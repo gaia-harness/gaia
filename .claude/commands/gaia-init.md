@@ -516,7 +516,7 @@ Worktrees buy you the ability to run a GAIA task without touching your current c
 - a dev server started inside a worktree collides on the same port as one in the main checkout;
 - a crashed session can leave a worktree behind for you to remove by hand.
 
-Scope limit: this policy governs `/gaia-plan` and `/gaia-debt` only. `/gaia-audit`, `/gaia-harden`, and `/gaia-wiki` still work in the main checkout. And while a GAIA task holds your session in a worktree, `/update-deps` and `/update-gaia` refuse to run there; run them from a separate session on the main checkout.
+Scope limit: this policy governs `/gaia-plan` and `/gaia-debt` only. `/gaia-cleanse`, `/gaia-codify`, and `/gaia-wiki` still work in the main checkout. And while a GAIA task holds your session in a worktree, `/update-deps` and `/update-gaia` refuse to run there; run them from a separate session on the main checkout.
 
 _Non-response: SAFE-DEFAULT. Omit the flag entirely, which leaves the key absent and leaves the `/setup-gaia` question live for the owner to answer later. Automatic mode: same, no re-ask._
 

@@ -1105,7 +1105,7 @@ write_ledger() {
   key_base="$(git -C "$SANDBOX" merge-base "$key_reference" HEAD)"
   if [ -z "$entries" ]; then
     entries="$(jq -n --arg member "$member" \
-      '[{member: $member, entry_id: "r1-1", finding_class: "example-class", severity: "important",
+      '[{member: $member, entry_id: "r1-1", finding_class: "example-class", severity: "major",
          path: "a.txt", line: 1, title: "an open finding", first_seen_round: 1, escalated: false}]')"
   fi
   mkdir -p "$SANDBOX/.gaia/local/audit"

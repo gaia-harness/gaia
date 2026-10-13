@@ -48,9 +48,9 @@ The `audience` axis answers two questions at two layers, under one name. A regis
 
 | Label | Color | Description | Created by |
 | --- | --- | --- | --- |
-| `severity:critical` | `b60205` | Breaks a documented promise or loses work; drain first | tech-debt |
-| `severity:important` | `e3555a` | Degrades a documented behavior; drain before suggestions | tech-debt |
-| `severity:suggestion` | `f5a3a3` | Improvement with no broken behavior behind it | tech-debt |
+| `severity:critical` | `b60205` | Wrong, or will produce broken work; drain first | tech-debt |
+| `severity:major` | `e3555a` | A significant gap or defect; drain before minor findings | tech-debt |
+| `severity:minor` | `f5a3a3` | Real but small; fix by default, never ignorable | tech-debt |
 | `severity:investigate` | `c4a7a7` | Severity not yet determined; research required before it can be graded | tech-debt |
 
 ### Effort

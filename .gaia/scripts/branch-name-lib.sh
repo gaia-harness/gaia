@@ -21,8 +21,8 @@
 #   debt        debt/<n>[-<slug>]                       drain        <n>
 #   plan        <type>/spec-<nnn>[-<slug>]              plan         SPEC-<nnn>
 #   plan        <type>/plan-<nnn>[-<slug>]              plan         plan-<nnn>
-#   audit       audit/<YYYY-MM-DD-HHMM>                 maintenance  <rest>
-#   harden      harden/<YYYY-MM-DD-HHMM>                maintenance  <rest>
+#   cleanse     cleanse/<YYYY-MM-DD-HHMM>               maintenance  <rest>
+#   codify      codify/<YYYY-MM-DD-HHMM>                maintenance  <rest>
 #   fitness     fitness/<YYYY-MM-DD-HHMM>               maintenance  <rest>
 #   residue     residue/<YYYY-MM-DD-HHMM>               maintenance  <rest>
 #   deps        deps/<YYYY-MM-DD-HHMM>                  maintenance  <rest>
@@ -116,7 +116,7 @@
 #     debt <issue> <issue>... [--batch]   debt/<ascending members>-batch
 #     plan <spec-NNN|plan-NNN> --type <type> [--slug <text>]
 #                                         <type>/<id>[-<slug>]
-#     audit | harden | fitness | residue | deps
+#     cleanse | codify | fitness | residue | deps
 #                                         <kind>/<UTC YYYY-MM-DD-HHMM>
 #     update <version>                    update/v<version>-<UTC YYYY-MM-DD-HHMM>
 #     release <version>                   release/v<version>
@@ -280,7 +280,7 @@ _gaia_branch_set_class() {
           ;;
       esac
       ;;
-    audit/* | harden/* | fitness/* | residue/* | deps/* | update/* | release/* | forensics/* \
+    cleanse/* | codify/* | fitness/* | residue/* | deps/* | update/* | release/* | forensics/* \
       | wiki/sync-* | wiki-sync/* \
       | chore/*-[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]-[0-9][0-9][0-9][0-9])
       mode="maintenance"
@@ -534,7 +534,7 @@ gaia_branch_name() {
       fi
       _gaia_branch_emit "${type}/${id}" "$slug"
       ;;
-    audit | harden | fitness | residue | deps)
+    cleanse | codify | fitness | residue | deps)
       if [ "$#" -gt 0 ]; then
         printf 'gaia_branch_name: unexpected argument %s\n' "$1" >&2
         return 2
@@ -557,7 +557,7 @@ gaia_branch_name() {
       fi
       ;;
     *)
-      printf 'gaia_branch_name: unknown kind %s (debt, plan, audit, harden, fitness, residue, deps, update, release)\n' "${kind:-<none>}" >&2
+      printf 'gaia_branch_name: unknown kind %s (debt, plan, cleanse, codify, fitness, residue, deps, update, release)\n' "${kind:-<none>}" >&2
       return 2
       ;;
   esac
@@ -667,7 +667,7 @@ gaia_branch_validate() {
   }
   types="$_gaia_branch_types"
 
-  case " debt plan audit harden fitness residue deps update release forensics ${types} " in
+  case " debt plan cleanse codify fitness residue deps update release forensics ${types} " in
     *" ${prefix} "*) ;;
     *)
       printf 'gaia_branch_validate: %s has the prefix %s, which is neither a GAIA workflow nor a commit type; use one of: %s\n' "$branch" "$prefix" "$types" >&2

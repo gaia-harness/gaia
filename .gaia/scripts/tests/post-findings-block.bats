@@ -242,8 +242,8 @@ extract_payload() {
 # UAT-034: one block, every dispatched member's findings
 
 @test "UAT-034: multiple sidecars merge into exactly one posted block carrying every member's findings" {
-  write_sidecar code-audit-frontend '[{"finding_class":"holistic/swallowed-error","severity":"warning","area_tags":["app/services"]}]'
-  write_sidecar code-audit-maintainer-shell '[{"finding_class":"holistic/secret-exposure","severity":"warning","area_tags":[".gaia/scripts"]}]'
+  write_sidecar code-audit-frontend '[{"finding_class":"holistic/swallowed-error","severity":"major","area_tags":["app/services"]}]'
+  write_sidecar code-audit-maintainer-shell '[{"finding_class":"holistic/secret-exposure","severity":"major","area_tags":[".gaia/scripts"]}]'
   stub_gh '[]'
   run run_script
   [ "$status" -eq 0 ]
@@ -260,12 +260,12 @@ extract_payload() {
 # UAT-037: structural shape the tally's parser accepts
 
 @test "UAT-037: the rendered block carries the sentinels and a structurally valid payload" {
-  write_sidecar code-audit-frontend '[{"finding_class":"holistic/swallowed-error","severity":"warning","area_tags":["app/services"]}]'
+  write_sidecar code-audit-frontend '[{"finding_class":"holistic/swallowed-error","severity":"major","area_tags":["app/services"]}]'
   stub_gh '[]'
   run run_script
   [ "$status" -eq 0 ]
-  grep -qF "<!-- gaia-harden:findings:start -->" "$SANDBOX/posted_body.txt"
-  grep -qF "<!-- gaia-harden:findings:end -->" "$SANDBOX/posted_body.txt"
+  grep -qF "<!-- gaia-codify:findings:start -->" "$SANDBOX/posted_body.txt"
+  grep -qF "<!-- gaia-codify:findings:end -->" "$SANDBOX/posted_body.txt"
   payload="$(extract_payload)"
   jq -e . <<<"$payload" >/dev/null
   [ "$(jq -r '.schema' <<<"$payload")" = "1" ]
@@ -283,7 +283,7 @@ extract_payload() {
   # verification / repair. The PR comment is a published surface whose
   # visibility follows the repo's, and a finding's text can quote the very hole
   # it reports, so only the three keys the block contract freezes go out.
-  write_sidecar code-audit-maintainer-shell '[{"finding_class":"holistic/secret-exposure","severity":"warning","area_tags":[".claude/hooks"],"path":".claude/hooks/block-secrets-write.sh","line":113,"title":"the path arm admits arbitrary trailing text","failure_mode":"one separator after the expansion unlocks an unbounded run over the secret character set","verified_by":"fed the hook the braced-expansion fixture: base denies, HEAD allows","suggested_fix":"bound each path segment"}]'
+  write_sidecar code-audit-maintainer-shell '[{"finding_class":"holistic/secret-exposure","severity":"major","area_tags":[".claude/hooks"],"path":".claude/hooks/block-secrets-write.sh","line":113,"title":"the path arm admits arbitrary trailing text","failure_mode":"one separator after the expansion unlocks an unbounded run over the secret character set","verified_by":"fed the hook the braced-expansion fixture: base denies, HEAD allows","suggested_fix":"bound each path segment"}]'
   stub_gh '[]'
   run run_script
   [ "$status" -eq 0 ]
@@ -291,7 +291,7 @@ extract_payload() {
   entry="$(jq -c '.findings[0]' <<<"$payload")"
   # The three frozen keys survive, verbatim.
   [ "$(jq -r '.finding_class' <<<"$entry")" = "holistic/secret-exposure" ]
-  [ "$(jq -r '.severity' <<<"$entry")" = "warning" ]
+  [ "$(jq -r '.severity' <<<"$entry")" = "major" ]
   [ "$(jq -r '.area_tags[0]' <<<"$entry")" = ".claude/hooks" ]
   # Exactly those three, nothing more.
   [ "$(jq -r '[keys[]] | sort | join(",")' <<<"$entry")" = "area_tags,finding_class,severity" ]
@@ -308,7 +308,7 @@ extract_payload() {
 
 @test "a second run on the same branch updates the existing comment rather than creating a second" {
   write_sidecar code-audit-frontend '[]'
-  stub_gh '[{"id":5,"body":"unrelated comment"},{"id":7,"body":"prior findings <!-- gaia-harden:findings:start -->\nold\n<!-- gaia-harden:findings:end -->"}]'
+  stub_gh '[{"id":5,"body":"unrelated comment"},{"id":7,"body":"prior findings <!-- gaia-codify:findings:start -->\nold\n<!-- gaia-codify:findings:end -->"}]'
   run run_script
   [ "$status" -eq 0 ]
   [ "$output" = "findings: updated 0 finding(s) from 1 member(s) on PR #42" ]
@@ -325,7 +325,7 @@ extract_payload() {
   # find, so every run creates another comment. Asserting the exit status
   # cannot see that; feeding the REAL posted body back as the existing comment
   # can, which is why this test round-trips it rather than hand-writing one.
-  write_sidecar code-audit-frontend '[{"finding_class":"holistic/swallowed-error","severity":"warning","area_tags":["app/services"]}]'
+  write_sidecar code-audit-frontend '[{"finding_class":"holistic/swallowed-error","severity":"major","area_tags":["app/services"]}]'
   stub_gh '[]'
   run run_script
   [ "$status" -eq 0 ]
@@ -369,7 +369,7 @@ extract_payload() {
 # AC6: a malformed sidecar is skipped, named, and never silently vanishes
 
 @test "a malformed sidecar (invalid JSON) is skipped, named on stderr, and the rest still posts" {
-  write_sidecar code-audit-frontend '[{"finding_class":"holistic/swallowed-error","severity":"warning","area_tags":["app/services"]}]'
+  write_sidecar code-audit-frontend '[{"finding_class":"holistic/swallowed-error","severity":"major","area_tags":["app/services"]}]'
   echo 'not json at all' > "$AUDIT_DIRECTORY/${AUDIT_KEY}.code-audit-maintainer-shell.findings.json"
   stub_gh '[]'
   run run_script
@@ -406,7 +406,7 @@ extract_payload() {
   # would post "the audit found nothing" on a PR when the merge broke, which
   # is a false statement on a published surface.
   write_sidecar code-audit-maintainer-shell \
-    '[{"finding_class":"holistic/secret-exposure","severity":"warning","area_tags":[".claude/hooks"],"path":".claude/hooks/guard.sh","line":9,"title":"t","failure_mode":"f","verified_by":"v","suggested_fix":"s"}]'
+    '[{"finding_class":"holistic/secret-exposure","severity":"major","area_tags":[".claude/hooks"],"path":".claude/hooks/guard.sh","line":9,"title":"t","failure_mode":"f","verified_by":"v","suggested_fix":"s"}]'
   stub_gh '[]'
   stub_jq_merge_fails
   run run_script
@@ -495,9 +495,9 @@ extract_payload() {
   # posts only the final round -- which is clean by construction, because a
   # clean round is what let the PR merge at all.
   write_sidecar_at "$AUDIT_KEY" code-audit-frontend \
-    '[{"finding_class":"holistic/swallowed-error","severity":"warning","area_tags":["app/services"]}]'
+    '[{"finding_class":"holistic/swallowed-error","severity":"major","area_tags":["app/services"]}]'
   write_sidecar_at "${BASE_ROUND2}.main" code-audit-maintainer-shell \
-    '[{"finding_class":"holistic/secret-exposure","severity":"warning","area_tags":[".gaia/scripts"]}]'
+    '[{"finding_class":"holistic/secret-exposure","severity":"major","area_tags":[".gaia/scripts"]}]'
   write_sidecar_at "${BASE_ROUND3}.main" code-audit-maintainer-shell '[]'
   stub_gh '[]'
   run run_script
@@ -522,9 +522,9 @@ extract_payload() {
   # glob never could: file count and member count agreed only while a member
   # could write at most one matching sidecar.
   write_sidecar_at "$AUDIT_KEY" code-audit-maintainer-shell \
-    '[{"finding_class":"holistic/swallowed-error","severity":"warning","area_tags":["a"]}]'
+    '[{"finding_class":"holistic/swallowed-error","severity":"major","area_tags":["a"]}]'
   write_sidecar_at "${BASE_ROUND2}.main" code-audit-maintainer-shell \
-    '[{"finding_class":"holistic/secret-exposure","severity":"warning","area_tags":["b"]}]'
+    '[{"finding_class":"holistic/secret-exposure","severity":"major","area_tags":["b"]}]'
   write_sidecar_at "${BASE_ROUND3}.main" code-audit-maintainer-shell '[]'
   stub_gh '[]'
   run run_script
@@ -537,7 +537,7 @@ extract_payload() {
   # sidecar cannot be shown to be a different member from another unnamed one,
   # and over-stating the count is the defect being repaired. Two nameless plus
   # one named reads as 2, where counting files would read 3.
-  printf '{"schema":1,"findings":[{"finding_class":"holistic/swallowed-error","severity":"warning","security":false,"area_tags":["a"]}]}\n' \
+  printf '{"schema":1,"findings":[{"finding_class":"holistic/swallowed-error","severity":"major","security":false,"area_tags":["a"]}]}\n' \
     > "$AUDIT_DIRECTORY/${AUDIT_KEY}.nameless-one.findings.json"
   printf '{"schema":1,"member":"","findings":[]}\n' \
     > "$AUDIT_DIRECTORY/${BASE_ROUND2}.main.nameless-two.findings.json"
@@ -554,11 +554,11 @@ extract_payload() {
   # every worktree), so a sibling tree's sidecars sit in the same directory and
   # the branch slug is the whole discriminator between them.
   write_sidecar_at "$AUDIT_KEY" code-audit-frontend \
-    '[{"finding_class":"holistic/swallowed-error","severity":"warning","area_tags":["app/services"]}]'
+    '[{"finding_class":"holistic/swallowed-error","severity":"major","area_tags":["app/services"]}]'
   write_sidecar_at "${BASE}.other-branch" code-audit-frontend \
-    '[{"finding_class":"holistic/foreign-tree","severity":"warning","area_tags":["elsewhere"]}]'
+    '[{"finding_class":"holistic/foreign-tree","severity":"major","area_tags":["elsewhere"]}]'
   write_sidecar_at "${BASE_ROUND2}.worktree-debt%2F42-slug" code-audit-maintainer-shell \
-    '[{"finding_class":"holistic/foreign-worktree","severity":"warning","area_tags":["elsewhere"]}]'
+    '[{"finding_class":"holistic/foreign-worktree","severity":"major","area_tags":["elsewhere"]}]'
   stub_gh '[]'
   run run_script
   [ "$status" -eq 0 ]
@@ -575,7 +575,7 @@ extract_payload() {
   # slug can carry a dot of its own and the anchor is unambiguous. Without the
   # leading dot, `main` would match `release-main` here.
   write_sidecar_at "${BASE}.release-main" code-audit-frontend \
-    '[{"finding_class":"holistic/suffix-collision","severity":"warning","area_tags":["elsewhere"]}]'
+    '[{"finding_class":"holistic/suffix-collision","severity":"major","area_tags":["elsewhere"]}]'
   stub_gh '[]'
   run run_script
   [ "$status" -eq 0 ]
@@ -660,7 +660,7 @@ write_sidecar_with_review_base() {
 
 @test "a malformed review_base (string instead of object) is skipped, named on stderr, findings still merge" {
   member="code-audit-frontend"
-  findings='[{"finding_class":"holistic/swallowed-error","severity":"warning","security":false,"area_tags":["app/services"]}]'
+  findings='[{"finding_class":"holistic/swallowed-error","severity":"major","security":false,"area_tags":["app/services"]}]'
   jq -cn --arg member "$member" --argjson findings "$findings" \
     '{schema:1, member:$member, findings:$findings, review_base:"not-an-object"}' \
     > "$AUDIT_DIRECTORY/${AUDIT_KEY}.${member}.findings.json"
@@ -674,7 +674,7 @@ write_sidecar_with_review_base() {
 }
 
 @test "a malformed review_base (object missing sha) is skipped, named on stderr, findings still merge" {
-  write_sidecar_with_review_base code-audit-frontend '[{"finding_class":"holistic/swallowed-error","severity":"warning","area_tags":["app/services"]}]' '{"reason":"member-clearance"}'
+  write_sidecar_with_review_base code-audit-frontend '[{"finding_class":"holistic/swallowed-error","severity":"major","area_tags":["app/services"]}]' '{"reason":"member-clearance"}'
   stub_gh '[]'
   run run_script
   [ "$status" -eq 0 ]
@@ -698,9 +698,9 @@ write_sidecar_with_review_base() {
 # findings, so it never renders in the block.
 
 @test "a light review sidecar is skipped and only the full sidecar renders" {
-  write_sidecar code-audit-frontend '[{"finding_class":"holistic/swallowed-error","severity":"warning","area_tags":["app/services"]}]'
+  write_sidecar code-audit-frontend '[{"finding_class":"holistic/swallowed-error","severity":"major","area_tags":["app/services"]}]'
   printf '{"schema":1,"member":"code-audit-frontend","review":"light","findings":%s}\n' \
-    '[{"finding_class":"holistic/light-only-marker","severity":"warning","area_tags":["app/light"]}]' \
+    '[{"finding_class":"holistic/light-only-marker","severity":"major","area_tags":["app/light"]}]' \
     > "$AUDIT_DIRECTORY/${AUDIT_KEY}.code-audit-frontend.light.findings.json"
   [ -f "$AUDIT_DIRECTORY/${AUDIT_KEY}.code-audit-frontend.light.findings.json" ]
   stub_gh '[]'
@@ -727,7 +727,7 @@ write_sidecar_with_review_base() {
 
 @test "entry_id and resolutions never reach the rendered block" {
   jq -cn '{schema:1, member:"code-audit-frontend",
-    findings:[{finding_class:"holistic/swallowed-error", severity:"warning", security:false, area_tags:["app/services"], entry_id:"r1-1"}],
+    findings:[{finding_class:"holistic/swallowed-error", severity:"major", security:false, area_tags:["app/services"], entry_id:"r1-1"}],
     resolutions:[{entry_id:"r1-2", rationale:"fixed at HEAD"}]}' \
     > "$AUDIT_DIRECTORY/${AUDIT_KEY}.code-audit-frontend.findings.json"
   stub_gh '[]'
@@ -759,10 +759,10 @@ write_sidecar_with_review_base() {
   # Written straight to disk: write_sidecar would record the unflagged entry as
   # security:false, which is exactly the case under test.
   printf '%s\n' '{"schema":1,"member":"code-audit-frontend","findings":[
-    {"finding_class":"holistic/swallowed-error","severity":"warning","security":false,"area_tags":["app/services"]},
-    {"finding_class":"holistic/secret-exposure","severity":"warning","security":true,"area_tags":["vault-directory"],"authored":false},
-    {"finding_class":"holistic/missing-flag","severity":"warning","area_tags":["unflagged-directory"],"authored":false},
-    {"finding_class":"holistic/injection-hole","severity":"error","security":false,"area_tags":["critical-directory"],"authored":false}
+    {"finding_class":"holistic/swallowed-error","severity":"major","security":false,"area_tags":["app/services"]},
+    {"finding_class":"holistic/secret-exposure","severity":"major","security":true,"area_tags":["vault-directory"],"authored":false},
+    {"finding_class":"holistic/missing-flag","severity":"major","area_tags":["unflagged-directory"],"authored":false},
+    {"finding_class":"holistic/injection-hole","severity":"critical","security":false,"area_tags":["critical-directory"],"authored":false}
   ]}' > "$AUDIT_DIRECTORY/${AUDIT_KEY}.code-audit-frontend.findings.json"
   stub_gh '[]'
   run run_script
@@ -778,12 +778,12 @@ write_sidecar_with_review_base() {
   grep -qF "vault-directory" "$SANDBOX/posted_body.txt" && return 1
   grep -qF "unflagged-directory" "$SANDBOX/posted_body.txt" && return 1
   grep -qF "critical-directory" "$SANDBOX/posted_body.txt" && return 1
-  grep -qF '"error"' "$SANDBOX/posted_body.txt" && return 1
+  grep -qF '"critical"' "$SANDBOX/posted_body.txt" && return 1
   return 0
 }
 
 @test "a run whose every entry is withheld posts an empty findings array and the count" {
-  write_sidecar code-audit-frontend '[{"finding_class":"holistic/secret-exposure","severity":"error","security":true,"area_tags":["vault-directory"]}]'
+  write_sidecar code-audit-frontend '[{"finding_class":"holistic/secret-exposure","severity":"critical","security":true,"area_tags":["vault-directory"]}]'
   stub_gh '[]'
   run run_script
   [ "$status" -eq 0 ]
@@ -796,7 +796,7 @@ write_sidecar_with_review_base() {
 }
 
 @test "a block with nothing withheld carries no count line" {
-  write_sidecar code-audit-frontend '[{"finding_class":"holistic/swallowed-error","severity":"warning","security":false,"area_tags":["app/services"]}]'
+  write_sidecar code-audit-frontend '[{"finding_class":"holistic/swallowed-error","severity":"major","security":false,"area_tags":["app/services"]}]'
   stub_gh '[]'
   run run_script
   [ "$status" -eq 0 ]

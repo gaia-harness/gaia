@@ -31,7 +31,7 @@ Spawn **one `general-purpose` Agent per selected lens, all in parallel** (one me
 
 The four core lenses (always dispatched; the set is chosen for low overlap, each reliably finds defects the others miss):
 
-- **Factual grounding (id prefix `FG`).** Treat the SPEC as a set of factual claims and verify each load-bearing claim true or false against ground truth. For every claim about code, an installed dependency, an export subpath, a file path, or an existing convention, open the artifact and confirm it resolves, including whether any newly added dependency is justified and version-pinned. Any claim that is false or overstated is at least `high`, likely `blocker`.
+- **Factual grounding (id prefix `FG`).** Treat the SPEC as a set of factual claims and verify each load-bearing claim true or false against ground truth. For every claim about code, an installed dependency, an export subpath, a file path, or an existing convention, open the artifact and confirm it resolves, including whether any newly added dependency is justified and version-pinned. Any claim that is false or overstated is at least `major`, likely `critical`.
 - **UAT testability (id prefix `TST`).** Attack each UAT for falsifiability and GAMEABILITY. For each weak UAT, describe the concrete scenario where it passes while the feature is still broken or useless (e.g. a "points to X" UAT that passes on a bare path drop), and propose a tighter, doc-grep- or test-checkable `then`. Flag any UAT with no obvious verification method.
 - **Coverage & consistency (id prefix `COV`).** Build the cross-matrix intent ↔ `success_criteria` ↔ UATs ↔ `scope_boundaries` and find the holes: orphan success criteria with no covering UAT; promises in the intent no UAT covers; UATs the SPEC needs but lacks; contradictions between `always`/`never`/`ask_first` and the UATs or intent; `scope_boundaries` entries that are not enforceable or observable; and whether the SPEC respects the project's established conventions (its `CLAUDE.md` rules, coding guidelines, naming).
 - **Red-team & feasibility (id prefix `RT`).** Actively try to BREAK the SPEC. Construct the strongest scenario where ALL UATs pass yet the feature is not actually delivered or its core value claim is unmet. Attack acceptance-gate feasibility (is each gate concretely runnable and deterministic?), durability and over-claims, blast-radius completeness (any consumer or site the SPEC missed), and any circular justification or unstated assumption a planner would inherit as fact.
@@ -56,10 +56,10 @@ This heading covers three distinct dispatch sites, delimited below by their own 
 
 ### 7b-i. Refutation
 
-From the 7a thin digests, main selects every **material** finding id (severity ≠ `low`) across all selected lenses; low-severity findings skip refutation and carry forward unchanged. Each refuter defaults to "refuted" unless it can substantiate the defect from ground truth, so this pass is severity discipline as much as false-positive killing. The refuter count scales with `audit_intensity`, up to a cap:
+From the 7a thin digests, main selects every **material** finding id (severity `critical` or `major`) across all selected lenses; `minor` findings skip refutation and carry forward unchanged, to be applied by default. Each refuter defaults to "refuted" unless it can substantiate the defect from ground truth, so this pass is severity discipline as much as false-positive killing. The refuter count scales with `audit_intensity`, up to a cap:
 
 - **Standard:** one refuter per material finding, all in parallel.
-- **Deep:** three refuters per material finding, all in parallel, each given a distinct verification lens, prepend one of `correctness`, `security/safety`, or `reproduces-as-described` to the refuter prompt below. A finding is refuted only on a ≥2-of-3 majority; its corrected severity is the median of the non-refuting refuters.
+- **Deep:** three refuters per material finding, all in parallel, each given a distinct verification lens, prepend one of `correctness`, `security/safety`, or `reproduces-as-described` to the refuter prompt below. A finding is refuted only on a ≥2-of-3 majority; its corrected severity is the median of the non-refuting refuters over the order `none < minor < major < critical`.
 - **Batched (either tier, above the cap):** when the shape above would dispatch more than **24** refuters (Standard: more than 24 material findings; Deep: more than 8), dispatch instead **one refuter per lens** that raised a material finding, all in parallel, each covering every material finding in that lens's findings file. On Deep, prepend all three verification lenses to that one refuter's prompt; its single verdict decides each finding, with no majority.
 
 The cap exists because the per-finding shapes grow with finding volume: a broad Deep audit that raises 87 material findings would pay 261 refuters. High volume is also where per-finding refutation buys least, since a defect several lenses raised independently already carries the cross-check the extra refuters add. Batched, the dispatch count is bounded by the lens count however many findings the lenses raise.
@@ -82,13 +82,13 @@ Verdict schema: the **file** the refuter writes to `verdicts/<finding-id>.json` 
 
     {
       "verdict": "confirmed" | "partial" | "refuted",
-      "corrected_severity": "blocker" | "high" | "medium" | "low" | "none",
+      "corrected_severity": "critical" | "major" | "minor" | "none",
       "disposition": "plan_directive" | "spec_defect",
       "reasoning": "<one or two sentences>",
       "evidence": "<file:line or SPEC quote actually checked>"
     }
 
-Main computes the Deep ≥2/3 majority and the median severity **from the returned thin verdict lines only** and **never opens the per-refuter verdict files**, so verdict reasoning bodies never reach main. Surviving findings = the low-severity findings (carried forward) plus every material finding not refuted (Standard and batched: a single `refuted` verdict kills it; Deep: a ≥2-of-3 majority kills it), each stamped with its `corrected_severity` and `disposition`.
+Main computes the Deep ≥2/3 majority and the median severity **from the returned thin verdict lines only** and **never opens the per-refuter verdict files**, so verdict reasoning bodies never reach main. Surviving findings = the `minor` findings (carried forward) plus every material finding not refuted (Standard and batched: a single `refuted` verdict kills it; Deep: a ≥2-of-3 majority kills it), each stamped with its `corrected_severity` and `disposition`.
 
 Append one `coverage.jsonl` record (`phase: "refuter"`, `disposition: "first_pass"|"not_applicable"`) per material finding refuted, or, batched, one per lens batch carrying `lens: "<LENS>"`, so the report's `## Coverage` shows which shape ran.
 
@@ -104,7 +104,7 @@ Dispatch prompt (interpolate `<DRAFT_PATH>`, `<spec_id>`, `<surviving_findings>`
 >
 > **Write** your fresh findings to `.gaia/local/cache/audit-<spec_id>/findings/completeness.json` under the findings file schema in `.claude/skills/gaia/references/spec/lens-dispatch.md` (`{ "dimension": "completeness", "findings": [...] }`), writing the file even if your findings array is empty.
 >
-> **Return** only the thin digest, no finding bodies: `{ "dimension": "completeness", "counts": { "blocker": <int>, "high": <int>, "medium": <int>, "low": <int> }, "findings": [ { "id": "CPL-NNN", "severity": "...", "title": "..." } ] }`.
+> **Return** only the thin digest, no finding bodies: `{ "dimension": "completeness", "counts": { "critical": <int>, "major": <int>, "minor": <int> }, "findings": [ { "id": "CPL-NNN", "severity": "...", "title": "..." } ] }`.
 
 It **writes its fresh findings to `.gaia/local/cache/audit-<spec_id>/findings/completeness.json`** (the findings file schema in `spec/lens-dispatch.md`) and returns the thin digest above; its bodies never flow into main. After it finishes, classify `findings/completeness.json` the same way as a lens file (`## Pre-clear, classify, re-dispatch` in `spec/lens-dispatch.md`): re-dispatch once on a no-op, and run the critic inline on a second.
 
@@ -134,7 +134,7 @@ Route each surviving finding by its `disposition`, read from the **thin verdict 
 - **Plan-time directive** (the SPEC's contract is already satisfied; the fix is an implementation instruction). No change folds into the draft (it stays byte-identical), but the finding gains a plan-time-directive entry in `AUDIT.md` (7d) so `/gaia-plan` and the implementer honor it.
 - **SPEC contract defect** (a UAT or the intent is itself wrong, gameable, or missing). The draft is not yet saved, so the fix folds straight into the draft cache with NO reopen ceremony.
 
-**Interactive.** Main reads only the handful of **material** (severity ≠ `low`) spec-defect survivors from the findings files to surface them to the user, mirroring step 6b's high-finding prompt (issue, evidence, recommendation; apply / keep / revise). No numeric cap or paging. This is the second bounded interactive carve-out where a finding body legitimately reaches main. Collect the user's apply/keep/revise decisions into the delegated-fold decision list. **Low** spec-defect fixes are never read into main; the applier folds them directly from the on-disk findings files (it reads the full cache), and refuter verdict text is never read into main. (Low findings skip refutation and carry no verdict line, so the sourcing of a low finding's `disposition` is a pre-existing question the audit's logic leaves unchanged here; the applier folds only the low spec-defects an inline fold would fold.)
+**Interactive.** Main reads only the handful of **material** (`critical` or `major`) spec-defect survivors from the findings files to surface them to the user, mirroring step 6b's gated-finding prompt (issue, evidence, recommendation; apply / keep / revise). No numeric cap or paging. This is the second bounded interactive carve-out where a finding body legitimately reaches main. Collect the user's apply/keep/revise decisions into the delegated-fold decision list. **Minor** spec-defect fixes are never read into main; the applier folds them directly from the on-disk findings files (it reads the full cache), and refuter verdict text is never read into main. (Minor findings skip refutation and carry no verdict line, so the sourcing of a minor finding's `disposition` is a pre-existing question the audit's logic leaves unchanged here; the applier folds only the minor spec-defects an inline fold would fold.)
 
 **Auto-mode per rule 12.** No reads; **no finding body reaches main**. The transcript carries ids, severities, titles, verdicts, and dispositions only. Unambiguous spec-defect ids apply (added to the decision list as `apply`); a defect with more than one defensible repair becomes a deferred-clarification note in `clarifications.deferred[]` with rationale `"Auto-mode audit, defer for human review."` and is not applied. Never revert intentional clarify-loop evolution.
 
@@ -151,11 +151,11 @@ The **applier** writes a sibling report at `${AUDIT_MD}`, the report path main h
 ```markdown
 # <spec_id> Adversarial Audit
 
-<one line: N lenses, R findings raised, S survived verification, X refuted; severity counts>
+<one line: N lenses, R findings raised, S survived verification, X refuted; severity counts (critical / major / minor)>
 
 ## Verdict
 
-<plannable? blockers? premise sound? one short paragraph>
+<plannable? critical findings? premise sound? one short paragraph>
 
 ## Plan-time directives (no SPEC change)
 

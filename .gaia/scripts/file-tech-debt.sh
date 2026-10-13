@@ -20,7 +20,7 @@
 #   Issues disabled, viewer lacks write permission); transient is a timeout,
 #   rate limit, 5xx or any answer that cannot be classified.
 # screen: stdout `clear` (exit 0) or `security <trigger>` (exit 1). Triggers:
-#   flag-true, flag-absent, flag-non-boolean, severity-error,
+#   flag-true, flag-absent, flag-non-boolean, severity-critical,
 #   issue-severity-critical, secret-shaped, class-absent, class-malformed.
 #   `holistic/unclassified` is a valid class and never a trigger. The class
 #   check is a shape check; membership in the closed vocabulary is the
@@ -147,7 +147,7 @@ screen_trigger() {
     if (has("security") | not) or .security == null then "flag-absent"
     elif (.security | type) != "boolean" then "flag-non-boolean"
     elif .security then "flag-true"
-    elif .severity == "error" then "severity-error"
+    elif .severity == "critical" then "severity-critical"
     elif .issue_severity == "Critical" then "issue-severity-critical"
     else empty end' "$screened_file")" || return 3
   if [ -n "$flag_trigger" ]; then
@@ -428,9 +428,9 @@ fetch_lists() {
 severity_label() {
   jq -r '
     if (.issue_severity // "") != "" then
-      ({"Critical": "critical", "Important": "important", "Suggestion": "suggestion"}[.issue_severity] // empty)
+      ({"Critical": "critical", "Major": "major", "Minor": "minor"}[.issue_severity] // empty)
     else
-      ({"error": "critical", "warning": "important", "suggestion": "suggestion"}[.severity // ""] // empty)
+      ((.severity // "") | select(IN("critical", "major", "minor")))
     end' "$1"
 }
 

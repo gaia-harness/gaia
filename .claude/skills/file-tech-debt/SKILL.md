@@ -23,7 +23,7 @@ Execute it; do not read it for the mechanics. Its header owns the finding JSON, 
 
 The caller owns one judgment: the finding's boolean `security` flag, true when the content reads as an exploitable weakness (missing authentication or authorization, injection, secret exposure, SSRF, path traversal, unsafe deserialization, crypto misuse). Everything else is mechanical and fails safe toward diverting:
 
-- **Security first.** A security-class finding (flag true, absent or non-boolean; severity `error` or `Critical`; secret-shaped text; an absent or malformed `finding_class`) never reaches a public or internal issue. It files only when repository visibility reads exactly `PRIVATE` before the probe and again immediately before the first write. Any other answer, including a failed read, writes a redacted record under `.gaia/local/audit/security/` and reports a count and that path, nothing more. `holistic/unclassified` is a valid class and never a trigger.
+- **Security first.** A security-class finding (flag true, absent or non-boolean; severity `critical`; secret-shaped text; an absent or malformed `finding_class`) never reaches a public or internal issue. It files only when repository visibility reads exactly `PRIVATE` before the probe and again immediately before the first write. Any other answer, including a failed read, writes a redacted record under `.gaia/local/audit/security/` and reports a count and that path, nothing more. `holistic/unclassified` is a valid class and never a trigger.
 - **Backend probe.** `absent` (no repository, unauthenticated, Issues disabled, no write permission) files nothing and records outcome `absent`. `transient` (timeout, rate limit, 5xx) files nothing, records outcome `transient`, and keeps the finding in a retry directory beside the outcome file for the next round. `present` goes on to dedup and filing.
 - **Verify after filing.** The script re-queries open issues for the wrapped key and records `failed` when the new issue is not found.
 
@@ -167,8 +167,8 @@ Every out-of-scope non-security issue this recipe files carries `tech-debt` plus
 | Report tier | Label |
 |---|---|
 | Critical | `severity:critical` |
-| Important | `severity:important` |
-| Suggestion | `severity:suggestion` |
+| Major | `severity:major` |
+| Minor | `severity:minor` |
 
 `severity:investigate` is the fourth value and it does not map from a report tier, because it is not a tier. It records that the severity is **not yet determined** and that research is needed before it can be. Choose it when the finding's consequence turns on a fact about the code that the filing has not established: whether a branch is reachable, whether a guard ever fails open in practice, whether a caller depends on the behavior. Do not choose it when the answer is merely inconvenient to look up, and never choose it as a way of not choosing. The other three grades are judgments; this one is the admission that no judgment was made, and it is checked accordingly.
 
@@ -215,7 +215,7 @@ The registry is reconciled before the first filing in a run, then anything still
 ```bash
 .gaia/cli/gaia labels sync 2>/dev/null || true
 present="$(gh label list --limit 200 --json name --jq '.[].name' 2>/dev/null)"
-for label in tech-debt severity:critical severity:important severity:suggestion severity:investigate \
+for label in tech-debt severity:critical severity:major severity:minor severity:investigate \
              footprint:narrow footprint:wide footprint:spec \
              difficulty:easy difficulty:medium difficulty:hard wontfix; do
   printf '%s\n' "$present" | grep -qx "$label" || gh label create "$label" 2>/dev/null || true

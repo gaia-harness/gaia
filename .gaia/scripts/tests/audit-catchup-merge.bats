@@ -427,7 +427,7 @@ refuse_with_open_finding() {
   key_base="$(lsb_git merge-base "$(resolver_lines "$FRONTEND" | sed -n '3p')" HEAD)"
   captured="$(scope_value "$FRONTEND" D_SCOPE)"
   [ -n "$key_base" ] && [ -n "$captured" ] || return 1
-  printf '[%s]' "$(lsb_finding frontend/app/shared.md 30 error false)" |
+  printf '[%s]' "$(lsb_finding frontend/app/shared.md 30 critical false)" |
     bash "$LSB_ROOT/.gaia/scripts/audit-write-findings.sh" --root "$LSB_ROOT" --member "$FRONTEND" \
       --base "$key_base" --findings - >/dev/null || return 1
   bash "$LSB_ROOT/.gaia/scripts/audit-write-clearance.sh" --root "$LSB_ROOT" --member "$FRONTEND" \

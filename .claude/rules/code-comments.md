@@ -45,7 +45,7 @@ Pointing at a rule stays allowed. Copying a rule's content into a comment does n
 
 ## Counts
 
-<!-- gaia-harden: promoted from recurring finding_class holistic/stale-figure; pruned by /gaia-audit on obsolescence/redundancy/supersession/duplication only, never for non-recurrence -->
+<!-- gaia-harden: promoted from recurring finding_class holistic/stale-figure; pruned by /gaia-cleanse on obsolescence/redundancy/supersession/duplication only, never for non-recurrence -->
 
 A bare count is a name for a set, and it decays the way a name does: the set grows, nothing recounts, and the number becomes a false claim a reader trusts precisely because it is specific. "Six subcommands", "the three exit codes", "all four members", in a docblock, a file header, or a bats `@test` name.
 

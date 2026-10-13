@@ -41,7 +41,7 @@ assert_armed() { [ -f "$REPO/$SENTINEL_RELATIVE_PATH" ]; }
 assert_not_armed() { [ ! -f "$REPO/$SENTINEL_RELATIVE_PATH" ]; }
 
 @test "gh issue create arms the sentinel" {
-  run_hook 'gh issue create --label tech-debt --label severity:suggestion --body-file /tmp/b.md'
+  run_hook 'gh issue create --label tech-debt --label severity:minor --body-file /tmp/b.md'
   assert_armed
 }
 

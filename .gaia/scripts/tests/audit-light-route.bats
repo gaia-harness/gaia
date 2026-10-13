@@ -250,9 +250,9 @@ refuse_notes() {
   lsb_refuse_with_findings "$FRONTEND" "[$findings]"
 }
 
-@test "a refusal with open warning findings routes the small repair light refusal-anchored" {
+@test "a refusal with open major findings routes the small repair light refusal-anchored" {
   lsb_init
-  refuse_notes "$(lsb_finding frontend/app/notes.md 2 warning false)" "$(lsb_finding frontend/app/notes.md 4 suggestion false)"
+  refuse_notes "$(lsb_finding frontend/app/notes.md 2 major false)" "$(lsb_finding frontend/app/notes.md 4 minor false)"
   local refusal_sha="$LSB_HEAD" record input
   lsb_commit_lines frontend/app/notes.md 5 fixed
   lsb_route "$FRONTEND"
@@ -263,7 +263,7 @@ refuse_notes() {
   [ "$(jq -c '[.checklist[] | [.key, .path, .line]]' "$record")" = '[["r1-1","frontend/app/notes.md",2],["r1-2","frontend/app/notes.md",4]]' ]
   grep -qxF 'open_findings: 2' "$input"
   [ "$(grep -c "^finding$(printf '\t')" "$input")" -eq 2 ]
-  grep -qF "$(printf 'finding\tr1-1\tfrontend/app/notes.md\t2\twarning\t')" "$input"
+  grep -qF "$(printf 'finding\tr1-1\tfrontend/app/notes.md\t2\tmajor\t')" "$input"
 }
 
 @test "twin: a refusal-anchored fixture without any refusal has no checklist and routes by the full anchor" {
@@ -280,7 +280,7 @@ refuse_notes() {
 @test "a refusal newer than an older full clearance anchors the delta, not the clearance" {
   lsb_init
   lsb_full_clearance "$FRONTEND"
-  refuse_notes "$(lsb_finding frontend/app/notes.md 3 warning false)"
+  refuse_notes "$(lsb_finding frontend/app/notes.md 3 major false)"
   local refusal_sha="$LSB_HEAD"
   lsb_commit_lines frontend/app/notes.md 5 fixed
   lsb_route "$FRONTEND"
@@ -288,9 +288,9 @@ refuse_notes() {
   [ "$(jq -r '.anchor_sha' "$(route_record_for "$FRONTEND")")" = "$refusal_sha" ]
 }
 
-@test "an open finding of severity error routes full refusal-open-security" {
+@test "an open finding of severity critical routes full refusal-open-security" {
   lsb_init
-  refuse_notes "$(lsb_finding frontend/app/notes.md 2 warning false)" "$(lsb_finding frontend/app/notes.md 4 error false)"
+  refuse_notes "$(lsb_finding frontend/app/notes.md 2 major false)" "$(lsb_finding frontend/app/notes.md 4 critical false)"
   lsb_commit_lines frontend/app/notes.md 5 fixed
   lsb_route "$FRONTEND"
   expect_route full refusal-open-security
@@ -298,7 +298,7 @@ refuse_notes() {
 
 @test "an open finding with security true routes full refusal-open-security" {
   lsb_init
-  refuse_notes "$(lsb_finding frontend/app/notes.md 2 warning false)" "$(lsb_finding frontend/app/notes.md 4 suggestion true)"
+  refuse_notes "$(lsb_finding frontend/app/notes.md 2 major false)" "$(lsb_finding frontend/app/notes.md 4 minor true)"
   lsb_commit_lines frontend/app/notes.md 5 fixed
   lsb_route "$FRONTEND"
   expect_route full refusal-open-security
@@ -306,7 +306,7 @@ refuse_notes() {
 
 @test "an open finding with no security field routes full refusal-open-security" {
   lsb_init
-  refuse_notes "$(lsb_finding frontend/app/notes.md 2 warning false)" "$(lsb_finding frontend/app/notes.md 4 warning omit)"
+  refuse_notes "$(lsb_finding frontend/app/notes.md 2 major false)" "$(lsb_finding frontend/app/notes.md 4 major omit)"
   lsb_commit_lines frontend/app/notes.md 5 fixed
   lsb_route "$FRONTEND"
   expect_route full refusal-open-security
@@ -323,7 +323,7 @@ refuse_notes() {
 
 @test "a refusal-anchored delta over the cap or on a hard-Full path still routes full" {
   lsb_init
-  refuse_notes "$(lsb_finding frontend/app/notes.md 2 warning false)"
+  refuse_notes "$(lsb_finding frontend/app/notes.md 2 major false)"
   lsb_commit_lines frontend/app/notes.md 51 fixed
   lsb_route "$FRONTEND"
   expect_route full over-cap
@@ -335,7 +335,7 @@ refuse_notes() {
 
 @test "a refusal at HEAD with nothing earlier to anchor on routes full no-full-clearance" {
   lsb_init
-  refuse_notes "$(lsb_finding frontend/app/notes.md 2 warning false)"
+  refuse_notes "$(lsb_finding frontend/app/notes.md 2 major false)"
   lsb_route "$FRONTEND"
   expect_route full no-full-clearance
 }

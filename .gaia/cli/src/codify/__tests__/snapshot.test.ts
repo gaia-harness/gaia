@@ -23,7 +23,7 @@ type Sandbox = {
 };
 
 const setupSandbox = (): Sandbox => {
-  const root = mkdtempSync(path.join(tmpdir(), 'gaia-harden-snapshot-'));
+  const root = mkdtempSync(path.join(tmpdir(), 'gaia-codify-snapshot-'));
   // runSnapshot calls resolveRepoRoot, so we need a real git repo.
   execFileSync('git', ['init', '-q', '-b', 'main'], {cwd: root});
 
@@ -96,7 +96,7 @@ const FULL_TALLY = {
   window_days: 90,
 };
 
-describe('harden-ledger snapshot', () => {
+describe('codify-ledger snapshot', () => {
   let sandbox: Sandbox;
   let io: ReturnType<typeof captureStdio>;
 

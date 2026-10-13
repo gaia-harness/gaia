@@ -187,7 +187,7 @@ describe('schemas/finding-class', () => {
     );
   });
 
-  describe('isOracleFindingClass (harden-tally is_oracle source)', () => {
+  describe('isOracleFindingClass (codify-tally is_oracle source)', () => {
     test.each([
       'react-doctor/no-generic-handler-names',
       'axe/color-contrast',

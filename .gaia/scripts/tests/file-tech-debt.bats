@@ -104,7 +104,7 @@ case "$args" in
     echo "https://github.com/owner/name/issues/$((101 + count))"
     ;;
   "label list"*)
-    cat "$stub/labels" 2>/dev/null || printf 'tech-debt\nseverity:important\nseverity:suggestion\nseverity:critical\naudience:adopter\n'
+    cat "$stub/labels" 2>/dev/null || printf 'tech-debt\nseverity:major\nseverity:minor\nseverity:critical\naudience:adopter\n'
     ;;
   *) ;;
 esac
@@ -117,7 +117,7 @@ STUB
 # make_finding <jq-filter>: the default non-security finding, then the filter.
 make_finding() {
   jq -n -c "{member: \"code-audit-frontend\", finding_class: \"holistic/swallowed-error\", path: \"app/a.ts\", line: 10,
-    severity: \"warning\", security: false, title: \"TITLE-SENTINEL\", failure_mode: \"FAILURE-SENTINEL\",
+    severity: \"major\", security: false, title: \"TITLE-SENTINEL\", failure_mode: \"FAILURE-SENTINEL\",
     suggested_fix: \"FIX-SENTINEL\", audience: \"adopter\"} | $1" >"$FINDING"
 }
 
@@ -151,7 +151,7 @@ security_cases() {
 .security = true|flag-true
 del(.security)|flag-absent
 .security = "yes"|flag-non-boolean
-.severity = "error"|severity-error
+.severity = "critical"|severity-critical
 .issue_severity = "Critical"|issue-severity-critical
 .failure_mode = "token $SHAPED_TOKEN"|secret-shaped
 .failure_mode = "token $SHAPED_PAT"|secret-shaped
@@ -425,7 +425,7 @@ CASES
   [ "$status" -eq 0 ]
   [ "$output" = "filed 101" ]
   [ "$(jq -r '.issue' "$OUTCOMES")" = 101 ]
-  grep -q -e '--label tech-debt --label severity:important' "$STUB/log"
+  grep -q -e '--label tech-debt --label severity:major' "$STUB/log"
   grep -q -e ' --body ' "$STUB/log" && return 1
   jq -e '.[0].body | contains("<!-- gaia-debt-key: v1 class=holistic/swallowed-error path=app/a.ts line=10 -->")' "$STUB/open.json" >/dev/null
 }

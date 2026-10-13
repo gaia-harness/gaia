@@ -132,7 +132,7 @@ member_digest() {
 # finding_object <line> <title>: one valid finding in the member's own file.
 finding_object() {
   jq -nc --argjson line "$1" --arg title "$2" --arg path "$MEMBER_FILE" \
-    '{finding_class:"holistic/swallowed-error",severity:"error",path:$path,line:$line,title:$title,
+    '{finding_class:"holistic/swallowed-error",severity:"critical",path:$path,line:$line,title:$title,
       failure_mode:"the failure the finding names",verified_by:"ran it and saw the failure",
       suggested_fix:"the repair"}'
 }
@@ -146,8 +146,7 @@ open_entry_ids() {
 # that echo their entry_id, which is how a member re-reports a still-open one.
 reported_open_entries() {
   jq -c --arg member "$1" '[.remaining[] | select(.member == $member)
-    | {finding_class, path, line, title, failure_mode, verified_by, suggested_fix, entry_id,
-       severity: ({"critical":"error","important":"warning","suggestion":"suggestion"}[.severity] // "warning")}]' \
+    | {finding_class, path, line, title, failure_mode, verified_by, suggested_fix, entry_id, severity}]' \
     "$(ledger_path)"
 }
 

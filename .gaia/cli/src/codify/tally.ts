@@ -1,5 +1,5 @@
 /**
- * `gaia harden-tally` - the deterministic, TTL-bounded recurrence tally for the
+ * `gaia codify-tally` - the deterministic, TTL-bounded recurrence tally for the
  * policy-memory loop.
  *
  * Resolves the rolling 90-day merged-PR window via `gh`, extracts each PR's
@@ -8,7 +8,7 @@
  * ledger suppresses, self-cleans the ledger, and prints the candidate list
  * plus the classless `unclassified` recurrence signal as JSON to stdout. The
  * statusline refresher composes a nudge reason from `triggers` (or from
- * counts when no review snapshot exists); `/gaia-harden review` re-runs this
+ * counts when no review snapshot exists); `/gaia-codify review` re-runs this
  * to get the live list.
  *
  * No LLM, no drafting, no writes other than (indirectly) the ledger prune. The
@@ -18,7 +18,7 @@
  *
  * `audited_pr_count` and `class_inventory` give a review snapshot the full
  * denominator and vocabulary it needs; `triggers` names what changed against
- * the last completed review's snapshot (`.gaia/local/harden/reviewed.json`),
+ * the last completed review's snapshot (`.gaia/local/codify/reviewed.json`),
  * evaluated by `evaluateTriggers` (`triggers.ts`).
  */
 import path from 'node:path';
@@ -38,10 +38,11 @@ import {checkDeclineSuppression, pruneDeclineLedger} from './ledger.js';
 import type {DeclineSuppression} from './ledger.js';
 import {TALLY_SCHEMA_VERSION} from './material-rise.js';
 import {parseFindingsBlock} from './parse-findings-block.js';
+import {resolveCodifyRoot} from './state-dir.js';
 import {evaluateTriggers} from './triggers.js';
-import type {HardenTrigger} from './triggers.js';
+import type {CodifyTrigger} from './triggers.js';
 
-const HELP_TEXT = `Usage: gaia harden-tally
+const HELP_TEXT = `Usage: gaia codify-tally
 
   Tallies recurring code-review-audit findings across the rolling 90-day
   merged-PR window and prints the candidate list as JSON. A class is a
@@ -82,7 +83,7 @@ type EmittedTally = TallyResult & {
   snapshot_present: boolean;
   snapshot_reviewed_at: null | string;
   tally_schema_version: number;
-  triggers: HardenTrigger[];
+  triggers: CodifyTrigger[];
 };
 
 type RunOptions = {
@@ -215,7 +216,7 @@ const fetchWindowPrs = (cwd: string, now: Date): WindowPrs => {
     structuredError({
       code: 'window_truncated',
       message: `the merged-PR window holds more than ${MERGED_PR_WINDOW_MAX_PAGES * MERGED_PR_PAGE_CEILING} PRs, more than the paged read covers; report this as a GAIA bug`,
-      subcommand: 'harden-tally',
+      subcommand: 'codify-tally',
     });
 
     return {ghOk: false, prs: []};
@@ -247,6 +248,13 @@ export const run = (
   }
 
   const cwd = options.cwd ?? process.cwd();
+
+  try {
+    resolveCodifyRoot(cwd);
+  } catch {
+    // Not inside a repository: the reads below already degrade on their own.
+  }
+
   const ledger = options.ledger ?? openDeclineLedger(cwd);
   const now = new Date();
 
@@ -288,7 +296,7 @@ export const run = (
     structuredError({
       code: 'malformed_snapshot',
       message: snapshotResult.error,
-      subcommand: 'harden-tally',
+      subcommand: 'codify-tally',
     });
   }
 
@@ -300,7 +308,7 @@ export const run = (
   // `prs`/`candidates`, so comparing it to the snapshot would report a false
   // "everything vanished" rather than staying silent until the window reads
   // again.
-  const triggers: HardenTrigger[] =
+  const triggers: CodifyTrigger[] =
     ghOk && snapshot !== null ?
       evaluateTriggers({
         live: {

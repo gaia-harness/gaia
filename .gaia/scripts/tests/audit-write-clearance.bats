@@ -619,7 +619,7 @@ scrub_maintainer_only() {
   member="code-audit-maintainer-shell"
   digest="$(member_digest "$ROOT" "$member")"
   refused="$AUDIT_DIRECTORY/${digest}.${member}.refused"
-  reason="operator acknowledged the Important with a stated reason"
+  reason="operator acknowledged the Major with a stated reason"
 
   bash "$WRITER" --root "$ROOT" --member "$member" --provenance refused >/dev/null
   [ -f "$refused" ] || return 1
@@ -795,7 +795,7 @@ ledger_setup() {
 # finding_json <line> [<severity>] [<entry_id>] [<finding_class>]: one complete
 # finding object. A non-empty entry_id makes it a re-report of that open entry.
 finding_json() {
-  jq -cn --argjson line "$1" --arg severity "${2:-warning}" --arg entry_id "${3:-}" \
+  jq -cn --argjson line "$1" --arg severity "${2:-major}" --arg entry_id "${3:-}" \
     --arg finding_class "${4:-holistic/secret-exposure}" '
     {finding_class: $finding_class, severity: $severity,
      path: ".claude/hooks/block-secrets-write.sh", line: $line,
@@ -825,7 +825,7 @@ write_findings_sidecar() {
 # write_sidecar_for <member> <line> [<severity>] [<entry_id>]: a complete
 # one-finding sidecar; with an entry_id it re-reports that open entry.
 write_sidecar_for() {
-  write_findings_sidecar "$1" "[$(finding_json "$2" "${3:-warning}" "${4:-}")]"
+  write_findings_sidecar "$1" "[$(finding_json "$2" "${3:-major}" "${4:-}")]"
 }
 
 # open_entry_id <member> [<index>]: the entry_id of that member's open ledger
@@ -843,8 +843,7 @@ open_entry_id() {
 rereport_all_open() {
   local findings
   findings="$(jq -c --arg member "$1" '[.remaining[] | select(.member == $member)
-    | {finding_class, path, line, title, failure_mode, verified_by, suggested_fix, entry_id,
-       severity: ({"critical":"error","important":"warning","suggestion":"suggestion"}[.severity] // "warning")}]' "$LEDGER")"
+    | {finding_class, path, line, title, failure_mode, verified_by, suggested_fix, entry_id, severity}]' "$LEDGER")"
   write_findings_sidecar "$1" "$findings"
 }
 
@@ -887,20 +886,32 @@ resolve_all_open() {
   [ "$(jq -r .first_seen_round <<<"$entry")" = "1" ]
 }
 
-@test "ledger: the sidecar's severity scale is mapped onto the ledger's" {
+@test "ledger: the sidecar severity carries onto the ledger unchanged" {
   ledger_setup
   member="code-audit-maintainer-shell"
-  write_sidecar_for "$member" 113 error
+  write_sidecar_for "$member" 113 critical
   bash "$WRITER" --root "$ROOT" --member "$member" --provenance refused --base "$LEDGER_BASE_SHA" >/dev/null
   [ "$(jq -r '.remaining[0].severity' "$LEDGER")" = "critical" ]
 
-  write_sidecar_for "$member" 113 warning "$(open_entry_id "$member")"
+  write_sidecar_for "$member" 113 major "$(open_entry_id "$member")"
   bash "$WRITER" --root "$ROOT" --member "$member" --provenance refused --base "$LEDGER_BASE_SHA" >/dev/null
-  [ "$(jq -r '.remaining[0].severity' "$LEDGER")" = "important" ]
+  [ "$(jq -r '.remaining[0].severity' "$LEDGER")" = "major" ]
 
-  write_sidecar_for "$member" 113 suggestion "$(open_entry_id "$member")"
+  write_sidecar_for "$member" 113 minor "$(open_entry_id "$member")"
   bash "$WRITER" --root "$ROOT" --member "$member" --provenance refused --base "$LEDGER_BASE_SHA" >/dev/null
-  [ "$(jq -r '.remaining[0].severity' "$LEDGER")" = "suggestion" ]
+  [ "$(jq -r '.remaining[0].severity' "$LEDGER")" = "minor" ]
+}
+
+@test "ledger: a severity token outside critical, major, minor is recorded as major" {
+  ledger_setup
+  member="code-audit-maintainer-shell"
+  write_sidecar_for "$member" 113 major
+  sidecar="$AUDIT_DIRECTORY/${LEDGER_BASE_SHA}.fix%2Fledger.${member}.findings.json"
+  [ -f "$sidecar" ]
+  jq '.findings[0].severity = "warning"' "$sidecar" > "$BATS_TEST_TMPDIR/tampered.json"
+  mv "$BATS_TEST_TMPDIR/tampered.json" "$sidecar"
+  bash "$WRITER" --root "$ROOT" --member "$member" --provenance refused --base "$LEDGER_BASE_SHA" >/dev/null
+  [ "$(jq -r '.remaining[0].severity' "$LEDGER")" = "major" ]
 }
 
 @test "ledger: round increments across refusals and first_seen_round carries" {
@@ -1077,7 +1088,7 @@ resolve_all_open() {
   # Two distinct defects on one line, same finding_class: the findings writer
   # permits this, and the carry-forward must match one prior entry per finding
   # (by entry_id) rather than binding a generator that re-emits the body per match.
-  printf '[{"finding_class":"holistic/unclassified","severity":"warning","path":".gaia/scripts/a.sh","line":42,"title":"first defect","failure_mode":"the guard admits an empty value","verified_by":"ran it at base and at HEAD","suggested_fix":"reject an empty value"},{"finding_class":"holistic/unclassified","severity":"warning","path":".gaia/scripts/a.sh","line":42,"title":"second defect","failure_mode":"the same line also swallows stderr","verified_by":"stubbed the program to exit non-zero","suggested_fix":"check the status"}]' \
+  printf '[{"finding_class":"holistic/unclassified","severity":"major","path":".gaia/scripts/a.sh","line":42,"title":"first defect","failure_mode":"the guard admits an empty value","verified_by":"ran it at base and at HEAD","suggested_fix":"reject an empty value"},{"finding_class":"holistic/unclassified","severity":"major","path":".gaia/scripts/a.sh","line":42,"title":"second defect","failure_mode":"the same line also swallows stderr","verified_by":"stubbed the program to exit non-zero","suggested_fix":"check the status"}]' \
     | bash "$THIS_DIRECTORY/../audit-write-findings.sh" --root "$ROOT" --member "$member" --base "$LEDGER_BASE_SHA" --findings - >/dev/null
 
   bash "$WRITER" --root "$ROOT" --member "$member" --provenance refused --base "$LEDGER_BASE_SHA" >/dev/null
@@ -1208,7 +1219,7 @@ accounting_fixture() {
   [ "$(git -C "$ROOT" merge-base refs/remotes/origin/main HEAD)" = "$LEDGER_BASE_SHA" ]
   member="$ACCOUNTING_MEMBER"
   write_findings_sidecar "$member" \
-    "[$(finding_json 113 error),$(finding_json 59 warning "" holistic/swallowed-error)]"
+    "[$(finding_json 113 critical),$(finding_json 59 major "" holistic/swallowed-error)]"
   bash "$WRITER" --root "$ROOT" --member "$member" --provenance refused --base "$LEDGER_BASE_SHA" >/dev/null
   write_sidecar_for "$SIBLING_MEMBER" 7
   bash "$WRITER" --root "$ROOT" --member "$SIBLING_MEMBER" --provenance refused --base "$LEDGER_BASE_SHA" >/dev/null
@@ -1298,7 +1309,7 @@ snapshot_ledger() {
   b_sha="$(git -C "$ROOT" rev-parse HEAD)"
 
   # The round at B finds a new defect and says nothing about the open one.
-  write_findings_sidecar "$member" "[$(finding_json 40 warning "" holistic/swallowed-error)]"
+  write_findings_sidecar "$member" "[$(finding_json 40 major "" holistic/swallowed-error)]"
   snapshot_ledger
   run bash "$WRITER" --root "$ROOT" --member "$member" --provenance refused --base "$LEDGER_BASE_SHA"
   [ "$status" -eq 3 ]
@@ -1308,7 +1319,7 @@ snapshot_ledger() {
 
   # Control: the open finding re-reported by its id at a shifted line, plus the new one.
   write_findings_sidecar "$member" \
-    "[$(finding_json 120 warning "$open_identifier"),$(finding_json 40 warning "" holistic/swallowed-error)]"
+    "[$(finding_json 120 major "$open_identifier"),$(finding_json 40 major "" holistic/swallowed-error)]"
   run bash "$WRITER" --root "$ROOT" --member "$member" --provenance refused --base "$LEDGER_BASE_SHA"
   [ "$status" -eq 0 ]
   [ -f "$AUDIT_DIRECTORY/${b_digest}.${member}.refused" ]
@@ -1495,7 +1506,7 @@ snapshot_ledger() {
   [ "$status" -eq 3 ]
   grep -qF -- "   ${open_identifier}  " <<<"$output" || return 1
 
-  write_findings_sidecar "$member" "[$(finding_json 113 warning "$open_identifier"),$(finding_json 59)]"
+  write_findings_sidecar "$member" "[$(finding_json 113 major "$open_identifier"),$(finding_json 59)]"
   run bash "$WRITER" --root "$ROOT" --member "$member" --provenance refused --base "$offset_base"
   [ "$status" -eq 0 ]
   [ "$(jq -r .base_sha "$LEDGER")" = "$LEDGER_BASE_SHA" ]
@@ -1507,7 +1518,7 @@ snapshot_ledger() {
 @test "accounting: a write with no --base still reads the open set at the derived key" {
   ledger_setup
   member="$ACCOUNTING_MEMBER"
-  write_findings_sidecar "$member" "[$(finding_json 113 error),$(finding_json 59)]"
+  write_findings_sidecar "$member" "[$(finding_json 113 critical),$(finding_json 59)]"
   bash "$WRITER" --root "$ROOT" --member "$member" --provenance refused --base "$LEDGER_BASE_SHA" >/dev/null
   first_identifier="$(open_entry_id "$member" 0)"
   second_identifier="$(open_entry_id "$member" 1)"
@@ -1531,7 +1542,7 @@ snapshot_ledger() {
   ledger_setup
   member="$ACCOUNTING_MEMBER"
   digest="$(member_digest "$ROOT" "$member")"
-  write_findings_sidecar "$member" "[$(finding_json 113 error),$(finding_json 59)]"
+  write_findings_sidecar "$member" "[$(finding_json 113 critical),$(finding_json 59)]"
   bash "$WRITER" --root "$ROOT" --member "$member" --provenance refused --base "$LEDGER_BASE_SHA" >/dev/null
   refused="$AUDIT_DIRECTORY/${digest}.${member}.refused"
   [ -f "$refused" ]
@@ -1553,7 +1564,7 @@ snapshot_ledger() {
 
 @test "accounting: a refused write in a member-refusal round with no ledger exits 3" {
   accounting_fixture
-  write_findings_sidecar "$member" "[$(finding_json 113 error "$FIRST_ID"),$(finding_json 59 warning "$SECOND_ID")]"
+  write_findings_sidecar "$member" "[$(finding_json 113 critical "$FIRST_ID"),$(finding_json 59 major "$SECOND_ID")]"
   rm -f "$LEDGER"
   run bash "$WRITER" --root "$ROOT" --member "$member" --provenance refused --base "$LEDGER_BASE_SHA"
   [ "$status" -eq 3 ]
@@ -2089,7 +2100,7 @@ write_orphan_ledger() {
     {schema: 1, base_sha: $base, branch: "fix/catchup", round: 1, head_sha: $base,
      updated_at: "2026-01-01T00:00:00Z",
      remaining: [{member: $member, entry_id: $id, finding_class: "holistic/secret-exposure",
-                  severity: "important", path: ".claude/hooks/block-secrets-write.sh", line: 113,
+                  severity: "major", path: ".claude/hooks/block-secrets-write.sh", line: 113,
                   title: "the path arm admits arbitrary trailing text",
                   failure_mode: "a separator unbounds the tail", verified_by: "ran the hook",
                   suggested_fix: "bound each trailing segment", first_seen_round: 1,

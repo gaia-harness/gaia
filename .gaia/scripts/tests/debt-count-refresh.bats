@@ -82,7 +82,7 @@ open_count() { jq -r '.openCount' "$CACHE"; }
 # quote, so the stub becomes a syntax error, reads as a gh failure, and this
 # test reds on a stale count rather than on the real cause.
 @test "excludes in-progress from the open count" {
-  stub_gh_json '[{"number":1,"labels":[{"name":"tech-debt"},{"name":"severity:important"}],"body":"the refresher'"'"'s own count"},{"number":2,"labels":[{"name":"tech-debt"},{"name":"severity:suggestion"},{"name":"in-progress"}]},{"number":3,"labels":[{"name":"tech-debt"},{"name":"severity:critical"}]}]'
+  stub_gh_json '[{"number":1,"labels":[{"name":"tech-debt"},{"name":"severity:major"}],"body":"the refresher'"'"'s own count"},{"number":2,"labels":[{"name":"tech-debt"},{"name":"severity:minor"},{"name":"in-progress"}]},{"number":3,"labels":[{"name":"tech-debt"},{"name":"severity:critical"}]}]'
   : > "$SENTINEL"
   run run_refresh
   [ "$status" -eq 0 ]
@@ -94,7 +94,7 @@ open_count() { jq -r '.openCount' "$CACHE"; }
 # the backlog until its SPEC and implementation land, so it must not inflate the
 # nudge. Three issues, one spec-pending, must count 2.
 @test "excludes debt:spec-pending from the open count" {
-  stub_gh_json '[{"number":1,"labels":[{"name":"tech-debt"},{"name":"severity:important"}]},{"number":2,"labels":[{"name":"tech-debt"},{"name":"severity:suggestion"},{"name":"debt:spec-pending"}]},{"number":3,"labels":[{"name":"tech-debt"},{"name":"severity:critical"}]}]'
+  stub_gh_json '[{"number":1,"labels":[{"name":"tech-debt"},{"name":"severity:major"}]},{"number":2,"labels":[{"name":"tech-debt"},{"name":"severity:minor"},{"name":"debt:spec-pending"}]},{"number":3,"labels":[{"name":"tech-debt"},{"name":"severity:critical"}]}]'
   : > "$SENTINEL"
   run run_refresh
   [ "$status" -eq 0 ]
@@ -107,7 +107,7 @@ open_count() { jq -r '.openCount' "$CACHE"; }
 # started, so the active state must leave the count exactly as the pending one
 # does. Three issues, one spec-active, must count 2.
 @test "excludes debt:spec-active from the open count" {
-  stub_gh_json '[{"number":1,"labels":[{"name":"tech-debt"},{"name":"severity:important"}]},{"number":2,"labels":[{"name":"tech-debt"},{"name":"severity:suggestion"},{"name":"debt:spec-active"}]},{"number":3,"labels":[{"name":"tech-debt"},{"name":"severity:critical"}]}]'
+  stub_gh_json '[{"number":1,"labels":[{"name":"tech-debt"},{"name":"severity:major"}]},{"number":2,"labels":[{"name":"tech-debt"},{"name":"severity:minor"},{"name":"debt:spec-active"}]},{"number":3,"labels":[{"name":"tech-debt"},{"name":"severity:critical"}]}]'
   : > "$SENTINEL"
   run run_refresh
   [ "$status" -eq 0 ]

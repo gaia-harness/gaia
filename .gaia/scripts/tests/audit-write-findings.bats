@@ -42,7 +42,7 @@ setup() {
 # rule fires on its own.
 complete_finding() {
   cat <<'JSON'
-{"finding_class":"holistic/secret-exposure","severity":"warning",
+{"finding_class":"holistic/secret-exposure","severity":"major",
  "path":".claude/hooks/block-secrets-write.sh","line":113,
  "title":"the expansion-then-path arm admits arbitrary trailing text",
  "failure_mode":"once a separator follows the closing brace the tail is unbounded over the character set a literal secret uses, so a live token assigned behind one is allowed",
@@ -109,7 +109,7 @@ write() {
   write "[$(complete_finding)]" >/dev/null
   entry="$(jq -c '.findings[0]' "$EXPECTED")"
   [ "$(jq -r .finding_class <<<"$entry")" = "holistic/secret-exposure" ]
-  [ "$(jq -r .severity <<<"$entry")" = "warning" ]
+  [ "$(jq -r .severity <<<"$entry")" = "major" ]
   [ "$(jq -r .path <<<"$entry")" = ".claude/hooks/block-secrets-write.sh" ]
   [ "$(jq -r .line <<<"$entry")" = "113" ]
   grep -qF "arbitrary trailing text" <<<"$(jq -r .title <<<"$entry")"
@@ -243,17 +243,17 @@ write() {
   grep -qF "finding_class must be a non-empty string" <<<"$output"
 }
 
-@test "rejects a severity outside error|warning|suggestion" {
-  # `critical` is the re-run ledger's vocabulary, not the sidecar's; the two
-  # scales are deliberately different and confusing them must not pass.
-  run write "[$(complete_finding | jq -c '.severity = "critical"')]"
+@test "rejects a severity outside critical|major|minor" {
+  # `warning`, `error` and `suggestion` are the retired tokens: a stale writer
+  # must be refused, not silently accepted.
+  run write "[$(complete_finding | jq -c '.severity = "warning"')]"
   [ "$status" -eq 2 ]
-  grep -qF "severity must be one of error|warning|suggestion" <<<"$output"
+  grep -qF "severity must be one of critical|major|minor" <<<"$output"
   [ ! -f "$EXPECTED" ]
 }
 
 @test "accepts each of the three valid severities" {
-  for severity in error warning suggestion; do
+  for severity in critical major minor; do
     write "[$(complete_finding | jq -c --arg severity "$severity" '.severity = $severity')]" >/dev/null
     [ "$(jq -r '.findings[0].severity' "$EXPECTED")" = "$severity" ]
   done

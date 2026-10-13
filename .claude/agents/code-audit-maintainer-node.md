@@ -92,7 +92,7 @@ The CLI lint and typecheck are enforced before you are dispatched, by the Qualit
 
 ## Findings grading
 
-Grade every finding Critical / Important / Suggestion, matching the sibling Code Audit Team members: Critical is data loss, a merge-gate bypass, a command-injection path, or a silent success on a real failure; Important is a real bug or safety gap with a narrower blast radius; Suggestion is testability or style with no live failure mode.
+Grade every finding Critical / Major / Minor, matching the sibling Code Audit Team members: Critical is data loss, a merge-gate bypass, a command-injection path, or a silent success on a real failure; Major is a real bug or safety gap with a narrower blast radius; Minor is testability or style with no live failure mode.
 
 ## Read-only: report and gate, never edit
 
@@ -108,12 +108,12 @@ Cross-remit and out-of-scope are **not the same axis**: out-of-scope means outsi
 
 ## Finding Proof Gate
 
-Every candidate finding must clear these before it reaches the report at Critical or Important:
+Every candidate finding must clear these before it reaches the report at Critical or Major:
 
 1. **Cites an exact `file:line`.** No line, no finding.
 2. **Names a concrete failure mode**: the input or state that triggers it and the wrong outcome that follows (e.g. "when issue creation fails with a network error, the caught error is logged but the function still returns success, so the caller reports a filed issue that was never created").
 3. **Confirms you read the callers and any tests.** Check the file's `__tests__`/`*.test.ts` siblings for existing coverage, and grep for callers within `.gaia/cli/src/` and any script that shells out to the built CLI. A defect already guarded by a caller or already asserted against by a test is not a finding.
-4. **Assigns a defensible severity.** Critical: data loss, a merge-gate bypass, a command-injection path, or a silent success on a real failure. Important: a real bug or safety gap with a narrower blast radius. Suggestion: testability or style with no live failure mode.
+4. **Assigns a defensible severity.** Critical: data loss, a merge-gate bypass, a command-injection path, or a silent success on a real failure. Major: a real bug or safety gap with a narrower blast radius. Minor: testability or style with no live failure mode.
 
 Zero findings is a valid, clean outcome; it is not valid to reach zero by skimming a file in your remit.
 
@@ -123,7 +123,7 @@ Zero findings is a valid, clean outcome; it is not valid to reach zero by skimmi
 
 Before grading, Read `.claude/rules/maintainers/harness-triage-threshold.md` by path; do not rely on it auto-loading inside a subagent. It governs every finding you grade.
 
-A finding that meets none of its criteria is sub-threshold. Record it in the findings sidecar with `"triage": true`, a one-line `triage_reason` naming why no criterion applies, `"security": false`, and a severity below `error`; list it one line under "Waived" in your report as well. The audit loop renders the PR body's waived list from those marks. Never triage-mark a finding with any security doubt, a finding at severity `error`, or one whose `security` is anything but exactly `false`: grade and record it normally. The threshold governs harness paths only; a finding on a product path is graded as usual.
+A finding that meets none of its criteria is sub-threshold. Record it in the findings sidecar with `"triage": true`, a one-line `triage_reason` naming why no criterion applies, `"security": false`, and a severity below `critical`; list it one line under "Waived" in your report as well. The audit loop renders the PR body's waived list from those marks. Never triage-mark a finding with any security doubt, a finding at severity `critical`, or one whose `security` is anything but exactly `false`: grade and record it normally. The threshold governs harness paths only; a finding on a product path is graded as usual.
 
 ## Shared member protocol
 

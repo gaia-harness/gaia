@@ -76,7 +76,7 @@ gh issue list --label tech-debt --state open --limit 1000 \
       labels: [.labels[].name],
       sev: ([.labels[].name]
             | if   index("severity:critical")    then 3
-              elif index("severity:important")   then 2
+              elif index("severity:major")       then 2
               elif index("severity:investigate") then 0
               else 1 end),
       difficulty: ([.labels[].name]
@@ -94,7 +94,7 @@ gh issue list --label tech-debt --state open --limit 1000 \
 
 How the sort works, and why it is deterministic:
 
-- **Severity descending.** Each issue's one severity label maps to a rank: `severity:critical → 3`, `severity:important → 2`, `severity:suggestion → 1`, `severity:investigate → 0`. An issue with **no** severity label falls through the `else` branch to rank `1`, the **suggestion** band, so a human-filed fieldless issue is a valid candidate and sorts with the suggestions.
+- **Severity descending.** Each issue's one severity label maps to a rank: `severity:critical → 3`, `severity:major → 2`, `severity:minor → 1`, `severity:investigate → 0`. An issue with **no** severity label falls through the `else` branch to rank `1`, the **minor** band, so a human-filed fieldless issue is a valid candidate and sorts with the minor findings.
 - **`severity:investigate` sorts below every band and is excluded from candidacy** (the backlog pass below); the unlabelled `else` keeps rank 1, a sort position and never a label.
 - **`createdAt` ascending within a band.** `sort_by([(-.sev), .createdAt])` sorts by negated rank first (highest severity first) then by `createdAt`. `gh` returns `createdAt` as a `Z`-normalized RFC 3339 string, so a lexicographic ascending sort is chronological ascending: of two equal-severity issues, the **older** one sorts first (FIFO within the band).
 - **Every issue also carries `body`, `labels`, `key`, and `footprint`.** `labels` is the label name list; `body` is the raw issue body, populated unconditionally; `key` is the parsed dedup key (`class`, `path`, an integer `line`) or `null` when absent or malformed; `footprint` is the footprint class taken from the `footprint:<class>` label with its namespace prefix stripped (`narrow` | `wide` | `spec`), or `null` when the issue carries no `footprint:` label. These ride the sort but play no part in it; the passes below read them.

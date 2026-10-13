@@ -9,9 +9,9 @@
  * bundle by construction.
  */
 
+import {run as runCodifyLedger} from './codify/ledger.js';
+import {run as runCodifyTally} from './codify/tally.js';
 import {run as runFitness} from './fitness/index.js';
-import {run as runHardenLedger} from './harden/ledger.js';
-import {run as runHardenTally} from './harden/tally.js';
 import {run as runInit} from './init/index.js';
 import {run as runLabels} from './labels/index.js';
 import {run as runPackages} from './packages/index.js';
@@ -37,8 +37,8 @@ const HELP_TEXT = `Usage: gaia <subcommand> [args]
   fitness render-card [--cols N]
   labels sync
   packages sync-settings [--check]
-  harden-ledger list|record|prune|snapshot
-  harden-tally
+  codify-ledger list|record|prune|snapshot
+  codify-tally
   update merge-workspace|merge-audit-ci|merge-region|regen-regions
   update-deps run|decline|global-tools|advisories|advisory-landed|dismiss-alert|write-security-cache|check-security-override
   init strip-branding|configure-i18n|configure-data-layer|rename|wire-statusline|bootstrap-env|write-project-config|finalize|resume
@@ -53,9 +53,9 @@ const HELP_TEXT = `Usage: gaia <subcommand> [args]
 const SUBCOMMAND_HANDLERS: Readonly<
   Partial<Record<string, SubcommandHandler>>
 > = {
+  'codify-ledger': runCodifyLedger,
+  'codify-tally': runCodifyTally,
   fitness: runFitness,
-  'harden-ledger': runHardenLedger,
-  'harden-tally': runHardenTally,
   init: runInit,
   labels: runLabels,
   packages: runPackages,

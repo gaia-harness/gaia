@@ -173,7 +173,7 @@ run_in_registry_repo() {
   [ "${#lines[@]}" -eq 16 ]
   local expected_path
   for expected_path in setup-state.json cache/shared/context cache/shared protected \
-    settings.json audit audit/light telemetry telemetry/usage-sweep.lock.d debt harden runs \
+    settings.json audit audit/light telemetry telemetry/usage-sweep.lock.d debt codify runs \
     ports ports/tombstones ports/launches ports/sessions; do
     grep -qxF -- "$expected_path" <<<"$output" || return 1
   done
@@ -236,17 +236,18 @@ run_in_registry_repo() {
 
 # ========== gaia_registry_rm_whitelist ==========
 
-@test "gaia_registry_rm_whitelist: prints exactly the 7 rm-whitelist rows in registry order" {
+@test "gaia_registry_rm_whitelist: prints exactly the 8 rm-whitelist rows in registry order" {
   run_in_registry_repo gaia_registry_rm_whitelist
   [ "$status" -eq 0 ]
-  [ "${#lines[@]}" -eq 7 ]
+  [ "${#lines[@]}" -eq 8 ]
   [ "${lines[0]}" = $'.gaia/local/plans\ttrue' ]
   [ "${lines[1]}" = $'.gaia/local/specs\ttrue' ]
   [ "${lines[2]}" = $'.gaia/local/audit\ttrue' ]
-  [ "${lines[3]}" = $'.gaia/local/cache\ttrue' ]
-  [ "${lines[4]}" = $'.gaia/local/runs\ttrue' ]
-  [ "${lines[5]}" = $'dist\tfalse' ]
-  [ "${lines[6]}" = $'build\tfalse' ]
+  [ "${lines[3]}" = $'.gaia/local/cleanse\ttrue' ]
+  [ "${lines[4]}" = $'.gaia/local/cache\ttrue' ]
+  [ "${lines[5]}" = $'.gaia/local/runs\ttrue' ]
+  [ "${lines[6]}" = $'dist\tfalse' ]
+  [ "${lines[7]}" = $'build\tfalse' ]
 }
 
 @test "gaia_registry_rm_whitelist: no jq on PATH returns 1 and prints nothing on stdout (a caller that cannot read the list treats every path as non-whitelisted)" {
@@ -399,9 +400,10 @@ run_in_registry_repo() {
     "red-ledger/observations.jsonl:per-tree"
     "worthiness-ledger/worthiness.jsonl:per-tree"
     "forensics/2026-07-23-x.md:per-tree"
-    "harden/declines.json:shared"
-    "harden/reviewed.json:shared"
-    "harden/review-tally.json:shared"
+    "codify/declines.json:shared"
+    "codify/reviewed.json:shared"
+    "codify/review-tally.json:shared"
+    "harden/declines.json:residue"
     "specs/ledger.json:main-only"
     "plans/ledger.json:main-only"
     "cache/gh-artifact-pr.treeA.json:main-only"
@@ -418,7 +420,10 @@ run_in_registry_repo() {
     "cache/audit-SPEC-042:ephemeral"
     "cache/mutation-scratch/abc123.work.code-audit-frontend:ephemeral"
     "cache/some-run/renders.json:ephemeral"
-    "audit/KNOWLEDGE-2026-07-23.md:ephemeral"
+    "cleanse/KNOWLEDGE-2026-07-23.md:ephemeral"
+    "cleanse/filing-outcomes-abc.jsonl:ephemeral"
+    "cleanse/filing-retry/x.json:ephemeral"
+    "audit/KNOWLEDGE-2026-07-23.md:residue"
     "audit/issue-body-abc.md:ephemeral"
     "mentorship.json:residue"
     "telemetry/cost"".jsonl:residue"

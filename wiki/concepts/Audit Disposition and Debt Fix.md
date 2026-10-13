@@ -2,13 +2,13 @@
 type: concept
 status: active
 created: 2026-06-30
-updated: 2026-10-08
+updated: 2026-10-13
 tags: [concept, claude, review]
 ---
 
 # Audit Disposition and Debt Fix
 
-Every finding the [[Code Review Audit Agent]] surfaces carries a **forced disposition** before its marker clears, and one actor disposes: the audit loop unit ([[PR Merge Workflow]]), never the member that reported it. In-scope findings keep their existing handling (the round's fixer repairs, or an escalation that blocks the marker). Out-of-scope findings, debt in code the PR did not change but the audit opened anyway within its review radius, route out of the gating Critical/Important/Suggestions sections into a separate disposition: a deduped, severity-labeled `tech-debt` GitHub issue, a recorded waive (not filed) when the finding's path is gate machinery or a file the pull request already changes and the finding itself clears both disqualifiers, a diverted security surface, or a backend-absent record. The `/gaia-debt` skill then fixes the filed backlog one fix unit at a time, a unit being a single issue or a user-approved related batch, and a statusline segment surfaces the open count.
+Every finding the [[Code Review Audit Agent]] surfaces carries a **forced disposition** before its marker clears, and one actor disposes: the audit loop unit ([[PR Merge Workflow]]), never the member that reported it. In-scope findings keep their existing handling (the round's fixer repairs, or an escalation that blocks the marker). Out-of-scope findings, debt in code the PR did not change but the audit opened anyway within its review radius, route out of the gating Critical/Major/Minor sections into a separate disposition: a deduped, severity-labeled `tech-debt` GitHub issue, a recorded waive (not filed) when the finding's path is gate machinery or a file the pull request already changes and the finding itself clears both disqualifiers, a diverted security surface, or a backend-absent record. The `/gaia-debt` skill then fixes the filed backlog one fix unit at a time, a unit being a single issue or a user-approved related batch, and a statusline segment surfaces the open count.
 
 The system **fails open**. A definitively-absent issue backend makes the whole feature inert. A transient backend failure never silently drops a finding and never blocks the merge. The single intended block is a genuinely-missing disposition on a present, writable backend.
 
@@ -27,7 +27,7 @@ The audit never edits the reviewed PR's working tree for an out-of-scope finding
 
 Each surviving finding (one that clears the proof gate and any adversarial verification) is tagged against the audit base's changed line ranges:
 
-- **in-scope**: the finding's `file:line` falls inside the PR's changed line ranges. It flows into the Critical/Important/Suggestions sections and gates the marker exactly as before.
+- **in-scope**: the finding's `file:line` falls inside the PR's changed line ranges. It flows into the Critical/Major/Minor sections and gates the marker exactly as before.
 - **out-of-scope**: the defective line is outside those ranges, but the audit already opened the file within its review radius, a caller, a test, an upstream guard, or an importer of a changed export (the same files the incremental-scope importer recheck opens).
 
 The bound is hard: the audit **never opens an unrelated file to hunt for debt**. Out-of-scope filing is a byproduct of reviewing the diff and its review radius, never a whole-file or whole-repo sweep. A file the audit never opened to review the diff is out of bounds and its debt is not filed.
@@ -55,7 +55,7 @@ Either path term alone is sufficient, and a gate-machinery finding satisfies the
 
 A waived finding is recorded as a `waive-out-of-scope` disposition (basis `cross-remit`) and listed in the PR body under the heading `## Out-of-scope machinery findings (recorded, not filed)`, its dedup key written there in the wrapped `<!-- gaia-debt-key: … -->` form (`.claude/skills/file-tech-debt/SKILL.md`). The PR body is the durable, human-readable record of what was waived. The disposition carries no field for the changed-files term; the union lives entirely in how the eligibility test reads the existing `path=`.
 
-An **accepted residual** is a distinct disposition from a machinery waive: a waive covers an out-of-scope finding on an eligible path, while an accepted residual is an in-scope Suggestion or finding the operator defers rather than fixing in this pull request, in the member's own remit ([[Audit Round Procedure#Applying the audit's own Suggestions: digest economics]]). It is recorded under the heading `## Accepted residuals (recorded, not fixed)` in the pull request body and nowhere else: no dependence on any gitignored `.gaia/local` store.
+An **accepted residual** is a distinct disposition from a machinery waive: a waive covers an out-of-scope finding on an eligible path, while an accepted residual is an in-scope Minor finding or finding the operator defers rather than fixing in this pull request, in the member's own remit ([[Audit Round Procedure#Applying the audit's own Minor findings: digest economics]]). It is recorded under the heading `## Accepted residuals (recorded, not fixed)` in the pull request body and nowhere else: no dependence on any gitignored `.gaia/local` store.
 
 Eligibility is partly **author-controlled**: touching a file at all makes that file's non-security out-of-scope findings waivable, so the eligibility test bounds **where** a waive may be recorded, not **which** findings may be waived. Three walls stand on that second question, all of them agent judgment and none of them gate-checked: the non-security screen, and the two disqualifiers above.
 
@@ -109,7 +109,7 @@ A security-class finding's detail never reaches a public or internal issue or th
 
 ## The disposition gate and the marker
 
-The disposition gate is the **fourth marker precondition**, alongside the three existing ones (no in-scope Critical, every in-scope Important addressed, every in-scope Suggestion auto-fixed or escalated), which are now scoped to in-scope findings. It is enforced by the unit, not by a member: `audit-dispositions-check.sh check` refuses a finding with no disposition (whoever authored it), and `check-outcomes` reconciles the round's `filing-outcomes-<r>.jsonl` against every `file` and `divert` entry.
+The disposition gate is a **further marker precondition**, alongside the existing ones (no in-scope Critical, every in-scope Major fixed or acknowledged), which are scoped to in-scope findings (the two layers: [[PR Merge Workflow#Who audits: the dispatched member set]]). It is enforced by the unit, not by a member: `audit-dispositions-check.sh check` refuses a finding with no disposition (whoever authored it), and `check-outcomes` reconciles the round's `filing-outcomes-<r>.jsonl` against every `file` and `divert` entry.
 
 The unit decides a disposition for each finding in the round's `dispositions-<r>.json`; filed `tech-debt` issues and the PR-body headings carry the durable record. The dispositions are `fix`, `accept-residual`, `waive-out-of-scope`, `file` and `divert`. The filing script records one outcome per `file` or `divert` entry:
 
@@ -143,9 +143,9 @@ The local re-run carry-forward ledger (`.gaia/local/audit/<audit-key>.rerun.json
 
 **Ordering is a pure sort, and no model ranks.** Severity descending then oldest first is one source-checkable expression over fields GitHub returns, so anyone can reproduce the order by re-running it. Clustering is likewise a pure function of parsed fields. A model that ranked or clustered would make the order unreproducible and let the drainer talk itself into the issue it preferred.
 
-**An unlabelled issue sorts with the suggestions.** A fallback that lands on `investigate` would make "I do not know" the value an issue acquires by default, which is what turned the dedup key's `class=` axis into a graveyard. And because the drain excludes investigate from candidacy, every human-filed fieldless issue would silently leave the fix pool. The fallback assigns a sort position, never a label, so nothing about it is a grade.
+**An unlabelled issue sorts with the Minor findings.** A fallback that lands on `investigate` would make "I do not know" the value an issue acquires by default, which is what turned the dedup key's `class=` axis into a graveyard. And because the drain excludes investigate from candidacy, every human-filed fieldless issue would silently leave the fix pool. The fallback assigns a sort position, never a label, so nothing about it is a grade.
 
-**Investigate ranks below every band and is not one.** It records that the severity is not yet known, so it is not a fourth rung on the ramp: its rank only sorts it below the suggestions. What such an issue asks for is research, and `/gaia-debt` fixes, so the drain excludes it outright. It leaves the pool by answering its question and re-grading it, never by the drain doing that research.
+**Investigate ranks below every band and is not one.** It records that the severity is not yet known, so it is not a fourth rung on the ramp: its rank only sorts it below the Minor findings. What such an issue asks for is research, and `/gaia-debt` fixes, so the drain excludes it outright. It leaves the pool by answering its question and re-grading it, never by the drain doing that research.
 
 **Clustering needs a real shared cause.** The fallback class `holistic/unclassified` never pairs two issues, because two issues that both fall back to it share no root-cause signal, only the absence of one, and pairing them on a shared directory is clustering on the directory. A shared directory alone is too weak to cluster on: a whole services directory is not one fix. A backlog whose issues all carry the fallback class therefore clusters on a shared path alone, and the class-plus-directory signal starts contributing once real classes are seeded. Clustering is security-blind because the offer is where visibility matters: a security-class issue never anchors a public batch.
 
@@ -191,7 +191,7 @@ Where `/gaia-debt` fixes the backlog the audit already filed, `/gaia-residue` de
 
 ## Relationship to the Policy-Memory Loop
 
-`/gaia-debt` and `/gaia-harden` (the [[Policy-Memory Loop]]) share the `finding_class` vocabulary but do not overlap. `/gaia-harden` hardens recurring **forms**: when the same `finding_class` recurs across distinct PRs, it drafts the lowest-context-weight guard (a deterministic check, skill, or path-scoped rule) so the class stops recurring. `/gaia-debt` fixes concrete **instances**: the specific out-of-scope defects the audit filed as `tech-debt` issues, one fix PR at a time. One governs the rule that prevents a pattern; the other clears the individual debts already on the books.
+`/gaia-debt` and `/gaia-codify` (the [[Policy-Memory Loop]]) share the `finding_class` vocabulary but do not overlap. `/gaia-codify` codifies recurring **forms**: when the same `finding_class` recurs across distinct PRs, it drafts the lowest-context-weight guard (a deterministic check, skill, or path-scoped rule) so the class stops recurring. `/gaia-debt` fixes concrete **instances**: the specific out-of-scope defects the audit filed as `tech-debt` issues, one fix PR at a time. One governs the rule that prevents a pattern; the other clears the individual debts already on the books.
 
 ## Deferred (not yet built)
 
@@ -205,6 +205,6 @@ The following are intentionally out of scope for the current implementation and 
 ## Pairs with
 
 - [[Code Review Audit Agent]]: the producer; classifies scope and disposes out-of-scope findings.
-- [[PR Merge Workflow]]: the disposition gate is the fourth marker precondition.
-- [[Policy-Memory Loop]]: the sibling `finding_class` consumer; hardens recurring forms while `/gaia-debt` fixes concrete instances.
+- [[PR Merge Workflow]]: the disposition gate is a further marker precondition.
+- [[Policy-Memory Loop]]: the sibling `finding_class` consumer; codifies recurring forms while `/gaia-debt` fixes concrete instances.
 - [[Worktrees]]: the per-tree/shared state model that `.gaia/local/debt/`'s shared scope and the worktree-mode fix mechanics both follow.

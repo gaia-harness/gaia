@@ -18,13 +18,13 @@ const fallbackWindow = (findings: number): TallyPrRecord[] =>
       {
         area_tags: [],
         finding_class: 'holistic/unclassified',
-        severity: 'warning',
+        severity: 'major',
       },
     ])
   );
 
 describe('computeTally', () => {
-  test('surfaces a class seen on 3 distinct PRs at warning severity', () => {
+  test('surfaces a class seen on 3 distinct PRs at major severity', () => {
     const result = computeTally({
       coveredClass: noCover,
       prs: [
@@ -32,21 +32,21 @@ describe('computeTally', () => {
           {
             area_tags: ['app/components'],
             finding_class: 'react-doctor/no-generic-handler-names',
-            severity: 'warning',
+            severity: 'major',
           },
         ]),
         pr(1188, [
           {
             area_tags: ['app/components'],
             finding_class: 'react-doctor/no-generic-handler-names',
-            severity: 'warning',
+            severity: 'major',
           },
         ]),
         pr(1175, [
           {
             area_tags: ['app/hooks'],
             finding_class: 'react-doctor/no-generic-handler-names',
-            severity: 'warning',
+            severity: 'major',
           },
         ]),
       ],
@@ -63,7 +63,7 @@ describe('computeTally', () => {
       finding_class: 'react-doctor/no-generic-handler-names',
       is_oracle: true,
       pr_numbers: [1201, 1188, 1175],
-      severity_max: 'warning',
+      severity_max: 'major',
     });
   });
 
@@ -75,7 +75,7 @@ describe('computeTally', () => {
           {
             area_tags: [],
             finding_class: 'rule/switch-statement',
-            severity: 'warning',
+            severity: 'major',
           },
         ])
       ),
@@ -91,10 +91,10 @@ describe('computeTally', () => {
       coveredClass: noCover,
       prs: [
         pr(2, [
-          {area_tags: [], finding_class: 'knip/exports', severity: 'warning'},
+          {area_tags: [], finding_class: 'knip/exports', severity: 'major'},
         ]),
         pr(1, [
-          {area_tags: [], finding_class: 'knip/exports', severity: 'warning'},
+          {area_tags: [], finding_class: 'knip/exports', severity: 'major'},
         ]),
       ],
       suppressedClass: noSuppress,
@@ -109,9 +109,9 @@ describe('computeTally', () => {
       coveredClass: noCover,
       prs: [
         pr(1, [
-          {area_tags: [], finding_class: 'knip/exports', severity: 'warning'},
-          {area_tags: [], finding_class: 'knip/exports', severity: 'warning'},
-          {area_tags: [], finding_class: 'knip/exports', severity: 'warning'},
+          {area_tags: [], finding_class: 'knip/exports', severity: 'major'},
+          {area_tags: [], finding_class: 'knip/exports', severity: 'major'},
+          {area_tags: [], finding_class: 'knip/exports', severity: 'major'},
         ]),
       ],
       suppressedClass: noSuppress,
@@ -121,44 +121,44 @@ describe('computeTally', () => {
     expect(result.candidate_count).toBe(0);
   });
 
-  test('UAT-001: a suggestion-only recurring class is a candidate with severity_max suggestion', () => {
-    const suggestionOnly = computeTally({
+  test('UAT-001: a minor-only recurring class is a candidate with severity_max minor', () => {
+    const minorOnly = computeTally({
       coveredClass: noCover,
       prs: [3, 2, 1].map((n) =>
         pr(n, [
           {
             area_tags: [],
             finding_class: 'holistic/hardcoded-string',
-            severity: 'suggestion',
+            severity: 'minor',
           },
         ])
       ),
       suppressedClass: noSuppress,
       windowDays: 90,
     });
-    expect(suggestionOnly.candidate_count).toBe(1);
-    expect(suggestionOnly.candidates[0]).toMatchObject({
+    expect(minorOnly.candidate_count).toBe(1);
+    expect(minorOnly.candidates[0]).toMatchObject({
       distinct_pr_count: 3,
-      severity_max: 'suggestion',
+      severity_max: 'minor',
     });
-    expect(suggestionOnly.unclassified).toBeNull();
+    expect(minorOnly.unclassified).toBeNull();
 
-    const atWarning = computeTally({
+    const atMajor = computeTally({
       coveredClass: noCover,
       prs: [3, 2, 1].map((n) =>
         pr(n, [
           {
             area_tags: [],
             finding_class: 'holistic/hardcoded-string',
-            severity: 'warning',
+            severity: 'major',
           },
         ])
       ),
       suppressedClass: noSuppress,
       windowDays: 90,
     });
-    expect(atWarning.candidate_count).toBe(1);
-    expect(atWarning.candidates[0]?.severity_max).toBe('warning');
+    expect(atMajor.candidate_count).toBe(1);
+    expect(atMajor.candidates[0]?.severity_max).toBe('major');
   });
 
   test('combines CI-run and local-run findings for the same class across distinct PRs', () => {
@@ -171,21 +171,21 @@ describe('computeTally', () => {
           {
             area_tags: ['app'],
             finding_class: 'rule/switch-statement',
-            severity: 'warning',
+            severity: 'major',
           },
         ]),
         pr(11, [
           {
             area_tags: ['app'],
             finding_class: 'rule/switch-statement',
-            severity: 'error',
+            severity: 'critical',
           },
         ]),
         pr(12, [
           {
             area_tags: ['app'],
             finding_class: 'rule/switch-statement',
-            severity: 'warning',
+            severity: 'major',
           },
         ]),
       ],
@@ -194,7 +194,7 @@ describe('computeTally', () => {
     });
 
     expect(result.candidate_count).toBe(1);
-    expect(result.candidates[0]?.severity_max).toBe('error');
+    expect(result.candidates[0]?.severity_max).toBe('critical');
   });
 
   test('collapses two same-class findings in one PR to a single distinct-PR count', () => {
@@ -205,12 +205,12 @@ describe('computeTally', () => {
           {
             area_tags: ['app/routes'],
             finding_class: 'holistic/missing-auth-check',
-            severity: 'error',
+            severity: 'critical',
           },
           {
             area_tags: ['app/pages'],
             finding_class: 'holistic/missing-auth-check',
-            severity: 'warning',
+            severity: 'major',
           },
         ])
       ),
@@ -221,7 +221,7 @@ describe('computeTally', () => {
     expect(result.candidates[0]).toMatchObject({
       area_tags: ['app/routes', 'app/pages'],
       distinct_pr_count: 3,
-      severity_max: 'error',
+      severity_max: 'critical',
     });
   });
 
@@ -230,16 +230,16 @@ describe('computeTally', () => {
       coveredClass: noCover,
       prs: [3, 2, 1].map((n) =>
         pr(n, [
-          {area_tags: [], finding_class: '', severity: 'error'},
+          {area_tags: [], finding_class: '', severity: 'critical'},
           {
             area_tags: [],
             finding_class: 'not-a-real-prefix/x',
-            severity: 'error',
+            severity: 'critical',
           },
           {
             area_tags: [],
             finding_class: 'holistic/something-made-up',
-            severity: 'error',
+            severity: 'critical',
           },
         ])
       ),
@@ -260,7 +260,7 @@ describe('computeTally', () => {
           {
             area_tags: [],
             finding_class: 'holistic/arbitrary-slug',
-            severity: 'error',
+            severity: 'critical',
           },
         ])
       ),
@@ -280,28 +280,28 @@ describe('computeTally', () => {
           {
             area_tags: ['app/routes'],
             finding_class: 'holistic/unclassified',
-            severity: 'warning',
+            severity: 'major',
           },
           // A second, distinct classless finding in the SAME PR must still
           // collapse to a single distinct-PR increment (cardinality one).
           {
             area_tags: ['app/services'],
             finding_class: 'holistic/unclassified',
-            severity: 'error',
+            severity: 'critical',
           },
         ]),
         pr(2, [
           {
             area_tags: [],
             finding_class: 'holistic/unclassified',
-            severity: 'suggestion',
+            severity: 'minor',
           },
         ]),
         pr(3, [
           {
             area_tags: [],
             finding_class: 'holistic/unclassified',
-            severity: 'warning',
+            severity: 'major',
           },
         ]),
       ],
@@ -317,7 +317,7 @@ describe('computeTally', () => {
     ).toBe(true);
     expect(result.unclassified).not.toBeNull();
     expect(result.unclassified?.distinct_pr_count).toBe(3);
-    expect(result.unclassified?.severity_max).toBe('error');
+    expect(result.unclassified?.severity_max).toBe('critical');
     expect(result.unclassified?.area_tags).toEqual([
       'app/routes',
       'app/services',
@@ -332,7 +332,7 @@ describe('computeTally', () => {
           {
             area_tags: [],
             finding_class: 'holistic/unclassified',
-            severity: 'warning',
+            severity: 'major',
           },
         ])
       ),
@@ -349,7 +349,7 @@ describe('computeTally', () => {
         {
           area_tags: [],
           finding_class: 'holistic/unclassified',
-          severity: 'warning',
+          severity: 'major',
         },
       ])
     );
@@ -363,7 +363,7 @@ describe('computeTally', () => {
         {
           area_tags: [],
           finding_class: 'holistic/unclassified',
-          severity: 'warning',
+          severity: 'major',
         },
       ])
     );
@@ -371,7 +371,7 @@ describe('computeTally', () => {
     expect(windowClasses(prs)).toEqual([]);
   });
 
-  test('Directive #1: severity_max is a running max across PRs (suggestion then error -> error)', () => {
+  test('Directive #1: severity_max is a running max across PRs (minor then critical -> critical)', () => {
     const result = computeTally({
       coveredClass: noCover,
       prs: [
@@ -379,21 +379,21 @@ describe('computeTally', () => {
           {
             area_tags: [],
             finding_class: 'rule/switch-statement',
-            severity: 'suggestion',
+            severity: 'minor',
           },
         ]),
         pr(2, [
           {
             area_tags: [],
             finding_class: 'rule/switch-statement',
-            severity: 'error',
+            severity: 'critical',
           },
         ]),
         pr(3, [
           {
             area_tags: [],
             finding_class: 'rule/switch-statement',
-            severity: 'suggestion',
+            severity: 'minor',
           },
         ]),
       ],
@@ -401,10 +401,10 @@ describe('computeTally', () => {
       windowDays: 90,
     });
 
-    expect(result.candidates[0]?.severity_max).toBe('error');
+    expect(result.candidates[0]?.severity_max).toBe('critical');
   });
 
-  test('Directive #1: severity_max is never downgraded (warning then suggestion -> warning)', () => {
+  test('Directive #1: severity_max is never downgraded (major then minor -> major)', () => {
     const result = computeTally({
       coveredClass: noCover,
       prs: [
@@ -412,21 +412,21 @@ describe('computeTally', () => {
           {
             area_tags: [],
             finding_class: 'rule/switch-statement',
-            severity: 'warning',
+            severity: 'major',
           },
         ]),
         pr(2, [
           {
             area_tags: [],
             finding_class: 'rule/switch-statement',
-            severity: 'suggestion',
+            severity: 'minor',
           },
         ]),
         pr(3, [
           {
             area_tags: [],
             finding_class: 'rule/switch-statement',
-            severity: 'suggestion',
+            severity: 'minor',
           },
         ]),
       ],
@@ -434,10 +434,10 @@ describe('computeTally', () => {
       windowDays: 90,
     });
 
-    expect(result.candidates[0]?.severity_max).toBe('warning');
+    expect(result.candidates[0]?.severity_max).toBe('major');
   });
 
-  test('Directive #5: an oracle-prefixed class at suggestion severity is still a candidate', () => {
+  test('Directive #5: an oracle-prefixed class at minor severity is still a candidate', () => {
     const result = computeTally({
       coveredClass: noCover,
       prs: [3, 2, 1].map((n) =>
@@ -445,7 +445,7 @@ describe('computeTally', () => {
           {
             area_tags: [],
             finding_class: 'knip/exports',
-            severity: 'suggestion',
+            severity: 'minor',
           },
         ])
       ),
@@ -455,7 +455,7 @@ describe('computeTally', () => {
 
     expect(result.candidates[0]).toMatchObject({
       is_oracle: true,
-      severity_max: 'suggestion',
+      severity_max: 'minor',
     });
   });
 
@@ -471,7 +471,7 @@ describe('computeTally', () => {
           {
             area_tags: [],
             finding_class: 'holistic/swallowed-error',
-            severity: 'warning',
+            severity: 'major',
           },
         ])
       ),
@@ -493,7 +493,7 @@ describe('computeTally', () => {
           {
             area_tags: [],
             finding_class: 'rule/switch-statement',
-            severity: 'warning',
+            severity: 'major',
           },
         ])
       ),
@@ -513,7 +513,7 @@ describe('computeTally', () => {
           {
             area_tags: [],
             finding_class: 'axe/color-contrast',
-            severity: 'error',
+            severity: 'critical',
           },
         ])
       ),
@@ -536,13 +536,11 @@ describe('computeTally', () => {
           {
             area_tags: [],
             finding_class: 'axe/color-contrast',
-            severity: 'warning',
+            severity: 'major',
           },
         ])
       ),
-      pr(99, [
-        {area_tags: [], finding_class: 'knip/types', severity: 'warning'},
-      ]),
+      pr(99, [{area_tags: [], finding_class: 'knip/types', severity: 'major'}]),
     ];
 
     expect(windowClasses(prs)).toEqual(['axe/color-contrast']);
@@ -553,7 +551,7 @@ describe('computeTally', () => {
       {
         area_tags: [],
         finding_class: 'holistic/unclassified',
-        severity: 'warning',
+        severity: 'major',
       },
     ])
   );
@@ -635,14 +633,14 @@ describe('computeTally', () => {
         {
           area_tags: [],
           finding_class: 'holistic/stale-figure',
-          severity: 'warning',
+          severity: 'major',
         },
       ]),
       pr(102, [
         {
           area_tags: [],
           finding_class: 'holistic/stale-figure',
-          severity: 'warning',
+          severity: 'major',
         },
       ]),
       ...[201, 202, 203].map((n) =>
@@ -650,7 +648,7 @@ describe('computeTally', () => {
           {
             area_tags: [],
             finding_class: 'rule/switch-statement',
-            severity: 'warning',
+            severity: 'major',
           },
         ])
       ),
@@ -659,7 +657,7 @@ describe('computeTally', () => {
           {
             area_tags: [],
             finding_class: 'axe/color-contrast',
-            severity: 'warning',
+            severity: 'major',
           },
         ])
       ),
@@ -728,7 +726,7 @@ describe('computeTally', () => {
           {
             area_tags: [],
             finding_class: 'holistic/stale-figure',
-            severity: 'warning',
+            severity: 'major',
           },
         ]),
         pr(2, []),

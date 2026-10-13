@@ -3,7 +3,7 @@ type: overview
 title: GAIA React Overview
 status: mature
 created: 2026-04-20
-updated: 2026-10-05
+updated: 2026-10-13
 tags: [overview, gaia]
 ---
 
@@ -64,7 +64,7 @@ Every change passes through [[Quality Gate]]: typecheck → lint → unit test �
 
 ## Knowledge Hygiene
 
-`/gaia-audit` runs a two-stage Sonnet audit (research → mechanical apply, gated by sha256 + verbatim drift checks) over memory, wiki, auto-loaded `CLAUDE.md` files, and `.claude/rules/`. Flags duplication, stale entries, conflicting instructions, and auto-load bloat, with wiki as the source of truth (broken wikilinks are repaired by `/gaia-wiki`). See [[GAIA Audit]].
+`/gaia-cleanse` runs a two-stage Sonnet audit (research → mechanical apply, gated by sha256 + verbatim drift checks) over memory, wiki, auto-loaded `CLAUDE.md` files, and `.claude/rules/`. Flags duplication, stale entries, conflicting instructions, and auto-load bloat, with wiki as the source of truth (broken wikilinks are repaired by `/gaia-wiki`). See [[GAIA Cleanse]].
 
 ## See also
 

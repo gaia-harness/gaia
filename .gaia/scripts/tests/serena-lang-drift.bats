@@ -265,7 +265,7 @@ build_refresher_sandbox() {
   # A full, current-schema cache, checkedAt far in the past so the TTL gate
   # does not early-exit.
   cat > "$sandbox/.gaia/local/cache/shared/update-check.json" <<'JSON'
-{"checkedAt":1000000000,"outdatedCount":7,"gaiaCurrent":"1.2.3","gaiaLatest":"1.2.3","gaiaHasUpdate":false,"hardenCandidateCount":2,"auditNudge":false,"auditNudgeReason":"","auditLastAppliedAt":0,"auditMemoryCount":0,"auditMemoryBaseline":0,"serenaLangDrift":[]}
+{"checkedAt":1000000000,"outdatedCount":7,"gaiaCurrent":"1.2.3","gaiaLatest":"1.2.3","gaiaHasUpdate":false,"codifyCandidateCount":2,"cleanseNudge":false,"cleanseNudgeReason":"","cleanseLastAppliedAt":0,"cleanseMemoryCount":0,"cleanseMemoryBaseline":0,"serenaLangDrift":[]}
 JSON
   printf '%s' "$sandbox"
 }
@@ -274,7 +274,7 @@ JSON
   local sandbox; sandbox="$(build_refresher_sandbox refresh011)"
   local cache="$sandbox/.gaia/local/cache/shared/update-check.json"
   # Stub gh + curl so the network fields resolve without hitting the network;
-  # GAIA_BIN ($GAIA_DIRECTORY/cli/gaia) is absent so no gaia/harden shell-outs fire.
+  # GAIA_BIN ($GAIA_DIRECTORY/cli/gaia) is absent so no gaia/codify shell-outs fire.
   local stub="$TEMPORARY_ROOT/stub011"; mkdir -p "$stub"
   printf '#!/bin/sh\nexit 0\n' > "$stub/gh"; chmod +x "$stub/gh"
   printf '#!/bin/sh\nexit 0\n' > "$stub/curl"; chmod +x "$stub/curl"
@@ -289,9 +289,9 @@ JSON
 
   # Every pre-existing field is still present.
   for key in checkedAt outdatedCount gaiaCurrent gaiaLatest gaiaHasUpdate \
-    hardenCandidateCount hardenUnclassifiedCount hardenNudgeReason \
-    auditNudge auditNudgeReason auditLastAppliedAt \
-    auditMemoryCount auditMemoryBaseline serenaLangDrift; do
+    codifyCandidateCount codifyUnclassifiedCount codifyNudgeReason \
+    cleanseNudge cleanseNudgeReason cleanseLastAppliedAt \
+    cleanseMemoryCount cleanseMemoryBaseline serenaLangDrift; do
     [ "$(jq "has(\"$key\")" "$cache")" = "true" ] || return 1
   done
 

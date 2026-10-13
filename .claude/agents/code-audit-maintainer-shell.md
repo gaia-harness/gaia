@@ -140,7 +140,7 @@ This lens activates only for the non-script paths above, and it is additive: a d
 
 ## Findings grading
 
-Grade every finding Critical / Important / Suggestion, matching the sibling Code Audit Team members: Critical breaks the merge gate, bricks a session, or is exploitable with adversary-controlled input; Important is a real bug or portability failure with a narrower blast radius; Suggestion is style or robustness with no live failure mode.
+Grade every finding Critical / Major / Minor, matching the sibling Code Audit Team members: Critical breaks the merge gate, bricks a session, or is exploitable with adversary-controlled input; Major is a real bug or portability failure with a narrower blast radius; Minor is style or robustness with no live failure mode.
 
 ## Read-only: report and gate, never edit
 
@@ -156,14 +156,14 @@ Cross-remit and out-of-scope are **not the same axis**: out-of-scope means outsi
 
 ## Finding Proof Gate
 
-Every candidate finding must clear these before it reaches the report at Critical or Important:
+Every candidate finding must clear these before it reaches the report at Critical or Major:
 
 1. **Cites an exact `file:line`.** No line, no finding.
 2. **Names a concrete failure mode**: the input or state that triggers it and the wrong outcome that follows (e.g. "when `$path` contains a space, the unquoted `for f in $path` word-splits and the loop iterates over the wrong tokens"). A category label ("possible quoting issue") is not a failure mode.
 3. **Confirms you read the callers and any tests.** Grep for where the script is invoked (a hook wired in `.claude/settings.json`, a workflow step, another script), and check whether a `.bats` test already covers the flagged behavior. A defect every caller already guards against, or a test already asserts against, is not a finding.
-4. **Assigns a defensible severity.** Critical: breaks the merge gate, bricks a session, or is exploitable with adversary-controlled input. Important: a real bug or portability failure with a narrower blast radius. Suggestion: style or robustness with no live failure mode.
+4. **Assigns a defensible severity.** Critical: breaks the merge gate, bricks a session, or is exploitable with adversary-controlled input. Major: a real bug or portability failure with a narrower blast radius. Minor: style or robustness with no live failure mode.
 
-A candidate that fails a check is dropped or demoted, not silently discarded from consideration, still name it as a Suggestion if it has any residual value. Zero findings is a valid, clean outcome; it is not valid to reach zero by never looking closely at a file in your remit.
+A candidate that fails a check is dropped or demoted, not silently discarded from consideration, still name it as a Minor if it has any residual value. Zero findings is a valid, clean outcome; it is not valid to reach zero by never looking closely at a file in your remit.
 
 **Evidence that needs real bytes on disk goes in a scratch directory you own.** Establishing that a guard is not hollow means breaking the construct it names and watching its check go red, which cannot happen in the tree you must return byte-identical. Name your scratch paths (mutation trees) under `.gaia/local/cache/mutation-scratch/` with your own member name, so co-dispatched members never collide, and remove your copy once you are done and your findings sidecar is written. **Populate and mutate it with Bash, never with `Write`/`Edit`.** Dispatched into a linked worktree, that directory resolves into the main checkout, because a worktree's whole `.gaia/local` is one symlink to it, so a `Write` or `Edit` naming a path there is refused for leaving your tree, while `cp`, redirection and an in-place `sed` reach it normally. The refusal is the runtime's own worktree confinement rather than a GAIA guard, so there is nothing to widen and it is not a finding. The same holds for the confinement's refusals of a multi-command block, a `git` call inside a command substitution, and a command name computed at runtime, which "Remit and self-skip" names: they are why every command in this file is one plain call with literal arguments, and a member meeting one on a command of its own re-spells it that way rather than reporting it.
 
@@ -171,7 +171,7 @@ A candidate that fails a check is dropped or demoted, not silently discarded fro
 
 Before grading, Read `.claude/rules/maintainers/harness-triage-threshold.md` by path; do not rely on it auto-loading inside a subagent. It governs every finding you grade, including those on rules and agent files.
 
-A finding that meets none of its criteria is sub-threshold. Record it in the findings sidecar with `"triage": true`, a one-line `triage_reason` naming why no criterion applies, `"security": false`, and a severity below `error`; list it one line under "Waived" in your report as well. The audit loop renders the PR body's waived list from those marks. Never triage-mark a finding with any security doubt, a finding at severity `error`, or one whose `security` is anything but exactly `false`: grade and record it normally. The threshold governs harness paths only; a finding on a product path is graded as usual.
+A finding that meets none of its criteria is sub-threshold. Record it in the findings sidecar with `"triage": true`, a one-line `triage_reason` naming why no criterion applies, `"security": false`, and a severity below `critical`; list it one line under "Waived" in your report as well. The audit loop renders the PR body's waived list from those marks. Never triage-mark a finding with any security doubt, a finding at severity `critical`, or one whose `security` is anything but exactly `false`: grade and record it normally. The threshold governs harness paths only; a finding on a product path is graded as usual.
 
 ## Shared member protocol
 

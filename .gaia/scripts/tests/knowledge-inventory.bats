@@ -1,7 +1,7 @@
 #!/usr/bin/env bats
 #
 # Suite for .gaia/scripts/knowledge-inventory.sh, the deterministic half of
-# /gaia-audit (.claude/skills/gaia/references/audit.md): the store inventory
+# /gaia-cleanse (.claude/skills/gaia/references/cleanse.md): the store inventory
 # Stage 1 records, the ownership answer both stages act on, and the check that
 # lets a 0-action report finalize without a human. Each refusal has a green
 # case and a red twin that changes one input, so every rule is shown to decide
@@ -296,6 +296,113 @@ class_of() {
 @test "verify: a missing report exits 3" {
   inventory verify "$BATS_TEST_TMPDIR/absent.md"
   [ "$status" -eq 3 ]
+}
+
+# --- relocate-reports ---
+
+# relocate_fixture: a main checkout in $PROJECT with one commit, so a linked
+# worktree can be added to it.
+relocate_fixture() {
+  git -C "$PROJECT" -c user.name=t -c user.email=t@example.com commit -q --allow-empty -m init
+  mkdir -p "$PROJECT/.gaia/local/audit"
+  cd "$PROJECT"
+}
+
+@test "relocate-reports: moves an applied report into cleanse/ keeping its mtime" {
+  relocate_fixture
+  printf 'report\n' >"$PROJECT/.gaia/local/audit/KNOWLEDGE-2026-01-01-1200.md"
+  touch -t 202601011200 "$PROJECT/.gaia/local/audit/KNOWLEDGE-2026-01-01-1200.md"
+  before="$(stat -c %Y "$PROJECT/.gaia/local/audit/KNOWLEDGE-2026-01-01-1200.md" 2>/dev/null || stat -f %m "$PROJECT/.gaia/local/audit/KNOWLEDGE-2026-01-01-1200.md")"
+  run --separate-stderr bash "$SCRIPT" relocate-reports --root "$PROJECT"
+  [ "$status" -eq 0 ]
+  [ -z "$output" ]
+  [ -f "$PROJECT/.gaia/local/cleanse/KNOWLEDGE-2026-01-01-1200.md" ]
+  [ ! -e "$PROJECT/.gaia/local/audit/KNOWLEDGE-2026-01-01-1200.md" ]
+  after="$(stat -c %Y "$PROJECT/.gaia/local/cleanse/KNOWLEDGE-2026-01-01-1200.md" 2>/dev/null || stat -f %m "$PROJECT/.gaia/local/cleanse/KNOWLEDGE-2026-01-01-1200.md")"
+  [ "$before" = "$after" ]
+}
+
+@test "relocate-reports: a same-named report already in cleanse/ is kept and the old one stays" {
+  relocate_fixture
+  mkdir -p "$PROJECT/.gaia/local/cleanse"
+  printf 'old\n' >"$PROJECT/.gaia/local/audit/KNOWLEDGE-a.md"
+  printf 'new\n' >"$PROJECT/.gaia/local/cleanse/KNOWLEDGE-a.md"
+  printf 'other\n' >"$PROJECT/.gaia/local/audit/KNOWLEDGE-b.md"
+  run bash "$SCRIPT" relocate-reports --root "$PROJECT"
+  [ "$status" -eq 0 ]
+  [ "$(cat "$PROJECT/.gaia/local/cleanse/KNOWLEDGE-a.md")" = "new" ]
+  [ "$(cat "$PROJECT/.gaia/local/audit/KNOWLEDGE-a.md")" = "old" ]
+  [ "$(cat "$PROJECT/.gaia/local/cleanse/KNOWLEDGE-b.md")" = "other" ]
+  [ ! -e "$PROJECT/.gaia/local/audit/KNOWLEDGE-b.md" ]
+}
+
+@test "relocate-reports: only reports already in cleanse/ leaves them untouched" {
+  relocate_fixture
+  mkdir -p "$PROJECT/.gaia/local/cleanse"
+  printf 'new\n' >"$PROJECT/.gaia/local/cleanse/KNOWLEDGE-a.md"
+  run bash "$SCRIPT" relocate-reports --root "$PROJECT"
+  [ "$status" -eq 0 ]
+  [ -z "$output" ]
+  [ "$(cat "$PROJECT/.gaia/local/cleanse/KNOWLEDGE-a.md")" = "new" ]
+}
+
+@test "relocate-reports: nothing to move exits 0 silently and creates no cleanse/" {
+  relocate_fixture
+  run bash "$SCRIPT" relocate-reports --root "$PROJECT"
+  [ "$status" -eq 0 ]
+  [ -z "$output" ]
+  [ ! -d "$PROJECT/.gaia/local/cleanse" ]
+}
+
+@test "relocate-reports: leaves non-report files in audit/ alone" {
+  relocate_fixture
+  printf 'x\n' >"$PROJECT/.gaia/local/audit/issue-body-1.md"
+  printf 'r\n' >"$PROJECT/.gaia/local/audit/KNOWLEDGE-a.md"
+  run bash "$SCRIPT" relocate-reports --root "$PROJECT"
+  [ "$status" -eq 0 ]
+  [ -f "$PROJECT/.gaia/local/audit/issue-body-1.md" ]
+  [ -f "$PROJECT/.gaia/local/cleanse/KNOWLEDGE-a.md" ]
+}
+
+@test "relocate-reports red twin: --help exits 0 and moves nothing" {
+  relocate_fixture
+  printf 'r\n' >"$PROJECT/.gaia/local/audit/KNOWLEDGE-a.md"
+  run bash "$SCRIPT" relocate-reports --help --root "$PROJECT"
+  [ "$status" -eq 0 ]
+  [ -f "$PROJECT/.gaia/local/audit/KNOWLEDGE-a.md" ]
+  [ ! -d "$PROJECT/.gaia/local/cleanse" ]
+}
+
+@test "relocate-reports red twin: an unknown flag exits 2 and moves nothing" {
+  relocate_fixture
+  printf 'r\n' >"$PROJECT/.gaia/local/audit/KNOWLEDGE-a.md"
+  run bash "$SCRIPT" relocate-reports --bogus --root "$PROJECT"
+  [ "$status" -eq 2 ]
+  [ -f "$PROJECT/.gaia/local/audit/KNOWLEDGE-a.md" ]
+  [ ! -d "$PROJECT/.gaia/local/cleanse" ]
+}
+
+@test "relocate-reports red twin: a linked worktree skips the move" {
+  relocate_fixture
+  printf 'r\n' >"$PROJECT/.gaia/local/audit/KNOWLEDGE-a.md"
+  git -C "$PROJECT" worktree add -q "$BATS_TEST_TMPDIR/linked" -b linked
+  cd "$BATS_TEST_TMPDIR/linked"
+  run --separate-stderr bash "$SCRIPT" relocate-reports --root "$PROJECT"
+  [ "$status" -eq 0 ]
+  [ -z "$output" ]
+  [ -f "$PROJECT/.gaia/local/audit/KNOWLEDGE-a.md" ]
+  [ ! -e "$PROJECT/.gaia/local/cleanse" ]
+}
+
+@test "relocate-reports red twin: a working directory outside any repository skips the move" {
+  relocate_fixture
+  printf 'r\n' >"$PROJECT/.gaia/local/audit/KNOWLEDGE-a.md"
+  mkdir -p "$BATS_TEST_TMPDIR/not-a-repo"
+  cd "$BATS_TEST_TMPDIR/not-a-repo"
+  run bash "$SCRIPT" relocate-reports --root "$PROJECT"
+  [ "$status" -eq 0 ]
+  [ -f "$PROJECT/.gaia/local/audit/KNOWLEDGE-a.md" ]
+  [ ! -e "$PROJECT/.gaia/local/cleanse" ]
 }
 
 # --- usage ---

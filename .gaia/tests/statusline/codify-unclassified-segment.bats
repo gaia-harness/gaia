@@ -1,10 +1,10 @@
 #!/usr/bin/env bats
 
 # Tests for the classless-recurrence delivery channels of the policy-memory
-# loop: the statusline's `hardenUnclassifiedCount` segment, the refresher
-# (.gaia/scripts/check-updates.sh) that writes that field from `harden-tally`'s
+# loop: the statusline's `codifyUnclassifiedCount` segment, the refresher
+# (.gaia/scripts/check-updates.sh) that writes that field from `codify-tally`'s
 # `unclassified` object, and the doc-grep coverage confirming:
-#   - harden.md presents the unclassified signal (UAT-008, review-grep half;
+#   - codify.md presents the unclassified signal (UAT-008, review-grep half;
 #     the deterministic candidates[]-exclusion half is task-tally-core's Vitest)
 #   - check-updates.sh dropped the stale "at error/warning severity" phrasing
 #     (directive #6; this file is swept in Phase 2, so Phase 1's doc-grep,
@@ -15,16 +15,16 @@
 # indicators are eligible to render; HOME points at an empty dir so left-side
 # delegation stays inert. The refresher half runs a real copy of
 # check-updates.sh against an isolated .gaia tree with a mock `gaia` binary
-# answering `harden-tally`, and a stub `gh` so `gaiaLatest` never makes a real
+# answering `codify-tally`, and a stub `gh` so `gaiaLatest` never makes a real
 # network call.
 
 setup() {
   STATUSLINE_SOURCE=$(cd "$BATS_TEST_DIRNAME/../../statusline" && pwd)
   CHECK_UPDATES_SOURCE=$(cd "$BATS_TEST_DIRNAME/../../scripts" && pwd)/check-updates.sh
-  HARDEN_MARKDOWN=$(cd "$BATS_TEST_DIRNAME/../../../.claude/skills/gaia/references" && pwd)/harden.md
+  CODIFY_MARKDOWN=$(cd "$BATS_TEST_DIRNAME/../../../.claude/skills/gaia/references" && pwd)/codify.md
 
   # ---- statusline fixture ----
-  MAIN=$(mktemp -d -t gaia-sl-harden-XXXXXX)
+  MAIN=$(mktemp -d -t gaia-sl-codify-XXXXXX)
   git -C "$MAIN" init --quiet --initial-branch=main
   git -C "$MAIN" config user.email "test@example.com"
   git -C "$MAIN" config user.name "Test"
@@ -36,10 +36,10 @@ setup() {
   git -C "$MAIN" commit --quiet -m "init"
   printf '{"completed_at":"2026-01-01T00:00:00Z"}' > "$MAIN/.gaia/local/setup-state.json"
 
-  TEMPORARY_HOME=$(mktemp -d -t gaia-sl-harden-home-XXXXXX)
+  TEMPORARY_HOME=$(mktemp -d -t gaia-sl-codify-home-XXXXXX)
 
   # ---- refresher fixture ----
-  REFRESH_ROOT=$(mktemp -d -t gaia-cu-harden-XXXXXX)
+  REFRESH_ROOT=$(mktemp -d -t gaia-cu-codify-XXXXXX)
   mkdir -p "$REFRESH_ROOT/.gaia/scripts" "$REFRESH_ROOT/.gaia/cli" "$REFRESH_ROOT/.gaia/local/cache/shared"
   cp "$CHECK_UPDATES_SOURCE" "$REFRESH_ROOT/.gaia/scripts/check-updates.sh"
   chmod +x "$REFRESH_ROOT/.gaia/scripts/check-updates.sh"
@@ -60,7 +60,7 @@ teardown() {
 
 # A `gaia` binary stub answering the two subcommands check-updates.sh calls:
 # `update-deps run --emit-updates <file>` (writes an empty plan) and
-# `harden-tally` (emits candidate_count 0 plus an `unclassified` object shaped
+# `codify-tally` (emits candidate_count 0 plus an `unclassified` object shaped
 # by $MOCK_UNCLASSIFIED_COUNT / $MOCK_UNCLASSIFIED_SUPPRESSED from the test's
 # environment). $MOCK_UNCLASSIFIED_SUPPRESSED=true mirrors compute-tally.ts's
 # suppressed-fallback shape: a successful gh window read whose classless
@@ -81,7 +81,7 @@ case "$1" in
     [ -n "$output_path" ] && printf '{"actionable_count":0}' > "$output_path"
     exit 0
     ;;
-  harden-tally)
+  codify-tally)
     if [ "${MOCK_UNCLASSIFIED_SUPPRESSED:-false}" = "true" ]; then
       printf '{"candidate_count":0,"unclassified":null,"gh_ok":true,"window_days":90}'
     else
@@ -111,25 +111,25 @@ EOF
 }
 
 # Run MAIN's statusline with a payload whose current_dir is MAIN and a cache
-# fixture holding the given hardenCandidateCount / hardenUnclassifiedCount.
+# fixture holding the given codifyCandidateCount / codifyUnclassifiedCount.
 run_statusline_with_cache() {
   local candidate="$1" unclassified="$2" json
-  printf '{"hardenCandidateCount":%s,"hardenUnclassifiedCount":%s}' "$candidate" "$unclassified" \
+  printf '{"codifyCandidateCount":%s,"codifyUnclassifiedCount":%s}' "$candidate" "$unclassified" \
     > "$MAIN/.gaia/local/cache/shared/update-check.json"
   json=$(jq -n --arg current_directory "$MAIN" '{workspace: {current_dir: $current_directory}, cwd: $current_directory, model: {display_name: "Test"}, context_window: {used_percentage: 10}}')
   run env HOME="$TEMPORARY_HOME" bash -c "printf '%s' '$json' | bash '$MAIN/.gaia/statusline/gaia-statusline.sh'"
 }
 
-@test "statusline renders the unclassified segment when hardenUnclassifiedCount > 0" {
+@test "statusline renders the unclassified segment when codifyUnclassifiedCount > 0" {
   run_statusline_with_cache 0 3
   [ "$status" -eq 0 ]
-  grep -qF -- "Run /gaia-harden (3 unclassified)" <<<"$output"
+  grep -qF -- "Run /gaia-codify (3 unclassified)" <<<"$output"
 }
 
-@test "statusline renders the candidate segment alone, singular noun intact, when only hardenCandidateCount > 0" {
+@test "statusline renders the candidate segment alone, singular noun intact, when only codifyCandidateCount > 0" {
   run_statusline_with_cache 1 0
   [ "$status" -eq 0 ]
-  grep -qF -- "Run /gaia-harden (1 recurring pattern)" <<<"$output"
+  grep -qF -- "Run /gaia-codify (1 recurring pattern)" <<<"$output"
   grep -qF -- "unclassified" <<<"$output" && return 1
   return 0
 }
@@ -137,29 +137,29 @@ run_statusline_with_cache() {
 # Both counts non-zero is the case the merged segment introduces: the two
 # reasons stack into one parameter rather than into a second segment naming
 # the same command.
-@test "statusline folds both counts into one harden segment when both are non-zero" {
+@test "statusline folds both counts into one codify segment when both are non-zero" {
   run_statusline_with_cache 2 3
   [ "$status" -eq 0 ]
-  grep -qF -- "Run /gaia-harden (2 recurring patterns, 3 unclassified)" <<<"$output"
+  grep -qF -- "Run /gaia-codify (2 recurring patterns, 3 unclassified)" <<<"$output"
   # The statusline is one line, so `grep -c` would count that line once
   # whether it holds one segment or two. Count the occurrences themselves.
-  [ "$(grep -oF -- "Run /gaia-harden" <<<"$output" | wc -l | tr -d ' ')" -eq 1 ]
+  [ "$(grep -oF -- "Run /gaia-codify" <<<"$output" | wc -l | tr -d ' ')" -eq 1 ]
 }
 
-@test "statusline renders no harden segment when both counts are 0" {
+@test "statusline renders no codify segment when both counts are 0" {
   run_statusline_with_cache 0 0
   [ "$status" -eq 0 ]
-  grep -qF -- "gaia-harden" <<<"$output" && return 1
+  grep -qF -- "gaia-codify" <<<"$output" && return 1
   return 0
 }
 
-@test "refresher writes a valid hardenUnclassifiedCount field on a fresh run" {
+@test "refresher writes a valid codifyUnclassifiedCount field on a fresh run" {
   run env MOCK_UNCLASSIFIED_COUNT=3 bash "$REFRESH_ROOT/.gaia/scripts/check-updates.sh"
   [ "$status" -eq 0 ]
   CACHE_FILE="$REFRESH_ROOT/.gaia/local/cache/shared/update-check.json"
   [ -f "$CACHE_FILE" ]
   jq . "$CACHE_FILE" >/dev/null
-  [ "$(jq -r '.hardenUnclassifiedCount' "$CACHE_FILE")" = "3" ]
+  [ "$(jq -r '.codifyUnclassifiedCount' "$CACHE_FILE")" = "3" ]
 }
 
 # UAT-007: both delivery channels clear once a maintainer records the
@@ -167,11 +167,11 @@ run_statusline_with_cache() {
 # rendered against that same cache carries no unclassified nudge.
 @test "the rendered statusline carries no unclassified segment once the tally reports a suppressed fallback" {
   CACHE_FILE="$REFRESH_ROOT/.gaia/local/cache/shared/update-check.json"
-  printf '{"checkedAt":0,"hardenCandidateCount":0,"hardenUnclassifiedCount":5}' > "$CACHE_FILE"
+  printf '{"checkedAt":0,"codifyCandidateCount":0,"codifyUnclassifiedCount":5}' > "$CACHE_FILE"
   run env MOCK_UNCLASSIFIED_SUPPRESSED=true bash "$REFRESH_ROOT/.gaia/scripts/check-updates.sh"
   [ "$status" -eq 0 ]
   jq . "$CACHE_FILE" >/dev/null
-  [ "$(jq -r '.hardenUnclassifiedCount' "$CACHE_FILE")" = "0" ]
+  [ "$(jq -r '.codifyUnclassifiedCount' "$CACHE_FILE")" = "0" ]
 
   # Render against the refresher's own cache file (every field it wrote),
   # not a hand-built one, so the assertion covers the field the refresher
@@ -184,18 +184,18 @@ run_statusline_with_cache() {
   true
 }
 
-# --- doc-grep: harden.md presents the unclassified signal (UAT-008, review half) ---
+# --- doc-grep: codify.md presents the unclassified signal (UAT-008, review half) ---
 
-@test "harden.md binds the top-level unclassified field alongside the candidate fields" {
-  grep -Fq "bind the top-level \`unclassified\` field" "$HARDEN_MARKDOWN"
+@test "codify.md binds the top-level unclassified field alongside the candidate fields" {
+  grep -Fq "bind the top-level \`unclassified\` field" "$CODIFY_MARKDOWN"
 }
 
-@test "harden.md presents the unclassified signal in its own seed-a-class-or-investigate section" {
-  grep -Fq "## Unclassified recurrence signal (seed-a-class-or-investigate)" "$HARDEN_MARKDOWN"
+@test "codify.md presents the unclassified signal in its own seed-a-class-or-investigate section" {
+  grep -Fq "## Unclassified recurrence signal (seed-a-class-or-investigate)" "$CODIFY_MARKDOWN"
 }
 
-@test "harden.md states the unclassified signal is excluded from the draftable candidate set" {
-  grep -Fq "It is NEVER placed in the draftable candidate set." "$HARDEN_MARKDOWN"
+@test "codify.md states the unclassified signal is excluded from the draftable candidate set" {
+  grep -Fq "It is NEVER placed in the draftable candidate set." "$CODIFY_MARKDOWN"
 }
 
 # --- doc-grep: directive-#6 sweep of check-updates.sh (swept in Phase 2) ---

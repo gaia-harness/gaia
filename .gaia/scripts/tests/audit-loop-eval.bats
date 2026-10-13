@@ -451,7 +451,7 @@ sequence_case() {
   [ "$(GAIA_AUDIT_GRANT_ROUNDS=7 gaia_loop_knobs_initial | jq -r '.grant_rounds')" = 3 ]
 }
 
-# brief_check <recommended> <pending> <error> <warning> <suggestion>: run the
+# brief_check <recommended> <pending> <critical> <major> <minor>: run the
 # CLI brief and check the fields every verdict shares.
 brief_check() {
   run "$CLI/audit-loop-eval.sh" brief --root "$ALF_ROOT"
@@ -461,7 +461,7 @@ brief_check() {
   [ "$(read_json "$BRIEF" '.pending_checkpoint')" = "$2" ] || return 1
   [ "$(read_json "$BRIEF" '.grant_line')" = "$(gaia_loop_grant_line 3)" ] || return 1
   [ "$(read_json "$BRIEF" '.accept_line')" = "$(gaia_loop_accept_line)" ] || return 1
-  [ "$(read_json "$BRIEF" '.remaining_by_severity | "\(.error),\(.warning),\(.suggestion)"')" = "$3,$4,$5" ] || { echo "severity $(read_json "$BRIEF" '.remaining_by_severity')"; return 1; }
+  [ "$(read_json "$BRIEF" '.remaining_by_severity | "\(.critical),\(.major),\(.minor)"')" = "$3,$4,$5" ] || { echo "severity $(read_json "$BRIEF" '.remaining_by_severity')"; return 1; }
   [ "$(read_json "$BRIEF" '.spend')" = "spend for feat/loop: 1.23 USD" ] || { echo "spend $(read_json "$BRIEF" '.spend')"; return 1; }
   [ "$(read_json "$BRIEF" '.spend_note')" = "information only" ]
 }
@@ -480,7 +480,7 @@ brief_check() {
 @test "brief: quiet recommends accept" {
   cli_copy
   alf_fill f.txt 12 feature
-  next_round 1 '[{"path":"untouched.txt","line":1,"severity":"error"},{"path":"untouched.txt","line":2,"severity":"suggestion"},{"path":"untouched.txt","line":3,"severity":"suggestion"}]'
+  next_round 1 '[{"path":"untouched.txt","line":1,"severity":"critical"},{"path":"untouched.txt","line":2,"severity":"minor"},{"path":"untouched.txt","line":3,"severity":"minor"}]'
   brief_check accept false 1 0 2
   [ "$(read_json "$BRIEF" '.verdict')" = quiet ]
 }
@@ -681,7 +681,7 @@ HIGH="fresh 400000 1000000"
 
 # non_security_entries <entries-json> [severity]: the entries with security false and a severity.
 non_security_entries() {
-  jq -c --arg severity "${2:-warning}" 'map(. + {security: false, severity: $severity})' <<<"$1"
+  jq -c --arg severity "${2:-major}" 'map(. + {security: false, severity: $severity})' <<<"$1"
 }
 
 # rounds_sequence <entries-json>...: one round per argument on branch-added f.txt;
@@ -758,7 +758,7 @@ override_file() {
 
 @test "signal cap: round 10 of a converging branch raises only cap; the unit dispatch is denied cap" {
   maintainer
-  authored_count_sequence warning 10 9 8 7 6 5 4 3 2 1
+  authored_count_sequence major 10 9 8 7 6 5 4 3 2 1
   only_signal 10 cap "deny cap true true"
 }
 
@@ -770,7 +770,7 @@ override_file() {
 
 @test "signal enriching: a new key on a repaired line raises only enriching and denies" {
   maintainer
-  authored_count_sequence warning 6 5
+  authored_count_sequence major 6 5
   alf_set_line f.txt 8 repaired
   next_round 3 "$(non_security_entries "$(plus "$(alf_entries f.txt 1 3)" f.txt 8)")"
   only_signal 3 enriching "deny rubric:enriching true false"
@@ -778,42 +778,42 @@ override_file() {
 
 @test "signal stalled: A 5,5,5 raises only stalled and denies" {
   maintainer
-  authored_count_sequence warning 5 5 5
+  authored_count_sequence major 5 5 5
   only_signal 3 stalled "deny rubric:stalled true false"
 }
 
-@test "signal nitpicky: two all-Suggestion rounds at round 6 raise only nitpicky and deny" {
+@test "signal nitpicky: two all-Minor rounds at round 6 raise only nitpicky and deny" {
   maintainer
-  authored_count_sequence suggestion 8 7 6 5 4 3
+  authored_count_sequence minor 8 7 6 5 4 3
   only_signal 6 nitpicky "deny rubric:nitpicky true false"
 }
 
-@test "signal nitpicky needs both rounds: a Suggestion-only round after a warning round raises nothing" {
+@test "signal nitpicky needs both rounds: a Minor-only round after a Major round raises nothing" {
   local snapshot
   maintainer
-  authored_count_sequence warning 8 7 6 5 4
+  authored_count_sequence major 8 7 6 5 4
   alf_set_line other.txt 6 "round 6"
-  next_round 6 "$(non_security_entries "$(alf_entries f.txt 1 3)" suggestion)"
+  next_round 6 "$(non_security_entries "$(alf_entries f.txt 1 3)" minor)"
   snapshot="$(evaluate_round 6)"
   [ "$(read_json "$snapshot" '.accept_reasons | tojson')" = '[]' ]
 }
 
 @test "signal reintroduced: a key that vanished and came back raises only reintroduced and denies" {
   maintainer
-  authored_count_sequence warning 3 2 3
+  authored_count_sequence major 3 2 3
   only_signal 3 reintroduced "deny rubric:reintroduced true false"
 }
 
 @test "signal reintroduced: a finding whose line moves three rounds running raises only reintroduced" {
   maintainer
-  rounds_sequence "$(non_security_entries "$(alf_entries f.txt 1 3)" suggestion)" "$(non_security_entries "$(alf_entries f.txt 4 5)" suggestion)" \
-    "$(non_security_entries "$(alf_entries f.txt 6 6)" suggestion)"
+  rounds_sequence "$(non_security_entries "$(alf_entries f.txt 1 3)" minor)" "$(non_security_entries "$(alf_entries f.txt 4 5)" minor)" \
+    "$(non_security_entries "$(alf_entries f.txt 6 6)" minor)"
   only_signal 3 reintroduced "deny rubric:reintroduced true false"
 }
 
 @test "signal small-tail: two findings with no progress at round 6 raise only small-tail and deny" {
   maintainer
-  authored_count_sequence warning 6 5 4 3 2 2
+  authored_count_sequence major 6 5 4 3 2 2
   only_signal 6 small-tail "deny rubric:small-tail true false"
 }
 
@@ -854,7 +854,7 @@ drift_fixture() {
 @test "red: no signal is not accept-eligible and the unit dispatch is allowed" {
   local snapshot
   maintainer
-  authored_count_sequence warning 5 4
+  authored_count_sequence major 5 4
   snapshot="$(evaluate_round 2)"
   [ "$(read_json "$snapshot" '.accept_reasons | tojson')" = '[]' ]
   [ "$(read_json "$snapshot" '.accept_eligible')" = false ]
@@ -878,11 +878,11 @@ drift_fixture() {
   [ "$(read_json "$snapshot" '.accept_eligible')" = false ]
 }
 
-@test "red: a security:true Suggestion in A(r) makes a signalling round ineligible" {
+@test "red: a security:true Minor in A(r) makes a signalling round ineligible" {
   local snapshot
   maintainer
-  rounds_sequence "$(non_security_entries "$(alf_entries f.txt 1 3)" suggestion)" "$(non_security_entries "$(alf_entries f.txt 4 5)" suggestion)" \
-    '[{"path":"f.txt","line":6,"finding_class":"rule/x","severity":"suggestion","security":true}]'
+  rounds_sequence "$(non_security_entries "$(alf_entries f.txt 1 3)" minor)" "$(non_security_entries "$(alf_entries f.txt 4 5)" minor)" \
+    '[{"path":"f.txt","line":6,"finding_class":"rule/x","severity":"minor","security":true}]'
   snapshot="$(evaluate_round 3)"
   [ "$(read_json "$snapshot" '.accept_reasons | tojson')" = '["reintroduced"]' ]
   [ "$(read_json "$snapshot" '.accept_eligible')" = false ]
@@ -892,9 +892,9 @@ drift_fixture() {
 @test "red: a Critical in A(r) makes a signalling round ineligible" {
   local snapshot
   maintainer
-  authored_count_sequence warning 5 5
+  authored_count_sequence major 5 5
   alf_set_line other.txt 3 "round 3"
-  next_round 3 "$(jq -c '.[0].severity = "error"' <<<"$(non_security_entries "$(alf_entries f.txt 1 5)")")"
+  next_round 3 "$(jq -c '.[0].severity = "critical"' <<<"$(non_security_entries "$(alf_entries f.txt 1 5)")")"
   snapshot="$(evaluate_round 3)"
   [ "$(read_json "$snapshot" '.accept_reasons | tojson')" = '["stalled"]' ]
   [ "$(read_json "$snapshot" '.accept_eligible')" = false ]
@@ -916,11 +916,11 @@ drift_fixture() {
   [ "$(read_json "$findings" '.entries[0] | keys | join(",")')" = "authored,cross_remit,finding_class,line,member,path,security,severity" ]
 }
 
-@test "security normalization: a round whose only A(r) entry is a security:false Suggestion stays eligible" {
+@test "security normalization: a round whose only A(r) entry is a security:false Minor stays eligible" {
   local snapshot
   maintainer
-  rounds_sequence "$(non_security_entries "$(alf_entries f.txt 1 3)" suggestion)" "$(non_security_entries "$(alf_entries f.txt 4 5)" suggestion)" \
-    '[{"path":"f.txt","line":6,"finding_class":"rule/x","severity":"suggestion","security":false}]'
+  rounds_sequence "$(non_security_entries "$(alf_entries f.txt 1 3)" minor)" "$(non_security_entries "$(alf_entries f.txt 4 5)" minor)" \
+    '[{"path":"f.txt","line":6,"finding_class":"rule/x","severity":"minor","security":false}]'
   snapshot="$(evaluate_round 3)"
   [ "$(read_json "$snapshot" '.A')" = 1 ]
   [ "$(read_json "$snapshot" '.counted_keys[0].security')" = false ]
@@ -1102,7 +1102,7 @@ drift_fixture() {
 
 @test "vetoes: a vetoed key re-enters A from its effective round, whatever was disposed" {
   local vetoes="$ALF_ROOT/.gaia/local/runs/$ALF_NORMALIZED_BRANCH/vetoes.json" key
-  authored_count_sequence warning 3 3 3
+  authored_count_sequence major 3 3 3
   alf_dispositions 1 '[{"member":"code-audit-frontend","finding_class":"rule/x","path":"f.txt","line":1,"disposition":"waive-out-of-scope","basis":"triage-threshold","reason":"r"}]'
   key='{"member":"code-audit-frontend","finding_class":"rule/x","path":"f.txt","line":1,"vetoed_at":"x","unit":1'
   [ "$(read_json "$(evaluate_round 1)" '.A')" = 3 ]
@@ -1120,7 +1120,7 @@ drift_fixture() {
 
 @test "red: an unreadable or malformed vetoes.json fails the evaluation" {
   local vetoes="$ALF_ROOT/.gaia/local/runs/$ALF_NORMALIZED_BRANCH/vetoes.json" body
-  authored_count_sequence warning 3 3
+  authored_count_sequence major 3 3
   mkdir -p "${vetoes%/*}"
   for body in 'not json' '{"version":1,"keys":[]} {"version":1,"keys":[]}' '{"version":2,"keys":[]}' \
     '{"version":1,"keys":[{"member":"m","finding_class":"c","path":"p","line":1}]}'; do
@@ -1148,7 +1148,7 @@ drift_fixture() {
 @test "legacy: a stored snapshot without counted_keys turns the history signals off and eligibility false" {
   local snapshot
   maintainer
-  authored_count_sequence warning 6 5 4 3 2 2
+  authored_count_sequence major 6 5 4 3 2 2
   [ "$(read_json "$(evaluate_round 6)" '.signals["small-tail"]')" = true ]
   alf_state_edit 'del(.history.rounds[4].snapshot.counted_keys)'
   snapshot="$(evaluate_round 6)"
@@ -1159,7 +1159,7 @@ drift_fixture() {
 @test "legacy: a legacy round r-2 turns reintroduced off; waiver-drift needs a new round r-1" {
   local snapshot
   maintainer
-  authored_count_sequence warning 3 2 3
+  authored_count_sequence major 3 2 3
   alf_state_edit 'del(.history.rounds[0].snapshot.counted_keys)'
   snapshot="$(evaluate_round 3)"
   [ "$(read_json "$snapshot" '.signals.reintroduced')" = false ]
@@ -1175,7 +1175,7 @@ drift_fixture() {
 
 @test "legacy: the enriching verdict still reads the stored keys of round r-1" {
   local snapshot
-  authored_count_sequence warning 6 5
+  authored_count_sequence major 6 5
   alf_set_line f.txt 8 repaired
   next_round 3 "$(non_security_entries "$(plus "$(alf_entries f.txt 1 3)" f.txt 8)")"
   alf_state_edit 'del(.history.rounds[1].snapshot.counted_keys)'
@@ -1251,7 +1251,7 @@ drift_fixture() {
   alf_init
   alf_branch feat/loop
   cli_copy
-  authored_count_sequence warning 5 5 5
+  authored_count_sequence major 5 5 5
   alf_add_checkpoint 3 context
   alf_state_edit '.history.checkpoints[-1].trigger = "context"'
   run "$CLI/audit-loop-eval.sh" brief --root "$ALF_ROOT"

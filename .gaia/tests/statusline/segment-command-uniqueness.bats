@@ -8,7 +8,7 @@
 # rendered statusline.
 #
 # It has to be checked against the RENDERED line rather than against the
-# source's `nudge_set` calls. `/gaia-audit` legitimately occupies two of
+# source's `nudge_set` calls. `/gaia-cleanse` legitimately occupies two of
 # those calls, an if/else over whether a reason is available, and only ever
 # renders one of them; a source-level count would red on the very shape that
 # is correct.
@@ -19,7 +19,7 @@
 # still names itself, not where a narrower render has already shrunk to a
 # bare command or an icon.
 #
-# The fixture mirrors the statusline half of harden-unclassified-segment.bats:
+# The fixture mirrors the statusline half of codify-unclassified-segment.bats:
 # a MAIN git checkout with setup marked complete and no gaia-init gate file,
 # so the right-side indicators are eligible to render, and HOME pointing at an
 # empty dir so left-side delegation stays inert.
@@ -57,12 +57,12 @@ run_saturated_statusline() {
   "gaiaHasUpdate": true,
   "gaiaLatest": "9.9.9",
   "outdatedCount": 3,
-  "hardenCandidateCount": 2,
-  "hardenUnclassifiedCount": 1,
+  "codifyCandidateCount": 2,
+  "codifyUnclassifiedCount": 1,
   "residueCandidateCount": 5,
   "wikiDriftCount": 20,
-  "auditNudge": true,
-  "auditNudgeReason": "stale",
+  "cleanseNudge": true,
+  "cleanseNudgeReason": "stale",
   "serenaLangDrift": ["go"]
 }
 JSON
@@ -89,9 +89,9 @@ rendered_commands() {
   run_saturated_statusline
   [ "$status" -eq 0 ]
   expected=$(printf '%s\n' \
-    "Run /gaia-audit" \
+    "Run /gaia-cleanse" \
+    "Run /gaia-codify" \
     "Run /gaia-debt" \
-    "Run /gaia-harden" \
     "Run /gaia-residue" \
     "Run /gaia-serena-sync" \
     "Run /gaia-wiki" \
@@ -107,20 +107,20 @@ rendered_commands() {
   [ -z "$duplicate_commands" ]
 }
 
-# Same invariant, but with the cache carrying hardenNudgeReason: the harden
+# Same invariant, but with the cache carrying codifyNudgeReason: the codify
 # segment now renders from that key rather than from the two counts, and the
-# multi-trigger reason text must still produce exactly one /gaia-harden
+# multi-trigger reason text must still produce exactly one /gaia-codify
 # segment rather than one per trigger it names.
-@test "one /gaia-harden segment when the cache carries a multi-trigger hardenNudgeReason" {
+@test "one /gaia-codify segment when the cache carries a multi-trigger codifyNudgeReason" {
   cat > "$MAIN/.gaia/local/cache/shared/update-check.json" <<'JSON'
 {
   "gaiaHasUpdate": true,
   "gaiaLatest": "9.9.9",
   "outdatedCount": 3,
-  "hardenNudgeReason": "1 new pattern, drifting-duplicate rising",
+  "codifyNudgeReason": "1 new pattern, drifting-duplicate rising",
   "residueCandidateCount": 5,
-  "auditNudge": true,
-  "auditNudgeReason": "stale",
+  "cleanseNudge": true,
+  "cleanseNudgeReason": "stale",
   "serenaLangDrift": ["go"]
 }
 JSON
@@ -129,8 +129,8 @@ JSON
   json=$(jq -n --arg current_directory "$MAIN" '{workspace: {current_dir: $current_directory}, cwd: $current_directory, model: {display_name: "Test"}, context_window: {used_percentage: 10}}')
   run env HOME="$TEMPORARY_HOME" COLUMNS=400 bash -c "printf '%s' '$json' | bash '$MAIN/.gaia/statusline/gaia-statusline.sh'"
   [ "$status" -eq 0 ]
-  grep -qF -- "Run /gaia-harden (1 new pattern, drifting-duplicate rising)" <<<"$output"
-  [ "$(grep -oF -- "Run /gaia-harden" <<<"$output" | wc -l | tr -d ' ')" -eq 1 ]
+  grep -qF -- "Run /gaia-codify (1 new pattern, drifting-duplicate rising)" <<<"$output"
+  [ "$(grep -oF -- "Run /gaia-codify" <<<"$output" | wc -l | tr -d ' ')" -eq 1 ]
   duplicate_commands=$(rendered_commands "$output" | uniq -d)
   [ -z "$duplicate_commands" ]
 }

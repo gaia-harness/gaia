@@ -1,17 +1,17 @@
 /**
  * Zod schema + read/write helpers for the machine-local review snapshot.
  *
- * A completed `/gaia-harden` review records what it reviewed so the
- * `/gaia-harden` statusline nudge can stay silent until something changes.
- * The review skill saves its start-of-run `harden-tally` JSON, then at each
- * completion point runs `harden-ledger snapshot record` against that saved
+ * A completed `/gaia-codify` review records what it reviewed so the
+ * `/gaia-codify` statusline nudge can stay silent until something changes.
+ * The review skill saves its start-of-run `codify-tally` JSON, then at each
+ * completion point runs `codify-ledger snapshot record` against that saved
  * tally; the resulting snapshot is what trigger evaluation compares the live
  * tally against.
  *
- * The file lives at `.gaia/local/harden/reviewed.json` (gitignored).
+ * The file lives at `.gaia/local/codify/reviewed.json` (gitignored).
  * `readReviewSnapshot` reports a corrupt or hand-edited file as
  * `status: 'malformed'` rather than throwing. The nudge path reads the same
- * file through `harden-tally`, which reports a malformed snapshot as
+ * file through `codify-tally`, which reports a malformed snapshot as
  * `snapshot_present: false` plus a structured stderr error; the statusline
  * refresher discards stderr and falls back to the count-based nudge text
  * instead of trusting the corrupt counts.
@@ -23,7 +23,7 @@ import {atomicWriteFileSync} from '../util/atomic-write.js';
 import {summarizeZodError} from './zod-error.js';
 
 export const reviewSnapshotPath = (repoRoot: string): string =>
-  path.join(repoRoot, '.gaia', 'local', 'harden', 'reviewed.json');
+  path.join(repoRoot, '.gaia', 'local', 'codify', 'reviewed.json');
 
 const ClassSummarySchema = z.object({
   distinct_pr_count: z.number().int().min(1),
@@ -106,7 +106,7 @@ export const writeReviewSnapshot = (
   atomicWriteFileSync(target, serialized);
 };
 
-// The subset of the emitted `harden-tally` JSON a snapshot is built from.
+// The subset of the emitted `codify-tally` JSON a snapshot is built from.
 // Loose: the real tally carries many more keys, and this schema only cares
 // about the ones `snapshotFromTally` reads.
 export const ReviewTallyInputSchema = z.looseObject({

@@ -142,7 +142,7 @@ case "\$1" in
     [ -n "\$output_path" ] && printf '{"actionable_count":0}' > "\$output_path"
     exit 0
     ;;
-  harden-tally)
+  codify-tally)
     printf '{"candidate_count":0,"unclassified":null,"gh_ok":true,"window_days":90}'
     exit 0
     ;;

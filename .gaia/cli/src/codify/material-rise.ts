@@ -1,6 +1,6 @@
 /**
  * The only threshold definitions for "has a finding class materially risen",
- * shared by trigger evaluation (`harden-tally`) and decline re-surface
+ * shared by trigger evaluation (`codify-tally`) and decline re-surface
  * (`checkDeclineSuppression`). Fixed by design; changing a value here is
  * an ask-first decision, not a tuning knob.
  *

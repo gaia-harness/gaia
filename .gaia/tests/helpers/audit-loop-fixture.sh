@@ -106,7 +106,7 @@ alf_sidecar() {
   local base="${4:-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa}" file_path
   file_path="$ALF_ROOT/.gaia/local/audit/$base.$ALF_SLUG.$1.findings.json"
   jq -n -c --arg member "$1" --argjson entries "$2" '{schema: 1, member: $member,
-    findings: ($entries | map({finding_class: "rule/x", severity: "warning", title: "t", failure_mode: "f",
+    findings: ($entries | map({finding_class: "rule/x", severity: "major", title: "t", failure_mode: "f",
                          verified_by: "v", suggested_fix: "s"} + .))}' >"$file_path" || return 1
   touch -t "$(alf_time "$3")" "$file_path"
 }

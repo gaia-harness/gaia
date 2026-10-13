@@ -52,14 +52,14 @@ readonly PROGRAM_NAME="check-debt-issue-metadata"
 # exactly that reason: a spelling changed there and not here fails a filing
 # immediately, which is the loud direction to fail in.
 #
-# `investigate` is not a fourth rung on the critical/important/suggestion ramp.
+# `investigate` is not a fourth rung on the critical/major/minor ramp.
 # It is the admission that no rung was chosen, and it is the one value in this
 # set that carries an obligation of its own: `check_investigate_block` below
 # demands the body name the open question, and `--investigate-cap` bounds how
 # many may be open at once. Both exist because the dedup key's `class=` field
 # already ran the experiment of a free "I do not know" value and lost it: the
 # `holistic/unclassified` fallback absorbed 91.4% of that axis at its worst.
-readonly SEVERITY_VALUES="critical important suggestion investigate"
+readonly SEVERITY_VALUES="critical major minor investigate"
 
 # How many `severity:investigate` issues may be open at once. Three, because
 # the grade is a budget rather than a band: a backlog that holds more than
@@ -161,7 +161,7 @@ normalize_body() {
 # read a line at a time out of a process substitution rather than word-split out
 # of an unquoted `$(...)` in a `for` list. An unquoted command substitution is
 # split on IFS and then glob-expanded, which silently converts one bad label
-# into something the checks accept: `severity:critical important` would be tested
+# into something the checks accept: `severity:critical major` would be tested
 # as two separate values that are each individually legal, and `severity:*` would
 # expand against the working directory and report one finding per file in the
 # repository root instead of one finding naming the label. And the loop is fed
@@ -208,7 +208,7 @@ check_labels() {
   fi
 
   # Exactly one severity. Zero is the common defect (the ordering query's
-  # `else` branch silently files it into the suggestion band, so it never
+  # `else` branch silently files it into the minor band, so it never
   # surfaces as an error at drain time); two is rarer and worse, because the
   # band an issue sorts into then depends on jq's index() order.
   label_count="$(count_namespace_labels "$labels" 'severity:')"

@@ -2,7 +2,7 @@
 type: concept
 status: active
 created: 2026-09-20
-updated: 2026-10-09
+updated: 2026-10-13
 tags: [concept, gaia, scripts]
 ---
 
@@ -109,7 +109,7 @@ The maintainer's copy of this page carries every root file. An adopter's copy ca
 | `gh-artifact-lib.sh` | yes | sourced | Shared breadcrumb for the GitHub pull request a run produced. |
 | `guard-awk-lib.sh` | no | sourced | Shared awk scaffolding the guard lints build their detectors on. |<!-- gaia:maintainer-only:start --><!-- gaia:maintainer-only:end -->
 | `hook-registration-lib.sh` | no | sourced | The shared read of `.claude/settings.json`'s registrations, and the oracle for whether a registered hook can stop a tool call. |<!-- gaia:maintainer-only:start --><!-- gaia:maintainer-only:end -->
-| `knowledge-inventory.sh` | yes | `/gaia-audit` | Inventories the knowledge stores, classifies each file an audit action would write (memory scopes, then `fitness-ownership.sh`), and verifies a clean report against a fresh recount before it may finalize without a human. |
+| `knowledge-inventory.sh` | yes | `/gaia-cleanse` | Inventories the knowledge stores, classifies each file an audit action would write (memory scopes, then `fitness-ownership.sh`), and verifies a clean report against a fresh recount before it may finalize without a human. |
 | `ledger-path-lib.sh` | yes | sourced | The one definition of every main-checkout ledger path, so renaming one changes one place. |
 | `link-worktree.sh` | yes | `provision-worktree.sh` hook, `/setup-gaia` | Lays the shared-state symlinks a linked worktree needs. |
 | `main-only-lib.sh` | yes | the main-only skills | Refusal helper for a flow that must run in the main checkout, never a linked worktree. |
@@ -153,7 +153,7 @@ In GAIA's source a bats suite asserts the glob too. This directory has already p
 <!-- gaia:maintainer-only:start -->
 Three further decisions ride with a new root script in the maintainer repository, and each one is a real edit somewhere else:
 
-- **Ship or withhold**, through `/distribution-audit`. The release CLI refuses to produce a manifest until every newly-shipping file has an answer, so this one cannot be skipped, only deferred to the release that trips over it.
+- **Ship or withhold**, through `/distribution-vet`. The release CLI refuses to produce a manifest until every newly-shipping file has an answer, so this one cannot be skipped, only deferred to the release that trips over it.
 - **Whether a CI job's paths filter arms on it.** A scan surface a job reads that its filter does not arm on reports green having run the assertion zero times, which is the arming-stage failure `.claude/rules/guards-must-fail.md` names: adding a root to a scan is always two edits, the scan and the filter. The bats shards are discovered by glob rather than enumerated, so a sibling suite needs no registration of its own. Read a filter entry for which question it answers before adding one, because the two look alike and are not: whether the job runs at all, and, where a job narrows further, which of its legs run.
 - **Whether it folds into `.gaia/tests/shell-lint.sh`** alongside the other guards shellcheck cannot model, and whether it is advisory or blocking there.
 <!-- gaia:maintainer-only:end -->

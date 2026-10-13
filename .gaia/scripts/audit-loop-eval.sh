@@ -131,12 +131,12 @@
 #   enriching     the verdict is enriching.
 #   stalled       the verdict is stalled.
 #   nitpicky      r >= 6, and A(r) and A(r-1) are both non-empty with every
-#                 entry of each severity suggestion.
+#                 entry of each severity minor.
 #   reintroduced  r >= 3, A(r), A(r-1), A(r-2) non-null, and either a key of
 #                 A(r-2) is absent from A(r-1) and back in A(r), or some
 #                 (member, finding_class, path) is in all three with its line
 #                 set disjoint between consecutive rounds (it moved each round).
-#   small-tail    r >= 6, 1 <= A(r) <= 2, no A(r) entry is severity error,
+#   small-tail    r >= 6, 1 <= A(r) <= 2, no A(r) entry is severity critical,
 #                 A(r-1) non-null and A(r) >= A(r-1) (no progress last round).
 # gaia:maintainer-only:start
 #   waiver-drift  maintainer repo only (<main>/.claude/rules/maintainers/
@@ -145,11 +145,10 @@
 #                 are disposed waive-out-of-scope with basis triage-threshold
 #                 in that round's own dispositions file (waived_count).
 # gaia:maintainer-only:end
-# accept_eligible: some signal holds, no A(r) entry is severity error or
+# accept_eligible: some signal holds, no A(r) entry is severity critical or
 # security true, the verdict is not unknown, and no stored snapshot a signal
 # reads is legacy. accept_reasons: exactly the signals that hold. Severity is
-# the sidecar vocabulary: error (Critical), warning (Important), suggestion
-# (Suggestion). An entry's security reads true unless the sidecar holds the
+# the sidecar vocabulary: critical, major, minor. An entry's security reads true unless the sidecar holds the
 # boolean false (absent or non-boolean reads true); cross_remit is true only
 # when the sidecar holds true. A(r-1), A(r-2) and their counted_keys,
 # raw_count and waived_count come from the stored snapshots, never
@@ -551,9 +550,9 @@ _gaia_loop_brief() {
      accept_reasons: ($snapshot.accept_reasons // []), rounds_cap: $cap,
      recommended: $recommended,
      grant_line: $grant_line, accept_line: $accept_line,
-     remaining_by_severity: ($findings.entries | {error: map(select(.severity == "error")) | length,
-                                            warning: map(select(.severity == "warning")) | length,
-                                            suggestion: map(select(.severity == "suggestion")) | length}),
+     remaining_by_severity: ($findings.entries | {critical: map(select(.severity == "critical")) | length,
+                                            major: map(select(.severity == "major")) | length,
+                                            minor: map(select(.severity == "minor")) | length}),
      spend: $spend, spend_note: "information only"}'
 }
 

@@ -178,9 +178,9 @@ describe('labels/sync planSync create sets', () => {
       'needs-human',
       'security',
       'severity:critical',
-      'severity:important',
       'severity:investigate',
-      'severity:suggestion',
+      'severity:major',
+      'severity:minor',
       'tech-debt',
       'wontfix',
     ]);
@@ -228,9 +228,9 @@ describe('labels/sync planSync create sets', () => {
       'non-issue',
       'security',
       'severity:critical',
-      'severity:important',
       'severity:investigate',
-      'severity:suggestion',
+      'severity:major',
+      'severity:minor',
       'tech-debt',
       'wontfix',
     ]);

@@ -93,10 +93,10 @@ worktree_spelling() {
     "feat/spec-|adhoc unknown" \
     "feat/a/spec-1|adhoc unknown" \
     "Feat/plan-1|adhoc unknown" \
-    "audit/plan-1|maintenance plan-1" \
+    "cleanse/plan-1|maintenance plan-1" \
     "debt/spec-1|drain unknown" \
-    "audit/2026-10-03-1200|maintenance 2026-10-03-1200" \
-    "harden/2026-10-03-1200|maintenance 2026-10-03-1200" \
+    "cleanse/2026-10-03-1200|maintenance 2026-10-03-1200" \
+    "codify/2026-10-03-1200|maintenance 2026-10-03-1200" \
     "fitness/2026-10-03-1200|maintenance 2026-10-03-1200" \
     "residue/2026-10-03-1200|maintenance 2026-10-03-1200" \
     "deps/2026-10-03-1200|maintenance 2026-10-03-1200" \
@@ -224,7 +224,7 @@ plan_type_in() {
 @test "plan-type: legacy plan/ branches, hand-named branches, workflow branches and non-plan names print nothing" {
   local branch
   for branch in plan/plan-023-conventional-commits-naming plan/spec-005-x worktree-plan+spec-005 feat/planning-notes \
-    feat/new-thing debt/12-spec-1 audit/plan-1 release/v1.0.0 main ""; do
+    feat/new-thing debt/12-spec-1 cleanse/plan-1 release/v1.0.0 main ""; do
     run gaia_branch_plan_type "$branch"
     [ "$status" -eq 0 ] || { echo "branch '$branch': status $status" >&2; return 1; }
     [ -z "$output" ] || { echo "branch '$branch': printed '$output'" >&2; return 1; }
@@ -267,7 +267,7 @@ plan_type_in() {
 
 @test "name: each argument-free maintenance kind appends a UTC minute stamp" {
   local kind
-  for kind in audit harden fitness residue deps; do
+  for kind in cleanse codify fitness residue deps; do
     run --separate-stderr gaia_branch_name "$kind"
     [ "$status" -eq 0 ] || { echo "kind '$kind': status $status" >&2; return 1; }
     grep -qE "^${kind}/[0-9]{4}-[0-9]{2}-[0-9]{2}-[0-9]{4}\$" <<<"$output" || {
@@ -300,6 +300,17 @@ plan_type_in() {
   grep -qF 'unknown kind' <<<"$stderr"
 }
 
+@test "name: the renamed audit and harden kinds exit 2 as unknown kinds naming the replacements" {
+  local retired_kind
+  for retired_kind in audit harden; do
+    run --separate-stderr gaia_branch_name "$retired_kind"
+    [ "$status" -eq 2 ] || { echo "kind '$retired_kind': status $status" >&2; return 1; }
+    [ -z "$output" ]
+    grep -qF 'unknown kind' <<<"$stderr"
+    grep -qF 'cleanse, codify' <<<"$stderr"
+  done
+}
+
 @test "name: a long slug is cut to keep the name within 64 bytes, never ending in a dash" {
   local long name
   long="$(printf 'word-%.0s' $(seq 30))"
@@ -322,7 +333,7 @@ plan_type_in() {
 @test "name: a bad argument exits 2 with nothing on stdout and a reason on stderr" {
   local args
   for args in "" "bogus" "debt" "debt abc" "debt 1 --slug" "plan" "plan spec-x" \
-    "plan feat-1 --type feat" "plan spec-1" "plan spec-1 --type" "plan spec-1 --type feat extra" "plan --type feat" "chore" "chore x" "audit extra" "harden extra" "fitness extra" \
+    "plan feat-1 --type feat" "plan spec-1" "plan spec-1 --type" "plan spec-1 --type feat extra" "plan --type feat" "chore" "chore x" "cleanse extra" "codify extra" "fitness extra" \
     "residue extra" "deps extra" "update" "update 1.0+b" "release" "release 1.0+b"; do
     # shellcheck disable=SC2086
     run --separate-stderr gaia_branch_name $args
@@ -450,7 +461,7 @@ plan_mint_in() {
     expect_classify "$(worktree_spelling "$name")" "$want"
   done
   local kind
-  for kind in audit harden fitness residue deps "update v2.0.0"; do
+  for kind in cleanse codify fitness residue deps "update v2.0.0"; do
     # shellcheck disable=SC2086
     name="$(gaia_branch_name $kind)"
     [ "$(gaia_branch_classify "$name" | cut -d' ' -f1)" = "maintenance" ]
@@ -585,7 +596,7 @@ prefix_conforms() {
 # hands git or the harness a hand-spelled GAIA branch name. One definition, so
 # the guard and its can-fail twin below read exactly the same patterns.
 literal_hits() {
-  local kinds='(debt|plan|chore|release|spec|harden|audit|fitness|residue|deps|update|forensics|wiki/sync)[-/]'
+  local kinds='(debt|plan|chore|release|spec|codify|cleanse|fitness|residue|deps|update|forensics|wiki/sync)[-/]'
   git -C "$1" grep -nE \
     -e "(checkout -b|switch -c|branch -[mM]|worktree add( [^ ]+)* -[bB]) +\"?${kinds}" \
     -e 'BRANCH="(debt|plan|chore|release)/' \
@@ -662,7 +673,7 @@ expect_invalid() {
 @test "validate accepts one canonical example per workflow kind" {
   local branch
   for branch in debt/42-fix-it debt/41-42-47-batch plan/spec-005-cards plan/plan-023-naming \
-    audit/2026-10-03-1200 harden/2026-10-03-1200 fitness/2026-10-03-1200 residue/2026-10-03-1200 \
+    cleanse/2026-10-03-1200 codify/2026-10-03-1200 fitness/2026-10-03-1200 residue/2026-10-03-1200 \
     deps/2026-10-03-1200 update/v2.0.0-2026-10-03-1200 release/v2.0.0 \
     wiki/sync-2026-09-20-abc1234 forensics/123-some-class; do
     expect_valid "$branch"
@@ -672,7 +683,7 @@ expect_invalid() {
 @test "validate accepts every name the library mints" {
   local branch
   for branch in "$(gaia_branch_name debt 2159 --slug "reconcile claim")" "$(gaia_branch_name debt 3 1 2)" \
-    "$(gaia_branch_name plan plan-023 --type feat --slug naming)" "$(gaia_branch_name audit)" "$(gaia_branch_name harden)" \
+    "$(gaia_branch_name plan plan-023 --type feat --slug naming)" "$(gaia_branch_name cleanse)" "$(gaia_branch_name codify)" \
     "$(gaia_branch_name fitness)" "$(gaia_branch_name residue)" "$(gaia_branch_name deps)" \
     "$(gaia_branch_name update v2.0.0)" "$(gaia_branch_name release 2.0.0)"; do
     expect_valid "$branch"
@@ -868,7 +879,7 @@ unmintable_kinds() {
   kinds="$(name_call_kinds "$REPO_ROOT")"
   # A short read would leave the loop green over a subset: every kind a bash
   # flow mints must have been found.
-  for kind in debt plan release audit harden fitness residue deps update; do
+  for kind in debt plan release cleanse codify fitness residue deps update; do
     grep -qx "$kind" <<<"$kinds" || { echo "no call site found for kind '$kind'" >&2; return 1; }
   done
   unmintable="$(unmintable_kinds "$REPO_ROOT")"
@@ -880,9 +891,9 @@ unmintable_kinds() {
   mkdir -p "$repo/.claude"
   git init -q "$repo"
   printf '%s\n' 'bash .gaia/scripts/branch-name-lib.sh name chore x' \
-    'bash .gaia/scripts/branch-name-lib.sh name audit' >"$repo/.claude/x.md"
+    'bash .gaia/scripts/branch-name-lib.sh name cleanse' >"$repo/.claude/x.md"
   git -C "$repo" add .claude/x.md
-  [ "$(name_call_kinds "$repo" | tr '\n' ' ')" = "audit chore " ]
+  [ "$(name_call_kinds "$repo" | tr '\n' ' ')" = "chore cleanse " ]
   [ "$(unmintable_kinds "$repo")" = "chore" ]
 }
 

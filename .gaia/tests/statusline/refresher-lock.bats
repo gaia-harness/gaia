@@ -6,7 +6,7 @@
 # `checkedAt`, which is only written when a run finishes. Without a lock,
 # every render between a run's start and its cache write launches another
 # full run, each paging the merged-PR window through gh. These tests hold one
-# run open inside a mock `harden-tally` and assert a second run neither
+# run open inside a mock `codify-tally` and assert a second run neither
 # starts the tally nor writes the cache, that a normal run releases the lock,
 # and that a lock left behind by a killed run is reclaimed once stale rather
 # than blocking every future refresh.
@@ -38,7 +38,7 @@ teardown() {
   return 0
 }
 
-# A `gaia` stub. `harden-tally` appends one line to $MOCK_LOG per invocation,
+# A `gaia` stub. `codify-tally` appends one line to $MOCK_LOG per invocation,
 # touches $MOCK_ENTERED, then, while $MOCK_HOLD exists, waits (bounded) so a
 # test can hold a run open mid-refresh. Every other subcommand answers empty.
 write_mock_gaia() {
@@ -56,7 +56,7 @@ case "$1" in
     [ -n "$output_path" ] && printf '{"actionable_count":0}' > "$output_path"
     exit 0
     ;;
-  harden-tally)
+  codify-tally)
     printf 'tally\n' >> "$MOCK_LOG"
     : > "$MOCK_ENTERED"
     i=0
@@ -86,7 +86,7 @@ EOF
   chmod +x "$1"
 }
 
-# Wait (bounded) for the held run to reach harden-tally.
+# Wait (bounded) for the held run to reach codify-tally.
 wait_for_entered() {
   local i=0
   while [ ! -e "$MOCK_ENTERED" ] && [ "$i" -lt 200 ]; do
@@ -109,7 +109,7 @@ wait_for_entered() {
 
   rm -f "$MOCK_HOLD"
   wait "$held_pid"
-  [ "$(jq -r '.hardenCandidateCount' "$CACHE_FILE")" -eq 2 ]
+  [ "$(jq -r '.codifyCandidateCount' "$CACHE_FILE")" -eq 2 ]
   [ "$(wc -l < "$MOCK_LOG" | tr -d ' ')" -eq 1 ]
 }
 
@@ -189,6 +189,6 @@ EOF
   touch -t 200001010000 "$LOCK_DIRECTORY"
   run bash "$REFRESH_ROOT/.gaia/scripts/check-updates.sh"
   [ "$status" -eq 0 ]
-  [ "$(jq -r '.hardenCandidateCount' "$CACHE_FILE")" -eq 2 ]
+  [ "$(jq -r '.codifyCandidateCount' "$CACHE_FILE")" -eq 2 ]
   [ ! -e "$LOCK_DIRECTORY" ]
 }

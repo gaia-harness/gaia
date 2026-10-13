@@ -211,14 +211,14 @@ FAKE
 }
 
 # ---------- 9b. Harden decline ledger durability (write-through to main) ----------
-@test "harden declines: a decline written on the worktree side lands in the main checkout" {
+@test "codify declines: a decline written on the worktree side lands in the main checkout" {
   run run_in "$LINKED"
   [ "$status" -eq 0 ]
 
-  mkdir -p "$LINKED/.gaia/local/harden"
-  printf '%s\n' '{"version":1,"declines":[{"finding_class":"x"}]}' > "$LINKED/.gaia/local/harden/declines.json"
-  [ -f "$MAIN/.gaia/local/harden/declines.json" ]
-  [ "$(cat "$MAIN/.gaia/local/harden/declines.json")" = '{"version":1,"declines":[{"finding_class":"x"}]}' ]
+  mkdir -p "$LINKED/.gaia/local/codify"
+  printf '%s\n' '{"version":1,"declines":[{"finding_class":"x"}]}' > "$LINKED/.gaia/local/codify/declines.json"
+  [ -f "$MAIN/.gaia/local/codify/declines.json" ]
+  [ "$(cat "$MAIN/.gaia/local/codify/declines.json")" = '{"version":1,"declines":[{"finding_class":"x"}]}' ]
 }
 
 @test "env files: fresh worktree shares .env and .env.local, skips .env.example" {

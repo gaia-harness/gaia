@@ -36,8 +36,8 @@ def disjoint($left_lines; $right_lines): all($left_lines[]; . as $line | any($ri
 | ($counted_summaries | map(identity_key)) as $round_counted_keys
 | (if $previous_snapshot | has_counted_keys then $previous_snapshot.counted_keys | map(identity_key) else [] end) as $previous_round_counted_keys
 | (if $second_previous_snapshot | has_counted_keys then $second_previous_snapshot.counted_keys | map(identity_key) else [] end) as $second_previous_round_counted_keys
-| ($authored_count != null and $authored_count >= 1 and all($counted_summaries[]; .severity == "suggestion")) as $round_suggestions_only
-| ($previous_authored_count != null and $previous_authored_count >= 1 and ($previous_snapshot | has_counted_keys) and all($previous_snapshot.counted_keys[]; .severity == "suggestion")) as $previous_round_suggestions_only
+| ($authored_count != null and $authored_count >= 1 and all($counted_summaries[]; .severity == "minor")) as $round_minor_only
+| ($previous_authored_count != null and $previous_authored_count >= 1 and ($previous_snapshot | has_counted_keys) and all($previous_snapshot.counted_keys[]; .severity == "minor")) as $previous_round_minor_only
 | (any($second_previous_round_counted_keys[]; . as $entry_key | (any($previous_round_counted_keys[]; . == $entry_key) | not) and any($round_counted_keys[]; . == $entry_key))) as $returned
 | (any(($round_counted_keys | map(.[0:3]) | unique)[]; . as $triple
      | triple_lines($triple; $round_counted_keys) as $round_lines | triple_lines($triple; $previous_round_counted_keys) as $previous_round_lines | triple_lines($triple; $second_previous_round_counted_keys) as $second_previous_round_lines
@@ -46,18 +46,18 @@ def disjoint($left_lines; $right_lines): all($left_lines[]; . as $line | any($ri
    quiet: ($verdict == "quiet"),
    enriching: ($verdict == "enriching"),
    stalled: ($verdict == "stalled"),
-   nitpicky: (($previous_is_legacy | not) and $round >= 6 and $round_suggestions_only and $previous_round_suggestions_only),
+   nitpicky: (($previous_is_legacy | not) and $round >= 6 and $round_minor_only and $previous_round_minor_only),
    reintroduced: (($previous_is_legacy | not) and ($second_previous_is_legacy | not) and $round >= 3 and $authored_count != null and $previous_authored_count != null and $second_previous_authored_count != null
                   and ($returned or $moved)),
    "small-tail": (($previous_is_legacy | not) and $round >= 6 and $authored_count != null and $authored_count >= 1 and $authored_count <= 2
-                  and all($counted_summaries[]; .severity != "error") and $previous_authored_count != null and $authored_count >= $previous_authored_count),
+                  and all($counted_summaries[]; .severity != "critical") and $previous_authored_count != null and $authored_count >= $previous_authored_count),
    "waiver-drift": (($previous_is_legacy | not) and $is_maintainer_repo and $round >= 2 and $raw > 0 and $waived * 2 >= $raw
                     and ($previous_snapshot.raw_count | type) == "number" and $previous_snapshot.raw_count > 0
                     and ($previous_snapshot.waived_count | type) == "number" and $previous_snapshot.waived_count * 2 >= $previous_snapshot.raw_count)} as $signals
 | ([("cap", "quiet", "enriching", "stalled", "nitpicky", "reintroduced", "small-tail", "waiver-drift")
     | select($signals[.] == true)]) as $reasons
 | (($reasons | length) > 0 and $verdict != "unknown" and ($previous_is_legacy | not) and ($second_previous_is_legacy | not)
-   and all($counted_summaries[]; .severity != "error" and .security != true)) as $eligible
+   and all($counted_summaries[]; .severity != "critical" and .security != true)) as $eligible
 '
 
 # _gaia_loop_snapshot_eligible <snapshot-json>: `true` only when the snapshot says so.

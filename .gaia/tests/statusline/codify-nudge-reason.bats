@@ -1,19 +1,19 @@
 #!/usr/bin/env bats
 
-# Tests for the review-aware `/gaia-harden` nudge: the refresher
-# (.gaia/scripts/check-updates.sh) composes `hardenNudgeReason` from
-# `harden-tally`'s emitted JSON (README C6 at .gaia/local/specs/SPEC-084/plan),
+# Tests for the review-aware `/gaia-codify` nudge: the refresher
+# (.gaia/scripts/check-updates.sh) composes `codifyNudgeReason` from
+# `codify-tally`'s emitted JSON (README C6 at .gaia/local/specs/SPEC-084/plan),
 # and the statusline (.gaia/statusline/gaia-statusline.sh) renders that cached
 # reason without ever reading the review snapshot itself.
 #
-# The statusline half mirrors harden-unclassified-segment.bats: a MAIN git
+# The statusline half mirrors codify-unclassified-segment.bats: a MAIN git
 # checkout with setup marked complete and no gaia-init gate file, so the
 # right-side indicators are eligible to render; HOME points at an empty dir so
 # left-side delegation stays inert. The refresher half runs a real copy of
 # check-updates.sh against an isolated .gaia tree with a mock `gaia` binary
-# whose `harden-tally` prints $MOCK_TALLY_JSON verbatim, so each test supplies
+# whose `codify-tally` prints $MOCK_TALLY_JSON verbatim, so each test supplies
 # its own C6-shaped JSON, and a stub `gh` so `gaiaLatest` never makes a real
-# network call. REFRESH_ROOT also carries `.gaia/local/harden/`, the review
+# network call. REFRESH_ROOT also carries `.gaia/local/codify/`, the review
 # snapshot's directory, since the race check reads a file there.
 
 setup() {
@@ -42,13 +42,13 @@ setup() {
   # ---- refresher fixture ----
   REFRESH_ROOT=$(mktemp -d -t gaia-cu-hreason-XXXXXX)
   mkdir -p "$REFRESH_ROOT/.gaia/scripts" "$REFRESH_ROOT/.gaia/cli" \
-    "$REFRESH_ROOT/.gaia/local/cache/shared" "$REFRESH_ROOT/.gaia/local/harden"
+    "$REFRESH_ROOT/.gaia/local/cache/shared" "$REFRESH_ROOT/.gaia/local/codify"
   cp "$CHECK_UPDATES_SOURCE" "$REFRESH_ROOT/.gaia/scripts/check-updates.sh"
   chmod +x "$REFRESH_ROOT/.gaia/scripts/check-updates.sh"
   write_mock_gaia "$REFRESH_ROOT/.gaia/cli/gaia"
 
   CACHE_FILE="$REFRESH_ROOT/.gaia/local/cache/shared/update-check.json"
-  export MOCK_SNAPSHOT_FILE="$REFRESH_ROOT/.gaia/local/harden/reviewed.json"
+  export MOCK_SNAPSHOT_FILE="$REFRESH_ROOT/.gaia/local/codify/reviewed.json"
 
   GH_BIN="$BATS_TEST_TMPDIR/bin"
   mkdir -p "$GH_BIN"
@@ -65,7 +65,7 @@ teardown() {
 
 # A `gaia` binary stub answering the two subcommands check-updates.sh calls:
 # `update-deps run --emit-updates <file>` (writes an empty plan) and
-# `harden-tally` (prints $MOCK_TALLY_JSON verbatim, so each test supplies its
+# `codify-tally` (prints $MOCK_TALLY_JSON verbatim, so each test supplies its
 # own C6-shaped payload). $MOCK_REWRITE_SNAPSHOT_BEFORE / _AFTER, when set,
 # write that literal content to $MOCK_SNAPSHOT_FILE before / after printing
 # the tally -- the two race-window shapes tests 8 and 9 drive.
@@ -84,7 +84,10 @@ case "$1" in
     [ -n "$output_path" ] && printf '{"actionable_count":0}' > "$output_path"
     exit 0
     ;;
-  harden-tally)
+  codify-tally)
+    if [ -n "${MOCK_RELOCATE_FROM:-}" ]; then
+      mv "$MOCK_RELOCATE_FROM" "$MOCK_RELOCATE_TO"
+    fi
     if [ -n "${MOCK_REWRITE_SNAPSHOT_BEFORE:-}" ]; then
       printf '%s' "$MOCK_REWRITE_SNAPSHOT_BEFORE" > "$MOCK_SNAPSHOT_FILE"
     fi
@@ -129,12 +132,12 @@ run_refresher() {
   run env MOCK_TALLY_JSON="$tally" bash "$REFRESH_ROOT/.gaia/scripts/check-updates.sh"
 }
 
-# Same as run_refresher, but returns the resulting hardenNudgeReason on
+# Same as run_refresher, but returns the resulting codifyNudgeReason on
 # stdout instead of leaving $status/$output for the caller to inspect.
-harden_reason_for() {
+codify_reason_for() {
   run_refresher "$1" "$2"
   [ "$status" -eq 0 ] || return 1
-  jq -r '.hardenNudgeReason' "$CACHE_FILE"
+  jq -r '.codifyNudgeReason' "$CACHE_FILE"
 }
 
 # Render MAIN's statusline with a payload whose current_dir is MAIN.
@@ -155,17 +158,17 @@ render_statusline_against_refresher_cache() {
 @test "no snapshot: byte identity with the old-style cache, plural count (UAT-001)" {
   run_refresher '{"candidate_count":2,"unclassified":{"distinct_pr_count":5,"pr_numbers":[1],"area_tags":[],"severity_max":"info"},"gh_ok":true,"window_days":90,"snapshot_present":false,"snapshot_reviewed_at":null,"triggers":[]}'
   [ "$status" -eq 0 ]
-  [ "$(jq -r '.hardenNudgeReason' "$CACHE_FILE")" = "2 recurring patterns, 5 unclassified" ]
+  [ "$(jq -r '.codifyNudgeReason' "$CACHE_FILE")" = "2 recurring patterns, 5 unclassified" ]
 
   render_statusline_against_refresher_cache
   [ "$status" -eq 0 ]
-  grep -qF -- "Run /gaia-harden (2 recurring patterns, 5 unclassified)" <<<"$output"
-  new_segment=$(grep -oE 'Run /gaia-harden \([^)]*\)' <<<"$output")
+  grep -qF -- "Run /gaia-codify (2 recurring patterns, 5 unclassified)" <<<"$output"
+  new_segment=$(grep -oE 'Run /gaia-codify \([^)]*\)' <<<"$output")
 
-  printf '{"hardenCandidateCount":2,"hardenUnclassifiedCount":5}' > "$MAIN/.gaia/local/cache/shared/update-check.json"
+  printf '{"codifyCandidateCount":2,"codifyUnclassifiedCount":5}' > "$MAIN/.gaia/local/cache/shared/update-check.json"
   render_statusline
   [ "$status" -eq 0 ]
-  old_segment=$(grep -oE 'Run /gaia-harden \([^)]*\)' <<<"$output")
+  old_segment=$(grep -oE 'Run /gaia-codify \([^)]*\)' <<<"$output")
   [ "$new_segment" = "$old_segment" ]
 }
 
@@ -174,7 +177,7 @@ render_statusline_against_refresher_cache() {
 @test "a tally with no snapshot_present key at all composes today's text" {
   run_refresher '{"candidate_count":3,"unclassified":null,"gh_ok":true,"window_days":90}'
   [ "$status" -eq 0 ]
-  [ "$(jq -r '.hardenNudgeReason' "$CACHE_FILE")" = "3 recurring patterns" ]
+  [ "$(jq -r '.codifyNudgeReason' "$CACHE_FILE")" = "3 recurring patterns" ]
 }
 
 # 3. Snapshot present, no triggers (UAT-003) -----------------------------------
@@ -184,11 +187,11 @@ render_statusline_against_refresher_cache() {
     '{"candidate_count":2,"unclassified":null,"gh_ok":true,"window_days":90,"snapshot_present":true,"snapshot_reviewed_at":"T","triggers":[]}' \
     '{"reviewed_at":"T"}'
   [ "$status" -eq 0 ]
-  [ "$(jq -r '.hardenNudgeReason' "$CACHE_FILE")" = "" ]
+  [ "$(jq -r '.codifyNudgeReason' "$CACHE_FILE")" = "" ]
 
   render_statusline_against_refresher_cache
   [ "$status" -eq 0 ]
-  grep -qF -- "gaia-harden" <<<"$output" && return 1
+  grep -qF -- "gaia-codify" <<<"$output" && return 1
   true
 }
 
@@ -197,40 +200,40 @@ render_statusline_against_refresher_cache() {
 @test "exact trigger texts, joined in the fixed order" {
   local snapshot_json='{"reviewed_at":"T"}'
 
-  [ "$(harden_reason_for '{"candidate_count":0,"unclassified":null,"gh_ok":true,"window_days":90,"snapshot_present":true,"snapshot_reviewed_at":"T","triggers":[{"type":"new_class","finding_class":"holistic/a"}]}' "$snapshot_json")" = "1 new pattern" ]
-  [ "$(harden_reason_for '{"candidate_count":0,"unclassified":null,"gh_ok":true,"window_days":90,"snapshot_present":true,"snapshot_reviewed_at":"T","triggers":[{"type":"new_class","finding_class":"holistic/a"},{"type":"new_class","finding_class":"holistic/b"}]}' "$snapshot_json")" = "2 new patterns" ]
-  [ "$(harden_reason_for '{"candidate_count":0,"unclassified":null,"gh_ok":true,"window_days":90,"snapshot_present":true,"snapshot_reviewed_at":"T","triggers":[{"type":"rising_class","finding_class":"holistic/overclaimed-guarantee"}]}' "$snapshot_json")" = "overclaimed-guarantee rising" ]
-  [ "$(harden_reason_for '{"candidate_count":0,"unclassified":null,"gh_ok":true,"window_days":90,"snapshot_present":true,"snapshot_reviewed_at":"T","triggers":[{"type":"rising_class","finding_class":"holistic/swallowed-error"}]}' "$snapshot_json")" = "swallowed-error rising" ]
-  [ "$(harden_reason_for '{"candidate_count":0,"unclassified":null,"gh_ok":true,"window_days":90,"snapshot_present":true,"snapshot_reviewed_at":"T","triggers":[{"type":"rising_unclassified"}]}' "$snapshot_json")" = "unclassified rising" ]
-  [ "$(harden_reason_for '{"candidate_count":0,"unclassified":null,"gh_ok":true,"window_days":90,"snapshot_present":true,"snapshot_reviewed_at":"T","triggers":[{"type":"schema_change"}]}' "$snapshot_json")" = "tally changed" ]
-  [ "$(harden_reason_for '{"candidate_count":0,"unclassified":null,"gh_ok":true,"window_days":90,"snapshot_present":true,"snapshot_reviewed_at":"T","triggers":[{"type":"rising_class","finding_class":"A"}]}' "$snapshot_json")" = "A rising" ]
+  [ "$(codify_reason_for '{"candidate_count":0,"unclassified":null,"gh_ok":true,"window_days":90,"snapshot_present":true,"snapshot_reviewed_at":"T","triggers":[{"type":"new_class","finding_class":"holistic/a"}]}' "$snapshot_json")" = "1 new pattern" ]
+  [ "$(codify_reason_for '{"candidate_count":0,"unclassified":null,"gh_ok":true,"window_days":90,"snapshot_present":true,"snapshot_reviewed_at":"T","triggers":[{"type":"new_class","finding_class":"holistic/a"},{"type":"new_class","finding_class":"holistic/b"}]}' "$snapshot_json")" = "2 new patterns" ]
+  [ "$(codify_reason_for '{"candidate_count":0,"unclassified":null,"gh_ok":true,"window_days":90,"snapshot_present":true,"snapshot_reviewed_at":"T","triggers":[{"type":"rising_class","finding_class":"holistic/overclaimed-guarantee"}]}' "$snapshot_json")" = "overclaimed-guarantee rising" ]
+  [ "$(codify_reason_for '{"candidate_count":0,"unclassified":null,"gh_ok":true,"window_days":90,"snapshot_present":true,"snapshot_reviewed_at":"T","triggers":[{"type":"rising_class","finding_class":"holistic/swallowed-error"}]}' "$snapshot_json")" = "swallowed-error rising" ]
+  [ "$(codify_reason_for '{"candidate_count":0,"unclassified":null,"gh_ok":true,"window_days":90,"snapshot_present":true,"snapshot_reviewed_at":"T","triggers":[{"type":"rising_unclassified"}]}' "$snapshot_json")" = "unclassified rising" ]
+  [ "$(codify_reason_for '{"candidate_count":0,"unclassified":null,"gh_ok":true,"window_days":90,"snapshot_present":true,"snapshot_reviewed_at":"T","triggers":[{"type":"schema_change"}]}' "$snapshot_json")" = "tally changed" ]
+  [ "$(codify_reason_for '{"candidate_count":0,"unclassified":null,"gh_ok":true,"window_days":90,"snapshot_present":true,"snapshot_reviewed_at":"T","triggers":[{"type":"rising_class","finding_class":"A"}]}' "$snapshot_json")" = "A rising" ]
 
-  [ "$(harden_reason_for '{"candidate_count":0,"unclassified":null,"gh_ok":true,"window_days":90,"snapshot_present":true,"snapshot_reviewed_at":"T","triggers":[{"type":"new_class","finding_class":"C"},{"type":"rising_class","finding_class":"holistic/drifting-duplicate"}]}' "$snapshot_json")" = "1 new pattern, drifting-duplicate rising" ]
+  [ "$(codify_reason_for '{"candidate_count":0,"unclassified":null,"gh_ok":true,"window_days":90,"snapshot_present":true,"snapshot_reviewed_at":"T","triggers":[{"type":"new_class","finding_class":"C"},{"type":"rising_class","finding_class":"holistic/drifting-duplicate"}]}' "$snapshot_json")" = "1 new pattern, drifting-duplicate rising" ]
 
   render_statusline_against_refresher_cache
   [ "$status" -eq 0 ]
-  grep -qF -- "Run /gaia-harden (1 new pattern, drifting-duplicate rising)" <<<"$output"
-  [ "$(grep -oF -- "Run /gaia-harden" <<<"$output" | wc -l | tr -d ' ')" -eq 1 ]
+  grep -qF -- "Run /gaia-codify (1 new pattern, drifting-duplicate rising)" <<<"$output"
+  [ "$(grep -oF -- "Run /gaia-codify" <<<"$output" | wc -l | tr -d ' ')" -eq 1 ]
 
-  [ "$(harden_reason_for '{"candidate_count":0,"unclassified":null,"gh_ok":true,"window_days":90,"snapshot_present":true,"snapshot_reviewed_at":"T","triggers":[{"type":"schema_change"},{"type":"new_class","finding_class":"C"},{"type":"rising_class","finding_class":"a"},{"type":"rising_unclassified"}]}' "$snapshot_json")" = "tally changed, 1 new pattern, a rising, unclassified rising" ]
+  [ "$(codify_reason_for '{"candidate_count":0,"unclassified":null,"gh_ok":true,"window_days":90,"snapshot_present":true,"snapshot_reviewed_at":"T","triggers":[{"type":"schema_change"},{"type":"new_class","finding_class":"C"},{"type":"rising_class","finding_class":"a"},{"type":"rising_unclassified"}]}' "$snapshot_json")" = "tally changed, 1 new pattern, a rising, unclassified rising" ]
 }
 
 # 5. Positive control (directive 13) ------------------------------------------
 
-@test "positive control: a hand-written cache with hardenNudgeReason renders it" {
-  printf '{"hardenNudgeReason":"1 new pattern"}' > "$MAIN/.gaia/local/cache/shared/update-check.json"
+@test "positive control: a hand-written cache with codifyNudgeReason renders it" {
+  printf '{"codifyNudgeReason":"1 new pattern"}' > "$MAIN/.gaia/local/cache/shared/update-check.json"
   render_statusline
   [ "$status" -eq 0 ]
-  grep -qF -- "Run /gaia-harden (1 new pattern)" <<<"$output"
+  grep -qF -- "Run /gaia-codify (1 new pattern)" <<<"$output"
 }
 
 # 6. Reason key governs when present -------------------------------------------
 
 @test "the reason key governs rendering even when its value is empty" {
-  printf '{"hardenNudgeReason":"","hardenCandidateCount":4,"hardenUnclassifiedCount":2}' > "$MAIN/.gaia/local/cache/shared/update-check.json"
+  printf '{"codifyNudgeReason":"","codifyCandidateCount":4,"codifyUnclassifiedCount":2}' > "$MAIN/.gaia/local/cache/shared/update-check.json"
   render_statusline
   [ "$status" -eq 0 ]
-  grep -qF -- "gaia-harden" <<<"$output" && return 1
+  grep -qF -- "gaia-codify" <<<"$output" && return 1
   true
 }
 
@@ -243,12 +246,12 @@ render_statusline_against_refresher_cache() {
     MOCK_REWRITE_SNAPSHOT_AFTER='{"reviewed_at":"Y"}' \
     bash "$REFRESH_ROOT/.gaia/scripts/check-updates.sh"
   [ "$status" -eq 0 ]
-  [ "$(jq -r '.hardenNudgeReason' "$CACHE_FILE")" = "" ]
+  [ "$(jq -r '.codifyNudgeReason' "$CACHE_FILE")" = "" ]
   [ "$(jq -r '.checkedAt' "$CACHE_FILE")" = "0" ]
 
   render_statusline_against_refresher_cache
   [ "$status" -eq 0 ]
-  grep -qF -- "gaia-harden" <<<"$output" && return 1
+  grep -qF -- "gaia-codify" <<<"$output" && return 1
   true
 }
 
@@ -256,13 +259,13 @@ render_statusline_against_refresher_cache() {
 
 @test "race: the review lands before the tally read (T0 arm)" {
   printf '{"reviewed_at":"X"}' > "$MOCK_SNAPSHOT_FILE"
-  printf '{"checkedAt":0,"hardenNudgeReason":"1 new pattern"}' > "$CACHE_FILE"
+  printf '{"checkedAt":0,"codifyNudgeReason":"1 new pattern"}' > "$CACHE_FILE"
   run env \
     MOCK_TALLY_JSON='{"candidate_count":0,"unclassified":null,"gh_ok":false,"window_days":90,"snapshot_present":true,"snapshot_reviewed_at":"Y"}' \
     MOCK_REWRITE_SNAPSHOT_BEFORE='{"reviewed_at":"Y"}' \
     bash "$REFRESH_ROOT/.gaia/scripts/check-updates.sh"
   [ "$status" -eq 0 ]
-  [ "$(jq -r '.hardenNudgeReason' "$CACHE_FILE")" = "" ]
+  [ "$(jq -r '.codifyNudgeReason' "$CACHE_FILE")" = "" ]
   [ "$(jq -r '.checkedAt' "$CACHE_FILE")" = "0" ]
 }
 
@@ -271,7 +274,7 @@ render_statusline_against_refresher_cache() {
 
 @test "race: the tally's snapshot read disagrees with the unchanged file (arm b)" {
   # The snapshot file never changes across the run, so arm (a)'s two script
-  # reads agree ("X" both times) and cannot fire on its own. harden-tally's
+  # reads agree ("X" both times) and cannot fire on its own. codify-tally's
   # reported snapshot_reviewed_at ("Q") disagrees with that file anyway,
   # simulating its own snapshot read landing on a different value than the
   # file the script re-reads before the write.
@@ -280,7 +283,7 @@ render_statusline_against_refresher_cache() {
     MOCK_TALLY_JSON='{"candidate_count":0,"unclassified":null,"gh_ok":true,"window_days":90,"snapshot_present":true,"snapshot_reviewed_at":"Q","triggers":[{"type":"new_class","finding_class":"holistic/a"}]}' \
     bash "$REFRESH_ROOT/.gaia/scripts/check-updates.sh"
   [ "$status" -eq 0 ]
-  [ "$(jq -r '.hardenNudgeReason' "$CACHE_FILE")" = "" ]
+  [ "$(jq -r '.codifyNudgeReason' "$CACHE_FILE")" = "" ]
   [ "$(jq -r '.checkedAt' "$CACHE_FILE")" = "0" ]
 
   # Refusal proof: drop arm (b) from the race check in a scratch copy that
@@ -306,7 +309,7 @@ render_statusline_against_refresher_cache() {
     MOCK_TALLY_JSON='{"candidate_count":0,"unclassified":null,"gh_ok":true,"window_days":90,"snapshot_present":true,"snapshot_reviewed_at":"Q","triggers":[{"type":"new_class","finding_class":"holistic/a"}]}' \
     bash "$broken"
   [ "$status" -eq 0 ]
-  [ "$(jq -r '.hardenNudgeReason' "$CACHE_FILE")" = "1 new pattern" ]
+  [ "$(jq -r '.codifyNudgeReason' "$CACHE_FILE")" = "1 new pattern" ]
 }
 
 # 10. No race, same inputs: refusal-state control for 8 and 9 -----------------
@@ -317,7 +320,7 @@ render_statusline_against_refresher_cache() {
     MOCK_TALLY_JSON='{"candidate_count":0,"unclassified":null,"gh_ok":true,"window_days":90,"snapshot_present":true,"snapshot_reviewed_at":"X","triggers":[{"type":"new_class","finding_class":"holistic/a"}]}' \
     bash "$REFRESH_ROOT/.gaia/scripts/check-updates.sh"
   [ "$status" -eq 0 ]
-  [ "$(jq -r '.hardenNudgeReason' "$CACHE_FILE")" = "1 new pattern" ]
+  [ "$(jq -r '.codifyNudgeReason' "$CACHE_FILE")" = "1 new pattern" ]
   checked_at=$(jq -r '.checkedAt' "$CACHE_FILE")
   [ "$checked_at" != "0" ]
 }
@@ -329,7 +332,7 @@ render_statusline_against_refresher_cache() {
   run env MOCK_TALLY_JSON='{"candidate_count":2,"unclassified":null,"gh_ok":true,"window_days":90,"snapshot_present":false,"snapshot_reviewed_at":null,"triggers":[]}' \
     bash "$REFRESH_ROOT/.gaia/scripts/check-updates.sh"
   [ "$status" -eq 0 ]
-  [ "$(jq -r '.hardenNudgeReason' "$CACHE_FILE")" = "2 recurring patterns" ]
+  [ "$(jq -r '.codifyNudgeReason' "$CACHE_FILE")" = "2 recurring patterns" ]
   checked_at=$(jq -r '.checkedAt' "$CACHE_FILE")
   [ "$checked_at" != "0" ]
 
@@ -338,30 +341,30 @@ render_statusline_against_refresher_cache() {
   run env MOCK_TALLY_JSON='{"candidate_count":2,"unclassified":null,"gh_ok":true,"window_days":90,"snapshot_present":false,"snapshot_reviewed_at":null,"triggers":[]}' \
     bash "$REFRESH_ROOT/.gaia/scripts/check-updates.sh"
   [ "$status" -eq 0 ]
-  [ "$(jq -r '.hardenNudgeReason' "$CACHE_FILE")" = "2 recurring patterns" ]
+  [ "$(jq -r '.codifyNudgeReason' "$CACHE_FILE")" = "2 recurring patterns" ]
   checked_at=$(jq -r '.checkedAt' "$CACHE_FILE")
   [ "$checked_at" != "0" ]
 }
 
 # 12. Counts still written (directive 8) ---------------------------------------
 
-@test "hardenCandidateCount and hardenUnclassifiedCount stay written alongside the reason" {
+@test "codifyCandidateCount and codifyUnclassifiedCount stay written alongside the reason" {
   run_refresher \
     '{"candidate_count":2,"unclassified":null,"gh_ok":true,"window_days":90,"snapshot_present":true,"snapshot_reviewed_at":"T","triggers":[]}' \
     '{"reviewed_at":"T"}'
   [ "$status" -eq 0 ]
-  [ "$(jq -r '.hardenNudgeReason' "$CACHE_FILE")" = "" ]
-  [ "$(jq -r '.hardenCandidateCount' "$CACHE_FILE")" = "2" ]
-  [ "$(jq -r '.hardenUnclassifiedCount' "$CACHE_FILE")" = "0" ]
+  [ "$(jq -r '.codifyNudgeReason' "$CACHE_FILE")" = "" ]
+  [ "$(jq -r '.codifyCandidateCount' "$CACHE_FILE")" = "2" ]
+  [ "$(jq -r '.codifyUnclassifiedCount' "$CACHE_FILE")" = "0" ]
 }
 
 # 13. printf fallback writer carries the key -----------------------------------
 
-@test "the no-jq printf fallback writer carries hardenNudgeReason" {
+@test "the no-jq printf fallback writer carries codifyNudgeReason" {
   run env PATH="$(path_shim_without jq)" bash "$REFRESH_ROOT/.gaia/scripts/check-updates.sh"
   [ "$status" -eq 0 ]
   [ -f "$CACHE_FILE" ]
-  grep -qF -- '"hardenNudgeReason":""' "$CACHE_FILE"
+  grep -qF -- '"codifyNudgeReason":""' "$CACHE_FILE"
 }
 
 # 14. Injected escape byte, newline, and parenthetical text in a rising_class
@@ -379,7 +382,7 @@ render_statusline_against_refresher_cache() {
 
   run_refresher "$malicious_tally" "$snapshot_json"
   [ "$status" -eq 0 ]
-  reason=$(jq -r '.hardenNudgeReason' "$CACHE_FILE")
+  reason=$(jq -r '.codifyNudgeReason' "$CACHE_FILE")
   grep -qF -- "$escape_character" <<<"$reason" && return 1
   [ "$(printf '%s' "$reason" | wc -l | tr -d ' ')" -eq 0 ]
   grep -qF -- ') Run fake (' <<<"$reason" && return 1
@@ -388,7 +391,7 @@ render_statusline_against_refresher_cache() {
   [ "$status" -eq 0 ]
   grep -qF -- "$injected_sequence" <<<"$output" && return 1
   grep -qF -- ') Run fake (' <<<"$output" && return 1
-  [ "$(grep -oF -- "Run /gaia-harden" <<<"$output" | wc -l | tr -d ' ')" -eq 1 ]
+  [ "$(grep -oF -- "Run /gaia-codify" <<<"$output" | wc -l | tr -d ' ')" -eq 1 ]
 
   # Refusal proof: revert the gsub sanitization in a scratch copy that lives
   # beside the original (check-updates.sh derives GAIA_DIRECTORY/PROJECT_ROOT from
@@ -410,7 +413,7 @@ render_statusline_against_refresher_cache() {
   printf '%s' "$snapshot_json" > "$MOCK_SNAPSHOT_FILE"
   run env MOCK_TALLY_JSON="$malicious_tally" bash "$broken"
   [ "$status" -eq 0 ]
-  broken_reason=$(jq -r '.hardenNudgeReason' "$CACHE_FILE")
+  broken_reason=$(jq -r '.codifyNudgeReason' "$CACHE_FILE")
   grep -qF -- "$escape_character" <<<"$broken_reason"
 }
 
@@ -424,15 +427,15 @@ render_statusline_against_refresher_cache() {
   # escape and a newline.
   local injected_sequence
   injected_sequence=$(printf '\033[31m')
-  printf '%s' '{"hardenNudgeReason":"1 new pattern\u001b[31mFAKE\n more"}' \
+  printf '%s' '{"codifyNudgeReason":"1 new pattern\u001b[31mFAKE\n more"}' \
     > "$MAIN/.gaia/local/cache/shared/update-check.json"
 
   render_statusline
   [ "$status" -eq 0 ]
   grep -qF -- "$injected_sequence" <<<"$output" && return 1
   [ "${#lines[@]}" -eq 1 ]
-  grep -qF -- "Run /gaia-harden (1 new pattern" <<<"$output"
-  [ "$(grep -oF -- "Run /gaia-harden" <<<"$output" | wc -l | tr -d ' ')" -eq 1 ]
+  grep -qF -- "Run /gaia-codify (1 new pattern" <<<"$output"
+  [ "$(grep -oF -- "Run /gaia-codify" <<<"$output" | wc -l | tr -d ' ')" -eq 1 ]
 
   # Refusal proof: drop the control-byte stripping in a scratch copy that
   # lives beside the original (gaia-statusline.sh resolves PROJECT_ROOT from
@@ -442,7 +445,7 @@ render_statusline_against_refresher_cache() {
   search='tr -d'
   # shellcheck disable=SC2016 # single-quoted on purpose: this is the literal
   # replacement line to write, not an expression to expand here.
-  broken_line='      harden_reason="${harden_reason_raw#?}"'
+  broken_line='      codify_reason="${codify_reason_raw#?}"'
   count=$(grep -cF -- "$search" "$MAIN/.gaia/statusline/gaia-statusline.sh")
   [ "$count" -eq 1 ]
   broken="$MAIN/.gaia/statusline/gaia-statusline-broken.sh"
@@ -457,3 +460,42 @@ render_statusline_against_refresher_cache() {
   grep -qF -- "$injected_sequence" <<<"$output"
 }
 
+# 16. First run on a tree whose state still sits in the old directory ----------
+
+@test "race: the first run on old-directory state does not read the state move as a completed review" {
+  # The CLI moves the old state directory into place while it runs, after the
+  # refresher's first token read. The tally reports the token the file carries.
+  rm -rf "$REFRESH_ROOT/.gaia/local/codify"
+  mkdir -p "$REFRESH_ROOT/.gaia/local/harden"
+  printf '{"reviewed_at":"X"}' > "$REFRESH_ROOT/.gaia/local/harden/reviewed.json"
+  local tally='{"candidate_count":0,"unclassified":null,"gh_ok":true,"window_days":90,"snapshot_present":true,"snapshot_reviewed_at":"X","triggers":[{"type":"new_class","finding_class":"holistic/a"}]}'
+
+  run env MOCK_TALLY_JSON="$tally" \
+    MOCK_RELOCATE_FROM="$REFRESH_ROOT/.gaia/local/harden" MOCK_RELOCATE_TO="$REFRESH_ROOT/.gaia/local/codify" \
+    bash "$REFRESH_ROOT/.gaia/scripts/check-updates.sh"
+  [ "$status" -eq 0 ]
+  [ -f "$REFRESH_ROOT/.gaia/local/codify/reviewed.json" ]
+  [ "$(jq -r '.codifyNudgeReason' "$CACHE_FILE")" = "1 new pattern" ]
+  [ "$(jq -r '.checkedAt' "$CACHE_FILE")" != "0" ]
+
+  # Refusal proof: read the new location only, in a scratch copy beside the
+  # original, and confirm the same inputs now clear the reason as a race.
+  search='  local snapshot_file="$CODIFY_SNAPSHOT_FILE"'
+  count=$(grep -cF -- "$search" "$REFRESH_ROOT/.gaia/scripts/check-updates.sh")
+  [ "$count" -eq 1 ]
+  broken="$REFRESH_ROOT/.gaia/scripts/check-updates-broken.sh"
+  awk -v search_text="$search" '
+    index($0, search_text) > 0 { print; getline; next }
+    { print }
+  ' "$REFRESH_ROOT/.gaia/scripts/check-updates.sh" > "$broken"
+  chmod +x "$broken"
+
+  rm -rf "$REFRESH_ROOT/.gaia/local/codify" "$CACHE_FILE"
+  mkdir -p "$REFRESH_ROOT/.gaia/local/harden"
+  printf '{"reviewed_at":"X"}' > "$REFRESH_ROOT/.gaia/local/harden/reviewed.json"
+  run env MOCK_TALLY_JSON="$tally" \
+    MOCK_RELOCATE_FROM="$REFRESH_ROOT/.gaia/local/harden" MOCK_RELOCATE_TO="$REFRESH_ROOT/.gaia/local/codify" \
+    bash "$broken"
+  [ "$status" -eq 0 ]
+  [ "$(jq -r '.codifyNudgeReason' "$CACHE_FILE")" = "" ]
+}

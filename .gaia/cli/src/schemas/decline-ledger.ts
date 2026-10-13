@@ -1,7 +1,7 @@
 /**
  * Zod schema + read/write helpers for the machine-local decline ledger.
  *
- * When an engineer declines a hardening candidate, that decline is recorded
+ * When an engineer declines a codify candidate, that decline is recorded
  * only on their machine so it never vetoes the rule for a teammate. The
  * ledger holds one bounded entry per `finding_class`; re-recording a class
  * overwrites its timestamp, PR count, and denominator.
@@ -10,7 +10,7 @@
  * `declined_at_audited_pr_count` and `tally_schema_version`, because a raw
  * count with no denominator cannot be compared to a live share honestly.
  *
- * The file lives at `.gaia/local/harden/declines.json` (gitignored). A
+ * The file lives at `.gaia/local/codify/declines.json` (gitignored). A
  * corrupt, hand-edited, version-1 or incomplete-entry file fails loud (the
  * discriminated `read*` result carries `status: 'malformed'`) rather than
  * being silently treated as empty, which would wrongly re-surface or wrongly
@@ -26,7 +26,7 @@ import {atomicWriteFileSync} from '../util/atomic-write.js';
 import {summarizeZodError} from './zod-error.js';
 
 export const declineLedgerPath = (repoRoot: string): string =>
-  path.join(repoRoot, '.gaia', 'local', 'harden', 'declines.json');
+  path.join(repoRoot, '.gaia', 'local', 'codify', 'declines.json');
 
 export const DeclineEntrySchema = z.object({
   declined_at: z.iso.datetime(),

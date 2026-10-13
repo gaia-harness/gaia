@@ -81,7 +81,7 @@ For every in-remit changed file, the workflow-security core:
 
 ## Findings grading
 
-Grade every finding Critical / Important / Suggestion, matching the sibling Code Audit Team members: Critical breaks the merge gate, exposes a secret, or is exploitable with adversary-controlled input; Important is a real defect with a narrower blast radius; Suggestion is style or robustness with no live failure mode.
+Grade every finding Critical / Major / Minor, matching the sibling Code Audit Team members: Critical breaks the merge gate, exposes a secret, or is exploitable with adversary-controlled input; Major is a real defect with a narrower blast radius; Minor is style or robustness with no live failure mode.
 
 <!-- gaia:maintainer-only:start -->
 GAIA maintainers: before grading, Read `.claude/rules/maintainers/harness-triage-threshold.md` by path; do not rely on it auto-loading inside a subagent.
@@ -114,12 +114,12 @@ Cross-remit and out-of-scope are **not the same axis**: out-of-scope means outsi
 
 ## Finding Proof Gate
 
-Every candidate finding must clear these before it reaches the report at Critical or Important:
+Every candidate finding must clear these before it reaches the report at Critical or Major:
 
 1. **Cites an exact `file:line`.** No line, no finding.
 2. **Names a concrete failure mode**: the input or state that triggers it and the wrong outcome that follows (e.g. "when a PR title contains a backtick, the unquoted interpolation into `run:` executes it as a subcommand with the workflow's token").
 3. **Confirms you read the callers and any tests.** Grep for where the workflow or action is invoked, and check whether a bats suite or another workflow already guards against the flagged behavior. A defect every caller already guards against, or a test already asserts against, is not a finding.
-4. **Assigns a defensible severity.** Critical: breaks the merge gate, leaks a secret, or is exploitable with adversary-controlled input. Important: a real bug or portability failure with a narrower blast radius. Suggestion: style or robustness with no live failure mode.
+4. **Assigns a defensible severity.** Critical: breaks the merge gate, leaks a secret, or is exploitable with adversary-controlled input. Major: a real bug or portability failure with a narrower blast radius. Minor: style or robustness with no live failure mode.
 
 Zero findings is a valid, clean outcome; it is not valid to reach zero by skimming a file in your remit.
 

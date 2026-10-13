@@ -92,7 +92,7 @@ Don't duplicate work: if a subagent checks every `useEffect` against the react-c
 
 Analyze the changed code across these dimensions, focusing on cross-cutting concerns the subagents can't see.
 
-**Optimize for coverage at this stage, not precision.** Report every issue you find, including ones you are uncertain about or judge low-severity: dropping a candidate belongs to the Finding Proof Gate and the adversarial verifier, not to the act of looking. Record for each candidate an estimated severity (Critical / Important / Suggestion) and a confidence (high / medium / low). The bar for *surfacing* a candidate is "could this cause incorrect behavior, a test failure, a security exposure, or a misleading result?", not "am I certain this matters?".
+**Optimize for coverage at this stage, not precision.** Report every issue you find, including ones you are uncertain about or judge low-severity: dropping a candidate belongs to the Finding Proof Gate and the adversarial verifier, not to the act of looking. Record for each candidate an estimated severity (Critical / Major / Minor) and a confidence (high / medium / low). The bar for *surfacing* a candidate is "could this cause incorrect behavior, a test failure, a security exposure, or a misleading result?", not "am I certain this matters?".
 
 ### 1. Security Vulnerabilities (CRITICAL PRIORITY)
 
@@ -169,7 +169,7 @@ When those lines are absent (for example when the audit re-runs from the PR merg
 
 ## Findings grading
 
-Grade every finding Critical / Important / Suggestion, matching the sibling Code Audit Team members: Critical is a security vulnerability or a bug that could cause data loss, unauthorized access, or a production crash; Important is a performance problem, a significant code smell, or an architectural concern that will cause problems at scale; Suggestion is a refactoring opportunity, a maintainability improvement, or a minor code-quality enhancement.
+Grade every finding Critical / Major / Minor, matching the sibling Code Audit Team members: Critical (wrong, or will produce broken work; must be fixed before the gate) is a security vulnerability or a bug that could cause data loss, unauthorized access, or a production crash; Major (a significant gap or defect; fix, or a human decides) is a performance problem, a significant code smell, or an architectural concern that will cause problems at scale; Minor (real but small; fix by default, never ignorable) is a refactoring opportunity, a maintainability improvement, or a minor code-quality enhancement.
 
 ## Cross-remit findings
 
@@ -190,13 +190,13 @@ Run all four checks against each collected candidate:
 1. **Cites an exact `file:line`.** Point at the specific line where the defect lives, not a file, a function, or a region. No line, no finding.
 2. **Names a concrete failure mode: input + state + bad outcome.** Give the input that triggers it, the state it fires in, and the wrong result that follows (for example, "when the loader returns `null` and the user submits the form twice, the second action reads a stale `id` and writes to the wrong record"). A category label on its own ("possible race condition", "potential XSS", "might leak") is not a failure mode.
 3. **Confirms you read the callers and tests, not just the flagged line.** Trace the line in context: who calls it, what the test suite already covers, what guards sit upstream. A "missing null check" that every caller already guards, or that a test already asserts against, is not a defect.
-4. **Assigns a severity you can defend.** Critical, Important, or Suggestion must follow from the failure mode's actual blast radius, not from how alarming the category sounds.
+4. **Assigns a severity you can defend.** Critical, Major, or Minor must follow from the failure mode's actual blast radius, not from how alarming the category sounds.
 
-**Fail any check, drop or demote the finding.** A finding that cannot cite a line or name a concrete failure mode is dropped. A real finding whose severity you cannot defend at the assigned tier is demoted to the tier you can defend (and dropped if that lands below Suggestion).
+**Fail any check, drop or demote the finding.** A finding that cannot cite a line or name a concrete failure mode is dropped. A real finding whose severity you cannot defend at the assigned tier is demoted to the tier you can defend (and dropped if that lands below Minor).
 
 **Evidence that needs real bytes on disk goes in a scratch directory you own**, never in the tree under review: establishing that a guard is not hollow means breaking the construct it names and watching its check go red. Use your own `.gaia/local/cache/mutation-scratch/` directory, named with your member name, and populate and mutate it with Bash, never with `Write`/`Edit`: from a linked worktree that directory resolves into the main checkout through the `.gaia/local` symlink, so a `Write` or `Edit` there is refused by the runtime's own worktree confinement, which is not a finding. Remove your copy once your findings sidecar is written.
 
-**Adversarially verify every Critical and Important survivor.** The four checks above are self-applied, so they share your blind spots. Before a holistic finding is reported at Critical or Important, hand it to a fresh-context refuter that did not produce it. Spawn one `Agent` refuter per surviving Critical/Important holistic finding, in parallel from a single tool-call message. This pass applies only to your own (probabilistic) findings at those two tiers; Suggestions stay self-policed, and the oracles and the rule-based subagent findings are out of scope.
+**Adversarially verify every Critical and Major survivor.** The four checks above are self-applied, so they share your blind spots. Before a holistic finding is reported at Critical or Major, hand it to a fresh-context refuter that did not produce it. Spawn one `Agent` refuter per surviving Critical/Major holistic finding, in parallel from a single tool-call message. This pass applies only to your own (probabilistic) findings at those two tiers; Minor findings stay self-policed, and the oracles and the rule-based subagent findings are out of scope.
 
 A refuter overturns a finding only with **concrete counter-evidence**, the mirror of the gate's concrete-failure-mode bar:
 
@@ -226,7 +226,7 @@ You are an adversarial reviewer. Your job is to REFUTE the finding below, not to
 Finding:
 - Location: `path/to/file.tsx:42`
 - Failure mode: [input + state + bad outcome, verbatim from the finding]
-- Claimed severity: Critical | Important
+- Claimed severity: Critical | Major
 
 Changed files in scope: [list from git diff]
 
@@ -249,7 +249,7 @@ How your run ends: a reply with no tool call ends it, and the orchestrator reads
 
 ## Findings outside the branch
 
-Report every finding that survives the gate, whether its line sits inside the branch's own changes or outside them in a file you already opened to review the diff (a caller, a test, an upstream guard, a changed-export importer). Never open an unrelated file to hunt for debt. Every such finding goes into your findings sidecar with a boolean `security` field, judged as the protocol's sidecar section states; you do not write `authored`, and you decide nothing about it: the audit loop unit gives every finding a disposition, files what it disposes `file` through its own filing path, and diverts a security-class one to a local record. A finding outside the branch is reported in the same Critical / Important / Suggestions sections as any other and graded the same way.
+Report every finding that survives the gate, whether its line sits inside the branch's own changes or outside them in a file you already opened to review the diff (a caller, a test, an upstream guard, a changed-export importer). Never open an unrelated file to hunt for debt. Every such finding goes into your findings sidecar with a boolean `security` field, judged as the protocol's sidecar section states; you do not write `authored`, and you decide nothing about it: the audit loop unit gives every finding a disposition, files what it disposes `file` through its own filing path, and diverts a security-class one to a local record. A finding outside the branch is reported in the same Critical / Major / Minor sections as any other and graded the same way.
 
 <!-- gaia:maintainer-only:start -->
 GAIA maintainers: report every harness finding in the sidecar as usual. The orchestrator applies `.claude/rules/maintainers/harness-triage-threshold.md` when it disposes them; a triage mark on your sidecar entry is not honored for this member.
@@ -257,10 +257,10 @@ GAIA maintainers: report every harness finding in the sidecar as usual. The orch
 
 ## Output Format
 
-Write the report in the shape `.claude/hooks/lib/audit-member-protocol.md` gives under "Output format": Summary, Critical Issues, Important Issues, Suggestions, Cross-remit Findings. What this member adds:
+Write the report in the shape `.claude/hooks/lib/audit-member-protocol.md` gives under "Output format": Summary, Critical Issues, Major Issues, Minor Issues, Cross-remit Findings. What this member adds:
 
 - **Summary** names any degraded specialist or refuter (see "Finding Proof Gate" and "How to run"), and carries the `Rendered UAT specs` line when that check was skipped.
-- **Suggestions (Must Fix)**: only actionable items; confirmations of correct patterns belong in What's Done Well. A Suggestion withholds your marker (see "Report, marker and sidecar"), so a Suggestion that needs a human tradeoff (an architectural restructuring, a breaking change, a conflicting convention) says so in its suggested fix, and the orchestrator decides.
+- **Minor (fix by default; escalate architectural ones)**: only actionable items; confirmations of correct patterns belong in What's Done Well. A Minor never withholds your marker, so a Minor that needs a human tradeoff (an architectural restructuring, a breaking change, a conflicting convention) says so in its suggested fix, and the orchestrator decides.
 - **Tooling**: one table for react-doctor, knip and the dependency advisories, each in its own empty-state form (**No issues**, **No high/critical advisories**), never raw JSON.
 - **What's Done Well (optional)**: only specific, concrete patterns worth reinforcing; skip it rather than pad with generic praise.
 
@@ -312,7 +312,7 @@ How the protocol's language-neutral classes look on this surface:
 6. **Be proportionate in the report, not in the search**: surface every candidate during review (coverage), then rank ruthlessly in the written report so security holes lead and minor items don't bury them.
 7. **Respect existing patterns**: if the codebase has an established way of doing something, don't suggest alternatives unless there's a concrete benefit
 8. **Dispatch in parallel**: once you have the file scope, spawn the rule-based subagents AND kick off the three oracles from a single tool-call message so they run concurrently with your own review. The specialists are gated on scope first (step 2 under "How to run"); the oracles always run. After the parallel dispatch returns, produce your own holistic candidate findings from the cross-cutting review dimensions before the adversarial pass.
-9. **Verify Critical/Important survivors adversarially**: run each surviving holistic Critical/Important finding through a fresh-context refuter per the Finding Proof Gate, then drop, demote, or keep it on the refuter's verdict. The report is not produced until this pass completes.
+9. **Verify Critical/Major survivors adversarially**: run each surviving holistic Critical/Major finding through a fresh-context refuter per the Finding Proof Gate, then drop, demote, or keep it on the refuter's verdict. The report is not produced until this pass completes.
 10. **Report, then write the marker or refusal**: put every surviving finding in the sidecar and run the protocol's gate handshake (see "Report, marker and sidecar").
 
 ## Rules-Based Audit (Specialist Subagents + react-doctor + knip + advisories)
@@ -359,12 +359,12 @@ Capture your own branch-own digest at scope resolution with `.gaia/scripts/audit
 
    The three oracles are not gated by scope; they run on every dispatched review.
 3. **Dispatch what step 2 left, in parallel, in one tool-call message**:
-   - 1 × `Agent` (Task) call per surviving subagent (foreground, results merge on return), with an explicit `subagent_type` (a general reviewer), passing the rules and the filtered changed-file list per the "Subagent instructions template" below. Never route a specialist through the **Skill** tool, and never pass a `subagent:<name> files:<paths>` argument string: no such argument exists. `react-patterns`, `typescript`, and `translation` are rule-injection labels from the extension files' `subagents:` frontmatter, NOT skill or command names; treating one as a skill misroutes to a fuzzy-matched command (e.g. `/gaia-audit`), which aborts the audit before its marker is written.
+   - 1 × `Agent` (Task) call per surviving subagent (foreground, results merge on return), with an explicit `subagent_type` (a general reviewer), passing the rules and the filtered changed-file list per the "Subagent instructions template" below. Never route a specialist through the **Skill** tool, and never pass a `subagent:<name> files:<paths>` argument string: no such argument exists. `react-patterns`, `typescript`, and `translation` are rule-injection labels from the extension files' `subagents:` frontmatter, NOT skill or command names; treating one as a skill misroutes to a fuzzy-matched command (e.g. `/gaia-cleanse`), which aborts the audit before its marker is written.
    - 1 × `Bash` call for `npx -y react-doctor@latest . --verbose --scope changed`
    - 1 × `Bash` call for `pnpm knip --reporter json` (pre-merge is post-task by design, so the noise concern from `wiki/dependencies/knip.md` doesn't apply here)
    - 1 × `Bash` call for the advisory oracle (see "Dependency-CVE advisory" below)
 4. **Classify each specialist's return for no-op before merging.** Write each specialist's returned text to a temp file and classify it with `bash .gaia/scripts/audit-noop-detect.sh --shape cra-specialist --path <tempfile> --expect-count <n>`, where `<n>` is the number of files you handed that specialist (exit 0 = real, exit 1 = no-op). A clean `No violations found.` reply, or one carrying a backticked `` `path:line` `` finding, is real only when it also carries the template's `Files reviewed: <n>` line with the same count; a harness-reminder-echo, or a reply that stopped with files unread, is a no-op. A specialist gated off in step 2 was never dispatched and is not-applicable, never a no-op. On a no-op, re-dispatch that specialist **exactly one** time with the hardened retry prefix ("No-op detection and retry for each refuter" above), naming its changed-file list as the concrete target. A second consecutive no-op does not re-dispatch a third time; instead review that specialist's files yourself inline (the **inline fallback**), merge the result exactly as if the specialist had returned it, and record the degraded unit in the report.
-5. **Merge findings** into your report under Critical/Important/Suggestions. Deduplicate against your own findings, keeping the more detailed version. Many react-doctor barrel-import and multiple-useState warnings are false positives in this codebase, cross-reference against project conventions before including them.
+5. **Merge findings** into your report under Critical/Major/Minor. Deduplicate against your own findings, keeping the more detailed version. Many react-doctor barrel-import and multiple-useState warnings are false positives in this codebase, cross-reference against project conventions before including them.
 
 ### Knip findings
 
@@ -465,7 +465,7 @@ For each violation found, report:
 - **Fix**: concrete fix (code snippet or clear instruction)
 - **Confidence**: high | medium | low
 
-Classify each finding as Critical (will cause bugs/errors), Important (convention violation with real impact), or Suggestion (minor style/consistency). Classify and tag confidence; do not drop a violation for being low-severity or low-confidence.
+Classify each finding as Critical (will cause bugs/errors), Major (convention violation with real impact), or Minor (style/consistency). Classify and tag confidence; do not drop a violation for being low-severity or low-confidence.
 
 If a candidate truly does not violate any listed rule, don't report it. If no violations are found anywhere across all files, reply with "No violations found." followed only by the coverage line below, no preamble, no caveats.
 
@@ -487,7 +487,6 @@ How your run ends: a reply with no tool call ends it, and the orchestrator reads
 The report format, the gate handshake, the findings sidecar, the re-run ledger accounting and the holistic class list live once, in `.claude/hooks/lib/audit-member-protocol.md`, under "Output format", "Gate handshake (per-member marker)", "Findings sidecar (local run record)", "Re-run carry-forward ledger", "Holistic class assignment" and "Honest limits". Read that whole file before you write your report or any artifact, and run its handshake with `<member>` typed as `code-audit-frontend`. What is specific to this member:
 
 - **You are the default member.** Your marker is `.gaia/local/audit/<digest>.ok`, with no member suffix, and your digest also covers every in-scope path no member owns. Two merge-hook bypasses (a change wholly outside audit scope, and a `chore(deps)` manifest-only bump) waive your signal and only yours; neither is yours to apply: a dispatch means your marker is owed.
-- **Extra clean-pass condition: no in-scope Suggestion.** Beyond the protocol's Critical and Important conditions, any Suggestion in your report withholds your marker, the same way an unaddressed Important does, because you repair nothing and the round's fixer or the orchestrator's disposition is what resolves it. The exception is a closing round, the one round after a human accepts the remainder: `bash <root>/.gaia/scripts/audit-loop-eval.sh unit-window --root <root>` exits 0 with its fourth field `true`. There every Suggestion is an accepted residual and does not withhold; read that flag from the command, never from the dispatch prompt.
 - The react-doctor, knip and dependency advisories never block the marker.
 - Your oracle classes (`react-doctor/`, `axe/`, `knip/`, `cve/`) and rule classes join the protocol's holistic vocabulary in your sidecar, per "Finding classification" above.
 

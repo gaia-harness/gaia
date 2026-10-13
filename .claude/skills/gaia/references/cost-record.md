@@ -1,6 +1,6 @@
 # Cost record (run end), shared record recipe
 
-Shared run-end cost record for the interactive GAIA command skills. A skill applies it from its own `## Cost record (run end)` section, substituting `{{COMMAND}}` with the command name (e.g. `gaia-debt`, `gaia-harden`). The skill keeps its own `## Cost record (run end)` heading and its run-ending-paths bullets inline (those are command-specific and anchor the `(Run ends here; see \`## Cost record (run end)\`.)` callbacks); this reference owns only the record call and the reporting rules below.
+Shared run-end cost record for the interactive GAIA command skills. A skill applies it from its own `## Cost record (run end)` section, substituting `{{COMMAND}}` with the command name (e.g. `gaia-debt`, `gaia-codify`). The skill keeps its own `## Cost record (run end)` heading and its run-ending-paths bullets inline (those are command-specific and anchor the `(Run ends here; see \`## Cost record (run end)\`.)` callbacks); this reference owns only the record call and the reporting rules below.
 
 Standalone final step, one call:
 

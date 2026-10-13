@@ -100,7 +100,7 @@
 #   it IS checked against live entries (mapping f->file, d->dir).
 #   ANCESTOR recognition: a DIRECTORY that is not itself a row is still
 #   recognized when it is an ancestor of a registered entry (the bare
-#   audit/, cache/, debt/, telemetry/, harden/, audit/security/ containers
+#   audit/, cache/, debt/, telemetry/, codify/, cleanse/, audit/security/ containers
 #   hold classified children even though the bare directory has no row of its
 #   own). Without this a caller would report every legitimate container as
 #   unknown on every session. A file is never a
@@ -274,7 +274,7 @@ gaia_registry_recognizes() {
   # holds classified children (audit/*.ok, ...) even though the bare directory
   # is not its own row. Without this, the runtime conformance check would
   # report every legitimate container (audit/, cache/, debt/, telemetry/,
-  # harden/, audit/security/) as unrecognized on every session. A file is
+  # codify/, cleanse/, audit/security/) as unrecognized on every session. A file is
   # never a container, so this applies to a directory (and the untyped case)
   # only.
   if [ "$requested_type" != f ]; then

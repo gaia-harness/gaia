@@ -747,7 +747,7 @@ describe('release runtime-deps CLI', () => {
 
   test('bare mode names its narrowed scope in the report header', () => {
     // A clean bare result covers only what the manifest already answers for,
-    // so a shipped script added before its `/distribution-audit` answer lands
+    // so a shipped script added before its `/distribution-vet` answer lands
     // is skipped rather than cleared. The header has to say so; an unqualified
     // "scanned N script(s)" reads as "all of them" and turns a partial pass
     // into a false all-clear.

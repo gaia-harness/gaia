@@ -1,10 +1,10 @@
-# /gaia-audit
+# /gaia-cleanse
 
 ## Execution model, READ FIRST
 
 **Do not execute the playbook yourself in the current conversation.** Dispatch the Stage 1 and Stage 2 subagents via the `Agent` tool. Each subagent runs in isolated context. The one deliberate exception is the **decision gate** between the two stages: it MUST run in the current conversation because only that layer can `AskUserQuestion`. Do not "fix" the gate back into a subagent.
 
-Calling `/gaia-audit` is the intent to audit. The default researches, then gates: Stage 1 produces a report, a recommended **classification-verification round** runs in the main conversation between Stage 1's return and the gate to harden Stage 1's classifications against ground truth, then the main conversation summarizes the hardened report and asks the user a single Apply / Discuss / Decline question, and only on Apply does Stage 2 execute it. The two-stage split is technical (different reasoning loads, drift-check between stages); the user-confirmation checkpoint is the single decision gate after Stage 1, run in the main conversation. **Exception: a clean audit (0 actions) skips both the round and the gate and auto-applies, once a deterministic recount confirms Stage 1 covered every store.** "Applying" only finalizes the report's `status`, files any out-of-scope findings, and clears the statusline nudge, so a clean report that was truncated or narrowed must not reach it unseen; leaving a verified 0-action report parked at the gate is the path that strands a `draft` that nudges indefinitely.
+Calling `/gaia-cleanse` is the intent to cleanse. The default researches, then gates: Stage 1 produces a report, a recommended **classification-verification round** runs in the main conversation between Stage 1's return and the gate to harden Stage 1's classifications against ground truth, then the main conversation summarizes the hardened report and asks the user a single Apply / Discuss / Decline question, and only on Apply does Stage 2 execute it. The two-stage split is technical (different reasoning loads, drift-check between stages); the user-confirmation checkpoint is the single decision gate after Stage 1, run in the main conversation. **Exception: a clean audit (0 actions) skips both the round and the gate and auto-applies, once a deterministic recount confirms Stage 1 covered every store.** "Applying" only finalizes the report's `status`, files any out-of-scope findings, and clears the statusline nudge, so a clean report that was truncated or narrowed must not reach it unseen; leaving a verified 0-action report parked at the gate is the path that strands a `draft` that nudges indefinitely.
 
 **Stage 2 also files out-of-scope findings; the main conversation then publishes.** The run does the same full flow /update-deps and /gaia-debt do, one up-front decision (the gate, or the preview in those skills) and then it drives autonomously to merge. Two mechanical additions ride the finalizing path (gated Apply, 0-action auto-apply, and `--apply`), never the Decline path:
 
@@ -25,7 +25,7 @@ Every path below referenced as `$PROJECT_ROOT/...`, `$MEMORY_DIR/...`, or `$AGEN
 
 ### Branch on `$ARGUMENTS`
 
-**Default (`/gaia-audit`)** → Stage 1 (Research), then either auto-apply (clean audit) or the **decision gate**, then branch.
+**Default (`/gaia-cleanse`)** → Stage 1 (Research), then either auto-apply (clean audit) or the **decision gate**, then branch.
 
 1. Spawn the Stage 1 (Research) subagent below. Wait for it to return. Stage 1 writes the report with `status: draft`.
 2. If Stage 1 failed (no report path printed), do not gate or spawn Stage 2. Surface the error and stop. (Run ends here; see `## Cost record (run end)`.)
@@ -44,7 +44,7 @@ Every path below referenced as `$PROJECT_ROOT/...`, `$MEMORY_DIR/...`, or `$AGEN
 
 This gate runs in the main conversation, not in a subagent (only the main conversation can `AskUserQuestion`). "Apply" is the one-keystroke fast path that keeps the one-go feel.
 
-**`/gaia-audit --apply`** → Stage 2 only, against the most recent `draft` (or `applied-partial` / `scoped-partial` for retry).
+**`/gaia-cleanse --apply`** → Stage 2 only, against the most recent `draft` (or `applied-partial` / `scoped-partial` for retry).
 
 Skip Stage 1 and the decision gate, but always ask the gate's owner question afresh and pass its answer to Stage 2: an earlier run's answer is never inherited. Then check the target report's frontmatter for `audit_hardened: true`:
 
@@ -63,7 +63,7 @@ Use this to re-apply an existing report after fixing drift, or to retry without 
 - `description`: `"Knowledge audit (research)"`
 - `prompt`: the string below (literal, no paraphrasing):
 
-  > `You are Stage 1 of a two-stage knowledge audit. Your job is to PRODUCE A REPORT ONLY, do not mutate any files outside .gaia/local/audit/. The Stage 2 agent will execute the actions immediately after you return.`
+  > `You are Stage 1 of a two-stage knowledge audit. Your job is to PRODUCE A REPORT ONLY, do not mutate any files outside .gaia/local/cleanse/. The Stage 2 agent will execute the actions immediately after you return.`
   >
   > `Before doing anything else, resolve these variables and use them for every path in the playbook:`
   >
@@ -75,7 +75,7 @@ Use this to re-apply an existing report after fixing drift, or to retry without 
   >
   > `Record the resolved values at the top of the report (both frontmatter and a visible line) so Stage 2 uses the same bindings.`
   >
-  > `Read $PROJECT_ROOT/.claude/skills/gaia/references/audit.md and execute the "Research procedure" section (Steps 1–4). Write the report to $PROJECT_ROOT/.gaia/local/audit/KNOWLEDGE-{YYYY-MM-DD-HHMM}.md using the exact "Report template" schema. Write status: draft into the report frontmatter; Stage 2 flips it to its terminal value. Every action you propose must be mechanical, include every detail a literal-minded executor needs: absolute paths, line ranges, expected current content (verbatim snippet), replacement content (verbatim), and drift-check signals. No handwaving like "merge these" or "consolidate that".`
+  > `Read $PROJECT_ROOT/.claude/skills/gaia/references/cleanse.md and execute the "Research procedure" section (Steps 1–4). Write the report to $PROJECT_ROOT/.gaia/local/cleanse/KNOWLEDGE-{YYYY-MM-DD-HHMM}.md using the exact "Report template" schema. Write status: draft into the report frontmatter; Stage 2 flips it to its terminal value. Every action you propose must be mechanical, include every detail a literal-minded executor needs: absolute paths, line ranges, expected current content (verbatim snippet), replacement content (verbatim), and drift-check signals. No handwaving like "merge these" or "consolidate that".`
   >
   > `You do NOT fix wiki-internal redundancy or broken links yourself, /gaia-wiki owns those (its consolidate stage merges redundancy, and its lint stage detects and fixes broken wikilinks). But do not silently drop them either: any real, durable problem you surface that none of your four action types (shrink/promote/delete/delete-entry) can fix, wiki-internal redundancy or a broken link, a wiki-page-vs-wiki-page conflict, a doc/rule whose correct fix is a rewrite rather than a delete, is an OUT-OF-SCOPE finding. Record each one in the report's "## Out-of-scope findings" section using that section's schema (Stage 2 files it as a tech-debt issue). You file, you do not fix. If you surface none, write the section with an explicit "None." so Stage 2 knows there is nothing to file.`
   >
@@ -100,7 +100,7 @@ Use this to re-apply an existing report after fixing drift, or to retry without 
   >
   > `Compare these to the "project_root" / "memory_dir" fields recorded in the report's frontmatter. If they differ, STOP and print a clear error, do not improvise.`
   >
-  > `Read $PROJECT_ROOT/.claude/skills/gaia/references/audit.md and execute the "Apply procedure" section (Step 5). For every action: verify the expected-current-content drift signal matches; if it does, apply the change verbatim; if it does not, SKIP and note it in the final summary. The owner check runs before every write, against the "Owner-approved files:" line at the end of this prompt. Never improvise. Never invent replacements. If anything is ambiguous, skip.`
+  > `Read $PROJECT_ROOT/.claude/skills/gaia/references/cleanse.md and execute the "Apply procedure" section (Step 5). For every action: verify the expected-current-content drift signal matches; if it does, apply the change verbatim; if it does not, SKIP and note it in the final summary. The owner check runs before every write, against the "Owner-approved files:" line at the end of this prompt. Never improvise. Never invent replacements. If anything is ambiguous, skip.`
   >
   > `Then, before printing your summary, execute the "Dispose out-of-scope findings (Stage 2)" section: file every finding in the report's "## Out-of-scope findings" section as a tech-debt issue per that section's procedure (idempotent, so a re-run never double-files). Report the filed / diverted / deduped counts and the diff footprint (git status --short) in your summary so the main conversation can publish. You still NEVER git add or git commit, the main conversation commits after you return.`
 
@@ -135,16 +135,16 @@ The report you produce is a **contract** to a Sonnet-level executor. Assume it c
 
 ## Step 0, Prune old reports
 
-Before writing the new report, self-maintain `$PROJECT_ROOT/.gaia/local/audit/`. The prune applies to finalized reports only (`applied`, `applied-partial`, and their scoped forms `scoped-applied`, `scoped-partial`):
+Run `bash .gaia/scripts/knowledge-inventory.sh relocate-reports` first, then self-maintain `$PROJECT_ROOT/.gaia/local/cleanse/` before writing the new report. The prune applies to finalized reports only (`applied`, `applied-partial`, and their scoped forms `scoped-applied`, `scoped-partial`):
 
 - **Never prune a `draft`** (live, unfinished work; it is resumable via `--apply`). Treat a missing `status:` as non-`applied`, do not prune it either.
 - Of the finalized reports: **keep the newest 5 regardless of age** (floor, protects long gaps between runs); of anything beyond the newest 5, **delete those older than 30 days**.
 
 ```bash
-if [ -d ".gaia/local/audit" ]; then
+if [ -d ".gaia/local/cleanse" ]; then
   # Select only finalized reports, newest first; drafts and
   # status-less reports are never candidates for prune.
-  ls -t .gaia/local/audit/KNOWLEDGE-*.md 2>/dev/null | while IFS= read -r f; do
+  ls -t .gaia/local/cleanse/KNOWLEDGE-*.md 2>/dev/null | while IFS= read -r f; do
     status="$(sed -n 's/^status:[[:space:]]*//p' "$f" 2>/dev/null | head -n1)"
     case "$status" in
       applied|applied-partial|scoped-applied|scoped-partial) printf '%s\n' "$f" ;;
@@ -180,13 +180,13 @@ Rules-vs-wiki: a `.claude/rules/*.md` file is allowed to duplicate wiki content 
 
 ### Provenance-marked rules (`gaia-harden:`)
 
-A `.claude/rules/*.md` rule whose first line after frontmatter is the provenance marker
+A `.claude/rules/*.md` rule whose first line after frontmatter starts with the provenance marker prefix `<!-- gaia-harden: promoted from recurring finding_class`, whichever tail follows (`pruned by /gaia-cleanse ...`, or the 1.x `pruned by /gaia-audit ...`), is recognized by that prefix alone. The current form:
 
 ```
-<!-- gaia-harden: promoted from recurring finding_class <class>; pruned by /gaia-audit on obsolescence/redundancy/supersession/duplication only, never for non-recurrence -->
+<!-- gaia-harden: promoted from recurring finding_class <class>; pruned by /gaia-cleanse on obsolescence/redundancy/supersession/duplication only, never for non-recurrence -->
 ```
 
-is an **ordinary rule** for this audit: inventory it, word-budget it, and apply DUPLICATE / obsolescence / supersession exactly as for a hand-authored rule. The marker grants **no policy-memory exemption**. Such a rule always carries a `paths:` glob, so it is the path-scoped case the Rules-vs-wiki note already permits to duplicate wiki content, no special-casing needed.
+A marked rule is an **ordinary rule** for this cleanse: inventory it, word-budget it, and apply DUPLICATE / obsolescence / supersession exactly as for a hand-authored rule. The marker grants **no policy-memory exemption**. Such a rule always carries a `paths:` glob, so it is the path-scoped case the Rules-vs-wiki note already permits to duplicate wiki content, no special-casing needed.
 
 The marker is documentation of WHY the rule exists, not a magic token. It also encodes one guardrail: **do NOT classify the rule STALE merely because its anti-pattern is no longer recurring.** A suppressed pattern going quiet is the rule working, not evidence it is stale, and lessons do not expire. The STALE definition already keys on "references a file/branch/feature no longer present", which does not include "the pattern stopped recurring"; non-recurrence is never a prune signal. Prune a provenance-marked rule only on **obsolescence** (its `paths:`-governed surface was removed), **redundancy** (a lint rule, hook, or test now enforces the same thing), **supersession**, or **duplication**.
 
@@ -212,7 +212,7 @@ For each over-budget file, propose one of: inline facts → wiki, consolidate du
 
 ## Step 4, Report
 
-Write `$PROJECT_ROOT/.gaia/local/audit/KNOWLEDGE-{YYYY-MM-DD-HHMM}.md`. Create `$PROJECT_ROOT/.gaia/local/audit/` if missing. Also snapshot `git status --short` into the report's frontmatter so Stage 2 can detect drift.
+Write `$PROJECT_ROOT/.gaia/local/cleanse/KNOWLEDGE-{YYYY-MM-DD-HHMM}.md`. Create `$PROJECT_ROOT/.gaia/local/cleanse/` if missing. Also snapshot `git status --short` into the report's frontmatter so Stage 2 can detect drift.
 
 Derive the timestamp from the shell, never guess the current date/time: `date '+%Y-%m-%d-%H%M'` for the `{YYYY-MM-DD-HHMM}` filename, `date '+%Y-%m-%d %H:%M'` for the `generated:` field.
 
@@ -336,7 +336,7 @@ One fenced YAML block per finding:
   finding_class: {seeded code-audit-frontend finding_class, or holistic/unclassified when it maps to none (the usual case for a knowledge/doc finding)}
   path: {repo-relative POSIX path of the offending file}
   line: {integer line the finding anchors to}
-  severity: {critical | important | suggestion, using the code-audit-frontend tier meaning; most knowledge-hygiene findings are suggestion, a genuine cross-page contradiction is important}
+  severity: {critical | major | minor, using the code-audit tier meaning; most knowledge-hygiene findings are minor, a genuine cross-page contradiction is major}
   failure_mode: {one line, concrete: what is wrong and the bad outcome}
   suggested_fix: {one line, e.g. "run /gaia-wiki" for wiki-internal redundancy, a page-vs-page conflict, a dead repo path, or a broken wikilink, or a specific rewrite}
   footprint: {narrow | wide, narrow when the fix is a single logical unit confined to one file with no cross-module ripple, else wide}
@@ -360,7 +360,7 @@ Wiki-internal redundancy and broken-link repair are handled by `/gaia-wiki` (its
 
 ## To re-apply
 
-Apply runs immediately after this report (or at the decision gate). To re-apply later (e.g., after fixing drift): `/gaia-audit --apply` within 72h.
+Apply runs immediately after this report (or at the decision gate). To re-apply later (e.g., after fixing drift): `/gaia-cleanse --apply` within 72h.
 
 End the research run by printing: report path and total actions per category. (Stage 2 runs next automatically.)
 
@@ -401,7 +401,7 @@ Announce once, naming each lens in full with its id code in parentheses (e.g. `c
 
 > Dispatching the three lenses in parallel against ground truth: classification grounding (CL), conflict adjudication (CF), edit safety / blast-radius (ES).
 
-Dispatch **one `general-purpose` Agent per lens, all in parallel** (one message, one Agent tool call per lens), each handed the shared preamble plus its lens line. Each agent reads the Stage 1 report at `<REPORT_PATH>` (resolved under `.gaia/local/audit/`), the cited stores, the wiki, and `node_modules` if relevant, and returns only the findings JSON below, no narrative.
+Dispatch **one `general-purpose` Agent per lens, all in parallel** (one message, one Agent tool call per lens), each handed the shared preamble plus its lens line. Each agent reads the Stage 1 report at `<REPORT_PATH>` (resolved under `.gaia/local/cleanse/`), the cited stores, the wiki, and `node_modules` if relevant, and returns only the findings JSON below, no narrative.
 
 Shared preamble (interpolate `<REPORT_PATH>` = the Stage 1 report path the main conversation just received, `<repo_root>` = `$PWD`, `<MEMORY_DIR>` = the resolved memory dir from the report frontmatter):
 
@@ -409,7 +409,7 @@ Shared preamble (interpolate `<REPORT_PATH>` = the Stage 1 report path the main 
 >
 > - Verify every checkable claim against ground truth; when an action cites a wiki page or a fact, open it and confirm.
 > - Cite evidence as `file:line`.
-> - Severity: `blocker` = the action will execute a wrong or destructive edit (e.g. a memory delete whose cited fact does not resolve in the wiki); `high` = the classification is likely wrong and the action needs dropping or correcting before apply; `medium` = should fix; `low` = nit.
+> - Severity: `critical` = the action will execute a wrong or destructive edit (e.g. a memory delete whose cited fact does not resolve in the wiki); `major` = the classification is likely wrong and the action needs dropping or correcting before apply; `minor` = real but small, fix by default.
 > - Give each finding a stable id prefixed with your lens code.
 > - Be concrete and falsifiable. A finding a verifier can confirm by reading one file is a good finding; vague "could be clearer" is not.
 > - Bias note: a wrongly-dropped delete is harmless (the entry stays); a wrongly-executed delete on a memory entry is PERMANENT (machine-local, no git undo), so when you cannot confirm a delete's basis from ground truth, flag it for dropping.
@@ -427,7 +427,7 @@ Findings schema (each agent returns exactly this object; `location` is the offen
       "findings": [
         {
           "id": "<lens-prefix>-NNN",
-          "severity": "blocker" | "high" | "medium" | "low",
+          "severity": "critical" | "major" | "minor",
           "title": "<short>",
           "location": "<action id or classification>",
           "issue": "<one sentence: what is wrong>",
@@ -452,7 +452,7 @@ This default (disagreement → drop the action) is the deliberate INVERSION of `
 
 Route each surviving finding by scope:
 
-- **Localized finding** (one mis-classified action): drop or correct that action block directly in the report file. The main conversation edits the report; it lives under `.gaia/local/audit/`, which the main conversation may write. "Drop" removes the action block; "correct" fixes the cited target or `reason` when the lens supplies a correct one. Because the disposition is asymmetric, a `delete` / `shrink` a lens cannot confirm is DROPPED, not kept (the spec round keeps unrefuted findings to preserve the artifact; here the conservative default is to not execute the unconfirmed destructive edit).
+- **Localized finding** (one mis-classified action): drop or correct that action block directly in the report file. The main conversation edits the report; it lives under `.gaia/local/cleanse/`, which the main conversation may write. "Drop" removes the action block; "correct" fixes the cited target or `reason` when the lens supplies a correct one. Because the disposition is asymmetric, a `delete` / `shrink` a lens cannot confirm is DROPPED, not kept (the spec round keeps unrefuted findings to preserve the artifact; here the conservative default is to not execute the unconfirmed destructive edit).
 - **Structural finding** (a whole Stage-1 lens is miscalibrated, e.g. every STALE classification used the same flawed grep and they are all rename-not-removal): re-spawn the Stage 1 (Research) subagent (mirror `plan/decomposition-audit.md` 4.6b's re-spawn-the-planner) with the surviving findings appended as a correction directive. The re-spawn reuses the existing Stage 1 subagent definition, goes through the same report path, and overwrites the flawed report. Bound this to ONE re-spawn: after re-spawning, re-run the round once against the regenerated report, then proceed (do not loop indefinitely).
 
 **The stamp.** After the round completes (findings dispositioned, report edited), stamp the report frontmatter `audit_hardened: true`. This is the idempotency and inheritance signal:
@@ -466,10 +466,10 @@ You are executing, not reasoning. Follow this loop exactly.
 
 ### Pre-flight
 
-1. Find the most recent non-`applied` report under `$PROJECT_ROOT/.gaia/local/audit/`: the newest `KNOWLEDGE-*.md` whose frontmatter `status:` is `draft`, `applied-partial`, or `scoped-partial` (an `applied` or `scoped-applied` report has already been executed and must not be re-applied; skip it). If none, stop and print `no fresh report, run /gaia-audit first`. Otherwise check its mtime:
+1. Run `bash .gaia/scripts/knowledge-inventory.sh relocate-reports`, then find the most recent non-`applied` report under `$PROJECT_ROOT/.gaia/local/cleanse/`: the newest `KNOWLEDGE-*.md` whose frontmatter `status:` is `draft`, `applied-partial`, or `scoped-partial` (an `applied` or `scoped-applied` report has already been executed and must not be re-applied; skip it). If none, stop and print `no fresh report, run /gaia-cleanse first`. Otherwise check its mtime:
    - mtime ≤ 24h → proceed normally.
    - 24h < mtime ≤ 72h → print `WARNING: draft is {age}h old; drift checks will catch any staleness` and continue.
-   - mtime > 72h → stop and print `draft too old (>72h), re-run /gaia-audit`.
+   - mtime > 72h → stop and print `draft too old (>72h), re-run /gaia-cleanse`.
 2. Parse the report's frontmatter. Verify `project_root`, `memory_dir`, and `agent_memory_dir` match the values you resolved at startup. If any differ, stop and print a clear error, the report was generated on a different machine or in a different clone.
 3. Run `git rev-parse HEAD`, if it differs from `git_head` in the report, print a warning but continue. Run `git status --short`, any file that is currently dirty AND appears as a target in the report is marked `SKIP (dirty)` before any action runs.
 4. Read the `## Ordering` section. Process actions in that order.
@@ -509,15 +509,15 @@ This verification is the single authority for the report's terminal `status`: af
 
 After applying the in-scope actions, file every finding in the report's `## Out-of-scope findings` section as a `tech-debt` issue: **you file, you never fix**, and never edit the working tree for one. If that report section reads `None.`, skip this step entirely.
 
-Filing goes through `.gaia/scripts/file-tech-debt.sh` and nothing else; the file-tech-debt skill (`.claude/skills/file-tech-debt/SKILL.md`, section 0) owns the security screen, the issue-backend check, the dedup, the labels and the divert. For each finding, write one finding JSON to a scratch file under `.gaia/local/audit/` and run, with one outcome file for the whole run:
+Filing goes through `.gaia/scripts/file-tech-debt.sh` and nothing else; the file-tech-debt skill (`.claude/skills/file-tech-debt/SKILL.md`, section 0) owns the security screen, the issue-backend check, the dedup, the labels and the divert. For each finding, write one finding JSON to a scratch file under `.gaia/local/cleanse/` and run, with one outcome file for the whole run:
 
 ```bash
-bash .gaia/scripts/file-tech-debt.sh file --finding <finding.json> --outcome-file .gaia/local/audit/filing-outcomes-<unique>.jsonl
+bash .gaia/scripts/file-tech-debt.sh file --finding <finding.json> --outcome-file .gaia/local/cleanse/filing-outcomes-<unique>.jsonl
 ```
 
 Map the block's fields onto the finding JSON as follows; the mapping is the whole audit-specific part:
 
-- `member` is the literal `gaia-audit`; `finding_class` (or `holistic/unclassified`), `path`, `line`, `title`, `failure_mode`, `suggested_fix`, `footprint` and `audience` carry over by name; `difficulty` becomes `grade`; `severity` (`critical | important | suggestion`) becomes `issue_severity` (`Critical | Important | Suggestion`); `security_sensitive` becomes `security`, set from the block's flag alone, since `holistic/unclassified` is the expected class for a doc finding and never a trigger.
+- `member` is the literal `gaia-cleanse`; `finding_class` (or `holistic/unclassified`), `path`, `line`, `title`, `failure_mode`, `suggested_fix`, `footprint` and `audience` carry over by name; `difficulty` becomes `grade`; `severity` (`critical | major | minor`) becomes `issue_severity` (`Critical | Major | Minor`); `security_sensitive` becomes `security`, set from the block's flag alone, since `holistic/unclassified` is the expected class for a doc finding and never a trigger.
 
 Record the filed, diverted and deduped counts (the script's stdout words: `filed <n>`, `diverted <count> <record-path>`, `absent`, `transient`, `failed <reason>`) for the final summary. `absent` and `transient` are never fatal: file what you can, note the rest, and let the main conversation publish regardless. A diverted finding is reported as a count and a record path only.
 
@@ -537,14 +537,14 @@ CACHE="$CACHE_ROOT/.gaia/local/cache/shared/update-check.json"
 if [ -f "$CACHE" ]; then
   if command -v jq >/dev/null 2>&1; then
     tmp="$(mktemp)"
-    jq '.auditNudge = false | .auditNudgeReason = "" | .checkedAt = 0' "$CACHE" > "$tmp" && mv "$tmp" "$CACHE"
+    jq '.cleanseNudge = false | .cleanseNudgeReason = "" | .checkedAt = 0' "$CACHE" > "$tmp" && mv "$tmp" "$CACHE"
   else
     rm -f "$CACHE"
   fi
 fi
 ```
 
-`auditNudge = false` / `auditNudgeReason = ""` clear the displayed nudge immediately; `checkedAt = 0` forces `check-updates.sh` past its TTL gate on the next statusline render (which fires it in the background), recomputing every signal (including any over-budget condition a partial apply left unresolved) from the source of truth. All other cached fields (`outdatedCount`, `gaia*`) are preserved, so no other indicator flickers. If the cache file is absent, skip.
+`cleanseNudge = false` / `cleanseNudgeReason = ""` clear the displayed nudge immediately; `checkedAt = 0` forces `check-updates.sh` past its TTL gate on the next statusline render (which fires it in the background), recomputing every signal (including any over-budget condition a partial apply left unresolved) from the source of truth. All other cached fields (`outdatedCount`, `gaia*`) are preserved, so no other indicator flickers. If the cache file is absent, skip.
 
 Then print a final summary to stdout:
 
@@ -581,7 +581,7 @@ Otherwise the working tree carries the applied `wiki/` / `.claude/` / `CLAUDE.md
 1. **Cut a branch** (the uncommitted applied changes carry over):
 
    ```bash
-   git checkout -b "$(bash .gaia/scripts/branch-name-lib.sh name audit)"
+   git checkout -b "$(bash .gaia/scripts/branch-name-lib.sh name cleanse)"
    ```
 
 2. **Commit.** `.gaia/local/` is gitignored, so `git add -A` never sweeps in the report; memory edits are outside the repo. Route the message through a file, never `-m`, so package/keyword text can't trip a shell hook:
@@ -643,7 +643,7 @@ If any `git push`, `gh pr create`, or `gh pr merge` above exits non-zero, print 
 
 ## Cost record (run end)
 
-Every path that ends a `/gaia-audit` run appends exactly one cost record, the run-ending paths above:
+Every path that ends a `/gaia-cleanse` run appends exactly one cost record, the run-ending paths above:
 
 - Stage 1 failure (no report path).
 - The decision gate's Decline.
@@ -655,7 +655,7 @@ Every path that ends a `/gaia-audit` run appends exactly one cost record, the ru
 Standalone final step, one call:
 
 ```bash
-bash .gaia/scripts/usage.sh record command:gaia-audit --workflow gaia-audit
+bash .gaia/scripts/usage.sh record command:gaia-cleanse --workflow gaia-cleanse
 ```
 
 and the pull request is on the current repo, append:

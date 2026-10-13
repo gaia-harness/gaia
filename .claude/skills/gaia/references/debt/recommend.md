@@ -6,7 +6,7 @@ The no-argument offer of `/gaia-debt`. `debt.md` routes here on a `top` parse af
 
 Runs on a `top` parse, after the backlog read in `debt.md`, or when the operator picks option 3 of the direct-number cluster offer in `debt/named.md`; a named set never reaches it. The top candidate is the first in the sorted list. Before building the prompt, apply the offer-time security and spec reads (`debt.md`, `### Offer-time reads`), which decide which candidates are public-batch-eligible, then resolve which cluster, if any, anchors the recommendation.
 
-The **recommended batch**, when one exists, is the top cluster all of whose members are public-batch-eligible: normally the cluster containing the top-ranked candidate, but a security-class top candidate is never public-batch-eligible on a non-PRIVATE repo, and a spec-class top candidate is never batch-eligible on any repo, so either anchors no batch and is offered only as its own single candidate. An eligible batch may span severities, a `severity:suggestion` in the same file as a `severity:important` is a cheap add-on.
+The **recommended batch**, when one exists, is the top cluster all of whose members are public-batch-eligible: normally the cluster containing the top-ranked candidate, but a security-class top candidate is never public-batch-eligible on a non-PRIVATE repo, and a spec-class top candidate is never batch-eligible on any repo, so either anchors no batch and is offered only as its own single candidate. An eligible batch may span severities, a `severity:minor` in the same file as a `severity:major` is a cheap add-on.
 
 How you present the choice depends on backlog size and cluster shape, counted over the **remaining candidates** (the backlog pass's `candidates`), not the raw open-issue count:
 

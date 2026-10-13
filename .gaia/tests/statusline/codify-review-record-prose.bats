@@ -1,6 +1,6 @@
 #!/usr/bin/env bats
 
-# Pins the /gaia-harden playbook's review-completion contract mechanically:
+# Pins the /gaia-codify playbook's review-completion contract mechanically:
 # the start-of-run tally save, the single combined record-and-clear block that
 # lives once inside "## Record the review (end of run)" (record, capture its
 # exit status, then a guarded cache clear, all inside one fenced Bash block so
@@ -8,10 +8,10 @@
 # section rather than a copy of it, that section's placement ahead of Publish,
 # and the --audited-pr-count flag on both ledger record call sites (decline
 # and the unclassified signal). .gaia/tests/statusline/ is already armed by
-# harden.md edits in .github/workflows/audit-ci-tests.yml.
+# codify.md edits in .github/workflows/audit-ci-tests.yml.
 
 setup() {
-  HARDEN_MARKDOWN=$(cd "$BATS_TEST_DIRNAME/../../../.claude/skills/gaia/references" && pwd)/harden.md
+  CODIFY_MARKDOWN=$(cd "$BATS_TEST_DIRNAME/../../../.claude/skills/gaia/references" && pwd)/codify.md
 }
 
 # swap_lines <file> <first_line_number> <second_line_number>
@@ -73,8 +73,8 @@ check_record_prose() {
 
   # 1. Fetch section saves the tally to review-tally.json.
   sed -n "${fetch_start},${judge_line}p" "$file" \
-    | grep -qE "harden-tally >.*\.gaia/local/harden/review-tally\.json" \
-    || { echo "Fetch section missing the harden-tally > review-tally.json save"; return 1; }
+    | grep -qE "codify-tally >.*\.gaia/local/codify/review-tally\.json" \
+    || { echo "Fetch section missing the codify-tally > review-tally.json save"; return 1; }
 
   # 2. All-clear bullet (one unwrapped paragraph line): references the Record
   #    section, and carries no copy of either the record literal or the
@@ -89,9 +89,9 @@ check_record_prose() {
   fi
   sed -n "${allclear_start}p" "$file" | grep -qF "Record the review" \
     || { echo "all-clear bullet missing a reference to Record the review"; return 1; }
-  sed -n "${allclear_start}p" "$file" | grep -qF "harden-ledger snapshot record --tally-file" \
+  sed -n "${allclear_start}p" "$file" | grep -qF "codify-ledger snapshot record --tally-file" \
     && { echo "all-clear bullet carries its own copy of the snapshot record literal"; return 1; }
-  sed -n "${allclear_start}p" "$file" | grep -qF '.hardenNudgeReason = ""' \
+  sed -n "${allclear_start}p" "$file" | grep -qF '.codifyNudgeReason = ""' \
     && { echo "all-clear bullet carries its own copy of the cache-clear literal"; return 1; }
 
   # 3. Record the review heading exists, between Unclassified and Publish.
@@ -112,7 +112,7 @@ check_record_prose() {
   #    status, then the exit-0 guard, then the cache-clear literal, in that
   #    order, so the combined block reads as one runnable sequence.
   local record_line_relative status_line_relative guard_line_relative clear_line_relative
-  record_line_relative=$(sed -n "${record_heading_line},${publish_line}p" "$file" | grep -n "harden-ledger snapshot record --tally-file" | head -1 | cut -d: -f1)
+  record_line_relative=$(sed -n "${record_heading_line},${publish_line}p" "$file" | grep -n "codify-ledger snapshot record --tally-file" | head -1 | cut -d: -f1)
   if [ -z "$record_line_relative" ]; then
     echo "Record section missing the snapshot record literal"
     return 1
@@ -127,7 +127,7 @@ check_record_prose() {
     echo "Record section missing the record_status -eq 0 guard"
     return 1
   fi
-  clear_line_relative=$(sed -n "${record_heading_line},${publish_line}p" "$file" | grep -nF '.hardenNudgeReason = ""' | head -1 | cut -d: -f1)
+  clear_line_relative=$(sed -n "${record_heading_line},${publish_line}p" "$file" | grep -nF '.codifyNudgeReason = ""' | head -1 | cut -d: -f1)
   if [ -z "$clear_line_relative" ]; then
     echo "Record section missing the cache-clear literal"
     return 1
@@ -157,7 +157,7 @@ check_record_prose() {
 
   # 6. The cache-clear jq expression is single-sourced across the whole file.
   local clear_count
-  clear_count=$(grep -cF '.hardenNudgeReason = "" | .checkedAt = 0' "$file")
+  clear_count=$(grep -cF '.codifyNudgeReason = "" | .checkedAt = 0' "$file")
   if [ "$clear_count" -ne 1 ]; then
     echo "the cache-clear jq expression appears $clear_count times, expected exactly 1"
     return 1
@@ -191,21 +191,21 @@ check_no_stale_phrasing() {
 
 # --- (a) the real file passes ---
 
-@test "check_record_prose passes on the real harden.md" {
-  run check_record_prose "$HARDEN_MARKDOWN"
+@test "check_record_prose passes on the real codify.md" {
+  run check_record_prose "$CODIFY_MARKDOWN"
   [ "$status" -eq 0 ]
 }
 
-@test "harden.md no longer contains the retired defer/unclassified phrasing" {
-  run check_no_stale_phrasing "$HARDEN_MARKDOWN"
+@test "codify.md no longer contains the retired defer/unclassified phrasing" {
+  run check_no_stale_phrasing "$CODIFY_MARKDOWN"
   [ "$status" -eq 0 ]
 }
 
 # --- (b) refusal cases ---
 
 @test "refuses when the Record section is moved after Publish" {
-  local copy="$BATS_TEST_TMPDIR/harden-record-after-publish.md"
-  cp "$HARDEN_MARKDOWN" "$copy"
+  local copy="$BATS_TEST_TMPDIR/codify-record-after-publish.md"
+  cp "$CODIFY_MARKDOWN" "$copy"
   local record_line publish_line
   record_line=$(grep -n "^## Record the review (end of run)" "$copy" | head -1 | cut -d: -f1)
   publish_line=$(grep -n "^## Publish approved changes (end of run)" "$copy" | head -1 | cut -d: -f1)
@@ -215,13 +215,13 @@ check_no_stale_phrasing() {
 }
 
 @test "refuses when the cache clear is placed before the record line" {
-  local copy="$BATS_TEST_TMPDIR/harden-clear-before-record.md"
-  cp "$HARDEN_MARKDOWN" "$copy"
+  local copy="$BATS_TEST_TMPDIR/codify-clear-before-record.md"
+  cp "$CODIFY_MARKDOWN" "$copy"
   local record_heading_line publish_line record_relative_line clear_relative_line record_absolute_line clear_absolute_line
   record_heading_line=$(grep -n "^## Record the review (end of run)" "$copy" | head -1 | cut -d: -f1)
   publish_line=$(grep -n "^## Publish approved changes (end of run)" "$copy" | head -1 | cut -d: -f1)
-  record_relative_line=$(sed -n "${record_heading_line},${publish_line}p" "$copy" | grep -n "harden-ledger snapshot record --tally-file" | head -1 | cut -d: -f1)
-  clear_relative_line=$(sed -n "${record_heading_line},${publish_line}p" "$copy" | grep -nF '.hardenNudgeReason = ""' | head -1 | cut -d: -f1)
+  record_relative_line=$(sed -n "${record_heading_line},${publish_line}p" "$copy" | grep -n "codify-ledger snapshot record --tally-file" | head -1 | cut -d: -f1)
+  clear_relative_line=$(sed -n "${record_heading_line},${publish_line}p" "$copy" | grep -nF '.codifyNudgeReason = ""' | head -1 | cut -d: -f1)
   record_absolute_line=$((record_heading_line + record_relative_line - 1))
   clear_absolute_line=$((record_heading_line + clear_relative_line - 1))
   swap_lines "$copy" "$record_absolute_line" "$clear_absolute_line"
@@ -230,8 +230,8 @@ check_no_stale_phrasing() {
 }
 
 @test "refuses when the all-clear region no longer references Record the review" {
-  local copy="$BATS_TEST_TMPDIR/harden-allclear-no-reference.md"
-  cp "$HARDEN_MARKDOWN" "$copy"
+  local copy="$BATS_TEST_TMPDIR/codify-allclear-no-reference.md"
+  cp "$CODIFY_MARKDOWN" "$copy"
   local allclear_start
   allclear_start=$(grep -n 'candidate_count.*is .0.*unclassified.*is .null' "$copy" | head -1 | cut -d: -f1)
   sed -i.bak "${allclear_start}s/Record the review/XXXXXXXXXX/" "$copy"
@@ -240,16 +240,16 @@ check_no_stale_phrasing() {
 }
 
 @test "refuses when the all-clear region regains a duplicate copy of the record-and-clear block" {
-  local copy="$BATS_TEST_TMPDIR/harden-allclear-duplicated-block.md"
-  cp "$HARDEN_MARKDOWN" "$copy"
+  local copy="$BATS_TEST_TMPDIR/codify-allclear-duplicated-block.md"
+  cp "$CODIFY_MARKDOWN" "$copy"
   local allclear_start duplicate_block_file
   allclear_start=$(grep -n 'candidate_count.*is .0.*unclassified.*is .null' "$copy" | head -1 | cut -d: -f1)
   duplicate_block_file="$BATS_TEST_TMPDIR/duplicate_block_file-block.txt"
   cat > "$duplicate_block_file" <<'EOF'
-.gaia/cli/gaia harden-ledger snapshot record --tally-file .gaia/local/harden/review-tally.json
+.gaia/cli/gaia codify-ledger snapshot record --tally-file .gaia/local/codify/review-tally.json
 record_status=$?
 if [ "$record_status" -eq 0 ]; then
-  jq '.hardenNudgeReason = "" | .checkedAt = 0' "$CACHE" > "$tmp" && mv "$tmp" "$CACHE"
+  jq '.codifyNudgeReason = "" | .checkedAt = 0' "$CACHE" > "$tmp" && mv "$tmp" "$CACHE"
 fi
 EOF
   insert_after "$copy" "$allclear_start" "$duplicate_block_file"
@@ -258,19 +258,19 @@ EOF
 }
 
 @test "refuses when the cache-clear jq expression is duplicated elsewhere in the file" {
-  local copy="$BATS_TEST_TMPDIR/harden-jq-duplicated.md"
-  cp "$HARDEN_MARKDOWN" "$copy"
+  local copy="$BATS_TEST_TMPDIR/codify-jq-duplicated.md"
+  cp "$CODIFY_MARKDOWN" "$copy"
   cat >> "$copy" <<'EOF'
 
-jq '.hardenNudgeReason = "" | .checkedAt = 0' "$CACHE" > "$tmp"
+jq '.codifyNudgeReason = "" | .checkedAt = 0' "$CACHE" > "$tmp"
 EOF
   run check_record_prose "$copy"
   [ "$status" -ne 0 ]
 }
 
 @test "refuses when --audited-pr-count is stripped from the decline call" {
-  local copy="$BATS_TEST_TMPDIR/harden-decline-no-audited.md"
-  cp "$HARDEN_MARKDOWN" "$copy"
+  local copy="$BATS_TEST_TMPDIR/codify-decline-no-audited.md"
+  cp "$CODIFY_MARKDOWN" "$copy"
   local decline_start defer_start line_relative line_absolute
   decline_start=$(grep -n "^### decline" "$copy" | head -1 | cut -d: -f1)
   defer_start=$(grep -n "^### defer" "$copy" | head -1 | cut -d: -f1)
@@ -282,23 +282,23 @@ EOF
 }
 
 @test "check_no_stale_phrasing refuses a copy carrying the retired unclassified phrasing" {
-  local copy="$BATS_TEST_TMPDIR/harden-stale-phrasing.md"
-  cp "$HARDEN_MARKDOWN" "$copy"
+  local copy="$BATS_TEST_TMPDIR/codify-stale-phrasing.md"
+  cp "$CODIFY_MARKDOWN" "$copy"
   printf '\nnagged for it for up to ninety days\n' >> "$copy"
   run check_no_stale_phrasing "$copy"
   [ "$status" -ne 0 ]
 }
 
-# --- existing pins from harden-unclassified-segment.bats stay green ---
+# --- existing pins from codify-unclassified-segment.bats stay green ---
 
 @test "still binds the top-level unclassified field" {
-  grep -qF "bind the top-level \`unclassified\` field" "$HARDEN_MARKDOWN"
+  grep -qF "bind the top-level \`unclassified\` field" "$CODIFY_MARKDOWN"
 }
 
 @test "still carries the Unclassified recurrence signal heading" {
-  grep -qF "## Unclassified recurrence signal (seed-a-class-or-investigate)" "$HARDEN_MARKDOWN"
+  grep -qF "## Unclassified recurrence signal (seed-a-class-or-investigate)" "$CODIFY_MARKDOWN"
 }
 
 @test "still states the unclassified signal is excluded from the draftable candidate set" {
-  grep -qF "It is NEVER placed in the draftable candidate set." "$HARDEN_MARKDOWN"
+  grep -qF "It is NEVER placed in the draftable candidate set." "$CODIFY_MARKDOWN"
 }

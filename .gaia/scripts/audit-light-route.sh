@@ -24,7 +24,7 @@
 #   refusal-newer        a refusal at HEAD, or one the anchor walk did not take
 #                        (recorded at another version)
 #   refusal-open-security the anchor is a refusal and its open findings cannot
-#                        all be vouched for: one has severity `error`, a
+#                        all be vouched for: one has severity `critical`, a
 #                        `security` field that is not exactly `false`, or no
 #                        readable severity, security, key, path or line; or the
 #                        refusal's findings cannot be read at all
@@ -346,7 +346,7 @@ light_route_main() {
     branch_slug_value="$(gaia_branch_slug "$root" 2>/dev/null)" || branch_slug_value=""
     checklist_json="$(light_route_refusal_checklist "$root" "$member" "$anchor_tree" "$branch_slug_value" 2>/dev/null)" \
       || { checklist_json="[]"; _light_route_finish full refusal-open-security; }
-    [ "$(jq -r 'all(.[]; (.severity == "warning" or .severity == "suggestion") and .security == false)' <<<"$checklist_json" 2>/dev/null)" = "true" ] \
+    [ "$(jq -r 'all(.[]; (.severity == "major" or .severity == "minor") and .security == false)' <<<"$checklist_json" 2>/dev/null)" = "true" ] \
       || _light_route_finish full refusal-open-security
   fi
 

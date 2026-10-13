@@ -52,6 +52,7 @@ make_pair() {
     cp "$RESOLVER" "$MAIN/.gaia/scripts/main-root-lib.sh"
   fi
   printf '1.0.0\n' > "$MAIN/.gaia/VERSION"
+  cp "$SCRIPTS_DIRECTORY/knowledge-inventory.sh" "$MAIN/.gaia/scripts/knowledge-inventory.sh"
 
   git -C "$MAIN" init -q
   git -C "$MAIN" config user.email t@t.t
@@ -138,9 +139,9 @@ STUB
   # three entries; the worktree's gets one, which is the realistic shape (a
   # freshly created worktree path has almost no memory history). A count of 1
   # here means the shared cache is stating a fact about the worktree, and the
-  # audit nudge silently stops tracking the clone.
-  main_slug="${MAIN//\//-}"
-  worktree_slug="${WORKTREE//\//-}"
+  # cleanse nudge silently stops tracking the clone.
+  main_slug="$(printf %s "$MAIN" | sed 's/[^A-Za-z0-9-]/-/g')"
+  worktree_slug="$(printf %s "$WORKTREE" | sed 's/[^A-Za-z0-9-]/-/g')"
   mkdir -p "$BATS_TEST_TMPDIR/home/.claude/projects/$main_slug/memory"
   mkdir -p "$BATS_TEST_TMPDIR/home/.claude/projects/$worktree_slug/memory"
   touch "$BATS_TEST_TMPDIR/home/.claude/projects/$main_slug/memory/"{a,b,c}.md
@@ -150,7 +151,7 @@ STUB
     run bash "$WORKTREE/.gaia/scripts/check-updates.sh"
   [ "$status" -eq 0 ]
 
-  count="$(jq -r '.auditMemoryCount' "$MAIN/.gaia/local/cache/shared/update-check.json")"
+  count="$(jq -r '.cleanseMemoryCount' "$MAIN/.gaia/local/cache/shared/update-check.json")"
   [ "$count" = "3" ]
 }
 

@@ -58,4 +58,21 @@ describe('coveredClassesFromRules', () => {
     expect(covered.has('axe/color-contrast')).toBe(true);
     expect(covered.has('knip/exports')).toBe(true);
   });
+
+  test('binds a marker carrying the earlier tail and one carrying the current tail', () => {
+    writeFileSync(
+      path.join(dir, 'earlier-tail.md'),
+      '<!-- gaia-harden: promoted from recurring finding_class rule/earlier-tail; pruned by /gaia-audit on obsolescence/redundancy/supersession/duplication only, never for non-recurrence -->'
+    );
+    writeFileSync(
+      path.join(dir, 'current-tail.md'),
+      markerComment('rule/current-tail')
+    );
+
+    expect(markerComment('rule/current-tail')).toContain('/gaia-cleanse');
+
+    const covered = coveredClassesFromRules(dir);
+    expect(covered.has('rule/earlier-tail')).toBe(true);
+    expect(covered.has('rule/current-tail')).toBe(true);
+  });
 });

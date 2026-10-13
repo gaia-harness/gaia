@@ -118,7 +118,7 @@ Overwrites `wiki/log.md` with release-clean content (full frontmatter required b
 
 Writes `.gaia/manifest.json`, sorted alphabetically. Walks `git ls-files`, subtracts `.gaia/release-exclude` patterns and adopter-owned sentinels, classifies the remainder as `owned` / `shared` / `wiki-owned`. Adopters use this manifest in `/update-gaia` to decide which files to overwrite, three-way merge, or leave alone.
 
-`--allow-undecided` preserves the release path's unconditional regeneration. The CLI otherwise refuses to produce a manifest while a shipping file has no explicit ship-or-withhold answer; release day is not the moment to relitigate what a file is for, so the release path takes the escape hatch by design. `/distribution-audit` is where that decision gets made, and it never carries this token.
+`--allow-undecided` preserves the release path's unconditional regeneration. The CLI otherwise refuses to produce a manifest while a shipping file has no explicit ship-or-withhold answer; release day is not the moment to relitigate what a file is for, so the release path takes the escape hatch by design. `/distribution-vet` is where that decision gets made, and it never carries this token.
 
 ### 7b. Rebuild the bundled CLIs
 
