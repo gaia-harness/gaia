@@ -2,7 +2,7 @@
 type: concept
 status: active
 created: 2026-07-23
-updated: 2026-10-13
+updated: 2026-10-14
 tags: [concept, worktree, claude, hooks, state]
 ---
 
@@ -89,6 +89,8 @@ There is **one output form** everywhere: a single line, one trailing newline, an
 A resolution failure does not decide the caller's behavior — the caller does. A fail-open guard keeps allowing; a silent reader or linker stands down and exits 0; a hard-requirement script propagates the named reason and aborts. The resolver keeps its reason off stdout so a fail-open caller can read the exit status alone without leaking a diagnostic on every guarded tool call. The worktree-detection **predicate** ("am I in a linked worktree") ships as a second entry point on the same implementation, so a site that needs a boolean does not resolve a root to get one.
 
 ## What lives in `.gaia/local/`, and how worktrees share it
+
+GAIA enters lifecycle worktrees only through `EnterWorktree`. A tree made with a plain `git worktree add` under `.claude/worktrees/` gets the backstop that steers the session into it, and its cleanup is `### Worktree entered by path or in an earlier session` in `.claude/skills/gaia/references/work-lifecycle.md`.
 
 A Code Audit Team member dispatched into a worktree made with plain `git worktree add` writes its marker, findings sidecar, and scope file into that worktree's real `.gaia/local/audit/`. Provisioning moves those files into main's `audit/` one by one before it backs the directory up, leaves any same-named file in main untouched, and logs the collision.
 

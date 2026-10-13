@@ -251,7 +251,7 @@ Then write the following files directly to `{PLAN_DIR}/`:
       5. Post the `GAIA-Audit` status after the promotion commit, immediately before `gh pr merge`: `bash .claude/hooks/post-audit-status.sh <path to a current member marker>`. Then merge.
       ```
 
-    - **Post-merge close.** Place this block after the merge, ahead of the worktree cleanup bullets below:
+    - **Post-merge close.** Place this block after the merge, ahead of the post-merge cleanup bullet below:
 
       ```
       <!-- gaia:orchestrator-step post-merge-close -->
@@ -262,34 +262,17 @@ Then write the following files directly to `{PLAN_DIR}/`:
 
       If the run stops before this step finishes (an interruption, a merge made outside the orchestrator), the pre-flight sweep that `/gaia-spec` and `/gaia-plan` both run (`lifecycle.md` `## Pre-flight sweep`) reconciles the ledger, consolidates the folder and reaps it later.
 
-    - **Post-merge worktree cleanup (worktree-mode runs only).** When the orchestrator's pre-flight chose worktree mode (or the run was dispatched into a worktree by upstream tooling), the post-merge phase runs the cleanup procedure below AFTER the user confirms the PR is merged. The procedure detects the squash-merge state and discards the worktree without prompting (the SPEC clarifications.answered confirms pre-consent: the orchestrator told the user "after merge, the worktree will be discarded" before opening the PR; the user merging the PR is the consent).
-      1. This procedure is the post-merge close's worktree-exit step: it runs only after that close has confirmed the merge through `pr-wait-merge.sh` (exit 0, `MERGED`) and reconciled the ledger. If the merge is not confirmed, do NOT proceed, surface to user and stop.
-      2. **Isolation-context check (see next bullet).** If the orchestrator is running inside an isolated subagent context, emit a continuation prompt and STOP, do NOT call `ExitWorktree`.
-      3. Otherwise, call `ExitWorktree({action: "remove", discard_changes: true})` directly. `discard_changes: true` is safe and correct: a squash-merge absorbs every commit on the worktree branch, but those commits are not reachable as ancestors of `main`. Without `discard_changes: true` the runtime conservatively refuses, treating the unreachable commits as unsynced work. The merged-state confirmation in step 1 proves the work is preserved.
-      4. Delete the renamed branch as `.claude/skills/gaia/references/isolation.md` (`### Post-merge removal`) prescribes.
-      5. Report a one-line success: `worktree discarded; PR #<N> squash-merged as <short-sha>`.
+    - **Post-merge cleanup.** The generated `ORCHESTRATOR.md` carries a pointer to `.claude/skills/gaia/references/work-lifecycle.md` `## 8. Cleanup`, run only after the post-merge close has confirmed `MERGED` through `pr-wait-merge.sh` and reconciled the ledger; if the merge is not confirmed, the orchestrator surfaces to the user and stops. The pointer has an arm for each isolation mode, and carries no snapshot of the reference (a snapshot would freeze a copy outside every grep):
+      - **Feature-branch run:** `### Feature branch`, with `<branch-name>` = the plan's branch. Without it, a feature-branch run ends on the merged branch with no checkout, pull, branch delete or prune.
+      - **Worktree run:** `### Worktree entered by name in this session` when the orchestrator entered its worktree in this session, and `### Worktree entered by path or in an earlier session` for a resumed run. The user merging the PR is the consent to discard the worktree, so the orchestrator discards it without prompting (the orchestrator tells the user "after merge, the worktree will be discarded" before opening the PR).
+      - **Isolated sub-agent context** (the orchestrator was dispatched with `isolation: "worktree"` or a `cwd` override and cannot call `ExitWorktree`): that reference's `### Sub-agent context: continuation prompt`, with these two lines appended to its command list (the first for a spec-colocated plan only):
 
-      Never call `ExitWorktree` first and treat its refusal as the trigger for the discard retry, that's the backstop pattern this section replaces. The merged-state confirmation is the primary signal source.
+        ```text
+            bash .gaia/scripts/summary-verify.sh <ABSOLUTE-PATH-TO-SUMMARY.md> && rm <ABSOLUTE-PATH-TO-SPEC-FOLDER>/SPEC.md <ABSOLUTE-PATH-TO-SPEC-FOLDER>/AUDIT.md   # spec-colocated plan only
+            bash .gaia/scripts/plan-archive.sh <ABSOLUTE-PATH-TO-PLAN_DIR>
+        ```
 
-    - **Isolation-context detection (worktree-mode runs only).** The runtime refuses `ExitWorktree` calls from agents dispatched with `isolation: "worktree"` or any `cwd` override (the refusal text is `ExitWorktree cannot be called from a subagent with a cwd override`). Before calling `ExitWorktree`, the orchestrator detects this context. Detection signal (v1):
-      - **Primary signal:** the orchestrator was invoked via `Agent(...)` with `isolation: "worktree"`. The orchestrator knows this if its dispatch was a sub-agent task (i.e. the kickoff prompt was passed to a Task / Agent call from a parent session) AND the cwd is a worktree path. If the orchestrator can read the runtime's session metadata to confirm isolation directly, it does so; otherwise it heuristically checks: if `pwd` resolves to a path under `.claude/worktrees/` AND the parent session that launched the orchestrator is unknown, treat as isolated.
-      - **Fallback:** if uncertain, attempt `ExitWorktree({action: "remove", discard_changes: true})` and check the runtime response. If the response contains `cannot be called from a subagent`, treat the call as never-issued (it's a refusal, not a destructive action), branch into the continuation-prompt path, and STOP. (This is the only place the orchestrator may use the deny-as-signal pattern; everywhere else, proactive detection is required.)
-
-      When detected, the orchestrator does NOT call `ExitWorktree`. It emits this continuation prompt to the user inside a `text` fenced code block, then stops:
-
-      ```text
-      The worktree at <ABSOLUTE-PATH-TO-WORKTREE> is ready to discard.
-      PR #<N> squash-merged as <short-sha>. From a shell at
-      <ABSOLUTE-PATH-TO-MAIN-CHECKOUT>, run:
-
-          git worktree remove --force <ABSOLUTE-PATH-TO-WORKTREE>
-          git branch -D <branch-name>   # if it still exists
-          git -C <ABSOLUTE-PATH-TO-MAIN-CHECKOUT> pull --ff-only origin main   # only when `git rev-parse --abbrev-ref HEAD` there prints main
-          bash .gaia/scripts/summary-verify.sh <ABSOLUTE-PATH-TO-SUMMARY.md> && rm <ABSOLUTE-PATH-TO-SPEC-FOLDER>/SPEC.md <ABSOLUTE-PATH-TO-SPEC-FOLDER>/AUDIT.md   # spec-colocated plan only
-          bash .gaia/scripts/plan-archive.sh <ABSOLUTE-PATH-TO-PLAN_DIR>
-      ```
-
-      The last two commands are the post-merge close's remaining steps (`lifecycle.md` `## Post-merge close`), which an isolated orchestrator cannot run because they need the main checkout. Do not emit an `ExitWorktree({...})` call in this continuation prompt. `ExitWorktree` only operates on a worktree created by `EnterWorktree` in the current session: from a fresh session it is a no-op on a prior-session worktree, and its schema requires `action` and rejects a `worktree` parameter. A plain `git worktree remove --force` is the correct session-independent cleanup. No error surfaces, no `ExitWorktree` invocation happens in this branch, and the user pastes the shell commands into any terminal to complete the cleanup without further investigation.
+        These two commands are the post-merge close's remaining steps (`lifecycle.md` `## Post-merge close`), which an isolated orchestrator cannot run because they need the main checkout.
 
 4.  **`{PLAN_DIR}/KICKOFF.md`**: the orchestrator's kickoff prompt itself, ready to be read and executed verbatim. The file is the prompt, no preamble, no "copy and paste below" instruction, no surrounding commentary, no `---` separators framing the prompt as a quoted block. The opening line addresses the orchestrator directly (e.g. "You are the orchestrator for the {feature} plan…"). Must be fully self-contained with no assumed context: absolute paths to `README.md` and `ORCHESTRATOR.md`, the goal, hard rules, and the execution outline, with exactly one carve-out: the imperative pointer to the shared isolation reference named in the Pre-flight isolation bullet above. The generated files carry that pointer, never a snapshot of the reference's content. The kickoff also includes a one-line reference to the pre-merge Code Audit Team audit obligation (e.g. "Before any `gh pr merge`, resolve the dispatched Code Audit Team members with `bash .gaia/scripts/resolve-audit-members.sh` and spawn each one; see ORCHESTRATOR.md's pre-merge audit section."), a one-line default-execution-model statement (e.g. "Dispatch each task sub-agent as `general-purpose` with `model: \"sonnet\"` unless ORCHESTRATOR.md's phase list escalates that phase to Opus."), and a one-line cold-start resume statement (e.g. "On cold start, before pre-flight, check `{PLAN_DIR}/RUNNING` for a prior run and follow ORCHESTRATOR.md's Resume detection section (reconnect + resume gate) before writing the sentinel."). All three lines ensure a cold-started orchestrator reads the requirement before doing any work, surviving any context compression that drops the ORCHESTRATOR.md content from the first read.
 

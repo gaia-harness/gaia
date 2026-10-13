@@ -333,9 +333,7 @@ Resolve the PR to completion through `wiki/concepts/PR Merge Workflow.md`, read 
 
   **Every other kind of drop is out of this check's scope, and reopening one would be wrong.** A member released by a pre-isolation screen, dropped at claim time to a peer session, or parked on a SPEC with either park label never reached this PR's body, because the body is written after isolation, so no trailer of this run's can close it and there is nothing here to catch. Meanwhile each of those members is legitimately closable by something else while this PR is still open: a released member is back in the backlog where a peer session may fix and merge it, and a spec-parked member closes exactly as intended when its SPEC's implementation PR merges carrying `Closes #N`. Reading `CLOSED` is the success case for those, so reopening on it would undo a real fix and, for a parked member, fight the count rule that already removed it from `openCount`. Scope the check to the post-commit drops and leave the rest alone.
 
-  On `MERGED`, run post-merge cleanup by isolation mode:
-  - **Feature-branch isolation:** `git checkout main && git pull`, `git branch -D <branch>`, `git fetch --prune`. (Run ends here; see `## Cost record (run end)`.)
-  - **Worktree mode:** Read `.claude/skills/gaia/references/debt/worktree-cleanup.md` now and follow its `### Post-merge worktree cleanup (worktree-mode fixes only)` instead. It removes the worktree first and deletes the branch afterward, since a worktree-held branch cannot be deleted while the worktree stands.
+  On `MERGED`, run `.claude/skills/gaia/references/work-lifecycle.md` `## 8. Cleanup`: feature-branch mode takes `### Feature branch`, and worktree mode takes `### Worktree entered by name in this session` (or `### Worktree entered by path or in an earlier session` for a resumed run), with the sub-agent case taking `### Sub-agent context: continuation prompt`. (Run ends here; see `## Cost record (run end)`.)
 
   Every arm above but `MERGED` and `CONFLICTING` ends the run there (the report above and the return without cleanup); see `## Cost record (run end)`.
 
@@ -362,7 +360,7 @@ Every path that ends a `/gaia-debt` run appends exactly one cost record, the run
 - Pre-flight isolation blocked: a member must be fixed on a branch in the main checkout and the session cannot cut one. This path opened no PR, so it passes no `--pr`.
 - The spec screen handing off: the whole-unit-spec-class case stops the run here (a per-member handoff within a surviving batch also records via this same run-end record). This path opened no PR, so it passes no `--pr`; the record correctly carries no artifact.
 - Driving the PR to merge: `MERGED` cleanup, a still-queued `--auto` merge, a failed required check, a pull request closed without merging, a merge wait that refused because it read nothing, a stop at the audit gate's branch checkpoint, or a controlled stop before merge.
-- Worktree mode's isolation-context continuation prompt (`debt/worktree-cleanup.md`).
+- Worktree mode's isolation-context continuation prompt (`work-lifecycle.md` `### Sub-agent context: continuation prompt`).
 
 The parser, validation, named-set, and named-selection claim-time stops above all end the run before a PR exists, so none of them passes `--pr`.
 

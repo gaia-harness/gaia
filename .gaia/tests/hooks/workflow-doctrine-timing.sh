@@ -15,14 +15,18 @@
 # the registered rooting step is part of the measurement. The hook runs under
 # macOS bash 3.2 when /bin/bash is that version (a PATH shim makes
 # `#!/usr/bin/env bash` resolve to it); elsewhere a warning is printed and the
-# resolved bash is used. Each of four inputs runs N times with a fresh
+# resolved bash is used. Each input runs N times with a fresh
 # session_id per run, so the dedupe marker never short-circuits the inject
 # path. Wall time is taken around the child process only, with perl
 # Time::HiRes.
 #
 # Inputs: sessionstart_default (startup on main), sessionstart_branch (startup
 # on feat/9-sample), posttooluse_bash_nonarming (Bash `ls -la` on the branch),
-# posttooluse_bash_arming (Bash `git switch feat/9-sample` on the branch).
+# posttooluse_bash_arming (Bash `git switch feat/9-sample` on the branch),
+# posttooluse_bash_git_nonarming (Bash `git status` on the branch, a git
+# command the verb pattern does not arm), posttooluse_bash_worktree_add (a real
+# `git worktree add` under the fixture's .claude/worktrees/ with a fresh path
+# per run, removed after each run, so every run takes the backstop path).
 #
 # Usage: bash .gaia/tests/hooks/workflow-doctrine-timing.sh [--runs N] [--json]
 # Run it from the repo root. Default N is 20.
@@ -143,6 +147,29 @@ measure() {
       printf "%.1f %.1f\n", p50, sorted_milliseconds[p90_index] }'
 }
 
+# measure_worktree_add: like measure, but each run first makes a real linked
+# worktree under .claude/worktrees/ and removes it after the hook ran.
+measure_worktree_add() {
+  local iteration_count=0 milliseconds times="" worktree_directory worktree_branch
+  git -C "$fixture" checkout -q main
+  while [ "$((iteration_count += 1))" -le "$runs" ]; do
+    next_session_id
+    worktree_directory="$fixture/.claude/worktrees/timing-$iteration_count"
+    worktree_branch="timing-hand-$iteration_count"
+    git -C "$fixture" worktree add -q "$worktree_directory" -b "$worktree_branch"
+    bash_payload "$session_id" "git worktree add $worktree_directory -b $worktree_branch" >"$work/in.json"
+    time_one "$work/in.json" "$work/out.json"
+    milliseconds=$(cat "$work/out.json.ms")
+    times="$times$milliseconds
+"
+    git -C "$fixture" worktree remove --force "$worktree_directory"
+    git -C "$fixture" branch -q -D "$worktree_branch"
+  done
+  printf '%s' "$times" | sed '/^$/d' | sort -n | awk '
+    { sorted_milliseconds[NR] = $1 } END { p50 = sorted_milliseconds[int((NR + 1) / 2)]; p90_index = int(NR * 0.9); if (p90_index < 1) p90_index = 1;
+      printf "%.1f %.1f\n", p50, sorted_milliseconds[p90_index] }'
+}
+
 # payload_length <branch>: decoded additionalContext byte length for one startup run.
 payload_length() {
   local branch="$1"
@@ -157,6 +184,8 @@ read -r sessionstart_default_p50 sessionstart_default_p90 < <(measure sessionsta
 read -r sessionstart_branch_p50 sessionstart_branch_p90 < <(measure sessionstart_branch session_start_payload feat/9-sample "")
 read -r posttooluse_bash_nonarming_p50 posttooluse_bash_nonarming_p90 < <(measure posttooluse_bash_nonarming bash_payload feat/9-sample "ls -la")
 read -r posttooluse_bash_arming_p50 posttooluse_bash_arming_p90 < <(measure posttooluse_bash_arming bash_payload feat/9-sample "git switch feat/9-sample")
+read -r posttooluse_bash_git_nonarming_p50 posttooluse_bash_git_nonarming_p90 < <(measure posttooluse_bash_git_nonarming bash_payload feat/9-sample "git status")
+read -r posttooluse_bash_worktree_add_p50 posttooluse_bash_worktree_add_p90 < <(measure_worktree_add)
 
 injected=$(payload_length feat/9-sample)
 maximum_payload_bytes=$(payload_length "$long_branch")
@@ -167,12 +196,15 @@ rule_tokens=$((rule / 4))
 if [ "$json" = 1 ]; then
   jq -n \
     --argjson sessionstart_default_p50 "$sessionstart_default_p50" --argjson sessionstart_branch_p50 "$sessionstart_branch_p50" --argjson posttooluse_bash_nonarming_p50 "$posttooluse_bash_nonarming_p50" --argjson posttooluse_bash_arming_p50 "$posttooluse_bash_arming_p50" \
+    --argjson posttooluse_bash_git_nonarming_p50 "$posttooluse_bash_git_nonarming_p50" --argjson posttooluse_bash_worktree_add_p50 "$posttooluse_bash_worktree_add_p50" \
     --argjson injected_bytes "$injected" --argjson injected_tokens "$injected_tokens" --argjson maximum_payload_bytes "$maximum_payload_bytes" \
     --argjson rule "$rule" --argjson rule_tokens "$rule_tokens" '
     [ {metric:"p50_sessionstart_default_ms",value:$sessionstart_default_p50,unit:"ms",budget:50},
       {metric:"p50_sessionstart_branch_ms",value:$sessionstart_branch_p50,unit:"ms",budget:50},
       {metric:"p50_posttooluse_bash_nonarming_ms",value:$posttooluse_bash_nonarming_p50,unit:"ms",budget:50},
       {metric:"p50_posttooluse_bash_arming_ms",value:$posttooluse_bash_arming_p50,unit:"ms",budget:50},
+      {metric:"p50_posttooluse_bash_git_nonarming_ms",value:$posttooluse_bash_git_nonarming_p50,unit:"ms",budget:50},
+      {metric:"p50_posttooluse_bash_worktree_add_ms",value:$posttooluse_bash_worktree_add_p50,unit:"ms",budget:50},
       {metric:"injected_bytes",value:$injected_bytes,unit:"bytes",budget:4096},
       {metric:"injected_tokens_est",value:$injected_tokens,unit:"tokens",budget:null},
       {metric:"payload_max_bytes_128char_branch",value:$maximum_payload_bytes,unit:"bytes",budget:4096},
@@ -184,6 +216,8 @@ else
   printf '%-30s p50 %7s ms   p90 %7s ms\n' sessionstart_branch "$sessionstart_branch_p50" "$sessionstart_branch_p90"
   printf '%-30s p50 %7s ms   p90 %7s ms\n' posttooluse_bash_nonarming "$posttooluse_bash_nonarming_p50" "$posttooluse_bash_nonarming_p90"
   printf '%-30s p50 %7s ms   p90 %7s ms\n' posttooluse_bash_arming "$posttooluse_bash_arming_p50" "$posttooluse_bash_arming_p90"
+  printf '%-30s p50 %7s ms   p90 %7s ms\n' posttooluse_bash_git_nonarming "$posttooluse_bash_git_nonarming_p50" "$posttooluse_bash_git_nonarming_p90"
+  printf '%-30s p50 %7s ms   p90 %7s ms\n' posttooluse_bash_worktree_add "$posttooluse_bash_worktree_add_p50" "$posttooluse_bash_worktree_add_p90"
   echo "injected_bytes: $injected (tokens est $injected_tokens)"
   echo "payload_max_bytes_128char_branch: $maximum_payload_bytes"
   echo "rule_bytes: $rule (tokens est $rule_tokens)"

@@ -5,8 +5,9 @@
 #   a. every prompt, command or line GAIA hands the user to copy and paste is
 #      printed inside a fenced code block, and the always-loaded rule saying so
 #      lives in .claude/rules/context-discipline.md;
-#   b. the post-merge worktree cleanup pulls `main` into the main checkout only
-#      when that checkout is on `main`, and still runs no `git checkout`.
+#   b. the post-merge cleanup, owned by the shared work-lifecycle reference,
+#      pulls `main` into the main checkout only when that checkout is on `main`,
+#      and its worktree arms still run no `git checkout`.
 #
 # Every check is a function taking a root laid out like the repository, so the
 # red twins run the same function against a mutated scratch copy: removing a
@@ -57,7 +58,7 @@ scratch_copy() {
     "$REFERENCES/spec.md" \
     "$REFERENCES/isolation.md" \
     "$REFERENCES/debt/spec-handoff.md" \
-    "$REFERENCES/debt/worktree-cleanup.md" \
+    "$REFERENCES/work-lifecycle.md" \
     .claude/skills/update-gaia/references/merge-execution.md \
     .claude/hooks/audit-loop-bound.sh \
     "$RUNBOOK"; do
@@ -81,14 +82,14 @@ plan_kickoff_prompt() {
     grep -qF -- 'Read <absolute-path-to-PLAN_DIR>/KICKOFF.md and execute it.'
 }
 
-planner_continuation_prompt() {
-  section "$1/$REFERENCES/plan/planner.md" '## Plan files' | fence_bodies text |
+lifecycle_continuation_prompt() {
+  section "$1/$REFERENCES/work-lifecycle.md" '### Sub-agent context: continuation prompt' | fence_bodies text |
     grep -qF -- 'is ready to discard.'
 }
 
-debt_continuation_prompt() {
-  section "$1/$REFERENCES/debt/worktree-cleanup.md" '### Isolation-context detection' | fence_bodies text |
-    grep -qF -- 'is ready to discard.'
+planner_continuation_lines() {
+  section "$1/$REFERENCES/plan/planner.md" '## Plan files' | fence_bodies text |
+    grep -qF -- 'plan-archive.sh'
 }
 
 spec_model_switch_line() {
@@ -116,7 +117,7 @@ unattended_grant_line() {
   grep -qF -- "\`grant_line\` and no continuation prompt, the line alone in a fenced code block" "$1/$RUNBOOK"
 }
 
-FENCE_SITES=(rule_line plan_kickoff_prompt planner_continuation_prompt debt_continuation_prompt
+FENCE_SITES=(rule_line plan_kickoff_prompt lifecycle_continuation_prompt planner_continuation_lines
   spec_model_switch_line spec_plan_handoff debt_spec_handoff update_gaia_follow_up_commands unattended_grant_line)
 
 @test "every paste site prints inside a fence, and the always-loaded rule says so" {
@@ -144,35 +145,38 @@ FENCE_SITES=(rule_line plan_kickoff_prompt planner_continuation_prompt debt_cont
   done
 }
 
-# --- b. the pull after a worktree merge --------------------------------------
+# --- b. the pull after a merge -------------------------------------------------
 
 worktree_arm_pulls() {
-  local arm
-  arm="$(section "$1/$RUNBOOK" '### Cleanup under worktree isolation')"
-  fence_bodies bash <<<"$arm" | grep -qF -- "git -C <main-checkout> $PULL" || return 1
-  grep -qF -- 'prints `main`' <<<"$arm" || return 1
-  grep -qiF -- 'never force or stash' <<<"$arm"
+  local path_arm prose
+  path_arm="$(section "$1/$REFERENCES/work-lifecycle.md" '### Worktree entered by path or in an earlier session')"
+  fence_bodies bash <<<"$path_arm" | grep -qF -- "git $PULL" || return 1
+  fence_bodies bash <<<"$path_arm" | grep -qF -- '= main ]' || return 1
+  prose="$(section "$1/$REFERENCES/work-lifecycle.md" '## 8. Cleanup')"
+  grep -qF -- 'skip the checkout and the pull' <<<"$prose" || return 1
+  grep -qF -- 'Never force a pull, and never stash' <<<"$prose"
 }
 
 worktree_arm_has_no_checkout() {
-  local arm
-  arm="$(section "$1/$RUNBOOK" '### Cleanup under worktree isolation')"
-  [ -n "$(fence_bodies bash <<<"$arm")" ] || return 1
-  if fence_bodies bash <<<"$arm" | grep -qE -- 'git( -C [^ ]+)? (checkout|switch)'; then
-    return 1
-  fi
+  local arm heading
+  for heading in '### Worktree entered by name in this session' '### Worktree entered by path or in an earlier session'; do
+    arm="$(section "$1/$REFERENCES/work-lifecycle.md" "$heading")"
+    [ -n "$(fence_bodies bash <<<"$arm")" ] || return 1
+    if fence_bodies bash <<<"$arm" | grep -qE -- 'git( -C [^ ]+)? (checkout|switch)'; then
+      return 1
+    fi
+  done
 }
 
-isolation_removal_pulls() {
+in_session_removal_pulls() {
   local removal
-  removal="$(section "$1/$REFERENCES/isolation.md" '### Post-merge removal')"
+  removal="$(section "$1/$REFERENCES/work-lifecycle.md" '### Worktree entered by name in this session')"
   grep -qF -- 'rev-parse --abbrev-ref HEAD' <<<"$removal" || return 1
-  grep -qF -- "git -C <main root> $PULL" <<<"$removal"
+  grep -qF -- "git $PULL" <<<"$removal"
 }
 
 continuation_prompts_pull() {
-  section "$1/$REFERENCES/plan/planner.md" '## Plan files' | fence_bodies text | grep -qF -- "$PULL" || return 1
-  section "$1/$REFERENCES/debt/worktree-cleanup.md" '### Isolation-context detection' | fence_bodies text |
+  section "$1/$REFERENCES/work-lifecycle.md" '### Sub-agent context: continuation prompt' | fence_bodies text |
     grep -qF -- "$PULL"
 }
 
@@ -186,9 +190,9 @@ main_checkout_paragraph_uses_digest() {
   fi
 }
 
-debt_pointer_names_planner() {
-  grep -qF -- '`plan/planner.md`' "$1/$REFERENCES/debt/worktree-cleanup.md" || return 1
-  if grep -qF -- "matches \`plan.md\`" "$1/$REFERENCES/debt/worktree-cleanup.md"; then return 1; fi
+planner_points_at_reference() {
+  grep -qF -- 'work-lifecycle.md' "$1/$REFERENCES/plan/planner.md" || return 1
+  if grep -qF -- 'is ready to discard.' "$1/$REFERENCES/plan/planner.md"; then return 1; fi
 }
 
 @test "the worktree arm pulls main only when the main checkout holds main, and never forces" {
@@ -196,49 +200,51 @@ debt_pointer_names_planner() {
 }
 
 @test "red twin: a worktree arm without the pull fails" {
-  local copy
+  local copy file
   copy="$(scratch_copy)"
-  grep -vF -- "$PULL" "$copy/$RUNBOOK" >"$copy/runbook.new"
-  mv "$copy/runbook.new" "$copy/$RUNBOOK"
+  file="$copy/$REFERENCES/work-lifecycle.md"
+  grep -vF -- "$PULL" "$file" >"$file.new"
+  mv "$file.new" "$file"
   run worktree_arm_pulls "$copy"
   [ "$status" -ne 0 ]
 }
 
-@test "the worktree arm's fences still carry no git checkout" {
+@test "the worktree arms' fences still carry no git checkout" {
   worktree_arm_has_no_checkout "$REPO_ROOT"
 }
 
-@test "red twin: a git checkout inside the worktree arm's fence fails" {
-  local copy
+@test "red twin: a git checkout inside a worktree arm's fence fails" {
+  local copy file
   copy="$(scratch_copy)"
-  awk -v pull="$PULL" 'index($0, "git -C <main-checkout> " pull) { print "git -C <main-checkout> checkout main" } { print }' \
-    "$copy/$RUNBOOK" >"$copy/runbook.new"
-  mv "$copy/runbook.new" "$copy/$RUNBOOK"
+  file="$copy/$REFERENCES/work-lifecycle.md"
+  awk -v pull="git $PULL" 'index($0, pull) { print "  git checkout main" } { print }' "$file" >"$file.new"
+  mv "$file.new" "$file"
   run worktree_arm_has_no_checkout "$copy"
   [ "$status" -ne 0 ]
 }
 
-@test "isolation.md's post-merge removal reads the main checkout's HEAD and pulls" {
-  isolation_removal_pulls "$REPO_ROOT"
+@test "the in-session worktree removal reads the main checkout's HEAD and pulls" {
+  in_session_removal_pulls "$REPO_ROOT"
 }
 
-@test "red twin: a post-merge removal without the pull fails" {
-  local copy
+@test "red twin: an in-session removal without the pull fails" {
+  local copy file
   copy="$(scratch_copy)"
-  grep -vF -- "$PULL" "$copy/$REFERENCES/isolation.md" >"$copy/isolation.new"
-  mv "$copy/isolation.new" "$copy/$REFERENCES/isolation.md"
-  run isolation_removal_pulls "$copy"
+  file="$copy/$REFERENCES/work-lifecycle.md"
+  grep -vF -- "$PULL" "$file" >"$file.new"
+  mv "$file.new" "$file"
+  run in_session_removal_pulls "$copy"
   [ "$status" -ne 0 ]
 }
 
-@test "both worktree continuation prompts carry the pull" {
+@test "the sub-agent continuation prompt carries the pull" {
   continuation_prompts_pull "$REPO_ROOT"
 }
 
 @test "red twin: a continuation prompt without the pull fails" {
   local copy file
   copy="$(scratch_copy)"
-  file="$copy/$REFERENCES/debt/worktree-cleanup.md"
+  file="$copy/$REFERENCES/work-lifecycle.md"
   grep -vF -- "$PULL" "$file" >"$file.new"
   mv "$file.new" "$file"
   run continuation_prompts_pull "$copy"
@@ -249,6 +255,15 @@ debt_pointer_names_planner() {
   main_checkout_paragraph_uses_digest "$REPO_ROOT"
 }
 
-@test "worktree-cleanup.md points at plan/planner.md for the matching prompt" {
-  debt_pointer_names_planner "$REPO_ROOT"
+@test "the planner template points at the lifecycle reference and carries no prompt of its own" {
+  planner_points_at_reference "$REPO_ROOT"
+}
+
+@test "red twin: a planner template that carries its own prompt again fails" {
+  local copy file
+  copy="$(scratch_copy)"
+  file="$copy/$REFERENCES/plan/planner.md"
+  printf 'The worktree at <ABSOLUTE-PATH-TO-WORKTREE> is ready to discard.\n' >>"$file"
+  run planner_points_at_reference "$copy"
+  [ "$status" -ne 0 ]
 }

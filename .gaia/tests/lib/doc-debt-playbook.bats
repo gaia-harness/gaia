@@ -11,8 +11,9 @@
 #      duplicate instruction paid on every run;
 #   2. the audit step dispatches `audit-loop-unit` through the merge workflow's
 #      audit-loop-unit section and never resolves and spawns members itself;
-#   3. the post-merge path waits on `pr-wait-merge.sh` and never confirms the
-#      merge with a one-shot `gh pr view --json state`;
+#   3. the post-merge path waits on `pr-wait-merge.sh`, never confirms the
+#      merge with a one-shot `gh pr view --json state`, and points at the
+#      shared work-lifecycle reference for the cleanup;
 #   4. clustering and exclusion come from `debt-backlog.sh`, and a non-zero
 #      exit from it stops the run before anything is claimed;
 #   5. a sub-reference read is a step a model can skip, so `debt.md` routes to
@@ -172,14 +173,15 @@ audit_step_dispatches_unit() {
 # --- 3. no one-shot merge check ---------------------------------------------
 
 no_one_shot_merge_check() {
-  local files file cleanup
+  local files file drive
   files="$(playbook_files "$1")" || return 1
   while IFS= read -r file; do
     grep -qE -- 'gh pr view <N> --json state' "$file" && return 1
   done <<<"$files"
-  cleanup="$(extract_section "$1/debt/worktree-cleanup.md" '### Post-merge worktree cleanup')"
-  [ -n "$cleanup" ] || return 1
-  grep -qF -- 'pr-wait-merge.sh' <<<"$cleanup" || return 1
+  drive="$(extract_section "$1/debt.md" '## Drive the PR to merge')"
+  [ -n "$drive" ] || return 1
+  grep -qF -- 'pr-wait-merge.sh' <<<"$drive" || return 1
+  grep -qF -- 'work-lifecycle.md' <<<"$drive" || return 1
   return 0
 }
 
@@ -194,10 +196,18 @@ no_one_shot_merge_check() {
   [ "$status" -ne 0 ]
 }
 
-@test "the merge-check guard goes red when the worktree cleanup stops naming the wait" {
+@test "the merge-check guard goes red when the drive section stops naming the wait" {
   copy="$(scratch_copy)"
-  sed 's/pr-wait-merge\.sh/the merge wait/g' "$copy/debt/worktree-cleanup.md" >"$copy/debt/worktree-cleanup.md.new"
-  mv "$copy/debt/worktree-cleanup.md.new" "$copy/debt/worktree-cleanup.md"
+  sed 's/pr-wait-merge\.sh/the merge wait/g' "$copy/debt.md" >"$copy/debt.md.new"
+  mv "$copy/debt.md.new" "$copy/debt.md"
+  run no_one_shot_merge_check "$copy"
+  [ "$status" -ne 0 ]
+}
+
+@test "the merge-check guard goes red when the drive section stops pointing at the lifecycle reference" {
+  copy="$(scratch_copy)"
+  sed 's/work-lifecycle\.md/the cleanup page/g' "$copy/debt.md" >"$copy/debt.md.new"
+  mv "$copy/debt.md.new" "$copy/debt.md"
   run no_one_shot_merge_check "$copy"
   [ "$status" -ne 0 ]
 }
@@ -229,17 +239,29 @@ backlog_pass_is_scripted() {
 
 ROUTE_PREFIX='Read `.claude/skills/gaia/references/debt/'
 
+# is_pointer_stub <file>: a debt/*.md that is exactly one line and names the
+# shared work-lifecycle reference. It carries no procedure, so routing to it
+# would add a read with nothing to skip.
+is_pointer_stub() {
+  [ "$(wc -l <"$1" | tr -d ' ')" -eq 1 ] && grep -qF -- 'work-lifecycle.md' "$1"
+}
+
 # every_sub_reference_routed <references-dir>: succeeds when debt.md holds a
-# `Read` line naming each debt/*.md by its repo path. The set comes from the
-# directory, and an independent count catches a glob that read fewer files
-# than exist; an empty set fails rather than passing vacuously.
+# `Read` line naming each debt/*.md by its repo path, except a pointer stub.
+# The set comes from the directory, and an independent count (also skipping
+# stubs) catches a glob that read fewer files than exist; an empty set fails
+# rather than passing vacuously.
 every_sub_reference_routed() {
-  local dir="$1" file name count=0 expected
+  local dir="$1" file name count=0 expected=0
   [ -f "$dir/debt.md" ] || return 1
-  expected="$(find "$dir/debt" -maxdepth 1 -type f -name '*.md' 2>/dev/null | wc -l | tr -d ' ')"
+  for file in "$dir"/debt/*.md; do
+    [ -f "$file" ] || continue
+    is_pointer_stub "$file" || expected=$((expected + 1))
+  done
   [ "$expected" -ge 1 ] || return 1
   for file in "$dir"/debt/*.md; do
     [ -f "$file" ] || continue
+    is_pointer_stub "$file" && continue
     name="$(basename "$file")"
     count=$((count + 1))
     if ! grep -qF -- "${ROUTE_PREFIX}${name}\`" "$dir/debt.md"; then
@@ -253,6 +275,18 @@ every_sub_reference_routed() {
 
 @test "every sub-reference is routed from debt.md by a Read line" {
   every_sub_reference_routed "$PLAYBOOK_DIR"
+}
+
+@test "the routing check goes red when a pointer stub gains a second line" {
+  local stub="" file
+  copy="$(scratch_copy)"
+  for file in "$copy"/debt/*.md; do
+    if is_pointer_stub "$file"; then stub="$file"; fi
+  done
+  [ -n "$stub" ] || return 1
+  printf '\n### Some procedure\n' >>"$stub"
+  run every_sub_reference_routed "$copy"
+  [ "$status" -ne 0 ]
 }
 
 @test "the routing check goes red when one routing line is deleted" {
@@ -312,8 +346,6 @@ MOVED_HEADINGS=(
   "named.md	## Fix a specific issue (direct-number path)"
   "named.md	## Fix a named set (two or more numbers)"
   "recommend.md	## Recommend and present"
-  "worktree-cleanup.md	### Post-merge worktree cleanup"
-  "worktree-cleanup.md	### Isolation-context detection"
 )
 
 # has_heading <file> <heading-prefix>: a line of the file starts with the prefix.

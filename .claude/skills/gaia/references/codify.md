@@ -381,9 +381,9 @@ A fix to a drafted rule is a commit to a file in a member's remit, so it rotates
 
 **Leave open** → report the PR URL and stop.
 
-**Merge, verify, clean up.** Run `gh pr merge <N> --squash --delete-branch --auto` directly, so a merge reached after the watch window closed with checks pending queues behind them rather than being refused by branch policy. Then run the merge wait, `bash .gaia/scripts/pr-wait-merge.sh --pr <N> --attempts 20`, with a 20-attempt bound in place of its default 5, since a full CI run outlasts the default. The merge above is already queued and the script issues no `gh pr merge` of its own, so nothing here re-merges. One arm per verdict plus one for the exit-2 refusal, and the script's `--help` is the authority on both:
+**Merge, verify, clean up.** Run `gh pr merge <N> --squash --delete-branch --auto` directly, so a merge reached after the watch window closed with checks pending queues behind them rather than being refused by branch policy. Then run the merge wait, `bash .gaia/scripts/pr-wait-merge.sh --pr <N> --attempts 20`, with a 20-attempt bound in place of its default 5, since a full CI run outlasts the default, per `.claude/skills/gaia/references/work-lifecycle.md` `## 7. Merge (when asked)`. The merge above is already queued and the script issues no `gh pr merge` of its own, so nothing here re-merges. One arm per verdict plus one for the exit-2 refusal:
 
-- On `MERGED` (exit 0), clean up per the workflow's `## Post-merge verification before cleanup` (`git checkout main && git pull origin main`, `git branch -D <CODIFY_BRANCH>`, `git fetch --prune origin`).
+- On `MERGED` (exit 0), clean up per `.claude/skills/gaia/references/work-lifecycle.md` `## 8. Cleanup` `### Feature branch`, with `<branch-name>` = `<CODIFY_BRANCH>`.
 - On `CONFLICTING` (exit 3), repair per `wiki/concepts/PR Merge Workflow.md`'s `### Conflict found mid-wait` and run the wait again.
 - On `CHECK_FAILED` (exit 4), print the PR URL and the failing check, and leave the branch in place.
 - On `TIMEOUT` (exit 5), the window closed with the pull request still open: print the PR URL, say the merge queued above has not landed yet, and leave the branch in place.

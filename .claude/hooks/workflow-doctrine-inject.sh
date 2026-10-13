@@ -7,11 +7,30 @@
 # default branch in the main checkout never receives it.
 #
 # Triggers: SessionStart (startup, resume, clear, compact), PostToolUse
-# EnterWorktree, and PostToolUse Bash when the command arms the checkout/switch
-# fragment below. The arm only decides whether to look; the decision is always
-# the tree's HEAD after the command ran. Branch detection and keys reuse the
-# usage ledger's primitives (usage-lib.sh, branch-name-lib.sh, main-root-lib.sh);
-# this hook adds no second branch rule.
+# EnterWorktree, and PostToolUse Bash when the command arms the
+# checkout/switch/worktree-add fragment below. The arm only decides whether to
+# look; the doctrine decision is always the tree's HEAD after the command ran.
+# Branch detection and keys reuse the usage ledger's primitives (usage-lib.sh,
+# branch-name-lib.sh, main-root-lib.sh); this hook adds no second branch rule.
+#
+# Worktree backstop: a session that never read the lifecycle can make a tree
+# with a plain Bash `git worktree add` and then work on it by absolute path
+# from the main checkout, where nothing provisions it and audit markers and
+# tools resolve the wrong tree. When the command added a linked worktree under
+# a `.claude/worktrees/` directory (confirmed through `git worktree list
+# --porcelain` against the -C directory or the payload cwd, paths compared
+# physically), the output starts with text naming the tree's path and branch,
+# `EnterWorktree({path: ...})`, the lifecycle reference, and, when the branch is
+# not a minted name or HEAD is detached, the rename to mint before the first
+# push. It is advisory, never a deny: a command it cannot parse, a failed add
+# whose target git never registered, or a command whose `worktree add` sits in data the verb-arming proof masks
+# yields nothing. A tree outside `.claude/worktrees/` is a deliberate side tree
+# (a migration verification tree, say), not a lifecycle worktree, so it gets
+# nothing. The backstop fires on every such call, outside the doctrine dedupe,
+# and a default-branch session in the main checkout still receives it; it rides
+# ahead of the key line and doctrine in the one JSON value. The payload budget
+# in workflow-doctrine-sources.bats covers the key line and doctrine only; the
+# backstop sits on top of it, bounded by the path and branch lengths.
 #
 # Cost order, because it runs on every Bash call: CI and jq gates, one payload
 # parse, the arming check before any git process, then one git call. Branch,
@@ -44,7 +63,8 @@
 #
 # Without jq only SessionStart injects: the event and session id are read from
 # the flat payload with sed, the tree is the process cwd, the JSON is built with
-# awk, and no marker is read or written. PostToolUse exits silently.
+# awk, and no marker is read or written. PostToolUse exits silently, which is
+# the backstop's honest limit: on a machine without jq it is absent.
 #
 # The tree is the session's own (payload cwd, or the EnterWorktree
 # worktreePath), never the path a `git -C <path>` command aims at, so a
@@ -55,6 +75,40 @@ trap 'exit 0' ERR
 
 # Byte-wise string lengths, and no locale cost in the hot path. Not exported.
 LC_ALL=C
+
+# The worktree backstop text, built before the doctrine path runs. It is pending
+# until some output carries it: the doctrine path prepends it to the key line
+# and clears the flag, and every other exit prints it alone from the EXIT trap,
+# so a default-branch session and the doctrine dedupe cannot swallow it.
+backstop=""
+backstop_pending=0
+# shellcheck disable=SC2329 # runs from the EXIT trap below
+print_backstop_alone() {
+  [ "$backstop_pending" = 1 ] && [ -n "$backstop" ] || return 0
+  backstop_pending=0
+  local text=$backstop alone_output
+  text=${text//\\/\\\\}
+  text=${text//\"/\\\"}
+  text=${text//$'\n'/\\n}
+  text=${text//$'\t'/\\t}
+  text=${text//$'\r'/\\r}
+  case "$text" in
+    *[![:print:]]*)
+      alone_output=$(jq -n --arg event_name "$event" --arg backstop_text "$backstop" \
+        '{hookSpecificOutput:{hookEventName:$event_name, additionalContext:$backstop_text}}') || return 0
+      ;;
+    *)
+      alone_output='{
+  "hookSpecificOutput": {
+    "hookEventName": "'"$event"'",
+    "additionalContext": "'"$text"'"
+  }
+}'
+      ;;
+  esac
+  [ -z "$alone_output" ] || printf '%s\n' "$alone_output"
+}
+trap print_backstop_alone EXIT
 
 [ -n "${GITHUB_ACTIONS:-}" ] && exit 0
 
@@ -83,6 +137,155 @@ else
   source=$(printf '%s\n' "$payload" | sed -n 's/.*"source"[[:space:]]*:[[:space:]]*"\([A-Za-z]*\)".*/\1/p' | sed -n 1p)
 fi
 
+# split_words <- the words of the first command in $1: quotes stripped, stopping
+# at the first unquoted separator or redirection. Returns 1 for text it cannot
+# split faithfully (a backslash, an unterminated quote).
+split_command_words() {
+  split_words=()
+  local text=$1 index=0 length=${#1} character quote="" word="" in_word=0
+  while [ "$index" -lt "$length" ]; do
+    character=${text:index:1}
+    index=$((index + 1))
+    if [ -n "$quote" ]; then
+      if [ "$character" = "$quote" ]; then quote=""; else word="$word$character"; fi
+      continue
+    fi
+    case "$character" in
+      '"' | "'") quote=$character; in_word=1 ;;
+      ' ' | $'\t')
+        if [ "$in_word" = 1 ]; then split_words+=("$word"); word=""; in_word=0; fi
+        ;;
+      ';' | '&' | '|' | $'\n' | ')' | '<' | '>' | '`') break ;;
+      \\) return 1 ;;
+      *) word="$word$character"; in_word=1 ;;
+    esac
+  done
+  [ -z "$quote" ] || return 1
+  if [ "$in_word" = 1 ]; then split_words+=("$word"); fi
+  return 0
+}
+
+# resolve_physical <path> <base> prints the physical absolute path, a relative
+# <path> taken against <base>; fails when the directory does not exist.
+resolve_physical() {
+  local candidate=$1
+  case "$candidate" in /*) ;; *) candidate="$2/$candidate" ;; esac
+  (CDPATH="" cd -P "$candidate" 2>/dev/null && pwd -P)
+}
+
+# The command word is a variable so the backstop and key lines read as text,
+# not as a cwd-relative interpreter call, to the cwd-relative-load lint.
+run=bash
+
+# Decides whether the Bash command just run added a linked worktree under a
+# .claude/worktrees/ directory and, if so, builds $backstop. Advisory only: a
+# command it cannot parse, a path git does not list, or a tree elsewhere leaves
+# $backstop empty. The repository and the relative-path base come from the -C
+# directory or the payload cwd, never this process's own.
+compute_backstop() {
+  local invocation_regex tail_text base_directory repo_directory word target_word target
+  local count index porcelain line record record_physical in_match=0 branch="" detached=0
+  local branch_known=0 needs_rename=0 tree_text rename_text
+  invocation_regex=$'(^|&&|;|\\|\\||\\||\n|\\$\\()[[:space:]]*(git([[:space:]]+-C[[:space:]]+("[^"]*"|\'[^\']*\'|[^[:space:]]+))*[[:space:]]+worktree[[:space:]]+add)([[:space:]]|$)'
+  [[ $worktree_add_view =~ $invocation_regex ]] || return 0
+  tail_text=${worktree_add_view#*"${BASH_REMATCH[0]}"}
+  split_command_words "${BASH_REMATCH[2]} ${tail_text:0:2048}" || return 0
+  count=${#split_words[@]}
+
+  base_directory=${cwd:-$PWD}
+  case "$base_directory" in /*) ;; *) return 0 ;; esac
+  repo_directory=$base_directory
+  index=1
+  while [ "$index" -lt "$count" ]; do
+    case "${split_words[index]}" in
+      -C)
+        index=$((index + 1))
+        [ "$index" -lt "$count" ] || return 0
+        repo_directory=$(resolve_physical "${split_words[index]}" "$repo_directory") || return 0
+        index=$((index + 1))
+        ;;
+      worktree) break ;;
+      *) return 0 ;;
+    esac
+  done
+  [ "${split_words[index]:-}" = worktree ] && [ "${split_words[index + 1]:-}" = add ] || return 0
+  index=$((index + 2))
+
+  target_word=""
+  while [ "$index" -lt "$count" ]; do
+    word=${split_words[index]}
+    index=$((index + 1))
+    case "$word" in
+      -b | -B | --reason) index=$((index + 1)) ;;
+      --) target_word=${split_words[index]:-}; break ;;
+      -*) ;;
+      *) target_word=$word; break ;;
+    esac
+  done
+  [ -n "$target_word" ] || return 0
+  case "$target_word" in *'$'* | *'`'* | '~'*) return 0 ;; esac
+  target=$(resolve_physical "$target_word" "$repo_directory") || return 0
+  case "$target" in */.claude/worktrees/?*) ;; *) return 0 ;; esac
+  case "$target" in *'"'* | *\\* | *'$'* | *'`'* | *$'\n'*) return 0 ;; esac
+
+  # The porcelain record is the authority that the add succeeded and for the
+  # branch the tree holds.
+  porcelain=$(git -C "$repo_directory" worktree list --porcelain 2>/dev/null) || return 0
+  while IFS= read -r line; do
+    case "$line" in
+      "worktree "*)
+        [ "$in_match" = 1 ] && break
+        record=${line#worktree }
+        if [ "$record" = "$target" ]; then
+          in_match=1
+        else
+          case "$record" in
+            */.claude/worktrees/?*)
+              record_physical=$(resolve_physical "$record" /) || record_physical=""
+              [ "$record_physical" = "$target" ] && in_match=1
+              ;;
+          esac
+        fi
+        ;;
+      "branch refs/heads/"*) [ "$in_match" = 1 ] && branch=${line#branch refs/heads/} ;;
+      detached) [ "$in_match" = 1 ] && detached=1 ;;
+      "") [ "$in_match" = 1 ] && break ;;
+    esac
+  done <<<"$porcelain"
+  [ "$in_match" = 1 ] || return 0
+
+  needs_rename=1
+  if [ "$detached" = 0 ] && [ -n "$branch" ]; then
+    branch_known=1
+    # shellcheck source=/dev/null
+    . "$scripts/branch-name-lib.sh" 2>/dev/null || return 0
+    type gaia_branch_validate >/dev/null 2>&1 || return 0
+    if gaia_branch_validate "$branch" >/dev/null 2>&1; then needs_rename=0; fi
+  fi
+  # A branch name outside the usual grammar is never echoed into context.
+  case "$branch" in *[!A-Za-z0-9._/+-]*) branch_known=0 ;; esac
+
+  if [ "$branch_known" = 1 ]; then
+    tree_text="A git worktree exists at $target on branch $branch."
+  elif [ "$detached" = 1 ] || [ -z "$branch" ]; then
+    tree_text="A git worktree exists at $target on a detached HEAD."
+  else
+    tree_text="A git worktree exists at $target on a branch whose name is not shown here."
+  fi
+  backstop="$tree_text If this session has not entered it, nothing has provisioned it: call EnterWorktree({path: \"$target\"}) before working there, because entering provisions the tree and keeps audit markers and tools off the main checkout. The full lifecycle is in .claude/skills/gaia/references/work-lifecycle.md."
+  if [ "$needs_rename" = 1 ]; then
+    if [ "$detached" = 1 ] || [ -z "$branch" ]; then
+      rename_text="Before the first push, mint a name with: $run .gaia/scripts/branch-name-lib.sh name adhoc --type <type> --slug \"<slug>\" and give the tree a branch: git -C \"$target\" switch -c <minted name>"
+    else
+      if [ "$branch_known" = 1 ]; then rename_text="$branch"; else rename_text="<current branch>"; fi
+      rename_text="This branch is not a minted name; before the first push, mint one with: $run .gaia/scripts/branch-name-lib.sh name adhoc --type <type> --slug \"<slug>\" and rename it: git -C \"$target\" branch -m $rename_text <minted name>"
+    fi
+    backstop="$backstop"$'\n'"$rename_text"
+  fi
+  backstop_pending=1
+}
+
+worktree_add_view=""
 case "$event" in
   SessionStart) ;;
   PostToolUse)
@@ -93,9 +296,11 @@ case "$event" in
         # shellcheck source=/dev/null
         [ -f "$_verb_arming_library" ] && . "$_verb_arming_library" 2>/dev/null
         type gaia_verb_armed >/dev/null 2>&1 || exit 0
-        verb_pattern='(git([[:space:]]+-C[[:space:]]+("[^"]*"|'"'"'[^'"'"']*'"'"'|[^[:space:]]+))?[[:space:]]+(checkout|switch)|gh[[:space:]]+pr[[:space:]]+checkout)([[:space:]]|$)'
-        if gaia_verb_armed "$verb_pattern" 'git checkout;git switch;git -C * checkout;git -C * switch;gh pr checkout' "$tool_command"; then
-          :
+        verb_pattern='(git([[:space:]]+-C[[:space:]]+("[^"]*"|'"'"'[^'"'"']*'"'"'|[^[:space:]]+))?[[:space:]]+(checkout|switch|worktree[[:space:]]+add)|gh[[:space:]]+pr[[:space:]]+checkout)([[:space:]]|$)'
+        if gaia_verb_armed "$verb_pattern" 'git checkout;git switch;git worktree add;git -C * checkout;git -C * switch;git -C * worktree add;gh pr checkout' "$tool_command"; then
+          # The deciding match's own text, so a worktree add the data proof
+          # masked out of a heredoc body never reaches the parser.
+          if [[ ${GAIA_VERB_ARM_VIEW:-} =~ worktree[[:space:]]+add ]]; then worktree_add_view=$GAIA_VERB_ARM_VIEW; fi
         else
           exit 0
         fi
@@ -105,6 +310,8 @@ case "$event" in
     ;;
   *) exit 0 ;;
 esac
+
+[ -z "$worktree_add_view" ] || compute_backstop
 
 # Which tree the session is in.
 tree=""
@@ -298,9 +505,6 @@ if [ "$use_marker" = 1 ]; then
   fi
 fi
 
-# The command word is a variable so the key lines read as text, not as a
-# cwd-relative interpreter call, to the cwd-relative-load lint.
-run=bash
 keyline=""
 if gaia_usage_valid_reference "$key"; then
   case "$key" in
@@ -311,6 +515,10 @@ if gaia_usage_valid_reference "$key"; then
 fi
 if [ -n "$rename_line" ]; then
   if [ -n "$keyline" ]; then keyline="$rename_line"$'\n'"$keyline"; else keyline="$rename_line"; fi
+fi
+if [ "$backstop_pending" = 1 ]; then
+  if [ -n "$keyline" ]; then keyline="$backstop"$'\n'"$keyline"; else keyline="$backstop"; fi
+  backstop_pending=0
 fi
 
 if [ "$have_jq" = 1 ]; then

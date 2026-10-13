@@ -306,14 +306,11 @@ Heal already cut and switched to `<BRANCH>`, the name Step 4 minted, so the chan
    gh pr merge <N> --squash --delete-branch --auto
    ```
 
-   `--auto` queues the merge behind required checks (the oracle check above already confirmed whether a marker is owed for this diff). Then run the merge wait, `bash .gaia/scripts/pr-wait-merge.sh --pr <N>`, the bounded poll (~2-3 minutes) `wiki/concepts/PR Merge Workflow.md` (`## Post-merge verification before cleanup`) prescribes. The merge above is already queued and the script issues no `gh pr merge` of its own, so nothing here re-merges. One arm per verdict plus one for the exit-2 refusal, and the script's `--help` is the authority on both:
+   `--auto` queues the merge behind required checks (the oracle check above already confirmed whether a marker is owed for this diff). Then run the merge wait, `bash .gaia/scripts/pr-wait-merge.sh --pr <N>`, per `.claude/skills/gaia/references/work-lifecycle.md` `## 7. Merge (when asked)`. The merge above is already queued and the script issues no `gh pr merge` of its own, so nothing here re-merges. One arm per verdict plus one for the exit-2 refusal:
 
-   - **`MERGED`** (exit 0) → clean up, record cost (pass-through: `gh pr create` above already printed the URL), then print the merged PR URL:
+   - **`MERGED`** (exit 0) → clean up per `.claude/skills/gaia/references/work-lifecycle.md` `## 8. Cleanup` `### Feature branch`, with `<branch-name>` = `<BRANCH>`, record cost (pass-through: `gh pr create` above already printed the URL), then print the merged PR URL:
 
      ```bash
-     git -C "$PROJECT_ROOT" checkout main && git -C "$PROJECT_ROOT" pull origin main
-     git -C "$PROJECT_ROOT" branch -D "<BRANCH>"
-     git -C "$PROJECT_ROOT" fetch --prune origin
      bash .gaia/scripts/usage.sh record command:gaia-fitness --workflow gaia-fitness \
        --pr <N>
      ```

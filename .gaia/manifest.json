@@ -139,6 +139,7 @@
     ".claude/skills/gaia/references/wiki/lint-fix.md": "owned",
     ".claude/skills/gaia/references/wiki/lint.md": "owned",
     ".claude/skills/gaia/references/wiki/sync.md": "owned",
+    ".claude/skills/gaia/references/work-lifecycle.md": "owned",
     ".claude/skills/naming-conventions/references/examples.md": "owned",
     ".claude/skills/naming-conventions/SKILL.md": "owned",
     ".claude/skills/tdd/deep-modules.md": "owned",
@@ -699,7 +700,7 @@
     "wiki/overview.md": "wiki-owned",
     "wiki/README.md": "wiki-owned"
   },
-  "generated": "2026-10-13T12:40:58.696Z",
+  "generated": "2026-10-13T15:20:14.902Z",
   "regions": [
     {
       "endMarker": "<!-- gaia:audit-remit:end -->",

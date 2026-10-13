@@ -34,6 +34,7 @@
 #   wiki-sync   wiki-sync/<YYYY-MM-DD>-<short-sha>      maintenance  <rest>  (legacy)
 #   plan        plan/spec-<nnn>[-<slug>]                plan         SPEC-<nnn>  (legacy)
 #   plan        plan/plan-<nnn>[-<slug>]                plan         plan-<nnn>  (legacy)
+#   adhoc       <type>/[<issue>-]<slug>                 adhoc        unknown  (minted; classified by fallthrough)
 #   (any other branch, including main, a `chore/` or `wiki/` branch outside
 #   the rows above, and hand-named `<type>/[<issue>-]<slug>` branches)
 #                                                       adhoc        unknown
@@ -116,14 +117,19 @@
 #     debt <issue> <issue>... [--batch]   debt/<ascending members>-batch
 #     plan <spec-NNN|plan-NNN> --type <type> [--slug <text>]
 #                                         <type>/<id>[-<slug>]
+#     adhoc --type <type> [--issue <n>] --slug <text>
+#                                         <type>/[<issue>-]<slug>
 #     cleanse | codify | fitness | residue | deps
 #                                         <kind>/<UTC YYYY-MM-DD-HHMM>
 #     update <version>                    update/v<version>-<UTC YYYY-MM-DD-HHMM>
 #     release <version>                   release/v<version>
 #   A leading `v` on <version> is stripped. The retired `chore` kind exits 2.
-#   `--type` is required for `plan` and is lowercase letters; when `jq` and
+#   `--type` is required for `plan` and `adhoc` and is lowercase letters; when `jq` and
 #   `.gaia/conventional-commits.json` are readable it must also be one of the
 #   JSON's `types`, and without them the shape check alone applies.
+#   `adhoc` refuses the legacy `debt` type and any slug that would make the
+#   name read as another kind (exit 2, never adjusted); `--issue` takes digits
+#   with an optional leading `#`.
 #   <slug> is reduced to lowercase kebab-case; a slug is truncated
 #   to keep the whole name within 64 bytes. Two or more distinct issues always
 #   mint a batch name, which carries no slug; `--batch` is accepted and
@@ -156,6 +162,7 @@
 #   bash .gaia/scripts/branch-name-lib.sh classify worktree-debt+42-fix
 #   bash .gaia/scripts/branch-name-lib.sh members debt/41-42-batch
 #   bash .gaia/scripts/branch-name-lib.sh name plan spec-005 --type feat --slug cards
+#   bash .gaia/scripts/branch-name-lib.sh name adhoc --type fix --issue 12 --slug "fix the thing"
 #   bash .gaia/scripts/branch-name-lib.sh spec-number feat/spec-005-cards
 #   bash .gaia/scripts/branch-name-lib.sh plan-number feat/plan-024-cards
 #   bash .gaia/scripts/branch-name-lib.sh plan-type feat/plan-024-cards
@@ -443,7 +450,7 @@ _gaia_branch_load_types() {
 }
 
 gaia_branch_name() {
-  local kind="${1-}" slug="" argument="" members="" id="" version="" count=0 type=""
+  local kind="${1-}" slug="" argument="" members="" id="" version="" count=0 type="" slug_given=0
   [ "$#" -gt 0 ] && shift
 
   case "$kind" in
@@ -534,6 +541,93 @@ gaia_branch_name() {
       fi
       _gaia_branch_emit "${type}/${id}" "$slug"
       ;;
+    adhoc)
+      local issue="" name="" room=0
+      while [ "$#" -gt 0 ]; do
+        case "$1" in
+          --slug)
+            shift
+            [ "$#" -gt 0 ] || { echo "gaia_branch_name: --slug needs a value" >&2; return 2; }
+            slug="$(_gaia_branch_kebab "$1")"
+            slug_given=1
+            shift
+            ;;
+          --type)
+            shift
+            [ "$#" -gt 0 ] || { echo "gaia_branch_name: --type needs a value" >&2; return 2; }
+            type="$1"
+            shift
+            ;;
+          --issue)
+            shift
+            [ "$#" -gt 0 ] || { echo "gaia_branch_name: --issue needs a value" >&2; return 2; }
+            issue="${1#\#}"
+            _gaia_branch_is_digits "$issue" || {
+              printf 'gaia_branch_name: %s is not an issue number\n' "$1" >&2
+              return 2
+            }
+            issue="$(_gaia_branch_strip_zeros "$issue")"
+            shift
+            ;;
+          *)
+            printf 'gaia_branch_name: unexpected argument %s\n' "$1" >&2
+            return 2
+            ;;
+        esac
+      done
+      [ -n "$type" ] || {
+        echo "gaia_branch_name: adhoc needs --type <type>, the commit type of the change, for example --type fix" >&2
+        return 2
+      }
+      case "$type" in
+        *[!a-z]*)
+          printf 'gaia_branch_name: --type %s must be lowercase letters only\n' "$type" >&2
+          return 2
+          ;;
+        debt)
+          echo "gaia_branch_name: --type debt is reserved for the debt drain and reads as a drain branch; use a commit type" >&2
+          return 2
+          ;;
+      esac
+      # Minting must not depend on jq: when the type list is unreadable the
+      # shape check above is all that applies, and validate is the backstop.
+      if _gaia_branch_load_types; then
+        case " ${_gaia_branch_types} " in
+          *" ${type} "*) ;;
+          *)
+            printf 'gaia_branch_name: --type %s is not a commit type; use one of: %s\n' "$type" "$_gaia_branch_types" >&2
+            return 2
+            ;;
+        esac
+      fi
+      if [ -z "$slug" ]; then
+        if [ "$slug_given" = 1 ]; then
+          echo "gaia_branch_name: adhoc --slug has no letters or digits" >&2
+        else
+          echo "gaia_branch_name: adhoc needs --slug <text>" >&2
+        fi
+        return 2
+      fi
+      if [ -n "$issue" ]; then
+        name="$(_gaia_branch_emit "${type}/${issue}" "$slug")" || return $?
+      else
+        # The helper never truncates its prefix, so the slug is cut here to
+        # the room left after `<type>/`.
+        room=$((GAIA_BRANCH_NAME_MAXIMUM_LENGTH - ${#type} - 1))
+        if [ "$room" -gt 0 ]; then
+          slug="${slug:0:$room}"
+          slug="$(printf '%s' "$slug" | LC_ALL=C sed -E 's/-+$//')"
+        fi
+        name="$(_gaia_branch_emit "${type}/${slug}" "")" || return $?
+      fi
+      _gaia_branch_set_class "$name"
+      if [ "$_gaia_branch_mode" != "adhoc" ] || [ "$_gaia_branch_unit" != "unknown" ]; then
+        printf 'gaia_branch_name: the slug "%s" makes %s read as %s %s, not an ad-hoc branch; pick another slug\n' \
+          "$slug" "$name" "$_gaia_branch_mode" "$_gaia_branch_unit" >&2
+        return 2
+      fi
+      printf '%s\n' "$name"
+      ;;
     cleanse | codify | fitness | residue | deps)
       if [ "$#" -gt 0 ]; then
         printf 'gaia_branch_name: unexpected argument %s\n' "$1" >&2
@@ -557,7 +651,7 @@ gaia_branch_name() {
       fi
       ;;
     *)
-      printf 'gaia_branch_name: unknown kind %s (debt, plan, cleanse, codify, fitness, residue, deps, update, release)\n' "${kind:-<none>}" >&2
+      printf 'gaia_branch_name: unknown kind %s (debt, plan, adhoc, cleanse, codify, fitness, residue, deps, update, release)\n' "${kind:-<none>}" >&2
       return 2
       ;;
   esac

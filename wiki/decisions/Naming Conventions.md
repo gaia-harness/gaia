@@ -4,7 +4,7 @@ status: active
 priority: 2
 date: 2026-10-03
 created: 2026-10-03
-updated: 2026-10-04
+updated: 2026-10-14
 tags: [decision, git, conventions]
 ---
 
@@ -32,11 +32,11 @@ Plan branches are the one exception, because a plan is written in full before it
 
 ## Branches
 
-`<prefix>/<unit>[-<slug>]`, lowercase kebab, at most 64 bytes. The workflow prefixes and the hand-named `<type>/[<issue>-]<slug>` shape are owned by the header of `.gaia/scripts/branch-name-lib.sh`, which also lists the legacy spellings it still reads: existing branches keep working, nothing mints them, and none is renamed. `/gaia-spec` creates no branch.
+`<prefix>/<unit>[-<slug>]`, lowercase kebab, at most 64 bytes. The workflow prefixes and the `<type>/[<issue>-]<slug>` shape, which ad-hoc work mints too, are owned by the header of `.gaia/scripts/branch-name-lib.sh`, which also lists the legacy spellings it still reads: existing branches keep working, nothing mints them, and none is renamed. `/gaia-spec` creates no branch.
 
 ## Worktree branches
 
-The harness names a worktree branch `worktree-<name>` with each `/` in the name written as `+`. GAIA renames it to the canonical name right after creating the worktree, so the local branch, the remote branch, and the PR head match, and deletes the renamed branch after removing the worktree post-merge. The commands and the reason are in `.claude/skills/gaia/references/isolation.md` under `## Worktree creation`.
+The harness names a worktree branch `worktree-<name>` with each `/` in the name written as `+`. GAIA renames it to the canonical name right after creating the worktree, so the local branch, the remote branch, and the PR head match, and the post-merge cleanup deletes the renamed branch. The rename's commands and the reason are in `.claude/skills/gaia/references/isolation.md` under `## Worktree creation`; the deletion is `## 8. Cleanup` in `.claude/skills/gaia/references/work-lifecycle.md`.
 
 ## Enforcement
 

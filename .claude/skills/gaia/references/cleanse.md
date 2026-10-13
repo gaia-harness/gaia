@@ -611,17 +611,9 @@ Otherwise the working tree carries the applied `wiki/` / `.claude/` / `CLAUDE.md
    gh pr merge <N> --squash --delete-branch --auto
    ```
 
-   `--auto` queues the merge behind required checks (the oracle check before `gh pr create` already confirmed whether a marker is owed). Verify the terminal state before any local cleanup with the merge wait, `bash .gaia/scripts/pr-wait-merge.sh --pr <N>`, the bounded poll `wiki/concepts/PR Merge Workflow.md` (`## Post-merge verification before cleanup`) prescribes. The merge above is already queued and the script issues no `gh pr merge` of its own, so nothing here re-merges. One arm per verdict plus one for the exit-2 refusal, and the script's `--help` is the authority on both:
+   `--auto` queues the merge behind required checks (the oracle check before `gh pr create` already confirmed whether a marker is owed). Verify the terminal state before any local cleanup with the merge wait, `bash .gaia/scripts/pr-wait-merge.sh --pr <N>`, per `.claude/skills/gaia/references/work-lifecycle.md` `## 7. Merge (when asked)`. The merge above is already queued and the script issues no `gh pr merge` of its own, so nothing here re-merges. One arm per verdict plus one for the exit-2 refusal:
 
-   - **`MERGED`** (exit 0) → clean up locally, then print the merged PR URL:
-
-     ```bash
-     git checkout main && git pull origin main
-     git branch -D <branch-name>
-     git fetch --prune origin
-     ```
-
-     (Run ends here; see `## Cost record (run end)`.)
+   - **`MERGED`** (exit 0) → clean up per `.claude/skills/gaia/references/work-lifecycle.md` `## 8. Cleanup` `### Feature branch`, with `<branch-name>` = the branch created above, then print the merged PR URL. (Run ends here; see `## Cost record (run end)`.)
 
    - **`CONFLICTING`** (exit 3) → repair it per that page's `### Conflict found mid-wait` and run the wait again.
    - **`CHECK_FAILED`** (exit 4) → print the PR URL and the failing check, and leave the branch in place as for a queued merge. (Run ends here; see `## Cost record (run end)`.)

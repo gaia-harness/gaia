@@ -1,0 +1,7 @@
+{
+  "version": 1,
+  "isolation_policy": "always-worktree",
+  "setup_decisions": {
+    "isolation-policy": "applied"
+  }
+}

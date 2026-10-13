@@ -1,7 +1,7 @@
 # Isolation: branch vs worktree
 
-The shared branch-vs-worktree decision. Two callers read this file and apply it: `/gaia-plan` (through the
-`ORCHESTRATOR.md` it generates) and `/gaia-debt`. This is the only definition of the decision order, the
+The shared branch-vs-worktree decision. Its callers read this file and apply it: `/gaia-plan` (through the
+`ORCHESTRATOR.md` it generates), `/gaia-debt`, and ad-hoc work (through `.claude/skills/gaia/references/work-lifecycle.md`). This is the only definition of the decision order, the
 prompt, and the worktree-creation call. No caller restates any of it.
 
 ## Slots the caller supplies
@@ -239,33 +239,6 @@ never captured into a variable. In feature-branch mode the same plain read appli
 Read it once, after the arm has switched cwd (worktree creation, or the feature-branch arm's in-place
 checkout), never before. Every later sub-agent dispatch this session makes, each task sub-agent and each
 pre-merge Code Audit Team member, interpolates this same value rather than re-deriving it ad hoc.
-
-### Post-merge removal
-
-After `ExitWorktree({action: "remove", discard_changes: true})`, delete the renamed branch: `ExitWorktree` removes the directory but
-deletes only the branch name it created, which leaves the canonical branch behind. Get the main checkout's root with a plain
-`bash .gaia/scripts/main-root-lib.sh` call and carry the printed path as `<main root>`, then:
-
-```bash
-git -C <main root> show-ref --verify --quiet refs/heads/<branch-name>
-```
-
-When it exits 0, run `git -C <main root> branch -D <branch-name>`. A non-zero exit means the branch is already gone and there is
-nothing to delete. Then read what the main checkout holds:
-
-```bash
-git -C <main root> rev-parse --abbrev-ref HEAD
-```
-
-When it prints `main`, bring it up to date so the next task starts from the latest `main`:
-
-```bash
-git -C <main root> pull --ff-only origin main
-```
-
-When it prints anything else, a peer session holds the main checkout: skip the pull and say so. When the pull fails (a dirty tree,
-a diverged `main`), report it and stop; never force or stash. Run no `git checkout` here: moving the main checkout's HEAD is the
-step `wiki/concepts/PR Merge Workflow.md` (`### Cleanup under worktree isolation`) explains this arm never takes.
 
 ### Resume
 

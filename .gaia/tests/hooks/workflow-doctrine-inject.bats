@@ -473,3 +473,266 @@ assert_silent() {
   run_hook "$(session_start_payload od2 startup "$REPO")"
   assert_silent
 }
+
+# ---------------------------------------------------------------------------
+# Worktree backstop: a Bash `git worktree add` under .claude/worktrees/.
+# Each case runs the real command in the fixture repo first, then feeds the hook
+# the same command in a PostToolUse payload.
+# ---------------------------------------------------------------------------
+
+# The branch validator reads the commit types from the JSON beside the library.
+backstop_fixture() {
+  cp "$REPO_ROOT/.gaia/conventional-commits.json" "$REPO/.gaia/conventional-commits.json"
+}
+
+context_has() { grep -qF -- "$1" "$TEMPORARY_DIRECTORY/ctx"; }
+
+# <path> <branch>: the backstop names the tree, its branch, the entry call, and the reference.
+assert_backstop_names() {
+  assert_envelope PostToolUse || return 1
+  context_has "A git worktree exists at $1 on branch $2." || return 1
+  context_has "EnterWorktree({path: \"$1\"})" || return 1
+  context_has ".claude/skills/gaia/references/work-lifecycle.md" || return 1
+}
+
+assert_rename_instruction() { # <path> <branch>
+  context_has 'bash .gaia/scripts/branch-name-lib.sh name adhoc --type <type> --slug "<slug>"' || return 1
+  context_has "git -C \"$1\" branch -m $2 <minted name>" || return 1
+}
+
+assert_no_rename_instruction() {
+  context_has 'name adhoc' && return 1
+  context_has 'branch -m' && return 1
+  context_has 'switch -c' && return 1
+  return 0
+}
+
+@test "backstop: an absolute .claude/worktrees path with a hand-made branch names the tree, the entry call, and the rename" {
+  backstop_fixture
+  local tree="$REPO/.claude/worktrees/hand-tree"
+  git -C "$REPO" worktree add -q "$tree" -b hand-name
+  run_hook "$(post_tool_bash_payload w1 "git worktree add $tree -b hand-name" "$REPO")"
+  assert_backstop_names "$tree" hand-name
+  assert_rename_instruction "$tree" hand-name
+  [ "$(awk 'END { print NR }' "$TEMPORARY_DIRECTORY/ctx")" -eq 2 ]
+}
+
+@test "backstop: relative path, -C form, -b before or after the path, -B, and a quoted path each inject the right absolute path" {
+  backstop_fixture
+  local tree
+
+  git -C "$REPO" worktree add -q .claude/worktrees/rel -b hand-rel
+  tree="$REPO/.claude/worktrees/rel"
+  run_hook "$(post_tool_bash_payload w2a 'git worktree add .claude/worktrees/rel -b hand-rel' "$REPO")"
+  assert_backstop_names "$tree" hand-rel
+
+  git -C "$REPO" worktree add -q .claude/worktrees/dashc -b hand-c
+  tree="$REPO/.claude/worktrees/dashc"
+  run_hook "$(post_tool_bash_payload w2b "git -C \"$REPO\" worktree add .claude/worktrees/dashc -b hand-c" "$TEMPORARY_DIRECTORY/norepo")"
+  assert_backstop_names "$tree" hand-c
+
+  git -C "$REPO" worktree add -q -b hand-before .claude/worktrees/before
+  tree="$REPO/.claude/worktrees/before"
+  run_hook "$(post_tool_bash_payload w2c 'git worktree add -b hand-before .claude/worktrees/before' "$REPO")"
+  assert_backstop_names "$tree" hand-before
+
+  git -C "$REPO" worktree add -q -B hand-force .claude/worktrees/force
+  tree="$REPO/.claude/worktrees/force"
+  run_hook "$(post_tool_bash_payload w2d 'git worktree add -B hand-force .claude/worktrees/force' "$REPO")"
+  assert_backstop_names "$tree" hand-force
+
+  tree="$REPO/.claude/worktrees/quoted"
+  git -C "$REPO" worktree add -q --lock --reason "keep it" "$tree" -b hand-quoted
+  run_hook "$(post_tool_bash_payload w2e "git worktree add --lock --reason 'keep it' \"$tree\" -b hand-quoted" "$REPO")"
+  assert_backstop_names "$tree" hand-quoted
+}
+
+@test "backstop: a minted branch carries no rename instruction, and the hand-made control does" {
+  backstop_fixture
+  local tree="$REPO/.claude/worktrees/minted"
+  git -C "$REPO" worktree add -q "$tree" -b fix/12-sample
+  run_hook "$(post_tool_bash_payload w3 "git worktree add $tree -b fix/12-sample" "$REPO")"
+  assert_backstop_names "$tree" fix/12-sample
+  assert_no_rename_instruction
+  [ "$(awk 'END { print NR }' "$TEMPORARY_DIRECTORY/ctx")" -eq 1 ]
+
+  tree="$REPO/.claude/worktrees/hand"
+  git -C "$REPO" worktree add -q "$tree" -b hand-control
+  run_hook "$(post_tool_bash_payload w3b "git worktree add $tree -b hand-control" "$REPO")"
+  assert_backstop_names "$tree" hand-control
+  assert_rename_instruction "$tree" hand-control
+}
+
+@test "backstop: --detach says detached and gives the switch -c instruction" {
+  backstop_fixture
+  local tree="$REPO/.claude/worktrees/loose"
+  git -C "$REPO" worktree add -q --detach "$tree"
+  run_hook "$(post_tool_bash_payload w4 "git worktree add --detach $tree" "$REPO")"
+  assert_envelope PostToolUse
+  context_has "A git worktree exists at $tree on a detached HEAD."
+  context_has "EnterWorktree({path: \"$tree\"})"
+  context_has "git -C \"$tree\" switch -c <minted name>"
+  context_has 'name adhoc --type <type> --slug "<slug>"'
+  context_has 'branch -m' && return 1
+  true
+}
+
+@test "backstop: a tree outside any .claude/worktrees directory gets nothing, and the same command under it does" {
+  backstop_fixture
+  git -C "$REPO" worktree add -q "$TEMPORARY_DIRECTORY/side-tree" -b side-branch
+  run_hook "$(post_tool_bash_payload w5 "git worktree add $TEMPORARY_DIRECTORY/side-tree -b side-branch" "$REPO")"
+  assert_silent
+
+  git -C "$REPO" worktree add -q "$REPO/.claude/worktrees/inside" -b inside-branch
+  run_hook "$(post_tool_bash_payload w5b "git worktree add $REPO/.claude/worktrees/inside -b inside-branch" "$REPO")"
+  assert_backstop_names "$REPO/.claude/worktrees/inside" inside-branch
+}
+
+@test "backstop: a failed add gets nothing, for an occupied path and for an invalid ref" {
+  backstop_fixture
+  local occupied="$REPO/.claude/worktrees/occupied"
+  mkdir -p "$occupied"
+  printf 'x\n' >"$occupied/file"
+  git -C "$REPO" worktree add -q "$occupied" -b occupied-branch 2>/dev/null && return 1
+  run_hook "$(post_tool_bash_payload w6a "git worktree add $occupied -b occupied-branch" "$REPO")"
+  assert_silent
+
+  local invalid="$REPO/.claude/worktrees/invalid"
+  git -C "$REPO" worktree add -q "$invalid" -b 'bad..name' 2>/dev/null && return 1
+  run_hook "$(post_tool_bash_payload w6b "git worktree add $invalid -b bad..name" "$REPO")"
+  assert_silent
+
+  # Control: the same fixture and command shape, but the add succeeds.
+  git -C "$REPO" worktree add -q "$REPO/.claude/worktrees/ok" -b ok-branch
+  run_hook "$(post_tool_bash_payload w6c "git worktree add $REPO/.claude/worktrees/ok -b ok-branch" "$REPO")"
+  assert_backstop_names "$REPO/.claude/worktrees/ok" ok-branch
+}
+
+@test "backstop: a re-run add of an already-registered target states what exists and makes entry conditional" {
+  backstop_fixture
+  local tree="$REPO/.claude/worktrees/again"
+  git -C "$REPO" worktree add -q "$tree" -b again-branch
+  git -C "$REPO" worktree add -q "$tree" -b again-branch 2>/dev/null && return 1
+  run_hook "$(post_tool_bash_payload w6d "git worktree add $tree -b again-branch" "$REPO")"
+  assert_backstop_names "$tree" again-branch
+  context_has "was created" && return 1
+  context_has "If this session has not entered it" || return 1
+  true
+}
+
+@test "backstop: two adds in one session each inject, and a checkout between them still dedupes the doctrine" {
+  backstop_fixture
+  local tree
+  # Default-branch session: no doctrine, the backstop alone, both times.
+  tree="$REPO/.claude/worktrees/one"
+  git -C "$REPO" worktree add -q "$tree" -b hand-one
+  run_hook "$(post_tool_bash_payload same "git worktree add $tree -b hand-one" "$REPO")"
+  assert_backstop_names "$tree" hand-one
+  tree="$REPO/.claude/worktrees/two"
+  git -C "$REPO" worktree add -q "$tree" -b hand-two
+  run_hook "$(post_tool_bash_payload same "git worktree add $tree -b hand-two" "$REPO")"
+  assert_backstop_names "$tree" hand-two
+
+  # Feature-branch session: the first add carries the doctrine, the checkout is
+  # deduped, the second add carries the backstop alone.
+  git -C "$REPO" checkout -q -b feat/12-x
+  tree="$REPO/.claude/worktrees/three"
+  git -C "$REPO" worktree add -q "$tree" -b hand-three
+  run_hook "$(post_tool_bash_payload seen "git worktree add $tree -b hand-three" "$REPO")"
+  assert_backstop_names "$tree" hand-three
+  context_has "Fixture doctrine line one."
+
+  run_hook "$(post_tool_bash_payload seen 'git switch feat/12-x' "$REPO")"
+  assert_silent
+
+  tree="$REPO/.claude/worktrees/four"
+  git -C "$REPO" worktree add -q "$tree" -b hand-four
+  run_hook "$(post_tool_bash_payload seen "git worktree add $tree -b hand-four" "$REPO")"
+  assert_backstop_names "$tree" hand-four
+  context_has "Fixture doctrine line one." && return 1
+  true
+}
+
+@test "backstop: an add run from inside another linked worktree resolves against that worktree" {
+  backstop_fixture
+  local outer="$REPO/.claude/worktrees/outer" inner="$REPO/.claude/worktrees/inner"
+  git -C "$REPO" worktree add -q "$outer" -b outer-branch
+  git -C "$outer" worktree add -q ../inner -b inner-branch
+  run_hook "$(post_tool_bash_payload w8 'git worktree add ../inner -b inner-branch' "$outer")"
+  assert_backstop_names "$inner" inner-branch
+}
+
+@test "backstop: on a feature branch whose doctrine is not injected yet, one value carries the backstop, then the key line, then the doctrine" {
+  backstop_fixture
+  git -C "$REPO" checkout -q -b feat/12-x
+  local tree="$REPO/.claude/worktrees/combined"
+  git -C "$REPO" worktree add -q "$tree" -b fix/13-combined
+  run_hook "$(post_tool_bash_payload w9 "git worktree add $tree -b fix/13-combined" "$REPO")"
+  jq -e . <<<"$output" >/dev/null
+  assert_backstop_names "$tree" fix/13-combined
+  [ "$(sed -n 2p "$TEMPORARY_DIRECTORY/ctx" | cut -c1-34)" = "Branch key: branch:feat/12-x. Link" ]
+  tail -n +3 "$TEMPORARY_DIRECTORY/ctx" >"$TEMPORARY_DIRECTORY/rest"
+  cmp "$TEMPORARY_DIRECTORY/rest" "$DOCTRINE_PATH"
+}
+
+@test "backstop: a worktree add that is only data (a heredoc body or a quoted argument) gets nothing, and the real command does" {
+  backstop_fixture
+  local tree="$REPO/.claude/worktrees/data"
+  git -C "$REPO" worktree add -q "$tree" -b data-branch
+  local heredoc_command quoted_command
+  heredoc_command=$(printf "cat > note.md <<'EOF'\ngit worktree add %s -b data-branch\nEOF" "$tree")
+  run_hook "$(post_tool_bash_payload w10a "$heredoc_command" "$REPO")"
+  assert_silent
+  quoted_command="gh pr create --title t --body \"run git worktree add $tree -b data-branch later\""
+  run_hook "$(post_tool_bash_payload w10b "$quoted_command" "$REPO")"
+  assert_silent
+  run_hook "$(post_tool_bash_payload w10c "git worktree add $tree -b data-branch" "$REPO")"
+  assert_backstop_names "$tree" data-branch
+}
+
+@test "backstop: without jq PostToolUse prints nothing for a worktree add, and with jq the same command injects" {
+  backstop_fixture
+  mkdir -p "$TEMPORARY_DIRECTORY/nojq"
+  local tool_name tool_path tree="$REPO/.claude/worktrees/nojq"
+  for tool_name in git sed awk cat wc; do
+    tool_path="$(command -v "$tool_name")"
+    ln -sf "$tool_path" "$TEMPORARY_DIRECTORY/nojq/$tool_name"
+  done
+  git -C "$REPO" worktree add -q "$tree" -b hand-nojq
+  # shellcheck disable=SC2016  # the inner script expands in the child shell
+  run --separate-stderr bash -c 'cd "$1" && PATH="$2" exec /bin/bash "$3"' _ "$REPO" "$TEMPORARY_DIRECTORY/nojq" "$HOOK" <<<"$(post_tool_bash_payload nj2 "git worktree add $tree -b hand-nojq" "$REPO")"
+  assert_silent
+  run_hook "$(post_tool_bash_payload nj3 "git worktree add $tree -b hand-nojq" "$REPO")"
+  assert_backstop_names "$tree" hand-nojq
+}
+
+@test "backstop: a hook copy without the worktree-add arm is silent where the real hook injects (red twin)" {
+  backstop_fixture
+  local tree="$REPO/.claude/worktrees/twin"
+  git -C "$REPO" worktree add -q "$tree" -b hand-twin
+  run_hook "$(post_tool_bash_payload r1 "git worktree add $tree -b hand-twin" "$REPO")"
+  assert_backstop_names "$tree" hand-twin
+
+  sed -e 's/|worktree\[\[:space:\]\]+add)/)/' -e 's/git worktree add;//' -e 's/git -C \* worktree add;//' "$HOOK" >"$TEMPORARY_DIRECTORY/no-arm.sh"
+  cmp -s "$HOOK" "$TEMPORARY_DIRECTORY/no-arm.sh" && return 1
+  cp "$TEMPORARY_DIRECTORY/no-arm.sh" "$HOOK"
+  run_hook "$(post_tool_bash_payload r2 "git worktree add $tree -b hand-twin" "$REPO")"
+  assert_silent
+}
+
+@test "backstop: a hook copy that skips the porcelain confirmation injects for a failed add (red twin)" {
+  backstop_fixture
+  local occupied="$REPO/.claude/worktrees/occupied"
+  mkdir -p "$occupied"
+  printf 'x\n' >"$occupied/file"
+  git -C "$REPO" worktree add -q "$occupied" -b occupied-branch 2>/dev/null && return 1
+  run_hook "$(post_tool_bash_payload r3 "git worktree add $occupied -b occupied-branch" "$REPO")"
+  assert_silent
+
+  # shellcheck disable=SC2016  # the pattern matches a literal $ in the hook source
+  sed -e 's/^  \[ "\$in_match" = 1 \] || return 0$/  :/' "$HOOK" >"$TEMPORARY_DIRECTORY/no-confirm.sh"
+  cmp -s "$HOOK" "$TEMPORARY_DIRECTORY/no-confirm.sh" && return 1
+  cp "$TEMPORARY_DIRECTORY/no-confirm.sh" "$HOOK"
+  run_hook "$(post_tool_bash_payload r4 "git worktree add $occupied -b occupied-branch" "$REPO")"
+  [ -n "$output" ]
+}
