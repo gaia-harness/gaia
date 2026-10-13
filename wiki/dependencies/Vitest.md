@@ -4,7 +4,7 @@ status: active
 package: vitest
 role: test-runner
 created: 2026-04-20
-updated: 2026-10-05
+updated: 2026-10-13
 tags: [dependency, testing]
 ---
 
@@ -32,7 +32,7 @@ Vitest-aware lint rules come from `@vitest/eslint-plugin`, which the shared `@ga
 ## Run rules
 
 > [!info] Watch mode needs a TTY
-> Vitest only enters watch mode with an interactive TTY; in CI or under Claude, a bare `pnpm test` runs once and exits. Use `pnpm test --run` for an explicit single pass, or at an interactive terminal to avoid watch mode. See [[Test Runner]] rule.
+> Vitest only enters watch mode with an interactive TTY; in CI or under Claude, a bare `pnpm test` runs once and exits. Use `pnpm test --run` for an explicit single pass, or at an interactive terminal to avoid watch mode. The `test` script is plain `vitest`; the one-shot scripts are `test:ci` (`vitest --run --passWithNoTests --coverage --bail 1`) and `test:lint-staged` (`vitest --run --changed --passWithNoTests --bail 1`).
 
 See [[Testing]], [[Component Testing]].
 

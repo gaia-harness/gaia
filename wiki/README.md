@@ -33,7 +33,7 @@ wiki/
 <!-- gaia:maintainer-only:end -->
 ├── concepts/           # ideas/patterns (Quality Gate, Co-location, Thin Routes)
 <!-- gaia:maintainer-only:start -->
-└── meta/               # dashboards, lint reports
+└── meta/               # lint and consolidate reports
 <!-- gaia:maintainer-only:end -->
 ```
 

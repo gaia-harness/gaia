@@ -2,155 +2,64 @@
 type: concept
 status: active
 created: 2026-09-20
-updated: 2026-10-09
+updated: 2026-10-13
 tags: [concept, gaia, scripts]
 ---
 
 # GAIA Scripts
 
-`.gaia/scripts/` is GAIA's shell layer: the shared libraries its hooks and skills source, the deterministic checks its gates run, and the small command-line helpers its workflows shell out to. It is flat by design, one level of `.sh` at the root plus a handful of single-purpose subdirectories, and the flatness is a tested contract rather than a convention, so a script is added beside its siblings rather than filed under a new folder.
+`.gaia/scripts/` is GAIA's shell layer: the shared libraries its hooks and skills source, the deterministic checks its gates run, and the small command-line helpers its workflows shell out to. It is flat by design, one level of files at the root plus a handful of single-purpose subdirectories, and the flatness is a tested contract rather than a convention, so a script is added beside its siblings rather than filed under a new folder.
 
-Nothing in the directory itself says what any file is, which family it belongs to, or whether it reaches an adopter at all. This page is that index.
+The directory carries one structure, the name prefix, and the prefix tracks what a script is for. This page describes each family at that level and names no individual file, so adding a script to a family cannot make it false. Two other sources answer the per-file questions:
 
-## The index
-
-One row per file at the root of `.gaia/scripts/`, grouped by name prefix, because the prefix is the only structure the directory carries and it tracks what a script is for.
-
-**Ships.** Whether the file reaches an adopter. The column restates the release boundary's verdict; it decides nothing itself.
-
-**Invoker.** What runs the script: a CI job, a hook, a skill or slash command, another script, or a human. `sourced` marks a library that defines functions and runs nothing on its own, so it has no invoker of its own and is read through whatever sources it.
-
+- **What a file is.** Its own header comment states what it does, who invokes it, and its exit contract. Read the header, not a table.
+- **Whether it ships.** `.gaia/manifest.json` lists every shipped file. A family below that reads "mostly ships" or "mixed" has members on both sides of the release boundary.
 <!-- gaia:maintainer-only:start -->
-`yes` in that column means the file reaches an adopter and `no` means it is withheld and exists only in the maintainer repository; `.gaia/manifest.json` and `.gaia/release-exclude` are the authorities it restates. The split runs along family lines and is invisible from the directory itself.
-
-The maintainer's copy of this page carries every root file. An adopter's copy carries only the `yes` rows, so every row they read says `yes`: each withheld row ends in a single-line `gaia:maintainer-only` marker pair, which the bundle-time scrub drops whole before tar, so both audiences read one table built from one source. Prose that names a withheld path is wrapped the same way. See [[Bundle-time Scrub]] and [[Release Workflow]].
+  In GAIA's source, `.gaia/release-exclude` owns the withheld side, and its comment above each withheld entry says why. See [[Bundle-time Scrub]] and [[Release Workflow]].
 <!-- gaia:maintainer-only:end -->
 
-### `audit-`
+A `*-lib` file is sourced and runs nothing on its own. Everything else is run as a command by whatever the family's invoker is.
 
-| Script | Ships | Invoker | What it is |
+## Root families
+
+| Family | What it does | Invoked from | Ships |
 |---|---|---|---|
-| `audit-dispositions-check.sh` | yes | `audit-loop-bound.sh`, the `audit-loop-unit` agent (CLI) | The deterministic check on an audit round's dispositions file and the renderer of its pull request body records; severity and security are read from the findings sidecars, never from the dispositions. The header states the rules. |
-| `audit-fix-verify.sh` | yes | the PR Merge Workflow fix round | Records the working-tree baseline before a fixer runs, pins a copy of itself beside it, and checks the fixer's changes against the dispositions afterward from that copy. |
-| `audit-key-lib.sh` | yes | sourced | Mints the worktree-partitioned key every audit artifact path is built from, and the general slug rule those keys share. |
-| `audit-loop-eval.sh` | yes | `audit-loop-bound.sh` (sourced), the PR Merge Workflow checkpoint (CLI) | Judges each audit round's findings and prints the verdict and the checkpoint brief; read-only. |
-| `audit-loop-record.sh` | yes | the PR Merge Workflow fix round | Writes the marker-delimited `## Audit rounds` section into a pull request body. |
-| `audit-loop-signals-lib.sh` | yes | sourced by `audit-loop-eval.sh` | The rubric signals and the unit and member gate decision functions; reads no file. |
-| `audit-loop-state-lib.sh` | yes | sourced | Reads, validates and writes the per-branch audit loop state, and parses the typed grant and accept lines. |
-| `audit-member-digest.sh` | yes | CI, audit hooks, agent definitions | Prints one Code Audit Team member's branch-own digest, and exits non-zero printing nothing on any condition it cannot resolve. |
-| `audit-noop-detect.sh` | yes | `.claude/rules/subagent-dispatch.md`, the audit fan-out surfaces | Decides whether a dispatched agent's report artifact is a real result or a silent no-op. |
-| `audit-resolve-scope.sh` | yes | every Code Audit Team agent definition | Resolves a member's review scope in one command: diff bases, changed-file lists, the dirty-in-scope check, and the scope digest. |
-| `audit-scope-digest.sh` | yes | agent definitions | Carries a member's own branch-own digest between scope resolution and clearance write, the two Bash calls that must agree. `--release` drops a capture when a round ends without publishing a marker or refusal, so the next round recaptures fresh. |
-| `audit-write-clearance.sh` | yes | agent definitions, CI | The one writer for every Code Audit Team clearance marker. |
-| `audit-write-findings.sh` | yes | agent definitions | The one writer for a member's findings sidecar, the report of record the merge workflow reads. |
-
-### `check-`
-
-| Script | Ships | Invoker | What it is |
-|---|---|---|---|
-| `check-audit-base-derivation.sh` | no | GAIA's own invariant harness (maintainer-side) | Keeps every Code Audit Team member resolving one review base rather than several. |<!-- gaia:maintainer-only:start --><!-- gaia:maintainer-only:end -->
-| `check-audit-key-callers.sh` | no | GAIA's own invariant harness (maintainer-side) | Asserts the agent definitions that name an audit artifact actually call the shared key helper instead of hand-building a path. |<!-- gaia:maintainer-only:start --><!-- gaia:maintainer-only:end -->
-| `check-debt-issue-metadata.sh` | yes | the audit agent, `/gaia-debt` | Validates the label set and dedup key a tech-debt filing carries against the filing rules. |
-| `check-hook-command-rooting.sh` | yes | GAIA's own invariant harness (maintainer-side) | Asserts every hook command in `.claude/settings.json` is rooted at the repository top level rather than at the working directory. |
-| `check-hook-scope-manifest.sh` | yes | GAIA's own invariant harness (maintainer-side) | Scans every hook for a `.gaia/local` path built without a resolved root. |
-| `check-main-root-derivation.sh` | no | GAIA's own invariant harness | Catches a hand-rolled main-checkout derivation inlined into a consumer that declares no resolver at all. |<!-- gaia:maintainer-only:start --><!-- gaia:maintainer-only:end -->
-| `check-updates.sh` | yes | `SessionStart`, the statusline | Background check, started by the statusline, that feeds its nudges: a newer GAIA release, the outdated-package and open-advisory counts for `/update-deps`, the residue candidate count, and `wikiDriftCount` (commits the wiki trails HEAD by, from `gaia wiki state`). It also sweeps stale per-session context files. |
-
-### `debt-`
-
-| Script | Ships | Invoker | What it is |
-|---|---|---|---|
-| `debt-backlog.sh` | yes | `/gaia-debt` | Excludes claimed, spec-parked and investigate-graded issues from the ordered backlog and groups the rest into related-fix clusters, from the dedup-key path and class. |
-| `debt-batch-budget.sh` | yes | `/gaia-debt` | Scores an operator-named batch against the named-batch budget from labels and dedup-key directories, and ranks the within-budget subsets to offer when it is over. |
-| `debt-count-refresh.sh` | yes | the statusline | Recomputes the open tech-debt count the statusline nudge shows. |
-| `debt-dedup.sh` | yes | the file-tech-debt skill | Reports whether a finding's path and line already match an open or declined tech-debt issue, so a filing is never duplicated. |
-| `debt-parse-args.sh` | yes | `/gaia-debt` | Parses the `/gaia-debt` argument string into `top` (no numbers) or the named issue numbers, plus any isolation mode the operator named, and refuses anything else. |
-| `debt-path-probe.sh` | yes | `/gaia-debt` | Reports whether each backlog issue's dedup-key path is still tracked, comparing every path against the index as data. |
-| `debt-stale-claims.sh` | yes | `/gaia-debt` | Prints the number of every open tech-debt issue whose `in-progress` claim is stale. It never strips a label; the caller does. |
-
-### `lint-`
-
-| Script | Ships | Invoker | What it is |
-|---|---|---|---|
-| `lint-errexit-status-read.sh` | no | `shell-lint.yml` | Flags `$?` read after a command-substitution assignment under `set -e`, where it reports the wrong command. |<!-- gaia:maintainer-only:start --><!-- gaia:maintainer-only:end -->
-| `lint-git-path-quoting.sh` | no | `shell-lint.yml` | Flags an executed git listing that names files without `-z`, so a C-quoted path reaches the reader mangled. |<!-- gaia:maintainer-only:start --><!-- gaia:maintainer-only:end -->
-| `lint-hook-array-guard.sh` | no | GAIA's own CI (maintainer-side) | Flags unguarded bare array expansions under `set -u` across the framework's own bash, the bash-3.2 empty-array class. |<!-- gaia:maintainer-only:start --><!-- gaia:maintainer-only:end -->
-| `lint-hook-cwd-relative-loads.sh` | no | GAIA's own shell-lint harness | Flags a hook that locates the framework code it loads from the working directory rather than from its own path. |<!-- gaia:maintainer-only:start --><!-- gaia:maintainer-only:end -->
-| `lint-hook-jq-availability.sh` | no | GAIA's own shell-lint harness | Flags a blocking hook that parses its payload with jq and fails open when jq is absent. |<!-- gaia:maintainer-only:start --><!-- gaia:maintainer-only:end -->
-| `lint-sigpipe-readers.sh` | no | `shell-lint.yml`, `audit-ci-tests.yml` | Flags a short-circuiting reader downstream of a pipe under `pipefail`, where the pipeline status inverts on a match. |<!-- gaia:maintainer-only:start --><!-- gaia:maintainer-only:end -->
-| `lint-workflow-run-interpolation.sh` | no | `shell-lint.yml` | Flags a `${{ }}` expression substituted into a workflow `run:` body, the script-injection shape. |<!-- gaia:maintainer-only:start --><!-- gaia:maintainer-only:end -->
-
-### `token-`
-
-| Script | Ships | Invoker | What it is |
-|---|---|---|---|
-| `token-pricing-lib.sh` | yes | sourced | The pricing jq definitions the ledger readers share, and the loader that overlays the optional local price override on the distributed rate card. Sources no other file and opens no network connection. |
-| `token-rates.json` | yes | read by the pricing lib | The distributed rate card every readout prices from. |
-
-### `verify-`
-
-| Script | Ships | Invoker | What it is |
-|---|---|---|---|
-| `verify-audit-roster.sh` | yes | run by hand (maintainer-side) | Deterministic check of the Code Audit Team roster against the member definitions it generates. |
-| `verify-cli-bundle-fresh.sh` | no | `cli-tests.yml`, `release.yml` | Asserts the committed CLI bundles are exactly what rebuilding from source produces. |<!-- gaia:maintainer-only:start --><!-- gaia:maintainer-only:end -->
-| `verify-required-checks.sh` | no | `/gaia-release` preflight | Detects drift between the checks this repo requires to merge and the live GitHub ruleset. It never writes to the ruleset. |<!-- gaia:maintainer-only:start --><!-- gaia:maintainer-only:end -->
-
-### Unprefixed
-
-| Script | Ships | Invoker | What it is |
-|---|---|---|---|
-| `assert-no-release-leak.sh` | no | `release.yml` | Proves no release-excluded path survived into the tree that becomes the tarball. |<!-- gaia:maintainer-only:start --><!-- gaia:maintainer-only:end -->
-| `awk-interp-lib.sh` | no | sourced | Resolves `GAIA_AWK`, the sanctioned awk interpreter (mawk or BWK one-true-awk) the awk-tokenizer guards run under. |<!-- gaia:maintainer-only:start --><!-- gaia:maintainer-only:end -->
-| `bats5.sh` | no | the bats runners | Runs bats under a bash 5 when one is available, so local matches CI. |<!-- gaia:maintainer-only:start --><!-- gaia:maintainer-only:end -->
-| `branch-name-lib.sh` | yes | sourced, and run as a command by the skills | GAIA's branch-naming convention: the one place a branch or worktree name is minted and read back. |
-| `context-checkpoint-lib.sh` | yes | sourced | The one place the context checkpoint line, the statusline bands, the unit round count and the per-session context file are defined, so the bar color and the checkpoint cannot disagree. The header states the override rule. |
-| `chore-deps-skip.sh` | yes | `git grep chore-deps-skip` | The chore(deps) predicate: a dep-bump subject plus a manifest-only changed-file list on stdin. |
-| `fitness-ownership.sh` | yes | `/gaia-fitness` | Classifies each file a fitness fix would touch as third-party, ignored, GAIA-shipped or the project's own, from the manifest, the vendor pins and `.gitignore`, so the heal edits only the project's own files. |
-| `gh-artifact-lib.sh` | yes | sourced | Shared breadcrumb for the GitHub pull request a run produced. |
-| `guard-awk-lib.sh` | no | sourced | Shared awk scaffolding the guard lints build their detectors on. |<!-- gaia:maintainer-only:start --><!-- gaia:maintainer-only:end -->
-| `hook-registration-lib.sh` | no | sourced | The shared read of `.claude/settings.json`'s registrations, and the oracle for whether a registered hook can stop a tool call. |<!-- gaia:maintainer-only:start --><!-- gaia:maintainer-only:end -->
-| `knowledge-inventory.sh` | yes | `/gaia-audit` | Inventories the knowledge stores, classifies each file an audit action would write (memory scopes, then `fitness-ownership.sh`), and verifies a clean report against a fresh recount before it may finalize without a human. |
-| `ledger-path-lib.sh` | yes | sourced | The one definition of every main-checkout ledger path, so renaming one changes one place. |
-| `link-worktree.sh` | yes | `provision-worktree.sh` hook, `/setup-gaia` | Lays the shared-state symlinks a linked worktree needs. |
-| `main-only-lib.sh` | yes | the main-only skills | Refusal helper for a flow that must run in the main checkout, never a linked worktree. |
-| `main-root-lib.sh` | yes | sourced by most hooks and scripts | GAIA's shared main-checkout resolver: the one answer to which checkout am I in. |
-| `plan-archive.sh` | yes | the orchestrator self-cleanup | Reduces or deletes a merged plan folder once `usage.sh represented` finds the run's close on the usage ledger; a reduced folder holds `SUMMARY.md` only. |
-| `plan-resume-point.sh` | yes | `/gaia-plan` | Deterministic phase-level resume point for a plan picked up mid-flight. |
-| `post-findings-block.sh` | yes | agent definitions, `post-findings-block-on-merge.sh` hook | Merges every dispatched member's findings sidecar into one machine-readable block and posts it on the pull request. |
-| `pr-wait-merge.sh` | yes | the merge workflow, every flow that merges | The merge wait: polls a pull request to `MERGED` and exits early on every state that means it never will. |
-| `resolve-audit-members.sh` | yes | the merge workflow, audit hooks, CI | Resolves which Code Audit Team members a diff dispatches. |
-| `state-registry-lib.sh` | yes | sourced | Reader for the state registry, the record of every runtime path GAIA writes. |
-| `summary-verify.sh` | yes | the spec and plan close flows | Fail-closed verify gate for the consolidated summary artifact, run before the irreversible removal of the layers it replaces. |
-| `write-audit-remits.sh` | yes | GAIA's own CI (maintainer-side) | Generates each Code Audit Team member's remit region from the roster. |
+| `audit-` | The Code Audit Team's machinery: scope resolution, digests, the single writers for clearance markers and findings sidecars, the audit loop's state, evaluation and records, the dispositions check, the no-op detector, and the Light-route helpers. See [[Code Review Audit Agent]] and [[PR Merge Workflow]]. | Agent definitions, audit hooks, CI, the merge workflow | Mostly ships |
+| `check-` | Deterministic checks of a repository invariant: hook command rooting, settings drift, tech-debt filing metadata, the update refresher the statusline starts, and maintainer-side invariant checks over the harness itself. | Hooks, skills, the statusline, GAIA's own invariant harness | Mixed |
+| `lint-` | Guard lints over GAIA's own shell and workflow YAML for classes shellcheck cannot model. | The shell lint runner and CI | Maintainer-only |
+| `debt-` | The tech-debt backlog: ordering and clustering, batch budgeting, dedup, argument parsing, path probing, stale-claim detection, and the statusline count. | `/gaia-debt`, the file-tech-debt skill, the statusline | Ships |
+| `usage-` and `token-` | The usage ledger and its readouts: recording, merging, rendering, and the pricing definitions and rate card the readouts share. Opens no network connection. | Hooks, the statusline, workflows that record or read cost | Ships |
+| `verify-` | Drift checks of a repository state against an external authority: the audit roster, the committed CLI bundles, the required-checks ruleset, vendored skills. | Run by hand, CI, release preflight | Mixed, mostly withheld |
+| Dev-server plumbing (no shared prefix) | Per-worktree port allocation, background server lifecycle, Storybook launch, a smoke check, and the package prerequisite step. | Skills, the pre-commit hook, the quality gate | Ships |
+| `*-lib` shared libraries | The one definition of a cross-cutting rule: main-checkout resolution, branch naming, ledger paths, the state registry, the context checkpoint, the GitHub artifact breadcrumb, the awk interpreter and guard scaffolding. Each is read through whatever sources it. | Sourced by hooks and scripts | Mixed |
+| Workflow helpers (no shared prefix) | Single-purpose commands a skill or workflow shells out to: plan archive and resume point, the merge wait, member resolution, findings posting, fitness ownership, the knowledge inventory, summary verification, worktree linking, and the chore(deps) predicate. | Skills, slash commands, the merge workflow, hooks | Mostly ships |
+| Release and test tooling (no shared prefix) | Release leak assertion, release-body composition, CLI auto-bundle, vendoring, bats runners, and the changed-file to bats-suite mapping. | `release.yml`, pre-commit, the bats runners, the audit gate | Maintainer-only |
 
 ## Subdirectories
 
-The root holds the shell layer; each subdirectory holds one thing that is not shell, or is not a script at all. None of them is a second tier of the index above, and nothing that holds this page to the tree descends into any of them.
+The root holds the shell layer; each subdirectory holds one family that is not root shell, or is not a script at all. None is a second tier of the root, and nothing that holds this page to the tree descends into any of them.
 
-| Directory | What is in it |
+| Directory | What it is |
 |---|---|
+| `spec/` | The spec and plan lifecycle: id allocation, the ledger and its lock, reconcile and archive passes, the UAT gate and divergence check, title normalization, and the working-doc-id scan. Invoked by `/gaia-spec`, `/gaia-plan`, and their close flows. |
 | `audit-ledger/` | The Node writer that appends a worthiness verdict to the audit ledger. |
 | `classifier/` | The Node helper that classifies a test as deterministic or not. |
-| `lib/` | Shell that is sourced by a root script rather than run: the Serena language helper. |
-| `red-ledger/` | The Node extractor that reads test signals out of a RED run, plus its own README. |
+| `red-ledger/` | The Node extractors that read test and story signals out of a RED run. |
+| `lib/` | Helpers sourced or imported by a root script rather than run on their own. |
 
 <!-- gaia:maintainer-only:start -->
-`tests/` is separate, and separate on purpose. It holds the bats suites that guard the root scripts, and it is far larger than everything above it put together. A suite there is the blocking runner for the guard beside it, which is why a guard's conformance lives next to the guard rather than in the general test tree. It is not indexed here: a suite is discovered from the script it names, so an index of it would be an index of the index above.
+`tests/` is separate, and separate on purpose. It holds the bats suites that guard the root scripts, and it is far larger than everything above it put together. A suite there is the blocking runner for the guard beside it, which is why a guard's conformance lives next to the guard rather than in the general test tree. It is not described here: a suite is discovered from the script it names.
 <!-- gaia:maintainer-only:end -->
 
 ## Adding a script
 
-A new file at the root of `.gaia/scripts/` owes **a row on this page**, in the family its prefix names, with its invoker and what it is. That is every root file, not only the shell: a data file the scripts read is as invisible from the directory as a script is. The index is the only place the directory says what anything is, so a file added without a row is a file nobody can find.
+A new root file takes the family prefix that matches what it does, and `*-lib` for a file that is sourced rather than run. A script that fits no family takes a plain descriptive name. Its header comment is its documentation; this page needs no edit unless the script opens a new family. The naming rule is `.claude/rules/coding-guidelines.md`.
 
-Naming: take the family prefix that matches what the script does (`check-` and `lint-` for a deterministic gate, `audit-` for the Code Audit Team's machinery, `token-` for the pricing, `debt-` for the tech-debt backlog, `verify-` for a drift check against an external authority), and `*-lib.sh` for a file that is sourced rather than run. A script that fits no family takes a plain descriptive name and joins the unprefixed table.
-
-**Do not reorganize the directory into subfolders.** The single-level glob `.gaia/scripts/*.sh` is a contract several places depend on by value, not a hazard to be tidied away: it is a literal registry entry, and it is what a worktree provisioning step chmods through. A new subdirectory leaves both reading a tree that no longer matches, silently. Reference density compounds it, worst in the family with the cleanest case for a move: its members are each named across dozens of files, so relocating one family is a several-hundred-file rename for no functional gain.
+**Do not reorganize the directory into subfolders.** The single-level glob `.gaia/scripts/*.sh` is a contract several places depend on by value, not a hazard to be tidied away: it is a literal registry entry, and it is what a worktree provisioning step chmods through. A new subdirectory leaves both reading a tree that no longer matches, silently. Reference density compounds it: each member of a family is named across dozens of files, so relocating one family is a several-hundred-file rename for no functional gain.
 
 <!-- gaia:maintainer-only:start -->
 In GAIA's source a bats suite asserts the glob too. This directory has already paid for a location change once, recorded in GAIA's own release health taxonomy: moving it across the release boundary added it as a manifest-owned tree without adding it as a scan target to either distribution-boundary primitive, and the repair covered the one file its finding named rather than the tree it had un-excluded.
-<!-- gaia:maintainer-only:end -->
 
-<!-- gaia:maintainer-only:start -->
 Three further decisions ride with a new root script in the maintainer repository, and each one is a real edit somewhere else:
 
 - **Ship or withhold**, through `/distribution-audit`. The release CLI refuses to produce a manifest until every newly-shipping file has an answer, so this one cannot be skipped, only deferred to the release that trips over it.

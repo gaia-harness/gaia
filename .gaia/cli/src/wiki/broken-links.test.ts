@@ -123,7 +123,6 @@ describe('wiki broken-links', () => {
     );
     sandbox.writeFile('wiki/meta/x.md', '[[Missing Exempt]]\n');
     sandbox.writeFile('wiki/log.md', '[[Missing Exempt]]\n');
-    sandbox.writeFile('wiki/hot.md', '[[Missing Exempt]]\n');
     sandbox.writeFile('wiki/_archived/y.md', '[[Missing Exempt]]\n');
 
     const exit = run(['--json'], {cwd: sandbox.root});
@@ -243,7 +242,6 @@ describe('wiki broken-links', () => {
     test('links inside exempt files are not reported', () => {
       sandbox.writeFile('wiki/meta/x.md', '[[Gone]]\n');
       sandbox.writeFile('wiki/log.md', '[[Gone]]\n');
-      sandbox.writeFile('wiki/hot.md', '[[Gone]]\n');
       sandbox.writeFile('wiki/_archived/y.md', '[[Gone]]\n');
 
       expect(findBrokenLinks(sandbox.root)).toEqual({

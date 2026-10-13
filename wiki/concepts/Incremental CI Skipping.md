@@ -2,7 +2,7 @@
 type: concept
 status: active
 created: 2026-06-02
-updated: 2026-06-24
+updated: 2026-10-13
 tags: [concept, ci]
 ---
 
@@ -88,5 +88,5 @@ full scope.
 
 ## See also
 
-- [[Chromatic Opt-Out]]: why and how the Chromatic check can be disabled.
+- [[Chromatic]]: its Opt-out section covers removing the Chromatic check.
 - [[PR Merge Workflow]]: the local-side audit handshake.

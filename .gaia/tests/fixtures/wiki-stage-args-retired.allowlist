@@ -6,7 +6,6 @@
 #
 # History that is never rewritten.
 CHANGELOG.md
-wiki/meta/**
 # The guard and this list.
 .gaia/tests/lib/wiki-stage-args-retired.bats
 .gaia/tests/fixtures/wiki-stage-args-retired.allowlist

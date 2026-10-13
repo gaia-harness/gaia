@@ -39340,7 +39340,6 @@ var WIKI_DIR = "wiki";
 var MARKDOWN_EXTENSIONS = /* @__PURE__ */ new Set([".md"]);
 var WIKI_SCAN_EXEMPT_PREFIXES = ["wiki/meta/"];
 var GENERATED_CONTENT_EXEMPT_PATHS = /* @__PURE__ */ new Set([
-  "wiki/hot.md",
   "wiki/log.md"
 ]);
 var isWikiScanExempt = (relativePath) => WIKI_SCAN_EXEMPT_PREFIXES.some((prefix) => relativePath.startsWith(prefix));
@@ -39952,7 +39951,6 @@ var finalizeMerge = (options) => {
 // src/wiki/chain.ts
 var WIKI_CHAIN_BRANCH_PREFIX = "wiki/sync-";
 var WIKI_CHAIN_BRANCH_PATTERN = /^wiki\/sync-\d{4}-\d{2}-\d{2}-[\da-f]{7,40}$/u;
-var LEGACY_WIKI_CHAIN_BRANCH_PATTERN = /^wiki-sync\/\d{4}-\d{2}-\d{2}-[\da-f]{7,40}$/u;
 var USAGE_SCRIPT = ".gaia/scripts/usage.sh";
 var passthroughFailure2 = (result, command, args) => passthroughFailure({ args, command, prefix: "chain", result });
 var stepOk = commandSucceeded;
@@ -40297,7 +40295,7 @@ var runFinish = (argv, options) => {
     );
     return { code: UNEXPECTED_EXIT10 };
   }
-  if (!WIKI_CHAIN_BRANCH_PATTERN.test(branch) && !LEGACY_WIKI_CHAIN_BRANCH_PATTERN.test(branch)) {
+  if (!WIKI_CHAIN_BRANCH_PATTERN.test(branch)) {
     process.stdout.write(
       `chain finish: in-place commits remain on ${branch}; no PR opened
 `
@@ -40760,9 +40758,9 @@ var HELP_TEXT58 = `Usage: gaia wiki dead-paths [--json]
   wiki/ and the registered package paths (frontend/) that no longer exist on
   disk, plus any reference to
   sibling-monorepo paths (studio/, website/) which reach outside the GAIA
-  tarball and never resolve on a single-repo clone. Excludes wiki/log.md,
-  wiki/hot.md and wiki/meta/** (generated or append-only files that
-  legitimately reference historical paths).
+  tarball and never resolve on a single-repo clone. Excludes wiki/log.md
+  and wiki/meta/** (generated or append-only files that legitimately
+  reference historical paths).
 `;
 var HELP_TOKENS57 = /* @__PURE__ */ new Set(["--help", "-h", "help"]);
 var HARNESS_PREFIXES = [".claude/", ".gaia/", "wiki/"];
@@ -40785,6 +40783,9 @@ var RUNTIME_PREFIXES = [".gaia/local/"];
 var ADOPTER_OWNED_SENTINELS = /* @__PURE__ */ new Set([
   ".gaia/project.json"
 ]);
+var MACHINE_LOCAL_PATHS = /* @__PURE__ */ new Set([
+  ".claude/settings.local.json"
+]);
 var PATH_TOKEN_PATTERN = /`([^`\n]+?)`/g;
 var PLACEHOLDER_PATTERN = /[<>*${}]|N{3,}|X{3,}/;
 var HISTORICAL_BULLET_PATTERN = /^\s*-\s+\*\*(Removed|Deleted|Renamed|Migrated|Replaced)\*\*/i;
@@ -40793,6 +40794,7 @@ var isTrackedPath = (token, prefixes) => {
   if (!token.includes("/")) return false;
   if (!/\.[a-z0-9]{1,8}$/i.test(token)) return false;
   if (ADOPTER_OWNED_SENTINELS.has(token)) return false;
+  if (MACHINE_LOCAL_PATHS.has(token)) return false;
   if (RUNTIME_PREFIXES.some((prefix) => token.startsWith(prefix))) return false;
   if (SIBLING_REPO_PATTERN.test(token)) return true;
   return prefixes.some((prefix) => token.startsWith(prefix));
@@ -40878,7 +40880,7 @@ import { readFileSync as readFileSync48 } from "node:fs";
 import path59 from "node:path";
 var HELP_TEXT59 = `Usage: gaia wiki empty-sections [--json]
 
-  Scan wiki/**/*.md (excluding wiki/meta/**, wiki/hot.md, wiki/log.md) for
+  Scan wiki/**/*.md (excluding wiki/meta/** and wiki/log.md) for
   LEAF headings with no body, no child heading and no non-blank, non-heading
   content before the next sibling/shallower heading or EOF. Parent headings
   are never flagged. Fenced code blocks and the frontmatter block are handled.
@@ -41380,7 +41382,7 @@ var DOMAIN_DIRS2 = [
   "meta"
 ];
 var SKIPPED_FILES2 = /* @__PURE__ */ new Set(["_index.md", "README.md"]);
-var ROOT_LINK_SOURCES = ["index.md", "overview.md", "hot.md"];
+var ROOT_LINK_SOURCES = ["index.md", "overview.md"];
 var slugFromPath = (filePath) => path63.basename(filePath, ".md");
 var extractTitle = (body, fallback) => {
   const lines = body.split("\n");

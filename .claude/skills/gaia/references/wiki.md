@@ -70,7 +70,7 @@ Spawn:
   >
   > ```json
   > {
-  >   "report_path": "wiki/meta/consolidate-report-YYYY-MM-DD.md",
+  >   "report_path": "wiki/meta/consolidate-report.md",
   >   "findings": [
   >     {
   >       "id": "<stable id, e.g. supersession-0, near-collision-2>",
