@@ -17,11 +17,6 @@
  *     from a structured JSON file (e.g. a maintainer-only hook registration
  *     inside `.claude/settings.json`), the shape json-strip cannot express.
  *
- *   - json-field-rewrite: substitute inside a JSON string field a
- *     selector addresses, for a maintainer-only token that must leave the
- *     bundle while the field itself survives (a schema-required key a
- *     delete would invalidate).
- *
  *   - pnpm-member-strip: remove a maintainer-only workspace member from the
  *     staged pnpm workspace file and lockfile (`pnpm-member-strip.ts`).
  *     Refuses, writing neither file, when it cannot produce a consistent
@@ -202,28 +197,6 @@ const JsonStripArrayElementSchema = z.object({
   type: z.literal('json-strip-array-element'),
 });
 
-// Rewrites the value of a JSON string field in place. `path` reuses the
-// `json-strip-array-element` selector grammar (dot-notation, `[]` marking an
-// array to iterate) but ends on the field itself, and `pattern` is applied
-// globally to that field's value. This is the shape neither sibling transform
-// can express: `json-strip` deletes the key, which a shipped schema declaring
-// it `required` would then reject, and `json-strip-array-element` removes the
-// whole element. A selector matching nothing is a silent no-op, the same
-// stale-selector convention its sibling follows.
-const JsonFieldRewriteSchema = z.object({
-  paths: z.array(z.string().min(1)).min(1),
-  selectors: z
-    .array(
-      z.object({
-        path: z.string().min(1),
-        pattern: z.string().min(1),
-        replacement: z.string(),
-      })
-    )
-    .min(1),
-  type: z.literal('json-field-rewrite'),
-});
-
 // Strict like the leak checks: a misspelled key here would otherwise be
 // stripped and the transform would run against a default it never had.
 const PnpmMemberStripSchema = z.strictObject({
@@ -240,7 +213,6 @@ const ConfigSchema = z.object({
         MarkerStripSchema,
         JsonStripSchema,
         JsonStripArrayElementSchema,
-        JsonFieldRewriteSchema,
         PnpmMemberStripSchema,
         LeakCheckSchema,
       ])
@@ -253,7 +225,6 @@ type DerivedLeakCheck =
   | z.infer<typeof OtherDerivedLeakCheckSchema>
   | z.infer<typeof RefsDerivedLeakCheckSchema>
   | z.infer<typeof TitleDerivedLeakCheckSchema>;
-type JsonFieldRewriteTransform = z.infer<typeof JsonFieldRewriteSchema>;
 type JsonStripArrayElementTransform = z.infer<
   typeof JsonStripArrayElementSchema
 >;
@@ -636,174 +607,6 @@ const applyJsonStripArrayElement = (
   }
 
   return {elementsRemoved, filesTouched};
-};
-
-// JSON field rewrite
-
-export type JsonFieldRewriteResult = {
-  fieldsRewritten: number;
-  filesTouched: readonly string[];
-};
-
-type ResolvedRewrite = {
-  segments: readonly SelectorSegment[];
-  substitution: Substitution;
-};
-type Substitution = {pattern: RegExp; replacement: string};
-
-/**
- * Walk `segments` from `node` and substitute in the string field the terminal
- * segment names. Defensive in the same way `removeMatchingArrayElements` is:
- * any structural surprise (a missing key, an array where an object is
- * expected, a non-string field) ends the walk with zero rewrites rather than
- * throwing, so a selector that has drifted from the file cannot corrupt it.
- * Returns the count of fields whose value actually changed.
- *
- * The one case that DOES throw is a substitution that would empty the field.
- * Emptying is not a structural surprise, it is this transform doing exactly
- * what it was configured to do to a value that happens to be nothing but the
- * matched token, and the result is the failure the transform exists to
- * prevent: the reason it substitutes instead of deleting is that the shipped
- * schema requires the key, and a `minLength` on that key makes an empty
- * string as invalid as an absent one. Failing the build beats shipping a
- * bundle that fails its own validator.
- */
-const rewriteMatchingFields = (
-  node: unknown,
-  segments: readonly SelectorSegment[],
-  substitution: Substitution
-): number => {
-  if (segments.length === 0) return 0;
-
-  if (typeof node !== 'object' || node === null || Array.isArray(node)) {
-    return 0;
-  }
-
-  const record = node as Record<string, unknown>;
-  const [segment, ...rest] = segments as [
-    SelectorSegment,
-    ...SelectorSegment[],
-  ];
-  const child = record[segment.key];
-
-  if (segment.isArray) {
-    if (!Array.isArray(child)) return 0;
-
-    let rewritten = 0;
-
-    for (const element of child) {
-      rewritten += rewriteMatchingFields(element, rest, substitution);
-    }
-
-    return rewritten;
-  }
-
-  if (rest.length > 0) {
-    return rewriteMatchingFields(child, rest, substitution);
-  }
-
-  if (typeof child !== 'string') return 0;
-
-  const rewritten = child.replaceAll(
-    substitution.pattern,
-    substitution.replacement
-  );
-
-  if (rewritten === child) return 0;
-
-  if (rewritten.length === 0) {
-    throw new Error(
-      `refusing to empty "${segment.key}": ${JSON.stringify(child)} rewrites to an empty string`
-    );
-  }
-
-  record[segment.key] = rewritten;
-
-  return 1;
-};
-
-/**
- * Applies the resolved rewrites to one JSON file in place. Returns the count
- * of fields actually changed (0 for a non-object file or when no selector
- * matches); the file is rewritten only when that count is positive.
- */
-const rewriteFieldsInFile = (
-  absolutePath: string,
-  relativePath: string,
-  rewrites: readonly ResolvedRewrite[]
-): number => {
-  let parsed: unknown;
-
-  try {
-    parsed = JSON.parse(readFileSync(absolutePath, 'utf8'));
-  } catch (error) {
-    throw new Error(
-      `Failed to parse JSON at ${relativePath}: ${error instanceof Error ? error.message : String(error)}`
-    );
-  }
-
-  const isPlainObject =
-    typeof parsed === 'object' && parsed !== null && !Array.isArray(parsed);
-
-  if (!isPlainObject) return 0;
-
-  let rewritten = 0;
-
-  for (const rewrite of rewrites) {
-    try {
-      rewritten += rewriteMatchingFields(
-        parsed,
-        rewrite.segments,
-        rewrite.substitution
-      );
-    } catch (error) {
-      throw new Error(
-        `${relativePath}: ${error instanceof Error ? error.message : String(error)}`
-      );
-    }
-  }
-
-  if (rewritten > 0) {
-    atomicWriteFileSync(absolutePath, `${JSON.stringify(parsed, null, 2)}\n`);
-  }
-
-  return rewritten;
-};
-
-const applyJsonFieldRewrite = (
-  stagingRoot: string,
-  files: readonly string[],
-  transform: JsonFieldRewriteTransform
-): JsonFieldRewriteResult => {
-  const filesTouched: string[] = [];
-  let fieldsRewritten = 0;
-  // `g` is required, not stylistic: `String.prototype.replaceAll` throws on a
-  // non-global RegExp, and a field can carry the token more than once.
-  const rewrites: ResolvedRewrite[] = transform.selectors.map((selector) => ({
-    segments: parseSelectorPath(selector.path),
-    substitution: {
-      pattern: new RegExp(selector.pattern, 'g'),
-      replacement: selector.replacement,
-    },
-  }));
-
-  for (const relativePath of files) {
-    if (matchesAnyGlob(relativePath, transform.paths)) {
-      const absolutePath = path.join(stagingRoot, relativePath);
-      const rewritten = rewriteFieldsInFile(
-        absolutePath,
-        relativePath,
-        rewrites
-      );
-
-      if (rewritten > 0) {
-        filesTouched.push(relativePath);
-        fieldsRewritten += rewritten;
-      }
-    }
-  }
-
-  return {fieldsRewritten, filesTouched};
 };
 
 // pnpm member strip
@@ -1494,10 +1297,6 @@ const parseFlags = (argv: readonly string[]): FlagParseResult => {
 // Run
 
 type Report = {
-  json_field_rewrite: {
-    fields_rewritten: number;
-    files_touched: readonly string[];
-  };
   json_strip: {
     files_touched: readonly string[];
     keys_removed: number;
@@ -1538,7 +1337,6 @@ const renderHumanReport = (report: Report, jsonMode: boolean): string => {
     `release scrub: stripped ${report.marker_strip.blocks_stripped} marker block(s) across ${report.marker_strip.files_touched.length} file(s)`,
     `release scrub: removed ${report.json_strip.keys_removed} json key(s) from ${report.json_strip.files_touched.length} file(s)`,
     `release scrub: removed ${report.json_strip_array_element.elements_removed} json array element(s) from ${report.json_strip_array_element.files_touched.length} file(s)`,
-    `release scrub: rewrote ${report.json_field_rewrite.fields_rewritten} json field(s) in ${report.json_field_rewrite.files_touched.length} file(s)`,
     `release scrub: removed ${report.pnpm_member_strip.importers_removed} pnpm importer(s), ${report.pnpm_member_strip.packages_removed} package(s), ${report.pnpm_member_strip.snapshots_removed} snapshot(s)`,
   ];
 
@@ -1682,8 +1480,6 @@ const runLeakChecksForTransform = (
 };
 
 type TransformResults = {
-  jsonFieldRewriteFiles: string[];
-  jsonFieldsRewritten: number;
   jsonStripArrayElementFiles: string[];
   jsonStripArrayElementsRemoved: number;
   jsonStripFiles: string[];
@@ -1709,8 +1505,6 @@ const runTransforms = (
   ctx: ScrubContext
 ): TransformResults => {
   const results: TransformResults = {
-    jsonFieldRewriteFiles: [],
-    jsonFieldsRewritten: 0,
     jsonStripArrayElementFiles: [],
     jsonStripArrayElementsRemoved: 0,
     jsonStripFiles: [],
@@ -1751,14 +1545,6 @@ const runTransforms = (
       );
       results.jsonStripArrayElementsRemoved += result.elementsRemoved;
       results.jsonStripArrayElementFiles.push(...result.filesTouched);
-    } else if (transform.type === 'json-field-rewrite') {
-      const result = applyJsonFieldRewrite(
-        ctx.stagingDir,
-        ctx.stagedFiles,
-        transform
-      );
-      results.jsonFieldsRewritten += result.fieldsRewritten;
-      results.jsonFieldRewriteFiles.push(...result.filesTouched);
     } else if (transform.type === 'pnpm-member-strip') {
       const result = applyPnpmMemberStrip(
         ctx.stagingDir,
@@ -1881,10 +1667,6 @@ export const run = (
   }
 
   const report: Report = {
-    json_field_rewrite: {
-      fields_rewritten: results.jsonFieldsRewritten,
-      files_touched: results.jsonFieldRewriteFiles,
-    },
     json_strip: {
       files_touched: results.jsonStripFiles,
       keys_removed: results.jsonStripKeysRemoved,

@@ -334,45 +334,45 @@ describe('labels/sync planSync rename', () => {
   // so that recolor does not survive the rename. That is the accepted cost.
   test('a rename carries the registry color when the live color differs', () => {
     const actions = plan({
-      live: [{color: '2da44e', description: '', name: 'debt:in-progress'}],
+      live: [{color: '2da44e', description: '', name: 'needs-human-review'}],
     });
 
     expect(kinds(actions, 'rename')).toEqual([
       {
-        from: 'debt:in-progress',
+        from: 'needs-human-review',
         kind: 'rename',
-        registryColor: 'ffd33d',
-        to: 'in-progress',
+        registryColor: 'd93f0b',
+        to: 'needs-human',
       },
     ]);
   });
 
   test('a rename plans no recolor when the live color already matches', () => {
     const actions = plan({
-      live: [{color: 'ffd33d', description: '', name: 'debt:in-progress'}],
+      live: [{color: 'd93f0b', description: '', name: 'needs-human-review'}],
     });
 
     expect(kinds(actions, 'rename')).toEqual([
       {
-        from: 'debt:in-progress',
+        from: 'needs-human-review',
         kind: 'rename',
         registryColor: null,
-        to: 'in-progress',
+        to: 'needs-human',
       },
     ]);
   });
 
   test('an uppercase live color is not a recolor', () => {
     const actions = plan({
-      live: [{color: 'FFD33D', description: '', name: 'debt:in-progress'}],
+      live: [{color: 'D93F0B', description: '', name: 'needs-human-review'}],
     });
 
     expect(kinds(actions, 'rename')).toEqual([
       {
-        from: 'debt:in-progress',
+        from: 'needs-human-review',
         kind: 'rename',
         registryColor: null,
-        to: 'in-progress',
+        to: 'needs-human',
       },
     ]);
   });
@@ -399,21 +399,21 @@ describe('labels/sync planSync rename', () => {
     expect(
       mutationFor(
         {
-          from: 'debt:in-progress',
+          from: 'needs-human-review',
           kind: 'rename',
-          registryColor: 'ffd33d',
-          to: 'in-progress',
+          registryColor: 'd93f0b',
+          to: 'needs-human',
         },
         NO_FLAGS
       )
     ).toEqual([
       'label',
       'edit',
-      'debt:in-progress',
+      'needs-human-review',
       '--name',
-      'in-progress',
+      'needs-human',
       '--color',
-      'ffd33d',
+      'd93f0b',
     ]);
   });
 
@@ -425,10 +425,10 @@ describe('labels/sync planSync rename', () => {
       expect(
         mutationFor(
           {
-            from: 'debt:in-progress',
+            from: 'needs-human-review',
             kind: 'rename',
-            registryColor: 'ffd33d',
-            to: 'in-progress',
+            registryColor: 'd93f0b',
+            to: 'needs-human',
           },
           flags
         )
@@ -439,23 +439,23 @@ describe('labels/sync planSync rename', () => {
   test('the report names the recolor the rename will apply', () => {
     expect(
       describeAction({
-        from: 'debt:in-progress',
+        from: 'needs-human-review',
         kind: 'rename',
-        registryColor: 'ffd33d',
-        to: 'in-progress',
+        registryColor: 'd93f0b',
+        to: 'needs-human',
       })
-    ).toBe('rename debt:in-progress to in-progress, recoloring to ffd33d');
+    ).toBe('rename needs-human-review to needs-human, recoloring to d93f0b');
   });
 
   test('a rename with no recolor reports the rename alone', () => {
     expect(
       describeAction({
-        from: 'debt:in-progress',
+        from: 'needs-human-review',
         kind: 'rename',
         registryColor: null,
-        to: 'in-progress',
+        to: 'needs-human',
       })
-    ).toBe('rename debt:in-progress to in-progress');
+    ).toBe('rename needs-human-review to needs-human');
   });
 });
 
@@ -490,7 +490,7 @@ describe('labels/sync planSync deletes', () => {
       .map((entry) => entry.name)
       .toSorted((a, b) => a.localeCompare(b));
 
-    expect(deprecatedNames).toEqual([REMOVED_FEATURE_NAME, 'run-audit']);
+    expect(deprecatedNames).toEqual([REMOVED_FEATURE_NAME]);
 
     for (const audience of AUDIENCES) {
       for (const flags of FLAG_COMBINATIONS) {
