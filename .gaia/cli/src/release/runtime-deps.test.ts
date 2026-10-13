@@ -212,6 +212,23 @@ describe('extractPathRefs', () => {
     expect(refs.map((r) => r.path)).toContain('.claude/settings.json');
   });
 
+  test('skips the allowlisted installer outputs the React Doctor install script strips', () => {
+    // install-react-doctor.sh names the per-machine skill directory the
+    // installer writes (to verify it landed) and the workflow the installer
+    // writes (to delete it). Neither is ever sourced or executed, so the exact
+    // tokens are allowlisted.
+    const refs = extractPathRefs(
+      '.gaia/scripts/install-react-doctor.sh',
+      'skill_directory="$package_directory/.claude/skills/react-doctor"\nrm -f .github/workflows/react-doctor.yml\n'
+    );
+    expect(refs.map((r) => r.path)).not.toContain(
+      '.claude/skills/react-doctor'
+    );
+    expect(refs.map((r) => r.path)).not.toContain(
+      '.github/workflows/react-doctor.yml'
+    );
+  });
+
   test('reduces a pattern that truncates mid-basename to its directory', () => {
     // A pattern with a non-empty basename prefix before the `*` expanded to the
     // fragment `.claude/agents/code-audit-`, which names no manifest entry and

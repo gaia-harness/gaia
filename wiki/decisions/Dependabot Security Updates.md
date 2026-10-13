@@ -14,7 +14,7 @@ Superseded by [[Dependabot as a Data Source]]: Dependabot is now a data source o
 
 ## Decision
 
-`/setup-gaia` offers Dependabot security updates for npm as an opt-in (Phase 3.6 of `.claude/commands/setup-gaia.md`), recorded as `dependabot_security_updates` in the committed `.gaia/project.json` (see [[Project Config]]). It is never a file every clone inherits. `/update-deps` keeps sole ownership of version updates.
+`/setup-gaia` offers Dependabot security updates for npm as an opt-in (the `## Remaining defaults` section of `.claude/skills/gaia/references/setup/github-repo.md`), recorded as `dependabot_security_updates` in the committed `.gaia/project.json` (see [[Project Config]]). It is never a file every clone inherits. `/update-deps` keeps sole ownership of version updates.
 
 ## Why
 

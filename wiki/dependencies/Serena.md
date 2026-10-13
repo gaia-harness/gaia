@@ -14,7 +14,7 @@ LSP-backed MCP server. Gives Claude live, always-fresh access to symbol definiti
 
 ## Pin
 
-- Version: `.claude/commands/setup-gaia.md` owns the pin.
+- Version: `.claude/skills/gaia/references/setup/per-machine.md` owns the pin.
 - Scope: user (registered globally for the user's Claude Code, not project-scoped).
 - Runtime: requires `uv` (Astral Python toolchain runner).
 - Context: `--context claude-code`, which trims Serena to its symbol and memory tools and drops the file read/create, shell, directory-list, and pattern-search tools that Claude Code's own tools already cover.
