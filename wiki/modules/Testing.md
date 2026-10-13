@@ -11,7 +11,7 @@ depends_on:
   - '[[Chromatic]]'
   - '[[MSW]]'
 created: 2026-04-20
-updated: 2026-10-05
+updated: 2026-10-13
 tags: [module, testing]
 ---
 
@@ -33,7 +33,7 @@ Server-side tests (the QueryClient accessor, `attempt`, base-URL resolution) run
 One config, `frontend/vitest.config.ts`, defines three projects: `node` for pure and server code, `browser` for hooks and any `*.test.tsx`, and `storybook` for every story. Read it for the exact membership. The `browser` and `storybook` projects run in headless Chromium; no project uses an emulated DOM.
 
 > [!info] Watch mode needs a TTY
-> Vitest only enters watch mode with an interactive TTY; in CI or under Claude, a bare `pnpm test` runs once and exits. Use `pnpm test --run` for an explicit single pass. See [[Test Runner]].
+> Vitest only enters watch mode with an interactive TTY; in CI or under Claude, a bare `pnpm test` runs once and exits. Use `pnpm test --run` for an explicit single pass. See [[Vitest]].
 
 ### Setup prerequisite
 
@@ -64,7 +64,7 @@ Most shipped e2e specs are axe-core a11y scans; others cover hydration errors an
 
 - Visual regression on every PR
 - `pnpm chromatic` (run in CI), `CHROMATIC_PROJECT_TOKEN` env var on CI
-- See [[Chromatic Opt-Out]] if you want to remove it
+- To remove it, see the Opt-out section of [[Chromatic]]
 
 ## ESLint rules on test files
 

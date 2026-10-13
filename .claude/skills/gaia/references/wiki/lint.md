@@ -14,17 +14,11 @@ Compute today's date from the shell clock first: no LLM has a clock, so the mode
 DATE=$(date +%F)
 ```
 
-**Regenerate the report from scratch every run.** A lint report is a point-in-time snapshot; a stale report from an earlier run must never be reused or renamed into today's slot. `wiki/meta/` is release-excluded, so a freshly scaffolded adopter clone has no such directory yet; create it before any report write. Then remove any same-day report so a stale one cannot be picked up and patched in place:
+**Regenerate the report from scratch every run.** The report lives at one fixed path, `wiki/meta/lint-report.md`, and each run overwrites it: it is a point-in-time snapshot, and the commit history holds earlier runs. A stale report must never be reused or patched in place. `wiki/meta/` is release-excluded, so a freshly scaffolded adopter clone has no such directory yet; create it, then write the report shell with the standard frontmatter and H1 heading. The `cat >` truncates the previous run's report:
 
 ```bash
 mkdir -p wiki/meta/
-rm -f wiki/meta/lint-report-$DATE.md
-```
-
-Then create the report file with the standard frontmatter and H1 heading:
-
-```bash
-cat > wiki/meta/lint-report-$DATE.md <<EOF
+cat > wiki/meta/lint-report.md <<EOF
 ---
 type: meta
 title: 'Lint Report $DATE'
@@ -38,7 +32,7 @@ status: developing
 EOF
 ```
 
-Use `wiki/meta/lint-report-$DATE.md` as the canonical report path for every subsequent step and the Step 9 summary. The GAIA checks below write into this same file: each **replaces** its own `## #NN` section if one already exists, otherwise appends it at the bottom. Never trust or carry over a pre-existing GAIA section: every check re-derives from its live CLI primitive on each run.
+Use `wiki/meta/lint-report.md` as the canonical report path for every subsequent step and the Step 9 summary. The GAIA checks below write into this same file: each **replaces** its own `## #NN` section if one already exists, otherwise appends it at the bottom. Never trust or carry over a pre-existing GAIA section: every check re-derives from its live CLI primitive on each run.
 
 ## Step 2: GAIA check #11: Wiki drift
 
@@ -346,7 +340,7 @@ List every broken link (one per line) as `` - `wiki/path.md:7` → `[[Target]]` 
 
 Print to the user:
 
-1. The report path (e.g. `wiki/meta/lint-report-2026-05-03.md`).
+1. The report path, `wiki/meta/lint-report.md`.
 2. A one-line summary that includes the drift severity and count, plus dead-path count, orphan count, frontmatter-gap count, empty-section count, and broken-link count when any of those is non-zero, plus narrative-ref count if non-zero.
 
 If `drift_severity` is **`high`**, surface it prominently (separate line, prefixed with `WIKI DRIFT:`).

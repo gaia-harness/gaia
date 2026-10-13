@@ -6,7 +6,7 @@ language: typescript
 purpose: API mocking layer shared across Vitest, Storybook, and dev
 depends_on: [[MSW]]
 created: 2026-04-20
-updated: 2026-10-06
+updated: 2026-10-13
 tags: [module, msw, testing, mocking]
 ---
 
@@ -17,7 +17,7 @@ The app uses [[MSW]] + `@msw/data` as the **single mocking layer** for unit test
 > [!key-insight] One mock set, three environments
 > The same handlers and in-memory database serve Vitest (CI/local), the dev server (`MSW_ENABLED=true`), and Playwright runs. You define a mock once; every surface sees the same fake API.
 
-See also: [[API Service Pattern]], [[Services]], [[Testing]], [[Test Runner]].
+See also: [[API Service Pattern]], [[Services]], [[Testing]], [[Vitest]].
 
 ## Why MSW lives at the network layer
 

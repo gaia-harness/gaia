@@ -65,10 +65,9 @@ const SKIPPED_FILES = new Set(['_index.md', 'README.md']);
 
 // Wiki-root pages whose outbound wikilinks count toward inbound counts of
 // domain pages but which are not themselves emitted as indexable entries.
-// `index.md` is the catalog; `overview.md` is the project landing page;
-// `hot.md` is the auto-loaded recent-context cache. Pages reachable only
-// from these would otherwise flag as orphans.
-const ROOT_LINK_SOURCES = ['index.md', 'overview.md', 'hot.md'];
+// `index.md` is the catalog and `overview.md` is the project landing page.
+// Pages reachable only from these would otherwise flag as orphans.
+const ROOT_LINK_SOURCES = ['index.md', 'overview.md'];
 
 const slugFromPath = (filePath: string): string =>
   path.basename(filePath, '.md');

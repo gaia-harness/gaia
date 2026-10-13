@@ -2,8 +2,8 @@
  * `gaia wiki broken-links [--json]` handler.
  *
  * Resolution is by slug (file basename) or H1 title, case-insensitive, over
- * every live page, including `wiki/meta/`, `wiki/log.md` and `wiki/hot.md`:
- * those are exempt from being scanned, not from being linked to. `[[#Heading]]`
+ * every live page, including `wiki/meta/` and `wiki/log.md`: those
+ * are exempt from being scanned, not from being linked to. `[[#Heading]]`
  * names the page it sits on, so it is neither resolved nor counted.
  *
  * `extractWikilinks` in `util/wikilinks.ts` is deliberately not reused: its

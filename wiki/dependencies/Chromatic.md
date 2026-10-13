@@ -4,7 +4,7 @@ status: active
 package: chromatic
 role: visual-regression
 created: 2026-04-20
-updated: 2026-10-06
+updated: 2026-10-13
 tags: [dependency, testing, visual]
 ---
 
@@ -54,4 +54,4 @@ Before uploading, the workflow builds Storybook once with sentinel values standi
 
 ## Opt-out
 
-If you don't want Chromatic, see [[Chromatic Opt-Out]].
+Removing Chromatic means uninstalling `chromatic`, deleting its GitHub workflow, the `frontend/.storybook/chromatic/` folder and `frontend/.storybook/modes.ts`, and updating `frontend/.storybook/preview.ts` to use `WrapDecorator` directly and drop `parameters.chromatic` and the `theme` global. Ask Claude to walk through the steps.

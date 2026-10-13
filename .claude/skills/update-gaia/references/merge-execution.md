@@ -584,20 +584,10 @@ When all three `package.json` counts are zero (summed across the root and every 
 
 **Documented adopter actions (opt-in).** Two merge outcomes leave the adopter with a follow-up the three-way merge deliberately will **not** perform: a dependency GAIA dropped this release that the adopter still has (the Step 7a "GAIA removed it; adopter still has it" no-op, left in place by design) and files removed upstream still in the working tree (`delete[]`). Both are silent or bare, the agent knows _what_ changed but surfaces no _why_. Recover the intent from the release CHANGELOG and offer an opt-in suggestion.
 
-Read `$LATEST_DIR/CHANGELOG.md` (already on disk from Step 5, no extra fetch) and extract the `## [x.y.z]` sections strictly newer than `$BASELINE` through `$LATEST` with this range walk, which reads the file as a positional argument:
+Read `$LATEST_DIR/CHANGELOG.md` (already on disk from Step 5, no extra fetch) and extract the `## [x.y.z]` sections strictly newer than `$BASELINE` through `$LATEST` with the same range walk as SKILL.md Step 4, run from the release copy:
 
 ```bash
-# Keep this awk program identical to the one in SKILL.md Step 4.
-range="$(awk -v baseline="$BASELINE" -v latest="$LATEST" '
-  function vcmp(a,b,   x,y,i){split(a,x,".");split(b,y,".");for(i=1;i<=3;i++){if((x[i]+0)>(y[i]+0))return 1;if((x[i]+0)<(y[i]+0))return -1}return 0}
-  /^## \[Unreleased\]/           {printing=0; next}
-  /^\[[^][]+\]:[[:space:]]*http/ {printing=0; next}
-  /^## \[[0-9]+\.[0-9]+\.[0-9]+\]/ {
-    v=$0; sub(/^## \[/,"",v); sub(/\].*/,"",v)
-    printing=(vcmp(v,baseline)>0 && vcmp(v,latest)<=0)
-  }
-  printing {print}
-' "$LATEST_DIR/CHANGELOG.md")"
+range="$(bash "$LATEST_DIR/.gaia/scripts/changelog-range.sh" "$BASELINE" "$LATEST" "$LATEST_DIR/CHANGELOG.md")"
 ```
 
 Within that range, match **only** convention-anchored entries: bullets under a `### Removed` or `### Changed` heading that carry an explicit `**Action required:**` line and/or a literal `pnpm` command in backticks. **Key on the heading plus that anchored phrasing; do not free-parse arbitrary prose** (the convention is documented in `CHANGELOG.md`). For each match, take the literal command (the backtick-quoted `pnpm …`) and the subject it names, then gate it on whether the action still applies to _this_ adopter and record the survivors in `adopterActions[]`:

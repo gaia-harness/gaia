@@ -2,7 +2,7 @@
 type: concept
 status: active
 created: 2026-05-03
-updated: 2026-10-03
+updated: 2026-10-13
 tags: [concept, claude, workflow, wiki]
 ---
 
@@ -71,8 +71,8 @@ If drift exceeds 30 commits, the sync stage asks before proceeding; long-skipped
 For each commit since `last_evaluated_sha`:
 
 1. **First-pass:** read subject + file stats. Classify WORTHY (likely needs a wiki update) or SKIP (typo, formatting, dep bump with no behavior change, etc.). The classifier's source-path discrimination (which paths count as this project's source, as opposed to tests or tooling) is a declared, repo-configurable input under `gaia.wikiClassify` in `package.json`, defaulting to values sized for an adopter app under `frontend/app/**`; a repo whose source lives elsewhere (GAIA's own template repo included) tunes it there, and `/update-gaia` never touches keys outside its managed sections, so the tuning survives an update. Each run also reports a health signal, the share of evaluated commits that reached a fail-open default rather than a discriminating rule, and warns when that share crosses a threshold, so a stale or mistuned path vocabulary is visible rather than silently classifying every commit WORTHY.
-2. **Second-pass on WORTHY only:** read the diff. Edit the relevant `wiki/services/`, `wiki/concepts/`, `wiki/decisions/`, `wiki/dependencies/`, etc. pages. If a commit looks worthy from its subject but turns out to be a refactor on diff inspection, demote to SKIP.
-3. **Log every decision** (worthy and skipped) to `wiki/log.md` with a one-line reason.
+2. **Second-pass on WORTHY only:** read the diff. Edit the relevant `wiki/modules/`, `wiki/concepts/`, `wiki/decisions/`, `wiki/dependencies/`, etc. pages. If a commit looks worthy from its subject but turns out to be a refactor on diff inspection, demote to SKIP.
+3. **Log each WORTHY commit** to `wiki/log.md` with a one-line reason. Skipped commits get no line: `gaia wiki commit-classify` reproduces their class from git, and `wiki/.state.json` records them as evaluated.
    3b. **Fabrication guard.** Before advancing state, asserts every WORTHY edit was actually written to disk: a per-path porcelain check confirms each claimed page shows as changed or created, and a broader content-change check confirms at least one wiki content file is modified when the WORTHY set is non-empty. Any failure aborts the run before state advances, leaving `last_evaluated_sha` unchanged so the next sync re-evaluates the same range.
 4. **Advance state** to current HEAD.
 5. **Commit** the wiki changes with `gaia wiki chain commit`, labelled `wiki: sync through <short_sha>`.

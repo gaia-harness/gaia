@@ -21,12 +21,6 @@
 #     selector that matches nothing is a silent no-op. Runs before leak-check
 #     so it sees the already-clean JSON.
 #
-#   - json-field-rewrite: substitute inside a JSON string field a selector
-#     addresses, for a maintainer-only token that has to leave the bundle
-#     while the field itself survives (a schema-required key a delete would
-#     invalidate). Refuses to empty a field, so a value consisting only of
-#     the matched token fails the build rather than shipping "".
-#
 #   - pnpm-member-strip: remove a maintainer-only workspace member from the
 #     staged pnpm workspace file and lockfile, offline and without calling
 #     pnpm. Refuses, writing neither file, when it cannot produce a
@@ -117,24 +111,6 @@ transforms:
     selectors:
       - path: "labels[]"
         match: {audience: "maintainer"}
-
-  # Maintainer SPEC ids and issue references inside
-  # `.gaia/state-registry.json`'s per-entry `source` provenance. The field
-  # cannot simply be deleted: every entry carries a non-empty `source`, so a
-  # bundle that dropped the key, or kept
-  # it as "", would ship a silently invalid registry. Rewriting keeps the
-  # field non-empty and still meaningful ("SPEC-061 §shared" → "§shared")
-  # while the identifier, which resolves only inside the maintainer's
-  # release-excluded `.gaia/local/specs/` tree or on this project's tracker,
-  # leaves the bundle.
-  # Maintainer-side provenance in the repo is untouched.
-  - type: json-field-rewrite
-    paths:
-      - ".gaia/state-registry.json"
-    selectors:
-      - path: "entries[].source"
-        pattern: "\\bSPEC-[0-9]{3,}\\s*|gaia-react/gaia#[0-9]+,?\\s*"
-        replacement: ""
 
   # The CLI is a member of the maintainer's root pnpm workspace, but its
   # package.json never ships, and pnpm refuses a frozen install whose lockfile
@@ -485,8 +461,8 @@ transforms:
       # checks scan). Every `.md` exclude contributes its slug; every
       # bare-directory exclude (wiki/entities, wiki/meta) contributes the
       # directory slug plus the slug of each page beneath it, so entity pages
-      # and the dated audit artifacts under wiki/meta/ (consolidate-report-*,
-      # lint-report-*, staleness-audit-*) are covered without enumeration.
+      # and the audit reports under wiki/meta/ are covered without
+      # enumeration.
       # Matching is case-insensitive and alias/anchor-aware. A newly excluded
       # page is caught with no edit here; the set cannot drift from the
       # manifest.

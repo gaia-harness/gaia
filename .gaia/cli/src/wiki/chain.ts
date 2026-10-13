@@ -55,11 +55,6 @@ const WIKI_CHAIN_BRANCH_PREFIX = 'wiki/sync-';
 const WIKI_CHAIN_BRANCH_PATTERN =
   /^wiki\/sync-\d{4}-\d{2}-\d{2}-[\da-f]{7,40}$/u;
 
-// The shape `begin` minted before the branch-naming convention. `finish` still
-// recognizes it so a chain begun on an older CLI can land; nothing mints it.
-const LEGACY_WIKI_CHAIN_BRANCH_PATTERN =
-  /^wiki-sync\/\d{4}-\d{2}-\d{2}-[\da-f]{7,40}$/u;
-
 const USAGE_SCRIPT = '.gaia/scripts/usage.sh';
 
 const passthroughFailure = (
@@ -633,10 +628,7 @@ const runFinish = (
     return {code: UNEXPECTED_EXIT};
   }
 
-  if (
-    !WIKI_CHAIN_BRANCH_PATTERN.test(branch) &&
-    !LEGACY_WIKI_CHAIN_BRANCH_PATTERN.test(branch)
-  ) {
+  if (!WIKI_CHAIN_BRANCH_PATTERN.test(branch)) {
     // In-place run (begin was a no-op on a feature branch). The stage commits
     // already live on the developer's branch; opening a PR is their call.
     process.stdout.write(

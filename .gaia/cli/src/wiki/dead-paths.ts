@@ -26,9 +26,9 @@ export const HELP_TEXT = `Usage: gaia wiki dead-paths [--json]
   wiki/ and the registered package paths (frontend/) that no longer exist on
   disk, plus any reference to
   sibling-monorepo paths (studio/, website/) which reach outside the GAIA
-  tarball and never resolve on a single-repo clone. Excludes wiki/log.md,
-  wiki/hot.md and wiki/meta/** (generated or append-only files that
-  legitimately reference historical paths).
+  tarball and never resolve on a single-repo clone. Excludes wiki/log.md
+  and wiki/meta/** (generated or append-only files that legitimately
+  reference historical paths).
 `;
 
 const HELP_TOKENS = new Set(['--help', '-h', 'help']);
@@ -110,6 +110,11 @@ export const ADOPTER_OWNED_SENTINELS: ReadonlySet<string> = new Set([
   '.gaia/project.json',
 ]);
 
+/** Machine-local, gitignored, and written by Claude Code, never by GAIA. */
+const MACHINE_LOCAL_PATHS: ReadonlySet<string> = new Set([
+  '.claude/settings.local.json',
+]);
+
 const PATH_TOKEN_PATTERN = /`([^`\n]+?)`/g;
 
 /**
@@ -151,6 +156,7 @@ const isTrackedPath = (token: string, prefixes: readonly string[]): boolean => {
   if (!token.includes('/')) return false;
   if (!/\.[a-z0-9]{1,8}$/i.test(token)) return false;
   if (ADOPTER_OWNED_SENTINELS.has(token)) return false;
+  if (MACHINE_LOCAL_PATHS.has(token)) return false;
   if (RUNTIME_PREFIXES.some((prefix) => token.startsWith(prefix))) return false;
   if (SIBLING_REPO_PATTERN.test(token)) return true;
 

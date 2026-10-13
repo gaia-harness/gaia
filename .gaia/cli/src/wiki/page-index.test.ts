@@ -201,14 +201,14 @@ No outbound links.
     expect(stdio.errors.join('')).toContain('unknown flag');
   });
 
-  test('counts wikilinks from wiki/index.md, overview.md, hot.md as inbound', () => {
+  test('counts wikilinks from wiki/index.md and overview.md as inbound', () => {
     sandbox.writePage(
       'wiki/concepts/Solo.md',
       '---\ntype: concept\n---\n\n# Solo\n\nNo other domain page links here.\n'
     );
     sandbox.writePage(
       'wiki/concepts/AlsoSolo.md',
-      '---\ntype: concept\n---\n\n# AlsoSolo\n\nReachable only from hot.\n'
+      '---\ntype: concept\n---\n\n# AlsoSolo\n\nReachable only from the index.\n'
     );
     sandbox.writePage(
       'wiki/concepts/Overviewed.md',
@@ -222,10 +222,6 @@ No outbound links.
       'wiki/overview.md',
       '# Overview\n\nSee [[Overviewed]].\n'
     );
-    sandbox.writePage(
-      'wiki/hot.md',
-      '# Hot\n\nRecent: [[AlsoSolo]] and [[Solo]].\n'
-    );
 
     const exit = run(['--json'], {cwd: sandbox.root});
     expect(exit).toBe(0);
@@ -235,11 +231,10 @@ No outbound links.
     // Root pages must NOT appear in the output.
     expect(titles).not.toContain('Catalog');
     expect(titles).not.toContain('Overview');
-    expect(titles).not.toContain('Hot');
 
     const byTitle = new Map(index.pages.map((page) => [page.title, page]));
-    expect(byTitle.get('Solo')?.inbound_links).toBe(2);
-    expect(byTitle.get('AlsoSolo')?.inbound_links).toBe(2);
+    expect(byTitle.get('Solo')?.inbound_links).toBe(1);
+    expect(byTitle.get('AlsoSolo')?.inbound_links).toBe(1);
     expect(byTitle.get('Overviewed')?.inbound_links).toBe(1);
   });
 

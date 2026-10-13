@@ -13,8 +13,8 @@
  * and a `#` inside a fence is not a heading; the leading frontmatter block is
  * stripped before evaluation.
  *
- * Scans `wiki/**\/*.md` except `wiki/meta/**` (dated audit artifacts) and the
- * auto-managed sentinels `wiki/hot.md` and `wiki/log.md`.
+ * Scans `wiki/**\/*.md` except `wiki/meta/**` (audit reports) and the
+ * append-only `wiki/log.md`.
  *
  * Output: one `path:line  heading` line per finding, or a clean message.
  * With `--json`, emits { "empty": [ { path, line, heading } ] }. Exit 0
@@ -33,7 +33,7 @@ import {
 
 const HELP_TEXT = `Usage: gaia wiki empty-sections [--json]
 
-  Scan wiki/**/*.md (excluding wiki/meta/**, wiki/hot.md, wiki/log.md) for
+  Scan wiki/**/*.md (excluding wiki/meta/** and wiki/log.md) for
   LEAF headings with no body, no child heading and no non-blank, non-heading
   content before the next sibling/shallower heading or EOF. Parent headings
   are never flagged. Fenced code blocks and the frontmatter block are handled.

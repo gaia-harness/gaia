@@ -272,8 +272,7 @@ describe('wiki empty-sections', () => {
     expect(findEmptySections(sandbox.root)).toEqual([]);
   });
 
-  test('skips the auto-managed sentinels wiki/hot.md and wiki/log.md', () => {
-    sandbox.writeFile('wiki/hot.md', ['# Recent Context', '', ''].join('\n'));
+  test('skips the append-only wiki/log.md', () => {
     sandbox.writeFile('wiki/log.md', ['# Log', '', ''].join('\n'));
 
     expect(findEmptySections(sandbox.root)).toEqual([]);

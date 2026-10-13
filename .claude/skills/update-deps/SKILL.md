@@ -80,8 +80,8 @@ Parse the arguments before any other work. `--security` together with `--scope` 
 When invoked with `--scope <group-name>` (e.g. `/update-deps --scope react-router`):
 
 - Skip Phase 0 (override audit), out of scope for a single-group run.
-- Skip the discovery + preview phase, no preview runs in `--scope`; the
-  group's members are known from the companion-group table.
+- Skip the preview, no preview runs in `--scope`; the group's members are
+  the discovery payload's entries whose `group` is the named group.
 - Skip wave classification, the run is implicitly a single group; treat it
   as Wave A if all members are minor/patch, else Wave B.
 - Wave A / Wave B still apply, scoped to the named group's members
@@ -94,31 +94,13 @@ When invoked with `--scope <group-name>` (e.g. `/update-deps --scope react-route
 Invoked manually, one group per run, when a maintainer wants a single
 major-bump group's own PR rather than the combined Wave A/B run.
 
-## Companion groups (reference)
+## Companion groups
 
-The fixed table mapping each package to its group. `gaia update-deps run`
-resolves grouping internally and is the source of
-truth at runtime; every emitted entry already carries its resolved `group`.
-**When any member of a group is outdated, all members present in a manifest
-update together**, so a group moves as one unit (and snoozes as one unit).
-
-| Group             | Members                                                                                                                                  |
-| ----------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
-| `react-router`    | `react-router`, `@react-router/dev`, `@react-router/node`, `@react-router/serve`, `@react-router/fs-routes`                              |
-| `react`           | `react`, `react-dom`, `@types/react`, `@types/react-dom`                                                                                 |
-| `tailwindcss`     | `tailwindcss`, `@tailwindcss/vite`, `prettier-plugin-tailwindcss`                                                                        |
-| `shadcn`          | `shadcn`, `@base-ui/react`, `class-variance-authority`, `lucide-react`, `tw-animate-css`                                                 |
-| `storybook`       | `storybook`, `@storybook/*`, `eslint-plugin-storybook`, `msw-storybook-addon`, `storybook-react-i18next`, `@vueless/storybook-dark-mode` |
-| `vitest`          | `vitest`, `@vitest/browser-playwright`, `@vitest/coverage-v8`, `@vitest/ui`, `@vitest/eslint-plugin`, `vitest-browser-react`             |
-| `playwright`      | `@playwright/test`, `playwright`                                                                                                         |
-| `eslint`          | `eslint`, `@eslint/js`, `@eslint/compat`, `eslint-config-*`, `eslint-plugin-*` (9.x cap applies)                                         |
-| `i18next`         | `i18next`, `react-i18next`, `remix-i18next`, `i18next-browser-languagedetector`                                                          |
-| `msw`             | `msw`, `msw-storybook-addon`                                                                                                             |
-| `vite`            | `vite`, `@vitejs/plugin-react`                                                                                                           |
-| `zod-conform`     | `zod`, `@conform-to/react`, `@conform-to/zod`                                                                                            |
-| `fontawesome`     | `@fortawesome/*`                                                                                                                         |
-| `stylelint`       | `stylelint`, `stylelint-config-*`, `stylelint-order`                                                                                     |
-| `prettier`        | `prettier`, `eslint-config-prettier`, `eslint-plugin-prettier`                                                                           |
+`gaia update-deps run` owns the group table: every emitted entry carries its
+resolved `group`, and a group's members that a manifest declares but `pnpm
+outdated` did not flag are pulled in with it. **When any member of a group is
+outdated, all members present in a manifest update together**, so a group
+moves as one unit (and snoozes as one unit).
 
 After any change to the installed `msw` version (Wave A or Wave B), run `pnpm -C frontend msw:init` (`pnpm -C frontend exec msw init` when the project has no such script) so the regenerated `frontend/public/mockServiceWorker.js` joins the change; msw 3 has no postinstall that keeps it current.
 
