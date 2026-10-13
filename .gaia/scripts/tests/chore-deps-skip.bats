@@ -15,6 +15,7 @@ setup() {
   THIS_DIRECTORY="$( cd "$( dirname "$BATS_TEST_FILENAME" )" && pwd )"
   REPO_ROOT="$( cd "$THIS_DIRECTORY/../../.." && pwd )"
   PREDICATE="$REPO_ROOT/.gaia/scripts/chore-deps-skip.sh"
+  . "$REPO_ROOT/.gaia/tests/hooks/helpers/package-fixture.sh"
   # A missing predicate is a real regression (a rename or deletion), not an
   # environment gap, so this suite fails rather than skips: a skip here would
   # green the whole file with nothing checked (guards-must-fail.md).
@@ -145,6 +146,7 @@ setup_sandbox_repo() {
   mkdir -p "$SANDBOX/.gaia/scripts" "$SANDBOX/.claude/hooks/lib"
   cp "$PREDICATE" "$SANDBOX/.gaia/scripts/chore-deps-skip.sh"
   cp "$REPO_ROOT/.claude/hooks/lib/gaia-packages.sh" "$SANDBOX/.claude/hooks/lib/gaia-packages.sh"
+  write_builtin_descriptor "$SANDBOX"
   git -C "$SANDBOX" init --quiet --initial-branch=main
   git -C "$SANDBOX" config user.email "test@example.com"
   git -C "$SANDBOX" config user.name "Test"
@@ -405,6 +407,7 @@ sandbox_predicate() {
 
 @test "package manifests: with no registry the built-in frontend package is used" {
   make_sandbox
+  write_builtin_descriptor "$SANDBOX"
   sandbox_predicate 'chore(deps): bump x' $'pnpm-lock.yaml\nfrontend/package.json'
   [ "$output" = "true" ]
 }

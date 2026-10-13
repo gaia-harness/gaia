@@ -24,18 +24,23 @@
 // the bash callers can apply their own fail-open policy.
 //
 // Exit codes: 2 usage, 3 `typescript` unresolvable, 4 to 6 read and parse
-// failures, 7 the package registry or a descriptor is unusable. Exit 7 prints
+// failures, 7 the package registry or a descriptor is unusable or cannot be
+// read (no bash or jq). Exit 7 prints
 // `{"error": <message>}` on stdout and is the one failure a caller must NOT
 // treat as fail-open: the strict-candidate globs come from the package
 // descriptor, so without them no file can be classified and a
 // gate that fell back to "emergent" would stop gating anything.
 //
 // The registry is read from the process working directory, which every caller
-// sets to the acting tree's root before invoking this script.
+// sets to the acting tree's root before invoking this script. It is read
+// through the hooks' bash reader, `.claude/hooks/lib/gaia-packages.sh`, so the
+// classifier carries no registry reader of its own; every caller already
+// needs bash and jq.
 
 import {createRequire} from 'node:module';
 import {readFileSync} from 'node:fs';
-import {joinGlob, loadPackages, repoRegExps} from '../lib/gaia-packages.mjs';
+import {spawnSync} from 'node:child_process';
+import {fileURLToPath} from 'node:url';
 
 const require = createRequire(import.meta.url);
 
@@ -53,26 +58,48 @@ if (!filePath) {
 // The strict-candidate globs come from the package descriptor, never from a
 // literal prefix, so the classifier follows the app wherever the registry puts
 // it. A descriptor failure is exit 7, distinct from every other exit here.
-const loadedPackages = loadPackages(process.cwd());
-if (!loadedPackages.ok) {
+// The bash program prints one JSON object: `{ere, globs}` for the
+// strict-candidate key, or `{error}` carrying the reader's load error.
+const PACKAGES_PROGRAM = `. "$1" || exit 8
+if gaia_packages_load "$2"; then
+  gaia_package_globs tddStrictCandidates | jq -R . |
+    jq -cs --arg ere "$(gaia_package_globs_ere tddStrictCandidates)" '{ere: $ere, globs: .}'
+else
+  jq -cn --arg error "$GAIA_PACKAGES_ERROR" '{error: $error}'
+fi`;
+const packagesLibrary = fileURLToPath(
+  new URL('../../../.claude/hooks/lib/gaia-packages.sh', import.meta.url),
+);
+const loaded = spawnSync(
+  'bash',
+  ['-c', PACKAGES_PROGRAM, 'classify-determinism', packagesLibrary, process.cwd()],
+  {encoding: 'utf8'},
+);
+let packages = {};
+try {
+  packages = JSON.parse(loaded.stdout ?? '');
+} catch {
+  // An empty or partial answer (no bash, no jq, no library) falls through to
+  // the generic message below.
+}
+if (loaded.status !== 0 || typeof packages.ere !== 'string') {
+  const message =
+    typeof packages.error === 'string'
+      ? packages.error
+      : `gaia-packages: the package registry could not be read through ${packagesLibrary}. Next step: confirm bash and jq are on PATH and the library is present, then retry.`;
   // Exit from the write callback, not right after the write: a pipe-backed
   // stdout is asynchronous on macOS (see the stdout-exit idiom at the tail).
   // The never-settling await parks the rest of the script until it fires.
-  process.stdout.write(
-    `${JSON.stringify({error: loadedPackages.message})}\n`,
-    () => process.exit(7),
+  process.stdout.write(`${JSON.stringify({error: message})}\n`, () =>
+    process.exit(7),
   );
   await new Promise(() => {});
 }
-const strictCandidatePatterns = repoRegExps(
-  loadedPackages.packages,
-  'tddStrictCandidates',
-);
-const strictCandidateGlobs = loadedPackages.packages.flatMap((entry) =>
-  entry.descriptor.globs.tddStrictCandidates.map((glob) =>
-    joinGlob(entry.path, glob),
-  ),
-);
+const strictCandidateGlobs = packages.globs;
+// An empty ERE means no package is registered; `new RegExp('')` would match
+// every path, so it compiles to no pattern at all.
+const strictCandidatePatterns =
+  packages.ere === '' ? [] : [new RegExp(packages.ere)];
 
 let ts;
 try {

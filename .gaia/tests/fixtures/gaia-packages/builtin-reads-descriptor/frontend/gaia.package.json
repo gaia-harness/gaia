@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 1,
+  "name": "frontend",
+  "globs": {
+    "tddUnitTests": ["src/**/*.test.ts"],
+    "tddStrictCandidates": ["src/lib/**"],
+    "emergentTests": ["src/**/*.spec.ts"],
+    "preCommitSource": ["src/**"],
+    "doctorConfigs": ["doctor.config.*"],
+    "dependencyManifests": ["package.json"]
+  },
+  "wiki": {
+    "sourcePaths": ["src/"],
+    "inventoryPaths": [],
+    "flowPaths": []
+  }
+}

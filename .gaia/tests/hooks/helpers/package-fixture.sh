@@ -62,6 +62,15 @@ write_packages_today() {
   write_package_descriptor "$1" .
 }
 
+# write_builtin_descriptor <root> [unit-json] [strict-json] [emergent-json]
+# The adopter layout with no registry: the built-in registry names the frontend
+# package at `frontend`, whose descriptor is still read from disk.
+write_builtin_descriptor() {
+  local root="$1"
+  shift
+  write_package_descriptor "$root" frontend "$@"
+}
+
 # write_packages_moved <root> [unit-json] [strict-json] [emergent-json]
 # The 2.0.0 layout: the app at `frontend/` (registry path `frontend`).
 write_packages_moved() {

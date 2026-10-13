@@ -66,6 +66,7 @@ setup() {
   git -C "$REPO" config user.email "test@example.com"
   git -C "$REPO" config user.name "Test"
   git -C "$REPO" config commit.gpgsign false
+  write_builtin_descriptor "$REPO"
 
   install_tree_links "$REPO"
 
@@ -549,6 +550,7 @@ make_worktree() {
   WORKTREE="$BATS_TEST_TMPDIR/wt"
   git -C "$REPO" worktree add --quiet -b wt-branch "$WORKTREE" main
   install_tree_links "$WORKTREE"
+  write_builtin_descriptor "$WORKTREE"
 }
 
 # Run the hook with an explicit payload cwd. run_merge_hook leaves that field
@@ -725,6 +727,7 @@ test("renders a label", () => {
 }
 
 @test "a registered package with no descriptor denies with the gaia-packages reason, never an allow" {
+  rm "$REPO/frontend/gaia.package.json"
   write_package_registry "$REPO" '[{"name":"frontend","path":"frontend"}]'
   commit_file "frontend/app/components/X/tests/X.test.tsx" "$EMERGENT_TEST"
   run_merge_hook
@@ -797,7 +800,14 @@ record_verdict() {
       node "$HOME_ROOT/.gaia/scripts/audit-ledger/append-worthiness.mjs" "$relative_path" "$full_name" keep )
 }
 
+# The fixture descriptor's default emergent globs plus the story-file glob the
+# committed frontend descriptor carries.
+write_story_descriptor() {
+  write_builtin_descriptor "$REPO" '' '' '["app/components/**/*.test.ts","app/components/**/*.test.tsx",".playwright/**/*.spec.ts",".playwright/**/*.spec.tsx",".playwright/**/*.test.ts",".playwright/**/*.test.tsx","app/**/*.stories.tsx"]'
+}
+
 @test "denies a changed play story under app/components and one under app/utils/tests, then allows once verdicts are recorded" {
+  write_story_descriptor
   local component_story="frontend/app/components/Marker/tests/marker.stories.tsx"
   local utility_story="frontend/app/utils/tests/utility-marker.stories.tsx"
   commit_file "$component_story" "$(story_source ShowsComponentMarker 'component marker')"
@@ -819,6 +829,7 @@ record_verdict() {
 }
 
 @test "a story whose play changed after its verdict is denied again" {
+  write_story_descriptor
   local story="frontend/app/utils/tests/utility-marker.stories.tsx"
   commit_file "$story" "$(story_source ShowsUtilityMarker 'utility marker')"
   record_verdict "$story" "Shows Utility Marker"
@@ -830,6 +841,7 @@ record_verdict() {
 }
 
 @test "a render-only story file demands no verdict" {
+  write_story_descriptor
   commit_file "frontend/app/components/Marker/tests/marker.stories.tsx" "import type {Meta, StoryObj} from '@storybook/react-vite';
 
 const Marker = () => <p>marker</p>;
@@ -848,6 +860,7 @@ export const Plain: Story = {};
 }
 
 @test "a story whose play is an imported identifier is denied naming the file and the unsupported shape" {
+  write_story_descriptor
   local story="frontend/app/utils/tests/imported-play.stories.tsx"
   commit_file "$story" "import type {Meta, StoryObj} from '@storybook/react-vite';
 import {sharedPlay} from './shared-play';
@@ -872,6 +885,7 @@ export const UsesImportedPlay: Story = {play: sharedPlay};
 }
 
 @test "a story file with a syntax error still passes through (the extractor's other failures fail open)" {
+  write_story_descriptor
   commit_file "frontend/app/utils/tests/broken.stories.tsx" "export const Broken = {play: async ((( => {"
   run_merge_hook
   [ "$status" -eq 0 ]

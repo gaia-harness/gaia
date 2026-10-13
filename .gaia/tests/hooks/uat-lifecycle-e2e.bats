@@ -44,6 +44,8 @@ setup() {
   SPEC="$PLAN/SPEC.md"
   ROUTING="$PLAN/README.md"
   mkdir -p "$TREE/.gaia" "$TREE/frontend/.playwright/e2e" "$PLAN"
+  . "$BATS_TEST_DIRNAME/helpers/package-fixture.sh"
+  write_builtin_descriptor "$TREE"
   # The renderer writes its ledger beside the routing file, so the fixtures
   # are copied rather than pointed at.
   cp "$FIXTURES/SPEC.md" "$SPEC"

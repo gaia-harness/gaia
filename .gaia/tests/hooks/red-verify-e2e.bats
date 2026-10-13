@@ -43,6 +43,7 @@ setup() {
   git -C "$REPO" config user.email "test@example.com"
   git -C "$REPO" config user.name "Test"
   git -C "$REPO" config commit.gpgsign false
+  write_builtin_descriptor "$REPO"
 
   # Mirror the repo-relative layout both hooks resolve from pwd.
   mkdir -p "$REPO/.claude/hooks/lib" "$REPO/.gaia/scripts"

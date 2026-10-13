@@ -12,8 +12,10 @@ import {
 import {tmpdir} from 'node:os';
 import path from 'node:path';
 import {EXIT_CODES} from '../exit.js';
-import {writeFrontendRegistry} from '../util/package-fixture.js';
-import {BUILTIN_DESCRIPTOR} from '../util/packages.js';
+import {
+  committedFrontendDescriptor,
+  writeFrontendRegistry,
+} from '../util/package-fixture.js';
 import type {GhOptions, GhResult} from '../util/run-process.js';
 import {run} from './advisories.js';
 import type {AdvisoriesOptions} from './advisories.js';
@@ -417,9 +419,9 @@ describe('advisories: alerts source', () => {
     writeFileSync(
       path.join(sandbox.root, 'gaia.package.json'),
       JSON.stringify({
-        ...BUILTIN_DESCRIPTOR,
+        ...committedFrontendDescriptor(),
         globs: {
-          ...BUILTIN_DESCRIPTOR.globs,
+          ...committedFrontendDescriptor().globs,
           dependencyManifests: ['tools/pnpm-lock.yaml'],
         },
       })
@@ -799,6 +801,28 @@ describe('advisories: enrichment and classification', () => {
       insideReleaseAgeWindow: true,
       patchEligibleAt: '2026-10-05T08:00:00.000Z',
     });
+  });
+
+  test('an unreadable package registry exits INVALID_ARGUMENTS with the gaia-packages message and no payload, never an unowned package manifest', async () => {
+    rmSync(path.join(sandbox.root, 'frontend', 'gaia.package.json'));
+    const stderrWrites: string[] = [];
+    vi.spyOn(process.stderr, 'write').mockImplementation((chunk) => {
+      stderrWrites.push(String(chunk));
+
+      return true;
+    });
+
+    const exit = await invoke({
+      gh: ghStub({
+        open: ghOk([alert({manifest: 'frontend/package.json', number: 1})]),
+      }),
+    });
+
+    expect(exit).toBe(EXIT_CODES.INVALID_ARGUMENTS);
+    expect(stderrWrites.join('')).toContain(
+      'gaia-packages: frontend/gaia.package.json is missing'
+    );
+    expect(existsSync(sandbox.emit)).toBe(false);
   });
 
   test('an unreadable --updates payload exits INVALID_ARGUMENTS with no payload', async () => {

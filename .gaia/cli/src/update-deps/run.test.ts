@@ -11,7 +11,10 @@ import {
 } from 'node:fs';
 import {tmpdir} from 'node:os';
 import path from 'node:path';
-import {writeFrontendRegistry} from '../util/package-fixture.js';
+import {
+  writeBuiltinDescriptor,
+  writeFrontendRegistry,
+} from '../util/package-fixture.js';
 import {saveDeclines} from './declines.js';
 import {resolveGroupMembers} from './groups.js';
 import {
@@ -1380,6 +1383,7 @@ describe('update-deps run: frontend package root', () => {
   beforeEach(() => {
     // Registry-less workspace: the built-in default puts the app in frontend/.
     root = mkdtempSync(path.join(tmpdir(), 'gaia-update-deps-workspace-'));
+    writeBuiltinDescriptor(root);
     execFileSync('git', ['init', '-q', '-b', 'main'], {cwd: root});
     writeFileSync(
       path.join(root, 'package.json'),
@@ -1591,6 +1595,7 @@ describe('update-deps run: CLI workspace member', () => {
     root = realpathSync(
       mkdtempSync(path.join(tmpdir(), 'gaia-update-deps-cli-member-'))
     );
+    writeBuiltinDescriptor(root);
     execFileSync('git', ['init', '-q', '-b', 'main'], {cwd: root});
     writeJson('package.json', {name: 'root'});
     writeJson('frontend/package.json', {

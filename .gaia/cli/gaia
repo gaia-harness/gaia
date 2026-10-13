@@ -23339,49 +23339,6 @@ var descriptorSchema = (expectedName) => external_exports.object({
 var BUILTIN_REGISTRY = [
   { name: "frontend", path: "frontend" }
 ];
-var BUILTIN_DESCRIPTOR = {
-  globs: {
-    dependencyManifests: ["package.json"],
-    doctorConfigs: ["doctor.config.*", "react-doctor.config.*"],
-    emergentTests: [
-      "app/components/**/*.test.ts",
-      "app/components/**/*.test.tsx",
-      "app/pages/**/*.test.ts",
-      "app/pages/**/*.test.tsx",
-      ".playwright/**/*.spec.ts",
-      ".playwright/**/*.spec.tsx",
-      ".playwright/**/*.test.ts",
-      ".playwright/**/*.test.tsx",
-      "app/**/*.stories.tsx"
-    ],
-    preCommitSource: ["app/**", "test/**", ".storybook/**", ".playwright/**"],
-    tddStrictCandidates: [
-      "app/utils/**",
-      "app/services/**",
-      "app/hooks/**",
-      "app/components/**/*.ts",
-      "app/pages/**/*.ts"
-    ],
-    tddUnitTests: ["app/**/*.test.ts", "app/**/*.test.tsx"]
-  },
-  name: "frontend",
-  schemaVersion: 1,
-  wiki: {
-    flowPaths: [
-      "app/middleware/",
-      "app/routes.ts",
-      "app/i18n.ts",
-      "app/sessions.server/"
-    ],
-    inventoryPaths: [
-      "app/components/",
-      "app/hooks/",
-      "app/pages/",
-      "app/services/"
-    ],
-    sourcePaths: ["app/"]
-  }
-};
 var registryError = (reason) => {
   const detail = reason === "" ? "" : `: ${reason}`;
   return {
@@ -23390,15 +23347,13 @@ var registryError = (reason) => {
     ok: false
   };
 };
-var descriptorError = (file2, state, reason = "") => {
-  const nextStep = state === "missing" ? `restore ${file2} from the GAIA release, or correct the path in ${REGISTRY_FILE}` : `restore ${file2} from the GAIA release, or correct the field it names`;
-  const status = state === "invalid" ? `invalid: ${reason}` : state;
-  return {
-    code: "DESCRIPTOR_INVALID",
-    message: `gaia-packages: ${file2} is ${status}. Next step: ${nextStep}.`,
-    ok: false
-  };
-};
+var missingNextStep = (file2, source) => source === "builtin" ? `restore it with git checkout origin/main -- ${file2}, or run /update-gaia` : `restore ${file2} from the GAIA release, or correct the path in ${REGISTRY_FILE}`;
+var fieldNextStep = (file2) => `restore ${file2} from the GAIA release, or correct the field it names`;
+var descriptorError = (file2, status, nextStep) => ({
+  code: "DESCRIPTOR_INVALID",
+  message: `gaia-packages: ${file2} is ${status}. Next step: ${nextStep}.`,
+  ok: false
+});
 var descriptorFileFor = (packagePath) => packagePath === "." ? DESCRIPTOR_NAME : `${packagePath}/${DESCRIPTOR_NAME}`;
 var registryIssueReason = (issue2) => {
   const [index, field2] = issue2.path;
@@ -23493,15 +23448,15 @@ var loadRegistry = (repoRoot) => {
   const duplicate = duplicateReason(registry2.data);
   return duplicate === null ? { entries: registry2.data, source: "registry" } : registryError(duplicate);
 };
-var loadDescriptor = (repoRoot, entry) => {
+var loadDescriptor = (repoRoot, entry, source) => {
   const file2 = descriptorFileFor(entry.path);
   const read = readFileState(path6.join(repoRoot, file2));
   if (read.kind === "absent") {
-    return descriptorError(file2, "missing");
+    return descriptorError(file2, "missing", missingNextStep(file2, source));
   }
   const parsed = parseJson(read);
   if (parsed === null) {
-    return descriptorError(file2, "malformed");
+    return descriptorError(file2, "malformed", fieldNextStep(file2));
   }
   const descriptor = descriptorSchema(entry.name).safeParse(parsed.value);
   if (descriptor.success) {
@@ -23511,32 +23466,22 @@ var loadDescriptor = (repoRoot, entry) => {
     (a, b) => issueRank(a) - issueRank(b)
   );
   const reason = issue2 === void 0 ? "not a JSON object" : descriptorIssueReason(issue2, entry.name);
-  return descriptorError(file2, "invalid", reason);
+  return descriptorError(file2, `invalid: ${reason}`, fieldNextStep(file2));
 };
 var loadPackages = (repoRoot) => {
   const registry2 = loadRegistry(repoRoot);
   if ("ok" in registry2) {
     return registry2;
   }
-  if (registry2.source === "builtin") {
-    return {
-      ok: true,
-      packages: registry2.entries.map((entry) => ({
-        ...entry,
-        descriptor: BUILTIN_DESCRIPTOR
-      })),
-      source: "builtin"
-    };
-  }
   const packages = [];
   for (const entry of registry2.entries) {
-    const loaded = loadDescriptor(repoRoot, entry);
+    const loaded = loadDescriptor(repoRoot, entry, registry2.source);
     if ("ok" in loaded) {
       return loaded;
     }
     packages.push(loaded);
   }
-  return { ok: true, packages, source: "registry" };
+  return { ok: true, packages, source: registry2.source };
 };
 var globToBody = (glob) => glob.replaceAll(/[\\.+^$()[\]|]/g, String.raw`\$&`).replaceAll("**/", "").replaceAll("**", "").replaceAll("*", "").replaceAll("?", "").replaceAll(
   /\{([^{}]+)\}/g,
@@ -36684,9 +36629,7 @@ var readBaselineIds = (repoRoot) => {
   }
   return ids;
 };
-var ownedManifestPredicate = (repoRoot) => {
-  const loaded = loadPackages(repoRoot);
-  const patterns = loaded.ok ? repoRegExps(loaded.packages, "dependencyManifests") : [];
+var ownedManifestPredicate = (repoRoot, patterns) => {
   const member = readCliWorkspaceMember(repoRoot);
   const memberManifest = member === null ? null : path45.posix.join(member, "package.json");
   return (manifestPath) => ALWAYS_OWNED_MANIFESTS.has(manifestPath) || manifestPath === memberManifest || patterns.some((pattern) => pattern.test(manifestPath));
@@ -36709,7 +36652,10 @@ var readAlerts = async (context) => {
     repo: repository.repo
   });
   if (!fetched.ok) return fetched;
-  const isOwned = ownedManifestPredicate(context.repoRoot);
+  const isOwned = ownedManifestPredicate(
+    context.repoRoot,
+    context.manifestPatterns
+  );
   const open2 = normalizeAlerts(fetched.open, OPEN_STATES);
   const dismissed = normalizeAlerts(fetched.dismissed, DISMISSED_STATES);
   const ownedOpen = open2.records.filter((alert) => isOwned(alert.manifestPath));
@@ -36890,14 +36836,25 @@ var run43 = async (argv, options = {}) => {
   if (offers === null) {
     return usageError2(`cannot read updates payload: ${String(args.updates)}`);
   }
+  const repoRoot = resolveRootOrCwd(cwd);
+  const loaded = loadPackages(repoRoot);
+  if (!loaded.ok) {
+    structuredError({
+      code: "gaia_packages",
+      message: loaded.message,
+      subcommand: SUBCOMMAND6
+    });
+    return EXIT_CODES.INVALID_ARGUMENTS;
+  }
   const context = {
     args,
     cwd,
     env: options.env ?? process.env,
+    manifestPatterns: repoRegExps(loaded.packages, "dependencyManifests"),
     now: (options.now ?? (() => /* @__PURE__ */ new Date()))(),
     options,
     pnpmRunner: options.pnpmRunner ?? advisoryPnpmRunner,
-    repoRoot: resolveRootOrCwd(cwd)
+    repoRoot
   };
   const payload = await buildPayload(context, offers);
   const outPath = resolveFrom(cwd, args.emit);
