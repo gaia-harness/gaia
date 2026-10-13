@@ -96,7 +96,7 @@ spec_model_switch_line() {
 }
 
 spec_plan_handoff() {
-  section "$1/$REFERENCES/spec.md" '### 11.' | sed 's/^> \{0,1\}//' | fence_bodies '' |
+  section "$1/$REFERENCES/spec.md" '### 11.' | fence_bodies text |
     grep -qxF -- '/gaia-plan SPEC-NNN'
 }
 

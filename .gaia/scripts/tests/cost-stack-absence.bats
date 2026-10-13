@@ -94,8 +94,12 @@ allowed_hit_count() {
   [ "$(allowed_hit_count 'wiki/concepts/Usage Ledger.md')" -eq 1 ]
 }
 
-@test "the retired ledger's name appears in exactly one registry entry" {
-  [ "$(allowed_hit_count '.gaia/state-registry.json')" -eq 1 ]
+@test "the retired ledger's name appears in the registry only on residue rows" {
+  # The ledger row and its backups row; any other hit (a live entry, a
+  # description) makes the file count exceed the residue-path count.
+  residue_hits="$(jq -r '.residue[].path' "$REPO_ROOT/.gaia/state-registry.json" | grep -o -E 'cost\.jsonl' | wc -l | tr -d ' ')"
+  [ "$residue_hits" -gt 0 ]
+  [ "$(allowed_hit_count '.gaia/state-registry.json')" -eq "$residue_hits" ]
 }
 
 @test "the Unreleased changelog section names no retired symbol" {

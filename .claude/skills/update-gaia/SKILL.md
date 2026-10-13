@@ -14,7 +14,7 @@ The first three take the same Step 7 rows. The class changes only two of them: w
 
 Backups land in `.gaia-backup/<timestamp>/`. Conflict patches land in `.gaia-merge/`.
 
-**After the commit.** This file runs the pre-flight through Step 4b, spawns the execution agent for Steps 5–10 (`references/merge-execution.md`), and then waits for the user. Once the user confirms the Step 10 commit, run Step 11 below.
+**After the commit.** This file runs the pre-flight through Step 4b, spawns the execution agent for Steps 5–10 (`references/merge-execution.md`), and then waits for the user. Once the user confirms the Step 10 commit, run Steps 11 and 12 below.
 
 ## Pre-flight: Worktree check
 
@@ -226,3 +226,7 @@ fi
 ```
 
 If `gh` is unavailable or errors, tell the user to open the PR manually: `$branch` → `main`.
+
+### Step 12: Offer the residue sweep
+
+The merged `.gaia/state-registry.json` names the `.gaia/local` state that retired features left behind. Run `bash .gaia/scripts/state-registry-lib.sh residue-sweep` and show its output. When its Residue section lists paths, ask once with `AskUserQuestion` (question `Delete the residue paths listed above?`, header `Residue`, options `Delete them` and `Keep them`) and on `Delete them` run the same command with `--apply`. It deletes only the Residue paths; Unknown paths are listed, never deleted. A non-zero exit names its cause on stderr: relay it and finish, since the update itself is done.

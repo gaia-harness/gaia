@@ -373,13 +373,14 @@ use_real_registry() {
   assert_allowed_by_json
 }
 
-# Paired deny control for the two allows above: with both protected rows gone
+# Paired deny control for the two allows above: with every protected row gone
 # the same write is denied, so the allow is the registry's recognition and not
 # a failed cd or a blanket allow.
-@test "a worktree-mode write under protected is denied once both protected rows are removed (real registry)" {
+@test "a worktree-mode write under protected is denied once every protected row is removed (real registry)" {
   make_repo
   use_real_registry
-  jq '.entries |= map(select(.id != "audit-loop-state" and .id != "checkpoint-override"))' \
+  [ "$(jq '[.entries[] | select(.path | startswith("protected/"))] | length' "$REPO/.gaia/state-registry.json")" -gt 0 ]
+  jq '.entries |= map(select(.path | startswith("protected/") | not))' \
     "$REPO/.gaia/state-registry.json" >"$REPO/.gaia/state-registry.json.new"
   mv "$REPO/.gaia/state-registry.json.new" "$REPO/.gaia/state-registry.json"
   make_worktree "feat/9-sample-e" "feat/9-sample-e"

@@ -20,6 +20,8 @@ A linked worktree's `.gaia/local` is a single symlink to the main checkout's `.g
 
 An `ephemeral` entry is consumed once and then orphaned; its owner is meant to prune it, and most such entries have no other backstop if the owner doesn't.
 
+A removed feature has no owner left to prune what it wrote, so retiring one means adding a `residue` row naming its paths, and the residue sweep does the rest. `bash .gaia/scripts/state-registry-lib.sh residue-sweep` lists every present path a residue row names, with the row's reason, and paths no row claims under a separate Unknown heading; `--apply` deletes exactly the residue paths. It never deletes a live or unknown path, never follows a symlink, and never leaves `.gaia/local/`. A row whose state moves once to a new name carries a `successor`, and the sweep keeps its paths until that successor exists. `/update-gaia` offers the sweep after every update; the script's header owns the exit codes and output format.
+
 ## The protected folder
 
 `.gaia/local/protected/` holds state that only hooks or a human may write: the audit loop's per-branch history and allowance under `protected/audit-loop/`, and the machine-local checkpoint override at `protected/checkpoint-override.json`. The placement rule is one sentence: state that only hooks or a human may write lives in `.gaia/local/protected/`, and placing a file there protects it from Claude's tools by every spelling the guard covers. A new occupant still needs its own row in `.gaia/state-registry.json` to carry a scope.

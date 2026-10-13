@@ -47,7 +47,6 @@
     ".claude/hooks/lib/audit-rules-changed.sh": "owned",
     ".claude/hooks/lib/audit-scope.sh": "owned",
     ".claude/hooks/lib/cross-repo-refusal.sh": "owned",
-    ".claude/hooks/lib/gaia-active-plan.sh": "owned",
     ".claude/hooks/lib/gaia-packages.sh": "owned",
     ".claude/hooks/lib/gaia-version.sh": "owned",
     ".claude/hooks/lib/git-segments.sh": "owned",
