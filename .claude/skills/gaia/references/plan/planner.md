@@ -275,16 +275,19 @@ Then write the following files directly to `{PLAN_DIR}/`:
       - **Primary signal:** the orchestrator was invoked via `Agent(...)` with `isolation: "worktree"`. The orchestrator knows this if its dispatch was a sub-agent task (i.e. the kickoff prompt was passed to a Task / Agent call from a parent session) AND the cwd is a worktree path. If the orchestrator can read the runtime's session metadata to confirm isolation directly, it does so; otherwise it heuristically checks: if `pwd` resolves to a path under `.claude/worktrees/` AND the parent session that launched the orchestrator is unknown, treat as isolated.
       - **Fallback:** if uncertain, attempt `ExitWorktree({action: "remove", discard_changes: true})` and check the runtime response. If the response contains `cannot be called from a subagent`, treat the call as never-issued (it's a refusal, not a destructive action), branch into the continuation-prompt path, and STOP. (This is the only place the orchestrator may use the deny-as-signal pattern; everywhere else, proactive detection is required.)
 
-      When detected, the orchestrator does NOT call `ExitWorktree`. It emits this copy-paste continuation prompt to the user, then stops:
+      When detected, the orchestrator does NOT call `ExitWorktree`. It emits this continuation prompt to the user inside a `text` fenced code block, then stops:
 
-          The worktree at <ABSOLUTE-PATH-TO-WORKTREE> is ready to discard.
-          PR #<N> squash-merged as <short-sha>. From a shell at
-          <ABSOLUTE-PATH-TO-MAIN-CHECKOUT>, run:
+      ```text
+      The worktree at <ABSOLUTE-PATH-TO-WORKTREE> is ready to discard.
+      PR #<N> squash-merged as <short-sha>. From a shell at
+      <ABSOLUTE-PATH-TO-MAIN-CHECKOUT>, run:
 
-              git worktree remove --force <ABSOLUTE-PATH-TO-WORKTREE>
-              git branch -D <branch-name>   # if it still exists
-              bash .gaia/scripts/summary-verify.sh <ABSOLUTE-PATH-TO-SUMMARY.md> && rm <ABSOLUTE-PATH-TO-SPEC-FOLDER>/SPEC.md <ABSOLUTE-PATH-TO-SPEC-FOLDER>/AUDIT.md   # spec-colocated plan only
-              bash .gaia/scripts/plan-archive.sh <ABSOLUTE-PATH-TO-PLAN_DIR>
+          git worktree remove --force <ABSOLUTE-PATH-TO-WORKTREE>
+          git branch -D <branch-name>   # if it still exists
+          git -C <ABSOLUTE-PATH-TO-MAIN-CHECKOUT> pull --ff-only origin main   # only when `git rev-parse --abbrev-ref HEAD` there prints main
+          bash .gaia/scripts/summary-verify.sh <ABSOLUTE-PATH-TO-SUMMARY.md> && rm <ABSOLUTE-PATH-TO-SPEC-FOLDER>/SPEC.md <ABSOLUTE-PATH-TO-SPEC-FOLDER>/AUDIT.md   # spec-colocated plan only
+          bash .gaia/scripts/plan-archive.sh <ABSOLUTE-PATH-TO-PLAN_DIR>
+      ```
 
       The last two commands are the post-merge close's remaining steps (`lifecycle.md` `## Post-merge close`), which an isolated orchestrator cannot run because they need the main checkout. Do not emit an `ExitWorktree({...})` call in this continuation prompt. `ExitWorktree` only operates on a worktree created by `EnterWorktree` in the current session: from a fresh session it is a no-op on a prior-session worktree, and its schema requires `action` and rejects a `worktree` parameter. A plain `git worktree remove --force` is the correct session-independent cleanup. No error surfaces, no `ExitWorktree` invocation happens in this branch, and the user pastes the shell commands into any terminal to complete the cleanup without further investigation.
 

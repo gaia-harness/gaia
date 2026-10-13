@@ -6,4 +6,4 @@
 - Choose each model by fit to the task, from the model table in `wiki/concepts/Workflow Doctrine.md`.
 - Keep durable research output under `.gaia/local/research/<topic>-<date>/`: one small current-state file, rewritten in place and never appended, plus artifacts beside it.
 - Work that spans sessions resumes from one `STATE.md` in its run folder under `.gaia/local/runs/` or its research folder, rewritten in place.
-- A handoff is a paste-ready continuation prompt in a code fence that carries its own context, never a pointer to this session's scrollback.
+- A prompt, command or line the user is meant to copy and paste is printed inside a fenced code block (three backticks, info string `text`), never in prose or a blockquote; when it contains a triple-backtick fence of its own, fence it with four backticks. A handoff is such a continuation prompt and carries its own context, never a pointer to this session's scrollback.

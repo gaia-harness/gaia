@@ -160,7 +160,13 @@ SPEC synthesis, the two-gate ceremony, the Socratic clarify loop, and the gate c
     - `{ label: "Switch to Opus (Recommended)", description: "Highest-quality specs. Stops here so you can switch, then re-run /gaia-spec." }`
     - `{ label: "Switch to Fable", description: "Also a top-tier planning model. Stops here so you can switch, then re-run /gaia-spec." }`
     - `{ label: "Stay on [model name]", description: "Author the SPEC on the current model without switching." }`
-  - If the user picks Opus or Fable: do **not** start the workflow. Print exactly one instruction and STOP: `"Switch with /model (pick <chosen model>), then re-run /gaia-spec <description>."` Interpolate `<chosen model>`; if a feature description was supplied as an argument, echo it in place of `<description>` so the re-run is a single paste, otherwise drop the `<description>` placeholder. Allocate no SPEC id, write no files, author nothing.
+  - If the user picks Opus or Fable: do **not** start the workflow. Print exactly one instruction line, `Switch with /model (pick <chosen model>), then re-run:`, then the re-run command alone inside a `text` fenced code block, and STOP:
+
+    ```text
+    /gaia-spec <description>
+    ```
+
+    Interpolate `<chosen model>`; if a feature description was supplied as an argument, echo it in place of `<description>` so the re-run is a single paste, otherwise drop the `<description>` placeholder. Allocate no SPEC id, write no files, author nothing.
   - If the user picks "Stay": proceed to step 1 on the current model.
 
 ### 1. Get description
