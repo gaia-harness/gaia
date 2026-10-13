@@ -81,6 +81,7 @@ run_in_registry_repo() {
     type gaia_registry_integrity_snapshot >/dev/null
     type gaia_registry_recognizes >/dev/null
     type gaia_registry_classify >/dev/null
+    type gaia_registry_residue_sweep >/dev/null
     echo OK
   ' _ "$LIBRARY_SCRIPT"
   [ "$status" -eq 0 ]
@@ -484,7 +485,7 @@ run_in_registry_repo() {
     ([.entries[].match] | all(. as $match_type | ["exact","glob","prefix"] | index($match_type) != null))
     and ([.entries[].kind] | all(. as $kind | ["file","dir"] | index($kind) != null))
     and ([.entries[].scope] | all(. as $scope | ["shared","per-tree","main-only","ephemeral"] | index($scope) != null))
-    and ([.entries[].writer] | all(. as $writer | ["code","hand-authored","not-yet-live"] | index($writer) != null))
+    and ([.entries[].writer] | all(. as $writer | ["code","hand-authored"] | index($writer) != null))
     and ([.residue[].match] | all(. as $match_type | ["exact","glob","prefix"] | index($match_type) != null))
     and ([.residue[].writer] | all(. == "none-residue"))
   ' "$REGISTRY"

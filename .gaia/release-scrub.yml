@@ -501,7 +501,6 @@ transforms:
           - "wiki/log.md"
         title-opt-out:
           - "GAIA" # the project's own name; a generic word on nearly every shipped page.
-          - "dashboard" # a common noun; the wiki/meta/dashboard.md title is not a followable pointer in prose.
           - "Steven Sacks" # the maintainer's name appears as attribution, not as a page reference.
           - "Release Workflow" # a generic multi-word title; bare-prose form reads as ordinary text, and its [[wikilink]] and path forms stay covered by the sibling checks.
           - "spec-kit" # a third-party product name that shipped prose uses as a word; its [[wikilink]] and path forms stay covered by the sibling checks.

@@ -42,7 +42,6 @@
 .claude/hooks/lib/audit-digest.sh	code-audit-maintainer-shell
 .claude/hooks/lib/audit-machinery.sh	code-audit-maintainer-shell
 .claude/hooks/lib/audit-scope.sh	code-audit-maintainer-shell
-.claude/hooks/lib/gaia-active-plan.sh	code-audit-maintainer-shell
 .claude/hooks/lib/gaia-ci-defer.sh	code-audit-maintainer-shell
 .claude/hooks/lib/red-ledger.sh	code-audit-maintainer-shell
 .claude/hooks/lib/repo-scope.sh	code-audit-maintainer-shell

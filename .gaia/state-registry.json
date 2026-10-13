@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "description": "The one classification of every .gaia/local entry, transcribed by hand from the frozen state-model classification (never generated from code, which is what is under correction). Consumers read this instead of hand-maintaining their own lists. `path` is relative to .gaia/local/. A `path` may join more than one concrete on-disk shape with '|' when a single logical entry covers several filenames (e.g. a clearance marker's .ok/.refused siblings); each '|'-joined alternative is matched independently under the entry's own `match` rule. A `path` may also carry a '<placeholder>' token for a variable path segment (a spec id, a digest, a worktree name); for `match: glob` a placeholder behaves as a shell '*' wildcard, and for `match: prefix` only the literal text before the first '<' is significant. `residue` lists known dead-feature/legacy paths that are real on some machines but are not live state: reported if found, never treated as drift and never a live entry.",
+  "description": "The one classification of every .gaia/local entry, transcribed by hand from the frozen state-model classification (never generated from code, which is what is under correction). Consumers read this instead of hand-maintaining their own lists. `path` is relative to .gaia/local/. A `path` may join more than one concrete on-disk shape with '|' when a single logical entry covers several filenames (e.g. a clearance marker's .ok/.refused siblings); each '|'-joined alternative is matched independently under the entry's own `match` rule. A `path` may also carry a '<placeholder>' token for a variable path segment (a spec id, a digest, a worktree name); for `match: glob` a placeholder behaves as a shell '*' wildcard, and for `match: prefix` only the literal text before the first '<' is significant. `residue` lists known dead-feature/legacy paths that are real on some machines but are not live state: never treated as drift and never a live entry. `bash .gaia/scripts/state-registry-lib.sh residue-sweep` lists the ones present and `--apply` deletes them. A residue row may name a `successor`, a .gaia/local-relative path its state moves to once: the sweep leaves that row's paths alone until the successor exists, so state a pending move has yet to carry is never deleted.",
   "entries": [
     {
       "id": "setup-state",
@@ -344,6 +344,17 @@
       "reaped_by": null
     },
     {
+      "id": "harness-verify-pass",
+      "path": "protected/verify-pass/",
+      "match": "prefix",
+      "kind": "dir",
+      "scope": "main-only",
+      "keyed_by": null,
+      "why": "Per-branch record that the maintainer harness verification passed for a commit, resolved to main so the audit loop hook reads one record from every tree. Written by the verification runner, read by the audit loop bound hook; a project without the maintainer test tree never writes it.",
+      "writer": "code",
+      "reaped_by": null
+    },
+    {
       "id": "project-id",
       "path": ".project-id",
       "match": "exact",
@@ -672,20 +683,92 @@
       "path": "harden/",
       "match": "prefix",
       "why": "The old state directory of the command now named /gaia-codify. The CLI moves it to codify/ once and leaves it behind when codify/ already exists or when it holds a ledger in a format codify no longer reads; nothing reads it afterwards.",
-      "writer": "none-residue"
+      "writer": "none-residue",
+      "successor": "codify/"
     },
     {
       "id": "audit-knowledge-reports-residue",
       "path": "audit/KNOWLEDGE-*.md",
       "match": "glob",
       "why": "Reports left in audit/ when a report of the same name already sits in cleanse/; the one-time move never overwrites. Nothing reads them afterwards.",
-      "writer": "none-residue"
+      "writer": "none-residue",
+      "successor": "cleanse/"
     },
     {
       "id": "telemetry-rate-table-tmp-residue",
       "path": "telemetry/.token-rates*.tmp.*",
       "match": "glob",
       "why": "Retired in-flight temp files of the seeded rate table writes; any found is inert and has no writer or reaper.",
+      "writer": "none-residue"
+    },
+    {
+      "id": "automation-config-residue",
+      "path": "automation.json",
+      "match": "exact",
+      "why": "Machine-local config of the removed GAIA CI automation; nothing reads or writes it.",
+      "writer": "none-residue"
+    },
+    {
+      "id": "telemetry-retired-logs-residue",
+      "path": "telemetry/spec-pacing.jsonl|telemetry/gh-mirror.jsonl|telemetry/audit-respawn.jsonl",
+      "match": "exact",
+      "why": "Logs of removed features (spec pacing, the spec-to-issue mirror, the audit re-spawn measurement); nothing reads or writes them.",
+      "writer": "none-residue"
+    },
+    {
+      "id": "telemetry-cost-ledger-backup-residue",
+      "path": "telemetry/cost.jsonl.bak.*",
+      "match": "glob",
+      "why": "Backups of the retired cost ledger; nothing reads them.",
+      "writer": "none-residue"
+    },
+    {
+      "id": "health-audit-residue",
+      "path": "audit/comprehensive/|audit/archived/",
+      "match": "prefix",
+      "why": "Run and archive folders of the removed /health-audit; nothing reads or writes them.",
+      "writer": "none-residue"
+    },
+    {
+      "id": "health-audit-cycle-residue",
+      "path": "audit/c[0-9]|audit/c[0-9][0-9]|audit.prev-*",
+      "match": "glob",
+      "why": "Cycle folders and the moved-aside previous audit folder of the removed /health-audit; nothing reads or writes them. The cycle shapes stop at two digits so a digest-named marker that starts with c never matches.",
+      "writer": "none-residue"
+    },
+    {
+      "id": "link-worktree-backup-residue",
+      "path": "audit.bak.*|setup-state.json.bak.*|audit/marker.txt",
+      "match": "glob",
+      "why": "Backups and a probe file the 1.6.1 worktree linker left when it replaced real state with a symlink; nothing reads them.",
+      "writer": "none-residue"
+    },
+    {
+      "id": "commit-keyed-marker-residue",
+      "path": "audit/[0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f].ok",
+      "match": "glob",
+      "why": "1.6.1 clearance markers, keyed by a 40-hex commit id. Current markers are keyed by a 64-hex digest, so one of this exact shape is never read; the glob spells forty hex digits so no current marker matches it.",
+      "writer": "none-residue"
+    },
+    {
+      "id": "audit-retired-scratch-residue",
+      "path": "audit/progress.log|audit/*.progress.log|audit/wave-stamp-*|audit/.wave-stamp-*|audit/dispositions.*|audit/worthiness.jsonl",
+      "match": "glob",
+      "why": "Scratch of removed audit steps (progress breadcrumbs, wave stamps, the disposition sidecar's temp files) and the earlier worthiness log location, now per tree under worthiness-ledger/; nothing reads or writes them here.",
+      "writer": "none-residue"
+    },
+    {
+      "id": "plans-code-review-audit-ci-residue",
+      "path": "plans/code-review-audit-ci/",
+      "match": "prefix",
+      "why": "Contract notes for the removed GAIA CI audit and its commit trailer; nothing reads them.",
+      "writer": "none-residue"
+    },
+    {
+      "id": "cache-retired-guard-residue",
+      "path": "cache/spec-chain-*.json|cache/version-check.lock",
+      "match": "glob",
+      "why": "State of the removed spec-to-plan chain guard and the removed spec-kit version-check throttle; nothing reads or writes them.",
       "writer": "none-residue"
     }
   ],

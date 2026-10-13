@@ -115,6 +115,28 @@
 #   unavailable or the registry cannot be read, it prints nothing and
 #   returns 1.
 #
+# gaia_registry_residue_sweep [--apply]
+#   Walks the MAIN checkout's .gaia/local (physically: `find -P`, never into a
+#   symlink) as deep as the deepest residue row, and prints, sorted, under one
+#   heading each:
+#     Residue ...        each present path a residue row names, "<path>  (<why>)";
+#                        a matching directory is listed once, never per child
+#     Kept until ...     a residue path whose row names a `successor` not yet
+#                        present (a one-time move has not run), "(waits for <successor>)"
+#     Symlinks ...       a symlink a residue row names; left to whoever made it
+#                        (a linked worktree's shared-state link is its owner's)
+#     Unknown ...        a path no row or row ancestor claims, listed at its top
+#   An empty Residue or Unknown section prints "Residue: none." / "Unknown: none.";
+#   the other two headings appear only when non-empty. Without --apply nothing
+#   changes. With --apply it deletes exactly the Residue paths, printing
+#   "Removed: <path>" for each, after re-checking that no symlink sits on the
+#   path; live, unknown, kept and symlinked paths are never deleted, and nothing
+#   outside .gaia/local is ever reached (paths come from the walk, not the row).
+#   Exit: 0 listed (or swept) cleanly, also when .gaia/local is absent;
+#   1 nothing read or deleted: jq missing, registry unreadable, or .gaia/local
+#   is itself a symlink; 2 usage; 3 --apply could not delete (or refused) at
+#   least one path, each named on stderr, the rest deleted.
+#
 # Usage (sourced):
 #   . .gaia/scripts/state-registry-lib.sh
 #   registry="$(gaia_registry_path)" || { echo "no registry: $?" >&2; }
@@ -129,6 +151,7 @@
 #   bash .gaia/scripts/state-registry-lib.sh integrity-snapshot         # gaia_registry_integrity_snapshot
 #   bash .gaia/scripts/state-registry-lib.sh recognizes <relpath> <f|d> # gaia_registry_recognizes
 #   bash .gaia/scripts/state-registry-lib.sh classify <relpath>         # gaia_registry_classify
+#   bash .gaia/scripts/state-registry-lib.sh residue-sweep [--apply]    # gaia_registry_residue_sweep
 
 # gaia_registry_path: see the header contract above.
 gaia_registry_path() {
@@ -178,35 +201,46 @@ _gaia_registry_pattern_matches() {
   local -a alternatives
   read -ra alternatives <<<"$pattern"
   IFS="$saved_ifs"
-  local alternative literal_prefix literal_prefix_trimmed
+  local alternative
   for alternative in "${alternatives[@]}"; do
-    case "$match_type" in
-      exact)
-        [ "$relative_path" = "$alternative" ] && return 0
-        ;;
-      glob)
-        # Deliberately unquoted: $alternative is a shell-glob pattern by contract
-        # (registry-authored, not attacker input), and case needs it bare
-        # to expand as a glob rather than a literal string.
-        # shellcheck disable=SC2254
-        case "$relative_path" in
-          $alternative) return 0 ;;
-        esac
-        ;;
-      prefix)
-        # Literal text before the first '<' (or the whole alternative, unchanged,
-        # when it has none). Matches the directory itself with no trailing
-        # slash (a caller may hand either form) as well as any child under
-        # it.
-        literal_prefix="${alternative%%<*}"
-        literal_prefix_trimmed="${literal_prefix%/}"
-        case "$relative_path" in
-          "$literal_prefix_trimmed") return 0 ;;
-          "$literal_prefix"*) return 0 ;;
-        esac
-        ;;
-    esac
+    _gaia_registry_alternative_matches "$relative_path" "$alternative" "$match_type" && return 0
   done
+  return 1
+}
+
+# _gaia_registry_alternative_matches <relative_path> <alternative> <match_type>
+# One '|'-free alternative under <match_type>. Split out so the residue sweep
+# can match thousands of paths without the here-string temp file each
+# _gaia_registry_pattern_matches call costs on bash 3.2.
+_gaia_registry_alternative_matches() {
+  local relative_path="$1" alternative="$2" match_type="$3"
+  local literal_prefix literal_prefix_trimmed
+  case "$match_type" in
+    exact)
+      [ "$relative_path" = "$alternative" ] && return 0
+      ;;
+    glob)
+      # Deliberately unquoted: $alternative is a shell-glob pattern by contract
+      # (registry-authored, not attacker input), and case needs it bare
+      # to expand as a glob rather than a literal string.
+      # shellcheck disable=SC2254
+      case "$relative_path" in
+        $alternative) return 0 ;;
+      esac
+      ;;
+    prefix)
+      # Literal text before the first '<' (or the whole alternative, unchanged,
+      # when it has none). Matches the directory itself with no trailing
+      # slash (a caller may hand either form) as well as any child under
+      # it.
+      literal_prefix="${alternative%%<*}"
+      literal_prefix_trimmed="${literal_prefix%/}"
+      case "$relative_path" in
+        "$literal_prefix_trimmed") return 0 ;;
+        "$literal_prefix"*) return 0 ;;
+      esac
+      ;;
+  esac
   return 1
 }
 
@@ -323,6 +357,213 @@ gaia_registry_classify() {
   return 0
 }
 
+# _gaia_registry_sweep_contained <local_root> <relative_path>
+# True when <relative_path> names a path strictly inside <local_root> with no
+# symlink on the way, re-checked at delete time so a link swapped in after the
+# walk still stops the delete.
+_gaia_registry_sweep_contained() {
+  local local_root="$1" relative_path="$2" walked="$1" segment rest
+  case "/$relative_path/" in
+    */../* | */./* | //*) return 1 ;;
+  esac
+  rest="$relative_path"
+  while :; do
+    segment="${rest%%/*}"
+    walked="$walked/$segment"
+    [ -L "$walked" ] && return 1
+    [ "$rest" = "$segment" ] && break
+    rest="${rest#*/}"
+  done
+  return 0
+}
+
+# gaia_registry_residue_sweep: see the header contract above.
+gaia_registry_residue_sweep() {
+  local apply=0
+  case "$#:${1:-}" in
+    0:) ;;
+    1:--apply) apply=1 ;;
+    *)
+      printf 'usage: state-registry-lib.sh residue-sweep [--apply]\n' >&2
+      return 2
+      ;;
+  esac
+  local registry
+  registry="$(gaia_registry_path)" || return 1
+  local local_root="${registry%/state-registry.json}/local"
+  if [ -L "$local_root" ]; then
+    printf 'residue-sweep: %s is a symlink; run from the main checkout, whose .gaia/local is the real directory\n' "$local_root" >&2
+    return 1
+  fi
+  if [ ! -d "$local_root" ]; then
+    printf 'No .gaia/local directory: nothing to sweep.\n'
+    return 0
+  fi
+
+  # One row per '|'-joined alternative, read once, so the walk below matches
+  # in-process instead of re-reading the registry per path. The optional
+  # successor is the last column: tab is whitespace to `read`, so an empty
+  # field anywhere earlier would collapse and shift the ones after it.
+  local residue_rows live_rows
+  residue_rows="$(jq -r '.residue[] | . as $row | (.path | split("|")[])
+    | [$row.match, ., $row.why, ($row.successor // "")] | @tsv' "$registry")" || {
+    printf 'residue-sweep: cannot read the residue rows of %s\n' "$registry" >&2
+    return 1
+  }
+  live_rows="$(jq -r '.entries[] | . as $row | (.path | split("|")[])
+    | [$row.match, ., $row.kind] | @tsv' "$registry")" || {
+    printf 'residue-sweep: cannot read the live entries of %s\n' "$registry" >&2
+    return 1
+  }
+
+  local -a residue_match residue_path residue_successor residue_why live_match live_path live_kind ancestor_globs
+  local match_type alternative third fourth depth=1 segments ancestor
+  while IFS=$'\t' read -r match_type alternative third fourth; do
+    [ -n "$match_type" ] || continue
+    residue_match+=("$match_type")
+    residue_path+=("$alternative")
+    residue_why+=("$third")
+    residue_successor+=("$fourth")
+  done <<<"$residue_rows"
+  while IFS=$'\t' read -r match_type alternative third; do
+    [ -n "$match_type" ] || continue
+    live_match+=("$match_type")
+    live_path+=("$alternative")
+    live_kind+=("$third")
+  done <<<"$live_rows"
+
+  # The walk goes as deep as the deepest residue alternative and no deeper.
+  # Every ancestor of every alternative becomes a same-depth glob ('<x>' read
+  # as '*'), so a directory holding only classified children (cache/<id>/ for
+  # cache/*/renders.json) is recognized rather than reported unknown.
+  for alternative in "${residue_path[@]}"; do
+    segments="${alternative%/}"
+    segments="${segments//[!\/]/}"
+    [ $((${#segments} + 1)) -gt "$depth" ] && depth=$((${#segments} + 1))
+  done
+  for alternative in "${residue_path[@]}" "${live_path[@]}"; do
+    alternative="${alternative%/}"
+    while [ "${alternative#*<*>}" != "$alternative" ]; do
+      alternative="${alternative%%<*}*${alternative#*>}"
+    done
+    while [ "${alternative%/*}" != "$alternative" ]; do
+      alternative="${alternative%/*}"
+      ancestor_globs+=("$alternative")
+    done
+  done
+
+  local -a found_residue found_lines kept_lines link_lines unknown_lines
+  local absolute relative kind skip_prefix="" index matched slashes
+  while IFS= read -r -d '' absolute; do
+    relative="${absolute#"$local_root"/}"
+    if [ -n "$skip_prefix" ]; then
+      case "$relative" in "$skip_prefix"/*) continue ;; esac
+      skip_prefix=""
+    fi
+    if [ -L "$absolute" ]; then kind='link'; elif [ -d "$absolute" ]; then kind='dir'; else kind='file'; fi
+
+    matched=""
+    index=0
+    while [ "$index" -lt "${#residue_path[@]}" ]; do
+      if _gaia_registry_alternative_matches "$relative" "${residue_path[index]}" "${residue_match[index]}"; then
+        matched="$index"
+        break
+      fi
+      index=$((index + 1))
+    done
+    if [ -n "$matched" ]; then
+      [ "$kind" = dir ] && skip_prefix="$relative"
+      if [ "$kind" = link ]; then
+        link_lines+=("$relative")
+      elif [ -n "${residue_successor[matched]}" ] && [ ! -e "$local_root/${residue_successor[matched]}" ]; then
+        kept_lines+=("$relative  (waits for ${residue_successor[matched]})")
+      else
+        found_residue+=("$relative")
+        found_lines+=("$relative  (${residue_why[matched]})")
+      fi
+      continue
+    fi
+
+    matched=""
+    index=0
+    while [ "$index" -lt "${#live_path[@]}" ]; do
+      case "${live_match[index]}:${live_kind[index]}:$kind" in
+        prefix:* | *:file:file | *:dir:dir | *:link) ;;
+        *)
+          index=$((index + 1))
+          continue
+          ;;
+      esac
+      if _gaia_registry_alternative_matches "$relative" "${live_path[index]}" "${live_match[index]}"; then
+        matched="$index"
+        break
+      fi
+      index=$((index + 1))
+    done
+    if [ -n "$matched" ]; then
+      # Descend only where residue can sit beneath (cache/shared/ holds a
+      # residue leaf); every other live subtree is skipped whole.
+      if [ "$kind" = dir ]; then
+        case " ${residue_path[*]}" in
+          *" $relative/"*) ;;
+          *) skip_prefix="$relative" ;;
+        esac
+      fi
+      continue
+    fi
+
+    if [ "$kind" != file ]; then
+      slashes="${relative//[!\/]/}"
+      for ancestor in "${ancestor_globs[@]}"; do
+        segments="${ancestor//[!\/]/}"
+        [ "${#segments}" = "${#slashes}" ] || continue
+        # shellcheck disable=SC2254
+        case "$relative" in $ancestor) continue 2 ;; esac
+      done
+    fi
+    unknown_lines+=("$relative")
+    [ "$kind" = dir ] && skip_prefix="$relative"
+  done < <(find -P "$local_root" -mindepth 1 -maxdepth "$depth" -print0)
+
+  _gaia_registry_sweep_section 'Residue (no current GAIA code reads or writes these):' 'Residue: none.' "${found_lines[@]+"${found_lines[@]}"}"
+  [ "${#kept_lines[@]}" -eq 0 ] ||
+    _gaia_registry_sweep_section 'Kept until the one-time move to the named successor has run:' '' "${kept_lines[@]}"
+  [ "${#link_lines[@]}" -eq 0 ] ||
+    _gaia_registry_sweep_section 'Symlinks matching residue, left to their owner:' '' "${link_lines[@]}"
+  _gaia_registry_sweep_section 'Unknown (not in the registry; listed, never deleted):' 'Unknown: none.' "${unknown_lines[@]+"${unknown_lines[@]}"}"
+
+  if [ "$apply" = 0 ]; then
+    [ "${#found_residue[@]}" -eq 0 ] || printf 'Run with --apply to delete the residue paths listed above.\n'
+    return 0
+  fi
+  local failed=0
+  for relative in "${found_residue[@]+"${found_residue[@]}"}"; do
+    if ! _gaia_registry_sweep_contained "$local_root" "$relative"; then
+      printf 'residue-sweep: refused %s: a symlink now sits on its path\n' "$relative" >&2
+      failed=1
+    elif rm -rf -- "${local_root:?}/$relative" 2>/dev/null && [ ! -e "$local_root/$relative" ]; then
+      printf 'Removed: %s\n' "$relative"
+    else
+      printf 'residue-sweep: could not delete %s\n' "$relative" >&2
+      failed=1
+    fi
+  done
+  [ "$failed" = 0 ] || return 3
+  return 0
+}
+
+# _gaia_registry_sweep_section <heading> <empty line> [items...]
+_gaia_registry_sweep_section() {
+  local heading="$1" empty_line="$2"
+  shift 2
+  if [ "$#" -eq 0 ]; then
+    printf '%s\n' "$empty_line"
+    return 0
+  fi
+  printf '%s\n' "$heading"
+  printf '%s\n' "$@" | LC_ALL=C sort | sed 's/^/  /'
+}
+
 if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
   case "${1:-}" in
     path)
@@ -355,8 +596,13 @@ if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
       gaia_registry_classify "${1:-}"
       exit $?
       ;;
+    residue-sweep)
+      shift
+      gaia_registry_residue_sweep "$@"
+      exit $?
+      ;;
     *)
-      printf 'usage: %s {path|linkable-paths|rm-whitelist|integrity-snapshot|recognizes <relpath> <f|d>|classify <relpath>}\n' "$0" >&2
+      printf 'usage: %s {path|linkable-paths|rm-whitelist|integrity-snapshot|recognizes <relpath> <f|d>|classify <relpath>|residue-sweep [--apply]}\n' "$0" >&2
       exit 2
       ;;
   esac

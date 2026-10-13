@@ -420,12 +420,12 @@ The handoff prompt is just the SPEC id, `plan.md`'s step 1a resolves `SPEC-NNN` 
 
 Print the handoff to the user as one cohesive block and stop: the status line, a `/clear`-and-paste instruction, then a single fenced code block whose contents are the full `/gaia-plan` invocation (command prefix included). Prepending `/gaia-plan ` makes the block a runnable command, not a bare argument, so the user copies exactly one thing:
 
-> SPEC-NNN saved to `.gaia/local/specs/SPEC-NNN/SPEC.md`.
->
-> To plan it, /clear and paste this:
->
-> ```
-> /gaia-plan SPEC-NNN
-> ```
+SPEC-NNN saved to `.gaia/local/specs/SPEC-NNN/SPEC.md`.
+
+To plan it, /clear and paste this:
+
+```text
+/gaia-plan SPEC-NNN
+```
 
 This is the end of the `/gaia-spec` flow.
