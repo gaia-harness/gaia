@@ -1,11 +1,9 @@
 /**
  * Companion-group resolution for `gaia update-deps run`.
  *
- * The skill at `.claude/skills/update-deps/SKILL.md` ("Companion groups"
- * reference) defines a fixed table that maps each outdated package to a group
- * so the wave is processed atomically. This module replicates that table
- * for the CLI primitive; the LLM-driven skill and the CLI must agree on
- * which packages move together.
+ * The one table mapping each package to the group it moves with, so a wave
+ * processes a group atomically. The update-deps skill carries no copy: it
+ * reads each entry's resolved `group` from the run's output.
  *
  * Resolution rules:
  *   - Exact-name matches win first.
@@ -15,8 +13,8 @@
  *     `eslint-plugin-prettier` exact matches MUST take precedence over the
  *     `eslint` group's broader `eslint-config-*` / `eslint-plugin-*`
  *     prefixes; that's why exact-name matches are checked first.
- *   - `msw-storybook-addon` belongs to both `storybook` and `msw` per the
- *     SKILL table; we route it to `storybook` (more specific addon scope).
+ *   - `msw-storybook-addon` couples to both `storybook` and `msw`; we route
+ *     it to `storybook` (more specific addon scope).
  *   - `typescript` and `@types/node` are deliberately ungrouped. A compiler
  *     bump and an ambient Node type-definition bump are independent risks with
  *     independent migration guides, so pairing them would force a TS major and

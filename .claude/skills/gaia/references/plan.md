@@ -194,12 +194,12 @@ This line reads identically to the `/gaia-spec` cost line (spec reference, step 
 
 The prompt is a single line, exactly:
 
-```
+```text
 Read <absolute-path-to-PLAN_DIR>/KICKOFF.md and execute it.
 ```
 
 For example `.../.gaia/local/specs/SPEC-NNN/plan/KICKOFF.md` for a spec-derived plan, or `.../.gaia/local/plans/{slug}/KICKOFF.md` for a spec-less plan. Use `$PLAN_DIR/KICKOFF.md` (the absolute path resolved in step 3). The path MUST be absolute so the cold Claude session has no working-directory ambiguity. Do not include any other instruction, the orchestrator's behavior lives in `KICKOFF.md`.
 
-**Print the prompt as a fenced code block** so the user can select and copy it manually.
+**Print the prompt inside a `text` fenced code block** so the user can select and copy it manually.
 
 Then print one trailing line: `Type /clear and paste the prompt above.`

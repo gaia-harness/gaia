@@ -1620,3 +1620,22 @@ run_hook_with_shim() {
   spawn_count=$(wc -c <"$spawn_log" | tr -d ' ')
   [ "$spawn_count" -eq 1 ]
 }
+
+# The post-merge cleanup pulls `main` into the main checkout when that checkout
+# is on `main` (PR Merge Workflow, worktree arm). The pull moves no HEAD to
+# another branch, so the guard must let it through, both from the main checkout
+# and from a session whose cwd was a worktree the cleanup just removed.
+@test "the post-merge pull into a main checkout on main is allowed" {
+  on_main
+  run_hook "git -C $REPO pull --ff-only origin main"
+  assert_allowed_by_json
+}
+
+@test "the post-merge pull is allowed when the session cwd was a removed worktree" {
+  local json
+  on_main
+  json=$(jq -n --arg command "git -C $REPO pull --ff-only origin main" --arg directory "$REPO/.claude/worktrees/removed" \
+    '{tool_name: "Bash", cwd: $directory, tool_input: {command: $command}}')
+  invoke_hook_in "$REPO" "$json" "$HOOK_ABSOLUTE_PATH"
+  assert_allowed_by_json
+}

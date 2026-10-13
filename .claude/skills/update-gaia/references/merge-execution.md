@@ -561,7 +561,7 @@ Render that row from `LABELS_STATE`. Each backticked row below is the whole lite
 - `nonzero` → `Labels: unknown (gaia labels sync exited non-zero; some labels may already have been applied, see Step 8c)`
 - `applied`, all four counts `0` → `Labels: no changes (already in sync)`
 - `applied`, any count non-zero → the table template's own `Labels:` line, with the four counts filled in
-- `degraded` → the row named by `LABELS_DEGRADED_AT` below, then `$LABELS_MANUAL_CMDS` printed beneath the table so the recovery commands are where the row says they are:
+- `degraded` → the row named by `LABELS_DEGRADED_AT` below, then `$LABELS_MANUAL_CMDS` printed beneath the table inside a fenced code block so the recovery commands are where the row says they are:
   - `write` → `Labels: could not write (token lacks label scope); <LABELS_MANUAL> manual commands still owed, listed below. The mutations applied before the refusal are not repeated.`
   - `read` → `Labels: could not read or write (token lacks label scope); the <LABELS_MANUAL> commands below are the whole registry, not the work remaining, because the repository's labels could not be read. A create for a label you already have fails harmlessly.`
   - `unknown` → `Labels: could not complete (token lacks label scope); <LABELS_MANUAL> manual commands, listed below. This CLI does not record which refusal degraded it, so the list is either the mutations still owed or the whole registry. A create for a label you already have fails harmlessly either way.`
@@ -584,20 +584,10 @@ When all three `package.json` counts are zero (summed across the root and every 
 
 **Documented adopter actions (opt-in).** Two merge outcomes leave the adopter with a follow-up the three-way merge deliberately will **not** perform: a dependency GAIA dropped this release that the adopter still has (the Step 7a "GAIA removed it; adopter still has it" no-op, left in place by design) and files removed upstream still in the working tree (`delete[]`). Both are silent or bare, the agent knows _what_ changed but surfaces no _why_. Recover the intent from the release CHANGELOG and offer an opt-in suggestion.
 
-Read `$LATEST_DIR/CHANGELOG.md` (already on disk from Step 5, no extra fetch) and extract the `## [x.y.z]` sections strictly newer than `$BASELINE` through `$LATEST` with this range walk, which reads the file as a positional argument:
+Read `$LATEST_DIR/CHANGELOG.md` (already on disk from Step 5, no extra fetch) and extract the `## [x.y.z]` sections strictly newer than `$BASELINE` through `$LATEST` with the same range walk as SKILL.md Step 4, run from the release copy:
 
 ```bash
-# Keep this awk program identical to the one in SKILL.md Step 4.
-range="$(awk -v baseline="$BASELINE" -v latest="$LATEST" '
-  function vcmp(a,b,   x,y,i){split(a,x,".");split(b,y,".");for(i=1;i<=3;i++){if((x[i]+0)>(y[i]+0))return 1;if((x[i]+0)<(y[i]+0))return -1}return 0}
-  /^## \[Unreleased\]/           {printing=0; next}
-  /^\[[^][]+\]:[[:space:]]*http/ {printing=0; next}
-  /^## \[[0-9]+\.[0-9]+\.[0-9]+\]/ {
-    v=$0; sub(/^## \[/,"",v); sub(/\].*/,"",v)
-    printing=(vcmp(v,baseline)>0 && vcmp(v,latest)<=0)
-  }
-  printing {print}
-' "$LATEST_DIR/CHANGELOG.md")"
+range="$(bash "$LATEST_DIR/.gaia/scripts/changelog-range.sh" "$BASELINE" "$LATEST" "$LATEST_DIR/CHANGELOG.md")"
 ```
 
 Within that range, match **only** convention-anchored entries: bullets under a `### Removed` or `### Changed` heading that carry an explicit `**Action required:**` line and/or a literal `pnpm` command in backticks. **Key on the heading plus that anchored phrasing; do not free-parse arbitrary prose** (the convention is documented in `CHANGELOG.md`). For each match, take the literal command (the backtick-quoted `pnpm …`) and the subject it names, then gate it on whether the action still applies to _this_ adopter and record the survivors in `adopterActions[]`:
@@ -618,10 +608,10 @@ When `adopterActions[]` is non-empty, print a recommendation block after the tab
 **Generated regions.** Print each of the following after the table, whenever it applies. Each one reports a state the adopter cannot see any other way, so none may be dropped for brevity.
 
 1. **Rewritten regions.** Name every path in `regions.rewrittenPaths`, and state that those files now **intentionally differ** from the release copy because their region is derived from this adopter's own roster. Anything that later reports them as drifted is describing the intended state.
-2. **Failed or refused regenerations.** One entry per region, carrying the **literal argument vector** to run by hand, rendered from that entry's `argv` (for the region GAIA ships today that renders as `bash .gaia/scripts/write-audit-remits.sh`). Report each `failed[].kind` distinctly, because each has a different remedy, and on a `killed` entry report its `cause` as well: `cause`, not `kind`, is what tells the adopter whether a ceiling this flow imposed is what stopped their command, so printing the kind alone strands them. Step 7d's `failed[].kind` paragraph and its `cause` paragraph are the authority on both fields' values and remedies. Report per region rather than per path, because one command covers every path in the region, and the shipped writer aggregates per-member failures into a single non-zero exit after rewriting the members that did succeed.
+2. **Failed or refused regenerations.** One entry per region, carrying the **literal argument vector** to run by hand, printed inside a fenced code block, rendered from that entry's `argv` (for the region GAIA ships today that renders as `bash .gaia/scripts/write-audit-remits.sh`). Report each `failed[].kind` distinctly, because each has a different remedy, and on a `killed` entry report its `cause` as well: `cause`, not `kind`, is what tells the adopter whether a ceiling this flow imposed is what stopped their command, so printing the kind alone strands them. Step 7d's `failed[].kind` paragraph and its `cause` paragraph are the authority on both fields' values and remedies. Report per region rather than per path, because one command covers every path in the region, and the shipped writer aggregates per-member failures into a single non-zero exit after rewriting the members that did succeed.
 
    **A `kind: 'declaration'` or `kind: 'manifest'` refusal carries no `argv` (7d), and that is correct.** Neither has a command to hand over, so print the defect and state plainly that this release is unusable here and there is nothing for the adopter to run: the remedy is upstream, not in their tree. Never fabricate a command for either. A `manifest` refusal belongs in the summary row rather than this per-region list, since it names no region.
-3. **Skipped regenerations.** Name the region, the reason the runner gave, and the literal command from its `argv`.
+3. **Skipped regenerations.** Name the region, the reason the runner gave, and the literal command from its `argv`, printed inside a fenced code block.
 
    **The follow-up command is always the regeneration program, never a re-run of the CLI's own regeneration subcommand.** `argv` renders as `bash .gaia/scripts/write-audit-remits.sh`, which the adopter can paste into any shell once they have resolved whatever suppressed it. See **Command resolution** in Step 7, rule 3.
 4. **Un-regenerated regions on otherwise-clean paths.** Report **every** path in `regions.unregeneratedPaths` as carrying an un-regenerated region, rather than as a plain skip, and say what that means: the file's generated block does not match what this adopter's own configuration would produce.
