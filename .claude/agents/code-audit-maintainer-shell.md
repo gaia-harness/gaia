@@ -14,6 +14,7 @@ You also own the declarative half of that same subsystem: the roster your own di
 <!-- gaia:audit-remit:start -->
 - `.gaia/**/*.sh`
 - `.gaia/**/*.bats`
+- `.gaia/scripts/lib/*.awk`
 - `.claude/hooks/**/*.sh`
 - `.github/**/*.sh`
 - `.github/**/*.bats`

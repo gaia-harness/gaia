@@ -1,7 +1,17 @@
 import {afterEach, beforeEach, describe, expect, test} from 'vitest';
-import {mkdirSync, mkdtempSync, rmSync, writeFileSync} from 'node:fs';
+import {
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs';
 import {tmpdir} from 'node:os';
 import path from 'node:path';
+import {
+  ProjectConfigError,
+  updateProjectConfig,
+} from '../../util/project-config-write.js';
 import {
   isIsolationPolicy,
   projectConfigPath,
@@ -39,6 +49,26 @@ describe('ProjectConfigSchema', () => {
     expect(parsed.sandbox_recommended).toBeUndefined();
     expect(parsed.version).toBe(1);
   });
+
+  test('setup_decisions drops an unknown value and keeps the rest', () => {
+    expect(
+      ProjectConfigSchema.parse({setup_decisions: {a: 'applied', b: 'maybe'}})
+        .setup_decisions
+    ).toEqual({a: 'applied'});
+  });
+
+  test.each([['applied'], ['x'], [['applied']], [null], [3]])(
+    'a non-object setup_decisions (%j) reads as absent without malforming',
+    (value) => {
+      const parsed = ProjectConfigSchema.parse({
+        isolation_policy: 'prefer-branch',
+        setup_decisions: value,
+      });
+
+      expect(parsed.setup_decisions).toBeUndefined();
+      expect(parsed.isolation_policy).toBe('prefer-branch');
+    }
+  );
 
   test('the guards accept only the known literals', () => {
     expect(isIsolationPolicy('always-worktree')).toBe(true);
@@ -123,5 +153,45 @@ describe('readProjectConfig', () => {
     write('[]');
 
     expect(readProjectConfig(root).status).toBe('malformed');
+  });
+});
+
+describe('setup_decisions at the write boundary', () => {
+  let root: string;
+
+  beforeEach(() => {
+    root = mkdtempSync(path.join(tmpdir(), 'gaia-project-config-decisions-'));
+    mkdirSync(path.join(root, '.gaia'), {recursive: true});
+  });
+
+  afterEach(() => {
+    rmSync(root, {force: true, recursive: true});
+  });
+
+  test('a value a newer binary wrote does not make another writer fail', () => {
+    writeFileSync(
+      projectConfigPath(root),
+      JSON.stringify({setup_decisions: {x: 'future-value'}, version: 1}),
+      'utf8'
+    );
+
+    updateProjectConfig(root, {isolation_policy: 'prefer-branch'});
+
+    const written = JSON.parse(
+      readFileSync(projectConfigPath(root), 'utf8')
+    ) as Record<string, unknown>;
+
+    expect(written.setup_decisions).toEqual({x: 'future-value'});
+    expect(written.isolation_policy).toBe('prefer-branch');
+  });
+
+  test('a non-object setup_decisions is refused and nothing is written', () => {
+    const before = JSON.stringify({version: 1});
+    writeFileSync(projectConfigPath(root), before, 'utf8');
+
+    expect(() => {
+      updateProjectConfig(root, {setup_decisions: 'applied'});
+    }).toThrow(ProjectConfigError);
+    expect(readFileSync(projectConfigPath(root), 'utf8')).toBe(before);
   });
 });

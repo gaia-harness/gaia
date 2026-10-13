@@ -26,7 +26,35 @@ setup() {
   SKILL="$REPO_ROOT/.claude/skills/update-gaia/SKILL.md"
   MERGE_EXECUTION="$REPO_ROOT/.claude/skills/update-gaia/references/merge-execution.md"
   COMPOSE="$REPO_ROOT/.gaia/scripts/compose-release-body.sh"
-  ROUTING_LINE='On GAIA 1.6.1? Choose Abort, then paste the prompt from https://gaiareact.com/migrate into a fresh session.'
+  ROUTING_LINE="$(bash "$COMPOSE" --routing-line)"
+}
+
+# The retired routing line, assembled from parts so no tracked file holds it.
+retired_routing_line() {
+  printf '%s %s%s %s' 'On GAIA 1.6.1? Choose Abort,' 'then paste the prompt from https://gaiareact.com' '/migrate' 'into a fresh session.'
+}
+
+# The URL-absence token, assembled so this suite never matches itself.
+migrate_url_token() {
+  printf '%s/%s' gaiareact.com migrate
+}
+
+# 0 when the routing line `$1` carries every content requirement; 1 on the
+# first one it lacks.
+routing_line_has_content() {
+  line="$1"
+  for needle in \
+    'choose Abort' \
+    'only after the user says yes' \
+    "gh release download v2.0.0 --repo gaia-react/gaia --pattern 'gaia-bundle-v2.0.0.tar.gz*' --dir .gaia/local/cache/shared/migrate-2/v2.0.0" \
+    'shasum -a 256 -c' \
+    '-C .gaia/local/cache/shared/migrate-2/v2.0.0/tree' \
+    'tree/.gaia/migrations/2.0.0.md' \
+    'Reading this on GitHub?'; do
+    printf '%s' "$line" | grep -qF -- "$needle" || return 1
+  done
+  printf '%s' "$line" | grep -qF -- "$(migrate_url_token)" && return 1
+  return 0
 }
 
 # The first argument of the `gh release create` call in a workflow file: the
@@ -164,6 +192,25 @@ block_after_heading() {
   # The routing line appears once: hoisted, not duplicated.
   [ "$(grep -cxF -- "$ROUTING_LINE" "$out")" -eq 1 ]
   grep -qF '## [2.0.0] - 2026-10-03' "$out"
+  routing_line_has_content "$(head -n 1 "$out")"
+  sed -n 3p "$out" | grep -qF 'Choosing Proceed on 1.6.1'
+  grep -qxF 'sha256: deadbeef  gaia-bundle-v2.0.0.tar.gz' "$out"
+}
+
+@test "C1b: --routing-line prints exactly the one line and exits 0" {
+  run bash "$COMPOSE" --routing-line
+  [ "$status" -eq 0 ]
+  [ "$(printf '%s\n' "$output" | wc -l | tr -d ' ')" -eq 1 ]
+  routing_line_has_content "$output"
+}
+
+@test "C1c: the content check fails on a line without the yes-gate and on the retired line" {
+  routing_line_has_content "$ROUTING_LINE"
+  without_gate="${ROUTING_LINE//only after the user says yes/now}"
+  [ "$without_gate" != "$ROUTING_LINE" ]
+  routing_line_has_content "$without_gate" && return 1
+  routing_line_has_content "$(retired_routing_line)" && return 1
+  true
 }
 
 @test "C2: v2.0.0 notes without the routing line are refused" {
@@ -171,6 +218,17 @@ block_after_heading() {
   sha="$BATS_TEST_TMPDIR/asset.sha256"
   out="$BATS_TEST_TMPDIR/body.md"
   printf '## [2.0.0] - 2026-10-03\n\n- the entry\n' > "$notes"
+  printf 'deadbeef  gaia-bundle-v2.0.0.tar.gz\n' > "$sha"
+  run bash "$COMPOSE" v2.0.0 "$notes" "$sha" "$out"
+  [ "$status" -eq 1 ]
+  [ ! -e "$out" ]
+}
+
+@test "C2b: v2.0.0 notes carrying the retired routing line are refused" {
+  notes="$BATS_TEST_TMPDIR/notes.md"
+  sha="$BATS_TEST_TMPDIR/asset.sha256"
+  out="$BATS_TEST_TMPDIR/body.md"
+  printf '## [2.0.0] - 2026-10-03\n\n### Breaking\n\n%s\n\n- the entry\n' "$(retired_routing_line)" > "$notes"
   printf 'deadbeef  gaia-bundle-v2.0.0.tar.gz\n' > "$sha"
   run bash "$COMPOSE" v2.0.0 "$notes" "$sha" "$out"
   [ "$status" -eq 1 ]

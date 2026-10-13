@@ -15,7 +15,7 @@ import {
 } from 'node:fs';
 import {tmpdir} from 'node:os';
 import path from 'node:path';
-import {run} from './commit-and-tag.js';
+import {checkReleaseFence, run} from './commit-and-tag.js';
 import type {CommandRunner} from './commit-and-tag.js';
 
 type Sandbox = {
@@ -341,6 +341,230 @@ describe('release commit-and-tag --tag', () => {
     const exit = run(['--tag'], {cwd: sandbox.root, runner});
     expect(exit).toBe(2);
     expect(stdio.errors.join('')).toContain('unable to access remote');
+  });
+});
+
+const LOCAL_TAGS_ARGV = ['tag', '-l', 'v*'] as const;
+const REMOTE_TAGS_ARGV = ['ls-remote', '--tags', 'origin'] as const;
+
+const remoteLines = (...names: string[]): string =>
+  names
+    .map(
+      (name) => `0123456789abcdef0123456789abcdef01234567\trefs/tags/${name}`
+    )
+    .join('\n');
+
+const callLines = (recorded: RecordedCall[]): string[] =>
+  recorded.map((call) => `${call.command} ${call.args.join(' ')}`);
+
+const refusedWithoutTagging = (recorded: RecordedCall[]): void => {
+  expect(recorded.find((c) => c.args[0] === 'push')).toBeUndefined();
+  expect(
+    recorded.find((c) => c.args[0] === 'tag' && c.args[1] === '-a')
+  ).toBeUndefined();
+};
+
+describe('release commit-and-tag --tag release fence', () => {
+  let sandbox: Sandbox;
+  let stdio: ReturnType<typeof captureStdio>;
+
+  beforeEach(() => {
+    stdio = captureStdio();
+  });
+
+  afterEach(() => {
+    stdio.restore();
+    sandbox.cleanup();
+    vi.restoreAllMocks();
+  });
+
+  test('refuses a lower major than the highest origin tag', () => {
+    sandbox = setupSandbox('1.6.2');
+    writeFileSync(path.join(sandbox.root, '.gaia', 'VERSION'), '2.0.1\n');
+    const recorded: RecordedCall[] = [];
+    const runner = buildRecordingRunner(
+      [{argv: REMOTE_TAGS_ARGV, result: okResult(remoteLines('v2.0.0'))}],
+      recorded
+    );
+
+    const exit = run(['--tag'], {cwd: sandbox.root, runner});
+    expect(exit).toBe(1);
+    const err = stdio.errors.join('');
+    expect(err).toMatch(/^REFUSED:/mu);
+    expect(err).toContain('v1.6.2');
+    expect(err).toContain('v2.0.0');
+    expect(err).toContain('newest-created release');
+    expect(err).toContain('Nothing was tagged');
+    refusedWithoutTagging(recorded);
+  });
+
+  test('tags an equal major', () => {
+    sandbox = setupSandbox('2.0.1');
+    const recorded: RecordedCall[] = [];
+    const runner = buildRecordingRunner(
+      [{argv: REMOTE_TAGS_ARGV, result: okResult(remoteLines('v2.0.0'))}],
+      recorded
+    );
+
+    const exit = run(['--tag'], {cwd: sandbox.root, runner});
+    expect(exit).toBe(0);
+    const calls = callLines(recorded);
+    expect(calls).toContain('git tag -a v2.0.1 -m Release v2.0.1');
+    expect(calls).toContain('git push origin v2.0.1');
+  });
+
+  test('spec tags play no part in the highest major', () => {
+    sandbox = setupSandbox('1.6.2');
+    const recorded: RecordedCall[] = [];
+    const runner = buildRecordingRunner(
+      [
+        {
+          argv: REMOTE_TAGS_ARGV,
+          result: okResult(remoteLines('spec/99', 'spec/120', 'v1.6.1')),
+        },
+      ],
+      recorded
+    );
+
+    const exit = run(['--tag'], {cwd: sandbox.root, runner});
+    expect(exit).toBe(0);
+    expect(callLines(recorded)).toContain(
+      'git tag -a v1.6.2 -m Release v1.6.2'
+    );
+  });
+
+  test('peeled lines are dropped and the tag still counts once', () => {
+    sandbox = setupSandbox('1.6.2');
+    const recorded: RecordedCall[] = [];
+    const runner = buildRecordingRunner(
+      [
+        {
+          argv: REMOTE_TAGS_ARGV,
+          result: okResult(remoteLines('v2.0.0', 'v2.0.0^{}')),
+        },
+      ],
+      recorded
+    );
+
+    const exit = run(['--tag'], {cwd: sandbox.root, runner});
+    expect(exit).toBe(1);
+    const err = stdio.errors.join('');
+    expect(err).toContain('v2.0.0');
+    expect(err).not.toContain('^{}');
+    refusedWithoutTagging(recorded);
+  });
+
+  test('a peeled-only line never counts as a release tag', () => {
+    sandbox = setupSandbox('1.6.2');
+    const recorded: RecordedCall[] = [];
+    const runner = buildRecordingRunner(
+      [{argv: REMOTE_TAGS_ARGV, result: okResult(remoteLines('v2.0.0^{}'))}],
+      recorded
+    );
+
+    expect(run(['--tag'], {cwd: sandbox.root, runner})).toBe(0);
+  });
+
+  test('a tag present only locally counts', () => {
+    sandbox = setupSandbox('2.5.0');
+    const recorded: RecordedCall[] = [];
+    const runner = buildRecordingRunner(
+      [{argv: LOCAL_TAGS_ARGV, result: okResult('v3.0.0\n')}],
+      recorded
+    );
+
+    const exit = run(['--tag'], {cwd: sandbox.root, runner});
+    expect(exit).toBe(1);
+    expect(stdio.errors.join('')).toContain('v3.0.0');
+    refusedWithoutTagging(recorded);
+  });
+
+  test.each([false, true])(
+    'a failed origin read refuses with a next step (noPush=%s)',
+    (noPush) => {
+      sandbox = setupSandbox('2.5.0');
+      const recorded: RecordedCall[] = [];
+      const runner = buildRecordingRunner(
+        [
+          {
+            argv: REMOTE_TAGS_ARGV,
+            result: failResult(128, 'fatal: could not read from remote'),
+          },
+        ],
+        recorded
+      );
+
+      const exit = run(noPush ? ['--tag', '--no-push'] : ['--tag'], {
+        cwd: sandbox.root,
+        runner,
+      });
+      expect(exit).toBe(1);
+      const err = stdio.errors.join('');
+      expect(err).toMatch(/^REFUSED:/mu);
+      expect(err).toContain('origin');
+      expect(err).toContain('re-run');
+      refusedWithoutTagging(recorded);
+    }
+  );
+
+  test('a spawn error on the origin read refuses', () => {
+    sandbox = setupSandbox('2.5.0');
+    const recorded: RecordedCall[] = [];
+
+    const runner: CommandRunner = (command, args) => {
+      recorded.push({args: [...args], command});
+
+      if (args[0] === 'ls-remote') {
+        return {
+          ...failResult(0, ''),
+          error: new Error('spawn git ENOENT'),
+          status: null,
+        };
+      }
+
+      return okResult('');
+    };
+
+    expect(run(['--tag'], {cwd: sandbox.root, runner})).toBe(1);
+    refusedWithoutTagging(recorded);
+  });
+
+  test('a package.json version with no parseable major refuses', () => {
+    sandbox = setupSandbox('not-a-version');
+    const recorded: RecordedCall[] = [];
+    const runner = buildRecordingRunner([], recorded);
+
+    const exit = run(['--tag'], {cwd: sandbox.root, runner});
+    expect(exit).toBe(1);
+    expect(stdio.errors.join('')).toContain('not-a-version');
+    refusedWithoutTagging(recorded);
+  });
+});
+
+describe('checkReleaseFence', () => {
+  test.each([
+    ['v2.0', 'v2.0.0-rc.1', 'v02.0.0', 'release-3', 'v3', 'v3.0.0.1', 'spec/9'],
+  ])('ignores non-release names: %s', (...names) => {
+    expect(checkReleaseFence('1.6.2', names)).toEqual({ok: true});
+  });
+
+  test('refuses and names the highest release tag by full version', () => {
+    expect(checkReleaseFence('1.6.2', ['v2.0.0', 'v2.10.1', 'v2.9.0'])).toEqual(
+      {highestTag: 'v2.10.1', ok: false}
+    );
+  });
+
+  test('proceeds on an equal or higher major, or with no tags', () => {
+    expect(checkReleaseFence('2.0.1', ['v2.3.0'])).toEqual({ok: true});
+    expect(checkReleaseFence('3.0.0', ['v2.3.0'])).toEqual({ok: true});
+    expect(checkReleaseFence('1.0.0', [])).toEqual({ok: true});
+  });
+
+  test('reports an unparseable version', () => {
+    expect(checkReleaseFence('banana', ['v1.0.0'])).toEqual({
+      ok: false,
+      unparseable: true,
+    });
   });
 });
 

@@ -156,6 +156,9 @@ auditors:
     globs:
       - ".gaia/**/*.sh"
       - ".gaia/**/*.bats"
+      # The awk programs the shell scripts load are executed code that no
+      # `*.sh` glob reaches.
+      - ".gaia/scripts/lib/*.awk"
       - ".claude/hooks/**/*.sh"
       - ".github/**/*.sh"
       - ".github/**/*.bats"
@@ -382,6 +385,9 @@ unowned:
   # and belongs here regardless; one it reads as INSTRUCTIONS belongs to a
   # member when one exists, and is declared unowned by name when none does.
   - ".claude/skills/**/*.md"
+  # A version migration note is instruction prose an agent follows, and no
+  # member has a lens for instruction prose: the same footing as the skills.
+  - ".gaia/migrations/**"
   - ".claude/agents/worthiness-evaluator.md"
   - ".claude/commands/**/*.md"
   - ".gaia/cli/health/**/*.md"

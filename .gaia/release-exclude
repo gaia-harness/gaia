@@ -308,7 +308,11 @@ frontend/.playwright/e2e/react-perf-smoke.spec.ts
 # first-run `/gaia-init` check); an adopter's PR process is their own.
 # The issue templates are GAIA's own bug and feature forms, and their
 # config.yml disables blank issues and links to GAIA's Discussions; an
-# adopter's issue intake is their own.
+# adopter's issue intake is their own. `.gaia/project.json` holds GAIA's own
+# team settings and setup decisions; an adopter records their own through
+# `/gaia-init` and `/setup-gaia`, and shipping GAIA's copy would mark an
+# adopter's setup features as already decided.
+.gaia/project.json
 .github/CODEOWNERS
 .github/ISSUE_TEMPLATE/bug_report.yml
 .github/ISSUE_TEMPLATE/config.yml

@@ -20767,6 +20767,9 @@ var HELP_TEXT5 = `Usage: gaia-maintainer release commit-and-tag (--commit | --ta
   --tag         Tag HEAD as vX.Y.Z and push the tag to origin.
   --no-push     With --tag: skip the tag push step.
 
+  --tag refuses a version whose major is below the highest existing release
+  tag (local or origin), and when origin's tags cannot be read.
+
   Exit codes:
     0  success
     1  user-correctable error
@@ -20915,9 +20918,68 @@ var runCommitMode = (ctx) => {
   );
   return EXIT_CODES.OK;
 };
+var RELEASE_TAG_PATTERN = /^v(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/u;
+var VERSION_MAJOR_PATTERN = /^(0|[1-9]\d*)\./u;
+var parseReleaseTag = (name) => {
+  const match = RELEASE_TAG_PATTERN.exec(name);
+  if (match === null) return null;
+  return [Number(match[1]), Number(match[2]), Number(match[3])];
+};
+var compareReleaseTags = (left, right) => left[0] - right[0] || left[1] - right[1] || left[2] - right[2];
+var checkReleaseFence = (version2, tagNames) => {
+  const majorMatch = VERSION_MAJOR_PATTERN.exec(version2);
+  if (majorMatch === null) return { ok: false, unparseable: true };
+  const newMajor = Number(majorMatch[1]);
+  let highest;
+  for (const name of tagNames) {
+    const parts = parseReleaseTag(name);
+    if (parts !== null && (highest === void 0 || compareReleaseTags(parts, highest.parts) > 0)) {
+      highest = { name, parts };
+    }
+  }
+  if (highest !== void 0 && newMajor < highest.parts[0]) {
+    return { highestTag: highest.name, ok: false };
+  }
+  return { ok: true };
+};
+var collectTagNames = (ctx) => {
+  const names = [];
+  const localResult = ctx.runner("git", ["tag", "-l", "v*"], { cwd: ctx.cwd });
+  if (stepSucceeded(localResult)) {
+    names.push(...localResult.stdout.split("\n").map((line) => line.trim()));
+  }
+  const remoteResult = ctx.runner("git", ["ls-remote", "--tags", "origin"], {
+    cwd: ctx.cwd
+  });
+  if (!stepSucceeded(remoteResult)) return null;
+  for (const line of remoteResult.stdout.split("\n")) {
+    const reference = line.split("	", 2)[1]?.trim();
+    if (reference !== void 0 && reference.startsWith("refs/tags/") && !reference.endsWith("^{}")) {
+      names.push(reference.slice("refs/tags/".length));
+    }
+  }
+  return names;
+};
 var runTagMode = (ctx) => {
   const tagName = `v${ctx.version}`;
   const message = `Release v${ctx.version}`;
+  const tagNames = collectTagNames(ctx);
+  if (tagNames === null) {
+    process.stderr.write(
+      `REFUSED: could not read origin's tags, so ${tagName} cannot be checked against the highest existing release. Nothing was tagged. Check the network and the origin remote, then re-run.
+`
+    );
+    return EXIT_CODES.UNKNOWN_SUBCOMMAND;
+  }
+  const verdict = checkReleaseFence(ctx.version, tagNames);
+  if (!verdict.ok) {
+    process.stderr.write(
+      "unparseable" in verdict ? `REFUSED: package.json version "${ctx.version}" has no parseable major. Nothing was tagged.
+` : `REFUSED: ${tagName} has a lower major than the existing release tag ${verdict.highestTag}. A 1.x /update-gaia resolves the newest-created release, so publishing a lower major after a higher one routes 1.x adopters past the 2.0.0 fence. Nothing was tagged.
+`
+    );
+    return EXIT_CODES.UNKNOWN_SUBCOMMAND;
+  }
   const tagStep = {
     args: ["tag", "-a", tagName, "-m", message],
     command: "git"

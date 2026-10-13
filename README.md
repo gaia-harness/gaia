@@ -49,7 +49,7 @@ You end up with a clean app shell and a fully-configured Claude workflow.
 
 ### Repository layout
 
-GAIA is a monorepo. The harness (`.claude/`, `.gaia/`, `.githooks/`, `.github/`, `wiki/`) lives at the repo root and the React app lives in `frontend/`. Launch Claude at the root for harness workflows (audits, merges, releases, `/gaia-*` commands); a launch inside `frontend/` supports frontend work through commit. Upgrading a 1.6.1 project? Follow the migration guide at [gaiareact.com/migrate](https://gaiareact.com/migrate).
+GAIA is a monorepo. The harness (`.claude/`, `.gaia/`, `.githooks/`, `.github/`, `wiki/`) lives at the repo root and the React app lives in `frontend/`. Launch Claude at the root for harness workflows (audits, merges, releases, `/gaia-*` commands); a launch inside `frontend/` supports frontend work through commit. Upgrading a 1.6.1 project? Open Claude Code in the 1.6.1 project and ask it to fetch, verify and follow the bundled 2.0.0 migration note, as the first line of the [v2.0.0 release](https://github.com/gaia-react/gaia/releases/tag/v2.0.0) describes.
 
 ## What Breaks Claude on Real Projects
 

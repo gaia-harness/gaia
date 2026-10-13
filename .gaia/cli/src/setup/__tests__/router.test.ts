@@ -6,9 +6,12 @@ const REPOSITORY_POLICY_VERBS = [
   'check-admin',
   'configure-dependabot-alerts',
   'detect-remote',
+  'drift',
+  'record',
   'enable-delete-branch',
   'warn-existing-tools',
   'write-isolation-policy',
+  'write-sandbox-recommendation',
 ] as const;
 
 let outputs: string[];
