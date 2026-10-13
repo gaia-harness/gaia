@@ -1,0 +1,22 @@
+{
+  "version": 1,
+  "description": "The machine-readable list of setup features a GAIA project or machine can decide on. The setup command records one decision per listed id (applied, declined, or not-applicable) in the project config for project-scope ids and in the per-machine setup state for machine-scope ids, and the update flow reads the list against those records to find features a project has not yet decided. Each entry names its scope, whether the setup phase applies it without asking (required), whether applying it needs a repository admin (admin), whether its reference can run on its own with only what it probes itself (standalone), and the reference file that owns the feature. Ids are stable: a feature that changes meaning gets a new id and the old one retires. Every id added after the first set must be standalone.",
+  "features": [
+    {"id": "install-tools", "scope": "machine", "required": true, "admin": false, "standalone": false, "reference": ".claude/skills/gaia/references/setup/per-machine.md"},
+    {"id": "install-plugins", "scope": "machine", "required": true, "admin": false, "standalone": false, "reference": ".claude/skills/gaia/references/setup/per-machine.md"},
+    {"id": "chmod-statusline", "scope": "machine", "required": true, "admin": false, "standalone": false, "reference": ".claude/skills/gaia/references/setup/per-machine.md"},
+    {"id": "bootstrap-env", "scope": "machine", "required": true, "admin": false, "standalone": false, "reference": ".claude/skills/gaia/references/setup/per-machine.md"},
+    {"id": "sandbox", "scope": "machine", "required": false, "admin": false, "standalone": false, "reference": ".claude/skills/gaia/references/setup/sandbox.md"},
+    {"id": "statusline-left", "scope": "machine", "required": false, "admin": false, "standalone": false, "reference": ".claude/skills/gaia/references/setup/statusline-left.md"},
+    {"id": "github-repository", "scope": "project", "required": false, "admin": false, "standalone": false, "reference": ".claude/skills/gaia/references/setup/github-repo.md"},
+    {"id": "push-protection", "scope": "project", "required": true, "admin": true, "standalone": false, "reference": ".claude/skills/gaia/references/setup/github-repo.md"},
+    {"id": "branch-protection", "scope": "project", "required": true, "admin": true, "standalone": false, "reference": ".claude/commands/setup-gaia.md"},
+    {"id": "gaia-audit-check", "scope": "project", "required": true, "admin": true, "standalone": false, "reference": ".claude/commands/setup-gaia.md"},
+    {"id": "delete-branch-on-merge", "scope": "project", "required": false, "admin": true, "standalone": false, "reference": ".claude/skills/gaia/references/setup/github-repo.md"},
+    {"id": "dependabot-posture", "scope": "project", "required": true, "admin": true, "standalone": false, "reference": ".claude/skills/gaia/references/setup/github-repo.md"},
+    {"id": "squash-only", "scope": "project", "required": false, "admin": true, "standalone": false, "reference": ".claude/skills/gaia/references/setup/squash-only.md"},
+    {"id": "label-sync", "scope": "project", "required": true, "admin": false, "standalone": false, "reference": ".claude/commands/setup-gaia.md"},
+    {"id": "isolation-policy", "scope": "project", "required": false, "admin": true, "standalone": false, "reference": ".claude/skills/gaia/references/setup/isolation-question.md"},
+    {"id": "sandbox-recommendation", "scope": "project", "required": false, "admin": true, "standalone": false, "reference": ".claude/commands/setup-gaia.md"}
+  ]
+}

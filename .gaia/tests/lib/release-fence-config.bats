@@ -19,7 +19,7 @@
 setup() {
   REPO_ROOT="$(cd "$(dirname "$BATS_TEST_FILENAME")/../../.." && pwd)"
   MAINTAINER_CLI="$REPO_ROOT/.gaia/cli/gaia-maintainer"
-  ROUTING_LINE='On GAIA 1.6.1? Choose Abort, then paste the prompt from https://gaiareact.com/migrate into a fresh session.'
+  ROUTING_LINE="$(bash "$REPO_ROOT/.gaia/scripts/compose-release-body.sh" --routing-line)"
   # Paths that moved under frontend/ in 2.0.0. The root halves of the split
   # files (package.json, prettier.config.mjs, .prettierignore, .gitignore,
   # lockfile, workspace file) legitimately stay at the root and are not here.
@@ -116,6 +116,15 @@ unreleased_body() {
   body="$(unreleased_body "$REPO_ROOT/CHANGELOG.md")"
   first_after_heading="$(printf '%s\n' "$body" | awk '/^### Breaking$/{f=1;next} f&&NF{print;exit}')"
   [ "$first_after_heading" = "$ROUTING_LINE" ]
+}
+
+@test "L1b: a Breaking lead line that is the retired routing line fails the comparison" {
+  retired="$(printf '%s %s%s %s' 'On GAIA 1.6.1? Choose Abort,' 'then paste the prompt from https://gaiareact.com' '/migrate' 'into a fresh session.')"
+  fixture="$BATS_TEST_TMPDIR/CHANGELOG.md"
+  printf '## [Unreleased]\n\n### Breaking\n\n%s\n\n- an entry\n' "$retired" > "$fixture"
+  body="$(unreleased_body "$fixture")"
+  first_after_heading="$(printf '%s\n' "$body" | awk '/^### Breaking$/{f=1;next} f&&NF{print;exit}')"
+  [ "$first_after_heading" != "$ROUTING_LINE" ]
 }
 
 @test "L2: the Unreleased section carries no em dash, and the check sees one when present" {

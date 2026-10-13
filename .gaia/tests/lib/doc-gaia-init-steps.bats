@@ -4,9 +4,9 @@
 # command asks no CI-intent or wiki-mode question, writes the project settings
 # through `gaia init write-project-config`, and its resume step list names the
 # same steps, in the same order, as the CLI's STEP_ORDER. It also pins the
-# shared-reference shape: the command reads exactly the per-machine and
-# isolation-question references, lists them in its references block, and the
-# setup command reads both too (finalize deletes only this command); it has no
+# shared-reference shape: the command reads exactly the per-machine,
+# isolation-question and sandbox-recommendation references, lists them in its
+# references block, and the setup command reads each too (finalize deletes only this command); it has no
 # lettered sub-steps; and it finalizes with the plain setup finalize call.
 #
 # Forbidden tokens that the repo-wide absence guard also forbids are built at
@@ -190,7 +190,7 @@ data_layer_gaps() {
 # Shared references only
 # ---------------------------------------------------------------------------
 
-SHARED_REFERENCES="isolation-question.md per-machine.md"
+SHARED_REFERENCES="isolation-question.md per-machine.md sandbox-recommendation.md"
 
 # references_block_names <file>: the basenames of the bullets directly below
 # the references block's exact opening sentence, sorted, one per line. Fails
@@ -249,7 +249,7 @@ check_shared_references_only() {
   check_shared_references_only "$INIT_MD" "$SETUP_MD" "$REFERENCES_DIRECTORY"
 }
 
-@test "the shared-reference check fails when the init command names a third reference" {
+@test "the shared-reference check fails when the init command names a reference outside the shared set" {
   local scratch="$BATS_TEST_TMPDIR/gaia-init.scratch.md"
   cp "$INIT_MD" "$scratch"
   printf '\nRead `.claude/skills/gaia/references/setup/sandbox.md` now, the whole file.\n' >>"$scratch"

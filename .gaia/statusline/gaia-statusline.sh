@@ -257,13 +257,39 @@ if [ "$mid_init" -eq 1 ]; then
   : # /gaia-init in progress, no right-side indicators
 else
   SETUP_STATE_FILE="$STATE_ROOT/.gaia/local/setup-state.json"
+  SETUP_FEATURES_FILE="$STATE_ROOT/.gaia/setup-features.json"
   setup_complete="false"
+  setup_pending_count=0
   if [ -f "$SETUP_STATE_FILE" ]; then
     if command -v jq >/dev/null 2>&1; then
-      if [ "$(jq -r '.completed_at // "null"' "$SETUP_STATE_FILE" 2>/dev/null)" != "null" ]; then
+      # The pending machine-scope setup choices ride the completion read, so a
+      # render spawns one jq whether or not the list exists. The list goes in
+      # as a raw string and is parsed under try, so a malformed list yields a
+      # zero count and never fails the completion read it shares a process
+      # with. Count first, then completed_at: the count never holds a comma.
+      if [ -f "$SETUP_FEATURES_FILE" ]; then
+        setup_read=$(jq -r --rawfile list "$SETUP_FEATURES_FILE" '
+          (.decisions | if type == "object" then . else {} end) as $decisions
+          | [ (try ([$list | fromjson | .features | arrays | .[] | objects
+                     | select((.scope == "machine") and ((.id | type) == "string")
+                              and (($decisions[.id] // "") | IN("applied", "declined", "not-applicable") | not))]
+                    | length | tostring) catch "0"),
+              (.completed_at // "null") ]
+          | join(",")' "$SETUP_STATE_FILE" 2>/dev/null)
+        setup_pending_count="${setup_read%%,*}"
+        setup_completed_at="${setup_read#*,}"
+      else
+        setup_completed_at=$(jq -r '.completed_at // "null"' "$SETUP_STATE_FILE" 2>/dev/null)
+      fi
+      if [ "$setup_completed_at" != "null" ]; then
         setup_complete="true"
       fi
+      case "$setup_pending_count" in
+        ''|*[!0-9]*) setup_pending_count=0 ;;
+      esac
     else
+      # No jq: completion still reads from the file, but the pending count is
+      # skipped, so the post-completion nudge stays dark rather than erroring.
       # Fallback: a complete state has a non-null completed_at value.
       if grep -q '"completed_at"[[:space:]]*:[[:space:]]*"' "$SETUP_STATE_FILE" 2>/dev/null; then
         setup_complete="true"
@@ -282,12 +308,13 @@ else
       # left-side-only path below.
   else
     # Nudge slots, indexed by render priority rather than by where each one
-    # is armed below: update-gaia 0, gaia-serena-sync 1, update-deps 2,
-    # gaia-cleanse 3, gaia-codify 4, gaia-debt 5, gaia-residue 6, gaia-wiki 7. The
-    # update-check-derived nudges stay gated on $CACHE_FILE; the debt nudge is
-    # gated independently on $DEBT_CACHE so it still renders when
-    # update-check.json is absent, which is why debt (5) is armed after
-    # residue (6) in source order but renders before it.
+    # is armed below: setup-gaia 0, update-gaia 1, gaia-serena-sync 2,
+    # update-deps 3, gaia-cleanse 4, gaia-codify 5, gaia-debt 6, gaia-residue 7,
+    # gaia-wiki 8. The update-check-derived nudges stay gated on $CACHE_FILE;
+    # the setup nudge and the debt nudge are gated independently (on the setup
+    # read above and on $DEBT_CACHE) so they still render when update-check.json
+    # is absent, which is why debt (6) is armed after residue (7) in source
+    # order but renders before it.
     #
     # Each slot carries its Large text, its bare Small command, and `mid`,
     # the Medium form's parenthetical content; an empty mid means the nudge
@@ -308,6 +335,16 @@ else
       nudge_mid[$1]="$5"
       nudge_icon[$1]="$6"
     }
+    # Post-completion setup nudge: machine-scope setup choices the shipped list
+    # holds and this machine has not decided. Highest priority because it is
+    # the only nudge that tells a teammate who pulled a release about a choice
+    # only they can make.
+    if [ "$setup_pending_count" -gt 0 ] 2>/dev/null; then
+      setup_noun="choices"
+      [ "$setup_pending_count" -eq 1 ] && setup_noun="choice"
+      printf -v full 'Run /setup-gaia (%d setup %s pending)' "$setup_pending_count" "$setup_noun"
+      nudge_set 0 '01;95' 'Run /setup-gaia' "$full" "$setup_pending_count" '🔧'
+    fi
     if [ -f "$CACHE_FILE" ] && command -v jq >/dev/null 2>&1; then
       # One spawn for both update-deps counts. securityCount is never defaulted
       # to 0: null (no advisory source answered) must stay distinguishable from
@@ -346,7 +383,7 @@ else
 
       if [ "$gaia_has_update" = "true" ] && [ -n "$gaia_latest" ]; then
         printf -v full 'Run /update-gaia (GAIA %s available)' "$gaia_latest"
-        nudge_set 0 '01;36' 'Run /update-gaia' "$full" "$gaia_latest" '🌍'
+        nudge_set 1 '01;36' 'Run /update-gaia' "$full" "$gaia_latest" '🌍'
       fi
       deps_outdated=0
       deps_security=0
@@ -360,7 +397,7 @@ else
         else
           printf -v full 'Run /update-deps (%d security)' "$deps_security"
         fi
-        nudge_set 2 '01;33' 'Run /update-deps' "$full" "$((deps_outdated + deps_security))" '📦'
+        nudge_set 3 '01;33' 'Run /update-deps' "$full" "$((deps_outdated + deps_security))" '📦'
       fi
       # Both signals are discharged by the same bare `/gaia-codify` run, and no
       # argument selects between them, so they stack into one segment's reason
@@ -374,7 +411,7 @@ else
       if [ "$has_codify_reason" = "1" ]; then
         if [ -n "$codify_reason" ]; then
           printf -v full 'Run /gaia-codify (%s)' "$codify_reason"
-          nudge_set 4 '01;35' 'Run /gaia-codify' "$full" "$codify_mid" '🔨'
+          nudge_set 5 '01;35' 'Run /gaia-codify' "$full" "$codify_mid" '🔨'
         fi
       else
         codify_unclassified=$(jq -r '.codifyUnclassifiedCount // 0' "$CACHE_FILE" 2>/dev/null)
@@ -390,15 +427,15 @@ else
         fi
         if [ -n "$fallback_reason" ]; then
           printf -v full 'Run /gaia-codify (%s)' "$fallback_reason"
-          nudge_set 4 '01;35' 'Run /gaia-codify' "$full" "$codify_mid" '🔨'
+          nudge_set 5 '01;35' 'Run /gaia-codify' "$full" "$codify_mid" '🔨'
         fi
       fi
       if [ "$cleanse_nudge" = "true" ]; then
         if [ -n "$cleanse_reason" ]; then
           printf -v full 'Run /gaia-cleanse (%s)' "$cleanse_reason"
-          nudge_set 3 '01;32' 'Run /gaia-cleanse' "$full" '' '🔎'
+          nudge_set 4 '01;32' 'Run /gaia-cleanse' "$full" '' '🔎'
         else
-          nudge_set 3 '01;32' 'Run /gaia-cleanse' 'Run /gaia-cleanse' '' '🔎'
+          nudge_set 4 '01;32' 'Run /gaia-cleanse' 'Run /gaia-cleanse' '' '🔎'
         fi
       fi
       if [ -n "$serena_drift" ]; then
@@ -406,7 +443,7 @@ else
         # Language count from the already-joined string: commas plus one.
         serena_commas="${serena_drift//[!,]/}"
         serena_language_count=$(( ${#serena_commas} + 1 ))
-        nudge_set 1 '01;31' 'Run /gaia-serena-sync' "$full" "$serena_language_count" '🔭'
+        nudge_set 2 '01;31' 'Run /gaia-serena-sync' "$full" "$serena_language_count" '🔭'
       fi
       # Residue nudge: renders once at least RESIDUE_NUDGE_THRESHOLD keyed
       # candidates have aged past 30 days (the age dial lives in the tally,
@@ -423,7 +460,7 @@ else
         residue_suffix="s"
         [ "$residue_count" -eq 1 ] && residue_suffix=""
         printf -v full 'Run /gaia-residue (%d aged residual%s)' "$residue_count" "$residue_suffix"
-        nudge_set 6 '01;37' 'Run /gaia-residue' "$full" "$residue_count" '🧹'
+        nudge_set 7 '01;37' 'Run /gaia-residue' "$full" "$residue_count" '🧹'
       fi
       # Wiki nudge: renders once the wiki trails HEAD by at least
       # WIKI_NUDGE_THRESHOLD non-bookkeeping commits. A maintainer constant,
@@ -437,7 +474,7 @@ else
       if [ "$wiki_drift_count" -ge "$WIKI_NUDGE_THRESHOLD" ] 2>/dev/null; then
         # 01;96 (bright cyan) is the one color no other slot or the setup
         # segment uses.
-        nudge_set 7 '01;96' 'Run /gaia-wiki' "Run /gaia-wiki ($wiki_drift_count commits)" "$wiki_drift_count" '🧠'
+        nudge_set 8 '01;96' 'Run /gaia-wiki' "Run /gaia-wiki ($wiki_drift_count commits)" "$wiki_drift_count" '🧠'
       fi
     fi
     # Debt-backlog nudge, read from the pinned debt cache. Independent of
@@ -448,7 +485,7 @@ else
         debt_noun="issues"
         [ "$debt_count" -eq 1 ] && debt_noun="issue"
         printf -v full 'Run /gaia-debt (%d %s)' "$debt_count" "$debt_noun"
-        nudge_set 5 '01;34' 'Run /gaia-debt' "$full" "$debt_count" '💸'
+        nudge_set 6 '01;34' 'Run /gaia-debt' "$full" "$debt_count" '💸'
       fi
     fi
 

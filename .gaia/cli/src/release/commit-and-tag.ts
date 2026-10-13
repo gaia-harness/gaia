@@ -35,6 +35,9 @@ const HELP_TEXT = `Usage: gaia-maintainer release commit-and-tag (--commit | --t
   --tag         Tag HEAD as vX.Y.Z and push the tag to origin.
   --no-push     With --tag: skip the tag push step.
 
+  --tag refuses a version whose major is below the highest existing release
+  tag (local or origin), and when origin's tags cannot be read.
+
   Exit codes:
     0  success
     1  user-correctable error
@@ -276,6 +279,94 @@ const runCommitMode = (ctx: CommitContext): number => {
   return EXIT_CODES.OK;
 };
 
+const RELEASE_TAG_PATTERN = /^v(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/u;
+const VERSION_MAJOR_PATTERN = /^(0|[1-9]\d*)\./u;
+
+type FenceVerdict =
+  {highestTag: string; ok: false} | {ok: false; unparseable: true} | {ok: true};
+
+const parseReleaseTag = (name: string): [number, number, number] | null => {
+  const match = RELEASE_TAG_PATTERN.exec(name);
+
+  if (match === null) return null;
+
+  return [Number(match[1]), Number(match[2]), Number(match[3])];
+};
+
+const compareReleaseTags = (
+  left: [number, number, number],
+  right: [number, number, number]
+): number => left[0] - right[0] || left[1] - right[1] || left[2] - right[2];
+
+/**
+ * Decides whether tagging `version` is allowed given every tag name seen.
+ * Only plain `vX.Y.Z` names count; the guard exists because a 1.x
+ * `/update-gaia` resolves the newest-created release, so a lower major
+ * published after a higher one routes 1.x adopters past the 2.0.0 fence.
+ */
+export const checkReleaseFence = (
+  version: string,
+  tagNames: readonly string[]
+): FenceVerdict => {
+  const majorMatch = VERSION_MAJOR_PATTERN.exec(version);
+
+  if (majorMatch === null) return {ok: false, unparseable: true};
+
+  const newMajor = Number(majorMatch[1]);
+  let highest: undefined | {name: string; parts: [number, number, number]};
+
+  for (const name of tagNames) {
+    const parts = parseReleaseTag(name);
+
+    if (
+      parts !== null &&
+      (highest === undefined || compareReleaseTags(parts, highest.parts) > 0)
+    ) {
+      highest = {name, parts};
+    }
+  }
+
+  if (highest !== undefined && newMajor < highest.parts[0]) {
+    return {highestTag: highest.name, ok: false};
+  }
+
+  return {ok: true};
+};
+
+/**
+ * Local tags plus origin's tags, or `null` when origin cannot be read. A run
+ * that cannot see origin cannot know whether it is publishing under a higher
+ * major, so the caller refuses instead of falling back to local tags alone.
+ */
+const collectTagNames = (ctx: TagContext): null | string[] => {
+  const names: string[] = [];
+  const localResult = ctx.runner('git', ['tag', '-l', 'v*'], {cwd: ctx.cwd});
+
+  if (stepSucceeded(localResult)) {
+    names.push(...localResult.stdout.split('\n').map((line) => line.trim()));
+  }
+
+  const remoteResult = ctx.runner('git', ['ls-remote', '--tags', 'origin'], {
+    cwd: ctx.cwd,
+  });
+
+  if (!stepSucceeded(remoteResult)) return null;
+
+  for (const line of remoteResult.stdout.split('\n')) {
+    const reference = line.split('\t', 2)[1]?.trim();
+
+    if (
+      reference !== undefined &&
+      reference.startsWith('refs/tags/') &&
+      !reference.endsWith('^{}')
+    ) {
+      names.push(reference.slice('refs/tags/'.length));
+    }
+  }
+
+  return names;
+};
+
 type TagContext = {
   cwd: string;
   noPush: boolean;
@@ -286,6 +377,28 @@ type TagContext = {
 const runTagMode = (ctx: TagContext): number => {
   const tagName = `v${ctx.version}`;
   const message = `Release v${ctx.version}`;
+
+  const tagNames = collectTagNames(ctx);
+
+  if (tagNames === null) {
+    process.stderr.write(
+      `REFUSED: could not read origin's tags, so ${tagName} cannot be checked against the highest existing release. Nothing was tagged. Check the network and the origin remote, then re-run.\n`
+    );
+
+    return EXIT_CODES.UNKNOWN_SUBCOMMAND;
+  }
+
+  const verdict = checkReleaseFence(ctx.version, tagNames);
+
+  if (!verdict.ok) {
+    process.stderr.write(
+      'unparseable' in verdict ?
+        `REFUSED: package.json version "${ctx.version}" has no parseable major. Nothing was tagged.\n`
+      : `REFUSED: ${tagName} has a lower major than the existing release tag ${verdict.highestTag}. A 1.x /update-gaia resolves the newest-created release, so publishing a lower major after a higher one routes 1.x adopters past the 2.0.0 fence. Nothing was tagged.\n`
+    );
+
+    return EXIT_CODES.UNKNOWN_SUBCOMMAND;
+  }
 
   const tagStep: Step = {
     args: ['tag', '-a', tagName, '-m', message],

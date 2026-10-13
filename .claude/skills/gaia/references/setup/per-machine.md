@@ -2,7 +2,13 @@
 
 The four per-machine steps `/gaia-init` (Step 8) and `/setup-gaia` (Phase 2) share: external tools, Claude plugins, the statusline executable bit, and the app `.env`. Run from the repository root. The calling command says what a halt means for it and how to resume.
 
-For each step below: skip it when its name is in `completed_steps` of `.gaia/cli/gaia setup status --json`; run it; run its probes (see `## Probes`); when every probe passes, run `.gaia/cli/gaia setup mark-step <step>`. A failed command or a failed probe: print one `[ok]` or `[FAIL]` line per probe run so far, surface the error verbatim, and halt the calling command.
+For each step below, read `completed_steps` from `.gaia/cli/gaia setup status --json`, then:
+
+- A step already in `completed_steps` is not re-run. When its id is owed (the owed check in `setup-decisions.md`), run its record line.
+- A step with probes (see `## Probes`) runs its probes first, before its install. When every probe passes, it skips the install, runs `.gaia/cli/gaia setup mark-step <step>` and its record line. Otherwise it runs its commands, then its probes again; when every probe passes, it marks the step and runs its record line.
+- A step without probes runs its commands, marks the step, and runs its record line.
+
+A failed command, or a probe that still fails after the install: print one `[ok]` or `[FAIL]` line per probe run so far, surface the error verbatim, record nothing, and halt the calling command.
 
 ## Step 1: install-tools
 
@@ -36,6 +42,8 @@ Three external tools need per-machine setup. Probes: React Doctor, Playwright CL
 
   Serena picks one language at first startup and freezes it into `.serena/project.yml`. When the project grows another language, update the `language_servers:` list (`languages:` before Serena 1.7) in that file and restart Serena; `/gaia-serena-sync` automates the same edit on explicit consent.
 
+Record line: `.gaia/cli/gaia setup record install-tools applied`.
+
 ## Step 2: install-plugins
 
 ```bash
@@ -48,6 +56,8 @@ Probes: typescript-lsp, claude-obsidian. Already-installed plugins are a no-op. 
 
 To upgrade an existing install, run `claude plugin list`, then `claude plugin uninstall <the id it shows> --scope project`, then the marketplace add and install above.
 
+Record line: `.gaia/cli/gaia setup record install-plugins applied`.
+
 ## Step 3: chmod-statusline
 
 The statusline command in `.claude/settings.json` points at `.gaia/statusline/*.sh`. The executable bit is normally tracked by git but can be lost on cross-platform clones. Idempotent:
@@ -56,6 +66,8 @@ The statusline command in `.claude/settings.json` points at `.gaia/statusline/*.
 chmod +x .gaia/statusline/*.sh
 ```
 
+Record line: `.gaia/cli/gaia setup record chmod-statusline applied`.
+
 ## Step 4: bootstrap-env
 
 The app's `.env` lives in the `frontend/` package and is gitignored. When `frontend/.env` is absent and `frontend/.env.example` exists, copy it; otherwise this is a no-op (the project may not use `.env`, or an earlier bootstrap already wrote it):
@@ -63,6 +75,8 @@ The app's `.env` lives in the `frontend/` package and is gitignored. When `front
 ```bash
 cp frontend/.env.example frontend/.env
 ```
+
+Record line: `.gaia/cli/gaia setup record bootstrap-env applied`.
 
 ## Probes
 

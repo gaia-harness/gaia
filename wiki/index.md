@@ -153,7 +153,9 @@ Master catalog of every page in the wiki. Newly created pages must be added here
 - [[Claude Hooks]]
 - [[GAIA Scripts]]: the families of `.gaia/scripts/` by name prefix with what each does and where it is invoked, the subdirectories, and why the directory stays flat.
 - [[OS Sandbox]]: two-tier sandbox-enablement preference (owner recommends, each machine resolves) and the honest `.env` deny-merge boundary.
-- [[Project Config]]: `.gaia/project.json`, the committed team-shared settings file (sandbox recommendation, isolation policy), its writers and readers, and why `/update-gaia` never touches it.
+- [[Project Config]]: `.gaia/project.json`, the committed team-shared settings file (sandbox recommendation, isolation policy, setup decisions), its writers and readers, and why `/update-gaia`'s merge never overwrites it while its setup drift step records decisions into it.
+- [[Migration Notes]]: the authoring guide for `.gaia/migrations/`: the note format, how `/update-gaia` selects notes from the verified bundle, and what the blocking and after-merge modes oblige an author to do.
+- [[Setup Features]]: the shipped setup feature list `.gaia/setup-features.json`, the project and machine decision records, and how `/gaia-init`, `/setup-gaia`, `/update-gaia` and the statusline use them.
 - [[Package Descriptor]]: the package registry `.gaia/packages.json` and per-package `gaia.package.json`; who reads them, the fail-closed rule, and the frontend launch scope.
 - [[Claude Integration Conventions]]: Conventions for Claude's config surface: extension points, monorepo retrofit, service swaps, domain isolation.
 - [[Local Working State]]: the gitignored `.gaia/local/` working-state folder and its pointer to the state registry; the SessionStart janitor's wiki-landing catch-up.

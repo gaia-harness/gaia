@@ -19,7 +19,12 @@ import {tmpdir} from 'node:os';
 import path from 'node:path';
 import {newMainCheckout} from '../../util/main-checkout-fixture.js';
 import {resolveMainWorktreeRoot} from '../../util/main-root.js';
-import {pendingSteps, readStateFile, SETUP_STEPS} from '../util/state-file.js';
+import {
+  pendingSteps,
+  readStateFile,
+  SETUP_STEPS,
+  writeStateFile,
+} from '../util/state-file.js';
 
 type Sandbox = {
   cleanup: () => void;
@@ -208,5 +213,64 @@ describe('resolveMainWorktreeRoot', () => {
         else process.env[key] = value;
       }
     }
+  });
+});
+
+describe('decisions', () => {
+  let sandbox: Sandbox;
+
+  beforeEach(() => {
+    sandbox = setupSandbox();
+  });
+
+  afterEach(() => {
+    sandbox.cleanup();
+  });
+
+  const base = {
+    completed_at: null,
+    completed_steps: [],
+    started_at: 'x',
+    version: 1,
+  };
+
+  test('reads the string-valued entries of an object decisions', () => {
+    writeStateJson(sandbox.statePath, {
+      ...base,
+      decisions: {a: 'applied', b: 3, c: 'declined', d: null},
+    });
+
+    expect(readStateFile(sandbox.root)?.decisions).toEqual({
+      a: 'applied',
+      c: 'declined',
+    });
+  });
+
+  test.each([['applied'], [['applied']], [null], [3]])(
+    'drops a non-object decisions (%j)',
+    (value) => {
+      writeStateJson(sandbox.statePath, {...base, decisions: value});
+
+      expect(readStateFile(sandbox.root)).not.toHaveProperty('decisions');
+    }
+  );
+
+  test('writeStateFile writes decisions when present and omits the key when absent', () => {
+    writeStateFile(sandbox.root, {
+      completed_at: null,
+      completed_steps: [],
+      decisions: {a: 'applied'},
+      started_at: 'x',
+      version: 1,
+    });
+    expect(readStateFile(sandbox.root)?.decisions).toEqual({a: 'applied'});
+
+    writeStateFile(sandbox.root, {
+      completed_at: null,
+      completed_steps: [],
+      started_at: 'x',
+      version: 1,
+    });
+    expect(readStateFile(sandbox.root)).not.toHaveProperty('decisions');
   });
 });

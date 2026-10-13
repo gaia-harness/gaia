@@ -40,6 +40,8 @@ export const SETUP_STEPS = [
 export type SetupState = {
   completed_at: null | string;
   completed_steps: SetupStep[];
+  /** Machine-scope setup decisions, id to value; kept through every write. */
+  decisions?: Record<string, string>;
   started_at: string;
   version: 1;
 };
@@ -51,6 +53,23 @@ const isSetupStep = (value: string): value is SetupStep =>
 
 export const resolveStateFilePath = (repoRoot: string): string =>
   path.join(repoRoot, STATE_DIRECTORY_RELATIVE, STATE_FILENAME);
+
+/** The string-valued entries of a plain object; anything else is absent. */
+const keepStringValues = (
+  value: unknown
+): Record<string, string> | undefined => {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+    return undefined;
+  }
+
+  const kept: Record<string, string> = {};
+
+  for (const [id, entry] of Object.entries(value)) {
+    if (typeof entry === 'string') kept[id] = entry;
+  }
+
+  return kept;
+};
 
 export const readStateFile = (repoRoot: string): null | SetupState => {
   const filePath = resolveStateFilePath(repoRoot);
@@ -74,9 +93,12 @@ export const readStateFile = (repoRoot: string): null | SetupState => {
     throw new TypeError('setup-state.json is missing a valid started_at');
   }
 
+  const decisions = keepStringValues(parsed.decisions);
+
   return {
     completed_at: parsed.completed_at ?? null,
     completed_steps: rawSteps.filter(isSetupStep),
+    ...(decisions === undefined ? {} : {decisions}),
     started_at: parsed.started_at,
     version: 1,
   };

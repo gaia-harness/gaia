@@ -52,7 +52,7 @@ export const isMainCheckout = (cwd: string): boolean => {
 };
 
 // The earlier ledger format is unreadable to the current reader, and the
-// migration prompt tells the adopter to delete it at its old path, so it must
+// 2.0.0 migration note tells the adopter to delete it at its old path, so it must
 // stay where that command looks.
 const isVersionOneLedger = (ledgerPath: string): boolean => {
   try {

@@ -13,12 +13,15 @@ import {lookupOwn} from '../util/argv.js';
 import {run as runCheckAdmin} from './check-admin.js';
 import {run as runConfigureDependabotAlerts} from './configure-dependabot-alerts.js';
 import {run as runDetectRemote} from './detect-remote.js';
+import {run as runDrift} from './drift.js';
 import {run as runEnableDeleteBranch} from './enable-delete-branch.js';
 import {run as runFinalize} from './finalize.js';
 import {run as runMarkStep} from './mark-step.js';
+import {run as runRecord} from './record.js';
 import {run as runStatus} from './status.js';
 import {run as runWarnExistingTools} from './warn-existing-tools.js';
 import {run as runWriteIsolationPolicy} from './write-isolation-policy.js';
+import {run as runWriteSandboxRecommendation} from './write-sandbox-recommendation.js';
 
 const HELP_TEXT = `Usage: gaia setup <subcommand> [args]
 
@@ -32,6 +35,11 @@ const HELP_TEXT = `Usage: gaia setup <subcommand> [args]
   enable-delete-branch --owner <o> --repo <r>
                                            PATCH delete_branch_on_merge=true.
   write-isolation-policy <policy>          Set the team's git isolation policy in .gaia/project.json.
+  write-sandbox-recommendation <true|false>
+                                           Set the team's sandbox recommendation in .gaia/project.json.
+  record <id> <applied|declined|not-applicable>
+                                           Record a setup decision for a listed feature.
+  drift [--json] [--features <path>]       List setup features with no recorded decision.
   configure-dependabot-alerts --owner <o> --repo <r> [--json]
                                            Turn Dependabot alerts on and automated security fixes off, then verify both, via gh.
 `;
@@ -46,12 +54,15 @@ const SUBCOMMAND_HANDLERS: Readonly<
   'check-admin': runCheckAdmin,
   'configure-dependabot-alerts': runConfigureDependabotAlerts,
   'detect-remote': runDetectRemote,
+  drift: runDrift,
   'enable-delete-branch': runEnableDeleteBranch,
   finalize: runFinalize,
   'mark-step': runMarkStep,
+  record: runRecord,
   status: runStatus,
   'warn-existing-tools': runWarnExistingTools,
   'write-isolation-policy': runWriteIsolationPolicy,
+  'write-sandbox-recommendation': runWriteSandboxRecommendation,
 };
 
 export const run = async (argv: readonly string[]): Promise<number> => {

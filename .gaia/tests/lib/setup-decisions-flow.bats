@@ -1,0 +1,924 @@
+#!/usr/bin/env bats
+# Executable and prose checks over /setup-gaia's decision routing: the owed
+# check, who may record project decisions, each reference block that records
+# a feature's settled state without a question, the land step, the setup
+# ping, the label-sync degraded marker, the squash-only gate, Phase 5's
+# standalone handoff, and /gaia-init's records.
+#
+# Each block is extracted from the shipped file by its heading and run inside
+# a fixture repository under $BATS_TEST_TMPDIR, whose `.gaia/cli/gaia` is a
+# wrapper around the real CLI bundle: it answers `labels sync`, `sandbox
+# status` (when a test sets a stub answer) and `ping` itself, and passes every
+# other call, `setup record` and `setup drift` included, to the real bundle.
+# `gh` is a stub on PATH answering the API paths the blocks read.
+#
+# The interactive questions themselves (the isolation policy, the sandbox
+# recommendation, the squash-only offer) are covered by a manual /setup-gaia
+# run; here their answers are driven through the literal write and record
+# lines the files carry.
+#
+# Assertion style: .claude/rules/bats-assertions.md.
+
+SETUP_COMMAND_PATH='.claude/commands/setup-gaia.md'
+INIT_COMMAND_PATH='.claude/commands/gaia-init.md'
+REFERENCES_PATH='.claude/skills/gaia/references/setup'
+
+setup() {
+  REPO_ROOT="$(cd "${BATS_TEST_DIRNAME}/../../.." && pwd)"
+  SETUP_COMMAND="${REPO_ROOT}/${SETUP_COMMAND_PATH}"
+  INIT_COMMAND="${REPO_ROOT}/${INIT_COMMAND_PATH}"
+  REFERENCES="${REPO_ROOT}/${REFERENCES_PATH}"
+  REAL_CLI="${REPO_ROOT}/.gaia/cli/gaia"
+  FEATURE_LIST="${REPO_ROOT}/.gaia/setup-features.json"
+  [ -x "$REAL_CLI" ] || {
+    echo "the CLI bundle is absent: ${REAL_CLI}" >&2
+    return 1
+  }
+  export REAL_CLI
+  export GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_NOSYSTEM=1
+  export GIT_AUTHOR_NAME=fixture GIT_AUTHOR_EMAIL=fixture@example.com
+  export GIT_COMMITTER_NAME=fixture GIT_COMMITTER_EMAIL=fixture@example.com
+  STUB_BIN="${BATS_TEST_TMPDIR}/stub-bin"
+  mkdir -p "$STUB_BIN"
+  write_gh_stub
+  export PATH="${STUB_BIN}:${PATH}"
+  export GH_LOG="${BATS_TEST_TMPDIR}/gh.log" CLI_LOG="${BATS_TEST_TMPDIR}/cli.log"
+  : >"$GH_LOG"
+  : >"$CLI_LOG"
+  export HOME="${BATS_TEST_TMPDIR}/home"
+  mkdir -p "${HOME}/.claude"
+}
+
+# ---------------------------------------------------------------------------
+# Fixtures
+# ---------------------------------------------------------------------------
+
+# write_gh_stub: a gh that logs every call and answers the reads the blocks
+# make for owner `o`, repo `r`, default branch `main`. Every mutating call is
+# logged as MUTATION and succeeds.
+write_gh_stub() {
+  cat >"${STUB_BIN}/gh" <<'STUB'
+#!/usr/bin/env bash
+printf '%s\n' "$*" >>"$GH_LOG"
+case "$*" in
+  *"-X "*) printf 'MUTATION %s\n' "$*" >>"$GH_LOG"; cat >/dev/null; exit 0 ;;
+  "api repos/o/r/branches/main --jq .name") echo main ;;
+  "api repos/o/r/branches/main/protection") echo '{}' ;;
+  "api repos/o/r/branches/main/protection/required_status_checks --jq .contexts") echo '["GAIA-Audit", "Vitest"]' ;;
+  "api repos/o/r --jq .security_and_analysis"*) echo "${GH_PUSH_STATUS:-enabled}" ;;
+  "api repos/o/r --jq .delete_branch_on_merge") echo "${GH_DELETE_BRANCH:-true}" ;;
+  "api repos/o/r --jq {allow_merge_commit"*)
+    echo '{"allow_merge_commit": false, "allow_rebase_merge": false, "allow_squash_merge": true, "squash_merge_commit_title": "PR_TITLE", "squash_merge_commit_message": "COMMIT_MESSAGES"}' ;;
+  *) exit 1 ;;
+esac
+STUB
+  chmod +x "${STUB_BIN}/gh"
+}
+
+# make_repo <name> [list]: a git repository on `main` with one commit, the
+# feature list (the real one unless a path is given), and the CLI wrapper.
+# Prints its path.
+make_repo() {
+  local repo="${BATS_TEST_TMPDIR}/$1" list="${2:-$FEATURE_LIST}"
+  mkdir -p "${repo}/.gaia/cli"
+  git init -q -b main "$repo"
+  printf '.gaia/local/\n.gaia/cli/\n' >"${repo}/.gitignore"
+  cp "$list" "${repo}/.gaia/setup-features.json"
+  cat >"${repo}/.gaia/cli/gaia" <<'WRAPPER'
+#!/usr/bin/env bash
+case "$1 ${2:-}" in
+  "labels sync")
+    printf '%s\n' "${STUB_SYNC_STDOUT-labels-sync: 0 created, 0 renamed}"
+    exit "${STUB_SYNC_STATUS:-0}"
+    ;;
+  "sandbox status")
+    if [ -n "${STUB_SANDBOX_STATUS:-}" ]; then
+      printf '%s\n' "$STUB_SANDBOX_STATUS"
+      exit 0
+    fi
+    ;;
+esac
+if [ "$1" = ping ]; then
+  printf '%s\n' "$*" >>"$CLI_LOG"
+  exit 0
+fi
+exec "$REAL_CLI" "$@"
+WRAPPER
+  chmod +x "${repo}/.gaia/cli/gaia"
+  git -C "$repo" add .gitignore .gaia/setup-features.json
+  git -C "$repo" commit -q -m initial
+  printf '%s\n' "$repo"
+}
+
+# make_provisioned <name>: a completed machine with all four per-machine steps
+# and no decision record, a declined sandbox marker, a `gaia` statusline
+# choice, a global statusline, and no .gaia/project.json.
+make_provisioned() {
+  local repo step
+  repo="$(make_repo "$1")"
+  for step in install-tools install-plugins chmod-statusline bootstrap-env; do
+    in_repo "$repo" .gaia/cli/gaia setup mark-step "$step" >/dev/null || return 1
+  done
+  in_repo "$repo" .gaia/cli/gaia setup finalize >/dev/null || return 1
+  in_repo "$repo" .gaia/cli/gaia sandbox record --outcome declined --capability ready >/dev/null || return 1
+  printf '%s\n' '{"version": 1, "statusline": {"left": "gaia"}}' >"${repo}/.gaia/local/settings.json"
+  printf '%s\n' '{"statusLine": {"command": "my-statusline"}}' >"${HOME}/.claude/settings.json"
+  printf '%s\n' "$repo"
+}
+
+# in_repo <repo> <command...>: run a command from the repository root.
+in_repo() {
+  local repo="$1"
+  shift
+  (cd "$repo" && "$@")
+}
+
+# run_block <repo> <block> [NAME=value...]: run a block's text with bash from
+# the repository root, with the given variables in its environment.
+run_block() {
+  local repo="$1" block="$2"
+  shift 2
+  [ -n "$block" ] || {
+    echo "the block to run is empty" >&2
+    return 1
+  }
+  (cd "$repo" && env "$@" bash -c "$block")
+}
+
+# block_under <file> <heading> [n]: the body of the n-th (default first)
+# column-0 bash fence after the exact heading line, before the next level-two
+# heading.
+block_under() {
+  awk -v heading="$2" -v want="${3:-1}" '
+    $0 == heading { seen = 1; next }
+    seen && /^## / { exit }
+    seen && /^```bash[[:space:]]*$/ { inside = 1; n++; next }
+    seen && inside && /^```[[:space:]]*$/ { inside = 0; if (n == want) exit; next }
+    seen && inside && n == want { print }
+  ' "$1"
+}
+
+# section <file> <start-prefix> <stop-regex>: the lines from the first line
+# starting with the prefix up to, not including, the next line matching the
+# stop regex.
+section() {
+  awk -v start="$2" -v stop="$3" '
+    !inside && index($0, start) == 1 { inside = 1; print; next }
+    inside && $0 ~ stop { exit }
+    inside
+  ' "$1"
+}
+
+# check_line <name> <id>: the owed or declined check line from
+# setup-decisions.md with the id substituted.
+check_line() {
+  local anchor line
+  case "$1" in
+    owed) anchor="'any(.undecided[]?; .id == \$id)'" ;;
+    declined) anchor="'.decided[\$id] == \"declined\"'" ;;
+  esac
+  line="$(grep -F -- "$anchor" "${REFERENCES}/setup-decisions.md" | grep -F -- '--arg id <id>' | sed 's/^ *//')"
+  [ "$(grep -c . <<<"$line")" -eq 1 ] || {
+    echo "expected one ${1} check line, found: ${line}" >&2
+    return 1
+  }
+  printf '%s\n' "${line/<id>/$2}"
+}
+
+# decision <repo> <id>: the recorded value for an id, from whichever record
+# file holds it, or empty.
+decision() {
+  in_repo "$1" .gaia/cli/gaia setup drift --json | jq -r --arg id "$2" '.decided[$id] // empty'
+}
+
+# undecided_ids <repo>: drift's undecided ids, space-separated.
+undecided_ids() {
+  in_repo "$1" .gaia/cli/gaia setup drift --json | jq -r '[.undecided[].id] | join(" ")'
+}
+
+# record_all_but <repo> <id>: record every listed id except one as applied.
+record_all_but() {
+  local repo="$1" skip="$2" id
+  for id in $(jq -r '.features[].id' "$FEATURE_LIST"); do
+    [ "$id" = "$skip" ] && continue
+    in_repo "$repo" .gaia/cli/gaia setup record "$id" applied >/dev/null || return 1
+  done
+}
+
+# assert_no_mutation: the gh stub saw no mutating call.
+assert_no_mutation() {
+  if grep -q '^MUTATION' "$GH_LOG"; then
+    echo "a mutating gh call was made: $(grep '^MUTATION' "$GH_LOG")" >&2
+    return 1
+  fi
+}
+
+# pin <text> <literal...>: every literal appears in the text.
+pin() {
+  local text="$1" literal
+  shift
+  [ -n "$text" ] || {
+    echo "the pinned section is empty" >&2
+    return 1
+  }
+  for literal in "$@"; do
+    grep -qF -- "$literal" <<<"$text" || {
+      echo "the section does not carry: ${literal}" >&2
+      return 1
+    }
+  done
+}
+
+# without_lines <file> <literal> <name>: a scratch copy of the file without the
+# lines carrying the literal; fails when nothing was removed.
+without_lines() {
+  local copy="${BATS_TEST_TMPDIR}/$3"
+  grep -vF -- "$2" "$1" >"$copy" || true
+  cmp -s "$1" "$copy" && {
+    echo "the mutation removed nothing from $1" >&2
+    return 1
+  }
+  printf '%s\n' "$copy"
+}
+
+# ---------------------------------------------------------------------------
+# The owed set
+# ---------------------------------------------------------------------------
+
+@test "the owed check lists every listed id on a provisioned machine with no record and no project.json" {
+  local repo output_line owed id count=0
+  repo="$(make_provisioned owed-set)"
+  [ ! -e "${repo}/.gaia/project.json" ]
+  output_line="$(run_block "$repo" "$(block_under "${REFERENCES}/setup-decisions.md" '## The owed check')")"
+  owed="$(sed -n 's/^OWED_AT_START=//p' <<<"$output_line")"
+  while IFS= read -r id; do
+    count=$((count + 1))
+    grep -qw -- "$id" <<<"$owed" || {
+      echo "${id} is missing from OWED_AT_START: ${owed}" >&2
+      return 1
+    }
+  done < <(jq -r '.features[].id' "$FEATURE_LIST")
+  [ "$count" -eq "$(jq '.features | length' "$FEATURE_LIST")" ]
+  [ "$(wc -w <<<"$owed" | tr -d ' ')" -eq "$count" ]
+}
+
+@test "the owed check prints DRIFT_FAILED when the list cannot be read" {
+  local repo
+  repo="$(make_repo drift-failed)"
+  printf 'not json\n' >"${repo}/.gaia/setup-features.json"
+  run run_block "$repo" "$(block_under "${REFERENCES}/setup-decisions.md" '## The owed check')"
+  grep -qx 'DRIFT_FAILED' <<<"$output"
+  grep -q '^OWED_AT_START=' <<<"$output" && return 1
+  true
+}
+
+# ---------------------------------------------------------------------------
+# Who records project decisions
+# ---------------------------------------------------------------------------
+
+# who_records <repo> NAME=value...: run the block and print its two lines.
+who_records() {
+  local repo="$1"
+  shift
+  run_block "$repo" "$(block_under "${REFERENCES}/setup-decisions.md" '## Who records project decisions')" \
+    FOUND= HOST= ADMIN= AUTH_STATUS= DEFAULT_BRANCH= "$@"
+}
+
+@test "who records: an admin on the default branch is admin, and on another branch is none" {
+  local repo
+  repo="$(make_repo who-admin)"
+  run who_records "$repo" FOUND=true HOST=github.com ADMIN=true AUTH_STATUS=ok DEFAULT_BRANCH=main
+  grep -qx 'MAY_RECORD_PROJECT=admin' <<<"$output"
+  grep -qx 'DEFAULT_BRANCH=main' <<<"$output"
+  git -C "$repo" checkout -q -b feature
+  run who_records "$repo" FOUND=true HOST=github.com ADMIN=true AUTH_STATUS=ok DEFAULT_BRANCH=main
+  grep -qx 'MAY_RECORD_PROJECT=none' <<<"$output"
+}
+
+@test "who records: a non-admin, a failed auth, and no origin are none" {
+  local repo
+  repo="$(make_repo who-none)"
+  run who_records "$repo" FOUND=true HOST=github.com ADMIN=false AUTH_STATUS=ok DEFAULT_BRANCH=main
+  grep -qx 'MAY_RECORD_PROJECT=none' <<<"$output"
+  run who_records "$repo" FOUND=true HOST=github.com ADMIN=true AUTH_STATUS=unauthenticated DEFAULT_BRANCH=main
+  grep -qx 'MAY_RECORD_PROJECT=none' <<<"$output"
+  run who_records "$repo" FOUND=false DEFAULT_BRANCH=main
+  grep -qx 'MAY_RECORD_PROJECT=none' <<<"$output"
+  grep -qx 'DEFAULT_BRANCH=' <<<"$output"
+}
+
+@test "who records: a non-GitHub origin takes its default branch from origin/HEAD, and without one is none" {
+  local repo origin="${BATS_TEST_TMPDIR}/who-origin.git"
+  repo="$(make_repo who-other-host)"
+  git init -q --bare "$origin"
+  git -C "$repo" remote add origin "$origin"
+  run who_records "$repo" FOUND=true HOST=git.example.com
+  grep -qx 'MAY_RECORD_PROJECT=none' <<<"$output"
+  grep -qx 'DEFAULT_BRANCH=' <<<"$output"
+  git -C "$repo" push -q origin main
+  git -C "$repo" symbolic-ref refs/remotes/origin/HEAD refs/remotes/origin/main
+  run who_records "$repo" FOUND=true HOST=git.example.com
+  grep -qx 'MAY_RECORD_PROJECT=not-applicable-only' <<<"$output"
+  grep -qx 'DEFAULT_BRANCH=main' <<<"$output"
+  git -C "$repo" checkout -q -b feature
+  run who_records "$repo" FOUND=true HOST=git.example.com
+  grep -qx 'MAY_RECORD_PROJECT=none' <<<"$output"
+}
+
+# ---------------------------------------------------------------------------
+# Probes record without a question
+# ---------------------------------------------------------------------------
+
+# record_settled_state <repo> <may-record-project>: run every block that
+# records a settled state with no question.
+record_settled_state() {
+  local repo="$1" may="$2" github_repo="${REFERENCES}/github-repo.md" line
+  run_block "$repo" "$(block_under "${REFERENCES}/sandbox.md" '## Record a settled decision')" || return 1
+  run_block "$repo" "$(block_under "${REFERENCES}/statusline-left.md" '## Record a settled choice')" \
+    GLOBAL_STATUSLINE=my-statusline LEFT_CHOICE=gaia || return 1
+  run_block "$repo" "$(block_under "$github_repo" '## Owed and recorded settings' 2)" \
+    OWNER=o REPO=r HOST=github.com DEFAULT_BRANCH=main MAY_RECORD_PROJECT="$may" || return 1
+  run_block "$repo" "$(block_under "$github_repo" '## Push protection')" \
+    OWNER=o REPO=r MAY_RECORD_PROJECT="$may" || return 1
+  run_block "$repo" "$(block_under "$github_repo" '## Remaining defaults')" \
+    OWNER=o REPO=r MAY_RECORD_PROJECT="$may" || return 1
+  run_block "$repo" "$(block_under "${REFERENCES}/squash-only.md" '# Squash-only merge question')" \
+    OWNER=o REPO=r MAY_RECORD_PROJECT="$may" || return 1
+  run_block "$repo" "$(block_under "$SETUP_COMMAND" '## Phase 4.5: Label sync (always evaluated)')" \
+    LABEL_SYNC_OWED=true MAY_RECORD_PROJECT="$may" || return 1
+  while IFS= read -r line; do
+    in_repo "$repo" bash -c "$line" >/dev/null || return 1
+  done < <(grep -oE '\.gaia/cli/gaia setup record [a-z-]+ applied' "${REFERENCES}/per-machine.md")
+  # The Dependabot posture is applied by `gaia setup configure-dependabot-alerts`,
+  # whose GitHub calls the CLI's own tests cover; its success records through
+  # this gated line.
+  line="$(grep -oE '\[ "\$MAY_RECORD_PROJECT" != admin \] \|\| \.gaia/cli/gaia setup record dependabot-posture applied' "$github_repo")"
+  [ "$(grep -c . <<<"$line")" -eq 1 ] || return 1
+  run_block "$repo" "$line" MAY_RECORD_PROJECT="$may" || return 1
+}
+
+@test "the probe blocks record every settled feature without a question, and drift then reports nothing" {
+  local repo id
+  repo="$(make_provisioned probes)"
+  [ "$(grep -cE '\.gaia/cli/gaia setup record [a-z-]+ applied' "${REFERENCES}/per-machine.md")" -eq 4 ]
+  record_settled_state "$repo" admin >/dev/null
+  [ "$(decision "$repo" sandbox)" = declined ]
+  [ "$(decision "$repo" statusline-left)" = applied ]
+  for id in github-repository branch-protection gaia-audit-check push-protection delete-branch-on-merge \
+    dependabot-posture squash-only label-sync install-tools install-plugins chmod-statusline bootstrap-env; do
+    [ "$(decision "$repo" "$id")" = applied ] || {
+      echo "${id} recorded '$(decision "$repo" "$id")', expected applied" >&2
+      return 1
+    }
+  done
+  assert_no_mutation
+  # The two team settings are absent here and need an interactive answer;
+  # the manual run covers the question, and these are its write and record lines.
+  in_repo "$repo" .gaia/cli/gaia setup write-isolation-policy prefer-branch >/dev/null
+  in_repo "$repo" .gaia/cli/gaia setup record isolation-policy applied >/dev/null
+  in_repo "$repo" .gaia/cli/gaia setup write-sandbox-recommendation false >/dev/null
+  in_repo "$repo" .gaia/cli/gaia setup record sandbox-recommendation declined >/dev/null
+  [ -z "$(undecided_ids "$repo")" ]
+  [ "$(jq -c 'keys' "${repo}/.gaia/project.json")" = '["isolation_policy","sandbox_recommended","setup_decisions","version"]' ]
+}
+
+@test "the probe blocks keep every other key of an existing project.json" {
+  local repo before
+  repo="$(make_provisioned probes-existing)"
+  printf '%s\n' '{"version": 1, "isolation_policy": "prefer-worktree", "sandbox_recommended": true, "x": {"kept": [1, 2]}}' \
+    >"${repo}/.gaia/project.json"
+  before="$(jq -S -c . "${repo}/.gaia/project.json")"
+  record_settled_state "$repo" admin >/dev/null
+  in_repo "$repo" .gaia/cli/gaia setup record isolation-policy applied >/dev/null
+  in_repo "$repo" .gaia/cli/gaia setup record sandbox-recommendation applied >/dev/null
+  [ -z "$(undecided_ids "$repo")" ]
+  [ "$(jq -S -c 'del(.setup_decisions)' "${repo}/.gaia/project.json")" = "$before" ]
+}
+
+@test "the per-machine rule runs a step's probes before its install and skips the install when they pass" {
+  check_probe_first "${REFERENCES}/per-machine.md"
+}
+
+# check_probe_first <file>: the per-step rule, above the first step heading,
+# runs probes before the install and skips the install when every probe passes.
+check_probe_first() {
+  pin "$(awk '/^## Step 1:/ { exit } { print }' "$1")" \
+    'runs its probes first, before its install' \
+    'When every probe passes, it skips the install'
+}
+
+@test "the probe-first pin fails on a copy without the probe-first clause" {
+  local copy
+  copy="$(without_lines "${REFERENCES}/per-machine.md" 'runs its probes first' per-machine-no-probe-first.md)"
+  run check_probe_first "$copy"
+  [ "$status" -ne 0 ]
+}
+
+# ---------------------------------------------------------------------------
+# A machine id on a completed machine
+# ---------------------------------------------------------------------------
+
+@test "an owed statusline choice with no global statusline records not-applicable on this machine" {
+  local repo
+  repo="$(make_repo statusline-none)"
+  record_all_but "$repo" statusline-left
+  [ "$(undecided_ids "$repo")" = statusline-left ]
+  run_block "$repo" "$(block_under "${REFERENCES}/statusline-left.md" '## Record a settled choice')" \
+    GLOBAL_STATUSLINE= LEFT_CHOICE= >/dev/null
+  [ "$(jq -r '.decisions["statusline-left"]' "${repo}/.gaia/local/setup-state.json")" = not-applicable ]
+  [ -z "$(undecided_ids "$repo")" ]
+}
+
+@test "a standing user statusline choice records declined" {
+  local repo
+  repo="$(make_repo statusline-user)"
+  run_block "$repo" "$(block_under "${REFERENCES}/statusline-left.md" '## Record a settled choice')" \
+    GLOBAL_STATUSLINE=my-statusline LEFT_CHOICE=user >/dev/null
+  [ "$(jq -r '.decisions["statusline-left"]' "${repo}/.gaia/local/setup-state.json")" = declined ]
+}
+
+# ---------------------------------------------------------------------------
+# The declined rule
+# ---------------------------------------------------------------------------
+
+@test "the declined check passes only for an id recorded declined" {
+  local repo line
+  repo="$(make_repo declined-check)"
+  line="$(check_line declined sandbox)"
+  run in_repo "$repo" bash -c "$line"
+  [ "$status" -ne 0 ]
+  in_repo "$repo" .gaia/cli/gaia setup record sandbox applied >/dev/null
+  run in_repo "$repo" bash -c "$line"
+  [ "$status" -ne 0 ]
+  in_repo "$repo" .gaia/cli/gaia setup record sandbox declined >/dev/null
+  in_repo "$repo" bash -c "$line"
+}
+
+# declined_pins <setup-command> <github-repo-reference>: every plain-run
+# re-ask consults the declined check first.
+declined_pins() {
+  pin "$(section "$1" '## Phase 2:' '^## ')" 'the declined check passes for `sandbox`' || return 1
+  pin "$(section "$1" '## Phase 4.6:' '^## ')" 'the declined check passes for `statusline-left`' || return 1
+  pin "$(section "$1" '### The sandbox recommendation' '^##')" '`absent` and the declined check passes: skip silently' || return 1
+  pin "$(section "$2" '## Remaining defaults' '^## ')" 'run the declined check for `delete-branch-on-merge` first'
+}
+
+@test "Phase 2, Phase 4.6, the sandbox recommendation and the delete-branch question consult the declined check" {
+  declined_pins "$SETUP_COMMAND" "${REFERENCES}/github-repo.md"
+}
+
+@test "the declined pins fail on a copy that drops any one of the four" {
+  local literal copy count=0
+  for literal in 'the declined check passes for `sandbox`' 'the declined check passes for `statusline-left`' \
+    '`absent` and the declined check passes'; do
+    count=$((count + 1))
+    copy="$(without_lines "$SETUP_COMMAND" "$literal" "declined-setup-${count}.md")"
+    run declined_pins "$copy" "${REFERENCES}/github-repo.md"
+    [ "$status" -ne 0 ] || {
+      echo "the pins passed without: ${literal}" >&2
+      return 1
+    }
+  done
+  copy="$(without_lines "${REFERENCES}/github-repo.md" 'run the declined check for `delete-branch-on-merge`' declined-github.md)"
+  run declined_pins "$SETUP_COMMAND" "$copy"
+  [ "$status" -ne 0 ]
+}
+
+# ---------------------------------------------------------------------------
+# Land the decisions
+# ---------------------------------------------------------------------------
+
+land_block() {
+  block_under "${REFERENCES}/land-decisions.md" '## Land the decisions' "$1"
+}
+
+@test "the land decision block: changed or untracked lands, unchanged or absent does not" {
+  local repo
+  repo="$(make_repo land-decide)"
+  [ "$(run_block "$repo" "$(land_block 1)")" = NOTHING_TO_LAND ]
+  in_repo "$repo" .gaia/cli/gaia setup record squash-only declined >/dev/null
+  [ "$(run_block "$repo" "$(land_block 1)")" = LAND ]
+  git -C "$repo" add .gaia/project.json
+  git -C "$repo" commit -q -m project
+  [ "$(run_block "$repo" "$(land_block 1)")" = NOTHING_TO_LAND ]
+  in_repo "$repo" .gaia/cli/gaia setup record squash-only applied >/dev/null
+  [ "$(run_block "$repo" "$(land_block 1)")" = LAND ]
+}
+
+@test "the land blocks, run in order, push the decision to the origin's default branch and clear the sentinel" {
+  local repo origin="${BATS_TEST_TMPDIR}/land-origin.git" output_text
+  repo="$(make_repo land-push)"
+  git init -q --bare "$origin"
+  git -C "$repo" remote add origin "$origin"
+  git -C "$repo" push -q origin main
+  in_repo "$repo" .gaia/cli/gaia setup record squash-only declined >/dev/null
+  [ "$(run_block "$repo" "$(land_block 1)")" = LAND ]
+  run_block "$repo" "$(land_block 2)"
+  [ -f "${repo}/.gaia/local/setup-in-progress" ]
+  output_text="$(run_block "$repo" "$(land_block 3)" DEFAULT_BRANCH=main 2>&1)"
+  grep -qE '^LANDED [0-9a-f]+$' <<<"$output_text"
+  run_block "$repo" "$(land_block 4)"
+  [ ! -e "${repo}/.gaia/local/setup-in-progress" ]
+  [ "$(git --git-dir="$origin" show main:.gaia/project.json | jq -r '.setup_decisions["squash-only"]')" = declined ]
+  [ "$(run_block "$repo" "$(land_block 1)")" = NOTHING_TO_LAND ]
+}
+
+@test "a failed push reports the decisions committed locally" {
+  local repo output_text
+  repo="$(make_repo land-no-origin)"
+  in_repo "$repo" .gaia/cli/gaia setup record squash-only declined >/dev/null
+  output_text="$(run_block "$repo" "$(land_block 3)" DEFAULT_BRANCH=main 2>&1)"
+  grep -qF 'committed locally and need a push or a pull request' <<<"$output_text"
+  grep -q '^LANDED' <<<"$output_text" && return 1
+  true
+}
+
+# check_land_order <file>: under `## Land the decisions`, the sentinel touch
+# sits in a fence of its own with no git command, before the fence staging
+# .gaia/project.json, and a fence removing the sentinel follows that one.
+check_land_order() {
+  awk '
+    $0 == "## Land the decisions" { seen = 1; next }
+    seen && /^## / { exit }
+    seen && /^```bash[[:space:]]*$/ { inside = 1; n++; touch = 0; git = 0; next }
+    seen && inside && /^```[[:space:]]*$/ {
+      inside = 0
+      if (touch && !git && !touch_fence) touch_fence = n
+      next
+    }
+    seen && inside && /^touch \.gaia\/local\/setup-in-progress$/ { touch = 1 }
+    seen && inside && /^git / { git = 1 }
+    seen && inside && /^git add \.gaia\/project\.json$/ && !commit_fence { commit_fence = n }
+    seen && inside && /^rm -f \.gaia\/local\/setup-in-progress$/ { remove_fence = n }
+    END {
+      if (!touch_fence || !commit_fence || !remove_fence) exit 1
+      exit !(touch_fence < commit_fence && commit_fence < remove_fence)
+    }
+  ' "$1" || {
+    echo "the sentinel touch, the commit and the sentinel removal are not three ordered fences" >&2
+    return 1
+  }
+}
+
+@test "the land step touches the sentinel alone, then commits, then removes the sentinel" {
+  check_land_order "${REFERENCES}/land-decisions.md"
+}
+
+@test "the land order check fails when the touch folds into the commit fence" {
+  local copy="${BATS_TEST_TMPDIR}/land-folded.md"
+  awk '
+    /^touch \.gaia\/local\/setup-in-progress$/ { next }
+    /^git add \.gaia\/project\.json$/ { print "touch .gaia/local/setup-in-progress" }
+    { print }
+  ' "${REFERENCES}/land-decisions.md" >"$copy"
+  cmp -s "${REFERENCES}/land-decisions.md" "$copy" && return 1
+  run check_land_order "$copy"
+  [ "$status" -ne 0 ]
+}
+
+# check_phase_five_five <file>: Phase 5.5 lands only when project decisions
+# may be recorded.
+check_phase_five_five() {
+  pin "$(section "$1" '## Phase 5.5:' '^## ')" \
+    'When `MAY_RECORD_PROJECT` is not `none`, Read `.claude/skills/gaia/references/setup/land-decisions.md` now'
+}
+
+@test "Phase 5.5 runs the land step only when MAY_RECORD_PROJECT is not none" {
+  check_phase_five_five "$SETUP_COMMAND"
+}
+
+@test "the Phase 5.5 pin fails on a copy that drops the condition" {
+  local copy="${BATS_TEST_TMPDIR}/phase-five-five.md"
+  sed 's/^When `MAY_RECORD_PROJECT` is not `none`, Read/Read/' "$SETUP_COMMAND" >"$copy"
+  cmp -s "$SETUP_COMMAND" "$copy" && return 1
+  run check_phase_five_five "$copy"
+  [ "$status" -ne 0 ]
+}
+
+# ---------------------------------------------------------------------------
+# The setup ping
+# ---------------------------------------------------------------------------
+
+ping_block() {
+  block_under "${REFERENCES}/land-decisions.md" '## The setup ping'
+}
+
+@test "a plain re-run that decided an owed id pings with the real sandbox value, no type and no repo" {
+  local repo
+  repo="$(make_repo ping-plain)"
+  in_repo "$repo" .gaia/cli/gaia setup record squash-only declined >/dev/null
+  run_block "$repo" "$(ping_block)" SETUP_TYPE= REPO_CHOICE= OWED_AT_START='squash-only label-sync' \
+    STUB_SANDBOX_STATUS='{"resolved": true, "outcome": "enabled"}' >/dev/null
+  [ "$(cat "$CLI_LOG")" = 'ping --event setup --sandbox on' ]
+}
+
+@test "the ping carries --repo only when the connect question was answered" {
+  local repo
+  repo="$(make_repo ping-repo)"
+  in_repo "$repo" .gaia/cli/gaia setup record squash-only declined >/dev/null
+  run_block "$repo" "$(ping_block)" SETUP_TYPE= REPO_CHOICE=create OWED_AT_START=squash-only \
+    STUB_SANDBOX_STATUS='{"resolved": true, "outcome": "declined"}' >/dev/null
+  [ "$(cat "$CLI_LOG")" = 'ping --event setup --sandbox off --repo create' ]
+}
+
+@test "a plain re-run that decided nothing sends no ping and leaves project.json byte-identical" {
+  local repo output_text
+  repo="$(make_repo ping-skipped)"
+  printf '%s\n' '{"version": 1, "x": true}' >"${repo}/.gaia/project.json"
+  cp "${repo}/.gaia/project.json" "${BATS_TEST_TMPDIR}/project-before.json"
+  output_text="$(run_block "$repo" "$(ping_block)" SETUP_TYPE= REPO_CHOICE= OWED_AT_START='squash-only sandbox' \
+    STUB_SANDBOX_STATUS='{"resolved": true, "outcome": "enabled"}')"
+  [ "$output_text" = PING_SKIPPED ]
+  [ ! -s "$CLI_LOG" ]
+  cmp "${BATS_TEST_TMPDIR}/project-before.json" "${repo}/.gaia/project.json"
+}
+
+@test "a reconfigure run pings with its type even when nothing was newly decided" {
+  local repo
+  repo="$(make_repo ping-type)"
+  run_block "$repo" "$(ping_block)" SETUP_TYPE=reconfigure REPO_CHOICE= OWED_AT_START= \
+    STUB_SANDBOX_STATUS='{"resolved": false}' >/dev/null
+  [ "$(cat "$CLI_LOG")" = 'ping --event setup --sandbox off --type reconfigure' ]
+}
+
+# ---------------------------------------------------------------------------
+# Label sync
+# ---------------------------------------------------------------------------
+
+label_sync_block() {
+  block_under "$SETUP_COMMAND" '## Phase 4.5: Label sync (always evaluated)'
+}
+
+@test "a degraded label sync on stdout prints no LABELS_APPLIED and records nothing" {
+  local repo output_text
+  repo="$(make_repo labels-degraded)"
+  output_text="$(run_block "$repo" "$(label_sync_block)" LABEL_SYNC_OWED=true MAY_RECORD_PROJECT=admin \
+    STUB_SYNC_STDOUT='labels-sync: degraded, manual commands follow' STUB_SYNC_STATUS=0)"
+  grep -qxF 'labels-sync: degraded, manual commands follow' <<<"$output_text"
+  grep -qx LABELS_APPLIED <<<"$output_text" && return 1
+  [ -z "$(decision "$repo" label-sync)" ]
+}
+
+@test "a block testing stderr for the marker records the degraded sync, so stdout is what catches it" {
+  local repo block mutated old new
+  repo="$(make_repo labels-stderr)"
+  block="$(label_sync_block)"
+  old='SYNC_OUTPUT="$(.gaia/cli/gaia labels sync)"'
+  new='SYNC_OUTPUT="$(.gaia/cli/gaia labels sync 2>&1 >/dev/null)"'
+  mutated="${block/"$old"/"$new"}"
+  [ "$mutated" != "$block" ]
+  run_block "$repo" "$mutated" LABEL_SYNC_OWED=true MAY_RECORD_PROJECT=admin \
+    STUB_SYNC_STDOUT='labels-sync: degraded, manual commands follow' STUB_SYNC_STATUS=0 >/dev/null
+  [ "$(decision "$repo" label-sync)" = applied ]
+}
+
+@test "a clean label sync records only when label-sync is owed and the run is an admin's" {
+  local repo output_text
+  repo="$(make_repo labels-gates)"
+  output_text="$(run_block "$repo" "$(label_sync_block)" LABEL_SYNC_OWED=false MAY_RECORD_PROJECT=admin)"
+  grep -qx LABELS_APPLIED <<<"$output_text"
+  [ -z "$(decision "$repo" label-sync)" ]
+  run_block "$repo" "$(label_sync_block)" LABEL_SYNC_OWED=true MAY_RECORD_PROJECT=none >/dev/null
+  [ -z "$(decision "$repo" label-sync)" ]
+  run_block "$repo" "$(label_sync_block)" LABEL_SYNC_OWED=true MAY_RECORD_PROJECT=admin >/dev/null
+  [ "$(decision "$repo" label-sync)" = applied ]
+}
+
+@test "a failed label sync records nothing" {
+  local repo output_text
+  repo="$(make_repo labels-failed)"
+  output_text="$(run_block "$repo" "$(label_sync_block)" LABEL_SYNC_OWED=true MAY_RECORD_PROJECT=admin STUB_SYNC_STATUS=1)"
+  grep -qx LABELS_APPLIED <<<"$output_text" && return 1
+  [ -z "$(decision "$repo" label-sync)" ]
+}
+
+# ---------------------------------------------------------------------------
+# The squash-only gate
+# ---------------------------------------------------------------------------
+
+# check_squash_gate <file>: Phase 3.7's Gate 1 names the owed check and
+# RECONFIGURE.
+check_squash_gate() {
+  pin "$(section "$1" '### Gate 1: whether the question is owed' '^##')" \
+    '`squash-only` is owed (the owed check)' 'RECONFIGURE'
+}
+
+@test "the squash-only owed check passes while undecided, fails once declined, and a new answer overwrites" {
+  local repo line
+  repo="$(make_repo squash-gate)"
+  line="$(check_line owed squash-only)"
+  in_repo "$repo" bash -c "$line"
+  in_repo "$repo" .gaia/cli/gaia setup record squash-only declined >/dev/null
+  run in_repo "$repo" bash -c "$line"
+  [ "$status" -ne 0 ]
+  run in_repo "$repo" .gaia/cli/gaia setup record squash-only applied
+  [ "$(jq -r '.previous' <<<"$output")" = declined ]
+  [ "$(jq -r '.setup_decisions["squash-only"]' "${repo}/.gaia/project.json")" = applied ]
+}
+
+@test "Phase 3.7's Gate 1 names both the owed check and RECONFIGURE" {
+  check_squash_gate "$SETUP_COMMAND"
+}
+
+@test "the squash-only gate pin fails on a copy without the owed-check bullet" {
+  local copy
+  copy="$(without_lines "$SETUP_COMMAND" '`squash-only` is owed (the owed check)' squash-gate.md)"
+  run check_squash_gate "$copy"
+  [ "$status" -ne 0 ]
+}
+
+# ---------------------------------------------------------------------------
+# Who may record: the admin rule
+# ---------------------------------------------------------------------------
+
+@test "with MAY_RECORD_PROJECT none, no project block records while a machine block still does" {
+  local repo
+  repo="$(make_provisioned admin-none)"
+  record_settled_state "$repo" none >/dev/null
+  run_block "$repo" "$(block_under "${REFERENCES}/github-repo.md" '## Owed and recorded settings' 1)" \
+    MAY_RECORD_PROJECT=none >/dev/null
+  [ ! -e "${repo}/.gaia/project.json" ]
+  [ "$(decision "$repo" statusline-left)" = applied ]
+  [ "$(decision "$repo" sandbox)" = declined ]
+}
+
+@test "with MAY_RECORD_PROJECT not-applicable-only, the non-GitHub arm records only owed GitHub ids" {
+  local repo id
+  repo="$(make_repo admin-other-host)"
+  in_repo "$repo" .gaia/cli/gaia setup record squash-only declined >/dev/null
+  run_block "$repo" "$(block_under "${REFERENCES}/github-repo.md" '## Owed and recorded settings' 1)" \
+    MAY_RECORD_PROJECT=not-applicable-only >/dev/null
+  run_block "$repo" "$(block_under "${REFERENCES}/github-repo.md" '## Owed and recorded settings' 2)" \
+    OWNER=o REPO=r HOST=git.example.com DEFAULT_BRANCH=main MAY_RECORD_PROJECT=not-applicable-only >/dev/null
+  for id in github-repository push-protection branch-protection gaia-audit-check delete-branch-on-merge \
+    dependabot-posture label-sync; do
+    [ "$(decision "$repo" "$id")" = not-applicable ] || {
+      echo "${id} recorded '$(decision "$repo" "$id")', expected not-applicable" >&2
+      return 1
+    }
+  done
+  [ "$(decision "$repo" squash-only)" = declined ]
+  [ "$(jq -r '.setup_decisions | keys | length' "${repo}/.gaia/project.json")" -eq 8 ]
+  [ "$(undecided_ids "$repo")" = 'install-tools install-plugins chmod-statusline bootstrap-env sandbox statusline-left isolation-policy sandbox-recommendation' ]
+  [ ! -s "$GH_LOG" ]
+}
+
+# ---------------------------------------------------------------------------
+# Phase 5: standalone features
+# ---------------------------------------------------------------------------
+
+standalone_block() {
+  block_under "${REFERENCES}/standalone-features.md" '# Owed standalone setup features'
+}
+
+@test "Phase 5 hands an admin each undecided standalone feature, and a non-admin only the machine one" {
+  local list="${BATS_TEST_TMPDIR}/standalone-list.json" repo output_text
+  jq '.features += [
+    {"id": "later-machine", "scope": "machine", "required": true, "admin": false, "standalone": true, "reference": "docs/later-machine.md"},
+    {"id": "later-project", "scope": "project", "required": false, "admin": true, "standalone": true, "reference": "docs/later-project.md"}
+  ]' "$FEATURE_LIST" >"$list"
+  repo="$(make_repo standalone "$list")"
+  output_text="$(run_block "$repo" "$(standalone_block)" MAY_RECORD_PROJECT=admin)"
+  [ "$output_text" = "$(printf '%s\n' 'OWED_FEATURE later-machine apply docs/later-machine.md' 'OWED_FEATURE later-project ask docs/later-project.md')" ]
+  output_text="$(run_block "$repo" "$(standalone_block)" MAY_RECORD_PROJECT=none)"
+  [ "$output_text" = "$(printf '%s\n' 'OWED_FEATURE later-machine apply docs/later-machine.md' 'SKIP_PROJECT later-project')" ]
+}
+
+@test "Phase 5 prints nothing for the shipped list" {
+  local repo output_text
+  repo="$(make_repo standalone-real)"
+  [ "$(undecided_ids "$repo" | wc -w | tr -d ' ')" -gt 0 ]
+  output_text="$(run_block "$repo" "$(standalone_block)" MAY_RECORD_PROJECT=admin)"
+  [ -z "$output_text" ]
+}
+
+# ---------------------------------------------------------------------------
+# Prose pins
+# ---------------------------------------------------------------------------
+
+# check_phase_one_reads_decisions <file>: the setup-decisions Read line sits
+# in Phase 1, before Phase 2.
+check_phase_one_reads_decisions() {
+  pin "$(section "$1" '## Phase 1:' '^## ')" \
+    'Read `.claude/skills/gaia/references/setup/setup-decisions.md` now' \
+    'run its `## The owed check` and `## Who records project decisions`'
+}
+
+@test "Phase 1 reads setup-decisions.md and runs the owed check and the who-records block" {
+  check_phase_one_reads_decisions "$SETUP_COMMAND"
+}
+
+@test "the Phase 1 pin fails when the Read line moves to Phase 2" {
+  local copy="${BATS_TEST_TMPDIR}/phase-one-moved.md" line
+  line="$(grep -F 'references/setup/setup-decisions.md` now' "$SETUP_COMMAND")"
+  awk -v line="$line" '$0 == line { next } { print } /^## Phase 2:/ { print ""; print line }' "$SETUP_COMMAND" >"$copy"
+  cmp -s "$SETUP_COMMAND" "$copy" && return 1
+  run check_phase_one_reads_decisions "$copy"
+  [ "$status" -ne 0 ]
+}
+
+# check_owed_github_route <file>: inside Phase 3.5, the route to
+# github-repo.md's owed settings comes before the isolation policy's Gate 1.
+check_owed_github_route() {
+  section "$1" '## Phase 3.5:' '^## ' | awk '
+    index($0, "references/setup/github-repo.md` now") && index($0, "`## Owed and recorded settings`") && !route { route = NR }
+    $0 == "### Gate 1: the key'\''s own presence" { gate = NR }
+    END { exit !(route && gate && route < gate) }
+  ' || {
+    echo "Phase 3.5 does not route to the owed GitHub settings before its Gate 1" >&2
+    return 1
+  }
+}
+
+@test "Phase 3.5 routes to the owed GitHub settings before its Gate 1" {
+  check_owed_github_route "$SETUP_COMMAND"
+}
+
+@test "the owed-settings route pin fails when the route moves below Gate 1 or out of Phase 3.5" {
+  local copy line
+  line="$(grep -F '`## Owed and recorded settings`' "$SETUP_COMMAND" | grep -F 'github-repo.md` now')"
+  [ "$(grep -c . <<<"$line")" -eq 1 ]
+  copy="${BATS_TEST_TMPDIR}/route-below-gate.md"
+  awk -v line="$line" '$0 == line { next } { print } $0 == "### Gate 1: the key'\''s own presence" { print ""; print line }' \
+    "$SETUP_COMMAND" >"$copy"
+  run check_owed_github_route "$copy"
+  [ "$status" -ne 0 ]
+  copy="${BATS_TEST_TMPDIR}/route-out-of-phase.md"
+  awk -v line="$line" '$0 == line { next } { print } /^## Phase 3\.7:/ { print ""; print line }' "$SETUP_COMMAND" >"$copy"
+  run check_owed_github_route "$copy"
+  [ "$status" -ne 0 ]
+}
+
+# check_squash_records_decision <file>: Phase 3.7 says the decision is
+# recorded and landed, and never that nothing is written or committed.
+check_squash_records_decision() {
+  local text
+  text="$(section "$1" '## Phase 3.7:' '^## ')"
+  pin "$text" 'the decision is recorded in `.gaia/project.json` `setup_decisions`, and Phase 5.5 lands it' || return 1
+  if grep -qF 'nothing is written to `.gaia/project.json` and nothing is committed' <<<"$text"; then
+    echo "Phase 3.7 still says nothing is written or committed" >&2
+    return 1
+  fi
+}
+
+@test "Phase 3.7 records its decision and no longer says nothing is written or committed" {
+  check_squash_records_decision "$SETUP_COMMAND"
+}
+
+@test "the Phase 3.7 pin fails when the old sentence is put back" {
+  local copy="${BATS_TEST_TMPDIR}/squash-old-sentence.md"
+  awk '{ print } /^## Phase 3\.7:/ { print ""; print "So nothing is written to `.gaia/project.json` and nothing is committed." }' \
+    "$SETUP_COMMAND" >"$copy"
+  run check_squash_records_decision "$copy"
+  [ "$status" -ne 0 ]
+}
+
+# check_idempotence_relaxation <file>: the Idempotence section states the
+# relaxation for decisions recorded this run.
+check_idempotence_relaxation() {
+  pin "$(section "$1" '## Idempotence' '^## ')" \
+    'relaxes that promise for `setup_decisions` and the keys an owed question writes'
+}
+
+@test "the Idempotence section relaxes the byte-identical promise for recorded decisions" {
+  check_idempotence_relaxation "$SETUP_COMMAND"
+}
+
+@test "the Idempotence pin fails on a copy without the relaxation" {
+  local copy="${BATS_TEST_TMPDIR}/idempotence.md"
+  sed 's/ relaxes that promise for `setup_decisions`/ keeps that promise for `setup_decisions`/' "$SETUP_COMMAND" >"$copy"
+  cmp -s "$SETUP_COMMAND" "$copy" && return 1
+  run check_idempotence_relaxation "$copy"
+  [ "$status" -ne 0 ]
+}
+
+# check_init_step_nine <file>: Step 9 reads the shared sandbox-recommendation
+# reference, records both decisions, and holds no inline question.
+check_init_step_nine() {
+  local text
+  text="$(section "$1" '## Step 9:' '^## ')"
+  pin "$text" 'read `.claude/skills/gaia/references/setup/sandbox-recommendation.md` now' \
+    '.gaia/cli/gaia setup record sandbox-recommendation applied' \
+    '.gaia/cli/gaia setup record sandbox-recommendation declined' \
+    '.gaia/cli/gaia setup record isolation-policy applied' || return 1
+  if grep -qF "Recommend Claude Code's OS-level Bash sandbox to your team?" <<<"$text"; then
+    echo "Step 9 still holds the sandbox question inline" >&2
+    return 1
+  fi
+}
+
+@test "gaia-init Step 9 reads sandbox-recommendation.md and records its decisions" {
+  check_init_step_nine "$INIT_COMMAND"
+}
+
+@test "the Step 9 pin fails when the question is inline again or the Read line is gone" {
+  local copy="${BATS_TEST_TMPDIR}/init-inline.md"
+  awk '{ print } /^### Sandbox recommendation$/ { print ""; print "> Recommend Claude Code'\''s OS-level Bash sandbox to your team?" }' \
+    "$INIT_COMMAND" >"$copy"
+  cmp -s "$INIT_COMMAND" "$copy" && return 1
+  run check_init_step_nine "$copy"
+  [ "$status" -ne 0 ]
+  copy="$(without_lines "$INIT_COMMAND" 'references/setup/sandbox-recommendation.md` now' init-no-read.md)"
+  run check_init_step_nine "$copy"
+  [ "$status" -ne 0 ]
+}

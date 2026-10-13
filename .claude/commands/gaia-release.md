@@ -189,6 +189,8 @@ git log -1 --oneline    # verify this is the merge commit
 .gaia/cli/gaia-maintainer release commit-and-tag --tag
 ```
 
+`commit-and-tag --tag` refuses (`REFUSED:`) a tag whose major is below the highest existing `vX.Y.Z` release tag's major, read from local tags and origin's, because a 1.x `/update-gaia` resolves the newest-created release.
+
 Push the tag, which kicks the GitHub Release workflow (`release.yml`) to build the scrubbed tarball.
 
 ### 13. Lockstep `create-gaia`
@@ -330,7 +332,7 @@ gh release edit "v<NEW_VERSION>" -R gaia-react/gaia --notes-file "/tmp/gh-notes-
 gh release view "v<NEW_VERSION>" -R gaia-react/gaia --json body --jq .body | head -1
 ```
 
-The first line must be exactly `On GAIA 1.6.1? Choose Abort, then paste the prompt from https://gaiareact.com/migrate into a fresh session.` See `wiki/concepts/Release Workflow.md`.
+The first line must equal the output of `bash .gaia/scripts/compose-release-body.sh --routing-line`. See `wiki/concepts/Release Workflow.md`.
 
 ### 15. Lockstep docs
 
@@ -365,3 +367,5 @@ git tag -d "v<NEW_VERSION>"           # delete locally
 git push origin :"v<NEW_VERSION>"     # only if already pushed
 .gaia/cli/gaia-maintainer release commit-and-tag --tag      # re-tag from the actual merge commit
 ```
+
+Re-tagging after deleting a wrong tag passes the same major guard, since the deleted tag no longer counts.

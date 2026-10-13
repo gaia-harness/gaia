@@ -1,47 +1,15 @@
-# update-gaia: merge execution (Steps 5–10)
+# update-gaia: merge execution (Steps 6 to 9)
 
-The execution agent that `/update-gaia` spawns follows this file. Read all of it before starting Step 5: the Step 7 walk can overwrite this file partway through the run, and the agent keeps executing the copy it read. Step 11 runs in the orchestrator and lives in `../SKILL.md`.
+The execution agent that `/update-gaia` spawns follows this file. Read all of it before starting Step 6: the Step 7 walk can overwrite this file partway through the run, and the agent keeps executing the copy it read. The orchestrator has already downloaded both bundles and verified each against its release checksum (`../SKILL.md` Step 3c), and passes the verified, freshly extracted trees as `BASELINE_DIR` and `LATEST_DIR`; this file downloads nothing. Steps 9b to 12 run in the orchestrator and live in `../SKILL.md`.
 
 Contents:
 
-- Step 5: Fetch baseline and latest tarballs
 - Step 6: Load the latest manifest
 - Step 7: Three-way merge (7a each `package.json`, 7b `pnpm-workspace.yaml`, 7c `.gaia/audit-ci.yml`, 7d regenerate declared regions, 7e regenerate package settings)
-- Step 8: Deferred version bump (8c sync GitHub labels)
+- Step 8: The version is written by the orchestrator (8c sync GitHub labels)
 - Step 9: Summary
-- Step 10: Next steps for the user
 
-## Steps 5–10 (execution agent)
-
-### Step 5: Fetch baseline and latest tarballs
-
-Cache under `.gaia/local/cache/shared/update-gaia/` (gitignored) so repeated runs don't redownload:
-
-```bash
-mkdir -p .gaia/local/cache/shared/update-gaia
-for tag in "v$BASELINE" "$LATEST_TAG"; do
-  dir=".gaia/local/cache/shared/update-gaia/$tag"
-  [ -d "$dir" ] && continue
-  mkdir -p "$dir"
-  if ! gh release download "$tag" \
-      --repo gaia-react/gaia \
-      --pattern "gaia-bundle-${tag}.tar.gz" \
-      --dir "$dir" \
-    || ! tar -xzf "$dir/gaia-bundle-${tag}.tar.gz" -C "$dir" --strip-components=1; then
-    rm -rf "$dir"
-    echo "FETCH_FAILED $tag"
-  fi
-done
-```
-
-`BASELINE_DIR=".gaia/local/cache/shared/update-gaia/v$BASELINE"`, `LATEST_DIR=".gaia/local/cache/shared/update-gaia/$LATEST_TAG"`.
-
-The asset is `gaia-bundle-<tag>.tar.gz` from 2.0.0 on; releases before 2.0.0 published `gaia-<tag>.tar.gz` and are out of reach on purpose (`SKILL.md` Step 3b refuses a 1.x baseline, and the different name is what makes a 1.6.1 `/update-gaia` fail here, before it writes anything, instead of misreading the moved layout as deletions).
-
-The block prints `FETCH_FAILED <tag>` for any tag whose download or extraction did not complete, and removes the partial cache dir so a re-run retries cleanly. On any `FETCH_FAILED`, **stop, do not proceed to Step 6**:
-
-- `FETCH_FAILED $LATEST_TAG`: the latest release is unreachable (network, auth, or a missing release asset). Tell the user, then re-run once it is reachable.
-- `FETCH_FAILED v$BASELINE`: the baseline tarball is unavailable (older release, pre-manifest). The three-way merge needs a baseline, so stop and explain the adopter can manually cherry-pick changes by comparing their project to `$LATEST_DIR`.
+## Steps 6 to 9 (execution agent)
 
 ### Step 6: Load the latest manifest
 
@@ -476,9 +444,9 @@ By now the Step 7 walk has replaced `.gaia/cli/gaia` and `.gaia/scripts/check-se
 - **Step 7 left `.claude/settings.json` as a conflict patch:** the regeneration ran from the adopter's pre-merge root settings. Say so in Step 9; after the adopter resolves the patch, they re-run `./.gaia/cli/gaia packages sync-settings` themselves.
 - **The package has no `settings.overlay.json`:** not an error, the overlay is optional.
 
-### Step 8: Deferred version bump
+### Step 8: The version is written by the orchestrator
 
-The version bump itself is deferred to Step 9 (after the summary prints) so an interrupted run stays resumable, see that step for the rationale.
+The execution agent never writes `.gaia/VERSION`, the manifest copy or the update ping. The orchestrator writes `.gaia/VERSION` last, in `../SKILL.md` Step 9d, after the after-merge notes and the setup drift, so an interrupted run leaves the version at the baseline and the next run resumes on its update branch.
 
 ### Step 8c: Sync GitHub labels
 
@@ -584,7 +552,7 @@ When all three `package.json` counts are zero (summed across the root and every 
 
 **Documented adopter actions (opt-in).** Two merge outcomes leave the adopter with a follow-up the three-way merge deliberately will **not** perform: a dependency GAIA dropped this release that the adopter still has (the Step 7a "GAIA removed it; adopter still has it" no-op, left in place by design) and files removed upstream still in the working tree (`delete[]`). Both are silent or bare, the agent knows _what_ changed but surfaces no _why_. Recover the intent from the release CHANGELOG and offer an opt-in suggestion.
 
-Read `$LATEST_DIR/CHANGELOG.md` (already on disk from Step 5, no extra fetch) and extract the `## [x.y.z]` sections strictly newer than `$BASELINE` through `$LATEST` with the same range walk as SKILL.md Step 4, run from the release copy:
+Read `$LATEST_DIR/CHANGELOG.md` (already on disk from `../SKILL.md` Step 3c, no extra fetch) and extract the `## [x.y.z]` sections strictly newer than `$BASELINE` through `$LATEST` with the same range walk as SKILL.md Step 4, run from the release copy:
 
 ```bash
 range="$(bash "$LATEST_DIR/.gaia/scripts/changelog-range.sh" "$BASELINE" "$LATEST" "$LATEST_DIR/CHANGELOG.md")"
@@ -629,39 +597,4 @@ When `adopterActions[]` is non-empty, print a recommendation block after the tab
 
     A `reported` entry is the one the adopter has to look at.
 
-The merge walk is complete and the summary is recorded, so finalize the version. Write the new version and refresh the manifest:
-
-```bash
-echo "$LATEST" > .gaia/VERSION
-GAIA_MANIFEST_WRITE=release cp "$LATEST_DIR/.gaia/manifest.json" .gaia/manifest.json
-```
-
-The manifest copy carries the `GAIA_MANIFEST_WRITE=` marker, a bare edit is blocked by `.claude/hooks/block-manifest-write.sh`, and this wholesale replace is the release-only write the guard exempts. This refreshes `.gaia/manifest.json` from the release copy so the next `/update-gaia` has the right baseline. Unresolved conflict patches, re-pin notes, or a SPEC-migration action item do **not** block this bump, they are follow-ups the user resolves against the already-recorded update; `.gaia/VERSION` tracks the file merge, which is done.
-
-Now that the bump has landed, record the transition:
-
-```bash
-.gaia/cli/gaia ping --event update --from "$BASELINE" --to "$LATEST" || true
-```
-
-This ping records the version transition for adoption analytics and is best-effort, it never gates the update or its resumability.
-
-Deferring the bump to this point (rather than before the walk) keeps an interrupted run resumable: any abort during the walk (user cancels, disk error) leaves `.gaia/VERSION` at `BASELINE`, and because the merge is idempotent (already-merged files match latest and skip), a re-run picks up cleanly. Overwritten files are safe, their prior state is in `.gaia-backup/`. Step 3 catches the remaining window where the bump landed but the user has not yet committed.
-
-Then bust the update-check cache so the SessionStart prompt reflects the post-update state on the next session. Use the Write tool to overwrite `.gaia/local/cache/shared/update-check.json`: read the existing cache first, then write it back unchanged **except** `gaiaCurrent` and `gaiaLatest` set to `$LATEST`, `gaiaHasUpdate` set to `false`, `outdatedCount` set to `0`, and `checkedAt` set to the current Unix timestamp. **Carry every other field across verbatim, named here or not.** The cache holds fields this step has no reason to know about, and several are observations nothing later can reconstruct (`cleanseMemoryBaseline`, the two `codify*` counts, and `codifyNudgeReason`), so dropping one silently disarms the nudge it belongs to instead of causing a visible error. If the cache file does not exist, skip this step.
-
-The next SessionStart hook fires the background refresher; the session after that sees no GAIA update available.
-
-### Step 10: Next steps for the user
-
-Tell the user:
-
-1. Review any conflict patches in `.gaia-merge/` and reconcile manually. Delete the patch file once resolved. If `.gaia-merge/package.json.notes` or `.gaia-merge/pnpm-workspace.yaml.notes` exists, reconcile the re-pin conflicts and decide on the suggestions, then delete it.
-2. If the `package.json` or `pnpm-workspace.yaml` merge applied any change, sync `pnpm-lock.yaml` before the quality gate, but pick the command by what changed. A dependency or `packageManager` bump syncs with `pnpm install`. An `overrides`, `allowBuilds`, or resolution-setting change needs `pnpm dedupe` instead: `pnpm install` short-circuits with "Already up to date" when only the `overrides:` map moved and leaves the lockfile untouched, so a floor you just accepted would be declared in config and unapplied in the tree, with nothing red to say so (`wiki/dependencies/pnpm-overrides.md`). `pnpm dedupe` is correct for both cases, so prefer it when unsure.
-3. If any region regeneration failed, was refused, or was skipped, running the command named in the Step 9 report is a follow-up the adopter owns. Resolve whatever suppressed it first (the conflict patch for that path, most often), then run the command and re-run the roster check to confirm the region is current.
-4. If Step 7e reported stale package settings, or you resolved a `.claude/settings.json` conflict patch, run `./.gaia/cli/gaia packages sync-settings` and then `bash .gaia/scripts/check-settings-drift.sh`, and stage the regenerated `frontend/.claude/settings.json`. Never hand-edit that file.
-5. Run the quality gate per `wiki/decisions/Quality Gate.md` to verify the updated code still passes.
-6. Inspect the diff (`git diff`) before committing.
-7. When satisfied, commit with `chore(gaia): update to $LATEST_TAG`.
-
-Do **not** auto-commit on behalf of the user, they need to review the changes first.
+The merge walk is complete and the summary is printed. Return the `UpdateMergeReport` and stop: the orchestrator follows the after-merge notes, carries the setup drift, records the update (the manifest copy, the update ping and the `.gaia/VERSION` write, last) and prints the next steps, in `../SKILL.md` Steps 9b to 10.

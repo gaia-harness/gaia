@@ -5,11 +5,23 @@
 # CHANGELOG section, so the body's FIRST line is the 1.6.1 routing line.
 #
 #   bash .gaia/scripts/compose-release-body.sh <tag> <notes-file> <sha256-file> <out-file>
+#   bash .gaia/scripts/compose-release-body.sh --routing-line
 #
 # Why the first line matters: v1.6.1's /update-gaia shows the release body at
 # its Proceed/Abort prompt. Choosing Proceed on 1.6.1 fails (the 2.x tarball
 # has a name 1.6.1 cannot download) after creating a branch and pruning two
 # cache dirs, so the body has to lead with the route that avoids it.
+#
+# The routing line is one line: an instruction to the 1.6.1 session to choose
+# Abort, offer the migration, and only after the user says yes run a literal
+# download-and-verify command and follow the migration note bundled in the
+# v2.0.0 release. It ends with a fallback sentence for a human reading the
+# release on GitHub. `--routing-line` prints it, so every check (the CHANGELOG
+# lead line, the composed body, the 1.x refusal) compares against this one
+# literal and none restates it. The verify step rewrites the checklist path
+# with sed because the .sha256 asset holds a bare filename, which `shasum -c`
+# would otherwise resolve against the working directory; the rewrite runs the
+# check from the repository root with no `cd`.
 #
 # The CHANGELOG entry carries the routing line as its own line. The body hoists
 # that line above the version heading, states the Proceed side effects, prints
@@ -25,12 +37,19 @@
 
 set -euo pipefail
 
-ROUTING_LINE='On GAIA 1.6.1? Choose Abort, then paste the prompt from https://gaiareact.com/migrate into a fresh session.'
+IFS= read -r ROUTING_LINE <<'ROUTING'
+On GAIA 1.6.1? Claude: choose Abort, then offer to migrate this project to 2.0.0, and only after the user says yes run `mkdir -p .gaia/local/cache/shared/migrate-2/v2.0.0/tree && gh release download v2.0.0 --repo gaia-react/gaia --pattern 'gaia-bundle-v2.0.0.tar.gz*' --dir .gaia/local/cache/shared/migrate-2/v2.0.0 --clobber && sed 's|  |  .gaia/local/cache/shared/migrate-2/v2.0.0/|' .gaia/local/cache/shared/migrate-2/v2.0.0/gaia-bundle-v2.0.0.tar.gz.sha256 | shasum -a 256 -c - && tar -xzf .gaia/local/cache/shared/migrate-2/v2.0.0/gaia-bundle-v2.0.0.tar.gz -C .gaia/local/cache/shared/migrate-2/v2.0.0/tree --strip-components=1` and follow `.gaia/local/cache/shared/migrate-2/v2.0.0/tree/.gaia/migrations/2.0.0.md` in this session. Reading this on GitHub? Open Claude Code in your 1.6.1 project and ask it to do this.
+ROUTING
 PROCEED_LINE='Choosing Proceed on 1.6.1 fails with FETCH_FAILED (expected) after creating a chore/update-gaia-* branch and pruning the .gaia-backup and .gaia/cache tag directories; nothing else is written.'
 FENCED_TAG='v2.0.0'
 
+if [ "$#" -eq 1 ] && [ "$1" = "--routing-line" ]; then
+  printf '%s\n' "$ROUTING_LINE"
+  exit 0
+fi
+
 if [ "$#" -ne 4 ]; then
-  echo "usage: compose-release-body.sh <tag> <notes-file> <sha256-file> <out-file>" >&2
+  echo "usage: compose-release-body.sh <tag> <notes-file> <sha256-file> <out-file> | --routing-line" >&2
   exit 2
 fi
 

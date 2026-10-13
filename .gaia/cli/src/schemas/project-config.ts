@@ -7,6 +7,8 @@
 import {z} from 'zod';
 import {existsSync, readFileSync} from 'node:fs';
 import path from 'node:path';
+import {isSetupDecision} from './setup-features.js';
+import type {SetupDecision} from './setup-features.js';
 import {summarizeZodError} from './zod-error.js';
 
 export const ISOLATION_POLICIES = [
@@ -28,8 +30,28 @@ export const isIsolationPolicy = (value: string): value is IsolationPolicy =>
 export const ProjectConfigStrictShape = {
   isolation_policy: z.literal(ISOLATION_POLICIES).optional(),
   sandbox_recommended: z.boolean().optional(),
+  // Values stay free strings at the write boundary so a decision value a newer
+  // GAIA wrote never makes an older writer refuse the whole file.
+  setup_decisions: z.record(z.string(), z.string()).optional(),
   version: z.literal(1),
 };
+
+/**
+ * Read side of `setup_decisions`: keeps the entries holding a known decision
+ * and drops the rest, so one unrecognized value never hides the others. A
+ * non-object reads as absent.
+ */
+const ReadSetupDecisionsSchema = z
+  .record(z.string(), z.unknown())
+  .transform((entries) => {
+    const known: Record<string, SetupDecision> = {};
+
+    for (const [id, value] of Object.entries(entries)) {
+      if (isSetupDecision(value)) known[id] = value;
+    }
+
+    return known;
+  });
 
 // A call rather than `field.catch(...)` at the top level, which
 // unicorn/prefer-top-level-await misreads as a promise chain.
@@ -55,6 +77,7 @@ export const ProjectConfigSchema = z.object({
     ProjectConfigStrictShape.sandbox_recommended,
     undefined
   ),
+  setup_decisions: withFallback(ReadSetupDecisionsSchema.optional(), undefined),
   // An unrecognized or absent version degrades to 1 rather than malforming
   // the config.
   version: withFallback(ProjectConfigStrictShape.version, 1),

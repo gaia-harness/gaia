@@ -32,11 +32,19 @@ if [ "$#" -eq 3 ] && [ ! -r "$3" ]; then
   exit 2
 fi
 
-# Versions compare numerically per component, so 1.10.0 sorts above 1.9.0.
+# Versions compare numerically per component, so 1.10.0 sorts above 1.9.0; the
+# comparison lives in lib/version-compare.awk beside this script, shared with
+# select-migration-notes.sh.
 # The link-reference rule ends printing at the first `[x.y.z]: http...` line,
 # which Keep a Changelog places after the last section.
-awk -v baseline="$1" -v latest="$2" '
-  function vcmp(a,b,   x,y,i){split(a,x,".");split(b,y,".");for(i=1;i<=3;i++){if((x[i]+0)>(y[i]+0))return 1;if((x[i]+0)<(y[i]+0))return -1}return 0}
+compare_lib="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/version-compare.awk"
+if [ ! -r "$compare_lib" ]; then
+  echo "changelog-range.sh: cannot read $compare_lib" >&2
+  exit 2
+fi
+compare_src="$(cat "$compare_lib")"
+
+awk -v baseline="$1" -v latest="$2" "$compare_src"'
   /^## \[Unreleased\]/           {printing=0; next}
   /^\[[^][]+\]:[[:space:]]*http/ {printing=0; next}
   /^## \[[0-9]+\.[0-9]+\.[0-9]+\]/ {

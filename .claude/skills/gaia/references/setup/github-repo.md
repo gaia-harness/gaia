@@ -1,8 +1,10 @@
 # GitHub repository connection and remaining defaults
 
-`/setup-gaia` Phase 3 reads this file, whole, when the repo does not exist yet or its default branch is not pushed. Run `## Connect the repository` first; Options 1 and 2 return to `### Recommended defaults` in `setup-gaia.md`, and Option 3 and the authentication refusal skip the rest of Phase 3 and continue at Phase 3.5 in `setup-gaia.md`. After the registration there, `## Remaining defaults` runs.
+`/setup-gaia` Phase 3 reads this file, whole, when the repo does not exist yet or its default branch is not pushed. Run `## Connect the repository` first; Options 1 and 2 return to `### Recommended defaults` in `setup-gaia.md`, and Option 3 and the authentication refusal skip the rest of Phase 3 and continue at Phase 3.5 in `setup-gaia.md`. After the registration there, `## Remaining defaults` runs. `setup-gaia.md` Phase 3.5 also reads this file to run `## Owed and recorded settings`, when a GitHub setting has no recorded decision.
 
-Contents: Connect the repository; Remaining defaults.
+Every project-scope record line below is gated on `MAY_RECORD_PROJECT` (`setup-decisions.md`), and the owed and declined checks are the lines that file defines. In each block, declare `OWNER`, `REPO`, `DEFAULT_BRANCH` and `MAY_RECORD_PROJECT` with the cached values.
+
+Contents: Connect the repository; Push protection; Remaining defaults; Owed and recorded settings.
 
 ## Connect the repository
 
@@ -83,21 +85,17 @@ Because the repo is created `--private`, the pushed history lands in a private r
 
 Never flip the repo to public/internal without this second confirmation. Private-by-default is the primary mitigation for exposing historical secrets in the pushed history.
 
-**Secret-scanning push-protection (best-effort).** Immediately after create, enable secret-scanning push-protection so it guards every later push and is in place before any public/internal flip:
+**Secret-scanning push-protection (best-effort).** Immediately after create, run `## Push protection` below, so it guards every later push and is in place before any public/internal flip.
+
+After creation, cache `owner`/`repo` from the new remote. The repo exists with its default branch pushed, so record it, then return to `### Recommended defaults` in `setup-gaia.md`:
 
 ```bash
-gh api -X PATCH "repos/<owner>/<repo>" --input - <<'JSON'
-{"security_and_analysis": {"secret_scanning_push_protection": {"status": "enabled"}}}
-JSON
+[ "$MAY_RECORD_PROJECT" != admin ] || .gaia/cli/gaia setup record github-repository applied
 ```
-
-If this is unavailable on the plan (e.g. a private repo without GitHub Advanced Security), degrade gracefully: print a one-line note that push-protection could not be enabled and continue. Do not halt.
-
-After creation, cache `owner`/`repo` from the new remote and return to `### Recommended defaults` in `setup-gaia.md`.
 
 ### Option 2: Adopt an existing repo
 
-The user already has a github `origin` (cached in Phase 1). Skip creation and return to `### Recommended defaults` in `setup-gaia.md`.
+The user already has a github `origin` (cached in Phase 1). Skip creation. Once its default branch is pushed, record it as Option 1 does (`[ "$MAY_RECORD_PROJECT" != admin ] || .gaia/cli/gaia setup record github-repository applied`), then return to `### Recommended defaults` in `setup-gaia.md`.
 
 ### Option 3: Set one up manually
 
@@ -110,17 +108,53 @@ Create a repo on your provider, then:
 When it's pushed, re-run /setup-gaia to apply the recommended defaults (branch protection and the GAIA-Audit required check need repo admin).
 ```
 
-Exit the repo phase without mutating GitHub: skip the rest of Phase 3 and continue at Phase 3.5 in `setup-gaia.md`.
+Exit the repo phase without mutating GitHub: skip the rest of Phase 3 and continue at Phase 3.5 in `setup-gaia.md`. This option records nothing.
+
+## Push protection
+
+Secret-scanning push protection, read first and enabled only when it is off:
+
+```bash
+read_push_protection() {
+  gh api "repos/$OWNER/$REPO" --jq '.security_and_analysis.secret_scanning_push_protection.status // "absent"' 2>/dev/null
+}
+PUSH_STATUS="$(read_push_protection)"
+PATCH_ERROR=""
+if [ "$PUSH_STATUS" != enabled ]; then
+  PATCH_ERROR="$(printf '%s' '{"security_and_analysis": {"secret_scanning_push_protection": {"status": "enabled"}}}' \
+    | gh api -X PATCH "repos/$OWNER/$REPO" --input - 2>&1 >/dev/null)"
+  PUSH_STATUS="$(read_push_protection)"
+fi
+if [ "$PUSH_STATUS" = enabled ]; then
+  echo "Secret-scanning push protection is enabled."
+  [ "$MAY_RECORD_PROJECT" != admin ] || .gaia/cli/gaia setup record push-protection applied
+elif [ "$PUSH_STATUS" = absent ] || printf '%s' "$PATCH_ERROR" | grep -qiE 'secret scanning|advanced security'; then
+  echo "Push protection could not be enabled: GitHub does not offer it for this repository."
+  [ "$MAY_RECORD_PROJECT" != admin ] || .gaia/cli/gaia setup record push-protection not-applicable
+else
+  echo "Could not enable push protection on $OWNER/$REPO: ${PATCH_ERROR:-status ${PUSH_STATUS:-unreadable}}"
+fi
+```
+
+When GitHub does not offer it for this repository (e.g. a private repo without GitHub Advanced Security), the one-line note says so and the id records `not-applicable`. Any other failure records nothing, so the next run retries. Never halt here.
 
 ## Remaining defaults
+
+When this section runs from `## Owed and recorded settings`, run only the items whose id is owed.
 
 **delete_branch_on_merge.** Read the current setting:
 
 ```bash
-gh api "repos/<owner>/<repo>" --jq .delete_branch_on_merge
+DELETE_BRANCH="$(gh api "repos/$OWNER/$REPO" --jq .delete_branch_on_merge)"
+if [ "$DELETE_BRANCH" = true ]; then
+  echo "delete_branch_on_merge is already enabled."
+  [ "$MAY_RECORD_PROJECT" != admin ] || .gaia/cli/gaia setup record delete-branch-on-merge applied
+else
+  printf 'delete_branch_on_merge=%s\n' "$DELETE_BRANCH"
+fi
 ```
 
-If `false`, AskUserQuestion:
+If `false`, run the declined check for `delete-branch-on-merge` first: when it passes, the question was declined before, so skip it silently. Otherwise AskUserQuestion:
 
 > GitHub is set to NOT delete branches when PRs merge, so every merged branch stays on the remote until someone deletes it by hand. GAIA runs no branch cleanup of its own. Enabling `delete_branch_on_merge` has GitHub delete each pull request's branch as it merges.
 >
@@ -130,10 +164,11 @@ If `false`, AskUserQuestion:
 On Enable:
 
 ```bash
-.gaia/cli/gaia setup enable-delete-branch --owner <owner> --repo <repo>
+.gaia/cli/gaia setup enable-delete-branch --owner "$OWNER" --repo "$REPO" \
+  && { [ "$MAY_RECORD_PROJECT" != admin ] || .gaia/cli/gaia setup record delete-branch-on-merge applied; }
 ```
 
-If already `true`, print `delete_branch_on_merge is already enabled.` and continue.
+On Skip, change nothing on GitHub and record the decision: `[ "$MAY_RECORD_PROJECT" != admin ] || .gaia/cli/gaia setup record delete-branch-on-merge declined`.
 
 **Squash-only merges.** Phase 3.7 owns this offer; it runs there, after the team settings, because `--reconfigure` re-opens it on a repo this phase no longer touches.
 
@@ -173,8 +208,53 @@ Then set the posture through the CLI, which owns the GitHub calls:
 .gaia/cli/gaia setup configure-dependabot-alerts --owner <owner> --repo <repo> --json
 ```
 
-On success, print `Dependabot alerts are on and automated security fixes are off for <owner>/<repo>.` When `changed` is non-empty, also print each change; the change is reported, not asked about. On failure, print `Could not set the Dependabot posture on <owner>/<repo> (failed at <step>). Finish with repo-admin access:` followed by each `manual_commands` entry, and note that an organization-enforced security configuration can refuse the change, in which case an organization admin must change it. Do not halt setup on a failure.
+On success, print `Dependabot alerts are on and automated security fixes are off for <owner>/<repo>.` and record it: `[ "$MAY_RECORD_PROJECT" != admin ] || .gaia/cli/gaia setup record dependabot-posture applied`. When `changed` is non-empty, also print each change; the change is reported, not asked about. On failure, record nothing, print `Could not set the Dependabot posture on <owner>/<repo> (failed at <step>). Finish with repo-admin access:` followed by each `manual_commands` entry, and note that an organization-enforced security configuration can refuse the change, in which case an organization admin must change it. Do not halt setup on a failure.
 
 GAIA writes no `.github/dependabot.yml` and enables no setting that makes Dependabot open pull requests. `/update-deps` resolves security advisories through the local quality gate, with Dependabot alerts as its data source. Turning automated security fixes off is repository-wide, so it also stops Dependabot security pull requests for any other ecosystem your own `dependabot.yml` covers.
 
 All Phase-3 GitHub mutations (create, protection, required-check registration, the Dependabot alerts-on and security-fixes-off posture, delete-branch) are net-new, admin-gated, security-sensitive calls. A non-admin runner degrades gracefully: skip the mutation, print the admin-note in `setup-gaia.md`'s `### Recommended defaults (admin-gated)`, and continue to Phase 3.5.
+
+## Owed and recorded settings
+
+`setup-gaia.md` Phase 3.5 runs this section when `MAY_RECORD_PROJECT` is not `none` and a GitHub id is owed. Each block decides only owed ids, so a decided one is never re-recorded.
+
+**An origin not on github.com** (`MAY_RECORD_PROJECT` is `not-applicable-only`): none of the GitHub settings can apply, so each owed one records `not-applicable`:
+
+```bash
+owed() { .gaia/cli/gaia setup drift --json | jq -e --arg id "$1" 'any(.undecided[]?; .id == $id)' >/dev/null; }
+if [ "$MAY_RECORD_PROJECT" = not-applicable-only ]; then
+  owed github-repository && .gaia/cli/gaia setup record github-repository not-applicable
+  owed push-protection && .gaia/cli/gaia setup record push-protection not-applicable
+  owed branch-protection && .gaia/cli/gaia setup record branch-protection not-applicable
+  owed gaia-audit-check && .gaia/cli/gaia setup record gaia-audit-check not-applicable
+  owed delete-branch-on-merge && .gaia/cli/gaia setup record delete-branch-on-merge not-applicable
+  owed dependabot-posture && .gaia/cli/gaia setup record dependabot-posture not-applicable
+  owed squash-only && .gaia/cli/gaia setup record squash-only not-applicable
+  owed label-sync && .gaia/cli/gaia setup record label-sync not-applicable
+fi
+true
+```
+
+**A github.com repo and an admin** (`MAY_RECORD_PROJECT` is `admin`): probe each owed setting this section owns and record what it shows:
+
+```bash
+owed() { .gaia/cli/gaia setup drift --json | jq -e --arg id "$1" 'any(.undecided[]?; .id == $id)' >/dev/null; }
+if [ "$MAY_RECORD_PROJECT" = admin ] && [ "$HOST" = github.com ]; then
+  branch_path="repos/$OWNER/$REPO/branches/$DEFAULT_BRANCH"
+  if owed github-repository && gh api "$branch_path" --jq .name >/dev/null 2>&1; then
+    .gaia/cli/gaia setup record github-repository applied
+  fi
+  if owed branch-protection && gh api "$branch_path/protection" >/dev/null 2>&1; then
+    .gaia/cli/gaia setup record branch-protection applied
+  fi
+  if owed gaia-audit-check && gh api "$branch_path/protection/required_status_checks" --jq '.contexts' 2>/dev/null \
+    | jq -e 'any(.[]; . == "GAIA-Audit") and all(.[]; . != "code-review-audit")' >/dev/null 2>&1; then
+    .gaia/cli/gaia setup record gaia-audit-check applied
+  fi
+fi
+true
+```
+
+A probe that finds branch protection or the `GAIA-Audit` registration missing records nothing: Phase 1 already sends an admin whose registration is owed down Phase 3's partial re-run path, which applies both, so a miss here means that path failed and the next run retries it.
+
+Then, when `push-protection` is owed, run `## Push protection`; and run the owed items of `## Remaining defaults` (`delete-branch-on-merge`, `dependabot-posture`). `squash-only` is decided in Phase 3.7 and `label-sync` in Phase 4.5.

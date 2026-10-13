@@ -275,10 +275,13 @@ transforms:
           # Local simulations against mid-development log content would
           # otherwise false-positive.
           - "wiki/log.md"
+          # A migration note names the 1.x paths it deletes or moves; every other check still covers the folder.
+          - ".gaia/migrations/**"
         # Excluded only to withhold GAIA's own copy; adopters create their own,
         # so a shipped reference to one points at something they do have.
         ref-opt-out:
           - ".github/CODEOWNERS" # /gaia-init writes the adopter's.
+          - ".gaia/project.json" # /gaia-init and /setup-gaia write the adopter's.
           - ".github/pull_request_template.md" # adopters keep their own PR template.
           - "wiki/meta" # wiki lint and consolidate write their reports here.
           - "wiki/entities" # an adopter's wiki grows its own entity pages.
