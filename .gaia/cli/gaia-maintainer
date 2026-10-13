@@ -25107,11 +25107,13 @@ var PROSE_PATH_ALLOWLIST = /* @__PURE__ */ new Set([
   ".claude/skills/new-service",
   ".claude/skills/playwright-cli",
   ".claude/skills/react-code",
+  ".claude/skills/react-doctor",
   ".claude/skills/skeleton-loaders",
   ".claude/skills/tailwind",
   ".claude/skills/typescript",
   ".gaia/packages",
-  ".github/workflows"
+  ".github/workflows",
+  ".github/workflows/react-doctor.yml"
 ]);
 var PATH_BODY_CHAR = /[a-zA-Z0-9._/-]/;
 var PATH_TRUNCATING_METACHAR = /[$*?[{]/;
@@ -26313,17 +26315,6 @@ var JsonStripArrayElementSchema = external_exports.object({
   ).min(1),
   type: external_exports.literal("json-strip-array-element")
 });
-var JsonFieldRewriteSchema = external_exports.object({
-  paths: external_exports.array(external_exports.string().min(1)).min(1),
-  selectors: external_exports.array(
-    external_exports.object({
-      path: external_exports.string().min(1),
-      pattern: external_exports.string().min(1),
-      replacement: external_exports.string()
-    })
-  ).min(1),
-  type: external_exports.literal("json-field-rewrite")
-});
 var PnpmMemberStripSchema = external_exports.strictObject({
   lockfile: external_exports.string().min(1),
   member: external_exports.string().min(1),
@@ -26336,7 +26327,6 @@ var ConfigSchema = external_exports.object({
       MarkerStripSchema,
       JsonStripSchema,
       JsonStripArrayElementSchema,
-      JsonFieldRewriteSchema,
       PnpmMemberStripSchema,
       LeakCheckSchema
     ])
@@ -26525,96 +26515,6 @@ var applyJsonStripArrayElement = (stagingRoot, files, transform2) => {
     }
   }
   return { elementsRemoved, filesTouched };
-};
-var rewriteMatchingFields = (node2, segments, substitution) => {
-  if (segments.length === 0) return 0;
-  if (typeof node2 !== "object" || node2 === null || Array.isArray(node2)) {
-    return 0;
-  }
-  const record2 = node2;
-  const [segment, ...rest] = segments;
-  const child = record2[segment.key];
-  if (segment.isArray) {
-    if (!Array.isArray(child)) return 0;
-    let rewritten2 = 0;
-    for (const element of child) {
-      rewritten2 += rewriteMatchingFields(element, rest, substitution);
-    }
-    return rewritten2;
-  }
-  if (rest.length > 0) {
-    return rewriteMatchingFields(child, rest, substitution);
-  }
-  if (typeof child !== "string") return 0;
-  const rewritten = child.replaceAll(
-    substitution.pattern,
-    substitution.replacement
-  );
-  if (rewritten === child) return 0;
-  if (rewritten.length === 0) {
-    throw new Error(
-      `refusing to empty "${segment.key}": ${JSON.stringify(child)} rewrites to an empty string`
-    );
-  }
-  record2[segment.key] = rewritten;
-  return 1;
-};
-var rewriteFieldsInFile = (absolutePath, relativePath, rewrites) => {
-  let parsed;
-  try {
-    parsed = JSON.parse(readFileSync15(absolutePath, "utf8"));
-  } catch (error62) {
-    throw new Error(
-      `Failed to parse JSON at ${relativePath}: ${error62 instanceof Error ? error62.message : String(error62)}`
-    );
-  }
-  const isPlainObject3 = typeof parsed === "object" && parsed !== null && !Array.isArray(parsed);
-  if (!isPlainObject3) return 0;
-  let rewritten = 0;
-  for (const rewrite of rewrites) {
-    try {
-      rewritten += rewriteMatchingFields(
-        parsed,
-        rewrite.segments,
-        rewrite.substitution
-      );
-    } catch (error62) {
-      throw new Error(
-        `${relativePath}: ${error62 instanceof Error ? error62.message : String(error62)}`
-      );
-    }
-  }
-  if (rewritten > 0) {
-    atomicWriteFileSync(absolutePath, `${JSON.stringify(parsed, null, 2)}
-`);
-  }
-  return rewritten;
-};
-var applyJsonFieldRewrite = (stagingRoot, files, transform2) => {
-  const filesTouched = [];
-  let fieldsRewritten = 0;
-  const rewrites = transform2.selectors.map((selector) => ({
-    segments: parseSelectorPath(selector.path),
-    substitution: {
-      pattern: new RegExp(selector.pattern, "g"),
-      replacement: selector.replacement
-    }
-  }));
-  for (const relativePath of files) {
-    if (matchesAnyGlob(relativePath, transform2.paths)) {
-      const absolutePath = path16.join(stagingRoot, relativePath);
-      const rewritten = rewriteFieldsInFile(
-        absolutePath,
-        relativePath,
-        rewrites
-      );
-      if (rewritten > 0) {
-        filesTouched.push(relativePath);
-        fieldsRewritten += rewritten;
-      }
-    }
-  }
-  return { fieldsRewritten, filesTouched };
 };
 var NOTHING_STRIPPED = {
   filesTouched: [],
@@ -26972,7 +26872,6 @@ var renderHumanReport = (report, jsonMode) => {
     `release scrub: stripped ${report.marker_strip.blocks_stripped} marker block(s) across ${report.marker_strip.files_touched.length} file(s)`,
     `release scrub: removed ${report.json_strip.keys_removed} json key(s) from ${report.json_strip.files_touched.length} file(s)`,
     `release scrub: removed ${report.json_strip_array_element.elements_removed} json array element(s) from ${report.json_strip_array_element.files_touched.length} file(s)`,
-    `release scrub: rewrote ${report.json_field_rewrite.fields_rewritten} json field(s) in ${report.json_field_rewrite.files_touched.length} file(s)`,
     `release scrub: removed ${report.pnpm_member_strip.importers_removed} pnpm importer(s), ${report.pnpm_member_strip.packages_removed} package(s), ${report.pnpm_member_strip.snapshots_removed} snapshot(s)`
   ];
   if (report.unbalanced_markers.length > 0) {
@@ -27076,8 +26975,6 @@ var runLeakChecksForTransform = (transform2, ctx) => {
 };
 var runTransforms = (config2, ctx) => {
   const results = {
-    jsonFieldRewriteFiles: [],
-    jsonFieldsRewritten: 0,
     jsonStripArrayElementFiles: [],
     jsonStripArrayElementsRemoved: 0,
     jsonStripFiles: [],
@@ -27116,14 +27013,6 @@ var runTransforms = (config2, ctx) => {
       );
       results.jsonStripArrayElementsRemoved += result.elementsRemoved;
       results.jsonStripArrayElementFiles.push(...result.filesTouched);
-    } else if (transform2.type === "json-field-rewrite") {
-      const result = applyJsonFieldRewrite(
-        ctx.stagingDir,
-        ctx.stagedFiles,
-        transform2
-      );
-      results.jsonFieldsRewritten += result.fieldsRewritten;
-      results.jsonFieldRewriteFiles.push(...result.filesTouched);
     } else if (transform2.type === "pnpm-member-strip") {
       const result = applyPnpmMemberStrip(
         ctx.stagingDir,
@@ -27213,10 +27102,6 @@ var run12 = (argv, options = {}) => {
     return EXIT_CODES.UNKNOWN_SUBCOMMAND;
   }
   const report = {
-    json_field_rewrite: {
-      fields_rewritten: results.jsonFieldsRewritten,
-      files_touched: results.jsonFieldRewriteFiles
-    },
     json_strip: {
       files_touched: results.jsonStripFiles,
       keys_removed: results.jsonStripKeysRemoved

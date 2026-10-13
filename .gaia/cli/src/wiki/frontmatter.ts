@@ -6,20 +6,19 @@
  * page gaps if it is missing the frontmatter block entirely, or if either
  * required field is absent or null.
  *
- * Scans `wiki/**\/*.md` except `wiki/meta/**` (dated audit artifacts that do
+ * Scans `wiki/**\/*.md` except `wiki/meta/**` (audit reports that do
  * not follow the page frontmatter convention).
  *
  * That is the shared base exemption and nothing else: this scan deliberately
  * does NOT take the generated-content tier its two sibling scanners take.
- * `wiki/hot.md` and `wiki/log.md` do follow the frontmatter convention, and
- * their renderers emit the floor on purpose, so a gap on one is a real break
- * in a renderer rather than noise about a regenerated file.
+ * `wiki/log.md` does follow the frontmatter convention, and its renderer emits
+ * the floor on purpose, so a gap on it is a real break in the renderer rather
+ * than noise about a regenerated file.
  *
  * Nothing downstream catches that break. `gaia wiki log-prepend` reads
  * `wiki/log.md` and fails only when the fence itself is missing or unclosed;
- * it never reads a field, so a missing `type` or `status` passes it, and it
- * never looks at `wiki/hot.md` at all. This scan is the only detector, which
- * is why it keeps reading both pages.
+ * it never reads a field, so a missing `type` or `status` passes it. This scan
+ * is the only detector, which is why it keeps reading that page.
  *
  * Output: one `path: missing a, b` line per gap, or a clean message. With
  * `--json`, emits { "gaps": [ { path, missing } ] }. Exit 0 always; gaps

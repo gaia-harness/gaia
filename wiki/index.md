@@ -97,7 +97,6 @@ Master catalog of every page in the wiki. Newly created pages must be added here
 - [[Dark Mode Modernization]]
 - [[Content Security Policy]]: per-request nonce CSP; Report-Only pending an upstream React Router fix; documents the `unsafe-inline` and no-`report-uri` trade-offs.
 <!-- gaia:maintainer-only:start -->
-- [[Dispatched-Check Rollup via Polling]]: in-loop pollers stamp dispatched-workflow jobs via the Checks API so they land in `statusCheckRollup`; documents why a `workflow_run` listener is not viable under `GITHUB_TOKEN`.
 <!-- gaia:maintainer-only:end -->
 - [[Composite Action Step Timeouts]]: Node-provisioning steps are bounded by their owning job's `timeout-minutes`; a step-level cap is a per-workflow choice, not a rule.
 - [[Code Audit Team]]: config-driven auditor roster + dispatch resolver; AND-aggregation across dispatched members at the merge gate.
@@ -124,7 +123,6 @@ Master catalog of every page in the wiki. Newly created pages must be added here
 - [[Worthiness Presence Gate]]: merge-time `gh pr merge` hook requiring each changed emergent test to carry a worthiness-ledger line matching its current content; presence + signal match only (never the verdict), scoped to the PR's changed emergent tests, fail-open.
 <!-- gaia:maintainer-only:start -->
 - [[Dependabot as a Data Source]]: Dependabot alerts feed `/update-deps`, which resolves advisories through the local quality gate; GAIA renders no Dependabot config and keeps automated security fixes off.
-- [[Dependabot Security Updates]]: superseded opt-in design for security-update pull requests, kept as the record of what it chose and why it was reversed.
 - [[Bundle-time Scrub]]: marker-strip + leak-check + runtime-deps; closes the audit-round loop with build-time enforcement.
 <!-- gaia:maintainer-only:end -->
 
@@ -139,7 +137,6 @@ Master catalog of every page in the wiki. Newly created pages must be added here
 - [[Accessibility]]
 - [[ESLint Fixes]]
 - [[Forensics]]: read-only bug-report bridge with redaction and classification
-- [[Test Runner]]
 - [[Pre-commit Hooks]]
 - [[Git Workflow]]
 - [[PR Merge Workflow]]: the main-thread merge runbook: fork-PR refusal, pre-dispatch verification, dispatching the audit loop unit, the branch checkpoint, the status post, the merge and the post-merge cleanup.
@@ -154,7 +151,7 @@ Master catalog of every page in the wiki. Newly created pages must be added here
 - [[Policy-Memory Loop]]: prune-first self-improvement; recurring finding_class -> statusline nudge -> `/gaia-codify` -> path-scoped rule -> `/gaia-cleanse` prunes only on obsolescence/redundancy/supersession/duplication.
 - [[Incremental CI Skipping]]: required checks skip when the delta since they last passed green has no relevant files; `resolve-check-base.sh` / `resolve-audit-base.sh`.
 - [[Claude Hooks]]
-- [[GAIA Scripts]]: the index of `.gaia/scripts/`: one row per root file with its family, ship status, invoker, and what it is, plus the subdirectories and why the directory stays flat.
+- [[GAIA Scripts]]: the families of `.gaia/scripts/` by name prefix with what each does and where it is invoked, the subdirectories, and why the directory stays flat.
 - [[OS Sandbox]]: two-tier sandbox-enablement preference (owner recommends, each machine resolves) and the honest `.env` deny-merge boundary.
 - [[Project Config]]: `.gaia/project.json`, the committed team-shared settings file (sandbox recommendation, isolation policy), its writers and readers, and why `/update-gaia` never touches it.
 - [[Package Descriptor]]: the package registry `.gaia/packages.json` and per-package `gaia.package.json`; who reads them, the fail-closed rule, and the frontend launch scope.
@@ -179,11 +176,3 @@ Master catalog of every page in the wiki. Newly created pages must be added here
 - [[Usage Ledger]]: the only cost store, an append-only per-message usage ledger under `.gaia/local/telemetry/`; start and close bindings with latest-start-wins pairing, agent fields on segments, `usage.sh record` and `represented`, read-time attribution through a lineage graph, the per-PR block with its Code Audit Team line, and initiative readouts.
 - [[Serena Integration]]: Serena handles live code; the wiki handles institutional memory.
 - [[React Perf Diagnostic]]: `/gaia-react-perf`: measure-only runtime render-performance diagnostic built on bippy; capture -> reduce CLI -> ranked `memoDefeated` findings with a structural-fix cross-reference.
-- [[Chromatic Opt-Out]]
-
-<!-- gaia:maintainer-only:start -->
-
-## Meta
-
-- [[dashboard]]
-<!-- gaia:maintainer-only:end -->

@@ -8,6 +8,12 @@ Initialize a new project from the GAIA React template. The template already ship
 
 **Language meta-instruction:** Conduct this entire conversation in the language the user has been typing in. Detect it from prior context, no explicit detection step needed. Do not translate source files, rules, skills, or wiki entries, those stay English regardless. Only translate the prompts you show the user.
 
+Contents: Interactive gates: run mode and non-response policy; Step 0: Ensure pnpm is available; Step 1: Install dependencies; Step 2: Gather user input; Step 3: Run the init CLI; Step 4: Locale-specific scaffolding; Step 5: Create CODEOWNERS; Step 6: Check `.env`; Step 7: Verify the build; Step 8: Claude configuration; Step 9: Project settings; Step 10: Refresh the wiki; Step 11: Finalize; On failure: resume.
+
+This command reads these references, all under `.claude/skills/gaia/references/setup/`. Read one only when a "Read ... now" line sends you there, and then read the whole file:
+- `per-machine.md`: Step 8, the per-machine tool, plugin, statusline and `.env` steps with their probes.
+- `isolation-question.md`: Step 9, interactive mode only, the team git isolation-policy question.
+
 ## Interactive gates: run mode and non-response policy
 
 `/gaia-init` asks the user a series of questions ("gates"). This section governs how **every** gate behaves and overrides any harness default. Read it before the first gate and apply it to each one.
@@ -160,19 +166,9 @@ else
 fi
 ```
 
-Then **re-verify from the project root**:
+Then **re-verify from the project root** with `pnpm --version`.
 
-```bash
-pnpm --version
-```
-
-If the major version is still < 12, a non-corepack pnpm (Homebrew, the standalone installer) is shadowing the upgrade earlier on `PATH`. Do **not** loop or silently continue. Show which binary wins and halt so the user can resolve it:
-
-```bash
-command -v pnpm   # e.g. /opt/homebrew/bin/pnpm, the shadowing install
-```
-
-Halt with: "pnpm <version> at <path> is older than the required 12+ and takes precedence on your PATH. Upgrade or remove it (e.g. `brew upgrade pnpm`, `pnpm self-update`) so corepack's pinned version wins, then re-run /gaia-init."
+If the major version is still < 12, a non-corepack pnpm (Homebrew, the standalone installer) is shadowing the upgrade earlier on `PATH`. Do **not** loop or silently continue. Show which binary wins with `command -v pnpm` (e.g. `/opt/homebrew/bin/pnpm`, the shadowing install) and halt so the user can resolve it. Halt with: "pnpm <version> at <path> is older than the required 12+ and takes precedence on your PATH. Upgrade or remove it (e.g. `brew upgrade pnpm`, `pnpm self-update`) so corepack's pinned version wins, then re-run /gaia-init."
 
 ## Step 1: Install dependencies
 
@@ -327,8 +323,6 @@ If `STRIP_I18N == true`, read `frontend/.claude/instructions/remove-i18n.md` and
 
 ## Step 5: Create CODEOWNERS
 
-GAIA branding is stripped automatically by `gaia init strip-branding` in Step 3: FUNDING.yml is removed, the README is regenerated from the template with the project title, and the Storybook brand is rewritten to the project title. The template ships no GAIA logo, so there is nothing to supply during init.
-
 The GAIA template does not ship a `.github/CODEOWNERS`, so create one: a single line naming the user's GitHub username as the repo-wide code owner.
 
 ```bash
@@ -363,126 +357,11 @@ Fix any issues before moving on.
 
 ## Step 8: Claude configuration
 
-If any install step fails, print the command so the user can run it manually.
+Read `.claude/skills/gaia/references/setup/per-machine.md` now, the whole file, and run its steps in order.
 
-### Install tools
+On a halt, print the probe lines and stop with: "One or more components failed verification. Retry the failed install commands above, then resume with `.gaia/cli/gaia init resume`."
 
-GAIA bundles project-scoped skills, the generic ones at `.claude/skills/` (`tdd`) and the React ones at `frontend/.claude/skills/` (`eslint-fixes`, `playwright-cli`, `react-code`, `skeleton-loaders`, `tailwind`, `tdd-react`, `typescript`), they ship with the clone. Three external tools still need per-machine setup. The Serena MCP entry below requires `uv` (Astral's Python toolchain runner) on the host, GAIA precheck-installs it just like Step 0 precheck-installs pnpm.
-
-- [React Doctor](https://github.com/millionco/react-doctor): `npx -y react-doctor@latest install --yes`, run as the first command of the block below
-  Installs the `react-doctor` skill for detected agents (Claude Code included). Scans the project for React-specific issues (47+ rules: security, performance, correctness, architecture). Auto-runs after code edits in a `CLAUDECODE` environment and is invoked by the `code-audit-frontend` agent pre-merge.
-
-  **Then strip React Doctor's bundled extras so GAIA stays the sole controller of when react-doctor runs.** The installer adds five things beyond the Claude Code skill: a standalone GitHub Actions workflow, a commit-hook block, a `doctor` package script, a pinned `react-doctor` devDependency, and a `.agents/skills/react-doctor/` copy of the skill for any other agents it detects (Codex, Cursor, Gemini CLI, GitHub Copilot, OpenCode, Pi, Warp, and others). The `doctor` script and the `react-doctor` devDependency land in the root `package.json`, and the lockfile updates with it. There is no skill-only install flag, so install then remove them, as one block in one shell, because the lockfile snapshot taken before the install is held in a shell variable. `wiki/dependencies/react-doctor.md` holds the verification record for each path. GAIA already triggers react-doctor two ways it owns, the Claude Code skill (auto-run after edits) and the `code-audit-frontend` agent pre-merge (always at `@latest`), so the bundled trigger points are redundant and they collide with GAIA's `.githooks/pre-commit` hook and GAIA's own audit gate. The installer writes its hook block into the file `core.hooksPath` names, which in GAIA is the tracked `.githooks/pre-commit`, between the lines `# react-doctor hook start` and `# react-doctor hook end`, so step 5 deletes that block to leave the tracked hook unchanged.
-
-  ```bash
-  # 0. Snapshot the lockfile, then install. The installer's dependency resolution fills optional
-  #    peer slots of other packages in pnpm-lock.yaml, which `pnpm remove` leaves behind, so
-  #    step 6 restores this snapshot.
-  lockfile_snapshot="$(mktemp)"
-  cp pnpm-lock.yaml "$lockfile_snapshot"
-  npx -y react-doctor@latest install --yes
-  # 1. Drop the standalone workflow (GAIA ships no CI workflow of its own for it).
-  rm -f .github/workflows/react-doctor.yml
-  # 2. Remove the non-Claude skill copy. The installer writes .agents/skills/react-doctor/ for
-  #    any other agents it detects (Codex, Cursor, Gemini CLI, Copilot, Warp, and others); GAIA drives react-doctor through the Claude
-  #    Code skill only, so this copy is redundant. rmdir the now-empty parents but leave any
-  #    unrelated .agents/ content untouched (rmdir refuses a non-empty dir).
-  rm -rf .agents/skills/react-doctor
-  rmdir .agents/skills .agents 2>/dev/null || true
-  # 3. Uninstall the pinned dep + lockfile entry. --config.ignore-scripts=true skips the
-  #    prepare script (avoids a redundant hook-path setup); react-doctor runs at @latest on demand.
-  #    Run from the repo root, where the installer wrote the dependency.
-  pnpm remove react-doctor --config.ignore-scripts=true 2>/dev/null || true
-  # 4. Delete the package script it added (named `doctor`, or `react-doctor` if `doctor` was taken).
-  #    The hyphenated key needs bracket+quote form; a bare `scripts.react-doctor` throws
-  #    ERR_PNPM_UNEXPECTED_TOKEN_IN_PROPERTY_PATH and aborts the whole command, leaving `doctor` behind too.
-  pnpm pkg delete scripts.doctor 'scripts["react-doctor"]'
-  # 5. Remove react-doctor's block (and the blank line it adds before it) from
-  #    the pre-commit hook it wrote into, then make sure git runs the hook.
-  hook_file="$(git rev-parse --git-path hooks/pre-commit)"
-  if [ -f "$hook_file" ] && grep -q '^# react-doctor hook start$' "$hook_file"; then
-    awk '
-      /^# react-doctor hook start$/ { in_block = 1; if (have_prev && prev == "") have_prev = 0; next }
-      in_block { if ($0 == "# react-doctor hook end") in_block = 0; next }
-      { if (have_prev) print prev; prev = $0; have_prev = 1 }
-      END { if (have_prev) print prev }
-    ' "$hook_file" > "$hook_file.tmp" && cat "$hook_file.tmp" > "$hook_file" && rm -f "$hook_file.tmp"
-  fi
-  if [ "$(git config --local --get core.hooksPath)" != ".githooks" ]; then
-    git config core.hooksPath .githooks
-  fi
-  # 6. Put the lockfile back byte for byte from the step 0 snapshot, then resync node_modules to it.
-  cat "$lockfile_snapshot" > pnpm-lock.yaml && rm -f "$lockfile_snapshot"
-  pnpm install --frozen-lockfile --config.ignore-scripts=true
-  ```
-
-  Each strip line is idempotent and no-ops when its artifact is absent (e.g. when React Doctor's dependency install was skipped by a trust policy, or when no non-Claude agent was detected so no `.agents/` copy was written). Step 6 copies the pre-install snapshot rather than checking the lockfile out of git, so lockfile edits made before the install survive it. The block delete rewrites the hook in place with `cat ... >` rather than `mv`, which keeps its executable bit. The `git config` line re-arms the hook path: a clone whose dependencies were installed before `git init` skipped `prepare`, so nothing else would set it. Verify: `grep -c 'react-doctor hook' .githooks/pre-commit` prints 0, `git diff --quiet -- .githooks/pre-commit` exits 0, and `git config --local --get core.hooksPath` prints `.githooks`. After this, `git status` shows no React Doctor workflow and no `.agents/` skill copy, `package.json` carries no `react-doctor` entry, and `pnpm-lock.yaml` carries no change the install made; only the Claude Code skill remains. Do not report a lingering workflow, `.agents/` copy, or commit hook to the user; there is none.
-
-- [Playwright CLI](https://github.com/microsoft/playwright-cli) binary: `npm install -g @playwright/cli@latest`
-  Installs the global `playwright-cli` binary the bundled skill shells out to. `/update-deps` keeps the global binary current; `wiki/dependencies/playwright-cli.md` covers the fallback and the deprecated-package trap. Used for E2E debugging and authoring Playwright specs with minimal token cost, each interaction is one shell call instead of a round-trip through an MCP session.
-- [Serena](https://github.com/oraios/serena) MCP server: semantic code-search and editing tools (find symbol, find references, replace symbol body) backed by language servers, pulls Claude away from grep-the-world toward symbol-aware operations. First, ensure `uv` is available, tell the user: "Checking for uv…" then run:
-
-  ```bash
-  if ! command -v uv &>/dev/null; then
-    curl -LsSf https://astral.sh/uv/install.sh | sh
-  fi
-  ```
-
-  After install, source the shell rc the installer modifies (or add `~/.local/bin` to `PATH` for this session) and verify with `uv --version`. If the verification fails, halt `/gaia-init` with: `uv is required for GAIA. Install with: curl -LsSf https://astral.sh/uv/install.sh | sh, then re-run /gaia-init.` Once `uv` is confirmed present, register Serena with:
-
-  ```bash
-  claude mcp add serena -s user -- uvx --from git+https://github.com/oraios/serena@v1.7.0 serena start-mcp-server --context claude-code --project-from-cwd --open-web-dashboard false
-  ```
-
-  `-s user` registers Serena globally for the user's Claude Code; `--context claude-code` selects Serena's Claude-Code tool context instead of the default desktop-app one; `--project-from-cwd` makes Serena auto-activate the project rooted at the launch directory, so no per-project re-registration is needed; `--open-web-dashboard false` keeps it headless. The pinned ref keeps every GAIA install on the same Serena baseline. If the `claude mcp add` invocation itself fails (network, registry change, etc.), surface the error verbatim and halt `/gaia-init` so the user can retry the command manually after addressing the cause.
-
-  Serena's tools only win over Opus's built-in Read/Grep/Edit when Claude Code loads Serena's system-prompt override; Opus otherwise defaults to its own tools, a strong built-in-tool bias the Serena maintainers prescribe this override to counter. Tell the user the recommended way to start Claude Code sessions in this project:
-
-  ```bash
-  claude --append-system-prompt="$(serena prompts print-cc-system-prompt-override)"
-  ```
-
-  This is optional but recommended and adopter-safe: a plainly-launched `claude` still works, and the always-loaded `.claude/rules/serena-cc-override.md` is the durable fallback. Use the append form, never `--system-prompt`, which replaces Claude Code's base prompt.
-
-### Install plugins
-
-- `claude plugin install typescript-lsp@claude-plugins-official`
-- `claude plugin marketplace add AgriciDaniel/claude-obsidian`
-- `claude plugin install claude-obsidian@agricidaniel-claude-obsidian` (baseline: claude-obsidian 2.2.0; needs Python 3.11+ with `python3` on PATH)
-
-To upgrade an existing install, run `claude plugin list`, then `claude plugin uninstall <the id it shows>`, then the marketplace add and install above.
-
-### Make the statusline executable
-
-The CLI in Step 3 wired the statusline command into Claude settings; the wrapper still needs the executable bit:
-
-```bash
-chmod +x .gaia/statusline/*.sh
-```
-
-(Idempotent, safe to run regardless.)
-
-### Verify installs
-
-After all installs and plugin registrations above, run a probe-after pass to confirm each component landed. For each component below, run the probe and emit one line:
-
-| Component       | Probe                                                                                                                                                   |
-| --------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| React Doctor    | `[ -d .claude/skills/react-doctor ]` (installed project-local; gitignored, kept per-machine)                                                            |
-| Playwright CLI  | `command -v playwright-cli && playwright-cli --version >/dev/null 2>&1`                                                                                 |
-| Serena          | `claude mcp list 2>/dev/null \| grep -q '^serena:'`                                                                                                     |
-| typescript-lsp  | `claude plugin list 2>/dev/null \| grep -q 'typescript-lsp'`                                                                                            |
-| claude-obsidian | `claude plugin list 2>/dev/null \| grep -q 'claude-obsidian'`                                                                                           |
-
-Emit one line per component: `[ok] <component>` if the probe exits 0, `[FAIL] <component>` if it exits non-zero.
-
-After all probes run: if any component shows `[FAIL]`, print the full table, then halt `/gaia-init` with:
-
-> "One or more components failed verification. Retry the failed install commands above, then resume with `.gaia/cli/gaia init resume`."
-
-If all probes pass, print the full table and continue to Step 9.
-
-The same probe set applies when setting up from an existing clone, `/setup-gaia` runs it after registering external tools.
+When every step is recorded, continue to Step 9. `/setup-gaia` runs the same reference, so a machine set up here owes it nothing per-machine.
 
 ## Step 9: Project settings
 
@@ -509,24 +388,9 @@ Hold the answer as `true` (recommend) or `false` (don't recommend, including the
 
 Independent of the sandbox recommendation above, record how this team wants `/gaia-plan` and `/gaia-debt` to isolate their work: a feature branch cut in the current checkout, or a separate git worktree. Unlike the sandbox recommendation, this is a **committed, team-level setting**, not something every machine resolves for itself.
 
-Worktrees buy you the ability to run a GAIA task without touching your current checkout, so you can keep coding, or run a second GAIA task, while it works. They cost:
-
-- a separate checkout per task, whose first quality-gate run installs its own `node_modules` (a one-time install; the real disk cost ranges from tens of megabytes on a copy-on-write filesystem to the full install size elsewhere);
-- your editor indexes that second checkout as well as the main one;
-- a dev server started inside a worktree collides on the same port as one in the main checkout;
-- a crashed session can leave a worktree behind for you to remove by hand.
-
-Scope limit: this policy governs `/gaia-plan` and `/gaia-debt` only. `/gaia-cleanse`, `/gaia-codify`, and `/gaia-wiki` still work in the main checkout. And while a GAIA task holds your session in a worktree, `/update-deps` and `/update-gaia` refuse to run there; run them from a separate session on the main checkout.
-
 _Non-response: SAFE-DEFAULT. Omit the flag entirely, which leaves the key absent and leaves the `/setup-gaia` question live for the owner to answer later. Automatic mode: same, no re-ask._
 
-Use AskUserQuestion, with header `Isolation policy` (in the user's language; this configuration block stays in English):
-
-> How should this team isolate `/gaia-plan` and `/gaia-debt` work?
->
-> - **Prefer branches (Recommended).** Default. GAIA cuts a feature branch and works in the current checkout.
-> - **Prefer worktrees.** GAIA leads with a worktree, so you can keep working, or run another GAIA task, at the same time.
-> - **Always use worktrees.** GAIA always works in a worktree, no question asked.
+In Automatic mode, skip the question (the flag is omitted). Otherwise, read `.claude/skills/gaia/references/setup/isolation-question.md` now, the whole file, and ask its question.
 
 Hold the answer as `prefer-branch`, `prefer-worktree`, or `always-worktree`, or as "omitted" on a non-response, "Other", or Automatic mode.
 
@@ -548,9 +412,7 @@ End of Step 9.
 
 ## Step 10: Refresh the wiki
 
-The template ships with a wiki shaped for the upstream GAIA project. Refresh the file that encodes "where we are right now" so the new project starts with a clean context:
-
-### 10b. Overwrite `wiki/log.md`
+The template ships with a wiki shaped for the upstream GAIA project. Refresh the file that encodes "where we are right now" so the new project starts with a clean context.
 
 Read `wiki/log.md` first, then replace the entire file with the following content (the GAIA development log is irrelevant to the new project). Substitute `<LANGUAGES>` with this run's configured locale codes, comma-separated (e.g. `en` or `en, es, de`); if i18n was stripped, write `single-language (i18n removed)`.
 
@@ -578,10 +440,10 @@ Append-only. New entries at the TOP.
 
 ## Step 11: Finalize
 
-Mark per-machine setup as complete so the statusline does not show "Run /setup-gaia (Required)". `/gaia-init` performs all the same per-machine work as `/setup-gaia` (tools, plugins, statusline chmod, .env), but it does not call `gaia setup mark-step` as it goes, so stamp the state file with `--force` now that everything is done:
+Step 8 recorded each per-machine step through the shared reference, so stamp completion now. This clears "Run /setup-gaia (Required)" from the statusline:
 
 ```bash
-.gaia/cli/gaia setup finalize --force
+.gaia/cli/gaia setup finalize
 ```
 
 If the CLI exits non-zero, it surfaces a structured error whose `code` field explains the cause (e.g. `not_a_git_repo`, `state_malformed`); surface that JSON line verbatim and stop. Do not retry or self-heal.

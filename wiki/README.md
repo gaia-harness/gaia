@@ -9,7 +9,7 @@ tags: [meta, schema]
 # GAIA React: LLM Wiki
 
 Mode: B (Codebase) + E (Research)
-Plugin baseline: `.claude/commands/setup-gaia.md` owns it (DragonScale features intentionally not adopted, see [[DragonScale Opt-Out]])
+Plugin baseline: `.claude/skills/gaia/references/setup/per-machine.md` owns it (DragonScale features intentionally not adopted, see [[DragonScale Opt-Out]])
 Purpose: Persistent knowledge base for the GAIA React workflow: architecture, conventions, decisions, Claude integration.
 <!-- gaia:maintainer-only:start -->
 Owner: Steven Sacks
@@ -33,7 +33,7 @@ wiki/
 <!-- gaia:maintainer-only:end -->
 ├── concepts/           # ideas/patterns (Quality Gate, Co-location, Thin Routes)
 <!-- gaia:maintainer-only:start -->
-└── meta/               # dashboards, lint reports
+└── meta/               # lint and consolidate reports
 <!-- gaia:maintainer-only:end -->
 ```
 

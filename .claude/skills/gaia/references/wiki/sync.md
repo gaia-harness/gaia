@@ -61,8 +61,8 @@ git show <sha>
 
 Read the diff. Decide what wiki page(s) need updating:
 
-- New service in `frontend/app/services/`: edit or create `wiki/services/<name>.md`
-- New hook in `frontend/app/hooks/`: edit or create `wiki/hooks/<name>.md`
+- New service in `frontend/app/services/`: edit `wiki/modules/Services.md`
+- New hook in `frontend/app/hooks/`: edit `wiki/modules/Hooks.md`
 - New route group: edit `wiki/decisions/Thin Routes.md` and/or `wiki/modules/Pages.md`
 - Dependency change: edit `wiki/dependencies/<name>.md` (create if needed)
 - Architectural pattern: edit relevant `wiki/concepts/<topic>.md`
@@ -90,22 +90,22 @@ If a commit's diff turns out NOT to be wiki-worthy on closer inspection (e.g. su
 
 ## Step 5: Append to wiki/log.md
 
-For each commit (worthy or skipped), first dedup against the existing ledger, then run:
+Log WORTHY commits only. A skipped commit gets no line: its class and reason are reproducible from git with `gaia wiki commit-classify`, and `wiki/.state.json` is the cursor that records it as evaluated. For each commit still WORTHY after Step 4, first dedup against the existing ledger, then run:
 
 ```bash
 # Skip commits a prior sync already catalogued, avoids double-logging.
 # Grep the working-tree log so lines this sync already prepended count too.
 grep -qF "<short_sha>" wiki/log.md && continue
-.gaia/cli/gaia wiki log-prepend --sha <short_sha> --decision <WORTHY|SKIP> --reason "<one-line reason>"
+.gaia/cli/gaia wiki log-prepend --sha <short_sha> --decision WORTHY --reason "<one-line reason>"
 ```
 
-The dedup guard matters most on the recovery path (Step 1), where the resolved `suggested_base` can sit behind commits a prior sync already logged. Skip any commit whose short SHA is already in `wiki/log.md` rather than appending a duplicate line.
+The dedup guard matters on the recovery path (Step 1), where the resolved `suggested_base` can sit behind commits a prior sync already logged as WORTHY. Skip any commit whose short SHA is already in `wiki/log.md` rather than appending a duplicate line.
 
-The CLI inserts a single canonical line `- <YYYY-MM-DD> <sha> <decision>, <reason>` at the top of `wiki/log.md` (after frontmatter), atomically, newest entries on top. Examples:
+The CLI inserts a single canonical line `- <YYYY-MM-DD> <sha> <decision>, <reason>` at the top of `wiki/log.md` (after frontmatter), atomically, newest entries on top. Example:
 
-- WORTHY: `.gaia/cli/gaia wiki log-prepend --sha abc1234 --decision WORTHY --reason "added /services/Gemini integration → wiki/services/Gemini.md"`
-- SKIP: `.gaia/cli/gaia wiki log-prepend --sha def5678 --decision SKIP --reason "typo-only commit"`
-- Serena-policy SKIP: `.gaia/cli/gaia wiki log-prepend --sha 9a0b1c2 --decision SKIP --reason "Serena handles inventory, added Button variant in frontend/app/components/button"`
+```bash
+.gaia/cli/gaia wiki log-prepend --sha abc1234 --decision WORTHY --reason "added the Gemini service → wiki/modules/Services.md"
+```
 
 ## Step 5b: Fabrication guard, verify edits landed on disk
 
@@ -119,7 +119,7 @@ Check each claimed path individually (wiki filenames contain spaces, so do NOT f
 # 1. No-empty-WORTHY check: WORTHY commits must produce at least one content change.
 CONTENT_CHANGES=$(git status --porcelain -- wiki/ \
   ':(exclude)wiki/.state.json' ':(exclude)wiki/log.md' \
-  ':(exclude)wiki/hot.md' ':(exclude)wiki/meta/')
+  ':(exclude)wiki/meta/')
 
 # 2. Per-claim check: every CLAIMED path must show as changed/created.
 #    git status --porcelain -- "<path>" is empty when the path is unmodified.

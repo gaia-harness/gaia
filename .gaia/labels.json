@@ -168,7 +168,7 @@
       "managed": true,
       "deprecated": false,
       "blocked": false,
-      "renamedFrom": ["handler:prompt"],
+      "renamedFrom": [],
       "reason": null
     },
     {
@@ -181,7 +181,7 @@
       "managed": true,
       "deprecated": false,
       "blocked": false,
-      "renamedFrom": ["handler:plan"],
+      "renamedFrom": [],
       "reason": null
     },
     {
@@ -194,7 +194,7 @@
       "managed": true,
       "deprecated": false,
       "blocked": false,
-      "renamedFrom": ["handler:spec"],
+      "renamedFrom": [],
       "reason": null
     },
     {
@@ -207,7 +207,7 @@
       "managed": true,
       "deprecated": false,
       "blocked": false,
-      "renamedFrom": ["debt:in-progress"],
+      "renamedFrom": [],
       "reason": null
     },
     {
@@ -266,19 +266,6 @@
       "name": "gaia-ci",
       "color": "d4d4d4",
       "description": "Deprecated: the CI maintenance jobs that opened these PRs were removed.",
-      "axis": "origin",
-      "audience": "adopter",
-      "features": [],
-      "managed": true,
-      "deprecated": true,
-      "blocked": false,
-      "renamedFrom": [],
-      "reason": null
-    },
-    {
-      "name": "run-audit",
-      "color": "a78bfa",
-      "description": "Deprecated: the CI override label it drove was removed; audits run locally.",
       "axis": "origin",
       "audience": "adopter",
       "features": [],
@@ -350,7 +337,7 @@
       "managed": true,
       "deprecated": false,
       "blocked": false,
-      "renamedFrom": ["surface:adopter"],
+      "renamedFrom": [],
       "reason": null
     },
     {
@@ -363,7 +350,7 @@
       "managed": true,
       "deprecated": false,
       "blocked": false,
-      "renamedFrom": ["surface:maintainer"],
+      "renamedFrom": [],
       "reason": null
     },
     {

@@ -180,6 +180,17 @@ describe('wiki dead-paths', () => {
     expect(scanWikiPaths(sandbox.root).dead).toEqual([]);
   });
 
+  test('ignores the machine-local Claude Code settings file, by exact token', () => {
+    sandbox.writeFile(
+      'wiki/concepts/Local Settings.md',
+      '# Local Settings\n\nPer-machine overrides live in `.claude/settings.local.json`, not `.claude/settings.local.json.bak`.\n'
+    );
+
+    expect(scanWikiPaths(sandbox.root).dead.map((d) => d.path)).toEqual([
+      '.claude/settings.local.json.bak',
+    ]);
+  });
+
   test('exempts the sentinel by exact token, not by prefix', () => {
     // A path that merely extends the sentinel is a distinct, longer token and
     // must still flag. Loosening the `.has()` membership check to a prefix
@@ -212,14 +223,10 @@ describe('wiki dead-paths', () => {
     expect(scanWikiPaths(sandbox.root).dead).toEqual([]);
   });
 
-  test('skips wiki/log.md, wiki/hot.md and wiki/meta/** by design', () => {
+  test('skips wiki/log.md and wiki/meta/** by design', () => {
     sandbox.writeFile(
       'wiki/log.md',
       '# Log\n\nDeleted `.claude/hooks/old.sh` (historical record).\n'
-    );
-    sandbox.writeFile(
-      'wiki/hot.md',
-      '# Hot\n\nRecent work moved `.claude/hooks/moved.sh` (session cache).\n'
     );
     sandbox.writeFile(
       'wiki/meta/lint-report.md',

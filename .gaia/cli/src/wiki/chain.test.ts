@@ -810,7 +810,7 @@ describe('wiki chain', () => {
       expect(pruneIndex).toBeGreaterThan(branchDeleteIndex);
     });
 
-    test('on a legacy wiki-sync/ chain branch: still opens the PR', () => {
+    test('on a wiki-sync/ branch: treated as hand-named, no PR opened', () => {
       sandbox = setupSandbox();
       const recorded: RecordedCall[] = [];
       const runner = buildRunner(
@@ -818,30 +818,6 @@ describe('wiki chain', () => {
           {
             argv: ['rev-parse', '--abbrev-ref', 'HEAD'],
             result: okResult('wiki-sync/2026-05-07-bbbbbbb\n'),
-          },
-          {
-            argv: ['symbolic-ref', '--short', 'refs/remotes/origin/HEAD'],
-            result: okResult('origin/main\n'),
-          },
-          {
-            argv: ['rev-list', '--count', 'main..HEAD'],
-            result: okResult('3\n'),
-          },
-          {
-            argv: ['rev-parse', 'HEAD'],
-            result: okResult('bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\n'),
-          },
-          {
-            argv: [
-              'pr',
-              'view',
-              'wiki-sync/2026-05-07-bbbbbbb',
-              '--json',
-              'state',
-              '--jq',
-              '.state',
-            ],
-            result: okResult('MERGED\n'),
           },
         ],
         recorded
@@ -855,12 +831,8 @@ describe('wiki chain', () => {
       expect(exit).toBe(0);
 
       const ordered = recorded.map((c) => [c.command, ...c.args].join(' '));
-      expect(
-        ordered.some((c) =>
-          c.startsWith('git push -u origin wiki-sync/2026-05-07-bbbbbbb')
-        )
-      ).toBe(true);
-      expect(ordered.some((c) => c.startsWith('gh pr create'))).toBe(true);
+      expect(ordered.some((c) => c.startsWith('git push'))).toBe(false);
+      expect(ordered.some((c) => c.startsWith('gh pr create'))).toBe(false);
     });
 
     test('on a chain branch, merge does not land: auto-merge stays queued, cleanup deferred', () => {

@@ -118,10 +118,11 @@ line_starting() {
   true
 }
 
-@test "GAIA Scripts.md has a row for each audit-loop script" {
-  for script in audit-fix-verify.sh audit-loop-eval.sh audit-loop-record.sh audit-loop-state-lib.sh; do
-    grep -qF -- "| \`$script\` | yes |" "$SCRIPTS_WIKI" || { echo "missing row: $script" >&2; return 1; }
-  done
+@test "GAIA Scripts.md describes the audit- family and carries no per-file rows" {
+  grep -qF -- '| `audit-` |' "$SCRIPTS_WIKI"
+  # Per-file rows drift; the page points at script headers and release-exclude.
+  grep -qE -- '^\| `audit-[a-z-]+\.sh` \|' "$SCRIPTS_WIKI" && return 1
+  grep -qF -- '.gaia/release-exclude' "$SCRIPTS_WIKI"
 }
 
 # --- COV-007: the fixer is not briefed from the ledger ---------------------

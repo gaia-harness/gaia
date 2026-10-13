@@ -12,7 +12,7 @@ Wiki pages emitted by the wiki promotion step carry `promoted_from: SPEC-NNN` an
 
 ## Step 1, Build the page index
 
-Run `.gaia/cli/gaia wiki page-index --json` and use the returned shape. The CLI walks the canonical domains (`wiki/decisions/`, `wiki/concepts/`, `wiki/modules/`, `wiki/flows/`, `wiki/components/`, `wiki/dependencies/`), skipping `wiki/_archived/`, `wiki/meta/`, `wiki/entities/`, `wiki/log.md`, `wiki/index.md`, `wiki/hot.md`, `wiki/overview.md`, `wiki/README.md`, and per-domain `_index.md` files.
+Run `.gaia/cli/gaia wiki page-index --json` and use the returned shape. The CLI walks the canonical domains (`wiki/decisions/`, `wiki/concepts/`, `wiki/modules/`, `wiki/flows/`, `wiki/components/`, `wiki/dependencies/`), skipping `wiki/_archived/`, `wiki/meta/`, `wiki/entities/`, `wiki/log.md`, `wiki/index.md`, `wiki/overview.md`, `wiki/README.md`, and per-domain `_index.md` files.
 
 Each entry in `pages[]` provides `path`, `domain`, `title`, `type`, `status`, `tags`, `inbound_links`, and `outbound_links`. Augment with the consolidation-only fields the CLI does not surface, read each page's frontmatter for:
 
@@ -70,7 +70,7 @@ This is the last step the detection subagent runs. After writing the report file
 mkdir -p wiki/meta/
 ```
 
-Write to `wiki/meta/consolidate-report-<YYYY-MM-DD>.md`, where `<YYYY-MM-DD>` is `date +%F` (shell), derive it deterministically, never guess the current date. The same value fills the frontmatter `created`/`updated` and the H1. Overwrite if a same-day report exists.
+Write to `wiki/meta/consolidate-report.md`, overwriting the previous run's report: it is a point-in-time snapshot, and the commit history holds earlier runs. `<YYYY-MM-DD>` below is `date +%F` (shell), derive it deterministically, never guess the current date. It fills the frontmatter `created`/`updated` and the H1.
 
 Frontmatter:
 
@@ -196,7 +196,7 @@ Do NOT commit. The router commits the staged edits with `chain commit` (`referen
 
 Print:
 
-1. The report path (e.g. `wiki/meta/consolidate-report-2026-05-06.md`).
+1. The report path, `wiki/meta/consolidate-report.md`.
 2. One-line summary: `<applied> applied, <kept> kept, <skipped> skipped across <total> findings.`
 
 If any HIGH-severity supersession or reversed-decision was applied, prefix the summary with `WIKI CONSOLIDATE: ` so the parent agent surfaces it prominently.

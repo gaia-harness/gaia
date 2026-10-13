@@ -116,7 +116,7 @@ See [[Claude Integration Conventions]] for the broader convention covering exten
 
 ## Plugin skills (claude-obsidian)
 
-Core wiki maintenance (sync, consolidate, lint) runs through GAIA's native CLI (`.gaia/cli/gaia wiki ...`), not the plugin. Wiki-lint in particular is a GAIA-native check with its own rules and report, independent of the plugin's `wiki-lint` skill. The `claude-obsidian` plugin is installed globally via the Claude Code marketplace (not vendored into this repo) and supplies **auxiliary** skills only. Its skills auto-load on context match alongside GAIA's project-local skills.
+Core wiki maintenance (sync, consolidate, lint) runs through GAIA's native CLI (`.gaia/cli/gaia wiki ...`), not the plugin. Wiki-lint in particular is a GAIA-native check with its own rules and report, independent of the plugin's `wiki-lint` skill. The `claude-obsidian` plugin is installed at project scope for this repository through the Claude Code marketplace (not vendored into this repo; the marketplace stays user-level) and supplies **auxiliary** skills only. Its skills load in sessions of this project, not of every project on the machine, and auto-load on context match alongside GAIA's project-local skills.
 
 GAIA leans on two of them:
 

@@ -40,7 +40,7 @@ const MARKDOWN_EXTENSIONS: ReadonlySet<string> = new Set(['.md']);
 /**
  * The exemption every scanner reading this corpus applies, whatever it asks.
  *
- * `wiki/meta/` is dated audit artifacts, and it is the only exemption whose
+ * `wiki/meta/` holds audit reports, and it is the only exemption whose
  * warrant survives every question these scanners ask: those pages are not
  * pages in the sense any of the scans means, so no scan's finding against one
  * is actionable. Matched by prefix, because it names a directory.
@@ -48,12 +48,12 @@ const MARKDOWN_EXTENSIONS: ReadonlySet<string> = new Set(['.md']);
 export const WIKI_SCAN_EXEMPT_PREFIXES = ['wiki/meta/'] as const;
 
 /**
- * The pages that are regenerated or append-only rather than hand-edited.
+ * The page that is append-only rather than hand-edited.
  *
  * **This tier is for CONTENT-ROT scans only, and a scan that asks a different
  * question must not inherit it.** The warrant is that a finding about the
- * *content* of one of these pages is not rot a human can act on, because the
- * page is overwritten rather than edited. That reasoning covers a dead citation
+ * *content* of such a page is not rot a human can act on, because the page is
+ * written by a tool rather than edited. That reasoning covers a dead citation
  * (`dead-paths`) and an empty section (`empty-sections`), and it does not
  * cover a schema question: a frontmatter gap in a generated page is entirely
  * actionable, at the renderer that generates it, and `gaia wiki frontmatter`
@@ -61,18 +61,17 @@ export const WIKI_SCAN_EXEMPT_PREFIXES = ['wiki/meta/'] as const;
  * log-prepend` fails on it. So `frontmatter` takes the base tier above and
  * this one is deliberately not offered to it.
  *
- * Matched exactly, not by prefix: these name two files, and a prefix would
- * also swallow any page whose path merely starts with one of them.
+ * Matched exactly, not by prefix: it names one file, and a prefix would also
+ * swallow any page whose path merely starts with it.
  *
- * These two and the base entry together are the Exceptions list in
- * `.claude/rules/wiki-style.md`, and that correspondence still holds
- * undivided: the rule exempts all three from a prose rule about inline
- * historical references, which is a question about the pages themselves. The
- * split into two tiers here is about which *scan* may take which exemption,
- * which that rule never spoke to, so it needs no counterpart there.
+ * This tier (`wiki/log.md`) and the base tier (`wiki/meta/`) correspond to the
+ * two path entries of the Exceptions list in `.claude/rules/wiki-style.md`;
+ * its other entries are not wiki pages a scanner walks. The rule exempts
+ * both paths from a prose rule about inline historical references; the split
+ * into two tiers here is about which *scan* may take which exemption, which
+ * that rule never spoke to.
  */
 export const GENERATED_CONTENT_EXEMPT_PATHS: ReadonlySet<string> = new Set([
-  'wiki/hot.md',
   'wiki/log.md',
 ]);
 

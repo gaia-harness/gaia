@@ -22,8 +22,7 @@
  * Each extracted path constant is verified to be either:
  *
  *   - present in `.gaia/manifest.json` (a shipped file), or
- *   - an adopter-owned sentinel (`wiki/log.md`,
- *     `.gaia/VERSION`, `.gaia/manifest.json`), or
+ *   - an adopter-owned sentinel (`ADOPTER_OWNED_SENTINELS` below), or
  *   - a runtime-allocated path on adopter machines (under
  *     `.gaia/local/`,
  *     `.claude/worktrees/`, `.claude/agent-memory/`, `.claude/audit/`,
@@ -147,6 +146,11 @@ const PATH_PREFIXES = ['.gaia/', '.claude/', '.github/'] as const;
  *     paths, never sourced or executed, so a missing target is the intended
  *     state. Each retired location is listed as its own token because the
  *     allowlist matches exactly.
+ *   - `.claude/skills/react-doctor` and `.github/workflows/react-doctor.yml`:
+ *     outputs of the third-party installer `install-react-doctor.sh` runs.
+ *     The script checks that the per-machine, gitignored skill directory
+ *     landed and deletes the workflow; it never sources or executes either,
+ *     and neither can have a manifest entry.
  *     This module has no inline-ignore channel, so the allowlist is the
  *     documented one.
  */
@@ -180,11 +184,13 @@ export const PROSE_PATH_ALLOWLIST: ReadonlySet<string> = new Set([
   '.claude/skills/new-service',
   '.claude/skills/playwright-cli',
   '.claude/skills/react-code',
+  '.claude/skills/react-doctor',
   '.claude/skills/skeleton-loaders',
   '.claude/skills/tailwind',
   '.claude/skills/typescript',
   '.gaia/packages',
   '.github/workflows',
+  '.github/workflows/react-doctor.yml',
 ]);
 
 const PATH_BODY_CHAR = /[a-zA-Z0-9._/-]/;

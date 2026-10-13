@@ -1,0 +1,36 @@
+# Isolation policy question
+
+`/gaia-init` Step 9 and `/setup-gaia` Phase 3.5 read this file, whole, to ask the team git isolation-policy question and map the answer to a value. The calling command says what to do with a value and what no answer does.
+
+## The question
+
+Show the explainer (this block stays English regardless of UI language, it's the canonical contract):
+
+> Worktrees buy you the ability to run a GAIA task without touching your current checkout, so you can keep
+> coding, or run a second GAIA task, while it works. They cost:
+>
+> - a separate checkout per task, whose first quality-gate run installs its own `node_modules` (a one-time
+>   install; the real disk cost ranges from tens of megabytes on a copy-on-write filesystem to the full
+>   install size elsewhere);
+> - your editor indexes that second checkout as well as the main one;
+> - a dev server started inside a worktree collides on the same port as one in the main checkout;
+> - a crashed session can leave a worktree behind for you to remove by hand.
+>
+> Scope limit: this policy governs `/gaia-plan` and `/gaia-debt` only. `/gaia-cleanse`, `/gaia-codify`, and
+> `/gaia-wiki` still work in the main checkout. And while a GAIA task holds your session in a worktree,
+> `/update-deps` and `/update-gaia` refuse to run there; run them from a separate session on the main
+> checkout.
+
+Then use `AskUserQuestion`, header **`Isolation policy`** (in the user's language), question "How should this team isolate `/gaia-plan` and `/gaia-debt` work?", with these three options in this exact order:
+
+- **Prefer branches (Recommended)**: Default. GAIA cuts a feature branch and works in the current checkout.
+- **Prefer worktrees**: GAIA leads with a worktree, so you can keep working, or run another GAIA task, at the same time.
+- **Always use worktrees**: GAIA always works in a worktree, no question asked.
+
+## The answer
+
+- `Prefer branches (Recommended)` is `prefer-branch`.
+- `Prefer worktrees` is `prefer-worktree`.
+- `Always use worktrees` is `always-worktree`.
+
+"Other" or a dismissal is no answer.

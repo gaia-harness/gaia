@@ -4,7 +4,7 @@ status: active
 priority: 2
 date: 2026-10-04
 created: 2026-10-04
-updated: 2026-10-04
+updated: 2026-10-13
 tags: [decision, dependencies, security, ci]
 ---
 
@@ -52,4 +52,4 @@ An advisory waits for the next `/update-deps` run. The statusline security count
 
 ## Related
 
-[[Dependabot Security Updates]], [[pnpm-audit]], [[Project Config]], [[PR Merge Workflow]], [[pnpm]].
+[[pnpm-audit]], [[Project Config]], [[PR Merge Workflow]], [[pnpm]].

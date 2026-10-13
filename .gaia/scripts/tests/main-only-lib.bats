@@ -343,11 +343,11 @@ NO_CALL_SITE_FILES=(
   ".claude/skills/file-tech-debt/SKILL.md"
 )
 
-# Seven of the call-site roster are thin dispatchers: a "Read `.claude/..." (or "Read `frontend/.claude/...") line
+# Part of the call-site roster are thin dispatchers: a "Read `.claude/..." (or "Read `frontend/.claude/...") line
 # sends the agent to a reference file, and a refusal call placed BELOW that
 # line greps as present but never runs, because the agent follows the
-# reference instead of reading the rest of the file. This is the frozen set
-# FC-2 names; the placement test below derives its own split at runtime
+# reference instead of reading the rest of the file. This is the frozen
+# set; the placement test below derives its own split at runtime
 # rather than trusting this list, and fails when the two disagree.
 EXPECTED_DISPATCHER_FILES=(
   ".claude/commands/gaia-cleanse.md"
@@ -355,6 +355,7 @@ EXPECTED_DISPATCHER_FILES=(
   ".claude/commands/gaia-fitness.md"
   ".claude/commands/gaia-codify.md"
   ".claude/commands/gaia-serena-sync.md"
+  ".claude/commands/setup-gaia.md"
   ".claude/skills/gaia-wiki/SKILL.md"
   "frontend/.claude/skills/gaia-react-perf/SKILL.md"
 )
@@ -411,12 +412,12 @@ extract_block() {
     invoke_line=$(grep -n '^[[:space:]]*gaia_refuse_if_worktree "' "$REPO_ROOT/$call_site_file" | head -1 | cut -d: -f1)
     [ "$invoke_line" -lt "$dispatch_line" ] || { echo "$call_site_file: invocation at line $invoke_line does not precede dispatch line $dispatch_line" >&2; return 1; }
   done
-  # Report and enforce the measured split against FC-2's frozen seven: a
+  # Report and enforce the measured split against the frozen set: a
   # difference is a finding, not something to accommodate.
   sorted_measured="$(printf '%s\n' "${measured[@]}" | sort)"
   sorted_expected="$(printf '%s\n' "${EXPECTED_DISPATCHER_FILES[@]}" | sort)"
   echo "measured dispatchers (${#measured[@]}): $sorted_measured" >&2
-  [ "$sorted_measured" = "$sorted_expected" ] || { echo "dispatcher split drifted from FC-2's seven; measured vs expected above" >&2; return 1; }
+  [ "$sorted_measured" = "$sorted_expected" ] || { echo "dispatcher split drifted from the frozen set; measured vs expected above" >&2; return 1; }
 }
 
 # ---------- per-call-site execution, under the shell the call site really uses ----------
