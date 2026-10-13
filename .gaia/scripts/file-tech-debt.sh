@@ -33,7 +33,9 @@
 #    "outcome":"filed|diverted|absent|transient|failed","issue":<int|null>,
 #    "record":"<path|null>"}
 #   and prints one stdout line: `filed <n>`, `diverted <count> <record-path>`,
-#   `absent`, `transient` or `failed <reason>`. Exit 0 for filed, diverted,
+#   `absent`, `transient` or `failed <reason>`. A `verify-after-file-*` reason
+#   means the create itself succeeded and the issue may exist; the caller
+#   reconciles by dedup before any retry. Exit 0 for filed, diverted,
 #   absent and transient; 1 for failed; 2 usage; 3 unreadable input or a
 #   missing tool (jq, a sha256 tool).
 #   The outcome line keeps the key fields so the caller can reconcile it with
@@ -601,16 +603,21 @@ cmd_file() {
     printf '%s\n' "$present_labels" | grep -qx -e "$wanted_label" || gh label create "$wanted_label" --repo "$repo" >/dev/null 2>&1 || true
   done <<<"$(printf '%s' "$labels_csv" | tr ',' '\n')"
 
-  if ! gh issue create --repo "$repo" --title "$title" ${label_arguments[@]+"${label_arguments[@]}"} --body-file "$body_file" >/dev/null 2>"$work_directory/create-error"; then
+  local created_url
+  if ! created_url="$(gh issue create --repo "$repo" --title "$title" ${label_arguments[@]+"${label_arguments[@]}"} --body-file "$body_file" 2>"$work_directory/create-error")"; then
     finish_failed "create"
   fi
 
-  if ! fetch_lists; then
-    finish_failed "verify-after-file"
-  fi
+  # Verify by the number the create returned, not by re-listing: the
+  # label-filtered issue list lags a fresh create, while a read by number does
+  # not, so a list read here reports a filed issue as missing.
   local verified_number
-  verified_number="$(jq -r --arg key "$wrapped_key" '[.[] | select((.body // "") | contains($key)) | .number] | sort | .[0] // empty' "$work_directory/open.json")"
-  [ -n "$verified_number" ] || finish_failed "verify-after-file"
+  verified_number="$(printf '%s\n' "$created_url" | sed -n 's#^https://.*/issues/\([0-9][0-9]*\)$#\1#p' | tail -n 1)"
+  [ -n "$verified_number" ] || finish_failed "verify-after-file-number"
+  run_gh issue view "$verified_number" --repo "$repo" --json body
+  [ "$gh_status" -eq 0 ] || finish_failed "verify-after-file-fetch"
+  printf '%s' "$gh_output" | jq -e --arg key "$wrapped_key" '(.body // "") | contains($key)' >/dev/null 2>&1 \
+    || finish_failed "verify-after-file-missing"
 
   # Best-effort: nudge the statusline debt count to recompute.
   { mkdir -p "$root/.gaia/local/debt" && : >"$root/.gaia/local/debt/refresh-requested"; } 2>/dev/null || true
