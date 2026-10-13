@@ -2,7 +2,7 @@
 type: concept
 status: active
 created: 2026-04-20
-updated: 2026-10-05
+updated: 2026-10-13
 tags: [concept, ci, quality]
 ---
 
@@ -39,4 +39,4 @@ A branch or worktree cut before the hook landed has no pre-push hook until it me
 
 A clone whose hook does not run reports nothing. Check `git config --get core.hooksPath`: it must print `.githooks`. If it does not, run `pnpm install` or `git config core.hooksPath .githooks`.
 
-See [[Quality Gate]], [[Test Runner]].
+See [[Quality Gate]], [[Vitest]].

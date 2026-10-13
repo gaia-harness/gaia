@@ -4,7 +4,7 @@ status: active
 priority: 1
 date: 2026-05-09
 created: 2026-05-09
-updated: 2026-10-03
+updated: 2026-10-13
 tags: [decision, distribution, maintainer, cli]
 ---
 
@@ -29,7 +29,7 @@ Tree-shaking via esbuild at build time requires two entry points:
 - `.gaia/cli/src/index.ts`: excludes release imports and handlers; builds the adopter binary.
 - `.gaia/cli/src/index.maintainer.ts`: includes release; builds the maintainer binary.
 
-`pnpm bundle` produces both, each tree-shaking out the other's exclusive subcommands. `release-exclude` lists the maintainer binary as a path to strip from adopter tarballs.
+`pnpm bundle` produces both, each tree-shaking out the other's exclusive subcommands. Nobody runs it by hand on an ordinary commit: the pre-commit hook rebuilds and stages both bundles whenever the commit stages a CLI build input, and `.gaia/scripts/cli-autobundle.sh` names the triggers. `release-exclude` lists the maintainer binary as a path to strip from adopter tarballs.
 
 ## Where it lives
 

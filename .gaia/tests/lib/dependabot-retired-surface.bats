@@ -120,6 +120,6 @@ check_shipped_files() {
 }
 
 @test "a release-excluded path is not scanned and a shipped one is" {
-  is_release_excluded "wiki/decisions/Dependabot Security Updates.md"
+  is_release_excluded "wiki/decisions/Dependabot as a Data Source.md"
   ! is_release_excluded ".gaia/cli/gaia"
 }

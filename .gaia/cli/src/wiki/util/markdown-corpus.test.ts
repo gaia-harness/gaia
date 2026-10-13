@@ -20,26 +20,17 @@ describe('the shared wiki exemption vocabulary', () => {
   // predicate may answer for the other: a scan that takes the base must not
   // pick up the generated-content pages through it.
   test('the base tier does not carry the generated-content pages', () => {
-    expect(isWikiScanExempt('wiki/hot.md')).toBe(false);
     expect(isWikiScanExempt('wiki/log.md')).toBe(false);
   });
 
-  test('the generated-content tier matches its two pages exactly', () => {
-    expect(isGeneratedContentExempt('wiki/hot.md')).toBe(true);
+  test('the generated-content tier matches its page exactly', () => {
     expect(isGeneratedContentExempt('wiki/log.md')).toBe(true);
-    // A Set iterates in insertion order, so this is the declaration order.
-    expect([...GENERATED_CONTENT_EXEMPT_PATHS]).toEqual([
-      'wiki/hot.md',
-      'wiki/log.md',
-    ]);
+    expect([...GENERATED_CONTENT_EXEMPT_PATHS]).toEqual(['wiki/log.md']);
   });
 
-  // Exact, not prefix. `dead-paths` prefix-matched these two before the
-  // vocabulary was shared, which also swallowed any page whose path merely
-  // started with one of them; `empty-sections` matched them exactly. Taking
-  // the exact form narrows the exemption rather than widening it.
-  test('the generated-content tier does not match a page that merely starts with one', () => {
+  // Exact, not prefix: a prefix would also swallow any page whose path merely
+  // starts with the exempt one.
+  test('the generated-content tier does not match a page that merely starts with it', () => {
     expect(isGeneratedContentExempt('wiki/log.md-archive.md')).toBe(false);
-    expect(isGeneratedContentExempt('wiki/hot.md.bak')).toBe(false);
   });
 });

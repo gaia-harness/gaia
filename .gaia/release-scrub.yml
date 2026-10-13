@@ -485,8 +485,8 @@ transforms:
       # checks scan). Every `.md` exclude contributes its slug; every
       # bare-directory exclude (wiki/entities, wiki/meta) contributes the
       # directory slug plus the slug of each page beneath it, so entity pages
-      # and the dated audit artifacts under wiki/meta/ (consolidate-report-*,
-      # lint-report-*, staleness-audit-*) are covered without enumeration.
+      # and the audit reports under wiki/meta/ are covered without
+      # enumeration.
       # Matching is case-insensitive and alias/anchor-aware. A newly excluded
       # page is caught with no edit here; the set cannot drift from the
       # manifest.
