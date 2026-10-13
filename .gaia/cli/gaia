@@ -21936,6 +21936,10 @@ import {
 } from "node:fs";
 import path4 from "node:path";
 
+// src/util/main-root.ts
+import { realpathSync } from "node:fs";
+import path3 from "node:path";
+
 // src/util/git-env.ts
 import { execFileSync } from "node:child_process";
 
@@ -21964,8 +21968,6 @@ var execGaiaGitRaw = (args, cwd) => {
 var execGaiaGit = (args, cwd) => execGaiaGitRaw(args, cwd).trim();
 
 // src/util/main-root.ts
-import { realpathSync } from "node:fs";
-import path3 from "node:path";
 var sameRealPath = (a, b) => {
   try {
     return realpathSync(a) === realpathSync(b);
@@ -22020,14 +22022,7 @@ var LOST_RACE_CODES = /* @__PURE__ */ new Set(["EEXIST", "ENOENT", "ENOTEMPTY"])
 var isLostRace = (error62) => error62 instanceof Error && "code" in error62 && typeof error62.code === "string" && LOST_RACE_CODES.has(error62.code);
 var isMainCheckout = (cwd) => {
   try {
-    const output2 = execGaiaGit(
-      ["rev-parse", "--absolute-git-dir", "--git-common-dir"],
-      cwd
-    );
-    const [gitDir, commonDirRaw] = output2.split(/\r?\n/);
-    if (gitDir === void 0 || commonDirRaw === void 0) return false;
-    const commonDir = path4.isAbsolute(commonDirRaw) ? commonDirRaw : path4.resolve(cwd, commonDirRaw);
-    return sameRealPath(gitDir, commonDir);
+    return sameRealPath(resolveRepoRoot(cwd), resolveMainWorktreeRoot(cwd));
   } catch {
     return false;
   }

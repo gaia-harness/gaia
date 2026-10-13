@@ -305,7 +305,7 @@ class_of() {
 relocate_fixture() {
   git -C "$PROJECT" -c user.name=t -c user.email=t@example.com commit -q --allow-empty -m init
   mkdir -p "$PROJECT/.gaia/local/audit"
-  cd "$PROJECT"
+  cd "$PROJECT" || return 1
 }
 
 @test "relocate-reports: moves an applied report into cleanse/ keeping its mtime" {

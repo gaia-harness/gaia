@@ -13,8 +13,7 @@ import {
 } from 'node:fs';
 import path from 'node:path';
 import {structuredError} from '../stderr.js';
-import {execGaiaGit} from '../util/git-env.js';
-import {sameRealPath} from '../util/main-root.js';
+import {resolveMainWorktreeRoot, sameRealPath} from '../util/main-root.js';
 import {resolveRepoRoot} from '../util/repo-root.js';
 
 export type CodifyStateMove =
@@ -38,29 +37,15 @@ const isLostRace = (error: unknown): boolean =>
   LOST_RACE_CODES.has(error.code);
 
 /**
- * True only when `cwd` is the main checkout: git's absolute git dir equals its
- * common dir. TypeScript form of shell's `gaia_is_linked_worktree`, except
- * that any git failure reads as "not the main checkout" so the move fails
- * safe: a linked worktree's `.gaia/local` is a symlink to the main
- * checkout's, and a move from there would rename state concurrent sessions
- * still read.
+ * True only when `cwd` is the main checkout: its own toplevel is the main
+ * root the shared resolver derives. Any git failure reads as "not the main
+ * checkout" so the move fails safe: a linked worktree's `.gaia/local` is a
+ * symlink to the main checkout's, and a move from there would rename state
+ * concurrent sessions still read.
  */
 export const isMainCheckout = (cwd: string): boolean => {
   try {
-    const output = execGaiaGit(
-      ['rev-parse', '--absolute-git-dir', '--git-common-dir'],
-      cwd
-    );
-    const [gitDir, commonDirRaw] = output.split(/\r?\n/);
-
-    if (gitDir === undefined || commonDirRaw === undefined) return false;
-
-    const commonDir =
-      path.isAbsolute(commonDirRaw) ? commonDirRaw : (
-        path.resolve(cwd, commonDirRaw)
-      );
-
-    return sameRealPath(gitDir, commonDir);
+    return sameRealPath(resolveRepoRoot(cwd), resolveMainWorktreeRoot(cwd));
   } catch {
     return false;
   }
