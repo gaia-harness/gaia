@@ -649,6 +649,8 @@ OLD_HOOK
 
 @test "built-in default: with no registry, frontend/app/x.tsx runs the gate in frontend/" {
   rm -f "$REPO/.gaia/packages.json"
+  . "$BATS_TEST_DIRNAME/helpers/package-fixture.sh"
+  write_builtin_descriptor "$REPO"
   stage_and_run "frontend/app/x.tsx"
   assert_gate_ran "$REPO/frontend"
 }

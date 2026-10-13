@@ -22,7 +22,9 @@ setup() {
   . "$BATS_TEST_DIRNAME/helpers/run-hook.sh"
   . "$(cd "$BATS_TEST_DIRNAME/../../.." && pwd)/.gaia/tests/helpers/audit-roster.sh"
   . "$BATS_TEST_DIRNAME/helpers/merge-gate-fixture.sh"
+  . "$BATS_TEST_DIRNAME/helpers/package-fixture.sh"
   mgf_init
+  write_builtin_descriptor "$REPO"
 }
 
 # assert_one_post <description>: exactly one status POST, to the pull request's
