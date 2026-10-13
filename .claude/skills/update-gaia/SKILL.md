@@ -132,7 +132,7 @@ On `REFUSED`, stop and relay the message: no branch, no prune, no download. For 
 
 ## Step 3c: Download and verify the bundles
 
-Every bundle this run reads is verified against its release's `.sha256` asset in this run, before the Proceed question, and every tree it reads is extracted again from that verified tarball. Each tag's cache directory, `.gaia/local/cache/shared/update-gaia/<tag>/` (gitignored, shared across worktrees), holds `gaia-bundle-<tag>.tar.gz`, `gaia-bundle-<tag>.tar.gz.sha256` and `tree/`. A cached tarball skips only the download, never the verification or the extract; there is no verified-marker file.
+Every bundle this run reads is verified against its release's `.sha256` asset in this run, before the Proceed question, and every tree it reads is extracted again from that verified tarball. Each tag's cache directory, `.gaia/local/cache/shared/update-gaia/<tag>/` (gitignored, shared across worktrees), holds `gaia-bundle-<tag>.tar.gz`, `gaia-bundle-<tag>.tar.gz.sha256` and `tree/`, and the target's directory also holds the `changelog-range.md` Step 4 saves. A cached tarball skips only the download, never the verification or the extract; there is no verified-marker file.
 
 ```bash
 verify_checklist() {
@@ -243,17 +243,19 @@ if [ -z "$changelog" ] && command -v gh >/dev/null 2>&1; then
 fi
 
 range="$(printf '%s\n' "$changelog" | bash .gaia/scripts/changelog-range.sh "$BASELINE" "$LATEST")"
+range_file=".gaia/local/cache/shared/update-gaia/$LATEST_TAG/changelog-range.md"
 
 if [ -n "$range" ]; then
-  printf '%s\n' "$range"
+  printf '%s\n' "$range" | tee "$range_file"
 else
+  rm -f "$range_file"
   # Fetch failed (offline, private, missing file): fall back to the single-tag
   # GitHub release body so the gate still has context.
   gh release view "$LATEST_TAG" --repo gaia-react/gaia --json body --jq .body
 fi
 ```
 
-The script prints the contiguous block from `$LATEST` down to (but not including) `$BASELINE`, without the `[Unreleased]` block or the bottom link-reference list. Print the range to the user. When Step 3d printed `AFTER_MERGE` lines, name each `AFTER_MERGE` note (its version and its path) as a note this run follows after the merge. Then use `AskUserQuestion`:
+The script prints the contiguous block from `$LATEST` down to (but not including) `$BASELINE`, without the `[Unreleased]` block or the bottom link-reference list. The block also saves that range as `changelog-range.md` in the target's cache directory, beside `tree/`, for Step 9's documented adopter actions: the release bundle withholds `CHANGELOG.md`, so this fetch is the execution agent's only copy. A failed fetch removes the file, so Step 9 reports the range as unavailable rather than reading a stale one. Print the range to the user. When Step 3d printed `AFTER_MERGE` lines, name each `AFTER_MERGE` note (its version and its path) as a note this run follows after the merge. Then use `AskUserQuestion`:
 
 - **Question**: "Update GAIA from v$BASELINE to $LATEST_TAG?"
 - **Options**: `Proceed` / `Abort`.
