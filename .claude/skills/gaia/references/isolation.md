@@ -251,7 +251,21 @@ git -C <main root> show-ref --verify --quiet refs/heads/<branch-name>
 ```
 
 When it exits 0, run `git -C <main root> branch -D <branch-name>`. A non-zero exit means the branch is already gone and there is
-nothing to delete.
+nothing to delete. Then read what the main checkout holds:
+
+```bash
+git -C <main root> rev-parse --abbrev-ref HEAD
+```
+
+When it prints `main`, bring it up to date so the next task starts from the latest `main`:
+
+```bash
+git -C <main root> pull --ff-only origin main
+```
+
+When it prints anything else, a peer session holds the main checkout: skip the pull and say so. When the pull fails (a dirty tree,
+a diverged `main`), report it and stop; never force or stash. Run no `git checkout` here: moving the main checkout's HEAD is the
+step `wiki/concepts/PR Merge Workflow.md` (`### Cleanup under worktree isolation`) explains this arm never takes.
 
 ### Resume
 

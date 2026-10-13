@@ -3,9 +3,9 @@
 The hand-off procedure for a confirmed spec-class member. `debt.md` routes here from its `## Fix-time spec screen`, once per confirmed member, including the members of a named set's spec hand-off. Do not implement a confirmed member; run these steps for it, then return to the spec screen's stop conditions in `debt.md`.
 
 1. **No-orphan claim swap.** Reconcile the label via the registry idempotently (`.gaia/cli/gaia labels sync 2>/dev/null || true; gh label list --json name --jq '.[].name' 2>/dev/null | grep -qx 'debt:spec-pending' || gh label create 'debt:spec-pending' 2>/dev/null || true`), then **add `debt:spec-pending` before removing `in-progress`** (`gh issue edit <n> --add-label debt:spec-pending` then `gh issue edit <n> --remove-label in-progress`), so a mid-swap failure never strands the issue label-less. The registry reconcile leaves a hand-created label alone, for the reason `## Claim the fix unit` in `debt.md` gives at its fallback create.
-2. **Print a single copy-pasteable `/gaia-spec` handoff block**, carrying the originating issue number `#<N>` so the eventual implementation PR can `Closes #<N>`, and carrying the `debt:spec-pending` -> `debt:spec-active` swap the pasted session runs on arrival:
+2. **Print a single copy-pasteable `/gaia-spec` handoff block inside a `text` fenced code block**, carrying the originating issue number `#<N>` so the eventual implementation PR can `Closes #<N>`, and carrying the `debt:spec-pending` -> `debt:spec-active` swap the pasted session runs on arrival:
 
-   ```
+   ```text
    /gaia-spec Design-first tech debt from issue #<N>: <one-line problem>. First run
    `gh issue edit <N> --remove-label debt:spec-pending --add-label debt:spec-active`
    (best-effort; do not block authoring on it). Author a SPEC for this fix; the
