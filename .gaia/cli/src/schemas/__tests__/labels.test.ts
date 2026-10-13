@@ -45,7 +45,7 @@ describe('schemas/labels', () => {
       deprecatedEntries
         .map((entry) => entry.name)
         .toSorted((a, b) => a.localeCompare(b))
-    ).toEqual([REMOVED_FEATURE_NAME, 'run-audit']);
+    ).toEqual([REMOVED_FEATURE_NAME]);
 
     for (const entry of deprecatedEntries) {
       expect(entry.reason).toBeNull();

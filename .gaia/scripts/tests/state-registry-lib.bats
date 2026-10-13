@@ -411,7 +411,6 @@ run_in_registry_repo() {
     "dep-audit-baseline.json:main-only"
     "sandbox.json:main-only"
     "setup-in-progress:main-only"
-    "cache/v2-update-notes.md:main-only"
     "cache/draft-SPEC-042.md:ephemeral"
     "cache/gate1-SPEC-042.json:ephemeral"
     "cache/spec-session-SPEC-042.json:ephemeral"
@@ -499,7 +498,7 @@ run_in_registry_repo() {
 
 @test "schema invariant: every entry and residue row carries all required fields" {
   run jq -e '
-    (.entries | all(has("id") and has("path") and has("match") and has("kind") and has("scope") and has("keyed_by") and has("why") and has("writer") and has("reaped_by") and has("source")))
+    (.entries | all(has("id") and has("path") and has("match") and has("kind") and has("scope") and has("keyed_by") and has("why") and has("writer") and has("reaped_by")))
     and (.residue | all(has("id") and has("path") and has("match") and has("why") and has("writer")))
   ' "$REGISTRY"
   [ "$status" -eq 0 ]
@@ -576,13 +575,13 @@ retired_cost_state_violations() {
 
 @test "registry: a scratch registry restoring the audit-window entry is caught" {
   local scratch="$BATS_TEST_TMPDIR/restored-window.json"
-  jq '.entries += [{"id":"audit-window-breadcrumb","path":"cache/audit-window-*.json","match":"glob","kind":"file","scope":"ephemeral","keyed_by":null,"why":"x","writer":"code","reaped_by":null,"source":"x"}]' "$REGISTRY" >"$scratch"
+  jq '.entries += [{"id":"audit-window-breadcrumb","path":"cache/audit-window-*.json","match":"glob","kind":"file","scope":"ephemeral","keyed_by":null,"why":"x","writer":"code","reaped_by":null}]' "$REGISTRY" >"$scratch"
   retired_cost_state_violations "$scratch" | grep -qF "audit-window entry present"
 }
 
 @test "registry: a scratch registry with the cost ledger live again, or the override missing, is caught" {
   local scratch="$BATS_TEST_TMPDIR/live-ledger.json" ledger_path="telemetry/cost"".jsonl"
-  jq --arg path "$ledger_path" '.entries += [{"id":"x","path":$path,"match":"exact","kind":"file","scope":"shared","keyed_by":"x","why":"x","writer":"code","reaped_by":null,"source":"x"}]' "$REGISTRY" >"$scratch"
+  jq --arg path "$ledger_path" '.entries += [{"id":"x","path":$path,"match":"exact","kind":"file","scope":"shared","keyed_by":"x","why":"x","writer":"code","reaped_by":null}]' "$REGISTRY" >"$scratch"
   retired_cost_state_violations "$scratch" | grep -qF "still live: $ledger_path"
   jq 'del(.entries[] | select(.id == "telemetry-rate-override"))' "$REGISTRY" >"$scratch"
   retired_cost_state_violations "$scratch" | grep -qF "override entry missing or wrong"

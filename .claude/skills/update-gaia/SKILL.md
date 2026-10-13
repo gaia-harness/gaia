@@ -117,17 +117,7 @@ if [ -z "$changelog" ] && command -v gh >/dev/null 2>&1; then
     -H "Accept: application/vnd.github.raw" 2>/dev/null)"
 fi
 
-# Keep this awk program identical to the one in references/merge-execution.md Step 9.
-range="$(printf '%s\n' "$changelog" | awk -v baseline="$BASELINE" -v latest="$LATEST" '
-  function vcmp(a,b,   x,y,i){split(a,x,".");split(b,y,".");for(i=1;i<=3;i++){if((x[i]+0)>(y[i]+0))return 1;if((x[i]+0)<(y[i]+0))return -1}return 0}
-  /^## \[Unreleased\]/           {printing=0; next}
-  /^\[[^][]+\]:[[:space:]]*http/ {printing=0; next}
-  /^## \[[0-9]+\.[0-9]+\.[0-9]+\]/ {
-    v=$0; sub(/^## \[/,"",v); sub(/\].*/,"",v)
-    printing=(vcmp(v,baseline)>0 && vcmp(v,latest)<=0)
-  }
-  printing {print}
-')"
+range="$(printf '%s\n' "$changelog" | bash .gaia/scripts/changelog-range.sh "$BASELINE" "$LATEST")"
 
 if [ -n "$range" ]; then
   printf '%s\n' "$range"
@@ -138,7 +128,7 @@ else
 fi
 ```
 
-The awk walks the version headers newest-first, prints the contiguous block from `$LATEST` down to (but not including) `$BASELINE`, and drops the `[Unreleased]` block and the bottom link-reference list. Print the range to the user. Then use `AskUserQuestion`:
+The script prints the contiguous block from `$LATEST` down to (but not including) `$BASELINE`, without the `[Unreleased]` block or the bottom link-reference list. Print the range to the user. Then use `AskUserQuestion`:
 
 - **Question**: "Update GAIA from v$BASELINE to $LATEST_TAG?"
 - **Options**: `Proceed` / `Abort`.

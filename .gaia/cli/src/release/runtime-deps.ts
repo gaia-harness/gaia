@@ -22,8 +22,7 @@
  * Each extracted path constant is verified to be either:
  *
  *   - present in `.gaia/manifest.json` (a shipped file), or
- *   - an adopter-owned sentinel (`wiki/log.md`,
- *     `.gaia/VERSION`, `.gaia/manifest.json`), or
+ *   - an adopter-owned sentinel (`ADOPTER_OWNED_SENTINELS` below), or
  *   - a runtime-allocated path on adopter machines (under
  *     `.gaia/local/`,
  *     `.claude/worktrees/`, `.claude/agent-memory/`, `.claude/audit/`,
