@@ -2,7 +2,7 @@
 type: concept
 status: active
 created: 2026-10-01
-updated: 2026-10-13
+updated: 2026-10-14
 tags: [concept, claude, workflow, doctrine]
 ---
 
@@ -61,7 +61,7 @@ A resumed session reads `STATE.md` and the artifact listing and nothing else. Th
 
 Every worktree shares one `.gaia/local`, which resolves into the main checkout. That is why run folders are keyed by branch and never shared between keys, and why research binding works through a Write made to the main checkout's absolute path and not through a path relative to the worktree.
 
-The injection hook decides from the session's own tree. Two spellings therefore do not trigger injection: `git -C <path>` aimed at another tree, and `git worktree add` followed by `cd`. Entering a worktree through EnterWorktree does trigger it, because that tool reports the tree the session now works in.
+The injection hook decides from the session's own tree. Two spellings therefore do not inject the doctrine: `git -C <path>` aimed at another tree, and `git worktree add` followed by `cd`. Entering a worktree through EnterWorktree does inject it, because that tool reports the tree the session now works in. A `git worktree add` that creates a tree under `.claude/worktrees/` is caught on the add itself and steered into `EnterWorktree`, a separate injection described in `.claude/skills/gaia/references/work-lifecycle.md` under `## The git worktree add backstop`.
 
 ## Initiative linking
 

@@ -2,7 +2,7 @@
 type: concept
 status: active
 created: 2026-04-21
-updated: 2026-10-04
+updated: 2026-10-14
 tags: [concept, git, workflow]
 ---
 
@@ -22,7 +22,7 @@ git switch -c <type>/<issue>-<slug>
 
 The branch name, the commit subject, and the PR title follow [[Naming Conventions]].
 
-Branches GAIA's own commands create are not hand-named: every one takes its name from `.gaia/scripts/branch-name-lib.sh`, whose header holds that convention.
+Branches GAIA's own commands create, and branches for any committed work a session does outside a skill, are not hand-named: every one takes its name from `.gaia/scripts/branch-name-lib.sh`, whose header holds that convention. The lifecycle for such work, from claim to cleanup, is `.claude/skills/gaia/references/work-lifecycle.md`.
 
 ## 2. Never force-push to `main` or `master`
 

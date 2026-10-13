@@ -2,7 +2,7 @@
 type: concept
 status: active
 created: 2026-10-01
-updated: 2026-10-13
+updated: 2026-10-14
 tags: [concept, claude, config, workflow]
 ---
 
@@ -17,7 +17,7 @@ All keys are optional except `version`, which is `1`.
 | Key | Values | Meaning |
 | --- | --- | --- |
 | `sandbox_recommended` | `true` or `false` | The owner's recommendation to run Claude Code's OS sandbox. Each machine still resolves it for itself; see [[OS Sandbox]]. |
-| `isolation_policy` | `always-worktree`, `prefer-worktree`, `prefer-branch` | How a session isolates work that closes an issue or runs a plan. The reading rules live in `.claude/skills/gaia/references/isolation.md`. |
+| `isolation_policy` | `always-worktree`, `prefer-worktree`, `prefer-branch` | How a session isolates work that closes an issue, runs a plan, or is ad-hoc committed work (through `## 3. Isolate` in `.claude/skills/gaia/references/work-lifecycle.md`). The reading rules live in `.claude/skills/gaia/references/isolation.md`. |
 | `setup_decisions` | an object of setup feature id to `applied`, `declined` or `not-applicable` | The project-scope decisions made through `/gaia-init`, `/setup-gaia` and `/update-gaia`. See [[Setup Features]]. |
 
 A reader treats an unknown or invalid value as absent, so a typo or a value a newer GAIA wrote never breaks the file. The known values are enforced when the file is written.
