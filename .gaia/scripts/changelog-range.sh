@@ -7,9 +7,9 @@
 #
 #   changelog-range.sh <baseline> <latest> [<changelog file>]
 #
-# Reads the file when one is given, stdin otherwise. /update-gaia runs it on
-# the fetched CHANGELOG to show the release notes, and on the release copy to
-# recover documented adopter actions, so the two always agree on the range.
+# Reads the file when one is given, stdin otherwise. /update-gaia runs it once,
+# on the fetched CHANGELOG, and saves the range it prints for the documented
+# adopter actions, so the release notes and those actions agree on the range.
 #
 # Exit codes: 0 printed the range (possibly empty), 2 usage error or an
 # unreadable file.

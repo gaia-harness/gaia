@@ -313,6 +313,81 @@ prose_pins_hold() {
   true
 }
 
+# --- Step 4 and Step 9: the CHANGELOG range reaches the execution agent -------
+
+# The release bundle withholds CHANGELOG.md, so Step 4's fetched range is the
+# only copy Step 9's adopter-action suggestions can read.
+
+STEP_9_ACTIONS='**Documented adopter actions (opt-in).**'
+
+# A project holding the range walk, a verified-cache directory for v2.1.0, and
+# stub curl and gh executables. The stub curl prints $CURL_FIXTURE, or fails
+# when it is unset; the stub gh always fails.
+step_4_setup() {
+  PROJECT="$BATS_TEST_TMPDIR/project"
+  CACHE="$PROJECT/.gaia/local/cache/shared/update-gaia"
+  mkdir -p "$PROJECT/.gaia/scripts/lib" "$CACHE/v2.1.0/tree" "$BATS_TEST_TMPDIR/bin"
+  cp "$REPO_ROOT/.gaia/scripts/changelog-range.sh" "$PROJECT/.gaia/scripts/"
+  cp "$COMPARE_LIB" "$PROJECT/.gaia/scripts/lib/"
+  cat > "$BATS_TEST_TMPDIR/bin/curl" <<'STUB'
+#!/usr/bin/env bash
+[ -n "${CURL_FIXTURE:-}" ] || exit 22
+cat "$CURL_FIXTURE"
+STUB
+  printf '#!/usr/bin/env bash\nexit 1\n' > "$BATS_TEST_TMPDIR/bin/gh"
+  chmod +x "$BATS_TEST_TMPDIR/bin/curl" "$BATS_TEST_TMPDIR/bin/gh"
+  printf '%s\n' '# Changelog' '' '## [Unreleased]' '' '## [2.1.0]' '' '### Removed' '' '- dropped `pnpm remove left-pad`' '' '## [2.0.0]' '' '- base' > "$BATS_TEST_TMPDIR/CHANGELOG.md"
+  BLOCK_4="$(block_after_heading "$SKILL" "$STEP_4")"
+  [ -n "$BLOCK_4" ]
+}
+
+run_step_4() {
+  run_block_in "$PROJECT" "$BLOCK_4" PATH="$BATS_TEST_TMPDIR/bin:$PATH" BASELINE=2.0.0 LATEST=2.1.0 LATEST_TAG=v2.1.0 "$@"
+}
+
+@test "Step 4: a fetched range is saved beside the verified target bundle" {
+  step_4_setup
+  run_step_4 CURL_FIXTURE="$BATS_TEST_TMPDIR/CHANGELOG.md"
+  [ "$status" -eq 0 ]
+  grep -qxF '## [2.1.0]' "$CACHE/v2.1.0/changelog-range.md"
+  grep -qxF -- '- dropped `pnpm remove left-pad`' "$CACHE/v2.1.0/changelog-range.md"
+  grep -qxF '## [2.0.0]' "$CACHE/v2.1.0/changelog-range.md" && return 1
+  true
+}
+
+@test "Step 4: a failed fetch leaves no saved range, removing one an earlier run saved" {
+  step_4_setup
+  printf 'stale\n' > "$CACHE/v2.1.0/changelog-range.md"
+  run_step_4
+  [ -e "$CACHE/v2.1.0/changelog-range.md" ] && return 1
+  true
+}
+
+run_step_9_actions() {
+  local block
+  block="$(block_after_heading "$MERGE_EXECUTION" "$STEP_9_ACTIONS")"
+  [ -n "$block" ] || return 1
+  run_block_in "$PROJECT" "$block" LATEST_DIR=.gaia/local/cache/shared/update-gaia/v2.1.0/tree BASELINE=2.0.0 LATEST=2.1.0
+}
+
+@test "Step 9: adopter actions read the range Step 4 saved, never a CHANGELOG inside the bundle" {
+  step_4_setup
+  run_step_4 CURL_FIXTURE="$BATS_TEST_TMPDIR/CHANGELOG.md"
+  [ "$status" -eq 0 ]
+  run_step_9_actions
+  [ "$status" -eq 0 ]
+  printf '%s\n' "$output" | grep -qxF -- '- dropped `pnpm remove left-pad`'
+  section_of "$MERGE_EXECUTION" '### Step 9: Summary' | grep -qF 'LATEST_DIR/CHANGELOG.md' && return 1
+  true
+}
+
+@test "Step 9: a missing saved range is announced, not read as an empty range" {
+  step_4_setup
+  run_step_9_actions
+  [ "$status" -eq 0 ]
+  printf '%s\n' "$output" | grep -qxF 'CHANGELOG_RANGE_UNAVAILABLE'
+}
+
 # --- Step 3d: the target bundle's own selector judges the notes ---------------
 
 @test "Step 3d: a mode only the target's selector knows is accepted, while this repository's selector rejects it" {
