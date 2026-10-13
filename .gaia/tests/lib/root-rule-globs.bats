@@ -8,8 +8,9 @@
 #
 # Each check is proven able to fail: a scratch copy of the rules directory gets
 # a glob reverted to the retired form and the checker must flag it. The match
-# check drives the shared C3 glob matcher (gaia-packages.mjs globToRegExp) over
-# the real rule globs and a reverted copy.
+# check compiles the real rule globs, and a reverted copy, through the package
+# reader's glob dialect (.claude/hooks/lib/gaia-packages.sh) by loading them as
+# a scratch package descriptor.
 #
 # Assertion style note (`.claude/rules/bats-assertions.md`): assertions use
 # POSIX `[ ]` or an explicit `return 1`, never a bare mid-test `[[ ]]`.
@@ -17,8 +18,9 @@
 setup() {
   REPO_ROOT="$(cd "$BATS_TEST_DIRNAME/../../.." && pwd)"
   RULES_DIRECTORY="$REPO_ROOT/.claude/rules"
-  MATCHER="$REPO_ROOT/.gaia/scripts/lib/gaia-packages.mjs"
   SCRATCH_RULES="$BATS_TEST_TMPDIR/rules"
+  # shellcheck source=/dev/null
+  . "$REPO_ROOT/.claude/hooks/lib/gaia-packages.sh"
 }
 
 # Echoes each `paths:` glob of one rule file, one per line, quotes stripped.
@@ -50,15 +52,21 @@ retired_globs_in() {
 }
 
 # Exit 0 when any glob of the rule file matches the repo-relative path under
-# the C3 dialect, 1 when none does.
+# the package descriptor's glob dialect, 1 when none does, 2 when the globs do
+# not load. The globs become every key of a scratch descriptor at path `.`, so
+# they compile unjoined.
 rule_matches_path() {
-  local rule_file="$1" candidate_path="$2"
-  rule_globs "$rule_file" | CANDIDATE_PATH="$candidate_path" MATCHER="$MATCHER" node --input-type=module -e '
-    import {readFileSync} from "node:fs";
-    const {globToRegExp} = await import(process.env.MATCHER);
-    const globs = readFileSync(0, "utf8").split("\n").filter(Boolean);
-    process.exit(globs.some((glob) => globToRegExp(glob).test(process.env.CANDIDATE_PATH)) ? 0 : 1);
-  '
+  local rule_file="$1" candidate_path="$2" root="$BATS_TEST_TMPDIR/matcher" ere
+  mkdir -p "$root/.gaia"
+  printf '[{"name":"rules","path":"."}]\n' >"$root/.gaia/packages.json"
+  rule_globs "$rule_file" | jq -R . | jq -s '{
+    schemaVersion: 1, name: "rules",
+    globs: {tddUnitTests: ., tddStrictCandidates: ., emergentTests: ., preCommitSource: ., doctorConfigs: ., dependencyManifests: .},
+    wiki: {sourcePaths: [], inventoryPaths: [], flowPaths: []}
+  }' >"$root/gaia.package.json"
+  gaia_packages_load "$root" || return 2
+  ere="$(gaia_package_globs_ere tddUnitTests)"
+  printf '%s\n' "$candidate_path" | grep -Eq -- "$ere"
 }
 
 copy_rules_to_scratch() {

@@ -10,7 +10,10 @@ import {
 import {tmpdir} from 'node:os';
 import path from 'node:path';
 import {EXIT_CODES} from '../exit.js';
-import {writeFrontendRegistry} from '../util/package-fixture.js';
+import {
+  writeBuiltinDescriptor,
+  writeFrontendRegistry,
+} from '../util/package-fixture.js';
 import {run} from './bootstrap-env.js';
 import {readState} from './util/state.js';
 
@@ -22,7 +25,7 @@ type Sandbox = {
 const setupSandbox = (): Sandbox => {
   const root = mkdtempSync(path.join(tmpdir(), 'gaia-bootstrap-env-'));
 
-  mkdirSync(path.join(root, 'frontend'));
+  writeBuiltinDescriptor(root);
 
   return {
     cleanup: () => {

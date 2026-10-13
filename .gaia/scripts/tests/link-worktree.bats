@@ -19,6 +19,7 @@ setup() {
   # Resolve the script under test relative to this file (repo-root agnostic).
   SCRIPT_DIRECTORY="$(cd "$(dirname "$BATS_TEST_FILENAME")/.." && pwd)"
   SCRIPT="$SCRIPT_DIRECTORY/link-worktree.sh"
+  . "$BATS_TEST_DIRNAME/../../tests/hooks/helpers/package-fixture.sh"
 
   # Canonicalize via `pwd -P` because macOS resolves /var -> /private/var
   # inside `git rev-parse`, and the script reports absolute paths from the
@@ -327,6 +328,7 @@ JSON
   printf 'LOCAL_VAR=local' > "$MAIN/frontend/.env.local"
   printf 'EXAMPLE_VAR=example' > "$MAIN/frontend/.env.example"
   printf 'EXAMPLE_VAR=example' > "$LINKED/frontend/.env.example"
+  write_builtin_descriptor "$LINKED"
 
   run run_in "$LINKED"
   [ "$status" -eq 0 ]
@@ -343,6 +345,7 @@ JSON
   mkdir -p "$MAIN/frontend" "$LINKED/frontend"
   printf 'ROOT_VAR=root' > "$MAIN/.env"
   printf 'PKG_VAR=pkg' > "$MAIN/frontend/.env"
+  write_builtin_descriptor "$LINKED"
 
   run run_in "$LINKED"
   [ "$status" -eq 0 ]
@@ -353,6 +356,7 @@ JSON
 @test "package env files: a re-run is idempotent with no backups" {
   mkdir -p "$MAIN/frontend" "$LINKED/frontend"
   printf 'PKG_VAR=pkg' > "$MAIN/frontend/.env"
+  write_builtin_descriptor "$LINKED"
   run_in "$LINKED"
 
   run run_in "$LINKED"
@@ -376,20 +380,22 @@ JSON
 
   mkdir -p "$MAIN/frontend" "$LINKED/frontend"
   printf 'PKG_VAR=pkg' > "$MAIN/frontend/.env"
+  write_builtin_descriptor "$LINKED"
 
   run bash -c "cd '$LINKED' && bash '$mutant/.gaia/scripts/link-worktree.sh'"
   [ "$status" -eq 0 ]
   [ ! -e "$LINKED/frontend/.env" ]
 }
 
-@test "package env files: a worktree whose branch has no package directory gets none created" {
+@test "package env files: a worktree whose branch has no package directory, so no descriptor, logs it and gets none created" {
   mkdir -p "$MAIN/frontend"
   printf 'PKG_VAR=pkg' > "$MAIN/frontend/.env"
   [ ! -e "$LINKED/frontend" ]
 
   run run_in "$LINKED"
   [ "$status" -eq 0 ]
-  [ ! -e "$LINKED/frontend" ]
+  [ ! -e "$LINKED/frontend" ] || return 1
+  grep -qF -- "gaia-packages: frontend/gaia.package.json is missing" <<<"$output"
 }
 
 @test "package env files: a registry path other than frontend is linked too" {

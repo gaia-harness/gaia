@@ -6,7 +6,10 @@ import path from 'node:path';
 import {EXIT_CODES} from '../exit.js';
 import {ADOPTER_OWNED_SENTINELS as GIT_TRACKED_SENTINELS} from '../release/manifest.js';
 import {ADOPTER_OWNED_SENTINELS as RELEASE_SENTINELS} from '../release/runtime-deps.js';
-import {writeFrontendRegistry} from '../util/package-fixture.js';
+import {
+  writeBuiltinDescriptor,
+  writeFrontendRegistry,
+} from '../util/package-fixture.js';
 import {
   ADOPTER_OWNED_SENTINELS,
   HELP_TEXT,
@@ -27,6 +30,7 @@ type Sandbox = {
 
 const setupSandbox = (): Sandbox => {
   const root = mkdtempSync(path.join(tmpdir(), 'gaia-wiki-dead-paths-'));
+  writeBuiltinDescriptor(root);
   execFileSync('git', ['init', '-q'], {cwd: root});
   mkdirSync(path.join(root, 'wiki'), {recursive: true});
 

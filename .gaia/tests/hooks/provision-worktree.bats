@@ -25,6 +25,7 @@
 
 setup() {
   . "$BATS_TEST_DIRNAME/helpers/run-hook.sh"
+  . "$BATS_TEST_DIRNAME/helpers/package-fixture.sh"
   HOOK_ABSOLUTE_PATH="$(cd "$BATS_TEST_DIRNAME/../../../.claude/hooks" && pwd)/provision-worktree.sh"
   REPO_ROOT_REAL="$(cd "$BATS_TEST_DIRNAME/../../.." && pwd)"
   . "$REPO_ROOT_REAL/.gaia/tests/helpers/path.sh"
@@ -53,6 +54,7 @@ make_main() {
   # The built-in registry names `frontend`; typegen runs only for a package
   # that carries a react-router config.
   echo 'export default {};' > "$MAIN/frontend/react-router.config.ts"
+  write_builtin_descriptor "$MAIN"
   cp "$REPO_ROOT_REAL/.gaia/scripts/main-root-lib.sh" "$MAIN/.gaia/scripts/"
   cp "$REPO_ROOT_REAL/.gaia/scripts/state-registry-lib.sh" "$MAIN/.gaia/scripts/"
   cp "$REPO_ROOT_REAL/.gaia/scripts/link-worktree.sh" "$MAIN/.gaia/scripts/"
@@ -955,6 +957,7 @@ SH
 @test "a registry whose descriptor is missing logs the gaia-packages message, skips typegen, and stays non-fatal" {
   make_main
   printf '[{"name":"frontend","path":"frontend"}]\n' > "$MAIN/.gaia/packages.json"
+  rm "$MAIN/frontend/gaia.package.json"
   git -C "$MAIN" add -A
   git -C "$MAIN" commit -q -m "registry without descriptor"
   stub_typegen

@@ -54,6 +54,7 @@ setup() {
   . "$(cd "$BATS_TEST_DIRNAME/../../.." && pwd)/.gaia/tests/helpers/path.sh"
   . "$(cd "$BATS_TEST_DIRNAME/../../.." && pwd)/.gaia/tests/helpers/audit-roster.sh"
   . "$(cd "$BATS_TEST_DIRNAME/../../.." && pwd)/.gaia/tests/helpers/catchup-fixture.sh"
+  . "$BATS_TEST_DIRNAME/helpers/package-fixture.sh"
   HOOK_ABSOLUTE_PATH=$(cd "$BATS_TEST_DIRNAME/../../../.claude/hooks" && pwd)/pr-merge-audit-check.sh
   SETTINGS_ABSOLUTE_PATH=$(cd "$BATS_TEST_DIRNAME/../../../.claude" && pwd)/settings.json
   RESOLVER_ABSOLUTE_PATH=$(cd "$BATS_TEST_DIRNAME/../../../.gaia/scripts" && pwd)/resolve-audit-members.sh
@@ -66,6 +67,7 @@ setup() {
   git -C "$REPO" config commit.gpgsign false
 
   mkdir -p "$REPO/.gaia"
+  write_builtin_descriptor "$REPO"
   printf '1.4.0\n' > "$REPO/.gaia/VERSION"
   echo "# readme" > "$REPO/README.md"
   seed_audit_roster "$REPO"
@@ -1382,6 +1384,7 @@ gh pr merge 30 --squash"
   chmod +x "$LINKED_WORKTREE/.gaia/scripts/chore-deps-skip.sh"
   mkdir -p "$LINKED_WORKTREE/.claude/hooks/lib"
   cp "$BATS_TEST_DIRNAME/../../../.claude/hooks/lib/gaia-packages.sh" "$LINKED_WORKTREE/.claude/hooks/lib/gaia-packages.sh"
+  write_builtin_descriptor "$LINKED_WORKTREE"
   [ ! -f "$REPO/.gaia/scripts/chore-deps-skip.sh" ]
 
   run_merge_hook_in_worktree

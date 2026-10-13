@@ -13,6 +13,7 @@ import {
 import {tmpdir} from 'node:os';
 import path from 'node:path';
 import {EXIT_CODES} from '../exit.js';
+import {writeBuiltinDescriptor} from '../util/package-fixture.js';
 import {readState} from './util/state.js';
 import {run} from './index.js';
 
@@ -23,6 +24,8 @@ type Sandbox = {
 
 const setupSandbox = (): Sandbox => {
   const root = mkdtempSync(path.join(tmpdir(), 'gaia-init-router-'));
+
+  writeBuiltinDescriptor(root);
 
   return {
     cleanup: () => {

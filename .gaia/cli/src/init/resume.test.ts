@@ -7,6 +7,7 @@ import {afterEach, beforeEach, describe, expect, test, vi} from 'vitest';
 import {mkdtempSync, rmSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import path from 'node:path';
+import {writeBuiltinDescriptor} from '../util/package-fixture.js';
 import {argvFromStepArgs, run} from './resume.js';
 import {STEP_ORDER, writeState} from './util/state.js';
 
@@ -17,6 +18,8 @@ type Sandbox = {
 
 const setupSandbox = (): Sandbox => {
   const root = mkdtempSync(path.join(tmpdir(), 'gaia-init-resume-'));
+
+  writeBuiltinDescriptor(root);
 
   return {
     cleanup: () => {

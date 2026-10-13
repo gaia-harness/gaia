@@ -3,12 +3,10 @@
 # the package registry (.gaia/packages.json) and per-package descriptors
 # (<path>/gaia.package.json), SPEC-092 contract C1 to C4.
 #
-# One of three implementations of one contract. The Node twin
-# (.gaia/scripts/lib/gaia-packages.mjs) and the TypeScript twin
-# (.gaia/cli/src/util/packages.ts) are driven over the SAME corpus by
-# .gaia/cli/src/util/gaia-packages-mjs.test.ts and packages.test.ts, so a corpus
-# edit that one implementation disagrees with fails there. This file is the bash
-# half. It lives in a seam directory so the bats sharder runs it (S13).
+# One of two implementations of one contract. The TypeScript twin
+# (.gaia/cli/src/util/packages.ts) is driven over the SAME corpus by
+# .gaia/cli/src/util/packages.test.ts, so a corpus edit that one implementation
+# disagrees with fails there. This file is the bash half. It lives in a seam directory so the bats sharder runs it (S13).
 #
 # Corpus layout, .gaia/tests/fixtures/gaia-packages/<case>/: an optional
 # packages.json (installed as .gaia/packages.json), optional descriptor files at
@@ -267,9 +265,10 @@ check_case() {
   [ -z "${lines[1]:-}" ]
 }
 
-@test "registry absent: source is builtin, frontend/app matches and root app does not" {
+@test "registry absent: source is builtin, the committed descriptor drives it, frontend/app matches and root app does not" {
   . "$LIBRARY"
-  mkdir -p "$BATS_TEST_TMPDIR/absent"
+  mkdir -p "$BATS_TEST_TMPDIR/absent/frontend"
+  cp "$REPO_ROOT/frontend/gaia.package.json" "$BATS_TEST_TMPDIR/absent/frontend/"
   gaia_packages_load "$BATS_TEST_TMPDIR/absent"
   [ "$(gaia_packages_source)" = builtin ]
   local ere
@@ -291,18 +290,25 @@ check_case() {
   true
 }
 
-@test "built-in descriptor equals the committed descriptor located through the committed registry" {
+@test "package globs: each glob joined to its package path in registry order, empty before a load, 1 on an unknown key" {
   . "$LIBRARY"
-  local package_path committed
-  package_path="$(jq -r '.[] | select(.name == "frontend") | .path' "$REPO_ROOT/.gaia/packages.json")"
-  [ -n "$package_path" ]
-  if [ "$package_path" = . ]; then
-    committed="$REPO_ROOT/gaia.package.json"
-  else
-    committed="$REPO_ROOT/$package_path/gaia.package.json"
-  fi
-  [ -f "$committed" ]
-  [ "$(jq -S . "$committed")" = "$(_gaia_packages_builtin_descriptor | jq -S .)" ]
+  local status=0
+  [ -z "$(gaia_package_globs tddStrictCandidates)" ]
+  materialize "$CORPUS/two-packages" "$BATS_TEST_TMPDIR/r"
+  gaia_packages_load "$BATS_TEST_TMPDIR/r"
+  run gaia_package_globs tddStrictCandidates
+  [ "$status" -eq 0 ]
+  [ "${#lines[@]}" -eq 12 ]
+  [ "${lines[0]}" = 'frontend/app/utils/**' ]
+  [ "${lines[4]}" = 'ios/app/utils/**' ]
+  [ "${lines[11]}" = 'frontend/inner/app/components/**/*.ts' ]
+  # A package at `.` contributes its globs unjoined.
+  materialize "$CORPUS/path-dot" "$BATS_TEST_TMPDIR/dot"
+  gaia_packages_load "$BATS_TEST_TMPDIR/dot"
+  [ "$(gaia_package_globs tddUnitTests | head -1)" = 'app/**/*.test.ts' ]
+  status=0
+  gaia_package_globs notAKey >/dev/null 2>&1 || status=$?
+  [ "$status" -eq 1 ]
 }
 
 @test "the committed descriptor loads clean through the committed registry" {

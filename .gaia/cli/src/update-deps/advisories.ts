@@ -215,11 +215,9 @@ const readBaselineIds = (repoRoot: string): ReadonlySet<number> => {
  * has no such member, so the last rule is inert there.
  */
 const ownedManifestPredicate = (
-  repoRoot: string
+  repoRoot: string,
+  patterns: readonly RegExp[]
 ): ((manifestPath: string) => boolean) => {
-  const loaded = loadPackages(repoRoot);
-  const patterns =
-    loaded.ok ? repoRegExps(loaded.packages, 'dependencyManifests') : [];
   const member = readCliWorkspaceMember(repoRoot);
   // Joined, never spelled whole: the adopter bundle is scanned for the literal
   // path of a release-excluded file.
@@ -240,6 +238,7 @@ type RunContext = {
   args: ParsedArgs;
   cwd: string;
   env: NodeJS.ProcessEnv;
+  manifestPatterns: readonly RegExp[];
   now: Date;
   options: AdvisoriesOptions;
   pnpmRunner: PnpmRunner;
@@ -269,7 +268,10 @@ const readAlerts = async (context: RunContext): Promise<AlertsOutcome> => {
 
   if (!fetched.ok) return fetched;
 
-  const isOwned = ownedManifestPredicate(context.repoRoot);
+  const isOwned = ownedManifestPredicate(
+    context.repoRoot,
+    context.manifestPatterns
+  );
   const open = normalizeAlerts(fetched.open, OPEN_STATES);
   const dismissed = normalizeAlerts(fetched.dismissed, DISMISSED_STATES);
   const ownedOpen = open.records.filter((alert) => isOwned(alert.manifestPath));
@@ -539,14 +541,30 @@ export const run = async (
     return usageError(`cannot read updates payload: ${String(args.updates)}`);
   }
 
+  const repoRoot = resolveRootOrCwd(cwd);
+  // An unreadable registry refuses rather than owning no package manifest,
+  // which would drop their alerts from the count without a word.
+  const loaded = loadPackages(repoRoot);
+
+  if (!loaded.ok) {
+    structuredError({
+      code: 'gaia_packages',
+      message: loaded.message,
+      subcommand: SUBCOMMAND,
+    });
+
+    return EXIT_CODES.INVALID_ARGUMENTS;
+  }
+
   const context: RunContext = {
     args,
     cwd,
     env: options.env ?? process.env,
+    manifestPatterns: repoRegExps(loaded.packages, 'dependencyManifests'),
     now: (options.now ?? (() => new Date()))(),
     options,
     pnpmRunner: options.pnpmRunner ?? advisoryPnpmRunner,
-    repoRoot: resolveRootOrCwd(cwd),
+    repoRoot,
   };
   const payload = await buildPayload(context, offers);
   const outPath = resolveFrom(cwd, args.emit);

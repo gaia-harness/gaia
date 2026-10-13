@@ -217,7 +217,6 @@
     ".gaia/scripts/gh-artifact-lib.sh": "owned",
     ".gaia/scripts/knowledge-inventory.sh": "owned",
     ".gaia/scripts/ledger-path-lib.sh": "owned",
-    ".gaia/scripts/lib/gaia-packages.mjs": "owned",
     ".gaia/scripts/lib/serena-lang.sh": "owned",
     ".gaia/scripts/link-worktree.sh": "owned",
     ".gaia/scripts/main-only-lib.sh": "owned",

@@ -1,0 +1,25 @@
+{
+  "load": 0,
+  "source": "builtin",
+  "list": [["frontend", "frontend"]],
+  "globs": {
+    "tddUnitTests": {
+      "match": ["frontend/src/x.test.ts"],
+      "noMatch": ["frontend/app/x.test.ts"]
+    },
+    "tddStrictCandidates": {
+      "match": ["frontend/src/lib/x.ts"],
+      "noMatch": ["frontend/app/utils/x.ts"]
+    },
+    "preCommitSource": {
+      "match": ["frontend/src/x.ts"],
+      "noMatch": ["frontend/app/x.ts"]
+    }
+  },
+  "forPath": {
+    "frontend/src/x.ts": "frontend"
+  },
+  "dir": {
+    "frontend": "frontend"
+  }
+}

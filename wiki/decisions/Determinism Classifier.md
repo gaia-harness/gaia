@@ -66,7 +66,7 @@ The classifier is **file-granular**: it labels a whole file STRICT or EMERGENT a
 
 ## Infrastructure
 
-- `.gaia/scripts/classifier/classify-determinism.mjs`: Node ESM helper using the TypeScript compiler API. Takes a repo-relative source path (or `--stdin`, where the path argument names the file identity for path scoping and `.ts`-vs-`.tsx` script kind). Emits one JSON object: `{file, classification: "strict" | "emergent", reasons: [...]}`. Exits 0 on success; exits non-zero with a one-line stderr message on a missing argument, a missing `typescript`, an unreadable file, or a parse failure, so a bash caller can apply its own fail-open policy. Mirrors `extract-test-signals.mjs` (see [[TDD RED Verification]]).
+- `.gaia/scripts/classifier/classify-determinism.mjs`: Node ESM helper using the TypeScript compiler API. Takes a repo-relative source path (or `--stdin`, where the path argument names the file identity for path scoping and `.ts`-vs-`.tsx` script kind). Emits one JSON object: `{file, classification: "strict" | "emergent", reasons: [...]}`. Exits 0 on success; exits non-zero with a one-line stderr message on a missing argument, a missing `typescript`, an unreadable file, or a parse failure, so a bash caller can apply its own fail-open policy. The strict-candidate globs come from the package registry, read through `.claude/hooks/lib/gaia-packages.sh` ([[Package Descriptor]]); an unusable registry or descriptor exits 7 with `{"error": ...}` on stdout, the one failure a caller must not treat as fail-open. Mirrors `extract-test-signals.mjs` (see [[TDD RED Verification]]).
 
 ## Consumers
 

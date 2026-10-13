@@ -66,6 +66,7 @@ setup() {
   git -C "$REPO" config user.email "test@example.com"
   git -C "$REPO" config user.name "Test"
   git -C "$REPO" config commit.gpgsign false
+  write_builtin_descriptor "$REPO"
 
   install_tree_links "$REPO"
 
@@ -751,6 +752,7 @@ reason_of_output() {
 }
 
 @test "a registered package with no descriptor denies with the gaia-packages reason, never an allow" {
+  rm "$REPO/frontend/gaia.package.json"
   write_package_registry "$REPO" '[{"name":"frontend","path":"frontend"}]'
   stage_file "frontend/app/utils/x.test.ts" "$PASSING_TEST"
   run_commit_hook

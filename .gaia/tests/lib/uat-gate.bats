@@ -21,6 +21,8 @@ setup() {
   REPORTS="$BATS_TEST_DIRNAME/fixtures/uat-gate"
   WORK="$BATS_TEST_TMPDIR/work"
   mkdir -p "$WORK/plan"
+  . "$BATS_TEST_DIRNAME/../hooks/helpers/package-fixture.sh"
+  write_builtin_descriptor "$WORK"
   SPEC="$WORK/SPEC.md"
   ROUTING="$WORK/plan/README.md"
   STDERR_FILE="$BATS_TEST_TMPDIR/stderr"

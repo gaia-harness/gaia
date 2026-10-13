@@ -83,6 +83,8 @@ setup() {
 
   SANDBOX="$BATS_TEST_TMPDIR/sandbox"
   mkdir -p "$SANDBOX/.gaia"
+  . "$THIS_DIRECTORY/../../../.gaia/tests/hooks/helpers/package-fixture.sh"
+  write_builtin_descriptor "$SANDBOX"
   printf '1.2.3\n' > "$SANDBOX/.gaia/VERSION"
 
   git -C "$SANDBOX" init --quiet --initial-branch=main

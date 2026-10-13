@@ -11,7 +11,10 @@ import {
 import {tmpdir} from 'node:os';
 import path from 'node:path';
 import {execGaiaGit} from '../util/git-env.js';
-import {writeFrontendRegistry} from '../util/package-fixture.js';
+import {
+  writeBuiltinDescriptor,
+  writeFrontendRegistry,
+} from '../util/package-fixture.js';
 import {run} from './hook.js';
 
 type Sandbox = {
@@ -457,6 +460,7 @@ describe('gaia scaffold hook root resolution', () => {
     const dir = realpathSync(
       mkdtempSync(path.join(tmpdir(), 'gaia-hook-root-'))
     );
+    writeBuiltinDescriptor(dir);
     scratch.push(dir);
 
     return dir;

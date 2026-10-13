@@ -1,17 +1,5 @@
 # file<TAB>needle<TAB>reason. A retired-path hit is allowed when its file matches and the line contains the needle.
 # An entry that matches no hit fails the gate as stale. Read by .gaia/scripts/check-retired-paths.sh.
-.claude/hooks/lib/gaia-packages.sh	app/	Built-in default package descriptor: paths are package-relative by contract and join the registry path at use.
-.claude/hooks/lib/gaia-packages.sh	.playwright/	Built-in default package descriptor: paths are package-relative by contract and join the registry path at use.
-.claude/hooks/lib/gaia-packages.sh	test/**	Built-in default package descriptor: paths are package-relative by contract and join the registry path at use.
-.claude/hooks/lib/gaia-packages.sh	.storybook/	Built-in default package descriptor: paths are package-relative by contract and join the registry path at use.
-.gaia/cli/src/util/packages.ts	app/	Built-in default package descriptor: paths are package-relative by contract and join the registry path at use.
-.gaia/cli/src/util/packages.ts	.playwright/	Built-in default package descriptor: paths are package-relative by contract and join the registry path at use.
-.gaia/cli/src/util/packages.ts	test/**	Built-in default package descriptor: paths are package-relative by contract and join the registry path at use.
-.gaia/cli/src/util/packages.ts	.storybook/	Built-in default package descriptor: paths are package-relative by contract and join the registry path at use.
-.gaia/scripts/lib/gaia-packages.mjs	app/	Built-in default package descriptor: paths are package-relative by contract and join the registry path at use.
-.gaia/scripts/lib/gaia-packages.mjs	.playwright/	Built-in default package descriptor: paths are package-relative by contract and join the registry path at use.
-.gaia/scripts/lib/gaia-packages.mjs	test/**	Built-in default package descriptor: paths are package-relative by contract and join the registry path at use.
-.gaia/scripts/lib/gaia-packages.mjs	.storybook/	Built-in default package descriptor: paths are package-relative by contract and join the registry path at use.
 .gaia/cli/src/release/runtime-deps.ts	'.claude/agents/code-audit-frontend/	Withheld-token list: names the retired root homes of the moved frontend-only units so a stray root copy never ships.
 .gaia/cli/src/release/runtime-deps.ts	'.claude/instructions/	Withheld-token list: names the retired root homes of the moved frontend-only units so a stray root copy never ships.
 .gaia/cli/src/release/runtime-deps.ts	'.claude/rules/	Withheld-token list: names the retired root homes of the moved frontend-only units so a stray root copy never ships.
