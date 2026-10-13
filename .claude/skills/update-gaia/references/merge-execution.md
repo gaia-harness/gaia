@@ -552,11 +552,18 @@ When all three `package.json` counts are zero (summed across the root and every 
 
 **Documented adopter actions (opt-in).** Two merge outcomes leave the adopter with a follow-up the three-way merge deliberately will **not** perform: a dependency GAIA dropped this release that the adopter still has (the Step 7a "GAIA removed it; adopter still has it" no-op, left in place by design) and files removed upstream still in the working tree (`delete[]`). Both are silent or bare, the agent knows _what_ changed but surfaces no _why_. Recover the intent from the release CHANGELOG and offer an opt-in suggestion.
 
-Read `$LATEST_DIR/CHANGELOG.md` (already on disk from `../SKILL.md` Step 3c, no extra fetch) and extract the `## [x.y.z]` sections strictly newer than `$BASELINE` through `$LATEST` with the same range walk as SKILL.md Step 4, run from the release copy:
+Read the `## [x.y.z]` sections strictly newer than `$BASELINE` through `$LATEST` from the range `../SKILL.md` Step 4 saved beside the verified target bundle. The bundle itself withholds `CHANGELOG.md`, so `$LATEST_DIR` holds no copy, and this step fetches nothing:
 
 ```bash
-range="$(bash "$LATEST_DIR/.gaia/scripts/changelog-range.sh" "$BASELINE" "$LATEST" "$LATEST_DIR/CHANGELOG.md")"
+range_file="${LATEST_DIR%/tree}/changelog-range.md"
+if [ -f "$range_file" ]; then
+  cat "$range_file"
+else
+  echo "CHANGELOG_RANGE_UNAVAILABLE"
+fi
 ```
+
+On `CHANGELOG_RANGE_UNAVAILABLE` (Step 4's fetch failed), leave `adopterActions[]` empty and say so after the table, in one line: `Adopter-action suggestions skipped: the release CHANGELOG could not be fetched.` A silent empty list would read as "this release documents nothing to do".
 
 Within that range, match **only** convention-anchored entries: bullets under a `### Removed` or `### Changed` heading that carry an explicit `**Action required:**` line and/or a literal `pnpm` command in backticks. **Key on the heading plus that anchored phrasing; do not free-parse arbitrary prose** (the convention is documented in `CHANGELOG.md`). For each match, take the literal command (the backtick-quoted `pnpm …`) and the subject it names, then gate it on whether the action still applies to _this_ adopter and record the survivors in `adopterActions[]`:
 
