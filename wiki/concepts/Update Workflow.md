@@ -3,7 +3,7 @@ type: concept
 title: Update Workflow
 status: active
 created: 2026-04-22
-updated: 2026-10-03
+updated: 2026-10-13
 tags: [release, claude, adopter, drift]
 ---
 
@@ -17,9 +17,9 @@ How `/update-gaia` pulls a newer GAIA release into an initialized project withou
 | --------------------- | ------------------------------------------------------------------------------------------------------------------- |
 | `.gaia/VERSION`       | Adopter's current baseline: which GAIA version `my-app/` was scaffolded from (or last `/update-gaia`d to).          |
 | `.gaia/manifest.json` | Ships with every release. Maps each file in the release to a class.                                                 |
-| `.gaia/local/cache/shared/update-gaia/` | Gitignored, shared across worktrees. Holds downloaded baseline + latest tarballs for the 3-way comparison. Pruned to the baseline tarball (plus `update-check.json`, which lives one level up at `.gaia/local/cache/shared/`) at the start of each confirmed update; other cached tag dirs are removed. |
+| `.gaia/local/cache/shared/update-gaia/` | Gitignored, shared across worktrees. Holds the verified baseline and target bundles for the 3-way comparison: per tag, the release tarball, its `.sha256`, and a `tree/` extracted again from the verified tarball on every run. The prune at the start of each confirmed update keeps both tags and removes every other cached tag dir (`update-check.json` lives one level up at `.gaia/local/cache/shared/`, outside it). |
 | `.gaia-merge/`        | Gitignored. Sidecar `.patch` files emitted for files the update can't safely auto-merge. Adopter resolves manually. Removed at the start of an update only when empty; a populated dir is kept and its leftover patches flagged. |
-| `.gaia-backup/`       | Gitignored. Per-timestamp backups of every file the walk overwrites. Prior runs' backups are pruned at the start of each confirmed update; once an update is committed git history is the durable recovery. |
+| `.gaia-backup/`       | Gitignored. Per-timestamp backups of every file the walk overwrites. Prior runs' backups are pruned at the start of each confirmed update, except on a resumed run, whose backups are the only copy of what the interrupted merge overwrote; once an update is committed git history is the durable recovery. |
 
 ## File classes
 
@@ -40,18 +40,16 @@ A package's generated `<path>/.claude/settings.json` (`frontend/.claude/settings
 
 ## Flow
 
-1. Read `.gaia/VERSION`. Missing → tell user to run `/gaia-init` on a fresh `create-gaia` scaffold.
-2. Resolve latest release via `gh release list --repo gaia-react/gaia` (or GitHub API fallback).
-3. Compare to baseline. Same or older → exit, unless `.gaia/VERSION` has been bumped but not committed (an interrupted prior run), in which case surface the residual state so the adopter can commit or discard. Never downgrade.
-3b. **Refuse a 1.x baseline.** A project whose `.gaia/VERSION` major is below 2 is pointed at https://gaiareact.com/migrate and nothing is fetched, created, or pruned: the 2.0.0 layout moved the app into `frontend/`, and a three-way merge across that move would read every baseline app path as an upstream deletion.
-4. Show the adopter the **full baseline-to-latest CHANGELOG range** (every versioned section newer than `$BASELINE`, fetched no-auth from the release tarball) and **confirm** before touching anything. An adopter several versions behind sees every intervening entry, not just the latest tag's body. Step 9 cross-references the Step 7a removal no-op and deletion sweep against `**Action required:**`-anchored entries in the displayed range and surfaces a documented, opt-in cleanup suggestion for any convention-marked entry the merge walk left in place. Never auto-removes a dependency or deletes a file. If on `main`/`master`, create the feature branch only after this confirmation, not before, so an early exit leaves no orphan branch.
-5. Prune prior runs' leftover artifacts before this run creates its own: drop stale `.gaia-backup/` copies and stale `.gaia/local/cache/shared/update-gaia/` tag dirs (keeping the baseline tarball), and remove `.gaia-merge/` only when empty. Then download baseline + latest tarballs to `.gaia/local/cache/shared/update-gaia/`. Stop on any download or extraction failure; do not proceed with a partial cache.
-5b. Fetch the baseline and latest tarballs, `gaia-bundle-<tag>.tar.gz` (`gh release download --pattern`). The `gaia-bundle-` name is the 2.0.0 release fence: a 1.6.1 `/update-gaia` asks for `gaia-<tag>.tar.gz`, finds nothing, and stops at its fetch step before it writes a file. The release body leads with a line routing 1.6.1 adopters to the migrate page, and `release.yml` publishes a `.sha256` asset beside the tarball.
-6. Walk the latest manifest. For each file, apply the decision table below.
-7. Report summary: overwritten / merged / added / removed / skipped / conflicts / deleted / backed up.
-7b. Regenerate each registered package's settings with `./.gaia/cli/gaia packages sync-settings`, then run `bash .gaia/scripts/check-settings-drift.sh`. This runs after the root `.claude/settings.json` merge, because a session launched in `frontend/` reads only the generated file and a root hook or deny it lacks would silently not run there.
-8. Bump `.gaia/VERSION` and replace `.gaia/manifest.json` with the latest version's copy. This happens after the summary prints so that if the walk was aborted mid-way the version stays at baseline and a re-run resumes cleanly.
-9. Remind the adopter to review `.gaia-merge/`, run the [[Quality Gate]], and commit manually.
+The step list, its order, and every command live in the `update-gaia` skill (`.claude/skills/update-gaia/SKILL.md` for the orchestrator, `references/merge-execution.md` for the merge agent it spawns). The shape that order guarantees:
+
+- **Nothing changes before the adopter confirms.** Version resolution, the 1.x refusal, the bundle download and verification, and the migration-note selection all run before the Proceed question. An early exit (up to date, refused, a failed verification, a blocking note, an Abort) leaves no branch and no prune; only the verified update cache remains.
+- **Every bundle is verified in the run that reads it.** The baseline and target tarballs are checked against the release's `.sha256` asset, and the trees the merge reads are extracted again from those verified tarballs. A cached tarball skips only the download. The tarball name, `gaia-bundle-<tag>.tar.gz`, is also the 2.0.0 release fence: a 1.6.1 `/update-gaia` asks for `gaia-<tag>.tar.gz`, finds nothing, and stops at its fetch step before it writes a file.
+- **A 1.x baseline migrates through the bundled 2.0.0 note.** The 2.0.0 layout moved the app into `frontend/`, and a three-way merge across that move would read every baseline app path as an upstream deletion. The refusal prints a command that downloads, verifies and extracts the v2.0.0 release, and points at the migration note inside it.
+- **Migration notes come from the verified target bundle only.** The target release's own selector picks the notes the update crosses, so a mode a later release adds is judged by that release. A blocking note stops the run before anything is branched, pruned or merged, and owns the hop to its own version. After-merge notes are followed after the three-way merge and before the version bump.
+- **The adopter sees the full CHANGELOG range** from the baseline to the target, and confirms. On `main`/`master` the update branch is created only after that confirmation.
+- **The merge agent merges and reports.** It walks the target manifest with the decision table below, regenerates declared regions and package settings, syncs labels, and prints the summary. Its summary cross-references `**Action required:**`-anchored CHANGELOG entries and surfaces opt-in cleanup suggestions; it never auto-removes a dependency or deletes a file.
+- **Setup drift carries new setup features.** The target bundle's feature list is compared with the project's decision records: a standalone feature is applied or asked through its own setup reference and recorded, an admin-gated one met by a non-admin is left owed, and the rest are handed to `/setup-gaia`.
+- **The version is written last.** The manifest copy and the update ping come first, then `.gaia/VERSION`. The adopter then reviews `.gaia-merge/`, runs the [[Quality Gate]], and commits by hand.
 
 ## Decision table
 
@@ -116,7 +114,9 @@ The load-bearing guarantee: a dependency the adopter removed is **never re-added
 
 - **Never touch adopter-owned paths.** Anything not in the manifest is invisible.
 - **Never auto-clobber drift.** Drift in any class writes a `.gaia-merge/<path>.patch` and leaves the working tree alone; the adopter resolves it by hand. Nothing about drift prompts.
-- **Atomic version marker.** `.gaia/VERSION` flips to latest only after the summary prints (Step 8). Abort during the walk → version stays at baseline, and a re-run resumes cleanly because the merge walk is idempotent (already-merged files match latest and skip). Any already-overwritten files live in `.gaia-backup/`. If the version was bumped but not committed (e.g. an interrupted Step 8), Step 3 detects the mismatch and surfaces it.
+- **Verify before reading.** No unverified tarball or tree is read, and no migration note is read from anywhere but the verified target bundle.
+- **A blocking note stops before any change.** Nothing is branched, pruned or merged when the update crosses a blocking note; the adopter follows the note or stops.
+- **Version marker last.** `.gaia/VERSION` flips to the target only after the merge, the after-merge notes, the setup drift, the manifest copy and the update ping. An interruption anywhere before that write leaves the version at the baseline; the next run finds the update branch for the same target and resumes on it, keeping `.gaia-backup/` and repeating the idempotent merge, notes and drift. An interruption between the ping and the version write can repeat the ping, which beats losing it. A version bumped but not committed is detected at the compare step and surfaced.
 - **No auto-commit.** `/update-gaia` leaves the working tree dirty; the adopter reviews + commits.
 
 ## Rollback

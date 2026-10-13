@@ -13,6 +13,7 @@ Contents: Interactive gates: run mode and non-response policy; Step 0: Ensure pn
 This command reads these references, all under `.claude/skills/gaia/references/setup/`. Read one only when a "Read ... now" line sends you there, and then read the whole file:
 - `per-machine.md`: Step 8, the per-machine tool, plugin, statusline and `.env` steps with their probes.
 - `isolation-question.md`: Step 9, interactive mode only, the team git isolation-policy question.
+- `sandbox-recommendation.md`: Step 9, interactive mode only, the team sandbox-recommendation question.
 
 ## Interactive gates: run mode and non-response policy
 
@@ -365,7 +366,7 @@ When every step is recorded, continue to Step 9. `/setup-gaia` runs the same ref
 
 ## Step 9: Project settings
 
-Record two team-level settings in `.gaia/project.json`: the sandbox recommendation and the git isolation policy. The file is committed and team-shared, and `/update-gaia` never overwrites it.
+Record two team-level settings in `.gaia/project.json`: the sandbox recommendation and the git isolation policy. The file is committed and team-shared, and `/update-gaia`'s merge never overwrites it.
 
 **The unconditional terminal action of Step 9, on every exit path (an enumerated answer, a free-text answer, a non-response, or a resumed run), is a single `gaia init write-project-config` call.** No branch may end Step 9 without it.
 
@@ -375,12 +376,7 @@ Record whether this project recommends Claude Code's OS-level Bash sandbox. This
 
 _Non-response: SAFE-DEFAULT. Default to "No, don't recommend" (`false`). Automatic mode: same default, no re-ask._
 
-Use AskUserQuestion (in the user's language; this configuration block stays in English):
-
-> Recommend Claude Code's OS-level Bash sandbox to your team? Each machine still decides at /setup-gaia; this only records the recommendation.
->
-> - **No, don't recommend (Recommended).** No team-level nudge; every machine still decides independently at `/setup-gaia`.
-> - **Yes, recommend the sandbox.** `/setup-gaia` shows this as the suggested answer on each machine.
+In Automatic mode, skip the question. Otherwise, read `.claude/skills/gaia/references/setup/sandbox-recommendation.md` now, the whole file, and ask its question.
 
 Hold the answer as `true` (recommend) or `false` (don't recommend, including the non-response/Automatic default).
 
@@ -407,6 +403,8 @@ Once you have the sandbox recommendation and the isolation-policy answer above (
 Substitute `<true|false>` with the sandbox recommendation. Append `--isolation-policy <value>` **only** when the user chose one of the three labels above. On a non-response, on "Other", or in Automatic mode, **omit the flag entirely**: omitting it omits the key, which leaves the team policy unset and leaves `/setup-gaia`'s question live for the owner to answer later. Never substitute a default value for a missing answer here. The command writes `.gaia/project.json` (creating it when absent), which is committed and team-shared. This call is mandatory on every exit path, there is no Step 9 branch that skips it.
 
 If the CLI exits non-zero, surface the structured-error JSON verbatim and stop. The user can re-run the failing command manually after addressing the cause, then resume `/gaia-init` with `.gaia/cli/gaia init resume`.
+
+Then record both decisions, so `/setup-gaia` never re-asks them. The sandbox recommendation always: `.gaia/cli/gaia setup record sandbox-recommendation applied` for `true`, `.gaia/cli/gaia setup record sandbox-recommendation declined` for `false` (the non-response and Automatic default included). The isolation policy only when the user chose one: `.gaia/cli/gaia setup record isolation-policy applied`.
 
 End of Step 9.
 
@@ -440,7 +438,7 @@ Append-only. New entries at the TOP.
 
 ## Step 11: Finalize
 
-Step 8 recorded each per-machine step through the shared reference, so stamp completion now. This clears "Run /setup-gaia (Required)" from the statusline:
+Step 8 recorded each per-machine step through the shared reference, so stamp completion now. This clears "Run /setup-gaia (Required)" from the statusline, which then shows a `Run /setup-gaia` nudge until `/setup-gaia` records this machine's remaining choices (the sandbox, the statusline left side):
 
 ```bash
 .gaia/cli/gaia setup finalize

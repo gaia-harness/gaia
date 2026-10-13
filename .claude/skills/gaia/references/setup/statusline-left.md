@@ -1,6 +1,25 @@
 # Statusline left-side question
 
-`/setup-gaia` Phase 4.6 reads this file, whole, once its gate says a choice is owed. Control returns to Phase 4.6 of `setup-gaia.md`, which falls through to Phase 6.
+`/setup-gaia` Phase 4.6 reads this file, whole, on every run for `## The routing warning`, and when its gate says a choice or a record is owed. Control returns to Phase 4.6 of `setup-gaia.md`, which falls through to Phase 5.
+
+## The routing warning
+
+Find the statusLine the project actually runs: the first of `.claude/settings.local.json`, `.claude/settings.json` and `~/.claude/settings.json` that sets `statusLine.command`.
+
+```bash
+EFFECTIVE_STATUSLINE=""; EFFECTIVE_SOURCE=""
+for f in .claude/settings.local.json .claude/settings.json "$HOME/.claude/settings.json"; do
+  c="$(jq -r '.statusLine.command // empty' "$f" 2>/dev/null)"
+  if [ -n "$c" ]; then EFFECTIVE_STATUSLINE="$c"; EFFECTIVE_SOURCE="$f"; break; fi
+done
+printf '%s\n%s\n' "$EFFECTIVE_SOURCE" "$EFFECTIVE_STATUSLINE"
+```
+
+The command routes through GAIA when its text names `gaia-statusline.sh`, or when it runs a wrapper script whose own text names `gaia-statusline.sh` (read the script the command runs, one level deep). Otherwise print this warning, filling in the source file, and continue; it is advisory and changes nothing:
+
+> Warning: this project's effective statusLine (from `<EFFECTIVE_SOURCE>`) does not run `.gaia/statusline/gaia-statusline.sh`. Without it you get no GAIA nudges, and no context readings are written, so the audit loop's checkpoint falls back to counting rounds. To fix it, remove the `statusLine` key from `<EFFECTIVE_SOURCE>` (when that is `.claude/settings.local.json`), or point it at a wrapper that runs `gaia-statusline.sh`. `/gaia-fitness` reports the same condition when the source is `.claude/settings.json`.
+
+The choice below still runs after the warning: it takes effect once the statusLine is routed through GAIA again.
 
 ## The question
 
@@ -26,4 +45,22 @@ else
 fi && mv -f "$tmp" .gaia/local/settings.json || rm -f "$tmp"
 ```
 
+Then record the choice: `gaia` runs `.gaia/cli/gaia setup record statusline-left applied`, `user` runs `.gaia/cli/gaia setup record statusline-left declined`. "Other" or a dismissal wrote nothing and records nothing.
+
 The statusline reads the choice on its next render; no restart is needed. Nothing is committed: the file is gitignored. This file is not `.gaia/local/protected/checkpoint-override.json`, the human-only audit checkpoint override, which Claude never writes.
+
+## Record a settled choice
+
+Run when `statusline-left` is owed and no question is needed: no global statusline, or a `gaia` or `user` choice that stands. Run with Phase 4.6's `GLOBAL_STATUSLINE` and `LEFT_CHOICE`:
+
+```bash
+if [ -z "$GLOBAL_STATUSLINE" ]; then
+  .gaia/cli/gaia setup record statusline-left not-applicable
+elif [ "$LEFT_CHOICE" = gaia ]; then
+  .gaia/cli/gaia setup record statusline-left applied
+elif [ "$LEFT_CHOICE" = user ]; then
+  .gaia/cli/gaia setup record statusline-left declined
+fi
+```
+
+With no global statusline there is nothing to choose between, so the id records `not-applicable`; a global statusline added later re-opens the choice through Phase 4.6's own gate.

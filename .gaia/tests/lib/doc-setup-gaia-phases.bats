@@ -48,7 +48,7 @@
 # Each reference basename is named literally, once, in this list: the change
 # selector picks this suite only when it contains a changed file's basename.
 # The reference-index check keeps the list and the directory in step.
-EXPECTED_SETUP_REFERENCES="per-machine.md sandbox.md github-repo.md isolation-question.md squash-only.md statusline-left.md"
+EXPECTED_SETUP_REFERENCES="per-machine.md sandbox.md github-repo.md isolation-question.md squash-only.md statusline-left.md setup-decisions.md standalone-features.md land-decisions.md sandbox-recommendation.md"
 
 # The exact opening sentence of a command's references block.
 REFERENCES_OPENING='This command reads these references, all under `.claude/skills/gaia/references/setup/`. Read one only when a "Read ... now" line sends you there, and then read the whole file:'
@@ -142,7 +142,6 @@ real_surface() {
 forbidden_literals() {
   printf '%s\n' \
     '## Phase 4:' \
-    '## Phase 5:' \
     'audit-mode-decision' \
     'setup-ci status' \
     'check-drift' \
@@ -174,8 +173,8 @@ check_no_ci_phases() {
     fi
   done < <(forbidden_literals)
   # A short read of the literal list would turn the loop into a partial check.
-  [ "$count" -eq 20 ] || {
-    echo "expected 20 forbidden literals, read ${count}" >&2
+  [ "$count" -eq 19 ] || {
+    echo "expected 19 forbidden literals, read ${count}" >&2
     return 1
   }
   if grep -qiE 'enable gaia ci|which bot token|token type|tool mode|tools running on cron' "$file"; then
@@ -209,7 +208,7 @@ check_no_ci_phases() {
       return 1
     }
   done < <(forbidden_literals)
-  [ "$count" -eq 20 ]
+  [ "$count" -eq 19 ]
 }
 
 @test "the no-CI check fails on a CI enable question put back" {
@@ -309,8 +308,9 @@ check_references_never_reconfigure() {
 # ---------------------------------------------------------------------------
 
 # check_project_json <file>: every jq read of a .gaia/*.json file targets
-# .gaia/project.json, the expected keys are read from it, and the one
-# team-setting commit stages it. A read of .gaia/local/settings.json is not a
+# .gaia/project.json, the expected keys are read from it, and exactly two
+# commits stage it: the isolation-policy commit and the land step that commits
+# recorded setup decisions. A read of .gaia/local/settings.json is not a
 # team setting: it is the per-machine opt-ins file (the statusline left-side
 # choice), so it is left out of the read set.
 check_project_json() {
@@ -332,8 +332,8 @@ check_project_json() {
     }
   done
   staged="$(grep -cE '^git add \.gaia/project\.json' "$file" || true)"
-  [ "$staged" -eq 1 ] || {
-    echo "expected 1 commit staging .gaia/project.json, found ${staged}" >&2
+  [ "$staged" -eq 2 ] || {
+    echo "expected 2 commits staging .gaia/project.json (the isolation policy and the land step), found ${staged}" >&2
     return 1
   }
 }
@@ -434,7 +434,7 @@ check_phase_references() {
 @test "the cross-reference check fails on a reference to a removed phase" {
   local copy surface
   copy="$(scratch_copy "$PAGE" "phase-reference.md")"
-  printf '\nFall through to Phase 5.\n' >>"$copy"
+  printf '\nFall through to Phase 9.\n' >>"$copy"
   surface="$(build_surface "$copy" "$REFERENCES_DIRECTORY" surface-phase-reference.md)"
   run check_phase_references "$surface" "$copy"
   [ "$status" -ne 0 ]
@@ -443,7 +443,7 @@ check_phase_references() {
 @test "the cross-reference check fails on a reference file naming a missing phase" {
   local directory surface
   directory="$(scratch_references phase-reference-directory)"
-  printf '\nContinue at Phase 5.\n' >>"${directory}/squash-only.md"
+  printf '\nContinue at Phase 9.\n' >>"${directory}/squash-only.md"
   surface="$(build_surface "$PAGE" "$directory" surface-phase-reference-file.md)"
   run check_phase_references "$surface" "$PAGE"
   [ "$status" -ne 0 ]
@@ -799,7 +799,7 @@ check_posture_subcommand() {
   [ "$status" -ne 0 ]
 }
 
-@test "the project.json check fails when a second team-setting commit is added" {
+@test "the project.json check fails when an extra team-setting commit is added" {
   local copy surface
   copy="$(scratch_copy "$PAGE" "second-commit.md")"
   printf '\n```bash\ngit add .gaia/project.json\n```\n' >>"$copy"
