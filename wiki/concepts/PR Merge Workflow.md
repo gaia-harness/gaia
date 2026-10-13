@@ -2,7 +2,7 @@
 type: concept
 status: active
 created: 2026-04-20
-updated: 2026-10-13
+updated: 2026-10-14
 tags: [concept, ci, review]
 ---
 
@@ -306,45 +306,27 @@ Rules the script preserves, each of which exists to stop the wait abandoning a m
 
 **`--auto` vs `--admin`:** when `gh pr merge` rejects with "base branch policy prohibits the merge", the right escape is `--auto`; it queues the merge and GitHub completes it once checks pass. Never reach for `--admin` to bypass branch protection without explicit permission; it removes the safety the policy exists to provide.
 
-Cleanup is what differs, because the two isolation modes hold the branch differently. Take the arm matching how the work is isolated; [[Task Orchestration]] covers how that choice is made.
+Cleanup runs from `.claude/skills/gaia/references/work-lifecycle.md` `## 8. Cleanup`, whose arm depends on how the session holds the branch; [[Task Orchestration]] covers how that choice is made.
 
-**Read what the main checkout is holding before you pick an arm.** Both arms are run from a shell in the main checkout, and only one of them moves that checkout's HEAD, so isolation mode alone does not decide which is safe:
+**Read what the main checkout is holding before you pick an arm.** The cleanup arms in `.claude/skills/gaia/references/work-lifecycle.md` run from a shell in the main checkout, and only the feature-branch arm can move that checkout's HEAD, so isolation mode alone does not decide which is safe:
 
 ```bash
 git -C <main-checkout> rev-parse --abbrev-ref HEAD
 ```
 
-Anything other than `main` means another session holds the main checkout on its own branch. Take the worktree arm and run no `git checkout` at all. `.claude/hooks/block-main-destructive-git.sh` enforces this read: it denies a checkout or switch that would move the main checkout's HEAD off a branch with an open pull request, unless this session opened that pull request, and its source describes the kinds of spelling it cannot see. This is not a hypothetical: several worktree rows can merge while a separate main-checkout row is mid-audit on its branch, and the feature-branch arm's `git checkout main` then yanks HEAD out from under it. Nothing is lost when that happens, the branch, the pull request and the working tree all survive, but the interrupted member's own tree self-check fires and its round is forfeited, which is a whole member read spent for nothing. The sharper half is quieter: with the main checkout sitting on `main`, `resolve-audit-members.sh` returns an empty spawn set because `main` has no diff, not because anything cleared, and a monitor keyed on emptiness reads that as CLEARED. Such a check runs from the checkout that holds the row's branch, after confirming its HEAD names that branch, and reads each member's current digest with `bash .gaia/scripts/audit-member-digest.sh --root <root> --member <member>`: the row is clear only when every member holds a `.gaia/local/audit/<digest>.ok` marker for that digest ([[Audit Round Procedure#Marker key]]).
-
-### Cleanup under feature-branch isolation
-
-The session sits in the main checkout and holds the branch directly, and the precondition above holds, HEAD is the branch being cleaned up rather than a peer's:
-
-```bash
-git checkout main && git pull origin main
-git branch -D <pr-branch>  # force needed for squash (orphaned commits)
-git fetch --prune origin
-```
+Anything other than `main` means another session holds the main checkout on its own branch. Run no `git checkout` at all; the reference's `### Feature branch` arm skips the checkout and the pull in that case. `.claude/hooks/block-main-destructive-git.sh` enforces this read: it denies a checkout or switch that would move the main checkout's HEAD off a branch with an open pull request, unless this session opened that pull request, and its source describes the kinds of spelling it cannot see. This is not a hypothetical: several worktree rows can merge while a separate main-checkout row is mid-audit on its branch, and the reference's `### Feature branch` arm, run without that read, then yanks HEAD out from under it. Nothing is lost when that happens, the branch, the pull request and the working tree all survive, but the interrupted member's own tree self-check fires and its round is forfeited, which is a whole member read spent for nothing. The sharper half is quieter: with the main checkout sitting on `main`, `resolve-audit-members.sh` returns an empty spawn set because `main` has no diff, not because anything cleared, and a monitor keyed on emptiness reads that as CLEARED. Such a check runs from the checkout that holds the row's branch, after confirming its HEAD names that branch, and reads each member's current digest with `bash .gaia/scripts/audit-member-digest.sh --root <root> --member <member>`: the row is clear only when every member holds a `.gaia/local/audit/<digest>.ok` marker for that digest ([[Audit Round Procedure#Marker key]]).
 
 ### Cleanup under worktree isolation
 
-A `git checkout main` from inside a linked worktree fails with `fatal: 'main' is already used by worktree at '<path>'` whenever the main checkout is on `main`. That is a property of linked worktrees, not a merge failure, and it makes the feature-branch sequence above unusable from a worktree. Reap the worktree centrally instead:
+This section holds the rationale for the worktree arms in `.claude/skills/gaia/references/work-lifecycle.md`; the commands live there, in `### Worktree entered by name in this session` and `### Worktree entered by path or in an earlier session`.
 
-```bash
-# from a shell in the main checkout, never from the worktree being removed
-git worktree remove --force .claude/worktrees/<branch-name>
-git branch -D <pr-branch>  # force needed for squash (orphaned commits)
-git fetch --prune origin
-git -C <main-checkout> pull --ff-only origin main  # only when the HEAD read prints main
-```
+A `git checkout main` from inside a linked worktree fails with `fatal: 'main' is already used by worktree at '<path>'` whenever the main checkout is on `main`. That is a property of linked worktrees, not a merge failure, and it makes the reference's `### Feature branch` arm unusable from a worktree. The worktree is reaped centrally from the main checkout instead.
 
-**Then bring `main` up to date, only where it is already checked out.** Re-run the HEAD read from [[#Post-merge verification before cleanup]]. When it prints `main`, run the pull above, so the next task starts from the latest `main`. When it prints anything else, a peer session holds the main checkout: skip the pull and say so. When the pull fails (a dirty tree, a diverged `main`), report it and stop; never force or stash.
+**The worktree arms carry no `git checkout`, and that is load-bearing rather than incidental.** Removing the worktree followed by `git branch -D` leaves the main checkout's HEAD exactly where it was, and the pull runs only on a HEAD already at `main`, so nothing in them moves HEAD to another branch. That is what makes them safe to run while a peer session holds that checkout on its own branch. Do not prepend the feature-branch arm's `git checkout main` and pull to them: they are not missing a step, and adding one is the precise move the precondition above exists to prevent.
 
-**This sequence carries no `git checkout`, and that is load-bearing rather than incidental.** `git worktree remove` followed by `git branch -D` leaves the main checkout's HEAD exactly where it was, and the pull runs only on a HEAD already at `main`, so nothing here moves HEAD to another branch. That is what makes the arm safe to run while a peer session holds that checkout on its own branch. Do not prepend the feature-branch arm's `git checkout main && git pull` to it: the sequence is not missing a step, and adding one is the precise move the precondition above exists to prevent.
+`--force` on the worktree removal is required because the worktree holds a branch whose commits the squash merge absorbed without making them ancestors of `main`, so git otherwise refuses to remove it. On a `gh` below 2.99.0 the `git branch -D` step is what actually drops the local branch on this path. `--delete-branch` deletes the local branch first and the remote branch second, and its local half checks out the default branch before deleting, which is precisely the step that fails here; because that step fails, `gh` returns before reaching its own remote delete. The remote branch still disappears on a repository configured to delete head branches on merge, so that setting rather than `gh` is what removes it here. From `gh` 2.99.0 on, the local delete is skipped with a warning naming this cleanup, and `gh` does delete the remote branch itself. If the branch is already gone, the command reports `branch not found` and nothing is wrong.
 
-`--force` is required because the worktree holds a branch whose commits the squash merge absorbed without making them ancestors of `main`, so git otherwise refuses to remove it. On a `gh` below 2.99.0 the `git branch -D` step is what actually drops the local branch on this path. `--delete-branch` deletes the local branch first and the remote branch second, and its local half checks out the default branch before deleting, which is precisely the step that fails here; because that step fails, `gh` returns before reaching its own remote delete. The remote branch still disappears on a repository configured to delete head branches on merge, so that setting rather than `gh` is what removes it here. From `gh` 2.99.0 on, the local delete is skipped with a warning naming this cleanup, and `gh` does delete the remote branch itself. If the branch is already gone, the command reports `branch not found` and nothing is wrong.
-
-An agent driving the merge in-session removes its own worktree with the runtime's `ExitWorktree({action: "remove", discard_changes: true})`, gated on the confirmed `MERGED` state; `discard_changes` is safe there for the same reason `--force` is here. It then deletes the renamed branch and runs the same HEAD read and conditional pull, as `.claude/skills/gaia/references/isolation.md` (`### Post-merge removal`) prescribes. From a context that cannot call it, a fresh session or a sub-agent with a pinned working directory, the shell sequence above is the session-independent equivalent. See [[Audit Disposition and Debt Fix]] and [[Worktrees]].
+See [[Audit Disposition and Debt Fix]] and [[Worktrees]].
 
 ### Conflict found mid-wait
 
@@ -366,7 +348,7 @@ This failure mode belongs to `gh` below 2.99.0. When `gh pr merge` exits non-zer
 bash .gaia/scripts/pr-wait-merge.sh --pr <N>
 ```
 
-If it prints `MERGED`, do NOT retry the merge. Treat it as merged, run any post-merge steps (wiki-sync, etc.), and clean up through [[#Cleanup under worktree isolation]] above rather than the feature-branch sequence. Retrying compounds the problem and can produce a duplicate squash on a non-existent branch.
+If it prints `MERGED`, do NOT retry the merge. Treat it as merged, run any post-merge steps (wiki-sync, etc.), and clean up through the worktree arms in `.claude/skills/gaia/references/work-lifecycle.md` `## 8. Cleanup` rather than the feature-branch arm (the rationale is in [[#Cleanup under worktree isolation]]). Retrying compounds the problem and can produce a duplicate squash on a non-existent branch.
 
 **With `--auto`, the exit status depends on the merge state at call time**, so it is not a property of the isolation mode alone. When GitHub queues the merge behind remaining checks, `gh` deletes neither branch and exits 0, and the repository's own head-branch deletion setting is then the only thing that removes the remote branch once the merge lands. When the pull request is immediately mergeable, `gh` merges on the spot and takes the same local delete path a plain merge takes, so a worktree run on a `gh` below 2.99.0 sees the failure above. Neither case revises what the poll reports.
 

@@ -26,4 +26,3 @@ Read `.claude/skills/gaia/references/debt.md` from the project root and follow i
 - `recommend.md`: the no-argument offer.
 - `named.md`: validating named issue numbers and fixing one issue or a named set.
 - `spec-handoff.md`: handing a spec-class issue off to `/gaia-spec`.
-- `worktree-cleanup.md`: post-merge cleanup when the fix ran in a worktree.

@@ -109,13 +109,37 @@ order_violations() {
   [ -z "$output" ]
 }
 
-@test "the guard reads real gated lines: it sees the checkpoint brief script, the status poster and the cleanup" {
+@test "the guard reads real gated lines: it sees the checkpoint brief script, the status poster and the merge wait" {
   gated="$(gated_lines "$PAGE")"
   grep -qF 'audit-loop-eval.sh brief' <<<"$gated" || return 1
-  grep -qF 'git checkout main' <<<"$gated" || return 1
+  grep -qF 'pr-wait-merge.sh --pr' <<<"$gated" || return 1
   grep -qF 'post-audit-status.sh' <<<"$gated" || return 1
   # The check sits in a shell fence, not only in prose.
   [ -n "$(first_fork_check_line "$PAGE")" ]
+}
+
+@test "the merge wait assertion fails when every pr-wait-merge.sh fence is turned into prose" {
+  scratch="${BATS_TEST_TMPDIR}/wait-as-prose.md"
+  # Drop the fence markers of every shell fence holding the merge wait, so its
+  # lines stay on the page as prose.
+  awk -v regex="$FENCE_OPEN_REGEX" '
+    { line[NR] = $0 }
+    END {
+      for (i = 1; i <= NR; i++) {
+        if (!inside && line[i] ~ regex) { inside = 1; start = i; hit = 0; continue }
+        if (inside && line[i] ~ /^```[[:space:]]*$/) {
+          if (hit) { skip[start] = 1; skip[i] = 1 }
+          inside = 0; continue
+        }
+        if (inside && index(line[i], "pr-wait-merge.sh")) hit = 1
+      }
+      for (i = 1; i <= NR; i++) if (!skip[i]) print line[i]
+    }
+  ' "$PAGE" >"$scratch"
+  [ "$(grep -cF 'pr-wait-merge.sh' "$scratch")" -ge 1 ] || return 1
+  gated="$(gated_lines "$scratch")"
+  run grep -qF 'pr-wait-merge.sh --pr' <<<"$gated"
+  [ "$status" -eq 1 ]
 }
 
 @test "the guard fails when the fork check is moved below the first audit-loop-eval.sh fence" {

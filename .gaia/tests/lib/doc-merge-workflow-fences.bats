@@ -121,8 +121,6 @@ post-status|post-audit-status.sh <current-member-marker>|static|posts a commit s
 merge-and-poll|gh pr merge <N> --squash|static|merges a live PR
 merge-poll|pr-wait-merge.sh --pr <N>|static|waits on a live PR's merge state and required checks; the local-sync confirmation fence repeats the same line|2
 main-checkout-head|rev-parse --abbrev-ref HEAD|exec|read-only git plumbing, runs against a fixture checkout substituted for the placeholder
-cleanup-branch|git checkout main && git pull origin main|static|checks out main and deletes a branch in this checkout
-cleanup-worktree|git worktree remove --force|static|removes a worktree in this checkout
 TABLE
 }
 
