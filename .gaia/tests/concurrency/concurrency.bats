@@ -459,7 +459,6 @@ JS
     .claude/hooks/lib/jq-availability.sh \
     .claude/hooks/lib/red-ledger.sh \
     .claude/hooks/lib/repo-scope.sh \
-    .gaia/scripts/lib/gaia-packages.mjs \
     .gaia/scripts/main-root-lib.sh \
     .gaia/scripts/state-registry-lib.sh \
     .gaia/scripts/link-worktree.sh
@@ -978,6 +977,8 @@ if [ "$1" = "typegen" ]; then
 fi
 SH
   chmod +x "$MAIN/frontend/node_modules/.bin/react-router"
+  . "$BATS_TEST_DIRNAME/../hooks/helpers/package-fixture.sh"
+  write_builtin_descriptor "$MAIN"
   gaia_commit_all "$MAIN" "add provisioning deps + stub CLI"
 
   # RESTATED AT THE MOVE TO HARNESS-NATIVE CREATION (see README, Published

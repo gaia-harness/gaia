@@ -16,7 +16,7 @@ import {
   QUOTED_FIRST_BYTE,
   QUOTEPATH_PIN_ARGS,
 } from '../util/non-ascii-path-fixture.js';
-import {BUILTIN_DESCRIPTOR} from '../util/packages.js';
+import {committedFrontendDescriptor} from '../util/package-fixture.js';
 import {run} from './commit-classify.js';
 import type {CommitClassification} from './commit-classify.js';
 
@@ -148,7 +148,8 @@ const initSandboxRepo = (root: string, omit?: ReadonlySet<string>): void => {
 /**
  * `transitionalLayout` pins the app at the repo root with a literal registry
  * and descriptor in the baseline commit; without it the sandbox has no
- * registry, so the built-in default (the app under `frontend/`) applies.
+ * registry and commits the committed descriptor under `frontend/`, so the
+ * built-in default (the app under `frontend/`) applies.
  */
 const setupSandbox = (transitionalLayout = true): Sandbox => {
   const root = mkdtempSync(path.join(tmpdir(), 'gaia-wiki-classify-'));
@@ -173,7 +174,13 @@ const setupSandbox = (transitionalLayout = true): Sandbox => {
     baseline['.gaia/packages.json'] = JSON.stringify([
       {name: 'frontend', path: '.'},
     ]);
-    baseline['gaia.package.json'] = JSON.stringify(BUILTIN_DESCRIPTOR);
+    baseline['gaia.package.json'] = JSON.stringify(
+      committedFrontendDescriptor()
+    );
+  } else {
+    baseline['frontend/gaia.package.json'] = JSON.stringify(
+      committedFrontendDescriptor()
+    );
   }
   const initialSha = commit('initial commit', baseline);
 

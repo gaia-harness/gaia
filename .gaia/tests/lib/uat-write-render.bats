@@ -13,6 +13,8 @@ setup() {
   LIB="$REPO_ROOT_REAL/.gaia/scripts/spec/uat-lib.sh"
   WORK="$BATS_TEST_TMPDIR/work"
   mkdir -p "$WORK/plan"
+  . "$BATS_TEST_DIRNAME/../hooks/helpers/package-fixture.sh"
+  write_builtin_descriptor "$WORK"
   SPEC="$WORK/SPEC.md"
   ROUTING="$WORK/plan/README.md"
   LEDGER="$WORK/plan/uat-render.json"

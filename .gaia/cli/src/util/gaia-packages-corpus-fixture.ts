@@ -2,13 +2,10 @@
  * The shared driver for the package-registry conformance corpus under
  * `.gaia/tests/fixtures/gaia-packages/`.
  *
- * The corpus is the oracle for three implementations of one contract: the bash
- * reader (driven by `.gaia/tests/hooks/gaia-packages-lib.bats`), the Node
- * reader (`gaia-packages-mjs.test.ts`) and the TypeScript reader
- * (`packages.test.ts`). The two vitest suites share this one driver so the
- * comparison logic cannot drift between them: a suite that compared more
- * loosely than its sibling would green over a disagreement the corpus exists to
- * catch. Each case directory holds an optional `packages.json` (installed as
+ * The corpus is the oracle for two implementations of one contract: the bash
+ * reader (driven by `.gaia/tests/hooks/gaia-packages-lib.bats`) and the
+ * TypeScript reader (`packages.test.ts`, through this driver). Each case
+ * directory holds an optional `packages.json` (installed as
  * `.gaia/packages.json`), descriptor files at their package paths, and
  * `expected.json`.
  */

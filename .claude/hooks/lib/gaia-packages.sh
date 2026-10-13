@@ -1,19 +1,20 @@
 #!/usr/bin/env bash
 # shellcheck shell=bash
 #
-# The bash reader of the package registry and descriptors. One of three
-# implementations of one contract: the Node twin is
-# `.gaia/scripts/lib/gaia-packages.mjs`, the other is the CLI's TypeScript
-# reader. A shared conformance corpus is the oracle all three satisfy, error
-# message text included, so a reason string changed here changes in the other two.
+# The bash reader of the package registry and descriptors. One of two
+# implementations of one contract: the other is the CLI's TypeScript reader. A
+# shared conformance corpus is the oracle both satisfy, error message text
+# included, so a reason string changed here changes in the other. Node scripts
+# outside the CLI bundle (the determinism classifier) read the registry through
+# this library rather than carrying a reader of their own.
 #
 # CONTRACT WITH THE CALLER. Source this file, then call
 # `gaia_packages_load <repo_root>` and branch on its status before any other
 # function. A caller under `set -e` must capture the status
 # (`gaia_packages_load "$root" || status=$?`) because 2, 3 and 4 are answers, not
 # crashes. Status:
-#   0  ok: the registry, or the built-in default when `.gaia/packages.json` is
-#      absent, loaded and every descriptor validated
+#   0  ok: the registry, or the built-in default registry when
+#      `.gaia/packages.json` is absent, loaded and every descriptor validated
 #   2  the registry is present and malformed
 #   3  a registered package's descriptor is missing, malformed or invalid
 #   4  jq is not on PATH; nothing was read
@@ -23,8 +24,10 @@
 # a guard that ignores the status sees an empty ERE rather than a stale one.
 #
 # FAIL-CLOSED. An absent registry is the built-in default (frontend at
-# `frontend`), never "nothing in scope". A present registry that fails any check
-# returns an error and never a partial answer. A missing jq returns 4 rather
+# `frontend`), never "nothing in scope", and its descriptor is still read from
+# `frontend/gaia.package.json`: a missing one is status 3, never a fallback. A
+# present registry that fails any check returns an error and never a partial
+# answer. A missing jq returns 4 rather
 # than guessing: this library parses JSON with nothing else, so it cannot
 # answer without it, and the PreToolUse hooks that call it carry their own
 # `gaia_require_jq` arm (`.claude/hooks/lib/jq-availability.sh`) for their
@@ -49,6 +52,7 @@ GAIA_PACKAGES_SH=1
 # shellcheck disable=SC2034 # GAIA_PACKAGES_ERROR is read by the sourcing caller
 GAIA_PACKAGES_ERROR=''
 _GAIA_PKG_SOURCE=''
+_GAIA_PKG_GLOBS=''
 _GAIA_PKG_LIST=''
 _GAIA_PKG_ERE_tddUnitTests=''
 _GAIA_PKG_ERE_tddStrictCandidates=''
@@ -57,66 +61,18 @@ _GAIA_PKG_ERE_preCommitSource=''
 _GAIA_PKG_ERE_doctorConfigs=''
 _GAIA_PKG_ERE_dependencyManifests=''
 
-# The built-in default registry and descriptor, used when `.gaia/packages.json`
-# is absent. The one copy of these values for bash; a bats test pins it equal to
-# the committed descriptor.
+# The built-in default registry, used when `.gaia/packages.json` is absent. Its
+# package's descriptor is read from disk like any registered package's, so the
+# committed `gaia.package.json` is the one copy of the default globs.
 _gaia_packages_builtin_registry() {
   cat <<'JSON'
 [{"name":"frontend","path":"frontend"}]
 JSON
 }
 
-_gaia_packages_builtin_descriptor() {
-  cat <<'JSON'
-{
-  "schemaVersion": 1,
-  "name": "frontend",
-  "globs": {
-    "tddUnitTests": ["app/**/*.test.ts", "app/**/*.test.tsx"],
-    "tddStrictCandidates": [
-      "app/utils/**",
-      "app/services/**",
-      "app/hooks/**",
-      "app/components/**/*.ts",
-      "app/pages/**/*.ts"
-    ],
-    "emergentTests": [
-      "app/components/**/*.test.ts",
-      "app/components/**/*.test.tsx",
-      "app/pages/**/*.test.ts",
-      "app/pages/**/*.test.tsx",
-      ".playwright/**/*.spec.ts",
-      ".playwright/**/*.spec.tsx",
-      ".playwright/**/*.test.ts",
-      ".playwright/**/*.test.tsx",
-      "app/**/*.stories.tsx"
-    ],
-    "preCommitSource": ["app/**", "test/**", ".storybook/**", ".playwright/**"],
-    "doctorConfigs": ["doctor.config.*", "react-doctor.config.*"],
-    "dependencyManifests": ["package.json"]
-  },
-  "wiki": {
-    "sourcePaths": ["app/"],
-    "inventoryPaths": [
-      "app/components/",
-      "app/hooks/",
-      "app/pages/",
-      "app/services/"
-    ],
-    "flowPaths": [
-      "app/middleware/",
-      "app/routes.ts",
-      "app/i18n.ts",
-      "app/sessions.server/"
-    ]
-  }
-}
-JSON
-}
-
 # The jq program that reduces a parsed registry to the reason it is malformed,
 # or the empty string when it is sound. Same checks, same order, same wording as
-# `registryReason` in gaia-packages.mjs.
+# the TypeScript reader's registry schema.
 # shellcheck disable=SC2016 # a jq program: the dollar signs are jq variables, not shell expansions
 _GAIA_PKG_REGISTRY_PROGRAM='
   def entry_reason($i):
@@ -143,7 +99,7 @@ _GAIA_PKG_REGISTRY_PROGRAM='
 
 # The jq program that reduces a parsed descriptor to the reason it is invalid,
 # or the empty string. `$n` is the registry name the descriptor must carry.
-# Mirrors `descriptorReason` in gaia-packages.mjs.
+# Mirrors `descriptorIssueReason` in the TypeScript reader.
 # shellcheck disable=SC2016 # a jq program: the dollar signs are jq variables, not shell expansions
 _GAIA_PKG_DESCRIPTOR_PROGRAM='
   def clean: type == "string" and . != "" and ((test("[\\x00-\\x1f\\x7f]")) | not);
@@ -168,9 +124,10 @@ _GAIA_PKG_DESCRIPTOR_PROGRAM='
 '
 
 # The jq program that compiles one descriptor to `key<TAB>body|body|...` lines,
-# one per globs key, each glob joined to the package path `$p` first. A body has
-# no anchors; the caller anchors the union. Same substitution sequence as
-# `globToBody` in gaia-packages.mjs.
+# one per globs key, each glob joined to the package path `$p` first, then one
+# `=key<TAB>joined-glob` line per glob for `gaia_package_globs`. A body has no
+# anchors; the caller anchors the union. Same substitution sequence as
+# `globToBody` in the TypeScript reader.
 # shellcheck disable=SC2016 # a jq program: the dollar signs are jq variables, not shell expansions
 _GAIA_PKG_COMPILE_PROGRAM='
   def body:
@@ -191,12 +148,14 @@ _GAIA_PKG_COMPILE_PROGRAM='
   def joined($p): if $p == "." then . else $p + "/" + . end;
   . as $d
   | ("tddUnitTests","tddStrictCandidates","emergentTests","preCommitSource","doctorConfigs","dependencyManifests") as $k
-  | $k + "\t" + ($d.globs[$k] | map(joined($p) | body) | join("|"))
+  | ($d.globs[$k] | map(joined($p))) as $globs
+  | ($k + "\t" + ($globs | map(body) | join("|"))), ($globs[] | "=" + $k + "\t" + .)
 '
 
 _gaia_packages_reset() {
   GAIA_PACKAGES_ERROR=''
   _GAIA_PKG_SOURCE=''
+  _GAIA_PKG_GLOBS=''
   _GAIA_PKG_LIST=''
   _GAIA_PKG_ERE_tddUnitTests=''
   _GAIA_PKG_ERE_tddStrictCandidates=''
@@ -204,6 +163,15 @@ _gaia_packages_reset() {
     _GAIA_PKG_ERE_preCommitSource=''
   _GAIA_PKG_ERE_doctorConfigs=''
   _GAIA_PKG_ERE_dependencyManifests=''
+}
+
+# _gaia_packages_descriptor_file <package-path> -> the repo-relative descriptor path
+_gaia_packages_descriptor_file() {
+  if [ "$1" = . ]; then
+    printf 'gaia.package.json\n'
+  else
+    printf '%s/gaia.package.json\n' "$1"
+  fi
 }
 
 # _gaia_packages_registry_error <reason-or-empty>
@@ -215,10 +183,14 @@ _gaia_packages_registry_error() {
   GAIA_PACKAGES_ERROR="gaia-packages: .gaia/packages.json is malformed${detail}. Next step: fix .gaia/packages.json so it is a JSON array of {\"name\",\"path\"} entries, or delete it to use the built-in default."
 }
 
-# _gaia_packages_descriptor_error <file> <missing|malformed|invalid> [reason]
+# _gaia_packages_descriptor_error <file> <missing|malformed|invalid> [reason] [registry-source]
+# A missing descriptor under the built-in registry has no registry path to
+# correct, so its next step is the restore alone.
 _gaia_packages_descriptor_error() {
-  local file="$1" state="$2" reason="${3:-}" status next
-  if [ "$state" = missing ]; then
+  local file="$1" state="$2" reason="${3:-}" registry_source="${4:-}" status next
+  if [ "$state" = missing ] && [ "$registry_source" = builtin ]; then
+    next="restore it with git checkout origin/main -- ${file}, or run /update-gaia"
+  elif [ "$state" = missing ]; then
     next="restore ${file} from the GAIA release, or correct the path in .gaia/packages.json"
   else
     next="restore ${file} from the GAIA release, or correct the field it names"
@@ -265,6 +237,12 @@ _gaia_packages_compile_descriptor() {
   compiled=$(jq -r --arg p "$1" "$_GAIA_PKG_COMPILE_PROGRAM") || return 1
   while IFS= read -r line; do
     [ -n "$line" ] || continue
+    case "$line" in
+      =*)
+        _GAIA_PKG_GLOBS="${_GAIA_PKG_GLOBS}${line#=}"$'\n'
+        continue
+        ;;
+    esac
     key="${line%%$'\t'*}"
     body="${line#*$'\t'}"
     _gaia_packages_append_ere "$key" "$body" || return 1
@@ -273,7 +251,7 @@ _gaia_packages_compile_descriptor() {
 
 # gaia_packages_load <repo_root>
 gaia_packages_load() {
-  local root="${1:-}" registry_file entries line name pkg_path descriptor_file
+  local root="${1:-}" registry_file registry_source entries name pkg_path descriptor_file
   local reason
 
   _gaia_packages_reset
@@ -289,57 +267,38 @@ gaia_packages_load() {
 
   registry_file="$root/.gaia/packages.json"
   if [ ! -e "$registry_file" ] && [ ! -L "$registry_file" ]; then
-    _GAIA_PKG_SOURCE=builtin
+    registry_source=builtin
     entries=$(_gaia_packages_builtin_registry | jq -r '.[] | .name + "\t" + .path') || {
-      _gaia_packages_reset
+      # shellcheck disable=SC2034 # read by the sourcing caller
       GAIA_PACKAGES_ERROR='gaia-packages: the built-in registry could not be read. Next step: report this as a GAIA bug.'
       return 2
     }
-    while IFS=$'\t' read -r name pkg_path; do
-      [ -n "$name" ] || continue
-      _GAIA_PKG_LIST="${_GAIA_PKG_LIST}${name}"$'\t'"${pkg_path}"$'\n'
-      # A here-string, not a pipe: a pipeline would run the compile in a
-      # subshell and discard the per-key state it exists to fill.
-      if ! _gaia_packages_compile_descriptor "$pkg_path" <<<"$(_gaia_packages_builtin_descriptor)"; then
-        _gaia_packages_reset
-        # shellcheck disable=SC2034 # read by the sourcing caller
-        GAIA_PACKAGES_ERROR='gaia-packages: the built-in descriptor could not be compiled. Next step: report this as a GAIA bug.'
-        return 3
-      fi
-    done <<<"$entries"
-
-    return 0
+  else
+    if ! jq -e -s 'length == 1' "$registry_file" >/dev/null 2>&1; then
+      _gaia_packages_registry_error ''
+      return 2
+    fi
+    if ! reason=$(jq -r "$_GAIA_PKG_REGISTRY_PROGRAM" "$registry_file" 2>/dev/null); then
+      _gaia_packages_registry_error ''
+      return 2
+    fi
+    if [ -n "$reason" ]; then
+      _gaia_packages_registry_error "$reason"
+      return 2
+    fi
+    registry_source=registry
+    entries=$(jq -r '.[] | .name + "\t" + .path' "$registry_file") || {
+      _gaia_packages_registry_error ''
+      return 2
+    }
   fi
 
-  if ! jq -e -s 'length == 1' "$registry_file" >/dev/null 2>&1; then
-    _gaia_packages_registry_error ''
-    return 2
-  fi
-  if ! reason=$(jq -r "$_GAIA_PKG_REGISTRY_PROGRAM" "$registry_file" 2>/dev/null); then
-    _gaia_packages_registry_error ''
-    return 2
-  fi
-  if [ -n "$reason" ]; then
-    _gaia_packages_registry_error "$reason"
-    return 2
-  fi
-
-  _GAIA_PKG_SOURCE=registry
-  entries=$(jq -r '.[] | .name + "\t" + .path' "$registry_file") || {
-    _gaia_packages_reset
-    _gaia_packages_registry_error ''
-    return 2
-  }
   while IFS=$'\t' read -r name pkg_path; do
     [ -n "$name" ] || continue
-    if [ "$pkg_path" = . ]; then
-      descriptor_file='gaia.package.json'
-    else
-      descriptor_file="${pkg_path}/gaia.package.json"
-    fi
+    descriptor_file="$(_gaia_packages_descriptor_file "$pkg_path")"
     if [ ! -e "$root/$descriptor_file" ] && [ ! -L "$root/$descriptor_file" ]; then
       _gaia_packages_reset
-      _gaia_packages_descriptor_error "$descriptor_file" missing
+      _gaia_packages_descriptor_error "$descriptor_file" missing '' "$registry_source"
       return 3
     fi
     if ! jq -e -s 'length == 1' "$root/$descriptor_file" >/dev/null 2>&1; then
@@ -365,10 +324,11 @@ gaia_packages_load() {
     fi
   done <<<"$entries"
 
+  _GAIA_PKG_SOURCE="$registry_source"
   return 0
 }
 
-# gaia_packages_source -> `registry` or `builtin` (empty before a successful load)
+# gaia_packages_source ->`registry` or `builtin` (empty before a successful load)
 gaia_packages_source() {
   printf '%s\n' "$_GAIA_PKG_SOURCE"
 }
@@ -399,6 +359,19 @@ gaia_package_globs_ere() {
   else
     printf '\n'
   fi
+}
+
+# gaia_package_globs <key> -> every package's globs for the key, each joined to
+# its package path, one per line in registry order. Empty before a successful
+# load; status 1 on an unknown key.
+gaia_package_globs() {
+  local wanted="${1:-}" key glob
+  gaia_package_globs_ere "$wanted" >/dev/null || return 1
+  while IFS=$'\t' read -r key glob; do
+    if [ "$key" = "$wanted" ]; then
+      printf '%s\n' "$glob"
+    fi
+  done <<<"$_GAIA_PKG_GLOBS"
 }
 
 # gaia_package_for_path <repo-relative path> -> the owning package name, or

@@ -35,6 +35,8 @@ setup() {
   write_stub_gh "$STUB_BIN/gh"
   write_stub_pnpm "$STUB_BIN/pnpm"
 
+  . "$BATS_TEST_DIRNAME/../../tests/hooks/helpers/package-fixture.sh"
+  write_builtin_descriptor "$SCRATCH_ROOT"
   git -C "$SCRATCH_ROOT" init --quiet --initial-branch=main
   git -C "$SCRATCH_ROOT" config user.email t@t.t
   git -C "$SCRATCH_ROOT" config user.name t

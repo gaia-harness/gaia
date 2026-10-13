@@ -74,6 +74,7 @@ beforeAll(() => {
   for (const file of [
     'frontend/app/utils/date.ts',
     'frontend/app/utils/string.ts',
+    'frontend/gaia.package.json',
   ]) {
     mkdirSync(path.join(FIXTURE_ROOT, path.dirname(file)), {recursive: true});
     copyFileSync(realAppFile(file), path.join(FIXTURE_ROOT, file));
@@ -479,6 +480,26 @@ describe('classify-determinism', () => {
           );
         }
       );
+    });
+
+    test('an empty registry has no strict candidates, so a pure file classifies emergent', () => {
+      withTree({'.gaia/packages.json': '[]'}, (cwd) => {
+        const result = run(cwd, 'frontend/app/utils/x.ts');
+
+        expect(result.status).toBe(0);
+        expect(JSON.parse(result.stdout).classification).toBe('emergent');
+      });
+    });
+
+    test('no registry and no descriptor exits 7 naming the restore step', () => {
+      withTree({}, (cwd) => {
+        const result = run(cwd, 'frontend/app/utils/x.ts');
+
+        expect(result.status).toBe(7);
+        expect(JSON.parse(result.stdout).error).toContain(
+          'git checkout origin/main -- frontend/gaia.package.json'
+        );
+      });
     });
 
     test('an unparseable registry exits 7 with {"error"} on stdout and classifies nothing', () => {

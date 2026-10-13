@@ -11,6 +11,7 @@
 setup() {
   REPO_ROOT_REAL="$(cd "$BATS_TEST_DIRNAME/../../.." && pwd)"
   SCRIPT="$REPO_ROOT_REAL/.gaia/scripts/spec/uat-write.sh"
+  . "$BATS_TEST_DIRNAME/../hooks/helpers/package-fixture.sh"
   WORK="$BATS_TEST_TMPDIR/work"
   mkdir -p "$WORK/.gaia" "$BATS_TEST_TMPDIR/plan"
   SPEC="$WORK/SPEC.md"
@@ -60,6 +61,7 @@ run_uat_write() {
 }
 
 @test "built-in default: specs render under frontend/.playwright/e2e and nothing under the root .playwright" {
+  write_builtin_descriptor "$WORK"
   run_uat_write
   [ "$status" -eq 0 ]
   [ -f "$WORK/frontend/.playwright/e2e/sign-in/sign-in-page-opens.spec.ts" ] || return 1
@@ -129,6 +131,7 @@ run_uat_write() {
 }
 
 @test "a ledger orphan in the package target is deleted, and a stale root copy at the same relative path is left alone" {
+  write_builtin_descriptor "$WORK"
   run_uat_write
   [ "$status" -eq 0 ]
   rendered="$WORK/frontend/.playwright/e2e/sign-in/sign-in-page-opens.spec.ts"

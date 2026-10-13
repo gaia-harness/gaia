@@ -13,7 +13,10 @@ import {tmpdir} from 'node:os';
 import path from 'node:path';
 import {EXIT_CODES} from '../exit.js';
 import {execGaiaGit} from '../util/git-env.js';
-import {writeFrontendRegistry} from '../util/package-fixture.js';
+import {
+  writeBuiltinDescriptor,
+  writeFrontendRegistry,
+} from '../util/package-fixture.js';
 import {run as runComponent} from './component.js';
 import {run as runHook} from './hook.js';
 import {run as runRoute} from './route.js';
@@ -118,6 +121,7 @@ describe.each(SCAFFOLDERS)('gaia scaffold $name package root', (scaffolder) => {
     'built-in default writes under frontend/ when run from %s',
     (_label, cwdRelative) => {
       const packageDir = path.join(root, 'frontend');
+      writeBuiltinDescriptor(root);
       seedPackage(packageDir, scaffolder.seed);
       const cwd = path.join(root, cwdRelative);
 
@@ -165,6 +169,7 @@ describe('gaia scaffold component --parent normalization', () => {
 
   beforeEach(() => {
     root = realpathSync(mkdtempSync(path.join(tmpdir(), 'gaia-parent-')));
+    writeBuiltinDescriptor(root);
     execGaiaGit(['init', '-q', '-b', 'main'], root);
     mkdirSync(path.join(root, 'frontend/app/components/form'), {
       recursive: true,

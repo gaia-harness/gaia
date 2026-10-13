@@ -515,6 +515,7 @@ make_package_fixture() {
   git -C "$FIXTURE" config user.email "test@example.com"
   git -C "$FIXTURE" config user.name "Test"
   git -C "$FIXTURE" config commit.gpgsign false
+  write_builtin_descriptor "$FIXTURE"
   ln -s "$REPO_ROOT/.gaia/scripts/red-ledger" "$FIXTURE/.gaia/scripts/red-ledger"
   printf '%s' "$PACKAGE_TEST_BODY" >"$FIXTURE/frontend/app/utils/x.test.ts"
   printf '%s' "$PACKAGE_TEST_BODY" >"$FIXTURE/app/utils/x.test.ts"
@@ -656,6 +657,7 @@ assert_frontend_capture() {
 
 @test "package scope: a registered package with no descriptor records nothing and blocks with the gaia-packages reason" {
   make_package_fixture
+  rm "$FIXTURE/frontend/gaia.package.json"
   write_package_registry "$FIXTURE" '[{"name":"frontend","path":"frontend"}]'
   run_capture_in_fixture "$FIXTURE" "pnpm test --run frontend/app/utils/x.test.ts"
   [ "$status" -eq 0 ]

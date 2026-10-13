@@ -1,16 +1,15 @@
 import {z} from 'zod';
 /**
- * The TypeScript reader of the package registry and descriptors (SPEC-092
- * contract C1 to C4). One of three implementations of one contract: the bash
- * twin is `.claude/hooks/lib/gaia-packages.sh`, the Node twin is
- * `.gaia/scripts/lib/gaia-packages.mjs`. The shared conformance corpus under
- * `.gaia/tests/fixtures/gaia-packages/` is the oracle all three satisfy, error
- * message text included, so a reason string changed here changes in the other
- * two.
+ * The TypeScript reader of the package registry and descriptors. One of two
+ * implementations of one contract: the bash twin is
+ * `.claude/hooks/lib/gaia-packages.sh`. The shared conformance corpus under
+ * `.gaia/tests/fixtures/gaia-packages/` is the oracle both satisfy, error
+ * message text included, so a reason string changed here changes in the other.
  *
- * Fail-closed: an absent `.gaia/packages.json` is the built-in default
- * (frontend at `frontend`), never "nothing in scope"; a present registry that
- * is malformed, or a descriptor that is missing or invalid, returns an error
+ * Fail-closed: an absent `.gaia/packages.json` is the built-in default registry
+ * (frontend at `frontend`), never "nothing in scope", and its descriptor is
+ * still read from `frontend/gaia.package.json`; a present registry that is
+ * malformed, or a descriptor that is missing or invalid, returns an error
  * result and never a partial answer.
  *
  * Glob dialect (C3): `**` + `/` is zero or more whole directories, a trailing
@@ -84,59 +83,17 @@ export type LoadResult =
       message: string;
       ok: false;
     }
-  | {ok: true; packages: LoadedPackage[]; source: 'builtin' | 'registry'};
+  | {ok: true; packages: LoadedPackage[]; source: RegistrySource};
 
 export type PackageDescriptor = z.infer<ReturnType<typeof descriptorSchema>>;
 
 export type RegistryEntry = z.infer<typeof registryEntrySchema>;
 
+type RegistrySource = 'builtin' | 'registry';
+
 export const BUILTIN_REGISTRY: readonly RegistryEntry[] = [
   {name: 'frontend', path: 'frontend'},
 ];
-
-export const BUILTIN_DESCRIPTOR: PackageDescriptor = {
-  globs: {
-    dependencyManifests: ['package.json'],
-    doctorConfigs: ['doctor.config.*', 'react-doctor.config.*'],
-    emergentTests: [
-      'app/components/**/*.test.ts',
-      'app/components/**/*.test.tsx',
-      'app/pages/**/*.test.ts',
-      'app/pages/**/*.test.tsx',
-      '.playwright/**/*.spec.ts',
-      '.playwright/**/*.spec.tsx',
-      '.playwright/**/*.test.ts',
-      '.playwright/**/*.test.tsx',
-      'app/**/*.stories.tsx',
-    ],
-    preCommitSource: ['app/**', 'test/**', '.storybook/**', '.playwright/**'],
-    tddStrictCandidates: [
-      'app/utils/**',
-      'app/services/**',
-      'app/hooks/**',
-      'app/components/**/*.ts',
-      'app/pages/**/*.ts',
-    ],
-    tddUnitTests: ['app/**/*.test.ts', 'app/**/*.test.tsx'],
-  },
-  name: 'frontend',
-  schemaVersion: 1,
-  wiki: {
-    flowPaths: [
-      'app/middleware/',
-      'app/routes.ts',
-      'app/i18n.ts',
-      'app/sessions.server/',
-    ],
-    inventoryPaths: [
-      'app/components/',
-      'app/hooks/',
-      'app/pages/',
-      'app/services/',
-    ],
-    sourcePaths: ['app/'],
-  },
-};
 
 const registryError = (reason: string): LoadResult => {
   const detail = reason === '' ? '' : `: ${reason}`;
@@ -148,23 +105,25 @@ const registryError = (reason: string): LoadResult => {
   };
 };
 
+/** A missing descriptor under the built-in registry has no registry path to correct. */
+const missingNextStep = (file: string, source: RegistrySource): string =>
+  source === 'builtin' ?
+    `restore it with git checkout origin/main -- ${file}, or run /update-gaia`
+  : `restore ${file} from the GAIA release, or correct the path in ${REGISTRY_FILE}`;
+
+/** The next step for a descriptor that is present but malformed or invalid. */
+const fieldNextStep = (file: string): string =>
+  `restore ${file} from the GAIA release, or correct the field it names`;
+
 const descriptorError = (
   file: string,
-  state: 'invalid' | 'malformed' | 'missing',
-  reason = ''
-): LoadResult => {
-  const nextStep =
-    state === 'missing' ?
-      `restore ${file} from the GAIA release, or correct the path in ${REGISTRY_FILE}`
-    : `restore ${file} from the GAIA release, or correct the field it names`;
-  const status = state === 'invalid' ? `invalid: ${reason}` : state;
-
-  return {
-    code: 'DESCRIPTOR_INVALID',
-    message: `gaia-packages: ${file} is ${status}. Next step: ${nextStep}.`,
-    ok: false,
-  };
-};
+  status: string,
+  nextStep: string
+): LoadResult => ({
+  code: 'DESCRIPTOR_INVALID',
+  message: `gaia-packages: ${file} is ${status}. Next step: ${nextStep}.`,
+  ok: false,
+});
 
 const descriptorFileFor = (packagePath: string): string =>
   packagePath === '.' ? DESCRIPTOR_NAME : `${packagePath}/${DESCRIPTOR_NAME}`;
@@ -208,7 +167,7 @@ const SECTION_ORDER = ['schemaVersion', 'name', 'globs', 'wiki'];
 const WIKI_KEY_ORDER = ['sourcePaths', 'inventoryPaths', 'flowPaths'];
 
 /**
- * Where an issue falls in the validation order the bash and Node readers use.
+ * Where an issue falls in the validation order the bash reader uses.
  * Zod reports issues in schema key order, which the lint config sorts
  * alphabetically, so the order that picks the reported reason is stated here
  * rather than inherited from how the schema happens to be written.
@@ -289,9 +248,7 @@ const parseJson = (state: FileState): null | {value: unknown} => {
 
 const loadRegistry = (
   repoRoot: string
-):
-  | LoadResult
-  | {entries: readonly RegistryEntry[]; source: 'builtin' | 'registry'} => {
+): LoadResult | {entries: readonly RegistryEntry[]; source: RegistrySource} => {
   const read = readFileState(path.join(repoRoot, REGISTRY_FILE));
 
   if (read.kind === 'absent') {
@@ -320,18 +277,19 @@ const loadRegistry = (
 
 const loadDescriptor = (
   repoRoot: string,
-  entry: RegistryEntry
+  entry: RegistryEntry,
+  source: RegistrySource
 ): LoadedPackage | LoadResult => {
   const file = descriptorFileFor(entry.path);
   const read = readFileState(path.join(repoRoot, file));
 
   if (read.kind === 'absent') {
-    return descriptorError(file, 'missing');
+    return descriptorError(file, 'missing', missingNextStep(file, source));
   }
   const parsed = parseJson(read);
 
   if (parsed === null) {
-    return descriptorError(file, 'malformed');
+    return descriptorError(file, 'malformed', fieldNextStep(file));
   }
   const descriptor = descriptorSchema(entry.name).safeParse(parsed.value);
 
@@ -346,7 +304,7 @@ const loadDescriptor = (
       descriptorIssueReason(issue, entry.name)
     );
 
-  return descriptorError(file, 'invalid', reason);
+  return descriptorError(file, `invalid: ${reason}`, fieldNextStep(file));
 };
 
 export const loadPackages = (repoRoot: string): LoadResult => {
@@ -355,21 +313,10 @@ export const loadPackages = (repoRoot: string): LoadResult => {
   if ('ok' in registry) {
     return registry;
   }
-
-  if (registry.source === 'builtin') {
-    return {
-      ok: true,
-      packages: registry.entries.map((entry) => ({
-        ...entry,
-        descriptor: BUILTIN_DESCRIPTOR,
-      })),
-      source: 'builtin',
-    };
-  }
   const packages: LoadedPackage[] = [];
 
   for (const entry of registry.entries) {
-    const loaded = loadDescriptor(repoRoot, entry);
+    const loaded = loadDescriptor(repoRoot, entry, registry.source);
 
     if ('ok' in loaded) {
       return loaded;
@@ -377,7 +324,7 @@ export const loadPackages = (repoRoot: string): LoadResult => {
     packages.push(loaded);
   }
 
-  return {ok: true, packages, source: 'registry'};
+  return {ok: true, packages, source: registry.source};
 };
 
 /**

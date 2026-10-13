@@ -1,9 +1,9 @@
 /**
- * Strategy: the TypeScript reader of the package registry is one of three
+ * Strategy: the TypeScript reader of the package registry is one of two
  * implementations of one contract, so most of what it must do is stated by the
- * shared corpus (`.gaia/tests/fixtures/gaia-packages/`), which the bash and Node
- * readers are driven over too. This suite adds what the corpus cannot say: the
- * fail-closed result shapes, the built-in default pinned to the committed
+ * shared corpus (`.gaia/tests/fixtures/gaia-packages/`), which the bash reader
+ * is driven over too. This suite adds what the corpus cannot say: the
+ * fail-closed result shapes, the built-in registry reading the committed
  * descriptor, hostile input, and a proof that the corpus check itself can fail.
  */
 import {afterAll, describe, expect, test} from 'vitest';
@@ -11,7 +11,6 @@ import {
   existsSync,
   mkdirSync,
   mkdtempSync,
-  readFileSync,
   rmSync,
   writeFileSync,
 } from 'node:fs';
@@ -27,9 +26,11 @@ import {
   retiredGlobsKey,
 } from './gaia-packages-corpus-fixture.js';
 import type {CorpusReader} from './gaia-packages-corpus-fixture.js';
-import {writeFrontendRegistry} from './package-fixture.js';
 import {
-  BUILTIN_DESCRIPTOR,
+  writeBuiltinDescriptor,
+  writeFrontendRegistry,
+} from './package-fixture.js';
+import {
   BUILTIN_REGISTRY,
   globToRegExp,
   joinGlob,
@@ -162,9 +163,9 @@ describe('fail-closed results', () => {
 });
 
 describe('built-in default', () => {
-  test('registry absent: source is builtin and frontend/app matches, root app does not', () => {
+  test('registry absent: source is builtin, the committed descriptor drives it, frontend/app matches and root app does not', () => {
     const root = path.join(SCRATCH, 'absent');
-    mkdirSync(root, {recursive: true});
+    writeBuiltinDescriptor(root);
     const result = loadPackages(root);
 
     expect(result.ok && result.source).toBe('builtin');
@@ -178,22 +179,6 @@ describe('built-in default', () => {
 
   test('the built-in registry is frontend at frontend', () => {
     expect(BUILTIN_REGISTRY).toEqual([{name: 'frontend', path: 'frontend'}]);
-  });
-
-  test('the built-in descriptor equals the committed descriptor located through the committed registry', () => {
-    const registry = JSON.parse(
-      readFileSync(path.join(REPO_ROOT, '.gaia/packages.json'), 'utf8')
-    ) as {name: string; path: string}[];
-    const entry = registry.find((candidate) => candidate.name === 'frontend');
-    expect(entry).toBeDefined();
-    const committed = JSON.parse(
-      readFileSync(
-        path.join(REPO_ROOT, entry?.path ?? '', 'gaia.package.json'),
-        'utf8'
-      )
-    ) as unknown;
-
-    expect(committed).toEqual(BUILTIN_DESCRIPTOR);
   });
 
   test('the committed registry loads clean from the repo root', () => {

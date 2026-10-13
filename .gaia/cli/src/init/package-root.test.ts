@@ -10,7 +10,10 @@ import {
 import {tmpdir} from 'node:os';
 import path from 'node:path';
 import {EXIT_CODES} from '../exit.js';
-import {writeFrontendRegistry} from '../util/package-fixture.js';
+import {
+  writeBuiltinDescriptor,
+  writeFrontendRegistry,
+} from '../util/package-fixture.js';
 import {run as runConfigureI18n} from './configure-i18n.js';
 import {run as runRename} from './rename.js';
 import {run as runStripBranding} from './strip-branding.js';
@@ -51,6 +54,7 @@ describe('gaia init commands resolve the frontend package root', () => {
   });
 
   test('configure-i18n edits frontend/app and touches no root app/', () => {
+    writeBuiltinDescriptor(root);
     write(
       root,
       'frontend/app/i18n.ts',
@@ -70,6 +74,7 @@ describe('gaia init commands resolve the frontend package root', () => {
   });
 
   test('rename edits the frontend language files and touches no root app/', () => {
+    writeBuiltinDescriptor(root);
     write(root, 'package.json', '{"name": "gaia"}\n');
     write(root, 'CLAUDE.md', '# GAIA React\n\nBody\n');
     write(
@@ -91,6 +96,7 @@ describe('gaia init commands resolve the frontend package root', () => {
   });
 
   test('strip-branding de-brands frontend/.storybook and touches no root .storybook', () => {
+    writeBuiltinDescriptor(root);
     write(root, 'frontend/.storybook/preview.ts', PREVIEW);
     write(root, '.gaia/templates/README.md', '# {{PROJECT_TITLE}}\n');
 
