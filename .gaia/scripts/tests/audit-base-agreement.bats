@@ -679,7 +679,7 @@ owners_of() {
   local writer_key
   writer_key="$(audit_key_for code-audit-maintainer-shell "$repo")"
   [ -n "$writer_key" ]
-  printf '{"schema":1,"member":"code-audit-maintainer-shell","findings":[{"finding_class":"shell/unquoted-expansion","severity":"warning","security":false,"area_tags":["shell"],"path":".gaia/scripts/x.sh","line":7,"title":"t","failure_mode":"f","verified_by":"v","suggested_fix":"s"}]}\n' \
+  printf '{"schema":1,"member":"code-audit-maintainer-shell","findings":[{"finding_class":"shell/unquoted-expansion","severity":"major","security":false,"area_tags":["shell"],"path":".gaia/scripts/x.sh","line":7,"title":"t","failure_mode":"f","verified_by":"v","suggested_fix":"s"}]}\n' \
     > "$repo/.gaia/local/audit/${writer_key}.code-audit-maintainer-shell.findings.json"
 
   # A round that cleared BEFORE the one above, keyed to the base that round
@@ -693,7 +693,7 @@ owners_of() {
   # derives its own base, and the whole point here is an explicit earlier one.
   earlier_key="$( . "$repo/.gaia/scripts/audit-key-lib.sh" && gaia_audit_key "$earlier_base" "$repo" )"
   [ -n "$earlier_key" ]
-  printf '{"schema":1,"member":"code-audit-frontend","findings":[{"finding_class":"holistic/swallowed-error","severity":"warning","security":false,"area_tags":["app"],"path":"app/a.txt","line":1,"title":"t","failure_mode":"f","verified_by":"v","suggested_fix":"s"}]}\n' \
+  printf '{"schema":1,"member":"code-audit-frontend","findings":[{"finding_class":"holistic/swallowed-error","severity":"major","security":false,"area_tags":["app"],"path":"app/a.txt","line":1,"title":"t","failure_mode":"f","verified_by":"v","suggested_fix":"s"}]}\n' \
     > "$repo/.gaia/local/audit/${earlier_key}.code-audit-frontend.findings.json"
   [ "$earlier_base" = "${writer_key%%.*}" ] && return 1
 

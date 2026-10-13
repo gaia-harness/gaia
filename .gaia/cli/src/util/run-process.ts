@@ -84,7 +84,7 @@ const run = (
     encoding: 'utf8',
     env: options.env ?? process.env,
     // Node's 1 MiB default kills the child on overflow, which reads here as a
-    // plain exit 1. `harden-tally`'s 90-day `gh pr list --json comments`
+    // plain exit 1. `codify-tally`'s 90-day `gh pr list --json comments`
     // window runs past 1 MiB, so the default reads it as a gh failure.
     maxBuffer: MAX_GIT_BUFFER_BYTES,
     stdio: ['ignore', 'pipe', 'pipe'],

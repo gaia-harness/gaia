@@ -296,10 +296,10 @@ wait_for_file() {
   "gaiaHasUpdate": true,
   "gaiaLatest": "9.9.9",
   "outdatedCount": 3,
-  "hardenCandidateCount": 2,
-  "hardenUnclassifiedCount": 1,
-  "auditNudge": true,
-  "auditNudgeReason": "stale",
+  "codifyCandidateCount": 2,
+  "codifyUnclassifiedCount": 1,
+  "cleanseNudge": true,
+  "cleanseNudgeReason": "stale",
   "serenaLangDrift": ["go"]
 }
 JSON
@@ -311,8 +311,8 @@ JSON
   [ "$status" -eq 0 ]
   grep -qF -- "update-gaia" <<<"$output"
   grep -qF -- "update-deps" <<<"$output"
-  grep -qF -- "gaia-harden" <<<"$output"
-  grep -qF -- "gaia-audit" <<<"$output"
+  grep -qF -- "gaia-codify" <<<"$output"
+  grep -qF -- "gaia-cleanse" <<<"$output"
   grep -qF -- "gaia-serena-sync" <<<"$output"
   grep -qF -- "gaia-debt" <<<"$output"
 
@@ -320,8 +320,8 @@ JSON
   [ "$status" -eq 0 ]
   grep -qF -- "update-gaia" <<<"$output" && return 1
   grep -qF -- "update-deps" <<<"$output" && return 1
-  grep -qF -- "gaia-harden" <<<"$output" && return 1
-  grep -qF -- "gaia-audit" <<<"$output" && return 1
+  grep -qF -- "gaia-codify" <<<"$output" && return 1
+  grep -qF -- "gaia-cleanse" <<<"$output" && return 1
   grep -qF -- "gaia-serena-sync" <<<"$output" && return 1
   grep -qF -- "gaia-debt" <<<"$output" && return 1
   return 0

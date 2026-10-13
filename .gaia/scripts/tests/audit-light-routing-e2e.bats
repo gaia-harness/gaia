@@ -139,7 +139,7 @@ escalate_through_light() {
 @test "a refused branch repaired by a small delta clears light against the refusal's findings, and the merge gate allows it" {
   lsb_init
   lsb_commit_lines frontend/app/notes.md 5 line
-  lsb_refuse_with_findings "$FRONTEND" "[$(lsb_finding frontend/app/notes.md 2 warning false)]"
+  lsb_refuse_with_findings "$FRONTEND" "[$(lsb_finding frontend/app/notes.md 2 major false)]"
   assert_gate_denies
   lsb_commit_lines frontend/app/notes.md 5 fixed
   assert_gate_denies
@@ -155,7 +155,7 @@ escalate_through_light() {
 @test "the same repair with the cited line left as it was is refused and the merge gate keeps denying" {
   lsb_init
   lsb_commit_lines frontend/app/notes.md 5 line
-  lsb_refuse_with_findings "$FRONTEND" "[$(lsb_finding frontend/app/notes.md 2 warning false)]"
+  lsb_refuse_with_findings "$FRONTEND" "[$(lsb_finding frontend/app/notes.md 2 major false)]"
   lsb_commit frontend/app/notes.md "$(printf 'line 1\nline 2\nline 3\nline 4\nchanged 5')"
   lsb_route "$FRONTEND"
   expect_line "$(printf 'light\trefusal-anchored')"
@@ -296,7 +296,7 @@ escalate_through_light() {
   findings_base="$(cd "$LSB_ROOT" && bash .github/audit/resolve-audit-base.sh --member "$FRONTEND" 2>/dev/null | sed -n '3p')"
   findings_base="$(lsb_git merge-base "$findings_base" HEAD)"
   bash "$LSB_ROOT/.gaia/scripts/audit-write-clearance.sh" --root "$LSB_ROOT" --member "$FRONTEND" --provenance refused >/dev/null
-  jq -n -c '[range(1; 3) | {finding_class: "holistic/example", severity: "warning", path: "frontend/app/notes.md", line: .,
+  jq -n -c '[range(1; 3) | {finding_class: "holistic/example", severity: "major", path: "frontend/app/notes.md", line: .,
     title: "a defect", failure_mode: "input and state give a wrong outcome", verified_by: "ran it", suggested_fix: "repair it"}]' |
     bash "$LSB_ROOT/.gaia/scripts/audit-write-findings.sh" --root "$LSB_ROOT" --member "$FRONTEND" --base "$findings_base" --findings - >/dev/null
   run bash "$(telemetry_script)" member-result --root "$LSB_ROOT" --member "$FRONTEND"

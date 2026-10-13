@@ -28,22 +28,22 @@ setup() {
   RUN_FOLDER="$ALF_ROOT/.gaia/local/runs/$ALF_NORMALIZED_BRANCH"
   SNAPSHOT_DIRECTORY="$ALF_ROOT/.gaia/local/protected/audit-loop/$ALF_NORMALIZED_BRANCH.d"
   mkdir -p "$RUN_FOLDER"
-  # f.txt:1 authored Critical, :2 security Suggestion, :3 Important,
-  # base.txt:3 Critical outside the branch diff, :4 cross-remit Important,
-  # :5 no security field, :6 Suggestion; base.txt:5 security Suggestion,
-  # base.txt:6 Important and base.txt:7 Important with no security field, all
+  # f.txt:1 authored Critical, :2 security Minor, :3 Major,
+  # base.txt:3 Critical outside the branch diff, :4 cross-remit Major,
+  # :5 no security field, :6 Minor; base.txt:5 security Minor,
+  # base.txt:6 Major and base.txt:7 Major with no security field, all
   # outside the branch diff.
   FINDINGS_JSON='[
-    {"path":"f.txt","line":1,"finding_class":"c/crit","severity":"error","security":false},
-    {"path":"f.txt","line":2,"finding_class":"c/sec","severity":"suggestion","security":true},
-    {"path":"f.txt","line":3,"finding_class":"c/imp","severity":"warning","security":false},
-    {"path":"base.txt","line":3,"finding_class":"c/oos","severity":"error","security":false},
-    {"path":"f.txt","line":4,"finding_class":"c/xr","severity":"warning","security":false,"cross_remit":true},
-    {"path":"f.txt","line":5,"finding_class":"c/nosec","severity":"warning"},
-    {"path":"f.txt","line":6,"finding_class":"c/sug","severity":"suggestion","security":false},
-    {"path":"base.txt","line":5,"finding_class":"c/oossec","severity":"suggestion","security":true},
-    {"path":"base.txt","line":6,"finding_class":"c/oosimp","severity":"warning","security":false},
-    {"path":"base.txt","line":7,"finding_class":"c/oosnosec","severity":"warning"}
+    {"path":"f.txt","line":1,"finding_class":"c/crit","severity":"critical","security":false},
+    {"path":"f.txt","line":2,"finding_class":"c/sec","severity":"minor","security":true},
+    {"path":"f.txt","line":3,"finding_class":"c/imp","severity":"major","security":false},
+    {"path":"base.txt","line":3,"finding_class":"c/oos","severity":"critical","security":false},
+    {"path":"f.txt","line":4,"finding_class":"c/xr","severity":"major","security":false,"cross_remit":true},
+    {"path":"f.txt","line":5,"finding_class":"c/nosec","severity":"major"},
+    {"path":"f.txt","line":6,"finding_class":"c/sug","severity":"minor","security":false},
+    {"path":"base.txt","line":5,"finding_class":"c/oossec","severity":"minor","security":true},
+    {"path":"base.txt","line":6,"finding_class":"c/oosimp","severity":"major","security":false},
+    {"path":"base.txt","line":7,"finding_class":"c/oosnosec","severity":"major"}
   ]'
   open_round 1 "$FINDINGS_JSON"
   # A gh stub logging each call with the GH_REPO it saw. The repository
@@ -149,15 +149,15 @@ vetoes() {
   red critical-not-fix "$(key_json c/crit f.txt 1)"
 }
 
-@test "critical: relabelling the Critical as warning inside the dispositions entry still fails" {
+@test "critical: relabelling the Critical as major inside the dispositions entry still fails" {
   local entry
-  entry="$(disposition_entry f.txt 1 c/crit waive-out-of-scope because triage-threshold | jq -c '. + {severity: "warning", security: false}')"
+  entry="$(disposition_entry f.txt 1 c/crit waive-out-of-scope because triage-threshold | jq -c '. + {severity: "major", security: false}')"
   write_dispositions 1 "$(fill "$FINDINGS_JSON" "[$entry]")"
   run_check 1
   red critical-not-fix "$(key_json c/crit f.txt 1)"
 }
 
-@test "security: a security:true Suggestion waived fails security-not-fix" {
+@test "security: a security:true Minor waived fails security-not-fix" {
   write_dispositions 1 "$(fill "$FINDINGS_JSON" "[$(disposition_entry f.txt 2 c/sec waive-out-of-scope because triage-threshold)]")"
   run_check 1
   red security-not-fix "$(key_json c/sec f.txt 2)"
@@ -212,7 +212,7 @@ vetoes() {
   red security-file-not-private "$(key_json c/oos base.txt 3)"
 }
 
-@test "security divert: an out-of-scope security:true Suggestion filed fails on INTERNAL and on a failed probe" {
+@test "security divert: an out-of-scope security:true Minor filed fails on INTERNAL and on a failed probe" {
   local visibility
   write_dispositions 1 "$(fill "$FINDINGS_JSON" "[$(disposition_entry base.txt 5 c/oossec file "filed upstream")]")"
   for visibility in INTERNAL ''; do
@@ -222,20 +222,20 @@ vetoes() {
   done
 }
 
-@test "security divert: an out-of-scope non-security Important filed on a PUBLIC repo passes without probing" {
+@test "security divert: an out-of-scope non-security Major filed on a PUBLIC repo passes without probing" {
   write_dispositions 1 "$(fill "$FINDINGS_JSON" "[$(disposition_entry base.txt 6 c/oosimp file "filed upstream")]")"
   run_check 1
   green || return 1
   [ ! -e "$GH_CALLS" ] || { echo "probed: $(cat "$GH_CALLS")"; return 1; }
 }
 
-@test "control: a branch-authored security:false Suggestion waived on the triage threshold passes" {
+@test "control: a branch-authored security:false Minor waived on the triage threshold passes" {
   write_dispositions 1 "$(fill "$FINDINGS_JSON" "[$(disposition_entry f.txt 6 c/sug waive-out-of-scope "below threshold" triage-threshold)]")"
   run_check 1
   green
 }
 
-@test "control: a cross_remit Important waived with basis cross-remit passes" {
+@test "control: a cross_remit Major waived with basis cross-remit passes" {
   write_dispositions 1 "$(fill "$FINDINGS_JSON" "[$(disposition_entry f.txt 4 c/xr waive-out-of-scope "other member's remit" cross-remit)]")"
   run_check 1
   green
@@ -263,6 +263,23 @@ vetoes() {
   write_dispositions 1 "$(fill "$FINDINGS_JSON" '[]' 'select(.line != 2)')"
   run_check 1
   red undisposed "$(key_json c/sec f.txt 2)"
+}
+
+@test "undisposed: an omitted branch-authored Minor fails, and a fix entry clears it" {
+  open_round 2 '[{"path":"f.txt","line":7,"finding_class":"c/minorgap","severity":"minor","security":false}]'
+  write_dispositions 2 '[]'
+  run_check 2
+  red undisposed "$(key_json c/minorgap f.txt 7)" || return 1
+  write_dispositions 2 "[$(disposition_entry f.txt 7 c/minorgap fix)]"
+  run_check 2
+  green
+}
+
+@test "security: a security:true Major waived fails security-not-fix" {
+  open_round 2 '[{"path":"f.txt","line":7,"finding_class":"c/majsec","severity":"major","security":true}]'
+  write_dispositions 2 "[$(disposition_entry f.txt 7 c/majsec waive-out-of-scope because triage-threshold)]"
+  run_check 2
+  red security-not-fix "$(key_json c/majsec f.txt 7)"
 }
 
 @test "undisposed: an omitted key vetoed for the round fails, though no member re-reported it" {
@@ -311,7 +328,7 @@ vetoes() {
   run_check 1 --snapshot-dir "$SNAPSHOT_DIRECTORY"
   green || return 1
   [ -f "$SNAPSHOT_DIRECTORY/dispositions-1.checked.json" ] || return 1
-  open_round 2 '[{"path":"f.txt","line":7,"finding_class":"c/later","severity":"suggestion","security":false}]'
+  open_round 2 '[{"path":"f.txt","line":7,"finding_class":"c/later","severity":"minor","security":false}]'
   run_check_all --snapshot-dir "$SNAPSHOT_DIRECTORY"
   green
 }
@@ -320,7 +337,7 @@ vetoes() {
   write_dispositions 1 "$(fill "$FINDINGS_JSON" "[$(disposition_entry f.txt 3 c/imp waive-out-of-scope because triage-threshold)]")"
   run_check 1
   green || return 1
-  open_round 2 '[{"path":"f.txt","line":7,"finding_class":"c/later","severity":"suggestion","security":false}]'
+  open_round 2 '[{"path":"f.txt","line":7,"finding_class":"c/later","severity":"minor","security":false}]'
   run_check_all
   red unknown-key "$(key_json c/imp f.txt 3)"
 }
@@ -338,7 +355,7 @@ tree_state() {
   write_dispositions 1 "$(fill "$FINDINGS_JSON" "[$(disposition_entry f.txt 3 c/imp waive-out-of-scope because triage-threshold)]")"
   run_check 1 --snapshot-dir "$SNAPSHOT_DIRECTORY"
   green || return 1
-  open_round 2 '[{"path":"f.txt","line":7,"finding_class":"c/later","severity":"suggestion","security":false}]'
+  open_round 2 '[{"path":"f.txt","line":7,"finding_class":"c/later","severity":"minor","security":false}]'
   write_dispositions 2 "[$(disposition_entry f.txt 7 c/later fix)]"
   before="$(tree_state)"
   run_check_all
@@ -354,7 +371,7 @@ tree_state() {
   write_dispositions 1 "$(fill "$FINDINGS_JSON" "[$(disposition_entry f.txt 3 c/imp waive-out-of-scope because triage-threshold)]")"
   run_check 1
   green || return 1
-  open_round 2 '[{"path":"f.txt","line":7,"finding_class":"c/later","severity":"suggestion","security":false}]'
+  open_round 2 '[{"path":"f.txt","line":7,"finding_class":"c/later","severity":"minor","security":false}]'
   write_dispositions 2 "[$(disposition_entry f.txt 7 c/later fix)]"
   before="$(tree_state)"
   run_check_all
@@ -367,7 +384,7 @@ tree_state() {
   write_dispositions 1 "$(fill "$FINDINGS_JSON" "[$(disposition_entry f.txt 3 c/imp waive-out-of-scope because triage-threshold)]")"
   run_check 1 --snapshot-dir "$SNAPSHOT_DIRECTORY"
   green || return 1
-  open_round 2 '[{"path":"f.txt","line":7,"finding_class":"c/later","severity":"suggestion","security":false}]'
+  open_round 2 '[{"path":"f.txt","line":7,"finding_class":"c/later","severity":"minor","security":false}]'
   run_check 1
   green || return 1
   write_dispositions 1 "$(fill "$FINDINGS_JSON" "[$(disposition_entry f.txt 3 c/imp waive-out-of-scope "a different reason" triage-threshold)]")"
@@ -461,17 +478,17 @@ tree_state() {
 
 @test "waiver-table: header and one row per non-fix entry, severity from the sidecar" {
   local entry rows
-  entry="$(disposition_entry f.txt 1 c/crit waive-out-of-scope "pipe | here" triage-threshold | jq -c '. + {severity: "warning"}')"
+  entry="$(disposition_entry f.txt 1 c/crit waive-out-of-scope "pipe | here" triage-threshold | jq -c '. + {severity: "major"}')"
   write_dispositions 1 "$(fill "$FINDINGS_JSON" "[$entry,$(disposition_entry f.txt 3 c/imp fix),$(disposition_entry f.txt 6 c/sug accept-residual later)]")"
   run bash "$SCRIPT" waiver-table --root "$ALF_ROOT" --run-folder "$RUN_FOLDER" --rounds 1-1
   green || return 1
   head -n 1 <<<"$output" | grep -qF -- 'key | member | severity | security | disposition | reason' || return 1
   rows="$(wc -l <<<"$output" | tr -d ' ')"
   [ "$rows" -eq 4 ] || { echo "$output"; return 1; }
-  grep -F -- 'f.txt:1 c/crit' <<<"$output" | grep -qF -- '| error | false |' || { echo "$output"; return 1; }
+  grep -F -- 'f.txt:1 c/crit' <<<"$output" | grep -qF -- '| critical | false |' || { echo "$output"; return 1; }
   grep -qF -- 'pipe \| here' <<<"$output" || { echo "$output"; return 1; }
   grep -qF -- 'f.txt:3 c/imp' <<<"$output" && return 1
-  grep -F -- 'f.txt:6 c/sug' <<<"$output" | grep -qF -- '| suggestion | false | code-audit-frontend' && return 1
+  grep -F -- 'f.txt:6 c/sug' <<<"$output" | grep -qF -- '| minor | false | code-audit-frontend' && return 1
   true
 }
 
@@ -479,10 +496,10 @@ tree_state() {
   write_dispositions 1 "$(fill "$FINDINGS_JSON" "[$(disposition_entry f.txt 1 c/crit fix),$(disposition_entry f.txt 6 c/sug accept-residual later)]")"
   run_check 1 --snapshot-dir "$SNAPSHOT_DIRECTORY"
   green || return 1
-  open_round 2 '[{"path":"f.txt","line":7,"finding_class":"c/later","severity":"error","security":false}]'
+  open_round 2 '[{"path":"f.txt","line":7,"finding_class":"c/later","severity":"critical","security":false}]'
   run bash "$SCRIPT" waiver-table --root "$ALF_ROOT" --run-folder "$RUN_FOLDER" --rounds 1-1
   green || return 1
-  grep -F -- 'f.txt:6 c/sug' <<<"$output" | grep -qF -- '| suggestion | false |' || { echo "$output"; return 1; }
+  grep -F -- 'f.txt:6 c/sug' <<<"$output" | grep -qF -- '| minor | false |' || { echo "$output"; return 1; }
 }
 
 @test "pr-sections: three headings, keyed entries parse as residue keys, vetoed key drops out (directive 7)" {
@@ -533,7 +550,7 @@ tree_state() {
   # shellcheck disable=SC2016
   sed 's/\$lookup_entry\.severity/$entry.severity/g' "$SCRIPTS/audit-dispositions-check.sh" >"$mutant_directory/audit-dispositions-check.sh"
   ! cmp -s "$SCRIPTS/audit-dispositions-check.sh" "$mutant_directory/audit-dispositions-check.sh" || { echo "mutation did not apply"; return 1; }
-  entry="$(disposition_entry f.txt 1 c/crit waive-out-of-scope because triage-threshold | jq -c '. + {severity: "warning"}')"
+  entry="$(disposition_entry f.txt 1 c/crit waive-out-of-scope because triage-threshold | jq -c '. + {severity: "major"}')"
   write_dispositions 1 "$(fill "$FINDINGS_JSON" "[$entry]")"
   run bash "$mutant_directory/audit-dispositions-check.sh" check --root "$ALF_ROOT" --run-folder "$RUN_FOLDER" --round 1
   [ "$status" -eq 0 ] || { echo "mutant status $status: $output"; return 1; }
@@ -582,7 +599,7 @@ tree_state() {
 # --- every finding disposed, divert, visibility, outcomes, triage, PR sections ---
 
 SHELL_MEMBER=code-audit-maintainer-shell
-TRIAGE_ENTRY='{"path":".claude/hooks/h.sh","line":1,"finding_class":"c/tri","severity":"warning","security":false,"triage":true,"triage_reason":"below threshold"}'
+TRIAGE_ENTRY='{"path":".claude/hooks/h.sh","line":1,"finding_class":"c/tri","severity":"major","security":false,"triage":true,"triage_reason":"below threshold"}'
 
 # member_key_json <member> <class> <path> <line>
 member_key_json() {
@@ -670,7 +687,7 @@ run_sections() {
   red divert-not-allowed "$(key_json c/sec f.txt 2)"
 }
 
-@test "UAT-003e: divert on an out-of-branch security:false warning fails divert-not-allowed" {
+@test "UAT-003e: divert on an out-of-branch security:false major fails divert-not-allowed" {
   write_dispositions 1 "$(fill "$FINDINGS_JSON" "[$(disposition_entry base.txt 6 c/oosimp divert "not security")]")"
   run_check 1
   red divert-not-allowed "$(key_json c/oosimp base.txt 6)"
@@ -732,7 +749,7 @@ run_sections() {
   green
 }
 
-@test "UAT-023: a maintainer triage mark on its own harness path, security:false and warning, needs no entry and renders one waived line" {
+@test "UAT-023: a maintainer triage mark on its own harness path, security:false and major, needs no entry and renders one waived line" {
   local line_count
   with_maintainer "[$TRIAGE_ENTRY]"
   write_dispositions 1 "$(fill "$FINDINGS_JSON" '[]')"
@@ -745,9 +762,9 @@ run_sections() {
   [ "$line_count" -eq 1 ] || { echo "$output"; return 1; }
 }
 
-@test "UAT-023: a triage mark with severity error, security true, security absent, off its member's globs, or with no roster is ignored" {
+@test "UAT-023: a triage mark with severity critical, security true, security absent, off its member's globs, or with no roster is ignored" {
   local mutation
-  for mutation in '.severity = "error"' '.security = true' 'del(.security)' '.path = "f.txt" | .line = 9'; do
+  for mutation in '.severity = "critical"' '.security = true' 'del(.security)' '.path = "f.txt" | .line = 9'; do
     with_maintainer "[$(jq -c "$mutation" <<<"$TRIAGE_ENTRY")]"
     write_dispositions 1 "$(fill "$FINDINGS_JSON" '[]')"
     run_check 1
@@ -764,7 +781,7 @@ run_sections() {
 @test "UAT-023: a code-audit-frontend triage mark is ignored" {
   local with_mark
   write_roster
-  with_mark="$(jq -c '. + [{"path":"f.txt","line":8,"finding_class":"c/fronttri","severity":"suggestion","security":false,"triage":true,"triage_reason":"below threshold"}]' <<<"$FINDINGS_JSON")"
+  with_mark="$(jq -c '. + [{"path":"f.txt","line":8,"finding_class":"c/fronttri","severity":"minor","security":false,"triage":true,"triage_reason":"below threshold"}]' <<<"$FINDINGS_JSON")"
   alf_sidecar "$MEMBER" "$with_mark" 11
   write_dispositions 1 "$(fill "$FINDINGS_JSON" '[]')"
   run_check 1
@@ -805,7 +822,7 @@ secret_token() { printf '%s_%s' ghp "$(printf '%036d' 0)"; }
   true
 }
 
-@test "UAT-023: a waive line for a severity error finding does not render" {
+@test "UAT-023: a waive line for a severity critical finding does not render" {
   write_dispositions 1 "$(fill "$FINDINGS_JSON" "[$(disposition_entry base.txt 3 c/oos waive-out-of-scope "below threshold" triage-threshold)]")"
   run_sections
   green || return 1
@@ -813,7 +830,7 @@ secret_token() { printf '%s_%s' ghp "$(printf '%036d' 0)"; }
   true
 }
 
-@test "UAT-023: a waive line for a security:false warning with a clean reason renders exactly once" {
+@test "UAT-023: a waive line for a security:false major with a clean reason renders exactly once" {
   write_dispositions 1 "$(fill "$FINDINGS_JSON" "[$(disposition_entry base.txt 6 c/oosimp waive-out-of-scope "below threshold" triage-threshold)]")"
   run_sections
   green || return 1
@@ -913,7 +930,7 @@ secret_token() { printf '%s_%s' ghp "$(printf '%036d' 0)"; }
   jq -e '.version == 2 and any(.lookup[]; .finding_class == "c/tri" and .triage == true and .triage_reason == "below threshold")' \
     "$SNAPSHOT_DIRECTORY/dispositions-1.checked.json" >/dev/null || { cat "$SNAPSHOT_DIRECTORY/dispositions-1.checked.json"; return 1; }
   alf_sidecar "$SHELL_MEMBER" "[$(jq -c 'del(.triage, .triage_reason)' <<<"$TRIAGE_ENTRY")]" 12
-  open_round 2 '[{"path":"f.txt","line":7,"finding_class":"c/later","severity":"suggestion","security":false}]'
+  open_round 2 '[{"path":"f.txt","line":7,"finding_class":"c/later","severity":"minor","security":false}]'
   write_dispositions 2 "[$(disposition_entry f.txt 7 c/later fix)]"
   run_check_all --snapshot-dir "$SNAPSHOT_DIRECTORY"
   green || return 1

@@ -450,7 +450,7 @@ _noop_write_clearance() {
   sleep 1
   _noop_resolve_sidecar_at "$root" 1212121212121212121212121212121212121212 \
     'debt%2F1537-example' code-audit-frontend \
-    '{"schema":1,"member":"code-audit-frontend","findings":[{"finding_class":"holistic/swallowed-error","severity":"warning","path":"a.sh","line":3,"entry_id":"r1-1","area_tags":["."]}],"resolutions":[{"entry_id":"r1-2","rationale":"fixed at HEAD"}]}'
+    '{"schema":1,"member":"code-audit-frontend","findings":[{"finding_class":"holistic/swallowed-error","severity":"major","path":"a.sh","line":3,"entry_id":"r1-1","area_tags":["."]}],"resolutions":[{"entry_id":"r1-2","rationale":"fixed at HEAD"}]}'
   run "$SCRIPT" --shape audit-team-member --path "$FIXTURES_DIRECTORY/shared/reminder-echo.txt" \
     --marker "$root/.gaia/local/audit/${digest}.code-audit-frontend.ok" \
     --findings-root "$root" --findings-since "$stamp"

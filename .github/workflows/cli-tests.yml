@@ -347,7 +347,7 @@ jobs:
               # writer's and checker's classes out of it. Most regenerations
               # co-change .gaia/release-exclude, listed above, because the release
               # CLI writes both when a file is withheld -- but a manifest-only
-              # write is not rare (a ship-only /distribution-audit answer, a class
+              # write is not rare (a ship-only /distribution-vet answer, a class
               # reassignment, a plain re-run), and it matches no other pattern
               # here, so without this line it would resolve `code=false` and green
               # the job having run the scenarios that read the manifest zero

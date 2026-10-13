@@ -2,8 +2,8 @@
  * `gaia residue-tally [--count-only]`
  *
  * The `/gaia-residue` deterministic primitive: an I/O shell around
- * `compute-candidates.ts`'s pure core, structured like `gaia harden-tally`
- * (`../harden/tally.ts`). Reads the merged pull-request corpus and the
+ * `compute-candidates.ts`'s pure core, structured like `gaia codify-tally`
+ * (`../codify/tally.ts`). Reads the merged pull-request corpus and the
  * tech-debt issue corpus through the injectable `CorpusProvider` seam,
  * attributes each body through the incremental attribution cache, suppresses
  * on the filer's three arms plus the dismissal store, resolves the emitted

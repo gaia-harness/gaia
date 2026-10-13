@@ -1,6 +1,6 @@
-# /gaia-harden
+# /gaia-codify
 
-Human-gated hardening for the policy-memory loop. `/gaia-harden` is the ONLY code path that authors or activates anything in this loop, and it runs only under explicit human invocation. For each recurring finding it judges the lowest-context-weight form that fits, checks edit-vs-new first, and recommends exactly one action with rationale. It explains every item in plain language, presents the whole recommended plan once, and asks the human to accept it, change some items, or stop. Nothing is authored or activated unattended.
+Human-gated codifying for the policy-memory loop. `/gaia-codify` is the ONLY code path that authors or activates anything in this loop, and it runs only under explicit human invocation. For each recurring finding it judges the lowest-context-weight form that fits, checks edit-vs-new first, and recommends exactly one action with rationale. It explains every item in plain language, presents the whole recommended plan once, and asks the human to accept it, change some items, or stop. Nothing is authored or activated unattended.
 
 v1 owns prose-rule create/edit end to end. Skills and deterministic checks are recommended and scaffolded only (a skill-creator handoff; a hook+script sketch), never auto-authored or auto-activated.
 
@@ -14,7 +14,7 @@ The agent never runs `git add`, `git commit`, or `git push` *while dispositions 
 
 Tokenize the first whitespace-separated word of `$ARGUMENTS`:
 
-- `review` (or empty `$ARGUMENTS`) → the full interactive flow. This is the default an empty `$ARGUMENTS` resolves to, so the statusline nudge points here without carrying a `review` token. The nudge text is today's count form (`Run /gaia-harden (N recurring pattern)` for one, `Run /gaia-harden (N recurring patterns)` for more) only on a clone with no review snapshot; after a completed review it instead names the trigger (`tally changed`, `N new pattern(s)`, `<class> rising` per rising class (the last path segment of the class name), `unclassified rising`), and it stays silent while nothing has changed since that review. See `wiki/concepts/Policy-Memory Loop.md` for the trigger model.
+- `review` (or empty `$ARGUMENTS`) → the full interactive flow. This is the default an empty `$ARGUMENTS` resolves to, so the statusline nudge points here without carrying a `review` token. The nudge text is today's count form (`Run /gaia-codify (N recurring pattern)` for one, `Run /gaia-codify (N recurring patterns)` for more) only on a clone with no review snapshot; after a completed review it instead names the trigger (`tally changed`, `N new pattern(s)`, `<class> rising` per rising class (the last path segment of the class name), `unclassified rising`), and it stays silent while nothing has changed since that review. See `wiki/concepts/Policy-Memory Loop.md` for the trigger model.
 - `list` → print the live candidates with their distinct-PR counts and the recommended form. No authoring, no prompts.
 - `why` → the remainder of `$ARGUMENTS` is a `finding_class`. Explain that one candidate: the PRs it recurred on, the recommended form, and the rationale. No authoring, no prompts.
 
@@ -27,13 +27,13 @@ Every subcommand reads the live list from the tally primitive. Re-run it; never 
 In `review` mode, save the tally to a file and read it from there, since the end-of-run Record section needs the same run's tally:
 
 ```bash
-mkdir -p .gaia/local/harden && .gaia/cli/gaia harden-tally > .gaia/local/harden/review-tally.json
+mkdir -p .gaia/local/codify && .gaia/cli/gaia codify-tally > .gaia/local/codify/review-tally.json
 ```
 
 `list` and `why` keep the plain call and write nothing:
 
 ```bash
-.gaia/cli/gaia harden-tally
+.gaia/cli/gaia codify-tally
 ```
 
 A structured `malformed_snapshot` error on stderr means the prior review snapshot is ignored for this run's triggers; the next completed review replaces it. It prints JSON to stdout:
@@ -49,7 +49,7 @@ A structured `malformed_snapshot` error on stderr means the prior review snapsho
       "distinct_pr_count": 4,
       "pr_numbers": [311, 314, 318, 320],
       "area_tags": ["frontend/app/components"],
-      "severity_max": "warning",
+      "severity_max": "major",
       "is_oracle": false
     }
   ],
@@ -57,10 +57,10 @@ A structured `malformed_snapshot` error on stderr means the prior review snapsho
     "distinct_pr_count": 3,
     "pr_numbers": [401, 405, 409],
     "area_tags": ["frontend/app/routes"],
-    "severity_max": "suggestion"
+    "severity_max": "minor"
   },
   "audited_pr_count": 400,
-  "tally_schema_version": 1,
+  "tally_schema_version": 2,
   "class_inventory": [
     {"finding_class": "holistic/a", "distinct_pr_count": 40}
   ],
@@ -85,7 +85,7 @@ A structured `malformed_snapshot` error on stderr means the prior review snapsho
 
 `unclassified` is `null` when no classless cluster has crossed the recurrence threshold; otherwise it carries `distinct_pr_count`, `pr_numbers`, `area_tags`, and `severity_max` for that one cluster.
 
-Bind to these fields per candidate: `finding_class`, `distinct_pr_count`, `pr_numbers`, `area_tags`, `severity_max`, `is_oracle`. Also bind the top-level `unclassified` field (an object or `null`, see below). The tally already drops classes a promoted rule covers and classes the decline ledger suppresses, so every entry it returns is an open candidate. Coverage detection is class-level and scope-blind in v1: a promoted rule suppresses its `finding_class` regardless of the rule's `paths:` glob, because coverage keys only on the provenance marker's `finding_class`, not on scope. `harden-tally` is network-dependent and non-fatal: it always exits 0, and the emitted `gh_ok` boolean separates a real all-clear from a window it did not fully read. Branch on the result:
+Bind to these fields per candidate: `finding_class`, `distinct_pr_count`, `pr_numbers`, `area_tags`, `severity_max`, `is_oracle`. Also bind the top-level `unclassified` field (an object or `null`, see below). The tally already drops classes a promoted rule covers and classes the decline ledger suppresses, so every entry it returns is an open candidate. Coverage detection is class-level and scope-blind in v1: a promoted rule suppresses its `finding_class` regardless of the rule's `paths:` glob, because coverage keys only on the provenance marker's `finding_class`, not on scope. `codify-tally` is network-dependent and non-fatal: it always exits 0, and the emitted `gh_ok` boolean separates a real all-clear from a window it did not fully read. Branch on the result:
 
 - **`gh_ok` is `false`**: the merged-PR window could not be read (a `gh`/network outage), which is NOT an all-clear. Report "could not read the merged-PR window; this is not an all-clear, re-run when `gh` is available" and stop, never claim no findings. (Run ends here; see `## Cost record (run end)`.)
 - **`gh_ok` is `true`, `candidate_count` is `0`, `unclassified` is `null`**: report "no recurring findings crossed the threshold in the last 90 days". In `review` mode, before stopping, run the combined record-and-clear block from `## Record the review (end of run)` as one Bash call: shell variables do not persist across separate calls, so the record and the clear must run together. On a non-zero `record_status`, report it the way that section says (quote the structured error code); either way this stop does not proceed to Publish. `list`/`why` stop as today, writing nothing. (Run ends here; see `## Cost record (run end)`.)
@@ -110,7 +110,7 @@ Also check whether the quality gate (`wiki/decisions/Quality Gate.md`) already l
 
 Inspect the candidate's `is_oracle` flag and the pattern's nature:
 
-- **Oracle-class finding** (if `harden-tally` flags the candidate's `is_oracle` true, its `finding_class` is a tool id owned by a deterministic tool).
+- **Oracle-class finding** (if `codify-tally` flags the candidate's `is_oracle` true, its `finding_class` is a tool id owned by a deterministic tool).
 
   A deterministic check already exists for it. Recommend making that check BLOCKING or adding it to the quality gate, an enforcement edit, NOT a new prose rule. Point at `wiki/decisions/Quality Gate.md` and the tool's wiring (`wiki/dependencies/knip.md`, `wiki/dependencies/pnpm-audit.md`, the `code-audit-frontend` agent, or the relevant CI workflow). A `knip/*` class is the exception to the quality-gate route: the developer Quality Gate intentionally omits knip (see `wiki/dependencies/knip.md`), so route knip enforcement to the `code-audit-frontend` agent or CI, never the dev gate. Never draft prose for an oracle class.
 
@@ -161,7 +161,7 @@ Then, as secondary detail: the `finding_class`, the `pr_numbers`, and `severity_
 
 Present the whole plan before asking anything. Print one summary table, one row per candidate in tally order, with columns: row number, what keeps going wrong, how often, recommended action (plain words), and why. When `unclassified` is non-null, add it as a final row marked **not a candidate**, with "record a suppression; the signal returns if it rises materially" as its action (`## Unclassified recurrence signal (seed-a-class-or-investigate)` below owns what that means). Print each row's example and secondary detail below the table, keyed by row number.
 
-Then ask one question through an explicit user-question step (`AskUserQuestion`, header `Harden plan`, single-select), options in this order:
+Then ask one question through an explicit user-question step (`AskUserQuestion`, header `Codify plan`, single-select), options in this order:
 
 1. **Accept all recommendations (Recommended)**: every candidate takes its recommended action.
 2. **Change some**: pick which rows to change, then choose their actions; every other row takes its recommendation.
@@ -213,12 +213,12 @@ Make the existing deterministic check blocking or add it to the quality gate. Th
 Record one bounded entry to the machine-local ledger, passing the candidate's current distinct-PR count:
 
 ```bash
-.gaia/cli/gaia harden-ledger record --finding-class "<finding_class>" --pr-count <distinct_pr_count> --audited-pr-count <audited_pr_count>
+.gaia/cli/gaia codify-ledger record --finding-class "<finding_class>" --pr-count <distinct_pr_count> --audited-pr-count <audited_pr_count>
 ```
 
-Check the `harden-ledger record` exit code before reporting the outcome. On exit `0` the entry is written: report the machine-local decline as described below. On any non-zero exit (notably `CONFIG_INVALID` 30 for a corrupt or version-skewed ledger, or `STORAGE_INACCESSIBLE` 20; `record` itself never exits `2`) the entry was NOT recorded: tell the engineer the decline did not persist and why, and do not claim success. Because nothing was suppressed, the candidate re-surfaces on the next tally. A failed decline write does not halt the review: the run continues to the next candidate and, after the last one, proceeds through the unclassified section to `## Record the review (end of run)`, so the snapshot still records; the declined-but-unsuppressed class simply reappears in the next review.
+Check the `codify-ledger record` exit code before reporting the outcome. On exit `0` the entry is written: report the machine-local decline as described below. On any non-zero exit (notably `CONFIG_INVALID` 30 for a corrupt or version-skewed ledger, or `STORAGE_INACCESSIBLE` 20; `record` itself never exits `2`) the entry was NOT recorded: tell the engineer the decline did not persist and why, and do not claim success. Because nothing was suppressed, the candidate re-surfaces on the next tally. A failed decline write does not halt the review: the run continues to the next candidate and, after the last one, proceeds through the unclassified section to `## Record the review (end of run)`, so the snapshot still records; the declined-but-unsuppressed class simply reappears in the next review.
 
-State that the decline is machine-local only (the ledger is gitignored) and never shared: a teammate still sees the nudge and can approve. The decline re-surfaces on evidence, the ledger handles that: the candidate returns once the rise from the count recorded at decline to the live count is material, the same share-based material-rise rule that governs every other trigger (see `wiki/concepts/Policy-Memory Loop.md`), with a floor requiring at least 3 more distinct PRs, and measured against the same tally schema version. An entry recorded under a different tally schema version never suppresses; re-decline it to restore a suppression under the live rule. A mis-decline is reversible: re-record with a corrected count, or let `.gaia/cli/gaia harden-ledger prune` drop the entry once the class leaves the window, the undo and hygiene path for the ledger.
+State that the decline is machine-local only (the ledger is gitignored) and never shared: a teammate still sees the nudge and can approve. The decline re-surfaces on evidence, the ledger handles that: the candidate returns once the rise from the count recorded at decline to the live count is material, the same share-based material-rise rule that governs every other trigger (see `wiki/concepts/Policy-Memory Loop.md`), with a floor requiring at least 3 more distinct PRs, and measured against the same tally schema version. An entry recorded under a different tally schema version never suppresses; re-decline it to restore a suppression under the live rule. A mis-decline is reversible: re-record with a corrected count, or let `.gaia/cli/gaia codify-ledger prune` drop the entry once the class leaves the window, the undo and hygiene path for the ledger.
 
 ### defer
 
@@ -233,7 +233,7 @@ Write to `.claude/rules/<slug>.md`, where `<slug>` is a short kebab-case name de
 paths:
   - '<glob derived from area_tags, e.g. frontend/app/components/**/*>'
 ---
-<!-- gaia-harden: promoted from recurring finding_class <class>; pruned by /gaia-audit on obsolescence/redundancy/supersession/duplication only, never for non-recurrence -->
+<!-- gaia-harden: promoted from recurring finding_class <class>; pruned by /gaia-cleanse on obsolescence/redundancy/supersession/duplication only, never for non-recurrence -->
 
 # <Rule Title>
 
@@ -263,13 +263,13 @@ Rules for filling it in:
 The marker is this exact line, with `<class>` substituted:
 
 ```
-<!-- gaia-harden: promoted from recurring finding_class <class>; pruned by /gaia-audit on obsolescence/redundancy/supersession/duplication only, never for non-recurrence -->
+<!-- gaia-harden: promoted from recurring finding_class <class>; pruned by /gaia-cleanse on obsolescence/redundancy/supersession/duplication only, never for non-recurrence -->
 ```
 
-`/gaia-audit` recognizes this marker only to apply its existing obsolescence / redundancy / supersession / duplication signals without a policy-memory exemption, and to explicitly NOT treat non-recurrence as a prune signal. The marker grants no special lifecycle. Do not alter its wording: multiple binders key on it. The tally's coverage scan matches its prefix (`gaia-harden: promoted from recurring finding_class`) and is deliberately tail-agnostic. `/gaia-audit` (`.claude/skills/gaia/references/audit.md`) keys on the full text.
+`/gaia-cleanse` recognizes this marker only to apply its existing obsolescence / redundancy / supersession / duplication signals without a policy-memory exemption, and to explicitly NOT treat non-recurrence as a prune signal. The marker grants no special lifecycle. Do not alter its wording: multiple binders key on it. The tally's coverage scan matches its prefix (`gaia-harden: promoted from recurring finding_class`) and is deliberately tail-agnostic. `/gaia-cleanse` (`.claude/skills/gaia/references/cleanse.md`) keys on the same prefix and accepts either tail (`pruned by /gaia-cleanse ...` or the 1.x `pruned by /gaia-audit ...`).
 
 <!-- gaia:maintainer-only:start -->
-The marker text lives once, in `.gaia/cli/src/harden/marker.ts`'s `markerComment(...)`, and every doc copy reproduces it byte for byte. A wording change that misses any copy silently breaks one binder or the other.
+The marker text lives once, in `.gaia/cli/src/codify/marker.ts`'s `markerComment(...)`, and every doc copy reproduces it byte for byte. A wording change that misses any copy silently breaks one binder or the other.
 <!-- gaia:maintainer-only:end -->
 
 ## Unclassified recurrence signal (seed-a-class-or-investigate)
@@ -280,12 +280,12 @@ When `unclassified` is `null`, skip this section silently and proceed to `## Rec
 
 When `unclassified` is non-null, present it to the engineer as a distinct signal, separate from any candidate: the closed finding_class vocabulary may be missing something, or the cluster warrants investigation on its own. Render it the way `### Explain each item in plain language` above renders an item; when there were candidates, the plan table already carried it as its final row, so refer back to that row rather than repeating it. State explicitly:
 
-- It is NEVER placed in the draftable candidate set. `/gaia-harden` NEVER drafts a path-scoped rule, a deterministic-check sketch, a skill scaffold, or any other artifact for it.
+- It is NEVER placed in the draftable candidate set. `/gaia-codify` NEVER drafts a path-scoped rule, a deterministic-check sketch, a skill scaffold, or any other artifact for it.
 - It carries no approve / decline / defer / redirect action; there is nothing to ask the engineer to disposition here.
 - Seeding a class does **not** reclassify the cluster's findings. The tally buckets each finding on the literal class string its pull request recorded, so a finding written down as classless stays classless until it ages out of the window. Seeding reaches forward only, to what a member assigns next.
-- Because of that, the signal carries a **suppression**, recorded the way a decline is: `.gaia/cli/gaia harden-ledger record --finding-class holistic/unclassified --pr-count <distinct_pr_count> --audited-pr-count <audited_pr_count>`, passing the count the signal currently carries. The signal falls silent, and it returns on the same share-based material-rise rule as every other trigger (see `wiki/concepts/Policy-Memory Loop.md`), with the same distinct-PR floor, measured against the same tally schema version. Only the baseline is a stored snapshot; the live count it is compared against is read from the rolling 90-day window each time, so window churn as old pull requests age out can lower the live share and thereby delay or indefinitely prevent the return. A baseline recorded at the wrong count is corrected by recording again with the right one, and the `### decline` prune undo reaches this entry on the same terms as any other: once the classless cluster stops recurring at the threshold, the prune drops the baseline with it, so the next unrelated classless cluster is measured from zero rather than from a high-water mark nothing in the window still supports.
+- Because of that, the signal carries a **suppression**, recorded the way a decline is: `.gaia/cli/gaia codify-ledger record --finding-class holistic/unclassified --pr-count <distinct_pr_count> --audited-pr-count <audited_pr_count>`, passing the count the signal currently carries. The signal falls silent, and it returns on the same share-based material-rise rule as every other trigger (see `wiki/concepts/Policy-Memory Loop.md`), with the same distinct-PR floor, measured against the same tally schema version. Only the baseline is a stored snapshot; the live count it is compared against is read from the rolling 90-day window each time, so window churn as old pull requests age out can lower the live share and thereby delay or indefinitely prevent the return. A baseline recorded at the wrong count is corrected by recording again with the right one, and the `### decline` prune undo reaches this entry on the same terms as any other: once the classless cluster stops recurring at the threshold, the prune drops the baseline with it, so the next unrelated classless cluster is measured from zero rather than from a high-water mark nothing in the window still supports.
 - The suppression is machine-local: the ledger is gitignored and per-clone (the state registry shares one copy across a clone's worktrees), so it silences the nudge only for the developer who records it while the change it discharges is committed and shared. Every other clone keeps seeing the nudge until the cluster ages out.
-- The nudge is rendered by the statusline from the reason the refresher caches, which `## Record the review (end of run)` clears at once. To confirm the record landed without waiting, read the ledger directly: `.gaia/cli/gaia harden-ledger list`.
+- The nudge is rendered by the statusline from the reason the refresher caches, which `## Record the review (end of run)` clears at once. To confirm the record landed without waiting, read the ledger directly: `.gaia/cli/gaia codify-ledger list`.
 
 Then proceed to `## Record the review (end of run)`.
 
@@ -293,10 +293,10 @@ Then proceed to `## Record the review (end of run)`.
 
 Runs once, in `review` mode only, after the last candidate is dispositioned and `## Unclassified recurrence signal (seed-a-class-or-investigate)` has run. An abandoned run, one where a candidate was left without an answer or the human chose **Stop without changes**, never reaches this section and writes nothing. `list`, `why`, and a `gh_ok` false fetch never reach it either.
 
-Record the snapshot from this run's own start-of-run tally (the file `## Fetch the live candidate list` saved), then, only on exit `0`, clear the cached nudge so the next statusline render stops showing it (model on `.claude/skills/gaia/references/audit.md`'s cache-bust, main-root-resolved, jq with an `rm -f` fallback). Run both as one Bash call: shell variables do not persist across separate calls.
+Record the snapshot from this run's own start-of-run tally (the file `## Fetch the live candidate list` saved), then, only on exit `0`, clear the cached nudge so the next statusline render stops showing it (model on `.claude/skills/gaia/references/cleanse.md`'s cache-bust, main-root-resolved, jq with an `rm -f` fallback). Run both as one Bash call: shell variables do not persist across separate calls.
 
 ```bash
-.gaia/cli/gaia harden-ledger snapshot record --tally-file .gaia/local/harden/review-tally.json
+.gaia/cli/gaia codify-ledger snapshot record --tally-file .gaia/local/codify/review-tally.json
 record_status=$?
 if [ "$record_status" -eq 0 ]; then
   CACHE_ROOT="$(bash .gaia/scripts/main-root-lib.sh 2>/dev/null || git rev-parse --show-toplevel)"
@@ -304,7 +304,7 @@ if [ "$record_status" -eq 0 ]; then
   if [ -f "$CACHE" ]; then
     if command -v jq >/dev/null 2>&1; then
       tmp="$(mktemp)"
-      jq '.hardenNudgeReason = "" | .checkedAt = 0' "$CACHE" > "$tmp" && mv "$tmp" "$CACHE"
+      jq '.codifyNudgeReason = "" | .checkedAt = 0' "$CACHE" > "$tmp" && mv "$tmp" "$CACHE"
     else
       rm -f "$CACHE"
     fi
@@ -330,16 +330,16 @@ If it is empty, no-op (a redirect or an unapplied too-invasive edit can leave th
 
 **Repo-state safety.** Branching needs a safe state. If HEAD is detached or a rebase / merge / cherry-pick / bisect is in progress, do not branch: leave the approved changes in the working tree, tell the engineer they ship through normal PR review, and stop. (Run ends here; see `## Cost record (run end)`.)
 
-**On the default branch (main/master):** publish runs to a terminal state, the way `/update-deps` does on a main-branch run: merged and cleaned up, left open because the human chose to, or stopped on a named failure. It never ends at "PR opened, audit pending", because nothing else ever dispatches the audit a harden PR owes.
+**On the default branch (main/master):** publish runs to a terminal state, the way `/update-deps` does on a main-branch run: merged and cleaned up, left open because the human chose to, or stopped on a named failure. It never ends at "PR opened, audit pending", because nothing else ever dispatches the audit a codify PR owes.
 
-**Create the branch, as its own Bash call.** The uncommitted approved edits follow the checkout. Mint the name first and carry its output as a literal, `<HARDEN_BRANCH>`, into every later call, since shell variables do not persist between calls:
+**Create the branch, as its own Bash call.** The uncommitted approved edits follow the checkout. Mint the name first and carry its output as a literal, `<CODIFY_BRANCH>`, into every later call, since shell variables do not persist between calls:
 
 ```bash
-bash .gaia/scripts/branch-name-lib.sh name harden
+bash .gaia/scripts/branch-name-lib.sh name codify
 ```
 
 ```bash
-git checkout -b "<HARDEN_BRANCH>"
+git checkout -b "<CODIFY_BRANCH>"
 ```
 
 Never fold this into the commit call. The main-branch guard reads a whole command before any of it runs, so a `git checkout -b … && git commit …` call still looks like a commit on `main` and is refused.
@@ -347,14 +347,14 @@ Never fold this into the commit call. The main-branch guard reads a whole comman
 <!-- gaia:maintainer-only:start -->
 **Clear the obligations a rule file carries**, before `gh pr create`. Each is invisible in the diff. The first two apply only to a new rule file:
 - **Tier it in the audit partition** per `.claude/rules/maintainers/hook-registration.md`. Nearly always merely-shared, which needs no entry; this is a judgment call no check enforces.
-- **Answer distribution** through `/distribution-audit`, which regenerates `.gaia/manifest.json`. The distribution pre-flight refuses `gh pr create` for a newly-shipping file with no ship-or-withhold answer.
+- **Answer distribution** through `/distribution-vet`, which regenerates `.gaia/manifest.json`. The distribution pre-flight refuses `gh pr create` for a newly-shipping file with no ship-or-withhold answer.
 - **Keep release-excluded citations out of a shipped rule's visible body** (see `## The prose-rule template (fill in, then write)`, its filling rules).
 <!-- gaia:maintainer-only:end -->
 
-**Commit and push, then open the PR, as two calls.** Route the commit message through a file, never `-m`. Subject: `chore(harden): <the approved forms, e.g. "promote use-effect-derived-state rule">`.
+**Commit and push, then open the PR, as two calls.** Route the commit message through a file, never `-m`. Subject: `chore(codify): <the approved forms, e.g. "promote use-effect-derived-state rule">`.
 
 ```bash
-git add -A && git commit -F <commit-message-file> && git push -u origin <HARDEN_BRANCH>
+git add -A && git commit -F <commit-message-file> && git push -u origin <CODIFY_BRANCH>
 ```
 
 ```bash
@@ -365,7 +365,7 @@ gh pr create --draft --title "<commit subject>" --body-file <pr-body-file>
 **Clear the CHANGELOG gate** per `wiki/concepts/PR Merge Workflow.md` in a follow-up commit, now that the PR number exists for its `(#<PR>)` reference, and push it before any audit dispatch anchors on HEAD. A promoted policy rule that changes how the agent works usually warrants a `## [Unreleased]` entry.
 <!-- gaia:maintainer-only:end -->
 
-**Run the audit, on every path.** Read `wiki/concepts/PR Merge Workflow.md` and run its `#### Before the first dispatch: verify your own work` checks, then resolve the dispatched members with `bash .gaia/scripts/resolve-audit-members.sh`. Do not assume a harden diff is out of audit scope: a rule file or enforcement wiring can sit in a member's remit. When members are named, complete the workflow's marker handshake (dispatch the `audit-loop-unit` agent per its `## Dispatch the audit loop unit`, which spawns, fixes and re-audits under the `#### The branch checkpoint`); once that page's `#### Posting the status last` conditions hold, post the status yourself, `bash .claude/hooks/post-audit-status.sh <path to a current member marker>`, before the merge question below. When none are named, the out-of-scope bypass clears the merge with no marker. At a checkpoint, ask the human the same checkpoint `AskUserQuestion` the workflow prescribes for an interactive run: the pinned question `bash .gaia/scripts/audit-loop-eval.sh pinned-question --root <root>` prints, asked verbatim, with the evidence from `bash .gaia/scripts/audit-loop-eval.sh brief --root <root>` shown beside it.
+**Run the audit, on every path.** Read `wiki/concepts/PR Merge Workflow.md` and run its `#### Before the first dispatch: verify your own work` checks, then resolve the dispatched members with `bash .gaia/scripts/resolve-audit-members.sh`. Do not assume a codify diff is out of audit scope: a rule file or enforcement wiring can sit in a member's remit. When members are named, complete the workflow's marker handshake (dispatch the `audit-loop-unit` agent per its `## Dispatch the audit loop unit`, which spawns, fixes and re-audits under the `#### The branch checkpoint`); once that page's `#### Posting the status last` conditions hold, post the status yourself, `bash .claude/hooks/post-audit-status.sh <path to a current member marker>`, before the merge question below. When none are named, the out-of-scope bypass clears the merge with no marker. At a checkpoint, ask the human the same checkpoint `AskUserQuestion` the workflow prescribes for an interactive run: the pinned question `bash .gaia/scripts/audit-loop-eval.sh pinned-question --root <root>` prints, asked verbatim, with the evidence from `bash .gaia/scripts/audit-loop-eval.sh brief --root <root>` shown beside it.
 
 A fix to a drafted rule is a commit to a file in a member's remit, so it rotates that member's digest and buys a whole extra round. The citation check in the prose-rule template's filling rules is what keeps round one clean.
 
@@ -373,7 +373,7 @@ A fix to a drafted rule is a commit to a file in a member's remit, so it rotates
 
 **Ask the merge question**, once, via `AskUserQuestion`, after the audit has cleared and the check watch ended without a failing check. A candidate the human declined or deferred is no reason to withhold the merge: the PR carries only what they approved.
 
-- **header:** `"Merge harden PR?"`
+- **header:** `"Merge codify PR?"`
 - **question:** `"PR #<N> has cleared its audit. Merge it now, or leave it open for review?"`
 - **options (this exact order):**
   1. `{ label: "Merge", description: "Squash-merge PR #<N> now and clean up the branch." }`
@@ -383,7 +383,7 @@ A fix to a drafted rule is a commit to a file in a member's remit, so it rotates
 
 **Merge, verify, clean up.** Run `gh pr merge <N> --squash --delete-branch --auto` directly, so a merge reached after the watch window closed with checks pending queues behind them rather than being refused by branch policy. Then run the merge wait, `bash .gaia/scripts/pr-wait-merge.sh --pr <N> --attempts 20`, with a 20-attempt bound in place of its default 5, since a full CI run outlasts the default. The merge above is already queued and the script issues no `gh pr merge` of its own, so nothing here re-merges. One arm per verdict plus one for the exit-2 refusal, and the script's `--help` is the authority on both:
 
-- On `MERGED` (exit 0), clean up per the workflow's `## Post-merge verification before cleanup` (`git checkout main && git pull origin main`, `git branch -D <HARDEN_BRANCH>`, `git fetch --prune origin`).
+- On `MERGED` (exit 0), clean up per the workflow's `## Post-merge verification before cleanup` (`git checkout main && git pull origin main`, `git branch -D <CODIFY_BRANCH>`, `git fetch --prune origin`).
 - On `CONFLICTING` (exit 3), repair per `wiki/concepts/PR Merge Workflow.md`'s `### Conflict found mid-wait` and run the wait again.
 - On `CHECK_FAILED` (exit 4), print the PR URL and the failing check, and leave the branch in place.
 - On `TIMEOUT` (exit 5), the window closed with the pull request still open: print the PR URL, say the merge queued above has not landed yet, and leave the branch in place.
@@ -398,15 +398,15 @@ If any `git` or `gh` command above exits non-zero, print the error and STOP. Do 
 
 ## list subcommand
 
-Run `harden-tally`, judge every candidate, and print the same summary table and per-row detail `### Present the plan, then ask once` prints, rendered per `### Explain each item in plain language`, including the unclassified row when `unclassified` is non-null, noting it awaits a seeded class or investigation. Author nothing and prompt for nothing. (Run ends here; see `## Cost record (run end)`.)
+Run `codify-tally`, judge every candidate, and print the same summary table and per-row detail `### Present the plan, then ask once` prints, rendered per `### Explain each item in plain language`, including the unclassified row when `unclassified` is non-null, noting it awaits a seeded class or investigation. Author nothing and prompt for nothing. (Run ends here; see `## Cost record (run end)`.)
 
 ## why subcommand
 
-Run `harden-tally`, find the candidate whose `finding_class` matches the argument. Explain it with the rendering `### Explain each item in plain language` defines, then add the fuller rationale (including whether an existing artifact should be edited instead). If no candidate matches, say so and list the open candidates. `unclassified` is never `why`-addressable: it carries no `finding_class`, so treat a `why` argument of `unclassified` (or similar) the same as no match, say so, and point at `list` to see it. Author nothing and prompt for nothing. (Run ends here; see `## Cost record (run end)`.)
+Run `codify-tally`, find the candidate whose `finding_class` matches the argument. Explain it with the rendering `### Explain each item in plain language` defines, then add the fuller rationale (including whether an existing artifact should be edited instead). If no candidate matches, say so and list the open candidates. `unclassified` is never `why`-addressable: it carries no `finding_class`, so treat a `why` argument of `unclassified` (or similar) the same as no match, say so, and point at `list` to see it. Author nothing and prompt for nothing. (Run ends here; see `## Cost record (run end)`.)
 
 ## Cost record (run end)
 
-Every path that ends a `/gaia-harden` run appends exactly one cost record, the run-ending paths above:
+Every path that ends a `/gaia-codify` run appends exactly one cost record, the run-ending paths above:
 
 - `list` and `why` printing their result.
 - The `gh_ok: false` and zero-candidate stops from the live candidate fetch.
@@ -418,11 +418,11 @@ Every path that ends a `/gaia-harden` run appends exactly one cost record, the r
 
 On the default-branch publish path the record is written once, at one of those outcomes, and its `Cost:` line is the last thing the run prints. Opening the PR is not a run end: the audit, the checks, and the merge question still follow it.
 
-Apply the shared record recipe in `.claude/skills/gaia/references/cost-record.md` with `{{COMMAND}}` = `gaia-harden`.
+Apply the shared record recipe in `.claude/skills/gaia/references/cost-record.md` with `{{COMMAND}}` = `gaia-codify`.
 
 ## Guardrails
 
-- `/gaia-harden` is the only writer in this loop, and only under explicit human invocation. The background refresher and the audit emit never author.
+- `/gaia-codify` is the only writer in this loop, and only under explicit human invocation. The background refresher and the audit emit never author.
 - Never `git add`, `git commit`, or `git push` while dispositions are collected and applied. The single end-of-run publish step (`## Publish approved changes (end of run)`) is the only writer to git, and it merges only on the human's answer to its merge prompt, never automatically.
 - Never auto-activate a skill or a deterministic check. v1 owns only prose-rule create/edit end to end; the other two forms are scaffold-only.
 - Every drafted prose rule is mandatorily path-scoped (`paths:` frontmatter), and carries the verbatim provenance marker.

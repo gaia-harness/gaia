@@ -1,10 +1,10 @@
 /**
- * `gaia harden-ledger {list|record|prune|snapshot}`
+ * `gaia codify-ledger {list|record|prune|snapshot}`
  *
- * The machine-local decline ledger CLI. When an engineer declines a hardening
+ * The machine-local decline ledger CLI. When an engineer declines a codify
  * candidate the decline is recorded only on their machine (gitignored), so it
  * never vetoes the rule for a teammate. Re-surfacing is evidence-based, not a
- * timer, and shares the same material-rise rule the `/gaia-harden` nudge
+ * timer, and shares the same material-rise rule the `/gaia-codify` nudge
  * triggers use (`isMaterialRise`, `material-rise.ts`): a declined class stays
  * suppressed until the live count's rise over its snapshot at the decline is
  * material, measured against the audited-PR denominator on both sides. An
@@ -13,12 +13,12 @@
  * longer uses.
  *
  * The tally refresher calls `checkDeclineSuppression` and `pruneDeclineLedger`
- * in process; the `/gaia-harden` command WRITES to it (`record`) on decline; a
+ * in process; the `/gaia-codify` command WRITES to it (`record`) on decline; a
  * completed review WRITES to the sibling `snapshot` verbs (dispatched to
  * `snapshot.ts`). The two functions write nothing to stdout or stderr: the
  * tally runs on every statusline refresh, so any output would land there.
  *
- * Ledger file: `.gaia/local/harden/declines.json` (gitignored). Schema and
+ * Ledger file: `.gaia/local/codify/declines.json` (gitignored). Schema and
  * atomic writer in `schemas/decline-ledger.ts`. The path is shared across the
  * clone's worktrees by the state registry's symlink, so a decline recorded
  * from a linked worktree lands in the main checkout's copy and survives that
@@ -32,11 +32,11 @@ import {
 } from '../schemas/decline-ledger.js';
 import type {DeclineLedger} from '../schemas/decline-ledger.js';
 import {structuredError} from '../stderr.js';
-import {resolveRepoRoot} from '../util/repo-root.js';
 import {isMaterialRise, TALLY_SCHEMA_VERSION} from './material-rise.js';
 import {runSnapshot} from './snapshot.js';
+import {resolveCodifyRoot} from './state-dir.js';
 
-const HELP_TEXT = `Usage: gaia harden-ledger <subcommand> [args]
+const HELP_TEXT = `Usage: gaia codify-ledger <subcommand> [args]
 
   list
     Print the decline ledger as JSON to stdout
@@ -53,7 +53,7 @@ const HELP_TEXT = `Usage: gaia harden-ledger <subcommand> [args]
 
   snapshot record [args]
     Dispatches to the review-snapshot verb. See
-    \`gaia harden-ledger snapshot --help\`.
+    \`gaia codify-ledger snapshot --help\`.
 `;
 
 const HELP_TOKENS = new Set(['--help', '-h', 'help']);
@@ -82,12 +82,12 @@ const resolveRoot = (
   subcommand: string
 ): null | string => {
   try {
-    return resolveRepoRoot(options.cwd ?? process.cwd());
+    return resolveCodifyRoot(options.cwd ?? process.cwd());
   } catch {
     structuredError({
       code: 'not_a_git_repo',
-      message: `gaia harden-ledger ${subcommand} must run inside a git repository`,
-      subcommand: `harden-ledger ${subcommand}`,
+      message: `gaia codify-ledger ${subcommand} must run inside a git repository`,
+      subcommand: `codify-ledger ${subcommand}`,
     });
 
     return null;
@@ -123,7 +123,7 @@ const loadLedger = (
     structuredError({
       code: 'malformed_ledger',
       message: result.error,
-      subcommand: `harden-ledger ${subcommand}`,
+      subcommand: `codify-ledger ${subcommand}`,
     });
 
     return null;
@@ -139,7 +139,7 @@ const handleList = (argv: readonly string[], options: RunOptions): number => {
     structuredError({
       code: 'invalid_arguments',
       message: `unknown argument: ${argv[0]}`,
-      subcommand: 'harden-ledger list',
+      subcommand: 'codify-ledger list',
     });
 
     return EXIT_CODES.UNKNOWN_SUBCOMMAND;
@@ -198,7 +198,7 @@ const handleRecord = (argv: readonly string[], options: RunOptions): number => {
     structuredError({
       code: 'invalid_arguments',
       message: parsed.error,
-      subcommand: 'harden-ledger record',
+      subcommand: 'codify-ledger record',
     });
 
     return EXIT_CODES.UNKNOWN_SUBCOMMAND;
@@ -209,8 +209,8 @@ const handleRecord = (argv: readonly string[], options: RunOptions): number => {
   if (findingClass === undefined || findingClass === '') {
     structuredError({
       code: 'invalid_arguments',
-      message: 'harden-ledger record requires --finding-class <c>',
-      subcommand: 'harden-ledger record',
+      message: 'codify-ledger record requires --finding-class <c>',
+      subcommand: 'codify-ledger record',
     });
 
     return EXIT_CODES.UNKNOWN_SUBCOMMAND;
@@ -220,8 +220,8 @@ const handleRecord = (argv: readonly string[], options: RunOptions): number => {
     structuredError({
       code: 'invalid_arguments',
       message:
-        'harden-ledger record requires --pr-count <n> (non-negative integer)',
-      subcommand: 'harden-ledger record',
+        'codify-ledger record requires --pr-count <n> (non-negative integer)',
+      subcommand: 'codify-ledger record',
     });
 
     return EXIT_CODES.UNKNOWN_SUBCOMMAND;
@@ -231,8 +231,8 @@ const handleRecord = (argv: readonly string[], options: RunOptions): number => {
     structuredError({
       code: 'invalid_arguments',
       message:
-        'harden-ledger record requires --audited-pr-count <d> (non-negative integer)',
-      subcommand: 'harden-ledger record',
+        'codify-ledger record requires --audited-pr-count <d> (non-negative integer)',
+      subcommand: 'codify-ledger record',
     });
 
     return EXIT_CODES.UNKNOWN_SUBCOMMAND;
@@ -385,7 +385,7 @@ const handlePrune = (argv: readonly string[], options: RunOptions): number => {
     structuredError({
       code: 'invalid_arguments',
       message: parsed.error,
-      subcommand: 'harden-ledger prune',
+      subcommand: 'codify-ledger prune',
     });
 
     return EXIT_CODES.UNKNOWN_SUBCOMMAND;
@@ -397,8 +397,8 @@ const handlePrune = (argv: readonly string[], options: RunOptions): number => {
     structuredError({
       code: 'invalid_arguments',
       message:
-        'harden-ledger prune requires --window-classes <c1,c2,...> (use an empty string to prune all)',
-      subcommand: 'harden-ledger prune',
+        'codify-ledger prune requires --window-classes <c1,c2,...> (use an empty string to prune all)',
+      subcommand: 'codify-ledger prune',
     });
 
     return EXIT_CODES.UNKNOWN_SUBCOMMAND;
@@ -420,7 +420,7 @@ const handlePrune = (argv: readonly string[], options: RunOptions): number => {
     structuredError({
       code: 'malformed_ledger',
       message: outcome.error,
-      subcommand: 'harden-ledger prune',
+      subcommand: 'codify-ledger prune',
     });
 
     return EXIT_CODES.CONFIG_INVALID;
@@ -450,8 +450,8 @@ export const run = (
 
   structuredError({
     code: 'unknown_subcommand',
-    message: `unknown harden-ledger subcommand: ${sub}`,
-    subcommand: 'harden-ledger',
+    message: `unknown codify-ledger subcommand: ${sub}`,
+    subcommand: 'codify-ledger',
   });
 
   return EXIT_CODES.UNKNOWN_SUBCOMMAND;

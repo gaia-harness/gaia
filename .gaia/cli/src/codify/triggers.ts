@@ -1,6 +1,6 @@
 /**
- * Pure trigger evaluation for the `/gaia-harden` statusline nudge: compares
- * the live `harden-tally` result against the machine-local review snapshot
+ * Pure trigger evaluation for the `/gaia-codify` statusline nudge: compares
+ * the live `codify-tally` result against the machine-local review snapshot
  * and names what changed since the last completed review. No I/O; the caller
  * supplies the live tally fields and the parsed snapshot (`null` when absent
  * or malformed).
@@ -12,6 +12,12 @@
 import type {ReviewSnapshot} from '../schemas/review-snapshot.js';
 import {isMaterialRise} from './material-rise.js';
 
+export type CodifyTrigger =
+  | {finding_class: string; type: 'new_class'}
+  | {finding_class: string; type: 'rising_class'}
+  | {type: 'rising_unclassified'}
+  | {type: 'schema_change'};
+
 export type EvaluateTriggersArgs = {
   live: {
     auditedPrCount: number;
@@ -22,16 +28,10 @@ export type EvaluateTriggersArgs = {
   snapshot: null | ReviewSnapshot;
 };
 
-export type HardenTrigger =
-  | {finding_class: string; type: 'new_class'}
-  | {finding_class: string; type: 'rising_class'}
-  | {type: 'rising_unclassified'}
-  | {type: 'schema_change'};
-
 export const evaluateTriggers = ({
   live,
   snapshot,
-}: EvaluateTriggersArgs): HardenTrigger[] => {
+}: EvaluateTriggersArgs): CodifyTrigger[] => {
   if (snapshot === null) return [];
 
   // A schema-version mismatch means the tally's counting semantics changed
@@ -42,7 +42,7 @@ export const evaluateTriggers = ({
     return [{type: 'schema_change'}];
   }
 
-  const triggers: HardenTrigger[] = [];
+  const triggers: CodifyTrigger[] = [];
 
   for (const candidate of live.candidates) {
     const base = snapshot.classes[candidate.finding_class];

@@ -4,7 +4,7 @@ path: .claude/
 status: active
 purpose: Claude Code integration, commands, rules, hooks, agents, skills
 created: 2026-04-20
-updated: 2026-10-04
+updated: 2026-10-13
 tags: [module, claude, hooks]
 ---
 
@@ -28,7 +28,7 @@ GAIA ships with [Claude Code](https://claude.ai/) support out of the box. Everyt
 
 ## Commands vs. skills
 
-GAIA workflows are split between slash commands under `.claude/commands/` (`/gaia-plan`, `/gaia-spec`, `/gaia-audit`, `/gaia-fitness`, `/gaia-forensics`, `/gaia-harden`, `/gaia-init`, and more) and standalone skills under `.claude/skills/` (`gaia-wiki`, with its own `SKILL.md`). There is no `/gaia` router; each command and skill reads a shared reference file in `.claude/skills/gaia/references/`. For the current inventory, query Serena or list the folder directly.
+GAIA workflows are split between slash commands under `.claude/commands/` (`/gaia-plan`, `/gaia-spec`, `/gaia-cleanse`, `/gaia-fitness`, `/gaia-forensics`, `/gaia-codify`, `/gaia-init`, and more) and standalone skills under `.claude/skills/` (`gaia-wiki`, with its own `SKILL.md`). There is no `/gaia` router; each command and skill reads a shared reference file in `.claude/skills/gaia/references/`. For the current inventory, query Serena or list the folder directly.
 
 ## Rules: auto-attached
 

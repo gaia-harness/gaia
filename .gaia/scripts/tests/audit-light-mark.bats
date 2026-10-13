@@ -492,12 +492,12 @@ light_sidecar_files() {
 # --- refusal-anchored checklist ---------------------------------------------
 
 # prepare_refusal_anchored <content-after-the-refusal-file-or-empty>: five owned
-# lines refused with a warning on line 2 and a suggestion on line 4, then the
+# lines refused with a major on line 2 and a minor on line 4, then the
 # repair (every line rewritten, or the given file body), routed light.
 prepare_refusal_anchored() {
   lsb_init
   lsb_commit_lines frontend/app/notes.md 5 line
-  lsb_refuse_with_findings "$FRONTEND" "[$(lsb_finding frontend/app/notes.md 2 warning false),$(lsb_finding frontend/app/notes.md 4 suggestion false)]"
+  lsb_refuse_with_findings "$FRONTEND" "[$(lsb_finding frontend/app/notes.md 2 major false),$(lsb_finding frontend/app/notes.md 4 minor false)]"
   if [ -n "${1:-}" ]; then
     lsb_commit frontend/app/notes.md "$1"
   else

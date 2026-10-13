@@ -70,7 +70,7 @@
     {
       "name": "severity:critical",
       "color": "b60205",
-      "description": "Breaks a documented promise or loses work; drain first",
+      "description": "Wrong, or will produce broken work; drain first",
       "axis": "urgency",
       "audience": "adopter",
       "features": ["tech-debt"],
@@ -81,29 +81,29 @@
       "reason": null
     },
     {
-      "name": "severity:important",
+      "name": "severity:major",
       "color": "e3555a",
-      "description": "Degrades a documented behavior; drain before suggestions",
+      "description": "A significant gap or defect; drain before minor findings",
       "axis": "urgency",
       "audience": "adopter",
       "features": ["tech-debt"],
       "managed": true,
       "deprecated": false,
       "blocked": false,
-      "renamedFrom": [],
+      "renamedFrom": ["severity:important"],
       "reason": null
     },
     {
-      "name": "severity:suggestion",
+      "name": "severity:minor",
       "color": "f5a3a3",
-      "description": "Improvement with no broken behavior behind it",
+      "description": "Real but small; fix by default, never ignorable",
       "axis": "urgency",
       "audience": "adopter",
       "features": ["tech-debt"],
       "managed": true,
       "deprecated": false,
       "blocked": false,
-      "renamedFrom": [],
+      "renamedFrom": ["severity:suggestion"],
       "reason": null
     },
     {

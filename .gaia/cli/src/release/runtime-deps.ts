@@ -594,7 +594,7 @@ const renderReport = (report: Report, jsonMode: boolean): string => {
 
   // Name the scope in bare mode. A clean bare result covers only the scripts
   // the manifest already answers for, so a shipped script added before its
-  // `/distribution-audit` answer lands is skipped rather than cleared. Saying
+  // `/distribution-vet` answer lands is skipped rather than cleared. Saying
   // "scanned N script(s)" there would read as "all of them".
   //
   // Read off the report rather than taking the mode as a second boolean

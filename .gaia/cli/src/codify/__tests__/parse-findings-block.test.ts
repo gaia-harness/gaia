@@ -5,11 +5,11 @@ import type {RejectReason} from '../parse-findings-block.js';
 const block = (payload: string): string =>
   [
     'Human-readable summary line.',
-    '<!-- gaia-harden:findings:start -->',
+    '<!-- gaia-codify:findings:start -->',
     '<!--',
     payload,
     '-->',
-    '<!-- gaia-harden:findings:end -->',
+    '<!-- gaia-codify:findings:end -->',
   ].join('\n');
 
 describe('parseFindingsBlock', () => {
@@ -21,12 +21,12 @@ describe('parseFindingsBlock', () => {
           {
             area_tags: ['app/components'],
             finding_class: 'react-doctor/no-generic-handler-names',
-            severity: 'warning',
+            severity: 'major',
           },
           {
             area_tags: ['app/routes'],
             finding_class: 'holistic/missing-auth-check',
-            severity: 'error',
+            severity: 'critical',
           },
         ],
         pr_number: 42,
@@ -41,12 +41,12 @@ describe('parseFindingsBlock', () => {
         {
           area_tags: ['app/components'],
           finding_class: 'react-doctor/no-generic-handler-names',
-          severity: 'warning',
+          severity: 'major',
         },
         {
           area_tags: ['app/routes'],
           finding_class: 'holistic/missing-auth-check',
-          severity: 'error',
+          severity: 'critical',
         },
       ],
     });
@@ -65,9 +65,9 @@ describe('parseFindingsBlock', () => {
 
   test('returns null when the payload between sentinels is not valid JSON', () => {
     const body = [
-      '<!-- gaia-harden:findings:start -->',
+      '<!-- gaia-codify:findings:start -->',
       '<!-- { not json } -->',
-      '<!-- gaia-harden:findings:end -->',
+      '<!-- gaia-codify:findings:end -->',
     ].join('\n');
     expect(parseFindingsBlock(body)).toBeNull();
   });
@@ -77,11 +77,11 @@ describe('parseFindingsBlock', () => {
       JSON.stringify({
         auditor: 'local',
         findings: [
-          {area_tags: 'not-an-array', finding_class: 5, severity: 'warning'},
+          {area_tags: 'not-an-array', finding_class: 5, severity: 'major'},
           {
             area_tags: ['app'],
             finding_class: 'knip/exports',
-            severity: 'warning',
+            severity: 'major',
           },
         ],
         pr_number: 9,
@@ -95,7 +95,7 @@ describe('parseFindingsBlock', () => {
         {
           area_tags: ['app'],
           finding_class: 'knip/exports',
-          severity: 'warning',
+          severity: 'major',
         },
       ],
     });
@@ -124,10 +124,39 @@ describe('parseFindingsBlock', () => {
     expect(onReject).toHaveBeenCalledExactlyOnceWith('severity', 'Critical');
   });
 
+  test.each(['error', 'warning', 'suggestion'])(
+    'drops a finding carrying the retired severity token "%s"',
+    (retiredToken) => {
+      const body = block(
+        JSON.stringify({
+          findings: [
+            {
+              area_tags: ['app'],
+              finding_class: 'holistic/missing-auth-check',
+              severity: retiredToken,
+            },
+          ],
+          pr_number: 1,
+          schema: 1,
+        })
+      );
+      const onReject = vi.fn();
+
+      expect(parseFindingsBlock(body, onReject)).toEqual({
+        auditor: '',
+        findings: [],
+      });
+      expect(onReject).toHaveBeenCalledExactlyOnceWith(
+        'severity',
+        retiredToken
+      );
+    }
+  );
+
   test('fires onReject for a missing finding_class', () => {
     const body = block(
       JSON.stringify({
-        findings: [{area_tags: [], severity: 'warning'}],
+        findings: [{area_tags: [], severity: 'major'}],
         pr_number: 1,
         schema: 1,
       })
@@ -151,7 +180,7 @@ describe('parseFindingsBlock', () => {
           {
             area_tags: [1, 2],
             finding_class: 'knip/exports',
-            severity: 'warning',
+            severity: 'major',
           },
         ],
         pr_number: 1,
@@ -187,9 +216,9 @@ describe('parseFindingsBlock', () => {
     expect(
       parseFindingsBlock(
         [
-          '<!-- gaia-harden:findings:start -->',
+          '<!-- gaia-codify:findings:start -->',
           '<!-- { not json } -->',
-          '<!-- gaia-harden:findings:end -->',
+          '<!-- gaia-codify:findings:end -->',
         ].join('\n'),
         onReject
       )
@@ -221,7 +250,7 @@ describe('parseFindingsBlock', () => {
       {
         area_tags: ['app/components'],
         finding_class: 'react-doctor/no-generic-handler-names',
-        severity: 'warning',
+        severity: 'major',
       },
     ];
     const withoutReviewBases = block(
@@ -261,7 +290,7 @@ describe('parseFindingsBlock', () => {
       {
         area_tags: ['app/components'],
         finding_class: 'react-doctor/no-generic-handler-names',
-        severity: 'warning',
+        severity: 'major',
       },
     ];
     const withoutReviewBases = block(

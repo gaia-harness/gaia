@@ -2,7 +2,7 @@
 type: concept
 status: active
 created: 2026-07-18
-updated: 2026-10-03
+updated: 2026-10-13
 tags: [concept, ci, audit, claude]
 ---
 
@@ -39,19 +39,19 @@ Add the new agent file's path to `AUDIT_MACHINERY_PATHS` in `.claude/hooks/lib/a
 A member reporting an **oracle** finding, backed by a deterministic tool (`react-doctor/`, `axe/`, `knip/`, `cve/`), needs no schema change: the tool owns the id space after its prefix, and any well-formed slug is valid. A member reporting findings in a genuinely new category needs a new closed-vocabulary bucket in the `finding_class` schema: a new prefix, a seeded `as const` union of specific classes, and that union folded into the closed-vocabulary set the validator checks against. Keep new classes genuine root-cause categories the member can assign reliably and repeatably, never a subsystem tag standing in for "somewhere in this member's remit." When in doubt, leave a class out; an unclassed finding is stamped with the classless fallback and counted as the unclassified recurrence signal rather than a draftable candidate.
 
 <!-- gaia:maintainer-only:start -->
-The schema lives at `.gaia/cli/src/schemas/finding-class.ts`, maintainer-only CLI source that never reaches an adopter clone. A bucket added there only reaches the shipped `harden-tally` command once the bundled binary is rebuilt (see step 7).
+The schema lives at `.gaia/cli/src/schemas/finding-class.ts`, maintainer-only CLI source that never reaches an adopter clone. A bucket added there only reaches the shipped `codify-tally` command once the bundled binary is rebuilt (see step 7).
 <!-- gaia:maintainer-only:end -->
 
 ### 6. Integrate the recurrence tally
 
-The finding-recurrence tally reads each member's findings sidecar to feed `/gaia-harden`'s judge-the-form logic. If the new member's finding classes need routing guidance beyond the default (a mechanizable pattern routes to a deterministic check, a judgment call routes to a prose rule), add a short paragraph to `.claude/skills/gaia/references/harden.md` describing how the new bucket routes, alongside the existing oracle / holistic / rule / workflow / prose paragraphs.
+The finding-recurrence tally reads each member's findings sidecar to feed `/gaia-codify`'s judge-the-form logic. If the new member's finding classes need routing guidance beyond the default (a mechanizable pattern routes to a deterministic check, a judgment call routes to a prose rule), add a short paragraph to `.claude/skills/gaia/references/codify.md` describing how the new bucket routes, alongside the existing oracle / holistic / rule / workflow / prose paragraphs.
 
 <!-- gaia:maintainer-only:start -->
 ### 7. Regenerate the CLI binary
 
-A finding-class schema change only reaches the shipped `harden-tally` command once the bundled adopter binary (`.gaia/cli/gaia`) is rebuilt from `.gaia/cli/src` and committed alongside the schema edit. Skipping this leaves the schema and the binary disagreeing about the valid vocabulary.
+A finding-class schema change only reaches the shipped `codify-tally` command once the bundled adopter binary (`.gaia/cli/gaia`) is rebuilt from `.gaia/cli/src` and committed alongside the schema edit. Skipping this leaves the schema and the binary disagreeing about the valid vocabulary.
 
-A change to how the tally counts, the window, the recurrence threshold, which PRs count as audited, how one PR's findings from several auditors merge, or which findings blocks and findings the parser accepts, bumps `TALLY_SCHEMA_VERSION` in `.gaia/cli/src/harden/material-rise.ts` in the same change. The counting code sits inside the `tally-semantics` regions of `.gaia/cli/src/harden/tally.ts`, `.gaia/cli/src/harden/compute-tally.ts`, and `.gaia/cli/src/harden/parse-findings-block.ts`; nothing checks the bump, so a change inside those regions is the cue to make it. A comment-only edit there needs no bump, and neither does a new finding_class bucket alone. A bump fires exactly one "tally changed" nudge and voids every share baseline recorded under the old counting.
+A change to how the tally counts, the window, the recurrence threshold, which PRs count as audited, how one PR's findings from several auditors merge, or which findings blocks and findings the parser accepts, bumps `TALLY_SCHEMA_VERSION` in `.gaia/cli/src/codify/material-rise.ts` in the same change. The counting code sits inside the `tally-semantics` regions of `.gaia/cli/src/codify/tally.ts`, `.gaia/cli/src/codify/compute-tally.ts`, and `.gaia/cli/src/codify/parse-findings-block.ts`; nothing checks the bump, so a change inside those regions is the cue to make it. A comment-only edit there needs no bump, and neither does a new finding_class bucket alone. A bump fires exactly one "tally changed" nudge and voids every share baseline recorded under the old counting.
 
 ### 8. Release-exclude any test fixtures
 

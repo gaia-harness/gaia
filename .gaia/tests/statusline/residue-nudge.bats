@@ -5,12 +5,12 @@
 # that writes `residueCandidateCount` from `residue-tally --count-only`'s
 # `aged_candidate_count` / `gh_ok` / `count_approximate` fields.
 #
-# The statusline half mirrors harden-unclassified-segment.bats: a MAIN git
+# The statusline half mirrors codify-unclassified-segment.bats: a MAIN git
 # checkout with setup marked complete and no gaia-init gate file, so the
 # right-side indicators are eligible to render; HOME points at an empty dir
 # so left-side delegation stays inert. The refresher half runs a real copy of
 # check-updates.sh against an isolated .gaia tree with a mock `gaia` binary
-# answering `residue-tally` (and the `update-deps` / `harden-tally`
+# answering `residue-tally` (and the `update-deps` / `codify-tally`
 # subcommands the same refresher also calls), a stub `gh` so `gaiaLatest`
 # never makes a real network call, and a logging `git` shim that delegates to
 # the real binary while recording every invocation.
@@ -68,7 +68,7 @@ teardown() {
 }
 
 # A `gaia` binary stub answering the subcommands check-updates.sh
-# calls: `update-deps run --emit-updates <file>` and `harden-tally` (both
+# calls: `update-deps run --emit-updates <file>` and `codify-tally` (both
 # no-op stand-ins, irrelevant to this suite's assertions), and
 # `residue-tally` (records its argv to $RESIDUE_ARGV_LOG, then answers per
 # $MOCK_RESIDUE_EXIT / $MOCK_RESIDUE_BAD_JSON / $MOCK_RESIDUE_GH_OK /
@@ -88,7 +88,7 @@ case "$1" in
     [ -n "$output_path" ] && printf '{"actionable_count":0}' > "$output_path"
     exit 0
     ;;
-  harden-tally)
+  codify-tally)
     printf '{"candidate_count":0,"unclassified":null,"gh_ok":true,"window_days":90}'
     exit 0
     ;;

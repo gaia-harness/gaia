@@ -1,9 +1,9 @@
 /**
- * `gaia harden-ledger snapshot record`
+ * `gaia codify-ledger snapshot record`
  *
- * A completed `/gaia-harden` review records what it reviewed so the
- * `/gaia-harden` statusline nudge can stay silent until something changes.
- * `record` builds the snapshot from a saved `harden-tally` JSON and writes
+ * A completed `/gaia-codify` review records what it reviewed so the
+ * `/gaia-codify` statusline nudge can stay silent until something changes.
+ * `record` builds the snapshot from a saved `codify-tally` JSON and writes
  * it, unconditionally overwriting whatever snapshot came before; it never
  * reads the prior snapshot, so a malformed one is simply replaced rather
  * than blocking the next completed review.
@@ -13,7 +13,7 @@
  * built from a failed window read would silence the nudge on a reading
  * nobody made.
  *
- * Snapshot file: `.gaia/local/harden/reviewed.json` (gitignored). Schema and
+ * Snapshot file: `.gaia/local/codify/reviewed.json` (gitignored). Schema and
  * atomic writer in `schemas/review-snapshot.ts`.
  */
 import {readFileSync} from 'node:fs';
@@ -26,12 +26,12 @@ import {
 } from '../schemas/review-snapshot.js';
 import {summarizeZodError} from '../schemas/zod-error.js';
 import {structuredError} from '../stderr.js';
-import {resolveRepoRoot} from '../util/repo-root.js';
+import {resolveCodifyRoot} from './state-dir.js';
 
-const HELP_TEXT = `Usage: gaia harden-ledger snapshot record [args]
+const HELP_TEXT = `Usage: gaia codify-ledger snapshot record [args]
 
   record --tally-file <path>
-    Build a review snapshot from a saved harden-tally JSON file and write it,
+    Build a review snapshot from a saved codify-tally JSON file and write it,
     overwriting any existing snapshot unconditionally.
 `;
 
@@ -47,12 +47,12 @@ const resolveRoot = (
   subcommand: string
 ): null | string => {
   try {
-    return resolveRepoRoot(options.cwd ?? process.cwd());
+    return resolveCodifyRoot(options.cwd ?? process.cwd());
   } catch {
     structuredError({
       code: 'not_a_git_repo',
-      message: `gaia harden-ledger ${subcommand} must run inside a git repository`,
-      subcommand: `harden-ledger ${subcommand}`,
+      message: `gaia codify-ledger ${subcommand} must run inside a git repository`,
+      subcommand: `codify-ledger ${subcommand}`,
     });
 
     return null;
@@ -91,7 +91,7 @@ const handleRecord = (argv: readonly string[], options: RunOptions): number => {
     structuredError({
       code: 'invalid_arguments',
       message: parsed.error,
-      subcommand: 'harden-ledger snapshot record',
+      subcommand: 'codify-ledger snapshot record',
     });
 
     return EXIT_CODES.UNKNOWN_SUBCOMMAND;
@@ -114,7 +114,7 @@ const handleRecord = (argv: readonly string[], options: RunOptions): number => {
     structuredError({
       code: 'tally_file_unreadable',
       message: `${tallyPath}: ${error instanceof Error ? error.message : String(error)}`,
-      subcommand: 'harden-ledger snapshot record',
+      subcommand: 'codify-ledger snapshot record',
     });
 
     return EXIT_CODES.STORAGE_INACCESSIBLE;
@@ -128,7 +128,7 @@ const handleRecord = (argv: readonly string[], options: RunOptions): number => {
     structuredError({
       code: 'malformed_tally',
       message: `${tallyPath}: invalid JSON: ${error instanceof Error ? error.message : String(error)}`,
-      subcommand: 'harden-ledger snapshot record',
+      subcommand: 'codify-ledger snapshot record',
     });
 
     return EXIT_CODES.PAYLOAD_VALIDATION_FAILED;
@@ -140,7 +140,7 @@ const handleRecord = (argv: readonly string[], options: RunOptions): number => {
     structuredError({
       code: 'malformed_tally',
       message: summarizeZodError(tallyPath, result.error),
-      subcommand: 'harden-ledger snapshot record',
+      subcommand: 'codify-ledger snapshot record',
     });
 
     return EXIT_CODES.PAYLOAD_VALIDATION_FAILED;
@@ -150,7 +150,7 @@ const handleRecord = (argv: readonly string[], options: RunOptions): number => {
     structuredError({
       code: 'tally_gh_not_ok',
       message: `${tallyPath}: gh_ok is false, refusing to snapshot a failed window read`,
-      subcommand: 'harden-ledger snapshot record',
+      subcommand: 'codify-ledger snapshot record',
     });
 
     return EXIT_CODES.PAYLOAD_VALIDATION_FAILED;
@@ -181,8 +181,8 @@ export const runSnapshot = (
 
   structuredError({
     code: 'unknown_subcommand',
-    message: `unknown harden-ledger snapshot subcommand: ${sub}`,
-    subcommand: 'harden-ledger snapshot',
+    message: `unknown codify-ledger snapshot subcommand: ${sub}`,
+    subcommand: 'codify-ledger snapshot',
   });
 
   return EXIT_CODES.UNKNOWN_SUBCOMMAND;

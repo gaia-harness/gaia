@@ -31,7 +31,7 @@
 #                  the reason, and the writer removes that sibling refusal AFTER
 #                  the earned .ok is atomically published. This is the only
 #                  legitimate refused->earned path on identical content (an
-#                  operator acknowledges an unaddressed Important with a stated
+#                  operator acknowledges an unaddressed Major with a stated
 #                  reason, so the digest does not move). Absent the flag, an
 #                  earned write NEVER touches a sibling refusal, that strict
 #                  precedence is the anti-gaming control (a bare re-run must not
@@ -156,7 +156,7 @@
 #   derivation: with no ledger at the key, any ledger of this branch that holds
 #   an open entry for this member under a base that is neither the key base nor
 #   on HEAD's first-parent history is an exit 3 that lists each such ledger,
-#   newest first, and prints the `jq` command re-keying the newest. No severity gate: re-reporting an open Critical or Important on an
+#   newest first, and prints the `jq` command re-keying the newest. No severity gate: re-reporting an open Critical or Major on an
 #   earned write counts as accounted, exactly as on a refused write; whether an
 #   earned marker is warranted stays the member protocol's precondition.
 #   - jq is REQUIRED: it builds the body, so every value is escaped by
@@ -175,9 +175,9 @@
 #   refused: this member's `remaining[]` entries are rebuilt from its findings
 #     sidecar (.gaia/local/audit/<key>.<member>.findings.json), which already
 #     carries each finding's path, line, title, failure_mode and suggested_fix.
-#     Severity is mapped onto the ledger's own scale (error -> critical,
-#     warning -> important, suggestion -> suggestion). A finding that echoes an
-#     open `entry_id` keeps that id and its `first_seen_round` (its line may
+#     Severity carries over unchanged; a token outside critical, major, minor
+#     is recorded as major, failing toward the gating tier. A finding that
+#     echoes an open `entry_id` keeps that id and its `first_seen_round` (its line may
 #     move); every other finding gets a new id `r<round>-<n>`, unique within the
 #     ledger. An open entry the sidecar resolves moves to `fixed_last_round[]`
 #     carrying its `entry_id` and the rationale as `resolution`. The accounting
@@ -1087,7 +1087,7 @@ if [ -n "$BASE" ]; then
           --arg version "$version" \
           '
           def ledger_severity:
-            {"error":"critical","warning":"important","suggestion":"suggestion"}[.] // "important";
+            if IN("critical", "major", "minor") then . else "major" end;
           def nonempty_string: type == "string" and length > 0;
           def array_or_empty: if type == "array" then . else [] end;
           ((($prior.round // 0) + 1)                                        as $round

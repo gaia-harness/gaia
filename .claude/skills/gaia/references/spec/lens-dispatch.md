@@ -6,7 +6,13 @@ Contents: `## Caller slots`, `## Shared preamble`, `## Write and return`, `## Fi
 
 ## Caller slots
 
-Each caller fills the `<...>` placeholders of the shared preamble from its own column.
+Each caller fills the `<...>` placeholders of the shared preamble from its own column. Findings are graded on three tiers, each defined by the action it requires:
+
+- **Critical:** wrong, or will produce broken work; must be fixed before the gate.
+- **Major:** a significant gap or defect; fix, or a human decides (acknowledge).
+- **Minor:** real but small; fix by default, never ignorable.
+
+There is no tier below Minor: what is worth reporting is Minor, what is not is not reported. A finding between Major and Minor is graded by these definitions, Major when unsure.
 
 | Slot | Spec audit | Plan audit |
 | --- | --- | --- |
@@ -17,8 +23,11 @@ Each caller fills the `<...>` placeholders of the shared preamble from its own c
 | `location` meaning | SPEC section or UAT id | task doc or README section |
 | Findings directory (`<FINDINGS_DIR>`) | `.gaia/local/cache/audit-<spec_id>/findings/` | `<PLAN_DIR>/audit/` |
 | Write tool | the ordinary write tools | `Bash`, see below |
-| `blocker` | the SPEC is factually wrong or will produce broken or misleading work | the plan is factually wrong or will produce broken or conflicting work |
-| `high` | a significant gap or ambiguity a planner is forced to guess on | a gap or hidden dependency the orchestrator is forced to guess on |
+| `critical` | the SPEC is wrong or will produce broken or misleading work; fix before gate 2 | the plan is wrong or will produce broken or conflicting work; fix before execution |
+| `major` | a significant gap or ambiguity a planner is forced to guess on; fix, or the human decides | a significant gap or hidden dependency the orchestrator is forced to guess on; fix, or the human decides |
+| `minor` | real but small; fixed by default | real but small; fixed by default |
+
+A plan written from a spec is audited by `plan/decomposition-audit.md` (the plan's own decomposition audit), not by a re-run of the SPEC audit.
 
 Plan write tool: `<PLAN_DIR>` is a main-anchored absolute path. When the session runs in a linked worktree, the harness refuses `Edit` and `Write` at that path, so the lens agent, and the main thread's inline fallback, write the findings file with `Bash` at the main-checkout path and read it back to confirm both its content and its location before it is classified. Keep the fallback to the findings files: a `Bash` redirect is never the way to write into another checkout where the edit tools already work.
 
@@ -32,7 +41,7 @@ Send this to every lens, interpolating the slots. The caller appends a `LENS: <n
 >
 > - Verify EVERY checkable claim against the actual repository and `node_modules`. Do not take the artifact's assertions on faith; when a claim names code, a file, an export, or a signature, open it and confirm it resolves.
 > - Cite evidence: <evidence form> for any ground-truth check.
-> - Severity: `blocker` = <blocker meaning>; `high` = <high meaning>; `medium` = should fix; `low` = nit.
+> - Severity: `critical` = <critical meaning>; `major` = <major meaning>; `minor` = <minor meaning>. A finding between major and minor is graded by those definitions, major when unsure.
 > - Give each finding a stable id prefixed with your lens code.
 > - Be concrete and falsifiable. A finding a verifier can refute by reading one file is a good finding; vague "could be clearer" is not.
 > - **Write** your full findings to `<FINDINGS_DIR><LENS>.json` (the fully qualified path) under the file schema, using <write tool>. Write the file even if your findings array is empty.
@@ -42,9 +51,9 @@ Send this to every lens, interpolating the slots. The caller appends a `LENS: <n
 
 The agent writes its full findings to `<FINDINGS_DIR><LENS>.json`, always the fully qualified path, never a bare relative one, and writes the file even when the array is empty. The file on disk is what the caller trusts; the reply is a digest of it.
 
-The reply is the thin digest and nothing else. It lists every finding, material and low, as `{ id, severity, title }`:
+The reply is the thin digest and nothing else. It lists every finding, material and minor, as `{ id, severity, title }`:
 
-    { "dimension": "<lens>", "counts": { "blocker": <int>, "high": <int>, "medium": <int>, "low": <int> },
+    { "dimension": "<lens>", "counts": { "critical": <int>, "major": <int>, "minor": <int> },
       "findings": [ { "id": "<lens>-NNN", "severity": "...", "title": "..." } ] }
 
 Whether the main thread later reads a finding body is the caller's rule: the spec audit keeps bodies out of the main thread, and the plan audit's main thread reads the files to apply fixes.
@@ -58,7 +67,7 @@ What each agent writes to `<LENS>.json`. This is not a return contract; the thin
       "findings": [
         {
           "id": "<lens-prefix>-NNN",
-          "severity": "blocker" | "high" | "medium" | "low",
+          "severity": "critical" | "major" | "minor",
           "title": "<short>",
           "location": "<per the caller's location slot>",
           "issue": "<one sentence: what is wrong>",

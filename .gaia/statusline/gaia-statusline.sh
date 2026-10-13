@@ -7,7 +7,7 @@
 # Medium and Small form, then an icon, then a `+N` for however many still do
 # not fit; the lowest-priority nudge still at its current size shrinks first,
 # so a higher-priority nudge is never at a later size step than a
-# lower-priority one (a nudge with no Medium form, such as /gaia-audit,
+# lower-priority one (a nudge with no Medium form, such as /gaia-cleanse,
 # shows its Small text at that step).
 #
 # Left-side resolution (first match wins):
@@ -283,7 +283,7 @@ else
   else
     # Nudge slots, indexed by render priority rather than by where each one
     # is armed below: update-gaia 0, gaia-serena-sync 1, update-deps 2,
-    # gaia-audit 3, gaia-harden 4, gaia-debt 5, gaia-residue 6, gaia-wiki 7. The
+    # gaia-cleanse 3, gaia-codify 4, gaia-debt 5, gaia-residue 6, gaia-wiki 7. The
     # update-check-derived nudges stay gated on $CACHE_FILE; the debt nudge is
     # gated independently on $DEBT_CACHE so it still renders when
     # update-check.json is absent, which is why debt (5) is armed after
@@ -321,27 +321,27 @@ else
       gaia_has_update=$(jq -r '.gaiaHasUpdate // false' "$CACHE_FILE" 2>/dev/null)
       gaia_latest=$(jq -r '.gaiaLatest // empty' "$CACHE_FILE" 2>/dev/null)
       # One spawn for three reads: a digit-string candidate count, a comma,
-      # then a leading 1 or 0 saying whether hardenNudgeReason exists,
+      # then a leading 1 or 0 saying whether codifyNudgeReason exists,
       # followed by the reason itself.
-      harden_all=$(jq -r '((.hardenCandidateCount // 0) | if type == "number" then (floor | tostring) else "0" end) + "," + (if has("hardenNudgeReason") then "1" + ((.hardenNudgeReason // "") | tostring) else "0" end)' "$CACHE_FILE" 2>/dev/null)
-      harden_count="${harden_all%%,*}"
-      harden_reason_raw="${harden_all#*,}"
-      case "$harden_count" in
-        ''|*[!0-9]*) harden_count=0 ;;
+      codify_all=$(jq -r '((.codifyCandidateCount // 0) | if type == "number" then (floor | tostring) else "0" end) + "," + (if has("codifyNudgeReason") then "1" + ((.codifyNudgeReason // "") | tostring) else "0" end)' "$CACHE_FILE" 2>/dev/null)
+      codify_count="${codify_all%%,*}"
+      codify_reason_raw="${codify_all#*,}"
+      case "$codify_count" in
+        ''|*[!0-9]*) codify_count=0 ;;
       esac
-      # The Medium/icon form for /gaia-harden; empty when there is no
+      # The Medium/icon form for /gaia-codify; empty when there is no
       # candidate count, so the segment goes straight to Small.
-      harden_mid=""
-      [ "$harden_count" -gt 0 ] 2>/dev/null && harden_mid="$harden_count"
-      has_harden_reason="${harden_reason_raw:0:1}"
-      # A cached reason is untrusted: harden-tally's finding_class segments and
+      codify_mid=""
+      [ "$codify_count" -gt 0 ] 2>/dev/null && codify_mid="$codify_count"
+      has_codify_reason="${codify_reason_raw:0:1}"
+      # A cached reason is untrusted: codify-tally's finding_class segments and
       # the review snapshot both originate in PR text any author controls, so
       # strip control bytes (escape sequences, newlines) before this reaches a
       # terminal, even though the refresher's own composition already
       # constrains the class-name segment it builds the reason from.
-      harden_reason="$(printf '%s' "${harden_reason_raw#?}" | tr -d '\000-\037\177')"
-      audit_nudge=$(jq -r '.auditNudge // false' "$CACHE_FILE" 2>/dev/null)
-      audit_reason=$(jq -r '.auditNudgeReason // empty' "$CACHE_FILE" 2>/dev/null)
+      codify_reason="$(printf '%s' "${codify_reason_raw#?}" | tr -d '\000-\037\177')"
+      cleanse_nudge=$(jq -r '.cleanseNudge // false' "$CACHE_FILE" 2>/dev/null)
+      cleanse_reason=$(jq -r '.cleanseNudgeReason // empty' "$CACHE_FILE" 2>/dev/null)
       serena_drift=$(jq -r '(.serenaLangDrift // []) | join(", ")' "$CACHE_FILE" 2>/dev/null)
 
       if [ "$gaia_has_update" = "true" ] && [ -n "$gaia_latest" ]; then
@@ -362,43 +362,43 @@ else
         fi
         nudge_set 2 '01;33' 'Run /update-deps' "$full" "$((deps_outdated + deps_security))" '📦'
       fi
-      # Both signals are discharged by the same bare `/gaia-harden` run, and no
+      # Both signals are discharged by the same bare `/gaia-codify` run, and no
       # argument selects between them, so they stack into one segment's reason
       # parameter rather than into a second segment naming the same command.
-      # Same shape as the /gaia-audit segment below, which folds its reason in
+      # Same shape as the /gaia-cleanse segment below, which folds its reason in
       # the same way. This reads the refresher's own cached composition only:
       # it never reads the review snapshot itself. A cache written before
-      # hardenNudgeReason existed has no key to read, so it falls back to
+      # codifyNudgeReason existed has no key to read, so it falls back to
       # composing today's count text the same way the refresher's own
       # upgrade-window seed does.
-      if [ "$has_harden_reason" = "1" ]; then
-        if [ -n "$harden_reason" ]; then
-          printf -v full 'Run /gaia-harden (%s)' "$harden_reason"
-          nudge_set 4 '01;35' 'Run /gaia-harden' "$full" "$harden_mid" '🔨'
+      if [ "$has_codify_reason" = "1" ]; then
+        if [ -n "$codify_reason" ]; then
+          printf -v full 'Run /gaia-codify (%s)' "$codify_reason"
+          nudge_set 4 '01;35' 'Run /gaia-codify' "$full" "$codify_mid" '🔨'
         fi
       else
-        harden_unclassified=$(jq -r '.hardenUnclassifiedCount // 0' "$CACHE_FILE" 2>/dev/null)
+        codify_unclassified=$(jq -r '.codifyUnclassifiedCount // 0' "$CACHE_FILE" 2>/dev/null)
         fallback_reason=""
-        if [ "$harden_count" -gt 0 ] 2>/dev/null; then
-          harden_noun="recurring patterns"
-          [ "$harden_count" -eq 1 ] && harden_noun="recurring pattern"
-          fallback_reason=$(printf '%d %s' "$harden_count" "$harden_noun")
+        if [ "$codify_count" -gt 0 ] 2>/dev/null; then
+          codify_noun="recurring patterns"
+          [ "$codify_count" -eq 1 ] && codify_noun="recurring pattern"
+          fallback_reason=$(printf '%d %s' "$codify_count" "$codify_noun")
         fi
-        if [ -n "$harden_unclassified" ] && [ "$harden_unclassified" -gt 0 ] 2>/dev/null; then
+        if [ -n "$codify_unclassified" ] && [ "$codify_unclassified" -gt 0 ] 2>/dev/null; then
           [ -n "$fallback_reason" ] && fallback_reason="${fallback_reason}, "
-          fallback_reason=$(printf '%s%d unclassified' "$fallback_reason" "$harden_unclassified")
+          fallback_reason=$(printf '%s%d unclassified' "$fallback_reason" "$codify_unclassified")
         fi
         if [ -n "$fallback_reason" ]; then
-          printf -v full 'Run /gaia-harden (%s)' "$fallback_reason"
-          nudge_set 4 '01;35' 'Run /gaia-harden' "$full" "$harden_mid" '🔨'
+          printf -v full 'Run /gaia-codify (%s)' "$fallback_reason"
+          nudge_set 4 '01;35' 'Run /gaia-codify' "$full" "$codify_mid" '🔨'
         fi
       fi
-      if [ "$audit_nudge" = "true" ]; then
-        if [ -n "$audit_reason" ]; then
-          printf -v full 'Run /gaia-audit (%s)' "$audit_reason"
-          nudge_set 3 '01;32' 'Run /gaia-audit' "$full" '' '🔎'
+      if [ "$cleanse_nudge" = "true" ]; then
+        if [ -n "$cleanse_reason" ]; then
+          printf -v full 'Run /gaia-cleanse (%s)' "$cleanse_reason"
+          nudge_set 3 '01;32' 'Run /gaia-cleanse' "$full" '' '🔎'
         else
-          nudge_set 3 '01;32' 'Run /gaia-audit' 'Run /gaia-audit' '' '🔎'
+          nudge_set 3 '01;32' 'Run /gaia-cleanse' 'Run /gaia-cleanse' '' '🔎'
         fi
       fi
       if [ -n "$serena_drift" ]; then

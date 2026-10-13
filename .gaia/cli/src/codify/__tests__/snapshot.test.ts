@@ -23,7 +23,7 @@ type Sandbox = {
 };
 
 const setupSandbox = (): Sandbox => {
-  const root = mkdtempSync(path.join(tmpdir(), 'gaia-harden-snapshot-'));
+  const root = mkdtempSync(path.join(tmpdir(), 'gaia-codify-snapshot-'));
   // runSnapshot calls resolveRepoRoot, so we need a real git repo.
   execFileSync('git', ['init', '-q', '-b', 'main'], {cwd: root});
 
@@ -89,14 +89,14 @@ const FULL_TALLY = {
   gh_ok: true,
   snapshot_present: false,
   snapshot_reviewed_at: null,
-  tally_schema_version: 1,
+  tally_schema_version: 2,
   triggers: [],
   unclassified: {distinct_pr_count: 120},
   unclassified_window_count: 120,
   window_days: 90,
 };
 
-describe('harden-ledger snapshot', () => {
+describe('codify-ledger snapshot', () => {
   let sandbox: Sandbox;
   let io: ReturnType<typeof captureStdio>;
 
@@ -121,7 +121,7 @@ describe('harden-ledger snapshot', () => {
       expect(recordCode).toBe(EXIT_CODES.OK);
 
       const snapshot = readSnapshot(sandbox.snapshotPath);
-      expect(snapshot.tally_schema_version).toBe(1);
+      expect(snapshot.tally_schema_version).toBe(2);
       expect(snapshot.window_days).toBe(90);
       expect(snapshot.audited_pr_count).toBe(400);
       expect(snapshot.reviewed_at).toBe(FIXED_NOW.toISOString());

@@ -43,10 +43,10 @@ afterEach(() => {
 });
 
 const fullCache = (): Record<string, unknown> => ({
-  auditMemoryBaseline: {count: 3, hash: 'abc'},
   checkedAt: 1,
+  cleanseMemoryBaseline: {count: 3, hash: 'abc'},
+  codifyNudgeReason: 'recurring',
   gaiaCurrent: '1.6.1',
-  hardenNudgeReason: 'recurring',
   outdatedCount: 4,
   securityCount: 2,
   securitySource: 'pnpm-audit',

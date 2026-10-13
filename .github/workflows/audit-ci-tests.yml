@@ -275,7 +275,7 @@ jobs:
               - '.claude/skills/gaia/references/isolation.md'
               - '.claude/skills/gaia/references/debt.md'
               # `.claude/skills/file-tech-debt/SKILL.md` carries the
-              # difficulty-grading rubric and `.claude/skills/gaia/references/audit.md`
+              # difficulty-grading rubric and `.claude/skills/gaia/references/cleanse.md`
               # is one of its filing routes; code-audit-frontend.md and debt.md
               # are already listed above, add the other two. The
               # `.claude/agents/**/*.md` root above already covers
@@ -286,7 +286,7 @@ jobs:
               # entry above (patterns OR together) and self-maintains when a
               # new member joins the roster.
               - '.claude/skills/file-tech-debt/SKILL.md'
-              - '.claude/skills/gaia/references/audit.md'
+              - '.claude/skills/gaia/references/cleanse.md'
               - '.claude/agents/code-audit-*.md'
               # doc-machinery-waive-prose.bats (.gaia/tests/lib/) greps the
               # out-of-scope disposition rule on this page; it is a source the
@@ -309,9 +309,9 @@ jobs:
               # run those assertions zero times.
               - 'wiki/concepts/Audit Disposition and Debt Fix.md'
               # This page describes the classification-verification round the
-              # audit.md surfaces above implement; it matches no other pattern
+              # cleanse.md surfaces above implement; it matches no other pattern
               # here, so it is kept armed alongside them.
-              - 'wiki/concepts/GAIA Audit.md'
+              - 'wiki/concepts/GAIA Cleanse.md'
               # doc-countability-prose.bats (.gaia/tests/lib/) greps this page
               # for the superseded classless-finding claims (a classless finding
               # is "not a countable finding", "omitted from findings[]",
@@ -401,14 +401,14 @@ jobs:
               # shipped .gaia/statusline/gaia-statusline.sh worktree gate and
               # segment rendering, and it runs real copies of the two
               # refreshers that feed those segments:
-              # .gaia/scripts/check-updates.sh (the hardenUnclassifiedCount and
-              # hardenNudgeReason segments -- the latter driven by
-              # harden-nudge-reason.bats) and
+              # .gaia/scripts/check-updates.sh (the codifyUnclassifiedCount and
+              # codifyNudgeReason segments -- the latter driven by
+              # codify-nudge-reason.bats) and
               # .gaia/scripts/debt-count-refresh.sh. Both refreshers are already covered by
               # the .gaia/scripts/** glob above, so only the statusline dirs
-              # and harden.md need listing here -- but narrowing that glob
+              # and codify.md need listing here -- but narrowing that glob
               # would stop arming this suite on two of its sources.
-              # harden.md is the third source it reads as real repo text,
+              # codify.md is the third source it reads as real repo text,
               # read by the unclassified-signal tests and the review-record
               # prose tests, and the .claude/skills/gaia/references/ entries
               # above name other files only, so without this line an edit to
@@ -416,7 +416,7 @@ jobs:
               # live, and greens having run those assertions zero times.
               - '.gaia/statusline/**'
               - '.gaia/tests/statusline/**'
-              - '.claude/skills/gaia/references/harden.md'
+              - '.claude/skills/gaia/references/codify.md'
               # workflow-filter-coverage.bats (.gaia/scripts/tests/) reads every
               # workflow in .github/workflows/, so without this line an edit to
               # one alone matches no pattern here, every bats step skips, and

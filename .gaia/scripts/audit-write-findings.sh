@@ -78,8 +78,7 @@
 # gaia:maintainer-only:start
 #   The schema lives at .gaia/cli/src/schemas/finding-class.ts.
 # gaia:maintainer-only:end
-#   severity       one of error | warning | suggestion (Critical -> error,
-#                  Important -> warning, Suggestion -> suggestion).
+#   severity       one of critical | major | minor.
 #   path           repo-relative POSIX path of the defect.
 #   line           integer >= 1.
 #   title          one-line statement of the defect.
@@ -172,7 +171,7 @@ usage: audit-write-findings.sh --root <path> --member <name> --base <sha>
                 optional; never part of the pairing rule.
   --review      only `light`: writes the light sidecar path and body key.
 
-Each finding requires finding_class, severity (error|warning|suggestion), path,
+Each finding requires finding_class, severity (critical|major|minor), path,
 line, title, failure_mode, verified_by, and suggested_fix. area_tags is
 optional and defaults to the path's directory; entry_id is optional.
 
@@ -333,7 +332,7 @@ fi
 # -----------------------------------------------------------------------------
 
 #    The finding is bound to $finding before any field is read. Without the binding,
-#    a `.severity` inside a `["error",...] | index(...)` pipe resolves against
+#    a `.severity` inside a `["critical",...] | index(...)` pipe resolves against
 #    the LITERAL ARRAY rather than the finding, which is a jq runtime error, and
 #    an error swallowed by `2>/dev/null` would silently accept every finding.
 #    So the jq status is checked and a validator that cannot run FAILS CLOSED.
@@ -344,8 +343,8 @@ if ! violation="$(printf '%s' "$raw" | jq -r '
     | if ($finding | type) != "object" then "not a JSON object"
       elif ($finding.finding_class | nonempty_string | not) then "finding_class must be a non-empty string"
       elif (($finding.severity | type) != "string")
-        or ((["error","warning","suggestion"] | index($finding.severity)) == null)
-        then "severity must be one of error|warning|suggestion"
+        or ((["critical","major","minor"] | index($finding.severity)) == null)
+        then "severity must be one of critical|major|minor"
       elif ($finding.path | nonempty_string | not) then "path must be a non-empty repo-relative path"
       elif (($finding.line | type) != "number") or ($finding.line != ($finding.line | floor)) or ($finding.line < 1)
         then "line must be an integer >= 1"

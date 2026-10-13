@@ -6,7 +6,7 @@ paths:
   - '.gaia/**/*.ts'
   - '**/*.bats'
 ---
-<!-- gaia-harden: promoted from recurring finding_class holistic/ambient-context-resolution; pruned by /gaia-audit on obsolescence/redundancy/supersession/duplication only, never for non-recurrence -->
+<!-- gaia-harden: promoted from recurring finding_class holistic/ambient-context-resolution; pruned by /gaia-cleanse on obsolescence/redundancy/supersession/duplication only, never for non-recurrence -->
 
 # Resolve the Subject From the Input, Not the Ambient State
 

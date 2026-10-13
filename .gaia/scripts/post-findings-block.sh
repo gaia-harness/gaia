@@ -41,7 +41,7 @@
 #   Keying this glob to one base is what starved the block before: the base a
 #   caller could resolve at merge time is the newest one, whose round is clean
 #   by construction, because a clean round is what let the pull request merge.
-#   The findings worth hardening against -- the ones fixed during the loop --
+#   The findings worth codifying -- the ones fixed during the loop --
 #   were exactly the ones dropped.
 #
 #   The branch half stays the whole discriminator. `.gaia/local/audit/` is
@@ -77,7 +77,7 @@
 # Caller contract (load-bearing, not this script's own concern)
 #   Call this ONLY from the local orchestrator, once per local dispatch wave,
 #   after every dispatched member has returned. This script edits ANY PR
-#   comment carrying the `<!-- gaia-harden:findings:start -->` sentinel, so a
+#   comment carrying the `<!-- gaia-codify:findings:start -->` sentinel, so a
 #   second call for the same PR replaces the first block with one carrying
 #   only that call's members' findings. See wiki/concepts/PR Merge Workflow.md.
 #
@@ -89,7 +89,7 @@
 #   own branch is the discriminator. The writer keys on both halves; this
 #   reader selects on the branch half only, per "Which sidecars this reads".
 #   {"schema":1,"member":"<name>","findings":[
-#     {"finding_class":"...","severity":"error|warning|suggestion",
+#     {"finding_class":"...","severity":"critical|major|minor",
 #      "area_tags":["..."],"path":"...","line":N,"title":"...",
 #      "failure_mode":"...","verified_by":"...","suggested_fix":"..."}
 #   ]}
@@ -116,19 +116,19 @@
 #   is itself a disclosure: it tells a reader of a public repository where an
 #   unfixed hole sits. So an entry whose `security` is anything but the
 #   boolean false (an absent or malformed flag reads as security-class,
-#   failing closed), or whose severity is `error`, is not projected at all.
+#   failing closed), or whose severity is `critical`, is not projected at all.
 #   It contributes only to one bare count line after the block, `<n>
 #   finding(s) withheld (security-class or Critical)`, which names no class,
 #   severity or area tag.
 #
 # Rendered block shape (frozen, matches parse-findings-block.ts)
-#   <!-- gaia-harden:findings:start -->
+#   <!-- gaia-codify:findings:start -->
 #   <!--
 #   {"schema":1,"pr_number":N,"auditor":"local","findings":[ ... ],
 #    "review_bases":[{"member":"...","sha":"...","reason":"...",
 #                     "anchor_tree":"..."}]}
 #   -->
-#   <!-- gaia-harden:findings:end -->
+#   <!-- gaia-codify:findings:end -->
 #   <n> finding(s) withheld (security-class or Critical)     (only when n > 0)
 #
 #   review_bases is ALWAYS present, possibly []. One entry per valid sidecar
@@ -365,7 +365,7 @@ fi
 #    does. Its stderr is captured rather than discarded for the same reason.
 #    The withheld test is one jq definition shared by the publish and count
 #    passes, so an entry is in exactly one of them.
-withheld_predicate='def withheld: (.security != false) or (.severity == "error");'
+withheld_predicate='def withheld: (.security != false) or (.severity == "critical");'
 if ! merged_findings="$(jq -s "$withheld_predicate"' [.[] | .findings[]? | select(withheld | not) | {finding_class, severity, area_tags}]' ${valid_files[@]+"${valid_files[@]}"} 2>&1)"; then
   emit_error "cannot merge the findings sidecars: $merged_findings"
   emit_decline "post failed"
@@ -414,11 +414,11 @@ fi
 trap 'rm -f "$body_file"' EXIT
 
 {
-  printf '<!-- gaia-harden:findings:start -->\n'
+  printf '<!-- gaia-codify:findings:start -->\n'
   printf '<!--\n'
   printf '%s\n' "$payload"
   printf '%s\n' '-->'
-  printf '<!-- gaia-harden:findings:end -->\n'
+  printf '<!-- gaia-codify:findings:end -->\n'
   if [ "$withheld_count" -gt 0 ] 2>/dev/null; then
     printf '%s finding(s) withheld (security-class or Critical)\n' "$withheld_count"
   fi
@@ -443,7 +443,7 @@ if [ -z "$repo" ]; then
 fi
 
 existing_id="$(gh api "repos/${repo}/issues/${PR}/comments" --paginate \
-  --jq '.[] | select((.body // "") | contains("<!-- gaia-harden:findings:start -->")) | .id' \
+  --jq '.[] | select((.body // "") | contains("<!-- gaia-codify:findings:start -->")) | .id' \
   2>/dev/null | head -n 1 || true)"
 
 if [ -n "$existing_id" ]; then

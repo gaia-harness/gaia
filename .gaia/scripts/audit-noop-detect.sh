@@ -618,7 +618,7 @@ case "$SHAPE" in
     # report never reached the orchestrator still wrote its marker, so
     # keying on marker-presence would classify REAL, suppress the one-shot
     # retry, and leave the operator holding a green gate with no findings to
-    # act on, including the Suggestions the clean-pass contract requires them
+    # act on, including the Minor findings the clean-pass contract requires them
     # to resolve or acknowledge. The sidecar is the report of record, so
     # demanding BOTH is what separates a real clean pass from a lost one.
     #

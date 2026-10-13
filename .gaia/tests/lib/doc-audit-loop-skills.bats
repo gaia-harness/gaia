@@ -2,7 +2,7 @@
 #
 # Doc-conformance suite for the prose that describes the audit loop's branch
 # checkpoint outside the PR Merge Workflow page: the always-loaded rules, the
-# `/gaia-debt` and `/gaia-harden` references, the audit agent text, and the
+# `/gaia-debt` and `/gaia-codify` references, the audit agent text, and the
 # hook and script inventories.
 #
 # What it guards. The checkpoint has two audiences with opposite instructions:
@@ -21,7 +21,7 @@
 setup() {
   REPO_ROOT="$(cd "$BATS_TEST_DIRNAME/../../.." && pwd)"
   DEBT_MD="${DOC_AUDIT_LOOP_DEBT_MD:-$REPO_ROOT/.claude/skills/gaia/references/debt.md}"
-  HARDEN_MD="${DOC_AUDIT_LOOP_HARDEN_MD:-$REPO_ROOT/.claude/skills/gaia/references/harden.md}"
+  CODIFY_MD="${DOC_AUDIT_LOOP_CODIFY_MD:-$REPO_ROOT/.claude/skills/gaia/references/codify.md}"
   PR_MERGE_MD="${DOC_AUDIT_LOOP_PR_MERGE_MD:-$REPO_ROOT/.claude/rules/pr-merge.md}"
   QUALITY_GATE_MD="${DOC_AUDIT_LOOP_QUALITY_GATE_MD:-$REPO_ROOT/.claude/rules/quality-gate.md}"
   HOOKS_WIKI="${DOC_AUDIT_LOOP_HOOKS_WIKI:-$REPO_ROOT/wiki/concepts/Claude Hooks.md}"
@@ -79,10 +79,10 @@ line_starting() {
   true
 }
 
-# --- UAT-029: /gaia-harden asks at the checkpoint --------------------------
+# --- UAT-029: /gaia-codify asks at the checkpoint --------------------------
 
-@test "UAT-029: harden.md's audit paragraph asks the checkpoint question and emits no continuation prompt" {
-  paragraph="$(line_starting "$HARDEN_MD" '**Run the audit, on every path.**')"
+@test "UAT-029: codify.md's audit paragraph asks the checkpoint question and emits no continuation prompt" {
+  paragraph="$(line_starting "$CODIFY_MD" '**Run the audit, on every path.**')"
   [ -n "$paragraph" ]
   grep -qF -- '#### The branch checkpoint' <<<"$paragraph"
   grep -qF -- 'checkpoint `AskUserQuestion`' <<<"$paragraph"

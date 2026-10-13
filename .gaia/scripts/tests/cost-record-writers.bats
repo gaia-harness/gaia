@@ -52,15 +52,15 @@ argv_block() {
   require_in "$REFERENCES/cost-record.md" 'usage\.sh record command:\{\{COMMAND\}\} --workflow \{\{COMMAND\}\}' 'recipe call with {{COMMAND}}'
 }
 
-@test "harden, debt and residue apply the shared recipe with their own command" {
+@test "codify, debt and residue apply the shared recipe with their own command" {
   local command
-  for command in harden debt residue; do
+  for command in codify debt residue; do
     require_in "$REFERENCES/$command.md" 'references/cost-record\.md.*\{\{COMMAND\}\}` = `gaia-'"$command"'`' "cost-record.md reference for gaia-$command"
   done
 }
 
-@test "audit and fitness record their own workflow" {
-  require_in "$REFERENCES/audit.md" 'usage\.sh record command:gaia-audit --workflow gaia-audit' 'gaia-audit record call'
+@test "cleanse and fitness record their own workflow" {
+  require_in "$REFERENCES/cleanse.md" 'usage\.sh record command:gaia-cleanse --workflow gaia-cleanse' 'gaia-cleanse record call'
   require_in "$REFERENCES/fitness.md" 'usage\.sh record command:gaia-fitness --workflow gaia-fitness' 'gaia-fitness record call'
 }
 

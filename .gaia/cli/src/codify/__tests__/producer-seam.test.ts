@@ -34,14 +34,14 @@ const SEEDED_FINDING = {
   area_tags: ['app/routes'],
   finding_class: 'holistic/hardcoded-string',
   security: false,
-  severity: 'suggestion',
+  severity: 'minor',
 };
 
 const CLASSLESS_FINDING = {
   area_tags: ['app/services'],
   finding_class: 'holistic/unclassified',
   security: false,
-  severity: 'warning',
+  severity: 'major',
 };
 
 // A fake `gh` answering exactly the calls `post-findings-block.sh` makes when
@@ -173,7 +173,7 @@ const runProducer = (args: {
 // producer-composed path the tests below cover.
 const handWrittenBlock = (prNumber: number, findings: RawFinding[]): string =>
   [
-    '<!-- gaia-harden:findings:start -->',
+    '<!-- gaia-codify:findings:start -->',
     '<!--',
     JSON.stringify({
       auditor: 'local',
@@ -182,7 +182,7 @@ const handWrittenBlock = (prNumber: number, findings: RawFinding[]): string =>
       schema: 1,
     }),
     '-->',
-    '<!-- gaia-harden:findings:end -->',
+    '<!-- gaia-codify:findings:end -->',
   ].join('\n');
 
 describe('producer seam: sidecar -> post-findings-block.sh -> parseFindingsBlock -> computeTally', () => {
@@ -201,7 +201,7 @@ describe('producer seam: sidecar -> post-findings-block.sh -> parseFindingsBlock
         prNumber,
       });
 
-      expect(body).toContain('<!-- gaia-harden:findings:start -->');
+      expect(body).toContain('<!-- gaia-codify:findings:start -->');
 
       const parsed = parseFindingsBlock(body);
 
@@ -222,26 +222,25 @@ describe('producer seam: sidecar -> post-findings-block.sh -> parseFindingsBlock
     expect(result.candidates[0]).toMatchObject({
       distinct_pr_count: 3,
       finding_class: 'holistic/hardcoded-string',
-      severity_max: 'suggestion',
+      severity_max: 'minor',
     });
 
     expect(result.unclassified).not.toBeNull();
     expect(result.unclassified?.distinct_pr_count).toBe(3);
-    expect(result.unclassified?.severity_max).toBe('warning');
+    expect(result.unclassified?.severity_max).toBe('major');
     expect(
       result.candidates.some((c) => c.finding_class === 'holistic/unclassified')
     ).toBe(false);
   });
 
-  test('UAT-004 negative arm: a sidecar finding written with a raw (unmapped) grading is dropped by the parser, its sibling finding survives', () => {
+  test('UAT-004 negative arm: a sidecar finding written with a raw (capitalized) grading is dropped by the parser, its sibling finding survives', () => {
     const onReject = vi.fn();
     const body = runProducer({
       base: 'd'.repeat(40),
       findings: [
-        // Raw grading, not the lowercase mapped severity the contract
-        // requires: `Critical` maps to `error`, but a member that stamped
-        // the raw grading verbatim violates the contract, and the parser
-        // must drop it rather than accept it.
+        // Raw grading, not the lowercase token the contract requires: a
+        // member that stamped `Critical` verbatim violates the contract, and
+        // the parser must drop it rather than accept it.
         {
           area_tags: ['app/routes'],
           finding_class: 'holistic/hardcoded-string',
@@ -252,7 +251,7 @@ describe('producer seam: sidecar -> post-findings-block.sh -> parseFindingsBlock
           area_tags: ['app/routes'],
           finding_class: 'holistic/non-null-assertion',
           security: false,
-          severity: 'warning',
+          severity: 'major',
         },
       ],
       prNumber: 201,

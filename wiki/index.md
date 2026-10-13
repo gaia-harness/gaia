@@ -3,7 +3,7 @@ type: meta
 title: Index
 status: active
 created: 2026-04-20
-updated: 2026-10-03
+updated: 2026-10-13
 tags: [meta]
 ---
 
@@ -148,7 +148,7 @@ Master catalog of every page in the wiki. Newly created pages must be added here
 - [[Registering a Code Audit Team Member]]: how-to for adding a new roster member: agent def, roster entry, machinery wiring, finding_class bucket, recurrence-tally integration, and the local-gate checklist.
 - [[Audit Disposition and Debt Fix]]: forced disposition of out-of-scope audit findings as deduped tech-debt issues; security-class divert; the /gaia-debt fix loop (single issue, recommended related batch, or operator-named batch, isolated per the team's git isolation policy) and statusline nudge; /gaia-residue drains the accepted-residual record the same audit leaves unfiled.
 - [[GitHub Labels]]: the label registry at `.gaia/labels.json`, the palette rule, the generated page, and `gaia labels sync` / `docs`.
-- [[Policy-Memory Loop]]: prune-first self-improvement; recurring finding_class -> statusline nudge -> `/gaia-harden` -> path-scoped rule -> `/gaia-audit` prunes only on obsolescence/redundancy/supersession/duplication.
+- [[Policy-Memory Loop]]: prune-first self-improvement; recurring finding_class -> statusline nudge -> `/gaia-codify` -> path-scoped rule -> `/gaia-cleanse` prunes only on obsolescence/redundancy/supersession/duplication.
 - [[Incremental CI Skipping]]: required checks skip when the delta since they last passed green has no relevant files; `resolve-check-base.sh` / `resolve-audit-base.sh`.
 - [[Claude Hooks]]
 - [[GAIA Scripts]]: the families of `.gaia/scripts/` by name prefix with what each does and where it is invoked, the subdirectories, and why the directory stays flat.
@@ -167,7 +167,7 @@ Master catalog of every page in the wiki. Newly created pages must be added here
 <!-- gaia:maintainer-only:end -->
 - [[GAIA Spec]]: `/gaia-spec`: GAIA's script-driven Socratic discovery workflow; produces an immutable SPEC artifact and stops, printing a `/gaia-plan` prompt for a fresh session (a guard enforces the stop).
 - [[GAIA Plan]]: `/gaia-plan`: feature plan + orchestrator scaffolding, clipboard handoff to a fresh session.
-- [[GAIA Audit]]: `/gaia-audit`: two-stage knowledge-store hygiene sweep.
+- [[GAIA Cleanse]]: `/gaia-cleanse`: two-stage knowledge-store hygiene sweep.
 - [[Wiki Sync]]: the sync stage of `/gaia-wiki` and the statusline drift nudge: keep the wiki convergent with code without spawned sub-Claudes.
 - [[Wiki Consolidate]]: the consolidate stage of `/gaia-wiki`: cross-SPEC redundancy and contradiction audit; surfaces supersession candidates, reversed decisions, near-collision slugs, and subject-orphans.
 - [[GAIA Init Workflow]]: `/gaia init` subcommands: strip-branding, configure-i18n, rename, wire-statusline, write-project-config, finalize, resume.

@@ -690,7 +690,7 @@ run_linter() {
 
 # A blockquoted fence is how a page quotes a prompt an agent is told to run
 # verbatim, so it is executed instruction rather than illustration by
-# construction. `.claude/skills/gaia/references/audit.md` carries it.
+# construction. `.claude/skills/gaia/references/cleanse.md` carries it.
 @test "a fence carrying a blockquote prefix is entered" {
   fixture_repo
   fixture_file docs/guide.md \

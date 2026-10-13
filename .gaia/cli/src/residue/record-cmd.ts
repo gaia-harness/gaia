@@ -5,8 +5,8 @@
  * is produced by `appendRecords`'s JSON serializer, so the SPEC's
  * no-embedded-newline refusal and schema-version obligation are met in one
  * place rather than trusted to a hand-written JSONL line. Mirrors
- * `gaia harden-ledger record`, the precedent this reproduces
- * (`../harden/ledger.ts`).
+ * `gaia codify-ledger record`, the precedent this reproduces
+ * (`../codify/ledger.ts`).
  *
  * `class` and `cited_line_text` are derived from the token's decoded
  * coordinate plus the attribution cache: a coordinate the cache still holds

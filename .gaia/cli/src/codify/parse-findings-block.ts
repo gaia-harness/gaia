@@ -4,13 +4,13 @@
  *
  * Shape (frozen by the comment-block contract):
  *
- *   <!-- gaia-harden:findings:start -->
+ *   <!-- gaia-codify:findings:start -->
  *   <!--
  *   {"schema":1,"pr_number":N,"auditor":"ci","findings":[
- *     {"finding_class":"...","severity":"warning","area_tags":["..."]}
+ *     {"finding_class":"...","severity":"major","area_tags":["..."]}
  *   ]}
  *   -->
- *   <!-- gaia-harden:findings:end -->
+ *   <!-- gaia-codify:findings:end -->
  *
  * The JSON payload lives INSIDE an inner HTML comment so it does not render. The
  * parser locates the sentinels, strips the inner comment framing, and
@@ -18,13 +18,13 @@
  * caller treats the PR as carrying no countable findings rather than crashing
  * the refresher.
  */
-const START_SENTINEL = '<!-- gaia-harden:findings:start -->';
-const END_SENTINEL = '<!-- gaia-harden:findings:end -->';
+const START_SENTINEL = '<!-- gaia-codify:findings:start -->';
+const END_SENTINEL = '<!-- gaia-codify:findings:end -->';
 
 export type ParsedFinding = {
   area_tags: string[];
   finding_class: string;
-  severity: 'error' | 'suggestion' | 'warning';
+  severity: 'critical' | 'major' | 'minor';
 };
 
 /**
@@ -43,7 +43,7 @@ export type ParsedFindingsBlock = {
  * The one accepted severity set. It is the one source and no test may
  * re-declare it.
  */
-export const SEVERITIES = new Set(['error', 'suggestion', 'warning']);
+export const SEVERITIES = new Set(['critical', 'major', 'minor']);
 
 export type OnReject = (reason: RejectReason, detail: string) => void;
 

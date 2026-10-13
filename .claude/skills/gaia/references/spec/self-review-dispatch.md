@@ -32,7 +32,7 @@ Spawn a `general-purpose` Agent with this prompt (interpolate `<DRAFT_PATH>` and
 >
 >     {
 >       "id": "SR-NNN",
->       "severity": "low" | "medium" | "high",
+>       "severity": "minor" | "major" | "critical",
 >       "kind": "placeholder" | "ambiguity" | "inconsistency" | "drift" | "scope_change" | "missing_uat" | "other",
 >       "location": "<section heading or UAT-NNN>",
 >       "excerpt": "<short verbatim excerpt, keep under 200 chars>",
@@ -40,32 +40,32 @@ Spawn a `general-purpose` Agent with this prompt (interpolate `<DRAFT_PATH>` and
 >       "suggested_fix": "<one sentence, what to change to resolve>"
 >     }
 >
-> **Apply** every `low` and `medium` `suggested_fix` yourself to the draft at `<DRAFT_PATH>` in a single `Write` (you have already read the whole draft). Do NOT apply the `high` findings; the wrapper gates those.
+> **Apply** every `minor` `suggested_fix` yourself to the draft at `<DRAFT_PATH>` in a single `Write` (you have already read the whole draft). Do NOT apply the `critical` or `major` findings; the wrapper gates those.
 >
-> **Return** only this thin digest, no finding bodies beyond the `high_findings` fields below:
+> **Return** only this thin digest, no finding bodies beyond the `gated_findings` fields below:
 >
->     { "counts": { "low": <int>, "medium": <int>, "high": <int> },
+>     { "counts": { "critical": <int>, "major": <int>, "minor": <int> },
 >       "applied": [<ids>],
->       "high_findings": [ { "id": "SR-NNN", "kind": "...", "location": "...", "issue": "...", "excerpt": "...", "suggested_fix": "..." } ],
+>       "gated_findings": [ { "id": "SR-NNN", "kind": "...", "location": "...", "issue": "...", "excerpt": "...", "suggested_fix": "..." } ],
 >       "pending_clarifications": [ { "topic": "...", "question": "..." } ] }
 >
-> Severity guidance:
+> Severity guidance (Critical: wrong, or will produce broken work; must be fixed before the gate. Major: a significant gap or defect; fix, or a human decides. Minor: real but small; fix by default, never ignorable):
 >
-> - **low**, placeholder text ("TODO", vague adjectives), terminology inconsistency
-> - **medium**, internal inconsistency, ambiguous UAT phrasing
-> - **high**, drift from gate-1 snapshot, scope change, removed UAT, added UAT not present at gate 1
+> - **minor**, placeholder text ("TODO", vague adjectives), terminology inconsistency, an ambiguous phrasing the definitions grade minor
+> - **major**, drift from gate-1 snapshot, scope change, removed UAT, added UAT not present at gate 1, internal inconsistency a planner would guess on
+> - **critical**, the draft is wrong or will produce broken work
 
-The digest is thin: `counts` gives the low/medium/high split, `applied` lists the folded ids, and each `high_findings` entry carries `kind`, `excerpt`, and `suggested_fix` (aligned with the 6a schema) so 6b's auto-branch and auto-mode rule 8 can gate and render the prompt without re-reading the draft.
+The digest is thin: `counts` gives the critical/major/minor split, `applied` lists the folded ids, and each `gated_findings` entry carries `kind`, `excerpt`, and `suggested_fix` (aligned with the 6a schema) so 6b's auto-branch and auto-mode rule 8 can gate and render the prompt without re-reading the draft.
 
 Append one `coverage.jsonl` record (`phase: "self_review"`, `disposition: "first_pass"|"not_applicable"`) to `.gaia/local/cache/audit-<spec_id>/coverage.jsonl`.
 
-**Fallback.** When subagent dispatch is unavailable, the main thread runs the self-review inline (parity with the step-7 audit fallback): it reads the draft, records the same findings, applies every `low` and `medium` `suggested_fix` itself in a single Write, and gates the highs at 6b.
+**Fallback.** When subagent dispatch is unavailable, the main thread runs the self-review inline (parity with the step-7 audit fallback): it reads the draft, records the same findings, applies every `minor` `suggested_fix` itself in a single Write, and gates the critical and major findings at 6b.
 
 ## 6b. Apply findings (severity-gated)
 
-The self-review agent already applied every `low` and `medium` `suggested_fix` (6a); main gates only the **high** findings, rendered from the digest's `high_findings` entries (`issue`, `excerpt`, `suggested_fix`). This is one of the two bounded interactive carve-outs where a finding body legitimately reaches main; keep it, do not extend it.
+The self-review agent already applied every `minor` `suggested_fix` (6a); main gates only the **critical** and **major** findings, rendered from the digest's `gated_findings` entries (`issue`, `excerpt`, `suggested_fix`). This is one of the two bounded interactive carve-outs where a finding body legitimately reaches main; keep it, do not extend it.
 
-- **high findings:** surface to the user before applying. Never silently revert intentional clarify-loop evolution. **Auto-mode exception per rule 8:** apply the `suggested_fix` and append a one-line note to `clarifications.deferred[]` recording the finding (kind, location, issue) so a reviewer can audit. If the finding is `kind: "drift"` or `"scope_change"` and the change came from a clarify answer the agent itself just made in step 5, prefer keeping the clarify answer over reverting, append the note but skip the fix. Use a plain prompt per finding:
+- **critical and major findings:** surface to the user before applying. Never silently revert intentional clarify-loop evolution. **Auto-mode exception per rule 8:** apply the `suggested_fix` and append a one-line note to `clarifications.deferred[]` recording the finding (kind, location, issue) so a reviewer can audit. If the finding is `kind: "drift"` or `"scope_change"` and the change came from a clarify answer the agent itself just made in step 5, prefer keeping the clarify answer over reverting, append the note but skip the fix. Use a plain prompt per finding:
 
   > Self-review flagged a scope-level concern in `<location>`:
   >
@@ -77,7 +77,7 @@ The self-review agent already applied every `low` and `medium` `suggested_fix` (
   >
   > Apply the fix, keep the current draft, or revise differently?
 
-  Wait for user direction. An **approved** high fix folds through the **delegated fold** (see "Audit cache + delegated fold" in `spec.md`), keyed by its `SR-NNN` id in the decision list; do not emit a main-thread draft `Write` for the fold. On `revise differently`, route the user's revision through the same delegated fold. On `keep`, fold nothing.
+  Wait for user direction. An **approved** gated fix folds through the **delegated fold** (see "Audit cache + delegated fold" in `spec.md`), keyed by its `SR-NNN` id in the decision list; do not emit a main-thread draft `Write` for the fold. On `revise differently`, route the user's revision through the same delegated fold. On `keep`, fold nothing.
 
 ## 6c. Pending clarifications block-or-defer
 

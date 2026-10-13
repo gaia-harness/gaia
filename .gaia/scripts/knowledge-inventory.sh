@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# Deterministic half of /gaia-audit (.claude/skills/gaia/references/audit.md):
+# Deterministic half of /gaia-cleanse (.claude/skills/gaia/references/cleanse.md):
 # what the knowledge stores hold, who owns a file an action targets, and
 # whether a 0-action report may finalize without a human. The playbook's
 # model stages call this rather than computing any of it themselves.
@@ -10,6 +10,7 @@
 #   bash .gaia/scripts/knowledge-inventory.sh counts   [--root <project-root>]
 #   bash .gaia/scripts/knowledge-inventory.sh classify [--root <project-root>] <path>...
 #   bash .gaia/scripts/knowledge-inventory.sh verify   [--root <project-root>] <report> [--scope-hint <text>]
+#   bash .gaia/scripts/knowledge-inventory.sh relocate-reports [--root <project-root>]
 #
 # With no --root the project is the git top level of the working directory.
 # The memory dir derives from the root the way Claude Code keys it: every
@@ -35,7 +36,22 @@
 #           equal to a fresh recount. Otherwise exit 1 with one `refuse:` line
 #           per failed condition.
 #
-# Exit 2: usage error. Exit 3: an input could not be read.
+# relocate-reports
+#           one-time move of <root>/.gaia/local/audit/KNOWLEDGE-*.md into
+#           <root>/.gaia/local/cleanse/ (the directory /gaia-cleanse writes
+#           to), keeping each file's mtime because the newest applied report's
+#           mtime anchors the statusline nudge's drift clock. Never overwrites
+#           and never deletes: a report whose name already sits in cleanse/ is
+#           left where it is. Prints nothing on success.
+#           It moves only when the working directory is the main checkout. A
+#           linked worktree shares one .gaia/local with the main checkout, so a
+#           move from there would rename reports out from under sessions still
+#           running the old layout; --root is never the test, because the
+#           statusline refresher passes the main checkout's root from a
+#           worktree. From a linked worktree, outside a repository, or on
+#           --help it exits 0 and moves nothing.
+#
+# Exit 2: usage error. Exit 3: an input could not be read or a move failed.
 
 set -uo pipefail
 
@@ -51,11 +67,11 @@ fail_input() {
   exit 3
 }
 
-[ "$#" -ge 1 ] || fail_usage "usage: knowledge-inventory.sh list|counts|classify|verify [--root <project-root>] ..."
+[ "$#" -ge 1 ] || fail_usage "usage: knowledge-inventory.sh list|counts|classify|verify|relocate-reports [--root <project-root>] ..."
 subcommand="$1"
 shift
 case "$subcommand" in
-  list | counts | classify | verify) ;;
+  list | counts | classify | verify | relocate-reports) ;;
   *) fail_usage "unknown subcommand: $subcommand" ;;
 esac
 
@@ -73,6 +89,10 @@ while [ "$#" -gt 0 ]; do
       [ "$#" -ge 2 ] || fail_usage "--scope-hint needs a value"
       scope_hint="$2"
       shift 2
+      ;;
+    --help | -h)
+      printf 'usage: knowledge-inventory.sh list|counts|classify|verify|relocate-reports [--root <project-root>] ...\n'
+      exit 0
       ;;
     -*) fail_usage "unknown option: $1" ;;
     *)
@@ -204,7 +224,31 @@ verify_report() {
   printf 'verified: %s\n' "$recomputed"
 }
 
+relocate_reports() {
+  local audit_dir="$root/.gaia/local/audit" cleanse_dir="$root/.gaia/local/cleanse" report
+  # Nothing to move is the steady state after the one move, and the
+  # statusline refresher calls this on every refresh: return before the
+  # checkout checks below spawn git.
+  set -- "$audit_dir"/KNOWLEDGE-*.md
+  [ -f "$1" ] || return 0
+
+  # shellcheck source=/dev/null
+  . "$(dirname "$0")/main-root-lib.sh" || return 0
+  if gaia_is_linked_worktree "$PWD"; then
+    return 0
+  fi
+  gaia_resolve_main_root "$PWD" >/dev/null 2>&1 || return 0
+
+  for report in "$audit_dir"/KNOWLEDGE-*.md; do
+    [ -f "$report" ] || continue
+    [ ! -e "$cleanse_dir/${report##*/}" ] || continue
+    mkdir -p "$cleanse_dir" || fail_input "cannot create $cleanse_dir"
+    mv "$report" "$cleanse_dir/" || fail_input "cannot move $report"
+  done
+}
+
 case "$subcommand" in
+  relocate-reports) relocate_reports ;;
   list) list_rows ;;
   counts) count_line ;;
   classify) classify_paths ;;

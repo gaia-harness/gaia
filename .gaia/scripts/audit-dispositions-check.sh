@@ -10,7 +10,7 @@
 # severity, the security flag, cross-remit, authorship and the triage mark are
 # read from the members' findings sidecars by identity key (member,
 # finding_class, path, line), through `audit-loop-eval.sh findings`.
-# Relabelling a Critical as Important inside the dispositions entry changes
+# Relabelling a Critical as Major inside the dispositions entry changes
 # nothing.
 #
 # Usage:
@@ -23,7 +23,7 @@
 # Dispositions: fix, accept-residual, waive-out-of-scope, file, divert.
 #
 # Rules (a violation prints `violation: <token> <compact key json>` on stdout):
-#   critical-not-fix            a Critical (severity error) key disposed anything but fix,
+#   critical-not-fix            a Critical (severity critical) key disposed anything but fix,
 #                               or file or divert when the finding is from outside the branch
 #   security-not-fix            the same for a security:true key (a finding with no
 #                               boolean security field reads as true)
@@ -33,7 +33,7 @@
 #                               entry exists; a failed probe is not PRIVATE): it diverts,
 #                               never a public or internal issue
 #   divert-not-allowed          divert on a key that is branch-authored or not
-#                               security-class (security not false, or severity error)
+#                               security-class (security not false, or severity critical)
 #   empty-reason                a non-fix disposition with an empty or blank reason
 #   vetoed-not-fix              a waiver-vetoed key (must be fixed) for this round
 #                               (effective_from_round <= r) that is not fix; a synthetic
@@ -127,7 +127,7 @@
 # key-less one-liners deduplicated by key, waiver-vetoed keys excluded for the
 # rounds the veto binds, diverts as a count only, and the not-filed section
 # from the outcomes files and <D>/filing-retry/. A waiver or triage line
-# renders only when the lookup says security false and severity not error, and
+# renders only when the lookup says security false and severity not critical, and
 # every rendered reason passes `file-tech-debt.sh screen-text` first; a reason
 # that fails renders as a withheld count.
 
@@ -166,8 +166,8 @@ _GRADE_JQ='
 def key_array: [.member, .finding_class, .path, .line];
 def key_object: {member, finding_class, path, line};
 def trim: gsub("^\\s+|\\s+$"; "");
-def security_class: ((.severity | IN("warning", "suggestion")) | not) or (.security | if type == "boolean" then . else true end);
-def triage_honored: .triage == true and .security == false and .severity != "error" and (.member | IN($triage_members[]));
+def security_class: ((.severity | IN("major", "minor")) | not) or (.security | if type == "boolean" then . else true end);
+def triage_honored: .triage == true and .security == false and .severity != "critical" and (.member | IN($triage_members[]));
 ($vetoes | map(select(.effective_from_round <= $round) | [.member, .finding_class, .path, .line])) as $vetoed_keys
 | ($lookup | map({key: (key_array | tojson), value: .}) | from_entries) as $lookup_by_key
 | [.entries[] | key_array] as $disposed_keys
@@ -177,9 +177,9 @@ def triage_honored: .triage == true and .security == false and .severity != "err
       | (if $lookup_entry == null and ($is_vetoed | not) then ["unknown-key"]
          else [
            (if $lookup_entry != null and .disposition != "fix"
-               and ((($lookup_entry.severity | IN("warning", "suggestion")) | not) or ($lookup_entry.security | if type == "boolean" then . else true end))
+               and ((($lookup_entry.severity | IN("major", "minor")) | not) or ($lookup_entry.security | if type == "boolean" then . else true end))
                and (((.disposition == "file" or ($version >= 2 and .disposition == "divert")) and $lookup_entry.authored == false) | not)
-            then (if ($lookup_entry.severity | IN("warning", "suggestion")) then "security-not-fix" else "critical-not-fix" end)
+            then (if ($lookup_entry.severity | IN("major", "minor")) then "security-not-fix" else "critical-not-fix" end)
             else empty end),
            (if $lookup_entry != null and .disposition == "file" and $lookup_entry.authored == false
                and ($lookup_entry | security_class) and $visibility != "PRIVATE"
@@ -533,14 +533,14 @@ _command_waiver_table() {
 
 # _ROWS_JQ: one round's PR-body candidate rows. A waiver or triage row exists
 # only inside the render bound (the lookup says security false and severity
-# not error); divert rows carry no reason, since only their count is rendered.
+# not critical); divert rows carry no reason, since only their count is rendered.
 # shellcheck disable=SC2016
 _ROWS_JQ='
 def key_array: [.member, .finding_class, .path, .line];
 def trim: gsub("^\\s+|\\s+$"; "");
 def one: gsub("<!--|-->"; "") | gsub("\\s+"; " ") | trim | if . == "" then "no reason recorded" else . end;
 def text($value): (if ($value | type) == "string" then $value else "" end) | one;
-def in_bound: . != null and .security == false and .severity != "error";
+def in_bound: . != null and .security == false and .severity != "critical";
 ($vetoes | map(select(.effective_from_round <= $round) | [.member, .finding_class, .path, .line])) as $vetoed_keys
 | ($lookup | map({key: (key_array | tojson), value: .}) | from_entries) as $lookup_by_key
 | [.entries[] | key_array] as $disposed_keys

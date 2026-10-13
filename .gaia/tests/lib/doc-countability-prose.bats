@@ -89,8 +89,8 @@ setup() {
   )
   WIKI_PAGE="$ROOT/wiki/concepts/Policy-Memory Loop.md"
   AUDIT_AGENT_PAGE="$ROOT/wiki/concepts/Code Review Audit Agent.md"
-  TALLY_CORE="$ROOT/.gaia/cli/src/harden/compute-tally.ts"
-  TALLY_EMIT="$ROOT/.gaia/cli/src/harden/tally.ts"
+  TALLY_CORE="$ROOT/.gaia/cli/src/codify/compute-tally.ts"
+  TALLY_EMIT="$ROOT/.gaia/cli/src/codify/tally.ts"
   FINDING_CLASS="$ROOT/.gaia/cli/src/schemas/finding-class.ts"
 }
 

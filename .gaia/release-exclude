@@ -15,18 +15,18 @@
 # release GAIA. The release-notes skill translates GAIA's CHANGELOG into
 # public release notes for the marketing site, a release-time maintainer
 # task, so it ships nowhere just like /gaia-release. Other
-# /gaia-* commands (plan, audit) are adopter-useful and
+# /gaia-* commands (plan, cleanse) are adopter-useful and
 # must NOT be added here. The two code-audit-maintainer-* agents are
 # the Code Audit Team's maintainer-only members (framework shell + framework
 # TypeScript lenses); adopters audit only their own app via
-# code-audit-frontend. /distribution-audit is the maintainer's
-# ship-or-withhold audit over newly-shipping files; it drives the
+# code-audit-frontend. /distribution-vet is the maintainer's
+# ship-or-withhold vet over newly-shipping files; it drives the
 # maintainer-only release CLI and has no meaning on an adopter clone.
 .claude/commands/gaia-release.md
 .claude/skills/release-notes
 .claude/agents/code-audit-maintainer-shell.md
 .claude/agents/code-audit-maintainer-node.md
-.claude/commands/distribution-audit.md
+.claude/commands/distribution-vet.md
 # verify-required-checks.sh declares the required_status_checks the GAIA team's own
 # branch ruleset must enforce (job names like "Audit CI Tests" that only exist
 # on maintainer-only, release-excluded workflows); an adopter clone has no such

@@ -272,7 +272,7 @@ A run with no one to answer never reaches this gate: Step 4 applies nothing with
 
 ## Step 8, Publish (commit / PR / merge)
 
-Reached only on **Publish** from Step 7. It does for fitness's heal diff what `/gaia-audit`'s Publish and `/update-deps` Phase 8 do: commit the working-tree changes and drive the PR to merge on a main-branch run, or commit and push on any other branch. The diff is expected to touch only out-of-audit-scope surfaces (`.claude/**`, `CLAUDE.md`, `.gitignore`, `.claude/settings.json`), in which case the PR clears the merge gate through the out-of-scope bypass (`wiki/concepts/Audit Gate Reference.md`, `#### Signals`) with no `code-audit-frontend` marker. Do not assume it: a heal fix can restore a framework surface the roster claims, and `.gitignore` itself is treated as in scope by the gate. Before `gh pr merge`, run
+Reached only on **Publish** from Step 7. It does for fitness's heal diff what `/gaia-cleanse`'s Publish and `/update-deps` Phase 8 do: commit the working-tree changes and drive the PR to merge on a main-branch run, or commit and push on any other branch. The diff is expected to touch only out-of-audit-scope surfaces (`.claude/**`, `CLAUDE.md`, `.gitignore`, `.claude/settings.json`), in which case the PR clears the merge gate through the out-of-scope bypass (`wiki/concepts/Audit Gate Reference.md`, `#### Signals`) with no `code-audit-frontend` marker. Do not assume it: a heal fix can restore a framework surface the roster claims, and `.gitignore` itself is treated as in scope by the gate. Before `gh pr merge`, run
 
 ```bash
 bash .gaia/scripts/resolve-audit-members.sh

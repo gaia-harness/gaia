@@ -41,7 +41,7 @@ type Sandbox = {
 };
 
 const setupSandbox = (): Sandbox => {
-  const root = mkdtempSync(path.join(tmpdir(), 'gaia-harden-ledger-'));
+  const root = mkdtempSync(path.join(tmpdir(), 'gaia-codify-ledger-'));
   // The handler calls resolveRepoRoot, so we need a real git repo.
   execFileSync('git', ['init', '-q', '-b', 'main'], {cwd: root});
 
@@ -92,7 +92,7 @@ const readLedger = (ledgerPath: string): DeclineLedger =>
 
 const FIXED_NOW = new Date('2026-06-05T14:32:00.000Z');
 
-describe('harden-ledger', () => {
+describe('codify-ledger', () => {
   let sandbox: Sandbox;
   let io: ReturnType<typeof captureStdio>;
 
@@ -228,7 +228,7 @@ describe('harden-ledger', () => {
       expect(ledger.declines).toHaveLength(2);
     });
 
-    test('creates the harden dir with mode 755', () => {
+    test('creates the codify dir with mode 755', () => {
       run(
         [
           'record',
@@ -742,7 +742,7 @@ describe('harden-ledger', () => {
     });
 
     test('the suppression check reports unreadable, silently, rather than re-surfacing a declined class', () => {
-      // Seed a valid entry first so the harden dir exists, then corrupt it.
+      // Seed a valid entry first so the codify dir exists, then corrupt it.
       run(
         [
           'record',

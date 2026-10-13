@@ -22,13 +22,21 @@ What was reviewed (file list) and the overall verdict. Name any specialist or re
 - **Issue**: the concrete failure mode
 - **Fix**: the concrete correction
 
-### Important Issues (Should Fix)
+### Major Issues (Fix or Acknowledge)
 
 Same format.
 
-### Suggestions
+### Minor Issues (Fix by Default)
 
-Same format. They never block the marker on their own unless your definition states otherwise; note whether the author addressed or acknowledged each.
+Same format. Note whether the author addressed or acknowledged each.
+
+The three tiers mean:
+
+- **Critical:** wrong, or will produce broken work; must be fixed before the gate.
+- **Major:** a significant gap or defect; fix, or a human decides (acknowledge).
+- **Minor:** real but small; fix by default, never ignorable.
+
+There is no tier below Minor: what is worth reporting is Minor, and what is not is not reported.
 
 ### Cross-remit Findings
 
@@ -44,7 +52,9 @@ Never gates your own marker; the orchestrator decides the disposition (see "Cros
 
 Run the handshake on every pass, in order: account for your open ledger entries, write the sidecar, then write either your earned marker or your refusal. Every command below takes `<root>` and the values the scope resolver printed as literals typed into the command, and each fence is its own Bash call, for the reasons stated under "Remit and self-skip" in your definition. Keep the single quotes a command puts around a value such as `'<ANCHOR_TREE>'`: an empty value must stay an argument of its own rather than drop out and leave its flag to take the next one. `<KEY_BASE>`, `<BASE_SHA>`, `<BASE_REASON>`, `<ANCHOR_TREE>` and `<AUDIT_KEY>` all come from that one resolver call; `<BASE_SHA>` is the incremental review base it derives through `.github/audit/resolve-audit-base.sh`.
 
-**Clean pass.** No Critical finding, every Important finding either fixed at HEAD since the last invocation (verify by re-reading the file, never trust a prior chat claim) or explicitly acknowledged by the operator with a stated reason, and every extra clean-pass condition your definition states met the same way. Anything else withholds the marker.
+**Two gate layers.** Your marker gates on Critical (fix) and Major (fix or acknowledge); no Minor withholds it. Separately, the dispositions file decides every finding, Minor included: fix by default; `accept-residual`, `waive-out-of-scope` or `file` need a reason, and architectural ones escalate to the human.
+
+**Clean pass.** No Critical finding, every Major finding either fixed at HEAD since the last invocation (verify by re-reading the file, never trust a prior chat claim) or explicitly acknowledged by the operator with a stated reason, and every extra clean-pass condition your definition states met the same way. Anything else withholds the marker.
 
 **Before step 0: account for your own open entries.** List them with one plain command:
 
@@ -75,7 +85,7 @@ The marker is keyed to your own branch-own digest, a sha256 over the branch's ow
 
 A `review scope superseded` refusal here means your scope digest no longer matched your branch-own digest at write time: no artifact was written and the round is forfeited. That refusal releases your stale capture as it exits, so the re-dispatch on the new HEAD clears normally. Do not re-run the resolver yourself after it: it would hand you a capture for content you did not review.
 
-**1, withheld.** On any unresolved Critical, unaddressed Important, or unmet extra condition, record a **refusal** (a member's recorded verdict withholding clearance after a full review; proof the member ran; resolve the finding, never re-dispatch it as a no-op) with the same writer, and stop:
+**1, withheld.** On any unresolved Critical, unaddressed Major, or unmet extra condition, record a **refusal** (a member's recorded verdict withholding clearance after a full review; proof the member ran; resolve the finding, never re-dispatch it as a no-op) with the same writer, and stop:
 
 ```bash
 bash <root>/.gaia/scripts/audit-write-clearance.sh \
@@ -133,7 +143,7 @@ Shape (one entry per finding; the writer rejects the write and names the offendi
 
 ```json
 [
-  {"finding_class":"holistic/swallowed-error","severity":"warning","security":false,
+  {"finding_class":"holistic/swallowed-error","severity":"major","security":false,
    "path":"src/services/requests.ts","line":42,
    "title":"a rejected request resolves as success",
    "failure_mode":"a 500 from the endpoint takes the catch arm, which returns the empty parse result, so the caller renders an empty list as if the fetch succeeded",
@@ -144,7 +154,7 @@ Shape (one entry per finding; the writer rejects the write and names the offendi
 
 Field contract:
 
-- `severity` maps from your grading: Critical → `error`, Important → `warning`, Suggestion → `suggestion`.
+- `severity` is the tier name in lower case: `critical`, `major` or `minor`.
 - `finding_class` comes from the closed vocabulary ("Holistic class assignment" below, plus any member-specific vocabulary your definition owns) and counts at any severity; a finding that maps to no seeded class is stamped `holistic/unclassified` and included, never omitted, surfacing as the distinct unclassified recurrence signal.
 - `path` and `line` locate the defect. `failure_mode` is input, state and wrong outcome. `verified_by` is the executed evidence your Finding Proof Gate demands, not the reasoning that suggested looking. `suggested_fix` is the repair, concrete enough to act on. `area_tags` is optional and defaults to the path's directory.
 - `security` is a boolean on every entry. It is `true` when any of these holds, judged on the finding's content and severity and never on its `finding_class`: it came from a security review dimension; its content describes an exploitable weakness (missing authentication or authorization, injection, secret exposure, request forgery, path traversal, unsafe deserialization, cryptographic misuse, and the like); its severity is Critical; it is secret-shaped. It is `false` only when you are sure none holds; when unsure, `true`. A missing or non-boolean value is read as `true`. `holistic/unclassified` carries no security signal on its own.
@@ -153,10 +163,10 @@ Field contract:
 - Never write `authored`: the round's evaluator annotates authorship against the branch's own changes.
 
 <!-- gaia:maintainer-only:start -->
-- `triage` (optional boolean) with `triage_reason` (non-empty string, required when `triage` is true) marks a harness finding below `.claude/rules/maintainers/harness-triage-threshold.md`'s threshold. The dispositions check honors the mark as disposed only when the entry's member is `code-audit-maintainer-shell` or `code-audit-maintainer-node`, its path is inside that member's roster globs, its severity is not `error`, and `security` is exactly `false`; any other mark is ignored and the finding is graded and disposed like any other. An adopter copy of the check honors no mark at all.
+- `triage` (optional boolean) with `triage_reason` (non-empty string, required when `triage` is true) marks a harness finding below `.claude/rules/maintainers/harness-triage-threshold.md`'s threshold. The dispositions check honors the mark as disposed only when the entry's member is `code-audit-maintainer-shell` or `code-audit-maintainer-node`, its path is inside that member's roster globs, its severity is not `critical`, and `security` is exactly `false`; any other mark is ignored and the finding is graded and disposed like any other. An adopter copy of the check honors no mark at all.
 <!-- gaia:maintainer-only:end -->
 
-`[]` when your report is empty is still a real "this run found nothing" record: write it. A marker on disk with no sidecar beside it reads as a lost report and gets your dispatch retried. Every Critical, Important and Suggestion finding goes in, inside the branch's changes or outside them, and every cross-remit finding too.
+`[]` when your report is empty is still a real "this run found nothing" record: write it. A marker on disk with no sidecar beside it reads as a lost report and gets your dispatch retried. Every Critical, Major and Minor finding goes in, inside the branch's changes or outside them, and every cross-remit finding too.
 
 **What happens to a finding outside the branch.** You report it; you never decide it. The evaluator marks it `authored:false`, and the orchestrator gives it a disposition the dispositions check (`.gaia/scripts/audit-dispositions-check.sh`) requires for every finding: `fix`, `accept-residual`, `waive-out-of-scope`, `file` (filed by `file-tech-debt.sh`, its outcome reconciled by the check's `check-outcomes`), or `divert`, which only a security-class finding outside the branch may take and which writes a local record under the gitignored `.gaia/local/audit/security/` instead of any issue.
 
@@ -168,7 +178,7 @@ The ledger carries the audit loop's state across rounds in one gitignored file p
 
 **Keying.** `<AUDIT_KEY>` is the value the scope resolver printed, which `gaia_audit_key` derives from the shared `KEY_BASE` plus the current branch, so two worktrees sharing a base never collide. It keys on the base rather than HEAD, and on the pull-request-wide `KEY_BASE` rather than your own per-member `BASE_SHA`: one ledger serves the whole dispatched set, so every member must land on the same key however far its own review base narrowed. The key holds still across the fix commits of a loop and moves only when the base resolver finds a newer whole-team signal, on a rebase, or on a reset; carry the value this round's resolver printed and never predict one. An empty `AUDIT_KEY` skips the ledger (fail-open).
 
-**Shape (schema 1).** Top level: `schema` (`1`), `base_sha` (equals the key base), `branch`, `round`, `head_sha`, `updated_at`, `remaining[]`, `fixed_last_round[]`, `member_provenance`, optional `notes`. A `remaining[]` entry is one open finding: `member`, `finding_class`, `severity` (`critical|important|suggestion`), `path`, `line`, `title`, `failure_mode`, `verified_by`, `suggested_fix`, `source` (`holistic|rule|oracle`), `first_seen_round`, `escalated`, and `entry_id` (writer-assigned, unique; an entry without one is not accountable). A `fixed_last_round[]` entry is `member`, `finding_class`, `path`, `line`, `title`, `fixed_in_sha`, plus `entry_id` and `resolution` when a resolution record retired it. `member_provenance` maps a member name to its latest refusal (`refusal_digest`, `refusal_tree`, `refusal_sha`, `version`).
+**Shape (schema 1).** Top level: `schema` (`1`), `base_sha` (equals the key base), `branch`, `round`, `head_sha`, `updated_at`, `remaining[]`, `fixed_last_round[]`, `member_provenance`, optional `notes`. A `remaining[]` entry is one open finding: `member`, `finding_class`, `severity` (`critical|major|minor`), `path`, `line`, `title`, `failure_mode`, `verified_by`, `suggested_fix`, `source` (`holistic|rule|oracle`), `first_seen_round`, `escalated`, and `entry_id` (writer-assigned, unique; an entry without one is not accountable). A `fixed_last_round[]` entry is `member`, `finding_class`, `path`, `line`, `title`, `fixed_in_sha`, plus `entry_id` and `resolution` when a resolution record retired it. `member_provenance` maps a member name to its latest refusal (`refusal_digest`, `refusal_tree`, `refusal_sha`, `version`).
 
 **Reader contract.**
 
@@ -179,7 +189,7 @@ The ledger carries the audit loop's state across rounds in one gitignored file p
 **Writer behavior.** The shared clearance writer maintains the ledger; never write it by hand. Never remove the ledger yourself: one file serves every dispatched member, so deleting it on your own clean pass discards a co-dispatched member's open entries.
 
 - **Accounting (every write, before anything publishes).** Every open entry of yours (your `member`, carrying an `entry_id`) must be re-reported or resolved in your sidecar. An unaccounted entry, or open entries with an absent or unparseable sidecar, exits 3 with nothing published, names each entry by `entry_id`, `finding_class` and `path:line`, and keeps your scope capture: re-check each at HEAD, rewrite the sidecar, and retry. The same exit 3 applies when your round was captured on `member-refusal` and the ledger cannot be read; the message then says to release the capture with `audit-scope-digest.sh --release`, re-run the resolver (which resolves an earlier base), review, and write again.
-- **Refusal.** Your `remaining[]` entries are rebuilt from your sidecar (`error` → `critical`, `warning` → `important`); a re-reported entry keeps its `entry_id` and `first_seen_round`, a resolved one moves to `fixed_last_round[]` with its rationale, `round` increments from a valid same-key ledger, and your `member_provenance` records the refusal with a review-coverage proof when your scope capture matches. That link is what lets your next review anchor on the refusal (reason `member-refusal`) and cover only the delta since it plus the entries you account for.
+- **Refusal.** Your `remaining[]` entries are rebuilt from your sidecar (each keeps its `critical`, `major` or `minor` severity); a re-reported entry keeps its `entry_id` and `first_seen_round`, a resolved one moves to `fixed_last_round[]` with its rationale, `round` increments from a valid same-key ledger, and your `member_provenance` records the refusal with a review-coverage proof when your scope capture matches. That link is what lets your next review anchor on the refusal (reason `member-refusal`) and cover only the delta since it plus the entries you account for.
 - **Earned write.** Your entries move to `fixed_last_round[]` with the sha that closed them, your `member_provenance` entry is dropped, and the file is removed once no member has anything left. Without `--base`, a repaired finding lingers in `remaining[]` and the next fixer acts on work already done.
 - A write touches only its own member's entries and provenance. The post-publish ledger update is atomic and best-effort: a failure there warns and never fails a clearance record that already published.
 
@@ -236,6 +246,6 @@ The gate's bounds on what happens to your findings read files Claude can write. 
 
 - **Divert legality** reads the sidecar's `security` flag and severity and the evaluator's `authored` annotation. A member that misclassifies a security finding as `security: false` is not caught, and neither is a forged sidecar.
 - **The triage-mark bound** reads the same flags from the sidecar: the check ignores a mark outside its bound, but it cannot tell an honest `security: false` from a wrong one.
-- **The light-route security bound** routes a refusal-anchored re-audit to a full review when any open finding is `error` or not exactly `security: false`, and it reads that from the same sidecar and ledger.
+- **The light-route security bound** routes a refusal-anchored re-audit to a full review when any open finding is `critical` or not exactly `security: false`, and it reads that from the same sidecar and ledger.
 
 Each bound stops an orchestrator that skips or misreads a step; none stops one that rewrites the record it reads. That is why `security` defaults to `true` when unsure, and why a missing or non-boolean value reads as `true`.

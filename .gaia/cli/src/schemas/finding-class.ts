@@ -164,7 +164,7 @@ const isOraclePrefix = (prefix: string): prefix is FindingClassPrefix =>
  * True when `findingClass` carries a known oracle prefix (`react-doctor/`,
  * `axe/`, `knip/`, `cve/`), the deterministic-tool buckets. Reuses the same
  * `ORACLE_PREFIXES` membership check as `isValidFindingClass` so callers never
- * need to re-list the prefixes; `harden-tally` uses this to emit `is_oracle`
+ * need to re-list the prefixes; `codify-tally` uses this to emit `is_oracle`
  * per candidate.
  */
 export const isOracleFindingClass = (findingClass: string): boolean => {

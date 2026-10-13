@@ -231,7 +231,7 @@ write_sidecar() {
   local base="${1:-$BASE_SHA}" member="${2:-code-audit-frontend}" findings="${3:-}"
   # Not a `${3:-...}` default: the literal carries double quotes, which end the
   # assignment's own quoting mid-expansion.
-  [ -n "$findings" ] || findings='[{"finding_class":"holistic/swallowed-error","severity":"warning","area_tags":["app/services"]}]'
+  [ -n "$findings" ] || findings='[{"finding_class":"holistic/swallowed-error","severity":"major","area_tags":["app/services"]}]'
   jq -nc --arg member "$member" --argjson findings "$findings" \
     '{schema: 1, member: $member,
       findings: ($findings | map(if has("security") then . else . + {security: false} end))}' \
@@ -249,7 +249,7 @@ write_sidecar() {
   [ ! -s "$FAKE_GH_STATE/patch_count" ]
 
   body="$(cat "$FAKE_GH_STATE/comment_body")"
-  grep -qF -- '<!-- gaia-harden:findings:start -->' <<<"$body" || return 1
+  grep -qF -- '<!-- gaia-codify:findings:start -->' <<<"$body" || return 1
   grep -qF -- '"auditor":"local"' <<<"$body" || return 1
   grep -qF -- 'holistic/swallowed-error' <<<"$body" || return 1
 }
@@ -263,7 +263,7 @@ write_sidecar() {
   # empty final round and nothing else.
   write_sidecar
   write_sidecar eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee code-audit-maintainer-shell \
-    '[{"finding_class":"holistic/secret-exposure","severity":"warning","area_tags":[".gaia/scripts"]}]'
+    '[{"finding_class":"holistic/secret-exposure","severity":"major","area_tags":[".gaia/scripts"]}]'
   # The final, cleared round: present, empty, and the only one a base resolved
   # at merge time could ever have selected.
   write_sidecar "$(git -C "$REPO" rev-parse HEAD)" code-audit-frontend '[]'

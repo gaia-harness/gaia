@@ -28,7 +28,7 @@ const tryReadFile = (filePath: string): null | string => {
 // Prefix-bound / tail-agnostic on purpose: derived from the shared
 // `MARKER_PREFIX` constant, then followed by the class-capture tail. It matches
 // any copy that keeps the frozen prefix regardless of the trailing wording, so
-// this binder never silently drifts from `/gaia-audit`'s full-text match.
+// a rule promoted under an earlier tail (`pruned by /gaia-audit ...`) still binds.
 const MARKER_RE = new RegExp(
   String.raw`${escapeRegExp(MARKER_PREFIX)}\s+(\S+?)\s*(?:;|-->)`,
   'g'

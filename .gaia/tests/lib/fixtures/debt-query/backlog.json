@@ -9,7 +9,7 @@
   {
     "number": 102,
     "title": "Keyed suggestion issue on the same path with footprint:wide",
-    "labels": [{ "name": "tech-debt" }, { "name": "severity:suggestion" }, { "name": "footprint:wide" }],
+    "labels": [{ "name": "tech-debt" }, { "name": "severity:minor" }, { "name": "footprint:wide" }],
     "createdAt": "2026-01-02T00:00:00Z",
     "body": "The same file carries a second, unrelated cleanup opportunity further down.\n\n<!-- gaia-debt-key: v1 class=holistic/unclassified path=app/foo.ts line=42 -->"
   },
@@ -30,7 +30,7 @@
   {
     "number": 105,
     "title": "Keyed suggestion issue whose path contains a space (SPEC-082 fixture)",
-    "labels": [{ "name": "tech-debt" }, { "name": "severity:suggestion" }],
+    "labels": [{ "name": "tech-debt" }, { "name": "severity:minor" }],
     "createdAt": "2026-01-05T00:00:00Z",
     "body": "A residual cited on a spaced wiki path, added so the ordering query's spaced-path handling is exercised.\n\n<!-- gaia-debt-key: v1 class=holistic/unclassified path=wiki/concepts/PR Merge Workflow.md line=175 -->"
   },

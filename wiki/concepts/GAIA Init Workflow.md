@@ -2,7 +2,7 @@
 type: concept
 status: active
 created: 2026-05-07
-updated: 2026-10-06
+updated: 2026-10-13
 tags: [concept, claude, cli, workflow]
 ---
 
@@ -22,7 +22,7 @@ The `/gaia init` namespace provides subcommands for on-boarding a cloned GAIA te
 
 Each language-file key is optional (the shipped `_index.ts` carries only `meta.title`) and is rewritten wherever it is a quoted string literal; a key present but holding something else (a template literal, a computed value) is left untouched. Each key is matched wherever its own rewrite looks for it, so a value wrapped in one quote may hold the other bare: `siteName: "Steve's Template"` is an ordinary literal and is rewritten, as is a value this command itself wrote when the title carried the non-wrapping quote.
 
-**`wire-statusline`**: Inserts the canonical GAIA `statusLine` block at the top level of the chosen Claude settings file (`--mode project` writes `.claude/settings.json`, `global` writes `~/.claude/settings.json`, `skip` is a no-op). The statusline surfaces the per-machine setup gate plus `/update-gaia`, `/update-deps`, `/gaia-harden`, and `/gaia-audit` nudges.
+**`wire-statusline`**: Inserts the canonical GAIA `statusLine` block at the top level of the chosen Claude settings file (`--mode project` writes `.claude/settings.json`, `global` writes `~/.claude/settings.json`, `skip` is a no-op). The statusline surfaces the per-machine setup gate plus `/update-gaia`, `/update-deps`, `/gaia-codify`, and `/gaia-cleanse` nudges.
 
 **`bootstrap-env`**: Copies `.env.example` to `.env` when `.env` does not yet exist, running as a CLI subprocess so it bypasses Claude Code's `Write(.env)` deny rule. No-op when `.env` already exists or `.env.example` is absent.
 

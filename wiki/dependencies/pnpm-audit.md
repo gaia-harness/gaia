@@ -4,7 +4,7 @@ status: active
 package: pnpm audit
 role: dependency-cve-advisory
 created: 2026-06-04
-updated: 2026-09-29
+updated: 2026-10-13
 tags: [dependency, security, quality]
 ---
 
@@ -38,7 +38,7 @@ No workflow GAIA renders into your project runs `pnpm audit` on a schedule or op
 
 ## Acting on output
 
-High/critical advisories surface in the audit's advisory bucket, never in Critical/Important/Suggestions (those are blocking tiers). They are **advisory, not blocking**, like knip's and react-doctor's; they never block the audit marker or [[PR Merge Workflow]]. Per surfaced advisory, the fix path is one of:
+High/critical advisories surface in the audit's advisory bucket, never in Critical/Major/Minor (the report tiers). They are **advisory, not blocking**, like knip's and react-doctor's; they never block the audit marker or [[PR Merge Workflow]]. Per surfaced advisory, the fix path is one of:
 
 1. **Bump**: a `patched_versions` range exists; update the dependency to a patched version.
 2. **Override**: no patched range and the advisory is transitive; pin a safe version via an `overrides` entry in `pnpm-workspace.yaml`. Apply it with `pnpm dedupe`, not `pnpm install`, which does not re-resolve an overrides-only change; see [[pnpm-overrides]].

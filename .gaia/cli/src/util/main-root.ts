@@ -14,7 +14,8 @@ import {execGaiaGit} from './git-env.js';
  * returns. Two spellings of the same directory (a symlinked temp dir, a
  * relative vs. absolute path) must not read as a validation failure.
  */
-const sameRealPath = (a: string, b: string): boolean => {
+/** True when both paths resolve to the same real path; false when either cannot be resolved. */
+export const sameRealPath = (a: string, b: string): boolean => {
   try {
     return realpathSync(a) === realpathSync(b);
   } catch {

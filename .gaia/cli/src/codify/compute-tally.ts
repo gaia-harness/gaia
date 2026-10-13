@@ -3,7 +3,7 @@
  *
  * Turns recorded code-review-audit findings (already extracted from the
  * machine-readable PR-comment blocks of the rolling window) into the candidate
- * list the statusline nudge and `/gaia-harden review` consume. No I/O lives
+ * list the statusline nudge and `/gaia-codify review` consume. No I/O lives
  * here: the caller resolves the PR window, parses the comment blocks, and wires
  * the suppression inputs (promoted rules, the decline ledger) as predicates.
  *
@@ -57,8 +57,8 @@ export type ComputeTallyArgs = {
   windowDays: number;
 };
 
-// Severity ordering for the running max: error > warning > suggestion.
-export type Severity = 'error' | 'suggestion' | 'warning';
+// Severity ordering for the running max: critical > major > minor.
+export type Severity = 'critical' | 'major' | 'minor';
 
 export type TallyCandidate = {
   area_tags: string[];
@@ -101,9 +101,9 @@ export type UnclassifiedSignal = {
 };
 
 const SEVERITY_RANK: Record<Severity, number> = {
-  error: 3,
-  suggestion: 1,
-  warning: 2,
+  critical: 3,
+  major: 2,
+  minor: 1,
 };
 
 const maxSeverity = (a: Severity, b: Severity): Severity =>
@@ -123,7 +123,7 @@ type PerPrCollapse = {
 // tally-semantics:start
 // Collapses one PR's findings into per-key aggregates so a key counts once
 // per PR regardless of how many findings carry it, tracking the PR-local
-// severity max (running max across error > warning > suggestion) and the
+// severity max (running max across critical > major > minor) and the
 // union of area tags seen for it. A key is either a valid finding_class or
 // the `OUT_OF_SCOPE_FALLBACK_FINDING_CLASS` constant, standing in for the
 // classless "unclassified" bucket. Free-text / unseeded finding_class values

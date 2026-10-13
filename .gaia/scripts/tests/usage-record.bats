@@ -243,7 +243,7 @@ scratch_scripts() {
   [ "$(close_count)" -eq 0 ]
   for case_arguments in "spec:bad --workflow gaia-spec" "spec:SPEC-901 --workflow gaia-spec --bogus" "spec:SPEC-901 --workflow gaia-spec --pr 5" \
     "spec:SPEC-901 --workflow gaia-spec --issue 5" "spec:SPEC-901" "spec:SPEC-901 --workflow gaia-fitness" "spec:SPEC-901 --workflow nonsense" \
-    "plan:PLAN-901 --workflow gaia-spec" "command:gaia-fitness --workflow gaia-audit" "command:gaia-spec --workflow gaia-spec" \
+    "plan:PLAN-901 --workflow gaia-spec" "command:gaia-fitness --workflow gaia-cleanse" "command:gaia-spec --workflow gaia-spec" \
     "command:gaia-fitness --workflow gaia-fitness --pr 0" "spec:SPEC-901 --workflow gaia-spec --start not-a-time" \
     "spec:SPEC-901 --workflow gaia-spec --start 2999-01-01T00:00:00Z" "spec:SPEC-901 --workflow gaia-spec --line"; do
     # shellcheck disable=SC2086  # the case string is word-split into arguments on purpose

@@ -2,7 +2,7 @@
 type: concept
 status: active
 created: 2026-07-23
-updated: 2026-10-04
+updated: 2026-10-13
 tags: [concept, worktree, claude, hooks, state]
 ---
 
@@ -100,7 +100,7 @@ A linked worktree's `.gaia/local` is a **single symlink to the main checkout's**
 
 Every entry is exactly one of these. The scope answers where it lives and who owns it once the whole directory resolves to main:
 
-- **shared**: a durable store multiple trees co-write, whose entries must coexist. Correct only with a content or identity partition key, a cross-tree lock, or (for a singleton) an idempotent overwrite. *Examples:* the audit clearance markers (keyed by branch-own digest); the findings and rerun sidecars (keyed by base-sha **plus branch**, so two trees off one main tip do not overwrite each other); the telemetry cost ledger (a cross-tree file lock plus self-identifying rows); the debt count cache (idempotent overwrite of a repo-global fact); the harden decline ledger (one copy per clone, keyed internally by finding class, because one copy is the only scope at which a decline can suppress what it declined).
+- **shared**: a durable store multiple trees co-write, whose entries must coexist. Correct only with a content or identity partition key, a cross-tree lock, or (for a singleton) an idempotent overwrite. *Examples:* the audit clearance markers (keyed by branch-own digest); the findings and rerun sidecars (keyed by base-sha **plus branch**, so two trees off one main tip do not overwrite each other); the telemetry cost ledger (a cross-tree file lock plus self-identifying rows); the debt count cache (idempotent overwrite of a repo-global fact); the codify decline ledger (one copy per clone, keyed internally by finding class, because one copy is the only scope at which a decline can suppress what it declined).
 - **per-tree** — durable state belonging to exactly one tree that must not bleed across trees. Addressed at a sub-path carrying the resolved-checkout-root tree key the identity rule defines; the resolver supplies the key, the registry declares which entries need it. *Examples:* the RED ledger; the worthiness ledger (the same kind of per-tree fact as a RED observation); the forensics and handoff drop zones.
 - **main-only** — a single canonical value owned by the main checkout, or a transient main-anchored coordination store holding no durable per-tree data. A worktree reads it or writes into main's one copy; it does not co-write a partitioned dataset. A coordination store may still carry a key (a spec-chain sentinel by session) — that partitions coordination records, it does not make the store a co-written dataset. *Examples:* the SPEC and plan ledgers; the PR-artifact capture; the project id; the update-preference file.
 - **ephemeral** — transient scratch, regenerable or discardable, self-pruned by its own producer or left for a human to clear. Keyed by session, spec id, or a uuid, or an idempotent-overwrite cache whose concurrent write is harmless. Needs no tree key and no preservation. *Examples:* in-flight SPEC drafts and gate caches; react-perf run output.

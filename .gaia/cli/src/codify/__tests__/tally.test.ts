@@ -66,11 +66,11 @@ const findingsComment = (
 ): {body: string} => ({
   body: [
     'Audit summary.',
-    '<!-- gaia-harden:findings:start -->',
+    '<!-- gaia-codify:findings:start -->',
     '<!--',
     JSON.stringify({auditor, findings, pr_number: prNumber, schema: 1}),
     '-->',
-    '<!-- gaia-harden:findings:end -->',
+    '<!-- gaia-codify:findings:end -->',
   ].join('\n'),
 });
 
@@ -82,11 +82,11 @@ const anonymousFindingsComment = (
 ): {body: string} => ({
   body: [
     'Audit summary.',
-    '<!-- gaia-harden:findings:start -->',
+    '<!-- gaia-codify:findings:start -->',
     '<!--',
     JSON.stringify({findings, pr_number: prNumber, schema: 1}),
     '-->',
-    '<!-- gaia-harden:findings:end -->',
+    '<!-- gaia-codify:findings:end -->',
   ].join('\n'),
 });
 
@@ -107,7 +107,7 @@ const parseStdout = (out: string[]): Record<string, unknown> =>
 const REFERENCE_NOW = new Date('2026-09-18T10:00:00.000Z');
 
 const snapshotPath = (root: string): string =>
-  path.join(root, '.gaia', 'local', 'harden', 'reviewed.json');
+  path.join(root, '.gaia', 'local', 'codify', 'reviewed.json');
 
 const writeRawSnapshot = (root: string, contents: string): void => {
   mkdirSync(path.dirname(snapshotPath(root)), {recursive: true});
@@ -126,7 +126,7 @@ const stubClassWindow = (args: {
   const recurringPrs = Array.from({length: args.recurring}, (_u, index) =>
     ghPr(index + 1, [
       findingsComment(index + 1, 'ci', [
-        {area_tags: [], finding_class: args.findingClass, severity: 'warning'},
+        {area_tags: [], finding_class: args.findingClass, severity: 'major'},
       ]),
     ])
   );
@@ -136,7 +136,7 @@ const stubClassWindow = (args: {
         {
           area_tags: [],
           finding_class: 'holistic/stale-figure',
-          severity: 'warning',
+          severity: 'major',
         },
       ]),
     ])
@@ -158,7 +158,7 @@ const stubClasslessWindow = (prNumbers: readonly number[]): void => {
             {
               area_tags: [],
               finding_class: 'holistic/unclassified',
-              severity: 'warning',
+              severity: 'major',
             },
           ]),
         ])
@@ -181,7 +181,7 @@ const recurringFinding = (prNumber: number) =>
     {
       area_tags: ['app'],
       finding_class: 'rule/switch-statement',
-      severity: 'warning',
+      severity: 'major',
     },
   ]);
 
@@ -267,7 +267,7 @@ const makeFakeLedger = (): FakeLedger => {
   };
 };
 
-describe('harden-tally run', () => {
+describe('codify-tally run', () => {
   let sandbox: Sandbox;
   let stdout: ReturnType<typeof captureStdout>;
 
@@ -290,7 +290,7 @@ describe('harden-tally run', () => {
             {
               area_tags: ['app/components'],
               finding_class: 'react-doctor/no-generic-handler-names',
-              severity: 'warning',
+              severity: 'major',
             },
           ]),
         ]),
@@ -299,7 +299,7 @@ describe('harden-tally run', () => {
             {
               area_tags: ['app/hooks'],
               finding_class: 'react-doctor/no-generic-handler-names',
-              severity: 'warning',
+              severity: 'major',
             },
           ]),
         ]),
@@ -308,7 +308,7 @@ describe('harden-tally run', () => {
             {
               area_tags: ['app/components'],
               finding_class: 'react-doctor/no-generic-handler-names',
-              severity: 'warning',
+              severity: 'major',
             },
           ]),
         ]),
@@ -340,7 +340,7 @@ describe('harden-tally run', () => {
             {
               area_tags: ['app'],
               finding_class: 'rule/switch-statement',
-              severity: 'warning',
+              severity: 'major',
             },
           ]),
         ]),
@@ -349,7 +349,7 @@ describe('harden-tally run', () => {
             {
               area_tags: ['app'],
               finding_class: 'rule/switch-statement',
-              severity: 'error',
+              severity: 'critical',
             },
           ]),
         ]),
@@ -358,7 +358,7 @@ describe('harden-tally run', () => {
             {
               area_tags: ['app'],
               finding_class: 'rule/switch-statement',
-              severity: 'warning',
+              severity: 'major',
             },
           ]),
         ]),
@@ -373,7 +373,7 @@ describe('harden-tally run', () => {
     const printed = parseStdout(stdout.out);
     expect(printed.candidate_count).toBe(1);
     const candidates = printed.candidates as Record<string, unknown>[];
-    expect(candidates[0]?.severity_max).toBe('error');
+    expect(candidates[0]?.severity_max).toBe('critical');
     expect(candidates[0]?.is_oracle).toBe(false);
   });
 
@@ -389,14 +389,14 @@ describe('harden-tally run', () => {
             {
               area_tags: ['app'],
               finding_class: 'rule/switch-statement',
-              severity: 'warning',
+              severity: 'major',
             },
           ]),
           findingsComment(1201, 'local', [
             {
               area_tags: ['app'],
               finding_class: 'axe/color-contrast',
-              severity: 'warning',
+              severity: 'major',
             },
           ]),
         ]),
@@ -405,7 +405,7 @@ describe('harden-tally run', () => {
             {
               area_tags: ['app'],
               finding_class: 'rule/switch-statement',
-              severity: 'warning',
+              severity: 'major',
             },
           ]),
         ]),
@@ -414,7 +414,7 @@ describe('harden-tally run', () => {
             {
               area_tags: ['app'],
               finding_class: 'rule/switch-statement',
-              severity: 'warning',
+              severity: 'major',
             },
           ]),
         ]),
@@ -445,14 +445,14 @@ describe('harden-tally run', () => {
             {
               area_tags: [],
               finding_class: 'rule/switch-statement',
-              severity: 'warning',
+              severity: 'major',
             },
           ]),
           findingsComment(1, 'ci', [
             {
               area_tags: [],
               finding_class: 'axe/color-contrast',
-              severity: 'warning',
+              severity: 'major',
             },
           ]),
         ]),
@@ -461,7 +461,7 @@ describe('harden-tally run', () => {
             {
               area_tags: [],
               finding_class: 'rule/switch-statement',
-              severity: 'warning',
+              severity: 'major',
             },
           ]),
         ]),
@@ -470,7 +470,7 @@ describe('harden-tally run', () => {
             {
               area_tags: [],
               finding_class: 'rule/switch-statement',
-              severity: 'warning',
+              severity: 'major',
             },
           ]),
         ]),
@@ -479,7 +479,7 @@ describe('harden-tally run', () => {
             {
               area_tags: [],
               finding_class: 'axe/color-contrast',
-              severity: 'warning',
+              severity: 'major',
             },
           ]),
         ]),
@@ -488,7 +488,7 @@ describe('harden-tally run', () => {
             {
               area_tags: [],
               finding_class: 'axe/color-contrast',
-              severity: 'warning',
+              severity: 'major',
             },
           ]),
         ]),
@@ -523,14 +523,14 @@ describe('harden-tally run', () => {
             {
               area_tags: [],
               finding_class: 'rule/switch-statement',
-              severity: 'warning',
+              severity: 'major',
             },
           ]),
           anonymousFindingsComment(1, [
             {
               area_tags: [],
               finding_class: 'axe/color-contrast',
-              severity: 'warning',
+              severity: 'major',
             },
           ]),
         ]),
@@ -539,7 +539,7 @@ describe('harden-tally run', () => {
             {
               area_tags: [],
               finding_class: 'axe/color-contrast',
-              severity: 'warning',
+              severity: 'major',
             },
           ]),
         ]),
@@ -548,7 +548,7 @@ describe('harden-tally run', () => {
             {
               area_tags: [],
               finding_class: 'axe/color-contrast',
-              severity: 'warning',
+              severity: 'major',
             },
           ]),
         ]),
@@ -572,12 +572,12 @@ describe('harden-tally run', () => {
       stubGh([
         ghPr(1, [
           findingsComment(1, 'ci', [
-            {area_tags: [], finding_class: 'knip/exports', severity: 'warning'},
+            {area_tags: [], finding_class: 'knip/exports', severity: 'major'},
           ]),
         ]),
         ghPr(2, [
           findingsComment(2, 'ci', [
-            {area_tags: [], finding_class: 'knip/exports', severity: 'warning'},
+            {area_tags: [], finding_class: 'knip/exports', severity: 'major'},
           ]),
         ]),
       ])
@@ -596,9 +596,9 @@ describe('harden-tally run', () => {
       stubGh([
         ghPr(1, [
           findingsComment(1, 'ci', [
-            {area_tags: [], finding_class: 'knip/exports', severity: 'warning'},
-            {area_tags: [], finding_class: 'knip/exports', severity: 'warning'},
-            {area_tags: [], finding_class: 'knip/exports', severity: 'warning'},
+            {area_tags: [], finding_class: 'knip/exports', severity: 'major'},
+            {area_tags: [], finding_class: 'knip/exports', severity: 'major'},
+            {area_tags: [], finding_class: 'knip/exports', severity: 'major'},
           ]),
         ]),
       ])
@@ -621,7 +621,7 @@ describe('harden-tally run', () => {
               {
                 area_tags: [],
                 finding_class: 'holistic/hardcoded-string',
-                severity: 'suggestion',
+                severity: 'minor',
               },
             ]),
           ])
@@ -637,7 +637,7 @@ describe('harden-tally run', () => {
     const printed = parseStdout(stdout.out);
     expect(printed.candidate_count).toBe(1);
     const candidates = printed.candidates as Record<string, unknown>[];
-    expect(candidates[0]?.severity_max).toBe('suggestion');
+    expect(candidates[0]?.severity_max).toBe('minor');
   });
 
   test('emits a populated unclassified field for a classless recurring finding, excluded from candidates', () => {
@@ -649,7 +649,7 @@ describe('harden-tally run', () => {
               {
                 area_tags: ['app/routes'],
                 finding_class: 'holistic/unclassified',
-                severity: 'warning',
+                severity: 'major',
               },
             ]),
           ])
@@ -667,7 +667,7 @@ describe('harden-tally run', () => {
     const unclassified = printed.unclassified as Record<string, unknown>;
     expect(unclassified).not.toBeNull();
     expect(unclassified.distinct_pr_count).toBe(3);
-    expect(unclassified.severity_max).toBe('warning');
+    expect(unclassified.severity_max).toBe('major');
     const candidates = printed.candidates as Record<string, unknown>[];
     expect(
       candidates.every((c) => c.finding_class !== 'holistic/unclassified')
@@ -682,7 +682,7 @@ describe('harden-tally run', () => {
             {
               area_tags: [],
               finding_class: 'holistic/unclassified',
-              severity: 'warning',
+              severity: 'major',
             },
           ]),
         ]),
@@ -712,7 +712,7 @@ describe('harden-tally run', () => {
               {
                 area_tags: [],
                 finding_class: 'rule/switch-statement',
-                severity: 'warning',
+                severity: 'major',
               },
             ]),
           ])
@@ -736,7 +736,7 @@ describe('harden-tally run', () => {
             {
               area_tags: [],
               finding_class: 'axe/color-contrast',
-              severity: 'error',
+              severity: 'critical',
             },
           ]),
         ])
@@ -775,7 +775,7 @@ describe('harden-tally run', () => {
               {
                 area_tags: [],
                 finding_class: 'axe/color-contrast',
-                severity: 'warning',
+                severity: 'major',
               },
             ]),
           ])
@@ -798,7 +798,7 @@ describe('harden-tally run', () => {
               {
                 area_tags: [],
                 finding_class: 'axe/color-contrast',
-                severity: 'warning',
+                severity: 'major',
               },
             ]),
           ])
@@ -825,7 +825,7 @@ describe('harden-tally run', () => {
               {
                 area_tags: [],
                 finding_class: 'axe/color-contrast',
-                severity: 'warning',
+                severity: 'major',
               },
             ]),
           ])
@@ -849,7 +849,7 @@ describe('harden-tally run', () => {
               {
                 area_tags: [],
                 finding_class: 'axe/color-contrast',
-                severity: 'warning',
+                severity: 'major',
               },
             ]),
           ])
@@ -926,7 +926,7 @@ describe('harden-tally run', () => {
               {
                 area_tags: [],
                 finding_class: 'holistic/unclassified',
-                severity: 'warning',
+                severity: 'major',
               },
             ]),
           ])
@@ -1058,7 +1058,7 @@ describe('harden-tally run', () => {
             {
               area_tags: [],
               finding_class: 'holistic/stale-figure',
-              severity: 'warning',
+              severity: 'major',
             },
           ]),
         ]),
@@ -1068,7 +1068,7 @@ describe('harden-tally run', () => {
             {
               area_tags: [],
               finding_class: 'holistic/stale-figure',
-              severity: 'warning',
+              severity: 'major',
             },
           ]),
         ]),

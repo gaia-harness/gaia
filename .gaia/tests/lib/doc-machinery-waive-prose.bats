@@ -408,7 +408,7 @@ setup() {
 
 @test "Group A: the digest-economics section carries the accept-and-note heading, with its article" {
   local section
-  section="$(extract_section_or_fail "$WIKI" "^#### Applying the audit's own Suggestions: digest economics" '^#{3,4} ')" || return 1
+  section="$(extract_section_or_fail "$WIKI" "^#### Applying the audit's own Minor findings: digest economics" '^#{3,4} ')" || return 1
   printf '%s\n' "$section" | grep -qF -- 'under the heading `## Accepted residuals (recorded, not fixed)`' || return 1
 }
 
@@ -442,7 +442,7 @@ setup() {
 
 @test "Group B: the digest-economics section states all three accept-and-note entry fields" {
   local section
-  section="$(extract_section_or_fail "$WIKI" "^#### Applying the audit's own Suggestions: digest economics" '^#{3,4} ')" || return 1
+  section="$(extract_section_or_fail "$WIKI" "^#### Applying the audit's own Minor findings: digest economics" '^#{3,4} ')" || return 1
   printf '%s\n' "$section" | grep -qF -- "file:line" || return 1
   printf '%s\n' "$section" | grep -qF -- "failure mode" || return 1
   printf '%s\n' "$section" | grep -qF -- "dedup key" || return 1
@@ -452,7 +452,7 @@ setup() {
 
 @test "Group C: the digest-economics section states the two headings stay distinct because the dispositions differ" {
   local section
-  section="$(extract_section_or_fail "$WIKI" "^#### Applying the audit's own Suggestions: digest economics" '^#{3,4} ')" || return 1
+  section="$(extract_section_or_fail "$WIKI" "^#### Applying the audit's own Minor findings: digest economics" '^#{3,4} ')" || return 1
   printf '%s\n' "$section" | grep -qF -- "the two mean different things" || return 1
 }
 
@@ -473,7 +473,7 @@ setup() {
 
 @test "Group D: the digest-economics section carries the C7 enumeration command by its load-bearing fragments" {
   local section
-  section="$(extract_section_or_fail "$WIKI" "^#### Applying the audit's own Suggestions: digest economics" '^#{3,4} ')" || return 1
+  section="$(extract_section_or_fail "$WIKI" "^#### Applying the audit's own Minor findings: digest economics" '^#{3,4} ')" || return 1
   printf '%s\n' "$section" | grep -qF -- "gh pr list --state merged" || return 1
   printf '%s\n' "$section" | grep -qF -- "--limit 2000" || return 1
   printf '%s\n' "$section" | grep -qF -- "--json number,body" || return 1
@@ -497,14 +497,14 @@ setup() {
 
 @test "Group E: the digest-economics section states the convention binds forward and does not sweep the existing record" {
   local section
-  section="$(extract_section_or_fail "$WIKI" "^#### Applying the audit's own Suggestions: digest economics" '^#{3,4} ')" || return 1
+  section="$(extract_section_or_fail "$WIKI" "^#### Applying the audit's own Minor findings: digest economics" '^#{3,4} ')" || return 1
   printf '%s\n' "$section" | grep -qF -- "governs what gets recorded from here on" || return 1
   printf '%s\n' "$section" | grep -qF -- "is left as it stands" || return 1
 }
 
 @test "Group E: no pinned accept-and-note section carries banned change-narration vocabulary" {
   local section
-  section="$(extract_section_or_fail "$WIKI" "^#### Applying the audit's own Suggestions: digest economics" '^#{3,4} ')" || return 1
+  section="$(extract_section_or_fail "$WIKI" "^#### Applying the audit's own Minor findings: digest economics" '^#{3,4} ')" || return 1
   printf '%s\n' "$section" | grep -qE -- 'was changed|previously did|as of ' && return 1
   section="$(extract_section_or_fail "$WIKI" '^#### When rounds stop: pre-commit a disposition for every branch' '^#{3,4} ')" || return 1
   printf '%s\n' "$section" | grep -qE -- 'was changed|previously did|as of ' && return 1

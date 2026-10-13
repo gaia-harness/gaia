@@ -112,13 +112,13 @@ stage_refusal() {
   bash "$FINDINGS_WRITER" \
     --root "$ROOT" --member "$MEMBER" --base "$BASE" --findings - >/dev/null <<'JSON'
 [
-  {"finding_class":"holistic/secret-exposure","severity":"error",
+  {"finding_class":"holistic/secret-exposure","severity":"critical",
    "path":".claude/hooks/guard.sh","line":113,
    "title":"the expansion-then-path arm admits arbitrary trailing text",
    "failure_mode":"once a separator follows the closing brace the tail is unbounded over the character set a literal secret uses, so a live token assigned behind one is allowed through",
    "verified_by":"ran the hook on the braced-expansion fixture at base and at HEAD: base denies, HEAD allows",
    "suggested_fix":"bound each trailing segment so a token-length run exceeds the bound, keeping the ordinary path case"},
-  {"finding_class":"holistic/swallowed-error","severity":"warning",
+  {"finding_class":"holistic/swallowed-error","severity":"major",
    "path":".claude/hooks/guard.sh","line":59,
    "title":"a trailing shell comment defeats the value extraction",
    "failure_mode":"the extraction strips quotes but nothing past the value, so the rest of the line becomes the value and no allowlist arm matches, denying an ordinary secret-free export",
@@ -135,8 +135,7 @@ JSON
 # which is what the writer's open-finding accounting requires of it.
 stage_rerefusal() {
   jq -c --arg member "$MEMBER" '[.remaining[] | select(.member == $member)
-    | {finding_class, path, line, title, failure_mode, verified_by, suggested_fix, entry_id,
-       severity: ({"critical":"error","important":"warning","suggestion":"suggestion"}[.severity] // "warning")}]' "$LEDGER" \
+    | {finding_class, path, line, title, failure_mode, verified_by, suggested_fix, entry_id, severity}]' "$LEDGER" \
     | bash "$FINDINGS_WRITER" --root "$ROOT" --member "$MEMBER" --base "$BASE" --findings - >/dev/null
   bash "$CLEARANCE_WRITER" \
     --root "$ROOT" --member "$MEMBER" --provenance refused --base "$BASE" >/dev/null
@@ -205,7 +204,7 @@ classify() {
   # The writer refuses the write rather than recording a thinner entry, which is
   # what makes assertion 1 an invariant instead of a hope.
   run bash "$FINDINGS_WRITER" --root "$ROOT" --member "$MEMBER" --base "$BASE" --findings - <<'JSON'
-[{"finding_class":"holistic/secret-exposure","severity":"error",
+[{"finding_class":"holistic/secret-exposure","severity":"critical",
   "title":"something is wrong somewhere",
   "failure_mode":"unclear","verified_by":"read it","suggested_fix":"fix it"}]
 JSON
@@ -221,9 +220,9 @@ JSON
   [ "$(jq -r .member <<<"$entry")" = "$MEMBER" ]
   [ "$(jq -r .path <<<"$entry")" = ".claude/hooks/guard.sh" ]
   [ "$(jq -r .line <<<"$entry")" = "113" ]
-  # The sidecar's severity scale is mapped onto the ledger's.
+  # The sidecar severity carries onto the ledger unchanged.
   [ "$(jq -r .severity <<<"$entry")" = "critical" ]
-  [ "$(jq -r '.remaining[1].severity' "$LEDGER")" = "important" ]
+  [ "$(jq -r '.remaining[1].severity' "$LEDGER")" = "major" ]
   grep -qF "base denies, HEAD allows" <<<"$(jq -r .verified_by <<<"$entry")"
   grep -qF "bound each trailing segment" <<<"$(jq -r .suggested_fix <<<"$entry")"
   [ "$(jq -r .round "$LEDGER")" = "1" ]
@@ -242,7 +241,7 @@ JSON
   # coming from the return text or from the sidecar's mere presence.
   bash "$FINDINGS_WRITER" --root "$ROOT" --member "$MEMBER" --base "$BASE" \
     --findings - >/dev/null <<'JSON'
-[{"finding_class":"holistic/secret-exposure","severity":"error",
+[{"finding_class":"holistic/secret-exposure","severity":"critical",
   "path":".claude/hooks/guard.sh","line":113,"title":"t",
   "failure_mode":"f","verified_by":"v","suggested_fix":"s"}]
 JSON
@@ -324,10 +323,10 @@ JSON
   # The other legitimate exit, for content that did not move: the member
   # re-audits, finds the blocker acknowledged, and says so in writing, for each
   # open finding as well as for the refusal.
-  write_resolving_sidecar "operator acknowledged the unaddressed Important with a stated reason"
+  write_resolving_sidecar "operator acknowledged the unaddressed Major with a stated reason"
   bash "$CLEARANCE_WRITER" --root "$ROOT" --member "$MEMBER" \
     --provenance earned --base "$BASE" \
-    --supersede-refusal "operator acknowledged the unaddressed Important with a stated reason" >/dev/null
+    --supersede-refusal "operator acknowledged the unaddressed Major with a stated reason" >/dev/null
   [ -f "$REFUSAL" ] && return 1
   [ "$(jq -r '.supersedes.provenance' "$MARKER")" = "refused" ]
   # No member has anything left, so the ledger is spent and goes away.

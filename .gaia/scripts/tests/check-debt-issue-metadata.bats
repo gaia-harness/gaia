@@ -73,7 +73,7 @@ EOF
 }
 
 # The label set a correct graded filing carries.
-GOOD_LABELS='tech-debt,severity:important,audience:adopter,footprint:narrow,difficulty:easy'
+GOOD_LABELS='tech-debt,severity:major,audience:adopter,footprint:narrow,difficulty:easy'
 
 # The label set an investigate filing carries. No difficulty grade: a filing
 # that cannot grade the severity has not read the code closely enough to grade
@@ -103,7 +103,7 @@ refute_code() {
 }
 
 @test "an ungraded filing is clean: the difficulty label is optional by design" {
-  run bash "$CHECK" --pre-file --labels 'tech-debt,severity:suggestion,audience:maintainer' --body-file "$BODY"
+  run bash "$CHECK" --pre-file --labels 'tech-debt,severity:minor,audience:maintainer' --body-file "$BODY"
   [ "$status" -eq 0 ]
 }
 
@@ -112,7 +112,7 @@ refute_code() {
 # ---------------------------------------------------------------------------
 
 @test "RED, live defect: a filing with no audience: label is rejected" {
-  run bash "$CHECK" --pre-file --labels 'tech-debt,severity:important,difficulty:easy' --body-file "$BODY"
+  run bash "$CHECK" --pre-file --labels 'tech-debt,severity:major,difficulty:easy' --body-file "$BODY"
   [ "$status" -eq 1 ]
   assert_code "audience-count"
 }
@@ -124,7 +124,7 @@ refute_code() {
 }
 
 @test "a audience: value outside the permitted set is rejected" {
-  run bash "$CHECK" --pre-file --labels 'tech-debt,severity:important,audience:internal' --body-file "$BODY"
+  run bash "$CHECK" --pre-file --labels 'tech-debt,severity:major,audience:internal' --body-file "$BODY"
   [ "$status" -eq 1 ]
   assert_code "audience-value"
 }
@@ -160,7 +160,7 @@ refute_code() {
 }
 
 @test "a difficulty: value outside the permitted set is rejected" {
-  run bash "$CHECK" --pre-file --labels 'tech-debt,severity:important,audience:adopter,difficulty:trivial' --body-file "$BODY"
+  run bash "$CHECK" --pre-file --labels 'tech-debt,severity:major,audience:adopter,difficulty:trivial' --body-file "$BODY"
   [ "$status" -eq 1 ]
   assert_code "difficulty-value"
 }
@@ -274,7 +274,7 @@ refute_code() {
   # value: the drain re-derives spec-versus-implement from the cited code and
   # grades narrow-versus-wide itself, so demanding presence would demand a value
   # no decision reads, and would make every hand-filed issue a finding.
-  run bash "$CHECK" --pre-file --labels 'tech-debt,severity:important,audience:adopter' --body-file "$BODY"
+  run bash "$CHECK" --pre-file --labels 'tech-debt,severity:major,audience:adopter' --body-file "$BODY"
   [ "$status" -eq 0 ]
   refute_code "footprint"
 }
@@ -282,7 +282,7 @@ refute_code() {
 @test "each permitted footprint: value is accepted" {
   local footprint_value
   for footprint_value in narrow wide spec; do
-    run bash "$CHECK" --pre-file --labels "tech-debt,severity:important,audience:adopter,footprint:$footprint_value" --body-file "$BODY"
+    run bash "$CHECK" --pre-file --labels "tech-debt,severity:major,audience:adopter,footprint:$footprint_value" --body-file "$BODY"
     [ "$status" -eq 0 ] || return 1
   done
 }
@@ -294,13 +294,13 @@ refute_code() {
 }
 
 @test "a footprint: value outside the permitted set is rejected" {
-  run bash "$CHECK" --pre-file --labels 'tech-debt,severity:important,audience:adopter,footprint:agent' --body-file "$BODY"
+  run bash "$CHECK" --pre-file --labels 'tech-debt,severity:major,audience:adopter,footprint:agent' --body-file "$BODY"
   [ "$status" -eq 1 ]
   assert_code "footprint-value"
 }
 
 @test "RED: an unfilled footprint placeholder is a finding, not a dropped flag" {
-  run bash "$CHECK" --pre-file --labels 'tech-debt,severity:important,audience:adopter,footprint:' --body-file "$BODY"
+  run bash "$CHECK" --pre-file --labels 'tech-debt,severity:major,audience:adopter,footprint:' --body-file "$BODY"
   [ "$status" -eq 1 ]
   assert_code "footprint-value"
   # The count check cannot catch this: `footprint:` is one label, so at-most-one
@@ -325,20 +325,20 @@ refute_code() {
 }
 
 @test "RED: an unfilled difficulty placeholder is a finding, not a dropped flag" {
-  run bash "$CHECK" --pre-file --labels 'tech-debt,severity:important,audience:adopter,difficulty:' --body-file "$BODY"
+  run bash "$CHECK" --pre-file --labels 'tech-debt,severity:major,audience:adopter,difficulty:' --body-file "$BODY"
   [ "$status" -eq 1 ]
   assert_code "difficulty-value"
 }
 
 @test "RED: two values crammed into one label are rejected, not checked separately" {
   # Both halves are individually legal, so a word-splitting loop passed this.
-  run bash "$CHECK" --pre-file --labels 'tech-debt,severity:important,audience:adopter maintainer' --body-file "$BODY"
+  run bash "$CHECK" --pre-file --labels 'tech-debt,severity:major,audience:adopter maintainer' --body-file "$BODY"
   [ "$status" -eq 1 ]
   assert_code "audience-value"
 }
 
 @test "RED: a glob in a label value is reported as one finding, not expanded" {
-  run bash "$CHECK" --pre-file --labels 'tech-debt,severity:important,audience:*' --body-file "$BODY"
+  run bash "$CHECK" --pre-file --labels 'tech-debt,severity:major,audience:*' --body-file "$BODY"
   [ "$status" -eq 1 ]
   assert_code "audience-value"
   # The bad case: the glob expanded against the working directory and the run
@@ -348,7 +348,7 @@ refute_code() {
 }
 
 @test "a filing with no tech-debt label is rejected" {
-  run bash "$CHECK" --pre-file --labels 'severity:important,audience:adopter' --body-file "$BODY"
+  run bash "$CHECK" --pre-file --labels 'severity:major,audience:adopter' --body-file "$BODY"
   [ "$status" -eq 1 ]
   assert_code "missing-tech-debt"
 }
@@ -463,7 +463,7 @@ refute_code() {
   # the caller's shell, so a check that loops in a subshell would report its
   # findings and lose the count, exiting 0 with findings on stdout.
   printf 'no key at all\n' >"$BODY"
-  run bash "$CHECK" --pre-file --labels 'severity:important,severity:critical' --body-file "$BODY"
+  run bash "$CHECK" --pre-file --labels 'severity:major,severity:critical' --body-file "$BODY"
   [ "$status" -eq 1 ]
   assert_code "missing-tech-debt"
   assert_code "severity-count"
@@ -564,7 +564,7 @@ stub_gh_failing() {
 @test "--sweep applies the shared label and body checks to a live-shaped corpus" {
   stub_gh '[
     {"number":300,
-     "labels":[{"name":"tech-debt"},{"name":"severity:important"}],
+     "labels":[{"name":"tech-debt"},{"name":"severity:major"}],
      "body":"no key here"}
   ]'
   run bash "$CHECK" --sweep
@@ -579,7 +579,7 @@ stub_gh_failing() {
   # The drain's own capture is unanchored and accepts it; this gate must too.
   stub_gh '[
     {"number":400,
-     "labels":[{"name":"tech-debt"},{"name":"severity:important"},{"name":"audience:adopter"}],
+     "labels":[{"name":"tech-debt"},{"name":"severity:major"},{"name":"audience:adopter"}],
      "body":"<!-- gaia-debt-key: v1 class=c path=app/a.ts line=1 -->\r\nsome prose\r\n"}
   ]'
   run bash "$CHECK" --sweep
@@ -595,7 +595,7 @@ stub_gh_failing() {
 @test "--issue reports on a single issue through the same shared checks" {
   stub_gh '[]' '{
     "number":200,
-    "labels":[{"name":"tech-debt"},{"name":"severity:important"}],
+    "labels":[{"name":"tech-debt"},{"name":"severity:major"}],
     "body":"no key here"
   }'
   run bash "$CHECK" --issue 200
@@ -813,7 +813,7 @@ YAML
   grep -qF -- 'AUDIENCE_VALUES' "$stripped" && return 1
 
   run bash "$stripped" --pre-file \
-    --labels 'tech-debt,severity:important,footprint:narrow,difficulty:easy' \
+    --labels 'tech-debt,severity:major,footprint:narrow,difficulty:easy' \
     --body-file "$BODY"
   [ "$status" -eq 0 ]
 }

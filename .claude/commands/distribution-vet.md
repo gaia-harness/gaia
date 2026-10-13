@@ -1,10 +1,10 @@
 ---
-name: distribution-audit
+name: distribution-vet
 description: Maintainer-only. Classifies every file that would newly ship to adopters against the written distribution-boundary categories, withholds by default when none matches cleanly, and asks the maintainer only where the taxonomy does not settle it, so the release CLI can produce a manifest.
 disable-model-invocation: true
 ---
 
-# /distribution-audit
+# /distribution-vet
 
 Maintainer-only. Thin orchestrator over `.gaia/cli/gaia-maintainer`, which owns every deterministic step. This command supplies the one thing the CLI cannot: a classification of each newly-shipping file against the written distribution boundary, and a maintainer's answer on the few the taxonomy does not settle.
 

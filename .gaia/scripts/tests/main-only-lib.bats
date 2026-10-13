@@ -286,10 +286,10 @@ install_libraries() {
 # literal at the same array index. Order matches the RUNBOOK.md
 # classification's own ordering, not alphabetical.
 CALL_SITE_FILES=(
-  ".claude/commands/gaia-audit.md"
+  ".claude/commands/gaia-cleanse.md"
   ".claude/commands/gaia-debt.md"
   ".claude/commands/gaia-fitness.md"
-  ".claude/commands/gaia-harden.md"
+  ".claude/commands/gaia-codify.md"
   ".claude/commands/gaia-release.md"
   ".claude/commands/gaia-serena-sync.md"
   ".claude/commands/setup-gaia.md"
@@ -300,10 +300,10 @@ CALL_SITE_FILES=(
   ".claude/skills/update-gaia/SKILL.md"
 )
 CALL_SITE_FLOW_NAMES=(
-  "/gaia-audit"
+  "/gaia-cleanse"
   "/gaia-debt"
   "/gaia-fitness"
-  "/gaia-harden"
+  "/gaia-codify"
   "/gaia-release"
   "/gaia-serena-sync"
   "/setup-gaia"
@@ -320,9 +320,9 @@ CALL_SITE_FLOW_NAMES=(
 # This half is what catches a future drive-by adding the refusal to one of these, e.g. onto /gaia-plan, which would break
 # plan execution the moment the flow enters the worktree it just created.
 #
-# distribution-audit joins them on a different warrant, and one worth stating
+# distribution-vet joins them on a different warrant, and one worth stating
 # because the refusal did sit on it. What decides it is what the flow writes:
-# /distribution-audit writes `.gaia/manifest.json` and `.gaia/release-exclude`,
+# /distribution-vet writes `.gaia/manifest.json` and `.gaia/release-exclude`,
 # git-tracked branch-scoped files a linked worktree isolates correctly, and it
 # writes nothing under `.gaia/local`, so a worktree run collides with no shared
 # state. The release path's main-only property is enforced at /gaia-release's
@@ -333,10 +333,10 @@ CALL_SITE_FLOW_NAMES=(
 # here instead. Reading the motivating case the docblock does record reaches
 # the same verdict anyway: that sentence is a conjunction, a
 # VERSION/lockfile/cache-state write AND opening or driving a PR, and
-# /distribution-audit satisfies neither half. CALL_SITE_FILES is the roster,
+# /distribution-vet satisfies neither half. CALL_SITE_FILES is the roster,
 # and the `call-site roster:` census tests are what enforce it.
 NO_CALL_SITE_FILES=(
-  ".claude/commands/distribution-audit.md"
+  ".claude/commands/distribution-vet.md"
   ".claude/commands/gaia-plan.md"
   ".claude/commands/gaia-spec.md"
   ".claude/commands/gaia-forensics.md"
@@ -350,10 +350,10 @@ NO_CALL_SITE_FILES=(
 # set; the placement test below derives its own split at runtime
 # rather than trusting this list, and fails when the two disagree.
 EXPECTED_DISPATCHER_FILES=(
-  ".claude/commands/gaia-audit.md"
+  ".claude/commands/gaia-cleanse.md"
   ".claude/commands/gaia-debt.md"
   ".claude/commands/gaia-fitness.md"
-  ".claude/commands/gaia-harden.md"
+  ".claude/commands/gaia-codify.md"
   ".claude/commands/gaia-serena-sync.md"
   ".claude/commands/setup-gaia.md"
   ".claude/skills/gaia-wiki/SKILL.md"
