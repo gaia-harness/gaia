@@ -112,9 +112,13 @@
     ".claude/skills/gaia/references/serena-sync.md": "owned",
     ".claude/skills/gaia/references/setup/github-repo.md": "owned",
     ".claude/skills/gaia/references/setup/isolation-question.md": "owned",
+    ".claude/skills/gaia/references/setup/land-decisions.md": "owned",
     ".claude/skills/gaia/references/setup/per-machine.md": "owned",
+    ".claude/skills/gaia/references/setup/sandbox-recommendation.md": "owned",
     ".claude/skills/gaia/references/setup/sandbox.md": "owned",
+    ".claude/skills/gaia/references/setup/setup-decisions.md": "owned",
     ".claude/skills/gaia/references/setup/squash-only.md": "owned",
+    ".claude/skills/gaia/references/setup/standalone-features.md": "owned",
     ".claude/skills/gaia/references/setup/statusline-left.md": "owned",
     ".claude/skills/gaia/references/spec.md": "owned",
     ".claude/skills/gaia/references/spec/audit.md": "owned",
@@ -599,6 +603,7 @@
     "wiki/concepts/GitHub Labels.md": "wiki-owned",
     "wiki/concepts/Incremental CI Skipping.md": "wiki-owned",
     "wiki/concepts/Local Working State.md": "wiki-owned",
+    "wiki/concepts/Migration Notes.md": "wiki-owned",
     "wiki/concepts/OS Sandbox.md": "wiki-owned",
     "wiki/concepts/Package Descriptor.md": "wiki-owned",
     "wiki/concepts/Policy-Memory Loop.md": "wiki-owned",
@@ -608,6 +613,7 @@
     "wiki/concepts/React Perf Diagnostic.md": "wiki-owned",
     "wiki/concepts/Registering a Code Audit Team Member.md": "wiki-owned",
     "wiki/concepts/Serena Integration.md": "wiki-owned",
+    "wiki/concepts/Setup Features.md": "wiki-owned",
     "wiki/concepts/Task Orchestration.md": "wiki-owned",
     "wiki/concepts/Token Cost Readout.md": "wiki-owned",
     "wiki/concepts/Update Workflow.md": "wiki-owned",
@@ -693,7 +699,7 @@
     "wiki/overview.md": "wiki-owned",
     "wiki/README.md": "wiki-owned"
   },
-  "generated": "2026-10-13T11:33:00.434Z",
+  "generated": "2026-10-13T12:40:58.696Z",
   "regions": [
     {
       "endMarker": "<!-- gaia:audit-remit:end -->",
