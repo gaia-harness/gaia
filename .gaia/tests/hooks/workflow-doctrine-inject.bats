@@ -490,7 +490,7 @@ context_has() { grep -qF -- "$1" "$TEMPORARY_DIRECTORY/ctx"; }
 # <path> <branch>: the backstop names the tree, its branch, the entry call, and the reference.
 assert_backstop_names() {
   assert_envelope PostToolUse || return 1
-  context_has "A git worktree was created at $1 on branch $2." || return 1
+  context_has "A git worktree exists at $1 on branch $2." || return 1
   context_has "EnterWorktree({path: \"$1\"})" || return 1
   context_has ".claude/skills/gaia/references/work-lifecycle.md" || return 1
 }
@@ -569,7 +569,7 @@ assert_no_rename_instruction() {
   git -C "$REPO" worktree add -q --detach "$tree"
   run_hook "$(post_tool_bash_payload w4 "git worktree add --detach $tree" "$REPO")"
   assert_envelope PostToolUse
-  context_has "A git worktree was created at $tree on a detached HEAD."
+  context_has "A git worktree exists at $tree on a detached HEAD."
   context_has "EnterWorktree({path: \"$tree\"})"
   context_has "git -C \"$tree\" switch -c <minted name>"
   context_has 'name adhoc --type <type> --slug "<slug>"'
@@ -606,6 +606,18 @@ assert_no_rename_instruction() {
   git -C "$REPO" worktree add -q "$REPO/.claude/worktrees/ok" -b ok-branch
   run_hook "$(post_tool_bash_payload w6c "git worktree add $REPO/.claude/worktrees/ok -b ok-branch" "$REPO")"
   assert_backstop_names "$REPO/.claude/worktrees/ok" ok-branch
+}
+
+@test "backstop: a re-run add of an already-registered target states what exists and makes entry conditional" {
+  backstop_fixture
+  local tree="$REPO/.claude/worktrees/again"
+  git -C "$REPO" worktree add -q "$tree" -b again-branch
+  git -C "$REPO" worktree add -q "$tree" -b again-branch 2>/dev/null && return 1
+  run_hook "$(post_tool_bash_payload w6d "git worktree add $tree -b again-branch" "$REPO")"
+  assert_backstop_names "$tree" again-branch
+  context_has "was created" && return 1
+  context_has "If this session has not entered it" || return 1
+  true
 }
 
 @test "backstop: two adds in one session each inject, and a checkout between them still dedupes the doctrine" {

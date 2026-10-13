@@ -22,8 +22,8 @@
 # physically), the output starts with text naming the tree's path and branch,
 # `EnterWorktree({path: ...})`, the lifecycle reference, and, when the branch is
 # not a minted name or HEAD is detached, the rename to mint before the first
-# push. It is advisory, never a deny: a command it cannot parse, a failed add,
-# or a command whose `worktree add` sits in data the verb-arming proof masks
+# push. It is advisory, never a deny: a command it cannot parse, a failed add
+# whose target git never registered, or a command whose `worktree add` sits in data the verb-arming proof masks
 # yields nothing. A tree outside `.claude/worktrees/` is a deliberate side tree
 # (a migration verification tree, say), not a lifecycle worktree, so it gets
 # nothing. The backstop fires on every such call, outside the doctrine dedupe,
@@ -266,13 +266,13 @@ compute_backstop() {
   case "$branch" in *[!A-Za-z0-9._/+-]*) branch_known=0 ;; esac
 
   if [ "$branch_known" = 1 ]; then
-    tree_text="A git worktree was created at $target on branch $branch."
+    tree_text="A git worktree exists at $target on branch $branch."
   elif [ "$detached" = 1 ] || [ -z "$branch" ]; then
-    tree_text="A git worktree was created at $target on a detached HEAD."
+    tree_text="A git worktree exists at $target on a detached HEAD."
   else
-    tree_text="A git worktree was created at $target on a branch whose name is not shown here."
+    tree_text="A git worktree exists at $target on a branch whose name is not shown here."
   fi
-  backstop="$tree_text Nothing has provisioned it yet: call EnterWorktree({path: \"$target\"}) before working there, because entering provisions the tree and keeps audit markers and tools off the main checkout. The full lifecycle is in .claude/skills/gaia/references/work-lifecycle.md."
+  backstop="$tree_text If this session has not entered it, nothing has provisioned it: call EnterWorktree({path: \"$target\"}) before working there, because entering provisions the tree and keeps audit markers and tools off the main checkout. The full lifecycle is in .claude/skills/gaia/references/work-lifecycle.md."
   if [ "$needs_rename" = 1 ]; then
     if [ "$detached" = 1 ] || [ -z "$branch" ]; then
       rename_text="Before the first push, mint a name with: $run .gaia/scripts/branch-name-lib.sh name adhoc --type <type> --slug \"<slug>\" and give the tree a branch: git -C \"$target\" switch -c <minted name>"
