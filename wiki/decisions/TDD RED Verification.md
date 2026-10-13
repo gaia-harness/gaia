@@ -36,6 +36,7 @@ The content signal is a normalized hash of the test's comment-free content, so t
 - Type-only tests are exempt. A test whose assertions are all type-level and which carries no runtime expectation has no runtime failure mode, so the gate has nothing to demand; `tsc` enforces it instead. See [[#Type-only tests]].
 - A test whose title cannot be computed at extraction time is exempt: no signal is emitted, so it never enters the checked set. See [[#Dynamic-title carve-out]].
 - The RED demand is scoped to the deterministic surface. A test whose subject is emergent (clock-, entropy-, or I/O-bound, or dependent on the rendered tree) commits without a RED. See [[#Determinism carve-out]].
+- A test file that arrives unchanged from a GAIA release being applied commits without a RED. See [[#Release carve-out]].
 
 ## Infrastructure
 
@@ -78,6 +79,12 @@ An emergent verdict relaxes the demand: that test commits with no RED. The deter
 The carve-out only relaxes; it never tightens. When the classifier is unavailable or errors, the check falls back to its pre-carve behavior and demands the RED, so the deterministic path is never broken and the fail-open posture holds. A missed RED on a genuinely emergent test is caught late by the advisory worthiness audit, which forcing RED theatre up front cannot.
 
 The honest RED on the deterministic surface is a genuine missing-implementation failure: the test is authored against the not-yet-written or stub implementation symbol, never a revert of correct production code. A single-pass author whose implementation already exists in the same change is exempt from a manufactured RED and routed to the worthiness audit instead. The `tdd` skill (`.claude/skills/tdd/SKILL.md`) documents the authoring idiom and the per-file classifier roll-up.
+
+## Release carve-out
+
+An `/update-gaia` merge, or a migration note's merge, can bring a deterministic test GAIA ships together with the implementation it covers. No failing run of the adopter's exists to observe, since the test and its subject land in the same update, and demanding one leaves only manufactured failures: mutating shipped source to provoke them. The test's RED was GAIA's to observe before the release shipped.
+
+The commit check exempts a staged test file whose blob equals the file at the same repo-relative path in a release tree the update flow extracted from its checksum-verified bundle into the shared update cache under the main checkout's `.gaia/local/cache/shared/`. The comparison is on the staged blob, hashed with the path's own attributes, so an adopter edit to a shipped test still demands its RED, and a release copy at a different path matches nothing. A pruned or absent tree matches nothing, so like the other carve-outs this one only relaxes the demand on an affirmative match. The cache is local and writable, like the ledger beside it, which fits the gate's threat model of a cooperative but fallible agent rather than one forging evidence.
 
 ## Consequences
 
