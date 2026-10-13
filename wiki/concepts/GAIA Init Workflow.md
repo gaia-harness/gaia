@@ -26,7 +26,7 @@ Each language-file key is optional (the shipped `_index.ts` carries only `meta.t
 
 **`bootstrap-env`**: Copies `.env.example` to `.env` when `.env` does not yet exist, running as a CLI subprocess so it bypasses Claude Code's `Write(.env)` deny rule. No-op when `.env` already exists or `.env.example` is absent.
 
-**`write-project-config`**: Records the answers `/gaia-init` collects in its project-settings step (whether a sandbox is recommended and the git isolation policy) in the team-shared settings file described in [[Project Config]], creating it when absent. `/gaia-init` asks no CI or wiki-mode question. The file is committed with the rest of the init changes and never overwritten by `/update-gaia`.
+**`write-project-config`**: Records the answers `/gaia-init` collects in its project-settings step (whether a sandbox is recommended and the git isolation policy) in the team-shared settings file described in [[Project Config]], creating it when absent. `/gaia-init` also records its sandbox-recommendation and isolation-policy decisions through `gaia setup record`, so `/setup-gaia` never re-asks them (see [[Setup Features]]). `/gaia-init` asks no CI or wiki-mode question. The file is committed with the rest of the init changes, and `/update-gaia`'s merge never overwrites it.
 
 **`finalize`**: Deletes `.claude/commands/gaia-init.md` so init cannot be re-run. It does not commit; the user reviews and commits the init changes.
 

@@ -9,7 +9,7 @@
       "kind": "file",
       "scope": "shared",
       "keyed_by": "singleton per-clone value; correct via idempotent overwrite, no partition key needed",
-      "why": "Per-clone /gaia-init and /setup-gaia step-completion record. A per-tree copy would re-run setup steps per worktree, which is wrong for a fact about the clone, not the tree.",
+      "why": "Per-clone /gaia-init and /setup-gaia step-completion record, plus the machine-scope setup decisions (`decisions`). A per-tree copy would re-run setup steps per worktree, which is wrong for a fact about the clone, not the tree.",
       "writer": "code",
       "reaped_by": null
     },

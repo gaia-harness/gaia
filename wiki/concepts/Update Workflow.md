@@ -45,10 +45,10 @@ The step list, its order, and every command live in the `update-gaia` skill (`.c
 - **Nothing changes before the adopter confirms.** Version resolution, the 1.x refusal, the bundle download and verification, and the migration-note selection all run before the Proceed question. An early exit (up to date, refused, a failed verification, a blocking note, an Abort) leaves no branch and no prune; only the verified update cache remains.
 - **Every bundle is verified in the run that reads it.** The baseline and target tarballs are checked against the release's `.sha256` asset, and the trees the merge reads are extracted again from those verified tarballs. A cached tarball skips only the download. The tarball name, `gaia-bundle-<tag>.tar.gz`, is also the 2.0.0 release fence: a 1.6.1 `/update-gaia` asks for `gaia-<tag>.tar.gz`, finds nothing, and stops at its fetch step before it writes a file.
 - **A 1.x baseline migrates through the bundled 2.0.0 note.** The 2.0.0 layout moved the app into `frontend/`, and a three-way merge across that move would read every baseline app path as an upstream deletion. The refusal prints a command that downloads, verifies and extracts the v2.0.0 release, and points at the migration note inside it.
-- **Migration notes come from the verified target bundle only.** The target release's own selector picks the notes the update crosses, so a mode a later release adds is judged by that release. A blocking note stops the run before anything is branched, pruned or merged, and owns the hop to its own version. After-merge notes are followed after the three-way merge and before the version bump.
+- **Migration notes come from the verified target bundle only.** The target release's own selector picks the notes the update crosses, so a mode a later release adds is judged by that release. A blocking note stops the run before anything is branched, pruned or merged, and owns the hop to its own version. After-merge notes are followed after the three-way merge and before the version bump. See [[Migration Notes]] for the note format and what each mode obliges.
 - **The adopter sees the full CHANGELOG range** from the baseline to the target, and confirms. On `main`/`master` the update branch is created only after that confirmation.
 - **The merge agent merges and reports.** It walks the target manifest with the decision table below, regenerates declared regions and package settings, syncs labels, and prints the summary. Its summary cross-references `**Action required:**`-anchored CHANGELOG entries and surfaces opt-in cleanup suggestions; it never auto-removes a dependency or deletes a file.
-- **Setup drift carries new setup features.** The target bundle's feature list is compared with the project's decision records: a standalone feature is applied or asked through its own setup reference and recorded, an admin-gated one met by a non-admin is left owed, and the rest are handed to `/setup-gaia`.
+- **Setup drift carries new setup features.** The target bundle's feature list is compared with the project's decision records: a standalone feature is applied or asked through its own setup reference and recorded, an admin-gated one met by a non-admin is left owed, and the rest are handed to `/setup-gaia`. See [[Setup Features]].
 - **The version is written last.** The manifest copy and the update ping come first, then `.gaia/VERSION`. The adopter then reviews `.gaia-merge/`, runs the [[Quality Gate]], and commits by hand.
 
 ## Decision table
@@ -149,6 +149,8 @@ After a new GAIA release is announced (watch releases on `gaia-react/gaia`). Cad
 ## See also
 
 - [[Quality Gate]]: run the gate after the `update-gaia` skill finishes and before committing.
+- [[Migration Notes]]: the authoring guide for the notes a release ships in its bundle.
+- [[Setup Features]]: the setup feature list and decision records the drift step compares.
 - [[Worktrees]]: the shared-state model `.gaia/local/cache/shared/update-gaia/` follows.
 
 <!-- gaia:maintainer-only:start -->

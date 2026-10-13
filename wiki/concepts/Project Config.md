@@ -2,7 +2,7 @@
 type: concept
 status: active
 created: 2026-10-01
-updated: 2026-10-04
+updated: 2026-10-13
 tags: [concept, claude, config, workflow]
 ---
 
@@ -18,24 +18,27 @@ All keys are optional except `version`, which is `1`.
 | --- | --- | --- |
 | `sandbox_recommended` | `true` or `false` | The owner's recommendation to run Claude Code's OS sandbox. Each machine still resolves it for itself; see [[OS Sandbox]]. |
 | `isolation_policy` | `always-worktree`, `prefer-worktree`, `prefer-branch` | How a session isolates work that closes an issue or runs a plan. The reading rules live in `.claude/skills/gaia/references/isolation.md`. |
+| `setup_decisions` | an object of setup feature id to `applied`, `declined` or `not-applicable` | The project-scope decisions made through `/gaia-init`, `/setup-gaia` and `/update-gaia`. See [[Setup Features]]. |
 
 A reader treats an unknown or invalid value as absent, so a typo or a value a newer GAIA wrote never breaks the file. The known values are enforced when the file is written.
 
 ## Writers
 
-Two CLI commands write the file, each creating it (with `version` set) when it does not exist:
+These CLI commands write the file, each creating it (with `version` set) when it does not exist:
 
 - `gaia init write-project-config`, called by `/gaia-init` for the sandbox recommendation and the isolation policy (see [[GAIA Init Workflow]]).
 - `gaia setup write-isolation-policy`, called by `/setup-gaia` when a repo admin records the isolation policy.
+- `gaia setup write-sandbox-recommendation`, called by `/setup-gaia` when a repo admin answers the team sandbox recommendation.
+- `gaia setup record`, which merges one setup decision into `setup_decisions`.
 
-A writer merges into the existing JSON, so a key it does not know survives, and writes atomically.
+A writer merges into the raw file, so a key or a `setup_decisions` entry it does not know survives, and writes atomically.
 
 ## Readers
 
-`/setup-gaia` reads the file to resolve the sandbox recommendation and the isolation policy before it asks anything a prior answer already settled. The isolation policy is also read at the start of work that cuts a branch or worktree.
+`/setup-gaia` reads the file to resolve the sandbox recommendation and the isolation policy before it asks anything a prior answer already settled. The isolation policy is also read at the start of work that cuts a branch or worktree. `gaia setup drift` reads `setup_decisions` to report the undecided setup features, and `/setup-gaia` uses that to route owed phases.
 
 ## Ownership
 
-The file is adopter-owned. It is absent from `.gaia/manifest.json`, so `/update-gaia` never overwrites or deletes it, and it is committed so the whole team shares one answer. No GAIA command creates it before something has a value to record.
+The file is adopter-owned. It is absent from `.gaia/manifest.json`, so `/update-gaia`'s merge never overwrites or deletes it, and it is committed so the whole team shares one answer. `/update-gaia`'s setup drift step records decisions into it, and those records ride the update commit. `/setup-gaia` lands its project decisions on the default branch. No GAIA command creates it before something has a value to record.
 
 See [[Update Workflow]] for the merge rules the file sits outside.
