@@ -173,6 +173,10 @@ resolve_physical() {
   (CDPATH="" cd -P "$candidate" 2>/dev/null && pwd -P)
 }
 
+# The command word is a variable so the backstop and key lines read as text,
+# not as a cwd-relative interpreter call, to the cwd-relative-load lint.
+run=bash
+
 # Decides whether the Bash command just run added a linked worktree under a
 # .claude/worktrees/ directory and, if so, builds $backstop. Advisory only: a
 # command it cannot parse, a path git does not list, or a tree elsewhere leaves
@@ -271,10 +275,10 @@ compute_backstop() {
   backstop="$tree_text Nothing has provisioned it yet: call EnterWorktree({path: \"$target\"}) before working there, because entering provisions the tree and keeps audit markers and tools off the main checkout. The full lifecycle is in .claude/skills/gaia/references/work-lifecycle.md."
   if [ "$needs_rename" = 1 ]; then
     if [ "$detached" = 1 ] || [ -z "$branch" ]; then
-      rename_text="Before the first push, mint a name with: bash .gaia/scripts/branch-name-lib.sh name adhoc --type <type> --slug \"<slug>\" and give the tree a branch: git -C \"$target\" switch -c <minted name>"
+      rename_text="Before the first push, mint a name with: $run .gaia/scripts/branch-name-lib.sh name adhoc --type <type> --slug \"<slug>\" and give the tree a branch: git -C \"$target\" switch -c <minted name>"
     else
       if [ "$branch_known" = 1 ]; then rename_text="$branch"; else rename_text="<current branch>"; fi
-      rename_text="This branch is not a minted name; before the first push, mint one with: bash .gaia/scripts/branch-name-lib.sh name adhoc --type <type> --slug \"<slug>\" and rename it: git -C \"$target\" branch -m $rename_text <minted name>"
+      rename_text="This branch is not a minted name; before the first push, mint one with: $run .gaia/scripts/branch-name-lib.sh name adhoc --type <type> --slug \"<slug>\" and rename it: git -C \"$target\" branch -m $rename_text <minted name>"
     fi
     backstop="$backstop"$'\n'"$rename_text"
   fi
@@ -501,9 +505,6 @@ if [ "$use_marker" = 1 ]; then
   fi
 fi
 
-# The command word is a variable so the key lines read as text, not as a
-# cwd-relative interpreter call, to the cwd-relative-load lint.
-run=bash
 keyline=""
 if gaia_usage_valid_reference "$key"; then
   case "$key" in
