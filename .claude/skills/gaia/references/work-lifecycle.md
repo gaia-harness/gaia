@@ -58,7 +58,7 @@ Read `.claude/skills/gaia/references/isolation.md` and apply it with these slot 
 | `{{OWNER}}` | `this change` |
 | `{{SIBLING}}` | `another task` |
 
-Isolation words in the request ("in a worktree", "on a branch") are the stated answer isolation.md takes in place of its question. Without them, isolation.md runs unchanged, and its policy read decides whether the question is asked at all. Arms that isolation.md walks ahead of the question can override a stated answer; isolation.md names which, and says so in one line when one does.
+Run isolation.md every time, its policy read first, even when the request names the isolation. Isolation words in the request ("in a worktree", "on a branch") are only the stated answer isolation.md takes in place of its question; they never skip the policy read. The arms isolation.md walks ahead of the question still run and can override a stated answer: under `always-worktree`, a stated branch becomes a worktree, said in one line.
 
 ## 4. Enter the worktree
 
