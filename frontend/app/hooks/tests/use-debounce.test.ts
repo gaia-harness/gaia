@@ -62,6 +62,10 @@ describe('useDebounce', () => {
 
     await unmount();
 
+    // React drops a state update on an unmounted component, so result.current
+    // alone holds even with the cleanup removed; the timer count proves it ran
+    expect(vi.getTimerCount()).toBe(0);
+
     await act(() => {
       vi.advanceTimersByTime(300);
     });

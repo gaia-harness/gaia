@@ -26426,7 +26426,9 @@ var applyMarkerStrip = (stagingRoot, files, transform2) => {
           });
         }
         if (result.blocks > 0) {
-          atomicWriteFileSync(absolutePath, result.output);
+          atomicWriteFileSync(absolutePath, result.output, {
+            mode: statSync3(absolutePath).mode % 512
+          });
           filesTouched.push(relativePath);
           blocksStripped += result.blocks;
         }
