@@ -691,7 +691,7 @@ run_decision() {
     snapshot=$(jq -c --argjson i "$((used - 1))" '.history.rounds[$i].snapshot' <<<"$WORKING_STATE")
     if [ "$snapshot" = null ]; then
       snapshot=$(gaia_loop_evaluate_round "$main" "$WORKING_STATE" "$used") ||
-        finish_deny "BLOCKED: the audit loop checkpoint could not evaluate round $used on branch $BRANCH_KEY. Fail-loud, not fail-open: run \`bash $scripts/audit-loop-eval.sh eval --root $root\` to see why."
+        finish_deny "BLOCKED: the audit loop checkpoint could not evaluate round $used on branch $BRANCH_KEY. Fail-loud, not fail-open: run \`bash $scripts/audit-loop-eval.sh brief --root $root\` to see why."
       WORKING_STATE=$(jq -c --argjson round_index "$((used - 1))" --argjson snapshot "$snapshot" '.history.rounds[$round_index].snapshot = $snapshot' <<<"$WORKING_STATE")
     fi
   fi
