@@ -13,7 +13,10 @@ tags: [concept, gaia, scripts]
 The directory carries one structure, the name prefix, and the prefix tracks what a script is for. This page describes each family at that level and names no individual file, so adding a script to a family cannot make it false. Two other sources answer the per-file questions:
 
 - **What a file is.** Its own header comment states what it does, who invokes it, and its exit contract. Read the header, not a table.
-- **Whether it ships.** `.gaia/release-exclude` and `.gaia/manifest.json` own the release boundary. A family below that reads "mostly ships" or "mixed" has members on both sides of it, and the exclude file's comment above each withheld entry says why. See [[Bundle-time Scrub]] and [[Release Workflow]].
+- **Whether it ships.** `.gaia/manifest.json` lists every shipped file. A family below that reads "mostly ships" or "mixed" has members on both sides of the release boundary.
+<!-- gaia:maintainer-only:start -->
+  In GAIA's source, `.gaia/release-exclude` owns the withheld side, and its comment above each withheld entry says why. See [[Bundle-time Scrub]] and [[Release Workflow]].
+<!-- gaia:maintainer-only:end -->
 
 A `*-lib` file is sourced and runs nothing on its own. Everything else is run as a command by whatever the family's invoker is.
 
