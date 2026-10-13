@@ -2534,7 +2534,7 @@ describe('shipped audience-label-vocabulary check', () => {
       '--label audience:<side> \\\n'
     );
     sandbox.writeStaged(
-      '.claude/skills/gaia/references/audit.md',
+      '.claude/skills/gaia/references/cleanse.md',
       '  audience: {adopter | maintainer, against the rubric}\n'
     );
     sandbox.writeStaged(
@@ -2556,7 +2556,7 @@ describe('shipped audience-label-vocabulary check', () => {
 
     expect(out).toContain('wiki/page.md');
     expect(out).toContain('.claude/skills/file-tech-debt/SKILL.md');
-    expect(out).toContain('.claude/skills/gaia/references/audit.md');
+    expect(out).toContain('.claude/skills/gaia/references/cleanse.md');
     expect(out).toContain('.gaia/scripts/check.sh');
     expect(out).toContain('.claude/agents/some-agent.md');
     expect(out).toContain('.claude/skills/vocabulary.md');

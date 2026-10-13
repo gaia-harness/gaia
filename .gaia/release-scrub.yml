@@ -341,7 +341,7 @@ transforms:
       # reads. The spans live behind maintainer-only markers in
       # `.claude/skills/file-tech-debt/SKILL.md`,
       # `.claude/agents/code-audit-frontend.md`,
-      # `.claude/skills/gaia/references/audit.md`,
+      # `.claude/skills/gaia/references/cleanse.md`,
       # `.claude/skills/gaia/references/residue.md`,
       # `.gaia/scripts/check-debt-issue-metadata.sh`, and
       # `wiki/concepts/Audit Disposition and Debt Fix.md`; this check is what

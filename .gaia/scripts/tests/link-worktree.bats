@@ -210,7 +210,7 @@ FAKE
   [ "$(cat "$MAIN/.gaia/local/red-ledger/deadbeefdeadbeef/observations.jsonl")" = '{"total":42}' ]
 }
 
-# ---------- 9b. Harden decline ledger durability (write-through to main) ----------
+# ---------- 9b. Codify decline ledger durability (write-through to main) ----------
 @test "codify declines: a decline written on the worktree side lands in the main checkout" {
   run run_in "$LINKED"
   [ "$status" -eq 0 ]

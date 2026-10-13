@@ -1,6 +1,6 @@
 #!/usr/bin/env bats
 # doc-grep coverage for the `promote` action's source-side contract in
-# `.claude/skills/gaia/references/audit.md`, stated only as prose and read by
+# `.claude/skills/gaia/references/cleanse.md`, stated only as prose and read by
 # a Sonnet Stage 1 that writes the action blocks and a Sonnet Stage 2 that
 # applies them.
 #
@@ -62,7 +62,7 @@ scoped() {
 
 setup() {
   ROOT="$(cd "$BATS_TEST_DIRNAME/../../.." && pwd)"
-  AUDIT="$ROOT/.claude/skills/gaia/references/audit.md"
+  AUDIT="$ROOT/.claude/skills/gaia/references/cleanse.md"
 
   # `-s`, not `-f`: an empty file would satisfy `-f` and only then fail
   # obliquely, inside `extract_section_or_fail`'s own vacuous-match guard,

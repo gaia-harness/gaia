@@ -85,7 +85,7 @@ case "$1" in
     if [ "${MOCK_UNCLASSIFIED_SUPPRESSED:-false}" = "true" ]; then
       printf '{"candidate_count":0,"unclassified":null,"gh_ok":true,"window_days":90}'
     else
-      printf '{"candidate_count":0,"unclassified":{"distinct_pr_count":%s,"pr_numbers":[401,405,409],"area_tags":["app/routes"],"severity_max":"suggestion"},"gh_ok":true,"window_days":90}' "${MOCK_UNCLASSIFIED_COUNT:-3}"
+      printf '{"candidate_count":0,"unclassified":{"distinct_pr_count":%s,"pr_numbers":[401,405,409],"area_tags":["app/routes"],"severity_max":"minor"},"gh_ok":true,"window_days":90}' "${MOCK_UNCLASSIFIED_COUNT:-3}"
     fi
     exit 0
     ;;
