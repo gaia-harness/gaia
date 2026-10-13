@@ -60,7 +60,7 @@ A structured `malformed_snapshot` error on stderr means the prior review snapsho
     "severity_max": "minor"
   },
   "audited_pr_count": 400,
-  "tally_schema_version": 1,
+  "tally_schema_version": 2,
   "class_inventory": [
     {"finding_class": "holistic/a", "distinct_pr_count": 40}
   ],

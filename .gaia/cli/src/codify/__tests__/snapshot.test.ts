@@ -89,7 +89,7 @@ const FULL_TALLY = {
   gh_ok: true,
   snapshot_present: false,
   snapshot_reviewed_at: null,
-  tally_schema_version: 1,
+  tally_schema_version: 2,
   triggers: [],
   unclassified: {distinct_pr_count: 120},
   unclassified_window_count: 120,
@@ -121,7 +121,7 @@ describe('codify-ledger snapshot', () => {
       expect(recordCode).toBe(EXIT_CODES.OK);
 
       const snapshot = readSnapshot(sandbox.snapshotPath);
-      expect(snapshot.tally_schema_version).toBe(1);
+      expect(snapshot.tally_schema_version).toBe(2);
       expect(snapshot.window_days).toBe(90);
       expect(snapshot.audited_pr_count).toBe(400);
       expect(snapshot.reviewed_at).toBe(FIXED_NOW.toISOString());

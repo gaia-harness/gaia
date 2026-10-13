@@ -21818,7 +21818,7 @@ var RISE_RATIO_NUM = 5;
 var RISE_RATIO_DEN = 4;
 var RISE_MIN_PR_DELTA = 3;
 var MIN_TRUSTED_AUDITED_PRS = 20;
-var TALLY_SCHEMA_VERSION = 1;
+var TALLY_SCHEMA_VERSION = 2;
 var isMaterialRise = ({
   baseAuditedPrCount,
   baseCount,

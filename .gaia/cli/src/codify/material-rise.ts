@@ -16,7 +16,7 @@ export const RISE_MIN_PR_DELTA = 3;
 
 export const MIN_TRUSTED_AUDITED_PRS = 20;
 
-export const TALLY_SCHEMA_VERSION = 1;
+export const TALLY_SCHEMA_VERSION = 2;
 
 export type MaterialRiseArgs = {
   baseAuditedPrCount: number;

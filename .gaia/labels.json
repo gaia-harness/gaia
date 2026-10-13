@@ -90,7 +90,7 @@
       "managed": true,
       "deprecated": false,
       "blocked": false,
-      "renamedFrom": [],
+      "renamedFrom": ["severity:important"],
       "reason": null
     },
     {
@@ -103,7 +103,7 @@
       "managed": true,
       "deprecated": false,
       "blocked": false,
-      "renamedFrom": [],
+      "renamedFrom": ["severity:suggestion"],
       "reason": null
     },
     {
