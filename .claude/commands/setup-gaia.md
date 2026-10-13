@@ -14,6 +14,16 @@ It is safe for **any developer** to run at any time. A plain (no-flag) re-run on
 
 The slash command name intentionally does NOT start with `gaia-` so it does not pollute the `/gaia` autocomplete namespace (those are reserved for the four user-invoked GAIA workflows).
 
+Contents: Pre-flight: Worktree check; Argument parse; Phase 0: Prerequisites; Phase 1: Detect situation; Phase 2: Per-machine setup; Phase 3: GitHub repository; Phase 3.5: Team git isolation policy; Phase 3.7: Squash-only merges; Phase 4.5: Label sync; Phase 4.6: Statusline left side; Phase 6: Finalize; Idempotence / re-run safety; On failure: re-run.
+
+This command reads these references, all under `.claude/skills/gaia/references/setup/`. Read one only when a "Read ... now" line sends you there, and then read the whole file:
+- `sandbox.md`: Phase 2, when the sandbox gate says the decision is owed.
+- `per-machine.md`: Phase 2, when `completed_at` is null and the per-machine steps are owed.
+- `github-repo.md`: Phase 3, when no repo exists yet or its default branch is not pushed.
+- `isolation-question.md`: Phase 3.5, once both gates say the question is owed.
+- `squash-only.md`: Phase 3.7, once both gates say the question is owed.
+- `statusline-left.md`: Phase 4.6, once the gate says a choice is owed.
+
 ## Pre-flight: Worktree check
 
 This command does per-machine and per-clone provisioning, writes `.gaia/local/setup-state.json`, and provisions the GitHub repository. If invoked from a linked worktree, reject hard: `gaia_refuse_if_worktree` (`.gaia/scripts/main-only-lib.sh`) asks the shared resolver which tree this is and refuses out loud, naming the main checkout, when the answer is a worktree.
@@ -119,7 +129,7 @@ The classification only routes the phases below; each phase re-checks its own co
 
 ## Phase 2: Per-machine setup (skip if setup-state finalized)
 
-If `setup status --json` reports a non-null `completed_at`, this whole phase no-ops **except for the sandbox decision below** (a first adopter finished per-machine work inside `/gaia-init`, so the repo prompt in Phase 3 is their first real interaction, with no tool-install log lines before it, and the recorded per-machine steps are unchanged). Otherwise run Steps 1–4 below in order. Each records itself via `.gaia/cli/gaia setup mark-step <step>` and is skipped when already in `completed_steps`.
+If `setup status --json` reports a non-null `completed_at`, this whole phase no-ops **except for the sandbox decision below** (a first adopter finished per-machine work inside `/gaia-init`, so the repo prompt in Phase 3 is their first real interaction, with no tool-install log lines before it, and the recorded per-machine steps are unchanged).
 
 **Sandbox decision (runs even when `completed_at` is non-null).** This clause surfaces the OS-level Bash sandbox enablement decision whenever no per-machine resolution has been recorded. It runs even when `completed_at` is non-null because Phase 2 otherwise short-circuits once per-machine setup is complete and would skip the decision. So before falling through to Phase 3, always evaluate this:
 
@@ -129,193 +139,9 @@ RESOLVED="$(.gaia/cli/gaia sandbox status --json 2>/dev/null | jq -r '.resolved 
 
 If `RESOLVED` is `true` and `RECONFIGURE` is NOT set, the decision stands: do NOT re-prompt and do NOT flip the settled value. Skip to the rest of setup. Otherwise (marker absent, or `--reconfigure`), run the decision body below. This clause is gated on the `gaia sandbox status` marker, never on a `SETUP_STEPS` value: no `SETUP_STEPS` entry is added and `gaia setup mark-step` is never called for the sandbox decision; `.gaia/local/sandbox.json` is the only tracking.
 
-1. **Read the recommendation.** Absent file, absent key, or an unreadable config all mean "no recommendation", so the default is off:
+Read `.claude/skills/gaia/references/setup/sandbox.md` now, the whole file, and run it.
 
-   ```bash
-   RECOMMENDED="$(jq -r '.sandbox_recommended // false' .gaia/project.json 2>/dev/null || echo false)"
-   ```
-
-2. **Classify capability** via the injectable CLI (falls back to a real host probe when flags are omitted):
-
-   ```bash
-   .gaia/cli/gaia sandbox detect --json
-   ```
-
-   Cache `capability`, `installCommand`, `reason` from the JSON.
-
-3. **Branch on capability.** Never half-enable: the sandbox is either fully applied or left off.
-   - `unsupported` (native Windows or WSL1): do NOT enable. Tell the developer plainly that Claude Code's OS-level sandbox is unavailable on this machine (use `reason`) and point them to WSL2 instead. Record the outcome and skip the prompt:
-
-     ```bash
-     .gaia/cli/gaia sandbox record --outcome incapable --capability unsupported
-     ```
-
-   - `needs-deps` (Linux/WSL2 missing bubblewrap/socat): do NOT enable, do NOT half-enable. Print the concrete `installCommand` (plus the Fedora form carried in `reason`) and tell the developer the sandbox stays off until those are installed and `/setup-gaia` is re-run. Record the outcome and skip the prompt:
-
-     ```bash
-     .gaia/cli/gaia sandbox record --outcome incapable --capability needs-deps
-     ```
-
-   - `ready` (macOS Seatbelt, or Linux/WSL2 with both deps present): run the single prompt below.
-
-4. **The single informed prompt** (`ready` only). Use AskUserQuestion exactly once, there is no promptless auto-enable branch anywhere in this file. Its default option tracks `RECOMMENDED`: when `true`, "Enable the sandbox" is Recommended; when `false` (including when nothing was recommended), "Don't enable" is Recommended.
-
-   > Enable Claude Code's OS-level Bash sandbox on this machine? It sandboxes Bash commands and their child processes, but it can break local tools: `docker`, `gh`, `terraform`, and other commands that need network or host access may fail or need allowlisting. Your project owner {recommends / does not recommend} it; each machine decides for itself.
-   >
-   > - **Enable the sandbox** / **Don't enable** (Recommended tracks the owner's recommendation, default off when none)
-
-   On **enable**:
-
-   ```bash
-   REGISTRY="$(npm config get registry 2>/dev/null)"
-   DOCKER_PRESENT=false; command -v docker >/dev/null 2>&1 && DOCKER_PRESENT=true
-   .gaia/cli/gaia sandbox apply --registry "$REGISTRY" --docker-present "$DOCKER_PRESENT" --capability ready
-   ```
-
-   `apply` deep-merges the minimal seed into `.claude/settings.local.json` (gitignored) and writes the `enabled` marker. Then print the honesty message below. Tell the developer the enable takes effect on the NEXT Claude Code session (this setup run stays unsandboxed), matching the existing "restart Claude Code" closing line in Phase 6.
-
-   On **don't enable**:
-
-   ```bash
-   .gaia/cli/gaia sandbox record --outcome declined --capability ready
-   ```
-
-**Sandbox honesty message.** Print this on the enable path above:
-
-> Note: enabling the sandbox alone does not protect .env. The sandbox's default read policy is permissive (it still reads ~/.aws, ~/.ssh, .env). What protects `.env` is GAIA's committed `sandbox.filesystem.denyRead` entries, which reach subprocesses spawned by sandboxed Bash and cover `.env`, the `.env.local` / `.env.production` variant family, and the key, certificate, credential, and secrets-directory classes, each at any depth in the project rather than at its root only; `.env.example` stays readable. They do NOT cover MCP shell execution, NOT a `docker *`-excluded command that runs outside the sandbox, and NOT `~/.ssh` or `~/.aws`: no entry names either one, and an ordinary private key there (`id_rsa`, `id_ed25519`) carries none of those names or extensions and sits under no `secrets/` directory, so it stays readable. The same denied read also blocks the app's own `.env` reads under Claude-run tooling (Vite, tests). And if bubblewrap/socat later goes missing, an enabled machine degrades to unsandboxed by default, at which point only the `block-sensitive-read.sh` tool-tier guard remains.
->
-> The minimal seed itself only adds the registry host to `allowedDomains` and, when docker is present, a `docker *` exclusion. It still leaves `gh`/git-over-https, `uvx`, `curl`, and claude plugin installs BLOCKED until you allowlist them yourself.
-
-### Step 1: install-tools
-
-Skip if `install-tools` is in `completed_steps`.
-
-Three external tools require per-machine setup. The Serena MCP entry needs `uv` (Astral's Python toolchain runner).
-
-- [React Doctor](https://github.com/millionco/react-doctor): `npx -y react-doctor@latest install --yes`, run as the first command of the block below
-  Installs the `react-doctor` skill for detected agents (Claude Code included). Scans for React-specific issues; auto-runs after code edits in a `CLAUDECODE` environment and is invoked by the `code-audit-frontend` agent pre-merge.
-
-  **Then strip React Doctor's bundled extras** so GAIA stays the sole controller of when react-doctor runs. There is no skill-only install flag, so the installer also adds a standalone GitHub Actions workflow, a commit-hook block (written into the file `core.hooksPath` names, which in GAIA is the tracked `.githooks/pre-commit`, between `# react-doctor hook start` and `# react-doctor hook end`), a `doctor` package script, a pinned `react-doctor` devDependency, and a `.agents/skills/react-doctor/` copy of the skill for any other agents it detects (Codex, Cursor, Gemini CLI, GitHub Copilot, OpenCode, Pi, Warp, and others). The `doctor` script and the `react-doctor` devDependency land in the root `package.json`. `wiki/dependencies/react-doctor.md` holds the verification record for each path. GAIA triggers react-doctor via the Claude Code skill (auto-run after edits) and the `code-audit-frontend` agent (at `@latest`), so remove the rest, keeping only the Claude Code skill. Run the install and the strip as one block, in one shell, because the lockfile snapshot taken before the install is held in a shell variable:
-
-  ```bash
-  # The installer's dependency resolution fills optional peer slots of other packages in
-  # pnpm-lock.yaml, which `pnpm remove` leaves behind, so snapshot the lockfile and restore it below.
-  lockfile_snapshot="$(mktemp)"
-  cp pnpm-lock.yaml "$lockfile_snapshot"
-  npx -y react-doctor@latest install --yes
-  rm -f .github/workflows/react-doctor.yml
-  # Remove the non-Claude skill copy (Codex, Cursor, Copilot, Warp, and others); rmdir the now-empty parents but leave
-  # any unrelated .agents/ content untouched.
-  rm -rf .agents/skills/react-doctor
-  rmdir .agents/skills .agents 2>/dev/null || true
-  pnpm remove react-doctor --config.ignore-scripts=true 2>/dev/null || true
-  # Hyphenated key needs bracket+quote form; a bare scripts.react-doctor throws
-  # ERR_PNPM_UNEXPECTED_TOKEN_IN_PROPERTY_PATH and aborts, leaving `doctor` behind too.
-  pnpm pkg delete scripts.doctor 'scripts["react-doctor"]'
-  # Remove react-doctor's block (and the blank line it adds before it) from the
-  # pre-commit hook it wrote into, then make sure git runs the hook.
-  hook_file="$(git rev-parse --git-path hooks/pre-commit)"
-  if [ -f "$hook_file" ] && grep -q '^# react-doctor hook start$' "$hook_file"; then
-    awk '
-      /^# react-doctor hook start$/ { in_block = 1; if (have_prev && prev == "") have_prev = 0; next }
-      in_block { if ($0 == "# react-doctor hook end") in_block = 0; next }
-      { if (have_prev) print prev; prev = $0; have_prev = 1 }
-      END { if (have_prev) print prev }
-    ' "$hook_file" > "$hook_file.tmp" && cat "$hook_file.tmp" > "$hook_file" && rm -f "$hook_file.tmp"
-  fi
-  if [ "$(git config --local --get core.hooksPath)" != ".githooks" ]; then
-    git config core.hooksPath .githooks
-  fi
-  # Put the lockfile back byte for byte, then resync node_modules to it.
-  cat "$lockfile_snapshot" > pnpm-lock.yaml && rm -f "$lockfile_snapshot"
-  pnpm install --frozen-lockfile --config.ignore-scripts=true
-  ```
-
-  Each strip line is idempotent and no-ops when its artifact is absent (including when no non-Claude agent was detected, so no `.agents/` copy was written). The lockfile restore copies the pre-install snapshot rather than checking the file out of git, so lockfile edits made before the install survive it. The block delete rewrites the hook in place with `cat ... >` rather than `mv`, which keeps its executable bit. The `git config` line re-arms the hook path, because a clone whose dependencies were installed before `git init` skipped `prepare`. Verify: `grep -c 'react-doctor hook' .githooks/pre-commit` prints 0, `git diff --quiet -- .githooks/pre-commit` exits 0, `git config --local --get core.hooksPath` prints `.githooks`, and `git status` lists no `package.json` or `pnpm-lock.yaml` change the install made.
-
-- [Playwright CLI](https://github.com/microsoft/playwright-cli): `npm install -g @playwright/cli@latest`
-  Installs the global `playwright-cli` binary the bundled skill shells out to; the skill's `allowed-tools: Bash(playwright-cli:*)` directive calls it. `/update-deps` keeps the global binary current; `wiki/dependencies/playwright-cli.md` covers the fallback and the deprecated-package trap.
-
-- [Serena](https://github.com/oraios/serena) MCP server: ensure `uv` first.
-
-  ```bash
-  if ! command -v uv &>/dev/null; then
-    curl -LsSf https://astral.sh/uv/install.sh | sh
-  fi
-  ```
-
-  Verify with `uv --version`. If verification fails, halt with: `uv is required for GAIA. Install with: curl -LsSf https://astral.sh/uv/install.sh | sh, then re-run /setup-gaia.`
-
-  Then register Serena globally:
-
-  ```bash
-  claude mcp add serena -s user -- uvx --from git+https://github.com/oraios/serena@v1.7.0 serena start-mcp-server --context claude-code --project-from-cwd --open-web-dashboard false
-  ```
-
-  If the registration already exists (`claude mcp add` exits non-zero with a "name already exists" error), treat as success and continue. A stale pin on an existing registration needs `claude mcp remove serena -s user` and then the add above.
-
-  Serena's tools only win over Opus's built-in Read/Grep/Edit when Claude Code loads Serena's system-prompt override; Opus otherwise defaults to its own tools, a strong built-in-tool bias the Serena maintainers prescribe this override to counter. Tell the user the recommended way to start Claude Code sessions in this project:
-
-  ```bash
-  claude --append-system-prompt="$(serena prompts print-cc-system-prompt-override)"
-  ```
-
-  This is optional but recommended and adopter-safe: a plainly-launched `claude` still works, and the always-loaded `.claude/rules/serena-cc-override.md` is the durable fallback. Use the append form, never `--system-prompt`, which replaces Claude Code's base prompt.
-
-  Serena picks a single language at first startup and freezes it into `.serena/project.yml`. If the project later grows another language, Serena will not index it until the `language_servers:` list (`languages:` before Serena 1.7) in `.serena/project.yml` is updated and Serena restarts. To fix this manually, edit that list in `.serena/project.yml` directly and restart Serena; `/gaia-serena-sync` automates the same edit on explicit consent.
-
-After all three tools install successfully:
-
-```bash
-.gaia/cli/gaia setup mark-step install-tools
-```
-
-If any install fails, surface the error verbatim and halt. The user can re-run `/setup-gaia` after addressing the cause; this step resumes.
-
-### Step 2: install-plugins
-
-Skip if `install-plugins` is in `completed_steps`.
-
-```bash
-claude plugin install typescript-lsp@claude-plugins-official
-claude plugin marketplace add AgriciDaniel/claude-obsidian
-claude plugin install claude-obsidian@agricidaniel-claude-obsidian
-```
-
-Baseline: claude-obsidian 2.2.0, which needs Python 3.11+ with `python3` on PATH. To upgrade an existing install, run `claude plugin list`, then `claude plugin uninstall <the id it shows>`, then the marketplace add and install above.
-
-If any fail, surface the error and halt. Already-installed plugins are a no-op. After all three succeed:
-
-```bash
-.gaia/cli/gaia setup mark-step install-plugins
-```
-
-### Step 3: chmod-statusline
-
-Skip if `chmod-statusline` is in `completed_steps`.
-
-The statusline command in `.claude/settings.json` points at `.gaia/statusline/*.sh`; the executable bit is normally tracked by git but can be lost on cross-platform clones.
-
-```bash
-chmod +x .gaia/statusline/*.sh
-.gaia/cli/gaia setup mark-step chmod-statusline
-```
-
-### Step 4: bootstrap-env
-
-Skip if `bootstrap-env` is in `completed_steps`.
-
-The app's `.env` lives in the `frontend/` package and is gitignored. If `frontend/.env` does not exist and `frontend/.env.example` does, copy:
-
-```bash
-cp frontend/.env.example frontend/.env
-```
-
-If neither exists, that's fine, the project may not use `.env`. After the copy (or no-op):
-
-```bash
-.gaia/cli/gaia setup mark-step bootstrap-env
-```
+**Per-machine steps (only when `completed_at` is null).** Read `.claude/skills/gaia/references/setup/per-machine.md` now, the whole file, and run its steps. On a halt, the user fixes the cause and re-runs `/setup-gaia`; each step resumes from its recorded state.
 
 ## Phase 3: GitHub repository (skip if provisioning already complete)
 
@@ -323,111 +149,7 @@ Judge this phase from the **repo/branch/push/required-check state cached in Phas
 
 - **The repo exists, the default branch is pushed, and the registration is not owed** (Phase 1's **provisioned** or **fresh clone**): print `GitHub repository already provisioned.` and fall through to Phase 3.5 without touching GitHub.
 - **The repo exists, the default branch is pushed, and the registration is owed** (an admin's **partial re-run**): print `GitHub repository already provisioned; registering the GAIA-Audit required check.` and skip the connect question. When the default branch has no protection rule yet (`gh api "repos/<owner>/<repo>/branches/<default-branch>/protection"` exits non-zero), run the **Default-branch protection** PUT below first; never re-PUT an existing rule, because the PUT replaces every setting on it. Then run **Register GAIA-Audit as the required check** below and fall through to Phase 3.5. The other recommended defaults already ran when the repo was provisioned, so this path skips them.
-- **Otherwise** (no repo yet, or its default branch is not pushed), this is the **first user-facing interaction for a first adopter**. Ask (AskUserQuestion) with these three options:
-
-> How do you want to connect this project to GitHub?
->
-> - **Create the repo on GitHub** (Recommended): I'll create it private, push your default branch, and set the recommended defaults.
-> - **Adopt an existing repo**: you already have a github `origin`; I'll skip creation and apply the recommended defaults.
-> - **Set one up manually**: I'll print guidance and leave GitHub untouched.
-
-### Option 1: Create the repo on GitHub
-
-**Pre-creation authz check (distinct from the existing-repo admin probe).** `check-admin` needs a repo that already exists, so it cannot gate creation. Confirm an **authenticated gh with repo-creation rights** first:
-
-```bash
-gh auth status
-```
-
-If `gh` is unauthenticated (or the active token lacks the `repo` scope needed to create a repository), do NOT attempt creation. Print:
-
-```
-Creating a GitHub repo needs an authenticated gh with repo-creation rights. Run `gh auth login` (grant the `repo` scope), then re-run /setup-gaia and pick "Create the repo on GitHub". Or choose "Adopt an existing repo" / "Set one up manually".
-```
-
-Exit the repo phase without mutating GitHub.
-
-**Choose the owner (personal account or organization).** Before creating, decide *where* the repo lives. Resolve the personal login and enumerate the orgs the user belongs to:
-
-```bash
-gh api user --jq .login                       # personal login
-gh api --paginate /user/orgs --jq '.[].login' # org memberships (best-effort; may need the read:org scope)
-```
-
-Org enumeration is best-effort: `/user/orgs` only returns orgs the active token can see. A missing org is not fatal; the free-text path below covers it.
-
-**If the user belongs to no orgs, skip the owner question entirely** and create under the personal account (the default create command below).
-
-Otherwise, rank the orgs by the user's own recent commit activity so the most-likely target is offered first. The contributions graph is the precise "committed to" signal (last-year window), one call:
-
-```bash
-gh api graphql -f query='
-{ viewer { contributionsCollection { commitContributionsByRepository(maxRepositories: 100) {
-  repository { owner { login } } contributions { totalCount } } } } }' --jq '
-  [.data.viewer.contributionsCollection.commitContributionsByRepository[]
-   | {owner: .repository.owner.login, n: .contributions.totalCount}]
-  | group_by(.owner) | map({owner: .[0].owner, n: (map(.n) | add)})
-  | sort_by(-.n) | .[].owner'
-```
-
-Order the org set by this ranking; orgs the ranker omits fall to the end in membership order. If the GraphQL call fails or returns nothing (older gh, missing scope, no recent activity), fall back to plain `/user/orgs` order. Ranking is cosmetic: it only decides which orgs appear as buttons; the final choice is always correct.
-
-Then AskUserQuestion with these options **in this exact order**:
-
-> Where should this repository live?
->
-> - **Personal account (@<login>)** (Recommended): create it under your own GitHub account.
-> - **<org>**: create it in this organization. (one option per org, ranked; **at most 3**)
-
-If the user belongs to **more than three** orgs, print the full ranked list first, offer the personal account plus the **top 3** ranked orgs as buttons, and add to the question: "If the org you want isn't a button, choose Other and type its exact login from the list above." (AskUserQuestion supplies the free-text Other option automatically.) Record the chosen owner for the create command below.
-
-**Create private by default.** Non-interactive `gh repo create` requires one of `--public` / `--private` / `--internal`; default to `--private`. Create under the owner chosen above: omit the positional for the personal account, or pass `<owner>/<name>` for an org (deriving `<name>` from the project directory):
-
-```bash
-# Personal account:
-gh repo create --source=. --push --private
-# Organization <owner>:
-gh repo create "<owner>/$(basename "$PWD")" --source=. --push --private
-```
-
-Because the repo is created `--private`, the pushed history lands in a private repo and is never publicly exposed by this push. A **public or internal** repo is created **only** after a separate, explicit confirmation:
-
-> Create this repository **public or internal** instead of private? Its full pushed git history becomes visible to everyone who can see the repo.
->
-> - **Keep it private** (Recommended)
-> - **Make it public**
-> - **Make it internal** (org-visible)
-
-Never flip the repo to public/internal without this second confirmation. Private-by-default is the primary mitigation for exposing historical secrets in the pushed history.
-
-**Secret-scanning push-protection (best-effort).** Immediately after create, enable secret-scanning push-protection so it guards every later push and is in place before any public/internal flip:
-
-```bash
-gh api -X PATCH "repos/<owner>/<repo>" --input - <<'JSON'
-{"security_and_analysis": {"secret_scanning_push_protection": {"status": "enabled"}}}
-JSON
-```
-
-If this is unavailable on the plan (e.g. a private repo without GitHub Advanced Security), degrade gracefully: print a one-line note that push-protection could not be enabled and continue. Do not halt.
-
-After creation, cache `owner`/`repo` from the new remote and fall through to **Recommended defaults**.
-
-### Option 2: Adopt an existing repo
-
-The user already has a github `origin` (cached in Phase 1). Skip creation and fall through to **Recommended defaults**.
-
-### Option 3: Set one up manually
-
-Print:
-
-```
-Create a repo on your provider, then:
-  git remote add origin <url>
-  git push -u origin <default-branch>
-When it's pushed, re-run /setup-gaia to apply the recommended defaults (branch protection and the GAIA-Audit required check need repo admin).
-```
-
-Exit the repo phase without mutating GitHub.
+- **Otherwise** (no repo yet, or its default branch is not pushed), this is the **first user-facing interaction for a first adopter**. Read `.claude/skills/gaia/references/setup/github-repo.md` now, the whole file, and run its `## Connect the repository`.
 
 ### Recommended defaults (admin-gated)
 
@@ -497,74 +219,11 @@ Could not register the GAIA-Audit required check (admin permission and a branch-
 Until GAIA-Audit is registered, GitHub does not require the audit: a pull request merged from the github.com button skips it. While code-review-audit stays a required context, every pull request on <default-branch> stays blocked, because nothing posts it.
 ```
 
-Do not halt on a registration failure; continue with **Remaining defaults** below, or, on the registration-only re-run path at the top of Phase 3, fall through to Phase 3.5.
+Do not halt on a registration failure; continue with the reference's `## Remaining defaults` (already read on this path), or, on the registration-only re-run path at the top of Phase 3, fall through to Phase 3.5.
 
 #### Remaining defaults
 
-**delete_branch_on_merge.** Read the current setting:
-
-```bash
-gh api "repos/<owner>/<repo>" --jq .delete_branch_on_merge
-```
-
-If `false`, AskUserQuestion:
-
-> GitHub is set to NOT delete branches when PRs merge, so every merged branch stays on the remote until someone deletes it by hand. GAIA runs no branch cleanup of its own. Enabling `delete_branch_on_merge` has GitHub delete each pull request's branch as it merges.
->
-> - **Enable delete_branch_on_merge** (Recommended)
-> - **Skip** (merged branches stay on the remote)
-
-On Enable:
-
-```bash
-.gaia/cli/gaia setup enable-delete-branch --owner <owner> --repo <repo>
-```
-
-If already `true`, print `delete_branch_on_merge is already enabled.` and continue.
-
-**Squash-only merges.** Phase 3.7 owns this offer; it runs there, after the team settings, because `--reconfigure` re-opens it on a repo this phase no longer touches.
-
-**Dependabot posture.** Dependabot is a data source for `/update-deps`, never a pull-request producer: alerts stay on and automated security fixes stay off. First warn about any existing Dependabot or Renovate config, without editing either file:
-
-```bash
-.gaia/cli/gaia setup warn-existing-tools --json
-```
-
-When `found` contains `dependabot` and `dependabot_unparseable` is not true, print:
-
-```
-.github/dependabot.yml has an npm entry. GAIA's /update-deps covers npm and pnpm, and running both opens duplicate dependency PRs.
-
-To remove it: delete the `package-ecosystem: npm` entry from .github/dependabot.yml (other ecosystems can stay). /setup-gaia leaves the file untouched.
-```
-
-When `dependabot_unparseable` is true, print instead:
-
-```
-.github/dependabot.yml could not be read. Check it for an npm entry: GAIA's /update-deps covers npm and pnpm, and running both opens duplicate dependency PRs.
-
-To remove one: delete the `package-ecosystem: npm` entry from .github/dependabot.yml (other ecosystems can stay). /setup-gaia leaves the file untouched.
-```
-
-When `found` contains `renovate`, print:
-
-```
-A Renovate configuration was detected in this repo. GAIA's /update-deps covers npm and pnpm, and running both opens duplicate dependency PRs.
-
-To remove the overlap: disable Renovate's npm and pnpm package management. /setup-gaia will NOT change the Renovate configuration.
-```
-
-Then set the posture through the CLI, which owns the GitHub calls:
-
-```bash
-.gaia/cli/gaia setup configure-dependabot-alerts --owner <owner> --repo <repo> --json
-```
-
-On success, print `Dependabot alerts are on and automated security fixes are off for <owner>/<repo>.` When `changed` is non-empty, also print each change; the change is reported, not asked about. On failure, print `Could not set the Dependabot posture on <owner>/<repo> (failed at <step>). Finish with repo-admin access:` followed by each `manual_commands` entry, and note that an organization-enforced security configuration can refuse the change, in which case an organization admin must change it. Do not halt setup on a failure.
-
-GAIA writes no `.github/dependabot.yml` and enables no setting that makes Dependabot open pull requests. `/update-deps` resolves security advisories through the local quality gate, with Dependabot alerts as its data source. Turning automated security fixes off is repository-wide, so it also stops Dependabot security pull requests for any other ecosystem your own `dependabot.yml` covers.
-
-All Phase-3 GitHub mutations (create, protection, required-check registration, the Dependabot alerts-on and security-fixes-off posture, delete-branch) are net-new, admin-gated, security-sensitive calls. A non-admin runner degrades gracefully: skip the mutation, print the admin-note above, and continue to Phase 3.5.
+Run `github-repo.md`'s `## Remaining defaults`.
 
 ## Phase 3.5: Team git isolation policy (always evaluated)
 
@@ -614,31 +273,9 @@ A developer who is not a repo admin is never asked for the team policy and sees 
 Tell the user (in their language, detected from earlier context): "Let's set your team's default git
 isolation policy."
 
-Show the explainer (this block stays English regardless of UI language, it's the canonical contract):
+Read `.claude/skills/gaia/references/setup/isolation-question.md` now, the whole file, and ask its question.
 
-> Worktrees buy you the ability to run a GAIA task without touching your current checkout, so you can keep
-> coding, or run a second GAIA task, while it works. They cost:
->
-> - a separate checkout per task, whose first quality-gate run installs its own `node_modules` (a one-time
->   install; the real disk cost ranges from tens of megabytes on a copy-on-write filesystem to the full
->   install size elsewhere);
-> - your editor indexes that second checkout as well as the main one;
-> - a dev server started inside a worktree collides on the same port as one in the main checkout;
-> - a crashed session can leave a worktree behind for you to remove by hand.
->
-> Scope limit: this policy governs `/gaia-plan` and `/gaia-debt` only. `/gaia-audit`, `/gaia-harden`, and
-> `/gaia-wiki` still work in the main checkout. And while a GAIA task holds your session in a worktree,
-> `/update-deps` and `/update-gaia` refuse to run there; run them from a separate session on the main
-> checkout.
-
-Use `AskUserQuestion`, header **`Isolation policy`**, with these three options in this exact order:
-
-- **Prefer branches (Recommended)**
-- **Prefer worktrees**
-- **Always use worktrees**
-
-On a choice, run **The write** below with the matching value: `Prefer branches (Recommended)` →
-`prefer-branch`, `Prefer worktrees` → `prefer-worktree`, `Always use worktrees` → `always-worktree`.
+On a choice, run **The write** below with the value `isolation-question.md`'s `## The answer` maps it to.
 
 **Declining** ("Other", or dismissing the question) writes nothing and commits nothing. The key stays absent,
 so the question re-fires on a later explicit `/setup-gaia` run, a bounded cost since this is a setup command,
@@ -713,30 +350,7 @@ Fail closed, silently (skip the question, no error, no output), on any of: `dete
 
 ### The question
 
-Read the current settings:
-
-```bash
-gh api "repos/<owner>/<repo>" --jq '{allow_merge_commit, allow_rebase_merge, allow_squash_merge, squash_merge_commit_title, squash_merge_commit_message}'
-```
-
-If they already match the PATCH below, print `Merges are already squash-only.` and fall through to Phase 4.5. Otherwise AskUserQuestion:
-
-> This repository allows merges that bypass the squash path, or squashes under a title other than the PR title. A merge commit, a rebase merge, or a default squash title can land a non-Conventional subject on the default branch, so the PR title lint stops describing what lands. Squash-only turns off merge commits and rebase merges, and has every squash commit take the PR title as its subject and the branch's commit messages as its body.
->
-> - **Make merges squash-only** (Recommended)
-> - **Skip** (keep the current merge settings)
-
-On Make merges squash-only:
-
-```bash
-gh api -X PATCH "repos/<owner>/<repo>" --input - <<'JSON'
-{"allow_merge_commit": false, "allow_rebase_merge": false, "allow_squash_merge": true, "squash_merge_commit_title": "PR_TITLE", "squash_merge_commit_message": "COMMIT_MESSAGES"}
-JSON
-```
-
-Re-run the read above and confirm the five values match the PATCH. On a failed PATCH or a read-back that does not match, print the error and the manual path, `Settings → General → Pull Requests` on `https://github.com/<owner>/<repo>/settings`, and continue; do not halt.
-
-On Skip, change nothing.
+Read `.claude/skills/gaia/references/setup/squash-only.md` now, the whole file, and ask its question.
 
 Fall through to Phase 4.5.
 
@@ -792,37 +406,13 @@ printf 'global=%s\nchoice=%s\n' "$GLOBAL_STATUSLINE" "$LEFT_CHOICE"
 
 A missing `statusline.left` key means never asked. The file's presence alone is not the signal, because it holds other opt-ins too.
 
-### The question
-
-Use `AskUserQuestion`, header **`Statusline`**, question "You have your own global statusline. Which one should draw the left side of the statusline in this project?", with these two options in this exact order:
-
-- **Use GAIA's statusline bar (Recommended)**: project, branch, model and effort, and a context bar whose colors match the audit checkpoint line.
-- **Keep my own statusline**: your global `statusLine.command` keeps drawing the left side.
-
-Either way GAIA's nudges stay on the right and context readings are still written. Choosing "Other" or dismissing the question writes nothing, so the question re-fires on a later `/setup-gaia` run.
-
-### The write
-
-Write `gaia` for the first option or `user` for the second, keeping any other key already in the file. A file without version 1, or one that does not parse, is replaced, since the statusline reads it as missing anyway:
-
-```bash
-LEFT="<gaia|user>"
-mkdir -p .gaia/local
-tmp="$(mktemp .gaia/local/settings.json.XXXXXX)"
-if jq -e 'type == "object" and .version == 1' .gaia/local/settings.json >/dev/null 2>&1; then
-  jq --arg left "$LEFT" '.statusline = ((.statusline | if type == "object" then . else {} end) + {left: $left})' .gaia/local/settings.json >"$tmp"
-else
-  jq -n --arg left "$LEFT" '{version: 1, statusline: {left: $left}}' >"$tmp"
-fi && mv -f "$tmp" .gaia/local/settings.json || rm -f "$tmp"
-```
-
-The statusline reads the choice on its next render; no restart is needed. Nothing is committed: the file is gitignored. This file is not `.gaia/local/protected/checkpoint-override.json`, the human-only audit checkpoint override, which Claude never writes.
+Read `.claude/skills/gaia/references/setup/statusline-left.md` now, the whole file, and ask its question, then write the answer.
 
 Fall through to Phase 6.
 
 ## Phase 6: Finalize
 
-Stamp per-machine setup-state as complete, then report. `setup finalize` refuses to finalize while any step is pending (it returns non-zero without stamping `completed_at`), and a first adopter reaches here with `completed_steps: []` (their `/gaia-init` already set `completed_at` via `gaia setup finalize --force`), so this phase must both **short-circuit when already finalized** and **pass `--force` when any step is still pending**.
+Stamp per-machine setup-state as complete, then report. `setup finalize` refuses to finalize while any step is pending (it returns non-zero without stamping `completed_at`), and a first adopter reaches here with every step in `completed_steps` and `completed_at` stamped (their `/gaia-init` recorded each per-machine step through the shared reference and ran a plain `gaia setup finalize`), so the short-circuit below applies; this phase must both **short-circuit when already finalized** and **pass `--force` when any other run still has a step pending**.
 
 First, defensively clear the setup sentinel, unconditionally and before the short-circuit below, so a Phase 3.5 commit that aborted between creating and removing it cannot leave main-branch protection suspended on this machine:
 

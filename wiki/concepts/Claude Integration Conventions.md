@@ -29,14 +29,14 @@ See [[modules/Claude Integration|the modules page]] for the inventory of current
 
 ### Wiki vendor relationship
 
-GAIA does **not** vendor the `claude-obsidian` plugin into the repo. The plugin is installed **globally** via the Claude Code plugin marketplace (marketplace clone at `~/.claude/plugins/marketplaces/agricidaniel-claude-obsidian/`, installed cache under `~/.claude/plugins/cache/agricidaniel-claude-obsidian/claude-obsidian/<version>/`). `.claude/commands/setup-gaia.md` owns the plugin baseline. Adopters get it the moment they have Claude Code installed; nothing under `wiki/` or `.claude/` in this repo carries plugin source code.
+GAIA does **not** vendor the `claude-obsidian` plugin into the repo. The plugin installs at **project scope** through the per-machine `claude plugin install ... --scope project`, enabled for the team by `enabledPlugins` in `.claude/settings.json`, so its skills load in sessions of this project and not of every project on the machine. The marketplace is registered at user scope by the per-machine `marketplace add` (clone at `~/.claude/plugins/marketplaces/agricidaniel-claude-obsidian/`, installed cache under `~/.claude/plugins/cache/agricidaniel-claude-obsidian/claude-obsidian/<version>/`) and declared for the repository by `extraKnownMarketplaces` in `.claude/settings.json`, which registers it without installing the plugin. `.claude/skills/gaia/references/setup/per-machine.md` owns the plugin baseline. Adopters get it when `/gaia-init` or `/setup-gaia` runs the per-machine install; nothing under `wiki/` or `.claude/` in this repo carries plugin source code.
 
 What this means in practice:
 
 - **Wiki mode** is declared as `Mode: B (Codebase) + E (Research)` in `wiki/README.md`. The string matches upstream's `skills/wiki/references/modes.md` catalog so any agent reading the upstream skill picks the right scaffolding rules. Mode is a documentation contract; there is no runtime toggle in the plugin.
 - **Wiki hooks are GAIA-owned** (in `.claude/hooks/wiki-*.sh`), not delegated to the upstream plugin's `hooks.json`. Reasons: the 2.x plugin does not auto-commit wiki edits, and no GAIA hook commits them either; the plugin's own session-context load stays off (`CLAUDE_OBSIDIAN_SESSION_CONTEXT` stays unset) and its vault discovery fails closed on GAIA's layout.
 - **DragonScale is opt-out.** The plugin ships an optional memory layer (fold operator, deterministic addresses, semantic tiling, boundary-first autoresearch) that GAIA declines. See [[DragonScale Opt-Out]] for the per-mechanism reasoning and the opt-in path for a project that wants it.
-- **Plugin upgrades require uninstall + install.** A plain `claude plugin marketplace update` does not re-pin the cache. Run `claude plugin list`, then `claude plugin uninstall <the id it shows>` (an older install is registered under an older id, so the id comes from the list), then `claude plugin marketplace add AgriciDaniel/claude-obsidian` and `claude plugin install claude-obsidian@agricidaniel-claude-obsidian` to flip `installPath` to the new version. This is a Claude Code plugin CLI quirk worth remembering when upgrading the plugin. `.claude/commands/setup-gaia.md` owns the baseline version.
+- **Plugin upgrades require uninstall + install.** A plain `claude plugin marketplace update` does not re-pin the cache. Run `claude plugin list`, then `claude plugin uninstall <the id it shows> --scope project` (an older install is registered under an older id, so the id comes from the list), then `claude plugin marketplace add AgriciDaniel/claude-obsidian` and `claude plugin install claude-obsidian@agricidaniel-claude-obsidian --scope project` to flip `installPath` to the new version. This is a Claude Code plugin CLI quirk worth remembering when upgrading the plugin. `.claude/skills/gaia/references/setup/per-machine.md` owns the baseline version.
 - **Python 3.11+ is a prerequisite.** The plugin's hooks run through `python3` on `PATH`, so a machine without Python 3.11 or newer cannot run them.
 
 ## 2. Rules vs. skills vs. hooks: decision criteria
@@ -162,7 +162,7 @@ See root `CLAUDE.md` § Wiki for the authoritative directive.
 
 ## 12. React Doctor (per-machine install)
 
-Do **not** vendor `react-doctor` into the repo. Do not symlink it. Install per-machine via the upstream install script, invoked by `/gaia-init`.
+Do **not** vendor `react-doctor` into the repo. Do not symlink it. Install per-machine with `.gaia/scripts/install-react-doctor.sh`, which `/gaia-init` and `/setup-gaia` run through `.claude/skills/gaia/references/setup/per-machine.md`. The skill lands in `frontend/.claude/skills/react-doctor/`.
 
 The `code-review-audit` agent dispatches react-doctor **in parallel** with its specialist subagents. `.claude/agents/code-audit-frontend.md` owns the command and its scope flag.
 

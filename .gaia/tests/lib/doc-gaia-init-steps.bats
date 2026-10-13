@@ -3,16 +3,25 @@
 # Doc-conformance suite for /gaia-init (.claude/commands/gaia-init.md): the
 # command asks no CI-intent or wiki-mode question, writes the project settings
 # through `gaia init write-project-config`, and its resume step list names the
-# same steps, in the same order, as the CLI's STEP_ORDER.
+# same steps, in the same order, as the CLI's STEP_ORDER. It also pins the
+# shared-reference shape: the command reads exactly the per-machine and
+# isolation-question references, lists them in its references block, and the
+# setup command reads both too (finalize deletes only this command); it has no
+# lettered sub-steps; and it finalizes with the plain setup finalize call.
 #
 # Forbidden tokens that the repo-wide absence guard also forbids are built at
 # runtime, so this file never carries the literal. Each absence check is proven
 # able to fail: a scratch copy of the command gets the forbidden content
 # re-inserted and the check must flag it.
 
+# The exact opening sentence of a command's references block.
+REFERENCES_OPENING='This command reads these references, all under `.claude/skills/gaia/references/setup/`. Read one only when a "Read ... now" line sends you there, and then read the whole file:'
+
 setup() {
   REPO_ROOT="$(cd "$BATS_TEST_DIRNAME/../../.." && pwd)"
   INIT_MD="$REPO_ROOT/.claude/commands/gaia-init.md"
+  SETUP_MD="$REPO_ROOT/.claude/commands/setup-gaia.md"
+  REFERENCES_DIRECTORY="$REPO_ROOT/.claude/skills/gaia/references/setup"
   STATE_TS="$REPO_ROOT/.gaia/cli/src/init/util/state.ts"
   FROZEN_STEPS="strip-branding configure-i18n configure-data-layer rename wire-statusline bootstrap-env write-project-config finalize"
 }
@@ -175,4 +184,176 @@ data_layer_gaps() {
   sed 's/^### Q7, TanStack Query (asked alone)/Pick SSR or SPA.\n&/' "$INIT_MD" >"$scratch"
   run bash -c "awk '/^## Step 2:/{on=1} /^## Step 3:/{on=0} on' '$scratch' | grep -E 'SSR|SPA|prerender'"
   [ "$status" -eq 0 ]
+}
+
+# ---------------------------------------------------------------------------
+# Shared references only
+# ---------------------------------------------------------------------------
+
+SHARED_REFERENCES="isolation-question.md per-machine.md"
+
+# references_block_names <file>: the basenames of the bullets directly below
+# the references block's exact opening sentence, sorted, one per line. Fails
+# loudly when the opening sentence is absent.
+references_block_names() {
+  local names
+  names="$(OPENING="$REFERENCES_OPENING" awk '
+    $0 == ENVIRON["OPENING"] { found = 1; next }
+    found && /^- `[^`]+\.md`: / {
+      name = $0
+      sub(/^- `/, "", name)
+      sub(/`:.*$/, "", name)
+      print name
+      next
+    }
+    found { exit }
+    END { if (!found) exit 2 }
+  ' "$1")" || {
+    echo "the references block opening sentence is absent from $1" >&2
+    return 1
+  }
+  sort <<<"$names"
+}
+
+# check_shared_references_only <init> <setup-command> <directory>: the setup
+# reference paths <init> names are exactly the shared ones, they exist, its
+# references block lists exactly those, and the setup command names each too.
+check_shared_references_only() {
+  local init="$1" setup_command="$2" directory="$3" expected named block name
+  expected="$(tr ' ' '\n' <<<"$SHARED_REFERENCES" | sort)"
+  named="$(grep -oE '\.claude/skills/gaia/references/setup/[A-Za-z0-9._-]+\.md' "$init" | sed 's#.*/##' | sort -u)"
+  [ "$named" = "$expected" ] || {
+    echo "the init command names setup references other than the shared ones:" >&2
+    diff <(printf '%s\n' "$expected") <(printf '%s\n' "$named") >&2 || true
+    return 1
+  }
+  for name in $SHARED_REFERENCES; do
+    [ -f "${directory}/${name}" ] || {
+      echo "a shared reference is absent: ${name}" >&2
+      return 1
+    }
+    grep -qF -- ".claude/skills/gaia/references/setup/${name}" "$setup_command" || {
+      echo "the setup command no longer names ${name}" >&2
+      return 1
+    }
+  done
+  block="$(references_block_names "$init")" || return 1
+  [ "$block" = "$expected" ] || {
+    echo "the init references block differs from the shared references:" >&2
+    diff <(printf '%s\n' "$expected") <(printf '%s\n' "$block") >&2 || true
+    return 1
+  }
+}
+
+@test "gaia-init.md reads only the references setup-gaia.md also reads" {
+  check_shared_references_only "$INIT_MD" "$SETUP_MD" "$REFERENCES_DIRECTORY"
+}
+
+@test "the shared-reference check fails when the init command names a third reference" {
+  local scratch="$BATS_TEST_TMPDIR/gaia-init.scratch.md"
+  cp "$INIT_MD" "$scratch"
+  printf '\nRead `.claude/skills/gaia/references/setup/sandbox.md` now, the whole file.\n' >>"$scratch"
+  run check_shared_references_only "$scratch" "$SETUP_MD" "$REFERENCES_DIRECTORY"
+  [ "$status" -ne 0 ]
+  grep -qF 'other than the shared ones' <<<"$output"
+}
+
+@test "the shared-reference check fails when the setup command stops naming isolation-question.md" {
+  local scratch="$BATS_TEST_TMPDIR/setup-gaia.scratch.md"
+  sed 's#references/setup/isolation-question\.md#references/setup/gone.md#g' "$SETUP_MD" >"$scratch"
+  cmp -s "$SETUP_MD" "$scratch" && return 1
+  run check_shared_references_only "$INIT_MD" "$scratch" "$REFERENCES_DIRECTORY"
+  [ "$status" -ne 0 ]
+  grep -qF 'no longer names isolation-question.md' <<<"$output"
+}
+
+@test "the shared-reference check fails when the references block drops a bullet" {
+  local scratch="$BATS_TEST_TMPDIR/gaia-init.scratch.md"
+  grep -v -- '^- `isolation-question.md`: ' "$INIT_MD" >"$scratch" || true
+  cmp -s "$INIT_MD" "$scratch" && return 1
+  run check_shared_references_only "$scratch" "$SETUP_MD" "$REFERENCES_DIRECTORY"
+  [ "$status" -ne 0 ]
+  grep -qF 'references block differs' <<<"$output"
+}
+
+@test "the shared-reference check fails loudly when the opening sentence is reworded" {
+  local scratch="$BATS_TEST_TMPDIR/gaia-init.scratch.md"
+  sed 's/^This command reads these references/This command loads these references/' "$INIT_MD" >"$scratch"
+  cmp -s "$INIT_MD" "$scratch" && return 1
+  run check_shared_references_only "$scratch" "$SETUP_MD" "$REFERENCES_DIRECTORY"
+  [ "$status" -ne 0 ]
+  grep -qF 'opening sentence is absent' <<<"$output"
+}
+
+@test "the shared-reference check fails when a shared reference file is absent" {
+  local directory="$BATS_TEST_TMPDIR/references"
+  mkdir -p "$directory"
+  cp "$REFERENCES_DIRECTORY/per-machine.md" "$directory/"
+  run check_shared_references_only "$INIT_MD" "$SETUP_MD" "$directory"
+  [ "$status" -ne 0 ]
+  grep -qF 'a shared reference is absent' <<<"$output"
+}
+
+# ---------------------------------------------------------------------------
+# No lettered sub-steps
+# ---------------------------------------------------------------------------
+
+# lettered_substeps <file>: print every step heading numbered with a letter
+# suffix (for example a "10b." sub-step).
+lettered_substeps() {
+  grep -nE '^#{2,4} [0-9]+[a-z]\.' "$1" || true
+}
+
+@test "gaia-init.md has no lettered sub-step headings" {
+  run lettered_substeps "$INIT_MD"
+  [ "$status" -eq 0 ]
+  [ -z "$output" ]
+}
+
+@test "the lettered sub-step check flags a re-inserted sub-step heading" {
+  local scratch="$BATS_TEST_TMPDIR/gaia-init.scratch.md"
+  cp "$INIT_MD" "$scratch"
+  printf '\n### 10b. Overwrite\n' >>"$scratch"
+  run lettered_substeps "$scratch"
+  [ "$status" -eq 0 ]
+  [ -n "$output" ]
+}
+
+# ---------------------------------------------------------------------------
+# Plain finalize
+# ---------------------------------------------------------------------------
+
+# check_plain_finalize <file>: the file carries the plain setup finalize call
+# and never the forced form.
+check_plain_finalize() {
+  grep -qF -- '.gaia/cli/gaia setup finalize' "$1" || {
+    echo "the plain setup finalize call is absent" >&2
+    return 1
+  }
+  if grep -qF -- 'setup finalize --force' "$1"; then
+    echo "the forced setup finalize call is present" >&2
+    return 1
+  fi
+}
+
+@test "gaia-init.md finalizes with the plain setup finalize call" {
+  check_plain_finalize "$INIT_MD"
+}
+
+@test "the plain finalize check fails on the forced form put back" {
+  local scratch="$BATS_TEST_TMPDIR/gaia-init.scratch.md"
+  cp "$INIT_MD" "$scratch"
+  printf '\n.gaia/cli/gaia setup finalize --force\n' >>"$scratch"
+  run check_plain_finalize "$scratch"
+  [ "$status" -ne 0 ]
+  grep -qF 'forced setup finalize' <<<"$output"
+}
+
+@test "the plain finalize check fails when the plain call is removed" {
+  local scratch="$BATS_TEST_TMPDIR/gaia-init.scratch.md"
+  grep -vF -- '.gaia/cli/gaia setup finalize' "$INIT_MD" >"$scratch" || true
+  cmp -s "$INIT_MD" "$scratch" && return 1
+  run check_plain_finalize "$scratch"
+  [ "$status" -ne 0 ]
+  grep -qF 'plain setup finalize call is absent' <<<"$output"
 }
