@@ -95,13 +95,31 @@ case "$args" in
     body_file="$(printf '%s\n' "$@" | sed -n '/^--body-file$/{n;p;}')"
     count=0
     [ -f "$stub/open.json" ] && count="$(jq 'length' "$stub/open.json")"
+    [ -f "$stub/created.json" ] || echo '[]' >"$stub/created.json"
+    jq -c --rawfile body "$body_file" --argjson number "$((101 + count))" '. + [{number: $number, body: $body}]' \
+      "$stub/created.json" >"$stub/created.next"
+    mv "$stub/created.next" "$stub/created.json"
+    # create-invisible models the label-filtered list lagging behind the write.
     if [ ! -f "$stub/create-invisible" ]; then
       [ -f "$stub/open.json" ] || echo '[]' >"$stub/open.json"
       jq -c --rawfile body "$body_file" --argjson number "$((101 + count))" '. + [{number: $number, body: $body}]' \
         "$stub/open.json" >"$stub/open.next"
       mv "$stub/open.next" "$stub/open.json"
     fi
-    echo "https://github.com/owner/name/issues/$((101 + count))"
+    if [ -f "$stub/create-output" ]; then
+      cat "$stub/create-output"
+    else
+      echo "https://github.com/owner/name/issues/$((101 + count))"
+    fi
+    ;;
+  "issue view"*)
+    [ -f "$stub/view-fail" ] && exit 1
+    number="$(printf '%s\n' "$@" | sed -n '3p')"
+    if [ -f "$stub/view-body" ]; then
+      jq -n -c --rawfile body "$stub/view-body" '{body: $body}'
+    else
+      jq -c --argjson number "$number" '.[] | select(.number == $number) | {body}' "$stub/created.json" 2>/dev/null
+    fi
     ;;
   "label list"*)
     cat "$stub/labels" 2>/dev/null || printf 'tech-debt\nseverity:major\nseverity:minor\nseverity:critical\naudience:adopter\n'
@@ -123,7 +141,7 @@ make_finding() {
 
 # reset_state: a clean stub log and record directory between loop iterations.
 reset_state() {
-  rm -f "$STUB/log" "$OUTCOMES" "$STUB/open.json" "$STUB/closed.json"
+  rm -f "$STUB/log" "$OUTCOMES" "$STUB/open.json" "$STUB/closed.json" "$STUB/created.json"
   rm -rf "$WORK_REPO/.gaia/local" "$BATS_TEST_TMPDIR/run"
 }
 
@@ -446,12 +464,38 @@ CASES
   true
 }
 
-@test "a create whose key the re-query cannot find is failed with exit 1" {
+@test "a create the label-filtered list does not show yet still verifies by its number" {
   touch "$STUB/create-invisible"
   run_file
+  [ "$status" -eq 0 ]
+  [ "$output" = "filed 101" ]
+  [ "$(jq -r '.issue' "$OUTCOMES")" = 101 ]
+  grep -q -e '^issue view 101 --repo owner/name' "$STUB/log"
+}
+
+@test "a create whose issue cannot be read back is failed as verify-after-file-fetch" {
+  touch "$STUB/view-fail"
+  run_file
   [ "$status" -eq 1 ]
-  [ "$output" = "failed verify-after-file" ]
+  [ "$output" = "failed verify-after-file-fetch" ]
   [ "$(jq -r '.outcome' "$OUTCOMES")" = failed ]
+}
+
+@test "a created issue whose body lacks the key is failed as verify-after-file-missing" {
+  printf 'no key here\n' >"$STUB/view-body"
+  run_file
+  [ "$status" -eq 1 ]
+  [ "$output" = "failed verify-after-file-missing" ]
+  [ "$(jq -r '.outcome' "$OUTCOMES")" = failed ]
+}
+
+@test "a create that prints no issue url is failed as verify-after-file-number" {
+  printf 'created\n' >"$STUB/create-output"
+  run_file
+  [ "$status" -eq 1 ]
+  [ "$output" = "failed verify-after-file-number" ]
+  grep -q '^issue view' "$STUB/log" && return 1
+  true
 }
 
 @test "a create that itself fails on a present backend writes failed" {
