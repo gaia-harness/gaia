@@ -15,6 +15,7 @@ export const RULES_FIXTURES: FixtureMap = {
     red: () => ({
       files: {
         'CLAUDE.md': 'Project rules.\n',
+        'docs/index.md': '# Docs\n',
         [RULE]: 'Read `docs/missing.md` first.\n',
       },
       git: true,

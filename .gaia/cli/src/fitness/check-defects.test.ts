@@ -227,6 +227,7 @@ const hostileProject = (secret: string): FixtureProject => ({
   files: {
     'CLAUDE.md':
       '# Project\n\nImports follow.\n\n@docs/missing-import.md\n\nSee `docs/missing-path.md` for detail.\n',
+    'docs/index.md': '# Docs\n',
   },
   git: true,
   settingsJson: {

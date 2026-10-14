@@ -228,7 +228,7 @@ export const AUTHORING_RULES: readonly RuleDefinition[] = [
     category: 'authoring',
     check: linkResolvesCheck,
     detection:
-      'A markdown link or backticked relative path inside the skill directory (a repo-relative path for commands and agents) that does not exist.',
+      'A markdown link outside inline code, or a backticked relative path whose first folder exists, inside the skill directory (a repo-relative path for commands and agents; a reference qualified by another skill name resolves in that skill) that does not exist.',
     ruleId: 'authoring.reference.link.resolves',
     severity: 'warning',
   },
