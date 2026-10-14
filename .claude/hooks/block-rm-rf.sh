@@ -17,7 +17,7 @@
 #   - rm -rf .*  (dotfile glob, incl. the .[!.]* / ..?* / {.,}* spellings)
 #   - rm -rf .git
 #   - rm -rf .claude (the Claude config: hooks, skills, agents, rules, settings)
-#   - rm -rf node_modules (anywhere, must use pnpm clean / explicit path)
+#   - rm -rf node_modules (anywhere)
 #
 # Allowed (whitelist of safe scratch paths):
 #   The safe-scratch set is declared in .gaia/state-registry.json's

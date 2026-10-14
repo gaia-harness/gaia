@@ -44,7 +44,7 @@ import type {CodifyTrigger} from './triggers.js';
 
 const HELP_TEXT = `Usage: gaia codify-tally
 
-  Tallies recurring code-review-audit findings across the rolling 90-day
+  Tallies recurring Code Audit Team findings across the rolling 90-day
   merged-PR window and prints the candidate list as JSON. A class is a
   candidate when it recurs across >= 3 distinct PRs at any severity, no
   promoted rule covers it, and the decline ledger does not suppress it. A

@@ -24777,7 +24777,7 @@ var evaluateTriggers = ({
 // src/codify/tally.ts
 var HELP_TEXT3 = `Usage: gaia codify-tally
 
-  Tallies recurring code-review-audit findings across the rolling 90-day
+  Tallies recurring Code Audit Team findings across the rolling 90-day
   merged-PR window and prints the candidate list as JSON. A class is a
   candidate when it recurs across >= 3 distinct PRs at any severity, no
   promoted rule covers it, and the decline ledger does not suppress it. A
@@ -42661,8 +42661,8 @@ var HELP_TEXT47 = `Usage: gaia update-deps run --emit-updates <path>
 
   Discover outdated packages via \`pnpm outdated --json\`, classify each
   into Wave A (minor/patch, batched) or Wave B (major, per-group), and
-  write the result as JSON to <path>. Used by the dependabot workflow to
-  split major bumps into separate PRs before invoking the LLM upgrade.
+  write the result as JSON to <path>. Used by the /update-deps skill to
+  discover and group the updates before the LLM-driven upgrade.
 
   --emit-updates <path>   Required. JSON file to write. Parent dirs are
                           created on demand.
@@ -48286,7 +48286,7 @@ var HELP_TEXT72 = `Usage: gaia <subcommand> [args]
   update merge-workspace|merge-audit-ci|merge-region|regen-regions
   update-deps run|decline|global-tools|advisories|advisory-landed|dismiss-alert|write-security-cache|check-security-override
   init strip-branding|configure-i18n|configure-data-layer|rename|wire-statusline|bootstrap-env|write-project-config|finalize|resume
-  setup status|mark-step|finalize|detect-remote|warn-existing-tools|check-admin|enable-delete-branch|write-isolation-policy|configure-dependabot-alerts
+  setup status|mark-step|finalize|detect-remote|warn-existing-tools|check-admin|enable-delete-branch|write-isolation-policy|configure-dependabot-alerts|write-sandbox-recommendation|record|drift
   sandbox detect|apply|record|status
   ping --event <init|setup|update> [--field value ...]
   residue-tally [--count-only]

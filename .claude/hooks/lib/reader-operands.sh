@@ -14,9 +14,8 @@
 # Prints, one per line, every token in one already-split command segment that a
 # recognized reader would open. Prints nothing when the segment's command word
 # is not a reader and the segment carries no read redirect. Callers split the
-# full command into segments themselves, because the two hooks disagree about
-# what else a segment means: only the dotenv guard treats a bare `env` as a
-# process-environment dump, and that judgement is not this library's.
+# full command into segments themselves, because the bare-env dump judgement
+# belongs to block-sensitive-read.sh, not this library.
 #
 # WHY grep NEEDS ITS OWN ARM. In `grep PATTERN FILE` the first operand is a
 # pattern, not a path. The blanket "every token is a candidate" treatment the

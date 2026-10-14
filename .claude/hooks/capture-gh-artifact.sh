@@ -9,8 +9,7 @@
 # artifact by direct pass-through instead and reads no breadcrumb; see
 # .gaia/scripts/gh-artifact-lib.sh for the full rationale.
 #
-# Fires on every Bash tool call in every session: stay cheap, degrade
-# silently, never emit a permission decision, never write to stdout, always
+# Degrade silently, never emit a permission decision, never write to stdout, always
 # exit 0.
 
 set -euo pipefail
