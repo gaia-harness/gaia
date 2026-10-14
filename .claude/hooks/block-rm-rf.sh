@@ -695,8 +695,16 @@ main() {
         # sweep it up, and they name it in their own deny text, so the direct
         # spelling of it denies here rather than being the one shape that walks past
         # a guard advertising the target.
-        .claude|./.claude|.claude/*|./.claude/*)
+        .claude|./.claude|.claude/|./.claude/|'.claude/*'|'./.claude/*')
           deny "BLOCKED: rm -rf of .claude is forbidden, it removes the hooks, skills, agents, and settings."
+          ;;
+        # A path inside `.claude` stays denied: a flagged rm of `.claude/hooks` or
+        # `.claude/skills` is the same loss one level down, and a narrower arm would
+        # need a list of which subpaths matter. The text differs because the
+        # whole-directory one is false for a single file, and it names the spelling
+        # that passes, so a documented cleanup step has a next command.
+        .claude/*|./.claude/*)
+          deny "BLOCKED: rm or git rm with -r or -f under .claude/ is forbidden, it can remove hooks, skills, agents, or settings. Remove one exact file with a flagless 'rm <file>', or 'git rm -q -- <file>' when it is tracked."
           ;;
         node_modules|./node_modules|*/node_modules|node_modules/*)
           deny "BLOCKED: rm -rf of node_modules is forbidden, use 'pnpm store prune' or remove deliberately."
