@@ -56,10 +56,11 @@
 #
 # SIZE IN BYTES is the better proxy a pure discovery pass can compute, and it
 # is a proxy rather than an identity. Timed one file at a time across
-# SCRIPTS_TESTS_DIRECTORY it predicts runtime at r=0.43 over that group as it stands
-# and at r=0.73 with SCRIPTS_COST_OUTLIERS set aside, so it is sound for the
-# ordinary members and blind to exactly the files that list names. Anchoring
-# those is what covers the gap; the weight itself stays bytes for every file.
+# SCRIPTS_TESTS_DIRECTORY it tracks runtime only loosely: right on average, and
+# wrong for a suite whose cost lives in a command it runs per test rather than
+# in its own text. Where such a suite lands decides the slowest leg, so
+# anchoring the ones SCRIPTS_COST_OUTLIERS names is what covers the gap; the
+# weight itself stays bytes for every file.
 #
 # Size is read from the tree at discovery time, which is what keeps this pure
 # discovery. A checked-in table of per-file runtimes would be a better proxy
@@ -93,10 +94,12 @@
 # the repo's detector for it.
 set -euo pipefail
 
-HOOKS_DIRECTORY="${HOOKS_DIRECTORY:-.gaia/tests/hooks}"
-# Named as a constant as well as a default because SCRIPTS_COST_OUTLIERS below
-# describes THIS directory's contents: comparing the resolved seam against it
-# is what tells a stale entry apart from a seam a caller has pointed elsewhere.
+# Each weighted group's directory is named as a constant as well as a default
+# because its COST_OUTLIERS list below describes THAT directory's contents:
+# comparing the resolved seam against it is what tells a stale entry apart from
+# a seam a caller has pointed elsewhere.
+HOOKS_DIRECTORY_DEFAULT='.gaia/tests/hooks'
+HOOKS_DIRECTORY="${HOOKS_DIRECTORY:-$HOOKS_DIRECTORY_DEFAULT}"
 SCRIPTS_TESTS_DIRECTORY_DEFAULT='.gaia/scripts/tests'
 SCRIPTS_TESTS_DIRECTORY="${SCRIPTS_TESTS_DIRECTORY:-$SCRIPTS_TESTS_DIRECTORY_DEFAULT}"
 AUDIT_TESTS_DIRECTORY="${AUDIT_TESTS_DIRECTORY:-.github/audit/tests}"
@@ -119,39 +122,43 @@ STATUSLINE_DIRECTORY="${STATUSLINE_DIRECTORY:-.gaia/tests/statusline}"
 # measurements and why the groups stop where they do.
 PINNED_HOOKS=(local-janitor.bats)
 
-# The scripts group's cost outliers: suites whose runtime lives in what they
-# INVOKE rather than in what they contain, which is the one thing a byte weight
-# cannot see. Each of these drives a whole-tree gate per assertion, so its cost
-# tracks the size of the tree it sweeps and not the size of its own text, and
-# the weight below reads it as an ordinary file of that many bytes.
+# The scripts group's anchors: suites given a bucket of their own before the
+# byte walk fills the rest, because where the walk would put them decides the
+# slowest leg. Each spends its time in a command it runs per test rather than
+# in its own text, so a byte weight misjudges it: shell-lint.bats re-drives a
+# whole-tree gate per assertion, so its cost tracks the tree it sweeps and its
+# bytes read as a light file; audit-loop-eval.bats runs the evaluator CLI
+# against a fixture repository per test, so it is among the heaviest suites in
+# the group whichever way it is weighed.
 #
-# The drift is measured, not asserted. Timed one file at a time across the
-# whole group, a file's size predicts its runtime at r=0.43 with these two in
-# and at r=0.73 with them out, so the proxy is sound for the group's other
-# members and wrong for exactly these. They also dominate: between them they
-# carry better than a third of the group's wall clock, and the next suite
-# behind them costs under a quarter of either. Those are shares rather than
-# counts on purpose, since the group gains suites and a count taken once goes
-# quietly wrong; `wiki/decisions/Sharded CI Test Matrix.md` carries the run.
-#
-# What that combination breaks is the partition, not the estimate. Weighed by
-# bytes these two are unremarkable, so which bucket each lands in is decided by
-# the packing of everything around them, and a tree change anywhere in the
-# group can move them together. That draw is what reds the leg: co-located they
-# exceed .github/workflows/audit-ci-tests.yml's per-shard cap and the job is
-# cancelled with no failing assertion. Naming them here holds them in distinct
-# buckets so no draw can produce it, which is what splitting one of them into
-# halves could not do on its own -- a split divides the text, and the cost
-# stayed with the half that kept the whole-tree runs.
+# What a bad draw breaks is the partition, not the estimate. Left to the walk,
+# which bucket each lands in is decided by the packing of everything around
+# them, and a tree change anywhere in the group can stack them with the other
+# heavy suites onto one leg. That leg then gates the whole workflow, and past
+# .github/workflows/audit-ci-tests.yml's per-shard cap the job is cancelled
+# with no failing assertion. Anchoring holds them in distinct buckets and lets
+# the walk pack the rest around them, which splitting a suite into halves
+# could not do on its own: a split divides the text, and the cost stays with
+# the half that kept the per-test runs.
 #
 # Membership rule for a future maintainer: a suite belongs here when its cost
-# is dominated by an external command it runs per test, and it does NOT belong
-# here merely for being slow or large. A suite left out weighs its bytes, which
-# is today's behaviour and degrades no further; the ordering below decides
-# which bucket each named suite anchors, so keep the list shorter than
-# SCRIPTS_IDS. `wiki/decisions/Sharded CI Test Matrix.md` carries the
-# measurements.
-SCRIPTS_COST_OUTLIERS=(shell-lint.bats)
+# is dominated by an external command it runs per test, or when it is heavy
+# enough that anchoring it measurably balances the group, replayed against
+# per-file timings from a CI run. It does NOT belong here merely for being slow
+# or large. A suite left out weighs its bytes, which degrades no further than
+# today; the ordering below decides which bucket each named suite anchors, so
+# keep the list shorter than SCRIPTS_IDS and leave the walk a free bucket.
+# `wiki/decisions/Sharded CI Test Matrix.md` carries the measurements.
+SCRIPTS_COST_OUTLIERS=(audit-loop-eval.bats shell-lint.bats)
+
+# The hooks group's cost outliers, under the same membership rule: one
+# classifies every tracked path in a single test, one builds a fixture
+# repository per case, one runs real git pushes, so a small file can hold more
+# minutes than a large one. Weighed by bytes alone they can all draw onto one
+# leg and make it the slowest of the matrix; anchored, each takes a bucket of
+# its own.
+# `wiki/decisions/Sharded CI Test Matrix.md` carries the measurements.
+HOOKS_COST_OUTLIERS=(audit-scope-routing-parity.bats audit-loop-bound.bats githooks-pre-push-e2e.bats)
 
 # The two weighted groups, each listed once and in matrix order. Adding a shard
 # to a group is a one-word edit here: SHARD_IDS is built from these rather than
@@ -386,9 +393,9 @@ greedy_bucket() {
   done < <(weighted_list "$directory" "$mode")
 }
 
-# Fail closed when SCRIPTS_COST_OUTLIERS names a file $1's discovery does not
-# return. A stale entry is silent everywhere else: the suite it meant to hold
-# apart is renamed or gone, anchoring quietly stops applying to it, every shard
+# Fail closed when a COST_OUTLIERS list, its basenames passed from $2 on, names
+# a file $1's discovery does not return. A stale entry is silent everywhere
+# else: the suite it meant to hold apart is renamed or gone, anchoring quietly stops applying to it, every shard
 # still exits 0 with a whole partition, and the co-location it exists to
 # prevent is back with nothing saying so. That is the same silent-manifest
 # failure this script's discovery design rejects, so it is an error here rather
@@ -396,13 +403,14 @@ greedy_bucket() {
 #
 # Checked at the configuration boundary rather than inside the assignment walk,
 # and only against the default seam. The list describes one real directory; a
-# caller that points SCRIPTS_TESTS_DIRECTORY at a fixture tree is not carrying a
+# caller that points a group's directory at a fixture tree is not carrying a
 # stale list, it is asking about a directory the list was never about, and the
 # anchors are simply vacuous there. Reading a seam override as a stale list
 # would fail every seam-based test in this script's own guard suite.
 require_anchors_present() {
   local directory="$1" base found bats_path
-  for base in ${SCRIPTS_COST_OUTLIERS[@]+"${SCRIPTS_COST_OUTLIERS[@]}"}; do
+  shift
+  for base in "$@"; do
     found=0
     while IFS= read -r bats_path || [ -n "$bats_path" ]; do
       if [ "${bats_path##*/}" = "$base" ]; then
@@ -422,12 +430,18 @@ files_for_shard() {
   case "$1" in
     hooks-1) files_hooks1 ;;
     hooks-*)
-      greedy_bucket "$HOOKS_DIRECTORY" "$1" pinned "" \
+      if [ "$HOOKS_DIRECTORY" = "$HOOKS_DIRECTORY_DEFAULT" ]; then
+        require_anchors_present "$HOOKS_DIRECTORY" \
+          ${HOOKS_COST_OUTLIERS[@]+"${HOOKS_COST_OUTLIERS[@]}"}
+      fi
+      greedy_bucket "$HOOKS_DIRECTORY" "$1" pinned \
+        "${HOOKS_COST_OUTLIERS[*]+${HOOKS_COST_OUTLIERS[*]}}" \
         ${HOOKS_GREEDY_IDS[@]+"${HOOKS_GREEDY_IDS[@]}"}
       ;;
     scripts-*)
       if [ "$SCRIPTS_TESTS_DIRECTORY" = "$SCRIPTS_TESTS_DIRECTORY_DEFAULT" ]; then
-        require_anchors_present "$SCRIPTS_TESTS_DIRECTORY"
+        require_anchors_present "$SCRIPTS_TESTS_DIRECTORY" \
+          ${SCRIPTS_COST_OUTLIERS[@]+"${SCRIPTS_COST_OUTLIERS[@]}"}
       fi
       greedy_bucket "$SCRIPTS_TESTS_DIRECTORY" "$1" all \
         "${SCRIPTS_COST_OUTLIERS[*]+${SCRIPTS_COST_OUTLIERS[*]}}" \
