@@ -4,7 +4,7 @@ status: active
 priority: 2
 date: 2026-08-13
 created: 2026-08-13
-updated: 2026-10-04
+updated: 2026-10-14
 tags: [decision, ci, performance, github-actions, bats]
 ---
 
@@ -63,6 +63,8 @@ Two properties of the correlation above are what let that happen, and neither is
 Splitting one of them along a seam it already has does not move that cost, which is the finding that matters here. A split divides the text, and the whole-tree runs stay with whichever half keeps them: the two halves come out around 287 and 15 seconds on a hand run rather than at any even division, and the larger half by bytes is the cheaper one by minutes. What a split does change is how many files the partition has to place, and placing them is where the failure was. Weighed by bytes these suites are unremarkable, so which bucket each takes is decided by the packing of everything around it, and a tree change anywhere in the group can put two of them on one leg. Co-located they exceed the per-shard cap, the job is cancelled with no failing assertion, and the aggregator reds on a cancelled dependency rather than on anything that ran.
 
 So the sharder anchors them instead: each named outlier takes a bucket of its own before the byte walk fills the rest, which makes the collision unreachable rather than merely unlikely. Measured one file at a time over the whole scripts directory, the group moves from 535 / 257 / 592 seconds to 519 / 529 / 336, and the arrangement that matters is the one it removes: the same walk was free to produce an 830-second shard, and did. The cap is not the lever and never was. A fourth scripts shard is not needed while the outliers are held apart, and it would not have prevented the collision, since a wider byte walk still places them by weight. The lever that remains, if the group grows back into the cap, is a suite's own runtime: the heavier anchor spends most of its total re-driving whole-tree gates one assertion at a time.
+
+The hooks group carries the same class and the same anchor. One suite classifies every tracked path in a single test, one builds a fixture repository per case, and one runs real git pushes, so each costs far more than its bytes predict. Weighed by bytes alone the walk draws all three onto one leg, which then runs 688 seconds of bats against 293 and 270 beside it, the slowest leg of the matrix. Anchored, each takes a bucket of its own, and the group measures 315 / 369 / 287 seconds on one CI run. Part of that gap is a fixture cost rather than placement. The jq-availability suite drives every hook with jq off PATH, and a shim built with one symlink fork per binary in the runner's `/usr/bin` costs several seconds per test; `.gaia/tests/helpers/path.sh` links each directory with one call, which holds the suite near 5 seconds rather than about 210.
 
 The hooks group stops at three shards even though a fourth would lower its own heaviest shard, because the gain does not survive either axis. On CI, splitting hooks further only exposes the next constraint underneath it, worth a few seconds unless the `lib` directory is split as well, and the pair costs three more legs. On a hand run it is worth less than that, for the reason the paragraph below gives.
 
