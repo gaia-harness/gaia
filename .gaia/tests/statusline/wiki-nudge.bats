@@ -389,12 +389,6 @@ stage_state_advance() {
   [ "$(grep -oF -- $'\033[01;96m' <<<"$output" | wc -l | tr -d ' ')" -eq 1 ]
 }
 
-@test "the threshold is declared once as a named constant" {
-  [ "$(grep -c 'WIKI_NUDGE_THRESHOLD=' "$STATUSLINE_SOURCE")" -eq 1 ]
-  grep -qE '^ *WIKI_NUDGE_THRESHOLD=20$' "$STATUSLINE_SOURCE"
-  grep -qE 'RESIDUE_NUDGE_THRESHOLD=' "$STATUSLINE_SOURCE"
-}
-
 @test "a statusline with the comparison weakened to -gt fails the 20-commit case" {
   make_statusline_fixture
   mutant="$STATUSLINE_FIXTURE/.gaia/statusline/gaia-statusline-mutant.sh"

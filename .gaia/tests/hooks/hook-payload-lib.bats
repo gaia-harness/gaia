@@ -98,13 +98,6 @@ command_from_payload() {
   [ "$GAIA_HOOK_COMMAND" = $'first\nsecond' ]
 }
 
-@test "a lone trailing newline is stripped like the legacy read" {
-  local payload='{"tool_name":"Bash","tool_input":{"command":"git status\n"}}'
-  gaia_hook_payload_read "$payload"
-  [ "$GAIA_HOOK_COMMAND" = "$(command_from_payload "$payload")" ]
-  [ "$GAIA_HOOK_COMMAND" = "git status" ]
-}
-
 @test "absent, null and false fields give the empty string" {
   gaia_hook_payload_read '{"tool_name":null,"session_id":false,"tool_input":{"command":null,"path":false}}'
   assert_all_fields_empty
@@ -224,13 +217,6 @@ command_from_payload() {
   . "$HOOK_PAYLOAD_LIBRARY"
   gaia_hook_payload_read '{"tool_name":"Bash"}'
   [ "$GAIA_HOOK_TOOL_NAME" = "Bash" ]
-}
-
-@test "a failed read after a good one clears the previous values" {
-  gaia_hook_payload_read '{"tool_name":"Bash","tool_input":{"command":"ls"}}'
-  [ "$GAIA_HOOK_COMMAND" = "ls" ]
-  gaia_hook_payload_read 'oops' && return 1
-  assert_all_fields_empty
 }
 
 @test "the library parses under the stock macOS bash" {

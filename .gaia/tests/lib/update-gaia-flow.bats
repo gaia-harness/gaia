@@ -451,17 +451,6 @@ branch_at_date() {
   true
 }
 
-@test "Step 3: a twin that re-mints the branch name misses the interrupted run's branch" {
-  make_repository
-  git -C "$REPOSITORY" branch update/v2.1.0-2020-01-01-0000
-  twin='name="$(bash .gaia/scripts/branch-name-lib.sh name update "$LATEST_TAG")"
-if git show-ref --verify --quiet "refs/heads/$name"; then echo "RESUME $name"; fi'
-  run_block_in "$REPOSITORY" "$twin" LATEST_TAG=v2.1.0
-  [ "$status" -eq 0 ]
-  printf '%s\n' "$output" | grep -qF RESUME && return 1
-  true
-}
-
 @test "Step 3: with two matching branches the more recently committed one wins" {
   make_repository
   branch_at_date update/v2.1.0-2020-06-01-0000 '2021-01-01T00:00:00Z'

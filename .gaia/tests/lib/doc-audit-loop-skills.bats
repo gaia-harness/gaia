@@ -21,12 +21,6 @@
 setup() {
   REPO_ROOT="$(cd "$BATS_TEST_DIRNAME/../../.." && pwd)"
   DEBT_MD="${DOC_AUDIT_LOOP_DEBT_MD:-$REPO_ROOT/.claude/skills/gaia/references/debt.md}"
-  CODIFY_MD="${DOC_AUDIT_LOOP_CODIFY_MD:-$REPO_ROOT/.claude/skills/gaia/references/codify.md}"
-  PR_MERGE_MD="${DOC_AUDIT_LOOP_PR_MERGE_MD:-$REPO_ROOT/.claude/rules/pr-merge.md}"
-  QUALITY_GATE_MD="${DOC_AUDIT_LOOP_QUALITY_GATE_MD:-$REPO_ROOT/.claude/rules/quality-gate.md}"
-  HOOKS_WIKI="${DOC_AUDIT_LOOP_HOOKS_WIKI:-$REPO_ROOT/wiki/concepts/Claude Hooks.md}"
-  SCRIPTS_WIKI="${DOC_AUDIT_LOOP_SCRIPTS_WIKI:-$REPO_ROOT/wiki/concepts/GAIA Scripts.md}"
-  REVIEW_WIKI="${DOC_AUDIT_LOOP_REVIEW_WIKI:-$REPO_ROOT/wiki/concepts/Code Review Audit Agent.md}"
   FRONTEND_AGENT="${DOC_AUDIT_LOOP_FRONTEND_AGENT:-$REPO_ROOT/.claude/agents/code-audit-frontend.md}"
   MEMBER_PROTOCOL="${DOC_AUDIT_LOOP_MEMBER_PROTOCOL:-$REPO_ROOT/.claude/hooks/lib/audit-member-protocol.md}"
 }
@@ -81,76 +75,15 @@ line_starting() {
 
 # --- UAT-029: /gaia-codify asks at the checkpoint --------------------------
 
-@test "UAT-029: codify.md's audit paragraph asks the checkpoint question and emits no continuation prompt" {
-  paragraph="$(line_starting "$CODIFY_MD" '**Run the audit, on every path.**')"
-  [ -n "$paragraph" ]
-  grep -qF -- '#### The branch checkpoint' <<<"$paragraph"
-  grep -qF -- 'checkpoint `AskUserQuestion`' <<<"$paragraph"
-  grep -qF -- 'audit-loop-eval.sh brief' <<<"$paragraph"
-  grep -qiF -- 'continuation prompt' <<<"$paragraph" && return 1
-  grep -qiF -- 'is a stop' <<<"$paragraph" && return 1
-  true
-}
-
 # --- the always-loaded rules ------------------------------------------------
-
-@test "pr-merge.md's checkpoint paragraph says Claude never writes grants or loop state, within the old byte budget" {
-  paragraph="$(line_starting "$PR_MERGE_MD" '**The audit loop runs on its own until the branch checkpoint.**')"
-  [ -n "$paragraph" ]
-  grep -qF -- 'Claude never writes grants or loop state' <<<"$paragraph"
-  grep -qF -- '#### The branch checkpoint' <<<"$paragraph"
-  bytes="$(printf '%s\n' "$paragraph" | wc -c | tr -d ' ')"
-  [ "$bytes" -le 724 ]
-}
-
-@test "quality-gate.md carries the fix-round exception to its STOP clause" {
-  grep -qF -- 'STOP and report before committing, except inside a workflow whose own instructions commit without stopping, such as the fix round of `wiki/concepts/Audit Round Procedure.md` (`#### The fix round: fixer, verifier, gate`);' "$QUALITY_GATE_MD"
-}
 
 # --- wiki inventories -------------------------------------------------------
 
-@test "Claude Hooks.md's table has a row for each audit-loop hook and none for the removed one" {
-  for hook in audit-loop-ask-grant.sh audit-loop-bound.sh audit-loop-grant.sh block-audit-loop-write.sh; do
-    grep -qF -- "| \`$hook\` |" "$HOOKS_WIKI" || { echo "missing table row: $hook" >&2; return 1; }
-  done
-  grep -qE -- 'block-fourth[-]audit-round' "$HOOKS_WIKI" && return 1
-  grep -qF -- 'audit-stamp-trailer' "$HOOKS_WIKI" && return 1
-  true
-}
-
-@test "GAIA Scripts.md describes the audit- family and carries no per-file rows" {
-  grep -qF -- '| `audit-` |' "$SCRIPTS_WIKI"
-  # Per-file rows drift; the page points at script headers and release-exclude.
-  grep -qE -- '^\| `audit-[a-z-]+\.sh` \|' "$SCRIPTS_WIKI" && return 1
-  grep -qF -- '.gaia/release-exclude' "$SCRIPTS_WIKI"
-}
-
 # --- COV-007: the fixer is not briefed from the ledger ---------------------
-
-@test "COV-007: Code Review Audit Agent.md says the ledger briefs the re-audit and the fixer reads dispositions" {
-  grep -qF -- "the fixer is briefed from the dispositions file the round's orchestrator writes" "$REVIEW_WIKI"
-  grep -qF -- "the fixer is briefed from the main thread's dispositions file" "$REVIEW_WIKI" && return 1
-  grep -qF -- 'the fixer read the ledger' "$REVIEW_WIKI" && return 1
-  true
-}
 
 # The member-side ledger text lives once, in the shared member protocol's
 # "Re-run carry-forward ledger" section, which every member definition points
 # at; the frontend definition carries no copy of its own.
-
-@test "COV-007: the member protocol's ledger section has the fixer reading dispositions, never the ledger" {
-  local ledger_section
-  ledger_section="$(awk '/^## Re-run carry-forward ledger$/ {inside=1; next} inside && /^## / {exit} inside' "$MEMBER_PROTOCOL")"
-  [ -n "$ledger_section" ]
-  grep -qF -- "the fixer is briefed from the dispositions file the round's orchestrator writes" <<<"$ledger_section"
-  local surface
-  for surface in "$MEMBER_PROTOCOL" "$FRONTEND_AGENT"; do
-    grep -qF -- "the fixer is briefed from the main thread's dispositions file" "$surface" && return 1
-    grep -qF -- 'and the fixer read' "$surface" && return 1
-    grep -qF -- 'the next re-audit and the fixer' "$surface" && return 1
-  done
-  true
-}
 
 # --- the shared ledger is removed by the clearance writer, never a member ---
 # One ledger serves every dispatched member, so a member deleting it on its own

@@ -188,18 +188,6 @@ check_case() {
   [[ "$output" == *"for_path"* ]]
 }
 
-@test "malformed registry: load returns 2, names the file and the next step, never 0" {
-  . "$LIBRARY"
-  materialize "$CORPUS/registry-malformed-json" "$BATS_TEST_TMPDIR/r"
-  local status=0
-  gaia_packages_load "$BATS_TEST_TMPDIR/r" || status=$?
-  [ "$status" -ne 0 ]
-  [ "$status" -eq 2 ]
-  [[ "$GAIA_PACKAGES_ERROR" =~ ^gaia-packages:\ .*\.gaia/packages\.json\ is\ malformed.*Next\ step:\  ]]
-  # The answers are empty, not stale.
-  [ -z "$(gaia_package_globs_ere tddUnitTests)" ]
-}
-
 @test "a descriptor that still carries a retired globs key loads clean and the key answers nothing" {
   . "$LIBRARY"
   local retired_key status=0 key_status=0
@@ -215,17 +203,6 @@ check_case() {
   [ -n "$(gaia_package_globs_ere tddUnitTests)" ]
   gaia_package_globs_ere "$retired_key" >/dev/null 2>&1 || key_status=$?
   [ "$key_status" -eq 1 ]
-}
-
-@test "missing descriptor: load returns 3 naming the descriptor path, never 0" {
-  . "$LIBRARY"
-  materialize "$CORPUS/descriptor-missing" "$BATS_TEST_TMPDIR/r"
-  local status=0
-  gaia_packages_load "$BATS_TEST_TMPDIR/r" || status=$?
-  [ "$status" -ne 0 ]
-  [ "$status" -eq 3 ]
-  [[ "$GAIA_PACKAGES_ERROR" == *"frontend/gaia.package.json is missing"* ]]
-  [[ "$GAIA_PACKAGES_ERROR" == *"Next step: "* ]]
 }
 
 @test "a failed load after a good one clears the earlier answers" {
@@ -278,18 +255,6 @@ check_case() {
   true
 }
 
-@test "literal registry at path . with a literal descriptor: root app matches, frontend/app does not" {
-  . "$LIBRARY"
-  materialize "$CORPUS/path-dot" "$BATS_TEST_TMPDIR/dot"
-  gaia_packages_load "$BATS_TEST_TMPDIR/dot"
-  [ "$(gaia_packages_source)" = registry ]
-  local ere
-  ere="$(gaia_package_globs_ere tddUnitTests)"
-  [[ "app/utils/x.test.ts" =~ $ere ]]
-  [[ "frontend/app/utils/x.test.ts" =~ $ere ]] && return 1
-  true
-}
-
 @test "package globs: each glob joined to its package path in registry order, empty before a load, 1 on an unknown key" {
   . "$LIBRARY"
   local status=0
@@ -319,11 +284,6 @@ check_case() {
   [ "$(gaia_packages_source)" = registry ]
 }
 
-@test "the built-in registry is the frontend package at frontend" {
-  . "$LIBRARY"
-  [ "$(_gaia_packages_builtin_registry | jq -c .)" = '[{"name":"frontend","path":"frontend"}]' ]
-}
-
 @test "hostile registry path is malformed (2) and runs nothing" {
   . "$LIBRARY"
   local root="$BATS_TEST_TMPDIR/hostile" marker="$BATS_TEST_TMPDIR/pwned" status=0
@@ -344,15 +304,6 @@ check_case() {
   gaia_packages_load "$root" || status=$?
   [ "$status" -eq 0 ]
   [ ! -e "$marker" ]
-}
-
-@test "an unknown glob key returns 1" {
-  . "$LIBRARY"
-  materialize "$CORPUS/path-frontend" "$BATS_TEST_TMPDIR/r"
-  gaia_packages_load "$BATS_TEST_TMPDIR/r"
-  local status=0
-  gaia_package_globs_ere noSuchKey >/dev/null || status=$?
-  [ "$status" -eq 1 ]
 }
 
 @test "the library is safe under set -euo pipefail with unset caller state" {

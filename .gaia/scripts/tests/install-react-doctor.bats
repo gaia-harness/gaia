@@ -37,7 +37,7 @@ fi
   printf '\n%s\n' "$start_marker"
   printf 'npx react-doctor --staged\n'
   printf '# react-doctor hook end\n'
-} >>.githooks/pre-commit
+} >>"$(git rev-parse --git-path hooks/pre-commit)"
 if [ "$mode" = partial ]; then
   exit 3
 fi
@@ -188,6 +188,8 @@ install --frozen-lockfile --config.ignore-scripts=true'
   run bash "$SCRIPT"
   [ "$status" -eq 0 ]
   [ "$(git config --local --get core.hooksPath)" = ".githooks" ]
+  grep -q 'react-doctor hook' .githooks/pre-commit .git/hooks/pre-commit && return 1
+  true
 }
 
 @test "--help exits 0 and prints usage" {

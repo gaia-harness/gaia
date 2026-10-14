@@ -10,16 +10,23 @@
 setup() {
   REPO_ROOT="$(cd "$BATS_TEST_DIRNAME/../../.." && pwd)"
   WORKFLOW="$REPO_ROOT/.github/workflows/cli-tests.yml"
-  FRESHNESS_STEP='run: bash .gaia/scripts/verify-cli-bundle-fresh.sh'
+  FRESHNESS_STEP_ERE='^[[:space:]]+run: bash \.gaia/scripts/verify-cli-bundle-fresh\.sh'
+}
+
+# freshness_step_active <workflow>: rc 0 when an uncommented YAML run line
+# invokes the freshness script.
+freshness_step_active() {
+  grep -qE -- "$FRESHNESS_STEP_ERE" "$1"
 }
 
 @test "the PR-time bundle-freshness step is wired into cli-tests" {
-  grep -qF -- "$FRESHNESS_STEP" "$WORKFLOW"
+  freshness_step_active "$WORKFLOW"
 }
 
-@test "the freshness-step check flags a workflow copy without it" {
+@test "the freshness-step check flags a workflow copy with the step commented out" {
   local scratch="$BATS_TEST_TMPDIR/cli-tests.yml"
-  grep -vF -- "$FRESHNESS_STEP" "$WORKFLOW" >"$scratch" || true
-  run grep -qF -- "$FRESHNESS_STEP" "$scratch"
+  sed -E 's/^([[:space:]]+)(run: bash \.gaia\/scripts\/verify-cli-bundle-fresh\.sh)/\1# \2/' "$WORKFLOW" >"$scratch"
+  cmp -s "$WORKFLOW" "$scratch" && return 1
+  run freshness_step_active "$scratch"
   [ "$status" -ne 0 ]
 }

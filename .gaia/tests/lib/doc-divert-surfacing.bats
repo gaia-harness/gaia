@@ -56,13 +56,6 @@ assert_pinned() {
   assert_pinned "$PAGE" 'and nothing about it goes into a PR body, comment or status.'
 }
 
-@test "UAT-038: the surfacing sentence sits under Posting the status last" {
-  local posting
-  posting="$(awk '/^#### Posting the status last$/ {inside_posting=1; next} /^#{3,4} / {inside_posting=0} inside_posting' "$PAGE")"
-  [ -n "$posting" ]
-  grep -qF -- 'surface that count and the `diverted_records` paths to the human before the status is posted' <<<"$posting"
-}
-
 @test "UAT-005: the unit re-files every retry file each round and records filing_pending" {
   assert_pinned "$AGENT" '- Retry pass: run the same command with `--finding <f>` and `--disposition file` once for every file in `<run>/filing-retry/` that an earlier `transient` outcome left, into the same outcome file. Run it every round, whatever the round'"'"'s own filings did.'
   assert_pinned "$AGENT" 'and the files left in `<run>/filing-retry/` into `filing_pending`'

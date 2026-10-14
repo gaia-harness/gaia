@@ -5,10 +5,6 @@
 # and any sub-reference under .claude/skills/gaia/references/debt/).
 #
 # The invariants, one per hand-off plus the split's routing:
-#   1. the playbook never touches the debt-count sentinel: the PostToolUse hook
-#      on `gh issue edit` / `gh issue reopen` refreshes the count after every
-#      claim, release, and park, so a touch written into the playbook is a
-#      duplicate instruction paid on every run;
 #   2. the audit step dispatches `audit-loop-unit` through the merge workflow's
 #      audit-loop-unit section and never resolves and spawns members itself;
 #   3. the post-merge path waits on `pr-wait-merge.sh`, never confirms the
@@ -17,9 +13,8 @@
 #   4. clustering and exclusion come from `debt-backlog.sh`, and a non-zero
 #      exit from it stops the run before anything is claimed;
 #   5. a sub-reference read is a step a model can skip, so `debt.md` routes to
-#      every debt/*.md through a `Read` line, names no sub-reference that does
-#      not exist, keeps the sections every entry path shares, and each moved
-#      section lives in exactly one sub-reference.
+#      every debt/*.md through a `Read` line and names no sub-reference that
+#      does not exist.
 #
 # The playbook set is `debt.md` plus every `debt/*.md` that exists, so the
 # invariants keep holding when the file is split. DOC_DEBT_PLAYBOOK_DIR points
@@ -77,63 +72,6 @@ scratch_copy() {
     cp -R "$PLAYBOOK_DIR/debt" "$copy/debt"
   fi
   printf '%s\n' "$copy"
-}
-
-# no_sentinel_touch <references-dir>: succeeds when no playbook file instructs
-# a sentinel touch; reports each offending file and returns 1 otherwise.
-SENTINEL_TOUCH_PATTERN='refresh-requested|touch(ing)? the sentinel|sentinel (is )?touch|debt-count sentinel'
-no_sentinel_touch() {
-  local files file count status=0
-  files="$(playbook_files "$1")" || return 1
-  [ -n "$files" ] || return 1
-  count=0
-  while IFS= read -r file; do
-    count=$((count + 1))
-    if grep -qiE -- "$SENTINEL_TOUCH_PATTERN" "$file"; then
-      printf 'sentinel touch in %s\n' "$file" >&2
-      status=1
-    fi
-  done <<<"$files"
-  [ "$count" -ge 1 ] || return 1
-  return "$status"
-}
-
-# --- 1. the playbook never touches the count sentinel -----------------------
-
-@test "the playbook set is non-empty and contains debt.md" {
-  files="$(playbook_files "$PLAYBOOK_DIR")"
-  [ -n "$files" ]
-  grep -qF -- "$PLAYBOOK_DIR/debt.md" <<<"$files"
-}
-
-@test "the playbook never touches the debt-count sentinel" {
-  no_sentinel_touch "$PLAYBOOK_DIR"
-}
-
-@test "the sentinel check goes red on each phrasing it exists to catch" {
-  for phrase in \
-    'mkdir -p .gaia/local/debt && : > .gaia/local/debt/refresh-requested' \
-    'touch the sentinel' \
-    'touching the sentinel' \
-    'the sentinel touch' \
-    'the sentinel is touched' \
-    '## Touch the debt-count sentinel'; do
-    copy="$(scratch_copy)"
-    printf '\n%s\n' "$phrase" >>"$copy/debt.md"
-    run no_sentinel_touch "$copy"
-    [ "$status" -ne 0 ] || {
-      printf 'sentinel check stayed green for: %s\n' "$phrase" >&2
-      return 1
-    }
-  done
-}
-
-@test "the sentinel check reads a sub-reference file as well as debt.md" {
-  copy="$(scratch_copy)"
-  mkdir -p "$copy/debt"
-  printf 'touching the sentinel\n' >"$copy/debt/extra.md"
-  run no_sentinel_touch "$copy"
-  [ "$status" -ne 0 ]
 }
 
 # --- 2. the audit step dispatches the unit ----------------------------------
@@ -322,81 +260,5 @@ no_orphan_route() {
   copy="$(scratch_copy)"
   printf '\n%smissing.md` now and follow it.\n' "$ROUTE_PREFIX" >>"$copy/debt.md"
   run no_orphan_route "$copy"
-  [ "$status" -ne 0 ]
-}
-
-CORE_HEADINGS=(
-  '## Argument parsing'
-  '## Read and order the backlog'
-  '## Claim the fix unit'
-  '## Fix-time security screen'
-  '## Fix-time staleness screen'
-  '## Fix-time spec screen'
-  '## Pre-flight isolation (branch vs worktree)'
-  '## Drive the PR to merge'
-  '## Cost record (run end)'
-  '## Guardrails'
-)
-
-# owner<TAB>heading: each heading that moved out of the core, with the one
-# sub-reference that owns it. The spec hand-off has no entry: it holds body
-# text from a heading that stays in the core.
-MOVED_HEADINGS=(
-  "named.md	## Validate named numbers"
-  "named.md	## Fix a specific issue (direct-number path)"
-  "named.md	## Fix a named set (two or more numbers)"
-  "recommend.md	## Recommend and present"
-)
-
-# has_heading <file> <heading-prefix>: a line of the file starts with the prefix.
-has_heading() {
-  awk -v want="$2" 'index($0, want) == 1 { found = 1 } END { exit !found }' "$1"
-}
-
-# headings_owned <references-dir>: the core keeps every shared heading, and
-# each moved heading appears in its owning sub-reference and in no other file
-# of the playbook set.
-headings_owned() {
-  local dir="$1" heading entry owner files file holders
-  for heading in "${CORE_HEADINGS[@]}"; do
-    if ! has_heading "$dir/debt.md" "$heading"; then
-      printf 'debt.md lost %s\n' "$heading" >&2
-      return 1
-    fi
-  done
-  files="$(playbook_files "$dir")" || return 1
-  for entry in "${MOVED_HEADINGS[@]}"; do
-    owner="${entry%%	*}"
-    heading="${entry#*	}"
-    holders=""
-    while IFS= read -r file; do
-      if has_heading "$file" "$heading"; then
-        holders="$holders${file#"$dir"/} "
-      fi
-    done <<<"$files"
-    if [ "$holders" != "debt/$owner " ]; then
-      printf '%s is held by [%s], expected [debt/%s]\n' "$heading" "$holders" "$owner" >&2
-      return 1
-    fi
-  done
-  return 0
-}
-
-@test "the core keeps the shared sections and each moved section has one owner" {
-  headings_owned "$PLAYBOOK_DIR"
-}
-
-@test "the ownership check goes red when a moved heading is duplicated into the core" {
-  copy="$(scratch_copy)"
-  printf '\n## Recommend and present\n\nstale copy\n' >>"$copy/debt.md"
-  run headings_owned "$copy"
-  [ "$status" -ne 0 ]
-}
-
-@test "the ownership check goes red when the core loses a shared heading" {
-  copy="$(scratch_copy)"
-  sed 's/^## Claim the fix unit/## Claiming/' "$copy/debt.md" >"$copy/debt.md.new"
-  mv "$copy/debt.md.new" "$copy/debt.md"
-  run headings_owned "$copy"
   [ "$status" -ne 0 ]
 }

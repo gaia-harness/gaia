@@ -447,6 +447,7 @@ case "$1 $2" in
     cat "$STUB_DIRECTORY/body.txt"; printf '\n'
     ;;
   "pr edit")
+    [ -z "${STUB_FAIL_EDIT:-}" ] || exit 1
     previous_argument=""
     for argument in "$@"; do
       [ "$previous_argument" = "--body-file" ] && cp "$argument" "$STUB_DIRECTORY/edited.md"
@@ -503,10 +504,12 @@ STUBEOF
   [ ! -e "$STUB/edited.md" ]
 }
 
-@test "gh mode: a failing pr edit exits 1" {
+@test "gh mode: a failing pr edit exits 1 after the body was read" {
   make_stub
   printf 'body\n' > "$STUB/body.txt"
   values 1 '{"code-audit-frontend":1}' 0
-  run env STUB_FAIL=1 bash "$SCRIPT" --pr 12 --values-json "$TEMPORARY_DIRECTORY/values.json"
+  run env STUB_FAIL_EDIT=1 bash "$SCRIPT" --pr 12 --values-json "$TEMPORARY_DIRECTORY/values.json"
   [ "$status" -eq 1 ]
+  grep -q 'pr view' "$STUB/argv.log"
+  grep -q 'pr edit' "$STUB/argv.log"
 }

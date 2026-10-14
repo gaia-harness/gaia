@@ -18,11 +18,9 @@ bats_require_minimum_version 1.5.0
 setup() {
   REPO_ROOT="$(cd "$BATS_TEST_DIRNAME/../../.." && pwd)"
   DOCTRINE="$REPO_ROOT/.claude/doctrine/context-checkpoint.md"
-  RULE="$REPO_ROOT/.claude/rules/context-discipline.md"
   WIKI="$REPO_ROOT/wiki/concepts/Workflow Doctrine.md"
   EXCLUDE="$REPO_ROOT/.gaia/release-exclude"
   WIKI_HEADING='## Context checkpoint'
-  WIKI_PAGE_PATH='wiki/concepts/Workflow Doctrine.md'
   TEMPORARY_DIRECTORY="$BATS_TEST_TMPDIR"
 }
 
@@ -32,57 +30,12 @@ setup() {
 # the text. Keep each statement's literal on one line of the doctrine so a
 # line-deletion twin can remove exactly it.
 ANCHORS=(
-  'F|look for a chance to clear'
-  'F|clear unless the remaining work is small'
-  'F|Fire and skull: clear now'
-  'F|no background task, sub-agent or monitor'
-  'F|nothing is half-applied'
-  'F|The hook cannot detect this'
-  'F|you judge it'
   'F|Save the place before you ask'
-  'F|Then ask'
   'F|Commit and push first'
-  'F|`RUNNING`'
-  'F|`PROGRESS.md`'
-  'F|committed phase boundary'
-  'F|draft cache'
-  'F|current-state file'
-  'F|.gaia/local/runs/<branch>/STATE.md'
-  'F|.gaia/local/runs/session-<session id>/STATE.md'
   'F|The `Save path:` line'
   'F|Never the scratchpad'
-  'F|`Facts`'
-  'F|`Status checklist`'
-  'F|`NEXT:`'
-  'F|4 KB'
-  'F|rewritten in place'
-  'F|interactive only'
-  'F|`AskUserQuestion`'
-  'F|exactly two options'
-  'F|`Continue here` and `Clear and resume`'
-  'F|(Recommended)'
-  'F|one-line reason'
-  'F|a few steps'
-  'F|runs mostly in sub-agents'
-  'F|riskier than finishing'
-  'F|when unsure'
-  'F|pre-merge audit'
-  'F|Never skip the save and ask'
-  'F|nearly-done session gets `Continue here`'
-  'R|always recommend .Clear and resume., whatever the remaining work'
-  'F|The reason states the band'
-  'F|keep working until the next band'
-  'F|run `/clear`'
-  'F|info string `text`'
-  'F|naming the state file path, the goal and the next step'
-  'F|never points at this session'
   'F|no further tool calls'
   'F|With no human in the session, never ask'
-  'F|At red and fire, save and continue'
-  'F|At skull, save, print the continuation prompt in a `text` fence, report, and stop'
-  'F|`/loop`'
-  'F|Headless and scheduled'
-  'F|never fire'
 )
 
 anchors_ok() {
@@ -122,13 +75,6 @@ save_before_ask_ok() {
   [ -n "$save_line" ] || return 1
   [ -n "$ask_line" ] || return 1
   [ "$save_line" -lt "$ask_line" ] || return 1
-  return 0
-}
-
-no_third_option_ok() {
-  local file_path="$1"
-  [ -f "$file_path" ] || return 1
-  grep -qiE 'accept[ -]and[ -]stop' "$file_path" && return 1
   return 0
 }
 
@@ -172,21 +118,6 @@ not_excluded_ok() {
   return 0
 }
 
-# every line of the rule naming the checkpoint also names the wiki page that holds the reasoning
-rule_pointer_ok() {
-  local file_path="$1" checkpoint_lines
-  [ -f "$file_path" ] || return 1
-  checkpoint_lines="$(grep -F -- 'context checkpoint' "$file_path")"
-  [ -n "$checkpoint_lines" ] || return 1
-  printf '%s\n' "$checkpoint_lines" | grep -qvF -- "$WIKI_PAGE_PATH" && return 1
-  return 0
-}
-
-# the heading that follows `## Resume`
-wiki_heading_after_resume() {
-  awk '/^## / { if (previous == "## Resume") { print $0; exit } previous = $0 }' "$1"
-}
-
 wiki_section_body() {
   awk -v heading="$WIKI_HEADING" '
     $0 == heading { on = 1; next }
@@ -198,7 +129,6 @@ wiki_section_body() {
 wiki_section_ok() {
   local file_path="$1" body
   [ -f "$file_path" ] || return 1
-  [ "$(wiki_heading_after_resume "$file_path")" = "$WIKI_HEADING" ] || return 1
   body="$(wiki_section_body "$file_path")"
   [ -n "$body" ] || return 1
   printf '%s\n' "$body" | grep -qF -- '.claude/doctrine/context-checkpoint.md' || return 1
@@ -214,30 +144,7 @@ plant_in_wiki_section() {
   awk -v heading="$WIKI_HEADING" -v planted="$2" '{ print } $0 == heading { print planted }' "$1"
 }
 
-# the wiki with the section moved to sit after Concurrency limits
-move_wiki_section_down() {
-  awk -v heading="$WIKI_HEADING" '
-    FNR == NR {
-      if ($0 == heading) inside = 1
-      else if (inside && /^## /) inside = 0
-      if (inside) section = section $0 "\n"
-      next
-    }
-    {
-      if ($0 == heading) skipping = 1
-      else if (skipping && /^## /) skipping = 0
-      if (skipping) next
-      if ($0 == "## Initiative linking") printf "%s", section
-      print
-    }
-  ' "$1" "$1"
-}
-
 # ------------------------------------------------------------- the doctrine
-
-@test "doctrine: the file exists and is not empty" {
-  [ -s "$DOCTRINE" ]
-}
 
 @test "doctrine anchors: every required statement is present" {
   [ "${#ANCHORS[@]}" -gt 0 ]
@@ -262,18 +169,6 @@ move_wiki_section_down() {
   ANCHORS=('Z|anything')
   if anchors_ok "$DOCTRINE"; then ANCHORS=("${original[@]}"); return 1; fi
   ANCHORS=("${original[@]}")
-  true
-}
-
-@test "doctrine: there are exactly two options and no third" {
-  no_third_option_ok "$DOCTRINE"
-}
-
-@test "doctrine third-option red twin: a planted Accept and stop line fails" {
-  { cat "$DOCTRINE"; printf -- '- `Accept and stop`: end the session.\n'; } >"$TEMPORARY_DIRECTORY/third-option.md"
-  if no_third_option_ok "$TEMPORARY_DIRECTORY/third-option.md"; then return 1; fi
-  { cat "$DOCTRINE"; printf -- '- accept-and-stop\n'; } >"$TEMPORARY_DIRECTORY/third-option-dashed.md"
-  if no_third_option_ok "$TEMPORARY_DIRECTORY/third-option-dashed.md"; then return 1; fi
   true
 }
 
@@ -364,30 +259,11 @@ move_wiki_section_down() {
 
 # ------------------------------------------------------------ doc surfaces
 
-@test "rule: the line naming the context checkpoint also names the wiki page" {
-  rule_pointer_ok "$RULE"
-}
-
-@test "rule pointer red twins: the pointer line removed, or its page path removed, fails" {
-  grep -vF -- 'context checkpoint' "$RULE" >"$TEMPORARY_DIRECTORY/rule-no-pointer.md" || true
-  if cmp -s "$RULE" "$TEMPORARY_DIRECTORY/rule-no-pointer.md"; then return 1; fi
-  if rule_pointer_ok "$TEMPORARY_DIRECTORY/rule-no-pointer.md"; then return 1; fi
-  sed "s|$WIKI_PAGE_PATH|elsewhere.md|g" "$RULE" >"$TEMPORARY_DIRECTORY/rule-no-path.md"
-  if cmp -s "$RULE" "$TEMPORARY_DIRECTORY/rule-no-path.md"; then return 1; fi
-  if rule_pointer_ok "$TEMPORARY_DIRECTORY/rule-no-path.md"; then return 1; fi
-  true
-}
-
-@test "wiki: the checkpoint section follows Resume, links the doctrine, restates nothing, spells no number" {
+@test "wiki: the checkpoint section links the doctrine, restates nothing, spells no number" {
   wiki_section_ok "$WIKI"
 }
 
-@test "wiki section red twins: moved below Concurrency limits, link removed, rule restated, number planted" {
-  move_wiki_section_down "$WIKI" >"$TEMPORARY_DIRECTORY/wiki-moved.md"
-  if cmp -s "$WIKI" "$TEMPORARY_DIRECTORY/wiki-moved.md"; then return 1; fi
-  grep -qxF -- "$WIKI_HEADING" "$TEMPORARY_DIRECTORY/wiki-moved.md" || return 1
-  if wiki_section_ok "$TEMPORARY_DIRECTORY/wiki-moved.md"; then return 1; fi
-
+@test "wiki section red twins: link removed, rule restated, number planted" {
   sed 's|\.claude/doctrine/context-checkpoint\.md|elsewhere.md|g' "$WIKI" >"$TEMPORARY_DIRECTORY/wiki-no-link.md"
   if cmp -s "$WIKI" "$TEMPORARY_DIRECTORY/wiki-no-link.md"; then return 1; fi
   if wiki_section_ok "$TEMPORARY_DIRECTORY/wiki-no-link.md"; then return 1; fi

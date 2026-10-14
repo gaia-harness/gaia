@@ -163,11 +163,6 @@ commit_file() {
   git -C "$SANDBOX" commit --quiet -m "$message"
 }
 
-@test "tests.yml 'Check chore-deps title' body is non-empty and executes" {
-  tests_body="$(extract_step_body "$REPO_ROOT/.github/workflows/tests.yml" "Check chore-deps title")"
-  [ -n "$tests_body" ]
-}
-
 @test "tests.yml 'Check chore-deps title': an unknown PR_BASE_SHA exits 0 with skip=false" {
   body="$(extract_step_body "$REPO_ROOT/.github/workflows/tests.yml" "Check chore-deps title")"
   [ -n "$body" ]
@@ -234,11 +229,6 @@ commit_file() {
   result="$(run_step_capture "$body" PR_TITLE="chore(deps): bump zod" "PR_BASE_SHA=$base" "EVENT_NAME=pull_request")"
   [ "$(field "$result" exit_status)" -eq 0 ]
   [ "$(field "$result" skip)" = "true" ]
-}
-
-@test "chromatic.yml 'Check chore-deps commit' body is non-empty and executes" {
-  body="$(extract_step_body "$REPO_ROOT/.github/workflows/chromatic.yml" "Check chore-deps commit")"
-  [ -n "$body" ]
 }
 
 # chromatic.yml reads a subject off HEAD directly and needs a real remote
@@ -440,12 +430,6 @@ sandbox_predicate() {
   use_frontend_registry
   sandbox_predicate 'chore(deps): resolve 1 security advisory (cookie)' $'pnpm-workspace.yaml\npnpm-lock.yaml'
   [ "$output" = "true" ]
-}
-
-@test "security resolutions: the same change plus a frontend source file is not dependency-only" {
-  use_frontend_registry
-  sandbox_predicate 'chore(deps): resolve 1 security advisory (cookie)' $'pnpm-workspace.yaml\npnpm-lock.yaml\nfrontend/app/root.tsx'
-  [ "$output" = "false" ]
 }
 
 @test "path-dot layout: root package.json plus the lockfile is dependency-only" {

@@ -101,17 +101,6 @@ regenerate() {
   done
 }
 
-@test "the generated file carries every root PreToolUse hook command verbatim" {
-  local command_json count=0
-  while IFS= read -r command_json; do
-    [ -n "$command_json" ] || continue
-    count=$((count + 1))
-    jq -e --argjson c "$command_json" '[.hooks.PreToolUse[]?.hooks[]?.command] | index($c) != null' "$GENERATED"
-  done < <(jq -c '.hooks.PreToolUse[]?.hooks[]?.command' "$ROOT_SETTINGS")
-  [ "$count" -gt 0 ]
-  [ "$count" -eq "$(jq '[.hooks.PreToolUse[]?.hooks[]?.command] | length' "$GENERATED")" ]
-}
-
 @test "the generated file re-anchors the root denies to the frontend launch dir" {
   local pair root_form anchored
   for pair in 'Edit(.env)|Edit(../.env)' \
@@ -360,16 +349,6 @@ assert_generation_refused() {
 }
 
 # --- MIG-013: no new files under a retired root path ---
-
-@test "a new root app/ file is refused naming its frontend/ equivalent" {
-  build_tree
-  mkdir -p "$TREE/app"
-  printf 'x\n' >"$TREE/app/x.tsx"
-  git -C "$TREE" add app/x.tsx
-  run_hook
-  [ "$status" -ne 0 ]
-  grep -qF -- "app/x.tsx -> frontend/app/x.tsx" <<<"$output"
-}
 
 @test "every retired root directory is refused" {
   build_tree

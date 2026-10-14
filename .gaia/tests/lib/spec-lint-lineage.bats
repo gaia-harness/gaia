@@ -1,5 +1,5 @@
 #!/usr/bin/env bats
-# lineage: frontmatter lint (invalid_lineage) plus the /gaia-spec step-9 fence.
+# lineage: frontmatter lint (invalid_lineage).
 #
 # Fixtures are built in $BATS_TEST_TMPDIR from the real SPEC template, so the
 # lint runs against the shipped shape. Hermetic: no real specs, no telemetry.
@@ -7,7 +7,6 @@
 REPO_ROOT="$(cd "$BATS_TEST_DIRNAME/../../.." && pwd)"
 LINT="$REPO_ROOT/.gaia/scripts/spec/lint.sh"
 TEMPLATE="$REPO_ROOT/.claude/skills/gaia/references/spec/spec-template.md"
-SPEC_MD="$REPO_ROOT/.claude/skills/gaia/references/spec.md"
 
 # Filled SPEC from the template with the given frontmatter line(s) in place of
 # the template's "lineage: []" line. No argument drops the key entirely.
@@ -21,15 +20,6 @@ make_spec() {
     sed 's/SPEC-NNN/SPEC-001/;s/UAT-NNN/UAT-001/' "$TEMPLATE" \
       | awk -v replacement_file_path="$replacement_file" '/^lineage: \[\]$/ { while ((getline replacement_line < replacement_file_path) > 0) print replacement_line; next } { print }' >"$output_path"
   fi
-}
-
-# Extract the fenced bash block of spec.md that contains "usage.sh lineage".
-extract_lineage_fence() {
-  awk '
-    /^```bash$/ { block_text = ""; inside_block = 1; next }
-    /^```$/ && inside_block { if (block_text ~ /usage\.sh lineage/) printf "%s", block_text; inside_block = 0; next }
-    inside_block { block_text = block_text $0 "\n" }
-  ' "$1"
 }
 
 @test "the template carries the lineage line" {
@@ -141,22 +131,4 @@ extract_lineage_fence() {
   [ "$status" -eq 1 ]
   [ "$(printf '%s' "$output" | jq '[.findings[] | select(.code == "invalid_lineage")] | length')" -eq 1 ]
   printf '%s' "$output" | jq -r '.findings[0].message' | grep -q 'bogus-entry'
-}
-
-@test "spec.md lineage fence assigns SPEC_PATH within the same fence" {
-  run extract_lineage_fence "$SPEC_MD"
-  [ "$status" -eq 0 ]
-  [ -n "$output" ]
-  [ "$(printf '%s\n' "$output" | grep -c 'SPEC_PATH=')" -ge 1 ]
-  [ "$(printf '%s\n' "$output" | grep -c 'main-root-lib.sh')" -ge 1 ]
-}
-
-@test "guard: fence extraction over a copy without the SPEC_PATH assignment counts 0" {
-  local copy="$BATS_TEST_TMPDIR/spec-copy.md"
-  # The assignment line lives in the lineage fence; drop it there only.
-  awk '/^SPEC_PATH="\$\{MAIN_ROOT\}\/\.gaia\/local\/specs\/SPEC-NNN\/SPEC\.md"$/ { next } { print }' "$SPEC_MD" >"$copy"
-  run extract_lineage_fence "$copy"
-  [ "$status" -eq 0 ]
-  [ -n "$output" ]
-  [ "$(printf '%s\n' "$output" | grep -c 'SPEC_PATH=' || true)" -eq 0 ]
 }

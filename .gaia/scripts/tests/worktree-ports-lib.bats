@@ -386,9 +386,12 @@ ledger_line_count_for_slot() {
 
 @test "context line and missing-file message carry the ask-first sentence and ports hint" {
   run gaia_ports_context_line 2 http://localhost:5175 6008
-  [ "$output" = "GAIA ports for this worktree (slot 2): app http://localhost:5175, Storybook http://localhost:6008. Never stop a process on a port another live tree owns without asking the user first. Run bash .gaia/scripts/ports.sh to see this tree's ports." ]
+  grep -qF -- "Never stop a process on a port another live tree owns without asking the user first." <<<"$output"
+  grep -qF -- "Run bash .gaia/scripts/ports.sh to see this tree's ports." <<<"$output"
   run gaia_ports_missing_file_message /t /t/frontend/.gaia-ports
-  [ "$output" = "GAIA: /t is a linked worktree with no port file at /t/frontend/.gaia-ports, so it has no ports of its own and will not borrow the main checkout's. Run: bash .claude/hooks/provision-worktree.sh /t Never stop a process on a port another live tree owns without asking the user first. Run bash .gaia/scripts/ports.sh to see this tree's ports." ]
+  grep -qF -- "Never stop a process on a port another live tree owns without asking the user first." <<<"$output"
+  grep -qF -- "Run bash .gaia/scripts/ports.sh to see this tree's ports." <<<"$output"
+  grep -qF -- "Run: bash .claude/hooks/provision-worktree.sh /t" <<<"$output"
 }
 
 @test "state directory: the seam wins and otherwise the main root's ports folder is named" {

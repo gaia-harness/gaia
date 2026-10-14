@@ -309,22 +309,34 @@ expect_fail_closed() {
   grep -qF -- "usage" <<<"$stderr"
 }
 
+# Prints each of the two scripts in <dir> that defines its own vcmp.
+inline_vcmp_scripts() {
+  local script
+  for script in select-migration-notes.sh changelog-range.sh; do
+    if grep -q 'function vcmp' "$1/$script"; then
+      printf '%s\n' "$script"
+    fi
+  done
+}
+
 @test "both scripts load the shared comparison and neither defines its own vcmp" {
   [ -r "$SCRIPTS_DIR/lib/version-compare.awk" ]
   grep -q 'function vcmp' "$SCRIPTS_DIR/lib/version-compare.awk"
   for script in select-migration-notes.sh changelog-range.sh; do
     grep -qF 'lib/version-compare.awk' "$SCRIPTS_DIR/$script"
-    grep -q 'function vcmp' "$SCRIPTS_DIR/$script" && return 1
   done
-  true
+  [ -z "$(inline_vcmp_scripts "$SCRIPTS_DIR")" ]
 }
 
 @test "a copy of either script with an inline vcmp is reported by the definition check" {
   for script in select-migration-notes.sh changelog-range.sh; do
     cp "$SCRIPTS_DIR/$script" "$BATS_TEST_TMPDIR/$script"
     printf '# function vcmp(a,b){return 0}\n' >>"$BATS_TEST_TMPDIR/$script"
-    grep -q 'function vcmp' "$BATS_TEST_TMPDIR/$script"
   done
+  run inline_vcmp_scripts "$BATS_TEST_TMPDIR"
+  [ "$status" -eq 0 ]
+  grep -qxF 'select-migration-notes.sh' <<<"$output"
+  grep -qxF 'changelog-range.sh' <<<"$output"
 }
 
 @test "the selector loads the comparison from its own install directory" {

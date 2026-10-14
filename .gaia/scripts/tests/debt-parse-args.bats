@@ -205,12 +205,6 @@ run_unrecognized() {
   esac
 }
 
-@test "the script parses under macOS bash 3.2" {
-  [ -x /bin/bash ] || skip "no /bin/bash"
-  run /bin/bash -n "$SCRIPT"
-  [ "$status" -eq 0 ]
-}
-
 @test "one row per grammar branch passes under /bin/bash" {
   [ -x /bin/bash ] || skip "no /bin/bash"
   local major

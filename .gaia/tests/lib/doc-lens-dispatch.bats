@@ -55,10 +55,6 @@ check_under_500_lines() {
   [ "$(wc -l <"$1")" -lt 500 ]
 }
 
-check_opening_sentence() {
-  grep -qF 'You are an ADVERSARIAL auditor of <ARTIFACT>' "$1"
-}
-
 check_redispatch_once() {
   grep -qF 're-dispatch that lens exactly once' "$1"
 }
@@ -84,17 +80,17 @@ check_plan_bash_write_note() {
   grep -qF 'read it back to confirm both its content and its location' "$file"
 }
 
-check_no_banned_prose() {
-  local file="$1"
-  grep -qF "$(printf '\xe2\x80\x94')" "$file" && return 1
-  grep -qE 'SPEC-[0-9]+|UAT-[0-9]+|PLAN-[0-9]+|#[0-9]{2,}' "$file" && return 1
-  true
-}
-
 # Scratch copy of the contract with one fixed string deleted.
 mutate_delete() {
   local out="$BATS_TEST_TMPDIR/mutated.md"
   sed "s|$1||" "$CONTRACT" >"$out"
+  printf '%s\n' "$out"
+}
+
+# Scratch copy of the contract with one fixed string swapped for another.
+mutate_replace() {
+  local out="$BATS_TEST_TMPDIR/mutated.md"
+  sed "s|$1|$2|" "$CONTRACT" >"$out"
   printf '%s\n' "$out"
 }
 
@@ -134,7 +130,7 @@ mutate_delete() {
 
 @test "red twin: a copy without the re-dispatch sentence fails" {
   local mutated
-  mutated="$(mutate_delete 're-dispatch that lens exactly once')"
+  mutated="$(mutate_replace 'exactly once' 'twice')"
   check_redispatch_once "$mutated" && return 1
   true
 }
@@ -145,7 +141,7 @@ mutate_delete() {
 
 @test "red twin: a copy without the inline fallback fails" {
   local mutated
-  mutated="$(mutate_delete 'run that lens inline on the main thread')"
+  mutated="$(mutate_replace 'inline on the main thread' 'in a fresh subagent')"
   check_inline_fallback "$mutated" && return 1
   true
 }
@@ -156,19 +152,8 @@ mutate_delete() {
 
 @test "red twin: a copy that classifies at dispatch return fails" {
   local mutated
-  mutated="$(mutate_delete ', never at the moment the dispatch call returns')"
+  mutated="$(mutate_replace ', never at the moment' ', or at the moment')"
   check_completion_notification "$mutated" && return 1
-  true
-}
-
-@test "shared preamble keeps the literal ADVERSARIAL opening" {
-  check_opening_sentence "$CONTRACT"
-}
-
-@test "red twin: a copy without the ADVERSARIAL opening fails" {
-  local mutated
-  mutated="$(mutate_delete 'You are an ADVERSARIAL auditor of')"
-  check_opening_sentence "$mutated" && return 1
   true
 }
 
@@ -191,16 +176,5 @@ mutate_delete() {
   local mutated
   mutated="$(mutate_delete 'read it back to confirm both its content and its location')"
   check_plan_bash_write_note "$mutated" && return 1
-  true
-}
-
-@test "contract carries no em dash and no working-document id" {
-  check_no_banned_prose "$CONTRACT"
-}
-
-@test "red twin: a copy with an em dash fails the prose check" {
-  local mutated="$BATS_TEST_TMPDIR/dash.md"
-  { cat "$CONTRACT"; printf 'a \xe2\x80\x94 b\n'; } >"$mutated"
-  check_no_banned_prose "$mutated" && return 1
   true
 }

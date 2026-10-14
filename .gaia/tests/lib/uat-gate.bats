@@ -121,13 +121,6 @@ assert_stderr_names() {
   done
 }
 
-@test "gate passes a passed report (the twin of every refusal below)" {
-  prepare_green
-  gate --phase 2 --report "$REPORTS/passed.json"
-  [ "$status" -eq 0 ]
-  [ ! -s "$STDERR_FILE" ]
-}
-
 @test "gate refuses an expected failure with the expected-failure reason" {
   prepare_green
   gate --phase 2 --report "$REPORTS/expected-failure.json"

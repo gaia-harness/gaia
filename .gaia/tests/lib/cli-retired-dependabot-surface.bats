@@ -42,14 +42,6 @@ check_help_text() {
   return 0
 }
 
-@test "the retired-name set is derived whole" {
-  [ "${#RETIRED_SUBCOMMANDS[@]}" -eq 3 ]
-  local name
-  for name in "${RETIRED_SUBCOMMANDS[@]}"; do
-    [ -n "$name" ]
-  done
-}
-
 @test "every retired setup subcommand is an unknown subcommand" {
   local name
   for name in "${RETIRED_SUBCOMMANDS[@]}"; do

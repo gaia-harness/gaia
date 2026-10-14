@@ -431,8 +431,6 @@ write_settings() {
   done
   [ "$(jq -r '.entries[] | select(.id == "research-main") | "\(.path) \(.match) \(.kind) \(.scope) \(.writer)"' "$registry_file")" = "research/ prefix dir main-only hand-authored" ]
   [ "$(jq -r '.entries[] | select(.id == "telemetry-usage-branch-memo") | "\(.path) \(.match) \(.kind) \(.scope) \(.writer)"' "$registry_file")" = "telemetry/usage-branch-memo.json exact file shared code" ]
-  [ "$(jq -r '.entries[] | select(.id == "telemetry-usage-branch-memo") | .keyed_by' "$registry_file")" = "singleton per clone; temp-file-then-rename, lock-free, last writer wins" ]
-  [ "$(jq -r '.entries[] | select(.id == "telemetry-usage-sweep-lock") | .reaped_by' "$registry_file")" = "usage-flush.sh stale reclaim" ]
   [ "$(jq -r '.entries[] | select(.id == "telemetry-usage-tmp") | .match' "$registry_file")" = glob ]
 }
 

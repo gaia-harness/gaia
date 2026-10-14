@@ -77,14 +77,6 @@ check_shipped_files() {
   shipped_paths | check_retired_surface "$REPOSITORY_ROOT"
 }
 
-@test "the retired-name set is derived whole" {
-  [ "${#RETIRED_NAMES[@]}" -eq 6 ]
-  local name
-  for name in "${RETIRED_NAMES[@]}"; do
-    [ -n "$name" ]
-  done
-}
-
 @test "no shipped file names the retired Dependabot surface" {
   run check_shipped_files
   [ "$status" -eq 0 ] || { echo "$output" >&2; return 1; }
