@@ -42,7 +42,7 @@ const tryGitRemoteUrl = (cwd: string): null | string => {
       stdio: ['ignore', 'pipe', 'ignore'],
     });
 
-    return result.toString().trim();
+    return result.trim();
   } catch {
     return null;
   }

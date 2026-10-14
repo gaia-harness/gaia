@@ -91,7 +91,7 @@ const recordLaunch = ({
 
   // Fire and forget: the record is bookkeeping and must never slow the server.
   const child = spawn(
-    // eslint-disable-next-line sonarjs/no-os-command-from-path
+    // eslint-disable-next-line sonarjs/no-os-command-from-path -- the script path is absolute; `bash` is the only PATH lookup
     'bash',
     [
       scriptPath,

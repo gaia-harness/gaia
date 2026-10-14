@@ -99,13 +99,13 @@ gaia_json "scaffold service" scaffold service items \
   || { fail "scaffold service with Query installed wrote no queries.ts"; exit 1; }
 
 gaia_json "route items list" scaffold route items --group _public \
-  --data query --service items --shape list --action >/dev/null
+  --data query --service items --shape list --action --i18n >/dev/null
 gaia_json "route items detail" scaffold route items --group _public \
-  --data query --service items --shape detail --action >/dev/null
+  --data query --service items --shape detail --action --i18n >/dev/null
 gaia_json "route items-server" scaffold route items-server --group _public \
-  --data server --service items --shape list --action >/dev/null
+  --data server --service items --shape list --action --i18n >/dev/null
 gaia_json "route items-client" scaffold route items-client --group _public \
-  --data client --service items --shape list --action >/dev/null
+  --data client --service items --shape list --action --i18n >/dev/null
 
 ROUTES="$FRONTEND/app/routes"
 PAGES="$FRONTEND/app/pages"

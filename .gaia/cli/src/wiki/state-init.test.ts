@@ -33,9 +33,7 @@ const setupSandbox = (): Sandbox => {
   const headSha = execFileSync('git', ['rev-parse', 'HEAD'], {
     cwd: root,
     encoding: 'utf8',
-  })
-    .toString()
-    .trim();
+  }).trim();
 
   return {
     cleanup: () => {

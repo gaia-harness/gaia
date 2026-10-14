@@ -6,6 +6,9 @@ import type {SetupWorker} from 'msw/browser';
 import {afterAll, beforeAll, beforeEach, describe, expect, test} from 'vitest';
 import {render} from 'vitest-browser-react';
 import {userEvent} from 'vitest/browser';
+import i18next from 'i18next';
+import {initReactI18next} from 'react-i18next';
+import i18nConfig from '~/i18n';
 import {
   createQueryClient,
   QUERY_DEFAULT_OPTIONS,
@@ -80,6 +83,11 @@ const ItemsStub = createRoutesStub([
 ]);
 
 beforeAll(async () => {
+  // The routes are scaffolded with --i18n, and a routes stub has no root to
+  // initialize i18next, so the test does it from the app's own config.
+  await i18next
+    .use(initReactI18next)
+    .init({...i18nConfig, lng: i18nConfig.fallbackLng});
   // The mock handlers read process.env while their modules load, and a
   // browser has no process until the root loader injects one.
   (globalThis as ProcessHolder).process = {env: {API_URL: API_ORIGIN}};

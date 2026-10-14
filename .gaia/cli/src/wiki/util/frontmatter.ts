@@ -55,7 +55,7 @@ const parseScalar = (raw: string): FrontmatterValue => {
     });
   }
 
-  if (/^-?\d+(\.\d+)?$/u.test(trimmed)) {
+  if (/^-?\d+(?:\.\d+)?$/u.test(trimmed)) {
     return Number(trimmed);
   }
 

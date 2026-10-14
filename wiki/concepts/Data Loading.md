@@ -2,7 +2,7 @@
 type: concept
 status: active
 created: 2026-10-06
-updated: 2026-10-06
+updated: 2026-10-14
 tags: [concept, services, routing, data-loading]
 ---
 
@@ -70,7 +70,7 @@ export const clientLoader = async () => {
 
 Scaffold: `gaia scaffold route items --group _public --data query --service items --shape list --action`. The route scaffold refuses `--data query` when Query is not installed, and when the bound service has no `queries.ts`; each refusal names the command that fixes it.
 
-The imperative methods `ensureQueryData`, `fetchQuery`, and `prefetchQuery` (and the infinite variants) are banned in `app/**` by the local lint rule `local/no-imperative-query-fetch` (`frontend/eslint/no-imperative-query-fetch.mjs`). The lint rule exists so a route has one fetch idiom; `queryClient.query` is the supported call and the message says so.
+The imperative methods `ensureQueryData`, `fetchQuery`, and `prefetchQuery` (and the infinite variants) are banned in `app/**` by the lint rule `no-imperative-query-fetch/no-imperative-query-fetch`, which ships in `@gaia-react/lint`'s `reactRouter` block. The lint rule exists so a route has one fetch idiom; `queryClient.query` is the supported call and the message says so.
 
 ## The service side
 

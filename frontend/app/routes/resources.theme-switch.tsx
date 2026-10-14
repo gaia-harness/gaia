@@ -5,7 +5,10 @@ import {setTheme} from '~/utils/theme.server';
 import type {Route} from './+types/resources.theme-switch';
 
 export const ThemeFormSchema = z.object({
-  redirectTo: z.string().refine(isLocalRedirect).optional(),
+  redirectTo: z
+    .string()
+    .refine(isLocalRedirect, {error: 'Redirect must stay on this site'})
+    .optional(),
   theme: z.literal(['dark', 'light', 'system']),
 });
 

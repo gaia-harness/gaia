@@ -75,7 +75,7 @@ describe('wiki dispatch', () => {
       .join('')
       .split('\n')
       .flatMap((line) => {
-        const match = /^ {2}(?! )(\S+)/u.exec(line);
+        const match = /^ {2}(\S+)/u.exec(line);
 
         return match?.[1] === undefined ? [] : [match[1]];
       });

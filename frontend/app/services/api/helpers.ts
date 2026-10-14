@@ -22,7 +22,7 @@ const handleSchemaValidationError = (
   error: SchemaValidationError
 ): ApiError => {
   if (typeof window === 'undefined') {
-    // eslint-disable-next-line no-console
+    // eslint-disable-next-line no-console -- schema issues are logged on the server only
     console.error('Response failed schema validation', error.issues);
   }
 

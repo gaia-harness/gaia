@@ -24,7 +24,7 @@ const runGit = (args: readonly string[], options: RunOptions = {}): string => {
     stdio: ['ignore', 'pipe', 'pipe'],
   });
 
-  return result.toString();
+  return result;
 };
 
 const tryRunGit = (

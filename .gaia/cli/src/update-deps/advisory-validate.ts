@@ -13,17 +13,17 @@ export type AdvisoryScope = 'development' | 'n/a' | 'runtime';
 
 export type AdvisorySeverity = 'critical' | 'high' | 'low' | 'medium';
 
-const GHSA_PATTERN = /^GHSA(-[23456789cfghjmpqrvwx]{4}){3}$/u;
+const GHSA_PATTERN = /^GHSA(?:-[2-9cfghjmpqrvwx]{4}){3}$/u;
 
 // npm's name grammar, with uppercase admitted for the legacy packages that
 // predate the lowercase rule. Every character outside it, a space or a shell
 // metacharacter included, fails.
 const NPM_NAME_PATTERN =
-  /^(?:@[a-z0-9~-][a-z0-9._~-]*\/)?[A-Za-z0-9~-][A-Za-z0-9._~-]*$/u;
+  /^(?:@[a-z0-9~-][a-z0-9._~-]*\/)?[A-Za-z0-9~-][\w.~-]*$/u;
 const NPM_NAME_MAX_LENGTH = 214;
 
 const RANGE_PATTERN = /^[0-9A-Za-z.*^~<>=|, -]+$/u;
-const MANIFEST_PATH_PATTERN = /^[A-Za-z0-9._/@-]+$/u;
+const MANIFEST_PATH_PATTERN = /^[\w./@-]+$/u;
 
 // Generous bounds: no real version, range, or manifest path comes near them,
 // and they keep a hostile megabyte string out of the semver parser.

@@ -3,7 +3,7 @@
 // API_URL is supplied without a trailing slash (handler pattern becomes
 // `<URL>things` while ky requests `<URL>/things`; no match → passthrough).
 export const url = (path: string): string => {
-  // eslint-disable-next-line sonarjs/super-linear-regex
+  // eslint-disable-next-line sonarjs/super-linear-regex -- the pattern is anchored to the end of a short env value
   const prefix = (process.env.API_URL ?? '').replace(/\/+$/, '');
   const input = path.replace(/^\/+/, '');
 

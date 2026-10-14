@@ -24,7 +24,7 @@ const CLASSES: ReadonlySet<string> = new Set([
   'third-party',
 ]);
 
-// eslint-disable-next-line no-control-regex
+// eslint-disable-next-line no-control-regex -- matching control characters is the point
 const CONTROL_CHARACTER = /[\u0000-\u001F\u007F]/;
 
 /** Only these variables reach the classifier; nothing the project controls does. */

@@ -3,6 +3,9 @@
 {{/hasI18n}}const PLACEHOLDER_CLASS_NAME =
   'w-48 animate-pulse rounded-sm bg-muted text-transparent select-none';
 
+// Skeleton text stands in for data not yet loaded, so it is never translated.
+const PLACEHOLDER_TEXT = 'Placeholder';
+
 {{#hasI18n}}const HydrateFallback = () => {
   const {t} = useTranslation('pages', {keyPrefix: '{{i18nKey}}'});
 
@@ -16,9 +19,9 @@
           {t('loading')}
         </p>
         <div aria-hidden={true} className="flex flex-col gap-2">
-          <p className={PLACEHOLDER_CLASS_NAME}>Placeholder</p>
-          <p className={PLACEHOLDER_CLASS_NAME}>Placeholder</p>
-          <p className={PLACEHOLDER_CLASS_NAME}>Placeholder</p>
+          <p className={PLACEHOLDER_CLASS_NAME}>{PLACEHOLDER_TEXT}</p>
+          <p className={PLACEHOLDER_CLASS_NAME}>{PLACEHOLDER_TEXT}</p>
+          <p className={PLACEHOLDER_CLASS_NAME}>{PLACEHOLDER_TEXT}</p>
         </div>
       </section>
     </>
@@ -33,9 +36,9 @@
         Loading
       </p>
       <div aria-hidden={true} className="flex flex-col gap-2">
-        <p className={PLACEHOLDER_CLASS_NAME}>Placeholder</p>
-        <p className={PLACEHOLDER_CLASS_NAME}>Placeholder</p>
-        <p className={PLACEHOLDER_CLASS_NAME}>Placeholder</p>
+        <p className={PLACEHOLDER_CLASS_NAME}>{PLACEHOLDER_TEXT}</p>
+        <p className={PLACEHOLDER_CLASS_NAME}>{PLACEHOLDER_TEXT}</p>
+        <p className={PLACEHOLDER_CLASS_NAME}>{PLACEHOLDER_TEXT}</p>
       </div>
     </section>
   </>

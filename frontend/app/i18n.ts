@@ -3,9 +3,9 @@ import resources, {LANGUAGES} from '~/languages';
 
 export const DEFAULT_LOCALE = 'en';
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const formatFn: FormatFunction = (value: any, format?: string) =>
-  // eslint-disable-next-line @typescript-eslint/no-unsafe-return
+// eslint-disable-next-line @typescript-eslint/no-explicit-any -- i18next types the formatted value as `any`
+const formatInterpolatedValue: FormatFunction = (value: any, format?: string) =>
+  // eslint-disable-next-line @typescript-eslint/no-unsafe-return -- a non-number value passes through untouched
   format === 'number' ? Number(value).toLocaleString() : value;
 
 const i18n = {
@@ -14,7 +14,7 @@ const i18n = {
   fallbackNS: ['common'],
   interpolation: {
     escapeValue: false,
-    format: formatFn,
+    format: formatInterpolatedValue,
   },
   lowerCaseLng: true,
   react: {useSuspense: false},

@@ -193,7 +193,7 @@ export const PROSE_PATH_ALLOWLIST: ReadonlySet<string> = new Set([
   '.github/workflows/react-doctor.yml',
 ]);
 
-const PATH_BODY_CHAR = /[a-zA-Z0-9._/-]/;
+const PATH_BODY_CHAR = /[\w./-]/;
 
 /**
  * Characters that OPEN a shell pattern: glob metacharacters, brace expansion,

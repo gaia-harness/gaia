@@ -27,10 +27,9 @@ const devUrl = `http://localhost:${ports.devPort}`;
  * Testing multiple browsers can significantly increase test time on CI.
  * Recommend only testing multiple browsers locally.
  */
-const TEST_ALL_BROWSERS = false;
+const TEST_ALL_BROWSERS = false as boolean;
 
 const otherBrowsers =
-  // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
   !process.env.CI && TEST_ALL_BROWSERS ?
     [
       {

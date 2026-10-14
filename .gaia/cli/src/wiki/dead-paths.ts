@@ -67,7 +67,7 @@ const trackedPrefixes = (repoRoot: string): readonly string[] => {
  * clone except the maintainer's. The pattern matches both bare prefixes
  * (`studio/foo.md`) and relative escapes (`../../../studio/foo.md`).
  */
-const SIBLING_REPO_PATTERN = /(?:^|\/)(studio|website)\//;
+const SIBLING_REPO_PATTERN = /(?:^|\/)(?:studio|website)\//;
 
 /**
  * This scan's own exemption, on top of the two shared tiers it takes from
@@ -115,7 +115,7 @@ const MACHINE_LOCAL_PATHS: ReadonlySet<string> = new Set([
   '.claude/settings.local.json',
 ]);
 
-const PATH_TOKEN_PATTERN = /`([^`\n]+?)`/g;
+const PATH_TOKEN_PATTERN = /`([^`\n]+)`/g;
 
 /**
  * Placeholder markers in wiki examples: `<name>`, `${VAR}`, `*.ts`, and
@@ -134,7 +134,7 @@ const PLACEHOLDER_PATTERN = /[<>*${}]|N{3,}|X{3,}/;
  *   - **Migrated** `...`
  */
 const HISTORICAL_BULLET_PATTERN =
-  /^\s*-\s+\*\*(Removed|Deleted|Renamed|Migrated|Replaced)\*\*/i;
+  /^\s*-\s+\*\*(?:Removed|Deleted|Renamed|Migrated|Replaced)\*\*/i;
 
 type DeadRef = {
   filePath: string;

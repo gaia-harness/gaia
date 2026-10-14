@@ -56,9 +56,7 @@ const renderEachBlocks = (template: string, vars: TemplateVars): string =>
 
     if (!Array.isArray(value)) return '';
 
-    return value
-      .map((item) => body.replaceAll(THIS_PATTERN, String(item)))
-      .join('');
+    return value.map((item) => body.replaceAll(THIS_PATTERN, item)).join('');
   });
 
 const renderBooleanSections = (template: string, vars: TemplateVars): string =>

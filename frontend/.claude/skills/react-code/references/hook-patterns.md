@@ -13,112 +13,7 @@
 
 ## useEffect Anti-Patterns
 
-### Don't transform data for rendering
-
-```tsx
-// BAD, unnecessary state + Effect + extra render cycle
-const [filtered, setFiltered] = useState<Exercise[]>([]);
-useEffect(() => {
-  setFiltered(exercises.filter((e) => e.muscleGroup === selected));
-}, [exercises, selected]);
-
-// GOOD, derive inline
-const filtered = exercises.filter((e) => e.muscleGroup === selected);
-```
-
-### Don't use Effects for expensive calculations
-
-```tsx
-// BAD, triggers a render to set state, then Effect runs and triggers a second render
-useEffect(() => {
-  setSorted(exercises.slice().sort((a, b) => a.name.localeCompare(b.name)));
-}, [exercises]);
-
-// GOOD, derive inline during render, no extra render; the compiler memoizes it
-const sorted = exercises.slice().sort((a, b) => a.name.localeCompare(b.name));
-```
-
-### Don't derive redundant state
-
-```tsx
-// BAD, Effect sets state after render, causing an extra render cycle every time deps change
-useEffect(() => {
-  setFullName(`${firstName} ${lastName}`);
-}, [firstName, lastName]);
-
-// GOOD
-const fullName = `${firstName} ${lastName}`;
-```
-
-### Don't put user-event logic in Effects
-
-```tsx
-// BAD, notification in Effect triggered by state change; effects fire after render,
-// so the causal link between action and side effect is indirect; also runs on mount
-// and every dep change, not just the user action
-useEffect(() => {
-  if (justAdded) showToast(`${product.name} added`);
-}, [justAdded]);
-
-// GOOD, in the event handler
-function handleAddToPlan() {
-  dispatch({type: 'add', product});
-  showToast(`${product.name} added to your plan`);
-}
-```
-
-### Don't chain Effects
-
-```tsx
-// BAD, multiple Effects cascading state updates; each setState triggers its own render,
-// so n chained effects = n+1 render cycles
-useEffect(() => {
-  setCard(deck[index]);
-}, [index]);
-useEffect(() => {
-  setGoldCount(card.isGold ? count + 1 : count);
-}, [card]);
-
-// GOOD, derive everything from the event
-function pickCard(index: number) {
-  const card = deck[index];
-  const newGoldCount = card.isGold ? goldCardCount + 1 : goldCardCount;
-  setIndex(index);
-  setCard(card);
-  setGoldCardCount(newGoldCount);
-  setIsWon(newGoldCount >= 5);
-}
-```
-
-### Don't notify parent via Effect
-
-```tsx
-// BAD, fires after every render where isOn changed, including the initial mount;
-// easy source of infinite loops if parent updates props that feed back into this child
-useEffect(() => {
-  onChange(isOn);
-}, [isOn]);
-
-// GOOD
-function handleToggle() {
-  const next = !isOn;
-  setIsOn(next);
-  onChange(next);
-}
-```
-
-### State reset, use key, not Effect
-
-```tsx
-// BAD, Effect fires after the stale state has already rendered, causing a visible flash before reset
-useEffect(() => {
-  setNotes('');
-  setEditing(false);
-}, [userId]);
-
-// GOOD, key forces unmount/remount, all state resets before the first paint
-<WorkoutNotes key={userId} userId={userId} />;
-```
+Lint (`react-you-might-not-need-an-effect`, in `@gaia-react/lint`'s `react` block) reports the Effects that should not be Effects: data transformed for rendering, redundant derived state, user-event logic, chained Effects, notifying a parent, and resetting state on a prop change (use `key`). Its message names the fix.
 
 ---
 
@@ -126,21 +21,38 @@ useEffect(() => {
 
 Effects are appropriate for synchronizing with external systems.
 
-### Data fetching with ignore flag
+### Data fetching: abort in the cleanup
+
+Pass an `AbortController` signal and abort it in the cleanup. Aborting cancels the request and rejects the pending promise, so a stale response never reaches the setter. `@eslint-react/web-api-no-leaked-fetch` reports a `fetch` with no abort.
+
+```tsx
+useEffect(() => {
+  const controller = new AbortController();
+
+  fetch(`/api/gyms/${gymId}/exercises`, {signal: controller.signal})
+    .then(async (response) => setExercises(await response.json()))
+    .catch((error: unknown) => {
+      if (!controller.signal.aborted) throw error;
+    });
+
+  return () => controller.abort();
+}, [gymId]);
+```
+
+### An async client with no way to cancel
+
+Guard the setter with an `ignore` flag, so a response that lands after the cleanup is dropped.
 
 ```tsx
 useEffect(() => {
   let ignore = false;
 
-  async function fetchExercises() {
-    const {data} = await supabase
-      .from('exercises')
-      .select('*')
-      .eq('gym_id', gymId);
-    if (!ignore) setExercises(data ?? []);
+  async function loadExercises() {
+    const exercises = await client.listExercises(gymId);
+    if (!ignore) setExercises(exercises);
   }
 
-  fetchExercises();
+  void loadExercises();
   return () => {
     ignore = true;
   };
@@ -149,28 +61,13 @@ useEffect(() => {
 
 ### External store subscription
 
-Prefer `useSyncExternalStore` when possible. Use Effect for third-party widgets or browser APIs that don't expose a subscribe/getSnapshot pattern.
+Lint (`no-external-store-subscription`) steers a store with a subscribe/getSnapshot pair to `useSyncExternalStore`. Use an Effect for third-party widgets or browser APIs that don't expose that pattern.
 
 ---
 
 ## Strict Mode & Cleanup
 
-React 18 Strict Mode mounts → unmounts → remounts every component in development. Effects run twice. Cleanup must fully undo the setup, or the second invocation leaves duplicate state or stale listeners. This is intentional, it surfaces missing cleanups before they leak in production.
-
-```tsx
-// BAD, missing cleanup leaks the listener (and fires twice in dev with Strict Mode)
-useEffect(() => {
-  window.addEventListener('resize', handleResize);
-}, [handleResize]);
-
-// GOOD, cleanup mirrors setup exactly
-useEffect(() => {
-  window.addEventListener('resize', handleResize);
-  return () => window.removeEventListener('resize', handleResize);
-}, [handleResize]);
-```
-
-The same principle applies to any subscription, timer, or third-party widget: if the Effect sets something up, the cleanup must tear it down completely.
+Strict Mode mounts, unmounts, and remounts every component in development, so Effects run twice and cleanup must fully undo the setup. Lint (`@eslint-react/web-api-no-leaked-*`) reports a listener, timer, interval, observer, or fetch with no cleanup. It does not see subscriptions or third-party widgets: tear those down by hand.
 
 ---
 

@@ -17,8 +17,8 @@ const LISTING_MAX_CODE_POINTS = 1536;
 
 const NAME_CHARSET = /^[\da-z]+(?:-[\da-z]+)*$/;
 const RESERVED_WORDS: ReadonlySet<string> = new Set(['anthropic', 'claude']);
-const XML_TAG = /<\/?[A-Za-z][^>]*>/;
-const TOP_LEVEL_SCALAR = /^([A-Z_a-z][\w-]*)[\t ]*:[\t ]+(\S.*)$/;
+const XML_TAG = /<\/?[A-Z][^>]*>/i;
+const TOP_LEVEL_SCALAR = /^([A-Z_][\w-]*)[\t ]*:[\t ]+(\S.*)$/i;
 
 const SKILL_DIRECTORY = /(?:^|\/)\.claude\/skills\/([^/]+)\/SKILL\.md$/;
 const COMMAND_STEM = /(?:^|\/)\.claude\/commands\/(.+)\.md$/;
@@ -34,8 +34,7 @@ type Parsed = {
   raw: string;
 };
 
-// The spread counts code points, which is the unit the Agent Skills limits use.
-// eslint-disable-next-line @typescript-eslint/no-misused-spread
+// eslint-disable-next-line @typescript-eslint/no-misused-spread -- the spread counts code points, which is the unit the Agent Skills limits use
 const codePoints = (text: string): number => [...text].length;
 
 const nonEmptyString = (value: unknown): string | undefined =>
@@ -262,7 +261,7 @@ const listingTruncation = perFile(['skill', 'command'], (parsed) => {
 
 const descriptionXmlTag = perFile(['skill', 'command', 'agent'], (parsed) => {
   const description = nonEmptyString(parsed.data.description);
-  const outsideCode = description?.replaceAll(/(`+)[\S\s]*?\1/g, '');
+  const outsideCode = description?.replaceAll(/(`+)[\s\S]*?\1/g, '');
 
   return outsideCode !== undefined && XML_TAG.test(outsideCode) ?
       [

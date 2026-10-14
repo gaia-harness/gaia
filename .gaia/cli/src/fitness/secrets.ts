@@ -6,7 +6,7 @@
 
 /** Known credential shapes. Each pattern is global so `replace` hits every match. */
 export const CREDENTIAL_PATTERNS: readonly RegExp[] = [
-  /-----BEGIN [A-Z ]*PRIVATE KEY-----[\S\s]*?(?:-----END [A-Z ]*PRIVATE KEY-----|$)/g,
+  /-----BEGIN [A-Z ]*PRIVATE KEY-----[\s\S]*?(?:-----END [A-Z ]*PRIVATE KEY-----|$)/g,
   /sk-ant-[\w-]{16,}/g,
   /\bsk-[\dA-Za-z]{20,}/g,
   /\bgh[opsur]_[\dA-Za-z]{30,}/g,

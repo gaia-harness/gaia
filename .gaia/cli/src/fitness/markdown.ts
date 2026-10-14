@@ -118,7 +118,9 @@ export const stripFencedCode = (text: string): string => {
 
 /** Replaces each inline code span on `line` with spaces of the same length. */
 export const stripInlineCode = (line: string): string =>
-  line.replaceAll(/(`+)(.+?)\1/g, (span) => ' '.repeat(span.length));
+  line.replaceAll(/``(?:[^`]|`(?!`))+``|`[^`]+`/g, (span) =>
+    ' '.repeat(span.length)
+  );
 
 /**
  * The lines of `text` with frontmatter and fenced code blanked (and inline

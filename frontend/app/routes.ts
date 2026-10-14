@@ -1,4 +1,4 @@
-/* eslint-disable import-x/no-extraneous-dependencies */
+/* eslint-disable import-x/no-extraneous-dependencies -- `@react-router/dev` is a dev dependency and routes.ts runs only at build time */
 import type {RouteConfig} from '@react-router/dev/routes';
 import {getAppDirectory} from '@react-router/dev/routes';
 import {flatRoutes} from '@react-router/fs-routes';
