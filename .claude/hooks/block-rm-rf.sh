@@ -24,6 +24,10 @@
 #   `rm_whitelist` array, not spelled here, and read via
 #   gaia_registry_rm_whitelist (.gaia/scripts/state-registry-lib.sh). See that
 #   registry entry for the current list and its bare-vs-children-only shape.
+#   Beside it, the children of a Claude Code session scratchpad
+#   (<temp root>/claude-<uid>/.../scratchpad/<child>), which Claude Code itself
+#   tells every session to use for temporary files; `_rm_in_session_scratchpad`
+#   owns the shape and `main` derives the roots.
 #
 # Each entry is whitelisted in both its relative and its absolute spelling, so
 # `rm -rf /path/to/repo/dist` is allowed exactly as `rm -rf dist` is. The absolute
@@ -266,24 +270,51 @@ _rm_whitelisted_absolute() {
   return 1
 }
 
-# _rm_whitelist_hint <whitelist_tsv>
+# _rm_in_session_scratchpad <token> <uid> <temp_root>...
+# True when <token> is strictly inside a Claude Code session scratchpad under one of the
+# temp roots: <temp_root>/claude-<uid>/<one or more segments>/scratchpad/<child>. Claude
+# Code tells every session to keep its temporary files there, and GAIA's own dispatch
+# rule pre-clears output paths with `rm -f`, so denying it denied a prescribed spelling.
+# The scratchpad directory itself, the claude-<uid> directory, and the temp root stay
+# denied: only a child matches. An empty <uid> matches nothing, the safe direction. A `..`
+# escape never reaches this helper, because the traversal arm in `main` denies it first.
+_rm_in_session_scratchpad() {
+  local token="$1" user_id="$2" temporary_root
+  shift 2
+  [[ -n "$user_id" ]] || return 1
+  for temporary_root in "$@"; do
+    while [[ "$temporary_root" == */ ]]; do
+      temporary_root=${temporary_root%/}
+    done
+    [[ -n "$temporary_root" ]] || continue
+    case "$token" in
+      "$temporary_root/claude-$user_id/"?*"/scratchpad/"?*) return 0 ;;
+    esac
+  done
+  return 1
+}
+
+# _rm_whitelist_hint <whitelist_tsv> [<extra_root>]
 # The next step for an absolute-path deny: the scratch roots an absolute spelling may
 # remove, read from the same list `_rm_whitelisted_absolute` matches against, so the
-# message and the allow cannot disagree. Prints nothing for an empty list, leaving the
-# bare deny text rather than a hint naming no root.
+# message and the allow cannot disagree. <extra_root> is the session scratchpad's display
+# form, appended last. Prints nothing when both are empty, leaving the bare deny text
+# rather than a hint naming no root.
 _rm_whitelist_hint() {
-  local tsv="$1" base children_only roots=""
-  [[ -n "$tsv" ]] || return 0
-  while IFS=$'\t' read -r base children_only; do
-    [[ -n "$base" ]] || continue
-    if [[ "$children_only" == true ]]; then
-      roots="${roots:+$roots, }$base/*"
-    else
-      roots="${roots:+$roots, }$base"
-    fi
-  done <<<"$tsv"
+  local tsv="$1" extra_root="${2:-}" base children_only roots=""
+  if [[ -n "$tsv" ]]; then
+    while IFS=$'\t' read -r base children_only; do
+      [[ -n "$base" ]] || continue
+      if [[ "$children_only" == true ]]; then
+        roots="${roots:+$roots, }$base/*"
+      else
+        roots="${roots:+$roots, }$base"
+      fi
+    done <<<"$tsv"
+  fi
+  [[ -n "$extra_root" ]] && roots="${roots:+$roots, }$extra_root"
   [[ -n "$roots" ]] || return 0
-  printf ' An absolute path is removable only inside a project scratch root: %s.' "$roots"
+  printf ' An absolute path is removable only inside a scratch root: %s.' "$roots"
 }
 
 main() {
@@ -303,6 +334,7 @@ main() {
   # degrade _rm_whitelisted_absolute is already written for: it matches nothing, so an
   # absolute scratch path falls to the absolute-path deny.
   local repository_root rm_whitelist=""
+  local flags_given rm_label user_id temporary_root temporary_root_alias="" scratchpad_hint=""
 
   payload=$(cat)
   # jq-availability arm: refuse loudly rather than fail open when the interpreter
@@ -450,6 +482,16 @@ main() {
     fi
   fi
 
+  # The session scratchpad's roots. Claude Code places it under CLAUDE_CODE_TMPDIR when
+  # that is set and under /tmp otherwise, never under TMPDIR (on macOS that is a
+  # per-user /var/folders path the scratchpad does not use). macOS resolves /tmp to
+  # /private/tmp and hands sessions the resolved spelling, so both are roots. A failed
+  # `id` leaves the uid empty, which the helper treats as matching nothing.
+  user_id="$(id -u 2>/dev/null)" || user_id=''
+  temporary_root="${CLAUDE_CODE_TMPDIR:-/tmp}"
+  [[ "$temporary_root" == /tmp || "$temporary_root" == /tmp/* ]] && temporary_root_alias="/private$temporary_root"
+  [[ -n "$user_id" ]] && scratchpad_hint="${temporary_root%/}/claude-$user_id/*/scratchpad/*"
+
   # A here-string keeps the loop in the current shell, so deny()'s exit is the
   # hook's exit rather than a subshell's.
   while IFS= read -r rm_segment; do
@@ -494,6 +536,24 @@ main() {
     #
     # (tokens is provably non-empty here anyway: rm_segment is guarded non-empty above
     # and always carries the word.)
+    #
+    # The deny text names the flags this segment actually carries, read after the same
+    # quote and backslash removal the target loop applies, so an `rm -f` deny says
+    # `rm -f` rather than claiming a recursive removal nobody asked for.
+    flags_given=''
+    for ((i = 1; i < ${#tokens[@]}; i++)); do
+      token=${tokens[i]//[\"\'\\]/}
+      # A bare `--` ends option parsing. Only flag-shaped words count (a dash and
+      # letters, or a long option), so a dashed number or value in quoted prose stays
+      # out of the label. A dash-and-letters word in that prose still counts; the cost
+      # is a longer label, never a changed verdict.
+      [[ "$token" == -- ]] && break
+      if [[ "$token" =~ ^-[[:alpha:]]+$ || "$token" =~ ^--[[:alpha:]-]+$ ]]; then
+        flags_given+=" $token"
+      fi
+    done
+    rm_label="rm${flags_given}"
+
     for ((i = 1; i < ${#tokens[@]}; i++)); do
       token=${tokens[i]}
 
@@ -584,7 +644,7 @@ main() {
       # first slash.
       first_segment=${token%%/*}
       if [[ "$first_segment" == .* && "$first_segment" == *[*?\[]* ]]; then
-        deny "BLOCKED: rm -rf of a dotfile glob ('$token') is forbidden, it removes .git and .claude."
+        deny "BLOCKED: ${rm_label} of a dotfile glob ('$token') is forbidden, it removes .git and .claude."
       fi
 
       # `{.,}*` expands to `.* *`, the dotfile glob and the unscoped glob at once,
@@ -594,7 +654,7 @@ main() {
       # `dist/{a,b}` allowed, and anchoring on the first segment keeps the brace
       # group that reaches the cwd distinct from one nested under a named dir.
       if [[ "$first_segment" == *'{'*','*'}'* && "$token" == *'*'* ]]; then
-        deny "BLOCKED: rm -rf of an unscoped brace glob ('$token') is forbidden, it removes .git and .claude."
+        deny "BLOCKED: ${rm_label} of an unscoped brace glob ('$token') is forbidden, it removes .git and .claude."
       fi
 
       # Traversal escapes resolve somewhere the spelling does not name, so they can
@@ -611,7 +671,7 @@ main() {
       # whitelist check with `..` serving as its non-empty parent segment.
       case "$token" in
         /../*|/..|/*/../*|/*/..)
-          deny "BLOCKED: rm -rf of absolute path '$token' is forbidden."
+          deny "BLOCKED: ${rm_label} of absolute path '$token' is forbidden."
           ;;
       esac
 
@@ -650,6 +710,9 @@ main() {
       if _rm_whitelisted_absolute "$token" "$rm_whitelist"; then
         continue
       fi
+      if _rm_in_session_scratchpad "$token" "$user_id" "$temporary_root" "$temporary_root_alias"; then
+        continue
+      fi
 
       # SC2088 (tilde does not expand in quotes) is disabled for this whole case: the
       # `~` / `$HOME` patterns below are literal match targets, not paths to expand.
@@ -659,7 +722,7 @@ main() {
       # shellcheck disable=SC2088
       case "$token" in
         /|/*)
-          deny "BLOCKED: rm -rf of absolute path '$token' is forbidden.$(_rm_whitelist_hint "$rm_whitelist")"
+          deny "BLOCKED: ${rm_label} of absolute path '$token' is forbidden.$(_rm_whitelist_hint "$rm_whitelist" "$scratchpad_hint")"
           ;;
         # The brace form is matched alongside the bare one. `${HOME}` is if anything
         # the more careful spelling of the expansion, and leaving it out reproduced
@@ -677,16 +740,16 @@ main() {
         # literal in bash and removes a directory named `~foo`, so denying it is a
         # false deny, which fails safe.
         '~'*|'$HOME'|'$HOME/'*|'\$HOME'|'\$HOME/'*|'${HOME}'|'${HOME}/'*|'\${HOME}'|'\${HOME}/'*)
-          deny "BLOCKED: rm -rf of \$HOME / ~ is forbidden."
+          deny "BLOCKED: ${rm_label} of \$HOME / ~ is forbidden."
           ;;
         '.'|'./')
-          deny "BLOCKED: rm -rf of cwd ('.') is forbidden."
+          deny "BLOCKED: ${rm_label} of cwd ('.') is forbidden."
           ;;
         '*'|'./*')
-          deny "BLOCKED: rm -rf of unscoped glob ('*') is forbidden."
+          deny "BLOCKED: ${rm_label} of unscoped glob ('*') is forbidden."
           ;;
         .git|./.git|.git/*|./.git/*)
-          deny "BLOCKED: rm -rf of .git is forbidden."
+          deny "BLOCKED: ${rm_label} of .git is forbidden."
           ;;
         # `.claude` is `.git`'s peer, not a lesser sibling: it is the whole Claude
         # configuration (hooks, skills, agents, rules, settings.json), it sits in
@@ -696,7 +759,7 @@ main() {
         # spelling of it denies here rather than being the one shape that walks past
         # a guard advertising the target.
         .claude|./.claude|.claude/|./.claude/|'.claude/*'|'./.claude/*')
-          deny "BLOCKED: rm -rf of .claude is forbidden, it removes the hooks, skills, agents, and settings."
+          deny "BLOCKED: ${rm_label} of .claude is forbidden, it removes the hooks, skills, agents, and settings."
           ;;
         # A path inside `.claude` stays denied: a flagged rm of `.claude/hooks` or
         # `.claude/skills` is the same loss one level down, and a narrower arm would
@@ -707,7 +770,7 @@ main() {
           deny "BLOCKED: rm or git rm with -r or -f under .claude/ is forbidden, it can remove hooks, skills, agents, or settings. Remove one exact file with a flagless 'rm <file>', or 'git rm -q -- <file>' when it is tracked."
           ;;
         node_modules|./node_modules|*/node_modules|node_modules/*)
-          deny "BLOCKED: rm -rf of node_modules is forbidden, use 'pnpm store prune' or remove deliberately."
+          deny "BLOCKED: ${rm_label} of node_modules is forbidden, use 'pnpm store prune' or remove deliberately."
           ;;
         *)
           : # unknown-or-whitelisted relative path: allowed, as before (the relative whitelist folds in here).
