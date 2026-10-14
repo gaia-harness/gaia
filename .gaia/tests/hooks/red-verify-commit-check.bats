@@ -623,6 +623,63 @@ test("uses wall-clock time", () => {
   denied
 }
 
+# --- release-delivered tests: a test arriving unchanged from a verified GAIA
+# release bundle carries no RED of the adopter's to observe ---
+
+# Place a file in a release tree under the shared update cache, at the same
+# repo-relative path the commit stages it at. Args: cache kind, tag, path,
+# content.
+place_release_file() {
+  local kind="$1" tag="$2" path="$3" content="$4"
+  local tree="$REPO/.gaia/local/cache/shared/$kind/$tag/tree"
+  mkdir -p "$tree/$(dirname "$path")"
+  printf '%s' "$content" > "$tree/$path"
+}
+
+@test "allows a new test byte-equal to its copy in an /update-gaia release tree" {
+  place_release_file update-gaia v2.1.0 "frontend/app/utils/x/index.test.ts" "$PASSING_TEST"
+  stage_file "frontend/app/utils/x/index.test.ts" "$PASSING_TEST"
+  run_commit_hook
+  [ "$status" -eq 0 ]
+  refute_denied
+}
+
+@test "allows a new test byte-equal to its copy in a migration release tree" {
+  place_release_file migrate-2 v2.0.0 "frontend/app/utils/x/index.test.ts" "$PASSING_TEST"
+  stage_file "frontend/app/utils/x/index.test.ts" "$PASSING_TEST"
+  run_commit_hook_from "frontend/app/utils"
+  [ "$status" -eq 0 ]
+  refute_denied
+}
+
+@test "denies a release test the adopter edited before committing" {
+  place_release_file update-gaia v2.1.0 "frontend/app/utils/x/index.test.ts" "$PASSING_TEST"
+  stage_file "frontend/app/utils/x/index.test.ts" "$PASSING_TEST
+test(\"adopter addition\", () => {
+  expect(2 + 2).toBe(4);
+});
+"
+  run_commit_hook
+  [ "$status" -eq 0 ]
+  denied
+}
+
+@test "denies a new test whose content a release tree holds only at another path" {
+  place_release_file update-gaia v2.1.0 "frontend/app/utils/y/index.test.ts" "$PASSING_TEST"
+  stage_file "frontend/app/utils/x/index.test.ts" "$PASSING_TEST"
+  run_commit_hook
+  [ "$status" -eq 0 ]
+  denied
+}
+
+@test "deny reason names the release-bundle recovery for an update commit" {
+  stage_file "frontend/app/utils/x/index.test.ts" "$PASSING_TEST"
+  run_commit_hook
+  [ "$status" -eq 0 ]
+  grep -qF -- 'verified release bundle' <<<"$output"
+  denied
+}
+
 # --- comment-only edit vs. an assertion absorbed into a comment (UAT-006, UAT-014, UAT-008) ---
 
 @test "denies when a live assertion is absorbed into a comment (strict, new-at-HEAD, runtime; UAT-006)" {
