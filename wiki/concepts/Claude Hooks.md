@@ -188,7 +188,7 @@ The wiki sync system is convergent: the user's already-paid-for Claude session d
 
 - **`wiki-session-start.sh`** (SessionStart, startup|resume): runs `local-janitor.sh`, then prints the first line of the base-catch-up report the janitor writes when its fast-forward of the base branch is refused, and deletes the report, so the line reaches the conversation once. SessionStart stdout reaches the model. The hook never fails the session and commits no wiki edit. See [[Claude Integration Conventions]] § Wiki vendor relationship.
 
-Wiki drift has no hook: the only drift signal is the `🧠 Run /gaia-wiki` statusline nudge, see [[Wiki Sync]]. `update-deps` and `update-gaia` are surfaced via the **statusline** (not a hook); see [[Claude Skills]] § Statusline update indicators. The statusline surface is chosen over a SessionStart `<system-reminder>` because system-reminders are visible only to the model; passive statusline indicators are visible to the user.
+Wiki drift has no hook: the only drift signal is the `🧠 Run /gaia-wiki` statusline nudge, see [[Wiki Sync]]. `update-deps` and `update-gaia` are surfaced via the **statusline** (not a hook); see [[Claude Skills]] § Statusline update indicators.
 
 ## Why `.claude/rules/shell-cwd.md` bans `cd`
 
@@ -206,7 +206,7 @@ That compounds with the ordinary cost of a `cd`: the working directory it sets p
 
 ## Adding hooks
 
-Ask Claude to add a hook; Claude will drop the script into `.claude/hooks/` and register it in `.claude/settings.json` via the `update-config` skill. **A registered hook owes an entry above.** The inventory in `## Bundled hooks` is what every reader treats as the complete hook layer, and it is hand-kept. Naming convention: `block-{noun}.sh` for blockers, `check-{noun}.sh` for advisory, `pre-{event}-{noun}.sh` for pre-event reminders. Blocker scripts begin with `#!/usr/bin/env bash` + `set -euo pipefail`, read stdin via `jq`, and either `exit 0`/`exit 2` or emit the structured `hookSpecificOutput.permissionDecision` JSON, except `audit-loop-bound.sh`, which opens `set -uo pipefail` because a decision hook must not abort mid-decision: every failure path in it is an explicit deny.
+Ask Claude to add a hook; Claude will drop the script into `.claude/hooks/` and register it in `.claude/settings.json` via the `update-config` skill. **A registered hook owes an entry above.** The inventory in `## Bundled hooks` is what every reader treats as the complete hook layer, and it is hand-kept. Copy the shape of an existing hook such as `block-no-verify.sh`; the header of `audit-loop-bound.sh` describes the decision-hook variant.
 
 <!-- gaia:maintainer-only:start -->
 `.gaia/scripts/lint-hook-array-guard.sh`, run over `.claude/hooks/` and `.gaia/scripts/`, flags a bare `"${arr[@]}"` / `"${arr[*]}"` expansion in a `set -u` body: on stock macOS `/bin/bash` (3.2.57) that expansion aborts with `unbound variable` over an empty array before any trailing `|| true` can catch it, a failure class a bash-5 test run cannot see. Guard the expansion (`"${arr[@]+"${arr[@]}"}"`) or check the array is non-empty first.

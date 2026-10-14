@@ -21,7 +21,7 @@ Conventions for GAIA's Claude Code config surface: extension points, monorepo re
 | `.claude/commands/`     | Slash commands (e.g. `/gaia-init`, `/gaia-plan`)                                                                              | Manual (slash invocation)    |
 | `.claude/hooks/`        | Bash scripts wired in `settings.json`                                                                                         | Auto on matched tool events  |
 | `.claude/rules/`        | Coding rules; optionally path-scoped via `paths:` frontmatter                                                                 | Auto (global) or path-scoped |
-| `.claude/skills/`       | Skills: both context-triggered (`react-code`, `typescript`) and user-invoked (`gaia-wiki`, `new-component`, `update-deps`) | Auto on context/intent match |
+| `.claude/skills/`       | Skills: both context-triggered (`naming-conventions`, `tdd`) and user-invoked (`gaia-wiki`, `update-deps`) | Auto on context/intent match |
 | `.claude/agent-memory/` | Ephemeral per-agent scratch (gitignored by GAIA's shipped `.gitignore`, not source of truth)                                   | Auto per named agent         |
 | `wiki/`                 | Knowledge base: architecture, decisions, patterns (source of truth)                                                           | Manual (on-demand fetch)     |
 
@@ -72,17 +72,11 @@ library: package-name
 
 At dispatch the agent Globs `*.md` in its extension directory (skipping `README.md`), reads each file, and injects its content into the matching specialist subagent's prompt. To swap a library: delete its extension file, add one for the replacement. The main agent definition stays unchanged.
 
-Convention applies to **review-type agents only**, currently just `code-review-audit`. Cross-link: [[Code Review Audit Agent]].
+Convention applies to **review-type agents only**, currently just `code-audit-frontend`. Cross-link: [[Code Review Audit Agent]].
 
 ## 4. Skill references convention
 
 `SKILL.md` is stack-agnostic lazy philosophy; it auto-loads into context, so it must stay concise. Vendored third-party skills are the exception: they ship as the upstream wrote them, and [[Vendored Third-Party Skills]] owns that rule.
-
-Stack-specific or deep-dive content lives in `references/{topic}.md` inside the skill directory, loaded on demand. `SKILL.md` signals available references via markdown links. Adding support for a new stack = add a new reference file; `SKILL.md` stays unchanged.
-
-Example: `frontend/.claude/skills/tdd-react/SKILL.md` links to `frontend/.claude/skills/tdd-react/references/tests-react.md`, while the stack-neutral `.claude/skills/tdd/` stays at the root. A Svelte package would carry its own `tdd-svelte` skill beside it.
-
-Skill descriptions should hint at available references when useful.
 
 Cross-link: [[Claude Skills]].
 
@@ -144,7 +138,7 @@ Each gate defines its own runner commands. The default `quality-gate.md` stays s
 When replacing the default API layer (Ky + Zod) with Supabase, Firebase, GraphQL, or another REST client:
 
 1. Delete or archive `frontend/.claude/rules/api-service.md` (GAIA's default Ky pattern).
-2. Delete `.claude/skills/new-service/` if it scaffolds the outgoing pattern.
+2. Delete `frontend/.claude/skills/new-service/` if it scaffolds the outgoing pattern.
 3. Add `.claude/rules/{new-service}.md` with `paths:` scoped to affected directories.
 4. Add `.claude/agents/code-audit-frontend/{new-service}.md` with `subagents: [react-patterns, typescript]`.
 5. Update `{CONTAINER}/{APP}/CLAUDE.md` (or root) with dev-server commands for the new service.
@@ -152,7 +146,7 @@ When replacing the default API layer (Ky + Zod) with Supabase, Firebase, GraphQL
 
 ## 10. Per-app CLAUDE.md hierarchy (monorepo)
 
-GAIA ships single-app; do not preemptively split `CLAUDE.md`. When monorepo-converting:
+Per-package `CLAUDE.md` hierarchy (see section 6 step 3):
 
 - **Root `CLAUDE.md`**: monorepo overview, cross-cutting rules (wiki, memory discipline).
 - **`{CONTAINER}/{APP}/CLAUDE.md`**: per-app stack specifics, dev commands, local env notes.
@@ -174,7 +168,7 @@ See root `CLAUDE.md` § Wiki for the authoritative directive.
 
 Do **not** vendor `react-doctor` into the repo. Do not symlink it. Install per-machine with `.gaia/scripts/install-react-doctor.sh`, which `/gaia-init` and `/setup-gaia` run through `.claude/skills/gaia/references/setup/per-machine.md`. The skill lands in `frontend/.claude/skills/react-doctor/`.
 
-The `code-review-audit` agent dispatches react-doctor **in parallel** with its specialist subagents. `.claude/agents/code-audit-frontend.md` owns the command and its scope flag.
+The `code-audit-frontend` agent dispatches react-doctor **in parallel** with its specialist subagents. `.claude/agents/code-audit-frontend.md` owns the command and its scope flag.
 
 ## 13. Proceed vs. AskUserQuestion
 

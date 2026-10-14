@@ -26,4 +26,4 @@ addon-a11y scopes axe to the body, so it cannot see page-level structure on its 
 ## Cross-references
 
 - [[ESLint Fixes]]: playbook for lint-level violations.
-- `.claude/skills/a11y-fixes/`: fix playbook for the axe-core runtime violations surfaced by the runs above.
+- `frontend/.claude/skills/a11y-fixes/`: fix playbook for the axe-core runtime violations surfaced by the runs above.

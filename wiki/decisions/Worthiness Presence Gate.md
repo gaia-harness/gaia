@@ -15,7 +15,7 @@ carry a worthiness-ledger line matching its current content. It is the
 merge-time half of the [[Worthiness Audit]]: the evaluator judges each emergent
 test and the tdd skill appends one ledger line per judged test; this gate
 enforces at merge that such a line exists for the content being merged. It sits
-alongside the [[PR Merge Workflow]]'s code-review-audit gate, both deny
+alongside the [[PR Merge Workflow]]'s Code Audit Team gate, both deny
 `gh pr merge` independently.
 
 Machine-enforced by `.claude/hooks/worthiness-presence-check.sh`, a PreToolUse
@@ -122,7 +122,7 @@ The gate enforces only where its tooling answers, matching the sibling hooks:
 
 ## Relationship to the other merge gates
 
-- The code-review-audit gate ([[PR Merge Workflow]]) proves a clean code review
+- The Code Audit Team gate ([[PR Merge Workflow]]) proves a clean code review
   ran against HEAD. This gate proves the emergent tests the PR changed carry
   worthiness verdicts for their current content. They are independent denials;
   both must clear.

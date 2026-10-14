@@ -29,12 +29,12 @@ Each domain is self-contained: its own `urls.ts` and `index.ts`. Services are is
 
 ## Scaffold output
 
-`/new-service` wraps the deterministic CLI `gaia scaffold service <name>`; `gaia scaffold service --help` lists its flags and the schema syntax. It emits all files for a domain. Live examples in `frontend/app/services/gaia/`:
+`/new-service` wraps the deterministic CLI `gaia scaffold service <name>`; `gaia scaffold service --help` lists its flags and the schema syntax. It emits all files for a domain. Generated files and their key rules (templates in `.gaia/cli/templates/service/`):
 
 | File                 | Key rules                                                                                                              |
 | -------------------- | ---------------------------------------------------------------------------------------------------------------------- |
 | `urls.ts`            | A domain's endpoints in one per-domain `{NAME}_URLS` constant; colon-prefixed segments interpolated from `pathParams`  |
-| `api.ts`             | `create()` from `../api` plus the `envelope(schema)` helper; wraps Ky with opt-in snake↔camel, per-request base URL, auth headers |
+| `api.ts` (one per layer, not generated) | `create()` from `../api` plus the `envelope(schema)` helper; wraps Ky with opt-in snake↔camel, per-request base URL, auth headers |
 | `parsers.ts`         | `z.iso.datetime()` not `z.string().datetime()`; `.nullish()` for optional fields; an input schema for each mutation     |
 | `types.ts`           | `z.infer<typeof schema>` only; never hand-maintain types alongside schemas                                             |
 | `requests.ts`        | Passes `schema: envelope(<schema>)` to `api` and returns the unwrapped value; mutations send typed JSON from the input schema |

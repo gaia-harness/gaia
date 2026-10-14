@@ -19,7 +19,7 @@ The diagnostic separates a token-heavy raw capture from the small summary the mo
 |---|---|---|
 | **Capture** | `frontend/.playwright/react-perf/` | A bippy harness, bundled to an IIFE and injected via Playwright `addInitScript` before React initializes, records each rendered fiber to primitives and writes a raw `RenderRecord` dump to `.gaia/local/cache/<run>/`. |
 | **Reduce** | `gaia react-perf reduce <raw.json>` | A deterministic, vitest-tested CLI subcommand. Filters framework noise, recomputes the signal, ranks findings, applies a frame-budget gate, and prints a small `ReducedSummary` JSON. |
-| **Reason** | `.claude/skills/gaia-react-perf/` | The skill ingests only the `ReducedSummary` and presents the ranked diagnosis. |
+| **Reason** | `frontend/.claude/skills/gaia-react-perf/` | The skill ingests only the `ReducedSummary` and presents the ranked diagnosis. |
 | **Verify** | the skill runbook | After a fix, re-capture and re-reduce, then confirm the targeted finding count drops to 0 before stopping. |
 
 The capture helper exports `installRenderCapture(page, {isStrictModeDisabled?})` and `collectRenderDump(page, {runId?, isRunDirectoryKept?})`. `collectRenderDump` auto-deletes the run directory on process exit unless `isRunDirectoryKept` is set, so a diagnosis drive passes `{isRunDirectoryKept: true}` to let the reduce step read the dump.
