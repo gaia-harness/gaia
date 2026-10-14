@@ -37,6 +37,7 @@ You also own the declarative half of that same subsystem: the roster your own di
 - `.claude/agents/code-audit-*.md`
 - `.claude/agents/audit-loop-unit.md`
 - `.claude/agents/audit-light-reviewer.md`
+- `.claude/agents/fitness-judge.md`
 - `.claude/hooks/lib/audit-member-protocol.md`
 - `.claude/rules/**`
 - `.claude/doctrine/**`

@@ -195,6 +195,9 @@ const idsFound = (
   }
 };
 
+// Each rule builds a red and a green scratch project plus a classifier spawn, far past vitest's 5000ms default under suite load.
+export const FIXTURE_PARITY_TIMEOUT_MS = 60_000;
+
 /**
  * Asserts every rule has a red fixture that fires it and a green fixture that
  * does not, and that no fixture names a rule outside `rules`.

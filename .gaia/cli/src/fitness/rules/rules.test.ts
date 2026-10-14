@@ -1,6 +1,10 @@
 import {afterEach, describe, expect, test} from 'vitest';
 import {runCheck} from '../check.js';
-import {createScratchProject, expectFixtureParity} from '../test-support.js';
+import {
+  createScratchProject,
+  expectFixtureParity,
+  FIXTURE_PARITY_TIMEOUT_MS,
+} from '../test-support.js';
 import type {Finding, FixtureProject} from '../types.js';
 import {RULES_FIXTURES} from './rules.fixtures.js';
 import {RULES_RULES} from './rules.js';
@@ -38,9 +42,13 @@ const ruleWithPaths = (frontmatterLines: string): FixtureProject => ({
 });
 
 describe('rules rules', () => {
-  test('every rule has a red fixture that fires it and a green fixture that does not', () => {
-    expectFixtureParity(RULES_RULES, RULES_FIXTURES);
-  });
+  test(
+    'every rule has a red fixture that fires it and a green fixture that does not',
+    () => {
+      expectFixtureParity(RULES_RULES, RULES_FIXTURES);
+    },
+    FIXTURE_PARITY_TIMEOUT_MS
+  );
 });
 
 describe('rules.glob-syntax', () => {

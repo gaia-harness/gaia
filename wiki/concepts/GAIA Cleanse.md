@@ -3,26 +3,28 @@ type: concept
 title: GAIA Cleanse
 status: active
 created: 2026-04-20
-updated: 2026-10-13
+updated: 2026-10-14
 tags: [concept, claude, skill, knowledge, hygiene]
 ---
 
 # GAIA Cleanse
 
-`/gaia-cleanse` runs a two-stage cleanse over every knowledge store in the project (wiki, auto-loaded `CLAUDE.md` files, `.claude/rules/`, machine-local memory) checking for duplication, stale entries, and auto-load token bloat. **Wiki is the source of truth.** The skill lives at `.claude/skills/gaia/references/cleanse.md` (dispatched by the `/gaia-cleanse` command, which reads this reference and follows it).
+`/gaia-cleanse` runs a two-stage cleanse over every knowledge store in the project (wiki, auto-loaded `CLAUDE.md` files, `.claude/rules/`, machine-local memory) checking for duplication, stale entries, and auto-load token bloat. **Wiki is the source of truth.** It curates memory and the wiki; it does not judge whether two committed instruction files contradict each other (`/doctor prompt-audit` owns that). The playbook is an entry file at `.claude/skills/gaia/references/cleanse.md` (dispatched by the `/gaia-cleanse` command, which reads this reference and follows it) plus one-level sub-references under `.claude/skills/gaia/references/cleanse/`: research (the Stage 1 procedure and report schema), the classification-verification round, apply (Stage 2), and publish. The entry file names when each is read.
+
+The deterministic inputs come from the `gaia fitness` CLI rather than from the model: the store listing and counts from `gaia fitness inventory --json`, over-budget files and in-repo dead-path candidates from `gaia fitness check --json` findings, and memory dead-path candidates from the inventory's findings. The playbook holds no budget numbers.
 
 ## When to use
 
 - After an ingestion spree that may have introduced overlap
 - When auto-load payload starts feeling heavy (CLAUDE.md or rules growing)
 - Periodic hygiene pass
-- When the statusline shows `Run /gaia-cleanse (<reason>)`: GAIA nudges on per-machine memory drift (the memory count comes from `.gaia/scripts/knowledge-inventory.sh counts`), an auto-load file over budget, or a pending draft to resume. The over-budget signal is a live recompute with no debounce of its own.
+- When the statusline shows `Run /gaia-cleanse (<reason>)`: GAIA nudges on per-machine memory drift (the memory count comes from `gaia fitness inventory --json`), an auto-load file over budget, or a pending draft to resume. The over-budget signal is a live recompute with no debounce of its own.
 
 ## Two-stage execution with a decision gate
 
 `/gaia-cleanse` is the intent to cleanse. The default researches, then gates: Stage 1 produces a report, the main conversation summarizes it and asks a single **Apply / Discuss / Decline** question, and only on **Apply** does Stage 2 execute it. The two-stage split is technical (different reasoning loads, a drift-check between stages); the user-confirmation checkpoint is the single decision gate after Stage 1.
 
-A clean cleanse (Stage 1 finds 0 actions) skips the gate and auto-applies, but only after `.gaia/scripts/knowledge-inventory.sh verify` recounts every store and finds the report's recorded counts match, the run was not scoped, and the report is whole. Applying a clean report finalizes its `status` and clears the statusline nudge, so a truncated or over-narrowed Stage 1 would otherwise report a pass nothing backs. A refused check names each mismatch and falls through to the normal gate.
+A clean cleanse (Stage 1 finds 0 actions) skips the gate and auto-applies, but only after `.gaia/scripts/knowledge-inventory.sh verify` recounts every store (through `gaia fitness inventory --json`) and finds the report's recorded counts match, the run was not scoped, and the report is whole. Applying a clean report finalizes its `status` and clears the statusline nudge, so a truncated or over-narrowed Stage 1 would otherwise report a pass nothing backs. A refused check prints one `refuse:` line per mismatch on stderr and falls through to the normal gate. When the CLI cannot run or its output does not parse, `verify` exits 3 and prints no `verified:` line, so a report is never auto-applied on a recount that did not happen.
 
 - **Apply**: execute the report, file any out-of-scope problem as a `tech-debt` issue, then commit, open a PR, and merge it on a main-branch run (the one-keystroke fast path).
 - **Discuss / refine**: talk it through, edit the report in place, then re-ask.
@@ -43,9 +45,9 @@ The project's own committed files are edited only on a yes per file: after **App
 
 ### Classification-verification round
 
-When Stage 1 proposes at least one action, a recommended-but-optional **classification-verification round** runs in the main conversation between the report and the decision gate. Low-overlap lenses verify Stage 1's single-pass classifications against ground truth: the cited fact actually lives in the wiki page it names, a STALE entry is genuinely gone rather than renamed, a CONFLICT is a real contradiction rather than a sanctioned path-scoped rule, and a memory delete's reason citation resolves. The round is biased toward dropping a delete it cannot confirm, because memory deletes are machine-local and have no git undo, so a wrongly-kept entry is cheap clutter while a wrongly-executed delete is permanent. A mis-classified action is dropped or corrected in the report directly; a whole miscalibrated lens re-spawns Stage 1 once with the findings as a correction directive.
+When Stage 1 proposes at least one action, a recommended-but-optional **classification-verification round** runs in the main conversation between the report and the decision gate. Low-overlap lenses verify Stage 1's single-pass classifications against ground truth: the cited fact actually lives in the wiki page it names, a STALE entry is genuinely gone rather than renamed, a cross-store CONFLICT is a real contradiction rather than a sanctioned path-scoped rule, and a memory delete's reason citation resolves. The round is biased toward dropping a delete it cannot confirm, because memory deletes are machine-local and have no git undo, so a wrongly-kept entry is cheap clutter while a wrongly-executed delete is permanent. A mis-classified action is dropped or corrected in the report directly; a whole miscalibrated lens re-spawns Stage 1 once with the findings as a correction directive.
 
-The hardened report carries an `audit_hardened` stamp that the decision gate and `--apply` inherit: `--apply` against a stamped report trusts the hardening, while an unstamped draft has the round run non-interactively before applying. The round is recommended by default, and skipping it is a legitimate recommendation only when every proposed action is a git-reversible, non-CONFLICT-driven shrink on an in-repo, non-memory file; anything irreversible or contradiction-driven is recommended for verification. It never blocks, and is skipped entirely on a report with no actions.
+The hardened report carries an `audit_hardened` stamp that the decision gate and `--apply` inherit: `--apply` against a stamped report trusts the hardening, while an unstamped draft has the round run non-interactively before applying. The round is recommended by default, and skipping it is a legitimate recommendation only when every proposed action is a git-reversible shrink on an in-repo, non-memory file and the report counts no cross-store conflict; anything irreversible or contradiction-driven is recommended for verification. It never blocks, and is skipped entirely on a report with no actions.
 
 | Invocation             | Path                              | When to use                                                                                                       |
 | ---------------------- | --------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
@@ -53,7 +55,11 @@ The hardened report carries an `audit_hardened` stamp that the decision gate and
 | `/gaia-cleanse "<hint>"` | Same, scoped to the hint          | Narrow Stage 1 to named stores or files; a scoped run always gates, and never advances the statusline's last-cleanse anchor |
 | `/gaia-cleanse --apply`  | Stage 2 only                      | Retry against the most recent draft or partial report (after drift fix or interrupted apply), within a 72h grace |
 
-Stage 1 (Sonnet) proposes actions (`delete`, `delete-entry`, `promote`, `shrink`), each carrying the drift signals its own schema names, written to `.gaia/local/cleanse/KNOWLEDGE-{timestamp}.md`. Stage 2 (Sonnet) reads the report, verifies drift signals still match, and applies changes verbatim; on mismatch it skips and reports rather than improvising. Drift checks (sha256 + verbatim before/after) carry the safety, so the research stage doesn't need a heavier model. Contradiction findings (CONFLICT research category) emit `replace` or `delete` action types in the report, not a separate action type.
+Stage 1 (Sonnet) proposes actions (`delete`, `delete-entry`, `promote`, `shrink`), each carrying the drift signals its own schema names, written to `.gaia/local/cleanse/KNOWLEDGE-{timestamp}.md`. Stage 2 (Sonnet) reads the report, verifies drift signals still match, and applies changes verbatim; on mismatch it skips and reports rather than improvising. Drift checks (sha256 + verbatim before/after) carry the safety, so the research stage doesn't need a heavier model. A memory entry that contradicts a wiki page (the CONFLICT research category) emits a `replace` or `delete` action type in the report, not a separate action type.
+
+### Conflict scope
+
+Only conflicts across stores are judged. A memory entry against the wiki is resolved toward the wiki and yields a memory action. A rule, skill, command or `CLAUDE.md` file that contradicts a wiki page is report-only: no action is emitted and the contradiction is recorded in `## Out-of-scope findings`, so it is filed as a `tech-debt` issue naming the file to reconcile. Two committed instruction files that contradict each other are not audited here; the report's Summary points to `/doctor prompt-audit`, which owns that check. No action ever writes a committed instruction file on conflict grounds, and Stage 2 skips any report action that would.
 
 ### Report lifecycle
 
@@ -62,13 +68,13 @@ Each report carries a `status:` field. Stage 1 writes it as `draft`; Stage 2 fli
 ## What it catches
 
 - **Cross-store duplication**: fact lives in both memory and wiki → wiki wins; the memory entry is deleted
-- **Contradictions**: a memory entry, rule, or project file that asserts the opposite of the authoritative source on a subject → resolved toward the authoritative source (cross-store favors the wiki; project-internal favors whichever file is canonical for that fact).
+- **Contradictions with the wiki**: a memory entry that asserts the opposite of a wiki page → resolved toward the wiki; an instruction file that contradicts a wiki page → reported, never edited (see Conflict scope).
 - **Promotable memory**: durable knowledge stuck in machine-local memory → moves to a specific wiki page
-- **Auto-load bloat**: flags `CLAUDE.md` and rules over budget
+- **Auto-load bloat**: flags `CLAUDE.md` and rules over budget, from the CLI's `claudemd.budget` findings
 - **Stale entries** referencing removed code, branches, or features
 - Wiki-internal redundancy and broken links are not fixed here (that is [[Wiki Management]], consolidate / lint), but they are no longer dropped: each is filed as a `tech-debt` issue whose suggested fix names the right `/gaia-wiki` command, or, for a broken wikilink, which `/gaia-wiki` detects and fixes through its lint stage's check #17, `/gaia-wiki`.
 
-Guardrails and portability details live in `.claude/skills/gaia/references/cleanse.md`. Key invariants: Stage 2 never deletes unless Stage 1 named the wiki target; it never writes a file the project does not own, or one of its own the human did not approve; Stage 2 never runs `git add` / `git commit` (the main conversation's publish step commits after it returns); the cleanse files out-of-scope findings but never fixes them; reports gitignored under `.gaia/local/cleanse/`.
+Guardrails and portability details live in `.claude/skills/gaia/references/cleanse.md` and its `cleanse/` sub-references. Key invariants: Stage 2 never deletes unless Stage 1 named the wiki target; it never writes a file the project does not own, or one of its own the human did not approve; Stage 2 never runs `git add` / `git commit` (the main conversation's publish step commits after it returns); the cleanse files out-of-scope findings but never fixes them; reports gitignored under `.gaia/local/cleanse/`.
 
 ## Pairs with
 

@@ -17,6 +17,7 @@ import {runCheck} from '../check.js';
 import {
   createScratchProject,
   expectFixtureParity,
+  FIXTURE_PARITY_TIMEOUT_MS,
   runFitness,
 } from '../test-support.js';
 import type {Finding, FixtureProject, RuleDefinition} from '../types.js';
@@ -62,9 +63,13 @@ const ruleProject = (lines: number): FixtureProject => ({
 });
 
 describe('claudemd rules', () => {
-  test('every rule has a red fixture that fires it and a green fixture that does not', () => {
-    expectFixtureParity(CLAUDEMD_RULES, CLAUDEMD_FIXTURES);
-  });
+  test(
+    'every rule has a red fixture that fires it and a green fixture that does not',
+    () => {
+      expectFixtureParity(CLAUDEMD_RULES, CLAUDEMD_FIXTURES);
+    },
+    FIXTURE_PARITY_TIMEOUT_MS
+  );
 
   test('the default budgets are the budgets module constants', () => {
     expect(DEFAULT_BUDGETS).toEqual({

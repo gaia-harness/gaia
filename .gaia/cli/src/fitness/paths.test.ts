@@ -13,6 +13,11 @@ describe('asRepositoryPath', () => {
     ['src/app.ts:12', 'src/app.ts'],
     ['docs/guide.md#top', 'docs/guide.md'],
     ['../shared/guide.md', '../shared/guide.md'],
+    ['.eslintrc.json', '.eslintrc.json'],
+    [
+      'node_modules/@scope/package/index.js',
+      'node_modules/@scope/package/index.js',
+    ],
   ])('%s is a path', (candidate, expected) => {
     expect(asRepositoryPath(candidate)).toBe(expected);
   });
@@ -30,6 +35,13 @@ describe('asRepositoryPath', () => {
     '-flag/file.md',
     'https://example.com/a.md',
     'a=b/c.md',
+    '@storybook/react-vite',
+    '@scope/package',
+    'reactrouter.com/docs',
+    'docs.example.org/guide.md',
+    '.md',
+    '.sh',
+    'frontend/.claude/...',
     '',
   ])('%s is not a path', (candidate) => {
     expect(asRepositoryPath(candidate)).toBeUndefined();

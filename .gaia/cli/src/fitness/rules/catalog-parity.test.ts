@@ -1,10 +1,10 @@
 import {describe, expect, test} from 'vitest';
-import {expectFixtureParity} from '../test-support.js';
+import {
+  expectFixtureParity,
+  FIXTURE_PARITY_TIMEOUT_MS,
+} from '../test-support.js';
 import {ALL_FIXTURES} from './fixtures.js';
 import {INVENTORY_ONLY_RULES, RULE_CATALOG} from './index.js';
-
-// Every rule builds a red and a green scratch project (git init plus a classifier spawn), far past the default timeout.
-const CATALOG_PARITY_TIMEOUT_MS = 60_000;
 
 describe('rule catalog', () => {
   test(
@@ -12,7 +12,7 @@ describe('rule catalog', () => {
     () => {
       expectFixtureParity(RULE_CATALOG, ALL_FIXTURES);
     },
-    CATALOG_PARITY_TIMEOUT_MS
+    FIXTURE_PARITY_TIMEOUT_MS
   );
 
   test('rule ids are unique and each starts with its category', () => {

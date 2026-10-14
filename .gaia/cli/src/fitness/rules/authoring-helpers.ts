@@ -1,6 +1,6 @@
 import type {RuleContext} from '../context.js';
 import {filesOfKinds} from '../context.js';
-import {extractLinks, resolveLinkTarget, skillDirectoryOf} from '../links.js';
+import {extractLinks, resolveLink, skillDirectoryOf} from '../links.js';
 import {lineOf, splitFrontmatter, stripFencedCode} from '../markdown.js';
 import type {
   FileKind,
@@ -300,14 +300,11 @@ export const linkResolvesCheck = (
 
       if (!checked) return [];
 
-      const resolved = resolveLinkTarget(context, file.path, reference);
-
-      if (resolved !== undefined) return [];
-
-      // A target that leaves the root is reported by its own rule, never read.
-      const probe = context.resolve(file.path, reference.target, 'file-dir');
-
-      if (probe.status === 'outside') return [];
+      // An ignored target is no broken link, and one that leaves the root is
+      // reported by its own rule, never read.
+      if (resolveLink(context, file.path, reference).status !== 'dead') {
+        return [];
+      }
 
       return [
         {

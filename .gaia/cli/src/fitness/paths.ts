@@ -45,15 +45,40 @@ const PATH_CHARACTERS = /^[\w./@+-]+$/;
 export const LINE_SUFFIX = /:\d+(?:-\d+)?$/;
 const EXTENSION = /\.([A-Za-z0-9]+)$/;
 
+// A host name leading the token (`site.com/docs`) is a web address, and a
+// leading `@` is an npm scope: neither names a file in the project. The top
+// level domains are listed because `foo.sh/bar` could still be a folder.
+const WEB_ADDRESS =
+  /^[\da-z-]+(?:\.[\da-z-]+)*\.(?:ai|app|co|com|dev|edu|gov|io|net|org)\//i;
+const ELLIPSIS_SEGMENT = /(?:^|\/)\.{3,}(?:\/|$)/;
+
 /** Normalizes a candidate token; undefined when it is not a repo-relative path. */
 export const asRepositoryPath = (candidate: string): string | undefined => {
   const token = (candidate.split('#', 1)[0] ?? '').replace(LINE_SUFFIX, '');
 
-  if (token === '' || token.startsWith('/') || token.startsWith('-')) {
+  if (
+    token === '' ||
+    token.startsWith('/') ||
+    token.startsWith('-') ||
+    token.startsWith('@')
+  ) {
     return undefined;
   }
 
   if (!PATH_CHARACTERS.test(token)) return undefined;
+
+  if (WEB_ADDRESS.test(token) || ELLIPSIS_SEGMENT.test(token)) {
+    return undefined;
+  }
+
+  // `.md` names an extension, not a file; a dotfile such as `.eslintrc.json`
+  // carries a second segment.
+  if (
+    /^\.[A-Za-z0-9]+$/.test(token) &&
+    BARE_FILE_EXTENSIONS.has(token.slice(1))
+  ) {
+    return undefined;
+  }
 
   if (token.includes('/')) return token;
 
@@ -125,6 +150,23 @@ export const extractImports = (text: string): ImportReference[] => {
   return imports;
 };
 
+export type ReferenceBase = 'file-dir' | 'package' | 'root';
+
+const PACKAGE_FOLDER = /^(.+?)\/\.claude\/|^(.+)\/CLAUDE(?:\.local)?\.md$/;
+
+/**
+ * A path in the folder a nested file's package starts at: the folder holding
+ * its `.claude`, or a nested CLAUDE.md's own folder. Resolving against it with
+ * the `file-dir` base tries the package root without widening the context
+ * contract. Undefined for a file at the project root.
+ */
+const packageAnchor = (fromFile: string): string | undefined => {
+  const match = PACKAGE_FOLDER.exec(fromFile);
+  const folder = match?.[1] ?? match?.[2];
+
+  return folder === undefined ? undefined : `${folder}/_`;
+};
+
 export type ReferenceStatus =
   | {relative: string; status: 'dead'}
   | {relative: string; status: 'found'}
@@ -140,7 +182,7 @@ export type ReferenceStatus =
 export const resolveReference = (
   context: RuleContext,
   reference: {
-    bases: readonly ('file-dir' | 'root')[];
+    bases: readonly ReferenceBase[];
     fromFile: string;
     token: string;
   }
@@ -151,7 +193,15 @@ export const resolveReference = (
   // root would misread `~` as a folder name.
   if (token.startsWith('~')) return {status: 'outside'};
 
-  const results = bases.map((base) => context.resolve(fromFile, token, base));
+  const results = bases.flatMap((base) => {
+    if (base !== 'package') return [context.resolve(fromFile, token, base)];
+
+    const anchor = packageAnchor(fromFile);
+
+    return anchor === undefined ?
+        []
+      : [context.resolve(anchor, token, 'file-dir')];
+  });
   const found = results.find(
     (result) => result.status === 'inside' && result.exists
   );
@@ -160,7 +210,10 @@ export const resolveReference = (
     return {relative: found.relative, status: 'found'};
   }
 
-  if (results.every((result) => result.status === 'outside')) {
+  if (
+    results.length > 0 &&
+    results.every((result) => result.status === 'outside')
+  ) {
     return {status: 'outside'};
   }
 
@@ -175,15 +228,43 @@ export const resolveReference = (
   return {relative: inside.relative, status: 'dead'};
 };
 
-/** One finding per backticked or linked path in `files` that does not exist. */
+const basenameSets = new WeakMap<ReadonlySet<string>, ReadonlySet<string>>();
+
+/** The file names (last segments) of every tracked path, built once per project. */
+const trackedBasenames = (context: RuleContext): ReadonlySet<string> => {
+  const cached = basenameSets.get(context.allTrackedPaths);
+
+  if (cached !== undefined) return cached;
+
+  const names = new Set(
+    [...context.allTrackedPaths].map(
+      (tracked) => tracked.split('/').pop() ?? ''
+    )
+  );
+
+  basenameSets.set(context.allTrackedPaths, names);
+
+  return names;
+};
+
+/**
+ * One finding per backticked or linked path in `files` that does not exist.
+ * A path is also tried from the package a nested file belongs to, and a bare
+ * file name is found wherever a tracked file carries it: prose names the file,
+ * not where it lives.
+ */
 export const deadPathFindings = (
   context: RuleContext,
   files: readonly ProjectFile[]
 ): RawFinding[] =>
   files.flatMap((file) =>
     extractPathReferences(file.text).flatMap(({line, linked, token}) => {
+      if (!token.includes('/') && trackedBasenames(context).has(token)) {
+        return [];
+      }
+
       const status = resolveReference(context, {
-        bases: linked ? ['root', 'file-dir'] : ['root'],
+        bases: linked ? ['root', 'file-dir', 'package'] : ['root', 'package'],
         fromFile: file.path,
         token,
       });

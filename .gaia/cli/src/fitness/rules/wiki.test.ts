@@ -6,6 +6,7 @@ import {runCheck} from '../check.js';
 import {
   createScratchProject,
   expectFixtureParity,
+  FIXTURE_PARITY_TIMEOUT_MS,
   runFitness,
 } from '../test-support.js';
 import type {CheckReport, FixtureProject} from '../types.js';
@@ -35,9 +36,13 @@ const citing = (reference: string): string =>
   `# Example Page\n\nSee \`${reference}\` for the details.\n`;
 
 describe('wiki rules', () => {
-  test('every rule has a red fixture that fires it and a green fixture that does not', () => {
-    expectFixtureParity(WIKI_RULES, WIKI_FIXTURES);
-  });
+  test(
+    'every rule has a red fixture that fires it and a green fixture that does not',
+    () => {
+      expectFixtureParity(WIKI_RULES, WIKI_FIXTURES);
+    },
+    FIXTURE_PARITY_TIMEOUT_MS
+  );
 
   test('a dead reference names the page, the line and the missing path', () => {
     const findings = wikiFindings(

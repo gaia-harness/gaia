@@ -1,6 +1,10 @@
 import {describe, expect, test} from 'vitest';
 import {runCheck} from '../check.js';
-import {createScratchProject, expectFixtureParity} from '../test-support.js';
+import {
+  createScratchProject,
+  expectFixtureParity,
+  FIXTURE_PARITY_TIMEOUT_MS,
+} from '../test-support.js';
 import type {Finding} from '../types.js';
 import {documentOf, FRONTMATTER_FIXTURES} from './frontmatter.fixtures.js';
 import {FRONTMATTER_RULES} from './frontmatter.js';
@@ -29,9 +33,13 @@ const idsOf = (findings: readonly Finding[]): readonly string[] =>
 const PLAIN = 'description: Does an example thing.';
 
 describe('frontmatter rules', () => {
-  test('has a red and a green fixture for every rule', () => {
-    expectFixtureParity(FRONTMATTER_RULES, FRONTMATTER_FIXTURES);
-  });
+  test(
+    'has a red and a green fixture for every rule',
+    () => {
+      expectFixtureParity(FRONTMATTER_RULES, FRONTMATTER_FIXTURES);
+    },
+    FIXTURE_PARITY_TIMEOUT_MS
+  );
 
   test('flags a description of 1025 characters at warning and passes 1024', () => {
     const over = skillFindings(

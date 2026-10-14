@@ -3,7 +3,11 @@ import {describe, expect, test} from 'vitest';
 import {chmodSync, existsSync} from 'node:fs';
 import path from 'node:path';
 import {runCheck} from '../check.js';
-import {createScratchProject, expectFixtureParity} from '../test-support.js';
+import {
+  createScratchProject,
+  expectFixtureParity,
+  FIXTURE_PARITY_TIMEOUT_MS,
+} from '../test-support.js';
 import type {FixtureProject, RuleDefinition} from '../types.js';
 import {readScriptReference, splitCommandWords} from './hook-command.js';
 import {
@@ -53,9 +57,13 @@ const withScript = (command: string, event = 'PreToolUse') =>
   });
 
 describe('hook rules fixtures', () => {
-  test('fires on every red fixture and stays quiet on every green one', () => {
-    expectFixtureParity(HOOKS_RULES, HOOKS_FIXTURES);
-  });
+  test(
+    'fires on every red fixture and stays quiet on every green one',
+    () => {
+      expectFixtureParity(HOOKS_RULES, HOOKS_FIXTURES);
+    },
+    FIXTURE_PARITY_TIMEOUT_MS
+  );
 });
 
 describe('hook command reading', () => {

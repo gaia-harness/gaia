@@ -83,16 +83,15 @@ const SKILL_DIRECTORY = /^((?:.*\/)?\.claude\/skills\/[^/]+)\//;
 export const skillDirectoryOf = (relative: string): string | undefined =>
   SKILL_DIRECTORY.exec(relative)?.[1];
 
+type LinkAttempt = {base: 'file-dir' | 'root'; from: string};
+
 /** The directories a relative target is tried against, in order. */
-export const resolveLinkTarget = (
-  context: RuleContext,
+const linkAttempts = (
   fromFile: string,
   reference: LinkReference
-): string | undefined => {
+): LinkAttempt[] => {
   const skillDirectory = skillDirectoryOf(fromFile);
-  const attempts: {base: 'file-dir' | 'root'; from: string}[] = [
-    {base: 'file-dir', from: fromFile},
-  ];
+  const attempts: LinkAttempt[] = [{base: 'file-dir', from: fromFile}];
 
   if (reference.kind === 'backtick') {
     attempts.push({base: 'root', from: fromFile});
@@ -102,19 +101,60 @@ export const resolveLinkTarget = (
     }
   }
 
-  for (const attempt of attempts) {
+  return attempts;
+};
+
+export type LinkResolution =
+  | {relative: string; status: 'found'}
+  | {status: 'dead' | 'ignored' | 'outside'};
+
+/**
+ * Resolves every place a target is tried exactly once and classifies it. A
+ * target on disk is found. Otherwise one the VCS ignores is a runtime artifact
+ * a fresh clone does not have, so it is not a broken link. Otherwise one that
+ * leaves the project root (a link out of the repository, or a folder symlinked
+ * elsewhere such as a shared state folder in a linked worktree) is never read
+ * or judged. Anything else is dead.
+ */
+export const resolveLink = (
+  context: RuleContext,
+  fromFile: string,
+  reference: LinkReference
+): LinkResolution => {
+  let ignored = false;
+  let outside = false;
+
+  for (const attempt of linkAttempts(fromFile, reference)) {
     const resolved = context.resolve(
       attempt.from,
       reference.target,
       attempt.base
     );
 
-    if (resolved.status === 'inside' && resolved.exists) {
-      return resolved.relative;
+    if (resolved.status === 'outside') {
+      outside = true;
+    } else if (resolved.status === 'inside') {
+      if (resolved.exists) {
+        return {relative: resolved.relative, status: 'found'};
+      }
+
+      if (context.gitIgnored(resolved.relative) === true) ignored = true;
     }
   }
 
-  return undefined;
+  if (ignored) return {status: 'ignored'};
+
+  return {status: outside ? 'outside' : 'dead'};
+};
+
+export const resolveLinkTarget = (
+  context: RuleContext,
+  fromFile: string,
+  reference: LinkReference
+): string | undefined => {
+  const resolution = resolveLink(context, fromFile, reference);
+
+  return resolution.status === 'found' ? resolution.relative : undefined;
 };
 
 const GRAPH_KINDS: readonly FileKind[] = [

@@ -1,6 +1,10 @@
 import {afterEach, describe, expect, test} from 'vitest';
 import {runCheck} from '../check.js';
-import {createScratchProject, expectFixtureParity} from '../test-support.js';
+import {
+  createScratchProject,
+  expectFixtureParity,
+  FIXTURE_PARITY_TIMEOUT_MS,
+} from '../test-support.js';
 import type {Finding, FixtureProject} from '../types.js';
 import {
   AUTHORING_FIXTURES,
@@ -67,9 +71,13 @@ const idsForDescription = (description: string): string[] =>
   idsOf({files: {[SKILL]: skillFile('Body.\n', {description})}});
 
 describe('authoring rules', () => {
-  test('every rule has a red fixture that fires it and a green fixture that does not', () => {
-    expectFixtureParity(AUTHORING_RULES, AUTHORING_FIXTURES);
-  });
+  test(
+    'every rule has a red fixture that fires it and a green fixture that does not',
+    () => {
+      expectFixtureParity(AUTHORING_RULES, AUTHORING_FIXTURES);
+    },
+    FIXTURE_PARITY_TIMEOUT_MS
+  );
 
   test('every id starts with the authoring category', () => {
     for (const rule of AUTHORING_RULES) {

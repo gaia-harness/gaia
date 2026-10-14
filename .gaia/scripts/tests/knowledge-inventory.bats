@@ -1,9 +1,11 @@
 #!/usr/bin/env bats
 #
 # Suite for .gaia/scripts/knowledge-inventory.sh, the deterministic half of
-# /gaia-cleanse (.claude/skills/gaia/references/cleanse.md): the store inventory
-# Stage 1 records, the ownership answer both stages act on, and the check that
-# lets a 0-action report finalize without a human. Each refusal has a green
+# /gaia-cleanse (.claude/skills/gaia/references/cleanse.md): the ownership
+# answer both stages act on and the check that lets a 0-action report finalize
+# without a human. The store listing and counts are the CLI's
+# (`gaia fitness inventory --json`) and are covered by its own vitest; verify
+# takes its recount from the committed CLI bundle. Each refusal has a green
 # case and a red twin that changes one input, so every rule is shown to decide
 # the answer rather than merely agree with it.
 #
@@ -47,7 +49,7 @@ setup() {
 EXPECTED_COUNTS="memory=2 user_agent_memory=1 project_agent_memory=1 rules=2 wiki=2 claude_md=2"
 
 inventory() {
-  run bash "$SCRIPT" "$1" --root "$PROJECT" "${@:2}"
+  run --separate-stderr bash "$SCRIPT" "$1" --root "$PROJECT" "${@:2}"
 }
 
 # write_report <store-counts> [scope]: a clean 0-action report whose
@@ -88,74 +90,6 @@ class_of() {
     fi
   done <<<"$output"
   return 1
-}
-
-# --- counts ---
-
-@test "counts: one count per store, markdown files only" {
-  inventory counts
-  [ "$status" -eq 0 ]
-  [ "$output" = "$EXPECTED_COUNTS" ]
-}
-
-@test "counts red twin: a new memory entry changes the memory count" {
-  printf 'new\n' >"$MEMORY/new.md"
-  inventory counts
-  [ "$status" -eq 0 ]
-  [ "$output" = "memory=3 user_agent_memory=1 project_agent_memory=1 rules=2 wiki=2 claude_md=2" ]
-}
-
-@test "counts: an absent store counts zero rather than failing" {
-  rm -rf "$MEMORY" "$USER_AGENT_MEMORY" "$PROJECT/.claude/agent-memory"
-  inventory counts
-  [ "$status" -eq 0 ]
-  [ "$output" = "memory=0 user_agent_memory=0 project_agent_memory=0 rules=2 wiki=2 claude_md=2" ]
-}
-
-@test "counts: a root with a dot and a plus reads the memory dir keyed with every non-alphanumeric as a dash" {
-  local odd_root="$BATS_TEST_TMPDIR/odd.root+name"
-  local odd_memory
-  odd_memory="$HOME/.claude/projects/$(printf %s "$odd_root" | sed 's/[^A-Za-z0-9-]/-/g')/memory"
-  mkdir -p "$odd_root" "$odd_memory"
-  printf 'x\n' >"$odd_memory/one.md"
-  run bash "$SCRIPT" counts --root "$odd_root"
-  [ "$status" -eq 0 ]
-  [[ "$output" == memory=1\ * ]]
-}
-
-@test "counts red twin: a memory dir keyed by slashes only is not read for a dotted root" {
-  local odd_root="$BATS_TEST_TMPDIR/odd.root+name"
-  local slash_only_memory
-  slash_only_memory="$HOME/.claude/projects/$(printf %s "$odd_root" | sed 's|/|-|g')/memory"
-  mkdir -p "$odd_root" "$slash_only_memory"
-  printf 'x\n' >"$slash_only_memory/one.md"
-  run bash "$SCRIPT" counts --root "$odd_root"
-  [ "$status" -eq 0 ]
-  [[ "$output" == memory=0\ * ]]
-}
-
-# --- list ---
-
-@test "list: one row per file with store, path, word count, and mtime" {
-  inventory list
-  [ "$status" -eq 0 ]
-  [ "${#lines[@]}" -eq 10 ]
-  local row
-  row="$(grep -F "$MEMORY/MEMORY.md" <<<"$output")"
-  [ "$(cut -f1 <<<"$row")" = "memory" ]
-  [ "$(cut -f3 <<<"$row")" = "3" ]
-  [[ "$(cut -f4 <<<"$row")" =~ ^[0-9]+$ ]]
-  grep -qF "notes.txt" <<<"$output" && return 1
-  true
-}
-
-@test "list and counts agree per store" {
-  inventory list
-  local store expected
-  for store in memory user_agent_memory project_agent_memory rules wiki claude_md; do
-    expected="$(tr ' ' '\n' <<<"$EXPECTED_COUNTS" | sed -n "s/^$store=//p")"
-    [ "$(cut -f1 <<<"$output" | grep -cx "$store")" -eq "$expected" ]
-  done
 }
 
 # --- classify ---
@@ -219,7 +153,7 @@ class_of() {
   write_report "$EXPECTED_COUNTS"
   inventory verify "$REPORT"
   [ "$status" -eq 0 ]
-  [[ "$output" == "verified: $EXPECTED_COUNTS" ]]
+  [ "$output" = "verified: $EXPECTED_COUNTS" ]
 }
 
 @test "verify red twin: a store whose count changed refuses and names the store" {
@@ -227,14 +161,14 @@ class_of() {
   printf 'new\n' >"$PROJECT/wiki/new.md"
   inventory verify "$REPORT"
   [ "$status" -eq 1 ]
-  [[ "$output" == *"refuse: store wiki: report 2, recomputed 3"* ]]
+  [[ "$stderr" == *"refuse: store wiki: report 2, recomputed 3"* ]]
 }
 
 @test "verify red twin: a report that never counted a store refuses and names it" {
   write_report "memory=2 user_agent_memory=1 project_agent_memory=1 rules=2 claude_md=2"
   inventory verify "$REPORT"
   [ "$status" -eq 1 ]
-  [[ "$output" == *"refuse: store wiki: report none, recomputed 2"* ]]
+  [[ "$stderr" == *"refuse: store wiki: report none, recomputed 2"* ]]
 }
 
 @test "verify red twin: a report with no store counts refuses" {
@@ -242,21 +176,21 @@ class_of() {
   sed '/^store_counts:/d' "$REPORT" >"$REPORT.tmp" && mv "$REPORT.tmp" "$REPORT"
   inventory verify "$REPORT"
   [ "$status" -eq 1 ]
-  [[ "$output" == *"refuse: store memory: report none, recomputed 2"* ]]
+  [[ "$stderr" == *"refuse: store memory: report none, recomputed 2"* ]]
 }
 
 @test "verify red twin: a scope hint refuses even with matching counts" {
   write_report "$EXPECTED_COUNTS"
   inventory verify "$REPORT" --scope-hint "memory only"
   [ "$status" -eq 1 ]
-  [[ "$output" == *"refuse: scope hint given"* ]]
+  [[ "$stderr" == *"refuse: scope hint given"* ]]
 }
 
 @test "verify red twin: a report whose scope is not full refuses" {
   write_report "$EXPECTED_COUNTS" "wiki/"
   inventory verify "$REPORT"
   [ "$status" -eq 1 ]
-  [[ "$output" == *"refuse: report scope is wiki/, not full"* ]]
+  [[ "$stderr" == *"refuse: report scope is wiki/, not full"* ]]
 }
 
 @test "verify red twin: a report carrying an action block refuses" {
@@ -266,7 +200,7 @@ class_of() {
 - [ ] `delete-001`/' "$REPORT" >"$REPORT.tmp" && mv "$REPORT.tmp" "$REPORT"
   inventory verify "$REPORT"
   [ "$status" -eq 1 ]
-  [[ "$output" == *"refuse: report carries 1 action block(s)"* ]]
+  [[ "$stderr" == *"refuse: report carries 1 action block(s)"* ]]
 }
 
 @test "verify red twin: a Summary that does not say 0 actions refuses" {
@@ -274,7 +208,7 @@ class_of() {
   sed 's/^- Actions proposed: 0$/- Actions proposed: 2/' "$REPORT" >"$REPORT.tmp" && mv "$REPORT.tmp" "$REPORT"
   inventory verify "$REPORT"
   [ "$status" -eq 1 ]
-  [[ "$output" == *"refuse: Summary does not read Actions proposed: 0"* ]]
+  [[ "$stderr" == *"refuse: Summary does not read Actions proposed: 0"* ]]
 }
 
 @test "verify red twin: a report cut off before its out-of-scope section refuses" {
@@ -282,7 +216,7 @@ class_of() {
   sed '/^## Out-of-scope findings$/,$d' "$REPORT" >"$REPORT.tmp" && mv "$REPORT.tmp" "$REPORT"
   inventory verify "$REPORT"
   [ "$status" -eq 1 ]
-  [[ "$output" == *"refuse: report has no ## Out-of-scope findings section"* ]]
+  [[ "$stderr" == *"refuse: report has no ## Out-of-scope findings section"* ]]
 }
 
 @test "verify: every refusal is named, not only the first" {
@@ -290,12 +224,77 @@ class_of() {
   printf 'new\n' >"$MEMORY/new.md"
   inventory verify "$REPORT" --scope-hint "wiki/"
   [ "$status" -eq 1 ]
-  [ "$(grep -c '^refuse: ' <<<"$output")" -eq 3 ]
+  [ "$(grep -c '^refuse: ' <<<"$stderr")" -eq 3 ]
 }
 
 @test "verify: a missing report exits 3" {
   inventory verify "$BATS_TEST_TMPDIR/absent.md"
   [ "$status" -eq 3 ]
+}
+
+@test "verify: a refusal prints nothing on stdout and a verified run prints nothing on stderr" {
+  write_report "$EXPECTED_COUNTS"
+  inventory verify "$REPORT"
+  [ "$status" -eq 0 ]
+  [ -z "$stderr" ]
+  inventory verify "$REPORT" --scope-hint "memory only"
+  [ "$status" -eq 1 ]
+  [ -z "$output" ]
+}
+
+# scratch_script <cli-body>: a copy of the script beside a stand-in
+# cli/gaia whose body is <cli-body>, so the recount runs against a CLI that
+# fails in a chosen way. Sets SCRATCH_SCRIPT.
+scratch_script() {
+  mkdir -p "$BATS_TEST_TMPDIR/scratch/scripts" "$BATS_TEST_TMPDIR/scratch/cli"
+  cp "$SCRIPT" "$BATS_TEST_TMPDIR/scratch/scripts/knowledge-inventory.sh"
+  printf '#!/usr/bin/env bash\n%s\n' "$1" >"$BATS_TEST_TMPDIR/scratch/cli/gaia"
+  chmod +x "$BATS_TEST_TMPDIR/scratch/cli/gaia"
+  SCRATCH_SCRIPT="$BATS_TEST_TMPDIR/scratch/scripts/knowledge-inventory.sh"
+}
+
+@test "verify red twin: a CLI that exits 3 makes verify exit 3 and never verify" {
+  write_report "$EXPECTED_COUNTS"
+  scratch_script 'exit 3'
+  run --separate-stderr bash "$SCRATCH_SCRIPT" verify --root "$PROJECT" "$REPORT"
+  [ "$status" -eq 3 ]
+  [ -z "$output" ]
+  [[ "$stderr" == *"store recount failed"* ]]
+}
+
+@test "verify red twin: a CLI that prints something other than a store map makes verify exit 3" {
+  write_report "$EXPECTED_COUNTS"
+  scratch_script "printf 'not json\\n'"
+  run --separate-stderr bash "$SCRATCH_SCRIPT" verify --root "$PROJECT" "$REPORT"
+  [ "$status" -eq 3 ]
+  [ -z "$output" ]
+  [[ "$stderr" == *"did not print a store map"* ]]
+}
+
+@test "verify red twin: a missing CLI makes verify exit 3" {
+  write_report "$EXPECTED_COUNTS"
+  scratch_script 'exit 0'
+  rm "$BATS_TEST_TMPDIR/scratch/cli/gaia"
+  run --separate-stderr bash "$SCRATCH_SCRIPT" verify --root "$PROJECT" "$REPORT"
+  [ "$status" -eq 3 ]
+  [ -z "$output" ]
+  [[ "$stderr" == *"cannot run"* ]]
+}
+
+@test "verify green twin: a stand-in CLI that prints the matching store map verifies" {
+  write_report "$EXPECTED_COUNTS"
+  scratch_script "printf '%s\\n' '{\"stores\":{\"memory\":{\"count\":2},\"user_agent_memory\":{\"count\":1},\"project_agent_memory\":{\"count\":1},\"rules\":{\"count\":2},\"wiki\":{\"count\":2},\"claude_md\":{\"count\":2}}}'"
+  run --separate-stderr bash "$SCRATCH_SCRIPT" verify --root "$PROJECT" "$REPORT"
+  [ "$status" -eq 0 ]
+  [ "$output" = "verified: $EXPECTED_COUNTS" ]
+}
+
+@test "verify red twin: a stand-in CLI whose count differs refuses and names the store" {
+  write_report "$EXPECTED_COUNTS"
+  scratch_script "printf '%s\\n' '{\"stores\":{\"memory\":{\"count\":2},\"user_agent_memory\":{\"count\":1},\"project_agent_memory\":{\"count\":1},\"rules\":{\"count\":2},\"wiki\":{\"count\":9},\"claude_md\":{\"count\":2}}}'"
+  run --separate-stderr bash "$SCRATCH_SCRIPT" verify --root "$PROJECT" "$REPORT"
+  [ "$status" -eq 1 ]
+  [[ "$stderr" == *"refuse: store wiki: report 2, recomputed 9"* ]]
 }
 
 # --- relocate-reports ---

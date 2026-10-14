@@ -3,6 +3,7 @@ import {runCheck} from '../check.js';
 import {
   createScratchProject,
   expectFixtureParity,
+  FIXTURE_PARITY_TIMEOUT_MS,
   runFitness,
 } from '../test-support.js';
 import type {CheckReport, FixtureProject} from '../types.js';
@@ -38,9 +39,13 @@ const permissionsProject = (allow: unknown[]): FixtureProject => ({
 });
 
 describe('settings rules fixtures', () => {
-  test('fires on every red fixture and stays quiet on every green one', () => {
-    expectFixtureParity(SETTINGS_RULES, SETTINGS_FIXTURES);
-  });
+  test(
+    'fires on every red fixture and stays quiet on every green one',
+    () => {
+      expectFixtureParity(SETTINGS_RULES, SETTINGS_FIXTURES);
+    },
+    FIXTURE_PARITY_TIMEOUT_MS
+  );
 });
 
 describe('settings.valid-json', () => {

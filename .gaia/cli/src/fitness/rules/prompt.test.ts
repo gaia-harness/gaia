@@ -1,6 +1,10 @@
 import {describe, expect, test} from 'vitest';
 import {runCheck} from '../check.js';
-import {createScratchProject, expectFixtureParity} from '../test-support.js';
+import {
+  createScratchProject,
+  expectFixtureParity,
+  FIXTURE_PARITY_TIMEOUT_MS,
+} from '../test-support.js';
 import type {Finding, FixtureProject} from '../types.js';
 import {PROMPT_FIXTURES} from './prompt.fixtures.js';
 import {PROMPT_RULES} from './prompt.js';
@@ -37,9 +41,13 @@ const SONNET_SKILL = '.claude/skills/sonnet-example/SKILL.md';
 const UNPINNED_SKILL = '.claude/skills/unpinned-example/SKILL.md';
 
 describe('prompt rules', () => {
-  test('every rule has a red fixture that fires it and a green one that does not', () => {
-    expectFixtureParity(PROMPT_RULES, PROMPT_FIXTURES);
-  });
+  test(
+    'every rule has a red fixture that fires it and a green one that does not',
+    () => {
+      expectFixtureParity(PROMPT_RULES, PROMPT_FIXTURES);
+    },
+    FIXTURE_PARITY_TIMEOUT_MS
+  );
 
   test('a rule fires only on a file whose resolved model is in its list', () => {
     const report = checkProject({

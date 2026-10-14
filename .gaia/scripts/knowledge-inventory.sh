@@ -1,13 +1,13 @@
 #!/usr/bin/env bash
 #
 # Deterministic half of /gaia-cleanse (.claude/skills/gaia/references/cleanse.md):
-# what the knowledge stores hold, who owns a file an action targets, and
-# whether a 0-action report may finalize without a human. The playbook's
-# model stages call this rather than computing any of it themselves.
+# who owns a file an action targets, whether a 0-action report may finalize
+# without a human, and the one-time move of old reports. The playbook's model
+# stages call this rather than computing any of it themselves. What the
+# knowledge stores hold (the listing and the counts) is the CLI's:
+# `.gaia/cli/gaia fitness inventory --json`.
 #
 # Usage:
-#   bash .gaia/scripts/knowledge-inventory.sh list     [--root <project-root>]
-#   bash .gaia/scripts/knowledge-inventory.sh counts   [--root <project-root>]
 #   bash .gaia/scripts/knowledge-inventory.sh classify [--root <project-root>] <path>...
 #   bash .gaia/scripts/knowledge-inventory.sh verify   [--root <project-root>] <report> [--scope-hint <text>]
 #   bash .gaia/scripts/knowledge-inventory.sh relocate-reports [--root <project-root>]
@@ -17,9 +17,6 @@
 # character outside A-Za-z0-9- becomes a dash, and a root given through a
 # symlink names a different memory dir than its target.
 #
-# list      one `<store>\t<path>\t<words>\t<mtime-epoch>` row per markdown file.
-# counts    one line, `<store>=<n>` per store, space separated. Stage 1 copies
-#           it verbatim into the report's `store_counts:` frontmatter field.
 # classify  one `<class>\t<path>` line per input, in input order:
 #             project-memory  under the project's memory dir or its
 #                             .claude/agent-memory/ (gitignored, yet the
@@ -33,8 +30,13 @@
 #           full scope, no scope hint, no action block, a Summary reading
 #           `Actions proposed: 0`, an `## Out-of-scope findings` section (a
 #           report cut short lacks its last section), and every store count
-#           equal to a fresh recount. Otherwise exit 1 with one `refuse:` line
-#           per failed condition.
+#           equal to a fresh recount. The recount is the CLI's
+#           (`<script dir>/../cli/gaia fitness inventory --json`, each store's
+#           `count`). Otherwise exit 1 with one `refuse: <reason>` line per
+#           failed condition on stderr. When the CLI cannot run or its output
+#           does not parse, verify exits 3 and prints no `verified:` line: it
+#           fails closed, so a report is never auto-applied on a recount that
+#           did not happen.
 #
 # relocate-reports
 #           one-time move of <root>/.gaia/local/audit/KNOWLEDGE-*.md into
@@ -51,11 +53,10 @@
 #           worktree. From a linked worktree, outside a repository, or on
 #           --help it exits 0 and moves nothing.
 #
-# Exit 2: usage error. Exit 3: an input could not be read or a move failed.
+# Exit 2: usage error. Exit 3: an input could not be read, the CLI recount
+# could not run, or a move failed.
 
 set -uo pipefail
-
-STORES="memory user_agent_memory project_agent_memory rules wiki claude_md"
 
 fail_usage() {
   printf 'knowledge-inventory: %s\n' "$1" >&2
@@ -67,11 +68,11 @@ fail_input() {
   exit 3
 }
 
-[ "$#" -ge 1 ] || fail_usage "usage: knowledge-inventory.sh list|counts|classify|verify|relocate-reports [--root <project-root>] ..."
+[ "$#" -ge 1 ] || fail_usage "usage: knowledge-inventory.sh classify|verify|relocate-reports [--root <project-root>] ..."
 subcommand="$1"
 shift
 case "$subcommand" in
-  list | counts | classify | verify | relocate-reports) ;;
+  classify | verify | relocate-reports) ;;
   *) fail_usage "unknown subcommand: $subcommand" ;;
 esac
 
@@ -91,7 +92,7 @@ while [ "$#" -gt 0 ]; do
       shift 2
       ;;
     --help | -h)
-      printf 'usage: knowledge-inventory.sh list|counts|classify|verify|relocate-reports [--root <project-root>] ...\n'
+      printf 'usage: knowledge-inventory.sh classify|verify|relocate-reports [--root <project-root>] ...\n'
       exit 0
       ;;
     -*) fail_usage "unknown option: $1" ;;
@@ -108,43 +109,6 @@ fi
 root="${root%/}"
 memory_dir="$HOME/.claude/projects/$(printf %s "$root" | sed 's/[^A-Za-z0-9-]/-/g')/memory"
 user_agent_memory_dir="$HOME/.claude/agent-memory"
-
-# store_files <store>: the store's markdown files, one per line, sorted.
-store_files() {
-  case "$1" in
-    memory) find "$memory_dir" -type f -name '*.md' 2>/dev/null ;;
-    user_agent_memory) find "$user_agent_memory_dir" -type f -name '*.md' 2>/dev/null ;;
-    project_agent_memory) find "$root/.claude/agent-memory" -type f -name '*.md' 2>/dev/null ;;
-    rules) find "$root/.claude/rules" -type f -name '*.md' 2>/dev/null ;;
-    wiki) find "$root/wiki" -type f -name '*.md' 2>/dev/null ;;
-    # Depth 3 reaches a package's CLAUDE.md (frontend/CLAUDE.md) without
-    # descending into .claude/worktrees/, where each linked tree's own copy sits.
-    claude_md) find "$root" -maxdepth 3 -name CLAUDE.md -not -path '*/node_modules/*' 2>/dev/null ;;
-  esac | LC_ALL=C sort
-}
-
-count_line() {
-  local store line=""
-  for store in $STORES; do
-    line+="$store=$(store_files "$store" | grep -c .)"$' '
-  done
-  printf '%s\n' "${line% }"
-}
-
-modification_epoch() {
-  stat -c %Y "$1" 2>/dev/null || stat -f %m "$1" 2>/dev/null
-}
-
-list_rows() {
-  local store file words
-  for store in $STORES; do
-    while IFS= read -r file; do
-      [ -n "$file" ] || continue
-      words="$(wc -w <"$file" | tr -d '[:space:]')"
-      printf '%s\t%s\t%s\t%s\n' "$store" "$file" "$words" "$(modification_epoch "$file")"
-    done < <(store_files "$store")
-  done
-}
 
 # memory_class <path>: project-memory or user-memory for a path inside a
 # memory store, nothing otherwise. A `..` segment never matches, so a path
@@ -184,6 +148,33 @@ classify_paths() {
   done
 }
 
+# recount_stores: `<store>=<count>` per store in the CLI inventory's order,
+# space separated, on stdout. Returns 3 when jq or the CLI is missing, the
+# CLI exits non-zero, or its output is not a store map, so verify never
+# compares a report against a recount that did not happen.
+recount_stores() {
+  local cli inventory counts
+  cli="$(dirname "$0")/../cli/gaia"
+  command -v jq >/dev/null 2>&1 || {
+    printf 'knowledge-inventory: jq is required for the store recount\n' >&2
+    return 3
+  }
+  [ -x "$cli" ] || {
+    printf 'knowledge-inventory: cannot run %s\n' "$cli" >&2
+    return 3
+  }
+  inventory="$("$cli" fitness inventory --json --root "$root")" || {
+    printf 'knowledge-inventory: the CLI store recount failed\n' >&2
+    return 3
+  }
+  counts="$(jq -r '[.stores | to_entries[] | "\(.key)=\(.value.count)"] | join(" ")' <<<"$inventory" 2>/dev/null)" || counts=""
+  [ -n "$counts" ] || {
+    printf 'knowledge-inventory: the CLI store recount did not print a store map\n' >&2
+    return 3
+  }
+  printf '%s\n' "$counts"
+}
+
 # frontmatter_value <report> <key>: the value of <key> in the report's
 # leading `---` block, or nothing.
 frontmatter_value() {
@@ -199,7 +190,10 @@ verify_report() {
   local report="${arguments[0]}"
   [ -f "$report" ] && [ -r "$report" ] || fail_input "cannot read report $report"
 
-  local refusals=() scope action_blocks recorded recomputed store report_count recomputed_count
+  local refusals=() scope action_blocks recorded recomputed stores store report_count recomputed_count
+  recomputed="$(recount_stores)" || exit "$?"
+  stores="$(tr ' ' '\n' <<<"$recomputed" | sed 's/=.*//')"
+
   [ -z "$scope_hint" ] || refusals+=("scope hint given ($scope_hint); a scoped run never auto-applies")
   scope="$(frontmatter_value "$report" scope)"
   [ "$scope" = "full" ] || refusals+=("report scope is ${scope:-unset}, not full")
@@ -209,8 +203,7 @@ verify_report() {
   grep -qx '## Out-of-scope findings' "$report" || refusals+=("report has no ## Out-of-scope findings section")
 
   recorded=" $(frontmatter_value "$report" store_counts) "
-  recomputed="$(count_line)"
-  for store in $STORES; do
+  for store in $stores; do
     report_count="$(tr ' ' '\n' <<<"$recorded" | sed -n "s/^$store=//p")"
     recomputed_count="$(tr ' ' '\n' <<<"$recomputed" | sed -n "s/^$store=//p")"
     [ "$report_count" = "$recomputed_count" ] ||
@@ -218,7 +211,7 @@ verify_report() {
   done
 
   if [ "${#refusals[@]}" -gt 0 ]; then
-    printf 'refuse: %s\n' ${refusals[@]+"${refusals[@]}"}
+    printf 'refuse: %s\n' ${refusals[@]+"${refusals[@]}"} >&2
     exit 1
   fi
   printf 'verified: %s\n' "$recomputed"
@@ -249,8 +242,6 @@ relocate_reports() {
 
 case "$subcommand" in
   relocate-reports) relocate_reports ;;
-  list) list_rows ;;
-  counts) count_line ;;
   classify) classify_paths ;;
   verify) verify_report ;;
 esac
