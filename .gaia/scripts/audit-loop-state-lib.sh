@@ -354,7 +354,9 @@ gaia_loop_recommended() {
 # the statusline is hidden while a question shows and never visible over Remote
 # Control, and the human reads the choices, not the text above them. A missing,
 # stale, future, unparseable or absent reading, or a zero-size window, reads
-# "context unavailable".
+# "context unavailable". The reading's text and its side of the line come from
+# gaia_context_summary and gaia_context_band, so the caller sources
+# context-checkpoint-lib.sh first; rc 6 when it has not.
 # Exactly one option leads and ends in " (Recommended)". A `context` trigger
 # means the session is at or over the line, so "Continue audit in a new session" always leads and
 # "Continue audit in this session" stays offered right after it as the opt-out. For any other
@@ -368,6 +370,7 @@ gaia_loop_pinned_question() {
   local recommended="${9-}" line="${10-}"
   local LC_ALL=C typed_grant_note typed_accept_note context_tokens context_window question_context=", context unavailable" option_context="Context unavailable" band=none lead
   command -v jq >/dev/null 2>&1 || return 6
+  declare -F gaia_context_summary >/dev/null && declare -F gaia_context_band >/dev/null || return 6
   _gaia_loop_keyable "$branch" || return 2
   [[ "$nonce" =~ ^[0-9a-f]{16}$ ]] || return 2
   gaia_loop_is_uint "$used" || return 2
@@ -385,10 +388,13 @@ gaia_loop_pinned_question() {
       context_tokens="${BASH_REMATCH[1]}"
       context_window="${BASH_REMATCH[2]}"
       if [ "$((10#$context_window))" -gt 0 ]; then
-        question_context=", context $((10#$context_tokens * 100 / 10#$context_window))% ($((10#$context_tokens / 1000))k of $((10#$context_window / 1000))k)"
-        option_context="Context $((10#$context_tokens * 100 / 10#$context_window))% ($((10#$context_tokens / 1000))k of $((10#$context_window / 1000))k)"
+        option_context=$(gaia_context_summary "$context_tokens" "$context_window")
+        question_context=", context ${option_context#Context }"
         if [ -n "$line" ]; then
-          if [ "$((10#$context_tokens))" -lt "$((10#$line))" ]; then band=below; else band=above; fi
+          case "$(gaia_context_band "$context_tokens" "$context_window" "$line")" in
+            green | yellow) band=below ;;
+            red | fire | skull) band=above ;;
+          esac
         fi
       fi
       ;;

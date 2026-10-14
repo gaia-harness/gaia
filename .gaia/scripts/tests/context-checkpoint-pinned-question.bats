@@ -2,9 +2,9 @@
 #
 # Suite for the audit loop's pinned question text staying byte-identical while the
 # shared context lib grows new helpers and raises a band. The fixture was captured
-# from the libs as committed before that change; the question builder keeps its own
-# copy of the reading-summary math, so this compare is what notices a drift in
-# either place.
+# from the libs as committed before that change; the question builder reads its
+# reading summary and its side of the line from that lib's gaia_context_summary
+# and gaia_context_band, so this compare is what notices a drift in either one.
 #
 # Run: .gaia/scripts/bats5.sh .gaia/scripts/tests/context-checkpoint-pinned-question.bats < /dev/null
 # Assertion style: bash-3.2-safe per .claude/rules/bats-assertions.md.
@@ -44,13 +44,13 @@ copy_libraries() {
   cmp "$actual" "$FIXTURE"
 }
 
-@test "red twin: a changed summary format in the question builder fails the compare" {
+@test "red twin: a changed summary format in the shared context lib fails the compare" {
   local scratch="$BATS_TEST_TMPDIR/mutant" actual="$BATS_TEST_TMPDIR/mutant-actual.txt"
   copy_libraries "$scratch"
-  sed 's/k of /K of /g' "$scratch/audit-loop-state-lib.sh" >"$scratch/audit-loop-state-lib.sh.new"
-  mv "$scratch/audit-loop-state-lib.sh.new" "$scratch/audit-loop-state-lib.sh"
+  sed 's/k of /K of /g' "$scratch/context-checkpoint-lib.sh" >"$scratch/context-checkpoint-lib.sh.new"
+  mv "$scratch/context-checkpoint-lib.sh.new" "$scratch/context-checkpoint-lib.sh"
   # The mutation must actually have changed the copy.
-  run cmp -s "$scratch/audit-loop-state-lib.sh" "$REPO_ROOT/.gaia/scripts/audit-loop-state-lib.sh"
+  run cmp -s "$scratch/context-checkpoint-lib.sh" "$REPO_ROOT/.gaia/scripts/context-checkpoint-lib.sh"
   [ "$status" -ne 0 ]
   (emit_questions "$scratch") >"$actual"
   run cmp -s "$actual" "$FIXTURE"

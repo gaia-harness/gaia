@@ -14,6 +14,8 @@ setup() {
   REPO_ROOT="$(cd "$BATS_TEST_DIRNAME/../../.." && pwd)"
   SCRIPTS="${AUDIT_LOOP_SCRIPTS_DIRECTORY:-$REPO_ROOT/.gaia/scripts}"
   # shellcheck source=/dev/null
+  . "$SCRIPTS/context-checkpoint-lib.sh"
+  # shellcheck source=/dev/null
   . "$SCRIPTS/audit-loop-state-lib.sh"
   # shellcheck source=/dev/null
   . "$REPO_ROOT/.gaia/tests/helpers/audit-loop-fixture.sh"
@@ -386,7 +388,7 @@ labels() { printf '%s' "$1" | jq -r '[.questions[0].options[].label] | join("|")
   cp "$SCRIPTS"/*.sh "$mutant_directory/"
   sed -e 's/if \$cap and (\$eligible | not) then/if false then/' -e '/{key: "grant_/d' "$SCRIPTS/audit-loop-state-lib.sh" >"$mutant_directory/audit-loop-state-lib.sh"
   if cmp -s "$SCRIPTS/audit-loop-state-lib.sh" "$mutant_directory/audit-loop-state-lib.sh"; then return 1; fi
-  question="$(bash -c '. "$1"; gaia_loop_pinned_question feat/x 0123456789abcdef 10 3 false true cap' _ "$mutant_directory/audit-loop-state-lib.sh")"
+  question="$(bash -c '. "$1/context-checkpoint-lib.sh"; . "$1/audit-loop-state-lib.sh"; gaia_loop_pinned_question feat/x 0123456789abcdef 10 3 false true cap' _ "$mutant_directory")"
   [ "$(option_count "$question")" -eq 1 ]
   run at_least_two_options "$question"
   [ "$status" -ne 0 ]
@@ -487,10 +489,17 @@ recommended_count() { printf '%s' "$1" | jq '[.questions[0].options[] | select(.
   local mutant_directory="$BATS_TEST_TMPDIR/mut-line" question
   mkdir -p "$mutant_directory"
   cp "$SCRIPTS"/*.sh "$mutant_directory/"
-  sed 's/-lt "\$((10#\$line))"/-le "$((10#$line))"/' "$SCRIPTS/audit-loop-state-lib.sh" >"$mutant_directory/audit-loop-state-lib.sh"
-  if cmp -s "$SCRIPTS/audit-loop-state-lib.sh" "$mutant_directory/audit-loop-state-lib.sh"; then return 1; fi
-  question="$(bash -c '. "$1"; gaia_loop_pinned_question feat/x 0123456789abcdef 6 3 true false rubric:J2 "fresh 400000 1000000" grant 400000' _ "$mutant_directory/audit-loop-state-lib.sh")"
+  # The comparison lives in the shared band helper the builder reads its side of the line from.
+  sed '/^gaia_context_band()/,/^}/ s/-ge "\$red"/-gt "$red"/' "$SCRIPTS/context-checkpoint-lib.sh" >"$mutant_directory/context-checkpoint-lib.sh"
+  if cmp -s "$SCRIPTS/context-checkpoint-lib.sh" "$mutant_directory/context-checkpoint-lib.sh"; then return 1; fi
+  question="$(bash -c '. "$1/context-checkpoint-lib.sh"; . "$1/audit-loop-state-lib.sh"; gaia_loop_pinned_question feat/x 0123456789abcdef 6 3 true false rubric:J2 "fresh 400000 1000000" grant 400000' _ "$mutant_directory")"
   [ "$(first_label "$question")" = "Continue audit in this session (Recommended)" ]
+}
+
+@test "pinned question: without the shared context lib sourced it is rc 6 with empty stdout" {
+  run bash -c '. "$1/audit-loop-state-lib.sh"; gaia_loop_pinned_question feat/x 0123456789abcdef 6 3 true false context' _ "$SCRIPTS"
+  [ "$status" -eq 6 ]
+  [ -z "$output" ]
 }
 
 @test "recommended: a context checkpoint with no denying signal is a grant, otherwise the verdict decides" {
@@ -553,7 +562,7 @@ recommended_count() { printf '%s' "$1" | jq '[.questions[0].options[] | select(.
   mkdir -p "$mutant_directory"
   cp "$SCRIPTS"/*.sh "$mutant_directory/"
   sed 's/^_GAIA_LOOP_ASK_RECORDER=1$/_GAIA_LOOP_ASK_RECORDER=0/' "$SCRIPTS/audit-loop-state-lib.sh" >"$mutant_directory/audit-loop-state-lib.sh"
-  question="$(bash -c '. "$1"; gaia_loop_pinned_question feat/x 0123456789abcdef 6 3 true false context' _ "$mutant_directory/audit-loop-state-lib.sh")"
+  question="$(bash -c '. "$1/context-checkpoint-lib.sh"; . "$1/audit-loop-state-lib.sh"; gaia_loop_pinned_question feat/x 0123456789abcdef 6 3 true false context' _ "$mutant_directory")"
   [ "$(printf '%s' "$question" | jq '[.questions[0].options[] | select(.label | startswith("Continue") or startswith("Accept")) | select(.description | test("type `audit-(grant 3|accept)`"))] | length')" -eq 3 ]
 }
 
