@@ -447,6 +447,8 @@ CASES
   [ "$status" -eq 0 ]
   [ "$output" = "filed 101" ]
   [ "$(jq -r '.issue' "$OUTCOMES")" = 101 ]
+  [ "$(grep -c '^issue create' "$STUB/log")" -eq 1 ]
+  grep -q -e ' --body-file ' "$STUB/log"
   grep -q -e '--label tech-debt --label severity:major' "$STUB/log"
   grep -q -e ' --body ' "$STUB/log" && return 1
   jq -e '.[0].body | contains("<!-- gaia-debt-key: v1 class=holistic/swallowed-error path=app/a.ts line=10 -->")' "$STUB/open.json" >/dev/null
