@@ -58,13 +58,35 @@ else
   cp "$ALL_TRACKED" "$INCLUDE"
 fi
 
+# One grep over every included file finds the marker-bearing ones, rather than
+# one grep per file. It runs from PROJECT_ROOT on the repo-relative names, so
+# it prints the same names back. An empty list never reaches xargs, which runs
+# grep once on empty input and grep would then read stdin; grep exits 1 when no
+# file matches, which here is a clean result, so only xargs' own failures stop
+# the walk.
+EXISTING="$(mktemp)"
+MARKED="$(mktemp)"
+trap 'rm -rf "$STAGING" "$ALL_TRACKED" "$EXCLUDE_REGEX" "$INCLUDE" "$EXISTING" "$MARKED"' EXIT
+while IFS= read -r relative_path; do
+  if [ -f "$PROJECT_ROOT/$relative_path" ]; then
+    printf '%s\0' "$relative_path"
+  fi
+done < "$INCLUDE" > "$EXISTING"
+if [ -s "$EXISTING" ]; then
+  marker_status=0
+  (cd "$PROJECT_ROOT" && xargs -0 grep -l -F -- 'gaia:maintainer-only:start' 2>/dev/null) \
+    < "$EXISTING" > "$MARKED" || marker_status=$?
+  if [ "$marker_status" -ne 0 ] && [ "$marker_status" -ne 123 ]; then
+    fail "marker scan failed (xargs status $marker_status)"
+    exit 1
+  fi
+fi
+
 MISSING_DELTA=()
 ZERO_BYTE=()
 while IFS= read -r relative_path; do
   source_path="$PROJECT_ROOT/$relative_path"
   staged="$STAGING/$relative_path"
-  [ -f "$source_path" ] || continue
-  grep -q 'gaia:maintainer-only:start' "$source_path" 2>/dev/null || continue
 
   # Source had a marker block; staged counterpart must exist and be smaller.
   if [ ! -f "$staged" ]; then
@@ -82,7 +104,7 @@ while IFS= read -r relative_path; do
     ZERO_BYTE+=("$relative_path")
     continue
   fi
-done < "$INCLUDE"
+done < "$MARKED"
 
 if [ "${#MISSING_DELTA[@]}" -gt 0 ]; then
   log "Files with marker blocks that did not shrink in staging:"

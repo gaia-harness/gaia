@@ -99,7 +99,8 @@ suite_list="$(mktemp)" || { rm -f "$changed_list"; die_input "cannot create a te
 tracked_list="$(mktemp)" || { rm -f "$changed_list" "$suite_list"; die_input "cannot create a temporary file"; }
 suite_tree_list="$(mktemp)" || { rm -f "$changed_list" "$suite_list" "$tracked_list"; die_input "cannot create a temporary file"; }
 directory_list="$(mktemp)" || { rm -f "$changed_list" "$suite_list" "$tracked_list" "$suite_tree_list"; die_input "cannot create a temporary file"; }
-trap 'rm -f "$changed_list" "$suite_list" "$tracked_list" "$suite_tree_list" "$directory_list"' EXIT
+pattern_list="$(mktemp)" || { rm -f "$changed_list" "$suite_list" "$tracked_list" "$suite_tree_list" "$directory_list"; die_input "cannot create a temporary file"; }
+trap 'rm -f "$changed_list" "$suite_list" "$tracked_list" "$suite_tree_list" "$directory_list" "$pattern_list"' EXIT
 
 # -z keeps a non-ASCII path unquoted, so it compares equal to the diff's path.
 git -C "$repository_root" ls-files -z | tr '\0' '\n' > "$tracked_list" \
@@ -107,51 +108,66 @@ git -C "$repository_root" ls-files -z | tr '\0' '\n' > "$tracked_list" \
 awk -F/ 'NF > 1 && /\.bats$/ { print $1 }' "$tracked_list" | sort -u > "$suite_tree_list"
 awk -F/ 'NF > 1 { sub(/\/[^\/]*$/, ""); print }' "$tracked_list" | sort -u > "$directory_list"
 
-count_other_paths_ending_with() {
-  awk -v changed="$1" -v suffix="/$2" '
-    $0 != changed && substr("/" $0, length($0) + 2 - length(suffix)) == suffix { count++ }
-    END { print count + 0 }
-  ' "$tracked_list"
-}
-
-directory_path_contains() {
-  awk -v text="$1" 'index($0, text) { found = 1; exit } END { exit !found }' "$directory_list"
-}
-
-match_text_for() {
-  local changed_path="$1" base_name="${1##*/}" match_text parent_path
-  if [ "$changed_path" = "$base_name" ]; then
-    printf '/%s' "$base_name"
-    return
-  fi
-  case "$base_name" in
-    *.ts|*.tsx|*.js|*.jsx|*.mjs|*.cjs) ;;
-    *)
-      match_text="$base_name"
-      parent_path="${changed_path%/*}"
-      while directory_path_contains "$match_text"; do
-        match_text="${parent_path##*/}/$match_text"
-        [ "$parent_path" != "${parent_path%/*}" ] || break
-        parent_path="${parent_path%/*}"
-      done
-      printf '%s' "$match_text"
-      return
-      ;;
-  esac
-  if grep -qxF -e "${changed_path%%/*}" "$suite_tree_list" \
-    || [ "$(count_other_paths_ending_with "$changed_path" "$base_name")" -eq 0 ]; then
-    printf '%s' "$base_name"
-    return
-  fi
-  match_text="$base_name"
-  parent_path="${changed_path%/*}"
-  while :; do
-    match_text="${parent_path##*/}/$match_text"
-    [ "$parent_path" != "${parent_path%/*}" ] || break
-    parent_path="${parent_path%/*}"
-    [ "$(count_other_paths_ending_with "$changed_path" "$match_text")" -gt 0 ] || break
-  done
-  printf '%s' "$match_text"
+# Reads changed paths, one per line on stdin, and prints each one's match text
+# on its own line in the same order: one awk process for the whole change,
+# where calling awk per path and per lengthening step cost seconds on a long
+# branch.
+match_texts_for() {
+  awk -v tracked_file="$tracked_list" -v directory_file="$directory_list" -v suite_tree_file="$suite_tree_list" '
+    function last_segment(path,   segments, segment_count) {
+      segment_count = split(path, segments, "/")
+      return segments[segment_count]
+    }
+    function parent_of(path) {
+      if (match(path, /\/[^\/]*$/)) return substr(path, 1, RSTART - 1)
+      return path
+    }
+    function first_segment(path,   slash) {
+      slash = index(path, "/")
+      return slash ? substr(path, 1, slash - 1) : path
+    }
+    function count_other_paths_ending_with(changed, suffix,   position, count, tracked_path) {
+      suffix = "/" suffix
+      count = 0
+      for (position = 1; position <= tracked_count; position++) {
+        tracked_path = tracked[position]
+        if (tracked_path != changed && substr("/" tracked_path, length(tracked_path) + 2 - length(suffix)) == suffix) count++
+      }
+      return count
+    }
+    function directory_path_contains(text,   position) {
+      for (position = 1; position <= directory_count; position++) {
+        if (index(directories[position], text)) return 1
+      }
+      return 0
+    }
+    function match_text_for(changed,   base_name, match_text, parent_path) {
+      base_name = last_segment(changed)
+      if (changed == base_name) return "/" base_name
+      match_text = base_name
+      parent_path = parent_of(changed)
+      if (base_name !~ /\.(ts|tsx|js|jsx|mjs|cjs)$/) {
+        while (directory_path_contains(match_text)) {
+          match_text = last_segment(parent_path) "/" match_text
+          if (index(parent_path, "/") == 0) break
+          parent_path = parent_of(parent_path)
+        }
+        return match_text
+      }
+      if ((first_segment(changed) in suite_trees) || count_other_paths_ending_with(changed, base_name) == 0) return base_name
+      while (1) {
+        match_text = last_segment(parent_path) "/" match_text
+        if (index(parent_path, "/") == 0) break
+        parent_path = parent_of(parent_path)
+        if (count_other_paths_ending_with(changed, match_text) == 0) break
+      }
+      return match_text
+    }
+    FILENAME == tracked_file { tracked[++tracked_count] = $0; next }
+    FILENAME == directory_file { directories[++directory_count] = $0; next }
+    FILENAME == suite_tree_file { suite_trees[$0] = 1; next }
+    { print match_text_for($0) }
+  ' "$tracked_list" "$directory_list" "$suite_tree_list" -
 }
 
 if [ "${#diff_arguments[@]}" -gt 0 ]; then
@@ -175,11 +191,19 @@ while IFS= read -r -d '' changed_path; do
       [ -f "$repository_root/$changed_path" ] && printf '%s\n' "$changed_path" >> "$suite_list"
       ;;
   esac
-  # git grep exits 1 on no match; only a status above 1 is a failure.
-  git -C "$repository_root" grep -l -F -e "$(match_text_for "$changed_path")" -- '*.bats' >> "$suite_list" || {
-    grep_status=$?
-    [ "$grep_status" -eq 1 ] || die_input "git grep for $changed_path failed"
-  }
 done < "$changed_list"
+
+tr '\0' '\n' < "$changed_list" | match_texts_for > "$pattern_list" \
+  || die_input "computing the match texts failed"
+# One git grep for every match text at once. An empty change never reaches
+# it: handed an empty pattern file, git grep reads the `*.bats` pathspec as its
+# pattern instead and lists every tracked file of any kind holding that text.
+if [ -s "$pattern_list" ]; then
+  # git grep exits 1 on no match; only a status above 1 is a failure.
+  git -C "$repository_root" grep -l -F -f "$pattern_list" -- '*.bats' >> "$suite_list" || {
+    grep_status=$?
+    [ "$grep_status" -eq 1 ] || die_input "git grep over the changed paths failed"
+  }
+fi
 
 sort -u "$suite_list"
