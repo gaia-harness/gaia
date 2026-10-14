@@ -7,7 +7,7 @@ import {
   skillDirectoryOf,
 } from '../links.js';
 import {lineOf, splitFrontmatter, stripFencedCode} from '../markdown.js';
-import {isProjectFolder} from '../paths.js';
+import {isProjectFolder, templateExamples} from '../paths.js';
 import type {
   FileKind,
   ProjectFile,
@@ -291,13 +291,15 @@ export const linkResolvesCheck = (
     'playbook',
   ]).flatMap((file) => {
     const inSkillTree = skillDirectoryOf(file.path) !== undefined;
+    const isExample = templateExamples(file.text);
 
     return extractLinks(file.text).flatMap((reference) => {
       const checked =
         reference.kind === 'markdown' ||
-        (inSkillTree ?
+        ((inSkillTree ?
           BACKTICK_SKILL_PREFIX.test(reference.target)
-        : REPO_ROOT_PREFIX.test(reference.target));
+        : REPO_ROOT_PREFIX.test(reference.target)) &&
+          !isExample(reference.target));
 
       if (!checked) return [];
 

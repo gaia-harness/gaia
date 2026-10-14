@@ -1,3 +1,5 @@
+import {STATE_FILE_RELATIVE} from '../init/util/state.js';
+import {escapeRegExp} from '../util/escape-regexp.js';
 import type {ResolvedPath, RuleContext} from './context.js';
 import {bodyLines, splitFrontmatter, stripInlineCode} from './markdown.js';
 import type {ProjectFile, RawFinding} from './types.js';
@@ -227,10 +229,36 @@ const resolveEverywhere = (
 ];
 
 /**
+ * Paths GAIA's own tooling writes on first use, so a fresh tree lacks them and
+ * no ignore file names them: `gaia init` writes its resume cursor, and the wiki
+ * maintenance passes write their audit reports under `wiki/meta/`. Only the
+ * folder is listed: a report's name varies, so a cited file under it is still
+ * a claim that the file exists.
+ */
+const TOOLING_PATHS: ReadonlySet<string> = new Set([
+  STATE_FILE_RELATIVE,
+  'wiki/meta',
+]);
+
+/**
+ * Whether a missing path is a runtime artifact a fresh clone lacks: one GAIA's
+ * tooling creates, or one git ignores. `folder` keeps the trailing slash, which
+ * a directory-only ignore pattern such as `output/` needs to match a folder
+ * that does not exist.
+ */
+export const isRuntimeArtifact = (
+  context: RuleContext,
+  relative: string,
+  folder: boolean
+): boolean =>
+  TOOLING_PATHS.has(relative) ||
+  context.gitIgnored(folder ? `${relative}/` : relative) === true;
+
+/**
  * Where a path token points. Anything found under any base or anchor counts as
  * found; otherwise a target that leaves the root under every base is `outside`,
- * never read and never dead. A gitignored target is a runtime artifact absent
- * from a fresh clone, so it is found rather than dead.
+ * never read and never dead. A runtime artifact absent from a fresh clone is
+ * found rather than dead.
  */
 export const resolveReference = (
   context: RuleContext,
@@ -266,7 +294,7 @@ export const resolveReference = (
 
   if (inside?.status !== 'inside') return {status: 'unresolvable'};
 
-  if (context.gitIgnored(inside.relative) === true) {
+  if (isRuntimeArtifact(context, inside.relative, token.endsWith('/'))) {
     return {relative: inside.relative, status: 'found'};
   }
 
@@ -345,6 +373,50 @@ const scopeAnchors = (file: ProjectFile): string[] => {
   });
 };
 
+const PLACEHOLDER = /<[^<>]+>/;
+
+/**
+ * Whether a token is a worked example of a placeholder template `text`
+ * declares, such as `pages/about/page.tsx` beside `pages/<route>/page.tsx`; a
+ * placeholder stands for any run of path characters, folders included. Both
+ * the first and the last segment must be literal: a placeholder there (`<x>/a`,
+ * `a/<x>/`, `a/<x>.md`) fits every path in some folder, so it would silence
+ * every dead path under it and declares no example.
+ */
+export const templateExamples = (
+  text: string
+): ((token: string) => boolean) => {
+  const templates =
+    text.includes('<') ?
+      bodyLines(text).flatMap((line) =>
+        [...line.matchAll(BACKTICKED)].flatMap((match) => {
+          const template = match[1] ?? '';
+          const literals = template.split(PLACEHOLDER);
+          const segments = template.replace(/\/$/, '').split('/');
+
+          if (
+            literals.length < 2 ||
+            (segments[0] ?? '').includes('<') ||
+            (segments.at(-1) ?? '').includes('<') ||
+            !literals.every(
+              (literal) => literal === '' || PATH_CHARACTERS.test(literal)
+            )
+          ) {
+            return [];
+          }
+
+          const pattern = literals
+            .map((literal) => escapeRegExp(literal))
+            .join(String.raw`[\w./@+-]+`);
+
+          return [new RegExp(`^${pattern}$`)];
+        })
+      )
+    : [];
+
+  return (token) => templates.some((template) => template.test(token));
+};
+
 /**
  * One finding per backticked or linked path in `files` that does not exist.
  * A path is also tried from the package a nested file belongs to and from a
@@ -355,6 +427,8 @@ const scopeAnchors = (file: ProjectFile): string[] => {
  * that, and a bare name that is missing cannot be told from an example, a
  * runtime file or a sentence saying the file does not exist. The cost is a
  * backticked path whose whole top folder was removed, which goes unreported.
+ * Nor is a backticked instance of a placeholder template the same file
+ * declares a claim: it is a worked example of that template.
  */
 export const deadPathFindings = (
   context: RuleContext,
@@ -362,11 +436,14 @@ export const deadPathFindings = (
 ): RawFinding[] =>
   files.flatMap((file) => {
     const anchors = scopeAnchors(file);
+    const isExample = templateExamples(file.text);
 
     return extractPathReferences(file.text).flatMap(({line, linked, token}) => {
       const segments = token.replace(/\/$/, '').split('/');
 
       if (!linked && segments.length === 1) return [];
+
+      if (!linked && isExample(token)) return [];
 
       const reference: PathReferenceQuery = {
         anchors,
