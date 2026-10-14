@@ -460,7 +460,7 @@ doctor_groupless_shard() {
 doctor_unweighted() {
   local destination anchor
   destination="$(copy_sharder)"
-  anchor="$(grep -nF 'size="$(wc -c <"$absolute_path" | tr -d '"'"' '"'"')"' "$destination" | head -1 | cut -d: -f1)"
+  anchor="$(grep -nF 'size="${readable_sizes[$readable_position]:-0}"' "$destination" | head -1 | cut -d: -f1)"
   [ -n "$anchor" ] || return 1
   awk -v anchor_line="$anchor" '
     NR == anchor_line { print "      size=1"; next }
@@ -508,6 +508,37 @@ seed_lopsided_tree() {
   # ...and is still caught, because the two heavy files landed together.
   SCRIPTS_TESTS_DIRECTORY="$directory" run within_load_bound "$copy" "$total" "$largest" scripts-1 scripts-2 scripts-3
   [ "$status" -eq 1 ]
+}
+
+# The sizes come from one wc over the whole group, paired to the files by
+# position. A directory named like a suite gets no wc line, so letting it into
+# that wc would hand each later file its neighbour's size. Two heavy files, one
+# named with a space, must each hold a shard alone, with the light files and
+# the directory together on the third.
+@test "A10: a directory among the suites does not shift the weights onto the wrong files" {
+  local directory shard heavy_shard_count=0 listing
+  directory="$BATS_TEST_TMPDIR/a10-scripts"
+  mkdir -p "$directory/a-directory.bats"
+  for name in "b heavy" "c heavy"; do
+    write_trivial_bats "$directory/$name.bats" "HEAVY-$name"
+    head -c 1000 /dev/zero | tr '\0' '#' >>"$directory/$name.bats"
+  done
+  for name in d-light e-light f-light g-light; do
+    write_trivial_bats "$directory/$name.bats" "LIGHT-$name"
+  done
+
+  for shard in scripts-1 scripts-2 scripts-3; do
+    # stdout alone: a wc complaint about the directory is not a listed file.
+    listing="$(SCRIPTS_TESTS_DIRECTORY="$directory" bash "$SCRIPT" files "$shard" 2>/dev/null)" || return 1
+    if grep -qF 'heavy.bats' <<<"$listing"; then
+      heavy_shard_count=$((heavy_shard_count + 1))
+      [ "$(grep -c . <<<"$listing")" -eq 1 ] || {
+        printf '%s holds a heavy file and more:\n%s\n' "$shard" "$listing" >&2
+        return 1
+      }
+    fi
+  done
+  [ "$heavy_shard_count" -eq 2 ]
 }
 
 # The anchored basenames the script declares, asked for rather than spelled

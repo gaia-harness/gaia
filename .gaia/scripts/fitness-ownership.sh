@@ -97,57 +97,111 @@ for pin in "$root"/.gaia/vendor/*.json; do
   vendor_targets+=("${target%/}")
 done
 
-result=""
+# The first pass settles every class a path's spelling decides and queues the
+# rest for the two lookups that need git and the manifest, each then run once
+# over the whole queue rather than once per path. It stops at an empty path,
+# whose usage error is raised only after the lookups for the paths before it,
+# so a check-ignore failure earlier in the input still wins as it did when each
+# path was classified in turn.
+classes=()
+normalized_paths=()
+lookup_paths=()
+empty_given=""
+empty_seen=0
 for given in ${paths[@]+"${paths[@]}"}; do
   path="$given"
   if [[ "$path" =~ ^(.+):[0-9]+$ ]]; then
     path="${BASH_REMATCH[1]}"
   fi
+  class=""
   case "$path" in
     "$root"/*) path="${path#"$root"/}" ;;
-    /*)
-      result+="third-party"$'\t'"$path"$'\n'
-      continue
-      ;;
+    /*) class="third-party" ;;
   esac
-  while [ "${path#./}" != "$path" ]; do
-    path="${path#./}"
-  done
-  [ -n "$path" ] || fail_usage "empty path in: $given"
-
-  case "/$path/" in
-    */../*)
-      result+="third-party"$'\t'"$path"$'\n'
-      continue
-      ;;
-  esac
-
-  class=""
-  for target in ${vendor_targets[@]+"${vendor_targets[@]}"}; do
-    case "$path" in
-      "$target" | "$target"/*)
-        class="third-party"
-        break
-        ;;
-    esac
-  done
-
   if [ -z "$class" ]; then
-    git -C "$root" check-ignore -q -- "$path" 2>/dev/null
-    case "$?" in
-      0) class="ignored" ;;
-      1) ;;
-      *) fail_input "git check-ignore failed for $path" ;;
+    while [ "${path#./}" != "$path" ]; do
+      path="${path#./}"
+    done
+    if [ -z "$path" ]; then
+      empty_given="$given"
+      empty_seen=1
+      break
+    fi
+
+    case "/$path/" in
+      */../*) class="third-party" ;;
     esac
   fi
 
   if [ -z "$class" ]; then
+    for target in ${vendor_targets[@]+"${vendor_targets[@]}"}; do
+      case "$path" in
+        "$target" | "$target"/*)
+          class="third-party"
+          break
+          ;;
+      esac
+    done
+  fi
+  [ -n "$class" ] || lookup_paths+=("$path")
+  classes+=("$class")
+  normalized_paths+=("$path")
+done
+
+# One check-ignore over the queue. A single path git rejects (one beyond a
+# symbolic link) fails the whole batch with 128, so on any status but 0 or 1
+# fall back to one call per path, in input order: that names the first path
+# git rejects, the same path and message the per-path form reported.
+ignored_set=$'\n'
+if [ "${#lookup_paths[@]}" -gt 0 ]; then
+  # PIPESTATUS does not outlive the command substitution, so the status rides
+  # out as its last line.
+  ignored_list="$(
+    printf '%s\0' ${lookup_paths[@]+"${lookup_paths[@]}"} | git -C "$root" check-ignore --stdin -z 2>/dev/null | tr '\0' '\n'
+    printf '%s' "${PIPESTATUS[1]}"
+  )"
+  check_ignore_status="${ignored_list##*$'\n'}"
+  ignored_list="${ignored_list%"$check_ignore_status"}"
+  case "$check_ignore_status" in
+    0 | 1) ignored_set+="$ignored_list" ;;
+    *)
+      for path in ${lookup_paths[@]+"${lookup_paths[@]}"}; do
+        git -C "$root" check-ignore -q -- "$path" 2>/dev/null
+        case "$?" in
+          0 | 1) ;;
+          *) fail_input "git check-ignore failed for $path" ;;
+        esac
+      done
+      fail_input "git check-ignore failed (status $check_ignore_status)"
+      ;;
+  esac
+fi
+[ "$empty_seen" -eq 0 ] || fail_usage "empty path in: $empty_given"
+
+owned_set=$'\n'
+if [ "${#lookup_paths[@]}" -gt 0 ]; then
+  owned_set+="$(jq -r '.files | to_entries[] | select(.value == "owned") | .key' "$manifest")"$'\n'
+fi
+
+result=""
+index=0
+while [ "$index" -lt "${#normalized_paths[@]}" ]; do
+  path="${normalized_paths[$index]}"
+  class="${classes[$index]}"
+  index=$((index + 1))
+  if [ -z "$class" ]; then
+    case "$ignored_set" in
+      *$'\n'"$path"$'\n'*) class="ignored" ;;
+    esac
+  fi
+  if [ -z "$class" ]; then
     if [ "$path" = ".gaia/manifest.json" ]; then
       class="gaia-shipped"
-    elif [ "$(jq -r --arg path "$path" '.files[$path] // empty' "$manifest")" = "owned" ]; then
-      class="gaia-shipped"
     else
-      class="adopter"
+      case "$owned_set" in
+        *$'\n'"$path"$'\n'*) class="gaia-shipped" ;;
+        *) class="adopter" ;;
+      esac
     fi
   fi
   result+="$class"$'\t'"$path"$'\n'

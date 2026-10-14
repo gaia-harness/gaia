@@ -192,20 +192,27 @@ package_listing=$(gaia_packages_list)
 if [ -n "$doctor_ere" ]; then
   while IFS=$'\t' read -r package_name package_dir; do
     [ -n "$package_name" ] || continue
-    found=''
-    count=0
+    # Every file's repo-relative path first, then one grep over the list, not
+    # a basename and a grep process per file in the package directory.
+    relatives=''
     while IFS= read -r candidate; do
       [ -n "$candidate" ] || continue
+      candidate="${candidate##*/}"
       if [ "$package_dir" = . ]; then
         relative="$candidate"
       else
         relative="$package_dir/$candidate"
       fi
-      if printf '%s\n' "$relative" | grep -Eq -- "$doctor_ere"; then
-        count=$((count + 1))
-        found="${found}${relative}"$'\n'
-      fi
-    done <<<"$(find "$root/$package_dir" -maxdepth 1 -type f -exec basename {} \; 2>/dev/null)"
+      relatives="${relatives}${relative}"$'\n'
+    done <<<"$(find "$root/$package_dir" -maxdepth 1 -type f 2>/dev/null)"
+    found=''
+    if [ -n "$relatives" ]; then
+      found=$(printf '%s' "$relatives" | grep -E -- "$doctor_ere")
+    fi
+    count=0
+    while IFS= read -r candidate; do
+      [ -n "$candidate" ] && count=$((count + 1))
+    done <<<"$found"
     if [ "$count" -gt 1 ]; then
       printf 'doctor\t%s\n' "$package_dir"
       while IFS= read -r candidate; do

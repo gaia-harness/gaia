@@ -109,38 +109,46 @@ while IFS="$(printf '\t')" read -r package_name package_path; do
   # gate is a miss. Pairs travel as JSON so a command carrying a quote or a
   # newline compares exactly. `.["if"]` because bare `.if` is a syntax error in
   # older jq.
+  #
+  # Each query below is one jq run that prints only the root entries the
+  # generated file lacks, rather than one jq run per entry. The presence test
+  # sits in `try ... catch false` per entry, so a generated file whose shape
+  # makes the test error reports that entry missing, as a failing per-entry
+  # `jq -e` did.
   while IFS= read -r handler_json; do
     [ -n "$handler_json" ] || continue
-    if ! jq -e --argjson h "$handler_json" \
-      '[.hooks.PreToolUse[]?.hooks[]? | [.command, .["if"]]] | any(.[]; . == $h)' \
-      "$generated" >/dev/null; then
-      command_json="$(printf '%s' "$handler_json" | jq -c '.[0]')"
-      if_json="$(printf '%s' "$handler_json" | jq -c '.[1]')"
-      report_missing "$generated_relative" "the PreToolUse hook command $command_json with if $if_json"
-    fi
+    command_json="$(printf '%s' "$handler_json" | jq -c '.[0]')"
+    if_json="$(printf '%s' "$handler_json" | jq -c '.[1]')"
+    report_missing "$generated_relative" "the PreToolUse hook command $command_json with if $if_json"
   done <<HOOK_HANDLERS
-$(jq -c '.hooks.PreToolUse[]?.hooks[]? | [.command, .["if"]]' "$root_settings")
+$(jq -c --slurpfile generated "$generated" '
+  .hooks.PreToolUse[]?.hooks[]? | [.command, .["if"]]
+  | select(. as $h
+      | (try ($generated[0] | [.hooks.PreToolUse[]?.hooks[]? | [.command, .["if"]]] | any(.[]; . == $h)) catch false)
+      | not)' "$root_settings")
 HOOK_HANDLERS
 
   # Every root deny rule and denyRead entry, in its re-anchored form.
   while IFS= read -r rule_json; do
     [ -n "$rule_json" ] || continue
-    if ! jq -e --argjson r "$rule_json" '(.permissions.deny // []) | index($r) != null' \
-      "$generated" >/dev/null; then
-      report_missing "$generated_relative" "the permissions.deny rule $rule_json"
-    fi
+    report_missing "$generated_relative" "the permissions.deny rule $rule_json"
   done <<DENY_RULES
-$(jq -c --arg p "$prefix" "$reanchor_program"'(.permissions.deny // [])[] | rule_anchor($p)' "$root_settings")
+$(jq -c --arg p "$prefix" --slurpfile generated "$generated" "$reanchor_program"'
+  (.permissions.deny // [])[] | rule_anchor($p)
+  | select(. as $r
+      | (try (($generated[0] | (.permissions.deny // []) | index($r)) != null) catch false)
+      | not)' "$root_settings")
 DENY_RULES
 
   while IFS= read -r entry_json; do
     [ -n "$entry_json" ] || continue
-    if ! jq -e --argjson r "$entry_json" '(.sandbox.filesystem.denyRead // []) | index($r) != null' \
-      "$generated" >/dev/null; then
-      report_missing "$generated_relative" "the sandbox.filesystem.denyRead entry $entry_json"
-    fi
+    report_missing "$generated_relative" "the sandbox.filesystem.denyRead entry $entry_json"
   done <<DENY_READ_ENTRIES
-$(jq -c --arg p "$prefix" "$reanchor_program"'(.sandbox.filesystem.denyRead // [])[] | spec_anchor($p)' "$root_settings")
+$(jq -c --arg p "$prefix" --slurpfile generated "$generated" "$reanchor_program"'
+  (.sandbox.filesystem.denyRead // [])[] | spec_anchor($p)
+  | select(. as $r
+      | (try (($generated[0] | (.sandbox.filesystem.denyRead // []) | index($r)) != null) catch false)
+      | not)' "$root_settings")
 DENY_READ_ENTRIES
 
   if ! jq -e --arg d "$parent" '(.permissions.additionalDirectories // []) | index($d) != null' \
