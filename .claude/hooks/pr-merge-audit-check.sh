@@ -665,9 +665,19 @@ resolve_pr_record() {
 # failure (no gh, no auth, no PR for the current branch, network error, an
 # empty file list, or an unresolved repo root) the bypass does not fire and the
 # normal deny path runs, the bypass is opt-in proof, not a fallback.
+#
+# Sets $chore_deps_unbound when the record qualifies and only the command
+# binding fails, so a deny can name the spelling that binds instead of
+# claiming the title or file list disqualified the pull request.
+chore_deps_unbound=0
 check_chore_deps_pr() {
   resolve_pr_record
   [ -n "$pr_record_title" ] || return 1
+  # tree_root, not root: the predicate is executable code, so it comes from the
+  # ACTING tree that carries it. root is the main checkout, which from a linked
+  # worktree is a different branch entirely and need not have the script at all.
+  [ -n "$tree_root" ] || return 1
+  [ "$(bash "$tree_root/.gaia/scripts/chore-deps-skip.sh" "$pr_record_title" <<<"$pr_record_files")" = "true" ] || return 1
   # Bind the bypass to the pull request the COMMAND names. The title above came
   # from `gh pr view` with no number, so on its own it proves a property of the
   # CURRENT BRANCH's pull request while the merge being gated names one this
@@ -677,12 +687,11 @@ check_chore_deps_pr() {
   # since that is gh's current-branch default and therefore the very pull
   # request the title was read for, which is what leaves the turnkey
   # `gh pr merge --squash` dep-bump path unaffected.
-  gate_command_names_the_record_pr || return 1
-  # tree_root, not root: the predicate is executable code, so it comes from the
-  # ACTING tree that carries it. root is the main checkout, which from a linked
-  # worktree is a different branch entirely and need not have the script at all.
-  [ -n "$tree_root" ] || return 1
-  [ "$(bash "$tree_root/.gaia/scripts/chore-deps-skip.sh" "$pr_record_title" <<<"$pr_record_files")" = "true" ]
+  if ! gate_command_names_the_record_pr; then
+    chore_deps_unbound=1
+    return 1
+  fi
+  return 0
 }
 
 # gate_resolve_base: resolve, ONCE per run, the diff base that scopes this pull
@@ -1037,6 +1046,47 @@ See wiki/concepts/PR Merge Workflow.md for the full contract."
   return 1
 }
 
+# gate_deny_unbound_bypass <what qualifies>: the deny for a record-based bypass
+# whose content qualified and whose command binding alone failed. The marker
+# deny below it would be false here twice over: its reason says the pull
+# request disqualified itself, and its remedy, an audit run, produces a marker
+# this diff never owed while the respelled merge still binds the same way.
+gate_deny_unbound_bypass() {
+  local qualification="$1" named record reason
+  resolve_pr_record
+  named="${GAIA_GH_MERGE_REFERENCE:-no target this gate could read}"
+  record="${pr_record_number:-}"
+
+  reason="PR merge gate: this checkout's pull request ${record:-<no pull-request record>} needs no Code Audit Team marker (${qualification}), but this gate could not bind the merge command to that pull request, so the bypass did not fire.
+
+  Merge names:         ${named}
+  This checkout is on: ${record:-<no pull-request record>}
+
+A bypass clears a merge only once it has read the command and confirmed it
+targets this checkout's own pull request, and it denies on every abstention.
+It abstains when the merge is not the first and only command in its tool call
+(a \`cd\` before it, a \`;\` or \`&&\` after it, a pipe into \`tail\`), when the
+command carries a quoted flag value or any other byte outside the small set a
+merge needs, and when it names a branch, a URL, or a different number.
+
+To unblock, run the merge as its own command, with nothing beside it:
+  gh pr merge ${record:-<N>} --squash --delete-branch
+or with no number at all, \`gh pr merge --squash --delete-branch\`; \`--auto\` may
+be added to either. No marker and no audit run is needed. To merge a different
+pull request, check out its branch so this gate reads that pull request's own
+diff.
+
+See wiki/concepts/PR Merge Workflow.md for the full contract."
+
+  jq -n --arg reason "$reason$gate_arm_note" '{
+    hookSpecificOutput: {
+      hookEventName: "PreToolUse",
+      permissionDecision: "deny",
+      permissionDecisionReason: $reason
+    }
+  }'
+}
+
 # gate_empty_is_decisive: may an EMPTY base-to-HEAD range clear this gate on its
 # own? Five conjuncts, and the last four are why this is a named predicate
 # rather than a bare call to the shared trust check.
@@ -1108,6 +1158,10 @@ gate_empty_is_decisive() {
 # withheld marker to have been withheld over. No dependence on a CI stamp; the
 # one network read is the base branch behind gate_resolve_base() above, whose
 # failure widens the diff.
+#
+# Sets $out_of_scope_unbound when every changed path is out of scope and only
+# the command binding fails, for the same reason $chore_deps_unbound exists.
+out_of_scope_unbound=0
 check_out_of_scope_pr() {
   # The merge base scopes the diff to THIS PR's changes, not unrelated drift
   # already on the base branch.
@@ -1151,7 +1205,10 @@ check_out_of_scope_pr() {
   # gate_empty_is_decisive, which owns a strictly larger conjunct set including
   # this one, so hoisting would duplicate that call and blur which arm answers
   # for which conjuncts.
-  gate_command_names_the_record_pr || return 1
+  if ! gate_command_names_the_record_pr; then
+    out_of_scope_unbound=1
+    return 1
+  fi
 
   return 0
 }
@@ -1313,6 +1370,15 @@ if [ -z "$members" ]; then
     exit 0
   fi
 
+  if [ "$out_of_scope_unbound" -eq 1 ]; then
+    gate_deny_unbound_bypass 'every path it changes is outside audit scope'
+    exit 0
+  fi
+  if [ "$chore_deps_unbound" -eq 1 ]; then
+    gate_deny_unbound_bypass 'a chore(deps) pull request confined to dependency manifests'
+    exit 0
+  fi
+
   gate_require_digests
 
   # check_out_of_scope_pr above already populated the memo on every path that
@@ -1377,6 +1443,9 @@ report=""
 # Set when the chore(deps) waiver, not an earned signal, cleared
 # code-audit-frontend: the one member-aware allow that earns a bypass stamp.
 frontend_chore_deps_waived=0
+# Set when a member other than code-audit-frontend stays uncleared, which is
+# what decides whether an unbound chore(deps) waiver alone blocks the merge.
+other_member_uncleared=0
 
 while IFS= read -r roster_member; do
   [ -n "$roster_member" ] || continue
@@ -1406,15 +1475,19 @@ while IFS= read -r roster_member; do
 "
   else
     all_cleared=0
+    [ "$roster_member" = "code-audit-frontend" ] || other_member_uncleared=1
     if [ "$member_refused" -eq 1 ]; then
       refused_path="$(clearance_refused_path "$root" "$member_content_digest" "$roster_member")"
       report="${report}  - ${roster_member}: REFUSED (a live refusal exists for this exact branch-own digest at ${refused_path}; a bare re-spawn does not clear it, the member must supersede it, see below)
 "
     elif [ "$roster_member" = "code-audit-frontend" ]; then
+      chore_deps_line="PR title does not match \`chore(deps):\`/\`chore(deps-dev):\`, or the PR changes a path other than a dependency manifest"
+      [ "$chore_deps_unbound" -eq 0 ] \
+        || chore_deps_line="the PR qualifies, but the merge command could not be bound to it; run \`gh pr merge <N>\` as its own command"
       report="${report}  - code-audit-frontend: PENDING
       Local marker:    ${marker} $(marker_state "$marker")
       GitHub status:   absent or version/digest mismatch
-      chore(deps) PR:  PR title does not match \`chore(deps):\`/\`chore(deps-dev):\`, or the PR changes a path other than a dependency manifest
+      chore(deps) PR:  ${chore_deps_line}
 "
     else
       member_marker="$root/.gaia/local/audit/${member_content_digest:-<unavailable>}.${roster_member}.ok"
@@ -1427,6 +1500,11 @@ done <<< "$members"
 if [ "$all_cleared" -eq 1 ]; then
   gate_permit_binds_to_named_pr || exit 0
   [ "$frontend_chore_deps_waived" -eq 0 ] || gate_post_bypass_stamp 'skipped: chore(deps) manifest-only'
+  exit 0
+fi
+
+if [ "$chore_deps_unbound" -eq 1 ] && [ "$other_member_uncleared" -eq 0 ]; then
+  gate_deny_unbound_bypass 'a chore(deps) pull request confined to dependency manifests'
   exit 0
 fi
 
