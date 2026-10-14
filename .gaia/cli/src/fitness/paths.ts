@@ -378,9 +378,10 @@ const PLACEHOLDER = /<[^<>]+>/;
 /**
  * Whether a token is a worked example of a placeholder template `text`
  * declares, such as `pages/about/page.tsx` beside `pages/<route>/page.tsx`; a
- * placeholder stands for any run of path characters, folders included. A
- * template whose first segment is a placeholder fits a path in every folder,
- * so it declares no example.
+ * placeholder stands for any run of path characters, folders included. Both
+ * the first and the last segment must be literal: a placeholder there (`<x>/a`,
+ * `a/<x>/`, `a/<x>.md`) fits every path in some folder, so it would silence
+ * every dead path under it and declares no example.
  */
 export const templateExamples = (
   text: string
@@ -391,10 +392,12 @@ export const templateExamples = (
         [...line.matchAll(BACKTICKED)].flatMap((match) => {
           const template = match[1] ?? '';
           const literals = template.split(PLACEHOLDER);
+          const segments = template.replace(/\/$/, '').split('/');
 
           if (
             literals.length < 2 ||
-            (template.split('/', 1)[0] ?? '').includes('<') ||
+            (segments[0] ?? '').includes('<') ||
+            (segments.at(-1) ?? '').includes('<') ||
             !literals.every(
               (literal) => literal === '' || PATH_CHARACTERS.test(literal)
             )

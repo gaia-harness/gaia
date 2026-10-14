@@ -28325,7 +28325,8 @@ var templateExamples = (text) => {
     (line) => [...line.matchAll(BACKTICKED)].flatMap((match) => {
       const template = match[1] ?? "";
       const literals = template.split(PLACEHOLDER);
-      if (literals.length < 2 || (template.split("/", 1)[0] ?? "").includes("<") || !literals.every(
+      const segments = template.replace(/\/$/, "").split("/");
+      if (literals.length < 2 || (segments[0] ?? "").includes("<") || (segments.at(-1) ?? "").includes("<") || !literals.every(
         (literal2) => literal2 === "" || PATH_CHARACTERS.test(literal2)
       )) {
         return [];

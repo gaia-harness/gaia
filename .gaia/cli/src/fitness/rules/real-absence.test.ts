@@ -155,6 +155,18 @@ describe('a concrete instance of a placeholder template the file declares', () =
     ).toHaveLength(2);
   });
 
+  test('is dead when the template ends in a placeholder, which fits every path in its folder', () => {
+    expect(
+      findingsOf(
+        rule(
+          'Shared components are `pages/<name>/`, and reports are `pages/<name>.md`; see `pages/about/page.tsx` and `pages/gone.md`.\n',
+          pages
+        ),
+        'rules.dead-path'
+      )
+    ).toHaveLength(2);
+  });
+
   test('is dead when the template starts with a placeholder, which fits any folder', () => {
     expect(
       findingsOf(
@@ -180,7 +192,7 @@ describe('a concrete instance of a placeholder template the file declares', () =
     expect(
       findingsOf(
         command(
-          'Reports live at `.gaia/reports/<date>.md`, such as `.gaia/reports/2026-01-01.md`.\n'
+          'Reports live at `.gaia/reports/<date>/summary.md`, such as `.gaia/reports/2026-01-01/summary.md`.\n'
         ),
         'authoring.reference.link.resolves'
       )
@@ -188,7 +200,7 @@ describe('a concrete instance of a placeholder template the file declares', () =
     expect(
       findingsOf(
         command(
-          'Reports live at `.gaia/reports/<date>.md`; see `.gaia/report/2026-01-01.md`.\n'
+          'Reports live at `.gaia/reports/<date>/summary.md`; see `.gaia/report/2026-01-01/summary.md`.\n'
         ),
         'authoring.reference.link.resolves'
       )
