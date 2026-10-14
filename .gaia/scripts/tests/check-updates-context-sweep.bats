@@ -98,6 +98,58 @@ run_refresher() {
   [ -L "$CONTEXT_DIRECTORY/link.json" ]
 }
 
+# ---------- context checkpoint marker sweep ----------
+
+# seed_checkpoint: marker files named by session id, plus a writer tmp orphan.
+seed_checkpoint() {
+  CHECKPOINT_DIRECTORY="$MAIN/.gaia/local/cache/context-checkpoint"
+  mkdir -p "$CHECKPOINT_DIRECTORY/subdirectory"
+  printf '2\n' > "$CHECKPOINT_DIRECTORY/old-session"
+  printf '2\n' > "$CHECKPOINT_DIRECTORY/new-session"
+  printf '2\n' > "$CHECKPOINT_DIRECTORY/.old-session.4242"
+  touch -t "$(days_ago 8)" "$CHECKPOINT_DIRECTORY/old-session" "$CHECKPOINT_DIRECTORY/.old-session.4242" "$CHECKPOINT_DIRECTORY/subdirectory"
+  touch -t "$(days_ago 1)" "$CHECKPOINT_DIRECTORY/new-session"
+}
+
+@test "checkpoint sweep: an 8-day-old marker and tmp orphan go, a fresh marker and a subdirectory stay" {
+  make_main
+  seed_checkpoint
+  run_refresher
+  [ "$status" -eq 0 ]
+  [ ! -e "$CHECKPOINT_DIRECTORY/old-session" ]
+  [ ! -e "$CHECKPOINT_DIRECTORY/.old-session.4242" ]
+  [ -e "$CHECKPOINT_DIRECTORY/new-session" ]
+  [ -d "$CHECKPOINT_DIRECTORY/subdirectory" ]
+}
+
+@test "checkpoint sweep: a symlinked marker directory is left alone" {
+  make_main
+  local target="$BATS_TEST_TMPDIR/elsewhere-directory"
+  mkdir -p "$target" "$MAIN/.gaia/local/cache"
+  printf '2\n' > "$target/old-session"
+  touch -t "$(days_ago 8)" "$target/old-session"
+  ln -s "$target" "$MAIN/.gaia/local/cache/context-checkpoint"
+  run_refresher
+  [ "$status" -eq 0 ]
+  [ -e "$target/old-session" ]
+}
+
+@test "checkpoint sweep red twin: a scratch copy without the block leaves the old marker in place" {
+  local scratch="$BATS_TEST_TMPDIR/check-updates-noblock.sh"
+  sed '/^# ---------- context-checkpoint marker sweep ----------$/,/^# ---------- outdatedCount ----------$/{/^# ---------- outdatedCount ----------$/!d;}' "$SCRIPTS_DIRECTORY/check-updates.sh" > "$scratch"
+  # The mutation must have landed, or this test proves nothing.
+  if grep -q 'context-checkpoint' "$scratch"; then
+    printf 'checkpoint block still present; mutation did not apply\n' >&2
+    return 1
+  fi
+  make_main "$scratch"
+  seed_checkpoint
+  run_refresher
+  [ "$status" -eq 0 ]
+  [ -e "$CHECKPOINT_DIRECTORY/old-session" ]
+  [ -e "$CHECKPOINT_DIRECTORY/.old-session.4242" ]
+}
+
 # ---------- registry rows ----------
 
 # make_registry_repo: a fixture repo whose main-root registry is a scratch copy

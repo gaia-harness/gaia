@@ -57,6 +57,12 @@ Each branch gets one folder under `.gaia/local/runs/<key>/`, with the `branch:` 
 
 A resumed session reads `STATE.md` and the artifact listing and nothing else. The checkpoint says where the run stands, and the listing says which dispatches finished, so the two together answer "what next" without replaying the history that produced them. Reading more than that spends the context the run folder was built to protect. The steps are in [`.claude/doctrine/execution.md`](../../.claude/doctrine/execution.md).
 
+## Context checkpoint
+
+Claude cannot see its own context reading, so a long session has no way to notice it is running heavy. A PostToolUse hook reads the per-session reading the statusline writes and, once per band from red upward, injects [`.claude/doctrine/context-checkpoint.md`](../../.claude/doctrine/context-checkpoint.md) with the session id and the resolved save path above it. That file owns the rule: what each band means, where to save, what to ask, and what to recommend. This page does not restate it.
+
+The hook stays silent for sub-agents, when there is no fresh reading, and for a session whose branch the audit loop's state file records, because the audit loop owns that checkpoint. The bands come from `.gaia/scripts/context-checkpoint-lib.sh`, the same source the statusline reads, so the two never disagree. Marks live per session: a session resumed after `/clear` starts unmarked and is checked afresh, while compaction keeps its marks.
+
 ## Concurrency limits
 
 Every worktree shares one `.gaia/local`, which resolves into the main checkout. That is why run folders are keyed by branch and never shared between keys, and why research binding works through a Write made to the main checkout's absolute path and not through a path relative to the worktree.
@@ -91,14 +97,32 @@ Re-measured with `bash .gaia/tests/hooks/workflow-doctrine-timing.sh`.
 | p50 SessionStart, working branch | 40.2 ms | 50 ms |
 | p50 PostToolUse Bash, non-arming | 25.1 ms | 50 ms |
 | p50 PostToolUse Bash, arming | 46.9 ms | 50 ms |
-| Injected bytes | 3,084 | 4,096 |
-| Injected tokens (bytes / 4) | 771 | none |
-| Payload with a 128-character branch | 3,314 bytes | 4,096 |
-| Rule bytes | 542 | 1,200 |
-| Rule tokens (bytes / 4) | 135 | none |
+| Injected bytes | 3,501 | 4,096 |
+| Injected tokens (bytes / 4) | 875 | none |
+| Payload with a 128-character branch | 3,731 bytes | 4,096 |
+| Rule bytes | 1,177 | 1,200 |
+| Rule tokens (bytes / 4) | 294 | none |
 | Per-session hook cost estimate | 843.4 ms | none |
 
-The per-session estimate uses the median session's 32 Bash calls and 0 compactions.
+The per-session estimate uses the median session's 32 Bash calls and 0 compactions. The byte rows are current; the timing rows and the estimate keep their earlier quieter-machine values, because a re-run at a 1-minute load above 13 inflated every path and would have recorded a load artifact as a budget miss.
+
+The context checkpoint hook runs after every tool call of every main session, so each exit path of its ladder carries the 50 ms budget. Re-measured with `bash .gaia/tests/hooks/context-checkpoint-timing.sh`, through the registered command string with its rooting step included. The paths are interleaved in blocks next to a no-op baseline so they share the machine's load; read each row beside the baseline.
+
+| Path | p50 | Budget |
+| --- | --- | --- |
+| Sub-agent payload | 17.2 ms | 50 ms |
+| Below red, no marker | 34.2 ms | 50 ms |
+| Skull already marked | 18.0 ms | 50 ms |
+| Red marked, below fire | 33.7 ms | 50 ms |
+| Firing | 52.3 ms (50.0 ms paired, below) | 50 ms |
+| In an audit loop | 48.2 ms | 50 ms |
+| 200 KB tool result, below red | 39.8 ms | 50 ms |
+| No-op baseline (`/bin/sh -c true`) | 4.3 ms | none |
+| Injected bytes on the firing path | 3,251 | none |
+
+The figures come from the quietest of several runs on a shared machine, whose 1-minute load stayed above 10 throughout.
+
+Because the firing path's absolute figure tracks machine load, its budget was judged by a paired relative measurement instead. The firing path and the doctrine hook's arming path were each run through their registered commands under bash 3.2 from one fixture, alternating run by run with the order flipped every pair, 200 runs each, at a 1-minute load of 14.6 to 14.8. Doctrine arming read a p50 of 55.3 ms and checkpoint firing 59.0 ms, a ratio of 1.0669. Scaled against the doctrine arming row above (46.9 ms), the firing path reads 50.0 ms (50.04 before rounding). To re-check it, repeat the pairing on any machine and scale the ratio by that row; an idle-machine run of the checkpoint timing tool supersedes it.
 <!-- gaia:maintainer-only:end -->
 
 ## See also
