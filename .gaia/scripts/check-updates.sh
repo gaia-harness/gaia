@@ -531,6 +531,7 @@ run_cli_into_temporary_file() {
   rm -f "$output_file" 2>/dev/null
 }
 
+# shellcheck disable=SC2329 # called by name through run_cli_into_temporary_file
 read_memory_count_from_inventory() {
   local exit_code="$1" inventory_file="$2" memory_count
   [ "$exit_code" -eq 0 ] || return 0
@@ -610,6 +611,7 @@ fi
 # result only when stdout parses as a check report; any other outcome leaves
 # the signal off.
 project_drift=false
+# shellcheck disable=SC2329 # called by name through run_cli_into_temporary_file
 flag_project_drift_from_budget_report() {
   local exit_code="$1" budget_file="$2" budget_finding_count
   { [ "$exit_code" -eq 0 ] || [ "$exit_code" -eq 1 ]; } || return 0

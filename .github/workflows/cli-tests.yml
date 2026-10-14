@@ -199,6 +199,8 @@ jobs:
               - '.gaia/manifest*.json'
               - '.gaia/vendor/**'
               - '.gaia/scripts/fitness-ownership.sh'
+              - '.github/actions/gaia-setup-node/action.yml'
+              - '.gaia/scripts/verify-cli-bundle-fresh.sh'
               - '.github/workflows/cli-tests.yml'
       - if: steps.filter.outputs.code == 'true' || steps.filter.outputs.fitness == 'true' || github.event_name == 'workflow_dispatch'
         name: Setup Node and install the CLI member
