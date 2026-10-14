@@ -8,7 +8,7 @@ The `/gaia-spec` wrapper dispatches this directly at step 6 as a `general-purpos
 
 ## Inputs
 
-- The in-progress SPEC draft. The wrapper writes the working draft to `.gaia/local/cache/draft.md` during the loop; the path may also be supplied via `$ARGUMENTS`.
+- The in-progress SPEC draft. The wrapper writes the working draft to `.gaia/local/cache/draft-<spec_id>.md` during the loop and passes its path in the dispatch prompt.
 - The gate-1 snapshot at `.gaia/local/cache/gate1-<spec_id>.json`, captured when the user confirmed intent + UATs.
 
 ## Audit checklist
@@ -45,22 +45,11 @@ Each UAT must be testable. Flag UATs that:
 - Lack a falsifiable `then`.
 - Reference an undefined system (e.g. "the orchestrator" without prior naming).
 
-### 5. Pending clarifications block-or-defer
+### 5. Pending clarifications
 
-For each item in `clarifications.pending[]`, surface via `AskUserQuestion`:
+For each item in `clarifications.pending[]`, list it in the digest `pending_clarifications` as `{topic, question}`. The agent does not ask: the wrapper asks at `.claude/skills/gaia/references/spec/self-review-dispatch.md` 6c, offering `Answer now`, `Defer with rationale` (recorded in `clarifications.deferred[]`), or `Discuss this`.
 
-- question: `"Pending clarification: <item>. Answer now, or defer with rationale?"`
-- header: `"Pending"`
-- options:
-  - `{ label: "Answer now", description: "Resolve the clarification before save." }`
-  - `{ label: "Defer with rationale", description: "Record a rationale and proceed; item remains pending." }`
-  - `{ label: "Discuss this", description: "Drop to plain Q&A on this clarification." }`
-
-On `Answer now`: collect the answer, move the item to `clarifications.answered[]`.
-On `Defer with rationale`: collect the rationale via plain prompt, record alongside the pending item.
-On `Discuss this`: drop to plain Q&A; on settlement, move to `clarifications.answered[]`.
-
-Save remains blocked while any pending item is unresolved (neither answered nor explicitly deferred).
+Save stays blocked while any pending item is neither answered nor deferred.
 
 ## Output
 
@@ -74,7 +63,7 @@ self-review findings (gate 2 gate):
   scope_drift:  <N>: gate1.<field> vs current.<field>
   inconsistency: <N>: <description>
   ambiguous_uats: <N>: UAT-NNN: <phrasing>
-  pending: <N>: <item summary>, ...
+  pending: <N>: <item summary>, ... (listed as pending_clarifications for the wrapper to ask)
 ```
 
 If every section is clean:
@@ -85,5 +74,5 @@ If every section is clean:
 
 - This hook is the last automated gate before the human-facing gate 2. Surface every candidate finding in each section, including borderline and low-confidence ones; do not pre-filter for importance or confidence. Gate 2 (the human) triages. Suppressing a borderline finding here is the failure mode this gate exists to catch.
 - Self-review applies the minor fixes to the draft itself and returns a thin digest; the wrapper gates only the critical and major findings. The authoritative return/apply contract is the 6a dispatch prompt in `.claude/skills/gaia/references/spec/self-review-dispatch.md`.
-- The pending-clarifications gate is itself a required behavior. The wrapper is responsible for honoring the user's choice and looping until pending is resolved.
+- The pending-clarifications gate is itself a required behavior. The agent reports the items; the wrapper asks, honors the user's choice, and loops until each item is answered or deferred.
 - The first-tool-call contract (lead with a Read, no prose before it) lives in the 6a dispatch prompt in `.claude/skills/gaia/references/spec/self-review-dispatch.md`, this file's dispatcher, not here.

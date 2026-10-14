@@ -40,7 +40,7 @@ Treating `missing`'s entries as if they were bare strings prints JSON blobs inst
 
 ## Step 3. Classify against the categories, then ask only what needs asking
 
-`.gaia/release-exclude` carries twelve numbered categories, each with a rationale paragraph, and is the single authoritative list of what stays maintainer-only. Most of `missing` is already answered there: category 3 settles a shipped script's verification rig in one line, category 4 settles everything under `.gaia/cli/src/`, category 1 settles the `/gaia-*` command split and names the adopter-useful exceptions.
+`.gaia/release-exclude` carries numbered categories, each with a rationale paragraph, and is the single authoritative list of what stays maintainer-only. Most of `missing` is already answered there: category 3 settles a shipped script's verification rig in one line, category 4 settles everything under `.gaia/cli/src/`, category 1 settles the `/gaia-*` command split and names the adopter-useful exceptions.
 
 So classify first and ask second. This is not "use judgment": it is matching each file against a written taxonomy and saying which entry it matched and why. A wrong decision then surfaces as a wrong **citation**, which a reader can check against the category's own text, instead of as a verdict they would have to re-derive from scratch.
 
@@ -59,7 +59,7 @@ Match on the rationale a category states, never on the shape of a path's neighbo
 The categories are **exclusion** categories, so a match is a withhold and a ship has to come from somewhere else. Three arms, and every path takes exactly one:
 
 - A category's rationale **covers** the path: **withhold**, citing that category.
-- A category's rationale **exempts** the path: **ship**, citing that category and the clause that exempts it. Several categories carry such a clause, and it is written inside the rationale rather than beside the paths: a `DOES ship` note, or an "adopters receive only" sentence that names what the exclusion spares. Category 1's "Other `/gaia-*` commands (plan, handoff, pickup, audit) are adopter-useful and must NOT be added here" is the worked case. Read a category's whole rationale for such a clause before taking the first arm; a category that excludes a directory often ships something inside it.
+- A category's rationale **exempts** the path: **ship**, citing that category and the clause that exempts it. Several categories carry such a clause, and it is written inside the rationale rather than beside the paths: a `DOES ship` note, or an "adopters receive only" sentence that names what the exclusion spares. Category 1's "Other `/gaia-*` commands (plan, cleanse) are adopter-useful and must NOT be added here" is the worked case. Read a category's whole rationale for such a clause before taking the first arm; a category that excludes a directory often ships something inside it.
 - **No rationale reaches the path in either direction**: record `none`, and send it to 3b's first class, the genuinely novel one.
 
 **A path in that third arm is recorded as a withhold**, and surfaced in 3b. It is never shipped on a silent default. The asymmetry is the whole reason:
@@ -83,7 +83,7 @@ Ask the maintainer about these, and about nothing else:
 
 A withhold that matched a category cleanly is not asked about. Its category and reason are recorded, and Step 4 lands them in `.gaia/release-exclude` where the diff carries them. This is what turns a forty-question pass into a handful of real ones, which is a thing a human can actually review.
 
-When a maintainer answers "keep internal" for a file that matched **no** category, the CLI still needs a category number and rejects one that names no numbered category, so ask a follow-up offering the numbered list. If none of the twelve fits, the file stays unanswered: extending the taxonomy is a separate, deliberate edit to `.gaia/release-exclude` and this command does not make it.
+When a maintainer answers "keep internal" for a file that matched **no** category, the CLI still needs a category number and rejects one that names no numbered category, so ask a follow-up offering the numbered list. If none of the numbered categories fits, the file stays unanswered: extending the taxonomy is a separate, deliberate edit to `.gaia/release-exclude` and this command does not make it.
 
 ### 3c. How every question is written
 
@@ -166,5 +166,3 @@ Every decision now carries a citation, so a wrong decision is a **wrong citation
 Both halves of the record land in the same commit (3d), and a later pass over the accumulated ledger reads that record rather than the files alone.
 
 Prose remains the only enforcement for two things: that the questions in 3b get asked at all, and that they are written the way 3c requires. Follow it as written rather than treating it as a suggestion.
-
-The clean-tree stop and the bookkeeping-only confirmation in Step 2 are unchanged, and have no automated test for the same reason.

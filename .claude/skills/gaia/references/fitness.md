@@ -278,7 +278,7 @@ gh pr merge <N> --squash --delete-branch --auto
 The merge above is already queued and the wait issues no `gh pr merge` of its own, so nothing here re-merges. One arm per verdict plus one for the exit-2 refusal; every arm records cost with `--pr <N>` (see **Cost record (run end)**):
 
 - **`MERGED`** (exit 0) → clean up per `.claude/skills/gaia/references/work-lifecycle.md` `## 8. Cleanup` `### Feature branch`, with `<branch-name>` = `<BRANCH>`, record cost, print the merged PR URL, then relay the record's `Cost:` line as the last line of the reply.
-- **`CONFLICTING`** (exit 3) → repair it per that page's `### Conflict found mid-wait` and run the wait again.
+- **`CONFLICTING`** (exit 3) → repair it per `wiki/concepts/PR Merge Workflow.md`'s `### Conflict found mid-wait` and run the wait again.
 - **`CHECK_FAILED`** (exit 4) → name the check and say the merge will not land until it is fixed, record cost, print the PR URL, and keep the local branch.
 - **`TIMEOUT`** (exit 5) → the window closed with the PR still open: record cost, print the PR URL, note auto-merge is queued and lands when checks pass, and do **not** delete the local branch or switch off it.
 - **`CLOSED`** (exit 6) → the PR was closed without merging: report the closure, record cost, print the PR URL, and keep the local branch.
