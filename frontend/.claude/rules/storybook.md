@@ -78,7 +78,7 @@ Chromatic snapshots every story in a `light` and a `dark` mode (`.storybook/mode
 ```tsx
 parameters: {
   chromatic: {
-    disableSnapshot: true,                // non-deterministic stories (spinners, env-injected data)
+    disableSnapshot: true,                // last resort: content that cannot be pinned (see below)
     modes: {
       dark: {disable: true},              // light-only snapshot
       // or a different width for both themes:
@@ -89,6 +89,20 @@ parameters: {
 ```
 
 Never set `chromatic.viewports`: Chromatic rejects it alongside modes.
+
+### Deterministic snapshots
+
+A Chromatic snapshot must render the same pixels on every build. Anything that varies between builds shows as a change that approval cannot clear, because the next build differs again.
+
+Pin these to literals in the story instead of producing them at render:
+
+- **Error stacks**: set `error.stack` to a fixed string. A live stack carries build-specific chunk paths and line numbers.
+- **The current date and time**: a fixed date, built the way `coding-guidelines-react.md` prescribes for every test.
+- **Random values and generated ids**: a literal, or the seeded faker in `test/mocks/faker.ts` drawn at module scope right after `faker.seed(<n>)` (its one shared seed is order-dependent, so a draw at render time or after unrelated draws shifts), never `Math.random()` or `crypto.randomUUID()`.
+- **Environment- or build-injected values** (version, hash, origin): a literal prop or arg.
+- **Live network data**: MSW handlers with fixed payloads.
+
+For animations and spinners, prefer a static state the component already exposes. Use `chromatic.disableSnapshot` only when the content cannot be pinned, because it drops the story's visual coverage.
 
 ## i18n in stories
 
