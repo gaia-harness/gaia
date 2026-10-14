@@ -79,7 +79,7 @@ The axe scans cover every page and every story in light and dark (stories in lig
 
 ## Local patches
 
-None. Every vendored ui file is byte-identical to `pnpm shadcn add <name>` output, so a refresh with `--overwrite` loses nothing. A patch, if one is ever needed, is recorded here with the file, the violation it fixes, and the upstream report before it lands.
+None. Every vendored ui file is byte-identical to `pnpm shadcn add <name>` output, so a refresh with `--overwrite` loses nothing.
 
 ## Tooling facts
 
