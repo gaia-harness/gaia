@@ -6,9 +6,29 @@ The report format, gate handshake, findings sidecar, re-run ledger accounting an
 
 **Re-read your definition only when it changed.** Your definition's first step runs the scope resolver, `<root>/.gaia/scripts/audit-resolve-scope.sh`. Its output carries one `DEFINITION=` line. Read `<root>/.claude/agents/<member>.md` only when that line is `DEFINITION=reread <path>`, and then follow the copy you read for the rest of the round; on `DEFINITION=unchanged` do not Read it, because the copy you were dispatched with is byte-identical to the one under the working root. The session loads definitions from the main checkout, so the read happens exactly when a branch edits your own definition.
 
-**You review and report; you change nothing.** You edit no tracked file, make no commit and no push, run no `gh issue` command, and file nothing. Every finding you make, inside the branch's own changes or outside them, goes into your findings sidecar; the audit loop unit disposes each one, its fixer repairs what is disposed `fix`, and `.gaia/scripts/file-tech-debt.sh` is the only path that files an issue. Evidence that needs real bytes on disk (a mutation that proves a guard can fail) goes in your own scratch directory under `.gaia/local/cache/mutation-scratch/`, named with your member name, populated with Bash, and removed once your sidecar is written.
+**You review and report; you change nothing.** You edit no tracked file, make no commit and no push, run no `gh issue` command, and file nothing. Every finding you make, inside the branch's own changes or outside them, goes into your findings sidecar; the audit loop unit disposes each one, its fixer repairs what is disposed `fix`, and `.gaia/scripts/file-tech-debt.sh` is the only path that files an issue. Evidence that needs real bytes on disk (a mutation that proves a guard can fail) goes in your own scratch directory, minted as "Scratch directory" below states, populated with Bash, and removed once your sidecar is written.
 
 **What you review.** The scope resolver's `CHANGED=` lines name the branch's own change since the anchor, and its `REVIEW_DIFF` file is your review input: a diff of exactly those paths that holds the branch's own hunks, never content the base brought in. Read it filtered to your remit, and read surrounding code only for context.
+
+## Scratch directory
+
+`<scratch>` is a directory only this invocation of you owns. Mint it before anything writes to it, as two Bash calls:
+
+```bash
+mkdir -p <root>/.gaia/local/cache/mutation-scratch
+```
+
+```bash
+mktemp -d <root>/.gaia/local/cache/mutation-scratch/<member>.XXXXXX
+```
+
+`mktemp` prints the path; type it as `<scratch>` from then on, like every other printed value. A name built from your member name alone is not yours: every linked worktree's `.gaia/local` is the main checkout's, so every audit on the machine shares `mutation-scratch/`, and an audit running in another worktree can be running your member at the same moment. With one shared name, that member's staged `findings.json` can be the file your sidecar writer reads, and its cleanup can delete your working copy mid-mutation, so a check goes red because the files vanished rather than because the guard works.
+
+Once your findings sidecar is written, remove exactly the path you minted, and nothing above it: the siblings belong to members still running.
+
+```bash
+rm -rf <scratch>
+```
 
 ## Output format
 
@@ -113,7 +133,7 @@ or, when withheld:
 
 ## Findings sidecar (local run record)
 
-On every pass, clean or withheld, write a findings sidecar with the shared writer, never by hand, and before any clearance artifact. The writer derives the path (`.gaia/local/audit/<AUDIT_KEY>.<member>.findings.json`), validates every entry, publishes atomically, and declines `findings-sidecar: declined: audit key unresolved` when the base or branch is undeterminable. `<scratch>` is your own scratch directory under `.gaia/local/cache/mutation-scratch/`, named with your member name. Stage the resolutions (`[]` when you resolve none), then the array, then hand both files to the writer:
+On every pass, clean or withheld, write a findings sidecar with the shared writer, never by hand, and before any clearance artifact. The writer derives the path (`.gaia/local/audit/<AUDIT_KEY>.<member>.findings.json`), validates every entry, publishes atomically, and declines `findings-sidecar: declined: audit key unresolved` when the base or branch is undeterminable. `<scratch>` is the directory you minted under "Scratch directory" above. Stage the resolutions (`[]` when you resolve none), then the array, then hand both files to the writer:
 
 ```bash
 printf '%s' '[ ...one {"entry_id":"<id>","rationale":"<why it is fixed or acknowledged>"} object per open entry you resolve instead of re-reporting; [] when none... ]' > <scratch>/resolutions.json
@@ -137,7 +157,7 @@ bash <root>/.gaia/scripts/audit-write-findings.sh \
 
 Pass the same `KEY_BASE` your resolver call printed, never a second derivation. `--review-base`, `--base-reason` and `--anchor-tree` carry the per-member decision record into the sidecar's `review_base` object.
 
-**Stage the array in your own scratch directory, as a file written fresh with `printf` in the call immediately before the writer.** Members dispatched in one wave share a session scratchpad, so a fixed staging filename there is one every member picks, and one member's array reaches another member's published sidecar under that member's name; your member name in the path prevents it. Write it fresh every time: the audit key can survive a re-dispatch, and a file an earlier call left republishes a stale report as a fresh one. Neither failure is visible downstream. Keep the payload in single quotes, which hold a `$` or a backtick in finding text literal (an apostrophe is written `'\''`). The stage is a Bash redirect because worktree isolation refuses the alternatives: a pipe into the writer is refused whenever the payload carries the token `git`, which any finding path under `.github/` does; `Write` into this directory is refused because it resolves into the main checkout through the `.gaia/local` symlink; and a heredoc is refused outright.
+**Stage the array in your own scratch directory, as a file written fresh with `printf` in the call immediately before the writer.** Members dispatched in one wave share a session scratchpad, so a fixed staging filename there is one every member picks, and one member's array reaches another member's published sidecar under that member's name; a directory minted for this invocation alone prevents it. Write it fresh every time: the audit key can survive a re-dispatch, and a file an earlier call left republishes a stale report as a fresh one. Neither failure is visible downstream. Keep the payload in single quotes, which hold a `$` or a backtick in finding text literal (an apostrophe is written `'\''`). The stage is a Bash redirect because worktree isolation refuses the alternatives: a pipe into the writer is refused whenever the payload carries the token `git`, which any finding path under `.github/` does; `Write` into this directory is refused because it resolves into the main checkout through the `.gaia/local` symlink; and a heredoc is refused outright.
 
 Shape (one entry per finding; the writer rejects the write and names the offending index if a required field is missing):
 

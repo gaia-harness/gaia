@@ -16,13 +16,10 @@
 # stale staging file holding another member's findings.
 #
 # The fix is a staging directory no sibling can share, written fresh in the
-# call before the writer. Each spec names its own scratch directory under
-# `.gaia/local/cache/mutation-scratch/`, keyed to the audit key AND the member
-# name, so co-dispatched members never pick the same file. A name derived from
-# the audit key alone closes neither case, because the key is a base sha plus a
-# branch slug over a shared base every co-dispatched member resolves alike, and
-# that base advances only when a clean round posts its status, so the
-# re-dispatch after a withheld round recomputes the key it just used. Writing
+# call before the writer. Each member stages into the scratch directory the
+# protocol mints per invocation under `.gaia/local/cache/mutation-scratch/`
+# (pinned in `doc-audit-mutation-scratch.bats`), so neither a co-dispatched
+# member nor the same member in a concurrent audit picks the same file. Writing
 # the file fresh with `printf` immediately before the writer is what keeps an
 # earlier round's file from republishing.
 #
