@@ -125,6 +125,23 @@ The context checkpoint hook runs after every tool call of every main session, so
 The figures come from the quietest of several runs on a shared machine, whose 1-minute load stayed above 10 throughout.
 
 Because the firing path's absolute figure tracks machine load, its budget was judged by a paired relative measurement instead. The firing path and the doctrine hook's arming path were each run through their registered commands under bash 3.2 from one fixture, alternating run by run with the order flipped every pair, 200 runs each, at a 1-minute load of 14.6 to 14.8. Doctrine arming read a p50 of 55.3 ms and checkpoint firing 59.0 ms, a ratio of 1.0669. Scaled against the doctrine arming row above (46.9 ms), the firing path reads 50.0 ms (50.04 before rounding). To re-check it, repeat the pairing on any machine and scale the ratio by that row; an idle-machine run of the checkpoint timing tool supersedes it.
+
+The sub-agent checkpoint hook is registered with no matcher, so it also runs after every tool call of every main session, where it must end at its first raw pattern check. Its per-call paths carry the 50 ms budget; the once-per-agent first-sight path and the firing path carry 100 ms. Re-measured with `bash .gaia/tests/hooks/context-checkpoint-subagent-timing.sh`, through the registered command string, against generated sub-agent transcripts of more than 7 MB (including one whose final line is past the tail read bound and one whose first record is near the head read bound), 50 runs per path, interleaved next to the same no-op baseline.
+
+| Path | p50 | Budget |
+| --- | --- | --- |
+| Main-session payload (no `agent_id`) | 20.8 ms | 50 ms |
+| Not opted in, marked | 23.5 ms | 50 ms |
+| Opted in, below red | 54.3 ms | 50 ms (over) |
+| Band already marked | 54.9 ms | 50 ms (over) |
+| Widened tail read | 94.6 ms | none |
+| First sight (head read of a large first record) | 92.5 ms | 100 ms |
+| Firing | 61.1 ms | 100 ms |
+| No-op baseline (`/bin/sh -c true`) | 5.3 ms | none |
+| Injected bytes on the firing path | 1,740 | none |
+| Per-session chain over the no-matcher PostToolUse hooks | 3,850 ms | none |
+
+The figures come from the quietest of four runs on a shared machine whose 1-minute load stayed between 30 and 63 throughout, so every row is inflated by load and read best beside the baseline. The two over-budget rows are the paths that read and scan the transcript tail on every call (bash string work over the tail read bound); the other three runs read 66 to 79 ms on them, so the overage is not a single noisy sample. The per-session row is the main-session hook's below-red, no-marker p50 (34.2 ms, above) plus this hook's main-session payload p50, times 70 tool calls, the median over the 596 main-session transcripts of this repository's maintainer that held at least one tool call (a one-off count of `tool_use` blocks per transcript file). To re-check it, repeat the count on any machine and pass the two inputs to the tool as `--main-hook-ms` and `--median-tool-calls`.
 <!-- gaia:maintainer-only:end -->
 
 ## See also
