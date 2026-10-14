@@ -25,7 +25,6 @@ describe('useDebounce', () => {
     value = 'world';
     await rerender();
 
-    // Not updated yet; delay has not elapsed
     expect(result.current).toBe('hello');
 
     await act(() => {
@@ -51,27 +50,18 @@ describe('useDebounce', () => {
     expect(result.current).toBe('world');
   });
 
-  test('clears the pending timer on unmount, with no late state update', async () => {
+  test('clears the pending timer on unmount', async () => {
     let value = 'hello';
-    const {act, rerender, result, unmount} = await renderHook(() =>
-      useDebounce(value, 300)
-    );
+    const {rerender, unmount} = await renderHook(() => useDebounce(value, 300));
 
     value = 'world';
     await rerender();
 
     await unmount();
 
-    // React drops a state update on an unmounted component, so result.current
-    // alone holds even with the cleanup removed; the timer count proves it ran
+    // React drops a state update on an unmounted component, so a result.current
+    // check would pass without the cleanup; the timer count proves it ran
     expect(vi.getTimerCount()).toBe(0);
-
-    await act(() => {
-      vi.advanceTimersByTime(300);
-    });
-
-    // Still reflects the value at the time of unmount
-    expect(result.current).toBe('hello');
   });
 
   test('cancels pending update on rapid value changes and settles on the final value', async () => {
