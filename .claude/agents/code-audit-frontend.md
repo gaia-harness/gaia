@@ -105,7 +105,7 @@ Analyze the changed code across these dimensions, focusing on cross-cutting conc
 
 ### 2. Performance Issues
 
-- **N+1 patterns**: Sequential awaits inside loops that could be parallelized with `Promise.all`
+- **N+1 patterns**: Sequential awaits inside loops that could be parallelized with `Promise.all`, and O(n^2) work split across a function or component boundary that no single scope shows: a list row component or per-item helper that scans the full collection (`find`, `filter`, `includes`, `some`); fix by building a `Map` or `Set` once above the per-item work, or by passing the looked-up item down
 - **Compiler bail-outs**: a component or hook the React Compiler report shows skipped or failing (a Rules-of-React violation) when a compile report is available; manual memos and `"use no memo"` directives are judged by the react-buckets compiler-first rule, not here
 - **Bundle size**: Large imports that could be tree-shaken or lazy-loaded, duplicate logic, named imports over namespace imports (the barrel-import false-positive caveat under "Merge findings" applies here too: the project's documented barrel modules, e.g. `frontend/app/services/gaia/*` and `frontend/test/mocks/*`, are the intended pattern, not defects)
 - **SSR performance**: Heavy computation in loaders that blocks response, missing caching for cacheable upstream responses
