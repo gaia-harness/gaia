@@ -59,7 +59,7 @@ The exception is a PR whose entire diff is out of audit scope: the hook's out-of
 
 #### Before the first dispatch: verify your own work
 
-The gate is the most expensive feedback in the workflow, and it is a **merge** gate. The **first** dispatch on a branch has no earned clearance to anchor on, so every member reads its whole owned surface: 60-110k tokens per member and several minutes. Spending that to learn something a local check would have reported is a straight loss, because it consumes the round that should be finding what the author cannot see. Each repair then moves HEAD and rotates the digest, buying another round.
+The gate is the most expensive feedback in the workflow, and it is a **merge** gate. The **first** dispatch on a branch has no earned clearance to anchor on, so every member reviews the branch's whole own change, and most of each member's cost is fixed overhead it pays whatever the diff size: several minutes per member, even on a small diff. Spending that to learn something a local check would have reported is a straight loss, because it consumes the round that should be finding what the author cannot see. Each repair then moves HEAD and rotates the digest, buying another round.
 
 The failure shape is specific and worth naming, because it does not look like a mistake while it is happening. New parsing, matching, or extraction logic is written; it handles the shapes the author thought of; a member finds a shape it mishandles; the fix ships; the next round finds another. Each round is individually productive, so the loop feels like progress while it is really a debugging session billed at audit rates. Several rounds to converge on one hand-rolled parser is the canonical case.
 

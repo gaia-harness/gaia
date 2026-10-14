@@ -21,11 +21,11 @@
 # clone audits only adopter-audience surfaces.
 #
 # Light review is opt-in per member through three optional keys placed after
-# `globs:`: `light_review: true` lets small post-clearance re-audits route to a
-# cheaper reviewer; `light_line_cap` is the changed-line budget for that route
-# (a positive integer, never above 50, the ceiling the router clamps to); and
-# `light_hard_full` lists the member's own globs that always route to a full
-# review. Keys are snake_case so the roster readers end the `globs:` list on
+# `globs:`: `light_review: true` lets a small delta since the member's last
+# full review or refusal route to a cheaper reviewer; `light_line_cap` is the
+# changed-line budget for that route (a positive integer, never above 50, the
+# ceiling the router clamps to); and `light_hard_full` lists the member's own
+# globs that always route to a full review. Keys are snake_case so the roster readers end the `globs:` list on
 # them and never take a `light_hard_full` item for an ownership glob. Every
 # `light_hard_full` glob must sit inside the member's own `globs:`.
 auditors:
