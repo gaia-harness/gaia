@@ -1,0 +1,88 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`renderCard > renders a clean A+ report without a findings block or footer 1`] = `
+"+----------------------------+
+| GAIA FITNESS OVERALL   A+  |
++----------------------------+
+| authoring              A+  |
+| claudemd               A+  |
+| frontmatter            A+  |
+| hooks                  A+  |
+| prompt                 A+  |
+| rules                  A+  |
+| settings               A+  |
+| wiki                   A+  |
++----------------------------+"
+`;
+
+exports[`renderCard > renders a mixed report 1`] = `
+"+--------------------------------------------------------------------------------------------------+
+| GAIA FITNESS                                                                       OVERALL   C+  |
++--------------------------------------------------------------------------------------------------+
+| authoring                                                                                    A+  |
+| claudemd                                                                                     A+  |
+| frontmatter                                                                      1 warning   B+  |
+| hooks                                                                              1 error   C+  |
+| prompt                                                                                       A+  |
+| rules                                                                                        A+  |
+| settings                                                                 1 warning, 1 info   B   |
+| wiki                                                                                         A+  |
++--------------------------------------------------------------------------------------------------+
+| FINDINGS                                                                                         |
+|                                                                                                  |
+| frontmatter: B+                                                                                  |
+|   [warning] .claude/commands/example.md:2                                                        |
+|             frontmatter.command.description                                                      |
+|             description frontmatter is missing; add a concise description of what this command   |
+|             does.                                                                                |
+|                                                                                                  |
+| hooks: C+                                                                                        |
+|   [error]   .claude/settings.json:14                                                             |
+|             hooks.script-missing                                                                 |
+|             Point the hook at a script that exists.                                              |
+|                                                                                                  |
+| settings: B                                                                                      |
+|   [warning] .claude/settings.json                                                                |
+|             settings.permissions.redundant                                                       |
+|             Drop the redundant permission entry.                                                 |
+|   [info]    .claude/settings.json:3                                                              |
+|             settings.permissions.broad                                                           |
+|             Consider narrowing this entry.                                                       |
++--------------------------------------------------------------------------------------------------+"
+`;
+
+exports[`renderCard > renders an all n/a report as categories and an overall n/a, no findings block 1`] = `
+"+----------------------------+
+| GAIA FITNESS OVERALL   n/a |
++----------------------------+
+| authoring              n/a |
+| claudemd               n/a |
+| frontmatter            n/a |
+| hooks                  n/a |
+| prompt                 n/a |
+| rules                  n/a |
+| settings               n/a |
+| wiki                   n/a |
++----------------------------+"
+`;
+
+exports[`renderCard > renders upstream findings in their own block pointing at /update-gaia 1`] = `
+"+--------------------------------------------------------------+
+| GAIA FITNESS                                   OVERALL   A+  |
++--------------------------------------------------------------+
+| authoring                                                A+  |
+| claudemd                                                 A+  |
+| frontmatter                                              A+  |
+| hooks                                                    A+  |
+| prompt                                                   A+  |
+| rules                                                    A+  |
+| settings                                                 A+  |
+| wiki                                                     A+  |
++--------------------------------------------------------------+
+| UPSTREAM                                                     |
+| GAIA ships these files; /update-gaia takes the upstream fix. |
+|                                                              |
+|   [warning] .claude/hooks/example.sh:1                       |
+|             hooks.script-not-executable                      |
++--------------------------------------------------------------+"
+`;

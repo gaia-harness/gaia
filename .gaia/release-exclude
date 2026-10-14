@@ -334,3 +334,10 @@ SUPPORTERS.md
 # on an adopter clone. The asset lives outside `app/` so it is never pulled
 # into the app build either.
 docs/assets
+
+# --- 13. Maintainer-only fitness suppressions ---
+# GAIA's own CI runs the fitness lint over the whole harness and applies the
+# reasoned suppressions in this file to GAIA's files. An adopter writes their
+# own, so shipping GAIA's copy would suppress findings on files that are not
+# GAIA's and hide real ones.
+.claude/gaia-fitness.json

@@ -16,12 +16,14 @@
   },
   "dependencies": {
     "js-yaml": "5.4.3",
+    "picomatch": "4.0.7",
     "semver": "7.8.5",
     "zod": "4.6.5"
   },
   "devDependencies": {
     "@gaia-react/lint": "3.0.0-rc.3",
     "@types/node": "26.6.5",
+    "@types/picomatch": "4.0.3",
     "@types/semver": "7.8.0",
     "esbuild": "0.28.2",
     "eslint": "9.39.5",

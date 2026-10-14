@@ -68,6 +68,7 @@ setup() {
   # reconciles this against the tree in both directions.
   ROSTER=(
     '.claude/agents/code-audit-frontend.md'
+    '.claude/skills/gaia/references/fitness.md'
     '.claude/skills/gaia/references/plan/decomposition-audit.md'
     '.claude/skills/gaia/references/spec/audit.md'
     '.claude/skills/gaia/references/spec/lens-dispatch.md'

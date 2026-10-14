@@ -116,7 +116,7 @@ Master catalog of every page in the wiki. Newly created pages must be added here
 - [[DragonScale Opt-Out]]
 - [[Vendored Third-Party Skills]]: third-party skills are vendored byte-identical with a GAIA-owned version marker; GAIA guidance lives outside the vendored folder; updates re-vendor.
 - [[Wiki Management]]: wiki primitives, state file, deterministic classification
-- [[Claude Integration Fitness]]: check taxonomy + F-to-A+ grading + triage/heal protocol run by `/gaia-fitness`.
+- [[Claude Integration Fitness]]: why `/gaia-fitness` is a deterministic linter, what it grades, and its ownership-checked heal protocol.
 - [[TDD RED Verification]]: mechanical enforcement that a new test was observed failing before commit; RED-observation ledger + two hooks.
 - [[Determinism Classifier]]: per-file AST signal labelling a source file strict (RED-gated) or emergent (advisory audit); versioned DOM-API allowlist, file-granular.
 - [[Worthiness Audit]]: advisory two-axis (honesty + worthiness) review of emergent-surface tests; fresh-context reviewer proposes keep/fix/delete, deletes human-gated, audit ledger sibling to the RED ledger; stories audited as emergent tests; two-tier end-of-task surfacing.

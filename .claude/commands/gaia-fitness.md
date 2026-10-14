@@ -1,6 +1,6 @@
 ---
 name: gaia-fitness
-description: Health-checks and auto-heals this project's Claude integration (triage, heal, verify) and reports an F-to-A+ grade.
+description: Lints this project's Claude integration (skills, commands, agents, rules, hooks, settings, CLAUDE.md files, wiki) with a deterministic rule catalog and reports an F-to-A+ grade, plus Claude Code built-in results and an advisory model judgment of descriptions, trigger overlap, rule scope and terminology. Proposes fixes for project-owned files only and applies each one only on a per-file yes, then offers to publish. Use when the user asks to check, grade or tidy their Claude setup.
 disable-model-invocation: true
 ---
 

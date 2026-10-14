@@ -3,11 +3,12 @@
 # The /gaia-cleanse nudge's drift signals (.gaia/scripts/check-updates.sh):
 # the last-cleanse anchor read from the newest applied report under
 # .gaia/local/cleanse/, the one-time move of reports out of .gaia/local/audit/,
-# and the memory count taken from knowledge-inventory.sh.
+# and the memory count taken from the CLI inventory.
 #
 # The fixture is a real main-checkout git repository holding copies of the real
 # refresher, main-root-lib.sh and knowledge-inventory.sh, with a `gaia` wrapper
-# that answers every subcommand the refresher calls with an inert stub. HOME is
+# that answers every subcommand the refresher calls with an inert stub, except
+# `fitness`, which runs the committed CLI bundle. HOME is
 # a throwaway directory, so no real machine state is read or written. The
 # assertions read the cache keys the statusline reads.
 #
@@ -63,10 +64,14 @@ case "$1" in
     printf '{"drift_count":0}'
     exit 0
     ;;
+  fitness)
+    exec "$GAIA_TEST_FITNESS_BUNDLE" "$@"
+    ;;
   *) exit 1 ;;
 esac
 WRAPPER
   chmod +x "$REPOSITORY_FIXTURE/.gaia/cli/gaia"
+  export GAIA_TEST_FITNESS_BUNDLE="$REPO_ROOT/.gaia/cli/gaia"
   printf '1.0.0\n' > "$REPOSITORY_FIXTURE/.gaia/VERSION"
   printf 'seed\n' > "$REPOSITORY_FIXTURE/wiki/index.md"
   printf 'short project instructions\n' > "$REPOSITORY_FIXTURE/CLAUDE.md"
@@ -156,13 +161,20 @@ broken_copy() {
   touch "$MEMORY_DIRECTORY/a.md" "$MEMORY_DIRECTORY/b.md" "$MEMORY_DIRECTORY/c.md"
   refresh
   [ "$(cache_value cleanseMemoryCount)" = "3" ]
+}
 
-  # Refusal proof: restore the slash-only key derivation in a scratch copy and
-  # confirm the same seeded directory is no longer found.
-  broken_copy '  memory_count=$(bash "$KNOWLEDGE_INVENTORY" counts --root "$STATE_ROOT" 2>/dev/null \' \
-    "  memory_count=\$(find \"\$HOME/.claude/projects/\${STATE_ROOT//\\//-}/memory\" -type f -name '*.md' 2>/dev/null | wc -l | tr -d '[:space:]')" 1
-  refresh "$broken"
-  [ "$(cache_value cleanseMemoryCount)" = "0" ]
+@test "a CLI that cannot answer leaves the previous memory count in place, never zero" {
+  # An unknown-subcommand style failure: exit 1 with no inventory on stdout.
+  printf '#!/usr/bin/env bash\nexit 1\n' > "$BATS_TEST_TMPDIR/failing-bundle"
+  chmod +x "$BATS_TEST_TMPDIR/failing-bundle"
+  GAIA_TEST_FITNESS_BUNDLE="$BATS_TEST_TMPDIR/failing-bundle"
+  export GAIA_TEST_FITNESS_BUNDLE
+  mkdir -p "$MEMORY_DIRECTORY"
+  touch "$MEMORY_DIRECTORY/a.md" "$MEMORY_DIRECTORY/b.md" "$MEMORY_DIRECTORY/c.md"
+  printf '{"checkedAt":0,"cleanseMemoryCount":7}' > "$CACHE_FILE"
+  run env HOME="$TEMPORARY_HOME" bash "$REPOSITORY_FIXTURE/.gaia/scripts/check-updates.sh"
+  [ "$status" -eq 0 ]
+  [ "$(cache_value cleanseMemoryCount)" = "7" ]
 }
 
 @test "the anchor reads a numeric epoch when stat -f answers with filesystem text" {

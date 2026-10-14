@@ -287,6 +287,7 @@ transforms:
           - "wiki/entities" # an adopter's wiki grows its own entity pages.
           - ".gaia/audit-residual-dismissals.jsonl" # /gaia-residue writes the adopter's store.
           - ".github/FUNDING.yml" # an adopter may keep their own; `gaia init` deletes only GAIA's.
+          - ".claude/gaia-fitness.json" # adopters create their own fitness suppression file.
         line-allowlist:
           # package.json's `gaia.wikiClassify` source/test path arrays are
           # load-bearing config globs, not prose pointers: an entry naming a

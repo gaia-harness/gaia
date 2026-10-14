@@ -4,6 +4,7 @@
     ".claude/agents/audit-loop-unit.md": "owned",
     ".claude/agents/code-audit-frontend.md": "owned",
     ".claude/agents/code-audit-github-workflows.md": "owned",
+    ".claude/agents/fitness-judge.md": "owned",
     ".claude/agents/worthiness-evaluator.md": "owned",
     ".claude/commands/gaia-cleanse.md": "owned",
     ".claude/commands/gaia-codify.md": "owned",
@@ -92,6 +93,10 @@
     ".claude/skills/file-tech-debt/SKILL.md": "owned",
     ".claude/skills/gaia-wiki/SKILL.md": "owned",
     ".claude/skills/gaia/references/cleanse.md": "owned",
+    ".claude/skills/gaia/references/cleanse/apply.md": "owned",
+    ".claude/skills/gaia/references/cleanse/publish.md": "owned",
+    ".claude/skills/gaia/references/cleanse/research.md": "owned",
+    ".claude/skills/gaia/references/cleanse/verification-round.md": "owned",
     ".claude/skills/gaia/references/codify.md": "owned",
     ".claude/skills/gaia/references/cost-record.md": "owned",
     ".claude/skills/gaia/references/debt.md": "owned",
@@ -230,6 +235,7 @@
     ".gaia/scripts/dev-smoke.sh": "owned",
     ".gaia/scripts/file-tech-debt.sh": "owned",
     ".gaia/scripts/fitness-ownership.sh": "owned",
+    ".gaia/scripts/fitness-publish.sh": "owned",
     ".gaia/scripts/gh-artifact-lib.sh": "owned",
     ".gaia/scripts/install-react-doctor.sh": "owned",
     ".gaia/scripts/knowledge-inventory.sh": "owned",
@@ -700,7 +706,7 @@
     "wiki/overview.md": "wiki-owned",
     "wiki/README.md": "wiki-owned"
   },
-  "generated": "2026-10-13T15:20:14.902Z",
+  "generated": "2026-10-14T06:22:11.952Z",
   "regions": [
     {
       "endMarker": "<!-- gaia:audit-remit:end -->",
