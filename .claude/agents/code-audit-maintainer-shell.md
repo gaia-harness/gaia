@@ -197,7 +197,7 @@ The protocol's "Holistic class assignment" section owns the class list, each cla
 - `holistic/unbounded-invocation`: a `gh` call in a loop with no timeout or page cap.
 - `holistic/overclaimed-guarantee`: a header crediting a pin with catching every drift when it catches one spelling.
 - `holistic/incomplete-enumeration`: a header listing the surfaces a scan walks while the scan walks one more.
-- `holistic/repeated-round-trip`: a `jq` process spawned per field over one JSON document.
+- `holistic/repeated-round-trip`: a loop spawning `git check-ignore` or `grep -q` once per path, or `jq` once per field of one JSON document, where one batched call over the whole set returns the same answers.
 
 ## Methodology
 
