@@ -64,9 +64,8 @@ export const reactCompilerOptions = {
   ...(reportPath ? {logger: createReportLogger(reportPath)} : {}),
 } as const;
 
-// The switch is a literal, so the lint rule reads this condition as constant.
 export const reactCompiler: PluginOption =
-  // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
+  // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- the switch is a literal, so the rule reads this condition as constant
   isReactCompilerEnabled ?
     babel({presets: [reactCompilerPreset(reactCompilerOptions)]})
   : false;

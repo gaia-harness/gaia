@@ -8,8 +8,8 @@ import ChromaticDecorator from './decorator';
 export const isChromaticSnapshot =
   isChromatic() ||
   (process.env.NODE_ENV === 'production' ?
-    // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
-    [...(window?.location.ancestorOrigins ?? [])].some((origin) =>
+    // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- Firefox has no `location.ancestorOrigins`, whatever the DOM type says
+    [...(window.location.ancestorOrigins ?? [])].some((origin) =>
       origin.includes('www.chromatic.com')
     )
   : false);
@@ -17,7 +17,7 @@ export const isChromaticSnapshot =
 if (!isChromaticSnapshot) {
   const channel = addons.getChannel();
   channel.on(DARK_MODE_EVENT_NAME, (isDark: boolean) => {
-    // eslint-disable-next-line unicorn/prevent-abbreviations
+    // eslint-disable-next-line unicorn/prevent-abbreviations -- `docs-story` is Storybook's class name
     const docsStory = document.querySelector('.docs-story');
 
     if (isDark) {

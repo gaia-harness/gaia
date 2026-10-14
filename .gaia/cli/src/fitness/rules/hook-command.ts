@@ -45,7 +45,7 @@ const RECOGNIZED_ROOT_PREFIXES: readonly string[] = [
   '$CLAUDE_PROJECT_DIR/',
 ];
 
-const ASSIGNMENT = /^[A-Z_a-z]\w*=/;
+const ASSIGNMENT = /^[A-Z_]\w*=/i;
 
 const COMMAND_TERMINATORS: ReadonlySet<string> = new Set(['\n', '&', ';', '|']);
 

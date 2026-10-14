@@ -388,8 +388,7 @@ const finishEmptyBranch = (options: FinishEmptyBranchOptions): number => {
   return EXIT_CODES.OK;
 };
 
-const PR_URL =
-  /https:\/\/github\.com\/([A-Za-z0-9._-]+\/[A-Za-z0-9._-]+)\/pull\/(\d+)/u;
+const PR_URL = /https:\/\/github\.com\/([\w.-]+\/[\w.-]+)\/pull\/(\d+)/u;
 
 /**
  * Parse the first anchored `.../pull/<n>` URL out of `gh pr create`'s stdout.
@@ -456,7 +455,7 @@ const recordWikiCost = (options: RunOptions, artifact?: GhArtifact): void => {
 };
 
 const DRAFT_UNSUPPORTED =
-  /draft.*(not supported|unsupported)|(not supported|unsupported).*draft/i;
+  /draft.*(?:not supported|unsupported)|(?:not supported|unsupported).*draft/i;
 
 type OpenPullRequestOptions = {
   prBody: string;

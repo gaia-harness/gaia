@@ -35,7 +35,7 @@ type Environment = z.infer<typeof clientSchema>;
 // preview inlines nothing, so under a story every field reads `undefined`
 // despite the type. Give a story the values it needs as args.
 declare global {
-  // eslint-disable-next-line @typescript-eslint/consistent-type-definitions
+  // eslint-disable-next-line @typescript-eslint/consistent-type-definitions -- global augmentation of `Window` needs an interface to merge
   interface Window {
     process: {
       env: Environment;

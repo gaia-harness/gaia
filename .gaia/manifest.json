@@ -525,8 +525,6 @@
     "frontend/Dockerfile.dockerignore": "owned",
     "frontend/doctor.config.ts": "owned",
     "frontend/eslint.config.mjs": "owned",
-    "frontend/eslint/no-imperative-query-fetch.d.mts": "owned",
-    "frontend/eslint/no-imperative-query-fetch.mjs": "owned",
     "frontend/gaia.package.json": "shared",
     "frontend/knip.config.ts": "owned",
     "frontend/package.json": "shared",

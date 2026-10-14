@@ -1,4 +1,5 @@
-/* eslint-disable no-console */
+/* eslint-disable no-console -- the root boundary logs the error it renders */
+/* eslint-disable i18next/no-literal-string -- renders when i18n may have failed, so its strings stay English */
 import {isRouteErrorResponse} from 'react-router';
 import Document from '~/components/document';
 import ErrorStack from '~/components/errors/error-stack';

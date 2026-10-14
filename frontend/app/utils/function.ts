@@ -36,15 +36,10 @@ export const tryCatch = <T, A extends readonly unknown[]>(
   return [undefined, result] as TryCatchResult<T>;
 };
 
-// eslint-disable-next-line @typescript-eslint/no-unsafe-function-type
-export const compose = (...fns: Function[]): Function =>
-  // eslint-disable-next-line sonarjs/reduce-initial-value
-  fns.reduce(
-    (f, g) =>
-      (...args: unknown[]) =>
-        // eslint-disable-next-line @typescript-eslint/no-unsafe-return
-        f(g(...args))
-  );
+export const compose =
+  <T>(...fns: ((value: T) => T)[]) =>
+  (value: T): T =>
+    fns.reduceRight((result, fn) => fn(result), value);
 
 export const noop = (): void => {};
 

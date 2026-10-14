@@ -43,7 +43,7 @@ const BARE_FILE_EXTENSIONS = new Set([
 const PATH_CHARACTERS = /^[\w./@+-]+$/;
 
 export const LINE_SUFFIX = /:\d+(?:-\d+)?$/;
-const EXTENSION = /\.([A-Za-z0-9]+)$/;
+const EXTENSION = /\.([A-Z0-9]+)$/i;
 
 // A host name leading the token (`site.com/docs`) is a web address, and a
 // leading `@` is an npm scope: neither names a file in the project. The top
@@ -74,7 +74,7 @@ export const asRepositoryPath = (candidate: string): string | undefined => {
   // `.md` names an extension, not a file; a dotfile such as `.eslintrc.json`
   // carries a second segment.
   if (
-    /^\.[A-Za-z0-9]+$/.test(token) &&
+    /^\.[A-Z0-9]+$/i.test(token) &&
     BARE_FILE_EXTENSIONS.has(token.slice(1))
   ) {
     return undefined;
@@ -91,7 +91,7 @@ export const asRepositoryPath = (candidate: string): string | undefined => {
 
 export const BACKTICKED = /`([^`\n]+)`/g;
 const LINK_TARGET = /\]\(([^)\s]+)\)/g;
-const SCHEME = /^[A-Za-z][A-Za-z0-9+.-]*:/;
+const SCHEME = /^[A-Z][A-Z0-9+.-]*:/i;
 
 /** Backticked and markdown-linked repo-relative paths in `text`, outside fenced code. */
 export const extractPathReferences = (text: string): PathReference[] => {

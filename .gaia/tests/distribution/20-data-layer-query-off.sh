@@ -17,7 +17,7 @@
 #      clientLoader list route bound to it scaffolds cleanly.
 #   4. `scaffold route --data query` is refused, writes nothing, and names the
 #      Query-on init command (UAT-010).
-#   5. The local lint rule reports each imperative Query fetch, and the
+#   5. The bundled lint rule reports each imperative Query fetch, and the
 #      inherited `no-restricted-properties` and `no-restricted-syntax` entries
 #      still fire (UAT-012).
 #   6. Storybook keeps the MSW loader and no Query decorator, and the worker
@@ -128,7 +128,7 @@ if [ -e "$FRONTEND/app/services/gaia/items/queries.ts" ]; then
   exit 1
 fi
 gaia_json "route items client" scaffold route items --group _public \
-  --data client --service items --shape list --action >/dev/null
+  --data client --service items --shape list --action --i18n >/dev/null
 [ -f "$FRONTEND/app/pages/items/tests/page.stories.tsx" ] \
   || { fail "route scaffold wrote no app/pages/items/tests/page.stories.tsx"; exit 1; }
 
@@ -170,8 +170,8 @@ done
 [ "$lint_probe_status" -ne 0 ] \
   || { fail "eslint passed the lint probes; each must fail"; exit 1; }
 
-[ "$(lint_rule_count "$WORK/lint-probes.json" imperative-query-probe.ts local/no-imperative-query-fetch 'queryClient.query')" = "4" ] \
-  || { fail "local/no-imperative-query-fetch did not report each of the four imperative fetches naming queryClient.query"; exit 1; }
+[ "$(lint_rule_count "$WORK/lint-probes.json" imperative-query-probe.ts no-imperative-query-fetch/no-imperative-query-fetch 'queryClient.query')" = "4" ] \
+  || { fail "no-imperative-query-fetch/no-imperative-query-fetch did not report each of the four imperative fetches naming queryClient.query"; exit 1; }
 [ "$(lint_rule_count "$WORK/lint-probes.json" restricted-properties-probe.ts no-restricted-properties)" -ge 1 ] \
   || { fail "Math.pow no longer fails the inherited no-restricted-properties entry"; exit 1; }
 [ "$(lint_rule_count "$WORK/lint-probes.json" restricted-syntax-probe.tsx no-restricted-syntax)" -ge 1 ] \

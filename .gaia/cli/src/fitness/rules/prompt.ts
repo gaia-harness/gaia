@@ -105,7 +105,7 @@ const EMPHASIS_KEYS: ReadonlySet<string> = new Set([
   'description',
   'when_to_use',
 ]);
-const TOP_LEVEL_KEY = /^([A-Za-z_][\w-]*)\s*:/;
+const TOP_LEVEL_KEY = /^([A-Z_][\w-]*)\s*:/i;
 
 const capsEmphasisFindings = (file: ProjectFile): readonly RawFinding[] => {
   const frontmatter = splitFrontmatter(file.text);
@@ -141,7 +141,7 @@ const capsEmphasisFindings = (file: ProjectFile): readonly RawFinding[] => {
 
 type TagHit = {line: number};
 
-const TAG = /<(\/?)([A-Za-z][\w-]*)((?:\s[^<>]*?)?)(\/?)>/g;
+const TAG = /<(\/?)([A-Z][\w-]*)((?:\s[^<>]*?)?)(\/?)>/gi;
 
 const tagBalanceFindings = (file: ProjectFile): readonly RawFinding[] => {
   const opens = new Map<string, TagHit[]>();
@@ -270,7 +270,7 @@ export const PROMPT_RULES: readonly RuleDefinition[] = [
     detection:
       '"if in doubt" or "when in doubt" followed by a tool verb, or "default to using".',
     matcher: pattern(
-      /\b(?:(?:if|when) in doubt\b[^.\n]*\b(?:call|fetch|grep|invoke|query|read|run|search|use)\b|default to using\b)/i
+      /\b(?:(?:if|when) in doubt\b[^.\n]+\b(?:call|fetch|grep|invoke|query|read|run|search|use)\b|default to using\b)/i
     ),
     message:
       'The prompt defaults the model to reaching for a tool when unsure, which makes it over-call tools.',

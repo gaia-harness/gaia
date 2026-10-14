@@ -14,7 +14,7 @@ type DocumentProps = {
   className?: string;
   dir?: string;
   lang: string;
-  // eslint-disable-next-line react/boolean-prop-naming
+  // eslint-disable-next-line react/boolean-prop-naming -- `noIndex` mirrors the robots `noindex` directive it renders
   noIndex?: boolean;
   title?: string;
 };

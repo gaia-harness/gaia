@@ -33,7 +33,7 @@ export type LinkReference = {
 
 const MARKDOWN_LINK = /\]\(<?([^)\s>]+)/g;
 const BACKTICK_SPAN = /`([^`\n]+)`/g;
-const URL_SCHEME = /^[A-Za-z][A-Za-z0-9+.-]*:/;
+const URL_SCHEME = /^[A-Z][A-Z0-9+.-]*:/i;
 const NOT_A_PATH = /[\s<>{}*?$|;&"'()\\]/;
 
 /** A token that could be a relative file path: no placeholders, globs or URLs. */

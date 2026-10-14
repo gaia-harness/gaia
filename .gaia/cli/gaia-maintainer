@@ -20243,7 +20243,7 @@ var TYPE_TO_BUMP = {
 };
 var classifyCommit = (commit) => {
   const { body, subject } = commit;
-  if (/(^|\n)BREAKING CHANGE: /u.test(body)) return "major";
+  if (/(?:^|\n)BREAKING CHANGE: /u.test(body)) return "major";
   const header = parseConventionalCommitHeader(subject);
   if (header === void 0) return null;
   const { breaking, type } = header;
@@ -24628,7 +24628,7 @@ var runGit = (args, options = {}) => {
     maxBuffer: MAX_GIT_BUFFER_BYTES,
     stdio: ["ignore", "pipe", "pipe"]
   });
-  return result.toString();
+  return result;
 };
 var tryRunGit = (args, options = {}) => {
   try {
@@ -25178,7 +25178,7 @@ var PROSE_PATH_ALLOWLIST = /* @__PURE__ */ new Set([
   ".github/workflows",
   ".github/workflows/react-doctor.yml"
 ]);
-var PATH_BODY_CHAR = /[a-zA-Z0-9._/-]/;
+var PATH_BODY_CHAR = /[\w./-]/;
 var PATH_TRUNCATING_METACHAR = /[$*?[{]/;
 var stripCommentSuffix = (line) => {
   if (/^\s*#/.test(line)) return "";

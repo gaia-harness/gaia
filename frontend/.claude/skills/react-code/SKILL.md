@@ -25,14 +25,7 @@ Most hook bugs come from misidentifying the type of problem being solved. Before
 
 ### Gate 1: Hook Check
 
-**Before writing `useEffect`:**
-
-1. Can I calculate this during render? → Derive inline (the compiler memoizes derived values), no Effect needed.
-2. Does this respond to a user action? → Put it in the event handler, no Effect needed.
-3. Am I syncing state to other state? → Derive it; remove the redundant state, no Effect needed.
-4. Am I notifying a parent of a state change? → Call both setters in the handler, no Effect needed.
-5. Do I need to reset child state when a prop changes? → Use `key`, no Effect needed.
-6. Am I synchronizing with an external system (browser API, third-party widget, network)? → Effect is appropriate here. Add cleanup. For data fetching, include an `ignore` flag.
+**Before writing `useEffect`:** decide whether it should be an Effect at all. Lint (`react-you-might-not-need-an-effect`) reports the ones that should not: state derived from props or state, user-event logic, chained updates, notifying a parent, and resetting state on a prop change. An Effect is right when it synchronizes with an external system (browser API, third-party widget, network). Add cleanup; for a fetch, pass an `AbortController` signal and abort it in the cleanup (`@eslint-react/web-api-no-leaked-fetch` requires it). An async client with no way to cancel guards its setter with an `ignore` flag instead.
 
 **Before writing `useMemo`, `useCallback`, or `memo`:** don't; see `## Memoization: compiler-first`.
 
@@ -72,7 +65,7 @@ See `references/conform-forms.md` for full Conform + Zod wiring. Beyond the impo
 
 **Before writing ANY user-visible string in JSX:**
 
-Every string a user can see or hear, labels, headings, placeholders, button text, error messages, tooltips, descriptions, status text, `aria-label` attributes, `alt` text, and `title` attributes, must come from a `t()` call. Hard-coded English strings in JSX are bugs. This applies to new components, new UI sections, and modifications that add visible text. The only exceptions are punctuation-only strings, single-character symbols, developer-facing content (console.log, comments, test assertions), and approximate skeleton-loader placeholder text standing in for a dynamic runtime value. Skeleton text that mirrors static `t()` content must still use `t()` (see the skeleton-loaders skill).
+Every string a user can see or hear, labels, headings, placeholders, button text, error messages, tooltips, descriptions, status text, `aria-label` attributes, `alt` text, and `title` attributes, must come from a `t()` call. Lint (`i18next/no-literal-string`) reports raw JSX text but not attributes, so `aria-label`, `alt`, `title`, and placeholders are yours to check. This applies to new components, new UI sections, and modifications that add visible text. The only exceptions are punctuation-only strings, single-character symbols, developer-facing content (console.log, comments, test assertions), and approximate skeleton-loader placeholder text standing in for a dynamic runtime value. Skeleton text that mirrors static `t()` content must still use `t()` (see the skeleton-loaders skill).
 
 1. Add the translation key to the appropriate namespace file in `app/languages/en/` (and any other locale folders present, copying the English string verbatim as a placeholder)
 2. Use `t('key')` in the component, never a string literal
@@ -88,18 +81,9 @@ See `references/translation-patterns.md` for edge cases (keyPrefix, Trans compon
 
 Write React 19 idioms. The work here is to not regress to pre-19 habits, and to not pull in React's framework-level form APIs that React Router already owns.
 
-**Before writing `forwardRef`: don't.** In React 19, `ref` is an ordinary prop on function components, so `forwardRef` is unnecessary (slated for deprecation in a future release). Use no `forwardRef`; destructure `ref` from props.
+**`forwardRef`:** lint (`@eslint-react/no-forward-ref`) reports it. In React 19 `ref` is an ordinary prop, so destructure it from props. The ref _type_ (`Ref<T>`, or `ComponentProps<'input'>` already carrying `ref`) is the typescript skill's domain.
 
-```tsx
-// BAD, needless indirection
-const TextBox = forwardRef<HTMLInputElement, TextBoxProps>((props, ref) => <input ref={ref} {...props} />);
-// GOOD, ref is just a prop
-const TextBox = ({ref, ...rest}: TextBoxProps) => <input ref={ref} {...rest} />;
-```
-
-The ref _type_ (`Ref<T>`, or `ComponentProps<'input'>` already carrying `ref`) is the typescript skill's domain.
-
-**Before writing `&&` in JSX, make the left operand a real boolean.** `&&` returns its left operand when falsy. `false`/`null`/`undefined` render nothing, but a numeric **`0`** is a renderable value and leaks the literal "0" into the DOM. This is the most common React rendering bug, so coercing a numeric operand is mandatory, not a stylistic option. **Lint catches the `.length && <JSX/>` form in real time** (via `no-restricted-syntax`); the general `count && <X/>` case is caught at pre-merge audit by react-doctor's type-aware `rendering-conditional-render` rule, which reports any numeric operand as a Bug. Coerce as you write rather than waiting for the audit: `count > 0`, `count !== 0`, or `!!count`.
+**Before writing `&&` in JSX, make the left operand a real boolean.** `&&` returns its left operand when falsy. `false`/`null`/`undefined` render nothing, but a numeric **`0`** is a renderable value and leaks the literal "0" into the DOM. This is the most common React rendering bug, so coercing a numeric operand is mandatory, not a stylistic option. Lint catches both forms in real time: `no-restricted-syntax` reports `.length && <JSX/>`, and the type-aware `sonarjs/jsx-no-leaked-render` reports the general `count && <X/>` case. Coerce as you write: `count > 0`, `count !== 0`, or `!!count`.
 
 ```tsx
 // BAD, renders "0" when the list is empty
@@ -110,14 +94,7 @@ The ref _type_ (`Ref<T>`, or `ComponentProps<'input'>` already carrying `ref`) i
 
 For render-or-nothing, a boolean-guarded `&&` is the idiom; it replaces the old `cond ? <X/> : null`. A ternary is only for a genuine either/or where both arms render, never `: null`.
 
-**Before writing `useContext` or `<Context.Provider>`, use the React 19 forms.** Read context with `use()` (unlike `useContext`, it may be called conditionally or after an early return); render the context object directly as the provider.
-
-```tsx
-const nonce = use(NonceContext); // not useContext(NonceContext)
-<NonceContext value={nonce}>{children}</NonceContext>; // not <NonceContext.Provider>
-```
-
-`<Context.Provider>`/`<Context.Consumer>` are legacy (deprecation planned). Use the `<Context>` shorthand and `use()` exclusively, never `.Provider`, `.Consumer`, or `useContext`. Convert any you find.
+**`useContext` and `<Context.Provider>`:** lint (`@eslint-react/no-use-context`, `@eslint-react/no-context-provider`) reports them. Read context with `use()` (it may be called conditionally or after an early return) and render the context object as the provider: `<NonceContext value={nonce}>`. Lint misses `<Context.Consumer>`, and the provider rule matches by name, so it can miss a `.Provider` on a context not named `…Context`; convert those by hand.
 
 **Stay in React Router's lane; don't reach for React's form Actions.** Submit through React Router `<Form>` / `useFetcher` + route `action` exports, validate with Conform + Zod (Gate 2), and read pending/optimistic state from React Router. React 19's framework-level form hooks duplicate and fight that surface. When tempted, redirect:
 

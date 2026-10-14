@@ -27,7 +27,7 @@ const REGISTRY_FILE = '.gaia/packages.json';
 const DESCRIPTOR_NAME = 'gaia.package.json';
 const NAME_PATTERN = /^[a-z][a-z0-9-]*$/;
 const PATH_PATTERN = /^(\.|[a-z0-9][a-z0-9._-]*(\/[a-z0-9][a-z0-9._-]*)*)$/;
-// eslint-disable-next-line no-control-regex
+// eslint-disable-next-line no-control-regex -- matching control characters is the point
 const CONTROL_CHARACTER = /[\u0000-\u001F\u007F]/;
 
 /** The `globs` keys every descriptor must carry, in validation order. */

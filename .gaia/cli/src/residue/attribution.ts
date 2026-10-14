@@ -83,12 +83,12 @@ export const DEFAULT_PREDICATES: AttributionPredicates = {
 // reproduced whole. `\d` is ASCII digits under every flag, the same set as
 // `[0-9]`.
 const HEADING_PATTERN = /^#{1,6}[\t\n\v\f\r ]/;
-const TOP_BULLET_PATTERN = /^([-*+]|\d{1,9}[.)])[\t\n\v\f\r ]/;
+const TOP_BULLET_PATTERN = /^(?:[-*+]|\d{1,9}[.)])[\t\n\v\f\r ]/;
 // A comment body may not contain another opener, so a code span quoting a
 // bare `<!--` ahead of a real comment cannot start a match that runs on to the
 // real comment's closer and deletes the prose between them. A comment wrapped
-// whole in a code span takes its backticks with it: the backreference demands
-// a closing backtick only when an opening one was consumed. A backtick opens
+// whole in a code span takes its backticks with it: the first alternative
+// consumes both backticks, and the second matches a bare comment. A backtick opens
 // the wrapping span only after whitespace or opening punctuation; after any
 // other character it is read as closing a neighbouring span, so two spans
 // around a bare comment are not merged. Honest limits, both display-only
@@ -97,7 +97,7 @@ const TOP_BULLET_PATTERN = /^([-*+]|\d{1,9}[.)])[\t\n\v\f\r ]/;
 // between, and a neighbouring span that itself ends in opening punctuation
 // loses its closing backtick.
 const HTML_COMMENT_PATTERN =
-  /(?:(?<![^\s"'([{])(`))?<!--(?:(?!<!--)[\s\S])*?-->\1/g;
+  /(?<![^\s"'([{])`<!--(?:(?!<!--)[\s\S])*?-->`|<!--(?:(?!<!--)[\s\S])*?-->/g;
 const BLANK_LINE_PATTERN = /^[\t\v\f\r ]*$/;
 const INDENTED_LINE_PATTERN = /^[\t ]/;
 const TRAILING_SPACE_CHARACTERS = new Set(['\t', '\n', '\v', '\f', '\r', ' ']);

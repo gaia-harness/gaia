@@ -32,8 +32,7 @@
  * grammar in `.gaia/scripts/check-debt-issue-metadata.sh` (`KEY_RE`).
  */
 export const KEY_PATTERN =
-  // eslint-disable-next-line sonarjs/concise-regex -- same spelling as the POSIX ERE key grammar
-  /<!-- gaia-debt-key: (v1 class=[^ ]+ path=[^>]+ line=[0-9]+) -->/;
+  /<!-- gaia-debt-key: (v1 class=[^ ]+ path=[^>]+ line=\d+) -->/;
 
 /** The filer's grammar, applied to a whole issue body; group 1 is the path. */
 export const LENIENT_KEY_PATTERN =
@@ -104,7 +103,7 @@ export const normalizeRepoRelativePath = (raw: string): Validated<string> => {
   if (
     raw.startsWith('/') ||
     raw.startsWith('\\\\') ||
-    /^[A-Za-z]:[\\/]/.test(raw)
+    /^[A-Z]:[\\/]/i.test(raw)
   ) {
     return {
       ok: false,

@@ -1,4 +1,4 @@
-/* eslint-disable canonical/filename-match-exported */
+/* eslint-disable canonical/filename-match-exported -- an index module is named by its folder */
 import type {ReactNode} from 'react';
 
 type StateProps = {

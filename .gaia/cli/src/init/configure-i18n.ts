@@ -84,7 +84,7 @@ const parseLocales = (raw: string): [string, ...string[]] | null => {
   if (head === undefined) return null;
 
   for (const code of parts) {
-    if (!/^[a-z]{2,3}(-[A-Za-z]{2,4})?$/u.test(code)) return null;
+    if (!/^[a-z]{2,3}(?:-[A-Za-z]{2,4})?$/u.test(code)) return null;
   }
 
   return [head, ...tail];

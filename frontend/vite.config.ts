@@ -25,7 +25,7 @@ if (portResolution.kind === 'resolved') {
 
 // Open the browser only when a person runs `pnpm dev` in a terminal. Tools that
 // spawn the dev server (Playwright, agents, CI) pipe stdout, so they get no tab.
-const canOpenBrowser = !!process.stdout.isTTY && !process.env.CI;
+const canOpenBrowser = process.stdout.isTTY && !process.env.CI;
 
 export default defineConfig({
   build: {

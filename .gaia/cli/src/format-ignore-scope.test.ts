@@ -107,7 +107,7 @@ const ignorePathsIn = (script: string): string[] =>
 // `./node_modules/.bin/prettier`, which would otherwise be a false red on a
 // script that does run the formatter. None of those boundaries admits
 // `.prettierignore`, whose preceding character is a dot.
-const PRETTIER_INVOCATION_PATTERN = /(?:^|\s|&&|\|\||;|\/)prettier(?:\s|$)/;
+const PRETTIER_INVOCATION_PATTERN = /(?:^|[\s;/]|&&|\|\|)prettier(?:\s|$)/;
 
 // The paths a script narrows prettier's ignore set to, or `null` when it
 // narrows nothing. Two shapes narrow nothing: no `--ignore-path` at all, which

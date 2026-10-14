@@ -301,9 +301,8 @@ export const findListenerOwner = ({
   if (treeRoot === undefined) return {kind: 'unknown'};
 
   try {
-    // The script path is built from the resolved tree root; `bash` is the only PATH lookup.
     const listenerOwnerOutput = execFileSync(
-      // eslint-disable-next-line sonarjs/no-os-command-from-path
+      // eslint-disable-next-line sonarjs/no-os-command-from-path -- the script path is built from the resolved tree root; `bash` is the only PATH lookup
       'bash',
       [
         resolveServerProcessScriptPath(treeRoot),

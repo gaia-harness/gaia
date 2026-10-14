@@ -50,11 +50,11 @@ const requireSafePath = (spec: string, label: string): void => {
  * `/` is dropped.
  */
 export const reanchorSpec = (spec: string, prefix: string): string => {
-  if (/^(\*\*\/|\/\/|~\/)/.test(spec)) {
+  if (/^(?:\*\*\/|\/\/|~\/)/.test(spec)) {
     return spec;
   }
 
-  return `${prefix}${spec.replace(/^(\.\/|\/)/, '')}`;
+  return `${prefix}${spec.replace(/^(?:\.\/|\/)/, '')}`;
 };
 
 /** Re-anchor a permission rule. Rules that carry no path copy unchanged. */

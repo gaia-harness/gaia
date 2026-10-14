@@ -1,4 +1,4 @@
-/* eslint-disable max-params, no-console */
+/* eslint-disable max-params, no-console -- the React Router server entry signature is fixed, and the server logs to stdout */
 import type {RenderToPipeableStreamOptions} from 'react-dom/server';
 import type {EntryContext, RouterContextProvider} from 'react-router';
 import {renderToPipeableStream} from 'react-dom/server';
@@ -100,7 +100,7 @@ const handleRequest = async (
       {
         nonce,
         onError: (error: unknown) => {
-          // eslint-disable-next-line sonarjs/no-parameter-reassignment
+          // eslint-disable-next-line sonarjs/no-parameter-reassignment -- the status is shared with the shell callbacks that send the response
           responseStatusCode = 500;
 
           if (shellRendered) {

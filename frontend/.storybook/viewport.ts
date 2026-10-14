@@ -1,4 +1,4 @@
-/* eslint-disable perfectionist/sort-objects */
+/* eslint-disable perfectionist/sort-objects -- viewports read smallest to largest, not alphabetically */
 const viewport = {
   viewports: {
     landscape: {

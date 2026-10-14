@@ -165,7 +165,7 @@ const ExternalLinkButton = () => {
   return (
     <Button
       nativeButton={false}
-      // eslint-disable-next-line jsx-a11y/anchor-has-content, jsx-a11y/no-redundant-roles
+      // eslint-disable-next-line jsx-a11y/anchor-has-content, jsx-a11y/no-redundant-roles -- Button's `render` prop supplies the anchor content, and Base UI needs the explicit role
       render={<a href="https://example.com" role="link" />}
       variant="outline"
     >
@@ -286,7 +286,7 @@ export const ExternalLinkActivatesOnEnter: StoryObj<typeof meta> = {
     <Button
       nativeButton={false}
       render={
-        // eslint-disable-next-line jsx-a11y/anchor-has-content, jsx-a11y/no-redundant-roles
+        // eslint-disable-next-line jsx-a11y/anchor-has-content, jsx-a11y/no-redundant-roles -- Button's `render` prop supplies the anchor content, and Base UI needs the explicit role
         <a href="https://example.com/docs" onClick={args.onClick} role="link" />
       }
     >

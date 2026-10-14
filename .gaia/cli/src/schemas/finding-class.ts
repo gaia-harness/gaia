@@ -43,7 +43,7 @@ const ORACLE_PREFIXES: readonly FindingClassPrefix[] = [
 // `-`, each starting with a letter or digit. That admits every id the oracles
 // emit (axe rule ids, knip issue types, numeric, GHSA, and CVE advisory ids,
 // plugin-namespaced rule ids) and rejects whitespace, control bytes, and markup.
-const ORACLE_SLUG_PATTERN = /^[A-Za-z0-9][\w.-]*(?:\/[A-Za-z0-9][\w.-]*)*$/;
+const ORACLE_SLUG_PATTERN = /^[A-Z0-9][\w.-]*(?:\/[A-Z0-9][\w.-]*)*$/i;
 const ORACLE_SLUG_MAX_LENGTH = 128;
 
 const isOracleSlug = (slug: string): boolean =>

@@ -35,7 +35,7 @@ export const ADVISORY_SPAWN_TIMEOUT_MS = 60_000;
 // failure.
 const PNPM_MAX_BUFFER_BYTES = 64 * 1024 * 1024;
 
-const REPOSITORY_SEGMENT_PATTERN = /^[A-Za-z0-9._-]+$/u;
+const REPOSITORY_SEGMENT_PATTERN = /^[\w.-]+$/u;
 
 /** `pnpm` spawned with a timeout, for every advisory-side pnpm call. */
 export const advisoryPnpmRunner: PnpmRunner = (args, options) => {

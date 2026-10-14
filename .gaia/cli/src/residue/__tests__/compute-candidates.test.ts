@@ -357,7 +357,7 @@ describe('computeCandidates, counts, ordering, and cursor', () => {
 
     const result = computeCandidates({...baseArgs, prs});
 
-    expect(result.candidates[0]?.cursor_token).toMatch(/^[A-Za-z0-9_-]+$/);
+    expect(result.candidates[0]?.cursor_token).toMatch(/^[\w-]+$/);
   });
 
   test('a recorded cursor resumes after that coordinate rather than re-emitting it', () => {

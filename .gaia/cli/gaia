@@ -24358,7 +24358,7 @@ var ORACLE_PREFIXES = [
   "knip",
   "cve"
 ];
-var ORACLE_SLUG_PATTERN = /^[A-Za-z0-9][\w.-]*(?:\/[A-Za-z0-9][\w.-]*)*$/;
+var ORACLE_SLUG_PATTERN = /^[A-Z0-9][\w.-]*(?:\/[A-Z0-9][\w.-]*)*$/i;
 var ORACLE_SLUG_MAX_LENGTH = 128;
 var isOracleSlug = (slug) => slug.length <= ORACLE_SLUG_MAX_LENGTH && ORACLE_SLUG_PATTERN.test(slug);
 var HOLISTIC_FINDING_CLASSES = [
@@ -27627,7 +27627,10 @@ var stripFencedCode = (text) => {
     return "";
   }).join("\n");
 };
-var stripInlineCode = (line) => line.replaceAll(/(`+)(.+?)\1/g, (span) => " ".repeat(span.length));
+var stripInlineCode = (line) => line.replaceAll(
+  /``(?:[^`]|`(?!`))+``|`[^`]+`/g,
+  (span) => " ".repeat(span.length)
+);
 var bodyLines = (text, { inlineCode = false } = {}) => {
   const { bodyStartLine, ok } = splitFrontmatter(text);
   const unframed = text.split("\n").map((line, index) => ok && index + 1 < bodyStartLine ? "" : line).join("\n");
@@ -28096,7 +28099,7 @@ var effectiveOwnership = (classified, kinds) => {
 import path12 from "node:path";
 var MARKDOWN_LINK = /\]\(<?([^)\s>]+)/g;
 var BACKTICK_SPAN = /`([^`\n]+)`/g;
-var URL_SCHEME = /^[A-Za-z][A-Za-z0-9+.-]*:/;
+var URL_SCHEME = /^[A-Z][A-Z0-9+.-]*:/i;
 var NOT_A_PATH = /[\s<>{}*?$|;&"'()\\]/;
 var isRelativePathToken = (token) => token !== "" && !token.startsWith("/") && !token.startsWith("~") && !token.startsWith("#") && !URL_SCHEME.test(token) && !NOT_A_PATH.test(token);
 var withoutFragment = (token) => {
@@ -28264,11 +28267,7 @@ var stringField2 = (file2, key) => {
   const value = splitFrontmatter(file2.text).data[key];
   return typeof value === "string" ? value : void 0;
 };
-var QUOTED_SPANS = [
-  /"[^"\n]*"/g,
-  /(?<!\w)'[^'\n]*'(?!\w)/g,
-  /`[^`\n]*`/g
-];
+var QUOTED_SPANS = [/"[^"\n]*"/g, /\B'[^'\n]*'\B/g, /`[^`\n]*`/g];
 var stripQuotedSpans = (text) => QUOTED_SPANS.reduce((value, pattern2) => value.replaceAll(pattern2, " "), text);
 var hasContentsLine = (bodyText) => stripFencedCode(bodyText).split("\n").filter((line) => line.trim() !== "").slice(0, TOC_SEARCH_LINES).some(
   (line) => /^\s*Contents:/.test(line) || /^#{1,6}\s+Contents\s*$/i.test(line.trim()) || /table of contents/i.test(line)
@@ -28314,7 +28313,7 @@ var TIME_SENSITIVE = new RegExp(
   String.raw`\b(?:before|after|until|by|as of)\s+(?:${MONTHS}\.?\s+)?(?:\d{1,2},?\s+)?(?:19|20)\d{2}(?![\w-])`,
   "i"
 );
-var WINDOWS_PATH = /\b[\w.-]+(?:\\[\w-]+)*\\[\w-]+\.[A-Za-z0-9]{1,6}\b/;
+var WINDOWS_PATH = /\b[\w.-]+(?:\\[\w-]+)*\\[\w-]+\.[A-Z0-9]{1,6}\b/i;
 var WINDOWS_FENCE_TAGS = /* @__PURE__ */ new Set([
   "bat",
   "cmd",
@@ -28654,7 +28653,7 @@ var BARE_FILE_EXTENSIONS = /* @__PURE__ */ new Set([
 ]);
 var PATH_CHARACTERS = /^[\w./@+-]+$/;
 var LINE_SUFFIX = /:\d+(?:-\d+)?$/;
-var EXTENSION = /\.([A-Za-z0-9]+)$/;
+var EXTENSION = /\.([A-Z0-9]+)$/i;
 var WEB_ADDRESS = /^[\da-z-]+(?:\.[\da-z-]+)*\.(?:ai|app|co|com|dev|edu|gov|io|net|org)\//i;
 var ELLIPSIS_SEGMENT = /(?:^|\/)\.{3,}(?:\/|$)/;
 var asRepositoryPath = (candidate) => {
@@ -28666,7 +28665,7 @@ var asRepositoryPath = (candidate) => {
   if (WEB_ADDRESS.test(token) || ELLIPSIS_SEGMENT.test(token)) {
     return void 0;
   }
-  if (/^\.[A-Za-z0-9]+$/.test(token) && BARE_FILE_EXTENSIONS.has(token.slice(1))) {
+  if (/^\.[A-Z0-9]+$/i.test(token) && BARE_FILE_EXTENSIONS.has(token.slice(1))) {
     return void 0;
   }
   if (token.includes("/")) return token;
@@ -28675,7 +28674,7 @@ var asRepositoryPath = (candidate) => {
 };
 var BACKTICKED = /`([^`\n]+)`/g;
 var LINK_TARGET = /\]\(([^)\s]+)\)/g;
-var SCHEME = /^[A-Za-z][A-Za-z0-9+.-]*:/;
+var SCHEME = /^[A-Z][A-Z0-9+.-]*:/i;
 var extractPathReferences = (text) => {
   const references = [];
   for (const [index, line] of bodyLines(text).entries()) {
@@ -29035,8 +29034,8 @@ var DESCRIPTION_MAX_CODE_POINTS = 1024;
 var LISTING_MAX_CODE_POINTS = 1536;
 var NAME_CHARSET = /^[\da-z]+(?:-[\da-z]+)*$/;
 var RESERVED_WORDS = /* @__PURE__ */ new Set(["anthropic", "claude"]);
-var XML_TAG = /<\/?[A-Za-z][^>]*>/;
-var TOP_LEVEL_SCALAR = /^([A-Z_a-z][\w-]*)[\t ]*:[\t ]+(\S.*)$/;
+var XML_TAG = /<\/?[A-Z][^>]*>/i;
+var TOP_LEVEL_SCALAR = /^([A-Z_][\w-]*)[\t ]*:[\t ]+(\S.*)$/i;
 var SKILL_DIRECTORY2 = /(?:^|\/)\.claude\/skills\/([^/]+)\/SKILL\.md$/;
 var COMMAND_STEM = /(?:^|\/)\.claude\/commands\/(.+)\.md$/;
 var AGENT_STEM = /(?:^|\/)\.claude\/agents\/(.+)\.md$/;
@@ -29182,7 +29181,7 @@ var listingTruncation = perFile(["skill", "command"], (parsed) => {
 });
 var descriptionXmlTag = perFile(["skill", "command", "agent"], (parsed) => {
   const description = nonEmptyString(parsed.data.description);
-  const outsideCode = description?.replaceAll(/(`+)[\S\s]*?\1/g, "");
+  const outsideCode = description?.replaceAll(/(`+)[\s\S]*?\1/g, "");
   return outsideCode !== void 0 && XML_TAG.test(outsideCode) ? [
     {
       line: keyLine(parsed.raw, "description"),
@@ -29311,7 +29310,7 @@ var RECOGNIZED_ROOT_PREFIXES = [
   "${CLAUDE_PROJECT_DIR}/",
   "$CLAUDE_PROJECT_DIR/"
 ];
-var ASSIGNMENT = /^[A-Z_a-z]\w*=/;
+var ASSIGNMENT = /^[A-Z_]\w*=/i;
 var COMMAND_TERMINATORS = /* @__PURE__ */ new Set(["\n", "&", ";", "|"]);
 var skipPast = (text, start, closer) => {
   if (closer === "'") {
@@ -29591,7 +29590,7 @@ var EMPHASIS_KEYS = /* @__PURE__ */ new Set([
   "description",
   "when_to_use"
 ]);
-var TOP_LEVEL_KEY = /^([A-Za-z_][\w-]*)\s*:/;
+var TOP_LEVEL_KEY = /^([A-Z_][\w-]*)\s*:/i;
 var capsEmphasisFindings = (file2) => {
   const frontmatter = splitFrontmatter(file2.text);
   if (!frontmatter.ok) return [];
@@ -29614,7 +29613,7 @@ var capsEmphasisFindings = (file2) => {
     ];
   });
 };
-var TAG = /<(\/?)([A-Za-z][\w-]*)((?:\s[^<>]*?)?)(\/?)>/g;
+var TAG = /<(\/?)([A-Z][\w-]*)((?:\s[^<>]*?)?)(\/?)>/gi;
 var tagBalanceFindings = (file2) => {
   const opens = /* @__PURE__ */ new Map();
   const closes = /* @__PURE__ */ new Map();
@@ -29713,7 +29712,7 @@ var PROMPT_RULES = [
   phraseRule({
     detection: '"if in doubt" or "when in doubt" followed by a tool verb, or "default to using".',
     matcher: pattern(
-      /\b(?:(?:if|when) in doubt\b[^.\n]*\b(?:call|fetch|grep|invoke|query|read|run|search|use)\b|default to using\b)/i
+      /\b(?:(?:if|when) in doubt\b[^.\n]+\b(?:call|fetch|grep|invoke|query|read|run|search|use)\b|default to using\b)/i
     ),
     message: "The prompt defaults the model to reaching for a tool when unsure, which makes it over-call tools.",
     models: ["opus"],
@@ -29856,7 +29855,7 @@ var RULES_RULES = [
 
 // src/fitness/secrets.ts
 var CREDENTIAL_PATTERNS = [
-  /-----BEGIN [A-Z ]*PRIVATE KEY-----[\S\s]*?(?:-----END [A-Z ]*PRIVATE KEY-----|$)/g,
+  /-----BEGIN [A-Z ]*PRIVATE KEY-----[\s\S]*?(?:-----END [A-Z ]*PRIVATE KEY-----|$)/g,
   /sk-ant-[\w-]{16,}/g,
   /\bsk-[\dA-Za-z]{20,}/g,
   /\bgh[opsur]_[\dA-Za-z]{30,}/g,
@@ -30293,7 +30292,7 @@ var trackedPrefixes = (repoRoot) => {
     )
   ];
 };
-var SIBLING_REPO_PATTERN = /(?:^|\/)(studio|website)\//;
+var SIBLING_REPO_PATTERN = /(?:^|\/)(?:studio|website)\//;
 var LOCAL_EXEMPT_PREFIX = "wiki/.state.json";
 var RUNTIME_PREFIXES = [".gaia/local/"];
 var ADOPTER_OWNED_SENTINELS = /* @__PURE__ */ new Set([
@@ -30302,9 +30301,9 @@ var ADOPTER_OWNED_SENTINELS = /* @__PURE__ */ new Set([
 var MACHINE_LOCAL_PATHS = /* @__PURE__ */ new Set([
   ".claude/settings.local.json"
 ]);
-var PATH_TOKEN_PATTERN = /`([^`\n]+?)`/g;
+var PATH_TOKEN_PATTERN = /`([^`\n]+)`/g;
 var PLACEHOLDER_PATTERN = /[<>*${}]|N{3,}|X{3,}/;
-var HISTORICAL_BULLET_PATTERN = /^\s*-\s+\*\*(Removed|Deleted|Renamed|Migrated|Replaced)\*\*/i;
+var HISTORICAL_BULLET_PATTERN = /^\s*-\s+\*\*(?:Removed|Deleted|Renamed|Migrated|Replaced)\*\*/i;
 var isTrackedPath = (token, prefixes) => {
   if (PLACEHOLDER_PATTERN.test(token)) return false;
   if (!token.includes("/")) return false;
@@ -30420,7 +30419,7 @@ var parseScalar = (raw) => {
       return stripped.length > 0 ? [stripped] : [];
     });
   }
-  if (/^-?\d+(\.\d+)?$/u.test(trimmed)) {
+  if (/^-?\d+(?:\.\d+)?$/u.test(trimmed)) {
     return Number(trimmed);
   }
   return stripQuotes(trimmed);
@@ -31699,7 +31698,7 @@ var DEAD_PATH_RULE = (() => {
   if (rule === void 0) throw new Error("memory.dead-path is not cataloged");
   return rule;
 })();
-var memoryKey = (root) => root.replaceAll(/[^\dA-Za-z-]/g, "-");
+var memoryKey = (root) => root.replaceAll(/[^\dA-Z-]/gi, "-");
 var isDirectoryNotLink = (directory) => {
   try {
     return lstatSync3(directory).isDirectory();
@@ -31810,9 +31809,9 @@ var describeFile = (location2, relative) => {
   }
 };
 var LINK_TARGET2 = /\]\(([^\s()]+)\)/g;
-var SCHEME_OR_ABSOLUTE = /^(?:[A-Za-z][\d+.A-Za-z-]*:|[/~#])/;
+var SCHEME_OR_ABSOLUTE = /^(?:[A-Z][\d+.A-Z-]*:|[/~#])/i;
 var PLACEHOLDER = /[$*<>{}]/;
-var FILE_EXTENSION = /\.[\dA-Za-z]{1,8}$/;
+var FILE_EXTENSION = /\.[\dA-Z]{1,8}$/i;
 var toRepoPath = (token) => {
   const withoutAnchor = token.split("#", 1)[0] ?? "";
   const candidate = withoutAnchor.replace(LINE_SUFFIX, "").replace(/^\.\//, "");
@@ -32085,7 +32084,9 @@ var HELP_TOKENS7 = /* @__PURE__ */ new Set(["--help", "-h", "help"]);
 var readStdin = async () => {
   const chunks = [];
   for await (const chunk of process.stdin) {
-    chunks.push(typeof chunk === "string" ? Buffer.from(chunk) : chunk);
+    chunks.push(
+      typeof chunk === "string" ? Buffer.from(chunk) : chunk
+    );
   }
   return Buffer.concat(chunks).toString("utf8");
 };
@@ -32411,7 +32412,7 @@ var isTruthy = (value) => {
 var renderEachBlocks = (template, vars) => template.replaceAll(EACH_PATTERN, (_match, name, body) => {
   const value = vars[name];
   if (!Array.isArray(value)) return "";
-  return value.map((item) => body.replaceAll(THIS_PATTERN, String(item))).join("");
+  return value.map((item) => body.replaceAll(THIS_PATTERN, item)).join("");
 });
 var renderBooleanSections = (template, vars) => template.replaceAll(SECTION_PATTERN, (_match, name, body) => {
   if (name === "each") return _match;
@@ -33315,8 +33316,8 @@ var planPreview = (packageDir) => {
   const handEdit = "add QueryClientDecorator to the decorators array and import it from ./decorators/QueryClientDecorator";
   if (source === null) return missingFile(relative, handEdit);
   if (source.includes("QueryClientDecorator")) return null;
-  const shorthand = [...source.matchAll(/^([ \t]*)decorators,[ \t]*$/gmu)];
-  const literal2 = [...source.matchAll(/decorators:\s*\[([^\]\n]*)\]/gu)];
+  const shorthand = [...source.matchAll(/^[ \t]*decorators,[ \t]*$/gmu)];
+  const literal2 = [...source.matchAll(/decorators:\s*\[[^\]\n]*\]/gu)];
   let next = null;
   if (shorthand.length === 1) {
     next = source.replace(
@@ -33582,7 +33583,7 @@ var parseLocales = (raw) => {
   const [head, ...tail] = parts;
   if (head === void 0) return null;
   for (const code of parts) {
-    if (!/^[a-z]{2,3}(-[A-Za-z]{2,4})?$/u.test(code)) return null;
+    if (!/^[a-z]{2,3}(?:-[A-Za-z]{2,4})?$/u.test(code)) return null;
   }
   return [head, ...tail];
 };
@@ -35605,10 +35606,10 @@ var requireSafePath = (spec, label) => {
   }
 };
 var reanchorSpec = (spec, prefix) => {
-  if (/^(\*\*\/|\/\/|~\/)/.test(spec)) {
+  if (/^(?:\*\*\/|\/\/|~\/)/.test(spec)) {
     return spec;
   }
-  return `${prefix}${spec.replace(/^(\.\/|\/)/, "")}`;
+  return `${prefix}${spec.replace(/^(?:\.\/|\/)/, "")}`;
 };
 var reanchorRule = (rule, prefix, label) => {
   const parts = PATH_RULE.exec(rule);
@@ -36671,10 +36672,7 @@ var clearCursor = (repoRoot) => {
 };
 
 // src/residue/key.ts
-var KEY_PATTERN = (
-  // eslint-disable-next-line sonarjs/concise-regex -- same spelling as the POSIX ERE key grammar
-  /<!-- gaia-debt-key: (v1 class=[^ ]+ path=[^>]+ line=[0-9]+) -->/
-);
+var KEY_PATTERN = /<!-- gaia-debt-key: (v1 class=[^ ]+ path=[^>]+ line=\d+) -->/;
 var LENIENT_KEY_PATTERN = /<!-- gaia-debt-key:[^>]*?path=([^>\n]+) line=/;
 var MAX_LINE = 1e7;
 var CONTROL_CHARACTERS = [
@@ -36695,7 +36693,7 @@ var normalizeRepoRelativePath = (raw) => {
       reason: `path contains an embedded ${control[1]} character`
     };
   }
-  if (raw.startsWith("/") || raw.startsWith("\\\\") || /^[A-Za-z]:[\\/]/.test(raw)) {
+  if (raw.startsWith("/") || raw.startsWith("\\\\") || /^[A-Z]:[\\/]/i.test(raw)) {
     return {
       ok: false,
       reason: "path has an absolute prefix; a residual key cites a repo-relative path"
@@ -36805,7 +36803,7 @@ var sameCoordinate = (a, b) => {
 };
 
 // src/residue/token.ts
-var TOKEN_PATTERN = /^[A-Za-z0-9_-]{1,512}$/;
+var TOKEN_PATTERN = /^[\w-]{1,512}$/;
 var base64UrlEncode = (raw) => Buffer.from(raw, "utf8").toString("base64").replaceAll("+", "-").replaceAll("/", "_").replaceAll("=", "");
 var base64UrlDecode = (token) => {
   const padded = token.replaceAll("-", "+").replaceAll("_", "/");
@@ -37420,8 +37418,8 @@ var DEFAULT_PREDICATES = {
   keyPattern: KEY_PATTERN
 };
 var HEADING_PATTERN = /^#{1,6}[\t\n\v\f\r ]/;
-var TOP_BULLET_PATTERN = /^([-*+]|\d{1,9}[.)])[\t\n\v\f\r ]/;
-var HTML_COMMENT_PATTERN = /(?:(?<![^\s"'([{])(`))?<!--(?:(?!<!--)[\s\S])*?-->\1/g;
+var TOP_BULLET_PATTERN = /^(?:[-*+]|\d{1,9}[.)])[\t\n\v\f\r ]/;
+var HTML_COMMENT_PATTERN = /(?<![^\s"'([{])`<!--(?:(?!<!--)[\s\S])*?-->`|<!--(?:(?!<!--)[\s\S])*?-->/g;
 var BLANK_LINE_PATTERN = /^[\t\v\f\r ]*$/;
 var INDENTED_LINE_PATTERN = /^[\t ]/;
 var TRAILING_SPACE_CHARACTERS = /* @__PURE__ */ new Set(["	", "\n", "\v", "\f", "\r", " "]);
@@ -40514,7 +40512,7 @@ var tryGitRemoteUrl = (cwd) => {
       encoding: "utf8",
       stdio: ["ignore", "pipe", "ignore"]
     });
-    return result.toString().trim();
+    return result.trim();
   } catch {
     return null;
   }
@@ -41652,11 +41650,11 @@ var import_semver3 = __toESM(require_semver2(), 1);
 
 // src/update-deps/advisory-validate.ts
 var import_semver2 = __toESM(require_semver2(), 1);
-var GHSA_PATTERN = /^GHSA(-[23456789cfghjmpqrvwx]{4}){3}$/u;
-var NPM_NAME_PATTERN = /^(?:@[a-z0-9~-][a-z0-9._~-]*\/)?[A-Za-z0-9~-][A-Za-z0-9._~-]*$/u;
+var GHSA_PATTERN = /^GHSA(?:-[2-9cfghjmpqrvwx]{4}){3}$/u;
+var NPM_NAME_PATTERN = /^(?:@[a-z0-9~-][a-z0-9._~-]*\/)?[A-Za-z0-9~-][\w.~-]*$/u;
 var NPM_NAME_MAX_LENGTH = 214;
 var RANGE_PATTERN = /^[0-9A-Za-z.*^~<>=|, -]+$/u;
-var MANIFEST_PATH_PATTERN = /^[A-Za-z0-9._/@-]+$/u;
+var MANIFEST_PATH_PATTERN = /^[\w./@-]+$/u;
 var VERSION_MAX_LENGTH = 256;
 var RANGE_MAX_LENGTH = 512;
 var MANIFEST_PATH_MAX_LENGTH = 512;
@@ -42065,7 +42063,7 @@ var reasonText = (tokens) => tokens.map((token) => ADVISORY_REASON_TEXT[token]).
 import { execFileSync as execFileSync4, spawnSync as spawnSync3 } from "node:child_process";
 var ADVISORY_SPAWN_TIMEOUT_MS = 6e4;
 var PNPM_MAX_BUFFER_BYTES = 64 * 1024 * 1024;
-var REPOSITORY_SEGMENT_PATTERN = /^[A-Za-z0-9._-]+$/u;
+var REPOSITORY_SEGMENT_PATTERN = /^[\w.-]+$/u;
 var advisoryPnpmRunner = (args, options) => {
   const result = spawnSync3("pnpm", args, {
     cwd: options.cwd,
@@ -46089,7 +46087,7 @@ var runGit = (args, options = {}) => {
     maxBuffer: MAX_GIT_BUFFER_BYTES,
     stdio: ["ignore", "pipe", "pipe"]
   });
-  return result.toString();
+  return result;
 };
 var tryRunGit = (args, options = {}) => {
   try {
@@ -46706,7 +46704,7 @@ var finishEmptyBranch = (options) => {
   );
   return EXIT_CODES.OK;
 };
-var PR_URL = /https:\/\/github\.com\/([A-Za-z0-9._-]+\/[A-Za-z0-9._-]+)\/pull\/(\d+)/u;
+var PR_URL = /https:\/\/github\.com\/([\w.-]+\/[\w.-]+)\/pull\/(\d+)/u;
 var parsePrUrl = (text) => {
   const match = PR_URL.exec(text);
   if (match === null) return void 0;
@@ -46739,7 +46737,7 @@ var recordWikiCost = (options, artifact) => {
   } catch {
   }
 };
-var DRAFT_UNSUPPORTED = /draft.*(not supported|unsupported)|(not supported|unsupported).*draft/i;
+var DRAFT_UNSUPPORTED = /draft.*(?:not supported|unsupported)|(?:not supported|unsupported).*draft/i;
 var openPullRequest = (options) => {
   const { prBody, prTitle, repoRoot, runner } = options;
   const createArgs = (draft) => [
