@@ -18,6 +18,7 @@
     ".claude/commands/gaia-spec.md": "owned",
     ".claude/commands/setup-gaia.md": "owned",
     ".claude/doctrine/context-checkpoint.md": "owned",
+    ".claude/doctrine/context-yield.md": "owned",
     ".claude/doctrine/execution.md": "owned",
     ".claude/hooks/audit-loop-ask-grant.sh": "owned",
     ".claude/hooks/audit-loop-bound.sh": "owned",
@@ -38,6 +39,7 @@
     ".claude/hooks/capture-gh-artifact.sh": "owned",
     ".claude/hooks/capture-red-observations.sh": "owned",
     ".claude/hooks/context-checkpoint-inject.sh": "owned",
+    ".claude/hooks/context-checkpoint-subagent.sh": "owned",
     ".claude/hooks/debt-sentinel-touch.sh": "owned",
     ".claude/hooks/debt-session-reconcile.sh": "owned",
     ".claude/hooks/issue-claim-release.sh": "owned",
@@ -259,6 +261,7 @@
     ".gaia/scripts/resolve-audit-members.sh": "owned",
     ".gaia/scripts/select-migration-notes.sh": "owned",
     ".gaia/scripts/server-process-lib.sh": "owned",
+    ".gaia/scripts/spec/handoff-clear.sh": "owned",
     ".gaia/scripts/spec/ledger-lib.sh": "owned",
     ".gaia/scripts/spec/ledger-update.sh": "owned",
     ".gaia/scripts/spec/lint.sh": "owned",
@@ -706,7 +709,7 @@
     "wiki/overview.md": "wiki-owned",
     "wiki/README.md": "wiki-owned"
   },
-  "generated": "2026-10-14T10:57:52.358Z",
+  "generated": "2026-10-14T22:03:14.010Z",
   "regions": [
     {
       "endMarker": "<!-- gaia:audit-remit:end -->",
