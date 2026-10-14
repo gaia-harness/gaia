@@ -554,17 +554,11 @@ next_allowed() {
 # Every evaluator arm reachable from fixture data is caught earlier in the hook
 # (the schema check, the dispositions check), so the failure is injected.
 failing_evaluator_hook() {
-  local scratch_directory="$BATS_TEST_TMPDIR/failing-evaluator" entry
-  mkdir -p "$scratch_directory/.claude/hooks" "$scratch_directory/.gaia/scripts"
+  local scratch_directory="$BATS_TEST_TMPDIR/failing-evaluator"
+  mkdir -p "$scratch_directory/.claude/hooks" "$scratch_directory/.gaia"
   ln -sfn "$REPO_ROOT/.claude/hooks/lib" "$scratch_directory/.claude/hooks/lib"
   cp "$HOOK" "$scratch_directory/.claude/hooks/audit-loop-bound.sh"
-  for entry in "$REPO_ROOT"/.gaia/*; do
-    [ "${entry##*/}" = scripts ] || ln -sfn "$entry" "$scratch_directory/.gaia/${entry##*/}"
-  done
-  for entry in "$REPO_ROOT"/.gaia/scripts/*; do
-    [ "${entry##*/}" = audit-loop-eval.sh ] || ln -sfn "$entry" "$scratch_directory/.gaia/scripts/${entry##*/}"
-  done
-  cp "$REPO_ROOT/.gaia/scripts/audit-loop-eval.sh" "$scratch_directory/.gaia/scripts/audit-loop-eval.sh"
+  cp -R "$REPO_ROOT/.gaia/scripts" "$scratch_directory/.gaia/scripts"
   printf 'gaia_loop_evaluate_round() { printf '"'"'audit-loop-eval: %s\\n'"'"' >&2; return 5; }\n' "$1" \
     >>"$scratch_directory/.gaia/scripts/audit-loop-eval.sh"
   HOOK="$scratch_directory/.claude/hooks/audit-loop-bound.sh"
