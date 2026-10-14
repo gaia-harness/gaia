@@ -3,7 +3,8 @@
 #
 # Reads JSON from stdin (Claude Code convention), prints a single line.
 # Left side is delegated; right side is the GAIA nudges, read from the
-# TTL-cached refresher and fitted to COLUMNS. Each nudge has its own Large,
+# TTL-cached refresher and fitted to the statusline row (COLUMNS less Claude
+# Code's built-in spacing, see measure_left). Each nudge has its own Large,
 # Medium and Small form, then an icon, then a `+N` for however many still do
 # not fit; the lowest-priority nudge still at its current size shrinks first,
 # so a higher-priority nudge is never at a later size step than a
@@ -73,8 +74,17 @@ input=$(cat)
 # byte (`\360`-`\364`, emoji and other astral-plane glyphs) is counted a
 # second time (`wide_glyph_count`) to match its 2-column render. Known limit: a 3-byte
 # glyph (CJK) still counts one column but renders two.
+#
+# `columns` is the statusline row's usable width, not COLUMNS. Claude Code sets
+# COLUMNS to the full terminal width, but draws the statusline inside built-in
+# spacing of 2 columns on each side, and cuts a longer line to fit with a
+# trailing `…`. Measured with a ruler exactly COLUMNS wide at COLUMNS 189, 153
+# and 100: each time the last column before the `…` was COLUMNS - 5, so the row
+# holds COLUMNS - 4. Known limit: a user-set `statusLine.padding` narrows the
+# row further and is not read here.
+STATUSLINE_BUILT_IN_SPACING=4
 measure_left() {
-  columns="${COLUMNS:-120}"
+  columns=$(( ${COLUMNS:-120} - STATUSLINE_BUILT_IN_SPACING ))
   left_visible=$(printf '%b' "$left" | sed 's/\x1b\[[0-9;]*m//g' | LC_ALL=C awk '{wide_glyph_count = gsub(/[\360-\364]/, "&"); gsub(/[\200-\277]/, ""); column_count = length + wide_glyph_count} END {print column_count+0}')
   case "$left_visible" in
     ''|*[!0-9]*) left_visible=0 ;;
