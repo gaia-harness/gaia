@@ -115,7 +115,10 @@ const defaultFindScriptProblem = (
 
   if (!resolved.exists) return `does not exist (${resolved.relative})`;
 
-  if (!context.isExecutable(resolved.relative)) {
+  if (
+    reference.viaInterpreter !== true &&
+    !context.isExecutable(resolved.relative)
+  ) {
     return `is not executable (${resolved.relative})`;
   }
 
@@ -161,7 +164,7 @@ export const createHookRules = (
           {
             file: file.path,
             line: entry.line,
-            message: `The ${entry.event} hook script ${problem}. A missing script exits 127, which neither blocks nor warns, so the guard fails open.`,
+            message: `The ${entry.event} hook script ${problem}. A hook command that cannot run exits 126 or 127, which neither blocks nor warns, so the guard fails open.`,
             remediation:
               'Fix the script path, create the script, or run chmod +x on it.',
           },

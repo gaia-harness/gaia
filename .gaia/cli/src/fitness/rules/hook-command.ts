@@ -6,8 +6,8 @@
  */
 
 export type ScriptReference =
-  /** A recognized root prefix; `remainder` is repo-relative. */
-  | {kind: 'anchored'; remainder: string}
+  /** A recognized root prefix; `remainder` is repo-relative, `viaInterpreter` is set when an interpreter runs it. */
+  | {kind: 'anchored'; remainder: string; viaInterpreter?: true}
   /** Absolute, tilde or `$`-anchored with a prefix this reader does not recognize: rooted, never stat'ed. */
   | {kind: 'anchored-unrecognized'}
   /** No path-bearing script token (bare executable, empty command, inline code). */
@@ -151,13 +151,20 @@ export const splitCommandWords = (command: string): readonly string[] => {
   return words;
 };
 
-const classifyToken = (token: string): ScriptReference => {
+const classifyToken = (
+  token: string,
+  viaInterpreter: boolean
+): ScriptReference => {
   const prefix = RECOGNIZED_ROOT_PREFIXES.find((candidate) =>
     token.startsWith(candidate)
   );
 
   if (prefix !== undefined) {
-    return {kind: 'anchored', remainder: token.slice(prefix.length)};
+    const remainder = token.slice(prefix.length);
+
+    return viaInterpreter ?
+        {kind: 'anchored', remainder, viaInterpreter: true}
+      : {kind: 'anchored', remainder};
   }
 
   if (/^[$/`~]/.test(token)) return {kind: 'anchored-unrecognized'};
@@ -174,7 +181,9 @@ export const readScriptReference = (command: string): ScriptReference => {
 
   while (ASSIGNMENT.test(words[index] ?? '')) index += 1;
 
-  if (INTERPRETERS.has(words[index] ?? '')) {
+  const viaInterpreter = INTERPRETERS.has(words[index] ?? '');
+
+  if (viaInterpreter) {
     index += 1;
 
     while ((words[index] ?? '').startsWith('-')) {
@@ -183,5 +192,5 @@ export const readScriptReference = (command: string): ScriptReference => {
     }
   }
 
-  return classifyToken(words[index] ?? '');
+  return classifyToken(words[index] ?? '', viaInterpreter);
 };

@@ -106,7 +106,9 @@ const vendorTargets = (root: string): string[] => {
 /**
  * Walks every component from the root to the target. A symlink is acceptable
  * only when it resolves inside the project and outside every vendored tree; a
- * path that does not exist yet has no further components to follow.
+ * path that does not exist yet has no further components to follow. A final
+ * component that is itself a symlink is refused, because the write replaces
+ * the path rather than writing through it.
  */
 export const findSymlinkProblem: SymlinkCheck = (root, target) => {
   const realRoot = realpathSync(root);
@@ -132,8 +134,10 @@ export const findSymlinkProblem: SymlinkCheck = (root, target) => {
   };
 
   let current = root;
+  let finalLink: string | undefined;
 
   for (const part of target.split('/')) {
+    finalLink = undefined;
     current = path.join(current, part);
 
     let isLink: boolean;
@@ -156,10 +160,22 @@ export const findSymlinkProblem: SymlinkCheck = (root, target) => {
       const problem = problemWith(resolved);
 
       if (problem !== undefined) return problem;
+
+      finalLink = resolved;
     }
   }
 
-  return problemWith(realpathSync(current));
+  const finalProblem = problemWith(realpathSync(current));
+
+  if (finalProblem !== undefined || finalLink === undefined) {
+    return finalProblem;
+  }
+
+  // The write renames a temporary file over the path, which would swap the link for a regular file and leave the file it points at unfixed.
+  return `target is a symlink to ${path
+    .relative(realRoot, finalLink)
+    .split(path.sep)
+    .join('/')}; fix that file instead`;
 };
 
 const sha256Of = (bytes: Buffer): string =>

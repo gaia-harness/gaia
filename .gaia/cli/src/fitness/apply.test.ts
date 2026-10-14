@@ -2,6 +2,7 @@ import {afterEach, describe, expect, test} from 'vitest';
 import {createHash} from 'node:crypto';
 import {
   chmodSync,
+  lstatSync,
   mkdtempSync,
   readFileSync,
   rmSync,
@@ -375,6 +376,25 @@ describe('gaia fitness apply symlink refusals', () => {
       reason: 'target resolves into a vendored tree',
     });
     expect(readText(scratch.root, 'vendored/CLAUDE.md')).toBe(MARKED);
+  });
+
+  test('refuses a target that is an in-root symlink and leaves the link and its file untouched', () => {
+    const scratch = project({
+      ...gitProject({'AGENTS.md': MARKED, 'CLAUDE.md': MARKED}),
+      classifier: alwaysAdopterClassifier(),
+    });
+
+    rmSync(path.join(scratch.root, 'CLAUDE.md'));
+    symlinkSync('AGENTS.md', path.join(scratch.root, 'CLAUDE.md'));
+
+    expect(apply(scratch)).toMatchObject({
+      kind: 'refused',
+      reason: 'target is a symlink to AGENTS.md; fix that file instead',
+    });
+    expect(
+      lstatSync(path.join(scratch.root, 'CLAUDE.md')).isSymbolicLink()
+    ).toBe(true);
+    expect(readText(scratch.root, 'AGENTS.md')).toBe(MARKED);
   });
 
   test('both symlink refusals depend on the symlink check', () => {

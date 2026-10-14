@@ -29376,12 +29376,13 @@ var splitCommandWords = (command) => {
   flush();
   return words;
 };
-var classifyToken = (token) => {
+var classifyToken = (token, viaInterpreter) => {
   const prefix = RECOGNIZED_ROOT_PREFIXES.find(
     (candidate) => token.startsWith(candidate)
   );
   if (prefix !== void 0) {
-    return { kind: "anchored", remainder: token.slice(prefix.length) };
+    const remainder = token.slice(prefix.length);
+    return viaInterpreter ? { kind: "anchored", remainder, viaInterpreter: true } : { kind: "anchored", remainder };
   }
   if (/^[$/`~]/.test(token)) return { kind: "anchored-unrecognized" };
   if (!token.includes("/")) return { kind: "none" };
@@ -29391,14 +29392,15 @@ var readScriptReference = (command) => {
   const words = splitCommandWords(command);
   let index = 0;
   while (ASSIGNMENT.test(words[index] ?? "")) index += 1;
-  if (INTERPRETERS.has(words[index] ?? "")) {
+  const viaInterpreter = INTERPRETERS.has(words[index] ?? "");
+  if (viaInterpreter) {
     index += 1;
     while ((words[index] ?? "").startsWith("-")) {
       if (INLINE_CODE_FLAGS.has(words[index] ?? "")) return { kind: "none" };
       index += 1;
     }
   }
-  return classifyToken(words[index] ?? "");
+  return classifyToken(words[index] ?? "", viaInterpreter);
 };
 
 // src/fitness/rules/hooks.ts
@@ -29466,7 +29468,7 @@ var defaultFindScriptProblem = (context, reference, fromFile) => {
     return `resolves outside the project (${reference.remainder})`;
   }
   if (!resolved.exists) return `does not exist (${resolved.relative})`;
-  if (!context.isExecutable(resolved.relative)) {
+  if (reference.viaInterpreter !== true && !context.isExecutable(resolved.relative)) {
     return `is not executable (${resolved.relative})`;
   }
   return void 0;
@@ -29495,7 +29497,7 @@ var createHookRules = (options = {}) => {
         {
           file: file2.path,
           line: entry.line,
-          message: `The ${entry.event} hook script ${problem}. A missing script exits 127, which neither blocks nor warns, so the guard fails open.`,
+          message: `The ${entry.event} hook script ${problem}. A hook command that cannot run exits 126 or 127, which neither blocks nor warns, so the guard fails open.`,
           remediation: "Fix the script path, create the script, or run chmod +x on it."
         }
       ];
@@ -31155,7 +31157,9 @@ var findSymlinkProblem = (root, target) => {
     ) ? "target resolves into a vendored tree" : void 0;
   };
   let current = root;
+  let finalLink;
   for (const part of target.split("/")) {
+    finalLink = void 0;
     current = path20.join(current, part);
     let isLink;
     try {
@@ -31172,9 +31176,14 @@ var findSymlinkProblem = (root, target) => {
       }
       const problem = problemWith2(resolved);
       if (problem !== void 0) return problem;
+      finalLink = resolved;
     }
   }
-  return problemWith2(realpathSync5(current));
+  const finalProblem = problemWith2(realpathSync5(current));
+  if (finalProblem !== void 0 || finalLink === void 0) {
+    return finalProblem;
+  }
+  return `target is a symlink to ${path20.relative(realRoot, finalLink).split(path20.sep).join("/")}; fix that file instead`;
 };
 var sha256Of = (bytes) => createHash("sha256").update(bytes).digest("hex");
 var readBase = (absolute) => {

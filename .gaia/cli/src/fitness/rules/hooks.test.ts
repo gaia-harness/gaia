@@ -118,7 +118,7 @@ describe('hook command reading', () => {
     ],
     [
       `bash "${SANCTIONED_ROOT}/.claude/hooks/example.sh"`,
-      {kind: 'anchored', remainder: EXAMPLE_SCRIPT},
+      {kind: 'anchored', remainder: EXAMPLE_SCRIPT, viaInterpreter: true},
     ],
   ])('reads %s', (command, expected) => {
     expect(readScriptReference(command)).toEqual(expected);
@@ -172,6 +172,20 @@ describe('hooks.path-exists-executable', () => {
   test('reports a script that exists without the executable bit', () => {
     expect(
       findingIds(withScript(`"$CLAUDE_PROJECT_DIR"/${EXAMPLE_SCRIPT}`)).ids
+    ).toEqual(['hooks.path-exists-executable']);
+  });
+
+  test('passes a non-executable script run through an interpreter', () => {
+    expect(
+      findingIds(withScript(`bash "${SANCTIONED_ROOT}/${EXAMPLE_SCRIPT}"`)).ids
+    ).toEqual([]);
+  });
+
+  test('reports a missing script run through an interpreter', () => {
+    expect(
+      findingIds(
+        hookProject(`bash "${SANCTIONED_ROOT}/.claude/hooks/missing.sh"`)
+      ).ids
     ).toEqual(['hooks.path-exists-executable']);
   });
 
