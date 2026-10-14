@@ -1345,3 +1345,13 @@ assert_branch_content_raises() {
   [ "$status" -ne 0 ]
   grep -qF 'BATS_TEST_TMPDIR is unset' <<<"$output"
 }
+
+@test "a sandbox copied from a setup_file template owns its origin and has a clean index" {
+  [ -d "$LSB_TEMPLATE_ROOT/plain/lsb-repo" ] || { printf 'no plain template under %s\n' "$LSB_TEMPLATE_ROOT" >&2; return 1; }
+  lsb_init
+  origin_url="$(lsb_git remote get-url origin)"
+  [ "$origin_url" = "$BATS_TEST_TMPDIR/lsb-origin.git" ] || { printf 'origin is %s\n' "$origin_url" >&2; return 1; }
+  # diff-files reads the index stat data without refreshing it, so a copy whose
+  # index still holds the template's inodes reports every tracked file here.
+  lsb_git diff-files --quiet || { lsb_git diff-files --name-only | head -5 >&2; return 1; }
+}
