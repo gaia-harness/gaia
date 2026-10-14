@@ -229,3 +229,28 @@ join_with() {
   [ "$(jq -r '.tokens' <<<"$(last_stdout_line)")" -eq 3000 ]
   jq -s -e '[.[] | select(.kind == "binding" and .type == "close")] | map(.session_id) | sort == ["sess-a", "sess-b"]' "$(ledger)" >/dev/null
 }
+
+@test "a joined session that recorded the run and starts the workflow again measures the new run from its own start" {
+  local line
+  main_start s1 10:00 gaia-debt
+  main_usage a1 10:10 1000
+  line="$(handoff_line)"
+  in_session sess-b
+  run join_with "$line"
+  [ "$status" -eq 0 ]
+  main_usage b1 11:00 2000
+  run --separate-stderr usage record command:gaia-debt --workflow gaia-debt --json
+  [ "$status" -eq 0 ]
+  # The second run's start must fall after the first close, which is stamped
+  # with the real clock, so its timestamps come from the real clock too.
+  stamp() { printf '%s' "$1"; }
+  sleep 1
+  main_start s2 "$(date -u +%Y-%m-%dT%H:%M:%SZ)" gaia-debt
+  sleep 1
+  main_usage b2 "$(date -u +%Y-%m-%dT%H:%M:%SZ)" 500
+  sleep 1
+  run --separate-stderr usage record command:gaia-debt --workflow gaia-debt --json
+  [ "$status" -eq 0 ]
+  [ "$(jq -r '.tokens' <<<"$(last_stdout_line)")" -eq 500 ]
+  jq -e '.elapsed_seconds < 60' <<<"$(last_stdout_line)" >/dev/null
+}

@@ -157,7 +157,7 @@ _record_locked() {
             then ([$after[] | select(IN($before[]) | not)] | last) as $new
               | ([$starts[] | select(._t == $new.t0)] | first) as $paired
               | ([$starts[] | select(._t < $paired._t and .source == "join-command" and (.run | type) == "object")
-                    | select(any($before[]; .t0 == ._t) | not)] | sort_by(._t) | last | .run // null) as $joined_run
+                    | . as $join | select(any($before[]; .t0 == $join._t) | not)] | sort_by(._t) | last | .run // null) as $joined_run
               | {verdict: "write", t0: $paired.ts, run: ($paired.run | if type == "object" then . else $joined_run end), rows: [$close_row]}
             elif any($starts[]; ._t != null and ._t <= $now_t) then {verdict: "recorded"}
             else {verdict: "nostart"} end
