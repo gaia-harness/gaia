@@ -42,6 +42,12 @@ GAIA_CONTEXT_SKULL_NUMERATOR=3
 GAIA_CONTEXT_SKULL_DENOMINATOR=2
 GAIA_CONTEXT_FRESH_SECONDS=1800
 GAIA_CONTEXT_FILE_VERSION=1
+GAIA_CONTEXT_DEFAULT_WINDOW=1000000
+GAIA_CONTEXT_YIELD_LIMIT=2
+# shellcheck disable=SC2034 # read by the sub-agent hook that sources this lib
+GAIA_CONTEXT_TRANSCRIPT_HEAD_BYTES=65536
+GAIA_CONTEXT_TRANSCRIPT_TAIL_BYTES=65536
+GAIA_CONTEXT_TRANSCRIPT_WIDE_BYTES=262144
 
 # A reader treats a reading written this many seconds in the future as still
 # plausible: the writer (statusline) and the reader (hook) are separate
@@ -185,4 +191,108 @@ gaia_context_summary() {
     return 0
   fi
   printf 'Context %s%% (%sk of %sk)\n' "$((10#$1 * 100 / 10#$2))" "$((10#$1 / 1000))" "$((10#$2 / 1000))"
+}
+
+# gaia_context_yield_limit: print how many yields a unit of work is allowed.
+gaia_context_yield_limit() {
+  printf '%s\n' "$GAIA_CONTEXT_YIELD_LIMIT"
+}
+
+# gaia_context_last_window <main-root> <session_id>: print the session's
+# context_window_size whatever the age of its reading (the window is fixed per
+# session; freshness governs tokens, not window). rc 1 with no stdout when the
+# file is missing, unparseable, a wrong version, or the window is not a
+# positive whole number.
+gaia_context_last_window() {
+  local file window integer_pattern='^[0-9]{1,12}$'
+  file=$(gaia_context_file "${1:-}" "${2:-}") || return 1
+  [ -f "$file" ] || return 1
+  command -v jq >/dev/null 2>&1 || return 1
+  window=$(jq -r --argjson version "$GAIA_CONTEXT_FILE_VERSION" '
+    if type == "object" and .version == $version
+      and (.context_window_size | type == "number" and . == floor and . >= 1)
+    then .context_window_size else empty end' "$file" 2>/dev/null) || return 1
+  [[ $window =~ $integer_pattern ]] || return 1
+  printf '%s\n' "$window"
+}
+
+# gaia_context_subagent_window <main-root> <session_id> <reading_tokens>: print
+# the window a sub-agent's bands use. The main session's window stands while the
+# reading fits inside it; a larger reading proves a larger window, so the
+# default applies, as it does with no usable main reading. rc 2 on a
+# non-integer reading.
+gaia_context_subagent_window() {
+  local integer_pattern='^[0-9]{1,12}$' last_window
+  [[ ${3:-} =~ $integer_pattern ]] || return 2
+  if last_window=$(gaia_context_last_window "${1:-}" "${2:-}") && [ "$((10#$3))" -le "$last_window" ]; then
+    printf '%s\n' "$last_window"
+  else
+    printf '%s\n' "$GAIA_CONTEXT_DEFAULT_WINDOW"
+  fi
+}
+
+# _gaia_context_tail_reading <transcript_path> <bytes>: scan the last <bytes>
+# bytes for the last assistant usage record. A read that did not start at byte
+# 0 may open mid-line, so its first line is dropped. Lines are split first and
+# only those holding a usage object get a regex, because a regex over the whole
+# buffer is slow in bash 3.2.
+_gaia_context_tail_reading() {
+  local path="$1" bytes="$2" size buffer line index body nested
+  local -a candidates=()
+  local type_pattern='(^|[^\\])"type":"assistant"'
+  local usage_pattern='(^|[^\\])"usage":\{([^{}]*(\{[^{}]*\}[^{}]*)*)\}'
+  local nested_pattern='\{[^{}]*\}'
+  local input_pattern='(^|[^\\])"input_tokens":([0-9]{1,12})([^0-9]|$)'
+  local creation_pattern='(^|[^\\])"cache_creation_input_tokens":([0-9]{1,12})([^0-9]|$)'
+  local read_pattern='(^|[^\\])"cache_read_input_tokens":([0-9]{1,12})([^0-9]|$)'
+  local input_tokens creation_tokens read_tokens skip_first=0
+  size=$(wc -c <"$path" 2>/dev/null) || return 1
+  size=${size//[[:space:]]/}
+  [ "$size" -gt "$bytes" ] && skip_first=1
+  buffer=$(tail -c "$bytes" "$path" 2>/dev/null) || return 1
+  while IFS= read -r line || [ -n "$line" ]; do
+    if [ "$skip_first" -eq 1 ]; then
+      skip_first=0
+      continue
+    fi
+    case $line in
+      *'"usage":{'*) candidates+=("$line") ;;
+    esac
+  done <<<"$buffer"
+  index=${#candidates[@]}
+  while [ "$index" -gt 0 ]; do
+    index=$((index - 1))
+    line=${candidates[$index]}
+    [[ $line =~ $type_pattern ]] || continue
+    [[ $line =~ $usage_pattern ]] || continue
+    body=${BASH_REMATCH[2]}
+    while [[ $body =~ $nested_pattern ]]; do
+      nested=${BASH_REMATCH[0]}
+      body=${body/"$nested"/}
+    done
+    [[ $body =~ $input_pattern ]] || continue
+    input_tokens=${BASH_REMATCH[2]}
+    [[ $body =~ $creation_pattern ]] || continue
+    creation_tokens=${BASH_REMATCH[2]}
+    [[ $body =~ $read_pattern ]] || continue
+    read_tokens=${BASH_REMATCH[2]}
+    printf '%s\n' "$((10#$input_tokens + 10#$creation_tokens + 10#$read_tokens))"
+    return 0
+  done
+  return 1
+}
+
+# gaia_context_transcript_reading <transcript_path>: print input + cache
+# creation + cache read tokens of the last assistant usage record, read from
+# the tail of the file and widened once when the tail holds none. A quote
+# preceded by a backslash sits inside a JSON string (a tool result that printed
+# a transcript) and never counts. rc 1 with no stdout when nothing is found.
+gaia_context_transcript_reading() {
+  local path="${1:-}" size
+  [ -f "$path" ] && [ -r "$path" ] || return 1
+  _gaia_context_tail_reading "$path" "$GAIA_CONTEXT_TRANSCRIPT_TAIL_BYTES" && return 0
+  size=$(wc -c <"$path" 2>/dev/null) || return 1
+  size=${size//[[:space:]]/}
+  [ "$size" -gt "$GAIA_CONTEXT_TRANSCRIPT_TAIL_BYTES" ] || return 1
+  _gaia_context_tail_reading "$path" "$GAIA_CONTEXT_TRANSCRIPT_WIDE_BYTES"
 }
