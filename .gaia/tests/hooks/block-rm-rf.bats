@@ -1076,12 +1076,14 @@ t'
   assert_denied_because "BLOCKED: rm -rf of absolute path '/' is forbidden."
 }
 
-@test "a deny for a quoted removal names only flag-shaped tokens, not the dash-prefixed prose after it" {
-  run_hook_bash 'echo "rm -f /Users/you/projects/my-app/notes.txt -- see the -foo and --bar-baz notes, 5 -x1 items"'
+@test "a deny names only flag-shaped tokens, not dashed numbers or values beside them" {
+  run_hook_bash 'echo "rm -f /Users/you/projects/my-app/notes.txt costs -2 and -x1 items"'
   assert_denied_because "BLOCKED: rm -f of absolute path '/Users/you/projects/my-app/notes.txt' is forbidden."
-  grep -qF -- '-foo' <<<"$output" && return 1
-  grep -qF -- '-x1' <<<"$output" && return 1
-  true
+}
+
+@test "a deny names no token after a bare --" {
+  run_hook_bash 'echo "rm -f /Users/you/projects/my-app/notes.txt -- see the -foo and --bar-baz notes"'
+  assert_denied_because "BLOCKED: rm -f of absolute path '/Users/you/projects/my-app/notes.txt' is forbidden."
 }
 
 @test "the absolute-path deny names the session scratchpad as a removable root" {

@@ -543,8 +543,10 @@ main() {
     flags_given=''
     for ((i = 1; i < ${#tokens[@]}; i++)); do
       token=${tokens[i]//[\"\'\\]/}
-      # A bare `--` ends option parsing. Only flag-shaped words count: prose after a
-      # removal quoted inside an argument is dash-prefixed too and is not a flag.
+      # A bare `--` ends option parsing. Only flag-shaped words count (a dash and
+      # letters, or a long option), so a dashed number or value in quoted prose stays
+      # out of the label. A dash-and-letters word in that prose still counts; the cost
+      # is a longer label, never a changed verdict.
       [[ "$token" == -- ]] && break
       if [[ "$token" =~ ^-[[:alpha:]]+$ || "$token" =~ ^--[[:alpha:]-]+$ ]]; then
         flags_given+=" $token"
