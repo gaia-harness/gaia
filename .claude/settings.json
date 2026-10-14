@@ -417,6 +417,13 @@
       ]
     }
   },
+  "skillOverrides": {
+    "gaia-debt": "name-only",
+    "gaia-plan": "name-only",
+    "gaia-spec": "name-only",
+    "update-deps": "name-only",
+    "update-gaia": "name-only"
+  },
   "statusLine": {
     "type": "command",
     "command": "bash \"$(git rev-parse --show-toplevel 2>/dev/null || printf %s \"${CLAUDE_PROJECT_DIR:-.}\")/.gaia/statusline/gaia-statusline.sh\""
