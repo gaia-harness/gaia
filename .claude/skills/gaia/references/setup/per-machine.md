@@ -52,8 +52,6 @@ claude plugin install typescript-lsp@claude-plugins-official
 
 Probes: typescript-lsp. An already-installed plugin is a no-op.
 
-claude-obsidian is optional; install it yourself with `--scope local` (this checkout) or `--scope user`.
-
 Record line: `.gaia/cli/gaia setup record install-plugins applied`.
 
 ## Step 3: chmod-statusline

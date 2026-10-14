@@ -29,9 +29,7 @@ See [[Claude Integration|the modules page]] for the inventory of current command
 
 ### Wiki vendor relationship
 
-GAIA ships no Obsidian plugin. `wiki/` is an Obsidian vault: a reader can open it in the Obsidian app, and Claude writes its syntax from the Obsidian section of `.claude/rules/wiki-style.md`. Wiki maintenance (sync, consolidate, lint) runs through GAIA's native CLI (`.gaia/cli/gaia wiki ...`), and the wiki hooks are GAIA-owned (`.claude/hooks/wiki-*.sh`); no hook commits wiki edits on its own.
-
-The `claude-obsidian` plugin is optional and outside GAIA. A user who wants it for their own Obsidian work installs it themselves, with `--scope local` (this checkout only) or `--scope user` (every project on the machine). [[DragonScale Opt-Out]] is superseded for the same reason.
+`wiki/` is an Obsidian vault: a reader can open it in the Obsidian app, and Claude writes its syntax from the Obsidian section of `.claude/rules/wiki-style.md`. Wiki maintenance (sync, consolidate, lint) runs through GAIA's native CLI (`.gaia/cli/gaia wiki ...`), and the wiki hooks are GAIA-owned (`.claude/hooks/wiki-*.sh`); no hook commits wiki edits on its own.
 
 ## 2. Rules vs. skills vs. hooks: decision criteria
 
@@ -180,4 +178,4 @@ When a recommendation already contains the concrete decisions (file paths, speci
 
 ## Cross-links
 
-[[Code Review Audit Agent]] · [[Claude Skills]] · [[Claude Hooks]] · [[Quality Gate]] · [[Pre-commit Hooks]] · [[DragonScale Opt-Out]]
+[[Code Review Audit Agent]] · [[Claude Skills]] · [[Claude Hooks]] · [[Quality Gate]] · [[Pre-commit Hooks]]

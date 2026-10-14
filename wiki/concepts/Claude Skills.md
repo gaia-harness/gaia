@@ -82,7 +82,7 @@ See [[Claude Integration Conventions]] for the broader convention covering exten
 
 ## Wiki skills
 
-Wiki maintenance (sync, consolidate, lint) runs through GAIA's native CLI (`.gaia/cli/gaia wiki ...`) and `/gaia-wiki`; GAIA owns `log.md` (`gaia wiki log-prepend`) and `index.md`. Obsidian syntax for wiki pages lives in `.claude/rules/wiki-style.md`, which loads only when Claude edits a wiki page, skill, agent or command. GAIA ships no Obsidian plugin; the `claude-obsidian` plugin is an optional install a user makes themselves. See [[Claude Integration Conventions]] § Wiki vendor relationship.
+Wiki maintenance (sync, consolidate, lint) runs through GAIA's native CLI (`.gaia/cli/gaia wiki ...`) and `/gaia-wiki`; GAIA owns `log.md` (`gaia wiki log-prepend`) and `index.md`. Obsidian syntax for wiki pages lives in `.claude/rules/wiki-style.md`, which loads only when Claude edits a wiki page, skill, agent or command. See [[Claude Integration Conventions]] § Wiki vendor relationship.
 
 ## Playwright CLI vs. MCP
 
