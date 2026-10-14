@@ -237,8 +237,6 @@ After all pages have been written and the body is rendered, update `wiki/index.m
 
 3. Write `wiki/index.md` back to disk.
 
-If `--preview` mode (from Step 2) is active, render the proposed index diff to stdout and do NOT write.
-
 The orchestrator stages the modified `wiki/index.md` together with the returned pages (Step 6); no separate staging is needed here.
 
 Match the existing wiki voice: declarative, no preamble, concrete examples where useful. End the file with a single trailing newline.

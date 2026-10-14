@@ -26,7 +26,7 @@ For the detected class, read only the files listed below. Record filename + one-
 | path                           | one-line summary rule                                            |
 | ------------------------------ | ---------------------------------------------------------------- |
 | `.gaia/manifest.json`          | presence + `version` field value                                 |
-| `.gaia/local/setup-state.json` | presence + value of the `lastStep` field if present              |
+| `.gaia/local/setup-state.json` | presence + value of the `completed_at` field and the `completed_steps` list if present |
 | `package.json`                 | presence + value of the `name` field (confirms rename completed) |
 | `frontend/package.json`        | presence only (the app package manifest)                         |
 
@@ -41,7 +41,7 @@ For the detected class, read only the files listed below. Record filename + one-
 
 | path               | one-line summary rule                           |
 | ------------------ | ----------------------------------------------- |
-| `wiki/.state.json` | presence + value of `lastSync` field if present |
+| `wiki/.state.json` | presence + value of `last_evaluated_at` field if present |
 | `wiki/log.md`      | presence + first line of the last entry only    |
 
 ### quality-gate

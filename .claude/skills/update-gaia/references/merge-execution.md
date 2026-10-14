@@ -75,7 +75,7 @@ BACKUP_DIR=".gaia-backup/$(date +%Y%m%d-%H%M%S)"
 mkdir -p .gaia-merge "$BACKUP_DIR"
 ```
 
-Track seven lists plus a `package.json` sub-report internally (`UpdateMergeReport`):
+Track these internally (`UpdateMergeReport`):
 
 ```ts
 {

@@ -180,6 +180,4 @@ These satisfy the SPEC's binding contracts; the plan and implementation must hon
 
 The `## Coverage` section is sourced from `.gaia/local/cache/audit-<spec_id>/coverage.jsonl`, one thin phase/lens/disposition record main appends per in-scope dispatch as it resolves, not from the findings/verdict files (which cannot encode a disposition). Each line's `<disposition>` is one of `first_pass` / `not_applicable`.
 
-When a sibling `AUDIT.md` exists, the step-11 `/gaia-plan` handoff names it so its plan-time directives are discoverable.
-
 After the report is written and any folds are cached, proceed to gate 2 (`spec.md` step 8), which renders the hardened draft.
