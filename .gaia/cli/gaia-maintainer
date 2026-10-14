@@ -118,7 +118,7 @@ import { execFileSync } from "node:child_process";
 var MAX_GIT_BUFFER_BYTES = 64 * 1024 * 1024;
 
 // src/util/git-env.ts
-var execGaiaGitRaw = (args, cwd) => {
+var execGaiaGitRaw = (args, cwd, input2) => {
   const env = { ...process.env };
   delete env.GIT_DIR;
   delete env.GIT_WORK_TREE;
@@ -127,13 +127,14 @@ var execGaiaGitRaw = (args, cwd) => {
     cwd,
     encoding: "utf8",
     env,
+    input: input2,
     // Node's 1 MiB default throws ENOBUFS on a large-output git command
     // (`git log` over a long history, `git status` on a very dirty tree).
     // The docblock above declares this the one chokepoint every git-shelling
     // resolver routes through, so the ceiling belongs here rather than at the
     // next caller to need it.
     maxBuffer: MAX_GIT_BUFFER_BYTES,
-    stdio: ["ignore", "pipe", "pipe"]
+    stdio: [input2 === void 0 ? "ignore" : "pipe", "pipe", "pipe"]
   });
 };
 var execGaiaGit = (args, cwd) => execGaiaGitRaw(args, cwd).trim();

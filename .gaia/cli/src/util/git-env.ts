@@ -22,7 +22,11 @@ import {MAX_GIT_BUFFER_BYTES} from './git-buffer.js';
  * payload shifts every column and a subsequent 3-character prefix slice eats
  * the path's own first character.
  */
-export const execGaiaGitRaw = (args: string[], cwd: string): string => {
+export const execGaiaGitRaw = (
+  args: string[],
+  cwd: string,
+  input?: string
+): string => {
   const env = {...process.env};
   delete env.GIT_DIR;
   delete env.GIT_WORK_TREE;
@@ -32,13 +36,14 @@ export const execGaiaGitRaw = (args: string[], cwd: string): string => {
     cwd,
     encoding: 'utf8',
     env,
+    input,
     // Node's 1 MiB default throws ENOBUFS on a large-output git command
     // (`git log` over a long history, `git status` on a very dirty tree).
     // The docblock above declares this the one chokepoint every git-shelling
     // resolver routes through, so the ceiling belongs here rather than at the
     // next caller to need it.
     maxBuffer: MAX_GIT_BUFFER_BYTES,
-    stdio: ['ignore', 'pipe', 'pipe'],
+    stdio: [input === undefined ? 'ignore' : 'pipe', 'pipe', 'pipe'],
   });
 };
 

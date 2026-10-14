@@ -52,6 +52,6 @@ The change selector picks a suite only when the suite names a changed file. A su
 # bats file_tags=whole-tree
 ```
 
-If the suite already carries tags, `whole-tree` joins the comma list (`# bats file_tags=foo,whole-tree`). The verification runner (`.gaia/tests/verify-harness.sh`) always runs every marked suite in branch mode, and in round mode whenever a harness path changed; the marked set is `git grep -l -E '^# bats file_tags=([^,]*,)*whole-tree(,|$)' -- '*.bats'`.
+If the suite already carries tags, `whole-tree` joins the comma list (`# bats file_tags=foo,whole-tree`). The verification runner (`.gaia/tests/verify-harness.sh`) runs every marked suite in branch mode and leaves them out of round mode, which runs a marked suite only when the round's delta selects it, so CI's full run is what catches a round fix that breaks a whole-tree invariant; the marked set is `git grep -l -E '^# bats file_tags=([^,]*,)*whole-tree(,|$)' -- '*.bats'`.
 
 `.gaia/tests/whole-tree-mark-guard.sh` flags an unmarked suite that enumerates the real tracked tree through an idiom it recognizes; its header lists the idioms. It does not see enumeration delegated to a script the suite calls (a lint script, a roster check), so mark such a suite by hand. A suite that writes fixture suites carrying the tag assembles the line at run time (`printf '# bats %s\n' 'file_tags=whole-tree'`) so it never holds the line at column 0 itself.
