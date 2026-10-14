@@ -11,6 +11,7 @@ tags: [meta, log]
 
 ## [Unreleased]
 
+- 2026-10-14 c1f9609e WORTHY - wiki pages updated in the commit itself; no further page drift: chore: drop the claude-obsidian plugin from GAIA
 - 2026-10-09 d4a23fcf WORTHY - wiki pages updated in the commit itself; no further page drift: docs(wiki): point remix-i18next at pnpm-workspace.yaml for active overrides
 - 2026-10-09 b3278191 WORTHY - wiki pages updated in the commit itself; no further page drift: feat(audit): scope catch-up merges out of the audit gate
 - 2026-10-09 a7bf37b2 WORTHY - wiki pages updated in the commit itself; no further page drift: refactor(harness): make the usage ledger the only cost store
