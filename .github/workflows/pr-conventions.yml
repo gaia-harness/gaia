@@ -56,7 +56,7 @@ permissions: {}
 
 jobs:
   pr-conventions:
-    name: Conventions check (PR title and head branch) (advisory)
+    name: Name lint (PR title, branch) (advisory)
     runs-on: ubuntu-latest
     # A checkout, a filtered install of two packages, and a few commitlint runs.
     # Ten minutes is a wide margin; without a cap a stalled install burns the
