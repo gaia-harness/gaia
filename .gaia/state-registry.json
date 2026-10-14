@@ -563,6 +563,17 @@
       "why": "Per-session dedupe marker written by workflow-doctrine-inject.sh (tmp + mv, through Bash) holding the last injected key so startup, resume and tool events do not re-inject an unchanged doctrine. Anchored to the main root, never the entered tree. One tiny file per session; a reaper is a filed follow-up, so reaped_by is null for now.",
       "writer": "code",
       "reaped_by": null
+    },
+    {
+      "id": "context-checkpoint-markers",
+      "path": "cache/context-checkpoint/",
+      "match": "prefix",
+      "kind": "dir",
+      "scope": "main-only",
+      "keyed_by": null,
+      "why": "Per-session marker written by context-checkpoint-inject.sh (tmp + mv) holding the highest context band the checkpoint has fired for, so each band fires once per session. Anchored to the main root so a session moving between the main checkout and a worktree sees one marker.",
+      "writer": "code",
+      "reaped_by": "check-updates.sh (sweeps regular files older than 7 days on its TTL-gated pass)"
     }
   ],
   "residue": [

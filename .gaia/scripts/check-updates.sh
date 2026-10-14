@@ -274,6 +274,17 @@ if [ -d "$CONTEXT_DIRECTORY" ] && [ ! -L "$CONTEXT_DIRECTORY" ]; then
   find "$CONTEXT_DIRECTORY" -maxdepth 1 -type f \( -name '*.json' -o -name '*.json.tmp.*' \) -mtime +"$CONTEXT_SWEEP_DAYS" -exec rm -f {} + 2>/dev/null || true
 fi
 
+# ---------- context-checkpoint marker sweep ----------
+# The context checkpoint hook writes one marker per session and nothing reaps it
+# when the session ends, so this pass does: regular files (never symlinks or
+# directories) directly in the marker directory, older than the age above. The
+# hook's orphaned tmp files (.<session id>.<pid>) go with them. A failed sweep
+# never fails this script.
+CHECKPOINT_DIRECTORY="$STATE_ROOT/.gaia/local/cache/context-checkpoint"
+if [ -d "$CHECKPOINT_DIRECTORY" ] && [ ! -L "$CHECKPOINT_DIRECTORY" ]; then
+  find "$CHECKPOINT_DIRECTORY" -maxdepth 1 -type f \( -name '[!.]*' -o -name '.*.*' \) -mtime +"$CONTEXT_SWEEP_DAYS" -exec rm -f {} + 2>/dev/null || true
+fi
+
 # ---------- outdatedCount ----------
 # Count only the updates /update-deps will actually apply. The `update-deps
 # run` primitive runs the same Phase 1-3 filtering the skill does; the ESLint

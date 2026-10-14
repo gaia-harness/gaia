@@ -49,6 +49,7 @@ The sourced libraries under `.claude/hooks/lib/` are deliberately absent. They a
 | `block-worktree-path-mismatch.sh` | PreToolUse (Edit\|Write\|MultiEdit) | Inside a linked worktree, denies an edit whose `file_path` resolves to the main checkout. |
 | `capture-gh-artifact.sh` | PostToolUse (Bash) | Records the pull request's branch for the usage ledger when a `gh pr create` runs, and the session-ownership breadcrumb the main-branch destructive-git guard reads. |
 | `capture-red-observations.sh` | PostToolUse, PostToolUseFailure (Bash) | Records a genuinely-failing test run in the RED ledger, the observing half of the RED-verification gate. |
+| `context-checkpoint-inject.sh` | PostToolUse (all tools) | Injects the context checkpoint doctrine once per context band from red upward into a main session, with its session id and save path. Silent for sub-agents, without a fresh reading, and for a session the audit loop's state for its branch records. |
 | `debt-sentinel-touch.sh` | PostToolUse (Bash) | Arms the debt-count staleness sentinel after a `gh` command that mutates the backlog. |
 | `debt-session-reconcile.sh` | SessionStart (startup\|resume) | Reconciles a shown `Run /gaia-debt` nudge against the live backlog. |
 | `issue-claim-release.sh` | PostToolUse (Bash) | Strips the `in-progress` claim from every issue a merged pull request closes. |
