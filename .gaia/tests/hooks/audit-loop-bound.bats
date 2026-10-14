@@ -549,6 +549,38 @@ next_allowed() {
   [ "$(state_field '.history.rounds[4].snapshot.A')" = null ]
 }
 
+# failing_evaluator_hook <reason>: a copy of the hook whose sourced evaluator
+# fails every round with exit 5 and the stderr line `audit-loop-eval: <reason>`.
+# Every evaluator arm reachable from fixture data is caught earlier in the hook
+# (the schema check, the dispositions check), so the failure is injected.
+failing_evaluator_hook() {
+  local scratch_directory="$BATS_TEST_TMPDIR/failing-evaluator" entry
+  mkdir -p "$scratch_directory/.claude/hooks" "$scratch_directory/.gaia/scripts"
+  ln -sfn "$REPO_ROOT/.claude/hooks/lib" "$scratch_directory/.claude/hooks/lib"
+  cp "$HOOK" "$scratch_directory/.claude/hooks/audit-loop-bound.sh"
+  for entry in "$REPO_ROOT"/.gaia/*; do
+    [ "${entry##*/}" = scripts ] || ln -sfn "$entry" "$scratch_directory/.gaia/${entry##*/}"
+  done
+  for entry in "$REPO_ROOT"/.gaia/scripts/*; do
+    [ "${entry##*/}" = audit-loop-eval.sh ] || ln -sfn "$entry" "$scratch_directory/.gaia/scripts/${entry##*/}"
+  done
+  cp "$REPO_ROOT/.gaia/scripts/audit-loop-eval.sh" "$scratch_directory/.gaia/scripts/audit-loop-eval.sh"
+  printf 'gaia_loop_evaluate_round() { printf '"'"'audit-loop-eval: %s\\n'"'"' >&2; return 5; }\n' "$1" \
+    >>"$scratch_directory/.gaia/scripts/audit-loop-eval.sh"
+  HOOK="$scratch_directory/.claude/hooks/audit-loop-bound.sh"
+}
+
+@test "a round that cannot be evaluated denies naming the evaluator's reason, and records no round" {
+  alf_sequence 3 3
+  failing_evaluator_hook "injected evaluator reason"
+  new_tree
+  dispatch
+  assert_denied
+  case "$(reason)" in *"could not evaluate round 2"*"injected evaluator reason"*) ;; *) echo "reason: $(reason)"; return 1 ;; esac
+  case "$(reason)" in *"audit-loop-eval:"*) echo "raw prefix leaked: $(reason)"; return 1 ;; esac
+  [ "$(nrounds)" -eq 2 ]
+}
+
 @test "jq absent denies a member dispatch with exit 2 and allows a general-purpose dispatch" {
   build_path "$BATS_TEST_TMPDIR/nojq" jq
   run env PATH="$BATS_TEST_TMPDIR/nojq" bash -c 'printf %s "$1" | /bin/bash "$2"' _ "$(payload "$FRONTEND_MEMBER" "$SID" "$ALF_ROOT" "$ALF_ROOT")" "$HOOK"
