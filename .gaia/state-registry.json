@@ -574,6 +574,17 @@
       "why": "Per-session marker written by context-checkpoint-inject.sh (tmp + mv) holding the highest context band the checkpoint has fired for, so each band fires once per session. Anchored to the main root so a session moving between the main checkout and a worktree sees one marker.",
       "writer": "code",
       "reaped_by": "check-updates.sh (sweeps regular files older than 7 days on its TTL-gated pass)"
+    },
+    {
+      "id": "context-checkpoint-agent-markers",
+      "path": "cache/context-checkpoint-agents/",
+      "match": "prefix",
+      "kind": "dir",
+      "scope": "main-only",
+      "keyed_by": null,
+      "why": "Per-sub-agent marker written by context-checkpoint-subagent.sh (tmp + mv) holding the sub-agent's handoff opt-in and the highest context band the checkpoint has fired for, so each band fires once per sub-agent. Anchored to the main root so a sub-agent running in a worktree sees one marker.",
+      "writer": "code",
+      "reaped_by": "check-updates.sh (sweeps regular files older than 7 days on its TTL-gated pass)"
     }
   ],
   "residue": [

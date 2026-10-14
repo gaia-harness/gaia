@@ -61,7 +61,9 @@ A resumed session reads `STATE.md` and the artifact listing and nothing else. Th
 
 Claude cannot see its own context reading, so a long session has no way to notice it is running heavy. A PostToolUse hook reads the per-session reading the statusline writes and, once per band from red upward, injects [`.claude/doctrine/context-checkpoint.md`](../../.claude/doctrine/context-checkpoint.md) with the session id and the resolved save path above it. That file owns the rule: what each band means, where to save, what to ask, and what to recommend. This page does not restate it.
 
-The hook stays silent for sub-agents, when there is no fresh reading, and for a session whose branch the audit loop's state file records, because the audit loop owns that checkpoint. The bands come from `.gaia/scripts/context-checkpoint-lib.sh`, the same source the statusline reads, so the two never disagree. Marks live per session: a session resumed after `/clear` starts unmarked and is checked afresh, while compaction keeps its marks.
+The main-session hook stays silent for sub-agents, when there is no fresh reading, and for a session whose branch the audit loop's state file records, because the audit loop owns that checkpoint. The bands come from `.gaia/scripts/context-checkpoint-lib.sh`, the same source the statusline reads, so the two never disagree. Marks live per session: a session resumed after `/clear` starts unmarked and is checked afresh, while compaction keeps its marks.
+
+A sub-agent gets its own checkpoint from a separate PostToolUse hook, `.claude/hooks/context-checkpoint-subagent.sh`. It reads the sub-agent's context from the sub-agent's own transcript and injects [`.claude/doctrine/context-yield.md`](../../.claude/doctrine/context-yield.md), but only for a sub-agent that opted in by naming a handoff path in its dispatch prompt. A heavy sub-agent writes the handoff and returns instead of running on; the dispatcher re-dispatches a fresh agent from that handoff and halts for the human once the yield limit `gaia_context_yield_limit` returns is passed. The bands and the limit come from `.gaia/scripts/context-checkpoint-lib.sh`; the doctrine file and `.claude/skills/gaia/references/plan/planner.md` own the rules.
 
 ## Concurrency limits
 
@@ -123,6 +125,23 @@ The context checkpoint hook runs after every tool call of every main session, so
 The figures come from the quietest of several runs on a shared machine, whose 1-minute load stayed above 10 throughout.
 
 Because the firing path's absolute figure tracks machine load, its budget was judged by a paired relative measurement instead. The firing path and the doctrine hook's arming path were each run through their registered commands under bash 3.2 from one fixture, alternating run by run with the order flipped every pair, 200 runs each, at a 1-minute load of 14.6 to 14.8. Doctrine arming read a p50 of 55.3 ms and checkpoint firing 59.0 ms, a ratio of 1.0669. Scaled against the doctrine arming row above (46.9 ms), the firing path reads 50.0 ms (50.04 before rounding). To re-check it, repeat the pairing on any machine and scale the ratio by that row; an idle-machine run of the checkpoint timing tool supersedes it.
+
+The sub-agent checkpoint hook is registered with no matcher, so it also runs after every tool call of every main session, where it must end at its first raw pattern check. The per-call paths every session and every sub-agent pays carry the 50 ms budget. The two per-call paths only an opted-in sub-agent pays (opted in below red, band already marked) carry 75 ms: each runs the payload confirm and the transcript tail read on every call, and an opted-in executor's tool calls each take seconds, so the difference over a whole executor run is a second or two. The once-per-agent first-sight path and the firing path carry 100 ms. Re-measured with `bash .gaia/tests/hooks/context-checkpoint-subagent-timing.sh`, through the registered command string, against generated sub-agent transcripts of more than 7 MB (including one whose final line is past the tail read bound and one whose first record is near the head read bound), 50 runs per path, interleaved next to the same no-op baseline.
+
+| Path | p50 | Budget |
+| --- | --- | --- |
+| Main-session payload (no `agent_id`) | 22.3 ms | 50 ms |
+| Not opted in, marked | 23.3 ms | 50 ms |
+| Opted in, below red | 59.4 ms | 75 ms |
+| Band already marked | 62.0 ms | 75 ms |
+| Widened tail read | 104.3 ms | none |
+| First sight (head read of a large first record) | 95.2 ms | 100 ms |
+| Firing | 68.8 ms | 100 ms |
+| No-op baseline (`/bin/sh -c true`) | 5.6 ms | none |
+| Injected bytes on the firing path | 1,740 | none |
+| Per-session chain over the no-matcher PostToolUse hooks | 3,955 ms | none |
+
+The figures come from one run on a machine whose other sessions were idle, at a 1-minute load of 7.3 at the start and 13.7 at the end; runs under a load of 30 to 63 read the same or lower on every per-call row, so these rows do not track load. Profiling the opted-in path under bash 3.2 splits it into the cost every call pays (about 22 ms, the main-session row), the payload confirm's one `jq` (about 13 ms), the transcript tail read and scan (about 23 ms: `wc`, `tail` of the tail read bound, and the bash scan over it), and the window, line and band (about 6 ms). The per-session row is the main-session hook's below-red, no-marker p50 (34.2 ms, above) plus this hook's main-session payload p50, times 70 tool calls, the median over the 596 main-session transcripts of this repository's maintainer that held at least one tool call (a one-off count of `tool_use` blocks per transcript file). To re-check it, repeat the count on any machine and pass the two inputs to the tool as `--main-hook-ms` and `--median-tool-calls`.
 <!-- gaia:maintainer-only:end -->
 
 ## See also

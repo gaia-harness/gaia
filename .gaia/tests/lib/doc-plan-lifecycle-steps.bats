@@ -3,10 +3,11 @@
 # Doc-conformance suite for the generated orchestrator's lifecycle steps.
 #
 # .claude/skills/gaia/references/plan/planner.md, the file the planner
-# sub-agent reads, holds five verbatim step blocks a planner copies into a
+# sub-agent reads, holds the verbatim step blocks a planner copies into a
 # generated ORCHESTRATOR.md, each opening with a sentinel line plan-verify.sh
-# checks: the UAT render, the owning-phase UAT gate, the pre-audit UAT checks,
-# the wiki promotion and the post-merge close.
+# checks: the UAT render, the owning-phase UAT gate, the sub-agent yield
+# handling, the pre-audit UAT checks, the wiki promotion and the post-merge
+# close.
 # .claude/skills/gaia/references/spec/lifecycle.md holds the procedures those
 # blocks point at, and .claude/skills/gaia/references/plan.md, the
 # /gaia-plan entry file, keeps the pre-flight sweep pointer. This suite pins:
@@ -40,6 +41,7 @@ setup() {
   RESUME_POINT="$REPO_ROOT/.gaia/scripts/plan-resume-point.sh"
   S_RENDER='<!-- gaia:orchestrator-step uat-render -->'
   S_GATE='<!-- gaia:orchestrator-step uat-gate -->'
+  S_YIELD='<!-- gaia:orchestrator-step yield-handling -->'
   S_PRE='<!-- gaia:orchestrator-step uat-pre-audit -->'
   S_WIKI='<!-- gaia:orchestrator-step wiki-promotion -->'
   S_CLOSE='<!-- gaia:orchestrator-step post-merge-close -->'
@@ -117,7 +119,7 @@ check_sentinels_once_in_fences() {
       return 1
     fi
   done < <(sentinel_set)
-  [ "$count" -eq 5 ] || { printf 'derived %s sentinels from plan-verify.sh, want 5\n' "$count" >&2; return 1; }
+  [ "$count" -eq 6 ] || { printf 'derived %s sentinels from plan-verify.sh, want 6\n' "$count" >&2; return 1; }
 }
 
 # check_block_has <file> <sentinel> <needle>...
@@ -135,6 +137,7 @@ check_block_contents() {
   local file="$1"
   check_block_has "$file" "$S_RENDER" 'uat-write.sh' '{SPEC_PATH}' '--routing' || return 1
   check_block_has "$file" "$S_GATE" 'uat-gate.sh' '--phase' || return 1
+  check_block_has "$file" "$S_YIELD" 'gaia_context_yield_limit' 'Yield handoff:' '(YIELD k)' || return 1
   check_block_has "$file" "$S_PRE" '--all' || return 1
   check_block_has "$file" "$S_WIKI" 'wiki-promote.md' || return 1
   check_block_has "$file" "$S_CLOSE" 'plan-archive.sh` runs only after `MERGED` is confirmed' || return 1
@@ -268,7 +271,7 @@ EOF
 @test "red twin: a block missing its command fails the contents check" {
   copy="$BATS_TEST_TMPDIR/planner.md"
   local needle
-  for needle in 'uat-write.sh' '--phase' '--all' 'wiki-promote.md' 'runs only after'; do
+  for needle in 'uat-write.sh' '--phase' 'gaia_context_yield_limit' 'Yield handoff:' 'YIELD k' '--all' 'wiki-promote.md' 'runs only after'; do
     awk -v needle="$needle" '{ gsub(needle, "removed") } { print }' "$PLANNER_MD" >"$copy"
     run check_block_contents "$copy"
     [ "$status" -ne 0 ] || { echo "removing '$needle' did not fail the check" >&2; return 1; }
@@ -330,7 +333,7 @@ check_entry_file_has_no_blocks() {
 
 @test "blocks copied as a planner copies them pass plan-verify.sh --spec" {
   write_plan_fixture
-  assemble_orchestrator "$PLANNER_MD" "$FIXTURE_PLAN/ORCHESTRATOR.md" "$S_RENDER" "$S_GATE" "$S_PRE" "$S_WIKI" "$S_CLOSE"
+  assemble_orchestrator "$PLANNER_MD" "$FIXTURE_PLAN/ORCHESTRATOR.md" "$S_RENDER" "$S_GATE" "$S_YIELD" "$S_PRE" "$S_WIKI" "$S_CLOSE"
   # The copy keeps the template's indentation, so the trim rule is exercised.
   grep -qE "^[[:space:]]+<!-- gaia:orchestrator-step uat-render -->$" "$FIXTURE_PLAN/ORCHESTRATOR.md"
   run bash "$PLAN_VERIFY" "$FIXTURE_PLAN" --spec "$FIXTURE_SPEC"
@@ -339,7 +342,7 @@ check_entry_file_has_no_blocks() {
 
 @test "red twin: a dropped render block fails plan-verify.sh naming the sentinel" {
   write_plan_fixture
-  assemble_orchestrator "$PLANNER_MD" "$FIXTURE_PLAN/ORCHESTRATOR.md" "$S_GATE" "$S_PRE" "$S_WIKI" "$S_CLOSE"
+  assemble_orchestrator "$PLANNER_MD" "$FIXTURE_PLAN/ORCHESTRATOR.md" "$S_GATE" "$S_YIELD" "$S_PRE" "$S_WIKI" "$S_CLOSE"
   run bash "$PLAN_VERIFY" "$FIXTURE_PLAN" --spec "$FIXTURE_SPEC"
   [ "$status" -eq 1 ]
   grep -qF -- "missing the sentinel line $S_RENDER" <<<"$output"
@@ -347,7 +350,7 @@ check_entry_file_has_no_blocks() {
 
 @test "red twin: a render block below the gate block fails plan-verify.sh as out of order" {
   write_plan_fixture
-  assemble_orchestrator "$PLANNER_MD" "$FIXTURE_PLAN/ORCHESTRATOR.md" "$S_GATE" "$S_RENDER" "$S_PRE" "$S_WIKI" "$S_CLOSE"
+  assemble_orchestrator "$PLANNER_MD" "$FIXTURE_PLAN/ORCHESTRATOR.md" "$S_GATE" "$S_RENDER" "$S_YIELD" "$S_PRE" "$S_WIKI" "$S_CLOSE"
   run bash "$PLAN_VERIFY" "$FIXTURE_PLAN" --spec "$FIXTURE_SPEC"
   [ "$status" -eq 1 ]
   grep -qF -- "$S_RENDER is out of order" <<<"$output"

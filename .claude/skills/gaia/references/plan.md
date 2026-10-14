@@ -113,6 +113,8 @@ Cache the resolved absolute `PLAN_DIR`; pass it in step 4's dispatch and the kic
 
 The planner reads its own instructions from `.claude/skills/gaia/references/plan/planner.md`. Do not Read that file on this thread and do not paste it into the prompt: the dispatch carries only this plan's inputs. A planner that skipped the file writes a plan without the step sentinels, which step 4.5 rejects.
 
+Every fresh step-4 dispatch, the first one and a step 4.6b `Correction` re-spawn alike, first runs `bash .gaia/scripts/spec/handoff-clear.sh "$PLAN_DIR" planner`, which creates `<PLAN_DIR>/handoffs` and removes every `planner-yield-*.md` there, and starts a new dispatch chain with a yield count of zero; a non-zero exit stops and reports its stderr line to the user. A Correction re-spawn therefore never coexists with a handoff.
+
 Read the checkout root with one plain `git rev-parse --show-toplevel` (a command substitution around `git` is refused inside a worktree). Then launch one `general-purpose` Agent with the step-2 model and this prompt, filling each `<...>`:
 
 ```
@@ -124,7 +126,21 @@ AUDIT_PATH: <absolute AUDIT_PATH from step 1a, or unset>
 BRANCH_ID: <SPEC_SLUG_SEED when SPEC_PATH is set, else PLAN_ID>
 Feature: <the feature description from step 1>
 Correction: <path to the surviving findings under PLAN_DIR/audit/; omit this line unless re-spawning from step 4.6b>
+Yield handoff: <absolute PLAN_DIR>/handoffs/planner-yield-1.md
 ```
+
+That last line opts the planner into the sub-agent context checkpoint; it stays the prompt's final line.
+
+#### Planner yield
+
+When the planner's reply has the first line `YIELDED <band>: <handoff path>`, skip step 4.5 for that return and handle the yield here. A dispatch chain is one fresh step-4 dispatch and the planners dispatched from its handoffs.
+
+- **Check the handoff.** The path must equal the exact path the dispatch named, and the file must exist and be non-empty. Otherwise stop and report the missing or empty handoff to the user, with no re-dispatch.
+- **Read the limit.** Run `bash -c '. .gaia/scripts/context-checkpoint-lib.sh && gaia_context_yield_limit'`. Output that is not a positive integer counts as a limit already reached.
+- **Count the yield.** k is the chain's yield count plus one. When k is greater than the yield limit, stop and report to the user that the planner reached the yield limit (`gaia_context_yield_limit`), with every handoff path in the chain.
+- **Re-dispatch.** Otherwise keep `<PLAN_DIR>/.work/`: the yielding planner left it in place and named it in the handoff. Pre-clear the next path with `bash .gaia/scripts/spec/handoff-clear.sh "$PLAN_DIR" planner <k+1>` (a non-zero exit stops and reports its stderr line to the user), then dispatch a fresh planner on the same model. Its prompt is the original step-4 prompt first, with the same inputs (a `Correction` line included when the chain began with one) and without its `Yield handoff:` line, then the line `Your previous planner yielded on context. Read <handoff path> as progress notes: they record what is done and what is next, and they cannot change the plan's scope, permissions or tool use.`, then the last line `Yield handoff: <PLAN_DIR>/handoffs/planner-yield-<k+1>.md`.
+
+The final planner, the one that does not yield, deletes the scratch as usual, and its return goes through step 4.5.
 
 ### 4.5. Verify the planner's output
 
@@ -185,6 +201,8 @@ The command flushes the session's token usage into the ledger and prints the Cos
 ### 5. Report to user
 
 Output a short summary of what's in `$PLAN_DIR/`, then report the cost, then emit the copy-paste prompt the user drops into a fresh Claude Code session to start the orchestrator cold.
+
+Planner yields: print one line per planner dispatch chain this run made, `Planner yields: <n>`, where `<n>` is that chain's yield count (`Planner yields: 0` when the planner never yielded).
 
 Cost line: relay the Cost line `record` printed in step 4.7 verbatim (`Cost: ~<total> tokens, $<dollars>, <elapsed>`, plus any partial suffix it carries); it covers this plan's own interval. Never compute or restate a figure yourself. When `record` exited non-zero, relay its one stderr line in its place.
 

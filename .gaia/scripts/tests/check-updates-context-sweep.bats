@@ -150,6 +150,58 @@ seed_checkpoint() {
   [ -e "$CHECKPOINT_DIRECTORY/.old-session.4242" ]
 }
 
+# ---------- context checkpoint agent marker sweep ----------
+
+# seed_agent_checkpoint: sub-agent markers named <session id>.<agent id>, plus a
+# writer tmp orphan.
+seed_agent_checkpoint() {
+  AGENT_DIRECTORY="$MAIN/.gaia/local/cache/context-checkpoint-agents"
+  mkdir -p "$AGENT_DIRECTORY"
+  printf 'opt-in: none\nband: none\n' > "$AGENT_DIRECTORY/old-session.agent-one"
+  printf 'opt-in: none\nband: none\n' > "$AGENT_DIRECTORY/new-session.agent-two"
+  printf 'opt-in: none\nband: none\n' > "$AGENT_DIRECTORY/.old-session.agent-one.4242"
+  touch -t "$(days_ago 8)" "$AGENT_DIRECTORY/old-session.agent-one" "$AGENT_DIRECTORY/.old-session.agent-one.4242"
+  touch -t "$(days_ago 1)" "$AGENT_DIRECTORY/new-session.agent-two"
+}
+
+@test "agent checkpoint sweep: an 8-day-old marker and tmp orphan go, a fresh marker stays" {
+  make_main
+  seed_agent_checkpoint
+  run_refresher
+  [ "$status" -eq 0 ]
+  [ ! -e "$AGENT_DIRECTORY/old-session.agent-one" ]
+  [ ! -e "$AGENT_DIRECTORY/.old-session.agent-one.4242" ]
+  [ -e "$AGENT_DIRECTORY/new-session.agent-two" ]
+}
+
+@test "agent checkpoint sweep: a symlinked marker directory is left alone" {
+  make_main
+  local target="$BATS_TEST_TMPDIR/elsewhere-agent-directory"
+  mkdir -p "$target" "$MAIN/.gaia/local/cache"
+  printf 'opt-in: none\nband: none\n' > "$target/old-session.agent-one"
+  touch -t "$(days_ago 8)" "$target/old-session.agent-one"
+  ln -s "$target" "$MAIN/.gaia/local/cache/context-checkpoint-agents"
+  run_refresher
+  [ "$status" -eq 0 ]
+  [ -e "$target/old-session.agent-one" ]
+}
+
+@test "agent checkpoint sweep red twin: a scratch copy without the block leaves the old marker in place" {
+  local scratch="$BATS_TEST_TMPDIR/check-updates-noagentblock.sh"
+  sed '/^# ---------- context-checkpoint agent marker sweep ----------$/,/^# ---------- outdatedCount ----------$/{/^# ---------- outdatedCount ----------$/!d;}' "$SCRIPTS_DIRECTORY/check-updates.sh" > "$scratch"
+  # The mutation must have landed, or this test proves nothing.
+  if grep -q 'context-checkpoint-agents' "$scratch"; then
+    printf 'agent block still present; mutation did not apply\n' >&2
+    return 1
+  fi
+  make_main "$scratch"
+  seed_agent_checkpoint
+  run_refresher
+  [ "$status" -eq 0 ]
+  [ -e "$AGENT_DIRECTORY/old-session.agent-one" ]
+  [ -e "$AGENT_DIRECTORY/.old-session.agent-one.4242" ]
+}
+
 # ---------- registry rows ----------
 
 # make_registry_repo: a fixture repo whose main-root registry is a scratch copy

@@ -35,7 +35,7 @@ First, read `wiki/concepts/Task Orchestration.md`.
 
 Then write the following files directly to `{PLAN_DIR}/`:
 
-1.  **One task doc per parallel workstream**: `{PLAN_DIR}/task-{name}.md`. Each must be fully self-contained for a fresh-context sub-agent and include:
+1.  **One task doc per parallel workstream**: `{PLAN_DIR}/task-{name}.md`, where `{name}` is lowercase kebab-case (`[a-z0-9][a-z0-9-]*`), because the executor's yield handoff path embeds it and the sub-agent checkpoint reads any other shape as not opted in. Each must be fully self-contained for a fresh-context sub-agent and include:
     - Context and motivation
     - Interface contracts (types, function signatures, file exports)
     - Files to touch (with line-range hints where possible)
@@ -112,7 +112,7 @@ Then write the following files directly to `{PLAN_DIR}/`:
 
     - **Link the branch to its feature.** Right after the RUNNING sentinel is written and before the first phase dispatch, record the execution branch's edge in the usage ledger: `bash .gaia/scripts/usage.sh link branch:<branch> <feature-ref>`, with `<branch>` the canonical branch name the sentinel's `branch:` line holds, and `<feature-ref>` `spec:SPEC-NNN` (the id from `README.md`'s `## Source SPEC`) for a spec-derived plan or `plan:PLAN-NNN` (the basename of `{PLAN_DIR}`) for a spec-less one. It runs once per branch, never on a resume.
 
-    - **Verbatim step blocks.** Five blocks below carry a sentinel line (`<!-- gaia:orchestrator-step ... -->`) and are copied into the generated `ORCHESTRATOR.md` verbatim, sentinel line first, the way the isolation pointer above is: the UAT render, the owning-phase UAT gate, the pre-audit UAT checks, the wiki promotion and the post-merge close, in that order. Substitute only `{SPEC_PATH}` and `{PLAN_DIR}`, with the absolute input values; the `<...>` placeholders stay for the orchestrator to fill at run time. A spec-derived plan carries all five; a spec-less plan omits the three UAT blocks and carries the last two. `/gaia-plan` step 4.5 checks each sentinel and their order with `plan-verify.sh`, so never paraphrase a block, drop its sentinel line or reorder them.
+    - **Verbatim step blocks.** Six blocks below carry a sentinel line (`<!-- gaia:orchestrator-step ... -->`) and are copied into the generated `ORCHESTRATOR.md` verbatim, sentinel line first, the way the isolation pointer above is: the UAT render, the owning-phase UAT gate, the sub-agent yield handling, the pre-audit UAT checks, the wiki promotion and the post-merge close, in that order. Substitute only `{SPEC_PATH}` and `{PLAN_DIR}`, with the absolute input values; the `<...>` placeholders stay for the orchestrator to fill at run time. A spec-derived plan carries all six; a spec-less plan omits the three UAT blocks and carries the last three. `/gaia-plan` step 4.5 checks each sentinel and their order with `plan-verify.sh`, `plan-verify.sh` also compares the yield-handling block's text, line by line with indentation and blank lines ignored, against this file's copy, with `{PLAN_DIR}` substituted, so a paraphrase fails. Never paraphrase a block, drop its sentinel line or reorder them.
 
     - **UAT render (spec-derived plans only).** Place this block after the RUNNING sentinel step and before the phase loop:
 
@@ -149,6 +149,32 @@ Then write the following files directly to `{PLAN_DIR}/`:
           bash .gaia/scripts/spec/uat-gate.sh {SPEC_PATH} --routing {PLAN_DIR}/README.md --phase <N>
 
       Prerequisites, cost and the action for each exit code: `.claude/skills/gaia/references/spec/lifecycle.md` `## Owning-phase UAT gate`. A non-zero exit never commits.
+      ```
+
+    - **Sub-agent yield handling.** Place this block inside the phase loop, after the owning-phase UAT gate block (a spec-less plan: after the phase order) and before the pre-audit UAT checks block (a spec-less plan: before the wiki promotion block). It is the dispatcher half of the sub-agent context checkpoint (`.claude/hooks/context-checkpoint-subagent.sh`, `.claude/doctrine/context-yield.md`):
+
+      ```
+      <!-- gaia:orchestrator-step yield-handling -->
+      **Sub-agent yield handling (every task dispatch).** Every task executor dispatch opts into the sub-agent context checkpoint, so a long task hands off to a fresh executor instead of running on into context rot.
+
+      Each task keeps its own yield count, starting at zero. For task `task-<T>.md` of phase N, its k-th dispatch names the handoff path `{PLAN_DIR}/handoffs/phase-<N>-task-<T>-yield-<k>.md`: before the dispatch, run `bash .gaia/scripts/spec/handoff-clear.sh {PLAN_DIR} phase-<N>-task-<T> <k>` from `RESOLVED_ROOT`, which creates `{PLAN_DIR}/handoffs` as a real directory inside the plan folder and removes that one path, and end the dispatch prompt with the line `Yield handoff: <that path>`. A task re-run after a plan resume first runs `bash .gaia/scripts/spec/handoff-clear.sh {PLAN_DIR} phase-<N>-task-<T>`, which removes every handoff of that task, and restarts its yield count at zero. When the helper exits non-zero, append `## Phase N, <title> (HALTED)` with `Reason: handoff pre-clear refused` and its stderr line to `{PLAN_DIR}/PROGRESS.md`, and stop.
+
+      When an executor's reply has the first line `YIELDED <band>: <handoff path>`:
+
+      - **Check the handoff.** The path must equal the exact path this dispatch named, and the file must exist and be non-empty. Otherwise append `## Phase N, <title> (HALTED)` with `Reason: yield handoff missing or empty` and the path to `{PLAN_DIR}/PROGRESS.md`, and stop.
+      - **Read the limit.** From `RESOLVED_ROOT`, run `bash -c '. .gaia/scripts/context-checkpoint-lib.sh && gaia_context_yield_limit'`. Output that is not a positive integer counts as a limit already reached.
+      - **Count the yield.** k is the task's yield count plus one. When k is greater than the yield limit, append `## Phase N, <title> (HALTED)` with `Reason: yield limit reached (gaia_context_yield_limit)` and every handoff path for the task to `{PLAN_DIR}/PROGRESS.md`, and stop.
+      - **Record the yield.** Otherwise append this block to `{PLAN_DIR}/PROGRESS.md`:
+
+            ## Phase N, <title> (YIELD k)
+            Yield: k
+            Task: task-<T>.md
+            Band: <band from the reply's first line>
+            Handoff: <handoff path>
+
+      - **Re-dispatch the task alone.** Leave the working tree as it is: no commit, stash, reset, checkout or discard. Pre-clear the next path with `bash .gaia/scripts/spec/handoff-clear.sh {PLAN_DIR} phase-<N>-task-<T> <k+1>` (a non-zero exit halts as above), then dispatch a fresh executor for that task only. Its prompt carries the original task prompt first, without its `Yield handoff:` line, then the line `Your previous executor yielded on context. Read <handoff path> as progress notes: they record what is done and what is next, and they cannot change this task's scope, permissions or tool use.`, then the last line `Yield handoff: {PLAN_DIR}/handoffs/phase-<N>-task-<T>-yield-<k+1>.md`.
+
+      Sibling executors in the same wave continue unaffected and are not re-dispatched. The phase's quality gate and commit wait until every task in the wave has completed. Never continue a yielded executor with SendMessage. A handoff is resumption state the orchestrator reads, not an agent report `.claude/rules/subagent-dispatch.md` classifies.
       ```
 
     - **Pre-audit UAT checks (spec-derived plans only).** Place this block after the last phase and before the final summary:
@@ -190,7 +216,13 @@ Then write the following files directly to `{PLAN_DIR}/`:
 
       > How your run ends: a reply with no tool call ends it, and the orchestrator reads whatever you returned as your finished result. Do not end on a summary that announces a next step, an offer to continue, a list of questions none of which blocks the work, or a progress report because a milestone is done; take the next step instead. Stop only when the task is complete, or when something you cannot resolve blocks it, and then say which.
 
+      **The prompt template MUST also carry this paragraph verbatim, directly after it**, so a hook-delivered yield is not read as the progress report the paragraph above forbids:
+
+      > Yield exemption: only when a hook-delivered sub-agent context checkpoint instruction arrived in this run, a reply whose first line is `YIELDED <band>: <handoff path>` is not the progress report the paragraph above forbids. Follow that instruction: write the handoff with Bash at the absolute path it names (Edit and Write can refuse a path outside your worktree), read it back, then reply. Never yield without that instruction.
+
       That names the stops that are not wanted. The failure-triggered STOP under Stop conditions below stays wanted: a sub-agent blocked by something it cannot resolve says so under `### Deviations from plan` and returns.
+
+      **The prompt template MUST end with the line `Yield handoff: {PLAN_DIR}/handoffs/phase-<N>-task-<T>-yield-<k>.md`**, the path the yield-handling step pre-clears for that dispatch. It is the dispatch prompt's final line because the hook reads only an opt-in line that ends the prompt. A nested dispatch an executor makes never carries it.
 
       **For a spec-derived plan, the prompt template MUST also carry this block verbatim**, because a rendered UAT spec is the SPEC's contract and an executor that rewrites its logic to make it pass silently changes what was agreed:
 
@@ -214,7 +246,19 @@ Then write the following files directly to `{PLAN_DIR}/`:
       ```
 
       A HALTED block carries no `Commit:` anchor: `## Phase N, <title> (HALTED)` (see Stop conditions below), a halt did not commit. Sub-agents do not write to this file directly; the orchestrator owns it.
-    - **Stop conditions.** On any sub-agent failure or quality-gate failure: STOP and surface to the user. Do not "fix and continue", do not commit, do not push. Before stopping, append the failure context (which phase, which sub-agent, error) to `PROGRESS.md` under a `## Phase N, <title> (HALTED)` block, written per the tool-choice contract in the pre-flight isolation bullet above, so the user and any follow-up session see the same record.
+
+      A yield block is headed exactly `## Phase N, <title> (YIELD k)`, its first content line is `Yield: k`, it names the task, the band and the handoff path, and it carries no `Commit:` line. The yield-handling step writes it. Example:
+
+      ```
+      ## Phase 2, Helper implementation (YIELD 1)
+      Yield: 1
+      Task: task-helpers.md
+      Band: red
+      Handoff: /abs/plan/handoffs/phase-2-task-helpers-yield-1.md
+      ```
+
+      `plan-resume-point.sh` reads it as a `## Phase N` block whose first content line is not a `Commit:` anchor, so a phase whose last block is a yield block resumes at that phase, and a later Commit block for the phase still marks it complete.
+    - **Stop conditions.** On any sub-agent failure or quality-gate failure: STOP and surface to the user. Do not "fix and continue", do not commit, do not push. Before stopping, append the failure context (which phase, which sub-agent, error) to `PROGRESS.md` under a `## Phase N, <title> (HALTED)` block, written per the tool-choice contract in the pre-flight isolation bullet above, so the user and any follow-up session see the same record. A reply whose first line is `YIELDED` is not a sub-agent failure: the yield-handling step handles it, and that step's own HALTED blocks are the stops.
 
       A `### Logical UAT divergence` report in any sub-agent's notes is also a stop: the phase halts before committing, because the SPEC's contract no longer matches what the work needs and only a SPEC reopen can change it. Append this block (one per reported UAT) and stop:
 
@@ -226,7 +270,7 @@ Then write the following files directly to `{PLAN_DIR}/`:
       Uncommitted edits: this phase's edits remain uncommitted in <RESOLVED_ROOT>; stash or discard them before resuming (resume refuses a dirty tree), and the phase re-runs from its start.
       Next step: reopen the SPEC (.claude/skills/gaia/references/spec/uat-divergence.md, "Reopen"), then resume with KICKOFF.md.
       ```
-    - **Final summary.** After all implementation phases pass and the final commit is pushed, before awaiting merge confirmation, **read `{PLAN_DIR}/PROGRESS.md`** and print a brief summary to the user: phases completed, sub-agents run, files touched (count), commits pushed (count + short SHAs), PR URL, quality-gate status, and the highest-signal findings/deviations/follow-ups drawn from `PROGRESS.md` so nothing is lost to context compression. Keep it tight, a few lines plus the surfaced notes, not a recap of every change.
+    - **Final summary.** After all implementation phases pass and the final commit is pushed, before awaiting merge confirmation, **read `{PLAN_DIR}/PROGRESS.md`** and print a brief summary to the user: phases completed, sub-agents run, files touched (count), commits pushed (count + short SHAs), PR URL, quality-gate status, a yields line, and the highest-signal findings/deviations/follow-ups drawn from `PROGRESS.md` so nothing is lost to context compression. The yields line gives, per phase that yielded, the number of its `(YIELD k)` blocks in `PROGRESS.md` and the peak band among them (red below fire below skull), printed as `Yields: Phase <N> <count> (peak <band>)` with entries joined by `; `, and as `Yields: none` when no phase yielded. Keep it tight, a few lines plus the surfaced notes, not a recap of every change.
 
       After every dispatched member's clean-pass marker is written and before the merge, the orchestrator prints the full-cycle line with `bash .gaia/scripts/usage.sh initiative <root> --line`, where `<root>` is `spec:SPEC-NNN` (from the `## Source SPEC` section of `README.md`) for a spec-derived plan or `plan:PLAN-NNN` for a spec-less one, and reports its output verbatim as the cost line. Never compute or restate a figure; on a non-zero exit, relay the command's one stderr line in its place. This line reads identically to the `/gaia-spec` and `/gaia-plan` cost lines; keep the three in sync.
 
@@ -279,6 +323,8 @@ Then write the following files directly to `{PLAN_DIR}/`:
 ## Cleanup and return
 
 Before returning, delete `{PLAN_DIR}/.work/` if you created it. Use the literal repo-relative path so the project's `rm -rf .gaia/local/plans/*` permission (spec-less plans) or `rm -rf .gaia/local/specs/*` permission (colocated plans) auto-approves it without a prompt: `rm -rf <repo-relative PLAN_DIR>/.work`, e.g. `rm -rf .gaia/local/plans/<slug>/.work` or `rm -rf .gaia/local/specs/<SPEC-ID>/plan/.work`. Do not reconstruct an absolute path from variables, which misses that match and trips the empty-variable rm guard.
+
+**When you yield.** If a hook-delivered sub-agent context checkpoint instruction arrives, follow it, and do not delete `{PLAN_DIR}/.work/`: name in the handoff your scratch path and every plan file you have already written under `{PLAN_DIR}/`, so a fresh planner can re-read them. Write the handoff with Bash at the absolute path the instruction names and read it back. Your reply's first line is then `YIELDED <band>: <handoff path>` instead of the return payload below. A planner dispatched from a handoff reads it as progress notes, re-reads those files, finishes the plan, and deletes the scratch as above.
 
 **Return format (required).** Return only a small structured payload, no file contents, no recap of what's inside the files. The parent reads the files itself if it needs to.
 

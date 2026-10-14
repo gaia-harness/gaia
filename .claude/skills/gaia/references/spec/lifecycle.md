@@ -35,7 +35,7 @@ Reason: UAT gate failed
 Spec files: <each failing path and its reasons, from uat-gate.sh's stderr>
 ```
 
-A HALTED phase block carries no `Commit:` line, so a resume re-runs the phase.
+A HALTED phase block carries no `Commit:` line, so a resume re-runs the phase. A yield block (`## Phase N, <title> (YIELD k)`, format owned by `plan/planner.md`) carries no `Commit:` line either.
 
 ## Pre-audit UAT checks
 
@@ -47,7 +47,7 @@ bash .gaia/scripts/spec/uat-gate.sh <SPEC_PATH> --routing <PLAN_DIR>/README.md -
 
 `--all` runs the same checks over every `e2e` row, which includes the divergence check and the working-doc id scan across every rendered spec. A non-zero exit is a HALT: stop and surface stderr. It is never an audit finding to fix inside a fix round.
 
-Then confirm the render landed before the first phase. When `<PLAN_DIR>/PROGRESS.md`'s first `## UAT render` block carries a `Commit: <short-sha>` (not `none`, not `Skipped:`), take the Phase 1 SHA from its `## Phase 1` block's `Commit:` line and run:
+Then confirm the render landed before the first phase. When `<PLAN_DIR>/PROGRESS.md`'s first `## UAT render` block carries a `Commit: <short-sha>` (not `none`, not `Skipped:`), take the Phase 1 SHA from the last `## Phase 1` block carrying a `Commit:` line and run:
 
 ```bash
 git -C <RESOLVED_ROOT> merge-base --is-ancestor <render sha> <Phase 1 sha>
@@ -59,7 +59,7 @@ A non-zero exit is a HALT naming both SHAs: Phase 1 was committed without the re
 
 The one consolidation recipe. Two callers run it: the orchestrator, after audit clearance and the human's ready-to-merge confirmation, and the pre-flight sweep's cold consolidation, against a folder whose PR already merged.
 
-**Synthesis.** The caller (the warm orchestrator, or the session running the sweep; never a task sub-agent) writes `SUMMARY.md` by layered override-resolution: read the layers in precedence `SPEC.md`, then `AUDIT.md`, then the plan's `PROGRESS.md`; the top layer wins on conflict. A spec-less plan has no `SPEC.md` or `AUDIT.md`, so its `PROGRESS.md` is the only layer; a cold consolidation reads the plan's `PROGRESS.md` when one is present. Ground the result in the merged code and passing tests, write it present-tense as final-state prose, and surface any material narrowing between the stated intent and the shipped scope under an optional `## Divergence` section. This step is agent synthesis, not a template: a mechanical concatenation cannot resolve conflicts between the layers or judge what "materially narrower" means.
+**Synthesis.** The caller (the warm orchestrator, or the session running the sweep; never a task sub-agent) writes `SUMMARY.md` by layered override-resolution: read the layers in precedence `SPEC.md`, then `AUDIT.md`, then the plan's `PROGRESS.md`; the top layer wins on conflict. A spec-less plan has no `SPEC.md` or `AUDIT.md`, so its `PROGRESS.md` is the only layer; a cold consolidation reads the plan's `PROGRESS.md` when one is present. Ground the result in the merged code and passing tests, write it present-tense as final-state prose, and surface any material narrowing between the stated intent and the shipped scope under an optional `## Divergence` section. This step is agent synthesis, not a template: a mechanical concatenation cannot resolve conflicts between the layers or judge what "materially narrower" means. Yield blocks in `PROGRESS.md` are resumption records, not findings, so consolidation ignores them.
 
 **Location.** A spec-colocated plan's `SUMMARY.md` sits beside `SPEC.md`, in the SPEC folder one level above the plan subfolder; a spec-less plan's sits in `<PLAN_DIR>`. Both folders are main-anchored. From a linked worktree, the write follows the tool-choice contract in `.claude/skills/gaia/references/spec.md` Operational primitives, which applies the same way to a spec-less plan folder.
 

@@ -345,6 +345,7 @@ On GAIA 1.6.1? Claude: choose Abort, then offer to migrate this project to 2.0.0
 
 ### Added
 
+- Plan task executors and the `/gaia-plan` planner now get a context checkpoint: past the red band they hand off to a fresh agent through a handoff file instead of running on, and a plan halts for you when one unit yields too often.
 - Long-running sessions now get a context checkpoint: when the context reaches the red, fire or skull band, Claude saves its place and asks whether to continue here or clear and resume, with a recommendation. Unattended sessions never ask.
 - Any committed work, with or without a skill, now follows one lifecycle: a minted branch name, isolation driven by your isolation policy, a draft pull request, the audit, the merge when you ask for it, and a cleanup that leaves `main` pulled. A worktree created with `git worktree add` under `.claude/worktrees/` is steered into that lifecycle, and `/gaia-debt`'s feature-branch cleanup now reads the main checkout's HEAD before it switches branches (#2615)
 - `/update-gaia` now verifies each release bundle against its published checksum before asking to proceed, and follows the migration notes that release carries inside that bundle. `/gaia-init` and `/setup-gaia` now record each setup decision, so a setup feature added by a later release is asked about once (never again once declined) or applied, and the statusline points a machine at `/setup-gaia` when one is pending.
