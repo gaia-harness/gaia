@@ -362,7 +362,7 @@ If there is an "Adding New Keys" section that references `frontend/app/languages
 
 In workflow step 1, delete the sentence "Pass `--i18n` whenever the project has i18n (`app/i18n.ts` exists): without it the page carries literal text, which lint (`i18next/no-literal-string`) rejects."
 
-In the front-matter `description`, delete ", and optional i18n keys" (keep "its page component, and page story").
+In the front-matter `description`, replace ", page story, and optional i18n keys" with " and page story" (result: "its page component and page story").
 
 ### F5. `frontend/.claude/rules/routes.md`
 

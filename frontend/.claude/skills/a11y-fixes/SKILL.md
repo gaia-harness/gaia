@@ -335,4 +335,4 @@ Every `id` in the rendered DOM must be unique. Common Conform pitfall: rendering
 
 ## Upstream shadcn and Base UI findings
 
-The vendored `components/ui/` files are byte-identical to `shadcn add` output and are never edited silently. The patch policy lives in `wiki/decisions/shadcn Component Layer.md`; follow it for a violation that comes from a vendored file. Radix Select `aria-hidden` sibling findings (shadcn-ui/ui#10074, shadcn-ui/ui#8707) are informational: they describe the Radix Select, which does not apply because GAIA's `base-nova` style uses Base UI.
+The vendored `components/ui/` files are byte-identical to `shadcn add` output and are never edited silently. The policy lives in `wiki/decisions/shadcn Component Layer.md` (never hand-edit a ui file). For a violation from an unedited vendored file, report it upstream and record it on that page before adding any local patch or scan exclusion. Radix Select `aria-hidden` sibling findings (shadcn-ui/ui#10074, shadcn-ui/ui#8707) are informational: they describe the Radix Select, which does not apply because GAIA's `base-nova` style uses Base UI.
