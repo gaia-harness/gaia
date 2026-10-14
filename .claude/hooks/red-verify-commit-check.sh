@@ -50,7 +50,8 @@
 #     the deterministic path intact and never relaxes the gate on uncertainty.
 #   - the deny path is fail-closed ONLY for the clean case: a parseable
 #     new-at-HEAD passing test with no matching valid RED in the ledger that the
-#     classifier does not label emergent.
+#     classifier does not label emergent and that no release tree ships
+#     unchanged (the release carve-out below).
 #
 # Package scope: which staged paths are unit tests is read from the
 # package descriptor (`tddUnitTests`, via .claude/hooks/lib/gaia-packages.sh),
@@ -277,6 +278,50 @@ test_subject_is_emergent() {
   fi
 }
 
+# ---------------------------------------------------------------------------
+# Release carve-out: a test file that arrives byte-for-byte from a GAIA release
+# being applied (an /update-gaia merge, or a migration note's merge) commits
+# with no RED demand. The test and the implementation it covers land in the
+# same update, so no failing run of the adopter's exists to observe; its RED
+# was GAIA's to observe before the release shipped.
+#
+# Recognition is content equality, keyed to the same repo-relative path, with
+# a release tree the update flow extracted from its checksum-verified bundle
+# into the shared update cache (`update-gaia/<tag>/tree/` and
+# `migrate-2/<tag>/tree/`, under the main checkout's `.gaia/local/cache/shared/`,
+# which every worktree shares). The STAGED blob is compared, since that is
+# what the commit records. An adopter edit to a shipped test changes the blob
+# and so still demands its RED, and a release copy at a different path matches
+# nothing. A tree that is absent, unresolvable, or pruned matches nothing too,
+# so this carve-out only ever relaxes the demand on an affirmative match.
+#
+# Limit: the cache is gitignored local state, so a session able to write a file
+# into a release tree could exempt a test; it could equally write the RED
+# ledger, which sits beside it. This gate's threat model is a cooperative but
+# fallible agent, not one forging evidence.
+# ---------------------------------------------------------------------------
+release_cache_root=''
+if release_main_root=$(gaia_resolve_main_root "$tree_root" 2>/dev/null) && [ -n "$release_main_root" ]; then
+  release_cache_root="$release_main_root/.gaia/local/cache/shared"
+fi
+
+staged_test_matches_release() {
+  local relative_path="$1" staged_blob release_file release_blob
+  [ -n "$release_cache_root" ] || return 1
+  staged_blob=$(git -C "$tree_root" rev-parse --verify --quiet ":$relative_path" 2>/dev/null) || return 1
+  [ -n "$staged_blob" ] || return 1
+  for release_file in \
+    "$release_cache_root"/update-gaia/*/tree/"$relative_path" \
+    "$release_cache_root"/migrate-2/*/tree/"$relative_path"; do
+    [ -f "$release_file" ] || continue
+    # --path applies the attributes (eol, filters) staging this path would, so
+    # the hash is the blob `git add` would have written for the release copy.
+    release_blob=$(git -C "$tree_root" hash-object --path="$relative_path" -- "$release_file" 2>/dev/null) || continue
+    [ "$release_blob" = "$staged_blob" ] && return 0
+  done
+  return 1
+}
+
 # Collect offenders as "file\tfullName" lines.
 offenders=""
 
@@ -297,6 +342,9 @@ while IFS= read -r path; do
     deny_with_reason "$classifier_package_error"
   fi
   [ "$subject_emergent" -eq 1 ] && continue
+
+  # Release carve-out: unchanged from a verified release tree, no RED owed.
+  staged_test_matches_release "$relative_path" && continue
 
   # Current tests: helper over the working-tree (staged) file content on disk.
   # Parse failure (mid-edit syntax error) -> skip this file (fail-open).
@@ -410,6 +458,8 @@ These tests are new at HEAD and pass now, but no matching RED was recorded for t
 To unblock:
   1. Run \`pnpm test --run <test-file>\`, naming the test's file, and confirm the test FAILS (RED) before the change that makes it pass. A run with no test path records no RED.
   2. Then make the change that turns it green and commit.
+
+A test arriving unchanged from a GAIA release (an /update-gaia or migration commit) needs no RED: it is exempt while its verified release bundle is extracted in the update cache. If this commit is one and the test is still denied, either the test differs from the shipped copy (restore it byte-for-byte, or observe a RED for your edit) or the release's tree is missing from the update cache (restore it with the verified download step /update-gaia or the migration note runs). Never fabricate a failing run by editing shipped source.
 
 A RED is bound to the test's comment-free content: rewording a comment inside a test leaves the signal unchanged and the RED still counts, but any change to what the test executes invalidates that RED, so a fresh failing run must be observed for the current body. Edits, renames, and refactors of tests already present at HEAD are out of scope and never demand a RED."
 
