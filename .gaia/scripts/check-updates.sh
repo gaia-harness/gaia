@@ -285,6 +285,17 @@ if [ -d "$CHECKPOINT_DIRECTORY" ] && [ ! -L "$CHECKPOINT_DIRECTORY" ]; then
   find "$CHECKPOINT_DIRECTORY" -maxdepth 1 -type f \( -name '[!.]*' -o -name '.*.*' \) -mtime +"$CONTEXT_SWEEP_DAYS" -exec rm -f {} + 2>/dev/null || true
 fi
 
+# ---------- context-checkpoint agent marker sweep ----------
+# The sub-agent checkpoint hook writes one marker per sub-agent and nothing reaps
+# it when the agent finishes, so this pass does, with the same rules as the
+# session markers above. The hook's orphaned tmp files
+# (.<session id>.<agent id>.<pid>) go with them. A failed sweep never fails this
+# script.
+CHECKPOINT_AGENT_DIRECTORY="$STATE_ROOT/.gaia/local/cache/context-checkpoint-agents"
+if [ -d "$CHECKPOINT_AGENT_DIRECTORY" ] && [ ! -L "$CHECKPOINT_AGENT_DIRECTORY" ]; then
+  find "$CHECKPOINT_AGENT_DIRECTORY" -maxdepth 1 -type f \( -name '[!.]*' -o -name '.*.*' \) -mtime +"$CONTEXT_SWEEP_DAYS" -exec rm -f {} + 2>/dev/null || true
+fi
+
 # ---------- outdatedCount ----------
 # Count only the updates /update-deps will actually apply. The `update-deps
 # run` primitive runs the same Phase 1-3 filtering the skill does; the ESLint
