@@ -8,21 +8,21 @@ type TryCatchResult<T> =
 type TryCatchSuccess<T> = [error: undefined, result: Awaited<T>];
 
 export const tryCatch = <T, A extends readonly unknown[]>(
-  fn: (...args: A) => T,
+  operation: (...args: A) => T,
   ...args: A
 ): TryCatchResult<T> => {
   let error;
-  let result;
+  let returnValue;
 
   try {
-    result = fn(...args);
+    returnValue = operation(...args);
   } catch (caughtError) {
     error = caughtError as Error;
   }
 
-  if (result instanceof Promise) {
-    return result
-      .then((promiseResult: T) => [undefined, promiseResult])
+  if (returnValue instanceof Promise) {
+    return returnValue
+      .then((resolvedValue: T) => [undefined, resolvedValue])
       .catch((caughtError: Error) => [
         caughtError,
         undefined,
@@ -33,11 +33,11 @@ export const tryCatch = <T, A extends readonly unknown[]>(
     return [error, undefined] as TryCatchResult<T>;
   }
 
-  return [undefined, result] as TryCatchResult<T>;
+  return [undefined, returnValue] as TryCatchResult<T>;
 };
 
 export const compose =
-  <T>(...transforms: ((value: T) => T)[]) =>
+  <T>(...transforms: ((value: T) => T)[]): ((value: T) => T) =>
   (value: T): T =>
     transforms.reduceRight(
       (composedValue, transform) => transform(composedValue),
@@ -46,7 +46,7 @@ export const compose =
 
 export const noop = (): void => {};
 
-export const sleep = async (ms: number): Promise<void> =>
+export const sleep = async (durationInMilliseconds: number): Promise<void> =>
   new Promise((resolve) => {
-    setTimeout(resolve, ms);
+    setTimeout(resolve, durationInMilliseconds);
   });
