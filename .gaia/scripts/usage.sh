@@ -6,8 +6,9 @@
 # nothing else. Writes exit 0 written (or nothing owed), 1 refused (a cycle, or
 # no ledger mutex available), 2 usage or grammar error, 75 lock timeout; every
 # non-zero write leaves both stores untouched. With jq absent every subcommand
-# prints the inactive line and exits 0 before touching any file, except `record`
-# and `represented`, which exit 2 (usage-record-lib.sh owns their exit codes).
+# prints the inactive line and exits 0 before touching any file, except `record`,
+# `represented`, `handoff` and `join`, which exit 2 (usage-record-lib.sh and
+# usage-handoff-lib.sh own their exit codes).
 # A library that cannot be loaded exits non-zero before any of that, naming the
 # file.
 #
@@ -36,6 +37,8 @@ _usage_missing_library() { printf 'usage: cannot load %s\n' "$1" >&2; exit 1; }
 . "$_usage_script_directory/token-pricing-lib.sh" 2>/dev/null || _usage_missing_library "$_usage_script_directory/token-pricing-lib.sh"
 # shellcheck source=.gaia/scripts/usage-record-lib.sh
 . "$_usage_script_directory/usage-record-lib.sh" 2>/dev/null || _usage_missing_library "$_usage_script_directory/usage-record-lib.sh"
+# shellcheck source=.gaia/scripts/usage-handoff-lib.sh
+. "$_usage_script_directory/usage-handoff-lib.sh" 2>/dev/null || _usage_missing_library "$_usage_script_directory/usage-handoff-lib.sh"
 
 usage_help() {
   cat <<'EOF'
@@ -55,6 +58,8 @@ usage: bash .gaia/scripts/usage.sh <subcommand> [args]
   record <ref> --workflow <w> [--pr <N>] [--issue <N>] [--start <iso>] [--json]
                                                     close a run, print its Cost line
   represented <ref> --workflow <w>                  exit 0 when the run's close is on the ledger
+  handoff                                           print the join line for this session's open run
+  join --workflow <w> --session <sid> --start <iso> bind this session to a run started in another
 common: [--main-root <dir>] [--telemetry-dir <dir>] [--rate-table <path>]
         [--projects-root <dir>]
 link, unlink, declare: [--session <sid>] [--sidechain]
@@ -453,6 +458,8 @@ case "$SUBCOMMAND" in
   initiative) _pre 0 "$@"; subcommand_initiative; exit 0 ;;
   reconcile) _pre 0 "$@"; subcommand_reconcile; exit 0 ;;
   record) _record_main "$@"; exit ;;
+  handoff) _handoff_main "$@"; exit ;;
+  join) _join_main "$@"; exit ;;
   represented) _represented_main "$@"; exit ;;
   "" | -h | --help) usage_help; exit 0 ;;
   *) usage_help >&2; exit 2 ;;

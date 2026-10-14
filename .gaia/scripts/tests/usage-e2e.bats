@@ -114,7 +114,7 @@ snapshot() {
   run_usage link spec:SPEC-001 research:x >/dev/null
   local subcommand_names events nojq merge_hook_payload create_hook_payload subcommand args
   subcommand_names="$(derive_subcommands "$REPO/.gaia/scripts/usage.sh" | tr '\n' ' ')"
-  [ "$subcommand_names" = "declare initiative lineage link pr pr-branch reconcile record represented unlink " ]
+  [ "$subcommand_names" = "declare handoff initiative join lineage link pr pr-branch reconcile record represented unlink " ]
   events="$(jq -r '[.hooks | to_entries[] | select(any(.value[].hooks[]; .command | test("usage-capture\\.sh"))) | .key] | sort | join(" ")' "$REPO/.claude/settings.json")"
   [ "$events" = "SessionStart Stop" ]
   grep -q 'pr-merge-cost\.sh' "$REPO/.claude/settings.json"
@@ -144,9 +144,9 @@ snapshot() {
     # shellcheck disable=SC2086  # the argument list is split on purpose
     run --separate-stderr env PATH="$nojq" bash "$REPO/.gaia/scripts/usage.sh" $args
     case "$subcommand" in
-      # The gates cannot answer without jq, so they refuse with 2 rather than
-      # reporting nothing owed.
-      record | represented)
+      # The gates cannot answer without jq, and the run-binding commands cannot
+      # find the run, so each refuses with 2 rather than reporting nothing owed.
+      record | represented | handoff | join)
         [ "$status" -eq 2 ] || { echo "usage.sh $subcommand exited $status without jq" >&2; return 1; }
         [ -z "$output" ] ;;
       *)
@@ -167,7 +167,7 @@ snapshot() {
   if cmp -s "$mutant_script" "$REPO/.gaia/scripts/usage.sh"; then echo "mutation did not apply" >&2; return 1; fi
   full="$(derive_subcommands "$REPO/.gaia/scripts/usage.sh" | tr '\n' ' ')"
   short="$(derive_subcommands "$mutant_script" | tr '\n' ' ')"
-  [ "$full" = "declare initiative lineage link pr pr-branch reconcile record represented unlink " ]
+  [ "$full" = "declare handoff initiative join lineage link pr pr-branch reconcile record represented unlink " ]
   [ "$short" != "$full" ]
   run subcommand_arguments brand-new-subcommand
   [ "$status" -ne 0 ]
