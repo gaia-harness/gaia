@@ -432,15 +432,6 @@
     "command": "bash \"$(git rev-parse --show-toplevel 2>/dev/null || printf %s \"${CLAUDE_PROJECT_DIR:-.}\")/.gaia/statusline/gaia-statusline.sh\""
   },
   "enabledPlugins": {
-    "typescript-lsp@claude-plugins-official": true,
-    "claude-obsidian@agricidaniel-claude-obsidian": true
-  },
-  "extraKnownMarketplaces": {
-    "agricidaniel-claude-obsidian": {
-      "source": {
-        "source": "github",
-        "repo": "AgriciDaniel/claude-obsidian"
-      }
-    }
+    "typescript-lsp@claude-plugins-official": true
   }
 }

@@ -113,7 +113,6 @@ Master catalog of every page in the wiki. Newly created pages must be added here
 - [[Quality Gate]]
 - [[Naming Conventions]]: Conventional Commits for commits and PR titles, canonical branch names, and the worktree branch rename; where the convention is read and what enforces it.
 - [[pnpm]]
-- [[DragonScale Opt-Out]]
 - [[Vendored Third-Party Skills]]: third-party skills are vendored byte-identical with a GAIA-owned version marker; GAIA guidance lives outside the vendored folder; updates re-vendor.
 - [[Wiki Management]]: wiki primitives, state file, deterministic classification
 - [[Claude Integration Fitness]]: why `/gaia-fitness` is a deterministic linter, what it grades, and its ownership-checked heal protocol.

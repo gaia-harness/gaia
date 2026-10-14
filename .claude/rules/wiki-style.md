@@ -27,6 +27,13 @@ Body prose, and the prose a code comment carries, describes **what is** in prese
   GAIA maintainers: two kinds of content go inside the HTML-comment maintainer-only markers, the same pair wrapping this note. First, roadmap or forward-looking content that must live in the source repo but not reach adopter scaffolds. Second, any statement specific to the maintainer repo itself, how `gaia-react/gaia` is configured or operated (its branch-protection / ruleset setup, per-author audit mode, secrets, in-tree-only workflows): on an adopter clone that reads as a claim about the reader's own repo and is false there, so wrap it. Keep the general behavior in the visible body and confine the maintainer-repo specifics to the wrapped block. The bundle-time scrub strips marker-delimited blocks from markdown under `wiki/` and `.claude/` before tar, so the source repo stays a superset of the adopter bundle; unbalanced markers fail the release build. See [[Bundle-time Scrub]].
   <!-- gaia:maintainer-only:end -->
 
+## Obsidian syntax
+
+- Wikilinks: `[[Page Title]]`, `[[Page Title#Heading]]`, `[[Page Title|text]]`. Titles are unique filenames, never paths. External URLs use standard Markdown links.
+- Callouts: `> [!note]`, `> [!warning]`, `> [!info]`, `> [!quote]`, and GAIA's own `> [!key-insight]`.
+- Frontmatter: the fields in `wiki/README.md`, with inline `tags: [...]`.
+- No embeds, block references, canvas or Bases in this wiki.
+
 ## Why
 
 Wiki readers (maintainers, adopters) need to understand the system as it is now. References to _how it got here_ are noise unless explicitly load-bearing, and even then, `wiki/log.md` and `CHANGELOG.md` are the right home, not body prose. Comments and pages explaining _what changed when_ rot the moment another change lands.

@@ -43,7 +43,7 @@ GAIA ships clean. `/gaia-init` does the last-mile setup:
 - **Configures the project.** Title, package name, docs title, CODEOWNERS, localized site titles.
 - **Installs dependencies.** Bootstraps pnpm via `corepack`, runs `pnpm install`.
 - **Configures i18n.** Prompts for your language set, scaffolds the matching language files, updates the component and Storybook wiring.
-- **Installs Claude skills, plugins, and MCP servers.** [React Doctor](https://github.com/millionco/react-doctor), [Playwright CLI](https://github.com/microsoft/playwright-cli), `typescript-lsp`, [`claude-obsidian`](https://github.com/AgriciDaniel/claude-obsidian), and [Serena](https://github.com/oraios/serena) (LSP-backed symbol search and editing).
+- **Installs Claude skills, plugins, and MCP servers.** [React Doctor](https://github.com/millionco/react-doctor), [Playwright CLI](https://github.com/microsoft/playwright-cli), `typescript-lsp`, and [Serena](https://github.com/oraios/serena) (LSP-backed symbol search and editing).
 
 You end up with a clean app shell and a fully-configured Claude workflow.
 
@@ -76,7 +76,7 @@ Most setups treat Claude as a tool you hold: bolt a `CLAUDE.md` onto the root an
 
 - **Rules scoped to activate only when needed.** Claude loads the ones that match what it's editing. Nothing else.
 - **Tiers of memory, each scoped and self-maintaining.** Claude stops relearning the codebase every session:
-  - **Wiki** (repo): architecture, modules, decisions, flows, concepts as focused, linked Markdown committed to git and shared across the team. Claude opens the one page it needs (_"How does dark mode wire through?"_) instead of preloading the whole manual. A statusline nudge flags when the wiki drifts from HEAD; SPEC outcomes drain in at PR merge; a redundancy and staleness pass runs whenever it grows. `/gaia-wiki` drives the full chain (sync, consolidate, lint) on demand, each step in a fresh subagent context. Open `wiki/` in [Obsidian](https://obsidian.md) for graph view, backlinks, and search; GAIA leans on the [`claude-obsidian`](https://github.com/AgriciDaniel/claude-obsidian) plugin's `claude-obsidian:wiki-query` and `claude-obsidian:obsidian-markdown` skills. GAIA owns `log.md` and `index.md`: `gaia wiki log-prepend` writes `log.md` and `/gaia-wiki` maintains `index.md`.
+  - **Wiki** (repo): architecture, modules, decisions, flows, concepts as focused, linked Markdown committed to git and shared across the team. Claude opens the one page it needs (_"How does dark mode wire through?"_) instead of preloading the whole manual. A statusline nudge flags when the wiki drifts from HEAD; SPEC outcomes drain in at PR merge; a redundancy and staleness pass runs whenever it grows. `/gaia-wiki` drives the full chain (sync, consolidate, lint) on demand, each step in a fresh subagent context. Open `wiki/` in [Obsidian](https://obsidian.md) for graph view, backlinks, and search. GAIA owns `log.md` and `index.md`: `gaia wiki log-prepend` writes `log.md` and `/gaia-wiki` maintains `index.md`.
   - **Agent memory** (per-agent): each subagent's scratchpad, persisted between runs.
   - **User memory** (global): your preferences, style, and defaults, carried across projects.
 - **Periodic knowledge cleanse.** `/gaia-cleanse` sweeps memory, wiki, and autoloaded files for duplication, conflicting instructions, and stale content before they start costing tokens.

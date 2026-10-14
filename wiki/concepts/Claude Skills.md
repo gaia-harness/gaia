@@ -2,7 +2,7 @@
 type: concept
 status: active
 created: 2026-04-20
-updated: 2026-10-13
+updated: 2026-10-15
 tags: [concept, claude, skills]
 ---
 
@@ -10,11 +10,11 @@ tags: [concept, claude, skills]
 
 `.claude/skills/` holds project-local skills. Each has a `SKILL.md` with YAML frontmatter (`name`, `description`, optional `allowed-tools`) defining when it activates. Skills apply by context/intent (description match); rules apply by file path. Skills that serve only the React app live in `frontend/.claude/skills/` and surface when work touches files under `frontend/`; the harness and stack-neutral skills stay in `.claude/skills/`.
 
-See [[modules/Claude Integration|the modules page]] for the full skills inventory inside `.claude/`.
+See [[Claude Integration|the modules page]] for the full skills inventory inside `.claude/`.
 
 ## Project-local skills
 
-GAIA's skills split into two groups: shared `gaia/references/` playbooks consumed by user-invoked workflows, and the skills under `.claude/skills/` and `frontend/.claude/skills/`, which [[modules/Claude Integration|the modules page]] inventories.
+GAIA's skills split into two groups: shared `gaia/references/` playbooks consumed by user-invoked workflows, and the skills under `.claude/skills/` and `frontend/.claude/skills/`, which [[Claude Integration|the modules page]] inventories.
 
 ### `gaia/references/` workflow playbooks
 
@@ -80,18 +80,9 @@ Stack-specific or deep-dive content lives in `references/{topic}.md` inside the 
 
 See [[Claude Integration Conventions]] for the broader convention covering extension points, monorepo retrofit, and service swaps.
 
-## Plugin skills (claude-obsidian)
+## Wiki skills
 
-Core wiki maintenance (sync, consolidate, lint) runs through GAIA's native CLI (`.gaia/cli/gaia wiki ...`), not the plugin. Wiki-lint in particular is a GAIA-native check with its own rules and report, independent of the plugin's `wiki-lint` skill. The `claude-obsidian` plugin is installed at project scope for this repository through the Claude Code marketplace (not vendored into this repo; the marketplace stays user-level) and supplies **auxiliary** skills only. Its skills load in sessions of this project, not of every project on the machine, and auto-load on context match alongside GAIA's project-local skills.
-
-GAIA leans on two of them:
-
-- `claude-obsidian:wiki-query`: read-only. Answers questions using the vault (hot cache, index, then drill in), with citations; quick / standard / deep modes.
-- `claude-obsidian:obsidian-markdown`: write correct Obsidian Flavored Markdown (wikilinks, embeds, callouts, properties, math, canvas syntax).
-
-GAIA owns `log.md` and `index.md`: `gaia wiki log-prepend` writes `log.md` and `/gaia-wiki` maintains `index.md`. The plugin's mutation skills (`claude-obsidian:save`, `claude-obsidian:wiki-ingest`, `claude-obsidian:autoresearch`) are not leaned on: they would write into GAIA's sha-keyed `log.md` ledger, and their vault resolution fails closed on GAIA's layout, which is the intended default.
-
-The plugin ships further skills; the upstream [skills directory](https://github.com/AgriciDaniel/claude-obsidian/tree/main/skills) is the catalog. The skill source also lives in the upstream plugin cache (`~/.claude/plugins/cache/agricidaniel-claude-obsidian/claude-obsidian/<version>/skills/`), informational reference only: adopters should not edit these files. See [[Claude Integration Conventions]] § Wiki vendor relationship and [[DragonScale Opt-Out]] for the baseline policy and why DragonScale's `wiki-fold` skill is dormant under GAIA's default configuration.
+Wiki maintenance (sync, consolidate, lint) runs through GAIA's native CLI (`.gaia/cli/gaia wiki ...`) and `/gaia-wiki`; GAIA owns `log.md` (`gaia wiki log-prepend`) and `index.md`. Obsidian syntax for wiki pages lives in `.claude/rules/wiki-style.md`, which loads only when Claude edits a wiki page, skill, agent or command. See [[Claude Integration Conventions]] § Wiki vendor relationship.
 
 ## Playwright CLI vs. MCP
 
@@ -101,4 +92,4 @@ GAIA uses the `playwright-cli` skill (Bash-invoked CLI) rather than the Playwrig
 
 **How to apply:** Do not recommend the Playwright MCP server for GAIA. When browser automation is needed, point at the existing `playwright-cli` skill.
 
-**Scope:** This is a Playwright-specific decision, not a blanket "CLI over MCP" policy. Other MCPs (Serena, claude-obsidian, context7) are evaluated on their own merits. Each MCP candidate is assessed individually.
+**Scope:** This is a Playwright-specific decision, not a blanket "CLI over MCP" policy. Other MCPs (Serena, context7) are evaluated on their own merits. Each MCP candidate is assessed individually.
