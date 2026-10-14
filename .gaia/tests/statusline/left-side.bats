@@ -198,8 +198,9 @@ assert_user_left() {
 
 @test "UAT-022: 1M window band edges with no override" {
   expect_band 1000000 100000 green none
-  expect_band 1000000 199999 green none
-  expect_band 1000000 200000 yellow none
+  expect_band 1000000 200000 green none
+  expect_band 1000000 249999 green none
+  expect_band 1000000 250000 yellow none
   expect_band 1000000 299999 yellow none
   expect_band 1000000 300000 red none
   expect_band 1000000 374999 red none
@@ -231,20 +232,20 @@ assert_user_left() {
 
 @test "UAT-019: an ask_tokens above the default reads as the default" {
   printf '{"version":1,"context_checkpoint":{"ask_tokens":600000}}' >"$MAIN/.gaia/local/protected/checkpoint-override.json"
-  expect_band 1000000 200000 yellow none
+  expect_band 1000000 250000 yellow none
   expect_band 1000000 300000 red none
 }
 
 @test "UAT-019: a non-integer ask_tokens reads as the default" {
   printf '{"version":1,"context_checkpoint":{"ask_tokens":"abc"}}' >"$MAIN/.gaia/local/protected/checkpoint-override.json"
-  expect_band 1000000 200000 yellow none
+  expect_band 1000000 250000 yellow none
   expect_band 1000000 300000 red none
 }
 
 @test "an override at the retired location leaves the band at the default" {
   local OLD_OVERRIDE="$MAIN/.gaia/local/checkpoint-override.json"
   printf '{"version":1,"context_checkpoint":{"ask_tokens":200000}}' >"$OLD_OVERRIDE"
-  expect_band 1000000 200000 yellow none
+  expect_band 1000000 250000 yellow none
   expect_band 1000000 300000 red none
 }
 
@@ -253,9 +254,9 @@ assert_user_left() {
   expect_band 1000000 250000 yellow none
   # Change the lib default in the sandbox copy only; the bar must follow it.
   local library_file="$MAIN/.gaia/scripts/context-checkpoint-lib.sh"
-  sed 's/^GAIA_CONTEXT_ASK_TOKENS_DEFAULT=.*/GAIA_CONTEXT_ASK_TOKENS_DEFAULT=250000/' "$library_file" >"$library_file.new"
-  grep -q '^GAIA_CONTEXT_ASK_TOKENS_DEFAULT=250000$' "$library_file.new"
+  sed 's/^GAIA_CONTEXT_ASK_TOKENS_DEFAULT=.*/GAIA_CONTEXT_ASK_TOKENS_DEFAULT=280000/' "$library_file" >"$library_file.new"
+  grep -q '^GAIA_CONTEXT_ASK_TOKENS_DEFAULT=280000$' "$library_file.new"
   mv "$library_file.new" "$library_file"
-  expect_band 1000000 249999 yellow none
-  expect_band 1000000 250000 red none
+  expect_band 1000000 279999 yellow none
+  expect_band 1000000 280000 red none
 }

@@ -65,7 +65,7 @@ context_json() {
 
 @test "bands: 1M window" {
   run gaia_context_bands 1000000 300000
-  [ "$output" = "200000 300000 375000 450000" ]
+  [ "$output" = "250000 300000 375000 450000" ]
 }
 
 @test "bands: 200K window" {
@@ -76,6 +76,13 @@ context_json() {
 @test "bands: yellow clamps to red" {
   run gaia_context_bands 1000000 200000
   [ "$output" = "200000 200000 250000 300000" ]
+}
+
+@test "bands: yellow clamps to a line between the yellow cap and the default" {
+  run gaia_context_bands 1000000 280000
+  [ "$output" = "250000 280000 350000 420000" ]
+  run gaia_context_bands 1000000 240000
+  [ "$output" = "240000 240000 300000 360000" ]
 }
 
 @test "bands: a bad argument is rc 2" {
@@ -301,7 +308,7 @@ write_old_override() {
 }
 
 @test "source: succeeds with an empty PATH and defines every function" {
-  run env PATH= "$BASH" -c '. "$1"; for function_name in gaia_context_is_session_id gaia_context_file gaia_context_override gaia_context_line gaia_context_bands gaia_context_write gaia_context_read; do [ "$(type -t "$function_name")" = function ] || exit 1; done' _ "$REPO_ROOT/.gaia/scripts/context-checkpoint-lib.sh"
+  run env PATH= "$BASH" -c '. "$1"; for function_name in gaia_context_is_session_id gaia_context_file gaia_context_override gaia_context_line gaia_context_bands gaia_context_write gaia_context_read gaia_context_effective_line gaia_context_band gaia_context_summary; do [ "$(type -t "$function_name")" = function ] || exit 1; done' _ "$REPO_ROOT/.gaia/scripts/context-checkpoint-lib.sh"
   [ "$status" -eq 0 ]
 }
 
@@ -313,12 +320,126 @@ write_old_override() {
 
 @test "constants: each numeric value is defined once and no function body inlines one" {
   local library="$REPO_ROOT/.gaia/scripts/context-checkpoint-lib.sh" value
-  for value in 300000 200000; do
+  for value in 300000 250000; do
     [ "$(grep -c "$value" "$library")" = "1" ]
   done
   [ "$(grep -c '^GAIA_CONTEXT_ASK_WINDOW_PERCENT_DEFAULT=50$' "$library")" = "1" ]
   [ "$(grep -c '^GAIA_CONTEXT_YELLOW_WINDOW_PERCENT=30$' "$library")" = "1" ]
   # No numeric literal other than 100 / 0 / 1 / 2 in code lines past the constants block.
-  run bash -c 'sed -n "/^_GAIA_CONTEXT_SKEW_SECONDS/,\$p" "$1" | grep -v "^ *#" | grep -nE "(^|[^0-9a-zA-Z_.-])(300000|200000|50|30)([^0-9]|$)"' _ "$library"
+  run bash -c 'sed -n "/^_GAIA_CONTEXT_SKEW_SECONDS/,\$p" "$1" | grep -v "^ *#" | grep -nE "(^|[^0-9a-zA-Z_.-])(300000|250000|50|30)([^0-9]|$)"' _ "$library"
   [ "$status" -eq 1 ]
+}
+
+# band_at <used> <window>: the band for a reading under the lib's effective line on the scratch main root.
+band_at() {
+  local line
+  line=$(gaia_context_effective_line "$MAIN" "$2") || return 2
+  gaia_context_band "$1" "$2" "$line"
+}
+
+@test "effective_line: no override reads the default cap" {
+  run gaia_context_effective_line "$MAIN" 1000000
+  [ "$status" -eq 0 ]
+  [ "$output" = "300000" ]
+  run gaia_context_effective_line "$MAIN" 200000
+  [ "$output" = "100000" ]
+}
+
+@test "effective_line: a lowered override wins and a raised one does not" {
+  write_settings '{"version":1,"context_checkpoint":{"ask_tokens":200000}}'
+  run gaia_context_effective_line "$MAIN" 1000000
+  [ "$output" = "200000" ]
+  write_settings '{"version":1,"context_checkpoint":{"ask_tokens":900000}}'
+  run gaia_context_effective_line "$MAIN" 1000000
+  [ "$output" = "300000" ]
+}
+
+@test "effective_line: a non-integer window is rc 2" {
+  run gaia_context_effective_line "$MAIN" abc
+  [ "$status" -eq 2 ]
+  run gaia_context_effective_line "$MAIN" ""
+  [ "$status" -eq 2 ]
+}
+
+@test "band: 1M window edges with no override" {
+  local reading expected
+  for reading in "249999 green" "250000 yellow" "299999 yellow" "300000 red" "374999 red" "375000 fire" "449999 fire" "450000 skull"; do
+    read -r reading expected <<<"$reading"
+    run band_at "$reading" 1000000
+    [ "$status" -eq 0 ]
+    [ "$output" = "$expected" ]
+  done
+}
+
+@test "band: 200k window edges with no override" {
+  run band_at 59999 200000
+  [ "$output" = "green" ]
+  run band_at 60000 200000
+  [ "$output" = "yellow" ]
+  run band_at 99999 200000
+  [ "$output" = "yellow" ]
+  run band_at 100000 200000
+  [ "$output" = "red" ]
+}
+
+@test "band: a lowered override line has no yellow band" {
+  write_settings '{"version":1,"context_checkpoint":{"ask_tokens":200000}}'
+  run band_at 199999 1000000
+  [ "$output" = "green" ]
+  run band_at 200000 1000000
+  [ "$output" = "red" ]
+  run band_at 249999 1000000
+  [ "$output" = "red" ]
+  run band_at 250000 1000000
+  [ "$output" = "fire" ]
+  run band_at 300000 1000000
+  [ "$output" = "skull" ]
+}
+
+@test "band: a bad argument is rc 2" {
+  run gaia_context_band abc 1000000 300000
+  [ "$status" -eq 2 ]
+  run gaia_context_band 100 abc 300000
+  [ "$status" -eq 2 ]
+  run gaia_context_band 100 1000000 ""
+  [ "$status" -eq 2 ]
+  run gaia_context_band "" 1000000 300000
+  [ "$status" -eq 2 ]
+}
+
+@test "band: red twin, a strict comparison at the red edge fails the edge assertion" {
+  local scratch="$BATS_TEST_TMPDIR/band-mutant"
+  mkdir -p "$scratch"
+  sed '/^gaia_context_band()/,/^}/ s/-ge "\$red"/-gt "$red"/' "$REPO_ROOT/.gaia/scripts/context-checkpoint-lib.sh" >"$scratch/context-checkpoint-lib.sh"
+  run cmp -s "$scratch/context-checkpoint-lib.sh" "$REPO_ROOT/.gaia/scripts/context-checkpoint-lib.sh"
+  [ "$status" -ne 0 ]
+  run env CONTEXT_LIBRARY_DIRECTORY="$scratch" bash "$REPO_ROOT/.gaia/scripts/bats5.sh" \
+    --filter 'band: 1M window edges' "$BATS_TEST_FILENAME" </dev/null
+  [ "$status" -ne 0 ]
+}
+
+@test "summary: format matches the audit loop option text" {
+  run gaia_context_summary 320000 1000000
+  [ "$status" -eq 0 ]
+  [ "$output" = "Context 32% (320k of 1000k)" ]
+  run gaia_context_summary 450000 1000000
+  [ "$output" = "Context 45% (450k of 1000k)" ]
+  run gaia_context_summary 12345 200000
+  [ "$output" = "Context 6% (12k of 200k)" ]
+}
+
+@test "summary: a zero window prints unavailable" {
+  run gaia_context_summary 100 0
+  [ "$status" -eq 0 ]
+  [ "$output" = "Context unavailable" ]
+}
+
+@test "summary: a non-integer argument is rc 2 and prints nothing" {
+  run gaia_context_summary abc 1000000
+  [ "$status" -eq 2 ]
+  [ -z "$output" ]
+  run gaia_context_summary 100 1.5
+  [ "$status" -eq 2 ]
+  run gaia_context_summary 100 ""
+  [ "$status" -eq 2 ]
 }

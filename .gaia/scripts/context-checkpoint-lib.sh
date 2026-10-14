@@ -34,7 +34,7 @@ GAIA_CONTEXT_ASK_TOKENS_DEFAULT=300000
 GAIA_CONTEXT_ASK_WINDOW_PERCENT_DEFAULT=50
 # shellcheck disable=SC2034 # read by the bound hook and the evaluator that source this lib
 GAIA_CONTEXT_UNIT_ROUNDS=3
-GAIA_CONTEXT_YELLOW_TOKENS=200000
+GAIA_CONTEXT_YELLOW_TOKENS=250000
 GAIA_CONTEXT_YELLOW_WINDOW_PERCENT=30
 GAIA_CONTEXT_FIRE_NUMERATOR=5
 GAIA_CONTEXT_FIRE_DENOMINATOR=4
@@ -143,4 +143,46 @@ gaia_context_read() {
     return 1
   fi
   printf 'fresh %s %s\n' "$used" "$window"
+}
+
+# gaia_context_effective_line <main-root> <window_size>: the checkpoint line with
+# the lower-only override applied. rc 2 on a non-integer window.
+gaia_context_effective_line() {
+  local override_values ask_tokens ask_window_percent
+  override_values=$(gaia_context_override "${1:-}") || return 2
+  read -r ask_tokens ask_window_percent <<<"$override_values"
+  gaia_context_line "${2:-}" "$ask_tokens" "$ask_window_percent"
+}
+
+# gaia_context_band <used_tokens> <window_size> <line>: green|yellow|red|fire|skull.
+# A reading at or past a threshold is in that band, the same comparisons the
+# statusline makes. rc 2 on a bad argument.
+gaia_context_band() {
+  local regex='^[0-9]{1,12}$' bands yellow red fire skull
+  [[ ${1:-} =~ $regex ]] || return 2
+  bands=$(gaia_context_bands "${2:-}" "${3:-}") || return 2
+  read -r yellow red fire skull <<<"$bands"
+  if [ "$((10#$1))" -ge "$skull" ]; then
+    printf 'skull\n'
+  elif [ "$((10#$1))" -ge "$fire" ]; then
+    printf 'fire\n'
+  elif [ "$((10#$1))" -ge "$red" ]; then
+    printf 'red\n'
+  elif [ "$((10#$1))" -ge "$yellow" ]; then
+    printf 'yellow\n'
+  else
+    printf 'green\n'
+  fi
+}
+
+# gaia_context_summary <used_tokens> <window_size>: "Context P% (Uk of Wk)", or
+# "Context unavailable" for a zero window. rc 2 on a non-integer argument.
+gaia_context_summary() {
+  local regex='^[0-9]{1,12}$'
+  [[ ${1:-} =~ $regex && ${2:-} =~ $regex ]] || return 2
+  if [ "$((10#$2))" -le 0 ]; then
+    printf 'Context unavailable\n'
+    return 0
+  fi
+  printf 'Context %s%% (%sk of %sk)\n' "$((10#$1 * 100 / 10#$2))" "$((10#$1 / 1000))" "$((10#$2 / 1000))"
 }

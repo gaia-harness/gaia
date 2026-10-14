@@ -184,7 +184,7 @@ wiki_models_ok() {
 
 WIKI_HEADINGS=(
   '## Roles' '## Inline floor' '## Model table' '## Run folder and checkpoint' '## Resume'
-  '## Concurrency limits' '## Initiative linking' '## Research attribution' '## Injection hook'
+  '## Context checkpoint' '## Concurrency limits' '## Initiative linking' '## Research attribution' '## Injection hook'
   '## Measurements' '## See also'
 )
 START_MARK='<!-- gaia:maintainer-only:start -->'
@@ -482,7 +482,7 @@ pad_to() { # pad_to <src> <dst> <total bytes>: src plus filler so dst ends in on
 # ------------------------------------------------ 8. wiki headings and markers
 
 @test "wiki structure: C5 headings in order, source links, maintainer markers bracket Measurements" {
-  [ "${#WIKI_HEADINGS[@]}" -eq 11 ]
+  [ "${#WIKI_HEADINGS[@]}" -eq 12 ]
   wiki_structure_ok "$WIKI"
 }
 

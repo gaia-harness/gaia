@@ -30,10 +30,15 @@ export const NotFound: StoryFn = () => (
   />
 );
 
+const serverError = new Error('Something broke while rendering');
+
+// Pinned so the snapshot never carries build-specific chunk paths.
+serverError.stack = `Error: Something broke while rendering
+    at Dashboard (app/pages/dashboard/index.tsx:42:11)
+    at renderWithHooks (react-dom.development.js:15486:18)`;
+
 export const ServerError: StoryFn = () => (
-  <RootErrorBoundary
-    {...createBoundaryProps(new Error('Something broke while rendering'))}
-  />
+  <RootErrorBoundary {...createBoundaryProps(serverError)} />
 );
 
 export const Unexpected: StoryFn = () => (
