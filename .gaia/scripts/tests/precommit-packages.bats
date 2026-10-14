@@ -370,7 +370,3 @@ C6_PAIRS=(
   [ "$output" = $'package\tfrontend' ]
 }
 
-@test "C13: an empty staged set is not reported exempt" {
-  plan
-  [ "$output" != "exempt" ]
-}

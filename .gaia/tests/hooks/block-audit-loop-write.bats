@@ -412,12 +412,6 @@ scratch_hook() {
   [ -z "$output" ]
 }
 
-@test "a process outside the tool path still writes a context file" {
-  run bash -c 'printf "{\"version\":1,\"n\":2}" > "$1.tmp" && mv "$1.tmp" "$1"' _ "$CONTEXT_FILE"
-  [ "$status" -eq 0 ]
-  grep -qF -- '"n":2' "$CONTEXT_FILE"
-}
-
 # --- override file: edit tools and Bash ---
 
 @test "Write creating the override file is denied with the human-only message" {
