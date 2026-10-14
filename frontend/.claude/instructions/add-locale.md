@@ -55,7 +55,7 @@ Edit `frontend/app/languages/index.ts`:
 
 Edit `frontend/app/components/language-select/index.tsx`:
 
-Add `{{LOCALE_CODE}}: '{{LANGUAGE_NAME_NATIVE}}'` to the `LANGUAGE_LABELS` record (keep `en: 'English'` first). Do **not** edit `OPTIONS`, it is derived automatically by mapping over the `LANGUAGES` array (registered in Step 2) and falls back to the bare locale code when a label is missing. Adding the `LANGUAGE_LABELS` entry is what gives the new option its native display name.
+Add `{{LOCALE_CODE}}: '{{LANGUAGE_NAME_NATIVE}}'` to the `LANGUAGE_LABELS` record (keep `en: 'English'` first). Do **not** edit `options`, it is derived inside the component by mapping over the `languages` prop (default `LANGUAGES`, registered in Step 2) and falls back to the bare locale code when a label is missing. Adding the `LANGUAGE_LABELS` entry is what gives the new option its native display name.
 
 The dropdown's option order follows the `LANGUAGES` array order from Step 2, so there is no manual sorting to do here.
 
@@ -107,8 +107,6 @@ Verify that `frontend/app/root.tsx` already uses `i18n.dir(i18n.language)` for t
 
 No additional work is needed for the four standard ISO 639-1 RTL codes that i18next recognizes natively: `ar`, `he`, `fa`, `ur`.
 
-For RTL locales **outside** that standard four (e.g. a custom or less common code), edit `frontend/app/i18n.ts` to add the locale to the `i18n.services.languageUtils.formatLanguageCode` override list so that i18next returns `'rtl'` for `i18n.dir()` calls with that code.
-
 **If `{{IS_RTL}}` is `false`, skip this step entirely.**
 
 ---
@@ -117,7 +115,7 @@ For RTL locales **outside** that standard four (e.g. a custom or less common cod
 
 Check whether `frontend/.playwright/e2e/language-switch-a11y.spec.ts` exists.
 
-**Pick a verification key that genuinely differs between English and `{{LOCALE_CODE}}`.** Do **not** assert against `meta.title`, top-level `title`, or `heroTitle`: `gaia init rename` rewrites all three to the project title, and the Step 1 translation rule copies a brand / proper-noun value verbatim, so they are identical in every locale and a switch assertion against them never changes. Use the seed's `cta` key instead (English `'View on GitHub'`), a normal UI string the index page renders as a visible link. Read the English value from `frontend/app/languages/en/pages/_index.ts` and the translated value from `frontend/app/languages/{{LOCALE_CODE}}/pages/_index.ts`. Before writing the assertion, confirm the two values actually differ; if `cta` is missing or was copied verbatim for this locale, pick any other body string whose English and `{{LOCALE_CODE}}` values differ.
+**Pick a verification key that genuinely differs between English and `{{LOCALE_CODE}}`.** Do **not** assert against `common:meta.siteName` (the seed's only rendered string): the Step 1 translation rule copies a brand / proper-noun value verbatim, so it is identical in every locale and a switch assertion against it never changes. Pick a key the index page renders whose English and `{{LOCALE_CODE}}` values differ, adding a body string to the index page first if it renders none. Read the English value from the English language file that holds it and the translated value from the matching `frontend/app/languages/{{LOCALE_CODE}}/` file. Before writing the assertion, confirm the two values actually differ.
 
 **If the file does not exist**, create it as a new spec. The spec must:
 
@@ -125,10 +123,10 @@ Check whether `frontend/.playwright/e2e/language-switch-a11y.spec.ts` exists.
 - Use a `test.describe` block named `'language switch, EN ↔ {{LOCALE_CODE}}'`.
 - Test the following flow:
   1. Navigate to `/`.
-  2. Assert the English `cta` text (e.g. `'View on GitHub'`) is visible.
+  2. Assert the English verification text is visible.
   3. Find the language select and switch to `{{LOCALE_CODE}}`.
-  4. Assert the `cta` text changes to the `{{LOCALE_CODE}}` translation from `frontend/app/languages/{{LOCALE_CODE}}/pages/_index.ts`.
-  5. Switch back to English and assert the English `cta` text is restored.
+  4. Assert the verification text changes to the `{{LOCALE_CODE}}` translation from the matching `frontend/app/languages/{{LOCALE_CODE}}/` file.
+  5. Switch back to English and assert the English verification text is restored.
 
 **If the file already exists**, append a new `test.describe` block for the new locale following the same shape as the existing blocks. Do not modify existing blocks, with one exception: if the shipped `language switcher has no serious a11y violations` test still calls `switcher.selectOption('en')`, change `'en'` to `'{{LOCALE_CODE}}'` so its after-switch scan checks a switched page rather than re-selecting the current language.
 

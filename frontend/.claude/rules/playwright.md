@@ -8,7 +8,7 @@ paths:
 
 ## File locations
 
-- Config: `playwright.config.ts` (repo root)
+- Config: `playwright.config.ts` (package root)
 - Specs: `.playwright/e2e/<feature>/<flow>.spec.ts`, grouped in feature folders; a flat `.playwright/e2e/*.spec.ts` stays valid for cross-cutting checks
 - Shared helpers: `.playwright/utils.ts`
 - Output/traces: `.playwright/output/` (gitignored)

@@ -54,7 +54,7 @@ const options = values.map((value) => ({
 label: t(`exercises.categoryValues.${value}` as 'exercises.categoryValues.cardio'),
 
 // GOOD, value is ExerciseCategory (literal union), typed at prop/LoaderData level
-import type {ExerciseCategory} from '~/types/database';
+import type {ExerciseCategory} from '~/services/exercises/types';
 // categoryOptions: ExerciseCategory[]  ← typed upstream, no cast needed
 const options = categoryOptions.map((value) => ({
   label: t(`exercises.categoryValues.${value}`), // ✓ TypeScript happy
@@ -62,7 +62,7 @@ const options = categoryOptions.map((value) => ({
 }));
 ```
 
-**Where to define the union type:** add it to `app/types/database.ts` alongside other DB-derived types. Then use it in `LoaderData`, component props, and anywhere else the value flows, the template literal in `t()` will just work.
+**Where to define the union type:** define it in the module that owns the value set (see the typescript skill's "One Source of Truth" section). Then use it in `LoaderData`, component props, and anywhere else the value flows, the template literal in `t()` will just work.
 
 ## Inline Styled Segments (Trans component)
 

@@ -23,7 +23,7 @@ no matching RED on record.
 ```json
 {
   "schema": 1,
-  "file": "app/x/index.test.ts",
+  "file": "frontend/app/x/index.test.ts",
   "fullName": "X does Y",
   "signal": "sha256:…",
   "failureKind": "assertion",

@@ -6,7 +6,7 @@ GAIA is opinionated. The conventions, rules, and hooks aren't suggestions. They'
 
 - Read the [README](./README.md). The whole thing.
 - Install with `npx create-gaia@latest my-app` and walk through `/gaia-init` so you understand what a fresh project looks like.
-- Run the quality gate locally: `pnpm typecheck`, `pnpm lint`, `pnpm test`, `pnpm build`. All four green, no warnings.
+- Run the quality gate locally per `wiki/decisions/Quality Gate.md`. All steps green, no warnings.
 - Browse the wiki under `wiki/`. That's where the project's reasoning lives.
 
 ## Filing issues
@@ -42,7 +42,7 @@ Read **Contributing code** above first; unassigned and unsolicited PRs are close
 
 1. Fork. Branch from `main`. Name the branch `<type>/[<issue>-]<slug>` with a Conventional Commits type, lowercase kebab.
 2. Commit subjects and the PR title follow Conventional Commits: `fix(scope): what`, `feat(scope): what`. A `commit-msg` hook enforces the subject locally (run `pnpm install` once so it can find commitlint), and the `PR Conventions` check enforces the PR title and branch name. The format is documented in [wiki/decisions/Naming Conventions.md](wiki/decisions/Naming%20Conventions.md).
-3. The quality gate must pass locally before you push: `pnpm typecheck`, `pnpm lint`, `pnpm test`, `pnpm build`. Zero warnings allowed. This is the project's distinguishing stance, not a starting position to negotiate.
+3. The quality gate must pass locally before you push (steps in `wiki/decisions/Quality Gate.md`). Zero warnings allowed. This is the project's distinguishing stance, not a starting position to negotiate.
 4. The code-review audit will run on your PR. It dispatches React Patterns, TypeScript and Architecture, and Translation specialists in parallel against your diff. It blocks the merge until findings are resolved.
 5. No `eslint-disable`, no `@ts-ignore`, no `eslint-disable-next-line`. If a rule is wrong for the case, open a separate PR to refine the rule. If the rule is right, fix the source.
 6. Update `CHANGELOG.md` under `## [Unreleased]` if your change is user-visible.
@@ -77,7 +77,7 @@ The full hook set is in `wiki/concepts/Claude Hooks.md`.
 
 The workhorse is the sync stage of `/gaia-wiki`. It's the only thing that advances `last_evaluated_sha` in `wiki/.state.json`. Hooks are read-only consumers.
 
-`/gaia-release` will refuse to bump version if `wiki/.state.json` SHA != HEAD. There is no opt-out.
+`/gaia-release` refuses to bump the version while the wiki has substantive drift (see Step 1 of `.claude/commands/gaia-release.md`). There is no opt-out.
 
 For the full design, see `wiki/concepts/Wiki Sync.md`.
 
@@ -89,11 +89,9 @@ For the full design, see `wiki/concepts/Wiki Sync.md`.
 bats .gaia/tests/hooks/                 # one suite directory
 ```
 
-Requires `bats-core` (`brew install bats-core`); `--jobs` also needs GNU parallel (`brew install parallel`). Tests are deterministic, run in tmp git repos, take a few seconds total. Add to your local commit hook if you want them on every commit.
+Requires `bats-core` (`brew install bats-core`); `--jobs` also needs GNU parallel (`brew install parallel`). Tests are deterministic, run in tmp git repos. Add to your local commit hook if you want them on every commit.
 
 Before opening a pull request, run `bash .gaia/tests/verify-harness.sh branch`: shell-lint, the distribution checks, the `whole-tree`-tagged suites and the change-selected suites, with a failure that also fails on the merge base with `origin/main` reported as pre-existing. It refuses to start (exit 3) on uncommitted tracked changes or a detached HEAD, so commit first, and it is the last step before the first audit dispatch. The pre-push hook (`.githooks/pre-push`) separately runs the distribution checks on every branch push.
-
-The hooks directory covers the bulk of the wiki system: drift math, marker file behavior, hook input parsing, edge cases (missing state, unreachable SHA, malformed JSON). The other five directories cover the audit helpers, the shipped `.gaia/scripts`, the SPEC-ledger libs, forensics, and the statusline.
 
 CI reaches the same partition through a different entry point. The `GAIA: Audit CI Tests` workflow's `shards` matrix runs `bash .gaia/tests/bats-shards.sh run <shard-id>` once per leg, each shard on its own runner, so the slowest leg sets the wall clock rather than the sum. The sharder discovers `.bats` files at run time, so a new suite file joins a shard with no matrix edit. See `.github/workflows/audit-ci-tests.yml` and `wiki/decisions/Sharded CI Test Matrix.md`.
 
