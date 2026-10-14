@@ -12,7 +12,7 @@
  */
 import {normalizeRepoRelativePath, parseKeyLine} from './key.js';
 
-export const TOKEN_PATTERN = /^[A-Za-z0-9_-]{1,512}$/;
+export const TOKEN_PATTERN = /^[\w-]{1,512}$/;
 
 export type DecodedToken =
   {ok: false; reason: string} | {ok: true; value: TokenCoordinate};

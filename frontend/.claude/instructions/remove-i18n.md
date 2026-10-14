@@ -55,7 +55,7 @@ After unwrapping all source files, re-run the grep. If any matches remain in `fr
 
 ## Section B, Root + entry files
 
-These three files have structural i18n wiring that the regex-style unwrap in Section A does not cover. Apply the diffs below verbatim.
+These files have structural i18n wiring that the regex-style unwrap in Section A does not cover. Apply the diffs below verbatim.
 
 ### B1. `frontend/app/root.tsx`
 
@@ -205,6 +205,21 @@ with:
 ```
 
 The `routerContext` parameter is now unused, drop it from the `handleRequest` signature.
+
+### B4. `frontend/app/components/errors/root-error-boundary/index.tsx`
+
+Delete these lines:
+
+```ts
+/* eslint-disable i18next/no-literal-string -- renders when i18n may have failed, so its strings stay English */
+import {DEFAULT_LOCALE} from '~/i18n';
+```
+
+Replace each `lang={DEFAULT_LOCALE}` with `lang="en"`, and delete the comment block above `const RootErrorBoundary`, which describes the i18n fallback.
+
+### B5. `frontend/eslint.config.mjs`
+
+Delete the `...lint.i18n,` line. With no i18next the bundle's `i18n` block reports every JSX string. A project that adds i18n back restores the line.
 
 ---
 

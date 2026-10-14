@@ -82,11 +82,7 @@ export const stringField = (
   return typeof value === 'string' ? value : undefined;
 };
 
-const QUOTED_SPANS = [
-  /"[^"\n]*"/g,
-  /(?<!\w)'[^'\n]*'(?!\w)/g,
-  /`[^`\n]*`/g,
-] as const;
+const QUOTED_SPANS = [/"[^"\n]*"/g, /\B'[^'\n]*'\B/g, /`[^`\n]*`/g] as const;
 
 export const stripQuotedSpans = (text: string): string =>
   QUOTED_SPANS.reduce((value, pattern) => value.replaceAll(pattern, ' '), text);
@@ -171,8 +167,7 @@ export const TIME_SENSITIVE = new RegExp(
   'i'
 );
 
-export const WINDOWS_PATH =
-  /\b[\w.-]+(?:\\[\w-]+)*\\[\w-]+\.[A-Za-z0-9]{1,6}\b/;
+export const WINDOWS_PATH = /\b[\w.-]+(?:\\[\w-]+)*\\[\w-]+\.[A-Z0-9]{1,6}\b/i;
 
 const WINDOWS_FENCE_TAGS: ReadonlySet<string> = new Set([
   'bat',

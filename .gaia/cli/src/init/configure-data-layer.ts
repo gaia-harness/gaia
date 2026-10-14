@@ -296,8 +296,8 @@ const planPreview = (packageDir: string): Plan => {
 
   if (source.includes('QueryClientDecorator')) return null;
 
-  const shorthand = [...source.matchAll(/^([ \t]*)decorators,[ \t]*$/gmu)];
-  const literal = [...source.matchAll(/decorators:\s*\[([^\]\n]*)\]/gu)];
+  const shorthand = [...source.matchAll(/^[ \t]*decorators,[ \t]*$/gmu)];
+  const literal = [...source.matchAll(/decorators:\s*\[[^\]\n]*\]/gu)];
   let next: null | string = null;
 
   if (shorthand.length === 1) {

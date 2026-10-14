@@ -68,7 +68,7 @@ const DEAD_PATH_RULE = (() => {
 
 /** How Claude Code keys a project's memory directory: every other character becomes a dash. */
 export const memoryKey = (root: string): string =>
-  root.replaceAll(/[^\dA-Za-z-]/g, '-');
+  root.replaceAll(/[^\dA-Z-]/gi, '-');
 
 const isDirectoryNotLink = (directory: string): boolean => {
   try {
@@ -234,9 +234,9 @@ const describeFile = (
 };
 
 const LINK_TARGET = /\]\(([^\s()]+)\)/g;
-const SCHEME_OR_ABSOLUTE = /^(?:[A-Za-z][\d+.A-Za-z-]*:|[/~#])/;
+const SCHEME_OR_ABSOLUTE = /^(?:[A-Z][\d+.A-Z-]*:|[/~#])/i;
 const PLACEHOLDER = /[$*<>{}]/;
-const FILE_EXTENSION = /\.[\dA-Za-z]{1,8}$/;
+const FILE_EXTENSION = /\.[\dA-Z]{1,8}$/i;
 
 /** A repo-relative path a memory file cites, or undefined when the token is something else. */
 const toRepoPath = (token: string): string | undefined => {

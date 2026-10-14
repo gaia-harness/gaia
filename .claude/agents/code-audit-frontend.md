@@ -31,7 +31,6 @@ You conduct comprehensive code audits for production React 19 / React Router 7 S
 - `*.config.cjs`
 - `*.config.js`
 - `frontend/.playwright/**`
-- `frontend/eslint/**`
 - `.npmrc`
 - `.prettierignore`
 - `.nvmrc`
@@ -126,7 +125,7 @@ Analyze the changed code across these dimensions, focusing on cross-cutting conc
 ### 4. Robustness & Edge Cases
 
 - **Missing validation**: Zod schemas that are too permissive, unvalidated URL params, missing bounds checks
-- **Race conditions**: Concurrent form submissions, stale data in optimistic UI, unhandled promise rejections, missing `ignore` flags in async effects
+- **Race conditions**: Concurrent form submissions, stale data in optimistic UI, unhandled promise rejections, async effects with no cancellation (an `AbortController` for a fetch, an `ignore` flag otherwise)
 - **Null safety**: Optional chaining masking real bugs, missing null checks on loader results, `!` non-null assertions hiding real bugs
 - **Error states**: Missing loading states, missing empty states, missing error recovery paths, swallowed errors
 - **Boundary conditions**: Empty arrays, zero values, very long strings, Unicode edge cases

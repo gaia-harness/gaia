@@ -204,15 +204,15 @@ describe('substituteVars', () => {
   // test): no-template-curly-in-string only checks quoted-string literals for
   // an accidentally-unescaped template placeholder, which isn't the case
   // here.
-  // eslint-disable-next-line no-template-curly-in-string
+  // eslint-disable-next-line no-template-curly-in-string -- the test name quotes a GitHub Actions expression
   test('leaves GitHub Actions ${{ secrets.X }} expressions unchanged', () => {
     const out = substituteVars(
-      // eslint-disable-next-line no-template-curly-in-string
+      // eslint-disable-next-line no-template-curly-in-string -- a GitHub Actions expression, not JS interpolation
       'GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}',
       {}
     );
 
-    // eslint-disable-next-line no-template-curly-in-string
+    // eslint-disable-next-line no-template-curly-in-string -- a GitHub Actions expression, not JS interpolation
     expect(out).toBe('GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}');
   });
 });

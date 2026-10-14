@@ -18,7 +18,7 @@ const requestToSnakeCase = async ({options, request}: BeforeRequestState) => {
 
     const body = JSON.stringify(toSnakeCase(parsed));
 
-    // eslint-disable-next-line unicorn/no-invalid-fetch-options
+    // eslint-disable-next-line unicorn/no-invalid-fetch-options -- only reached when the request already carries a body
     return new Request(request, {body});
   }
 };
@@ -65,8 +65,7 @@ export const appendSearchParams = (
 
   const casedParams =
     isSnakeCaseEnabled ?
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      (toSnakeCase<any>(searchParams) as Record<string, unknown>)
+      (toSnakeCase(searchParams) as Record<string, unknown>)
     : searchParams;
 
   const safeParams = queryString.stringify(casedParams, {arrayFormat});

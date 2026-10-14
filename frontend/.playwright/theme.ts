@@ -122,8 +122,7 @@ export const forceDarkBeforeLoad = async (page: Page): Promise<void> => {
   await page.emulateMedia({colorScheme: 'dark'});
   await page.addInitScript(() => {
     const addDarkClassToRootElement = () => {
-      // The document has no root element yet when the init script first runs.
-      // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
+      // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- the document has no root element yet when the init script first runs
       document.documentElement?.classList.add('dark');
     };
     addDarkClassToRootElement();

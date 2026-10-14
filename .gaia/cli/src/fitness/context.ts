@@ -157,7 +157,7 @@ export const createRuleContext = (input: ContextInput): RuleContext => {
 
   const isExecutable: RuleContext['isExecutable'] = (relative) => {
     try {
-      // eslint-disable-next-line no-bitwise
+      // eslint-disable-next-line no-bitwise -- the mode is a bit field; 0o111 masks the execute bits
       return (statSync(path.join(root, relative)).mode & 0o111) !== 0;
     } catch {
       return false;

@@ -1,6 +1,5 @@
 import gaiaLint from '@gaia-react/lint';
 import {defineConfig} from 'eslint/config';
-import noImperativeQueryFetch from './eslint/no-imperative-query-fetch.mjs';
 
 const lint = gaiaLint();
 
@@ -18,22 +17,8 @@ export default defineConfig([
     entryPoint: './app/styles/tailwind.css',
     ignore: ['dark'],
   }),
+  ...lint.i18n,
+  ...lint.zod,
   ...lint.prettier,
   ...lint.shadcn({ui: '~/components/ui'}),
-  {
-    files: ['app/**/*.{ts,tsx}'],
-    plugins: {
-      local: {rules: {'no-imperative-query-fetch': noImperativeQueryFetch}},
-    },
-    rules: {'local/no-imperative-query-fetch': 'error'},
-  },
-  {
-    files: ['app/**/*.{ts,tsx}'],
-    rules: {
-      'import-x/no-unresolved': [
-        'error',
-        {caseSensitive: true, commonjs: true, ignore: ['^virtual:']},
-      ],
-    },
-  },
 ]);

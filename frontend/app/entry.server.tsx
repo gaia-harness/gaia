@@ -1,4 +1,4 @@
-/* eslint-disable max-params, no-console */
+/* eslint-disable max-params, no-console -- the React Router server entry signature is fixed, and the server logs to stdout */
 import type {RenderToPipeableStreamOptions} from 'react-dom/server';
 import type {EntryContext, RouterContextProvider} from 'react-router';
 import {renderToPipeableStream} from 'react-dom/server';
@@ -30,7 +30,7 @@ if (import.meta.env.DEV && env.MSW_ENABLED) {
   console.info('\u001B[31m', '\n[MSW] Mocking enabled\n', '\u001B[0m');
 }
 
-const streamTimeout = 5000;
+const streamTimeoutInMilliseconds = 5000;
 
 const handleRequest = async (
   request: Request,
@@ -38,8 +38,8 @@ const handleRequest = async (
   responseHeaders: Headers,
   entryContext: EntryContext,
   routerContext: RouterContextProvider
-) => {
-  let shellRendered = false;
+): Promise<Response> => {
+  let hasRenderedShell = false;
 
   const nonce = randomBytes(16).toString('hex');
 
@@ -100,10 +100,10 @@ const handleRequest = async (
       {
         nonce,
         onError: (error: unknown) => {
-          // eslint-disable-next-line sonarjs/no-parameter-reassignment
+          // eslint-disable-next-line sonarjs/no-parameter-reassignment -- the status is shared with the shell callbacks that send the response
           responseStatusCode = 500;
 
-          if (shellRendered) {
+          if (hasRenderedShell) {
             console.error(error);
           }
         },
@@ -111,7 +111,7 @@ const handleRequest = async (
           reject(error);
         },
         [readyOption]: () => {
-          shellRendered = true;
+          hasRenderedShell = true;
           const body = new PassThrough();
           const stream = createReadableStreamFromReadable(body);
 
@@ -144,7 +144,7 @@ const handleRequest = async (
       }
     );
 
-    setTimeout(abort, streamTimeout + 1000);
+    setTimeout(abort, streamTimeoutInMilliseconds + 1000);
   });
 };
 
