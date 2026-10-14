@@ -26,3 +26,4 @@ This section owns the layout rule. Every other rule, skill, agent and wiki page 
 
 - Components and pages are tested by their Storybook stories (play functions run by Vitest in headless Chromium), hooks with `vitest-browser-react`, and pure and server code in the `node` Vitest project; the rules are in `storybook.md` and the `tdd-react` skill
 - Use Playwright to test user flows required by the feature specifications
+- Every test, story and mock builds its dates with `date()` from `test/utils.ts`, never `new Date()` or `Date.now()`, so the result is the same on every run. Pass `year` whenever the year reaches an assertion or a snapshot: the default base is next year's January 1, which moves every new year
