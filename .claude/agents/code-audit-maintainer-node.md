@@ -146,7 +146,7 @@ The protocol's "Holistic class assignment" section owns the class list, each cla
 - `holistic/unbounded-invocation`: a spawned process with no timeout or output cap.
 - `holistic/overclaimed-guarantee`: a validator documented as rejecting a shape it accepts on one branch.
 - `holistic/incomplete-enumeration`: a help string listing the accepted flags while the parser accepts one more.
-- `holistic/repeated-round-trip`: a child process spawned per field where one call returns all of them.
+- `holistic/repeated-round-trip`: a child process spawned per path or per field where one batched call returns all of them, even when a per-item cache stops repeats.
 
 ## Methodology
 
