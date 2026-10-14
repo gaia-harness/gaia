@@ -57,6 +57,12 @@ Each branch gets one folder under `.gaia/local/runs/<key>/`, with the `branch:` 
 
 A resumed session reads `STATE.md` and the artifact listing and nothing else. The checkpoint says where the run stands, and the listing says which dispatches finished, so the two together answer "what next" without replaying the history that produced them. Reading more than that spends the context the run folder was built to protect. The steps are in [`.claude/doctrine/execution.md`](../../.claude/doctrine/execution.md).
 
+## Context checkpoint
+
+Claude cannot see its own context reading, so a long session has no way to notice it is running heavy. A PostToolUse hook reads the per-session reading the statusline writes and, once per band from red upward, injects [`.claude/doctrine/context-checkpoint.md`](../../.claude/doctrine/context-checkpoint.md) with the session id and the resolved save path above it. That file owns the rule: what each band means, where to save, what to ask, and what to recommend. This page does not restate it.
+
+The hook stays silent for sub-agents, when there is no fresh reading, and for a session whose branch the audit loop's state file records, because the audit loop owns that checkpoint. The bands come from `.gaia/scripts/context-checkpoint-lib.sh`, the same source the statusline reads, so the two never disagree. Marks live per session: a session resumed after `/clear` starts unmarked and is checked afresh, while compaction keeps its marks.
+
 ## Concurrency limits
 
 Every worktree shares one `.gaia/local`, which resolves into the main checkout. That is why run folders are keyed by branch and never shared between keys, and why research binding works through a Write made to the main checkout's absolute path and not through a path relative to the worktree.
