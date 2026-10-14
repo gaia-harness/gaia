@@ -86,6 +86,25 @@ const realpathOfDeepestExisting = (absolute: string): string => {
   }
 };
 
+/** Whether `real` (already a real path) is `realRoot` or lies under it. */
+export const isInsideRoot = (realRoot: string, real: string): boolean => {
+  const relative = path.relative(realRoot, real);
+
+  return (
+    relative === '' ||
+    (!relative.startsWith('..') && !path.isAbsolute(relative))
+  );
+};
+
+/** The linted files carrying any of `kinds`, in `context.files` order. */
+export const filesOfKinds = (
+  context: RuleContext,
+  kinds: readonly FileKind[]
+): readonly ProjectFile[] =>
+  context.files.filter((file) =>
+    file.kinds.some((kind) => kinds.includes(kind))
+  );
+
 const toPosix = (value: string): string => value.split(path.sep).join('/');
 
 /** Builds the read-only view every rule receives. */
@@ -124,11 +143,10 @@ export const createRuleContext = (input: ContextInput): RuleContext => {
       base === 'root' ? root : path.join(root, path.posix.dirname(fromFile));
     const absolute = path.resolve(baseDirectory, target);
     const real = realpathOfDeepestExisting(absolute);
-    const relative = path.relative(realRoot, real);
 
-    if (relative.startsWith('..') || path.isAbsolute(relative)) {
-      return {status: 'outside'};
-    }
+    if (!isInsideRoot(realRoot, real)) return {status: 'outside'};
+
+    const relative = path.relative(realRoot, real);
 
     return {
       exists: existsSync(absolute),

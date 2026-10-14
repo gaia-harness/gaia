@@ -3,7 +3,7 @@ import path from 'node:path';
 import {EXIT_CODES} from '../exit.js';
 import {structuredError} from '../stderr.js';
 import {takeNonFlagValue} from '../util/argv.js';
-import {resolveRepoRoot} from '../util/repo-root.js';
+import {defaultRoot} from './cli-args.js';
 import {
   applySuppressions,
   canonicalRuleIds,
@@ -422,14 +422,6 @@ const parseArguments = (args: readonly string[]): ParseResult => {
   }
 
   return {ok: true, options};
-};
-
-const defaultRoot = (): string => {
-  try {
-    return resolveRepoRoot(process.cwd());
-  } catch {
-    return process.cwd();
-  }
 };
 
 /** Exit 1 when a finding reaches `failOn`, or a warning-or-worse matches an `--enforce` selector. */

@@ -302,18 +302,6 @@ describe('gaia fitness rules', () => {
   });
 });
 
-describe('stubbed subcommands', () => {
-  test.each(['inventory', 'builtins', 'apply'])(
-    '%s reports not_implemented and exits 3',
-    async (subcommand) => {
-      const result = await runFitness([subcommand]);
-
-      expect(result.exitCode).toBe(EXIT_CODES.COULD_NOT_RUN);
-      expect(result.stderr).toContain('not_implemented');
-    }
-  );
-});
-
 describe('test-support', () => {
   test('settingsJson wins over a files entry for .claude/settings.json', async () => {
     const {root} = scratch({

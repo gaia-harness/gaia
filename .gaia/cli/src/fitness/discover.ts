@@ -3,6 +3,7 @@ import path from 'node:path';
 import {execGaiaGitRaw} from '../util/git-env.js';
 import {gitZArgs, splitZStream} from '../util/git-z.js';
 import {FITNESS_CONFIG_PATH} from './config.js';
+import {isInsideRoot} from './context.js';
 import {compareBytes, splitFrontmatter} from './markdown.js';
 import type {FileKind} from './types.js';
 
@@ -132,11 +133,7 @@ const isRegularFileInside = (
 
     if (!statSync(real).isFile()) return false;
 
-    const inside = path.relative(realRoot, real);
-
-    return (
-      inside !== '' && !inside.startsWith('..') && !path.isAbsolute(inside)
-    );
+    return isInsideRoot(realRoot, real);
   } catch {
     return false;
   }

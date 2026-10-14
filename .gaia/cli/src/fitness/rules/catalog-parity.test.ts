@@ -3,10 +3,17 @@ import {expectFixtureParity} from '../test-support.js';
 import {ALL_FIXTURES} from './fixtures.js';
 import {INVENTORY_ONLY_RULES, RULE_CATALOG} from './index.js';
 
+// Every rule builds a red and a green scratch project (git init plus a classifier spawn), far past the default timeout.
+const CATALOG_PARITY_TIMEOUT_MS = 60_000;
+
 describe('rule catalog', () => {
-  test('every rule has a red fixture that fires it and a green fixture that does not', () => {
-    expectFixtureParity(RULE_CATALOG, ALL_FIXTURES);
-  });
+  test(
+    'every rule has a red fixture that fires it and a green fixture that does not',
+    () => {
+      expectFixtureParity(RULE_CATALOG, ALL_FIXTURES);
+    },
+    CATALOG_PARITY_TIMEOUT_MS
+  );
 
   test('rule ids are unique and each starts with its category', () => {
     const ids = RULE_CATALOG.map((rule) => rule.ruleId);

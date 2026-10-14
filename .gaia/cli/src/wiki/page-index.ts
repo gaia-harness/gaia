@@ -238,15 +238,18 @@ type RunOptions = {
   cwd?: string;
 };
 
-/** Internal helper that returns the parsed index without printing. */
-export const computePageIndex = (cwd: string): PageIndex => {
-  const repoRoot = resolveRepoRoot(cwd);
+/** As `computePageIndex`, for a root already known, so no git lookup runs. */
+export const computePageIndexAt = (repoRoot: string): PageIndex => {
   const wikiRoot = path.join(repoRoot, 'wiki');
   const pages = collectPages(wikiRoot);
   const rootSources = collectRootLinkSources(wikiRoot);
 
   return buildIndex(pages, rootSources);
 };
+
+/** Internal helper that returns the parsed index without printing. */
+export const computePageIndex = (cwd: string): PageIndex =>
+  computePageIndexAt(resolveRepoRoot(cwd));
 
 export const run = (
   argv: readonly string[],

@@ -120,6 +120,24 @@ export const stripFencedCode = (text: string): string => {
 export const stripInlineCode = (line: string): string =>
   line.replaceAll(/(`+)(.+?)\1/g, (span) => ' '.repeat(span.length));
 
+/**
+ * The lines of `text` with frontmatter and fenced code blanked (and inline
+ * code too, when asked), keeping every line so an index is a line number.
+ */
+export const bodyLines = (
+  text: string,
+  {inlineCode = false}: {inlineCode?: boolean} = {}
+): string[] => {
+  const {bodyStartLine, ok} = splitFrontmatter(text);
+  const unframed = text
+    .split('\n')
+    .map((line, index) => (ok && index + 1 < bodyStartLine ? '' : line))
+    .join('\n');
+  const lines = stripFencedCode(unframed).split('\n');
+
+  return inlineCode ? lines.map(stripInlineCode) : lines;
+};
+
 /** The 1-indexed line of character offset `index` in `text`. */
 export const lineOf = (text: string, index: number): number => {
   let line = 1;
