@@ -47,8 +47,8 @@ const HELP_TEXT = `Usage: gaia update-deps run --emit-updates <path>
 
   Discover outdated packages via \`pnpm outdated --json\`, classify each
   into Wave A (minor/patch, batched) or Wave B (major, per-group), and
-  write the result as JSON to <path>. Used by the dependabot workflow to
-  split major bumps into separate PRs before invoking the LLM upgrade.
+  write the result as JSON to <path>. Used by the /update-deps skill to
+  discover and group the updates before the LLM-driven upgrade.
 
   --emit-updates <path>   Required. JSON file to write. Parent dirs are
                           created on demand.
@@ -542,7 +542,7 @@ const fetchLatestVersion = (
  * key is missing / non-positive; in which case the cooldown is a no-op and
  * the version selection matches the pre-cooldown behaviour exactly (no extra
  * registry calls). pnpm 11 enforces this same setting on the lockfile; honour
- * it here so the dependabot flow never targets a version pnpm 11 would reject.
+ * it here so the /update-deps flow never targets a version pnpm 11 would reject.
  */
 export const readMinimumReleaseAge = (cwd: string): number => {
   let raw: string;

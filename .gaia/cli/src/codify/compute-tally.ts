@@ -1,7 +1,7 @@
 /**
  * Pure tally core for the policy-memory loop.
  *
- * Turns recorded code-review-audit findings (already extracted from the
+ * Turns recorded Code Audit Team findings (already extracted from the
  * machine-readable PR-comment blocks of the rolling window) into the candidate
  * list the statusline nudge and `/gaia-codify review` consume. No I/O lives
  * here: the caller resolves the PR window, parses the comment blocks, and wires
