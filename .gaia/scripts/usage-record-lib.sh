@@ -125,7 +125,10 @@ _record_flush() {
 # verdict is the exit code and the detail travels in files under RECORD_WORK.
 # 0 written; 3 no unclaimed start; 4 already recorded; 6 the ledger could not
 # be read; 7 an append failed. The decision is made here, with the lock held,
-# so two closes cannot both pair with one start.
+# so two closes cannot both pair with one start. A plain start with no run
+# binding, written after this session joined a run and before any close claimed
+# the join, is a re-invocation of the workflow, so the close inherits the join's
+# origin rather than treating this session as the origin.
 # shellcheck disable=SC2016  # jq source, no shell expansion
 _record_locked() {
   local ledger="$TELEMETRY_DIRECTORY/usage.jsonl" decision verdict
@@ -153,7 +156,9 @@ _record_locked() {
           | if ($after | length) > ($before | length)
             then ([$after[] | select(IN($before[]) | not)] | last) as $new
               | ([$starts[] | select(._t == $new.t0)] | first) as $paired
-              | {verdict: "write", t0: $paired.ts, run: ($paired.run | if type == "object" then . else null end), rows: [$close_row]}
+              | ([$starts[] | select(._t < $paired._t and .source == "join-command" and (.run | type) == "object")
+                    | select(any($before[]; .t0 == ._t) | not)] | sort_by(._t) | last | .run // null) as $joined_run
+              | {verdict: "write", t0: $paired.ts, run: ($paired.run | if type == "object" then . else $joined_run end), rows: [$close_row]}
             elif any($starts[]; ._t != null and ._t <= $now_t) then {verdict: "recorded"}
             else {verdict: "nostart"} end
         end')" || return 6

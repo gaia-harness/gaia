@@ -213,3 +213,19 @@ join_with() {
   [[ "$(last_stdout_line)" == *"partial"* ]] && return 1
   [ "$(jq -s '[.[] | select(.kind == "binding" and .type == "close")] | length' "$(ledger)")" -eq 2 ]
 }
+
+@test "a joined session that starts the workflow again still closes the origin session's spend with its own" {
+  local line
+  main_start s1 10:00 gaia-debt
+  main_usage a1 10:10 1000
+  line="$(handoff_line)"
+  in_session sess-b
+  run join_with "$line"
+  [ "$status" -eq 0 ]
+  main_start s2 11:30 gaia-debt
+  main_usage b1 11:40 2000
+  run --separate-stderr usage record command:gaia-debt --workflow gaia-debt --json
+  [ "$status" -eq 0 ]
+  [ "$(jq -r '.tokens' <<<"$(last_stdout_line)")" -eq 3000 ]
+  jq -s -e '[.[] | select(.kind == "binding" and .type == "close")] | map(.session_id) | sort == ["sess-a", "sess-b"]' "$(ledger)" >/dev/null
+}
