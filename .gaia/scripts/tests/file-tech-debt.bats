@@ -541,6 +541,19 @@ investigate_filter='.severity = "investigate" | .investigate_question = "QUESTIO
   grep -q -e '--label severity:investigate' "$STUB/log"
 }
 
+@test "an Investigate issue_severity over a critical severity still screens as security and diverts off a private repository" {
+  printf 'PUBLIC\n' >"$STUB/visibility"
+  make_finding "$investigate_filter | .severity = \"critical\" | .issue_severity = \"Investigate\""
+  run_file
+  [ "$status" -eq 0 ]
+  case "$output" in
+    "diverted 1 "*) ;;
+    *) echo "$output"; return 1 ;;
+  esac
+  has_write_call && return 1
+  true
+}
+
 @test "a multi-line question or settled-by is folded onto its one block line" {
   make_finding "$investigate_filter | .investigate_question = \"first\n  second\""
   run_file

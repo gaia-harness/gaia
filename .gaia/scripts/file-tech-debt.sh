@@ -44,7 +44,10 @@
 #
 # The finding's grade: `severity` critical|major|minor|investigate, or
 # `issue_severity` Critical|Major|Minor|Investigate, which wins when both are
-# set. An investigate grade also needs two non-empty strings,
+# set. The screen reads each of the two on its own, so a caller re-grading a
+# reviewer's finding to investigate sets `issue_severity` and leaves the
+# reviewer's `severity` in place: overwriting a `critical` would drop the
+# finding off the security path. An investigate grade also needs two non-empty strings,
 # `investigate_question` (the fact whose value decides the grade) and
 # `investigate_settled_by` (the evidence that would establish it); each is
 # folded onto one line and written into the body's research block:
