@@ -1,7 +1,7 @@
 #!/usr/bin/env bats
 #
 # Tests for .gaia/tests/verify-harness.sh: argument handling, branch-mode
-# preconditions and selection, the round-mode skip rule, and the missing-tool
+# preconditions and selection, round mode's narrower selection, and the missing-tool
 # probes. Every case builds a fixture repository under $BATS_TEST_TMPDIR with
 # .gaia/tests/lib/helpers/verify-harness-fixture.sh, whose stub checks log the
 # toplevel they ran from, so a passing case proves a check ran rather than a
@@ -104,14 +104,15 @@ missing_manifest_diagnostic() {
   has '  reproduce: bash .gaia/scripts/bats5.sh suites/x.bats < /dev/null'
 }
 
-@test "round mode skips both bats steps when its delta touches no harness path and no suite" {
+@test "round mode skips both bats steps when no suite references its delta" {
   fixture
   printf 'page two\n' >frontend/app/page.txt
   vhf_commit "a frontend-only change"
   run_runner round
   [ "$status" -eq 0 ]
-  has "SKIP  bats whole-tree: the round's delta touches no harness path"
-  has_line '^SKIP  bats selected: no suite .*references the round'"'"'s delta$'
+  has 'DELTA  the HEAD commit: 1 path(s)'
+  has "SKIP  bats whole-tree: round mode leaves the whole-tree suites to branch mode and CI"
+  has_line '^SKIP  bats selected: no suite references the round'"'"'s delta$'
   grep -q '^bats' "$VERIFY_FIXTURE_LOG" && { cat "$VERIFY_FIXTURE_LOG" >&2; return 1; }
   [ "$(vhf_log_entries shell-lint)" = "$VHF_ROOT" ]
   [ "$(vhf_log_entries build-staging)" = "$VHF_ROOT" ]
@@ -119,7 +120,7 @@ missing_manifest_diagnostic() {
   [ "$(vhf_log_entries 03-marker-strip)" = "$VHF_ROOT" ]
 }
 
-@test "round mode runs the HEAD commit's selection and the marked suites on a harness change" {
+@test "round mode runs the HEAD commit's selection and leaves the marked suites to branch mode" {
   fixture
   printf 's1 two\n' >src/s1-input.txt
   vhf_commit "an earlier commit touching what s1 names"
@@ -127,23 +128,34 @@ missing_manifest_diagnostic() {
   vhf_commit "a HEAD commit touching a harness rule s2 names"
   run_runner round
   [ "$status" -eq 0 ]
-  has_line '^PASS  bats whole-tree \([0-9]+s\)$'
+  has "SKIP  bats whole-tree: round mode leaves the whole-tree suites to branch mode and CI"
   has_line '^PASS  bats selected \([0-9]+s\)$'
   [ "$(vhf_suite_runs suites/s2.bats "$VHF_ROOT")" = "s2 rule" ]
-  [ "$(vhf_suite_runs suites/whole.bats "$VHF_ROOT" | LC_ALL=C sort | tr '\n' ',')" = "whole content,whole one,whole zero," ]
+  [ -z "$(vhf_suite_runs suites/whole.bats "$VHF_ROOT")" ]
   [ -z "$(vhf_suite_runs suites/s1.bats "$VHF_ROOT")" ]
 }
 
-@test "round mode runs the marked suites for a staged harness change nothing selects" {
+@test "round mode runs no marked suite for a staged harness change nothing selects" {
   fixture
   printf 'new rule\n' >.claude/rules/unnamed-rule.md
   vhf_git add .claude/rules/unnamed-rule.md
   run_runner round
   [ "$status" -eq 0 ]
   has 'DELTA  uncommitted tracked changes against HEAD'
-  has_line '^PASS  bats whole-tree \([0-9]+s\)$'
+  has "SKIP  bats whole-tree: round mode leaves the whole-tree suites to branch mode and CI"
   has_line '^SKIP  bats selected: '
-  [ -n "$(vhf_suite_runs suites/whole.bats "$VHF_ROOT")" ]
+  [ -z "$(vhf_suite_runs suites/whole.bats "$VHF_ROOT")" ]
+}
+
+@test "round mode runs a marked suite its delta selects under bats selected" {
+  fixture
+  vhf_add_test suites/whole.bats two
+  vhf_commit "a HEAD commit editing the marked suite"
+  run_runner round
+  [ "$status" -eq 0 ]
+  has "SKIP  bats whole-tree: round mode leaves the whole-tree suites to branch mode and CI"
+  has_line '^PASS  bats selected \([0-9]+s\)$'
+  [ "$(vhf_suite_runs suites/whole.bats "$VHF_ROOT" | LC_ALL=C sort | tr '\n' ',')" = "whole content,whole one,whole two,whole zero," ]
 }
 
 @test "round mode on a parentless HEAD selects over the empty tree without error" {
@@ -152,7 +164,7 @@ missing_manifest_diagnostic() {
   [ "$status" -eq 0 ]
   has 'DELTA  the root commit'
   lacks 'FAIL  bats selected'
-  has_line '^PASS  bats whole-tree \([0-9]+s\)$'
+  has "SKIP  bats whole-tree: round mode leaves the whole-tree suites to branch mode and CI"
 }
 
 # A harness commit, so both bats steps would run with every tool present.
@@ -169,7 +181,7 @@ harness_commit() {
   [ "$status" -eq 0 ]
   has 'WARN  shellcheck not found: install with brew install shellcheck; CI remains the only check for shell-lint'
   every_label_is SKIP shell-lint
-  every_label_is PASS 'release-scrub leak check' 01-files-present 03-marker-strip 'bats whole-tree' 'bats selected'
+  every_label_is PASS 'release-scrub leak check' 01-files-present 03-marker-strip 'bats selected'
 }
 
 @test "a missing rsync skips the three distribution checks and says so" {
@@ -180,7 +192,7 @@ harness_commit() {
   [ "$status" -eq 0 ]
   has 'WARN  rsync not found: install with brew install rsync; CI remains the only check for release-scrub leak check, 01-files-present, 03-marker-strip'
   every_label_is SKIP 'release-scrub leak check' 01-files-present 03-marker-strip
-  every_label_is PASS shell-lint 'bats whole-tree' 'bats selected'
+  every_label_is PASS shell-lint 'bats selected'
   [ -z "$(vhf_log_entries build-staging)" ]
 }
 
@@ -203,7 +215,7 @@ harness_commit() {
   [ "$status" -eq 0 ]
   has 'WARN  .gaia/cli/gaia-maintainer not found: install with pnpm -C .gaia/cli bundle; CI remains the only check for release-scrub leak check, 01-files-present, 03-marker-strip'
   every_label_is SKIP 'release-scrub leak check' 01-files-present 03-marker-strip
-  every_label_is PASS shell-lint 'bats whole-tree'
+  every_label_is PASS shell-lint
 }
 
 @test "a missing jq in branch mode skips 01 and writes no pass record, loudly" {
@@ -245,7 +257,7 @@ EOF
   run env PATH="$shim_directory:$PATH" bash "$VHF_ROOT/.gaia/tests/verify-harness.sh" round
   [ "$status" -eq 0 ]
   has 'WARNING: bats will run under bash 3'
-  every_label_is PASS 'bats whole-tree' 'bats selected'
+  every_label_is PASS 'bats selected'
 }
 
 @test "bats still runs without a parallel runner and relays the serial warning" {
@@ -256,7 +268,7 @@ EOF
   run env PATH="$farm" bash "$VHF_ROOT/.gaia/tests/verify-harness.sh" round
   [ "$status" -eq 0 ]
   has 'bats5: --jobs needs GNU parallel (brew install parallel); running serially.'
-  every_label_is PASS 'bats whole-tree' 'bats selected'
+  every_label_is PASS 'bats selected'
 }
 
 @test "a shell-lint failure names the check, the file and the reproduce command" {

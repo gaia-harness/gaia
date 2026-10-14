@@ -6,8 +6,7 @@
 # the whole branch) and each audit round's verification (`HEAD`, that round's
 # staged delta) run through bats5.sh. The verification runner
 # (.gaia/tests/verify-harness.sh) unions this output with the suites tagged
-# `whole-tree`: always in branch mode, and in round mode when the delta touches
-# a harness path.
+# `whole-tree` in branch mode; round mode runs this output alone.
 #
 # A suite is selected when it contains a changed file's match text as a fixed
 # string, or when it is itself a changed suite that still exists. The match

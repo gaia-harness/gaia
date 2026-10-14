@@ -14,11 +14,15 @@
 # Checks, in order, each run with the tree under check as its working
 # directory: shell-lint (branch, round), the release-scrub leak check (a bare
 # build-staging into an empty directory), 01-files-present, 03-marker-strip,
-# then the bats suites carrying the whole-tree mark and the suites the change
-# selector picks (branch, round). Branch mode selects over <merge-base> HEAD
-# and always runs the marked suites; round mode selects over the round's delta
-# (the uncommitted tracked changes when there are any, else the HEAD commit)
-# and adds the marked suites only when that delta touches a harness path.
+# then the bats suites carrying the whole-tree mark (branch) and the suites the
+# change selector picks (branch, round). Branch mode selects over <merge-base>
+# HEAD and always runs the marked suites. Round mode selects over the round's
+# delta (the uncommitted tracked changes when there are any, else the HEAD
+# commit) and never runs the marked set: branch mode ran it before the first
+# audit dispatch and CI runs every suite on each harness push before the merge,
+# so a round fix that breaks a whole-tree invariant still turns red before
+# merge, and re-running the set every round would cost minutes each round. A
+# marked suite the round's own selection picks still runs, under bats selected.
 #
 # A failing check is re-run on the merge base with refs/remotes/origin/main, in
 # a temporary worktree. A failure that reproduces there prints PRE-EXISTING
@@ -289,19 +293,13 @@ else
       selector_arguments=("$verify_empty_tree_object" HEAD)
       delta_description="the root commit"
     fi
-    harness_path_touched=0
     delta_path_count=0
     while IFS= read -r -d '' delta_path; do
       delta_path_count=$((delta_path_count + 1))
-      verify_is_harness_path "$delta_path" && harness_path_touched=1
     done < <(verify_git -c core.quotepath=false diff --name-only --no-renames -z ${selector_arguments[@]+"${selector_arguments[@]}"} -- 2>/dev/null)
-    if [ "$harness_path_touched" -eq 1 ]; then
-      printf 'DELTA  %s: %s path(s), harness paths touched\n' "$delta_description" "$delta_path_count"
-    else
-      printf 'DELTA  %s: %s path(s), no harness path touched\n' "$delta_description" "$delta_path_count"
-      run_whole_tree=0
-      whole_tree_skip_reason="the round's delta touches no harness path"
-    fi
+    printf 'DELTA  %s: %s path(s)\n' "$delta_description" "$delta_path_count"
+    run_whole_tree=0
+    whole_tree_skip_reason="round mode leaves the whole-tree suites to branch mode and CI"
   fi
 
   if [ "$bats_missing" -eq 1 ]; then
@@ -350,7 +348,7 @@ else
       new_failure_count=$((new_failure_count + 1))
     elif [ ! -s "$selected_suites" ]; then
       if [ "$mode" = round ]; then
-        verify_skip "bats selected" "no suite outside the whole-tree set references the round's delta"
+        verify_skip "bats selected" "no suite references the round's delta"
       else
         verify_skip "bats selected" "no suite outside the whole-tree set references the change"
       fi
