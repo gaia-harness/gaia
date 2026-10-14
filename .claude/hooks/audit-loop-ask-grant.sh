@@ -348,6 +348,7 @@ if [ "$kind" = grant ]; then
   case "$base" in
     *"in a new session")
       claude_context="$claude_context Print one instruction line, then the fenced continuation prompt for a fresh session with the branch, PR and run folder, and stop: do not start another round in this session."
+      claude_context="$claude_context Before printing it, run \`bash .gaia/scripts/usage.sh handoff\`; when it prints a line, the prompt's first step is to run that line verbatim, so the run's cost record covers both sessions."
       claude_context="$claude_context The line is 'Run \`/clear\`, then paste the prompt below.' by default."
       claude_context="$claude_context Use 'Press Ctrl+C, run \`claude\` (with any needed environment variable), then paste the prompt below.' instead only when the next audit unit would run stale without a fresh launch: it needs an environment variable this session lacks, or the branch changed, since this session started, an agent definition the unit dispatches (.claude/agents/) or hook wiring in .claude/settings.json that the audit loop or merge gate runs through."
       claude_context="$claude_context Edited skills, rules, CLAUDE.md, wiki pages and hook script bodies are read fresh after \`/clear\`, and launch-time changes the audit does not exercise do not matter, so neither calls for Ctrl+C."

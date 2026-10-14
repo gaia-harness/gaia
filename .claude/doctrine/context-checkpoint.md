@@ -39,6 +39,10 @@ At fire and skull, always recommend `Clear and resume`, whatever the remaining w
 - `Continue here`: keep working until the next band.
 - `Clear and resume`: print one instruction line (run `/clear`, then paste the prompt below) and a continuation prompt in a fenced code block with info string `text`, naming the state file path, the goal and the next step. It carries its own context and never points at this session's scrollback. Then end the turn with no further tool calls.
 
+## Carry the run's cost across
+
+Before printing any continuation prompt, run `bash .gaia/scripts/usage.sh handoff`. When it prints a line, write that line into STATE.md and make running it verbatim the prompt's first step: it binds the next session to the run this one started, so the run's cost record covers every session. No line means no recorded run is open, and the prompt carries nothing for it.
+
 ## Unattended
 
 With no human in the session, never ask. At red and fire, save and continue. At skull, save, print the continuation prompt in a `text` fence, report, and stop; the next `/loop` iteration resumes from the saved state, as a fresh session would. Headless and scheduled runs render no statusline, so they have no reading and never fire.
