@@ -450,10 +450,13 @@ def isnew: key as $entry_key | any(($previous_keys // [])[]; . == $entry_key) | 
 '
 
 # gaia_loop_evaluate_round <main-root> <state-json> <r>: round r's snapshot.
-# rc 2 no such round, 5 a bad round record or an unreadable vetoes.json.
+# rc 2 no such round, 5 a bad round record or an unreadable vetoes.json. Every
+# failure writes one `audit-loop-eval: <reason>` line to stderr, which the bound
+# hook relays in its deny.
 gaia_loop_evaluate_round() {
-  local main="$1" state="$2" round="$3" branch_key round_context tree commit previous_tree authorship enriching_hunks="null" findings disposed vetoed waived is_maintainer_repo=false
-  gaia_loop_is_uint "$round" && [ "$round" -ge 1 ] || return 2
+  local main="$1" state="$2" round="$3" branch_key round_context tree commit previous_tree authorship enriching_hunks="null" findings disposed vetoed waived is_maintainer_repo=false snapshot_status
+  gaia_loop_is_uint "$round" && [ "$round" -ge 1 ] ||
+    { printf 'audit-loop-eval: round %s is not a positive integer\n' "$round" >&2; return 2; }
   round_context="$(printf '%s' "$state" | jq -c --argjson round "$round" '
     .history.rounds as $rounds
     | if $round > ($rounds | length) then error("no round") else
@@ -465,20 +468,29 @@ gaia_loop_evaluate_round() {
          second_previous_snapshot: (if $round >= 3 then $rounds[$round - 3].snapshot else null end),
          series: [$rounds[0:$round - 1][] | .snapshot.A?],
          granted_round: (if $latest_grant == null then 0 else ([.history.checkpoints[] | select(.index == $latest_grant.checkpoint)] | .[0].at_round // 0) end)}
-      end' 2>/dev/null)" || return 2
+      end' 2>/dev/null)" ||
+    { printf 'audit-loop-eval: round %s is not in the recorded history, or the state cannot be read for it\n' "$round" >&2; return 2; }
   tree="$(printf '%s' "$round_context" | jq -r '.tree')"
   commit="$(printf '%s' "$round_context" | jq -r '.commit')"
   previous_tree="$(printf '%s' "$round_context" | jq -r '.previous_tree')"
-  gaia_loop_is_oid "$tree" && gaia_loop_is_oid "$commit" || return 5
+  if ! gaia_loop_is_oid "$tree" || ! gaia_loop_is_oid "$commit"; then
+    printf 'audit-loop-eval: round %s records no valid tree or commit oid\n' "$round" >&2
+    return 5
+  fi
   branch_key="$(printf '%s' "$state" | jq -r '.branch')"
-  vetoed="$(_gaia_loop_vetoed "$main" "$branch_key" "$round")" || return 5
-  findings="$(_gaia_loop_raw_findings "$main" "$state" "$round")" || return 2
-  authorship="$(_gaia_loop_authorship "$main" "$state" "$round")" || return 2
-  findings="$(_gaia_loop_annotate "$findings" "$authorship")" || return 2
+  vetoed="$(_gaia_loop_vetoed "$main" "$branch_key" "$round")" ||
+    { printf 'audit-loop-eval: %s/vetoes.json is unreadable or malformed\n' "$(gaia_loop_run_directory "$main" "$branch_key")" >&2; return 5; }
+  findings="$(_gaia_loop_raw_findings "$main" "$state" "$round")" ||
+    { printf 'audit-loop-eval: could not read the findings for round %s\n' "$round" >&2; return 2; }
+  authorship="$(_gaia_loop_authorship "$main" "$state" "$round")" ||
+    { printf 'audit-loop-eval: could not read the authorship (changed paths and hunks) for round %s\n' "$round" >&2; return 2; }
+  findings="$(_gaia_loop_annotate "$findings" "$authorship")" ||
+    { printf 'audit-loop-eval: could not annotate authorship on the findings for round %s\n' "$round" >&2; return 2; }
   if gaia_loop_is_oid "$previous_tree"; then
     enriching_hunks="$(_gaia_loop_hunks_json "$main" "$previous_tree" "$tree")"
   fi
-  disposed="$(_gaia_loop_disposed "$main" "$branch_key" "$round" | jq -c --argjson vetoed_keys "$vetoed" 'map(select(. as $entry_key | any($vetoed_keys[]; . == $entry_key) | not))')" || return 5
+  disposed="$(_gaia_loop_disposed "$main" "$branch_key" "$round" | jq -c --argjson vetoed_keys "$vetoed" 'map(select(. as $entry_key | any($vetoed_keys[]; . == $entry_key) | not))')" ||
+    { printf 'audit-loop-eval: could not read the dispositions before round %s\n' "$round" >&2; return 5; }
   waived="$(_gaia_loop_waived_keys "$main" "$branch_key" "$round")"
   # gaia:maintainer-only:start
   [ -f "$main/.claude/rules/maintainers/harness-triage-threshold.md" ] && is_maintainer_repo=true
@@ -491,7 +503,8 @@ gaia_loop_evaluate_round() {
     --argjson waivedkeys "$waived" --argjson is_maintainer_repo "$is_maintainer_repo" \
     --argjson granted_round "$(printf '%s' "$round_context" | jq -r '.granted_round')" --argjson round "$round" \
     --arg merge_base "$(printf '%s' "$authorship" | jq -r '.mb')" --arg now "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
-    "$_GAIA_LOOP_AUTHORED_JQ $_GAIA_LOOP_VERDICT_JQ"
+    "$_GAIA_LOOP_AUTHORED_JQ $_GAIA_LOOP_VERDICT_JQ" ||
+    { snapshot_status=$?; printf 'audit-loop-eval: could not compute the snapshot for round %s\n' "$round" >&2; return "$snapshot_status"; }
 }
 
 # _gaia_loop_spend <raw-branch>: usage.sh's text, or `unavailable`. A
@@ -523,11 +536,11 @@ _gaia_loop_spend() {
 _gaia_loop_brief() {
   local root="$1" main="$2" state="$3" used allowed pending snapshot findings raw spend per_round="[]" i round_snapshot
   used="$(printf '%s' "$state" | jq -r '.history.rounds | length')"
-  [ "$used" -ge 1 ] || return 2
+  [ "$used" -ge 1 ] || { printf 'audit-loop-eval: no recorded round to brief for %s\n' "$(printf '%s' "$state" | jq -r '.branch')" >&2; return 2; }
   allowed="$(gaia_loop_allowed "$state")"
   pending="$(gaia_loop_pending_checkpoint "$state")"
   snapshot="$(printf '%s' "$state" | jq -c '.history.rounds | last | .snapshot')"
-  [ "$snapshot" = null ] && { snapshot="$(gaia_loop_evaluate_round "$main" "$state" "$used")" || return 2; }
+  [ "$snapshot" = null ] && { snapshot="$(gaia_loop_evaluate_round "$main" "$state" "$used")" || return $?; }
   i=1
   while [ "$i" -le "$used" ]; do
     if [ "$i" -eq "$used" ]; then round_snapshot="$snapshot"; else round_snapshot="$(printf '%s' "$state" | jq -c --argjson i "$i" '.history.rounds[$i - 1].snapshot')"; fi

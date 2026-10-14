@@ -671,6 +671,105 @@ write_light_ledger() {
   case "$stderr" in *detached*) ;; *) return 1 ;; esac
 }
 
+# --- the evaluator's failure arms name their cause -----------------------------
+
+# assert_failure_reason <status> <pattern>: the last run exited <status> and its
+# last stderr line is an audit-loop-eval: reason matching <pattern>.
+assert_failure_reason() {
+  local last_line
+  [ "$status" -eq "$1" ] || { echo "status $status, want $1; stderr: $stderr"; return 1; }
+  last_line="$(printf '%s\n' "$stderr" | tail -n 1)"
+  # shellcheck disable=SC2254 # <pattern> is a glob by design
+  case "$last_line" in "audit-loop-eval: "$2) ;; *) echo "last stderr line: '$last_line'"; return 1 ;; esac
+}
+
+# malformed_vetoes: a vetoes.json the evaluator refuses to read.
+malformed_vetoes() {
+  local vetoes="$ALF_ROOT/.gaia/local/runs/$ALF_NORMALIZED_BRANCH/vetoes.json"
+  mkdir -p "${vetoes%/*}"
+  printf 'not json\n' >"$vetoes"
+}
+
+@test "failure reason: a round that is not a positive integer" {
+  alf_sequence 2 2
+  run --separate-stderr evaluate_round 0
+  assert_failure_reason 2 "round 0 is not a positive integer"
+}
+
+@test "failure reason: a round past the recorded history" {
+  alf_sequence 2 2
+  run --separate-stderr evaluate_round 9
+  assert_failure_reason 2 "*round 9*"
+}
+
+@test "failure reason: a round entry with no valid tree or commit oid" {
+  alf_sequence 2 2
+  alf_state_edit '.history.rounds[1].tree = "not-an-oid"'
+  run --separate-stderr evaluate_round 2
+  assert_failure_reason 5 "*round 2*tree or commit*"
+}
+
+@test "failure reason: an unreadable or malformed vetoes.json names the file" {
+  alf_sequence 2 2
+  malformed_vetoes
+  run --separate-stderr evaluate_round 2
+  assert_failure_reason 5 "*vetoes.json*"
+}
+
+@test "failure reason: a failed findings read" {
+  alf_sequence 2 2
+  _gaia_loop_raw_findings() { return 1; }
+  run --separate-stderr evaluate_round 2
+  assert_failure_reason 2 "*findings*round 2*"
+}
+
+@test "failure reason: a failed authorship read" {
+  alf_sequence 2 2
+  _gaia_loop_authorship() { return 1; }
+  run --separate-stderr evaluate_round 2
+  assert_failure_reason 2 "*authorship*round 2*"
+}
+
+@test "failure reason: a failed authorship annotation" {
+  alf_sequence 2 2
+  _gaia_loop_annotate() { return 1; }
+  run --separate-stderr evaluate_round 2
+  assert_failure_reason 2 "*annotate*round 2*"
+}
+
+@test "failure reason: a failed dispositions read" {
+  alf_sequence 2 2
+  _gaia_loop_disposed() { printf 'not json\n'; }
+  run --separate-stderr evaluate_round 2
+  assert_failure_reason 5 "*dispositions*round 2*"
+}
+
+@test "failure reason: a snapshot that cannot be computed" {
+  alf_sequence 2 2
+  _gaia_loop_annotate() { printf '{}\n'; }
+  run --separate-stderr evaluate_round 2
+  [ "$status" -ne 0 ]
+  assert_failure_reason "$status" "*snapshot*round 2*"
+}
+
+@test "failure reason: eval and brief print the evaluator's reason and keep its exit code" {
+  cli_copy
+  alf_sequence 2 2
+  malformed_vetoes
+  [ "$(jq -r '.history.rounds[1].snapshot' "$ALF_STATE")" = null ]
+  run --separate-stderr "$CLI/audit-loop-eval.sh" eval --root "$ALF_ROOT"
+  assert_failure_reason 5 "*vetoes.json*"
+  run --separate-stderr "$CLI/audit-loop-eval.sh" brief --root "$ALF_ROOT"
+  assert_failure_reason 5 "*vetoes.json*"
+}
+
+@test "failure reason: brief on a state with no rounds says so" {
+  cli_copy
+  alf_seed_state '{}'
+  run --separate-stderr "$CLI/audit-loop-eval.sh" brief --root "$ALF_ROOT"
+  assert_failure_reason 2 "*no recorded round*"
+}
+
 # --- rubric signals, accept eligibility, gate decisions ----------------------
 
 # K comes from the shared lib, so a change of K needs no edit here.
