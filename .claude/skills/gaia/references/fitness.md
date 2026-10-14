@@ -68,7 +68,7 @@ Two calls, each redirected to a file so the raw output never enters the conversa
 .gaia/cli/gaia fitness builtins --json > <SCRATCH>/builtins.json
 ```
 
-`check` exit codes: 0 means clean. Exit 1 means findings exist **only when** `<SCRATCH>/check.json` parses as a check report, because exit 1 is also the router's code for an unknown subcommand:
+`check` exits 0 and 1 are both successful runs, and neither says whether anything is reported: the report's `findings` array decides that, because warning and info findings can sit in the report of an exit 0 run. Exit 0 means no finding at error severity (and no `--enforce` match); exit 1 means at least one exists. Exit 1 is a check report **only when** `<SCRATCH>/check.json` parses as one, because exit 1 is also the router's code for an unknown subcommand:
 
 ```bash
 jq -e 'has("scope") and has("findings") and has("inventory")' <SCRATCH>/check.json
@@ -197,7 +197,7 @@ Reached only when Step 6 applied at least one fix. One re-run, after all applies
 .gaia/cli/gaia fitness check --json > <SCRATCH>/verify.json
 ```
 
-Apply the same exit-code rule as Step 3. Report which findings cleared and any new one (compare `rule_id`, `file`, `line` against the first report), and render the new card the way Step 5 does. A finding that survives a fix stays reported as unresolved; there is no second heal cycle, so no fix is proposed again in this run.
+Apply the same exit-code rule as Step 3: exits 0 and 1 both yield a report to read, and its `findings` array, not the exit code, decides what cleared. Report which findings cleared and any new one (compare `rule_id`, `file`, `line` against the first report), and render the new card the way Step 5 does. A finding that survives a fix stays reported as unresolved; there is no second heal cycle, so no fix is proposed again in this run.
 
 ---
 
