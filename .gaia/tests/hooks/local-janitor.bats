@@ -12,7 +12,9 @@ bats_require_minimum_version 1.5.0
 # lands it with `gh pr merge --auto`, which returns before the merge completes.
 # /gaia-wiki waits for the merge and cleans up through the work lifecycle; a
 # session that ends first leaves the local branch undeleted and the local base
-# branch behind. Sweep #1 covers both, in four steps: an existence
+# branch behind. Sweep #1 covers both once HEAD is off the sync branch (the
+# reap skips the current branch and the fast-forward needs HEAD on base), in
+# four steps: an existence
 # gate on a local `wiki/sync-*` or `wiki-sync/*` branch, a bounded and
 # rate-limited `git fetch --prune` of origin, a reap of each `[gone]` wiki sync branch
 # whose work `git cherry` confirms is already represented upstream, and a
