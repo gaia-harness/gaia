@@ -22,6 +22,12 @@ setup() {
   HOOKS_SOURCE_DIRECTORY=$(cd "$BATS_TEST_DIRNAME/../../../.claude/hooks" && pwd)
   HOOK_ABSOLUTE_PATH="$HOOKS_SOURCE_DIRECTORY/block-rm-rf.sh"
   SETTINGS_ABSOLUTE_PATH="${HOOKS_SOURCE_DIRECTORY%/hooks}/settings.json"
+  # The session-scratchpad root follows CLAUDE_CODE_TMPDIR, and a session running
+  # this suite may export one, so every case starts from the /tmp default and a case
+  # that needs another root exports it itself.
+  unset CLAUDE_CODE_TMPDIR
+  CURRENT_USER_ID=$(id -u)
+  SESSION_SCRATCHPAD="/private/tmp/claude-$CURRENT_USER_ID/-Users-you-projects-my-app/0b7c9e2a-1111-2222-3333-444455556666/scratchpad"
 }
 
 # Every payload here is about quoting, so the command text must reach the hook
@@ -974,6 +980,107 @@ t'
   assert_denied_because 'rm -rf of absolute path'
 }
 
+# --- the Claude Code session scratchpad ---
+#
+# Claude Code tells every session to keep temporary files in
+# <temp root>/claude-<uid>/<project>/<session>/scratchpad, and
+# `.claude/rules/subagent-dispatch.md` pre-clears a dispatch output path with
+# `rm -f`. The observed denial was exactly that pre-clear. Only a CHILD of a
+# scratchpad is removable: the scratchpad itself, the claude-<uid> directory, the
+# temp root, another user's tree, and a `..` escape all stay denied.
+
+@test "rm -f of a file in the session scratchpad is allowed" {
+  run_hook_bash "rm -f $SESSION_SCRATCHPAD/unit-1.json"
+  assert_allowed_by_json
+}
+
+@test "rm -rf of a directory in the session scratchpad is allowed" {
+  run_hook_bash "rm -rf $SESSION_SCRATCHPAD/probe"
+  assert_allowed_by_json
+}
+
+@test "rm -rf of a session scratchpad child under the /tmp spelling is allowed" {
+  run_hook_bash "rm -rf ${SESSION_SCRATCHPAD#/private}/probe"
+  assert_allowed_by_json
+}
+
+@test "rm -rf of the session scratchpad directory itself is denied" {
+  run_hook_bash "rm -rf $SESSION_SCRATCHPAD"
+  assert_denied_because 'rm -rf of absolute path'
+}
+
+@test "rm -rf of the claude-<uid> directory is denied" {
+  run_hook_bash "rm -rf /private/tmp/claude-$CURRENT_USER_ID"
+  assert_denied_because 'rm -rf of absolute path'
+}
+
+@test "rm -rf of a claude-<uid> path outside any scratchpad is denied" {
+  run_hook_bash "rm -rf /private/tmp/claude-$CURRENT_USER_ID/-Users-you-projects-my-app/0b7c9e2a/tasks"
+  assert_denied_because 'rm -rf of absolute path'
+}
+
+@test "rm -rf of the system temp dir is denied" {
+  run_hook_bash 'rm -rf /tmp'
+  assert_denied_because 'rm -rf of absolute path'
+}
+
+@test "rm -rf of a file directly under the system temp dir is denied" {
+  run_hook_bash 'rm -f /tmp/probe.txt'
+  assert_denied_because 'rm -f of absolute path'
+}
+
+@test "rm -rf of another user's session scratchpad is denied" {
+  run_hook_bash "rm -rf /private/tmp/claude-${CURRENT_USER_ID}9/-x/0b7c9e2a/scratchpad/probe"
+  assert_denied_because 'rm -rf of absolute path'
+}
+
+@test "a .. escape out of the session scratchpad is denied" {
+  run_hook_bash "rm -rf $SESSION_SCRATCHPAD/../../../../../Users/you"
+  assert_denied_because 'rm -rf of absolute path'
+}
+
+@test "CLAUDE_CODE_TMPDIR moves the session scratchpad root" {
+  export CLAUDE_CODE_TMPDIR=/Volumes/scratch/claude-temp/
+  run_hook_bash "rm -rf /Volumes/scratch/claude-temp/claude-$CURRENT_USER_ID/-x/0b7c9e2a/scratchpad/probe"
+  assert_allowed_by_json
+}
+
+@test "with CLAUDE_CODE_TMPDIR set, /tmp is not a session scratchpad root" {
+  export CLAUDE_CODE_TMPDIR=/Volumes/scratch/claude-temp
+  run_hook_bash "rm -rf $SESSION_SCRATCHPAD/probe"
+  assert_denied_because 'rm -rf of absolute path'
+}
+
+@test "TMPDIR is not a session scratchpad root" {
+  export TMPDIR=/var/folders/pn/xyz/T/
+  run_hook_bash "rm -rf /var/folders/pn/xyz/T/claude-$CURRENT_USER_ID/-x/0b7c9e2a/scratchpad/probe"
+  assert_denied_because 'rm -rf of absolute path'
+}
+
+# --- the deny text names the flags actually given ---
+
+@test "an absolute-path deny for rm -f says rm -f, not rm -rf" {
+  run_hook_bash 'rm -f /Users/you/projects/my-app/notes.txt'
+  assert_denied_because "BLOCKED: rm -f of absolute path '/Users/you/projects/my-app/notes.txt' is forbidden."
+  grep -qF -- 'rm -rf' <<<"$output" && return 1
+  true
+}
+
+@test "a deny for split flags names each flag as given" {
+  run_hook_bash 'rm -r -f $HOME'
+  assert_denied_because 'BLOCKED: rm -r -f of $HOME / ~ is forbidden.'
+}
+
+@test "a deny for a quoted flag names the flag without its quotes" {
+  run_hook_bash 'rm "-rf" /'
+  assert_denied_because "BLOCKED: rm -rf of absolute path '/' is forbidden."
+}
+
+@test "the absolute-path deny names the session scratchpad as a removable root" {
+  run_hook_bash 'rm -f /Users/you/projects/my-app/notes.txt'
+  assert_denied_because "/tmp/claude-$CURRENT_USER_ID/*/scratchpad/*"
+}
+
 # --- the observed worktree-cleanup incident ---
 #
 # An agent working inside a linked worktree could not delete its own scratch
@@ -1397,7 +1504,77 @@ assert_position_preserving() {
   source_hook
   run _rm_whitelist_hint $'.gaia/local/runs\ttrue\ndist\tfalse'
   [ "$status" -eq 0 ]
-  [ "$output" = ' An absolute path is removable only inside a project scratch root: .gaia/local/runs/*, dist.' ]
+  [ "$output" = ' An absolute path is removable only inside a scratch root: .gaia/local/runs/*, dist.' ]
+}
+
+@test "_rm_whitelist_hint: appends the extra root after the registry roots" {
+  source_hook
+  run _rm_whitelist_hint $'dist\tfalse' '/tmp/claude-501/*/scratchpad/*'
+  [ "$status" -eq 0 ]
+  [ "$output" = ' An absolute path is removable only inside a scratch root: dist, /tmp/claude-501/*/scratchpad/*.' ]
+}
+
+@test "_rm_whitelist_hint: an empty tsv still names the extra root" {
+  source_hook
+  run _rm_whitelist_hint "" '/tmp/claude-501/*/scratchpad/*'
+  [ "$status" -eq 0 ]
+  [ "$output" = ' An absolute path is removable only inside a scratch root: /tmp/claude-501/*/scratchpad/*.' ]
+}
+
+# --- _rm_in_session_scratchpad: the session-scratchpad allow ---
+
+@test "_rm_in_session_scratchpad: a child of a scratchpad under a listed root matches" {
+  source_hook
+  run _rm_in_session_scratchpad /tmp/claude-501/-p/session/scratchpad/x 501 /tmp
+  [ "$status" -eq 0 ]
+}
+
+@test "_rm_in_session_scratchpad: every listed root is tried" {
+  source_hook
+  run _rm_in_session_scratchpad /private/tmp/claude-501/-p/session/scratchpad/x 501 /tmp /private/tmp
+  [ "$status" -eq 0 ]
+}
+
+@test "_rm_in_session_scratchpad: a trailing slash on the root is ignored" {
+  source_hook
+  run _rm_in_session_scratchpad /tmp/claude-501/-p/session/scratchpad/x 501 /tmp//
+  [ "$status" -eq 0 ]
+}
+
+@test "_rm_in_session_scratchpad: an empty root (no alias, or a root of /) is skipped, never read as the filesystem root" {
+  source_hook
+  run _rm_in_session_scratchpad /claude-501/-p/session/scratchpad/x 501 "" /
+  [ "$status" -eq 1 ]
+}
+
+@test "_rm_in_session_scratchpad: the scratchpad directory itself does not match" {
+  source_hook
+  run _rm_in_session_scratchpad /tmp/claude-501/-p/session/scratchpad 501 /tmp
+  [ "$status" -eq 1 ]
+}
+
+@test "_rm_in_session_scratchpad: a scratchpad straight under claude-<uid> does not match" {
+  source_hook
+  run _rm_in_session_scratchpad /tmp/claude-501/scratchpad/x 501 /tmp
+  [ "$status" -eq 1 ]
+}
+
+@test "_rm_in_session_scratchpad: a root that is not listed does not match" {
+  source_hook
+  run _rm_in_session_scratchpad /private/tmp/claude-501/-p/session/scratchpad/x 501 /tmp
+  [ "$status" -eq 1 ]
+}
+
+@test "_rm_in_session_scratchpad: another uid does not match" {
+  source_hook
+  run _rm_in_session_scratchpad /tmp/claude-502/-p/session/scratchpad/x 501 /tmp
+  [ "$status" -eq 1 ]
+}
+
+@test "_rm_in_session_scratchpad: an empty uid matches nothing (the fail-toward-deny substrate)" {
+  source_hook
+  run _rm_in_session_scratchpad /tmp/claude-/-p/session/scratchpad/x "" /tmp
+  [ "$status" -eq 1 ]
 }
 
 @test "_rm_whitelist_hint: an empty tsv prints nothing" {
