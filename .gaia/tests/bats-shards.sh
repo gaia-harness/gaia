@@ -277,8 +277,14 @@ files_hooks1() {
 # An unreadable file weighs 0 rather than aborting: it still lands in exactly
 # one shard, so the partition stays whole and only the balance degrades. The
 # alternative fails the whole listing over a file the sharder does not read.
+#
+# The sizes come from one `wc -c` over every readable file rather than one per
+# file. Its lines are paired with the files by position, never by parsing the
+# name back out of them, so a name wc prints quoted or with spaces cannot
+# misalign a size; the trailing total line wc adds past one file is never read.
 weighted_list() {
-  local directory="$1" mode="$2" bats_path base absolute_path size
+  local directory="$1" mode="$2" bats_path base absolute_path size position
+  local listed_paths=() readable_flags=() readable_paths=() readable_sizes=()
   while IFS= read -r bats_path || [ -n "$bats_path" ]; do
     [ -n "$bats_path" ] || continue
     base="${bats_path##*/}"
@@ -289,12 +295,35 @@ weighted_list() {
       /*) absolute_path="$bats_path" ;;
       *) absolute_path="$REPO_ROOT/$bats_path" ;;
     esac
-    size=0
-    if [ -r "$absolute_path" ]; then
-      size="$(wc -c <"$absolute_path" | tr -d ' ')"
+    listed_paths+=("$bats_path")
+    # -f as well as -r: wc prints no line for a directory, which would shift
+    # every size after it onto the wrong file.
+    if [ -f "$absolute_path" ] && [ -r "$absolute_path" ]; then
+      readable_flags+=(1)
+      readable_paths+=("$absolute_path")
+    else
+      readable_flags+=(0)
     fi
-    printf '%s%s%s\n' "$size" "$TAB" "$bats_path"
-  done < <(discover_bats "$directory") | LC_ALL=C sort -t"$TAB" -k1,1nr -k2,2
+  done < <(discover_bats "$directory")
+
+  # wc with no operand reads stdin, so an empty list never reaches it.
+  if [ "${#readable_paths[@]}" -gt 0 ]; then
+    while IFS= read -r size; do
+      readable_sizes+=("$size")
+    done < <(wc -c -- ${readable_paths[@]+"${readable_paths[@]}"} | awk '{ print $1 }')
+  fi
+
+  position=0
+  local readable_position=0
+  while [ "$position" -lt "${#listed_paths[@]}" ]; do
+    size=0
+    if [ "${readable_flags[$position]}" -eq 1 ]; then
+      size="${readable_sizes[$readable_position]:-0}"
+      readable_position=$((readable_position + 1))
+    fi
+    printf '%s%s%s\n' "$size" "$TAB" "${listed_paths[$position]}"
+    position=$((position + 1))
+  done | LC_ALL=C sort -t"$TAB" -k1,1nr -k2,2
 }
 
 # Greedy longest-processing-time assignment of directory $1's discovered files

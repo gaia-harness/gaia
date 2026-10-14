@@ -270,6 +270,14 @@ commit_base_files() {
 }
 
 @test "no change prints nothing and exits 0" {
+  # Files holding the literal `*.bats`, which an empty pattern list would let
+  # git grep take as its pattern and print.
+  printf '# runs every *.bats\n' > "$FIXTURE/tests/names-the-glob.bats"
+  printf 'lists *.bats\n' > "$FIXTURE/wiki/glob.md"
+  git -C "$FIXTURE" add -A
+  git -C "$FIXTURE" commit -q -m glob
+  git -C "$FIXTURE" update-ref refs/remotes/origin/main HEAD
+
   run --separate-stderr bash "$SCRIPT" --dir "$FIXTURE"
   [ "$status" -eq 0 ]
   [ -z "$output" ]
@@ -296,6 +304,37 @@ commit_base_files() {
   PATH="$BATS_TEST_TMPDIR/bin:$PATH" run --separate-stderr bash "$SCRIPT" --dir "$FIXTURE" "$BASE" HEAD
   [ "$status" -eq 3 ]
   [ -z "$output" ]
+}
+
+@test "every changed path selects its own suites when the change spans several" {
+  printf 'edited\n' >> "$FIXTURE/wiki/PR Merge Workflow.md"
+  git -C "$FIXTURE" rm -q scripts/gone.sh
+  printf 'edited\n' >> "$FIXTURE/wiki/other.md"
+  git -C "$FIXTURE" commit -q -am several
+
+  run --separate-stderr bash "$SCRIPT" --dir "$FIXTURE" "$BASE" HEAD
+  [ "$status" -eq 0 ]
+  [ "$output" = $'tests/names-gone.bats\ntests/names-it.bats' ] || {
+    printf 'got:\n%s\n' "$output" >&2
+    return 1
+  }
+}
+
+@test "one suite search covers the whole change, however many paths it holds" {
+  printf 'edited\n' >> "$FIXTURE/wiki/PR Merge Workflow.md"
+  git -C "$FIXTURE" rm -q scripts/gone.sh
+  printf 'edited\n' >> "$FIXTURE/wiki/other.md"
+  git -C "$FIXTURE" commit -q -am several
+  # A git that logs each grep it is asked for, then runs it for real.
+  real_git="$(command -v git)"
+  mkdir -p "$BATS_TEST_TMPDIR/bin"
+  printf '#!/bin/sh\nfor argument in "$@"; do [ "$argument" = grep ] && echo grep >> "%s"; done\nexec "%s" "$@"\n' \
+    "$BATS_TEST_TMPDIR/grep-calls" "$real_git" > "$BATS_TEST_TMPDIR/bin/git"
+  chmod +x "$BATS_TEST_TMPDIR/bin/git"
+
+  PATH="$BATS_TEST_TMPDIR/bin:$PATH" run --separate-stderr bash "$SCRIPT" --dir "$FIXTURE" "$BASE" HEAD
+  [ "$status" -eq 0 ]
+  [ "$(wc -l < "$BATS_TEST_TMPDIR/grep-calls" | tr -d ' ')" -eq 1 ]
 }
 
 @test "no remote default branch in the default mode names the fix" {

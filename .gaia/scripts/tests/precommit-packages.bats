@@ -185,6 +185,32 @@ stage_renames() {
   grep -qxF $'doctor-file\tfrontend/doctor.config.ts' <<<"$output"
 }
 
+@test "doctor guard: a config whose name holds a space is counted with the others" {
+  use_frontend_package
+  : > "$REPO/frontend/doctor.config.ts"
+  : > "$REPO/frontend/doctor.config.local copy.ts"
+  : > "$REPO/frontend/not-a-config.ts"
+  plan
+  [ "$status" -eq 0 ]
+  [ "$(grep -c '^doctor-file' <<<"$output")" -eq 2 ]
+  grep -qxF $'doctor\tfrontend' <<<"$output"
+  grep -qxF $'doctor-file\tfrontend/doctor.config.ts' <<<"$output"
+  grep -qxF $'doctor-file\tfrontend/doctor.config.local copy.ts' <<<"$output"
+}
+
+@test "doctor guard: a package at the repo root reports its configs repo-relative" {
+  printf '[{"name":"root","path":"."}]\n' > "$REPO/.gaia/packages.json"
+  write_descriptor "$REPO" root '["app/**"]'
+  : > "$REPO/doctor.config.ts"
+  : > "$REPO/react-doctor.config.mjs"
+  plan
+  [ "$status" -eq 0 ]
+  [ "$(grep -c '^doctor-file' <<<"$output")" -eq 2 ]
+  grep -qxF $'doctor\t.' <<<"$output"
+  grep -qxF $'doctor-file\tdoctor.config.ts' <<<"$output"
+  grep -qxF $'doctor-file\treact-doctor.config.mjs' <<<"$output"
+}
+
 @test "doctor guard: one config in a package dir reports nothing" {
   use_frontend_package
   : > "$REPO/frontend/doctor.config.ts"

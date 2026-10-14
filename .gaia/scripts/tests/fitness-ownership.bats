@@ -173,7 +173,51 @@ class_of() {
   [ "${lines[2]}" = $'ignored\t.claude/skills/react-doctor/SKILL.md' ]
 }
 
+@test "paths holding a space classify by whole path in the ignore and manifest lookups" {
+  printf 'ignored dir/\n' >>"$PROJECT/.gitignore"
+  write_manifest '{"my skill/SKILL.md": "owned"}'
+  classify "ignored dir/notes.md" "my skill/SKILL.md" "skill/SKILL.md" "my skill/other.md"
+  [ "$status" -eq 0 ]
+  [ "${#lines[@]}" -eq 4 ]
+  [ "${lines[0]}" = $'ignored\tignored dir/notes.md' ]
+  [ "${lines[1]}" = $'gaia-shipped\tmy skill/SKILL.md' ]
+  [ "${lines[2]}" = $'adopter\tskill/SKILL.md' ]
+  [ "${lines[3]}" = $'adopter\tmy skill/other.md' ]
+}
+
+@test "git check-ignore and the manifest are each read a fixed number of times, however many paths are classified" {
+  local bin="$BATS_TEST_TMPDIR/bin" calls="$BATS_TEST_TMPDIR/calls" one_path_jq_calls
+  mkdir -p "$bin"
+  printf '#!/bin/sh\nfor argument in "$@"; do [ "$argument" = check-ignore ] && echo check-ignore >> "%s"; done\nexec "%s" "$@"\n' \
+    "$calls" "$(command -v git)" >"$bin/git"
+  printf '#!/bin/sh\necho jq >> "%s"\nexec "%s" "$@"\n' "$calls" "$(command -v jq)" >"$bin/jq"
+  chmod +x "$bin/git" "$bin/jq"
+  PATH="$bin:$PATH"
+
+  : >"$calls"
+  classify CLAUDE.md
+  [ "$status" -eq 0 ]
+  [ "$(grep -c '^check-ignore$' "$calls")" -eq 1 ]
+  one_path_jq_calls="$(grep -c '^jq$' "$calls")"
+
+  : >"$calls"
+  classify CLAUDE.md AGENTS.md wiki/index.md .claude/skills/gaia/references/fitness.md .claude/skills/react-doctor/SKILL.md
+  [ "$status" -eq 0 ]
+  [ "${#lines[@]}" -eq 5 ]
+  [ "$(grep -c '^check-ignore$' "$calls")" -eq 1 ]
+  [ "$(grep -c '^jq$' "$calls")" -eq "$one_path_jq_calls" ]
+}
+
 # --- fail-closed exits ---
+
+@test "a path git rejects fails the run closed and is named, though the rest of the batch is fine" {
+  mkdir -p "$PROJECT/real"
+  ln -s real "$PROJECT/linked"
+  run --separate-stderr bash "$SCRIPT" --root "$PROJECT" CLAUDE.md linked/notes.md wiki/index.md
+  [ "$status" -eq 3 ]
+  [ -z "$output" ]
+  [[ "$stderr" == *"git check-ignore failed for linked/notes.md"* ]]
+}
 
 @test "no path argument is a usage error" {
   run --separate-stderr bash "$SCRIPT" --root "$PROJECT"
