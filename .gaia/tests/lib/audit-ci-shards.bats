@@ -765,30 +765,38 @@ assert_paths_filter_pin_matches() {
 # W1. Exactly one job carries the required context name, byte-exact at four
 # spaces.
 
-@test "W1: exactly one job carries the required context name" {
-  require_yaml_parser
+# w1_check <workflow> — 0 when exactly one job carries the required context
+# name. Shared by W1 and its duplicate-name fixture so a change to the check
+# turns both.
+w1_check() {
+  local workflow="$1"
 
-  [ "$(read_workflow name "$WORKFLOW" audit-ci-tests)" = "Audit CI Tests" ] || {
+  [ "$(read_workflow name "$workflow" audit-ci-tests)" = "Audit CI Tests" ] || {
     echo "job id audit-ci-tests does not carry name: Audit CI Tests" >&2
     return 1
   }
 
   local other extra=""
-  for other in $(read_workflow jobs "$WORKFLOW"); do
+  for other in $(read_workflow jobs "$workflow"); do
     [ "$other" = "audit-ci-tests" ] && continue
-    [ "$(read_workflow name "$WORKFLOW" "$other")" = "Audit CI Tests" ] && extra="$extra $other"
+    [ "$(read_workflow name "$workflow" "$other")" = "Audit CI Tests" ] && extra="$extra $other"
   done
   [ -z "$extra" ] || { echo "job(s) other than audit-ci-tests also carry name: Audit CI Tests:${extra}" >&2; return 1; }
 
-  read_workflow needs "$WORKFLOW" audit-ci-tests | grep -qxF "shards" || {
+  read_workflow needs "$workflow" audit-ci-tests | grep -qxF "shards" || {
     echo "audit-ci-tests does not needs: shards" >&2
     return 1
   }
 
-  [ "$(grep -c '^    name: Audit CI Tests$' "$WORKFLOW")" -eq 1 ] || {
+  [ "$(grep -c '^    name: Audit CI Tests$' "$workflow")" -eq 1 ] || {
     echo "expected exactly one raw '    name: Audit CI Tests' line" >&2
     return 1
   }
+}
+
+@test "W1: exactly one job carries the required context name" {
+  require_yaml_parser
+  w1_check "$WORKFLOW"
 }
 
 @test "W1 adversarial: renaming the aggregator's name is caught" {
@@ -811,10 +819,8 @@ assert_paths_filter_pin_matches() {
   local doctored="$BATS_TEST_TMPDIR/w1b.yml"
   replace_line "$WORKFLOW" '    name: Shard (${{ matrix.shard }})' "    name: Audit CI Tests" "$doctored"
 
-  [ "$(grep -c '^    name: Audit CI Tests$' "$doctored")" -eq 2 ] || {
-    echo "doctoring did not produce two matching name: lines" >&2
-    return 1
-  }
+  run w1_check "$doctored"
+  [ "$status" -eq 1 ]
 }
 
 # W2. The aggregator runs on a dependency failure and on a dispatch.
@@ -933,10 +939,9 @@ assert_paths_filter_pin_matches() {
   # end-of-line, so this survives a later conjunct appended after it.
   mutated="$(printf '%s' "$line" | sed "s/ || github.event_name == 'workflow_dispatch'//")"
   assert_doctored "$line" "$mutated" "dropping the dispatch admission" || return 1
-  # This gate line is byte-identical at two sites in the workflow (the apt
-  # step's gate matches it too), and replace_line replaces every line equal
-  # to the search text. Doctoring both still produces the gap this test
-  # asserts, so the double replacement is not a bug here.
+  # replace_line replaces every line equal to the search text, so any other
+  # step carrying this exact gate is doctored too. That still produces the gap
+  # this test asserts.
   replace_line "$WORKFLOW" "$line" "$mutated" "$doctored"
 
   local job_id expression found_gap=""
@@ -1107,12 +1112,12 @@ sandbox_suites_present() {
   return 1
 }
 
-@test "W9: no .gaia/tests/sandbox suite references zsh, python3, or require_yaml_parser" {
-  local hits exit_status
-  local suites
-  require_repo_path -d "$REPO_ROOT/.gaia/tests/sandbox" "sandbox suite dir" || return 1
-  sandbox_suites_present "$REPO_ROOT/.gaia/tests/sandbox" || return 1
-  suites=("$REPO_ROOT"/.gaia/tests/sandbox/*.bats)
+# sandbox_tree_references_packages <directory> — 0 and prints the suites when any
+# .bats under $1 references a package the sandbox leg does not install. Shared
+# by W9 and its fixture so a change to the pattern turns both.
+sandbox_tree_references_packages() {
+  local directory="$1" hits exit_status suites
+  suites=("$directory"/*.bats)
   # grep exits 1 on a clean no-match and 2 on a hard error (an unreadable
   # file, a bad pattern). A blanket `|| true` cannot tell those apart and
   # would report green on the error, which is the same assert-nothing pass
@@ -1121,10 +1126,19 @@ sandbox_suites_present() {
   hits="$(grep -lE 'zsh|python3|require_yaml_parser' "${suites[@]}")" || exit_status=$?
   [ "$exit_status" -le 1 ] || {
     echo "W9: grep failed to scan the sandbox suites (exit $exit_status); nothing was asserted" >&2
-    return 1
+    return 2
   }
-  [ -z "$hits" ] || {
-    echo "sandbox suite(s) reference a package the sandbox leg's install step does not carry:" >&2
+  [ -n "$hits" ] || return 1
+  printf '%s\n' "$hits"
+}
+
+@test "W9: no .gaia/tests/sandbox suite references zsh, python3, or require_yaml_parser" {
+  local hits exit_status=0
+  require_repo_path -d "$REPO_ROOT/.gaia/tests/sandbox" "sandbox suite dir" || return 1
+  sandbox_suites_present "$REPO_ROOT/.gaia/tests/sandbox" || return 1
+  hits="$(sandbox_tree_references_packages "$REPO_ROOT/.gaia/tests/sandbox")" || exit_status=$?
+  [ "$exit_status" -eq 1 ] || {
+    echo "sandbox suite(s) reference a package the sandbox leg's install step does not carry (or the scan failed, exit $exit_status):" >&2
     printf '%s\n' "$hits" >&2
     return 1
   }
@@ -1146,7 +1160,8 @@ sandbox_suites_present() {
     printf '}\n'
   } > "$directory/fixture.bats"
 
-  grep -qE 'zsh|python3|require_yaml_parser' "$directory"/*.bats || {
+  run sandbox_tree_references_packages "$directory"
+  [ "$status" -eq 0 ] || {
     echo "a fixture naming zsh was not caught" >&2
     return 1
   }

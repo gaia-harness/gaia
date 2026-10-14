@@ -233,6 +233,20 @@ readonly INSTALL_COMMAND="brew install jq"
   assert_allowed_by_exit
 }
 
+@test "jq absent: block-sensitive-read refuses a dotenv read with the description first" {
+  local json
+  json=$(bash_payload_description_first "cat .env.local")
+  without_jq block-sensitive-read.sh "$json"
+  assert_blocked_by_exit
+}
+
+@test "jq absent: block-sensitive-read allows the jq install with the description first" {
+  local json
+  json=$(bash_payload_description_first "$INSTALL_COMMAND")
+  without_jq block-sensitive-read.sh "$json"
+  assert_allowed_by_exit
+}
+
 # The Agent payload keeps the harness key order: ambient head first, then the
 # tool call. The bound hook's binding literal is the member-name prefix, which
 # no ambient path carries.
