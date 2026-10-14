@@ -190,7 +190,7 @@ export const createClaudemdRules = (
     category: 'claudemd',
     check: deadPathCheck,
     detection:
-      'A backticked or linked repo-relative path in a CLAUDE.md does not exist.',
+      'A linked path, or a backticked path whose first folder exists, in a CLAUDE.md does not exist.',
     ruleId: 'claudemd.dead-path',
     severity: 'warning',
   },

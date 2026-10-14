@@ -1,7 +1,13 @@
 import type {RuleContext} from '../context.js';
 import {filesOfKinds} from '../context.js';
-import {extractLinks, resolveLink, skillDirectoryOf} from '../links.js';
+import {
+  extractLinks,
+  linkPlaces,
+  resolveLink,
+  skillDirectoryOf,
+} from '../links.js';
 import {lineOf, splitFrontmatter, stripFencedCode} from '../markdown.js';
+import {isProjectFolder} from '../paths.js';
 import type {
   FileKind,
   ProjectFile,
@@ -298,6 +304,20 @@ export const linkResolvesCheck = (
       // An ignored target is no broken link, and one that leaves the root is
       // reported by its own rule, never read.
       if (resolveLink(context, file.path, reference).status !== 'dead') {
+        return [];
+      }
+
+      // A backticked token whose first folder exists nowhere it is tried
+      // names something outside this tree, such as another project's script.
+      const firstFolder = reference.target.split('/', 1)[0] ?? '';
+
+      if (
+        reference.kind === 'backtick' &&
+        !linkPlaces(context, file.path, {
+          ...reference,
+          target: firstFolder,
+        }).some((resolved) => isProjectFolder(context, resolved))
+      ) {
         return [];
       }
 

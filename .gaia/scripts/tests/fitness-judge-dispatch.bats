@@ -163,3 +163,36 @@ entry() {
   [ "$status" -eq 0 ]
   [ -n "$output" ]
 }
+
+# write_judge_input <playbook> <scratch>: runs the playbook's input-writer
+# block (the indented `{ ... } > <SCRATCH>/judge-input.md` group) with
+# <SCRATCH> bound to the second argument, from the current directory.
+write_judge_input() {
+  local block
+  block="$(awk '/^   \{$/ {on=1} on {line=$0; sub(/^   /, "", line); print line} /^   \} > <SCRATCH>\/judge-input\.md$/ {exit}' "$1")"
+  [ -n "$block" ] || return 1
+  block="${block//<SCRATCH>/$2}"
+  bash -c "$block"
+}
+
+@test "the input writer numbers each judged line within its own file" {
+  local project report tab=$'\t'
+  project="$BATS_TEST_TMPDIR/project"
+  mkdir -p "$project/.claude/skills/a" "$project/.claude/skills/b"
+  printf 'first a\nsecond a\n' >"$project/.claude/skills/a/SKILL.md"
+  printf 'first b\nsecond b\nthird b' >"$project/.claude/skills/b/SKILL.md"
+  report="$BATS_TEST_TMPDIR/check.json"
+  printf '{"scope":"adopter","findings":[],"inventory":[%s,%s]}\n' \
+    "$(entry .claude/skills/a/SKILL.md skill adopter false)" \
+    "$(entry .claude/skills/b/SKILL.md skill adopter false)" >"$report"
+  cd "$project"
+  run write_judge_input "$PLAYBOOK" "$BATS_TEST_TMPDIR"
+  [ "$status" -eq 0 ]
+  run grep -E $'^ *[0-9]+\t' "$BATS_TEST_TMPDIR/judge-input.md"
+  [ "${#lines[@]}" -eq 5 ]
+  [[ "${lines[0]}" =~ ^\ *1${tab}first\ a$ ]]
+  [[ "${lines[2]}" =~ ^\ *1${tab}first\ b$ ]]
+  [[ "${lines[4]}" =~ ^\ *3${tab}third\ b$ ]]
+  run grep -c '^<<<GAIA-FITNESS-FILE-END ' "$BATS_TEST_TMPDIR/judge-input.md"
+  [ "$output" = "2" ]
+}

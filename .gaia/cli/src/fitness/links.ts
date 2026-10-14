@@ -1,6 +1,6 @@
 import path from 'node:path';
-import type {RuleContext} from './context.js';
-import {stripFencedCode} from './markdown.js';
+import type {ResolvedPath, RuleContext} from './context.js';
+import {stripFencedCode, stripInlineCode} from './markdown.js';
 import type {FileKind, ProjectFile} from './types.js';
 
 export type DepthViolation = {
@@ -28,6 +28,8 @@ export type LinkGraph = {
 export type LinkReference = {
   kind: 'backtick' | 'markdown';
   line: number;
+  /** The skill prose names as the target's owner ("the typescript skill's `x`"). */
+  skill?: string;
   target: string;
 };
 
@@ -35,6 +37,7 @@ const MARKDOWN_LINK = /\]\(<?([^)\s>]+)/g;
 const BACKTICK_SPAN = /`([^`\n]+)`/g;
 const URL_SCHEME = /^[A-Z][A-Z0-9+.-]*:/i;
 const NOT_A_PATH = /[\s<>{}*?$|;&"'()\\]/;
+const OWNING_SKILL = /\bthe ([\w-]+) skill's\s*$/i;
 
 /** A token that could be a relative file path: no placeholders, globs or URLs. */
 const isRelativePathToken = (token: string): boolean =>
@@ -57,7 +60,7 @@ export const extractLinks = (text: string): LinkReference[] => {
   const lines = stripFencedCode(text).split('\n');
 
   for (const [index, line] of lines.entries()) {
-    for (const match of line.matchAll(MARKDOWN_LINK)) {
+    for (const match of stripInlineCode(line).matchAll(MARKDOWN_LINK)) {
       const target = withoutFragment(match[1] ?? '');
 
       if (isRelativePathToken(target)) {
@@ -69,7 +72,14 @@ export const extractLinks = (text: string): LinkReference[] => {
       const target = withoutFragment((match[1] ?? '').trim());
 
       if (isRelativePathToken(target)) {
-        found.push({kind: 'backtick', line: index + 1, target});
+        const skill = OWNING_SKILL.exec(line.slice(0, match.index))?.[1];
+
+        found.push({
+          kind: 'backtick',
+          line: index + 1,
+          ...(skill === undefined ? {} : {skill}),
+          target,
+        });
       }
     }
   }
@@ -91,6 +101,18 @@ const linkAttempts = (
   reference: LinkReference
 ): LinkAttempt[] => {
   const skillDirectory = skillDirectoryOf(fromFile);
+
+  if (reference.skill !== undefined) {
+    const skillsFolder =
+      skillDirectory === undefined ? '.claude/skills' : (
+        path.posix.dirname(skillDirectory)
+      );
+
+    return [
+      {base: 'file-dir', from: `${skillsFolder}/${reference.skill}/SKILL.md`},
+    ];
+  }
+
   const attempts: LinkAttempt[] = [{base: 'file-dir', from: fromFile}];
 
   if (reference.kind === 'backtick') {
@@ -103,6 +125,16 @@ const linkAttempts = (
 
   return attempts;
 };
+
+/** Every place `target` is tried for a reference written in `fromFile`. */
+export const linkPlaces = (
+  context: RuleContext,
+  fromFile: string,
+  reference: LinkReference
+): ResolvedPath[] =>
+  linkAttempts(fromFile, reference).map((attempt) =>
+    context.resolve(attempt.from, reference.target, attempt.base)
+  );
 
 export type LinkResolution =
   | {relative: string; status: 'found'}
@@ -124,13 +156,7 @@ export const resolveLink = (
   let ignored = false;
   let outside = false;
 
-  for (const attempt of linkAttempts(fromFile, reference)) {
-    const resolved = context.resolve(
-      attempt.from,
-      reference.target,
-      attempt.base
-    );
-
+  for (const resolved of linkPlaces(context, fromFile, reference)) {
     if (resolved.status === 'outside') {
       outside = true;
     } else if (resolved.status === 'inside') {

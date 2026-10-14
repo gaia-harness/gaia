@@ -1,5 +1,5 @@
-import type {RuleContext} from './context.js';
-import {bodyLines, stripInlineCode} from './markdown.js';
+import type {ResolvedPath, RuleContext} from './context.js';
+import {bodyLines, splitFrontmatter, stripInlineCode} from './markdown.js';
 import type {ProjectFile, RawFinding} from './types.js';
 
 export type ImportReference = {
@@ -155,17 +155,35 @@ export type ReferenceBase = 'file-dir' | 'package' | 'root';
 const PACKAGE_FOLDER = /^(.+?)\/\.claude\/|^(.+)\/CLAUDE(?:\.local)?\.md$/;
 
 /**
- * A path in the folder a nested file's package starts at: the folder holding
- * its `.claude`, or a nested CLAUDE.md's own folder. Resolving against it with
- * the `file-dir` base tries the package root without widening the context
- * contract. Undefined for a file at the project root.
+ * The folder a nested file's package starts at: the folder holding its
+ * `.claude`, or a nested CLAUDE.md's own folder. Undefined for a file at the
+ * project root.
+ */
+const packageFolder = (fromFile: string): string | undefined => {
+  const match = PACKAGE_FOLDER.exec(fromFile);
+
+  return match?.[1] ?? match?.[2];
+};
+
+/**
+ * A path in the package folder. Resolving against it with the `file-dir` base
+ * tries the package root without widening the context contract.
  */
 const packageAnchor = (fromFile: string): string | undefined => {
-  const match = PACKAGE_FOLDER.exec(fromFile);
-  const folder = match?.[1] ?? match?.[2];
+  const folder = packageFolder(fromFile);
 
   return folder === undefined ? undefined : `${folder}/_`;
 };
+
+// An extensionless token is often an import specifier (`test/mocks/database`),
+// which names a source module without its extension. A candidate built from it
+// can only find the file: it never decides whether the token is dead or outside.
+const SPECIFIER_EXTENSIONS = ['ts', 'tsx', 'js', 'jsx', 'mjs', 'cjs'];
+
+const specifierCandidates = (token: string): string[] =>
+  token.endsWith('/') || EXTENSION.test(token.split('/').pop() ?? '') ?
+    []
+  : SPECIFIER_EXTENSIONS.map((extension) => `${token}.${extension}`);
 
 export type ReferenceStatus =
   | {relative: string; status: 'dead'}
@@ -173,51 +191,78 @@ export type ReferenceStatus =
   | {status: 'outside'}
   | {status: 'unresolvable'};
 
-/**
- * Where a path token points. Anything found under any base counts as found;
- * otherwise a target that leaves the root under every base is `outside`, never read and never
- * dead. A gitignored target is a runtime artifact absent from a fresh clone, so
- * it is found rather than dead.
- */
-export const resolveReference = (
+type PathReferenceQuery = {
+  /** Extra folders to try, each given as a file inside it; they can only find. */
+  anchors?: readonly string[];
+  bases: readonly ReferenceBase[];
+  fromFile: string;
+  token: string;
+};
+
+const resolveUnderBases = (
   context: RuleContext,
-  reference: {
-    bases: readonly ReferenceBase[];
-    fromFile: string;
-    token: string;
-  }
-): ReferenceStatus => {
-  const {bases, fromFile, token} = reference;
-
-  // A home-relative token leaves the project by construction; joining it to the
-  // root would misread `~` as a folder name.
-  if (token.startsWith('~')) return {status: 'outside'};
-
-  const results = bases.flatMap((base) => {
-    if (base !== 'package') return [context.resolve(fromFile, token, base)];
+  {bases, fromFile}: PathReferenceQuery,
+  candidate: string
+): ResolvedPath[] =>
+  bases.flatMap((base) => {
+    if (base !== 'package') return [context.resolve(fromFile, candidate, base)];
 
     const anchor = packageAnchor(fromFile);
 
     return anchor === undefined ?
         []
-      : [context.resolve(anchor, token, 'file-dir')];
+      : [context.resolve(anchor, candidate, 'file-dir')];
   });
-  const found = results.find(
-    (result) => result.status === 'inside' && result.exists
-  );
 
-  if (found?.status === 'inside') {
-    return {relative: found.relative, status: 'found'};
+/** Every place `candidate` is tried for `reference`: its bases, then its anchors. */
+const resolveEverywhere = (
+  context: RuleContext,
+  reference: PathReferenceQuery,
+  candidate: string
+): ResolvedPath[] => [
+  ...resolveUnderBases(context, reference, candidate),
+  ...(reference.anchors ?? []).map((anchor) =>
+    context.resolve(anchor, candidate, 'file-dir')
+  ),
+];
+
+/**
+ * Where a path token points. Anything found under any base or anchor counts as
+ * found; otherwise a target that leaves the root under every base is `outside`,
+ * never read and never dead. A gitignored target is a runtime artifact absent
+ * from a fresh clone, so it is found rather than dead.
+ */
+export const resolveReference = (
+  context: RuleContext,
+  reference: PathReferenceQuery
+): ReferenceStatus => {
+  const {token} = reference;
+
+  // A home-relative token leaves the project by construction; joining it to the
+  // root would misread `~` as a folder name.
+  if (token.startsWith('~')) return {status: 'outside'};
+
+  for (const candidate of [token, ...specifierCandidates(token)]) {
+    const found = resolveEverywhere(context, reference, candidate).find(
+      (result) => result.status === 'inside' && result.exists
+    );
+
+    if (found?.status === 'inside') {
+      return {relative: found.relative, status: 'found'};
+    }
   }
 
+  // Only the bases decide outside and dead; an anchor can only find.
+  const underBases = resolveUnderBases(context, reference, token);
+
   if (
-    results.length > 0 &&
-    results.every((result) => result.status === 'outside')
+    underBases.length > 0 &&
+    underBases.every((result) => result.status === 'outside')
   ) {
     return {status: 'outside'};
   }
 
-  const inside = results.find((result) => result.status === 'inside');
+  const inside = underBases.find((result) => result.status === 'inside');
 
   if (inside?.status !== 'inside') return {status: 'unresolvable'};
 
@@ -228,57 +273,126 @@ export const resolveReference = (
   return {relative: inside.relative, status: 'dead'};
 };
 
-const basenameSets = new WeakMap<ReadonlySet<string>, ReadonlySet<string>>();
+const folderSets = new WeakMap<ReadonlySet<string>, ReadonlySet<string>>();
 
-/** The file names (last segments) of every tracked path, built once per project. */
-const trackedBasenames = (context: RuleContext): ReadonlySet<string> => {
-  const cached = basenameSets.get(context.allTrackedPaths);
+/** Every folder that holds a tracked path, built once per project. */
+const trackedFolders = (context: RuleContext): ReadonlySet<string> => {
+  const cached = folderSets.get(context.allTrackedPaths);
 
   if (cached !== undefined) return cached;
 
-  const names = new Set(
-    [...context.allTrackedPaths].map(
-      (tracked) => tracked.split('/').pop() ?? ''
-    )
-  );
+  const folders = new Set<string>();
 
-  basenameSets.set(context.allTrackedPaths, names);
+  for (const tracked of context.allTrackedPaths) {
+    const segments = tracked.split('/');
 
-  return names;
+    for (let end = 1; end < segments.length; end += 1) {
+      folders.add(segments.slice(0, end).join('/'));
+    }
+  }
+
+  folderSets.set(context.allTrackedPaths, folders);
+
+  return folders;
+};
+
+/**
+ * Whether a resolved place is a real folder: one holding a tracked file, or an
+ * ignored one. Matched against the tracked names, so a case-insensitive disk
+ * does not let `Pages/` stand for `pages/`.
+ */
+export const isProjectFolder = (
+  context: RuleContext,
+  resolved: ResolvedPath
+): boolean =>
+  resolved.status === 'inside' &&
+  (trackedFolders(context).has(resolved.relative) ||
+    context.gitIgnored(resolved.relative) === true);
+
+const GLOB_SEGMENT = /[*?[\]{}!]/;
+
+/**
+ * The folders a rule's `paths:` globs scope it to, each given as a file inside
+ * it: the static prefix of every glob, under the rule's package. A rule about
+ * `app/**` names `components/ui/` relative to `app/`.
+ */
+const scopeAnchors = (file: ProjectFile): string[] => {
+  const frontmatter = splitFrontmatter(file.text);
+
+  if (!frontmatter.ok) return [];
+
+  const declared: unknown = frontmatter.data.paths;
+  const globs: unknown[] =
+    Array.isArray(declared) ? declared
+    : declared === undefined ? []
+    : [declared];
+  const folder = packageFolder(file.path);
+
+  return globs.flatMap((glob) => {
+    if (typeof glob !== 'string') return [];
+
+    const segments = glob.split('/');
+    const firstGlob = segments.findIndex((segment) =>
+      GLOB_SEGMENT.test(segment)
+    );
+    const prefix = segments
+      .slice(0, firstGlob === -1 ? segments.length - 1 : firstGlob)
+      .join('/');
+
+    if (prefix === '') return [];
+
+    return [folder === undefined ? `${prefix}/_` : `${folder}/${prefix}/_`];
+  });
 };
 
 /**
  * One finding per backticked or linked path in `files` that does not exist.
- * A path is also tried from the package a nested file belongs to, and a bare
- * file name is found wherever a tracked file carries it: prose names the file,
- * not where it lives.
+ * A path is also tried from the package a nested file belongs to and from a
+ * rule's `paths:` scope. A link is always a claim that a file exists. A
+ * backticked token is one only when it locates something: it has a folder,
+ * and that first folder exists under some base it is tried against. A bare
+ * name, a lint rule id, a package subpath, a placeholder and a title all fail
+ * that, and a bare name that is missing cannot be told from an example, a
+ * runtime file or a sentence saying the file does not exist. The cost is a
+ * backticked path whose whole top folder was removed, which goes unreported.
  */
 export const deadPathFindings = (
   context: RuleContext,
   files: readonly ProjectFile[]
 ): RawFinding[] =>
-  files.flatMap((file) =>
-    extractPathReferences(file.text).flatMap(({line, linked, token}) => {
-      if (!token.includes('/') && trackedBasenames(context).has(token)) {
-        return [];
-      }
+  files.flatMap((file) => {
+    const anchors = scopeAnchors(file);
 
-      const status = resolveReference(context, {
+    return extractPathReferences(file.text).flatMap(({line, linked, token}) => {
+      const segments = token.replace(/\/$/, '').split('/');
+
+      if (!linked && segments.length === 1) return [];
+
+      const reference: PathReferenceQuery = {
+        anchors,
         bases: linked ? ['root', 'file-dir', 'package'] : ['root', 'package'],
         fromFile: file.path,
         token,
-      });
+      };
+      if (resolveReference(context, reference).status !== 'dead') return [];
 
-      return status.status === 'dead' ?
-          [
-            {
-              file: file.path,
-              line,
-              message: `The path ${token} does not exist.`,
-              remediation:
-                'Update the path to where the file lives now, or remove the reference.',
-            },
-          ]
-        : [];
-    })
-  );
+      if (
+        !linked &&
+        !resolveEverywhere(context, reference, segments[0] ?? '').some(
+          (resolved) => isProjectFolder(context, resolved)
+        )
+      ) {
+        return [];
+      }
+
+      return [
+        {
+          file: file.path,
+          line,
+          message: `The path ${token} does not exist.`,
+          remediation:
+            'Update the path to where the file lives now, or remove the reference.',
+        },
+      ];
+    });
+  });

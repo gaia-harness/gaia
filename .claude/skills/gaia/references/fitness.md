@@ -92,7 +92,7 @@ jq -er '[.inventory[] | select(.ownership == "adopter" or .ownership == "gaia-sh
 
 **Otherwise:**
 
-1. Write the input file. Each file's content sits between begin and end marker lines, declared as data. A symlink is skipped, so the judge never reads outside the project through one:
+1. Write the input file. Each file's content sits between begin and end marker lines, declared as data, and every content line carries its line number within that file, so the judge copies a finding's line rather than counting it in the input file. A symlink is skipped, so the judge never reads outside the project through one:
 
    ```bash
    {
@@ -101,7 +101,7 @@ jq -er '[.inventory[] | select(.ownership == "adopter" or .ownership == "gaia-sh
        while IFS= read -r judged_path; do
          if [ -f "$judged_path" ] && [ ! -L "$judged_path" ]; then
            printf '<<<GAIA-FITNESS-FILE-BEGIN %s\n' "$judged_path"
-           cat -- "$judged_path"
+           cat -n -- "$judged_path"
            printf '\n<<<GAIA-FITNESS-FILE-END %s\n' "$judged_path"
          fi
        done

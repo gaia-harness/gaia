@@ -346,7 +346,10 @@ describe('orphan references', () => {
 describe('link resolution', () => {
   test('a backticked skill-relative path that is missing is flagged on its line', () => {
     const findings = findingsOf({
-      files: {[SKILL]: skillFile('Intro.\nRead `references/gone.md`.\n')},
+      files: {
+        '.claude/skills/example/references/data.json': '{}\n',
+        [SKILL]: skillFile('Intro.\nRead `references/gone.md`.\n'),
+      },
     });
 
     expect(findings).toHaveLength(1);
