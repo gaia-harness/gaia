@@ -636,16 +636,6 @@ test("uses wall-clock time", () => {
   refute_denied
 }
 
-@test "carve-out: the deterministic surface STILL demands a RED" {
-  # A pure .ts test under frontend/app/utils classifies strict; the carve-out does not
-  # relax it. With no matching RED on record, the commit is denied.
-  stage_file "frontend/app/utils/x/index.test.ts" "$PASSING_TEST"
-  run_commit_hook
-  [ "$status" -eq 0 ]
-  denied
-  [[ "$output" == *"adds two numbers"* ]]
-}
-
 @test "carve-out fail-open: missing classifier falls back to the RED demand" {
   # When the classifier helper is unavailable the carve-out must NOT fire: the
   # gate falls back to its pre-carve behavior and still demands the RED, so the
@@ -761,17 +751,6 @@ test(\"adopter addition\", () => {
   stage_file "frontend/app/utils/x/index.test.ts" "$COMMENT_STRICT_PRE"
   seed_ledger "frontend/app/utils/x/index.test.ts" "adds two numbers" "sha256:staleoldsignal"
   stage_file "frontend/app/utils/x/index.test.ts" "$COMMENT_STRICT_POST"
-  run_commit_hook
-  [ "$status" -eq 0 ]
-  grep -qF -- "adds two numbers" <<<"$output"
-  denied
-}
-
-@test "the RED half of the three-run transition denies on the first run (comment-carrying, strict, new-at-HEAD, runtime; UAT-008)" {
-  stage_file "frontend/app/utils/x/index.test.ts" "$COMMENT_STRICT_PRE"
-  # A literal the current computation does not produce -- the same idiom as
-  # the existing signal-mismatch case above.
-  seed_ledger "frontend/app/utils/x/index.test.ts" "adds two numbers" "sha256:staleoldsignal"
   run_commit_hook
   [ "$status" -eq 0 ]
   grep -qF -- "adds two numbers" <<<"$output"

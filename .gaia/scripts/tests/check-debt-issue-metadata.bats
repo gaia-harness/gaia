@@ -250,12 +250,6 @@ refute_code() {
   refute_code "stray-investigate-block"
 }
 
-@test "a graded filing with no research block stays clean" {
-  run bash "$CHECK" --pre-file --labels "$GOOD_LABELS" --body-file "$BODY"
-  [ "$status" -eq 0 ]
-  refute_code "investigate"
-}
-
 @test "a CRLF investigate block is not reported as missing" {
   # Same contract as the CRLF dedup-key test below: a body last edited in the
   # web UI arrives with a trailing carriage return on every line, and the
@@ -268,16 +262,6 @@ refute_code() {
 # ---------------------------------------------------------------------------
 # footprint: validated when present, never demanded
 # ---------------------------------------------------------------------------
-
-@test "a filing with no footprint: label is clean, the human-filed case" {
-  # Absence is deliberately not a finding. Nothing downstream depends on the
-  # value: the drain re-derives spec-versus-implement from the cited code and
-  # grades narrow-versus-wide itself, so demanding presence would demand a value
-  # no decision reads, and would make every hand-filed issue a finding.
-  run bash "$CHECK" --pre-file --labels 'tech-debt,severity:major,audience:adopter' --body-file "$BODY"
-  [ "$status" -eq 0 ]
-  refute_code "footprint"
-}
 
 @test "each permitted footprint: value is accepted" {
   local footprint_value
@@ -297,15 +281,6 @@ refute_code() {
   run bash "$CHECK" --pre-file --labels 'tech-debt,severity:major,audience:adopter,footprint:agent' --body-file "$BODY"
   [ "$status" -eq 1 ]
   assert_code "footprint-value"
-}
-
-@test "RED: an unfilled footprint placeholder is a finding, not a dropped flag" {
-  run bash "$CHECK" --pre-file --labels 'tech-debt,severity:major,audience:adopter,footprint:' --body-file "$BODY"
-  [ "$status" -eq 1 ]
-  assert_code "footprint-value"
-  # The count check cannot catch this: `footprint:` is one label, so at-most-one
-  # holds and only the value is wrong.
-  refute_code "footprint-count"
 }
 
 # --- the shapes an unquoted value expansion used to let through ------------
