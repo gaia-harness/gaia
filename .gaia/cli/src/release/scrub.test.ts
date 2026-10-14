@@ -3,10 +3,12 @@ import {afterEach, beforeEach, describe, expect, test, vi} from 'vitest';
 import {execFileSync} from 'node:child_process';
 import {createHash} from 'node:crypto';
 import {
+  chmodSync,
   mkdirSync,
   mkdtempSync,
   readFileSync,
   rmSync,
+  statSync,
   writeFileSync,
 } from 'node:fs';
 import {tmpdir} from 'node:os';
@@ -261,6 +263,38 @@ describe('release scrub CLI', () => {
       'utf8'
     );
     expect(after).toBe(original);
+  });
+
+  test('keeps the executable bit on a file it strips', () => {
+    sandbox = setupSandbox({
+      config: `
+transforms:
+  - type: marker-strip
+    paths:
+      - ".githooks/*"
+    start: "# gaia:maintainer-only:start"
+    end: "# gaia:maintainer-only:end"
+`,
+    });
+    sandbox.writeStaged(
+      '.githooks/pre-commit',
+      [
+        '#!/usr/bin/env bash',
+        '# gaia:maintainer-only:start',
+        'echo maintainer',
+        '# gaia:maintainer-only:end',
+        'echo public',
+        '',
+      ].join('\n')
+    );
+    const hookPath = path.join(sandbox.stagingDir, '.githooks/pre-commit');
+    chmodSync(hookPath, 0o755);
+
+    const exit = run([sandbox.stagingDir], {cwd: sandbox.rootDir});
+    expect(exit).toBe(0);
+
+    expect(readFileSync(hookPath, 'utf8')).not.toContain('echo maintainer');
+    expect(statSync(hookPath).mode % 0o1000).toBe(0o755);
   });
 
   test('refuses on unbalanced start without end', () => {

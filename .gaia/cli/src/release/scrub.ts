@@ -312,7 +312,12 @@ const applyMarkerStrip = (
         }
 
         if (result.blocks > 0) {
-          atomicWriteFileSync(absolutePath, result.output);
+          // The atomic write renames a fresh file over the source, so the
+          // source's mode is lost unless passed through; a stripped hook or
+          // shell script must stay executable in the bundle.
+          atomicWriteFileSync(absolutePath, result.output, {
+            mode: statSync(absolutePath).mode % 0o1000,
+          });
           filesTouched.push(relativePath);
           blocksStripped += result.blocks;
         }
