@@ -112,12 +112,13 @@ const countDomainPages = (wikiRoot: string): Record<string, number> => {
   return counts;
 };
 
-type StateFileShape = {
+export type StateFileShape = {
   last_evaluated_at?: string;
   last_evaluated_sha?: string;
 };
 
-const readStateFile = (statePath: string): null | StateFileShape => {
+/** Parse `wiki/.state.json`; null when it is absent or not JSON. */
+export const readStateFile = (statePath: string): null | StateFileShape => {
   if (!existsSync(statePath)) return null;
   const raw = readFileSync(statePath, 'utf8');
 
@@ -155,6 +156,55 @@ const printHuman = (state: WikiState, write: (chunk: string) => void): void => {
     lines.push(`    ${domain}: ${count}`);
   }
   write(`${lines.join('\n')}\n`);
+};
+
+/**
+ * The wiki state of the checkout at `repoRoot`, as `gaia wiki state --json`
+ * reports it. Shared with the statusline cache refresh so the nudge and this
+ * command can never compute drift two ways.
+ */
+export const computeWikiState = (repoRoot: string): WikiState => {
+  const wikiRoot = path.join(repoRoot, 'wiki');
+  const statePath = path.join(wikiRoot, '.state.json');
+  const stateFile = readStateFile(statePath);
+  const stateSha = stateFile?.last_evaluated_sha ?? '';
+  const stateAt = stateFile?.last_evaluated_at ?? '';
+  const head = headSha(repoRoot);
+  const headShort = shortSha(head, repoRoot);
+  const stateShort = stateSha === '' ? '' : shortSha(stateSha, repoRoot);
+  // The all-zero SHA is the "never evaluated" sentinel; git would reject it as
+  // an ancestor anyway, the explicit guard keeps that independent of git.
+  const reachable =
+    stateSha !== '' &&
+    stateSha !== ALL_ZERO_SHA &&
+    isReachable(stateSha, repoRoot);
+  const ahead = reachable ? countDriftCommits(stateSha, repoRoot) : 0;
+  const recent =
+    stateSha === '' || !reachable ? [] : recentCommits(stateSha, repoRoot, 5);
+  const severity = classifySeverity(ahead);
+  const counts = countDomainPages(wikiRoot);
+  // Only the unreachable path needs a recovery baseline. When the recorded SHA
+  // is still in HEAD's history, the normal `last_evaluated_sha..HEAD` range is
+  // correct; suggested_base stays empty so consumers ignore it.
+  const suggestedFull =
+    !reachable && stateAt !== '' ? ancestorBefore(stateAt, repoRoot) : '';
+  const suggestedBase =
+    suggestedFull === '' ? '' : shortSha(suggestedFull, repoRoot);
+
+  const driftCount =
+    reachable ? ahead : countDriftCommits(suggestedFull, repoRoot);
+
+  return {
+    commits_ahead: ahead,
+    drift_count: driftCount,
+    drift_severity: severity,
+    head_short: headShort,
+    per_domain_page_counts: counts,
+    reachable,
+    recent_commits: recent,
+    state_sha: stateShort,
+    suggested_base: suggestedBase,
+  };
 };
 
 type ParseStateArgsResult =
@@ -232,47 +282,7 @@ export const run = (
     return EXIT_CODES.UNKNOWN_SUBCOMMAND;
   }
 
-  const wikiRoot = path.join(repoRoot, 'wiki');
-  const statePath = path.join(wikiRoot, '.state.json');
-  const stateFile = readStateFile(statePath);
-  const stateSha = stateFile?.last_evaluated_sha ?? '';
-  const stateAt = stateFile?.last_evaluated_at ?? '';
-  const head = headSha(repoRoot);
-  const headShort = shortSha(head, repoRoot);
-  const stateShort = stateSha === '' ? '' : shortSha(stateSha, repoRoot);
-  // The all-zero SHA is the "never evaluated" sentinel; git would reject it as
-  // an ancestor anyway, the explicit guard keeps that independent of git.
-  const reachable =
-    stateSha !== '' &&
-    stateSha !== ALL_ZERO_SHA &&
-    isReachable(stateSha, repoRoot);
-  const ahead = reachable ? countDriftCommits(stateSha, repoRoot) : 0;
-  const recent =
-    stateSha === '' || !reachable ? [] : recentCommits(stateSha, repoRoot, 5);
-  const severity = classifySeverity(ahead);
-  const counts = countDomainPages(wikiRoot);
-  // Only the unreachable path needs a recovery baseline. When the recorded SHA
-  // is still in HEAD's history, the normal `last_evaluated_sha..HEAD` range is
-  // correct; suggested_base stays empty so consumers ignore it.
-  const suggestedFull =
-    !reachable && stateAt !== '' ? ancestorBefore(stateAt, repoRoot) : '';
-  const suggestedBase =
-    suggestedFull === '' ? '' : shortSha(suggestedFull, repoRoot);
-
-  const driftCount =
-    reachable ? ahead : countDriftCommits(suggestedFull, repoRoot);
-
-  const state: WikiState = {
-    commits_ahead: ahead,
-    drift_count: driftCount,
-    drift_severity: severity,
-    head_short: headShort,
-    per_domain_page_counts: counts,
-    reachable,
-    recent_commits: recent,
-    state_sha: stateShort,
-    suggested_base: suggestedBase,
-  };
+  const state = computeWikiState(repoRoot);
 
   if (json) {
     write(`${JSON.stringify(state)}\n`);

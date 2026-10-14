@@ -11,7 +11,11 @@ import {
 } from 'node:fs';
 import {tmpdir} from 'node:os';
 import path from 'node:path';
-import {invalidateStatuslineCache} from './statusline-cache.js';
+import {newMainCheckout} from '../../util/main-checkout-fixture.js';
+import {
+  invalidateStatuslineCache,
+  refreshWikiDriftInCache,
+} from './statusline-cache.js';
 
 describe('invalidateStatuslineCache', () => {
   let root: string;
@@ -126,6 +130,104 @@ describe('invalidateStatuslineCache', () => {
       checkedAt: 0,
       wikiDriftCount: 8,
     });
+    expect(existsSync(path.join(linked, '.gaia'))).toBe(false);
+  });
+});
+
+const commit = (cwd: string, subject: string): void => {
+  execFileSync('git', ['commit', '-q', '--allow-empty', '-m', subject], {
+    cwd,
+  });
+};
+
+const headOf = (cwd: string): string =>
+  execFileSync('git', ['rev-parse', 'HEAD'], {cwd, encoding: 'utf8'}).trim();
+
+describe('refreshWikiDriftInCache', () => {
+  let root: string;
+  let cacheDirectory: string;
+  let cachePath: string;
+
+  const writeState = (sha: string): void => {
+    mkdirSync(path.join(root, 'wiki'), {recursive: true});
+    writeFileSync(
+      path.join(root, 'wiki', '.state.json'),
+      JSON.stringify({last_evaluated_sha: sha}),
+      'utf8'
+    );
+  };
+
+  const seed = (contents: string): void => {
+    mkdirSync(cacheDirectory, {recursive: true});
+    writeFileSync(cachePath, contents, 'utf8');
+  };
+
+  beforeEach(() => {
+    root = newMainCheckout('gaia-statusline-refresh-');
+    cacheDirectory = path.join(root, '.gaia', 'local', 'cache', 'shared');
+    cachePath = path.join(cacheDirectory, 'update-check.json');
+  });
+
+  afterEach(() => {
+    rmSync(root, {force: true, recursive: true});
+  });
+
+  test('writes the drift and the state sha the refresher writes, keeping every other key', () => {
+    const evaluated = headOf(root);
+    writeState(evaluated);
+    commit(root, 'feat: one');
+    commit(root, 'wiki: sync through abcdef0');
+    commit(root, 'feat: two');
+    seed(JSON.stringify({checkedAt: 1_700_000_000, wikiDriftCount: 52}));
+
+    expect(refreshWikiDriftInCache(root)).toBe(2);
+    expect(JSON.parse(readFileSync(cachePath, 'utf8'))).toEqual({
+      checkedAt: 1_700_000_000,
+      wikiDriftCount: 2,
+      wikiStateSha: evaluated,
+    });
+  });
+
+  test('a state file at HEAD clears a showing count to 0', () => {
+    writeState(headOf(root));
+    seed(JSON.stringify({checkedAt: 5, wikiDriftCount: 52}));
+
+    expect(refreshWikiDriftInCache(root)).toBe(0);
+    expect(JSON.parse(readFileSync(cachePath, 'utf8'))).toMatchObject({
+      wikiDriftCount: 0,
+    });
+  });
+
+  test('creates nothing and returns null when the cache file is absent', () => {
+    writeState(headOf(root));
+
+    expect(refreshWikiDriftInCache(root)).toBeNull();
+    expect(existsSync(path.join(root, '.gaia'))).toBe(false);
+  });
+
+  test.each([
+    ['unparseable JSON', '{not json'],
+    ['a JSON array', '[1, 2]'],
+    ['JSON null', 'null'],
+  ])('leaves the file untouched for %s', (_label, contents) => {
+    writeState(headOf(root));
+    seed(contents);
+
+    expect(refreshWikiDriftInCache(root)).toBeNull();
+    expect(readFileSync(cachePath, 'utf8')).toBe(contents);
+  });
+
+  test("from a linked worktree, measures and writes the main checkout's drift", () => {
+    writeState(headOf(root));
+    commit(root, 'feat: main moves on');
+    seed(JSON.stringify({checkedAt: 5, wikiDriftCount: 0}));
+    const linked = path.join(root, '.claude', 'worktrees', 'linked');
+    execFileSync('git', ['worktree', 'add', '-q', '-b', 'linked', linked], {
+      cwd: root,
+    });
+    commit(linked, 'feat: only on the linked branch');
+
+    expect(refreshWikiDriftInCache(linked)).toBe(1);
     expect(existsSync(path.join(linked, '.gaia'))).toBe(false);
   });
 });
