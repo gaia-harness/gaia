@@ -10,8 +10,6 @@
 #   b. every plan/*.md is named in plan.md by its repo path and listed in the
 #      /gaia-plan command, so a sub-reference no line routes to cannot exist;
 #   c. every plan/<name>.md either file names exists;
-#   d. each moved label has exactly one home among plan.md, planner.md and
-#      decomposition-audit.md, so a stale copy cannot drift beside the original;
 #   e. the decomposition audit points at the shared lens contract instead of
 #      carrying its own reply-shaped findings schema;
 #   g. plan.md step 4's dispatch makes the planner's first action a Read of
@@ -102,32 +100,6 @@ no_orphan_route() {
   printf '\nRead `%s/plan/missing.md` now.\n' "$REFERENCES_RELATIVE" >>"$copy/$REFERENCES_RELATIVE/plan.md"
   run no_orphan_route "$copy"
   [ "$status" -ne 0 ]
-}
-
-# --- d. each moved label has one home ---------------------------------------
-
-# owner<TAB>extended regex: each label that moved out of plan.md, with the one
-# file that owns it.
-MOVED_LABELS=(
-  'plan/planner.md	\*\*Sub-agent invocation:\*\*'
-  'plan/planner.md	\*\*Stop conditions\.\*\*'
-  'plan/planner.md	How your run ends:'
-  'plan/decomposition-audit.md	^#+ 4\.6a'
-)
-
-labels_owned() {
-  local root="$1" entry owner pattern file holders
-  for entry in "${MOVED_LABELS[@]}"; do
-    owner="${entry%%	*}"
-    pattern="${entry#*	}"
-    holders=""
-    for file in plan.md plan/planner.md plan/decomposition-audit.md; do
-      if grep -qE -- "$pattern" "$root/$REFERENCES_RELATIVE/$file"; then
-        holders="$holders$file "
-      fi
-    done
-    [ "$holders" = "$owner " ] || { printf '%s is held by [%s], expected [%s]\n' "$pattern" "$holders" "$owner" >&2; return 1; }
-  done
 }
 
 # --- e. the audit uses the lens contract ------------------------------------

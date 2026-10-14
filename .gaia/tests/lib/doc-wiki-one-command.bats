@@ -4,12 +4,8 @@
 # the playbooks are prose instructions Claude executes, so the only
 # deterministic check on them is on their text.
 #
-#   UAT-002: the router takes no arguments and prints one notice for any.
 #   UAT-003: sync ends with a completion line the router branches on, and the
 #            router gates nothing on consolidate.
-#   UAT-004: a skipped consolidate finding resurfaces on the next run.
-#   UAT-011: lint carries the broken-wikilink check and the router surfaces it.
-#   UAT-012: the lint fix loop handles a broken wikilink.
 #   UAT-014: the router stops the chain when the begin step fails.
 #
 # Each assertion is a helper that takes its file paths as arguments, so the
@@ -25,7 +21,6 @@ setup() {
   CONSOLIDATE="$REPO_ROOT/.claude/skills/gaia/references/wiki/consolidate.md"
   LINT="$REPO_ROOT/.claude/skills/gaia/references/wiki/lint.md"
   LINT_FIX="$REPO_ROOT/.claude/skills/gaia/references/wiki/lint-fix.md"
-  EN_DASH="$(printf '\xe2\x80\x93')"
 }
 
 # --- shared helpers -------------------------------------------------------
@@ -95,27 +90,6 @@ scratch_copy() {
   printf '%s\n' "$destination"
 }
 
-# A scratch copy of $1 with one line $3 added directly under heading line $2.
-scratch_with_line_under() {
-  local destination="$BATS_TEST_TMPDIR/$4"
-  awk -v heading="$2" -v added="$3" '{ print } $0 == heading { print added }' "$1" >"$destination"
-  printf '%s\n' "$destination"
-}
-
-# --- UAT-002: router arguments -------------------------------------------
-
-assert_router_takes_no_arguments() {
-  local router="$1" retired
-  has_fixed "$router" 'Usage: /gaia-wiki' || return 1
-  grep -qxF -- 'Usage: /gaia-wiki' "$router" || { echo "usage line is not on a line of its own"; return 1; }
-  has_fixed "$router" 'Note: /gaia-wiki takes no arguments; ignoring "<arguments>" and running the full chain.' || return 1
-  for retired in sync consolidate lint; do
-    has_fixed "$router" "\`$retired\`" || return 1
-  done
-  lacks_regex "$router" 'Print help|No chaining|stop after relaying|sub-arg|Usage: /gaia-wiki \[' || return 1
-  return 0
-}
-
 # --- UAT-003: completion signal -------------------------------------------
 
 assert_completion_signal() {
@@ -140,56 +114,11 @@ assert_completion_signal() {
   [[ "$output" == *"missing in $scratch"* ]]
 }
 
-# --- UAT-004: a skipped finding resurfaces ----------------------------------
-
-assert_skip_resurfaces() {
-  local consolidate="$1"
-  has_fixed "$consolidate" 'No-op. The finding stays active and resurfaces on the next `/gaia-wiki` run.' || return 1
-  has_fixed "$consolidate" '`Keep both` is the only answer that suppresses a finding on later runs.' || return 1
-  lacks_regex "$consolidate" 'revisit .* manually|running .*consolidate.* manually' || return 1
-  return 0
-}
-
-# --- UAT-011: broken-wikilink check ----------------------------------------
-
-# Prints the number of the last "## Step N" heading of lint file $1.
-last_lint_step_number() {
-  grep -E '^## Step [0-9]+' "$1" | tail -1 | sed -E 's/^## Step ([0-9]+).*/\1/'
-}
-
-assert_broken_wikilink_check() {
-  local lint="$1" router="$2" consolidate="$3" last_step
-  has_fixed "$lint" '## #17: Broken wikilinks' || return 1
-  has_fixed "$lint" '.gaia/cli/gaia wiki broken-links --json' || return 1
-  has_fixed "$lint" 'WIKI BROKEN-LINKS:' || return 1
-  last_step="$(grep -E '^## Step ' "$lint" | tail -1)"
-  [ "$last_step" = '## Step 9: Surface to the user' ] || { echo "last lint step is: $last_step"; return 1; }
-  section_has_fixed "$router" 'Lint' 'WIKI BROKEN-LINKS:' || return 1
-  section_has_fixed "$router" 'Lint' "Steps 1${EN_DASH}$(last_lint_step_number "$lint")" || return 1
-  lacks_regex "$consolidate" 'No lint check detects a broken wikilink' || return 1
-  return 0
-}
-
 # --- Conformance beyond the UAT clauses ------------------------------------
-
-assert_no_stage_invocation_wording() {
-  local file
-  for file in "$@"; do
-    lacks_regex "$file" 'stage name such as|standalone' || return 1
-  done
-  return 0
-}
 
 assert_sync_commits_only_through_chain() {
   has_fixed "$1" 'gaia wiki chain commit' || return 1
   lacks_regex "$1" 'git commit|git -C [^ ]+ commit|commit -m' || return 1
-  return 0
-}
-
-assert_router_lint_names_broken_wikilinks() {
-  local text
-  text="$(section_text "$1" 'Lint')"
-  grep -qiE 'broken[- ]wikilink' <<<"$text" || { echo "the Lint section does not name broken wikilinks in $1"; return 1; }
   return 0
 }
 
@@ -206,30 +135,6 @@ assert_router_lint_names_broken_wikilinks() {
   run assert_sync_commits_only_through_chain "$scratch"
   [ "$status" -ne 0 ]
   [[ "$output" == *"git commit"* ]]
-}
-
-# --- UAT-012: lint fix loop ---------------------------------------------------
-
-# Print the broken-wikilink entries of lint-fix file $1: each bullet that opens
-# with the #17 marker, up to the next top-level bullet or heading.
-fix_loop_broken_link_text() {
-  awk '
-    /^- \*\*#17/ { inside = 1; print; next }
-    inside && (/^- / || /^#/) { inside = 0 }
-    inside { print }
-  ' "$1"
-}
-
-assert_fix_loop_handles_broken_links() {
-  local text
-  need_file "$1" || return 1
-  text="$(fix_loop_broken_link_text "$1")"
-  [ -n "$text" ] || { echo "no broken-wikilink entry in $1"; return 1; }
-  local literal
-  for literal in 'wiki/_archived/' 'Repoint to <page title>' 'Remove the link' 'Leave as is'; do
-    grep -qF -- "$literal" <<<"$text" || { echo "missing in the broken-wikilink entry of $1: $literal"; return 1; }
-  done
-  return 0
 }
 
 # --- UAT-014: the chain stops when begin fails -------------------------------

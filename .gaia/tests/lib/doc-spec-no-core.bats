@@ -3,8 +3,7 @@
 # Doc-conformance suite: /gaia-spec runs as one explicit, script-driven
 # workflow with no dependency on a spec-kit core install. Step 3 carries the
 # allocate, anchor, and stamp duties itself, step 10 runs the lint script
-# directly, and neither the reference, the template, nor the allocator header
-# names a spec-kit mechanism.
+# directly.
 #
 # Tokens the removed-automation guard forbids anywhere in the tree are built at
 # runtime (concatenation) so this file never carries one contiguously.
@@ -19,10 +18,6 @@ setup() {
   LINT="$REPO_ROOT/.gaia/scripts/spec/lint.sh"
 
   slash_command_prefix="/spec""kit-"
-  hook_pre_draft="before""_specify"
-  hook_post_draft="after""_specify"
-  hook_post_clarify="after""_clarify"
-  execute_command="EXECUTE""_COMMAND"
 }
 
 _anchor_line() {
@@ -75,37 +70,6 @@ step3_range() {
   true
 }
 
-# no_spec_kit_mechanism <references-dir>: succeeds when spec.md and every
-# spec/<name>.md it names carry no spec-kit mechanism. The set is derived from
-# spec.md's own routes, so text moved into a sub-reference stays checked. A
-# named file that does not exist, or a pass that reads fewer files than
-# spec.md names, fails rather than narrowing the check.
-no_spec_kit_mechanism() {
-  local dir="$1" names name files file count=0 expected
-  [ -f "$dir/spec.md" ] || return 1
-  names="$(grep -oE -- '(^|[^A-Za-z0-9_-])spec/[A-Za-z0-9_-]+\.md' "$dir/spec.md" | sed -E 's|^.*spec/||' | sort -u)"
-  [ -n "$names" ] || return 1
-  files="$dir/spec.md"
-  while IFS= read -r name; do
-    if [ ! -f "$dir/spec/$name" ]; then
-      printf 'spec.md names missing spec/%s\n' "$name" >&2
-      return 1
-    fi
-    files="$files
-$dir/spec/$name"
-  done <<<"$names"
-  expected=$(($(printf '%s\n' "$names" | wc -l) + 1))
-  while IFS= read -r file; do
-    count=$((count + 1))
-    grep -n -i -E 'speckit|spec-kit|preset' "$file" && return 1
-    grep -n -F 'from another file under another agent' "$file" && return 1
-    grep -n -E "${execute_command}|${hook_pre_draft}|${hook_post_draft}|${hook_post_clarify}|How spec-kit fires" "$file" && return 1
-  done <<<"$files"
-  [ "$count" -eq "$expected" ] || return 1
-  [ "$count" -ge 2 ] || return 1
-  return 0
-}
-
 @test "step 10 runs the lint script directly" {
   range="$(range_between "$SPEC_MD" '### 10. Immutability lint' '### 11.')"
   [ -n "$range" ]
@@ -115,4 +79,3 @@ $dir/spec/$name"
   fi
   true
 }
-

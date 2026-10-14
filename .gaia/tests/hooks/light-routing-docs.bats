@@ -48,11 +48,6 @@ assert_pinned() {
   true
 }
 
-# light_section <file>: the page's `#### Light routing` subsection body.
-light_section() {
-  awk '/^#### Light routing$/ {inside_light_section=1; next} /^#{1,4} / {inside_light_section=0} inside_light_section' "$1"
-}
-
 @test "page and unit never spell the light write flag" {
   grep -qF -- "$FORBIDDEN_FLAG" "$PAGE" && return 1
   grep -qF -- "$FORBIDDEN_FLAG" "$UNIT" && return 1
@@ -100,13 +95,3 @@ light_section() {
     | grep -viE 'never|no marker|light-marker|audit-light-mark' || true)"
   [ -n "$offending" ]
 }
-
-# maintainer_block <file>: the lines inside gaia:maintainer-only markers. The
-# marker names are assembled from halves so this file carries no marker line.
-maintainer_block() {
-  awk -v marker="gaia:""maintainer-only" '
-    index($0, "<!-- " marker ":start -->") { inside = 1; next }
-    index($0, "<!-- " marker ":end -->") { inside = 0; next }
-    inside' "$1"
-}
-

@@ -25,8 +25,6 @@ setup() {
   TASK_ORCHESTRATION="$REPO_ROOT/wiki/concepts/Task Orchestration.md"
   PLANMD="$REPO_ROOT/.claude/skills/gaia/references/plan.md"
   DEBTMD="$REPO_ROOT/.claude/skills/gaia/references/debt.md"
-  MODEL_RE='\b(opus|sonnet|haiku|fable)\b|claude-(opus|sonnet|haiku|fable)'
-  BAN_TERMS=("executor" "commit" "git" "worktree" "branch" "quality gate" "push" "merge" "pull request")
   TEMPORARY_DIRECTORY="$BATS_TEST_TMPDIR"
 }
 
@@ -40,30 +38,6 @@ rule_budget_ok() {
   nonblank_line_count="$(grep -c '[^[:space:]]' "$file_path")"
   [ "$nonblank_line_count" -le 8 ] || return 1
   [ "$(wc -c <"$file_path" | tr -d ' ')" -le 1200 ] || return 1
-  return 0
-}
-
-BAN_VISITED=0
-rule_ban_ok() {
-  local file_path="$1" ban_term
-  BAN_VISITED=0
-  [ -f "$file_path" ] || return 1
-  for ban_term in "${BAN_TERMS[@]}"; do
-    BAN_VISITED=$((BAN_VISITED + 1))
-    grep -qiF -- "$ban_term" "$file_path" && return 1
-  done
-  grep -qiE '\bPR\b' "$file_path" && return 1
-  return 0
-}
-
-rule_directives_ok() {
-  local file_path="$1" required_phrase
-  [ -f "$file_path" ] || return 1
-  for required_phrase in '.claude/rules/subagent-dispatch.md' 'wiki/concepts/Workflow Doctrine.md' \
-    '.gaia/local/research/<topic>-<date>/' 'rewritten in place'; do
-    grep -qF -- "$required_phrase" "$file_path" || return 1
-  done
-  grep -qiF -- 'never appended' "$file_path" || return 1
   return 0
 }
 
@@ -121,109 +95,6 @@ anchors_ok() {
   return 0
 }
 
-no_model_names_ok() {
-  local file_path="$1"
-  [ -f "$file_path" ] || return 1
-  grep -niE "$MODEL_RE" "$file_path" >/dev/null && return 1
-  return 0
-}
-
-# prints "<start> <end>" of the first contiguous `|` block after the Model table heading
-wiki_model_block() {
-  awk '
-    $0 == "## Model table" { on = 1; next }
-    on && /^## / { exit }
-    on && /^\|/ { if (!block_start) block_start = NR; block_end = NR; next }
-    on && block_start && !/^\|/ { exit }
-    END { print block_start, block_end }
-  ' "$1"
-}
-
-WIKI_MATCHES=0
-wiki_models_ok() {
-  local file_path="$1" block_start_line block_end_line line_number rows
-  [ -f "$file_path" ] || return 1
-  read -r block_start_line block_end_line <<<"$(wiki_model_block "$file_path")"
-  [ -n "$block_start_line" ] && [ -n "$block_end_line" ] || return 1
-  WIKI_MATCHES=0
-  while IFS= read -r line_number; do
-    WIKI_MATCHES=$((WIKI_MATCHES + 1))
-    [ "$line_number" -ge "$block_start_line" ] && [ "$line_number" -le "$block_end_line" ] || return 1
-  done < <(grep -niE "$MODEL_RE" "$file_path" | cut -d: -f1)
-  [ $((block_end_line - block_start_line + 1 - 2)) -eq 4 ] || return 1
-  rows="$(sed -n "${block_start_line},${block_end_line}p" "$file_path" | awk -F'|' 'NR > 2 { gsub(/^ +| +$/, "", $2); print $2 }')"
-  [ "$rows" = "$(printf 'sweep\nscoped implementation\nsynthesis\nlookup, scaffold, mechanical')" ] || return 1
-  return 0
-}
-
-WIKI_HEADINGS=(
-  '## Roles' '## Inline floor' '## Model table' '## Run folder and checkpoint' '## Resume'
-  '## Context checkpoint' '## Concurrency limits' '## Initiative linking' '## Research attribution' '## Injection hook'
-  '## Measurements' '## See also'
-)
-START_MARK='<!-- gaia:maintainer-only:start -->'
-END_MARK='<!-- gaia:maintainer-only:end -->'
-
-line_of() { grep -nxF -- "$2" "$1" | head -n 1 | cut -d: -f1; }
-
-wiki_structure_ok() {
-  local file_path="$1" heading previous_line_number=0 line_number measurements_heading_line
-  [ -f "$file_path" ] || return 1
-  for heading in "${WIKI_HEADINGS[@]}"; do
-    line_number="$(line_of "$file_path" "$heading")"
-    [ -n "$line_number" ] || return 1
-    [ "$line_number" -gt "$previous_line_number" ] || return 1
-    previous_line_number="$line_number"
-  done
-  grep -qF '.claude/doctrine/execution.md' "$file_path" || return 1
-  grep -qF '.claude/rules/context-discipline.md' "$file_path" || return 1
-  measurements_heading_line="$(line_of "$file_path" '## Measurements')"
-  # Marker pairs alternate start, end, never nested or left open, and one pair
-  # brackets Measurements. Other pairs wrap maintainer-only lines elsewhere.
-  awk -v start_marker="$START_MARK" -v end_marker="$END_MARK" -v measurements="$measurements_heading_line" '
-    $0 == start_marker { if (open) exit 1; open = 1; start_line = NR; next }
-    $0 == end_marker { if (!open) exit 1; open = 0; if (start_line < measurements && measurements < NR) covered = 1 }
-    END { if (open || !covered) exit 1 }
-  ' "$file_path" || return 1
-  return 0
-}
-
-wiki_exception_ok() {
-  local file_path="$1"
-  [ -f "$file_path" ] || return 1
-  grep -qiF 'sanctioned depth-2 orchestrator' "$file_path" || return 1
-  grep -qF 'audit-loop-unit' "$file_path" || return 1
-  grep -qiF 'state-changing git' "$file_path" || return 1
-  return 0
-}
-
-no_ids_ok() {
-  local file_path="$1"
-  [ -f "$file_path" ] || return 1
-  grep -nE 'UAT-[0-9]+|SPEC-[0-9]+' "$file_path" >/dev/null && return 1
-  return 0
-}
-
-presence_ok() {
-  local root="$1" relative_path
-  shift
-  [ "$#" -gt 0 ] || return 1
-  for relative_path in "$@"; do
-    [ -e "$root/$relative_path" ] || return 1
-  done
-  return 0
-}
-
-ledger_names_ok() {
-  local file_path
-  [ "$#" -gt 0 ] || return 1
-  for file_path in "$@"; do
-    [ -f "$file_path" ] || return 1
-    grep -nE 'links\.jsonl|usage\.jsonl' "$file_path" >/dev/null && return 1
-  done
-  return 0
-}
-
 settings_ok() {
   local file_path="$1"
   [ -f "$file_path" ] || return 1
@@ -258,42 +129,6 @@ registry_ok() {
       and (.keyed_by | type == "string" and length > 0) and has("reaped_by"))] | length == 1' "$file_path" >/dev/null || return 1
   jq -e '[.entries[] | select(.path == "cache/doctrine-injected.*" and .scope == "main-only"
       and .keyed_by == null and has("reaped_by"))] | length == 1' "$file_path" >/dev/null || return 1
-  return 0
-}
-
-task_orchestration_links_ok() {
-  local file_path="$1" first_paragraph
-  [ -f "$file_path" ] || return 1
-  first_paragraph="$(awk '
-    !in_heading && /^# / { in_heading = 1; next }
-    in_heading && !in_paragraph && /^[[:space:]]*$/ { next }
-    in_heading && /^[[:space:]]*$/ { exit }
-    in_heading { in_paragraph = 1; print }
-  ' "$file_path")"
-  [ -n "$first_paragraph" ] || return 1
-  case "$first_paragraph" in *'[[Workflow Doctrine]]'*) ;; *) return 1 ;; esac
-  grep -qxF '## Plan artifacts' "$file_path" || return 1
-  grep -qxF '## Execution lifecycle' "$file_path" || return 1
-  return 0
-}
-
-plan_pointer_ok() {
-  local file_path="$1" first rule
-  [ -f "$file_path" ] || return 1
-  first="$(grep -n 'Workflow Doctrine' "$file_path" | head -n 1 | cut -d: -f1)"
-  rule="$(grep -n '^---$' "$file_path" | head -n 1 | cut -d: -f1)"
-  [ -n "$first" ] || return 1
-  if [ -n "$rule" ]; then [ "$first" -lt "$rule" ] || return 1; fi
-  return 0
-}
-
-no_model_rows_ok() {
-  local file_path="$1" row_prefix
-  [ -f "$file_path" ] || return 1
-  grep -qF 'Workflow Doctrine' "$file_path" || return 1
-  for row_prefix in '| sweep' '| scoped implementation' '| synthesis' '| lookup, scaffold, mechanical'; do
-    grep -qF -- "$row_prefix" "$file_path" && return 1
-  done
   return 0
 }
 

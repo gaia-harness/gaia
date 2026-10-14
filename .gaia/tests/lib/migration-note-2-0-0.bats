@@ -6,7 +6,6 @@
 #   R      the note passes the real release scrub, the id check still covers
 #          the folder, and the excluded-refs exemption is what lets it pass
 #   G      the ground rule and the step 7 restart paragraph
-#   O      the step 14 event and handoff order, and the baseline record
 #   P1     GAIA's own project config is withheld from the bundle
 #
 # Tokens the suite must not contain (the migrate URL, an em dash, a concrete
@@ -45,35 +44,6 @@ restart_paragraph_ok() {
     printf '%s\n' "$paragraph" | grep -qF -- "$token" || return 1
   done
   printf '%s\n' "$paragraph" | grep -q -i -- 'paste' && return 1
-  return 0
-}
-
-# Line numbers (relative to the file) of the step 14 anchors, one per line:
-# manifest write, install event, handoff, update event, migrate-2 deletion.
-step14_lines() {
-  awk '
-    /^## Step 14/ { f = 1; next }
-    f && /^## / { exit }
-    !f { next }
-    index($0, "Copy L'"'"'s `.gaia/manifest.json`") && !m { m = NR }
-    $0 == ".gaia/cli/gaia ping --event init || true" && !i { i = NR }
-    index($0, "git switch main && git pull --ff-only") && !h { h = NR }
-    $0 ~ /^\.gaia\/cli\/gaia ping --event update --from <baseline> --to 2\.0\.0 \|\| true$/ && !u { u = NR }
-    $0 ~ /^[0-9]+\. Delete `\.gaia\/local\/cache\/shared\/migrate-2\/`/ && !d { d = NR }
-    END { print m + 0; print i + 0; print h + 0; print u + 0; print d + 0 }
-  ' "$1"
-}
-
-# Exit 0 when the five step 14 anchors of the note at $1 all exist and ascend.
-step14_order_ok() {
-  local lines prev=0 n
-  lines="$(step14_lines "$1")"
-  [ "$(printf '%s\n' "$lines" | wc -l | tr -d ' ')" -eq 5 ] || return 1
-  for n in $lines; do
-    [ "$n" -gt "$prev" ] || return 1
-    prev="$n"
-  done
-  grep -qF -- 'update ping pending' "$1" || return 1
   return 0
 }
 

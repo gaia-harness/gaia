@@ -1,18 +1,13 @@
 #!/usr/bin/env bats
 #
 # Doc-conformance suite for /gaia-init (.claude/commands/gaia-init.md): the
-# command asks no CI-intent or wiki-mode question, writes the project settings
-# through `gaia init write-project-config`, and its resume step list names the
-# same steps, in the same order, as the CLI's STEP_ORDER. It also pins the
-# shared-reference shape: the command reads exactly the per-machine,
-# isolation-question and sandbox-recommendation references, lists them in its
-# references block, and the setup command reads each too (finalize deletes only this command); it has no
-# lettered sub-steps; and it finalizes with the plain setup finalize call.
-#
-# Forbidden tokens that the repo-wide absence guard also forbids are built at
-# runtime, so this file never carries the literal. Each absence check is proven
-# able to fail: a scratch copy of the command gets the forbidden content
-# re-inserted and the check must flag it.
+# command writes the project settings through `gaia init write-project-config`,
+# and its resume step list names the same steps, in the same order, as the CLI's
+# STEP_ORDER. It also pins the shared-reference shape: the command reads exactly
+# the per-machine, isolation-question and sandbox-recommendation references,
+# lists them in its references block, and the setup command reads each too
+# (finalize deletes only this command); and it finalizes with the plain setup
+# finalize call.
 
 # The exact opening sentence of a command's references block.
 REFERENCES_OPENING='This command reads these references, all under `.claude/skills/gaia/references/setup/`. Read one only when a "Read ... now" line sends you there, and then read the whole file:'
@@ -24,33 +19,6 @@ setup() {
   REFERENCES_DIRECTORY="$REPO_ROOT/.claude/skills/gaia/references/setup"
   STATE_TS="$REPO_ROOT/.gaia/cli/src/init/util/state.ts"
   FROZEN_STEPS="strip-branding configure-i18n configure-data-layer rename wire-statusline bootstrap-env write-project-config finalize"
-}
-
-# Fixed-string forbidden tokens, one per line. The runtime-built ones are the
-# tokens the repo-wide absence guard forbids as literals.
-forbidden_tokens() {
-  printf '%s\n' \
-    "$(printf 'configure%sautomation' -)" \
-    "$(printf 'automation%sjson' .)" \
-    "$(printf 'docs.gaiareact.com/maintenance/gaia%sci' -)" \
-    'Configure CI integrations' \
-    'GAIA CI' \
-    'default_mode' \
-    '--wiki' \
-    'CI_CATEGORY' \
-    '--ci' \
-    'Sets `wiki`' \
-    '`ci` / `local` / `off`'
-}
-
-# Print each forbidden token found in the file given as $1.
-violations() {
-  local file="$1" token
-  while IFS= read -r token; do
-    if grep -qF -- "$token" "$file"; then
-      printf '%s\n' "$token"
-    fi
-  done < <(forbidden_tokens)
 }
 
 # Print the resume list names in order, from the `--from-step` sentence.
@@ -111,29 +79,6 @@ writer_call_present() {
   local scratch="$BATS_TEST_TMPDIR/gaia-init.scratch.md"
   sed -E 's/6=bootstrap-env, 7=write-project-config/6=write-project-config, 7=bootstrap-env/' "$INIT_MD" >"$scratch"
   [ "$(resume_steps "$scratch")" != "$FROZEN_STEPS" ]
-}
-
-# Print Step 2 (from its heading to the Step 3 heading) of the file given as $1.
-step_two() {
-  awk '/^## Step 2:/{on=1} /^## Step 3:/{on=0} on' "$1"
-}
-
-# Print each data-layer anchor missing from the file given as $1, one per line.
-data_layer_gaps() {
-  local file="$1" label
-  for label in 'camelCase (Recommended)' 'snake_case' 'Not sure' \
-    'Add TanStack Query for client-owned data?' 'No (Recommended)'; do
-    step_two "$file" | grep -qF -- "$label" || printf 'option: %s\n' "$label"
-  done
-  grep -qF '| Backend casing            | `camelCase`' "$file" || echo 'safe-default row: casing'
-  grep -qF '| TanStack Query            | `No`' "$file" || echo 'safe-default row: query'
-  grep -qF '> | Backend casing ' "$file" || echo 'automatic row: casing'
-  grep -qF '> | TanStack Query ' "$file" || echo 'automatic row: query'
-  grep -qF -- '- Backend casing (Step 2)' "$file" || echo 'automatic bullet: casing'
-  grep -qF -- '- TanStack Query (Step 2)' "$file" || echo 'automatic bullet: query'
-  grep -qE 'gaia init configure-data-layer --casing <CASING> --query <QUERY>' "$file" ||
-    echo 'step 3 line'
-  return 0
 }
 
 # ---------------------------------------------------------------------------
@@ -242,16 +187,6 @@ check_shared_references_only() {
   run check_shared_references_only "$INIT_MD" "$SETUP_MD" "$directory"
   [ "$status" -ne 0 ]
   grep -qF 'a shared reference is absent' <<<"$output"
-}
-
-# ---------------------------------------------------------------------------
-# No lettered sub-steps
-# ---------------------------------------------------------------------------
-
-# lettered_substeps <file>: print every step heading numbered with a letter
-# suffix (for example a "10b." sub-step).
-lettered_substeps() {
-  grep -nE '^#{2,4} [0-9]+[a-z]\.' "$1" || true
 }
 
 # ---------------------------------------------------------------------------

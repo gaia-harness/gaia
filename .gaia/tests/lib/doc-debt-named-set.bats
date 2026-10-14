@@ -25,7 +25,6 @@
 #     its own (the scorer owns them);
 #   - a named selection that loses a member at the claim-time re-read releases
 #     the claims set so far and stops, never re-presents the backlog;
-#   - every new run-ending path writes a cost record;
 #   - the budget constants are assigned in exactly one file, the scorer.
 #
 # Section-scoped, not whole-file: a phrase surviving elsewhere cannot green a
@@ -116,36 +115,6 @@ named_set_section() {
   grep -qF -- '- `numbers <N>`' <<<"$section"
   grep -qF -- '- `numbers <N1> <N2> ...`' <<<"$section"
   grep -qF -- '- `unrecognized <token>`' <<<"$section"
-}
-
-# playbook_set <core-file>: the core plus every sub-reference beside it under
-# debt/, one path per line, core first.
-playbook_set() {
-  local core="$1" file
-  printf '%s\n' "$core"
-  for file in "$(dirname "$core")"/debt/*.md; do
-    [ -f "$file" ] && printf '%s\n' "$file"
-  done
-  return 0
-}
-
-# no_list_or_why_section <core-file>: fails when any file in the playbook set
-# carries a list or why subcommand heading, or when the set holds no
-# sub-reference (a short glob would otherwise pass over the core alone).
-no_list_or_why_section() {
-  local files file count=0 expected
-  files="$(playbook_set "$1")"
-  # An independent count of the sub-references, so a glob that reads fewer
-  # files than exist fails instead of passing over a subset.
-  expected="$(find "$(dirname "$1")/debt" -maxdepth 1 -type f -name '*.md' 2>/dev/null | wc -l | tr -d ' ')"
-  while IFS= read -r file; do
-    [ -s "$file" ] || return 1
-    count=$((count + 1))
-    grep -qE -- '^## (list|why) subcommand' "$file" && return 1
-  done <<<"$files"
-  [ "$expected" -ge 1 ] || return 1
-  [ "$count" -eq $((expected + 1)) ] || return 1
-  return 0
 }
 
 @test "argument parsing relays the refusal verbatim and ends before the backend probe" {
@@ -336,14 +305,6 @@ budget_constant_owners() {
   grep -qiF -- 'release every claim this run already set' <<<"$section"
   grep -qF -- '`#<N> was <claimed by another session | parked on a SPEC> before this run could claim it; released this run'"'"'s claims and stopped. Re-run /gaia-debt with the numbers you still want.`' <<<"$section"
   grep -qiF -- 'without re-presenting the backlog' <<<"$section"
-}
-
-# --- 8. cost records for every new run-ending path --------------------------
-
-cost_record_has() {
-  section="$(extract_section '## Cost record (run end)')"
-  [ -n "$section" ]
-  grep -qiF -- "$1" <<<"$section"
 }
 
 # --- 9. difficulty has exactly one consumer ---------------------------------

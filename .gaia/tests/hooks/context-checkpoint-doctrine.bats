@@ -22,7 +22,6 @@ setup() {
   WIKI="$REPO_ROOT/wiki/concepts/Workflow Doctrine.md"
   EXCLUDE="$REPO_ROOT/.gaia/release-exclude"
   WIKI_HEADING='## Context checkpoint'
-  WIKI_PAGE_PATH='wiki/concepts/Workflow Doctrine.md'
   TEMPORARY_DIRECTORY="$BATS_TEST_TMPDIR"
 }
 
@@ -80,13 +79,6 @@ save_before_ask_ok() {
   return 0
 }
 
-no_third_option_ok() {
-  local file_path="$1"
-  [ -f "$file_path" ] || return 1
-  grep -qiE 'accept[ -]and[ -]stop' "$file_path" && return 1
-  return 0
-}
-
 document_shape_ok() {
   local file_path="$1"
   [ -f "$file_path" ] || return 1
@@ -124,16 +116,6 @@ not_excluded_ok() {
       "$line" | "$line"/*) return 1 ;;
     esac
   done <"$exclude"
-  return 0
-}
-
-# every line of the rule naming the checkpoint also names the wiki page that holds the reasoning
-rule_pointer_ok() {
-  local file_path="$1" checkpoint_lines
-  [ -f "$file_path" ] || return 1
-  checkpoint_lines="$(grep -F -- 'context checkpoint' "$file_path")"
-  [ -n "$checkpoint_lines" ] || return 1
-  printf '%s\n' "$checkpoint_lines" | grep -qvF -- "$WIKI_PAGE_PATH" && return 1
   return 0
 }
 

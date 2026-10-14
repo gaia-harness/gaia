@@ -2,10 +2,8 @@
 # doc-grep coverage for the narrowing of /gaia-cleanse to memory and wiki
 # curation. The playbook (.claude/skills/gaia/references/cleanse.md and its
 # cleanse/*.md sub-references) is prose a model executes, so the narrowing is
-# pinned as text: a conflict between two committed instruction files is no
-# longer judged here, every consumer of CONFLICT is scoped to cross-store
-# conflicts, an instruction file that contradicts a wiki page is reported and
-# never edited, and the store listing and budgets come from the CLI.
+# pinned as text: an instruction file that contradicts a wiki page is reported
+# and never edited, and the store listing comes from the CLI.
 #
 # Every check is a function over a list of files. Each is run twice: green over
 # the real playbook files, and red over the committed excerpt of the earlier
@@ -53,51 +51,6 @@ anchored_lines() {
   found="$(grep -hE -- "$anchor" "$@")" || return 1
   [ -n "$found" ] || return 1
   printf '%s\n' "$found"
-}
-
-# every_anchored_line_names <anchor_ERE> <term_ERE> <file>...: the anchor
-# matches at least one line and every matching line contains the term.
-every_anchored_line_names() {
-  local anchor="$1" term="$2" found line
-  shift 2
-  found="$(anchored_lines "$anchor" "$@")" || return 1
-  while IFS= read -r line; do
-    grep -qiE -- "$term" <<<"$line" || return 1
-  done <<<"$found"
-}
-
-check_no_project_internal_scope() {
-  grep -q -- 'Project-internal' "$@" && return 1
-  true
-}
-
-check_summary_conflicts_line_is_cross_store() {
-  every_anchored_line_names '^- Conflicts:' 'cross-store' "$@"
-}
-
-check_run_recommendation_is_cross_store() {
-  every_anchored_line_names '^- \*\*Recommend Run\*\*' 'cross-store' "$@"
-}
-
-check_skip_eligibility_is_cross_store() {
-  every_anchored_line_names '^- \*\*Skip is eligible\*\*' 'cross-store' "$@"
-}
-
-check_conflict_lens_is_cross_store() {
-  every_anchored_line_names '^- \*\*CF, conflict adjudication' 'cross-store' "$@"
-}
-
-check_conflict_readjudication_is_cross_store() {
-  every_anchored_line_names '^- A (cross-store )?CONFLICT-driven|^Collect the CF findings ONLY' 'cross-store' "$@"
-}
-
-check_names_prompt_audit() {
-  grep -q -- '/doctor prompt-audit' "$@"
-}
-
-check_no_budget_table() {
-  grep -qE -- '≤500 words|≤400 words|≤200 lines' "$@" && return 1
-  true
 }
 
 check_inventory_comes_from_the_cli() {

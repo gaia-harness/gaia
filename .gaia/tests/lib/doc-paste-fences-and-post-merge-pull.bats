@@ -1,17 +1,12 @@
 #!/usr/bin/env bats
 #
-# Doc-conformance suite for two operator-facing contracts:
-#
-#   a. every prompt, command or line GAIA hands the user to copy and paste is
-#      printed inside a fenced code block, and the always-loaded rule saying so
-#      lives in .claude/rules/context-discipline.md;
-#   b. the post-merge cleanup, owned by the shared work-lifecycle reference,
-#      pulls `main` into the main checkout only when that checkout is on `main`,
-#      and its worktree arms still run no `git checkout`.
+# Doc-conformance suite for the post-merge cleanup, owned by the shared
+# work-lifecycle reference: it pulls `main` into the main checkout only when
+# that checkout is on `main`, and its worktree arms still run no `git checkout`.
 #
 # Every check is a function taking a root laid out like the repository, so the
 # red twins run the same function against a mutated scratch copy: removing a
-# site's fence, or its pull, has to turn that site's check red.
+# site's pull has to turn that site's check red.
 #
 # Assertion style: .claude/rules/bats-assertions.md.
 
@@ -150,11 +145,6 @@ in_session_removal_pulls() {
   grep -qF -- "git $PULL" <<<"$removal"
 }
 
-continuation_prompts_pull() {
-  section "$1/$REFERENCES/work-lifecycle.md" '### Sub-agent context: continuation prompt' | fence_bodies text |
-    grep -qF -- "$PULL"
-}
-
 main_checkout_paragraph_uses_digest() {
   local paragraph
   paragraph="$(grep -F -- '**Read what the main checkout is holding' "$1/$RUNBOOK")"
@@ -163,11 +153,6 @@ main_checkout_paragraph_uses_digest() {
   if section "$1/$RUNBOOK" '## Post-merge verification before cleanup' | grep -qF -- "marker body's \`tree\` field"; then
     return 1
   fi
-}
-
-planner_points_at_reference() {
-  grep -qF -- 'work-lifecycle.md' "$1/$REFERENCES/plan/planner.md" || return 1
-  if grep -qF -- 'is ready to discard.' "$1/$REFERENCES/plan/planner.md"; then return 1; fi
 }
 
 @test "the worktree arm pulls main only when the main checkout holds main, and never forces" {
@@ -215,4 +200,3 @@ planner_points_at_reference() {
 @test "the post-merge verification section keys on the member digest, not the marker tree field" {
   main_checkout_paragraph_uses_digest "$REPO_ROOT"
 }
-

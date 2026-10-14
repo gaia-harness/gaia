@@ -2,8 +2,8 @@
 # Executable and prose checks over /setup-gaia's decision routing: the owed
 # check, who may record project decisions, each reference block that records
 # a feature's settled state without a question, the land step, the setup
-# ping, the label-sync degraded marker, the squash-only gate, Phase 5's
-# standalone handoff, and /gaia-init's records.
+# ping, the label-sync degraded marker, the squash-only gate, and Phase 5's
+# standalone handoff.
 #
 # Each block is extracted from the shipped file by its heading and run inside
 # a fixture repository under $BATS_TEST_TMPDIR, whose `.gaia/cli/gaia` is a
@@ -158,17 +158,6 @@ block_under() {
   ' "$1"
 }
 
-# section <file> <start-prefix> <stop-regex>: the lines from the first line
-# starting with the prefix up to, not including, the next line matching the
-# stop regex.
-section() {
-  awk -v start="$2" -v stop="$3" '
-    !inside && index($0, start) == 1 { inside = 1; print; next }
-    inside && $0 ~ stop { exit }
-    inside
-  ' "$1"
-}
-
 # check_line <name> <id>: the owed or declined check line from
 # setup-decisions.md with the id substituted.
 check_line() {
@@ -211,34 +200,6 @@ assert_no_mutation() {
     echo "a mutating gh call was made: $(grep '^MUTATION' "$GH_LOG")" >&2
     return 1
   fi
-}
-
-# pin <text> <literal...>: every literal appears in the text.
-pin() {
-  local text="$1" literal
-  shift
-  [ -n "$text" ] || {
-    echo "the pinned section is empty" >&2
-    return 1
-  }
-  for literal in "$@"; do
-    grep -qF -- "$literal" <<<"$text" || {
-      echo "the section does not carry: ${literal}" >&2
-      return 1
-    }
-  done
-}
-
-# without_lines <file> <literal> <name>: a scratch copy of the file without the
-# lines carrying the literal; fails when nothing was removed.
-without_lines() {
-  local copy="${BATS_TEST_TMPDIR}/$3"
-  grep -vF -- "$2" "$1" >"$copy" || true
-  cmp -s "$1" "$copy" && {
-    echo "the mutation removed nothing from $1" >&2
-    return 1
-  }
-  printf '%s\n' "$copy"
 }
 
 # ---------------------------------------------------------------------------
@@ -395,14 +356,6 @@ record_settled_state() {
   [ "$(jq -S -c 'del(.setup_decisions)' "${repo}/.gaia/project.json")" = "$before" ]
 }
 
-# check_probe_first <file>: the per-step rule, above the first step heading,
-# runs probes before the install and skips the install when every probe passes.
-check_probe_first() {
-  pin "$(awk '/^## Step 1:/ { exit } { print }' "$1")" \
-    'runs its probes first, before its install' \
-    'When every probe passes, it skips the install'
-}
-
 # ---------------------------------------------------------------------------
 # A machine id on a completed machine
 # ---------------------------------------------------------------------------
@@ -441,15 +394,6 @@ check_probe_first() {
   [ "$status" -ne 0 ]
   in_repo "$repo" .gaia/cli/gaia setup record sandbox declined >/dev/null
   in_repo "$repo" bash -c "$line"
-}
-
-# declined_pins <setup-command> <github-repo-reference>: every plain-run
-# re-ask consults the declined check first.
-declined_pins() {
-  pin "$(section "$1" '## Phase 2:' '^## ')" 'the declined check passes for `sandbox`' || return 1
-  pin "$(section "$1" '## Phase 4.6:' '^## ')" 'the declined check passes for `statusline-left`' || return 1
-  pin "$(section "$1" '### The sandbox recommendation' '^##')" '`absent` and the declined check passes: skip silently' || return 1
-  pin "$(section "$2" '## Remaining defaults' '^## ')" 'run the declined check for `delete-branch-on-merge` first'
 }
 
 # ---------------------------------------------------------------------------
@@ -538,13 +482,6 @@ check_land_order() {
   cmp -s "${REFERENCES}/land-decisions.md" "$copy" && return 1
   run check_land_order "$copy"
   [ "$status" -ne 0 ]
-}
-
-# check_phase_five_five <file>: Phase 5.5 lands only when project decisions
-# may be recorded.
-check_phase_five_five() {
-  pin "$(section "$1" '## Phase 5.5:' '^## ')" \
-    'When `MAY_RECORD_PROJECT` is not `none`, Read `.claude/skills/gaia/references/setup/land-decisions.md` now'
 }
 
 # ---------------------------------------------------------------------------
@@ -648,13 +585,6 @@ label_sync_block() {
 # The squash-only gate
 # ---------------------------------------------------------------------------
 
-# check_squash_gate <file>: Phase 3.7's Gate 1 names the owed check and
-# RECONFIGURE.
-check_squash_gate() {
-  pin "$(section "$1" '### Gate 1: whether the question is owed' '^##')" \
-    '`squash-only` is owed (the owed check)' 'RECONFIGURE'
-}
-
 @test "the squash-only owed check passes while undecided, fails once declined, and a new answer overwrites" {
   local repo line
   repo="$(make_repo squash-gate)"
@@ -732,63 +662,3 @@ standalone_block() {
   output_text="$(run_block "$repo" "$(standalone_block)" MAY_RECORD_PROJECT=admin)"
   [ -z "$output_text" ]
 }
-
-# ---------------------------------------------------------------------------
-# Prose pins
-# ---------------------------------------------------------------------------
-
-# check_phase_one_reads_decisions <file>: the setup-decisions Read line sits
-# in Phase 1, before Phase 2.
-check_phase_one_reads_decisions() {
-  pin "$(section "$1" '## Phase 1:' '^## ')" \
-    'Read `.claude/skills/gaia/references/setup/setup-decisions.md` now' \
-    'run its `## The owed check` and `## Who records project decisions`'
-}
-
-# check_owed_github_route <file>: inside Phase 3.5, the route to
-# github-repo.md's owed settings comes before the isolation policy's Gate 1.
-check_owed_github_route() {
-  section "$1" '## Phase 3.5:' '^## ' | awk '
-    index($0, "references/setup/github-repo.md` now") && index($0, "`## Owed and recorded settings`") && !route { route = NR }
-    $0 == "### Gate 1: the key'\''s own presence" { gate = NR }
-    END { exit !(route && gate && route < gate) }
-  ' || {
-    echo "Phase 3.5 does not route to the owed GitHub settings before its Gate 1" >&2
-    return 1
-  }
-}
-
-# check_squash_records_decision <file>: Phase 3.7 says the decision is
-# recorded and landed, and never that nothing is written or committed.
-check_squash_records_decision() {
-  local text
-  text="$(section "$1" '## Phase 3.7:' '^## ')"
-  pin "$text" 'the decision is recorded in `.gaia/project.json` `setup_decisions`, and Phase 5.5 lands it' || return 1
-  if grep -qF 'nothing is written to `.gaia/project.json` and nothing is committed' <<<"$text"; then
-    echo "Phase 3.7 still says nothing is written or committed" >&2
-    return 1
-  fi
-}
-
-# check_idempotence_relaxation <file>: the Idempotence section states the
-# relaxation for decisions recorded this run.
-check_idempotence_relaxation() {
-  pin "$(section "$1" '## Idempotence' '^## ')" \
-    'relaxes that promise for `setup_decisions` and the keys an owed question writes'
-}
-
-# check_init_step_nine <file>: Step 9 reads the shared sandbox-recommendation
-# reference, records both decisions, and holds no inline question.
-check_init_step_nine() {
-  local text
-  text="$(section "$1" '## Step 9:' '^## ')"
-  pin "$text" 'read `.claude/skills/gaia/references/setup/sandbox-recommendation.md` now' \
-    '.gaia/cli/gaia setup record sandbox-recommendation applied' \
-    '.gaia/cli/gaia setup record sandbox-recommendation declined' \
-    '.gaia/cli/gaia setup record isolation-policy applied' || return 1
-  if grep -qF "Recommend Claude Code's OS-level Bash sandbox to your team?" <<<"$text"; then
-    echo "Step 9 still holds the sandbox question inline" >&2
-    return 1
-  fi
-}
-

@@ -494,15 +494,6 @@ CASES
   true
 }
 
-# header_has_literals <file>: the comment block before `set -u` names both.
-header_has_literals() {
-  local header
-  header="$(sed -n '1,/^set -u$/p' "$1")"
-  [ -n "$header" ] || return 1
-  printf '%s' "$header" | grep -qF 'AskUserQuestion' || return 1
-  printf '%s' "$header" | grep -qF 'audit-grant' || return 1
-}
-
 # --- mutants: each guard can fail ----------------------------------------------
 
 # scratch_hook <sed-expression>: a scratch copy of the hook with its libraries

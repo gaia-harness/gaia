@@ -14,21 +14,12 @@
 #   sub-agent cleanup the continuation heading  full statement: that heading line
 #
 # Checks:
-#   1. the reference carries every phrase, the heading exactly once, and a full
-#      statement of cleanup, worktree removal and the continuation prompt (the
-#      merge-wait fence is owned by the merge workflow page, so the reference
-#      names the command in prose only);
 #   2. outside the reference, no file carries a full statement of cleanup,
 #      worktree removal or the continuation heading;
 #   3. outside the reference, a fence holding the merge-wait phrase appears only
 #      in the merge workflow page. Exemption: a fence that carries a
 #      `gaia:orchestrator-step` sentinel line (the plan reference's post-merge
-#      close template block is such a fence and must stay byte-identical);
-#   4. every file under `.claude/skills` or `.claude/rules` that mentions any
-#      signature phrase, in prose or in a fence, names `work-lifecycle.md`.
-#      Naming the merge workflow page does not satisfy it. The exemptions are in
-#      one array below. Pages under `wiki/concepts` are held to checks 2 and 3
-#      only.
+#      close template block is such a fence and must stay byte-identical.
 #
 # Every check takes a root laid out like the repository and prints one offender
 # line per violation, so the red twins run the same function against a mutated
@@ -45,12 +36,8 @@ setup() {
   MERGE_WORKFLOW='wiki/concepts/PR Merge Workflow.md'
   DEBT='.claude/skills/gaia/references/debt.md'
   SCOPE_DIRS=(.claude/skills .claude/rules wiki/concepts)
-  # Exempt from check 4: always loaded and naming the merge workflow itself,
-  # the reference, and the merge owner (outside check 4's scope in any case).
-  CHECK_4_EXEMPT=(.claude/rules/pr-merge.md "$REFERENCE" "$MERGE_WORKFLOW")
   PHRASE_MERGE_WAIT='pr-wait-merge.sh --pr'
   PHRASE_CLEANUP='fetch --prune'
-  PHRASE_REMOVE='ExitWorktree'
   CALL_REMOVE='ExitWorktree({action: "remove"'
   HEADING_CONTINUATION='### Sub-agent context: continuation prompt'
 }
@@ -83,43 +70,6 @@ fence_hits() {
 
 file_mentions() { grep -qF -- "$2" "$1"; }
 
-# list_carriers <root> <phrase>: prints the files in scope carrying the phrase.
-list_carriers() {
-  local root="$1" phrase="$2" relative
-  while IFS= read -r relative; do
-    file_mentions "$root/$relative" "$phrase" && printf '%s\n' "$relative"
-  done < <(scope_files "$root")
-  return 0
-}
-
-# check_1 <root>: the reference holds every phrase and a full statement of three.
-check_1() {
-  local root="$1" file="$1/$REFERENCE" failed=0 phrase
-  if [ ! -f "$file" ]; then
-    printf 'check1: %s missing\n' "$REFERENCE"
-    return 1
-  fi
-  for phrase in "$PHRASE_MERGE_WAIT" "$PHRASE_CLEANUP" "$PHRASE_REMOVE" "$HEADING_CONTINUATION"; do
-    if ! file_mentions "$file" "$phrase"; then
-      printf 'check1: %s lacks "%s"\n' "$REFERENCE" "$phrase"
-      failed=1
-    fi
-  done
-  if [ "$(grep -cxF -- "$HEADING_CONTINUATION" "$file")" -ne 1 ]; then
-    printf 'check1: %s must carry the heading "%s" exactly once\n' "$REFERENCE" "$HEADING_CONTINUATION"
-    failed=1
-  fi
-  if [ "$(fence_hits "$file" "$PHRASE_CLEANUP" 0)" -lt 1 ]; then
-    printf 'check1: %s has no fence holding "%s"\n' "$REFERENCE" "$PHRASE_CLEANUP"
-    failed=1
-  fi
-  if ! file_mentions "$file" "$CALL_REMOVE"; then
-    printf 'check1: %s lacks the call literal %s\n' "$REFERENCE" "$CALL_REMOVE"
-    failed=1
-  fi
-  return "$failed"
-}
-
 # check_2 <root>: no full statement of cleanup, removal or the heading outside the reference.
 check_2() {
   local root="$1" failed=0 relative
@@ -149,29 +99,6 @@ check_3() {
     [ "$relative" = "$MERGE_WORKFLOW" ] && continue
     if [ "$(fence_hits "$root/$relative" "$PHRASE_MERGE_WAIT" 1)" -gt 0 ]; then
       printf 'check3: %s holds a fence with "%s"\n' "$relative" "$PHRASE_MERGE_WAIT"
-      failed=1
-    fi
-  done < <(scope_files "$root")
-  return "$failed"
-}
-
-# check_4 <root>: every skill or rule file mentioning a phrase names work-lifecycle.md.
-check_4() {
-  local root="$1" failed=0 relative exempt skip phrase mentioned
-  while IFS= read -r relative; do
-    case "$relative" in .claude/skills/* | .claude/rules/*) ;; *) continue ;; esac
-    skip=0
-    for exempt in "${CHECK_4_EXEMPT[@]}"; do
-      [ "$relative" = "$exempt" ] && skip=1
-    done
-    [ "$skip" -eq 1 ] && continue
-    mentioned=''
-    for phrase in "$PHRASE_MERGE_WAIT" "$PHRASE_CLEANUP" "$PHRASE_REMOVE" "$HEADING_CONTINUATION"; do
-      file_mentions "$root/$relative" "$phrase" && mentioned="$mentioned [$phrase]"
-    done
-    [ -n "$mentioned" ] || continue
-    if ! file_mentions "$root/$relative" 'work-lifecycle.md'; then
-      printf 'check4: %s mentions%s without naming work-lifecycle.md\n' "$relative" "$mentioned"
       failed=1
     fi
   done < <(scope_files "$root")

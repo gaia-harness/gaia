@@ -3,15 +3,13 @@
 # remediation text: `.claude/skills/update-deps/SKILL.md`, its security recipe
 # `references/security.md`, and the override audit `references/override-audit.md`.
 #
-# What this suite pins: the Security preview section heads the preview, a run
-# with no outdated package but an open advisory is a real run, the security
-# phase's batch gate and per-resolution revert, every still-open reason literal,
-# the Phase 7 Security section's source line, dismissed-alert exclusion,
-# introduced marker, and cache rewrite, the Phase 8 security-only subject, the
-# flag refusal, the frontmatter triggers, acceptance only after a per-advisory
+# What this suite pins: a run with no outdated package but an open advisory is
+# a real run, the security phase's batch gate and per-resolution revert, the
+# Phase 7 Security section's source line, introduced marker, and cache rewrite,
+# the Phase 8 security-only subject, acceptance only after a per-advisory
 # question, the release-age and trust settings rule, no fixed /tmp scratch path,
-# the worktree state line's null-versus-zero read, the report-only reading,
-# the security phase's own snapshot directories, and baseline conversion.
+# the worktree state line's null-versus-zero read, the report-only reading, and
+# the security phase's own snapshot directories.
 #
 # Each check is a function over a file path, so every test that proves the
 # real page passes has a twin that runs the same function over a scratch copy
@@ -83,25 +81,6 @@ section() {
 phase7() { section "$1" "## Phase 7: Final report" "## Phase 8: Publish"; }
 
 # ---------------------------------------------------------------------------
-# 1. The Security section heads the preview
-# ---------------------------------------------------------------------------
-
-check_security_before_major() {
-  local preview security_line major_line
-  preview="$(section "$1" "### Preview" "### Decision")"
-  security_line="$(grep -nF -- '**Security**' <<<"$preview" | head -n 1 | cut -d: -f1)"
-  major_line="$(grep -nF -- '**Major**' <<<"$preview" | head -n 1 | cut -d: -f1)"
-  [ -n "$security_line" ] && [ -n "$major_line" ] || {
-    echo "the preview names no Security or no Major section" >&2
-    return 1
-  }
-  [ "$security_line" -lt "$major_line" ] || {
-    echo "the Security section does not come before Major" >&2
-    return 1
-  }
-}
-
-# ---------------------------------------------------------------------------
 # 2. Zero outdated with an advisory is a real run
 # ---------------------------------------------------------------------------
 
@@ -161,44 +140,6 @@ check_revert_and_cap() {
 }
 
 # ---------------------------------------------------------------------------
-# 4. Every still-open reason literal is stated
-# ---------------------------------------------------------------------------
-
-# reason_literals: one literal per line, each opened by its backtick so a
-# literal that is a prefix of another (quality gate failed) stays distinct.
-reason_literals() {
-  printf '%s\n' \
-    '`no patch`' \
-    '`acceptance declined`' \
-    '`quality gate failed`' \
-    '`quality gate failed (batch not isolated)`' \
-    '`wave reverted (' \
-    '`chain-head major declined`' \
-    '`dismissal refused (' \
-    '`patch inside release-age window (eligible ' \
-    '`report-only run`' \
-    '`held by config (' \
-    '`still installed in vulnerable range (' \
-    '`introduced by this run`'
-}
-
-# check_reason_literals <skill> <security>
-check_reason_literals() {
-  local literal count=0
-  while IFS= read -r literal; do
-    count=$((count + 1))
-    grep -qF -- "$literal" "$1" "$2" || {
-      echo "reason literal absent: ${literal}" >&2
-      return 1
-    }
-  done < <(reason_literals)
-  [ "$count" -eq 12 ] || {
-    echo "expected 12 reason literals, read ${count}" >&2
-    return 1
-  }
-}
-
-# ---------------------------------------------------------------------------
 # 5, 13, 14, 15. The Phase 7 Security section
 # ---------------------------------------------------------------------------
 
@@ -216,10 +157,6 @@ check_not_run_source_line() {
   remove_fixed "$copy" 'Dependabot alerts: Not run ('
   run check_not_run_source_line "$copy"
   [ "$status" -ne 0 ]
-}
-
-check_dismissed_exclusion() {
-  grep -qF -- 'is in the opening `dismissedGhsas`, or that this run dismissed, is accepted, not open: it gets no Still open row and no `introduced by this run` marker' <<<"$(phase7 "$1")"
 }
 
 check_cache_rewrite() {
@@ -342,44 +279,6 @@ check_phase8_security_only() {
 }
 
 # ---------------------------------------------------------------------------
-# 8. --security with --scope refuses naming both
-# ---------------------------------------------------------------------------
-
-check_flag_refusal() {
-  grep -qF -- '`/update-deps: --security and --scope cannot be combined; pass one or the other.`' "$1"
-}
-
-# ---------------------------------------------------------------------------
-# 9. Frontmatter description
-# ---------------------------------------------------------------------------
-
-# description_phrases: phrases the description must carry.
-description_phrases() {
-  printf '%s\n' 'Dependabot' 'security updates' 'fix Dependabot alerts' 'fix security advisories'
-}
-
-check_description() {
-  local description phrase count=0
-  description="$(awk 'NR == 1 && $0 == "---" { inside = 1; next } inside && $0 == "---" { exit } inside && /^description:/' "$1")"
-  [ -n "$description" ] || {
-    echo "no frontmatter description" >&2
-    return 1
-  }
-  while IFS= read -r phrase; do
-    count=$((count + 1))
-    grep -qF -- "$phrase" <<<"$description" || {
-      echo "description lacks: ${phrase}" >&2
-      return 1
-    }
-  done < <(description_phrases)
-  [ "$count" -eq 4 ] || return 1
-  if grep -qF -- 'Autonomous Dependabot' <<<"$description"; then
-    echo "description still says Autonomous Dependabot" >&2
-    return 1
-  fi
-}
-
-# ---------------------------------------------------------------------------
 # 10. Acceptance asks per advisory and never runs in CI
 # ---------------------------------------------------------------------------
 
@@ -490,27 +389,6 @@ state_line_body() {
   ' "$1"
 }
 
-check_state_line_reads_null() {
-  local body
-  body="$(state_line_body "$1")"
-  [ -n "$body" ] || {
-    echo "no gaia_update_deps_state_line definition" >&2
-    return 1
-  }
-  grep -qF -- '.securityCount' <<<"$body" || {
-    echo "the state line does not read securityCount" >&2
-    return 1
-  }
-  if grep -qE -- 'securityCount[[:space:]]*\|?[[:space:]]*//' <<<"$body"; then
-    echo "the state line defaults securityCount with //" >&2
-    return 1
-  fi
-  grep -qF -- 'security advisories unavailable' <<<"$body" || {
-    echo "the state line has no unavailable branch" >&2
-    return 1
-  }
-}
-
 # run_state_line <cache-json>: source the extracted function and run it over
 # a fixture cache.
 run_state_line() {
@@ -601,25 +479,3 @@ check_own_snapshots() {
   run check_own_snapshots "$copy"
   [ "$status" -ne 0 ]
 }
-
-# ---------------------------------------------------------------------------
-# 19. Conversion with several baseline entries
-# ---------------------------------------------------------------------------
-
-CONVERSION_REFUSAL='Refuse the conversion only when no baseline entry maps to the GHSA'
-
-check_conversion() {
-  local paragraph
-  paragraph="$(grep -F -- '**Conversion.**' "$1")"
-  grep -qF -- "$CONVERSION_REFUSAL" <<<"$paragraph" || {
-    echo "conversion is not refused only when no entry maps" >&2
-    return 1
-  }
-  grep -qF -- 'derive the proposed comment from the entry with the lowest id' <<<"$paragraph" || return 1
-  grep -qF -- 'confirm once for that advisory' <<<"$paragraph" || return 1
-  if grep -qF -- 'more than one' <<<"$paragraph"; then
-    echo "conversion refuses when more than one entry maps" >&2
-    return 1
-  fi
-}
-

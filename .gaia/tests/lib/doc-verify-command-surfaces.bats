@@ -3,14 +3,12 @@
 # their own work: the merge runbook, the audit round procedure, the pr-merge
 # rule and the audit-loop-unit agent. Each must name the one verification command (branch
 # mode before the first dispatch, round mode per audit round) inside its
-# maintainer-only blocks, never as separate shell-lint, selector and bats5
-# steps, and never outside a block (the release leak check refuses a mention of
-# a release-excluded path in shipped text).
+# maintainer-only blocks.
 #
 # GAIA_VERIFY_SURFACE_WIKI (the runbook), GAIA_VERIFY_SURFACE_ROUNDS (the round
 # procedure), GAIA_VERIFY_SURFACE_RULE and GAIA_VERIFY_SURFACE_AGENT override the surface paths so a scratch copy can be
 # driven through the same predicates; each defaults to the real file. Every
-# presence and absence check has a red twin run against such a copy.
+# presence check has a red twin run against such a copy.
 #
 # Assertion style: .claude/rules/bats-assertions.md.
 
@@ -34,30 +32,9 @@ maintainer_text() {
   ' "$1"
 }
 
-# outside_text <file>: only the lines outside maintainer-only marker pairs.
-outside_text() {
-  awk '
-    /<!-- gaia:maintainer-only:start -->/ { inside = 1; next }
-    /<!-- gaia:maintainer-only:end -->/ { inside = 0; next }
-    !inside { print }
-  ' "$1"
-}
-
 # block_has <file> <literal>: rc 0 when a maintainer-only block carries it.
 block_has() {
   maintainer_text "$1" | grep -qF -- "$2"
-}
-
-# runner_outside_block <file>: rc 0 when a line outside every block names the
-# runner.
-runner_outside_block() {
-  outside_text "$1" | grep -qF -- 'verify-harness.sh'
-}
-
-# separate_steps_listed <file>: rc 0 when a block names the shell-lint path or
-# the selector, the old separate steps.
-separate_steps_listed() {
-  block_has "$1" '.gaia/tests/shell-lint.sh' || block_has "$1" 'bats-suites-for-change.sh'
 }
 
 # scratch_without <file> <literal> <name>: copy of the file with every line
@@ -65,30 +42,6 @@ separate_steps_listed() {
 scratch_without() {
   local scratch_copy_path="$BATS_TEST_TMPDIR/$3"
   grep -vF -- "$2" "$1" >"$scratch_copy_path"
-  printf '%s\n' "$scratch_copy_path"
-}
-
-# scratch_with_old_step <file> <name>: copy with the old separate steps added
-# inside a maintainer-only block; prints its path.
-scratch_with_old_step() {
-  local scratch_copy_path="$BATS_TEST_TMPDIR/$2"
-  {
-    cat "$1"
-    printf '<!-- gaia:maintainer-only:start -->\n'
-    printf 'Run `bash .gaia/tests/shell-lint.sh` and `bash .gaia/scripts/bats-suites-for-change.sh`.\n'
-    printf '<!-- gaia:maintainer-only:end -->\n'
-  } >"$scratch_copy_path"
-  printf '%s\n' "$scratch_copy_path"
-}
-
-# scratch_with_outside_mention <file> <name>: copy with a runner mention
-# outside any block; prints its path.
-scratch_with_outside_mention() {
-  local scratch_copy_path="$BATS_TEST_TMPDIR/$2"
-  {
-    cat "$1"
-    printf '\nRun bash .gaia/tests/verify-harness.sh branch here.\n'
-  } >"$scratch_copy_path"
   printf '%s\n' "$scratch_copy_path"
 }
 

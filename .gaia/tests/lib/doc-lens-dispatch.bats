@@ -55,10 +55,6 @@ check_under_500_lines() {
   [ "$(wc -l <"$1")" -lt 500 ]
 }
 
-check_opening_sentence() {
-  grep -qF 'You are an ADVERSARIAL auditor of <ARTIFACT>' "$1"
-}
-
 check_redispatch_once() {
   grep -qF 're-dispatch that lens exactly once' "$1"
 }
@@ -82,13 +78,6 @@ check_plan_bash_write_note() {
   local file="$1"
   grep -qF 'write the findings file with `Bash` at the main-checkout path' "$file" || return 1
   grep -qF 'read it back to confirm both its content and its location' "$file"
-}
-
-check_no_banned_prose() {
-  local file="$1"
-  grep -qF "$(printf '\xe2\x80\x94')" "$file" && return 1
-  grep -qE 'SPEC-[0-9]+|UAT-[0-9]+|PLAN-[0-9]+|#[0-9]{2,}' "$file" && return 1
-  true
 }
 
 # Scratch copy of the contract with one fixed string deleted.
@@ -189,4 +178,3 @@ mutate_replace() {
   check_plan_bash_write_note "$mutated" && return 1
   true
 }
-

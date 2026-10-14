@@ -40,8 +40,6 @@ setup() {
   UNIT='^#### The audit loop unit'
   DISPATCH_UNIT='^## Dispatch the audit loop unit'
   UNIT_AGENT="${GAIA_AUDIT_LOOP_UNIT_AGENT:-$ROOT/.claude/agents/audit-loop-unit.md}"
-  PR_MERGE_RULE="${GAIA_PR_MERGE_RULE:-$ROOT/.claude/rules/pr-merge.md}"
-  FIX_VERIFY="${GAIA_AUDIT_FIX_VERIFY:-$ROOT/.gaia/scripts/audit-fix-verify.sh}"
 }
 
 # section <start_ERE> [page]: the page (the round procedure unless <page> is
@@ -375,43 +373,3 @@ pinned_labels() {
   grep -qF -- 'no snapshot directory)' <<<"$row" && return 1
   true
 }
-
-# --- UAT-021: sentences the unit made false stay out of the loop prose -------
-
-# stale_present <file> <literal>: rc 0 when the fixed string is in the file.
-stale_present() {
-  grep -qF -- "$2" "$1"
-}
-
-# stale_pairs: `<file-key>|<literal>` lines, one per retired sentence.
-stale_pairs() {
-  cat <<'PAIRS'
-page|Nothing raises the allowance from a PR-body edit, an environment knob above the default, or an AskUserQuestion selection
-page|Selecting an option changes nothing until the human types that line
-page|The main thread writes it locally at every round end
-page|The checkpoint round sits where the normal branch has already finished
-page|on every `Agent` dispatch of a `code-audit-*` member
-page|The procedure the main thread runs for every round
-page|`dispositions-<r>.json` (main thread)
-page|dispositions-<r>.json (main thread)
-page|The main thread stages, commits, and pushes the verified round
-rule|only a human typing the grant or accept line raises it
-verify|dispositions-<r>.json (main thread)
-PAIRS
-}
-
-# stale_file <file-key>: the path a pair's key names. The `page` key covers the
-# round procedure and the runbook together, since a retired sentence may not
-# survive on either.
-stale_file() {
-  case "$1" in
-    page)
-      cat "$PAGE" "$RUNBOOK" >"$BATS_TEST_TMPDIR/loop-pages.md"
-      printf '%s\n' "$BATS_TEST_TMPDIR/loop-pages.md"
-      ;;
-    rule) printf '%s\n' "$PR_MERGE_RULE" ;;
-    verify) printf '%s\n' "$FIX_VERIFY" ;;
-    *) return 1 ;;
-  esac
-}
-
