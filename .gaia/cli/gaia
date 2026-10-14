@@ -28867,7 +28867,7 @@ var createClaudemdRules = (budgets) => [
     appliesTo: ["claudemd", "rule", "skill", "command", "agent"],
     category: "claudemd",
     check: machinePathCheck,
-    detection: "A /Users/<name>/, /home/<name>/ or drive-letter user path appears in a CLAUDE.md (not CLAUDE.local.md), rule, skill, command or agent.",
+    detection: "A home-directory path (a Users or home segment followed by a user name) or a drive-letter user path appears in a CLAUDE.md (not CLAUDE.local.md), rule, skill, command or agent.",
     ruleId: "claudemd.no-absolute-machine-path",
     severity: "warning"
   },
