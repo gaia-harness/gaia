@@ -167,7 +167,7 @@ The identical write from Bash succeeds. That asymmetry is the whole surprise, an
 
 ## Ports per worktree
 
-Every checkout owns stable dev, Storybook, and Playwright ports, so two trees never fight over one. The main checkout is slot 0 and keeps the default ports; each linked worktree holds a slot of its own, and its ports are the defaults offset by that slot.
+Every checkout owns stable dev, Storybook, and Playwright ports, so two trees never fight over one. The main checkout is slot 0 and keeps the default ports; each linked worktree holds a slot of its own, and its ports are the defaults offset by that slot. The slots cover the `frontend/` package only; a backend beside it gets no slot, and [[Claude Integration Conventions#A backend and worktrees]] covers the choice that leaves.
 
 **The ledger.** A slot ledger lives in main-anchored state (`.gaia/state-registry.json` declares it and its siblings, which hold the removal tombstones and the launch and session records). Because the ledger is main-anchored, every tree sees the same assignments and a slot is never handed out twice; a lock guards only the ledger's read-modify-write and is never held across a wait or a signal. Provisioning assigns the lowest free slot whose ports no other tree's or unidentified server holds, and a tree keeps its slot on every later entry. The logic is in `.gaia/scripts/worktree-ports-lib.sh`.
 
