@@ -187,6 +187,7 @@ On GAIA 1.6.1? Claude: choose Abort, then offer to migrate this project to 2.0.0
 - `gaia setup-ci` is merged into `gaia setup`: the same subcommands, flags and output now run as `gaia setup <subcommand>`, and `/setup-gaia` calls them there. `gaia setup-ci` is an unknown subcommand (#2591)
 - `gaia sandbox` exits 2 on invalid arguments, like the other subcommands, instead of 1 (#2591)
 - `/gaia-plan`'s planner now reads its instructions from a file instead of receiving them in the dispatch, and `/gaia-spec` and `/gaia-plan` read their resume, clarify, review and audit procedures only when a run reaches them, which cuts the tokens every run pays. The plan decomposition audit's lenses now write their findings to files that are checked, so a lens that returns nothing can no longer pass as a clean decomposition. (#2589)
+- The slowest scripts leg of GAIA's own CI bats matrix runs about a quarter faster. Two audit-sandbox suites now build their fixture repository once per file instead of once per test, and the shell-lint suite's chunk tests no longer run guards they never assert on, which takes the scripts group from about 1460 to about 1110 seconds of bats. The scripts group no longer anchors any suite to a leg of its own: replays showed an anchor list wins only by perturbing how the other suites pack, and the next suite edit takes that win back. Maintainer-only and release-excluded, so no adopter clone runs any of it (#2669)
 
 ### Removed
 

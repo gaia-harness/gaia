@@ -11,6 +11,27 @@
 
 bats_require_minimum_version 1.5.0
 
+setup_file() {
+  command -v jq >/dev/null 2>&1 || skip "jq not available"
+  REPO_ROOT="$(cd "$BATS_TEST_DIRNAME/../../.." && pwd)"
+  # shellcheck source=.gaia/scripts/tests/helpers/light-sandbox.sh
+  . "$REPO_ROOT/.gaia/scripts/tests/helpers/light-sandbox.sh"
+  lsb_build_templates plain maintainer
+  local flavor
+  for flavor in plain maintainer; do
+    (
+      BATS_TEST_TMPDIR="$LSB_TEMPLATE_ROOT/prepared-$flavor"
+      mkdir -p "$BATS_TEST_TMPDIR"
+      if [ "$flavor" = maintainer ]; then lsb_init --maintainer; else lsb_init; fi
+      lsb_full_clearance code-audit-frontend
+      lsb_commit frontend/app/notes.md "$(printf 'one\ntwo\nthree')"
+      routed="$(bash "$LSB_ROOT/.gaia/scripts/audit-light-route.sh" --root "$LSB_ROOT" --member code-audit-frontend)"
+      [ "$routed" = "$(printf 'light\tlight-eligible')" ] || { printf 'template router: %s\n' "$routed" >&2; exit 1; }
+      cp "$LSB_TEMPLATE_ROOT/$flavor/slug" "$BATS_TEST_TMPDIR/slug"
+    ) || return 1
+  done
+}
+
 setup() {
   REPO_ROOT="$(cd "$BATS_TEST_DIRNAME/../../.." && pwd)"
   # shellcheck source=.gaia/scripts/tests/helpers/light-sandbox.sh
@@ -72,11 +93,9 @@ assert_no_marker() {
 # prepare_light [--maintainer]: a full clearance, a small owned Markdown delta,
 # and a router run that routed it light.
 prepare_light() {
-  lsb_init "$@"
-  lsb_full_clearance "$FRONTEND"
-  lsb_commit frontend/app/notes.md "$(printf 'one\ntwo\nthree')"
-  lsb_route "$FRONTEND"
-  [ "$output" = "$(printf 'light\tlight-eligible')" ] || { printf 'router: %s\n' "$output" >&2; return 1; }
+  local flavor=plain
+  [ "${1:-}" = "--maintainer" ] && flavor=maintainer
+  lsb_from_template "prepared-$flavor"
 }
 
 clear_reply_to_file() {

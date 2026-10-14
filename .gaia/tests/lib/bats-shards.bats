@@ -600,7 +600,7 @@ seed_anchor_tree() {
 # is otherwise decided by the packing of every other file in the group, and a
 # tree change anywhere in it can put two together and red the leg on the cap.
 @test "S16: no two declared cost outliers share a scripts shard" {
-  local base shard seen
+  local base shard seen declaration declared_words
   seen=""
   while IFS= read -r base || [ -n "$base" ]; do
     [ -n "$base" ] || continue
@@ -610,9 +610,15 @@ seed_anchor_tree() {
     printf '%s\n' "$seen" | grep -qxF -- "$shard" && return 1
     seen="$(printf '%s\n%s' "$seen" "$shard")"
   done < <(cost_outliers "$SCRIPT")
-  # Non-vacuity: a list that parsed to nothing would pass the loop above
-  # without asserting anything.
-  [ -n "$(cost_outliers "$SCRIPT")" ]
+  # The scripts list may legitimately be empty, so non-vacuity is asserted on
+  # the parse rather than on the members: the declaration must exist, and the
+  # parse must return exactly the words it holds. A renamed or reshaped
+  # declaration would otherwise read as an empty list and pass the loop above
+  # without asserting anything; the hooks twin below carries the non-empty arm.
+  declaration="$(grep -E '^SCRIPTS_COST_OUTLIERS=\(.*\)$' "$SCRIPT")"
+  [ "$(printf '%s\n' "$declaration" | grep -c .)" -eq 1 ]
+  declared_words="$(printf '%s' "$declaration" | sed 's/^[^(]*(\(.*\))$/\1/' | wc -w | tr -d ' ')"
+  [ "$(cost_outliers "$SCRIPT" | grep -c .)" -eq "$declared_words" ]
 }
 
 # A6. Proves S16's property comes from the anchoring and not from the byte

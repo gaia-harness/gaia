@@ -58,15 +58,15 @@
 # is a proxy rather than an identity. Timed one file at a time across
 # SCRIPTS_TESTS_DIRECTORY it tracks runtime only loosely: right on average, and
 # wrong for a suite whose cost lives in a command it runs per test rather than
-# in its own text. Where such a suite lands decides the slowest leg, so
-# anchoring the ones SCRIPTS_COST_OUTLIERS names is what covers the gap; the
-# weight itself stays bytes for every file.
+# in its own text. Where such a suite lands can decide the slowest leg, so a
+# weighted group's COST_OUTLIERS list can anchor one; the weight itself stays
+# bytes for every file.
 #
 # Size is read from the tree at discovery time, which is what keeps this pure
 # discovery. A checked-in table of per-file runtimes would be a better proxy
 # still, and it would reintroduce exactly the stale-manifest hazard this
 # script's whole design rejects: a new file would weigh nothing, and nothing
-# would say so. SCRIPTS_COST_OUTLIERS is not that table and does not reopen the
+# would say so. A COST_OUTLIERS list is not that table and does not reopen the
 # hazard: it carries no runtimes and changes no file's weight, it decides which
 # BUCKET a named file takes, and a file it does not name weighs its bytes as
 # before rather than weighing nothing. A name it carries that discovery does
@@ -124,32 +124,28 @@ PINNED_HOOKS=(local-janitor.bats)
 
 # The scripts group's anchors: suites given a bucket of their own before the
 # byte walk fills the rest, because where the walk would put them decides the
-# slowest leg. Each spends its time in a command it runs per test rather than
-# in its own text, so a byte weight misjudges it: shell-lint.bats re-drives a
-# whole-tree gate per assertion, so its cost tracks the tree it sweeps and its
-# bytes read as a light file; audit-loop-eval.bats runs the evaluator CLI
-# against a fixture repository per test, so it is among the heaviest suites in
-# the group whichever way it is weighed.
+# slowest leg. The list is empty, and the plain byte walk places every suite.
+# Replayed against one CI run's per-file timings, no suite in the group is
+# heavy enough for an anchor to balance it, and every anchor list that does
+# better than the plain walk wins only by perturbing the packing around it, a
+# win the next size change anywhere in the group takes back.
 #
-# What a bad draw breaks is the partition, not the estimate. Left to the walk,
-# which bucket each lands in is decided by the packing of everything around
-# them, and a tree change anywhere in the group can stack them with the other
-# heavy suites onto one leg. That leg then gates the whole workflow, and past
+# What a bad draw breaks is the partition, not the estimate: a leg that stacks
+# the heavy suites gates the whole workflow, and past
 # .github/workflows/audit-ci-tests.yml's per-shard cap the job is cancelled
-# with no failing assertion. Anchoring holds them in distinct buckets and lets
-# the walk pack the rest around them, which splitting a suite into halves
-# could not do on its own: a split divides the text, and the cost stays with
-# the half that kept the per-test runs.
+# with no failing assertion. The lever against that is a suite's own runtime,
+# not its bucket: a suite cheap enough that no draw of it matters needs no
+# anchor.
 #
 # Membership rule for a future maintainer: a suite belongs here when its cost
-# is dominated by an external command it runs per test, or when it is heavy
-# enough that anchoring it measurably balances the group, replayed against
-# per-file timings from a CI run. It does NOT belong here merely for being slow
-# or large. A suite left out weighs its bytes, which degrades no further than
-# today; the ordering below decides which bucket each named suite anchors, so
+# is dominated by an external command it runs per test, AND anchoring it
+# measurably balances the group, replayed against per-file timings from a CI
+# run, against the plain walk as well as against today's list. It does NOT
+# belong here merely for being slow or large. A suite left out weighs its
+# bytes; the ordering below decides which bucket each named suite anchors, so
 # keep the list shorter than SCRIPTS_IDS and leave the walk a free bucket.
 # `wiki/decisions/Sharded CI Test Matrix.md` carries the measurements.
-SCRIPTS_COST_OUTLIERS=(audit-loop-eval.bats shell-lint.bats)
+SCRIPTS_COST_OUTLIERS=()
 
 # The hooks group's cost outliers, under the same membership rule: one
 # classifies every tracked path in a single test, one builds a fixture
