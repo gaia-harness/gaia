@@ -36,9 +36,59 @@ _lsb_set_head() {
   LSB_TREE="$(lsb_git rev-parse 'HEAD^{tree}')" || return 1
 }
 
-# lsb_init [--maintainer]: build the sandbox; --maintainer also commits the
-# maintainer-repo rule file the telemetry gate tests for.
+# lsb_build_templates [name...]: from setup_file, build each named sandbox
+# flavor once under $BATS_FILE_TMPDIR/lsb-templates/<name> (plain, maintainer)
+# and export LSB_TEMPLATE_ROOT so lsb_init copies instead of rebuilding.
+lsb_build_templates() {
+  [ -n "${BATS_FILE_TMPDIR:-}" ] || { printf 'lsb_build_templates: BATS_FILE_TMPDIR is unset\n' >&2; return 1; }
+  local name
+  export LSB_TEMPLATE_ROOT="$BATS_FILE_TMPDIR/lsb-templates"
+  for name in "$@"; do
+    mkdir -p "$LSB_TEMPLATE_ROOT/$name" || return 1
+    case "$name" in
+      plain) ( BATS_TEST_TMPDIR="$LSB_TEMPLATE_ROOT/$name" LSB_TEMPLATE_ROOT="" _lsb_build ) || return 1 ;;
+      maintainer) ( BATS_TEST_TMPDIR="$LSB_TEMPLATE_ROOT/$name" LSB_TEMPLATE_ROOT="" _lsb_build --maintainer ) || return 1 ;;
+      *) printf 'lsb_build_templates: unknown flavor %s\n' "$name" >&2; return 1 ;;
+    esac
+  done
+}
+
+# lsb_from_template <name>: copy the sandbox under $LSB_TEMPLATE_ROOT/<name>
+# into this test's BATS_TEST_TMPDIR. A suite makes a further template by
+# building a sandbox with BATS_TEST_TMPDIR pointed at $LSB_TEMPLATE_ROOT/<name>
+# in setup_file; templates are only ever copied, so no test sees another's
+# writes. The origin URL is the one absolute path inside a sandbox, so it is
+# re-pointed at the copy, or a push would land in the shared template.
+lsb_from_template() {
+  local template="$LSB_TEMPLATE_ROOT/$1"
+  [ -d "$template/lsb-repo" ] || { printf 'lsb_from_template: no template %s\n' "$1" >&2; return 1; }
+  cp -Rp "$template/lsb-repo" "$BATS_TEST_TMPDIR/lsb-repo" || return 1
+  cp -Rp "$template/lsb-origin.git" "$BATS_TEST_TMPDIR/lsb-origin.git" || return 1
+  LSB_ORIGIN="$BATS_TEST_TMPDIR/lsb-origin.git"
+  LSB_ROOT="$(cd "$BATS_TEST_TMPDIR/lsb-repo" && pwd -P)" || return 1
+  lsb_git remote set-url origin "$LSB_ORIGIN" || return 1
+  # The copy has new inodes, so the index's stat data no longer matches; plumbing
+  # that skips the refresh would otherwise see every tracked file as modified.
+  lsb_git update-index -q --refresh >/dev/null 2>&1 || true
+  LSB_BRANCH="feat/light-sandbox"
+  LSB_SLUG="$(cat "$template/slug")" || return 1
+  _lsb_set_head
+}
+
+# lsb_init [--maintainer]: the sandbox, copied from a setup_file template when
+# one exists, built from scratch otherwise.
 lsb_init() {
+  [ -n "${BATS_TEST_TMPDIR:-}" ] || { printf 'lsb_init: BATS_TEST_TMPDIR is unset\n' >&2; return 1; }
+  local flavor=plain
+  [ "${1:-}" = "--maintainer" ] && flavor=maintainer
+  if [ -n "${LSB_TEMPLATE_ROOT:-}" ] && [ -d "$LSB_TEMPLATE_ROOT/$flavor/lsb-repo" ]; then
+    lsb_from_template "$flavor"
+    return
+  fi
+  _lsb_build "$@"
+}
+
+_lsb_build() {
   [ -n "${BATS_TEST_TMPDIR:-}" ] || { printf 'lsb_init: BATS_TEST_TMPDIR is unset\n' >&2; return 1; }
   local repository="$BATS_TEST_TMPDIR/lsb-repo" relative
   LSB_ORIGIN="$BATS_TEST_TMPDIR/lsb-origin.git"
@@ -76,7 +126,8 @@ lsb_init() {
   # One commit on the branch, so a clearance written straight after lsb_init
   # sits on a branch commit: the merge-base itself is outside every walk range
   # and can never anchor.
-  lsb_commit frontend/app/branch-start.md "branch start"
+  lsb_commit frontend/app/branch-start.md "branch start" || return 1
+  printf '%s' "$LSB_SLUG" >"$BATS_TEST_TMPDIR/slug"
 }
 
 # lsb_strip_maintainer_only: remove every maintainer-only region from the

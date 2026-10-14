@@ -201,7 +201,9 @@ gate_pass_headers() {
 @test "shell-lint fails closed on a finding in the FIRST worker's chunk" {
   first_sh="$(tracked_sh first)"
   [ -n "$first_sh" ]
-  run env PATH="$STUB_DIRECTORY:$PATH" SHELLCHECK_FAIL_ON="$first_sh" bash "$GATE"
+  local overrides=() line
+  while IFS= read -r line; do overrides+=("$line"); done < <(stub_all_guards "$STUB_DIRECTORY")
+  run env PATH="$STUB_DIRECTORY:$PATH" ${overrides[@]+"${overrides[@]}"} SHELLCHECK_FAIL_ON="$first_sh" bash "$GATE"
   [ "$status" -eq 1 ]
   grep -qF -- "shell-lint FAILED" <<<"$output"
   # The failing worker's buffered log has to replay too, or the gate reds
@@ -212,7 +214,9 @@ gate_pass_headers() {
 @test "shell-lint fails closed on a finding in the LAST worker's chunk" {
   last_sh="$(tracked_sh last)"
   [ -n "$last_sh" ]
-  run env PATH="$STUB_DIRECTORY:$PATH" SHELLCHECK_FAIL_ON="$last_sh" bash "$GATE"
+  local overrides=() line
+  while IFS= read -r line; do overrides+=("$line"); done < <(stub_all_guards "$STUB_DIRECTORY")
+  run env PATH="$STUB_DIRECTORY:$PATH" ${overrides[@]+"${overrides[@]}"} SHELLCHECK_FAIL_ON="$last_sh" bash "$GATE"
   [ "$status" -eq 1 ]
   grep -qF -- "shell-lint FAILED" <<<"$output"
   grep -qF -- "In $last_sh line 1:" <<<"$output"
