@@ -28,7 +28,7 @@ If the detection does not fire, fall through to `## Inputs` below.
 
 Invocation carries a target version, e.g. `release-notes 1.4.0` (no leading `v`). Resolve which CHANGELOG block to translate, and where the date comes from, by that version:
 
-- **Graduated / historical**: `CHANGELOG.md` contains `## [<version>], <YYYY-MM-DD>`. Translate that block. Take `version` and `date` **verbatim from the header**. The release already happened on that date; the shell clock is irrelevant.
+- **Graduated / historical**: `CHANGELOG.md` contains `## [<version>] - <YYYY-MM-DD>`. Translate that block. Take `version` and `date` **verbatim from the header**. The release already happened on that date; the shell clock is irrelevant.
 - **Live cut**: the version isn't graduated yet; its entries live under `## [Unreleased]`. Translate that block. `version` is the argument (the maintainer is cutting it now). `date` is **today from the shell clock** (`date +%F`).
 
 If no version was supplied and an `[Unreleased]` block exists, ask the maintainer which version is being cut, the version label has to come from a human, not a guess.

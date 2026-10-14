@@ -48,7 +48,7 @@ If a match references the older page's title (substring, case-insensitive), flag
 
 ### 2c. Near-collision slugs
 
-Run `.gaia/cli/gaia wiki near-collisions --max-distance 2` and surface its output. The CLI emits per-domain pairs that are within Levenshtein distance 2 (or where one slug is a prefix of the other) as tabular text. Flag each as a **near-collision** candidate. The newer page (by `promoted_at`, ties broken by file mtime) is the canonical.
+Run `.gaia/cli/gaia wiki near-collisions --max-distance 2` and surface its output. The CLI emits per-domain pairs that are within Levenshtein distance 2 as tabular text. Flag each as a **near-collision** candidate. The newer page (by `promoted_at`, ties broken by file mtime) is the canonical.
 
 Distance 2 is the right floor: distance 3 produces excessive false positives in dense domains with short slugs (e.g. `Ky` matches every dependency, `State` collides with `Styles`).
 

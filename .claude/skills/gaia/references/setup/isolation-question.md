@@ -16,12 +16,12 @@ Show the explainer (this block stays English regardless of UI language, it's the
 > - a dev server started inside a worktree collides on the same port as one in the main checkout;
 > - a crashed session can leave a worktree behind for you to remove by hand.
 >
-> Scope limit: this policy governs `/gaia-plan` and `/gaia-debt` only. `/gaia-cleanse`, `/gaia-codify`, and
+> Scope limit: this policy governs `/gaia-plan`, `/gaia-debt` and ad-hoc committed work. `/gaia-cleanse`, `/gaia-codify`, and
 > `/gaia-wiki` still work in the main checkout. And while a GAIA task holds your session in a worktree,
 > `/update-deps` and `/update-gaia` refuse to run there; run them from a separate session on the main
 > checkout.
 
-Then use `AskUserQuestion`, header **`Isolation policy`** (in the user's language), question "How should this team isolate `/gaia-plan` and `/gaia-debt` work?", with these three options in this exact order:
+Then use `AskUserQuestion`, header **`Isolation policy`** (in the user's language), question "How should this team isolate `/gaia-plan`, `/gaia-debt` and ad-hoc committed work?", with these three options in this exact order:
 
 - **Prefer branches (Recommended)**: Default. GAIA cuts a feature branch and works in the current checkout.
 - **Prefer worktrees**: GAIA leads with a worktree, so you can keep working, or run another GAIA task, at the same time.

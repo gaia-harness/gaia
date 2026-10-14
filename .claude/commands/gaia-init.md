@@ -25,7 +25,7 @@ After a gate sits unanswered for a while, the harness injects a stock note like 
 
 ### No cascade
 
-Evaluate each gate independently. A non-response on one gate is **never** evidence the user is away for any other gate. A timeout on the language question tells you nothing about the title, the CODEOWNERS handle, or the CI question. Never carry an "away" inference forward, re-ask the next gate normally.
+Evaluate each gate independently. A non-response on one gate is **never** evidence the user is away for any other gate. A timeout on the language question tells you nothing about the title, the CODEOWNERS handle, or the backend casing question. Never carry an "away" inference forward, re-ask the next gate normally.
 
 ### Tone
 
@@ -37,7 +37,7 @@ Before Step 0's pnpm check, ask this as the **very first** AskUserQuestion (in t
 
 > How do you want to handle the setup questions?
 >
-> - **Interactive** (Recommended). GAIA asks about language, project name, CODEOWNERS, and CI one at a time and waits for your answer on the consequential ones.
+> - **Interactive** (Recommended). GAIA asks its setup questions and waits for your answer on the consequential ones.
 > - **Automatic.** GAIA selects the recommended default for every question for you, without stopping to ask. It shows you the full list of chosen defaults first, and you can change anything afterward.
 
 List **Interactive** first (the recommended option) and **Automatic** second. This gate is itself HARD-BLOCK: on non-response, re-ask, never assume a mode.
@@ -446,7 +446,7 @@ Step 8 recorded each per-machine step through the shared reference, so stamp com
 
 If the CLI exits non-zero, it surfaces a structured error whose `code` field explains the cause (e.g. `not_a_git_repo`, `state_malformed`); surface that JSON line verbatim and stop. Do not retry or self-heal.
 
-Then run the CLI's init finalize step, it removes the `/init` interceptor hook, prunes the matching entry from `.claude/settings.json`, and deletes this command file:
+Then run the CLI's init finalize step, it deletes this command file:
 
 ```bash
 .gaia/cli/gaia init finalize

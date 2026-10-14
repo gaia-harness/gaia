@@ -51,7 +51,7 @@ Otherwise the working tree carries the applied `wiki/` / `.claude/` / `CLAUDE.md
 
    - **`MERGED`** (exit 0) → clean up per `.claude/skills/gaia/references/work-lifecycle.md` `## 8. Cleanup` `### Feature branch`, with `<branch-name>` = the branch created above, then print the merged PR URL. (Run ends here.)
 
-   - **`CONFLICTING`** (exit 3) → repair it per that page's `### Conflict found mid-wait` and run the wait again.
+   - **`CONFLICTING`** (exit 3) → repair it per `wiki/concepts/PR Merge Workflow.md`'s `### Conflict found mid-wait` and run the wait again.
    - **`CHECK_FAILED`** (exit 4) → print the PR URL and the failing check, and leave the branch in place as for a queued merge. (Run ends here.)
    - **`TIMEOUT`** (exit 5) → the window closed with the pull request still open: print the PR URL, note auto-merge is queued and lands when checks pass, and **do not** delete the local branch or switch off it. (Run ends here.)
    - **`CLOSED`** (exit 6) → the pull request was closed without merging, so no wait can clear it: report the closure, print the PR URL, and leave the branch in place. (Run ends here.)

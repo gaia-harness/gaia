@@ -353,6 +353,6 @@ If `broken.length > 0`, surface as a separate line prefixed with `WIKI BROKEN-LI
 
 ## Notes
 
-- Everything that reads `wiki/.state.json` besides sync (the statusline nudge, this lint) is a read-only consumer. Only sync writes to it. This workflow also does not write `wiki/.state.json`.
+- This workflow does not write `wiki/.state.json`. The writers are named in the sync.md Playbook.
 - Drift count semantics: missing state file or unreachable SHA are surfaced as advisories, not silent zeroes. See [[Wiki Sync]] for the full design.
 - Severity table thresholds are the canonical thresholds for this plan; if changing, update both this file and any sibling tooling that classifies drift.

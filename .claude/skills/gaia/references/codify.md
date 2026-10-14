@@ -101,7 +101,7 @@ For each candidate decide two axes and recommend EXACTLY ONE form with a one-lin
 Before choosing a form, check whether an existing artifact already covers the class's territory. Grep the candidate surfaces:
 
 ```bash
-grep -rln "<keywords derived from the finding_class>" .claude/rules .claude/skills .claude/hooks
+grep -rln "<keywords derived from the finding_class>" .claude/rules .claude/skills .claude/hooks frontend/.claude/rules frontend/.claude/skills
 ```
 
 Also check whether the quality gate (`wiki/decisions/Quality Gate.md`) already lists a step for it. If an existing rule, skill, or hook covers the territory, recommend EDITING that artifact, not creating a new one. Name the artifact to edit and what to add.
