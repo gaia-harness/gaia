@@ -1,12 +1,14 @@
 ---
 type: decision
-status: active
+status: superseded
 created: 2026-04-26
-updated: 2026-10-03
+updated: 2026-10-15
 tags: [decision, claude]
 ---
 
 # Decision: DragonScale Opt-Out
+
+> Superseded. GAIA no longer enables the `claude-obsidian` plugin, so DragonScale, an extension of that plugin, has nothing in GAIA to layer on. The reasoning below still describes why the four mechanisms do not fit a codebase wiki; a user who installs the plugin themselves (see [[Claude Integration Conventions]] § Wiki vendor relationship) decides about DragonScale on their own.
 
 GAIA does not ship or enable DragonScale. Its wiki runs on the standard claude-obsidian surface (Mode B + E). DragonScale is an optional extension layered on top of the same plugin, and GAIA declines all four mechanisms it ships. A project that wants any of them can opt in on its own; see [[#Opting in]].
 

@@ -48,13 +48,11 @@ Record line: `.gaia/cli/gaia setup record install-tools applied`.
 
 ```bash
 claude plugin install typescript-lsp@claude-plugins-official
-claude plugin marketplace add AgriciDaniel/claude-obsidian
-claude plugin install claude-obsidian@agricidaniel-claude-obsidian --scope project
 ```
 
-Probes: typescript-lsp, claude-obsidian. Already-installed plugins are a no-op. The project-scope install records claude-obsidian for this checkout, and `.claude/settings.json` enables it and declares its marketplace for the team; each machine still runs the install. Baseline: claude-obsidian 2.2.0, which needs Python 3.11+ with `python3` on PATH.
+Probes: typescript-lsp. An already-installed plugin is a no-op.
 
-To upgrade an existing install, run `claude plugin list`, then `claude plugin uninstall <the id it shows> --scope project`, then the marketplace add and install above.
+claude-obsidian is optional; install it yourself with `--scope local` (this checkout) or `--scope user`.
 
 Record line: `.gaia/cli/gaia setup record install-plugins applied`.
 
@@ -82,18 +80,9 @@ Record line: `.gaia/cli/gaia setup record bootstrap-env applied`.
 
 After a step's commands, run each of its probes and emit one line per component: `[ok] <component>` when the probe exits 0, `[FAIL] <component>` when it exits non-zero.
 
-| Component       | Probe                                                                        |
-| --------------- | ---------------------------------------------------------------------------- |
-| React Doctor    | `[ -d frontend/.claude/skills/react-doctor ]` (gitignored, kept per-machine) |
-| Playwright CLI  | `command -v playwright-cli && playwright-cli --version >/dev/null 2>&1`      |
-| Serena          | `claude mcp list 2>/dev/null \| grep -q '^serena:'`                          |
-| typescript-lsp  | `claude plugin list 2>/dev/null \| grep -q 'typescript-lsp'`                 |
-| claude-obsidian | the fenced block below                                                       |
-
-The claude-obsidian probe matches the project-scope install record to this repository root:
-
-```bash
-claude plugin list --json 2>/dev/null \
-  | jq -e --arg root "$(git rev-parse --show-toplevel)" \
-    'any(.[]; .id == "claude-obsidian@agricidaniel-claude-obsidian" and .scope == "project" and .projectPath == $root)' >/dev/null
-```
+| Component      | Probe                                                                        |
+| -------------- | ---------------------------------------------------------------------------- |
+| React Doctor   | `[ -d frontend/.claude/skills/react-doctor ]` (gitignored, kept per-machine) |
+| Playwright CLI | `command -v playwright-cli && playwright-cli --version >/dev/null 2>&1`      |
+| Serena         | `claude mcp list 2>/dev/null \| grep -q '^serena:'`                          |
+| typescript-lsp | `claude plugin list 2>/dev/null \| grep -q 'typescript-lsp'`                 |

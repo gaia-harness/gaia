@@ -2,12 +2,6 @@
 # Phase 2 per-machine setup, driven by the per-machine reference under
 # `.claude/skills/gaia/references/setup/`:
 #
-#   - claude-obsidian installs at project scope: every install line on the
-#     setup surface (`.claude/commands/setup-gaia.md` followed by every setup
-#     reference) carries `--scope project`, and `.claude/settings.json`
-#     enables the plugin and declares its marketplace.
-#   - The claude-obsidian probe, extracted and run against a stubbed `claude`,
-#     passes only a project-scope record for this repository root.
 #   - The React Doctor probe names the `frontend/` skill location, and neither
 #     the setup surface nor `.claude/commands/gaia-init.md` carries the
 #     root-level probe.
@@ -29,7 +23,6 @@ setup() {
   INIT_PAGE="${REPO_ROOT}/.claude/commands/gaia-init.md"
   REFERENCES_DIRECTORY="${REPO_ROOT}/.claude/skills/gaia/references/setup"
   PER_MACHINE_REFERENCE="${REFERENCES_DIRECTORY}/per-machine.md"
-  SETTINGS_FILE="${REPO_ROOT}/.claude/settings.json"
   [ -f "$PAGE" ] || {
     echo "the audited page is absent: ${PAGE}" >&2
     return 1
@@ -95,162 +88,6 @@ build_surface() {
 # real_surface: the surface of the real command and references.
 real_surface() {
   build_surface "$PAGE" "$REFERENCES_DIRECTORY" surface-real.md
-}
-
-# ---------------------------------------------------------------------------
-# claude-obsidian installs at project scope
-# ---------------------------------------------------------------------------
-
-# check_project_scope_plugin <surface-file> <settings-file>: every
-# claude-obsidian install line carries --scope project, the committed settings
-# enable the plugin, and they declare its marketplace.
-check_project_scope_plugin() {
-  local surface="$1" settings="$2" lines bad
-  lines="$(grep -F 'claude plugin install claude-obsidian@' "$surface" || true)"
-  [ -n "$lines" ] || {
-    echo "the surface has no claude-obsidian install line" >&2
-    return 1
-  }
-  bad="$(grep -vF -- '--scope project' <<<"$lines" || true)"
-  [ -z "$bad" ] || {
-    echo "a claude-obsidian install line lacks --scope project: ${bad}" >&2
-    return 1
-  }
-  jq -e '.enabledPlugins["claude-obsidian@agricidaniel-claude-obsidian"] == true' "$settings" >/dev/null || {
-    echo "the settings do not enable claude-obsidian" >&2
-    return 1
-  }
-  jq -e '.extraKnownMarketplaces["agricidaniel-claude-obsidian"].source == {"source":"github","repo":"AgriciDaniel/claude-obsidian"}' "$settings" >/dev/null || {
-    echo "the settings do not declare the claude-obsidian marketplace" >&2
-    return 1
-  }
-}
-
-@test "claude-obsidian installs at project scope and the settings enable and declare it" {
-  check_project_scope_plugin "$(real_surface)" "$SETTINGS_FILE"
-}
-
-@test "the project-scope check fails when --scope project is stripped from an install line" {
-  local directory surface
-  directory="$(scratch_references scope-stripped)"
-  sed 's/ --scope project//' "${REFERENCES_DIRECTORY}/per-machine.md" >"${directory}/per-machine.md"
-  cmp -s "${REFERENCES_DIRECTORY}/per-machine.md" "${directory}/per-machine.md" && return 1
-  surface="$(build_surface "$PAGE" "$directory" surface-scope-stripped.md)"
-  run check_project_scope_plugin "$surface" "$SETTINGS_FILE"
-  [ "$status" -ne 0 ]
-  grep -qF 'lacks --scope project' <<<"$output"
-}
-
-@test "the project-scope check fails when the settings do not enable the plugin" {
-  local settings="${BATS_TEST_TMPDIR}/settings-no-plugin.json"
-  jq 'del(.enabledPlugins["claude-obsidian@agricidaniel-claude-obsidian"])' "$SETTINGS_FILE" >"$settings"
-  cmp -s "$SETTINGS_FILE" "$settings" && return 1
-  run check_project_scope_plugin "$(real_surface)" "$settings"
-  [ "$status" -ne 0 ]
-  grep -qF 'do not enable' <<<"$output"
-}
-
-@test "the project-scope check fails when the settings do not declare the marketplace" {
-  local settings="${BATS_TEST_TMPDIR}/settings-no-marketplace.json"
-  jq 'del(.extraKnownMarketplaces)' "$SETTINGS_FILE" >"$settings"
-  cmp -s "$SETTINGS_FILE" "$settings" && return 1
-  run check_project_scope_plugin "$(real_surface)" "$settings"
-  [ "$status" -ne 0 ]
-  grep -qF 'do not declare' <<<"$output"
-}
-
-# ---------------------------------------------------------------------------
-# The claude-obsidian probe, executed against a stubbed claude
-# ---------------------------------------------------------------------------
-
-# bash_fence_containing <anchor> <file>: print the body of the one bash fence
-# containing the anchor; fails unless there is exactly one.
-bash_fence_containing() {
-  awk -v anchor="$1" '
-    /^```bash[[:space:]]*$/ { inside = 1; body = ""; next }
-    /^```[[:space:]]*$/ && inside {
-      inside = 0
-      if (index(body, anchor)) { printf "%s", body; found++ }
-      next
-    }
-    inside { body = body $0 "\n" }
-    END { if (found != 1) exit 1 }
-  ' "$2"
-}
-
-# run_probe_fixture <fence> <repository> <stub-directory> <fixture-json>: run
-# the probe inside the repository with a `claude` stub that answers
-# `plugin list --json` with the fixture; the stub's status is the probe's.
-run_probe_fixture() {
-  (
-    cd "$2" || exit 1
-    PROBE_FIXTURE="$4" PATH="$3:${PATH}" bash "$1"
-  )
-}
-
-# assert_probe_behavior <fence>: a user-scope record, a project-scope record
-# for another path, and another plugin's record for this root all fail; a
-# project-scope record whose projectPath is this root passes.
-assert_probe_behavior() {
-  local fence="$1" repository="${BATS_TEST_TMPDIR}/probe-repository" stub_directory="${BATS_TEST_TMPDIR}/probe-bin"
-  local root plugin_id="claude-obsidian@agricidaniel-claude-obsidian" fixture name
-  rm -rf "$repository" "$stub_directory"
-  mkdir -p "$repository" "$stub_directory"
-  git init -q "$repository" || return 1
-  root="$(git -C "$repository" rev-parse --show-toplevel)" || return 1
-  cat >"${stub_directory}/claude" <<'STUB'
-#!/usr/bin/env bash
-[ "$*" = "plugin list --json" ] || exit 1
-printf '%s\n' "$PROBE_FIXTURE"
-STUB
-  chmod +x "${stub_directory}/claude"
-  for name in user-only user-with-path other-path other-plugin; do
-    case "$name" in
-      user-only) fixture="$(jq -nc --arg id "$plugin_id" '[{id: $id, scope: "user", enabled: true, projectPath: null}]')" ;;
-      user-with-path) fixture="$(jq -nc --arg id "$plugin_id" --arg root "$root" '[{id: $id, scope: "user", enabled: true, projectPath: $root}]')" ;;
-      other-path) fixture="$(jq -nc --arg id "$plugin_id" '[{id: $id, scope: "project", enabled: true, projectPath: "/somewhere/else"}]')" ;;
-      other-plugin) fixture="$(jq -nc --arg root "$root" '[{id: "typescript-lsp@claude-plugins-official", scope: "project", enabled: true, projectPath: $root}]')" ;;
-    esac
-    if run_probe_fixture "$fence" "$repository" "$stub_directory" "$fixture"; then
-      echo "the probe passed the ${name} fixture" >&2
-      return 1
-    fi
-  done
-  fixture="$(jq -nc --arg id "$plugin_id" --arg root "$root" '[{id: $id, scope: "project", enabled: true, projectPath: $root}]')"
-  run_probe_fixture "$fence" "$repository" "$stub_directory" "$fixture" || {
-    echo "the probe failed the matching project-scope fixture" >&2
-    return 1
-  }
-}
-
-extract_obsidian_probe() {
-  bash_fence_containing 'claude plugin list --json' "$PER_MACHINE_REFERENCE" >"${BATS_TEST_TMPDIR}/probe.sh"
-  [ -s "${BATS_TEST_TMPDIR}/probe.sh" ]
-}
-
-@test "the claude-obsidian probe passes only a project-scope record for this repository root" {
-  extract_obsidian_probe
-  assert_probe_behavior "${BATS_TEST_TMPDIR}/probe.sh"
-}
-
-@test "probe mutation: a fence without the projectPath clause passes the other-path fixture" {
-  extract_obsidian_probe
-  local mutated="${BATS_TEST_TMPDIR}/probe-no-path.sh"
-  sed 's/ and \.projectPath == \$root//' "${BATS_TEST_TMPDIR}/probe.sh" >"$mutated"
-  cmp -s "${BATS_TEST_TMPDIR}/probe.sh" "$mutated" && return 1
-  run assert_probe_behavior "$mutated"
-  [ "$status" -ne 0 ]
-  grep -qF 'other-path' <<<"$output"
-}
-
-@test "probe mutation: a fence without the scope clause passes the user-with-path fixture" {
-  extract_obsidian_probe
-  local mutated="${BATS_TEST_TMPDIR}/probe-no-scope.sh"
-  sed 's/ and \.scope == "project"//' "${BATS_TEST_TMPDIR}/probe.sh" >"$mutated"
-  cmp -s "${BATS_TEST_TMPDIR}/probe.sh" "$mutated" && return 1
-  run assert_probe_behavior "$mutated"
-  [ "$status" -ne 0 ]
-  grep -qF 'user-with-path' <<<"$output"
 }
 
 # ---------------------------------------------------------------------------

@@ -433,7 +433,7 @@ Append-only. New entries at the TOP.
 - Project name: <PROJECT_TITLE>
 - Languages: <LANGUAGES>
 - Removed: GAIA branding (FUNDING.yml, README, Storybook brand)
-- Installed: React Doctor, TDD, Playwright CLI skills; typescript-lsp, claude-obsidian plugins
+- Installed: React Doctor, TDD, Playwright CLI skills; typescript-lsp plugin
 ```
 
 ## Step 11: Finalize

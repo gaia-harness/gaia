@@ -4,7 +4,7 @@ path: .claude/
 status: active
 purpose: Claude Code integration, commands, rules, hooks, agents, skills
 created: 2026-04-20
-updated: 2026-10-13
+updated: 2026-10-15
 tags: [module, claude, hooks]
 ---
 
@@ -47,7 +47,7 @@ Hooks are bash scripts wired through `.claude/settings.json`. See its `hooks` ke
 ### Wiki coherence (a layered system)
 
 > [!key-insight] Why GAIA owns the wiki hooks
-> The `claude-obsidian` plugin does not commit `wiki/` edits on its own, and its own session-context load is opt-in and fails closed on GAIA's layout. No hook commits wiki edits on its own.
+> No hook commits wiki edits on its own.
 
 The sync design is convergent: hooks never spawn `claude -p` sub-processes. No hook surfaces drift: the `🧠 Run /gaia-wiki` statusline nudge is the only signal, and the user's session reconciles the wiki via `/gaia-wiki`. See [[Wiki Sync]].
 

@@ -2,14 +2,12 @@
 type: meta
 status: active
 created: 2026-04-20
-updated: 2026-10-03
+updated: 2026-10-15
 tags: [meta, schema]
 ---
 
 # GAIA React: LLM Wiki
 
-Mode: B (Codebase) + E (Research)
-Plugin baseline: `.claude/skills/gaia/references/setup/per-machine.md` owns it (DragonScale features intentionally not adopted, see [[DragonScale Opt-Out]])
 Purpose: Persistent knowledge base for the GAIA React workflow: architecture, conventions, decisions, Claude integration.
 <!-- gaia:maintainer-only:start -->
 Owner: Steven Sacks
