@@ -602,9 +602,45 @@ t'
   assert_denied_because 'BLOCKED: rm -rf of .claude is forbidden'
 }
 
-@test "rm -rf .claude/hooks (a path inside .claude) is denied" {
+@test "rm -rf .claude/hooks (a path inside .claude) is denied with the subpath reason" {
   run_hook_bash 'rm -rf .claude/hooks'
-  assert_denied_because 'BLOCKED: rm -rf of .claude is forbidden'
+  assert_denied_because 'under .claude/ is forbidden'
+}
+
+# A subpath denies with its own text, which names the spelling that passes: the
+# whole-directory text is false for one marker file, and an adopter following a
+# documented cleanup step needs the next command, not a misdescription.
+
+@test "rm -f of one marker file under .claude denies and names the flagless spelling" {
+  run_hook_bash 'rm -f .claude/i18n-strings-checked'
+  assert_denied_because "flagless 'rm <file>'"
+}
+
+@test "rm -f of one marker file under .claude does not claim the whole directory" {
+  run_hook_bash 'rm -f .claude/i18n-strings-checked'
+  assert_denied_by_json
+  grep -qF -- 'rm -rf of .claude is forbidden' <<<"$output" && return 1
+  true
+}
+
+@test "rm -rf of a skill directory under .claude denies with the subpath reason" {
+  run_hook_bash 'rm -rf .claude/skills/speckit-plan'
+  assert_denied_because 'under .claude/ is forbidden'
+}
+
+@test "git rm -r -q of a skill directory under .claude denies with the subpath reason" {
+  run_hook_bash 'git rm -r -q .claude/skills/speckit-plan'
+  assert_denied_because 'under .claude/ is forbidden'
+}
+
+@test "flagless rm of one marker file under .claude is allowed" {
+  run_hook_bash 'rm .claude/i18n-strings-checked'
+  assert_allowed_by_json
+}
+
+@test "git rm -q -- of one tracked file under .claude is allowed" {
+  run_hook_bash 'git rm -q -- .claude/skills/speckit-plan/SKILL.md'
+  assert_allowed_by_json
 }
 
 @test "rm -rf \$PWD/.claude is denied" {
