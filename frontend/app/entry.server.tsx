@@ -38,7 +38,7 @@ const handleRequest = async (
   responseHeaders: Headers,
   entryContext: EntryContext,
   routerContext: RouterContextProvider
-) => {
+): Promise<Response> => {
   let shellRendered = false;
 
   const nonce = randomBytes(16).toString('hex');

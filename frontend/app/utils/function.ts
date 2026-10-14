@@ -37,9 +37,12 @@ export const tryCatch = <T, A extends readonly unknown[]>(
 };
 
 export const compose =
-  <T>(...fns: ((value: T) => T)[]) =>
+  <T>(...transforms: ((value: T) => T)[]) =>
   (value: T): T =>
-    fns.reduceRight((result, fn) => fn(result), value);
+    transforms.reduceRight(
+      (composedValue, transform) => transform(composedValue),
+      value
+    );
 
 export const noop = (): void => {};
 

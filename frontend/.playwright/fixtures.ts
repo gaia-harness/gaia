@@ -12,9 +12,10 @@ type AxeFixtures = {
  */
 export const test = base.extend<AxeFixtures>({
   makeAxeBuilder: async ({page}, provide) => {
-    const make = () => new AxeBuilder({page}).withTags(AXE_WCAG_TAGS);
+    const createAxeBuilder = () =>
+      new AxeBuilder({page}).withTags(AXE_WCAG_TAGS);
 
-    await provide(make);
+    await provide(createAxeBuilder);
   },
 });
 
