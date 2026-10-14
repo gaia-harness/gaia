@@ -12,13 +12,15 @@
 #       step 4 of the recipe already builds. Reads no network and needs no
 #       `gh`, so the gate in front of every filing is hermetic.
 #
-#   --investigate-cap --labels <csv>
+#   --investigate-cap --labels <csv> [--repo <owner/name>]
 #       Blocking, and the one mode that reads the network on the filing path.
 #       No-ops clean unless the label set carries `severity:investigate`, so
 #       the ordinary filing never pays for it. When it does, it counts the open
 #       investigate queue and reports a finding once the cap is reached. A `gh`
 #       that cannot answer exits 2, not 1: the caller files anyway rather than
-#       losing a finding to an unreachable tracker.
+#       losing a finding to an unreachable tracker. `--repo` names the
+#       repository whose queue is counted; without it `gh` resolves one from
+#       the working directory.
 #
 #   --issue <N>
 #       Advisory. Validates one already-filed issue, read through `gh`.
@@ -78,7 +80,7 @@ usage() {
   cat >&2 <<'EOF'
 usage:
   check-debt-issue-metadata.sh --pre-file --labels <csv> --body-file <path>
-  check-debt-issue-metadata.sh --investigate-cap --labels <csv>
+  check-debt-issue-metadata.sh --investigate-cap --labels <csv> [--repo <owner/name>]
   check-debt-issue-metadata.sh --issue <N>
   check-debt-issue-metadata.sh --sweep
 EOF
@@ -463,7 +465,7 @@ run_pre_file() {
 # Mode: --investigate-cap
 # ---------------------------------------------------------------------------
 
-# run_investigate_cap <labels-csv>
+# run_investigate_cap <labels-csv> [<repo>]
 #
 # The forcing function. `severity:investigate` is the one grade a filer can
 # reach without reading the cited code, so left unrationed it becomes the path
@@ -477,7 +479,7 @@ run_pre_file() {
 # yourself because the budget for not deciding is spent. So the refusal names
 # the open numbers rather than only the count.
 run_investigate_cap() {
-  local labels_csv="$1" labels corpus count numbers
+  local labels_csv="$1" repo="${2:-}" labels corpus count numbers repo_arguments=()
 
   [ -n "$labels_csv" ] || fatal "--investigate-cap requires --labels"
 
@@ -489,12 +491,13 @@ run_investigate_cap() {
   grep -qx 'severity:investigate' <<<"$labels" || return 0
 
   require_gh
+  [ -z "$repo" ] || repo_arguments=(--repo "$repo")
 
   # `--limit` well above the cap rather than at it: a truncated list cannot
   # hide a violation (any count at or above the cap trips), and reading past
   # the cap is what lets the refusal name the whole queue instead of an
   # arbitrary prefix of it.
-  corpus="$(gh issue list --label tech-debt --label severity:investigate \
+  corpus="$(gh issue list ${repo_arguments[@]+"${repo_arguments[@]}"} --label tech-debt --label severity:investigate \
     --state open --limit 100 --json number,title)" ||
     fatal "could not read the open severity:investigate queue through gh"
 
@@ -590,7 +593,7 @@ run_sweep() {
 # ---------------------------------------------------------------------------
 
 main() {
-  local mode="" labels="" body_file="" issue=""
+  local mode="" labels="" body_file="" issue="" repo=""
 
   while [ "$#" -gt 0 ]; do
     case "$1" in
@@ -610,6 +613,10 @@ main() {
         shift
         body_file="${1:-}"
         ;;
+      --repo)
+        shift
+        repo="${1:-}"
+        ;;
       -h | --help) usage ;;
       *) fatal "unknown argument: $1" ;;
     esac
@@ -618,7 +625,7 @@ main() {
 
   case "$mode" in
     pre-file) run_pre_file "$labels" "$body_file" ;;
-    investigate-cap) run_investigate_cap "$labels" ;;
+    investigate-cap) run_investigate_cap "$labels" "$repo" ;;
     issue) run_issue "$issue" ;;
     sweep) run_sweep ;;
     *) usage ;;

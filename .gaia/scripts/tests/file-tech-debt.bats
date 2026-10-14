@@ -83,6 +83,10 @@ case "$args" in
     fi
     echo '[]'
     ;;
+  "issue list"*"--label severity:investigate"*)
+    [ -f "$stub/investigate-fail" ] && exit 1
+    cat "$stub/investigate.json" 2>/dev/null || echo '[]'
+    ;;
   "issue list"*"--state open"*)
     [ -f "$stub/list-fail" ] && exit 1
     cat "$stub/open.json" 2>/dev/null || echo '[]'
@@ -514,6 +518,102 @@ CASES
     *) echo "$output"; return 1 ;;
   esac
   grep -q '^issue create' "$STUB/log" && return 1
+  true
+}
+
+# --- severity:investigate ------------------------------------------------------
+
+investigate_filter='.severity = "investigate" | .investigate_question = "QUESTION-SENTINEL" | .investigate_settled_by = "SETTLED-SENTINEL"'
+
+@test "an investigate finding files with severity:investigate and the research block" {
+  make_finding "$investigate_filter"
+  run_file
+  [ "$status" -eq 0 ]
+  [ "$output" = "filed 101" ]
+  grep -q -e '--label tech-debt --label severity:investigate' "$STUB/log"
+  jq -e '.[0].body | contains("<!-- gaia-investigate: v1 -->\n**Question:** QUESTION-SENTINEL\n**Settled by:** SETTLED-SENTINEL\n")' "$STUB/open.json" >/dev/null
+}
+
+@test "issue_severity Investigate grades the filing the same way" {
+  make_finding "$investigate_filter | del(.severity) | .issue_severity = \"Investigate\""
+  run_file
+  [ "$status" -eq 0 ]
+  grep -q -e '--label severity:investigate' "$STUB/log"
+}
+
+@test "a multi-line question or settled-by is folded onto its one block line" {
+  make_finding "$investigate_filter | .investigate_question = \"first\n  second\""
+  run_file
+  [ "$status" -eq 0 ]
+  jq -e '.[0].body | contains("**Question:** first second\n")' "$STUB/open.json" >/dev/null
+}
+
+@test "an investigate finding without a question or a settled-by is refused by name and files nothing" {
+  local filter reason
+  while IFS='|' read -r filter reason; do
+    reset_state
+    make_finding "$investigate_filter | $filter"
+    run_file
+    [ "$status" -eq 1 ] || { echo "$filter: status $status"; return 1; }
+    [ "$output" = "failed $reason" ] || { echo "$filter: $output"; return 1; }
+    [ "$(jq -r '.outcome' "$OUTCOMES")" = failed ] || { echo "$filter: outcome"; return 1; }
+    grep -q '^issue create' "$STUB/log" && { echo "$filter: created"; return 1; }
+  done <<CASES
+del(.investigate_question)|missing-investigate-question
+.investigate_question = "  "|missing-investigate-question
+.investigate_question = 7|missing-investigate-question
+del(.investigate_settled_by)|missing-investigate-settled-by
+.investigate_settled_by = ""|missing-investigate-settled-by
+CASES
+  true
+}
+
+@test "the research fields on a graded finding are refused and file nothing" {
+  local filter
+  for filter in '.investigate_question = "Q"' '.investigate_settled_by = "S"' '.severity = "minor" | .investigate_question = "Q" | .investigate_settled_by = "S"'; do
+    reset_state
+    make_finding "$filter"
+    run_file
+    [ "$status" -eq 1 ] || { echo "$filter: status $status"; return 1; }
+    [ "$output" = "failed investigate-fields-on-graded-finding" ] || { echo "$filter: $output"; return 1; }
+    grep -q '^issue create' "$STUB/log" && { echo "$filter: created"; return 1; }
+  done
+  true
+}
+
+@test "a full investigate queue refuses the filing and passes the cap's reasons through" {
+  printf '[{"number":31,"title":"a"},{"number":32,"title":"b"},{"number":33,"title":"c"}]\n' >"$STUB/investigate.json"
+  make_finding "$investigate_filter"
+  run --separate-stderr bash "$SCRIPT" file --finding "$FINDING" --outcome-file "$OUTCOMES" --repo owner/name
+  [ "$status" -eq 1 ]
+  [ "$output" = "failed investigate-cap" ]
+  grep -q 'investigate-cap-reached' <<<"$stderr"
+  grep -q '#31 #32 #33' <<<"$stderr"
+  grep -q 'grade this finding yourself' <<<"$stderr"
+  grep -q '^issue create' "$STUB/log" && return 1
+  true
+}
+
+@test "the investigate cap reads the queue of the pinned repository" {
+  make_finding "$investigate_filter"
+  run_file
+  [ "$status" -eq 0 ]
+  grep -q -e '^issue list --repo owner/name --label tech-debt --label severity:investigate' "$STUB/log"
+}
+
+@test "a cap check that cannot reach the tracker is advisory and the filing proceeds" {
+  touch "$STUB/investigate-fail"
+  make_finding "$investigate_filter"
+  run --separate-stderr bash "$SCRIPT" file --finding "$FINDING" --outcome-file "$OUTCOMES" --repo owner/name
+  [ "$status" -eq 0 ]
+  [ "$output" = "filed 101" ]
+  grep -q 'investigate' <<<"$stderr"
+}
+
+@test "a graded finding never reads the investigate queue" {
+  run_file
+  [ "$status" -eq 0 ]
+  grep -q 'severity:investigate' "$STUB/log" && return 1
   true
 }
 
