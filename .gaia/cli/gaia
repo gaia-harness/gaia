@@ -24945,17 +24945,17 @@ var takeNonFlagValue = (argv, index, flag) => {
 import { createHash } from "node:crypto";
 import {
   lstatSync as lstatSync2,
-  mkdirSync as mkdirSync4,
+  mkdirSync as mkdirSync5,
   readdirSync as readdirSync6,
-  readFileSync as readFileSync11,
+  readFileSync as readFileSync12,
   realpathSync as realpathSync5,
   statSync as statSync8
 } from "node:fs";
-import path20 from "node:path";
+import path21 from "node:path";
 
 // src/fitness/check.ts
 import { statSync as statSync7 } from "node:fs";
-import path19 from "node:path";
+import path20 from "node:path";
 
 // src/fitness/cli-args.ts
 var defaultRoot = () => {
@@ -28096,145 +28096,63 @@ var effectiveOwnership = (classified, kinds) => {
 };
 
 // src/fitness/links.ts
+import path13 from "node:path";
+
+// src/init/util/state.ts
+import { existsSync as existsSync6, mkdirSync as mkdirSync4, readFileSync as readFileSync8 } from "node:fs";
 import path12 from "node:path";
-var MARKDOWN_LINK = /\]\(<?([^)\s>]+)/g;
-var BACKTICK_SPAN = /`([^`\n]+)`/g;
-var URL_SCHEME = /^[A-Z][A-Z0-9+.-]*:/i;
-var NOT_A_PATH = /[\s<>{}*?$|;&"'()\\]/;
-var OWNING_SKILL = /\bthe ([\w-]+) skill's\s*$/i;
-var isRelativePathToken = (token) => token !== "" && !token.startsWith("/") && !token.startsWith("~") && !token.startsWith("#") && !URL_SCHEME.test(token) && !NOT_A_PATH.test(token);
-var withoutFragment = (token) => {
-  const cut = token.search(/[#?]/);
-  return cut === -1 ? token : token.slice(0, cut);
-};
-var extractLinks = (text) => {
-  const found = [];
-  const lines = stripFencedCode(text).split("\n");
-  for (const [index, line] of lines.entries()) {
-    for (const match of stripInlineCode(line).matchAll(MARKDOWN_LINK)) {
-      const target = withoutFragment(match[1] ?? "");
-      if (isRelativePathToken(target)) {
-        found.push({ kind: "markdown", line: index + 1, target });
-      }
-    }
-    for (const match of line.matchAll(BACKTICK_SPAN)) {
-      const target = withoutFragment((match[1] ?? "").trim());
-      if (isRelativePathToken(target)) {
-        const skill = OWNING_SKILL.exec(line.slice(0, match.index))?.[1];
-        found.push({
-          kind: "backtick",
-          line: index + 1,
-          ...skill === void 0 ? {} : { skill },
-          target
-        });
-      }
-    }
+var STATE_FILE_RELATIVE = ".gaia/init-state.json";
+var emptyState = () => ({ completed_steps: [], step_args: {} });
+var isStringArray = (value) => Array.isArray(value) && value.every((entry) => typeof entry === "string");
+var parseState = (raw) => {
+  let parsed;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    throw new Error(".gaia/init-state.json is not valid JSON");
   }
-  return found;
-};
-var SKILL_DIRECTORY = /^((?:.*\/)?\.claude\/skills\/[^/]+)\//;
-var skillDirectoryOf = (relative) => SKILL_DIRECTORY.exec(relative)?.[1];
-var linkAttempts = (fromFile, reference) => {
-  const skillDirectory = skillDirectoryOf(fromFile);
-  if (reference.skill !== void 0) {
-    const skillsFolder = skillDirectory === void 0 ? ".claude/skills" : path12.posix.dirname(skillDirectory);
-    return [
-      { base: "file-dir", from: `${skillsFolder}/${reference.skill}/SKILL.md` }
-    ];
+  if (parsed === null || typeof parsed !== "object" || Array.isArray(parsed)) {
+    throw new Error(".gaia/init-state.json must be a JSON object");
   }
-  const attempts = [{ base: "file-dir", from: fromFile }];
-  if (reference.kind === "backtick") {
-    attempts.push({ base: "root", from: fromFile });
-    if (skillDirectory !== void 0) {
-      attempts.push({ base: "file-dir", from: `${skillDirectory}/SKILL.md` });
-    }
+  const source = parsed;
+  const completed = source.completed_steps;
+  const args = source.step_args;
+  const completedSteps = isStringArray(completed) ? completed : [];
+  const stepArgs = args !== null && typeof args === "object" && !Array.isArray(args) ? args : {};
+  return { completed_steps: completedSteps, step_args: stepArgs };
+};
+var stateFilePath = (cwd) => path12.join(cwd, STATE_FILE_RELATIVE);
+var readState = (cwd) => {
+  const target = stateFilePath(cwd);
+  if (!existsSync6(target)) return emptyState();
+  const raw = readFileSync8(target, "utf8");
+  return parseState(raw);
+};
+var writeState = (cwd, state) => {
+  const target = stateFilePath(cwd);
+  mkdirSync4(path12.dirname(target), { recursive: true });
+  const serialized = `${JSON.stringify(state, null, 2)}
+`;
+  atomicWriteFileSync(target, serialized);
+};
+var markStepCompleted = (cwd, step, args = {}) => {
+  const state = readState(cwd);
+  if (!state.completed_steps.includes(step)) {
+    state.completed_steps.push(step);
   }
-  return attempts;
+  state.step_args[step] = args;
+  writeState(cwd, state);
 };
-var linkPlaces = (context, fromFile, reference) => linkAttempts(fromFile, reference).map(
-  (attempt) => context.resolve(attempt.from, reference.target, attempt.base)
-);
-var resolveLink = (context, fromFile, reference) => {
-  let ignored = false;
-  let outside = false;
-  for (const resolved of linkPlaces(context, fromFile, reference)) {
-    if (resolved.status === "outside") {
-      outside = true;
-    } else if (resolved.status === "inside") {
-      if (resolved.exists) {
-        return { relative: resolved.relative, status: "found" };
-      }
-      if (context.gitIgnored(resolved.relative) === true) ignored = true;
-    }
-  }
-  if (ignored) return { status: "ignored" };
-  return { status: outside ? "outside" : "dead" };
-};
-var resolveLinkTarget = (context, fromFile, reference) => {
-  const resolution = resolveLink(context, fromFile, reference);
-  return resolution.status === "found" ? resolution.relative : void 0;
-};
-var GRAPH_KINDS = [
-  "skill",
-  "command",
-  "agent",
-  "reference",
-  "playbook"
+var STEP_ORDER = [
+  "strip-branding",
+  "configure-i18n",
+  "configure-data-layer",
+  "rename",
+  "wire-statusline",
+  "bootstrap-env",
+  "write-project-config",
+  "finalize"
 ];
-var hasKind = (file2, kinds) => kinds.some((kind) => file2.kinds.includes(kind));
-var REFERENCE_KINDS = ["reference", "playbook"];
-var collectEdges = (context, nodes) => {
-  const edgesFrom = /* @__PURE__ */ new Map();
-  for (const file2 of nodes) {
-    const edges = [];
-    for (const reference of extractLinks(file2.text)) {
-      const to = resolveLinkTarget(context, file2.path, reference);
-      if (to !== void 0 && to !== file2.path) {
-        edges.push({ from: file2.path, line: reference.line, to });
-      }
-    }
-    edgesFrom.set(file2.path, edges);
-  }
-  return edgesFrom;
-};
-var collectLevelOne = (edgesFrom, levelZero, referenceFiles) => {
-  const levelOne = /* @__PURE__ */ new Set();
-  const queue = [...levelZero];
-  for (const file2 of queue) {
-    const fromEntry = levelZero.has(file2);
-    for (const edge of edgesFrom.get(file2) ?? []) {
-      const reachable = fromEntry || path12.posix.dirname(edge.to) === path12.posix.dirname(file2);
-      if (reachable && referenceFiles.has(edge.to) && !levelZero.has(edge.to) && !levelOne.has(edge.to)) {
-        levelOne.add(edge.to);
-        queue.push(edge.to);
-      }
-    }
-  }
-  return levelOne;
-};
-var buildLinkGraph = (context) => {
-  const nodes = context.files.filter((file2) => hasKind(file2, GRAPH_KINDS));
-  const referenceFiles = new Set(
-    nodes.filter((file2) => hasKind(file2, REFERENCE_KINDS)).map((file2) => file2.path)
-  );
-  const edgesFrom = collectEdges(context, nodes);
-  const levelZero = new Set(
-    nodes.filter((file2) => hasKind(file2, ["skill", "command", "playbook"])).map((file2) => file2.path)
-  );
-  const levelOne = collectLevelOne(edgesFrom, levelZero, referenceFiles);
-  const violations = [];
-  const linked = /* @__PURE__ */ new Set();
-  for (const file2 of [...levelZero, ...levelOne]) {
-    for (const edge of edgesFrom.get(file2) ?? []) {
-      linked.add(edge.to);
-      const placed = levelZero.has(edge.to) || levelOne.has(edge.to);
-      if (levelOne.has(file2) && referenceFiles.has(edge.to) && !placed) {
-        violations.push({ file: file2, line: edge.line, target: edge.to });
-      }
-    }
-  }
-  return { levelOne, levelZero, linked, violations };
-};
 
 // src/fitness/paths.ts
 var BARE_FILE_EXTENSIONS = /* @__PURE__ */ new Set([
@@ -28341,6 +28259,11 @@ var resolveEverywhere = (context, reference, candidate) => [
     (anchor2) => context.resolve(anchor2, candidate, "file-dir")
   )
 ];
+var TOOLING_PATHS = /* @__PURE__ */ new Set([
+  STATE_FILE_RELATIVE,
+  "wiki/meta"
+]);
+var isRuntimeArtifact = (context, relative, folder) => TOOLING_PATHS.has(relative) || context.gitIgnored(folder ? `${relative}/` : relative) === true;
 var resolveReference = (context, reference) => {
   const { token } = reference;
   if (token.startsWith("~")) return { status: "outside" };
@@ -28358,7 +28281,7 @@ var resolveReference = (context, reference) => {
   }
   const inside = underBases.find((result) => result.status === "inside");
   if (inside?.status !== "inside") return { status: "unresolvable" };
-  if (context.gitIgnored(inside.relative) === true) {
+  if (isRuntimeArtifact(context, inside.relative, token.endsWith("/"))) {
     return { relative: inside.relative, status: "found" };
   }
   return { relative: inside.relative, status: "dead" };
@@ -28396,11 +28319,31 @@ var scopeAnchors = (file2) => {
     return [folder === void 0 ? `${prefix}/_` : `${folder}/${prefix}/_`];
   });
 };
+var PLACEHOLDER = /<[^<>]+>/;
+var templateExamples = (text) => {
+  const templates = text.includes("<") ? bodyLines(text).flatMap(
+    (line) => [...line.matchAll(BACKTICKED)].flatMap((match) => {
+      const template = match[1] ?? "";
+      const literals = template.split(PLACEHOLDER);
+      const segments = template.replace(/\/$/, "").split("/");
+      if (literals.length < 2 || (segments[0] ?? "").includes("<") || (segments.at(-1) ?? "").includes("<") || !literals.every(
+        (literal2) => literal2 === "" || PATH_CHARACTERS.test(literal2)
+      )) {
+        return [];
+      }
+      const pattern2 = literals.map((literal2) => escapeRegExp(literal2)).join(String.raw`[\w./@+-]+`);
+      return [new RegExp(`^${pattern2}$`)];
+    })
+  ) : [];
+  return (token) => templates.some((template) => template.test(token));
+};
 var deadPathFindings = (context, files) => files.flatMap((file2) => {
   const anchors = scopeAnchors(file2);
+  const isExample = templateExamples(file2.text);
   return extractPathReferences(file2.text).flatMap(({ line, linked, token }) => {
     const segments = token.replace(/\/$/, "").split("/");
     if (!linked && segments.length === 1) return [];
+    if (!linked && isExample(token)) return [];
     const reference = {
       anchors,
       bases: linked ? ["root", "file-dir", "package"] : ["root", "package"],
@@ -28423,6 +28366,152 @@ var deadPathFindings = (context, files) => files.flatMap((file2) => {
     ];
   });
 });
+
+// src/fitness/links.ts
+var MARKDOWN_LINK = /\]\(<?([^)\s>]+)/g;
+var BACKTICK_SPAN = /`([^`\n]+)`/g;
+var URL_SCHEME = /^[A-Z][A-Z0-9+.-]*:/i;
+var NOT_A_PATH = /[\s<>{}*?$|;&"'()\\]/;
+var OWNING_SKILL = /\bthe ([\w-]+) skill's\s*$/i;
+var isRelativePathToken = (token) => token !== "" && !token.startsWith("/") && !token.startsWith("~") && !token.startsWith("#") && !URL_SCHEME.test(token) && !NOT_A_PATH.test(token);
+var withoutFragment = (token) => {
+  const cut = token.search(/[#?]/);
+  return cut === -1 ? token : token.slice(0, cut);
+};
+var extractLinks = (text) => {
+  const found = [];
+  const lines = stripFencedCode(text).split("\n");
+  for (const [index, line] of lines.entries()) {
+    for (const match of stripInlineCode(line).matchAll(MARKDOWN_LINK)) {
+      const target = withoutFragment(match[1] ?? "");
+      if (isRelativePathToken(target)) {
+        found.push({ kind: "markdown", line: index + 1, target });
+      }
+    }
+    for (const match of line.matchAll(BACKTICK_SPAN)) {
+      const target = withoutFragment((match[1] ?? "").trim());
+      if (isRelativePathToken(target)) {
+        const skill = OWNING_SKILL.exec(line.slice(0, match.index))?.[1];
+        found.push({
+          kind: "backtick",
+          line: index + 1,
+          ...skill === void 0 ? {} : { skill },
+          target
+        });
+      }
+    }
+  }
+  return found;
+};
+var SKILL_DIRECTORY = /^((?:.*\/)?\.claude\/skills\/[^/]+)\//;
+var skillDirectoryOf = (relative) => SKILL_DIRECTORY.exec(relative)?.[1];
+var linkAttempts = (fromFile, reference) => {
+  const skillDirectory = skillDirectoryOf(fromFile);
+  if (reference.skill !== void 0) {
+    const skillsFolder = skillDirectory === void 0 ? ".claude/skills" : path13.posix.dirname(skillDirectory);
+    return [
+      { base: "file-dir", from: `${skillsFolder}/${reference.skill}/SKILL.md` }
+    ];
+  }
+  const attempts = [{ base: "file-dir", from: fromFile }];
+  if (reference.kind === "backtick") {
+    attempts.push({ base: "root", from: fromFile });
+    if (skillDirectory !== void 0) {
+      attempts.push({ base: "file-dir", from: `${skillDirectory}/SKILL.md` });
+    }
+  }
+  return attempts;
+};
+var linkPlaces = (context, fromFile, reference) => linkAttempts(fromFile, reference).map(
+  (attempt) => context.resolve(attempt.from, reference.target, attempt.base)
+);
+var resolveLink = (context, fromFile, reference) => {
+  let ignored = false;
+  let outside = false;
+  for (const resolved of linkPlaces(context, fromFile, reference)) {
+    if (resolved.status === "outside") {
+      outside = true;
+    } else if (resolved.status === "inside") {
+      if (resolved.exists) {
+        return { relative: resolved.relative, status: "found" };
+      }
+      if (isRuntimeArtifact(
+        context,
+        resolved.relative,
+        reference.target.endsWith("/")
+      )) {
+        ignored = true;
+      }
+    }
+  }
+  if (ignored) return { status: "ignored" };
+  return { status: outside ? "outside" : "dead" };
+};
+var resolveLinkTarget = (context, fromFile, reference) => {
+  const resolution = resolveLink(context, fromFile, reference);
+  return resolution.status === "found" ? resolution.relative : void 0;
+};
+var GRAPH_KINDS = [
+  "skill",
+  "command",
+  "agent",
+  "reference",
+  "playbook"
+];
+var hasKind = (file2, kinds) => kinds.some((kind) => file2.kinds.includes(kind));
+var REFERENCE_KINDS = ["reference", "playbook"];
+var collectEdges = (context, nodes) => {
+  const edgesFrom = /* @__PURE__ */ new Map();
+  for (const file2 of nodes) {
+    const edges = [];
+    for (const reference of extractLinks(file2.text)) {
+      const to = resolveLinkTarget(context, file2.path, reference);
+      if (to !== void 0 && to !== file2.path) {
+        edges.push({ from: file2.path, line: reference.line, to });
+      }
+    }
+    edgesFrom.set(file2.path, edges);
+  }
+  return edgesFrom;
+};
+var collectLevelOne = (edgesFrom, levelZero, referenceFiles) => {
+  const levelOne = /* @__PURE__ */ new Set();
+  const queue = [...levelZero];
+  for (const file2 of queue) {
+    const fromEntry = levelZero.has(file2);
+    for (const edge of edgesFrom.get(file2) ?? []) {
+      const reachable = fromEntry || path13.posix.dirname(edge.to) === path13.posix.dirname(file2);
+      if (reachable && referenceFiles.has(edge.to) && !levelZero.has(edge.to) && !levelOne.has(edge.to)) {
+        levelOne.add(edge.to);
+        queue.push(edge.to);
+      }
+    }
+  }
+  return levelOne;
+};
+var buildLinkGraph = (context) => {
+  const nodes = context.files.filter((file2) => hasKind(file2, GRAPH_KINDS));
+  const referenceFiles = new Set(
+    nodes.filter((file2) => hasKind(file2, REFERENCE_KINDS)).map((file2) => file2.path)
+  );
+  const edgesFrom = collectEdges(context, nodes);
+  const levelZero = new Set(
+    nodes.filter((file2) => hasKind(file2, ["skill", "command", "playbook"])).map((file2) => file2.path)
+  );
+  const levelOne = collectLevelOne(edgesFrom, levelZero, referenceFiles);
+  const violations = [];
+  const linked = /* @__PURE__ */ new Set();
+  for (const file2 of [...levelZero, ...levelOne]) {
+    for (const edge of edgesFrom.get(file2) ?? []) {
+      linked.add(edge.to);
+      const placed = levelZero.has(edge.to) || levelOne.has(edge.to);
+      if (levelOne.has(file2) && referenceFiles.has(edge.to) && !placed) {
+        violations.push({ file: file2, line: edge.line, target: edge.to });
+      }
+    }
+  }
+  return { levelOne, levelZero, linked, violations };
+};
 
 // src/fitness/rules/authoring-helpers.ts
 var MAX_BODY_LINES = 500;
@@ -28584,8 +28673,9 @@ var linkResolvesCheck = (context) => filesOfKinds(context, [
   "playbook"
 ]).flatMap((file2) => {
   const inSkillTree = skillDirectoryOf(file2.path) !== void 0;
+  const isExample = templateExamples(file2.text);
   return extractLinks(file2.text).flatMap((reference) => {
-    const checked = reference.kind === "markdown" || (inSkillTree ? BACKTICK_SKILL_PREFIX.test(reference.target) : REPO_ROOT_PREFIX.test(reference.target));
+    const checked = reference.kind === "markdown" || (inSkillTree ? BACKTICK_SKILL_PREFIX.test(reference.target) : REPO_ROOT_PREFIX.test(reference.target)) && !isExample(reference.target);
     if (!checked) return [];
     if (resolveLink(context, file2.path, reference).status !== "dead") {
       return [];
@@ -30079,15 +30169,15 @@ var SETTINGS_RULES = [
 
 // src/fitness/rules/wiki.ts
 import { statSync as statSync6 } from "node:fs";
-import path18 from "node:path";
+import path19 from "node:path";
 
 // src/wiki/dead-paths.ts
-import { readFileSync as readFileSync9, statSync as statSync4 } from "node:fs";
-import path16 from "node:path";
+import { readFileSync as readFileSync10, statSync as statSync4 } from "node:fs";
+import path17 from "node:path";
 
 // src/util/packages.ts
-import { lstatSync, readFileSync as readFileSync8 } from "node:fs";
-import path13 from "node:path";
+import { lstatSync, readFileSync as readFileSync9 } from "node:fs";
+import path14 from "node:path";
 var REGISTRY_FILE = ".gaia/packages.json";
 var DESCRIPTOR_NAME = "gaia.package.json";
 var NAME_PATTERN = /^[a-z][a-z0-9-]*$/;
@@ -30204,7 +30294,7 @@ var readFileState = (file2) => {
     };
   }
   try {
-    return { kind: "text", text: readFileSync8(file2, "utf8") };
+    return { kind: "text", text: readFileSync9(file2, "utf8") };
   } catch {
     return { kind: "unreadable" };
   }
@@ -30220,7 +30310,7 @@ var parseJson = (state) => {
   }
 };
 var loadRegistry = (repoRoot) => {
-  const read = readFileState(path13.join(repoRoot, REGISTRY_FILE));
+  const read = readFileState(path14.join(repoRoot, REGISTRY_FILE));
   if (read.kind === "absent") {
     return { entries: BUILTIN_REGISTRY, source: "builtin" };
   }
@@ -30240,7 +30330,7 @@ var loadRegistry = (repoRoot) => {
 };
 var loadDescriptor = (repoRoot, entry, source) => {
   const file2 = descriptorFileFor(entry.path);
-  const read = readFileState(path13.join(repoRoot, file2));
+  const read = readFileState(path14.join(repoRoot, file2));
   if (read.kind === "absent") {
     return descriptorError(file2, "missing", missingNextStep(file2, source));
   }
@@ -30287,20 +30377,20 @@ var repoRegExps = (packages, key) => packages.flatMap(
 
 // src/wiki/util/markdown-corpus.ts
 import { statSync as statSync3 } from "node:fs";
-import path15 from "node:path";
+import path16 from "node:path";
 
 // src/util/tree-walk.ts
 import { readdirSync as readdirSync4 } from "node:fs";
-import path14 from "node:path";
+import path15 from "node:path";
 var EVERY_EXTENSION = "every-extension";
 var normalizeEntry = (entry, separator) => entry.split(separator).join("/");
 var collectTreeFiles = (root, extensions) => {
   const walk2 = (directory) => readdirSync4(directory, { withFileTypes: true }).flatMap((entry) => {
-    const absolute = path14.join(directory, entry.name);
+    const absolute = path15.join(directory, entry.name);
     if (entry.isDirectory()) {
       return walk2(absolute);
     }
-    return entry.isFile() && (extensions === EVERY_EXTENSION || extensions.has(path14.extname(entry.name).toLowerCase())) ? [normalizeEntry(path14.relative(root, absolute), path14.sep)] : [];
+    return entry.isFile() && (extensions === EVERY_EXTENSION || extensions.has(path15.extname(entry.name).toLowerCase())) ? [normalizeEntry(path15.relative(root, absolute), path15.sep)] : [];
   });
   return walk2(root).toSorted((a, b) => a.localeCompare(b));
 };
@@ -30315,14 +30405,14 @@ var GENERATED_CONTENT_EXEMPT_PATHS = /* @__PURE__ */ new Set([
 var isWikiScanExempt = (relativePath) => WIKI_SCAN_EXEMPT_PREFIXES.some((prefix) => relativePath.startsWith(prefix));
 var isGeneratedContentExempt = (relativePath) => GENERATED_CONTENT_EXEMPT_PATHS.has(relativePath);
 var collectWikiMarkdown = (cwd) => {
-  const wikiDir = path15.join(cwd, WIKI_DIR);
+  const wikiDir = path16.join(cwd, WIKI_DIR);
   try {
     statSync3(wikiDir);
   } catch {
     return [];
   }
   return collectTreeFiles(wikiDir, MARKDOWN_EXTENSIONS).map(
-    (relativePath) => path15.posix.join(WIKI_DIR, relativePath)
+    (relativePath) => path16.posix.join(WIKI_DIR, relativePath)
   );
 };
 
@@ -30377,7 +30467,7 @@ var isTrackedPath = (token, prefixes) => {
 var shouldSkipFile = (relPath) => isWikiScanExempt(relPath) || isGeneratedContentExempt(relPath) || relPath.startsWith(LOCAL_EXEMPT_PREFIX);
 var pathExists = (root, candidate) => {
   try {
-    statSync4(path16.join(root, candidate));
+    statSync4(path17.join(root, candidate));
     return true;
   } catch {
     return false;
@@ -30393,7 +30483,7 @@ var collectFindingsInLine = (ctx, lineNumber, line) => {
   return { dead };
 };
 var collectFindingsInFile = (ctx) => {
-  const content = readFileSync9(path16.join(ctx.cwd, ctx.filePath), "utf8");
+  const content = readFileSync10(path17.join(ctx.cwd, ctx.filePath), "utf8");
   const lines = content.split("\n");
   const perLine = lines.map(
     (line, index) => collectFindingsInLine(ctx, index + 1, line)
@@ -30451,8 +30541,8 @@ var run4 = (argv, options = {}) => {
 };
 
 // src/wiki/page-index.ts
-import { existsSync as existsSync6, readdirSync as readdirSync5, readFileSync as readFileSync10, statSync as statSync5 } from "node:fs";
-import path17 from "node:path";
+import { existsSync as existsSync7, readdirSync as readdirSync5, readFileSync as readFileSync11, statSync as statSync5 } from "node:fs";
+import path18 from "node:path";
 
 // src/wiki/util/frontmatter.ts
 var FRONTMATTER_FENCE = "---";
@@ -30557,7 +30647,7 @@ var DOMAIN_DIRS = [
 ];
 var SKIPPED_FILES = /* @__PURE__ */ new Set(["_index.md", "README.md"]);
 var ROOT_LINK_SOURCES = ["index.md", "overview.md"];
-var slugFromPath = (filePath) => path17.basename(filePath, ".md");
+var slugFromPath = (filePath) => path18.basename(filePath, ".md");
 var extractTitle = (body, fallback) => {
   const lines = body.split("\n");
   for (const line of lines) {
@@ -30582,8 +30672,8 @@ var arrayOfStrings = (value) => {
 };
 var isIndexablePage = (entry) => entry.isFile() && entry.name.endsWith(".md") && !SKIPPED_FILES.has(entry.name) && !entry.name.startsWith("_");
 var readPageRecord = (domainDir, domain2, entry) => {
-  const absPath = path17.join(domainDir, entry.name);
-  const raw = readFileSync10(absPath, "utf8");
+  const absPath = path18.join(domainDir, entry.name);
+  const raw = readFileSync11(absPath, "utf8");
   const { body, frontmatter } = parseFrontmatter(raw);
   const slug = slugFromPath(entry.name);
   const title = extractTitle(body, slug);
@@ -30592,7 +30682,7 @@ var readPageRecord = (domainDir, domain2, entry) => {
     body,
     domain: domain2,
     outboundTargets: targets,
-    relativePath: path17.posix.join("wiki", domain2, entry.name),
+    relativePath: path18.posix.join("wiki", domain2, entry.name),
     slug,
     status: stringValue(frontmatter.status),
     tags: arrayOfStrings(frontmatter.tags),
@@ -30601,16 +30691,16 @@ var readPageRecord = (domainDir, domain2, entry) => {
   };
 };
 var collectDomainPages = (wikiRoot, domain2) => {
-  const domainDir = path17.join(wikiRoot, domain2);
-  if (!existsSync6(domainDir) || !statSync5(domainDir).isDirectory()) return [];
+  const domainDir = path18.join(wikiRoot, domain2);
+  if (!existsSync7(domainDir) || !statSync5(domainDir).isDirectory()) return [];
   const entries = readdirSync5(domainDir, { withFileTypes: true });
   return entries.filter((entry) => isIndexablePage(entry)).map((entry) => readPageRecord(domainDir, domain2, entry));
 };
 var collectPages = (wikiRoot) => DOMAIN_DIRS.flatMap((domain2) => collectDomainPages(wikiRoot, domain2));
 var collectRootLinkSources = (wikiRoot) => ROOT_LINK_SOURCES.filter(
-  (filename) => existsSync6(path17.join(wikiRoot, filename))
+  (filename) => existsSync7(path18.join(wikiRoot, filename))
 ).map((filename) => {
-  const raw = readFileSync10(path17.join(wikiRoot, filename), "utf8");
+  const raw = readFileSync11(path18.join(wikiRoot, filename), "utf8");
   const { body } = parseFrontmatter(raw);
   return extractWikilinks(body);
 });
@@ -30660,7 +30750,7 @@ var printHuman = (index) => {
 `);
 };
 var computePageIndexAt = (repoRoot) => {
-  const wikiRoot = path17.join(repoRoot, "wiki");
+  const wikiRoot = path18.join(repoRoot, "wiki");
   const pages = collectPages(wikiRoot);
   const rootSources = collectRootLinkSources(wikiRoot);
   return buildIndex(pages, rootSources);
@@ -30695,7 +30785,7 @@ var run5 = (argv, options = {}) => {
     });
     return EXIT_CODES.UNKNOWN_SUBCOMMAND;
   }
-  const wikiRoot = path17.join(repoRoot, "wiki");
+  const wikiRoot = path18.join(repoRoot, "wiki");
   const pages = collectPages(wikiRoot);
   const rootSources = collectRootLinkSources(wikiRoot);
   const index = buildIndex(pages, rootSources);
@@ -30772,7 +30862,7 @@ var WIKI_DIRECTORY = "wiki";
 var hasWikiDirectory = (context) => {
   try {
     return statSync6(
-      path18.join(context.rootDirectory, WIKI_DIRECTORY)
+      path19.join(context.rootDirectory, WIKI_DIRECTORY)
     ).isDirectory();
   } catch {
     return false;
@@ -30915,7 +31005,7 @@ var APPLICABILITY = {
   prompt: (context) => hasAnyKind(context, ["skill", "command", "agent"]),
   rules: (context) => hasAnyKind(context, ["rule"]),
   settings: (context) => hasAnyKind(context, ["settings", "settings-local", "fitness-config"]),
-  wiki: (context) => isDirectory(path19.join(context.rootDirectory, "wiki"))
+  wiki: (context) => isDirectory(path20.join(context.rootDirectory, "wiki"))
 };
 var LINTED_OWNERSHIPS = /* @__PURE__ */ new Set([
   "adopter",
@@ -30948,7 +31038,7 @@ var partitionFindings = (rawFindings, scope) => {
   return { graded, upstream };
 };
 var runCheck = (options) => {
-  const root = path19.resolve(options.root);
+  const root = path20.resolve(options.root);
   if (!isDirectory(root)) throw new Error("the root is not a directory");
   const catalog = options.catalog ?? RULE_CATALOG;
   const only = options.only ?? [];
@@ -31149,7 +31239,7 @@ var run7 = (args) => {
       return usageError(`${selector} matches no rule id or alias`);
     }
   }
-  const resolvedRoot = path19.resolve(root ?? defaultRoot());
+  const resolvedRoot = path20.resolve(root ?? defaultRoot());
   try {
     const report2 = runCheck({ configPath, only, root: resolvedRoot, scope });
     process.stdout.write(`${JSON.stringify(redactDeep(report2), null, 2)}
@@ -31172,17 +31262,17 @@ var ABSENT = "absent";
 var SHA256_HEX = /^[\da-f]{64}$/;
 var VENDOR_PIN_DIRECTORY = ".gaia/vendor";
 var normalizeTarget = (target) => {
-  if (target === "" || target.includes("\\") || path20.isAbsolute(target)) {
+  if (target === "" || target.includes("\\") || path21.isAbsolute(target)) {
     return void 0;
   }
-  const normalized = path20.posix.normalize(target);
-  if (normalized === "." || normalized === ".." || normalized.startsWith("../") || path20.posix.isAbsolute(normalized)) {
+  const normalized = path21.posix.normalize(target);
+  if (normalized === "." || normalized === ".." || normalized.startsWith("../") || path21.posix.isAbsolute(normalized)) {
     return void 0;
   }
   return normalized.endsWith("/") ? normalized.slice(0, -1) : normalized;
 };
 var vendorTargets = (root) => {
-  const directory = path20.join(root, VENDOR_PIN_DIRECTORY);
+  const directory = path21.join(root, VENDOR_PIN_DIRECTORY);
   let names;
   try {
     names = readdirSync6(directory).filter((name) => name.endsWith(".json"));
@@ -31193,7 +31283,7 @@ var vendorTargets = (root) => {
   for (const name of names) {
     try {
       const parsed = JSON.parse(
-        readFileSync11(path20.join(directory, name), "utf8")
+        readFileSync12(path21.join(directory, name), "utf8")
       );
       const value = parsed !== null && typeof parsed === "object" ? parsed.target : void 0;
       const normalized = typeof value === "string" ? normalizeTarget(value) : void 0;
@@ -31210,7 +31300,7 @@ var findSymlinkProblem = (root, target) => {
     if (!isInsideRoot(realRoot, resolved)) {
       return "target passes through a symlink that leaves the project root";
     }
-    const relative = path20.relative(realRoot, resolved).split(path20.sep).join("/");
+    const relative = path21.relative(realRoot, resolved).split(path21.sep).join("/");
     return vendored.some(
       (tree) => relative === tree || relative.startsWith(`${tree}/`)
     ) ? "target resolves into a vendored tree" : void 0;
@@ -31219,7 +31309,7 @@ var findSymlinkProblem = (root, target) => {
   let finalLink;
   for (const part of target.split("/")) {
     finalLink = void 0;
-    current = path20.join(current, part);
+    current = path21.join(current, part);
     let isLink;
     try {
       isLink = lstatSync2(current).isSymbolicLink();
@@ -31242,7 +31332,7 @@ var findSymlinkProblem = (root, target) => {
   if (finalProblem !== void 0 || finalLink === void 0) {
     return finalProblem;
   }
-  return `target is a symlink to ${path20.relative(realRoot, finalLink).split(path20.sep).join("/")}; fix that file instead`;
+  return `target is a symlink to ${path21.relative(realRoot, finalLink).split(path21.sep).join("/")}; fix that file instead`;
 };
 var sha256Of = (bytes) => createHash("sha256").update(bytes).digest("hex");
 var readBase = (absolute) => {
@@ -31258,7 +31348,7 @@ var readBase = (absolute) => {
     return {
       exists: true,
       mode: followed.mode % PERMISSION_MODULUS,
-      sha256: sha256Of(readFileSync11(absolute))
+      sha256: sha256Of(readFileSync12(absolute))
     };
   } catch {
     return {
@@ -31285,7 +31375,7 @@ var validateOptions = (options) => {
       reason: "--base-sha256 must be a 64-character lowercase hex digest or absent"
     };
   }
-  const root = path20.resolve(options.root);
+  const root = path21.resolve(options.root);
   try {
     if (statSync8(root).isDirectory()) return { root, target };
   } catch {
@@ -31331,7 +31421,7 @@ var applyProposal = (options) => {
   const { root, target } = validated;
   const refusal = refuseUnlessFixableAdopter(options, root, target) ?? symlinkRefusal(options, root, target);
   if (refusal !== void 0) return refusal;
-  const absolute = path20.join(root, target);
+  const absolute = path21.join(root, target);
   const base = readBase(absolute);
   if ("error" in base) return refused(base.error);
   if ((base.exists ? base.sha256 : ABSENT) !== options.baseSha256) {
@@ -31339,12 +31429,12 @@ var applyProposal = (options) => {
   }
   let proposal;
   try {
-    proposal = readFileSync11(options.proposalPath);
+    proposal = readFileSync12(options.proposalPath);
   } catch {
     return { kind: "could-not-run", reason: "the proposal file cannot be read" };
   }
   try {
-    mkdirSync4(path20.dirname(absolute), { recursive: true });
+    mkdirSync5(path21.dirname(absolute), { recursive: true });
     atomicWriteFileSync(
       absolute,
       proposal,
@@ -31408,8 +31498,8 @@ var run8 = (args) => {
   if (baseSha256 === void 0) return usageError2("--base-sha256 is required");
   const result = applyProposal({
     baseSha256,
-    proposalPath: path20.resolve(proposal),
-    root: path20.resolve(root ?? defaultRoot()),
+    proposalPath: path21.resolve(proposal),
+    root: path21.resolve(root ?? defaultRoot()),
     target
   });
   if (result.kind === "applied") {
@@ -31434,7 +31524,7 @@ var run8 = (args) => {
 // src/fitness/builtins.ts
 import { spawn as spawn2 } from "node:child_process";
 import { accessSync, constants, realpathSync as realpathSync6, statSync as statSync9 } from "node:fs";
-import path21 from "node:path";
+import path22 from "node:path";
 var MAX_CAPTURE_BYTES = 256 * 1024;
 var DEFAULT_TIMEOUT_MS = 6e4;
 var TIMEOUT_ENV = "GAIA_FITNESS_BUILTIN_TIMEOUT_MS";
@@ -31459,9 +31549,9 @@ var timeoutMilliseconds = (environment) => {
   return Number.isInteger(parsed) && parsed > 0 ? parsed : DEFAULT_TIMEOUT_MS;
 };
 var findOnPath = (name, searchPath) => {
-  for (const directory of (searchPath ?? "").split(path21.delimiter)) {
+  for (const directory of (searchPath ?? "").split(path22.delimiter)) {
     if (directory !== "") {
-      const candidate = path21.join(directory, name);
+      const candidate = path22.join(directory, name);
       try {
         if (statSync9(candidate).isFile()) {
           accessSync(candidate, constants.X_OK);
@@ -31589,7 +31679,7 @@ var findTargetDirectories = (root) => {
         0,
         file2.path.indexOf("/", (match[1]?.length ?? 0) + ".claude/".length)
       );
-      if (isDirectory2(path21.join(root, directory))) directories.add(directory);
+      if (isDirectory2(path22.join(root, directory))) directories.add(directory);
     }
   }
   const found = [...directories];
@@ -31718,7 +31808,7 @@ var run9 = async (args) => {
     });
     return EXIT_CODES.INVALID_ARGUMENTS;
   }
-  const root = path21.resolve(parsed.root ?? defaultRoot());
+  const root = path22.resolve(parsed.root ?? defaultRoot());
   if (!isDirectory2(root)) {
     structuredError({
       code: "could_not_run",
@@ -31734,9 +31824,9 @@ var run9 = async (args) => {
 };
 
 // src/fitness/inventory.ts
-import { lstatSync as lstatSync3, readdirSync as readdirSync7, readFileSync as readFileSync12, statSync as statSync10 } from "node:fs";
+import { lstatSync as lstatSync3, readdirSync as readdirSync7, readFileSync as readFileSync13, statSync as statSync10 } from "node:fs";
 import { homedir } from "node:os";
-import path22 from "node:path";
+import path23 from "node:path";
 var STORE_NAMES = [
   "memory",
   "user_agent_memory",
@@ -31779,7 +31869,7 @@ var walk = (directory, options, position) => {
     const relative = prefix === "" ? entry.name : `${prefix}/${entry.name}`;
     if (entry.isFile()) return options.matches(entry) ? [relative] : [];
     if (entry.isDirectory() && depth < options.maximumDepth && !options.skipDirectory(relative, entry)) {
-      return walk(path22.join(directory, entry.name), options, {
+      return walk(path23.join(directory, entry.name), options, {
         depth: depth + 1,
         prefix: relative
       });
@@ -31807,17 +31897,17 @@ var claudeMdBelow = (root) => walk(
   WALK_START
 );
 var locateStores = (root, home) => {
-  const memoryDirectory = path22.join(
+  const memoryDirectory = path23.join(
     home,
     ".claude",
     "projects",
     memoryKey(root),
     "memory"
   );
-  const userAgentDirectory = path22.join(home, ".claude", "agent-memory");
-  const projectAgentDirectory = path22.join(root, ".claude", "agent-memory");
-  const rulesDirectory = path22.join(root, ".claude", "rules");
-  const wikiDirectory = path22.join(root, "wiki");
+  const userAgentDirectory = path23.join(home, ".claude", "agent-memory");
+  const projectAgentDirectory = path23.join(root, ".claude", "agent-memory");
+  const rulesDirectory = path23.join(root, ".claude", "rules");
+  const wikiDirectory = path23.join(root, "wiki");
   return {
     claude_md: {
       directory: root,
@@ -31852,9 +31942,9 @@ var locateStores = (root, home) => {
   };
 };
 var describeFile = (location2, relative) => {
-  const absolute = path22.join(location2.directory, relative);
+  const absolute = path23.join(location2.directory, relative);
   try {
-    const text = readFileSync12(absolute, "utf8");
+    const text = readFileSync13(absolute, "utf8");
     return {
       file: {
         lines: text.split("\n").length - 1,
@@ -31870,19 +31960,19 @@ var describeFile = (location2, relative) => {
 };
 var LINK_TARGET2 = /\]\(([^\s()]+)\)/g;
 var SCHEME_OR_ABSOLUTE = /^(?:[A-Z][\d+.A-Z-]*:|[/~#])/i;
-var PLACEHOLDER = /[$*<>{}]/;
+var PLACEHOLDER2 = /[$*<>{}]/;
 var FILE_EXTENSION = /\.[\dA-Z]{1,8}$/i;
 var toRepoPath = (token) => {
   const withoutAnchor = token.split("#", 1)[0] ?? "";
   const candidate = withoutAnchor.replace(LINE_SUFFIX, "").replace(/^\.\//, "");
-  if (candidate === "" || SCHEME_OR_ABSOLUTE.test(candidate) || PLACEHOLDER.test(candidate) || !candidate.includes("/") || !FILE_EXTENSION.test(candidate) || candidate.split("/").includes("..")) {
+  if (candidate === "" || SCHEME_OR_ABSOLUTE.test(candidate) || PLACEHOLDER2.test(candidate) || !candidate.includes("/") || !FILE_EXTENSION.test(candidate) || candidate.split("/").includes("..")) {
     return void 0;
   }
   return candidate;
 };
 var pathExists2 = (root, relative) => {
   try {
-    statSync10(path22.join(root, relative));
+    statSync10(path23.join(root, relative));
     return true;
   } catch {
     return false;
@@ -31937,7 +32027,7 @@ var run10 = (args) => {
     });
     return EXIT_CODES.INVALID_ARGUMENTS;
   }
-  const root = path22.resolve(parsed.root ?? defaultRoot());
+  const root = path23.resolve(parsed.root ?? defaultRoot());
   try {
     if (!statSync10(root).isDirectory()) throw new Error("not a directory");
   } catch {
@@ -32290,7 +32380,7 @@ import { copyFileSync, existsSync as existsSync8 } from "node:fs";
 import path25 from "node:path";
 
 // src/util/package-target.ts
-import path23 from "node:path";
+import path24 from "node:path";
 var resolveTreeRoot = (cwd) => {
   try {
     return resolveRepoRoot(cwd);
@@ -32313,7 +32403,7 @@ var resolvePackageTarget = (cwd, name = "frontend") => {
   }
   return {
     ok: true,
-    packageDir: path23.resolve(repoRoot, found.path),
+    packageDir: path24.resolve(repoRoot, found.path),
     packagePath: found.path,
     repoRoot
   };
@@ -32324,62 +32414,6 @@ var toPackageRelative = (value, packagePath) => {
   }
   return value.startsWith(`${packagePath}/`) ? value.slice(packagePath.length + 1) : value;
 };
-
-// src/init/util/state.ts
-import { existsSync as existsSync7, mkdirSync as mkdirSync5, readFileSync as readFileSync13 } from "node:fs";
-import path24 from "node:path";
-var STATE_FILE_RELATIVE = ".gaia/init-state.json";
-var emptyState = () => ({ completed_steps: [], step_args: {} });
-var isStringArray = (value) => Array.isArray(value) && value.every((entry) => typeof entry === "string");
-var parseState = (raw) => {
-  let parsed;
-  try {
-    parsed = JSON.parse(raw);
-  } catch {
-    throw new Error(".gaia/init-state.json is not valid JSON");
-  }
-  if (parsed === null || typeof parsed !== "object" || Array.isArray(parsed)) {
-    throw new Error(".gaia/init-state.json must be a JSON object");
-  }
-  const source = parsed;
-  const completed = source.completed_steps;
-  const args = source.step_args;
-  const completedSteps = isStringArray(completed) ? completed : [];
-  const stepArgs = args !== null && typeof args === "object" && !Array.isArray(args) ? args : {};
-  return { completed_steps: completedSteps, step_args: stepArgs };
-};
-var stateFilePath = (cwd) => path24.join(cwd, STATE_FILE_RELATIVE);
-var readState = (cwd) => {
-  const target = stateFilePath(cwd);
-  if (!existsSync7(target)) return emptyState();
-  const raw = readFileSync13(target, "utf8");
-  return parseState(raw);
-};
-var writeState = (cwd, state) => {
-  const target = stateFilePath(cwd);
-  mkdirSync5(path24.dirname(target), { recursive: true });
-  const serialized = `${JSON.stringify(state, null, 2)}
-`;
-  atomicWriteFileSync(target, serialized);
-};
-var markStepCompleted = (cwd, step, args = {}) => {
-  const state = readState(cwd);
-  if (!state.completed_steps.includes(step)) {
-    state.completed_steps.push(step);
-  }
-  state.step_args[step] = args;
-  writeState(cwd, state);
-};
-var STEP_ORDER = [
-  "strip-branding",
-  "configure-i18n",
-  "configure-data-layer",
-  "rename",
-  "wire-statusline",
-  "bootstrap-env",
-  "write-project-config",
-  "finalize"
-];
 
 // src/init/bootstrap-env.ts
 var HELP_TEXT9 = `Usage: gaia init bootstrap-env
@@ -34102,7 +34136,7 @@ var FUNDING_PATH = ".github/FUNDING.yml";
 var README_TEMPLATE = ".gaia/templates/README.md";
 var README_TARGET = "README.md";
 var PREVIEW_FILE = ".storybook/preview.ts";
-var PLACEHOLDER2 = "{{PROJECT_TITLE}}";
+var PLACEHOLDER3 = "{{PROJECT_TITLE}}";
 var removeIfPresent2 = (cwd, relative) => {
   const absolute = path35.join(cwd, relative);
   if (existsSync17(absolute)) {
@@ -34115,7 +34149,7 @@ var writeReadme = (cwd, title) => {
     throw new Error(`${README_TEMPLATE} not found; cannot replace README`);
   }
   const template = readFileSync22(templatePath2, "utf8");
-  const rendered = template.split(PLACEHOLDER2).join(title);
+  const rendered = template.split(PLACEHOLDER3).join(title);
   const target = path35.join(cwd, README_TARGET);
   if (existsSync17(target)) {
     const current = readFileSync22(target, "utf8");
