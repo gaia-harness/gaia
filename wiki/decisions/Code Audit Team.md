@@ -169,7 +169,7 @@ Adding a `.sh` under `.claude/hooks/**` needs to reach `.gaia/local` only throug
 
 ### Light routing: the kill rule
 
-Both maintainer members opt in to light routing, so a small repair after a refusal, and a small delta after a full clearance, can be re-checked by a cheap reviewer instead of a full member dispatch (see [[Audit Round Procedure#Light routing]]). The mechanism earns its place only if it clears re-audits in practice, so a measured threshold retires it.
+Members opt in to light routing one by one through `light_review` in `.gaia/audit-ci.yml`, so a small repair after a refusal, and a small delta after a full clearance, can be re-checked by a cheap reviewer instead of a full member dispatch (see [[Audit Round Procedure#Light routing]]). The mechanism earns its place only if it clears re-audits in practice, so a measured threshold retires it.
 
 **The rule.** Retire light routing if the light-cleared count stays under 10 percent of the eligible re-audit count, with both summed across every opted-in member, over the 30 most recent merged pull requests that touched `code-audit-frontend`'s remit. Retiring it means removing the `light_review` keys from the roster and deleting the routing scripts, the reviewer definition and their suites.
 

@@ -7,7 +7,7 @@
 #
 # stdout is exactly one line, `<route>\t<reason>`, and the exit is 0 whenever a
 # line was printed. Exit 2 is a usage error. Every consumer reads any non-zero
-# exit, and any line other than `light\tlight-eligible`, as Full.
+# exit, and any line whose first field is not `light`, as Full.
 #
 # Reasons, in decision order (the first rule that fires wins):
 #   degraded             a dependency, a library, or the member digest is
