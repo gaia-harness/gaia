@@ -41,13 +41,14 @@ _lsb_set_head() {
 # and export LSB_TEMPLATE_ROOT so lsb_init copies instead of rebuilding.
 lsb_build_templates() {
   [ -n "${BATS_FILE_TMPDIR:-}" ] || { printf 'lsb_build_templates: BATS_FILE_TMPDIR is unset\n' >&2; return 1; }
-  local name
+  local name template_directory
   export LSB_TEMPLATE_ROOT="$BATS_FILE_TMPDIR/lsb-templates"
   for name in "$@"; do
-    mkdir -p "$LSB_TEMPLATE_ROOT/$name" || return 1
+    template_directory="$LSB_TEMPLATE_ROOT/$name"
+    mkdir -p "$template_directory" || return 1
     case "$name" in
-      plain) ( BATS_TEST_TMPDIR="$LSB_TEMPLATE_ROOT/$name" LSB_TEMPLATE_ROOT="" _lsb_build ) || return 1 ;;
-      maintainer) ( BATS_TEST_TMPDIR="$LSB_TEMPLATE_ROOT/$name" LSB_TEMPLATE_ROOT="" _lsb_build --maintainer ) || return 1 ;;
+      plain) ( BATS_TEST_TMPDIR="$template_directory" LSB_TEMPLATE_ROOT="" _lsb_build ) || return 1 ;;
+      maintainer) ( BATS_TEST_TMPDIR="$template_directory" LSB_TEMPLATE_ROOT="" _lsb_build --maintainer ) || return 1 ;;
       *) printf 'lsb_build_templates: unknown flavor %s\n' "$name" >&2; return 1 ;;
     esac
   done
