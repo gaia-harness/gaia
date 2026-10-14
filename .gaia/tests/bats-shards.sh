@@ -93,10 +93,12 @@
 # the repo's detector for it.
 set -euo pipefail
 
-HOOKS_DIRECTORY="${HOOKS_DIRECTORY:-.gaia/tests/hooks}"
-# Named as a constant as well as a default because SCRIPTS_COST_OUTLIERS below
-# describes THIS directory's contents: comparing the resolved seam against it
-# is what tells a stale entry apart from a seam a caller has pointed elsewhere.
+# Each weighted group's directory is named as a constant as well as a default
+# because its COST_OUTLIERS list below describes THAT directory's contents:
+# comparing the resolved seam against it is what tells a stale entry apart from
+# a seam a caller has pointed elsewhere.
+HOOKS_DIRECTORY_DEFAULT='.gaia/tests/hooks'
+HOOKS_DIRECTORY="${HOOKS_DIRECTORY:-$HOOKS_DIRECTORY_DEFAULT}"
 SCRIPTS_TESTS_DIRECTORY_DEFAULT='.gaia/scripts/tests'
 SCRIPTS_TESTS_DIRECTORY="${SCRIPTS_TESTS_DIRECTORY:-$SCRIPTS_TESTS_DIRECTORY_DEFAULT}"
 AUDIT_TESTS_DIRECTORY="${AUDIT_TESTS_DIRECTORY:-.github/audit/tests}"
@@ -152,6 +154,15 @@ PINNED_HOOKS=(local-janitor.bats)
 # SCRIPTS_IDS. `wiki/decisions/Sharded CI Test Matrix.md` carries the
 # measurements.
 SCRIPTS_COST_OUTLIERS=(shell-lint.bats)
+
+# The hooks group's cost outliers, under the same membership rule: one
+# classifies every tracked path in a single test, one builds a fixture
+# repository per case, one runs real git pushes, so a small file can hold more
+# minutes than a large one. Weighed by bytes alone they can all draw onto one
+# leg and make it the slowest of the matrix; anchored, each takes a bucket of
+# its own.
+# `wiki/decisions/Sharded CI Test Matrix.md` carries the measurements.
+HOOKS_COST_OUTLIERS=(audit-scope-routing-parity.bats audit-loop-bound.bats githooks-pre-push-e2e.bats)
 
 # The two weighted groups, each listed once and in matrix order. Adding a shard
 # to a group is a one-word edit here: SHARD_IDS is built from these rather than
@@ -386,9 +397,9 @@ greedy_bucket() {
   done < <(weighted_list "$directory" "$mode")
 }
 
-# Fail closed when SCRIPTS_COST_OUTLIERS names a file $1's discovery does not
-# return. A stale entry is silent everywhere else: the suite it meant to hold
-# apart is renamed or gone, anchoring quietly stops applying to it, every shard
+# Fail closed when a COST_OUTLIERS list, its basenames passed from $2 on, names
+# a file $1's discovery does not return. A stale entry is silent everywhere
+# else: the suite it meant to hold apart is renamed or gone, anchoring quietly stops applying to it, every shard
 # still exits 0 with a whole partition, and the co-location it exists to
 # prevent is back with nothing saying so. That is the same silent-manifest
 # failure this script's discovery design rejects, so it is an error here rather
@@ -396,13 +407,14 @@ greedy_bucket() {
 #
 # Checked at the configuration boundary rather than inside the assignment walk,
 # and only against the default seam. The list describes one real directory; a
-# caller that points SCRIPTS_TESTS_DIRECTORY at a fixture tree is not carrying a
+# caller that points a group's directory at a fixture tree is not carrying a
 # stale list, it is asking about a directory the list was never about, and the
 # anchors are simply vacuous there. Reading a seam override as a stale list
 # would fail every seam-based test in this script's own guard suite.
 require_anchors_present() {
   local directory="$1" base found bats_path
-  for base in ${SCRIPTS_COST_OUTLIERS[@]+"${SCRIPTS_COST_OUTLIERS[@]}"}; do
+  shift
+  for base in "$@"; do
     found=0
     while IFS= read -r bats_path || [ -n "$bats_path" ]; do
       if [ "${bats_path##*/}" = "$base" ]; then
@@ -422,12 +434,18 @@ files_for_shard() {
   case "$1" in
     hooks-1) files_hooks1 ;;
     hooks-*)
-      greedy_bucket "$HOOKS_DIRECTORY" "$1" pinned "" \
+      if [ "$HOOKS_DIRECTORY" = "$HOOKS_DIRECTORY_DEFAULT" ]; then
+        require_anchors_present "$HOOKS_DIRECTORY" \
+          ${HOOKS_COST_OUTLIERS[@]+"${HOOKS_COST_OUTLIERS[@]}"}
+      fi
+      greedy_bucket "$HOOKS_DIRECTORY" "$1" pinned \
+        "${HOOKS_COST_OUTLIERS[*]+${HOOKS_COST_OUTLIERS[*]}}" \
         ${HOOKS_GREEDY_IDS[@]+"${HOOKS_GREEDY_IDS[@]}"}
       ;;
     scripts-*)
       if [ "$SCRIPTS_TESTS_DIRECTORY" = "$SCRIPTS_TESTS_DIRECTORY_DEFAULT" ]; then
-        require_anchors_present "$SCRIPTS_TESTS_DIRECTORY"
+        require_anchors_present "$SCRIPTS_TESTS_DIRECTORY" \
+          ${SCRIPTS_COST_OUTLIERS[@]+"${SCRIPTS_COST_OUTLIERS[@]}"}
       fi
       greedy_bucket "$SCRIPTS_TESTS_DIRECTORY" "$1" all \
         "${SCRIPTS_COST_OUTLIERS[*]+${SCRIPTS_COST_OUTLIERS[*]}}" \

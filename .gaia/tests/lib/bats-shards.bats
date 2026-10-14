@@ -514,25 +514,30 @@ seed_lopsided_tree() {
 # out, on the same reasoning S9 gives for the pinned set: a literal here would
 # name today's two files and would keep passing once a third is added, which is
 # exactly the case S16 exists to cover.
+#
+# $2 names the list, SCRIPTS_COST_OUTLIERS when omitted; each weighted group
+# declares its own.
 cost_outliers() {
-  sed -n 's/^SCRIPTS_COST_OUTLIERS=(\(.*\))$/\1/p' "$1" | tr ' ' '\n' | grep -v '^$'
+  local list_name="${2:-SCRIPTS_COST_OUTLIERS}"
+  sed -n "s/^${list_name}=(\\(.*\\))\$/\\1/p" "$1" | tr ' ' '\n' | grep -v '^$'
 }
 
-# A copy of the script whose anchor list is replaced by $2 (space-separated,
-# possibly empty). Empty is the "anchoring disabled" arm every fixture below
-# compares against: it is the one mutation that turns the mechanism off
-# without touching the assignment walk the A1/A2 fixtures splice into.
+# A copy of the script whose anchor list $3 (SCRIPTS_COST_OUTLIERS when
+# omitted) is replaced by $2 (space-separated, possibly empty). Empty is the
+# "anchoring disabled" arm every fixture below compares against: it is the one
+# mutation that turns the mechanism off without touching the assignment walk
+# the A1/A2 fixtures splice into.
 doctor_outliers() {
-  local name="$1" list="$2" destination anchor
+  local name="$1" list="$2" list_name="${3:-SCRIPTS_COST_OUTLIERS}" destination anchor
   destination="$(copy_sharder "$name")"
   # Resolved and checked before splicing, for the reason greedy_walk_line
   # gives: an awk program that matches nothing rewrites nothing and hands back
   # an undoctored copy, which proves whatever the caller assumed rather than
   # what it meant to test.
-  anchor="$(grep -nE '^SCRIPTS_COST_OUTLIERS=\(' "$destination" | head -1 | cut -d: -f1)"
+  anchor="$(grep -nE "^${list_name}=\\(" "$destination" | head -1 | cut -d: -f1)"
   [ -n "$anchor" ] || return 1
-  awk -v anchor_line="$anchor" -v list="$list" '
-    NR == anchor_line { print "SCRIPTS_COST_OUTLIERS=(" list ")"; next }
+  awk -v anchor_line="$anchor" -v list="$list" -v list_name="$list_name" '
+    NR == anchor_line { print list_name "=(" list ")"; next }
     { print }
   ' "$destination" >"$destination.new"
   mv "$destination.new" "$destination"
@@ -681,6 +686,55 @@ seed_anchor_tree() {
   # diagnostics, and pinning a substring short enough to appear in another one
   # would let a differently-caused exit 2 satisfy the test.
   grep -qF -- 'anchored files over' <<<"$output"
+}
+
+# Which weighted hooks shard of script $1 holds basename $2, the group's ids
+# asked for on scripts_shard_of's reasoning.
+hooks_shard_of() {
+  local script="$1" base="$2" id
+  while IFS= read -r id; do
+    [ -n "$id" ] || continue
+    if bash "$script" files "$id" 2>/dev/null | grep -qF -- "/$base"; then
+      printf '%s\n' "$id"
+      return 0
+    fi
+  done < <(bash "$script" group hooks-2)
+  return 1
+}
+
+# S16 for the hooks group: its cost outliers are the suites whose runtime lives
+# in what they run, so their byte weight says nothing about which leg can hold
+# two of them.
+@test "S16: no two declared cost outliers share a hooks shard" {
+  local base shard seen
+  seen=""
+  while IFS= read -r base || [ -n "$base" ]; do
+    [ -n "$base" ] || continue
+    shard="$(hooks_shard_of "$SCRIPT" "$base")"
+    [ -n "$shard" ]
+    printf '%s\n' "$seen" | grep -qxF -- "$shard" && return 1
+    seen="$(printf '%s\n%s' "$seen" "$shard")"
+  done < <(cost_outliers "$SCRIPT" HOOKS_COST_OUTLIERS)
+  [ -n "$(cost_outliers "$SCRIPT" HOOKS_COST_OUTLIERS)" ]
+}
+
+# A7 for the hooks group: a stale name fails closed on the default seam, and a
+# seam override is not read as a stale list.
+@test "A7: a hooks anchor naming a missing file is a fail-closed error" {
+  local copy directory
+  copy="$(doctor_outliers a7-hooks-stale.sh 'no-such-hook-suite.bats' HOOKS_COST_OUTLIERS)"
+  run bash "$copy" files hooks-2
+  [ "$status" -eq 2 ]
+  grep -qF -- 'no-such-hook-suite.bats' <<<"$output"
+
+  directory="$BATS_TEST_TMPDIR/a7-hooks-seam"
+  seed_anchor_tree "$directory"
+  write_trivial_bats "$directory/local-janitor.bats" "PINNED"
+  HOOKS_DIRECTORY="$directory" run bash "$copy" files hooks-2
+  [ "$status" -eq 0 ]
+
+  run bash "$SCRIPT" files hooks-2
+  [ "$status" -eq 0 ]
 }
 
 @test "S11: a pinned hook missing from discovery is a fail-closed error" {

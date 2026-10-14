@@ -123,7 +123,7 @@ path_without() {
 # bats-only primitive, and it says so rather than writing somewhere a caller did
 # not ask for: sourced outside a test, it refuses.
 path_shim_without() {
-  local name="$1" shim kept="" path_entry bin base
+  local name="$1" shim kept="" path_entry
   if [ -z "${BATS_TEST_TMPDIR:-}" ]; then
     printf 'path_shim_without: BATS_TEST_TMPDIR is unset; this primitive needs a bats per-test temp dir\n' >&2
     return 1
@@ -134,21 +134,25 @@ path_shim_without() {
     [ -n "$path_entry" ] || continue
     [ -d "$path_entry" ] || continue
     if path_directory_provides "$path_entry" "$name"; then
-      for bin in "$path_entry"/*; do
-        base="${bin##*/}"
-        [ "$base" = "$name" ] && continue
-        # First writer wins, so among the MIRRORED directories an earlier one
-        # keeps its precedence over a later one providing the same command.
-        # That is the whole of the ordering this preserves, and the docblock
-        # above states the limit: the shim leads, so a command that a kept
-        # earlier directory and a mirrored later one both provide now resolves
-        # to the mirrored copy.
-        [ -e "$shim/$base" ] || ln -s "$bin" "$shim/$base" 2>/dev/null || true
-      done
+      # One ln for the whole directory rather than one per binary: a Linux
+      # runner's /usr/bin holds most of a thousand entries, and a fork for each
+      # cost every caller seconds per test.
+      #
+      # First writer wins, so among the MIRRORED directories an earlier one
+      # keeps its precedence over a later one providing the same command: ln
+      # without -f refuses a name the shim already holds, reports it, and goes
+      # on with the rest of its operands on both GNU and BSD. Those refusals are
+      # why its status is not read. The docblock above states the limit: the
+      # shim leads, so a command that a kept earlier directory and a mirrored
+      # later one both provide now resolves to the mirrored copy.
+      ln -s "$path_entry"/* "$shim/" 2>/dev/null || true
     else
       kept="${kept:+$kept:}$path_entry"
     fi
   done <<<"${PATH//:/$'\n'}"
+  # Removed once every providing directory is mirrored, since each of them
+  # brought its own copy.
+  rm -f "$shim/$name" || return 1
   printf '%s\n' "$shim${kept:+:$kept}"
 }
 
