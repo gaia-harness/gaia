@@ -66,7 +66,7 @@ export const attempt = async <T>(
 ): Promise<AttemptResult<T>> => {
   const [error, result] = await tryCatch(operation);
 
-  if (error) {
+  if (error !== undefined) {
     return [handleResponseError(error), undefined];
   }
 

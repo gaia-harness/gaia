@@ -78,4 +78,15 @@ describe('attempt', () => {
       undefined,
     ]);
   });
+
+  test('falsy non-Error throw: resolves to [{status: 500, statusText: "Unknown error"}, undefined]', async () => {
+    const attemptOutcome = await attempt(async () => {
+      throw null;
+    });
+
+    expect(attemptOutcome).toEqual([
+      {status: 500, statusText: 'Unknown error'},
+      undefined,
+    ]);
+  });
 });

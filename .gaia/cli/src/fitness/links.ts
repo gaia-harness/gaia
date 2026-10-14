@@ -1,6 +1,7 @@
 import path from 'node:path';
 import type {ResolvedPath, RuleContext} from './context.js';
 import {stripFencedCode, stripInlineCode} from './markdown.js';
+import {isRuntimeArtifact} from './paths.js';
 import type {FileKind, ProjectFile} from './types.js';
 
 export type DepthViolation = {
@@ -142,8 +143,8 @@ export type LinkResolution =
 
 /**
  * Resolves every place a target is tried exactly once and classifies it. A
- * target on disk is found. Otherwise one the VCS ignores is a runtime artifact
- * a fresh clone does not have, so it is not a broken link. Otherwise one that
+ * target on disk is found. Otherwise a runtime artifact a fresh clone does not
+ * have (`isRuntimeArtifact`) is not a broken link. Otherwise one that
  * leaves the project root (a link out of the repository, or a folder symlinked
  * elsewhere such as a shared state folder in a linked worktree) is never read
  * or judged. Anything else is dead.
@@ -164,7 +165,15 @@ export const resolveLink = (
         return {relative: resolved.relative, status: 'found'};
       }
 
-      if (context.gitIgnored(resolved.relative) === true) ignored = true;
+      if (
+        isRuntimeArtifact(
+          context,
+          resolved.relative,
+          reference.target.endsWith('/')
+        )
+      ) {
+        ignored = true;
+      }
     }
   }
 

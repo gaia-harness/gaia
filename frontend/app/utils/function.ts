@@ -1,23 +1,22 @@
 // Based on proposed Safe Assignment Operator ?=
 // https://github.com/arthurfiorette/proposal-try-operator/tree/old/proposal-safe-assignment-operator
-type TryCatchError = [error: Error, result: undefined];
+type TryCatchError = [error: Error, returnValue: undefined];
 type TryCatchResult<T> =
   T extends Promise<unknown> ?
     Promise<TryCatchError | TryCatchSuccess<Awaited<T>>>
   : TryCatchError | TryCatchSuccess<T>;
-type TryCatchSuccess<T> = [error: undefined, result: Awaited<T>];
+type TryCatchSuccess<T> = [error: undefined, returnValue: Awaited<T>];
 
 export const tryCatch = <T, A extends readonly unknown[]>(
   operation: (...args: A) => T,
   ...args: A
 ): TryCatchResult<T> => {
-  let error;
   let returnValue;
 
   try {
     returnValue = operation(...args);
   } catch (caughtError) {
-    error = caughtError as Error;
+    return [caughtError as Error, undefined] as TryCatchResult<T>;
   }
 
   if (returnValue instanceof Promise) {
@@ -27,10 +26,6 @@ export const tryCatch = <T, A extends readonly unknown[]>(
         caughtError,
         undefined,
       ]) as TryCatchResult<T>;
-  }
-
-  if (error) {
-    return [error, undefined] as TryCatchResult<T>;
   }
 
   return [undefined, returnValue] as TryCatchResult<T>;

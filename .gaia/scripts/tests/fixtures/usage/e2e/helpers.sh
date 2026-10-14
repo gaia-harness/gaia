@@ -210,6 +210,8 @@ subcommand_arguments() {
     reconcile) echo "reconcile" ;;
     record) echo "record spec:SPEC-001 --workflow gaia-spec" ;;
     represented) echo "represented spec:SPEC-001 --workflow gaia-spec" ;;
+    handoff) echo "handoff" ;;
+    join) echo "join --workflow gaia-spec --session s-w --start 2026-10-01T09:00:00Z" ;;
     *) return 1 ;;
   esac
 }
@@ -218,9 +220,10 @@ subcommand_arguments() {
 # argument list over the populated fixture. record and represented are gates, not
 # readouts: the fixture holds no close row for the ref and no start in the
 # invoking session, so each refuses with 1 before any network or ledger write.
+# join refuses with 1 the same way: the fixture sets no session id to bind.
 subcommand_expected_status() {
   case "$1" in
-    record | represented) echo 1 ;;
+    record | represented | join) echo 1 ;;
     *) echo 0 ;;
   esac
 }
