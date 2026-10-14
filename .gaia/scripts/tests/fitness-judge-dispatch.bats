@@ -176,7 +176,7 @@ write_judge_input() {
 }
 
 @test "the input writer numbers each judged line within its own file" {
-  local project report
+  local project report tab=$'\t'
   project="$BATS_TEST_TMPDIR/project"
   mkdir -p "$project/.claude/skills/a" "$project/.claude/skills/b"
   printf 'first a\nsecond a\n' >"$project/.claude/skills/a/SKILL.md"
@@ -190,9 +190,9 @@ write_judge_input() {
   [ "$status" -eq 0 ]
   run grep -E $'^ *[0-9]+\t' "$BATS_TEST_TMPDIR/judge-input.md"
   [ "${#lines[@]}" -eq 5 ]
-  [[ "${lines[0]}" =~ ^\ *1$'\t'first\ a$ ]]
-  [[ "${lines[2]}" =~ ^\ *1$'\t'first\ b$ ]]
-  [[ "${lines[4]}" =~ ^\ *3$'\t'third\ b$ ]]
+  [[ "${lines[0]}" =~ ^\ *1${tab}first\ a$ ]]
+  [[ "${lines[2]}" =~ ^\ *1${tab}first\ b$ ]]
+  [[ "${lines[4]}" =~ ^\ *3${tab}third\ b$ ]]
   run grep -c '^<<<GAIA-FITNESS-FILE-END ' "$BATS_TEST_TMPDIR/judge-input.md"
   [ "$output" = "2" ]
 }
