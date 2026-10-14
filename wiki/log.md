@@ -11,6 +11,49 @@ tags: [meta, log]
 
 ## [Unreleased]
 
+- 2026-10-14 d1f6c6b WORTHY - wiki pages updated in the commit itself or no wiki-described behavior changed; no further page drift: wiki: maintenance chain through 9eee903
+- 2026-10-14 6eb0e2c WORTHY - wiki pages updated in the commit itself or no wiki-described behavior changed; no further page drift: fix(harness): fence every paste-ready prompt and pull main after a worktree merge
+- 2026-10-14 3087a22 WORTHY - wiki pages updated in the commit itself or no wiki-described behavior changed; no further page drift: refactor(harness): tidy the state and label registries
+- 2026-10-14 262f935 WORTHY - wiki pages updated in the commit itself or no wiki-described behavior changed; no further page drift: chore(wiki): overwrite fixed meta reports, log WORTHY only, prune superseded pages
+- 2026-10-14 0bf363e WORTHY - wiki pages updated in the commit itself or no wiki-described behavior changed; no further page drift: refactor(setup): one onboarding source for gaia-init and setup-gaia
+- 2026-10-14 02845a5 WORTHY - wiki pages updated in the commit itself or no wiki-described behavior changed; no further page drift: refactor(harness): read the package descriptor from one place
+- 2026-10-14 157dfa2 WORTHY - wiki pages updated in the commit itself or no wiki-described behavior changed; no further page drift: refactor(harness): unify severity tiers; rename codify, cleanse, distribution-vet
+- 2026-10-14 f41ec0f WORTHY - wiki pages updated in the commit itself or no wiki-described behavior changed; no further page drift: feat(harness): sweep the .gaia/local state retired features leave behind
+- 2026-10-14 e4f311f WORTHY - wiki pages updated in the commit itself or no wiki-described behavior changed; no further page drift: feat(harness): bundled migration notes and setup drift for /update-gaia
+- 2026-10-14 1c79421 WORTHY - wiki pages updated in the commit itself or no wiki-described behavior changed; no further page drift: fix(update-gaia): read adopter actions from the fetched CHANGELOG range
+- 2026-10-14 0d45b8d WORTHY - wiki pages updated in the commit itself or no wiki-described behavior changed; no further page drift: feat(harness): one lifecycle for committed work, skill or not
+- 2026-10-14 bf11ea8 WORTHY - wiki pages updated in the commit itself or no wiki-described behavior changed; no further page drift: fix(harness): exempt release-delivered tests from the RED commit gate
+- 2026-10-14 5a8c915 WORTHY - wiki pages updated in the commit itself or no wiki-described behavior changed; no further page drift: fix(hooks): name the allowed spelling when the rm guard denies a path under .claude
+- 2026-10-14 7fd96a6 WORTHY - wiki pages updated in the commit itself or no wiki-described behavior changed; no further page drift: fix: keep scrubbed files executable and pin the debounce cleanup
+- 2026-10-14 0c3438b WORTHY - wiki pages updated in the commit itself or no wiki-described behavior changed; no further page drift: fix(file-tech-debt): verify a filed issue by its number, not a re-list
+- 2026-10-14 ccf091b WORTHY - wiki pages updated in the commit itself or no wiki-described behavior changed; no further page drift: fix(harness): name the cause when the audit loop evaluator cannot evaluate a round
+- 2026-10-14 8595633 WORTHY - wiki pages updated in the commit itself or no wiki-described behavior changed; no further page drift: fix(harness): name the binding when a merge bypass qualifies but the command does not bind
+- 2026-10-14 0601dbf WORTHY - wiki pages updated in the commit itself or no wiki-described behavior changed; no further page drift: docs(wiki): rewrite the monorepo playbook for adding a package beside frontend
+- 2026-10-14 f1bf849 WORTHY - wiki pages updated in the commit itself or no wiki-described behavior changed; no further page drift: feat(fitness): deterministic Claude-integration linter with a thin model layer
+- 2026-10-14 96683c8 WORTHY - wiki pages updated in the commit itself or no wiki-described behavior changed; no further page drift: fix(fitness): stop reporting live paths as dead and number judge input lines
+- 2026-10-14 a75d2bf WORTHY - wiki pages updated in the commit itself or no wiki-described behavior changed; no further page drift: feat(harness): add a general context checkpoint for long sessions
+- 2026-10-14 544867c WORTHY - wiki pages updated in the commit itself or no wiki-described behavior changed; no further page drift: fix(storybook): pin the ServerError story stack and codify deterministic snapshots
+- 2026-10-14 42f494d WORTHY - wiki pages updated in the commit itself or no wiki-described behavior changed; no further page drift: chore(deps): adopt @gaia-react/lint 3.0.0-rc.6 rules and drop gaia's local lint rules
+- 2026-10-14 a0e4931 WORTHY - wiki pages updated in the commit itself or no wiki-described behavior changed; no further page drift: refactor(audit-loop): build the pinned question from the shared context helpers
+- 2026-10-14 2f2ce93 WORTHY - wiki pages updated in the commit itself or no wiki-described behavior changed; no further page drift: fix(utils): report a falsy synchronous throw from tryCatch as an error
+- 2026-10-14 9581ff2 WORTHY - wiki pages updated in the commit itself or no wiki-described behavior changed; no further page drift: fix(fitness): stop reporting runtime and example paths as dead
+- 2026-10-14 f64aea8 WORTHY - wiki pages updated in the commit itself or no wiki-described behavior changed; no further page drift: fix(debt): file severity:investigate findings through file-tech-debt.sh
+- 2026-10-14 996cc08 WORTHY - wiki pages updated in the commit itself or no wiki-described behavior changed; no further page drift: fix(usage): carry a recorded run's cost across a session change
+- 2026-10-14 cbc9494 WORTHY - wiki pages updated in the commit itself or no wiki-described behavior changed; no further page drift: fix(hooks): let a catch-up merge commit tests the merged parent brought in
+- 2026-10-14 2fe9153 WORTHY - wiki pages updated in the commit itself or no wiki-described behavior changed; no further page drift: perf(tests): mirror PATH shims with one ln per directory and anchor heavy hooks suites
+- 2026-10-14 e09cb77 WORTHY - wiki pages updated in the commit itself or no wiki-described behavior changed; no further page drift: fix(audit): mint each audit member's mutation scratch directory per invocation
+- 2026-10-14 f1d2e95 WORTHY - wiki pages updated in the commit itself or no wiki-described behavior changed; no further page drift: feat(harness): give long sub-agents a context checkpoint
+- 2026-10-14 9352b5a WORTHY - wiki pages updated in the commit itself or no wiki-described behavior changed; no further page drift: docs(wiki): correct statements the 2.0 code no longer matches
+- 2026-10-14 e2a4cc9 WORTHY - wiki pages updated in the commit itself or no wiki-described behavior changed; no further page drift: fix(audit): background the round gate and drop whole-tree suites from round mode
+- 2026-10-14 5e02bc1 WORTHY - wiki pages updated in the commit itself or no wiki-described behavior changed; no further page drift: perf(fitness): batch git check-ignore lookups per rule
+- 2026-10-14 4c7e183 WORTHY - wiki pages updated in the commit itself or no wiki-described behavior changed; no further page drift: fix(statusline): fit the nudges to Claude Code's statusline row, not COLUMNS
+- 2026-10-14 b8c216c WORTHY - wiki pages updated in the commit itself or no wiki-described behavior changed; no further page drift: perf(bats): cut fixture cost on the slowest Audit CI Tests leg
+- 2026-10-14 2e90ab3 WORTHY - wiki pages updated in the commit itself or no wiki-described behavior changed; no further page drift: fix(audit): widen the repeated-round-trip examples to per-path spawns
+- 2026-10-14 cd17e7e WORTHY - wiki pages updated in the commit itself or no wiki-described behavior changed; no further page drift: fix(statusline): drop the redundant "setup" from the /setup-gaia nudge
+- 2026-10-14 1fadcfb WORTHY - wiki pages updated in the commit itself or no wiki-described behavior changed; no further page drift: perf(harness): trim base context with name-only skills and a shorter claim rule
+- 2026-10-14 efb37b6 WORTHY - wiki pages updated in the commit itself or no wiki-described behavior changed; no further page drift: fix(audit): point the frontend audit at cross-boundary quadratic lookups
+- 2026-10-14 bf9b533 WORTHY - wiki pages updated in the commit itself or no wiki-described behavior changed; no further page drift: perf(scripts): batch per-file subprocess loops into one call per set
+- 2026-10-14 09a5027 WORTHY - wiki pages updated in the commit itself or no wiki-described behavior changed; no further page drift: chore: drop the claude-obsidian plugin from GAIA
 - 2026-10-14 c1f9609e WORTHY - wiki pages updated in the commit itself; no further page drift: chore: drop the claude-obsidian plugin from GAIA
 - 2026-10-09 d4a23fcf WORTHY - wiki pages updated in the commit itself; no further page drift: docs(wiki): point remix-i18next at pnpm-workspace.yaml for active overrides
 - 2026-10-09 b3278191 WORTHY - wiki pages updated in the commit itself; no further page drift: feat(audit): scope catch-up merges out of the audit gate
