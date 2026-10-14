@@ -18,14 +18,13 @@
 # gate's whole run, and there if it drives the pass `--only` can select.
 #
 # The split divides the text and not the cost, which is worth knowing before
-# reaching for it again. The whole-tree runs stayed here, so this half remains
-# far above that floor while the sibling sits well under it, and the two are
-# nowhere near an even division. What the split bought is a smaller unit for
-# the sharder to place, not a cheaper one; what keeps this file off the same
-# leg as the group's other cost outlier is SCRIPTS_COST_OUTLIERS in
-# .gaia/tests/bats-shards.sh, which anchors each of them to a bucket of its own
-# rather than letting the byte weight decide. Lowering the number here means
-# reducing how many times the tests below re-drive the whole-tree gate.
+# reaching for it again: each half keeps whatever whole-tree runs its tests
+# drive, so the two are nowhere near an even division. What the split bought
+# is a smaller unit for the sharder to place, not a cheaper one. Lowering the
+# number here means
+# reducing how many times the tests below re-drive the whole-tree gate, which
+# is why only the first test runs the real folded guards and the chunk tests
+# stub them.
 #
 # The shellcheck binary is stubbed with an always-clean, pinned-version fake on
 # PATH so the suite runs on the audit-ci-tests box (bats installed, no linter
