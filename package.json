@@ -62,7 +62,7 @@
     "@commitlint/config-conventional": "21.2.3",
     "@gaia-react/lint": "3.0.0-rc.3",
     "lint-staged": "17.6.0",
-    "prettier": "3.9.9",
+    "prettier": "3.9.10",
     "typescript": "6.0.3"
   },
   "engines": {

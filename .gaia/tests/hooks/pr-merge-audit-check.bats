@@ -2059,6 +2059,88 @@ rge 30 --squash'
   assert_allowed_by_json
 }
 
+# ---------------------------------------------------------------------------
+# A bypass whose content qualifies but whose command does not bind
+#
+# When every path qualifies for a bypass and only the command binding fails,
+# the merge still denies, but the reason must say so and name the spelling that
+# binds. The generic marker deny claims the pull request "changes at least one
+# in-scope path", which is false here, and its
+# remedy (run the audit loop) spends a verification run and an audit round on
+# a diff that owes no marker.
+# ---------------------------------------------------------------------------
+
+@test "unbound bypass: a lone merge of a .gaia-only pull request bypasses" {
+  install_gh_stub
+  commit_files ".gaia/audit-residual-dismissals.jsonl" "{}"
+
+  run_merge_hook "gh pr merge 30 --squash --delete-branch --auto"
+  assert_allowed_by_json
+}
+
+@test "unbound bypass: a compound merge of a .gaia-only pull request names the binding and the lone spelling" {
+  install_gh_stub
+  commit_files ".gaia/audit-residual-dismissals.jsonl" "{}"
+
+  run_merge_hook "cd /tmp; gh pr merge 30 --squash --delete-branch --auto; echo done"
+  assert_denied_by_json
+  grep -qF -- "could not bind the merge command" <<<"$output" || return 1
+  grep -qF -- "gh pr merge 30 --squash --delete-branch" <<<"$output" || return 1
+  grep -qF -- "at least one in-scope path" <<<"$output" && return 1
+  return 0
+}
+
+@test "unbound bypass: a piped merge of a .gaia-only pull request names the binding and the lone spelling" {
+  install_gh_stub
+  commit_files ".gaia/audit-residual-dismissals.jsonl" "{}"
+
+  run_merge_hook "gh pr merge 30 --squash --delete-branch | tail -5"
+  assert_denied_by_json
+  grep -qF -- "could not bind the merge command" <<<"$output" || return 1
+  grep -qF -- "at least one in-scope path" <<<"$output" && return 1
+  return 0
+}
+
+@test "unbound bypass: a compound merge of a mixed diff keeps the marker deny" {
+  install_gh_stub
+  commit_files \
+    "wiki/x.md" "doc" \
+    "frontend/app/y.ts" "export const y = 1"
+
+  run_merge_hook "cd /tmp; gh pr merge 30 --squash"
+  assert_denied_by_json
+  grep -qF -- "could not bind the merge command" <<<"$output" && return 1
+  return 0
+}
+
+@test "unbound bypass: a compound merge of a chore(deps) manifest-only pull request names the binding" {
+  install_gh_stub_with_title "chore(deps): bump the github-actions group" "[]" "package.json"
+  install_chore_deps_predicate
+  commit_files "package.json" "{}"
+
+  run_merge_hook "cd /tmp; gh pr merge 30 --squash"
+  assert_denied_by_json
+  grep -qF -- "could not bind the merge command" <<<"$output" || return 1
+  grep -qF -- "chore(deps)" <<<"$output" || return 1
+  grep -qF -- "PR title does not match" <<<"$output" && return 1
+  return 0
+}
+
+@test "unbound bypass: the chore(deps) binding deny also holds on the single-signal path" {
+  # With the member resolver absent the gate takes the single-signal path, which
+  # carries its own copy of the deny; the case above drives the member-aware one.
+  rm -f "$REPO/.gaia/scripts/resolve-audit-members.sh"
+  install_gh_stub_with_title "chore(deps): bump the github-actions group" "[]" "package.json"
+  install_chore_deps_predicate
+  commit_files "package.json" "{}"
+
+  run_merge_hook "cd /tmp; gh pr merge 30 --squash"
+  assert_denied_by_json
+  grep -qF -- "could not bind the merge command" <<<"$output" || return 1
+  grep -qF -- "PR title does not match" <<<"$output" && return 1
+  return 0
+}
+
 # --- Clearance binding: the merge names the pull request the clearance is for
 #
 # A clearance signal proves a property of THIS CHECKOUT's content: a member's

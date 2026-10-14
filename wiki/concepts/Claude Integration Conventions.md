@@ -3,7 +3,7 @@ type: concept
 title: Claude Integration Conventions
 status: active
 created: 2026-04-21
-updated: 2026-10-03
+updated: 2026-10-14
 tags: [claude, meta, configuration]
 ---
 
@@ -102,15 +102,25 @@ Examples of path-scoped rules: `i18n.md` (pages + components + languages), `rout
 
 ## 6. Monorepo retrofit playbook
 
-GAIA already ships its React app as the `frontend/` package. This playbook is for adding a further package beside it. **Container folder name is a project decision**: `apps/`, `projects/`, `packages/`, etc. Substitute `{CONTAINER}/{APP}` throughout. Register each package as [[Package Descriptor]] describes.
+GAIA ships its React app as the `frontend/` package of a pnpm workspace whose root holds the shared harness. This playbook adds a further package beside it, such as a backend. The package's folder is a project decision; `{PKG}` stands for its path below. `frontend/` is the worked example for every step: copy its shape, not its contents.
 
-Steps (all mechanical):
+1. **Join the workspace.** List `{PKG}` under `packages:` in `pnpm-workspace.yaml` and give it a `package.json`. The pre-commit hook drives each package through `pnpm -C {PKG}`, so the manifest is needed even for a stack outside Node.
+2. **Register it.** Add its entry to `.gaia/packages.json`, keeping the `frontend` entry, and write `{PKG}/gaia.package.json`, as [[Package Descriptor]] describes. Its globs are package-relative and decide which of the package's files each guard sees, the pre-commit gate included. A registered package with no descriptor fails closed, so land both files in one commit.
+3. **Give it its own `CLAUDE.md` and `.claude/`.** `{PKG}/CLAUDE.md` carries the stack, its commands and its test setup, the way `frontend/CLAUDE.md` does. Stack-specific rules and skills go in `{PKG}/.claude/rules/` and `{PKG}/.claude/skills/`, with `paths:` globs relative to `{PKG}`. Add a section to the root `CLAUDE.md` telling a root session to Read `{PKG}/CLAUDE.md` before touching `{PKG}/`, mirroring its frontend section: in a root session that Read is what loads the package's rules and skills.
+4. **Generate its settings.** `{PKG}/.claude/settings.json` is generated from the root `.claude/settings.json`, never hand-edited: package-only settings go in `{PKG}/.claude/settings.overlay.json`, then run `./.gaia/cli/gaia packages sync-settings`. The pre-commit hook refuses a commit that leaves any generated settings file missing or stale.
+5. **Meet the pre-commit floor.** For each package with a staged path matching its pre-commit globs, the hook runs the package's typecheck, lint-staged and test scripts; `.githooks/pre-commit` names the scripts `{PKG}/package.json` must define. See [[Pre-commit Hooks]].
+6. **Add a stack-specific quality gate**, as §8 describes. The shared gate's executable steps check only `frontend/`, and its skip check matches JavaScript, TypeScript and CSS sources, so a package in another language gets no gate until its own names its checks.
+7. **Give it an auditor.** The Code Audit Team assigns each changed file to the member whose globs in `.gaia/audit-ci.yml` match it. A file no member claims still owes `code-audit-frontend`, the default member, so the merge gate holds the branch to an audit, but by a React lens with no remit for the package's stack. Register a member for the package, as [[Registering a Code Audit Team Member]] describes, or grant its globs to an existing member whose lens fits. `bash .gaia/scripts/verify-audit-roster.sh` reports every tracked path no member owns and no `unowned:` entry declares; no hook or shipped workflow runs it, so run it after the roster change. An `unowned:` entry only quiets that report and suppresses no review.
+8. **Leave the wiki hooks alone.** `wiki-session-start.sh` is git-level and names no package path.
 
-1. **Update `paths:` globs in rules**: prefix every `app/…` glob with `{CONTAINER}/{APP}/`. Example: `app/state/**/*` → `apps/web/app/state/**/*`.
-2. **Update scaffolding templates**: in `.claude/skills/new-*/SKILL.md` (and any `references/`), path outputs must become `{CONTAINER}/{APP}/app/…`.
-3. **Split CLAUDE.md**: add a per-app `CLAUDE.md` at `{CONTAINER}/{APP}/CLAUDE.md` with stack-specific commands; keep root `CLAUDE.md` as the monorepo overview (see §10).
-4. **Verify hook scripts**: confirm no script hardcodes a specific container folder name. If found, fix.
-5. **Leave wiki hooks alone**: `wiki-session-start.sh` is git-level and path-agnostic.
+### A backend and worktrees
+
+GAIA provisions per-worktree isolation for the `frontend/` package only: the port slot, the port file, and the refusals that keep one tree's servers off another's ports ([[Worktrees#Ports per worktree]]). A backend added beside it gets none of that automatically: it has no port slot, and its database, migrations, seed data and queues are shared by every tree. It takes one of two shapes:
+
+- **One shared backend** that every worktree points at. It is simple, but branches that change the schema or the data collide.
+- **A backend per worktree**, with its own port, database and seed. It isolates each branch, but every tree pays the setup and running cost.
+
+Before running backend work in a worktree, Claude raises this trade-off with the user and lets the user choose. Claude does not pick a shape on its own.
 
 ## 7. External-service rule pattern
 

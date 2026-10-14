@@ -12,11 +12,11 @@ A git worktree is a second (third, fourth) working directory for one repository,
 
 "Behaves identically" is the whole claim. Creating a worktree is one command and it works immediately, with no repair step and no knowledge of where GAIA keeps its files. Nothing done in one folder can corrupt, block, silently satisfy, or be misattributed to another. Every notification, status indicator, and maintenance flow works the same inside one. The main folder holds no privileged working state, only what is genuinely global.
 
-Two facts make that hard, and everything below exists to handle them: GAIA must know **which tree an action belongs to**, and it must know **where the main checkout is** — and both answers have to be the same everywhere, in every checkout shape.
+Two facts make that hard, and everything below exists to handle them: GAIA must know **which tree an action belongs to**, and it must know **where the main checkout is**, and both answers have to be the same everywhere, in every checkout shape.
 
 ## For a feature author: the one rule
 
-You almost never compute any of this yourself. If you are about to write "find the repo root" or "the list of shared `.gaia/local` folders," stop — those are the two mistakes this model exists to prevent, and each has one shared answer:
+You almost never compute any of this yourself. If you are about to write "find the repo root" or "the list of shared `.gaia/local` folders," stop: those are the two mistakes this model exists to prevent, and each has one shared answer:
 
 - **Never derive the main checkout by hand.** Do not write `dirname "$(git rev-parse --git-common-dir)"` or any cousin of it. Source the resolver and call it. It is correct in checkout shapes the hand-rolled idiom gets wrong.
 - **Never hardcode what lives in `.gaia/local/`.** Do not restate the list of shared entries, or which folders are per-tree. Read the state registry. Every entry is declared once, with its scope and its key; the registry is the only list, and inside a linked worktree an Edit or Write to a child it does not know is denied rather than silently absorbed.
@@ -29,10 +29,10 @@ Get those two right and your feature is worktree-correct for free. Get either wr
 
 ## Which tree am I in?
 
-A hook or script often needs to attribute an action to the tree it happened in — to write that tree's state, render that tree's status, or decide whether a guard should fire. The harness hands several candidate signals on each event, and all but one are traps:
+A hook or script often needs to attribute an action to the tree it happened in: to write that tree's state, render that tree's status, or decide whether a guard should fire. The harness hands several candidate signals on each event, and all but one are traps:
 
 - `session_id` is **shared** from a parent to its subagents, so it cannot tell them apart.
-- `agent_id` is present for a worktree subagent but **absent on the main thread**, so it is not a tree key either (it answers a different question — *which agent*, not *which tree*).
+- `agent_id` is present for a worktree subagent but **absent on the main thread**, so it is not a tree key either (it answers a different question: *which agent*, not *which tree*).
 - A worktree-creation event carries a working directory, but one that names the **dispatching** tree, not the tree being created.
 
 Only the working directory the harness reports for the acting agent is reliably per-agent: each agent's own event carries its own tree's directory (on a tool call, the payload `cwd`; on the statusline event, `workspace.current_dir`). That is the source of truth for tree identity.
@@ -40,7 +40,7 @@ Only the working directory the harness reports for the acting agent is reliably 
 ### The rule
 
 1. Read the acting event's working-directory field.
-2. If it is **absolute and resolves to a checkout**, the tree identity is that checkout's resolved root. It is authoritative on its own — no comparison against the process's own directory, no consulting `session_id` or `agent_id` to confirm it. Identity is the resolved, symlink-canonicalized root, so a tree reached through a symlink and through its real path are one identity, never two.
+2. If it is **absolute and resolves to a checkout**, the tree identity is that checkout's resolved root. It is authoritative on its own: no comparison against the process's own directory, no consulting `session_id` or `agent_id` to confirm it. Identity is the resolved, symlink-canonicalized root, so a tree reached through a symlink and through its real path are one identity, never two.
 3. If the field is **unusable** (absent, relative, or absolute but not a checkout), fall back to the hook's own process directory, resolved the same way. The pair a guard compares (main's root and the acting tree's root) is always read from one source, never mixed across the two.
 4. If neither resolves to a checkout, identity is **undeterminable**: the rule never invents a tree by defaulting to main or to any worktree, and each site takes its class's failure direction below.
 
@@ -52,9 +52,9 @@ Undeterminable identity is one rule with a direction chosen per site, not a sing
 
 | Site class | Example | On undeterminable identity |
 |---|---|---|
-| Non-destructive path guard | the worktree write-guard | **fail open** — allow the action (blocking a legitimate edit on an identity it could not confirm is the worse, cheap-to-notice failure, and the guard is defense-in-depth) |
-| Per-tree writer / reaper | the session-start janitor, the RED ledger, the worthiness ledger | **refuse to act** — no-op rather than writing or deleting one tree's state as another's, which is the worse failure (`GAIA_TREE_KEY_UNRESOLVABLE` is the diagnostic where one is emitted) |
-| Destructive removal guard | the `rm -rf` guard | **fail cautious** — a wrong destructive action is unrecoverable, so an unreadable registry loses the scratch carve-outs and the target falls to the absolute-path deny. It derives no tree identity; it is one of several guards that do not fail open. |
+| Non-destructive path guard | the worktree write-guard | **fail open**: allow the action (blocking a legitimate edit on an identity it could not confirm is the worse, cheap-to-notice failure, and the guard is defense-in-depth) |
+| Per-tree writer / reaper | the session-start janitor, the RED ledger, the worthiness ledger | **refuse to act**: no-op rather than writing or deleting one tree's state as another's, which is the worse failure (`GAIA_TREE_KEY_UNRESOLVABLE` is the diagnostic where one is emitted) |
+| Destructive removal guard | the `rm -rf` guard | **fail cautious**: a wrong destructive action is unrecoverable, so an unreadable registry loses the scratch carve-outs and the target falls to the absolute-path deny. It derives no tree identity; it is one of several guards that do not fail open. |
 | Read-side scope gate | the statusline's nudge gate | **fail open, render**: a surface that goes dark on an identity it could not confirm tells the developer nothing, and the failure is cheap to notice. Its state reads stay main-anchored regardless of the gate's answer. |
 | Main-anchored surface or state (exempt) | the SPEC and plan ledgers, the token tally and its local rate table with its state files, the PR-artifact capture | does not derive tree identity; anchors to main by design. |
 | Digest-keyed shared state (exempt) | the audit branch-own-digest clearance markers | does not derive tree identity; keyed by the branch-own digest, one shared store |
@@ -63,30 +63,30 @@ The exempt classes are named so their absence reads as deliberate, not an oversi
 
 ### The signal is measured, not promised
 
-The harness documents the working-directory field only as "the directory at invocation" — it never promises the per-agent scoping the rule depends on. So the day the harness changes that unpromised behavior, every site that reads it would break silently and at once.
+The harness documents the working-directory field only as "the directory at invocation": it never promises the per-agent scoping the rule depends on. So the day the harness changes that unpromised behavior, every site that reads it would break silently and at once.
 
-The defense today is the fallback and the per-site failure directions above: a dropped, relative, or non-resolvable working directory routes to the hook's own process directory and the site keeps guarding. The *per-agent* property (that two concurrent agents each see their own tree) is exercised by the N-worktree concurrency harness. A dedicated single-event contract test — one that pins the assumed shape and fails loudly naming the field as the broken contract, turning a silent repo-wide regression into one attributable failure — is specified and not yet built.
+The defense today is the fallback and the per-site failure directions above: a dropped, relative, or non-resolvable working directory routes to the hook's own process directory and the site keeps guarding. The *per-agent* property (that two concurrent agents each see their own tree) is exercised by the N-worktree concurrency harness. A dedicated single-event contract test (one that pins the assumed shape and fails loudly naming the field as the broken contract, turning a silent repo-wide regression into one attributable failure) is specified and not yet built.
 
 ## Where is the main checkout?
 
-Almost everything GAIA does needs one path: the root of the project's main working tree. Worktree creation puts new trees under it; the linker points shared state at it; the cost ledger records into it; the janitor sweeps inside it; the statusline reads from it. There is **one resolver per language**, and everything calls its own — bash sites source `main-root-lib.sh`, instruction prose invokes it as a script, the Node CLI calls its TypeScript counterpart rather than paying a subprocess on a hot path. Two implementations, one per language, is the deliberate position; a third copy in either is not. The shell resolver is the one that answers correctly in every shape below.
+Almost everything GAIA does needs one path: the root of the project's main working tree. Worktree creation puts new trees under it; the linker points shared state at it; the cost ledger records into it; the janitor sweeps inside it; the statusline reads from it. There is **one resolver per language**, and everything calls its own: bash sites source `main-root-lib.sh`, instruction prose invokes it as a script, the Node CLI calls its TypeScript counterpart rather than paying a subprocess on a hot path. Two implementations, one per language, is the deliberate position; a third copy in either is not. The shell resolver is the one that answers correctly in every shape below.
 
 <!-- gaia:maintainer-only:start -->
 GAIA maintainers: a CI check scans tracked source outside the two resolvers for the ingredients of a hand-rolled derivation (`--git-common-dir`, a worktree-suffix path trim, a first-record read of `git worktree list --porcelain`) and fails the build on a match. It runs from the release-excluded suites, so it guards maintainer changes.
 <!-- gaia:maintainer-only:end -->
 
-The naive idiom — "the main checkout is the parent of git's common directory" — is wrong outside an ordinary clone. In a submodule, git's directory lives in the superproject, so the idiom hands back a path inside `.git`. In a `--separate-git-dir` checkout it does the same. Nothing errors, because the paths are guarded by silent presence checks, so the wrongness is invisible until GAIA writes a ledger or links shared state into git's own storage. The resolver answers correctly in every shape git can describe:
+The naive idiom ("the main checkout is the parent of git's common directory") is wrong outside an ordinary clone. In a submodule, git's directory lives in the superproject, so the idiom hands back a path inside `.git`. In a `--separate-git-dir` checkout it does the same. Nothing errors, because the paths are guarded by silent presence checks, so the wrongness is invisible until GAIA writes a ledger or links shared state into git's own storage. The resolver answers correctly in every shape git can describe:
 
-1. **Am I in a linked worktree?** Compare the absolute git directory against the absolute common directory (both physically resolved). They differ only inside a linked worktree. Correct in every shape, including submodules — unlike the `dirname(common) != toplevel` test, which reads a plain submodule checkout as a worktree.
+1. **Am I in a linked worktree?** Compare the absolute git directory against the absolute common directory (both physically resolved). They differ only inside a linked worktree. Correct in every shape, including submodules, unlike the `dirname(common) != toplevel` test, which reads a plain submodule checkout as a worktree.
 2. **Not in one** → the working tree that owns the target directory (correct for ordinary clone, submodule, and separate-git-dir alike).
 3. **In one** → the main working tree git records: `core.worktree` resolved against the common directory (the submodule case), otherwise the common directory's parent (the ordinary case).
 4. **Neither recorded, or the candidate does not validate** → the shape is **underivable**: exit non-zero, print nothing on stdout, write one named reason to stderr identifying the shape and the git directory it saw.
 
 A candidate is accepted only after it **validates**: it is a real directory, the toplevel git reports for it equals the candidate itself (physically resolved), and the common directory git reports for it is the one the resolution started from. Validation is what separates "fails loudly" from "silently returns a path inside somebody's git storage," so an ambient work-tree override cannot stand in for the repository's own layout.
 
-There is **one output form** everywhere: a single line, one trailing newline, an absolute path with symlinks resolved, no trailing slash, no `..` — byte-identical to git's toplevel from that root. Consumers string-compare the answer (the write-guard denies on exact equality; the statusline resolves two roots), so the form is load-bearing.
+There is **one output form** everywhere: a single line, one trailing newline, an absolute path with symlinks resolved, no trailing slash, no `..`, byte-identical to git's toplevel from that root. Consumers string-compare the answer (the write-guard denies on exact equality; the statusline resolves two roots), so the form is load-bearing.
 
-A resolution failure does not decide the caller's behavior — the caller does. A fail-open guard keeps allowing; a silent reader or linker stands down and exits 0; a hard-requirement script propagates the named reason and aborts. The resolver keeps its reason off stdout so a fail-open caller can read the exit status alone without leaking a diagnostic on every guarded tool call. The worktree-detection **predicate** ("am I in a linked worktree") ships as a second entry point on the same implementation, so a site that needs a boolean does not resolve a root to get one.
+A resolution failure does not decide the caller's behavior; the caller does. A fail-open guard keeps allowing; a silent reader or linker stands down and exits 0; a hard-requirement script propagates the named reason and aborts. The resolver keeps its reason off stdout so a fail-open caller can read the exit status alone without leaking a diagnostic on every guarded tool call. The worktree-detection **predicate** ("am I in a linked worktree") ships as a second entry point on the same implementation, so a site that needs a boolean does not resolve a root to get one.
 
 ## What lives in `.gaia/local/`, and how worktrees share it
 
@@ -94,24 +94,24 @@ GAIA enters lifecycle worktrees only through `EnterWorktree`. A tree made with a
 
 A Code Audit Team member dispatched into a worktree made with plain `git worktree add` writes its marker, findings sidecar, and scope file into that worktree's real `.gaia/local/audit/`. Provisioning moves those files into main's `audit/` one by one before it backs the directory up, leaves any same-named file in main untouched, and logs the collision.
 
-`.gaia/local/` holds GAIA's per-machine working state — audit results, cost tracking, specs, plans, caches, ledgers. It is gitignored in full and ships nothing to adopters. It stays at that path in every checkout, because a developer must be able to browse to their own specs and plans without knowing where GAIA hides things.
+`.gaia/local/` holds GAIA's per-machine working state: audit results, cost tracking, specs, plans, caches, ledgers. It is gitignored in full and ships nothing to adopters. It stays at that path in every checkout, because a developer must be able to browse to their own specs and plans without knowing where GAIA hides things.
 
-A linked worktree's `.gaia/local` is a **single symlink to the main checkout's** `.gaia/local`, not a real directory holding a hand-maintained set of individually-symlinked entries. One consequence is that there is no shared-entry list to keep in sync, and no per-path guard exemptions — the whole directory is main's, so those collapse to one fact. The other consequence is the load-bearing one: state that must stay **per-tree** does not get its isolation from having its own physical directory. Under one symlink, a bare `red-ledger/` resolves to one shared path for every tree. So per-tree state is isolated by an **explicit tree-identity key** instead of by the filesystem, and the classification below is what says which entries need it.
+A linked worktree's `.gaia/local` is a **single symlink to the main checkout's** `.gaia/local`, not a real directory holding a hand-maintained set of individually-symlinked entries. One consequence is that there is no shared-entry list to keep in sync, and no per-path guard exemptions: the whole directory is main's, so those collapse to one fact. The other consequence is the load-bearing one: state that must stay **per-tree** does not get its isolation from having its own physical directory. Under one symlink, a bare `red-ledger/` resolves to one shared path for every tree. So per-tree state is isolated by an **explicit tree-identity key** instead of by the filesystem, and the classification below is what says which entries need it.
 
 ### The four scopes
 
 Every entry is exactly one of these. The scope answers where it lives and who owns it once the whole directory resolves to main:
 
 - **shared**: a durable store multiple trees co-write, whose entries must coexist. Correct only with a content or identity partition key, a cross-tree lock, or (for a singleton) an idempotent overwrite. *Examples:* the audit clearance markers (keyed by branch-own digest); the findings and rerun sidecars (keyed by base-sha **plus branch**, so two trees off one main tip do not overwrite each other); the telemetry cost ledger (a cross-tree file lock plus self-identifying rows); the debt count cache (idempotent overwrite of a repo-global fact); the codify decline ledger (one copy per clone, keyed internally by finding class, because one copy is the only scope at which a decline can suppress what it declined).
-- **per-tree** — durable state belonging to exactly one tree that must not bleed across trees. Addressed at a sub-path carrying the resolved-checkout-root tree key the identity rule defines; the resolver supplies the key, the registry declares which entries need it. *Examples:* the RED ledger; the worthiness ledger (the same kind of per-tree fact as a RED observation); the forensics and handoff drop zones.
-- **main-only** — a single canonical value owned by the main checkout, or a transient main-anchored coordination store holding no durable per-tree data. A worktree reads it or writes into main's one copy; it does not co-write a partitioned dataset. A coordination store may still carry a key (a spec-chain sentinel by session) — that partitions coordination records, it does not make the store a co-written dataset. *Examples:* the SPEC and plan ledgers; the PR-artifact capture; the project id; the update-preference file.
-- **ephemeral** — transient scratch, regenerable or discardable, self-pruned by its own producer or left for a human to clear. Keyed by session, spec id, or a uuid, or an idempotent-overwrite cache whose concurrent write is harmless. Needs no tree key and no preservation. *Examples:* in-flight SPEC drafts and gate caches; react-perf run output.
+- **per-tree**: durable state belonging to exactly one tree that must not bleed across trees. Addressed at a sub-path carrying the resolved-checkout-root tree key the identity rule defines; the resolver supplies the key, the registry declares which entries need it. *Examples:* the RED ledger; the worthiness ledger (the same kind of per-tree fact as a RED observation); the forensics and handoff drop zones.
+- **main-only**: a single canonical value owned by the main checkout, or a transient main-anchored coordination store holding no durable per-tree data. A worktree reads it or writes into main's one copy; it does not co-write a partitioned dataset. A coordination store may still carry a key (a spec-chain sentinel by session): that partitions coordination records, it does not make the store a co-written dataset. *Examples:* the SPEC and plan ledgers; the PR-artifact capture; the project id; the update-preference file.
+- **ephemeral**: transient scratch, regenerable or discardable, self-pruned by its own producer or left for a human to clear. Keyed by session, spec id, or a uuid, or an idempotent-overwrite cache whose concurrent write is harmless. Needs no tree key and no preservation. *Examples:* in-flight SPEC drafts and gate caches; react-perf run output.
 
 The one genuinely-close pair is **shared vs main-only**, since both resolve to main. The distinguishing test is whether the store holds *durable co-written data from multiple trees that must coexist* (shared) or *a single value or transient coordination* (main-only). The line between **per-tree and ephemeral** is durability: per-tree must persist for its tree and be addressable by tree; ephemeral is thrown away.
 
 ### The registry, and what it does with the unknown
 
-There is **one file** declaring every `.gaia/local/` entry — its scope, a plain-language reason, and, for a shared entry, its key. Everything that needs that information reads this registry; nothing keeps its own copy. That is the whole product: the registry is the only list, so "someone forgot to update one of the hand-written lists" has nowhere left to happen, and drift from the registry is reported rather than silently absorbed.
+There is **one file** declaring every `.gaia/local/` entry: its scope, a plain-language reason, and, for a shared entry, its key. Everything that needs that information reads this registry; nothing keeps its own copy. That is the whole product: the registry is the only list, so "someone forgot to update one of the hand-written lists" has nowhere left to happen, and drift from the registry is reported rather than silently absorbed.
 
 <!-- gaia:maintainer-only:start -->
 GAIA maintainers: because the directory is gitignored and empty on a fresh CI checkout, enforcement is limited to what a checkout without it can still see. One CI check requires that a single canonical resolver definition exists per language.
@@ -167,7 +167,7 @@ The identical write from Bash succeeds. That asymmetry is the whole surprise, an
 
 ## Ports per worktree
 
-Every checkout owns stable dev, Storybook, and Playwright ports, so two trees never fight over one. The main checkout is slot 0 and keeps the default ports; each linked worktree holds a slot of its own, and its ports are the defaults offset by that slot.
+Every checkout owns stable dev, Storybook, and Playwright ports, so two trees never fight over one. The main checkout is slot 0 and keeps the default ports; each linked worktree holds a slot of its own, and its ports are the defaults offset by that slot. The slots cover the `frontend/` package only; a backend beside it gets no slot, and [[Claude Integration Conventions#A backend and worktrees]] covers the choice that leaves.
 
 **The ledger.** A slot ledger lives in main-anchored state (`.gaia/state-registry.json` declares it and its siblings, which hold the removal tombstones and the launch and session records). Because the ledger is main-anchored, every tree sees the same assignments and a slot is never handed out twice; a lock guards only the ledger's read-modify-write and is never held across a wait or a signal. Provisioning assigns the lowest free slot whose ports no other tree's or unidentified server holds, and a tree keeps its slot on every later entry. The logic is in `.gaia/scripts/worktree-ports-lib.sh`.
 
@@ -198,7 +198,7 @@ Both run from release-excluded suites, so they guard maintainer changes. The reg
 
 ## Adding state or a hook correctly (the checklist)
 
-- **New piece of `.gaia/local/` state?** Decide its scope from the four above (durable-co-written → shared with a key; durable-one-tree → per-tree; one-canonical or coordination → main-only; throwaway → ephemeral). Add its registry entry — scope, reason, and a key if shared — in the same change. Do not add it to any hand-written list; there are none to add it to.
+- **New piece of `.gaia/local/` state?** Decide its scope from the four above (durable-co-written → shared with a key; durable-one-tree → per-tree; one-canonical or coordination → main-only; throwaway → ephemeral). Add its registry entry (scope, reason, and a key if shared) in the same change. Do not add it to any hand-written list; there are none to add it to.
 - **Need the main checkout root?** Source the resolver and call it. Do not derive it. Keep your caller's failure disposition: a guard fails open, a reader stands down, a hard script aborts with the named reason.
 - **Need to know which tree an event is for?** Read the acting event's working-directory field through the identity rule; pick your class's failure direction for undeterminable identity. Never key on `session_id` or `agent_id` for a tree.
 - **Writing a hook that touches per-tree state?** Address it under the tree key, not a bare relative path. A bare `.gaia/local/<thing>` resolves to main's one copy for every tree.
@@ -206,5 +206,5 @@ Both run from release-excluded suites, so they guard maintainer changes. The reg
 ## Cross-references
 
 - [[Local Working State]]: the `.gaia/local/` folder, its pointer to the state registry, and the session-start janitor.
-- [[Claude Hooks]] — the hook surface and the per-agent working-directory measurement the identity rule rests on.
+- [[Claude Hooks]]: the hook surface and the per-agent working-directory measurement the identity rule rests on.
 - [[PR Merge Workflow]]; the audit → PR → merge cycle the concurrency test drives, and the branch-own-digest clearance markers.

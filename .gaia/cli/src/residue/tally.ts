@@ -9,8 +9,8 @@
  * on the filer's three arms plus the dismissal store, resolves the emitted
  * batch's cited lines, and prints the frozen JSON contract to stdout.
  *
- * Always exits 0: a failed window read is reported through `gh_ok`, never a
- * non-zero exit, so the statusline refresher and the skill never treat a
+ * Always exits 0: a failed read of the merged-PR window or of the tech-debt
+ * issue list is reported through `gh_ok`, never a non-zero exit, so the statusline refresher and the skill never treat a
  * network outage as a crash.
  */
 import {EXIT_CODES} from '../exit.js';
@@ -47,14 +47,17 @@ const HELP_TEXT = `Usage: gaia residue-tally [options]
   dismissal store still suppresses, resolves the emitted batch's cited line,
   and prints the candidate list as JSON.
 
-  --count-only      No head fetch, no git call. Every candidate carries
-                     resolution "unresolved"; store suppression matches on
-                     path and line alone (count_approximate: true).
+  --count-only      No head fetch and no per-candidate line resolution (one
+                     git rev-parse still finds the repo root). Every
+                     candidate carries resolution "unresolved"; store
+                     suppression matches on path and line alone
+                     (count_approximate: true).
 
   The emitted batch is capped at GAIA_RESIDUE_CAP (default 10).
 
-  Network failures are non-fatal: a failed window read emits gh_ok: false
-  with an empty candidate list, and the command still exits 0.
+  Network failures are non-fatal: a failed read of either the merged-PR
+  window or the tech-debt issue list emits gh_ok: false with an empty
+  candidate list, and the command still exits 0.
 `;
 
 const HELP_TOKENS = new Set(['--help', '-h', 'help']);
