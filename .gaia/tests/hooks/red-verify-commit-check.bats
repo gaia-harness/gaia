@@ -331,6 +331,59 @@ test("brand new test", () => {
   [[ "$output" != *"existing test"* ]]
 }
 
+# --- Catch-up merge: tests the merged-in parent brought are not new ---
+
+# Leave the tmp repo mid-merge on `feature`: main has added PASSING_TEST at the
+# given path, both branches edited CHANGELOG.md so the merge stops on a
+# conflict, and the conflict is resolved and staged, as a hand-committed
+# catch-up merge looks right before its `git commit`.
+start_catch_up_merge() {
+  local test_path="$1"
+  git -C "$REPO" checkout --quiet -b feature
+  commit_file_at_head "CHANGELOG.md" 'feature line
+'
+  git -C "$REPO" checkout --quiet main
+  commit_file_at_head "CHANGELOG.md" 'main line
+'
+  commit_file_at_head "$test_path" "$PASSING_TEST"
+  git -C "$REPO" checkout --quiet feature
+  git -C "$REPO" merge --quiet main >/dev/null 2>&1 && return 1
+  git -C "$REPO" rev-parse --quiet --verify MERGE_HEAD >/dev/null
+  stage_file "CHANGELOG.md" 'feature line
+main line
+'
+}
+
+@test "allows a catch-up merge commit carrying a test the merged parent added" {
+  start_catch_up_merge "frontend/app/utils/x/index.test.ts"
+  run_commit_hook
+  [ "$status" -eq 0 ]
+  refute_denied
+}
+
+@test "a catch-up merge still denies a test its resolution adds beyond both parents" {
+  start_catch_up_merge "frontend/app/utils/x/index.test.ts"
+  stage_file "frontend/app/utils/x/index.test.ts" "${PASSING_TEST}test(\"resolution-only test\", () => {
+  expect(3).toBe(3);
+});
+"
+  run_commit_hook
+  [ "$status" -eq 0 ]
+  denied
+  [[ "$output" == *"resolution-only test"* ]]
+  [[ "$output" != *"adds two numbers"* ]]
+}
+
+@test "a catch-up merge still denies a new test file neither parent holds" {
+  start_catch_up_merge "frontend/app/utils/x/index.test.ts"
+  stage_file "frontend/app/utils/y/index.test.ts" "$PASSING_TEST"
+  run_commit_hook
+  [ "$status" -eq 0 ]
+  denied
+  [[ "$output" == *"frontend/app/utils/y/index.test.ts"* ]]
+  [[ "$output" != *"frontend/app/utils/x/index.test.ts"* ]]
+}
+
 # --- Non-test / no-new-test commits never fire ---
 
 @test "allows a commit staging only non-test source" {

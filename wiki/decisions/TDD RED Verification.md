@@ -4,7 +4,7 @@ status: active
 priority: 1
 date: 2026-06-04
 created: 2026-06-04
-updated: 2026-10-05
+updated: 2026-10-14
 tags: [decision, tdd, hooks, quality]
 ---
 
@@ -37,6 +37,7 @@ The content signal is a normalized hash of the test's comment-free content, so t
 - A test whose title cannot be computed at extraction time is exempt: no signal is emitted, so it never enters the checked set. See [[#Dynamic-title carve-out]].
 - The RED demand is scoped to the deterministic surface. A test whose subject is emergent (clock-, entropy-, or I/O-bound, or dependent on the rendered tree) commits without a RED. See [[#Determinism carve-out]].
 - A test file that arrives unchanged from a GAIA release being applied commits without a RED. See [[#Release carve-out]].
+- On a merge commit, a test the other parent already holds is not new: a catch-up merge of the base commits the base's tests without a RED, since they were committed, and owed their RED, on the base. A test the conflict resolution adds beyond both parents still owes one.
 
 ## Infrastructure
 
