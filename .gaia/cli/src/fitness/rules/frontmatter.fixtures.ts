@@ -2,7 +2,6 @@ import type {FixtureFactory, FixtureMap, FixtureProject} from '../types.js';
 
 const SKILL_PATH = '.claude/skills/example/SKILL.md';
 const COMMAND_PATH = '.claude/commands/example.md';
-const AGENT_PATH = '.claude/agents/example.md';
 
 const PLAIN_DESCRIPTION = 'Does an example thing when the user asks for one.';
 
@@ -90,17 +89,8 @@ export const FRONTMATTER_FIXTURES: FixtureMap = {
       skillWith(`name: ${'a'.repeat(65)}`, `description: ${PLAIN_DESCRIPTION}`),
   },
   'frontmatter.skill.name.present': {
-    green: () =>
-      projectOf({
-        [AGENT_PATH]: documentOf(
-          'name: example',
-          `description: ${PLAIN_DESCRIPTION}`
-        ),
-      }),
-    red: () =>
-      projectOf({
-        [AGENT_PATH]: documentOf(`description: ${PLAIN_DESCRIPTION}`),
-      }),
+    green: validSkill,
+    red: () => skillWith(`description: ${PLAIN_DESCRIPTION}`),
   },
   'frontmatter.skill.name.reserved-word': {
     green: validSkill,

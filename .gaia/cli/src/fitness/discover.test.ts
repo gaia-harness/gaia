@@ -22,12 +22,20 @@ const scratch = (project: FixtureProject) => {
 const pathsOf = (root: string): string[] =>
   discoverFiles(root).files.map((file) => file.path);
 
+const agentPaths = (files: Record<string, string>): string[] => {
+  const {root} = scratch({files, git: true});
+
+  return discoverFiles(root)
+    .files.filter((file) => file.kinds.includes('agent'))
+    .map((file) => file.path);
+};
+
 describe('kindsOfPath', () => {
   test.each([
     ['.claude/skills/example/SKILL.md', ['skill']],
     ['.claude/skills/example/references/more.md', ['reference']],
     ['.claude/commands/nested/example.md', ['command']],
-    ['.claude/agents/example.md', ['agent']],
+    ['.claude/agents/example.md', []],
     ['.claude/rules/example.md', ['rule']],
     ['CLAUDE.md', ['claudemd']],
     ['a/b/CLAUDE.md', ['claudemd']],
@@ -130,6 +138,48 @@ describe('discoverFiles inside git', () => {
     });
 
     expect(pathsOf(root)).toEqual(['.claude/commands/example.md']);
+  });
+});
+
+describe('discoverFiles agent kind', () => {
+  test.each([
+    [
+      'a name-less file with other frontmatter keys is documentation',
+      '.claude/agents/sub/notes.md',
+      '---\nlibrary: x\n---\n# notes\n',
+    ],
+    [
+      'a file with no frontmatter is documentation',
+      '.claude/agents/README.md',
+      '# readme\n',
+    ],
+    [
+      'a blank name counts as absent',
+      '.claude/agents/blank.md',
+      '---\nname:\n---\n# b\n',
+    ],
+  ])('%s', (_name, agentPath, content) => {
+    expect(agentPaths({[agentPath]: content})).toEqual([]);
+  });
+
+  test.each([
+    [
+      'a name without a description is still an agent',
+      '.claude/agents/x.md',
+      '---\nname: x\n---\n# x\n',
+    ],
+    [
+      'unparseable YAML is still an agent',
+      '.claude/agents/y.md',
+      '---\nname: [unclosed\n---\n# y\n',
+    ],
+    [
+      'unclosed frontmatter is still an agent',
+      '.claude/agents/z.md',
+      '---\nname: z\n# z\n',
+    ],
+  ])('%s', (_name, agentPath, content) => {
+    expect(agentPaths({[agentPath]: content})).toEqual([agentPath]);
   });
 });
 

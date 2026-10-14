@@ -47,7 +47,7 @@ const RULE_FILE = /(?:^|\/)\.claude\/rules\/.+\.md$/;
 const SETTINGS_FILE = /(?:^|\/)\.claude\/settings\.json$/;
 const SETTINGS_LOCAL_FILE = /(?:^|\/)\.claude\/settings\.local\.json$/;
 
-/** The kinds a path earns from its name alone; a playbook is decided by content. */
+/** The kinds a path earns from its name alone; a playbook and a real agent are decided by content. */
 export const kindsOfPath = (relative: string): FileKind[] => {
   const kinds: FileKind[] = [];
   const segments = relative.split('/');
@@ -57,7 +57,6 @@ export const kindsOfPath = (relative: string): FileKind[] => {
   else if (SKILL_TREE_MARKDOWN.test(relative)) kinds.push('reference');
 
   if (COMMAND_FILE.test(relative)) kinds.push('command');
-  if (AGENT_FILE.test(relative)) kinds.push('agent');
   if (RULE_FILE.test(relative)) kinds.push('rule');
 
   if (segments.length <= MAX_CLAUDE_MD_SEGMENTS) {
@@ -74,6 +73,28 @@ export const kindsOfPath = (relative: string): FileKind[] => {
   if (relative === FITNESS_CONFIG_PATH) kinds.push('fitness-config');
 
   return kinds;
+};
+
+/**
+ * Claude Code scans `.claude/agents/` recursively but treats a file with no
+ * frontmatter, or frontmatter with no `name`, as documentation beside the
+ * agents. Broken frontmatter stays an agent, because Claude Code drops it
+ * silently and the author meant one.
+ */
+export const isAgentDocumentation = (text: string): boolean => {
+  const frontmatter = splitFrontmatter(text);
+
+  if (frontmatter.error === 'no frontmatter') return true;
+
+  if (!frontmatter.ok) return false;
+
+  const {name} = frontmatter.data;
+
+  return (
+    name === undefined ||
+    name === null ||
+    (typeof name === 'string' && name.trim() === '')
+  );
 };
 
 const listGitTracked = (root: string): string[] | undefined => {
@@ -245,14 +266,6 @@ export const discoverFiles = (root: string): Discovery => {
     (relative) => !listedSet.has(relative)
   );
 
-  const kindsByPath = new Map<string, FileKind[]>();
-
-  for (const relative of [...existing, ...localOnly]) {
-    const kinds = kindsOfPath(relative);
-
-    if (kinds.length > 0) kindsByPath.set(relative, kinds);
-  }
-
   const textByPath = new Map<string, string>();
 
   const readText = (relative: string): string => {
@@ -266,6 +279,21 @@ export const discoverFiles = (root: string): Discovery => {
 
     return text;
   };
+
+  const kindsByPath = new Map<string, FileKind[]>();
+
+  for (const relative of [...existing, ...localOnly]) {
+    const kinds = kindsOfPath(relative);
+
+    if (
+      AGENT_FILE.test(relative) &&
+      !isAgentDocumentation(readText(relative))
+    ) {
+      kinds.push('agent');
+    }
+
+    if (kinds.length > 0) kindsByPath.set(relative, kinds);
+  }
 
   const routingFiles: DiscoveredFile[] = [...kindsByPath.entries()]
     .filter(([, kinds]) => kinds.includes('command') || kinds.includes('skill'))

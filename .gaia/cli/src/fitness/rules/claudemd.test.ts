@@ -420,7 +420,7 @@ describe('claudemd.no-absolute-machine-path', () => {
 
   test('flags unix home paths and drive-letter user paths in each governed file', () => {
     const files = {
-      '.claude/agents/example.md': `Read ${homePath}/a.txt\n`,
+      '.claude/agents/example.md': `---\nname: example\n---\nRead ${homePath}/a.txt\n`,
       '.claude/commands/example.md': `Read ${windowsPath}\\a.txt\n`,
       '.claude/rules/example.md': `Read ${homePath}/a.txt\n`,
       '.claude/skills/example/SKILL.md': `Read ${homePath}/a.txt\n`,

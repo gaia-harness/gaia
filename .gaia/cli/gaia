@@ -27782,7 +27782,6 @@ var kindsOfPath = (relative) => {
   if (SKILL_FILE.test(relative)) kinds.push("skill");
   else if (SKILL_TREE_MARKDOWN.test(relative)) kinds.push("reference");
   if (COMMAND_FILE.test(relative)) kinds.push("command");
-  if (AGENT_FILE.test(relative)) kinds.push("agent");
   if (RULE_FILE.test(relative)) kinds.push("rule");
   if (segments.length <= MAX_CLAUDE_MD_SEGMENTS) {
     if (base === "CLAUDE.md") kinds.push("claudemd");
@@ -27795,6 +27794,13 @@ var kindsOfPath = (relative) => {
   if (SETTINGS_LOCAL_FILE.test(relative)) kinds.push("settings-local");
   if (relative === FITNESS_CONFIG_PATH) kinds.push("fitness-config");
   return kinds;
+};
+var isAgentDocumentation = (text) => {
+  const frontmatter = splitFrontmatter(text);
+  if (frontmatter.error === "no frontmatter") return true;
+  if (!frontmatter.ok) return false;
+  const { name } = frontmatter.data;
+  return name === void 0 || name === null || typeof name === "string" && name.trim() === "";
 };
 var listGitTracked = (root) => {
   try {
@@ -27909,11 +27915,6 @@ var discoverFiles = (root) => {
   const localOnly = localCandidates.filter(
     (relative) => !listedSet.has(relative)
   );
-  const kindsByPath = /* @__PURE__ */ new Map();
-  for (const relative of [...existing, ...localOnly]) {
-    const kinds = kindsOfPath(relative);
-    if (kinds.length > 0) kindsByPath.set(relative, kinds);
-  }
   const textByPath = /* @__PURE__ */ new Map();
   const readText = (relative) => {
     const cached2 = textByPath.get(relative);
@@ -27922,6 +27923,14 @@ var discoverFiles = (root) => {
     textByPath.set(relative, text);
     return text;
   };
+  const kindsByPath = /* @__PURE__ */ new Map();
+  for (const relative of [...existing, ...localOnly]) {
+    const kinds = kindsOfPath(relative);
+    if (AGENT_FILE.test(relative) && !isAgentDocumentation(readText(relative))) {
+      kinds.push("agent");
+    }
+    if (kinds.length > 0) kindsByPath.set(relative, kinds);
+  }
   const routingFiles = [...kindsByPath.entries()].filter(([, kinds]) => kinds.includes("command") || kinds.includes("skill")).map(([relative, kinds]) => ({
     kinds,
     path: relative,
