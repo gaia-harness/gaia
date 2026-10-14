@@ -40,6 +40,17 @@ describe('function utils', () => {
     expect(tryCatch(() => '')).toEqual([undefined, '']);
     expect(tryCatch(() => null)).toEqual([undefined, null]);
   });
+
+  test.each([null, 0, ''])(
+    'tryCatch reports a falsy sync throw (%o) as an error',
+    (thrownValue) => {
+      expect(
+        tryCatch(() => {
+          throw thrownValue;
+        })
+      ).toEqual([thrownValue, undefined]);
+    }
+  );
 });
 
 const double = (value: number) => value * 2;

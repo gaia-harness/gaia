@@ -11,13 +11,12 @@ export const tryCatch = <T, A extends readonly unknown[]>(
   fn: (...args: A) => T,
   ...args: A
 ): TryCatchResult<T> => {
-  let error;
   let result;
 
   try {
     result = fn(...args);
   } catch (caughtError) {
-    error = caughtError as Error;
+    return [caughtError as Error, undefined] as TryCatchResult<T>;
   }
 
   if (result instanceof Promise) {
@@ -27,10 +26,6 @@ export const tryCatch = <T, A extends readonly unknown[]>(
         caughtError,
         undefined,
       ]) as TryCatchResult<T>;
-  }
-
-  if (error) {
-    return [error, undefined] as TryCatchResult<T>;
   }
 
   return [undefined, result] as TryCatchResult<T>;
