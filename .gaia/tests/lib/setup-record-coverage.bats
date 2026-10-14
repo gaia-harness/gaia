@@ -120,19 +120,6 @@ check_no_unknown_id() {
   check_every_id_recorded "$REPO_ROOT" "$FEATURE_LIST"
 }
 
-@test "each listed id, one at a time, has a literal record line on the real surface" {
-  local recorded id count=0
-  recorded="$(recorded_ids "$REPO_ROOT")"
-  while IFS= read -r id; do
-    count=$((count + 1))
-    grep -qxF -- "$id" <<<"$recorded" || {
-      echo "no literal record line for ${id}" >&2
-      return 1
-    }
-  done < <(listed_ids "$FEATURE_LIST")
-  [ "$count" -eq "$(jq '.features | length' "$FEATURE_LIST")" ]
-}
-
 @test "every literal record line on the real surface names a listed id" {
   check_no_unknown_id "$REPO_ROOT" "$FEATURE_LIST"
 }

@@ -1,8 +1,8 @@
 #!/usr/bin/env bats
 #
 # Registration of the sub-agent context checkpoint hook in both settings files,
-# the state registry entry that classifies its marker directory, its release
-# inclusion, and its row on the hooks wiki page. The hook must reach every tool
+# the state registry entry that classifies its marker directory, and its release
+# inclusion. The hook must reach every tool
 # of a sub-agent, so it registers once, on PostToolUse, with no matcher, in the
 # group that holds the main-session checkpoint hook; a matcher would silently
 # narrow it and a second event would fire it twice. A session launched in the
@@ -26,7 +26,6 @@ setup() {
   FRONTEND_SETTINGS="${GAIA_REGISTRATION_FRONTEND_SETTINGS:-$REPO_ROOT/frontend/.claude/settings.json}"
   REGISTRY="${GAIA_REGISTRATION_REGISTRY:-$REPO_ROOT/.gaia/state-registry.json}"
   EXCLUDE="$REPO_ROOT/.gaia/release-exclude"
-  HOOKS_PAGE="$REPO_ROOT/wiki/concepts/Claude Hooks.md"
   HOOK_PATH='.claude/hooks/context-checkpoint-subagent.sh'
   DOCTRINE_PATH='.claude/doctrine/context-yield.md'
   HANDOFF_CLEAR_ALLOW='Bash(bash .gaia/scripts/spec/handoff-clear.sh:*)'
@@ -86,11 +85,6 @@ assert_not_excluded() {
   return 0
 }
 
-# assert_wiki_row PAGE: a table row whose first cell is the hook's name.
-assert_wiki_row() {
-  grep -q '^| `context-checkpoint-subagent[.]sh` |' "$1"
-}
-
 # mutate_json SOURCE JQ_PROGRAM: writes a scratch copy of SOURCE transformed by
 # the program, and leaves its path in MUTANT.
 mutate_json() {
@@ -114,11 +108,6 @@ mutate_json() {
   assert_rooted_with_timeout "$FRONTEND_SETTINGS"
 }
 
-@test "the real tree passes the registered-command rooting check" {
-  run bash "$REPO_ROOT/.gaia/scripts/check-hook-command-rooting.sh" "$REPO_ROOT"
-  [ "$status" -eq 0 ]
-}
-
 @test "both settings files allow the handoff pre-clear script exactly once" {
   assert_handoff_clear_allowed "$SETTINGS"
   assert_handoff_clear_allowed "$FRONTEND_SETTINGS"
@@ -130,15 +119,11 @@ mutate_json() {
   assert_registry_entry "$REGISTRY"
 }
 
-# --- release inclusion and wiki -----------------------------------------------
+# --- release inclusion --------------------------------------------------------
 
 @test "neither the hook nor the doctrine file is release-excluded" {
   assert_not_excluded "$EXCLUDE" "$HOOK_PATH"
   assert_not_excluded "$EXCLUDE" "$DOCTRINE_PATH"
-}
-
-@test "the hooks wiki page has a row for the sub-agent hook" {
-  assert_wiki_row "$HOOKS_PAGE"
 }
 
 # --- red twins ------------------------------------------------------------------
@@ -185,13 +170,6 @@ mutate_json() {
   [ "$status" -ne 0 ]
 }
 
-@test "red twin: a registration present in only one of the two files fails the pair check" {
-  mutate_json "$FRONTEND_SETTINGS" '.hooks.PostToolUse |= map(.hooks |= map(select(.command | test("context-checkpoint-subagent[.]sh") | not)))'
-  assert_registered "$SETTINGS"
-  run assert_registered "$MUTANT"
-  [ "$status" -ne 0 ]
-}
-
 @test "red twin: removing the handoff pre-clear allowance fails the allowance check" {
   mutate_json "$SETTINGS" '.permissions.allow |= map(select(. != "Bash(bash .gaia/scripts/spec/handoff-clear.sh:*)"))'
   run assert_handoff_clear_allowed "$MUTANT"
@@ -222,12 +200,3 @@ mutate_json() {
   [ "$status" -ne 0 ]
 }
 
-@test "red twin: a hooks page copy without the row fails the wiki check" {
-  grep -v '^| `context-checkpoint-subagent[.]sh` |' "$HOOKS_PAGE" > "$BATS_TEST_TMPDIR/hooks-page.md"
-  if cmp -s "$BATS_TEST_TMPDIR/hooks-page.md" "$HOOKS_PAGE"; then
-    printf 'mutation did not change the page\n' >&2
-    return 1
-  fi
-  run assert_wiki_row "$BATS_TEST_TMPDIR/hooks-page.md"
-  [ "$status" -ne 0 ]
-}

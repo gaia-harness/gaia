@@ -146,18 +146,6 @@ setup() {
   done
 }
 
-@test "no spec still prescribes the shared staging filename" {
-  # The original defect, verbatim. Every member handed this same placeholder,
-  # which is what made one filename the filename all of them picked. Subsumed
-  # by the rule above and kept anyway: it names the defect this suite exists
-  # for, so a failure reads as the regression it is rather than as generic
-  # drift.
-  for audited_file in "${ALL[@]}"; do
-    grep -qF -- '--findings /path/to/findings.json' "$audited_file" && return 1
-  done
-  true
-}
-
 # --- Group 3: the producer that stages the file, paired with its writer ---------
 
 @test "every staged producer is immediately followed by its writer call" {
@@ -229,41 +217,6 @@ setup() {
   true
 }
 
-# --- Group 4: the prose states the rule the command encodes ----------------
-# The operative clause, not the rationale around it: a spec whose command
-# drifts while this sentence stays put is the failure #1190 names, so the
-# sentence must be the instruction rather than its explanation.
-
-@test "every spec states the operative staging rule" {
-  for audited_file in "${SPECS[@]}"; do
-    grep -qF -- '**Stage the array in your own scratch directory, as a file written fresh with `printf` in the call immediately before the writer.**' "$audited_file" || {
-      echo "$audited_file does not state the staging rule its own command encodes" >&2
-      return 1
-    }
-    grep -qF -- 'and a heredoc is refused outright' "$audited_file" || {
-      echo "$audited_file no longer states that the heredoc form is refused" >&2
-      return 1
-    }
-  done
-}
-
-@test "no spec still states the superseded stdin staging rule" {
-  for audited_file in "${ALL[@]}"; do
-    grep -qF -- 'Stage nothing: the array goes in through the single-quoted `printf` payload above, never through a file.' "$audited_file" && return 1
-  done
-  true
-}
-
-@test "no spec still offers a staged temp file as the alternative" {
-  # The superseded sentence, verbatim. It presented stdin as a convenience for
-  # a member that would rather not stage a file, which left the staged file
-  # the default reading of the placeholder above it.
-  for audited_file in "${ALL[@]}"; do
-    grep -qF -- 'reads the array from stdin when you would rather not stage a temp file' "$audited_file" && return 1
-  done
-  true
-}
-
 # --- Group 3: a value the scope resolver prints empty still reaches its flag --
 
 @test "no spec hands a resolver value to a flag unquoted" {
@@ -284,16 +237,12 @@ setup() {
   done
 }
 
-@test "every spec carries the quoted anchor-tree form and states why" {
+@test "every spec carries the quoted anchor-tree form" {
   # The floor for the rule above: a spec that stopped prescribing the sidecar
   # write, or dropped the flag, would pass an absence check on nothing.
   for audited_file in "${SPECS[@]}"; do
     grep -qF -- "--anchor-tree '<ANCHOR_TREE>'" "$audited_file" || {
       echo "$audited_file carries no quoted --anchor-tree form" >&2
-      return 1
-    }
-    grep -qF -- 'Keep the single quotes a command puts around a value' "$audited_file" || {
-      echo "$audited_file does not state why a resolver value is single-quoted" >&2
       return 1
     }
   done

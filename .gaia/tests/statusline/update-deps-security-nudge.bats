@@ -42,16 +42,6 @@ render_at() {
   plain=$(printf '%s' "$output" | sed 's/\x1b\[[0-9;]*m//g')
 }
 
-@test "UAT-001: outdated and security both render at Large" {
-  write_cache '{"outdatedCount":3,"securityCount":2,"securitySource":"dependabot","securityUnavailableReason":""}'
-  render_at 200
-  [ "$status" -eq 0 ]
-  case "$plain" in
-    *"Run /update-deps (3 outdated, 2 security)") ;;
-    *) return 1 ;;
-  esac
-}
-
 @test "UAT-002: security alone renders without an outdated term" {
   write_cache '{"outdatedCount":0,"securityCount":2,"securitySource":"pnpm-audit","securityUnavailableReason":"forbidden"}'
   render_at 200

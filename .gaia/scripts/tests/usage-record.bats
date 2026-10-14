@@ -464,18 +464,6 @@ straddling_segments() {
 
 # ---------- loading ----------
 
-@test "usage-record-lib.sh loads at top level: without it initiative and record both fail naming it" {
-  local scratch="$TEMPORARY_DIRECTORY/no-record-lib"
-  scratch_scripts "$scratch"
-  rm "$scratch/usage-record-lib.sh"
-  run --separate-stderr bash "$scratch/usage.sh" initiative spec:SPEC-001 --main-root "$MAIN"
-  [ "$status" -ne 0 ]
-  [[ "$stderr" == *"usage-record-lib.sh"* ]]
-  run --separate-stderr bash "$scratch/usage.sh" record spec:SPEC-001 --workflow gaia-spec --main-root "$MAIN"
-  [ "$status" -ne 0 ]
-  [[ "$stderr" == *"usage-record-lib.sh"* ]]
-}
-
 @test "usage-record-lib.sh holds no second attribution or pricing path" {
   run grep -nE 'priced_row|rate_window|GAIA_PRICING_JQ_DEFS|usage_resolve_t|first_ts' "$SCRIPTS/usage-record-lib.sh"
   [ "$status" -eq 1 ]

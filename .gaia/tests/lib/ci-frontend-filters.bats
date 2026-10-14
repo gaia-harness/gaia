@@ -27,6 +27,7 @@ tsconfig*.json
 vite.config.*
 .github/workflows/chromatic.yml
 .github/actions/**"
+  BARE_PATH_ERE="(path|working-directory|storybookBuildDir|externals):[[:space:]]*['\"]?(\./)?(\.playwright|storybook-static|app)(/|['\"]?[[:space:]]*$)"
 }
 
 tests_pattern() {
@@ -146,7 +147,7 @@ tests_verdict() {
 # one root workspace lockfile.
 @test "workflows: no bare app/, .playwright/ or storybook-static reference" {
   local offenders
-  offenders="$(grep -nE "(path|working-directory|storybookBuildDir|externals):[[:space:]]*['\"]?(\./)?(\.playwright|storybook-static|app)(/|['\"]?[[:space:]]*$)" \
+  offenders="$(grep -nE "$BARE_PATH_ERE" \
     "$TESTS_YML" "$CHROMATIC_YML" || true)"
   [ -z "$offenders" ] || { printf '%s\n' "$offenders" >&2; return 1; }
   # Shell-line uses of the build output and the playwright runner.
@@ -166,7 +167,7 @@ tests_verdict() {
   local scratch
   scratch="$BATS_TEST_TMPDIR/old.yml"
   printf '          path: .playwright/output\n          storybookBuildDir: '"'"'storybook-static'"'"'\n' > "$scratch"
-  run grep -nE "(path|working-directory|storybookBuildDir|externals):[[:space:]]*['\"]?(\./)?(\.playwright|storybook-static|app)(/|['\"]?[[:space:]]*$)" "$scratch"
+  run grep -nE "$BARE_PATH_ERE" "$scratch"
   [ "$status" -eq 0 ]
 }
 

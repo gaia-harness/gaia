@@ -333,28 +333,32 @@ C6_PAIRS=(
   use_frontend_package
   stage_renames "app/x.tsx:frontend/app/y.tsx"
   plan
-  [ "$output" != "exempt" ]
+  [ "$status" -eq 0 ]
+  [ "$output" = $'package\tfrontend' ]
 }
 
 @test "C13 refusal: a .claude file outside the C6 units is not exempt" {
   use_frontend_package
   stage_renames ".claude/rules/quality-gate.md:frontend/.claude/rules/quality-gate.md"
   plan
-  [ "$output" != "exempt" ]
+  [ "$status" -eq 0 ]
+  [ -z "$output" ]
 }
 
 @test "C13 refusal: a root config file outside the C6 list is not exempt" {
   use_frontend_package
   stage_renames "package.json:frontend/package.json"
   plan
-  [ "$output" != "exempt" ]
+  [ "$status" -eq 0 ]
+  [ -z "$output" ]
 }
 
 @test "C13 refusal: the dockerignore pair with a different destination is not exempt" {
   use_frontend_package
   stage_renames ".dockerignore:frontend/.dockerignore"
   plan
-  [ "$output" != "exempt" ]
+  [ "$status" -eq 0 ]
+  [ -z "$output" ]
 }
 
 @test "C13 refusal: a C6 rename carrying a content change is not exempt" {
@@ -366,7 +370,3 @@ C6_PAIRS=(
   [ "$output" = $'package\tfrontend' ]
 }
 
-@test "C13: an empty staged set is not reported exempt" {
-  plan
-  [ "$output" != "exempt" ]
-}

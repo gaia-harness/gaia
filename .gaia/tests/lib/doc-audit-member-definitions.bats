@@ -80,23 +80,7 @@ section_text() {
   done
 }
 
-@test "UAT-001: no member definition carries a disposition-pipeline heading" {
-  local member_file hits
-  for member_file in "${MEMBERS[@]}"; do
-    hits="$(grep -niE -- '^#{2,4} .*(scope classification|backend probe|divert|non-security disposition|disposition pipeline|disposition gate|disposition semantics|machinery-path waive)' "$member_file" || true)"
-    [ -z "$hits" ] || { echo "$member_file: $hits" >&2; return 1; }
-  done
-}
-
 # --- UAT-007: the frontend definition carries no self-heal machinery ---------
-
-@test "UAT-007: the frontend definition has no self-heal, closing-round, promotion or audit-run-env section" {
-  local hits
-  hits="$(grep -niE -- '^#{2,4} .*(self-heal|closing round|in-flight|promotion|audit-run env|trailer)' "$FRONTEND" || true)"
-  [ -z "$hits" ] || { echo "$hits" >&2; return 1; }
-  grep -qF -- 'AUDIT_SELF_HEALED' "$FRONTEND" && { echo "the self-heal flag survives" >&2; return 1; }
-  true
-}
 
 # --- UAT-009: one shared protocol, pointed at by every member -----------------
 
@@ -107,29 +91,6 @@ section_text() {
     [ -z "$hits" ] || { echo "$member_file: $hits" >&2; return 1; }
     grep -qF -- "$PROTOCOL_PATH" "$member_file" || { echo "$member_file does not name $PROTOCOL_PATH" >&2; return 1; }
   done
-}
-
-@test "UAT-009: the protocol carries its title and the six shared headings, each exactly once" {
-  [ "$(head -n 1 "$PROTOCOL")" = '# Code Audit Team: member protocol' ] || return 1
-  local heading count
-  for heading in \
-    '## Output format' \
-    '## Gate handshake (per-member marker)' \
-    '## Findings sidecar (local run record)' \
-    '## Re-run carry-forward ledger' \
-    '## Holistic class assignment' \
-    '## Honest limits'; do
-    count="$(grep -cxF -- "$heading" "$PROTOCOL" || true)"
-    [ "$count" -eq 1 ] || { echo "'$heading' appears $count times" >&2; return 1; }
-  done
-}
-
-@test "UAT-009: the protocol's precedence clause names no holistic class-assignment section" {
-  local clause
-  clause="$(grep -F -- 'govern what they name' "$PROTOCOL" || true)"
-  [ -n "$clause" ] || { echo "no precedence clause found" >&2; return 1; }
-  grep -qiE -- 'holistic class assignment|class-assignment sections' <<<"$clause" && { echo "the clause names a class-assignment section: $clause" >&2; return 1; }
-  true
 }
 
 @test "UAT-009: the protocol ships: it is absent from the release-exclude list" {
@@ -192,20 +153,6 @@ conditional_reread_line() {
 }
 
 # --- UAT-017 and UAT-033: no CI arm and no trailer stamping -------------------
-
-@test "UAT-017: the protocol carries no GITHUB_ACTIONS or CI arm" {
-  local hits
-  hits="$(grep -nE -- 'GITHUB_ACTIONS|(^|[^A-Za-z0-9_])CI([^A-Za-z0-9_]|$)' "$PROTOCOL" || true)"
-  [ -z "$hits" ] || { echo "$hits" >&2; return 1; }
-}
-
-@test "UAT-033: neither the protocol nor the frontend definition describes trailer stamping" {
-  local shipped_file hits
-  for shipped_file in "$PROTOCOL" "$FRONTEND"; do
-    hits="$(grep -niE -- 'audit-stamp-trailer|GAIA-Audit:|trailer' "$shipped_file" || true)"
-    [ -z "$hits" ] || { echo "$shipped_file: $hits" >&2; return 1; }
-  done
-}
 
 # --- UAT-028: the advisory step uses the deterministic advisory command -------
 

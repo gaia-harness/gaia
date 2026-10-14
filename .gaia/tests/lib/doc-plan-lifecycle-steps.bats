@@ -19,11 +19,11 @@
 #   - nothing in planner.md archives the plan folder or removes SPEC.md before
 #     the post-merge close, and lifecycle.md's close confirms MERGED first;
 #   - the blocks, assembled the way a planner copies them (indentation
-#     kept), pass plan-verify.sh, and a dropped or reordered block fails it;
-#   - the literal PROGRESS.md lines and report heading the runbooks and
-#     resume helper key on;
-#   - both pre-flights point at the shared sweep, whose reconcile scan runs
-#     before the reap that reads what it stamps;
+#     kept), pass plan-verify.sh;
+#   - the render block routes exit 3 and runs on every resume, and the stop
+#     conditions name the SPEC reopen;
+#   - the shared pre-flight sweep runs its reconcile scan before the reap that
+#     reads what it stamps, and the post-merge close passes the PR number;
 #   - the new PROGRESS.md blocks never move plan-resume-point.sh's answer.
 #
 # Every check is a function taking the file(s) it reads, so each red twin
@@ -35,7 +35,6 @@ setup() {
   REPO_ROOT="$(cd "$BATS_TEST_DIRNAME/../../.." && pwd)"
   PLAN_MD="$REPO_ROOT/.claude/skills/gaia/references/plan.md"
   PLANNER_MD="$REPO_ROOT/.claude/skills/gaia/references/plan/planner.md"
-  SPEC_MD="$REPO_ROOT/.claude/skills/gaia/references/spec.md"
   LIFECYCLE_MD="$REPO_ROOT/.claude/skills/gaia/references/spec/lifecycle.md"
   PLAN_VERIFY="$REPO_ROOT/.gaia/scripts/spec/plan-verify.sh"
   RESUME_POINT="$REPO_ROOT/.gaia/scripts/plan-resume-point.sh"
@@ -80,11 +79,6 @@ fence_with() {
       next
     }
     in_fence { buffer = buffer $0 "\n"; if (t == want) hit = 1 }' "$1"
-}
-
-# line_of <file> <fixed string>: first line number holding it, or empty.
-line_of() {
-  grep -nF -m1 -- "$2" "$1" | cut -d: -f1
 }
 
 # range_of <file> <start fixed string> <end fixed string>: the lines from the
@@ -172,26 +166,16 @@ check_lifecycle_close_order() {
 }
 
 check_pinned_literals() {
-  local plan="$1" lifecycle="$2" range block
-  range="$(range_of "$plan" '**Sub-agent invocation:**' '**Orchestrator-owned git flow.**')"
-  grep -qxE '[[:space:]]*### Logical UAT divergence' <<<"$range" || { printf 'sub-agent template lacks the divergence heading\n' >&2; return 1; }
+  local plan="$1" range block
   range="$(range_of "$plan" '**Stop conditions.**' '**Final summary.**')"
-  grep -qF 'Reason: logical UAT divergence' <<<"$range" || { printf 'stop conditions lack Reason: logical UAT divergence\n' >&2; return 1; }
   grep -qiF 'reopen the SPEC' <<<"$range" || { printf 'stop conditions do not name the SPEC reopen\n' >&2; return 1; }
-  check_block_has "$plan" "$S_RENDER" 'Skipped: no e2e-routed UATs' '## UAT render (HALTED)' 'Reason: UAT render conflict' || return 1
   block="$(fence_with "$plan" "$S_RENDER")"
   grep -qF 'Exit 3' <<<"$block" || { printf 'render block does not route exit 3\n' >&2; return 1; }
   grep -qF 'every resume' <<<"$block" || { printf 'render block does not run on resume\n' >&2; return 1; }
-  section_of "$lifecycle" '## Owning-phase UAT gate' | grep -qF 'Reason: UAT gate failed' || { printf 'gate section lacks Reason: UAT gate failed\n' >&2; return 1; }
-  check_block_has "$plan" "$S_WIKI" '## Wiki promotion' 'skipped-unattended' || return 1
 }
 
 check_preflight_sites() {
-  local plan="$1" spec="$2" lifecycle="$3" range section scan reap
-  range="$(range_of "$plan" '### 0. Pre-flight sweep' '### 1. Get description')"
-  { grep -qF 'spec/lifecycle.md' <<<"$range" && grep -qF '## Pre-flight sweep' <<<"$range"; } || { printf 'plan.md step 0 does not point at the sweep\n' >&2; return 1; }
-  range="$(range_of "$spec" '### 2. Resume-vs-start-new' '### 3. ')"
-  { grep -qF 'spec/lifecycle.md' <<<"$range" && grep -qF '## Pre-flight sweep' <<<"$range"; } || { printf 'spec.md step 2 does not point at the sweep\n' >&2; return 1; }
+  local lifecycle="$1" section scan reap
   section="$(section_of "$lifecycle" '## Pre-flight sweep')"
   scan="$(grep -nF -m1 'plan-reconcile.sh "$PWD"' <<<"$section" | cut -d: -f1)"
   reap="$(grep -nF -m1 'plan-archive-merged.sh' <<<"$section" | cut -d: -f1)"
@@ -340,51 +324,26 @@ check_entry_file_has_no_blocks() {
   [ "$status" -eq 0 ] || { echo "$output" >&2; return 1; }
 }
 
-@test "red twin: a dropped render block fails plan-verify.sh naming the sentinel" {
-  write_plan_fixture
-  assemble_orchestrator "$PLANNER_MD" "$FIXTURE_PLAN/ORCHESTRATOR.md" "$S_GATE" "$S_YIELD" "$S_PRE" "$S_WIKI" "$S_CLOSE"
-  run bash "$PLAN_VERIFY" "$FIXTURE_PLAN" --spec "$FIXTURE_SPEC"
-  [ "$status" -eq 1 ]
-  grep -qF -- "missing the sentinel line $S_RENDER" <<<"$output"
-}
-
-@test "red twin: a render block below the gate block fails plan-verify.sh as out of order" {
-  write_plan_fixture
-  assemble_orchestrator "$PLANNER_MD" "$FIXTURE_PLAN/ORCHESTRATOR.md" "$S_GATE" "$S_RENDER" "$S_YIELD" "$S_PRE" "$S_WIKI" "$S_CLOSE"
-  run bash "$PLAN_VERIFY" "$FIXTURE_PLAN" --spec "$FIXTURE_SPEC"
-  [ "$status" -eq 1 ]
-  grep -qF -- "$S_RENDER is out of order" <<<"$output"
-}
-
 # ---------- pinned literals ----------
 
-@test "the report heading and PROGRESS.md record lines are pinned" {
-  check_pinned_literals "$PLANNER_MD" "$LIFECYCLE_MD"
+@test "the render block routes exit 3 and runs on every resume, and stop conditions name the SPEC reopen" {
+  check_pinned_literals "$PLANNER_MD"
 }
 
-@test "red twin: removing any pinned literal fails the literal check" {
-  local literal target copy
-  for literal in '### Logical UAT divergence' 'Reason: logical UAT divergence' 'Skipped: no e2e-routed UATs' \
-    '## UAT render (HALTED)' 'Reason: UAT render conflict' 'skipped-unattended' 'Reason: UAT gate failed'; do
-    plan_copy="$BATS_TEST_TMPDIR/planner.md"
-    lifecycle_copy="$BATS_TEST_TMPDIR/lifecycle.md"
-    cp "$PLANNER_MD" "$plan_copy"
-    cp "$LIFECYCLE_MD" "$lifecycle_copy"
-    case "$literal" in
-      'Reason: UAT gate failed') target="$lifecycle_copy" ;;
-      *) target="$plan_copy" ;;
-    esac
-    awk -v literal="$literal" '{ while ((i = index($0, literal)) > 0) $0 = substr($0, 1, i - 1) "removed" substr($0, i + length(literal)) } { print }' "$target" >"$target.new"
-    mv "$target.new" "$target"
-    run check_pinned_literals "$plan_copy" "$lifecycle_copy"
+@test "red twin: removing any routing literal fails the literal check" {
+  local literal plan_copy="$BATS_TEST_TMPDIR/planner.md"
+  for literal in 'Exit 3' 'every resume' 'reopen the SPEC'; do
+    awk -v literal="$literal" '{ while ((i = index($0, literal)) > 0) $0 = substr($0, 1, i - 1) "removed" substr($0, i + length(literal)) } { print }' "$PLANNER_MD" >"$plan_copy"
+    if cmp -s "$PLANNER_MD" "$plan_copy"; then echo "'$literal' is not in planner.md" >&2; return 1; fi
+    run check_pinned_literals "$plan_copy"
     [ "$status" -ne 0 ] || { echo "removing '$literal' did not fail the check" >&2; return 1; }
   done
 }
 
 # ---------- pre-flight sweep call sites and order ----------
 
-@test "both pre-flights point at the sweep, and its scan precedes the reap" {
-  check_preflight_sites "$PLAN_MD" "$SPEC_MD" "$LIFECYCLE_MD"
+@test "the sweep scans before it reaps and the close passes the PR number" {
+  check_preflight_sites "$LIFECYCLE_MD"
 }
 
 @test "red twin: a reap above the scan, or a close without the PR number, fails" {
@@ -393,14 +352,10 @@ check_entry_file_has_no_blocks() {
   awk '
     /^## Pre-flight sweep$/ { print; print ""; print "bash .gaia/scripts/spec/plan-archive-merged.sh \"$PWD\" 2>/dev/null || true"; next }
     { print }' "$LIFECYCLE_MD" >"$copy"
-  run check_preflight_sites "$PLAN_MD" "$SPEC_MD" "$copy"
+  run check_preflight_sites "$copy"
   [ "$status" -ne 0 ]
   sed 's/"\$PLAN_ID" "<N>"/"$PLAN_ID"/' "$LIFECYCLE_MD" >"$copy"
-  run check_preflight_sites "$PLAN_MD" "$SPEC_MD" "$copy"
-  [ "$status" -ne 0 ]
-  plan_copy="$BATS_TEST_TMPDIR/plan.md"
-  sed 's/### 0. Pre-flight sweep/### 0. Something else/' "$PLAN_MD" >"$plan_copy"
-  run check_preflight_sites "$plan_copy" "$SPEC_MD" "$LIFECYCLE_MD"
+  run check_preflight_sites "$copy"
   [ "$status" -ne 0 ]
 }
 

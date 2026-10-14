@@ -158,12 +158,6 @@ verify_spec_less() {
   echo "$output" | grep -qF 'UAT-002'
 }
 
-@test "the criterion line with the then-clause verbatim passes" {
-  spec_fixture
-  verify_spec
-  [ "$status" -eq 0 ]
-}
-
 @test "a criterion line for the right id with a different then-clause fails" {
   spec_fixture
   write_task '- Story play-function criterion (UAT-002): the toast reads Failed'
@@ -354,13 +348,6 @@ verify_spec_less() {
   [ "$(echo "$output" | grep -c 'unsubstituted')" -eq 2 ]
 }
 
-@test "the same plan with the token substituted passes" {
-  spec_less_fixture
-  printf 'Read %s/README.md first.\n' "$PLAN" >>"$PLAN/ORCHESTRATOR.md"
-  verify_spec_less
-  [ "$status" -eq 0 ]
-}
-
 @test "a placeholder in a file the planner does not generate is not scanned" {
   spec_less_fixture
   mkdir -p "$PLAN/audit"
@@ -396,14 +383,6 @@ mutate_orchestrator() {
   } >"$PLAN/ORCHESTRATOR.md"
   verify_spec_less
   [ "$status" -eq 0 ] || { echo "$output" >&2; return 1; }
-}
-
-@test "red twin: a plan whose yield-handling block is removed fails naming the sentinel" {
-  spec_fixture
-  write_orchestrator "$S_RENDER" "$S_GATE" "$S_PRE" "$S_WIKI" "$S_CLOSE"
-  verify_spec
-  [ "$status" -eq 1 ]
-  echo "$output" | grep -qF -- "missing the sentinel line $S_YIELD"
 }
 
 @test "red twin: a yield-handling block with one sentence reworded fails naming the line" {

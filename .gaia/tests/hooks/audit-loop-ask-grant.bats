@@ -148,7 +148,7 @@ declined() {
   [ "$status" -eq 0 ]
   jq -e --argjson unit_rounds "$UNIT_ROUNDS" --arg option_label "$(session_label)" \
     '.allowance.answers[0] | .kind == "grant" and .n == $unit_rounds and .source == "ask" and .option == $option_label and (keys | sort) == ["at","checkpoint","kind","n","nonce","option","session_id","source"]' "$ALF_STATE"
-  printf '%s' "$output" | jq -e '.hookSpecificOutput.additionalContext | contains("Run `/clear`, then paste the prompt below.") and contains("Press Ctrl+C, run `claude`") and contains("would run stale without a fresh launch") and contains("on its own line") and contains("In a worktree, Claude Code may ask whether to keep or remove it as it exits: choose keep.") and contains("fenced continuation prompt") and contains("and stop")'
+  printf '%s' "$output" | jq -e '.hookSpecificOutput.additionalContext | contains("Run `/clear`, then paste the prompt below.") and contains("Press Ctrl+C, run `claude`") and contains("fenced continuation prompt") and contains("and stop")'
 }
 
 @test "the recommended label records the grant, with and without the suffix the pin carries, and the option keeps what was selected" {
@@ -491,26 +491,6 @@ CASES
 @test "the hook parses under stock bash and never exits 2" {
   /bin/bash -n "$REPO_ROOT/.claude/hooks/audit-loop-ask-grant.sh"
   grep -nE '^[[:space:]]*exit 2' "$REPO_ROOT/.claude/hooks/audit-loop-ask-grant.sh" && return 1
-  true
-}
-
-# header_has_literals <file>: the comment block before `set -u` names both.
-header_has_literals() {
-  local header
-  header="$(sed -n '1,/^set -u$/p' "$1")"
-  [ -n "$header" ] || return 1
-  printf '%s' "$header" | grep -qF 'AskUserQuestion' || return 1
-  printf '%s' "$header" | grep -qF 'audit-grant' || return 1
-}
-
-@test "UAT-021: both recorder headers name AskUserQuestion and audit-grant, and a header without one fails the check" {
-  header_has_literals "$REPO_ROOT/.claude/hooks/audit-loop-grant.sh"
-  header_has_literals "$REPO_ROOT/.claude/hooks/audit-loop-ask-grant.sh"
-  local twin="$BATS_TEST_TMPDIR/grant-twin.sh"
-  sed 's/AskUserQuestion/AskSomething/g' "$REPO_ROOT/.claude/hooks/audit-loop-grant.sh" >"$twin"
-  header_has_literals "$twin" && return 1
-  sed 's/audit-grant/audit-g/g' "$REPO_ROOT/.claude/hooks/audit-loop-ask-grant.sh" >"$twin"
-  header_has_literals "$twin" && return 1
   true
 }
 

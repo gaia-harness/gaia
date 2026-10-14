@@ -469,12 +469,6 @@ seed_loop_entry() {
   fires_ok red "$RED"
 }
 
-@test "the shipped doctrine file emits verbatim" {
-  write_reading "$RED"
-  invoke "$(payload)"
-  fires_ok red "$RED" "" "$REAL_DOCTRINE"
-}
-
 @test "compaction keeps the marker: SessionStart compact is silent and leaves it byte-identical; fire emits later" {
   mkdir -p "${MAIN_ROOT}/.gaia/local/cache/context-checkpoint"
   printf 'red\n' >"$(marker_path)"

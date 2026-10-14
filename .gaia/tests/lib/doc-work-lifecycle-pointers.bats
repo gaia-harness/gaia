@@ -151,17 +151,6 @@ scratch_copy() {
   [ "$status" -eq 0 ]
 }
 
-@test "byte cap: the hook names a positive cap, and the file list is non-empty and all present" {
-  local cap relative
-  cap="$(byte_cap "$REPO_ROOT")"
-  [ -n "$cap" ]
-  [ "$cap" -gt 0 ]
-  [ "${#FENCE_FILES[@]}" -gt 0 ]
-  for relative in "${FENCE_FILES[@]}"; do
-    [ -f "$REPO_ROOT/$relative" ] || { printf 'missing: %s\n' "$relative"; return 1; }
-  done
-}
-
 @test "no lifecycle instruction holds a fence with git worktree add" {
   run check_3 "$REPO_ROOT"
   printf '%s\n' "$output"

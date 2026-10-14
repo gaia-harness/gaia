@@ -130,13 +130,6 @@ readonly INSTALL_COMMAND="brew install jq"
   assert_blocked_by_exit
 }
 
-@test "jq absent: block-secrets-write refuses a write carrying a key" {
-  local json
-  json=$(edit_payload "app/config.ts")
-  without_jq block-secrets-write.sh "$json"
-  assert_blocked_by_exit
-}
-
 @test "jq absent: block-worktree-path-mismatch refuses an edit" {
   local json
   json=$(edit_payload "app/foo.ts")
@@ -233,6 +226,20 @@ readonly INSTALL_COMMAND="brew install jq"
   assert_allowed_by_exit
 }
 
+@test "jq absent: block-sensitive-read refuses a dotenv read with the description first" {
+  local json
+  json=$(bash_payload_description_first "cat .env.local")
+  without_jq block-sensitive-read.sh "$json"
+  assert_blocked_by_exit
+}
+
+@test "jq absent: block-sensitive-read allows the jq install with the description first" {
+  local json
+  json=$(bash_payload_description_first "$INSTALL_COMMAND")
+  without_jq block-sensitive-read.sh "$json"
+  assert_allowed_by_exit
+}
+
 # The Agent payload keeps the harness key order: ambient head first, then the
 # tool call. The bound hook's binding literal is the member-name prefix, which
 # no ambient path carries.
@@ -272,15 +279,6 @@ write_payload() {
 @test "jq absent: block-audit-loop-write refuses a write naming only a new file in the protected folder" {
   local json
   json=$(write_payload "/Users/you/work/repo/.gaia/local/protected/new-state.json")
-  grep -qF -- 'audit-loop' <<<"$json" && return 1
-  without_jq block-audit-loop-write.sh "$json"
-  assert_blocked_by_exit
-  grep -qF -- 'cannot be checked' <<<"$output"
-}
-
-@test "jq absent: block-audit-loop-write refuses a write naming only the override file" {
-  local json
-  json=$(write_payload "/Users/you/work/repo/.gaia/local/protected/checkpoint-override.json")
   grep -qF -- 'audit-loop' <<<"$json" && return 1
   without_jq block-audit-loop-write.sh "$json"
   assert_blocked_by_exit

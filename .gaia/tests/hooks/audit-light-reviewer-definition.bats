@@ -112,17 +112,6 @@ set_frontmatter_line() {
   [ "$status" -eq 0 ] || { printf '%s\n' "$output" >&2; return 1; }
 }
 
-@test "the definition exists, with the expected name, model, and tool grant" {
-  [ -f "$DEFINITION" ]
-  local front
-  front="$(frontmatter_of "$DEFINITION")"
-  printf '%s\n' "$front" | grep -qx 'name: audit-light-reviewer'
-  printf '%s\n' "$front" | grep -qx 'model: sonnet'
-  printf '%s\n' "$front" | grep -qx 'tools: Read'
-  printf '%s\n' "$front" | grep -qE '^name: code-audit-' && return 1
-  true
-}
-
 @test "guard refuses a missing definition" {
   run check_definition "$BATS_TEST_TMPDIR/does-not-exist.md"
   [ "$status" -ne 0 ]

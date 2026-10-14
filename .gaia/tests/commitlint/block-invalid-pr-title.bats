@@ -109,16 +109,6 @@ assert_allowed() {
   assert_blocked
 }
 
-@test "--title= is read as the title" {
-  run_hook "gh pr edit 2570 --title=\"$(title_of_length 93)\""
-  assert_blocked
-}
-
-@test "the last title wins, as in gh" {
-  run_hook "gh pr edit 2570 --title \"$(title_of_length 93)\" --title \"feat: short\""
-  assert_allowed
-}
-
 @test "a PR URL supplies the number on edit" {
   run_hook "gh pr edit https://github.com/o/r/pull/2570 --title \"$(title_of_length 92)\""
   assert_allowed

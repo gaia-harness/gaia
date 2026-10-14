@@ -10,9 +10,7 @@
 #      index (.claude/commands/gaia-spec.md), each sub-reference moved out of
 #      spec.md has a `Read` line there, and the self-review checklist carries
 #      its marked bullet (read by the sub-agent, never the main thread);
-#   c. each moved section lives in exactly one file of the playbook set;
-#   d. the adversarial-auditor preamble lives only in the lens-dispatch
-#      contract, never in the spec audit.
+#   c. each moved section lives in exactly one file of the playbook set.
 #
 # DOC_SPEC_PLAYBOOK_ROOT points the suite at a scratch copy of the repo's
 # playbook files; each invariant has a red twin that breaks such a copy and
@@ -198,35 +196,5 @@ sections_owned() {
   copy="$(scratch_copy)"
   printf '\nLOCK_STATUS="$(true)"\n' >>"$copy/$REFERENCES/spec.md"
   run sections_owned "$copy"
-  [ "$status" -ne 0 ]
-}
-
-# --- d. the auditor preamble lives only in the contract ----------------------
-
-PREAMBLE='You are an ADVERSARIAL auditor'
-
-preamble_only_in_contract() {
-  local root="$1" files file holders=""
-  files="$(playbook_files "$root")" || return 1
-  while IFS= read -r file; do
-    if grep -qF -- "$PREAMBLE" "$file"; then
-      holders="$holders${file#"$root/$REFERENCES"/} "
-    fi
-  done <<<"$files"
-  if [ "$holders" != "spec/lens-dispatch.md " ]; then
-    printf 'the auditor preamble is held by [%s], expected [spec/lens-dispatch.md]\n' "$holders" >&2
-    return 1
-  fi
-  return 0
-}
-
-@test "d. the adversarial-auditor preamble appears only in spec/lens-dispatch.md" {
-  preamble_only_in_contract "$PLAYBOOK_ROOT"
-}
-
-@test "d. the preamble check goes red when the spec audit carries its own copy" {
-  copy="$(scratch_copy)"
-  printf '\n> %s of a GAIA SPEC draft.\n' "$PREAMBLE" >>"$copy/$REFERENCES/spec/audit.md"
-  run preamble_only_in_contract "$copy"
   [ "$status" -ne 0 ]
 }

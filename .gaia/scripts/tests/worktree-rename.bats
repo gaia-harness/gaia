@@ -181,12 +181,6 @@ run_hook() {
   [ "$status" -ne 0 ]
 }
 
-@test "twin: the stub itself resolves for the canonical head, so its refusal above is the branch name" {
-  apply_reference_rename
-  run pr_lookup
-  [ "$status" -eq 0 ]
-}
-
 # --- 5. post-merge cleanup ---
 
 @test "git worktree remove leaves the renamed branch; show-ref then branch -D removes it" {
@@ -202,20 +196,6 @@ run_hook() {
   [ "$status" -ne 0 ]
   run git -C "$MAIN" branch --list plan/plan-1-x
   [ -z "$output" ]
-}
-
-@test "twin: skipping the delete leaves the branch behind" {
-  apply_reference_rename
-  git -C "$MAIN" worktree remove --force "$WORKTREE"
-  run git -C "$MAIN" show-ref --verify --quiet refs/heads/plan/plan-1-x
-  [ "$status" -eq 0 ]
-}
-
-@test "twin: show-ref exits non-zero once the branch is gone, so the delete is skipped" {
-  git -C "$MAIN" worktree remove --force "$WORKTREE"
-  git -C "$MAIN" branch -D 'worktree-plan+plan-1-x'
-  run git -C "$MAIN" show-ref --verify --quiet refs/heads/plan/plan-1-x
-  [ "$status" -ne 0 ]
 }
 
 # --- 6. resume lookup input ---
@@ -253,6 +233,5 @@ run_hook() {
 @test "twin: the same guard denies a commit on main in this scratch repo" {
   run_hook "$MAIN" "git -C $MAIN commit -m 'chore: x'"
   [ "$status" -eq 0 ]
-  printf '%s' "$output" | grep -qF '"permissionDecision":"deny"' || printf '%s' "$output" | grep -qF 'deny' || return 1
-  true
+  printf '%s' "$output" | jq -e '.hookSpecificOutput.permissionDecision == "deny"' >/dev/null
 }

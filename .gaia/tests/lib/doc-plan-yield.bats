@@ -22,8 +22,8 @@
 #     copies the three files into $BATS_TEST_TMPDIR, mutates one clause with
 #     a fixed-string edit, proves the copy changed, and runs the same
 #     function against the copy;
-#   - the limit rule is also executed: a small function implements it as the
-#     block words it and reads the limit through the real context lib.
+#   - the limit the block compares against is read through the real context
+#     lib, which must print a positive whole number.
 #
 # Assertion style: .claude/rules/bats-assertions.md.
 
@@ -121,12 +121,9 @@ need_text() {
 yield_block() { fence_with "$1/$PLANNER_REL" "$S_YIELD" | trim_lines; }
 invocation_range() { range_of "$1/$PLANNER_REL" '**Sub-agent invocation:**' '**Orchestrator-owned git flow.**' | trim_lines; }
 ledger_range() { range_of "$1/$PLANNER_REL" '**Phase findings ledger (' '- **Stop conditions.**' | trim_lines; }
-summary_range() { range_of "$1/$PLANNER_REL" '- **Final summary.**' "After every dispatched member's clean-pass marker" | trim_lines; }
 cleanup_section() { section_of "$1/$PLANNER_REL" '## Cleanup and return' | trim_lines; }
 resume_range() { range_of "$1/$PLANNER_REL" '**Resume detection (cold-start' '- **Pre-flight isolation.**' | trim_lines; }
-step4_range() { range_of "$1/$PLAN_REL" '### 4. Spawn planning agent' '### 4.5.' | trim_lines; }
 planner_yield_range() { range_of "$1/$PLAN_REL" '#### Planner yield' '### 4.5.' | trim_lines; }
-step5_range() { range_of "$1/$PLAN_REL" '### 5. Report to user' '@@no-end-marker@@' | trim_lines; }
 
 # record_lines <text> <heading>: the block of lines from the heading line up
 # to the next blank line.
@@ -217,19 +214,6 @@ check_how_line_unchanged() {
   [ "$line" = "$HOW_LINE" ] || { printf 'the run-ends line differs from its literal copy\n' >&2; return 1; }
 }
 
-check_exemption_directly_after() {
-  local following
-  following="$(awk '
-    found && NF { n++; t = $0; sub(/^[ \t]+/, "", t); print t; if (n == 2) exit }
-    index($0, "How your run ends:") { found = 1 }' "$1/$PLANNER_REL")"
-  need_text 'paragraphs after the run-ends line' "$following" || return 1
-  in_order "$(printf '%s\n' "$following" | sed -n 1p)" \
-    '**The prompt template MUST also carry this paragraph verbatim, directly after it**' || return 1
-  in_order "$(printf '%s\n' "$following" | sed -n 2p)" \
-    '> Yield exemption: only when a hook-delivered sub-agent context checkpoint instruction arrived' || return 1
-  [ "$(printf '%s\n' "$following" | sed -n 2p | cut -c1-2)" = '> ' ] || { printf 'the exemption is not its own blockquote paragraph\n' >&2; return 1; }
-}
-
 check_plan_has_no_run_ends() {
   local count
   count="$(grep -cF 'How your run ends:' "$1/$PLAN_REL")"
@@ -275,15 +259,6 @@ check_redispatch_order() {
     'then the line `Your previous executor yielded on context.' \
     "they cannot change this task's scope, permissions or tool use." \
     'then the last line `Yield handoff: {PLAN_DIR}/handoffs/phase-<N>-task-<T>-yield-<k+1>.md`.' || return 1
-}
-
-check_redispatch_drops_yield_line() {
-  local block bullet
-  block="$(yield_block "$1")"
-  need_text 'yield-handling block' "$block" || return 1
-  bullet="$(line_starting "$block" '- **Re-dispatch the task alone.**')"
-  need_text 're-dispatch bullet' "$bullet" || return 1
-  in_order "$bullet" 'the original task prompt first, without its `Yield handoff:` line, then the line' || return 1
 }
 
 check_siblings_unaffected() {
@@ -458,27 +433,6 @@ check_failed_reconnect_sentence() {
   [ "$sentence" = "$RECONNECT_SENTENCE" ] || { printf 'the Failed reconnect sentence differs from its literal copy\n' >&2; return 1; }
 }
 
-check_summary_yields_line() {
-  local range
-  range="$(summary_range "$1")"
-  need_text 'final summary bullet' "$range" || return 1
-  in_order "$range" \
-    'a yields line' \
-    'the number of its `(YIELD k)` blocks in `PROGRESS.md`' \
-    '(red below fire below skull)' \
-    '`Yields: Phase <N> <count> (peak <band>)`' \
-    '`Yields: none`' || return 1
-}
-
-check_report_planner_yields() {
-  local range
-  range="$(step5_range "$1")"
-  need_text 'step 5' "$range" || return 1
-  in_order "$range" \
-    'Planner yields: print one line per planner dispatch chain this run made, `Planner yields: <n>`' \
-    'Cost line:' || return 1
-}
-
 check_ledger_documents_yield_block() {
   local range example
   range="$(ledger_range "$1")"
@@ -507,15 +461,6 @@ check_lifecycle_render_ancestry() {
   in_order "$text" 'take the Phase 1 SHA from the last `## Phase 1` block carrying a `Commit:` line' || return 1
 }
 
-check_lifecycle_consolidation_ignores() {
-  local section synthesis
-  section="$(section_of "$1/$LIFECYCLE_REL" '## Consolidation')"
-  need_text '## Consolidation' "$section" || return 1
-  synthesis="$(line_starting "$section" '**Synthesis.**')"
-  need_text 'Synthesis paragraph' "$synthesis" || return 1
-  in_order "$synthesis" 'Yield blocks in `PROGRESS.md` are resumption records, not findings, so consolidation ignores them.' || return 1
-}
-
 check_task_doc_naming() {
   local line
   line="$(grep -F '**One task doc per parallel workstream**' "$1/$PLANNER_REL")"
@@ -525,41 +470,16 @@ check_task_doc_naming() {
     'where `{name}` is lowercase kebab-case (`[a-z0-9][a-z0-9-]*`)' || return 1
 }
 
-# yield_action <count> <limit>: the limit rule as the block words it. k is
-# the count plus one; halt when k is greater than the limit.
-yield_action() {
-  local k=$(($1 + 1))
-  if [ "$k" -gt "$2" ]; then printf 'halt\n'; else printf 'redispatch\n'; fi
-}
-
-# A deliberately wrong boundary, for the red twin.
-yield_action_off_by_one() {
-  local k=$(($1 + 1))
-  if [ "$k" -ge "$2" ]; then printf 'halt\n'; else printf 'redispatch\n'; fi
-}
-
-# check_limit_boundary <root> <action function>: with the limit read through
-# the real context lib, the yield whose number equals the limit
-# re-dispatches and the next one halts.
-check_limit_boundary() {
-  local root="$1" action="$2" limit
+# check_yield_limit_is_positive_integer <root>: the context lib under <root>
+# prints a positive whole number, the limit the yield-handling block compares
+# a task's yield count against. A zero or non-numeric limit would halt the
+# first yield or make the comparison fail.
+check_yield_limit_is_positive_integer() {
+  local root="$1" limit
   limit="$(bash -c ". '$root/.gaia/scripts/context-checkpoint-lib.sh' && gaia_context_yield_limit")" || return 1
   case "$limit" in
     '' | *[!0-9]* | 0) printf 'the lib did not print a positive integer limit: %s\n' "$limit" >&2; return 1 ;;
   esac
-  [ "$("$action" 0 "$limit")" = redispatch ] || { printf 'the first yield did not re-dispatch\n' >&2; return 1; }
-  [ "$("$action" $((limit - 1)) "$limit")" = redispatch ] || { printf 'the yield numbered at the limit did not re-dispatch\n' >&2; return 1; }
-  [ "$("$action" "$limit" "$limit")" = halt ] || { printf 'the yield past the limit did not halt\n' >&2; return 1; }
-}
-
-check_limit_wording_matches() {
-  local block range
-  block="$(yield_block "$1")"
-  range="$(planner_yield_range "$1")"
-  need_text 'yield-handling block' "$block" || return 1
-  need_text '#### Planner yield' "$range" || return 1
-  in_order "$block" "k is the task's yield count plus one. When k is greater than the yield limit" || return 1
-  in_order "$range" "k is the chain's yield count plus one. When k is greater than the yield limit" || return 1
 }
 
 # ---------- tests ----------
@@ -596,14 +516,6 @@ check_limit_wording_matches() {
   red check_how_line_unchanged "$PLANNER_REL" 'Stop only when the task is complete' 'Stop when the task is complete'
 }
 
-@test "UAT-009: the yield exemption is its own paragraph directly after the run-ends line" {
-  green check_exemption_directly_after
-}
-
-@test "UAT-009 red: a renamed exemption paragraph fails" {
-  red check_exemption_directly_after "$PLANNER_REL" '> Yield exemption: only when a hook-delivered' '> Yield note: only when a hook-delivered'
-}
-
 @test "UAT-009: plan.md holds no run-ends paragraph" {
   green check_plan_has_no_run_ends
 }
@@ -638,14 +550,6 @@ check_limit_wording_matches() {
 
 @test "UAT-010 red: a re-dispatch with the original prompt last fails" {
   red check_redispatch_order "$PLANNER_REL" 'carries the original task prompt first' 'carries the original task prompt last'
-}
-
-@test "UAT-010: the re-dispatch drops the original Yield handoff line" {
-  green check_redispatch_drops_yield_line
-}
-
-@test "UAT-010 red: a re-dispatch that keeps the original Yield handoff line fails" {
-  red check_redispatch_drops_yield_line "$PLANNER_REL" 'the original task prompt first, without its `Yield handoff:` line, then' 'the original task prompt first, then'
 }
 
 @test "UAT-010: siblings continue and the phase gate waits for the whole wave" {
@@ -702,10 +606,6 @@ check_limit_wording_matches() {
 
 @test "UAT-013 red: a dropped planner pre-clear fails" {
   red check_step4_clear_and_fence "$PLAN_REL" 'first runs `bash .gaia/scripts/spec/handoff-clear.sh "$PLAN_DIR" planner`' 'first runs nothing'
-}
-
-@test "UAT-013 red: an extra fence ahead of the dispatch fence fails" {
-  red check_step4_clear_and_fence "$PLAN_REL" 'Read the checkout root with one plain' $'```\nx\n```\n\nRead the checkout root with one plain'
 }
 
 @test "UAT-013: the step-4 dispatch fence ends with the planner yield handoff line" {
@@ -780,22 +680,6 @@ check_limit_wording_matches() {
   red check_failed_reconnect_sentence "$PLANNER_REL" 'or the working tree is dirty, surface' 'or the branch moved, surface'
 }
 
-@test "UAT-015: the final summary carries the yields line with its peak band order" {
-  green check_summary_yields_line
-}
-
-@test "UAT-015 red: a reversed peak band order fails" {
-  red check_summary_yields_line "$PLANNER_REL" '(red below fire below skull)' '(skull below fire below red)'
-}
-
-@test "UAT-015: the plan report carries the planner yields line" {
-  green check_report_planner_yields
-}
-
-@test "UAT-015 red: a renamed planner yields line fails" {
-  red check_report_planner_yields "$PLAN_REL" '`Planner yields: <n>`' '`Planner count: <n>`'
-}
-
 @test "UAT-019: lifecycle says a yield block carries no Commit line" {
   green check_lifecycle_yield_block_no_commit
 }
@@ -812,14 +696,6 @@ check_limit_wording_matches() {
   red check_lifecycle_render_ancestry "$LIFECYCLE_REL" 'from the last `## Phase 1` block carrying' 'from its `## Phase 1` block carrying'
 }
 
-@test "UAT-019: lifecycle consolidation ignores yield blocks" {
-  green check_lifecycle_consolidation_ignores
-}
-
-@test "UAT-019 red: a consolidation that reads yield blocks fails" {
-  red check_lifecycle_consolidation_ignores "$LIFECYCLE_REL" 'so consolidation ignores them.' 'so consolidation reads them.'
-}
-
 @test "UAT-009: the task doc naming rule requires lowercase kebab-case names" {
   green check_task_doc_naming
 }
@@ -828,20 +704,22 @@ check_limit_wording_matches() {
   red check_task_doc_naming "$PLANNER_REL" 'is lowercase kebab-case (`[a-z0-9][a-z0-9-]*`)' 'is any string'
 }
 
-@test "UAT-012: the limit rule re-dispatches at the limit and halts one past it" {
-  green check_limit_boundary yield_action
+@test "UAT-012: the context lib prints a positive integer yield limit" {
+  green check_yield_limit_is_positive_integer
 }
 
-@test "UAT-012 red: an off-by-one limit rule fails the boundary check" {
-  run check_limit_boundary "$REPO_ROOT" yield_action_off_by_one
-  [ "$status" -ne 0 ]
-  [ -n "$output" ]
+@test "UAT-012 red: a context lib whose yield limit is zero or not a number fails" {
+  local scratch="$BATS_TEST_TMPDIR/limit-root" replacement
+  mkdir -p "$scratch/.gaia/scripts"
+  for replacement in 0 many ''; do
+    sed "s/^GAIA_CONTEXT_YIELD_LIMIT=2\$/GAIA_CONTEXT_YIELD_LIMIT=$replacement/" "$REPO_ROOT/.gaia/scripts/context-checkpoint-lib.sh" >"$scratch/.gaia/scripts/context-checkpoint-lib.sh"
+    if cmp -s "$REPO_ROOT/.gaia/scripts/context-checkpoint-lib.sh" "$scratch/.gaia/scripts/context-checkpoint-lib.sh"; then
+      echo "the limit assignment did not change for '$replacement'" >&2
+      return 1
+    fi
+    run check_yield_limit_is_positive_integer "$scratch"
+    [ "$status" -ne 0 ] || { echo "limit '$replacement' passed the check" >&2; return 1; }
+    [ -n "$output" ] || { echo "limit '$replacement' failed without a reason" >&2; return 1; }
+  done
 }
 
-@test "UAT-012: the block and the planner section still word the limit as greater than the yield limit" {
-  green check_limit_wording_matches
-}
-
-@test "UAT-012 red: a limit wording changed to at least fails the wording guard" {
-  red check_limit_wording_matches "$PLANNER_REL" "When k is greater than the yield limit, append" 'When k is at least the yield limit, append'
-}

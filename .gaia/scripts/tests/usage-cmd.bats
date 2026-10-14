@@ -82,6 +82,8 @@ seed_links() {
   printf '%s\n' '{"schema_version":1,"kind":"segment","key":"branch:plan/spec-005-x","session_id":"s","inherit":false,"first_ts":"2026-10-01T00:00:00Z","last_ts":"2026-10-01T00:00:00Z","messages":1,"by_model":{}}' >"$TELEMETRY_DIRECTORY/usage.jsonl"
   run run_usage link spec:SPEC-005 branch:plan/spec-005-x
   [ "$status" -eq 1 ]
+  grep -qF '  cycle: ' <<<"$output"
+  grep -qF 'spec:SPEC-005 -> branch:plan/spec-005-x' <<<"$output"
   [ ! -e "$TELEMETRY_DIRECTORY/links.jsonl" ]
 }
 
@@ -202,7 +204,7 @@ cursors() {
 
 # ---------- UAT-013 jq absent ----------
 
-@test "UAT-013: with jq absent every subcommand prints the inactive line, exits 0, and creates no telemetry" {
+@test "UAT-013: with jq absent link, unlink, lineage, declare, pr, pr-branch, initiative and reconcile print the inactive line, exit 0, and create no telemetry" {
   local bin="$TEMPORARY_DIRECTORY/nojq" tool_name subcommand_line
   mkdir -p "$bin"
   for tool_name in dirname date git cat mkdir mktemp rm sed awk tr head find xargs stat shasum sha256sum; do
@@ -214,7 +216,6 @@ cursors() {
     "link branch:fix/foo research:x" "unlink branch:fix/foo research:x" "lineage $TEMPORARY_DIRECTORY/none.md"
     "declare research:x --session s1" "pr 1" "pr-branch 1" "initiative research:x" "reconcile"
   )
-  [ "${#subcommand_lines[@]}" -eq 8 ]
   for subcommand_line in "${subcommand_lines[@]}"; do
     # shellcheck disable=SC2086
     run env PATH="$bin" "$BASH" "$USAGE" $subcommand_line --main-root "$MAIN" --projects-root "$PROJECTS_DIRECTORY"
@@ -232,6 +233,7 @@ cursors() {
   grep -qF 'usage: bash .gaia/scripts/usage.sh <subcommand>' <<<"$output"
   run bash "$USAGE" --help
   [ "$status" -eq 0 ]
+  grep -qF 'usage: bash .gaia/scripts/usage.sh <subcommand>' <<<"$output"
   run bash "$USAGE" frobnicate
   [ "$status" -eq 2 ]
 }

@@ -15,7 +15,7 @@
 # setup marked complete, HOME pointing at an empty dir (left resolves to the
 # "Claude Code" fallback, 11 columns), and a cache that arms every right-side
 # nudge at once, at the widths the issue table names: update-gaia 9.9.9,
-# serena missing go+rust (2 languages), 28 outdated deps, an audit reason,
+# serena missing go+rust (2 languages), 28 outdated deps, a cleanse reason,
 # a codify reason with 6 candidates, 1 open debt issue, 15 aged residuals.
 
 setup() {
@@ -122,7 +122,7 @@ render_at() {
   esac
 }
 
-@test "audit has no Medium: it goes straight to its bare command" {
+@test "cleanse has no Medium: it goes straight to its bare command" {
   render_at 219
   [ "$status" -eq 0 ]
   expected="Claude Code  Run /update-gaia (GAIA 9.9.9 available)  Run /gaia-serena-sync (Serena missing: go, rust)  Run /update-deps (28 outdated)  Run /gaia-cleanse  Run /gaia-codify (6)  Run /gaia-debt (1)  Run /gaia-residue (15)"

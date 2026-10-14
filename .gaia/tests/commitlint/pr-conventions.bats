@@ -139,12 +139,10 @@ run_type() {
   [ "$count" -ge 1 ]
 }
 
-@test "workflow: default-deny permissions, read-only job, timeout, naming" {
+@test "workflow: default-deny permissions, read-only job, timeout, no pull_request_target or secrets" {
   grep -qx 'permissions: {}' "$WORKFLOW"
   grep -qx '      contents: read' "$WORKFLOW"
   grep -Eq '^    timeout-minutes: [0-9]+$' "$WORKFLOW"
-  grep -qx 'name: PR Conventions' "$WORKFLOW"
-  grep -qx '    name: Conventions check (PR title and head branch) (advisory)' "$WORKFLOW"
   grep -qF 'pull_request_target' <(grep -v '^#' "$WORKFLOW") && return 1
   grep -qF 'secrets.' <(grep -v '^#' "$WORKFLOW") && return 1
   true

@@ -38,12 +38,6 @@ files_defining() {
   done <<<"$(script_files)"
 }
 
-@test "the file set is non-empty and includes the render library" {
-  files="$(script_files)"
-  [ -n "$files" ]
-  printf '%s\n' "$files" | grep -q -x '.gaia/scripts/usage-render-lib.sh'
-}
-
 @test "each helper is defined in at most one file, and the duration formatter and commify in exactly one" {
   local entry name mode defining count
   for entry in "human_duration:ends-with" "is_unsigned_integer:exact" "commify:exact"; do

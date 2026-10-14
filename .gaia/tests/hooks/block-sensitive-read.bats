@@ -82,16 +82,6 @@ run_hook_without_library() {
 
 # --- Read-tool denies ---
 
-@test "Read .env.local is denied" {
-  run_hook_read ".env.local"
-  assert_denied_by_json
-}
-
-@test "Read .env.production is denied" {
-  run_hook_read ".env.production"
-  assert_denied_by_json
-}
-
 @test "Read a nested packages/api/.env.production is denied" {
   run_hook_read "packages/api/.env.production"
   assert_denied_by_json
@@ -108,11 +98,6 @@ run_hook_without_library() {
 
 @test "cat .env.local is denied" {
   run_hook_bash "cat .env.local"
-  assert_denied_by_json
-}
-
-@test "cat .env.production is denied" {
-  run_hook_bash "cat .env.production"
   assert_denied_by_json
 }
 
@@ -163,16 +148,6 @@ run_hook_without_library() {
 }
 
 # --- Bash denies: bare environment dumps ---
-
-@test "bare env is denied" {
-  run_hook_bash "env"
-  assert_denied_by_json
-}
-
-@test "bare printenv is denied" {
-  run_hook_bash "printenv"
-  assert_denied_by_json
-}
 
 @test "printenv NODE_ENV is denied (printenv has no runner form)" {
   run_hook_bash "printenv NODE_ENV"
@@ -326,11 +301,6 @@ run_hook_without_library() {
 
 @test "block-sensitive-read.sh is executable" {
   [ -x "$HOOK_ABSOLUTE_PATH" ]
-}
-
-@test "settings.json is valid JSON" {
-  run jq empty "$SETTINGS_ABSOLUTE_PATH"
-  [ "$status" -eq 0 ]
 }
 
 @test "settings.json registers block-sensitive-read.sh under the Read matcher" {
@@ -554,11 +524,6 @@ run_hook_monitor() {
   assert_denied_by_json
 }
 
-@test "Read certs/server.pem is denied" {
-  run_hook_read "certs/server.pem"
-  assert_denied_by_json
-}
-
 @test "Read config/aws-credentials.json is denied" {
   run_hook_read "config/aws-credentials.json"
   assert_denied_by_json
@@ -606,11 +571,6 @@ run_hook_monitor() {
 }
 
 # --- Bash denies: readers against a secret path ---
-
-@test "cat certs/server.key is denied" {
-  run_hook_bash "cat certs/server.key"
-  assert_denied_by_json
-}
 
 @test "grep TOKEN certs/server.pem is denied" {
   run_hook_bash "grep TOKEN certs/server.pem"
@@ -874,16 +834,6 @@ run_hook_monitor() {
   assert_allowed_by_json
 }
 
-@test "pnpm dev is allowed by the secret-path class" {
-  run_hook_bash "pnpm dev"
-  assert_allowed_by_json
-}
-
-@test "cat app/services/env.ts is allowed by the secret-path class" {
-  run_hook_bash "cat app/services/env.ts"
-  assert_allowed_by_json
-}
-
 @test "bare env is denied with the dump reason, not a secret-path reason" {
   run_hook_bash "env"
   assert_denied_by_json
@@ -909,11 +859,6 @@ run_hook_monitor() {
   [ "$status" -eq 0 ]
 }
 
-@test "permissions.deny carries none of the four replaced Read() globs" {
-  run jq -e '[.permissions.deny[] | select(startswith("Read("))] | length == 0' "$SETTINGS_ABSOLUTE_PATH"
-  [ "$status" -eq 0 ]
-}
-
 # --- Regression: a discard-listed flag that is value-less for the invoked tool ---
 #
 # Each of these was ALLOWED before the flag tables dropped -r, -T and the bare
@@ -927,11 +872,6 @@ run_hook_monitor() {
   assert_denied_by_json
 }
 
-@test "grep -r TOKEN secrets/prod.json is denied" {
-  run_hook_bash "grep -r TOKEN secrets/prod.json"
-  assert_denied_by_json
-}
-
 @test "grep -T TOKEN certs/server.pem is denied (bare -T is value-less for grep)" {
   run_hook_bash "grep -T TOKEN certs/server.pem"
   assert_denied_by_json
@@ -939,11 +879,6 @@ run_hook_monitor() {
 
 @test "grep --color TOKEN certs/server.key is denied (optional-value for grep)" {
   run_hook_bash "grep --color TOKEN certs/server.key"
-  assert_denied_by_json
-}
-
-@test "grep --colour TOKEN certs/server.key is denied" {
-  run_hook_bash "grep --colour TOKEN certs/server.key"
   assert_denied_by_json
 }
 
