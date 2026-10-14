@@ -28,7 +28,7 @@ AUDIT_MACHINERY_PATHS="$(cat <<'EOF'
 # re-run ledger is written and read under.
 # Both sit squarely inside the generating rule above; without them a change
 # to the file that selects the gate's own root rotates only the shell
-# member's digest and leaves the other members' markers standing.
+# member's digest and leaves the markers of the other members standing.
 .gaia/scripts/main-root-lib.sh
 .gaia/scripts/audit-key-lib.sh
 .gaia/scripts/audit-member-digest.sh
