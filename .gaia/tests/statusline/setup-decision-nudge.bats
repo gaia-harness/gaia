@@ -2,7 +2,7 @@
 
 # The statusline's post-completion setup nudge: once setup is complete, a
 # machine-scope setup choice the shipped list holds and this machine has not
-# decided arms a `Run /setup-gaia (<N> setup choice[s] pending)` segment at the
+# decided arms a `Run /setup-gaia (<N> choice[s] pending)` segment at the
 # highest priority. Project-scope ids never arm it, the incomplete-setup
 # `Run /setup-gaia (Required)` segment is untouched, and a linked worktree
 # stays dark because the nudge is a main-checkout task like the rest.
@@ -94,12 +94,12 @@ render() {
 @test "two pending machine choices nudge, and recording them clears the nudge one by one" {
   render "$MAIN"
   [ "$status" -eq 0 ]
-  grep -qF -- "Run /setup-gaia (2 setup choices pending)" <<<"$output"
+  grep -qF -- "Run /setup-gaia (2 choices pending)" <<<"$output"
 
   record_decision alpha applied
   render "$MAIN"
   [ "$status" -eq 0 ]
-  grep -qF -- "Run /setup-gaia (1 setup choice pending)" <<<"$output"
+  grep -qF -- "Run /setup-gaia (1 choice pending)" <<<"$output"
 
   record_decision beta applied
   render "$MAIN"
@@ -110,11 +110,11 @@ render() {
 
 @test "declined and not-applicable clear the nudge exactly as applied does" {
   render "$MAIN"
-  grep -qF -- "(2 setup choices pending)" <<<"$output"
+  grep -qF -- "(2 choices pending)" <<<"$output"
 
   record_decision alpha declined
   render "$MAIN"
-  grep -qF -- "(1 setup choice pending)" <<<"$output"
+  grep -qF -- "(1 choice pending)" <<<"$output"
 
   record_decision beta not-applicable
   render "$MAIN"
@@ -139,7 +139,7 @@ render() {
   arm_other_nudges
   render "$MAIN"
   [ "$status" -eq 0 ]
-  grep -qE -- "Run /setup-gaia \(2 setup choices pending\) +Run /update-gaia .* +Run /update-deps .* +Run /gaia-debt " <<<"$output"
+  grep -qE -- "Run /setup-gaia \(2 choices pending\) +Run /update-gaia .* +Run /update-deps .* +Run /gaia-debt " <<<"$output"
 }
 
 @test "the setup nudge is the last to shrink and has its own Medium and icon forms" {
@@ -180,7 +180,7 @@ render() {
   grep -qF -- "Run /update-gaia (GAIA 9.9.9 available)" <<<"$output"
   grep -qF -- "Run /update-deps (3 outdated)" <<<"$output"
   grep -qF -- "Run /gaia-debt (5 issues)" <<<"$output"
-  [ "${output//[[:space:]]/}" = "$(sed -E 's/Run \/setup-gaia \(2 setup choices pending\)//' <<<"$with_list" | tr -d '[:space:]')" ]
+  [ "${output//[[:space:]]/}" = "$(sed -E 's/Run \/setup-gaia \(2 choices pending\)//' <<<"$with_list" | tr -d '[:space:]')" ]
 }
 
 @test "a malformed list renders no setup slot, no Required segment, and exits 0" {
@@ -230,12 +230,12 @@ render() {
 
   # Positive control: the same fixture renders the slot once jq is on PATH.
   render "$MAIN"
-  grep -qF -- "Run /setup-gaia (2 setup choices pending)" <<<"$output"
+  grep -qF -- "Run /setup-gaia (2 choices pending)" <<<"$output"
 }
 
 @test "a linked worktree shows no setup choice nudge, the main checkout does" {
   render "$MAIN"
-  grep -qF -- "Run /setup-gaia (2 setup choices pending)" <<<"$output"
+  grep -qF -- "Run /setup-gaia (2 choices pending)" <<<"$output"
 
   render "$WORKTREE"
   [ "$status" -eq 0 ]

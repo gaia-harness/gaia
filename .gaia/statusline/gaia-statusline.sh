@@ -352,7 +352,7 @@ else
     if [ "$setup_pending_count" -gt 0 ] 2>/dev/null; then
       setup_noun="choices"
       [ "$setup_pending_count" -eq 1 ] && setup_noun="choice"
-      printf -v full 'Run /setup-gaia (%d setup %s pending)' "$setup_pending_count" "$setup_noun"
+      printf -v full 'Run /setup-gaia (%d %s pending)' "$setup_pending_count" "$setup_noun"
       nudge_set 0 '01;95' 'Run /setup-gaia' "$full" "$setup_pending_count" '🔧'
     fi
     if [ -f "$CACHE_FILE" ] && command -v jq >/dev/null 2>&1; then
