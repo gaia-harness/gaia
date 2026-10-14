@@ -304,6 +304,7 @@ describe('claudemd.imports-resolve and claudemd.dead-path', () => {
       {
         files: {
           'CLAUDE.md': 'See `docs/missing.md`.\n```\n`docs/fenced.md`\n```\n',
+          'docs/index.md': '# Docs\n',
         },
         git: true,
       },

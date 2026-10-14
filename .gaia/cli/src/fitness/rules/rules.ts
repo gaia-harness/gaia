@@ -105,7 +105,7 @@ export const RULES_RULES: readonly RuleDefinition[] = [
     category: 'rules',
     check: deadPathCheck,
     detection:
-      'A backticked or linked repo-relative path in a rule file does not exist.',
+      'A linked path, or a backticked path whose first folder exists, in a rule file does not exist; a rule path also resolves against its paths: scope.',
     ruleId: 'rules.dead-path',
     severity: 'warning',
   },

@@ -28098,6 +28098,7 @@ var MARKDOWN_LINK = /\]\(<?([^)\s>]+)/g;
 var BACKTICK_SPAN = /`([^`\n]+)`/g;
 var URL_SCHEME = /^[A-Za-z][A-Za-z0-9+.-]*:/;
 var NOT_A_PATH = /[\s<>{}*?$|;&"'()\\]/;
+var OWNING_SKILL = /\bthe ([\w-]+) skill's\s*$/i;
 var isRelativePathToken = (token) => token !== "" && !token.startsWith("/") && !token.startsWith("~") && !token.startsWith("#") && !URL_SCHEME.test(token) && !NOT_A_PATH.test(token);
 var withoutFragment = (token) => {
   const cut = token.search(/[#?]/);
@@ -28107,7 +28108,7 @@ var extractLinks = (text) => {
   const found = [];
   const lines = stripFencedCode(text).split("\n");
   for (const [index, line] of lines.entries()) {
-    for (const match of line.matchAll(MARKDOWN_LINK)) {
+    for (const match of stripInlineCode(line).matchAll(MARKDOWN_LINK)) {
       const target = withoutFragment(match[1] ?? "");
       if (isRelativePathToken(target)) {
         found.push({ kind: "markdown", line: index + 1, target });
@@ -28116,7 +28117,13 @@ var extractLinks = (text) => {
     for (const match of line.matchAll(BACKTICK_SPAN)) {
       const target = withoutFragment((match[1] ?? "").trim());
       if (isRelativePathToken(target)) {
-        found.push({ kind: "backtick", line: index + 1, target });
+        const skill = OWNING_SKILL.exec(line.slice(0, match.index))?.[1];
+        found.push({
+          kind: "backtick",
+          line: index + 1,
+          ...skill === void 0 ? {} : { skill },
+          target
+        });
       }
     }
   }
@@ -28126,6 +28133,12 @@ var SKILL_DIRECTORY = /^((?:.*\/)?\.claude\/skills\/[^/]+)\//;
 var skillDirectoryOf = (relative) => SKILL_DIRECTORY.exec(relative)?.[1];
 var linkAttempts = (fromFile, reference) => {
   const skillDirectory = skillDirectoryOf(fromFile);
+  if (reference.skill !== void 0) {
+    const skillsFolder = skillDirectory === void 0 ? ".claude/skills" : path12.posix.dirname(skillDirectory);
+    return [
+      { base: "file-dir", from: `${skillsFolder}/${reference.skill}/SKILL.md` }
+    ];
+  }
   const attempts = [{ base: "file-dir", from: fromFile }];
   if (reference.kind === "backtick") {
     attempts.push({ base: "root", from: fromFile });
@@ -28135,15 +28148,13 @@ var linkAttempts = (fromFile, reference) => {
   }
   return attempts;
 };
+var linkPlaces = (context, fromFile, reference) => linkAttempts(fromFile, reference).map(
+  (attempt) => context.resolve(attempt.from, reference.target, attempt.base)
+);
 var resolveLink = (context, fromFile, reference) => {
   let ignored = false;
   let outside = false;
-  for (const attempt of linkAttempts(fromFile, reference)) {
-    const resolved = context.resolve(
-      attempt.from,
-      reference.target,
-      attempt.base
-    );
+  for (const resolved of linkPlaces(context, fromFile, reference)) {
     if (resolved.status === "outside") {
       outside = true;
     } else if (resolved.status === "inside") {
@@ -28221,6 +28232,194 @@ var buildLinkGraph = (context) => {
   }
   return { levelOne, levelZero, linked, violations };
 };
+
+// src/fitness/paths.ts
+var BARE_FILE_EXTENSIONS = /* @__PURE__ */ new Set([
+  "bats",
+  "cjs",
+  "css",
+  "html",
+  "js",
+  "json",
+  "jsonc",
+  "jsonl",
+  "md",
+  "mdx",
+  "mjs",
+  "sh",
+  "toml",
+  "ts",
+  "tsx",
+  "txt",
+  "yaml",
+  "yml"
+]);
+var PATH_CHARACTERS = /^[\w./@+-]+$/;
+var LINE_SUFFIX = /:\d+(?:-\d+)?$/;
+var EXTENSION = /\.([A-Za-z0-9]+)$/;
+var WEB_ADDRESS = /^[\da-z-]+(?:\.[\da-z-]+)*\.(?:ai|app|co|com|dev|edu|gov|io|net|org)\//i;
+var ELLIPSIS_SEGMENT = /(?:^|\/)\.{3,}(?:\/|$)/;
+var asRepositoryPath = (candidate) => {
+  const token = (candidate.split("#", 1)[0] ?? "").replace(LINE_SUFFIX, "");
+  if (token === "" || token.startsWith("/") || token.startsWith("-") || token.startsWith("@")) {
+    return void 0;
+  }
+  if (!PATH_CHARACTERS.test(token)) return void 0;
+  if (WEB_ADDRESS.test(token) || ELLIPSIS_SEGMENT.test(token)) {
+    return void 0;
+  }
+  if (/^\.[A-Za-z0-9]+$/.test(token) && BARE_FILE_EXTENSIONS.has(token.slice(1))) {
+    return void 0;
+  }
+  if (token.includes("/")) return token;
+  const extension = EXTENSION.exec(token)?.[1];
+  return extension !== void 0 && BARE_FILE_EXTENSIONS.has(extension) ? token : void 0;
+};
+var BACKTICKED = /`([^`\n]+)`/g;
+var LINK_TARGET = /\]\(([^)\s]+)\)/g;
+var SCHEME = /^[A-Za-z][A-Za-z0-9+.-]*:/;
+var extractPathReferences = (text) => {
+  const references = [];
+  for (const [index, line] of bodyLines(text).entries()) {
+    for (const match of line.matchAll(BACKTICKED)) {
+      const token = asRepositoryPath(match[1] ?? "");
+      if (token !== void 0) {
+        references.push({ line: index + 1, linked: false, token });
+      }
+    }
+    for (const match of stripInlineCode(line).matchAll(LINK_TARGET)) {
+      const target = match[1] ?? "";
+      const token = SCHEME.test(target) ? void 0 : asRepositoryPath(target);
+      if (token !== void 0) {
+        references.push({ line: index + 1, linked: true, token });
+      }
+    }
+  }
+  return references;
+};
+var IMPORT = /(?:^|\s)@(\S+)/g;
+var TRAILING_PUNCTUATION = /* @__PURE__ */ new Set([")", ",", ".", ":", ";"]);
+var trimTrailingPunctuation = (value) => {
+  let end = value.length;
+  while (end > 0 && TRAILING_PUNCTUATION.has(value.charAt(end - 1))) end -= 1;
+  return value.slice(0, end);
+};
+var extractImports = (text) => {
+  const imports = [];
+  for (const [index, line] of bodyLines(text).entries()) {
+    for (const match of stripInlineCode(line).matchAll(IMPORT)) {
+      const token = trimTrailingPunctuation(match[1] ?? "");
+      if (token.includes("/") || token.includes(".")) {
+        imports.push({ line: index + 1, token });
+      }
+    }
+  }
+  return imports;
+};
+var PACKAGE_FOLDER = /^(.+?)\/\.claude\/|^(.+)\/CLAUDE(?:\.local)?\.md$/;
+var packageFolder = (fromFile) => {
+  const match = PACKAGE_FOLDER.exec(fromFile);
+  return match?.[1] ?? match?.[2];
+};
+var packageAnchor = (fromFile) => {
+  const folder = packageFolder(fromFile);
+  return folder === void 0 ? void 0 : `${folder}/_`;
+};
+var SPECIFIER_EXTENSIONS = ["ts", "tsx", "js", "jsx", "mjs", "cjs"];
+var specifierCandidates = (token) => token.endsWith("/") || EXTENSION.test(token.split("/").pop() ?? "") ? [] : SPECIFIER_EXTENSIONS.map((extension) => `${token}.${extension}`);
+var resolveUnderBases = (context, { bases, fromFile }, candidate) => bases.flatMap((base) => {
+  if (base !== "package") return [context.resolve(fromFile, candidate, base)];
+  const anchor2 = packageAnchor(fromFile);
+  return anchor2 === void 0 ? [] : [context.resolve(anchor2, candidate, "file-dir")];
+});
+var resolveEverywhere = (context, reference, candidate) => [
+  ...resolveUnderBases(context, reference, candidate),
+  ...(reference.anchors ?? []).map(
+    (anchor2) => context.resolve(anchor2, candidate, "file-dir")
+  )
+];
+var resolveReference = (context, reference) => {
+  const { token } = reference;
+  if (token.startsWith("~")) return { status: "outside" };
+  for (const candidate of [token, ...specifierCandidates(token)]) {
+    const found = resolveEverywhere(context, reference, candidate).find(
+      (result) => result.status === "inside" && result.exists
+    );
+    if (found?.status === "inside") {
+      return { relative: found.relative, status: "found" };
+    }
+  }
+  const underBases = resolveUnderBases(context, reference, token);
+  if (underBases.length > 0 && underBases.every((result) => result.status === "outside")) {
+    return { status: "outside" };
+  }
+  const inside = underBases.find((result) => result.status === "inside");
+  if (inside?.status !== "inside") return { status: "unresolvable" };
+  if (context.gitIgnored(inside.relative) === true) {
+    return { relative: inside.relative, status: "found" };
+  }
+  return { relative: inside.relative, status: "dead" };
+};
+var folderSets = /* @__PURE__ */ new WeakMap();
+var trackedFolders = (context) => {
+  const cached2 = folderSets.get(context.allTrackedPaths);
+  if (cached2 !== void 0) return cached2;
+  const folders = /* @__PURE__ */ new Set();
+  for (const tracked of context.allTrackedPaths) {
+    const segments = tracked.split("/");
+    for (let end = 1; end < segments.length; end += 1) {
+      folders.add(segments.slice(0, end).join("/"));
+    }
+  }
+  folderSets.set(context.allTrackedPaths, folders);
+  return folders;
+};
+var isProjectFolder = (context, resolved) => resolved.status === "inside" && (trackedFolders(context).has(resolved.relative) || context.gitIgnored(resolved.relative) === true);
+var GLOB_SEGMENT = /[*?[\]{}!]/;
+var scopeAnchors = (file2) => {
+  const frontmatter = splitFrontmatter(file2.text);
+  if (!frontmatter.ok) return [];
+  const declared = frontmatter.data.paths;
+  const globs = Array.isArray(declared) ? declared : declared === void 0 ? [] : [declared];
+  const folder = packageFolder(file2.path);
+  return globs.flatMap((glob) => {
+    if (typeof glob !== "string") return [];
+    const segments = glob.split("/");
+    const firstGlob = segments.findIndex(
+      (segment) => GLOB_SEGMENT.test(segment)
+    );
+    const prefix = segments.slice(0, firstGlob === -1 ? segments.length - 1 : firstGlob).join("/");
+    if (prefix === "") return [];
+    return [folder === void 0 ? `${prefix}/_` : `${folder}/${prefix}/_`];
+  });
+};
+var deadPathFindings = (context, files) => files.flatMap((file2) => {
+  const anchors = scopeAnchors(file2);
+  return extractPathReferences(file2.text).flatMap(({ line, linked, token }) => {
+    const segments = token.replace(/\/$/, "").split("/");
+    if (!linked && segments.length === 1) return [];
+    const reference = {
+      anchors,
+      bases: linked ? ["root", "file-dir", "package"] : ["root", "package"],
+      fromFile: file2.path,
+      token
+    };
+    if (resolveReference(context, reference).status !== "dead") return [];
+    if (!linked && !resolveEverywhere(context, reference, segments[0] ?? "").some(
+      (resolved) => isProjectFolder(context, resolved)
+    )) {
+      return [];
+    }
+    return [
+      {
+        file: file2.path,
+        line,
+        message: `The path ${token} does not exist.`,
+        remediation: "Update the path to where the file lives now, or remove the reference."
+      }
+    ];
+  });
+});
 
 // src/fitness/rules/authoring-helpers.ts
 var MAX_BODY_LINES = 500;
@@ -28390,6 +28589,13 @@ var linkResolvesCheck = (context) => filesOfKinds(context, [
     const checked = reference.kind === "markdown" || (inSkillTree ? BACKTICK_SKILL_PREFIX.test(reference.target) : REPO_ROOT_PREFIX.test(reference.target));
     if (!checked) return [];
     if (resolveLink(context, file2.path, reference).status !== "dead") {
+      return [];
+    }
+    const firstFolder = reference.target.split("/", 1)[0] ?? "";
+    if (reference.kind === "backtick" && !linkPlaces(context, file2.path, {
+      ...reference,
+      target: firstFolder
+    }).some((resolved) => isProjectFolder(context, resolved))) {
       return [];
     }
     return [
@@ -28562,7 +28768,7 @@ var AUTHORING_RULES = [
     appliesTo: ["skill", "command", "agent", "reference"],
     category: "authoring",
     check: linkResolvesCheck,
-    detection: "A markdown link or backticked relative path inside the skill directory (a repo-relative path for commands and agents) that does not exist.",
+    detection: "A markdown link outside inline code, or a backticked relative path whose first folder exists, inside the skill directory (a repo-relative path for commands and agents; a reference qualified by another skill name resolves in that skill) that does not exist.",
     ruleId: "authoring.reference.link.resolves",
     severity: "warning"
   },
@@ -28630,152 +28836,6 @@ var AUTHORING_RULES = [
 var ROOT_CLAUDE_MD_WORD_BUDGET = 500;
 var NESTED_CLAUDE_MD_WORD_BUDGET = 400;
 var RULE_LINE_BUDGET = 200;
-
-// src/fitness/paths.ts
-var BARE_FILE_EXTENSIONS = /* @__PURE__ */ new Set([
-  "bats",
-  "cjs",
-  "css",
-  "html",
-  "js",
-  "json",
-  "jsonc",
-  "jsonl",
-  "md",
-  "mdx",
-  "mjs",
-  "sh",
-  "toml",
-  "ts",
-  "tsx",
-  "txt",
-  "yaml",
-  "yml"
-]);
-var PATH_CHARACTERS = /^[\w./@+-]+$/;
-var LINE_SUFFIX = /:\d+(?:-\d+)?$/;
-var EXTENSION = /\.([A-Za-z0-9]+)$/;
-var WEB_ADDRESS = /^[\da-z-]+(?:\.[\da-z-]+)*\.(?:ai|app|co|com|dev|edu|gov|io|net|org)\//i;
-var ELLIPSIS_SEGMENT = /(?:^|\/)\.{3,}(?:\/|$)/;
-var asRepositoryPath = (candidate) => {
-  const token = (candidate.split("#", 1)[0] ?? "").replace(LINE_SUFFIX, "");
-  if (token === "" || token.startsWith("/") || token.startsWith("-") || token.startsWith("@")) {
-    return void 0;
-  }
-  if (!PATH_CHARACTERS.test(token)) return void 0;
-  if (WEB_ADDRESS.test(token) || ELLIPSIS_SEGMENT.test(token)) {
-    return void 0;
-  }
-  if (/^\.[A-Za-z0-9]+$/.test(token) && BARE_FILE_EXTENSIONS.has(token.slice(1))) {
-    return void 0;
-  }
-  if (token.includes("/")) return token;
-  const extension = EXTENSION.exec(token)?.[1];
-  return extension !== void 0 && BARE_FILE_EXTENSIONS.has(extension) ? token : void 0;
-};
-var BACKTICKED = /`([^`\n]+)`/g;
-var LINK_TARGET = /\]\(([^)\s]+)\)/g;
-var SCHEME = /^[A-Za-z][A-Za-z0-9+.-]*:/;
-var extractPathReferences = (text) => {
-  const references = [];
-  for (const [index, line] of bodyLines(text).entries()) {
-    for (const match of line.matchAll(BACKTICKED)) {
-      const token = asRepositoryPath(match[1] ?? "");
-      if (token !== void 0) {
-        references.push({ line: index + 1, linked: false, token });
-      }
-    }
-    for (const match of stripInlineCode(line).matchAll(LINK_TARGET)) {
-      const target = match[1] ?? "";
-      const token = SCHEME.test(target) ? void 0 : asRepositoryPath(target);
-      if (token !== void 0) {
-        references.push({ line: index + 1, linked: true, token });
-      }
-    }
-  }
-  return references;
-};
-var IMPORT = /(?:^|\s)@(\S+)/g;
-var TRAILING_PUNCTUATION = /* @__PURE__ */ new Set([")", ",", ".", ":", ";"]);
-var trimTrailingPunctuation = (value) => {
-  let end = value.length;
-  while (end > 0 && TRAILING_PUNCTUATION.has(value.charAt(end - 1))) end -= 1;
-  return value.slice(0, end);
-};
-var extractImports = (text) => {
-  const imports = [];
-  for (const [index, line] of bodyLines(text).entries()) {
-    for (const match of stripInlineCode(line).matchAll(IMPORT)) {
-      const token = trimTrailingPunctuation(match[1] ?? "");
-      if (token.includes("/") || token.includes(".")) {
-        imports.push({ line: index + 1, token });
-      }
-    }
-  }
-  return imports;
-};
-var PACKAGE_FOLDER = /^(.+?)\/\.claude\/|^(.+)\/CLAUDE(?:\.local)?\.md$/;
-var packageAnchor = (fromFile) => {
-  const match = PACKAGE_FOLDER.exec(fromFile);
-  const folder = match?.[1] ?? match?.[2];
-  return folder === void 0 ? void 0 : `${folder}/_`;
-};
-var resolveReference = (context, reference) => {
-  const { bases, fromFile, token } = reference;
-  if (token.startsWith("~")) return { status: "outside" };
-  const results = bases.flatMap((base) => {
-    if (base !== "package") return [context.resolve(fromFile, token, base)];
-    const anchor2 = packageAnchor(fromFile);
-    return anchor2 === void 0 ? [] : [context.resolve(anchor2, token, "file-dir")];
-  });
-  const found = results.find(
-    (result) => result.status === "inside" && result.exists
-  );
-  if (found?.status === "inside") {
-    return { relative: found.relative, status: "found" };
-  }
-  if (results.length > 0 && results.every((result) => result.status === "outside")) {
-    return { status: "outside" };
-  }
-  const inside = results.find((result) => result.status === "inside");
-  if (inside?.status !== "inside") return { status: "unresolvable" };
-  if (context.gitIgnored(inside.relative) === true) {
-    return { relative: inside.relative, status: "found" };
-  }
-  return { relative: inside.relative, status: "dead" };
-};
-var basenameSets = /* @__PURE__ */ new WeakMap();
-var trackedBasenames = (context) => {
-  const cached2 = basenameSets.get(context.allTrackedPaths);
-  if (cached2 !== void 0) return cached2;
-  const names = new Set(
-    [...context.allTrackedPaths].map(
-      (tracked) => tracked.split("/").pop() ?? ""
-    )
-  );
-  basenameSets.set(context.allTrackedPaths, names);
-  return names;
-};
-var deadPathFindings = (context, files) => files.flatMap(
-  (file2) => extractPathReferences(file2.text).flatMap(({ line, linked, token }) => {
-    if (!token.includes("/") && trackedBasenames(context).has(token)) {
-      return [];
-    }
-    const status = resolveReference(context, {
-      bases: linked ? ["root", "file-dir", "package"] : ["root", "package"],
-      fromFile: file2.path,
-      token
-    });
-    return status.status === "dead" ? [
-      {
-        file: file2.path,
-        line,
-        message: `The path ${token} does not exist.`,
-        remediation: "Update the path to where the file lives now, or remove the reference."
-      }
-    ] : [];
-  })
-);
 
 // src/fitness/rules/claudemd.ts
 var DEFAULT_BUDGETS = {
@@ -28896,7 +28956,7 @@ var createClaudemdRules = (budgets) => [
     appliesTo: ["claudemd"],
     category: "claudemd",
     check: deadPathCheck,
-    detection: "A backticked or linked repo-relative path in a CLAUDE.md does not exist.",
+    detection: "A linked path, or a backticked path whose first folder exists, in a CLAUDE.md does not exist.",
     ruleId: "claudemd.dead-path",
     severity: "warning"
   },
@@ -29832,7 +29892,7 @@ var RULES_RULES = [
     appliesTo: ["rule"],
     category: "rules",
     check: deadPathCheck2,
-    detection: "A backticked or linked repo-relative path in a rule file does not exist.",
+    detection: "A linked path, or a backticked path whose first folder exists, in a rule file does not exist; a rule path also resolves against its paths: scope.",
     ruleId: "rules.dead-path",
     severity: "warning"
   },

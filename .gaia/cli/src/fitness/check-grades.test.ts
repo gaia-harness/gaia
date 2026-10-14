@@ -60,6 +60,7 @@ const deadPaths = (count: number): Record<string, string> => ({
     {length: count},
     (_, index) => `See \`docs/missing-${index}.md\` for detail.`
   ).join('\n\n')}\n`,
+  'docs/index.md': '# Docs\n',
 });
 
 type GradeCase = {

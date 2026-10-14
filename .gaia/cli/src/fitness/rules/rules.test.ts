@@ -143,6 +143,7 @@ describe('rules.dead-path', () => {
       {
         files: {
           'CLAUDE.md': 'Project rules.\n',
+          'docs/index.md': '# Docs\n',
           [RULE]: 'Intro.\nRead `docs/missing.md`.\n',
         },
         git: true,
