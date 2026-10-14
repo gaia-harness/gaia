@@ -234,7 +234,7 @@ export const runCheck = (options: RunCheckOptions): CheckReport => {
   const knownRules =
     catalog === RULE_CATALOG ? catalog : [...RULE_CATALOG, ...catalog];
   const canonical = canonicalRuleIds(knownRules);
-  const context = createRuleContext({
+  const {context, runWithBatchedIgnores} = createRuleContext({
     allTrackedPaths: discovery.allTrackedPaths,
     files: linted,
     inGit: discovery.inGit,
@@ -246,7 +246,7 @@ export const runCheck = (options: RunCheckOptions): CheckReport => {
   const rawFindings: Finding[] = [];
 
   for (const rule of selected) {
-    for (const raw of rule.check(context)) {
+    for (const raw of runWithBatchedIgnores(() => rule.check(context))) {
       rawFindings.push(
         buildFinding(rule, raw, ownershipOf.get(raw.file) ?? 'unknown')
       );

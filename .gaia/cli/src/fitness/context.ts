@@ -1,6 +1,7 @@
 import {existsSync, realpathSync, statSync} from 'node:fs';
 import path from 'node:path';
 import {execGaiaGitRaw} from '../util/git-env.js';
+import {splitZStream} from '../util/git-z.js';
 import {compareBytes} from './markdown.js';
 import type {FileKind, ModelFamily, ProjectFile} from './types.js';
 
@@ -107,8 +108,59 @@ export const filesOfKinds = (
 
 const toPosix = (value: string): string => value.split(path.sep).join('/');
 
-/** Builds the read-only view every rule receives. */
-export const createRuleContext = (input: ContextInput): RuleContext => {
+/** `git check-ignore -q` exits 0 ignored, 1 not ignored, and 128 when git cannot answer. */
+const checkIgnoreOne = (
+  root: string,
+  relative: string
+): boolean | undefined => {
+  try {
+    execGaiaGitRaw(['-C', root, 'check-ignore', '-q', '--', relative], root);
+
+    return true;
+  } catch (error: unknown) {
+    return (error as {status?: number}).status === 1 ? false : undefined;
+  }
+};
+
+/**
+ * The ignored subset of `paths` from one `git check-ignore --stdin -z`, which
+ * echoes each ignored path exactly as it was given. Undefined when git cannot
+ * answer: one path it rejects (empty, or beyond a symbolic link) aborts the
+ * whole batch, and the caller then asks per path so only that path reads
+ * undefined.
+ */
+const checkIgnoreBatch = (
+  root: string,
+  paths: readonly string[]
+): ReadonlySet<string> | undefined => {
+  try {
+    const output = execGaiaGitRaw(
+      ['-C', root, 'check-ignore', '--stdin', '-z'],
+      root,
+      paths.map((relative) => `${relative}\0`).join('')
+    );
+
+    return new Set(splitZStream(output));
+  } catch (error: unknown) {
+    return (error as {status?: number}).status === 1 ? new Set() : undefined;
+  }
+};
+
+/**
+ * Runs `run` (one rule's check) so its `gitIgnored` lookups cost one git
+ * process per round instead of one per path. Each round answers every lookup
+ * the cache cannot with a provisional `undefined` and records it; the recorded
+ * paths are then answered in one batch and `run` goes again, until a round
+ * misses nothing. Only that last round's result is returned, and every lookup
+ * in it saw its real answer, so the result is the one a per-path run gives, on
+ * the condition that `run` is a pure function of the context.
+ */
+export type BatchedRunner = <T>(run: () => Iterable<T>) => T[];
+
+/** Builds the read-only view every rule receives, and the runner that batches its ignore lookups. */
+export const createRuleContext = (
+  input: ContextInput
+): {context: RuleContext; runWithBatchedIgnores: BatchedRunner} => {
   const {allTrackedPaths, files, inGit, knownRuleIds, projectModel, root} =
     input;
   const byKind = new Map<FileKind, ProjectFile[]>();
@@ -165,26 +217,67 @@ export const createRuleContext = (input: ContextInput): RuleContext => {
   };
 
   const ignoredCache = new Map<string, boolean | undefined>();
+  let unanswered: Set<string> | undefined;
+
+  // A batch git aborts is halved until the path it rejects stands alone, so
+  // only that path pays a call of its own.
+  const answerIgnored = (paths: readonly string[]): void => {
+    const batch = checkIgnoreBatch(root, paths);
+
+    if (batch !== undefined) {
+      for (const relative of paths) {
+        ignoredCache.set(relative, batch.has(relative));
+      }
+    } else if (paths.length === 1) {
+      const [only] = paths as [string];
+
+      ignoredCache.set(only, checkIgnoreOne(root, only));
+    } else {
+      const middle = Math.ceil(paths.length / 2);
+
+      answerIgnored(paths.slice(0, middle));
+      answerIgnored(paths.slice(middle));
+    }
+  };
 
   const gitIgnored: RuleContext['gitIgnored'] = (relative) => {
     if (!inGit) return undefined;
     if (ignoredCache.has(relative)) return ignoredCache.get(relative);
 
-    let answer: boolean | undefined;
+    if (unanswered !== undefined) {
+      unanswered.add(relative);
 
-    try {
-      execGaiaGitRaw(['-C', root, 'check-ignore', '-q', '--', relative], root);
-      answer = true;
-    } catch (error: unknown) {
-      answer = (error as {status?: number}).status === 1 ? false : undefined;
+      return undefined;
     }
+
+    const answer = checkIgnoreOne(root, relative);
 
     ignoredCache.set(relative, answer);
 
     return answer;
   };
 
-  return {
+  const runWithBatchedIgnores: BatchedRunner = <T>(
+    run: () => Iterable<T>
+  ): T[] => {
+    for (;;) {
+      const missed = new Set<string>();
+      let result: T[];
+
+      unanswered = missed;
+
+      try {
+        result = [...run()];
+      } finally {
+        unanswered = undefined;
+      }
+
+      if (missed.size === 0) return result;
+      answerIgnored([...missed]);
+    }
+  };
+
+  const context: RuleContext = {
     allTrackedPaths,
     files,
     filesOfKind,
@@ -200,4 +293,6 @@ export const createRuleContext = (input: ContextInput): RuleContext => {
     rootDirectory: root,
     settingsFiles,
   };
+
+  return {context, runWithBatchedIgnores};
 };

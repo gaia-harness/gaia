@@ -23724,7 +23724,7 @@ import { execFileSync } from "node:child_process";
 var MAX_GIT_BUFFER_BYTES = 64 * 1024 * 1024;
 
 // src/util/git-env.ts
-var execGaiaGitRaw = (args, cwd) => {
+var execGaiaGitRaw = (args, cwd, input2) => {
   const env = { ...process.env };
   delete env.GIT_DIR;
   delete env.GIT_WORK_TREE;
@@ -23733,13 +23733,14 @@ var execGaiaGitRaw = (args, cwd) => {
     cwd,
     encoding: "utf8",
     env,
+    input: input2,
     // Node's 1 MiB default throws ENOBUFS on a large-output git command
     // (`git log` over a long history, `git status` on a very dirty tree).
     // The docblock above declares this the one chokepoint every git-shelling
     // resolver routes through, so the ceiling belongs here rather than at the
     // next caller to need it.
     maxBuffer: MAX_GIT_BUFFER_BYTES,
-    stdio: ["ignore", "pipe", "pipe"]
+    stdio: [input2 === void 0 ? "ignore" : "pipe", "pipe", "pipe"]
   });
 };
 var execGaiaGit = (args, cwd) => execGaiaGitRaw(args, cwd).trim();
@@ -25084,6 +25085,10 @@ var applySuppressions = (findings, entries, canonical) => {
 // src/fitness/context.ts
 import { existsSync as existsSync4, realpathSync as realpathSync3, statSync } from "node:fs";
 import path9 from "node:path";
+
+// src/util/git-z.ts
+var gitZArgs = (verb, args = []) => ["-c", "core.quotepath=false", verb, "-z", ...args];
+var splitZStream = (raw) => raw.split("\0").filter((record2) => record2.length > 0);
 
 // ../../node_modules/.pnpm/js-yaml@5.4.3/node_modules/js-yaml/dist/js-yaml.mjs
 var NOT_RESOLVED = /* @__PURE__ */ Symbol("NOT_RESOLVED");
@@ -27687,6 +27692,26 @@ var filesOfKinds = (context, kinds) => context.files.filter(
   (file2) => file2.kinds.some((kind) => kinds.includes(kind))
 );
 var toPosix = (value) => value.split(path9.sep).join("/");
+var checkIgnoreOne = (root, relative) => {
+  try {
+    execGaiaGitRaw(["-C", root, "check-ignore", "-q", "--", relative], root);
+    return true;
+  } catch (error62) {
+    return error62.status === 1 ? false : void 0;
+  }
+};
+var checkIgnoreBatch = (root, paths) => {
+  try {
+    const output2 = execGaiaGitRaw(
+      ["-C", root, "check-ignore", "--stdin", "-z"],
+      root,
+      paths.map((relative) => `${relative}\0`).join("")
+    );
+    return new Set(splitZStream(output2));
+  } catch (error62) {
+    return error62.status === 1 ? /* @__PURE__ */ new Set() : void 0;
+  }
+};
 var createRuleContext = (input2) => {
   const { allTrackedPaths, files, inGit, knownRuleIds, projectModel, root } = input2;
   const byKind = /* @__PURE__ */ new Map();
@@ -27726,20 +27751,48 @@ var createRuleContext = (input2) => {
     }
   };
   const ignoredCache = /* @__PURE__ */ new Map();
+  let unanswered;
+  const answerIgnored = (paths) => {
+    const batch = checkIgnoreBatch(root, paths);
+    if (batch !== void 0) {
+      for (const relative of paths) {
+        ignoredCache.set(relative, batch.has(relative));
+      }
+    } else if (paths.length === 1) {
+      const [only] = paths;
+      ignoredCache.set(only, checkIgnoreOne(root, only));
+    } else {
+      const middle = Math.ceil(paths.length / 2);
+      answerIgnored(paths.slice(0, middle));
+      answerIgnored(paths.slice(middle));
+    }
+  };
   const gitIgnored = (relative) => {
     if (!inGit) return void 0;
     if (ignoredCache.has(relative)) return ignoredCache.get(relative);
-    let answer;
-    try {
-      execGaiaGitRaw(["-C", root, "check-ignore", "-q", "--", relative], root);
-      answer = true;
-    } catch (error62) {
-      answer = error62.status === 1 ? false : void 0;
+    if (unanswered !== void 0) {
+      unanswered.add(relative);
+      return void 0;
     }
+    const answer = checkIgnoreOne(root, relative);
     ignoredCache.set(relative, answer);
     return answer;
   };
-  return {
+  const runWithBatchedIgnores = (run79) => {
+    for (; ; ) {
+      const missed = /* @__PURE__ */ new Set();
+      let result;
+      unanswered = missed;
+      try {
+        result = [...run79()];
+      } finally {
+        unanswered = void 0;
+      }
+      if (missed.size === 0) return result;
+      answerIgnored([...missed]);
+    }
+  };
+  const context = {
     allTrackedPaths,
     files,
     filesOfKind,
@@ -27752,17 +27805,12 @@ var createRuleContext = (input2) => {
     rootDirectory: root,
     settingsFiles
   };
+  return { context, runWithBatchedIgnores };
 };
 
 // src/fitness/discover.ts
 import { readdirSync as readdirSync3, readFileSync as readFileSync7, realpathSync as realpathSync4, statSync as statSync2 } from "node:fs";
 import path10 from "node:path";
-
-// src/util/git-z.ts
-var gitZArgs = (verb, args = []) => ["-c", "core.quotepath=false", verb, "-z", ...args];
-var splitZStream = (raw) => raw.split("\0").filter((record2) => record2.length > 0);
-
-// src/fitness/discover.ts
 var MAX_CLAUDE_MD_SEGMENTS = 3;
 var SETTINGS_LOCAL_PATH = ".claude/settings.local.json";
 var SKIPPED_DIRECTORIES = /* @__PURE__ */ new Set([
@@ -31081,7 +31129,7 @@ var runCheck = (options) => {
   );
   const knownRules = catalog === RULE_CATALOG ? catalog : [...RULE_CATALOG, ...catalog];
   const canonical = canonicalRuleIds(knownRules);
-  const context = createRuleContext({
+  const { context, runWithBatchedIgnores } = createRuleContext({
     allTrackedPaths: discovery.allTrackedPaths,
     files: linted,
     inGit: discovery.inGit,
@@ -31091,7 +31139,7 @@ var runCheck = (options) => {
   });
   const rawFindings = [];
   for (const rule of selected) {
-    for (const raw of rule.check(context)) {
+    for (const raw of runWithBatchedIgnores(() => rule.check(context))) {
       rawFindings.push(
         buildFinding(rule, raw, ownershipOf.get(raw.file) ?? "unknown")
       );
