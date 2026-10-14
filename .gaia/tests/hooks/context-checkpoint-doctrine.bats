@@ -18,7 +18,6 @@ bats_require_minimum_version 1.5.0
 setup() {
   REPO_ROOT="$(cd "$BATS_TEST_DIRNAME/../../.." && pwd)"
   DOCTRINE="$REPO_ROOT/.claude/doctrine/context-checkpoint.md"
-  RULE="$REPO_ROOT/.claude/rules/context-discipline.md"
   WIKI="$REPO_ROOT/wiki/concepts/Workflow Doctrine.md"
   EXCLUDE="$REPO_ROOT/.gaia/release-exclude"
   WIKI_HEADING='## Context checkpoint'

@@ -20,13 +20,11 @@
 # Assertion style: .claude/rules/bats-assertions.md.
 
 SETUP_COMMAND_PATH='.claude/commands/setup-gaia.md'
-INIT_COMMAND_PATH='.claude/commands/gaia-init.md'
 REFERENCES_PATH='.claude/skills/gaia/references/setup'
 
 setup() {
   REPO_ROOT="$(cd "${BATS_TEST_DIRNAME}/../../.." && pwd)"
   SETUP_COMMAND="${REPO_ROOT}/${SETUP_COMMAND_PATH}"
-  INIT_COMMAND="${REPO_ROOT}/${INIT_COMMAND_PATH}"
   REFERENCES="${REPO_ROOT}/${REFERENCES_PATH}"
   REAL_CLI="${REPO_ROOT}/.gaia/cli/gaia"
   FEATURE_LIST="${REPO_ROOT}/.gaia/setup-features.json"

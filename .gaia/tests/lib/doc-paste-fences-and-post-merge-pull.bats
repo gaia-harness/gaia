@@ -47,73 +47,13 @@ scratch_copy() {
   local copy="$BATS_TEST_TMPDIR/root" relative
   rm -rf "$copy"
   for relative in \
-    .claude/rules/context-discipline.md \
-    "$REFERENCES/plan.md" \
-    "$REFERENCES/plan/planner.md" \
-    "$REFERENCES/spec.md" \
-    "$REFERENCES/isolation.md" \
-    "$REFERENCES/debt/spec-handoff.md" \
     "$REFERENCES/work-lifecycle.md" \
-    .claude/skills/update-gaia/references/merge-execution.md \
-    .claude/hooks/audit-loop-bound.sh \
     "$RUNBOOK"; do
     mkdir -p "$copy/$(dirname "$relative")"
     cp "$REPO_ROOT/$relative" "$copy/$relative"
   done
   printf '%s\n' "$copy"
 }
-
-# --- a. the rule and the print sites -----------------------------------------
-
-rule_line() {
-  grep -qF -- 'A prompt, command or line the user is meant to copy and paste is printed inside a fenced code block' \
-    "$1/.claude/rules/context-discipline.md" || return 1
-  grep -qF -- 'fence it with four backticks' "$1/.claude/rules/context-discipline.md" || return 1
-  grep -qF -- 'carries its own context' "$1/.claude/rules/context-discipline.md"
-}
-
-plan_kickoff_prompt() {
-  section "$1/$REFERENCES/plan.md" '### 5. Report to user' | fence_bodies text |
-    grep -qF -- 'Read <absolute-path-to-PLAN_DIR>/KICKOFF.md and execute it.'
-}
-
-lifecycle_continuation_prompt() {
-  section "$1/$REFERENCES/work-lifecycle.md" '### Sub-agent context: continuation prompt' | fence_bodies text |
-    grep -qF -- 'is ready to discard.'
-}
-
-planner_continuation_lines() {
-  section "$1/$REFERENCES/plan/planner.md" '## Plan files' | fence_bodies text |
-    grep -qF -- 'plan-archive.sh'
-}
-
-spec_model_switch_line() {
-  section "$1/$REFERENCES/spec.md" '### Model gate' | fence_bodies text | grep -qE -- '^[[:space:]]*/gaia-spec <description>$'
-}
-
-spec_plan_handoff() {
-  section "$1/$REFERENCES/spec.md" '### 11.' | fence_bodies text |
-    grep -qxF -- '/gaia-plan SPEC-NNN'
-}
-
-debt_spec_handoff() {
-  fence_bodies text <"$1/$REFERENCES/debt/spec-handoff.md" | grep -qF -- '/gaia-spec Design-first tech debt from issue #<N>'
-}
-
-update_gaia_follow_up_commands() {
-  local file="$1/.claude/skills/update-gaia/references/merge-execution.md"
-  grep -qF -- 'printed beneath the table inside a fenced code block' "$file" || return 1
-  grep -qF -- 'to run by hand, printed inside a fenced code block' "$file" || return 1
-  grep -qF -- 'the literal command from its `argv`, printed inside a fenced code block' "$file"
-}
-
-unattended_grant_line() {
-  grep -qF -- 'print the typed grant line above inside a fenced code block' "$1/.claude/hooks/audit-loop-bound.sh" || return 1
-  grep -qF -- "\`grant_line\` and no continuation prompt, the line alone in a fenced code block" "$1/$RUNBOOK"
-}
-
-FENCE_SITES=(rule_line plan_kickoff_prompt lifecycle_continuation_prompt planner_continuation_lines
-  spec_model_switch_line spec_plan_handoff debt_spec_handoff update_gaia_follow_up_commands unattended_grant_line)
 
 # --- b. the pull after a merge -------------------------------------------------
 

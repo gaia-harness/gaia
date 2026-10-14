@@ -17,14 +17,10 @@ setup() {
   REPO_ROOT="$(cd "$BATS_TEST_DIRNAME/../../.." && pwd)"
   RULE="$REPO_ROOT/.claude/rules/context-discipline.md"
   DOCTRINE_PATH="$REPO_ROOT/.claude/doctrine/execution.md"
-  HOOK="$REPO_ROOT/.claude/hooks/workflow-doctrine-inject.sh"
   WIKI="$REPO_ROOT/wiki/concepts/Workflow Doctrine.md"
   SETTINGS="$REPO_ROOT/.claude/settings.json"
   REGISTRY="$REPO_ROOT/.gaia/state-registry.json"
   EXCLUDE="$REPO_ROOT/.gaia/release-exclude"
-  TASK_ORCHESTRATION="$REPO_ROOT/wiki/concepts/Task Orchestration.md"
-  PLANMD="$REPO_ROOT/.claude/skills/gaia/references/plan.md"
-  DEBTMD="$REPO_ROOT/.claude/skills/gaia/references/debt.md"
   TEMPORARY_DIRECTORY="$BATS_TEST_TMPDIR"
 }
 
@@ -65,7 +61,6 @@ payload_ok() {
   [ "${#name}" = 128 ] || return 1
   keyline="Branch key: branch:$name. Link its initiative once with: bash .gaia/scripts/usage.sh link branch:$name research:<topic>-<date> (or issue:<n>)"
   total=$(($(printf '%s\n' "$keyline" | wc -c) + $(wc -c <"$file_path")))
-  PAYLOAD_TOTAL="$total"
   [ "$total" -le 4096 ] || return 1
   return 0
 }
@@ -227,29 +222,6 @@ pad_to() { # pad_to <src> <dst> <total bytes>: src plus filler so dst ends in on
 # ------------------------------------------------------- 9. no working-doc ids
 
 # ------------------------------------------ 10. presence and ledger internals
-
-PRESENCE_PATHS=(
-  '.claude/rules/context-discipline.md'
-  '.claude/doctrine/execution.md'
-  '.claude/hooks/workflow-doctrine-inject.sh'
-  '.gaia/tests/hooks/workflow-doctrine-inject.bats'
-  '.gaia/scripts/tests/usage-research-binding.bats'
-  '.gaia/tests/hooks/workflow-doctrine-timing.sh'
-  'wiki/concepts/Workflow Doctrine.md'
-  '.gaia/tests/hooks/workflow-doctrine-sources.bats'
-  '.claude/rules/wiki-style.md'
-  '.claude/settings.json'
-  '.gaia/state-registry.json'
-  '.gaia/tests/hooks/block-worktree-path-mismatch.bats'
-  '.gaia/scripts/tests/state-registry-lib.bats'
-  '.gaia/tests/hooks/verb-arming-cost.bats'
-  'wiki/concepts/Task Orchestration.md'
-  '.claude/skills/gaia/references/plan.md'
-  '.claude/skills/gaia/references/debt.md'
-  'wiki/index.md'
-  'wiki/concepts/Claude Hooks.md'
-  'wiki/decisions/Quality Gate.md'
-)
 
 # --------------------------------------------------------- 11. registrations
 

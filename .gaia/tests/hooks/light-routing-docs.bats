@@ -20,7 +20,6 @@ setup() {
   ROOT="$(cd "$BATS_TEST_DIRNAME/../../.." && pwd)"
   PAGE="${GAIA_LIGHT_ROUTING_PAGE:-$ROOT/wiki/concepts/Audit Round Procedure.md}"
   UNIT="${GAIA_LIGHT_ROUTING_UNIT:-$ROOT/.claude/agents/audit-loop-unit.md}"
-  DECISION="${GAIA_LIGHT_ROUTING_DECISION:-$ROOT/wiki/decisions/Code Audit Team.md}"
   # Assembled so this file never spells the forbidden flag contiguously.
   FORBIDDEN_FLAG="--review"" light"
 }

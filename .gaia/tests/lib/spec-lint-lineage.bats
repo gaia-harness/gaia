@@ -7,7 +7,6 @@
 REPO_ROOT="$(cd "$BATS_TEST_DIRNAME/../../.." && pwd)"
 LINT="$REPO_ROOT/.gaia/scripts/spec/lint.sh"
 TEMPLATE="$REPO_ROOT/.claude/skills/gaia/references/spec/spec-template.md"
-SPEC_MD="$REPO_ROOT/.claude/skills/gaia/references/spec.md"
 
 # Filled SPEC from the template with the given frontmatter line(s) in place of
 # the template's "lineage: []" line. No argument drops the key entirely.

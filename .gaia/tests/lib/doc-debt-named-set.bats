@@ -39,7 +39,6 @@
 #   DOC_DEBT_NAMED_SET_NAMED_MD    the named-number sub-reference (debt/named.md),
 #                                  which owns validation, the direct-number
 #                                  path, and the named-set flow
-#   DOC_DEBT_NAMED_SET_COMMAND_MD  the command file
 #   DOC_DEBT_NAMED_SET_REPO_ROOT   the tree the budget-constant owner check scans
 # Every fixture is generated at runtime under $BATS_TEST_TMPDIR, and a line
 # assigning a budget constant is built with printf from parts, so this suite
@@ -51,7 +50,6 @@ setup() {
   REPO_ROOT="$(cd "$BATS_TEST_DIRNAME/../../.." && pwd)"
   DEBT_MD="${DOC_DEBT_NAMED_SET_DEBT_MD:-$REPO_ROOT/.claude/skills/gaia/references/debt.md}"
   NAMED_MD="${DOC_DEBT_NAMED_SET_NAMED_MD:-$REPO_ROOT/.claude/skills/gaia/references/debt/named.md}"
-  COMMAND_MD="${DOC_DEBT_NAMED_SET_COMMAND_MD:-$REPO_ROOT/.claude/commands/gaia-debt.md}"
   SCAN_ROOT="${DOC_DEBT_NAMED_SET_REPO_ROOT:-$REPO_ROOT}"
   NAMED_SET_HEADING='## Fix a named set (two or more numbers)'
 }

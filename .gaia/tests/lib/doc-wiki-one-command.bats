@@ -15,12 +15,8 @@
 
 setup() {
   REPO_ROOT="$(cd "$BATS_TEST_DIRNAME/../../.." && pwd)"
-  SKILL="$REPO_ROOT/.claude/skills/gaia-wiki/SKILL.md"
   ROUTER="$REPO_ROOT/.claude/skills/gaia/references/wiki.md"
   SYNC="$REPO_ROOT/.claude/skills/gaia/references/wiki/sync.md"
-  CONSOLIDATE="$REPO_ROOT/.claude/skills/gaia/references/wiki/consolidate.md"
-  LINT="$REPO_ROOT/.claude/skills/gaia/references/wiki/lint.md"
-  LINT_FIX="$REPO_ROOT/.claude/skills/gaia/references/wiki/lint-fix.md"
 }
 
 # --- shared helpers -------------------------------------------------------

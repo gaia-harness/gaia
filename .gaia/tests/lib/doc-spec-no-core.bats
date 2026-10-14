@@ -14,10 +14,7 @@ setup() {
   REPO_ROOT="$(cd "$BATS_TEST_DIRNAME/../../.." && pwd)"
   SPEC_MD="$REPO_ROOT/.claude/skills/gaia/references/spec.md"
   TEMPLATE="$REPO_ROOT/.claude/skills/gaia/references/spec/spec-template.md"
-  ALLOCATOR="$REPO_ROOT/.gaia/scripts/spec/spec-allocator.sh"
   LINT="$REPO_ROOT/.gaia/scripts/spec/lint.sh"
-
-  slash_command_prefix="/spec""kit-"
 }
 
 _anchor_line() {

@@ -21,12 +21,6 @@
 setup() {
   REPO_ROOT="$(cd "$BATS_TEST_DIRNAME/../../.." && pwd)"
   DEBT_MD="${DOC_AUDIT_LOOP_DEBT_MD:-$REPO_ROOT/.claude/skills/gaia/references/debt.md}"
-  CODIFY_MD="${DOC_AUDIT_LOOP_CODIFY_MD:-$REPO_ROOT/.claude/skills/gaia/references/codify.md}"
-  PR_MERGE_MD="${DOC_AUDIT_LOOP_PR_MERGE_MD:-$REPO_ROOT/.claude/rules/pr-merge.md}"
-  QUALITY_GATE_MD="${DOC_AUDIT_LOOP_QUALITY_GATE_MD:-$REPO_ROOT/.claude/rules/quality-gate.md}"
-  HOOKS_WIKI="${DOC_AUDIT_LOOP_HOOKS_WIKI:-$REPO_ROOT/wiki/concepts/Claude Hooks.md}"
-  SCRIPTS_WIKI="${DOC_AUDIT_LOOP_SCRIPTS_WIKI:-$REPO_ROOT/wiki/concepts/GAIA Scripts.md}"
-  REVIEW_WIKI="${DOC_AUDIT_LOOP_REVIEW_WIKI:-$REPO_ROOT/wiki/concepts/Code Review Audit Agent.md}"
   FRONTEND_AGENT="${DOC_AUDIT_LOOP_FRONTEND_AGENT:-$REPO_ROOT/.claude/agents/code-audit-frontend.md}"
   MEMBER_PROTOCOL="${DOC_AUDIT_LOOP_MEMBER_PROTOCOL:-$REPO_ROOT/.claude/hooks/lib/audit-member-protocol.md}"
 }
