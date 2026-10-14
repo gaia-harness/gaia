@@ -13,7 +13,8 @@
 # (working-tree content) and the set that existed at HEAD, then demands a
 # matching valid RED only for tests whose fullName is NEW at HEAD. Edits,
 # renames, and refactors of tests already present at HEAD are out of scope and
-# never demand a fresh RED.
+# never demand a fresh RED. On a merge commit, a test the other parent
+# (MERGE_HEAD) already holds counts as present too.
 #
 # Scope is driven entirely by the signal helper's emitted current-test set.
 # Tests with dynamic titles (template-literal/computed names, test.each rows
@@ -322,6 +323,10 @@ staged_test_matches_release() {
   return 1
 }
 
+# The other parent of a merge being concluded, read from the acting tree (a
+# linked worktree keeps its own MERGE_HEAD). Empty on an ordinary commit.
+merge_head=$(git -C "$tree_root" rev-parse --quiet --verify MERGE_HEAD 2>/dev/null || true)
+
 # Collect offenders as "file\tfullName" lines.
 offenders=""
 
@@ -380,6 +385,27 @@ while IFS= read -r path; do
     if [ -n "$head_ndjson" ]; then
       head_fullnames=$(printf '%s\n' "$head_ndjson" \
         | jq -r '.fullName // empty' 2>/dev/null || true)
+    fi
+  fi
+
+  # A merge commit has two parents, and a test the other parent already holds
+  # is not new: it was committed on that line of history, where its RED was
+  # owed, and the staged diff against HEAD only shows it because the merge
+  # brings it in. Its RED cannot
+  # be observed honestly here, on a tree that already carries the change that
+  # makes it pass. So its names join the pre-existing set, and only a test new
+  # beyond BOTH parents (one the conflict resolution writes) still owes a RED.
+  # Limit: a resolution that edits such a test's body is treated as an edit to
+  # an existing test, the same scope rule HEAD's own tests get.
+  if [ -n "$merge_head" ]; then
+    merge_head_source=$(git -C "$tree_root" show "$merge_head:$relative_path" 2>/dev/null || true)
+    if [ -n "$merge_head_source" ]; then
+      merge_head_ndjson=$( cd "$tree_root" && printf '%s' "$merge_head_source" \
+        | node "$signal_script" "$relative_path" --stdin 2>/dev/null || true)
+      if [ -n "$merge_head_ndjson" ]; then
+        head_fullnames=$(printf '%s\n%s\n' "$head_fullnames" "$(printf '%s\n' "$merge_head_ndjson" \
+          | jq -r '.fullName // empty' 2>/dev/null || true)")
+      fi
     fi
   fi
 
