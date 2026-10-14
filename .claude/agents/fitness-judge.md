@@ -41,7 +41,7 @@ Your entire final reply is one JSON array, with no prose, no code fence, and not
 {"judgment":"description-substance","file":"<path exactly as listed>","line":<number>,"message":"<one line: what is wrong, with the evidence>","remediation":"<one line: the change that fixes it>"}
 
 - `judgment` is one of `description-substance`, `trigger-overlap`, `rule-scope-fit`, `terminology`.
-- `file` is a path copied exactly from the input; `line` is the 1-based line of the evidence, or 1 when it is the file as a whole.
+- `file` is a path copied exactly from the input; `line` is the line of the evidence within that file, copied from the number the input prints at the start of the evidence line, or 1 when it is the file as a whole. Never count lines in the input file itself.
 - Reply `[]` when nothing is wrong.
 - Never run or name a command, never ask for a file to be written, and never claim to have cleared anything. The main thread writes your reply to disk and a deterministic script classifies it.
 

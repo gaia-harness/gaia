@@ -237,6 +237,7 @@ const fixableProject = (secret: string): FixtureProject => ({
       permissions: {allow: ['Read', 'Read']},
     })}\n`,
     'CLAUDE.md': '# Project\n\nSee `docs/missing-claude-path.md`.\n',
+    'docs/index.md': '# Docs\n',
     'frontend/CLAUDE.md':
       '# Frontend\n\nSee `docs/missing-frontend-path.md`.\n',
   },

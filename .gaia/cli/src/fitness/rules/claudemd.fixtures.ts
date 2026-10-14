@@ -29,7 +29,10 @@ export const CLAUDEMD_FIXTURES: FixtureMap = {
       git: true,
     }),
     red: () => ({
-      files: {'CLAUDE.md': 'See `docs/missing.md` for the guide.\n'},
+      files: {
+        'CLAUDE.md': 'See `docs/missing.md` for the guide.\n',
+        'docs/index.md': '# Docs\n',
+      },
       git: true,
     }),
   },
