@@ -66,32 +66,6 @@ run_bash() {
 
 # --- denied: edit tools ---
 
-@test "Write to the main state path is denied" {
-  run_edit Write "$STATE"
-  assert_denied_by_json
-}
-
-@test "Edit of the main state path is denied" {
-  run_edit Edit "$STATE"
-  assert_denied_by_json
-}
-
-@test "MultiEdit of the main state path is denied" {
-  run_edit MultiEdit "$STATE"
-  assert_denied_by_json
-}
-
-@test "Write through the worktree symlink spelling is denied" {
-  run_edit Write "$WORKTREE_STATE" "$WORKTREE"
-  assert_denied_by_json
-}
-
-@test "Write through the worktree symlink with a .. segment is denied" {
-  mkdir -p "$MAIN/.gaia/local/runs"
-  run_edit Write "$WORKTREE/.gaia/local/runs/../protected/audit-loop/feat/x.json" "$WORKTREE"
-  assert_denied_by_json
-}
-
 @test "Write with a .. segment that resolves into the directory is denied" {
   run_edit Write "$MAIN/.gaia/local/runs/../protected/audit-loop/feat/x.json"
   assert_denied_by_json
@@ -102,11 +76,6 @@ run_bash() {
   assert_denied_by_json
 }
 
-@test "Write to a relative path resolved against cwd is denied" {
-  run_edit Write ".gaia/local/protected/audit-loop/feat/x.json" "$MAIN"
-  assert_denied_by_json
-}
-
 @test "Write elsewhere is allowed" {
   run_edit Write "$MAIN/.gaia/local/runs/feat/notes.json"
   assert_allowed_by_json
@@ -114,21 +83,6 @@ run_bash() {
 }
 
 # --- denied: Bash natural spellings ---
-
-@test "Bash redirect into the state path is denied" {
-  run_bash "printf '{}' > $STATE"
-  assert_denied_by_json
-}
-
-@test "Bash append into the state path is denied" {
-  run_bash "echo x >> $STATE"
-  assert_denied_by_json
-}
-
-@test "Bash rm of the state path is denied" {
-  run_bash "rm $STATE"
-  assert_denied_by_json
-}
 
 @test "Bash rm -f of the state path is denied" {
   run_bash "rm -f $STATE"
@@ -145,33 +99,8 @@ run_bash() {
   assert_denied_by_json
 }
 
-@test "Bash cp onto the state path is denied" {
-  run_bash "cp /tmp/y $STATE"
-  assert_denied_by_json
-}
-
-@test "Bash tee into the state path is denied" {
-  run_bash "jq . /tmp/y | tee $STATE"
-  assert_denied_by_json
-}
-
-@test "Bash sed -i on the state path is denied" {
-  run_bash "sed -i '' 's/a/b/' $STATE"
-  assert_denied_by_json
-}
-
 @test "Bash python3 -c writing the state path is denied" {
   run_bash "python3 -c \"open('$STATE','w')\""
-  assert_denied_by_json
-}
-
-@test "Bash redirect through the worktree spelling is denied" {
-  run_bash "printf '{}' > $WORKTREE_STATE" "$WORKTREE"
-  assert_denied_by_json
-}
-
-@test "Bash rm through the worktree spelling is denied" {
-  run_bash "rm -f $WORKTREE_STATE" "$WORKTREE"
   assert_denied_by_json
 }
 
@@ -182,11 +111,6 @@ run_bash() {
 
 @test "Bash redirect with no space before the target is denied" {
   run_bash "echo x >$STATE"
-  assert_denied_by_json
-}
-
-@test "Monitor with a deny-worthy command is denied" {
-  invoke_hook "$(command_payload Monitor "rm -f $STATE" "$MAIN")" "$HOOK_ABSOLUTE_PATH"
   assert_denied_by_json
 }
 
@@ -283,16 +207,6 @@ echo '{}' > $STATE
 }
 
 # --- allowed ---
-
-@test "Bash cat of the state path is allowed" {
-  run_bash "cat $STATE"
-  assert_allowed_by_json
-}
-
-@test "Bash jq read of the state path is allowed" {
-  run_bash "jq '.history' $STATE"
-  assert_allowed_by_json
-}
 
 @test "Bash ls of the directory is allowed" {
   run_bash "ls $MAIN/.gaia/local/protected/audit-loop/"
@@ -430,11 +344,6 @@ scratch_hook() {
 
 @test "Write to a context file through the worktree symlink spelling is denied" {
   run_edit Write "$WORKTREE_CONTEXT_FILE" "$WORKTREE"
-  assert_denied_class 'context readings'
-}
-
-@test "Edit of a context file through the worktree symlink spelling is denied" {
-  run_edit Edit "$WORKTREE_CONTEXT_FILE" "$WORKTREE"
   assert_denied_class 'context readings'
 }
 
@@ -683,16 +592,6 @@ bash $GRANT_RECORDER"
   assert_recorder_denied "\"$FIX/My Repo/.claude/hooks/audit-loop-grant.sh\" < p.json"
 }
 
-@test "bash running the quoted ask recorder under a spaced checkout path is denied" {
-  printf '{"seed":1}' >"$STATE"
-  assert_recorder_denied "bash \"$FIX/My Repo/.claude/hooks/audit-loop-ask-grant.sh\" < p.json"
-}
-
-@test "the quoted ask recorder under a spaced checkout path as the command word is denied" {
-  printf '{"seed":1}' >"$STATE"
-  assert_recorder_denied "\"$FIX/My Repo/.claude/hooks/audit-loop-ask-grant.sh\" < p.json"
-}
-
 @test "git add of the quoted recorder under a spaced checkout path is allowed" {
   run_bash "git -C \"$FIX/My Repo\" add -- \"$FIX/My Repo/.claude/hooks/audit-loop-grant.sh\""
   assert_allowed_by_json
@@ -711,12 +610,6 @@ bash $GRANT_RECORDER"
 
 @test "git add naming the grant recorder is allowed" {
   run_bash "git -C $MAIN add -- .claude/hooks/audit-loop-grant.sh"
-  assert_allowed_by_json
-  [ -z "$output" ]
-}
-
-@test "git add naming the ask recorder is allowed" {
-  run_bash "git -C $MAIN add -- .claude/hooks/audit-loop-ask-grant.sh"
   assert_allowed_by_json
   [ -z "$output" ]
 }

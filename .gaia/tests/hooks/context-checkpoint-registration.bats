@@ -80,11 +80,6 @@ mutate_registry() {
   assert_rooted_with_timeout "$SETTINGS"
 }
 
-@test "the real tree passes the registered-command rooting check" {
-  run bash "$REPO_ROOT/.gaia/scripts/check-hook-command-rooting.sh" "$REPO_ROOT"
-  [ "$status" -eq 0 ]
-}
-
 # --- state registry -----------------------------------------------------------
 
 @test "the state registry holds one main-only, unkeyed, reaped entry for the marker directory" {

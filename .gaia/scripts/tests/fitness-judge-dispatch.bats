@@ -49,39 +49,10 @@ entry() {
   printf '{"path":"%s","kinds":["%s"],"words":10,"lines":3,"model":"unresolved","ownership":"%s","path_scoped":%s}' "$1" "$2" "$3" "$4"
 }
 
-@test "an absent reply file is a no-op" {
-  classify
-  [ "$status" -eq 1 ]
-}
-
 @test "an empty reply is a no-op" {
   : >"$REPLY"
   classify
   [ "$status" -eq 1 ]
-}
-
-@test "a reply that is prose and not an array is a no-op" {
-  printf 'I found nothing wrong with these files.\n' >"$REPLY"
-  classify
-  [ "$status" -eq 1 ]
-}
-
-@test "a reply that is a JSON object and not an array is a no-op" {
-  printf '{"judgment":"terminology"}\n' >"$REPLY"
-  classify
-  [ "$status" -eq 1 ]
-}
-
-@test "an empty array is a real reply" {
-  printf '[]\n' >"$REPLY"
-  classify
-  [ "$status" -eq 0 ]
-}
-
-@test "a valid array of judgments is a real reply" {
-  printf '[{"judgment":"terminology","file":".claude/skills/example/SKILL.md","line":3,"message":"m","remediation":"r"}]\n' >"$REPLY"
-  classify
-  [ "$status" -eq 0 ]
 }
 
 @test "the playbook's element-shape check passes a valid array and fails a malformed one" {

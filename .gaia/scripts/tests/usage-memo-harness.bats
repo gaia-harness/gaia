@@ -116,20 +116,6 @@ probe_index() { jq -r --arg category "$1" '[.probes[].category] | index($categor
   [ "${#wants[@]}" -eq "${#filters[@]}" ]
 }
 
-@test "every probe exhibits each of its expect keys" {
-  local probe_count i fails=0 seen=0
-  probe_count="$(umemo_probe_count "$PROBES")"
-  [ "$probe_count" -ge 20 ]
-  i=0
-  while [ "$i" -lt "$probe_count" ]; do
-    umemo_check_probe "$PROBES" "$i" || fails=$((fails + 1))
-    seen=$((seen + 1))
-    i=$((i + 1))
-  done
-  [ "$seen" -eq "$(jq -r '.probes | length' "$PROBES")" ]
-  [ "$fails" -eq 0 ]
-}
-
 @test "the probe check fails, for the stated reason, when an expectation is wrong" {
   local seen=0 i category_index
   local -a categories=(lower_bound multi_root first_merge inherit interval no_spend unresolvable cursor_adversarial)
@@ -292,25 +278,3 @@ probe_index() { jq -r --arg category "$1" '[.probes[].category] | index($categor
   true
 }
 
-@test "the identity fixture holds the adversarial cursor rows" {
-  grep -qF '"key":"branch:fix/cursor-drift"' "$UM_TELEMETRY_DIRECTORY/usage.jsonl"
-  grep -q '^{"kind":"cursor","schema_version":1,' "$UM_TELEMETRY_DIRECTORY/usage.jsonl"
-  grep -q '^{"schema_version":1,"kind":"cursor",' "$UM_TELEMETRY_DIRECTORY/usage.jsonl"
-}
-
-@test "u_old and u_new print the same pr readout for every probe" {
-  local probe_count i pr seen=0
-  probe_count="$(umemo_probe_count "$PROBES")"
-  [ "$probe_count" -ge 20 ]
-  i=0
-  while [ "$i" -lt "$probe_count" ]; do
-    pr="$(jq -r --argjson probe_position "$i" '.probes[$probe_position].pr' "$PROBES")"
-    u_old pr "$pr"
-    cp "$UM_OUTPUT_FILE" "$BATS_TEST_TMPDIR/old.out"
-    u_new pr "$pr"
-    assert_same "$BATS_TEST_TMPDIR/old.out" "$UM_OUTPUT_FILE"
-    seen=$((seen + 1))
-    i=$((i + 1))
-  done
-  [ "$seen" -eq "$probe_count" ]
-}

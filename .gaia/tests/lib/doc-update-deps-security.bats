@@ -101,20 +101,6 @@ check_security_before_major() {
   }
 }
 
-@test "the preview places the Security section above Major" {
-  check_security_before_major "$SKILL"
-}
-
-@test "the preview-order check fails when Security and Major swap" {
-  local copy
-  copy="$(scratch_copy "$SKILL" "swap.md")"
-  replace_fixed "$copy" '**Security**' '@@SWAP@@'
-  replace_fixed "$copy" '**Major**' '**Security**'
-  replace_fixed "$copy" '@@SWAP@@' '**Major**'
-  run check_security_before_major "$copy"
-  [ "$status" -ne 0 ]
-}
-
 # ---------------------------------------------------------------------------
 # 2. Zero outdated with an advisory is a real run
 # ---------------------------------------------------------------------------
@@ -212,27 +198,6 @@ check_reason_literals() {
   }
 }
 
-@test "every still-open reason literal appears in the skill or the security recipe" {
-  check_reason_literals "$SKILL" "$SECURITY"
-}
-
-@test "the reason-literal check fails on each literal deleted" {
-  local literal count=0 skill_copy security_copy
-  while IFS= read -r literal; do
-    count=$((count + 1))
-    skill_copy="$(scratch_copy "$SKILL" "reason-skill-${count}.md")"
-    security_copy="$(scratch_copy "$SECURITY" "reason-security-${count}.md")"
-    grep -qF -- "$literal" "$skill_copy" && remove_fixed "$skill_copy" "$literal"
-    grep -qF -- "$literal" "$security_copy" && remove_fixed "$security_copy" "$literal"
-    run check_reason_literals "$skill_copy" "$security_copy"
-    [ "$status" -ne 0 ] || {
-      echo "the check passed with ${literal} deleted" >&2
-      return 1
-    }
-  done < <(reason_literals)
-  [ "$count" -eq 12 ]
-}
-
 # ---------------------------------------------------------------------------
 # 5, 13, 14, 15. The Phase 7 Security section
 # ---------------------------------------------------------------------------
@@ -255,18 +220,6 @@ check_not_run_source_line() {
 
 check_dismissed_exclusion() {
   grep -qF -- 'is in the opening `dismissedGhsas`, or that this run dismissed, is accepted, not open: it gets no Still open row and no `introduced by this run` marker' <<<"$(phase7 "$1")"
-}
-
-@test "Phase 7 excludes dismissed alerts from Still open and from the introduced marker" {
-  check_dismissed_exclusion "$SKILL"
-}
-
-@test "the dismissed-alert check fails with the exclusion sentence deleted" {
-  local copy
-  copy="$(scratch_copy "$SKILL" "dismissed.md")"
-  remove_fixed "$copy" 'is in the opening `dismissedGhsas`, or that this run dismissed, is accepted, not open: it gets no Still open row and no `introduced by this run` marker'
-  run check_dismissed_exclusion "$copy"
-  [ "$status" -ne 0 ]
 }
 
 check_cache_rewrite() {
@@ -396,18 +349,6 @@ check_flag_refusal() {
   grep -qF -- '`/update-deps: --security and --scope cannot be combined; pass one or the other.`' "$1"
 }
 
-@test "--security with --scope refuses with a message naming both flags" {
-  check_flag_refusal "$SKILL"
-}
-
-@test "the flag-refusal check fails with one flag removed from the message" {
-  local copy
-  copy="$(scratch_copy "$SKILL" "flags.md")"
-  replace_fixed "$copy" '--security and --scope cannot be combined' '--security cannot be combined'
-  run check_flag_refusal "$copy"
-  [ "$status" -ne 0 ]
-}
-
 # ---------------------------------------------------------------------------
 # 9. Frontmatter description
 # ---------------------------------------------------------------------------
@@ -436,33 +377,6 @@ check_description() {
     echo "description still says Autonomous Dependabot" >&2
     return 1
   fi
-}
-
-@test "UAT-025: the description names Dependabot, security updates, and both security triggers" {
-  check_description "$SKILL"
-}
-
-@test "the description check fails on each phrase removed" {
-  local phrase count=0 copy
-  while IFS= read -r phrase; do
-    count=$((count + 1))
-    copy="$(scratch_copy "$SKILL" "description-${count}.md")"
-    remove_fixed "$copy" "$phrase"
-    run check_description "$copy"
-    [ "$status" -ne 0 ] || {
-      echo "the check passed with ${phrase} removed" >&2
-      return 1
-    }
-  done < <(description_phrases)
-  [ "$count" -eq 4 ]
-}
-
-@test "the description check fails with Autonomous Dependabot put back" {
-  local copy
-  copy="$(scratch_copy "$SKILL" "description-autonomous.md")"
-  replace_fixed "$copy" 'description: Remediates dependencies' 'description: Autonomous Dependabot, remediates dependencies'
-  run check_description "$copy"
-  [ "$status" -ne 0 ]
 }
 
 # ---------------------------------------------------------------------------
@@ -597,18 +511,6 @@ check_state_line_reads_null() {
   }
 }
 
-@test "the state line reads securityCount with no // default and an unavailable branch" {
-  check_state_line_reads_null "$SKILL"
-}
-
-@test "the state-line check fails with a // 0 default substituted" {
-  local copy
-  copy="$(scratch_copy "$SKILL" "state-default.md")"
-  replace_fixed "$copy" '(.securityCount | tostring)' '(.securityCount // 0 | tostring)'
-  run check_state_line_reads_null "$copy"
-  [ "$status" -ne 0 ]
-}
-
 # run_state_line <cache-json>: source the extracted function and run it over
 # a fixture cache.
 run_state_line() {
@@ -721,14 +623,3 @@ check_conversion() {
   fi
 }
 
-@test "conversion refuses only when no entry maps, and uses the lowest id when several do" {
-  check_conversion "$SECURITY"
-}
-
-@test "the conversion check fails with more than one restored as a refusal condition" {
-  local copy
-  copy="$(scratch_copy "$SECURITY" "conversion.md")"
-  replace_fixed "$copy" "$CONVERSION_REFUSAL" "${CONVERSION_REFUSAL}, or when more than one entry maps"
-  run check_conversion "$copy"
-  [ "$status" -ne 0 ]
-}

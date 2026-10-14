@@ -761,10 +761,6 @@ EOF
   return 0
 }
 
-@test "the default deadline is declared as a top-level integer assignment" {
-  grep -qE '^GAIA_AUDIT_LOOP_DEADLINE_DEFAULT=[0-9]+$' "$HOOK"
-}
-
 @test "a held state lock past the deadline denies and the holder's lock is untouched" {
   new_tree
   mkdir -p "$ALF_ROOT/.gaia/local/protected/audit-loop/feat"

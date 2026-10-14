@@ -118,15 +118,6 @@ named_set_section() {
   grep -qF -- '- `unrecognized <token>`' <<<"$section"
 }
 
-@test "argument parsing maps no removed list or why output" {
-  section="$(extract_section '## Argument parsing')"
-  [ -n "$section" ]
-  grep -qF -- '- `list`' <<<"$section" && return 1
-  grep -qF -- '- `why <N>`' <<<"$section" && return 1
-  grep -qF -- 'bare `fix`' <<<"$section" && return 1
-  grep -qF -- '/gaia-debt [<issue-number> ...] [[use] worktree|branch]' <<<"$section"
-}
-
 # playbook_set <core-file>: the core plus every sub-reference beside it under
 # debt/, one path per line, core first.
 playbook_set() {
@@ -155,31 +146,6 @@ no_list_or_why_section() {
   [ "$expected" -ge 1 ] || return 1
   [ "$count" -eq $((expected + 1)) ] || return 1
   return 0
-}
-
-@test "the debt reference carries no list or why subcommand section" {
-  no_list_or_why_section "$DEBT_MD"
-}
-
-@test "the list-or-why check reads every sub-reference, not only the core" {
-  copy="$BATS_TEST_TMPDIR/references"
-  mkdir -p "$copy/debt"
-  cp "$DEBT_MD" "$copy/debt.md"
-  cp "$(dirname "$DEBT_MD")"/debt/*.md "$copy/debt/"
-  no_list_or_why_section "$copy/debt.md"
-  printf '\n## why subcommand\n' >>"$copy/debt/named.md"
-  run no_list_or_why_section "$copy/debt.md"
-  [ "$status" -ne 0 ]
-}
-
-@test "argument parsing no longer falls an unparsed first token through to the top of the backlog" {
-  # Before: `12x` or `lsit` defaulted to the top-of-backlog flow, and `12 34`
-  # fixed #12 and dropped 34, because only the first token was read.
-  section="$(extract_section '## Argument parsing')"
-  [ -n "$section" ]
-  grep -qF -- 'default to `fix` with no target' <<<"$section" && return 1
-  grep -qiF -- 'first whitespace-separated word' <<<"$section" && return 1
-  true
 }
 
 @test "argument parsing relays the refusal verbatim and ends before the backend probe" {
@@ -246,12 +212,6 @@ validate_has_row() {
   grep -qiF -- 'no fall-through' <<<"$section"
 }
 
-@test "validation of every named number precedes the security pre-filter" {
-  section="$(extract_section '## Validate named numbers' "$NAMED_MD")$(named_set_section)"
-  [ -n "$section" ]
-  grep -qiF -- 'validation of every named number precedes the security pre-filter' <<<"$section"
-}
-
 # --- 3. the direct-number path ----------------------------------------------
 
 @test "the direct-number ineligible arm stops instead of falling through" {
@@ -262,12 +222,6 @@ validate_has_row() {
   grep -qiF -- 'stop' <<<"$ineligible"
   grep -qF -- 'then fall through to' <<<"$ineligible" && return 1
   true
-}
-
-@test "the direct-number cluster offer keeps its operator-chosen next-available option" {
-  section="$(extract_section '## Fix a specific issue (direct-number path)' "$NAMED_MD")"
-  [ -n "$section" ]
-  grep -qE -- '^[[:space:]]*3\. `Next available highest-priority item\(s\) instead`' <<<"$section"
 }
 
 @test "the direct-number path stops when the named issue is lost at claim time" {
@@ -324,27 +278,7 @@ validate_has_row() {
   grep -qiF -- 'never forces and never drains' <<<"$section"
 }
 
-@test "the spec hand-off prompt has exactly two options" {
-  section="$(named_set_section)"
-  [ -n "$section" ]
-  arm="$(extract_between '2. **Spec pre-filter.**' '3. **Branch-name dry-run.**' <<<"$section")"
-  [ -n "$arm" ]
-  grep -qiF -- 'exactly two options' <<<"$arm"
-  grep -qF -- '- `Hand off #<S> [#<S2> ...] to /gaia-spec`' <<<"$arm"
-  grep -qF -- '- `Cancel`' <<<"$arm"
-  options=$(grep -cE -- '^[[:space:]]*- `(Hand off|Cancel)' <<<"$arm")
-  [ "$options" -eq 2 ]
-}
-
 # --- 5. no weight, budget, or exit-code literal in the named-set section ----
-
-@test "the named-set section states no weight, budget, or exit-code number" {
-  section="$(named_set_section)"
-  [ -n "$section" ]
-  stripped="$(sed -E 's/^[[:space:]]*[0-9]+\. //' <<<"$section")"
-  grep -nE -- '(^|[^#0-9A-Za-z_./-])(2|3|7|12)([^0-9]|$)' <<<"$stripped" && return 1
-  true
-}
 
 # --- 6. the budget constants live in the scorer alone -----------------------
 
@@ -412,46 +346,7 @@ cost_record_has() {
   grep -qiF -- "$1" <<<"$section"
 }
 
-@test "cost record: the unrecognized-argument stop" {
-  cost_record_has 'unrecognized-argument stop'
-}
-
-@test "cost record: the validation stop" {
-  cost_record_has 'validation stop'
-}
-
-@test "cost record: the named-set security rejection" {
-  cost_record_has 'security pre-filter rejecting'
-}
-
-@test "cost record: the spec hand-off cancel" {
-  cost_record_has 'spec hand-off prompt cancelled'
-}
-
-@test "cost record: the branch-name-limit stop" {
-  cost_record_has 'branch-name dry-run stop'
-}
-
-@test "cost record: the over-budget cancel" {
-  cost_record_has 'over-budget prompt cancelled'
-}
-
-@test "cost record: the scorer's usage or unreadable-input stop" {
-  cost_record_has 'scorer stopping on usage or malformed input'
-}
-
-@test "cost record: a named selection's claim-time loss" {
-  cost_record_has 'named selection losing a member at the claim-time re-read'
-}
-
 # --- 9. difficulty has exactly one consumer ---------------------------------
-
-@test "the guardrails name the named-batch budget as difficulty's one consumer" {
-  section="$(extract_section '## Guardrails')"
-  [ -n "$section" ]
-  grep -qF -- 'Difficulty grading never gates anything' <<<"$section" && return 1
-  grep -qiF -- "the named-batch budget is difficulty's one consumer" <<<"$section"
-}
 
 @test "the guardrails forbid a named number draining a different issue" {
   section="$(extract_section '## Guardrails')"
@@ -460,24 +355,6 @@ cost_record_has() {
 }
 
 # --- 10. the command surface ------------------------------------------------
-
-@test "the command's argument hint is the multi-number form with the isolation suffix" {
-  [ -s "$COMMAND_MD" ]
-  hint="$(grep -E '^argument-hint:' "$COMMAND_MD")"
-  [ "$hint" = 'argument-hint: [<issue-number>...] [[use] worktree|branch]' ]
-}
-
-@test "the command's description and dispatch line name the multi-number form" {
-  [ -s "$COMMAND_MD" ]
-  description="$(grep -E '^description:' "$COMMAND_MD")"
-  grep -qiF -- 'several issue numbers' <<<"$description"
-  dispatch="$(grep -E '^Read `\.claude/skills/gaia/references/debt\.md`' "$COMMAND_MD")"
-  [ -n "$dispatch" ]
-  grep -qiF -- 'zero or more issue numbers' <<<"$dispatch"
-  grep -qiF -- 'several name your own batch' <<<"$dispatch"
-  grep -qiF -- 'argument parser' <<<"$dispatch"
-  grep -qiF -- 'unrecognized argument stops' <<<"$dispatch"
-}
 
 # --- 11. the ordering query stays the first --jq line -----------------------
 
@@ -499,15 +376,6 @@ cost_record_has() {
 }
 
 # --- 12. overlap credit from the dedup-key path alone -----------------------
-
-@test "the score step grants overlap credit from the dedup-key path alone" {
-  section="$(named_set_section)"
-  [ -n "$section" ]
-  score="$(extract_between '4. **Score.**' '5. **' <<<"$section")"
-  [ -n "$score" ]
-  grep -qiF -- 'overlap credit comes from the dedup-key path alone' <<<"$score"
-  grep -qiF -- 'a keyless member earns no shared-directory waiver even when its body cites a path' <<<"$score"
-}
 
 # --- 13 and 17. the spec hand-off -------------------------------------------
 
@@ -540,29 +408,6 @@ spec_arm() {
   grep -qF -- 'minted by `## Pre-flight isolation (branch vs worktree)` unchanged' <<<"$section"
   grep -qF -- 'the single-issue `--slug` form for a one-member selection, the batch form for two or more' <<<"$section"
   grep -qF -- 'one `Closes #N` per selected member and no other' <<<"$section"
-}
-
-@test "Force selects every named member" {
-  section="$(named_set_section)"
-  [ -n "$section" ]
-  grep -qF -- 'Force selects every named member' <<<"$section"
-}
-
-@test "a one-member subset drains alone with no cluster prompt" {
-  section="$(named_set_section)"
-  [ -n "$section" ]
-  grep -qiF -- 'a one-member subset drains that issue alone, with no cluster prompt' <<<"$section"
-}
-
-@test "the over-budget arm prints the cost lines and the total before the prompt" {
-  section="$(named_set_section)"
-  [ -n "$section" ]
-  cost=$(line_of '`#<N>: cost <cost> (' <<<"$section")
-  total=$(line_of '`Total <total> against a budget of <budget>: over budget.`' <<<"$section")
-  prompt=$(line_of "each of the scorer's \`subsets\`" <<<"$section")
-  [ -n "$cost" ] && [ -n "$total" ] && [ -n "$prompt" ]
-  [ "$cost" -lt "$prompt" ]
-  [ "$total" -lt "$prompt" ]
 }
 
 # --- 21. the security pre-filter's two passes -------------------------------

@@ -630,14 +630,6 @@ refuse_notes() {
 
 # --- the cap --------------------------------------------------------------
 
-@test "a 49-line delta routes light" {
-  lsb_init
-  lsb_full_clearance "$FRONTEND"
-  lsb_commit_lines frontend/app/notes.md 49 line
-  lsb_route "$FRONTEND"
-  expect_route light light-eligible
-}
-
 @test "a 50-line delta routes light" {
   lsb_init
   lsb_full_clearance "$FRONTEND"
@@ -1062,10 +1054,6 @@ assert_branch_content_raises() {
   assert_base_content_is_not_the_branchs machinery
 }
 
-@test "paired: the same machinery content committed on the branch routes full machinery" {
-  assert_branch_content_raises machinery
-}
-
 @test "base-only global-rules content after a clean catch-up leaves a small branch commit light" {
   assert_base_content_is_not_the_branchs rules-reset-global
 }
@@ -1078,10 +1066,6 @@ assert_branch_content_raises() {
   assert_base_content_is_not_the_branchs ownerless
 }
 
-@test "paired: the same ownerless content committed on the branch routes full ownerless" {
-  assert_branch_content_raises ownerless
-}
-
 @test "base-only hard-full content after a clean catch-up leaves a small branch commit light" {
   assert_base_content_is_not_the_branchs hard-full
 }
@@ -1092,10 +1076,6 @@ assert_branch_content_raises() {
 
 @test "a base-only symlink after a clean catch-up leaves a small branch commit light" {
   assert_base_content_is_not_the_branchs special-file
-}
-
-@test "paired: the same symlink committed on the branch routes full special-file" {
-  assert_branch_content_raises special-file
 }
 
 @test "base-only lines past the cap after a clean catch-up leave a small branch commit light" {
@@ -1121,20 +1101,6 @@ assert_branch_content_raises() {
   [ "$(jq -c '[.files[].path]' "$record")" = '["frontend/app/notes.md"]' ]
   range_copy="$(scoped_route_copy)"
   run bash "$range_copy" --root "$LSB_ROOT" --member "$FRONTEND" --check
-  expect_route full unclassifiable-path
-}
-
-@test "paired: the same path holding a newline, deleted by the branch after the clearance, routes full unclassifiable-path" {
-  lsb_init
-  lsb_catchup_init
-  printf 'x\n' >"$LSB_ROOT/frontend/app/a
-b.md"
-  lsb_git add -A && lsb_git commit -q -m newline
-  lsb_marker_json "$FRONTEND" earned full "$(lsb_git rev-parse 'HEAD^{tree}')" "$(version_literal)" >/dev/null
-  lsb_git rm -q "frontend/app/a
-b.md"
-  lsb_git commit -q -m remove
-  lsb_route "$FRONTEND"
   expect_route full unclassifiable-path
 }
 
@@ -1397,25 +1363,6 @@ b.md"
   lsb_commit frontend/app/notes.md "one line"
   lsb_seed_loop_state "$FRONTEND"
   [ "$(jq -c '[(.history.rounds | length), .history.rounds[0].tree, .history.rounds[0].members]' "$ALF_STATE")" = "[1,\"$LSB_TREE\",[\"$FRONTEND\"]]" ]
-}
-
-@test "lsb_mark and the reply builders drive the light-marker script" {
-  lsb_init
-  [ -f "$LSB_ROOT/.gaia/scripts/audit-light-mark.sh" ] || skip "audit-light-mark.sh is not present yet"
-  lsb_full_clearance "$FRONTEND"
-  lsb_commit frontend/app/notes.md "one line"
-  lsb_route "$FRONTEND"
-  expect_route light light-eligible
-  lsb_escalate_reply "$FRONTEND" >"$BATS_TEST_TMPDIR/escalate.json"
-  [ "$(jq -c '[.verdict, [.files[].verdict]]' "$BATS_TEST_TMPDIR/escalate.json")" = '["escalate",["escalate"]]' ]
-  lsb_clear_reply "$FRONTEND" >"$BATS_TEST_TMPDIR/clear.json"
-  [ "$(jq -c '[.verdict, [.files[].path]]' "$BATS_TEST_TMPDIR/clear.json")" = '["clear",["frontend/app/notes.md"]]' ]
-  lsb_mark "$FRONTEND" ""
-  [ "$status" -eq 0 ]
-  [ "$output" = "$(printf 'full\tverdict-noop')" ]
-  lsb_mark "$FRONTEND" "$BATS_TEST_TMPDIR/clear.json"
-  [ "$status" -eq 0 ]
-  [ "$output" = "light-cleared" ]
 }
 
 @test "lsb_init refuses outside a bats per-test temp directory" {

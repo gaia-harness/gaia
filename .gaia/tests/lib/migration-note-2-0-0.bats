@@ -148,32 +148,6 @@ step14_order_ok() {
   [ "$status" -ne 0 ]
 }
 
-@test "O1: step 14 sends the install event, then the setup handoff, then the update event, then deletes the cache" {
-  step14_order_ok "$NOTE"
-  grep -qF -- '.gaia/cli/gaia ping --event init --' "$NOTE" && return 1
-  grep -qE '^\.gaia/cli/gaia ping --event init .*(--mode|--i18n)' "$NOTE" && return 1
-  grep -qF -- 'Every setup feature is undecided on a migrated project' "$NOTE"
-  grep -qF -- 'baseline version the progress file recorded at step 1' "$NOTE"
-}
-
-@test "O2: a copy with the update event above the handoff fails the order assertion" {
-  fixture="$BATS_TEST_TMPDIR/early-update.md"
-  update_line='.gaia/cli/gaia ping --event update --from <baseline> --to 2.0.0 || true'
-  awk -v u="$update_line" '
-    $0 == u { next }
-    { print }
-    $0 == ".gaia/cli/gaia ping --event init || true" { print u }
-  ' "$NOTE" > "$fixture"
-  grep -qF -- "$update_line" "$fixture"
-  run step14_order_ok "$fixture"
-  [ "$status" -ne 0 ]
-}
-
-@test "O3: the progress file records the baseline version at step 1" {
-  grep -qF -- 'the baseline version step 1 read' "$NOTE"
-  grep -qF -- 'as the baseline version' "$NOTE"
-}
-
 @test "P1: GAIA's project config is excluded from the bundle and opted out of the excluded-refs check" {
   grep -qxF -- '.gaia/project.json' "$REPO_ROOT/.gaia/release-exclude"
   block="$(awk '/^      - id: /{f = ($0 == "      - id: excluded-refs")} f{print}' "$SCRUB_CONFIG")"

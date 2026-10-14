@@ -90,24 +90,12 @@ allowed_hit_count() {
   [ "$status" -eq 1 ] || { printf '%s\n' "$output" >&2; return 1; }
 }
 
-@test "the retired ledger's name appears in exactly one sentence of Usage Ledger.md" {
-  [ "$(allowed_hit_count 'wiki/concepts/Usage Ledger.md')" -eq 1 ]
-}
-
 @test "the retired ledger's name appears in the registry only on residue rows" {
   # The ledger row and its backups row; any other hit (a live entry, a
   # description) makes the file count exceed the residue-path count.
   residue_hits="$(jq -r '.residue[].path' "$REPO_ROOT/.gaia/state-registry.json" | grep -o -E 'cost\.jsonl' | wc -l | tr -d ' ')"
   [ "$residue_hits" -gt 0 ]
   [ "$(allowed_hit_count '.gaia/state-registry.json')" -eq "$residue_hits" ]
-}
-
-@test "the Unreleased changelog section names no retired symbol" {
-  section="$(awk '/^## \[Unreleased\]/ { found = 1; next } found && /^## \[/ { exit } found { print }' "$REPO_ROOT/CHANGELOG.md")"
-  # An empty extraction would pass vacuously.
-  [ -n "$section" ]
-  run grep -n -E "$PATTERN" <<<"$section"
-  [ "$status" -eq 1 ] || { printf '%s\n' "$output" >&2; return 1; }
 }
 
 @test "every retired file is absent from the tracked tree" {

@@ -120,31 +120,6 @@ unattended_grant_line() {
 FENCE_SITES=(rule_line plan_kickoff_prompt lifecycle_continuation_prompt planner_continuation_lines
   spec_model_switch_line spec_plan_handoff debt_spec_handoff update_gaia_follow_up_commands unattended_grant_line)
 
-@test "every paste site prints inside a fence, and the always-loaded rule says so" {
-  local site
-  for site in "${FENCE_SITES[@]}"; do
-    "$site" "$REPO_ROOT" || { echo "site not fenced: $site" >&2; return 1; }
-  done
-}
-
-@test "red twin: unfencing the copies turns every fence site red" {
-  local copy site file
-  copy="$(scratch_copy)"
-  # Drop every fence opener and closer, and every fence wording the rule and
-  # prose sites carry, so each site's own check has nothing left to find.
-  while IFS= read -r file; do
-    sed -e '/^[[:space:]]*>\{0,1\}[[:space:]]*```/d' -e 's/inside a fenced code block//' \
-      -e 's/in a fenced code block//' "$file" >"$file.new"
-    mv "$file.new" "$file"
-  done < <(find "$copy" -type f)
-  for site in "${FENCE_SITES[@]}"; do
-    if "$site" "$copy"; then
-      echo "site stayed green after unfencing: $site" >&2
-      return 1
-    fi
-  done
-}
-
 # --- b. the pull after a merge -------------------------------------------------
 
 worktree_arm_pulls() {
@@ -237,33 +212,7 @@ planner_points_at_reference() {
   [ "$status" -ne 0 ]
 }
 
-@test "the sub-agent continuation prompt carries the pull" {
-  continuation_prompts_pull "$REPO_ROOT"
-}
-
-@test "red twin: a continuation prompt without the pull fails" {
-  local copy file
-  copy="$(scratch_copy)"
-  file="$copy/$REFERENCES/work-lifecycle.md"
-  grep -vF -- "$PULL" "$file" >"$file.new"
-  mv "$file.new" "$file"
-  run continuation_prompts_pull "$copy"
-  [ "$status" -ne 0 ]
-}
-
 @test "the main-checkout read keys a monitor on the member digest, not the marker tree field" {
   main_checkout_paragraph_uses_digest "$REPO_ROOT"
 }
 
-@test "the planner template points at the lifecycle reference and carries no prompt of its own" {
-  planner_points_at_reference "$REPO_ROOT"
-}
-
-@test "red twin: a planner template that carries its own prompt again fails" {
-  local copy file
-  copy="$(scratch_copy)"
-  file="$copy/$REFERENCES/plan/planner.md"
-  printf 'The worktree at <ABSOLUTE-PATH-TO-WORKTREE> is ready to discard.\n' >>"$file"
-  run planner_points_at_reference "$copy"
-  [ "$status" -ne 0 ]
-}

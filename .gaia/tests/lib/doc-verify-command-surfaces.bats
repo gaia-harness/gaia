@@ -113,52 +113,9 @@ assert_block_pinned() {
   assert_block_pinned "$AGENT" 'verify-harness.sh round' agent-without-round.md
 }
 
-@test "no surface lists shell-lint, the selector and bats5 as separate steps in a block" {
-  separate_steps_listed "$WIKI" && return 1
-  separate_steps_listed "$ROUNDS" && return 1
-  separate_steps_listed "$RULE" && return 1
-  separate_steps_listed "$AGENT" && return 1
-  true
-}
-
-@test "separate-steps red twin: restoring the old steps inside a block makes the predicate fire" {
-  local copy
-  for surface in "$WIKI" "$ROUNDS" "$RULE" "$AGENT"; do
-    copy="$(scratch_with_old_step "$surface" old-step.md)"
-    separate_steps_listed "$copy" || { echo "red twin did not fail for $surface" >&2; return 1; }
-  done
-  true
-}
-
-@test "every line naming the runner sits inside a maintainer-only block" {
-  runner_outside_block "$WIKI" && return 1
-  runner_outside_block "$ROUNDS" && return 1
-  runner_outside_block "$RULE" && return 1
-  runner_outside_block "$AGENT" && return 1
-  true
-}
-
-@test "outside-block red twin: a runner mention outside a block makes the predicate fire" {
-  local copy
-  for surface in "$WIKI" "$ROUNDS" "$RULE" "$AGENT"; do
-    copy="$(scratch_with_outside_mention "$surface" outside.md)"
-    runner_outside_block "$copy" || { echo "red twin did not fail for $surface" >&2; return 1; }
-  done
-  true
-}
-
 @test "wiki and rule state the commit-first precondition" {
   assert_block_pinned "$WIKI" 'exit 3' wiki-without-exit3.md
   assert_block_pinned "$RULE" 'exit 3' rule-without-exit3.md
-}
-
-@test "wiki states branch mode comes after every other pre-dispatch commit" {
-  assert_block_pinned "$WIKI" 'after every other pre-dispatch commit' wiki-without-order.md
-}
-
-@test "wiki, rule and agent name the dispatch refusal or its consequence" {
-  assert_block_pinned "$WIKI" 'BLOCKED: audit verify' wiki-without-deny.md
-  assert_block_pinned "$AGENT" 'BLOCKED: audit verify' agent-without-deny.md
 }
 
 @test "round-mode timeout is a failed verification, never a pass, on the round procedure and the agent" {

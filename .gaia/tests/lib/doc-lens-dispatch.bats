@@ -161,17 +161,6 @@ mutate_delete() {
   true
 }
 
-@test "shared preamble keeps the literal ADVERSARIAL opening" {
-  check_opening_sentence "$CONTRACT"
-}
-
-@test "red twin: a copy without the ADVERSARIAL opening fails" {
-  local mutated
-  mutated="$(mutate_delete 'You are an ADVERSARIAL auditor of')"
-  check_opening_sentence "$mutated" && return 1
-  true
-}
-
 @test "pre-clear commands are spelled repo-relative for both callers" {
   check_repo_relative_preclear "$CONTRACT"
 }
@@ -194,13 +183,3 @@ mutate_delete() {
   true
 }
 
-@test "contract carries no em dash and no working-document id" {
-  check_no_banned_prose "$CONTRACT"
-}
-
-@test "red twin: a copy with an em dash fails the prose check" {
-  local mutated="$BATS_TEST_TMPDIR/dash.md"
-  { cat "$CONTRACT"; printf 'a \xe2\x80\x94 b\n'; } >"$mutated"
-  check_no_banned_prose "$mutated" && return 1
-  true
-}

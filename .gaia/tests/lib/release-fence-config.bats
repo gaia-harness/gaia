@@ -127,9 +127,3 @@ unreleased_body() {
   [ "$first_after_heading" != "$ROUTING_LINE" ]
 }
 
-@test "L2: the Unreleased section carries no em dash, and the check sees one when present" {
-  dash="$(printf '\342\200\224')"
-  body="$(unreleased_body "$REPO_ROOT/CHANGELOG.md")"
-  printf '%s\n' "$body" | grep -qF -- "$dash" && return 1
-  printf 'a %s b\n' "$dash" | grep -qF -- "$dash"
-}

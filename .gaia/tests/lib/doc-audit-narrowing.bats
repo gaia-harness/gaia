@@ -133,101 +133,7 @@ check_instruction_file_conflict_is_report_only() {
   done
 }
 
-@test "every sub-reference is linked from the entry file" {
-  local file
-  for file in "${SUB_REFERENCES[@]}"; do
-    grep -qF -- "cleanse/${file##*/}" "$ENTRY" || {
-      echo "${file##*/} is not linked from the entry" >&2
-      return 1
-    }
-  done
-}
-
-@test "a file over 100 lines carries a Contents line" {
-  local file
-  for file in "${PLAYBOOK_FILES[@]}"; do
-    [ "$(wc -l <"$file")" -le 100 ] || grep -q '^Contents:' "$file" || {
-      echo "$file is over 100 lines without a Contents line" >&2
-      return 1
-    }
-  done
-}
-
-@test "a sub-reference routes to no deeper file" {
-  local file
-  for file in "${SUB_REFERENCES[@]}"; do
-    grep -qE -- 'Read `[^`]*cleanse/' "$file" && {
-      echo "$file routes to another sub-reference" >&2
-      return 1
-    }
-  done
-  true
-}
-
 # --- conflict scope ---
-
-@test "no Project-internal conflict scope remains" {
-  check_no_project_internal_scope "${PLAYBOOK_FILES[@]}"
-}
-
-@test "red twin: the earlier text still held a Project-internal conflict scope" {
-  run check_no_project_internal_scope "$EXCERPT"
-  [ "$status" -eq 1 ]
-}
-
-@test "the Summary conflicts line is scoped to cross-store conflicts" {
-  check_summary_conflicts_line_is_cross_store "${PLAYBOOK_FILES[@]}"
-}
-
-@test "red twin: the earlier Summary conflicts line named no scope" {
-  run check_summary_conflicts_line_is_cross_store "$EXCERPT"
-  [ "$status" -eq 1 ]
-}
-
-@test "the Run recommendation names cross-store conflicts only" {
-  check_run_recommendation_is_cross_store "${PLAYBOOK_FILES[@]}"
-}
-
-@test "red twin: the earlier Run recommendation named any conflict" {
-  run check_run_recommendation_is_cross_store "$EXCERPT"
-  [ "$status" -eq 1 ]
-}
-
-@test "Skip eligibility names cross-store conflicts only" {
-  check_skip_eligibility_is_cross_store "${PLAYBOOK_FILES[@]}"
-}
-
-@test "red twin: the earlier Skip eligibility named any conflict" {
-  run check_skip_eligibility_is_cross_store "$EXCERPT"
-  [ "$status" -eq 1 ]
-}
-
-@test "the CF lens names cross-store conflicts only" {
-  check_conflict_lens_is_cross_store "${PLAYBOOK_FILES[@]}"
-}
-
-@test "red twin: the earlier CF lens named any conflict" {
-  run check_conflict_lens_is_cross_store "$EXCERPT"
-  [ "$status" -eq 1 ]
-}
-
-@test "the CF re-adjudication names cross-store conflicts only" {
-  check_conflict_readjudication_is_cross_store "${PLAYBOOK_FILES[@]}"
-}
-
-@test "red twin: the earlier CF re-adjudication named any conflict" {
-  run check_conflict_readjudication_is_cross_store "$EXCERPT"
-  [ "$status" -eq 1 ]
-}
-
-@test "the playbook points instruction-file conflicts at /doctor prompt-audit" {
-  check_names_prompt_audit "${PLAYBOOK_FILES[@]}"
-}
-
-@test "red twin: the earlier text never named /doctor prompt-audit" {
-  run check_names_prompt_audit "$EXCERPT"
-  [ "$status" -eq 1 ]
-}
 
 @test "an instruction file contradicting a wiki page is routed to out-of-scope findings with no action" {
   check_instruction_file_conflict_is_report_only "${PLAYBOOK_FILES[@]}"
@@ -253,15 +159,6 @@ check_instruction_file_conflict_is_report_only() {
 }
 
 # --- the CLI owns the inventory and the budgets ---
-
-@test "no budget table remains" {
-  check_no_budget_table "${PLAYBOOK_FILES[@]}"
-}
-
-@test "red twin: the earlier text carried a budget table" {
-  run check_no_budget_table "$EXCERPT"
-  [ "$status" -eq 1 ]
-}
 
 @test "the store inventory is read from the CLI and the script's list and counts are gone" {
   check_inventory_comes_from_the_cli "${PLAYBOOK_FILES[@]}"

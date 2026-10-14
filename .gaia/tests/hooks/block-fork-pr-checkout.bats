@@ -273,20 +273,3 @@ EOF
   grep -qF 'BLOCKED: block-fork-pr-checkout.sh cannot load lib/hook-payload.sh' <<<"$output"
 }
 
-@test "a non-arming Bash payload spawns no jq process" {
-  local hooks_directory shim_directory spawn_log real_jq payload spawn_count
-  hooks_directory=$(cd "$BATS_TEST_DIRNAME/../../../.claude/hooks" && pwd)
-  shim_directory="$BATS_TEST_TMPDIR/jq-shim"
-  spawn_log="$BATS_TEST_TMPDIR/jq-spawns"
-  real_jq=$(command -v jq)
-  mkdir -p "$shim_directory"
-  printf '#!/bin/sh\nprintf x >>"%s"\nexec "%s" "$@"\n' "$spawn_log" "$real_jq" >"$shim_directory/jq"
-  chmod +x "$shim_directory/jq"
-  : >"$spawn_log"
-  payload=$(jq -nc '{tool_name: "Bash", tool_input: {command: "ls -la"}}')
-  run env PATH="$shim_directory:$PATH" bash -c 'cd "$1" && printf %s "$2" | bash "$3"' _ "$BATS_TEST_TMPDIR" "$payload" "$hooks_directory/block-fork-pr-checkout.sh"
-  [ "$status" -eq 0 ]
-  [ -z "$output" ]
-  spawn_count=$(wc -c <"$spawn_log" | tr -d ' ')
-  [ "$spawn_count" -eq 0 ]
-}

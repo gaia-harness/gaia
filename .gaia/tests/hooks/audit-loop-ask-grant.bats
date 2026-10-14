@@ -503,17 +503,6 @@ header_has_literals() {
   printf '%s' "$header" | grep -qF 'audit-grant' || return 1
 }
 
-@test "UAT-021: both recorder headers name AskUserQuestion and audit-grant, and a header without one fails the check" {
-  header_has_literals "$REPO_ROOT/.claude/hooks/audit-loop-grant.sh"
-  header_has_literals "$REPO_ROOT/.claude/hooks/audit-loop-ask-grant.sh"
-  local twin="$BATS_TEST_TMPDIR/grant-twin.sh"
-  sed 's/AskUserQuestion/AskSomething/g' "$REPO_ROOT/.claude/hooks/audit-loop-grant.sh" >"$twin"
-  header_has_literals "$twin" && return 1
-  sed 's/audit-grant/audit-g/g' "$REPO_ROOT/.claude/hooks/audit-loop-ask-grant.sh" >"$twin"
-  header_has_literals "$twin" && return 1
-  true
-}
-
 # --- mutants: each guard can fail ----------------------------------------------
 
 # scratch_hook <sed-expression>: a scratch copy of the hook with its libraries

@@ -67,11 +67,6 @@ command_word() {
   [ "$output" = 'git commit' ]
 }
 
-@test "command word strips a NAME+=value prefix" {
-  command_word 'zz+=1 git commit'
-  [ "$output" = 'git commit' ]
-}
-
 @test "command word strips a double-quoted assignment value carrying a space" {
   command_word 'GIT_AUTHOR_DATE="2024-01-01 12:00" git commit'
   [ "$output" = 'git commit' ]

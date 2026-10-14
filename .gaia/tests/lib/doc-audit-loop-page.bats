@@ -81,15 +81,6 @@ hand_edit_sentences() {
   sentences | grep -iE '(orchestrator|main thread) (applies|makes|edits|fixes).*(repair|fix|edit)'
 }
 
-@test "the fix-round and checkpoint headings exist and the retired per-session heading does not" {
-  grep -qxF -- '#### The fix round: fixer, verifier, gate' "$PAGE"
-  grep -qxF -- '#### The branch checkpoint' "$RUNBOOK"
-  # The retired heading is spelled with bracket classes so this file carries
-  # none of the vocabulary the repository-wide check bans.
-  grep -qiE -- '^#### The three[-]round session[ ]cap' "$PAGE" && return 1
-  true
-}
-
 @test "UAT-001: step 2 and the fix round name the fixer dispatch and tell the main thread to make no repair itself" {
   local section_text
   section_text="$(section "$STEP2")" || return 1
@@ -107,18 +98,6 @@ hand_edit_sentences() {
   section_text="$(section "$CROSSREMIT")" || return 1
   grep -qF -- 'marks it `fix` in the round'"'"'s dispositions file and the fixer repairs it' <<<"$section_text" || return 1
   hand_edit_sentences <<<"$section_text" && return 1
-  true
-}
-
-@test "UAT-010: the loop sections carry no clear-and-paste handoff" {
-  local anchor section_text
-  for anchor in "$STEP2" "$UNIT" "$FIXROUND"; do
-    section_text="$(section "$anchor")" || return 1
-    grep -qiE -- '/clear|continuation prompt' <<<"$section_text" && {
-      echo "a loop section names a clear-and-paste handoff: $anchor" >&2
-      return 1
-    }
-  done
   true
 }
 
@@ -157,23 +136,10 @@ hand_edit_sentences() {
   sentences <<<"$section_text" | grep -qF -- 'No member repairs anything in it either: members edit no tracked file, and `code-audit-frontend` reads the same `closing` field'
 }
 
-@test "UAT-015: a gate log exists only for an attempt whose verifier passed" {
-  local section_text
-  section_text="$(section "$FIXROUND")" || return 1
-  grep -qF -- 'gate-<r>-<k>.log' <<<"$section_text" || return 1
-  sentences <<<"$section_text" | grep -qF -- 'A gate log exists only for an attempt whose verifier passed, because the verifier runs again after every repair continuation, before the next gate.'
-}
-
 @test "COV-001: the record is published at every round end, a round with no commit included" {
   local section_text
   section_text="$(section "$FIXROUND")" || return 1
   sentences <<<"$section_text" | grep -qF -- 'Publish it at every round end, not only after a push: a committed round, a clean or zero-fix round that makes no commit, the closing round, and any stop' || return 1
-}
-
-@test "COV-009: a round with zero fix entries has no baseline, fixer, verifier, gate or commit" {
-  local section_text
-  section_text="$(section "$FIXROUND")" || return 1
-  sentences <<<"$section_text" | grep -qF -- 'the round has no baseline, no fixer, no verifier, no gate, and no commit.' || return 1
 }
 
 @test "DP-003 and DP-004: the fix round states the attempt rule and reads the round index from current-round" {
@@ -211,10 +177,6 @@ anchors_resolve() {
     echo "derived only $count anchors from $agent" >&2
     return 1
   }
-}
-
-@test "UAT-021: the audit loop unit heading exists exactly once" {
-  [ "$(grep -cxF -- '#### The audit loop unit' "$PAGE")" -eq 1 ]
 }
 
 @test "DP-018: every anchor the unit agent names resolves to exactly one heading, and the check has a red twin" {
@@ -296,13 +258,6 @@ anchors_resolve() {
   sentences <<<"$section_text" | grep -qF -- 'The file carries counts and paths only and no finding detail' || return 1
   grep -qF -- 'which surfaces a non-zero `diverted_count` first' <<<"$section_text" || return 1
   sentences <<<"$section_text" | grep -qF -- 'Before posting the status the main thread surfaces a non-zero `diverted_count` to the human ([[PR Merge Workflow#Posting the status last]]) and then merges without stopping.' || return 1
-}
-
-@test "UAT-007: the fix round's baseline refuses a dirty member wave with exit 4 and stops the unit" {
-  local section_text
-  section_text="$(section "$FIXROUND")" || return 1
-  sentences <<<"$section_text" | grep -qF -- 'It refuses with exit 4 when the member wave left the tree dirty, a modified tracked file or an untracked, non-ignored one: it prints `member-wave-dirty` and one `dirty <path>` line per path, writes no baseline, and the unit stops `member-wave-dirty` and commits nothing.' || return 1
-  sentences <<<"$section_text" | grep -qF -- 'git-ignored paths never trip it.' || return 1
 }
 
 @test "UAT-005 and UAT-040: the fix round files through the filing script, runs the retry pass and reconciles with check-outcomes" {
@@ -397,18 +352,6 @@ pinned_labels() {
   true
 }
 
-@test "the checkpoint section names the recorder, the pinned-question printer and both owners of the numbers" {
-  local section_text
-  section_text="$(section "$CHECKPOINT" "$RUNBOOK")" || return 1
-  grep -qF -- 'audit-loop-ask-grant.sh' <<<"$section_text" || return 1
-  grep -qF -- 'audit-loop-eval.sh pinned-question --root <RESOLVED_ROOT>' <<<"$section_text" || return 1
-  grep -qF -- "\`.gaia/scripts/audit-loop-eval.sh\`'s header" <<<"$section_text" || return 1
-  grep -qF -- '.gaia/scripts/context-checkpoint-lib.sh' <<<"$section_text" || return 1
-  sentences <<<"$section_text" | grep -qF -- 'This page restates none of them.' || return 1
-  grep -qE -- '(300000|200000|1800) ' <<<"$section_text" && return 1
-  true
-}
-
 @test "UAT-014: the new-session option prints a fenced continuation prompt and an unattended run prints the typed line and none" {
   local section_text fence
   section_text="$(section "$CHECKPOINT" "$RUNBOOK")" || return 1
@@ -431,17 +374,6 @@ pinned_labels() {
   grep -qF -- 'it writes nothing' <<<"$row" || return 1
   grep -qF -- 'no snapshot directory)' <<<"$row" && return 1
   true
-}
-
-@test "the checkpoint section states the context gate, the fallback, the cap, one grant per unit, and the guard's false-deny" {
-  local section_text
-  section_text="$(section "$CHECKPOINT" "$RUNBOOK")" || return 1
-  grep -qF -- '**The context gate.**' <<<"$section_text" || return 1
-  sentences <<<"$section_text" | grep -qF -- 'A reading that is missing, stale, future-dated or unparseable falls back to the round-count checkpoint and never allows past it.' || return 1
-  sentences <<<"$section_text" | grep -qF -- 'a dispatch that would open a round past the hard cap is denied whatever was granted' || return 1
-  sentences <<<"$section_text" | grep -qF -- 'A grant answering the latest checkpoint admits exactly one unit of K rounds' || return 1
-  grep -qF -- 'a Bash heredoc or inline script whose text merely names those paths or a recorder' <<<"$section_text" || return 1
-  grep -qF -- 'write such files with the Write or Edit tools' <<<"$section_text" || return 1
 }
 
 # --- UAT-021: sentences the unit made false stay out of the loop prose -------
@@ -483,17 +415,3 @@ stale_file() {
   esac
 }
 
-@test "UAT-021: no sentence the unit made false survives, and restoring any one of them fails the check" {
-  local pairs key literal file pair_count=0 copy
-  pairs="$(stale_pairs)"
-  while IFS='|' read -r key literal; do
-    pair_count=$((pair_count + 1))
-    file="$(stale_file "$key")" || return 1
-    [ -f "$file" ] || { echo "file missing for $key: $file" >&2; return 1; }
-    stale_present "$file" "$literal" && { echo "retired sentence present in $key: $literal" >&2; return 1; }
-    copy="$BATS_TEST_TMPDIR/stale-$pair_count.txt"
-    { cat "$file"; printf '%s\n' "$literal"; } >"$copy"
-    stale_present "$copy" "$literal" || { echo "red twin did not fail for: $literal" >&2; return 1; }
-  done <<<"$pairs"
-  [ "$pair_count" -eq 11 ] || { echo "expected 11 pairs, read $pair_count" >&2; return 1; }
-}

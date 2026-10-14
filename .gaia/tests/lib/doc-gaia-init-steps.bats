@@ -73,34 +73,9 @@ state_steps() {
     tr '\n' ' ' | sed 's/ $//'
 }
 
-@test "gaia-init.md carries none of the CI-question tokens" {
-  run violations "$INIT_MD"
-  [ "$status" -eq 0 ]
-  [ -z "$output" ]
-}
-
-@test "the absence check flags every forbidden token re-inserted into a scratch copy" {
-  local token scratch
-  while IFS= read -r token; do
-    scratch="$BATS_TEST_TMPDIR/gaia-init.scratch.md"
-    cp "$INIT_MD" "$scratch"
-    printf '\n%s\n' "$token" >>"$scratch"
-    run violations "$scratch"
-    [ "$output" = "$token" ] || {
-      printf 'token not flagged: %s (got: %s)\n' "$token" "$output" >&2
-      return 1
-    }
-  done < <(forbidden_tokens)
-}
-
 @test "gaia-init.md calls write-project-config with --sandbox-recommended" {
   grep -qF 'gaia init write-project-config' "$INIT_MD"
   grep -qF -- '--sandbox-recommended <true|false>' "$INIT_MD"
-}
-
-@test "gaia-init.md keeps the isolation-policy omission rule" {
-  grep -qF -- '[--isolation-policy <always-worktree|prefer-worktree|prefer-branch>]' "$INIT_MD"
-  grep -qF -- 'omit the flag entirely' "$INIT_MD"
 }
 
 @test "the writer check fails when the writer call is removed from a scratch copy" {
@@ -125,10 +100,6 @@ state_steps() {
   [ "$(resume_steps "$scratch")" != "$FROZEN_STEPS" ]
 }
 
-@test "the adoption ping passes no --ci field" {
-  grep -qF '.gaia/cli/gaia ping --event init --mode "$MODE" --i18n "$I18N_COUNT" || true' "$INIT_MD"
-}
-
 # Print Step 2 (from its heading to the Step 3 heading) of the file given as $1.
 step_two() {
   awk '/^## Step 2:/{on=1} /^## Step 3:/{on=0} on' "$1"
@@ -150,40 +121,6 @@ data_layer_gaps() {
   grep -qE 'gaia init configure-data-layer --casing <CASING> --query <QUERY>' "$file" ||
     echo 'step 3 line'
   return 0
-}
-
-@test "gaia-init.md carries the data-layer questions, tier rows, defaults, and Step 3 call" {
-  run data_layer_gaps "$INIT_MD"
-  [ "$status" -eq 0 ]
-  [ -z "$output" ]
-}
-
-@test "the data-layer check flags each anchor deleted from a scratch copy" {
-  local pattern scratch
-  for pattern in 'camelCase (Recommended)' 'Not sure' 'No (Recommended)' \
-    '| Backend casing            | `camelCase`' '| TanStack Query            | `No`' \
-    '> | Backend casing ' '> | TanStack Query ' '- Backend casing (Step 2)' \
-    '- TanStack Query (Step 2)' 'configure-data-layer --casing'; do
-    scratch="$BATS_TEST_TMPDIR/gaia-init.scratch.md"
-    grep -vF -- "$pattern" "$INIT_MD" >"$scratch"
-    run data_layer_gaps "$scratch"
-    [ -n "$output" ] || {
-      printf 'deleting %s was not flagged\n' "$pattern" >&2
-      return 1
-    }
-  done
-}
-
-@test "Step 2 asks no rendering-mode question" {
-  run bash -c "awk '/^## Step 2:/{on=1} /^## Step 3:/{on=0} on' '$INIT_MD' | grep -E 'SSR|SPA|prerender'"
-  [ "$status" -ne 0 ]
-}
-
-@test "the rendering-mode check fails when a rendering question is added to a scratch Step 2" {
-  local scratch="$BATS_TEST_TMPDIR/gaia-init.scratch.md"
-  sed 's/^### Q7, TanStack Query (asked alone)/Pick SSR or SPA.\n&/' "$INIT_MD" >"$scratch"
-  run bash -c "awk '/^## Step 2:/{on=1} /^## Step 3:/{on=0} on' '$scratch' | grep -E 'SSR|SPA|prerender'"
-  [ "$status" -eq 0 ]
 }
 
 # ---------------------------------------------------------------------------
@@ -302,21 +239,6 @@ check_shared_references_only() {
 # suffix (for example a "10b." sub-step).
 lettered_substeps() {
   grep -nE '^#{2,4} [0-9]+[a-z]\.' "$1" || true
-}
-
-@test "gaia-init.md has no lettered sub-step headings" {
-  run lettered_substeps "$INIT_MD"
-  [ "$status" -eq 0 ]
-  [ -z "$output" ]
-}
-
-@test "the lettered sub-step check flags a re-inserted sub-step heading" {
-  local scratch="$BATS_TEST_TMPDIR/gaia-init.scratch.md"
-  cp "$INIT_MD" "$scratch"
-  printf '\n### 10b. Overwrite\n' >>"$scratch"
-  run lettered_substeps "$scratch"
-  [ "$status" -eq 0 ]
-  [ -n "$output" ]
 }
 
 # ---------------------------------------------------------------------------

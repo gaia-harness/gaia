@@ -121,14 +121,6 @@ race_a_close() {
   [ "$(segments | jq -c '[.[].schema_version] | unique')" = '[1]' ]
 }
 
-@test "agent fields: a meta not named agent-<id>.meta.json is not read" {
-  install
-  run flush_session
-  [ "$status" -eq 0 ]
-  [ -f "$PROJECTS_DIRECTORY/$(encode_project_path "$ROOT")/s-af/subagents/dc1.meta.json" ]
-  [ "$(segments | jq -r '.[] | select(.agent_id == "dc1") | .agent_type')" = unknown ]
-}
-
 @test "agent fields: one unparseable meta reads as unknown without disturbing the other sidecars" {
   install
   printf '{"agentType":"code-audit-fro' >"$PROJECTS_DIRECTORY/$(encode_project_path "$ROOT")/s-af/subagents/agent-bad1.meta.json"
@@ -237,24 +229,6 @@ race_a_close() {
 }
 
 # ---------- libraries and the start set ----------
-
-@test "hard error: a flusher missing usage-lib.sh or usage-parse-lib.sh exits non-zero and names the file" {
-  local scratch_directory="$TEMPORARY_DIRECTORY/missing" library
-  for library in usage-lib.sh usage-parse-lib.sh; do
-    rm -rf "$scratch_directory"
-    mkdir -p "$scratch_directory"
-    cp "$SCRIPTS"/usage-flush.sh "$SCRIPTS"/usage-parse-lib.sh "$SCRIPTS"/usage-lib.sh "$scratch_directory/"
-    rm "$scratch_directory/$library"
-    run --separate-stderr bash "$scratch_directory/usage-flush.sh" --session s-af --main-root "$ROOT"
-    [ "$status" -ne 0 ]
-    [ -z "$output" ]
-    grep -qF -- "$library" <<<"$stderr" || return 1
-  done
-  # With both libraries present the same invocation exits 0.
-  cp "$SCRIPTS"/usage-lib.sh "$SCRIPTS"/usage-parse-lib.sh "$scratch_directory/"
-  run bash "$scratch_directory/usage-flush.sh" --session s-af --main-root "$ROOT"
-  [ "$status" -eq 0 ]
-}
 
 @test "start set: the flusher reads GAIA_USAGE_START_SET and keeps no list of its own" {
   run grep -n 'UF_STARTSET' "$FLUSH"

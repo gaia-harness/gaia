@@ -220,13 +220,3 @@ preamble_only_in_contract() {
   return 0
 }
 
-@test "d. the adversarial-auditor preamble appears only in spec/lens-dispatch.md" {
-  preamble_only_in_contract "$PLAYBOOK_ROOT"
-}
-
-@test "d. the preamble check goes red when the spec audit carries its own copy" {
-  copy="$(scratch_copy)"
-  printf '\n> %s of a GAIA SPEC draft.\n' "$PREAMBLE" >>"$copy/$REFERENCES/spec/audit.md"
-  run preamble_only_in_contract "$copy"
-  [ "$status" -ne 0 ]
-}

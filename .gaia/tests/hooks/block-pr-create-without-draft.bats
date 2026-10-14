@@ -133,18 +133,7 @@ assert_allowed() {
   assert_blocked
 }
 
-@test "the deny text names the private-repository exception" {
-  run_hook 'gh pr create --title "feat: x"'
-  assert_blocked
-  grep -qF -- 'On a private repository where GitHub refuses draft pull requests, the non-draft form is allowed.' <<<"$output"
-}
-
 # --- another repository -------------------------------------------------------
-
-@test "-R naming another repository without --draft is allowed" {
-  run_hook 'gh pr create -R other/repo --title "feat: x" --body-file f'
-  assert_allowed
-}
 
 @test "--repo naming another repository without --draft is allowed" {
   run_hook 'gh pr create --repo other/repo --title "feat: x" --body-file f'

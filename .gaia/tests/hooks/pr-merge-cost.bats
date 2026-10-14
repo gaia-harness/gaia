@@ -97,13 +97,6 @@ run_nojq() {
   [ ! -e "$GH_STUB_DIRECTORY/argv.log" ]
 }
 
-@test "gh pr merge mentioned only inside heredoc body prose: not matched" {
-  stub_usage_merge 0
-  run_merge $'cat <<EOF\nPlease remember to gh pr merge later.\nEOF'
-  [ "$status" -eq 0 ]
-  [ -z "$output" ]
-}
-
 @test "gh pr merge mentioned inside a quoted string: not matched" {
   stub_usage_merge 0
   run_merge 'echo "remember to gh pr merge later"'

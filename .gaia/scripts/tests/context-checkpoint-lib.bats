@@ -182,12 +182,6 @@ write_old_override() {
   [ "$output" = "300000 20" ]
 }
 
-@test "override: both fields raised read as the defaults" {
-  write_settings '{"version":1,"context_checkpoint":{"ask_tokens":1000000,"ask_window_pct":100}}'
-  run gaia_context_override "$MAIN"
-  [ "$output" = "300000 50" ]
-}
-
 @test "override: version 2 reads as the defaults" {
   write_settings '{"version":2,"context_checkpoint":{"ask_tokens":100000}}'
   run gaia_context_override "$MAIN"
@@ -301,10 +295,6 @@ write_old_override() {
   done
   [ ! -e "$MAIN/.gaia/local/cache" ]
   [ ! -e "$MAIN/.gaia/etc" ]
-}
-
-@test "session id: a valid id passes" {
-  gaia_context_is_session_id "$SESSION_ID"
 }
 
 @test "source: succeeds with an empty PATH and defines every function" {

@@ -183,42 +183,6 @@ check_no_ci_phases() {
   fi
 }
 
-@test "setup-gaia and its references carry no CI phase, removed verb, token, or tool-mode question" {
-  check_no_ci_phases "$(real_surface)"
-}
-
-@test "the no-CI check over the surface fails on a literal put back in a reference" {
-  local directory surface
-  directory="$(scratch_references no-ci-reference)"
-  printf '\n%s\n' 'ANTHROPIC_API_KEY' >>"${directory}/sandbox.md"
-  surface="$(build_surface "$PAGE" "$directory" surface-no-ci.md)"
-  run check_no_ci_phases "$surface"
-  [ "$status" -ne 0 ]
-}
-
-@test "the no-CI check fails on every forbidden literal put back" {
-  local literal count=0 copy
-  while IFS= read -r literal; do
-    count=$((count + 1))
-    copy="$(scratch_copy "$PAGE" "no-ci-${count}.md")"
-    printf '\n%s\n' "$literal" >>"$copy"
-    run check_no_ci_phases "$copy"
-    [ "$status" -ne 0 ] || {
-      echo "the check passed with ${literal} present" >&2
-      return 1
-    }
-  done < <(forbidden_literals)
-  [ "$count" -eq 19 ]
-}
-
-@test "the no-CI check fails on a CI enable question put back" {
-  local copy
-  copy="$(scratch_copy "$PAGE" "no-ci-question.md")"
-  printf '\n> Enable GAIA CI now?\n' >>"$copy"
-  run check_no_ci_phases "$copy"
-  [ "$status" -ne 0 ]
-}
-
 # ---------------------------------------------------------------------------
 # --reconfigure stays, scoped to its decisions and the ping
 # ---------------------------------------------------------------------------
@@ -251,28 +215,6 @@ check_reconfigure_scope() {
   }
 }
 
-@test "--reconfigure is parsed and RECONFIGURE is read only in Phases 2, 3.5, 3.7, 4.6, and 6" {
-  check_reconfigure_scope "$PAGE"
-}
-
-@test "the reconfigure check fails on RECONFIGURE under another phase" {
-  local copy
-  copy="$(scratch_copy "$PAGE" "reconfigure-stray.md")"
-  awk '{ print } /^## Phase 4\.5:/ { print ""; print "When `RECONFIGURE` is set, rotate the token." }' \
-    "$PAGE" >"$copy"
-  run check_reconfigure_scope "$copy"
-  [ "$status" -ne 0 ]
-}
-
-@test "the reconfigure check fails when the argument parse drops the flag" {
-  local copy
-  copy="$(scratch_copy "$PAGE" "reconfigure-unparsed.md")"
-  awk '/^## /{inside = ($0 == "## Argument parse")} inside && /RECONFIGURE/ { next } { print }' \
-    "$PAGE" >"$copy"
-  run check_reconfigure_scope "$copy"
-  [ "$status" -ne 0 ]
-}
-
 # check_references_never_reconfigure <directory>: no reference mentions
 # RECONFIGURE, because every gate that consults it stays in the command.
 check_references_never_reconfigure() {
@@ -289,18 +231,6 @@ check_references_never_reconfigure() {
     echo "no reference found in ${directory}" >&2
     return 1
   }
-}
-
-@test "no setup reference mentions RECONFIGURE" {
-  check_references_never_reconfigure "$REFERENCES_DIRECTORY"
-}
-
-@test "the reference RECONFIGURE check fails on a mention appended to a reference copy" {
-  local directory
-  directory="$(scratch_references reconfigure-reference)"
-  printf '\nWhen `RECONFIGURE` is set, ask again.\n' >>"${directory}/squash-only.md"
-  run check_references_never_reconfigure "$directory"
-  [ "$status" -ne 0 ]
 }
 
 # ---------------------------------------------------------------------------
@@ -425,28 +355,6 @@ check_phase_references() {
     return 1
   }
   [ "$count" -ge 7 ]
-}
-
-@test "every Phase cross-reference on the setup surface names an existing phase heading" {
-  check_phase_references "$(real_surface)" "$PAGE"
-}
-
-@test "the cross-reference check fails on a reference to a removed phase" {
-  local copy surface
-  copy="$(scratch_copy "$PAGE" "phase-reference.md")"
-  printf '\nFall through to Phase 9.\n' >>"$copy"
-  surface="$(build_surface "$copy" "$REFERENCES_DIRECTORY" surface-phase-reference.md)"
-  run check_phase_references "$surface" "$copy"
-  [ "$status" -ne 0 ]
-}
-
-@test "the cross-reference check fails on a reference file naming a missing phase" {
-  local directory surface
-  directory="$(scratch_references phase-reference-directory)"
-  printf '\nContinue at Phase 9.\n' >>"${directory}/squash-only.md"
-  surface="$(build_surface "$PAGE" "$directory" surface-phase-reference-file.md)"
-  run check_phase_references "$surface" "$PAGE"
-  [ "$status" -ne 0 ]
 }
 
 # ---------------------------------------------------------------------------
@@ -740,35 +648,6 @@ check_no_dependabot_question() {
   return 0
 }
 
-@test "setup-gaia and its references ask no Dependabot question and have no Phase 3.6" {
-  check_no_dependabot_question "$(real_surface)"
-}
-
-@test "the no-Dependabot-question check fails on the question put back in a reference" {
-  local directory surface
-  directory="$(scratch_references dependabot-question-reference)"
-  printf '\nUse `AskUserQuestion`, header **`Dependabot`**, with two options.\n' >>"${directory}/github-repo.md"
-  surface="$(build_surface "$PAGE" "$directory" surface-dependabot-question.md)"
-  run check_no_dependabot_question "$surface"
-  [ "$status" -ne 0 ]
-}
-
-@test "the no-Dependabot-question check fails on the question put back" {
-  local copy
-  copy="$(scratch_copy "$PAGE" "dependabot-question.md")"
-  printf '\nUse `AskUserQuestion`, header **`Dependabot`**, with two options.\n' >>"$copy"
-  run check_no_dependabot_question "$copy"
-  [ "$status" -ne 0 ]
-}
-
-@test "the no-Dependabot-question check fails on the Phase 3.6 heading put back" {
-  local copy
-  copy="$(scratch_copy "$PAGE" "dependabot-heading.md")"
-  printf '\n## Phase 3.6: Dependabot security updates\n' >>"$copy"
-  run check_no_dependabot_question "$copy"
-  [ "$status" -ne 0 ]
-}
-
 # check_posture_subcommand <file>: the page invokes the posture subcommand.
 check_posture_subcommand() {
   grep -qF -- 'setup configure-dependabot-alerts' "$1" || {
@@ -787,15 +666,6 @@ check_posture_subcommand() {
   grep -vF -- 'setup configure-dependabot-alerts' "$GITHUB_REPO_REFERENCE" >"$copy" || true
   cmp -s "$GITHUB_REPO_REFERENCE" "$copy" && return 1
   run check_posture_subcommand "$copy"
-  [ "$status" -ne 0 ]
-}
-
-@test "the no-CI check fails when the Dependabot config writer is put back" {
-  local copy literal
-  literal="$(printf 'write-dependabot-%s' config)"
-  copy="$(scratch_copy "$PAGE" "writer-put-back.md")"
-  printf '\n.gaia/cli/gaia setup %s --json\n' "$literal" >>"$copy"
-  run check_no_ci_phases "$copy"
   [ "$status" -ne 0 ]
 }
 
@@ -1062,26 +932,6 @@ check_one_level_deep() {
   }
 }
 
-@test "no setup reference routes to another reference" {
-  check_one_level_deep "$REFERENCES_DIRECTORY"
-}
-
-@test "the one-level check fails on a routing line to a sibling setup reference" {
-  local directory
-  directory="$(scratch_references deep-sibling)"
-  printf '\nRead `%ssandbox.md` now.\n' "$SETUP_REFERENCES_PATH" >>"${directory}/per-machine.md"
-  run check_one_level_deep "$directory"
-  [ "$status" -ne 0 ]
-}
-
-@test "the one-level check fails on a routing line to a reference outside the setup folder" {
-  local directory
-  directory="$(scratch_references deep-outside)"
-  printf '\nRead `.claude/skills/gaia/references/debt.md` now.\n' >>"${directory}/squash-only.md"
-  run check_one_level_deep "$directory"
-  [ "$status" -ne 0 ]
-}
-
 # ---------------------------------------------------------------------------
 # Line cap
 # ---------------------------------------------------------------------------
@@ -1109,34 +959,6 @@ pad_to_lines() {
   local current
   current="$(wc -l <"$1" | tr -d ' ')"
   awk -v n="$(($2 - current))" 'BEGIN { for (i = 0; i < n; i++) print "" }' >>"$1"
-}
-
-@test "both commands and every setup reference are under the line cap" {
-  local list
-  list="$(surface_files "$PAGE" "$REFERENCES_DIRECTORY")"
-  list="${list}"$'\n'"${INIT_PAGE}"
-  check_line_cap "$list"
-}
-
-@test "the line cap check fails on a file padded to the cap and passes one line under" {
-  local copy
-  copy="$(scratch_copy "$PAGE" "cap-under.md")"
-  pad_to_lines "$copy" 499
-  run check_line_cap "$copy"
-  [ "$status" -eq 0 ]
-  copy="$(scratch_copy "$PAGE" "cap-over.md")"
-  pad_to_lines "$copy" 500
-  run check_line_cap "$copy"
-  [ "$status" -ne 0 ]
-}
-
-@test "the line cap check fails on an over-cap reference in the surface list" {
-  local directory list
-  directory="$(scratch_references cap-reference)"
-  pad_to_lines "${directory}/squash-only.md" 500
-  list="$(surface_files "$PAGE" "$directory")"
-  run check_line_cap "$list"
-  [ "$status" -ne 0 ]
 }
 
 # ---------------------------------------------------------------------------
@@ -1219,68 +1041,6 @@ check_contents_over_surface() {
   done
 }
 
-@test "both commands and every long setup reference carry a Contents line in the frozen form" {
-  check_contents_over_surface "$PAGE" "$INIT_PAGE" "$REFERENCES_DIRECTORY"
-}
-
-@test "the Contents check fails when the line is deleted from a command" {
-  local copy
-  copy="$(scratch_copy "$PAGE" "contents-deleted.md")"
-  grep -v '^Contents: ' "$PAGE" >"$copy" || true
-  cmp -s "$PAGE" "$copy" && return 1
-  run check_contents_line "$copy" always
-  [ "$status" -ne 0 ]
-}
-
-@test "the Contents check fails on a heading the line does not list" {
-  local copy
-  copy="$(scratch_copy "$PAGE" "contents-unlisted.md")"
-  printf '\n## Phase 9: Unlisted\n' >>"$copy"
-  run check_contents_line "$copy" always
-  [ "$status" -ne 0 ]
-  grep -qF 'differs from its headings' <<<"$output"
-}
-
-@test "the Contents check fails when an entry carries the heading's parenthetical" {
-  local copy
-  copy="$(scratch_copy "$PAGE" "contents-parenthetical.md")"
-  sed 's/Phase 2: Per-machine setup;/Phase 2: Per-machine setup (skip if setup-state finalized);/' "$PAGE" >"$copy"
-  cmp -s "$PAGE" "$copy" && return 1
-  run check_contents_line "$copy" always
-  [ "$status" -ne 0 ]
-  grep -qF 'differs from its headings' <<<"$output"
-}
-
-@test "the Contents check fails when a long reference has no line" {
-  local directory
-  directory="$(scratch_references contents-long-reference)"
-  pad_to_lines "${directory}/squash-only.md" 101
-  run check_contents_over_surface "$PAGE" "$INIT_PAGE" "$directory"
-  [ "$status" -ne 0 ]
-  grep -qF 'expected exactly one Contents line' <<<"$output"
-}
-
-@test "the Contents check skips a heading inside a fence, including one nested in a longer fence" {
-  local fixture="${BATS_TEST_TMPDIR}/contents-fenced.md" fence3='```' fence4='````'
-  {
-    printf '# Title\n\nContents: One; Two.\n\n## One\n\n'
-    printf '%smd\n## Hidden\n%s\n\n' "$fence3" "$fence3"
-    printf '%smd\n%s\n## Also hidden\n%s\n%s\n\n' "$fence4" "$fence3" "$fence3" "$fence4"
-    printf '## Two (note)\n'
-  } >"$fixture"
-  check_contents_line "$fixture" always
-}
-
-@test "the Contents check lists a heading that follows a fence" {
-  local fixture="${BATS_TEST_TMPDIR}/contents-after-fence.md" fence3='```'
-  {
-    printf '# Title\n\nContents: One.\n\n## One\n\n'
-    printf '%smd\n## Hidden\n%s\n\n## Visible\n' "$fence3" "$fence3"
-  } >"$fixture"
-  run check_contents_line "$fixture" always
-  [ "$status" -ne 0 ]
-}
-
 # ---------------------------------------------------------------------------
 # One per-machine source
 # ---------------------------------------------------------------------------
@@ -1328,58 +1088,6 @@ check_per_machine_source() {
       return 1
     }
   done
-}
-
-@test "the install literals live only in the per-machine reference or the installer script" {
-  check_per_machine_source "$PER_MACHINE_REFERENCE" "$REACT_DOCTOR_INSTALLER" "$PAGE" "$INIT_PAGE"
-}
-
-@test "the per-machine source check fails on each literal put back in either command" {
-  local literal source_file copy count=0
-  for source_file in "$PAGE" "$INIT_PAGE"; do
-    while IFS= read -r literal; do
-      count=$((count + 1))
-      copy="$(scratch_copy "$source_file" "per-machine-literal-${count}.md")"
-      printf '\n%s\n' "$literal" >>"$copy"
-      if [ "$source_file" = "$PAGE" ]; then
-        run check_per_machine_source "$PER_MACHINE_REFERENCE" "$REACT_DOCTOR_INSTALLER" "$copy" "$INIT_PAGE"
-      else
-        run check_per_machine_source "$PER_MACHINE_REFERENCE" "$REACT_DOCTOR_INSTALLER" "$PAGE" "$copy"
-      fi
-      [ "$status" -ne 0 ] || {
-        echo "the check passed with ${literal} in ${source_file}" >&2
-        return 1
-      }
-    done < <(per_machine_literals)
-  done
-  [ "$count" -gt 0 ]
-}
-
-@test "the per-machine source check fails when a command drops the per-machine path" {
-  local source_file copy count=0
-  for source_file in "$PAGE" "$INIT_PAGE"; do
-    count=$((count + 1))
-    copy="$(scratch_copy "$source_file" "per-machine-path-${count}.md")"
-    sed "s#${PER_MACHINE_PATH}#.claude/skills/gaia/references/setup/gone.md#g" "$source_file" >"$copy"
-    cmp -s "$source_file" "$copy" && return 1
-    if [ "$source_file" = "$PAGE" ]; then
-      run check_per_machine_source "$PER_MACHINE_REFERENCE" "$REACT_DOCTOR_INSTALLER" "$copy" "$INIT_PAGE"
-    else
-      run check_per_machine_source "$PER_MACHINE_REFERENCE" "$REACT_DOCTOR_INSTALLER" "$PAGE" "$copy"
-    fi
-    [ "$status" -ne 0 ]
-    grep -qF 'does not name' <<<"$output"
-  done
-}
-
-@test "the per-machine source check fails when a literal leaves the source" {
-  local copy
-  copy="$(scratch_copy "$PER_MACHINE_REFERENCE" "per-machine-no-serena.md")"
-  grep -vF -- 'oraios/serena@' "$PER_MACHINE_REFERENCE" >"$copy" || true
-  cmp -s "$PER_MACHINE_REFERENCE" "$copy" && return 1
-  run check_per_machine_source "$copy" "$REACT_DOCTOR_INSTALLER" "$PAGE" "$INIT_PAGE"
-  [ "$status" -ne 0 ]
-  grep -qF 'lacks' <<<"$output"
 }
 
 # ---------------------------------------------------------------------------

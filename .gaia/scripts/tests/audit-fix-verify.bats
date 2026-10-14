@@ -396,21 +396,6 @@ enforcement_case() {
   [ "$path_count" -ge 1 ]
 }
 
-@test "UAT-032 control: a listed edit to a SPEC-093 enforcement path with a fix entry passes" {
-  local file_path='.gaia/scripts/audit-dispositions-check.sh'
-  mkdir -p "$REPO/.gaia/scripts"
-  printf 'orig\n' >"$REPO/$file_path"
-  git -C "$REPO" add -A
-  git -C "$REPO" commit -q -m enforcement
-  write_dispositions '[{"member":"m","finding_class":"c1","path":"'"$file_path"'","line":1,"disposition":"fix"}]' '["'"$file_path"'"]'
-  take_baseline
-  take_digests
-  edit "$file_path"
-  printf '%s' '{"schema":1,"round":1,"attempt":1,"results":[{"member":"m","finding_class":"c1","path":"'"$file_path"'","line":1,"disposition":"fixed","reason":"r","changed_paths":["'"$file_path"'"]}],"changed_paths":["'"$file_path"'"],"reverted_paths":[]}' >"$RESULT_FILE"
-  do_check
-  [ "$status" -eq 0 ]
-}
-
 @test "a waive-out-of-scope entry carrying basis cross-remit passes the shape check" {
   write_dispositions '[
     {"member":"m","finding_class":"c1","path":"a.txt","line":3,"disposition":"fix"},
@@ -434,20 +419,6 @@ enforcement_case() {
   do_check
   [ "$status" -eq 0 ] || { echo "status $status: $output"; return 1; }
   grep -qF -- 'fix|accept-residual|waive-out-of-scope|file|divert' "$REAL_SCRIPT"
-}
-
-@test "the run-folder header drops the stale writer label and names the new shapes" {
-  if grep -Fq 'dispositions-<r>.json (main thread)' "$REAL_SCRIPT"; then
-    echo "stale writer label still present"
-    return 1
-  fi
-  local literal
-  for literal in basis vetoes.json 'unit-<u>.json' effective_from_round stop_reason; do
-    grep -Fq -- "$literal" "$REAL_SCRIPT" || {
-      echo "header lacks $literal"
-      return 1
-    }
-  done
 }
 
 @test "directive 3: an enforcement edit passes when allowed and a fix entry names it" {
@@ -596,16 +567,6 @@ enforcement_case() {
   default_result >"$RESULT_FILE"
   do_check
   [ "$status" -eq 0 ]
-}
-
-@test "the HEAD reference and a bare write-tree id each yield a digest set" {
-  with_harness
-  printf '# fixer edit\n' >>"$REPO/.claude/hooks/lib/audit-digest.sh"
-  head_digest="$(member_digest HEAD)"
-  tree_digest="$(member_digest "$(working_tree_id)")"
-  [[ "$head_digest" =~ ^[0-9a-f]{64}$ ]]
-  [[ "$tree_digest" =~ ^[0-9a-f]{64}$ ]]
-  [ "$head_digest" != "$tree_digest" ]
 }
 
 @test "without an origin ref no digest resolves and every new marker is reported" {

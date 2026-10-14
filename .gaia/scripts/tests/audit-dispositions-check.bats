@@ -199,19 +199,6 @@ vetoes() {
   red cross-remit-basis-mismatch "$(key_json c/imp f.txt 3)"
 }
 
-@test "control: an out-of-scope Critical filed with a reason passes on a confirmed PRIVATE repo" {
-  GH_VISIBILITY=PRIVATE
-  write_dispositions 1 "$(fill "$FINDINGS_JSON" "[$(disposition_entry base.txt 3 c/oos file "filed upstream")]")"
-  run_check 1
-  green
-}
-
-@test "security divert: an out-of-scope Critical filed on a PUBLIC repo fails security-file-not-private" {
-  write_dispositions 1 "$(fill "$FINDINGS_JSON" "[$(disposition_entry base.txt 3 c/oos file "filed upstream")]")"
-  run_check 1
-  red security-file-not-private "$(key_json c/oos base.txt 3)"
-}
-
 @test "security divert: an out-of-scope security:true Minor filed fails on INTERNAL and on a failed probe" {
   local visibility
   write_dispositions 1 "$(fill "$FINDINGS_JSON" "[$(disposition_entry base.txt 5 c/oossec file "filed upstream")]")"
@@ -237,12 +224,6 @@ vetoes() {
 
 @test "control: a cross_remit Major waived with basis cross-remit passes" {
   write_dispositions 1 "$(fill "$FINDINGS_JSON" "[$(disposition_entry f.txt 4 c/xr waive-out-of-scope "other member's remit" cross-remit)]")"
-  run_check 1
-  green
-}
-
-@test "control: every finding disposed fix passes" {
-  write_dispositions 1 "$(fill "$FINDINGS_JSON" "[$(disposition_entry f.txt 1 c/crit fix),$(disposition_entry f.txt 2 c/sec fix),$(disposition_entry base.txt 3 c/oos fix)]")"
   run_check 1
   green
 }

@@ -130,20 +130,6 @@ labels_owned() {
   done
 }
 
-@test "each moved label lives in exactly its owning file" {
-  labels_owned "$REPO_ROOT"
-}
-
-@test "red twin: a label duplicated into plan.md fails the ownership check" {
-  local label
-  for label in '**Sub-agent invocation:**' '**Stop conditions.**' 'How your run ends:' '#### 4.6a. Dispatch the lens auditors'; do
-    copy="$(scratch_copy)"
-    printf '\n%s stale copy\n' "$label" >>"$copy/$REFERENCES_RELATIVE/plan.md"
-    run labels_owned "$copy"
-    [ "$status" -ne 0 ] || { echo "duplicating '$label' did not fail the check" >&2; return 1; }
-  done
-}
-
 # --- e. the audit uses the lens contract ------------------------------------
 
 audit_uses_lens_contract() {

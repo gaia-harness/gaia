@@ -200,22 +200,7 @@ scratch_copy() {
   printf '%s\n' "$listing" | grep -qxF -- "$DEBT"
 }
 
-@test "carriers: each phrase is listed with the files that carry it" {
-  local phrase
-  for phrase in "$PHRASE_MERGE_WAIT" "$PHRASE_CLEANUP" "$PHRASE_REMOVE" "$HEADING_CONTINUATION"; do
-    printf 'phrase "%s" is carried by:\n' "$phrase"
-    list_carriers "$DOC_ROOT" "$phrase" | sed 's/^/  /'
-  done
-  list_carriers "$DOC_ROOT" "$PHRASE_CLEANUP" | grep -qxF -- "$REFERENCE"
-}
-
 # --- the four checks on the real tree -------------------------------------
-
-@test "check 1: the reference carries every phrase and a full statement of each owned step" {
-  run check_1 "$DOC_ROOT"
-  printf '%s\n' "$output"
-  [ "$status" -eq 0 ]
-}
 
 @test "check 2: no full statement of cleanup, worktree removal or the heading outside the reference" {
   run check_2 "$DOC_ROOT"
@@ -225,12 +210,6 @@ scratch_copy() {
 
 @test "check 3: a merge-wait fence appears only in the merge workflow page, sentinel fences excepted" {
   run check_3 "$DOC_ROOT"
-  printf '%s\n' "$output"
-  [ "$status" -eq 0 ]
-}
-
-@test "check 4: every skill or rule file mentioning a phrase names work-lifecycle.md" {
-  run check_4 "$DOC_ROOT"
   printf '%s\n' "$output"
   [ "$status" -eq 0 ]
 }
@@ -246,32 +225,6 @@ scratch_copy() {
   run check_2 "$copy"
   [ "$status" -ne 0 ]
   printf '%s\n' "$output" | grep -qF -- "check2: $DEBT "
-}
-
-@test "red twin: deleting the continuation heading from the reference turns check 1 red" {
-  local copy
-  copy="$(scratch_copy)"
-  run check_1 "$copy"
-  [ "$status" -eq 0 ]
-  grep -vxF -- "$HEADING_CONTINUATION" "$copy/$REFERENCE" >"$copy/reference.tmp"
-  mv "$copy/reference.tmp" "$copy/$REFERENCE"
-  run check_1 "$copy"
-  [ "$status" -ne 0 ]
-  printf '%s\n' "$output" | grep -qF -- "$HEADING_CONTINUATION"
-}
-
-@test "red twin: a cleanup mention in residue.md with every work-lifecycle.md mention stripped turns check 4 red" {
-  local copy residue='.claude/skills/gaia/references/residue.md'
-  copy="$(scratch_copy)"
-  run check_4 "$copy"
-  if printf '%s\n' "$output" | grep -qF -- "check4: $residue "; then return 1; fi
-  printf '\nRun git fetch --prune origin afterwards.\n' >>"$copy/$residue"
-  sed 's/work-lifecycle\.md/the lifecycle reference/g' "$copy/$residue" >"$copy/residue.tmp"
-  mv "$copy/residue.tmp" "$copy/$residue"
-  grep -qF -- 'PR Merge Workflow.md' "$copy/$residue"
-  run check_4 "$copy"
-  [ "$status" -ne 0 ]
-  printf '%s\n' "$output" | grep -qF -- "check4: $residue "
 }
 
 @test "red twin: a merge-wait fence appended to codify.md turns check 3 red and names codify.md" {

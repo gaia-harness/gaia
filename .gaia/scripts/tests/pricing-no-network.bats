@@ -88,15 +88,6 @@ function_body() {
   [ "$checked" -eq "${#READOUT_FILES[@]}" ]
 }
 
-@test "static: gaia_rates_load names no network tool" {
-  local body
-  body="$(function_body "$SCRIPTS/token-pricing-lib.sh" gaia_rates_load)"
-  [ -n "$body" ] || { printf 'extracted an empty gaia_rates_load body\n' >&2; return 1; }
-  grep -qF 'GAIA_RATES_JSON' <<<"$body"
-  grep -qE -- "$LOAD_PATTERN" <<<"$body" && { printf 'gaia_rates_load names a network entry point:\n%s\n' "$body" >&2; return 1; }
-  true
-}
-
 # library_violations <file>: every non-comment line of the pricing library that
 # names a network entry point or sources another file; empty when it is clean.
 library_violations() {

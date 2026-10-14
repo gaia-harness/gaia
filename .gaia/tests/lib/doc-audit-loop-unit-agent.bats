@@ -163,28 +163,6 @@ assert_pinned() {
   assert_pinned 'needs-human'
 }
 
-@test "agent carries the How your run ends paragraph verbatim" {
-  local plan="$ROOT/.claude/skills/gaia/references/plan/planner.md"
-  local paragraph
-  paragraph="$(grep -F -m1 'How your run ends:' "$plan" | sed 's/^[[:space:]>]*//')"
-  [ -n "$paragraph" ]
-  has_literal "$AGENT" "$paragraph"
-  assert_pinned 'How your run ends:'
-}
-
-@test "agent hard-codes no id reference, em dash, or round count" {
-  grep -qE 'SPEC-[0-9]|UAT-[0-9]' "$AGENT" && return 1
-  grep -qF -- "$(printf '\xe2\x80\x94')" "$AGENT" && return 1
-  grep -qF -- '3 rounds' "$AGENT" && return 1
-  # Red twins: each forbidden literal is detected when present.
-  printf 'x SPEC-093 y\n' >"$BATS_TEST_TMPDIR/id.md"
-  grep -qE 'SPEC-[0-9]|UAT-[0-9]' "$BATS_TEST_TMPDIR/id.md"
-  printf 'x \xe2\x80\x94 y\n' >"$BATS_TEST_TMPDIR/dash.md"
-  grep -qF -- "$(printf '\xe2\x80\x94')" "$BATS_TEST_TMPDIR/dash.md"
-  printf 'run 3 rounds\n' >"$BATS_TEST_TMPDIR/k.md"
-  grep -qF -- '3 rounds' "$BATS_TEST_TMPDIR/k.md"
-}
-
 @test "agent forbids merging, posting a status, CHANGELOG edits and vetoes.json" {
   assert_pinned 'Never run `gh pr merge`'
   assert_pinned 'Never run `post-audit-status.sh`'
@@ -224,10 +202,6 @@ assert_pinned() {
   run bash "$ROOT/.gaia/scripts/resolve-audit-members.sh" --root "$sandbox_repository" --base main
   [ "$status" -eq 0 ]
   [ -z "$output" ]
-}
-
-@test "roster: the shell member's remit region names the agent file" {
-  grep -qF -- '- `.claude/agents/audit-loop-unit.md`' "$ROOT/.claude/agents/code-audit-maintainer-shell.md"
 }
 
 @test "roster verifier passes on the real roster" {

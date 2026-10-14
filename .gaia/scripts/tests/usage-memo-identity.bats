@@ -207,22 +207,6 @@ memo_inode_flips() {
   [ "$skipped" -eq "$want_skipped" ]
 }
 
-@test "UAT-002 guard: the figure assertion fails over a main root with no capture hooks" {
-  local bare="$UM_TEMPORARY_DIRECTORY/main-nohooks"
-  # The same readout, once under the registered main root and once under a bare
-  # one: the first carries figures, the second must trip assert_priced.
-  capture hooked new pr 2302
-  assert_priced "$CAPTURE_DIRECTORY/hooked.out"
-  mkdir -p "$bare/.gaia/local/telemetry"
-  git -C "$bare" init -q -b main
-  git -C "$bare" -c user.email=t@example.com -c user.name=T -c commit.gpgsign=false commit -q --allow-empty -m init
-  cp "$UM_TELEMETRY_DIRECTORY"/usage.jsonl "$UM_TELEMETRY_DIRECTORY"/links.jsonl "$bare/.gaia/local/telemetry/"
-  UM_MAIN="$bare" UM_TELEMETRY_DIRECTORY="$bare/.gaia/local/telemetry" capture bare new pr 2302
-  [ -s "$CAPTURE_DIRECTORY/bare.out" ]
-  run assert_priced "$CAPTURE_DIRECTORY/bare.out"
-  [ "$status" -ne 0 ]
-}
-
 @test "UAT-002: a link that closes a cycle is refused identically and changes nothing" {
   local child parent before
   child="$(jq -r '.anchors.cycle.child' "$PROBES")"

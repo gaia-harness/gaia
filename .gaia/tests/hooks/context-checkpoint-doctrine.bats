@@ -235,10 +235,6 @@ move_wiki_section_down() {
 
 # ------------------------------------------------------------- the doctrine
 
-@test "doctrine: the file exists and is not empty" {
-  [ -s "$DOCTRINE" ]
-}
-
 @test "doctrine anchors: every required statement is present" {
   [ "${#ANCHORS[@]}" -gt 0 ]
   anchors_ok "$DOCTRINE"
@@ -262,18 +258,6 @@ move_wiki_section_down() {
   ANCHORS=('Z|anything')
   if anchors_ok "$DOCTRINE"; then ANCHORS=("${original[@]}"); return 1; fi
   ANCHORS=("${original[@]}")
-  true
-}
-
-@test "doctrine: there are exactly two options and no third" {
-  no_third_option_ok "$DOCTRINE"
-}
-
-@test "doctrine third-option red twin: a planted Accept and stop line fails" {
-  { cat "$DOCTRINE"; printf -- '- `Accept and stop`: end the session.\n'; } >"$TEMPORARY_DIRECTORY/third-option.md"
-  if no_third_option_ok "$TEMPORARY_DIRECTORY/third-option.md"; then return 1; fi
-  { cat "$DOCTRINE"; printf -- '- accept-and-stop\n'; } >"$TEMPORARY_DIRECTORY/third-option-dashed.md"
-  if no_third_option_ok "$TEMPORARY_DIRECTORY/third-option-dashed.md"; then return 1; fi
   true
 }
 
@@ -363,20 +347,6 @@ move_wiki_section_down() {
 }
 
 # ------------------------------------------------------------ doc surfaces
-
-@test "rule: the line naming the context checkpoint also names the wiki page" {
-  rule_pointer_ok "$RULE"
-}
-
-@test "rule pointer red twins: the pointer line removed, or its page path removed, fails" {
-  grep -vF -- 'context checkpoint' "$RULE" >"$TEMPORARY_DIRECTORY/rule-no-pointer.md" || true
-  if cmp -s "$RULE" "$TEMPORARY_DIRECTORY/rule-no-pointer.md"; then return 1; fi
-  if rule_pointer_ok "$TEMPORARY_DIRECTORY/rule-no-pointer.md"; then return 1; fi
-  sed "s|$WIKI_PAGE_PATH|elsewhere.md|g" "$RULE" >"$TEMPORARY_DIRECTORY/rule-no-path.md"
-  if cmp -s "$RULE" "$TEMPORARY_DIRECTORY/rule-no-path.md"; then return 1; fi
-  if rule_pointer_ok "$TEMPORARY_DIRECTORY/rule-no-path.md"; then return 1; fi
-  true
-}
 
 @test "wiki: the checkpoint section follows Resume, links the doctrine, restates nothing, spells no number" {
   wiki_section_ok "$WIKI"

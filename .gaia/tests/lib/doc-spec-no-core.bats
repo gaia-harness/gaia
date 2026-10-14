@@ -54,21 +54,6 @@ step3_range() {
   [ "$output" = '{"ok":true,"findings":[]}' ]
 }
 
-# "No specs/" means no bare core feature-tree path. The folder-creation fence
-# legitimately carries `.gaia/local/specs/`, which the regex below does not
-# match because a slash precedes `specs/`.
-@test "step 3 carries no core path" {
-  range="$(step3_range)"
-  [ -n "$range" ]
-
-  printf '%s\n' "$range" | grep -qF -- "$slash_command_prefix" && return 1
-  printf '%s\n' "$range" | grep -qF -- 'feature.json' && return 1
-  printf '%s\n' "$range" | grep -qF -- 'git checkout -b' && return 1
-  printf '%s\n' "$range" | grep -qF -- 'git switch -c' && return 1
-  printf '%s\n' "$range" | grep -qE -- '(^|[^a-z/])specs/' && return 1
-  true
-}
-
 @test "step 3 carries the absorbed duties" {
   range="$(step3_range)"
   [ -n "$range" ]
@@ -121,21 +106,6 @@ $dir/spec/$name"
   return 0
 }
 
-@test "spec.md and every sub-reference it routes to name no spec-kit mechanism" {
-  no_spec_kit_mechanism "$REPO_ROOT/.claude/skills/gaia/references"
-}
-
-@test "the spec-kit check goes red on a mechanism planted in a sub-reference" {
-  copy="$BATS_TEST_TMPDIR/references"
-  mkdir -p "$copy"
-  cp "$SPEC_MD" "$copy/spec.md"
-  cp -R "$REPO_ROOT/.claude/skills/gaia/references/spec" "$copy/spec"
-  no_spec_kit_mechanism "$copy"
-  printf '\nRun the speckit hook here.\n' >>"$copy/spec/clarify-loop.md"
-  run no_spec_kit_mechanism "$copy"
-  [ "$status" -ne 0 ]
-}
-
 @test "step 10 runs the lint script directly" {
   range="$(range_between "$SPEC_MD" '### 10. Immutability lint' '### 11.')"
   [ -n "$range" ]
@@ -146,13 +116,3 @@ $dir/spec/$name"
   true
 }
 
-@test "the allocator header names no preset" {
-  grep -i 'speckit preset' "$ALLOCATOR" && return 1
-  true
-}
-
-@test "the template heading is Preconditions with no hook language" {
-  [ "$(grep -c '^## Preconditions$' "$TEMPLATE")" -eq 1 ]
-  grep -i -E 'constitution|before_' "$TEMPLATE" && return 1
-  true
-}

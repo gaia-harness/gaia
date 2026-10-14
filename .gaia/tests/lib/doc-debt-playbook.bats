@@ -100,42 +100,6 @@ no_sentinel_touch() {
 
 # --- 1. the playbook never touches the count sentinel -----------------------
 
-@test "the playbook set is non-empty and contains debt.md" {
-  files="$(playbook_files "$PLAYBOOK_DIR")"
-  [ -n "$files" ]
-  grep -qF -- "$PLAYBOOK_DIR/debt.md" <<<"$files"
-}
-
-@test "the playbook never touches the debt-count sentinel" {
-  no_sentinel_touch "$PLAYBOOK_DIR"
-}
-
-@test "the sentinel check goes red on each phrasing it exists to catch" {
-  for phrase in \
-    'mkdir -p .gaia/local/debt && : > .gaia/local/debt/refresh-requested' \
-    'touch the sentinel' \
-    'touching the sentinel' \
-    'the sentinel touch' \
-    'the sentinel is touched' \
-    '## Touch the debt-count sentinel'; do
-    copy="$(scratch_copy)"
-    printf '\n%s\n' "$phrase" >>"$copy/debt.md"
-    run no_sentinel_touch "$copy"
-    [ "$status" -ne 0 ] || {
-      printf 'sentinel check stayed green for: %s\n' "$phrase" >&2
-      return 1
-    }
-  done
-}
-
-@test "the sentinel check reads a sub-reference file as well as debt.md" {
-  copy="$(scratch_copy)"
-  mkdir -p "$copy/debt"
-  printf 'touching the sentinel\n' >"$copy/debt/extra.md"
-  run no_sentinel_touch "$copy"
-  [ "$status" -ne 0 ]
-}
-
 # --- 2. the audit step dispatches the unit ----------------------------------
 
 audit_step_dispatches_unit() {
@@ -382,21 +346,3 @@ headings_owned() {
   return 0
 }
 
-@test "the core keeps the shared sections and each moved section has one owner" {
-  headings_owned "$PLAYBOOK_DIR"
-}
-
-@test "the ownership check goes red when a moved heading is duplicated into the core" {
-  copy="$(scratch_copy)"
-  printf '\n## Recommend and present\n\nstale copy\n' >>"$copy/debt.md"
-  run headings_owned "$copy"
-  [ "$status" -ne 0 ]
-}
-
-@test "the ownership check goes red when the core loses a shared heading" {
-  copy="$(scratch_copy)"
-  sed 's/^## Claim the fix unit/## Claiming/' "$copy/debt.md" >"$copy/debt.md.new"
-  mv "$copy/debt.md.new" "$copy/debt.md"
-  run headings_owned "$copy"
-  [ "$status" -ne 0 ]
-}

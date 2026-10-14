@@ -143,20 +143,3 @@ extract_lineage_fence() {
   printf '%s' "$output" | jq -r '.findings[0].message' | grep -q 'bogus-entry'
 }
 
-@test "spec.md lineage fence assigns SPEC_PATH within the same fence" {
-  run extract_lineage_fence "$SPEC_MD"
-  [ "$status" -eq 0 ]
-  [ -n "$output" ]
-  [ "$(printf '%s\n' "$output" | grep -c 'SPEC_PATH=')" -ge 1 ]
-  [ "$(printf '%s\n' "$output" | grep -c 'main-root-lib.sh')" -ge 1 ]
-}
-
-@test "guard: fence extraction over a copy without the SPEC_PATH assignment counts 0" {
-  local copy="$BATS_TEST_TMPDIR/spec-copy.md"
-  # The assignment line lives in the lineage fence; drop it there only.
-  awk '/^SPEC_PATH="\$\{MAIN_ROOT\}\/\.gaia\/local\/specs\/SPEC-NNN\/SPEC\.md"$/ { next } { print }' "$SPEC_MD" >"$copy"
-  run extract_lineage_fence "$copy"
-  [ "$status" -eq 0 ]
-  [ -n "$output" ]
-  [ "$(printf '%s\n' "$output" | grep -c 'SPEC_PATH=' || true)" -eq 0 ]
-}

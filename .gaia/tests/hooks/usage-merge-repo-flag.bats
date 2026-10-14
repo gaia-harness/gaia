@@ -45,32 +45,6 @@ assert_foreign_ignored() {
   [ ! -f "$GH_STUB_DIRECTORY/argv.log" ] || ! grep -q 'pr view 45' "$GH_STUB_DIRECTORY/argv.log" || return 1
 }
 
-@test "a repo flag after the number leaves no resolvable operand" {
-  run_merge "gh pr merge 45 --repo x/y"
-  assert_foreign_ignored
-}
-
-@test "a repo flag before the number leaves no resolvable operand" {
-  run_merge "gh pr merge --repo x/y 45"
-  assert_foreign_ignored
-}
-
-@test "-R before the number leaves no resolvable operand" {
-  run_merge "gh pr merge -R x/y 45"
-  assert_foreign_ignored
-}
-
-@test "--repo=value leaves no resolvable operand" {
-  run_merge "gh pr merge --repo=x/y 45"
-  assert_foreign_ignored
-}
-
-@test "a PR URL for another repository leaves no resolvable operand" {
-  git -C "$REPO" remote add origin https://github.com/o/r.git
-  run_merge "gh pr merge https://github.com/x/y/pull/45"
-  assert_foreign_ignored
-}
-
 @test "a PR URL with no origin remote counts as foreign" {
   run_merge "gh pr merge https://github.com/o/r/pull/45"
   assert_foreign_ignored

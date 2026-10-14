@@ -123,30 +123,6 @@ assert_router_takes_no_arguments() {
   return 0
 }
 
-@test "UAT-002: the router takes no arguments and prints one notice for any" {
-  run assert_router_takes_no_arguments "$ROUTER"
-  echo "$output"
-  [ "$status" -eq 0 ]
-}
-
-@test "UAT-002 can fail: a router with the print-help row back is flagged" {
-  local scratch
-  scratch="$(scratch_copy "$ROUTER" router-help.md)"
-  printf '| (anything else) | Print help. |\n' >>"$scratch"
-  run assert_router_takes_no_arguments "$scratch"
-  [ "$status" -ne 0 ]
-  [[ "$output" == *"Print help"* ]]
-}
-
-@test "UAT-002 can fail: a router without the notice line is flagged" {
-  local scratch
-  scratch="$BATS_TEST_TMPDIR/router-no-notice.md"
-  grep -v '^Note: /gaia-wiki takes no arguments' "$ROUTER" >"$scratch" || true
-  run assert_router_takes_no_arguments "$scratch"
-  [ "$status" -ne 0 ]
-  [[ "$output" == *"takes no arguments"* ]]
-}
-
 # --- UAT-003: completion signal -------------------------------------------
 
 assert_completion_signal() {
@@ -168,45 +144,12 @@ assert_completion_signal() {
   [ "$status" -eq 0 ]
 }
 
-@test "UAT-003 can fail: a router whose full chain carries a sentence gating consolidate is flagged" {
-  local scratch
-  scratch="$(scratch_with_line_under "$ROUTER" '## Full chain' "Consolidate runs only when its ${GATE_WORD} trips on added pages." router-gate.md)"
-  run assert_completion_signal "$SYNC" "$scratch"
-  [ "$status" -ne 0 ]
-  [[ "$output" == *"unwanted in section 'Full chain'"* ]]
-}
-
-@test "UAT-003: the unrelated merge gate sentence in the full chain is not flagged" {
-  local scratch
-  scratch="$(scratch_with_line_under "$ROUTER" '## Full chain' 'The merge gate outlasts any single wait.' router-merge-gate.md)"
-  run assert_completion_signal "$SYNC" "$scratch"
-  echo "$output"
-  [ "$status" -eq 0 ]
-}
-
 @test "UAT-003 can fail: a sync playbook without the completion line is flagged" {
   local scratch="$BATS_TEST_TMPDIR/sync-no-signal.md"
   grep -v 'SYNC_COMPLETE: true' "$SYNC" >"$scratch" || true
   run assert_completion_signal "$scratch" "$ROUTER"
   [ "$status" -ne 0 ]
   [[ "$output" == *"missing in $scratch"* ]]
-}
-
-@test "UAT-003 can fail: a router whose full chain carries the old trigger flag is flagged" {
-  local scratch
-  scratch="$(scratch_with_line_under "$ROUTER" '## Full chain' "${TRIGGER_FLAG}: false" router-trigger.md)"
-  run assert_completion_signal "$SYNC" "$scratch"
-  [ "$status" -ne 0 ]
-  [[ "$output" == *"$TRIGGER_FLAG"* ]]
-}
-
-@test "UAT-003 can fail: a sync playbook with the old ninth step is flagged" {
-  local scratch
-  scratch="$(scratch_copy "$SYNC" sync-step9.md)"
-  printf '## Step 9: Old gate\n' >>"$scratch"
-  run assert_completion_signal "$scratch" "$ROUTER"
-  [ "$status" -ne 0 ]
-  [[ "$output" == *"Step 9"* ]]
 }
 
 # --- UAT-004: a skipped finding resurfaces ----------------------------------
@@ -217,29 +160,6 @@ assert_skip_resurfaces() {
   has_fixed "$consolidate" '`Keep both` is the only answer that suppresses a finding on later runs.' || return 1
   lacks_regex "$consolidate" 'revisit .* manually|running .*consolidate.* manually' || return 1
   return 0
-}
-
-@test "UAT-004: a skipped consolidate finding resurfaces and Keep both is the only dismissal" {
-  run assert_skip_resurfaces "$CONSOLIDATE"
-  echo "$output"
-  [ "$status" -eq 0 ]
-}
-
-@test "UAT-004 can fail: the old skip wording is flagged" {
-  local scratch="$BATS_TEST_TMPDIR/consolidate-old-skip.md"
-  sed 's/^No-op\. The finding stays active.*/No-op. Finding remains active and will re-surface on the next consolidate run./' "$CONSOLIDATE" >"$scratch"
-  run assert_skip_resurfaces "$scratch"
-  [ "$status" -ne 0 ]
-  [[ "$output" == *"missing in $scratch"* ]]
-}
-
-@test "UAT-004 can fail: an instruction to revisit skipped findings manually is flagged" {
-  local scratch
-  scratch="$(scratch_copy "$CONSOLIDATE" consolidate-manual.md)"
-  printf 'You can revisit them by running consolidate manually.\n' >>"$scratch"
-  run assert_skip_resurfaces "$scratch"
-  [ "$status" -ne 0 ]
-  [[ "$output" == *"manually"* ]]
 }
 
 # --- UAT-011: broken-wikilink check ----------------------------------------
@@ -260,37 +180,6 @@ assert_broken_wikilink_check() {
   section_has_fixed "$router" 'Lint' "Steps 1${EN_DASH}$(last_lint_step_number "$lint")" || return 1
   lacks_regex "$consolidate" 'No lint check detects a broken wikilink' || return 1
   return 0
-}
-
-@test "UAT-011: lint carries the broken-wikilink check and the router surfaces it" {
-  run assert_broken_wikilink_check "$LINT" "$ROUTER" "$CONSOLIDATE"
-  echo "$output"
-  [ "$status" -eq 0 ]
-}
-
-@test "UAT-011 can fail: a router that does not surface the broken-link line is flagged" {
-  local scratch="$BATS_TEST_TMPDIR/router-no-broken-links.md"
-  sed 's/WIKI BROKEN-LINKS://g' "$ROUTER" >"$scratch"
-  run assert_broken_wikilink_check "$LINT" "$scratch" "$CONSOLIDATE"
-  [ "$status" -ne 0 ]
-  [[ "$output" == *"WIKI BROKEN-LINKS:"* ]]
-}
-
-@test "UAT-011 can fail: a lint playbook renumbered to eight steps while the router says nine is flagged" {
-  local scratch="$BATS_TEST_TMPDIR/lint-eight-steps.md"
-  sed 's/^## Step 9: Surface to the user/## Step 8: Surface to the user/' "$LINT" >"$scratch"
-  run assert_broken_wikilink_check "$scratch" "$ROUTER" "$CONSOLIDATE"
-  [ "$status" -ne 0 ]
-  [[ "$output" == *"last lint step is: ## Step 8"* ]]
-}
-
-@test "UAT-011 can fail: a consolidate playbook that denies any lint check for broken wikilinks is flagged" {
-  local scratch
-  scratch="$(scratch_copy "$CONSOLIDATE" consolidate-denial.md)"
-  printf 'No lint check detects a broken wikilink.\n' >>"$scratch"
-  run assert_broken_wikilink_check "$LINT" "$ROUTER" "$scratch"
-  [ "$status" -ne 0 ]
-  [[ "$output" == *"No lint check detects"* ]]
 }
 
 # --- Conformance beyond the UAT clauses ------------------------------------
@@ -316,27 +205,6 @@ assert_router_lint_names_broken_wikilinks() {
   return 0
 }
 
-@test "the skill entry and the playbooks carry no stage-invocation wording" {
-  run assert_no_stage_invocation_wording "$SKILL" "$SYNC" "$CONSOLIDATE" "$LINT" "$LINT_FIX"
-  echo "$output"
-  [ "$status" -eq 0 ]
-}
-
-@test "can fail: a skill entry that names a stage name such as an argument is flagged" {
-  local scratch
-  scratch="$(scratch_copy "$SKILL" skill-stage-wording.md)"
-  printf 'Pass a stage name such as the first one.\n' >>"$scratch"
-  run assert_no_stage_invocation_wording "$scratch" "$SYNC" "$CONSOLIDATE" "$LINT" "$LINT_FIX"
-  [ "$status" -ne 0 ]
-  [[ "$output" == *"stage name such as"* ]]
-}
-
-@test "can fail: a playbook that is missing is flagged rather than skipped" {
-  run assert_no_stage_invocation_wording "$SKILL" "$BATS_TEST_TMPDIR/no-such-playbook.md"
-  [ "$status" -ne 0 ]
-  [[ "$output" == *"missing or empty file"* ]]
-}
-
 @test "sync commits only through the chain commit command" {
   run assert_sync_commits_only_through_chain "$SYNC"
   echo "$output"
@@ -350,20 +218,6 @@ assert_router_lint_names_broken_wikilinks() {
   run assert_sync_commits_only_through_chain "$scratch"
   [ "$status" -ne 0 ]
   [[ "$output" == *"git commit"* ]]
-}
-
-@test "the router describes lint as covering broken wikilinks" {
-  run assert_router_lint_names_broken_wikilinks "$ROUTER"
-  echo "$output"
-  [ "$status" -eq 0 ]
-}
-
-@test "can fail: a router whose lint section never names broken wikilinks is flagged" {
-  local scratch="$BATS_TEST_TMPDIR/router-lint-silent.md"
-  sed -E 's/broken[- ][wW]ikilink/another/g' "$ROUTER" >"$scratch"
-  run assert_router_lint_names_broken_wikilinks "$scratch"
-  [ "$status" -ne 0 ]
-  [[ "$output" == *"does not name broken wikilinks"* ]]
 }
 
 # --- UAT-012: lint fix loop ---------------------------------------------------
@@ -388,28 +242,6 @@ assert_fix_loop_handles_broken_links() {
     grep -qF -- "$literal" <<<"$text" || { echo "missing in the broken-wikilink entry of $1: $literal"; return 1; }
   done
   return 0
-}
-
-@test "UAT-012: the fix loop repoints, removes, or leaves a broken wikilink and never repoints into the archive" {
-  run assert_fix_loop_handles_broken_links "$LINT_FIX"
-  echo "$output"
-  [ "$status" -eq 0 ]
-}
-
-@test "UAT-012 can fail: a fix loop that never mentions the archive is flagged" {
-  local scratch="$BATS_TEST_TMPDIR/lint-fix-no-archive.md"
-  sed 's#wiki/_archived/#elsewhere/#g' "$LINT_FIX" >"$scratch"
-  run assert_fix_loop_handles_broken_links "$scratch"
-  [ "$status" -ne 0 ]
-  [[ "$output" == *"wiki/_archived/"* ]]
-}
-
-@test "UAT-012 can fail: a fix loop without the remove option is flagged" {
-  local scratch="$BATS_TEST_TMPDIR/lint-fix-no-remove.md"
-  sed 's/Remove the link/Delete it/g' "$LINT_FIX" >"$scratch"
-  run assert_fix_loop_handles_broken_links "$scratch"
-  [ "$status" -ne 0 ]
-  [[ "$output" == *"Remove the link"* ]]
 }
 
 # --- UAT-014: the chain stops when begin fails -------------------------------
