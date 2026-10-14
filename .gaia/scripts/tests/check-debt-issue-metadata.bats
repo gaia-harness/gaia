@@ -701,6 +701,20 @@ stub_gh_failing() {
   [ "$status" -eq 2 ]
 }
 
+@test "--investigate-cap --repo counts the named repository's queue, and without it names none" {
+  stub_gh '[{"number":11,"title":"one"}]'
+  run bash "$CHECK" --investigate-cap --labels "$INVESTIGATE_LABELS" --repo owner/name
+  [ "$status" -eq 0 ]
+  grep -F -- "--label severity:investigate" "$TEMPORARY_DIRECTORY/argv.log" | grep -qF -- "--repo owner/name" || return 1
+
+  : >"$TEMPORARY_DIRECTORY/argv.log"
+  run bash "$CHECK" --investigate-cap --labels "$INVESTIGATE_LABELS"
+  [ "$status" -eq 0 ]
+  grep -qF -- "--label severity:investigate" "$TEMPORARY_DIRECTORY/argv.log" || return 1
+  grep -F -- "--label severity:investigate" "$TEMPORARY_DIRECTORY/argv.log" | grep -qF -- "--repo" && return 1
+  true
+}
+
 @test "--investigate-cap with no --labels exits 2 rather than reading an empty label set as clean" {
   run bash "$CHECK" --investigate-cap
   [ "$status" -eq 2 ]
