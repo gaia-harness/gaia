@@ -424,7 +424,7 @@ Do **not** auto-commit on behalf of the user, they need to review the changes fi
 
 ## Step 11 (orchestrator, after the user commits)
 
-Step 11 runs in the **orchestrator**, not the spawned agent: it depends on the Step 10 commit, which is the user's manual action and lands after the one-shot agent has already returned. Run it once that commit exists.
+The execution agent's work ends at Step 9, it returns its `UpdateMergeReport`, and the orchestrator relays the summary and runs Steps 9b to 10 itself. Step 11 runs in the **orchestrator**, not the spawned agent: it depends on the Step 10 commit, which is the user's manual action and lands after the one-shot agent has already returned. Run it once that commit exists.
 
 ### Step 11: Open a pull request
 
