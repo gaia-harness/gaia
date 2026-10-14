@@ -449,7 +449,7 @@
       "kind": "dir",
       "scope": "ephemeral",
       "keyed_by": null,
-      "why": "One Code Audit Team member's private working copy for the one kind of evidence that needs real bytes on disk: breaking a construct a guard names to establish the guard is not hollow. Each member names its child with its own member name, which keeps two co-dispatched members from overwriting each other's tree, and removes it when done.",
+      "why": "One Code Audit Team member's private working copy for the one kind of evidence that needs real bytes on disk: breaking a construct a guard names to establish the guard is not hollow. Each member invocation mints its child with mktemp under a member-name prefix, which keeps co-dispatched members and concurrent audits from other worktrees out of each other's tree, and removes exactly that child when done.",
       "writer": "code",
       "reaped_by": null
     },

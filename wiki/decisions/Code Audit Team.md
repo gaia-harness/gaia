@@ -79,7 +79,7 @@ A clearance marker's branch-own digest is computed over the committed patch at `
 
 The clean-tree invariant above composes with a second fact into an obligation neither states alone: establishing that a guard is not hollow means breaking the construct the guard names and watching its check go red, which needs real bytes on disk. The mutation therefore has to happen on a copy, and the only writable space a dispatched subagent is handed is the session scratchpad, which every member of one parallel wave shares. A member improvising a name there picks the name its siblings also pick, and one member's copy lands over another's. Neither direction of that overwrite announces itself: a pristine tree over a mutated one makes the mutation look like it did not red, which reads as a hollow assertion that is not there; a mutated tree over a pristine one reds a check that has nothing to do with the change under review.
 
-Each member's definition instructs it to name its own scratch paths (mutation trees) with its own member name, so co-dispatched members never collide.
+Each member mints its scratch directory (mutation trees, staged findings) per invocation with `mktemp -d` under a member-name prefix, as the member protocol states, so neither co-dispatched members nor the same member running in a concurrent audit from another worktree collide.
 
 ## Dispatch resolver
 
