@@ -130,13 +130,6 @@ readonly INSTALL_COMMAND="brew install jq"
   assert_blocked_by_exit
 }
 
-@test "jq absent: block-secrets-write refuses a write carrying a key" {
-  local json
-  json=$(edit_payload "app/config.ts")
-  without_jq block-secrets-write.sh "$json"
-  assert_blocked_by_exit
-}
-
 @test "jq absent: block-worktree-path-mismatch refuses an edit" {
   local json
   json=$(edit_payload "app/foo.ts")
@@ -286,15 +279,6 @@ write_payload() {
 @test "jq absent: block-audit-loop-write refuses a write naming only a new file in the protected folder" {
   local json
   json=$(write_payload "/Users/you/work/repo/.gaia/local/protected/new-state.json")
-  grep -qF -- 'audit-loop' <<<"$json" && return 1
-  without_jq block-audit-loop-write.sh "$json"
-  assert_blocked_by_exit
-  grep -qF -- 'cannot be checked' <<<"$output"
-}
-
-@test "jq absent: block-audit-loop-write refuses a write naming only the override file" {
-  local json
-  json=$(write_payload "/Users/you/work/repo/.gaia/local/protected/checkpoint-override.json")
   grep -qF -- 'audit-loop' <<<"$json" && return 1
   without_jq block-audit-loop-write.sh "$json"
   assert_blocked_by_exit

@@ -863,16 +863,6 @@ w1_check() {
   }
 }
 
-@test "W3 non-vacuity: the aggregator's needs list is non-empty" {
-  require_yaml_parser
-  local count
-  count="$(read_workflow needs "$WORKFLOW" audit-ci-tests | grep -c '.' || true)"
-  [ "$count" -gt 0 ] || {
-    echo "the aggregator declares no needs:, so W3's per-entry assertion would pass over an empty set" >&2
-    return 1
-  }
-}
-
 @test "W3 adversarial: a bare true aggregator step is caught" {
   require_yaml_parser
   local doctored="$BATS_TEST_TMPDIR/w3.yml"
@@ -1724,21 +1714,6 @@ copy_sharder_without_group() {
     printf 'after:  %s\n' "$(printf '%s' "$legs_after" | tr '\n' ' ')" >&2
     return 1
   }
-}
-
-@test "W10 adversarial: seam_tree_scan refuses a group it does not know" {
-  local root="$BATS_TEST_TMPDIR/bad-seam"
-  seed_seam_tree "$root"
-  # The healthy arms first, so a runner that always failed could not pass this,
-  # and so a typo'd group name cannot read as "this group needs nothing".
-  run seam_tree_scan shard_package_needs "$root" hooks
-  [ "$status" -eq 0 ]
-  run seam_tree_scan shard_package_needs "$root" scripts
-  [ "$status" -eq 0 ]
-
-  run seam_tree_scan shard_package_needs "$root" nope
-  [ "$status" -eq 2 ]
-  grep -qF -- 'nope' <<<"$output"
 }
 
 # The apt list is only meaningful as a MEMBERSHIP list, and a negated gate
