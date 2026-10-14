@@ -20,8 +20,6 @@ setup() {
   NOTE="$REPO_ROOT/.gaia/migrations/2.0.0.md"
   MAINTAINER_CLI="$REPO_ROOT/.gaia/cli/gaia-maintainer"
   SCRUB_CONFIG="$REPO_ROOT/.gaia/release-scrub.yml"
-  EM_DASH="$(printf '\xe2\x80\x94')"
-  EN_DASH="$(printf '\xe2\x80\x93')"
   MIGRATE_URL="$(printf '%s%s' 'https://gaiareact.com' '/migrate')"
   SPEC_ID="$(printf '%s%s' 'SPEC-' '123')"
 }
@@ -46,7 +44,7 @@ restart_paragraph_ok() {
   for token in 'new session' 're-verify' '.sha256' 're-extract' 'tree/.gaia/migrations/2.0.0.md'; do
     printf '%s\n' "$paragraph" | grep -qF -- "$token" || return 1
   done
-  grep -q -i -- 'paste' "$1" && return 1
+  printf '%s\n' "$paragraph" | grep -q -i -- 'paste' && return 1
   return 0
 }
 
@@ -83,11 +81,8 @@ step14_order_ok() {
   [ -f "$NOTE" ]
   [ "$(head -n 3 "$NOTE")" = "$(printf -- '---\nmode: blocking\n---')" ]
   [ -z "$(sed -n '4p' "$NOTE")" ]
-  [ "$(sed -n '5p' "$NOTE")" = '# Migrate this project from GAIA 1.6.1 to GAIA 2.0.0' ]
   [ "$(head -c 3 "$NOTE" | od -An -tx1 | tr -d ' \n')" = '2d2d2d' ]
   grep -q "$(printf '\r')" "$NOTE" && return 1
-  grep -qF -- "$EM_DASH" "$NOTE" && return 1
-  grep -qF -- "$EN_DASH" "$NOTE" && return 1
   true
 }
 

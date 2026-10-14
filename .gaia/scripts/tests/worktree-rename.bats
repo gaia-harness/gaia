@@ -233,6 +233,5 @@ run_hook() {
 @test "twin: the same guard denies a commit on main in this scratch repo" {
   run_hook "$MAIN" "git -C $MAIN commit -m 'chore: x'"
   [ "$status" -eq 0 ]
-  printf '%s' "$output" | grep -qF '"permissionDecision":"deny"' || printf '%s' "$output" | grep -qF 'deny' || return 1
-  true
+  printf '%s' "$output" | jq -e '.hookSpecificOutput.permissionDecision == "deny"' >/dev/null
 }

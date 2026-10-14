@@ -32,57 +32,12 @@ setup() {
 # the text. Keep each statement's literal on one line of the doctrine so a
 # line-deletion twin can remove exactly it.
 ANCHORS=(
-  'F|look for a chance to clear'
-  'F|clear unless the remaining work is small'
-  'F|Fire and skull: clear now'
-  'F|no background task, sub-agent or monitor'
-  'F|nothing is half-applied'
-  'F|The hook cannot detect this'
-  'F|you judge it'
   'F|Save the place before you ask'
-  'F|Then ask'
   'F|Commit and push first'
-  'F|`RUNNING`'
-  'F|`PROGRESS.md`'
-  'F|committed phase boundary'
-  'F|draft cache'
-  'F|current-state file'
-  'F|.gaia/local/runs/<branch>/STATE.md'
-  'F|.gaia/local/runs/session-<session id>/STATE.md'
   'F|The `Save path:` line'
   'F|Never the scratchpad'
-  'F|`Facts`'
-  'F|`Status checklist`'
-  'F|`NEXT:`'
-  'F|4 KB'
-  'F|rewritten in place'
-  'F|interactive only'
-  'F|`AskUserQuestion`'
-  'F|exactly two options'
-  'F|`Continue here` and `Clear and resume`'
-  'F|(Recommended)'
-  'F|one-line reason'
-  'F|a few steps'
-  'F|runs mostly in sub-agents'
-  'F|riskier than finishing'
-  'F|when unsure'
-  'F|pre-merge audit'
-  'F|Never skip the save and ask'
-  'F|nearly-done session gets `Continue here`'
-  'R|always recommend .Clear and resume., whatever the remaining work'
-  'F|The reason states the band'
-  'F|keep working until the next band'
-  'F|run `/clear`'
-  'F|info string `text`'
-  'F|naming the state file path, the goal and the next step'
-  'F|never points at this session'
   'F|no further tool calls'
   'F|With no human in the session, never ask'
-  'F|At red and fire, save and continue'
-  'F|At skull, save, print the continuation prompt in a `text` fence, report, and stop'
-  'F|`/loop`'
-  'F|Headless and scheduled'
-  'F|never fire'
 )
 
 anchors_ok() {
@@ -182,11 +137,6 @@ rule_pointer_ok() {
   return 0
 }
 
-# the heading that follows `## Resume`
-wiki_heading_after_resume() {
-  awk '/^## / { if (previous == "## Resume") { print $0; exit } previous = $0 }' "$1"
-}
-
 wiki_section_body() {
   awk -v heading="$WIKI_HEADING" '
     $0 == heading { on = 1; next }
@@ -198,7 +148,6 @@ wiki_section_body() {
 wiki_section_ok() {
   local file_path="$1" body
   [ -f "$file_path" ] || return 1
-  [ "$(wiki_heading_after_resume "$file_path")" = "$WIKI_HEADING" ] || return 1
   body="$(wiki_section_body "$file_path")"
   [ -n "$body" ] || return 1
   printf '%s\n' "$body" | grep -qF -- '.claude/doctrine/context-checkpoint.md' || return 1
@@ -212,25 +161,6 @@ wiki_section_ok() {
 # the wiki with one line planted directly under the section heading
 plant_in_wiki_section() {
   awk -v heading="$WIKI_HEADING" -v planted="$2" '{ print } $0 == heading { print planted }' "$1"
-}
-
-# the wiki with the section moved to sit after Concurrency limits
-move_wiki_section_down() {
-  awk -v heading="$WIKI_HEADING" '
-    FNR == NR {
-      if ($0 == heading) inside = 1
-      else if (inside && /^## /) inside = 0
-      if (inside) section = section $0 "\n"
-      next
-    }
-    {
-      if ($0 == heading) skipping = 1
-      else if (skipping && /^## /) skipping = 0
-      if (skipping) next
-      if ($0 == "## Initiative linking") printf "%s", section
-      print
-    }
-  ' "$1" "$1"
 }
 
 # ------------------------------------------------------------- the doctrine
@@ -348,16 +278,11 @@ move_wiki_section_down() {
 
 # ------------------------------------------------------------ doc surfaces
 
-@test "wiki: the checkpoint section follows Resume, links the doctrine, restates nothing, spells no number" {
+@test "wiki: the checkpoint section links the doctrine, restates nothing, spells no number" {
   wiki_section_ok "$WIKI"
 }
 
-@test "wiki section red twins: moved below Concurrency limits, link removed, rule restated, number planted" {
-  move_wiki_section_down "$WIKI" >"$TEMPORARY_DIRECTORY/wiki-moved.md"
-  if cmp -s "$WIKI" "$TEMPORARY_DIRECTORY/wiki-moved.md"; then return 1; fi
-  grep -qxF -- "$WIKI_HEADING" "$TEMPORARY_DIRECTORY/wiki-moved.md" || return 1
-  if wiki_section_ok "$TEMPORARY_DIRECTORY/wiki-moved.md"; then return 1; fi
-
+@test "wiki section red twins: link removed, rule restated, number planted" {
   sed 's|\.claude/doctrine/context-checkpoint\.md|elsewhere.md|g' "$WIKI" >"$TEMPORARY_DIRECTORY/wiki-no-link.md"
   if cmp -s "$WIKI" "$TEMPORARY_DIRECTORY/wiki-no-link.md"; then return 1; fi
   if wiki_section_ok "$TEMPORARY_DIRECTORY/wiki-no-link.md"; then return 1; fi

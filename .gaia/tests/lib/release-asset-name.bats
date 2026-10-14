@@ -109,7 +109,10 @@ block_after_heading() {
 
 @test "A2: v1.6.1's pattern cannot match the 2.x asset, and can match the retired name" {
   TAG=v2.0.0
-  new_name="gaia-bundle-${TAG}.tar.gz"
+  new_name="$(uploaded_asset_name "$RELEASE_YML")"
+  [ -n "$new_name" ]
+  new_name="${new_name//'${TAG}'/$TAG}"
+  [ "$new_name" = "gaia-bundle-${TAG}.tar.gz" ]
   v1_pattern="gaia-${TAG}.tar.gz"
   glob_matches "$v1_pattern" "$new_name" && return 1
   # Control: the same matcher on the retired name matches, so a pass above is

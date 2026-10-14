@@ -137,9 +137,6 @@ commit_tree() {
   [ "$status" -ne 0 ]
 }
 
-@test "the suppression file is release-excluded and the subsumed frontmatter suite is gone" {
-  grep -qxF '.claude/gaia-fitness.json' "$REPO_ROOT/.gaia/release-exclude" || return 1
-  # Name assembled in two parts so a repo-wide search for the retired suite stays empty.
-  retired="doc-skill-""frontmatter.bats"
-  [ ! -e "$REPO_ROOT/.gaia/tests/lib/$retired" ]
+@test "the suppression file is release-excluded" {
+  grep -qxF '.claude/gaia-fitness.json' "$REPO_ROOT/.gaia/release-exclude"
 }

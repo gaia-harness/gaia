@@ -47,14 +47,25 @@ assert_pinned() {
   true
 }
 
+# frontmatter_names_agent <file>: rc 0 when the frontmatter carries the agent's
+# name and the opus model.
+frontmatter_names_agent() {
+  local close frontmatter_file="$BATS_TEST_TMPDIR/fm-check.txt"
+  close="$(awk 'NR>1 && /^---$/ {print NR; exit}' "$1")"
+  [ -n "$close" ] || return 1
+  sed -n "2,$((close - 1))p" "$1" >"$frontmatter_file"
+  grep -qx 'name: audit-loop-unit' "$frontmatter_file" || return 1
+  grep -qx 'model: opus' "$frontmatter_file" || return 1
+  return 0
+}
+
 @test "agent frontmatter: name equals the filename stem and model is opus" {
   [ "$(sed -n '1p' "$AGENT")" = '---' ]
   local close
   close="$(awk 'NR>1 && /^---$/ {print NR; exit}' "$AGENT")"
   [ -n "$close" ]
   sed -n "2,$((close - 1))p" "$AGENT" >"$BATS_TEST_TMPDIR/fm.txt"
-  grep -qx 'name: audit-loop-unit' "$BATS_TEST_TMPDIR/fm.txt"
-  grep -qx 'model: opus' "$BATS_TEST_TMPDIR/fm.txt"
+  frontmatter_names_agent "$AGENT"
   grep -q '^description: ' "$BATS_TEST_TMPDIR/fm.txt"
   # No tools line, matching the other agent definitions.
   grep -q '^tools:' "$BATS_TEST_TMPDIR/fm.txt" && return 1
@@ -65,9 +76,11 @@ assert_pinned() {
 
 @test "frontmatter red twin: a wrong name or model fails the same checks" {
   sed 's/^name: audit-loop-unit$/name: other/' "$AGENT" >"$BATS_TEST_TMPDIR/bad-name.md"
-  grep -qx 'name: audit-loop-unit' "$BATS_TEST_TMPDIR/bad-name.md" && return 1
+  cmp -s "$AGENT" "$BATS_TEST_TMPDIR/bad-name.md" && return 1
+  frontmatter_names_agent "$BATS_TEST_TMPDIR/bad-name.md" && return 1
   sed 's/^model: opus$/model: sonnet/' "$AGENT" >"$BATS_TEST_TMPDIR/bad-model.md"
-  grep -qx 'model: opus' "$BATS_TEST_TMPDIR/bad-model.md" && return 1
+  cmp -s "$AGENT" "$BATS_TEST_TMPDIR/bad-model.md" && return 1
+  frontmatter_names_agent "$BATS_TEST_TMPDIR/bad-model.md" && return 1
   true
 }
 
@@ -130,7 +143,7 @@ assert_pinned() {
   true
 }
 
-@test "UAT-007: the closing round maps a dirty tree after its wave to member-wave-dirty, and the pin fails without it" {
+@test "UAT-007: the closing round maps a dirty tree after its wave to member-wave-dirty" {
   assert_pinned 'A dirty tree after the closing wave stops the unit `member-wave-dirty`, naming the wave'"'"'s members and the dirty paths'
 }
 
@@ -158,9 +171,9 @@ assert_pinned() {
 }
 
 @test "agent names the window check, the ENFORCEMENT_PATHS rule and the stop" {
-  assert_pinned 'unit-window'
-  assert_pinned 'enforcement_paths_allowed'
-  assert_pinned 'needs-human'
+  assert_pinned 'audit-loop-eval.sh unit-window --root <root>'
+  assert_pinned 'Never set `enforcement_paths_allowed`.'
+  assert_pinned 'A finding that needs an ENFORCEMENT_PATHS edit means no commit for the round: stop `needs-human` and name the path.'
 }
 
 @test "agent forbids merging, posting a status, CHANGELOG edits and vetoes.json" {

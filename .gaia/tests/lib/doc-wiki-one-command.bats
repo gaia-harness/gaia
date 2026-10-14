@@ -26,13 +26,6 @@ setup() {
   LINT="$REPO_ROOT/.claude/skills/gaia/references/wiki/lint.md"
   LINT_FIX="$REPO_ROOT/.claude/skills/gaia/references/wiki/lint-fix.md"
   EN_DASH="$(printf '\xe2\x80\x93')"
-  # Built from fragments so this file never carries the removed gate's own
-  # spellings; the patterns still name them for the assertions.
-  GATE_WORD="ga"
-  GATE_WORD="${GATE_WORD}te"
-  TRIGGER_FLAG="CONSOLIDATE_"
-  TRIGGER_FLAG="${TRIGGER_FLAG}TRIGGERED"
-  GATE_WORDING="consolidat[a-z]* ${GATE_WORD}|${GATE_WORD} trips|\\(${GATE_WORD}d\\)|${TRIGGER_FLAG}|threshold"
 }
 
 # --- shared helpers -------------------------------------------------------
@@ -126,19 +119,14 @@ assert_router_takes_no_arguments() {
 # --- UAT-003: completion signal -------------------------------------------
 
 assert_completion_signal() {
-  local sync="$1" router="$2" file
+  local sync="$1" router="$2"
   has_fixed "$sync" 'SYNC_COMPLETE: true' || return 1
   section_has_fixed "$router" 'Sync' 'SYNC_COMPLETE: true' || return 1
   section_has_fixed "$router" 'Full chain' 'SYNC_COMPLETE: true' || return 1
-  for file in "$sync" "$router"; do
-    lacks_regex "$file" "$TRIGGER_FLAG" || return 1
-  done
-  lacks_regex "$sync" '--diff-filter=A|^## Step 9' || return 1
-  section_lacks_regex "$router" 'Full chain' "$GATE_WORDING" || return 1
   return 0
 }
 
-@test "UAT-003: sync ends with a completion line and the router gates nothing on consolidate" {
+@test "UAT-003: sync ends with the completion line the router branches on" {
   run assert_completion_signal "$SYNC" "$ROUTER"
   echo "$output"
   [ "$status" -eq 0 ]

@@ -98,6 +98,13 @@ mutate_delete() {
   printf '%s\n' "$out"
 }
 
+# Scratch copy of the contract with one fixed string swapped for another.
+mutate_replace() {
+  local out="$BATS_TEST_TMPDIR/mutated.md"
+  sed "s|$1|$2|" "$CONTRACT" >"$out"
+  printf '%s\n' "$out"
+}
+
 @test "contract has the five sections in order and stays small" {
   check_section_order "$CONTRACT"
   check_under_500_lines "$CONTRACT"
@@ -134,7 +141,7 @@ mutate_delete() {
 
 @test "red twin: a copy without the re-dispatch sentence fails" {
   local mutated
-  mutated="$(mutate_delete 're-dispatch that lens exactly once')"
+  mutated="$(mutate_replace 'exactly once' 'twice')"
   check_redispatch_once "$mutated" && return 1
   true
 }
@@ -145,7 +152,7 @@ mutate_delete() {
 
 @test "red twin: a copy without the inline fallback fails" {
   local mutated
-  mutated="$(mutate_delete 'run that lens inline on the main thread')"
+  mutated="$(mutate_replace 'inline on the main thread' 'in a fresh subagent')"
   check_inline_fallback "$mutated" && return 1
   true
 }
@@ -156,7 +163,7 @@ mutate_delete() {
 
 @test "red twin: a copy that classifies at dispatch return fails" {
   local mutated
-  mutated="$(mutate_delete ', never at the moment the dispatch call returns')"
+  mutated="$(mutate_replace ', never at the moment' ', or at the moment')"
   check_completion_notification "$mutated" && return 1
   true
 }

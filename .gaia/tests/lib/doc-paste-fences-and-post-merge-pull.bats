@@ -212,7 +212,7 @@ planner_points_at_reference() {
   [ "$status" -ne 0 ]
 }
 
-@test "the main-checkout read keys a monitor on the member digest, not the marker tree field" {
+@test "the post-merge verification section keys on the member digest, not the marker tree field" {
   main_checkout_paragraph_uses_digest "$REPO_ROOT"
 }
 

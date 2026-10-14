@@ -660,10 +660,10 @@ check_posture_subcommand() {
   check_posture_subcommand "$GITHUB_REPO_REFERENCE"
 }
 
-@test "the posture-subcommand check fails when the call is removed" {
+@test "the posture-subcommand check fails when the subcommand is renamed" {
   local copy
-  copy="$(scratch_copy "$GITHUB_REPO_REFERENCE" "posture-call-removed.md")"
-  grep -vF -- 'setup configure-dependabot-alerts' "$GITHUB_REPO_REFERENCE" >"$copy" || true
+  copy="$(scratch_copy "$GITHUB_REPO_REFERENCE" "posture-call-renamed.md")"
+  sed 's/setup configure-dependabot-alerts/setup configure-dependabot-alert/g' "$GITHUB_REPO_REFERENCE" >"$copy"
   cmp -s "$GITHUB_REPO_REFERENCE" "$copy" && return 1
   run check_posture_subcommand "$copy"
   [ "$status" -ne 0 ]

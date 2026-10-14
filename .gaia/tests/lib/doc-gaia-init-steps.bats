@@ -73,21 +73,34 @@ state_steps() {
     tr '\n' ' ' | sed 's/ $//'
 }
 
-@test "gaia-init.md calls write-project-config with --sandbox-recommended" {
-  grep -qF 'gaia init write-project-config' "$INIT_MD"
-  grep -qF -- '--sandbox-recommended <true|false>' "$INIT_MD"
+# writer_call_present <file>: rc 0 when the file calls write-project-config
+# with --sandbox-recommended.
+writer_call_present() {
+  grep -qF 'gaia init write-project-config' "$1" || return 1
+  grep -qF -- '--sandbox-recommended <true|false>' "$1" || return 1
+  return 0
 }
 
-@test "the writer check fails when the writer call is removed from a scratch copy" {
+@test "gaia-init.md calls write-project-config with --sandbox-recommended" {
+  writer_call_present "$INIT_MD"
+}
+
+@test "the writer check fails when the writer subcommand is renamed in a scratch copy" {
   local scratch="$BATS_TEST_TMPDIR/gaia-init.scratch.md"
-  grep -vF 'gaia init write-project-config' "$INIT_MD" >"$scratch"
-  run grep -qF 'gaia init write-project-config' "$scratch"
+  sed 's/gaia init write-project-config/gaia init write-renamed-config/g' "$INIT_MD" >"$scratch"
+  cmp -s "$INIT_MD" "$scratch" && return 1
+  run writer_call_present "$scratch"
   [ "$status" -ne 0 ]
 }
 
-@test "the resume list names exactly the frozen steps, 1-indexed, in order" {
-  [ "$(resume_steps "$INIT_MD")" = "$FROZEN_STEPS" ]
-  [ "$(resume_indices "$INIT_MD")" = "1 2 3 4 5 6 7 8" ]
+@test "the resume list indexes its steps 1..N in order, N derived from STEP_ORDER" {
+  local expected_indices="" index step_count
+  step_count="$(wc -w <<<"$(state_steps)" | tr -d ' ')"
+  [ "$step_count" -gt 0 ]
+  for ((index = 1; index <= step_count; index++)); do
+    expected_indices="${expected_indices:+$expected_indices }$index"
+  done
+  [ "$(resume_indices "$INIT_MD")" = "$expected_indices" ]
 }
 
 @test "the resume list agrees with STEP_ORDER in state.ts" {
