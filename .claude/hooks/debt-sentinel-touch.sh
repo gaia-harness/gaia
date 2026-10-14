@@ -15,8 +15,8 @@
 #
 # This complements one in-flow touch that is best-effort belt-and-suspenders,
 # not a replacement: the audit's own touch after it files an issue (the
-# file-tech-debt skill's sentinel-touch step, which runs inside the audit
-# subagent). The `/gaia-debt` skill touches nothing itself, because every claim,
+# file-tech-debt skill's sentinel-touch step, which runs where the issue
+# is filed). The `/gaia-debt` skill touches nothing itself, because every claim,
 # release, park, and reopen it makes is a `gh issue` command this hook answers.
 # A main-session `gh issue create`/`close` is caught only here.
 # The SessionStart reconcile hook (debt-session-reconcile.sh) backstops closes

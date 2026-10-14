@@ -61,7 +61,7 @@
 #      (.claude), .gaia metadata, prose docs, and root-level
 #      markdown. Evaluated fail-closed: any in-scope path (frontend/app/, frontend/test/,
 #      configs, .github/workflows/) makes the marker mandatory again. An
-#      in-scope-but-ownerless path (a root Makefile, public/**) is folded into
+#      in-scope-but-ownerless path (a root Makefile, frontend/public/**) is folded into
 #      the frontend member's digest input set, so a stale marker computed for a
 #      prior digest never matches such a change either; this bypass and that
 #      digest fold close the same band from two directions.
@@ -1339,7 +1339,7 @@ if [ -z "$members" ]; then
   # absent/unusable: fall through to the legacy single-signal gate verbatim.
   # NOT an unconditional allow, the member roster's auditable-base set is strictly narrower
   # than check_out_of_scope_pr's denylist, so an ownerless-but-in-scope file
-  # (root Makefile, public/**, ...) still denies here without a marker.
+  # (root Makefile, frontend/public/**, ...) still denies here without a marker.
   #
   # The out-of-scope classification runs FIRST, ahead of every clearance
   # signal, because the bypass stamp depends on it whichever signal allows: a

@@ -680,7 +680,7 @@ hop_guard() {
     return 0
   fi
 
-  deny "The main checkout is holding branch '$branch', which has open pull request #$pull_request_number: another session is working there, and moving this checkout's HEAD would pull the branch pull_request_number from under it and forfeit its audit round. If you are cleaning up after a merge, take the worktree arm in wiki/concepts/PR Merge Workflow.md, which runs no git checkout. If this is your own branch, run the command yourself with the ! prefix."
+  deny "The main checkout is holding branch '$branch', which has open pull request #$pull_request_number: another session is working there, and moving this checkout's HEAD would pull the branch '$branch' from under it and forfeit its audit round. If you are cleaning up after a merge, take the worktree arm in .claude/skills/gaia/references/work-lifecycle.md (## 8. Cleanup), which runs no git checkout. If this is your own branch, run the command yourself with the ! prefix."
 }
 
 # Walk each command-position segment. Separators (`| & ; ( )`, newlines) become

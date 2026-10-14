@@ -47,9 +47,11 @@
 # scales with the emergent test count; this axis is not made sub-linear.
 #
 # Fail-open vs fail-closed (threat model: a cooperative-but-fallible agent):
-#   - jq / git / node / the RED-ledger lib / the classifier unavailable -> exit 0
+#   - git / node / the RED-ledger lib / the classifier unavailable -> exit 0
 #     (allow). Sibling-hook posture; the gate enforces only where its tooling
-#     answers.
+#     answers. A missing jq refuses loudly (exit 2) through lib/jq-availability.sh
+#     for a command that carries `gh`, and an unloadable jq-availability.sh or
+#     hook-payload.sh also exits 2.
 #   - a changed emergent test file the signal helper cannot parse (mid-edit
 #     syntax error) -> that file is skipped, never denied. Fail-open.
 #   - the deny path is fail-closed ONLY for the clean case: a parseable in-scope

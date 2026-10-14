@@ -12,8 +12,8 @@
 #
 # Bash: inspect .tool_input.command.
 #   - Exemption: a command containing the substring GAIA_MANIFEST_WRITE=
-#     (any value) is allowed unconditionally. The two legitimate Bash writers
-#     (the release CLI, remove-i18n) prepend it.
+#     (any value) is allowed unconditionally. The legitimate Bash writers
+#     (see wiki/concepts/Claude Hooks.md) prepend it.
 #   - Otherwise denied when the command writes the guarded path via an output
 #     redirect (>, >>), tee, sed -i (with or without a macOS '' backup
 #     suffix), sponge, or cp/mv with the guarded path as destination. Reading

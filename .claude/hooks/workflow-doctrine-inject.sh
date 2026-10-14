@@ -32,8 +32,8 @@
 # in workflow-doctrine-sources.bats covers the key line and doctrine only; the
 # backstop sits on top of it, bounded by the path and branch lengths.
 #
-# Cost order, because it runs on every Bash call: CI and jq gates, one payload
-# parse, the arming check before any git process, then one git call. Branch,
+# Cost order, because it runs after every `git *` and `gh pr checkout *`
+# Bash call: CI and jq gates, one payload parse, the arming check before any git process, then one git call. Branch,
 # worktree kind, and origin/HEAD are read from the git directory's files after
 # that call, falling back to git where the layout is not the plain files
 # format. The marker's main root, the doctrine, and the libraries are only

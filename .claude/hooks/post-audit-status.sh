@@ -94,30 +94,8 @@
 #        marker line is always emitted; the audit caller surfaces it. Lines:
 #          status: posted GAIA-Audit success <short-sha>
 #          status: posted GAIA-Audit failure <short-sha>
-#        Decline lines (prefix "status: declined: "):
-#          marker absent
-#          marker not a valid clearance
-#          gh absent
-#          gh unauthenticated
-#          version file missing
-#          version normalizer unavailable (lib/gaia-version.sh)
-#          version file empty
-#          frontend digest unavailable
-#          branch patch library unavailable (lib/audit-branch-patch.sh)
-#          trusted base unverified, <gh failure line>; next step: gh auth status
-#          trusted base unverified, the base tip is not present locally; next
-#            step: git fetch origin
-#          trusted base unverified, more than one merge base with the base
-#            branch; next step: git merge --no-edit refs/remotes/origin/<base>
-#          trusted base unverified, no unique merge base could be derived
-#          clearance reader unavailable
-#          caller holds a live refusal
-#          repo slug unresolved
-#          audited tree not on pushed head
-#          stamp not pushed
-#          member resolver could not answer
-#          members pending <list>
-#          post failed
+#        Decline lines (prefix "status: declined: "): see the emit_decline
+#        calls in this file for the full set.
 #   1 , The status posted but the draft flip did not (see Draft flip). One
 #        stderr line names the manual `gh pr ready` command; the status is
 #        never rolled back.

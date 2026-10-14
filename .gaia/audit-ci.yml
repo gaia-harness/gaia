@@ -172,8 +172,8 @@ auditors:
       # schemas (`.gaia/*.json`), the release exclusion list, the hook
       # registrations, and the review-ownership file. Each decides what is
       # shipped, executed, or reviewed, and each dispatched nobody until now.
-      # None of these globs crosses a `/`, so the CLI's own package.json,
-      # tsconfig and lockfile stay with the node member below.
+      # None of these globs crosses a `/`, so the CLI's own package.json
+      # and tsconfig stay with the node member below.
       - ".gaia/*.yml"
       - ".gaia/*.json"
       # Vendored-skill markers: each pins the sha256 of every file in a
