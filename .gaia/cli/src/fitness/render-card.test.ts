@@ -2,37 +2,70 @@ import {describe, expect, test} from 'vitest';
 import {renderCard} from './render-card.js';
 import type {FitnessReport} from './render-card.js';
 
-const baseReport = (): FitnessReport => ({
-  categories: [
-    {grade: 'A+', name: 'Hook integrity'},
-    {grade: 'B+', name: 'Skill / command / agent frontmatter'},
-    {grade: 'A+', name: 'Rule hygiene'},
-    {grade: 'A', name: 'CLAUDE.md hygiene'},
-    {grade: 'A+', name: 'Settings hygiene'},
-    {grade: 'A', name: 'GAIA-install fitness'},
-    {grade: 'A+', name: 'Wiki fitness'},
-  ],
-  command: '/gaia-fitness',
-  findings: [
-    {
-      category: 'Skill / command / agent frontmatter',
-      file: '.claude/commands/deploy.md',
-      grade: 'B+',
-      remediation:
-        'description frontmatter is missing; add a concise description of what this command does.',
-      severity: 'warning',
-    },
-    {
-      category: 'CLAUDE.md hygiene',
-      file: 'CLAUDE.md',
-      grade: 'A',
-      remediation:
-        '@-import of a path-scoped rule resolves but is always-loaded; consider whether it warrants it.',
-      severity: 'info',
-    },
-  ],
-  overall: 'B+',
+const CATEGORY_NAMES = [
+  'authoring',
+  'claudemd',
+  'frontmatter',
+  'hooks',
+  'prompt',
+  'rules',
+  'settings',
+  'wiki',
+] as const;
+
+const reportWith = (
+  grades: Readonly<Record<string, string>>,
+  overall: string,
+  extra: Partial<Pick<FitnessReport, 'findings' | 'upstream'>> = {}
+): FitnessReport => ({
+  categories: CATEGORY_NAMES.map((name) => ({
+    grade: grades[name] ?? 'A+',
+    name,
+  })),
+  findings: [],
+  overall,
+  upstream: [],
+  ...extra,
 });
+
+const mixedReport = (): FitnessReport =>
+  reportWith({frontmatter: 'B+', hooks: 'C+', settings: 'B'}, 'C+', {
+    findings: [
+      {
+        category: 'frontmatter',
+        file: '.claude/commands/example.md',
+        line: 2,
+        remediation:
+          'description frontmatter is missing; add a concise description of what this command does.',
+        rule_id: 'frontmatter.command.description',
+        severity: 'warning',
+      },
+      {
+        category: 'hooks',
+        file: '.claude/settings.json',
+        line: 14,
+        remediation: 'Point the hook at a script that exists.',
+        rule_id: 'hooks.script-missing',
+        severity: 'error',
+      },
+      {
+        category: 'settings',
+        file: '.claude/settings.json',
+        line: 0,
+        remediation: 'Drop the redundant permission entry.',
+        rule_id: 'settings.permissions.redundant',
+        severity: 'warning',
+      },
+      {
+        category: 'settings',
+        file: '.claude/settings.json',
+        line: 3,
+        remediation: 'Consider narrowing this entry.',
+        rule_id: 'settings.permissions.broad',
+        severity: 'info',
+      },
+    ],
+  });
 
 const WIDTH_CAP_PLUS_BORDER = 124; // 120-column cap + "| " and " |"
 
@@ -43,32 +76,82 @@ const allEqual = (values: readonly number[]): boolean =>
   values.every((value) => value === values[0]);
 
 describe('renderCard', () => {
+  test('renders a mixed report', () => {
+    const card = renderCard(mixedReport(), 100);
+
+    expect(card).toMatchSnapshot();
+    expect(allEqual(lineWidths(card))).toBe(true);
+  });
+
+  test('renders an all n/a report as categories and an overall n/a, no findings block', () => {
+    const report = reportWith(
+      Object.fromEntries(CATEGORY_NAMES.map((name) => [name, 'n/a'])),
+      'n/a'
+    );
+    const card = renderCard(report, 100);
+
+    expect(card).toMatchSnapshot();
+    expect(card).toContain('n/a');
+    expect(card).not.toContain('FINDINGS');
+    expect(card).not.toContain('UPSTREAM');
+    expect(allEqual(lineWidths(card))).toBe(true);
+  });
+
+  test('renders upstream findings in their own block pointing at /update-gaia', () => {
+    const report = reportWith({}, 'A+', {
+      upstream: [
+        {
+          category: 'hooks',
+          file: '.claude/hooks/example.sh',
+          line: 1,
+          remediation:
+            'GAIA ships this file; run /update-gaia to take the upstream fix.',
+          rule_id: 'hooks.script-not-executable',
+          severity: 'warning',
+        },
+      ],
+    });
+    const card = renderCard(report, 100);
+
+    expect(card).toMatchSnapshot();
+    expect(card).toContain('UPSTREAM');
+    expect(card).toContain('/update-gaia');
+    expect(card).not.toContain('FINDINGS');
+    expect(allEqual(lineWidths(card))).toBe(true);
+  });
+
+  test('renders a clean A+ report without a findings block or footer', () => {
+    const card = renderCard(reportWith({}, 'A+'), 100);
+
+    expect(card).toMatchSnapshot();
+    expect(card).not.toContain('FINDINGS');
+    expect(card).not.toContain('git diff');
+    expect(card).toContain('GAIA FITNESS');
+  });
+
   test('every line shares one width so the borders align', () => {
-    const widths = lineWidths(renderCard(baseReport(), 80));
+    const widths = lineWidths(renderCard(mixedReport(), 80));
 
     expect(allEqual(widths)).toBe(true);
     expect(widths[0]).toBeGreaterThan(0);
   });
 
   test('opens and closes with a full border bar', () => {
-    const lines = renderCard(baseReport(), 80).split('\n');
+    const lines = renderCard(mixedReport(), 80).split('\n');
 
     expect(lines[0]).toMatch(/^\+-+\+$/);
     expect(lines.at(-1)).toMatch(/^\+-+\+$/);
   });
 
   test('renders categories alphabetically', () => {
-    const card = renderCard(baseReport(), 80);
-    const order = [
-      'CLAUDE.md hygiene',
-      'GAIA-install fitness',
-      'Hook integrity',
-      'Rule hygiene',
-      'Settings hygiene',
-      'Skill / command / agent frontmatter',
-      'Wiki fitness',
-    ];
-    const indices = order.map((name) => card.indexOf(`| ${name}`));
+    const report = mixedReport();
+    const reversed = [...report.categories];
+
+    reversed.reverse();
+    report.categories = reversed;
+
+    const card = renderCard(report, 80);
+    const indices = CATEGORY_NAMES.map((name) => card.indexOf(`| ${name}`));
 
     for (const index of indices) expect(index).toBeGreaterThan(-1);
 
@@ -79,30 +162,15 @@ describe('renderCard', () => {
     expect(indices).toEqual(indicesCopy.toSorted((a, b) => a - b));
   });
 
-  test('omits the FINDINGS block on a clean run and carries no footer', () => {
-    const report = baseReport();
-    report.findings = [];
-    report.categories = report.categories.map((category) => ({
-      ...category,
-      grade: 'A+',
-    }));
-    report.overall = 'A+';
-
-    const card = renderCard(report, 100);
-
-    expect(card).not.toContain('FINDINGS');
-    expect(card).not.toContain('git diff');
-    expect(allEqual(lineWidths(card))).toBe(true);
-  });
-
   test('caps the box at 120 columns on a very wide terminal', () => {
-    const report = baseReport();
+    const report = mixedReport();
     report.findings = [
       {
-        category: 'Hook integrity',
+        category: 'hooks',
         file: '.claude/settings.json',
-        grade: 'C',
+        line: 1,
         remediation: 'x'.repeat(400),
+        rule_id: 'hooks.script-missing',
         severity: 'error',
       },
     ];
@@ -113,13 +181,14 @@ describe('renderCard', () => {
   });
 
   test('truncates an over-long file path while keeping borders aligned', () => {
-    const report = baseReport();
+    const report = mixedReport();
     report.findings = [
       {
-        category: 'Hook integrity',
+        category: 'hooks',
         file: `.claude/${'nested/'.repeat(40)}hook.sh`,
-        grade: 'C',
+        line: 9,
         remediation: 'fix it',
+        rule_id: 'hooks.script-missing',
         severity: 'error',
       },
     ];
@@ -131,20 +200,22 @@ describe('renderCard', () => {
   });
 
   test('keeps a mixed-severity note aligned and summarized', () => {
-    const report = baseReport();
+    const report = mixedReport();
     report.findings = [
       {
-        category: 'Settings hygiene',
-        file: '.claude/settings.json:3',
-        grade: 'C',
+        category: 'settings',
+        file: '.claude/settings.json',
+        line: 3,
         remediation: 'secret-shaped value in env block',
+        rule_id: 'settings.env.secret',
         severity: 'error',
       },
       {
-        category: 'Settings hygiene',
-        file: '.claude/settings.json:9',
-        grade: 'C',
+        category: 'settings',
+        file: '.claude/settings.json',
+        line: 9,
         remediation: 'redundant permission entry',
+        rule_id: 'settings.permissions.redundant',
         severity: 'info',
       },
     ];
@@ -153,5 +224,13 @@ describe('renderCard', () => {
 
     expect(card).toContain('1 error, 1 info');
     expect(allEqual(lineWidths(card))).toBe(true);
+  });
+
+  test('shows file:line, and the bare file for a finding with no line', () => {
+    const card = renderCard(mixedReport(), 100);
+
+    expect(card).toContain('.claude/settings.json:14');
+    expect(card).toMatch(/\[warning\] \.claude\/settings\.json +\|/);
+    expect(card).not.toContain('.claude/settings.json:0');
   });
 });

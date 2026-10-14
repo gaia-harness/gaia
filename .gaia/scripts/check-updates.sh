@@ -50,12 +50,8 @@ TTL=21600
 #   - CLEANSE_DRIFT_DAYS: days since the last `applied` cleanse before signal (a) fires.
 #   - CLEANSE_MEMORY_DELTA: memory entries gained since the last `applied` cleanse
 #                         before signal (a) fires.
-#   - CLEANSE_CLAUDEMD_BUDGET: auto-load word budget for root CLAUDE.md (signal b).
-#   - CLEANSE_RULE_BUDGET: max lines for any .claude/rules/*.md (signal b).
 CLEANSE_DRIFT_DAYS=30
 CLEANSE_MEMORY_DELTA=10
-CLEANSE_CLAUDEMD_BUDGET=500
-CLEANSE_RULE_BUDGET=200
 
 # Resolve project root (parent of .gaia/) so the script works regardless of cwd.
 SCRIPT_DIRECTORY="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -505,8 +501,10 @@ cleanse_memory_baseline="$previous_cleanse_memory_baseline"
 cleanse_nudge=false
 cleanse_nudge_reason=""
 
-# (a) Memory entry count proxy: the `memory` field of knowledge-inventory.sh
-# counts, so the nudge and /gaia-cleanse count the same files.
+# (a) Memory entry count proxy: `.stores.memory.count` from the CLI inventory,
+# so the nudge and /gaia-cleanse count the same files. When the bundle, node or
+# jq cannot answer, the signal is skipped and the previous count stands; it is
+# never read as zero.
 #
 # The memory dir is keyed by the tree's path SPELLING, so unlike everything
 # else under .gaia/local this one is not reached through the worktree's
@@ -514,21 +512,45 @@ cleanse_nudge_reason=""
 # a freshly created worktree path has almost no memory history. Anchoring it to
 # the main checkout (--root STATE_ROOT) keeps this a fact about the clone,
 # which is what the shared cache it feeds is read as.
-KNOWLEDGE_INVENTORY="$GAIA_DIRECTORY/scripts/knowledge-inventory.sh"
-if [ -f "$KNOWLEDGE_INVENTORY" ]; then
-  memory_count=$(bash "$KNOWLEDGE_INVENTORY" counts --root "$STATE_ROOT" 2>/dev/null \
-    | tr ' ' '\n' | sed -n 's/^memory=//p')
+# Runs a CLI command with stdout captured to a temporary file in the cache
+# directory, then hands the command's exit code and that file to a handler
+# function. Does nothing without the bundle, jq or a temporary file, so the
+# handler's variables keep their prior values.
+run_cli_into_temporary_file() {
+  local handler="$1"
+  shift
+  local output_file exit_code
+  if ! { [ -x "$GAIA_BIN" ] && command -v jq >/dev/null 2>&1; }; then
+    return 0
+  fi
+  output_file="$(mktemp "$CACHE_DIRECTORY/.cli-output.XXXXXX" 2>/dev/null)"
+  [ -n "$output_file" ] || return 0
+  "$@" >"$output_file" 2>/dev/null
+  exit_code=$?
+  "$handler" "$exit_code" "$output_file"
+  rm -f "$output_file" 2>/dev/null
+}
+
+# shellcheck disable=SC2329 # called by name through run_cli_into_temporary_file
+read_memory_count_from_inventory() {
+  local exit_code="$1" inventory_file="$2" memory_count
+  [ "$exit_code" -eq 0 ] || return 0
+  memory_count=$(jq -r '.stores.memory.count | if type == "number" then floor else empty end' "$inventory_file" 2>/dev/null)
   case "$memory_count" in
     ''|*[!0-9]*) ;;
     *) cleanse_memory_count="$memory_count" ;;
   esac
-fi
+}
+
+run_cli_into_temporary_file read_memory_count_from_inventory \
+  "$GAIA_BIN" fitness inventory --json --root "$STATE_ROOT"
 
 # Newest `applied` cleanse report → its mtime is the last-cleanse timestamp.
 # The one-time move of reports out of the old audit/ directory runs from
 # PROJECT_ROOT, the checkout this script runs in: the move only happens from
 # the main checkout, and STATE_ROOT is the main checkout even when this runs
 # from a worktree. Its outcome never reaches the cache.
+KNOWLEDGE_INVENTORY="$GAIA_DIRECTORY/scripts/knowledge-inventory.sh"
 if [ -f "$KNOWLEDGE_INVENTORY" ]; then
   (cd "$PROJECT_ROOT" && bash "$KNOWLEDGE_INVENTORY" relocate-reports --root "$STATE_ROOT") >/dev/null 2>&1 || true
 fi
@@ -582,27 +604,27 @@ if [ "$cleanse_last_applied_at" -gt 0 ] 2>/dev/null \
   days_since=$(( (now - cleanse_last_applied_at) / 86400 ))
 fi
 
-# (b) Project drift: any committed auto-load file over budget. Budget-only, no
-# committed marker; clears for everyone once a dev fixes + commits.
+# (b) Project drift: any committed auto-load file over budget, judged by the
+# CLI's budget rule so the numbers live in one place. Budget-only, no committed
+# marker; clears for everyone once a dev fixes + commits. Measured against
+# PROJECT_ROOT. Exit 1 is shared with an unknown subcommand, so it counts as a
+# result only when stdout parses as a check report; any other outcome leaves
+# the signal off.
 project_drift=false
-claudemd_words=$(wc -w < "$PROJECT_ROOT/CLAUDE.md" 2>/dev/null | tr -d '[:space:]')
-case "$claudemd_words" in
-  ''|*[!0-9]*) claudemd_words=0 ;;
-esac
-if [ "$claudemd_words" -gt "$CLEANSE_CLAUDEMD_BUDGET" ] 2>/dev/null; then
-  project_drift=true
-fi
-for rule in "$PROJECT_ROOT"/.claude/rules/*.md; do
-  [ -f "$rule" ] || continue
-  rule_lines=$(wc -l < "$rule" 2>/dev/null | tr -d '[:space:]')
-  case "$rule_lines" in
-    ''|*[!0-9]*) continue ;;
+# shellcheck disable=SC2329 # called by name through run_cli_into_temporary_file
+flag_project_drift_from_budget_report() {
+  local exit_code="$1" budget_file="$2" budget_finding_count
+  { [ "$exit_code" -eq 0 ] || [ "$exit_code" -eq 1 ]; } || return 0
+  jq -e 'has("findings") and has("upstream")' "$budget_file" >/dev/null 2>&1 || return 0
+  budget_finding_count=$(jq -r '[.findings[], .upstream[]] | map(select(.rule_id == "claudemd.budget")) | length' "$budget_file" 2>/dev/null)
+  case "$budget_finding_count" in
+    ''|*[!0-9]*|0) ;;
+    *) project_drift=true ;;
   esac
-  if [ "$rule_lines" -gt "$CLEANSE_RULE_BUDGET" ] 2>/dev/null; then
-    project_drift=true
-    break
-  fi
-done
+}
+
+run_cli_into_temporary_file flag_project_drift_from_budget_report \
+  "$GAIA_BIN" fitness check --json --scope all --only claudemd.budget --root "$PROJECT_ROOT"
 
 # Pick the single highest-priority reason. The two machine-drift arms each get
 # a self-describing label; when both fire, the concrete new-memory count wins.

@@ -5,7 +5,6 @@
 # .claude/skills/gaia/references/spec/ that it reads at their branch points.
 #
 # The invariants:
-#   a. spec.md stays under the 500-line playbook cap;
 #   b. a sub-reference read is a step a model can skip, so every spec/<name>.md
 #      that spec.md names exists and is listed in the command's sub-reference
 #      index (.claude/commands/gaia-spec.md), each sub-reference moved out of
@@ -13,9 +12,7 @@
 #      its marked bullet (read by the sub-agent, never the main thread);
 #   c. each moved section lives in exactly one file of the playbook set;
 #   d. the adversarial-auditor preamble lives only in the lens-dispatch
-#      contract, never in the spec audit;
-#   e. every spec/*.md over 100 lines carries a `Contents:` line outside any
-#      code fence.
+#      contract, never in the spec audit.
 #
 # DOC_SPEC_PLAYBOOK_ROOT points the suite at a scratch copy of the repo's
 # playbook files; each invariant has a red twin that breaks such a copy and
@@ -55,31 +52,6 @@ playbook_files() {
     [ -f "$file" ] && printf '%s\n' "$file"
   done
   return 0
-}
-
-# --- a. spec.md stays under the cap ------------------------------------------
-
-entry_under_cap() {
-  local lines
-  [ -f "$1/$REFERENCES/spec.md" ] || return 1
-  lines="$(wc -l <"$1/$REFERENCES/spec.md" | tr -d ' ')"
-  [ "$lines" -ge 1 ] || return 1
-  [ "$lines" -lt 500 ] || {
-    printf 'spec.md is %s lines, the cap is 499\n' "$lines" >&2
-    return 1
-  }
-  return 0
-}
-
-@test "a. spec.md is under 500 lines" {
-  entry_under_cap "$PLAYBOOK_ROOT"
-}
-
-@test "a. the line cap goes red on a padded copy" {
-  copy="$(scratch_copy)"
-  for _ in $(seq 1 500); do printf 'padding\n'; done >>"$copy/$REFERENCES/spec.md"
-  run entry_under_cap "$copy"
-  [ "$status" -ne 0 ]
 }
 
 # --- b. routing and the command index ----------------------------------------
@@ -256,55 +228,5 @@ preamble_only_in_contract() {
   copy="$(scratch_copy)"
   printf '\n> %s of a GAIA SPEC draft.\n' "$PREAMBLE" >>"$copy/$REFERENCES/spec/audit.md"
   run preamble_only_in_contract "$copy"
-  [ "$status" -ne 0 ]
-}
-
-# --- e. long sub-references carry a Contents line -----------------------------
-
-# has_contents_line <file>: a line starting `Contents:` outside any code fence.
-has_contents_line() {
-  awk '
-    /^```/ { inside_fence = !inside_fence; next }
-    !inside_fence && /^Contents:/ { found = 1 }
-    END { exit !found }
-  ' "$1"
-}
-
-long_files_have_contents() {
-  local root="$1" file lines count=0 long=0
-  for file in "$root/$REFERENCES"/spec/*.md; do
-    [ -f "$file" ] || continue
-    count=$((count + 1))
-    lines="$(wc -l <"$file" | tr -d ' ')"
-    [ "$lines" -gt 100 ] || continue
-    long=$((long + 1))
-    if ! has_contents_line "$file"; then
-      printf '%s is %s lines and has no Contents: line\n' "${file#"$root"/}" "$lines" >&2
-      return 1
-    fi
-  done
-  [ "$count" -ge 1 ] || return 1
-  [ "$long" -ge 1 ] || return 1
-  return 0
-}
-
-@test "e. every spec/*.md over 100 lines carries a Contents line" {
-  long_files_have_contents "$PLAYBOOK_ROOT"
-}
-
-@test "e. the Contents check goes red when one long file loses its line" {
-  copy="$(scratch_copy)"
-  grep -v '^Contents:' "$copy/$REFERENCES/spec/audit.md" >"$copy/$REFERENCES/spec/audit.md.new"
-  mv "$copy/$REFERENCES/spec/audit.md.new" "$copy/$REFERENCES/spec/audit.md"
-  run long_files_have_contents "$copy"
-  [ "$status" -ne 0 ]
-}
-
-@test "e. a Contents line inside a code fence does not count" {
-  copy="$(scratch_copy)"
-  grep -v '^Contents:' "$copy/$REFERENCES/spec/audit.md" >"$copy/$REFERENCES/spec/audit.md.new"
-  printf '\n```text\nContents: fenced, not real\n```\n' >>"$copy/$REFERENCES/spec/audit.md.new"
-  mv "$copy/$REFERENCES/spec/audit.md.new" "$copy/$REFERENCES/spec/audit.md"
-  run long_files_have_contents "$copy"
   [ "$status" -ne 0 ]
 }

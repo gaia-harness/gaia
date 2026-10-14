@@ -2,334 +2,59 @@
 type: decision
 status: active
 created: 2026-05-12
-updated: 2026-10-08
+updated: 2026-10-14
 tags: [decision, claude, fitness]
 ---
 
 # Claude Integration Fitness
 
-`/gaia-fitness` is a health check + auto-heal that answers one question, "how well-configured and coherent is this project's Claude integration?", and fixes what it can. A single invocation runs three phases: triage (walk the seven graded categories below), heal (lane-aware Fixer subagents fix what the project owns, asking per file first, inside a bounded loop with oscillation detection), and verify (re-run the affected checks).
+`/gaia-fitness` answers one question, "how well-configured and coherent is this project's Claude integration?", and heals what it can. A single invocation checks, reports an F-to-A+ grade, heals the findings the project owns (asking per file first), re-runs the check once to verify, and offers a publish gate. The step-by-step flow is the playbook `.claude/skills/gaia/references/fitness.md`; this page records why it is shaped that way.
 
-The protocol is harness-agnostic: `/gaia-fitness` runs it standalone, and it is written so a larger audit harness can run the same protocol over the same seven categories as one bucket of a deeper loop.
+## Why a deterministic linter
 
-The `/gaia-fitness` skill's harness layer handles branch / repo-state and publishing: creating a `chore` branch (named by `.gaia/scripts/branch-name-lib.sh`) when HEAD is on the default branch and the first proposed fix is accepted, running triage-only when HEAD is detached or a rebase / merge / cherry-pick / bisect is in progress, and, after the report, gating on a single publish confirmation that commits the healed changes and drives the PR to merge (commit and push only on a non-default branch). See the `/gaia-fitness` skill reference for the full branching and publish algorithm. That harness layer is not part of the triage/heal protocol described here.
+The check is `gaia fitness check`, a fixed rule catalog run by the CLI, not a set of model auditors. A model reading the same files twice returns different findings, so a model-run grade moves between runs and a fix cannot be verified by re-running the check. A script over a fixed catalog gives the same findings for the same files, so the grade is reproducible, the catalog is covered by tests, and the same run can gate GAIA's own CI. Judgment the catalog cannot encode (description substance, trigger overlap between skills, rule scope against its `paths:` globs, terminology consistency) runs as one read-only advisory pass whose findings never move a grade.
 
-`/update-gaia` three-way-merges this page, so project-specific check classes you add here survive GAIA upgrades, and `/gaia-wiki` lints it. `/gaia-fitness` runs whatever classes the page defines alongside the shipped ones.
+The rules themselves live in the catalog, not on this page: `gaia fitness rules --json` prints every rule id, category, severity, the file kinds it applies to and a one-line detection description. A project adds its own checks as a rule (`.claude/rules/`) or a skill, not as a section here.
 
-## Check Taxonomy
+## Why grade only what the project owns
 
-Seven graded categories. Each category produces findings at `error`, `warning`, or `info` severity; the category grade derives from the worst severity found (see Grading Rubric).
+GAIA is a foundation: a project's `.claude/` mixes files GAIA ships, files the project wrote, and files a third party installed. A grade that counted all of them would charge the project for defects it cannot fix without drift. The grade covers files the project owns; a GAIA-shipped finding is listed under an upstream section, fixed by `/update-gaia`, and does not move the grade.
 
-### 1. Hook integrity
+## Grading
 
-Checks `.claude/settings.json` and `.claude/settings.local.json` hook entries:
+The grade is a pure function of the finding set. The CLI owns the bands and the overall rule, and the report's `categories`, `overall` and `findings` keys carry the result. Optional `.claude/gaia-fitness.json` suppresses a finding by rule id and path with a stated reason. This page restates neither the bands nor the rules.
 
-- Every hook command path exists on disk and is executable.
-- Hook command paths are rooted so they resolve independently of the shell's working directory. A bare repo-relative path (e.g. `.claude/hooks/wiki-session-start.sh`) is the shape to flag: it resolves against whatever directory the shell is in, and a script that is not found exits 127, which is not a blocking status, so the guard layer fails open with nothing reported. `.gaia/scripts/check-hook-command-rooting.sh` is the authority on what counts as rooted and states the property rather than a literal spelling, so read it rather than matching a remembered prefix.
-- Every hook event name is a valid Claude Code hook event.
-
-The valid Claude Code hook events (the canonical list the auditor checks against, so it does not re-derive an incomplete set from memory) are: `PreToolUse`, `PostToolUse`, `UserPromptSubmit`, `UserPromptExpansion`, `Notification`, `Stop`, `SubagentStop`, `PreCompact`, `PostCompact`, `SessionStart`, `SessionEnd`, `WorktreeCreate`, `WorktreeRemove`, plus any project-specific events the repo registers (a project that wires its own event names extends this list; an unfamiliar name is a finding only when it is neither in the list above nor registered by the project's own tooling).
-
-Findings here are typically `error` severity.
-
-### 2. Skill / command / agent frontmatter
-
-Checks `.claude/skills/*/SKILL.md`, `.claude/commands/*.md`, and `.claude/agents/*.md`:
-
-- `name` and `description` frontmatter fields present, non-empty, and not placeholder text.
-- No `name` collision across the three surfaces.
-
-One finding per defect, naming the file path and the remediation.
-
-### 3. Rule hygiene
-
-Checks `.claude/rules/*.md` and cross-references from `CLAUDE.md`:
-
-- No `@`-import of skill files inside a rule; always-loaded rules that transitively preload skills bloat every session.
-- Path-scoping glob syntax in rule frontmatter is valid.
-- Content-vs-glob coherence: a rule path-scoped to a narrow glob must contain advice relevant when those paths are edited. The glob is an activation trigger (it controls when the rule surfaces), not a claim that the advice is logically confined to those paths, so universal advice deliberately narrowed to an activation context is correct (e.g. portability advice scoped to `.claude/**`). Flag only the inverse defect: a narrow glob whose body is irrelevant to the globbed paths.
-- Rules referenced by `CLAUDE.md` exist at the cited path.
-
-Findings here are typically `warning` severity.
-
-### 4. `CLAUDE.md` hygiene
-
-Checks `CLAUDE.md` (root and any subfolder `CLAUDE.md`s the root names in its folder map):
-
-- Size vs. the project's stated size guidance.
-- Every `@`-import resolves to an existing file.
-- Every subfolder `CLAUDE.md` named in a folder map exists.
-- No absolute machine-local path used as an operative reference (an `@`-import target, a cited config or source path, or a path an instruction tells the agent to read or write). A home-directory path quoted as a counter-example or naming a location the prose forbids (e.g. the machine-local memory directory) is descriptive prose, not a finding.
-- No dead backticked path references (paths cited in backticks that do not exist on disk).
-
-One finding per defect, naming the location and the remediation.
-
-### 5. Settings hygiene
-
-Checks `.claude/settings.json`:
-
-- File is valid JSON; unparseable settings is an immediate category `F`.
-- Permission entries whose pattern is a strict subset of another entry's glob are redundant (`info` or `warning`).
-- Any secret-shaped value in the `env` block (`error`).
-- `.claude/settings.local.json` not listed in `.gitignore` (`warning`).
-- The committed `statusLine` in `.claude/settings.json` bypasses `.gaia/statusline/gaia-statusline.sh` (`warning`). It routes through GAIA when its command names `gaia-statusline.sh`, or when it runs a wrapper script whose own text names it (read the script it runs, one level deep). A bypass loses every GAIA nudge for everyone on the project, and the audit loop's checkpoint loses its context readings and falls back to counting rounds. Remediation: the `settings` lane restores the shipped `statusLine` command. A developer who wants their own statusline keeps it through `/setup-gaia`'s per-machine left-side choice, which still runs `gaia-statusline.sh`. A `statusLine` in `.claude/settings.local.json` is one machine's own choice and is not a finding (see [Decided / not findings](#decided--not-findings)).
-
-Permission-glob semantics: the rule the auditor applies for the strict-subset check, so it does not over-flag distinct entries: `Bash(cmd)` matches the exact command with no arguments; `Bash(cmd:*)` matches `cmd` invoked _with_ arguments. The two are distinct entries, not a redundant pair; a project that runs a command both ways keeps both deliberately. Flag a redundancy only on a genuine strict-subset shadow, e.g. `Bash(git status)` is fully covered by `Bash(git:*)` and is the redundant one.
-
-### 6. GAIA-install fitness
-
-Checks the GAIA installation:
-
-- Installed GAIA version vs. latest release: if behind, one `info` finding recommending `/update-gaia`. This is the only finding this category emits; a version-current install records none.
-
-### 7. Wiki fitness
-
-Checks wiki health by invoking the existing `gaia wiki` primitives; this category does not reimplement them:
-
-- `wiki/.state.json` staleness vs. `frontend/app/**` HEAD: if `commits_ahead` is non-zero, one `info` finding recommending `/gaia-wiki`.
-- `gaia wiki dead-paths`: any dead backticked path reference in wiki body prose is one `warning` finding per occurrence.
-- `gaia wiki orphans`: any orphan page (zero inbound links) is one `info` finding per page, recommending `/gaia-wiki`, whose lint and consolidate stages cross-link or archive it.
-
-### Decided / not findings
-
-Things audits keep re-discovering that are not findings:
-
-**Slash commands appear under "skills" in Claude Code's surface listing.** `.claude/commands/` files register through Claude Code's plugin/skill discovery and appear in the same listing as actual skills. This is a Claude Code surface artifact. Skip the round-trip.
-
-**`wiki/.state.json` lagging HEAD.** Normal pre-release state. No hook reports wiki drift (the statusline nudge is the only drift signal); the wiki-fitness category surfaces it as `info` (not `error` or `warning`) and recommends `/gaia-wiki`. Do not escalate to a blocking finding.
-
-**Release-excluded wiki pages flagged as orphans by `gaia wiki orphans`.** Expected state, not a defect. Shipped pages must not `[[wikilink]]` release-excluded pages (enforced by `wikilink-to-excluded`); plain-text references to them are correct. `gaia wiki orphans` cannot see release-exclusion, so it will always flag such a page. Surface as `info`; do not escalate to a blocking finding.
-
-**`@`-imports that use valid repo-relative paths.** An `@`-import is a finding only when it imports a skill file from inside a rule. Imports of always-loaded rule files from `CLAUDE.md` are the correct pattern; do not flag them.
-
-**Dead backticked path in `wiki/log.md`.** This file is exempt from `gaia wiki dead-paths` by design; it is the append-only historical record. Do not raise dead-path findings against it.
-
-**A bare `Bash(cmd)` permission entry alongside `Bash(cmd:*)`.** Not a shadowed-permission finding; they match different invocations (no-args vs. with-args). See the permission-glob semantics note under [Settings hygiene](#5-settings-hygiene) for the strict-subset rule that governs this check.
-
-**A `WorktreeCreate` or `WorktreeRemove` hook entry.** Not an unknown-event finding; both are in the canonical event list under [Hook integrity](#1-hook-integrity), so a project that registers either is wiring a real event and the auditor says nothing about it. GAIA registers neither: the harness creates and removes worktrees natively, and GAIA's own worktree work is provisioning, which rides `SessionStart` and `PostToolUse` on the `EnterWorktree` matcher instead. Their *absence* is therefore also not a finding. (If worktree symlink-handoff is demonstrably broken, that is a separate concern, not a fitness finding.)
-
-**A `statusLine` in `.claude/settings.local.json` that bypasses `gaia-statusline.sh`.** Not a settings finding. The file is personal and gitignored, so the override is one machine's choice, not the project's configuration; `/setup-gaia` warns that machine on every run. Only a bypass committed in `.claude/settings.json` is graded.
-
-**A skill directory with no `SKILL.md` that is a shared-reference bucket.** Not a frontmatter finding. The frontmatter category checks `*/SKILL.md` under `.claude/skills/`, but a directory whose files are individually tracked in `.gaia/manifest.json` and Read by path from command surfaces (rather than invoked by name) is a deliberate reference bucket, not a discoverable skill; a `SKILL.md` would be redundant. Surface a missing one as, at most, `info`, and do not escalate to a blocking finding. (`.claude/skills/gaia/` is the canonical case: its `references/` files are dispatched directly by the gaia-* commands.)
-
----
-
-## Grading Rubric
-
-Per-category grade is deterministic given the finding set for that category. The overall grade is the floor of the seven category grades (one `D` drags the headline to `D`).
-
-### Per-category bands
-
-| Grade  | Condition                                                                                                                        |
-| ------ | -------------------------------------------------------------------------------------------------------------------------------- |
-| **A+** | Zero findings in the category                                                                                                    |
-| **A**  | One or two `info` findings, no `warning` or `error`                                                                              |
-| **A−** | Three or more `info` findings, no `warning` or `error`                                                                           |
-| **B+** | One `warning`, no `error`                                                                                                        |
-| **B**  | Two `warning`s, no `error`                                                                                                       |
-| **B−** | Three or more `warning`s, no `error`                                                                                             |
-| **C+** | One `error`                                                                                                                      |
-| **C**  | Two `error`s                                                                                                                     |
-| **C−** | Three `error`s                                                                                                                   |
-| **D+** | Four `error`s                                                                                                                    |
-| **D**  | Five `error`s                                                                                                                    |
-| **D−** | Six or more `error`s                                                                                                             |
-| **F**  | Category is structurally broken, e.g. `.claude/settings.json` is unparseable (settings F); no `CLAUDE.md` exists (`CLAUDE.md` F) |
-
-The grade keys off the worst severity present, then the count at that severity: any `error` → the C/D band for the error count; else any `warning` → the B band for the warning count; else any `info` → the A band for the info count; else `A+`. Every band in the table, including `A−` and `C−`, is reachable for a single category, and the overall (floor) grade can therefore land on any of them. The exact +/− band thresholds are tunable; adjust the counts above for your project's tolerance.
-
-### Overall grade
-
-The overall grade equals the floor of the seven category grades. One `D` in any category drags the overall grade to `D`.
-
-### Ordinal encoding
-
-Grades ordinal-encode A+=12, A=11, A−=10, B+=9, B=8, B−=7, C+=6, C=5, C−=4, D+=3, D=2, D−=1, F=0. This encoding supports per-category trending if a project wants it. No 0–100 score is exposed; a percentage would be 100 minus arbitrary per-finding weights, which is false precision the letter-grade scale avoids.
-
----
-
-## Severity Vocabulary
-
-Every finding carries exactly three fields:
-
-- **`severity`**: one of `error`, `warning`, `info` (lowercase, exactly these three).
-- **`file`**: repo-relative path, with `:line` appended where the finding is attributable to a specific line.
-- **`remediation`**: one-line description of what to do.
-
-The chat report groups findings by the seven category names above.
-
----
-
-## Triage → Heal → Verify Protocol
-
-When `/gaia-fitness` runs this protocol, the harness is minimal: no Orchestrator-above-Triager layer, no preserved per-cycle artifact directories, no escalation handoff. On loop exhaustion it simply reports the unresolved findings with the grade. (A larger harness composing this protocol can wrap it in its own deeper loop; the protocol below does not assume one.)
-
-### Roles
-
-- **Orchestrator**: owns the cycle loop and the final report. When `/gaia-fitness` runs, this is the `/gaia-fitness` skill reference.
-- **Auditors**: per-category check executors dispatched during the triage phase.
-- **Fixers**: edit agents dispatched during the heal phase, lane-aware so multiple run in parallel without merge conflicts.
-
-### Triage phase
-
-The Orchestrator dispatches the seven category checks as **parallel subagents** (or parallel tool calls; the verifiable property is the structured findings artifact, not the dispatch mechanism):
-
-| Category                            | Model      | What it does                                                                                                                                        |
-| ----------------------------------- | ---------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Hook integrity                      | **Haiku**  | File-exists + executable checks on hook command paths; event-name validation against a known-valid list                                             |
-| Settings hygiene                    | **Haiku**  | `jq` parse of `settings.json`; glob-subset detection; secret-pattern grep on `env` values; `.gitignore` check for `settings.local.json`; `statusLine` routing through `gaia-statusline.sh` |
-| GAIA-install fitness                | **Haiku**  | Installed GAIA version vs. latest release                                                                                                           |
-| Wiki fitness                        | **Haiku**  | `gaia wiki state` for staleness; `gaia wiki dead-paths`; `gaia wiki orphans`                                                                        |
-| Skill / command / agent frontmatter | **Sonnet** | Frontmatter completeness + placeholder detection (requires judgment); name-collision check                                                          |
-| Rule hygiene                        | **Sonnet** | Content-vs-glob coherence (requires judgment about whether advice is universal or path-specific); `@`-import detection; `CLAUDE.md` cross-reference |
-| `CLAUDE.md` hygiene                 | **Sonnet** | Size evaluation vs. project guidance (requires judgment); dead-path + absolute-path grep; `@`-import resolution; folder-map cross-reference         |
-
-**Structured findings only flow back to the Orchestrator.** Raw command output stays in subagent context to avoid return-budget truncation. Each auditor returns an array of `{severity, file, remediation, fingerprint}` objects. Each auditor's dispatch prompt also carries this paragraph verbatim, because an auditor that ends its turn on a progress report returns a partial array that reads as a finished category:
-
-> How your run ends: a reply with no tool call ends it, and the orchestrator reads whatever you returned as your finished result. Do not end on a summary that announces a next step, an offer to continue, a list of questions none of which blocks the work, or a progress report because a milestone is done; take the next step instead. Stop only when the task is complete, or when something you cannot resolve blocks it, and then say which.
-
-The auditors are recall-oriented; they surface anything suspicious from a fixed knowledge cutoff, so they over-flag (an unfamiliar-but-valid hook event, a permission pair that only looks redundant, a schema example mistaken for an unfilled placeholder). **The Orchestrator dispatches each auditor with an explicit coverage directive** in its prompt, so recall does not ride on the auditor's own bar: `Surface every candidate, including ones you are uncertain about or judge low-severity. Do not filter for importance or confidence: adjudication is a separate stage. Assign each finding a severity so the Orchestrator can rank and drop.` A literal-minded auditor left to self-filter under-reports exactly the borderline judgment calls (frontmatter substantiveness, content-vs-glob coherence, size-vs-guidance) this triage exists to catch, which starves the adjudication stage of the candidates it is built to sift. The Orchestrator adjudicates every finding against the repo before grading: drop the false positives (consult [Decided / not findings](#decided--not-findings)), keep the real ones. The grades and the heal phase operate on the adjudicated set, not the raw auditor output.
+## Heal protocol
 
 ### Heal phase
 
-The Orchestrator dispatches **lane-aware Fixer subagents (Sonnet)** in parallel. Fixer lanes:
+Only a finding the CLI marks `fixable: true` is healed, and `gaia fitness apply` is the only writer. The fixable set is a property of the finding the CLI computes (a graded, unsuppressed error or warning on a file the project owns, in the hooks, settings, `CLAUDE.md` or rules categories), never a judgment the playbook makes.
 
-| Lane                 | Owns                                                                                                                 |
-| -------------------- | -------------------------------------------------------------------------------------------------------------------- |
-| **`claude-surface`** | `.claude/skills/**`, `.claude/commands/**`, `.claude/agents/**`, `.claude/hooks/**`, `CLAUDE.md`, `.claude/rules/**` |
-| **`settings`**       | `.claude/settings.json`                                                                                              |
-| **`gitignore`**      | `.gitignore`                                                                                                         |
+1. A proposer drafts the complete new content of each fixable file without touching it.
+2. The main thread shows each file's diff and asks, one file per question. A run with no one to answer reports the proposals and edits nothing.
+3. Each accepted proposal goes through `gaia fitness apply`, which re-checks ownership, refuses a symlink escape and refuses a file that changed since the diff was shown. A refusal is reported, never retried, and the file is never written by hand.
+4. After all applies, `gaia fitness check` runs once more. A finding that survives a fix stays reported as unresolved; there is no second heal cycle, so no fix is proposed twice in a run.
 
-A lane names where a Fixer may work, not what it may edit: within every lane, ownership decides.
-
-If a single finding's fix straddles multiple lanes, dispatch one Fixer with multi-lane scope (sequential edits inside that Fixer) rather than splitting across Fixers.
+A fix too invasive to apply without product context (restructuring a rule file, splitting an oversized `CLAUDE.md`, changing the structure of hook logic) gets a recommended approach in the report and no edit.
 
 #### Ownership
 
-GAIA is a foundation: a project's `.claude/` mixes files GAIA ships, files the project wrote, and files a third party installed. The heal phase edits only the project's own files, and only on a yes for each one. Before any Fixer runs, the Orchestrator classifies every file a fixable finding would touch with `bash .gaia/scripts/fitness-ownership.sh <file>...`, which decides from the project's records (`.gaia/manifest.json`, the `.gaia/vendor/*.json` pins, `.gitignore`), never from a reading of the file. The script's header defines the classes and their precedence; each class gets one treatment:
+The heal edits only the project's own files, and only on a yes for each one. Ownership comes from the project's records (`.gaia/manifest.json`, the `.gaia/vendor/*.json` pins, `.gitignore`), never from a reading of the file; `.gaia/scripts/fitness-ownership.sh` decides it and its header defines the classes and their precedence. Each class gets one treatment:
 
-| Class          | Heal                                                                                                                                                                                                                                                       |
-| -------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `third-party`  | Never edited. Reported as upstream-owned, naming the upstream (the vendor pin's package, the plugin).                                                                                                                                                       |
-| `ignored`      | Never edited. Reported with the fix for whoever manages the file: the tool that installed it, or the machine's owner for a per-machine file.                                                                                                                |
-| `gaia-shipped` | Never edited locally: a local edit is drift the next `/update-gaia` has to reconcile. Reported with the remediation `/update-gaia`, or, when the latest release still carries the defect, `/gaia-forensics` to report it upstream.                         |
-| `adopter`      | Edited only on a yes for that file. The Fixer proposes the change without writing the file, the Orchestrator shows the proposed diff and asks, and only an accepted proposal is applied. A run with no one to answer reports the proposal and edits nothing. |
+| Class          | Treatment                                                                                                                                                                                                                     |
+| -------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `third-party`  | Inventoried, never linted or edited. Upstream-owned.                                                                                                                                                                          |
+| `ignored`      | Inventoried, never linted or edited. Whoever manages the file (the tool that installed it, or a machine's owner for a per-machine file) fixes it.                                                                            |
+| `gaia-shipped` | Never edited locally: a local edit is drift the next `/update-gaia` has to reconcile. Findings are listed under the upstream section with the remediation `/update-gaia`.                                                    |
+| `unknown`      | Graded like an owned file but never healed: the classifier could not decide, so the heal does not guess.                                                                                                                     |
+| `adopter`      | Edited only on a yes for that file, through `gaia fitness apply`.                                                                                                                                                             |
 
-A non-zero exit from the classifier means it could not read its inputs; that run edits nothing and the report says why.
+A classifier that cannot read its inputs leaves every path `unknown`; that run heals nothing and the report says why.
 
-**Too-invasive fixes:** a fix a Fixer judges too invasive to apply without product context, e.g. restructuring a `.claude/rules/` file, splitting an oversized `CLAUDE.md`, changing the structure of hook logic, is **left unapplied**. The Fixer surfaces it in the report with a **recommended approach** (a description of what to do and why) so the operator can apply it manually.
+### Publish
 
-### Oscillation detection
-
-Finding fingerprint format:
-
-```
-{check-id}:{file}:{line}:{first-40-chars-of-match-text}
-```
-
-A finding whose fingerprint appears in both the current cycle's findings and the prior cycle's findings has survived a Fixer dispatch unchanged; the loop stops for that finding and it is reported as unresolved.
-
-Detection is mechanical: compare fingerprint sets across consecutive cycles. Any fingerprint in both sets triggers loop termination for that finding.
-
-A finding the heal does not edit (a report-only class, or a proposal the human declined) is settled for the run: it is never dispatched or proposed again in a later cycle, and the report carries it as unresolved with its class's remediation.
-
-### Bounded loop
-
-Default: **3 cycles** (tunable; adjust the cycle count in this page for your project's tolerance). Each cycle runs triage → heal → verify. The loop exits early when all findings resolve. On loop exhaustion, `/gaia-fitness` reports the remaining unresolved findings with the affected category grades and the overall grade. No escalation handoff; it reports and stops. Those are the only ends of a run, alongside a finding [oscillation detection](#oscillation-detection) stops: a turn that ends after one phase or one cycle, on a status note with work still outstanding and nothing blocking it, is not a stop but an unfinished run, so the Orchestrator takes the next phase instead of reporting.
-
-**Composed inside a deeper loop.** When a larger audit harness runs this protocol as one bucket of its own cycle loop, that outer loop subsumes this bounded loop: the harness runs the **triage phase** once per outer cycle, folds the fitness findings into its own findings set and oscillation guard, and dispatches fixes through the [heal-phase](#heal-phase) Fixer lanes above. It does not nest a second 3-cycle loop or a second oscillation guard inside each outer cycle. The bounded loop and the oscillation detection described here govern only the standalone `/gaia-fitness` invocation; the per-category grading rubric and Fixer lanes apply unchanged in both modes.
-
-### Verify phase
-
-After each heal cycle, re-run the affected category checks. Recompute the affected category grades and the overall grade. If the overall grade reaches A+, the loop exits clean. The final verify cycle, the one whose recomputed grade is reported (on a clean A+ exit or at loop exhaustion), re-runs all seven categories rather than only the affected ones, so a fix in one lane that regresses a check in a zero-finding category is caught before the loop reports.
-
----
-
-## Findings Schema
-
-```json
-{
-  "category": "hook-integrity",
-  "findings": [
-    {
-      "severity": "error",
-      "file": ".claude/settings.json:14",
-      "remediation": "Hook command path '.claude/hooks/missing.sh' does not exist; create the file or remove the hook entry.",
-      "fingerprint": "hook-integrity:.claude/settings.json:14:.claude/hooks/missing.sh"
-    }
-  ]
-}
-```
-
-`findings` is the only content that flows back from auditors to the Orchestrator. The Orchestrator assembles the per-category arrays into the chat report.
-
----
-
-## Chat Report Format
-
-The report is a single self-sizing ASCII card, emitted as a fenced code block in the chat reply. It has three regions:
-
-- **Header**: the command and the **overall grade** (floor of the seven category grades), right-aligned.
-- **Grades block**: the seven categories sorted alphabetically by name; each row carries a right-aligned severity-count note (`1 warning`, `2 errors, 1 info`) and the category grade.
-- **Findings block**: findings grouped by category, each as `[severity] file` with the `remediation` wrapped beneath. Omitted entirely on a clean run.
-
-The card carries no footer; the `/gaia-fitness` skill prints post-heal instructions as prose below it.
-
-The card width self-sizes: `clamp(longest content line, floor, min(terminal width, 120))`, where `floor` keeps the grades block from colliding. Remediation text wraps to the chosen width, so the card grows to one line per finding on a wide terminal and wraps on a narrow one. `/gaia-fitness` renders it with `gaia fitness render-card`, which takes the findings JSON on stdin and a `--cols` width; the skill's report step builds that JSON from the adjudicated findings and pastes the rendered card into the reply.
-
-Example (overall **B+**, the floor of one `B+` category over six `A`/`A+` categories):
-
-```text
-+------------------------------------------------------------------------------+
-| /gaia-fitness                                                   OVERALL   B+ |
-+------------------------------------------------------------------------------+
-| CLAUDE.md hygiene                                                1 info   A  |
-| GAIA-install fitness                                             1 info   A  |
-| Hook integrity                                                            A+ |
-| Rule hygiene                                                              A+ |
-| Settings hygiene                                                          A+ |
-| Skill / command / agent frontmatter                           1 warning   B+ |
-| Wiki fitness                                                              A+ |
-+------------------------------------------------------------------------------+
-| FINDINGS                                                                     |
-|                                                                              |
-| CLAUDE.md hygiene: A                                                         |
-|   [info]    CLAUDE.md                                                        |
-|             @-import of a path-scoped rule resolves but is always-loaded;    |
-|             consider whether it warrants it.                                 |
-|                                                                              |
-| GAIA-install fitness: A                                                      |
-|   [info]    .gaia/manifest.json                                              |
-|             GAIA v1.1.1 installed; v1.2.0 available. Run /update-gaia to     |
-|             upgrade.                                                         |
-|                                                                              |
-| Skill / command / agent frontmatter: B+                                      |
-|   [warning] .claude/commands/deploy.md                                       |
-|             description frontmatter is missing; add a concise description of |
-|             what this command does.                                          |
-+------------------------------------------------------------------------------+
-```
-
-The overall grade is the floor of the seven category grades: the single `B+` category sets the headline; the six `A`/`A+` categories do not lift it.
-
----
-
-## Extensibility
-
-Add a project-specific check class by appending a new numbered section under [Check Taxonomy](#check-taxonomy) above. Format:
-
-```markdown
-### 8. <Category name>
-
-<What it checks and how. Describe the model (Haiku or Sonnet) and what the auditor does.>
-```
-
-`/gaia-fitness` runs whatever classes this page defines. `/update-gaia` three-way-merges the page so your additions survive GAIA upgrades. `/gaia-wiki` lints the page. The extension point is this page itself; edit it directly, the way the `code-audit-frontend` agent picks up extension files from `.claude/agents/code-audit-frontend/`.
-
----
+After a heal that applied at least one fix, a single gate chooses between publishing (commit, push, open a PR and drive it through the merge gate), opening the PR only, or keeping the changes in the working tree. On a non-default branch the gate commits and pushes in place. The mechanics live in `.gaia/scripts/fitness-publish.sh` and the playbook.
 
 ## See also
 
-[[Wiki Management]]: `gaia wiki dead-paths`, `gaia wiki orphans`, and the other primitives the wiki-fitness category invokes.
-
-[[Worktrees]]: the per-tree identity model behind the `WorktreeCreate`/`WorktreeRemove` hook events and GAIA's own worktree provisioning, which rides `SessionStart`/`PostToolUse` instead.
+[[Wiki Management]]: `gaia wiki dead-paths`, `gaia wiki orphans`, and the other primitives the wiki rules of the catalog run.

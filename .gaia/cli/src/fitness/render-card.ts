@@ -1,14 +1,13 @@
 /**
- * The /gaia-fitness skill builds the input JSON from its adjudicated findings
- * and computed grades, then pastes the rendered card into its chat reply and
- * prints post-heal instructions as prose beneath it; the card itself carries
- * no footer.
+ * Renders the report `gaia fitness check --json` prints as an ASCII card. The
+ * /gaia-fitness playbook pipes that JSON in and pastes the card into its chat
+ * reply; the card itself carries no footer.
  */
 import {z} from 'zod';
 import {EXIT_CODES} from '../exit.js';
 import {structuredError} from '../stderr.js';
 
-const GRADE_WIDTH = 2; // widest grade glyph: "A+", "B-", "D+"
+const GRADE_WIDTH = 3; // widest grade glyph: "n/a"
 const GAP = 3; // spaces between the note column and the grade
 const TAG_WIDTH = 9; // "[warning]" is the widest severity tag
 const INDENT = 2 + TAG_WIDTH + 1; // findings remediation hang indent
@@ -16,27 +15,33 @@ const MARGIN = 4; // "| " + " |"
 const WIDTH_CAP = 120; // hard ceiling regardless of terminal width
 const FALLBACK_COLS = 100; // when neither --cols nor a TTY width is available
 const OVERALL_LABEL = 'OVERALL';
+const TITLE = 'GAIA FITNESS';
+const UPSTREAM_NOTE =
+  'GAIA ships these files; /update-gaia takes the upstream fix.';
 const SEVERITY_ORDER = ['error', 'warning', 'info'] as const;
+
+const FindingSchema = z.object({
+  category: z.string(),
+  file: z.string(),
+  line: z.number(),
+  remediation: z.string(),
+  rule_id: z.string(),
+  severity: z.literal(['error', 'info', 'warning']),
+});
 
 const ReportSchema = z.object({
   categories: z.array(z.object({grade: z.string(), name: z.string()})).min(1),
-  command: z.string(),
-  findings: z
-    .array(
-      z.object({
-        category: z.string(),
-        file: z.string(),
-        grade: z.string(),
-        remediation: z.string(),
-        severity: z.literal(['error', 'info', 'warning']),
-      })
-    )
-    .default([]),
+  findings: z.array(FindingSchema).default([]),
   overall: z.string(),
+  upstream: z.array(FindingSchema).default([]),
 });
 
 export type FitnessReport = z.infer<typeof ReportSchema>;
 type Finding = FitnessReport['findings'][number];
+
+/** `file:line`, or just `file` for a finding with no line (line 0). */
+const location = (finding: Finding): string =>
+  finding.line > 0 ? `${finding.file}:${finding.line}` : finding.file;
 
 /** Compact per-category summary, e.g. `2 errors, 1 info`. Blank when empty. */
 const severityNote = (findings: readonly Finding[]): string => {
@@ -111,18 +116,30 @@ const computeInner = (
     1 +
     clusterWidth;
 
-  const naturals = [
-    floor,
-    report.command.length + 1 + clusterWidth,
-    'FINDINGS'.length,
-  ];
+  const naturals = [floor, TITLE.length + 1 + clusterWidth, 'FINDINGS'.length];
 
   for (const finding of report.findings) {
+    const grade =
+      report.categories.find((category) => category.name === finding.category)
+        ?.grade ?? '';
+
     naturals.push(
-      `${finding.category}: ${finding.grade}`.length,
-      INDENT + finding.file.length,
+      `${finding.category}: ${grade}`.length,
+      INDENT + location(finding).length,
+      INDENT + finding.rule_id.length,
       INDENT + finding.remediation.length
     );
+  }
+
+  if (report.upstream.length > 0) {
+    naturals.push('UPSTREAM'.length, UPSTREAM_NOTE.length);
+
+    for (const finding of report.upstream) {
+      naturals.push(
+        INDENT + location(finding).length,
+        INDENT + finding.rule_id.length
+      );
+    }
   }
 
   const inner = Math.min(Math.max(...naturals), WIDTH_CAP, cols - MARGIN);
@@ -135,6 +152,29 @@ type FindingsRenderContext = {
   line: (content: string) => string;
 };
 
+/** One finding's tag/location line, rule id line and, when asked, wrapped remediation. */
+const renderFinding = (
+  finding: Finding,
+  context: FindingsRenderContext,
+  withRemediation: boolean
+): string[] => {
+  const {inner, line} = context;
+  const tag = `[${finding.severity}]`.padEnd(TAG_WIDTH);
+  const hang = ' '.repeat(INDENT);
+  const lines = [
+    line(`  ${tag} ${truncateTail(location(finding), inner - INDENT)}`),
+    line(`${hang}${truncateTail(finding.rule_id, inner - INDENT)}`),
+  ];
+
+  if (withRemediation) {
+    for (const wrapped of wrapText(finding.remediation, inner - INDENT)) {
+      lines.push(line(`${hang}${wrapped}`));
+    }
+  }
+
+  return lines;
+};
+
 /** Renders one category's finding block (blank line, header, then each
  * finding's tag/file/remediation lines). Empty when the category has no
  * findings. Extracted so `renderCard` itself stays flat. */
@@ -145,19 +185,14 @@ const renderCategoryFindings = (
 ): string[] => {
   if (findings === undefined || findings.length === 0) return [];
 
-  const {inner, line} = context;
+  const {line} = context;
   const lines: string[] = [
     line(''),
     line(`${category.name}: ${category.grade}`),
   ];
 
   for (const finding of findings) {
-    const tag = `[${finding.severity}]`.padEnd(TAG_WIDTH);
-    lines.push(line(`  ${tag} ${truncateTail(finding.file, inner - INDENT)}`));
-
-    for (const wrapped of wrapText(finding.remediation, inner - INDENT)) {
-      lines.push(line(`${' '.repeat(INDENT)}${wrapped}`));
-    }
+    lines.push(...renderFinding(finding, context, true));
   }
 
   return lines;
@@ -202,7 +237,7 @@ export const renderCard = (report: FitnessReport, cols: number): string => {
 
   const out: string[] = [
     bar(),
-    rightRow(report.command, OVERALL_LABEL, report.overall),
+    rightRow(TITLE, OVERALL_LABEL, report.overall),
     bar(),
   ];
 
@@ -223,6 +258,16 @@ export const renderCard = (report: FitnessReport, cols: number): string => {
     }
   }
 
+  if (report.upstream.length > 0) {
+    const context = {inner, line};
+
+    out.push(bar(), line('UPSTREAM'), line(UPSTREAM_NOTE), line(''));
+
+    for (const finding of report.upstream) {
+      out.push(...renderFinding(finding, context, false));
+    }
+  }
+
   out.push(bar());
 
   return out.join('\n');
@@ -230,8 +275,8 @@ export const renderCard = (report: FitnessReport, cols: number): string => {
 
 const HELP_TEXT = `Usage: gaia fitness render-card [--cols N]
 
-  Read a /gaia-fitness report JSON document on stdin and write a width-aware
-  ASCII report card to stdout. --cols sets the target terminal width
+  Read the JSON that \`gaia fitness check\` prints on stdin and write a
+  width-aware ASCII report card to stdout. --cols sets the target terminal width
   (default: autodetect, fallback ${FALLBACK_COLS}). The box self-sizes to the
   longest content line, clamped to ${WIDTH_CAP} columns and to the terminal
   width, wrapping remediation text to fit.

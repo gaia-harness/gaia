@@ -1,0 +1,30 @@
+{
+  "version": 1,
+  "ignore": [
+    {
+      "rule_id": "authoring.skill.body.max-lines",
+      "path": ".claude/skills/update-deps/SKILL.md",
+      "reason": "Skill body is over 500 lines; deferred to the authoring sweep that splits over-length skills."
+    },
+    {
+      "rule_id": "frontmatter.parse",
+      "path": ".claude/commands/gaia-debt.md",
+      "reason": "The argument-hint value is unquoted, which strict YAML rejects though Claude Code tolerates it; deferred until the command is next edited."
+    },
+    {
+      "rule_id": "frontmatter.parse",
+      "path": ".claude/commands/gaia-spec.md",
+      "reason": "The argument-hint value is unquoted, which strict YAML rejects though Claude Code tolerates it; deferred until the command is next edited."
+    },
+    {
+      "rule_id": "frontmatter.name-collision",
+      "path": ".gaia/tests/lib/fixtures/cleanse-conflict-routing/.claude/commands/example-release.md",
+      "reason": "Test fixture that reproduces a command and skill pair sharing one name by design; it is not a live harness file."
+    },
+    {
+      "rule_id": "frontmatter.name-collision",
+      "path": ".gaia/tests/lib/fixtures/cleanse-conflict-routing/.claude/skills/example-release/SKILL.md",
+      "reason": "Test fixture that reproduces a command and skill pair sharing one name by design; it is not a live harness file."
+    }
+  ]
+}

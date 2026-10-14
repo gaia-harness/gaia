@@ -147,6 +147,18 @@ STUB
   touch "$BATS_TEST_TMPDIR/home/.claude/projects/$main_slug/memory/"{a,b,c}.md
   touch "$BATS_TEST_TMPDIR/home/.claude/projects/$worktree_slug/memory/only.md"
 
+  # The count comes from the CLI inventory, so the worktree's `gaia` hands
+  # `fitness` to the committed bundle and answers nothing else.
+  mkdir -p "$WORKTREE/.gaia/cli"
+  cat > "$WORKTREE/.gaia/cli/gaia" <<STUB
+#!/usr/bin/env bash
+if [ "\$1" = "fitness" ]; then
+  exec "$SCRIPTS_DIRECTORY/../cli/gaia" "\$@"
+fi
+exit 1
+STUB
+  chmod +x "$WORKTREE/.gaia/cli/gaia"
+
   HOME="$BATS_TEST_TMPDIR/home" PATH="$MAIN/bin:$PATH" \
     run bash "$WORKTREE/.gaia/scripts/check-updates.sh"
   [ "$status" -eq 0 ]

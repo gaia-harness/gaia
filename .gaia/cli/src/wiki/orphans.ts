@@ -12,6 +12,7 @@
  */
 import {EXIT_CODES} from '../exit.js';
 import {structuredError} from '../stderr.js';
+import type {PageIndex} from './page-index.js';
 import {computePageIndex} from './page-index.js';
 
 const HELP_TEXT = `Usage: gaia wiki orphans [--json]
@@ -33,11 +34,21 @@ const HELP_TOKENS = new Set(['--help', '-h', 'help']);
 const isMaintainerOnly = (path: string): boolean =>
   path.startsWith('wiki/meta/') || path.startsWith('wiki/entities/');
 
-type Orphan = {
+export type Orphan = {
   domain: string;
   path: string;
   title: string;
 };
+
+/** The pages of `index` with no inbound wikilink, maintainer-only domains left out. */
+export const orphansOf = (index: PageIndex): Orphan[] =>
+  index.pages
+    .filter((page) => page.inbound_links === 0 && !isMaintainerOnly(page.path))
+    .map((page) => ({
+      domain: page.domain,
+      path: page.path,
+      title: page.title,
+    }));
 
 type RunOptions = {
   cwd?: string;
@@ -74,17 +85,7 @@ export const run = (
   try {
     cwd = options.cwd ?? process.cwd();
     const index = computePageIndex(cwd);
-    const orphans: Orphan[] = [];
-
-    for (const page of index.pages) {
-      if (page.inbound_links === 0 && !isMaintainerOnly(page.path)) {
-        orphans.push({
-          domain: page.domain,
-          path: page.path,
-          title: page.title,
-        });
-      }
-    }
+    const orphans = orphansOf(index);
 
     if (json) {
       process.stdout.write(`${JSON.stringify({orphans}, null, 2)}\n`);

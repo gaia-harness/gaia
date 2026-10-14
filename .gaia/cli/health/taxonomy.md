@@ -12,9 +12,9 @@ Without a shared baseline, fresh audit agents re-discover settled questions and 
 
 ## Composition
 
-The shared Claude-integration check categories and the triage/heal orchestration protocol live in `wiki/decisions/Claude Integration Fitness.md`. This taxonomy retains only the maintainer distribution-boundary / CLI-surface / forensics / tests classes.
+The shared Claude-integration check categories live in the CLI rule catalog (`gaia fitness rules --json`), and the heal protocol lives in `wiki/decisions/Claude Integration Fitness.md`. This taxonomy retains only the maintainer distribution-boundary / CLI-surface / forensics / tests classes.
 
-The release scrub and `/gaia-fitness` run the shared protocol over every fitness category that page defines. Cross-references are one-directional: this file references the wiki page; the wiki page never references `.gaia/cli/health/` paths.
+`/gaia-fitness` checks every category that catalog defines and heals by the protocol on that page. Cross-references are one-directional: this file references the wiki page; the wiki page never references `.gaia/cli/health/` paths.
 
 ## How to prime an audit
 
