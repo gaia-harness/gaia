@@ -57,11 +57,11 @@ if [ ! -d "$plan_directory" ]; then
   exit 2
 fi
 
-if [ "$unit" != planner ] && ! printf '%s\n' "$unit" | grep -Eq '^phase-[0-9]+-task-[a-z0-9][a-z0-9-]*$'; then
+if [ "$unit" != planner ] && ! grep -Eq '^phase-[0-9]+-task-[a-z0-9][a-z0-9-]*$' <<<"$unit"; then
   printf 'handoff-clear: unit must be planner or phase-<N>-task-<name>: %s\n' "$unit" >&2
   exit 2
 fi
-if [ "$#" -eq 3 ] && ! printf '%s\n' "$yield_number" | grep -Eq '^[1-9][0-9]*$'; then
+if [ "$#" -eq 3 ] && ! grep -Eq '^[1-9][0-9]*$' <<<"$yield_number"; then
   printf 'handoff-clear: yield number must be a positive integer: %s\n' "$yield_number" >&2
   exit 2
 fi

@@ -816,7 +816,11 @@ Yield handoff: $HANDOFF"
 @test "the hook is mode 755 and shellcheck-clean" {
   local hook_path="$REPO_ROOT/.claude/hooks/context-checkpoint-subagent.sh"
   [ -x "$hook_path" ]
-  [ -n "$(find "$hook_path" -perm 755)" ]
+  # GNU stat first: BSD stat rejects -c, while GNU stat accepts -f as its
+  # file-system mode and would print a wrong value.
+  local mode
+  mode="$(stat -c '%a' "$hook_path" 2>/dev/null || stat -f '%Lp' "$hook_path")"
+  [ "$mode" = 755 ]
   if ! command -v shellcheck >/dev/null 2>&1; then
     skip "shellcheck is not installed"
   fi
