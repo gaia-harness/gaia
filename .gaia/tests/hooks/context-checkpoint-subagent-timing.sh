@@ -4,7 +4,8 @@
 # suite and not run in CI.
 #
 # Purpose: the hook's wall time is paid on every tool call, so its per-call exit
-# paths carry a 50 ms p50 budget and its once-per-agent first-sight path and its
+# paths carry a p50 budget (50 ms where every session pays it, 75 ms where only
+# an opted-in sub-agent does) and its once-per-agent first-sight path and its
 # firing path carry a 100 ms one. This tool measures every path and reports; it
 # never tunes the hook and never enforces a budget. It fails (exit 1) only when
 # it measured something other than the path it names: a firing run whose decoded
@@ -59,9 +60,11 @@
 # transcripts), prints (main hook p50 + this hook's main_payload p50) times the
 # median tool calls: the no-matcher PostToolUse chain's cost over one session.
 #
-# Budgets: p50 at most 50 ms on main_payload, not_opted_in_marked,
-# opted_in_below_red and band_marked; at most 100 ms on first_sight and firing;
-# widened_read is recorded without a budget. A baseline well above a few ms
+# Budgets: p50 at most 50 ms on main_payload and not_opted_in_marked, the paths
+# every session and every sub-agent pays; at most 75 ms on opted_in_below_red
+# and band_marked, which only an opted-in sub-agent pays and which carry the
+# payload confirm and the transcript tail read on every call; at most 100 ms on
+# first_sight and firing; widened_read is recorded without a budget. A baseline well above a few ms
 # means the machine was loaded; repeat on a quieter machine before recording.
 #
 # --json prints the measurement rows as an array of {metric, value, unit,
@@ -281,6 +284,7 @@ note_failure() { failures=$((failures + 1)); failure_notes="$failure_notes$1
 budget_for() {
   case "$1" in
     first_sight | firing) echo 100 ;;
+    opted_in_below_red | band_marked) echo 75 ;;
     widened_read | baseline) echo none ;;
     *) echo 50 ;;
   esac
