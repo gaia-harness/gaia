@@ -72,7 +72,7 @@ Each report carries a `status:` field. Stage 1 writes it as `draft`; Stage 2 fli
 - **Promotable memory**: durable knowledge stuck in machine-local memory → moves to a specific wiki page
 - **Auto-load bloat**: flags `CLAUDE.md` and rules over budget, from the CLI's `claudemd.budget` findings
 - **Stale entries** referencing removed code, branches, or features
-- Wiki-internal redundancy and broken links are not fixed here (that is [[Wiki Management]], consolidate / lint), but they are no longer dropped: each is filed as a `tech-debt` issue whose suggested fix names the right `/gaia-wiki` command, or, for a broken wikilink, which `/gaia-wiki` detects and fixes through its lint stage's check #17, `/gaia-wiki`.
+- Wiki-internal redundancy and broken links are not fixed here (that is [[Wiki Management]], consolidate / lint), but they are no longer dropped: each is filed as a `tech-debt` issue whose suggested fix names the right `/gaia-wiki` command, or, for a broken wikilink, which `/gaia-wiki` detects and fixes through its lint stage's check #17.
 
 Guardrails and portability details live in `.claude/skills/gaia/references/cleanse.md` and its `cleanse/` sub-references. Key invariants: Stage 2 never deletes unless Stage 1 named the wiki target; it never writes a file the project does not own, or one of its own the human did not approve; Stage 2 never runs `git add` / `git commit` (the main conversation's publish step commits after it returns); the cleanse files out-of-scope findings but never fixes them; reports gitignored under `.gaia/local/cleanse/`.
 

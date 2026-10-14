@@ -22,7 +22,7 @@ GAIA's lint config, extracted to a standalone package under `github.com/gaia-rea
 
 ## Where rules live
 
-Source of truth: the package's `src/configs/*.ts` (per export: `base.ts`, `react.ts`, `style-hygiene.ts`, `guardrails.ts`, `testing.ts`, `storybook.ts`, `playwright.ts`, `prettier.ts`, `better-tailwind.ts`, `ignores.ts`). Custom plugins live in its `src/plugins/`.
+Source of truth: the package's `src/configs/*.ts`. Custom plugins live in its `src/plugins/`.
 
 The project's `frontend/eslint.config.mjs` is a thin consumer: it spreads the package's exported arrays and adds project-specific overrides last.
 

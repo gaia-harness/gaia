@@ -20,7 +20,7 @@ The template ships with **no global state slices**; `<State>` is a passthrough. 
 When TanStack Query is on (`gaia init configure-data-layer --query true`), `<State>` wraps its children in `QueryProvider` (`query-provider.tsx` in `frontend/app/state/`, written by that command), which obtains the QueryClient once per render tree. That provider is server data, not a state slice; see [[Data Loading]].
 
 > [!key-insight] Theme is loader-derived, not state
-> Theme is **not** a state slice. It's derived in the loader on every render from a cookie + `Sec-CH-Prefers-Color-Scheme` client hint, so no React state is required. See [[Theme Flow]] and [[Dark Mode Modernization]].
+> Theme is **not** a state slice. It's derived in the loader on every render from the `__theme` cookie, falling back to the OS preference on the client, so no React state is required. See [[Theme Flow]] and [[Dark Mode Modernization]].
 
 ## Canonical pattern
 

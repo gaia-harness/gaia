@@ -36,7 +36,7 @@ Both `actions.*` and `resources.*` hold no-UI server-side form endpoints. Use `a
 > [!key-insight] Routes are thin
 > Route files in `frontend/app/routes/` handle only **loader, action, meta, and rendering the page component**. All UI lives in `frontend/app/pages/`. This keeps routes easy to scan and pages easy to test in isolation. See [[Thin Routes]].
 
-`/new-route` scaffolds routes in this shape: route file, page folder, tests, story, i18n keys, all in one pass. Run the scaffold from the repo root; output paths resolve from the working directory.
+`/new-route` scaffolds routes in this shape: route file, page folder, tests, story, i18n keys, all in one pass.
 
 ### Scaffold naming conventions
 

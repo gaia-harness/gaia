@@ -50,7 +50,7 @@ handles that diff:
 
 ## Code review
 
-The `code-review-audit` agent reviews the branch diff, so a PR that touches
+The Code Audit Team (`code-audit-frontend`) reviews the branch diff, so a PR that touches
 `frontend/app/utils/http.server.ts` or `frontend/app/entry.server.tsx` re-surfaces the
 `'unsafe-inline'` and missing-`report-uri` observations; they sit in the diff
 scope. Both are accepted trade-offs, recorded here and in code comments at the

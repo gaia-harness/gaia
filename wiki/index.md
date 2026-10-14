@@ -95,7 +95,7 @@ Master catalog of every page in the wiki. Newly created pages must be added here
 - [[composeStory Pattern]]: superseded by [[Stories as Tests]]; keeps the stub-over-mock reasoning.
 - [[Stories as Tests]]: a story with a `play` is the component test, run by Vitest in headless Chromium; the three Vitest projects, what counts as a test to the harness, the CSF shapes and the exit-7 refusal, and the `languages` prop and router stub conventions.
 - [[Dark Mode Modernization]]
-- [[Content Security Policy]]: per-request nonce CSP; Report-Only pending an upstream React Router fix; documents the `unsafe-inline` and no-`report-uri` trade-offs.
+- [[Content Security Policy]]: per-request nonce CSP, enforced; documents the `unsafe-inline` and no-`report-uri` trade-offs.
 <!-- gaia:maintainer-only:start -->
 <!-- gaia:maintainer-only:end -->
 - [[Composite Action Step Timeouts]]: Node-provisioning steps are bounded by their owning job's `timeout-minutes`; a step-level cap is a per-workflow choice, not a rule.

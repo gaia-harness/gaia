@@ -16,13 +16,13 @@ GAIA ships with [Claude Code](https://claude.ai/) support out of the box. Everyt
 
 `.claude/` is split by lifecycle, not by feature:
 
-- `settings.json`: committed; hooks, env, plugins
+- `settings.json`: committed; hooks, permissions, plugins
 - `settings.local.json`: gitignored; personal overrides
 - `agent-memory/`: gitignored scratch path created on demand by named agents; **not** a source of truth; durable knowledge belongs in the wiki
 - `agents/`: sub-agent definitions
 - `commands/`: slash commands
 - `hooks/`: bash hooks invoked by `settings.json`
-- `instructions/`: parameterized one-shot runbooks dispatched by commands like `/gaia-init`; self-deleting after use
+- `frontend/.claude/instructions/`: parameterized one-shot runbooks dispatched by commands like `/gaia-init`; self-deleting after use
 - `rules/`: auto-attached guidance, file-path scoped
 - `skills/`: user-invokable workflows, scaffolders, context-triggered guidance
 
@@ -32,9 +32,9 @@ GAIA workflows are split between slash commands under `.claude/commands/` (`/gai
 
 ## Rules: auto-attached
 
-Rules activate automatically based on file paths; no need to invoke them. Each rule scopes itself to a glob in `.claude/rules/{name}.md` frontmatter. The set covers code conventions ([[Coding Guidelines]], [[State]], [[Routing]], [[i18n]], [[Tailwind]], [[API Service Pattern]], [[Storybook Stories]], [[Playwright]]), workflow ([[Git Workflow]], [[Quality Gate]], [[PR Merge Workflow]], [[Task Orchestration]]), and harness discipline (`shell-cwd.md`, `code-search.md`).
+Rules activate automatically based on file paths; no need to invoke them. Each rule scopes itself to a glob in its frontmatter (root rules in `.claude/rules/`, frontend rules in `frontend/.claude/rules/`). The set covers code conventions ([[Coding Guidelines]], [[State]], [[Routing]], [[i18n]], [[Tailwind]], [[API Service Pattern]], [[Storybook Stories]], [[Playwright]]), workflow ([[Git Workflow]], [[Quality Gate]], [[PR Merge Workflow]], [[Task Orchestration]]), and harness discipline (`shell-cwd.md`, `code-search.md`).
 
-For the current full rule list, query Serena or list `.claude/rules/`.
+For the current full rule list, query Serena or list `.claude/rules/` and `frontend/.claude/rules/`.
 
 ## Hooks: wired through `settings.json`
 
@@ -71,7 +71,7 @@ A linked worktree's `.gaia/local` is one symlink to the main checkout's (see [[W
 
 [[Code Review Audit Agent]] runs automatically before every PR merge (per [[PR Merge Workflow]]). The pre-merge gate is a multi-member Code Audit Team, not one agent: resolve the dispatched members with `bash .gaia/scripts/resolve-audit-members.sh` and dispatch the audit loop unit to run each one it names. See [[PR Merge Workflow]] for the dispatch and clearance mechanics.
 
-Pre-seeded with GAIA's architecture knowledge. Durable findings belong in the wiki (`wiki/concepts/Code Review Audit Agent.md` and adjacent pages). The `.claude/agent-memory/` path is a gitignored scratch path (created on demand under a per-agent subdir such as `code-review-audit/`), not a source of truth.
+Pre-seeded with GAIA's architecture knowledge. Durable findings belong in the wiki (`wiki/concepts/Code Review Audit Agent.md` and adjacent pages). The `.claude/agent-memory/` path is a gitignored scratch path (created on demand under a per-agent subdir such as `code-audit-frontend/`), not a source of truth.
 
 `worthiness-evaluator` is an opus advisory agent that judges each emergent-surface test (the package descriptor's `emergentTests` globs: components, pages, and Playwright) on honesty and worthiness, returning a keep / fix / delete verdict per test. It proposes only and edits no files; every delete is human-gated. Its verdicts feed the worthiness ledger that `worthiness-presence-check.sh` enforces at merge.
 
@@ -83,7 +83,7 @@ Workflow and scaffolder skills are user-invoked. Context-triggered skills activa
 
 ## settings.json
 
-Registers PreToolUse and PostToolUse hooks across several matchers (see `.claude/settings.json` for the current set), plus UserPromptSubmit and the SessionStart / Stop wiki-coherence hooks. GAIA's shipped settings register no `WorktreeCreate` and no `WorktreeRemove` hook: the harness owns worktree creation and removal natively, under the same `.claude/worktrees/<name>/` layout, and the branch it cuts is named `worktree-<name>` with every `/` in `<name>` written as `+`. Worktree *provisioning* is a separate concern from creation, and it is GAIA's: `provision-worktree.sh` runs on session start and on worktree entry, re-links the shared state the registry declares and regenerates the worktree's typed routes, and is idempotent, so a worktree with broken links, or one made by a plain `git worktree add`, repairs itself on the next entry. Provisioning on entry rather than at creation is what lets it reach a worktree GAIA had no hand in making. Sets a `statusLine` command, and enables the `typescript-lsp@claude-plugins-official` plugin. Serena MCP is registered user-globally with the `claude-code` context and `--project-from-cwd` auto-activation (`claude mcp add serena -s user`), not in this file (see [[Serena Integration]]).
+Registers its hooks (see the `hooks` key of `.claude/settings.json` for the current set). GAIA's shipped settings register no `WorktreeCreate` and no `WorktreeRemove` hook: the harness owns worktree creation and removal natively, under the same `.claude/worktrees/<name>/` layout, and the branch it cuts is named `worktree-<name>` with every `/` in `<name>` written as `+`. Worktree *provisioning* is a separate concern from creation, and it is GAIA's: `provision-worktree.sh` runs on session start and on worktree entry, re-links the shared state the registry declares and regenerates the worktree's typed routes, and is idempotent, so a worktree with broken links, or one made by a plain `git worktree add`, repairs itself on the next entry. Provisioning on entry rather than at creation is what lets it reach a worktree GAIA had no hand in making. Sets a `statusLine` command; the `enabledPlugins` key lists the enabled plugins. Serena MCP is registered user-globally with the `claude-code` context and `--project-from-cwd` auto-activation (`claude mcp add serena -s user`), not in this file (see [[Serena Integration]]).
 
 `permissions.allow` covers routine git / gh / pnpm operations plus scoped edits for `.claude/**`, `.gaia/**`, `wiki/**`, and `CHANGELOG.md`. `permissions.deny` covers `.env` writes (`Edit(.env)`), `pnpm-lock.yaml` writes, force-push variants on `main`/`master`, and `git reset --hard HEAD~*`. GAIA ships no `Read()` rule there: any such rule arms a bypass-immune approval breaker on every search and copy command, so read-side denial lives in the hook layer and, for sandboxed subprocesses, in `sandbox.filesystem.denyRead`. `Edit(<glob>)` is the write-side rule form: the file permission checks match only `Read(path)` and `Edit(path)` rules, and an `Edit` rule covers every file-editing tool (Write, Edit, MultiEdit, NotebookEdit), so a `Write(<glob>)` rule is accepted, never matched, and draws a startup warning naming the settings file it sits in. `block-sensitive-read.sh` delivers the whole tool tier, as heuristic defense-in-depth, not a sandbox. The OS-level sandbox is the tier that reaches an arbitrary subprocess, and GAIA declares its read boundary in `sandbox.filesystem.denyRead` rather than leaning on a permission rule to merge into it; those entries stay inert until a machine enables the sandbox, which GAIA does not do by default. Both permission lists are alphabetized; path globs are repo-relative (no leading `/`).
 
