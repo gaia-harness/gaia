@@ -42,6 +42,26 @@
 #   its dispositions; it never carries a title, failure mode, fix or trigger.
 #   The outcome file lives under .gaia/local on the one machine.
 #
+# The finding's grade: `severity` critical|major|minor|investigate, or
+# `issue_severity` Critical|Major|Minor|Investigate, which wins when both are
+# set. The screen reads each of the two on its own, so a caller re-grading a
+# reviewer's finding to investigate sets `issue_severity` and leaves the
+# reviewer's `severity` in place: overwriting a `critical` would drop the
+# finding off the security path. An investigate grade also needs two non-empty strings,
+# `investigate_question` (the fact whose value decides the grade) and
+# `investigate_settled_by` (the evidence that would establish it); each is
+# folded onto one line and written into the body's research block:
+#   <!-- gaia-investigate: v1 -->
+#   **Question:** <investigate_question>
+#   **Settled by:** <investigate_settled_by>
+# Either field empty fails `missing-investigate-question` or
+# `missing-investigate-settled-by`; either field set on any other grade fails
+# `investigate-fields-on-graded-finding`. Every filing then runs the
+# investigate-cap check, which reads the network only for an investigate grade:
+# a full queue fails `investigate-cap` with the check's report, naming the open
+# investigations, on stderr; a tracker it cannot read is reported on stderr and
+# the filing goes on.
+#
 # Order for file: screen, then (security-class only) a first visibility read,
 # probe, dedup, a second visibility read as the last gh call before the first
 # write, label creation, create, verify-after-file. A security-class finding
@@ -430,10 +450,18 @@ fetch_lists() {
 severity_label() {
   jq -r '
     if (.issue_severity // "") != "" then
-      ({"Critical": "critical", "Major": "major", "Minor": "minor"}[.issue_severity] // empty)
+      ({"Critical": "critical", "Major": "major", "Minor": "minor", "Investigate": "investigate"}[.issue_severity] // empty)
     else
-      ((.severity // "") | select(IN("critical", "major", "minor")))
+      ((.severity // "") | select(IN("critical", "major", "minor", "investigate")))
     end' "$1"
+}
+
+# investigate_field <json-file> <key>: the field as one line with surrounding
+# whitespace trimmed, or nothing when it is absent, not a string, or blank. The
+# research block is line-oriented and the metadata check reads each of its
+# lines on its own, so a newline in the value would split it.
+investigate_field() {
+  jq -r --arg key "$2" '.[$key] | if type == "string" then gsub("\\s*\\n\\s*"; " ") | gsub("^\\s+|\\s+$"; "") else "" end' "$1"
 }
 
 cmd_file() {
@@ -559,6 +587,16 @@ cmd_file() {
   [ -n "$suggested_fix" ] || finish_failed "missing-suggested-fix"
   [ -n "$tier" ] || finish_failed "missing-severity"
 
+  local investigate_question investigate_settled_by
+  investigate_question="$(investigate_field "$finding_file" investigate_question)"
+  investigate_settled_by="$(investigate_field "$finding_file" investigate_settled_by)"
+  if [ "$tier" = investigate ]; then
+    [ -n "$investigate_question" ] || finish_failed "missing-investigate-question"
+    [ -n "$investigate_settled_by" ] || finish_failed "missing-investigate-settled-by"
+  elif jq -e '(.investigate_question // "") != "" or (.investigate_settled_by // "") != ""' "$finding_file" >/dev/null 2>&1; then
+    finish_failed "investigate-fields-on-graded-finding"
+  fi
+
   local body_file="$work_directory/issue-body.md"
   {
     printf '%s\n\n' "$wrapped_key"
@@ -566,6 +604,11 @@ cmd_file() {
     printf '**Location:** `%s:%s`\n\n' "$finding_path" "$finding_line"
     printf '**Failure mode:** %s\n\n' "$failure_mode"
     printf '**Suggested fix:** %s\n' "$suggested_fix"
+    if [ "$tier" = investigate ]; then
+      printf '\n<!-- gaia-investigate: v1 -->\n'
+      printf '**Question:** %s\n' "$investigate_question"
+      printf '**Settled by:** %s\n' "$investigate_settled_by"
+    fi
   } >"$body_file"
 
   local labels_csv="tech-debt,severity:$tier" label_arguments
@@ -588,6 +631,21 @@ cmd_file() {
     printf '%s\n' "$metadata_report" >&2
     finish_failed "metadata-check"
   fi
+
+  # Exit 1 is a full queue, a refusal; exit 2 is a tracker that could not be
+  # read, advisory, because refusing every filing while it is unreachable loses
+  # findings. Either way its stderr reaches the caller, since the refusal names
+  # the open investigations a filer can resolve instead.
+  local cap_report cap_status=0
+  cap_report="$(bash "$script_directory/check-debt-issue-metadata.sh" --investigate-cap --labels "$labels_csv" --repo "$repo" 2>&1)" || cap_status=$?
+  case "$cap_status" in
+    0) ;;
+    1)
+      printf '%s\n' "$cap_report" >&2
+      finish_failed "investigate-cap"
+      ;;
+    *) printf '%s\n' "$cap_report" >&2 ;;
+  esac
 
   run_gh label list --repo "$repo" --limit 200 --json name --jq '.[].name'
   [ "$gh_status" -eq 0 ] || { [ "$sensitive" -eq 1 ] && finish_diverted "$security_trigger"; finish_transient; }

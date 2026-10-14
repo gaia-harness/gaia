@@ -125,7 +125,10 @@ _record_flush() {
 # verdict is the exit code and the detail travels in files under RECORD_WORK.
 # 0 written; 3 no unclaimed start; 4 already recorded; 6 the ledger could not
 # be read; 7 an append failed. The decision is made here, with the lock held,
-# so two closes cannot both pair with one start.
+# so two closes cannot both pair with one start. A plain start with no run
+# binding, written after this session joined a run and before any close claimed
+# the join, is a re-invocation of the workflow, so the close inherits the join's
+# origin rather than treating this session as the origin.
 # shellcheck disable=SC2016  # jq source, no shell expansion
 _record_locked() {
   local ledger="$TELEMETRY_DIRECTORY/usage.jsonl" decision verdict
@@ -145,14 +148,17 @@ _record_locked() {
           | if any($existing[]; .type == "close" and (.start_ts | type) == "string" and (.start_ts | usage_epoch) == $recovery_t)
                or ($start_exists and any($before[]; .t0 == $recovery_t))
             then {verdict: "recorded"}
-            else {verdict: "write", t0: $start_ts,
+            else {verdict: "write", t0: $start_ts, run: ([$starts[] | select(._t == $recovery_t) | .run | objects] | first),
                   rows: ((if $start_exists then [] else [{schema_version: 1, kind: "binding", type: "start", session_id: $session_id, ts: $start_ts,
                                                          workflow: $workflow, source: "record-command"}] end) + [$close_row])} end
         else
           usage_intervals($existing + [$close_row]) as $after
           | if ($after | length) > ($before | length)
             then ([$after[] | select(IN($before[]) | not)] | last) as $new
-              | {verdict: "write", t0: ([$starts[] | select(._t == $new.t0)] | first | .ts), rows: [$close_row]}
+              | ([$starts[] | select(._t == $new.t0)] | first) as $paired
+              | ([$starts[] | select(._t < $paired._t and .source == "join-command" and (.run | type) == "object")
+                    | . as $join | select(any($before[]; .t0 == $join._t) | not)] | sort_by(._t) | last | .run // null) as $joined_run
+              | {verdict: "write", t0: $paired.ts, run: ($paired.run | if type == "object" then . else $joined_run end), rows: [$close_row]}
             elif any($starts[]; ._t != null and ._t <= $now_t) then {verdict: "recorded"}
             else {verdict: "nostart"} end
         end')" || return 6
@@ -163,12 +169,44 @@ _record_locked() {
     write) ;;
     *) return 6 ;;
   esac
-  jq -r '.t0' <<<"$decision" >"$RECORD_WORK/t0" || return 6
   jq -c '.rows[]' <<<"$decision" >"$RECORD_WORK/usage_rows" || return 6
+  _record_bound_sessions "$ledger" "$decision" || return 6
   # The edges go first: they name a run ref nothing else uses yet, so one left
   # behind by a failed close append is inert, and the close row is the commit.
   if [ -s "$RECORD_WORK/link_rows" ]; then cat "$RECORD_WORK/link_rows" >>"$TELEMETRY_DIRECTORY/links.jsonl" || return 7; fi
-  cat "$RECORD_WORK/usage_rows" >>"$ledger" || return 7
+  cat "$RECORD_WORK/bound_rows" "$RECORD_WORK/usage_rows" >>"$ledger" || return 7
+}
+
+# _record_bound_sessions <ledger> <decision>: the other sessions bound to this
+# run's origin (usage-handoff-lib.sh writes the bindings), each given a close
+# under the same ref so every readout attributes its spend to the run. Writes
+# the extra close rows into bound_rows, one `<session id> TAB <start>` line per
+# session the Cost line sums into members, and the origin's start into
+# origin_ts. A session whose start is already claimed was recorded elsewhere
+# and is left out, so no spend is counted twice.
+# shellcheck disable=SC2016  # jq source, no shell expansion
+_record_bound_sessions() {
+  local ledger="$1" decision="$2" bound
+  bound="$({ LC_ALL=C grep -F '"kind":"binding"' "$ledger" 2>/dev/null || true; } | LC_ALL=C grep -F -- "\"workflow\":\"$WORKFLOW\"" |
+    jq -nRc --argjson decision "$decision" --arg session_id "$SESSION_ID" --arg workflow "$WORKFLOW" --arg ref "$RUN_REF" --arg now "$NOW" \
+      "$GAIA_USAGE_JQ_DEFS$GAIA_USAGE_RESOLVE_JQ"'
+      [inputs | (try fromjson catch null) | select(type == "object" and .schema_version == 1 and .kind == "binding"
+          and .workflow == $workflow and (.type == "start" or .type == "close") and .session_id != $session_id)] as $others
+      | ($decision.run // {session_id: $session_id, ts: $decision.t0}) as $origin
+      | ($origin.ts | usage_epoch) as $origin_t
+      | usage_intervals($others) as $claimed
+      | [$others[] | select(.type == "start") | . + {_t: (.ts | usage_epoch)} | select(._t != null)
+          | select((.session_id == $origin.session_id and ._t == $origin_t)
+              or ((.run | type) == "object" and .run.session_id == $origin.session_id and (.run.ts | usage_epoch) == $origin_t))
+          | . as $start | select(any($claimed[]; .session_id == $start.session_id and .t0 == $start._t) | not)]
+      | unique_by(.session_id) as $members
+      | {origin_ts: $origin.ts,
+         members: ([[$session_id, $decision.t0]] + [$members[] | [.session_id, .ts]]),
+         rows: [$members[] | {schema_version: 1, kind: "binding", type: "close", session_id, ts: $now, ref: $ref, workflow: $workflow,
+                              source: "record-command", start_ts: .ts}]}')" || return 1
+  jq -r '.origin_ts' <<<"$bound" >"$RECORD_WORK/origin_ts" || return 1
+  jq -r '.members[] | @tsv' <<<"$bound" >"$RECORD_WORK/members" || return 1
+  jq -c '.rows[]' <<<"$bound" >"$RECORD_WORK/bound_rows" || return 1
 }
 
 # _record_link_rows: the edge rows --pr and --issue ask for, written with the
@@ -193,15 +231,32 @@ _record_tree() {
   for child_pid in $(pgrep -P "$1" 2>/dev/null); do _record_tree "$child_pid"; done
 }
 
-# _record_print_cost <t0> <close ts>: the Cost line (or its JSON) as the last
+# _record_run_view <close ts>: gaia_usage_interval_view summed over every
+# session the run's close covers (members), with the elapsed time measured from
+# the origin's start, so a run continued across sessions reports its whole cost.
+# shellcheck disable=SC2016  # jq source, no shell expansion
+_record_run_view() {
+  local interval_end="$1" member_session member_start origin_start
+  origin_start="$(cat "$RECORD_WORK/origin_ts")"
+  while IFS=$'\t' read -r member_session member_start; do
+    gaia_usage_interval_view "$member_session" "$member_start" "$interval_end"
+  done <"$RECORD_WORK/members" |
+    jq -sc --arg origin_start "$origin_start" --arg interval_end "$interval_end" "$GAIA_USAGE_JQ_DEFS$GAIA_USAGE_RESOLVE_JQ"'
+      if length == 0 or any(.[]; (.tokens | type) != "number") then null
+      else {tokens: (map(.tokens) | add), dollars: (if any(.[]; .dollars == null) then null else (map(.dollars) | add) end),
+            elapsed_seconds: (($interval_end | usage_epoch) - ($origin_start | usage_epoch) | [., 0] | max | floor),
+            unpriced: any(.[]; .unpriced)} end'
+}
+
+# _record_print_cost <close ts>: the Cost line (or its JSON) as the last
 # stdout line, bounded by the render cap. The close row is already written, so a
 # cap or a failure prints a marker and the exit stays 0.
 _record_print_cost() {
-  local interval_start="$1" interval_end="$2" view_file="$RECORD_WORK/view" view_pid pids render_cap="${GAIA_USAGE_RENDER_CAP_SECONDS:-10}" started_at wait_ticks
+  local interval_end="$1" view_file="$RECORD_WORK/view" view_pid pids render_cap="${GAIA_USAGE_RENDER_CAP_SECONDS:-10}" started_at wait_ticks
   local view_json tokens dollars elapsed unpriced
   case "$render_cap" in '' | *[!0-9]* | 0) render_cap=10 ;; esac
   usage_rates_load "$RATE_TABLE" "$MAIN_ROOT"
-  (gaia_usage_interval_view "$SESSION_ID" "$interval_start" "$interval_end") >"$view_file" 2>/dev/null 3>&- &
+  (_record_run_view "$interval_end") >"$view_file" 2>/dev/null 3>&- &
   view_pid=$!
   started_at="$(date +%s)"
   while kill -0 "$view_pid" 2>/dev/null && [ $(($(date +%s) - started_at)) -lt "$render_cap" ]; do sleep 0.1; done
@@ -232,11 +287,14 @@ _record_print_cost() {
   gaia_usage_cost_line "$tokens" "$dollars" "$elapsed"
   [ "$RECORD_PARTIAL" = 0 ] || printf ' (partial: flush incomplete)'
   [ "$unpriced" != true ] || printf ' (partial: lower bound)'
+  # A recovery start bound to no other session may stand in for a run that
+  # began elsewhere, so its figure is never offered as the run's total.
+  if [ -n "$START_ISO" ] && [ "$(wc -l <"$RECORD_WORK/members" | tr -d ' ')" = 1 ]; then printf ' (partial: this session only)'; fi
   printf '\n'
 }
 
 _record_run() {
-  local hint status=0 t0
+  local hint status=0
   REF="${ARGS[0]-}"
   if [ "${#ARGS[@]}" -ne 1 ] || ! gaia_usage_valid_reference "$REF"; then _error "record takes one valid ref"; return 2; fi
   _record_check_workflow "$REF" || return 2
@@ -266,14 +324,13 @@ _record_run() {
   GAIA_LEDGER_LOCK_TIMEOUT_SECONDS="${GAIA_LEDGER_LOCK_TIMEOUT_SECONDS:-10}" with_ledger_lock "$TELEMETRY_DIRECTORY" _record_locked 2>/dev/null || status=$?
   case "$status" in
     0) ;;
-    3) _error "no unclaimed $WORKFLOW start in this session; nothing was written, rerun: $hint"; return 1 ;;
+    3) _error "no unclaimed $WORKFLOW start in this session; nothing was written. A run continued from another session: run the usage.sh join line its continuation prompt carries, then record again. Otherwise rerun: $hint, with <iso> the UTC time the run began (the Cost line then covers this session only)"; return 1 ;;
     4) _error "this run is already recorded; nothing was written, if it was missed rerun: $hint"; return 1 ;;
     75) _error "ledger lock timed out; nothing was written, rerun: bash .gaia/scripts/usage.sh record $REF --workflow $WORKFLOW${START_ISO:+ --start $START_ISO}"; return 1 ;;
     6) _error "could not read the usage ledger; nothing was written"; return 2 ;;
     *) _error "could not append to the usage ledger; check the close row before rerunning"; return 1 ;;
   esac
-  t0="$(cat "$RECORD_WORK/t0")"
-  _record_print_cost "$t0" "$NOW"
+  _record_print_cost "$NOW"
 }
 
 # shellcheck disable=SC2329  # reached through usage.sh's dispatch
