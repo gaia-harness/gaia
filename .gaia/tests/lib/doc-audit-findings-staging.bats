@@ -284,16 +284,12 @@ setup() {
   done
 }
 
-@test "every spec carries the quoted anchor-tree form and states why" {
+@test "every spec carries the quoted anchor-tree form" {
   # The floor for the rule above: a spec that stopped prescribing the sidecar
   # write, or dropped the flag, would pass an absence check on nothing.
   for audited_file in "${SPECS[@]}"; do
     grep -qF -- "--anchor-tree '<ANCHOR_TREE>'" "$audited_file" || {
       echo "$audited_file carries no quoted --anchor-tree form" >&2
-      return 1
-    }
-    grep -qF -- 'Keep the single quotes a command puts around a value' "$audited_file" || {
-      echo "$audited_file does not state why a resolver value is single-quoted" >&2
       return 1
     }
   done

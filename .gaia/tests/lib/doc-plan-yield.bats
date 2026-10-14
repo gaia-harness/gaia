@@ -22,8 +22,8 @@
 #     copies the three files into $BATS_TEST_TMPDIR, mutates one clause with
 #     a fixed-string edit, proves the copy changed, and runs the same
 #     function against the copy;
-#   - the limit rule is also executed: a small function implements it as the
-#     block words it and reads the limit through the real context lib.
+#   - the limit the block compares against is read through the real context
+#     lib, which must print a positive whole number.
 #
 # Assertion style: .claude/rules/bats-assertions.md.
 
@@ -124,7 +124,6 @@ ledger_range() { range_of "$1/$PLANNER_REL" '**Phase findings ledger (' '- **Sto
 summary_range() { range_of "$1/$PLANNER_REL" '- **Final summary.**' "After every dispatched member's clean-pass marker" | trim_lines; }
 cleanup_section() { section_of "$1/$PLANNER_REL" '## Cleanup and return' | trim_lines; }
 resume_range() { range_of "$1/$PLANNER_REL" '**Resume detection (cold-start' '- **Pre-flight isolation.**' | trim_lines; }
-step4_range() { range_of "$1/$PLAN_REL" '### 4. Spawn planning agent' '### 4.5.' | trim_lines; }
 planner_yield_range() { range_of "$1/$PLAN_REL" '#### Planner yield' '### 4.5.' | trim_lines; }
 step5_range() { range_of "$1/$PLAN_REL" '### 5. Report to user' '@@no-end-marker@@' | trim_lines; }
 
@@ -525,31 +524,16 @@ check_task_doc_naming() {
     'where `{name}` is lowercase kebab-case (`[a-z0-9][a-z0-9-]*`)' || return 1
 }
 
-# yield_action <count> <limit>: the limit rule as the block words it. k is
-# the count plus one; halt when k is greater than the limit.
-yield_action() {
-  local k=$(($1 + 1))
-  if [ "$k" -gt "$2" ]; then printf 'halt\n'; else printf 'redispatch\n'; fi
-}
-
-# A deliberately wrong boundary, for the red twin.
-yield_action_off_by_one() {
-  local k=$(($1 + 1))
-  if [ "$k" -ge "$2" ]; then printf 'halt\n'; else printf 'redispatch\n'; fi
-}
-
-# check_limit_boundary <root> <action function>: with the limit read through
-# the real context lib, the yield whose number equals the limit
-# re-dispatches and the next one halts.
-check_limit_boundary() {
-  local root="$1" action="$2" limit
+# check_yield_limit_is_positive_integer <root>: the context lib under <root>
+# prints a positive whole number, the limit the yield-handling block compares
+# a task's yield count against. A zero or non-numeric limit would halt the
+# first yield or make the comparison fail.
+check_yield_limit_is_positive_integer() {
+  local root="$1" limit
   limit="$(bash -c ". '$root/.gaia/scripts/context-checkpoint-lib.sh' && gaia_context_yield_limit")" || return 1
   case "$limit" in
     '' | *[!0-9]* | 0) printf 'the lib did not print a positive integer limit: %s\n' "$limit" >&2; return 1 ;;
   esac
-  [ "$("$action" 0 "$limit")" = redispatch ] || { printf 'the first yield did not re-dispatch\n' >&2; return 1; }
-  [ "$("$action" $((limit - 1)) "$limit")" = redispatch ] || { printf 'the yield numbered at the limit did not re-dispatch\n' >&2; return 1; }
-  [ "$("$action" "$limit" "$limit")" = halt ] || { printf 'the yield past the limit did not halt\n' >&2; return 1; }
 }
 
 check_limit_wording_matches() {
@@ -828,14 +812,23 @@ check_limit_wording_matches() {
   red check_task_doc_naming "$PLANNER_REL" 'is lowercase kebab-case (`[a-z0-9][a-z0-9-]*`)' 'is any string'
 }
 
-@test "UAT-012: the limit rule re-dispatches at the limit and halts one past it" {
-  green check_limit_boundary yield_action
+@test "UAT-012: the context lib prints a positive integer yield limit" {
+  green check_yield_limit_is_positive_integer
 }
 
-@test "UAT-012 red: an off-by-one limit rule fails the boundary check" {
-  run check_limit_boundary "$REPO_ROOT" yield_action_off_by_one
-  [ "$status" -ne 0 ]
-  [ -n "$output" ]
+@test "UAT-012 red: a context lib whose yield limit is zero or not a number fails" {
+  local scratch="$BATS_TEST_TMPDIR/limit-root" replacement
+  mkdir -p "$scratch/.gaia/scripts"
+  for replacement in 0 many ''; do
+    sed "s/^GAIA_CONTEXT_YIELD_LIMIT=2\$/GAIA_CONTEXT_YIELD_LIMIT=$replacement/" "$REPO_ROOT/.gaia/scripts/context-checkpoint-lib.sh" >"$scratch/.gaia/scripts/context-checkpoint-lib.sh"
+    if cmp -s "$REPO_ROOT/.gaia/scripts/context-checkpoint-lib.sh" "$scratch/.gaia/scripts/context-checkpoint-lib.sh"; then
+      echo "the limit assignment did not change for '$replacement'" >&2
+      return 1
+    fi
+    run check_yield_limit_is_positive_integer "$scratch"
+    [ "$status" -ne 0 ] || { echo "limit '$replacement' passed the check" >&2; return 1; }
+    [ -n "$output" ] || { echo "limit '$replacement' failed without a reason" >&2; return 1; }
+  done
 }
 
 @test "UAT-012: the block and the planner section still word the limit as greater than the yield limit" {

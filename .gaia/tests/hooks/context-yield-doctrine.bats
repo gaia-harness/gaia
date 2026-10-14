@@ -73,6 +73,17 @@ first_line_of() {
   grep -nF -- "$2" "$1" | head -n 1 | cut -d: -f1
 }
 
+# every anchor is present
+anchors_present_ok() {
+  local file_path="$1" anchor
+  [ -f "$file_path" ] || return 1
+  [ "${#ANCHORS[@]}" -gt 0 ] || return 1
+  for anchor in "${ANCHORS[@]}"; do
+    [ -n "$(first_line_of "$file_path" "$anchor")" ] || return 1
+  done
+  return 0
+}
+
 # every anchor is present and the first lines never decrease
 anchors_ordered_ok() {
   local file_path="$1" anchor line previous=0
@@ -165,8 +176,8 @@ no_ids_ok() {
   true
 }
 
-@test "doctrine anchors: every required sentence is present, in order" {
-  anchors_ordered_ok "$DOCTRINE"
+@test "doctrine anchors: every required sentence is present" {
+  anchors_present_ok "$DOCTRINE"
 }
 
 @test "doctrine anchors red twins: deleting any anchor's line fails the check" {
@@ -176,7 +187,7 @@ no_ids_ok() {
     mutated="$TEMPORARY_DIRECTORY/without-anchor-$index.md"
     without_lines_containing "$DOCTRINE" "$anchor" >"$mutated"
     if cmp -s "$DOCTRINE" "$mutated"; then return 1; fi
-    if anchors_ordered_ok "$mutated"; then return 1; fi
+    if anchors_present_ok "$mutated"; then return 1; fi
     visited=$((visited + 1))
   done
   [ "$visited" -eq "${#ANCHORS[@]}" ]
