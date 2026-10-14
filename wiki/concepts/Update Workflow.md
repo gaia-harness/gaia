@@ -28,7 +28,7 @@ The manifest assigns each shipped file exactly one class. Anything **not** in th
 | Class        | Meaning                                                                                                                                    | Drift handling                                                                                                                                                                         |
 | ------------ | ------------------------------------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `owned`      | GAIA controls fully: skills, commands, rules, hooks, config files.                                                                         | Pristine → overwrite silently. Drifted → write `.gaia-merge/<path>.patch`, skip, let adopter resolve.                                                                                  |
-| `shared`     | GAIA seeds; adopter customizes: `package.json`, `CLAUDE.md`, `README.md`, `.claude/settings.json`, `.github/workflows/*`, `wiki/index.md`. | Pristine → overwrite silently. Drifted → write `.gaia-merge/<path>.patch`, skip, let adopter resolve. `package.json` is the exception, merged field-aware (see below), not whole-file. |
+| `shared`     | GAIA seeds; adopter customizes: `package.json`, `CLAUDE.md`, `README.md`, `.claude/settings.json`, `.github/workflows/*`, `wiki/index.md`. | Pristine → overwrite silently. Drifted → write `.gaia-merge/<path>.patch`, skip, let adopter resolve. The field-aware exceptions are listed in `.claude/skills/update-gaia/references/merge-execution.md` Step 7. |
 | `wiki-owned` | GAIA-seeded wiki pages adopter may edit: concepts, decisions, modules, flows, dependencies.                                                | Same as `shared`.                                                                                                                                                                      |
 | _(implicit)_ | Adopter-owned. `wiki/log.md`, `CHANGELOG.md`, and any file the adopter created.                                             | Never touched by `/update-gaia`.                                                                                                                                                       |
 
@@ -89,7 +89,7 @@ The merge runs once for the root `package.json` and once for each package regist
 A whole-file three-way merge of `package.json` is pure noise: every adopter rewrites `name` / `description` / `author` and resets `version` at init, and GAIA bumps its own `version` every release, so adopter, baseline, and latest all differ on every release. `package.json` is therefore merged at JSON-key granularity, acting only on the genuine upstream delta `B → L`.
 
 - **Adopter-owned keys**: every top-level key except the managed sections (`name`, `version`, `description`, `author`, `private`, `type`, `bin`, `sideEffects`, …) is left untouched. Identity drift is invisible.
-- **Managed sections**: `dependencies`, `devDependencies`, `scripts`, `engines`, `pnpm.overrides`, top-level `overrides` (merged per entry), plus `packageManager` and other `pnpm.*` keys (merged as a single value).
+- **Managed sections**: the entries the merge acts on, listed in `.claude/skills/update-gaia/references/merge-execution.md` Step 7a.
 
 Per managed entry key `k`:
 

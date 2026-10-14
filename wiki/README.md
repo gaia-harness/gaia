@@ -41,8 +41,6 @@ wiki/
 
 - All notes use YAML frontmatter: type, status, created, updated, tags (minimum)
 - Wikilinks use `[[overview]]` - filenames are unique, no paths needed
-- `wiki/index.md` is the master catalog - `/gaia-wiki` maintains it
-- `wiki/log.md` is append-only - new entries at the TOP
 - Keep pages 100-300 lines; split if longer
 
 ## Operations

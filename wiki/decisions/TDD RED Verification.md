@@ -31,7 +31,7 @@ The content signal is a normalized hash of the test's comment-free content, so t
 ## Scope
 
 - Pre-commit check on `git commit` only. Does not gate `git push` or CI.
-- New tests only: tests that already exist at the merge base are not checked.
+- New tests only: tests that already exist at HEAD (or, on a merge commit, in the other parent) are not checked.
 - Fail-open: the hook does not block when the ledger tooling (Node, the signal extractor) is unavailable or when a test file cannot be parsed by the TS compiler API.
 - Type-only tests are exempt. A test whose assertions are all type-level and which carries no runtime expectation has no runtime failure mode, so the gate has nothing to demand; `tsc` enforces it instead. See [[#Type-only tests]].
 - A test whose title cannot be computed at extraction time is exempt: no signal is emitted, so it never enters the checked set. See [[#Dynamic-title carve-out]].

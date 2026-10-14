@@ -26,7 +26,7 @@ The repo is a monorepo. The harness (`.claude/`, `.gaia/`, `.githooks/`, `.githu
 | `services/`        | API wrapper + domain services              | [[Services]]   |
 | `sessions.server/` | Server-only signed cookie for language      | [[Sessions]]   |
 | `state/`           | Context+Provider state                     | [[State]]      |
-| `styles/`          | `tailwind.css`                             | [[Styles]]     |
+| `styles/`          | Tailwind entry and theme tokens            | [[Styles]]     |
 | `types/`           | Global TS types                            | -              |
 | `utils/`           | Pure helpers                               | [[Utils]]      |
 

@@ -14,11 +14,11 @@ Defined in `.claude/agents/code-audit-frontend.md`. Opus-class holistic reviewer
 
 Full spec: `.claude/agents/code-audit-frontend.md`.
 
-Reviews security, performance, code smells, architecture, robustness, and maintainability. Output is tiered: Critical (must fix) → Major (fix or acknowledge) → Minor (fix by default) → What's done well. After its own pass, spawns three specialist subagents in parallel (React Patterns & Accessibility, TypeScript & Architecture, Translation) plus `react-doctor`, `pnpm knip --reporter json`, and `pnpm audit --json` in a single tool call. Every dispatch is gated on scope so nothing spawns with nothing to review, but the two kinds of dispatch read different lists. Each subagent gates on file extension against the TS/TSX-filtered review scope (e.g. no `.tsx` → skip Subagent 1). The three oracles scan the whole repo or the whole dependency tree by design, so a diff carrying no `.ts` must still run them; they gate instead on the unfiltered whole-PR changed set, and only on its emptiness, which is the one case where a whole-repo oracle provably has nothing new to report. An unresolvable base runs them.
+Reviews security, performance, code smells, architecture, robustness, and maintainability. Output is tiered: Critical (must fix) → Major (fix or acknowledge) → Minor (fix by default) → What's done well. After its own pass, spawns three specialist subagents in parallel (React Patterns & Accessibility, TypeScript & Architecture, Translation) plus `react-doctor`, `pnpm knip --reporter json`, and `gaia update-deps advisories` in a single tool call. Every dispatch is gated on scope so nothing spawns with nothing to review, but the two kinds of dispatch read different lists. Each subagent gates on file extension against the TS/TSX-filtered review scope (e.g. no `.tsx` → skip Subagent 1). The three oracles scan the whole repo or the whole dependency tree by design, so a diff carrying no `.ts` must still run them; they gate instead on the unfiltered whole-PR changed set, and only on its emptiness, which is the one case where a whole-repo oracle provably has nothing new to report. An unresolvable base runs them.
 
 Knip runs pre-merge here (post-task by design) and its findings are bucketed advisory: real dead code, intentional library export (update `entry` globs), or implicit dependency (update `ignoreDependencies`). See [[knip]].
 
-A deterministic `pnpm audit --json` run is the oracle for known-vulnerable dependencies; the Security dimension does not LLM-judge current CVEs. Its high/critical advisories surface in an advisory bucket (read-only; never blocking the marker), scoped by a severity threshold and a machine-local baseline allowlist at `.gaia/local/dep-audit-baseline.json`. See [[pnpm-audit]].
+A deterministic `gaia update-deps advisories` run is the oracle for known-vulnerable dependencies; the Security dimension does not LLM-judge current CVEs. Its high/critical advisories surface in an advisory bucket (read-only; never blocking the marker), scoped by a severity threshold and a machine-local baseline allowlist at `.gaia/local/dep-audit-baseline.json`. See the "Dependency-CVE advisory" section of `.claude/agents/code-audit-frontend.md`.
 
 ## Finding proof gate and adversarial verification
 
@@ -128,4 +128,4 @@ A finding with no stable class is not omitted: it is stamped `holistic/unclassif
 
 ## Trigger
 
-Always before `gh pr merge` ([[PR Merge Workflow]]), enforced by the `pr-merge-audit-check.sh` advisory hook ([[Claude Hooks]]). Also on demand for any review.
+Always before `gh pr merge` ([[PR Merge Workflow]]), enforced by the `pr-merge-audit-check.sh` deny hook ([[Claude Hooks]]). Also on demand for any review.

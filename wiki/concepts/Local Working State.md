@@ -24,7 +24,7 @@ A removed feature has no owner left to prune what it wrote, so retiring one mean
 
 ## The protected folder
 
-`.gaia/local/protected/` holds state that only hooks or a human may write: the audit loop's per-branch history and allowance under `protected/audit-loop/`, and the machine-local checkpoint override at `protected/checkpoint-override.json`. The placement rule is one sentence: state that only hooks or a human may write lives in `.gaia/local/protected/`, and placing a file there protects it from Claude's tools by every spelling the guard covers. A new occupant still needs its own row in `.gaia/state-registry.json` to carry a scope.
+`.gaia/local/protected/` holds state that only hooks or a human may write; `.gaia/state-registry.json` lists its occupants. The placement rule is one sentence: state that only hooks or a human may write lives in `.gaia/local/protected/`, and placing a file there protects it from Claude's tools by every spelling the guard covers. A new occupant still needs its own row in `.gaia/state-registry.json` to carry a scope.
 
 `block-audit-loop-write.sh` guards the folder as a whole by prefix, so a file added later is protected by where it sits, with no edit to the guard. The hook's header owns the covered and not-covered spellings. `mkdir` stays allowed, so creating the folder or a directory inside it is not a write. A human changes or removes anything in the folder from a terminal outside Claude Code.
 

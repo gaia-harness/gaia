@@ -16,7 +16,7 @@ tags: [module, styles, tailwind]
 
 ## Conventions (load-bearing)
 
-See the `tailwind` skill (`.claude/skills/tailwind/`, which owns class composition with `cn`) and the `tailwind` rule (`frontend/.claude/rules/tailwind.md`):
+See the `tailwind` skill (`frontend/.claude/skills/tailwind/`, which owns class composition with `cn`) and the `tailwind` rule (`frontend/.claude/rules/tailwind.md`):
 
 - **No `px` units** in Tailwind classes: use the spacing scale or `rem` for custom values
 - **No template-literal class strings**: they defeat Tailwind's static analysis

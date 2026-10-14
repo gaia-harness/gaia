@@ -8,51 +8,17 @@ tags: [concept, claude, skills]
 
 # Claude Skills
 
-`.claude/skills/` holds project-local skills. Each has a `SKILL.md` with YAML frontmatter (`name`, `description`, optional `allowed-tools`) defining when it activates. Skills apply by context/intent (description match); rules apply by file path. Skills that serve only the React app live in `frontend/.claude/skills/` and surface when work touches files under `frontend/`; the harness and stack-neutral skills stay in `.claude/skills/`. The tables below cover both locations.
+`.claude/skills/` holds project-local skills. Each has a `SKILL.md` with YAML frontmatter (`name`, `description`, optional `allowed-tools`) defining when it activates. Skills apply by context/intent (description match); rules apply by file path. Skills that serve only the React app live in `frontend/.claude/skills/` and surface when work touches files under `frontend/`; the harness and stack-neutral skills stay in `.claude/skills/`.
 
 See [[modules/Claude Integration|the modules page]] for the full skills inventory inside `.claude/`.
 
 ## Project-local skills
 
-GAIA's skills split into three groups: shared `gaia/references/` playbooks consumed by user-invoked workflows, scaffolders for new code surfaces, and context-triggered guidance loaded by intent.
+GAIA's skills split into two groups: shared `gaia/references/` playbooks consumed by user-invoked workflows, and the skills under `.claude/skills/` and `frontend/.claude/skills/`, which [[modules/Claude Integration|the modules page]] inventories.
 
 ### `gaia/references/` workflow playbooks
 
-`.claude/skills/gaia/` holds no `SKILL.md`; it is a `references/` folder of deep-dive playbooks, each consumed by its matching `gaia-*` command or skill (the command/skill is the activation surface; the reference is the runbook it reads).
-
-| Reference                 | Consumed by          | What it does                                                                                                                                                                                                                                                                                                   |
-| ------------------------- | -------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `references/plan.md`      | `/gaia-plan`         | Plan a feature using [[Task Orchestration]]. See [[GAIA Plan]].                                                                                                                                                                                                                                                |
-| `references/cleanse.md`     | `/gaia-cleanse`        | Research-then-gate knowledge-store audit: Stage 1 (research) → Apply/Discuss/Decline gate → Stage 2 (apply). Both stages run `general-purpose` subagents pinned to Sonnet; a clean (0-action) audit skips the gate and auto-applies. See [[GAIA Cleanse]]. |
-| `references/spec.md`      | `/gaia-spec`         | Author an immutable SPEC artifact via Socratic discovery. See [[GAIA Spec]].                                                                                                                                                                                                                                   |
-| `references/fitness.md`   | `/gaia-fitness`      | Grade the project's Claude integration and heal what it owns.                                                                                                                                                                                                                                                  |
-| `references/forensics.md` | `/gaia-forensics`    | Turn a workflow misfire into a classified, filing-ready bug report.                                                                                                                                                                                                                                            |
-| `references/codify.md`    | `/gaia-codify`       | Review recurring audit findings and draft the lowest-weight guard (check / skill / rule).                                                                                                                                                                                                                  |
-| `references/wiki.md`      | `gaia-wiki` skill    | Wiki maintenance chain (sync / consolidate / lint).                                                                                                                                                                                                                                                            |
-
-### Scaffolders
-
-| Skill           | Triggers on                                                                                                                                |
-| --------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
-| `new-component` | "create a component", "scaffold a card": drops a kebab-case folder under `frontend/app/components/` with `index.tsx` and a `tests/` dir        |
-| `new-hook`      | "create a useFoo hook", "add a hook under frontend/app/hooks": drops a `use-thing.ts` + a `vitest-browser-react` hook test                                                 |
-| `new-route`     | "add a new page", "scaffold /dashboard": wires a route file + a `frontend/app/pages/<route path>/page.tsx` folder + i18n keys                         |
-| `new-service`   | "add a service", "scaffold the projects API": drops `frontend/app/services/{layer}/{name}/` (parsers, types, requests) and matching MSW collections |
-| `update-deps`   | Dependency remediation (outdated packages and security advisories): fired by `/gaia-init`, accepted from the statusline `Run /update-deps` indicator, or "update dependencies"          |
-| `update-gaia`   | Pull a later GAIA release into the project: accepted from the SessionStart update prompt, or "pull the latest GAIA"                        |
-
-### Context-triggered
-
-| Skill                | Triggers on                                                                                                  |
-| -------------------- | ------------------------------------------------------------------------------------------------------------ |
-| `eslint-fixes`       | ESLint failures, autofix conflicts (no-void, unawaited interactions and jest-dom rules in story plays, you-dont-need-lodash) |
-| `naming-conventions` | Naming or renaming identifiers in any language; vague names, abbreviations, redundant type noise             |
-| `playwright-cli`     | Browser automation tasks (navigation, form fill, screenshots, data extraction); Microsoft's skill vendored verbatim, see [[playwright-cli]] |
-| `react-code`         | Writing/reviewing React components, hooks, event handlers, extraction decisions                              |
-| `skeleton-loaders`   | Building skeleton loading states; shimmer animation; preventing layout shift                                 |
-| `tailwind`           | Tailwind class names, `cn` and conditional classes, variants, theme tokens                                   |
-| `tdd`                | Red-green-refactor; story-play and hook tests; test-first development                                                |
-| `typescript`         | camelCase, exports, Zod schemas, function params, no-switch / no-enum patterns                               |
+`.claude/skills/gaia/` holds no `SKILL.md`; it is a `references/` folder of deep-dive playbooks, each consumed by its matching `gaia-*` command or skill (the command/skill is the activation surface; the reference is the runbook it reads). A few references (`isolation.md`, `cost-record.md`, `work-lifecycle.md`) are shared recipes several commands read.
 
 ### Statusline update indicators
 
@@ -83,7 +49,7 @@ GAIA's `.claude/` surface places each kind of guidance in the layer that loads i
 | Hook (`.claude/hooks/`)               | Tool call matches a registered event                   | Mechanical enforcement (block / advise) on a specific tool shape, no judgment      |
 | Rule (`.claude/rules/`)               | Matching `paths:` glob in scope (or always when empty) | File-path-bound conventions: project-wide style, route layout, accessibility, i18n |
 | Skill (`.claude/skills/`)             | `description:` matches user intent / context           | Cross-file reasoning patterns: refactor playbooks, error-fix recipes, TDD loop     |
-| Instruction (`.claude/instructions/`) | Dispatched by a command/skill at runtime               | Parameterized one-shot runbooks (add a locale, strip i18n, etc.); self-deleting    |
+| Instruction (`frontend/.claude/instructions/`) | Dispatched by a command/skill at runtime               | Parameterized one-shot runbooks (add a locale, strip i18n, etc.); self-deleting    |
 
 Heuristic when migrating:
 
