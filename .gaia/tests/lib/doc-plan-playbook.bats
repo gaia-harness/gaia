@@ -7,7 +7,6 @@
 # main thread reads plan/decomposition-audit.md at step 4.6).
 #
 # The invariants:
-#   a. plan.md stays under the 500-line playbook cap;
 #   b. every plan/*.md is named in plan.md by its repo path and listed in the
 #      /gaia-plan command, so a sub-reference no line routes to cannot exist;
 #   c. every plan/<name>.md either file names exists;
@@ -15,7 +14,6 @@
 #      decomposition-audit.md, so a stale copy cannot drift beside the original;
 #   e. the decomposition audit points at the shared lens contract instead of
 #      carrying its own reply-shaped findings schema;
-#   f. every plan/*.md over 100 lines carries a Contents: line;
 #   g. plan.md step 4's dispatch makes the planner's first action a Read of
 #      plan/planner.md, the only thing that hands the planner its contract.
 #
@@ -40,26 +38,6 @@ scratch_copy() {
   cp -R "$REPO_ROOT/$REFERENCES_RELATIVE/plan" "$copy/$REFERENCES_RELATIVE/plan"
   cp "$REPO_ROOT/$COMMAND_RELATIVE" "$copy/$COMMAND_RELATIVE"
   printf '%s\n' "$copy"
-}
-
-# --- a. the cap -------------------------------------------------------------
-
-plan_under_cap() {
-  local lines
-  lines="$(wc -l <"$1/$REFERENCES_RELATIVE/plan.md" | tr -d ' ')"
-  [ "$lines" -lt 500 ] || { printf 'plan.md has %s lines, cap is 499\n' "$lines" >&2; return 1; }
-}
-
-@test "plan.md is under 500 lines" {
-  plan_under_cap "$REPO_ROOT"
-}
-
-@test "red twin: a plan.md padded to 500 lines fails the cap" {
-  copy="$(scratch_copy)"
-  file="$copy/$REFERENCES_RELATIVE/plan.md"
-  while [ "$(wc -l <"$file" | tr -d ' ')" -lt 500 ]; do printf 'padding\n' >>"$file"; done
-  run plan_under_cap "$copy"
-  [ "$status" -ne 0 ]
 }
 
 # --- b. every sub-reference is routed and listed ----------------------------
@@ -190,34 +168,6 @@ audit_uses_lens_contract() {
   sed 's|spec/lens-dispatch\.md|the lens contract|g' "$file" >"$file.new"
   mv "$file.new" "$file"
   run audit_uses_lens_contract "$copy"
-  [ "$status" -ne 0 ]
-}
-
-# --- f. long sub-references carry a Contents line ---------------------------
-
-long_files_have_contents() {
-  local root="$1" file lines count=0
-  for file in "$root/$REFERENCES_RELATIVE"/plan/*.md; do
-    [ -f "$file" ] || continue
-    count=$((count + 1))
-    lines="$(wc -l <"$file" | tr -d ' ')"
-    [ "$lines" -gt 100 ] || continue
-    grep -q '^Contents:' "$file" || { printf '%s has %s lines and no Contents: line\n' "$file" "$lines" >&2; return 1; }
-  done
-  [ "$count" -ge 1 ] || { printf 'no plan/*.md files found\n' >&2; return 1; }
-}
-
-@test "every plan/*.md over 100 lines carries a Contents: line" {
-  long_files_have_contents "$REPO_ROOT"
-}
-
-@test "red twin: planner.md without its Contents: line fails" {
-  copy="$(scratch_copy)"
-  file="$copy/$REFERENCES_RELATIVE/plan/planner.md"
-  [ "$(wc -l <"$file" | tr -d ' ')" -gt 100 ]
-  grep -v '^Contents:' "$file" >"$file.new"
-  mv "$file.new" "$file"
-  run long_files_have_contents "$copy"
   [ "$status" -ne 0 ]
 }
 

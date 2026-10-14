@@ -184,7 +184,23 @@ jobs:
               # skips the Vitest step, and greens this required check having
               # run the lockstep zero times.
               - '.gaia/conventional-commits.json'
-      - if: steps.filter.outputs.code == 'true' || github.event_name == 'workflow_dispatch'
+            # Everything the fitness lint grades or reads: the harness files
+            # themselves, the CLI that lints them, and the manifest, vendor
+            # pins and ownership script that decide which files are GAIA's.
+            fitness:
+              - '.claude/**'
+              - 'frontend/.claude/**'
+              - '**/CLAUDE.md'
+              - '**/CLAUDE.local.md'
+              - '.gaia/cli/**'
+              # A glob rather than the literal path: the distribution-harness
+              # filter below holds that literal line and a guard requires it to
+              # appear once in this file.
+              - '.gaia/manifest*.json'
+              - '.gaia/vendor/**'
+              - '.gaia/scripts/fitness-ownership.sh'
+              - '.github/workflows/cli-tests.yml'
+      - if: steps.filter.outputs.code == 'true' || steps.filter.outputs.fitness == 'true' || github.event_name == 'workflow_dispatch'
         name: Setup Node and install the CLI member
         uses: ./.github/actions/gaia-setup-node
         with:
@@ -275,9 +291,49 @@ jobs:
       # which is what keeps them from drifting: a comment asking a human to hold
       # two copies in lockstep is not an enforcement mechanism. Full rationale
       # lives in the script's docblock.
-      - if: steps.filter.outputs.code == 'true' || github.event_name == 'workflow_dispatch'
+      - if: steps.filter.outputs.code == 'true' || steps.filter.outputs.fitness == 'true' || github.event_name == 'workflow_dispatch'
         name: Verify committed CLI binaries and templates are rebuilt from src
         run: bash .gaia/scripts/verify-cli-bundle-fresh.sh
+      # GAIA's own harness held to the lint adopters are graded on, over the
+      # whole tree (`--scope all`). Only the frontmatter category and the two
+      # 500-line caps fail the job; every other finding stays advisory.
+      #
+      # The suppressions come from the base branch, never from the head: a pull
+      # request that could edit its own suppression file would silence its own
+      # violation. The base copy only selects which entries apply; the CLI
+      # still lints the head's `.claude/gaia-fitness.json` under its own path,
+      # so a pull request that commits a malformed one fails here. The base ref
+      # reaches the script through `env:` so it is never interpolated into the
+      # shell text. The pull request that introduces the file has no base copy,
+      # and falls back to the head's.
+      - if: steps.filter.outputs.fitness == 'true' || github.event_name == 'workflow_dispatch'
+        name: Fitness lint over GAIA's harness
+        env:
+          BASE_REF: ${{ github.base_ref }}
+        run: |
+          set -eu
+          suppressions="$RUNNER_TEMP/gaia-fitness.json"
+          report="$RUNNER_TEMP/fitness-report.json"
+          if [ "$GITHUB_EVENT_NAME" = "pull_request" ]; then
+            # A failed fetch stops the job: falling back to the head's file
+            # here would let a pull request choose its own suppressions.
+            git fetch --no-tags --depth=1 origin "refs/heads/$BASE_REF"
+            if git cat-file -e "FETCH_HEAD:.claude/gaia-fitness.json" 2>/dev/null; then
+              git show "FETCH_HEAD:.claude/gaia-fitness.json" > "$suppressions"
+              echo "Using the suppressions from the base branch."
+            else
+              echo "::notice::The base branch has no .claude/gaia-fitness.json; using this checkout's copy."
+              cp .claude/gaia-fitness.json "$suppressions"
+            fi
+          else
+            cp .claude/gaia-fitness.json "$suppressions"
+          fi
+          status=0
+          .gaia/cli/gaia fitness check --json --scope all --fail-on error --enforce frontmatter --enforce authoring.skill.body.max-lines --enforce authoring.playbook.max-lines --config "$suppressions" > "$report" || status=$?
+          if [ "$status" -ne 0 ]; then
+            jq -r '.findings[]? | select(.severity == "error" or (.rule_id | startswith("frontmatter")) or (.rule_id | test("max-lines"))) | "\(.file):\(.line) \(.rule_id)"' "$report" || cat "$report"
+          fi
+          exit "$status"
       # Offline byte-identity check over the vendored third-party skill folders
       # against the hashes their markers under .gaia/vendor record. It needs jq,
       # which ubuntu-latest carries, and never touches the network.

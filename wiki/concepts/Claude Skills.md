@@ -25,7 +25,7 @@ GAIA's skills split into three groups: shared `gaia/references/` playbooks consu
 | `references/plan.md`      | `/gaia-plan`         | Plan a feature using [[Task Orchestration]]. See [[GAIA Plan]].                                                                                                                                                                                                                                                |
 | `references/cleanse.md`     | `/gaia-cleanse`        | Research-then-gate knowledge-store audit: Stage 1 (research) → Apply/Discuss/Decline gate → Stage 2 (apply). Both stages run `general-purpose` subagents pinned to Sonnet; a clean (0-action) audit skips the gate and auto-applies. See [[GAIA Cleanse]]. |
 | `references/spec.md`      | `/gaia-spec`         | Author an immutable SPEC artifact via Socratic discovery. See [[GAIA Spec]].                                                                                                                                                                                                                                   |
-| `references/fitness.md`   | `/gaia-fitness`      | Health-check and auto-heal the project's Claude integration.                                                                                                                                                                                                                                                   |
+| `references/fitness.md`   | `/gaia-fitness`      | Grade the project's Claude integration and heal what it owns.                                                                                                                                                                                                                                                  |
 | `references/forensics.md` | `/gaia-forensics`    | Turn a workflow misfire into a classified, filing-ready bug report.                                                                                                                                                                                                                                            |
 | `references/codify.md`    | `/gaia-codify`       | Review recurring audit findings and draft the lowest-weight guard (check / skill / rule).                                                                                                                                                                                                                  |
 | `references/wiki.md`      | `gaia-wiki` skill    | Wiki maintenance chain (sync / consolidate / lint).                                                                                                                                                                                                                                                            |
@@ -101,9 +101,7 @@ Every session carries a listing of the skills and commands Claude may start on i
 - A `model:` pin follows the model table in [[Workflow Doctrine]].
 
 Vendored and installer-managed skills keep their upstream frontmatter.
-<!-- gaia:maintainer-only:start -->
-`.gaia/tests/lib/doc-skill-frontmatter.bats` checks the `name` and `description` limits over every GAIA-authored skill and command.
-<!-- gaia:maintainer-only:end -->
+`gaia fitness check` (the `frontmatter` rules) checks the `name` and `description` limits over every skill and command the project owns.
 
 ## Skill references convention
 

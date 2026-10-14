@@ -231,6 +231,9 @@ auditors:
       # The read-only judge /gaia-fitness dispatches: its reply is written to
       # disk and classified, so a change to it changes what that pass reports.
       - ".claude/agents/fitness-judge.md"
+      # GAIA's own fitness suppressions, read by the lint CI runs over the
+      # harness: widening it quietly waives an enforced finding.
+      - ".claude/gaia-fitness.json"
       # The two maintainer members' shared report, handshake and sidecar
       # protocol.
       # It sits under the `.claude/hooks/lib/**` machinery prefix, so every
