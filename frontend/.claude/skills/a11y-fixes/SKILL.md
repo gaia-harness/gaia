@@ -335,13 +335,4 @@ Every `id` in the rendered DOM must be unique. Common Conform pitfall: rendering
 
 ## Upstream shadcn and Base UI findings
 
-The vendored `components/ui/` files are byte-identical to `shadcn add` output, so a violation that comes from a vendored file is fixed by a local patch recorded in `wiki/decisions/shadcn Component Layer.md`, or by a scoped exclusion in the scan, never by editing the file silently. The a11y scan hits these cases:
-
-| Rule and symptom | Source | Fix kind |
-| --- | --- | --- |
-| `label`: the Slider thumb `<input type="range">` ignores `aria-label` on the root | shadcn-ui/ui#10221 | Local patch forwarding the label to the thumb input |
-| `button-name`: the Combobox trigger and icon buttons have no accessible name | shadcn-ui/ui#11589 | Local patch naming the icon buttons |
-| `aria-hidden-focus` on Base UI overlay focus guards (`span[data-base-ui-focus-guard][aria-hidden="true"]`, seen on open dropdown menus) | No upstream issue found as of 2026-10-03 (measured against the shadcn Base UI overlay set). TODO: file one | Selector-scoped exclusion in the scan, with a canary check that fails if no guard matches the selector, so the exclusion cannot go stale |
-| Radix Select `aria-hidden` sibling findings | shadcn-ui/ui#10074, shadcn-ui/ui#8707 | Informational: they describe the Radix Select, which does not apply because GAIA's `base-nova` style uses Base UI |
-
-`shadcn add --overwrite` drops a local patch along with the rest of the file. After refreshing a patched ui file, re-apply its patch from the decision page's list and re-run the scan.
+The vendored `components/ui/` files are byte-identical to `shadcn add` output and are never edited silently. The policy lives in `wiki/decisions/shadcn Component Layer.md` (never hand-edit a ui file). For a violation from a vendored file, report it upstream and work around it on the consuming side: the GAIA component or story that renders the ui control. Radix Select `aria-hidden` sibling findings (shadcn-ui/ui#10074, shadcn-ui/ui#8707) are informational: they describe the Radix Select, which does not apply because GAIA's `base-nova` style uses Base UI.

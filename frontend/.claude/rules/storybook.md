@@ -6,7 +6,7 @@ paths:
 
 # Storybook Conventions
 
-The `/new-component` command scaffolds the canonical story shape. This rule covers what to do when authoring or extending a story beyond that scaffold.
+The `new-component` skill scaffolds the canonical story shape. This rule covers what to do when authoring or extending a story beyond that scaffold.
 
 ## Stories are the tests
 

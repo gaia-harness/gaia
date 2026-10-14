@@ -31,22 +31,14 @@ For every match in `frontend/app/` (excluding `frontend/app/i18n.ts`, `frontend/
 4. Replace every `t('key')` and `t('key', {…})` call with the literal English string from `frontend/app/languages/en/`.
 5. If the file used `<Trans>` from `react-i18next`, replace the JSX with the literal English markup.
 
-The seeded list of files known to use `t()` (verify against the grep output, add any newcomers, drop any that have already been unwrapped):
-
-- `frontend/app/routes/_public._index.tsx`
-- `frontend/app/pages/index/page.tsx`
-- `frontend/app/routes/resources.theme-switch.tsx`
-- `frontend/app/components/errors/error-stack/index.tsx`
-- `frontend/app/components/form/form-error/index.tsx`
-- `frontend/app/components/theme-switch/index.tsx`
-- All `tests/index.stories.tsx` files alongside the above components (`tests/page.stories.tsx` for the index page); stories are the component tests, so no `.test.tsx` sits beside them
+The discovery grep above owns the set of files to unwrap. Stories are the component tests, so a `tests/*.stories.tsx` file beside a matched component is a match too, and no `.test.tsx` sits beside it.
 
 Resolve translation keys via the `frontend/app/languages/en/` files. Example: `t('meta.siteName')` → look up `meta.siteName` in `frontend/app/languages/en/common.ts` and inline the resolved string.
 
 `useTranslation`/`t()` is not the only i18n coupling on the index page: `frontend/app/pages/index/page.tsx` also imports and renders `LanguageSelect`, which Section C deletes. In every file that references it, remove the `import LanguageSelect from '~/components/language-select';` line and the `<LanguageSelect />` element. Discover all such files:
 
 ```bash
-grep -rln "components/language-select" app
+grep -rln "components/language-select" frontend/app frontend/test
 ```
 
 After unwrapping all source files, re-run the grep. If any matches remain in `frontend/app/` or `frontend/test/` outside the deletion targets above, unwrap those too. Repeat until grep returns no frontend/app/test matches.
@@ -274,27 +266,9 @@ Remove the `i18n` key from `parameters`:
 i18n,
 ```
 
-### D2. `frontend/test/utils.ts`
+### D2. `getLanguage` callers
 
-Remove:
-
-```ts
-import {pick} from 'accept-language-parser';
-import type {Language} from '~/languages';
-import {LANGUAGES} from '~/languages';
-```
-
-Remove the `getLanguage` export:
-
-```ts
-export const getLanguage = (request: Request) =>
-  (pick(LANGUAGES, request.headers.get('Accept-Language') ?? 'en') ??
-    'en') as Language;
-```
-
-The remaining file should export only `DELAY` and `date`.
-
-After this edit, grep for `getLanguage` across the repo and unwrap any callers (typically loaders/actions in `frontend/app/routes/`):
+`frontend/test/utils.ts` carries no i18n code, so it needs no edit. Grep for `getLanguage` across the repo and unwrap any callers (typically loaders/actions in `frontend/app/routes/`):
 
 ```bash
 grep -rln "getLanguage" frontend/app frontend/test
@@ -386,25 +360,9 @@ If there is an "Adding New Keys" section that references `frontend/app/languages
 
 ### F4. `frontend/.claude/skills/new-route/SKILL.md`
 
-Delete the `## Step 6: Create i18n keys (if requested)` section.
+In workflow step 1, delete the sentence "Pass `--i18n` whenever the project has i18n (`app/i18n.ts` exists): without it the page carries literal text, which lint (`i18next/no-literal-string`) rejects."
 
-In the page-component template, delete:
-
-```tsx
-import {useTranslation} from 'react-i18next';
-```
-
-```tsx
-const {t} = useTranslation('namespace');
-```
-
-In the loader template, delete:
-
-```ts
-import {getInstance} from '~/middleware/i18next';
-```
-
-Replace any `i18next.t('…')` calls in the loader template with literal placeholder strings.
+In the front-matter `description`, replace ", page story, and optional i18n keys" with " and page story" (result: "its page component and page story").
 
 ### F5. `frontend/.claude/rules/routes.md`
 
