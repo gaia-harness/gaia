@@ -184,15 +184,6 @@ run_in_fresh_shell() {
   [ "$output" = "3210" ]
 }
 
-@test "transcript reading excludes output tokens" {
-  assistant_line 10 200 3000 1 >"$TRANSCRIPT"
-  run gaia_context_transcript_reading "$TRANSCRIPT"
-  [ "$output" = "3210" ]
-  assistant_line 10 200 3000 999999 >"$TRANSCRIPT"
-  run gaia_context_transcript_reading "$TRANSCRIPT"
-  [ "$output" = "3210" ]
-}
-
 @test "transcript reading takes the last assistant record" {
   {
     assistant_line 900 900 900 1

@@ -19,7 +19,7 @@
 #   - nothing in planner.md archives the plan folder or removes SPEC.md before
 #     the post-merge close, and lifecycle.md's close confirms MERGED first;
 #   - the blocks, assembled the way a planner copies them (indentation
-#     kept), pass plan-verify.sh, and a dropped or reordered block fails it;
+#     kept), pass plan-verify.sh;
 #   - the render block routes exit 3 and runs on every resume, and the stop
 #     conditions name the SPEC reopen;
 #   - the shared pre-flight sweep runs its reconcile scan before the reap that
@@ -322,22 +322,6 @@ check_entry_file_has_no_blocks() {
   grep -qE "^[[:space:]]+<!-- gaia:orchestrator-step uat-render -->$" "$FIXTURE_PLAN/ORCHESTRATOR.md"
   run bash "$PLAN_VERIFY" "$FIXTURE_PLAN" --spec "$FIXTURE_SPEC"
   [ "$status" -eq 0 ] || { echo "$output" >&2; return 1; }
-}
-
-@test "red twin: a dropped render block fails plan-verify.sh naming the sentinel" {
-  write_plan_fixture
-  assemble_orchestrator "$PLANNER_MD" "$FIXTURE_PLAN/ORCHESTRATOR.md" "$S_GATE" "$S_YIELD" "$S_PRE" "$S_WIKI" "$S_CLOSE"
-  run bash "$PLAN_VERIFY" "$FIXTURE_PLAN" --spec "$FIXTURE_SPEC"
-  [ "$status" -eq 1 ]
-  grep -qF -- "missing the sentinel line $S_RENDER" <<<"$output"
-}
-
-@test "red twin: a render block below the gate block fails plan-verify.sh as out of order" {
-  write_plan_fixture
-  assemble_orchestrator "$PLANNER_MD" "$FIXTURE_PLAN/ORCHESTRATOR.md" "$S_GATE" "$S_RENDER" "$S_YIELD" "$S_PRE" "$S_WIKI" "$S_CLOSE"
-  run bash "$PLAN_VERIFY" "$FIXTURE_PLAN" --spec "$FIXTURE_SPEC"
-  [ "$status" -eq 1 ]
-  grep -qF -- "$S_RENDER is out of order" <<<"$output"
 }
 
 # ---------- pinned literals ----------

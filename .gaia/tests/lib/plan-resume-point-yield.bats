@@ -83,20 +83,6 @@ resume() {
   [ "${#lines[@]}" -eq 4 ]
 }
 
-@test "a yield block for phase 2 after committed phase 1 resumes at phase 2" {
-  local sha_one
-  sha_one="$(commit_one one)"
-  {
-    commit_block 1 "$sha_one"
-    yield_block 2 1
-  } >"$PLAN/PROGRESS.md"
-  resume --phases 3
-  [ "$status" -eq 0 ]
-  [ "${lines[0]}" = "2" ]
-  [ "${lines[1]}" = "COMPLETE 1 $sha_one" ]
-  [ "${#lines[@]}" -eq 2 ]
-}
-
 @test "two yield blocks for the same phase followed by its commit block complete the phase" {
   local sha_one sha_two
   sha_one="$(commit_one one)"

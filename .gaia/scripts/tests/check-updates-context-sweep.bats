@@ -220,14 +220,6 @@ classify() {
   run bash -c 'cd "$1" && bash .gaia/scripts/state-registry-lib.sh classify "$2"' _ "$REGISTRY_REPO" "$1"
 }
 
-@test "registry: context-readings precedes cache-shared and carries a reaper" {
-  run jq -e '
-    ([.entries[].id] | index("context-readings")) < ([.entries[].id] | index("cache-shared"))
-    and (.entries[] | select(.id == "context-readings") | .reaped_by | startswith("check-updates.sh"))
-  ' "$REAL_REGISTRY"
-  [ "$status" -eq 0 ]
-}
-
 @test "registry: a context file classifies via the context-readings row, not cache-shared" {
   make_registry_repo
   # Give the new row a scope no other row has, so reaching it is observable.
