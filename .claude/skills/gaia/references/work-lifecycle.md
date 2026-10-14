@@ -10,7 +10,7 @@ A session working outside a GAIA skill reaches the first edit it will commit. Ev
 
 A draft PR is part of every committed ad-hoc task, whether or not the request asked for one.
 
-Skills that drive their own PR (`/gaia-debt`, `/gaia-plan`'s orchestrator, `/gaia-fitness`, `/gaia-cleanse`, `/gaia-codify`, `/gaia-residue`, `/update-deps`) point at the steps below for what they share and keep their own extras. Where a skill's own contract differs from this page, the skill's contract governs.
+Skills that drive their own PR (`/gaia-debt`, `/gaia-plan`'s orchestrator, `/gaia-fitness`, `/gaia-cleanse`, `/gaia-codify`, `/gaia-residue`, `/gaia-wiki`, `/update-deps`) point at the steps below for what they share and keep their own extras. Where a skill's own contract differs from this page, the skill's contract governs.
 
 **Edits already on `main`.** The main checkout may already hold uncommitted edits for this work when the lifecycle starts. A feature branch cut from HEAD carries them as they are. `EnterWorktree` cuts the worktree fresh from the default base and does not carry them, so in worktree mode move them as a patch. Before entering, write the diff of tracked files to a scratch file outside the repository:
 

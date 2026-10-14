@@ -46397,35 +46397,6 @@ var commitDetails = (sinceSha, cwd) => {
   });
 };
 
-// src/wiki/util/statusline-cache.ts
-import { existsSync as existsSync39, readFileSync as readFileSync53 } from "node:fs";
-import path71 from "node:path";
-var CACHE_RELATIVE_PATH = path71.join(
-  ".gaia",
-  "local",
-  "cache",
-  "shared",
-  "update-check.json"
-);
-var invalidateStatuslineCache = (repoRoot) => {
-  try {
-    const cachePath = path71.join(
-      resolveMainWorktreeRoot(repoRoot),
-      CACHE_RELATIVE_PATH
-    );
-    if (!existsSync39(cachePath)) return;
-    const parsed = JSON.parse(readFileSync53(cachePath, "utf8"));
-    if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed))
-      return;
-    atomicWriteFileSync(
-      cachePath,
-      `${JSON.stringify({ ...parsed, checkedAt: 0 }, null, 2)}
-`
-    );
-  } catch {
-  }
-};
-
 // src/wiki/util/land.ts
 var UNEXPECTED_EXIT10 = 2;
 var todayUtc = (now = /* @__PURE__ */ new Date()) => {
@@ -46453,37 +46424,6 @@ var passthroughFailure = (options) => {
   if (stderr.length > 0) process.stderr.write(`${stderr}
 `);
   return UNEXPECTED_EXIT10;
-};
-var MERGE_WAIT_BUDGET_MS = 24e4;
-var MERGE_POLL_INTERVAL_MS = 3e4;
-var mergePollAttempts = (budgetMs = MERGE_WAIT_BUDGET_MS, intervalMs = MERGE_POLL_INTERVAL_MS) => Math.floor(budgetMs / intervalMs) + 1;
-var sleepSync2 = (ms) => {
-  Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
-};
-var waitForMerge = (options) => {
-  const {
-    attempts = mergePollAttempts(),
-    branch,
-    cwd,
-    runner,
-    sleep = sleepSync2
-  } = options;
-  const args = ["pr", "view", branch, "--json", "state", "--jq", ".state"];
-  for (let attempt = 0; attempt < attempts; attempt += 1) {
-    const result = runner("gh", args, { cwd });
-    if (commandSucceeded(result) && safeOutput2(result.stdout).trim() === "MERGED")
-      return true;
-    if (attempt < attempts - 1) sleep(MERGE_POLL_INTERVAL_MS);
-  }
-  return false;
-};
-var cleanupAfterMerge = (options) => {
-  const { base, branch, cwd, runner } = options;
-  runner("git", ["checkout", "--end-of-options", base], { cwd });
-  runner("git", ["pull", "--ff-only", "origin", base], { cwd });
-  const deleteResult = runner("git", ["branch", "-D", "--", branch], { cwd });
-  runner("git", ["fetch", "--prune", "origin"], { cwd });
-  return commandSucceeded(deleteResult);
 };
 var OUT_OF_SCOPE_DESCRIPTION = "skipped: out of scope";
 var PullRequestRecordSchema = external_exports.object({
@@ -46611,24 +46551,209 @@ var postOutOfScopeStamp = (options) => {
   }
   return "ready";
 };
-var finalizeMerge = (options) => {
-  const { base, branch, cwd, prefix, runner } = options;
-  if (waitForMerge(options)) {
-    cleanupAfterMerge({ base, branch, cwd, runner });
-    invalidateStatuslineCache(cwd);
-    process.stdout.write(
-      `${prefix}: merged PR for ${branch} and cleaned up locally
+
+// src/wiki/util/statusline-cache.ts
+import { existsSync as existsSync40, readFileSync as readFileSync54 } from "node:fs";
+import path72 from "node:path";
+
+// src/wiki/state.ts
+import { existsSync as existsSync39, readdirSync as readdirSync10, readFileSync as readFileSync53, statSync as statSync14 } from "node:fs";
+import path71 from "node:path";
+var HELP_TEXT62 = `Usage: gaia wiki state [--json]
+`;
+var ALL_ZERO_SHA = "0".repeat(40);
+var HELP_TOKENS61 = /* @__PURE__ */ new Set(["--help", "-h", "help"]);
+var classifySeverity = (commitCount) => {
+  if (commitCount <= 0) return "none";
+  if (commitCount <= 5) return "low";
+  if (commitCount <= 20) return "medium";
+  return "high";
+};
+var DOMAIN_DIRS2 = [
+  "components",
+  "concepts",
+  "decisions",
+  "dependencies",
+  "entities",
+  "flows",
+  "meta",
+  "modules"
+];
+var countDomainPages = (wikiRoot) => {
+  const counts = {};
+  for (const domain2 of DOMAIN_DIRS2) {
+    const domainDir = path71.join(wikiRoot, domain2);
+    if (!existsSync39(domainDir) || !statSync14(domainDir).isDirectory()) {
+      counts[domain2] = 0;
+    } else {
+      const entries = readdirSync10(domainDir, { withFileTypes: true });
+      let count = 0;
+      for (const entry of entries) {
+        if (entry.isFile() && entry.name.endsWith(".md") && entry.name !== "_index.md") {
+          count += 1;
+        }
+      }
+      counts[domain2] = count;
+    }
+  }
+  return counts;
+};
+var readStateFile2 = (statePath) => {
+  if (!existsSync39(statePath)) return null;
+  const raw = readFileSync53(statePath, "utf8");
+  try {
+    return JSON.parse(raw);
+  } catch {
+    return null;
+  }
+};
+var printHuman10 = (state, write) => {
+  const lines = [
+    "Wiki state",
+    `  HEAD:           ${state.head_short}`,
+    `  Last evaluated: ${state.state_sha}`,
+    `  Reachable:      ${state.reachable ? "yes" : "no"}`,
+    `  Drift:          ${state.drift_count} commits (${classifySeverity(state.drift_count)})`
+  ];
+  if (state.suggested_base !== "") {
+    lines.push(`  Recovery base:  ${state.suggested_base}`);
+  }
+  if (state.recent_commits.length > 0) {
+    lines.push("  Recent unsynced:");
+    for (const commit2 of state.recent_commits) {
+      lines.push(`    - ${commit2.sha} ${commit2.subject}`);
+    }
+  }
+  lines.push("  Per-domain pages:");
+  for (const [domain2, count] of Object.entries(state.per_domain_page_counts)) {
+    lines.push(`    ${domain2}: ${count}`);
+  }
+  write(`${lines.join("\n")}
+`);
+};
+var computeWikiState = (repoRoot) => {
+  const wikiRoot = path71.join(repoRoot, "wiki");
+  const statePath = path71.join(wikiRoot, ".state.json");
+  const stateFile = readStateFile2(statePath);
+  const stateSha = stateFile?.last_evaluated_sha ?? "";
+  const stateAt = stateFile?.last_evaluated_at ?? "";
+  const head = headSha(repoRoot);
+  const headShort = shortSha(head, repoRoot);
+  const stateShort = stateSha === "" ? "" : shortSha(stateSha, repoRoot);
+  const reachable = stateSha !== "" && stateSha !== ALL_ZERO_SHA && isReachable(stateSha, repoRoot);
+  const ahead = reachable ? countDriftCommits(stateSha, repoRoot) : 0;
+  const recent = stateSha === "" || !reachable ? [] : recentCommits(stateSha, repoRoot, 5);
+  const severity = classifySeverity(ahead);
+  const counts = countDomainPages(wikiRoot);
+  const suggestedFull = !reachable && stateAt !== "" ? ancestorBefore(stateAt, repoRoot) : "";
+  const suggestedBase = suggestedFull === "" ? "" : shortSha(suggestedFull, repoRoot);
+  const driftCount = reachable ? ahead : countDriftCommits(suggestedFull, repoRoot);
+  return {
+    commits_ahead: ahead,
+    drift_count: driftCount,
+    drift_severity: severity,
+    head_short: headShort,
+    per_domain_page_counts: counts,
+    reachable,
+    recent_commits: recent,
+    state_sha: stateShort,
+    suggested_base: suggestedBase
+  };
+};
+var parseStateArgs = (argv, write) => {
+  let json2 = false;
+  for (const token of argv) {
+    if (HELP_TOKENS61.has(token)) {
+      write(HELP_TEXT62);
+      return { exitCode: EXIT_CODES.OK, ok: false };
+    }
+    if (token === "--json") {
+      json2 = true;
+    } else {
+      structuredError({
+        code: "invalid_arguments",
+        message: `unknown flag: ${token}`,
+        subcommand: "wiki state"
+      });
+      return { exitCode: EXIT_CODES.UNKNOWN_SUBCOMMAND, ok: false };
+    }
+  }
+  return { json: json2, ok: true };
+};
+var run68 = (argv, options = {}) => {
+  const write = options.write ?? ((chunk) => {
+    process.stdout.write(chunk);
+  });
+  const parsed = parseStateArgs(argv, write);
+  if (!parsed.ok) {
+    return parsed.exitCode;
+  }
+  const { json: json2 } = parsed;
+  let repoRoot;
+  try {
+    repoRoot = resolveRepoRoot(options.cwd ?? process.cwd());
+  } catch {
+    structuredError({
+      code: "not_a_git_repo",
+      message: "gaia wiki state must run inside a git repository",
+      subcommand: "wiki state"
+    });
+    return EXIT_CODES.UNKNOWN_SUBCOMMAND;
+  }
+  const state = computeWikiState(repoRoot);
+  if (json2) {
+    write(`${JSON.stringify(state)}
+`);
+  } else {
+    printHuman10(state, write);
+  }
+  return EXIT_CODES.OK;
+};
+
+// src/wiki/util/statusline-cache.ts
+var CACHE_RELATIVE_PATH = path72.join(
+  ".gaia",
+  "local",
+  "cache",
+  "shared",
+  "update-check.json"
+);
+var invalidateStatuslineCache = (repoRoot) => {
+  try {
+    const cachePath = path72.join(
+      resolveMainWorktreeRoot(repoRoot),
+      CACHE_RELATIVE_PATH
+    );
+    if (!existsSync40(cachePath)) return;
+    const parsed = JSON.parse(readFileSync54(cachePath, "utf8"));
+    if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed))
+      return;
+    atomicWriteFileSync(
+      cachePath,
+      `${JSON.stringify({ ...parsed, checkedAt: 0 }, null, 2)}
 `
     );
-    return EXIT_CODES.OK;
+  } catch {
   }
-  runner("git", ["checkout", "--end-of-options", base], { cwd });
-  invalidateStatuslineCache(cwd);
-  process.stdout.write(
-    `${prefix}: opened PR for ${branch}; auto-merge queued but not yet merged, local cleanup deferred
+};
+var refreshWikiDriftInCache = (repoRoot) => {
+  try {
+    const mainRoot = resolveMainWorktreeRoot(repoRoot);
+    const cachePath = path72.join(mainRoot, CACHE_RELATIVE_PATH);
+    const parsed = JSON.parse(readFileSync54(cachePath, "utf8"));
+    if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed))
+      return null;
+    const driftCount = computeWikiState(mainRoot).drift_count;
+    const stateSha = readStateFile2(path72.join(mainRoot, "wiki", ".state.json"))?.last_evaluated_sha ?? "";
+    atomicWriteFileSync(
+      cachePath,
+      `${JSON.stringify({ ...parsed, wikiDriftCount: driftCount, wikiStateSha: stateSha }, null, 2)}
 `
-  );
-  return EXIT_CODES.OK;
+    );
+    return driftCount;
+  } catch {
+    return null;
+  }
 };
 
 // src/wiki/chain.ts
@@ -46638,8 +46763,8 @@ var USAGE_SCRIPT = ".gaia/scripts/usage.sh";
 var passthroughFailure2 = (result, command, args) => passthroughFailure({ args, command, prefix: "chain", result });
 var stepOk = commandSucceeded;
 var safeOutput3 = (value) => value ?? "";
-var HELP_TOKENS61 = /* @__PURE__ */ new Set(["--help", "-h", "help"]);
-var HELP_TEXT62 = `Usage: gaia wiki chain <begin|commit|finish> [args]
+var HELP_TOKENS62 = /* @__PURE__ */ new Set(["--help", "-h", "help"]);
+var HELP_TEXT63 = `Usage: gaia wiki chain <begin|commit|finish|refresh-nudge> [args]
 
   begin [--branch-aware]       On main/master: cut wiki/sync-<date>-<sha> so the
                                whole chain lands on one branch + PR. On a feature
@@ -46647,13 +46772,14 @@ var HELP_TEXT62 = `Usage: gaia wiki chain <begin|commit|finish> [args]
   commit --label "<subject>"   In-place commit of this stage's wiki/ changes, then
                                invalidates the statusline cache. No-op when nothing
                                changed; refuses non-wiki changes and main/master.
-  finish [--branch-aware]      Push the chain branch, open one PR, enable
-                               auto-merge, then wait for the PR to merge and
-                               clean up locally (return to base, pull, delete the
-                               branch, prune). If the merge does not land within
-                               the wait, auto-merge stays queued and local
-                               cleanup is deferred. Removes an empty chain branch;
-                               no-op for in-place runs.
+  finish [--branch-aware]      Push the chain branch, open one PR, and enable
+                               auto-merge, staying on the branch. The merge wait
+                               and local cleanup follow the work lifecycle.
+                               Removes an empty chain branch; no-op for in-place
+                               runs.
+  refresh-nudge                Recompute the main checkout's wiki drift and write
+                               it into the statusline cache now, rather than on
+                               the next background refresh. Run after cleanup.
 
   Exit codes:
     0  success
@@ -47008,34 +47134,47 @@ var runFinish = (argv, options) => {
     return { artifact: queued.artifact, code: queued.failureCode };
   }
   const { artifact } = queued;
-  return {
-    artifact,
-    code: finalizeMerge({
-      attempts: options.mergePollAttempts,
-      base,
-      branch,
-      cwd: repoRoot,
-      prefix: "chain finish",
-      runner,
-      sleep: options.sleep
-    })
-  };
+  const prLabel = artifact === void 0 ? "PR" : `PR #${artifact.number}`;
+  process.stdout.write(
+    `chain finish: opened ${prLabel} for ${branch}; auto-merge queued, merge not yet confirmed
+`
+  );
+  return { artifact, code: EXIT_CODES.OK };
 };
 var finish = (argv, options) => {
   const outcome = runFinish(argv, options);
   recordWikiCost(options, outcome.artifact);
   return outcome.code;
 };
+var refreshNudge = (argv, options) => {
+  if (argv.length > 0) {
+    structuredError({
+      code: "invalid_arguments",
+      message: `refresh-nudge takes no arguments, got: ${argv.join(" ")}`,
+      subcommand: "wiki chain refresh-nudge"
+    });
+    return EXIT_CODES.UNKNOWN_SUBCOMMAND;
+  }
+  const repoRoot = resolveRoot6(options.cwd ?? process.cwd(), "refresh-nudge");
+  if (repoRoot === null) return EXIT_CODES.UNKNOWN_SUBCOMMAND;
+  const driftCount = refreshWikiDriftInCache(repoRoot);
+  process.stdout.write(
+    driftCount === null ? "chain refresh-nudge: no statusline cache to refresh\n" : `chain refresh-nudge: wiki drift ${driftCount}, statusline cache updated
+`
+  );
+  return EXIT_CODES.OK;
+};
 var ACTIONS = {
   begin,
   commit,
-  finish
+  finish,
+  "refresh-nudge": refreshNudge
 };
-var run68 = (argv, options = {}) => {
+var run69 = (argv, options = {}) => {
   const action = argv[0];
   const rest = argv.slice(1);
-  if (action === void 0 || HELP_TOKENS61.has(action)) {
-    process.stdout.write(HELP_TEXT62);
+  if (action === void 0 || HELP_TOKENS62.has(action)) {
+    process.stdout.write(HELP_TEXT63);
     return EXIT_CODES.OK;
   }
   const handler = lookupOwn(ACTIONS, action);
@@ -47081,8 +47220,8 @@ var parseConventionalCommitHeader = (subject) => {
 var isCommitType = (type) => COMMIT_TYPES.includes(type);
 
 // src/wiki/classify-paths.ts
-import { existsSync as existsSync40, readFileSync as readFileSync54 } from "node:fs";
-import path72 from "node:path";
+import { existsSync as existsSync41, readFileSync as readFileSync55 } from "node:fs";
+import path73 from "node:path";
 var defaultClassifyPaths = (repoRoot) => {
   const loaded = loadPackages(repoRoot);
   if (!loaded.ok) {
@@ -47116,11 +47255,11 @@ var PackageJsonSchema = external_exports.object({
 });
 var readClassifyPaths = (repoRoot) => {
   const defaults = defaultClassifyPaths(repoRoot);
-  const target = path72.join(repoRoot, "package.json");
-  if (!existsSync40(target)) return defaults;
+  const target = path73.join(repoRoot, "package.json");
+  if (!existsSync41(target)) return defaults;
   let parsed;
   try {
-    parsed = JSON.parse(readFileSync54(target, "utf8"));
+    parsed = JSON.parse(readFileSync55(target, "utf8"));
   } catch {
     return defaults;
   }
@@ -47143,12 +47282,12 @@ var readClassifyPaths = (repoRoot) => {
 };
 
 // src/wiki/commit-classify.ts
-var HELP_TEXT63 = `Usage: gaia wiki commit-classify --since <sha> [--json]
+var HELP_TEXT64 = `Usage: gaia wiki commit-classify --since <sha> [--json]
 
   Emit a deterministic WORTHY/SKIP suggestion for every commit in
   <sha>..HEAD. Without --json, prints a tabular summary.
 `;
-var HELP_TOKENS62 = /* @__PURE__ */ new Set(["--help", "-h", "help"]);
+var HELP_TOKENS63 = /* @__PURE__ */ new Set(["--help", "-h", "help"]);
 var parseFlags15 = (argv) => {
   let since;
   let json2 = false;
@@ -47336,7 +47475,7 @@ var warnIfInert = (health) => {
 `
   );
 };
-var printHuman10 = (classification) => {
+var printHuman11 = (classification) => {
   if (classification.commits.length === 0) {
     process.stdout.write("No commits to classify.\n");
     return;
@@ -47357,10 +47496,10 @@ var printHuman10 = (classification) => {
   process.stdout.write(`${lines.join("\n")}
 `);
 };
-var run69 = (argv, options = {}) => {
+var run70 = (argv, options = {}) => {
   const first = argv[0];
-  if (first === void 0 || HELP_TOKENS62.has(first)) {
-    process.stdout.write(HELP_TEXT63);
+  if (first === void 0 || HELP_TOKENS63.has(first)) {
+    process.stdout.write(HELP_TEXT64);
     return first === void 0 ? EXIT_CODES.UNKNOWN_SUBCOMMAND : EXIT_CODES.OK;
   }
   const parsed = parseFlags15(argv);
@@ -47427,15 +47566,15 @@ var run69 = (argv, options = {}) => {
     process.stdout.write(`${JSON.stringify(classification)}
 `);
   } else {
-    printHuman10(classification);
+    printHuman11(classification);
   }
   return EXIT_CODES.OK;
 };
 
 // src/wiki/empty-sections.ts
-import { readFileSync as readFileSync55 } from "node:fs";
-import path73 from "node:path";
-var HELP_TEXT64 = `Usage: gaia wiki empty-sections [--json]
+import { readFileSync as readFileSync56 } from "node:fs";
+import path74 from "node:path";
+var HELP_TEXT65 = `Usage: gaia wiki empty-sections [--json]
 
   Scan wiki/**/*.md (excluding wiki/meta/** and wiki/log.md) for
   LEAF headings with no body, no child heading and no non-blank, non-heading
@@ -47444,7 +47583,7 @@ var HELP_TEXT64 = `Usage: gaia wiki empty-sections [--json]
   Without --json, prints one "path:line  heading" line per finding. With
   --json, emits { "empty": [ { path, line, heading } ] }.
 `;
-var HELP_TOKENS63 = /* @__PURE__ */ new Set(["--help", "-h", "help"]);
+var HELP_TOKENS64 = /* @__PURE__ */ new Set(["--help", "-h", "help"]);
 var ATX_HEADING_PATTERN = /^ {0,3}(#{1,6})(?:\s|$)/u;
 var FENCE_PATTERN2 = /^\s*(?:```|~~~)/u;
 var shouldSkipFile3 = (relPath) => isWikiScanExempt(relPath) || isGeneratedContentExempt(relPath);
@@ -47490,16 +47629,16 @@ var findInBody = (body, bodyLineOffset, relPath) => {
   });
 };
 var findEmptySections = (cwd) => collectWikiMarkdown(cwd).filter((filePath) => !shouldSkipFile3(filePath)).flatMap((filePath) => {
-  const content = readFileSync55(path73.join(cwd, filePath), "utf8");
+  const content = readFileSync56(path74.join(cwd, filePath), "utf8");
   const { body } = parseFrontmatter(content);
   const offset = content.split("\n").length - body.split("\n").length;
   return findInBody(body, offset, filePath);
 });
-var run70 = (argv, options = {}) => {
+var run71 = (argv, options = {}) => {
   let json2 = false;
   for (const token of argv) {
-    if (HELP_TOKENS63.has(token)) {
-      process.stdout.write(HELP_TEXT64);
+    if (HELP_TOKENS64.has(token)) {
+      process.stdout.write(HELP_TEXT65);
       return EXIT_CODES.OK;
     }
     if (token === "--json") {
@@ -47542,23 +47681,23 @@ var run70 = (argv, options = {}) => {
 };
 
 // src/wiki/frontmatter.ts
-import { readFileSync as readFileSync56 } from "node:fs";
-import path74 from "node:path";
-var HELP_TEXT65 = `Usage: gaia wiki frontmatter [--json]
+import { readFileSync as readFileSync57 } from "node:fs";
+import path75 from "node:path";
+var HELP_TEXT66 = `Usage: gaia wiki frontmatter [--json]
 
   Scan wiki/**/*.md (excluding wiki/meta/**) for pages missing required
   frontmatter. Required floor is type and status. Without --json, prints one
   "path: missing a, b" line per gap. With --json, emits
   { "gaps": [ { path, missing } ] }.
 `;
-var HELP_TOKENS64 = /* @__PURE__ */ new Set(["--help", "-h", "help"]);
+var HELP_TOKENS65 = /* @__PURE__ */ new Set(["--help", "-h", "help"]);
 var REQUIRED_FIELDS = ["type", "status"];
 var hasField = (frontmatter, field2) => Object.hasOwn(frontmatter, field2) && frontmatter[field2] !== null;
 var findFrontmatterGaps = (cwd) => {
   const gaps = [];
   for (const filePath of collectWikiMarkdown(cwd)) {
     if (!isWikiScanExempt(filePath)) {
-      const content = readFileSync56(path74.join(cwd, filePath), "utf8");
+      const content = readFileSync57(path75.join(cwd, filePath), "utf8");
       const { frontmatter } = parseFrontmatter(content);
       const missing = REQUIRED_FIELDS.filter(
         (field2) => !hasField(frontmatter, field2)
@@ -47570,11 +47709,11 @@ var findFrontmatterGaps = (cwd) => {
   }
   return gaps;
 };
-var run71 = (argv, options = {}) => {
+var run72 = (argv, options = {}) => {
   let json2 = false;
   for (const token of argv) {
-    if (HELP_TOKENS64.has(token)) {
-      process.stdout.write(HELP_TEXT65);
+    if (HELP_TOKENS65.has(token)) {
+      process.stdout.write(HELP_TEXT66);
       return EXIT_CODES.OK;
     }
     if (token === "--json") {
@@ -47617,13 +47756,13 @@ var run71 = (argv, options = {}) => {
 };
 
 // src/wiki/log-prepend.ts
-import { existsSync as existsSync41, readFileSync as readFileSync57, renameSync as renameSync5, writeFileSync as writeFileSync9 } from "node:fs";
-import path75 from "node:path";
-var HELP_TEXT66 = `Usage: gaia wiki log-prepend --sha <h> --decision <WORTHY|SKIP|RE_ANCHOR> --reason "..."
+import { existsSync as existsSync42, readFileSync as readFileSync58, renameSync as renameSync5, writeFileSync as writeFileSync9 } from "node:fs";
+import path76 from "node:path";
+var HELP_TEXT67 = `Usage: gaia wiki log-prepend --sha <h> --decision <WORTHY|SKIP|RE_ANCHOR> --reason "..."
 
   Prepends one canonical line to wiki/log.md after the frontmatter.
 `;
-var HELP_TOKENS65 = /* @__PURE__ */ new Set(["--help", "-h", "help"]);
+var HELP_TOKENS66 = /* @__PURE__ */ new Set(["--help", "-h", "help"]);
 var VALID_DECISIONS = /* @__PURE__ */ new Set(["RE_ANCHOR", "SKIP", "WORTHY"]);
 var FRONTMATTER_FENCE2 = "---";
 var FLAG_BY_TOKEN = {
@@ -47689,14 +47828,14 @@ var findInsertionIndex = (lines, endFenceIndex) => {
   }
   return endFenceIndex + 1;
 };
-var run72 = (argv, options = {}) => {
+var run73 = (argv, options = {}) => {
   if (argv.length === 0) {
-    process.stdout.write(HELP_TEXT66);
+    process.stdout.write(HELP_TEXT67);
     return EXIT_CODES.UNKNOWN_SUBCOMMAND;
   }
   const first = argv[0];
-  if (first !== void 0 && HELP_TOKENS65.has(first)) {
-    process.stdout.write(HELP_TEXT66);
+  if (first !== void 0 && HELP_TOKENS66.has(first)) {
+    process.stdout.write(HELP_TEXT67);
     return EXIT_CODES.OK;
   }
   const parsed = parseFlags16(argv);
@@ -47719,8 +47858,8 @@ var run72 = (argv, options = {}) => {
     });
     return EXIT_CODES.UNKNOWN_SUBCOMMAND;
   }
-  const logPath = path75.join(repoRoot, "wiki", "log.md");
-  if (!existsSync41(logPath)) {
+  const logPath = path76.join(repoRoot, "wiki", "log.md");
+  if (!existsSync42(logPath)) {
     structuredError({
       code: "log_missing",
       message: "wiki/log.md does not exist",
@@ -47728,7 +47867,7 @@ var run72 = (argv, options = {}) => {
     });
     return EXIT_CODES.UNKNOWN_SUBCOMMAND;
   }
-  const raw = readFileSync57(logPath, "utf8");
+  const raw = readFileSync58(logPath, "utf8");
   const lines = raw.split("\n");
   const scan = scanFrontmatter(lines);
   if (scan.kind === "missing" || scan.kind === "malformed") {
@@ -47754,16 +47893,16 @@ var run72 = (argv, options = {}) => {
 };
 
 // src/wiki/near-collisions.ts
-import { existsSync as existsSync42, readdirSync as readdirSync10, statSync as statSync14 } from "node:fs";
-import path76 from "node:path";
-var HELP_TEXT67 = `Usage: gaia wiki near-collisions [--max-distance 3]
+import { existsSync as existsSync43, readdirSync as readdirSync11, statSync as statSync15 } from "node:fs";
+import path77 from "node:path";
+var HELP_TEXT68 = `Usage: gaia wiki near-collisions [--max-distance 3]
 
   Per-domain Levenshtein over slugs. Emits tab-separated rows:
   <domain>  <slugA>  <slugB>  <distance>
 `;
-var HELP_TOKENS66 = /* @__PURE__ */ new Set(["--help", "-h", "help"]);
+var HELP_TOKENS67 = /* @__PURE__ */ new Set(["--help", "-h", "help"]);
 var DEFAULT_MAX_DISTANCE = 3;
-var DOMAIN_DIRS2 = [
+var DOMAIN_DIRS3 = [
   "components",
   "concepts",
   "decisions",
@@ -47800,12 +47939,12 @@ var levenshtein = (a, b) => {
   return current[b.length] ?? 0;
 };
 var isCollectibleSlugFile = (entry) => entry.isFile() && entry.name.endsWith(".md") && !SKIPPED_FILES2.has(entry.name) && !entry.name.startsWith("_");
-var collectDomainSlugs = (wikiRoot) => DOMAIN_DIRS2.flatMap((domain2) => {
-  const domainDir = path76.join(wikiRoot, domain2);
-  if (!existsSync42(domainDir) || !statSync14(domainDir).isDirectory()) {
+var collectDomainSlugs = (wikiRoot) => DOMAIN_DIRS3.flatMap((domain2) => {
+  const domainDir = path77.join(wikiRoot, domain2);
+  if (!existsSync43(domainDir) || !statSync15(domainDir).isDirectory()) {
     return [];
   }
-  const entries = readdirSync10(domainDir, { withFileTypes: true });
+  const entries = readdirSync11(domainDir, { withFileTypes: true });
   const slugs = entries.filter((entry) => isCollectibleSlugFile(entry)).map((entry) => entry.name.replace(/\.md$/u, "")).toSorted(
     (left, right) => left < right ? -1 : left > right ? 1 : 0
   );
@@ -47862,10 +48001,10 @@ var parseFlags17 = (argv) => {
   }
   return { flags: { maxDistance }, ok: true };
 };
-var run73 = (argv, options = {}) => {
+var run74 = (argv, options = {}) => {
   const first = argv[0];
-  if (first !== void 0 && HELP_TOKENS66.has(first)) {
-    process.stdout.write(HELP_TEXT67);
+  if (first !== void 0 && HELP_TOKENS67.has(first)) {
+    process.stdout.write(HELP_TEXT68);
     return EXIT_CODES.OK;
   }
   const parsed = parseFlags17(argv);
@@ -47888,7 +48027,7 @@ var run73 = (argv, options = {}) => {
     });
     return EXIT_CODES.UNKNOWN_SUBCOMMAND;
   }
-  const wikiRoot = path76.join(repoRoot, "wiki");
+  const wikiRoot = path77.join(repoRoot, "wiki");
   const domainGroups = collectDomainSlugs(wikiRoot);
   const collisions = findCollisions(domainGroups, parsed.flags.maxDistance);
   if (collisions.length === 0) return EXIT_CODES.OK;
@@ -47901,15 +48040,15 @@ var run73 = (argv, options = {}) => {
 };
 
 // src/wiki/state-bump.ts
-import { existsSync as existsSync43, readFileSync as readFileSync58 } from "node:fs";
-import path77 from "node:path";
-var HELP_TEXT68 = `Usage: gaia wiki state-bump <field> <value>
+import { existsSync as existsSync44, readFileSync as readFileSync59 } from "node:fs";
+import path78 from "node:path";
+var HELP_TEXT69 = `Usage: gaia wiki state-bump <field> <value>
 
   Updates a single field in wiki/.state.json. Sibling fields and key order
   are preserved. <value> is parsed as JSON when it parses (numbers,
   booleans, null, arrays, objects); otherwise treated as a string.
 `;
-var HELP_TOKENS67 = /* @__PURE__ */ new Set(["--help", "-h", "help"]);
+var HELP_TOKENS68 = /* @__PURE__ */ new Set(["--help", "-h", "help"]);
 var tryParseJson = (raw) => {
   try {
     return JSON.parse(raw);
@@ -47931,14 +48070,14 @@ var reorderObject = (source, field2, newValue) => {
   next[field2] = newValue;
   return next;
 };
-var run74 = (argv, options = {}) => {
+var run75 = (argv, options = {}) => {
   if (argv.length === 0) {
-    process.stdout.write(HELP_TEXT68);
+    process.stdout.write(HELP_TEXT69);
     return EXIT_CODES.UNKNOWN_SUBCOMMAND;
   }
   const first = argv[0];
-  if (first !== void 0 && HELP_TOKENS67.has(first)) {
-    process.stdout.write(HELP_TEXT68);
+  if (first !== void 0 && HELP_TOKENS68.has(first)) {
+    process.stdout.write(HELP_TEXT69);
     return EXIT_CODES.OK;
   }
   const positional = [];
@@ -47973,8 +48112,8 @@ var run74 = (argv, options = {}) => {
     });
     return EXIT_CODES.UNKNOWN_SUBCOMMAND;
   }
-  const statePath = path77.join(repoRoot, "wiki", ".state.json");
-  if (!existsSync43(statePath)) {
+  const statePath = path78.join(repoRoot, "wiki", ".state.json");
+  if (!existsSync44(statePath)) {
     structuredError({
       code: "state_missing",
       message: "wiki/.state.json does not exist",
@@ -47982,7 +48121,7 @@ var run74 = (argv, options = {}) => {
     });
     return EXIT_CODES.UNKNOWN_SUBCOMMAND;
   }
-  const raw = readFileSync58(statePath, "utf8");
+  const raw = readFileSync59(statePath, "utf8");
   let parsed;
   try {
     parsed = JSON.parse(raw);
@@ -48012,9 +48151,9 @@ var run74 = (argv, options = {}) => {
 
 // src/wiki/state-init.ts
 import { execFileSync as execFileSync7 } from "node:child_process";
-import { existsSync as existsSync44, mkdirSync as mkdirSync21 } from "node:fs";
-import path78 from "node:path";
-var HELP_TEXT69 = `Usage: gaia wiki state-init <sha>
+import { existsSync as existsSync45, mkdirSync as mkdirSync21 } from "node:fs";
+import path79 from "node:path";
+var HELP_TEXT70 = `Usage: gaia wiki state-init <sha>
 
   Create wiki/.state.json with {version: 1, last_evaluated_sha,
   last_evaluated_at}. Refuses if the file already exists.
@@ -48022,7 +48161,7 @@ var HELP_TEXT69 = `Usage: gaia wiki state-init <sha>
   <sha> may be any ref (full sha, short sha, branch, tag); it is
   resolved to a full 40-char sha via \`git rev-parse\`.
 `;
-var HELP_TOKENS68 = /* @__PURE__ */ new Set(["--help", "-h", "help"]);
+var HELP_TOKENS69 = /* @__PURE__ */ new Set(["--help", "-h", "help"]);
 var resolveFullSha = (ref, cwd) => {
   try {
     const out = execFileSync7(
@@ -48039,14 +48178,14 @@ var resolveFullSha = (ref, cwd) => {
     return null;
   }
 };
-var run75 = (argv, options = {}) => {
+var run76 = (argv, options = {}) => {
   if (argv.length === 0) {
-    process.stdout.write(HELP_TEXT69);
+    process.stdout.write(HELP_TEXT70);
     return EXIT_CODES.UNKNOWN_SUBCOMMAND;
   }
   const first = argv[0];
-  if (first !== void 0 && HELP_TOKENS68.has(first)) {
-    process.stdout.write(HELP_TEXT69);
+  if (first !== void 0 && HELP_TOKENS69.has(first)) {
+    process.stdout.write(HELP_TEXT70);
     return EXIT_CODES.OK;
   }
   const positional = [];
@@ -48090,9 +48229,9 @@ var run75 = (argv, options = {}) => {
     });
     return EXIT_CODES.UNKNOWN_SUBCOMMAND;
   }
-  const wikiDir = path78.join(repoRoot, "wiki");
-  const statePath = path78.join(wikiDir, ".state.json");
-  if (existsSync44(statePath)) {
+  const wikiDir = path79.join(repoRoot, "wiki");
+  const statePath = path79.join(wikiDir, ".state.json");
+  if (existsSync45(statePath)) {
     structuredError({
       code: "state_already_exists",
       message: "wiki/.state.json already exists; use `gaia wiki state-bump` to update fields",
@@ -48111,157 +48250,6 @@ var run75 = (argv, options = {}) => {
   const serialized = `${JSON.stringify(payload, null, 2)}
 `;
   atomicWriteFileSync(statePath, serialized);
-  return EXIT_CODES.OK;
-};
-
-// src/wiki/state.ts
-import { existsSync as existsSync45, readdirSync as readdirSync11, readFileSync as readFileSync59, statSync as statSync15 } from "node:fs";
-import path79 from "node:path";
-var HELP_TEXT70 = `Usage: gaia wiki state [--json]
-`;
-var ALL_ZERO_SHA = "0".repeat(40);
-var HELP_TOKENS69 = /* @__PURE__ */ new Set(["--help", "-h", "help"]);
-var classifySeverity = (commitCount) => {
-  if (commitCount <= 0) return "none";
-  if (commitCount <= 5) return "low";
-  if (commitCount <= 20) return "medium";
-  return "high";
-};
-var DOMAIN_DIRS3 = [
-  "components",
-  "concepts",
-  "decisions",
-  "dependencies",
-  "entities",
-  "flows",
-  "meta",
-  "modules"
-];
-var countDomainPages = (wikiRoot) => {
-  const counts = {};
-  for (const domain2 of DOMAIN_DIRS3) {
-    const domainDir = path79.join(wikiRoot, domain2);
-    if (!existsSync45(domainDir) || !statSync15(domainDir).isDirectory()) {
-      counts[domain2] = 0;
-    } else {
-      const entries = readdirSync11(domainDir, { withFileTypes: true });
-      let count = 0;
-      for (const entry of entries) {
-        if (entry.isFile() && entry.name.endsWith(".md") && entry.name !== "_index.md") {
-          count += 1;
-        }
-      }
-      counts[domain2] = count;
-    }
-  }
-  return counts;
-};
-var readStateFile2 = (statePath) => {
-  if (!existsSync45(statePath)) return null;
-  const raw = readFileSync59(statePath, "utf8");
-  try {
-    return JSON.parse(raw);
-  } catch {
-    return null;
-  }
-};
-var printHuman11 = (state, write) => {
-  const lines = [
-    "Wiki state",
-    `  HEAD:           ${state.head_short}`,
-    `  Last evaluated: ${state.state_sha}`,
-    `  Reachable:      ${state.reachable ? "yes" : "no"}`,
-    `  Drift:          ${state.drift_count} commits (${classifySeverity(state.drift_count)})`
-  ];
-  if (state.suggested_base !== "") {
-    lines.push(`  Recovery base:  ${state.suggested_base}`);
-  }
-  if (state.recent_commits.length > 0) {
-    lines.push("  Recent unsynced:");
-    for (const commit2 of state.recent_commits) {
-      lines.push(`    - ${commit2.sha} ${commit2.subject}`);
-    }
-  }
-  lines.push("  Per-domain pages:");
-  for (const [domain2, count] of Object.entries(state.per_domain_page_counts)) {
-    lines.push(`    ${domain2}: ${count}`);
-  }
-  write(`${lines.join("\n")}
-`);
-};
-var parseStateArgs = (argv, write) => {
-  let json2 = false;
-  for (const token of argv) {
-    if (HELP_TOKENS69.has(token)) {
-      write(HELP_TEXT70);
-      return { exitCode: EXIT_CODES.OK, ok: false };
-    }
-    if (token === "--json") {
-      json2 = true;
-    } else {
-      structuredError({
-        code: "invalid_arguments",
-        message: `unknown flag: ${token}`,
-        subcommand: "wiki state"
-      });
-      return { exitCode: EXIT_CODES.UNKNOWN_SUBCOMMAND, ok: false };
-    }
-  }
-  return { json: json2, ok: true };
-};
-var run76 = (argv, options = {}) => {
-  const write = options.write ?? ((chunk) => {
-    process.stdout.write(chunk);
-  });
-  const parsed = parseStateArgs(argv, write);
-  if (!parsed.ok) {
-    return parsed.exitCode;
-  }
-  const { json: json2 } = parsed;
-  let repoRoot;
-  try {
-    repoRoot = resolveRepoRoot(options.cwd ?? process.cwd());
-  } catch {
-    structuredError({
-      code: "not_a_git_repo",
-      message: "gaia wiki state must run inside a git repository",
-      subcommand: "wiki state"
-    });
-    return EXIT_CODES.UNKNOWN_SUBCOMMAND;
-  }
-  const wikiRoot = path79.join(repoRoot, "wiki");
-  const statePath = path79.join(wikiRoot, ".state.json");
-  const stateFile = readStateFile2(statePath);
-  const stateSha = stateFile?.last_evaluated_sha ?? "";
-  const stateAt = stateFile?.last_evaluated_at ?? "";
-  const head = headSha(repoRoot);
-  const headShort = shortSha(head, repoRoot);
-  const stateShort = stateSha === "" ? "" : shortSha(stateSha, repoRoot);
-  const reachable = stateSha !== "" && stateSha !== ALL_ZERO_SHA && isReachable(stateSha, repoRoot);
-  const ahead = reachable ? countDriftCommits(stateSha, repoRoot) : 0;
-  const recent = stateSha === "" || !reachable ? [] : recentCommits(stateSha, repoRoot, 5);
-  const severity = classifySeverity(ahead);
-  const counts = countDomainPages(wikiRoot);
-  const suggestedFull = !reachable && stateAt !== "" ? ancestorBefore(stateAt, repoRoot) : "";
-  const suggestedBase = suggestedFull === "" ? "" : shortSha(suggestedFull, repoRoot);
-  const driftCount = reachable ? ahead : countDriftCommits(suggestedFull, repoRoot);
-  const state = {
-    commits_ahead: ahead,
-    drift_count: driftCount,
-    drift_severity: severity,
-    head_short: headShort,
-    per_domain_page_counts: counts,
-    reachable,
-    recent_commits: recent,
-    state_sha: stateShort,
-    suggested_base: suggestedBase
-  };
-  if (json2) {
-    write(`${JSON.stringify(state)}
-`);
-  } else {
-    printHuman11(state, write);
-  }
   return EXIT_CODES.OK;
 };
 
@@ -48287,18 +48275,18 @@ var HELP_TEXT71 = `Usage: gaia wiki <subcommand> [args]
 var HELP_TOKENS70 = /* @__PURE__ */ new Set(["--help", "-h", "help"]);
 var SUBCOMMAND_HANDLERS10 = {
   "broken-links": run67,
-  chain: run68,
-  "commit-classify": run69,
+  chain: run69,
+  "commit-classify": run70,
   "dead-paths": run4,
-  "empty-sections": run70,
-  frontmatter: run71,
-  "log-prepend": run72,
-  "near-collisions": run73,
+  "empty-sections": run71,
+  frontmatter: run72,
+  "log-prepend": run73,
+  "near-collisions": run74,
   orphans: run6,
   "page-index": run5,
-  state: run76,
-  "state-bump": run74,
-  "state-init": run75
+  state: run68,
+  "state-bump": run75,
+  "state-init": run76
 };
 var run77 = async (argv) => {
   const subcommand = argv[0];
