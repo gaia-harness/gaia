@@ -32,6 +32,11 @@ import type {
 export type AdvisoriesPayload = {
   advisories: Advisory[];
   auditAvailable: boolean;
+  /**
+   * Every key the `pnpm audit` run reported, sorted and distinct, whether or
+   * not an alert backs it; empty when the audit did not run or failed.
+   */
+  auditKeys: string[];
   count: null | number;
   dismissedGhsas: string[];
   generatedAt: string;
@@ -565,6 +570,13 @@ const relationshipFromChain = (
 
 const auditKeyOf = (record: AuditRecord): string =>
   record.ghsa ?? `pnpm:${String(record.id)}`;
+
+/** The distinct keys of the audit records, sorted. */
+export const auditKeysOf = (audit: readonly AuditRecord[]): string[] => {
+  const keys = [...new Set(audit.map(auditKeyOf))];
+
+  return keys.toSorted(compareStrings);
+};
 
 /**
  * One advisory per key and package among the audit records (the key is the
