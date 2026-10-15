@@ -86,8 +86,10 @@ scratch_flusher() {
   local scratch_directory="$TEMPORARY_DIRECTORY/scratch"
   mkdir -p "$scratch_directory/.gaia/scripts" "$scratch_directory/.gaia/scripts/spec"
   cp "$SCRIPTS"/usage-flush.sh "$SCRIPTS"/usage-parse-lib.sh "$SCRIPTS"/usage-lib.sh "$SCRIPTS"/main-root-lib.sh \
-    "$SCRIPTS"/branch-name-lib.sh "$SCRIPTS"/ledger-path-lib.sh "$scratch_directory/.gaia/scripts/"
+    "$SCRIPTS"/branch-name-lib.sh "$scratch_directory/.gaia/scripts/"
   cp "$SCRIPTS/spec/with-ledger-lock.sh" "$scratch_directory/.gaia/scripts/spec/"
+  mkdir -p "$scratch_directory/.gaia/scripts/notebook"
+  cp "$SCRIPTS"/notebook/*.sh "$scratch_directory/.gaia/scripts/notebook/"
   sed "$1" "$SCRIPTS/$2" >"$scratch_directory/.gaia/scripts/$2.m"
   if cmp -s "$SCRIPTS/$2" "$scratch_directory/.gaia/scripts/$2.m"; then
     echo "mutation did not apply to $2" >&2

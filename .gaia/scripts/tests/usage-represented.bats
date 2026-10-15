@@ -95,7 +95,7 @@ traced_scripts() {
   local scratch="$1" file
   mkdir -p "$scratch/spec"
   for file in "$SCRIPTS"/usage*.sh "$SCRIPTS"/token-*.sh "$SCRIPTS"/token-rates.json "$SCRIPTS"/branch-name-lib.sh \
-    "$SCRIPTS"/main-root-lib.sh "$SCRIPTS"/ledger-path-lib.sh; do
+    "$SCRIPTS"/main-root-lib.sh; do
     [ -f "$file" ] && cp "$file" "$scratch/"
   done
   cp "$SCRIPTS/spec/with-ledger-lock.sh" "$scratch/spec/"

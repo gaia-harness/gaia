@@ -1,9 +1,9 @@
 # Context Discipline
 
-- Keep the main thread lean: it decides and synthesizes, and does not read in bulk.
-- Fan out work that reads much and returns little to sub-agents, and keep what they return small.
+- Keep the main thread lean: it decides, synthesizes, never reads in bulk.
+- Fan out read-heavy, low-yield work to sub-agents and keep their returns small.
 - Dispatch results follow `.claude/rules/subagent-dispatch.md`.
-- Choose each model by fit to the task, from the model table in `wiki/concepts/Workflow Doctrine.md`.
-- Keep durable research output under `.gaia/local/research/<topic>-<date>/`: one small current-state file, rewritten in place and never appended, plus artifacts beside it.
-- Work that spans sessions resumes from one `STATE.md` in its run folder under `.gaia/local/runs/` or its research folder, rewritten in place; when context runs heavy, the context checkpoint says when to save there and stop (`wiki/concepts/Workflow Doctrine.md`).
-- A prompt, command or line the user is meant to copy and paste is printed inside a fenced code block (three backticks, info string `text`), never in prose or a blockquote; when it contains a triple-backtick fence of its own, fence it with four backticks. A handoff is such a continuation prompt and carries its own context, never a pointer to this session's scrollback.
+- Choose each model by task fit, from the table in `wiki/concepts/Workflow Doctrine.md`.
+- Research lives under `.notebook/research/<topic>-<date>/`: one small current-state file rewritten in place plus artifacts beside it. Register: `bash .gaia/scripts/notebook/notebook-lib.sh register research <slug> active`; `set-status research <slug> pending` or `closed` (only `closed` is reaped; `wiki/concepts/Notebook.md`).
+- Work spanning sessions resumes from one `STATE.md`, rewritten in place, in its run folder (`.gaia/local/runs/`) or research folder; when context runs heavy, the checkpoint says when to save and stop (`wiki/concepts/Workflow Doctrine.md`).
+- A prompt or command meant for the user to paste goes in a fenced code block (three backticks, info string `text`), never prose or a blockquote; if it holds a triple-backtick fence, use four. A handoff is such a prompt: it carries its own context, never a pointer to this session's scrollback.

@@ -76,7 +76,7 @@ run_hook_bash() {
 }
 
 @test "Edit on an unrelated plan README is allowed" {
-  run_hook_edit "Edit" ".gaia/local/plans/x/README.md"
+  run_hook_edit "Edit" ".notebook/plans/x/README.md"
   assert_allowed_by_json
 }
 

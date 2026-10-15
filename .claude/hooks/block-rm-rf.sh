@@ -638,8 +638,8 @@ main() {
       # `..` still match `.git`, so they are the same hole, not a safer spelling.
       #
       # Only the first segment counts. A glob deeper in the path expands inside a
-      # named directory, which is what makes the whitelisted `.gaia/local/plans/*`
-      # an ordinary cleanup rather than this. The normalization above already
+      # named directory, which is what makes the whitelisted children of the notebook's
+      # plans folder an ordinary cleanup rather than this. The normalization above already
       # removed any `./` prefix, so the first segment is whatever precedes the
       # first slash.
       first_segment=${token%%/*}

@@ -8,16 +8,17 @@
 # Plan age anchors on `merged_at`, so this arm writes status "merged", not the
 # retired "completed".
 #
-# Does NOT use helpers/tmp-spec-repo.sh: that shared harness seeds only the
-# specs ledger. Mirrors the self-copy
-# sandbox pattern from ledger-update-plan-rows.bats instead: copy the script under
-# test plus its runtime deps (ledger-update.sh, ledger-lib.sh, with-ledger-lock.sh,
-# ledger-path-lib.sh, main-root-lib.sh) into a sibling lib dir so the
-# ${BASH_SOURCE[0]}-relative source resolves, `git init` the sandbox so
-# ledger-update.sh's main-checkout resolver (gaia_resolve_plans_directory) has
-# a real repository to resolve against, and seed the plans ledger explicitly.
+# Per-test fixture via helpers/tmp-notebook-repo.sh: a git repo carrying the
+# notebook library, the spec scripts and a catalog seeded with one ready plan
+# row. The fixture's repository also gives ledger-update.sh a real checkout to
+# resolve main against.
 
 bats_require_minimum_version 1.5.0
+
+# Builds the throwaway fixture repository the suite acts on.
+_fixture_repository() {
+  "$THIS_DIRECTORY/helpers/tmp-notebook-repo.sh" "$@"
+}
 
 setup() {
   THIS_DIRECTORY="$( cd "$( dirname "$BATS_TEST_FILENAME" )" && pwd )"
@@ -25,41 +26,10 @@ setup() {
   # snapshot_file + assert_files_identical: byte identity without `$(cat …)`.
   . "$REPO_ROOT/.gaia/tests/helpers/files.sh"
   SOURCE_LIBRARY_DIRECTORY="$REPO_ROOT/.gaia/scripts/spec"
-  SOURCE_SCRIPTS_DIRECTORY="$REPO_ROOT/.gaia/scripts"
   [ -x "$SOURCE_LIBRARY_DIRECTORY/plan-reconcile.sh" ] || skip "plan-reconcile.sh not executable"
 
-  SANDBOX_RAW="$(mktemp -d "${BATS_TEST_TMPDIR}/sandbox.XXXXXX")"
-  SANDBOX="$(cd "$SANDBOX_RAW" && pwd -P)"
-
-  git -C "$SANDBOX" init --quiet --initial-branch=main
-
-  mkdir -p "$SANDBOX/.gaia/scripts/spec"
-  for library_file in plan-reconcile.sh ledger-update.sh ledger-lib.sh with-ledger-lock.sh; do
-    cp "$SOURCE_LIBRARY_DIRECTORY/$library_file" "$SANDBOX/.gaia/scripts/spec/$library_file"
-  done
-  chmod +x "$SANDBOX/.gaia/scripts/spec/plan-reconcile.sh" \
-    "$SANDBOX/.gaia/scripts/spec/ledger-update.sh"
-
-  mkdir -p "$SANDBOX/.gaia/scripts"
-  cp "$SOURCE_SCRIPTS_DIRECTORY/ledger-path-lib.sh" "$SANDBOX/.gaia/scripts/ledger-path-lib.sh"
-  cp "$SOURCE_SCRIPTS_DIRECTORY/main-root-lib.sh" "$SANDBOX/.gaia/scripts/main-root-lib.sh"
-  cp "$SOURCE_SCRIPTS_DIRECTORY/branch-name-lib.sh" "$SANDBOX/.gaia/scripts/branch-name-lib.sh"
-
-  mkdir -p "$SANDBOX/.gaia/local/plans"
-  cat > "$SANDBOX/.gaia/local/plans/ledger.json" <<'EOF'
-{
-  "version": 1,
-  "plans": [
-    {
-      "id": "PLAN-005",
-      "allocated_at": "2026-01-01T00:00:00Z",
-      "source": "allocated",
-      "subject": "x",
-      "status": "ready"
-    }
-  ]
-}
-EOF
+  SANDBOX="$(_fixture_repository \
+    --seed-row '{"kind":"plan","id":"PLAN-005","path":"plans/PLAN-005","status":"ready","subject":"x","source":"allocated","created_at":"2026-01-01T00:00:00Z","status_changed_at":"2026-01-01T00:00:00Z"}')"
 }
 
 teardown() {
@@ -68,7 +38,7 @@ teardown() {
   fi
 }
 
-LEDGER_RELATIVE_PATH=".gaia/local/plans/ledger.json"
+CATALOG_RELATIVE_PATH=".notebook/catalog.json"
 
 _reconcile() {
   bash "$SANDBOX/.gaia/scripts/spec/plan-reconcile.sh" "$SANDBOX" "$@"
@@ -81,8 +51,12 @@ _reconcile_scan() {
 _row_field() {
   local id="$1" field="$2"
   jq -r --arg id "$id" --arg field_name "$field" \
-    '.plans[] | select(.id == $id) | .[$field_name] // "null"' \
-    "$SANDBOX/$LEDGER_RELATIVE_PATH"
+    '.items[] | select(.kind == "plan" and .id == $id) | .[$field_name] // "null"' \
+    "$SANDBOX/$CATALOG_RELATIVE_PATH"
+}
+
+_row_json() {
+  jq -c --arg id "$1" '.items[] | select(.kind == "plan" and .id == $id)' "$SANDBOX/$CATALOG_RELATIVE_PATH"
 }
 
 @test "1: ready PLAN-005 flips to merged with an ISO merged_at, exit 0" {
@@ -98,7 +72,7 @@ _row_field() {
 
 @test "1b: the flip does not depend on any plan folder existing" {
   # No PLAN-005 folder anywhere under the sandbox; the flip must still land.
-  [ ! -d "$SANDBOX/.gaia/local/plans/PLAN-005" ]
+  [ ! -d "$SANDBOX/.notebook/plans/PLAN-005" ]
   run _reconcile PLAN-005
   [ "$status" -eq 0 ]
   [ "$(_row_field PLAN-005 status)" = "merged" ]
@@ -112,28 +86,28 @@ _row_field() {
   [ "$(_row_field PLAN-005 status)" = "merged" ]
 }
 
-@test "3: a non-PLAN-NNN id is a no-op, exits 0, leaves the ledger unchanged" {
-  before="$(snapshot_file "$SANDBOX/$LEDGER_RELATIVE_PATH")"
+@test "3: a non-PLAN-NNN id is a no-op, exits 0, leaves the catalog unchanged" {
+  before="$(snapshot_file "$SANDBOX/$CATALOG_RELATIVE_PATH")"
   for id in cache-thing PLAN-x; do
     run _reconcile "$id"
     [ "$status" -eq 0 ]
   done
-  after="$(snapshot_file "$SANDBOX/$LEDGER_RELATIVE_PATH")"
+  after="$(snapshot_file "$SANDBOX/$CATALOG_RELATIVE_PATH")"
   assert_files_identical "$before" "$after"
 }
 
-@test "4a: a missing ledger exits 0 and creates nothing" {
-  rm -f "$SANDBOX/$LEDGER_RELATIVE_PATH"
+@test "4a: a missing catalog exits 0 and creates nothing" {
+  rm -f "$SANDBOX/$CATALOG_RELATIVE_PATH"
   run _reconcile PLAN-005
   [ "$status" -eq 0 ]
-  [ ! -f "$SANDBOX/$LEDGER_RELATIVE_PATH" ]
+  [ ! -f "$SANDBOX/$CATALOG_RELATIVE_PATH" ]
 }
 
-@test "4b: a missing row exits 0 and leaves the ledger unchanged" {
-  before="$(snapshot_file "$SANDBOX/$LEDGER_RELATIVE_PATH")"
+@test "4b: a missing row exits 0 and leaves the catalog unchanged" {
+  before="$(snapshot_file "$SANDBOX/$CATALOG_RELATIVE_PATH")"
   run _reconcile PLAN-999
   [ "$status" -eq 0 ]
-  after="$(snapshot_file "$SANDBOX/$LEDGER_RELATIVE_PATH")"
+  after="$(snapshot_file "$SANDBOX/$CATALOG_RELATIVE_PATH")"
   assert_files_identical "$before" "$after"
 }
 
@@ -162,16 +136,18 @@ _gh_stub_that_fails() {
   [ "$status" -eq 0 ]
   grep -qF "reconciled PLAN-005 -> merged" <<<"$output"
   [ "$(_row_field PLAN-005 status)" = "merged" ]
-  jq -e '.plans[] | select(.id == "PLAN-005") | .pr_number == 2601' "$SANDBOX/$LEDGER_RELATIVE_PATH"
+  jq -e '.items[] | select(.kind == "plan" and .id == "PLAN-005") | .pr_number == 2601' "$SANDBOX/$CATALOG_RELATIVE_PATH"
   [ ! -e "$STUB_DIRECTORY/gh-called" ]
 }
 
 @test "6b: the two-argument form matches the pre-change script: same stdout, stderr and exit, no pr_number, no network" {
   _gh_stub_that_fails
   # The committed script still names the retired two-script chokepoint; point
-  # that call at the merged one so only the third-argument behavior differs.
+  # that call at the merged one, and its one wording the catalog changed
+  # (the missing-row stderr line) at the new text, so only the third-argument
+  # behavior differs.
   git -C "$REPO_ROOT" show HEAD:.gaia/scripts/spec/plan-reconcile.sh \
-    | sed 's#/plan-\(ledger-update\.sh\)#/\1#g' > "$SANDBOX/.gaia/scripts/spec/plan-reconcile-before.sh"
+    | sed -e 's#/plan-\(ledger-update\.sh\)#/\1#g' -e 's#missing ledger/row#missing catalog row#' >"$SANDBOX/.gaia/scripts/spec/plan-reconcile-before.sh"
   for id in PLAN-005 PLAN-x cache-thing PLAN-999; do
     run --separate-stderr bash "$SANDBOX/.gaia/scripts/spec/plan-reconcile-before.sh" "$SANDBOX" "$id"
     before_status="$status" before_output="$output" before_stderr="$stderr"
@@ -197,18 +173,14 @@ _gh_stub_that_fails() {
 
 # --- scan mode: reconcile against merged pull requests ------------------------
 
-_seed_scan_ledger() {
-  cat > "$SANDBOX/$LEDGER_RELATIVE_PATH" <<'EOF'
-{
-  "version": 1,
-  "plans": [
-    {"id": "PLAN-031", "allocated_at": "2026-01-01T00:00:00Z", "source": "allocated", "subject": "a", "status": "ready"},
-    {"id": "PLAN-032", "allocated_at": "2026-01-02T00:00:00Z", "source": "allocated", "subject": "b", "status": "merged", "merged_at": "2026-02-01T00:00:00Z"},
-    {"id": "PLAN-033", "allocated_at": "2026-01-03T00:00:00Z", "source": "allocated", "subject": "c", "status": "ready"},
-    {"id": "PLAN-034", "allocated_at": "2026-01-04T00:00:00Z", "source": "allocated", "subject": "d", "status": "merged", "merged_at": "2026-02-02T00:00:00Z", "pr_number": 70}
-  ]
-}
-EOF
+_seed_scan_catalog() {
+  jq '.items = [
+    {"kind":"plan","id":"PLAN-031","path":"plans/PLAN-031","status":"ready","subject":"a","source":"allocated","created_at":"2026-01-01T00:00:00Z","status_changed_at":"2026-01-01T00:00:00Z"},
+    {"kind":"plan","id":"PLAN-032","path":"plans/PLAN-032","status":"merged","subject":"b","source":"allocated","created_at":"2026-01-02T00:00:00Z","status_changed_at":"2026-02-01T00:00:00Z","merged_at":"2026-02-01T00:00:00Z"},
+    {"kind":"plan","id":"PLAN-033","path":"plans/PLAN-033","status":"ready","subject":"c","source":"allocated","created_at":"2026-01-03T00:00:00Z","status_changed_at":"2026-01-03T00:00:00Z"},
+    {"kind":"plan","id":"PLAN-034","path":"plans/PLAN-034","status":"merged","subject":"d","source":"allocated","created_at":"2026-01-04T00:00:00Z","status_changed_at":"2026-02-02T00:00:00Z","merged_at":"2026-02-02T00:00:00Z","pr_number":70}
+  ]' "$SANDBOX/$CATALOG_RELATIVE_PATH" > "$BATS_TEST_TMPDIR/seeded-catalog.json"
+  cp "$BATS_TEST_TMPDIR/seeded-catalog.json" "$SANDBOX/$CATALOG_RELATIVE_PATH"
 }
 
 _gh_stub_listing() {
@@ -232,52 +204,53 @@ EOF
 }
 
 @test "7: scan mode matches ready and pr_number-less merged rows to the newest merged PR naming the plan" {
-  _seed_scan_ledger
+  _seed_scan_catalog
   _gh_stub_listing
   run _reconcile_scan
   [ "$status" -eq 0 ]
   [ "$(_row_field PLAN-031 status)" = "merged" ]
   [ "$(_row_field PLAN-031 merged_at)" = "2026-03-05T00:00:00Z" ]
-  jq -e '.plans[] | select(.id == "PLAN-031") | .pr_number == 101' "$SANDBOX/$LEDGER_RELATIVE_PATH"
+  jq -e '.items[] | select(.kind == "plan" and .id == "PLAN-031") | .pr_number == 101' "$SANDBOX/$CATALOG_RELATIVE_PATH"
   [ "$(_row_field PLAN-032 status)" = "merged" ]
   [ "$(_row_field PLAN-032 merged_at)" = "2026-03-02T00:00:00Z" ]
-  jq -e '.plans[] | select(.id == "PLAN-032") | .pr_number == 102' "$SANDBOX/$LEDGER_RELATIVE_PATH"
+  jq -e '.items[] | select(.kind == "plan" and .id == "PLAN-032") | .pr_number == 102' "$SANDBOX/$CATALOG_RELATIVE_PATH"
 }
 
 @test "7b: scan mode leaves unmatched rows and rows that already carry pr_number byte-identical" {
-  _seed_scan_ledger
+  _seed_scan_catalog
   _gh_stub_listing
-  expected_unmatched="$(jq -c '.plans[] | select(.id == "PLAN-033")' "$SANDBOX/$LEDGER_RELATIVE_PATH")"
-  expected_confirmed="$(jq -c '.plans[] | select(.id == "PLAN-034")' "$SANDBOX/$LEDGER_RELATIVE_PATH")"
+  expected_unmatched="$(_row_json PLAN-033)"
+  expected_confirmed="$(_row_json PLAN-034)"
   run _reconcile_scan
   [ "$status" -eq 0 ]
-  [ "$(jq -c '.plans[] | select(.id == "PLAN-033")' "$SANDBOX/$LEDGER_RELATIVE_PATH")" = "$expected_unmatched" ]
-  [ "$(jq -c '.plans[] | select(.id == "PLAN-034")' "$SANDBOX/$LEDGER_RELATIVE_PATH")" = "$expected_confirmed" ]
+  [ "$(_row_json PLAN-033)" = "$expected_unmatched" ]
+  [ "$(_row_json PLAN-034)" = "$expected_confirmed" ]
 }
 
-@test "7c: scan mode with no gh on PATH leaves the ledger byte-identical and exits 0" {
-  _seed_scan_ledger
-  before="$(snapshot_file "$SANDBOX/$LEDGER_RELATIVE_PATH")"
+@test "7c: scan mode with no gh on PATH leaves the catalog byte-identical and exits 0" {
+  _seed_scan_catalog
+  before="$(snapshot_file "$SANDBOX/$CATALOG_RELATIVE_PATH")"
   # A PATH holding only the tools the script needs, and no gh.
   bare="$BATS_TEST_TMPDIR/bare-bin"
   mkdir -p "$bare"
-  for tool in bash jq git sed sort tail date cat dirname mkdir rm mv grep awk tr head cut wc; do
+  for tool in bash jq git sed sort tail date cat dirname basename mkdir rm mv grep awk tr head cut wc uname env mktemp; do
     tool_path="$(command -v "$tool" 2>/dev/null || true)"
     [ -z "$tool_path" ] || ln -sf "$tool_path" "$bare/$tool"
   done
   PATH="$bare" run bash "$SANDBOX/.gaia/scripts/spec/plan-reconcile.sh" "$SANDBOX"
   [ "$status" -eq 0 ]
-  after="$(snapshot_file "$SANDBOX/$LEDGER_RELATIVE_PATH")"
+  after="$(snapshot_file "$SANDBOX/$CATALOG_RELATIVE_PATH")"
   assert_files_identical "$before" "$after"
 }
 
-@test "7d: scan mode with a failing gh leaves the ledger byte-identical and exits 0" {
-  _seed_scan_ledger
+@test "7d: scan mode with a failing gh leaves the catalog byte-identical and exits 0" {
+  _seed_scan_catalog
   _gh_stub_that_fails
-  before="$(snapshot_file "$SANDBOX/$LEDGER_RELATIVE_PATH")"
+  before="$(snapshot_file "$SANDBOX/$CATALOG_RELATIVE_PATH")"
   run _reconcile_scan
   [ "$status" -eq 0 ]
-  after="$(snapshot_file "$SANDBOX/$LEDGER_RELATIVE_PATH")"
+  [ -e "$STUB_DIRECTORY/gh-called" ]
+  after="$(snapshot_file "$SANDBOX/$CATALOG_RELATIVE_PATH")"
   assert_files_identical "$before" "$after"
 }
 
@@ -287,26 +260,68 @@ EOF
   grep -qF "usage: plan-reconcile.sh <repo_root> [<plan_id> [<pr_number>]]" <<<"$stderr"
 }
 
-@test "7f: scan mode ignores a same-number PR merged before the row was allocated and leaves the row ready" {
-  cat > "$SANDBOX/$LEDGER_RELATIVE_PATH" <<'JSON'
-{"version": 1, "plans": [{"id": "PLAN-031", "allocated_at": "2026-03-10T00:00:00Z", "source": "allocated", "subject": "a", "status": "ready"}]}
-JSON
+@test "7f: scan mode ignores a same-number PR merged before the row was created and leaves the row ready" {
+  jq '.items = [{"kind":"plan","id":"PLAN-031","path":"plans/PLAN-031","status":"ready","subject":"a","source":"allocated","created_at":"2026-03-10T00:00:00Z","status_changed_at":"2026-03-10T00:00:00Z"}]' \
+    "$SANDBOX/$CATALOG_RELATIVE_PATH" > "$BATS_TEST_TMPDIR/seeded-catalog.json"
+  cp "$BATS_TEST_TMPDIR/seeded-catalog.json" "$SANDBOX/$CATALOG_RELATIVE_PATH"
   _gh_stub_listing
-  before="$(snapshot_file "$SANDBOX/$LEDGER_RELATIVE_PATH")"
+  before="$(snapshot_file "$SANDBOX/$CATALOG_RELATIVE_PATH")"
   run _reconcile_scan
   [ "$status" -eq 0 ]
-  after="$(snapshot_file "$SANDBOX/$LEDGER_RELATIVE_PATH")"
+  after="$(snapshot_file "$SANDBOX/$CATALOG_RELATIVE_PATH")"
   assert_files_identical "$before" "$after"
   [ "$(_row_field PLAN-031 status)" = "ready" ]
 }
 
-@test "7g: scan mode still matches a same-number PR merged after the row was allocated when an older one shares the number" {
-  cat > "$SANDBOX/$LEDGER_RELATIVE_PATH" <<'JSON'
-{"version": 1, "plans": [{"id": "PLAN-031", "allocated_at": "2026-03-03T00:00:00Z", "source": "allocated", "subject": "a", "status": "ready"}]}
-JSON
+@test "7g: scan mode still matches a same-number PR merged after the row was created when an older one shares the number" {
+  jq '.items = [{"kind":"plan","id":"PLAN-031","path":"plans/PLAN-031","status":"ready","subject":"a","source":"allocated","created_at":"2026-03-03T00:00:00Z","status_changed_at":"2026-03-03T00:00:00Z"}]' \
+    "$SANDBOX/$CATALOG_RELATIVE_PATH" > "$BATS_TEST_TMPDIR/seeded-catalog.json"
+  cp "$BATS_TEST_TMPDIR/seeded-catalog.json" "$SANDBOX/$CATALOG_RELATIVE_PATH"
   _gh_stub_listing
   run _reconcile_scan
   [ "$status" -eq 0 ]
   [ "$(_row_field PLAN-031 status)" = "merged" ]
-  jq -e '.plans[] | select(.id == "PLAN-031") | .pr_number == 101' "$SANDBOX/$LEDGER_RELATIVE_PATH"
+  jq -e '.items[] | select(.kind == "plan" and .id == "PLAN-031") | .pr_number == 101' "$SANDBOX/$CATALOG_RELATIVE_PATH"
+}
+
+# --- readiness: the one-time move pending --------------------------------------
+
+@test "8: not ready, the single-id form prints the move line on stderr, exits 0 and changes nothing" {
+  rm -rf "$SANDBOX"
+  SANDBOX="$(_fixture_repository --legacy \
+    --seed-row '{"kind":"plan","id":"PLAN-005","path":"plans/PLAN-005","status":"ready","subject":"x","created_at":"2026-01-01T00:00:00Z","status_changed_at":"2026-01-01T00:00:00Z"}')"
+  before="$(snapshot_file "$SANDBOX/$CATALOG_RELATIVE_PATH")"
+  run --separate-stderr _reconcile PLAN-005 2601
+  [ "$status" -eq 0 ]
+  [ -z "$output" ]
+  grep -qF "bash .gaia/scripts/notebook/move.sh run" <<<"$stderr"
+  after="$(snapshot_file "$SANDBOX/$CATALOG_RELATIVE_PATH")"
+  assert_files_identical "$before" "$after"
+  [ "$(_row_field PLAN-005 status)" = "ready" ]
+}
+
+@test "8b: not ready, the scan form prints the move line on stderr, never reaches gh and changes nothing" {
+  rm -rf "$SANDBOX"
+  SANDBOX="$(_fixture_repository --legacy \
+    --seed-row '{"kind":"plan","id":"PLAN-031","path":"plans/PLAN-031","status":"ready","subject":"a","created_at":"2026-01-01T00:00:00Z","status_changed_at":"2026-01-01T00:00:00Z"}')"
+  _gh_stub_listing
+  before="$(snapshot_file "$SANDBOX/$CATALOG_RELATIVE_PATH")"
+  run --separate-stderr _reconcile_scan
+  [ "$status" -eq 0 ]
+  [ -z "$output" ]
+  grep -qF "bash .gaia/scripts/notebook/move.sh run" <<<"$stderr"
+  after="$(snapshot_file "$SANDBOX/$CATALOG_RELATIVE_PATH")"
+  assert_files_identical "$before" "$after"
+  [ "$(_row_field PLAN-031 status)" = "ready" ]
+}
+
+@test "9: run from the real repo root, the scan acts on the operand's fixture only" {
+  _seed_scan_catalog
+  _gh_stub_listing
+  real_before="$(directory_listing_checksum "$REPO_ROOT/.notebook")"
+  run bash -c 'cd "$1" && bash "$2/.gaia/scripts/spec/plan-reconcile.sh" "$2"' _ "$REPO_ROOT" "$SANDBOX"
+  [ "$status" -eq 0 ]
+  [ "$(_row_field PLAN-031 status)" = "merged" ]
+  real_after="$(directory_listing_checksum "$REPO_ROOT/.notebook")"
+  [ "$real_after" = "$real_before" ]
 }

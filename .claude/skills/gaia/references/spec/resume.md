@@ -26,8 +26,8 @@ Before prompting, gather context for an informed choice. The newer of the canoni
 
 ```bash
 SPEC_ID="<from allocator>"
-MAIN_ROOT="$(bash .gaia/scripts/main-root-lib.sh)"
-SPEC_PATH="${MAIN_ROOT}/.gaia/local/specs/${SPEC_ID}/SPEC.md"
+SPEC_FOLDER="$(bash .gaia/scripts/notebook/notebook-lib.sh path spec "$SPEC_ID")" || SPEC_FOLDER=""
+SPEC_PATH="${SPEC_FOLDER}/SPEC.md"
 DRAFT_PATH=".gaia/local/cache/draft-${SPEC_ID}.md"
 if [[ -f "$DRAFT_PATH" && "$DRAFT_PATH" -nt "$SPEC_PATH" ]]; then
   WORKING="$DRAFT_PATH"
@@ -36,7 +36,7 @@ else
 fi
 ```
 
-The two halves of that comparison live in different trees on purpose: the canonical artifact is main-anchored (state registry `specs-main`), so `SPEC_PATH` resolves main, while the working draft is per-tree and stays in the acting worktree where the authoring session wrote it. The Operational-primitives contract in `spec.md` applies here as everywhere: an empty `MAIN_ROOT` stops this step, because comparing against a relative path would silently make the draft look newer.
+The two halves of that comparison live in different trees on purpose: the canonical artifact is main-anchored (state registry `specs-main`), so `SPEC_PATH` resolves main, while the working draft is per-tree and stays in the acting worktree where the authoring session wrote it. The Operational-primitives contract in `spec.md` applies here as everywhere: an empty `SPEC_FOLDER` stops this step, because comparing against a relative path would silently make the draft look newer.
 
 ## Live-session check
 

@@ -8,9 +8,9 @@
 # `COMPLETE <n> <short-sha>` lines for the verified-complete phases, and
 # always exits 0.
 #
-# This suite is built ONLY from the frozen contract in
-# .gaia/local/specs/SPEC-027/plan/README.md and the per-UAT echo table; it
-# does not read the helper's implementation. Fixtures are real git repos
+# This suite is built ONLY from the frozen contract in a spec-derived plan's
+# README (the plan folder nested in its spec's notebook folder) and the
+# per-UAT echo table; it does not read the helper's implementation. Fixtures are real git repos
 # with real commits (no mocked git): non-ancestor fixtures move the branch
 # away with `git reset --hard`, and the worktree-HEAD fixture uses a real
 # second branch. Assertions follow .claude/rules/bats-assertions.md

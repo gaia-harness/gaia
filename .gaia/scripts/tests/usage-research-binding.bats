@@ -1,9 +1,10 @@
 #!/usr/bin/env bats
 #
-# Research attribution path form (SPEC-088 UAT-017): a research Write binds
-# session spend to research:<topic>-<date> only when it goes through the main
-# checkout's absolute path. The same Write through a linked worktree's
-# .gaia/local symlink binds nothing; `usage.sh declare` is the route that does.
+# Research attribution path form: a research Write binds session spend to
+# research:<topic>-<date> only when it goes through the main checkout's absolute
+# notebook research path. The same Write through a linked worktree's notebook
+# symlink, or under the retired local research root, binds nothing;
+# `usage.sh declare` is the route that does.
 #
 # Run under bash 5 (.claude/rules/bats-assertions.md):
 #   .gaia/scripts/bats5.sh .gaia/scripts/tests/usage-research-binding.bats
@@ -33,11 +34,12 @@ setup() {
   PROJECTS_DIRECTORY="$TEMPORARY_DIRECTORY/projects"
   TEL="$MAIN/.gaia/local/telemetry"
   unset CLAUDE_CODE_SESSION_ID GAIA_TALLY_PROJECTS_ROOT GITHUB_ACTIONS
-  mkdir -p "$MAIN" "$MAIN/.gaia/local/research" "$PROJECTS_DIRECTORY/$(encode_project_path "$MAIN")"
+  mkdir -p "$MAIN" "$MAIN/.notebook/research" "$PROJECTS_DIRECTORY/$(encode_project_path "$MAIN")"
   git -C "$MAIN" init -q -b main
   git -C "$MAIN" -c user.email=t@example.com -c user.name=T -c commit.gpgsign=false \
     commit -q --allow-empty -m init
   git -C "$MAIN" worktree add -q -b side "$WORKTREE"
+  ln -s "$MAIN/.notebook" "$WORKTREE/.notebook"
   register_hooks "$MAIN"
   # Every call below runs from outside any repo, so a missing --main-root
   # fails instead of resolving the real checkout.
@@ -95,35 +97,88 @@ has_line() { grep -qxF -- "$1" <<<"$output" || { printf 'missing line: [%s]\nin:
 RESEARCH_WRITE_PATH="research/topic-x-2026-10-01/README.md"
 
 @test "a main-path Write binds its session; a worktree-path Write binds nothing" {
-  make_worktree_session "$WORKTREE/.gaia/local/$RESEARCH_WRITE_PATH"
-  make_main_session "$MAIN/.gaia/local/$RESEARCH_WRITE_PATH"
+  make_worktree_session "$WORKTREE/.notebook/$RESEARCH_WRITE_PATH"
+  make_main_session "$MAIN/.notebook/$RESEARCH_WRITE_PATH"
   run init research:topic-x-2026-10-01
   [ "$status" -eq 0 ]
   has_line "  total (distinct segments): tokens 3,300  est. \$0.01"
 }
 
 @test "positive control: only the worktree-path session is flushed and it reports no spend" {
-  make_worktree_session "$WORKTREE/.gaia/local/$RESEARCH_WRITE_PATH"
+  make_worktree_session "$WORKTREE/.notebook/$RESEARCH_WRITE_PATH"
   run init research:topic-x-2026-10-01
   [ "$status" -eq 0 ]
   has_line "  total (distinct segments): tokens 0  est. \$0.00"
 }
 
 @test "positive control: the same session with a main-path Write reports its tokens" {
-  make_worktree_session "$MAIN/.gaia/local/$RESEARCH_WRITE_PATH"
+  make_worktree_session "$MAIN/.notebook/$RESEARCH_WRITE_PATH"
   run init research:topic-x-2026-10-01
   [ "$status" -eq 0 ]
   has_line "  total (distinct segments): tokens 330  est. \$0.00"
 }
 
 @test "declare binds a session's spend to a research initiative without a Write" {
-  make_worktree_session "$WORKTREE/.gaia/local/$RESEARCH_WRITE_PATH"
+  make_worktree_session "$WORKTREE/.notebook/$RESEARCH_WRITE_PATH"
   run bash "$USAGE" declare research:topic-y-2026-10-01 --session sess-wt \
     --main-root "$MAIN" --telemetry-dir "$TEL"
   [ "$status" -eq 0 ]
   run init research:topic-y-2026-10-01
   [ "$status" -eq 0 ]
   has_line "  total (distinct segments): tokens 330  est. \$0.00"
+}
+
+# binding_refs: the research refs of the ledger's binding rows, one per line.
+binding_refs() { jq -r 'select(.kind == "binding") | .ref' "$TEL/usage.jsonl"; }
+
+@test "a notebook Write binds its topic and a retired-root Write binds nothing, counted by rows" {
+  flush sess-nb "$(transcript sess-nb 100 10 200 20 "$MAIN/.notebook/research/topic-a-2026-10-01/x.md")"
+  flush sess-old "$(transcript sess-old 100 10 200 20 "$MAIN/.gaia/local/research/topic-b-2026-10-01/x.md")"
+  [ "$(jq -s '[.[] | select(.kind == "binding")] | length' "$TEL/usage.jsonl")" -eq 1 ]
+  [ "$(binding_refs)" = research:topic-a-2026-10-01 ]
+  [ "$(jq -s '[.[] | select(.kind == "binding" and .ref == "research:topic-b-2026-10-01")] | length' "$TEL/usage.jsonl")" -eq 0 ]
+}
+
+@test "a Write through a linked worktree's notebook symlink binds no row" {
+  flush sess-link "$(transcript sess-link 100 10 200 20 "$WORKTREE/.notebook/research/topic-c-2026-10-01/x.md")"
+  [ "$(jq -s '[.[] | select(.kind == "binding")] | length' "$TEL/usage.jsonl")" -eq 0 ]
+  [ "$(jq -s '[.[] | select(.kind == "segment")] | length' "$TEL/usage.jsonl")" -ge 1 ]
+}
+
+@test "a binding to a research folder that never existed is read without error" {
+  rmdir "$MAIN/.notebook/research"
+  make_main_session "$MAIN/.notebook/$RESEARCH_WRITE_PATH"
+  [ ! -e "$MAIN/.notebook/research/topic-x-2026-10-01" ]
+  run --separate-stderr init research:topic-x-2026-10-01
+  [ "$status" -eq 0 ]
+  [ -z "$stderr" ]
+  has_line "  total (distinct segments): tokens 3,300  est. \$0.01"
+}
+
+@test "a binding whose research folder was removed after the flush is still read and attributed" {
+  mkdir -p "$MAIN/.notebook/research/topic-x-2026-10-01"
+  make_main_session "$MAIN/.notebook/$RESEARCH_WRITE_PATH"
+  rm -rf "$MAIN/.notebook"
+  run --separate-stderr init research:topic-x-2026-10-01
+  [ "$status" -eq 0 ]
+  [ -z "$stderr" ]
+  has_line "  total (distinct segments): tokens 3,300  est. \$0.01"
+}
+
+@test "not ready: the segment is recorded, no research ref binds, the flush exits 0 and logs the move command" {
+  mkdir -p "$MAIN/.gaia/local/specs"
+  printf '{"specs":[]}\n' >"$MAIN/.gaia/local/specs/ledger.json"
+  run --separate-stderr flush sess-nr "$(transcript sess-nr 100 10 200 20 "$MAIN/.notebook/$RESEARCH_WRITE_PATH")"
+  [ "$status" -eq 0 ]
+  [ "$(jq -s '[.[] | select(.kind == "segment")] | length' "$TEL/usage.jsonl")" -ge 1 ]
+  [ "$(jq -s '[.[] | select(.kind == "binding")] | length' "$TEL/usage.jsonl")" -eq 0 ]
+  [ "$(grep -c 'bash .gaia/scripts/notebook/move.sh run' <<<"$stderr")" -eq 1 ]
+}
+
+@test "the main-root operand picks the research root: a flush from outside any repo binds into the fixture" {
+  [ ! -d "$BATS_TEST_TMPDIR/.git" ]
+  flush sess-tree "$(transcript sess-tree 100 10 200 20 "$MAIN/.notebook/$RESEARCH_WRITE_PATH")"
+  [ "$(binding_refs)" = research:topic-x-2026-10-01 ]
 }
 
 @test "the real checkout's telemetry directory is untouched by this suite" {

@@ -59,11 +59,13 @@ _umemo_build_tree() {
   local root="$1" script_file
   mkdir -p "$root/.gaia/scripts" "$root/.gaia/scripts/spec"
   for script_file in "$UM_SOURCE_ROOT"/.gaia/scripts/usage*.sh "$UM_SOURCE_ROOT"/.gaia/scripts/token-pricing-lib.sh \
-    "$UM_SOURCE_ROOT"/.gaia/scripts/ledger-path-lib.sh "$UM_SOURCE_ROOT"/.gaia/scripts/main-root-lib.sh \
+    "$UM_SOURCE_ROOT"/.gaia/scripts/main-root-lib.sh \
     "$UM_SOURCE_ROOT"/.gaia/scripts/branch-name-lib.sh; do
     cp "$script_file" "$root/.gaia/scripts/" || return 1
   done
   cp "$UM_SOURCE_ROOT/.gaia/scripts/spec/with-ledger-lock.sh" "$root/.gaia/scripts/spec/" || return 1
+  mkdir -p "$root/.gaia/scripts/notebook"
+  cp "$UM_SOURCE_ROOT"/.gaia/scripts/notebook/*.sh "$root/.gaia/scripts/notebook/" || return 1
   cat >"$root/.gaia/scripts/token-rates.json" <<'EOF'
 {
   "cache_multipliers": { "read": 0.1, "write_5m": 1.25, "write_1h": 2.0 },

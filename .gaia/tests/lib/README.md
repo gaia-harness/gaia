@@ -4,8 +4,8 @@ Maintainer-only bats suite for the SPEC ledger machinery:
 `.gaia/scripts/spec/spec-allocator.sh`, `ledger-update.sh`, and the
 shared `with-ledger-lock.sh` mutex. Excluded from the release bundle via
 `.gaia/release-exclude` (category `.gaia/tests/`). Every test is hermetic
-each spins up its own tmp git repo via `helpers/tmp-spec-repo.sh` and tears it
-down; no reliance on the real project `.gaia/local/specs/ledger.json`.
+each spins up its own tmp git repo via `helpers/tmp-notebook-repo.sh` and tears
+it down; no reliance on the real project's notebook catalog.
 
 This directory also carries **doc-conformance** suites, which grep instruction
 markdown rather than exercising a script. They live here because this is the

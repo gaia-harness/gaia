@@ -54,8 +54,8 @@ step3_range() {
   for needle in \
     'spec-allocator.sh next "$PWD"' \
     'SPEC_ID' \
-    'main-root-lib.sh' \
-    'mkdir -p "${MAIN_ROOT}/.gaia/local/specs/${SPEC_ID}"' \
+    'notebook-lib.sh path spec' \
+    'mkdir -p "$SPEC_FOLDER"' \
     'references/spec/spec-template.md' \
     'draft-' \
     'spec_id' 'type' 'status' 'immutable' 'wiki_promote_default' 'chain_trigger' 'created' 'updated'; do

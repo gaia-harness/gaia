@@ -50,6 +50,11 @@ coverage
 # the line above does not cover it and the local state it holds would otherwise
 # be stageable.
 .gaia/local.bak.*
+# The notebook is machine-local main-anchored state. Same no-trailing-slash
+# reason as .gaia/local (a worktree's copy is a symlink), and the linker's
+# backups of a displaced path are siblings the first line does not cover.
+.notebook
+.notebook.bak.*
 .gaia-backup/
 .gaia-merge/
 

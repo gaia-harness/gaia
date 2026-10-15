@@ -2,7 +2,7 @@
 type: concept
 status: active
 created: 2026-07-23
-updated: 2026-10-14
+updated: 2026-10-15
 tags: [concept, worktree, claude, hooks, state]
 ---
 
@@ -56,7 +56,7 @@ Undeterminable identity is one rule with a direction chosen per site, not a sing
 | Per-tree writer / reaper | the session-start janitor, the RED ledger, the worthiness ledger | **refuse to act**: no-op rather than writing or deleting one tree's state as another's, which is the worse failure (`GAIA_TREE_KEY_UNRESOLVABLE` is the diagnostic where one is emitted) |
 | Destructive removal guard | the `rm -rf` guard | **fail cautious**: a wrong destructive action is unrecoverable, so an unreadable registry loses the scratch carve-outs and the target falls to the absolute-path deny. It derives no tree identity; it is one of several guards that do not fail open. |
 | Read-side scope gate | the statusline's nudge gate | **fail open, render**: a surface that goes dark on an identity it could not confirm tells the developer nothing, and the failure is cheap to notice. Its state reads stay main-anchored regardless of the gate's answer. |
-| Main-anchored surface or state (exempt) | the SPEC and plan ledgers, the token tally and its local rate table with its state files, the PR-artifact capture | does not derive tree identity; anchors to main by design. |
+| Main-anchored surface or state (exempt) | the notebook (specs, plans and research), the token tally and its local rate table with its state files, the PR-artifact capture | does not derive tree identity; anchors to main by design. |
 | Digest-keyed shared state (exempt) | the audit branch-own-digest clearance markers | does not derive tree identity; keyed by the branch-own digest, one shared store |
 
 The exempt classes are named so their absence reads as deliberate, not an oversight. The deriving classes never choose their own default; the direction above is the rule.
@@ -94,7 +94,9 @@ GAIA enters lifecycle worktrees only through `EnterWorktree`. A tree made with a
 
 A Code Audit Team member dispatched into a worktree made with plain `git worktree add` writes its marker, findings sidecar, and scope file into that worktree's real `.gaia/local/audit/`. Provisioning moves those files into main's `audit/` one by one before it backs the directory up, leaves any same-named file in main untouched, and logs the collision.
 
-`.gaia/local/` holds GAIA's per-machine working state: audit results, cost tracking, specs, plans, caches, ledgers. It is gitignored in full and ships nothing to adopters. It stays at that path in every checkout, because a developer must be able to browse to their own specs and plans without knowing where GAIA hides things.
+`.gaia/local/` holds GAIA's per-machine working state: audit results, cost tracking, caches, ledgers. It is gitignored in full and ships nothing to adopters. Specs, plans and research live in the notebook; see [[Notebook]].
+
+A linked worktree also gets one `.notebook` symlink to the main checkout's `.notebook/`, made by the same linker (`link-worktree.sh`) and gated on `.notebook` being gitignored.
 
 A linked worktree's `.gaia/local` is a **single symlink to the main checkout's** `.gaia/local`, not a real directory holding a hand-maintained set of individually-symlinked entries. One consequence is that there is no shared-entry list to keep in sync, and no per-path guard exemptions: the whole directory is main's, so those collapse to one fact. The other consequence is the load-bearing one: state that must stay **per-tree** does not get its isolation from having its own physical directory. Under one symlink, a bare `red-ledger/` resolves to one shared path for every tree. So per-tree state is isolated by an **explicit tree-identity key** instead of by the filesystem, and the classification below is what says which entries need it.
 
@@ -104,7 +106,7 @@ Every entry is exactly one of these. The scope answers where it lives and who ow
 
 - **shared**: a durable store multiple trees co-write, whose entries must coexist. Correct only with a content or identity partition key, a cross-tree lock, or (for a singleton) an idempotent overwrite. *Examples:* the audit clearance markers (keyed by branch-own digest); the findings and rerun sidecars (keyed by base-sha **plus branch**, so two trees off one main tip do not overwrite each other); the telemetry cost ledger (a cross-tree file lock plus self-identifying rows); the debt count cache (idempotent overwrite of a repo-global fact); the codify decline ledger (one copy per clone, keyed internally by finding class, because one copy is the only scope at which a decline can suppress what it declined).
 - **per-tree**: durable state belonging to exactly one tree that must not bleed across trees. Addressed at a sub-path carrying the resolved-checkout-root tree key the identity rule defines; the resolver supplies the key, the registry declares which entries need it. *Examples:* the RED ledger; the worthiness ledger (the same kind of per-tree fact as a RED observation); the forensics and handoff drop zones.
-- **main-only**: a single canonical value owned by the main checkout, or a transient main-anchored coordination store holding no durable per-tree data. A worktree reads it or writes into main's one copy; it does not co-write a partitioned dataset. A coordination store may still carry a key (a spec-chain sentinel by session): that partitions coordination records, it does not make the store a co-written dataset. *Examples:* the SPEC and plan ledgers; the PR-artifact capture; the project id; the update-preference file.
+- **main-only**: a single canonical value owned by the main checkout, or a transient main-anchored coordination store holding no durable per-tree data. A worktree reads it or writes into main's one copy; it does not co-write a partitioned dataset. A coordination store may still carry a key (a spec-chain sentinel by session): that partitions coordination records, it does not make the store a co-written dataset. *Examples:* the notebook; the PR-artifact capture; the project id; the update-preference file.
 - **ephemeral**: transient scratch, regenerable or discardable, self-pruned by its own producer or left for a human to clear. Keyed by session, spec id, or a uuid, or an idempotent-overwrite cache whose concurrent write is harmless. Needs no tree key and no preservation. *Examples:* in-flight SPEC drafts and gate caches; react-perf run output.
 
 The one genuinely-close pair is **shared vs main-only**, since both resolve to main. The distinguishing test is whether the store holds *durable co-written data from multiple trees that must coexist* (shared) or *a single value or transient coordination* (main-only). The line between **per-tree and ephemeral** is durability: per-tree must persist for its tree and be addressable by tree; ephemeral is thrown away.
@@ -157,7 +159,7 @@ That wording is an observation under dispatch. Nothing here establishes what the
 
 ### The same rule seen from the Write tool
 
-Confinement is not Bash-specific. Write and Edit apply it to `file_path`, and a path under a linked worktree's `.gaia/local/**` trips it: the single symlink resolves to the main checkout, so the target leaves the tree. The wording is different again, and its advice does not fit this case, because the path given already **is** the worktree path and there is no worktree copy to redirect to:
+Confinement is not Bash-specific. Write and Edit apply it to `file_path`, and a path under a linked worktree's `.gaia/local/**` trips it (and `<wt>/.notebook/**` the same way): the single symlink resolves to the main checkout, so the target leaves the tree. The wording is different again, and its advice does not fit this case, because the path given already **is** the worktree path and there is no worktree copy to redirect to:
 
 > This session is isolated in the worktree `<path>`. Edit the worktree copy of this file instead of the shared-checkout path.
 
@@ -206,5 +208,6 @@ Both run from release-excluded suites, so they guard maintainer changes. The reg
 ## Cross-references
 
 - [[Local Working State]]: the `.gaia/local/` folder, its pointer to the state registry, and the session-start janitor.
+- [[Notebook]]: the main-anchored `.notebook/` that holds specs, plans and research.
 - [[Claude Hooks]]: the hook surface and the per-agent working-directory measurement the identity rule rests on.
 - [[PR Merge Workflow]]; the audit → PR → merge cycle the concurrency test drives, and the branch-own-digest clearance markers.

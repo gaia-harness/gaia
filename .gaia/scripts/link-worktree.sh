@@ -11,6 +11,7 @@
 # .env.example), so neither diverges per-worktree either:
 #
 #   <worktree>/.gaia/local -> <main>/.gaia/local
+#   <worktree>/.notebook -> <main>/.notebook
 #   <worktree>/.env, <worktree>/.env.* -> <main>/.env, <main>/.env.*
 #   <worktree>/<pkg>/.env, <worktree>/<pkg>/.env.* -> <main>/<pkg>/.env, <main>/<pkg>/.env.*
 #
@@ -23,6 +24,10 @@
 #   - Idempotent: re-running on an already-linked worktree is a no-op.
 #   - A pre-existing plain .gaia/local (file or directory) is moved to
 #     .gaia/local.bak.<timestamp> first; nothing under it is inspected or merged.
+#     The notebook link behaves the same, with .notebook.bak.<timestamp>.
+#   - The notebook link is made only when the main checkout's .gitignore
+#     ignores .notebook; otherwise it is skipped and one line names the
+#     missing .gitignore line.
 #   - No-op when invoked from the main checkout (not a linked worktree).
 #   - Always exits 0; a broken hook MUST NOT break worktree creation.
 #     Failures (e.g. Windows symlink permission errors) log to stderr.
@@ -35,6 +40,7 @@
 #   already-linked: <abs-path>
 #   linked-after-backup: <abs-path> (backup: <abs-backup-path>)
 #   skipped-no-target: <abs-path>
+#   skipped: .notebook is not gitignored in <abs-main-root>; add a .notebook line to its .gitignore
 #   failed: <abs-path>: <reason>
 #   failed: <abs-registry-path>: <gaia-packages message>   (root-only linking continues)
 #   not a linked worktree
@@ -137,6 +143,17 @@ link_one() {
 # The one shared path: .gaia/local itself. parent_relative_path is ".gaia" (the parent
 # directory that must exist on the worktree side before the symlink lands).
 link_one ".gaia/local" ".gaia"
+
+# The notebook root needs its own link: it is a gitignored root folder, empty
+# in every linked worktree, so anything written there would vanish with the
+# worktree. It is created on main only when git ignores it, because an
+# unignored folder would surface as untracked files in the main checkout.
+if git -C "$main_root" check-ignore -q .notebook 2>/dev/null; then
+  mkdir -p "$main_root/.notebook" 2>/dev/null
+  link_one ".notebook" "."
+else
+  log "skipped: .notebook is not gitignored in $main_root; add a .notebook line to its .gitignore"
+fi
 
 # ---------- share gitignored .env / .env.* files ----------
 # Vite (`pnpm dev`) and Playwright's dotenv `config()` read .env / .env.* from

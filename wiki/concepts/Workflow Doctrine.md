@@ -2,7 +2,7 @@
 type: concept
 status: active
 created: 2026-10-01
-updated: 2026-10-14
+updated: 2026-10-15
 tags: [concept, claude, workflow, doctrine]
 ---
 
@@ -77,7 +77,7 @@ A branch's spend is tied to the initiative it serves with `bash .gaia/scripts/us
 
 ## Research attribution
 
-A research Write binds to its initiative only when it is made with the Write tool to the main checkout's absolute `.gaia/local/research/<topic>-<date>/...` path. A worktree-relative path or a symlinked path does not bind. Research done with Edit or Bash binds with `bash .gaia/scripts/usage.sh declare research:<topic>-<date>`. A binding re-keys only `session:` spend, so spend already attributed to a branch or an issue stays where it is. The research ref is the full folder name, date included.
+A research Write binds to its initiative only when it is made with the Write tool to the main checkout's absolute `.notebook/research/<topic>-<date>/...` path (see [[Notebook]]). A worktree-relative path or a symlinked path does not bind. Research done with Edit or Bash binds with `bash .gaia/scripts/usage.sh declare research:<topic>-<date>`. A binding re-keys only `session:` spend, so spend already attributed to a branch or an issue stays where it is. The research ref is the full folder name, date included.
 
 ## Injection hook
 

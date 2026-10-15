@@ -6,9 +6,10 @@
 
 setup() {
   HELPERS="$BATS_TEST_DIRNAME/helpers"
-  REPO="$("$HELPERS/tmp-spec-repo.sh")"
+  REPO="$("$HELPERS/tmp-notebook-repo.sh")"
   LOCK_HELPER="$REPO/.gaia/scripts/spec/with-ledger-lock.sh"
-  LOCK_DIRECTORY="$REPO/.gaia/local/specs"
+  LOCK_DIRECTORY="$BATS_TEST_TMPDIR/lock-directory"
+  mkdir -p "$LOCK_DIRECTORY"
 }
 
 teardown() {

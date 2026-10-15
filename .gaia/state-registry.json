@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "description": "The one classification of every .gaia/local entry, transcribed by hand from the frozen state-model classification (never generated from code, which is what is under correction). Consumers read this instead of hand-maintaining their own lists. `path` is relative to .gaia/local/. A `path` may join more than one concrete on-disk shape with '|' when a single logical entry covers several filenames (e.g. a clearance marker's .ok/.refused siblings); each '|'-joined alternative is matched independently under the entry's own `match` rule. A `path` may also carry a '<placeholder>' token for a variable path segment (a spec id, a digest, a worktree name); for `match: glob` a placeholder behaves as a shell '*' wildcard, and for `match: prefix` only the literal text before the first '<' is significant. `residue` lists known dead-feature/legacy paths that are real on some machines but are not live state: never treated as drift and never a live entry. `bash .gaia/scripts/state-registry-lib.sh residue-sweep` lists the ones present and `--apply` deletes them. A residue row may name a `successor`, a .gaia/local-relative path its state moves to once: the sweep leaves that row's paths alone until the successor exists, so state a pending move has yet to carry is never deleted.",
+  "description": "The one classification of every .gaia/local entry, transcribed by hand from the frozen state-model classification (never generated from code, which is what is under correction). Consumers read this instead of hand-maintaining their own lists. `path` is relative to .gaia/local/ unless the row carries `root: notebook`, in which case it is relative to <main>/.notebook (the root of specs, plans and research; `root` defaults to `local`, and a lookup matches only the rows of the root it asks for). A `path` may join more than one concrete on-disk shape with '|' when a single logical entry covers several filenames (e.g. a clearance marker's .ok/.refused siblings); each '|'-joined alternative is matched independently under the entry's own `match` rule. A `path` may also carry a '<placeholder>' token for a variable path segment (a spec id, a digest, a worktree name); for `match: glob` a placeholder behaves as a shell '*' wildcard, and for `match: prefix` only the literal text before the first '<' is significant. `residue` lists known dead-feature/legacy paths that are real on some machines but are not live state: never treated as drift and never a live entry. `bash .gaia/scripts/state-registry-lib.sh residue-sweep` lists the ones present and `--apply` deletes them. A residue row may name a `successor`, a .gaia/local-relative path its state moves to once: the sweep leaves that row's paths alone until the successor exists, so state a pending move has yet to carry is never deleted. `report_only` lists the three old notebook roots (specs/, plans/, research/ under .gaia/local): paths under one are recognized (never Unknown), listed by the sweep once per root in a section of their own, and never deleted by `--apply` at any depth, whatever a residue row beneath them says; a human reviews what the one-time move left there.",
   "entries": [
     {
       "id": "setup-state",
@@ -279,6 +279,7 @@
     },
     {
       "id": "specs-main",
+      "root": "notebook",
       "path": "specs/",
       "match": "prefix",
       "kind": "dir",
@@ -290,6 +291,7 @@
     },
     {
       "id": "plans-main",
+      "root": "notebook",
       "path": "plans/",
       "match": "prefix",
       "kind": "dir",
@@ -301,6 +303,7 @@
     },
     {
       "id": "research-main",
+      "root": "notebook",
       "path": "research/",
       "match": "prefix",
       "kind": "dir",
@@ -308,6 +311,18 @@
       "keyed_by": null,
       "why": "GAIA's documented research location. A research Write under the main checkout's research directory binds the session's default-branch spend at read time, so the directory must resolve to main's copy from every tree.",
       "writer": "hand-authored",
+      "reaped_by": ".gaia/scripts/notebook/research-reaper.sh"
+    },
+    {
+      "id": "notebook-catalog",
+      "root": "notebook",
+      "path": "catalog.json",
+      "match": "exact",
+      "kind": "file",
+      "scope": "main-only",
+      "keyed_by": null,
+      "why": "The notebook's one index of specs, plans and research. Only the notebook library reads or writes it, under its catalog write lock; every other script goes through the library.",
+      "writer": "code",
       "reaped_by": null
     },
     {
@@ -638,20 +653,6 @@
       "writer": "none-residue"
     },
     {
-      "id": "plans-archived-residue",
-      "path": "plans/archived/",
-      "match": "prefix",
-      "why": "Legacy pre-existing archived-plan layout; the live plan-archive path reduces a plan folder in place today and does not move it here. Read only by repair and migration tooling.",
-      "writer": "none-residue"
-    },
-    {
-      "id": "specs-archived-residue",
-      "path": "specs/archived/",
-      "match": "prefix",
-      "why": "Legacy pre-existing archived-SPEC layout; the live spec-archive path reduces a SPEC folder in place today and does not move it here. Read only by repair and migration tooling.",
-      "writer": "none-residue"
-    },
-    {
       "id": "handoff-residue",
       "path": "handoff/",
       "match": "prefix",
@@ -780,13 +781,6 @@
       "writer": "none-residue"
     },
     {
-      "id": "plans-code-review-audit-ci-residue",
-      "path": "plans/code-review-audit-ci/",
-      "match": "prefix",
-      "why": "Contract notes for the removed GAIA CI audit and its commit trailer; nothing reads them.",
-      "writer": "none-residue"
-    },
-    {
       "id": "cache-retired-guard-residue",
       "path": "cache/spec-chain-*.json|cache/version-check.lock",
       "match": "glob",
@@ -794,18 +788,37 @@
       "writer": "none-residue"
     }
   ],
+  "report_only": [
+    {
+      "id": "specs-old-root",
+      "path": "specs/",
+      "root": "local",
+      "match": "prefix",
+      "why": "SPEC folders and ledger of the pre-notebook layout. The one-time move carries them to the notebook; what it keeps (collision copies, archived/ layouts, the frozen ledger backup) stays here for a human to review."
+    },
+    {
+      "id": "plans-old-root",
+      "path": "plans/",
+      "root": "local",
+      "match": "prefix",
+      "why": "Plan folders and ledger of the pre-notebook layout, including slug-named plan folders and archived/ layouts the one-time move keeps; a human reviews what remains."
+    },
+    {
+      "id": "research-old-root",
+      "path": "research/",
+      "root": "local",
+      "match": "prefix",
+      "why": "Research folders of the pre-notebook layout. The one-time move carries them to the notebook; anything left is for a human to review."
+    }
+  ],
   "rm_whitelist": [
-    { "path": ".gaia/local/plans",   "children_only": true,  "why": "Archived plan folders are regenerable scratch an agent may clear; the plans/ ledger itself is main-anchored state that is never bulk-deleted, so only its children are whitelisted." },
-    { "path": ".gaia/local/specs",   "children_only": true,  "why": "Individual spec-scratch folders are clearable, but specs/ is the main-anchored SPEC store and is never bulk-deleted; children only." },
+    { "path": ".notebook/plans",     "children_only": true,  "why": "Individual plan folders are clearable by an agent, but the notebook's plans folder is main-anchored state that is never bulk-deleted, so only its children are whitelisted." },
+    { "path": ".notebook/specs",     "children_only": true,  "why": "Individual spec folders are clearable, but the notebook's specs folder is the main-anchored SPEC store and is never bulk-deleted; children only." },
     { "path": ".gaia/local/audit",   "children_only": true,  "why": "Audit markers and reports are self-pruning scratch; the shared audit/ store is symlinked structure that is never bulk-deleted; children only." },
     { "path": ".gaia/local/cleanse", "children_only": true,  "why": "Cleanse reports are self-pruning scratch the /gaia-cleanse playbook ages out; the cleanse/ container is kept, only its children are cleared." },
     { "path": ".gaia/local/cache",   "children_only": true,  "why": "Cache entries are regenerable machine/session scratch; the cache/ container is kept, only its contents are cleared." },
     { "path": ".gaia/local/runs",    "children_only": true,  "why": "Per-branch run folders and their dispatch artifacts are scratch the PR Merge Workflow pre-clears by absolute path before each dispatch; the runs/ container is kept, only its contents are cleared." },
     { "path": "dist",                "children_only": false, "why": "Build output regenerated by the build; safe to remove wholesale (rm -rf dist), so the directory itself and its children are both whitelisted. Repo-root-relative, outside .gaia/local." },
     { "path": "build",               "children_only": false, "why": "Build output regenerated by the build; safe to remove wholesale, directory and children alike. Repo-root-relative, outside .gaia/local." }
-  ],
-  "integrity_snapshot": [
-    { "path": "specs",   "why": "Durable, leaf-authored SPEC folders; a destructive script deleting one must be caught, never mistaken for background churn." },
-    { "path": "plans",   "why": "Durable, leaf-authored plan folders and their PROGRESS ledgers; irreplaceable working state a run must not silently alter." }
   ]
 }

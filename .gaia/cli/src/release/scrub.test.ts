@@ -2709,3 +2709,54 @@ describe('shipped release-scrub config', () => {
     }
   });
 });
+
+const shippedLocalArtifactPathsConfig = (): string => {
+  const {check, transform} = shippedLeakCheck('local-artifact-paths');
+
+  return dumpYaml({transforms: [{...transform, checks: [check]}]});
+};
+
+describe('shipped local-artifact-paths check', () => {
+  let sandbox: Sandbox;
+  let stdio: ReturnType<typeof captureStdio>;
+
+  beforeEach(() => {
+    stdio = captureStdio();
+    sandbox = setupSandbox({config: shippedLocalArtifactPathsConfig()});
+  });
+
+  afterEach(() => {
+    stdio.restore();
+    sandbox.cleanup();
+    vi.restoreAllMocks();
+  });
+
+  test('flags a dated notebook research path in a shipped file', () => {
+    sandbox.writeStaged(
+      'wiki/concepts/example.md',
+      'See .notebook/research/topic-2026-10-01/README.md.\n'
+    );
+
+    expect(run([sandbox.stagingDir, '--config', sandbox.configPath])).toBe(1);
+    expect(stdio.outputs.join('')).toContain('wiki/concepts/example.md');
+  });
+
+  test('still flags a dated .gaia/local research path', () => {
+    sandbox.writeStaged(
+      'wiki/concepts/example.md',
+      'See .gaia/local/research/topic-2026-10-01/README.md.\n'
+    );
+
+    expect(run([sandbox.stagingDir, '--config', sandbox.configPath])).toBe(1);
+    expect(stdio.outputs.join('')).toContain('wiki/concepts/example.md');
+  });
+
+  test('does not flag the topic-date placeholder', () => {
+    sandbox.writeStaged(
+      'wiki/concepts/example.md',
+      'Folders look like .notebook/research/<topic>-<date>/.\n'
+    );
+
+    expect(run([sandbox.stagingDir, '--config', sandbox.configPath])).toBe(0);
+  });
+});

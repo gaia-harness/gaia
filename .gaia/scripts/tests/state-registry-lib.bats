@@ -78,7 +78,6 @@ run_in_registry_repo() {
     type gaia_registry_path >/dev/null
     type gaia_registry_linkable_paths >/dev/null
     type gaia_registry_rm_whitelist >/dev/null
-    type gaia_registry_integrity_snapshot >/dev/null
     type gaia_registry_recognizes >/dev/null
     type gaia_registry_classify >/dev/null
     type gaia_registry_residue_sweep >/dev/null
@@ -241,8 +240,10 @@ run_in_registry_repo() {
   run_in_registry_repo gaia_registry_rm_whitelist
   [ "$status" -eq 0 ]
   [ "${#lines[@]}" -eq 8 ]
-  [ "${lines[0]}" = $'.gaia/local/plans\ttrue' ]
-  [ "${lines[1]}" = $'.gaia/local/specs\ttrue' ]
+  [ "${lines[0]}" = $'.notebook/plans\ttrue' ]
+  [ "${lines[1]}" = $'.notebook/specs\ttrue' ]
+  grep -qF '.gaia/local/specs' <<<"$output" && return 1
+  grep -qF '.gaia/local/plans' <<<"$output" && return 1
   [ "${lines[2]}" = $'.gaia/local/audit\ttrue' ]
   [ "${lines[3]}" = $'.gaia/local/cleanse\ttrue' ]
   [ "${lines[4]}" = $'.gaia/local/cache\ttrue' ]
@@ -261,33 +262,6 @@ run_in_registry_repo() {
   PATH=""
   set +e
   stdout_value="$(gaia_registry_rm_whitelist 2>/dev/null)"
-  status_value=$?
-  set -e
-  PATH="$saved_path"
-  [ "$status_value" -eq 1 ]
-  [ -z "$stdout_value" ]
-}
-
-# ========== gaia_registry_integrity_snapshot ==========
-
-@test "gaia_registry_integrity_snapshot: prints exactly the 2 durable-state dirs in registry order" {
-  run_in_registry_repo gaia_registry_integrity_snapshot
-  [ "$status" -eq 0 ]
-  [ "${#lines[@]}" -eq 2 ]
-  [ "${lines[0]}" = "specs" ]
-  [ "${lines[1]}" = "plans" ]
-}
-
-@test "gaia_registry_integrity_snapshot: no jq on PATH returns 1 and prints nothing on stdout (a fail-closed consumer must refuse rather than treat an empty list as a clean diff)" {
-  # Stdout and stderr are captured separately here rather than through `run`
-  # (which merges them), because gaia_registry_path's own stderr diagnostic
-  # would otherwise land in $output and fail the stdout-emptiness assertion
-  # for a reason unrelated to this function's own contract.
-  saved_path="$PATH"
-  # shellcheck disable=SC2123 # deliberately blank PATH to make jq unfindable; restored right after the call
-  PATH=""
-  set +e
-  stdout_value="$(gaia_registry_integrity_snapshot 2>/dev/null)"
   status_value=$?
   set -e
   PATH="$saved_path"
@@ -405,8 +379,6 @@ run_in_registry_repo() {
     "codify/reviewed.json:shared"
     "codify/review-tally.json:shared"
     "harden/declines.json:residue"
-    "specs/ledger.json:main-only"
-    "plans/ledger.json:main-only"
     "cache/gh-artifact-pr.treeA.json:main-only"
     ".project-id:main-only"
     "declined-updates.json:main-only"
@@ -439,8 +411,8 @@ run_in_registry_repo() {
     "cache/shared/coaching-active.txt:residue"
     "audit/abc123.carried:residue"
     ".mentorship-swept:residue"
-    "plans/archived/PLAN-001:residue"
-    "specs/archived/SPEC-001:residue"
+    "plans/archived/PLAN-001:report-only"
+    "specs/archived/SPEC-001:report-only"
     "handoff/2026-07-23-x.md:residue"
   )
   local case_line relative_path expected got
@@ -458,6 +430,91 @@ run_in_registry_repo() {
       return 1
     fi
   done
+}
+
+# ========== roots ==========
+
+@test "roots: a notebook-root path is recognized and classified main-only by the notebook root only" {
+  run_in_registry_repo gaia_registry_recognizes specs/SPEC-001 d notebook
+  [ "$status" -eq 0 ]
+  run_in_registry_repo gaia_registry_classify specs/SPEC-001 notebook
+  [ "$status" -eq 0 ]
+  [ "$output" = "main-only" ]
+  run_in_registry_repo gaia_registry_classify plans/PLAN-001 notebook
+  [ "$output" = "main-only" ]
+  run_in_registry_repo gaia_registry_classify research/topic-2026-10-01 notebook
+  [ "$output" = "main-only" ]
+  run_in_registry_repo gaia_registry_classify catalog.json notebook
+  [ "$status" -eq 0 ]
+  [ "$output" = "main-only" ]
+}
+
+@test "roots: the default local root judges the old roots by the report-only rows, never the moved rows" {
+  run_in_registry_repo gaia_registry_classify specs/SPEC-001
+  [ "$output" = "report-only" ]
+  run_in_registry_repo gaia_registry_classify specs/SPEC-001 local
+  [ "$output" = "report-only" ]
+  run_in_registry_repo gaia_registry_classify catalog.json
+  [ "$output" = "unknown" ]
+  run_in_registry_repo gaia_registry_classify specs/archived/x
+  [ "$output" = "report-only" ]
+  run_in_registry_repo gaia_registry_recognizes research/topic-2026-10-01 d
+  [ "$status" -eq 0 ]
+}
+
+@test "roots: a local-root path is not matched by a notebook query" {
+  run_in_registry_repo gaia_registry_classify setup-state.json notebook
+  [ "$output" = "unknown" ]
+  run_in_registry_repo gaia_registry_recognizes setup-state.json f notebook
+  [ "$status" -eq 1 ]
+}
+
+@test "roots: a fixture registry whose specs row lacks root makes the notebook query unknown" {
+  make_registry_repo
+  jq 'del(.report_only) | del(.entries[] | select(.id == "specs-main") | .root)' "$REGISTRY" >"$REGISTRY_REPO/.gaia/state-registry.json"
+  run bash -c '
+    cd "$1" || exit 1
+    source "$1/.gaia/scripts/state-registry-lib.sh"
+    gaia_registry_classify specs/SPEC-001 notebook
+  ' _ "$REGISTRY_REPO"
+  [ "$status" -eq 0 ]
+  [ "$output" = "unknown" ]
+  run bash -c '
+    cd "$1" || exit 1
+    source "$1/.gaia/scripts/state-registry-lib.sh"
+    gaia_registry_classify specs/SPEC-001
+  ' _ "$REGISTRY_REPO"
+  [ "$output" = "main-only" ]
+}
+
+@test "roots: the CLI verbs take the root as the last argument" {
+  make_registry_repo
+  run bash -c 'cd "$1" && bash .gaia/scripts/state-registry-lib.sh classify catalog.json notebook' _ "$REGISTRY_REPO"
+  [ "$status" -eq 0 ]
+  [ "$output" = "main-only" ]
+  run bash -c 'cd "$1" && bash .gaia/scripts/state-registry-lib.sh recognizes catalog.json f notebook' _ "$REGISTRY_REPO"
+  [ "$status" -eq 0 ]
+  run bash -c 'cd "$1" && bash .gaia/scripts/state-registry-lib.sh recognizes catalog.json f' _ "$REGISTRY_REPO"
+  [ "$status" -eq 1 ]
+}
+
+@test "roots: linkable paths list local rows only" {
+  run_in_registry_repo gaia_registry_linkable_paths
+  [ "$status" -eq 0 ]
+  grep -qxF 'specs' <<<"$output" && return 1
+  grep -qxF 'catalog.json' <<<"$output" && return 1
+  true
+}
+
+@test "roots: the notebook rows carry the notebook root and the catalog row is the library's" {
+  [ "$(jq -r '[.entries[] | select(.id == "specs-main" or .id == "plans-main" or .id == "research-main") | .root] | join(",")' "$REGISTRY")" = "notebook,notebook,notebook" ]
+  [ "$(jq -r '.entries[] | select(.id == "notebook-catalog") | [.root, .path, .match, .kind, .scope, .writer, (.reaped_by | tostring)] | join(",")' "$REGISTRY")" = "notebook,catalog.json,exact,file,main-only,code,null" ]
+}
+
+@test "integrity snapshot: the verb is gone and the registry block is retired" {
+  run bash "$LIBRARY_SCRIPT" integrity-snapshot
+  [ "$status" -eq 2 ]
+  [ "$(jq -c '.integrity_snapshot' "$REGISTRY")" = "null" ]
 }
 
 # ========== schema-shaped structural invariants (no validator dependency; direct jq) ==========

@@ -109,7 +109,7 @@ UF_BATCH="$UF_TELEMETRY_DIRECTORY/.usage-batch.tmp.$$"
 UF_DEFAULT="$(gaia_usage_default_branch "$UF_MAIN")"
 
 UF_ROOTS_JSON="$({ printf '%s\n' "$UF_MAIN"; gaia_usage_tree_roots "$UF_MAIN"; } | jq -Rnc '[inputs | select(length > 0)] | unique')" || exit 0
-UF_RESEARCH_ROOTS_JSON="$(jq -nc --arg research_root "$UF_MAIN/.gaia/local/research/" '[$research_root]')" || exit 0
+UF_RESEARCH_ROOTS_JSON=''
 # The workflows whose start opens an attribution interval and whose run
 # `usage.sh record` closes: GAIA_USAGE_START_SET in usage-lib.sh.
 
@@ -326,11 +326,41 @@ _uf_agent_fields() {
   esac
 }
 
+# The research roots come from the notebook library so no path is spelled here.
+# Resolved on first use, not at start: the library load and readiness check cost
+# git calls that every flush would otherwise pay before its first read of the
+# ledger. Binding is a string-prefix match that never tests a folder exists. An
+# absent, unready or unresolvable library leaves the list empty: every other row
+# is still recorded and the cause is logged once.
+_uf_resolve_research_roots() {
+  local note research_directory
+  UF_RESEARCH_ROOTS_JSON='[]'
+  if _gaia_usage_load gaia_notebook_kind_directory notebook/notebook-lib.sh; then
+    export GAIA_NOTEBOOK_TREE="$UF_MAIN"
+    if note="$(gaia_notebook_require_ready 2>&1)"; then
+      if research_directory="$(gaia_notebook_kind_directory research 2>/dev/null)" && [ -n "$research_directory" ]; then
+        UF_RESEARCH_ROOTS_JSON="$(jq -nc --arg research_root "${research_directory%/}/" '[$research_root]')" || UF_RESEARCH_ROOTS_JSON='[]'
+      else
+        _uf_log "notebook research folder unresolvable; research writes are not bound"
+      fi
+    else
+      _uf_log "research writes are not bound: ${note:-the notebook is not ready}"
+    fi
+  else
+    _uf_log "notebook library not found; research writes are not bound"
+  fi
+}
+
 # Parses one file's due range and writes the commit batch to UF_BATCH. Rc 1
 # when there is nothing to commit.
 _uf_prepare() {
   local transcript_file="$1" session_id="$2" role="$3" size="$4" finished="$5" offset complete line_count hold cursor_row_prefix cursor_row_suffix new_offset rows raw_branch branch_map
   local -a raw_branches=()
+  # The split points are read first so nothing slow runs between a record run's
+  # flush starting and this snapshot: a close landing after it is caught at
+  # commit, one landing before it is split on.
+  grep -F -- "$session_id" "$UF_LEDGER" >"$UF_WORK/session_rows" 2>/dev/null
+  grep -F '"type":"close"' "$UF_WORK/session_rows" 2>/dev/null | sort >"$UF_WORK/closes"
   _uf_load_state "$transcript_file" "$session_id" "$role" || return 1
   offset="$UF_CURSOR_OFFSET"
   [ "$offset" -ge 0 ] || offset=0
@@ -341,6 +371,7 @@ _uf_prepare() {
   _uf_range "$transcript_file" "$offset" "$size" >"$UF_WORK/chunk"
   complete="$(_uf_complete_bytes "$UF_WORK/chunk")"
   line_count=$(($(wc -l <"$UF_WORK/chunk")))
+  [ -n "$UF_RESEARCH_ROOTS_JSON" ] || _uf_resolve_research_roots
   jq -nrR --argjson roots "$UF_ROOTS_JSON" --argjson research_roots "$UF_RESEARCH_ROOTS_JSON" --argjson startset "$GAIA_USAGE_START_SET" \
     --argjson line_count "$line_count" "$GAIA_USAGE_PARSE_JQ" <"$UF_WORK/chunk" >"$UF_WORK/p1" 2>/dev/null || return 1
   head -n 1 "$UF_WORK/p1" >"$UF_WORK/ext"
@@ -348,8 +379,6 @@ _uf_prepare() {
   branch_map='{}'
   if [ "${#raw_branches[@]}" -gt 0 ]; then branch_map="$(gaia_usage_branch_map "${raw_branches[@]}" 2>/dev/null)" || branch_map='{}'; fi
   [ -n "$branch_map" ] || branch_map='{}'
-  grep -F -- "$session_id" "$UF_LEDGER" >"$UF_WORK/session_rows" 2>/dev/null
-  grep -F '"type":"close"' "$UF_WORK/session_rows" 2>/dev/null | sort >"$UF_WORK/closes"
   _uf_agent_fields "$transcript_file" "$role"
   jq -nr --slurpfile extraction "$UF_WORK/ext" --argjson branch_map "$branch_map" --arg default "$UF_DEFAULT" --arg file_session_id "$session_id" \
     --argjson high_water_mark "$UF_HIGH_WATER_MARK" --argjson finished "$finished" --rawfile splitsraw "$UF_WORK/session_rows" \

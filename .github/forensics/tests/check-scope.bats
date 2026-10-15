@@ -99,9 +99,14 @@ setup() {
   [ "$output" = '{"ok":false,"allowed":[],"denied":[{"path":".specify/memory/foo.md","reason":"denylist"}]}' ]
 }
 
-@test "denylist: .gaia/local/specs/" {
-  run "$SCRIPT" .gaia/local/specs/SPEC-002.md
-  [ "$output" = '{"ok":false,"allowed":[],"denied":[{"path":".gaia/local/specs/SPEC-002.md","reason":"denylist"}]}' ]
+@test "denylist: .notebook/ specs" {
+  run "$SCRIPT" .notebook/specs/SPEC-002/SPEC.md
+  [ "$output" = '{"ok":false,"allowed":[],"denied":[{"path":".notebook/specs/SPEC-002/SPEC.md","reason":"denylist"}]}' ]
+}
+
+@test "denylist: .notebook/ research" {
+  run "$SCRIPT" .notebook/research/x/README.md
+  [ "$output" = '{"ok":false,"allowed":[],"denied":[{"path":".notebook/research/x/README.md","reason":"denylist"}]}' ]
 }
 
 @test "denylist: .github/workflows/" {

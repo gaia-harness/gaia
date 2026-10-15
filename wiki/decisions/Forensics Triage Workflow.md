@@ -4,7 +4,7 @@ status: active
 priority: 1
 date: 2026-05-08
 created: 2026-05-08
-updated: 2026-10-05
+updated: 2026-10-15
 tags: [decision, ci, automation, security]
 ---
 
@@ -63,7 +63,7 @@ Default-deny. Any path in neither list below is denylisted by default; allowlist
 | `website/`                            | Marketing/docs site; human-curated.                                     |
 | `.specify/specs/`                     | Denied defensively: a project migrated from an older GAIA may still hold a leftover spec-kit specs tree. |
 | `.specify/memory/`                    | Denied defensively: a project migrated from an older GAIA may still hold a leftover spec-kit memory tree. |
-| `.gaia/local/specs/`                  | GAIA spec artifacts.                                                    |
+| `.notebook/`                          | GAIA spec, plan and research artifacts ([[Notebook]]).                  |
 | `.gaia/templates/spec/`               | Template literals; mutating these affects every adopter.                |
 | `.claude/skills/gaia/references/spec/clarify-prompts.md`, `.claude/skills/gaia/references/spec/system-prompt.md`, `.claude/skills/gaia/references/spec/spec-template.md` | Prose template literals, denied by file so the sibling runbooks under the allowed skills root stay allowed; mutating these affects every adopter. |
 | `.github/workflows/`                  | Workflow files; covers self-modification of the triage workflow itself. |

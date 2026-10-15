@@ -10,7 +10,7 @@ Contents: `## Steps` (0 pre-flight sweep; 1 description, 1a SPEC reference; 2 pl
 
 ### 0. Pre-flight sweep
 
-Read `.claude/skills/gaia/references/spec/lifecycle.md` and run its `## Pre-flight sweep` now. It is best-effort and never blocks planning.
+Read `.claude/skills/gaia/references/spec/lifecycle.md` and run its `## Pre-flight sweep` now. Pass 0 (notebook readiness) blocks: if it exits non-zero, stop and surface its one stderr line, and plan nothing. Every other pass is best-effort and never blocks planning. Run it with the caller label `/gaia-plan`, so its research pass is list-only: it prints one eligible-count line, never asks and never runs `apply`.
 
 ### 1. Get description
 
@@ -23,21 +23,22 @@ Otherwise, ask: **"What do you want me to orchestrate?"** and wait for the respo
 Check the description for a SPEC reference. Three forms are recognized:
 
 1. **Bare id** (the canonical form `/gaia-spec` hands off): `$ARGUMENTS`, trimmed, is exactly `SPEC-\d+` and nothing else, e.g. `SPEC-026`.
-2. **Path form**: a path matching `.gaia/local/specs/SPEC-\d+/SPEC\.md` appears anywhere in the description.
+2. **Path form**: a path matching `.notebook/specs/SPEC-\d+/SPEC\.md` appears anywhere in the description.
 3. **Prefix form** (the older, verbose handoff shape, still accepted for pasted history): a `SPEC-\d+:` prefix at the start of the description.
 
 If any form matched, extract the `SPEC-\d+` id from wherever it appeared (the bare token, the path segment, or the text before the colon), then resolve it against the actual filesystem, self-healing a zero-padding mismatch (e.g. `SPEC-026` also resolves from the bare `SPEC-26`):
 
 ```bash
-# Main checkout root: SPEC folders are main-anchored state (state registry
-# specs-main), reachable from a linked worktree only through main.
-ROOT="$(bash .gaia/scripts/main-root-lib.sh)"
+# SPEC folders are main-anchored state (state registry specs-main); the
+# notebook library resolves each one through main, so a linked worktree reads
+# main's folder, never a forked copy.
 RAW="<the SPEC-\d+ id extracted above, e.g. SPEC-026 or SPEC-26>"
 NUM="${RAW#SPEC-}"
 PADDED="SPEC-$(printf '%03d' "$((10#$NUM))")"
 SPEC_ID=""
 for CANDIDATE in "$RAW" "$PADDED"; do
-  if [[ -f "${ROOT}/.gaia/local/specs/${CANDIDATE}/SPEC.md" ]]; then
+  CANDIDATE_DIR="$(bash .gaia/scripts/notebook/notebook-lib.sh path spec "$CANDIDATE" 2>/dev/null)" || continue
+  if [[ -f "${CANDIDATE_DIR}/SPEC.md" ]]; then
     SPEC_ID="$CANDIDATE"
     break
   fi
@@ -48,12 +49,12 @@ If `SPEC_ID` is still empty (no folder resolves), stop and surface: `"No SPEC fo
 
 Once `SPEC_ID` resolves:
 
-1. Cache `SPEC_DIR="${ROOT}/.gaia/local/specs/${SPEC_ID}"` and the absolute `SPEC_PATH="${SPEC_DIR}/SPEC.md"` for use in the planner prompt (step 4), the planner will reference it in `README.md`.
+1. Cache `SPEC_DIR="$(bash .gaia/scripts/notebook/notebook-lib.sh path spec "$SPEC_ID")"` and the absolute `SPEC_PATH="${SPEC_DIR}/SPEC.md"` for use in the planner prompt (step 4), the planner will reference it in `README.md`.
 2. Read `SPEC_PATH`. Its full content is the source-of-truth feature description; any dispatch summary in the original description is just a label.
 3. Check for a sibling audit: if `${SPEC_DIR}/AUDIT.md` exists, cache its absolute path as `AUDIT_PATH` for use in step 4, the planner reads it too. If absent, `AUDIT_PATH` is unset.
 4. Cache the lowercased SPEC id (`spec-005`) as `SPEC_SLUG_SEED` for use in step 4's branch-naming policy.
 
-If no SPEC reference is detected, `SPEC_SLUG_SEED`, `SPEC_PATH`, and `AUDIT_PATH` are unset; step 3 allocates a `PLAN-NNN` id from the local ledger for the spec-less plan.
+If no SPEC reference is detected, `SPEC_SLUG_SEED`, `SPEC_PATH`, and `AUDIT_PATH` are unset; step 3 allocates a `PLAN-NNN` id from the notebook catalog for the spec-less plan.
 
 Colocated plans live inside the SPEC folder, so plan→SPEC discovery is structural and needs no `SPEC_SLUG_SEED` prefix on a `plans/` slug. `SPEC_SLUG_SEED` is retained for the branch-name marker (step 4's branch policy) and human-facing labels. `SPEC_PATH` additionally seeds `SPEC_DIR` (its parent directory) for plan-directory resolution in step 3.
 
@@ -78,18 +79,19 @@ This decision governs the **planner** only. The plan's **execution** sub-agents 
 
 ### 3. Resolve plan directory
 
-**Spec-derived plans colocate inside their SPEC folder**, at `<SPEC_DIR>/plan[-N]` where `SPEC_DIR` is the SPEC's parent directory (`.gaia/local/specs/<SPEC-ID>`); the plan basename is `plan`, not a slug. **Spec-less plans live under `plans/PLAN-NNN`, where `PLAN-NNN` is a monotonic id allocated from the local `plans/ledger.json` ledger** (the same treatment SPECs get). The description lives in the ledger `subject`, not the folder name.
+**Spec-derived plans colocate inside their SPEC folder**, at `<SPEC_DIR>/plan[-N]` where `SPEC_DIR` is the SPEC's parent directory (`.notebook/specs/<SPEC-ID>`); the plan basename is `plan`, not a slug. **Spec-less plans live under `.notebook/plans/PLAN-NNN`, where `PLAN-NNN` is a monotonic id allocated through the notebook catalog** (the same treatment SPECs get). The description lives in the catalog row's `subject`, not the folder name.
 
 Resolve the absolute plan directory, then create it. The spec-derived arm suffixes `-2`, `-3`, … if a colocated plan folder already exists; the spec-less arm allocates a fresh `PLAN-NNN`, so it never collides:
 
 ```bash
 # Main checkout root: plan and SPEC folders are main-anchored state (state
 # registry plans-main / specs-main), so PLAN_DIR and the allocator operand point
-# at main even when /gaia-plan runs from a linked worktree.
+# at main even when /gaia-plan runs from a linked worktree. The notebook library
+# resolves each plan folder through main.
 ROOT="$(bash .gaia/scripts/main-root-lib.sh)"
 if [[ -n "${SPEC_PATH:-}" ]]; then
   # Spec-derived: colocate the plan inside its SPEC folder.
-  SPEC_DIR="$(dirname "$SPEC_PATH")"          # .../.gaia/local/specs/SPEC-NNN
+  SPEC_DIR="$(dirname "$SPEC_PATH")"          # <main>/.notebook/specs/SPEC-NNN
   PLAN_DIR="${SPEC_DIR}/plan"
   n=2
   while ! mkdir "$PLAN_DIR" 2>/dev/null; do
@@ -97,12 +99,12 @@ if [[ -n "${SPEC_PATH:-}" ]]; then
     n=$((n+1))
   done
 else
-  # Spec-less one-off: allocate a monotonic PLAN-NNN from the local ledger.
+  # Spec-less one-off: allocate a monotonic PLAN-NNN from the notebook catalog.
   # The allocator's union counts existing folders, so it always returns a fresh
   # number; no collision-suffix loop needed.
   DESCRIPTION="<feature description from step 1>"
   PLAN_ID="$(bash .gaia/scripts/spec/plan-allocator.sh next "$ROOT" "$DESCRIPTION")"
-  PLAN_DIR="${ROOT}/.gaia/local/plans/${PLAN_ID}"
+  PLAN_DIR="$(bash .gaia/scripts/notebook/notebook-lib.sh path plan "$PLAN_ID")"
   mkdir -p "$PLAN_DIR"
 fi
 ```
@@ -151,7 +153,7 @@ ROOT=<printed checkout root>
 PLAN_REL="${PLAN_DIR#"$ROOT/"}"
 # The planner deletes its own .work/ before returning; this is a verify-only
 # backstop. If scratch survived (e.g. the planner crashed mid-run), warn instead
-# of force-deleting: .gaia/local/plans/ is gitignored so leftover scratch is
+# of force-deleting: the notebook is gitignored so leftover scratch is
 # harmless clutter, and a verify-only step needs no rm-permission prompt on
 # every run. Remove it manually if the warning fires.
 [ -d "$PLAN_REL/.work" ] && echo "WARNING: planner scratch survived at $PLAN_REL/.work; remove it manually if unneeded."
@@ -216,7 +218,7 @@ The prompt is a single line, exactly:
 Read <absolute-path-to-PLAN_DIR>/KICKOFF.md and execute it.
 ```
 
-For example `.../.gaia/local/specs/SPEC-NNN/plan/KICKOFF.md` for a spec-derived plan, or `.../.gaia/local/plans/PLAN-NNN/KICKOFF.md` for a spec-less plan. Use `$PLAN_DIR/KICKOFF.md` (the absolute path resolved in step 3). The path MUST be absolute so the cold Claude session has no working-directory ambiguity. Do not include any other instruction, the orchestrator's behavior lives in `KICKOFF.md`.
+For example `.../.notebook/specs/SPEC-NNN/plan/KICKOFF.md` for a spec-derived plan, or `.../.notebook/plans/PLAN-NNN/KICKOFF.md` for a spec-less plan. Use `$PLAN_DIR/KICKOFF.md` (the absolute path resolved in step 3). The path MUST be absolute so the cold Claude session has no working-directory ambiguity. Do not include any other instruction, the orchestrator's behavior lives in `KICKOFF.md`.
 
 **Print the prompt inside a `text` fenced code block** so the user can select and copy it manually.
 

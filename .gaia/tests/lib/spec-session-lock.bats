@@ -14,8 +14,8 @@
 #
 # Assertion style: .claude/rules/bats-assertions.md.
 #
-# The walk needs no ledger/repo fixture -- it operates on live process ancestry
-# -- so this suite does NOT use helpers/tmp-spec-repo.sh. Cases 2 and 3 spawn a
+# The walk needs no catalog/repo fixture -- it operates on live process ancestry
+# -- so this suite does NOT use helpers/tmp-notebook-repo.sh. Cases 2 and 3 spawn a
 # real long-lived subtree (a bash renamed `bats-fake-host` via `exec -a`, a
 # child bash, a grandchild sleeper) and point the walk at the grandchild; the
 # overridden GAIA_SPEC_LOCK_HOST_PATTERN matches the fake host's argv so no real

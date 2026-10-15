@@ -65,10 +65,12 @@ STUB
 real_repo() {
   mk_repo
   local script_name
-  for script_name in usage-flush.sh usage-parse-lib.sh usage-lib.sh main-root-lib.sh branch-name-lib.sh ledger-path-lib.sh; do
+  for script_name in usage-flush.sh usage-parse-lib.sh usage-lib.sh main-root-lib.sh branch-name-lib.sh; do
     cp "$REPO_ROOT/.gaia/scripts/$script_name" "$REPO/.gaia/scripts/"
   done
   cp "$REPO_ROOT/.gaia/scripts/spec/with-ledger-lock.sh" "$REPO/.gaia/scripts/spec/"
+  mkdir -p "$REPO/.gaia/scripts/notebook"
+  cp "$REPO_ROOT"/.gaia/scripts/notebook/*.sh "$REPO/.gaia/scripts/notebook/"
 }
 
 # payload <event> <sid> [transcript_path] [stop_hook_active]

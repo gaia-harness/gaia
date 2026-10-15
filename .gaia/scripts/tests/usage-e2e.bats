@@ -228,8 +228,8 @@ net_clean() {
   git -C "$REPO" checkout -q -b feat/e2e
   gh_view 101 101 debt/123-slug MERGED 2026-10-02T00:00:00Z
   local subcommand args
-  mkdir -p "$REPO/.gaia/local/specs/SPEC-009"
-  printf -- '---\nspec_id: SPEC-009\nlineage: [research:topic-a]\n---\n' >"$REPO/.gaia/local/specs/SPEC-009/SPEC.md"
+  mkdir -p "$REPO/.notebook/specs/SPEC-009"
+  printf -- '---\nspec_id: SPEC-009\nlineage: [research:topic-a]\n---\n' >"$REPO/.notebook/specs/SPEC-009/SPEC.md"
   fire usage-capture.sh "$(hook_payload Stop s-m "$TRANSCRIPT_PATH_MAIN")"
   fire usage-capture.sh "$(hook_payload SessionStart s-m "$TRANSCRIPT_PATH_MAIN")"
   fire pr-merge-cost.sh "$(merge_payload 'gh pr merge 101' s-m "$TRANSCRIPT_PATH_MAIN")"

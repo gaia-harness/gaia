@@ -815,8 +815,8 @@ t'
 
 # --- allowed: whitelisted scratch paths ---
 
-@test "rm -rf .gaia/local/plans/x is allowed" {
-  run_hook_bash 'rm -rf .gaia/local/plans/x'
+@test "rm -rf .gaia/local/audit/x is allowed" {
+  run_hook_bash 'rm -rf .gaia/local/audit/x'
   assert_allowed_by_json
 }
 
@@ -867,8 +867,8 @@ t'
   assert_allowed_by_json
 }
 
-@test "rm -rf of an absolute .gaia/local/plans path is allowed" {
-  run_hook_bash 'rm -rf /Users/you/projects/my-app/.gaia/local/plans/x'
+@test "rm -rf of an absolute .gaia/local/cleanse path is allowed" {
+  run_hook_bash 'rm -rf /Users/you/projects/my-app/.gaia/local/cleanse/x'
   assert_allowed_by_json
 }
 
@@ -1247,8 +1247,8 @@ EOF'
 # the path expands inside a named directory, which is the ordinary cleanup shape
 # the whitelist exists for, so only the first path segment can trip the arm.
 
-@test "rm -rf .gaia/local/plans/* (a glob inside a whitelisted path) is allowed" {
-  run_hook_bash 'rm -rf .gaia/local/plans/*'
+@test "rm -rf .gaia/local/cleanse/* (a glob inside a whitelisted path) is allowed" {
+  run_hook_bash 'rm -rf .gaia/local/cleanse/*'
   assert_allowed_by_json
 }
 
@@ -1449,6 +1449,71 @@ assert_position_preserving() {
       return 1
     fi
   done
+}
+
+# --- the notebook allowance, against a fixture main checkout holding this tree's registry ---
+#
+# The hook reads the registry of the main checkout it runs in, so a linked
+# worktree running this suite would otherwise judge these paths by another
+# branch's registry. The fixture is a git repository carrying copies of the
+# hook, its libraries and the registry under test, and the hook runs with the
+# fixture as its working directory.
+
+stage_main_checkout_fixture() {
+  FIXTURE_MAIN="$BATS_TEST_TMPDIR/fixture-main"
+  FIXTURE_MAIN_PHYSICAL=""
+  rm -rf "$FIXTURE_MAIN"
+  mkdir -p "$FIXTURE_MAIN/.claude" "$FIXTURE_MAIN/.gaia/scripts"
+  local source_root="${HOOKS_SOURCE_DIRECTORY%/.claude/hooks}"
+  cp -R "$HOOKS_SOURCE_DIRECTORY" "$FIXTURE_MAIN/.claude/hooks"
+  cp "$source_root/.gaia/scripts/main-root-lib.sh" "$source_root/.gaia/scripts/state-registry-lib.sh" "$FIXTURE_MAIN/.gaia/scripts/"
+  cp "$source_root/.gaia/state-registry.json" "$FIXTURE_MAIN/.gaia/state-registry.json"
+  git -C "$FIXTURE_MAIN" init -q
+  FIXTURE_MAIN_PHYSICAL="$(cd "$FIXTURE_MAIN" && pwd -P)"
+}
+
+run_fixture_main_rmrf() {
+  local json
+  json=$(jq -n --arg command "$1" '{tool_name: "Bash", tool_input: {command: $command}}')
+  run bash -c 'cd "$3" && printf %s "$1" | bash "$2"' _ "$json" "$FIXTURE_MAIN/.claude/hooks/block-rm-rf.sh" "$FIXTURE_MAIN"
+}
+
+@test "notebook allowance: rm -rf of a spec folder under the main checkout's notebook is allowed" {
+  stage_main_checkout_fixture
+  run_fixture_main_rmrf "rm -rf $FIXTURE_MAIN_PHYSICAL/.notebook/specs/SPEC-001"
+  assert_allowed_by_json
+}
+
+@test "notebook allowance: rm -rf of a plan folder under the main checkout's notebook is allowed" {
+  stage_main_checkout_fixture
+  run_fixture_main_rmrf "rm -rf $FIXTURE_MAIN_PHYSICAL/.notebook/plans/PLAN-001"
+  assert_allowed_by_json
+}
+
+@test "notebook allowance: rm -rf of the notebook's specs folder itself is denied" {
+  stage_main_checkout_fixture
+  run_fixture_main_rmrf "rm -rf $FIXTURE_MAIN_PHYSICAL/.notebook/specs"
+  assert_denied_because "BLOCKED: rm -rf of absolute path '$FIXTURE_MAIN_PHYSICAL/.notebook/specs' is forbidden."
+}
+
+@test "notebook allowance: rm -rf of a research folder is denied" {
+  stage_main_checkout_fixture
+  run_fixture_main_rmrf "rm -rf $FIXTURE_MAIN_PHYSICAL/.notebook/research/topic-2026-10-01"
+  assert_denied_because "BLOCKED: rm -rf of absolute path '$FIXTURE_MAIN_PHYSICAL/.notebook/research/topic-2026-10-01' is forbidden."
+}
+
+@test "notebook allowance: rm -rf of a spec folder under the old local root is denied" {
+  stage_main_checkout_fixture
+  run_fixture_main_rmrf "rm -rf $FIXTURE_MAIN_PHYSICAL/.gaia/local/specs/SPEC-001"
+  assert_denied_because "BLOCKED: rm -rf of absolute path '$FIXTURE_MAIN_PHYSICAL/.gaia/local/specs/SPEC-001' is forbidden."
+}
+
+@test "notebook allowance: a fixture registry still whitelisting the old local specs root would allow what the real one denies" {
+  stage_main_checkout_fixture
+  jq '.rm_whitelist += [{"path": ".gaia/local/specs", "children_only": true, "why": "x"}]' "$FIXTURE_MAIN/.gaia/state-registry.json" >"$FIXTURE_MAIN/registry.tmp"
+  mv "$FIXTURE_MAIN/registry.tmp" "$FIXTURE_MAIN/.gaia/state-registry.json"
+  run_fixture_main_rmrf "rm -rf $FIXTURE_MAIN_PHYSICAL/.gaia/local/specs/SPEC-001"
+  assert_allowed_by_json
 }
 
 # --- _rm_whitelisted_absolute: the registry-driven absolute-whitelist matcher ---
@@ -1721,7 +1786,7 @@ run_staged_rmrf() {
 @test "control: the staged guard allows an absolute scratch path when the registry parses, on stock /bin/bash" {
   [ -x /bin/bash ] || skip "no /bin/bash"
   stage_rmrf_tree
-  run_staged_rmrf 'rm -rf /Users/you/projects/my-app/.gaia/local/plans/x' /bin/bash
+  run_staged_rmrf 'rm -rf /Users/you/projects/my-app/.gaia/local/audit/x' /bin/bash
   assert_allowed_by_json
 }
 
@@ -1729,7 +1794,7 @@ run_staged_rmrf() {
   [ -x /bin/bash ] || skip "no /bin/bash"
   stage_rmrf_tree
   write_conflicted_library "$STAGED_ROOT/.gaia/scripts/state-registry-lib.sh"
-  run_staged_rmrf 'rm -rf /Users/you/projects/my-app/.gaia/local/plans/x' /bin/bash
+  run_staged_rmrf 'rm -rf /Users/you/projects/my-app/.gaia/local/audit/x' /bin/bash
   assert_denied_by_json
 }
 

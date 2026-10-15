@@ -138,6 +138,7 @@ holds_within() {
   grep -F 'timed out' <<<"$stderr" && return 1
   [ "$(jq -s '[.[] | select(.kind == "edge" and .child == "spec:SPEC-001" and .parent == "research:sweep-parent")] | length' "$TEL/links.jsonl")" -eq 1 ]
 
+  printf '.notebook\n' >"$ROOT/.gitignore"
   started_seconds=$SECONDS
   GAIA_LEDGER_LOCK_TIMEOUT_SECONDS=2 run --separate-stderr bash "$REPO_ROOT/.gaia/scripts/spec/spec-allocator.sh" next "$ROOT"
   [ "$status" -eq 0 ]
@@ -155,8 +156,10 @@ holds_within() {
   local scratch_directory="$TEMPORARY_DIRECTORY/scratch" stderr_file="$TEMPORARY_DIRECTORY/mut.err"
   mkdir -p "$scratch_directory/.gaia/scripts" "$scratch_directory/.gaia/scripts/spec"
   cp "$SCRIPTS"/usage-flush.sh "$SCRIPTS"/usage-parse-lib.sh "$SCRIPTS"/usage-lib.sh "$SCRIPTS"/main-root-lib.sh \
-    "$SCRIPTS"/branch-name-lib.sh "$SCRIPTS"/ledger-path-lib.sh "$scratch_directory/.gaia/scripts/"
+    "$SCRIPTS"/branch-name-lib.sh "$scratch_directory/.gaia/scripts/"
   cp "$REPO_ROOT/.gaia/scripts/spec/with-ledger-lock.sh" "$scratch_directory/.gaia/scripts/spec/"
+  mkdir -p "$scratch_directory/.gaia/scripts/notebook"
+  cp "$SCRIPTS"/notebook/*.sh "$scratch_directory/.gaia/scripts/notebook/"
   sed 's/^  commit_started_at="\$(_uf_now)"$/  commit_started_at="$(_uf_now)"; sleep 3/' "$SCRIPTS/usage-flush.sh" >"$scratch_directory/.gaia/scripts/usage-flush.sh"
   cmp -s "$SCRIPTS/usage-flush.sh" "$scratch_directory/.gaia/scripts/usage-flush.sh" && return 1
   install branch

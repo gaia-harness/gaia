@@ -33,7 +33,7 @@ close_row() {
 
 @test "UAT-023: a SPEC filled from the template lints, the verbatim step-9 block records its lineage, and the initiative readout includes the SPEC and its branch with no link command" {
   local id=SPEC-095 spec fence transcript_path
-  spec="$REPO/.gaia/local/specs/$id/SPEC.md"
+  spec="$REPO/.notebook/specs/$id/SPEC.md"
   mkdir -p "${spec%/*}"
   sed -e "s/SPEC-NNN/$id/g" -e 's/UAT-NNN/UAT-001/g' \
     -e 's/^lineage: \[\]$/lineage: [research:topic-a-2026-10-01]/' \
@@ -197,7 +197,7 @@ parity() {
 }
 
 @test "UAT-018 (reduced): declare, research writes, and a closed gaia-plan interval each resolve their own span, and spend after the interval returns to the latest research" {
-  local transcript_path research_root="$REPO/.gaia/local/research"
+  local transcript_path research_root="$REPO/.notebook/research"
   transcript_path="$(transcript_path_for_session s18)"
   run run_usage declare research:x --session s18 --at 2026-10-01T11:00:00Z
   [ "$status" -eq 0 ]

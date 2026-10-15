@@ -7,12 +7,13 @@
 # never closes a run, so the age rule alone decides. Tests prove it with a
 # usage.sh stub that logs any invocation.
 #
-# Sweep criteria: a ledger row with status "abandoned" AND an active folder
-# AND abandoned_at past the retention window. Unlike the merged sweep there is
+# Sweep criteria: a catalog row with status "abandoned" and no reap record AND
+# a folder AND abandoned_at past the retention window. A successful delete
+# records a reap on the row. Unlike the merged sweep there is
 # no consolidation gate: an abandoned folder reaps as one unit.
 #
-# Each test spins up its own tmp git repo via helpers/tmp-spec-repo.sh and
-# tears it down; hermetic, no reliance on the real project ledger.
+# Each test spins up its own tmp git repo via helpers/tmp-notebook-repo.sh and
+# tears it down; hermetic, no reliance on the real project notebook.
 #
 # Assertion style: .claude/rules/bats-assertions.md.
 
@@ -21,10 +22,10 @@ bats_require_minimum_version 1.5.0
 setup() {
   HELPERS="$BATS_TEST_DIRNAME/helpers"
   ARCHIVE=".gaia/scripts/spec/spec-archive-abandoned.sh"
-  SPECS=".gaia/local/specs"
+  SPECS=".notebook/specs"
   USAGE_LEDGER=".gaia/local/telemetry/usage.jsonl"
-  # --seed-abandoned-folder stamps a fixed abandoned_at
-  # ("2026-01-02T00:00:00Z") rather than "just abandoned", so every delete
+  # --seed-spec-abandoned-folder stamps a fixed abandoned_at
+  # ("2026-01-01T00:00:00Z") rather than "just abandoned", so every delete
   # test below needs the age gate collapsed to stay deterministic regardless
   # of wall-clock time. The age-gate tests re-export this per test.
   export GAIA_SPEC_RETENTION_DAYS=0
@@ -69,24 +70,24 @@ _set_abandoned_at() {
   local repo="$1" id="$2" iso="$3"
   local temporary_file; temporary_file="$(mktemp)"
   jq --arg id "$id" --arg timestamp "$iso" \
-    '.specs |= map(if .id == $id then . + {abandoned_at: $timestamp} else . end)' \
-    "$repo/$SPECS/ledger.json" > "$temporary_file"
-  mv "$temporary_file" "$repo/$SPECS/ledger.json"
+    '.items |= map(if .kind == "spec" and .id == $id then . + {abandoned_at: $timestamp} else . end)' \
+    "$repo/.notebook/catalog.json" > "$temporary_file"
+  mv "$temporary_file" "$repo/.notebook/catalog.json"
 }
 
 _clear_abandoned_at() {
   local repo="$1" id="$2"
   local temporary_file; temporary_file="$(mktemp)"
   jq --arg id "$id" \
-    '.specs |= map(if .id == $id then del(.abandoned_at) else . end)' \
-    "$repo/$SPECS/ledger.json" > "$temporary_file"
-  mv "$temporary_file" "$repo/$SPECS/ledger.json"
+    '.items |= map(if .kind == "spec" and .id == $id then del(.abandoned_at) else . end)' \
+    "$repo/.notebook/catalog.json" > "$temporary_file"
+  mv "$temporary_file" "$repo/.notebook/catalog.json"
 }
 
 # --- 1: delete happy path (age rule alone) ----------------------------------
 
-@test "1: an abandoned row past the retention window is deleted; ledger stays abandoned" {
-  REPO="$("$HELPERS/tmp-spec-repo.sh" --seed-abandoned-folder SPEC-001)"
+@test "1: an abandoned row past the retention window is deleted; the row stays abandoned" {
+  REPO="$("$HELPERS/tmp-notebook-repo.sh" --seed-spec-abandoned-folder SPEC-001)"
 
   run _archive "$REPO"
   [ "$status" -eq 0 ]
@@ -95,15 +96,29 @@ _clear_abandoned_at() {
   [ ! -e "$REPO/$SPECS/SPEC-001" ]
   [ ! -e "$REPO/$SPECS/archived" ]
 
-  [ "$(jq -r '.specs[0].status' "$REPO/$SPECS/ledger.json")" = "abandoned" ]
-  [ "$(jq -r '.specs[0].abandoned_at' "$REPO/$SPECS/ledger.json")" = "2026-01-02T00:00:00Z" ]
+  [ "$(jq -r '.items[0].status' "$REPO/.notebook/catalog.json")" = "abandoned" ]
+  [ "$(jq -r '.items[0].abandoned_at' "$REPO/.notebook/catalog.json")" = "2026-01-01T00:00:00Z" ]
+  [ "$(jq -r '.items[0].reap.by' "$REPO/.notebook/catalog.json")" = "spec-archive-abandoned.sh" ]
+  jq -e '.items[0].reap.at | test("^[0-9]{4}-[0-9]{2}-[0-9]{2}T")' "$REPO/.notebook/catalog.json"
+}
+
+@test "1b: a row that already carries a reap record is skipped, even with a folder present" {
+  REPO="$("$HELPERS/tmp-notebook-repo.sh" --seed-spec-abandoned-folder SPEC-001)"
+  patched="$(mktemp)"
+  jq '.items |= map(. + {reap: {at: "2026-02-01T00:00:00Z", by: "spec-archive-abandoned.sh"}})' "$REPO/.notebook/catalog.json" > "$patched"
+  mv "$patched" "$REPO/.notebook/catalog.json"
+
+  run _archive "$REPO"
+  [ "$status" -eq 0 ]
+  refute_contains "Deleted"
+  [ -f "$REPO/$SPECS/SPEC-001/AUDIT.md" ]
 }
 
 # --- 2: single-id form ---------------------------------------------------------
 
 @test "2: the single-id form deletes only the named id" {
-  REPO="$("$HELPERS/tmp-spec-repo.sh" \
-    --seed-abandoned-folder SPEC-001 --seed-abandoned-folder SPEC-002)"
+  REPO="$("$HELPERS/tmp-notebook-repo.sh" \
+    --seed-spec-abandoned-folder SPEC-001 --seed-spec-abandoned-folder SPEC-002)"
 
   run bash "$REPO/$ARCHIVE" "$REPO" SPEC-001
   [ "$status" -eq 0 ]
@@ -112,7 +127,7 @@ _clear_abandoned_at() {
 }
 
 @test "4: an abandoned row with no active folder is a no-op" {
-  REPO="$("$HELPERS/tmp-spec-repo.sh" --seed-abandoned SPEC-005)"
+  REPO="$("$HELPERS/tmp-notebook-repo.sh" --seed-spec SPEC-005 abandoned)"
 
   run _archive "$REPO"
   [ "$status" -eq 0 ]
@@ -122,7 +137,7 @@ _clear_abandoned_at() {
 # --- 5: idempotent re-run -------------------------------------------------------
 
 @test "5: re-running the sweep after deleting is a no-op" {
-  REPO="$("$HELPERS/tmp-spec-repo.sh" --seed-abandoned-folder SPEC-001)"
+  REPO="$("$HELPERS/tmp-notebook-repo.sh" --seed-spec-abandoned-folder SPEC-001)"
 
   run _archive "$REPO"
   [ "$status" -eq 0 ]
@@ -139,8 +154,8 @@ _clear_abandoned_at() {
 # --- 6: only abandoned rows with folders are swept; merged rows are untouched -
 
 @test "6: a merged row is never touched by the abandoned sweep" {
-  REPO="$("$HELPERS/tmp-spec-repo.sh" \
-    --seed-abandoned-folder SPEC-001 --seed-merged-folder SPEC-002)"
+  REPO="$("$HELPERS/tmp-notebook-repo.sh" \
+    --seed-spec-abandoned-folder SPEC-001 --seed-spec-merged-folder SPEC-002)"
 
   run _archive "$REPO"
   [ "$status" -eq 0 ]
@@ -153,7 +168,7 @@ _clear_abandoned_at() {
 
 
 @test "7: a folder without an abandoned ledger row is never deleted" {
-  REPO="$("$HELPERS/tmp-spec-repo.sh" --seed-abandoned-folder SPEC-001 --seed-folder SPEC-002)"
+  REPO="$("$HELPERS/tmp-notebook-repo.sh" --seed-spec-abandoned-folder SPEC-001 --seed-spec-folder SPEC-002 draft)"
 
   run _archive "$REPO"
   [ "$status" -eq 0 ]
@@ -166,8 +181,8 @@ _clear_abandoned_at() {
 # --- 8: multiple abandoned folders in one sweep --------------------------------
 
 @test "8: two abandoned folders are deleted together with a combined summary" {
-  REPO="$("$HELPERS/tmp-spec-repo.sh" \
-    --seed-abandoned-folder SPEC-001 --seed-abandoned-folder SPEC-002)"
+  REPO="$("$HELPERS/tmp-notebook-repo.sh" \
+    --seed-spec-abandoned-folder SPEC-001 --seed-spec-abandoned-folder SPEC-002)"
 
   run _archive "$REPO"
   [ "$status" -eq 0 ]
@@ -179,7 +194,7 @@ _clear_abandoned_at() {
 # --- 9: no ledger -> clean no-op -------------------------------------------------
 
 @test "9: a repo with no abandoned rows produces no output and exits 0" {
-  REPO="$("$HELPERS/tmp-spec-repo.sh" --seed-draft SPEC-001)"
+  REPO="$("$HELPERS/tmp-notebook-repo.sh" --seed-spec SPEC-001 draft)"
   run _archive "$REPO"
   [ "$status" -eq 0 ]
   [ -z "$output" ]
@@ -188,7 +203,7 @@ _clear_abandoned_at() {
 # --- 10: age gate, within window -> kept -----------------------------------------
 
 @test "10: an abandoned folder within the retention window is kept, not deleted" {
-  REPO="$("$HELPERS/tmp-spec-repo.sh" --seed-abandoned-folder SPEC-001)"
+  REPO="$("$HELPERS/tmp-notebook-repo.sh" --seed-spec-abandoned-folder SPEC-001)"
   _set_abandoned_at "$REPO" SPEC-001 "$(_days_ago 2)"
   export GAIA_SPEC_RETENTION_DAYS=30
 
@@ -202,7 +217,7 @@ _clear_abandoned_at() {
 
 
 @test "11: an abandoned folder past the retention window is reaped" {
-  REPO="$("$HELPERS/tmp-spec-repo.sh" --seed-abandoned-folder SPEC-001)"
+  REPO="$("$HELPERS/tmp-notebook-repo.sh" --seed-spec-abandoned-folder SPEC-001)"
   _set_abandoned_at "$REPO" SPEC-001 "$(_days_ago 45)"
   export GAIA_SPEC_RETENTION_DAYS=30
 
@@ -211,14 +226,14 @@ _clear_abandoned_at() {
   assert_contains "Deleted 1 abandoned SPEC folder(s): SPEC-001"
   [ ! -e "$REPO/$SPECS/SPEC-001" ]
 
-  [ "$(jq -r '.specs[0].status' "$REPO/$SPECS/ledger.json")" = "abandoned" ]
+  [ "$(jq -r '.items[0].status' "$REPO/.notebook/catalog.json")" = "abandoned" ]
 }
 
 
 # --- 13/14: missing or unparseable abandoned_at -> kept regardless of age --------
 
 @test "13: an abandoned row with no abandoned_at is kept regardless of the usage ledger" {
-  REPO="$("$HELPERS/tmp-spec-repo.sh" --seed-abandoned-folder SPEC-001)"
+  REPO="$("$HELPERS/tmp-notebook-repo.sh" --seed-spec-abandoned-folder SPEC-001)"
   _clear_abandoned_at "$REPO" SPEC-001
   export GAIA_SPEC_RETENTION_DAYS=0
 
@@ -231,7 +246,7 @@ _clear_abandoned_at() {
 }
 
 @test "14: an abandoned row with an unparseable abandoned_at is kept regardless of the usage ledger" {
-  REPO="$("$HELPERS/tmp-spec-repo.sh" --seed-abandoned-folder SPEC-001)"
+  REPO="$("$HELPERS/tmp-notebook-repo.sh" --seed-spec-abandoned-folder SPEC-001)"
   _set_abandoned_at "$REPO" SPEC-001 "not-a-timestamp"
   export GAIA_SPEC_RETENTION_DAYS=0
 
@@ -246,7 +261,7 @@ _clear_abandoned_at() {
 # --- 15/16: GAIA_SPEC_RETENTION_DAYS knob is honored, shared with the merged sweep
 
 @test "15: GAIA_SPEC_RETENTION_DAYS=0 reaps a just-abandoned folder" {
-  REPO="$("$HELPERS/tmp-spec-repo.sh" --seed-abandoned-folder SPEC-001)"
+  REPO="$("$HELPERS/tmp-notebook-repo.sh" --seed-spec-abandoned-folder SPEC-001)"
   _set_abandoned_at "$REPO" SPEC-001 "$(_days_ago 0)"
   export GAIA_SPEC_RETENTION_DAYS=0
 
@@ -257,7 +272,7 @@ _clear_abandoned_at() {
 }
 
 @test "16: GAIA_SPEC_RETENTION_DAYS=99999 keeps an old abandoned folder" {
-  REPO="$("$HELPERS/tmp-spec-repo.sh" --seed-abandoned-folder SPEC-001)"
+  REPO="$("$HELPERS/tmp-notebook-repo.sh" --seed-spec-abandoned-folder SPEC-001)"
   _set_abandoned_at "$REPO" SPEC-001 "$(_days_ago 400)"
   export GAIA_SPEC_RETENTION_DAYS=99999
 
@@ -272,14 +287,14 @@ _clear_abandoned_at() {
 @test "17: a non-numeric GAIA_SPEC_RETENTION_DAYS falls back to the 30-day default" {
   export GAIA_SPEC_RETENTION_DAYS="abc"
 
-  REPO="$("$HELPERS/tmp-spec-repo.sh" --seed-abandoned-folder SPEC-001)"
+  REPO="$("$HELPERS/tmp-notebook-repo.sh" --seed-spec-abandoned-folder SPEC-001)"
   _set_abandoned_at "$REPO" SPEC-001 "$(_days_ago 10)"
   run _archive "$REPO"
   [ "$status" -eq 0 ]
   refute_contains "Deleted"
   [ -d "$REPO/$SPECS/SPEC-001" ]
 
-  REPO2="$("$HELPERS/tmp-spec-repo.sh" --seed-abandoned-folder SPEC-002)"
+  REPO2="$("$HELPERS/tmp-notebook-repo.sh" --seed-spec-abandoned-folder SPEC-002)"
   _set_abandoned_at "$REPO2" SPEC-002 "$(_days_ago 45)"
   run bash "$REPO2/$ARCHIVE" "$REPO2"
   [ "$status" -eq 0 ]
@@ -290,7 +305,7 @@ _clear_abandoned_at() {
 # --- 19: no consolidation gate -- a bare AUDIT.md folder still reaps -----------
 
 @test "19: an abandoned folder holding only AUDIT.md reaps with no consolidation gate" {
-  REPO="$("$HELPERS/tmp-spec-repo.sh" --seed-abandoned-folder SPEC-001)"
+  REPO="$("$HELPERS/tmp-notebook-repo.sh" --seed-spec-abandoned-folder SPEC-001)"
   [ -f "$REPO/$SPECS/SPEC-001/AUDIT.md" ]
   [ ! -e "$REPO/$SPECS/SPEC-001/SUMMARY.md" ]
 
@@ -303,7 +318,7 @@ _clear_abandoned_at() {
 # --- 20: the retired defer cache path is left alone --------------------------
 
 @test "20: reaping an abandoned row leaves a leftover wiki-promote cache file untouched" {
-  REPO="$("$HELPERS/tmp-spec-repo.sh" --seed-abandoned-folder SPEC-001)"
+  REPO="$("$HELPERS/tmp-notebook-repo.sh" --seed-spec-abandoned-folder SPEC-001)"
   mkdir -p "$REPO/.gaia/local/cache/wiki-promote"
   printf '{"branch":"spec-1-x","deferred_at":"2026-01-02T00:00:00Z"}\n' \
     > "$REPO/.gaia/local/cache/wiki-promote/SPEC-001.json"
@@ -320,7 +335,7 @@ _clear_abandoned_at() {
 # --- 22: the liveness lock is reaped with the rest of the abandoned keyset ---
 
 @test "22: a .lock file is reaped alongside the deleted abandoned folder" {
-  REPO="$("$HELPERS/tmp-spec-repo.sh" --seed-abandoned-folder SPEC-001)"
+  REPO="$("$HELPERS/tmp-notebook-repo.sh" --seed-spec-abandoned-folder SPEC-001)"
   echo '{"spec_id":"SPEC-001"}' > "$REPO/.gaia/local/cache/spec-session-SPEC-001.lock"
 
   run _archive "$REPO"
@@ -332,7 +347,7 @@ _clear_abandoned_at() {
 }
 
 @test "23: without ledger-lib.sh the sweep reaps nothing and says so; with it the same folder is reaped" {
-  REPO="$("$HELPERS/tmp-spec-repo.sh" --seed-abandoned-folder SPEC-001)"
+  REPO="$("$HELPERS/tmp-notebook-repo.sh" --seed-spec-abandoned-folder SPEC-001)"
 
   mv "$REPO/.gaia/scripts/spec/ledger-lib.sh" "$REPO/ledger-lib.sh.aside"
   run --separate-stderr _archive "$REPO"
@@ -347,7 +362,7 @@ _clear_abandoned_at() {
 }
 
 @test "24: an abandoned folder past retention is deleted on age alone and usage.sh is never called" {
-  REPO="$("$HELPERS/tmp-spec-repo.sh" --seed-abandoned-folder SPEC-001 --seed-abandoned-folder SPEC-002)"
+  REPO="$("$HELPERS/tmp-notebook-repo.sh" --seed-spec-abandoned-folder SPEC-001 --seed-spec-abandoned-folder SPEC-002)"
   # A usage.sh stub that logs any invocation; the usage ledger is also absent,
   # which would keep the folder under the merged sweep's gate.
   rm -f "$REPO/$USAGE_LEDGER"
@@ -366,7 +381,7 @@ _clear_abandoned_at() {
 }
 
 @test "25: the stub in case 24 is live: the merged sweep, which does gate, calls it" {
-  REPO="$("$HELPERS/tmp-spec-repo.sh" --seed-merged-folder SPEC-001)"
+  REPO="$("$HELPERS/tmp-notebook-repo.sh" --seed-spec-merged-folder SPEC-001)"
   {
     echo '#!/usr/bin/env bash'
     echo "echo \"\$*\" >> \"$REPO/usage-calls.log\""

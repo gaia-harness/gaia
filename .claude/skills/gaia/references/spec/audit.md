@@ -120,11 +120,14 @@ Its bodies never flow into main.
 
 ## 7c. Disposition routing + apply
 
-Resolve the main-anchored SPEC folder first, before any dispatch below consumes it. The SPEC folder is main-anchored state (state registry `specs-main`), so the report lands beside the artifact the ledger row indexes rather than in a second specs tree inside a linked worktree. The `mkdir -p` keeps this self-sufficient: step 3 already created the folder earlier in the session, and this step's `mkdir -p` keeps it self-sufficient however it is reached. Whoever writes `AUDIT.md` there, the delegated applier or main's inline fallback, does so per the tool-choice contract in `spec.md`'s Operational primitives.
+Resolve the main-anchored SPEC folder first, before any dispatch below consumes it. The SPEC folder is main-anchored state (state registry `specs-main`), so the report lands beside the artifact the catalog row indexes rather than in a second specs tree inside a linked worktree. The `mkdir -p` keeps this self-sufficient: step 3 already created the folder earlier in the session, and this step's `mkdir -p` keeps it self-sufficient however it is reached. Whoever writes `AUDIT.md` there, the delegated applier or main's inline fallback, does so per the tool-choice contract in `spec.md`'s Operational primitives.
 
 ```bash
-MAIN_ROOT="$(bash .gaia/scripts/main-root-lib.sh)"
-SPEC_DIR="${MAIN_ROOT}/.gaia/local/specs/${SPEC_ID}"
+SPEC_DIR="$(bash .gaia/scripts/notebook/notebook-lib.sh path spec "$SPEC_ID")" || SPEC_DIR=""
+if [ -z "$SPEC_DIR" ]; then
+  echo "gaia-spec: cannot resolve the notebook's SPEC folder; refusing to write the audit report" >&2
+  exit 1
+fi
 mkdir -p "$SPEC_DIR"
 AUDIT_MD="${SPEC_DIR}/AUDIT.md"
 ```
@@ -146,7 +149,7 @@ Before dispatching, finalize `.gaia/local/cache/audit-<spec_id>/coverage.jsonl`,
 
 `${SPEC_DIR}` and `${AUDIT_MD}` are already resolved at the top of 7c, which is where the applier dispatch consumes them; this step writes the report, it resolves no path of its own.
 
-The **applier** writes a sibling report at `${AUDIT_MD}`, the report path main hands it, from the on-disk findings and verdicts (it already holds the complete record, so main never loads a finding body to produce it). `${SPEC_DIR}` sits inside the `.gaia/local/specs/**` write-surface allowlist entry. Keep it lean:
+The **applier** writes a sibling report at `${AUDIT_MD}`, the report path main hands it, from the on-disk findings and verdicts (it already holds the complete record, so main never loads a finding body to produce it). `${SPEC_DIR}` sits inside the `.notebook/specs/**` write-surface allowlist entry. Keep it lean:
 
 ```markdown
 # <spec_id> Adversarial Audit

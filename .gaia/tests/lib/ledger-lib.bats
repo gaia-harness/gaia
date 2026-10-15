@@ -1,6 +1,7 @@
 #!/usr/bin/env bats
 # Unit tests for `.gaia/scripts/spec/ledger-lib.sh`, the shared helpers behind
-# the single ledger-update chokepoint and the archive sweeps.
+# the single ledger-update chokepoint and the archive sweeps. The helpers are
+# pure: they locate no file.
 
 setup() {
   THIS_DIRECTORY="$( cd "$( dirname "$BATS_TEST_FILENAME" )" && pwd )"
@@ -30,17 +31,6 @@ _iso_days_before_now() {
   done
 }
 
-@test "array_key: specs and plans" {
-  [ "$(gaia_ledger_array_key spec)" = "specs" ]
-  [ "$(gaia_ledger_array_key plan)" = "plans" ]
-}
-
-@test "array_key: unknown kind prints nothing and fails" {
-  run gaia_ledger_array_key bogus
-  [ "$status" -ne 0 ]
-  [ -z "$output" ]
-}
-
 @test "status_allowed: spec accepts draft ready merged abandoned" {
   for value in draft ready merged abandoned; do
     gaia_ledger_status_allowed spec "$value"
@@ -64,27 +54,6 @@ _iso_days_before_now() {
   done
   run gaia_ledger_status_allowed bogus ready
   [ "$status" -eq 1 ]
-}
-
-@test "directory: resolves the main-checkout specs and plans directories" {
-  . "$REPO_ROOT/.gaia/scripts/ledger-path-lib.sh"
-  sandbox="$(cd "$(mktemp -d "${BATS_TEST_TMPDIR}/sandbox.XXXXXX")" && pwd -P)"
-  git -C "$sandbox" init --quiet --initial-branch=main
-  run gaia_ledger_directory spec "$sandbox"
-  [ "$status" -eq 0 ]
-  [ "$output" = "$sandbox/.gaia/local/specs" ]
-  run gaia_ledger_directory plan "$sandbox"
-  [ "$status" -eq 0 ]
-  [ "$output" = "$sandbox/.gaia/local/plans" ]
-}
-
-@test "directory: unknown kind, or resolver functions absent, prints nothing and fails" {
-  run gaia_ledger_directory bogus "$BATS_TEST_TMPDIR"
-  [ "$status" -ne 0 ]
-  [ -z "$output" ]
-  run bash -c ". '$LIB'; gaia_ledger_directory spec '$BATS_TEST_TMPDIR'"
-  [ "$status" -ne 0 ]
-  [ -z "$output" ]
 }
 
 @test "age_past_window: exactly at the boundary is past, one day inside is not" {

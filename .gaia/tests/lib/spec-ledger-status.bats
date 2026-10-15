@@ -1,8 +1,8 @@
 #!/usr/bin/env bats
-# Canonical-status-vocabulary tests for the SPEC ledger.
+# Canonical-status-vocabulary tests for the SPEC rows of the notebook catalog.
 #
 # Three concerns:
-#   1. Behavioral guard: ledger-update.sh (the single chokepoint for ledger
+#   1. Behavioral guard: ledger-update.sh (the single chokepoint for status
 #      writes) accepts the four canonical statuses {draft, ready, merged,
 #      abandoned}, and rejects anything else (including the retired
 #      specified/archived/in-progress/allocated/completed values) with exit 6.
@@ -13,16 +13,17 @@
 #      unrecognized status untouched (logging it). This repairs the hand-edit /
 #      backfill vector the guard cannot see (raw edits bypass the chokepoint),
 #      and it also ships to adopters (runs on every /gaia-spec).
-#   3. Data integrity: the real project .gaia/local/specs/ledger.json carries no
-#      off-vocabulary status row.
+#   3. Data integrity: the real project catalog carries no off-vocabulary spec
+#      status row.
 #
 # Canonical vocabulary is documented in wiki/concepts/GAIA Spec.md
 # ("Ledger status vocabulary"). Keep WRITABLE below in sync with that section.
 #
 # Each behavioral test spins up its own tmp git repo via
-# helpers/tmp-spec-repo.sh and tears it down; hermetic, no reliance on the
-# real project ledger. The teardown uses the explicit-if form (the && idiom is
-# a bats teardown footgun: a falsy first clause makes teardown itself "fail").
+# helpers/tmp-notebook-repo.sh and tears it down; hermetic, no reliance on the
+# real project notebook. The teardown uses the explicit-if form (the && idiom
+# is a bats teardown footgun: a falsy first clause makes teardown itself
+# "fail").
 
 setup() {
   HELPERS="$BATS_TEST_DIRNAME/helpers"
@@ -48,43 +49,47 @@ _reconcile() {
   bash "$REPO/.gaia/scripts/spec/spec-reconcile.sh" "$@"
 }
 
-# Raw-write a status onto a row, bypassing the guard. Used to plant a
-# pre-guard off-vocabulary row that the guard itself would refuse to create.
-_plant_status() {
-  local id="$1" status="$2" temporary_file
-  temporary_file="$(mktemp)"
-  jq --arg id "$id" --arg new_status "$status" \
-    '.specs |= map(if .id == $id then .status = $new_status else . end)' \
-    "$REPO/.gaia/local/specs/ledger.json" > "$temporary_file"
-  mv "$temporary_file" "$REPO/.gaia/local/specs/ledger.json"
+_catalog() {
+  printf '%s\n' "$REPO/.notebook/catalog.json"
+}
+
+# The first spec row's field, read straight from the catalog file.
+_first_spec_field() {
+  jq -r --arg field "$1" '[.items[] | select(.kind == "spec")][0][$field]' "$(_catalog)"
+}
+
+# A spec row seeded with a status the guard would refuse to write, standing in
+# for a pre-guard or hand-edited row.
+_seed_with_status() {
+  "$HELPERS/tmp-notebook-repo.sh" --seed-spec "$1" "$2"
 }
 
 @test "1: non-canonical status is rejected with exit 6" {
-  REPO="$("$HELPERS/tmp-spec-repo.sh" --seed-draft SPEC-001)"
+  REPO="$("$HELPERS/tmp-notebook-repo.sh" --seed-spec SPEC-001 draft)"
   run _ledger_update "$REPO" SPEC-001 '{"status":"shipped"}'
   [ "$status" -eq 6 ]
   [[ "$output" == *"non-canonical status 'shipped'"* ]]
 }
 
-@test "2: a rejected patch leaves the ledger byte-for-byte unchanged" {
-  REPO="$("$HELPERS/tmp-spec-repo.sh" --seed-draft SPEC-001)"
-  before="$(snapshot_file "$REPO/.gaia/local/specs/ledger.json")"
+@test "2: a rejected patch leaves the catalog byte-for-byte unchanged" {
+  REPO="$("$HELPERS/tmp-notebook-repo.sh" --seed-spec SPEC-001 draft)"
+  before="$(snapshot_file "$(_catalog)")"
   run _ledger_update "$REPO" SPEC-001 '{"status":"shipped"}'
   [ "$status" -eq 6 ]
-  assert_files_identical "$REPO/.gaia/local/specs/ledger.json" "$before"
+  assert_files_identical "$(_catalog)" "$before"
 }
 
 @test "3: every writable status (the unified vocabulary) is accepted" {
-  REPO="$("$HELPERS/tmp-spec-repo.sh" --seed-draft SPEC-001)"
+  REPO="$("$HELPERS/tmp-notebook-repo.sh" --seed-spec SPEC-001 draft)"
   for writable_status in $WRITABLE; do
     run _ledger_update "$REPO" SPEC-001 "{\"status\":\"$writable_status\"}"
     [ "$status" -eq 0 ]
-    [ "$(jq -r '.specs[0].status' "$REPO/.gaia/local/specs/ledger.json")" = "$writable_status" ]
+    [ "$(_first_spec_field status)" = "$writable_status" ]
   done
 }
 
 @test "3b: every retired status is rejected with exit 6" {
-  REPO="$("$HELPERS/tmp-spec-repo.sh" --seed-draft SPEC-001)"
+  REPO="$("$HELPERS/tmp-notebook-repo.sh" --seed-spec SPEC-001 draft)"
   for retired_status in $RETIRED; do
     run _ledger_update "$REPO" SPEC-001 "{\"status\":\"$retired_status\"}"
     [ "$status" -eq 6 ]
@@ -93,53 +98,52 @@ _plant_status() {
 }
 
 @test "4: a status-less patch (merged_at only) passes the guard" {
-  REPO="$("$HELPERS/tmp-spec-repo.sh" --seed-draft SPEC-001)"
+  REPO="$("$HELPERS/tmp-notebook-repo.sh" --seed-spec SPEC-001 draft)"
   run _ledger_update "$REPO" SPEC-001 '{"merged_at":"2026-01-02T00:00:00Z"}'
   [ "$status" -eq 0 ]
-  [ "$(jq -r '.specs[0].merged_at' "$REPO/.gaia/local/specs/ledger.json")" = "2026-01-02T00:00:00Z" ]
-  [ "$(jq -r '.specs[0].status' "$REPO/.gaia/local/specs/ledger.json")" = "draft" ]
+  [ "$(_first_spec_field merged_at)" = "2026-01-02T00:00:00Z" ]
+  [ "$(_first_spec_field status)" = "draft" ]
 }
 
 @test "5: spec-reconcile renames a planted 'shipped' row to 'merged'" {
-  REPO="$("$HELPERS/tmp-spec-repo.sh" --seed-draft SPEC-001)"
-  _plant_status SPEC-001 shipped
+  REPO="$(_seed_with_status SPEC-001 shipped)"
   run _reconcile "$REPO"
   [ "$status" -eq 0 ]
   [[ "$output" == *"normalized SPEC-001: shipped -> merged"* ]]
-  [ "$(jq -r '.specs[0].status' "$REPO/.gaia/local/specs/ledger.json")" = "merged" ]
+  [ "$(_first_spec_field status)" = "merged" ]
 }
 
 @test "6: spec-reconcile leaves an unrecognized status untouched and warns" {
-  REPO="$("$HELPERS/tmp-spec-repo.sh" --seed-draft SPEC-001)"
-  _plant_status SPEC-001 bogus-status
+  REPO="$(_seed_with_status SPEC-001 bogus-status)"
   run _reconcile "$REPO"
   [ "$status" -eq 0 ]
   [[ "$output" == *"unrecognized status bogus-status"* ]]
-  [ "$(jq -r '.specs[0].status' "$REPO/.gaia/local/specs/ledger.json")" = "bogus-status" ]
+  [ "$(_first_spec_field status)" = "bogus-status" ]
 }
 
-@test "7: the real project ledger carries only writable statuses" {
+@test "7: the real project catalog carries only writable spec statuses" {
   root="$(git -C "$BATS_TEST_DIRNAME" rev-parse --show-toplevel)"
-  ledger="$root/.gaia/local/specs/ledger.json"
-  [ -f "$ledger" ] || ledger="$root/.gaia/specs.json"   # legacy fallback until cutover
-  [ -f "$ledger" ] || skip "no project ledger at $ledger"
+  notebook_root="$(GAIA_NOTEBOOK_TREE="$root" bash "$root/.gaia/scripts/notebook/notebook-lib.sh" root 2>/dev/null)" || skip "no resolvable notebook"
+  catalog="$notebook_root/catalog.json"
+  [ -f "$catalog" ] || skip "no project catalog at $catalog"
   bad="$(jq -r --arg writable "$WRITABLE" '
     ($writable | split(" ")) as $ok
-    | .specs[] | select(.status as $row_status | $ok | index($row_status) | not)
+    | .items[] | select(.kind == "spec")
+    | select(.status as $row_status | $ok | index($row_status) | not)
     | .id + ":" + (.status // "null")
-  ' "$ledger")"
+  ' "$catalog")"
   [ -z "$bad" ] || {
-    echo "off-vocabulary ledger rows: $bad" >&2
+    echo "off-vocabulary catalog rows: $bad" >&2
     false
   }
 }
 
-# --- 8: the SPEC-artifact frontmatter axis stays distinct from the ledger axis
+# --- 8: the SPEC-artifact frontmatter axis stays distinct from the row axis
 #
 # lint.sh validates a wholly separate status axis (the SPEC artifact's own
-# authoring lifecycle, in-progress|reopened|closed), never the ledger-row
-# vocabulary this suite covers. Belt-and-suspenders: confirms the ledger
-# guard's unified vocabulary was never leaked into lint.sh's enum.
+# authoring lifecycle, in-progress|reopened|closed), never the row
+# vocabulary this suite covers. Belt-and-suspenders: confirms the guard's
+# unified vocabulary was never leaked into lint.sh's enum.
 _lint_fixture() {
   local status_value="$1"
   cat <<EOF

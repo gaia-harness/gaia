@@ -3,7 +3,7 @@ type: concept
 title: Usage Ledger
 status: active
 created: 2026-09-30
-updated: 2026-10-09
+updated: 2026-10-15
 tags: [concept, cost, usage, data-contract]
 ---
 
@@ -67,7 +67,7 @@ Each usage message gets a raw key when it is written, from that line's own branc
 - The default branch, an empty branch, and a detached `HEAD` become `session:<session id>`.
 - An agent-isolation worktree's lines become `session:<session id>` flagged `inherit`, and resolve to the same session's own non-inherit key at read time.
 
-Three things bind a session to a named effort rather than leaving it on its session key. A `Write` to a file under `.gaia/local/research/` of the main checkout binds the session to `research:<slug>`. `usage.sh declare` binds a session to `research:<slug>` or `init:<slug>` by hand. A `/gaia-spec`, `/gaia-plan`, or maintenance-command invocation writes a `start` binding when the flusher sees the skill invoked or its slash command typed in the transcript, and `usage.sh record` writes the matching `close` binding; the spend between them binds to the close's `spec:`, `plan:`, or `command:` ref.
+Three things bind a session to a named effort rather than leaving it on its session key. A `Write` to a file under the main checkout's absolute `.notebook/research/` path binds the session to `research:<slug>`. `usage.sh declare` binds a session to `research:<slug>` or `init:<slug>` by hand. A `/gaia-spec`, `/gaia-plan`, or maintenance-command invocation writes a `start` binding when the flusher sees the skill invoked or its slash command typed in the transcript, and `usage.sh record` writes the matching `close` binding; the spend between them binds to the close's `spec:`, `plan:`, or `command:` ref.
 
 **Pairing is latest-start-wins.** `usage_intervals` in `.gaia/scripts/usage-resolve-lib.sh` is the only implementation, per session and workflow:
 
@@ -92,7 +92,7 @@ Two figures come out of the graph and are kept apart. The **per-PR figure** is t
 
 ## Research location
 
-`.gaia/local/research/<topic>/` (a directory per effort) or a loose `.md` file there is where GAIA looks for research. A `Write` to either binds the session's default-branch spend to `research:<topic>`. Research kept anywhere else is bound by running `usage.sh declare`. Only the main checkout's research directory binds; a worktree's own copy does not.
+`.notebook/research/<topic>/` (a directory per effort) or a loose `.md` file there is where GAIA looks for research (see [[Notebook]]). A `Write` to either, made to the main checkout's absolute path, binds the session's default-branch spend to `research:<topic>`. Research kept anywhere else is bound by running `usage.sh declare`. Only that absolute path binds; a path through a worktree's `.notebook` symlink does not.
 
 ## Commands
 

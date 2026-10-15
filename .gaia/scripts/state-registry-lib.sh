@@ -66,25 +66,20 @@
 #   gaia_registry_path), so a caller that cannot read the list treats every path as
 #   non-whitelisted -- the safe direction for a deny guard.
 #
-# gaia_registry_integrity_snapshot
-#   Prints, one per line in registry order, the .gaia/local-relative durable-
-#   state directories (integrity_snapshot the registry declares) a caller
-#   snapshots before and after a run: durable, leaf-authored content
-#   a destructive script can wipe out unnoticed, deliberately excluding
-#   background-churned dirs (debt, telemetry, audit, cache, red-ledger).
-#   Derived from the registry, never hardcoded in a caller. Prints nothing
-#   and returns 1 when the registry cannot be read (see gaia_registry_path).
-#   FAIL-CLOSED CONSUMER CONTRACT: unlike gaia_registry_recognizes (which
-#   fails open by design), an integrity-snapshot caller uses this list as a
-#   TRIPWIRE -- a caller that reads an empty or failed result MUST REFUSE
-#   (stop before hand-back), never proceed with an empty snapshot. An empty
-#   snapshot would diff clean against itself and mask a real deletion, the
-#   opposite of a deny guard's safe-empty default.
+# Roots. A row carries an optional `root`: "local" (the default; `path` is
+# relative to .gaia/local) or "notebook" (`path` is relative to the main
+# checkout's notebook root). gaia_registry_recognizes and gaia_registry_classify
+# take the root to query as an optional last argument (default "local") and
+# match only that root's rows, so a path under one root is never judged by
+# another root's rows. Residue rows describe .gaia/local only: a notebook query
+# never matches them. gaia_registry_linkable_paths and the residue sweep read
+# local rows only.
 #
-# gaia_registry_recognizes <relative_path> <type: f|d>
+# gaia_registry_recognizes <relative_path> <type: f|d> [<root>]
 #   A "may I reap this?" predicate. Exit 0 ("recognized",
 #   never reap) when <relative_path> (a .gaia/local-relative child path) matches
-#   a live entry OR a residue-block entry, by that entry's own `match` rule.
+#   a live entry, a residue-block entry OR a report_only row (an old notebook
+#   root: recognized, never reaped, never Unknown), by that entry's own `match` rule.
 #   Exit 1 ("unknown") only when the registry was read successfully and
 #   nothing matched.
 #   FAILURE CONTRACT (fail-SAFE): when jq is unavailable or the registry
@@ -106,11 +101,11 @@
 #   unknown on every session. A file is never a
 #   container, so this applies to <type> d (and the untyped case) only.
 #
-# gaia_registry_classify <relative_path>
+# gaia_registry_classify <relative_path> [<root>]
 #   Prints the scope of the matching entry ("shared" / "per-tree" /
-#   "main-only" / "ephemeral"), or "residue" for a residue-block match, or
-#   "unknown" when nothing matches -- always with exit 0 in those three
-#   cases. For diagnostics and conformance checks, not a reap gate: unlike
+#   "main-only" / "ephemeral"), "residue" for a residue-block match,
+#   "report-only" for a path under a report_only row, or "unknown" when
+#   nothing matches -- always with exit 0 in those cases. For diagnostics and conformance checks, not a reap gate: unlike
 #   gaia_registry_recognizes, this does NOT fail open. When jq is
 #   unavailable or the registry cannot be read, it prints nothing and
 #   returns 1.
@@ -126,11 +121,22 @@
 #     Symlinks ...       a symlink a residue row names; left to whoever made it
 #                        (a linked worktree's shared-state link is its owner's)
 #     Unknown ...        a path no row or row ancestor claims, listed at its top
+#     Old notebook roots ... each present report_only root, listed once, never per
+#                        child, with a note from `notebook-lib.sh move-state`
+#                        (run with GAIA_NOTEBOOK_TREE set to the main root):
+#                        `pending` says the root is not yet moved and names the
+#                        move command, `done` says it was moved to .notebook/ and
+#                        what is left was kept by the move, for review by hand;
+#                        `none` omits the section; an unreadable state says so on
+#                        the heading and is treated as `pending`. A report_only
+#                        row outranks any residue or live row beneath it, so
+#                        nothing under such a root is listed elsewhere.
 #   An empty Residue or Unknown section prints "Residue: none." / "Unknown: none.";
 #   the other two headings appear only when non-empty. Without --apply nothing
 #   changes. With --apply it deletes exactly the Residue paths, printing
 #   "Removed: <path>" for each, after re-checking that no symlink sits on the
-#   path; live, unknown, kept and symlinked paths are never deleted, and nothing
+#   path; live, unknown, kept, symlinked and report-only paths are never deleted
+#   (a path under a report_only root is refused at delete time too, exit 3), and nothing
 #   outside .gaia/local is ever reached (paths come from the walk, not the row).
 #   Exit: 0 listed (or swept) cleanly, also when .gaia/local is absent;
 #   1 nothing read or deleted: jq missing, registry unreadable, or .gaia/local
@@ -148,9 +154,8 @@
 #   bash .gaia/scripts/state-registry-lib.sh path                       # gaia_registry_path
 #   bash .gaia/scripts/state-registry-lib.sh linkable-paths             # gaia_registry_linkable_paths
 #   bash .gaia/scripts/state-registry-lib.sh rm-whitelist               # gaia_registry_rm_whitelist
-#   bash .gaia/scripts/state-registry-lib.sh integrity-snapshot         # gaia_registry_integrity_snapshot
-#   bash .gaia/scripts/state-registry-lib.sh recognizes <relpath> <f|d> # gaia_registry_recognizes
-#   bash .gaia/scripts/state-registry-lib.sh classify <relpath>         # gaia_registry_classify
+#   bash .gaia/scripts/state-registry-lib.sh recognizes <relpath> <f|d> [<root>] # gaia_registry_recognizes
+#   bash .gaia/scripts/state-registry-lib.sh classify <relpath> [<root>]         # gaia_registry_classify
 #   bash .gaia/scripts/state-registry-lib.sh residue-sweep [--apply]    # gaia_registry_residue_sweep
 
 # gaia_registry_path: see the header contract above.
@@ -244,6 +249,15 @@ _gaia_registry_alternative_matches() {
   return 1
 }
 
+# _gaia_registry_report_only_rows <registry> <root>
+# The report_only rows of <root> as "<match>\t<path>" lines. A registry with no
+# report_only block yields none.
+_gaia_registry_report_only_rows() {
+  jq -r --arg wanted_root "$2" '
+    (.report_only // [])[] | select((.root // "local") == $wanted_root) | [.match, .path] | @tsv
+  ' "$1" 2>/dev/null
+}
+
 # gaia_registry_linkable_paths: see the header contract above.
 gaia_registry_linkable_paths() {
   local registry
@@ -251,7 +265,7 @@ gaia_registry_linkable_paths() {
   jq -r '
     [
       .entries[]
-      | select(.scope == "shared")
+      | select(.scope == "shared" and (.root // "local") == "local")
       | (if .match == "prefix" then (.path | rtrimstr("/")) else (.path | split("/")[0]) end)
     ]
     | reduce .[] as $linkable_path ([]; if any(.[]; . == $linkable_path) then . else . + [$linkable_path] end)
@@ -266,27 +280,29 @@ gaia_registry_rm_whitelist() {
   jq -r '.rm_whitelist[]? | [.path, (.children_only | tostring)] | @tsv' "$registry"
 }
 
-# gaia_registry_integrity_snapshot: see the header contract above.
-gaia_registry_integrity_snapshot() {
-  local registry
-  registry="$(gaia_registry_path)" || return 1
-  jq -r '.integrity_snapshot[]?.path' "$registry"
-}
-
 # gaia_registry_recognizes: see the header contract above.
 gaia_registry_recognizes() {
-  local relative_path="${1:-}" requested_type="${2:-}"
+  local relative_path="${1:-}" requested_type="${2:-}" requested_root="${3:-local}"
   [ -n "$relative_path" ] || return 0
   local registry
   registry="$(gaia_registry_path 2>/dev/null)" || return 0
 
   local residue_lines
-  residue_lines="$(jq -r '.residue[] | [.match, .path] | @tsv' "$registry" 2>/dev/null)" || return 0
+  residue_lines="$(jq -r --arg wanted_root "$requested_root" '
+    .residue[] | select((.root // "local") == $wanted_root) | [.match, .path] | @tsv
+  ' "$registry" 2>/dev/null)" || return 0
   local entry_match_type entry_path
   while IFS=$'\t' read -r entry_match_type entry_path; do
     [ -n "$entry_match_type" ] || continue
     _gaia_registry_pattern_matches "$relative_path" "$entry_path" "$entry_match_type" && return 0
   done <<<"$residue_lines"
+
+  local report_only_lines
+  report_only_lines="$(_gaia_registry_report_only_rows "$registry" "$requested_root")" || return 0
+  while IFS=$'\t' read -r entry_match_type entry_path; do
+    [ -n "$entry_match_type" ] || continue
+    _gaia_registry_pattern_matches "$relative_path" "$entry_path" "$entry_match_type" && return 0
+  done <<<"$report_only_lines"
 
   local want_kind=""
   case "$requested_type" in
@@ -295,8 +311,10 @@ gaia_registry_recognizes() {
   esac
 
   local entry_lines
-  entry_lines="$(jq -r --arg wanted_kind "$want_kind" '
-    .entries[] | select($wanted_kind == "" or .kind == $wanted_kind) | [.match, .path] | @tsv
+  entry_lines="$(jq -r --arg wanted_kind "$want_kind" --arg wanted_root "$requested_root" '
+    .entries[]
+    | select((.root // "local") == $wanted_root and ($wanted_kind == "" or .kind == $wanted_kind))
+    | [.match, .path] | @tsv
   ' "$registry" 2>/dev/null)" || return 0
   while IFS=$'\t' read -r entry_match_type entry_path; do
     [ -n "$entry_match_type" ] || continue
@@ -312,8 +330,9 @@ gaia_registry_recognizes() {
   # never a container, so this applies to a directory (and the untyped case)
   # only.
   if [ "$requested_type" != f ]; then
-    if jq -e --arg ancestor_prefix "$relative_path/" '
-      [ (.entries[], .residue[]).path | split("|")[] ] | any(.[]; startswith($ancestor_prefix))
+    if jq -e --arg ancestor_prefix "$relative_path/" --arg wanted_root "$requested_root" '
+      [ (.entries[], .residue[]) | select((.root // "local") == $wanted_root) | .path | split("|")[] ]
+      | any(.[]; startswith($ancestor_prefix))
     ' "$registry" >/dev/null 2>&1; then
       return 0
     fi
@@ -324,7 +343,7 @@ gaia_registry_recognizes() {
 
 # gaia_registry_classify: see the header contract above.
 gaia_registry_classify() {
-  local relative_path="${1:-}"
+  local relative_path="${1:-}" requested_root="${2:-local}"
   [ -n "$relative_path" ] || {
     printf 'unknown\n'
     return 0
@@ -333,7 +352,9 @@ gaia_registry_classify() {
   registry="$(gaia_registry_path 2>/dev/null)" || return 1
 
   local residue_lines
-  residue_lines="$(jq -r '.residue[] | [.match, .path] | @tsv' "$registry" 2>/dev/null)" || return 1
+  residue_lines="$(jq -r --arg wanted_root "$requested_root" '
+    .residue[] | select((.root // "local") == $wanted_root) | [.match, .path] | @tsv
+  ' "$registry" 2>/dev/null)" || return 1
   local entry_match_type entry_path
   while IFS=$'\t' read -r entry_match_type entry_path; do
     [ -n "$entry_match_type" ] || continue
@@ -343,8 +364,20 @@ gaia_registry_classify() {
     fi
   done <<<"$residue_lines"
 
+  local report_only_lines
+  report_only_lines="$(_gaia_registry_report_only_rows "$registry" "$requested_root")" || return 1
+  while IFS=$'\t' read -r entry_match_type entry_path; do
+    [ -n "$entry_match_type" ] || continue
+    if _gaia_registry_pattern_matches "$relative_path" "$entry_path" "$entry_match_type"; then
+      printf 'report-only\n'
+      return 0
+    fi
+  done <<<"$report_only_lines"
+
   local entry_lines scope
-  entry_lines="$(jq -r '.entries[] | [.match, .path, .scope] | @tsv' "$registry" 2>/dev/null)" || return 1
+  entry_lines="$(jq -r --arg wanted_root "$requested_root" '
+    .entries[] | select((.root // "local") == $wanted_root) | [.match, .path, .scope] | @tsv
+  ' "$registry" 2>/dev/null)" || return 1
   while IFS=$'\t' read -r entry_match_type entry_path scope; do
     [ -n "$entry_match_type" ] || continue
     if _gaia_registry_pattern_matches "$relative_path" "$entry_path" "$entry_match_type"; then
@@ -377,6 +410,48 @@ _gaia_registry_sweep_contained() {
   return 0
 }
 
+# _gaia_registry_report_only_match <relative_path>
+# Prints the index of the first report-only row covering <relative_path> and
+# returns 0, or returns 1. Reads report_only_match / report_only_path from the
+# calling sweep, so the walk and the delete-time re-check apply one rule.
+_gaia_registry_report_only_match() {
+  local index=0
+  while [ "$index" -lt "${#report_only_path[@]}" ]; do
+    if _gaia_registry_alternative_matches "$1" "${report_only_path[index]}" "${report_only_match[index]}"; then
+      printf '%s\n' "$index"
+      return 0
+    fi
+    index=$((index + 1))
+  done
+  return 1
+}
+
+# _gaia_registry_sweep_old_roots <main_root> <root>...
+# Prints the section for the present old notebook roots, noting whether the
+# one-time move has run. The move state comes from the notebook library; when it
+# cannot be read the roots are treated as not yet moved and the heading says so.
+_gaia_registry_sweep_old_roots() {
+  local main_root="$1" move_state unreadable=""
+  shift
+  [ "$#" -gt 0 ] || return 0
+  move_state="$(GAIA_NOTEBOOK_TREE="$main_root" "${BASH:-bash}" "$main_root/.gaia/scripts/notebook/notebook-lib.sh" move-state 2>/dev/null)" || move_state=""
+  case "$move_state" in
+    none) return 0 ;;
+    pending | done) ;;
+    *)
+      move_state=pending
+      unreadable=" (could not read the move state; treating these as not yet moved)"
+      ;;
+  esac
+  printf 'Old notebook roots (report-only, never deleted by --apply)%s:\n' "$unreadable"
+  printf '%s\n' "$@" | LC_ALL=C sort | sed 's/^/  /'
+  if [ "$move_state" = "done" ]; then
+    printf '  Moved to .notebook/; anything left here was kept by the move (collision copies, slug-named plan folders, archived/ layouts, frozen ledger backups): review it by hand.\n'
+  else
+    printf '  Not yet moved: run the one-time move with: bash .gaia/scripts/notebook/move.sh run\n'
+  fi
+}
+
 # gaia_registry_residue_sweep: see the header contract above.
 gaia_registry_residue_sweep() {
   local apply=0
@@ -405,17 +480,24 @@ gaia_registry_residue_sweep() {
   # successor is the last column: tab is whitespace to `read`, so an empty
   # field anywhere earlier would collapse and shift the ones after it.
   local residue_rows live_rows
-  residue_rows="$(jq -r '.residue[] | . as $row | (.path | split("|")[])
+  residue_rows="$(jq -r '.residue[] | select((.root // "local") == "local") | . as $row | (.path | split("|")[])
     | [$row.match, ., $row.why, ($row.successor // "")] | @tsv' "$registry")" || {
     printf 'residue-sweep: cannot read the residue rows of %s\n' "$registry" >&2
     return 1
   }
-  live_rows="$(jq -r '.entries[] | . as $row | (.path | split("|")[])
+  live_rows="$(jq -r '.entries[] | select((.root // "local") == "local") | . as $row | (.path | split("|")[])
     | [$row.match, ., $row.kind] | @tsv' "$registry")" || {
     printf 'residue-sweep: cannot read the live entries of %s\n' "$registry" >&2
     return 1
   }
 
+  local report_only_rows
+  report_only_rows="$(_gaia_registry_report_only_rows "$registry" local)" || {
+    printf 'residue-sweep: cannot read the report-only rows of %s\n' "$registry" >&2
+    return 1
+  }
+
+  local -a report_only_match report_only_path report_only_seen
   local -a residue_match residue_path residue_successor residue_why live_match live_path live_kind ancestor_globs
   local match_type alternative third fourth depth=1 segments ancestor
   while IFS=$'\t' read -r match_type alternative third fourth; do
@@ -425,6 +507,11 @@ gaia_registry_residue_sweep() {
     residue_why+=("$third")
     residue_successor+=("$fourth")
   done <<<"$residue_rows"
+  while IFS=$'\t' read -r match_type alternative; do
+    [ -n "$match_type" ] || continue
+    report_only_match+=("$match_type")
+    report_only_path+=("$alternative")
+  done <<<"$report_only_rows"
   while IFS=$'\t' read -r match_type alternative third; do
     [ -n "$match_type" ] || continue
     live_match+=("$match_type")
@@ -461,6 +548,17 @@ gaia_registry_residue_sweep() {
       skip_prefix=""
     fi
     if [ -L "$absolute" ]; then kind='link'; elif [ -d "$absolute" ]; then kind='dir'; else kind='file'; fi
+
+    # A report-only row outranks every residue and live row beneath it: the
+    # old root is listed once and nothing under it is walked or deletable.
+    if matched="$(_gaia_registry_report_only_match "$relative")"; then
+      case " ${report_only_seen[*]-} " in
+        *" ${report_only_path[matched]} "*) ;;
+        *) report_only_seen+=("${report_only_path[matched]}") ;;
+      esac
+      [ "$kind" = dir ] && skip_prefix="$relative"
+      continue
+    fi
 
     matched=""
     index=0
@@ -531,6 +629,7 @@ gaia_registry_residue_sweep() {
   [ "${#link_lines[@]}" -eq 0 ] ||
     _gaia_registry_sweep_section 'Symlinks matching residue, left to their owner:' '' "${link_lines[@]}"
   _gaia_registry_sweep_section 'Unknown (not in the registry; listed, never deleted):' 'Unknown: none.' "${unknown_lines[@]+"${unknown_lines[@]}"}"
+  _gaia_registry_sweep_old_roots "${registry%/.gaia/state-registry.json}" "${report_only_seen[@]+"${report_only_seen[@]}"}"
 
   if [ "$apply" = 0 ]; then
     [ "${#found_residue[@]}" -eq 0 ] || printf 'Run with --apply to delete the residue paths listed above.\n'
@@ -538,7 +637,10 @@ gaia_registry_residue_sweep() {
   fi
   local failed=0
   for relative in "${found_residue[@]+"${found_residue[@]}"}"; do
-    if ! _gaia_registry_sweep_contained "$local_root" "$relative"; then
+    if _gaia_registry_report_only_match "$relative" >/dev/null; then
+      printf 'residue-sweep: refused %s: it sits under a report-only old notebook root\n' "$relative" >&2
+      failed=1
+    elif ! _gaia_registry_sweep_contained "$local_root" "$relative"; then
       printf 'residue-sweep: refused %s: a symlink now sits on its path\n' "$relative" >&2
       failed=1
     elif rm -rf -- "${local_root:?}/$relative" 2>/dev/null && [ ! -e "$local_root/$relative" ]; then
@@ -581,19 +683,14 @@ if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
       gaia_registry_rm_whitelist
       exit $?
       ;;
-    integrity-snapshot)
-      shift
-      gaia_registry_integrity_snapshot
-      exit $?
-      ;;
     recognizes)
       shift
-      gaia_registry_recognizes "${1:-}" "${2:-}"
+      gaia_registry_recognizes "${1:-}" "${2:-}" "${3:-local}"
       exit $?
       ;;
     classify)
       shift
-      gaia_registry_classify "${1:-}"
+      gaia_registry_classify "${1:-}" "${2:-local}"
       exit $?
       ;;
     residue-sweep)
@@ -602,7 +699,7 @@ if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
       exit $?
       ;;
     *)
-      printf 'usage: %s {path|linkable-paths|rm-whitelist|integrity-snapshot|recognizes <relpath> <f|d>|classify <relpath>|residue-sweep [--apply]}\n' "$0" >&2
+      printf 'usage: %s {path|linkable-paths|rm-whitelist|recognizes <relpath> <f|d> [<root>]|classify <relpath> [<root>]|residue-sweep [--apply]}\n' "$0" >&2
       exit 2
       ;;
   esac

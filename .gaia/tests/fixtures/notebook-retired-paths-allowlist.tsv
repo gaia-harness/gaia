@@ -1,0 +1,38 @@
+# Files allowed to name the retired .gaia/local/(specs|plans|research) roots.
+# Columns (tab-separated): file, reason, line-pattern (optional extended regex).
+# A row without a line pattern allows every hit in the file; a row with one
+# allows only the hit lines it matches. Live prose carries a pattern that
+# matches only the lines describing the old roots as old. A row whose file has
+# no hit is stale and fails the check.
+CHANGELOG.md	history ledger: released entries describe the old roots as they were
+.gaia/migrations/2.0.0.md	migration prompt: names the old roots in the one-time move, its backup check, the leftovers bullet and rollback
+.gaia/scripts/notebook/legacy-roots.sh	one-time move: the only library file that spells the old roots
+.gaia/scripts/tests/notebook-move.bats	one-time move: suite that plants the old roots to prove the move
+.gaia/scripts/tests/notebook-move-memory.bats	one-time move: suite for the memory-repoint step that names the old paths
+.gaia/scripts/tests/notebook-lib-paths.bats	one-time move: pins the legacy prefix the research library part reads from legacy-roots.sh
+.gaia/scripts/tests/main-only-lib.bats	recorded past-state fixture: a comment naming a machine-local runbook that was never tracked
+.gaia/tests/lib/audit-ci-shards.bats	recorded past-state fixture: a comment naming a machine-local summary page that was never tracked
+.gaia/tests/statusline/codify-nudge-reason.bats	recorded past-state fixture: a comment naming a machine-local plan README
+.gaia/tests/fixtures/dedup-key-corpus/README.md	recorded past-state fixture: corpus provenance naming the folder the keys were drawn from
+.gaia/cli/src/release/scrub.test.ts	recorded past-state fixture: scrub inputs that name the old roots as sample text
+.gaia/cli/src/wiki/dead-paths.test.ts	recorded past-state fixture: dead-path input naming an old-root path as sample text
+.gaia/scripts/tests/check-hook-scope-manifest.bats	recorded past-state fixture: bare-literal cases that need a .gaia/local path to prove the hook scope check
+.gaia/scripts/tests/plan-archive.bats	negative fixture: proves the plan archive refuses the pre-notebook folders and leaves them untouched
+.gaia/scripts/tests/spec-abandon-empty.bats	negative fixture: plants a legacy spec ledger to prove the not-ready refusal
+.gaia/scripts/tests/state-registry-lib.bats	negative fixture: asserts the registry no longer recognizes the old roots as live
+.gaia/scripts/tests/state-registry-report-only.bats	negative fixture: residue report-only section for the old roots
+.gaia/scripts/tests/usage-lib.bats	negative fixture: a research write under the old root binds nothing
+.gaia/scripts/tests/usage-research-binding.bats	negative fixture: an old-root research write binds nothing, and a legacy ledger makes the flush not ready
+.gaia/scripts/tests/usage-resolve.bats	legacy fixture: a legacy plan ledger beside the catalog to prove the catalog wins
+.gaia/tests/hooks/block-rm-rf.bats	negative fixture: removal under an old root is refused and no longer whitelisted
+.gaia/tests/lib/helpers/tmp-notebook-repo.sh	legacy fixture: the --legacy flag builds a not-ready repository with a legacy spec ledger
+.gaia/tests/lib/tmp-notebook-repo.bats	legacy fixture: proves the --legacy flag and that a plain build leaves the old roots absent
+.gaia/tests/lib/notebook-plan-lifecycle.bats	negative fixture: a decoy folder under the old plans root must stay untouched
+.gaia/tests/lib/notebook-spec-lifecycle.bats	negative fixture: asserts no script creates or touches the old specs root
+.gaia/tests/lib/plan-archive-merged.bats	negative fixture: a decoy folder under the old plans root must stay untouched
+.gaia/tests/lib/spec-allocator-concurrency.bats	negative fixture: asserts the allocator never creates the old specs root
+.gaia/tests/lib/spec-allocator-remote.bats	negative fixture: asserts the allocator never creates the old specs root
+.gaia/tests/lib/spec-renumber.bats	negative fixture: asserts renumbering never creates or touches the old specs root
+wiki/concepts/Notebook.md	live prose, old roots described as old: the one-time move's source locations	1\.x-era folders under
+wiki/concepts/Local Working State.md	live prose, old roots described as old: the report-only residue	report-only residue
+.gaia/release-scrub.yml	live prose, old roots described as old: the kept scrub alternative for a stale clone	alternative stays for a stale clone|Dated \.gaia/local/research/ or \.notebook/research/
