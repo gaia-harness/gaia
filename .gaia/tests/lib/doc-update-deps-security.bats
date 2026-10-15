@@ -1,7 +1,9 @@
 #!/usr/bin/env bats
 # Static and executable checks over the /update-deps skill's security
-# remediation text: `.claude/skills/update-deps/SKILL.md`, its security recipe
-# `references/security.md`, and the override audit `references/override-audit.md`.
+# remediation text: `.claude/skills/update-deps/SKILL.md`, its final report
+# `references/final-report.md` and publish step `references/publish.md`, its
+# security recipe `references/security.md`, and the override audit
+# `references/override-audit.md`.
 #
 # What this suite pins: a run with no outdated package but an open advisory is
 # a real run, the security phase's batch gate and per-resolution revert, the
@@ -20,10 +22,12 @@
 setup() {
   REPO_ROOT="$(cd "${BATS_TEST_DIRNAME}/../../.." && pwd)"
   SKILL="${REPO_ROOT}/.claude/skills/update-deps/SKILL.md"
+  FINAL_REPORT="${REPO_ROOT}/.claude/skills/update-deps/references/final-report.md"
+  PUBLISH="${REPO_ROOT}/.claude/skills/update-deps/references/publish.md"
   SECURITY="${REPO_ROOT}/.claude/skills/update-deps/references/security.md"
   OVERRIDE_AUDIT="${REPO_ROOT}/.claude/skills/update-deps/references/override-audit.md"
   local file
-  for file in "$SKILL" "$SECURITY" "$OVERRIDE_AUDIT"; do
+  for file in "$SKILL" "$FINAL_REPORT" "$PUBLISH" "$SECURITY" "$OVERRIDE_AUDIT"; do
     [ -f "$file" ] || {
       echo "an audited page is absent: ${file}" >&2
       return 1
@@ -78,7 +82,7 @@ section() {
   ' "$1"
 }
 
-phase7() { section "$1" "## Phase 7: Final report" "## Phase 8: Publish"; }
+phase7() { section "$1" "## Phase 7: Final report" "@@end-of-file@@"; }
 
 # ---------------------------------------------------------------------------
 # 2. Zero outdated with an advisory is a real run
@@ -148,12 +152,12 @@ check_not_run_source_line() {
 }
 
 @test "the Phase 7 Security instructions carry the alerts Not run source line" {
-  check_not_run_source_line "$SKILL"
+  check_not_run_source_line "$FINAL_REPORT"
 }
 
 @test "the source-line check fails with the Not run literal deleted" {
   local copy
-  copy="$(scratch_copy "$SKILL" "not-run.md")"
+  copy="$(scratch_copy "$FINAL_REPORT" "not-run.md")"
   remove_fixed "$copy" 'Dependabot alerts: Not run ('
   run check_not_run_source_line "$copy"
   [ "$status" -ne 0 ]
@@ -181,12 +185,12 @@ check_cache_rewrite() {
 }
 
 @test "Phase 7 rewrites the security cache from advisories --count-only, skipped in CI" {
-  check_cache_rewrite "$SKILL"
+  check_cache_rewrite "$FINAL_REPORT"
 }
 
 @test "the cache-rewrite check fails with the write-security-cache call deleted" {
   local copy
-  copy="$(scratch_copy "$SKILL" "cache-call.md")"
+  copy="$(scratch_copy "$FINAL_REPORT" "cache-call.md")"
   remove_fixed "$copy" '.gaia/cli/gaia update-deps write-security-cache --count'
   run check_cache_rewrite "$copy"
   [ "$status" -ne 0 ]
@@ -194,7 +198,7 @@ check_cache_rewrite() {
 
 @test "the cache-rewrite check fails with the --count-only call deleted" {
   local copy
-  copy="$(scratch_copy "$SKILL" "cache-count.md")"
+  copy="$(scratch_copy "$FINAL_REPORT" "cache-count.md")"
   remove_fixed "$copy" '.gaia/cli/gaia update-deps advisories --emit "$count_json" --count-only'
   run check_cache_rewrite "$copy"
   [ "$status" -ne 0 ]
@@ -202,7 +206,7 @@ check_cache_rewrite() {
 
 @test "the cache-rewrite check fails with the CI skip sentence deleted" {
   local copy
-  copy="$(scratch_copy "$SKILL" "cache-ci.md")"
+  copy="$(scratch_copy "$FINAL_REPORT" "cache-ci.md")"
   remove_fixed "$copy" 'never in CI: there the rewrite is skipped entirely'
   run check_cache_rewrite "$copy"
   [ "$status" -ne 0 ]
@@ -222,12 +226,12 @@ check_no_bare_none_and_introduced() {
 }
 
 @test "Phase 7 never reads a bare None and ties the introduced marker to the opening set" {
-  check_no_bare_none_and_introduced "$SKILL"
+  check_no_bare_none_and_introduced "$FINAL_REPORT"
 }
 
 @test "the no-bare-None check fails with that sentence deleted" {
   local copy
-  copy="$(scratch_copy "$SKILL" "bare-none.md")"
+  copy="$(scratch_copy "$FINAL_REPORT" "bare-none.md")"
   remove_fixed "$copy" 'never a bare `None`'
   run check_no_bare_none_and_introduced "$copy"
   [ "$status" -ne 0 ]
@@ -235,7 +239,7 @@ check_no_bare_none_and_introduced() {
 
 @test "the introduced-marker check fails with the comparison clause deleted" {
   local copy
-  copy="$(scratch_copy "$SKILL" "introduced.md")"
+  copy="$(scratch_copy "$FINAL_REPORT" "introduced.md")"
   remove_fixed "$copy" ', `auditKeys`,'
   run check_no_bare_none_and_introduced "$copy"
   [ "$status" -ne 0 ]
@@ -259,12 +263,12 @@ check_phase8_security_only() {
 }
 
 @test "Phase 8 runs for security-only work and its subject begins chore(deps):" {
-  check_phase8_security_only "$SKILL"
+  check_phase8_security_only "$PUBLISH"
 }
 
 @test "the Phase 8 check fails with the security-only run clause deleted" {
   local copy
-  copy="$(scratch_copy "$SKILL" "phase8-run.md")"
+  copy="$(scratch_copy "$PUBLISH" "phase8-run.md")"
   remove_fixed "$copy" 'Phase 8 runs when the only landed work is security resolutions.'
   run check_phase8_security_only "$copy"
   [ "$status" -ne 0 ]
@@ -272,7 +276,7 @@ check_phase8_security_only() {
 
 @test "the Phase 8 check fails with the chore(deps): subject clause deleted" {
   local copy
-  copy="$(scratch_copy "$SKILL" "phase8-subject.md")"
+  copy="$(scratch_copy "$PUBLISH" "phase8-subject.md")"
   remove_fixed "$copy" 'only security resolutions, with no devDependency-only version bump, always uses `chore(deps):`'
   run check_phase8_security_only "$copy"
   [ "$status" -ne 0 ]
@@ -356,13 +360,13 @@ check_no_tmp() {
   done
 }
 
-@test "no /tmp/ path remains in the skill, the security recipe, or the override audit" {
-  check_no_tmp "$SKILL" "$SECURITY" "$OVERRIDE_AUDIT"
+@test "no /tmp/ path remains in the skill or any of its audited references" {
+  check_no_tmp "$SKILL" "$FINAL_REPORT" "$PUBLISH" "$SECURITY" "$OVERRIDE_AUDIT"
 }
 
 @test "the /tmp check fails on a /tmp/ path inserted into each file" {
   local source count=0 copy
-  for source in "$SKILL" "$SECURITY" "$OVERRIDE_AUDIT"; do
+  for source in "$SKILL" "$FINAL_REPORT" "$PUBLISH" "$SECURITY" "$OVERRIDE_AUDIT"; do
     count=$((count + 1))
     copy="$(scratch_copy "$source" "tmp-${count}.md")"
     printf '\nmkdir -p /tmp/update-deps-scratch\n' >>"$copy"
@@ -372,7 +376,7 @@ check_no_tmp() {
       return 1
     }
   done
-  [ "$count" -eq 3 ]
+  [ "$count" -eq 5 ]
 }
 
 # ---------------------------------------------------------------------------

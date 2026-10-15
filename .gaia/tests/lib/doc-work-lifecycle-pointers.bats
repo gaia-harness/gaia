@@ -41,6 +41,7 @@ setup() {
     "$REFERENCES/codify.md"
     "$REFERENCES/residue.md"
     .claude/skills/update-deps/SKILL.md
+    .claude/skills/update-deps/references/publish.md
     "$ISSUE_CLAIM"
     "$EXECUTION"
   )

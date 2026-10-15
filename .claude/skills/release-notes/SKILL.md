@@ -59,7 +59,7 @@ export default {
 ```
 
 - `added` → "New" (capabilities that didn't exist before). `improved` → "Improved" (changed/enhanced behavior). `fixed` → "Fixed".
-- `headline`, **required for any bucketed release** (one or more `added`/`improved`/`fixed` items). A short title or one plain sentence, leading with the release's reason to exist. The buckets render with no title of their own, so a bucketed card with no `headline` ships titleless (this is exactly how `1.1.0` lost its title). A grab-bag with no single story still gets a `headline`: use a descriptive umbrella line naming the two or three biggest items ("Built-in a11y testing, dead-code detection, and Serena code intelligence"), never nothing. The only way to omit `headline` is to let a `summary` carry the lead instead (see below). For a newly-shipped capability, carry the rule 1 `now` into the headline too, "GAIA apps now ship with a CSP", not "ship with". The website build enforces this: `scripts/check-release-titles.mjs` (wired into `pnpm build` and `pnpm check:releases`) fails if any release file has neither a `headline` nor a `summary`, and the `Release` type in `types.ts` encodes the same lead-required rule.
+- `headline`, **required for any bucketed release** (one or more `added`/`improved`/`fixed` items). A short title or one plain sentence, leading with the release's reason to exist. The buckets render with no title of their own, so a bucketed card with no `headline` ships titleless. A grab-bag with no single story still gets a `headline`: use a descriptive umbrella line naming the two or three biggest items ("Built-in a11y testing, dead-code detection, and Serena code intelligence"), never nothing. The only way to omit `headline` is to let a `summary` carry the lead instead (see below). For a newly-shipped capability, carry the rule 1 `now` into the headline too, "GAIA apps now ship with a CSP", not "ship with". The website build enforces this: `scripts/check-release-titles.mjs` (wired into `pnpm build` and `pnpm check:releases`) fails if any release file has neither a `headline` nor a `summary`, and the `Release` type in `types.ts` encodes the same lead-required rule.
 - `summary` vs buckets, **mutually exclusive.** The renderer shows `summary` as a single paragraph _instead of_ the `added`/`improved`/`fixed` lists. The choice is driven by **how many distinct adopter-facing items survive the cut, not by the release's age or whether it's a backfill.** Use **buckets** whenever one or more itemizable adopter-facing changes remain; each lands as its own bullet under New/Improved/Fixed. Reserve `summary` for: (1) an **internal-only** release where every change was dropped as maintainer plumbing, a one-line "no adopter-facing changes" note (e.g. "Internal release-tooling fixes. No change to how GAIA apps behave."); (2) a genuine **one-sentence** story; or (3) a broad **inaugural / overview** release where a narrative reads better than a long list (the `1.0.0` entry). Never set both.
 - Bullet strings are markdown-lite: inline code in backticks, links as `[text](url)` (rendered as a new-tab link). Entry-reference links are _optional_ and are built from the trailing `(#N)` the entry carries: `https://github.com/gaia-react/gaia/issues/N` for the issue an entry closes, `https://github.com/gaia-react/gaia/pull/N` for an entry carrying a pull-request number. Include one only when a reader would genuinely follow it for detail, never as decoration. The exemplars below omit them.
 
@@ -142,7 +142,7 @@ Report for `1.3.5`:
 - two pnpm supply-chain lines (minimumReleaseAge quarantine, no-downgrade trustPolicy) → one "New" item
 ```
 
-### `1.4.0`, note the `#270` housekeeping drop (rules 5/6)
+### `1.4.0`, note the housekeeping drop (rules 5/6)
 
 ```ts
 export default {
@@ -161,10 +161,10 @@ Report for `1.4.0`:
 
 ```
 **Dropped** (with reason)
-- promote machine-local feedback memories into shared wiki (#270), reads like a feature but was the maintainer running /gaia-cleanse, a content action on GAIA's own wiki, not adopter-visible behavior (rule 5/6)
+- promote machine-local feedback memories into shared wiki, reads like a feature but was the maintainer running /gaia-cleanse, a content action on GAIA's own wiki, not adopter-visible behavior (rule 5/6)
 ```
 
-The `#270` trap is the whole point of rule 6: under `### Changed`, in imperative voice, it looks exactly like a shipped capability. It isn't. When the voice hides the subject and you can't resolve it from context, surface it under "Needs a human ruling" instead of dropping or keeping on instinct.
+The housekeeping trap is the whole point of rule 6: under `### Changed`, in imperative voice, it looks exactly like a shipped capability. It isn't. When the voice hides the subject and you can't resolve it from context, surface it under "Needs a human ruling" instead of dropping or keeping on instinct.
 
 ### When `summary` fits, internal-only or one-line releases
 

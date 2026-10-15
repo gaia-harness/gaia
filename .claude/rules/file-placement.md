@@ -2,7 +2,6 @@
 paths:
   - '.claude/hooks/**'
   - '.gaia/scripts/**'
-  - '.gaia/cli/src/**'
 ---
 
 # File Placement

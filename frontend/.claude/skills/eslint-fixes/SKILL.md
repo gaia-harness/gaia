@@ -10,7 +10,7 @@ How to resolve specific ESLint errors in this project.
 
 ## no-void
 
-Don't use the `void` operator in event listener functions. Instead, make the function `async` and `await` the promise.
+In an event handler, don't use the `void` operator: make the handler `async` and `await` the promise. Any other fire-and-forget statement (an effect body, a module-level call) uses `void`, never `.catch(() => {})`.
 
 ```tsx
 // BAD

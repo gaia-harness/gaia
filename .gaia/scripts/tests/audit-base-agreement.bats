@@ -863,14 +863,29 @@ probe_deadlock() {
 }
 
 @test "deadlock: each specialist's self-skip prose is wired to the whole-PR list" {
-  local member
+  # The self-skip arm lives once, in the member protocol's "Scope resolution"
+  # section, and each specialist definition sends its member there. So the
+  # arm is pinned inside that section, and each specialist is pinned to the
+  # pointer and to a resolver call that still resolves the whole-PR list.
+  local protocol="$REPO_ROOT/.claude/hooks/lib/audit-member-protocol.md" section member member_file
+  section="$(awk '/^## Scope resolution$/ { inside = 1; next } inside && /^## / { exit } inside { print }' "$protocol")"
+  [ -n "$section" ] || { printf 'the protocol has no "## Scope resolution" section\n'; return 1; }
+  grep -qF 'FULL_CHANGED=' <<<"$section" || {
+    printf 'the protocol scope section never names the FULL_CHANGED= lines\n'
+    return 1
+  }
+  grep -qF 'If no `FULL_CHANGED` path matches' <<<"$section" || {
+    printf 'the protocol scope section does not key the self-skip arm on FULL_CHANGED\n'
+    return 1
+  }
   for member in "${SPECIALISTS[@]}"; do
-    grep -qF 'FULL_CHANGED=' "$AGENTS_DIRECTORY/${member}.md" || {
-      printf '%s never names the FULL_CHANGED= lines\n' "$member"
+    member_file="$AGENTS_DIRECTORY/${member}.md"
+    grep -qF 'Read `<root>/.claude/hooks/lib/audit-member-protocol.md` by path and follow its "Scope resolution" section' "$member_file" || {
+      printf '%s does not send its member to the protocol scope section\n' "$member"
       return 1
     }
-    grep -qF 'If no `FULL_CHANGED` path matches' "$AGENTS_DIRECTORY/${member}.md" || {
-      printf '%s does not key its self-skip arm on FULL_CHANGED\n' "$member"
+    grep -qE "^<root>/\.gaia/scripts/audit-resolve-scope\.sh --member ${member} --root <root>$" "$member_file" || {
+      printf '%s does not run the resolver in the form that prints FULL_CHANGED\n' "$member"
       return 1
     }
   done

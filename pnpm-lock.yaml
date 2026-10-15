@@ -198,8 +198,8 @@ importers:
         specifier: 21.2.3
         version: 21.2.3
       '@gaia-react/lint':
-        specifier: 3.0.0-rc.6
-        version: 3.0.0-rc.6(cd0a673153338cf06e65d194ecdbb9e1)
+        specifier: 3.0.0-rc.7
+        version: 3.0.0-rc.7(cd0a673153338cf06e65d194ecdbb9e1)
       lint-staged:
         specifier: 17.6.0
         version: 17.6.0
@@ -226,8 +226,8 @@ importers:
         version: 4.6.6
     devDependencies:
       '@gaia-react/lint':
-        specifier: 3.0.0-rc.6
-        version: 3.0.0-rc.6(cd0a673153338cf06e65d194ecdbb9e1)
+        specifier: 3.0.0-rc.7
+        version: 3.0.0-rc.7(cd0a673153338cf06e65d194ecdbb9e1)
       '@types/node':
         specifier: 26.6.5
         version: 26.6.5
@@ -365,8 +365,8 @@ importers:
         specifier: 10.6.0
         version: 10.6.0
       '@gaia-react/lint':
-        specifier: 3.0.0-rc.6
-        version: 3.0.0-rc.6(cd0a673153338cf06e65d194ecdbb9e1)
+        specifier: 3.0.0-rc.7
+        version: 3.0.0-rc.7(cd0a673153338cf06e65d194ecdbb9e1)
       '@msw/data':
         specifier: 1.1.8
         version: 1.1.8
@@ -1235,8 +1235,8 @@ packages:
   '@floating-ui/utils@0.2.12':
     resolution: {integrity: sha512-HpCo8tmWzLVad5s2d19EhAz5zqrrQ6s69qd6moPMQvkOuSwDT1YgRfWSVuc4ennqrgv3OHppiOGMQ7oC13yIww==}
 
-  '@gaia-react/lint@3.0.0-rc.6':
-    resolution: {integrity: sha512-5JVryw0JucOCMIGCmFtYI1OCnECE+S3HNjYnEWpc1IwnV35CQDgZqXeHDCJQmKSwwqHzIB/t5LzEzZRup+zRWQ==}
+  '@gaia-react/lint@3.0.0-rc.7':
+    resolution: {integrity: sha512-hcpPCnhP8i+2KbahRMb8CE54B7IOi1H4vU2Uq5W5IDl4Nx1ZNK4UuX/1hFm6hGQdWI3mzYOb7xXHta9GO5O7Tg==}
     engines: {node: '>=22.19.0'}
     peerDependencies:
       eslint: ^9.30.0
@@ -7304,7 +7304,7 @@ snapshots:
 
   '@floating-ui/utils@0.2.12': {}
 
-  '@gaia-react/lint@3.0.0-rc.6(cd0a673153338cf06e65d194ecdbb9e1)':
+  '@gaia-react/lint@3.0.0-rc.7(cd0a673153338cf06e65d194ecdbb9e1)':
     dependencies:
       '@eslint-community/eslint-plugin-eslint-comments': 4.8.1(eslint@9.39.5(jiti@2.7.0)(supports-color@10.2.2))
       '@eslint-react/eslint-plugin': 5.26.0(eslint@9.39.5(jiti@2.7.0)(supports-color@10.2.2))(supports-color@10.2.2)(typescript@6.0.3)
