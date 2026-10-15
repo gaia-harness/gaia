@@ -275,7 +275,7 @@ run_hook_edit() {
 
 # tech-debt #934. plan.md puts the plan folder in the main checkout by contract
 # and has the worktree-mode orchestrator write PROGRESS.md back to it after
-# every phase. A linked worktree's own .gaia/local/plans/ is empty, so the
+# every phase. A linked worktree holds no plans folder of its own, so the
 # main-checkout path is the ONLY path that resolves to a real ledger: there is
 # no valid twin, which is what the #841 silent-wrong-write requires. Denying
 # these blocks the sole correct write, costing every worktree-mode plan run its
@@ -290,7 +290,7 @@ run_hook_edit() {
 }
 
 # The spec-colocated arm of the same contract: a plan under
-# .gaia/local/specs/<SPEC-ID>/plan/ writes its PROGRESS.md there, and the
+# .notebook/specs/<SPEC-ID>/plan/ writes its PROGRESS.md there, and the
 # consolidated SUMMARY.md one directory up, both in the main checkout.
 @test "a worktree-mode write to the main checkout's .notebook/specs ledger is allowed" {
   make_repo

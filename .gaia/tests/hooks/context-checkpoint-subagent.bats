@@ -705,7 +705,7 @@ Yield handoff: $TEMPORARY_DIRECTORY/elsewhere/.notebook/plans/demo/handoffs/phas
   fires_ok skull "$SKULL"
 
   new_agent
-  local planner_handoff="$MAIN_ROOT/.gaia/local/plans/demo/handoffs/planner-yield-2.md"
+  local planner_handoff="$MAIN_ROOT/.notebook/plans/PLAN-001/handoffs/planner-yield-2.md"
   opted_in_agent "$AGENT" "$SKULL" "$planner_handoff"
   invoke "$(payload)"
   fires_ok skull "$SKULL" "$AGENT" "$planner_handoff"
@@ -727,7 +727,7 @@ Yield handoff: $TEMPORARY_DIRECTORY/elsewhere/.notebook/plans/demo/handoffs/phas
 
 @test "a plan dispatched before the opt-in existed (no Yield handoff line) stays silent at skull; the same prompt with the line emits" {
   local legacy_prompt
-  legacy_prompt="You are a task sub-agent for the plan. Your task doc is $MAIN_ROOT/.gaia/local/plans/demo/task-a.md. Read it whole first, then do the task.
+  legacy_prompt="You are a task sub-agent for the plan. Your task doc is $MAIN_ROOT/.notebook/plans/PLAN-001/task-a.md. Read it whole first, then do the task.
 
 How your run ends: a reply with no tool call ends it, and the orchestrator reads whatever you returned as your finished result."
   start_transcript "$AGENT" "$legacy_prompt"

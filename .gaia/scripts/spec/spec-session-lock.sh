@@ -87,7 +87,7 @@
 # Lock file path: <main_root>/.gaia/local/cache/spec-session-<spec_id>.lock,
 #   where main_root is resolved from <repo_root> via the shared main-root
 #   resolver. Deliberately anchored to main, not to repo_root directly: once
-#   the SPEC ledger and folder resolve to one main checkout, two worktrees can
+#   the SPEC row and folder resolve to one main checkout, two worktrees can
 #   genuinely author the same draft, and a per-tree lock cannot see a peer
 #   tree's holder. Anchoring to main makes the mutex reachable from every tree
 #   of the repository (the `.lock` extension is load-bearing: it must never
