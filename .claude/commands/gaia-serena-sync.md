@@ -2,7 +2,6 @@
 name: gaia-serena-sync
 description: Detects the languages Serena is not indexing and, on explicit consent, additively appends them to the `language_servers:` list (`languages:` before Serena 1.7) in `.serena/project.yml`, then prompts a Serena restart. Never mutates without a yes; inert without Serena.
 disable-model-invocation: true
-argument-hint: []
 ---
 
 Run the GAIA **serena-sync** workflow.

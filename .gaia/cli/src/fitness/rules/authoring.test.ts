@@ -326,6 +326,22 @@ describe('description rules', () => {
 
     expect(ids).toEqual([]);
   });
+
+  test.each([
+    {expected: [], invocation: true},
+    {expected: ['authoring.skill.description.no-when'], invocation: false},
+  ])(
+    'disable-model-invocation: $invocation decides whether a command needs a trigger',
+    ({expected, invocation}) => {
+      const ids = idsOf({
+        files: {
+          '.claude/commands/example.md': `---\ndescription: Reviews pull request diffs for security defects.\ndisable-model-invocation: ${invocation}\n---\nBody.\n`,
+        },
+      });
+
+      expect(ids).toEqual(expected);
+    }
+  );
 });
 
 describe('orphan references', () => {

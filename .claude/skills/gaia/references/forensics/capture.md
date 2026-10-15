@@ -2,6 +2,8 @@
 
 Read this fragment at the capture step. Execute every command listed; apply exclusion rules before assembling the snapshot.
 
+Contents: Universal capture; Class-specific state files; Exclusions; Read-only guarantees; Output format.
+
 ## Universal capture
 
 Always-included envelope, regardless of class:

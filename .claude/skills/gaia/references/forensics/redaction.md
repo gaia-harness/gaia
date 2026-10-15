@@ -2,6 +2,8 @@
 
 Lazy-loaded by the forensics runbook at the redact step. Apply this algorithm verbatim to the assembled report body before writing or filing. No external lookups, this fragment is self-contained.
 
+Contents: Inputs; Path conversion; Token patterns; Boundary anchors; Env-var policy; Audit table; Order of operations; Idempotency.
+
 This fragment is the authoritative redaction contract for `/gaia-forensics`.
 
 <!-- gaia:maintainer-only:start -->

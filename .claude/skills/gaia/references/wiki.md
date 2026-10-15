@@ -2,6 +2,8 @@
 
 Wiki-maintenance router. It runs sync, consolidate, and lint with fixes, and lands them as one commit on one branch and one PR.
 
+Contents: Arguments; The run; Sync; Consolidate; Lint.
+
 ## Arguments
 
 `/gaia-wiki` takes no arguments.
@@ -109,7 +111,7 @@ Two-stage, like consolidate. **Detection runs in a Haiku subagent** and writes t
 
 ### Stage 1, detection subagent
 
-Dispatch a Haiku subagent via `Agent`. The work is mechanical (rule-based orphan, dead-link, broken-wikilink, and frontmatter checks plus a deterministic drift severity table), Haiku is sufficient.
+Dispatch a Haiku subagent via `Agent` to run the playbook in `references/wiki/lint.md`. The work is mechanical (rule-based orphan, dead-link, broken-wikilink, and frontmatter checks plus a deterministic drift severity table), Haiku is sufficient.
 
 Spawn:
 

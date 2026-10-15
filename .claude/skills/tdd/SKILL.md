@@ -5,6 +5,8 @@ description: Runs test-driven development with a red-green-refactor loop. Use wh
 
 # Test-Driven Development
 
+Contents: Selecting a Stack Reference; Philosophy; Anti-Pattern: Horizontal Slices; Workflow; Checklist Per Cycle.
+
 ## Selecting a Stack Reference
 
 Before writing the first red test, consult the reference for your stack:

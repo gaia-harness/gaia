@@ -2,6 +2,8 @@
 
 Dispatched by the `/gaia-wiki` router (`references/wiki.md` → "Lint", stage 1). Runs in a Haiku subagent context, the lookup, scaffold, mechanical row of the model table in `wiki/concepts/Workflow Doctrine.md`. It detects and reports only; the parent fixes the findings afterwards (`references/wiki/lint-fix.md`).
 
+Contents: Playbook; Step 1: Create the report shell; Step 2: GAIA check #11: Wiki drift; Step 3: GAIA check #12: Dead repo-relative paths; Step 4: GAIA check #13: UAT/SPEC narrative-ref drift; Step 5: GAIA check #14: Orphan pages; Step 6: GAIA check #15: Frontmatter gaps; Step 7: GAIA check #16: Empty sections; Step 8: GAIA check #17: Broken wikilinks; Step 9: Surface to the user; Notes.
+
 ## Playbook
 
 GAIA-native wiki lint. Builds its own report shell, then writes GAIA-specific checks: **#11: Wiki drift check**, **#12: Dead repo-relative paths**, **#13: UAT/SPEC narrative-ref drift**, **#14: Orphan pages**, **#15: Frontmatter gaps**, **#16: Empty sections**, and **#17: Broken wikilinks**. Every check re-derives from a live `.gaia/cli/gaia wiki` CLI primitive on each run; the report is plain markdown that GAIA owns end to end.

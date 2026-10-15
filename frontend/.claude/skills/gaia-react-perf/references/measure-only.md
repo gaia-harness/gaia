@@ -7,6 +7,8 @@ memo-defeating reference instability behind an over-render, the matching
 react-doctor cross-reference, and the recommended structural-first fix. After a
 fix it re-captures to confirm the targeted finding goes to zero, then stops.
 
+Contents: Boundaries (read first, do not exceed); Step 1: Confirm intent and target; Step 2: Drive and capture; Step 3: Reduce; Step 4: Diagnose; Step 5: Hand off the fix; Step 6: Verify; Step 7: Stop.
+
 ## Boundaries (read first, do not exceed)
 
 - **v1 is measure-only.** The skill emits a diagnosis. The human (or Claude, in

@@ -119,6 +119,8 @@ On GAIA 1.6.1? Claude: choose Abort, then offer to migrate this project to 2.0.0
 
 ### Changed
 
+- `/gaia-codify` and `/gaia-residue` take no arguments: their `list` and `why` subcommands are gone, and every run is the full interactive review.
+- `/gaia-fitness` no longer asks a command marked `disable-model-invocation: true` for a "Use when" trigger, since only the model's choice to invoke reads one. GAIA's own shipped references and skills now carry the Contents lines and links the check expects, so its UPSTREAM block in your report is close to empty.
 - `@gaia-react/lint` moves to 3.0.0-rc.6, which adds type-aware safety rules, a required `-- reason` on every `eslint-disable`, ReDoS and dead-pattern regex checks, Fast Refresh export checks, rules that report Effects that should not be Effects or that leak a listener, timer or fetch, and React 19 forms in place of `forwardRef`, `useContext` and `<Context.Provider>`. `frontend/eslint.config.mjs` opts into the new `lint.i18n` (raw JSX text) and `lint.zod` blocks, and `import-x/no-unresolved` now checks tests and stories. Lint catches these as you write instead of at review. **Action required:** run `pnpm lint` and fix each finding or give it a disable with a `-- reason`; a project without i18n deletes the `...lint.i18n,` line from `frontend/eslint.config.mjs` (#2643)
 - The frontend audit now looks for quadratic lookups split across a component or function boundary, such as a list row that searches the whole collection for its own item, which react-doctor's same-scope lookup rules cannot see, and recommends building a `Map` or `Set` once or passing the item down (#2681)
 - The statusline context indicator now turns yellow at 25% on a 1M window instead of 20%; smaller windows are unchanged.
@@ -209,6 +211,7 @@ On GAIA 1.6.1? Claude: choose Abort, then offer to migrate this project to 2.0.0
 
 ### Fixed
 
+- Every GAIA command's `argument-hint` is now a quoted string. The `/gaia-debt` and `/gaia-spec` hints began with `[`, so strict YAML readers, `/gaia-fitness` among them, failed to parse those commands' frontmatter.
 - `/update-deps` no longer marks a security advisory `introduced by this run` when it was already in the lockfile on `main` but had no open Dependabot alert. The opening advisory set now includes every advisory `pnpm audit` reports, the same source the run's final security check reads (#2694)
 - `/update-deps` reports and PR descriptions no longer list a global tool or vendored skill that is already current; those sections appear only when there is something to act on, and a vendored skill row now names its skill (#2692)
 - `/update-deps` started on `main` now cuts its update branch as soon as you confirm what to update, before anything is installed. It used to wait until the first install batch and its quality gate had finished, so those ran on `main` and a session that died mid-gate left a half-applied install there (#2690)

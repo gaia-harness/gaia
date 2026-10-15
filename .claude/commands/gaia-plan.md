@@ -1,7 +1,7 @@
 ---
 name: gaia-plan
 description: Plans a complex feature with GAIA's task-orchestration pattern, structuring the work into fresh-context subagent phases for approval. Does not implement. Use when the user asks to plan a feature, break work into phases, or turn a SPEC into an execution plan.
-argument-hint: [feature description]
+argument-hint: "[feature description]"
 ---
 
 Run the GAIA **plan** workflow with these arguments: `$ARGUMENTS`
@@ -14,3 +14,4 @@ Read `.claude/skills/gaia/references/plan.md` from the project root and follow i
 - `.claude/skills/gaia/references/plan/decomposition-audit.md`: step 4.6, when the gauge runs the audit.
 - `.claude/skills/gaia/references/spec/lens-dispatch.md`: step 4.6, with the audit.
 - `.claude/skills/gaia/references/plan/planner.md`: never read on this thread; the planner sub-agent spawned at step 4 reads it first.
+- `.claude/skills/gaia/references/spec/uat-write.md`, `.claude/skills/gaia/references/spec/uat-divergence.md`, `.claude/skills/gaia/references/spec/wiki-promote.md`: never read on this thread; `planner.md` routes the planner to each at the step that needs it.

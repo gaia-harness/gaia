@@ -2,8 +2,10 @@
 name: gaia-release
 description: Maintainer-only. Cuts a new GAIA release. Bumps the version, graduates the CHANGELOG, regenerates the manifest, opens the release PR, then tags on merge.
 disable-model-invocation: true
-argument-hint: patch|minor|major
+argument-hint: "patch|minor|major"
 ---
+
+Contents: Required argument; Pre-flight: Worktree check; Workflow; Recovery: I tagged on the wrong commit.
 
 Cut a new GAIA release. Thin orchestrator over the `.gaia/cli/gaia-maintainer release` CLI namespace, which owns every deterministic step (preflight checks, semver bump, CHANGELOG graduation, wiki scrub, manifest regen, commit + tag dance). This command sequences the CLI subcommands and surfaces user-facing prompts where human judgment is required.
 

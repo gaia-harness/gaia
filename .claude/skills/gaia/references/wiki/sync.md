@@ -2,6 +2,8 @@
 
 Dispatched by the `/gaia-wiki` router (`references/wiki.md` → "Sync"). Runs in a Sonnet subagent context.
 
+Contents: Playbook; Step 1: Read state and compute drift; Step 2: Drift cap check; Step 3: First-pass, classify commits; Step 4: Second-pass, read diffs for WORTHY commits only; Step 5: Append to wiki/log.md; Step 5b: Fabrication guard, verify edits landed on disk; Step 6: Advance state file; Step 7: Leave the edits uncommitted; Step 8: Report; Failure modes.
+
 ## Playbook
 
 Evaluate every commit between `wiki/.state.json` `last_evaluated_sha` and HEAD. For each, decide whether the wiki needs an update. Edit pages, log decisions, advance state. Sync commits nothing: its edits stay uncommitted, and the router lands them with the later stages' edits in the run's one commit (`gaia wiki chain commit`, `references/wiki.md` → "The run", step 6). Never commit here.

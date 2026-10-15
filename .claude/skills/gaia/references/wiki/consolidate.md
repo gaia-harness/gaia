@@ -2,6 +2,8 @@
 
 Dispatched by the `/gaia-wiki` router (`references/wiki.md` → "Consolidate"). Detection runs in a Sonnet subagent; apply/state/report run in the parent.
 
+Contents: Playbook; Step 1, Build the page index; Step 2, Detection passes; Step 3, Render the report (subagent-final step); Step 4, Action prompts (parent-side, interactive); Step 5, Advance consolidate state; Step 6, Report; Notes.
+
 ## Playbook
 
 This workflow complements but does not replace the orchestrator's wiki promotion step (per-SPEC writes, before the merge, acting on `SUMMARY.md` frontmatter), the sync stage (commit-driven updates), or the lint stage (broken-thing detection and repair). It detects **redundancy and contradiction** across the wiki and proposes merges so the wiki stays an accurate "today's state of the app" snapshot.

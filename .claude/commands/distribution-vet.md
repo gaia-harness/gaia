@@ -8,6 +8,8 @@ disable-model-invocation: true
 
 Maintainer-only. Thin orchestrator over `.gaia/cli/gaia-maintainer`, which owns every deterministic step. This command supplies the one thing the CLI cannot: a classification of each newly-shipping file against the written distribution boundary, and a maintainer's answer on the few the taxonomy does not settle.
 
+Contents: Step 1. Find the unanswered files; Step 2. Decide which path applies; Step 3. Classify against the categories, then ask only what needs asking; Step 4. Apply every answer in one call; What this command never does; Coverage note.
+
 `.gaia/release-exclude` is the distribution boundary: a file ships to adopters if and only if git tracks it and no line in that file masks it. `.gaia/manifest.json` is the update policy `/update-gaia` consumes, and incidentally the ledger of which shipping files a maintainer has acknowledged. A file that git tracks, that no exclude line masks, and that the manifest does not yet list is "unanswered": it would ship, but nobody has said so on purpose.
 
 ## Step 1. Find the unanswered files

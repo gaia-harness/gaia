@@ -8,7 +8,7 @@
  * ledger suppresses, self-cleans the ledger, and prints the candidate list
  * plus the classless `unclassified` recurrence signal as JSON to stdout. The
  * statusline refresher composes a nudge reason from `triggers` (or from
- * counts when no review snapshot exists); `/gaia-codify review` re-runs this
+ * counts when no review snapshot exists); `/gaia-codify` re-runs this
  * to get the live list.
  *
  * No LLM, no drafting, no writes other than (indirectly) the ledger prune. The

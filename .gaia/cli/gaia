@@ -28884,7 +28884,7 @@ var AUTHORING_RULES = [
       const text = stripQuotedSpans(
         `${description} ${stringField2(file2, "when_to_use") ?? ""}`
       );
-      return TRIGGER_WORDS.test(text) ? [] : [
+      return TRIGGER_WORDS.test(text) || splitFrontmatter(file2.text).data["disable-model-invocation"] === true ? [] : [
         {
           file: file2.path,
           line: lineOfKey(file2.text, "description"),
@@ -28893,7 +28893,7 @@ var AUTHORING_RULES = [
         }
       ];
     }),
-    detection: "Neither description nor when_to_use names a trigger: when, whenever, trigger, or use for, if, on, after or before.",
+    detection: "In a skill or command the model can invoke, neither description nor when_to_use names a trigger: when, whenever, trigger, or use for, if, on, after or before.",
     ruleId: "authoring.skill.description.no-when",
     severity: "info"
   },

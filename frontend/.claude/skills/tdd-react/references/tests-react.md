@@ -1,5 +1,7 @@
 # React Testing Reference (Storybook stories + Vitest projects + MSW)
 
+Contents: Testing Layers; Component Tests via Stories; Hook Tests via `renderHook`; Service Tests via MSW; When to Mock; Testing Forms with Conform; Bad Tests; Worth Keeping: the Discriminator, Composition, and Platform Rules; Render-only stories and a11y; Red Flags.
+
 ## Testing Layers
 
 Four layers share one mocking foundation (`msw` + `@msw/data`). Write tests at the **lowest layer that can verify the behavior**, a button's disabled state is a story play, not E2E; a route's redirect is E2E, a loader's parsing is a service test.

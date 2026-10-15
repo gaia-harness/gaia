@@ -5,6 +5,8 @@ description: Applies GAIA's patterns and conventions for all Tailwind styling. U
 
 # Tailwind
 
+Contents: units; Colors; cn; Conditional classes; Variants with cva; Custom Values; When to create a role token.
+
 ## units
 
 Always use Tailwind units first. Custom values are a last resort (see Custom Values) and always `rem`, never `px`.

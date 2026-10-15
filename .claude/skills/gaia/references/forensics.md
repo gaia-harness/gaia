@@ -2,6 +2,8 @@
 
 Turn a GAIA workflow misfire into a redacted, classified, filing-ready bug report in one invocation. Read-only end-to-end: no remediation, no autofix, no state mutation.
 
+Contents: Hard constraints; Steps; Cost record (run end); Output schema (load-bearing); Hardcoded constants; Required reading.
+
 ## Hard constraints
 
 These four rules are non-negotiable and apply to every code path:

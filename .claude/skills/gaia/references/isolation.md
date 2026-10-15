@@ -4,6 +4,8 @@ The shared branch-vs-worktree decision. Its callers read this file and apply it:
 `ORCHESTRATOR.md` it generates), `/gaia-debt`, and ad-hoc work (through `.claude/skills/gaia/references/work-lifecycle.md`). This is the only definition of the decision order, the
 prompt, and the worktree-creation call. No caller restates any of it.
 
+Contents: Slots the caller supplies; Decide, in this order; Worktree creation; Export: `RESOLVED_MODE` and `RESOLVED_ROOT`.
+
 ## Slots the caller supplies
 
 The caller's pointer binds four slots. There is no fifth.

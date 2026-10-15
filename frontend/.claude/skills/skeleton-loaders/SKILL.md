@@ -7,6 +7,8 @@ description: Builds skeleton loading states that are pixel-perfect matches of re
 
 Build skeleton loading states that are pixel-perfect matches of real content.
 
+Contents: Transparent Text Technique; 200ms Delay Pattern; When to Use; Accessibility; Full Example Implementation.
+
 ## Transparent Text Technique
 
 Use real HTML elements (`<p>`, `<span>`, `<h2>`, `<button>`) with the same font classes as the real component, plus shimmer + transparency classes. This makes skeletons inherit exact line-height, font-size, and weight, producing pixel-perfect dimensions without hardcoded `h-*`/`w-*` values.
