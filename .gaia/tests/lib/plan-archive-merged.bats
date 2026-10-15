@@ -3,13 +3,11 @@
 # spec-archive-merged.sh (see spec-archive-merged.bats for the shared design
 # notes: age gate, consolidation gate, usage-ledger gate).
 #
-# Does NOT use helpers/tmp-spec-repo.sh: that shared harness seeds only the
-# specs ledger. Instead mirrors the self-copy sandbox pattern from
-# .gaia/scripts/tests/plan-archive.bats: copy the script under test plus its
-# runtime deps (usage.sh with its libraries, ledger-path-lib.sh) into an
-# isolated sandbox and seed the plans ledger explicitly, so every sweep touches
-# only throwaway fixtures. The usage-ledger gate reads the sandbox's own
-# usage.jsonl; the happy-path fixture seeds the gaia-plan close it needs.
+# Per-test fixture via helpers/tmp-notebook-repo.sh: a throwaway git repo that
+# carries the notebook library, the usage-gate scripts and an empty catalog, so
+# every sweep touches only throwaway fixtures. The usage-ledger gate reads the
+# fixture's own usage.jsonl; the happy-path seed adds the gaia-plan close it
+# needs.
 #
 # By the time a plan reaches this sweep it has already been reduced to
 # SUMMARY.md by plan-archive.sh, so the seeded happy-path fixture
@@ -23,34 +21,17 @@ bats_require_minimum_version 1.5.0
 setup() {
   THIS_DIRECTORY="$( cd "$( dirname "$BATS_TEST_FILENAME" )" && pwd )"
   REPO_ROOT="$( cd "$THIS_DIRECTORY/../../.." && pwd )"
-  SOURCE_LIBRARY_DIRECTORY="$REPO_ROOT/.gaia/scripts/spec"
-  ARCHIVE_SOURCE="$SOURCE_LIBRARY_DIRECTORY/plan-archive-merged.sh"
+  ARCHIVE_SOURCE="$REPO_ROOT/.gaia/scripts/spec/plan-archive-merged.sh"
   [ -x "$ARCHIVE_SOURCE" ] || skip "plan-archive-merged.sh not executable"
-
-  SANDBOX_RAW="$(mktemp -d "${BATS_TEST_TMPDIR}/sandbox.XXXXXX")"
-  SANDBOX="$(cd "$SANDBOX_RAW" && pwd -P)"
-  git -C "$SANDBOX" init --quiet
-
-  mkdir -p "$SANDBOX/.gaia/scripts/spec" "$SANDBOX/.gaia/scripts" \
-    "$SANDBOX/.gaia/local/plans" "$SANDBOX/.gaia/local/telemetry"
-
-  cp "$ARCHIVE_SOURCE" "$SANDBOX/.gaia/scripts/spec/plan-archive-merged.sh"
-  chmod +x "$SANDBOX/.gaia/scripts/spec/plan-archive-merged.sh"
-  cp "$SOURCE_LIBRARY_DIRECTORY/ledger-lib.sh" "$SANDBOX/.gaia/scripts/spec/ledger-lib.sh"
-  # Usage-ledger gate deps, copied so the gate resolves against this
-  # sandbox's own usage ledger instead of the real repo's.
   # shellcheck source=helpers/usage-gate.sh
   . "$THIS_DIRECTORY/helpers/usage-gate.sh"
-  copy_usage_gate "$REPO_ROOT" "$SANDBOX"
-  cp "$REPO_ROOT/.gaia/scripts/ledger-path-lib.sh" "$SANDBOX/.gaia/scripts/ledger-path-lib.sh"
-  cp "$REPO_ROOT/.gaia/scripts/main-root-lib.sh" "$SANDBOX/.gaia/scripts/main-root-lib.sh"
 
-  printf '{\n  "version": 1,\n  "plans": []\n}\n' > "$SANDBOX/.gaia/local/plans/ledger.json"
-  : > "$SANDBOX/.gaia/local/telemetry/usage.jsonl"
+  SANDBOX="$("$THIS_DIRECTORY/helpers/tmp-notebook-repo.sh")"
 
-  PLANS="$SANDBOX/.gaia/local/plans"
-  LEDGER="$SANDBOX/.gaia/local/plans/ledger.json"
+  PLANS="$SANDBOX/.notebook/plans"
+  CATALOG="$SANDBOX/.notebook/catalog.json"
   TELEMETRY="$SANDBOX/.gaia/local/telemetry"
+  mkdir -p "$PLANS"
 
   # A fixed merged_at ("2026-01-02T00:00:00Z"), so every reap test below needs
   # the age gate collapsed to stay deterministic regardless of wall-clock
@@ -61,6 +42,9 @@ setup() {
 teardown() {
   if [ -n "${SANDBOX:-}" ]; then
     rm -rf "$SANDBOX"
+  fi
+  if [ -n "${LINKED:-}" ]; then
+    rm -rf "$LINKED"
   fi
 }
 
@@ -79,18 +63,29 @@ refute_contains() {
   fi
 }
 
-# _seed_merged_plan <plan_id> [unrecorded]: appends a merged ledger row AND
+# _patch_catalog <jq-filter> [jq args...]: rewrite the catalog in place.
+_patch_catalog() {
+  local filter="$1" temporary_file
+  shift
+  temporary_file="$(mktemp)"
+  jq "$@" "$filter" "$CATALOG" > "$temporary_file"
+  mv "$temporary_file" "$CATALOG"
+}
+
+# _seed_merged_row_only <plan_id>: a merged catalog row with NO folder (the
+# archive-sweep skip-no-folder case).
+_seed_merged_row_only() {
+  _patch_catalog '.items += [{kind: "plan", id: $id, path: ("plans/" + $id), status: "merged", subject: $id, source: "allocated", created_at: "2026-01-01T00:00:00Z", status_changed_at: "2026-01-02T00:00:00Z", merged_at: "2026-01-02T00:00:00Z"}]' --arg id "$1"
+}
+
+# _seed_merged_plan <plan_id> [unrecorded]: appends a merged catalog row AND
 # writes the already-consolidated folder shape (SUMMARY.md only), the sweep's
 # happy-path fixture, plus the gaia-plan close the usage-ledger gate needs
 # unless the second argument is "unrecorded".
 _seed_merged_plan() {
   local id="$1"
   [ "${2:-}" = unrecorded ] || seed_close_row "$TELEMETRY" "plan:$id" gaia-plan
-  local temporary_file; temporary_file="$(mktemp)"
-  jq --arg id "$id" \
-    '.plans += [{id: $id, allocated_at: "2026-01-01T00:00:00Z", source: "allocated", subject: $id, status: "merged", merged_at: "2026-01-02T00:00:00Z"}]' \
-    "$LEDGER" > "$temporary_file"
-  mv "$temporary_file" "$LEDGER"
+  _seed_merged_row_only "$id"
   mkdir -p "$PLANS/$id"
   cat > "$PLANS/$id/SUMMARY.md" <<EOF
 ---
@@ -103,18 +98,20 @@ Consolidated summary body.
 EOF
 }
 
-# _seed_merged_row_only <plan_id>: a merged ledger row with NO folder (the
-# archive-sweep skip-no-folder case).
-_seed_merged_row_only() {
-  local id="$1"
-  local temporary_file; temporary_file="$(mktemp)"
-  jq --arg id "$id" \
-    '.plans += [{id: $id, allocated_at: "2026-01-01T00:00:00Z", source: "allocated", subject: $id, status: "merged", merged_at: "2026-01-02T00:00:00Z"}]' \
-    "$LEDGER" > "$temporary_file"
-  mv "$temporary_file" "$LEDGER"
+# _write_summary <folder>: a well-formed consolidated SUMMARY.md.
+_write_summary() {
+  cat > "$1/SUMMARY.md" <<EOF
+---
+wiki_promote_default: ask
+wiki_promote_targets: []
+---
+# Summary
+
+Consolidated summary body.
+EOF
 }
 
-# _seed_folder_only <plan_id>: a folder with no ledger row (the sweep is
+# _seed_folder_only <plan_id>: a folder with no catalog row (the sweep is
 # row-driven, so it stays active).
 _seed_folder_only() {
   local id="$1"
@@ -123,43 +120,36 @@ _seed_folder_only() {
 }
 
 # _set_merged_at / _clear_merged_at <plan_id> [<iso>]: patch the seeded
-# ledger row's merged_at, for age-window and fail-closed tests.
+# catalog row's merged_at, for age-window and fail-closed tests.
 _set_merged_at() {
-  local id="$1" iso="$2"
-  local temporary_file; temporary_file="$(mktemp)"
-  jq --arg id "$id" --arg timestamp "$iso" \
-    '.plans |= map(if .id == $id then . + {merged_at: $timestamp} else . end)' \
-    "$LEDGER" > "$temporary_file"
-  mv "$temporary_file" "$LEDGER"
+  _patch_catalog '.items |= map(if .kind == "plan" and .id == $id then . + {merged_at: $timestamp} else . end)' --arg id "$1" --arg timestamp "$2"
 }
 
 _clear_merged_at() {
-  local id="$1"
-  local temporary_file; temporary_file="$(mktemp)"
-  jq --arg id "$id" \
-    '.plans |= map(if .id == $id then del(.merged_at) else . end)' \
-    "$LEDGER" > "$temporary_file"
-  mv "$temporary_file" "$LEDGER"
+  _patch_catalog '.items |= map(if .kind == "plan" and .id == $id then del(.merged_at) else . end)' --arg id "$1"
 }
 
 # _set_pr_number <plan_id> <number>: stamp the confirmed pr_number on a row.
 _set_pr_number() {
-  local id="$1" number="$2"
-  local temporary_file; temporary_file="$(mktemp)"
-  jq --arg id "$id" --argjson number "$number" \
-    '.plans |= map(if .id == $id then . + {pr_number: $number} else . end)' \
-    "$LEDGER" > "$temporary_file"
-  mv "$temporary_file" "$LEDGER"
+  _patch_catalog '.items |= map(if .kind == "plan" and .id == $id then . + {pr_number: $number} else . end)' --arg id "$1" --argjson number "$2"
 }
 
 # _set_status <plan_id> <status>: rewrite a row's status.
 _set_status() {
-  local id="$1" new_status="$2"
-  local temporary_file; temporary_file="$(mktemp)"
-  jq --arg id "$id" --arg value "$new_status" \
-    '.plans |= map(if .id == $id then . + {status: $value} else . end)' \
-    "$LEDGER" > "$temporary_file"
-  mv "$temporary_file" "$LEDGER"
+  _patch_catalog '.items |= map(if .kind == "plan" and .id == $id then . + {status: $value} else . end)' --arg id "$1" --arg value "$2"
+}
+
+# _row_field <plan_id> <field>: one field of a plan row, "none" when absent.
+_row_field() {
+  jq -r --arg id "$1" --arg field_name "$2" \
+    '.items[] | select(.kind == "plan" and .id == $id) | .[$field_name] // "none"' "$CATALOG"
+}
+
+# _snapshot: every path under the sandbox except git's own store, plus the
+# catalog bytes, for before/after comparison.
+_snapshot() {
+  find "$SANDBOX" -path "$SANDBOX/.git" -prune -o -print | LC_ALL=C sort
+  cksum < "$CATALOG"
 }
 
 # _days_ago <days>: portable ISO8601 timestamp that many days in the past, computed with
@@ -170,7 +160,7 @@ _days_ago() {
 
 # --- 1: delete happy path (SUMMARY.md-only, run recorded) ------------------
 
-@test "1: a merged row whose run is on the usage ledger is deleted; ledger row untouched" {
+@test "1: a merged row whose run is on the usage ledger is deleted; the row keeps its stamp and gains a reap record" {
   _seed_merged_plan PLAN-001
 
   run _archive "$SANDBOX"
@@ -178,10 +168,12 @@ _days_ago() {
   assert_contains "Deleted 1 merged plan folder(s): PLAN-001"
   [ ! -e "$PLANS/PLAN-001" ]
 
-  # Ledger row untouched: still merged, merged_at unchanged (the stamp is a
-  # precondition, not set by this sweep).
-  [ "$(jq -r '.plans[0].status' "$LEDGER")" = "merged" ]
-  [ "$(jq -r '.plans[0].merged_at' "$LEDGER")" = "2026-01-02T00:00:00Z" ]
+  # Row stamp untouched: still merged, merged_at unchanged (the stamp is a
+  # precondition, not set by this sweep). The reap record names this script.
+  [ "$(_row_field PLAN-001 status)" = "merged" ]
+  [ "$(_row_field PLAN-001 merged_at)" = "2026-01-02T00:00:00Z" ]
+  [ "$(jq -r '.items[] | select(.id == "PLAN-001") | .reap.by' "$CATALOG")" = "plan-archive-merged" ]
+  [ "$(jq -r '.items[] | select(.id == "PLAN-001") | .reap.at | test("^[0-9]{4}-")' "$CATALOG")" = "true" ]
 }
 
 # --- 2: single-id filter narrows the sweep -----------------------------------
@@ -195,6 +187,7 @@ _days_ago() {
   assert_contains "Deleted 1 merged plan folder(s): PLAN-001"
   [ ! -e "$PLANS/PLAN-001" ]
   [ -d "$PLANS/PLAN-002" ]
+  [ "$(_row_field PLAN-002 reap)" = "none" ]
 }
 
 # --- 5: the retired defer cache no longer blocks a reap ----------------------
@@ -220,6 +213,7 @@ _days_ago() {
   run _archive "$SANDBOX"
   [ "$status" -eq 0 ]
   refute_contains "Deleted"
+  [ "$(_row_field PLAN-005 reap)" = "none" ]
 }
 
 # --- 7: idempotent re-run ----------------------------------------------------
@@ -238,7 +232,7 @@ _days_ago() {
 
 # --- 8: only merged rows with folders are swept ------------------------------
 
-@test "8: a folder without a merged ledger row is never deleted" {
+@test "8: a folder without a merged catalog row is never deleted" {
   _seed_merged_plan PLAN-001
   _seed_folder_only PLAN-002
 
@@ -298,7 +292,7 @@ _days_ago() {
   assert_contains "Deleted 1 merged plan folder(s): PLAN-001"
   [ ! -e "$PLANS/PLAN-001" ]
 
-  [ "$(jq -r '.plans[0].status' "$LEDGER")" = "merged" ]
+  [ "$(_row_field PLAN-001 status)" = "merged" ]
 }
 
 
@@ -465,7 +459,7 @@ _days_ago() {
 
 @test "24: legacy arm: a merged row with no pr_number and an aged merged_at is reaped; inside the window it is kept" {
   _seed_merged_plan PLAN-001
-  [ "$(jq -r '.plans[0].pr_number // "none"' "$LEDGER")" = "none" ]
+  [ "$(_row_field PLAN-001 pr_number)" = "none" ]
   export GAIA_SPEC_RETENTION_DAYS=30
 
   _set_merged_at PLAN-001 "$(_days_ago 2)"
@@ -596,7 +590,7 @@ _days_ago() {
 
   run _archive "$SANDBOX"
   [ "$status" -eq 0 ]
-  assert_contains "Kept .gaia/local/plans/PLAN-001: no gaia-plan run recorded for plan:PLAN-001; outside a live gaia-plan run, record it: bash .gaia/scripts/usage.sh record plan:PLAN-001 --workflow gaia-plan --start <iso>"
+  assert_contains "Kept .notebook/plans/PLAN-001: no gaia-plan run recorded for plan:PLAN-001; outside a live gaia-plan run, record it: bash .gaia/scripts/usage.sh record plan:PLAN-001 --workflow gaia-plan --start <iso>"
   [ -d "$PLANS/PLAN-001" ]
   [ ! -e "$PLANS/PLAN-002" ]
 }
@@ -608,7 +602,7 @@ _days_ago() {
   run _archive "$SANDBOX"
   [ "$status" -eq 0 ]
   refute_contains "Deleted"
-  assert_contains "Kept .gaia/local/plans/PLAN-001: usage ledger missing or unreadable (.gaia/local/telemetry/usage.jsonl) for plan:PLAN-001; once it reads, outside a live gaia-plan run, record it: bash .gaia/scripts/usage.sh record plan:PLAN-001 --workflow gaia-plan --start <iso>"
+  assert_contains "Kept .notebook/plans/PLAN-001: usage ledger missing or unreadable (.gaia/local/telemetry/usage.jsonl) for plan:PLAN-001; once it reads, outside a live gaia-plan run, record it: bash .gaia/scripts/usage.sh record plan:PLAN-001 --workflow gaia-plan --start <iso>"
   [ -d "$PLANS/PLAN-001" ]
 }
 
@@ -621,4 +615,130 @@ _days_ago() {
   refute_contains "Deleted"
   assert_contains "no gaia-plan run recorded for plan:PLAN-001"
   [ -d "$PLANS/PLAN-001" ]
+}
+
+# --- 34-35: the notebook is the only place the sweep looks and deletes -------
+
+@test "34: a merged plan is deleted from the main notebook and a same-named folder in the old location is untouched" {
+  _seed_merged_plan PLAN-003
+  _set_pr_number PLAN-003 2601
+  mkdir -p "$SANDBOX/.gaia/local/plans/PLAN-003"
+  printf 'decoy\n' > "$SANDBOX/.gaia/local/plans/PLAN-003/SUMMARY.md"
+
+  run _archive "$SANDBOX"
+  [ "$status" -eq 0 ]
+  assert_contains "Deleted 1 merged plan folder(s): PLAN-003"
+  [ ! -e "$PLANS/PLAN-003" ]
+  [ "$(cat "$SANDBOX/.gaia/local/plans/PLAN-003/SUMMARY.md")" = "decoy" ]
+  [ "$(_row_field PLAN-003 reap | head -c 1)" = "{" ]
+}
+
+@test "34b: run from a linked worktree, the plan is deleted from main's notebook and the old-location folder is untouched" {
+  rm -rf "$SANDBOX"
+  fixture="$("$THIS_DIRECTORY/helpers/tmp-notebook-repo.sh" --worktree w)"
+  SANDBOX="$(printf '%s\n' "$fixture" | sed -n 1p)"
+  LINKED="$(printf '%s\n' "$fixture" | sed -n 2p)"
+  PLANS="$SANDBOX/.notebook/plans"
+  CATALOG="$SANDBOX/.notebook/catalog.json"
+  TELEMETRY="$SANDBOX/.gaia/local/telemetry"
+  _seed_merged_plan PLAN-003
+  _set_pr_number PLAN-003 2601
+  mkdir -p "$SANDBOX/.gaia/local/plans/PLAN-003"
+  printf 'decoy\n' > "$SANDBOX/.gaia/local/plans/PLAN-003/SUMMARY.md"
+
+  run bash "$LINKED/.gaia/scripts/spec/plan-archive-merged.sh" "$LINKED"
+  [ "$status" -eq 0 ]
+  assert_contains "Deleted 1 merged plan folder(s): PLAN-003"
+  [ ! -e "$PLANS/PLAN-003" ]
+  [ "$(cat "$SANDBOX/.gaia/local/plans/PLAN-003/SUMMARY.md")" = "decoy" ]
+  [ "$(jq -r '.items[] | select(.id == "PLAN-003") | .reap.by' "$CATALOG")" = "plan-archive-merged" ]
+  [ -L "$LINKED/.notebook" ]
+}
+
+@test "35: a row that already carries a reap record is skipped even when a folder is present" {
+  _seed_merged_plan PLAN-001
+  _patch_catalog '.items |= map(if .id == "PLAN-001" then . + {reap: {at: "2026-01-03T00:00:00Z", by: "plan-archive-merged"}} else . end)'
+
+  run _archive "$SANDBOX"
+  [ "$status" -eq 0 ]
+  refute_contains "Deleted"
+  [ -f "$PLANS/PLAN-001/SUMMARY.md" ]
+}
+
+# --- 36-37: path containment, red twins --------------------------------------
+
+@test "36: a row id that climbs out of the plans folder is skipped; the folder it points at survives" {
+  mkdir -p "$SANDBOX/.notebook/x" "$PLANS/PLAN-001"
+  _write_summary "$SANDBOX/.notebook/x"
+  printf 'precious\n' > "$SANDBOX/.notebook/x/precious.txt"
+  _seed_merged_row_only 'PLAN-001/../../x'
+  # The real usage gate already refuses a slash in the ref; a stub that always
+  # answers "recorded" leaves the id check as the only thing between the sweep
+  # and the folder.
+  printf '#!/usr/bin/env bash\nexit 0\n' > "$SANDBOX/.gaia/scripts/usage.sh"
+
+  # Guard can fail: the folder the id would reach exists, is a directory and
+  # holds a well-formed SUMMARY.md, so the consolidation, age and usage gates
+  # all pass and only the id check keeps it.
+  [ -d "$PLANS/PLAN-001/../../x" ]
+
+  run --separate-stderr _archive "$SANDBOX"
+  [ "$status" -eq 0 ]
+  refute_contains "Deleted"
+  [ "$(cat "$SANDBOX/.notebook/x/precious.txt")" = "precious" ]
+  [ "$(jq -r '.items[] | select(.kind == "plan") | has("reap")' "$CATALOG")" = "false" ]
+}
+
+@test "37: a symlinked plan folder pointing outside the notebook is refused and its target survives" {
+  outside="$BATS_TEST_TMPDIR/outside-target"
+  mkdir -p "$outside"
+  _write_summary "$outside"
+  printf 'precious\n' > "$outside/precious.txt"
+  seed_close_row "$TELEMETRY" plan:PLAN-002 gaia-plan
+  _seed_merged_row_only PLAN-002
+  ln -s "$outside" "$PLANS/PLAN-002"
+
+  run --separate-stderr _archive "$SANDBOX"
+  [ "$status" -eq 0 ]
+  refute_contains "Deleted"
+  [ -L "$PLANS/PLAN-002" ]
+  [ "$(cat "$outside/precious.txt")" = "precious" ]
+  [ "$(_row_field PLAN-002 reap)" = "none" ]
+}
+
+# --- 38: readiness -----------------------------------------------------------
+
+@test "38: a not-yet-moved repo exits 3 with the move command and removes nothing" {
+  rm -rf "$SANDBOX"
+  SANDBOX="$("$THIS_DIRECTORY/helpers/tmp-notebook-repo.sh" --legacy)"
+  PLANS="$SANDBOX/.notebook/plans"
+  CATALOG="$SANDBOX/.notebook/catalog.json"
+  TELEMETRY="$SANDBOX/.gaia/local/telemetry"
+  mkdir -p "$PLANS"
+  _seed_merged_plan PLAN-001
+  before="$(_snapshot)"
+
+  run --separate-stderr _archive "$SANDBOX"
+  [ "$status" -eq 3 ]
+  [ -z "$output" ]
+  grep -qF "bash .gaia/scripts/notebook/move.sh run" <<<"$stderr"
+  [ "$(_snapshot)" = "$before" ]
+  [ -f "$PLANS/PLAN-001/SUMMARY.md" ]
+}
+
+# --- 39: the tree selector ---------------------------------------------------
+
+@test "39: run from the real repo root, the sweep acts on the operand's fixture only" {
+  _seed_merged_plan PLAN-001
+  real_before="absent"
+  if [ -e "$REPO_ROOT/.notebook" ]; then real_before="$(find "$REPO_ROOT/.notebook/" | LC_ALL=C sort | cksum)"; fi
+
+  run bash -c 'cd "$1" && bash "$2/.gaia/scripts/spec/plan-archive-merged.sh" "$2"' _ "$REPO_ROOT" "$SANDBOX"
+  [ "$status" -eq 0 ]
+  assert_contains "Deleted 1 merged plan folder(s): PLAN-001"
+  [ ! -e "$PLANS/PLAN-001" ]
+
+  real_after="absent"
+  if [ -e "$REPO_ROOT/.notebook" ]; then real_after="$(find "$REPO_ROOT/.notebook/" | LC_ALL=C sort | cksum)"; fi
+  [ "$real_after" = "$real_before" ]
 }

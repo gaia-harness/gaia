@@ -31,9 +31,11 @@ gaia_make_temporary_directory() {
 }
 
 # gaia_new_main <prefix>: a real main checkout. git init, seeded identity,
-# commit.gpgsign false, a .gitignore excluding .gaia/local/ (written BEFORE any
-# .gaia/local content exists, so a later gaia_commit_all never accidentally
-# tracks per-tree working state), one initial commit, .gaia/local/ seeded.
+# commit.gpgsign false, a .gitignore excluding .gaia/local/ and the notebook
+# (written BEFORE any .gaia/local content exists, so a later gaia_commit_all
+# never accidentally tracks per-tree working state; the notebook library
+# refuses to write unless the notebook is ignored), one initial commit,
+# .gaia/local/ seeded.
 # Echoes the absolute main root.
 gaia_new_main() {
   local prefix="$1" main
@@ -42,7 +44,7 @@ gaia_new_main() {
   git -C "$main" config user.email test@example.com
   git -C "$main" config user.name Test
   git -C "$main" config commit.gpgsign false
-  printf '.gaia/local/\n' > "$main/.gitignore"
+  printf '.gaia/local/\n.notebook\n' > "$main/.gitignore"
   printf 'init\n' > "$main/README.md"
   git -C "$main" add -A
   git -C "$main" commit -q -m init

@@ -51,6 +51,8 @@ build_repo() {
     cp "$copied_file" "$REPO/.gaia/scripts/"
   done
   cp "$SOURCE_ROOT/.gaia/scripts/spec/with-ledger-lock.sh" "$REPO/.gaia/scripts/spec/"
+  mkdir -p "$REPO/.gaia/scripts/notebook"
+  cp "$SOURCE_ROOT"/.gaia/scripts/notebook/*.sh "$REPO/.gaia/scripts/notebook/"
   cat >"$REPO/.gaia/audit-ci.yml" <<'EOF'
 auditors:
   - name: code-audit-frontend

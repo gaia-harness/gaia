@@ -197,7 +197,7 @@ parity() {
 }
 
 @test "UAT-018 (reduced): declare, research writes, and a closed gaia-plan interval each resolve their own span, and spend after the interval returns to the latest research" {
-  local transcript_path research_root="$REPO/.gaia/local/research"
+  local transcript_path research_root="$REPO/.notebook/research"
   transcript_path="$(transcript_path_for_session s18)"
   run run_usage declare research:x --session s18 --at 2026-10-01T11:00:00Z
   [ "$status" -eq 0 ]

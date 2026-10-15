@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# spec-reconcile.sh: Reconcile finalized-but-open SPEC ledger rows against git
-# ground truth. For every .gaia/local/specs/ledger.json row whose status is
+# spec-reconcile.sh: Reconcile finalized-but-open SPEC catalog rows against git
+# ground truth. For every notebook catalog spec row whose status is
 # "ready" (the finalize state), check whether a merged PR exists whose head
 # branch is a plan branch naming that SPEC (.gaia/scripts/branch-name-lib.sh);
 # if so, flip the row to status "merged" and stamp
@@ -12,9 +12,9 @@
 # merge button, so nothing in the authoring flow can set it. This pass derives
 # it from git on demand and is the housekeeping counterpart to the allocator.
 #
-# Best-effort and fail-open by contract: a missing gh / jq / ledger / network,
+# Best-effort and fail-open by contract: a missing gh / jq / network,
 # an unmatched SPEC, or a ledger-update failure never blocks a caller. The only
-# observable effect is the ledger rows it can confidently advance. It prints one
+# observable effect is the catalog rows it can confidently advance. It prints one
 # line per reconciled SPEC to stdout.
 #
 # Usage:
@@ -22,7 +22,9 @@
 #
 # Exit: always 0 (advisory). The PR scan is capped at the 200 most recent merged
 # PRs; a SPEC whose PR is older than that is left as-is (logged to stderr), it is
-# already shipped and the stale ledger label is cosmetic, not a correctness gate.
+# already shipped and the stale status label is cosmetic, not a correctness gate.
+# Not ready (the one-time move to the notebook has not run): prints the move
+# command on stderr, changes nothing, still exits 0.
 set -uo pipefail
 
 if [ "$#" -lt 1 ]; then
@@ -32,28 +34,27 @@ fi
 
 repo_root="$1"
 _library_directory="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-# shellcheck source=../ledger-path-lib.sh
-. "${_library_directory}/../ledger-path-lib.sh" 2>/dev/null || true
+# shellcheck source=../notebook/notebook-lib.sh
+. "${_library_directory}/../notebook/notebook-lib.sh" 2>/dev/null || true
 # shellcheck source=../branch-name-lib.sh
 . "${_library_directory}/../branch-name-lib.sh" 2>/dev/null || true
 # Without the branch-naming library no merged PR can be matched to a SPEC.
 type gaia_branch_spec_number >/dev/null 2>&1 || exit 0
+type gaia_notebook_rows >/dev/null 2>&1 || exit 0
 
 # No jq, or not a git tree → nothing to do (checked before resolving main,
 # since resolving main needs a git tree too).
 command -v jq >/dev/null 2>&1 || exit 0
 git -C "$repo_root" rev-parse --git-dir >/dev/null 2>&1 || exit 0
 
-# repo_root names the tree this reconcile runs in; the ledger it reconciles
-# is main's, because the state registry declares specs/ main-only. Best-
-# effort by contract: an unresolvable main takes the same silent-exit-0 shape
-# as the git-tree check above, nothing touched.
-specs_directory="$(gaia_resolve_specs_directory "$repo_root" 2>/dev/null)" || exit 0
-[ -n "$specs_directory" ] || exit 0
-ledger_path="${specs_directory}/ledger.json"
-
-# No ledger → nothing to do.
-[ -f "$ledger_path" ] || exit 0
+# repo_root names the tree this reconcile runs in; the catalog it reconciles
+# is main's, resolved by the library from the tree selector. Best-effort by
+# contract: an unresolvable main or a not-ready notebook takes the same
+# exit-0 shape as the git-tree check above, nothing touched (the library has
+# already printed the move command for the not-ready case).
+export GAIA_NOTEBOOK_TREE="$repo_root"
+gaia_notebook_require_ready || exit 0
+rows_json="$(gaia_notebook_rows spec 2>/dev/null)" || exit 0
 
 # --- Normalize known-misnamed statuses to canonical (local, no network) ------
 # Pre-guard ledgers can carry an off-vocabulary status (a hand-edited or
@@ -69,18 +70,18 @@ canonicalize_status() {
   esac
 }
 
-off_vocabulary_ids="$(jq -r '
-  .specs[]
+off_vocabulary_ids="$(printf '%s' "$rows_json" | jq -r '
+  .[]
   | select((.status // "") as $row_status
       | ["draft","ready","merged","abandoned"] | index($row_status) | not)
   | .id
-' "$ledger_path" 2>/dev/null || true)"
+' 2>/dev/null || true)"
 
 if [ -n "$off_vocabulary_ids" ]; then
   while IFS= read -r off_vocabulary_id; do
     [ -n "$off_vocabulary_id" ] || continue
-    off_vocabulary_status="$(jq -r --arg id "$off_vocabulary_id" \
-      '.specs[] | select(.id == $id) | .status // "null"' "$ledger_path" 2>/dev/null || true)"
+    off_vocabulary_status="$(printf '%s' "$rows_json" | jq -r --arg id "$off_vocabulary_id" \
+      '.[] | select(.id == $id) | .status // "null"' 2>/dev/null || true)"
     canonical_status="$(canonicalize_status "$off_vocabulary_status")"
     if [ -n "$canonical_status" ]; then
       patch="$(jq -nc --arg canonical_status "$canonical_status" '{status: $canonical_status}')"
@@ -96,9 +97,7 @@ EOF
 fi
 
 # Candidate rows (local, cheap): finalized but not yet recorded as merged.
-candidates="$(jq -r '
-  .specs[] | select(.status == "ready") | .id
-' "$ledger_path" 2>/dev/null || true)"
+candidates="$(gaia_notebook_rows spec ready 2>/dev/null | jq -r '.[].id' 2>/dev/null || true)"
 [ -n "$candidates" ] || exit 0
 
 # Only now reach for the network. No gh, no remote, or a failed list → bail.

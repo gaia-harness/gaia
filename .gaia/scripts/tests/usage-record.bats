@@ -117,6 +117,8 @@ scratch_scripts() {
     [ -f "$file" ] && cp "$file" "$scratch/"
   done
   cp "$SCRIPTS/spec/with-ledger-lock.sh" "$scratch/spec/"
+  mkdir -p "$scratch/notebook"
+  cp "$SCRIPTS"/notebook/*.sh "$scratch/notebook/"
 }
 
 # ---------- close, flush, Cost line ----------

@@ -37,6 +37,8 @@ build_repo() {
   cp "$E2E_SOURCE_ROOT"/.claude/hooks/lib/*.sh "$REPO/.claude/hooks/lib/"
   cp "$E2E_SOURCE_ROOT"/.gaia/scripts/*.sh "$REPO/.gaia/scripts/"
   cp "$E2E_SOURCE_ROOT"/.gaia/scripts/spec/*.sh "$REPO/.gaia/scripts/spec/"
+  mkdir -p "$REPO/.gaia/scripts/notebook"
+  cp "$E2E_SOURCE_ROOT"/.gaia/scripts/notebook/*.sh "$REPO/.gaia/scripts/notebook/"
   cp "$E2E_SOURCE_ROOT/.claude/skills/gaia/references/spec/spec-template.md" "$REPO/.claude/skills/gaia/references/spec/"
   cp "$E2E_SOURCE_ROOT/.claude/skills/gaia/references/spec.md" "$REPO/.claude/skills/gaia/references/"
   cp "$E2E_SOURCE_ROOT/.claude/settings.json" "$REPO/.claude/settings.json"
@@ -202,7 +204,7 @@ subcommand_arguments() {
   case "$1" in
     link) echo "link spec:SPEC-002 research:x" ;;
     unlink) echo "unlink spec:SPEC-001 research:x" ;;
-    lineage) echo "lineage $REPO/.gaia/local/specs/SPEC-009/SPEC.md" ;;
+    lineage) echo "lineage $REPO/.notebook/specs/SPEC-009/SPEC.md" ;;
     declare) echo "declare research:x --session s-decl" ;;
     pr) echo "pr 101 --branch debt/123-slug" ;;
     pr-branch) echo "pr-branch 101" ;;

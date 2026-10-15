@@ -1,20 +1,20 @@
 #!/usr/bin/env bash
-# spec-allocator.sh: Allocate SPEC-NNN ids using the .gaia/local/specs/ledger.json
-# ledger, self-healed against deterministic markers in git (plan branches naming a SPEC) and
-# the working-tree SPEC files. The repo must be a git working tree.
+# spec-allocator.sh: Allocate SPEC-NNN ids using the notebook catalog's spec rows,
+# self-healed against deterministic markers in git (plan branches naming a SPEC) and
+# the SPEC folders on disk. The repo must be a git working tree.
 #
 # Usage:
-#   spec-allocator.sh next <repo_root> [<subject>]  # print next SPEC-NNN, reserve on remote, write ledger row
+#   spec-allocator.sh next <repo_root> [<subject>]  # print next SPEC-NNN, reserve on remote, write catalog row
 #   spec-allocator.sh highest <repo_root>           # print highest known SPEC-NNN, or "none"
 #   spec-allocator.sh in_progress <repo_root>       # print first unfinalized (draft) SPEC id, or "none"
 #   spec-allocator.sh reserve_pending <repo_root>   # push deferred provisional reservations; fail-open, exit 0
 #
 # Authority: the remote's spec/* tag namespace is the cross-team allocation
-# authority; the local, gitignored .gaia/local/specs/ledger.json is a per-machine
-# cache of draft status, intent, and timestamps, and one input to the union `next`
+# authority; the local, gitignored notebook catalog is a per-machine cache of
+# draft status, intent, and timestamps, and one input to the union `next`
 # reads. `next` performs a self-heal pass before allocating, any SPEC id found in a
 # branch name (the deterministic marker that GAIA tooling creates) is treated as
-# burned even if missing from the ledger. A skipped slot is strictly cheaper than a
+# burned even if missing from the catalog. A skipped slot is strictly cheaper than a
 # duplicate id. Commit messages are NOT scanned; they pick up free-text references
 # (test fixtures, regression notes) that would inflate the highest id incorrectly.
 #
@@ -28,7 +28,7 @@
 # uniform; the union parser strips leading zeros so a legacy spec/22 still parses.
 # Reservation tags are immutable: created once, never force-updated, never deleted
 # on the remote (a failed LOCAL tag may be deleted before retrying at a free number).
-# Each row records a `reservation` state:
+# Each row records a `reservation` state (an extra field on the catalog row):
 #   reserved     — tag confirmed pushed to the remote.
 #   provisional  — remote unreachable at allocation; deferred push pending (reserve_pending).
 #   local        — no origin remote configured; local-only numbering, no push ever needed.
@@ -46,17 +46,24 @@
 # next free number via spec-renumber.sh rather than keeping the collided number.
 #
 # Concurrency: the `next` read-union-reserve-write critical section runs under the
-# shared ledger mutex from with-ledger-lock.sh (flock when present, atomic-mkdir
-# fallback on stock macOS). The remote read/push and ledger append happen inside the
-# single held mutex so two same-machine `next` calls cannot interleave. A lock-
-# acquisition timeout (helper exit 75) maps to exit 4; reservation-retry exhaustion
-# also maps to exit 4; the caller (.claude/skills/gaia/references/spec.md step 3) handles exit
-# 4, and every other non-zero exit, by surfacing the error and halting. Lock env knobs (GAIA_LEDGER_LOCK_TIMEOUT_SECONDS / _STALE_SECONDS / _POLL_SECONDS /
-# _FORCE_FALLBACK): see with-ledger-lock.sh. Reservation env knobs:
+# notebook library's spec mint lock. The remote read and push happen inside that
+# one held lock so two same-machine `next` calls cannot interleave, while the
+# catalog row is written by one library call that takes the catalog write lock for
+# the write alone, so a plan or research write never waits on the remote tag push.
+# A lock-acquisition timeout (helper exit 75) maps to exit 4; reservation-retry
+# exhaustion also maps to exit 4; the caller (.claude/skills/gaia/references/spec.md
+# step 3) handles exit 4, and every other non-zero exit, by surfacing the error and
+# halting. Lock env knobs (GAIA_LEDGER_LOCK_TIMEOUT_SECONDS / _STALE_SECONDS /
+# _POLL_SECONDS / _FORCE_FALLBACK): see with-ledger-lock.sh. Reservation env knobs:
 #   GAIA_SPEC_REMOTE_TIMEOUT_SECONDS  per ls-remote / push bound (default 5)
 #   GAIA_SPEC_ALLOCATION_MAXIMUM_RETRIES    reservation retry bound     (default 5)
 #   GAIA_SPEC_FORCE_OFFLINE=1       force the unreachable path  (test knob)
 # `highest` and `in_progress` are read-only, take NO lock, and never touch the network.
+#
+# Not ready (the one-time move to the notebook has not run): `next`, `highest`
+# and `in_progress` exit 3 with the move command on stderr, minting nothing and
+# creating no folder; `reserve_pending` prints that line and exits 0, its
+# fail-open contract.
 set -euo pipefail
 
 if [ "$#" -lt 2 ]; then
@@ -67,6 +74,14 @@ fi
 mode="$1"
 repo_root="$2"
 subject_argument="${3:-}"
+
+case "$mode" in
+  next | highest | in_progress | reserve_pending) ;;
+  *)
+    echo "unknown mode: $mode" >&2
+    exit 2
+    ;;
+esac
 
 EMPTY_TREE="4b825dc642cb6eb9a060e54bf8d69288fbee4904"
 remote_timeout="${GAIA_SPEC_REMOTE_TIMEOUT_SECONDS:-5}"
@@ -83,10 +98,10 @@ _remote_tags_raw=""
 
 # Source the shared libs from this script's own directory so they resolve
 # identically from a caller in any checkout and from test copies of the lib dir (no
-# hardcoded repo path, template-distributed, repo-relative). The ledger-path
-# lib is reached by the same own-directory hop rather than through repo_root:
-# repo_root is the value whose trustworthiness is in question here, so loading
-# a library by it would decide correctness with the input under test.
+# hardcoded repo path, template-distributed, repo-relative). They are reached by
+# the same own-directory hop rather than through repo_root: repo_root is the
+# value whose trustworthiness is in question here, so loading a library by it
+# would decide correctness with the input under test.
 _library_directory="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 #
 # Each load is bracketed against a target that is present but UNPARSEABLE, and
@@ -96,19 +111,15 @@ _library_directory="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # /bin/bash 3.2.57, which aborts before the arm is ever evaluated. An
 # interrupted update, an unresolved merge conflict, and a truncated write all
 # leave exactly that state on disk.
-# shellcheck source=/dev/null
-set +e; [ -f "${_library_directory}/with-ledger-lock.sh" ] && . "${_library_directory}/with-ledger-lock.sh" 2>/dev/null; set -e
-type with_ledger_lock >/dev/null 2>&1 || {
-  echo "spec-allocator: the shared ledger mutex is unusable; refuse to allocate (would risk duplicate SPEC ids)" >&2
+# shellcheck source=../notebook/notebook-lib.sh
+set +e; [ -f "${_library_directory}/../notebook/notebook-lib.sh" ] && . "${_library_directory}/../notebook/notebook-lib.sh" 2>/dev/null; set -e
+type gaia_notebook_with_mint_lock >/dev/null 2>&1 || {
+  echo "spec-allocator: the notebook library is unusable; refuse to allocate (would risk duplicate SPEC ids)" >&2
   exit 4
 }
-# No probe of its own: the gaia_resolve_specs_directory call below already refuses
-# when the function is absent, which is the degrade this load owes.
-# shellcheck source=../ledger-path-lib.sh
-set +e; [ -f "${_library_directory}/../ledger-path-lib.sh" ] && . "${_library_directory}/../ledger-path-lib.sh" 2>/dev/null; set -e
 # The branch-naming library reads a SPEC number back out of a plan branch in
 # every spelling GAIA mints, the worktree one included. Loaded the same
-# bracketed way as the ledger-path lib above, for the same reason.
+# bracketed way as the notebook library above, for the same reason.
 # shellcheck source=../branch-name-lib.sh
 set +e; [ -f "${_library_directory}/../branch-name-lib.sh" ] && . "${_library_directory}/../branch-name-lib.sh" 2>/dev/null; set -e
 if ! type gaia_branch_spec_number >/dev/null 2>&1; then
@@ -123,43 +134,53 @@ require_git() {
   fi
 }
 
-# repo_root names the tree this allocation runs in; the ledger it feeds is
-# main's, because the state registry declares specs/ main-only. Resolve rather
-# than trust: from a linked worktree the operand is that worktree's own root,
-# and using it forks the ledger and points the mutex at a directory no peer
-# tree locks. A non-git operand is refused first with the existing "not a git
-# repository" contract (exit 3); the resolver then anchors to main and refuses
-# (exit 4) only when the operand is a repo whose main checkout is unresolvable
-# -- the same stance this script already takes on a lock it cannot acquire.
+# repo_root names the tree this allocation runs in; the catalog it feeds is
+# main's. The library resolves main from the tree selector, so a linked
+# worktree operand reaches the same catalog and the same locks as main does.
+# A non-git operand is refused first with the existing "not a git repository"
+# contract (exit 3); readiness then refuses (exit 3, the move command on
+# stderr) before the move has run; an unresolvable main refuses with exit 4,
+# the same stance this script takes on a lock it cannot acquire.
 require_git
-if ! specs_directory="$(gaia_resolve_specs_directory "$repo_root" 2>/dev/null)" || [ -z "$specs_directory" ]; then
-  echo "spec-allocator: cannot resolve the main checkout for '$repo_root'; refuse to allocate (would risk duplicate SPEC ids across worktrees)" >&2
+export GAIA_NOTEBOOK_TREE="$repo_root"
+ready_status=0
+gaia_notebook_require_ready || ready_status=$?
+if [ "$ready_status" -ne 0 ]; then
+  if [ "$mode" = "reserve_pending" ]; then
+    exit 0
+  fi
+  if [ "$ready_status" -eq 1 ]; then
+    echo "spec-allocator: cannot resolve the main checkout for '$repo_root'; refuse to allocate (would risk duplicate SPEC ids across worktrees)" >&2
+    exit 4
+  fi
+  exit "$ready_status"
+fi
+# A corrupt catalog would read as no rows and could hand out a burned number,
+# so every mode but the fail-open one refuses here, the library's diagnostic
+# already on stderr.
+if [ "$mode" != "reserve_pending" ] && ! gaia_notebook_catalog_read >/dev/null; then
+  echo "spec-allocator: the notebook catalog is unreadable; refuse to allocate (would risk duplicate SPEC ids)" >&2
   exit 4
 fi
-ledger_path="${specs_directory}/ledger.json"
 
 # Emit one bare integer per known SPEC number, one per line, unsorted.
 # Sources (all deterministic LOCAL markers; no free-text scanning, no network):
-#   1. .gaia/local/specs/ledger.json ledger
+#   1. The catalog's spec rows
 #   2. Local + remote-tracking plan branches naming a SPEC
-#   3. Working-tree folders .gaia/local/specs/<spec_id>/SPEC.md
+#   3. SPEC folders on disk in the notebook
 known_spec_numbers() {
-  if [ -f "$ledger_path" ]; then
-    jq -r '.specs[].id // empty' "$ledger_path" 2>/dev/null \
-      | sed -nE 's|^SPEC-0*([0-9]+)$|\1|p' || true
-  fi
+  gaia_notebook_rows spec 2>/dev/null | jq -r '.[].id // empty' 2>/dev/null \
+    | sed -nE 's|^SPEC-0*([0-9]+)$|\1|p' || true
 
   # The test is a builtin prefilter so a branch that cannot name a
-  # SPEC skips the subshells of the library; this scan runs under the ledger
+  # SPEC skips the subshells of the library; this scan runs under the mint
   # lock, and a repository carries hundreds of refs.
   gaia_branch_list "$repo_root" | while IFS= read -r branch; do
     if [[ "$branch" == *spec-* ]]; then gaia_branch_spec_number "$branch"; fi
   done
 
-  if [ -d "$specs_directory" ]; then
-    find "$specs_directory" -mindepth 2 -maxdepth 2 -type f -name 'SPEC.md' -print 2>/dev/null \
-      | sed -nE 's|.*/SPEC-0*([0-9]+)/SPEC\.md$|\1|p' || true
-  fi
+  gaia_notebook_folders spec 2>/dev/null \
+    | sed -nE 's|^SPEC-0*([0-9]+)$|\1|p' || true
 }
 
 # Highest known LOCAL SPEC number, or 0 if none. No network: the `highest`
@@ -175,48 +196,27 @@ highest_number() {
   echo "$maximum_number"
 }
 
-# Initialize the ledger file if missing. Empty ledger; entries are appended elsewhere.
-ensure_ledger() {
-  if [ ! -f "$ledger_path" ]; then
-    mkdir -p "$(dirname "$ledger_path")"
-    printf '{\n  "version": 1,\n  "specs": []\n}\n' > "$ledger_path"
-  fi
-}
-
-# Append a new row to the ledger atomically, carrying the reservation state and
-# tag-annotation subject. Keeps the `.specs += [...]` shape so a jq write failure
-# is surfaced as return 4 (mapped to exit 4 by `next`).
-append_ledger_row() {
-  local id="$1" reservation="$2" subject="$3"
-  local now temporary_file
-  now="$(date -u +'%Y-%m-%dT%H:%M:%SZ')"
-  ensure_ledger
-  temporary_file="$(mktemp)"
-  if ! jq --arg id "$id" --arg now "$now" --arg reservation "$reservation" --arg subject "$subject" \
-    '.specs += [{id: $id, allocated_at: $now, source: "allocated", status: "draft", reservation: $reservation, subject: $subject}]' \
-    "$ledger_path" > "$temporary_file"; then
-    rm -f "$temporary_file"
-    echo "spec-allocator: failed to update ledger at $ledger_path" >&2
-    # return (not exit) so the mkdir-lock trap still releases the lock dir;
+# Write a new draft row in one library call: the catalog stamps created_at and
+# status_changed_at, and the allocator's own fields ride in the extra object.
+# Returns 4 (mapped to exit 4 by `next`) when the write is refused.
+append_catalog_row() {
+  local id="$1" reservation="$2" subject="$3" extra
+  extra="$(jq -cn --arg reservation "$reservation" '{source: "allocated", reservation: $reservation}')"
+  if ! gaia_notebook_register spec "$id" draft "$subject" "" "$extra"; then
+    echo "spec-allocator: failed to write the catalog row for $id" >&2
+    # return (not exit) so the lock trap still releases the lock dir;
     # allocate_next propagates this exit_status and `next)` re-maps it to exit 4.
     return 4
   fi
-  mv "$temporary_file" "$ledger_path"
 }
 
-# Set an existing row's reservation state in place (mutex-protected pattern,
-# NOT routed through ledger-update.sh's status guard which only vets `status`).
-# Fail-open: a jq failure warns and returns 0 so a reconcile pass never crashes.
+# Set an existing row's reservation state in place, through the library's
+# update. Fail-open: a failure warns and returns 0 so a reconcile pass never
+# crashes.
 set_row_reservation() {
-  local id="$1" state="$2" temporary_file
-  [ -f "$ledger_path" ] || return 0
-  temporary_file="$(mktemp)"
-  if jq --arg id "$id" --arg reservation_state "$state" \
-    '.specs |= map(if .id == $id then .reservation = $reservation_state else . end)' \
-    "$ledger_path" > "$temporary_file"; then
-    mv "$temporary_file" "$ledger_path"
-  else
-    rm -f "$temporary_file"
+  local id="$1" state="$2" patch
+  patch="$(jq -cn --arg reservation_state "$state" '{reservation: $reservation_state}')"
+  if ! gaia_notebook_update spec "$id" "$patch" >/dev/null 2>&1; then
     echo "spec-allocator: failed to update reservation for $id" >&2
   fi
   return 0
@@ -226,7 +226,7 @@ set_row_reservation() {
 # none-when-empty contract preserved.
 #
 # A SPEC is "in flight" for resume-vs-start-new purposes only while it is being
-# authored. The ledger row is created at `next` (skill step 3) with status
+# authored. The catalog row is created at `next` (skill step 3) with status
 # "draft" and flipped to "ready" when the SPEC artifact is finalized and
 # frozen (skill step 8). Both transitions are owned by the same authoring
 # session, so this signal cannot go stale on a fragile downstream chain.
@@ -236,20 +236,16 @@ set_row_reservation() {
 # is deliberately not reported here. The merged transition is reconciled from
 # git ground truth by spec-reconcile.sh, out of this read path.
 #
-# Source: the .gaia/local/specs/ledger.json ledger only. The prior SPEC-file frontmatter
-# fallback is intentionally gone: every SPEC gets a ledger row at allocation, so
+# Source: the catalog's draft rows only. The prior SPEC-file frontmatter
+# fallback is intentionally gone: every SPEC gets a catalog row at allocation, so
 # a draft always has one, and scanning frozen SPEC files re-flagged finalized
 # work as in-flight forever (the staleness this design removes).
 in_progress_spec() {
-  if [ -f "$ledger_path" ]; then
-    local id
-    id="$(jq -r '
-      [.specs[] | select(.status == "draft")][0].id // empty
-    ' "$ledger_path" 2>/dev/null || true)"
-    if [ -n "$id" ]; then
-      printf '%s\n' "$id"
-      return
-    fi
+  local id
+  id="$(gaia_notebook_rows spec draft 2>/dev/null | jq -r '.[0].id // empty' 2>/dev/null || true)"
+  if [ -n "$id" ]; then
+    printf '%s\n' "$id"
+    return
   fi
   echo "none"
 }
@@ -441,7 +437,7 @@ _reconcile_one_provisional() {
   local spec_number tag subject push_exit_status tag_existence
   spec_number=$((10#${id#SPEC-}))
   tag="$(printf 'spec/%03d' "$spec_number")"
-  subject="$(jq -r --arg id "$id" '.specs[] | select(.id == $id) | .subject // empty' "$ledger_path" 2>/dev/null || true)"
+  subject="$(gaia_notebook_row spec "$id" 2>/dev/null | jq -r '.subject // empty' 2>/dev/null || true)"
   [ -z "$subject" ] && subject="$id"
   if ! create_local_tag "$tag" "$subject"; then
     set_row_reservation "$id" "unavailable"
@@ -473,14 +469,13 @@ _reconcile_one_provisional() {
 
 # Process every provisional+draft row (deferred push / renumber-on-collision).
 # Only a still-provisional, not-yet-shared draft is renumber-eligible; a
-# ready/merged row is left as accepted-stale. Runs with the ledger
-# mutex ALREADY held (called from allocate_next and, wrapped, from the
+# ready/merged row is left as accepted-stale. Runs with the spec mint lock
+# ALREADY held (called from allocate_next and, wrapped, from the
 # reserve_pending subcommand). Fail-open.
 _reserve_pending_locked() {
-  [ -f "$ledger_path" ] || return 0
   local ids id
-  ids="$(jq -r '.specs[] | select(.reservation == "provisional" and .status == "draft") | .id' \
-    "$ledger_path" 2>/dev/null || true)"
+  ids="$(gaia_notebook_rows spec draft 2>/dev/null \
+    | jq -r '.[] | select(.reservation == "provisional") | .id' 2>/dev/null || true)"
   [ -z "$ids" ] && return 0
   classify_remote
   if [ "$_remote_state" != "reachable" ]; then
@@ -512,14 +507,14 @@ reserve_reachable() {
     [ -z "$subject" ] && subject="$new_id"
     if ! create_local_tag "$tag" "$subject"; then
       echo "spec-allocator: cross-team collision-safety unavailable (could not create reservation tag): $new_id allocated from local numbering only" >&2
-      append_ledger_row "$new_id" "unavailable" "$subject" || return $?
+      append_catalog_row "$new_id" "unavailable" "$subject" || return $?
       printf '%s\n' "$new_id"
       return 0
     fi
     push_exit_status=0
     push_tag "$tag" || push_exit_status=$?
     if [ "$push_exit_status" -eq 0 ]; then
-      append_ledger_row "$new_id" "reserved" "$subject" || return $?
+      append_catalog_row "$new_id" "reserved" "$subject" || return $?
       printf '%s\n' "$new_id"
       return 0
     fi
@@ -535,7 +530,7 @@ reserve_reachable() {
           new_id="$(printf 'SPEC-%03d' "$candidate_number")"
           subject="$(normalize_subject "$requested_subject")"
           [ -z "$subject" ] && subject="$new_id"
-          append_ledger_row "$new_id" "provisional" "$subject" || return $?
+          append_catalog_row "$new_id" "provisional" "$subject" || return $?
           echo "spec-allocator: offline: $new_id reserved provisionally; the tag pushes on the next online allocation" >&2
           printf '%s\n' "$new_id"
           return 0
@@ -543,12 +538,12 @@ reserve_reachable() {
         ;;
       absent)
         echo "spec-allocator: cross-team collision-safety unavailable (tag namespace not writable): $new_id allocated from local numbering only" >&2
-        append_ledger_row "$new_id" "unavailable" "$subject" || return $?
+        append_catalog_row "$new_id" "unavailable" "$subject" || return $?
         printf '%s\n' "$new_id"
         return 0
         ;;
       error)
-        append_ledger_row "$new_id" "provisional" "$subject" || return $?
+        append_catalog_row "$new_id" "provisional" "$subject" || return $?
         echo "spec-allocator: offline: $new_id reserved provisionally; the tag pushes on the next online allocation" >&2
         printf '%s\n' "$new_id"
         return 0
@@ -559,12 +554,12 @@ reserve_reachable() {
   return 4
 }
 
-# The read-union-reserve-write critical section, run inside the ledger mutex so
+# The read-union-reserve-write critical section, run inside the spec mint lock so
 # two parallel `next` calls cannot read the same union and allocate a duplicate
 # id. Reconciles any prior provisional rows first, then classifies the remote
-# once and reserves by state. append_ledger_row returns (not exits) 4 on jq
-# failure; reserve_reachable returns 4 on retry exhaustion; both propagate so the
-# helper passes them through and the trap still runs.
+# once and reserves by state. append_catalog_row returns (not exits) 4 on a
+# refused write; reserve_reachable returns 4 on retry exhaustion; both propagate so
+# the helper passes them through and the trap still runs.
 allocate_next() {
   local requested_subject="${1:-}"
   local next_number new_id subject
@@ -576,7 +571,7 @@ allocate_next() {
       new_id="$(printf 'SPEC-%03d' "$next_number")"
       subject="$(normalize_subject "$requested_subject")"
       [ -z "$subject" ] && subject="$new_id"
-      append_ledger_row "$new_id" "local" "$subject" || return $?
+      append_catalog_row "$new_id" "local" "$subject" || return $?
       printf '%s\n' "$new_id"
       ;;
     unreachable)
@@ -584,7 +579,7 @@ allocate_next() {
       new_id="$(printf 'SPEC-%03d' "$next_number")"
       subject="$(normalize_subject "$requested_subject")"
       [ -z "$subject" ] && subject="$new_id"
-      append_ledger_row "$new_id" "provisional" "$subject" || return $?
+      append_catalog_row "$new_id" "provisional" "$subject" || return $?
       echo "spec-allocator: offline: $new_id reserved provisionally; the tag pushes on the next online allocation" >&2
       printf '%s\n' "$new_id"
       ;;
@@ -596,32 +591,24 @@ allocate_next() {
 
 case "$mode" in
   next)
-    require_git
-    ensure_ledger
-    # Lock-dir precondition: the dir must exist before with_ledger_lock.
-    # ensure_ledger already mkdir -p's it via the ledger parent, but make the
-    # precondition explicit and independent of ledger-init ordering.
-    mkdir -p "$specs_directory"
-    # Capture rc directly, NOT `if ! with_ledger_lock …; then rc=$?`: after a
+    # Capture rc directly, NOT `if ! with_mint_lock …; then rc=$?`: after a
     # `!`-negated command, $? is the negation's status (0), masking the real
     # rc. `|| rc=$?` preserves the helper's actual exit code under set -e.
     exit_status=0
-    with_ledger_lock "$specs_directory" allocate_next "$subject_argument" || exit_status=$?
+    gaia_notebook_with_mint_lock spec allocate_next "$subject_argument" || exit_status=$?
     if [ "$exit_status" -ne 0 ]; then
       if [ "$exit_status" -eq 75 ]; then
         echo "spec-allocator: could not acquire ledger lock; refuse to allocate (would risk duplicate SPEC ids)" >&2
         exit 4
       fi
-      exit "$exit_status"   # propagate append_ledger_row's rc 4 / retry-exhaustion 4, etc.
+      exit "$exit_status"   # propagate append_catalog_row's rc 4 / retry-exhaustion 4, etc.
     fi
     ;;
   reserve_pending)
-    require_git
-    ensure_ledger
-    mkdir -p "$specs_directory"
-    # Fail-open: process deferred reservations under the mutex, but always exit 0
-    # (a lock timeout or reconcile snag must never fail a caller's /gaia-spec).
-    with_ledger_lock "$specs_directory" _reserve_pending_locked || true
+    # Fail-open: process deferred reservations under the mint lock, but always
+    # exit 0 (a lock timeout or reconcile snag must never fail a caller's
+    # /gaia-spec).
+    gaia_notebook_with_mint_lock spec _reserve_pending_locked || true
     exit 0
     ;;
   highest)
@@ -634,9 +621,5 @@ case "$mode" in
     ;;
   in_progress)
     in_progress_spec
-    ;;
-  *)
-    echo "unknown mode: $mode" >&2
-    exit 2
     ;;
 esac

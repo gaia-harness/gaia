@@ -64,6 +64,8 @@ _umemo_build_tree() {
     cp "$script_file" "$root/.gaia/scripts/" || return 1
   done
   cp "$UM_SOURCE_ROOT/.gaia/scripts/spec/with-ledger-lock.sh" "$root/.gaia/scripts/spec/" || return 1
+  mkdir -p "$root/.gaia/scripts/notebook"
+  cp "$UM_SOURCE_ROOT"/.gaia/scripts/notebook/*.sh "$root/.gaia/scripts/notebook/" || return 1
   cat >"$root/.gaia/scripts/token-rates.json" <<'EOF'
 {
   "cache_multipliers": { "read": 0.1, "write_5m": 1.25, "write_1h": 2.0 },

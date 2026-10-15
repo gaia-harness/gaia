@@ -411,8 +411,8 @@ run_in_registry_repo() {
     "cache/shared/coaching-active.txt:residue"
     "audit/abc123.carried:residue"
     ".mentorship-swept:residue"
-    "plans/archived/PLAN-001:residue"
-    "specs/archived/SPEC-001:residue"
+    "plans/archived/PLAN-001:report-only"
+    "specs/archived/SPEC-001:report-only"
     "handoff/2026-07-23-x.md:residue"
   )
   local case_line relative_path expected got
@@ -449,17 +449,17 @@ run_in_registry_repo() {
   [ "$output" = "main-only" ]
 }
 
-@test "roots: the default local root does not match the moved rows" {
+@test "roots: the default local root judges the old roots by the report-only rows, never the moved rows" {
   run_in_registry_repo gaia_registry_classify specs/SPEC-001
-  [ "$output" = "unknown" ]
+  [ "$output" = "report-only" ]
   run_in_registry_repo gaia_registry_classify specs/SPEC-001 local
-  [ "$output" = "unknown" ]
+  [ "$output" = "report-only" ]
   run_in_registry_repo gaia_registry_classify catalog.json
   [ "$output" = "unknown" ]
   run_in_registry_repo gaia_registry_classify specs/archived/x
-  [ "$output" = "residue" ]
+  [ "$output" = "report-only" ]
   run_in_registry_repo gaia_registry_recognizes research/topic-2026-10-01 d
-  [ "$status" -eq 1 ]
+  [ "$status" -eq 0 ]
 }
 
 @test "roots: a local-root path is not matched by a notebook query" {
@@ -471,7 +471,7 @@ run_in_registry_repo() {
 
 @test "roots: a fixture registry whose specs row lacks root makes the notebook query unknown" {
   make_registry_repo
-  jq 'del(.entries[] | select(.id == "specs-main") | .root)' "$REGISTRY" >"$REGISTRY_REPO/.gaia/state-registry.json"
+  jq 'del(.report_only) | del(.entries[] | select(.id == "specs-main") | .root)' "$REGISTRY" >"$REGISTRY_REPO/.gaia/state-registry.json"
   run bash -c '
     cd "$1" || exit 1
     source "$1/.gaia/scripts/state-registry-lib.sh"
@@ -492,9 +492,9 @@ run_in_registry_repo() {
   run bash -c 'cd "$1" && bash .gaia/scripts/state-registry-lib.sh classify catalog.json notebook' _ "$REGISTRY_REPO"
   [ "$status" -eq 0 ]
   [ "$output" = "main-only" ]
-  run bash -c 'cd "$1" && bash .gaia/scripts/state-registry-lib.sh recognizes plans/PLAN-001 d notebook' _ "$REGISTRY_REPO"
+  run bash -c 'cd "$1" && bash .gaia/scripts/state-registry-lib.sh recognizes catalog.json f notebook' _ "$REGISTRY_REPO"
   [ "$status" -eq 0 ]
-  run bash -c 'cd "$1" && bash .gaia/scripts/state-registry-lib.sh recognizes plans/PLAN-001 d' _ "$REGISTRY_REPO"
+  run bash -c 'cd "$1" && bash .gaia/scripts/state-registry-lib.sh recognizes catalog.json f' _ "$REGISTRY_REPO"
   [ "$status" -eq 1 ]
 }
 

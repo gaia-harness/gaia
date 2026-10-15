@@ -287,7 +287,7 @@ edges() {
     _ "$SCRIPTS" "$MAIN" "$TELEMETRY_DIRECTORY"
 }
 
-@test "derived edges: branch names only; never a row of the retired cost store, never the plans ledger" {
+@test "derived edges: branch names only; never a row of the retired cost store, never the plans ledger or the notebook catalog" {
   local branch_name
   for branch_name in plan/spec-090-foo spec-084-x fix/2149-y debt/41-42-batch plan/plan-7-z feat/x; do
     printf '{"schema_version":1,"kind":"segment","key":"branch:%s","session_id":"d","inherit":false,"first_ts":"2026-10-01T00:00:00Z","last_ts":"2026-10-01T00:00:00Z","messages":1,"by_model":{}}\n' "$branch_name" >>"$TELEMETRY_DIRECTORY/usage.jsonl"
@@ -301,6 +301,8 @@ edges() {
     >"$TELEMETRY_DIRECTORY/cost"".jsonl"
   mkdir -p "$MAIN/.gaia/local/plans"
   printf '%s\n' '{"plans":[{"plan_id":"PLAN-777","branch":"feat/x","spec_id":"SPEC-778"}]}' >"$MAIN/.gaia/local/plans/ledger.json"
+  mkdir -p "$MAIN/.notebook"
+  printf '%s\n' '{"version":1,"items":[{"kind":"plan","id":"PLAN-777","path":"plans/PLAN-777","status":"ready","branch":"feat/x","spec_id":"SPEC-778"}]}' >"$MAIN/.notebook/catalog.json"
   run edges
   [ "$status" -eq 0 ]
   has_line "branch:plan/spec-090-foo spec:SPEC-090"

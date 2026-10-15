@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "description": "The one classification of every .gaia/local entry, transcribed by hand from the frozen state-model classification (never generated from code, which is what is under correction). Consumers read this instead of hand-maintaining their own lists. `path` is relative to .gaia/local/ unless the row carries `root: notebook`, in which case it is relative to <main>/.notebook (the root of specs, plans and research; `root` defaults to `local`, and a lookup matches only the rows of the root it asks for). A `path` may join more than one concrete on-disk shape with '|' when a single logical entry covers several filenames (e.g. a clearance marker's .ok/.refused siblings); each '|'-joined alternative is matched independently under the entry's own `match` rule. A `path` may also carry a '<placeholder>' token for a variable path segment (a spec id, a digest, a worktree name); for `match: glob` a placeholder behaves as a shell '*' wildcard, and for `match: prefix` only the literal text before the first '<' is significant. `residue` lists known dead-feature/legacy paths that are real on some machines but are not live state: never treated as drift and never a live entry. `bash .gaia/scripts/state-registry-lib.sh residue-sweep` lists the ones present and `--apply` deletes them. A residue row may name a `successor`, a .gaia/local-relative path its state moves to once: the sweep leaves that row's paths alone until the successor exists, so state a pending move has yet to carry is never deleted.",
+  "description": "The one classification of every .gaia/local entry, transcribed by hand from the frozen state-model classification (never generated from code, which is what is under correction). Consumers read this instead of hand-maintaining their own lists. `path` is relative to .gaia/local/ unless the row carries `root: notebook`, in which case it is relative to <main>/.notebook (the root of specs, plans and research; `root` defaults to `local`, and a lookup matches only the rows of the root it asks for). A `path` may join more than one concrete on-disk shape with '|' when a single logical entry covers several filenames (e.g. a clearance marker's .ok/.refused siblings); each '|'-joined alternative is matched independently under the entry's own `match` rule. A `path` may also carry a '<placeholder>' token for a variable path segment (a spec id, a digest, a worktree name); for `match: glob` a placeholder behaves as a shell '*' wildcard, and for `match: prefix` only the literal text before the first '<' is significant. `residue` lists known dead-feature/legacy paths that are real on some machines but are not live state: never treated as drift and never a live entry. `bash .gaia/scripts/state-registry-lib.sh residue-sweep` lists the ones present and `--apply` deletes them. A residue row may name a `successor`, a .gaia/local-relative path its state moves to once: the sweep leaves that row's paths alone until the successor exists, so state a pending move has yet to carry is never deleted. `report_only` lists the three old notebook roots (specs/, plans/, research/ under .gaia/local): paths under one are recognized (never Unknown), listed by the sweep once per root in a section of their own, and never deleted by `--apply` at any depth, whatever a residue row beneath them says; a human reviews what the one-time move left there.",
   "entries": [
     {
       "id": "setup-state",
@@ -653,20 +653,6 @@
       "writer": "none-residue"
     },
     {
-      "id": "plans-archived-residue",
-      "path": "plans/archived/",
-      "match": "prefix",
-      "why": "Legacy pre-existing archived-plan layout; the live plan-archive path reduces a plan folder in place today and does not move it here. Read only by repair and migration tooling.",
-      "writer": "none-residue"
-    },
-    {
-      "id": "specs-archived-residue",
-      "path": "specs/archived/",
-      "match": "prefix",
-      "why": "Legacy pre-existing archived-SPEC layout; the live spec-archive path reduces a SPEC folder in place today and does not move it here. Read only by repair and migration tooling.",
-      "writer": "none-residue"
-    },
-    {
       "id": "handoff-residue",
       "path": "handoff/",
       "match": "prefix",
@@ -795,18 +781,34 @@
       "writer": "none-residue"
     },
     {
-      "id": "plans-code-review-audit-ci-residue",
-      "path": "plans/code-review-audit-ci/",
-      "match": "prefix",
-      "why": "Contract notes for the removed GAIA CI audit and its commit trailer; nothing reads them.",
-      "writer": "none-residue"
-    },
-    {
       "id": "cache-retired-guard-residue",
       "path": "cache/spec-chain-*.json|cache/version-check.lock",
       "match": "glob",
       "why": "State of the removed spec-to-plan chain guard and the removed spec-kit version-check throttle; nothing reads or writes them.",
       "writer": "none-residue"
+    }
+  ],
+  "report_only": [
+    {
+      "id": "specs-old-root",
+      "path": "specs/",
+      "root": "local",
+      "match": "prefix",
+      "why": "SPEC folders and ledger of the pre-notebook layout. The one-time move carries them to the notebook; what it keeps (collision copies, archived/ layouts, the frozen ledger backup) stays here for a human to review."
+    },
+    {
+      "id": "plans-old-root",
+      "path": "plans/",
+      "root": "local",
+      "match": "prefix",
+      "why": "Plan folders and ledger of the pre-notebook layout, including slug-named plan folders and archived/ layouts the one-time move keeps; a human reviews what remains."
+    },
+    {
+      "id": "research-old-root",
+      "path": "research/",
+      "root": "local",
+      "match": "prefix",
+      "why": "Research folders of the pre-notebook layout. The one-time move carries them to the notebook; anything left is for a human to review."
     }
   ],
   "rm_whitelist": [

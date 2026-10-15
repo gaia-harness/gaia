@@ -24,14 +24,28 @@ teardown() {
 # Tranche 3 -- CONVERT
 # ---------------------------------------------------------------------------
 
-@test "C3-04: main-anchored ledgers resolve to main from a worktree" {
+# _notebook_library_files: the repo-relative notebook library files a fixture
+# running the real allocator needs (the library, its private parts and the
+# legacy-roots file it sources), derived from the real tree so a part added
+# later follows without an edit here.
+_notebook_library_files() {
+  local library_file
+  for library_file in "$GAIA_REPO_ROOT_REAL"/.gaia/scripts/notebook/notebook-lib*.sh "$GAIA_REPO_ROOT_REAL"/.gaia/scripts/notebook/legacy-roots.sh; do
+    [ -f "$library_file" ] && printf '%s\n' "${library_file#"$GAIA_REPO_ROOT_REAL"/}"
+  done
+}
+
+@test "C3-04: the notebook catalog resolves to main from a worktree" {
   MAIN="$(gaia_new_main gaia-c304-main)"
+  notebook_files="$(_notebook_library_files)"
+  [ -n "$notebook_files" ]
+  # shellcheck disable=SC2086  # one repo-relative path per line, none with spaces
   gaia_copy_real "$MAIN" \
     .gaia/scripts/spec/plan-allocator.sh \
     .gaia/scripts/spec/with-ledger-lock.sh \
     .gaia/scripts/spec/title-normalize.sh \
-    .gaia/scripts/ledger-path-lib.sh \
-    .gaia/scripts/main-root-lib.sh
+    .gaia/scripts/main-root-lib.sh \
+    $notebook_files
   gaia_commit_all "$MAIN" "add plan allocator"
 
   WORKTREE_B="$(gaia_add_worktree "$MAIN" treeB treeB)"
@@ -41,13 +55,22 @@ teardown() {
   root_b="$(run_in "$WORKTREE_B" -- git rev-parse --show-toplevel)"
   run bash "$MAIN/.gaia/scripts/spec/plan-allocator.sh" next "$root_b" "feature from B"
   [ "$status" -eq 0 ]
+  [ "$output" = "PLAN-001" ]
 
-  # Target: the write lands in the main checkout's one ledger, because the
-  # resolver -- not $PWD/$ROOT -- supplies the path. Today $ROOT resolves to
-  # B's own toplevel (plans/ is not among link-worktree.sh's five shared
-  # paths), so the row lands in a forked per-tree copy at
-  # B/.gaia/local/plans/ledger.json and main's ledger is never created.
-  [ -f "$MAIN/.gaia/local/plans/ledger.json" ]
+  # Target: the row lands in the main checkout's one catalog, because the
+  # library resolves main from the operand -- not $PWD/$ROOT -- and tree B
+  # never grows a notebook of its own (a link to main's is the only thing it
+  # may hold there).
+  run run_in "$MAIN" -- bash .gaia/scripts/notebook/notebook-lib.sh list plan
+  [ "$status" -eq 0 ]
+  [ "$(printf '%s' "$output" | jq -r 'length')" -eq 1 ]
+  [ "$(printf '%s' "$output" | jq -r '.[0].id')" = "PLAN-001" ]
+  [ "$(printf '%s' "$output" | jq -r '.[0].subject')" = "feature from B" ]
+  [ "$(printf '%s' "$output" | jq -r '.[0].status')" = "ready" ]
+  if [ -e "$WORKTREE_B/.notebook" ] && [ ! -L "$WORKTREE_B/.notebook" ]; then
+    echo "tree B grew a notebook of its own" >&2
+    return 1
+  fi
 }
 
 @test "C3-05: the project id is one value per clone" {
@@ -328,12 +351,15 @@ JS
 
 @test "C4-05: SPEC/plan locks serialize across worktrees" {
   MAIN="$(gaia_new_main gaia-c405-main)"
+  notebook_files="$(_notebook_library_files)"
+  [ -n "$notebook_files" ]
+  # shellcheck disable=SC2086  # one repo-relative path per line, none with spaces
   gaia_copy_real "$MAIN" \
     .gaia/scripts/spec/plan-allocator.sh \
     .gaia/scripts/spec/with-ledger-lock.sh \
     .gaia/scripts/spec/title-normalize.sh \
-    .gaia/scripts/ledger-path-lib.sh \
-    .gaia/scripts/main-root-lib.sh
+    .gaia/scripts/main-root-lib.sh \
+    $notebook_files
   gaia_commit_all "$MAIN" "add plan allocator"
 
   WORKTREE_A="$(gaia_add_worktree "$MAIN" treeA treeA)"
@@ -346,10 +372,11 @@ JS
   id_b="$(bash "$MAIN/.gaia/scripts/spec/plan-allocator.sh" next "$root_b" "feature B")"
 
   # Target: concurrent number allocations never both mint the same id -- the
-  # lock (and the ledger it guards) is anchored to main, so the second waits
-  # and reads the first's row. Today plan-allocator.sh is handed
-  # $ROOT = each tree's own toplevel (see C3-04), so each locks and numbers a
-  # SEPARATE, disconnected per-tree ledger, and both mint PLAN-001.
+  # mint lock (and the catalog it guards) is anchored to main, so the second
+  # waits and reads the first's row. plan-allocator.sh is handed $ROOT = each
+  # tree's own toplevel (see C3-04); the library resolves main from it, so
+  # both trees number against the one catalog instead of two disconnected
+  # per-tree ones that would both mint PLAN-001.
   [ "$id_a" != "$id_b" ]
 }
 

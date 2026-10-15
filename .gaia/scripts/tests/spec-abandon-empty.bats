@@ -1,10 +1,12 @@
 #!/usr/bin/env bats
 # Tests for `.gaia/scripts/spec/spec-abandon-empty.sh`: the guarded
 # sweep that retires a never-authored SPEC draft to the terminal `abandoned`
-# ledger status. Every test runs the real script against an isolated fixture
-# ledger, never the GAIA repo's own `.gaia/local/specs/ledger.json`.
+# status. Every test runs the real script against an isolated fixture
+# notebook, never the GAIA repo's own.
 #
 # Assertion style: bash-3.2-safe per .claude/rules/bats-assertions.md.
+
+bats_require_minimum_version 1.5.0
 
 setup() {
   LIBRARY_DIRECTORY="$(cd "$(dirname "$BATS_TEST_FILENAME")/../spec" && pwd)"
@@ -14,14 +16,17 @@ setup() {
   [ -x "$SCRIPT" ] || skip "spec-abandon-empty.sh not executable"
 
   SANDBOX="$(mktemp -d "${BATS_TEST_TMPDIR}/sandbox.XXXXXX")"
-  mkdir -p "$SANDBOX/.gaia/local/specs" "$SANDBOX/.gaia/local/cache" "$SANDBOX/.gaia/scripts"
-  # The scripts under test now resolve the main checkout via
-  # ledger-path-lib.sh/main-root-lib.sh, which requires a real git repo
-  # (fail-closed, no operand fallback); a plain mktemp -d is not one.
+  mkdir -p "$SANDBOX/.notebook/specs" "$SANDBOX/.gaia/local/cache" "$SANDBOX/.gaia/scripts/notebook"
+  # The scripts under test resolve the main checkout through the notebook
+  # library and main-root-lib.sh, which require a real git repo (fail-closed,
+  # no operand fallback); a plain mktemp -d is not one. The notebook must be
+  # gitignored for the library to write the catalog.
   git -C "$SANDBOX" init --quiet --initial-branch=main
-  cp "$REPO_SCRIPTS/ledger-path-lib.sh" "$REPO_SCRIPTS/main-root-lib.sh" "$SANDBOX/.gaia/scripts/"
-  chmod +x "$SANDBOX/.gaia/scripts/ledger-path-lib.sh" "$SANDBOX/.gaia/scripts/main-root-lib.sh"
-  LEDGER="$SANDBOX/.gaia/local/specs/ledger.json"
+  printf '.gaia/local\n.notebook\n' > "$SANDBOX/.gitignore"
+  cp "$REPO_SCRIPTS/main-root-lib.sh" "$SANDBOX/.gaia/scripts/"
+  cp "$REPO_SCRIPTS"/notebook/*.sh "$SANDBOX/.gaia/scripts/notebook/"
+  chmod +x "$SANDBOX/.gaia/scripts/main-root-lib.sh" "$SANDBOX"/.gaia/scripts/notebook/*.sh
+  CATALOG="$SANDBOX/.notebook/catalog.json"
 }
 
 # old_timestamp / new_timestamp: portable ISO8601 timestamps well outside / inside the
@@ -35,19 +40,23 @@ new_timestamp() {
   jq -rn '(now - 60) | strftime("%Y-%m-%dT%H:%M:%SZ")' # ~1m ago
 }
 
-# seed_ledger <json-specs-array>: writes the ledger with the given specs array.
-seed_ledger() {
-  printf '{"version": 1, "specs": %s}\n' "$1" > "$LEDGER"
+# seed_catalog <json-spec-rows-array>: writes the catalog with the given spec
+# rows, each given its kind and notebook-relative path.
+seed_catalog() {
+  jq -n --argjson rows "$1" '{
+    version: 1,
+    items: ($rows | map(. + {kind: "spec", path: ("specs/" + .id), subject: .id}))
+  }' > "$CATALOG"
 }
 
 status_of() {
-  jq -r --arg id "$1" '.specs[] | select(.id == $id) | .status' "$LEDGER"
+  jq -r --arg id "$1" '.items[] | select(.kind == "spec" and .id == $id) | .status' "$CATALOG"
 }
 
 # --- 1. Flips a fully empty, aged draft --------------------------------------
 
 @test "flips an empty draft older than the guard age to abandoned" {
-  seed_ledger "$(jq -nc --arg timestamp "$(old_timestamp)" '[{id: "SPEC-001", allocated_at: $timestamp, status: "draft"}]')"
+  seed_catalog "$(jq -nc --arg timestamp "$(old_timestamp)" '[{id: "SPEC-001", created_at: $timestamp, status: "draft"}]')"
   run bash "$SCRIPT" "$SANDBOX"
   [ "$status" -eq 0 ]
   [ "$(status_of SPEC-001)" = "abandoned" ]
@@ -55,17 +64,17 @@ status_of() {
 }
 
 @test "stamps abandoned_at on the flipped row" {
-  seed_ledger "$(jq -nc --arg timestamp "$(old_timestamp)" '[{id: "SPEC-001", allocated_at: $timestamp, status: "draft"}]')"
+  seed_catalog "$(jq -nc --arg timestamp "$(old_timestamp)" '[{id: "SPEC-001", created_at: $timestamp, status: "draft"}]')"
   run bash "$SCRIPT" "$SANDBOX"
   [ "$status" -eq 0 ]
-  abandoned_at="$(jq -r '.specs[0].abandoned_at // empty' "$LEDGER")"
+  abandoned_at="$(jq -r '.items[0].abandoned_at // empty' "$CATALOG")"
   [ -n "$abandoned_at" ]
 }
 
 # --- 2. Leaves a draft with a draft cache untouched (any age) ----------------
 
 @test "leaves a draft with a draft-<id>.md cache untouched" {
-  seed_ledger "$(jq -nc --arg timestamp "$(old_timestamp)" '[{id: "SPEC-002", allocated_at: $timestamp, status: "draft"}]')"
+  seed_catalog "$(jq -nc --arg timestamp "$(old_timestamp)" '[{id: "SPEC-002", created_at: $timestamp, status: "draft"}]')"
   echo "in progress" > "$SANDBOX/.gaia/local/cache/draft-SPEC-002.md"
   run bash "$SCRIPT" "$SANDBOX"
   [ "$status" -eq 0 ]
@@ -76,9 +85,9 @@ status_of() {
 # --- 3. Leaves a draft with a SPEC.md untouched ------------------------------
 
 @test "leaves a draft with a SPEC.md untouched" {
-  seed_ledger "$(jq -nc --arg timestamp "$(old_timestamp)" '[{id: "SPEC-003", allocated_at: $timestamp, status: "draft"}]')"
-  mkdir -p "$SANDBOX/.gaia/local/specs/SPEC-003"
-  echo "# SPEC" > "$SANDBOX/.gaia/local/specs/SPEC-003/SPEC.md"
+  seed_catalog "$(jq -nc --arg timestamp "$(old_timestamp)" '[{id: "SPEC-003", created_at: $timestamp, status: "draft"}]')"
+  mkdir -p "$SANDBOX/.notebook/specs/SPEC-003"
+  echo "# SPEC" > "$SANDBOX/.notebook/specs/SPEC-003/SPEC.md"
   run bash "$SCRIPT" "$SANDBOX"
   [ "$status" -eq 0 ]
   [ "$(status_of SPEC-003)" = "draft" ]
@@ -88,7 +97,7 @@ status_of() {
 # --- 4. Leaves a draft with a gate-1 snapshot untouched ----------------------
 
 @test "leaves a draft with a gate1-<id>.json snapshot untouched" {
-  seed_ledger "$(jq -nc --arg timestamp "$(old_timestamp)" '[{id: "SPEC-004", allocated_at: $timestamp, status: "draft"}]')"
+  seed_catalog "$(jq -nc --arg timestamp "$(old_timestamp)" '[{id: "SPEC-004", created_at: $timestamp, status: "draft"}]')"
   echo '{}' > "$SANDBOX/.gaia/local/cache/gate1-SPEC-004.json"
   run bash "$SCRIPT" "$SANDBOX"
   [ "$status" -eq 0 ]
@@ -99,7 +108,7 @@ status_of() {
 # --- 5. Leaves an empty draft younger than the guard age untouched ----------
 
 @test "leaves an empty draft younger than the guard age untouched" {
-  seed_ledger "$(jq -nc --arg timestamp "$(new_timestamp)" '[{id: "SPEC-005", allocated_at: $timestamp, status: "draft"}]')"
+  seed_catalog "$(jq -nc --arg timestamp "$(new_timestamp)" '[{id: "SPEC-005", created_at: $timestamp, status: "draft"}]')"
   run bash "$SCRIPT" "$SANDBOX"
   [ "$status" -eq 0 ]
   [ "$(status_of SPEC-005)" = "draft" ]
@@ -109,27 +118,27 @@ status_of() {
 # --- 6. Leaves a non-draft row untouched -------------------------------------
 
 @test "leaves a specified (non-draft) row untouched even if empty and aged" {
-  seed_ledger "$(jq -nc --arg timestamp "$(old_timestamp)" '[{id: "SPEC-006", allocated_at: $timestamp, status: "specified"}]')"
+  seed_catalog "$(jq -nc --arg timestamp "$(old_timestamp)" '[{id: "SPEC-006", created_at: $timestamp, status: "specified"}]')"
   run bash "$SCRIPT" "$SANDBOX"
   [ "$status" -eq 0 ]
   [ "$(status_of SPEC-006)" = "specified" ]
   [ -z "$output" ]
 }
 
-# --- 7. Unparseable allocated_at is treated as NOT aged ----------------------
+# --- 7. Unparseable created_at is treated as NOT aged ------------------------
 
-@test "treats an unparseable allocated_at as not aged (never guesses)" {
-  seed_ledger '[{"id": "SPEC-007", "allocated_at": "not-a-date", "status": "draft"}]'
+@test "treats an unparseable created_at as not aged (never guesses)" {
+  seed_catalog '[{"id": "SPEC-007", "created_at": "not-a-date", "status": "draft"}]'
   run bash "$SCRIPT" "$SANDBOX"
   [ "$status" -eq 0 ]
   [ "$(status_of SPEC-007)" = "draft" ]
   [ -z "$output" ]
 }
 
-# --- 8. Missing allocated_at is treated as NOT aged --------------------------
+# --- 8. Missing created_at is treated as NOT aged ----------------------------
 
-@test "treats a missing allocated_at as not aged (never guesses)" {
-  seed_ledger '[{"id": "SPEC-008", "status": "draft"}]'
+@test "treats a missing created_at as not aged (never guesses)" {
+  seed_catalog '[{"id": "SPEC-008", "status": "draft"}]'
   run bash "$SCRIPT" "$SANDBOX"
   [ "$status" -eq 0 ]
   [ "$(status_of SPEC-008)" = "draft" ]
@@ -139,10 +148,10 @@ status_of() {
 # --- 9. Multiple eligible drafts flip in one pass ----------------------------
 
 @test "flips multiple eligible drafts in one pass, leaves ineligible ones" {
-  seed_ledger "$(jq -nc --arg old "$(old_timestamp)" --arg new "$(new_timestamp)" '[
-    {id: "SPEC-010", allocated_at: $old, status: "draft"},
-    {id: "SPEC-011", allocated_at: $old, status: "draft"},
-    {id: "SPEC-012", allocated_at: $new, status: "draft"}
+  seed_catalog "$(jq -nc --arg old "$(old_timestamp)" --arg new "$(new_timestamp)" '[
+    {id: "SPEC-010", created_at: $old, status: "draft"},
+    {id: "SPEC-011", created_at: $old, status: "draft"},
+    {id: "SPEC-012", created_at: $new, status: "draft"}
   ]')"
   run bash "$SCRIPT" "$SANDBOX"
   [ "$status" -eq 0 ]
@@ -153,20 +162,20 @@ status_of() {
   grep -qF -- "SPEC-011" <<<"$output"
 }
 
-# --- 10. No ledger: exit 0, silent, no side effects --------------------------
+# --- 10. No catalog: exit 0, silent, no side effects -------------------------
 
-@test "no ledger file: exit 0, silent" {
-  rm -f "$LEDGER"
+@test "no catalog file: exit 0, silent, nothing created" {
+  rm -f "$CATALOG"
   run bash "$SCRIPT" "$SANDBOX"
   [ "$status" -eq 0 ]
   [ -z "$output" ]
-  [ ! -e "$LEDGER" ]
+  [ ! -e "$CATALOG" ]
 }
 
 # --- 11. No draft rows at all: exit 0, silent --------------------------------
 
-@test "ledger with no draft rows: exit 0, silent" {
-  seed_ledger "$(jq -nc --arg timestamp "$(old_timestamp)" '[{id: "SPEC-013", allocated_at: $timestamp, status: "merged"}]')"
+@test "catalog with no draft rows: exit 0, silent" {
+  seed_catalog "$(jq -nc --arg timestamp "$(old_timestamp)" '[{id: "SPEC-013", created_at: $timestamp, status: "merged"}]')"
   run bash "$SCRIPT" "$SANDBOX"
   [ "$status" -eq 0 ]
   [ -z "$output" ]
@@ -185,7 +194,7 @@ status_of() {
   # Sanity: ledger-update.sh itself accepts "abandoned" directly (the
   # chokepoint this sweep depends on), confirming the sweep and the guard
   # agree on the vocabulary rather than each hardcoding it separately.
-  seed_ledger '[{"id": "SPEC-014", "status": "draft"}]'
+  seed_catalog '[{"id": "SPEC-014", "status": "draft"}]'
   run bash "$LEDGER_UPDATE" "$SANDBOX" SPEC-014 '{"status":"abandoned"}'
   [ "$status" -eq 0 ]
   [ "$(status_of SPEC-014)" = "abandoned" ]
@@ -194,7 +203,7 @@ status_of() {
 # --- 14. Orphan lock is removed when a ghost row is abandoned ---------------
 
 @test "removes the orphan .lock file when a ghost draft is abandoned" {
-  seed_ledger "$(jq -nc --arg timestamp "$(old_timestamp)" '[{id: "SPEC-015", allocated_at: $timestamp, status: "draft"}]')"
+  seed_catalog "$(jq -nc --arg timestamp "$(old_timestamp)" '[{id: "SPEC-015", created_at: $timestamp, status: "draft"}]')"
   echo '{"spec_id":"SPEC-015"}' > "$SANDBOX/.gaia/local/cache/spec-session-SPEC-015.lock"
   run bash "$SCRIPT" "$SANDBOX"
   [ "$status" -eq 0 ]
@@ -208,9 +217,34 @@ status_of() {
   # A dead session's lock is precisely the ghost shape; the emptiness guard
   # never grows a fourth (`.lock`) check, so this row is abandoned exactly
   # like a lock-free ghost would be.
-  seed_ledger "$(jq -nc --arg timestamp "$(old_timestamp)" '[{id: "SPEC-016", allocated_at: $timestamp, status: "draft"}]')"
+  seed_catalog "$(jq -nc --arg timestamp "$(old_timestamp)" '[{id: "SPEC-016", created_at: $timestamp, status: "draft"}]')"
   echo '{"spec_id":"SPEC-016"}' > "$SANDBOX/.gaia/local/cache/spec-session-SPEC-016.lock"
   run bash "$SCRIPT" "$SANDBOX"
   [ "$status" -eq 0 ]
   [ "$(status_of SPEC-016)" = "abandoned" ]
+}
+
+# --- 16. A row id that would climb out of the specs folder is skipped --------
+
+@test "a traversal-shaped row id is skipped with a stderr line and never flipped" {
+  seed_catalog "$(jq -nc --arg timestamp "$(old_timestamp)" '[{id: "SPEC-001/../../x", created_at: $timestamp, status: "draft"}]')"
+  run --separate-stderr bash "$SCRIPT" "$SANDBOX"
+  [ "$status" -eq 0 ]
+  [ -z "$output" ]
+  [[ "$stderr" == *"refused the folder for row id"* ]]
+  [ "$(status_of 'SPEC-001/../../x')" = "draft" ]
+}
+
+# --- 17. Not ready: exit 3, the move line, nothing changed -------------------
+
+@test "a not-ready notebook exits 3 with the move line and changes nothing" {
+  seed_catalog "$(jq -nc --arg timestamp "$(old_timestamp)" '[{id: "SPEC-017", created_at: $timestamp, status: "draft"}]')"
+  mkdir -p "$SANDBOX/.gaia/local/specs"
+  printf '{"version": 1, "specs": []}\n' > "$SANDBOX/.gaia/local/specs/ledger.json"
+  before="$(cat "$CATALOG")"
+  run --separate-stderr bash "$SCRIPT" "$SANDBOX"
+  [ "$status" -eq 3 ]
+  [[ "$stderr" == *"bash .gaia/scripts/notebook/move.sh run"* ]]
+  [ "$(cat "$CATALOG")" = "$before" ]
+  [ "$(status_of SPEC-017)" = "draft" ]
 }

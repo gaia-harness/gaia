@@ -5,21 +5,24 @@
 #
 # Why this exists: a PR can merge out-of-band (the github.com button, another
 # session), or the orchestrator can end before its post-merge close, so the
-# SPEC folder lingers in the active specs dir with nothing to sweep it. This
-# pass is that sweep, after the ledger row has been reconciled to merged.
+# SPEC folder lingers in the notebook's specs folder with nothing to sweep it. This
+# pass is that sweep, after the catalog row has been reconciled to merged.
 #
-# Sweep criteria, per row: a .gaia/local/specs/ledger.json row is a delete
+# Sweep criteria, per row: a notebook catalog spec row is a delete
 # candidate when ALL hold:
-#   - row status == "merged"
-#   - an active artifact folder exists at .gaia/local/specs/<id>/ (the folder
-#     is the deletion unit; siblings go with it)
+#   - row status == "merged" and the row carries no reap record yet
+#   - an artifact folder exists for the id in the notebook's specs folder (the
+#     folder is the deletion unit; siblings go with it). The folder path comes
+#     from the notebook library, which refuses an id that would climb out of
+#     the specs folder and a folder that is a symlink: such a row is skipped
+#     with a stderr line and nothing is removed.
 #   - the folder holds no SPEC.md/AUDIT.md with an absent-or-empty
 #     SUMMARY.md (the consolidation gate below); consolidation never ran, so
 #     those layers are the sole record and are never destroyed
 #   - the row's merged_at is parseable AND has aged past the retention window
 #     (the age gate below); a missing or unparseable merged_at keeps the
 #     folder rather than reading as infinitely old
-# A merged row with no active folder (e.g. a pre-folder SPEC) is skipped.
+# A merged row with no folder (e.g. a pre-folder SPEC) is skipped.
 #
 # Age gate: a merged folder is kept until GAIA_SPEC_RETENTION_DAYS (default
 # 30; a non-numeric override falls back to 30) days have passed since the
@@ -40,15 +43,17 @@
 # the missing run and the `usage.sh record` recovery command, and the sweep
 # moves on to the next candidate.
 #
-# The ledger row's merged/merged_at stamp is a precondition set upstream (git
-# reconcile), not by this sweep, and stays untouched; it
-# is the identity record that survives once the folder is gone.
+# The catalog row's merged status and merged_at stamp are a precondition set
+# upstream (git reconcile), not by this sweep, and stay untouched; the row is
+# the identity record that survives once the folder is gone. After a
+# successful delete the sweep records a reap on the row, and a row carrying one
+# is skipped from then on.
 #
 # On a successful delete this reaps the SPEC's cache keyset (gate1/draft/
 # session/lock/audit), best-effort.
 #
 # Best-effort and fail-open by contract, exactly like spec-reconcile.sh: a
-# missing jq / ledger or an unrecorded run never blocks a caller. One stdout
+# missing jq or an unrecorded run never blocks a caller. One stdout
 # line summarizes what was deleted, and one names each kept folder;
 # diagnostics go to stderr.
 #
@@ -57,7 +62,9 @@
 # With <spec_id>, only that id is considered. With no id, every merged row is
 # swept. --close is accepted and ignored.
 #
-# Exit: always 0 (advisory).
+# Exit: 0 (advisory), except 3 when the one-time move to the notebook has not
+# run (the move command on stderr, nothing removed) and 4 when the catalog is
+# unreadable (nothing removed).
 set -uo pipefail
 
 args=()
@@ -97,15 +104,14 @@ _consolidation_gate_pass() {
   [ -s "$summary" ]
 }
 
-# Source the shared ledger-path and main-root libs from this script's own
-# directory, never through repo_root: repo_root is the value whose
-# trustworthiness is in question here, so loading a library by it would decide
-# correctness with the input under test. A library that cannot load sweeps
-# nothing.
+# Source the shared libs from this script's own directory, never through
+# repo_root: repo_root is the value whose trustworthiness is in question here,
+# so loading a library by it would decide correctness with the input under
+# test. A library that cannot load sweeps nothing.
 _library_directory="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-# shellcheck source=../ledger-path-lib.sh
-. "${_library_directory}/../ledger-path-lib.sh" 2>/dev/null || {
-  echo "spec-archive-merged: cannot load ${_library_directory}/../ledger-path-lib.sh; nothing swept" >&2
+# shellcheck source=../notebook/notebook-lib.sh
+. "${_library_directory}/../notebook/notebook-lib.sh" 2>/dev/null || {
+  echo "spec-archive-merged: cannot load the notebook library; nothing swept" >&2
   exit 0
 }
 # shellcheck source=../main-root-lib.sh
@@ -123,20 +129,23 @@ if ! type gaia_ledger_age_past_window >/dev/null 2>&1; then
   exit 0
 fi
 
-# repo_root names the tree this sweep runs in; the ledger and folders it
-# sweeps are main's, because the state registry declares specs/ main-only.
-# Best-effort by contract: an unresolvable main is one diagnostic and exit 0,
-# nothing touched.
-if ! specs_directory="$(gaia_resolve_specs_directory "$repo_root" 2>/dev/null)" || [ -z "$specs_directory" ]; then
+# No jq → nothing to do. (No git needed for the delete itself: notebook
+# folders are local and gitignored, so it is a plain filesystem rm, never a
+# git op.)
+command -v jq >/dev/null 2>&1 || exit 0
+
+# repo_root names the tree this sweep runs in; the catalog and folders it
+# sweeps are main's, resolved by the library from the tree selector. Readiness
+# is checked before any other gate: a not-ready notebook removes nothing.
+export GAIA_NOTEBOOK_TREE="$repo_root"
+ready_status=0
+gaia_notebook_require_ready || ready_status=$?
+if [ "$ready_status" -eq 1 ]; then
   echo "spec-archive-merged: cannot resolve the main checkout for '$repo_root'; nothing swept" >&2
   exit 0
+elif [ "$ready_status" -ne 0 ]; then
+  exit "$ready_status"
 fi
-ledger_path="${specs_directory}/ledger.json"
-
-# No ledger or no jq → nothing to do. (No git needed for the delete itself:
-# specs are local/gitignored, so it is a plain filesystem rm, never a git op.)
-[ -f "$ledger_path" ] || exit 0
-command -v jq >/dev/null 2>&1 || exit 0
 
 # The usage ledger lives under the main checkout, resolved from repo_root's own
 # git identity and never the caller's cwd. An unresolved root fails the gate
@@ -167,14 +176,18 @@ _usage_gate() {
   return 1
 }
 
-# Candidate rows (local, cheap): merged but possibly still in the active dir.
-# An optional single-id filter narrows the sweep to one row.
+# Candidate rows (local, cheap): merged, not yet reaped, possibly still on
+# disk. An optional single-id filter narrows the sweep to one row.
+merged_rows="$(gaia_notebook_rows spec merged)" || {
+  rows_status=$?
+  echo "spec-archive-merged: the notebook catalog is unreadable; nothing swept" >&2
+  exit "$rows_status"
+}
 if [ -n "$filter_id" ]; then
-  merged_ids="$(jq -r --arg id "$filter_id" \
-    '.specs[] | select(.status == "merged" and .id == $id) | .id' \
-    "$ledger_path" 2>/dev/null || true)"
+  merged_ids="$(printf '%s' "$merged_rows" | jq -r --arg id "$filter_id" \
+    '.[] | select(has("reap") | not) | select(.id == $id) | .id' 2>/dev/null || true)"
 else
-  merged_ids="$(jq -r '.specs[] | select(.status == "merged") | .id' "$ledger_path" 2>/dev/null || true)"
+  merged_ids="$(printf '%s' "$merged_rows" | jq -r '.[] | select(has("reap") | not) | .id' 2>/dev/null || true)"
 fi
 [ -n "$merged_ids" ] || exit 0
 
@@ -183,9 +196,19 @@ deleted_list=""
 while IFS= read -r spec_id; do
   [ -n "$spec_id" ] || continue
 
-  folder="${specs_directory}/${spec_id}"
-  # Skip merged rows with no active folder (already gone, or never had one).
+  # The library validates the id and refuses a symlinked or escaping folder;
+  # a refusal skips this row only.
+  if ! folder="$(gaia_notebook_item_directory spec "$spec_id" 2>/dev/null)" || [ -z "$folder" ]; then
+    echo "spec-archive-merged: refused the folder for row id '$spec_id' (invalid id, symlink or outside the notebook); skipped" >&2
+    continue
+  fi
+  # Skip merged rows with no folder (already gone, or never had one).
   [ -d "$folder" ] || continue
+
+  # The label shown in keep lines is the row's own notebook-relative path.
+  relative_folder="$(printf '%s' "$merged_rows" | jq -r --arg id "$spec_id" \
+    'first(.[] | select(.id == $id)) | .path // empty' 2>/dev/null || true)"
+  [ -n "$relative_folder" ] || relative_folder="specs/${spec_id}"
 
   # Consolidation gate: a folder still holding SPEC.md/AUDIT.md with no
   # consolidated SUMMARY.md is never reaped; those layers are its sole record.
@@ -197,7 +220,8 @@ while IFS= read -r spec_id; do
   # Age gate: cheaper than the representation gate below, and avoids computing
   # representation for a folder that is kept regardless. A missing/unparseable
   # merged_at keeps the folder (fail-closed). No caller bypasses it.
-  merged_at="$(jq -r --arg id "$spec_id" '.specs[] | select(.id==$id) | .merged_at // ""' "$ledger_path" 2>/dev/null || true)"
+  merged_at="$(printf '%s' "$merged_rows" | jq -r --arg id "$spec_id" \
+    'first(.[] | select(.id == $id)) | .merged_at // ""' 2>/dev/null || true)"
   if ! gaia_ledger_age_past_window "$merged_at" "$now_epoch" "$retention_days"; then
     echo "spec-archive-merged: $spec_id within retention window (or merged_at missing/unparseable); kept" >&2
     continue
@@ -207,14 +231,14 @@ while IFS= read -r spec_id; do
   # does not record. Any non-zero verdict, including an unresolved main
   # checkout, blocks this id and leaves the folder untouched. A folder that
   # holds a plan or plan-<N> subfolder also needs its gaia-plan run recorded.
-  if ! _usage_gate ".gaia/local/specs/${spec_id}" "spec:${spec_id}" gaia-spec; then
+  if ! _usage_gate "$relative_folder" "spec:${spec_id}" gaia-spec; then
     continue
   fi
   holds_plan=0
   for plan_subfolder in "$folder"/plan "$folder"/plan-[0-9]*; do
     [ -d "$plan_subfolder" ] && holds_plan=1
   done
-  if [ "$holds_plan" -eq 1 ] && ! _usage_gate ".gaia/local/specs/${spec_id}" "spec:${spec_id}" gaia-plan; then
+  if [ "$holds_plan" -eq 1 ] && ! _usage_gate "$relative_folder" "spec:${spec_id}" gaia-plan; then
     continue
   fi
 
@@ -228,9 +252,12 @@ while IFS= read -r spec_id; do
         "${local_cache}/spec-session-${spec_id}.lock" 2>/dev/null
   rm -rf "${local_cache}/audit-${spec_id}" 2>/dev/null
 
-  if ! rm -rf "$folder" 2>/dev/null; then
-    echo "spec-archive-merged: $spec_id folder delete failed; left active folder in place" >&2
+  if ! rm -rf "${folder:?}" 2>/dev/null; then
+    echo "spec-archive-merged: $spec_id folder delete failed; left folder in place" >&2
     continue
+  fi
+  if ! gaia_notebook_record_reap spec "$spec_id" spec-archive-merged.sh; then
+    echo "spec-archive-merged: $spec_id folder deleted but its reap record could not be written" >&2
   fi
 
   deleted_list="${deleted_list:+$deleted_list, }${spec_id}"

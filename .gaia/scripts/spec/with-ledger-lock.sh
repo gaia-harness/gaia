@@ -1,16 +1,16 @@
 #!/usr/bin/env bash
-# with-ledger-lock.sh: Single shared mutex helper for .gaia/local/specs/ledger.json
-# read-modify-write critical sections. Sourced (not executed) by sibling lib
-# scripts (spec-allocator.sh, plan-allocator.sh, ledger-update.sh) so the locking logic is defined
-# exactly once and cannot drift between two copies.
+# with-ledger-lock.sh: The shared mutex helper for read-modify-write critical
+# sections. It serializes over any lock directory it is given: the notebook
+# library's catalog and mint lock levels, and the Usage Ledger mutex. Sourced
+# (not executed) by the notebook library and the Usage Ledger scripts so the
+# locking logic is defined exactly once and cannot drift between copies.
 #
 # Public function:
 #   with_ledger_lock <lock_directory> <command> [args...]
 #
-# <lock_directory> is an already-existing directory (callers mkdir -p the ledger
-# parent before calling: the main-checkout specs/ or plans/ directory the
-# ledger-path lib resolves). <command> [args...]
-# runs inside the held mutex; its exit code passes through unchanged.
+# <lock_directory> is an already-existing directory (callers mkdir -p it before
+# calling). <command> [args...] runs inside the held mutex; its exit code
+# passes through unchanged.
 #
 # Lock primitive selection, in order:
 #   1. GAIA_LEDGER_LOCK_FORCE_FALLBACK=1 → atomic-mkdir lock (test knob).
@@ -33,8 +33,7 @@
 #
 # Diagnostics go to stderr only; the helper writes nothing to stdout itself.
 # On acquisition timeout it returns 75 (EX_TEMPFAIL); callers map this onto
-# their own ledger-write-failure exit code (see spec-allocator.sh /
-# ledger-update.sh headers).
+# their own write-failure exit code.
 #
 # This file is sourced, not run: it only defines the function and reads no env
 # until the function is called.

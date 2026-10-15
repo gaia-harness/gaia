@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Create a second clone of a --with-origin tmp-spec-repo.sh fixture's bare
+# Create a second clone of a --with-origin tmp-notebook-repo.sh fixture's bare
 # origin, for tests that need two independent working trees racing the same
 # remote (UAT-002, UAT-003). Prints the clone's path on stdout.
 #
@@ -9,7 +9,8 @@
 # `git clone` checks out the origin's committed tree verbatim, so the clone
 # inherits the lib scripts as real files (not symlinks) with their executable
 # bit intact, no separate copy loop needed: the origin already carries
-# whatever tmp-spec-repo.sh committed before pushing main.
+# whatever tmp-notebook-repo.sh committed before pushing main. The notebook is
+# gitignored, so the clone gets its own empty, ready catalog.
 set -euo pipefail
 
 if [ "$#" -ne 1 ]; then
@@ -24,5 +25,8 @@ git clone --quiet "$origin" "$clone_directory"
 git -C "$clone_directory" config user.email "test@example.com"
 git -C "$clone_directory" config user.name "Test"
 git -C "$clone_directory" config commit.gpgsign false
+
+mkdir -p "$clone_directory/.notebook"
+printf '{"version":1,"move_complete":{"at":"2026-01-01T00:00:00Z"},"items":[]}\n' > "$clone_directory/.notebook/catalog.json"
 
 echo "$clone_directory"

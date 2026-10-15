@@ -263,20 +263,21 @@ slug_of() {
   local main_checkout="$TEMPORARY_DIRECTORY/main" roots
   make_repo "$main_checkout"
   git -C "$main_checkout" worktree add -q "$main_checkout/.claude/worktrees/lw" -b wt-lw
-  roots="$(jq -nc --arg research_root "$main_checkout/.gaia/local/research/" '[$research_root]')"
-  [ "$(slug_of "$main_checkout/.gaia/local/research/topic-a-2026-10-01/README.md" "$roots")" = topic-a-2026-10-01 ]
-  [ "$(slug_of "$main_checkout/.gaia/local/research/release-2.0.0-readiness/notes/a.md" "$roots")" = release-2.0.0-readiness ]
-  [ "$(slug_of "$main_checkout/.gaia/local/research/DEBT-LOOP-DIAGNOSIS.md" "$roots")" = DEBT-LOOP-DIAGNOSIS ]
-  [ "$(slug_of "$main_checkout/.gaia/local/research/2250-carryover.patch" "$roots")" = null ]
-  [ "$(slug_of "/other/repo/.gaia/local/research/x/README.md" "$roots")" = null ]
-  [ "$(slug_of ".gaia/local/research/x/README.md" "$roots")" = null ]
-  [ "$(slug_of "$main_checkout/.gaia/local/research/../../x/README.md" "$roots")" = null ]
-  [ "$(slug_of "$main_checkout/.gaia/local/research/./x/a.md" "$roots")" = null ]
-  [ "$(slug_of "$main_checkout/.gaia/local/research//x/a.md" "$roots")" = null ]
-  [ "$(slug_of "$main_checkout/.gaia/local/research/x\"y/README.md" "$roots")" = null ]
-  [ "$(slug_of "$main_checkout/.gaia/local/research/.md" "$roots")" = null ]
-  [ "$(slug_of "$main_checkout/.gaia/local/research" "$roots")" = null ]
-  [ "$(slug_of "$main_checkout/.claude/worktrees/lw/.gaia/local/research/x/README.md" "$roots")" = null ]
+  roots="$(jq -nc --arg research_root "$main_checkout/.notebook/research/" '[$research_root]')"
+  [ "$(slug_of "$main_checkout/.notebook/research/topic-a-2026-10-01/README.md" "$roots")" = topic-a-2026-10-01 ]
+  [ "$(slug_of "$main_checkout/.notebook/research/release-2.0.0-readiness/notes/a.md" "$roots")" = release-2.0.0-readiness ]
+  [ "$(slug_of "$main_checkout/.notebook/research/DEBT-LOOP-DIAGNOSIS.md" "$roots")" = DEBT-LOOP-DIAGNOSIS ]
+  [ "$(slug_of "$main_checkout/.notebook/research/2250-carryover.patch" "$roots")" = null ]
+  [ "$(slug_of "/other/repo/.notebook/research/x/README.md" "$roots")" = null ]
+  [ "$(slug_of ".notebook/research/x/README.md" "$roots")" = null ]
+  [ "$(slug_of "$main_checkout/.notebook/research/../../x/README.md" "$roots")" = null ]
+  [ "$(slug_of "$main_checkout/.notebook/research/./x/a.md" "$roots")" = null ]
+  [ "$(slug_of "$main_checkout/.notebook/research//x/a.md" "$roots")" = null ]
+  [ "$(slug_of "$main_checkout/.notebook/research/x\"y/README.md" "$roots")" = null ]
+  [ "$(slug_of "$main_checkout/.notebook/research/.md" "$roots")" = null ]
+  [ "$(slug_of "$main_checkout/.notebook/research" "$roots")" = null ]
+  [ "$(slug_of "$main_checkout/.claude/worktrees/lw/.notebook/research/x/README.md" "$roots")" = null ]
+  [ "$(slug_of "$main_checkout/.gaia/local/research/topic-a-2026-10-01/README.md" "$roots")" = null ]
 }
 
 # ---------- 7. ref grammar ----------

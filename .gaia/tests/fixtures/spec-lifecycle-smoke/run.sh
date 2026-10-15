@@ -7,7 +7,7 @@
 #
 # Exit codes alone cannot prove a relocated script still loads its siblings: those loads are
 # written fail-open and spec-reconcile.sh exits 0 even when its branch-name library failed to
-# load. The effect lines (ledger statuses, lint JSON) are what catch that.
+# load. The effect lines (catalog statuses, lint JSON) are what catch that.
 set -euo pipefail
 
 library_directory=""
@@ -35,7 +35,8 @@ setup_failed() {
 
 # Run the helper, never source it: sourcing would apply its errexit, its cd, and its flag parser
 # to this runner.
-scratch_repo="$(bash "${real_repo}/.gaia/tests/lib/helpers/tmp-spec-repo.sh")" || setup_failed "build scratch repo"
+scratch_repo="$(bash "${real_repo}/.gaia/tests/lib/helpers/tmp-notebook-repo.sh" \
+  --seed-spec SPEC-001 ready --seed-spec SPEC-002 draft --seed-spec SPEC-004 draft)" || setup_failed "build scratch repo"
 stub_directory="$(mktemp -d)"
 trap 'rm -rf "$scratch_repo" "$stub_directory"' EXIT
 
@@ -51,12 +52,12 @@ done
 merged_branch="$(bash "${real_repo}/.gaia/scripts/branch-name-lib.sh" name plan spec-001 --type refactor --slug "pin saved articles")" \
   || setup_failed "mint merged branch name"
 
-# Seed the committed fixture: the ledger, the saved SPEC, and the branch merged into main.
-cp "${fixture_directory}/ledger.json" "${scratch_repo}/.gaia/local/specs/ledger.json"
-mkdir -p "${scratch_repo}/.gaia/local/specs/SPEC-002"
-cp "${fixture_directory}/SPEC.md" "${scratch_repo}/.gaia/local/specs/SPEC-002/SPEC.md"
+# Seed the committed fixture: the saved SPEC (the catalog rows came from the helper's flags), and
+# the branch merged into main.
+mkdir -p "${scratch_repo}/.notebook/specs/SPEC-002"
+cp "${fixture_directory}/SPEC.md" "${scratch_repo}/.notebook/specs/SPEC-002/SPEC.md"
 git -C "$scratch_repo" add -A
-git -C "$scratch_repo" commit --quiet -m "seed fixture" || setup_failed "record fixture"
+git -C "$scratch_repo" commit --quiet --allow-empty -m "seed fixture" || setup_failed "record fixture"
 git -C "$scratch_repo" checkout --quiet -b "$merged_branch"
 printf 'pinned\n' > "${scratch_repo}/pinned.txt"
 git -C "$scratch_repo" add pinned.txt
@@ -101,8 +102,8 @@ effect() {
   printf 'effect\t%s\t%s\n' "$1" "$2" >> "$output_file"
 }
 
-ledger_status() {
-  jq -r --arg id "$1" '.specs[] | select(.id == $id) | .status' "${scratch_repo}/.gaia/local/specs/ledger.json"
+catalog_status() {
+  jq -r --arg id "$1" '.items[] | select(.kind == "spec" and .id == $id) | .status' "${scratch_repo}/.notebook/catalog.json"
 }
 
 cd "$scratch_repo"
@@ -129,10 +130,10 @@ intent="$standard_output"
 effect intent "$intent"
 patch="$(jq -nc --arg intent "$intent" '{status: "ready"} + (if $intent == "" then {} else {intent: $intent} end)')"
 step ledger-update - bash "${lib}/ledger-update.sh" "$scratch_repo" SPEC-002 "$patch"
-step lint - bash "${lib}/lint.sh" "${scratch_repo}/.gaia/local/specs/SPEC-002/SPEC.md"
+step lint - bash "${lib}/lint.sh" "${scratch_repo}/.notebook/specs/SPEC-002/SPEC.md"
 lint_json="$(printf '%s' "$standard_output" | tr -d '\n')"
 
-effect reconcile-row "$(ledger_status SPEC-001)"
-effect saved-row "$(ledger_status SPEC-002)"
-effect ghost-row "$(ledger_status SPEC-004)"
+effect reconcile-row "$(catalog_status SPEC-001)"
+effect saved-row "$(catalog_status SPEC-002)"
+effect ghost-row "$(catalog_status SPEC-004)"
 effect lint "$lint_json"

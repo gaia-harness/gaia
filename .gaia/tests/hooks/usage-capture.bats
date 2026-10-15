@@ -69,6 +69,8 @@ real_repo() {
     cp "$REPO_ROOT/.gaia/scripts/$script_name" "$REPO/.gaia/scripts/"
   done
   cp "$REPO_ROOT/.gaia/scripts/spec/with-ledger-lock.sh" "$REPO/.gaia/scripts/spec/"
+  mkdir -p "$REPO/.gaia/scripts/notebook"
+  cp "$REPO_ROOT"/.gaia/scripts/notebook/*.sh "$REPO/.gaia/scripts/notebook/"
 }
 
 # payload <event> <sid> [transcript_path] [stop_hook_active]

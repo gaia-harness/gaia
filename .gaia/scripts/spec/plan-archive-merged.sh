@@ -7,11 +7,12 @@
 # Why this exists: the orchestrator's post-merge close reduces a plan folder to
 # SUMMARY.md, but a PR can merge out-of-band (the github.com
 # button, another session), or the orchestrator can end before its close, so
-# the PLAN-NNN folder lingers in the active plans dir with nothing to sweep
-# it. This pass is that sweep.
+# the PLAN-NNN folder lingers in the notebook's plans folder with nothing to
+# sweep it. This pass is that sweep.
 #
-# Sweep criteria, per row: a .gaia/local/plans/ledger.json row is a delete
-# candidate when ALL hold:
+# Sweep criteria, per catalog plan row: a row is a delete candidate when ALL
+# hold:
+#   - the row carries no reap record (a reaped plan is already gone)
 #   - the row is a merged row on one of two arms:
 #       confirmed arm: a non-empty pr_number (stamped by the orchestrator's
 #         post-merge close, or by plan-reconcile.sh's scan, which matches a
@@ -23,8 +24,10 @@
 #         pr_number existed age out here
 #     A row whose status is not "merged", or whose merged_at is missing or
 #     unparseable, is never a candidate on either arm.
-#   - an active artifact folder exists at .gaia/local/plans/<id>/ (the folder
-#     is the deletion unit; siblings go with it)
+#   - the library resolves the row's id to a plan folder that exists (a
+#     malformed id, a symlinked folder or a folder outside the plans folder is
+#     refused, never followed; the folder is the deletion unit, siblings go
+#     with it)
 #   - the folder holds a well-formed SUMMARY.md (the consolidation gate
 #     below); a folder with an absent, empty or malformed SUMMARY.md never
 #     went through consolidation, so whatever it holds is the sole record and
@@ -54,13 +57,14 @@
 # run and the `usage.sh record` recovery command, and the sweep moves on to
 # the next candidate.
 #
-# The ledger row's merged/merged_at/pr_number stamp is a precondition set
-# upstream (the orchestrator's post-merge close, or plan-reconcile.sh's scan),
-# not by this sweep, and stays untouched; it is the identity record that
-# survives once the folder is gone.
+# After a delete the row gets a reap record naming this script; the row's
+# merged/merged_at/pr_number stamp is a precondition set upstream (the
+# orchestrator's post-merge close, or plan-reconcile.sh's scan), not by this
+# sweep, and stays untouched. It is the identity record that survives once the
+# folder is gone.
 #
 # Best-effort and fail-open by contract, exactly like spec-archive-merged.sh:
-# a missing jq / ledger or an unrecorded run never blocks a caller. One stdout
+# a missing jq / catalog or an unrecorded run never blocks a caller. One stdout
 # line summarizes what was deleted, and one names each kept folder;
 # diagnostics go to stderr.
 #
@@ -69,7 +73,8 @@
 # With <plan_id>, only that id is considered. With no id, every merged row is
 # swept. --close is accepted and ignored.
 #
-# Exit: always 0 (advisory).
+# Exit: 0 (advisory), except 3 when the one-time notebook move is pending: the
+# move command is on stderr and nothing is removed.
 set -uo pipefail
 
 args=()
@@ -94,6 +99,31 @@ retention_days="${GAIA_SPEC_RETENTION_DAYS:-30}"
 case "$retention_days" in '' | *[!0-9]*) retention_days=30 ;; esac
 now_epoch="$(date -u +%s 2>/dev/null || echo 0)"
 
+_library_directory="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=SCRIPTDIR/../notebook/notebook-lib.sh
+. "${_library_directory}/../notebook/notebook-lib.sh" 2>/dev/null || {
+  echo "plan-archive-merged: cannot load ${_library_directory}/../notebook/notebook-lib.sh; skipping sweep" >&2
+  exit 0
+}
+# shellcheck source=SCRIPTDIR/../main-root-lib.sh
+. "${_library_directory}/../main-root-lib.sh" 2>/dev/null || {
+  echo "plan-archive-merged: cannot load ${_library_directory}/../main-root-lib.sh; skipping sweep" >&2
+  exit 0
+}
+
+# repo_root names the tree this sweep runs in; the catalog and the plan
+# folders it reads are main's. The operand decides the tree, not the caller's
+# cwd, so a run against another checkout never touches the cwd's notebook.
+export GAIA_NOTEBOOK_TREE="$repo_root"
+readiness_status=0
+gaia_notebook_require_ready || readiness_status=$?
+if [ "$readiness_status" -eq 3 ]; then
+  exit 3
+elif [ "$readiness_status" -ne 0 ]; then
+  echo "plan-archive-merged: cannot resolve the main checkout for '$repo_root'; skipping sweep" >&2
+  exit 0
+fi
+
 # _consolidation_gate_pass <folder>: 0 iff the folder's SUMMARY.md is present
 # and well-formed (consolidation ran). 1 keeps the folder: consolidation never
 # produced a SUMMARY.md to replace its contents. Prefers summary-verify.sh when
@@ -108,46 +138,19 @@ _consolidation_gate_pass() {
   [ -s "$summary" ]
 }
 
-# No jq -> nothing to do (checked first: cheap, and every other gate needs it).
+# No jq -> nothing to do (checked first among the gates: cheap, and every other
+# gate needs it).
 command -v jq >/dev/null 2>&1 || exit 0
 
-_library_directory="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-# shellcheck source=../ledger-path-lib.sh
-. "${_library_directory}/../ledger-path-lib.sh" 2>/dev/null || {
-  echo "plan-archive-merged: cannot load ${_library_directory}/../ledger-path-lib.sh; skipping sweep" >&2
-  exit 0
-}
-# shellcheck source=../main-root-lib.sh
-. "${_library_directory}/../main-root-lib.sh" 2>/dev/null || {
-  echo "plan-archive-merged: cannot load ${_library_directory}/../main-root-lib.sh; skipping sweep" >&2
-  exit 0
-}
 # The age test lives in ledger-lib.sh. Loaded bracketed against an unparseable
 # copy; without it no age can be judged, and an unknown age must never read as
 # past the window, so the sweep reaps nothing.
-# shellcheck source=ledger-lib.sh
+# shellcheck source=SCRIPTDIR/ledger-lib.sh
 [ -f "${_library_directory}/ledger-lib.sh" ] && . "${_library_directory}/ledger-lib.sh" 2>/dev/null || true
 if ! type gaia_ledger_age_past_window >/dev/null 2>&1; then
   echo "plan-archive-merged: ledger-lib.sh is unusable; nothing swept" >&2
   exit 0
 fi
-
-# repo_root names the tree this sweep runs in; the ledger and plan folders it
-# reads are main's, because the state registry declares plans/ main-only.
-# Resolve rather than trust a per-tree fallback: best-effort sweep, so an
-# unresolvable main root is one stderr diagnostic and exit 0 (this script's
-# own fail-open contract), never a silent fallback to the unresolved operand
-# -- that fallback is the forked-ledger defect this task removes. Resolving
-# still needs git; the delete itself remains a plain filesystem rm, never a
-# git op (plans are local/gitignored).
-if ! plans_directory="$(gaia_resolve_plans_directory "$repo_root" 2>/dev/null)" || [ -z "$plans_directory" ]; then
-  echo "plan-archive-merged: cannot resolve the main checkout for '$repo_root'; skipping sweep" >&2
-  exit 0
-fi
-ledger_path="${plans_directory}/ledger.json"
-
-# No ledger -> nothing to do.
-[ -f "$ledger_path" ] || exit 0
 
 # The usage ledger lives under the main checkout, resolved from repo_root's own
 # git identity and never the caller's cwd. An unresolved root fails the gate
@@ -178,19 +181,14 @@ _usage_gate() {
   return 1
 }
 
-# Candidate rows (local, cheap): merged rows. The confirmed arm (a pr_number)
-# and the legacy arm (none) share every gate and differ only in provenance, so
-# one select covers both; the age gate below requires a parseable, aged
-# merged_at of each. An optional
-# single-id filter narrows the sweep to one row. Each candidate prints as
-# "<id><TAB><merged_at>".
-if [ -n "$filter_id" ]; then
-  merged_rows="$(jq -r --arg id "$filter_id" \
-    '.plans[] | select(.status == "merged" and .id == $id) | "\(.id)\t\(.merged_at // "")"' \
-    "$ledger_path" 2>/dev/null || true)"
-else
-  merged_rows="$(jq -r '.plans[] | select(.status == "merged") | "\(.id)\t\(.merged_at // "")"' "$ledger_path" 2>/dev/null || true)"
-fi
+# Candidate rows (local, cheap): merged rows with no reap record. The
+# confirmed arm (a pr_number) and the legacy arm (none) share every gate and
+# differ only in provenance, so one select covers both; the age gate below
+# requires a parseable, aged merged_at of each. An optional single-id filter
+# narrows the sweep to one row. Each candidate prints as "<id><TAB><merged_at>".
+merged_rows="$(gaia_notebook_rows plan merged | jq -r --arg id "$filter_id" \
+  '.[] | select(has("reap") | not) | select($id == "" or .id == $id) | "\(.id)\t\(.merged_at // "")"' \
+  2>/dev/null || true)"
 [ -n "$merged_rows" ] || exit 0
 
 deleted_list=""
@@ -198,9 +196,15 @@ deleted_list=""
 while IFS='	' read -r plan_id merged_at; do
   [ -n "$plan_id" ] || continue
 
-  folder="${plans_directory}/${plan_id}"
+  # The library validates the id and refuses a folder that resolves outside
+  # the plans folder or is itself a symlink; either is skipped, never followed.
+  if ! folder="$(gaia_notebook_item_directory plan "$plan_id")" || [ -z "$folder" ]; then
+    echo "plan-archive-merged: refusing the folder for '$plan_id'; kept" >&2
+    continue
+  fi
   # Skip merged rows with no active folder (already gone, or never had one).
   [ -d "$folder" ] || continue
+  relative_folder="${folder#"${main_root}/"}"
 
   # Consolidation gate: a folder with no consolidated SUMMARY.md is never
   # reaped; its contents are the sole record.
@@ -220,14 +224,16 @@ while IFS='	' read -r plan_id merged_at; do
   # Usage-ledger gate: refuse to delete a folder whose gaia-plan run the usage
   # ledger does not record. Any non-zero verdict, including an unresolved main
   # checkout, blocks this id and leaves the folder untouched.
-  if ! _usage_gate ".gaia/local/plans/${plan_id}" "plan:${plan_id}" gaia-plan; then
+  if ! _usage_gate "$relative_folder" "plan:${plan_id}" gaia-plan; then
     continue
   fi
 
-  if ! rm -rf "$folder" 2>/dev/null; then
+  if ! rm -rf "${folder:?}" 2>/dev/null; then
     echo "plan-archive-merged: $plan_id folder delete failed; left active folder in place" >&2
     continue
   fi
+  gaia_notebook_record_reap plan "$plan_id" plan-archive-merged \
+    || echo "plan-archive-merged: $plan_id folder deleted but its reap record was not written" >&2
 
   deleted_list="${deleted_list:+$deleted_list, }${plan_id}"
 done <<EOF
