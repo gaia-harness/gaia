@@ -176,7 +176,7 @@ Things audits keep re-discovering. None of these are findings.
 
 **Two `wiki-stop-safety-net.sh` references in `.gaia/cli/src/wiki/dead-paths.{ts,test.ts}`.** Intentional. They are the canonical example of what `dead-paths` was built to catch (a renamed/merged hook still cited in code). Removing them would defeat the test.
 
-**`.gaia/local/plans/...` historical archive content.** Per-machine plan + handoff state under `.gaia/local/` is excluded from distribution (category 7). Plan-time references to retired files are the historical record by design. Not a finding.
+**`.notebook/plans/...` historical archive content.** Per-machine plan + handoff state under `.notebook/` is excluded from distribution (category 7). Plan-time references to retired files are the historical record by design. Not a finding.
 
 **`CHANGELOG.md` historical entries with old filenames.** `wiki-style.md` scopes to `wiki/**` body prose and `app/**` source comments. The changelog is by design a historical record of past releases; old filenames in old release notes are correct.
 

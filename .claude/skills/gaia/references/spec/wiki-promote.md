@@ -4,16 +4,16 @@ description: Promote a consolidated SPEC or plan summary into the GAIA wiki, pre
 
 # Wiki Promote
 
-The orchestrator runs this step after consolidation, once the audit has cleared and the human confirmed ready to merge, on the open PR's branch. It takes a `SPEC-NNN` id for the spec arm (`.gaia/local/specs/SPEC-NNN/SUMMARY.md`) or a `PLAN-NNN` id for the plan arm (`.gaia/local/plans/PLAN-NNN/SUMMARY.md`), both resolved through the main checkout. It reads the consolidated `SUMMARY.md`, writes pages into `wiki/` in the working tree, and returns the page list and one Choice token for the orchestrator to record and commit.
+The orchestrator runs this step after consolidation, once the audit has cleared and the human confirmed ready to merge, on the open PR's branch. It takes a `SPEC-NNN` id for the spec arm (`.notebook/specs/SPEC-NNN/SUMMARY.md`) or a `PLAN-NNN` id for the plan arm (`.notebook/plans/PLAN-NNN/SUMMARY.md`), both resolved through the notebook library. It reads the consolidated `SUMMARY.md`, writes pages into `wiki/` in the working tree, and returns the page list and one Choice token for the orchestrator to record and commit.
 
 Contents: Step 1 - Resolve the source; Step 2 - Read promotion gate; Step 3 - Resolve the open PR; Step 4 - Route to wiki destinations; Step 5 - Render and write pages; Step 5b - Page body rendering; Step 6 - Return the page list; Step 7 - Report.
 
 ## Step 1 - Resolve the source
 
-The orchestrator passes the `SPEC-NNN` or `PLAN-NNN` id as the invocation argument. Resolve the source path by id shape, anchored at the main checkout (`main_root="$(bash .gaia/scripts/main-root-lib.sh)"`), because the gitignored `.gaia/local/` tree lives there and not in an isolation worktree:
+The orchestrator passes the `SPEC-NNN` or `PLAN-NNN` id as the invocation argument. Resolve the source path by id shape, anchored at the main checkout through the library's `path` verb, because the gitignored notebook lives there and not in an isolation worktree:
 
-- `SPEC-NNN` → `$main_root/.gaia/local/specs/SPEC-NNN/SUMMARY.md`
-- `PLAN-NNN` → `$main_root/.gaia/local/plans/PLAN-NNN/SUMMARY.md`
+- `SPEC-NNN` → `$(bash .gaia/scripts/notebook/notebook-lib.sh path spec SPEC-NNN)/SUMMARY.md`
+- `PLAN-NNN` → `$(bash .gaia/scripts/notebook/notebook-lib.sh path plan PLAN-NNN)/SUMMARY.md`
 
 Read the consolidated `SUMMARY.md` frontmatter. Required fields: `wiki_promote_default`, `wiki_promote_targets` (may be an empty list).
 
@@ -69,6 +69,8 @@ Compute `<slug>` once for this run:
 2. Lowercase it, strip non-ASCII, replace any run of non-alphanumeric characters with a single hyphen, trim leading/trailing hyphens.
 3. If no H1 is found or the slug ends up empty, fall back to the id itself (e.g. `SPEC-NNN` or `PLAN-NNN`).
 
+
+**Notebook material.** When the source describes the notebook's layout, lifecycle or keep rules (its catalog, the reapers, the research folders), the target is the existing `wiki/concepts/Notebook.md`: merge the material into that page per Step 5's status classification rather than creating a new page.
 
 For each valid target subdomain:
 
@@ -195,7 +197,7 @@ Render the body in the following sections, in order, immediately after the closi
 
    Substitutions:
    - `<id>`, the `SPEC-NNN` or `PLAN-NNN` id from Step 1.
-   - `<relative-path>`, the resolved source's repo-relative path with a `../../` prefix (promoted wiki pages live at `wiki/<subdomain>/<page>.md`, two segments deep from the repo root): `../../.gaia/local/specs/SPEC-NNN/SUMMARY.md`, `../../.gaia/local/plans/PLAN-NNN/SUMMARY.md`, or the legacy `../../.gaia/local/specs/SPEC-NNN/SPEC.md` under the Step 1 fallback.
+   - `<relative-path>`, the resolved source's repo-relative path with a `../../` prefix (promoted wiki pages live at `wiki/<subdomain>/<page>.md`, two segments deep from the repo root): `../../.notebook/specs/SPEC-NNN/SUMMARY.md`, `../../.notebook/plans/PLAN-NNN/SUMMARY.md`, or the legacy `../../.notebook/specs/SPEC-NNN/SPEC.md` under the Step 1 fallback (`.notebook/` sits at the repo root, so the `../../` prefix holds for it as it did for any root-level source).
    - `<owner>/<repo>`, resolved once per run by running, via the Bash tool:
 
      ```bash

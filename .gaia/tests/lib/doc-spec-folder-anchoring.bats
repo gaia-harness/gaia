@@ -4,44 +4,53 @@
 # SPEC-folder writes land in the MAIN checkout when the acting session runs
 # inside a linked git worktree.
 #
-# THE PROBLEM. The registry declares `specs/` main-only (`.gaia/state-registry.json`,
-# entry `specs-main`), and `gaia_registry_main_only_dirs`'s own contract
+# THE PROBLEM. The registry declares the notebook's `specs/` main-only
+# (`.gaia/state-registry.json`, entry `specs-main`), and
+# `gaia_registry_main_only_dirs`'s own contract
 # (.gaia/scripts/state-registry-lib.sh) says a linked worktree has NO OWN COPY
-# of a main-only directory. A relative `.gaia/local/specs/...` write issued
+# of a main-only directory. A relative `.notebook/specs/...` write issued
 # from a worktree therefore does not reach main -- it forks a second specs
 # tree inside the worktree. Three sites write the SPEC folder and must each
 # resolve main first: spec.md step 3's folder creation (the mkdir fence),
 # and spec/audit.md's 7d (AUDIT.md write) and 7c (where the AUDIT.md path the
-# applier's report lands at is built).
+# applier's report lands at is built). Each asks the notebook library for the
+# folder (`notebook-lib.sh path spec <id>`), which resolves main itself.
 #
 # THE READ SIDE IS THE SAME CLASS. Once the writes land in main, a read that
-# still builds a relative `.gaia/local/specs` path looks into a tree that holds
-# no SPECs at all. Two read sites build the path themselves rather than
+# still builds a relative `.notebook/specs` path looks into a tree that holds
+# no SPECs at all. Two read sites need a folder path themselves rather than
 # handing it to a library: the pre-flight sweep's cold-consolidation candidate
-# scan in spec/lifecycle.md (the ledger scan plus the per-candidate folder),
+# scan in spec/lifecycle.md (the catalog listing plus the per-candidate folder),
 # and step 2's resume-point recency comparison in spec/resume.md
 # (the canonical `SPEC.md` half of it; the draft cache is per-tree and stays in
 # the acting worktree). The save step's usage-record call is the third place
 # the negative-space test watches: it hands the SPEC id to `usage.sh record`
 # and builds no folder path, and that range must stay free of a bare
-# `.gaia/local/specs/` literal.
+# `.notebook/specs/` literal.
 #
 # EXECUTE THE ARTIFACT, DO NOT PARAPHRASE IT. The precedent is
 # doc-merge-workflow-fences.bats's "fence resolve-mode: eval-ing it puts a
 # resolved_mode and a should_run in scope" test: it writes the fragment's OWN
 # literal to a script and runs it, rather than re-typing an approximation, so
 # the test executes the artifact instead of a paraphrase of it. A plain
-# `grep` for `main-root-lib.sh` would pass on prose that merely NAMES the
-# resolver while still joining a relative path.
-# Tests 1 and 2 below extract the real literal/block from the live source
-# files and run it; only test 3 (the weakest, deliberately third) is a plain
-# grep, and it is scoped tightly to the converted sites, not repo-wide.
+# `grep` for `notebook-lib.sh` would pass on prose that merely NAMES the
+# library while still joining a relative path.
+# Tests S1, S2, R1 and R2 below extract the real literal/block from the live
+# source files and run it; the negative-space tests (the weakest) are plain
+# greps, scoped tightly to the converted sites, not repo-wide.
+#
+# Every check is a function of the source file it measures, and each has a red
+# twin that runs the same check on a temp copy carrying the failing spelling
+# and proves the check can fail (.claude/rules/guards-must-fail.md).
 #
 # FIXTURE. A real `git init` main checkout plus a real `git worktree add`
 # linked worktree, both under BATS_TEST_TMPDIR. `.gaia/scripts/main-root-lib.sh`
-# is copied into the main checkout and committed BEFORE the worktree is
-# created, so the worktree receives it the same way it would receive any
-# other tracked repo script -- via git, not a second copy. Every extracted
+# and the notebook library (with the lock primitive it sources) are copied into
+# the main checkout and committed BEFORE the worktree is created, so the
+# worktree receives them the same way it would receive any other tracked repo
+# script -- via git, not a second copy. `.notebook` is gitignored in the
+# fixture, as in a real checkout, and main carries a catalog with the one-time
+# move marked complete so the library's readiness gate passes. Every extracted
 # block runs with the WORKTREE as the working directory. setup() self-checks
 # the fixture (`bash .gaia/scripts/main-root-lib.sh` from the worktree must
 # print MAIN's path) and fails loudly if that basic precondition does not
@@ -49,15 +58,15 @@
 #
 # Assertion style: .claude/rules/bats-assertions.md.
 #
-# WHAT EACH TEST CATCHES. Test 1 catches a bare-relative folder creation in
+# WHAT EACH TEST CATCHES. S1 catches a bare-relative folder creation in
 # step 3: run with cwd=worktree it creates the folder IN the worktree, not
 # main, and it also runs the fence with the resolver failing to prove the
-# fail-closed branch creates nothing. Test 2 catches an AUDIT.md path that 7d either never builds in shell
+# fail-closed branch creates nothing. S2 catches an AUDIT.md path that 7d either never builds in shell
 # (named only in inline prose, so there is nothing to execute) or builds
-# without the resolver, so it lands in the acting worktree. Test 3 catches the
-# bare relative `.gaia/local/specs/` literal returning to any of the three
-# write sites. Each extraction failure reports a legible reason rather than an
-# opaque bash error.
+# without the library, so it lands in the acting worktree. The write-site
+# negative-space test catches the bare relative `.notebook/specs/` literal
+# returning to any of the three write sites. Each extraction failure reports a
+# legible reason rather than an opaque bash error.
 #
 # The two read tests use a DECOY: the worktree is seeded with its own forked
 # specs tree naming a different SPEC id, and main with the canonical one. A
@@ -78,12 +87,16 @@ setup() {
   MAIN="$BATS_TEST_TMPDIR/main"
   WORKTREE="$BATS_TEST_TMPDIR/worktree"
 
-  mkdir -p "$MAIN/.gaia/scripts"
+  mkdir -p "$MAIN/.gaia/scripts/notebook" "$MAIN/.gaia/scripts/spec"
   cp "$REPO_ROOT/.gaia/scripts/main-root-lib.sh" "$MAIN/.gaia/scripts/main-root-lib.sh"
+  # The notebook library, its private parts and the lock primitive it sources.
+  cp "$REPO_ROOT"/.gaia/scripts/notebook/*.sh "$MAIN/.gaia/scripts/notebook/"
+  cp "$REPO_ROOT/.gaia/scripts/spec/with-ledger-lock.sh" "$MAIN/.gaia/scripts/spec/with-ledger-lock.sh"
   # The cold-consolidation sweep gates each candidate on the real verify
   # script, so the fixture carries the real script rather than letting a
   # missing-file failure stand in for a failed verify.
   cp "$REPO_ROOT/.gaia/scripts/summary-verify.sh" "$MAIN/.gaia/scripts/summary-verify.sh"
+  printf '.notebook\n' > "$MAIN/.gitignore"
 
   git -C "$MAIN" init -q -b main
   git -C "$MAIN" config user.email 'test@example.com'
@@ -96,6 +109,11 @@ setup() {
   MAIN_PHYSICAL_PATH="$(cd "$MAIN" && pwd -P)"
   WORKTREE_PHYSICAL_PATH="$(cd "$WORKTREE" && pwd -P)"
 
+  # Main's notebook, ready: a catalog carrying the move marker and no rows.
+  mkdir -p "$MAIN_PHYSICAL_PATH/.notebook"
+  printf '{"version":1,"move_complete":{"at":"2026-01-01T00:00:00Z"},"items":[]}\n' \
+    > "$MAIN_PHYSICAL_PATH/.notebook/catalog.json"
+
   # Fixture soundness gate. If this does not hold, everything built on the
   # fixture is meaningless, so fail here with a clear reason instead of
   # letting a downstream assertion fail for a confusing reason.
@@ -103,6 +121,12 @@ setup() {
   if [ "$resolved" != "$MAIN_PHYSICAL_PATH" ]; then
     printf 'FIXTURE BROKEN: main-root-lib.sh run from the worktree resolved to "%s", expected main "%s"\n' \
       "$resolved" "$MAIN_PHYSICAL_PATH" >&2
+    return 1
+  fi
+  resolved="$(cd "$WORKTREE" && bash .gaia/scripts/notebook/notebook-lib.sh path spec SPEC-999)"
+  if [ "$resolved" != "$MAIN_PHYSICAL_PATH/.notebook/specs/SPEC-999" ]; then
+    printf 'FIXTURE BROKEN: the notebook library run from the worktree resolved to "%s", expected main "%s"\n' \
+      "$resolved" "$MAIN_PHYSICAL_PATH/.notebook/specs/SPEC-999" >&2
     return 1
   fi
 }
@@ -139,8 +163,44 @@ range_to_end() {
   sed -n "${start_line},\$p" "$file"
 }
 
-@test "S1: spec.md step 3's folder-creation fence executes into main, not the worktree" {
-  block="$(range_between "$SPEC_MD" '### 3. Initial draft' '### 4. Gate 1')"
+# The ```bash fence inside an extracted range, as a runnable script.
+bash_fence_of() {
+  printf '%s\n' "$1" | awk '/^```bash/{inside_fence=1;next} /^```[[:space:]]*$/{inside_fence=0} inside_fence'
+}
+
+# Copy <source> to <destination> with the first occurrence of <old> replaced by
+# <new>. Fails when <old> is absent, so a twin whose planted spelling no longer
+# matches the prose reports that instead of testing an unchanged copy.
+plant_into_copy() {
+  local source_file="$1" destination="$2" old="$3" new="$4" content mutated
+  content="$(cat "$source_file")"
+  mutated="${content/"$old"/"$new"}"
+  if [ "$mutated" = "$content" ]; then
+    printf 'planted spelling not applied: "%s" not found in %s\n' "$old" "$source_file" >&2
+    return 1
+  fi
+  printf '%s\n' "$mutated" > "$destination"
+}
+
+# Copy <source> to <destination> with <line> inserted right after the first
+# line containing the fixed-string <anchor>.
+plant_line_after() {
+  local source_file="$1" destination="$2" anchor="$3" line="$4"
+  awk -v anchor="$anchor" -v planted="$line" '
+    { print }
+    !done && index($0, anchor) { print planted; done = 1 }
+  ' "$source_file" > "$destination"
+  if cmp -s "$source_file" "$destination"; then
+    printf 'planted line not applied: anchor "%s" not found in %s\n' "$anchor" "$source_file" >&2
+    return 1
+  fi
+}
+
+# --- S1 ----------------------------------------------------------------------
+
+check_s1() {
+  local spec_md="$1" block fence script broken
+  block="$(range_between "$spec_md" '### 3. Initial draft' '### 4. Gate 1')" || return 1
 
   # Select ONLY the bash fence that creates the folder (the one carrying
   # `mkdir -p`), so the allocator fence beside it is never executed here.
@@ -160,29 +220,31 @@ range_to_end() {
   printf '%s\n' "$fence" > "$script"
 
   run bash -c "cd '$WORKTREE' && SPEC_ID=SPEC-999 bash '$script'"
-  [ "$status" -eq 0 ]
+  [ "$status" -eq 0 ] || { printf 'the step-3 fence failed (status %s): %s\n' "$status" "$output" >&2; return 1; }
 
   # (a) main must have received the folder.
-  if [ ! -d "$MAIN_PHYSICAL_PATH/.gaia/local/specs/SPEC-999" ]; then
-    printf 'main never received .gaia/local/specs/SPEC-999 (ran: %s)\n' "$fence" >&2
+  if [ ! -d "$MAIN_PHYSICAL_PATH/.notebook/specs/SPEC-999" ]; then
+    printf 'main never received .notebook/specs/SPEC-999 (ran: %s)\n' "$fence" >&2
     return 1
   fi
 
-  # (b) THE LOAD-BEARING ASSERTION. Prose that merely names the resolver but
+  # (b) THE LOAD-BEARING ASSERTION. Prose that merely names the library but
   # still joins a relative path cannot fake this: running a bare
-  # `mkdir -p .gaia/local/specs/...` with cwd=worktree creates the folder
+  # `mkdir -p .notebook/specs/...` with cwd=worktree creates the folder
   # THERE, which this assertion catches even when (a) above happens to hold.
-  if [ -d "$WORKTREE_PHYSICAL_PATH/.gaia/local/specs" ]; then
-    printf 'a forked .gaia/local/specs tree exists in the worktree: %s\n' "$WORKTREE_PHYSICAL_PATH/.gaia/local/specs" >&2
+  if [ -d "$WORKTREE_PHYSICAL_PATH/.notebook/specs" ]; then
+    printf 'a forked .notebook/specs tree exists in the worktree: %s\n' "$WORKTREE_PHYSICAL_PATH/.notebook/specs" >&2
     return 1
   fi
 
   # (c) Fail-closed branch: with a resolver that prints nothing and exits
   # non-zero, the fence must refuse with its own message, exit non-zero, and
-  # create no specs tree anywhere under the fixture. Without the empty-MAIN_ROOT
-  # guard it would attempt `mkdir -p /.gaia/local/specs/...` at the filesystem root.
+  # create no specs tree anywhere under the fixture. Without the empty-path
+  # guard it would attempt `mkdir -p ""` or a write at the filesystem root.
   broken="$BATS_TEST_TMPDIR/broken-resolver"
-  mkdir -p "$broken/.gaia/scripts"
+  mkdir -p "$broken/.gaia/scripts/notebook" "$broken/.gaia/scripts/spec"
+  cp "$MAIN/.gaia/scripts/notebook/"*.sh "$broken/.gaia/scripts/notebook/"
+  cp "$MAIN/.gaia/scripts/spec/with-ledger-lock.sh" "$broken/.gaia/scripts/spec/with-ledger-lock.sh"
   printf '#!/usr/bin/env bash\nexit 1\n' > "$broken/.gaia/scripts/main-root-lib.sh"
 
   run bash -c "cd '$broken' && SPEC_ID=SPEC-998 bash '$script'"
@@ -203,12 +265,26 @@ range_to_end() {
   true
 }
 
-@test "S2: 7c's AUDIT.md path resolves into main, not the worktree" {
+@test "S1: spec.md step 3's folder-creation fence executes into main, not the worktree" {
+  check_s1 "$SPEC_MD"
+}
+
+@test "red twin S1: a step-3 fence that joins a relative notebook path fails the check" {
+  local mutated="$BATS_TEST_TMPDIR/spec-relative-mkdir.md"
+  plant_into_copy "$SPEC_MD" "$mutated" 'mkdir -p "$SPEC_FOLDER"' 'mkdir -p ".notebook/specs/${SPEC_ID}"'
+  check_s1 "$mutated" && return 1
+  true
+}
+
+# --- S2 ----------------------------------------------------------------------
+
+check_s2() {
+  local audit_md="$1" block bash_fence audit_variable_name script
   # The AUDIT.md path is built at the top of 7c, where the applier dispatch
   # that consumes ${SPEC_DIR}/${AUDIT_MD} first needs it; 7d writes the report
   # and resolves no path of its own. Anchor on the step that does the
   # resolving, not the step that does the writing.
-  block="$(range_between "$AUDIT_MD" '## 7c. Disposition routing + apply' '## 7d. Persist AUDIT.md')"
+  block="$(range_between "$audit_md" '## 7c. Disposition routing + apply' '## 7d. Persist AUDIT.md')" || return 1
 
   # The range can carry more than one ```bash fence. Select ONLY the fence
   # that constructs the AUDIT.md path, so this test runs the block it measures
@@ -242,7 +318,7 @@ range_to_end() {
   } > "$script"
 
   run bash -c "cd '$WORKTREE' && bash '$script'"
-  [ "$status" -eq 0 ]
+  [ "$status" -eq 0 ] || { printf 'the 7c fence failed (status %s): %s\n' "$status" "$output" >&2; return 1; }
 
   case "$output" in
     "$MAIN_PHYSICAL_PATH"/*) : ;;
@@ -261,33 +337,44 @@ range_to_end() {
   true
 }
 
-# The ```bash fence inside an extracted range, as a runnable script.
-bash_fence_of() {
-  printf '%s\n' "$1" | awk '/^```bash/{inside_fence=1;next} /^```[[:space:]]*$/{inside_fence=0} inside_fence'
+@test "S2: 7c's AUDIT.md path resolves into main, not the worktree" {
+  check_s2 "$AUDIT_MD"
+}
+
+@test "red twin S2: a 7c fence that builds a relative notebook path fails the check" {
+  local mutated="$BATS_TEST_TMPDIR/audit-relative.md"
+  plant_into_copy "$AUDIT_MD" "$mutated" \
+    'SPEC_DIR="$(bash .gaia/scripts/notebook/notebook-lib.sh path spec "$SPEC_ID")" || SPEC_DIR=""' \
+    'SPEC_DIR=".notebook/specs/${SPEC_ID}"'
+  check_s2 "$mutated" && return 1
+  true
 }
 
 # main holds the canonical SPEC-999; the worktree holds a forked SPEC-888. A
 # read that resolves main sees 999; a read that stays relative sees 888.
 seed_decoy() {
-  mkdir -p "$MAIN_PHYSICAL_PATH/.gaia/local/specs/SPEC-999"
-  printf '# canonical\n' > "$MAIN_PHYSICAL_PATH/.gaia/local/specs/SPEC-999/SPEC.md"
-  printf '{"specs":[{"id":"SPEC-999","status":"merged"}]}\n' \
-    > "$MAIN_PHYSICAL_PATH/.gaia/local/specs/ledger.json"
+  mkdir -p "$MAIN_PHYSICAL_PATH/.notebook/specs/SPEC-999"
+  printf '# canonical\n' > "$MAIN_PHYSICAL_PATH/.notebook/specs/SPEC-999/SPEC.md"
+  printf '{"version":1,"move_complete":{"at":"2026-01-01T00:00:00Z"},"items":[{"kind":"spec","id":"SPEC-999","path":"specs/SPEC-999","status":"merged"}]}\n' \
+    > "$MAIN_PHYSICAL_PATH/.notebook/catalog.json"
 
-  mkdir -p "$WORKTREE_PHYSICAL_PATH/.gaia/local/specs/SPEC-888"
-  printf '# forked decoy\n' > "$WORKTREE_PHYSICAL_PATH/.gaia/local/specs/SPEC-888/SPEC.md"
-  printf '{"specs":[{"id":"SPEC-888","status":"merged"}]}\n' \
-    > "$WORKTREE_PHYSICAL_PATH/.gaia/local/specs/ledger.json"
+  mkdir -p "$WORKTREE_PHYSICAL_PATH/.notebook/specs/SPEC-888"
+  printf '# forked decoy\n' > "$WORKTREE_PHYSICAL_PATH/.notebook/specs/SPEC-888/SPEC.md"
+  printf '{"version":1,"move_complete":{"at":"2026-01-01T00:00:00Z"},"items":[{"kind":"spec","id":"SPEC-888","path":"specs/SPEC-888","status":"merged"}]}\n' \
+    > "$WORKTREE_PHYSICAL_PATH/.notebook/catalog.json"
 }
 
-@test "R1: the pre-flight sweep's cold-consolidation scan reads the ledgers and folders from main" {
+# --- R1 ----------------------------------------------------------------------
+
+check_r1() {
+  local lifecycle_md="$1" block fence script
   # Both anchors are the sweep's own pass labels, the stable structure of the
   # section; the candidate fence is the only ```bash fence between them.
-  block="$(range_between "$LIFECYCLE_MD" '**2. Cold consolidation.**' '**3. Reap past retention.**')"
+  block="$(range_between "$lifecycle_md" '**3. Cold consolidation.**' '**4. Reap merged past retention.**')" || return 1
   fence="$(bash_fence_of "$block")"
 
-  if ! printf '%s\n' "$fence" | grep -qF 'ledger.json'; then
-    printf "the pre-flight sweep's cold-consolidation scan has no shell block that reads the SPEC ledger\n" >&2
+  if ! printf '%s\n' "$fence" | grep -qF 'notebook-lib.sh list spec --status merged'; then
+    printf "the pre-flight sweep's cold-consolidation scan has no shell block that lists the merged SPEC rows through the library\n" >&2
     return 1
   fi
 
@@ -297,7 +384,7 @@ seed_decoy() {
   printf '%s\n' "$fence" > "$script"
 
   run bash -c "cd '$WORKTREE' && bash '$script'"
-  [ "$status" -eq 0 ]
+  [ "$status" -eq 0 ] || { printf 'the sweep fence failed (status %s): %s\n' "$status" "$output" >&2; return 1; }
 
   if ! printf '%s\n' "$output" | grep -qF 'SPEC-999'; then
     printf 'the sweep run from the worktree never reached main'"'"'s merged SPEC-999 (output: "%s")\n' "$output" >&2
@@ -305,16 +392,32 @@ seed_decoy() {
   fi
 
   # THE LOAD-BEARING ASSERTION. Emitting the worktree's forked id is proof the
-  # ledger scan and the per-candidate folder are still relative.
+  # catalog scan and the per-candidate folder are still relative.
   if printf '%s\n' "$output" | grep -qF 'SPEC-888'; then
-    printf 'the sweep read the worktree'"'"'s forked specs tree (emitted SPEC-888): "%s"\n' "$output" >&2
+    printf 'the sweep read the worktree'"'"'s forked notebook (emitted SPEC-888): "%s"\n' "$output" >&2
     return 1
   fi
   true
 }
 
-@test "R2: the resume-point comparison resolves the canonical SPEC path into main" {
-  block="$(range_between "$RESUME_MD" 'Before prompting, gather context' 'Before presenting the resume choice')"
+@test "R1: the pre-flight sweep's cold-consolidation scan reads the catalog and folders from main" {
+  check_r1 "$LIFECYCLE_MD"
+}
+
+@test "red twin R1: a sweep that resolves the candidate folder relative to the worktree fails the check" {
+  local mutated="$BATS_TEST_TMPDIR/lifecycle-relative.md"
+  plant_into_copy "$LIFECYCLE_MD" "$mutated" \
+    'folder="$(bash .gaia/scripts/notebook/notebook-lib.sh path spec "$id")" || continue' \
+    'folder=".notebook/specs/${id}"'
+  check_r1 "$mutated" && return 1
+  true
+}
+
+# --- R2 ----------------------------------------------------------------------
+
+check_r2() {
+  local resume_md="$1" block fence script
+  block="$(range_between "$resume_md" 'Before prompting, gather context' 'Before presenting the resume choice')" || return 1
   fence="$(bash_fence_of "$block")"
 
   if ! printf '%s\n' "$fence" | grep -qF 'SPEC_PATH'; then
@@ -337,7 +440,7 @@ seed_decoy() {
   # half of the comparison this task anchors. The draft cache is per-tree by
   # registry classification and deliberately stays relative to the acting tree.
   run bash -c "cd '$WORKTREE' && bash '$script'"
-  [ "$status" -eq 0 ]
+  [ "$status" -eq 0 ] || { printf 'the resume fence failed (status %s): %s\n' "$status" "$output" >&2; return 1; }
 
   case "$output" in
     "$MAIN_PHYSICAL_PATH"/*) : ;;
@@ -356,10 +459,35 @@ seed_decoy() {
   true
 }
 
-@test "negative space: no bare relative .gaia/local/specs/ read survives at the three converted read sites" {
-  sweep_range="$(range_between "$LIFECYCLE_MD" '**2. Cold consolidation.**' '**3. Reap past retention.**')"
-  resume_range="$(range_between "$RESUME_MD" 'Before prompting, gather context' 'Before presenting the resume choice')"
-  session_helper_range="$(range_between "$SPEC_MD" '4. **Record the run (never blocks):**' '**Auto-mode:** the record call fires identically')"
+@test "R2: the resume-point comparison resolves the canonical SPEC path into main" {
+  check_r2 "$RESUME_MD"
+}
+
+@test "red twin R2: a resume point built from a relative notebook path fails the check" {
+  local mutated="$BATS_TEST_TMPDIR/resume-relative.md"
+  plant_into_copy "$RESUME_MD" "$mutated" \
+    'SPEC_FOLDER="$(bash .gaia/scripts/notebook/notebook-lib.sh path spec "$SPEC_ID")" || SPEC_FOLDER=""' \
+    'SPEC_FOLDER=".notebook/specs/${SPEC_ID}"'
+  check_r2 "$mutated" && return 1
+  true
+}
+
+# --- negative space ----------------------------------------------------------
+
+# Lines of the text on stdin that spell a notebook path without going through
+# the library or an anchored variable. Display prose that names the generic
+# path for a human to read sits outside the measured ranges.
+unanchored_notebook_lines() {
+  grep -F '.notebook/' | grep -v -E 'notebook-lib\.sh|MAIN_ROOT|SPEC_DIR' || true
+}
+
+# The three read-site ranges of the given files, concatenated, after proving
+# the save-step range still holds the record call it exists to measure.
+read_site_ranges() {
+  local spec_md="$1" lifecycle_md="$2" resume_md="$3" sweep_range resume_range session_helper_range
+  sweep_range="$(range_between "$lifecycle_md" '**3. Cold consolidation.**' '**4. Reap merged past retention.**')" || return 1
+  resume_range="$(range_between "$resume_md" 'Before prompting, gather context' 'Before presenting the resume choice')" || return 1
+  session_helper_range="$(range_between "$spec_md" '4. **Record the run (never blocks):**' '**Auto-mode:** the record call fires identically')" || return 1
 
   # The range is the save step's record call. It must hold the call itself,
   # so a prose reflow that moves an anchor cannot leave the range measuring
@@ -368,29 +496,51 @@ seed_decoy() {
     printf 'the save-step range does not hold the usage.sh record call\n' >&2
     return 1
   fi
+  printf '%s\n%s\n%s\n' "$sweep_range" "$resume_range" "$session_helper_range"
+}
 
+check_read_sites() {
+  local ranges bad
+  ranges="$(read_site_ranges "$1" "$2" "$3")" || return 1
+  [ -n "$ranges" ] || { printf 'the read-site ranges are empty\n' >&2; return 1; }
   # Ranges are scoped to the executable instructions only. Display prose that
   # names the generic path for a human to read (the draft-phase note above the
   # resume block, step 9's own narration) sits outside all three and is
   # deliberately not converted.
-  bad=""
-  for site in "$sweep_range" "$resume_range" "$session_helper_range"; do
-    hit="$(printf '%s\n' "$site" | grep -F '.gaia/local/specs/' | grep -v -E 'MAIN_ROOT|SPEC_DIR' || true)"
-    if [ -n "$hit" ]; then
-      bad="${bad}${hit}
-"
-    fi
-  done
-
+  bad="$(printf '%s\n' "$ranges" | unanchored_notebook_lines)"
   if [ -n "$bad" ]; then
-    printf 'unanchored .gaia/local/specs/ read survives at a converted site:\n%s\n' "$bad" >&2
+    printf 'unanchored .notebook/ read survives at a converted site:\n%s\n' "$bad" >&2
     return 1
   fi
   true
 }
 
-@test "negative space: no bare relative .gaia/local/specs/ write survives at the converted sites" {
-  step3_range="$(range_between "$SPEC_MD" '### 3. Initial draft' '### 4. Gate 1')"
+@test "negative space: no bare relative .notebook/specs/ read survives at the three converted read sites" {
+  check_read_sites "$SPEC_MD" "$LIFECYCLE_MD" "$RESUME_MD"
+}
+
+@test "red twin negative space: a bare relative .notebook/specs/ read planted at each read site fails the check" {
+  local mutated_spec mutated_lifecycle mutated_resume
+  mutated_spec="$BATS_TEST_TMPDIR/spec-read-plant.md"
+  mutated_lifecycle="$BATS_TEST_TMPDIR/lifecycle-read-plant.md"
+  mutated_resume="$BATS_TEST_TMPDIR/resume-read-plant.md"
+
+  # One plant per site, each in its own run, so each range proves it can fail.
+  plant_line_after "$LIFECYCLE_MD" "$mutated_lifecycle" '**3. Cold consolidation.**' 'cat .notebook/specs/SPEC-001/SPEC.md'
+  check_read_sites "$SPEC_MD" "$mutated_lifecycle" "$RESUME_MD" && return 1
+
+  plant_line_after "$RESUME_MD" "$mutated_resume" 'Before prompting, gather context' 'cat .notebook/specs/SPEC-001/SPEC.md'
+  check_read_sites "$SPEC_MD" "$LIFECYCLE_MD" "$mutated_resume" && return 1
+
+  plant_line_after "$SPEC_MD" "$mutated_spec" '4. **Record the run (never blocks):**' 'cat .notebook/specs/SPEC-001/SPEC.md'
+  check_read_sites "$mutated_spec" "$LIFECYCLE_MD" "$RESUME_MD" && return 1
+  true
+}
+
+# The three write-site ranges of the given files, concatenated.
+write_site_ranges() {
+  local spec_md="$1" audit_md="$2" step3_range persist_range routing_range
+  step3_range="$(range_between "$spec_md" '### 3. Initial draft' '### 4. Gate 1')" || return 1
   # routing_range (7c) is where the AUDIT.md path is actually constructed, so it is the
   # range this negative check earns its keep on; the positive assertion in S2
   # anchors there too. persist_range (7d) is retained as a genuine no-regression range:
@@ -399,26 +549,43 @@ seed_decoy() {
   # evidence the write site is covered -- routing_range and S2 are what cover it.
   # persist_range runs from 7d to the end of spec/audit.md, which closes with
   # the return to gate 2.
-  persist_range="$(range_to_end "$AUDIT_MD" '## 7d. Persist AUDIT.md')"
-  routing_range="$(range_between "$AUDIT_MD" '## 7c. Disposition routing + apply' '## 7d. Persist AUDIT.md')"
+  persist_range="$(range_to_end "$audit_md" '## 7d. Persist AUDIT.md')" || return 1
+  routing_range="$(range_between "$audit_md" '## 7c. Disposition routing + apply' '## 7d. Persist AUDIT.md')" || return 1
+  printf '%s\n%s\n%s\n' "$step3_range" "$persist_range" "$routing_range"
+}
 
-  # Scoped tightly to the write sites (not repo-wide): design section 2e
-  # notes that display prose elsewhere (spec.md:840, :916, :920, step 3's
-  # confirmation line) names the generic path for a human to read and is
-  # deliberately not converted. Those lines sit outside all three ranges
-  # above, so this check never has to special-case them.
-  bad=""
-  for site in "$step3_range" "$persist_range" "$routing_range"; do
-    hit="$(printf '%s\n' "$site" | grep -F '.gaia/local/specs/' | grep -v -E 'MAIN_ROOT|SPEC_DIR' || true)"
-    if [ -n "$hit" ]; then
-      bad="${bad}${hit}
-"
-    fi
-  done
-
+check_write_sites() {
+  local ranges bad
+  ranges="$(write_site_ranges "$1" "$2")" || return 1
+  [ -n "$ranges" ] || { printf 'the write-site ranges are empty\n' >&2; return 1; }
+  # Scoped tightly to the write sites (not repo-wide): display prose elsewhere
+  # (the step-3 confirmation line, the step-11 handoff) names the generic path
+  # for a human to read and is deliberately not converted. Those lines sit
+  # outside all three ranges, so this check never has to special-case them.
+  bad="$(printf '%s\n' "$ranges" | unanchored_notebook_lines)"
   if [ -n "$bad" ]; then
-    printf 'unanchored .gaia/local/specs/ write survives at a converted site:\n%s\n' "$bad" >&2
+    printf 'unanchored .notebook/ write survives at a converted site:\n%s\n' "$bad" >&2
     return 1
   fi
+  true
+}
+
+@test "negative space: no bare relative .notebook/specs/ write survives at the converted sites" {
+  check_write_sites "$SPEC_MD" "$AUDIT_MD"
+}
+
+@test "red twin negative space: a bare relative .notebook/specs/ write planted at each write site fails the check" {
+  local mutated_spec mutated_audit
+  mutated_spec="$BATS_TEST_TMPDIR/spec-write-plant.md"
+  mutated_audit="$BATS_TEST_TMPDIR/audit-write-plant.md"
+
+  plant_line_after "$SPEC_MD" "$mutated_spec" '### 3. Initial draft' 'mkdir -p .notebook/specs/${SPEC_ID}'
+  check_write_sites "$mutated_spec" "$AUDIT_MD" && return 1
+
+  plant_line_after "$AUDIT_MD" "$mutated_audit" '## 7c. Disposition routing + apply' 'mkdir -p .notebook/specs/${SPEC_ID}'
+  check_write_sites "$SPEC_MD" "$mutated_audit" && return 1
+
+  plant_line_after "$AUDIT_MD" "$mutated_audit" '## 7d. Persist AUDIT.md' 'printf x > .notebook/specs/${SPEC_ID}/AUDIT.md'
+  check_write_sites "$SPEC_MD" "$mutated_audit" && return 1
   true
 }

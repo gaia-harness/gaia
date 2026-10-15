@@ -1,10 +1,10 @@
 # /gaia-spec
 
-GAIA's script-driven Socratic discovery workflow. Produces an immutable SPEC artifact at `.gaia/local/specs/SPEC-NNN/SPEC.md` and stops. Do not implement anything, and do not plan anything, this skill produces an artifact and ends. The `/gaia-plan` handoff is a prompt you print for the human (step 11), never a command you run. See Hard constraint 6.
+GAIA's script-driven Socratic discovery workflow. Produces an immutable SPEC artifact at `.notebook/specs/SPEC-NNN/SPEC.md` and stops. Do not implement anything, and do not plan anything, this skill produces an artifact and ends. The `/gaia-plan` handoff is a prompt you print for the human (step 11), never a command you run. See Hard constraint 6.
 
 The procedures only some runs or only one stage need live in sub-references under `.claude/skills/gaia/references/spec/`, each read whole at its branch point, where a line here says to Read it now. Never skip such a line: the procedure it names is not restated here.
 
-Contents: Argument parsing; Auto mode; Hard constraints; Operational primitives (MAIN_ROOT contract, tool-choice contract, Session-shape cache, Session-lock, Working-draft checkpoint, Audit cache + delegated fold, Abandoned exit, Don't re-quote folded clarifications); Steps (model gate, 1 description, 2 resume-vs-start-new, 3 initial draft, 4 gate 1, 5 Socratic loop, 6 self-review, 7 adversarial SPEC-audit, 8 gate 2, 9 save and ledger and cost, 10 immutability lint, 11 /gaia-plan handoff, then STOP).
+Contents: Argument parsing; Auto mode; Hard constraints; Operational primitives (SPEC-folder path contract, tool-choice contract, Session-shape cache, Session-lock, Working-draft checkpoint, Audit cache + delegated fold, Abandoned exit, Don't re-quote folded clarifications); Steps (model gate, 1 description, 2 resume-vs-start-new, 3 initial draft, 4 gate 1, 5 Socratic loop, 6 self-review, 7 adversarial SPEC-audit, 8 gate 2, 9 save and ledger and cost, 10 immutability lint, 11 /gaia-plan handoff, then STOP).
 
 ## Argument parsing
 
@@ -40,7 +40,7 @@ The rest of the skill, write-surface allowlist, no-machine-local-memory rule, wo
 
 1. **No machine-local memory for project decisions.** Never call any tool that writes to `~/.claude/projects/.../memory/`. Project-relevant decisions belong ONLY in the SPEC artifact, the wiki, or `.claude/rules/`. Personal preferences (tone, formatting) remain allowed in machine-local memory. This is the no-machine-local-memory rule and it is non-negotiable.
 2. **Write-surface allowlist.** Every file write during a `/gaia-spec` session lands in exactly one of:
-   - `.gaia/local/specs/**`
+   - `.notebook/specs/**`
    - `.gaia/local/cache/**`
    - `.gaia/local/telemetry/**`
      Never edit source files (`frontend/app/**`, `src/**`, repo root configs, etc.). No automated backstop enforces this allowlist: the step-10 lint checks only the saved SPEC artifact's immutability, not which paths a session wrote. You self-police it at the agent-instruction level.
@@ -53,11 +53,11 @@ The rest of the skill, write-surface allowlist, no-machine-local-memory rule, wo
 
 Used by multiple steps below. Defined once here to keep step-level prose tight.
 
-Every ledger and lock library this skill invokes (`spec-session-lock.sh`, `spec-reconcile.sh`, the `spec-archive-*` / `spec-abandon-empty` sweeps, `spec-allocator.sh`, `ledger-update.sh`) takes the current tree as its `$PWD` operand and resolves the main checkout itself before touching `.gaia/local/specs`, so `$PWD` honestly names the running tree and the caller never resolves main for these calls. The SPEC-folder paths this skill builds for itself are the exception, on both sides, read and write: each builds a `.gaia/local/specs` path directly rather than handing it to a library, so each anchors to main explicitly at its own site.
+Every ledger and lock library this skill invokes (`spec-session-lock.sh`, `spec-reconcile.sh`, the `spec-archive-*` / `spec-abandon-empty` sweeps, `spec-allocator.sh`, `ledger-update.sh`) takes the current tree as its `$PWD` operand and resolves the main checkout itself before touching the notebook, so `$PWD` honestly names the running tree and the caller never resolves main for these calls. The SPEC-folder paths this skill builds for itself are the exception, on both sides, read and write: each needs the folder's path directly rather than handing it to a library, so each asks the notebook library for it at its own site.
 
-`bash .gaia/scripts/main-root-lib.sh` is the resolver every one of those sites calls, and it fails closed: it prints nothing and exits non-zero when it cannot resolve a main checkout. **This contract governs every `MAIN_ROOT` site below, and is stated only here.** At each of them an empty `MAIN_ROOT` stops the step and is surfaced; it never falls back to a relative path. That fallback is not a cosmetic concern: from a linked worktree a relative path names a tree that holds no SPECs, so a read silently finds nothing, and an unguarded `mkdir -p "${MAIN_ROOT}/.gaia/local/specs/${SPEC_ID}"` expands to `mkdir -p /.gaia/local/specs/...` and attempts a write at the filesystem root.
+`bash .gaia/scripts/notebook/notebook-lib.sh path spec <SPEC_ID>` is the resolver every one of those sites calls, and it fails closed: it prints nothing and exits non-zero when it cannot resolve a main checkout or the notebook is not ready (the one-time move is pending). **This contract governs every SPEC-folder site below, and is stated only here.** At each of them an empty result stops the step and is surfaced; it never falls back to a relative path. That fallback is not a cosmetic concern: from a linked worktree a relative path names a tree that holds no SPECs, so a read silently finds nothing, and an unguarded `mkdir -p "${SPEC_FOLDER}"` or a write to `${SPEC_FOLDER}/SPEC.md` with an empty variable expands to a path at the filesystem root.
 
-**Tool-choice contract: which tool writes a `MAIN_ROOT`-anchored path governs every write site below, and is stated only here.** From the main checkout the ordinary `Edit`/`Write` tools write it and nothing else applies. From inside a linked worktree they cannot reach it at all: the harness isolates the session to that worktree and refuses a `file_path` resolving to the shared checkout, and a linked worktree reaches `.gaia/local` through one symlink to the main checkout, so both spellings of the path land on the same refused target. Every write this skill directs into the resolved SPEC folder (`SPEC.md`, `AUDIT.md`, `SUMMARY.md`, and any sibling) takes the same fallback there: write it with `Bash` at its main-checkout absolute path, then read it back and confirm both its content and its location before continuing. The read-back is what makes the fallback safe rather than a dodge, since the failure the discipline exists to prevent is a write landing in the wrong tree, and it stays scoped to these main-anchored paths: a `Bash` redirect is never the way to write into another checkout where the edit tools already work. `.claude/skills/gaia/references/plan/planner.md` states the same rule for the plan ledger.
+**Tool-choice contract: which tool writes a main-anchored path governs every write site below, and is stated only here.** From the main checkout the ordinary `Edit`/`Write` tools write it and nothing else applies. From inside a linked worktree they cannot reach it at all: the harness isolates the session to that worktree and refuses a `file_path` resolving to the shared checkout, and a linked worktree reaches the notebook through one `.notebook` symlink to the main checkout, so both spellings of the path land on the same refused target. Every write this skill directs into the resolved SPEC folder (`SPEC.md`, `AUDIT.md`, `SUMMARY.md`, and any sibling) takes the same fallback there: write it with `Bash` at its main-checkout absolute path, then read it back and confirm both its content and its location before continuing. The read-back is what makes the fallback safe rather than a dodge, since the failure the discipline exists to prevent is a write landing in the wrong tree, and it stays scoped to these main-anchored paths: a `Bash` redirect is never the way to write into another checkout where the edit tools already work. `.claude/skills/gaia/references/plan/planner.md` states the same rule for the plan ledger.
 
 ### Session-shape cache (`spec-session-<spec_id>.json`)
 
@@ -177,12 +177,11 @@ Otherwise, ask: **"What do you want to spec?"** and wait for the response before
 
 ### 2. Resume-vs-start-new prompt (pre-flight)
 
-First, read `.claude/skills/gaia/references/spec/lifecycle.md` and run its `## Pre-flight sweep` now. It reconciles finalized rows whose PR has merged, cold-consolidates any merged folder whose layers were never consolidated, and reaps merged folders past the retention window. Its writes into a SPEC folder follow the tool-choice contract in Operational primitives.
+First, read `.claude/skills/gaia/references/spec/lifecycle.md` and run its `## Pre-flight sweep` now. It first checks notebook readiness (a non-zero result ends this command, surfacing its one stderr line), then reconciles finalized rows whose PR has merged, cold-consolidates any merged folder whose layers were never consolidated, reaps merged and abandoned folders past the retention window, and offers to reap closed research. Its writes into a SPEC folder follow the tool-choice contract in Operational primitives. Run it with the caller label `/gaia-spec`.
 
-Then delete any SPEC folder already at `abandoned` status past the same retention window (`GAIA_SPEC_RETENTION_DAYS`, default 30 days); no consolidation gate applies, since nothing about an abandoned draft is ever promoted. Then sweep any never-authored draft older than the guard age to the terminal `abandoned` status, so a ghost allocation (no SPEC.md, no draft cache, no gate-1 snapshot) stops re-surfacing on this very prompt. Both passes are best-effort and fail-open:
+Then sweep any never-authored draft older than the guard age to the terminal `abandoned` status, so a ghost allocation (no SPEC.md, no draft cache, no gate-1 snapshot) stops re-surfacing on this very prompt. Both passes below are best-effort and fail-open:
 
 ```bash
-bash .gaia/scripts/spec/spec-archive-abandoned.sh "$PWD" 2>/dev/null || true
 bash .gaia/scripts/spec/spec-abandon-empty.sh "$PWD" 2>/dev/null || true
 # Best-effort sweep of stale audit caches left by "Start new" or abandoned exits.
 # An audit-<id>/ cache is short-lived (created at 6a, deleted at the step-7 fallback, step 9
@@ -194,7 +193,7 @@ find .gaia/local/cache -maxdepth 1 -type d -name 'audit-*' -mtime +1 \
 
 Then run `bash .gaia/scripts/spec/spec-allocator.sh in_progress "$PWD"`. If the output is a `SPEC-NNN` id (not `none`), an unfinalized **draft** SPEC already exists, a prior authoring session that never reached the canonical save (step 9). The allocator reports only drafts; a finalized SPEC (`ready`/`merged`) is never surfaced here, because you resume a draft, not a frozen artifact.
 
-The id may name a **draft-phase** session, a SPEC allocated in another terminal whose interactive loop has not yet reached the canonical save (step 9), so `.gaia/local/specs/SPEC-NNN/SPEC.md` may not exist yet and the live draft is at `.gaia/local/cache/draft-SPEC-NNN.md`. The `WORKING`-selection in `spec/resume.md` resolves this correctly, preferring the draft cache when the canonical file is absent or older.
+The id may name a **draft-phase** session, a SPEC allocated in another terminal whose interactive loop has not yet reached the canonical save (step 9), so the SPEC folder's `SPEC.md` may not exist yet and the live draft is at `.gaia/local/cache/draft-SPEC-NNN.md`. The `WORKING`-selection in `spec/resume.md` resolves this correctly, preferring the draft cache when the canonical file is absent or older.
 
 **Auto-mode exception:** skip the resume prompt entirely. Always start new and proceed to step 3 with a fresh allocation. The draft SPEC (if any) remains untouched. Per Auto-mode rule 2 the user's `auto` invocation is the signal that they want a fresh artifact; resuming an existing draft into a non-interactive context risks silently overwriting work in progress.
 
@@ -214,15 +213,15 @@ bash .gaia/scripts/spec/spec-allocator.sh next "$PWD" "<subject>"
 
 On any non-zero exit, surface the allocator's stderr verbatim and halt the session: no folder, no draft, no lock. `GAIA_SPEC_FORCE_OFFLINE=1` makes the allocator skip remote reservation, which is useful for throwaway runs.
 
-**Anchor the folder.** Create the SPEC folder in the main checkout, never in the current worktree. The block runs as-is with `SPEC_ID` already set and the cwd inside any checkout of the repo; an empty `MAIN_ROOT` stops the step and is surfaced, per the Operational primitives contract, with no relative fallback:
+**Anchor the folder.** Create the SPEC folder in the main checkout's notebook, never in the current worktree. The block runs as-is with `SPEC_ID` already set and the cwd inside any checkout of the repo; an empty result stops the step and is surfaced, per the Operational primitives contract, with no relative fallback:
 
 ```bash
-MAIN_ROOT="$(bash .gaia/scripts/main-root-lib.sh)"
-if [ -z "$MAIN_ROOT" ]; then
-  echo "gaia-spec: cannot resolve the main checkout; refusing to create the SPEC folder" >&2
+SPEC_FOLDER="$(bash .gaia/scripts/notebook/notebook-lib.sh path spec "$SPEC_ID")" || SPEC_FOLDER=""
+if [ -z "$SPEC_FOLDER" ]; then
+  echo "gaia-spec: cannot resolve the notebook's SPEC folder; refusing to create the SPEC folder" >&2
   exit 1
 fi
-mkdir -p "${MAIN_ROOT}/.gaia/local/specs/${SPEC_ID}"
+mkdir -p "$SPEC_FOLDER"
 ```
 
 **Write the draft.** Read `.claude/skills/gaia/references/spec/spec-template.md`, substitute every `SPEC-NNN` with `SPEC_ID`, and stamp the GAIA frontmatter keys `spec_id`, `type`, `status`, `immutable`, `wiki_promote_default`, `chain_trigger`, `created`, and `updated` (the template carries them; `created` and `updated` become today's ISO date). Write the result with one `Write` to the working-draft checkpoint named in Operational primitives, `.gaia/local/cache/draft-<spec_id>.md`: the per-tree draft cache, not the SPEC folder. Step 9 owns the canonical save. Cache that draft path; you will read and re-render it across the rest of these steps.
@@ -295,7 +294,7 @@ Render the full draft artifact in markdown form (frontmatter plus body) and pres
 
 **Auto-mode exception per rule 3:** skip the user prompt. Render the draft into the agent's reasoning context, run a self-check (frontmatter populated, every UAT has Given/When/Then, intent matches gate-1 snapshot modulo intentional clarify evolution, deferred clarifications block well-formed). Apply at most one revision pass if the self-check finds an issue, then jump to the "On confirmation" actions below.
 
-While filling frontmatter, set `lineage:` to the research folder slug(s) under `.gaia/local/research/` (as `research:<slug>`) or issue number(s) (as `issue:<n>`) that discovery named as this SPEC's origin, and leave it `[]` when none. This is never a new question to the user, in auto mode or otherwise.
+While filling frontmatter, set `lineage:` to the research folder slug(s) under `.notebook/research/` (as `research:<slug>`) or issue number(s) (as `issue:<n>`) that discovery named as this SPEC's origin, and leave it `[]` when none. This is never a new question to the user, in auto mode or otherwise.
 
 Use a plain prompt, not `AskUserQuestion`. Suggested phrasing:
 
@@ -317,17 +316,16 @@ On confirmation:
 
 Only after gate-2 confirmation may you proceed to step 9.
 
-### 9. Save to .gaia/local/specs/SPEC-NNN/SPEC.md
+### 9. Save to .notebook/specs/SPEC-NNN/SPEC.md
 
-Create the SPEC folder in the main checkout, then write the confirmed draft to its canonical inner file (using the `spec_id` allocated in step 3). The SPEC folder is main-anchored state (state registry `specs-main`), so a session inside a linked worktree writes the artifact where the ledger row (written to main by the anchored ledger libraries) indexes it. Resolve once here, guarded per the Operational-primitives contract, and reuse `SPEC_FOLDER` for every path this step builds; the read-back below uses it rather than re-resolving:
+Create the SPEC folder in the main checkout, then write the confirmed draft to its canonical inner file (using the `spec_id` allocated in step 3). The SPEC folder is main-anchored state (state registry `specs-main`), so a session inside a linked worktree writes the artifact where the catalog row (written to main by the anchored ledger libraries) indexes it. Resolve once here, guarded per the Operational-primitives contract, and reuse `SPEC_FOLDER` for every path this step builds; the read-back below uses it rather than re-resolving:
 
 ```bash
-MAIN_ROOT="$(bash .gaia/scripts/main-root-lib.sh)"
-if [ -z "$MAIN_ROOT" ]; then
-  echo "gaia-spec: cannot resolve the main checkout; refusing to save the SPEC" >&2
+SPEC_FOLDER="$(bash .gaia/scripts/notebook/notebook-lib.sh path spec "$SPEC_ID")" || SPEC_FOLDER=""
+if [ -z "$SPEC_FOLDER" ]; then
+  echo "gaia-spec: cannot resolve the notebook's SPEC folder; refusing to save the SPEC" >&2
   exit 1
 fi
-SPEC_FOLDER="${MAIN_ROOT}/.gaia/local/specs/${SPEC_ID}"
 mkdir -p "$SPEC_FOLDER"
 ```
 
@@ -337,8 +335,8 @@ Update the frontmatter `updated` field to today's date.
 
 After the canonical write succeeds:
 
-1. **Delete the working-draft cache:** `rm -f .gaia/local/cache/draft-<spec_id>.md .gaia/local/cache/gate1-<spec_id>.json`, and remove the audit cache with `rm -rf .gaia/local/cache/audit-<spec_id>/`. The applier has already read the audit cache to derive `AUDIT.md` (which survives under `.gaia/local/specs/<spec_id>/`), so deleting it here is safe. The canonical artifact is the source of truth from this point forward; a stale cache would mislead step 2 of a future session.
-2. **Update the ledger row:** flip the row in `.gaia/local/specs/ledger.json` from `status: draft` to `status: ready` and stamp the intent (the SPEC's `intent` field reduced to a full first sentence, or a word-safe bounded prefix + `...` when the first sentence runs long, via the shared title-normalize rule) for at-a-glance scanning. This is the finalize transition: the SPEC artifact is now frozen, so the authoring session is done and the allocator stops reporting it for resume-vs-start-new. Downstream (plan → implement → merge) owns the feature from here; the ledger's `merged` transition is reconciled from git by `spec-reconcile.sh`, not set here. Failure is non-blocking, log to stderr and continue. The remote `spec/*` tags are the cross-team allocation authority; `.gaia/local/specs/ledger.json` is a per-machine local cache; the SPEC artifact and git history remain authoritative.
+1. **Delete the working-draft cache:** `rm -f .gaia/local/cache/draft-<spec_id>.md .gaia/local/cache/gate1-<spec_id>.json`, and remove the audit cache with `rm -rf .gaia/local/cache/audit-<spec_id>/`. The applier has already read the audit cache to derive `AUDIT.md` (which survives in the SPEC folder), so deleting it here is safe. The canonical artifact is the source of truth from this point forward; a stale cache would mislead step 2 of a future session.
+2. **Update the catalog row:** flip the SPEC's row in the notebook catalog from `status: draft` to `status: ready` and stamp the intent (the SPEC's `intent` field reduced to a full first sentence, or a word-safe bounded prefix + `...` when the first sentence runs long, via the shared title-normalize rule) for at-a-glance scanning. This is the finalize transition: the SPEC artifact is now frozen, so the authoring session is done and the allocator stops reporting it for resume-vs-start-new. Downstream (plan → implement → merge) owns the feature from here; the row's `merged` transition is reconciled from git by `spec-reconcile.sh`, not set here. Failure is non-blocking, log to stderr and continue. The remote `spec/*` tags are the cross-team allocation authority; the notebook catalog is a per-machine local cache; the SPEC artifact and git history remain authoritative.
 
 ```bash
 # SPEC.md lives in the main checkout (saved above); read it back from there,
@@ -364,6 +362,13 @@ bash .gaia/scripts/spec/ledger-update.sh "$PWD" "$SPEC_ID" "$PATCH" \
   || echo "ledger-update skipped (row missing or jq failure), non-blocking" >&2
 ```
 
+When the SPEC's `lineage:` holds `research:<slug>` entries, also record them on the row, best-effort like the flip above (`[...]` is the JSON array of those slugs without the `research:` prefix):
+
+```bash
+bash .gaia/scripts/notebook/notebook-lib.sh update spec "$SPEC_ID" '{"links":{"research":[...]}}' \
+  || echo "research links skipped (row missing), non-blocking" >&2
+```
+
 3. **Delete the session-shape cache:** `rm -f .gaia/local/cache/spec-session-${SPEC_ID}.json`. The cache's job, tracking `question_count` against the ceiling across a pause and resume, ends once the SPEC is saved. **Release the session lock (canonical save):** `bash .gaia/scripts/spec/spec-session-lock.sh release "$PWD" "$SPEC_ID" || true`. The canonical save is the holder's own graceful exit, so it drops its own lock here, alongside the session-shape cache.
 4. **Record the run (never blocks):** close the session's usage record and print its Cost line. This call never blocks or fails the save.
 
@@ -376,8 +381,7 @@ The command pairs this session's `gaia-spec` start with now, flushes the session
 5. **Lineage edges (never blocks):** materialize each `lineage:` entry as an edge in the usage links ledger now, because the SPEC folder is reaped later and nothing reads `SPEC.md` for edges at read time. Shell state does not survive between Bash calls, so this block re-derives its own paths. Substitute the literal SPEC id for `SPEC-NNN`:
 
 ```bash
-MAIN_ROOT="$(bash .gaia/scripts/main-root-lib.sh)"
-SPEC_PATH="${MAIN_ROOT}/.gaia/local/specs/SPEC-NNN/SPEC.md"
+SPEC_PATH="$(bash .gaia/scripts/notebook/notebook-lib.sh path spec SPEC-NNN)/SPEC.md"
 bash .gaia/scripts/usage.sh lineage "$SPEC_PATH" || true
 ```
 
@@ -387,7 +391,7 @@ A wrong path prints a `no SPEC file` line to stderr even behind `|| true`. A SPE
 
 ### 10. Immutability lint
 
-After the step-9 save, run `bash .gaia/scripts/spec/lint.sh <spec-path>` yourself against `${SPEC_FOLDER}/SPEC.md`, the file step 9 saved. Re-resolve `SPEC_FOLDER` through `bash .gaia/scripts/main-root-lib.sh`, since shell state does not persist between calls. This is an explicit agent step, not an event. The lint prints JSON (`{"ok":true,"findings":[]}` on pass); handle the result with the cycle rules below.
+After the step-9 save, run `bash .gaia/scripts/spec/lint.sh <spec-path>` yourself against `${SPEC_FOLDER}/SPEC.md`, the file step 9 saved. Re-resolve `SPEC_FOLDER` through `bash .gaia/scripts/notebook/notebook-lib.sh path spec "$SPEC_ID"`, since shell state does not persist between calls. This is an explicit agent step, not an event. The lint prints JSON (`{"ok":true,"findings":[]}` on pass); handle the result with the cycle rules below.
 
 Track `lint_cycle = <count>` in working memory (initialize to 1 on the first attempt).
 
@@ -416,11 +420,11 @@ The handoff lives here, inline, after the canonical save (step 9) and the immuta
 
 The handoff is complete work, not a partial answer. Say so plainly when you report: the SPEC is saved, and planning is the human's next move in a fresh session.
 
-The handoff prompt is just the SPEC id, `plan.md`'s step 1a resolves `SPEC-NNN` to `.gaia/local/specs/SPEC-NNN/SPEC.md` (and a sibling `AUDIT.md`, if step 7 ran) itself, so no path or intent text needs to travel in the copy-paste.
+The handoff prompt is just the SPEC id, `plan.md`'s step 1a resolves `SPEC-NNN` to `.notebook/specs/SPEC-NNN/SPEC.md` (and a sibling `AUDIT.md`, if step 7 ran) itself, so no path or intent text needs to travel in the copy-paste.
 
 Print the handoff to the user as one cohesive block and stop: the status line, a `/clear`-and-paste instruction, then a single fenced code block whose contents are the full `/gaia-plan` invocation (command prefix included). Prepending `/gaia-plan ` makes the block a runnable command, not a bare argument, so the user copies exactly one thing:
 
-SPEC-NNN saved to `.gaia/local/specs/SPEC-NNN/SPEC.md`.
+SPEC-NNN saved to `.notebook/specs/SPEC-NNN/SPEC.md`.
 
 To plan it, /clear and paste this:
 

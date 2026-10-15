@@ -33,7 +33,7 @@ close_row() {
 
 @test "UAT-023: a SPEC filled from the template lints, the verbatim step-9 block records its lineage, and the initiative readout includes the SPEC and its branch with no link command" {
   local id=SPEC-095 spec fence transcript_path
-  spec="$REPO/.gaia/local/specs/$id/SPEC.md"
+  spec="$REPO/.notebook/specs/$id/SPEC.md"
   mkdir -p "${spec%/*}"
   sed -e "s/SPEC-NNN/$id/g" -e 's/UAT-NNN/UAT-001/g' \
     -e 's/^lineage: \[\]$/lineage: [research:topic-a-2026-10-01]/' \

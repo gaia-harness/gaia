@@ -88,13 +88,13 @@ Reason: summary-verify.sh failed: <its first stderr line>
 Runs after `gh pr merge`, in this order. Each step runs only after the one before it.
 
 1. **Confirm the merge.** Run `bash .gaia/scripts/pr-wait-merge.sh --pr <N>`. Only exit 0 with stdout `MERGED` proceeds. On any other exit (`CONFLICTING`, `CHECK_FAILED`, `TIMEOUT`, `CLOSED`, or exit 2, a refusal and never a verdict) stop and surface the verdict: nothing below runs before `MERGED` is confirmed.
-2. **Resolve the main checkout.** In worktree mode the cwd is the worktree, whose ledgers are not shared, so never pass `$PWD`:
+2. **Resolve the main checkout.** In worktree mode the cwd is the worktree, whose catalog view is not the main checkout's, so never pass `$PWD`:
 
    ```bash
    main_root="$(bash .gaia/scripts/main-root-lib.sh)"
    ```
 
-3. **Reconcile the ledger.** Best-effort, never blocking:
+3. **Reconcile the catalog.** Best-effort, never blocking:
 
    ```bash
    # spec-colocated plan (branch carries the SPEC marker)
@@ -103,7 +103,7 @@ Runs after `gh pr merge`, in this order. Each step runs only after the one befor
    bash .gaia/scripts/spec/plan-reconcile.sh "$main_root" "$PLAN_ID" "<N>" || true
    ```
 
-   Passing the confirmed PR number stamps `pr_number` on the plans-ledger row, which the pre-flight sweep's reap reads.
+   Passing the confirmed PR number stamps `pr_number` on the plan's catalog row, which the pre-flight sweep's reap reads.
 4. **Clean up.** Run `.claude/skills/gaia/references/work-lifecycle.md` `## 8. Cleanup`. Feature-branch mode runs `### Feature branch` with the plan's branch. Worktree mode runs the arm that matches how the worktree was entered (`### Worktree entered by name in this session` or `### Worktree entered by path or in an earlier session`). From an isolated sub-agent context, run its `### Sub-agent context: continuation prompt`, whose appended lines carry steps 5 and 6 for the human to run from the main checkout.
 5. **Verify, then remove the layers.** From the main checkout:
 
@@ -130,7 +130,15 @@ Runs after `gh pr merge`, in this order. Each step runs only after the one befor
 
 ## Pre-flight sweep
 
-The shared backstop for merges that happened outside an orchestrator, or a close that never finished. `/gaia-spec` step 2 and `/gaia-plan` step 0 both run it. Every pass is best-effort and never blocks the command that runs it. The order is load-bearing: pass 1's scan stamps the `pr_number` that pass 2's plan candidates and pass 3's confirmed reap read.
+The shared backstop for merges that happened outside an orchestrator, or a close that never finished. `/gaia-spec` step 2 and `/gaia-plan` step 0 both run it, each naming its caller (`/gaia-spec` or `/gaia-plan`) so pass 6 knows whether it may ask. Pass 0 is the one blocking pass; passes 1-6 are best-effort and never block the command that runs the sweep. The order is load-bearing: pass 1's scan stamps the `pr_number` that pass 3's plan candidates and pass 4's confirmed reap read.
+
+**0. Notebook readiness (blocking).**
+
+```bash
+bash .gaia/scripts/notebook/notebook-lib.sh require-ready
+```
+
+A non-zero exit stops the command that runs the sweep: surface its one stderr line (it names `bash .gaia/scripts/notebook/move.sh run`) and run nothing else. Every later pass would refuse anyway, and a session must not allocate on a machine whose one-time move is still pending.
 
 **1. Reconcile.** Flip finalized rows whose PR merged:
 
@@ -141,33 +149,40 @@ bash .gaia/scripts/spec/plan-reconcile.sh "$PWD" 2>/dev/null || true
 
 The plan call is the scan form (no id): it matches `ready` rows, and `merged` rows without a `pr_number`, to their merged PR and stamps `merged_at` and `pr_number`.
 
-**2. Cold consolidation.** Find merged folders whose layers were never consolidated: merged spec rows whose folder holds `SPEC.md` or `AUDIT.md` without a verified `SUMMARY.md`, and merged plan rows carrying `pr_number` whose folder holds `PROGRESS.md` without a verified `SUMMARY.md`. The ledgers and folders are main-anchored, so the scan resolves the main checkout first:
+**2. Generalized reconcile.**
 
 ```bash
-MAIN_ROOT="$(bash .gaia/scripts/main-root-lib.sh)"
-if [ -z "$MAIN_ROOT" ]; then
-  echo "pre-flight sweep: cannot resolve the main checkout; skipping cold consolidation" >&2
-else
-  jq -r '.specs[] | select(.status == "merged") | .id' "${MAIN_ROOT}/.gaia/local/specs/ledger.json" 2>/dev/null | while read -r id; do
-    folder="${MAIN_ROOT}/.gaia/local/specs/${id}"
-    { [ -f "${folder}/SPEC.md" ] || [ -f "${folder}/AUDIT.md" ]; } || continue
-    bash .gaia/scripts/summary-verify.sh "${folder}/SUMMARY.md" >/dev/null 2>&1 && continue
-    echo "$folder"
-  done
-  jq -r '.plans[] | select(.status == "merged" and (.pr_number // null) != null) | .id' "${MAIN_ROOT}/.gaia/local/plans/ledger.json" 2>/dev/null | while read -r id; do
-    folder="${MAIN_ROOT}/.gaia/local/plans/${id}"
-    [ -f "${folder}/PROGRESS.md" ] || continue
-    bash .gaia/scripts/summary-verify.sh "${folder}/SUMMARY.md" >/dev/null 2>&1 && continue
-    echo "$folder"
-  done
-fi
+bash .gaia/scripts/notebook/reconcile.sh 2>/dev/null || true
 ```
 
-An empty `MAIN_ROOT` skips this pass rather than falling back to a relative path, which would read a forked ledger inside a linked worktree.
+Show its output lines to the human when non-empty. It registers row-less research folders as `untagged` and changes nothing else.
+
+**3. Cold consolidation.** Find merged folders whose layers were never consolidated: merged spec rows whose folder holds `SPEC.md` or `AUDIT.md` without a verified `SUMMARY.md`, and merged plan rows carrying `pr_number` whose folder holds `PROGRESS.md` without a verified `SUMMARY.md`. The candidates come from the notebook library, and each folder from its `path` verb, which resolves the main checkout itself:
+
+```bash
+spec_rows="$(bash .gaia/scripts/notebook/notebook-lib.sh list spec --status merged 2>/dev/null)" || spec_rows="[]"
+plan_rows="$(bash .gaia/scripts/notebook/notebook-lib.sh list plan --status merged 2>/dev/null)" || plan_rows="[]"
+spec_ids="$(printf '%s' "$spec_rows" | jq -r '.[].id')"
+plan_ids="$(printf '%s' "$plan_rows" | jq -r '.[] | select((.pr_number // null) != null) | .id')"
+for id in $spec_ids; do
+  folder="$(bash .gaia/scripts/notebook/notebook-lib.sh path spec "$id")" || continue
+  { [ -f "${folder}/SPEC.md" ] || [ -f "${folder}/AUDIT.md" ]; } || continue
+  bash .gaia/scripts/summary-verify.sh "${folder}/SUMMARY.md" >/dev/null 2>&1 && continue
+  echo "$folder"
+done
+for id in $plan_ids; do
+  folder="$(bash .gaia/scripts/notebook/notebook-lib.sh path plan "$id")" || continue
+  [ -f "${folder}/PROGRESS.md" ] || continue
+  bash .gaia/scripts/summary-verify.sh "${folder}/SUMMARY.md" >/dev/null 2>&1 && continue
+  echo "$folder"
+done
+```
+
+The library fails closed when the main checkout is unresolvable: its `list` and `path` calls exit non-zero, the candidate lists stay empty and the pass finds nothing, and a `path` call that exits non-zero skips its folder; never fall back to a relative path, which would read a forked notebook inside a linked worktree.
 
 For each printed folder, run `## Consolidation` above against it as a cold consolidation (for a SPEC folder, the layers include its `plan*/PROGRESS.md` when one is present). On a verify pass, a SPEC folder's PR is already merged, so remove its `SPEC.md` and `AUDIT.md`; a plan folder has no layers to remove. On a failed synthesis or verify, leave everything in place for a later pass. This pass never destroys a layer it failed to replace.
 
-**3. Reap past retention.**
+**4. Reap merged past retention.**
 
 ```bash
 bash .gaia/scripts/spec/spec-archive-merged.sh "$PWD" 2>/dev/null || true
@@ -175,3 +190,22 @@ bash .gaia/scripts/spec/plan-archive-merged.sh "$PWD" 2>/dev/null || true
 ```
 
 Both delete a merged folder once its `merged_at` is past `GAIA_SPEC_RETENTION_DAYS` (default 30), its layers are consolidated, and its cost is represented in the usage ledger; a folder still holding unconsolidated layers or an unrepresented cost is kept. The plan reap takes two kinds of row: rows confirmed against a merged PR (`pr_number`, stamped at the post-merge close or by pass 1's scan) and older merged rows without one, which age out on `merged_at` alone.
+
+**5. Reap abandoned past retention.**
+
+```bash
+bash .gaia/scripts/spec/spec-archive-abandoned.sh "$PWD" 2>/dev/null || true
+```
+
+Deletes an abandoned SPEC folder once its `abandoned_at` is past the same `GAIA_SPEC_RETENTION_DAYS` window. There is no consolidation or usage-ledger gate: nothing promotes an abandoned SPEC's content, so the age rule alone decides.
+
+**6. Research.**
+
+```bash
+bash .gaia/scripts/notebook/research-reaper.sh list
+```
+
+Its header owns the output shape, the keep reasons and the exit codes; read it rather than restating them here. What happens next depends on the caller.
+
+- **`/gaia-spec` step 2.** When `citation_query.answered` is false, say the citation check could not run and why (its `reason`), before the question. When `eligible` is non-empty, ask the human once with `AskUserQuestion`: list each slug with its verdict and lead with the option the JSON's `recommended` names, from the three options **Reap all**, **Snooze all** (for another `GAIA_RESEARCH_RETENTION_DAYS` window) and **Keep for now** (asked again next sweep); free text splits the answer per folder. Then run `bash .gaia/scripts/notebook/research-reaper.sh apply` with one `--reap <slug>` or `--snooze <slug>` per decision (none for keep). On exit 7 (non-interactive) or 8 (a slug no longer eligible), print the stderr lines and continue. Also print the `reported` lists (untagged, row-less, loose files) as one line each when non-empty. In auto mode or any unattended run, never ask: print the eligible count and continue.
+- **`/gaia-plan` step 0.** Run `list` only and print exactly one line with the eligible count (for example `research: <n> folder(s) eligible to reap; the next /gaia-spec sweep asks`), never asking and never running `apply`, so a chained spec-to-plan session asks at most once.

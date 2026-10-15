@@ -2,19 +2,19 @@
 type: concept
 status: active
 created: 2026-07-01
-updated: 2026-10-04
+updated: 2026-10-15
 tags: [concept, claude, hooks]
 ---
 
 # Local Working State
 
-`.gaia/local/` holds machine-local working state for GAIA's subsystems. It is gitignored in full, carries no tracked files, and is absent from `.gaia/manifest.json`, so nothing under it is committed or shipped to adopters. Each developer's copy is private to their machine, and subsystems create the subdirectories they need on demand (`mkdir -p`).
+`.gaia/local/` holds machine-local working state for GAIA's subsystems. Specs, plans and research live in the notebook, not here; see [[Notebook]]. It is gitignored in full, carries no tracked files, and is absent from `.gaia/manifest.json`, so nothing under it is committed or shipped to adopters. Each developer's copy is private to their machine, and subsystems create the subdirectories they need on demand (`mkdir -p`).
 
 Because the folder is invisible to git, residue a subsystem leaves behind never surfaces in a diff and accumulates silently. Each subsystem owns pruning its own residue; the state registry records who writes and who reaps each entry, so a reader can tell live state from leftovers.
 
 ## Layout
 
-`.gaia/state-registry.json` is the entry-by-entry list of `.gaia/local/`: each entry's path, scope (`shared`, `per-tree`, `main-only`, `ephemeral`), reason, writer, and reaper, plus known residue from removed features.
+`.gaia/state-registry.json` is the entry-by-entry list of `.gaia/local/` and of the notebook: each entry's `root` (`local` or `notebook`, default `local`), path relative to that root, scope (`shared`, `per-tree`, `main-only`, `ephemeral`), reason, writer, and reaper, plus known residue from removed features.
 
 A linked worktree's `.gaia/local` is a single symlink to the main checkout's `.gaia/local`, so every registry entry resolves to one copy rather than forking per tree. `.gaia/state-registry.json` declares each entry's scope, and an entry that has to stay private to one tree gets that isolation from a tree key in its own path rather than from a directory of its own; see [[Worktrees]]. The same linking covers a second, disjoint set: the checkout-root gitignored `.env` / `.env.*` files (every basename matching `.env` or `.env.*`, excluding the committed `.env.example`). Each linked worktree gets `<worktree>/.env` (and any `.env.*`) symlinked to the main checkout's copy, so the worktree's `pnpm dev` and Playwright runs read the same local secrets without a manual copy. These files live at the checkout root, not under `.gaia/local/`, so they aren't registry entries.
 
@@ -46,8 +46,8 @@ The hook is fail-safe throughout. Every gate is cheap and local, `--ff-only` aga
 
 ## Deciding by hand
 
-Anything under `.gaia/local/` is safe to delete once its owner is done with it: a spent audit marker for an already-merged PR, a plan directory for a merged or abandoned branch, a `KNOWLEDGE-*.md` report already applied, a gate cache for a merged spec. The append-only ledgers (`red-ledger/observations.jsonl`, `worthiness-ledger/worthiness.jsonl`, `telemetry`), the identity files (`.project-id`, `setup-state.json`, which also holds the machine's setup decisions, so deleting it re-opens them on the next `/setup-gaia`), and `.gaia/local/specs/ledger.json` (and the `specs/` store it lives in) are the load-bearing exceptions; deleting the ledger drops per-machine draft-resume state and the local half of SPEC-number allocation. `.gaia/local/protected/` is the other exception: Claude never deletes anything in it, and a human removes it from a terminal outside Claude Code.
+Anything under `.gaia/local/` is safe to delete once its owner is done with it: a spent audit marker for an already-merged PR, a `KNOWLEDGE-*.md` report already applied, a gate cache for a merged spec. The append-only ledgers (`red-ledger/observations.jsonl`, `worthiness-ledger/worthiness.jsonl`, `telemetry`), the identity files (`.project-id`, `setup-state.json`, which also holds the machine's setup decisions, so deleting it re-opens them on the next `/setup-gaia`) are the load-bearing exceptions. `.gaia/local/protected/` is the other exception: Claude never deletes anything in it, and a human removes it from a terminal outside Claude Code.
 
-`.gaia/local/research/` is where GAIA looks for research; a write there binds the session's spend to it (see [[Usage Ledger]]). The state registry stays the source of truth for how each path is classified.
+Research lives in the notebook, and a write there binds the session's spend to it (see [[Usage Ledger]]). The notebook's catalog is a do-not-delete file (see [[Notebook]]). The old `.gaia/local/specs`, `plans` and `research` folders are report-only residue: the residue sweep lists them and `--apply` never deletes anything under them. The state registry stays the source of truth for how each path is classified.
 
 See [[Claude Hooks]] for the hook surface and [[Audit Disposition and Debt Fix]] for the marker lifecycle.

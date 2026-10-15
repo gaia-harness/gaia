@@ -2,7 +2,7 @@
 type: concept
 status: active
 created: 2026-07-23
-updated: 2026-10-14
+updated: 2026-10-15
 tags: [concept, worktree, claude, hooks, state]
 ---
 
@@ -94,7 +94,9 @@ GAIA enters lifecycle worktrees only through `EnterWorktree`. A tree made with a
 
 A Code Audit Team member dispatched into a worktree made with plain `git worktree add` writes its marker, findings sidecar, and scope file into that worktree's real `.gaia/local/audit/`. Provisioning moves those files into main's `audit/` one by one before it backs the directory up, leaves any same-named file in main untouched, and logs the collision.
 
-`.gaia/local/` holds GAIA's per-machine working state: audit results, cost tracking, specs, plans, caches, ledgers. It is gitignored in full and ships nothing to adopters. It stays at that path in every checkout, because a developer must be able to browse to their own specs and plans without knowing where GAIA hides things.
+`.gaia/local/` holds GAIA's per-machine working state: audit results, cost tracking, caches, ledgers. It is gitignored in full and ships nothing to adopters. Specs, plans and research live in the notebook; see [[Notebook]].
+
+A linked worktree also gets one `.notebook` symlink to the main checkout's `.notebook/`, made by the same linker (`link-worktree.sh`) and gated on `.notebook` being gitignored.
 
 A linked worktree's `.gaia/local` is a **single symlink to the main checkout's** `.gaia/local`, not a real directory holding a hand-maintained set of individually-symlinked entries. One consequence is that there is no shared-entry list to keep in sync, and no per-path guard exemptions: the whole directory is main's, so those collapse to one fact. The other consequence is the load-bearing one: state that must stay **per-tree** does not get its isolation from having its own physical directory. Under one symlink, a bare `red-ledger/` resolves to one shared path for every tree. So per-tree state is isolated by an **explicit tree-identity key** instead of by the filesystem, and the classification below is what says which entries need it.
 
@@ -157,7 +159,7 @@ That wording is an observation under dispatch. Nothing here establishes what the
 
 ### The same rule seen from the Write tool
 
-Confinement is not Bash-specific. Write and Edit apply it to `file_path`, and a path under a linked worktree's `.gaia/local/**` trips it: the single symlink resolves to the main checkout, so the target leaves the tree. The wording is different again, and its advice does not fit this case, because the path given already **is** the worktree path and there is no worktree copy to redirect to:
+Confinement is not Bash-specific. Write and Edit apply it to `file_path`, and a path under a linked worktree's `.gaia/local/**` trips it (and `<wt>/.notebook/**` the same way): the single symlink resolves to the main checkout, so the target leaves the tree. The wording is different again, and its advice does not fit this case, because the path given already **is** the worktree path and there is no worktree copy to redirect to:
 
 > This session is isolated in the worktree `<path>`. Edit the worktree copy of this file instead of the shared-checkout path.
 
@@ -206,5 +208,6 @@ Both run from release-excluded suites, so they guard maintainer changes. The reg
 ## Cross-references
 
 - [[Local Working State]]: the `.gaia/local/` folder, its pointer to the state registry, and the session-start janitor.
+- [[Notebook]]: the main-anchored `.notebook/` that holds specs, plans and research.
 - [[Claude Hooks]]: the hook surface and the per-agent working-directory measurement the identity rule rests on.
 - [[PR Merge Workflow]]; the audit → PR → merge cycle the concurrency test drives, and the branch-own-digest clearance markers.

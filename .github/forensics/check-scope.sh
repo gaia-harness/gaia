@@ -43,7 +43,7 @@ dir|deny|studio/
 dir|deny|website/
 dir|deny|.specify/specs/
 dir|deny|.specify/memory/
-dir|deny|.gaia/local/specs/
+dir|deny|.notebook/
 dir|deny|.gaia/templates/spec/
 file|deny|.claude/skills/gaia/references/spec/clarify-prompts.md
 file|deny|.claude/skills/gaia/references/spec/system-prompt.md

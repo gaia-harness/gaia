@@ -70,8 +70,8 @@ check_completion_notification() {
 check_repo_relative_preclear() {
   local file="$1"
   grep -qF 'rm -f .gaia/local/cache/audit-<spec_id>/findings/<LENS>.json' "$file" || return 1
-  grep -qF 'rm -rf .gaia/local/plans/<PLAN-NNN>/audit' "$file" || return 1
-  grep -qF 'mkdir -p .gaia/local/plans/<PLAN-NNN>/audit' "$file"
+  grep -qF 'rm -rf .notebook/plans/<PLAN-NNN>/audit' "$file" || return 1
+  grep -qF 'mkdir -p .notebook/plans/<PLAN-NNN>/audit' "$file"
 }
 
 check_plan_bash_write_note() {
@@ -163,7 +163,7 @@ mutate_replace() {
 
 @test "red twin: an absolute plan pre-clear spelling fails" {
   local mutated="$BATS_TEST_TMPDIR/absolute.md"
-  sed 's|rm -rf .gaia/local/plans/<PLAN-NNN>/audit|rm -rf <PLAN_DIR>/audit|' "$CONTRACT" >"$mutated"
+  sed 's|rm -rf .notebook/plans/<PLAN-NNN>/audit|rm -rf <PLAN_DIR>/audit|' "$CONTRACT" >"$mutated"
   check_repo_relative_preclear "$mutated" && return 1
   true
 }

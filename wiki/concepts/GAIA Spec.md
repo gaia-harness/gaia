@@ -3,20 +3,20 @@ type: concept
 title: GAIA Spec
 status: active
 created: 2026-05-06
-updated: 2026-10-06
+updated: 2026-10-15
 tags: [concept, claude, skill, orchestration]
 ---
 
 # GAIA Spec
 
-`/gaia-spec [description]` is GAIA's script-driven Socratic discovery workflow; no spec-kit runtime is involved. It produces an immutable SPEC artifact at `.gaia/local/specs/SPEC-NNN/SPEC.md` and stops, printing a handoff prompt the human pastes into a fresh [[GAIA Plan]] session. The skill body lives at `.claude/skills/gaia/references/spec.md` (dispatched by the `/gaia-spec` command, which reads this reference).
+`/gaia-spec [description]` is GAIA's script-driven Socratic discovery workflow; no spec-kit runtime is involved. It produces an immutable SPEC artifact at `.notebook/specs/SPEC-NNN/SPEC.md` (see [[Notebook]]) and stops, printing a handoff prompt the human pastes into a fresh [[GAIA Plan]] session. The skill body lives at `.claude/skills/gaia/references/spec.md` (dispatched by the `/gaia-spec` command, which reads this reference).
 
 The workflow runs on GAIA's own scripts in `.gaia/scripts/spec/`, Claude-read prose in `.claude/skills/gaia/references/spec/`, and script-consumed templates in `.gaia/templates/spec/`, called directly by the skill.
 
 ## Hard constraints
 
 - **No machine-local memory for project decisions.** The skill must never write to `~/.claude/projects/.../memory/`. Project-relevant decisions belong only in the SPEC artifact, the wiki, or `.claude/rules/`.
-- **Write-surface allowlist.** Every write during a session lands in `.gaia/local/specs/**`, `.gaia/local/cache/**`, or `.gaia/local/telemetry/**`. Source files are off-limits. The step-10 lint audits this.
+- **Write-surface allowlist.** Every write during a session lands in `.notebook/specs/**`, `.gaia/local/cache/**`, or `.gaia/local/telemetry/**`. Source files are off-limits. No automated check enforces this allowlist; the session polices it at the instruction level, and the step-10 lint checks only the saved SPEC's immutability.
 - **One question at a time.** Closed-set questions go through `AskUserQuestion` with options ordered: recommended FIRST, alternatives, `Other`, `Discuss this`. Open-ended questions use plain prompts.
 - **Two-gate ceremony.** Gate 1 confirms intent + UATs in plain English before the clarify loop. Gate 2 confirms the rendered artifact before save. No silent advances.
 - **Coach tone, not interrogator.** Mirror back, name trade-offs, propose candidates. Never punt research to the human.
@@ -33,9 +33,9 @@ The workflow runs on GAIA's own scripts in `.gaia/scripts/spec/`, Claude-read pr
 6. **Self-review.** The wrapper dispatches it as a `general-purpose` Agent after the loop and before gate 2, as an explicit step of the skill. It audits drift (vs. the gate-1 snapshot), placeholders, ambiguity, and pending clarifications. Save remains blocked while any pending item is unresolved (block-or-defer prompt).
 7. **Adversarial SPEC-audit.** Before gate 2, the audit runs automatically on every spec with no prompt: the draft's stakes and content are gauged to set the rigor tier (Standard or Deep) and the specialist lens set, then the fan-out runs at that tier. Four low-overlap core lenses (factual grounding, UAT testability, coverage/consistency, red-team/feasibility) always run, plus any content-selected specialists (security, migration, accessibility, docs, performance); each verifies the draft's checkable claims against the repo and `node_modules` with `file:line` evidence. Each lens writes its findings to a file that is checked after it finishes, and a silent lens is re-dispatched once. A refutation pass keeps severity honest (Deep adds perspective-diverse refuters and a completeness critic; above a refuter cap, either tier batches one refuter per lens and Deep skips the critic); each surviving finding routes to a plan-time directive (recorded in a sibling `AUDIT.md`) or a SPEC contract fix folded into the draft pre-save (no reopen ceremony). The skill's own parallel `general-purpose` Agent fan-out, never the Workflow tool, so it runs in headless and auto-mode contexts. The single-agent step-6 self-review is the always-on baseline. Interactive and auto mode share the same gauge and tier and differ only in how findings surface at disposition; an unavailable fan-out falls back to the self-review. Never blocks save.
 8. **Gate 2: artifact confirmation.** Render the full draft and present for review. Plain prompt, not `AskUserQuestion`. Revise to convergence, then proceed.
-9. **Save** to `.gaia/local/specs/SPEC-NNN/SPEC.md`. The folder is the archival unit. Sibling artifacts (reports, evidence) live beside `SPEC.md` in the same folder; a flat `SPEC-NNN-<rest>.md` file maps to `SPEC-NNN/<REST>.md` (remainder uppercased, hyphens kept).
+9. **Save** to `.notebook/specs/SPEC-NNN/SPEC.md`. The folder is the archival unit. Sibling artifacts (reports, evidence) live beside `SPEC.md` in the same folder; a flat `SPEC-NNN-<rest>.md` file maps to `SPEC-NNN/<REST>.md` (remainder uppercased, hyphens kept).
 10. **Immutability lint.** The skill runs `.gaia/scripts/spec/lint.sh` itself on the saved SPEC (frontmatter, frozen UAT-NNN ids, no placeholders, write-allowlist audit). For mutations of an already-saved SPEC, the lint enforces the explicit reopen ceremony: `## Reopen rationale` and `## UAT diff` sections required.
-11. **`/gaia-plan` handoff, then stop.** The handoff lives inline at the end of the skill. After the canonical save, `/gaia-spec` prints a copy-pasteable `/gaia-plan SPEC-NNN` prompt (just the bare id), then stops; the human runs it in a fresh session. `/gaia-plan` resolves the id to `.gaia/local/specs/SPEC-NNN/SPEC.md` (and a sibling `AUDIT.md`, when the audit produced one) itself. Planning is always a new session: authoring a SPEC burns an enormous context (Socratic loop, gate renders, self-review, adversarial audit), and `/gaia-plan`'s deep synthesis needs a clean one, so the handoff is a prompt the human pastes into a fresh session rather than a chain the wrapper runs. See [[Task Orchestration#Topology]].
+11. **`/gaia-plan` handoff, then stop.** The handoff lives inline at the end of the skill. After the canonical save, `/gaia-spec` prints a copy-pasteable `/gaia-plan SPEC-NNN` prompt (just the bare id), then stops; the human runs it in a fresh session. `/gaia-plan` resolves the id to `.notebook/specs/SPEC-NNN/SPEC.md` (and a sibling `AUDIT.md`, when the audit produced one) itself. Planning is always a new session: authoring a SPEC burns an enormous context (Socratic loop, gate renders, self-review, adversarial audit), and `/gaia-plan`'s deep synthesis needs a clean one, so the handoff is a prompt the human pastes into a fresh session rather than a chain the wrapper runs. See [[Task Orchestration#Topology]].
 
 ## UAT divergence contract
 
@@ -46,11 +46,11 @@ The `/gaia-plan` orchestrator's UAT render step turns each browser-flow UAT into
 
 ## SPEC number allocation
 
-SPEC numbers are reserved as immutable `spec/NNN` git tags pushed to the remote, pointed at git's empty-tree object so they pin no history and carry no commit alive; each is annotated once, at reservation, with the spec's one-line subject, readable via `git tag -n`. The registry survives a fresh clone; an existing clone syncs new reservations with `git fetch --tags`. The next number is max+1 over the union of those tags and the machine's local signals (the ledger, plan branches naming a SPEC as read by `.gaia/scripts/branch-name-lib.sh`, `.gaia/local/specs/` folders). Cross-team collision-avoidance reads the remote `spec/*` tag namespace live, not locally-fetched tags, so it never depends on a stale local mirror. The ledger is one union input, holding draft status, intent, and timestamps per machine: load-bearing local state, not scratch.
+SPEC numbers are reserved as immutable `spec/NNN` git tags pushed to the remote, pointed at git's empty-tree object so they pin no history and carry no commit alive; each is annotated once, at reservation, with the spec's one-line subject, readable via `git tag -n`. The registry survives a fresh clone; an existing clone syncs new reservations with `git fetch --tags`. The next number is max+1 over the union of those tags and the machine's local signals (the catalog, plan branches naming a SPEC as read by `.gaia/scripts/branch-name-lib.sh`, `.notebook/specs/` folders). Cross-team collision-avoidance reads the remote `spec/*` tag namespace live, not locally-fetched tags, so it never depends on a stale local mirror. The catalog is one union input, holding draft status, intent, and timestamps per machine: load-bearing local state, not scratch.
 
 ## Ledger status vocabulary
 
-The ledger lives at `.gaia/local/specs/ledger.json`, a local, gitignored per-machine cache; the `status` field on each row is exactly one of four canonical values:
+Each spec is one row of the notebook catalog, a local, gitignored per-machine file ([[Notebook]] owns it; the notebook library's header owns the row schema). The `status` field on a spec row is exactly one of four canonical values:
 
 - `draft`: allocated, still being authored. The only status `.gaia/scripts/spec/spec-allocator.sh in_progress` surfaces for the resume-vs-start prompt.
 - `ready`: artifact finalized and frozen. Downstream plan → implement → merge owns the feature from here.
@@ -74,7 +74,7 @@ An **abandoned** SPEC's folder follows the same clock on a simpler path: there i
 
 ### Durability
 
-A `.gaia/local/specs/<ID>/` folder is working state, not the archival
+A `.notebook/specs/<ID>/` folder is working state, not the archival
 record: it is gitignored, machine-local, and reaped by design after the
 retention window above, whether the row is `merged` or `abandoned`. For a
 merged SPEC the durable source of truth is the implementing PR, plus
