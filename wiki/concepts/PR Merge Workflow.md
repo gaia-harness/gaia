@@ -233,6 +233,8 @@ bash .claude/hooks/post-audit-status.sh <current-member-marker>
 
 Any one dispatched member's own current marker path is sufficient; `post-audit-status.sh` already refuses while any dispatched member is pending and posts on the pushed PR head, so it resolves the rest itself (see [[Audit Gate Reference#Signals]]). Run `gh pr merge` only after this call reports a posted status.
 
+The hook answers for the checkout its working directory is in, so run it with the session's working directory in the checkout that holds the PR branch. When the branch lives in a linked worktree and the session sits in the main checkout, as a resumed session does, re-enter the worktree first with `EnterWorktree({path: "<worktree path>"})` (`git worktree list` names the path) rather than wrapping the call in `cd`. Run from a checkout on the default branch or a detached HEAD, the hook declines naming the wrong tree.
+
 Any later HEAD move needs a re-post, the manifest-answer commit above, a CHANGELOG fixup, or a conflict found mid-wait ([[#Conflict found mid-wait]] step 3 already does this for that case). If the orchestrator forgets this step, no `GAIA-Audit` status exists for the head; where `GAIA-Audit` is a required check, branch protection blocks the merge, so the omission fails closed and visibly rather than merging over a status nobody posted.
 
 A bypass pull request needs none of this: the merge hook, or the CLI wiki flow that opened it, posts the `skipped: ...` status itself, so the orchestrator never posts one for it (see [[Audit Gate Reference#The bypass stamp]]).

@@ -345,6 +345,17 @@ if [ "$post_state" = "success" ]; then
     base_tip="$(audit_github_base_tip "$repo_root" "$base_repository" "$base_branch" 2>&1)" || base_failure="$base_tip"
   fi
   if [ -n "$base_failure" ]; then
+    # gh answered `gh auth status` above, so a failed read from a checkout on
+    # the default branch or a detached HEAD, neither of which can head a pull
+    # request, means the hook ran from the wrong tree, not that auth broke.
+    current_branch="$(git -C "$repo_root" symbolic-ref --quiet --short HEAD 2>/dev/null)" || current_branch=""
+    default_branch="$(git -C "$repo_root" symbolic-ref --quiet refs/remotes/origin/HEAD 2>/dev/null)" || default_branch=""
+    default_branch="${default_branch#refs/remotes/origin/}"
+    [ -n "$default_branch" ] || default_branch="main"
+    if [ -z "$current_branch" ] || [ "$current_branch" = "$default_branch" ]; then
+      emit_decline "trusted base unverified, this checkout is on ${current_branch:-a detached HEAD}, which holds no pull request; next step: run this hook from the checkout that holds the pull request branch (git worktree list names it)"
+      exit 0
+    fi
     emit_decline "trusted base unverified, ${base_failure}; next step: gh auth status"
     exit 0
   fi
