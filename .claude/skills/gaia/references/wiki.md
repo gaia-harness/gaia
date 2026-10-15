@@ -1,6 +1,6 @@
 # /gaia-wiki
 
-Wiki-maintenance router. It runs the full wiki maintenance chain: sync, consolidate, and lint with fixes, on one branch and one PR.
+Wiki-maintenance router. It runs sync, consolidate, and lint with fixes, and lands them as one commit on one branch and one PR.
 
 ## Arguments
 
@@ -10,35 +10,38 @@ Wiki-maintenance router. It runs the full wiki maintenance chain: sync, consolid
 Usage: /gaia-wiki
 ```
 
-If `$ARGUMENTS` is non-empty, whatever it holds (a retired argument: `sync`, `consolidate`, or `lint`; `--help`; free text from a natural-language trigger such as `run wiki maintenance`), print this notice once, with the whole argument string in place of `<arguments>`, then run "Full chain" exactly as with no argument:
+If `$ARGUMENTS` is non-empty, whatever it holds (a retired argument: `sync`, `consolidate`, or `lint`; `--help`; free text from a natural-language trigger such as `run wiki maintenance`), print this notice once, with the whole argument string in place of `<arguments>`, then run "The run" exactly as with no argument:
 
 ```
-Note: /gaia-wiki takes no arguments; ignoring "<arguments>" and running the full chain.
+Note: /gaia-wiki takes no arguments; ignoring "<arguments>" and running sync, consolidate, and lint.
 ```
 
-## Full chain
+## The run
 
-The whole chain lands on **one branch and one PR**, not one PR per stage. The parent (the agent reading this file) owns the branch lifecycle through `gaia wiki chain`; each stage still runs as its own subagent. The `chain` calls are the only parent-side git/branch/PR actions, the playbook bans inlining any other branch logic, manual `gh pr` calls, or push narrative.
+The run lands as **one commit on one branch and one PR**. The stages commit nothing: each leaves its edits uncommitted in the working tree, and step 6 commits them all at once. The parent (the agent reading this file) owns the branch lifecycle through `gaia wiki chain`; each stage still runs as its own subagent. The `chain` calls are the only parent-side git/branch/PR actions, the playbook bans inlining any other branch logic, manual `git commit` or `gh pr` calls, or push narrative.
 
-1. **Begin.** Run `.gaia/cli/gaia wiki chain begin --branch-aware`. On `main`/`master` it cuts a `wiki/sync-<date>-<sha>` branch so every stage commits there; on a feature branch it is a no-op and the chain commits in place. If `chain begin` exits non-zero, stop the chain: run no stage, make no commit, and surface its error output to the user.
+1. **Begin.** Run `.gaia/cli/gaia wiki chain begin --branch-aware`. On `main`/`master` it cuts a `wiki/<YYYY-MM-DD-HHMM>` branch (UTC) for the run's commit; on a feature branch it is a no-op and the run commits in place. If `chain begin` exits non-zero, stop the run: run no stage, make no commit, and surface its error output to the user.
 
-2. **Sync.** Run the "Sync" section below. Capture the final summary. The chain branch (or the feature branch) is already checked out, so sync's Step 7 `chain commit` commits in place.
+2. **Sync.** Run the "Sync" section below. Capture the final summary. Sync's edits, including the advanced `wiki/.state.json`, stay uncommitted for step 6.
 
-3. **Branch on sync's outcome.** Sync's summary ends with the line `SYNC_COMPLETE: true` on every normal path, including drift=0 and the `suggested_base` recovery path. The line is **absent** on the state-init path, the fallback re-anchor path, a cancelled run, a refused `chain commit`, and every interruption and abort `references/wiki/sync.md`'s Failure modes section lists, all of which leave the wiki in a known-incomplete state. No other condition decides whether consolidate runs.
-   - **Line present**: run consolidate (step 4), then lint (step 5), then finish (step 6) and land (step 7).
-   - **Line absent**: skip consolidate and lint, then go straight to step 6 (finish), land per step 7 when it opened a PR, and surface the exceptional state. `chain finish` opens a PR for a lone re-anchor commit, removes the branch if sync committed nothing, or leaves an aborted (uncommitted) tree in place for the maintainer.
+3. **Branch on sync's outcome.** Sync's summary ends with the line `SYNC_COMPLETE: true` on every normal path, including drift=0 and the `suggested_base` recovery path. The line is **absent** on the state-init path, the fallback re-anchor path, a cancelled run, and every interruption and abort `references/wiki/sync.md`'s Failure modes section lists, all of which leave the wiki in a known-incomplete state. No other condition decides whether consolidate runs.
+   - **Line present**: run consolidate (step 4), then lint (step 5), then commit (step 6), finish (step 7), and land (step 8).
+   - **Line absent, `SYNC_PARTIAL: true` present** (the state-init path, the fallback re-anchor path, a mid-sync interruption): skip consolidate and lint, then commit (step 6) what sync left, finish (step 7), land per step 8 when finish opened a PR, and surface the exceptional state.
+   - **Both lines absent** (a cancelled run, the fabrication-guard abort, a corrupt state file): skip consolidate, lint, **and the commit**, then run finish (step 7) and surface the exceptional state. Never commit here: the fabrication-guard abort leaves Step 5's log lines for edits that were never written, and committing them would land the very sync the guard refused. With no commit, `chain finish` removes a clean empty branch, or leaves a dirty tree in place for the maintainer.
 
-4. **Consolidate.** Run the "Consolidate" section below. After its apply loop completes, commit the staged edits: `.gaia/cli/gaia wiki chain commit --label "wiki: consolidate through <head-sha>"` (the short HEAD sha sync reported in `State advanced to {head_sha}`). The command is a no-op when nothing was applied.
+4. **Consolidate.** Run the "Consolidate" section below. Its applied edits and advanced state stay uncommitted for step 6.
 
-5. **Lint.** Run the "Lint" section below, both stages. Lint runs after consolidate because consolidate may move, rename, or archive pages and lint's orphan/dead-link/broken-wikilink/drift checks need the true post-state. Once the fix loop has returned, commit its fixes and the final report together: `.gaia/cli/gaia wiki chain commit --label "wiki: lint through <head-sha>"`. Fixing before this commit, rather than on the PR `finish` opens, keeps the PR's head on the sha `finish` stamps: a push after `finish` moves the head off that stamp, and a queued auto-merge then waits on a `GAIA-Audit` status that never arrives.
+5. **Lint.** Run the "Lint" section below, both stages. Lint runs after consolidate because consolidate may move, rename, or archive pages and lint's orphan/dead-link/broken-wikilink/drift checks need the true post-state. Its fixes and final report stay uncommitted for step 6.
 
-6. **Finish.** Run `.gaia/cli/gaia wiki chain finish --branch-aware`. On the chain branch it pushes, opens ONE PR carrying every stage's commit, posts the out-of-scope `GAIA-Audit` stamp, and queues auto-merge, then stays on the branch and prints `chain finish: opened PR #<N> for <branch>; auto-merge queued, merge not yet confirmed`. That line means the PR is open, not merged: the run is not done, so go on to step 7. If no stage produced a commit it drops the empty branch and returns to base; on a feature-branch (in-place) run it is a no-op and the commits remain on the current branch. In those two cases no PR was opened, so the run ends here: relay the summary. A non-zero exit also ends the run: relay its stderr, which names the next step.
+6. **Commit.** Run `.gaia/cli/gaia wiki chain commit`. It commits every stage's `wiki/` edits as one commit with the subject `wiki: <YYYY-MM-DD> <HH:MM> UTC`, which the CLI mints from the branch's timestamp (from the clock on an in-place run); pass no label. It is a no-op when no stage changed anything. Lint's fixes land in this commit, before `finish`, rather than on the PR `finish` opens, so the PR's head stays on the sha `finish` stamps: a push after `finish` moves the head off that stamp, and a queued auto-merge then waits on a `GAIA-Audit` status that never arrives.
 
-7. **Merge and clean up.** The wiki PR lands like every other GAIA PR, through `.claude/skills/gaia/references/work-lifecycle.md`. The stamp in step 6 is this skill's audit, so the lifecycle's `## 6. Audit` does not run, and the merge is already queued, so nothing here re-merges. Run the merge wait from `## 7. Merge (when asked)` on the PR number `finish` printed (when it printed no number, read it with `gh pr view <branch> --json number --jq .number`), passing `--attempts 30`. Run it as a background Bash command and act on its verdict when it exits. A full CI run on the merge outlasts the default bound, and the wait returns the moment it reads `MERGED`, so a high ceiling costs nothing on a fast repository. Act on the verdict:
-   - **`MERGED`**: clean up per `## 8. Cleanup` `### Feature branch`, with `<branch-name>` = the chain branch. Then run `.gaia/cli/gaia wiki chain refresh-nudge`, which writes the main checkout's new drift into the statusline cache so the `/gaia-wiki` nudge clears now rather than on a later background refresh. Report the merged PR URL and that the nudge was refreshed. The run is complete.
-   - **Any other verdict, or the exit-2 refusal**: the run is **not** complete. Report the PR URL and the verdict, follow `wiki/concepts/PR Merge Workflow.md`'s arm for it, and leave the branch in place. Never report the wiki as landed. Tell the user to check out the base branch once they are done with the queued PR: the session-start janitor reaps the sync branch and fast-forwards base only when HEAD is off the sync branch.
+7. **Finish.** Run `.gaia/cli/gaia wiki chain finish --branch-aware`. On the wiki branch it pushes, opens ONE PR titled with the commit's subject, posts the out-of-scope `GAIA-Audit` stamp, and queues auto-merge, then stays on the branch and prints `chain finish: opened PR #<N> for <branch>; auto-merge queued, merge not yet confirmed`. That line means the PR is open, not merged: the run is not done, so go on to step 8. If the run produced no commit it drops the empty branch and returns to base; on a feature-branch (in-place) run it is a no-op and the commit remains on the current branch. In those two cases no PR was opened, so the run ends here: relay the summary. A non-zero exit also ends the run: relay its stderr, which names the next step.
 
-A `chain commit` that exits non-zero (sync's or the parent's) stops the chain: surface its message. For the non-wiki-changes refusal, tell the user to commit or stash the non-wiki changes, then rerun `/gaia-wiki`. For the protected-branch refusal, relay the CLI's own next step.
+8. **Merge and clean up.** The wiki PR lands like every other GAIA PR, through `.claude/skills/gaia/references/work-lifecycle.md`. The stamp in step 7 is this skill's audit, so the lifecycle's `## 6. Audit` does not run, and the merge is already queued, so nothing here re-merges. Run the merge wait from `## 7. Merge (when asked)` on the PR number `finish` printed (when it printed no number, read it with `gh pr view <branch> --json number --jq .number`), passing `--attempts 30`. Run it as a background Bash command and act on its verdict when it exits. A full CI run on the merge outlasts the default bound, and the wait returns the moment it reads `MERGED`, so a high ceiling costs nothing on a fast repository. Act on the verdict:
+   - **`MERGED`**: clean up per `## 8. Cleanup` `### Feature branch`, with `<branch-name>` = the wiki branch. Then run `.gaia/cli/gaia wiki chain refresh-nudge`, which writes the main checkout's new drift into the statusline cache so the `/gaia-wiki` nudge clears now rather than on a later background refresh. Report the merged PR URL and that the nudge was refreshed. The run is complete.
+   - **Any other verdict, or the exit-2 refusal**: the run is **not** complete. Report the PR URL and the verdict, follow `wiki/concepts/PR Merge Workflow.md`'s arm for it, and leave the branch in place. Never report the wiki as landed. Tell the user to check out the base branch once they are done with the queued PR: the session-start janitor reaps the wiki branch and fast-forwards base only when HEAD is off the wiki branch.
+
+A `chain commit` that exits non-zero stops the run before `finish`: surface its message. For the non-wiki-changes refusal, tell the user to commit or stash the non-wiki changes, then rerun `/gaia-wiki`. For the protected-branch refusal, relay the CLI's own next step.
 
 Each stage still dispatches its own subagent; never run a subagent's playbook yourself in this conversation. The parent-side stages, consolidate's apply loop and lint's fix loop, are the ones that run here.
 
@@ -53,7 +56,7 @@ Spawn:
 - `description`: `"Wiki sync"`
 - `prompt`: the string below (literal, no paraphrasing):
 
-  > `You are running the GAIA wiki-sync workflow in a fresh context. Read .claude/skills/gaia/references/wiki/sync.md from the project root and execute the "Playbook" section (Steps 1–8) verbatim. Your working directory is the project root. Print only the final summary block from Step 8, ending with the SYNC_COMPLETE: true line when Step 8 emits it, no preamble, no recap, no narration of intermediate steps.`
+  > `You are running the GAIA wiki-sync workflow in a fresh context. Read .claude/skills/gaia/references/wiki/sync.md from the project root and execute the "Playbook" section (Steps 1–8) verbatim. Your working directory is the project root. Print only the final summary block from Step 8, ending with the SYNC_COMPLETE: true line when Step 8 emits it, or the SYNC_PARTIAL: true line when the playbook says to print it, no preamble, no recap, no narration of intermediate steps.`
 
 When the subagent returns, relay its final summary verbatim. Do not redo the work in the parent.
 
@@ -96,13 +99,13 @@ After the subagent returns, the parent (the agent reading this file in the live 
 1. Parses the `findings[]` payload.
 2. Iterates findings in order **supersession → reversed → near-collision → subject-orphan** (most-impactful first), surfacing each via `AskUserQuestion` per Step 4 of the playbook in `references/wiki/consolidate.md`.
 3. Applies the user's chosen action (Apply / Keep both / Skip) per the playbook's per-kind rules.
-4. Runs Step 5 (advance state) and Step 6 (report) directly; the commit is Full chain step 4.
+4. Runs Step 5 (advance state) and Step 6 (report) directly; the commit is "The run" step 6.
 
 If any HIGH-severity supersession or reversed-decision finding is applied, surface it prominently (prefix the final summary line with `WIKI CONSOLIDATE:`).
 
 ## Lint
 
-Two-stage, like consolidate. **Detection runs in a Haiku subagent** and writes the report. **Fixing runs in the parent** because it asks the user where a fix needs judgment, and `AskUserQuestion` is unavailable inside dispatched subagents. Both stages run on every chain: a report that lists defects and leaves them standing fixes nothing.
+Two-stage, like consolidate. **Detection runs in a Haiku subagent** and writes the report. **Fixing runs in the parent** because it asks the user where a fix needs judgment, and `AskUserQuestion` is unavailable inside dispatched subagents. Both stages run every time: a report that lists defects and leaves them standing fixes nothing.
 
 ### Stage 1, detection subagent
 

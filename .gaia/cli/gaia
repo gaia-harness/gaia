@@ -46273,184 +46273,6 @@ var inspectWorkingTree = (cwd, runner = defaultRunner) => {
   return { hasNonWikiChanges, hasWikiChanges, paths };
 };
 
-// src/wiki/util/git.ts
-import { execFileSync as execFileSync6 } from "node:child_process";
-var runGit = (args, options = {}) => {
-  const cwd = options.cwd ?? process.cwd();
-  const result = execFileSync6("git", args, {
-    cwd,
-    encoding: "utf8",
-    maxBuffer: MAX_GIT_BUFFER_BYTES,
-    stdio: ["ignore", "pipe", "pipe"]
-  });
-  return result;
-};
-var tryRunGit = (args, options = {}) => {
-  try {
-    return runGit(args, options);
-  } catch {
-    return null;
-  }
-};
-var headSha = (cwd) => runGit(["rev-parse", "HEAD"], { cwd }).trim();
-var shortSha = (sha, cwd) => {
-  const result = tryRunGit(["rev-parse", "--short=7", sha], { cwd });
-  if (result === null) return sha.slice(0, 7);
-  return result.trim();
-};
-var isReachable = (sha, cwd) => {
-  try {
-    execFileSync6("git", ["merge-base", "--is-ancestor", sha, "HEAD"], {
-      cwd,
-      stdio: ["ignore", "ignore", "ignore"]
-    });
-    return true;
-  } catch {
-    return false;
-  }
-};
-var ancestorBefore = (isoTimestamp, cwd) => {
-  const result = tryRunGit(
-    ["rev-list", "-1", "--first-parent", `--before=${isoTimestamp}`, "HEAD"],
-    { cwd }
-  );
-  if (result === null) return "";
-  return result.trim();
-};
-var WIKI_BOOKKEEPING_SUBJECT_PATTERN = "^wiki: (sync|maintenance chain|consolidate|lint) through ";
-var countDriftCommits = (base, cwd) => {
-  const result = tryRunGit(
-    [
-      "rev-list",
-      "--count",
-      "--extended-regexp",
-      "--invert-grep",
-      `--grep=${WIKI_BOOKKEEPING_SUBJECT_PATTERN}`,
-      base === "" ? "HEAD" : `${base}..HEAD`
-    ],
-    { cwd }
-  );
-  if (result === null) return 0;
-  const parsed = Number.parseInt(result.trim(), 10);
-  return Number.isNaN(parsed) ? 0 : parsed;
-};
-var recentCommits = (sinceSha, cwd, limit = 5) => {
-  const result = tryRunGit(
-    [
-      "log",
-      "--no-merges",
-      "--reverse",
-      "--format=%h%x09%s",
-      `${sinceSha}..HEAD`
-    ],
-    { cwd }
-  );
-  if (result === null) return [];
-  const lines = result.split("\n").flatMap((line) => {
-    const trimmed = line.trim();
-    return trimmed.length > 0 ? [trimmed] : [];
-  });
-  return lines.slice(-limit).map((line) => {
-    const tabIndex = line.indexOf("	");
-    const sha = tabIndex === -1 ? line : line.slice(0, tabIndex);
-    const subject = tabIndex === -1 ? "" : line.slice(tabIndex + 1);
-    return { sha, subject };
-  });
-};
-var parseShortStat = (stat) => {
-  let filesChanged = 0;
-  let insertions = 0;
-  let deletions = 0;
-  const filesMatch = /(\d{1,9})\s+files?\s+changed/u.exec(stat);
-  const filesCaptured = filesMatch?.[1];
-  if (filesCaptured !== void 0)
-    filesChanged = Number.parseInt(filesCaptured, 10);
-  const insertMatch = /(\d{1,9})\s+insertions?\(\+\)/u.exec(stat);
-  const insertCaptured = insertMatch?.[1];
-  if (insertCaptured !== void 0)
-    insertions = Number.parseInt(insertCaptured, 10);
-  const deleteMatch = /(\d{1,9})\s+deletions?\(-\)/u.exec(stat);
-  const deleteCaptured = deleteMatch?.[1];
-  if (deleteCaptured !== void 0)
-    deletions = Number.parseInt(deleteCaptured, 10);
-  return { deletions, files_changed: filesChanged, insertions };
-};
-var fileListForCommit = (sha, cwd) => {
-  const result = tryRunGit(
-    gitZArgs("diff-tree", ["--no-commit-id", "--name-only", "-r", sha]),
-    { cwd }
-  );
-  if (result === null) return [];
-  return splitZStream(result);
-};
-var parseChunk = (chunk) => {
-  const trimmed = chunk.trim();
-  if (trimmed === "") return { precedingStat: "", record: null };
-  const lines = trimmed.split("\n");
-  const commitLineIndex = lines.findIndex((line) => line.startsWith("COMMIT "));
-  if (commitLineIndex === -1) {
-    return { precedingStat: trimmed, record: null };
-  }
-  const statLines = lines.slice(0, commitLineIndex);
-  const precedingStat = statLines.find((line) => /\d{1,9}\s+files?\s+changed/u.test(line)) ?? "";
-  const commitBlock = lines.slice(commitLineIndex);
-  const sha = (commitBlock[0] ?? "").replace(/^COMMIT\s+/u, "").trim();
-  const subject = commitBlock[1] ?? "";
-  const bodyLines2 = commitBlock.slice(2);
-  while (bodyLines2.length > 0 && (bodyLines2.at(-1) ?? "").trim() === "") {
-    bodyLines2.pop();
-  }
-  return {
-    precedingStat,
-    record: { body: bodyLines2.join("\n"), sha, subject }
-  };
-};
-var commitDetails = (sinceSha, cwd) => {
-  const recordSeparator = "---END-COMMIT---";
-  const raw = runGit(
-    [
-      "log",
-      "--no-merges",
-      "--reverse",
-      "--shortstat",
-      `--format=COMMIT %H%n%s%n%b%n${recordSeparator}`,
-      `${sinceSha}..HEAD`
-    ],
-    { cwd }
-  );
-  const chunks = raw.split(recordSeparator);
-  const records = [];
-  const stats = [];
-  let pendingStat = null;
-  for (const chunk of chunks) {
-    const { precedingStat, record: record2 } = parseChunk(chunk);
-    if (record2 === null) {
-      pendingStat = precedingStat;
-    } else {
-      records.push(record2);
-      if (records.length > 1) stats.push(precedingStat);
-      pendingStat = null;
-    }
-  }
-  if (records.length > 0) {
-    stats.push(pendingStat ?? "");
-  }
-  return records.map((record2, index) => {
-    const stat = stats[index] ?? "";
-    const parsed = parseShortStat(stat);
-    const files = fileListForCommit(record2.sha, cwd);
-    return {
-      body: record2.body,
-      deletions: parsed.deletions,
-      files,
-      files_changed: parsed.files_changed,
-      insertions: parsed.insertions,
-      sha: record2.sha,
-      subject: record2.subject
-    };
-  });
-};
-
 // src/wiki/util/land.ts
 var UNEXPECTED_EXIT10 = 2;
 var todayUtc = (now = /* @__PURE__ */ new Date()) => {
@@ -46613,6 +46435,186 @@ import path72 from "node:path";
 // src/wiki/state.ts
 import { existsSync as existsSync39, readdirSync as readdirSync10, readFileSync as readFileSync53, statSync as statSync14 } from "node:fs";
 import path71 from "node:path";
+
+// src/wiki/util/git.ts
+import { execFileSync as execFileSync6 } from "node:child_process";
+var runGit = (args, options = {}) => {
+  const cwd = options.cwd ?? process.cwd();
+  const result = execFileSync6("git", args, {
+    cwd,
+    encoding: "utf8",
+    maxBuffer: MAX_GIT_BUFFER_BYTES,
+    stdio: ["ignore", "pipe", "pipe"]
+  });
+  return result;
+};
+var tryRunGit = (args, options = {}) => {
+  try {
+    return runGit(args, options);
+  } catch {
+    return null;
+  }
+};
+var headSha = (cwd) => runGit(["rev-parse", "HEAD"], { cwd }).trim();
+var shortSha = (sha, cwd) => {
+  const result = tryRunGit(["rev-parse", "--short=7", sha], { cwd });
+  if (result === null) return sha.slice(0, 7);
+  return result.trim();
+};
+var isReachable = (sha, cwd) => {
+  try {
+    execFileSync6("git", ["merge-base", "--is-ancestor", sha, "HEAD"], {
+      cwd,
+      stdio: ["ignore", "ignore", "ignore"]
+    });
+    return true;
+  } catch {
+    return false;
+  }
+};
+var ancestorBefore = (isoTimestamp, cwd) => {
+  const result = tryRunGit(
+    ["rev-list", "-1", "--first-parent", `--before=${isoTimestamp}`, "HEAD"],
+    { cwd }
+  );
+  if (result === null) return "";
+  return result.trim();
+};
+var WIKI_BOOKKEEPING_SUBJECT_PATTERN = "^wiki: [0-9]{4}-[0-9]{2}-[0-9]{2} [0-9]{2}:[0-9]{2} UTC( |$)";
+var countDriftCommits = (base, cwd) => {
+  const result = tryRunGit(
+    [
+      "rev-list",
+      "--count",
+      "--extended-regexp",
+      "--invert-grep",
+      `--grep=${WIKI_BOOKKEEPING_SUBJECT_PATTERN}`,
+      base === "" ? "HEAD" : `${base}..HEAD`
+    ],
+    { cwd }
+  );
+  if (result === null) return 0;
+  const parsed = Number.parseInt(result.trim(), 10);
+  return Number.isNaN(parsed) ? 0 : parsed;
+};
+var recentCommits = (sinceSha, cwd, limit = 5) => {
+  const result = tryRunGit(
+    [
+      "log",
+      "--no-merges",
+      "--reverse",
+      "--format=%h%x09%s",
+      `${sinceSha}..HEAD`
+    ],
+    { cwd }
+  );
+  if (result === null) return [];
+  const lines = result.split("\n").flatMap((line) => {
+    const trimmed = line.trim();
+    return trimmed.length > 0 ? [trimmed] : [];
+  });
+  return lines.slice(-limit).map((line) => {
+    const tabIndex = line.indexOf("	");
+    const sha = tabIndex === -1 ? line : line.slice(0, tabIndex);
+    const subject = tabIndex === -1 ? "" : line.slice(tabIndex + 1);
+    return { sha, subject };
+  });
+};
+var parseShortStat = (stat) => {
+  let filesChanged = 0;
+  let insertions = 0;
+  let deletions = 0;
+  const filesMatch = /(\d{1,9})\s+files?\s+changed/u.exec(stat);
+  const filesCaptured = filesMatch?.[1];
+  if (filesCaptured !== void 0)
+    filesChanged = Number.parseInt(filesCaptured, 10);
+  const insertMatch = /(\d{1,9})\s+insertions?\(\+\)/u.exec(stat);
+  const insertCaptured = insertMatch?.[1];
+  if (insertCaptured !== void 0)
+    insertions = Number.parseInt(insertCaptured, 10);
+  const deleteMatch = /(\d{1,9})\s+deletions?\(-\)/u.exec(stat);
+  const deleteCaptured = deleteMatch?.[1];
+  if (deleteCaptured !== void 0)
+    deletions = Number.parseInt(deleteCaptured, 10);
+  return { deletions, files_changed: filesChanged, insertions };
+};
+var fileListForCommit = (sha, cwd) => {
+  const result = tryRunGit(
+    gitZArgs("diff-tree", ["--no-commit-id", "--name-only", "-r", sha]),
+    { cwd }
+  );
+  if (result === null) return [];
+  return splitZStream(result);
+};
+var parseChunk = (chunk) => {
+  const trimmed = chunk.trim();
+  if (trimmed === "") return { precedingStat: "", record: null };
+  const lines = trimmed.split("\n");
+  const commitLineIndex = lines.findIndex((line) => line.startsWith("COMMIT "));
+  if (commitLineIndex === -1) {
+    return { precedingStat: trimmed, record: null };
+  }
+  const statLines = lines.slice(0, commitLineIndex);
+  const precedingStat = statLines.find((line) => /\d{1,9}\s+files?\s+changed/u.test(line)) ?? "";
+  const commitBlock = lines.slice(commitLineIndex);
+  const sha = (commitBlock[0] ?? "").replace(/^COMMIT\s+/u, "").trim();
+  const subject = commitBlock[1] ?? "";
+  const bodyLines2 = commitBlock.slice(2);
+  while (bodyLines2.length > 0 && (bodyLines2.at(-1) ?? "").trim() === "") {
+    bodyLines2.pop();
+  }
+  return {
+    precedingStat,
+    record: { body: bodyLines2.join("\n"), sha, subject }
+  };
+};
+var commitDetails = (sinceSha, cwd) => {
+  const recordSeparator = "---END-COMMIT---";
+  const raw = runGit(
+    [
+      "log",
+      "--no-merges",
+      "--reverse",
+      "--shortstat",
+      `--format=COMMIT %H%n%s%n%b%n${recordSeparator}`,
+      `${sinceSha}..HEAD`
+    ],
+    { cwd }
+  );
+  const chunks = raw.split(recordSeparator);
+  const records = [];
+  const stats = [];
+  let pendingStat = null;
+  for (const chunk of chunks) {
+    const { precedingStat, record: record2 } = parseChunk(chunk);
+    if (record2 === null) {
+      pendingStat = precedingStat;
+    } else {
+      records.push(record2);
+      if (records.length > 1) stats.push(precedingStat);
+      pendingStat = null;
+    }
+  }
+  if (records.length > 0) {
+    stats.push(pendingStat ?? "");
+  }
+  return records.map((record2, index) => {
+    const stat = stats[index] ?? "";
+    const parsed = parseShortStat(stat);
+    const files = fileListForCommit(record2.sha, cwd);
+    return {
+      body: record2.body,
+      deletions: parsed.deletions,
+      files,
+      files_changed: parsed.files_changed,
+      insertions: parsed.insertions,
+      sha: record2.sha,
+      subject: record2.subject
+    };
+  });
+};
+
+// src/wiki/state.ts
 var HELP_TEXT62 = `Usage: gaia wiki state [--json]
 `;
 var ALL_ZERO_SHA = "0".repeat(40);
@@ -46811,8 +46813,21 @@ var refreshWikiDriftInCache = (repoRoot) => {
 };
 
 // src/wiki/chain.ts
-var WIKI_CHAIN_BRANCH_PREFIX = "wiki/sync-";
-var WIKI_CHAIN_BRANCH_PATTERN = /^wiki\/sync-\d{4}-\d{2}-\d{2}-[\da-f]{7,40}$/u;
+var WIKI_CHAIN_BRANCH_PREFIX = "wiki/";
+var WIKI_CHAIN_BRANCH_PATTERN = /^wiki\/(\d{4}-\d{2}-\d{2})-(\d{2})(\d{2})$/u;
+var utcTimestamp = (now) => ({
+  date: todayUtc(now),
+  hours: String(now.getUTCHours()).padStart(2, "0"),
+  minutes: String(now.getUTCMinutes()).padStart(2, "0")
+});
+var branchTimestamp = (branch) => {
+  const match = WIKI_CHAIN_BRANCH_PATTERN.exec(branch);
+  if (match === null) return null;
+  const [, date5 = "", hours = "", minutes = ""] = match;
+  return { date: date5, hours, minutes };
+};
+var wikiLandingSubject = ({ date: date5, hours, minutes }) => `wiki: ${date5} ${hours}:${minutes} UTC`;
+var wikiBranchName = ({ date: date5, hours, minutes }) => `${WIKI_CHAIN_BRANCH_PREFIX}${date5}-${hours}${minutes}`;
 var USAGE_SCRIPT = ".gaia/scripts/usage.sh";
 var passthroughFailure2 = (result, command, args) => passthroughFailure({ args, command, prefix: "chain", result });
 var stepOk = commandSucceeded;
@@ -46820,16 +46835,18 @@ var safeOutput3 = (value) => value ?? "";
 var HELP_TOKENS62 = /* @__PURE__ */ new Set(["--help", "-h", "help"]);
 var HELP_TEXT63 = `Usage: gaia wiki chain <begin|commit|finish|refresh-nudge> [args]
 
-  begin [--branch-aware]       On main/master: cut wiki/sync-<date>-<sha> so the
-                               whole chain lands on one branch + PR. On a feature
-                               branch: no-op (the chain commits in place).
-  commit --label "<subject>"   In-place commit of this stage's wiki/ changes, then
-                               invalidates the statusline cache. No-op when nothing
-                               changed; refuses non-wiki changes and main/master.
-  finish [--branch-aware]      Push the chain branch, open one PR, and enable
+  begin [--branch-aware]       On main/master: cut wiki/<YYYY-MM-DD-HHMM> so the
+                               run lands on one branch + PR. On a feature branch:
+                               no-op (the run commits in place).
+  commit                       Commit every stage's wiki/ changes in place as
+                               "wiki: <YYYY-MM-DD> <HH:MM> UTC", then
+                               invalidate the statusline cache. No-op when
+                               nothing changed; refuses non-wiki changes and
+                               main/master.
+  finish [--branch-aware]      Push the wiki branch, open one PR, and enable
                                auto-merge, staying on the branch. The merge wait
                                and local cleanup follow the work lifecycle.
-                               Removes an empty chain branch; no-op for in-place
+                               Removes an empty wiki branch; no-op for in-place
                                runs.
   refresh-nudge                Recompute the main checkout's wiki drift and write
                                it into the statusline cache now, rather than on
@@ -46837,7 +46854,7 @@ var HELP_TEXT63 = `Usage: gaia wiki chain <begin|commit|finish|refresh-nudge> [a
 
   Exit codes:
     0  success
-    1  user-correctable refusal (on main without --branch-aware, missing --label, ...)
+    1  user-correctable refusal (on main without --branch-aware, non-wiki changes, ...)
     2  unexpected (git/gh failure)
 `;
 var resolveRoot6 = (cwdOption, action) => {
@@ -46859,11 +46876,6 @@ var resolveRepoRootOrNull = (cwd) => {
     return null;
   }
 };
-var resolveShortHead = (runner, cwd) => {
-  const result = runner("git", ["rev-parse", "HEAD"], { cwd });
-  if (!stepOk(result)) return null;
-  return shortSha(safeOutput3(result.stdout).trim(), cwd);
-};
 var parseBranchAware = (argv) => {
   let branchAware = false;
   for (const token of argv) {
@@ -46874,23 +46886,6 @@ var parseBranchAware = (argv) => {
     }
   }
   return { branchAware, ok: true };
-};
-var parseCommitFlags = (argv) => {
-  let label;
-  for (let index = 0; index < argv.length; index += 1) {
-    const token = argv[index];
-    if (token !== "--label") {
-      return { message: `unknown flag: ${token}`, ok: false };
-    }
-    if (index + 1 >= argv.length) {
-      return { message: "--label requires a value", ok: false };
-    }
-    label = argv[index + 1];
-    index += 1;
-  }
-  if (label === void 0 || label.length === 0)
-    return { message: "--label is required", ok: false };
-  return { label, ok: true };
 };
 var begin = (argv, options) => {
   const parsed = parseBranchAware(argv);
@@ -46923,15 +46918,10 @@ var begin = (argv, options) => {
   }
   if (!parsed.branchAware) {
     return refuse2(
-      "chain begin: refusing to start a wiki chain on main; pass --branch-aware or check out a feature branch"
+      "chain begin: refusing to start a wiki run on main; pass --branch-aware or check out a feature branch"
     );
   }
-  const shortHead = resolveShortHead(runner, repoRoot);
-  if (shortHead === null) {
-    process.stderr.write("chain: could not resolve HEAD\n");
-    return UNEXPECTED_EXIT10;
-  }
-  const branchName = `${WIKI_CHAIN_BRANCH_PREFIX}${options.today ?? todayUtc()}-${shortHead}`;
+  const branchName = wikiBranchName(utcTimestamp(options.now ?? /* @__PURE__ */ new Date()));
   const args = ["checkout", "-b", branchName];
   const result = runner("git", args, { cwd: repoRoot });
   if (!stepOk(result)) return passthroughFailure2(result, "git", args);
@@ -46940,11 +46930,10 @@ var begin = (argv, options) => {
   return EXIT_CODES.OK;
 };
 var commit = (argv, options) => {
-  const parsed = parseCommitFlags(argv);
-  if (!parsed.ok) {
+  if (argv.length > 0) {
     structuredError({
       code: "invalid_arguments",
-      message: parsed.message,
+      message: `commit takes no arguments, got: ${argv.join(" ")}`,
       subcommand: "wiki chain commit"
     });
     return EXIT_CODES.UNKNOWN_SUBCOMMAND;
@@ -46985,17 +46974,20 @@ var commit = (argv, options) => {
     process.stdout.write("chain commit: nothing to commit\n");
     return EXIT_CODES.OK;
   }
+  const subject = wikiLandingSubject(
+    branchTimestamp(branch) ?? utcTimestamp(options.now ?? /* @__PURE__ */ new Date())
+  );
   const addArgs = ["add", "wiki"];
   const addResult = runner("git", addArgs, { cwd: repoRoot });
   if (!stepOk(addResult)) return passthroughFailure2(addResult, "git", addArgs);
-  const commitArgs = ["commit", "-m", parsed.label];
+  const commitArgs = ["commit", "-m", subject];
   const commitResult = runner("git", commitArgs, { cwd: repoRoot });
   if (!stepOk(commitResult)) {
     runner("git", ["reset", "HEAD", "--", "wiki"], { cwd: repoRoot });
     return passthroughFailure2(commitResult, "git", commitArgs);
   }
   invalidateStatuslineCache(repoRoot);
-  process.stdout.write(`chain commit: ${parsed.label}
+  process.stdout.write(`chain commit: ${subject}
 `);
   return EXIT_CODES.OK;
 };
@@ -47158,7 +47150,8 @@ var runFinish = (argv, options) => {
     );
     return { code: UNEXPECTED_EXIT10 };
   }
-  if (!WIKI_CHAIN_BRANCH_PATTERN.test(branch)) {
+  const timestamp = branchTimestamp(branch);
+  if (timestamp === null) {
     process.stdout.write(
       `chain finish: in-place commits remain on ${branch}; no PR opened
 `
@@ -47174,9 +47167,8 @@ var runFinish = (argv, options) => {
   if (!Number.isNaN(ahead) && ahead === 0) {
     return { code: finishEmptyBranch({ base, branch, repoRoot, runner }) };
   }
-  const shortHead = resolveShortHead(runner, repoRoot) ?? branch;
-  const prTitle = `wiki: maintenance chain through ${shortHead}`;
-  const prBody = "Automated /gaia-wiki full-chain landing (sync + consolidate + lint) via `gaia wiki chain finish`.";
+  const prTitle = wikiLandingSubject(timestamp);
+  const prBody = "Automated /gaia-wiki landing (sync + consolidate + lint) via `gaia wiki chain finish`.";
   const queued = queueAutoMerge({
     branch,
     prBody,

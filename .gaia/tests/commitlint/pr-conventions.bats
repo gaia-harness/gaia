@@ -174,7 +174,7 @@ run_type() {
     'plan/plan-023-conventional-commits-naming' \
     'fix/2450-statusline-nudge' \
     'dependabot/npm_and_yarn/foo-1.2.3' \
-    'wiki/sync-2026-10-03-abc1234' \
+    'wiki/2026-10-03-1432' \
     'forensics/12-hook'; do
     run_branch "$head_ref"
     if [ "$status" -ne 0 ]; then

@@ -1,12 +1,12 @@
 /**
  * `gaia wiki chain <begin|commit|finish|refresh-nudge>` handler.
  *
- * Orchestrates the `/gaia-wiki` full chain (sync → consolidate → lint) so it
- * lands on ONE branch and ONE PR instead of each stage landing independently.
- * The router (`references/wiki.md`) calls:
- *   begin   once, before sync         → cut `wiki/sync-<date>-<sha>` on main
- *   commit  after consolidate & lint   → in-place commit of that stage's edits
- *   finish  once, after lint           → push + PR + auto-merge
+ * Lands a `/gaia-wiki` run (sync → consolidate → lint) as ONE commit on ONE
+ * branch and ONE PR. The router (`references/wiki.md`) calls:
+ *   begin   once, before sync         → cut `wiki/<YYYY-MM-DD-HHMM>` on main
+ *   commit  once, after lint          → commit every stage's wiki/ edits as
+ *                                        `wiki: <YYYY-MM-DD> <HH:MM> UTC`
+ *   finish  once, after commit        → push + PR + auto-merge
  *   refresh-nudge after merge cleanup  → write the main checkout's wiki drift
  *                                        into the statusline cache
  *
@@ -15,13 +15,12 @@
  * (`references/work-lifecycle.md`, `## 7. Merge` and `## 8. Cleanup`), like
  * every other GAIA command that opens a PR.
  *
- * `begin` runs BEFORE sync on purpose: every stage's `commit` then sees a
- * feature branch and commits in place rather than opening its own premature
- * PR. `commit` refuses on main/master, so a stage that runs after a failed
- * `begin` cannot commit straight onto the base branch. On a feature branch
- * every action degrades to a no-op or a plain in-place commit, so a full chain
- * run from a feature branch leaves its commits there for the developer to land
- * their own way.
+ * `begin` runs BEFORE sync on purpose: the stages then edit on a feature
+ * branch, and `commit` refuses on main/master, so a run whose `begin` failed
+ * cannot commit straight onto the base branch. On a feature branch every
+ * action degrades to a no-op or a plain in-place commit, so a run from a
+ * feature branch leaves its commit there for the developer to land their own
+ * way.
  *
  * Determinism contract: no prose narration on stdout (one-line summaries
  * only), every git/gh call routes through an injectable `runner`, and exit
@@ -41,7 +40,6 @@ import {
   isProtectedBranch,
 } from './util/branch.js';
 import type {CommandRunner} from './util/branch.js';
-import {shortSha} from './util/git.js';
 import {
   commandSucceeded,
   passthroughFailure as passthroughFailureWithPrefix,
@@ -56,12 +54,41 @@ import {
   refreshWikiDriftInCache,
 } from './util/statusline-cache.js';
 
-const WIKI_CHAIN_BRANCH_PREFIX = 'wiki/sync-';
+const WIKI_CHAIN_BRANCH_PREFIX = 'wiki/';
 
-// The full shape `begin` mints (date plus short sha). `finish` matches this,
-// not the bare prefix, so a hand-named `wiki/sync-<slug>` branch stays in place.
-const WIKI_CHAIN_BRANCH_PATTERN =
-  /^wiki\/sync-\d{4}-\d{2}-\d{2}-[\da-f]{7,40}$/u;
+// The full shape `begin` mints (UTC date and minute, the timestamp every GAIA
+// maintenance branch carries). `finish` and `commit` match this, not the bare
+// prefix, so a hand-named `wiki/<slug>` branch stays in place; the groups
+// carry the branch's timestamp into the commit subject and PR title.
+const WIKI_CHAIN_BRANCH_PATTERN = /^wiki\/(\d{4}-\d{2}-\d{2})-(\d{2})(\d{2})$/u;
+
+type Timestamp = {date: string; hours: string; minutes: string};
+
+const utcTimestamp = (now: Date): Timestamp => ({
+  date: todayUtc(now),
+  hours: String(now.getUTCHours()).padStart(2, '0'),
+  minutes: String(now.getUTCMinutes()).padStart(2, '0'),
+});
+
+const branchTimestamp = (branch: string): null | Timestamp => {
+  const match = WIKI_CHAIN_BRANCH_PATTERN.exec(branch);
+
+  if (match === null) return null;
+
+  const [, date = '', hours = '', minutes = ''] = match;
+
+  return {date, hours, minutes};
+};
+
+// The one commit's subject, reused as the PR title so the squash on main reads
+// the same. `countDriftCommits` excludes this exact shape, so a landed run
+// never reads as drift; the commit the run evaluated through is recorded in
+// `wiki/.state.json`, not here.
+const wikiLandingSubject = ({date, hours, minutes}: Timestamp): string =>
+  `wiki: ${date} ${hours}:${minutes} UTC`;
+
+const wikiBranchName = ({date, hours, minutes}: Timestamp): string =>
+  `${WIKI_CHAIN_BRANCH_PREFIX}${date}-${hours}${minutes}`;
 
 const USAGE_SCRIPT = '.gaia/scripts/usage.sh';
 
@@ -83,16 +110,18 @@ const HELP_TOKENS = new Set(['--help', '-h', 'help']);
 
 const HELP_TEXT = `Usage: gaia wiki chain <begin|commit|finish|refresh-nudge> [args]
 
-  begin [--branch-aware]       On main/master: cut wiki/sync-<date>-<sha> so the
-                               whole chain lands on one branch + PR. On a feature
-                               branch: no-op (the chain commits in place).
-  commit --label "<subject>"   In-place commit of this stage's wiki/ changes, then
-                               invalidates the statusline cache. No-op when nothing
-                               changed; refuses non-wiki changes and main/master.
-  finish [--branch-aware]      Push the chain branch, open one PR, and enable
+  begin [--branch-aware]       On main/master: cut wiki/<YYYY-MM-DD-HHMM> so the
+                               run lands on one branch + PR. On a feature branch:
+                               no-op (the run commits in place).
+  commit                       Commit every stage's wiki/ changes in place as
+                               "wiki: <YYYY-MM-DD> <HH:MM> UTC", then
+                               invalidate the statusline cache. No-op when
+                               nothing changed; refuses non-wiki changes and
+                               main/master.
+  finish [--branch-aware]      Push the wiki branch, open one PR, and enable
                                auto-merge, staying on the branch. The merge wait
                                and local cleanup follow the work lifecycle.
-                               Removes an empty chain branch; no-op for in-place
+                               Removes an empty wiki branch; no-op for in-place
                                runs.
   refresh-nudge                Recompute the main checkout's wiki drift and write
                                it into the statusline cache now, rather than on
@@ -100,7 +129,7 @@ const HELP_TEXT = `Usage: gaia wiki chain <begin|commit|finish|refresh-nudge> [a
 
   Exit codes:
     0  success
-    1  user-correctable refusal (on main without --branch-aware, missing --label, ...)
+    1  user-correctable refusal (on main without --branch-aware, non-wiki changes, ...)
     2  unexpected (git/gh failure)
 `;
 
@@ -115,9 +144,9 @@ type GhArtifact = {number: number; repo: string};
 
 type RunOptions = {
   cwd?: string;
+  /** Override the clock for deterministic tests. */
+  now?: Date;
   runner?: CommandRunner;
-  /** Override "today" for deterministic tests. ISO-8601 date string. */
-  today?: string;
 };
 
 const resolveRoot = (cwdOption: string, action: string): null | string => {
@@ -145,17 +174,6 @@ const resolveRepoRootOrNull = (cwd: string): null | string => {
   }
 };
 
-const resolveShortHead = (
-  runner: CommandRunner,
-  cwd: string
-): null | string => {
-  const result = runner('git', ['rev-parse', 'HEAD'], {cwd});
-
-  if (!stepOk(result)) return null;
-
-  return shortSha(safeOutput(result.stdout).trim(), cwd);
-};
-
 type BranchAwareParse =
   {branchAware: boolean; ok: true} | {message: string; ok: false};
 
@@ -171,31 +189,6 @@ const parseBranchAware = (argv: readonly string[]): BranchAwareParse => {
   }
 
   return {branchAware, ok: true};
-};
-
-type CommitParse = {label: string; ok: true} | {message: string; ok: false};
-
-const parseCommitFlags = (argv: readonly string[]): CommitParse => {
-  let label: string | undefined;
-
-  for (let index = 0; index < argv.length; index += 1) {
-    const token = argv[index];
-
-    if (token !== '--label') {
-      return {message: `unknown flag: ${token}`, ok: false};
-    }
-
-    if (index + 1 >= argv.length) {
-      return {message: '--label requires a value', ok: false};
-    }
-    label = argv[index + 1];
-    index += 1;
-  }
-
-  if (label === undefined || label.length === 0)
-    return {message: '--label is required', ok: false};
-
-  return {label, ok: true};
 };
 
 const begin = (argv: readonly string[], options: RunOptions): number => {
@@ -237,19 +230,11 @@ const begin = (argv: readonly string[], options: RunOptions): number => {
 
   if (!parsed.branchAware) {
     return refuse(
-      'chain begin: refusing to start a wiki chain on main; pass --branch-aware or check out a feature branch'
+      'chain begin: refusing to start a wiki run on main; pass --branch-aware or check out a feature branch'
     );
   }
 
-  const shortHead = resolveShortHead(runner, repoRoot);
-
-  if (shortHead === null) {
-    process.stderr.write('chain: could not resolve HEAD\n');
-
-    return UNEXPECTED_EXIT;
-  }
-
-  const branchName = `${WIKI_CHAIN_BRANCH_PREFIX}${options.today ?? todayUtc()}-${shortHead}`;
+  const branchName = wikiBranchName(utcTimestamp(options.now ?? new Date()));
   const args = ['checkout', '-b', branchName];
   const result = runner('git', args, {cwd: repoRoot});
 
@@ -261,12 +246,10 @@ const begin = (argv: readonly string[], options: RunOptions): number => {
 };
 
 const commit = (argv: readonly string[], options: RunOptions): number => {
-  const parsed = parseCommitFlags(argv);
-
-  if (!parsed.ok) {
+  if (argv.length > 0) {
     structuredError({
       code: 'invalid_arguments',
-      message: parsed.message,
+      message: `commit takes no arguments, got: ${argv.join(' ')}`,
       subcommand: 'wiki chain commit',
     });
 
@@ -314,19 +297,23 @@ const commit = (argv: readonly string[], options: RunOptions): number => {
   }
 
   if (!workingTree.hasWikiChanges) {
-    // A stage that changed nothing leaves nothing to commit. Graceful no-op so
-    // the chain does not abort.
+    // A run that changed nothing leaves nothing to commit. Graceful no-op so
+    // `finish` can drop the empty branch.
     process.stdout.write('chain commit: nothing to commit\n');
 
     return EXIT_CODES.OK;
   }
 
+  // An in-place run has no branch timestamp, so it stamps the commit's own.
+  const subject = wikiLandingSubject(
+    branchTimestamp(branch) ?? utcTimestamp(options.now ?? new Date())
+  );
   const addArgs = ['add', 'wiki'];
   const addResult = runner('git', addArgs, {cwd: repoRoot});
 
   if (!stepOk(addResult)) return passthroughFailure(addResult, 'git', addArgs);
 
-  const commitArgs = ['commit', '-m', parsed.label];
+  const commitArgs = ['commit', '-m', subject];
   const commitResult = runner('git', commitArgs, {cwd: repoRoot});
 
   if (!stepOk(commitResult)) {
@@ -340,7 +327,7 @@ const commit = (argv: readonly string[], options: RunOptions): number => {
   // leaves `Run /gaia-wiki` showing until the cache expires on its own.
   invalidateStatuslineCache(repoRoot);
 
-  process.stdout.write(`chain commit: ${parsed.label}\n`);
+  process.stdout.write(`chain commit: ${subject}\n`);
 
   return EXIT_CODES.OK;
 };
@@ -355,10 +342,9 @@ type FinishEmptyBranchOptions = {
 /**
  * `chain finish` when the branch has zero commits ahead of `base`: a clean
  * tree means every stage was a no-op, so drop the empty branch and return to
- * base rather than open an empty PR. A dirty tree means sync aborted
- * mid-write (the Step 5b fabrication guard leaves the tree untouched without
- * committing); leave the branch and changes in place for the maintainer to
- * resolve.
+ * base rather than open an empty PR. A dirty tree means the run stopped
+ * before its commit (sync's fabrication guard aborts without committing);
+ * leave the branch and changes in place for the maintainer to resolve.
  */
 const finishEmptyBranch = (options: FinishEmptyBranchOptions): number => {
   const {base, branch, repoRoot, runner} = options;
@@ -523,9 +509,9 @@ type QueueAutoMergeOptions = {
 type QueueAutoMergeResult = {artifact?: GhArtifact; failureCode?: number};
 
 /**
- * Push the chain branch, open its PR as a draft (ready on a private repository
+ * Push the wiki branch, open its PR as a draft (ready on a private repository
  * that refuses drafts), post the out-of-scope stamp, mark the PR ready, and
- * queue auto-merge. Runs while still on the chain branch
+ * queue auto-merge. Runs while still on the wiki branch
  * so `gh pr merge` targets its PR; once `push` succeeds the branch exists on the
  * remote and is left for the maintainer to resolve rather than force-reverted.
  * A flip that failed stops the land before the merge step with the PR still an
@@ -552,7 +538,7 @@ const queueAutoMerge = (
 
   for (const step of remoteSequence) {
     // `--auto` merges outside the Claude Code merge hook, so nothing else posts
-    // GAIA-Audit for a wiki-only chain PR on a branch that requires it. The
+    // GAIA-Audit for a wiki-only PR on a branch that requires it. The
     // poster refuses a diff that leaves `wiki/` or that the roster dispatches.
     if (step === autoMergeStep) {
       const stamp = postOutOfScopeStamp({
@@ -632,9 +618,11 @@ const runFinish = (
     return {code: UNEXPECTED_EXIT};
   }
 
-  if (!WIKI_CHAIN_BRANCH_PATTERN.test(branch)) {
-    // In-place run (begin was a no-op on a feature branch). The stage commits
-    // already live on the developer's branch; opening a PR is their call.
+  const timestamp = branchTimestamp(branch);
+
+  if (timestamp === null) {
+    // In-place run (begin was a no-op on a feature branch). The commit
+    // already lives on the developer's branch; opening a PR is their call.
     process.stdout.write(
       `chain finish: in-place commits remain on ${branch}; no PR opened\n`
     );
@@ -655,10 +643,9 @@ const runFinish = (
     return {code: finishEmptyBranch({base, branch, repoRoot, runner})};
   }
 
-  const shortHead = resolveShortHead(runner, repoRoot) ?? branch;
-  const prTitle = `wiki: maintenance chain through ${shortHead}`;
+  const prTitle = wikiLandingSubject(timestamp);
   const prBody =
-    'Automated /gaia-wiki full-chain landing (sync + consolidate + lint) via `gaia wiki chain finish`.';
+    'Automated /gaia-wiki landing (sync + consolidate + lint) via `gaia wiki chain finish`.';
 
   const queued = queueAutoMerge({
     branch,

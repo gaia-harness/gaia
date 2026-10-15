@@ -102,6 +102,7 @@ worktree_spelling() {
     "deps/2026-10-03-1200|maintenance 2026-10-03-1200" \
     "update/v2.0.0-2026-10-03-1200|maintenance v2.0.0-2026-10-03-1200" \
     "release/v1.4.0|maintenance v1.4.0" \
+    "wiki/2026-10-15-0532|maintenance 2026-10-15-0532" \
     "wiki/sync-2026-09-20-abc1234|maintenance sync-2026-09-20-abc1234" \
     "forensics/123-some-class|maintenance 123-some-class" \
     "chore/update-deps-2026-09-20-1200|maintenance update-deps-2026-09-20-1200" \
@@ -109,6 +110,8 @@ worktree_spelling() {
     "chore/fix-typo|adhoc unknown" \
     "wiki/notes|adhoc unknown" \
     "wiki/2026-10-03-14-30|adhoc unknown" \
+    "wiki/2026-10-03-143|adhoc unknown" \
+    "wiki/2026-10-03-1432-notes|adhoc unknown" \
     "main|adhoc unknown" \
     "fix/some-thing|adhoc unknown" \
     "feat/new-thing|adhoc unknown" \
@@ -709,18 +712,18 @@ prefix_conforms() {
   local chain_value
   chain_value="$(chain_prefix "$REPO_ROOT/.gaia/cli/src/wiki/chain.ts")"
   [ -n "$chain_value" ]
-  prefix_conforms "$chain_value" "2026-09-20-abc1234"
-  expect_classify "${chain_value}2026-09-20-abc1234" "maintenance sync-2026-09-20-abc1234"
+  prefix_conforms "$chain_value" "2026-09-20-1432"
+  expect_classify "${chain_value}2026-09-20-1432" "maintenance 2026-09-20-1432"
 }
 
 @test "the wiki lockstep can fail: a source file with a different prefix literal is reported" {
   local scratch_chain="$BATS_TEST_TMPDIR/chain.ts"
-  sed "s#WIKI_CHAIN_BRANCH_PREFIX = 'wiki/sync-'#WIKI_CHAIN_BRANCH_PREFIX = 'wiki-chain/'#" \
+  sed "s#WIKI_CHAIN_BRANCH_PREFIX = 'wiki/'#WIKI_CHAIN_BRANCH_PREFIX = 'wiki-chain/'#" \
     "$REPO_ROOT/.gaia/cli/src/wiki/chain.ts" >"$scratch_chain"
   [ "$(chain_prefix "$scratch_chain")" = "wiki-chain/" ]
   # A prefix the table does not know is refused by the same helper the real
   # lockstep calls.
-  prefix_conforms "wiki-chain/" "2026-09-20-abc1234" && return 1
+  prefix_conforms "wiki-chain/" "2026-09-20-1432" && return 1
   true
 }
 
@@ -767,7 +770,7 @@ prefix_conforms() {
 # hands git or the harness a hand-spelled GAIA branch name. One definition, so
 # the guard and its can-fail twin below read exactly the same patterns.
 literal_hits() {
-  local kinds='(debt|plan|chore|release|spec|codify|cleanse|fitness|residue|deps|update|forensics|wiki/sync)[-/]'
+  local kinds='(debt|plan|chore|release|spec|codify|cleanse|fitness|residue|deps|update|forensics|wiki/sync|wiki/[0-9]{4})[-/]'
   git -C "$1" grep -nE \
     -e "(checkout -b|switch -c|branch -[mM]|worktree add( [^ ]+)* -[bB]) +\"?${kinds}" \
     -e 'BRANCH="(debt|plan|chore|release)/' \
@@ -800,10 +803,11 @@ literal_hits() {
     'git checkout -b "$BRANCH"' \
     'EnterWorktree({name: "<branch-name>"})' \
     'git checkout -b deps/2026-01-01-0000' \
-    'git checkout -b update/v1' >"$repo/.claude/x.md"
+    'git checkout -b update/v1' \
+    'git checkout -b wiki/2026-10-15-0532' >"$repo/.claude/x.md"
   git -C "$repo" add .claude/x.md
   hits="$(literal_hits "$repo")"
-  for line in 1 2 3 4 5 8 9; do
+  for line in 1 2 3 4 5 8 9 10; do
     grep -qF ".claude/x.md:$line:" <<<"$hits" || { echo "line $line not reported" >&2; return 1; }
   done
   # The minted and placeholder forms are the correct spellings, never hits.
@@ -846,7 +850,7 @@ expect_invalid() {
   for branch in debt/42-fix-it debt/41-42-47-batch plan/spec-005-cards plan/plan-023-naming \
     cleanse/2026-10-03-1200 codify/2026-10-03-1200 fitness/2026-10-03-1200 residue/2026-10-03-1200 \
     deps/2026-10-03-1200 update/v2.0.0-2026-10-03-1200 release/v2.0.0 \
-    wiki/sync-2026-09-20-abc1234 forensics/123-some-class; do
+    wiki/2026-10-15-0532 wiki/sync-2026-09-20-abc1234 forensics/123-some-class; do
     expect_valid "$branch"
   done
 }

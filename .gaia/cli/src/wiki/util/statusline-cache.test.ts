@@ -176,7 +176,7 @@ describe('refreshWikiDriftInCache', () => {
     const evaluated = headOf(root);
     writeState(evaluated);
     commit(root, 'feat: one');
-    commit(root, 'wiki: sync through abcdef0');
+    commit(root, 'wiki: 2026-10-15 05:32 UTC');
     commit(root, 'feat: two');
     seed(JSON.stringify({checkedAt: 1_700_000_000, wikiDriftCount: 52}));
 

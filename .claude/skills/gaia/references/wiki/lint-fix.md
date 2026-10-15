@@ -18,7 +18,7 @@ Read each check's findings fresh from its primitive, not from the report prose:
 
 Read check #13's findings from the `## #13` section of the report the subagent wrote: the structural-versus-narrative triage that produced them has no primitive.
 
-Check #11 (drift) has no fix here, because sync has just run in the same chain.
+Check #11 (drift) has no fix here, because sync has just run in the same `/gaia-wiki` run.
 
 When every list is empty, there is nothing to fix: skip to Step 5.
 
@@ -63,7 +63,7 @@ Ask one question per finding, up to four per `AskUserQuestion` call, header `Lin
 - **#16 Empty section.** Read the page around the heading.
   - `Remove the heading`: recommended unless the heading is one a tool writes and fills on its own (a promotion step's provenance heading, a template slot).
   - `Write the section`: draft the body from the page's subject and the code it describes, following `.claude/rules/wiki-style.md`.
-- **#13 Narrative refs.** These are not asked about. They sit in instruction files outside `wiki/`, and the chain's branch carries `wiki/` only: `chain commit` refuses a working tree with non-wiki changes, and the wiki-only diff is what lets `chain finish` stamp the PR out of audit scope. Do not edit them here. File each as a `tech-debt` issue with `bash .gaia/scripts/file-tech-debt.sh file --finding <finding.json> --outcome-file <outcome.jsonl>` (the `file-tech-debt` skill, section 0, owns the finding JSON), one per finding, citing its `path:line` and the narrative reference, so it is drained through `/gaia-debt` on a branch the audit gate covers. When the script reports `absent` or `transient`, list the findings in the Step 5 summary as unfiled.
+- **#13 Narrative refs.** These are not asked about. They sit in instruction files outside `wiki/`, and the wiki branch carries `wiki/` only: `chain commit` refuses a working tree with non-wiki changes, and the wiki-only diff is what lets `chain finish` stamp the PR out of audit scope. Do not edit them here. File each as a `tech-debt` issue with `bash .gaia/scripts/file-tech-debt.sh file --finding <finding.json> --outcome-file <outcome.jsonl>` (the `file-tech-debt` skill, section 0, owns the finding JSON), one per finding, citing its `path:line` and the narrative reference, so it is drained through `/gaia-debt` on a branch the audit gate covers. When the script reports `absent` or `transient`, list the findings in the Step 5 summary as unfiled.
 
 ## Step 4: Re-lint
 
@@ -75,4 +75,4 @@ Compare its findings, #17 included, with what Steps 2 and 3 resolved. A finding 
 
 Print one line: `Lint fix: <fixed> fixed, <filed> filed as tech-debt, <left> left as is, <unresolved> unresolved.` Then one line per finding left as is, unfiled, or unresolved, as `<check>: <location>`.
 
-Do not commit. The router commits the fixes and the final report together (`references/wiki.md` → "Full chain", step 5).
+Do not commit. The router commits the fixes and the final report with every other stage's edits in the run's one commit (`references/wiki.md` → "The run", step 6).

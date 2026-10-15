@@ -1,6 +1,6 @@
 ---
 name: gaia-wiki
-description: Runs the full GAIA wiki maintenance chain (sync, consolidate, lint with fixes) in one command. Trigger on `/gaia-wiki` or natural-language asks like "sync the wiki", "run wiki maintenance", "consolidate the wiki", or "lint the wiki".
+description: Runs GAIA wiki maintenance (sync, consolidate, lint with fixes) in one command and lands it as one commit and PR. Trigger on `/gaia-wiki` or natural-language asks like "sync the wiki", "run wiki maintenance", "consolidate the wiki", or "lint the wiki".
 ---
 
 Run the GAIA **wiki** maintenance workflow with these arguments: `$ARGUMENTS`
@@ -18,4 +18,4 @@ gaia_refuse_if_worktree "/gaia-wiki" || exit 1
 
 If the detection does not fire, fall through to the workflow dispatch line below.
 
-Read `.claude/skills/gaia/references/wiki.md` from the project root and follow it exactly. The reference takes no arguments; when arguments were given above, it prints one notice naming them and runs the full chain anyway.
+Read `.claude/skills/gaia/references/wiki.md` from the project root and follow it exactly. The reference takes no arguments; when arguments were given above, it prints one notice naming them and runs sync, consolidate, and lint anyway.

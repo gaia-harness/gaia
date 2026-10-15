@@ -7,15 +7,16 @@ bats_require_minimum_version 1.5.0
 #
 # Sweep #1 of local-janitor.sh: the wiki landing's local catch-up.
 #
-# The wiki landing CLI cuts a throwaway `wiki/sync-<date>-<sha>` branch (the
-# legacy `wiki-sync/<date>-<sha>` shape is still reaped) and
+# The wiki landing CLI cuts a throwaway `wiki/<YYYY-MM-DD-HHMM>` branch (the
+# legacy `wiki/sync-<date>-<sha>` and `wiki-sync/<date>-<sha>` shapes are still
+# reaped) and
 # lands it with `gh pr merge --auto`, which returns before the merge completes.
 # /gaia-wiki waits for the merge and cleans up through the work lifecycle; a
 # session that ends first leaves the local branch undeleted and the local base
 # branch behind. Sweep #1 covers both once HEAD is off the sync branch (the
 # reap skips the current branch and the fast-forward needs HEAD on base), in
 # four steps: an existence
-# gate on a local `wiki/sync-*` or `wiki-sync/*` branch, a bounded and
+# gate on a local wiki landing branch of one of those shapes, a bounded and
 # rate-limited `git fetch --prune` of origin, a reap of each `[gone]` wiki sync branch
 # whose work `git cherry` confirms is already represented upstream, and a
 # durable `--ff-only` fast-forward of the base branch to `origin/<base>`.
@@ -236,6 +237,69 @@ branch_exists() {
   run bash "$HOOK_ABSOLUTE_PATH"
   [ "$status" -eq 0 ]
   branch_exists "wiki/sync-notes"
+}
+
+@test "deletes a merged-and-gone wiki/<YYYY-MM-DD-HHMM> branch" {
+  make_repo
+  make_gone_branch "wiki/2026-10-15-0532"
+  cd "$REPO"
+  run bash "$HOOK_ABSOLUTE_PATH"
+  [ "$status" -eq 0 ]
+  branch_exists "wiki/2026-10-15-0532" && return 1
+  true
+}
+
+@test "keeps a wiki/<YYYY-MM-DD-HHMM> branch whose upstream is still live" {
+  make_repo
+  make_live_branch "wiki/2026-10-15-0533"
+  cd "$REPO"
+  run bash "$HOOK_ABSOLUTE_PATH"
+  [ "$status" -eq 0 ]
+  branch_exists "wiki/2026-10-15-0533"
+}
+
+@test "never deletes the checked-out wiki/<YYYY-MM-DD-HHMM> branch, even when gone" {
+  make_repo
+  make_gone_branch "wiki/2026-10-15-0534"
+  git -C "$REPO" checkout -q "wiki/2026-10-15-0534"
+  cd "$REPO"
+  run bash "$HOOK_ABSOLUTE_PATH"
+  [ "$status" -eq 0 ]
+  branch_exists "wiki/2026-10-15-0534"
+}
+
+@test "keeps gone hand-named wiki/ branches outside the timestamp shape" {
+  make_repo
+  make_live_branch "wiki/2026-10-15-0535"
+  make_gone_branch "wiki/docs"
+  make_gone_branch "wiki/2026-10-15-0535-notes"
+  make_gone_branch "wiki/2026-10-15-053"
+  cd "$REPO"
+  run bash "$HOOK_ABSOLUTE_PATH"
+  [ "$status" -eq 0 ]
+  branch_exists "wiki/docs"
+  branch_exists "wiki/2026-10-15-0535-notes"
+  branch_exists "wiki/2026-10-15-053"
+}
+
+@test "a lone hand-named wiki/ branch does not open the gate: ZERO fetch calls" {
+  make_repo
+  make_live_branch "wiki/docs"
+  make_argv_witness_shim
+  cd "$REPO"
+  PATH="$SHIM_DIRECTORY:$PATH" run bash "$HOOK_ABSOLUTE_PATH"
+  [ "$status" -eq 0 ]
+  [ "$(grep -c 'fetch' "$witness")" -eq 0 ]
+}
+
+@test "a lone wiki/<YYYY-MM-DD-HHMM> branch opens the gate: the sweep fetches" {
+  make_repo
+  make_live_branch "wiki/2026-10-15-0536"
+  make_argv_witness_shim
+  cd "$REPO"
+  PATH="$SHIM_DIRECTORY:$PATH" run bash "$HOOK_ABSOLUTE_PATH"
+  [ "$status" -eq 0 ]
+  [ "$(grep -c 'fetch' "$witness")" -ge 1 ]
 }
 
 @test "keeps a gone feat/x branch while a live wiki/sync- branch opens the gate" {

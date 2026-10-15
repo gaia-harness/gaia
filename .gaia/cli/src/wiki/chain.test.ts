@@ -138,6 +138,11 @@ const ghCalls = (recorded: RecordedCall[]): RecordedCall[] =>
 
 const USAGE_SCRIPT = '.gaia/scripts/usage.sh';
 
+// A fixed clock: 05:32 UTC on 2026-05-07, the timestamp `begin` mints and an
+// in-place `commit` stamps.
+const NOW = new Date('2026-05-07T05:32:00Z');
+const NOW_SUBJECT = 'wiki: 2026-05-07 05:32 UTC';
+
 const recordCalls = (recorded: RecordedCall[]): RecordedCall[] =>
   recorded.filter(
     (entry) => entry.command === 'bash' && entry.args[0] === USAGE_SCRIPT
@@ -232,12 +237,12 @@ describe('wiki chain', () => {
       const exit = run(['begin'], {cwd: sandbox.root, runner});
       expect(exit).toBe(1);
       expect(stdio.errors.join('')).toContain(
-        'refusing to start a wiki chain on main'
+        'refusing to start a wiki run on main'
       );
       expect(recorded.find((c) => c.args[0] === 'checkout')).toBeUndefined();
     });
 
-    test('on main with --branch-aware: cuts wiki/sync-<date>-<sha>, exit 0', () => {
+    test('on main with --branch-aware: cuts wiki/<UTC YYYY-MM-DD-HHMM>, exit 0', () => {
       sandbox = setupSandbox();
       const recorded: RecordedCall[] = [];
       const runner = buildRunner(
@@ -256,15 +261,15 @@ describe('wiki chain', () => {
 
       const exit = run(['begin', '--branch-aware'], {
         cwd: sandbox.root,
+        now: NOW,
         runner,
-        today: '2026-05-07',
       });
       expect(exit).toBe(0);
       expect(stdio.outputs.join('')).toContain(
-        'chain begin: started wiki/sync-2026-05-07-bbbbbbb'
+        'chain begin: started wiki/2026-05-07-0532'
       );
       expect(gitCalls(recorded).at(-1)).toMatchObject({
-        args: ['checkout', '-b', 'wiki/sync-2026-05-07-bbbbbbb'],
+        args: ['checkout', '-b', 'wiki/2026-05-07-0532'],
         command: 'git',
       });
     });
@@ -285,7 +290,7 @@ describe('wiki chain', () => {
       const exit = run(['begin'], {cwd: sandbox.root, runner});
       expect(exit).toBe(1);
       expect(stdio.errors.join('')).toContain(
-        'refusing to start a wiki chain on main'
+        'refusing to start a wiki run on main'
       );
     });
 
@@ -329,8 +334,8 @@ describe('wiki chain', () => {
 
       run(['begin', '--branch-aware'], {
         cwd: sandbox.root,
+        now: NOW,
         runner: onMainRunner,
-        today: '2026-05-07',
       });
       expect(recordCalls(onMainRecorded)).toHaveLength(0);
     });
@@ -354,21 +359,20 @@ describe('wiki chain', () => {
         recorded
       );
 
-      const exit = run(['commit', '--label', 'wiki: lint through abc1234'], {
+      const exit = run(['commit'], {
         cwd: sandbox.root,
+        now: NOW,
         runner,
       });
       expect(exit).toBe(0);
-      expect(stdio.outputs.join('')).toContain(
-        'chain commit: wiki: lint through abc1234'
-      );
+      expect(stdio.outputs.join('')).toContain(`chain commit: ${NOW_SUBJECT}`);
       const verbs = gitCalls(recorded);
       expect(verbs.at(-2)).toMatchObject({
         args: ['add', 'wiki'],
         command: 'git',
       });
       expect(verbs.at(-1)).toMatchObject({
-        args: ['commit', '-m', 'wiki: lint through abc1234'],
+        args: ['commit', '-m', NOW_SUBJECT],
         command: 'git',
       });
       expect(ghCalls(recorded)).toHaveLength(0);
@@ -391,8 +395,9 @@ describe('wiki chain', () => {
         recorded
       );
 
-      const exit = run(['commit', '--label', 'wiki: consolidate'], {
+      const exit = run(['commit'], {
         cwd: sandbox.root,
+        now: NOW,
         runner,
       });
       expect(exit).toBe(0);
@@ -419,8 +424,9 @@ describe('wiki chain', () => {
         recorded
       );
 
-      const exit = run(['commit', '--label', 'wiki: x'], {
+      const exit = run(['commit'], {
         cwd: sandbox.root,
+        now: NOW,
         runner,
       });
       expect(exit).toBe(1);
@@ -428,11 +434,39 @@ describe('wiki chain', () => {
       expect(recorded.find((c) => c.args[0] === 'commit')).toBeUndefined();
     });
 
-    test('missing --label: exit 1', () => {
+    test('rejects any argument: exit 1, no commit', () => {
       sandbox = setupSandbox();
-      const exit = run(['commit'], {cwd: sandbox.root});
+      const recorded: RecordedCall[] = [];
+      const runner = buildRunner([], recorded);
+      const exit = run(['commit', '--label', 'wiki: x'], {
+        cwd: sandbox.root,
+        runner,
+      });
       expect(exit).toBe(1);
-      expect(stdio.errors.join('')).toContain('--label is required');
+      expect(stdio.errors.join('')).toContain('commit takes no arguments');
+      expect(recorded).toHaveLength(0);
+    });
+
+    test('on a wiki branch: the subject carries the branch timestamp, not the clock', () => {
+      sandbox = setupSandbox();
+      const recorded: RecordedCall[] = [];
+      const runner = buildRunner(
+        [
+          {
+            argv: ['rev-parse', '--abbrev-ref', 'HEAD'],
+            result: okResult('wiki/2026-05-06-2359\n'),
+          },
+          wikiOnlyStatus,
+        ],
+        recorded
+      );
+
+      const exit = run(['commit'], {cwd: sandbox.root, now: NOW, runner});
+      expect(exit).toBe(0);
+      expect(gitCalls(recorded).at(-1)).toMatchObject({
+        args: ['commit', '-m', 'wiki: 2026-05-06 23:59 UTC'],
+        command: 'git',
+      });
     });
 
     test('commit failure unstages wiki and exits 2', () => {
@@ -450,15 +484,16 @@ describe('wiki chain', () => {
           },
           {argv: ['add', 'wiki'], result: okResult('')},
           {
-            argv: ['commit', '-m', 'wiki: x'],
+            argv: ['commit', '-m', NOW_SUBJECT],
             result: failResult(1, 'nothing to commit'),
           },
         ],
         recorded
       );
 
-      const exit = run(['commit', '--label', 'wiki: x'], {
+      const exit = run(['commit'], {
         cwd: sandbox.root,
+        now: NOW,
         runner,
       });
       expect(exit).toBe(2);
@@ -485,8 +520,9 @@ describe('wiki chain', () => {
         committingRecorded
       );
 
-      run(['commit', '--label', 'wiki: x'], {
+      run(['commit'], {
         cwd: sandbox.root,
+        now: NOW,
         runner: committingRunner,
       });
       expect(recordCalls(committingRecorded)).toHaveLength(0);
@@ -506,8 +542,9 @@ describe('wiki chain', () => {
         noopRecorded
       );
 
-      run(['commit', '--label', 'wiki: x'], {
+      run(['commit'], {
         cwd: sandbox.root,
+        now: NOW,
         runner: noopRunner,
       });
       expect(recordCalls(noopRecorded)).toHaveLength(0);
@@ -528,13 +565,14 @@ describe('wiki chain', () => {
         recorded
       );
 
-      const exit = run(['commit', '--label', 'wiki: sync through abc1234'], {
+      const exit = run(['commit'], {
         cwd: sandbox.root,
+        now: NOW,
         runner,
       });
       expect(exit).toBe(0);
       expect(gitCalls(recorded)).toContainEqual({
-        args: ['commit', '-m', 'wiki: sync through abc1234'],
+        args: ['commit', '-m', NOW_SUBJECT],
         command: 'git',
       });
       expect(
@@ -560,8 +598,9 @@ describe('wiki chain', () => {
         recorded
       );
 
-      const exit = run(['commit', '--label', 'wiki: x'], {
+      const exit = run(['commit'], {
         cwd: sandbox.root,
+        now: NOW,
         runner,
       });
       expect(exit).toBe(1);
@@ -587,8 +626,9 @@ describe('wiki chain', () => {
         recorded
       );
 
-      const exit = run(['commit', '--label', 'wiki: x'], {
+      const exit = run(['commit'], {
         cwd: sandbox.root,
+        now: NOW,
         runner,
       });
       expect(exit).toBe(0);
@@ -615,8 +655,9 @@ describe('wiki chain', () => {
           recorded
         );
 
-        const exit = run(['commit', '--label', 'wiki: x'], {
+        const exit = run(['commit'], {
           cwd: sandbox.root,
+          now: NOW,
           runner,
         });
         expect(exit).toBe(1);
@@ -643,8 +684,9 @@ describe('wiki chain', () => {
         recorded
       );
 
-      const exit = run(['commit', '--label', 'wiki: x'], {
+      const exit = run(['commit'], {
         cwd: sandbox.root,
+        now: NOW,
         runner,
       });
       expect(exit).toBe(2);
@@ -663,15 +705,16 @@ describe('wiki chain', () => {
           },
           wikiOnlyStatus,
           {
-            argv: ['commit', '-m', 'wiki: x'],
+            argv: ['commit', '-m', NOW_SUBJECT],
             result: failResult(1, 'hook rejected'),
           },
         ],
         recorded
       );
 
-      const exit = run(['commit', '--label', 'wiki: x'], {
+      const exit = run(['commit'], {
         cwd: sandbox.root,
+        now: NOW,
         runner,
       });
       expect(exit).not.toBe(0);
@@ -684,14 +727,14 @@ describe('wiki chain', () => {
   });
 
   describe('finish', () => {
-    test('on a hand-named wiki/sync-<slug> branch: stays in place, no push or gh call', () => {
+    test('on a hand-named wiki/<slug> branch: stays in place, no push or gh call', () => {
       sandbox = setupSandbox();
       const recorded: RecordedCall[] = [];
       const runner = buildRunner(
         [
           {
             argv: ['rev-parse', '--abbrev-ref', 'HEAD'],
-            result: okResult('wiki/sync-docs-cleanup\n'),
+            result: okResult('wiki/docs-cleanup\n'),
           },
         ],
         recorded
@@ -703,7 +746,7 @@ describe('wiki chain', () => {
       });
       expect(exit).toBe(0);
       expect(stdio.outputs.join('')).toContain(
-        'chain finish: in-place commits remain on wiki/sync-docs-cleanup'
+        'chain finish: in-place commits remain on wiki/docs-cleanup'
       );
       expect(ghCalls(recorded)).toHaveLength(0);
       expect(recorded.find((c) => c.args[0] === 'push')).toBeUndefined();
@@ -738,7 +781,7 @@ describe('wiki chain', () => {
         [
           {
             argv: ['rev-parse', '--abbrev-ref', 'HEAD'],
-            result: okResult('wiki/sync-2026-05-07-bbbbbbb\n'),
+            result: okResult('wiki/2026-05-07-0532\n'),
           },
           {
             argv: ['symbolic-ref', '--short', 'refs/remotes/origin/HEAD'],
@@ -762,12 +805,12 @@ describe('wiki chain', () => {
       });
       expect(exit).toBe(0);
       expect(stdio.outputs.join('')).toContain(
-        'for wiki/sync-2026-05-07-bbbbbbb; auto-merge queued, merge not yet confirmed'
+        'for wiki/2026-05-07-0532; auto-merge queued, merge not yet confirmed'
       );
 
       const ordered = recorded.map((c) => [c.command, ...c.args].join(' '));
       const pushIndex = ordered.findIndex((c) =>
-        c.startsWith('git push -u origin wiki/sync-2026-05-07-bbbbbbb')
+        c.startsWith('git push -u origin wiki/2026-05-07-0532')
       );
       const prCreateIndex = ordered.findIndex((c) =>
         c.startsWith('gh pr create')
@@ -823,7 +866,7 @@ describe('wiki chain', () => {
         [
           {
             argv: ['rev-parse', '--abbrev-ref', 'HEAD'],
-            result: okResult('wiki/sync-2026-05-07-ccccccc\n'),
+            result: okResult('wiki/2026-05-07-0533\n'),
           },
           {
             argv: ['symbolic-ref', '--short', 'refs/remotes/origin/HEAD'],
@@ -840,14 +883,14 @@ describe('wiki chain', () => {
       const exit = run(['finish'], {cwd: sandbox.root, runner});
       expect(exit).toBe(0);
       expect(stdio.outputs.join('')).toContain(
-        'removed empty branch wiki/sync-2026-05-07-ccccccc'
+        'removed empty branch wiki/2026-05-07-0533'
       );
       expect(gitCalls(recorded)).toContainEqual({
         args: ['checkout', 'main'],
         command: 'git',
       });
       expect(gitCalls(recorded)).toContainEqual({
-        args: ['branch', '-D', 'wiki/sync-2026-05-07-ccccccc'],
+        args: ['branch', '-D', 'wiki/2026-05-07-0533'],
         command: 'git',
       });
       expect(ghCalls(recorded)).toHaveLength(0);
@@ -860,7 +903,7 @@ describe('wiki chain', () => {
         [
           {
             argv: ['rev-parse', '--abbrev-ref', 'HEAD'],
-            result: okResult('wiki/sync-2026-05-07-eeeeeee\n'),
+            result: okResult('wiki/2026-05-07-0535\n'),
           },
           {
             argv: ['symbolic-ref', '--short', 'refs/remotes/origin/HEAD'],
@@ -895,7 +938,7 @@ describe('wiki chain', () => {
         [
           {
             argv: ['rev-parse', '--abbrev-ref', 'HEAD'],
-            result: okResult('wiki/sync-2026-05-07-ddddddd\n'),
+            result: okResult('wiki/2026-05-07-0534\n'),
           },
           {
             argv: ['symbolic-ref', '--short', 'refs/remotes/origin/HEAD'],
@@ -910,7 +953,7 @@ describe('wiki chain', () => {
             result: okResult('dddddddddddddddddddddddddddddddddddddddd\n'),
           },
           {
-            argv: ['push', '-u', 'origin', 'wiki/sync-2026-05-07-ddddddd'],
+            argv: ['push', '-u', 'origin', 'wiki/2026-05-07-0534'],
             result: failResult(128, 'remote: rejected'),
           },
         ],
@@ -950,7 +993,7 @@ describe('wiki chain', () => {
         [
           {
             argv: ['rev-parse', '--abbrev-ref', 'HEAD'],
-            result: okResult('wiki/sync-2026-05-07-bbbbbbb\n'),
+            result: okResult('wiki/2026-05-07-0532\n'),
           },
           {
             argv: ['symbolic-ref', '--short', 'refs/remotes/origin/HEAD'],
@@ -970,9 +1013,9 @@ describe('wiki chain', () => {
               'create',
               '--draft',
               '--title',
-              'wiki: maintenance chain through bbbbbbb',
+              'wiki: 2026-05-07 05:32 UTC',
               '--body',
-              'Automated /gaia-wiki full-chain landing (sync + consolidate + lint) via `gaia wiki chain finish`.',
+              'Automated /gaia-wiki landing (sync + consolidate + lint) via `gaia wiki chain finish`.',
             ],
             result: okResult('https://github.com/gaia-react/gaia/pull/712\n'),
           },
@@ -980,7 +1023,7 @@ describe('wiki chain', () => {
             argv: [
               'pr',
               'view',
-              'wiki/sync-2026-05-07-bbbbbbb',
+              'wiki/2026-05-07-0532',
               '--json',
               'state',
               '--jq',
@@ -1017,7 +1060,7 @@ describe('wiki chain', () => {
         [
           {
             argv: ['rev-parse', '--abbrev-ref', 'HEAD'],
-            result: okResult('wiki/sync-2026-05-07-ccccccc\n'),
+            result: okResult('wiki/2026-05-07-0533\n'),
           },
           {
             argv: ['symbolic-ref', '--short', 'refs/remotes/origin/HEAD'],
@@ -1048,7 +1091,7 @@ describe('wiki chain', () => {
         [
           {
             argv: ['rev-parse', '--abbrev-ref', 'HEAD'],
-            result: okResult('wiki/sync-2026-05-07-eeeeeee\n'),
+            result: okResult('wiki/2026-05-07-0535\n'),
           },
           {
             argv: ['symbolic-ref', '--short', 'refs/remotes/origin/HEAD'],
@@ -1106,7 +1149,7 @@ describe('wiki chain', () => {
         [
           {
             argv: ['rev-parse', '--abbrev-ref', 'HEAD'],
-            result: okResult('wiki/sync-2026-05-07-ddddddd\n'),
+            result: okResult('wiki/2026-05-07-0534\n'),
           },
           {
             argv: ['symbolic-ref', '--short', 'refs/remotes/origin/HEAD'],
@@ -1121,7 +1164,7 @@ describe('wiki chain', () => {
             result: okResult('dddddddddddddddddddddddddddddddddddddddd\n'),
           },
           {
-            argv: ['push', '-u', 'origin', 'wiki/sync-2026-05-07-ddddddd'],
+            argv: ['push', '-u', 'origin', 'wiki/2026-05-07-0534'],
             result: failResult(128, 'remote: rejected'),
           },
         ],
@@ -1145,7 +1188,7 @@ describe('wiki chain', () => {
         [
           {
             argv: ['rev-parse', '--abbrev-ref', 'HEAD'],
-            result: okResult('wiki/sync-2026-05-07-1111111\n'),
+            result: okResult('wiki/2026-05-07-1101\n'),
           },
           {
             argv: ['symbolic-ref', '--short', 'refs/remotes/origin/HEAD'],
@@ -1160,7 +1203,7 @@ describe('wiki chain', () => {
             result: okResult('1111111111111111111111111111111111111111\n'),
           },
           {
-            argv: ['push', '-u', 'origin', 'wiki/sync-2026-05-07-1111111'],
+            argv: ['push', '-u', 'origin', 'wiki/2026-05-07-1101'],
             result: okResult(''),
           },
           {
@@ -1169,9 +1212,9 @@ describe('wiki chain', () => {
               'create',
               '--draft',
               '--title',
-              'wiki: maintenance chain through 1111111',
+              'wiki: 2026-05-07 11:01 UTC',
               '--body',
-              'Automated /gaia-wiki full-chain landing (sync + consolidate + lint) via `gaia wiki chain finish`.',
+              'Automated /gaia-wiki landing (sync + consolidate + lint) via `gaia wiki chain finish`.',
             ],
             result: failResult(1, 'gh: create failed'),
           },
@@ -1196,7 +1239,7 @@ describe('wiki chain', () => {
         [
           {
             argv: ['rev-parse', '--abbrev-ref', 'HEAD'],
-            result: okResult('wiki/sync-2026-05-07-2222222\n'),
+            result: okResult('wiki/2026-05-07-1102\n'),
           },
           {
             argv: ['symbolic-ref', '--short', 'refs/remotes/origin/HEAD'],
@@ -1211,7 +1254,7 @@ describe('wiki chain', () => {
             result: okResult('2222222222222222222222222222222222222222\n'),
           },
           {
-            argv: ['push', '-u', 'origin', 'wiki/sync-2026-05-07-2222222'],
+            argv: ['push', '-u', 'origin', 'wiki/2026-05-07-1102'],
             result: okResult(''),
           },
           {
@@ -1220,9 +1263,9 @@ describe('wiki chain', () => {
               'create',
               '--draft',
               '--title',
-              'wiki: maintenance chain through 2222222',
+              'wiki: 2026-05-07 11:02 UTC',
               '--body',
-              'Automated /gaia-wiki full-chain landing (sync + consolidate + lint) via `gaia wiki chain finish`.',
+              'Automated /gaia-wiki landing (sync + consolidate + lint) via `gaia wiki chain finish`.',
             ],
             result: okResult('https://github.com/gaia-react/gaia/pull/712\n'),
           },
@@ -1248,7 +1291,7 @@ describe('wiki chain', () => {
         [
           {
             argv: ['rev-parse', '--abbrev-ref', 'HEAD'],
-            result: okResult('wiki/sync-2026-05-07-3333333\n'),
+            result: okResult('wiki/2026-05-07-1103\n'),
           },
           {
             argv: ['symbolic-ref', '--short', 'refs/remotes/origin/HEAD'],
@@ -1279,7 +1322,7 @@ describe('wiki chain', () => {
         [
           {
             argv: ['rev-parse', '--abbrev-ref', 'HEAD'],
-            result: okResult('wiki/sync-2026-05-07-fffffff\n'),
+            result: okResult('wiki/2026-05-07-0536\n'),
           },
           {
             argv: ['symbolic-ref', '--short', 'refs/remotes/origin/HEAD'],
@@ -1299,9 +1342,9 @@ describe('wiki chain', () => {
               'create',
               '--draft',
               '--title',
-              'wiki: maintenance chain through fffffff',
+              'wiki: 2026-05-07 05:36 UTC',
               '--body',
-              'Automated /gaia-wiki full-chain landing (sync + consolidate + lint) via `gaia wiki chain finish`.',
+              'Automated /gaia-wiki landing (sync + consolidate + lint) via `gaia wiki chain finish`.',
             ],
             result: okResult('https://github.com/gaia-react/gaia/pull/712\n'),
           },
@@ -1315,7 +1358,7 @@ describe('wiki chain', () => {
       });
       expect(exit).toBe(0);
       expect(stdio.outputs.join('')).toContain(
-        'chain finish: opened PR #712 for wiki/sync-2026-05-07-fffffff; auto-merge queued, merge not yet confirmed'
+        'chain finish: opened PR #712 for wiki/2026-05-07-0536; auto-merge queued, merge not yet confirmed'
       );
       const calls = recordCalls(recorded);
       expect(calls).toHaveLength(1);
@@ -1329,7 +1372,7 @@ describe('wiki chain', () => {
         [
           {
             argv: ['rev-parse', '--abbrev-ref', 'HEAD'],
-            result: okResult('wiki/sync-2026-05-07-4444444\n'),
+            result: okResult('wiki/2026-05-07-1104\n'),
           },
           {
             argv: ['symbolic-ref', '--short', 'refs/remotes/origin/HEAD'],
@@ -1349,9 +1392,9 @@ describe('wiki chain', () => {
               'create',
               '--draft',
               '--title',
-              'wiki: maintenance chain through 4444444',
+              'wiki: 2026-05-07 11:04 UTC',
               '--body',
-              'Automated /gaia-wiki full-chain landing (sync + consolidate + lint) via `gaia wiki chain finish`.',
+              'Automated /gaia-wiki landing (sync + consolidate + lint) via `gaia wiki chain finish`.',
             ],
             result: okResult('Creating pull request...\n'),
           },
@@ -1359,7 +1402,7 @@ describe('wiki chain', () => {
             argv: [
               'pr',
               'view',
-              'wiki/sync-2026-05-07-4444444',
+              'wiki/2026-05-07-1104',
               '--json',
               'state',
               '--jq',
@@ -1391,7 +1434,7 @@ describe('wiki chain', () => {
         [
           {
             argv: ['rev-parse', '--abbrev-ref', 'HEAD'],
-            result: okResult('wiki/sync-2026-05-07-5555555\n'),
+            result: okResult('wiki/2026-05-07-1105\n'),
           },
           {
             argv: ['symbolic-ref', '--short', 'refs/remotes/origin/HEAD'],
@@ -1411,9 +1454,9 @@ describe('wiki chain', () => {
               'create',
               '--draft',
               '--title',
-              'wiki: maintenance chain through 5555555',
+              'wiki: 2026-05-07 11:05 UTC',
               '--body',
-              'Automated /gaia-wiki full-chain landing (sync + consolidate + lint) via `gaia wiki chain finish`.',
+              'Automated /gaia-wiki landing (sync + consolidate + lint) via `gaia wiki chain finish`.',
             ],
             result: okResult('https://github.com/o$(touch CANARY)/n/pull/1\n'),
           },
@@ -1421,7 +1464,7 @@ describe('wiki chain', () => {
             argv: [
               'pr',
               'view',
-              'wiki/sync-2026-05-07-5555555',
+              'wiki/2026-05-07-1105',
               '--json',
               'state',
               '--jq',
@@ -1454,7 +1497,7 @@ describe('wiki chain', () => {
         [
           {
             argv: ['rev-parse', '--abbrev-ref', 'HEAD'],
-            result: okResult('wiki/sync-2026-05-07-6666666\n'),
+            result: okResult('wiki/2026-05-07-1106\n'),
           },
           {
             argv: ['symbolic-ref', '--short', 'refs/remotes/origin/HEAD'],
@@ -1474,9 +1517,9 @@ describe('wiki chain', () => {
               'create',
               '--draft',
               '--title',
-              'wiki: maintenance chain through 6666666',
+              'wiki: 2026-05-07 11:06 UTC',
               '--body',
-              'Automated /gaia-wiki full-chain landing (sync + consolidate + lint) via `gaia wiki chain finish`.',
+              'Automated /gaia-wiki landing (sync + consolidate + lint) via `gaia wiki chain finish`.',
             ],
             result: okResult('https://github.com/gaia-react/gaia/issues/415\n'),
           },
@@ -1484,7 +1527,7 @@ describe('wiki chain', () => {
             argv: [
               'pr',
               'view',
-              'wiki/sync-2026-05-07-6666666',
+              'wiki/2026-05-07-1106',
               '--json',
               'state',
               '--jq',
@@ -1561,7 +1604,7 @@ describe('wiki chain', () => {
   });
 
   describe('finish: out-of-scope stamp and statusline cache', () => {
-    const BRANCH = 'wiki/sync-2026-05-07-bbbbbbb';
+    const BRANCH = 'wiki/2026-05-07-0532';
     const HEAD_SHA = 'b'.repeat(40);
 
     const prRecord = (

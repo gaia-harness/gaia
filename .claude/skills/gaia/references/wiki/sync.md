@@ -4,7 +4,7 @@ Dispatched by the `/gaia-wiki` router (`references/wiki.md` → "Sync"). Runs in
 
 ## Playbook
 
-Evaluate every commit between `wiki/.state.json` `last_evaluated_sha` and HEAD. For each, decide whether the wiki needs an update. Edit pages, log decisions, advance state, commit.
+Evaluate every commit between `wiki/.state.json` `last_evaluated_sha` and HEAD. For each, decide whether the wiki needs an update. Edit pages, log decisions, advance state. Sync commits nothing: its edits stay uncommitted, and the router lands them with the later stages' edits in the run's one commit (`gaia wiki chain commit`, `references/wiki.md` → "The run", step 6). Never commit here.
 
 `wiki/.state.json` is written by two workflows: this one writes the sync-related fields (`last_evaluated_sha`, `last_evaluated_at`); the consolidate stage writes the consolidate-related field (`last_consolidated_sha`). Each must preserve fields owned by the other when writing. Everything else that reads it, the statusline nudge included, is a read-only consumer.
 
@@ -14,11 +14,11 @@ Run `.gaia/cli/gaia wiki state --json` and parse the result. Use `head_short`, `
 
 Throughout this playbook, **the evaluation baseline** is the ref Steps 2, 3, and 8 evaluate from. On the normal path it is `last_evaluated_sha`; on the recovery path (below) it is `suggested_base`. Each branch states which.
 
-- If the command exits non-zero with a `state_missing` (or equivalent) reason, this is a fresh project (no prior sync). Treat the first commit as the baseline. Run `.gaia/cli/gaia wiki state-init "$(git rev-list --max-parents=0 HEAD | tail -1)"` to create `wiki/.state.json` with `{version, last_evaluated_sha, last_evaluated_at}`, then commit with `.gaia/cli/gaia wiki chain commit --label "wiki: sync through <short-head>"` (`<short-head>` from `git rev-parse --short HEAD`). Stop, no commits to evaluate yet, and emit no `SYNC_COMPLETE: true` line.
+- If the command exits non-zero with a `state_missing` (or equivalent) reason, this is a fresh project (no prior sync). Treat the first commit as the baseline. Run `.gaia/cli/gaia wiki state-init "$(git rev-list --max-parents=0 HEAD | tail -1)"` to create `wiki/.state.json` with `{version, last_evaluated_sha, last_evaluated_at}`. Stop, no commits to evaluate yet: print `SYNC_PARTIAL: true` on its own line so the router commits the new state file, and emit no `SYNC_COMPLETE: true` line.
 - If `commits_ahead === 0`: skip the evaluation pass (no commits to evaluate), print `Wiki already in sync at {short_sha}.` and then, on its own line, `SYNC_COMPLETE: true`.
 - If `reachable === false`: the recorded `last_evaluated_sha` is not in HEAD's history. GAIA's squash-merge flow orphans it on **every** merge, the evaluated branch SHA is replaced by a new squash commit on `main`, so this is the common case, not just a manual rebase. Recover the un-evaluated window instead of discarding it:
   - **Recovery path, when `suggested_base` is non-empty.** The CLI resolved `suggested_base` to the newest commit on HEAD's **first-parent chain** at or older than `last_evaluated_at`. That can sit before where the orphaned SHA left off, so expect some already-catalogued commits in the window; Step 5's dedup guard skips them. Adopt `suggested_base` as the evaluation baseline and run the normal pass (Steps 2–8) from it, ending with `SYNC_COMPLETE: true`. Do NOT jump to HEAD and do NOT log a `RE_ANCHOR` line, the window is evaluated, not abandoned. Step 6 advances `last_evaluated_sha` to HEAD as usual.
-  - **Fallback path, when `suggested_base` is empty.** Only when the CLI cannot resolve a baseline (no `last_evaluated_at`, or it predates all history) revert to the lossy-but-safe re-anchor: run `.gaia/cli/gaia wiki state-bump last_evaluated_sha "$(git rev-parse HEAD)"`, then `.gaia/cli/gaia wiki log-prepend --sha "$(git rev-parse --short HEAD)" --decision RE_ANCHOR --reason "re-anchored after history rewrite (no recoverable baseline)"`, commit with `.gaia/cli/gaia wiki chain commit --label "wiki: sync through <short-head>"`, and exit. Emit no `SYNC_COMPLETE: true` line, there is no recovered range to evaluate.
+  - **Fallback path, when `suggested_base` is empty.** Only when the CLI cannot resolve a baseline (no `last_evaluated_at`, or it predates all history) revert to the lossy-but-safe re-anchor: run `.gaia/cli/gaia wiki state-bump last_evaluated_sha "$(git rev-parse HEAD)"`, then `.gaia/cli/gaia wiki log-prepend --sha "$(git rev-parse --short HEAD)" --decision RE_ANCHOR --reason "re-anchored after history rewrite (no recoverable baseline)"`, print `SYNC_PARTIAL: true` on its own line so the router commits the re-anchor, and exit. Emit no `SYNC_COMPLETE: true` line, there is no recovered range to evaluate.
 - Otherwise proceed with the evaluation pass on the normal baseline (`last_evaluated_sha`).
 
 ## Step 2: Drift cap check
@@ -109,7 +109,7 @@ The CLI inserts a single canonical line `- <YYYY-MM-DD> <sha> <decision>, <reaso
 
 ## Step 5b: Fabrication guard, verify edits landed on disk
 
-Before advancing state or committing, prove the Step 4 decisions actually wrote to disk. This is the fabrication guard: a run that logged WORTHY decisions in Step 5 and is about to advance state (Step 6) and commit (Step 7) MUST have produced the corresponding page edits. Without this check a model can satisfy the workflow's success signal (summary + log + state) while writing no content, and Step 7 launders that empty sync into a green commit.
+Before advancing state, prove the Step 4 decisions actually wrote to disk. This is the fabrication guard: a run that logged WORTHY decisions in Step 5 and is about to advance state (Step 6) and hand its edits to the router's commit MUST have produced the corresponding page edits. Without this check a model can satisfy the workflow's success signal (summary + log + state) while writing no content, and the router's commit launders that empty sync into a green commit.
 
 `CLAIMED` is the set of page paths Step 4 decided to edit or create for WORTHY commits, the same paths the Step 8 "Pages edited" / "ADRs created" lists report.
 
@@ -128,7 +128,7 @@ for p in "${CLAIMED[@]}"; do
 done
 ```
 
-ABORT on either failure, do NOT run Step 6, do NOT run Step 7, leave the working tree untouched, and print the failure block below **instead of** the Step 8 summary, then stop:
+ABORT on either failure, do NOT run Step 6, leave the working tree untouched, and print the failure block below **instead of** the Step 8 summary, then stop:
 
 1. **No empty WORTHY sync.** `N_worthy >= 1` but `CONTENT_CHANGES` is empty ⇒ edits were decided but none written. Abort.
 2. **Every claimed page exists in the diff.** Any `MISSING:` line from the loop ⇒ that edit was narrated, not written. Abort, naming the missing pages.
@@ -149,7 +149,7 @@ State not advanced. Nothing committed. Re-run sync; if this recurs, the dispatch
 model is narrating edits without performing them, escalate the model.
 ```
 
-The abort emits no `SYNC_COMPLETE: true` line, and the router (`references/wiki.md` → "Full chain") treats the absent line as a known-incomplete state and skips consolidate and lint, so an abort fails the whole chain safely without further wiring.
+The abort emits neither `SYNC_COMPLETE: true` nor `SYNC_PARTIAL: true`, and the router (`references/wiki.md` → "The run") treats the absence of both as a known-incomplete state: it skips consolidate, lint, and the commit, so an abort fails the whole run safely and leaves the uncommitted tree for the maintainer.
 
 ## Step 6: Advance state file
 
@@ -166,17 +166,9 @@ NEW_HEAD_AT=$(date -u +%Y-%m-%dT%H:%M:%SZ)
 
 If `last_consolidated_sha` is absent on the existing state (first sync ever): bootstrap it with `.gaia/cli/gaia wiki state-bump last_consolidated_sha "$NEW_HEAD"`. This seeds `last_consolidated_sha` on the first sync so the field always holds a commit.
 
-## Step 7: Commit
+## Step 7: Leave the edits uncommitted
 
-Run: `.gaia/cli/gaia wiki chain commit --label "wiki: sync through <short-head>"`, with `<short-head>` from `git rev-parse --short HEAD` taken before the commit. The label matches the drift excluder, so the commit never counts as drift.
-
-Exit codes:
-
-- 0, committed, or nothing to commit
-- 1, refused (non-wiki changes, or a protected branch because `chain begin` did not cut one): surface stderr verbatim and stop, with no `SYNC_COMPLETE: true` line
-- 2, unexpected: surface it, do NOT retry, and emit no `SYNC_COMPLETE: true` line
-
-Do NOT inline branch logic, manual `gh pr` calls, or any push narrative. The CLI is authoritative.
+Do not commit. The page edits, the log lines, and the advanced state file stay in the working tree for the router's one commit. Do NOT inline branch logic, a commit of your own, manual `gh pr` calls, or any push narrative: the router and the CLI own all of it.
 
 ## Step 8: Report
 
@@ -198,7 +190,7 @@ Wiki sync complete.
 
 (On the no-op path from Step 1's drift=0 branch: print `Wiki already in sync at {short_sha}.` instead of the block above.)
 
-After the summary block, print `SYNC_COMPLETE: true` on its own line (no leading whitespace). The router (`references/wiki.md` → "Full chain") reads this line to decide whether consolidate and lint run next. Example final summary:
+After the summary block, print `SYNC_COMPLETE: true` on its own line (no leading whitespace). The router (`references/wiki.md` → "The run") reads this line to decide whether consolidate and lint run next. Example final summary:
 
 ```
 Wiki sync complete.
@@ -214,11 +206,13 @@ Wiki sync complete.
 SYNC_COMPLETE: true
 ```
 
-The line is omitted on the state-init path, the fallback re-anchor path (`suggested_base` empty), the Step 2 `Cancel` answer, a non-zero `chain commit` in Step 7, and every entry under Failure modes.
+The line is omitted on the state-init path, the fallback re-anchor path (`suggested_base` empty), the Step 2 `Cancel` answer, and every entry under Failure modes.
+
+`SYNC_PARTIAL: true`, on its own line, is the other signal the router reads: it marks an incomplete sync whose edits the router still commits. It is printed on exactly three paths, the state-init path, the fallback re-anchor path, and a mid-sync interruption, and never alongside `SYNC_COMPLETE: true`. Every other path that omits `SYNC_COMPLETE: true` omits it too, so the router commits nothing there.
 
 ## Failure modes
 
-- **Mid-sync interruption.** If you've edited some pages but not all, do NOT advance state. Commit only the partial wiki edits through `.gaia/cli/gaia wiki chain commit --label "wiki: sync through <short-head>"` and stop, emitting no `SYNC_COMPLETE: true` line. The next sync resumes from the original `last_evaluated_sha`, not the partial one.
-- **Fabrication guard abort (Step 5b).** WORTHY commits were classified but the decided edits are absent from the working tree. State is not advanced and nothing is committed, so the next sync re-evaluates the same range from the unchanged `last_evaluated_sha`. No `SYNC_COMPLETE: true` line is emitted. Distinct from a mid-sync interruption: here the gap is between decided and written, not started and finished.
+- **Mid-sync interruption.** If you've edited some pages but not all, do NOT advance state. Leave the partial wiki edits uncommitted, print `SYNC_PARTIAL: true` on its own line so the router commits them, and stop, emitting no `SYNC_COMPLETE: true` line. The next sync resumes from the original `last_evaluated_sha`, not the partial one.
+- **Fabrication guard abort (Step 5b).** WORTHY commits were classified but the decided edits are absent from the working tree. State is not advanced, and neither signal line is emitted, so the router commits nothing and the next sync re-evaluates the same range from the unchanged `last_evaluated_sha`. Distinct from a mid-sync interruption: here the gap is between decided and written, not started and finished.
 - **Merge conflict on `wiki/log.md`.** Two sync runs on different branches will both prepend to the log. Resolve by keeping both lines, sorted newest-first.
 - **`wiki/.state.json` is corrupted or invalid JSON.** Stop and surface to the user. Do not auto-rewrite, they may have made manual edits worth preserving. No `SYNC_COMPLETE: true` line is emitted.

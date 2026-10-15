@@ -1,12 +1,12 @@
 #!/usr/bin/env bats
 #
-# Doc conformance for the one-command wiki maintenance chain. The router and
+# Doc conformance for the one-command wiki maintenance run. The router and
 # the playbooks are prose instructions Claude executes, so the only
 # deterministic check on them is on their text.
 #
 #   UAT-003: sync ends with a completion line the router branches on, and the
 #            router gates nothing on consolidate.
-#   UAT-014: the router stops the chain when the begin step fails.
+#   UAT-014: the router stops the run when the begin step fails.
 #
 # Each assertion is a helper that takes its file paths as arguments, so the
 # same helper runs on the real file and on a scratch copy that holds the bad
@@ -92,7 +92,7 @@ assert_completion_signal() {
   local sync="$1" router="$2"
   has_fixed "$sync" 'SYNC_COMPLETE: true' || return 1
   section_has_fixed "$router" 'Sync' 'SYNC_COMPLETE: true' || return 1
-  section_has_fixed "$router" 'Full chain' 'SYNC_COMPLETE: true' || return 1
+  section_has_fixed "$router" 'The run' 'SYNC_COMPLETE: true' || return 1
   return 0
 }
 
@@ -112,14 +112,14 @@ assert_completion_signal() {
 
 # --- Conformance beyond the UAT clauses ------------------------------------
 
-assert_sync_commits_only_through_chain() {
+assert_sync_leaves_commit_to_router() {
   has_fixed "$1" 'gaia wiki chain commit' || return 1
   lacks_regex "$1" 'git commit|git -C [^ ]+ commit|commit -m' || return 1
   return 0
 }
 
-@test "sync commits only through the chain commit command" {
-  run assert_sync_commits_only_through_chain "$SYNC"
+@test "sync runs no commit of its own; the router lands it through the chain commit command" {
+  run assert_sync_leaves_commit_to_router "$SYNC"
   echo "$output"
   [ "$status" -eq 0 ]
 }
@@ -128,20 +128,20 @@ assert_sync_commits_only_through_chain() {
   local scratch
   scratch="$(scratch_copy "$SYNC" sync-bare-commit.md)"
   printf 'git commit -m "wiki: sync"\n' >>"$scratch"
-  run assert_sync_commits_only_through_chain "$scratch"
+  run assert_sync_leaves_commit_to_router "$scratch"
   [ "$status" -ne 0 ]
   [[ "$output" == *"git commit"* ]]
 }
 
-# --- UAT-014: the chain stops when begin fails -------------------------------
+# --- UAT-014: the run stops when begin fails ---------------------------------
 
 assert_router_stops_on_failed_begin() {
-  section_has_fixed "$1" 'Full chain' 'If `chain begin` exits non-zero, stop the chain:' || return 1
-  section_lacks_regex "$1" 'Full chain' 'proceed regardless' || return 1
+  section_has_fixed "$1" 'The run' 'If `chain begin` exits non-zero, stop the run:' || return 1
+  section_lacks_regex "$1" 'The run' 'proceed regardless' || return 1
   return 0
 }
 
-@test "UAT-014: the router stops the chain when the begin step fails" {
+@test "UAT-014: the router stops the run when the begin step fails" {
   run assert_router_stops_on_failed_begin "$ROUTER"
   echo "$output"
   [ "$status" -eq 0 ]
@@ -149,8 +149,8 @@ assert_router_stops_on_failed_begin() {
 
 @test "UAT-014 can fail: a router that proceeds regardless is flagged" {
   local scratch="$BATS_TEST_TMPDIR/router-proceeds.md"
-  sed 's/If `chain begin` exits non-zero, stop the chain:/Proceed regardless of which./' "$ROUTER" >"$scratch"
+  sed 's/If `chain begin` exits non-zero, stop the run:/Proceed regardless of which./' "$ROUTER" >"$scratch"
   run assert_router_stops_on_failed_begin "$scratch"
   [ "$status" -ne 0 ]
-  [[ "$output" == *"stop the chain"* ]]
+  [[ "$output" == *"stop the run"* ]]
 }

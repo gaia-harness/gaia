@@ -164,14 +164,11 @@ add_commit() {
   git -C "$REPOSITORY_FIXTURE" commit --allow-empty --quiet -m "$1"
 }
 
-# The four bookkeeping subjects the drift count must not include.
+# The bookkeeping subject the drift count must not include: the landing
+# commit as `gaia wiki chain commit` writes it, and as its squash lands on main.
 add_bookkeeping_commits() {
-  local sha
-  sha=$(git -C "$REPOSITORY_FIXTURE" rev-parse --short HEAD)
-  add_commit "wiki: sync through $sha"
-  add_commit "wiki: maintenance chain through $sha"
-  add_commit "wiki: consolidate through $sha"
-  add_commit "wiki: lint through $sha"
+  add_commit "wiki: 2026-10-15 05:32 UTC"
+  add_commit "wiki: 2026-10-15 05:32 UTC (#12)"
 }
 
 # Write wiki/.state.json naming <sha> (full) and <evaluated_at>.
@@ -211,7 +208,7 @@ make_repo() {
   if [ "${1:-}" != "--no-state" ]; then
     write_state "$(git -C "$REPOSITORY_FIXTURE" rev-parse HEAD)"
     git -C "$REPOSITORY_FIXTURE" add wiki/.state.json
-    git -C "$REPOSITORY_FIXTURE" commit --quiet -m "wiki: sync through $(git -C "$REPOSITORY_FIXTURE" rev-parse --short HEAD)"
+    git -C "$REPOSITORY_FIXTURE" commit --quiet -m "wiki: 2026-10-15 05:32 UTC"
   fi
   git -C "$REPOSITORY_FIXTURE" remote add origin "$ORIGIN_DIRECTORY"
   git -C "$REPOSITORY_FIXTURE" push --quiet origin main
@@ -219,7 +216,7 @@ make_repo() {
   REPOSITORY_FIXTURE=$(cd "$REPOSITORY_FIXTURE" && pwd -P)
 }
 
-# add_drift <commit_count>: commit_count non-bookkeeping commits, with the four bookkeeping subjects
+# add_drift <commit_count>: commit_count non-bookkeeping commits, with the bookkeeping subjects
 # interleaved so a count that failed to filter them would overshoot.
 add_drift() {
   local commit_count="$1" i
@@ -285,8 +282,7 @@ run_chain_landing() {
       set -e
       cd "$1"
       "$2" wiki chain begin $3
-      short_head=$(git rev-parse --short HEAD)
-      "$2" wiki chain commit --label "wiki: sync through $short_head"
+      "$2" wiki chain commit
       "$2" wiki chain finish $3
     ' _ "$directory" "$REAL_GAIA" "$mode"
 }
@@ -303,7 +299,7 @@ stage_state_advance() {
 @test "19 non-bookkeeping commits behind: wikiDriftCount is 19 and no nudge renders" {
   make_repo
   add_drift 19
-  [ "$(git -C "$REPOSITORY_FIXTURE" log --format=%s | grep -c '^wiki: ')" -ge 5 ]
+  [ "$(git -C "$REPOSITORY_FIXTURE" log --format=%s | grep -c '^wiki: ')" -ge 3 ]
   refresh
   [ "$(cached_wiki_count)" = "19" ]
   render_fix
@@ -455,7 +451,7 @@ stage_state_advance() {
 
   write_state "$(git -C "$REPOSITORY_FIXTURE" rev-parse HEAD)"
   git -C "$REPOSITORY_FIXTURE" add wiki/.state.json
-  git -C "$REPOSITORY_FIXTURE" commit --quiet -m "wiki: sync through $(git -C "$REPOSITORY_FIXTURE" rev-parse --short HEAD)"
+  git -C "$REPOSITORY_FIXTURE" commit --quiet -m "wiki: 2026-10-15 05:32 UTC"
   refresh
   [ "$(cached_wiki_count)" -lt 20 ]
   render_fix
@@ -493,7 +489,7 @@ refresh_within_ttl() {
 
   write_state "$(git -C "$REPOSITORY_FIXTURE" rev-parse HEAD)"
   git -C "$REPOSITORY_FIXTURE" add wiki/.state.json
-  git -C "$REPOSITORY_FIXTURE" commit --quiet -m "wiki: sync through $(git -C "$REPOSITORY_FIXTURE" rev-parse --short HEAD)"
+  git -C "$REPOSITORY_FIXTURE" commit --quiet -m "wiki: 2026-10-15 05:32 UTC"
   refresh_within_ttl
   [ "$(cached_wiki_count)" -lt 20 ]
   render_fix
@@ -556,11 +552,11 @@ assert_nudge_cleared_without_refresher() {
   [ "$status" -eq 0 ]
   grep -qF -- "auto-merge queued, merge not yet confirmed" <<<"$output"
   grep -qF -- "statuses/" "$GH_LOG"
-  git -C "$REPOSITORY_FIXTURE" rev-parse --abbrev-ref HEAD | grep -q '^wiki/sync-'
+  git -C "$REPOSITORY_FIXTURE" rev-parse --abbrev-ref HEAD | grep -qE '^wiki/[0-9]{4}-[0-9]{2}-[0-9]{2}-[0-9]{4}$'
   [ "$(cached_wiki_count)" = "20" ]
 
   run_lifecycle_cleanup "$REPOSITORY_FIXTURE"
-  git -C "$REPOSITORY_FIXTURE" log -1 --format=%s | grep -q '^wiki: sync through '
+  git -C "$REPOSITORY_FIXTURE" log -1 --format=%s | grep -qE '^wiki: [0-9]{4}-[0-9]{2}-[0-9]{2} [0-9]{2}:[0-9]{2} UTC$'
   run_refresh_nudge "$REPOSITORY_FIXTURE"
   grep -qF -- "chain refresh-nudge: wiki drift 0" <<<"$output"
   assert_nudge_cleared_without_refresher "$REPOSITORY_FIXTURE" "$landed_sha"
@@ -573,8 +569,8 @@ assert_nudge_cleared_without_refresher() {
   landed_sha=$(git -C "$REPOSITORY_FIXTURE" rev-parse HEAD)
   run_chain_landing "$REPOSITORY_FIXTURE"
   [ "$status" -eq 0 ]
-  grep -qF -- "chain commit: wiki: sync through" <<<"$output"
-  git -C "$REPOSITORY_FIXTURE" log -1 --format=%s | grep -q '^wiki: sync through '
+  grep -qE -- "chain commit: wiki: [0-9]{4}-[0-9]{2}-[0-9]{2} [0-9]{2}:[0-9]{2} UTC" <<<"$output"
+  git -C "$REPOSITORY_FIXTURE" log -1 --format=%s | grep -qE '^wiki: [0-9]{4}-[0-9]{2}-[0-9]{2} [0-9]{2}:[0-9]{2} UTC$'
   run_refresh_nudge "$REPOSITORY_FIXTURE"
   assert_nudge_cleared_without_refresher "$REPOSITORY_FIXTURE" "$landed_sha"
 }
@@ -586,7 +582,7 @@ assert_nudge_cleared_without_refresher() {
   [ "$status" -eq 0 ]
   grep -qF -- "auto-merge queued, merge not yet confirmed" <<<"$output"
   [ "$(cached_wiki_count)" = "20" ]
-  git -C "$REPOSITORY_FIXTURE" rev-parse --abbrev-ref HEAD | grep -q '^wiki/sync-'
+  git -C "$REPOSITORY_FIXTURE" rev-parse --abbrev-ref HEAD | grep -qE '^wiki/[0-9]{4}-[0-9]{2}-[0-9]{2}-[0-9]{4}$'
   [ "$(git -C "$ORIGIN_DIRECTORY" rev-parse main)" != "$(git -C "$REPOSITORY_FIXTURE" rev-parse HEAD)" ]
 }
 
@@ -633,7 +629,7 @@ build_trailing_main_and_current_worktree() {
   git -C "$REPOSITORY_FIXTURE" worktree add --quiet "${REPOSITORY_FIXTURE}-wt" -b feature
   stage_state_advance "${REPOSITORY_FIXTURE}-wt"
   git -C "${REPOSITORY_FIXTURE}-wt" add wiki/.state.json
-  git -C "${REPOSITORY_FIXTURE}-wt" commit --quiet -m "wiki: sync through $(git -C "${REPOSITORY_FIXTURE}-wt" rev-parse --short HEAD)"
+  git -C "${REPOSITORY_FIXTURE}-wt" commit --quiet -m "wiki: 2026-10-15 05:32 UTC"
   [ "$(cli_drift_count "${REPOSITORY_FIXTURE}-wt")" = "0" ]
   [ "$(cli_drift_count "$REPOSITORY_FIXTURE")" = "25" ]
 }
@@ -681,7 +677,7 @@ assert_count_matches_cli() {
   make_repo --no-state
   write_state 0000000000000000000000000000000000000000
   git -C "$REPOSITORY_FIXTURE" add wiki/.state.json
-  git -C "$REPOSITORY_FIXTURE" commit --quiet -m "wiki: sync through 0000000"
+  git -C "$REPOSITORY_FIXTURE" commit --quiet -m "wiki: 2026-10-15 05:32 UTC"
   add_drift 5
   assert_count_matches_cli 6
   render_fix
@@ -692,7 +688,7 @@ assert_count_matches_cli() {
   make_repo --no-state
   printf '{}\n' > "$REPOSITORY_FIXTURE/wiki/.state.json"
   git -C "$REPOSITORY_FIXTURE" add wiki/.state.json
-  git -C "$REPOSITORY_FIXTURE" commit --quiet -m "wiki: lint through 0000000"
+  git -C "$REPOSITORY_FIXTURE" commit --quiet -m "wiki: 2026-10-15 05:32 UTC"
   add_drift 24
   assert_count_matches_cli 25
   render_fix
@@ -708,7 +704,7 @@ assert_count_matches_cli() {
   write_state aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa 2026-02-01T00:00:00Z
   git -C "$REPOSITORY_FIXTURE" add wiki/.state.json
   GIT_AUTHOR_DATE="2026-01-16T00:00:00Z" GIT_COMMITTER_DATE="2026-01-16T00:00:00Z" \
-    git -C "$REPOSITORY_FIXTURE" commit --quiet -m "wiki: sync through aaaaaaa"
+    git -C "$REPOSITORY_FIXTURE" commit --quiet -m "wiki: 2026-10-15 05:32 UTC"
   for i in $(seq 1 20); do
     GIT_AUTHOR_DATE="2026-03-01T00:00:00Z" GIT_COMMITTER_DATE="2026-03-01T00:00:00Z" add_commit "feat: late $i"
   done

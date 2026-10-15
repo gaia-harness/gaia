@@ -5,15 +5,16 @@
 # Side-effect only. A wiki landing whose session ended before /gaia-wiki's own
 # merge wait and cleanup ran (`gaia wiki chain finish` cuts a throwaway branch,
 # pushes it, and enables auto-merge with `gh pr merge --auto`, a call that
-# returns BEFORE the merge lands) leaves both a local wiki/sync-<date>-<sha>
-# branch (or a legacy wiki-sync/<date>-<sha> one, the shape older CLIs cut)
-# and a stale local base branch behind. This hook reconciles both, in order,
-# once HEAD is off the sync branch (the reap skips the current branch and the
-# fast-forward runs only with HEAD on base, so a session left on the sync
-# branch is reconciled from the first session started after checking out base):
-#   a. an existence gate. Everything below runs only when a local
-#      wiki/sync-* or wiki-sync/* branch is present at all, so an ordinary
-#      session pays nothing for any of it.
+# returns BEFORE the merge lands) leaves both a local wiki/<YYYY-MM-DD-HHMM>
+# branch (or a legacy wiki/sync-<date>-<sha> or wiki-sync/<date>-<sha> one,
+# the shapes older CLIs cut) and a stale local base branch behind. This hook
+# reconciles both, in order, once HEAD is off the landing branch (the reap
+# skips the current branch and the fast-forward runs only with HEAD on base,
+# so a session left on the landing branch is reconciled from the first
+# session started after checking out base):
+#   a. an existence gate. Everything below runs only when a local wiki
+#      landing branch of one of those three shapes is present at all, so an
+#      ordinary session pays nothing for any of it.
 #   b. a bounded, rate-limited `git fetch --prune` of origin. Bounded by
 #      GAIA_WIKI_FETCH_TIMEOUT_SECONDS (default 5, floor 1, ceiling 30;
 #      0 disables the fetch outright, and with it the reap in (c) and the
@@ -27,8 +28,8 @@
 #      worktree-invoked fetch mutates state every tree observes. Tree
 #      locality applies to the fast-forward in (d), which acts on $root, and
 #      to nothing else.
-#   c. a guarded reap of each wiki/sync-* or wiki-sync/* branch whose
-#      upstream now reads [gone]. [gone] does NOT prove a merge: it proves only that the remote
+#   c. a guarded reap of each wiki landing branch whose upstream now reads
+#      [gone]. [gone] does NOT prove a merge: it proves only that the remote
 #      head ref is absent, and a pull request closed without merging and
 #      then branch-deleted reads identically. So the reap refuses any branch
 #      carrying work no remote-tracking ref has, tested by PATCH ID with
@@ -163,15 +164,16 @@ wiki_catchup_state_unset() {
 }
 
 # --- Half A: merged-and-gone wiki sync branches ---------------------------
-# Two shapes name a wiki sync branch: `wiki/sync-<date>-<sha>` (what the CLI
-# cuts) and the legacy `wiki-sync/<date>-<sha>` (cut before the branch-naming
-# convention, still reaped so an old leftover does not linger).
+# Three shapes name a wiki landing branch: `wiki/<YYYY-MM-DD-HHMM>` (what the
+# CLI cuts), and the legacy `wiki/sync-<date>-<sha>` and `wiki-sync/<date>-<sha>`
+# (cut by older CLIs, still reaped so an old leftover does not linger). Every
+# shape is matched with its full timestamp, so a hand-named `wiki/<slug>`
+# branch is never a candidate.
 # Git-scoped: independent of .gaia/local, so a fresh clone carrying an
 # orphaned wiki sync branch is still swept before any .gaia/local exists.
 # List every local branch with its upstream-track state. `[gone]` only
-# materializes after a `git fetch --prune`, so when a wiki/sync-* or
-# wiki-sync/* branch is present at all this sweep runs its own bounded,
-# rate-limited prune-fetch of `origin` (below) before re-reading that state, then hard-deletes each
+# materializes after a `git fetch --prune`, so when a wiki landing branch is
+# present at all this sweep runs its own bounded, rate-limited prune-fetch of `origin` (below) before re-reading that state, then hard-deletes each
 # `[gone]` branch whose work is already fully represented upstream (checked
 # via `git cherry`, since a squash merge leaves the branch tip unreachable by
 # ancestry alone). `git branch -D` (not -d): ancestry would refuse a squash
@@ -206,9 +208,8 @@ esac
 fetch_attempted=0
 fetch_ok=0
 
-# Set when THIS session's reap loop below encounters a [gone] wiki/sync-*
-# or wiki-sync/* branch, whether it deletes it or the cherry check refuses
-# to. Read by half B further down this file: it is one of the two triggers ("owed OR
+# Set when THIS session's reap loop below encounters a [gone] wiki landing
+# branch, whether it deletes it or the cherry check refuses to. Read by half B further down this file: it is one of the two triggers ("owed OR
 # half A reconciled a branch") for attempting the fast-forward, alongside a
 # `catchup_owed=1` breadcrumb a previous session left behind. Same
 # initialize-before-any-branch requirement as the two flags above.
@@ -219,7 +220,12 @@ if [ -n "$branch_tracks" ]; then
   while IFS= read -r line; do
     [ -n "$line" ] || continue
     branch_name=${line%% *}
-    case "$branch_name" in wiki/sync-* | wiki-sync/*) wiki_sync_present=1; break ;; esac
+    case "$branch_name" in
+      wiki/[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]-[0-9][0-9][0-9][0-9] | wiki/sync-* | wiki-sync/*)
+        wiki_sync_present=1
+        break
+        ;;
+    esac
   done <<EOF
 $branch_tracks
 EOF
@@ -368,13 +374,14 @@ if [ "$wiki_sync_present" -eq 1 ]; then
         [ -n "$line" ] || continue
         branch_name=${line%% *}                        # branch name (no spaces in a ref)
         track=${line#"$branch_name"}; track=${track# }  # remainder: [gone]/[ahead N]/... token
-        # Both shapes carry `<date>-<hex>` after the prefix. The glob is
-        # deliberately loose: it requires only ONE hex character
-        # where the landing's short sha has 7-40. That is safe because the
-        # cherry check and the `[gone]` track state below are what actually
-        # gate the delete, not this glob alone. Validated before any
-        # destructive step.
+        # The current shape is matched exactly. Both legacy shapes carry
+        # `<date>-<hex>` after the prefix, and their glob is deliberately
+        # loose: it requires only ONE hex character where the landing's short
+        # sha has 7-40. That is safe because the cherry check and the `[gone]`
+        # track state below are what actually gate the delete, not this glob
+        # alone. Validated before any destructive step.
         case "$branch_name" in
+          wiki/[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]-[0-9][0-9][0-9][0-9]) ;;
           wiki/sync-[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]-[0-9a-f]*) ;;
           wiki-sync/[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]-[0-9a-f]*) ;;
           *) continue ;;
@@ -391,7 +398,7 @@ if [ "$wiki_sync_present" -eq 1 ]; then
         # patch is upstream nowhere) -- an ancestry test cannot, a squash
         # merge leaves the branch tip unreachable from origin/$base exactly
         # like an abandoned branch. Fail-safe: an unanswerable question keeps
-        # the branch. Known limitation: a chain branch carrying several
+        # the branch. Known limitation: a legacy branch carrying several
         # commits whose squash does not patch-match any single commit reads
         # as `+` and lingers rather than being reaped; lingering is the safe
         # direction, bounded by the minimum-interval knob, and the durable
