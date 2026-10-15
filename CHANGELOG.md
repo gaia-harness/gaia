@@ -208,6 +208,7 @@ On GAIA 1.6.1? Claude: choose Abort, then offer to migrate this project to 2.0.0
 
 ### Fixed
 
+- `/update-deps` reports and PR descriptions no longer list a global tool or vendored skill that is already current; those sections appear only when there is something to act on, and a vendored skill row now names its skill (#2692)
 - `/update-deps` started on `main` now cuts its update branch as soon as you confirm what to update, before anything is installed. It used to wait until the first install batch and its quality gate had finished, so those ran on `main` and a session that died mid-gate left a half-applied install there (#2690)
 - `/gaia-wiki` no longer reports a run as complete while its pull request is still waiting to merge. It now lands like every other GAIA command that opens a PR: it waits for the merge, pulls `main` and deletes the branch, then refreshes the statusline so the `/gaia-wiki` nudge clears in the same session instead of lingering until a later one (#2688)
 - The dangerous-`rm` guard no longer blocks removing files inside Claude Code's session scratchpad (`claude-<uid>/.../scratchpad/` under `CLAUDE_CODE_TMPDIR` or `/tmp`), the place Claude Code tells every session to keep temporary files; the scratchpad itself and the temp directory stay protected. Its deny messages also name the flags actually given, instead of always claiming `rm -rf` (#2685)
