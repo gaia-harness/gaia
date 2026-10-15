@@ -49,7 +49,7 @@ If the detection does not fire, fall through to the existing `## Pre-flight: Bra
 git branch --show-current
 ```
 
-If the current branch is `main` or `master` **and not running in CI**, set a flag (`SHOULD_CREATE_BRANCH=true`) but **do not create the branch yet**, branch creation is deferred until the run has confirmed work: after Phase 1 when the apply set is non-empty or the security plan has a resolution to apply, or after Phase 5b lands on a refresh-only run (see Branch creation). Creating a branch when there is nothing to update pollutes the branch list.
+If the current branch is `main` or `master` **and not running in CI**, set a flag (`SHOULD_CREATE_BRANCH=true`) but **do not create the branch yet**, branch creation is deferred until the run has confirmed work: right after the Phase 1 decision when the apply set is non-empty or the security plan has a resolution to apply, before anything is installed, or after Phase 5b lands on a refresh-only run (see Branch creation). Creating a branch when there is nothing to update pollutes the branch list.
 
 In CI (`CI=true`, set by GitHub Actions, GitLab CI, CircleCI, and most CI providers), skip branch creation, the workflow owns branch management and pre-creates the appropriate branch before this skill runs.
 
@@ -333,6 +333,34 @@ resolution to apply (see Branch creation). Phase 0 does not run, so Phase 6
 runs only after a landed refresh or a landed security override, and treats
 every key in the `overrides:` map as retained.
 
+## Branch creation (after discovery)
+
+Phase 1 already exited if the human cancelled, or declined the transitive
+refresh with nothing else to apply, so reaching here means the apply set is
+non-empty, the security plan has a resolution to apply, or the run is
+refresh-only. When the apply set is non-empty or the security plan has at least
+one resolution to apply, run this section right after the decision, before the
+Override audit + Wave A agent, so no install, lockfile rewrite, or quality gate
+runs on `main`/`master`. A security-only run (an empty apply set, or
+`--security` with no chain-head bump) then goes on to the security phase even
+when Phase 5b reports `Nothing moved` or `Reverted (<reason>)`. On a
+refresh-only run with nothing in the security plan, run it after Phase 5b
+returns, and only when it reports `landed`; on `Nothing moved` or
+`Reverted (<reason>)`, skip this section and every phase up to Phase 7 and go
+straight to the report (no branch exists, and Phase 8's nothing-updated rule
+skips publish):
+
+- Updates were confirmed. **Immediately bust the update-check cache** so the statusline reflects the post-update state on the next session regardless of whether this run completes. Use the Write tool to overwrite `.gaia/local/cache/shared/update-check.json`: read the existing cache first, then write it back unchanged **except** `outdatedCount` set to `0` and `checkedAt` set to the current Unix timestamp. **Carry every other field across verbatim, named here or not.** The cache holds fields this step has no reason to know about, and several are observations nothing later can reconstruct (`cleanseMemoryBaseline` and the two `codify*` counts), so dropping one silently disarms the nudge it belongs to instead of causing a visible error. If the cache file does not exist, skip this step. (Snoozed groups are already excluded by the ledger on the next real check.)
+
+- If `SHOULD_CREATE_BRANCH=true`, create the branch now and **remember that you created it** (this determines publish behavior in Phase 8):
+
+```bash
+git checkout -b "$(bash .gaia/scripts/branch-name-lib.sh name deps)"
+# CREATED_NEW_BRANCH=true, used in Phase 8
+```
+
+Otherwise (`SHOULD_CREATE_BRANCH=false`), proceed on the current branch and **remember that you did NOT create a new branch**.
+
 ## Override audit + Wave A: Haiku agent
 
 Spawn a **Haiku agent** (`model: "haiku"`) to run the override audit and the
@@ -355,33 +383,6 @@ and the reverted set carried a security chain-head bump, that advisory also
 falls through to its next candidate; with none left it is reported still open
 with `wave reverted (Wave A)` or `wave reverted (<group>)`, not `quality gate
 failed`.
-
-## Branch creation (after discovery)
-
-Phase 1 already exited if the human cancelled, or declined the transitive
-refresh with nothing else to apply, so reaching here means the apply set is
-non-empty, the security plan has a resolution to apply, or the run is
-refresh-only. With a non-empty apply set, run this section after the Haiku
-agent returns. When the apply set is empty but the security plan has at least
-one resolution to apply (a security-only run, or `--security` with no
-chain-head bump), run it right after the decision, and go on to the security
-phase even when Phase 5b reports `Nothing moved` or `Reverted (<reason>)`. On a
-refresh-only run with nothing in the security plan, run it after Phase 5b
-returns, and only when it reports `landed`; on `Nothing moved` or
-`Reverted (<reason>)`, skip this section and every phase up to Phase 7 and go
-straight to the report (no branch exists, and Phase 8's nothing-updated rule
-skips publish):
-
-- Updates were confirmed. **Immediately bust the update-check cache** so the statusline reflects the post-update state on the next session regardless of whether this run completes. Use the Write tool to overwrite `.gaia/local/cache/shared/update-check.json`: read the existing cache first, then write it back unchanged **except** `outdatedCount` set to `0` and `checkedAt` set to the current Unix timestamp. **Carry every other field across verbatim, named here or not.** The cache holds fields this step has no reason to know about, and several are observations nothing later can reconstruct (`cleanseMemoryBaseline` and the two `codify*` counts), so dropping one silently disarms the nudge it belongs to instead of causing a visible error. If the cache file does not exist, skip this step. (Snoozed groups are already excluded by the ledger on the next real check.)
-
-- If `SHOULD_CREATE_BRANCH=true`, create the branch now and **remember that you created it** (this determines publish behavior in Phase 8):
-
-```bash
-git checkout -b "$(bash .gaia/scripts/branch-name-lib.sh name deps)"
-# CREATED_NEW_BRANCH=true, used in Phase 8
-```
-
-Otherwise (`SHOULD_CREATE_BRANCH=false`), proceed on the current branch and **remember that you did NOT create a new branch**.
 
 ## Phase 5: Wave B (per-group major bumps)
 
