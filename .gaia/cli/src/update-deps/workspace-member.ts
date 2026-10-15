@@ -4,15 +4,24 @@ import path from 'node:path';
 
 export const CLI_WORKSPACE_MEMBER = '.gaia/cli';
 
+/** The parsed root pnpm-workspace.yaml, or undefined when unreadable. */
+export const readWorkspaceYaml = (repoRoot: string): unknown => {
+  try {
+    return load(
+      readFileSync(path.join(repoRoot, 'pnpm-workspace.yaml'), 'utf8')
+    );
+  } catch {
+    return undefined;
+  }
+};
+
 /**
  * Returns the CLI workspace member path when the root pnpm-workspace.yaml lists
  * it and its manifest exists, else null. Never throws.
  */
 export const readCliWorkspaceMember = (repoRoot: string): null | string => {
   try {
-    const parsed: unknown = load(
-      readFileSync(path.join(repoRoot, 'pnpm-workspace.yaml'), 'utf8')
-    );
+    const parsed = readWorkspaceYaml(repoRoot);
     if (typeof parsed !== 'object' || parsed === null) return null;
     const {packages} = parsed as {packages?: unknown};
     if (!Array.isArray(packages) || !packages.includes(CLI_WORKSPACE_MEMBER))

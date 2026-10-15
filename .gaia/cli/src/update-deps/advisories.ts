@@ -5,9 +5,11 @@ import semver from 'semver';
  * The one place advisory data enters GAIA: `check-updates.sh` (with
  * `--count-only`), the /update-deps skill, and its report all read the payload
  * this writes, never gh or pnpm output directly. Dependabot alerts are the
- * primary source and `pnpm audit` the fallback. Exit 0 whenever a payload was
- * written, `source: "unavailable"` included; callers read the payload, not the
- * exit status, to learn whether a source answered.
+ * primary source of advisory rows and `pnpm audit` the fallback; the count
+ * covers both, since Dependabot's dependency graph can miss the lockfile's
+ * transitive packages. Exit 0 whenever a payload was written,
+ * `source: "unavailable"` included; callers read the payload, not the exit
+ * status, to learn whether a source answered.
  */
 import {mkdirSync, readFileSync} from 'node:fs';
 import path from 'node:path';
@@ -48,18 +50,18 @@ import type {GhRunner, OriginReader} from './advisory-sources.js';
 import {isRangeString, toSemverRange} from './advisory-validate.js';
 import {fetchVersionTimes, readMinimumReleaseAge} from './run.js';
 import type {PnpmRunner} from './run.js';
-import {readCliWorkspaceMember} from './workspace-member.js';
+import {readCliWorkspaceMember, readWorkspaceYaml} from './workspace-member.js';
 
 const HELP_TEXT = `Usage: gaia update-deps advisories --emit <path> [--count-only] [--updates <path>] [--no-alerts]
 
   Fetch open dependency security advisories (Dependabot alerts first,
   \`pnpm audit\` as the fallback), keep only validated fields, rank them, and
-  write one JSON payload to <path>. Exits 0 whenever the payload was written,
-  including when no source answered (source "unavailable").
+  write one JSON payload to <path>. The count covers both sources. Exits 0
+  whenever the payload was written, including when no source answered
+  (source "unavailable").
 
   --emit <path>      Required. JSON file to write atomically.
-  --count-only       Count only: no advisory rows, no registry lookups, and
-                     in alerts mode no \`pnpm audit\`.
+  --count-only       Count only: no advisory rows and no registry lookups.
   --updates <path>   An \`update-deps run --emit-updates\` payload, used to
                      offer chain-head bumps as candidates.
   --no-alerts        Skip Dependabot alerts (as in CI) and use \`pnpm audit\`.
@@ -210,6 +212,21 @@ const readBaselineIds = (repoRoot: string): ReadonlySet<number> => {
 };
 
 /**
+ * The GHSA ids `auditConfig.ignoreGhsas` in pnpm-workspace.yaml accepts.
+ * `pnpm audit` drops them itself; Dependabot never reads the file, so an alert
+ * on one is dropped against this set.
+ */
+const readAcceptedGhsas = (repoRoot: string): ReadonlySet<string> => {
+  const parsed = readWorkspaceYaml(repoRoot);
+  const auditConfig = isRecord(parsed) ? parsed.auditConfig : undefined;
+  const ignored = isRecord(auditConfig) ? auditConfig.ignoreGhsas : undefined;
+
+  return new Set(
+    asArray(ignored).filter((ghsa): ghsa is string => typeof ghsa === 'string')
+  );
+};
+
+/**
  * Whether /update-deps owns a manifest: the root manifests, a path matching a
  * registered package's `dependencyManifests` globs, or the package manifest of
  * the CLI workspace member when the root workspace lists one. An adopter tree
@@ -262,7 +279,6 @@ const readAlerts = async (context: RunContext): Promise<AlertsOutcome> => {
     cwd: context.repoRoot,
     env: context.env,
     ghRunner: context.options.ghRunner,
-    includeDismissed: !context.args.countOnly,
     owner: repository.owner,
     repo: repository.repo,
   });
@@ -455,9 +471,13 @@ const buildPayload = async (
   offers: UpdateOffers
 ): Promise<AdvisoriesPayload> => {
   const {countOnly} = context.args;
-  const alerts = await readAlerts(context);
-  const runAudit = !countOnly || !alerts.ok;
-  const audit: AuditOutcome = runAudit ? readAudit(context) : {ok: false};
+  // The alert requests start first so their gh processes run while the
+  // synchronous audit blocks. The audit runs in count-only mode too:
+  // Dependabot's dependency graph can miss the lockfile's transitive
+  // packages, so the count unions its keys.
+  const pendingAlerts = readAlerts(context);
+  const audit = readAudit(context);
+  const alerts = await pendingAlerts;
   const acknowledged = readBaselineIds(context.repoRoot);
   const auditRecords = audit.ok ? audit.records : [];
   const rejectedCount =
@@ -485,21 +505,27 @@ const buildPayload = async (
   }
 
   const source = alerts.ok ? 'dependabot' : 'pnpm-audit';
-  const base =
-    alerts.ok ?
-      joinAuditToAlerts(alerts.open, auditRecords)
-    : advisoriesFromAudit(auditRecords);
-  const withBaseline = base.map((advisory) =>
-    applyBaseline(advisory, acknowledged)
+  const dismissedGhsas = alerts.ok ? alerts.dismissedGhsas : [];
+  const excluded: ReadonlySet<string> = new Set([
+    ...readAcceptedGhsas(context.repoRoot),
+    ...dismissedGhsas,
+  ]);
+  const countable = (advisories: readonly Advisory[]): Advisory[] =>
+    advisories
+      .filter((advisory) => !excluded.has(advisory.key))
+      .map((advisory) => applyBaseline(advisory, acknowledged));
+  const alertAdvisories = countable(
+    alerts.ok ? joinAuditToAlerts(alerts.open, auditRecords) : []
   );
+  const auditAdvisories = countable(advisoriesFromAudit(auditRecords));
+  const rows = alerts.ok ? alertAdvisories : auditAdvisories;
   const reasons: AdvisoryReasonToken[] = alerts.ok ? [] : [alerts.reason];
 
   return {
     ...common,
-    advisories:
-      countOnly ? [] : rankAdvisories(enrich(withBaseline, context, offers)),
-    count: countAdvisories(source, withBaseline),
-    dismissedGhsas: alerts.ok ? alerts.dismissedGhsas : [],
+    advisories: countOnly ? [] : rankAdvisories(enrich(rows, context, offers)),
+    count: countAdvisories(alertAdvisories, auditAdvisories),
+    dismissedGhsas,
     reasons,
     reasonText: reasonText(reasons),
     source,

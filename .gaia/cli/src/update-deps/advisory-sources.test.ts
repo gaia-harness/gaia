@@ -97,7 +97,6 @@ describe('fetchDependabotAlerts', () => {
 
         return {ok: true, stdout: '[]'};
       },
-      includeDismissed: true,
       owner: 'acme',
       repo: 'widgets',
     });

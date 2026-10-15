@@ -4,7 +4,7 @@ status: active
 package: pnpm audit
 role: dependency-cve-advisory
 created: 2026-06-04
-updated: 2026-10-13
+updated: 2026-10-15
 tags: [dependency, security, quality]
 ---
 
@@ -24,7 +24,7 @@ tags: [dependency, security, quality]
 Two filters keep the same unfixable transitive advisory from spamming every review:
 
 1. **Severity threshold**: only `high` and `critical` advisories are candidates (drops the long tail of low/moderate transitive noise). Within-run dedup is free: the JSON is keyed by advisory ID.
-2. **Baseline allowlist**: `.gaia/local/dep-audit-baseline.json` (machine-local, gitignored). Acknowledge an unfixable advisory by its ID and it is suppressed (count-only) on later reviews. While Dependabot alerts are readable, a baseline acknowledgment no longer reduces the statusline security count; `/update-deps` converts it to an alert dismissal, which does:
+2. **Baseline allowlist**: `.gaia/local/dep-audit-baseline.json` (machine-local, gitignored). Acknowledge an unfixable advisory by its ID and it is suppressed (count-only) on later reviews. While Dependabot alerts are readable, a baseline acknowledgment still drops an advisory only `pnpm audit` reports from the statusline security count, but not one an open alert backs; `/update-deps` converts it to an alert dismissal, which does:
 
    ```jsonc
    {"acknowledged": [{"id": 1098765, "module": "tough-cookie", "note": "why"}]}
@@ -42,6 +42,6 @@ High/critical advisories surface in the audit's advisory bucket, never in Critic
 
 1. **Bump**: a `patched_versions` range exists; update the dependency to a patched version.
 2. **Override**: no patched range and the advisory is transitive; pin a safe version via an `overrides` entry in `pnpm-workspace.yaml`. Apply it with `pnpm dedupe`, not `pnpm install`, which does not re-resolve an overrides-only change; see [[pnpm-overrides]].
-3. **Accept**: unfixable for now. An advisory GAIA itself accepts for every project ships as an `auditConfig.ignoreGhsas` entry in `pnpm-workspace.yaml`, commented with why it is safe and what ends it, so `pnpm audit` drops it before any surface reads it. For your own acceptances: when alerts are readable, acceptance is a dismissal of the Dependabot alert, made by `/update-deps` after you confirm it; otherwise it is an entry for the advisory `id` in `.gaia/local/dep-audit-baseline.json`, which suppresses it (count-only) on later reviews.
+3. **Accept**: unfixable for now. An advisory GAIA itself accepts for every project ships as an `auditConfig.ignoreGhsas` entry in `pnpm-workspace.yaml`, commented with why it is safe and what ends it. `pnpm audit` drops it itself, and `gaia update-deps advisories` drops a Dependabot alert on it, so neither the statusline security count nor `/update-deps` raises it. For your own acceptances: when alerts are readable, acceptance is a dismissal of the Dependabot alert, made by `/update-deps` after you confirm it; otherwise it is an entry for the advisory `id` in `.gaia/local/dep-audit-baseline.json`, which suppresses it (count-only) on later reviews.
 
 See [[Code Review Audit Agent]], [[PR Merge Workflow]], [[Quality Gate]], [[pnpm-overrides]].
