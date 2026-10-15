@@ -83,7 +83,7 @@ An absent report reads as "the lens found nothing", the conclusion a silent lens
 
 1. Before dispatch, clear the file of every lens about to be dispatched. Spell the commands repo-relative so the existing allow patterns match, never with the absolute `<PLAN_DIR>` spelling:
    - Spec: `rm -f .gaia/local/cache/audit-<spec_id>/findings/<LENS>.json`
-   - Plan: `rm -rf .notebook/plans/<PLAN-NNN>/audit`, then `mkdir -p .notebook/plans/<PLAN-NNN>/audit`
+   - Plan: `rm -rf .notebook/plans/<PLAN-NNN>/audit`, then `mkdir -p .notebook/plans/<PLAN-NNN>/audit` (a spec-derived plan: `rm -rf .notebook/specs/<SPEC-ID>/plan[-N]/audit`, then `mkdir -p .notebook/specs/<SPEC-ID>/plan[-N]/audit`)
 2. Dispatch every lens in one message, one Agent call per lens.
 3. After each agent's completion notification, never at the moment the dispatch call returns (that call reports dispatch metadata before the agent has run), classify its file:
 

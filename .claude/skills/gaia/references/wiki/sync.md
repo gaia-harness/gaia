@@ -16,8 +16,8 @@ Run `.gaia/cli/gaia wiki state --json` and parse the result. Use `head_short`, `
 
 Throughout this playbook, **the evaluation baseline** is the ref Steps 2, 3, and 8 evaluate from. On the normal path it is `last_evaluated_sha`; on the recovery path (below) it is `suggested_base`. Each branch states which.
 
-- If the command exits non-zero with a `state_missing` (or equivalent) reason, this is a fresh project (no prior sync). Treat the first commit as the baseline. Run `.gaia/cli/gaia wiki state-init "$(git rev-list --max-parents=0 HEAD | tail -1)"` to create `wiki/.state.json` with `{version, last_evaluated_sha, last_evaluated_at}`. Stop, no commits to evaluate yet: print `SYNC_PARTIAL: true` on its own line so the router commits the new state file, and emit no `SYNC_COMPLETE: true` line.
-- If `commits_ahead === 0`: skip the evaluation pass (no commits to evaluate), print `Wiki already in sync at {short_sha}.` and then, on its own line, `SYNC_COMPLETE: true`.
+- If `state_sha` is empty, this is a fresh project (no prior sync). Treat the first commit as the baseline. Run `.gaia/cli/gaia wiki state-init "$(git rev-list --max-parents=0 HEAD | tail -1)"` to create `wiki/.state.json` with `{version, last_evaluated_sha, last_evaluated_at}`. Stop, no commits to evaluate yet: print `SYNC_PARTIAL: true` on its own line so the router commits the new state file, and emit no `SYNC_COMPLETE: true` line.
+- If `drift_count === 0`: skip the evaluation pass (no commits to evaluate), print `Wiki already in sync at {short_sha}.` and then, on its own line, `SYNC_COMPLETE: true`.
 - If `reachable === false`: the recorded `last_evaluated_sha` is not in HEAD's history. GAIA's squash-merge flow orphans it on **every** merge, the evaluated branch SHA is replaced by a new squash commit on `main`, so this is the common case, not just a manual rebase. Recover the un-evaluated window instead of discarding it:
   - **Recovery path, when `suggested_base` is non-empty.** The CLI resolved `suggested_base` to the newest commit on HEAD's **first-parent chain** at or older than `last_evaluated_at`. That can sit before where the orphaned SHA left off, so expect some already-catalogued commits in the window; Step 5's dedup guard skips them. Adopt `suggested_base` as the evaluation baseline and run the normal pass (Steps 2–8) from it, ending with `SYNC_COMPLETE: true`. Do NOT jump to HEAD and do NOT log a `RE_ANCHOR` line, the window is evaluated, not abandoned. Step 6 advances `last_evaluated_sha` to HEAD as usual.
   - **Fallback path, when `suggested_base` is empty.** Only when the CLI cannot resolve a baseline (no `last_evaluated_at`, or it predates all history) revert to the lossy-but-safe re-anchor: run `.gaia/cli/gaia wiki state-bump last_evaluated_sha "$(git rev-parse HEAD)"`, then `.gaia/cli/gaia wiki log-prepend --sha "$(git rev-parse --short HEAD)" --decision RE_ANCHOR --reason "re-anchored after history rewrite (no recoverable baseline)"`, print `SYNC_PARTIAL: true` on its own line so the router commits the re-anchor, and exit. Emit no `SYNC_COMPLETE: true` line, there is no recovered range to evaluate.
@@ -103,7 +103,7 @@ grep -qF "<short_sha>" wiki/log.md && continue
 
 The dedup guard matters on the recovery path (Step 1), where the resolved `suggested_base` can sit behind commits a prior sync already logged as WORTHY. Skip any commit whose short SHA is already in `wiki/log.md` rather than appending a duplicate line.
 
-The CLI inserts a single canonical line `- <YYYY-MM-DD> <sha> <decision>, <reason>` at the top of `wiki/log.md` (after frontmatter), atomically, newest entries on top. Example:
+The CLI inserts a single canonical line `- <YYYY-MM-DD> <sha> <decision> - <reason>` at the top of `wiki/log.md` (after frontmatter), atomically, newest entries on top. Example:
 
 ```bash
 .gaia/cli/gaia wiki log-prepend --sha abc1234 --decision WORTHY --reason "added the Gemini service → wiki/modules/Services.md"
