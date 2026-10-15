@@ -65,6 +65,23 @@ trustPolicyExclude:
 minimumReleaseAgeExclude:
   - '@gaia-react/lint'
 
+# Advisories accepted as unfixable, so `pnpm audit` and /update-deps do not
+# raise them on every run. Each entry names why it is safe here and what ends
+# it; remove the entry once that happens.
+#   - GHSA-vfj7-8cjw-p6xm (braces <=3.0.3, stack-exhaustion denial of service
+#     on deeply nested brace patterns): no patched release exists, and braces
+#     reaches the tree through micromatch under the lint toolchain, stylelint
+#     and shadcn, so no dependency bump removes it. Exposure is dev-time only:
+#     braces expands developer-authored globs and config patterns, never
+#     attacker-controlled input. Remove when a patched braces ships and the
+#     lockfile resolves to it. When GAIA retires the last entry and drops
+#     auditConfig, /update-gaia raises no removal, so that release must name
+#     the removal as an adopter action in its CHANGELOG entry, and an adopter
+#     who copied it deletes their copy by hand.
+auditConfig:
+  ignoreGhsas:
+    - GHSA-vfj7-8cjw-p6xm
+
 # Resolution settings. pnpm 11 reads these from pnpm-workspace.yaml, not from
 # .npmrc (which it consults only for auth/registry). publicHoistPattern lifts
 # stylelint's shared config/plugins and prettier plugins to the root

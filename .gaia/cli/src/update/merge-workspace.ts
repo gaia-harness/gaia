@@ -66,6 +66,7 @@ const MANAGED_WHOLE_VALUE_KEYS: readonly string[] = [
   'publicHoistPattern',
   'savePrefix',
   'strictPeerDependencies',
+  'auditConfig',
 ];
 
 /**

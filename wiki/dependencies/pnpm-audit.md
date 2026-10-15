@@ -42,6 +42,6 @@ High/critical advisories surface in the audit's advisory bucket, never in Critic
 
 1. **Bump**: a `patched_versions` range exists; update the dependency to a patched version.
 2. **Override**: no patched range and the advisory is transitive; pin a safe version via an `overrides` entry in `pnpm-workspace.yaml`. Apply it with `pnpm dedupe`, not `pnpm install`, which does not re-resolve an overrides-only change; see [[pnpm-overrides]].
-3. **Accept**: unfixable for now. When alerts are readable, acceptance is a dismissal of the Dependabot alert, made by `/update-deps` after you confirm it; otherwise it is an entry for the advisory `id` in `.gaia/local/dep-audit-baseline.json`, which suppresses it (count-only) on later reviews.
+3. **Accept**: unfixable for now. An advisory GAIA itself accepts for every project ships as an `auditConfig.ignoreGhsas` entry in `pnpm-workspace.yaml`, commented with why it is safe and what ends it, so `pnpm audit` drops it before any surface reads it. For your own acceptances: when alerts are readable, acceptance is a dismissal of the Dependabot alert, made by `/update-deps` after you confirm it; otherwise it is an entry for the advisory `id` in `.gaia/local/dep-audit-baseline.json`, which suppresses it (count-only) on later reviews.
 
 See [[Code Review Audit Agent]], [[PR Merge Workflow]], [[Quality Gate]], [[pnpm-overrides]].

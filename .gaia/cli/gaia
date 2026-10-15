@@ -45034,7 +45034,8 @@ var MANAGED_WHOLE_VALUE_KEYS = [
   "minimumReleaseAgeExclude",
   "publicHoistPattern",
   "savePrefix",
-  "strictPeerDependencies"
+  "strictPeerDependencies",
+  "auditConfig"
 ];
 var SHARED_MAP_SECTIONS = ["overrides", "allowBuilds"];
 var VALUE_FLAGS5 = {
