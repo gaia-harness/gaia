@@ -6,8 +6,8 @@
 # merge wait and cleanup ran (`gaia wiki chain finish` cuts a throwaway branch,
 # pushes it, and enables auto-merge with `gh pr merge --auto`, a call that
 # returns BEFORE the merge lands) leaves both a local wiki/<YYYY-MM-DD-HHMM>
-# branch (or a legacy wiki/sync-<date>-<sha> or wiki-sync/<date>-<sha> one,
-# the shapes older CLIs cut) and a stale local base branch behind. This hook
+# branch (or a legacy wiki/sync-<date>-<sha> or wiki-sync/<date>-<sha> one)
+# and a stale local base branch behind. This hook
 # reconciles both, in order, once HEAD is off the landing branch (the reap
 # skips the current branch and the fast-forward runs only with HEAD on base,
 # so a session left on the landing branch is reconciled from the first
@@ -166,7 +166,7 @@ wiki_catchup_state_unset() {
 # --- Half A: merged-and-gone wiki sync branches ---------------------------
 # Three shapes name a wiki landing branch: `wiki/<YYYY-MM-DD-HHMM>` (what the
 # CLI cuts), and the legacy `wiki/sync-<date>-<sha>` and `wiki-sync/<date>-<sha>`
-# (cut by older CLIs, still reaped so an old leftover does not linger). Every
+# (nothing cuts them; they are reaped so a leftover does not linger). Every
 # shape is matched with its full timestamp, so a hand-named `wiki/<slug>`
 # branch is never a candidate.
 # Git-scoped: independent of .gaia/local, so a fresh clone carrying an

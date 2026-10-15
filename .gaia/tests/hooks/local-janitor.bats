@@ -8,9 +8,9 @@ bats_require_minimum_version 1.5.0
 # Sweep #1 of local-janitor.sh: the wiki landing's local catch-up.
 #
 # The wiki landing CLI cuts a throwaway `wiki/<YYYY-MM-DD-HHMM>` branch (the
-# legacy `wiki/sync-<date>-<sha>` and `wiki-sync/<date>-<sha>` shapes are still
-# reaped) and
-# lands it with `gh pr merge --auto`, which returns before the merge completes.
+# sweep also reaps the legacy `wiki/sync-<date>-<sha>` and
+# `wiki-sync/<date>-<sha>` shapes) and lands it with `gh pr merge --auto`,
+# which returns before the merge completes.
 # /gaia-wiki waits for the merge and cleans up through the work lifecycle; a
 # session that ends first leaves the local branch undeleted and the local base
 # branch behind. Sweep #1 covers both once HEAD is off the sync branch (the
