@@ -249,6 +249,14 @@
     ".gaia/scripts/link-worktree.sh": "owned",
     ".gaia/scripts/main-only-lib.sh": "owned",
     ".gaia/scripts/main-root-lib.sh": "owned",
+    ".gaia/scripts/notebook/legacy-roots.sh": "owned",
+    ".gaia/scripts/notebook/move.sh": "owned",
+    ".gaia/scripts/notebook/notebook-lib-catalog.sh": "owned",
+    ".gaia/scripts/notebook/notebook-lib-paths.sh": "owned",
+    ".gaia/scripts/notebook/notebook-lib-research.sh": "owned",
+    ".gaia/scripts/notebook/notebook-lib.sh": "owned",
+    ".gaia/scripts/notebook/reconcile.sh": "owned",
+    ".gaia/scripts/notebook/research-reaper.sh": "owned",
     ".gaia/scripts/plan-archive.sh": "owned",
     ".gaia/scripts/plan-resume-point.sh": "owned",
     ".gaia/scripts/ports.sh": "owned",
@@ -615,6 +623,7 @@
     "wiki/concepts/Incremental CI Skipping.md": "wiki-owned",
     "wiki/concepts/Local Working State.md": "wiki-owned",
     "wiki/concepts/Migration Notes.md": "wiki-owned",
+    "wiki/concepts/Notebook.md": "wiki-owned",
     "wiki/concepts/OS Sandbox.md": "wiki-owned",
     "wiki/concepts/Package Descriptor.md": "wiki-owned",
     "wiki/concepts/Policy-Memory Loop.md": "wiki-owned",
@@ -709,7 +718,7 @@
     "wiki/overview.md": "wiki-owned",
     "wiki/README.md": "wiki-owned"
   },
-  "generated": "2026-10-15T05:45:50.236Z",
+  "generated": "2026-10-15T13:58:06.044Z",
   "regions": [
     {
       "endMarker": "<!-- gaia:audit-remit:end -->",
