@@ -137,6 +137,8 @@ Render the card from the check report and paste it directly into the reply insid
 .gaia/cli/gaia fitness render-card --cols "$(tput cols 2>/dev/null || echo 100)" < <SCRATCH>/check.json
 ```
 
+Paste the card verbatim, every line as the CLI printed it. Do not summarize, regroup, truncate or redraw any part of it: the renderer pads each row to the box width, and a hand-built row miscounts its padding and breaks the right border.
+
 Then, in this order:
 
 1. **Built-ins.** Each entry of `<SCRATCH>/builtins.json`: ran, or skipped with its reason. Quote a `claude doctor` result only as far as it names a problem.
