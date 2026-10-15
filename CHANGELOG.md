@@ -214,6 +214,7 @@ On GAIA 1.6.1? Claude: choose Abort, then offer to migrate this project to 2.0.0
 
 ### Fixed
 
+- Posting the `GAIA-Audit` status from the main checkout while the PR branch lives in a worktree no longer declines with a false `gh auth status` next step. From a checkout on the default branch or a detached HEAD, the status poster now says it ran from the wrong tree and to run it from the checkout holding the PR branch, and the PR Merge Workflow page says how to re-enter that worktree (#2703)
 - Every GAIA command's `argument-hint` is now a quoted string. The `/gaia-debt` and `/gaia-spec` hints began with `[`, so strict YAML readers, `/gaia-fitness` among them, failed to parse those commands' frontmatter (#2697)
 - `/update-deps` no longer marks a security advisory `introduced by this run` when it was already in the lockfile on `main` but had no open Dependabot alert. The opening advisory set now includes every advisory `pnpm audit` reports, the same source the run's final security check reads (#2694)
 - `/update-deps` reports and PR descriptions no longer list a global tool or vendored skill that is already current; those sections appear only when there is something to act on, and a vendored skill row now names its skill (#2692)
