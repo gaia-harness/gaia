@@ -12,7 +12,7 @@ The `/gaia init` namespace provides subcommands for on-boarding a cloned GAIA te
 
 ## Subcommands
 
-**`strip-branding`**: Removes GAIA-specific branding and identifiers from the codebase (references in README, config files, and CLI scaffolds). Prepares a "vanilla" template for forking or white-label adoption. The `--title` it takes is escaped for each sink's own syntax (a single-quoted JavaScript literal in `frontend/.storybook/preview.ts`) rather than passed through raw.
+**`strip-branding`**: Removes GAIA-specific branding and identifiers from the codebase. Prepares a "vanilla" template for forking or white-label adoption. The `--title` it takes is escaped for each sink's own syntax (a single-quoted JavaScript literal in `frontend/.storybook/preview.ts`) rather than passed through raw.
 
 **`configure-i18n`**: Edits `frontend/app/languages/index.ts` (the `LANGUAGES` array and `Language` union) and `frontend/app/i18n.ts` (`fallbackLng`) to match the chosen locales when `--strip false`, or removes the i18n scaffolding when `--strip true`. The locale list is recorded in the init state file.
 
@@ -22,7 +22,7 @@ The `/gaia init` namespace provides subcommands for on-boarding a cloned GAIA te
 
 Each language-file key is optional (the shipped `_index.ts` carries only `meta.title`) and is rewritten wherever it is a quoted string literal; a key present but holding something else (a template literal, a computed value) is left untouched. Each key is matched wherever its own rewrite looks for it, so a value wrapped in one quote may hold the other bare: `siteName: "Steve's Template"` is an ordinary literal and is rewritten, as is a value this command itself wrote when the title carried the non-wrapping quote.
 
-**`wire-statusline`**: Inserts the canonical GAIA `statusLine` block at the top level of the chosen Claude settings file (`--mode project` writes `.claude/settings.json`, `global` writes `~/.claude/settings.json`, `skip` is a no-op). The statusline surfaces the per-machine setup gate plus `/update-gaia`, `/update-deps`, `/gaia-codify`, and `/gaia-cleanse` nudges.
+**`wire-statusline`**: Inserts the canonical GAIA `statusLine` block at the top level of the chosen Claude settings file (`--mode project` writes `.claude/settings.json`, `global` writes `~/.claude/settings.json`, `skip` is a no-op). [[Claude Skills]] (Statusline update indicators) lists the statusline nudges.
 
 **`bootstrap-env`**: Copies `frontend/.env.example` to `frontend/.env` when `frontend/.env` does not yet exist, running as a CLI subprocess so it bypasses Claude Code's `Write(.env)` deny rule. No-op when `frontend/.env` already exists or `frontend/.env.example` is absent.
 

@@ -41,7 +41,7 @@ Run `/gaia-release` on a clean `main`; `.claude/commands/gaia-release.md` owns t
 - Overwrite `wiki/log.md` with a single release-milestone entry (dev history lives in git).
 - Regenerate `.gaia/manifest.json` via `gaia-maintainer release manifest --allow-undecided`. The release path takes the escape hatch deliberately: a release cut from a tree containing a new file must not start failing.
 - Commit on the release branch: `chore(release): vX.Y.Z`. The pre-commit dance updates `wiki/.state.json`'s `last_evaluated_sha` to the new commit's own SHA via amend, so adopters' state files match their release commit on first scaffold.
-- Push branch, open PR via `gh`. The release PR is subject to the same CI gate (`Vitest and Playwright`, `Run Chromatic`) and Code Audit Team merge handshake as any other PR; see [[PR Merge Workflow]]. `gh pr merge --merge --auto` is the normal path: base-branch protection rejects a plain `--merge`, and `--auto` lets GitHub complete the merge once checks pass.
+- Push branch, open PR via `gh`. The release PR is subject to the same CI gate and Code Audit Team merge handshake as any other PR; see [[PR Merge Workflow]]. `.gaia/scripts/verify-required-checks.sh` (`REQUIRED_CONTEXTS`) lists the required contexts. `gh pr merge --merge --auto` is the normal path: base-branch protection rejects a plain `--merge`, and `--auto` lets GitHub complete the merge once checks pass.
 - Once the PR shows `MERGED`, pull `main`, tag the merge commit (`v<NEW_VERSION>`), push the tag. `commit-and-tag --tag` refuses (`REFUSED:`) a tag whose major is below the highest existing `vX.Y.Z` release tag's major, read from local tags and origin's, because a 1.x `/update-gaia` resolves the newest-created release.
 - Lockstep `create-gaia` and the website. The website update includes bumping three version constants, invoking the `release-notes` skill to generate the public changelog entry (`<version>.ts`) for the site, and overwriting the GitHub release body with adopter-facing notes rendered from that file via `render-release-md.mjs` (so the GitHub release and the website changelog stay in sync). For a 2.x release that 1.x adopters can still see (the 2.0.0 cut), the release data carries a `preamble` (the routing line, the Proceed side-effects line, the sha256 line) that the renderer emits verbatim before the headline, so the rewritten body still starts with the routing line. The step ends with `gh release view <tag> --json body --jq .body | head -1`, which must equal the output of `bash .gaia/scripts/compose-release-body.sh --routing-line`; the website keeps release notes but carries no separate migration page. Any other first line means the rewrite dropped the preamble, so re-render before moving on.
 - Lockstep the docs site (`../docs` sibling checkout): update the sidebar version constant and commit directly to `main`.
@@ -63,7 +63,7 @@ The tag push triggers [`release.yml`](../../.github/workflows/release.yml), whic
 
 The scrubbed `wiki/log.md` contains only the release marker; none of GAIA's internal change history.
 
-Two staleness gates run ahead of the tarball build so a stale committed artifact cannot ship silently: a binary rebuild-freshness check byte-compares the committed `.gaia/cli/gaia`/`gaia-maintainer` against a fresh bundle from source; and `gaia-maintainer release scrub-wiki --check` compares committed `wiki/log.md` against fresh-rendered release-clean output (dates normalized out of the comparison) and exits non-zero on drift without rendering anything, so a skipped scrub can no longer ship a stale wiki. Any gate failing halts the release before the tarball builds.
+Staleness gates in `.github/workflows/release.yml` run ahead of the tarball build so a stale committed artifact cannot ship silently; among them, a binary rebuild-freshness check byte-compares the committed `.gaia/cli/gaia`/`gaia-maintainer` against a fresh bundle from source; and `gaia-maintainer release scrub-wiki --check` compares committed `wiki/log.md` against fresh-rendered release-clean output (dates normalized out of the comparison) and exits non-zero on drift without rendering anything, so a skipped scrub can no longer ship a stale wiki. Any gate failing halts the release before the tarball builds.
 
 ### Bundle-time enforcement
 
@@ -114,7 +114,7 @@ A file's presence in the GAIA source tree (`gaia/.claude/commands/`, etc.) does 
 - [[Update Workflow]]: how adopters pull later releases into an initialized project without clobbering drift.
 - [[PR Merge Workflow]]: the audit + marker handshake and `--auto` merge pattern the release PR follows like any other.
 - [[Quality Gate]]: must pass before `/gaia-release` will let you tag.
-- [[Wiki Sync]]: drift gate at Step 2; release is blocked until `wiki/.state.json` matches HEAD.
+- [[Wiki Sync]]: drift gate in `release preflight`; release is blocked until `wiki/.state.json` matches HEAD.
 - [[Bundle-time Scrub]]: rationale for the scrub transforms, the leak checks, and runtime-deps; what the system catches, what it does not.
 - [[Git Workflow]]: destructive-on-main hook that `/gaia-release` coexists with (the final push is gated behind explicit user confirmation).
 - [[Worktrees]]: the per-tree state model behind `.claude/worktrees/`, generated at runtime and excluded from the release tarball.

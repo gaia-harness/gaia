@@ -44,11 +44,7 @@ The page component is named `<PascalName>Page` and lives in `page.tsx` of a fold
 
 ### Scaffold flags
 
-- `--group _public|_session`: required; writes the route file at `frontend/app/routes/<group>.<name>.tsx`
-- `--loader`: emit a loader stub
-- `--action`: emit an action stub
-- `--i18n`: emit a flat `<kebab>.ts` locale file and wire it into the locale barrel (fails loudly if the barrel is absent)
-- `--dry-run`: preview what would be written without touching the filesystem
+Run `gaia scaffold route --help` for the flag set.
 
 ### Fetcher action paths
 

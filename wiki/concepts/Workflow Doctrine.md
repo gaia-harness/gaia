@@ -99,14 +99,9 @@ Re-measured with `bash .gaia/tests/hooks/workflow-doctrine-timing.sh`.
 | p50 SessionStart, working branch | 40.2 ms | 50 ms |
 | p50 PostToolUse Bash, non-arming | 25.1 ms | 50 ms |
 | p50 PostToolUse Bash, arming | 46.9 ms | 50 ms |
-| Injected bytes | 3,501 | 4,096 |
-| Injected tokens (bytes / 4) | 875 | none |
-| Payload with a 128-character branch | 3,731 bytes | 4,096 |
-| Rule bytes | 1,177 | 1,200 |
-| Rule tokens (bytes / 4) | 294 | none |
 | Per-session hook cost estimate | 843.4 ms | none |
 
-The per-session estimate uses the median session's 32 Bash calls and 0 compactions. The byte rows are current; the timing rows and the estimate keep their earlier quieter-machine values, because a re-run at a 1-minute load above 13 inflated every path and would have recorded a load artifact as a budget miss.
+The per-session estimate uses the median session's 32 Bash calls and 0 compactions. The timing rows and the estimate keep their earlier quieter-machine values, because a re-run at a 1-minute load above 13 inflated every path and would have recorded a load artifact as a budget miss.
 
 The context checkpoint hook runs after every tool call of every main session, so each exit path of its ladder carries the 50 ms budget. Re-measured with `bash .gaia/tests/hooks/context-checkpoint-timing.sh`, through the registered command string with its rooting step included. The paths are interleaved in blocks next to a no-op baseline so they share the machine's load; read each row beside the baseline.
 

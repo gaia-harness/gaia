@@ -106,19 +106,7 @@ emergent file count and is not made sub-linear.
 
 ## Fail-open posture
 
-The gate enforces only where its tooling answers, matching the sibling hooks:
-
-- `jq`, `git`, `node`, the RED-ledger lib, or the classifier unavailable: allow.
-- A changed emergent test file the signal helper cannot parse (a mid-edit syntax
-  error): skip that file, never deny.
-- A story file whose shape the extractor refuses (exit 7): **deny**, the one
-  fail-closed case. The deny names the file and carries the extractor's one-line
-  reason plus the next step, rewriting the story in a supported shape ([[Stories as Tests]]).
-  A refusal means the gate cannot tell which stories have a play, so allowing the
-  merge would pass unaudited tests.
-- The deny path is fail-closed for the clean case, a parseable in-scope
-  emergent test whose current signal has no matching ledger line, and for the
-  extractor refusal above. Any other extractor failure keeps the fail-open skip.
+The `Fail-open vs fail-closed` block in `.claude/hooks/worthiness-presence-check.sh` owns which failures allow and which deny.
 
 ## Relationship to the other merge gates
 

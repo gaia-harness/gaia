@@ -43,7 +43,7 @@ Read **Contributing code** above first; unassigned and unsolicited PRs are close
 1. Fork. Branch from `main`. Name the branch `<type>/[<issue>-]<slug>` with a Conventional Commits type, lowercase kebab.
 2. Commit subjects and the PR title follow Conventional Commits: `fix(scope): what`, `feat(scope): what`. A `commit-msg` hook enforces the subject locally (run `pnpm install` once so it can find commitlint), and the `PR Conventions` check enforces the PR title and branch name. The format is documented in [wiki/decisions/Naming Conventions.md](wiki/decisions/Naming%20Conventions.md).
 3. The quality gate must pass locally before you push (steps in `wiki/decisions/Quality Gate.md`). Zero warnings allowed. This is the project's distinguishing stance, not a starting position to negotiate.
-4. The code-review audit will run on your PR. It dispatches React Patterns, TypeScript and Architecture, and Translation specialists in parallel against your diff. It blocks the merge until findings are resolved.
+4. The Code Audit Team audit will run on your PR (see `wiki/concepts/PR Merge Workflow.md`). It dispatches React Patterns, TypeScript and Architecture, and Translation specialists in parallel against your diff. It blocks the merge until findings are resolved.
 5. No `eslint-disable`, no `@ts-ignore`, no `eslint-disable-next-line`. If a rule is wrong for the case, open a separate PR to refine the rule. If the rule is right, fix the source.
 6. Update `CHANGELOG.md` under `## [Unreleased]` if your change is user-visible.
 7. PRs that lower the bar will be requested-changes back. PRs that raise it will be merged.

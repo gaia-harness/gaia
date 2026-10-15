@@ -22,7 +22,6 @@ wiki/
 ├── log.md              # change ledger (gaia wiki log-prepend writes it, newest at TOP)
 ├── overview.md         # executive summary
 ├── modules/            # major architectural areas (routing, auth, i18n, etc.)
-├── components/         # reusable UI components (Form, Toast, Layout, etc.)
 ├── decisions/          # ADRs: why GAIA chose X over Y
 ├── dependencies/       # external deps with role + version
 ├── flows/              # data flows (auth, theme, language, form submit)

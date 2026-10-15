@@ -112,7 +112,7 @@ The wiki (`wiki/`) is the source of truth for patterns, decisions, and conventio
 
 ## Extension mechanism
 
-Library-specific audit rules live in `.claude/agents/code-audit-frontend/*.md`. Each file targets one or more specialist subagents via YAML frontmatter (`subagents: [react-patterns, typescript, translation]`). The agent reads all extension files at startup and injects their rules into the relevant subagent prompts.
+Library-specific audit rules live in `.claude/agents/code-audit-frontend/*.md` under the repo root or under a registered package (GAIA's own live in `frontend/.claude/agents/code-audit-frontend/`); the agent's `## Extension Loading` section owns the globs. Each file targets one or more specialist subagents via YAML frontmatter (`subagents: [react-patterns, typescript, translation]`). The agent reads all extension files at startup and injects their rules into the relevant subagent prompts.
 
 The `subagents:` values (`react-patterns`, `typescript`, `translation`) are **rule-injection labels** - metadata that selects which specialist prompt receives this file's rules. They are not skill or command names. The agent dispatches each specialist via the **Agent (Task) tool** with an explicit `subagent_type`. Routing a specialist through the Skill tool misroutes it to a fuzzy-matched command (e.g. `/gaia-cleanse`), which rejects the args and aborts the audit before its marker is written.
 
