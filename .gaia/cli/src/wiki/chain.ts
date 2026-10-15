@@ -1,13 +1,19 @@
 /**
- * `gaia wiki chain <begin|commit|finish>` handler.
+ * `gaia wiki chain <begin|commit|finish|refresh-nudge>` handler.
  *
  * Orchestrates the `/gaia-wiki` full chain (sync → consolidate → lint) so it
  * lands on ONE branch and ONE PR instead of each stage landing independently.
  * The router (`references/wiki.md`) calls:
  *   begin   once, before sync         → cut `wiki/sync-<date>-<sha>` on main
  *   commit  after consolidate & lint   → in-place commit of that stage's edits
- *   finish  once, after lint           → push + PR + auto-merge, then wait for
- *                                        the merge and clean up locally
+ *   finish  once, after lint           → push + PR + auto-merge
+ *   refresh-nudge after merge cleanup  → write the main checkout's wiki drift
+ *                                        into the statusline cache
+ *
+ * Waiting for the merge and the local cleanup are not the CLI's: the router
+ * runs them through the shared work lifecycle
+ * (`references/work-lifecycle.md`, `## 7. Merge` and `## 8. Cleanup`), like
+ * every other GAIA command that opens a PR.
  *
  * `begin` runs BEFORE sync on purpose: every stage's `commit` then sees a
  * feature branch and commits in place rather than opening its own premature
@@ -38,7 +44,6 @@ import type {CommandRunner} from './util/branch.js';
 import {shortSha} from './util/git.js';
 import {
   commandSucceeded,
-  finalizeMerge,
   passthroughFailure as passthroughFailureWithPrefix,
   postOutOfScopeStamp,
   refuse,
@@ -46,7 +51,10 @@ import {
   UNEXPECTED_EXIT,
 } from './util/land.js';
 import type {PassthroughFailureOptions} from './util/land.js';
-import {invalidateStatuslineCache} from './util/statusline-cache.js';
+import {
+  invalidateStatuslineCache,
+  refreshWikiDriftInCache,
+} from './util/statusline-cache.js';
 
 const WIKI_CHAIN_BRANCH_PREFIX = 'wiki/sync-';
 
@@ -73,7 +81,7 @@ const safeOutput = (value: null | string | undefined): string => value ?? '';
 
 const HELP_TOKENS = new Set(['--help', '-h', 'help']);
 
-const HELP_TEXT = `Usage: gaia wiki chain <begin|commit|finish> [args]
+const HELP_TEXT = `Usage: gaia wiki chain <begin|commit|finish|refresh-nudge> [args]
 
   begin [--branch-aware]       On main/master: cut wiki/sync-<date>-<sha> so the
                                whole chain lands on one branch + PR. On a feature
@@ -81,13 +89,14 @@ const HELP_TEXT = `Usage: gaia wiki chain <begin|commit|finish> [args]
   commit --label "<subject>"   In-place commit of this stage's wiki/ changes, then
                                invalidates the statusline cache. No-op when nothing
                                changed; refuses non-wiki changes and main/master.
-  finish [--branch-aware]      Push the chain branch, open one PR, enable
-                               auto-merge, then wait for the PR to merge and
-                               clean up locally (return to base, pull, delete the
-                               branch, prune). If the merge does not land within
-                               the wait, auto-merge stays queued and local
-                               cleanup is deferred. Removes an empty chain branch;
-                               no-op for in-place runs.
+  finish [--branch-aware]      Push the chain branch, open one PR, and enable
+                               auto-merge, staying on the branch. The merge wait
+                               and local cleanup follow the work lifecycle.
+                               Removes an empty chain branch; no-op for in-place
+                               runs.
+  refresh-nudge                Recompute the main checkout's wiki drift and write
+                               it into the statusline cache now, rather than on
+                               the next background refresh. Run after cleanup.
 
   Exit codes:
     0  success
@@ -106,11 +115,7 @@ type GhArtifact = {number: number; repo: string};
 
 type RunOptions = {
   cwd?: string;
-  /** Override the merge-poll attempt count in `finish` (tests pass a small n). */
-  mergePollAttempts?: number;
   runner?: CommandRunner;
-  /** Override the inter-poll sleep in `finish` (tests pass a no-op). */
-  sleep?: (ms: number) => void;
   /** Override "today" for deterministic tests. ISO-8601 date string. */
   today?: string;
 };
@@ -668,22 +673,16 @@ const runFinish = (
   }
 
   const {artifact} = queued;
+  const prLabel = artifact === undefined ? 'PR' : `PR #${artifact.number}`;
 
-  // Land like any other PR: `--auto` waits for the gate to go green server side,
-  // then finalizeMerge polls for the merge and cleans up locally (or, on
-  // timeout, leaves the catch-up to the session-start janitor).
-  return {
-    artifact,
-    code: finalizeMerge({
-      attempts: options.mergePollAttempts,
-      base,
-      branch,
-      cwd: repoRoot,
-      prefix: 'chain finish',
-      runner,
-      sleep: options.sleep,
-    }),
-  };
+  // `--auto` returns before the merge lands. The router waits on it and cleans
+  // up through the work lifecycle, so `finish` stays on the branch and never
+  // reports a merge it has not seen.
+  process.stdout.write(
+    `chain finish: opened ${prLabel} for ${branch}; auto-merge queued, merge not yet confirmed\n`
+  );
+
+  return {artifact, code: EXIT_CODES.OK};
 };
 
 const finish = (argv: readonly string[], options: RunOptions): number => {
@@ -694,6 +693,32 @@ const finish = (argv: readonly string[], options: RunOptions): number => {
   return outcome.code;
 };
 
+const refreshNudge = (argv: readonly string[], options: RunOptions): number => {
+  if (argv.length > 0) {
+    structuredError({
+      code: 'invalid_arguments',
+      message: `refresh-nudge takes no arguments, got: ${argv.join(' ')}`,
+      subcommand: 'wiki chain refresh-nudge',
+    });
+
+    return EXIT_CODES.UNKNOWN_SUBCOMMAND;
+  }
+
+  const repoRoot = resolveRoot(options.cwd ?? process.cwd(), 'refresh-nudge');
+
+  if (repoRoot === null) return EXIT_CODES.UNKNOWN_SUBCOMMAND;
+
+  const driftCount = refreshWikiDriftInCache(repoRoot);
+
+  process.stdout.write(
+    driftCount === null ?
+      'chain refresh-nudge: no statusline cache to refresh\n'
+    : `chain refresh-nudge: wiki drift ${driftCount}, statusline cache updated\n`
+  );
+
+  return EXIT_CODES.OK;
+};
+
 const ACTIONS: Readonly<
   Partial<
     Record<string, (argv: readonly string[], options: RunOptions) => number>
@@ -702,6 +727,7 @@ const ACTIONS: Readonly<
   begin,
   commit,
   finish,
+  'refresh-nudge': refreshNudge,
 };
 
 export const run = (

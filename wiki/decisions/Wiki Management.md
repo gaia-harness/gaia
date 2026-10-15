@@ -34,11 +34,12 @@ The wiki is critical infrastructure; it decays when drift between code and docum
 
 **`gaia wiki broken-links`**: Lists wikilinks whose target page does not exist, with file and line (`--json` for a machine-readable list). A target resolves by slug or H1 title against every page outside `wiki/_archived/`. Used by the lint stage of `/gaia-wiki` for check #17.
 
-**`gaia wiki chain <begin|commit|finish>`**: Manages the branch lifecycle for `/gaia-wiki` so every stage (sync, consolidate, lint) lands in one PR rather than opening separate PRs.
+**`gaia wiki chain <begin|commit|finish|refresh-nudge>`**: Manages the branch lifecycle for `/gaia-wiki` so every stage (sync, consolidate, lint) lands in one PR rather than opening separate PRs.
 
 - `begin` (before sync): cuts a `wiki/sync-<date>-<sha>` branch from `main`; no-op on a feature branch, where stages commit in place.
 - `commit` (after each stage): commits that stage's `wiki/` changes in place; gracefully no-ops when nothing changed; refuses non-wiki changes; refuses on `main` and `master`; invalidates the statusline cache after a successful commit.
-- `finish` (after lint): pushes the branch, opens one PR for all stage commits, enables auto-merge, and takes one bounded wait on the merge. When it lands inside that wait, `finish` cleans up locally; on the common path the merge gate outlasts the wait, so it returns to base with the local cleanup outstanding for the session-start janitor. Drops the branch if it is empty. Leaves an aborted dirty tree in place for review. No-op for in-place runs on a feature branch.
+- `finish` (after lint): pushes the branch, opens one PR for all stage commits, posts the out-of-scope `GAIA-Audit` stamp, enables auto-merge, and stays on the branch. It never waits for the merge: `/gaia-wiki` then waits and cleans up through the shared work lifecycle (`.claude/skills/gaia/references/work-lifecycle.md`), like every other GAIA command that opens a PR. Drops the branch if it is empty. Leaves an aborted dirty tree in place for review. No-op for in-place runs on a feature branch.
+- `refresh-nudge` (after cleanup): writes the main checkout's wiki drift into the statusline cache, so the `/gaia-wiki` nudge clears the moment the landed state file is pulled rather than on the next background refresh.
 
 `/gaia-wiki` takes no stage argument; the chain commands are how every run lands.
 

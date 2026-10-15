@@ -166,7 +166,6 @@ const finishLanding = (cwd: string, runner: CommandRunner): number =>
   run(['finish', '--branch-aware'], {
     cwd,
     runner,
-    sleep: () => undefined,
   });
 
 const statusCalls = (recorded: RecordedCall[]): RecordedCall[] =>
@@ -732,7 +731,7 @@ describe('wiki chain', () => {
       expect(recorded.find((c) => c.args[0] === 'push')).toBeUndefined();
     });
 
-    test('on a chain branch, PR merges: push + PR + auto-merge, then wait + local cleanup', () => {
+    test('on a chain branch: push + PR + auto-merge, then stays on the branch without waiting or cleaning up', () => {
       sandbox = setupSandbox();
       const recorded: RecordedCall[] = [];
       const runner = buildRunner(
@@ -753,18 +752,6 @@ describe('wiki chain', () => {
             argv: ['rev-parse', 'HEAD'],
             result: okResult('bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\n'),
           },
-          {
-            argv: [
-              'pr',
-              'view',
-              'wiki/sync-2026-05-07-bbbbbbb',
-              '--json',
-              'state',
-              '--jq',
-              '.state',
-            ],
-            result: okResult('MERGED\n'),
-          },
         ],
         recorded
       );
@@ -772,11 +759,10 @@ describe('wiki chain', () => {
       const exit = run(['finish', '--branch-aware'], {
         cwd: sandbox.root,
         runner,
-        sleep: () => undefined,
       });
       expect(exit).toBe(0);
       expect(stdio.outputs.join('')).toContain(
-        'merged PR for wiki/sync-2026-05-07-bbbbbbb and cleaned up locally'
+        'for wiki/sync-2026-05-07-bbbbbbb; auto-merge queued, merge not yet confirmed'
       );
 
       const ordered = recorded.map((c) => [c.command, ...c.args].join(' '));
@@ -789,25 +775,21 @@ describe('wiki chain', () => {
       const prMergeIndex = ordered.indexOf(
         'gh pr merge --squash --auto --delete-branch'
       );
-      const pollIndex = ordered.findIndex((c) =>
-        c.startsWith('gh pr view wiki/sync-2026-05-07-bbbbbbb --json state')
-      );
-      const checkoutBaseIndex = ordered.indexOf(
-        'git checkout --end-of-options main'
-      );
-      const pullIndex = ordered.indexOf('git pull --ff-only origin main');
-      const branchDeleteIndex = ordered.indexOf(
-        'git branch -D -- wiki/sync-2026-05-07-bbbbbbb'
-      );
-      const pruneIndex = ordered.indexOf('git fetch --prune origin');
       expect(pushIndex).toBeGreaterThanOrEqual(0);
       expect(prCreateIndex).toBeGreaterThan(pushIndex);
       expect(prMergeIndex).toBeGreaterThan(prCreateIndex);
-      expect(pollIndex).toBeGreaterThan(prMergeIndex);
-      expect(checkoutBaseIndex).toBeGreaterThan(pollIndex);
-      expect(pullIndex).toBeGreaterThan(checkoutBaseIndex);
-      expect(branchDeleteIndex).toBeGreaterThan(pullIndex);
-      expect(pruneIndex).toBeGreaterThan(branchDeleteIndex);
+      // The merge wait and the local cleanup belong to the work lifecycle.
+      expect(
+        ghCalls(recorded).some(
+          (c) =>
+            c.args[0] === 'pr' &&
+            c.args[1] === 'view' &&
+            c.args.includes('state')
+        )
+      ).toBe(false);
+      expect(recorded.find((c) => c.args[0] === 'checkout')).toBeUndefined();
+      expect(recorded.find((c) => c.args[0] === 'pull')).toBeUndefined();
+      expect(recorded.find((c) => c.args[0] === 'branch')).toBeUndefined();
     });
 
     test('on a wiki-sync/ branch: treated as hand-named, no PR opened', () => {
@@ -826,76 +808,12 @@ describe('wiki chain', () => {
       const exit = run(['finish', '--branch-aware'], {
         cwd: sandbox.root,
         runner,
-        sleep: () => undefined,
       });
       expect(exit).toBe(0);
 
       const ordered = recorded.map((c) => [c.command, ...c.args].join(' '));
       expect(ordered.some((c) => c.startsWith('git push'))).toBe(false);
       expect(ordered.some((c) => c.startsWith('gh pr create'))).toBe(false);
-    });
-
-    test('on a chain branch, merge does not land: auto-merge stays queued, cleanup deferred', () => {
-      sandbox = setupSandbox();
-      const recorded: RecordedCall[] = [];
-      const runner = buildRunner(
-        [
-          {
-            argv: ['rev-parse', '--abbrev-ref', 'HEAD'],
-            result: okResult('wiki/sync-2026-05-07-fffffff\n'),
-          },
-          {
-            argv: ['symbolic-ref', '--short', 'refs/remotes/origin/HEAD'],
-            result: okResult('origin/main\n'),
-          },
-          {
-            argv: ['rev-list', '--count', 'main..HEAD'],
-            result: okResult('2\n'),
-          },
-          {
-            argv: ['rev-parse', 'HEAD'],
-            result: okResult('ffffffffffffffffffffffffffffffffffffffff\n'),
-          },
-          {
-            argv: [
-              'pr',
-              'view',
-              'wiki/sync-2026-05-07-fffffff',
-              '--json',
-              'state',
-              '--jq',
-              '.state',
-            ],
-            result: okResult('OPEN\n'),
-          },
-        ],
-        recorded
-      );
-
-      const exit = run(['finish', '--branch-aware'], {
-        cwd: sandbox.root,
-        mergePollAttempts: 3,
-        runner,
-        sleep: () => undefined,
-      });
-      expect(exit).toBe(0);
-      expect(stdio.outputs.join('')).toContain(
-        'auto-merge queued but not yet merged, local cleanup deferred'
-      );
-
-      // Polled the budget, then returned to base but deferred the local cleanup.
-      const pollCalls = ghCalls(recorded).filter(
-        (c) =>
-          c.args[0] === 'pr' && c.args[1] === 'view' && c.args.includes('state')
-      );
-      expect(pollCalls).toHaveLength(3);
-      expect(gitCalls(recorded)).toContainEqual({
-        args: ['checkout', '--end-of-options', 'main'],
-        command: 'git',
-      });
-      expect(recorded.find((c) => c.args[0] === 'branch')).toBeUndefined();
-      expect(recorded.find((c) => c.args[0] === 'pull')).toBeUndefined();
-      expect(recorded.find((c) => c.args[0] === 'fetch')).toBeUndefined();
     });
 
     test('on a chain branch with no commits ahead: drop empty branch, no PR', () => {
@@ -1081,7 +999,6 @@ describe('wiki chain', () => {
       const exit = run(['finish', '--branch-aware'], {
         cwd: sandbox.root,
         runner,
-        sleep: () => undefined,
       });
       expect(exit).toBe(0);
 
@@ -1355,7 +1272,7 @@ describe('wiki chain', () => {
       });
     });
 
-    test('merge-poll timeout: exactly 1 record call, carries the artifact', () => {
+    test('queued auto-merge: exactly 1 record call, carries the artifact and names the PR', () => {
       sandbox = setupSandbox();
       const recorded: RecordedCall[] = [];
       const runner = buildRunner(
@@ -1388,29 +1305,18 @@ describe('wiki chain', () => {
             ],
             result: okResult('https://github.com/gaia-react/gaia/pull/712\n'),
           },
-          {
-            argv: [
-              'pr',
-              'view',
-              'wiki/sync-2026-05-07-fffffff',
-              '--json',
-              'state',
-              '--jq',
-              '.state',
-            ],
-            result: okResult('OPEN\n'),
-          },
         ],
         recorded
       );
 
       const exit = run(['finish', '--branch-aware'], {
         cwd: sandbox.root,
-        mergePollAttempts: 3,
         runner,
-        sleep: () => undefined,
       });
       expect(exit).toBe(0);
+      expect(stdio.outputs.join('')).toContain(
+        'chain finish: opened PR #712 for wiki/sync-2026-05-07-fffffff; auto-merge queued, merge not yet confirmed'
+      );
       const calls = recordCalls(recorded);
       expect(calls).toHaveLength(1);
       expect(calls[0]).toEqual({args: SUCCESS_RECORD_ARGV, command: 'bash'});
@@ -1468,7 +1374,6 @@ describe('wiki chain', () => {
       const exit = run(['finish'], {
         cwd: sandbox.root,
         runner,
-        sleep: () => undefined,
       });
       expect(exit).toBe(0);
       const calls = recordCalls(recorded);
@@ -1531,7 +1436,6 @@ describe('wiki chain', () => {
       const exit = run(['finish'], {
         cwd: sandbox.root,
         runner,
-        sleep: () => undefined,
       });
       expect(exit).toBe(0);
       const calls = recordCalls(recorded);
@@ -1595,7 +1499,6 @@ describe('wiki chain', () => {
       const exit = run(['finish'], {
         cwd: sandbox.root,
         runner,
-        sleep: () => undefined,
       });
       expect(exit).toBe(0);
       const calls = recordCalls(recorded);
@@ -1768,10 +1671,6 @@ describe('wiki chain', () => {
           {
             argv: ['push', '-u', 'origin', BRANCH],
             result: options.push ?? okResult(''),
-          },
-          {
-            argv: ['pr', 'view', BRANCH, '--json', 'state', '--jq', '.state'],
-            result: okResult('MERGED\n'),
           },
         ],
         recorded
@@ -2010,19 +1909,19 @@ describe('wiki chain', () => {
       expect(stdio.errors.join('')).toContain('PR Merge Workflow');
     });
 
-    test('a merged land sets checkedAt to 0 and keeps every other key', () => {
+    // The main checkout's state file has not advanced until the merge lands
+    // and cleanup pulls it, so the cache is refreshed then, not here.
+    test('a queued land leaves the cache untouched', () => {
       sandbox = setupSandbox();
       mkdirSync(path.dirname(cachePathOf(sandbox.root)), {recursive: true});
-      writeFileSync(
-        cachePathOf(sandbox.root),
-        JSON.stringify({checkedAt: 1_700_000_000, wikiDriftCount: 27}),
-        'utf8'
-      );
+      const seeded = JSON.stringify({
+        checkedAt: 1_700_000_000,
+        wikiDriftCount: 27,
+      });
+      writeFileSync(cachePathOf(sandbox.root), seeded, 'utf8');
 
       expect(finishLanding(sandbox.root, finishRunner([]))).toBe(0);
-      expect(
-        JSON.parse(readFileSync(cachePathOf(sandbox.root), 'utf8'))
-      ).toEqual({checkedAt: 0, wikiDriftCount: 27});
+      expect(readFileSync(cachePathOf(sandbox.root), 'utf8')).toBe(seeded);
     });
 
     test('a push failure leaves the cache untouched', () => {
@@ -2053,6 +1952,24 @@ describe('wiki chain', () => {
       expect(exit).toBe(0);
       expect(stdio.outputs.join('')).toContain('Usage:');
       expect(recorded).toHaveLength(0);
+    });
+
+    test('refresh-nudge with no statusline cache: exit 0, says so, creates nothing', () => {
+      sandbox = setupSandbox();
+
+      const exit = run(['refresh-nudge'], {cwd: sandbox.root});
+      expect(exit).toBe(0);
+      expect(stdio.outputs.join('')).toContain(
+        'chain refresh-nudge: no statusline cache to refresh'
+      );
+      expect(existsSync(cachePathOf(sandbox.root))).toBe(false);
+    });
+
+    test('refresh-nudge rejects arguments: exit 1', () => {
+      sandbox = setupSandbox();
+
+      expect(run(['refresh-nudge', '--force'], {cwd: sandbox.root})).toBe(1);
+      expect(stdio.errors.join('')).toContain('takes no arguments');
     });
 
     test('unknown action: exit 1', () => {

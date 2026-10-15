@@ -2,12 +2,15 @@
 # local-janitor.sh, the wiki-landing catch-up for GAIA's machine-local
 # working state.
 #
-# Side-effect only. A wiki landing whose merge outlasts the CLI's own bounded
-# wait (`gaia wiki chain finish` cuts a throwaway branch,
+# Side-effect only. A wiki landing whose session ended before /gaia-wiki's own
+# merge wait and cleanup ran (`gaia wiki chain finish` cuts a throwaway branch,
 # pushes it, and enables auto-merge with `gh pr merge --auto`, a call that
 # returns BEFORE the merge lands) leaves both a local wiki/sync-<date>-<sha>
 # branch (or a legacy wiki-sync/<date>-<sha> one, the shape older CLIs cut)
-# and a stale local base branch behind. This hook reconciles both, in order:
+# and a stale local base branch behind. This hook reconciles both, in order,
+# once HEAD is off the sync branch (the reap skips the current branch and the
+# fast-forward runs only with HEAD on base, so a session left on the sync
+# branch is reconciled from the first session started after checking out base):
 #   a. an existence gate. Everything below runs only when a local
 #      wiki/sync-* or wiki-sync/* branch is present at all, so an ordinary
 #      session pays nothing for any of it.
