@@ -247,3 +247,15 @@ _snapshot() {
   real_after="$(directory_listing_checksum "$real_root/.notebook")"
   [ "$real_after" = "$real_before" ]
 }
+
+@test "11: a non-lock library failure (.notebook not gitignored) exits 4, not the raw library status" {
+  REPO="$(_fixture_repository)"
+  printf '.gaia/local\n' > "$REPO/.gitignore"
+  run --separate-stderr _run_allocator next "$REPO"
+  [ "$status" -eq 4 ]
+  [ -z "$output" ]
+  case "$stderr" in
+    *"catalog write failed"*) ;;
+    *) return 1 ;;
+  esac
+}

@@ -104,5 +104,6 @@ if [ "$exit_status" -ne 0 ]; then
     echo "plan-allocator: could not acquire the plan mint lock; refuse to allocate (would risk duplicate PLAN ids)" >&2
     exit 4
   fi
-  exit "$exit_status"
+  echo "plan-allocator: the catalog write failed (library status $exit_status); nothing was registered" >&2
+  exit 4
 fi
