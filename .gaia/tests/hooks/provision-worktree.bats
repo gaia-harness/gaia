@@ -29,6 +29,7 @@ setup() {
   HOOK_ABSOLUTE_PATH="$(cd "$BATS_TEST_DIRNAME/../../../.claude/hooks" && pwd)/provision-worktree.sh"
   REPO_ROOT_REAL="$(cd "$BATS_TEST_DIRNAME/../../.." && pwd)"
   . "$REPO_ROOT_REAL/.gaia/tests/helpers/path.sh"
+  . "$REPO_ROOT_REAL/.gaia/tests/helpers/background-provisioning.sh"
 }
 
 teardown() {
@@ -135,6 +136,24 @@ SH
   chmod +x "$PNPM_STUB_DIRECTORY/pnpm"
   PATH="$PNPM_STUB_DIRECTORY:$PATH"
   export PATH
+}
+
+# stub_blocking_pnpm: stub_pnpm whose install holds until PNPM_RELEASE exists
+# (ten seconds at most), so a test can observe the hook while it is running.
+stub_blocking_pnpm() {
+  stub_pnpm
+  PNPM_RELEASE="$PNPM_STUB_DIRECTORY/release"
+  cat > "$PNPM_STUB_DIRECTORY/pnpm" <<SH
+#!/bin/sh
+pwd -P >> "$PNPM_LOG"
+printf '%s\n' "\$*" >> "$PNPM_ARGS_LOG"
+for attempt in \$(seq 1 100); do
+  [ -e "$PNPM_RELEASE" ] && exit 0
+  sleep 0.1
+done
+exit 0
+SH
+  chmod +x "$PNPM_STUB_DIRECTORY/pnpm"
 }
 
 # ---------- 1. The direct-call form provisions the named tree ----------
@@ -968,4 +987,100 @@ SH
   grep -qF -- "TYPEGEN FAILED (non-fatal): gaia-packages: frontend/gaia.package.json is missing" <<<"$output" || return 1
   [ -e "$WORKTREE_PATH/frontend/.react-router/types/.stamp" ] && return 1
   [ -L "$WORKTREE_PATH/.gaia/local" ]
+}
+
+# ---------- A hook-triggered entry installs in the background ----------
+# The install and typegen are the hook's cost on a fresh tree, so a hook
+# trigger hands them to a detached job instead of holding the session on them.
+# The blocking stub is what makes "returned before the install finished"
+# observable rather than a timing guess. CI sets GITHUB_ACTIONS, under which
+# the hook stays in line, so each background case clears it.
+@test "an entry payload on a tree with a lockfile returns while the install is still running" {
+  make_main
+  add_lockfile
+  stub_typegen
+  stub_blocking_pnpm
+  WORKTREE_PATH="$(add_worktree feat-background)"
+  unset GITHUB_ACTIONS
+
+  invoke_hook "$(enter_payload "$WORKTREE_PATH")" "$HOOK_ABSOLUTE_PATH"
+  [ "$status" -eq 0 ] || return 1
+  [ -L "$WORKTREE_PATH/.gaia/local" ] || return 1
+  grep -qF -- "still installing in the background" <<<"$output" || return 1
+  log_path="$(background_provisioning_log "$WORKTREE_PATH")"
+  grep -qF -- "$log_path" <<<"$output" || return 1
+  grep -qF -- "provisioning finished" "$log_path" && return 1
+
+  touch "$PNPM_RELEASE"
+  wait_for_background_provisioning "$WORKTREE_PATH" || return 1
+  [ "$(cat "$PNPM_LOG")" = "$WORKTREE_PATH" ] || return 1
+  [ "$(cat "$PNPM_ARGS_LOG")" = "install --frozen-lockfile" ] || return 1
+  grep -qF -- "installed dependencies in $WORKTREE_PATH" "$log_path" || return 1
+  [ "$(cat "$WORKTREE_PATH/frontend/.react-router/types/.stamp")" = "$WORKTREE_PATH/frontend" ]
+}
+
+@test "a second entry while the background job runs starts no second install" {
+  make_main
+  add_lockfile
+  stub_blocking_pnpm
+  WORKTREE_PATH="$(add_worktree feat-background-twice)"
+  unset GITHUB_ACTIONS
+
+  invoke_hook "$(enter_payload "$WORKTREE_PATH")" "$HOOK_ABSOLUTE_PATH"
+  [ "$status" -eq 0 ] || return 1
+  invoke_hook "$(enter_payload "$WORKTREE_PATH")" "$HOOK_ABSOLUTE_PATH"
+  [ "$status" -eq 0 ] || return 1
+  grep -qF -- "provisioning already running in the background" <<<"$output" || return 1
+
+  touch "$PNPM_RELEASE"
+  wait_for_background_provisioning "$WORKTREE_PATH" || return 1
+  [ "$(wc -l < "$PNPM_LOG" | tr -d ' ')" = "1" ]
+}
+
+# A finished job leaves its pid file behind, so a later entry is told apart
+# from a running one by the finished line, not by the pid alone.
+@test "an entry after the background job finished starts a fresh install" {
+  make_main
+  add_lockfile
+  stub_pnpm
+  WORKTREE_PATH="$(add_worktree feat-background-again)"
+  unset GITHUB_ACTIONS
+
+  invoke_hook "$(enter_payload "$WORKTREE_PATH")" "$HOOK_ABSOLUTE_PATH"
+  [ "$status" -eq 0 ] || return 1
+  wait_for_background_provisioning "$WORKTREE_PATH" || return 1
+
+  invoke_hook "$(enter_payload "$WORKTREE_PATH")" "$HOOK_ABSOLUTE_PATH"
+  [ "$status" -eq 0 ] || return 1
+  grep -qF -- "provisioning already running" <<<"$output" && return 1
+  wait_for_background_provisioning "$WORKTREE_PATH" || return 1
+  [ "$(wc -l < "$PNPM_LOG" | tr -d ' ')" = "2" ]
+}
+
+@test "an EnterWorktree payload's additionalContext names the background log" {
+  make_main
+  add_lockfile
+  stub_pnpm
+  WORKTREE_PATH="$(add_worktree feat-background-context)"
+  unset GITHUB_ACTIONS
+  payload="$(jq -nc --arg tree_path "$WORKTREE_PATH" '{hook_event_name: "PostToolUse", tool_name: "EnterWorktree", cwd: $tree_path, tool_response: {worktreePath: $tree_path}}')"
+
+  run bash -c 'printf %s "$1" | bash "$2" 2>/dev/null' _ "$payload" "$HOOK_ABSOLUTE_PATH"
+  [ "$status" -eq 0 ] || return 1
+  context="$(jq -r '.hookSpecificOutput.additionalContext' <<<"$output")"
+  grep -qF -- "$(background_provisioning_log "$WORKTREE_PATH")" <<<"$context" || return 1
+  wait_for_background_provisioning "$WORKTREE_PATH"
+}
+
+@test "under GitHub Actions an entry payload installs before returning" {
+  make_main
+  add_lockfile
+  stub_pnpm
+  WORKTREE_PATH="$(add_worktree feat-background-ci)"
+
+  GITHUB_ACTIONS=true invoke_hook "$(enter_payload "$WORKTREE_PATH")" "$HOOK_ABSOLUTE_PATH"
+  [ "$status" -eq 0 ] || return 1
+  [ "$(cat "$PNPM_LOG")" = "$WORKTREE_PATH" ] || return 1
+  grep -qF -- "in the background" <<<"$output" && return 1
+  true
 }

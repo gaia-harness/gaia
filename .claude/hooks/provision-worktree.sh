@@ -43,8 +43,18 @@
 # signal or a wait, and a lock timeout keeps any existing port file and never
 # blocks. Inert under GitHub Actions.
 #
+# The dependency install and typegen are most of the hook's cost on a fresh
+# tree, seconds that a hook trigger would otherwise block the session for. So a
+# hook-triggered run (a payload on stdin, outside GitHub Actions) on a tree
+# with an install to run does the cheap steps in line and hands those two to a
+# detached background job, whose log lives in the worktree's own git directory
+# and ends with a finished line.
+# A direct call still does everything before returning, since its caller asked
+# for a provisioned tree.
+#
 # Stdout carries what Claude should know and nothing else: one line per server
-# stopped, then one context line naming the tree's ports and the ask-first rule.
+# stopped, one context line naming the tree's ports and the ask-first rule, and
+# one naming the background log while provisioning is still running.
 # SessionStart and a direct call print plain lines; PostToolUse prints one JSON
 # object whose additionalContext holds them. Every log stays on stderr, and a
 # run with nothing to say prints nothing.
@@ -427,8 +437,6 @@ install_workspace() {
   fi
 }
 
-install_workspace "$tree"
-
 # ---------- regenerate the typed routes ----------
 # `.react-router/types` is gitignored, so it exists only where it was generated
 # and a worktree never receives it. Without it every app file importing
@@ -453,43 +461,97 @@ install_workspace "$tree"
 # not run (no lockfile, no pnpm on PATH, or the install itself failed). A CLI
 # at the repository root is deliberately never tried: a package that resolves
 # nothing of its own is reported FAILED, not silently run from the wrong cwd.
-# shellcheck disable=SC1091
-if ! source "$self_directory/lib/gaia-packages.sh" 2>/dev/null; then
-  log "TYPEGEN FAILED (non-fatal): .claude/hooks/lib/gaia-packages.sh is missing, so the packages to generate routes for are unknown"
-else
-  packages_status=0
+generate_typed_routes() {
+  # shellcheck disable=SC1091
+  if ! source "$self_directory/lib/gaia-packages.sh" 2>/dev/null; then
+    log "TYPEGEN FAILED (non-fatal): .claude/hooks/lib/gaia-packages.sh is missing, so the packages to generate routes for are unknown"
+    return 0
+  fi
+  local packages_status=0
   gaia_packages_load "$tree" || packages_status=$?
   if [ "$packages_status" -ne 0 ]; then
     log "TYPEGEN FAILED (non-fatal): $GAIA_PACKAGES_ERROR"
-  else
-    main_root="$(gaia_resolve_main_root "$tree" 2>/dev/null)" || main_root=""
-    while IFS=$'\t' read -r package_name package_path; do
-      [ -n "$package_name" ] || continue
-      if [ "$package_path" = "." ]; then
-        package_prefix=""
-      else
-        package_prefix="$package_path/"
-      fi
-      package_directory="${tree}/${package_prefix%/}"
-      has_router_config=0
-      for router_config in "$package_directory"/react-router.config.*; do
-        [ -e "$router_config" ] && has_router_config=1
-      done
-      [ "$has_router_config" -eq 1 ] || continue
-
-      cli="$tree/${package_prefix}node_modules/.bin/react-router"
-      if [ ! -x "$cli" ] && [ -n "$main_root" ]; then
-        cli="$main_root/${package_prefix}node_modules/.bin/react-router"
-      fi
-      if [ ! -x "$cli" ]; then
-        log "TYPEGEN FAILED (non-fatal) for package $package_name: no react-router CLI at ${package_prefix}node_modules/.bin in $tree or the main checkout -- run 'pnpm install' there"
-      elif (cd "$package_directory" && "$cli" typegen) >/dev/null; then
-        log "generated typed routes for package $package_name in $package_directory"
-      else
-        log "TYPEGEN FAILED (non-fatal) for package $package_name in $package_directory"
-      fi
-    done <<<"$(gaia_packages_list)"
+    return 0
   fi
+  local main_root package_name package_path package_prefix package_directory has_router_config router_config cli
+  main_root="$(gaia_resolve_main_root "$tree" 2>/dev/null)" || main_root=""
+  while IFS=$'\t' read -r package_name package_path; do
+    [ -n "$package_name" ] || continue
+    if [ "$package_path" = "." ]; then
+      package_prefix=""
+    else
+      package_prefix="$package_path/"
+    fi
+    package_directory="${tree}/${package_prefix%/}"
+    has_router_config=0
+    for router_config in "$package_directory"/react-router.config.*; do
+      [ -e "$router_config" ] && has_router_config=1
+    done
+    [ "$has_router_config" -eq 1 ] || continue
+
+    cli="$tree/${package_prefix}node_modules/.bin/react-router"
+    if [ ! -x "$cli" ] && [ -n "$main_root" ]; then
+      cli="$main_root/${package_prefix}node_modules/.bin/react-router"
+    fi
+    if [ ! -x "$cli" ]; then
+      log "TYPEGEN FAILED (non-fatal) for package $package_name: no react-router CLI at ${package_prefix}node_modules/.bin in $tree or the main checkout -- run 'pnpm install' there"
+    elif (cd "$package_directory" && "$cli" typegen) >/dev/null; then
+      log "generated typed routes for package $package_name in $package_directory"
+    else
+      log "TYPEGEN FAILED (non-fatal) for package $package_name in $package_directory"
+    fi
+  done <<<"$(gaia_packages_list)"
+}
+
+install_and_generate() {
+  install_workspace "$tree"
+  generate_typed_routes
+}
+
+# ---------- run the install and typegen, in line or in the background ----------
+# The background job's log and pid file sit in the worktree's own git directory:
+# per tree, never tracked, and removed with the worktree. A job still running
+# from an earlier entry is left to finish rather than joined by a second
+# install in the same tree. Running means its pid is alive AND its log has no
+# finished line yet, so a recycled pid alone never suppresses a new run.
+provisioning_finished_line="provisioning finished"
+provisioning_context_line=""
+
+start_background_provisioning() {
+  local git_directory provisioning_log pid_file running_pid
+  git_directory="$(git -C "$tree" rev-parse --absolute-git-dir 2>/dev/null)" || git_directory=""
+  if [ -z "$git_directory" ] || [ ! -d "$git_directory" ]; then
+    install_and_generate
+    return 0
+  fi
+  provisioning_log="$git_directory/gaia-provision.log"
+  pid_file="$git_directory/gaia-provision.pid"
+
+  running_pid="$(cat "$pid_file" 2>/dev/null)" || running_pid=""
+  if [ -n "$running_pid" ] && kill -0 "$running_pid" 2>/dev/null \
+    && ! grep -qF -- "$provisioning_finished_line" "$provisioning_log" 2>/dev/null; then
+    log "provisioning already running in the background for $tree (pid $running_pid)"
+  else
+    : >"$provisioning_log"
+    # Every descriptor is redirected so the hook's own stdout and stderr close
+    # when it exits; an inherited pipe would hold the session until the job ends.
+    (
+      install_and_generate
+      log "$provisioning_finished_line"
+    ) </dev/null >>"$provisioning_log" 2>&1 &
+    printf '%s\n' "$!" >"$pid_file"
+    log "provisioning dependencies and typed routes in the background for $tree, logging to $provisioning_log"
+  fi
+  provisioning_context_line="Dependencies and typed routes for this worktree are still installing in the background. Before running pnpm, lint, typecheck, tests or a build here, check that the last line of $provisioning_log reads 'provision-worktree: $provisioning_finished_line'."
+}
+
+# Only a tree with an install to run goes to the background: without one, the
+# typegen left over takes about a second and is not worth a job to wait on.
+if [ -n "$payload" ] && [ -z "${GITHUB_ACTIONS:-}" ] \
+  && [ -f "$tree/pnpm-lock.yaml" ] && command -v pnpm >/dev/null 2>&1; then
+  start_background_provisioning
+else
+  install_and_generate
 fi
 
 # ---------- tell Claude ----------
@@ -503,9 +565,10 @@ json_escape() {
   printf '%s' "$text"
 }
 
-emit_ports_output() {
+emit_context_output() {
   local output_text="$ports_report_lines"
   [ -n "$ports_context_line" ] && output_text="${output_text}${ports_context_line}"$'\n'
+  [ -n "$provisioning_context_line" ] && output_text="${output_text}${provisioning_context_line}"$'\n'
   [ -n "$output_text" ] || return 0
   output_text="${output_text%$'\n'}"
   if [ "$payload_event" = "PostToolUse" ]; then
@@ -519,5 +582,5 @@ emit_ports_output() {
   fi
 }
 
-emit_ports_output
+emit_context_output
 exit 0
