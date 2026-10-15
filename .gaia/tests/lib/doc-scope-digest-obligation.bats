@@ -10,9 +10,11 @@
 # landed), never a paraphrase transcribed into the test.
 #
 # Three literals, three reasons:
-#   Group 1: FC-2a's obligation sentence, byte-identical in every agent
-#     definitions. Nothing else pins the literal's own wording against
-#     silent rewrite.
+#   Group 1: FC-2a's obligation sentence, held once in the "Scope
+#     resolution" section of the shared member protocol, which every agent
+#     definition sends its member to before the scope resolver runs. Nothing
+#     else pins the literal's own wording against silent rewrite, and a
+#     second copy in a definition is the drift the shared section removed.
 #   Group 2: the same sentence in wiki/concepts/Registering a Code Audit
 #     Team Member.md step 1 -- the reason it needs its own pin is that the
 #     next member registered reads that page, not the five existing
@@ -46,29 +48,45 @@ setup() {
   # An empty discovery has verified nothing; fail rather than pass vacuously.
   [ "${#AGENTS[@]}" -gt 0 ] || return 1
   REGISTRATION="$ROOT/wiki/concepts/Registering a Code Audit Team Member.md"
+  PROTOCOL="$ROOT/.claude/hooks/lib/audit-member-protocol.md"
+  SCOPE_POINTER='Read `<root>/.claude/hooks/lib/audit-member-protocol.md` by path and follow its "Scope resolution" section'
 
   # FC-2a, verbatim.
   OBLIGATION_LITERAL='Capture your own branch-own digest at scope resolution with `.gaia/scripts/audit-scope-digest.sh --capture`, and at marker-write time read that captured value back with `--read` and pass it as `--scope-digest`; never re-derive it in the writing call, and a rotation between the two means the review was superseded and you must be re-dispatched on the new HEAD.'
 }
 
-# --- Group 1: FC-2a is byte-identical in every agent definition -----------
+# --- Group 1: FC-2a lives once, in the protocol section every member reads --
 
-@test "Group 1: the obligation literal is present in every agent definition" {
-  local agent_file
-  for agent_file in "${AGENTS[@]}"; do
-    grep -qF -- "$OBLIGATION_LITERAL" "$agent_file" || {
-      echo "obligation literal missing from $agent_file" >&2
-      return 1
-    }
-  done
+# scope_section: the protocol's "## Scope resolution" section body.
+scope_section() {
+  awk '/^## Scope resolution$/ { inside = 1; next } inside && /^## / { exit } inside { print }' "$PROTOCOL"
 }
 
-@test "Group 1: the obligation literal appears exactly once per agent definition" {
+@test "Group 1: the obligation literal appears exactly once in the protocol, inside its Scope resolution section" {
+  local section count
+  section="$(scope_section)"
+  [ -n "$section" ] || { echo "no \"## Scope resolution\" section in $PROTOCOL" >&2; return 1; }
+  grep -qF -- "$OBLIGATION_LITERAL" <<<"$section" || {
+    echo "obligation literal missing from the protocol's Scope resolution section" >&2
+    return 1
+  }
+  count="$(grep -cF -- "$OBLIGATION_LITERAL" "$PROTOCOL")"
+  [ "$count" -eq 1 ] || {
+    echo "obligation literal appears $count times in $PROTOCOL, expected exactly 1" >&2
+    return 1
+  }
+}
+
+@test "Group 1: every agent definition sends its member to that section and carries no copy of its own" {
   local agent_file count
   for agent_file in "${AGENTS[@]}"; do
-    count="$(grep -cF -- "$OBLIGATION_LITERAL" "$agent_file")"
-    [ "$count" -eq 1 ] || {
-      echo "obligation literal appears $count times in $agent_file, expected exactly 1" >&2
+    grep -qF -- "$SCOPE_POINTER" "$agent_file" || {
+      echo "$agent_file does not send its member to the protocol's Scope resolution section" >&2
+      return 1
+    }
+    count="$(grep -cF -- "$OBLIGATION_LITERAL" "$agent_file" || true)"
+    [ "$count" -eq 0 ] || {
+      echo "$agent_file carries its own copy of the obligation literal, which can drift from the protocol's" >&2
       return 1
     }
   done

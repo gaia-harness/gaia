@@ -161,10 +161,10 @@ Commit what the CLI wrote, `.gaia/manifest.json` plus any `.gaia/release-exclude
 
 ## Coverage note
 
-Step 3 still has no automated test: its actor is a conversation, and nothing can run a conversation as a unit test. What changed is that the prose is no longer the only thing standing behind it.
+Step 3 has no automated test: its actor is a conversation, and nothing can run a conversation as a unit test.
 
-Every decision now carries a citation, so a wrong decision is a **wrong citation** rather than an unexaminable verdict, and checking one is bounded: read the named category's rationale in `.gaia/release-exclude` and compare it to the file. Nobody re-derives the decision from scratch. That is what the old gate asked for and never got, which is how months of first-option answers accumulated without anyone able to spot a bad one.
+Every decision carries a citation, so a wrong decision is a **wrong citation** rather than an unexaminable verdict, and checking one is bounded: read the named category's rationale in `.gaia/release-exclude` and compare it to the file. Nobody re-derives the decision from scratch.
 
 Both halves of the record land in the same commit (3d), and a later pass over the accumulated ledger reads that record rather than the files alone.
 
-Prose remains the only enforcement for two things: that the questions in 3b get asked at all, and that they are written the way 3c requires. Follow it as written rather than treating it as a suggestion.
+Prose is the only enforcement for two things: that the questions in 3b get asked at all, and that they are written the way 3c requires.

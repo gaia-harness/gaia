@@ -23,8 +23,10 @@
 # definition, runs against a fixture with a dirty in-scope file, a clean tree, a
 # dirty out-of-scope file, and a git whose `status` fails. The refusal contract
 # is agent-executed instruction prose, so it is held STRUCTURALLY, in the shape
-# of audit-guard-structural.bats: every member invokes the resolver ahead of the
-# contract that consumes its output, and carries the same contract. Every pin
+# of audit-guard-structural.bats: the contract lives once, in the "Scope
+# resolution" section of the shared member protocol, and every member sends
+# itself to that section before it invokes the resolver whose output the
+# contract consumes. Every pin
 # carries its own non-vacuity proof at the bottom of this file; see the comment
 # there for why those are meaning-changing edits rather than deletions of the
 # pinned string.
@@ -37,6 +39,7 @@ setup() {
   THIS_DIRECTORY="$( cd "$( dirname "$BATS_TEST_FILENAME" )" && pwd )"
   REPO_ROOT="$( cd "$THIS_DIRECTORY/../../.." && pwd )"
   SCRIPT="$REPO_ROOT/.gaia/scripts/audit-resolve-scope.sh"
+  PROTOCOL="$REPO_ROOT/.claude/hooks/lib/audit-member-protocol.md"
   . "$REPO_ROOT/.gaia/tests/helpers/catchup-fixture.sh"
 
   # The Code Audit Team members. The list is spelled out rather than
@@ -77,6 +80,10 @@ code-audit-maintainer-shell"
   # leading indentation: the content is what must not drift.
   SENTINEL_LINE='dirty=("dirty-scope check failed")'
 
+  # The pointer every member carries to the protocol section holding the
+  # refusal contract below. The contract binds a member only through it.
+  SCOPE_POINTER='Read `<root>/.claude/hooks/lib/audit-member-protocol.md` by path and follow its "Scope resolution" section'
+
   # The byte-identical refusal contract.
   REFUSAL='**Any `DIRTY=` line WITHHOLDS this pass.**'
 
@@ -95,6 +102,30 @@ code-audit-maintainer-shell"
 
 member_path() {
   printf '%s/.claude/agents/%s.md' "$REPO_ROOT" "$1"
+}
+
+# scope_section_file: writes the protocol's "## Scope resolution" section body
+# to a file and prints its path, so the contract pins read the section a
+# member is sent to rather than anywhere in the protocol.
+scope_section_file() {
+  local section_path="$BATS_TEST_TMPDIR/scope-section.md"
+  awk '/^## Scope resolution$/ { inside = 1; next } inside && /^## / { exit } inside { print }' "$PROTOCOL" > "$section_path"
+  [ -s "$section_path" ] || { echo "no \"## Scope resolution\" section in $PROTOCOL" >&2; return 1; }
+  printf '%s' "$section_path"
+}
+
+# assert_contract_reaches GATING_MEMBERS NEEDLE: NEEDLE sits in the protocol's
+# scope section, and every listed member sends itself to that section.
+assert_contract_reaches() {
+  local members="$1" needle="$2" section member_name
+  section="$(scope_section_file)" || return 1
+  assert_carries "$section" "$needle" || { echo "the protocol's Scope resolution section lacks: $needle" >&2; return 1; }
+  for member_name in $members; do
+    assert_carries "$(member_path "$member_name")" "$SCOPE_POINTER" || {
+      echo "$member_name does not send its member to the protocol's Scope resolution section" >&2
+      return 1
+    }
+  done
 }
 
 # resolver_invocation FILE: the scope-resolver command inside FILE's bash
@@ -210,26 +241,23 @@ EOF
   true
 }
 
-@test "every GATING member carries the byte-identical withhold contract" {
-  for member_name in $GATING; do
-    assert_carries "$(member_path "$member_name")" "$REFUSAL" || {
-      echo "missing or drifted refusal contract: $member_name" >&2
-      return 1
-    }
-  done
+@test "every GATING member reaches the byte-identical withhold contract" {
+  assert_contract_reaches "$GATING" "$REFUSAL" || {
+    echo "missing or drifted refusal contract" >&2
+    return 1
+  }
 }
 
-@test "the resolver runs before the dirty contract that reads its output" {
-  local member_name member_file needle invocation_line contract_line
+@test "every member reads the dirty contract's section before it runs the resolver" {
+  local member_name member_file invocation_line pointer_line
   for member_name in $MEMBERS; do
     member_file="$(member_path "$member_name")"
-    needle="$REFUSAL"
     invocation_line="$(grep -nF -- "<root>/.gaia/scripts/audit-resolve-scope.sh --member $member_name" "$member_file" | head -1 | cut -d: -f1)"
-    contract_line="$(grep -nF -- "$needle" "$member_file" | head -1 | cut -d: -f1)"
+    pointer_line="$(grep -nF -- "$SCOPE_POINTER" "$member_file" | head -1 | cut -d: -f1)"
     [ -n "$invocation_line" ] || { echo "no resolver invocation found: $member_name" >&2; return 1; }
-    [ -n "$contract_line" ] || { echo "no dirty contract found: $member_name" >&2; return 1; }
-    [ "$contract_line" -gt "$invocation_line" ] || {
-      echo "dirty contract precedes the resolver it reads: $member_name" >&2
+    [ -n "$pointer_line" ] || { echo "no pointer to the protocol's Scope resolution section: $member_name" >&2; return 1; }
+    [ "$pointer_line" -lt "$invocation_line" ] || {
+      echo "the resolver runs before its member is sent to the contract that reads its output: $member_name" >&2
       return 1
     }
   done
@@ -259,30 +287,24 @@ EOF
 }
 
 @test "every GATING member exempts the failure sentinel from the remit filter" {
-  for member_name in $GATING; do
-    assert_carries "$(member_path "$member_name")" "$SENTINEL_CARVEOUT" || {
-      echo "fail-closed sentinel is filterable away: $member_name" >&2
-      return 1
-    }
-  done
+  assert_contract_reaches "$GATING" "$SENTINEL_CARVEOUT" || {
+    echo "fail-closed sentinel is filterable away" >&2
+    return 1
+  }
 }
 
 @test "every GATING member withholds without stranding a refusal artifact" {
-  for member_name in $GATING; do
-    assert_carries "$(member_path "$member_name")" "$NO_REFUSAL_ARTIFACT" || {
-      echo "does not forbid the digest-keyed refusal artifact: $member_name" >&2
-      return 1
-    }
-  done
+  assert_contract_reaches "$GATING" "$NO_REFUSAL_ARTIFACT" || {
+    echo "does not forbid the digest-keyed refusal artifact" >&2
+    return 1
+  }
 }
 
 @test "the refusal briefs: every member owes the sidecar on the dirty path" {
-  for member_name in $MEMBERS; do
-    assert_carries "$(member_path "$member_name")" "$SIDECAR_CLAUSE" || {
-      echo "refusal does not oblige the findings sidecar: $member_name" >&2
-      return 1
-    }
-  done
+  assert_contract_reaches "$MEMBERS" "$SIDECAR_CLAUSE" || {
+    echo "refusal does not oblige the findings sidecar" >&2
+    return 1
+  }
 }
 
 # --- Behavioural: each member's own invocation --------------------------------
@@ -387,7 +409,7 @@ assert_pin_breaks() {
 }
 
 @test "the refusal pin breaks when the refusal becomes a warning (non-vacuity)" {
-  assert_pin_breaks "$(member_path code-audit-maintainer-shell)" refusal 's|WITHHOLDS this pass|is worth noting|' "$REFUSAL"
+  assert_pin_breaks "$(scope_section_file)" refusal 's|WITHHOLDS this pass|is worth noting|' "$REFUSAL"
 }
 
 @test "the print pin breaks when the result stops reaching stderr (non-vacuity)" {
@@ -431,17 +453,21 @@ assert_pin_breaks() {
 }
 
 @test "the sentinel pin breaks when the carve-out is softened (non-vacuity)" {
-  assert_pin_breaks "$(member_path code-audit-maintainer-shell)" sentinel 's|withholds unconditionally|is worth a look|' "$SENTINEL_CARVEOUT"
+  assert_pin_breaks "$(scope_section_file)" sentinel 's|withholds unconditionally|is worth a look|' "$SENTINEL_CARVEOUT"
 }
 
 @test "the artifact pin breaks when the prohibition is softened (non-vacuity)" {
-  assert_pin_breaks "$(member_path code-audit-maintainer-shell)" artifact 's|Withhold without writing|Consider not writing|' "$NO_REFUSAL_ARTIFACT"
+  assert_pin_breaks "$(scope_section_file)" artifact 's|Withhold without writing|Consider not writing|' "$NO_REFUSAL_ARTIFACT"
 }
 
 @test "the sidecar pin breaks when the obligation is softened (non-vacuity)" {
-  assert_pin_breaks "$(member_path code-audit-maintainer-shell)" sidecar 's|write the findings sidecar naming each dirty path|mention the dirty paths somewhere|' "$SIDECAR_CLAUSE"
+  assert_pin_breaks "$(scope_section_file)" sidecar 's|write the findings sidecar naming each dirty path|mention the dirty paths somewhere|' "$SIDECAR_CLAUSE"
 }
 
 @test "the run-order pin breaks when the anchor stops refusing (non-vacuity)" {
   assert_pin_breaks "$(member_path code-audit-maintainer-shell)" anchor 's|refuse the pass|warn|g' "$METHOD_ANCHOR"
+}
+
+@test "the pointer pin breaks when a member is sent to a different section (non-vacuity)" {
+  assert_pin_breaks "$(member_path code-audit-maintainer-shell)" pointer 's|follow its "Scope resolution" section|follow its "Output format" section|' "$SCOPE_POINTER"
 }
