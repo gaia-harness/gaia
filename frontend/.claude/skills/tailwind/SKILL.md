@@ -107,14 +107,17 @@ Boolean variants key on `true` and `false`. For the variant prop's type, `Varian
 
 ## Custom Values
 
-Prefer Tailwind's spacing scale (`p-4.25`, `min-w-9`). Arbitrary values are rejected by lint (`shadcn/no-arbitrary-values`) outside the vendored ui folder. When no scale value fits, round to the nearest scale step, or add a token to `app/styles/tailwind.css` `@theme` when the same custom value appears more than once. Never use `px`.
+Prefer Tailwind's scale (`p-4.25`, `min-w-9`, `text-xs`) and existing tokens. An arbitrary value is allowed only where neither fits (`bg-size-[200%_100%]`, `grid-cols-[auto_1fr]`); add a token to `app/styles/tailwind.css` `@theme` when the same custom value appears more than once. Lint enforces the edges: `better-tailwindcss/enforce-canonical-classes` rewrites an arbitrary value that has a scale equivalent (`w-[16px]` to `w-4`), and an arbitrary color is an error (colors are role tokens, see above). Write `rem`, not `px`.
 
 ```tsx
-// BAD, arbitrary px value
-<p className="text-[9px]" />
+// BAD, arbitrary value where a scale step fits
+<p className="mt-[1rem]" />
 
 // GOOD, scale value
-<p className="text-xs" />
+<p className="mt-4" />
+
+// GOOD, no scale step or token expresses this
+<div className="grid grid-cols-[auto_1fr]" />
 ```
 
 ## When to create a role token

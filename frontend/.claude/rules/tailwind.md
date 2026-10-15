@@ -32,4 +32,4 @@ Class strategy: `@custom-variant dark (&:where(.dark, .dark *))`. The `.dark` bl
 
 ## No arbitrary colors
 
-No hex, `rgb()`, `hsl()` or `oklch()` literals in `[]` or in a component's CSS. Colors live in `theme.css` only.
+No hex, `rgb()`, `hsl()` or `oklch()` literals in `[]` or in a component's CSS. Colors live in `theme.css` only. Lint rejects an arbitrary color class (`better-tailwindcss/no-restricted-classes`, set by `@gaia-react/lint`'s `shadcn` bundle); other arbitrary values are allowed where no scale step or token fits (the tailwind skill's "Custom Values").

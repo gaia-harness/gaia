@@ -73,7 +73,7 @@ export default defineConfig([
 | `guardrails` | `import-x/no-restricted-paths` with carve-outs: `resources.*` and `actions.*` route files are exempt for UI layers | Carve-out added in 1.6.0; spelling moved to `actions.*`/`resources.*` in 2.2.0 (the older `+` folders are still accepted on the 2.x line) |
 | `betterTailwind` | Tailwind class ordering and hygiene; the only unknown-class check (`shadcn/no-unknown-classes` stays off) | `ignore` lists classes that are real but not in the Tailwind graph |
 | `prettier` | Formatting via Prettier as an ESLint rule | The Prettier config also sorts classes inside `cn(...)` |
-| `shadcn` | `@shadcn/lint` token rules on source files: `no-raw-colors`, `require-static-classes`, `no-arbitrary-values`, `no-inline-styles` and `no-restyle` (`allow: ['layout']`), all errors; the vendored-ui exemption for `ui/*.tsx` | Spread last, after `lint.prettier`, so its `prettier/prettier: off` wins on vendored files; `settings.shadcn.ui` is set at root level; carried by 3.0.0-rc.1 |
+| `shadcn` | `@shadcn/lint` token rules on source files: `no-raw-colors`, `require-static-classes`, `no-inline-styles` and `no-restyle` (`allow: ['layout']`), all errors; `no-arbitrary-values` off, with `better-tailwindcss/no-restricted-classes` banning arbitrary colors instead; the vendored-ui exemption for `ui/*.tsx` | Spread last, after `lint.prettier`, so its `prettier/prettier: off` wins on vendored files; `settings.shadcn.ui` is set at root level; carried by 3.0.0-rc.1 |
 
 ### Component layer
 
