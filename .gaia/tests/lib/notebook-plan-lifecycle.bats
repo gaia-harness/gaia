@@ -11,6 +11,11 @@
 
 bats_require_minimum_version 1.5.0
 
+# Builds the throwaway fixture repository the suite acts on.
+_fixture_repository() {
+  "$HELPERS/tmp-notebook-repo.sh" "$@"
+}
+
 setup() {
   HELPERS="$BATS_TEST_DIRNAME/helpers"
   # shellcheck source=helpers/usage-gate.sh
@@ -68,7 +73,7 @@ _snapshot() {
 }
 
 @test "a plan runs allocate, merge stamp, reduce, reap; its number is never reused" {
-  REPO="$("$HELPERS/tmp-notebook-repo.sh")"
+  REPO="$(_fixture_repository)"
 
   run bash "$REPO/.gaia/scripts/spec/plan-allocator.sh" next "$REPO" "lifecycle plan"
   [ "$status" -eq 0 ]
@@ -106,10 +111,10 @@ _snapshot() {
 @test "a merged plan is reaped from main's notebook, run from main or from a linked worktree; a same-named old-location folder survives" {
   for origin in main linked; do
     if [ "$origin" = main ]; then
-      REPO="$("$HELPERS/tmp-notebook-repo.sh")"
+      REPO="$(_fixture_repository)"
       runner="$REPO"
     else
-      fixture="$("$HELPERS/tmp-notebook-repo.sh" --worktree w)"
+      fixture="$(_fixture_repository --worktree w)"
       REPO="$(printf '%s\n' "$fixture" | sed -n 1p)"
       LINKED="$(printf '%s\n' "$fixture" | sed -n 2p)"
       runner="$LINKED"
@@ -142,7 +147,7 @@ _snapshot() {
 }
 
 @test "not yet moved: the allocator and the reaper exit 3 with the move command and change nothing; the reconcile and archive scripts stay advisory" {
-  REPO="$("$HELPERS/tmp-notebook-repo.sh" --legacy \
+  REPO="$(_fixture_repository --legacy \
     --seed-plan-folder PLAN-001 ready)"
   seed_close_row "$REPO/.gaia/local/telemetry" plan:PLAN-001 gaia-plan
   before="$(_snapshot)"

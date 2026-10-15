@@ -9,6 +9,11 @@
 
 bats_require_minimum_version 1.5.0
 
+# Builds the throwaway fixture repository the suite acts on.
+_fixture_repository() {
+  "$HELPERS/tmp-notebook-repo.sh" "$@"
+}
+
 setup() {
   HELPERS="$BATS_TEST_DIRNAME/helpers"
   # snapshot_file + assert_files_identical: byte identity without `$(cat …)`.
@@ -67,7 +72,7 @@ _no_gh_path() {
 
 # --- 6: matching merged PR flips SPEC-006 to merged with merged_at from the PR ---
 @test "6: gh returns a merged PR on plan/spec-006-*; SPEC-006 flips to merged" {
-  REPO="$("$HELPERS/tmp-notebook-repo.sh" --seed-spec SPEC-006 ready)"
+  REPO="$(_fixture_repository --seed-spec SPEC-006 ready)"
   _stub_gh_echoing '[{"number":42,"headRefName":"plan/spec-006-x","mergedAt":"2026-05-01T00:00:00Z"}]'
 
   run bash -c "PATH='$STUB_DIRECTORY:$PATH' bash '$REPO/$RECONCILE' '$REPO'"
@@ -78,7 +83,7 @@ _no_gh_path() {
 }
 
 @test "6b: a worktree-spelled head branch matches, and the latest of two merges wins" {
-  REPO="$("$HELPERS/tmp-notebook-repo.sh" --seed-spec SPEC-006 ready)"
+  REPO="$(_fixture_repository --seed-spec SPEC-006 ready)"
   _stub_gh_echoing '[{"number":40,"headRefName":"plan/spec-006-first","mergedAt":"2026-04-01T00:00:00Z"},{"number":43,"headRefName":"worktree-plan+spec-006-x","mergedAt":"2026-05-02T00:00:00Z"}]'
 
   run bash -c "PATH='$STUB_DIRECTORY:$PATH' bash '$REPO/$RECONCILE' '$REPO'"
@@ -88,7 +93,7 @@ _no_gh_path() {
 }
 
 @test "7: no matching merged PR; SPEC-006 stays ready, no-op, exit 0" {
-  REPO="$("$HELPERS/tmp-notebook-repo.sh" --seed-spec SPEC-006 ready)"
+  REPO="$(_fixture_repository --seed-spec SPEC-006 ready)"
   # Merged PRs exist, but none names SPEC-006 in a spelling GAIA mints: one
   # names another SPEC, one carries the retired unprefixed spelling.
   _stub_gh_echoing '[{"number":7,"headRefName":"plan/spec-999-other","mergedAt":"2026-05-01T00:00:00Z"},{"number":8,"headRefName":"spec-006-legacy","mergedAt":"2026-05-01T00:00:00Z"}]'
@@ -101,7 +106,7 @@ _no_gh_path() {
 
 # --- 8: fail-open; no gh on PATH, or gh present but returns empty ---
 @test "8a: gh absent from PATH; exit 0, catalog unchanged" {
-  REPO="$("$HELPERS/tmp-notebook-repo.sh" --seed-spec SPEC-006 ready)"
+  REPO="$(_fixture_repository --seed-spec SPEC-006 ready)"
   before="$(snapshot_file "$(_catalog)")"
   _no_gh_path
 
@@ -112,7 +117,7 @@ _no_gh_path() {
 }
 
 @test "8b: gh present but returns empty output; exit 0, catalog unchanged" {
-  REPO="$("$HELPERS/tmp-notebook-repo.sh" --seed-spec SPEC-006 ready)"
+  REPO="$(_fixture_repository --seed-spec SPEC-006 ready)"
   before="$(snapshot_file "$(_catalog)")"
   _stub_gh_empty
 
@@ -123,7 +128,7 @@ _no_gh_path() {
 }
 
 @test "9: a retired 'specified' row is not a merge candidate; logged unrecognized, left as-is" {
-  REPO="$("$HELPERS/tmp-notebook-repo.sh" --seed-spec SPEC-006 specified)"
+  REPO="$(_fixture_repository --seed-spec SPEC-006 specified)"
   # A matching merged PR exists, but a "specified" row is off-vocabulary now
   # (the finalize state migrated to "ready"), so it is never reached as a
   # candidate; the off-vocab normalizer logs it as unrecognized instead.
@@ -138,7 +143,7 @@ _no_gh_path() {
 # --- 10: not ready ------------------------------------------------------------
 
 @test "10: a not-ready notebook prints the move line, changes nothing and exits 0" {
-  REPO="$("$HELPERS/tmp-notebook-repo.sh" --legacy --seed-spec SPEC-006 ready)"
+  REPO="$(_fixture_repository --legacy --seed-spec SPEC-006 ready)"
   _stub_gh_echoing '[{"number":42,"headRefName":"plan/spec-006-x","mergedAt":"2026-05-01T00:00:00Z"}]'
   before="$(snapshot_file "$(_catalog)")"
 
@@ -154,13 +159,13 @@ _no_gh_path() {
 # --- 11: tree selector ----------------------------------------------------------
 
 @test "11: run from the real repo's cwd with a fixture operand, only the fixture's catalog changes" {
-  REPO="$("$HELPERS/tmp-notebook-repo.sh" --seed-spec SPEC-006 ready)"
+  REPO="$(_fixture_repository --seed-spec SPEC-006 ready)"
   _stub_gh_echoing '[{"number":42,"headRefName":"plan/spec-006-x","mergedAt":"2026-05-01T00:00:00Z"}]'
   real_repo="$(cd "$BATS_TEST_DIRNAME/../../.." && pwd)"
-  real_before="$(find "$real_repo/.notebook" 2>/dev/null | LC_ALL=C sort || true)"
+  real_before="$(directory_listing_checksum "$real_repo/.notebook")"
 
   run bash -c "cd '$real_repo' && PATH='$STUB_DIRECTORY:$PATH' bash '$REPO/$RECONCILE' '$REPO'"
   [ "$status" -eq 0 ]
   [ "$(_status_of SPEC-006)" = "merged" ]
-  [ "$(find "$real_repo/.notebook" 2>/dev/null | LC_ALL=C sort || true)" = "$real_before" ]
+  [ "$(directory_listing_checksum "$real_repo/.notebook")" = "$real_before" ]
 }

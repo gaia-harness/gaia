@@ -14,6 +14,11 @@
 
 bats_require_minimum_version 1.5.0
 
+# Builds the throwaway fixture repository the suite acts on.
+_fixture_repository() {
+  "$HELPERS/tmp-notebook-repo.sh" "$@"
+}
+
 setup() {
   HELPERS="$BATS_TEST_DIRNAME/helpers"
   RENUMBER=".gaia/scripts/spec/spec-renumber.sh"
@@ -58,7 +63,7 @@ _row() {
 # --- 1: renumber-while-live re-keys the .lock, preserving its live pid ------
 
 @test "1: renumbering a draft with a live-shaped .lock re-keys it and keeps the recorded pid" {
-  REPO="$("$HELPERS/tmp-notebook-repo.sh" --seed-spec-folder SPEC-901 draft)"
+  REPO="$(_fixture_repository --seed-spec-folder SPEC-901 draft)"
 
   # Stand in for a live session-host: a real, long-lived background process
   # whose pid the lock records, so "is the pid still alive" is genuinely true.
@@ -87,7 +92,7 @@ _row() {
 # --- 2: a missing lock is a normal no-op ------------------------------------
 
 @test "2: renumbering a draft with no .lock file is a no-op for the lock re-key" {
-  REPO="$("$HELPERS/tmp-notebook-repo.sh" --seed-spec-folder SPEC-903 draft)"
+  REPO="$(_fixture_repository --seed-spec-folder SPEC-903 draft)"
 
   run _renumber "$REPO" SPEC-903 SPEC-904
   [ "$status" -eq 0 ]
@@ -99,7 +104,7 @@ _row() {
 # --- 3b: the rename hint rewrites a padded branch number --------------------
 
 @test "3b: the rename hint rewrites a padded branch number" {
-  REPO="$("$HELPERS/tmp-notebook-repo.sh" --seed-spec-folder SPEC-011 draft)"
+  REPO="$(_fixture_repository --seed-spec-folder SPEC-011 draft)"
   git -C "$REPO" checkout -q -b "plan/spec-011-cards"
 
   run _renumber "$REPO" SPEC-011 SPEC-012
@@ -110,7 +115,7 @@ _row() {
 # --- 8: renumber a foldered SPEC ---------------------------------------------
 
 @test "8a: renumber renames the folder; SPEC.md keeps its name; siblings ride along" {
-  REPO="$("$HELPERS/tmp-notebook-repo.sh" --seed-spec-folder SPEC-002 draft)"
+  REPO="$(_fixture_repository --seed-spec-folder SPEC-002 draft)"
   echo "report body" > "$REPO/.notebook/specs/SPEC-002/REPORT.md"
 
   run _renumber "$REPO" SPEC-002 SPEC-005
@@ -127,7 +132,7 @@ _row() {
 }
 
 @test "8b: renumber collision guard fires when the target folder exists" {
-  REPO="$("$HELPERS/tmp-notebook-repo.sh" --seed-spec-folder SPEC-002 draft --seed-spec-folder SPEC-005 draft)"
+  REPO="$(_fixture_repository --seed-spec-folder SPEC-002 draft --seed-spec-folder SPEC-005 draft)"
 
   run _renumber "$REPO" SPEC-002 SPEC-005
   [ "$status" -eq 4 ]
@@ -138,7 +143,7 @@ _row() {
 # --- 9: the catalog row is re-keyed ------------------------------------------
 
 @test "9a: the row id and path change, renamed_from is stamped and other fields are kept" {
-  REPO="$("$HELPERS/tmp-notebook-repo.sh" --seed-row '{"kind":"spec","id":"SPEC-002","path":"specs/SPEC-002","status":"draft","subject":"keep me","created_at":"2026-01-01T00:00:00Z","status_changed_at":"2026-01-01T00:00:00Z","reservation":"provisional","source":"allocated"}')"
+  REPO="$(_fixture_repository --seed-row '{"kind":"spec","id":"SPEC-002","path":"specs/SPEC-002","status":"draft","subject":"keep me","created_at":"2026-01-01T00:00:00Z","status_changed_at":"2026-01-01T00:00:00Z","reservation":"provisional","source":"allocated"}')"
   mkdir -p "$REPO/.notebook/specs/SPEC-002"
   printf -- '---\nspec_id: SPEC-002\nstatus: draft\n---\n' > "$REPO/.notebook/specs/SPEC-002/SPEC.md"
 
@@ -155,7 +160,7 @@ _row() {
 }
 
 @test "9b: renumbering onto an id whose row already exists is refused and changes nothing" {
-  REPO="$("$HELPERS/tmp-notebook-repo.sh" --seed-spec-folder SPEC-002 draft --seed-spec SPEC-005 ready)"
+  REPO="$(_fixture_repository --seed-spec-folder SPEC-002 draft --seed-spec SPEC-005 ready)"
   before_catalog="$(snapshot_file "$(_catalog)")"
   before_listing="$(find "$REPO/.notebook" -type f | LC_ALL=C sort)"
 
@@ -174,7 +179,7 @@ _row() {
   if [ "$(id -u)" -eq 0 ]; then
     skip "a read-only folder does not stop root"
   fi
-  REPO="$("$HELPERS/tmp-notebook-repo.sh" --seed-spec-folder SPEC-002 draft)"
+  REPO="$(_fixture_repository --seed-spec-folder SPEC-002 draft)"
   # A read-only notebook folder lets every read and the lock succeed while the
   # catalog temp file cannot be created, so the row re-key is what fails.
   chmod a-w "$REPO/.notebook"
@@ -211,7 +216,7 @@ _hold_catalog_lock() {
 }
 
 @test "10a: while another writer holds the catalog lock the renumber waits, then completes" {
-  REPO="$("$HELPERS/tmp-notebook-repo.sh" --seed-spec-folder SPEC-002 draft)"
+  REPO="$(_fixture_repository --seed-spec-folder SPEC-002 draft)"
   _hold_catalog_lock
 
   _renumber "$REPO" SPEC-002 SPEC-008 >"$BATS_TEST_TMPDIR/renumber.out" 2>&1 &
@@ -233,7 +238,7 @@ _hold_catalog_lock() {
 }
 
 @test "10b: registers racing a renumber lose neither write" {
-  REPO="$("$HELPERS/tmp-notebook-repo.sh" --seed-spec-folder SPEC-002 draft)"
+  REPO="$(_fixture_repository --seed-spec-folder SPEC-002 draft)"
   notebook_library="$REPO/.gaia/scripts/notebook/notebook-lib.sh"
 
   _renumber "$REPO" SPEC-002 SPEC-009 >"$BATS_TEST_TMPDIR/renumber.out" 2>&1 &
@@ -250,7 +255,7 @@ _hold_catalog_lock() {
 # --- 11: not ready -----------------------------------------------------------
 
 @test "11: a not-ready notebook is left alone: exit 3, the move line on stderr, no folder and no row renamed" {
-  REPO="$("$HELPERS/tmp-notebook-repo.sh" --legacy --seed-spec-folder SPEC-002 draft)"
+  REPO="$(_fixture_repository --legacy --seed-spec-folder SPEC-002 draft)"
   before_catalog="$(snapshot_file "$(_catalog)")"
   before_listing="$(find "$REPO/.notebook" "$REPO/.gaia/local/specs" -type f | LC_ALL=C sort)"
   before_hashes="$(_hash_notebook)"
@@ -268,7 +273,7 @@ _hold_catalog_lock() {
 }
 
 @test "12: run from a linked worktree, the renumber lands in main's notebook" {
-  built="$("$HELPERS/tmp-notebook-repo.sh" --seed-spec-folder SPEC-002 draft --worktree x)"
+  built="$(_fixture_repository --seed-spec-folder SPEC-002 draft --worktree x)"
   REPO="$(printf '%s\n' "$built" | sed -n 1p)"
   WORKTREE="$(printf '%s\n' "$built" | sed -n 2p)"
 

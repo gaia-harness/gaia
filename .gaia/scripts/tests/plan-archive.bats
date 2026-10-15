@@ -17,6 +17,11 @@
 
 bats_require_minimum_version 1.5.0
 
+# Builds the throwaway fixture repository the suite acts on.
+_fixture_repository() {
+  "$TMP_NOTEBOOK_REPO" "$@"
+}
+
 setup() {
   THIS_DIRECTORY="$( cd "$( dirname "$BATS_TEST_FILENAME" )" && pwd )"
   SCRIPT="$THIS_DIRECTORY/../plan-archive.sh"
@@ -28,7 +33,7 @@ setup() {
   . "$REPO_ROOT/.gaia/tests/lib/helpers/usage-gate.sh"
   TMP_NOTEBOOK_REPO="$REPO_ROOT/.gaia/tests/lib/helpers/tmp-notebook-repo.sh"
 
-  SANDBOX="$("$TMP_NOTEBOOK_REPO")"
+  SANDBOX="$(_fixture_repository)"
   # The fixture carries summary-verify.sh; the cases that exercise the plain
   # non-empty fallback need it absent, and copy_summary_verify puts it back.
   rm -f "$SANDBOX/.gaia/scripts/summary-verify.sh"
@@ -397,7 +402,7 @@ EOF
 
 @test "linked worktree: the ledger under the main checkout, reached through --main-root, clears the gate" {
   rm -rf "$SANDBOX"
-  fixture="$("$TMP_NOTEBOOK_REPO" --worktree-bare w)"
+  fixture="$(_fixture_repository --worktree-bare w)"
   main_checkout="$(printf '%s\n' "$fixture" | sed -n 1p)"
   LINKED="$(printf '%s\n' "$fixture" | sed -n 2p)"
   SANDBOX="$main_checkout"
@@ -426,7 +431,7 @@ EOF
 
 @test "linked worktree with a notebook link: an absolute path through the link acts on main's folder" {
   rm -rf "$SANDBOX"
-  fixture="$("$TMP_NOTEBOOK_REPO" --worktree w)"
+  fixture="$(_fixture_repository --worktree w)"
   main_checkout="$(printf '%s\n' "$fixture" | sed -n 1p)"
   LINKED="$(printf '%s\n' "$fixture" | sed -n 2p)"
   SANDBOX="$main_checkout"
@@ -676,7 +681,7 @@ EOF
 
 @test "not ready (move pending): exit 0, the move line on stderr, the folder untouched" {
   rm -rf "$SANDBOX"
-  SANDBOX="$("$TMP_NOTEBOOK_REPO" --legacy)"
+  SANDBOX="$(_fixture_repository --legacy)"
   CATALOG="$SANDBOX/.notebook/catalog.json"
   TELEMETRY="$SANDBOX/.gaia/local/telemetry"
   seed_plan ".notebook/plans/PLAN-001"

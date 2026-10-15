@@ -2,7 +2,6 @@
 # Create a tmp git repo seeded with a notebook and its catalog, for testing the
 # scripts that read and write it. Prints the repo path on stdout (and the linked
 # worktree path on a second line when --worktree or --worktree-bare is given).
-# Sibling of tmp-spec-repo.sh, which seeds the per-kind ledgers instead.
 #
 # Inside the tmp repo:
 #   - git init (main), test identity, commit.gpgsign false, a .gitignore that

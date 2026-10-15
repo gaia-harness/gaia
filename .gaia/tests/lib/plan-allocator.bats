@@ -9,8 +9,14 @@
 
 bats_require_minimum_version 1.5.0
 
+# Builds the throwaway fixture repository the suite acts on.
+_fixture_repository() {
+  "$HELPERS/tmp-notebook-repo.sh" "$@"
+}
+
 setup() {
   HELPERS="$BATS_TEST_DIRNAME/helpers"
+  . "$BATS_TEST_DIRNAME/../helpers/files.sh"
 }
 
 teardown() {
@@ -38,7 +44,7 @@ _snapshot() {
 }
 
 @test "1: fresh run registers a ready row + returns PLAN-001" {
-  REPO="$("$HELPERS/tmp-notebook-repo.sh")"
+  REPO="$(_fixture_repository)"
   run _run_allocator next "$REPO"
   [ "$status" -eq 0 ]
   [ "$output" = "PLAN-001" ]
@@ -49,7 +55,7 @@ _snapshot() {
 }
 
 @test "2: second call returns PLAN-002 with the exact row shape" {
-  REPO="$("$HELPERS/tmp-notebook-repo.sh")"
+  REPO="$(_fixture_repository)"
   run _run_allocator next "$REPO"
   [ "$status" -eq 0 ]
   run _run_allocator next "$REPO" "my subject"
@@ -72,14 +78,14 @@ _snapshot() {
 }
 
 @test "3a: no-terminator multiline subject collapses to one line" {
-  REPO="$("$HELPERS/tmp-notebook-repo.sh")"
+  REPO="$(_fixture_repository)"
   run _run_allocator next "$REPO" "$(printf 'first line\nsecond line')"
   [ "$status" -eq 0 ]
   [ "$(_plan_rows | jq -r '.[0].subject')" = "first line second line" ]
 }
 
 @test "3b: an over-bound multi-word subject is stored as a word-safe bounded prefix + ..." {
-  REPO="$("$HELPERS/tmp-notebook-repo.sh")"
+  REPO="$(_fixture_repository)"
   long="$(printf 'alphabet%.0s ' $(seq 1 20))"
   run _run_allocator next "$REPO" "$long"
   [ "$status" -eq 0 ]
@@ -111,14 +117,14 @@ _snapshot() {
 }
 
 @test "3c: empty/absent subject falls back to the allocated id" {
-  REPO="$("$HELPERS/tmp-notebook-repo.sh")"
+  REPO="$(_fixture_repository)"
   run _run_allocator next "$REPO"
   [ "$status" -eq 0 ]
   [ "$(_plan_rows | jq -r '.[0].subject')" = "PLAN-001" ]
 }
 
 @test "4a: a live on-disk PLAN-050 folder is consumed; next allocates PLAN-051" {
-  REPO="$("$HELPERS/tmp-notebook-repo.sh")"
+  REPO="$(_fixture_repository)"
   mkdir -p "$REPO/.notebook/plans/PLAN-050"
   run _run_allocator next "$REPO"
   [ "$status" -eq 0 ]
@@ -126,7 +132,7 @@ _snapshot() {
 }
 
 @test "4b: a reaped row with no folder (PLAN-004) and a row-less folder (PLAN-007) -> PLAN-008" {
-  REPO="$("$HELPERS/tmp-notebook-repo.sh" \
+  REPO="$(_fixture_repository \
     --seed-row '{"kind":"plan","id":"PLAN-004","path":"plans/PLAN-004","status":"merged","subject":"old","created_at":"2026-01-01T00:00:00Z","status_changed_at":"2026-01-01T00:00:00Z","reap":{"at":"2026-02-01T00:00:00Z","by":"plan-archive-merged"}}')"
   mkdir -p "$REPO/.notebook/plans/PLAN-007"
   [ ! -e "$REPO/.notebook/plans/PLAN-004" ]
@@ -136,7 +142,7 @@ _snapshot() {
 }
 
 @test "4c: a reaped row alone (no folder) still consumes its number" {
-  REPO="$("$HELPERS/tmp-notebook-repo.sh" \
+  REPO="$(_fixture_repository \
     --seed-row '{"kind":"plan","id":"PLAN-004","path":"plans/PLAN-004","status":"merged","created_at":"2026-01-01T00:00:00Z","status_changed_at":"2026-01-01T00:00:00Z","reap":{"at":null,"by":"pre-catalog"}}')"
   run _run_allocator next "$REPO"
   [ "$status" -eq 0 ]
@@ -144,14 +150,14 @@ _snapshot() {
 }
 
 @test "4d: a spec row and a spec folder never raise the plan number" {
-  REPO="$("$HELPERS/tmp-notebook-repo.sh" --seed-spec-folder SPEC-009 ready)"
+  REPO="$(_fixture_repository --seed-spec-folder SPEC-009 ready)"
   run _run_allocator next "$REPO"
   [ "$status" -eq 0 ]
   [ "$output" = "PLAN-001" ]
 }
 
 @test "4e: an archived/ folder is not a plan folder and is not scanned" {
-  REPO="$("$HELPERS/tmp-notebook-repo.sh")"
+  REPO="$(_fixture_repository)"
   mkdir -p "$REPO/.notebook/plans/archived/PLAN-050"
   run _run_allocator next "$REPO"
   [ "$status" -eq 0 ]
@@ -159,7 +165,7 @@ _snapshot() {
 }
 
 @test "5a: PLAN-999 folder expands to 4 digits with no leading zero" {
-  REPO="$("$HELPERS/tmp-notebook-repo.sh")"
+  REPO="$(_fixture_repository)"
   mkdir -p "$REPO/.notebook/plans/PLAN-999"
   run _run_allocator next "$REPO"
   [ "$status" -eq 0 ]
@@ -167,7 +173,7 @@ _snapshot() {
 }
 
 @test "5b: a leading-zero legacy PLAN-018 folder counts as 18 (base-10, not octal)" {
-  REPO="$("$HELPERS/tmp-notebook-repo.sh")"
+  REPO="$(_fixture_repository)"
   mkdir -p "$REPO/.notebook/plans/PLAN-018"
   run _run_allocator next "$REPO"
   [ "$status" -eq 0 ]
@@ -175,7 +181,7 @@ _snapshot() {
 }
 
 @test "6: concurrent next calls (forced mkdir fallback) yield two distinct ids" {
-  REPO="$("$HELPERS/tmp-notebook-repo.sh")"
+  REPO="$(_fixture_repository)"
   rm -f "$REPO"/out.* "$REPO/start.flag"
 
   for i in 1 2; do
@@ -197,7 +203,7 @@ _snapshot() {
 }
 
 @test "7: called from a linked worktree, the row lands in main's catalog" {
-  fixture="$("$HELPERS/tmp-notebook-repo.sh" --worktree b)"
+  fixture="$(_fixture_repository --worktree b)"
   REPO="$(printf '%s\n' "$fixture" | sed -n 1p)"
   LINKED="$(printf '%s\n' "$fixture" | sed -n 2p)"
   run bash "$REPO/.gaia/scripts/spec/plan-allocator.sh" next "$LINKED"
@@ -210,7 +216,7 @@ _snapshot() {
 }
 
 @test "8: a legacy (not-yet-moved) repo exits 3 with the move command and mints nothing" {
-  REPO="$("$HELPERS/tmp-notebook-repo.sh" --legacy)"
+  REPO="$(_fixture_repository --legacy)"
   before="$(_snapshot)"
   run --separate-stderr _run_allocator next "$REPO"
   [ "$status" -eq 3 ]
@@ -223,7 +229,7 @@ _snapshot() {
 }
 
 @test "9: an unknown mode and a missing operand are usage errors (exit 2)" {
-  REPO="$("$HELPERS/tmp-notebook-repo.sh")"
+  REPO="$(_fixture_repository)"
   run _run_allocator
   [ "$status" -eq 2 ]
   run _run_allocator bogus "$REPO"
@@ -231,15 +237,13 @@ _snapshot() {
 }
 
 @test "10: run from the real repo root, the allocation lands in the operand's fixture only" {
-  REPO="$("$HELPERS/tmp-notebook-repo.sh")"
+  REPO="$(_fixture_repository)"
   real_root="$(git -C "$BATS_TEST_DIRNAME" rev-parse --show-toplevel)"
-  real_before="absent"
-  if [ -e "$real_root/.notebook" ]; then real_before="$(find "$real_root/.notebook/" | LC_ALL=C sort | cksum)"; fi
+  real_before="$(directory_listing_checksum "$real_root/.notebook")"
   run bash -c 'cd "$1" && bash "$2/.gaia/scripts/spec/plan-allocator.sh" next "$2"' _ "$real_root" "$REPO"
   [ "$status" -eq 0 ]
   [ "$output" = "PLAN-001" ]
   [ "$(_plan_rows | jq -r 'length')" -eq 1 ]
-  real_after="absent"
-  if [ -e "$real_root/.notebook" ]; then real_after="$(find "$real_root/.notebook/" | LC_ALL=C sort | cksum)"; fi
+  real_after="$(directory_listing_checksum "$real_root/.notebook")"
   [ "$real_after" = "$real_before" ]
 }

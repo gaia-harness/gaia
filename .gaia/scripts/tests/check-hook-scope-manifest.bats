@@ -142,6 +142,17 @@ cat "$ledger"'
   grep -qF "NO RESOLVER: .claude/hooks/foo.sh" <<<"$output" || return 1
 }
 
+@test "resolver: a hook sourcing a library outside the resolver list, with a resolved reference, fails" {
+  local repo; repo="$(make_fixture_repo resolver-other-lib)"
+  add_hook "$repo" "foo.sh" '#!/usr/bin/env bash
+. .gaia/scripts/branch-name-lib.sh
+root="$(git rev-parse --show-toplevel)"
+cat "$root/.gaia/local/plans/x.json"'
+  run gaia_check_hook_scope_manifest "$repo"
+  [ "$status" -eq 1 ]
+  grep -qF "NO RESOLVER: .claude/hooks/foo.sh" <<<"$output" || return 1
+}
+
 @test "resolver: a hook that inherits its root via a resolver-backed lib, holding no literal of its own, passes" {
   local repo; repo="$(make_fixture_repo resolver-inherits)"
   add_hook "$repo" "foo.sh" '#!/usr/bin/env bash

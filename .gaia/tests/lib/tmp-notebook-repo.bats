@@ -1,7 +1,7 @@
 #!/usr/bin/env bats
 # Proves helpers/tmp-notebook-repo.sh: every seed flag writes the catalog row
 # and the on-disk shape it names, the shape flags build the right repo, and the
-# remote flags behave like the older tmp-spec-repo.sh ones.
+# remote flags build the origin and tag state a reservation test needs.
 #
 # Assertion style: .claude/rules/bats-assertions.md.
 
@@ -19,10 +19,14 @@ teardown() {
   fi
 }
 
+_run_helper() {
+  bash "$HELPER" "$@"
+}
+
 # Build a fixture; the first stdout line is the repo path.
 _build() {
   local built
-  built="$(bash "$HELPER" "$@")"
+  built="$(_run_helper "$@")"
   REPO="$(printf '%s\n' "$built" | sed -n 1p)"
   SECOND_PATH="$(printf '%s\n' "$built" | sed -n 2p)"
 }

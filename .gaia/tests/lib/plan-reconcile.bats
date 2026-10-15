@@ -15,6 +15,11 @@
 
 bats_require_minimum_version 1.5.0
 
+# Builds the throwaway fixture repository the suite acts on.
+_fixture_repository() {
+  "$THIS_DIRECTORY/helpers/tmp-notebook-repo.sh" "$@"
+}
+
 setup() {
   THIS_DIRECTORY="$( cd "$( dirname "$BATS_TEST_FILENAME" )" && pwd )"
   REPO_ROOT="$( cd "$THIS_DIRECTORY/../../.." && pwd )"
@@ -23,7 +28,7 @@ setup() {
   SOURCE_LIBRARY_DIRECTORY="$REPO_ROOT/.gaia/scripts/spec"
   [ -x "$SOURCE_LIBRARY_DIRECTORY/plan-reconcile.sh" ] || skip "plan-reconcile.sh not executable"
 
-  SANDBOX="$("$THIS_DIRECTORY/helpers/tmp-notebook-repo.sh" \
+  SANDBOX="$(_fixture_repository \
     --seed-row '{"kind":"plan","id":"PLAN-005","path":"plans/PLAN-005","status":"ready","subject":"x","source":"allocated","created_at":"2026-01-01T00:00:00Z","status_changed_at":"2026-01-01T00:00:00Z"}')"
 }
 
@@ -283,7 +288,7 @@ EOF
 
 @test "8: not ready, the single-id form prints the move line on stderr, exits 0 and changes nothing" {
   rm -rf "$SANDBOX"
-  SANDBOX="$("$THIS_DIRECTORY/helpers/tmp-notebook-repo.sh" --legacy \
+  SANDBOX="$(_fixture_repository --legacy \
     --seed-row '{"kind":"plan","id":"PLAN-005","path":"plans/PLAN-005","status":"ready","subject":"x","created_at":"2026-01-01T00:00:00Z","status_changed_at":"2026-01-01T00:00:00Z"}')"
   before="$(snapshot_file "$SANDBOX/$CATALOG_RELATIVE_PATH")"
   run --separate-stderr _reconcile PLAN-005 2601
@@ -297,7 +302,7 @@ EOF
 
 @test "8b: not ready, the scan form prints the move line on stderr, never reaches gh and changes nothing" {
   rm -rf "$SANDBOX"
-  SANDBOX="$("$THIS_DIRECTORY/helpers/tmp-notebook-repo.sh" --legacy \
+  SANDBOX="$(_fixture_repository --legacy \
     --seed-row '{"kind":"plan","id":"PLAN-031","path":"plans/PLAN-031","status":"ready","subject":"a","created_at":"2026-01-01T00:00:00Z","status_changed_at":"2026-01-01T00:00:00Z"}')"
   _gh_stub_listing
   before="$(snapshot_file "$SANDBOX/$CATALOG_RELATIVE_PATH")"
@@ -313,12 +318,10 @@ EOF
 @test "9: run from the real repo root, the scan acts on the operand's fixture only" {
   _seed_scan_catalog
   _gh_stub_listing
-  real_before="absent"
-  if [ -e "$REPO_ROOT/.notebook" ]; then real_before="$(find "$REPO_ROOT/.notebook/" | LC_ALL=C sort | cksum)"; fi
+  real_before="$(directory_listing_checksum "$REPO_ROOT/.notebook")"
   run bash -c 'cd "$1" && bash "$2/.gaia/scripts/spec/plan-reconcile.sh" "$2"' _ "$REPO_ROOT" "$SANDBOX"
   [ "$status" -eq 0 ]
   [ "$(_row_field PLAN-031 status)" = "merged" ]
-  real_after="absent"
-  if [ -e "$REPO_ROOT/.notebook" ]; then real_after="$(find "$REPO_ROOT/.notebook/" | LC_ALL=C sort | cksum)"; fi
+  real_after="$(directory_listing_checksum "$REPO_ROOT/.notebook")"
   [ "$real_after" = "$real_before" ]
 }

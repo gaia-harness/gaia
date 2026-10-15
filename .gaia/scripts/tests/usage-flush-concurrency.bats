@@ -156,7 +156,7 @@ holds_within() {
   local scratch_directory="$TEMPORARY_DIRECTORY/scratch" stderr_file="$TEMPORARY_DIRECTORY/mut.err"
   mkdir -p "$scratch_directory/.gaia/scripts" "$scratch_directory/.gaia/scripts/spec"
   cp "$SCRIPTS"/usage-flush.sh "$SCRIPTS"/usage-parse-lib.sh "$SCRIPTS"/usage-lib.sh "$SCRIPTS"/main-root-lib.sh \
-    "$SCRIPTS"/branch-name-lib.sh "$SCRIPTS"/ledger-path-lib.sh "$scratch_directory/.gaia/scripts/"
+    "$SCRIPTS"/branch-name-lib.sh "$scratch_directory/.gaia/scripts/"
   cp "$REPO_ROOT/.gaia/scripts/spec/with-ledger-lock.sh" "$scratch_directory/.gaia/scripts/spec/"
   mkdir -p "$scratch_directory/.gaia/scripts/notebook"
   cp "$SCRIPTS"/notebook/*.sh "$scratch_directory/.gaia/scripts/notebook/"

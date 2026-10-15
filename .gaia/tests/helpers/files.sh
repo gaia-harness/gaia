@@ -72,3 +72,16 @@ snapshot_file() {
 assert_files_identical() {
   cmp "$1" "$2" || return 1
 }
+
+# directory_listing_checksum DIR -> prints "absent" when DIR does not exist,
+# else a checksum of every path listed under it.
+#
+# A leak check on the real, untracked notebook: the suite never reads the
+# tracked tree, it proves a run left DIR's listing as it found it.
+directory_listing_checksum() {
+  if [ ! -e "$1" ]; then
+    printf 'absent'
+    return 0
+  fi
+  find "$1/" | LC_ALL=C sort | cksum
+}

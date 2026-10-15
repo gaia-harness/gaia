@@ -244,7 +244,6 @@
     ".gaia/scripts/gh-artifact-lib.sh": "owned",
     ".gaia/scripts/install-react-doctor.sh": "owned",
     ".gaia/scripts/knowledge-inventory.sh": "owned",
-    ".gaia/scripts/ledger-path-lib.sh": "owned",
     ".gaia/scripts/lib/serena-lang.sh": "owned",
     ".gaia/scripts/lib/version-compare.awk": "owned",
     ".gaia/scripts/link-worktree.sh": "owned",

@@ -18,15 +18,21 @@
 
 bats_require_minimum_version 1.5.0
 
+# Builds the throwaway fixture repository the suite acts on.
+_fixture_repository() {
+  "$THIS_DIRECTORY/helpers/tmp-notebook-repo.sh" "$@"
+}
+
 setup() {
   THIS_DIRECTORY="$( cd "$( dirname "$BATS_TEST_FILENAME" )" && pwd )"
   REPO_ROOT="$( cd "$THIS_DIRECTORY/../../.." && pwd )"
   ARCHIVE_SOURCE="$REPO_ROOT/.gaia/scripts/spec/plan-archive-merged.sh"
   [ -x "$ARCHIVE_SOURCE" ] || skip "plan-archive-merged.sh not executable"
+  . "$REPO_ROOT/.gaia/tests/helpers/files.sh"
   # shellcheck source=helpers/usage-gate.sh
   . "$THIS_DIRECTORY/helpers/usage-gate.sh"
 
-  SANDBOX="$("$THIS_DIRECTORY/helpers/tmp-notebook-repo.sh")"
+  SANDBOX="$(_fixture_repository)"
 
   PLANS="$SANDBOX/.notebook/plans"
   CATALOG="$SANDBOX/.notebook/catalog.json"
@@ -635,7 +641,7 @@ _days_ago() {
 
 @test "34b: run from a linked worktree, the plan is deleted from main's notebook and the old-location folder is untouched" {
   rm -rf "$SANDBOX"
-  fixture="$("$THIS_DIRECTORY/helpers/tmp-notebook-repo.sh" --worktree w)"
+  fixture="$(_fixture_repository --worktree w)"
   SANDBOX="$(printf '%s\n' "$fixture" | sed -n 1p)"
   LINKED="$(printf '%s\n' "$fixture" | sed -n 2p)"
   PLANS="$SANDBOX/.notebook/plans"
@@ -710,7 +716,7 @@ _days_ago() {
 
 @test "38: a not-yet-moved repo exits 3 with the move command and removes nothing" {
   rm -rf "$SANDBOX"
-  SANDBOX="$("$THIS_DIRECTORY/helpers/tmp-notebook-repo.sh" --legacy)"
+  SANDBOX="$(_fixture_repository --legacy)"
   PLANS="$SANDBOX/.notebook/plans"
   CATALOG="$SANDBOX/.notebook/catalog.json"
   TELEMETRY="$SANDBOX/.gaia/local/telemetry"
@@ -730,15 +736,13 @@ _days_ago() {
 
 @test "39: run from the real repo root, the sweep acts on the operand's fixture only" {
   _seed_merged_plan PLAN-001
-  real_before="absent"
-  if [ -e "$REPO_ROOT/.notebook" ]; then real_before="$(find "$REPO_ROOT/.notebook/" | LC_ALL=C sort | cksum)"; fi
+  real_before="$(directory_listing_checksum "$REPO_ROOT/.notebook")"
 
   run bash -c 'cd "$1" && bash "$2/.gaia/scripts/spec/plan-archive-merged.sh" "$2"' _ "$REPO_ROOT" "$SANDBOX"
   [ "$status" -eq 0 ]
   assert_contains "Deleted 1 merged plan folder(s): PLAN-001"
   [ ! -e "$PLANS/PLAN-001" ]
 
-  real_after="absent"
-  if [ -e "$REPO_ROOT/.notebook" ]; then real_after="$(find "$REPO_ROOT/.notebook/" | LC_ALL=C sort | cksum)"; fi
+  real_after="$(directory_listing_checksum "$REPO_ROOT/.notebook")"
   [ "$real_after" = "$real_before" ]
 }

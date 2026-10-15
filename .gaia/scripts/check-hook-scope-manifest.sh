@@ -17,8 +17,7 @@
 #   2. Resolver-backed   every hook outside .claude/hooks/lib/ that holds any
 #                        live `.gaia/local` reference names a resolver-backed
 #                        lib (main-root-lib.sh, state-registry-lib.sh,
-#                        red-ledger.sh, ledger-path-lib.sh,
-#                        or gh-artifact-lib.sh), so the joined root traces back
+#                        red-ledger.sh, or gh-artifact-lib.sh), so the joined root traces back
 #                        to one. A sourced lib under .claude/hooks/lib/ may
 #                        instead take its root from its caller, as
 #                        lib/audit-clearance.sh's `${root}/.gaia/local/audit`
@@ -31,13 +30,11 @@
 # counts as "this hook derives its root from a resolver" for assertion 2 --
 # the hook may source main-root-lib.sh directly, or inherit an already-
 # resolver-backed helper (state-registry-lib.sh, red-ledger.sh,
-# ledger-path-lib.sh, gh-artifact-lib.sh) rather than
-# re-sourcing the resolver itself.
+# gh-artifact-lib.sh) rather than re-sourcing the resolver itself.
 GAIA_HOOKCHECK_RESOLVER_LIBRARIES=(
   "main-root-lib.sh"
   "state-registry-lib.sh"
   "red-ledger.sh"
-  "ledger-path-lib.sh"
   "gh-artifact-lib.sh"
 )
 

@@ -130,7 +130,7 @@ type red_ledger_path >/dev/null 2>&1 || exit 0'
   # because the negation is admitted once, ahead of the rest of the arm.
   fixture_repo
   fixture_hook '[ ! -f .claude/hooks/lib/red-ledger.sh ] && exit 0
-[[ ! -f ".gaia/scripts/ledger-path-lib.sh" ]] && exit 0'
+[[ ! -f ".gaia/scripts/main-root-lib.sh" ]] && exit 0'
   run_linter
   [ "$status" -eq 1 ]
   grep -qF -- ".claude/hooks/check.sh:3:" <<<"$output" || return 1
@@ -140,7 +140,7 @@ type red_ledger_path >/dev/null 2>&1 || exit 0'
 
 @test "flags a bare source operand" {
   fixture_repo
-  fixture_hook '. .gaia/scripts/ledger-path-lib.sh'
+  fixture_hook '. .gaia/scripts/main-root-lib.sh'
   run_linter
   [ "$status" -eq 1 ]
   grep -qF -- ".claude/hooks/check.sh:3:" <<<"$output" || return 1
@@ -204,7 +204,7 @@ bash ".gaia/scripts/usage.sh" pr 1'
 
 @test "flags a single-quoted literal too" {
   fixture_repo
-  fixture_hook ". '.gaia/scripts/ledger-path-lib.sh'"
+  fixture_hook ". '.gaia/scripts/main-root-lib.sh'"
   run_linter
   [ "$status" -eq 1 ]
   grep -qF -- "a source operand names a bare repo-relative path" <<<"$output"
