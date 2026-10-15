@@ -39,7 +39,7 @@
     "cookie": "2.0.1",
     "date-fns": "4.4.0",
     "dotenv": "18.0.7",
-    "i18next": "26.4.3",
+    "i18next": "26.4.4",
     "i18next-browser-languagedetector": "8.2.1",
     "isbot": "5.2.2",
     "ky": "2.2.0",
