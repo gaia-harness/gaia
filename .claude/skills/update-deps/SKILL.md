@@ -184,7 +184,7 @@ date.`; in CI it continues as a refresh-only run whose security phase is
 report-only. With zero advisories the paths below stand.
 
 If `total_count` is `0` and `advisories[]` is empty, print `All packages are up to date.`
-(the Phase 7 `### Global tools` and `### Security` sections are still printed first). Under `--scope`, exit (no branch, no changes). Otherwise the apply set is empty
+(the Phase 7 `### Security` section, and `### Global tools` when it has a row to show, are still printed first). Under `--scope`, exit (no branch, no changes). Otherwise the apply set is empty
 and the run is **refresh-only** (see Decision): in CI it proceeds straight to
 Phase 5b; interactively, print `Transitive refresh: re-resolve every
 transitive dependency to the newest in-range version past the release-age
@@ -352,14 +352,16 @@ skips publish):
 
 - Updates were confirmed. **Immediately bust the update-check cache** so the statusline reflects the post-update state on the next session regardless of whether this run completes. Use the Write tool to overwrite `.gaia/local/cache/shared/update-check.json`: read the existing cache first, then write it back unchanged **except** `outdatedCount` set to `0` and `checkedAt` set to the current Unix timestamp. **Carry every other field across verbatim, named here or not.** The cache holds fields this step has no reason to know about, and several are observations nothing later can reconstruct (`cleanseMemoryBaseline` and the two `codify*` counts), so dropping one silently disarms the nudge it belongs to instead of causing a visible error. If the cache file does not exist, skip this step. (Snoozed groups are already excluded by the ledger on the next real check.)
 
-- If `SHOULD_CREATE_BRANCH=true`, create the branch now and **remember that you created it** (this determines publish behavior in Phase 8):
+- If an earlier step of this run already created the branch (`CREATED_NEW_BRANCH=true`), stay on it and create nothing: it is this run's branch.
+
+- Otherwise, if `SHOULD_CREATE_BRANCH=true`, create the branch now and **remember that you created it** (this determines publish behavior in Phase 8):
 
 ```bash
 git checkout -b "$(bash .gaia/scripts/branch-name-lib.sh name deps)"
 # CREATED_NEW_BRANCH=true, used in Phase 8
 ```
 
-Otherwise (`SHOULD_CREATE_BRANCH=false`), proceed on the current branch and **remember that you did NOT create a new branch**.
+When `SHOULD_CREATE_BRANCH=false`, proceed on the current branch and **remember that you did NOT create a new branch**.
 
 ## Override audit + Wave A: Haiku agent
 
@@ -450,7 +452,7 @@ Build the report **only** from the agent reports returned to you, the snooze and
 - **Breaking changes applied**: only what Wave B agents report editing in the codebase. Empty if no Wave B group ran.
 - **Transitive refresh**: the Phase 5b agent's result: one row per package it moved (from and to), or one of `Nothing moved`, `Declined in preview`, `Not run (--scope)`, `Not run (--security)`, or `Reverted (<reason>)` followed by the rows that would have moved. Always include this section; `Nothing moved` is a result, not an empty section. These rows never go in Updated packages, and a reverted refresh is reported here, not in Skipped packages.
 - **Overrides audited**: only what the Phase 0 / Phase 6 audit reports. If the `overrides:` map was empty, write "None" and move on. On a refresh-only run where Phase 6 did not run, write `Not run (refresh-only, tree unchanged)`.
-- **Security**: always present, printed on every exit path as Global tools is, and never a bare `None`: the heading is always followed by the source line and all three tables, and an empty table reads `None.`. The source line is `Source: pnpm audit, enriched by Dependabot alerts` when alerts were read, `Source: pnpm audit. Dependabot alerts: Not run (<reasonText>)` when they were unavailable, `Source: pnpm audit. Dependabot alerts: Not run (CI run)` in CI, or `Source: Not run (<reason>)` when the final-tree audit failed.
+- **Security**: always present, printed on every exit path, and never a bare `None`: the heading is always followed by the source line and all three tables, and an empty table reads `None.`. The source line is `Source: pnpm audit, enriched by Dependabot alerts` when alerts were read, `Source: pnpm audit. Dependabot alerts: Not run (<reasonText>)` when they were unavailable, `Source: pnpm audit. Dependabot alerts: Not run (CI run)` in CI, or `Source: Not run (<reason>)` when the final-tree audit failed.
   - **Resolved**: an opening advisory absent from the final-tree audit. Package, advisory key, method (`in-range refresh`, `chain-head bump (<pkg> <from> → <to>)`, `override (<key>: <value>)`, `chain-head major (<group>)`), new installed version. Append `(on this branch, pending merge)` when its alert is still open in alerts mode.
   - **Accepted**: package, advisory key, dismissal reason (or `baseline entry proposed` on the fallback).
   - **Still open**: every final-tree audit row not accepted. Package, advisory key, severity, installed, first patched, held back by (the extracted chain below its importer, plus `(+N more paths)` when the path count exceeds 1), and the reason from the security plan or Phase 5c (`report-only run` in a report-only run). Mark `introduced by this run` on a row whose key is not in the opening advisory set; that set is the opening payload's `advisories[].key` plus its `dismissedGhsas`, and this comparison is the whole test.
@@ -469,11 +471,11 @@ Build the report **only** from the agent reports returned to you, the snooze and
 - **Skipped packages**: _only_ packages that were attempted and reverted mid-run (peer-dep conflict, quality-gate failure, manual revert by an agent). **Never** include packages filtered out before installation by a policy rule (e.g. the ESLint 9.x cap or the release-age cooldown). Those are silent by design, surfacing them is noise the user sees every run. When you cannot tell whether a package was policy-filtered before installation or attempted and reverted mid-run, include it in Skipped, a spurious row is recoverable but a silently dropped real failure is not. If nothing was actually skipped during the run, write "None" or omit the table.
 - **Snoozed (deferred this run)**: the companion groups the human chose to skip in the preview, with the version each was snoozed at. These quiet the statusline for 14 days (or until a newer version ships); they are not failures. Omit the section if the human chose "Update all".
 - **Quality gate**: the gate result reported by the agents, verbatim.
-- **Global tools**: always include the playwright-cli row from the Phase 1 global-tools step: status, installed, latest, and the action taken (`upgraded`, `declined`, `report-only`, `not installed`). It is built inline, so it is an exception to building the report only from agent reports, like the Security section. Print it on every exit path, including the all-up-to-date and Skip exits.
+- **Global tools**: the playwright-cli row from the Phase 1 global-tools step: status, installed, latest, and the action taken (`upgraded`, `declined`, `report-only`, `not installed`). Print the section only when the row's status is not `current` (a newer release, not installed, or a failed probe); a `current` tool has nothing to act on, so omit the section rather than writing `None`. When it applies, print it on every exit path, including the all-up-to-date and Skip exits. It is built inline, so it is an exception to building the report only from agent reports, like the Security section.
 
 <!-- gaia:maintainer-only:start -->
 
-- **Vendored skills**: built inline from the Vendored skill sync step, so it is an exception to building the report only from agent reports. One row: marker version, upstream latest, and `current`, `re-vendored`, `verify failed (<path>)`, or `unknown`.
+- **Vendored skills**: built inline from the Vendored skill sync step, so it is an exception to building the report only from agent reports. Print the section only when the result is not `current`; a `current` marker is omitted, not written as `None`. One row: the skill name (`playwright-cli`), marker version, upstream latest, and `re-vendored`, `verify failed (<path>)`, or `unknown`.
 
 <!-- gaia:maintainer-only:end -->
 
