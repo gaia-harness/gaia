@@ -152,7 +152,7 @@ Process findings in this order: **supersession → reversed → near-collision �
 3. Update older page's frontmatter: `status: superseded`, `superseded_by: <newer-slug>`, `superseded_at: <ISO>`. Preserve `created`, `promoted_from`, `promoted_at`.
 4. Move older page: `mkdir -p wiki/_archived/ && git mv <older-path> wiki/_archived/<older-slug>.md`. (Use `mv` if `git mv` fails due to staging state.)
 5. Update `wiki/index.md`: remove the older page's entry from its domain section.
-6. Repoint every wikilink to the older page at the newer page, which now holds its content. Find them with `grep -rnF "[[<older-title>" wiki/ --include="*.md"`, skipping `wiki/_archived/`, `wiki/meta/`, and `wiki/log.md` (archived pages and history ledgers keep their record). A match is a link to the older page only when `]]`, `|`, or `#` follows the title. Replace the title with `<newer-title>`, keeping any `|alias`; drop a `#heading` anchor the newer page has no matching heading for. A link that would now point the newer page at itself is removed, along with its list item when it is the item's only content. Lint's check #17 reports any link this step misses, and lint's fix loop repairs it later in the same chain.
+6. Repoint every wikilink to the older page at the newer page, which now holds its content. Find them with `grep -rnF "[[<older-title>" wiki/ --include="*.md"`, skipping `wiki/_archived/`, `wiki/meta/`, and `wiki/log.md` (archived pages and history ledgers keep their record). A match is a link to the older page only when `]]`, `|`, or `#` follows the title. Replace the title with `<newer-title>`, keeping any `|alias`; drop a `#heading` anchor the newer page has no matching heading for. A link that would now point the newer page at itself is removed, along with its list item when it is the item's only content. Lint's check #17 reports any link this step misses, and lint's fix loop repairs it later in the same `/gaia-wiki` run.
 7. Update newer page's `promoted_from`: if currently a string, convert to a list `[<old_provenance>, <new_provenance>]` so future runs of the wiki promotion step treat it as a known consolidated page. If already a list, append.
 
 **Near-collision:**
@@ -188,11 +188,11 @@ Update `wiki/.state.json` via the CLI primitive (preserves sibling fields and ke
 
 Advance state on every completion regardless of how many findings were applied, including zero findings and all-skip runs.
 
-The `wiki/.state.json` file is committed by the router's `chain commit` after this stage (`references/wiki.md` → "Full chain", step 4). Consolidate itself does not commit, see Step 6.
+The `wiki/.state.json` file is committed by the router's one `chain commit` after lint (`references/wiki.md` → "The run", step 6). Consolidate itself does not commit, see Step 6.
 
 ## Step 6, Report
 
-Do NOT commit. The router commits the staged edits with `chain commit` (`references/wiki.md` → "Full chain", step 4).
+Do NOT commit. The router commits these edits with every other stage's in the run's one `chain commit` (`references/wiki.md` → "The run", step 6).
 
 Print:
 
@@ -204,8 +204,8 @@ If any HIGH-severity supersession or reversed-decision was applied, prefix the s
 ## Notes
 
 - **Boundary with the wiki promotion step.** The wiki promotion step writes per-SPEC; consolidate merges across SPECs. After a merge action, the canonical page's `promoted_from` becomes a list so future promotion runs treat it as a known consolidated page (no `foreign-collision` skip).
-- **Boundary with lint.** Lint finds and fixes broken things (dead repo paths, orphan pages, missing frontmatter, empty sections, broken wikilinks (#17)). Consolidate finds redundant things (two pages with competing claims). The full chain runs lint after consolidate, so lint's checks see the pages consolidate moved, renamed, or archived, and check #17 catches any link the apply actions above leave dangling.
+- **Boundary with lint.** Lint finds and fixes broken things (dead repo paths, orphan pages, missing frontmatter, empty sections, broken wikilinks (#17)). Consolidate finds redundant things (two pages with competing claims). `/gaia-wiki` runs lint after consolidate, so lint's checks see the pages consolidate moved, renamed, or archived, and check #17 catches any link the apply actions above leave dangling.
 - **`wiki/_archived/`** is excluded from the index and from future consolidation candidacy. Pages there remain readable but are out of the live spec.
 - **Idempotence.** Re-running consolidate on the same wiki state surfaces the same findings, minus those acknowledged via `consolidation_ack`. Apply actions are not idempotent (they mutate); the apply guard is "did the user already say apply", implicit in "the older page is no longer in its original domain," which the page index would reflect on the next run.
-- **Runs on every chain.** Consolidate runs on every chain whose sync completes normally. A `Skip`ped finding resurfaces on the next `/gaia-wiki` run, and `Keep both` is the only permanent dismissal.
+- **Runs every time.** Consolidate runs on every `/gaia-wiki` run whose sync completes normally. A `Skip`ped finding resurfaces on the next `/gaia-wiki` run, and `Keep both` is the only permanent dismissal.
 - **Shared state file ownership.** `wiki/.state.json` holds fields written by both sync (`last_evaluated_sha`, `last_evaluated_at`) and this workflow (`last_consolidated_sha`, `last_consolidated_at`). Each writer preserves the other's fields. Do not delete `wiki/.state.json`: sync and consolidate both write it, and the statusline and lint read it.

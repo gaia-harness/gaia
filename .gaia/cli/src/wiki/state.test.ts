@@ -539,11 +539,11 @@ describe('wiki state', () => {
 
   describe('drift_count', () => {
     const BOOKKEEPING_SUBJECTS = [
-      'wiki: sync through abc1234',
-      'wiki: maintenance chain through abc1234',
-      'wiki: consolidate through abc1234',
-      'wiki: lint through abc1234',
-      'wiki: sync through abc1234 (#99)',
+      'wiki: 2026-10-15 05:32 UTC',
+      'wiki: 2026-10-15 05:32 UTC (#12)',
+      'wiki: 2026-01-01 00:00 UTC',
+      'wiki: 2026-12-31 23:59 UTC (#2700)',
+      'wiki: 2026-10-15 14:07 UTC',
     ];
 
     test('excludes bookkeeping subjects and equals commits_ahead when reachable', () => {
@@ -571,8 +571,8 @@ describe('wiki state', () => {
       sandbox.commitSubjects([
         'feat: change',
         ...BOOKKEEPING_SUBJECTS,
-        'wiki: synced through x',
-        'docs: wiki sync through x',
+        'wiki: fix typo',
+        'docs: wiki 2026-10-15 05:32 UTC',
       ]);
 
       // Near-miss subjects are real drift: only the five exact forms drop out.
@@ -625,7 +625,7 @@ describe('wiki state', () => {
       );
       sandbox.commitAt('C', {'app/c.ts': 'c\n'}, '2026-01-03T00:00:00Z');
       sandbox.commitAt(
-        'wiki: sync through abc1234',
+        'wiki: 2026-01-04 00:00 UTC (#5)',
         {'wiki/log.md': 'x\n'},
         '2026-01-04T00:00:00Z'
       );

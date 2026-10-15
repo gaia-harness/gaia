@@ -28,9 +28,10 @@
 #   deps        deps/<YYYY-MM-DD-HHMM>                  maintenance  <rest>
 #   update      update/v<version>-<YYYY-MM-DD-HHMM>     maintenance  <rest>
 #   release     release/v<version>                      maintenance  <rest>
-#   wiki sync   wiki/sync-<YYYY-MM-DD>-<short-sha>      maintenance  <rest>
+#   wiki        wiki/<YYYY-MM-DD-HHMM>                  maintenance  <rest>
 #   forensics   forensics/<issue>-<class-slug>          maintenance  <rest>
 #   chore       chore/<task>-<YYYY-MM-DD-HHMM>          maintenance  <rest>  (legacy)
+#   wiki sync   wiki/sync-<YYYY-MM-DD>-<short-sha>      maintenance  <rest>  (legacy)
 #   wiki-sync   wiki-sync/<YYYY-MM-DD>-<short-sha>      maintenance  <rest>  (legacy)
 #   plan        plan/spec-<nnn>[-<slug>]                plan         SPEC-<nnn>  (legacy)
 #   plan        plan/plan-<nnn>[-<slug>]                plan         plan-<nnn>  (legacy)
@@ -49,13 +50,14 @@
 # and by gaia_branch_name, which read the JSON. A hand-named
 # `<type>/planning-notes` has no digits after `plan-`, so it stays adhoc.
 #
-# Legacy spellings (`chore/<task>-<ts>`, `wiki-sync/`, `plan/`, and the
-# `worktree-*` spelling below) are read so existing branches, PR heads, and ledgers keep
-# classifying; none is minted. The `chore/` row requires the timestamp suffix,
-# so a hand-named `chore/fix-typo` stays adhoc.
+# Legacy spellings (`chore/<task>-<ts>`, `wiki/sync-`, `wiki-sync/`, `plan/`,
+# and the `worktree-*` spelling below) are read so existing branches, PR heads,
+# and ledgers keep classifying; none is minted. The `chore/` and `wiki/` rows
+# require the timestamp suffix, so a hand-named `chore/fix-typo` or `wiki/docs`
+# stays adhoc.
 #
 # Two kinds are minted outside bash and are therefore not arms of
-# gaia_branch_name: `wiki/sync-`, by the GAIA CLI's wiki chain, and
+# gaia_branch_name: `wiki/`, by the GAIA CLI's `gaia wiki chain begin`, and
 # `forensics/`, by `forensics-triage.yml`. GAIA's own test suite pins each
 # prefix to this table, so neither can drift without a red suite.
 #
@@ -288,6 +290,7 @@ _gaia_branch_set_class() {
       esac
       ;;
     cleanse/* | codify/* | fitness/* | residue/* | deps/* | update/* | release/* | forensics/* \
+      | wiki/[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]-[0-9][0-9][0-9][0-9] \
       | wiki/sync-* | wiki-sync/* \
       | chore/*-[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]-[0-9][0-9][0-9][0-9])
       mode="maintenance"

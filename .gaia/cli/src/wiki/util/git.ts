@@ -105,11 +105,13 @@ export const ancestorBefore = (isoTimestamp: string, cwd: string): string => {
   return result.trim();
 };
 
-// Subjects `gaia wiki` writes when it lands a stage. They record wiki upkeep,
-// not drift the wiki has to catch up on, so counting them would make every land
-// read as new drift.
+// The subject `gaia wiki chain` lands a run under
+// (`wiki: <YYYY-MM-DD> <HH:MM> UTC`, plus the squash's ` (#N)`). It records
+// wiki upkeep, not drift the wiki has to catch up on, so counting it would
+// make every land read as new drift. POSIX ERE, because git's --grep has no
+// `\d`.
 const WIKI_BOOKKEEPING_SUBJECT_PATTERN =
-  '^wiki: (sync|maintenance chain|consolidate|lint) through ';
+  '^wiki: [0-9]{4}-[0-9]{2}-[0-9]{2} [0-9]{2}:[0-9]{2} UTC( |$)';
 
 /**
  * Count commits in `<base>..HEAD` minus wiki bookkeeping subjects; an empty

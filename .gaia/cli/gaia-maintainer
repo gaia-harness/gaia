@@ -24712,7 +24712,7 @@ var ancestorBefore = (isoTimestamp, cwd) => {
   if (result === null) return "";
   return result.trim();
 };
-var WIKI_BOOKKEEPING_SUBJECT_PATTERN = "^wiki: (sync|maintenance chain|consolidate|lint) through ";
+var WIKI_BOOKKEEPING_SUBJECT_PATTERN = "^wiki: [0-9]{4}-[0-9]{2}-[0-9]{2} [0-9]{2}:[0-9]{2} UTC( |$)";
 var countDriftCommits = (base, cwd) => {
   const result = tryRunGit(
     [

@@ -34,16 +34,16 @@ The wiki is critical infrastructure; it decays when drift between code and docum
 
 **`gaia wiki broken-links`**: Lists wikilinks whose target page does not exist, with file and line (`--json` for a machine-readable list). A target resolves by slug or H1 title against every page outside `wiki/_archived/`. Used by the lint stage of `/gaia-wiki` for check #17.
 
-**`gaia wiki chain <begin|commit|finish|refresh-nudge>`**: Manages the branch lifecycle for `/gaia-wiki` so every stage (sync, consolidate, lint) lands in one PR rather than opening separate PRs.
+**`gaia wiki chain <begin|commit|finish|refresh-nudge>`**: Manages the branch lifecycle for `/gaia-wiki` so every stage (sync, consolidate, lint) lands in one commit and one PR. The stages commit nothing themselves.
 
-- `begin` (before sync): cuts a `wiki/sync-<date>-<sha>` branch from `main`; no-op on a feature branch, where stages commit in place.
-- `commit` (after each stage): commits that stage's `wiki/` changes in place; gracefully no-ops when nothing changed; refuses non-wiki changes; refuses on `main` and `master`; invalidates the statusline cache after a successful commit.
-- `finish` (after lint): pushes the branch, opens one PR for all stage commits, posts the out-of-scope `GAIA-Audit` stamp, enables auto-merge, and stays on the branch. It never waits for the merge: `/gaia-wiki` then waits and cleans up through the shared work lifecycle (`.claude/skills/gaia/references/work-lifecycle.md`), like every other GAIA command that opens a PR. Drops the branch if it is empty. Leaves an aborted dirty tree in place for review. No-op for in-place runs on a feature branch.
+- `begin` (before sync): cuts a `wiki/<YYYY-MM-DD-HHMM>` branch (UTC) from `main`; no-op on a feature branch, where the run commits in place.
+- `commit` (once, after lint): commits every stage's `wiki/` changes in place as one commit whose subject it mints, `wiki: <YYYY-MM-DD> <HH:MM> UTC`, from the branch's timestamp (from the clock on an in-place run); gracefully no-ops when nothing changed; refuses non-wiki changes; refuses on `main` and `master`; invalidates the statusline cache after a successful commit.
+- `finish` (after the commit): pushes the branch, opens one PR titled with the commit's subject, posts the out-of-scope `GAIA-Audit` stamp, enables auto-merge, and stays on the branch. It never waits for the merge: `/gaia-wiki` then waits and cleans up through the shared work lifecycle (`.claude/skills/gaia/references/work-lifecycle.md`), like every other GAIA command that opens a PR. Drops the branch if it is empty. Leaves an aborted dirty tree in place for review. No-op for in-place runs on a feature branch.
 - `refresh-nudge` (after cleanup): writes the main checkout's wiki drift into the statusline cache, so the `/gaia-wiki` nudge clears the moment the landed state file is pulled rather than on the next background refresh.
 
-`/gaia-wiki` takes no stage argument; the chain commands are how every run lands.
+`/gaia-wiki` takes no stage argument; the `gaia wiki chain` commands are how every run lands.
 
-`/gaia-wiki`'s lint stage fixes what it finds. After the detection subagent writes its report, a parent-side fix loop resolves each finding (mechanically where one answer is right, by asking where the fix needs judgment), files the narrative-ref findings in instruction files as tech-debt because `chain commit` refuses non-wiki changes, then re-runs detection so the report describes the fixed wiki. The fixes and the final report land in the lint commit, so `finish` opens a PR on a wiki that is clean or whose remaining findings the user explicitly accepted. The loop's rules live in `.claude/skills/gaia/references/wiki/lint-fix.md`.
+`/gaia-wiki`'s lint stage fixes what it finds. After the detection subagent writes its report, a parent-side fix loop resolves each finding (mechanically where one answer is right, by asking where the fix needs judgment), files the narrative-ref findings in instruction files as tech-debt because `chain commit` refuses non-wiki changes, then re-runs detection so the report describes the fixed wiki. The fixes and the final report land in the run's one commit, made before `finish`, so `finish` opens a PR on a wiki that is clean or whose remaining findings the user explicitly accepted. The loop's rules live in `.claude/skills/gaia/references/wiki/lint-fix.md`.
 
 <!-- gaia:maintainer-only:start -->
 ## Shipped-surface boundary check

@@ -363,7 +363,7 @@ shared_commit_types() {
 }
 
 @test "issue link: a hand-named type branch links its issue; a date-shaped or sync unit links nothing" {
-  run derive branch:fix/2450-statusline-nudge branch:wiki/2026-10-03-14-30 branch:wiki/sync-2026-10-03-abc1234
+  run derive branch:fix/2450-statusline-nudge branch:wiki/2026-10-03-14-30 branch:wiki/2026-10-15-0532 branch:wiki/sync-2026-10-03-abc1234
   [ "$status" -eq 0 ]
   [ "$output" = '{"branch:fix/2450-statusline-nudge":["issue:2450"]}' ]
 }
