@@ -2719,6 +2719,16 @@ run_merge_hook_library_absent() {
   return 0
 }
 
+@test "library-absent: audit-scope.sh missing denies through the library guard, naming the ownership classifier" {
+  install_gh_stub
+  commit_files "frontend/app/x.ts" "export const x = 1"
+  write_markers_for_spawn_set "$(spawn_set)"
+
+  run_merge_hook_library_absent "audit-scope.sh" "gh pr merge --squash --delete-branch"
+  assert_denied_by_json
+  grep -qF -- 'cannot load the ownership classifier' <<<"$output"
+}
+
 @test "library-absent: verb-arming.sh missing denies every Bash tool call, naming the file" {
   run_merge_hook_library_absent "verb-arming.sh" "echo hi"
   assert_denied_by_json

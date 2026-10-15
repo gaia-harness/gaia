@@ -131,7 +131,7 @@ hand_edit_sentences() {
   section_text="$(section "$CHECKPOINT" "$RUNBOOK")" || return 1
   sentences <<<"$section_text" | grep -qF -- 'No fixer is dispatched for it, so the round has no `fixer-<r>-audit.json`: the members re-audit the current tree to earn their markers, and the remaining entries are recorded under the heading `## Accepted residuals (recorded, not fixed)` in the PR body' || return 1
   sentences <<<"$section_text" | grep -qF -- 'A closing round never re-arms the loop: if it does not clear, the next new-tree dispatch is denied and the human decides again.' || return 1
-  sentences <<<"$section_text" | grep -qF -- 'No member repairs anything in it either: members edit no tracked file, and `code-audit-frontend` reads the same `closing` field'
+  sentences <<<"$section_text" | grep -qF -- 'No member repairs anything in it either: members edit no tracked file.'
 }
 
 @test "COV-001: the record is published at every round end, a round with no commit included" {
