@@ -2,6 +2,8 @@
 
 Forms are composed directly from the ui `Field` parts, ui controls and Conform; GAIA has no form wrappers. Conform's Zod helpers import from the `@conform-to/zod/v4` subpath: the bare `@conform-to/zod` targets Zod 3 and throws at runtime (typecheck/lint/build don't catch it). The react-code SKILL.md carries this as the always-on rule; the examples below use `/v4` throughout.
 
+Contents: Form setup; The composed Field; Actions and disabled states; Typing; Zod Patterns.
+
 ## Form setup
 
 ### 1. Define the Zod schema (in the route file)

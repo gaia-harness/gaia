@@ -1,5 +1,7 @@
 # Translation Patterns, Edge Cases
 
+Contents: Core Rule; keyPrefix; Dynamic Translation Keys; Inline Styled Segments (Trans component); String Deduplication; Plurals.
+
 ## Core Rule
 
 One `useTranslation()` per component. Use `{ns: 'other'}` for cross-namespace access.

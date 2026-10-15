@@ -7,6 +7,8 @@ description: Applies GAIA's patterns and conventions for writing and editing Rea
 
 Write and edit React components, pages, routes, hooks, and forms following project conventions.
 
+Contents: Reach for the Platform First; Pre-Flight Gates; Memoization: compiler-first; Component Structure; Data Loading; Route-Page Architecture; References.
+
 ## Reach for the Platform First
 
 Before installing a package or hand-rolling a primitive, walk this ladder and stop at the first hit:

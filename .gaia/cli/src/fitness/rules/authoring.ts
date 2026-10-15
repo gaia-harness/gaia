@@ -1,5 +1,6 @@
 import {filesOfKinds} from '../context.js';
 import {buildLinkGraph, skillDirectoryOf} from '../links.js';
+import {splitFrontmatter} from '../markdown.js';
 import type {ProjectFile, RuleDefinition} from '../types.js';
 import {
   bodyOf,
@@ -138,7 +139,13 @@ export const AUTHORING_RULES: readonly RuleDefinition[] = [
           `${description} ${stringField(file, 'when_to_use') ?? ''}`
         );
 
-        return TRIGGER_WORDS.test(text) ?
+        // A trigger steers only the model's choice to invoke; a human-only
+        // command's description is a menu label.
+        return (
+            TRIGGER_WORDS.test(text) ||
+              splitFrontmatter(file.text).data['disable-model-invocation'] ===
+                true
+          ) ?
             []
           : [
               {
@@ -152,7 +159,7 @@ export const AUTHORING_RULES: readonly RuleDefinition[] = [
             ];
       }),
     detection:
-      'Neither description nor when_to_use names a trigger: when, whenever, trigger, or use for, if, on, after or before.',
+      'In a skill or command the model can invoke, neither description nor when_to_use names a trigger: when, whenever, trigger, or use for, if, on, after or before.',
     ruleId: 'authoring.skill.description.no-when',
     severity: 'info',
   },

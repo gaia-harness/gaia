@@ -2,6 +2,8 @@
 
 Human-gated codifying for the policy-memory loop. `/gaia-codify` is the ONLY code path that authors or activates anything in this loop, and it runs only under explicit human invocation. For each recurring finding it judges the lowest-context-weight form that fits, checks edit-vs-new first, and recommends exactly one action with rationale. It explains every item in plain language, presents the whole recommended plan once, and asks the human to accept it, change some items, or stop. Nothing is authored or activated unattended.
 
+Contents: Execution model, READ FIRST; Invocation; Fetch the live candidate list; Judge-the-form logic (the heart of the command); Per-form action handling; The prose-rule template (fill in, then write); Unclassified recurrence signal (seed-a-class-or-investigate); Record the review (end of run); Publish approved changes (end of run); Cost record (run end); Guardrails.
+
 v1 owns prose-rule create/edit end to end. Skills and deterministic checks are recommended and scaffolded only (a skill-creator handoff; a hook+script sketch), never auto-authored or auto-activated.
 
 ## Execution model, READ FIRST
@@ -10,30 +12,16 @@ Execute the playbook yourself in the current conversation. This is an interactiv
 
 The agent never runs `git add`, `git commit`, or `git push` *while dispositions are collected and applied*: each approve / decline / defer lands in the working tree or the ledger (or persists nothing), and the human owns every call. After the last candidate is dispositioned, one end-of-run publish step (`## Publish approved changes (end of run)`) carries any approved working-tree change through a PR, and merges only on the human's answer. A decline writes one bounded entry to the machine-local, gitignored ledger and nowhere else. A defer persists nothing of its own. Besides the decline ledger, a completed review writes one more machine-local file, the review snapshot, and clears the cached statusline nudge; see `## Record the review (end of run)`.
 
-## Argument parsing
+## Invocation
 
-Tokenize the first whitespace-separated word of `$ARGUMENTS`:
+`/gaia-codify` takes no arguments: every run is the full interactive review. The statusline nudge points here. Its text is the count form (`Run /gaia-codify (N recurring pattern)` for one, `Run /gaia-codify (N recurring patterns)` for more) only on a clone with no review snapshot; after a completed review it instead names the trigger (`tally changed`, `N new pattern(s)`, `<class> rising` per rising class (the last path segment of the class name), `unclassified rising`), and it stays silent while nothing has changed since that review. See `wiki/concepts/Policy-Memory Loop.md` for the trigger model.
 
-- `review` (or empty `$ARGUMENTS`) → the full interactive flow. This is the default an empty `$ARGUMENTS` resolves to, so the statusline nudge points here without carrying a `review` token. The nudge text is today's count form (`Run /gaia-codify (N recurring pattern)` for one, `Run /gaia-codify (N recurring patterns)` for more) only on a clone with no review snapshot; after a completed review it instead names the trigger (`tally changed`, `N new pattern(s)`, `<class> rising` per rising class (the last path segment of the class name), `unclassified rising`), and it stays silent while nothing has changed since that review. See `wiki/concepts/Policy-Memory Loop.md` for the trigger model.
-- `list` → print the live candidates with their distinct-PR counts and the recommended form. No authoring, no prompts.
-- `why` → the remainder of `$ARGUMENTS` is a `finding_class`. Explain that one candidate: the PRs it recurred on, the recommended form, and the rationale. No authoring, no prompts.
+## Fetch the live candidate list
 
-If the first token is none of `review` / `list` / `why` and `$ARGUMENTS` is non-empty, treat the whole string as if it were a `why <finding_class>` target only when it parses as a single finding_class; otherwise default to `review`.
-
-## Fetch the live candidate list (all subcommands)
-
-Every subcommand reads the live list from the tally primitive. Re-run it; never trust a stale count.
-
-In `review` mode, save the tally to a file and read it from there, since the end-of-run Record section needs the same run's tally:
+Read the live list from the tally primitive. Re-run it; never trust a stale count. Save the tally to a file and read it from there, since the end-of-run Record section needs the same run's tally:
 
 ```bash
 mkdir -p .gaia/local/codify && .gaia/cli/gaia codify-tally > .gaia/local/codify/review-tally.json
-```
-
-`list` and `why` keep the plain call and write nothing:
-
-```bash
-.gaia/cli/gaia codify-tally
 ```
 
 A structured `malformed_snapshot` error on stderr means the prior review snapshot is ignored for this run's triggers; the next completed review replaces it. It prints JSON to stdout:
@@ -88,8 +76,8 @@ A structured `malformed_snapshot` error on stderr means the prior review snapsho
 Bind to these fields per candidate: `finding_class`, `distinct_pr_count`, `pr_numbers`, `area_tags`, `severity_max`, `is_oracle`. Also bind the top-level `unclassified` field (an object or `null`, see below). The tally already drops classes a promoted rule covers and classes the decline ledger suppresses, so every entry it returns is an open candidate. Coverage detection is class-level and scope-blind in v1: a promoted rule suppresses its `finding_class` regardless of the rule's `paths:` glob, because coverage keys only on the provenance marker's `finding_class`, not on scope. `codify-tally` is network-dependent and non-fatal: it always exits 0, and the emitted `gh_ok` boolean separates a real all-clear from a window it did not fully read. Branch on the result:
 
 - **`gh_ok` is `false`**: the merged-PR window could not be read (a `gh`/network outage), which is NOT an all-clear. Report "could not read the merged-PR window; this is not an all-clear, re-run when `gh` is available" and stop, never claim no findings. (Run ends here; see `## Cost record (run end)`.)
-- **`gh_ok` is `true`, `candidate_count` is `0`, `unclassified` is `null`**: report "no recurring findings crossed the threshold in the last 90 days". In `review` mode, before stopping, run the combined record-and-clear block from `## Record the review (end of run)` as one Bash call: shell variables do not persist across separate calls, so the record and the clear must run together. On a non-zero `record_status`, report it the way that section says (quote the structured error code); either way this stop does not proceed to Publish. `list`/`why` stop as today, writing nothing. (Run ends here; see `## Cost record (run end)`.)
-- **`gh_ok` is `true`, `candidate_count` is `0`, `unclassified` is non-null**: do NOT stop. Skip judging and the plan question (there is no candidate to disposition) and go straight to `## Unclassified recurrence signal (seed-a-class-or-investigate)` below, which in `review` mode flows on to `## Record the review (end of run)`.
+- **`gh_ok` is `true`, `candidate_count` is `0`, `unclassified` is `null`**: report "no recurring findings crossed the threshold in the last 90 days". Before stopping, run the combined record-and-clear block from `## Record the review (end of run)` as one Bash call: shell variables do not persist across separate calls, so the record and the clear must run together. On a non-zero `record_status`, report it the way that section says (quote the structured error code); either way this stop does not proceed to Publish. (Run ends here; see `## Cost record (run end)`.)
+- **`gh_ok` is `true`, `candidate_count` is `0`, `unclassified` is non-null**: do NOT stop. Skip judging and the plan question (there is no candidate to disposition) and go straight to `## Unclassified recurrence signal (seed-a-class-or-investigate)` below, which flows on to `## Record the review (end of run)`.
 - **Otherwise**: judge every candidate (below), then present the plan and ask once (`### Present the plan, then ask once`).
 
 ## Judge-the-form logic (the heart of the command)
@@ -274,7 +262,7 @@ The marker text lives once, in `.gaia/cli/src/codify/marker.ts`'s `markerComment
 
 ## Unclassified recurrence signal (seed-a-class-or-investigate)
 
-Runs once in `review` mode, after the last candidate is dispositioned (or immediately, skipping straight here, when `candidate_count` was `0`). This section sits outside the approve/decline/defer/redirect dispositions above.
+Runs once, after the last candidate is dispositioned (or immediately, skipping straight here, when `candidate_count` was `0`). This section sits outside the approve/decline/defer/redirect dispositions above.
 
 When `unclassified` is `null`, skip this section silently and proceed to `## Record the review (end of run)`.
 
@@ -291,7 +279,7 @@ Then proceed to `## Record the review (end of run)`.
 
 ## Record the review (end of run)
 
-Runs once, in `review` mode only, after the last candidate is dispositioned and `## Unclassified recurrence signal (seed-a-class-or-investigate)` has run. An abandoned run, one where a candidate was left without an answer or the human chose **Stop without changes**, never reaches this section and writes nothing. `list`, `why`, and a `gh_ok` false fetch never reach it either.
+Runs once, after the last candidate is dispositioned and `## Unclassified recurrence signal (seed-a-class-or-investigate)` has run. An abandoned run, one where a candidate was left without an answer or the human chose **Stop without changes**, never reaches this section and writes nothing. A `gh_ok` false fetch never reaches it either.
 
 Record the snapshot from this run's own start-of-run tally (the file `## Fetch the live candidate list` saved), then, only on exit `0`, clear the cached nudge so the next statusline render stops showing it (model on `.claude/skills/gaia/references/cleanse.md`'s cache-bust, main-root-resolved, jq with an `rm -f` fallback). Run both as one Bash call: shell variables do not persist across separate calls.
 
@@ -316,7 +304,7 @@ On a non-zero `record_status`, the snapshot did NOT record: report that the revi
 
 ## Publish approved changes (end of run)
 
-Runs once, in `review` mode only, after `## Record the review (end of run)`. `list` and `why` never reach it (they author nothing). It exists so an engineer who approved at least one change does not then have to ask for a branch and PR by hand.
+Runs once, after `## Record the review (end of run)`. It exists so an engineer who approved at least one change does not then have to ask for a branch and PR by hand.
 
 **Precondition.** While applying the dispositions, track whether any candidate was approved through a handler that writes to the working tree: **new prose rule**, **edit existing prose rule**, or **enforcement edit**. The scaffold-only handlers (deterministic-check sketch, skill scaffold) write no file and never count, and decline / defer produce no change. If no approval produced a working-tree change, there is nothing to publish: say so briefly and stop. (Run ends here; see `## Cost record (run end)`.)
 
@@ -396,19 +384,10 @@ Every stop above ends the run; see `## Cost record (run end)`, which is written 
 
 If any `git` or `gh` command above exits non-zero, print the error and STOP. Do not retry, force-push, or amend; a rejected push is the engineer's call to resolve. (Run ends here; see `## Cost record (run end)`, passing `--pr` only if `gh pr create` already succeeded before the failure.)
 
-## list subcommand
-
-Run `codify-tally`, judge every candidate, and print the same summary table and per-row detail `### Present the plan, then ask once` prints, rendered per `### Explain each item in plain language`, including the unclassified row when `unclassified` is non-null, noting it awaits a seeded class or investigation. Author nothing and prompt for nothing. (Run ends here; see `## Cost record (run end)`.)
-
-## why subcommand
-
-Run `codify-tally`, find the candidate whose `finding_class` matches the argument. Explain it with the rendering `### Explain each item in plain language` defines, then add the fuller rationale (including whether an existing artifact should be edited instead). If no candidate matches, say so and list the open candidates. `unclassified` is never `why`-addressable: it carries no `finding_class`, so treat a `why` argument of `unclassified` (or similar) the same as no match, say so, and point at `list` to see it. Author nothing and prompt for nothing. (Run ends here; see `## Cost record (run end)`.)
-
 ## Cost record (run end)
 
 Every path that ends a `/gaia-codify` run appends exactly one cost record, the run-ending paths above:
 
-- `list` and `why` printing their result.
 - The `gh_ok: false` and zero-candidate stops from the live candidate fetch.
 - **Stop without changes** at the plan question.
 - Publish's no-change stop (no approval touched the working tree, or `git status --porcelain` came back empty).
@@ -433,5 +412,5 @@ Apply the shared record recipe in `.claude/skills/gaia/references/cost-record.md
 - Recommend exactly one form per candidate, with rationale; check edit-vs-new first; bias to the lowest-context-weight form. Never reflexively author a prose rule.
 - Factor the efficacy lens (Axis 3) into the recommendation and rationale: a recurring finding proves the problem, not the fix. When the recommended form is prose and no cheap evidence shows it would change behavior, surface that as a defer/decline signal for the human, never as an auto-decline.
 - This loop keys only on `finding_class` recurrence from the PR window.
-- The review snapshot is written only by a completed review-mode run, from that run's own start-of-run tally, never by `list`, `why`, a `gh_ok` false fetch, or an interrupted (abandoned) review.
+- The review snapshot is written only by a completed review, from that run's own start-of-run tally, never by a `gh_ok` false fetch or an interrupted (abandoned) review.
 - The `unclassified` signal is never a draftable candidate and is never auto-drafted: it carries no approve/decline/defer/redirect action and authors no artifact. It carries a suppression instead, on the terms `## Unclassified recurrence signal (seed-a-class-or-investigate)` states, including its release by the prune. Relaxing this guardrail is deliberate: seeding provably cannot shrink the cluster it answers. What spares the developer the nudge is no longer the suppression alone, the review snapshot does that on the same trigger terms as every other candidate; the suppression's own job is narrower, it removes the unclassified section from a review until the signal rises materially, so a review that has already seen it is not asked to re-litigate an unchanged cluster. No later change widens this further without the same justification.

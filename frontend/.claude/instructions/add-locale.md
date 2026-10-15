@@ -7,6 +7,8 @@ description: Add a single locale to the project's i18n setup. Parameterized, sub
 
 All paths in this file are repo-relative. The executing agent runs from the project root.
 
+Contents: Variable substitution; Step 1, Mirror the English language tree; Step 2, Register the locale; Step 3, LanguageSelect; Step 4, Storybook preview; Step 5, RTL handling (only if `{{IS_RTL}}` is `true`); Step 6, Playwright spec; Step 7, Manifest (no change needed); Step 8, Verify; Step 9, Self-delete.
+
 ## Variable substitution
 
 Before executing any step, verify all four variables below have been replaced with real values. If any variable is still in `{{...}}` form, **refuse to proceed** and report which variables are unsubstituted.

@@ -2,6 +2,8 @@
 
 The on-demand reconcile surface for Serena language drift. When an adopter's Serena-registered project grows a language Serena is not indexing, `/gaia-serena-sync` reports the missing languages, prints a literal in-place edit instruction, and presents **one** consent prompt covering the whole drifted set. On an explicit yes it appends the missing tokens to the `language_servers:` list (`languages:` before Serena 1.7) in `.serena/project.yml` via the shared library, reusing the list's exact indentation and style, keeping every other line byte-identical, then tells the adopter to restart Serena. With no drift it reports in sync and writes nothing. Any config form it cannot edit safely routes to a prompt-only fallback. It never runs `serena project create`.
 
+Contents: Execution model, READ FIRST; Step 0: Preconditions and inert exit; Step 1: Recompute current drift (the cache may be stale); Step 2: Report the drift and classify the config form; Step 3: One consent prompt covering the whole drifted set; Step 4: Prompt-only fallback (unsafe form); Guardrails.
+
 ## Execution model, READ FIRST
 
 Execute the playbook yourself in the current conversation. It is short and human-gated: the single write is gated behind one `AskUserQuestion`, and nothing mutates `.serena/project.yml` until the adopter explicitly says yes. Steps 0 and 1 are inert exits for adopters who do not run Serena or whose project is already in sync; run them first and stop early when they apply.

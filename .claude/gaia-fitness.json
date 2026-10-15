@@ -7,16 +7,6 @@
       "reason": "Skill body is over 500 lines; deferred to the authoring sweep that splits over-length skills."
     },
     {
-      "rule_id": "frontmatter.parse",
-      "path": ".claude/commands/gaia-debt.md",
-      "reason": "The argument-hint value is unquoted, which strict YAML rejects though Claude Code tolerates it; deferred until the command is next edited."
-    },
-    {
-      "rule_id": "frontmatter.parse",
-      "path": ".claude/commands/gaia-spec.md",
-      "reason": "The argument-hint value is unquoted, which strict YAML rejects though Claude Code tolerates it; deferred until the command is next edited."
-    },
-    {
       "rule_id": "frontmatter.name-collision",
       "path": ".gaia/tests/lib/fixtures/cleanse-conflict-routing/.claude/commands/example-release.md",
       "reason": "Test fixture that reproduces a command and skill pair sharing one name by design; it is not a live harness file."
@@ -25,6 +15,16 @@
       "rule_id": "frontmatter.name-collision",
       "path": ".gaia/tests/lib/fixtures/cleanse-conflict-routing/.claude/skills/example-release/SKILL.md",
       "reason": "Test fixture that reproduces a command and skill pair sharing one name by design; it is not a live harness file."
+    },
+    {
+      "rule_id": "authoring.skill.description.no-when",
+      "path": ".gaia/tests/lib/fixtures/cleanse-conflict-routing/.claude/commands/example-release.md",
+      "reason": "Test fixture whose description is deliberately minimal; it is not a live harness file."
+    },
+    {
+      "rule_id": "authoring.skill.description.no-when",
+      "path": ".gaia/tests/lib/fixtures/cleanse-conflict-routing/.claude/skills/example-deploy/SKILL.md",
+      "reason": "Test fixture whose description is deliberately minimal; it is not a live harness file."
     }
   ]
 }

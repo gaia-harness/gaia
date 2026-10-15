@@ -177,29 +177,19 @@ backlog_pass_is_scripted() {
 
 ROUTE_PREFIX='Read `.claude/skills/gaia/references/debt/'
 
-# is_pointer_stub <file>: a debt/*.md that is exactly one line and names the
-# shared work-lifecycle reference. It carries no procedure, so routing to it
-# would add a read with nothing to skip.
-is_pointer_stub() {
-  [ "$(wc -l <"$1" | tr -d ' ')" -eq 1 ] && grep -qF -- 'work-lifecycle.md' "$1"
-}
-
 # every_sub_reference_routed <references-dir>: succeeds when debt.md holds a
-# `Read` line naming each debt/*.md by its repo path, except a pointer stub.
-# The set comes from the directory, and an independent count (also skipping
-# stubs) catches a glob that read fewer files than exist; an empty set fails
-# rather than passing vacuously.
+# `Read` line naming each debt/*.md by its repo path. The set comes from the
+# directory, and an independent count catches a glob that read fewer files than
+# exist; an empty set fails rather than passing vacuously.
 every_sub_reference_routed() {
   local dir="$1" file name count=0 expected=0
   [ -f "$dir/debt.md" ] || return 1
   for file in "$dir"/debt/*.md; do
-    [ -f "$file" ] || continue
-    is_pointer_stub "$file" || expected=$((expected + 1))
+    [ -f "$file" ] && expected=$((expected + 1))
   done
   [ "$expected" -ge 1 ] || return 1
   for file in "$dir"/debt/*.md; do
     [ -f "$file" ] || continue
-    is_pointer_stub "$file" && continue
     name="$(basename "$file")"
     count=$((count + 1))
     if ! grep -qF -- "${ROUTE_PREFIX}${name}\`" "$dir/debt.md"; then
@@ -215,14 +205,9 @@ every_sub_reference_routed() {
   every_sub_reference_routed "$PLAYBOOK_DIR"
 }
 
-@test "the routing check goes red when a pointer stub gains a second line" {
-  local stub="" file
+@test "the routing check goes red when an unrouted sub-reference appears" {
   copy="$(scratch_copy)"
-  for file in "$copy"/debt/*.md; do
-    if is_pointer_stub "$file"; then stub="$file"; fi
-  done
-  [ -n "$stub" ] || return 1
-  printf '\n### Some procedure\n' >>"$stub"
+  printf 'See work-lifecycle.md.\n' >"$copy/debt/unrouted.md"
   run every_sub_reference_routed "$copy"
   [ "$status" -ne 0 ]
 }

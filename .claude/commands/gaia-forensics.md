@@ -2,7 +2,7 @@
 name: gaia-forensics
 description: Turns a GAIA workflow misfire into a redacted, classified, filing-ready bug report in one read-only pass. Self-diagnoses config issues inline and files probable bugs upstream on confirmation.
 disable-model-invocation: true
-argument-hint: [description]
+argument-hint: "[description]"
 ---
 
 Run the GAIA **forensics** workflow with these arguments: `$ARGUMENTS`

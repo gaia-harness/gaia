@@ -2,6 +2,8 @@
 
 A triage drain over the keyed audit residue recorded under the two canonical headings in merged pull-request bodies. It never fixes anything and never edits a file a residual cites; fixing is `/gaia-debt`'s job.
 
+Contents: Execution model, READ FIRST; Naming disambiguation; Invocation; Fetch the live candidate list; Bounding the run; Present each candidate; The three arms; Record; Refresh the statusline nudge (end of run); Publish approved changes (end of run); Cost record (run end); Guardrails.
+
 ## Execution model, READ FIRST
 
 Interactive and human-gated. Promote is one question per entry and never auto-advances. The agent never runs `git add`, `git commit`, or `git push` during the per-candidate loop; one end-of-run publish step runs after the last disposition.
@@ -10,19 +12,13 @@ Interactive and human-gated. Promote is one question per entry and never auto-ad
 
 This tree spends the word "residue" on a second meaning: orphaned machine-local state, carried by the `residue` array in `.gaia/state-registry.json`. That is a different thing from what this command drains. The audit sense this command triages is always spelled "residual": a residual is one keyed entry recorded under a canonical heading in a merged pull request's body. The collision is confined to maintainer-internal registry vocabulary and shadows nothing a user types, but any prose where both senses could be read together disambiguates explicitly, the way this paragraph does.
 
-## Argument parsing
+## Invocation
 
-Tokenize the first whitespace-separated word of `$ARGUMENTS`:
+`/gaia-residue` takes no arguments: every run is the full interactive triage.
 
-- `review` (or empty `$ARGUMENTS`) → the full interactive flow. This is the default an empty `$ARGUMENTS` resolves to.
-- `list` → print the live candidates. No authoring, no prompts.
-- `why <path>:<line>` → explain the one candidate at that coordinate. No authoring, no prompts.
+## Fetch the live candidate list
 
-When the first token is none of `review` / `list` / `why` and the whole string parses as a single `<path>:<line>` coordinate, treat it as a `why` target. Anything else defaults to `review`.
-
-## Fetch the live candidate list (all subcommands)
-
-Every subcommand reads the live list from the tally primitive. Re-run it; never trust a stale count.
+Read the live list from the tally primitive. Re-run it; never trust a stale count.
 
 ```bash
 .gaia/cli/gaia residue-tally
@@ -45,12 +41,12 @@ Then the three terminating reads:
 
 Which populations a stop arm carries live differs by arm. The zero-candidate arm carries both, and it is the one that bites: announcing that nothing is open over a truncated corpus, or over a dismissal store some of whose lines could not be read, is exactly the false all-clear this section exists to prevent. The `gh_ok` is `false` arms carry `store_skipped` live, but their `malformed` is always emitted empty whether or not malformed keys exist, so an empty `malformed` there means **unknown**, never none; report it as unknown rather than reporting nothing.
 
-These populations never reach the triage loop, so nothing else will mention them. Report each one that is non-empty, carrying the `reason` each entry gives rather than a summary of it; where the arm above says a population is unknown rather than empty, report it as unknown instead of staying silent. On `review` that is alongside the candidate list, before the first question; on `list` and `why`, alongside the printed result; and on either terminating stop above, alongside that stop's own report, before the run ends:
+These populations never reach the triage loop, so nothing else will mention them. Report each one that is non-empty, carrying the `reason` each entry gives rather than a summary of it; where the arm above says a population is unknown rather than empty, report it as unknown instead of staying silent. On a run that reaches triage that is alongside the candidate list, before the first question; on either terminating stop above, alongside that stop's own report, before the run ends:
 
 - `malformed` holds entry units whose key matched the gate's grammar but failed field validation. They are withheld from triage by design, and the reason is reported so the key can be repaired in its own pull-request body. A run that stays silent here leaves a residual no one can act on and no one knows about.
 - `store_skipped` holds dismissal-store lines that could not be read. Each one is a disposition that has stopped suppressing, so a suppression a reviewer believes is in place is not.
 
-`window` is different: the emit always carries it, and it holds no reason to relay. Report it, on the same terms and at the same point in each subcommand, only when `window.truncated` is `true`. That means the window read hit its own iteration bound, so the corpus may be incomplete and every count is a floor rather than a total. Say so; never present a truncated read as a whole one.
+`window` is different: the emit always carries it, and it holds no reason to relay. Report it, on the same terms and at the same point, only when `window.truncated` is `true`. That means the window read hit its own iteration bound, so the corpus may be incomplete and every count is a floor rather than a total. Say so; never present a truncated read as a whole one.
 
 ## Bounding the run
 
@@ -116,7 +112,7 @@ The store is append-only JSON Lines, carries a schema version, and is named abov
 
 ## Refresh the statusline nudge (end of run)
 
-Runs once, after the last disposition and before the publish step, whenever this run confirmed at least one disposition: a store record, or a promotion's filed issue. `list` and `why` never reach it. The statusline reads `residueCandidateCount` from the shared update-check cache, which `.gaia/scripts/check-updates.sh` recomputes only once its 6-hour TTL lapses, so without this step a user who just drained the residue keeps being told to run the command again.
+Runs once, after the last disposition and before the publish step, whenever this run confirmed at least one disposition: a store record, or a promotion's filed issue. The statusline reads `residueCandidateCount` from the shared update-check cache, which `.gaia/scripts/check-updates.sh` recomputes only once its 6-hour TTL lapses, so without this step a user who just drained the residue keeps being told to run the command again.
 
 Rewrite that one field from a fresh count, and leave every other field alone:
 
@@ -140,7 +136,7 @@ fi
 
 ## Publish approved changes (end of run)
 
-Runs once, after the last disposition, only when the store was actually written this run. `list` and `why` never reach it.
+Runs once, after the last disposition, only when the store was actually written this run.
 
 **Confirm there are real changes.**
 
@@ -194,19 +190,10 @@ Empty output confirms no marker is owed, and the merge gate's out-of-scope bypas
 
 If any `git` or `gh` command above exits non-zero, print the error and STOP. Do not retry, force-push, or amend.
 
-## list subcommand
-
-Run `residue-tally`, then print every candidate, one line each. Author nothing, prompt for nothing, resolve nothing beyond what the tally already emitted.
-
-## why subcommand
-
-Run `residue-tally`, then find the candidate whose cited coordinate matches the `<path>:<line>` argument. Explain it: its failure mode, its canonical disposition, its source pull request, its resolved line, and its resolution class. When the coordinate matches no candidate, say so and point at `list`. Author nothing, prompt for nothing. Match the coordinate against the tally's already-emitted JSON; do not pass it to a command.
-
 ## Cost record (run end)
 
 Every path that ends a `/gaia-residue` run appends exactly one cost record, the run-ending paths above:
 
-- `list` and `why` printing their result.
 - The `gh_ok: false` and zero-candidate stops from the live candidate fetch.
 - Publish's no-change stop (nothing landed in the working tree).
 - Publish's unsafe-repo-state stop.
