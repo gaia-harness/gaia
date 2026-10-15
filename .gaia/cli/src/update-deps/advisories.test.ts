@@ -519,9 +519,10 @@ describe('advisories: audit keys', () => {
     const payload = readPayload();
 
     expect(payload.source).toBe('dependabot');
-    expect(payload.advisories.map((entry) => entry.key)).toStrictEqual([
-      GHSA_A,
-    ]);
+    expect(payload.advisories.map((entry) => entry.key)).toHaveLength(3);
+    expect(payload.advisories.map((entry) => entry.key)).toEqual(
+      expect.arrayContaining([GHSA_A, GHSA_D, 'pnpm:3'])
+    );
     expect(payload.auditKeys).toStrictEqual([GHSA_D, GHSA_A, 'pnpm:3']);
   });
 
@@ -602,6 +603,23 @@ describe('advisories: the alerts count covers the lockfile', () => {
     });
 
     expect(readPayload().count).toBe(0);
+  });
+
+  test('full mode lists an audit-only advisory beside the alerts so the count has a row', async () => {
+    await invoke({
+      gh: ghStub({open: ghOk([alert({number: 1})])}),
+      pnpm: pnpmStub(
+        auditOutput(
+          auditAdvisory(),
+          auditAdvisory({github_advisory_id: null, id: 3, module_name: 'other'})
+        )
+      ),
+    });
+
+    const payload = readPayload();
+
+    expect(payload.count).toBe(2);
+    expect(payload.advisories).toHaveLength(2);
   });
 
   test('an alert and its audit record count once', async () => {

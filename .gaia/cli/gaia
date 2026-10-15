@@ -43712,7 +43712,13 @@ var buildPayload = async (context, offers) => {
     alerts.ok ? joinAuditToAlerts(alerts.open, auditRecords) : []
   );
   const auditAdvisories = countable(advisoriesFromAudit(auditRecords));
-  const rows = alerts.ok ? alertAdvisories : auditAdvisories;
+  const alertKeys = new Set(alertAdvisories.map((advisory) => advisory.key));
+  const rows = alerts.ok ? [
+    ...alertAdvisories,
+    ...auditAdvisories.filter(
+      (advisory) => !advisory.baselineAcknowledged && !alertKeys.has(advisory.key)
+    )
+  ] : auditAdvisories;
   const reasons = alerts.ok ? [] : [alerts.reason];
   return {
     ...common,

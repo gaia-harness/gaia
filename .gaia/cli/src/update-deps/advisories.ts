@@ -518,7 +518,19 @@ const buildPayload = async (
     alerts.ok ? joinAuditToAlerts(alerts.open, auditRecords) : []
   );
   const auditAdvisories = countable(advisoriesFromAudit(auditRecords));
-  const rows = alerts.ok ? alertAdvisories : auditAdvisories;
+  // Rows mirror the count's union, so every counted key has a row the
+  // security plan can act on.
+  const alertKeys = new Set(alertAdvisories.map((advisory) => advisory.key));
+  const rows =
+    alerts.ok ?
+      [
+        ...alertAdvisories,
+        ...auditAdvisories.filter(
+          (advisory) =>
+            !advisory.baselineAcknowledged && !alertKeys.has(advisory.key)
+        ),
+      ]
+    : auditAdvisories;
   const reasons: AdvisoryReasonToken[] = alerts.ok ? [] : [alerts.reason];
 
   return {
