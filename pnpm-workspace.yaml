@@ -74,7 +74,10 @@ minimumReleaseAgeExclude:
 #     and shadcn, so no dependency bump removes it. Exposure is dev-time only:
 #     braces expands developer-authored globs and config patterns, never
 #     attacker-controlled input. Remove when a patched braces ships and the
-#     lockfile resolves to it.
+#     lockfile resolves to it. /update-gaia raises no removal for an entry
+#     GAIA retires, so the release that removes it must name the removal as an
+#     adopter action in its CHANGELOG entry, and an adopter who copied it
+#     deletes their copy by hand.
 auditConfig:
   ignoreGhsas:
     - GHSA-vfj7-8cjw-p6xm
