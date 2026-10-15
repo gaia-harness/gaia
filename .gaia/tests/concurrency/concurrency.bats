@@ -1074,8 +1074,16 @@ SH
   # step.
   entry_payload="$(jq -nc --arg worktree_path "$WORKTREE_B" \
     '{tool_name: "EnterWorktree", cwd: $worktree_path, tool_response: {worktreePath: $worktree_path}}')"
+  # A hook-triggered entry on a tree with a lockfile installs in a background
+  # job, except under GitHub Actions, so CI's GITHUB_ACTIONS is cleared to
+  # measure the path a local session takes, and the property is read once that
+  # job has finished.
+  unset GITHUB_ACTIONS
   run_in "$WORKTREE_B" -- run_with PATH="$stub_directory:$PATH" -- \
     gaia_deliver_hook "$entry_payload" "$WORKTREE_B/.claude/hooks/provision-worktree.sh" >/dev/null 2>&1
+
+  . "$BATS_TEST_DIRNAME/../helpers/background-provisioning.sh"
+  wait_for_background_provisioning "$WORKTREE_B" || return 1
 
   # Target: a test run inside B resolves its dependencies from B's own tree,
   # never silently against main's when they differ. A bare "resolution

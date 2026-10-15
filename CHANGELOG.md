@@ -119,6 +119,7 @@ On GAIA 1.6.1? Claude: choose Abort, then offer to migrate this project to 2.0.0
 
 ### Changed
 
+- Entering a worktree no longer waits for its dependency install and typed-route generation: the worktree hook runs both in the background and tells Claude where to check that they finished, so `EnterWorktree` on a fresh tree returns in about a second instead of 7 to 16. A direct `bash .claude/hooks/provision-worktree.sh <path>` still finishes everything before returning (#2701)
 - `/gaia-codify` and `/gaia-residue` take no arguments: their `list` and `why` subcommands are gone, and every run is the full interactive review (#2697)
 - `/gaia-fitness` no longer asks a command marked `disable-model-invocation: true` for a "Use when" trigger, since only the model's choice to invoke reads one. GAIA's own shipped references and skills now carry the Contents lines and links the check expects, so its UPSTREAM block in your report is close to empty (#2697)
 - `/update-deps` keeps its final report and publish steps in their own reference files, bringing the skill under the `/gaia-fitness` length limit, and the `i18n` rule now also loads when Claude edits route files, where loaders call `getInstance()` for meta tags (#2698)
