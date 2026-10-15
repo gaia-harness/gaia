@@ -42143,6 +42143,10 @@ var relationshipFromChain = (chain) => {
   return chain.length === 2 ? "direct" : "transitive";
 };
 var auditKeyOf = (record2) => record2.ghsa ?? `pnpm:${String(record2.id)}`;
+var auditKeysOf = (audit) => {
+  const keys = [...new Set(audit.map(auditKeyOf))];
+  return keys.toSorted(compareStrings2);
+};
 var advisoriesFromAudit = (audit) => [
   ...groupBy(
     audit,
@@ -43668,6 +43672,7 @@ var buildPayload = async (context, offers) => {
   const rejectedCount = (alerts.ok ? alerts.rejected : 0) + (audit.ok ? audit.rejected : 0);
   const common = {
     auditAvailable: audit.ok,
+    auditKeys: auditKeysOf(auditRecords),
     generatedAt: context.now.toISOString(),
     rejectedCount,
     version: 1

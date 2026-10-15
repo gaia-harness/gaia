@@ -499,6 +499,52 @@ describe('advisories: alerts source', () => {
   });
 });
 
+describe('advisories: audit keys', () => {
+  test('alerts mode lists every audit key, including those no alert backs', async () => {
+    await invoke({
+      gh: ghStub({open: ghOk([alert({number: 1})])}),
+      pnpm: pnpmStub(
+        auditOutput(
+          auditAdvisory({github_advisory_id: GHSA_A, id: 1}),
+          auditAdvisory({
+            github_advisory_id: GHSA_D,
+            id: 2,
+            module_name: 'braces',
+          }),
+          auditAdvisory({github_advisory_id: null, id: 3, module_name: 'other'})
+        )
+      ),
+    });
+
+    const payload = readPayload();
+
+    expect(payload.source).toBe('dependabot');
+    expect(payload.advisories.map((entry) => entry.key)).toStrictEqual([
+      GHSA_A,
+    ]);
+    expect(payload.auditKeys).toStrictEqual([GHSA_D, GHSA_A, 'pnpm:3']);
+  });
+
+  test('count-only in alerts mode runs no audit and lists no audit keys', async () => {
+    await invoke({
+      args: ['--count-only'],
+      gh: ghStub({open: ghOk([alert({number: 1})])}),
+      pnpm: pnpmStub(auditOutput(auditAdvisory())),
+    });
+
+    expect(readPayload().auditKeys).toStrictEqual([]);
+  });
+
+  test('a failed audit lists no audit keys', async () => {
+    await invoke({
+      gh: ghStub({open: ghOk([alert({number: 1})])}),
+      pnpm: pnpmStub(PNPM_FAILS),
+    });
+
+    expect(readPayload()).toMatchObject({auditKeys: [], source: 'dependabot'});
+  });
+});
+
 describe('advisories: dismissed alerts', () => {
   test('full mode lists only owned dismissed GHSA ids and leaves the count alone', async () => {
     const gh = ghStub({

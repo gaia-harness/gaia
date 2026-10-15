@@ -215,7 +215,7 @@ check_no_bare_none_and_introduced() {
     echo "Phase 7 no longer states the section never reads a bare None" >&2
     return 1
   }
-  grep -qF -- 'Mark `introduced by this run` on a row whose key is not in the opening advisory set; that set is the opening payload'"'"'s `advisories[].key` plus its `dismissedGhsas`' <<<"$body" || {
+  grep -qF -- 'Mark `introduced by this run` on a row whose key is not in the opening advisory set Phase 1 kept (`advisories[].key`, `auditKeys`, and `dismissedGhsas`)' <<<"$body" || {
     echo "the introduced marker is not tied to the opening-set comparison" >&2
     return 1
   }
@@ -236,7 +236,7 @@ check_no_bare_none_and_introduced() {
 @test "the introduced-marker check fails with the comparison clause deleted" {
   local copy
   copy="$(scratch_copy "$SKILL" "introduced.md")"
-  remove_fixed "$copy" '; that set is the opening payload'"'"'s `advisories[].key` plus its `dismissedGhsas`'
+  remove_fixed "$copy" ', `auditKeys`,'
   run check_no_bare_none_and_introduced "$copy"
   [ "$status" -ne 0 ]
 }

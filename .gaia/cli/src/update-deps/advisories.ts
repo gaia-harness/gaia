@@ -20,6 +20,7 @@ import {projectPackageKeys, versionsFromKeys} from './advisory-lockfile.js';
 import {
   advisoriesFromAudit,
   applyBaseline,
+  auditKeysOf,
   classifyCandidates,
   countAdvisories,
   joinAuditToAlerts,
@@ -463,6 +464,7 @@ const buildPayload = async (
     (alerts.ok ? alerts.rejected : 0) + (audit.ok ? audit.rejected : 0);
   const common = {
     auditAvailable: audit.ok,
+    auditKeys: auditKeysOf(auditRecords),
     generatedAt: context.now.toISOString(),
     rejectedCount,
     version: 1 as const,
