@@ -30,8 +30,8 @@
 # `rg -g '*.key' TOKEN` reads every key file as surely as naming one would, and
 # the Grep tool arm already denies the same filter given as its `glob`. Their
 # value is a glob rather than a path, so the predicate catches the literal
-# shapes (`*.key`, `.env*`) and not every glob that could expand onto one; each
-# hook's HONEST LIMITS names what gets through. The value is split on commas and
+# shapes (`*.key`, `.env*`) and not every glob that could expand onto one; block-sensitive-read.sh's
+# HONEST LIMITS names what gets through. The value is split on commas and
 # each element judged alone, because the ugrep that Claude Code's own shell runs
 # as `grep` reads it as a list (`-g '!*.md,*.key'` still searches key files). A
 # comma inside a ripgrep brace glob splits into fragments that match nothing,
@@ -87,7 +87,7 @@ _GAIA_RO_SHORT_DISCARD='emABCDdtf'
 # Short and long flags whose value is a glob selecting the files a search reads.
 # Each non-negated element of the value is emitted. Not a closed set of every
 # way to select files: ripgrep's --type-add definitions and ugrep's extension
-# filters select too, and each hook's HONEST LIMITS names them as open.
+# filters select too, and block-sensitive-read.sh's HONEST LIMITS names them as open.
 _GAIA_RO_SHORT_SELECT='g'
 _GAIA_RO_LONG_SELECT='--include --glob --iglob'
 
@@ -101,11 +101,10 @@ _GAIA_RO_LONG_SELECT='--include --glob --iglob'
 _GAIA_RO_LONG_DISCARD='--regexp --file --exclude-from --ignore-file --max-count --after-context --before-context --context --binary-files --devices --directories --label --exclude --exclude-dir --group-separator --colors --type --type-not --type-add --replace --pre --sort --sortr --context-separator --path-separator --field-match-separator --encoding --engine --dfa-size-limit --regex-size-limit --max-columns --max-depth --max-filesize --threads'
 
 # Strip one matching pair of surrounding quotes from a token. PUBLIC, under the
-# gaia_reader_ prefix: both hooks call it for the tokens they read straight off
+# gaia_reader_ prefix: the hook calls it for the tokens it reads straight off
 # the payload, so a token reaches the predicate in the same shape whichever arm
-# produced it. It is one definition rather than three because a correction here
-# (escaped quotes, a backtick pair, nesting) has to reach every caller, and a
-# copy nobody remembers to edit diverges with no test going red.
+# produced it. It is one definition so a correction here (escaped quotes, a backtick pair,
+# nesting) reaches every caller.
 gaia_reader_strip_quotes() {
   local token="$1"
   case "$token" in

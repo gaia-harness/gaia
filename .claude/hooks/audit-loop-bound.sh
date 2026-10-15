@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # PreToolUse hook on Agent|Task: bound the pre-merge audit loop per BRANCH.
-# It gates two dispatches. An `audit-loop-unit` dispatch asks to run a unit of
+# It gates three kinds of dispatch (a light reviewer is only checked, see THE LIGHT
+# REVIEWER). An `audit-loop-unit` dispatch asks to run a unit of
 # up to K audit rounds off the main thread; the hook admits it against the
 # main session's context reading, the rubric signals, the round cap and the
 # round-count fallback, and records the unit's window. A Code Audit Team

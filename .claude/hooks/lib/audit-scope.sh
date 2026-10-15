@@ -8,10 +8,10 @@
 # Two different questions live here, and they are NOT the same question:
 #
 #   audit_out_of_scope_allowlisted the merge gate's out-of-scope allowlist,
-#                                  consulted on its legacy branch, by the spawn
-#                                  oracle's ownerless probe, and by the digest
-#                                  fold; widening it must move all three or a
-#                                  merge deadlocks
+#                                  consulted on its legacy branch, by the digest
+#                                  fold, and by the light router's ownerless probe
+#                                  (audit-light-route.sh); widening it must move all
+#                                  three or a merge deadlocks
 #   audit_owner_for_path           roster ownership: which member (if any)
 #                                  owns a path, in two precedence tiers:
 #                                  every claimant's globs first, first-match-

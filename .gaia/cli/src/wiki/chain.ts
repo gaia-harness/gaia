@@ -415,9 +415,9 @@ const lastLine = (value: null | string | undefined): string =>
  * inheriting it, so without this explicit write the line is silently
  * swallowed and `/gaia-wiki` prints no cost at all.
  *
- * Never throws and never influences `finish`'s exit code: a missing script
- * or empty output is silently fine, and a non-zero exit relays its one
- * stderr line in place of the Cost line.
+ * Never throws and never influences `finish`'s exit code: empty output
+ * is silently fine, and a non-zero exit (a missing script included) relays its
+ * one stderr line in place of the Cost line.
  */
 const recordWikiCost = (options: RunOptions, artifact?: GhArtifact): void => {
   try {

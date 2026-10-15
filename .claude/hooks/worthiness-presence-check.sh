@@ -54,8 +54,8 @@
 #     hook-payload.sh also exits 2.
 #   - a changed emergent test file the signal helper cannot parse (mid-edit
 #     syntax error) -> that file is skipped, never denied. Fail-open.
-#   - the deny path is fail-closed ONLY for the clean case: a parseable in-scope
-#     emergent test whose CURRENT signal has no matching worthiness-ledger line.
+#   - every deny is a deny_with_reason call below; the SCOPE paragraph above
+#     covers what is in scope.
 #
 # The signal covers the test's comment-free content, so a comment reword
 # leaves it unchanged and a matching line still counts. Stale-signal lines (a

@@ -168,7 +168,7 @@ command_line=$GAIA_HOOK_COMMAND
 #
 # This runs BEFORE arming, ahead of even knowing whether the tool call is a
 # merge, so an unloadable library denies every Bash tool call here, not merge
-# attempts alone, unlike the five-lib deny further down which only ever denies
+# attempts alone, unlike the library deny further down which only ever denies
 # a merge once armed.
 _hook_library_directory="$(cd "$(dirname "${BASH_SOURCE[0]}")/lib" 2>/dev/null && pwd)"
 _verb_arming_ok=0
@@ -353,7 +353,7 @@ tree=$(git rev-parse "HEAD^{tree}" 2>/dev/null || true)
 #   tree_root  WHAT a clearance attests to. The ACTING tree: the content
 #              being merged is this tree's HEAD, not main's. Every writer
 #              agrees -- the agent definitions pass
-#              `--root "$(git rev-parse --show-toplevel)"` to
+#              the acting tree's root as `--root <root>` to
 #              audit-write-clearance.sh, and resolve-audit-members.sh derives the same
 #              way -- so digesting main's HEAD here would compare a marker against content
 #              nobody is merging. From a linked worktree the two trees
@@ -1142,9 +1142,8 @@ gate_empty_is_decisive() {
 # no marker is required. The allowlist itself lives in the
 # shared classifier (audit_out_of_scope_allowlisted), the ONE place this
 # literal set is defined.
-# Legacy-gate only: the member roster's auditable-base set mirrors this check's complement, so
-# any in-scope path here also dispatches a member, a non-empty dispatched set
-# never reaches this function.
+# Legacy-gate only: a non-empty dispatched set never reaches this function; an in-scope path no
+# member owns dispatches nobody and lands here.
 #
 # Strict allowlist, evaluated fail-closed: the diff base must resolve, the diff
 # must be non-empty OR its emptiness must be decisive under

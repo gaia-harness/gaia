@@ -3,8 +3,8 @@
 # GitHub on session start/resume.
 #
 # The debt count invalidates promptly only through first-party sentinel events
-# (the audit filing a `tech-debt` issue; a `gh pr merge` / `gh issue close` /
-# `gh issue reopen` caught by debt-sentinel-touch.sh). A close that never reaches
+# (the audit filing a `tech-debt` issue, or any `gh` command
+# debt-sentinel-touch.sh arms on). A close that never reaches
 # one of those hooks, the GitHub web UI, a teammate, or a plain `gh issue close`
 # in a non-hooked shell, drops no sentinel, so the stale nudge would otherwise
 # linger until the refresher's own 6h TTL. This hook arms the sentinel on the

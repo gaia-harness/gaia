@@ -149,7 +149,7 @@ const RefsDerivedLeakCheckSchema = z.strictObject({
 // `scope-skip` subtracts paths from every check in the transform, so the one
 // class of file no token check can read usefully (a binary, whose bytes decoded
 // as UTF-8 are noise a regex can match by accident) is named once rather than
-// six times. It is deliberately NOT a performance lever: scanning the whole
+// once per check. It is deliberately NOT a performance lever: scanning the whole
 // staged tree, minified CLI bundle and lockfile included, costs ~80ms, and the
 // bundle is a shipped file where a leak is as real as anywhere else.
 const LeakCheckSchema = z.object({
