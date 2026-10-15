@@ -519,20 +519,24 @@ describe('advisories: audit keys', () => {
     const payload = readPayload();
 
     expect(payload.source).toBe('dependabot');
-    expect(payload.advisories.map((entry) => entry.key)).toStrictEqual([
-      GHSA_A,
-    ]);
+    expect(payload.advisories.map((entry) => entry.key)).toHaveLength(3);
+    expect(payload.advisories.map((entry) => entry.key)).toEqual(
+      expect.arrayContaining([GHSA_A, GHSA_D, 'pnpm:3'])
+    );
     expect(payload.auditKeys).toStrictEqual([GHSA_D, GHSA_A, 'pnpm:3']);
   });
 
-  test('count-only in alerts mode runs no audit and lists no audit keys', async () => {
+  test('count-only in alerts mode runs the audit and lists its keys', async () => {
     await invoke({
       args: ['--count-only'],
       gh: ghStub({open: ghOk([alert({number: 1})])}),
       pnpm: pnpmStub(auditOutput(auditAdvisory())),
     });
 
-    expect(readPayload().auditKeys).toStrictEqual([]);
+    expect(readPayload()).toMatchObject({
+      auditAvailable: true,
+      auditKeys: [GHSA_A],
+    });
   });
 
   test('a failed audit lists no audit keys', async () => {
@@ -542,6 +546,95 @@ describe('advisories: audit keys', () => {
     });
 
     expect(readPayload()).toMatchObject({auditKeys: [], source: 'dependabot'});
+  });
+});
+
+const writeIgnoredGhsas = (ghsas: readonly string[]): void => {
+  const entries = ghsas.map((ghsa) => `    - ${ghsa}\n`).join('');
+
+  writeFileSync(
+    path.join(sandbox.root, 'pnpm-workspace.yaml'),
+    `auditConfig:\n  ignoreGhsas:\n${entries}`
+  );
+};
+
+describe('advisories: the alerts count covers the lockfile', () => {
+  test('an advisory only pnpm audit reports raises the count', async () => {
+    await invoke({
+      args: ['--count-only'],
+      gh: ghStub({open: ghOk([])}),
+      pnpm: pnpmStub(auditOutput(auditAdvisory())),
+    });
+
+    expect(readPayload()).toMatchObject({count: 1, source: 'dependabot'});
+  });
+
+  test('an alert or audit record on an accepted GHSA stays out of the count and the rows', async () => {
+    writeIgnoredGhsas([GHSA_A]);
+
+    await invoke({
+      gh: ghStub({open: ghOk([alert({number: 1})])}),
+      pnpm: pnpmStub(auditOutput(auditAdvisory())),
+    });
+
+    expect(readPayload()).toMatchObject({advisories: [], count: 0});
+  });
+
+  test('an audit record on a dismissed alert stays out of the count', async () => {
+    await invoke({
+      args: ['--count-only'],
+      gh: ghStub({
+        dismissed: ghOk([alert({number: 8, state: 'dismissed'})]),
+        open: ghOk([]),
+      }),
+      pnpm: pnpmStub(auditOutput(auditAdvisory())),
+    });
+
+    expect(readPayload()).toMatchObject({count: 0, source: 'dependabot'});
+  });
+
+  test('an audit-only record the baseline acknowledges stays out of the count', async () => {
+    writeBaseline([{id: 1_098_765, module: 'cookie'}]);
+
+    await invoke({
+      args: ['--count-only'],
+      gh: ghStub({open: ghOk([])}),
+      pnpm: pnpmStub(auditOutput(auditAdvisory())),
+    });
+
+    expect(readPayload().count).toBe(0);
+  });
+
+  test('full mode lists an audit-only advisory beside the alerts so the count has a row', async () => {
+    await invoke({
+      gh: ghStub({open: ghOk([alert({number: 1})])}),
+      pnpm: pnpmStub(
+        auditOutput(
+          auditAdvisory(),
+          auditAdvisory({github_advisory_id: null, id: 3, module_name: 'other'})
+        )
+      ),
+    });
+
+    const payload = readPayload();
+
+    expect(payload.count).toBe(2);
+    expect(payload.advisories).toHaveLength(2);
+  });
+
+  test('an alert and its audit record count once', async () => {
+    await invoke({
+      args: ['--count-only'],
+      gh: ghStub({open: ghOk([alert({number: 1})])}),
+      pnpm: pnpmStub(
+        auditOutput(
+          auditAdvisory(),
+          auditAdvisory({github_advisory_id: null, id: 3, module_name: 'other'})
+        )
+      ),
+    });
+
+    expect(readPayload().count).toBe(2);
   });
 });
 
@@ -570,18 +663,19 @@ describe('advisories: dismissed alerts', () => {
     });
   });
 
-  test('count-only never asks for dismissed alerts', async () => {
-    const gh = ghStub({open: ghOk([alert({number: 1})])});
+  test('count-only asks for dismissed alerts too', async () => {
+    const gh = ghStub({
+      dismissed: ghOk([alert({ghsa: GHSA_B, number: 8, state: 'dismissed'})]),
+      open: ghOk([alert({number: 1})]),
+    });
 
     await invoke({args: ['--count-only'], gh});
 
-    expect(gh.calls).toHaveLength(1);
-    expect(String(gh.calls[0]?.args[2])).toContain('state=open');
+    expect(gh.calls).toHaveLength(2);
     expect(readPayload()).toMatchObject({
       advisories: [],
-      auditAvailable: false,
       count: 1,
-      dismissedGhsas: [],
+      dismissedGhsas: [GHSA_B],
     });
   });
 
@@ -928,7 +1022,7 @@ describe('advisories: enrichment and classification', () => {
     ]);
   });
 
-  test('count-only skips registry lookups and, in alerts mode, pnpm audit', async () => {
+  test('count-only skips registry lookups and runs only pnpm audit', async () => {
     writeWorkspace(1440);
     const pnpm = pnpmStub(auditOutput(auditAdvisory()));
 
@@ -938,7 +1032,7 @@ describe('advisories: enrichment and classification', () => {
       pnpm,
     });
 
-    expect(pnpm.calls).toHaveLength(0);
+    expect(pnpm.calls.map((call) => call[0])).toStrictEqual(['audit']);
   });
 });
 

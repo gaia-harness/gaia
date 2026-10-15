@@ -208,15 +208,14 @@ export type FetchAlertsOptions = {
   cwd: string;
   env: NodeJS.ProcessEnv;
   ghRunner?: GhRunner;
-  includeDismissed: boolean;
   owner: string;
   repo: string;
 };
 
 /**
- * Open npm alerts, plus dismissed ones when `includeDismissed` is set. A
- * failure of either call fails the whole fetch, so a caller never pairs an
- * answered open set with an unread dismissed set.
+ * Open npm alerts, plus dismissed ones. A failure of either call fails the
+ * whole fetch, so a caller never pairs an answered open set with an unread
+ * dismissed set.
  */
 export const fetchDependabotAlerts = async (
   options: FetchAlertsOptions
@@ -228,18 +227,12 @@ export const fetchDependabotAlerts = async (
     owner: options.owner,
     repo: options.repo,
   };
-  const open = await fetchAlertState({...common, state: 'open'});
+  const [open, dismissed] = await Promise.all([
+    fetchAlertState({...common, state: 'open'}),
+    fetchAlertState({...common, state: 'dismissed,auto_dismissed'}),
+  ]);
 
   if (!open.ok) return open;
-
-  if (!options.includeDismissed) {
-    return {dismissed: [], ok: true, open: open.records};
-  }
-
-  const dismissed = await fetchAlertState({
-    ...common,
-    state: 'dismissed,auto_dismissed',
-  });
 
   if (!dismissed.ok) return dismissed;
 

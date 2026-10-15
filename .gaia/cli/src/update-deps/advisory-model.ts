@@ -713,18 +713,18 @@ export const rankAdvisories = (advisories: readonly Advisory[]): Advisory[] =>
   );
 
 /**
- * The payload count: distinct GHSA ids on the alerts source (the baseline is
- * ignored there), or distinct keys minus baseline-acknowledged ones on the
- * `pnpm audit` source. A GHSA spanning several packages counts once.
+ * The payload count: distinct keys over every alert advisory (the baseline is
+ * ignored there, since an alert is accepted by dismissing it) and every audit
+ * advisory the baseline has not acknowledged. A key in both sets, or spanning
+ * several packages, counts once.
  */
 export const countAdvisories = (
-  source: Exclude<AdvisorySource, 'unavailable'>,
-  advisories: readonly Advisory[]
-): number => {
-  const counted =
-    source === 'dependabot' ? advisories : (
-      advisories.filter((advisory) => !advisory.baselineAcknowledged)
-    );
-
-  return new Set(counted.map((advisory) => advisory.key)).size;
-};
+  alertAdvisories: readonly Advisory[],
+  auditAdvisories: readonly Advisory[]
+): number =>
+  new Set(
+    [
+      ...alertAdvisories,
+      ...auditAdvisories.filter((advisory) => !advisory.baselineAcknowledged),
+    ].map((advisory) => advisory.key)
+  ).size;

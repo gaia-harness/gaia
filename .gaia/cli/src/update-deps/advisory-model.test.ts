@@ -231,12 +231,25 @@ describe('baseline', () => {
     ).toBe(false);
   });
 
-  test('the pnpm-audit count drops acknowledged keys; the alerts count does not', () => {
+  test('the audit count drops acknowledged keys; the alerts count does not', () => {
     const acknowledged = advisory({baselineAcknowledged: true, key: 'a'});
     const open = advisory({key: 'b'});
 
-    expect(countAdvisories('pnpm-audit', [acknowledged, open])).toBe(1);
-    expect(countAdvisories('dependabot', [acknowledged, open])).toBe(2);
+    expect(countAdvisories([], [acknowledged, open])).toBe(1);
+    expect(countAdvisories([acknowledged, open], [])).toBe(2);
+  });
+
+  test('the count is the union of alert keys and unacknowledged audit keys', () => {
+    expect(
+      countAdvisories(
+        [advisory({key: 'a'})],
+        [
+          advisory({key: 'a'}),
+          advisory({key: 'b'}),
+          advisory({baselineAcknowledged: true, key: 'c'}),
+        ]
+      )
+    ).toBe(2);
   });
 });
 
@@ -370,7 +383,7 @@ describe('a GHSA spanning several packages', () => {
       ['@babel/runtime', 'GHSA-968p-4wvh-cqc8', [1]],
       ['@babel/helpers', 'GHSA-968p-4wvh-cqc8', [2]],
     ]);
-    expect(countAdvisories('pnpm-audit', built)).toBe(1);
+    expect(countAdvisories([], built)).toBe(1);
   });
 
   test('the alerts source yields one advisory per package with its own alerts', () => {
@@ -403,7 +416,7 @@ describe('a GHSA spanning several packages', () => {
       ['@babel/runtime', [{manifestPath: 'pnpm-lock.yaml', number: 41}], [1]],
       ['@babel/helpers', [{manifestPath: 'pnpm-lock.yaml', number: 42}], [2]],
     ]);
-    expect(countAdvisories('dependabot', joined)).toBe(1);
+    expect(countAdvisories(joined, [])).toBe(1);
   });
 });
 

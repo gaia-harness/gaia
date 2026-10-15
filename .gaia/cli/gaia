@@ -42218,10 +42218,12 @@ var compareEpss = (a, b) => {
 var rankAdvisories = (advisories) => advisories.toSorted(
   (a, b) => severityRank(a.severity) - severityRank(b.severity) || compareEpss(a.epssPercentage, b.epssPercentage) || compareStrings2(a.key, b.key) || compareStrings2(a.package, b.package)
 );
-var countAdvisories = (source, advisories) => {
-  const counted = source === "dependabot" ? advisories : advisories.filter((advisory) => !advisory.baselineAcknowledged);
-  return new Set(counted.map((advisory) => advisory.key)).size;
-};
+var countAdvisories = (alertAdvisories, auditAdvisories) => new Set(
+  [
+    ...alertAdvisories,
+    ...auditAdvisories.filter((advisory) => !advisory.baselineAcknowledged)
+  ].map((advisory) => advisory.key)
+).size;
 
 // src/update-deps/advisory-reasons.ts
 var ADVISORY_REASON_TOKENS = [
@@ -42369,15 +42371,11 @@ var fetchDependabotAlerts = async (options) => {
     owner: options.owner,
     repo: options.repo
   };
-  const open2 = await fetchAlertState({ ...common, state: "open" });
+  const [open2, dismissed] = await Promise.all([
+    fetchAlertState({ ...common, state: "open" }),
+    fetchAlertState({ ...common, state: "dismissed,auto_dismissed" })
+  ]);
   if (!open2.ok) return open2;
-  if (!options.includeDismissed) {
-    return { dismissed: [], ok: true, open: open2.records };
-  }
-  const dismissed = await fetchAlertState({
-    ...common,
-    state: "dismissed,auto_dismissed"
-  });
   if (!dismissed.ok) return dismissed;
   return { dismissed: dismissed.records, ok: true, open: open2.records };
 };
@@ -42741,11 +42739,18 @@ var resolveGroupMembers = (groupName, allPackageNames) => {
 import { existsSync as existsSync33, readFileSync as readFileSync42 } from "node:fs";
 import path60 from "node:path";
 var CLI_WORKSPACE_MEMBER = ".gaia/cli";
-var readCliWorkspaceMember = (repoRoot) => {
+var readWorkspaceYaml = (repoRoot) => {
   try {
-    const parsed = load(
+    return load(
       readFileSync42(path60.join(repoRoot, "pnpm-workspace.yaml"), "utf8")
     );
+  } catch {
+    return void 0;
+  }
+};
+var readCliWorkspaceMember = (repoRoot) => {
+  try {
+    const parsed = readWorkspaceYaml(repoRoot);
     if (typeof parsed !== "object" || parsed === null) return null;
     const { packages } = parsed;
     if (!Array.isArray(packages) || !packages.includes(CLI_WORKSPACE_MEMBER))
@@ -43425,12 +43430,12 @@ var HELP_TEXT48 = `Usage: gaia update-deps advisories --emit <path> [--count-onl
 
   Fetch open dependency security advisories (Dependabot alerts first,
   \`pnpm audit\` as the fallback), keep only validated fields, rank them, and
-  write one JSON payload to <path>. Exits 0 whenever the payload was written,
-  including when no source answered (source "unavailable").
+  write one JSON payload to <path>. The count covers both sources. Exits 0
+  whenever the payload was written, including when no source answered
+  (source "unavailable").
 
   --emit <path>      Required. JSON file to write atomically.
-  --count-only       Count only: no advisory rows, no registry lookups, and
-                     in alerts mode no \`pnpm audit\`.
+  --count-only       Count only: no advisory rows and no registry lookups.
   --updates <path>   An \`update-deps run --emit-updates\` payload, used to
                      offer chain-head bumps as candidates.
   --no-alerts        Skip Dependabot alerts (as in CI) and use \`pnpm audit\`.
@@ -43522,6 +43527,14 @@ var readBaselineIds = (repoRoot) => {
   }
   return ids;
 };
+var readAcceptedGhsas = (repoRoot) => {
+  const parsed = readWorkspaceYaml(repoRoot);
+  const auditConfig = isRecord5(parsed) ? parsed.auditConfig : void 0;
+  const ignored = isRecord5(auditConfig) ? auditConfig.ignoreGhsas : void 0;
+  return new Set(
+    asArray(ignored).filter((ghsa) => typeof ghsa === "string")
+  );
+};
 var ownedManifestPredicate = (repoRoot, patterns) => {
   const member = readCliWorkspaceMember(repoRoot);
   const memberManifest = member === null ? null : path62.posix.join(member, "package.json");
@@ -43540,7 +43553,6 @@ var readAlerts = async (context) => {
     cwd: context.repoRoot,
     env: context.env,
     ghRunner: context.options.ghRunner,
-    includeDismissed: !context.args.countOnly,
     owner: repository.owner,
     repo: repository.repo
   });
@@ -43664,9 +43676,9 @@ var enrich = (advisories, context, offers) => {
 };
 var buildPayload = async (context, offers) => {
   const { countOnly } = context.args;
-  const alerts = await readAlerts(context);
-  const runAudit = !countOnly || !alerts.ok;
-  const audit = runAudit ? readAudit(context) : { ok: false };
+  const pendingAlerts = readAlerts(context);
+  const audit = readAudit(context);
+  const alerts = await pendingAlerts;
   const acknowledged = readBaselineIds(context.repoRoot);
   const auditRecords = audit.ok ? audit.records : [];
   const rejectedCount = (alerts.ok ? alerts.rejected : 0) + (audit.ok ? audit.rejected : 0);
@@ -43690,16 +43702,29 @@ var buildPayload = async (context, offers) => {
     };
   }
   const source = alerts.ok ? "dependabot" : "pnpm-audit";
-  const base = alerts.ok ? joinAuditToAlerts(alerts.open, auditRecords) : advisoriesFromAudit(auditRecords);
-  const withBaseline = base.map(
-    (advisory) => applyBaseline(advisory, acknowledged)
+  const dismissedGhsas = alerts.ok ? alerts.dismissedGhsas : [];
+  const excluded = /* @__PURE__ */ new Set([
+    ...readAcceptedGhsas(context.repoRoot),
+    ...dismissedGhsas
+  ]);
+  const countable = (advisories) => advisories.filter((advisory) => !excluded.has(advisory.key)).map((advisory) => applyBaseline(advisory, acknowledged));
+  const alertAdvisories = countable(
+    alerts.ok ? joinAuditToAlerts(alerts.open, auditRecords) : []
   );
+  const auditAdvisories = countable(advisoriesFromAudit(auditRecords));
+  const alertKeys = new Set(alertAdvisories.map((advisory) => advisory.key));
+  const rows = alerts.ok ? [
+    ...alertAdvisories,
+    ...auditAdvisories.filter(
+      (advisory) => !advisory.baselineAcknowledged && !alertKeys.has(advisory.key)
+    )
+  ] : auditAdvisories;
   const reasons = alerts.ok ? [] : [alerts.reason];
   return {
     ...common,
-    advisories: countOnly ? [] : rankAdvisories(enrich(withBaseline, context, offers)),
-    count: countAdvisories(source, withBaseline),
-    dismissedGhsas: alerts.ok ? alerts.dismissedGhsas : [],
+    advisories: countOnly ? [] : rankAdvisories(enrich(rows, context, offers)),
+    count: countAdvisories(alertAdvisories, auditAdvisories),
+    dismissedGhsas,
     reasons,
     reasonText: reasonText(reasons),
     source
