@@ -195,6 +195,7 @@ case "$1" in
     fi
     case " $* " in
       *" baseRefName "*)
+        [ ! -f "$stub_directory/base-branch-fails" ] || exit 1
         printf 'main\n'
         exit 0
         ;;
@@ -842,6 +843,50 @@ mutated_hook_mirror() {
 
   [ "$status" -eq 0 ]
   [ "$output" = "status: declined: trusted base unverified, the cached audit base differs from the base GitHub reports; next step: git config --unset branch.${branch}.gaia-audit-base" ]
+  assert_no_post || return 1
+}
+
+@test "success with the base branch read failing on the default branch: declines naming the wrong tree, not gh auth status, no POST" {
+  push_head_to_upstream
+  install_gh_stub "$(git -C "$REPO" rev-parse HEAD)"
+  marker=$(write_marker code-audit-frontend)
+  : > "$BATS_TEST_TMPDIR/base-branch-fails"
+
+  cd "$REPO"
+  run "$HOOK_ABSOLUTE_PATH" "$marker"
+
+  [ "$status" -eq 0 ]
+  [ "$output" = "status: declined: trusted base unverified, this checkout is on main, which holds no pull request; next step: run this hook from the checkout that holds the pull request branch (git worktree list names it)" ]
+  assert_no_post || return 1
+}
+
+@test "success with the base branch read failing on a detached HEAD: declines naming the wrong tree, no POST" {
+  push_head_to_upstream
+  install_gh_stub "$(git -C "$REPO" rev-parse HEAD)"
+  marker=$(write_marker code-audit-frontend)
+  : > "$BATS_TEST_TMPDIR/base-branch-fails"
+  git -C "$REPO" checkout --quiet --detach HEAD
+
+  cd "$REPO"
+  run "$HOOK_ABSOLUTE_PATH" "$marker"
+
+  [ "$status" -eq 0 ]
+  [ "$output" = "status: declined: trusted base unverified, this checkout is on a detached HEAD, which holds no pull request; next step: run this hook from the checkout that holds the pull request branch (git worktree list names it)" ]
+  assert_no_post || return 1
+}
+
+@test "success with the base branch read failing on a feature branch: still declines naming gh auth status, no POST" {
+  push_head_to_upstream
+  git -C "$REPO" checkout --quiet -b feature
+  install_gh_stub "$(git -C "$REPO" rev-parse HEAD)"
+  marker=$(write_marker code-audit-frontend)
+  : > "$BATS_TEST_TMPDIR/base-branch-fails"
+
+  cd "$REPO"
+  run "$HOOK_ABSOLUTE_PATH" "$marker"
+
+  [ "$status" -eq 0 ]
+  [ "$output" = "status: declined: trusted base unverified, audit-base-provenance: gh failed reading the pull request base branch; run gh auth status and retry; next step: gh auth status" ]
   assert_no_post || return 1
 }
 
