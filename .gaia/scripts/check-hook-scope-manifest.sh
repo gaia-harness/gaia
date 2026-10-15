@@ -1,15 +1,16 @@
 #!/usr/bin/env bash
 # shellcheck shell=bash
 #
-# Hook-scope check: hooks reach .gaia/local only through a resolved root.
+# Hook-scope check: hooks reach .gaia/local and the notebook root only through
+# a resolved root.
 #
-# A hook that builds a .gaia/local path from a bare literal resolves it
+# A hook that builds a .gaia/local (or .notebook) path from a bare literal resolves it
 # against whatever tree the hook happens to run in, so from inside a linked
 # worktree a write meant for one tree lands in another with no error. Scans
 # every .sh under .claude/hooks/** directly. Two assertions, both in
 # gaia_check_hook_scope_manifest:
 #
-#   1. No bare literal   no hook holds a live `.gaia/local` reference that is
+#   1. No bare literal   no hook holds a live `.gaia/local` or `.notebook` reference that is
 #                        not immediately preceded by a path-join character,
 #                        i.e. one reached without a resolved-root variable. A
 #                        comment mention is allowed.
@@ -61,8 +62,8 @@ _gaia_hookcheck_is_comment_line() {
 # test rather than an `(^|...)` alternation, whose `^` not every regex library
 # reads as an anchor inside a group.
 _gaia_hookcheck_is_bare_reference() {
-  local preceded_pattern='[^/\\]\.gaia/local'
-  [[ "$1" == .gaia/local* ]] || [[ "$1" =~ $preceded_pattern ]]
+  local preceded_pattern='[^/\\]\.(gaia/local|notebook)'
+  [[ "$1" == .gaia/local* ]] || [[ "$1" == .notebook* ]] || [[ "$1" =~ $preceded_pattern ]]
 }
 
 # _gaia_hookcheck_scan <repo_root> <hook_relative_path>...: one grep over every
@@ -89,7 +90,7 @@ _gaia_hookcheck_scan() {
     _gaia_hookcheck_live_files+="$relative_path"$'\n'
     _gaia_hookcheck_is_bare_reference "$text" &&
       _gaia_hookcheck_bare_lines+="$relative_path:$line_number"$'\n'
-  done < <(cd "$repo_root" && grep -H -n -F -- '.gaia/local' "$@" 2>/dev/null)
+  done < <(cd "$repo_root" && grep -H -n -F -e '.gaia/local' -e '.notebook' -- "$@" 2>/dev/null)
   while IFS= read -r relative_path; do
     _gaia_hookcheck_resolver_files+="$relative_path"$'\n'
   done < <(cd "$repo_root" && grep -l -F "${library_arguments[@]}" -- "$@" 2>/dev/null)
@@ -124,7 +125,7 @@ gaia_check_hook_scope_manifest() {
       esac
     done <<<"$_gaia_hookcheck_bare_lines"
     if [ -n "$bare" ]; then
-      printf 'BARE LITERAL: %s builds a .gaia/local path without a resolved root; join it to a root from main-root-lib.sh (or a caller-supplied root in a lib):\n%s\n' "$hook_path" "$bare"
+      printf 'BARE LITERAL: %s builds a .gaia/local or .notebook path without a resolved root; join it to a root from main-root-lib.sh (or a caller-supplied root in a lib):\n%s\n' "$hook_path" "$bare"
       exit_status=1
       continue
     fi

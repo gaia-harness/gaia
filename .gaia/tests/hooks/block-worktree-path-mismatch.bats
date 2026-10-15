@@ -280,35 +280,54 @@ run_hook_edit() {
 # no valid twin, which is what the #841 silent-wrong-write requires. Denying
 # these blocks the sole correct write, costing every worktree-mode plan run its
 # phase-findings ledger and its resume point.
-@test "a worktree-mode write to the main checkout's .gaia/local/plans ledger is allowed" {
+@test "a worktree-mode write to the main checkout's .notebook/plans ledger is allowed" {
   make_repo
   make_worktree "debt/31-foo" "debt/31-foo"
-  mkdir -p "$REPO/.gaia/local/plans/PLAN-001"
+  mkdir -p "$REPO/.notebook/plans/PLAN-001"
   cd "$WORKTREE"
-  run_hook_edit "Write" "$REPO/.gaia/local/plans/PLAN-001/PROGRESS.md"
+  run_hook_edit "Write" "$REPO/.notebook/plans/PLAN-001/PROGRESS.md"
   assert_allowed_by_json
 }
 
 # The spec-colocated arm of the same contract: a plan under
 # .gaia/local/specs/<SPEC-ID>/plan/ writes its PROGRESS.md there, and the
 # consolidated SUMMARY.md one directory up, both in the main checkout.
-@test "a worktree-mode write to the main checkout's .gaia/local/specs ledger is allowed" {
+@test "a worktree-mode write to the main checkout's .notebook/specs ledger is allowed" {
   make_repo
   make_worktree "debt/32-foo" "debt/32-foo"
-  mkdir -p "$REPO/.gaia/local/specs/SPEC-009/plan"
+  mkdir -p "$REPO/.notebook/specs/SPEC-009/plan"
   cd "$WORKTREE"
-  run_hook_edit "Write" "$REPO/.gaia/local/specs/SPEC-009/plan/PROGRESS.md"
+  run_hook_edit "Write" "$REPO/.notebook/specs/SPEC-009/plan/PROGRESS.md"
   assert_allowed_by_json
 }
 
 # The plans/specs carve-out is a path-segment match like the shared-state arm
 # above, so it must not leak to a sibling that merely shares a prefix.
-@test "a main-checkout write to a .gaia/local/plans lookalike sibling is still denied" {
+@test "a main-checkout write to a .notebookish lookalike sibling is still denied" {
   make_repo
   make_worktree "debt/33-foo" "debt/33-foo"
-  mkdir -p "$REPO/.gaia/local/plansible"
+  mkdir -p "$REPO/.notebookish"
   cd "$WORKTREE"
-  run_hook_edit "Write" "$REPO/.gaia/local/plansible/notes.md"
+  run_hook_edit "Write" "$REPO/.notebookish/notes.md"
+  assert_denied_by_json
+}
+
+# A write through the worktree's own .notebook symlink and one straight to the
+# main checkout's notebook both land in main-only state and are allowed; the
+# same payload aimed at an existing main-checkout directory outside it is the
+# red twin, proving the hook ran against real directories rather than failing
+# open on a missing one.
+@test "a worktree-mode write through the .notebook symlink or to main's .notebook is allowed; an existing main directory outside it is denied" {
+  make_repo
+  make_worktree "debt/34-foo" "debt/34-foo"
+  mkdir -p "$REPO/.notebook/research/x" "$REPO/src"
+  ln -s "$REPO/.notebook" "$WORKTREE/.notebook"
+  cd "$WORKTREE"
+  run_hook_edit "Write" "$WORKTREE/.notebook/research/x/a.md"
+  assert_allowed_by_json
+  run_hook_edit "Write" "$REPO/.notebook/research/x/a.md"
+  assert_allowed_by_json
+  run_hook_edit "Write" "$REPO/src/a.md"
   assert_denied_by_json
 }
 

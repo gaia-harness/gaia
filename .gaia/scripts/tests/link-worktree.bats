@@ -421,3 +421,70 @@ JSON
   [ ! -e "$LINKED/frontend/.env" ] || return 1
   grep -qF -- "failed: $LINKED/.gaia/packages.json: gaia-packages: .gaia/packages.json is malformed" <<<"$output"
 }
+
+# ---------- notebook root link ----------
+# The notebook link is made only when the main checkout's .gitignore ignores
+# .notebook, so these fixtures write that line first.
+
+@test "notebook: a linked worktree gets .notebook linked to main's, and main's is created" {
+  printf '.notebook\n' >"$MAIN/.gitignore"
+  [ ! -e "$MAIN/.notebook" ]
+  run run_in "$LINKED"
+  [ "$status" -eq 0 ]
+  [ -d "$MAIN/.notebook" ]
+  [ -L "$LINKED/.notebook" ]
+  [ "$(readlink "$LINKED/.notebook")" = "$MAIN/.notebook" ]
+  [[ "$output" == *"linked: $LINKED/.notebook"* ]] || return 1
+}
+
+@test "notebook: a write through the worktree link lands in main" {
+  printf '.notebook\n' >"$MAIN/.gitignore"
+  run run_in "$LINKED"
+  [ "$status" -eq 0 ]
+  mkdir -p "$LINKED/.notebook/research/x"
+  printf 'note\n' >"$LINKED/.notebook/research/x/a.md"
+  [ "$(cat "$MAIN/.notebook/research/x/a.md")" = "note" ]
+}
+
+@test "notebook: .notebook missing from the main .gitignore creates neither the link nor main's folder, and the log names the line" {
+  printf 'node_modules\n' >"$MAIN/.gitignore"
+  run run_in "$LINKED"
+  [ "$status" -eq 0 ]
+  [ ! -e "$MAIN/.notebook" ]
+  [ ! -e "$LINKED/.notebook" ]
+  [ ! -L "$LINKED/.notebook" ]
+  [[ "$output" == *"add a .notebook line to its .gitignore"* ]] || return 1
+  [ -L "$LINKED/.gaia/local" ]
+}
+
+@test "notebook: a pre-existing plain worktree .notebook is backed up to .notebook.bak.<ts> and replaced by the link" {
+  printf '.notebook\n' >"$MAIN/.gitignore"
+  mkdir -p "$LINKED/.notebook"
+  printf 'stale\n' >"$LINKED/.notebook/keep.md"
+  run run_in "$LINKED"
+  [ "$status" -eq 0 ]
+  [ -L "$LINKED/.notebook" ]
+  [ "$(readlink "$LINKED/.notebook")" = "$MAIN/.notebook" ]
+  backup="$(ls -A "$LINKED" | grep '^\.notebook\.bak\.' | head -1)"
+  [ -n "$backup" ]
+  [ "$(cat "$LINKED/$backup/keep.md")" = "stale" ]
+  [[ "$output" == *"linked-after-backup: $LINKED/.notebook"* ]] || return 1
+}
+
+@test "notebook: a second run reports already-linked" {
+  printf '.notebook\n' >"$MAIN/.gitignore"
+  run run_in "$LINKED"
+  [ "$status" -eq 0 ]
+  run run_in "$LINKED"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"already-linked: $LINKED/.notebook"* ]] || return 1
+  count="$(ls -A "$LINKED" | grep -c '^\.notebook\.bak\.' || true)"
+  [ "$count" -eq 0 ]
+}
+
+@test "notebook: a main-checkout run creates no .notebook" {
+  printf '.notebook\n' >"$MAIN/.gitignore"
+  run run_in "$MAIN"
+  [ "$status" -eq 0 ]
+  [ ! -e "$MAIN/.notebook" ]
+}

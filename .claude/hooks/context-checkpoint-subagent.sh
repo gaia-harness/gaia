@@ -15,7 +15,7 @@
 # dispatch prompt, one JSON string on line 1) is read, and only an occurrence
 # that ends that prompt string counts, so a task doc or example quoted earlier
 # in the prompt never opts an agent in. The path must sit under the main
-# root's .gaia/local/ and name a handoff file in the dispatcher's shape; any
+# root's .gaia/local/ or its notebook root and name a handoff file in the dispatcher's shape; any
 # other path, or one holding an escape, reads as not opted in.
 #
 # Silent for: a main-session payload (no `agent_id` key), any event other than
@@ -176,7 +176,7 @@ band_rank() {
 # file the agent will write, so anything else reads as not opted in.
 handoff_tail_pattern='/handoffs/(phase-[0-9]+-task-[a-z0-9][a-z0-9-]*|planner)-yield-[0-9]+\.md$'
 valid_handoff_path() {
-  case "$1" in "$main_root/.gaia/local/"?*) ;; *) return 1 ;; esac
+  case "$1" in "$main_root/.gaia/local/"?* | "$main_root/.notebook/"?*) ;; *) return 1 ;; esac
   case "$1" in *\\* | *\"* | *//* | */./* | */../* | *[$'\001'-$'\037'$'\177']*) return 1 ;; esac
   [[ $1 =~ $handoff_tail_pattern ]]
 }

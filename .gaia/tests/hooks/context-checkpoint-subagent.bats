@@ -48,7 +48,7 @@ setup() {
   agent_counter=0
   new_session
   new_agent
-  HANDOFF="$MAIN_ROOT/.gaia/local/plans/demo/handoffs/phase-2-task-subagent-hook-yield-1.md"
+  HANDOFF="$MAIN_ROOT/.notebook/plans/demo/handoffs/phase-2-task-subagent-hook-yield-1.md"
   WINDOW=1000000
   write_reading "$WINDOW"
   load_bands "$WINDOW"
@@ -648,7 +648,7 @@ folder_snapshot() {
   fires_ok red "$RED"
 }
 
-@test "opt-in negatives: placeholder, mid-line, earlier-but-not-final, relative, outside .gaia/local, traversal and escaped paths read as not opted in; valid controls emit" {
+@test "opt-in negatives: placeholder, mid-line, earlier-but-not-final, relative, outside the allowed roots, lookalike root, traversal and escaped paths read as not opted in; valid controls under either root emit" {
   local prompt
   local -a negative_prompts=(
     "Do the task.
@@ -669,10 +669,19 @@ Yield handoff: plans/demo/handoffs/phase-2-task-subagent-hook-yield-1.md"
 Yield handoff: $TEMPORARY_DIRECTORY/elsewhere/handoffs/phase-2-task-subagent-hook-yield-1.md"
     "Do the task.
 
-Yield handoff: $MAIN_ROOT/.gaia/local/plans/demo/../demo/handoffs/phase-2-task-subagent-hook-yield-1.md"
+Yield handoff: $MAIN_ROOT/.notebook/plans/demo/../demo/handoffs/phase-2-task-subagent-hook-yield-1.md"
     "Do the task.
 
-Yield handoff: $MAIN_ROOT/.gaia/local/plans/de\\mo/handoffs/phase-2-task-subagent-hook-yield-1.md"
+Yield handoff: $MAIN_ROOT/.notebook/plans/de\\mo/handoffs/phase-2-task-subagent-hook-yield-1.md"
+    "Do the task.
+
+Yield handoff: $MAIN_ROOT/.notebookx/plans/demo/handoffs/phase-2-task-subagent-hook-yield-1.md"
+    "Do the task.
+
+Yield handoff: $MAIN_ROOT/.notebook/../x/handoffs/phase-2-task-subagent-hook-yield-1.md"
+    "Do the task.
+
+Yield handoff: $TEMPORARY_DIRECTORY/elsewhere/.notebook/plans/demo/handoffs/phase-2-task-subagent-hook-yield-1.md"
   )
   for prompt in "${negative_prompts[@]}"; do
     new_agent
@@ -788,7 +797,7 @@ Yield handoff: $HANDOFF"
 
 @test "two opted-in agents in one session keep separate markers and fire independently" {
   local first_agent="$AGENT" second_agent second_handoff
-  second_handoff="$MAIN_ROOT/.gaia/local/plans/demo/handoffs/phase-2-task-other-yield-1.md"
+  second_handoff="$MAIN_ROOT/.notebook/plans/demo/handoffs/phase-2-task-other-yield-1.md"
   new_agent
   second_agent="$AGENT"
   opted_in_agent "$first_agent" "$RED"

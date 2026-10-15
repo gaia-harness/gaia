@@ -199,6 +199,15 @@ resolved_target_directory="$(CDPATH='' cd "$target_directory" 2>/dev/null && pwd
 # mechanism constructed that merely happens to embed the acting tree's own
 # key. Designing a replacement is a later phase's job; naming the loss here
 # is this one's.
+# The notebook root is exempt outright, with no registry consult. Every path
+# under it is main-only state, so there is no per-tree scope to tell a correct
+# write from a wrong one; a worktree reaches it through one symlink to the main
+# checkout, which would otherwise read as a cross-tree write and be denied.
+notebook_root="$main_root/.notebook"
+case "$resolved_target_directory" in
+  "$notebook_root" | "$notebook_root"/*) exit 0 ;;
+esac
+
 gaia_local="$main_root/.gaia/local"
 case "$resolved_target_directory" in
   "$gaia_local" | "$gaia_local"/*)
