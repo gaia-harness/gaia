@@ -186,6 +186,29 @@ describe('update merge-workspace', () => {
     ]);
   });
 
+  test('auditConfig is managed: an accepted advisory GAIA adds → suggestion (added)', () => {
+    sandbox.write('baseline', 'minimumReleaseAge: 4320\n');
+    sandbox.write(
+      'latest',
+      'minimumReleaseAge: 4320\nauditConfig:\n  ignoreGhsas:\n    - GHSA-aaaa-bbbb-cccc\n'
+    );
+    sandbox.write('current', 'minimumReleaseAge: 4320\n');
+
+    const exit = run(argv(sandbox));
+    expect(exit).toBe(0);
+
+    const report = parseJson(stdio.outputs);
+    expect(report.applied).toEqual([]);
+    expect(report.suggestions).toEqual([
+      {
+        key: 'auditConfig',
+        kind: 'key',
+        latest: {ignoreGhsas: ['GHSA-aaaa-bbbb-cccc']},
+        reason: 'added',
+      },
+    ]);
+  });
+
   test('adopter removed a key GAIA then changed → suggestion (removed-then-changed), never re-added', () => {
     sandbox.write('baseline', 'trustPolicy: no-downgrade\n');
     sandbox.write('latest', 'trustPolicy: strict\n');
