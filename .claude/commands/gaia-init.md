@@ -338,7 +338,7 @@ Only when Q3 obtained no real handle (automatic mode where gh detection also fai
 
 ## Step 6: Check `.env`
 
-Run the CLI, it copies `frontend/.env.example` to `frontend/.env` when `frontend/.env` is absent, no-op otherwise. Routing through the CLI subprocess bypasses the project's `Write(.env)` deny rule, which guards against Claude writing secrets, not against init seeding from the example file.
+Run the CLI, it copies `frontend/.env.example` to `frontend/.env` when `frontend/.env` is absent, no-op otherwise. Routing through the CLI subprocess bypasses the project's `Edit(.env)` deny rule, which guards against Claude writing secrets, not against init seeding from the example file.
 
 ```bash
 .gaia/cli/gaia init bootstrap-env

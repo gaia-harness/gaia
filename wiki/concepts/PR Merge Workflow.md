@@ -334,7 +334,7 @@ See [[Audit Disposition and Debt Fix]] and [[Worktrees]].
 
 ### Conflict found mid-wait
 
-A queued `--auto` merge, and any wait on CI or on a `GAIA-Audit` status between audit rounds, can go dead while it runs: the default branch lands a change that conflicts with the PR, `mergeable` turns `CONFLICTING` within minutes, and GitHub never completes the merge. A file most branches edit makes this common, and running several worktree branches at once makes it more so. Every wait in this workflow exits on `CONFLICTING` for that reason, the same way the poll above does, instead of running out its full bound; the check run in flight is spent either way, because the repair moves HEAD and starts a fresh one.
+A queued `--auto` merge, and any wait on CI or on a `GAIA-Audit` status between audit rounds, can go dead while it runs: the default branch lands a change that conflicts with the PR, `mergeable` turns `CONFLICTING` within minutes, and GitHub never completes the merge. A file most branches edit makes this common, and running several worktree branches at once makes it more so. The merge wait, `bash .gaia/scripts/pr-wait-merge.sh`, exits 3 on `CONFLICTING` for that reason instead of running out its full bound. A `gh pr checks --watch` CI wait does not read `mergeable` and runs out its bound on a dead PR, which is why the hand-rolled poll guard covers `gh pr checks`; the check run in flight is spent either way, because the repair moves HEAD and starts a fresh one.
 
 The repair is the catch-up merge from [[#Before the first dispatch: verify your own work]]:
 
