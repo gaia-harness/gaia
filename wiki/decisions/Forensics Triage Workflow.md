@@ -4,7 +4,7 @@ status: active
 priority: 1
 date: 2026-05-08
 created: 2026-05-08
-updated: 2026-10-15
+updated: 2026-10-16
 tags: [decision, ci, automation, security]
 ---
 
@@ -22,7 +22,7 @@ Lifecycle:
 
 1. **Idempotency check.** If the issue already carries `gaia-triaged`, the workflow exits with no work. The fail-forward final step also suppresses re-application of the label.
 2. **Body parse.** A pure-shell parser at `.github/forensics/parse-issue-body.sh` extracts the four required sections (`## Symptom`, `## Classification`, `## Capture`, `## Reproduction context`) plus frontmatter from the strict-schema issue body. The LLM is never invoked for extraction. Missing or malformed sections route the issue to `needs-human` with a comment naming the offending section, and no classification runs.
-3. **Classify.** `anthropics/claude-code-action` runs the prompt at `.github/forensics/prompt.md` with the parsed sections rendered in. The action runs with `--max-turns 1` and tool access disabled (no `Bash`, `Read`, `Edit`, `Write`, `WebFetch`, `WebSearch`); judgment only, no side effects on the working tree. The classifier emits a single trailing `GAIA-VERDICT: <class>` line; `parse-verdict.sh` extracts it deterministically. Missing, duplicated, or out-of-set verdict lines downgrade to `ambiguous` and route to `needs-human`.
+3. **Classify.** `anthropics/claude-code-action` runs the prompt at `.github/forensics/prompt.md` with the parsed sections rendered in. The action runs with `--max-turns 1` and every built-in tool removed with `--tools=` (the equals form; a separate empty-string token is dropped by the action's argument parser and reaches the CLI valueless), so no tool stays available to untrusted issue text; judgment only, no side effects on the working tree. The classifier emits a single trailing `GAIA-VERDICT: <class>` line; `parse-verdict.sh` extracts it deterministically. Missing, duplicated, or out-of-set verdict lines downgrade to `ambiguous` and route to `needs-human`.
 4. **Act on verdict.**
    - `non-issue`: close the issue, comment with the classifier's reasoning, label `non-issue`.
    - `needs-human`: label `needs-human`, comment with the reasoning, mention the maintainer. Issue stays open.
