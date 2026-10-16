@@ -258,8 +258,9 @@ export const writeLocaleFiles = (args: WriteLocaleFilesArgs): null | string => {
   // located, so the page's translations are not wired. Fail loudly with
   // an actionable message rather than reporting a misleading success.
   return (
-    `locale barrel not found at ${localeBarrel}; the locale file was ` +
-    'written but its import was not wired. ' +
-    `Add "import ${importName} from './${moduleName}';" to the barrel by hand.`
+    `locale barrel at ${localeBarrel} is missing or has no ` +
+    '`export default { ... }` block; the locale file was written but not ' +
+    'wired. ' +
+    `Add "import ${importName} from './${moduleName}';" and its default-export entry to the barrel by hand.`
   );
 };

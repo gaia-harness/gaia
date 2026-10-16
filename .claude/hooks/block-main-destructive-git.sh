@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# PreToolUse Bash hook: block commits to main/master and force-push to main/master,
+# PreToolUse Bash hook: block commits on main/master, force-push naming main/master,
+# any push from main/master or with a main/master/HEAD refspec source,
 # and block a peer session moving the main checkout's HEAD off a branch another
 # session holds there with an open pull request.
 #

@@ -11,10 +11,10 @@
 # worktree the hook re-emits the tree's ports context line, because worktree
 # provisioning does not run on those sources.
 #
-# Cleanup order: behind a stat-level gate that spawns no process probe, the
-# ledger is reclaimed under the lock; the lock is released before any process is
-# signalled, so a concurrent provisioning run is never starved while this hook
-# waits on a server. A lock timeout skips the reclaim and carries on.
+# Cleanup order: behind a gate that reads files and `ps` only and never probes
+# a port, the ledger is reclaimed under the lock; the lock is released before
+# any process is signalled, so a concurrent provisioning run is never starved
+# while this hook waits on a server. A lock timeout skips the reclaim and carries on.
 #
 # Output: only the report lines the process library prints (one per stopped
 # server) and, on clear and compact, the context line. Diagnostics go to stderr.

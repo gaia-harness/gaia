@@ -28,9 +28,9 @@ setup() {
   MERGE_WORDS='gh pr merge'
   CREATE_FRAGMENT='gh[[:space:]]+pr[[:space:]]+create([[:space:]]|$)'
   CREATE_WORDS='gh pr create'
-  # The tail-reading consumer's fragment: a boundary group that admits a
-  # separator abutting the verb, the captured tail, and the remainder group
-  # that lets the real bytes be recovered by suffix length against the view.
+  # A tail-reading fragment no consumer carries: a boundary group that admits
+  # a separator abutting the verb, the captured tail, and the remainder group
+  # that lets a test recover the real bytes by suffix length against the view.
   CREATE_TAIL_FRAGMENT=$'gh[[:space:]]+pr[[:space:]]+create([[:space:]&;|]|$)([^&;|\n]*)(.*)$'
   GIT_FRAGMENT='git([[:space:]]+-C[[:space:]]+[^[:space:]]+)?[[:space:]]+(commit|push)([[:space:]]|$)'
   GIT_WORDS='git commit;git push;git -C * commit;git -C * push'
@@ -426,9 +426,10 @@ opener_pair() {
 }
 
 @test "the tail-capturing fragment recovers its real tail by length when a dead opener sits in it" {
-  # The consumer's own recovery: slice the text by the suffix and tail lengths
-  # the view's match reports. The view masks the dead opener, so the captured
-  # group differs from the real bytes and only the slice returns them.
+  # The recovery a tail-reading caller would do: slice the text by the suffix
+  # and tail lengths the view's match reports. The view masks the dead opener,
+  # so the captured group differs from the real bytes and only the slice
+  # returns them.
   run bash -c '
     . "$1" || exit 9
     command_text=$2

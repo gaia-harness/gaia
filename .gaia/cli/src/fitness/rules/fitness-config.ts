@@ -122,7 +122,7 @@ export const FITNESS_CONFIG_RULES: readonly RuleDefinition[] = [
     category: 'settings',
     check: parseCheck,
     detection:
-      'The fitness config is not valid JSON, or its version is not 1; no suppression applies.',
+      'The fitness config is not valid JSON, is not an object with "version": 1, or has an "ignore" that is not a list; no suppression applies.',
     ruleId: 'settings.fitness-config.parse',
     severity: 'error',
   },

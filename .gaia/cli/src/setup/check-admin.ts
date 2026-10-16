@@ -10,8 +10,8 @@
  *   - `api_error`       : auth ok but the repos API call failed.
  *
  * Contract: `admin: false` whenever `auth_status != "ok"`. Never
- * false-positive admin. Exits 0 in every branch; `check-admin` is a
- * query, not a gate.
+ * false-positive admin. Exits 0 for every probe outcome and 1 on a
+ * usage error; `check-admin` is a query, not a gate.
  */
 import {EXIT_CODES} from '../exit.js';
 import {structuredError} from '../stderr.js';
@@ -20,7 +20,8 @@ import {runGhAsync} from '../util/run-process.js';
 const HELP_TEXT = `Usage: gaia setup check-admin --owner <o> --repo <r> [--json]
 
   Probe repo admin permission via \`gh\`. Returns admin: false for any
-  non-ok auth status. Exits 0 in every branch.
+  non-ok auth status. Exits 0 for every probe outcome; exits 1 on a usage
+  error.
 `;
 
 const HELP_TOKENS = new Set(['--help', '-h', 'help']);

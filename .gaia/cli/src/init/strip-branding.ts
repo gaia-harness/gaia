@@ -14,7 +14,7 @@
  * the README replacement is unchanged once written, and the Storybook
  * edit is a no-op once the project title is in place.
  *
- * Stdout: nothing on success. Exit codes: 0 / 1 / 2.
+ * Stdout: nothing on success. Exit codes: see HELP_TEXT.
  */
 import {existsSync, readFileSync, rmSync} from 'node:fs';
 import path from 'node:path';
@@ -37,6 +37,8 @@ const HELP_TEXT = `Usage: gaia init strip-branding --title <T>
     0  success (no stdout)
     1  user-correctable error (missing flag, missing template)
     2  unexpected (filesystem failure)
+    30 the package registry (.gaia/packages.json) cannot resolve the frontend
+       package
 `;
 
 const HELP_TOKENS = new Set(['--help', '-h', 'help']);

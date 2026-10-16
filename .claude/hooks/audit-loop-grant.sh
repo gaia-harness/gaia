@@ -48,9 +48,10 @@
 # `audit-grant <n>` keeps its meaning (n more rounds) and the answer it
 # writes carries `source: "typed"`.
 #
-# Invoked with arguments, with no payload on stdin, or with a payload for any
-# event other than UserPromptSubmit, the hook exits 1 and records nothing, so
-# running it by hand or from a tool call cannot record anything either.
+# Invoked with arguments, with no payload on stdin, or with a payload that
+# mentions a keyword but is for an event other than UserPromptSubmit, the hook
+# exits 1 and records nothing, so running it by hand or from a tool call cannot
+# record anything either. A payload mentioning neither keyword exits 0 first.
 #
 # Cost. A prompt that mentions neither keyword exits 0 with no output before
 # any jq or git call, using shell builtins only.

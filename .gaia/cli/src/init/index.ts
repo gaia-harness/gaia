@@ -34,7 +34,8 @@ const HELP_TEXT = `Usage: gaia init <subcommand> [args]
                             Writes one JSON line to stdout. Rerunnable after
                             init finalizes, e.g. --query true adds Query later.
   rename --title <T> --kebab <K>
-                            Rename the project across package.json + locales.
+                            Rename the project across package.json, CLAUDE.md
+                            and seeded language files.
   wire-statusline --mode <global|project|skip>
                             Wire the GAIA statusline into Claude settings.
   bootstrap-env             Copy .env.example to .env if .env is absent.

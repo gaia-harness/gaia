@@ -1,5 +1,5 @@
 /**
- * Runs as a CLI subprocess so it bypasses Claude Code's Write(.env) deny
+ * Runs as a CLI subprocess so it bypasses the project's Edit(.env) deny
  * rule; the deny rule guards against Claude writing secrets into .env, not
  * against the init scaffolding seeding it from the example file.
  *
