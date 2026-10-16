@@ -47,7 +47,7 @@ An adopter who needs a price the distributed table lacks or gets wrong writes `.
 ```
 
 - **Row replacement.** Each `models.<id>` in the override replaces the whole distributed entry list for that id; ids the override omits keep their distributed rows. `cache_multipliers` is not overridable.
-- **Unparseable override.** A file that is not a JSON object with a `models` object is ignored, and every readout prints `  ! rate override ignored (unparseable): .gaia/local/telemetry/token-rates.override.json` once, before its figures.
+- **Unparseable override.** A file that is not a JSON object with a `models` object is ignored, and every readout prints `  ! rate override ignored (unparseable): .gaia/local/telemetry/token-rates.override.json` once.
 - **Unpriced models.** A `claude-` model absent from both tables contributes $0 and every readout adds `  ! lower bound: unpriced model(s) <names>`; the Cost lines append ` (partial: lower bound)`. A key that does not start with `claude-` is ignored silently.
 - **`--rate-table <path>`** on `usage.sh` is a test seam: it replaces the distributed table for that one readout, and the override file still overlays it.
 

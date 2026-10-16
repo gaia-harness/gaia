@@ -39,6 +39,6 @@ On a machine still holding a specs or plans ledger in the 1.x-era folders under 
 
 ## Permissions and guards
 
-`rm -rf` is allowed only on children of the specs and plans folders; the state registry's `rm_whitelist` is the list. The worktree path-mismatch hook exempts writes under the main checkout's `.notebook/` (see [[Claude Hooks]]). A bats guard holds every script and hook outside the library to never naming the catalog file or a kind folder.
+Within the notebook, `rm -rf` is allowed only on children of the specs and plans folders; the state registry's `rm_whitelist` is the full list. The worktree path-mismatch hook exempts writes under the main checkout's `.notebook/` (see [[Claude Hooks]]). A bats guard holds every script and hook outside the library to never naming the catalog file or a kind folder.
 
 Usage binding for research follows the Write path rule in [[Usage Ledger]].

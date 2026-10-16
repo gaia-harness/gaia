@@ -28,4 +28,4 @@ The component layer GAIA vendors into `frontend/app/components/ui/`. The decisio
 
 ## Token linting
 
-`@shadcn/lint` is bundled into [[gaia-lint]] and enforces role tokens in source files. Its `cn` dependency is a third copy, dev-only.
+`@shadcn/lint` is bundled into [[gaia-lint]] and enforces role tokens in source files.

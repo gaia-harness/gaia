@@ -49,7 +49,7 @@ The heal edits only the project's own files, and only on a yes for each one. Own
 | `unknown`      | Graded like an owned file but never healed: the classifier could not decide, so the heal does not guess.                                                                                                                     |
 | `adopter`      | Edited only on a yes for that file, through `gaia fitness apply`.                                                                                                                                                             |
 
-A classifier that cannot read its inputs leaves every path `unknown`; that run heals nothing and the report says why.
+A classifier that cannot read its inputs leaves every path `unknown`; that run heals nothing.
 
 ### Publish
 

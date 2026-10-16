@@ -83,7 +83,7 @@ None. Every vendored ui file is byte-identical to `pnpm shadcn add <name>` outpu
 
 ## Tooling facts
 
-- **Three `cn` copies.** The app depends on `cn` 0.4.0. The shadcn CLI devDependency pulls its own `cn` (`^0.2.4`) and `@shadcn/lint` pulls `cn` 0.3.2 as a dev-only dependency. They coexist and none reaches the production bundle. Vendored ui files import `cn` from the `cn` package.
+- **Two `cn` copies.** The app depends on `cn` 0.4.0, which `@shadcn/lint` shares. The shadcn CLI devDependency pulls its own `cn` (`^0.2.4`). They coexist and none reaches the production bundle. Vendored ui files import `cn` from the `cn` package.
 - **The `utils` alias is schema-required and unused.** `components.json` must name one, and `shadcn add` writes no utils file, so `app/utils/cn.ts` does not exist.
 - **`no-restyle` is on everywhere outside ui.** `shadcn/no-restyle` is an error with `allow: ['layout']` for GAIA-owned files, and off for `ui/*.tsx`. No GAIA-owned file needed it disabled, so no fallback block exists.
 
