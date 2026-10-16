@@ -81,7 +81,7 @@ Resolution happens at read time: the latest research or declare binding at or be
 
 ## Initiatives
 
-An initiative is a tree of refs (`research:`, `init:`, `issue:`, `spec:`, `plan:`, `pr:`, `branch:`) joined by lineage edges. Edges come from two places:
+An initiative is a tree of refs (the ref grammar is `gaia_usage_valid_reference` in `.gaia/scripts/usage-lib.sh`) joined by lineage edges. Edges come from two places:
 
 - **Derived** at read time from naming conventions alone (a debt branch to its issue, `<type>/spec-<n>` to its SPEC, legacy `plan/spec-<n>` too, a branch named for an issue).
 - **Explicit**, recorded by `usage.sh link`, by `usage.sh lineage` from a SPEC's `lineage:` frontmatter, by the PR-create hook (a `pr:` to its branch), by `usage.sh record --pr` or `--issue` (a `pr:` or `issue:` to a command run), and by the orchestrator when it links a plan's branch to its SPEC.

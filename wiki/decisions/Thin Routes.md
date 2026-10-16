@@ -21,7 +21,7 @@ Route files (`frontend/app/routes/**`) contain only data exports and a one-line 
 
 ## Meta pattern
 
-Set `title`/`description` in the loader via `getInstance(context).t(...)`. Render the resulting `<title>` / `<meta>` either directly in the route component (index route) or pass them as props to the page component, which renders them (legal pages).
+Set `title`/`description` in the loader via `getInstance(context).t(...)`. Render the resulting `<title>` / `<meta>` either directly in the route component (index route) or pass them as props to the page component, which renders them.
 
 ## Actions
 

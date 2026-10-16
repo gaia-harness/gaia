@@ -120,10 +120,10 @@ When adding an external service (Supabase, Firebase, Stripe, Auth0, etc.):
 
 Multiple gates coexist via path scoping:
 
-- `.claude/rules/quality-gate.md`: shared/default gate (stack-neutral, always loaded)
+- `.claude/rules/quality-gate.md`: shared/default gate (always loaded; not stack-neutral, since its gate's package steps check only `frontend/`)
 - `.claude/rules/quality-gate-{stack}.md`: stack-specific gate with `paths:` frontmatter
 
-Each gate defines its own runner commands. The default `quality-gate.md` stays stack-neutral and delegates to stack-specific gates. Cross-link: [[Quality Gate]].
+Each gate defines its own runner commands. Cross-link: [[Quality Gate]].
 
 ## 9. API service layer swap
 
