@@ -11,6 +11,25 @@ tags: [meta, log]
 
 ## [Unreleased]
 
+- 2026-10-16 5bdabfd WORTHY - wiki correction commit; edits landed in-commit
+- 2026-10-16 7b1d06e WORTHY - wiki correction commit; edits landed in-commit
+- 2026-10-16 73d246b WORTHY - wiki correction commit; edits landed in-commit
+- 2026-10-16 3158548 WORTHY - wiki correction commit; edits landed in-commit
+- 2026-10-16 f3f0806 WORTHY - wiki correction commit; edits landed in-commit
+- 2026-10-16 312e59c WORTHY - wiki correction commit; edits landed in-commit
+- 2026-10-16 faae383 WORTHY - forensics classifier no tools -> wiki/decisions/Forensics Triage Workflow.md
+- 2026-10-16 39db330 WORTHY - remove-i18n runbook tooling cleanup; no wiki page affected
+- 2026-10-16 1ffc263 WORTHY - UAT fidelity judge; Code Review Audit Agent updated in-commit
+- 2026-10-16 4a8c011 WORTHY - 1.6.1 migration guard; no wiki page affected
+- 2026-10-16 d71092e WORTHY - root .notebook/ move; Notebook and related pages updated in-commit
+- 2026-10-16 f7cf1da WORTHY - pnpm audit counting; pnpm-audit.md updated in-commit
+- 2026-10-16 2c4ca66 WORTHY - braces advisory accepted; pnpm pages updated in-commit
+- 2026-10-16 77cdb78 WORTHY - lint 3.0.0 pin; dependencies/gaia-lint.md updated in-commit
+- 2026-10-16 db6258a WORTHY - post-audit-status wrong-tree message; PR Merge Workflow updated in-commit
+- 2026-10-16 ca6f0ee WORTHY - update-deps split and audit-member protocol; harness-only
+- 2026-10-16 8046dbf WORTHY - background worktree provisioning; Claude Hooks already updated in-commit
+- 2026-10-16 0d3145e WORTHY - fitness findings cleared; harness-only, wiki edits in-commit
+- 2026-10-16 4df75b4 WORTHY - wiki run lands as one commit; pages updated in-commit
 - 2026-10-14 d1f6c6b WORTHY - wiki pages updated in the commit itself or no wiki-described behavior changed; no further page drift: wiki: maintenance chain through 9eee903
 - 2026-10-14 6eb0e2c WORTHY - wiki pages updated in the commit itself or no wiki-described behavior changed; no further page drift: fix(harness): fence every paste-ready prompt and pull main after a worktree merge
 - 2026-10-14 3087a22 WORTHY - wiki pages updated in the commit itself or no wiki-described behavior changed; no further page drift: refactor(harness): tidy the state and label registries
