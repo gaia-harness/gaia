@@ -15,7 +15,7 @@ Contents: Stores and load behavior; Step 0 Prune old reports; Step 1 Inventory; 
 | Project agent memory                           | `$PROJECT_ROOT/.claude/agent-memory/`           | Per-agent, on demand                                        |
 | Project CLAUDE.md (root)                       | `$PROJECT_ROOT/CLAUDE.md`                       | Auto at session start                                       |
 | Wiki README                                    | `$PROJECT_ROOT/wiki/README.md`                  | On demand only                                              |
-| Project rules                                  | `$PROJECT_ROOT/.claude/rules/*.md`              | Auto by `paths:` frontmatter match                          |
+| Project rules                                  | `$PROJECT_ROOT/.claude/rules/*.md`              | Auto at session start, or on a `paths:` match               |
 | Project commands                               | `$PROJECT_ROOT/.claude/commands/*.md`           | On invocation only                                          |
 | Wiki index                                     | `$PROJECT_ROOT/wiki/index.md`                   | On demand                                                   |
 | Wiki domain pages                              | `$PROJECT_ROOT/wiki/<domain>/`                  | On demand                                                   |

@@ -20,7 +20,7 @@ The window the claim exists to close is the one between picking the work and hav
 
 ## Release
 
-`.claude/hooks/issue-claim-release.sh` releases the claim when a `gh pr merge <n>`, run as its own command in this session, lands a pull request whose body closes the issue by keyword (`Closes #<n>`); its header names the spellings it declines to read. Any other ending leaves the claim set, so strip it by hand: `gh issue edit <n> --remove-label in-progress`.
+`.claude/hooks/issue-claim-release.sh` releases the claim when a `gh pr merge <n>`, run as its own command in this session, lands a pull request whose body closes the issue by keyword (`Closes #<n>`); its comments name the spellings it declines to read. Any other ending leaves the claim set, so strip it by hand: `gh issue edit <n> --remove-label in-progress`.
 
 ## Scope
 

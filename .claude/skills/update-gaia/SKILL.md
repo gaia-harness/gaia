@@ -309,7 +309,7 @@ if [ -d .gaia/local/cache/shared/update-gaia ]; then
 fi
 
 # .gaia-merge/: conflict patches + .notes the operator resolves by hand (Step
-# 11). Remove only when empty; a populated dir holds unresolved action items, so
+# 10). Remove only when empty; a populated dir holds unresolved action items, so
 # never delete it, warn and name the leftovers instead.
 if [ -d .gaia-merge ]; then
   if [ -n "$(ls -A .gaia-merge 2>/dev/null)" ]; then

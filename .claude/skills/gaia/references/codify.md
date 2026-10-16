@@ -66,7 +66,7 @@ A structured `malformed_snapshot` error on stderr means the prior review snapsho
 
 - `audited_pr_count`: the window's audited-PR denominator, the count decline and snapshot records bind as `--audited-pr-count`.
 - `tally_schema_version`: the tally's counting-semantics version; a mismatch against the review snapshot is the `schema_change` trigger.
-- `class_inventory`: every non-fallback class counted at least once in the window, below-threshold included.
+- `class_inventory`: every non-fallback class counted at least once in the window that no promoted rule covers and the decline ledger does not suppress, below-threshold included.
 - `unclassified_window_count`: the classless fallback count, even below its own signal threshold.
 - `snapshot_present` / `snapshot_reviewed_at`: whether a schema-valid review snapshot was read, and when it was recorded.
 - `triggers`: what changed against the last completed review's snapshot; empty when there is no snapshot or `gh_ok` is `false`.
@@ -127,7 +127,7 @@ The human gate is only worth its cost if the human can judge what they are appro
 Per item, lead with:
 
 - **What keeps going wrong.** One sentence, no class slug, no reference vocabulary. For example: "Docs and comments describe how a script behaves, and the description no longer matches what the script does."
-- **One concrete example**: the file and what was wrong there. The findings block carries no prose, so the example comes from a `gaia-debt-key` comment (`<!-- gaia-debt-key: v1 class=<finding_class> path=<path> line=<int> -->`, `.claude/skills/file-tech-debt/SKILL.md` step 1) whose `class=` equals the item's class exactly. Do not use `gh`'s full-text search for this: it tokenizes on `/`, which every class contains (`file-tech-debt/SKILL.md` step 2). Parse the keys locally instead, and stop at the first exact match:
+- **One concrete example**: the file and what was wrong there. The findings block carries no prose, so the example comes from a `gaia-debt-key` comment (`<!-- gaia-debt-key: v1 class=<finding_class> path=<path> line=<int> -->`, `.claude/skills/file-tech-debt/SKILL.md` step 1) whose `class=` equals the item's class exactly. Do not use `gh`'s full-text search for this: it tokenizes on `/`, which every class contains (`.gaia/scripts/debt-dedup.sh` header). Parse the keys locally instead, and stop at the first exact match:
   1. The tech-debt issues, read once per run and reused for every item: `gh issue list --label tech-debt --state all --limit 1000 --json number,title,body`. A matching issue's title and body state the defect.
   2. The item's own PRs: `gh pr view <n> --json body` for up to the five most recent numbers in its `pr_numbers`. On a match, the bullet the key comment sits under states the defect.
 
