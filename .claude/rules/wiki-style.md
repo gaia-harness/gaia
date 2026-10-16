@@ -44,7 +44,7 @@ Wiki readers (maintainers, adopters) need to understand the system as it is now.
 - **`wiki/meta/`**: audit artifacts (lint reports, consolidate reports). Their purpose is referencing specific commits / SHAs / dates, so the no-inline-refs rule does not apply.
 - **Frontmatter (`created`, `updated`, `status`, etc.)**: metadata, not prose.
 <!-- gaia:maintainer-only:start -->
-- **`.gaia/tests/` is out of scope entirely.** It is release-excluded maintainer-only test infrastructure that never reaches an adopter, so a UAT/SPEC reference there is never shipped-surface drift. Its suites use `UAT-NNN` / `SEC-N` / `TST-NN` test-name prefixes, header comments, and section headers as deliberate SPEC-conformance traceability; those stay. Both audit greps below omit `.gaia/tests/` for this reason, matching the release boundary. Do not re-add `.gaia/tests/` to either grep.
+- **`.gaia/tests/` is out of scope entirely.** It is release-excluded maintainer-only test infrastructure that never reaches an adopter, so a UAT/SPEC reference there is never shipped-surface drift. Its suites use `UAT-NNN` / `SEC-N` / `TST-NN` test-name prefixes, header comments, and section headers as deliberate SPEC-conformance traceability; those stay. The audit greps below omit `.gaia/tests/` for this reason, matching the release boundary. Do not add `.gaia/tests/` to any of them.
 <!-- gaia:maintainer-only:end -->
 - **Targeted archival labels**: e.g. the `## Historical context (from <older-title>)` heading the consolidate stage of `/gaia-wiki` writes when merging a superseded page is a deliberate label that identifies lifted content; not the prose pattern this rule bans.
 
