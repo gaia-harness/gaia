@@ -10,13 +10,15 @@
 #
 # Denied targets:
 #   - any command using --no-preserve-root
-#   - rm -rf / (root)
+#   - rm -rf / (root), and any absolute path outside the whitelist below
 #   - rm -rf $HOME, ${HOME}, ~, ~/, $HOME/...
 #   - rm -rf .   (cwd, incl. $PWD)
 #   - rm -rf *   (unscoped glob)
 #   - rm -rf .*  (dotfile glob, incl. the .[!.]* / ..?* / {.,}* spellings)
 #   - rm -rf .git
 #   - rm -rf .claude (the Claude config: hooks, skills, agents, rules, settings)
+#     and .claude/<child>
+#   - an unscoped brace glob
 #   - rm -rf node_modules (anywhere)
 #
 # Allowed (whitelist of safe scratch paths):

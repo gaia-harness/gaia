@@ -66,7 +66,7 @@
 #   if gaia_verb_armed "$frag" "$words" "$cmd"; then … fi
 #
 # never as a bare statement and never inside `$( )`. Consumers run under three
-# different option sets, and five of them trap ERR; some of those also set
+# different option sets, and several of them trap ERR; some of those also set
 # errexit and one does not. In a condition context bash suppresses both errexit
 # and the ERR trap for the whole function body, which is what stops a routine
 # `return 1` from silently exiting a hook that traps ERR to `exit 0`. This

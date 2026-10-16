@@ -5,9 +5,10 @@
  *
  *   --commit   Stage the release-related files, commit with the message
  *              `chore(release): vX.Y.Z`, then amend `wiki/.state.json`
- *              so its `last_evaluated_sha` matches the release commit's
- *              own SHA. Result: the release commit's tree contains a
- *              state file that says "wiki is in sync at this release."
+ *              so its `last_evaluated_sha` records the release commit's
+ *              pre-amend SHA (a commit cannot contain its own hash).
+ *              Result: the release commit's tree contains a state file
+ *              that says "wiki is in sync at this release."
  *
  *   --tag      Tag HEAD as `vX.Y.Z` (annotated, message `Release vX.Y.Z`)
  *              and push the tag to `origin`. Run after the release PR

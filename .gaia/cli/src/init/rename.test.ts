@@ -589,7 +589,7 @@ describe('CLAUDE.md template invariant', () => {
 
 /**
  * The same invariant for the other sink: the shipped language files have to
- * come back actually renamed, or every adopter scaffold finishes Step 6 of
+ * come back actually renamed, or every adopter scaffold finishes Step 3 of
  * `/gaia-init` still carrying GAIA's title. Every test above writes its own
  * fixture, so nothing else reads the files that ship.
  *

@@ -527,7 +527,7 @@ _gaia_repo_scope_tracked() {
   [ "$directory_known" = 1 ] || return 2
   [ -n "$directory" ] || return 1
   _gaia_repo_scope_where "$directory" || scope_status=$?
-  # shellcheck disable=SC2034 # read by red-verify-commit-check.sh and worthiness-presence-check.sh
+  # shellcheck disable=SC2034 # read by worthiness-presence-check.sh
   [ "$scope_status" = 1 ] && GAIA_REPO_SCOPE_LEAD_CD="$directory"
   return "$scope_status"
 }

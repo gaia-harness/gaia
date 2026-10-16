@@ -596,9 +596,9 @@ use_real_registry() {
 # --- defense in depth: the file_path chain's own two guards ---
 
 # tech-debt #944. `dirname --` and `CDPATH=''` on the target_dir/
-# resolved_target_dir pair are unreachable in practice, because
-# .claude/skills/gaia/references/isolation.md contracts file_path as an absolute
-# path with no cwd resolution, and an absolute path defeats both. The two tests
+# resolved_target_dir pair are unreachable in practice, because the Edit,
+# Write and MultiEdit tools take file_path as an absolute path with no cwd
+# resolution, and an absolute path defeats both. The two tests
 # below cover them anyway: that contract rests on an external convention the
 # script cannot enforce, so if the harness ever emits a relative file_path,
 # they are the only thing standing there, and without coverage a future edit

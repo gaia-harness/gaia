@@ -13,11 +13,9 @@
 # that need it most.
 #
 # SAME LENGTH, ALWAYS. The view is the same CHARACTER length as <text>, because
-# the mask is an overwrite rather than a deletion. The pull-request-creation
-# consumer recovers the real bytes of its captured flag tail by suffix length
-# against the view, so any length drift there silently hands that consumer a
-# tail cut in the wrong place. Character length is the dimension that matters,
-# which is why the mask run is sized outside the byte-locale the scan runs in.
+# the mask is an overwrite rather than a deletion. Character length is the
+# dimension that matters, which is why the mask run is sized outside the
+# byte-locale the scan runs in.
 #
 # WHAT COUNTS AS DATA. Exactly one shape, and deliberately small. A heredoc
 # body is data when all of the following hold, the first six on its opener
@@ -614,8 +612,9 @@ gaia_verb_arm_view() {
 # over-arms.
 #
 # ABSTENTION IS WHOLE-INPUT, as in the walk above: an unterminated span, a
-# dollar-quoted word, a `${` carrying anything but a plain name, a `)` in a
-# context that holds the word `case` (a case arm's bare `)` would close the
+# dollar-quoted word, a `${` whose body is empty, starts with a space or `|`,
+# or can nest, quote or run a command, a `)` in a context that holds the word
+# `case` (a case arm's bare `)` would close the
 # substitution early and desync every quote after it), a backslash before `$`,
 # a backtick, or a backslash anywhere under backticks (the shell strips it
 # before parsing the inner command, so the escape is gone), a backtick under

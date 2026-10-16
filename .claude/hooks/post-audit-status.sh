@@ -120,8 +120,11 @@
 #
 # Notes
 #   - Bash 3.2 compatible (macOS-default bash).
-#   - Never `cd`s (per .claude/rules/shell-cwd.md). Resolves the repo root via
-#     git rev-parse and uses repo-relative paths from there.
+#   - Never changes its own shell directory (per .claude/rules/shell-cwd.md);
+#     the only `cd`s sit inside command-substitution subshells (locating the
+#     libraries and the repo root, and anchoring gh and the resolver on
+#     $repo_root). Resolves the repo root via git rev-parse
+#     and uses repo-relative paths from there.
 #   - The success description "<version> <frontend-digest> <tree-sha>" (three
 #     positional fields; field 2 is the digest) matches what every
 #     state-aware GAIA-Audit reader accepts as cleared, and state=success

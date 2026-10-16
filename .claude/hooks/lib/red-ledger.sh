@@ -1,9 +1,10 @@
 #!/usr/bin/env bash
-# Shared helpers for the RED-observation ledger, sourced by both the capture
-# hook (.claude/hooks/capture-red-observations.sh) and the commit check
-# (.claude/hooks/red-verify-commit-check.sh). Keeping the path, the
+# Shared helpers for the RED-observation ledger, sourced by the capture
+# hook (.claude/hooks/capture-red-observations.sh), the commit check
+# (.claude/hooks/red-verify-commit-check.sh) and the worthiness presence check
+# (.claude/hooks/worthiness-presence-check.sh). Keeping the path, the
 # repo-relative normalization, and the signal invocation in one place keeps
-# the two hooks in sync by construction.
+# them in sync by construction.
 #
 # Usage (from a hook script, at any working directory):
 #   _library_directory="$(cd "$(dirname "${BASH_SOURCE[0]}")/lib" 2>/dev/null && pwd)" || _library_directory=''

@@ -49,19 +49,10 @@ command=$GAIA_HOOK_COMMAND
 # so what survives is a denial with no stated reason. The parse check removes
 # both, which is why the cost above is spent here.
 #
-# What the check does not reach, because `bash -n` does not recurse into a
-# sourced file: verb-arming.sh lazily sources TWO libs of its own, each behind
-# an `-f` test with no parse check, and an unparseable copy of either still
-# abandons a stock 3.2 shell at exit 2.
-#
-#   verb-arming-walk.sh, inside _gaia_va_view, needs a raw verb match.
-#   repo-scope.sh, inside _gaia_va_first_command, needs only the lead-word
-#   pre-filter, so it fires on any command sharing the verb's FIRST WORD.
-#
-# The second is much the wider of the two and the one to close first: measured
-# on staged copies with repo-scope.sh holding conflict markers, a plain
-# `git status` exits 2 on /bin/bash 3.2.57 and 0 on 5.3.15. Both loads live
-# inside verb-arming.sh, so no consumer hook can guard either from out here.
+# The check does not recurse into the two libs verb-arming.sh lazily sources
+# (verb-arming-walk.sh, repo-scope.sh), because `bash -n` does not follow a
+# sourced file. verb-arming.sh brackets each load with set +e and a type check,
+# so an unparseable copy degrades rather than aborting the shell.
 # shellcheck source=/dev/null
 [ -n "${_hook_library_directory:-}" ] && "${BASH:-bash}" -n "$_hook_library_directory/verb-arming.sh" 2>/dev/null && . "$_hook_library_directory/verb-arming.sh" 2>/dev/null || true
 type gaia_verb_armed >/dev/null 2>&1 || exit 0

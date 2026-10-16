@@ -10,10 +10,10 @@
  * merges at key / map-entry granularity instead.
  *
  * It is READ-ONLY: it parses the baseline, latest and current YAML files with
- * js-yaml and emits a JSON verdict report. It never writes the workspace file;
- * the `/update-gaia` skill applies `applied[]` with the Edit tool so comments,
- * key order, and quote style survive (js-yaml `dump` would strip every
- * comment).
+ * js-yaml and emits a verdict report (JSON with --json). It never writes the
+ * workspace file; the `/update-gaia` skill applies `applied[]` with the Edit
+ * tool so comments, key order, and quote style survive (js-yaml `dump` would
+ * strip every comment).
  *
  * Verdict table (identical to the package.json step), per managed key or per
  * `overrides` / `allowBuilds` entry key, with baseline `B` / latest `L` /
@@ -41,7 +41,8 @@ const HELP_TEXT = `Usage: gaia update merge-workspace --baseline <file> --latest
   Field-aware three-way verdict for pnpm-workspace.yaml. Reads three YAML
   files (baseline / latest tarball + working-tree current), classifies the
   GAIA-managed keys and the adopter-shared overrides / allowBuilds maps, and
-  emits a JSON report of {applied, conflicts, suggestions}.
+  reports {applied, conflicts, suggestions} (JSON with --json, a human summary
+  otherwise).
 
   Read-only: never writes the workspace file. The /update-gaia skill applies
   the 'applied' entries with the Edit tool to preserve comments and order.

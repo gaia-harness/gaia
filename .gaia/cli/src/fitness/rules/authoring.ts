@@ -226,7 +226,7 @@ export const AUTHORING_RULES: readonly RuleDefinition[] = [
           'Link it from the entry file or a sibling reference so every file is one level from an entry.',
       })),
     detection:
-      'A file reachable only through a level 1 reference and not a sibling of the file that links it; entries are each SKILL.md, each command and each playbook a command routes to.',
+      'A file reachable only through a level 1 reference and not a sibling of the file that links it; entries are each SKILL.md, each command and each playbook a command or skill routes to.',
     ruleId: 'authoring.reference.depth.one-level',
     severity: 'warning',
   },

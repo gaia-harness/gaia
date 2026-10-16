@@ -479,7 +479,7 @@ describe('scaffold route: flag combos', () => {
     const out = stderr.restore();
 
     expect(exit).toBe(1);
-    expect(out).toContain('locale barrel not found');
+    expect(out).toContain('locale barrel at');
   });
 
   test('--json emits a single ScaffoldResult JSON line', () => {

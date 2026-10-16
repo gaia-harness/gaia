@@ -11,8 +11,8 @@ import {run as runSync} from './sync.js';
 
 const HELP_TEXT = `Usage: gaia labels <subcommand> [args]
 
-  sync [--repo <owner/name>] [--dry-run] [--adopt] [--adopt-palette]
-       [--prune-deprecated] [--enforce-blocked] [--json]
+  sync [--repo <owner/name>] [--repo-root <path>] [--dry-run] [--adopt]
+       [--adopt-palette] [--prune-deprecated] [--enforce-blocked] [--json]
        [--audience adopter|maintainer] [--feature <key>]...
                              Reconcile a repository against the registry.
 `;

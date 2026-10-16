@@ -17,7 +17,7 @@
  * with its real flags.
  *
  * Stdout: a one-line summary per step (skipped or replayed) so the
- * maintainer can see progress. Exit codes: 0 / 1 / 2.
+ * maintainer can see progress. Exit codes: see HELP_TEXT.
  */
 import {EXIT_CODES} from '../exit.js';
 import {structuredError} from '../stderr.js';
@@ -54,7 +54,8 @@ const HELP_TEXT = `Usage: gaia init resume [--from-step <N>]
   Exit codes:
     0  resume completed
     1  user-correctable error (unknown step, missing saved args)
-    2  unexpected (filesystem / step failure)
+    2  unexpected (filesystem failure)
+    other  a failing step's own exit code, passed through
 `;
 
 const HELP_TOKENS = new Set(['--help', '-h', 'help']);

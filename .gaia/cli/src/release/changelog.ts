@@ -56,7 +56,7 @@ const HELP_TEXT = `Usage: gaia-maintainer release changelog [--draft] [--version
   Exit codes:
     0  success
     1  user-correctable error
-    2  unexpected (git failure)
+    2  unexpected (git or write failure)
 `;
 
 const HELP_TOKENS = new Set(['--help', '-h', 'help']);

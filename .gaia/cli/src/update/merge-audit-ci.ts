@@ -13,9 +13,9 @@
  * the roster is read, so the adopter's copy of any other key is never visited.
  *
  * It is READ-ONLY: it parses the baseline, latest and current YAML files with
- * js-yaml and emits a JSON verdict report. It never writes the file; the
- * `/update-gaia` skill applies `applied[]` with the Edit tool so comments, key
- * order, and quote style survive.
+ * js-yaml and emits a verdict report (JSON with --json). It never writes the
+ * file; the `/update-gaia` skill applies `applied[]` with the Edit tool so
+ * comments, key order, and quote style survive.
  *
  * Verdict table (identical to the package.json / pnpm-workspace steps), per
  * roster member, with baseline `B` / latest `L` / adopter `A`:
@@ -47,7 +47,8 @@ const HELP_TEXT = `Usage: gaia update merge-audit-ci --baseline <file> --latest 
 
   Field-aware three-way verdict for .gaia/audit-ci.yml. Reads three YAML files
   (baseline / latest tarball + working-tree current), classifies the auditors
-  roster members, and emits a JSON report of {applied, conflicts, suggestions}.
+  roster members, and reports {applied, conflicts, suggestions} (JSON with
+  --json, a human summary otherwise).
 
   Read-only: never writes the file. The /update-gaia skill applies the 'applied'
   entries with the Edit tool to preserve comments and order.

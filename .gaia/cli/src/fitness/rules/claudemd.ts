@@ -35,7 +35,7 @@ const missingRootCheck = (context: RuleContext): readonly RawFinding[] =>
         file: ROOT_CLAUDE_MD,
         line: 0,
         message:
-          'The project has no root CLAUDE.md, so no instructions load automatically.',
+          'The project has no root CLAUDE.md, so no project instructions load from the root.',
         remediation:
           'Create a CLAUDE.md at the project root with the instructions every session needs.',
       },
