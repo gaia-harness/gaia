@@ -35,7 +35,7 @@ A catalog that is present but unreadable makes every writer and reaper refuse an
 
 ## Readiness and the one-time move
 
-On a machine still holding a 1.x-era specs or plans ledger, the notebook CLI verbs and the consumer scripts that call the readiness gate refuse with a message naming `bash .gaia/scripts/notebook/move.sh run` until the move runs; an old research folder alone does not trigger it. The move relocates by rename, folds both old ledgers into the catalog, keeps the old ledgers as frozen backups, deletes nothing, and reports auto-memory files that name the old paths (it repoints them only on a yes). `.gaia/migrations/2.0.0.md` says when an adopter runs it.
+On a machine still holding a specs or plans ledger in the 1.x-era folders under `.gaia/local/specs/` or `.gaia/local/plans/`, the notebook CLI verbs and the consumer scripts that call the readiness gate refuse with a message naming `bash .gaia/scripts/notebook/move.sh run` until the move runs; an old research folder alone does not trigger it. The move relocates by rename, folds both old ledgers into the catalog, keeps the old ledgers as frozen backups, deletes nothing, and reports auto-memory files that name the old paths (it repoints them only on a yes). `.gaia/migrations/2.0.0.md` says when an adopter runs it.
 
 ## Permissions and guards
 
