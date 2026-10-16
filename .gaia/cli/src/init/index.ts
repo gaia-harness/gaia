@@ -38,7 +38,7 @@ const HELP_TEXT = `Usage: gaia init <subcommand> [args]
   wire-statusline --mode <global|project|skip>
                             Wire the GAIA statusline into Claude settings.
   bootstrap-env             Copy .env.example to .env if .env is absent.
-  write-project-config --sandbox-recommended <bool>
+  write-project-config --sandbox-recommended <bool> [--isolation-policy <policy>]
                             Write .gaia/project.json (sandbox + isolation policy).
   finalize                  Final cleanup steps for the init runbook.
   resume [--from-step <N>]  Resume a partially-completed init via state file.

@@ -21,7 +21,9 @@ const HELP_TEXT = `Usage: gaia init bootstrap-env
 
   Exit codes:
     0  success (no stdout)
+    1  unknown flag
     2  unexpected filesystem failure
+    30 package registry could not resolve the frontend package root
 `;
 
 const HELP_TOKENS = new Set(['--help', '-h', 'help']);

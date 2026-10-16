@@ -212,8 +212,8 @@ _audit_scope_parse_auditors() {
 # can tell "nothing here needs an auditor" apart from "this needs one and has
 # none", which the dispatch resolver's empty member set cannot distinguish.
 #
-# Read only by .gaia/scripts/verify-audit-roster.sh's coverage invariant. No
-# dispatch path consults it, so an entry here never suppresses a review.
+# Read only by .gaia/scripts/verify-audit-roster.sh. No dispatch path
+# consults it, so an entry here never suppresses a review.
 #
 # Emits, tab-separated so a glob may legally contain a space:
 #   UNOWNED <glob> <compiled-regex>
