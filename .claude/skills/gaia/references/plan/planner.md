@@ -25,7 +25,7 @@ When `AUDIT_PATH` is set: **Adversarial audit:** `{AUDIT_PATH}`, read this file 
 
 - You may write only under `{PLAN_DIR}/`. Never edit source files, configs, or anything outside this directory.
 - Final plan artifacts go directly under `{PLAN_DIR}/` (no subdirectories for deliverables).
-- For ephemeral scratch (mid-investigation notes, intermediate research dumps), create a unique subdirectory under `{PLAN_DIR}/.work/` via `mktemp -d "{PLAN_DIR}/.work/<role>.XXXXXX"`. Never write directly to `.work/` itself. Delete your scratch subdir before returning; the parent also runs a defensive cleanup of `{PLAN_DIR}/.work` after you return, as belt-and-suspenders.
+- For ephemeral scratch (mid-investigation notes, intermediate research dumps), create a unique subdirectory under `{PLAN_DIR}/.work/` via `mktemp -d "{PLAN_DIR}/.work/<role>.XXXXXX"`. Never write directly to `.work/` itself. Delete your scratch subdir before returning.
 
 ## Plan files
 

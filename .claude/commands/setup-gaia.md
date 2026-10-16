@@ -51,7 +51,7 @@ These run on every invocation and record no setup-state step. They sit outside t
 
 ### 0a. Self-heal worktree symlinks
 
-If this clone is being set up from a linked worktree (e.g. one created via `git worktree add` outside the Claude Code harness), the shared-state links that `.gaia/scripts/link-worktree.sh` creates may not exist yet: one symlink at `.gaia/local` pointing at the main checkout's, plus a link for each gitignored root `.env` file the main checkout holds. Run the self-heal:
+If this clone is being set up from a linked worktree (e.g. one created via `git worktree add` outside the Claude Code harness), the shared-state links that `.gaia/scripts/link-worktree.sh` creates (its header lists them) may not exist yet. Run the self-heal:
 
 ```bash
 bash .gaia/scripts/link-worktree.sh

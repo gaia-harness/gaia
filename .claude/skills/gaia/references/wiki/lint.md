@@ -46,7 +46,7 @@ Always run `.gaia/cli/gaia wiki state --json` fresh and write the `## #11: Wiki 
 .gaia/cli/gaia wiki state --json
 ```
 
-The CLI returns a JSON object with `drift_severity` (`none` | `low` | `medium` | `high`), `head_short`, `state_sha`, `commits_ahead`, `reachable`, `recent_commits`, and `suggested_base`. If the command exits non-zero with `state_missing` (or equivalent reason), append:
+The CLI returns a JSON object with `drift_severity` (`none` | `low` | `medium` | `high`), `head_short`, `state_sha`, `commits_ahead`, `reachable`, `recent_commits`, and `suggested_base`. If the command prints an empty `state_sha`, append:
 
 ```markdown
 ## #11: Wiki drift check

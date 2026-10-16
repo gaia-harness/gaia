@@ -78,7 +78,7 @@ sibling already covers the behavior, a human-gated `delete`.
 
 ### Axis 2: WORTHINESS (is this test worth having at all?)
 
-An honest test can still be worthless. Apply three sub-rules:
+An honest test can still be worthless. Apply these sub-rules:
 
 - **The discriminator.** If this test failed, would the bug be in MY code or in
   a dependency? `date-fns`, `Intl`, Zod, `react-router`, `react-i18next` carry

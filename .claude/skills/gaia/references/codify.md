@@ -122,7 +122,7 @@ The evidence bar is deliberately low, a couple of before/after task replays or a
 
 ### Explain each item in plain language
 
-The human gate is only worth its cost if the human can judge what they are approving. A class slug, a PR list, and a rationale in this reference's own vocabulary (axis, oracle, efficacy lens, form, marker) are not judgeable by someone who did not write them. So every candidate, and the unclassified signal, is explained in plain terms first, and the taxonomy comes second. `review`, `list`, and `why` all use this rendering.
+The human gate is only worth its cost if the human can judge what they are approving. A class slug, a PR list, and a rationale in this reference's own vocabulary (axis, oracle, efficacy lens, form, marker) are not judgeable by someone who did not write them. So every candidate, and the unclassified signal, is explained in plain terms first, and the taxonomy comes second. Every candidate in the review uses this rendering.
 
 Per item, lead with:
 
@@ -161,7 +161,7 @@ On **Stop without changes**, apply nothing, write no ledger entry, skip the uncl
 
 Once every candidate has a disposition, from the plan answer or a per-row answer, apply each one through `## Per-form action handling` below, in table order.
 
-Accepting a recommended decline or defer is a decision, the same as choosing it row by row. The two persisting actions differ: `decline` writes a machine-local, evidence-gated ledger entry; `defer` persists nothing of its own, but the review snapshot a completed review writes still snoozes it until the class rises materially or the tally's counting changes, the same trigger rule that governs every other candidate; it still appears in `list` and in the next review.
+Accepting a recommended decline or defer is a decision, the same as choosing it row by row. The two persisting actions differ: `decline` writes a machine-local, evidence-gated ledger entry; `defer` persists nothing of its own, but the review snapshot a completed review writes still snoozes it until the class rises materially or the tally's counting changes, the same trigger rule that governs every other candidate; it still appears in the next review.
 
 `redirect` means the engineer overrides the form choice (e.g. "make it a prose rule even though you recommended a skill"). Honor the override and run that form's action handling. Axis-2 guardrails win over a redirect, though: a redirect cannot force a prose rule for an oracle class, and a redirect toward an enforcement-edit cannot manufacture one where no existing check or quality-gate step exists.
 
@@ -210,7 +210,7 @@ State that the decline is machine-local only (the ledger is gitignored) and neve
 
 ### defer
 
-Persist nothing of its own: do not write the ledger, do not draft a file. The review snapshot a completed review writes still snoozes the candidate on the same trigger rule as any other, until the class rises materially or the tally's counting changes. It never hides the candidate from `list` or from the next review; it only silences the statusline nudge until a trigger fires.
+Persist nothing of its own: do not write the ledger, do not draft a file. The review snapshot a completed review writes still snoozes the candidate on the same trigger rule as any other, until the class rises materially or the tally's counting changes. It never hides the candidate from the next review; it only silences the statusline nudge until a trigger fires.
 
 ## The prose-rule template (fill in, then write)
 

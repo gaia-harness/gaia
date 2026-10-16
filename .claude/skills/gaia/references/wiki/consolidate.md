@@ -14,7 +14,7 @@ Wiki pages emitted by the wiki promotion step carry `promoted_from: SPEC-NNN` an
 
 ## Step 1, Build the page index
 
-Run `.gaia/cli/gaia wiki page-index --json` and use the returned shape. The CLI walks the canonical domains (`wiki/decisions/`, `wiki/concepts/`, `wiki/modules/`, `wiki/flows/`, `wiki/components/`, `wiki/dependencies/`), skipping `wiki/_archived/`, `wiki/meta/`, `wiki/entities/`, `wiki/log.md`, `wiki/index.md`, `wiki/overview.md`, `wiki/README.md`, and per-domain `_index.md` files.
+Run `.gaia/cli/gaia wiki page-index --json` and use the returned shape. Ignore entries whose `domain` is `meta` or `entities`: the CLI emits them.
 
 Each entry in `pages[]` provides `path`, `domain`, `title`, `type`, `status`, `tags`, `inbound_links`, and `outbound_links`. Augment with the consolidation-only fields the CLI does not surface, read each page's frontmatter for:
 

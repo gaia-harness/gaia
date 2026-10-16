@@ -47,7 +47,7 @@ The 20-attempt bound replaces the default 5, for the reason the sibling callers 
 
 - **`MERGED`** (exit 0) → clean up per `.claude/skills/gaia/references/work-lifecycle.md` `## 8. Cleanup` `### Feature branch`, with `<branch-name>` = the branch created above, then print the merged PR URL.
 - **`TIMEOUT`** (exit 5, the bound was spent with the pull request still open) → print the PR URL and note that the merge queued above has not landed yet. **Do not** delete the local branch or switch off it, the PR is still open.
-- **`CONFLICTING`** (exit 3) → repair it per that page's `### Conflict found mid-wait` and run the wait again.
+- **`CONFLICTING`** (exit 3) → repair it per `wiki/concepts/PR Merge Workflow.md`'s `### Conflict found mid-wait` and run the wait again.
 - **`CHECK_FAILED`** (exit 4) → print the PR URL and the failing check, and leave the branch in place as for a queued merge.
 - **`CLOSED`** (exit 6) → the pull request was closed without merging, so no wait can clear it: report that, leave the branch in place, and stop.
 - **the wait refused rather than answered** (exit 2) → report what it could not read, leave the branch in place, and assert no state for the pull request.

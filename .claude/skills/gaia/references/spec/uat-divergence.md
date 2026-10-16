@@ -41,4 +41,4 @@ A logical divergence is resolved by a SPEC reopen. `/gaia-spec` has no reopen en
 3. The human (not the orchestrator) updates the plan README's routing row when the change re-routes the UAT or moves its owning phase, and the owning task doc's acceptance criteria when they quoted the old text. The render step's routing validation fails loudly on a forgotten row.
 4. Stash or discard the halted phase's uncommitted edits (resume refuses a dirty tree), then resume with the plan's `KICKOFF.md`. The render step re-renders the changed UAT; an edited spec comes back as a conflict.
 
-The specs ledger row needs no change: its vocabulary has no reopened state, and the SPEC's frontmatter `status` carries it.
+The spec's catalog row needs no change: its vocabulary has no reopened state, and the SPEC's frontmatter `status` carries it.
