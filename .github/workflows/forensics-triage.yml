@@ -264,10 +264,14 @@ jobs:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           prompt: ${{ steps.render-classifier.outputs.body }}
           # No tool access, judgment-only. The classifier MUST NOT
-          # touch the working tree (UAT-009).
+          # touch the working tree. `--tools=` (with the equals sign)
+          # removes every built-in tool, so none stays available to
+          # untrusted issue text. The action's arg parser drops an
+          # empty-string value, so the separate-token `--tools ""` reaches
+          # the CLI valueless and fails.
           claude_args: |
             --max-turns 1
-            --disallowedTools Bash,Edit,Write,Read,WebFetch,WebSearch
+            --tools=
 
       - name: Extract verdict
         id: verdict
