@@ -36,7 +36,11 @@ A dispatched specialist or refuter can return a harness-reminder-echo instead of
 
 Detection and the single hardened re-dispatch are the same on every surface. What follows a **second** consecutive no-op is that surface's terminal action, and this page owns the general rule: **inline fallback wherever the caller may legitimately do the work itself**, applying the recovered result exactly as if the subagent had returned it and recording the unit as degraded rather than clean or empty. Each surface still states its own **preamble**, what to restore, snapshot, or re-clear before the one retry, because that part is genuinely site-specific; only the ending has a single owner.
 
-**One surface departs from that ending, on purpose.** The pre-merge audit gate ([[Audit Round Procedure]]) stops and surfaces the double no-op to the operator instead of falling back inline, because a Code Audit Team member's clearance marker is that member's own attestation: an orchestrator that reviewed the diff itself inline would be writing a clearance nobody earned. Stopping is safe there in a way it is not elsewhere, because that gate is fail-closed, no marker still means no merge. That page states the departure and its reason; a surface not named there takes the inline ending above.
+**Some surfaces depart from that ending, on purpose.** The pre-merge audit gate ([[Audit Round Procedure]]) stops and surfaces the double no-op to the operator instead of falling back inline, because a Code Audit Team member's clearance marker is that member's own attestation: an orchestrator that reviewed the diff itself inline would be writing a clearance nobody earned. Stopping is safe there in a way it is not elsewhere, because that gate is fail-closed, no marker still means no merge. That page states the departure and its reason.
+
+The UAT fidelity judge of a spec-derived plan (`.claude/skills/gaia/references/spec/lifecycle.md`, `## Pre-audit UAT checks`) halts the run instead of falling back inline. Its caller is the orchestrator whose phases wrote the specs under judgment, so it cannot legitimately do the work itself: an inline verdict would be the implementer grading its own work. Halting is safe there because the run stops before the pre-merge audit and the merge. That page states the departure and its reason.
+
+A surface named in neither place takes the inline ending above.
 
 ### Ad-hoc dispatches: `--shape agent-report-file`
 

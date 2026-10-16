@@ -58,7 +58,7 @@ A non-zero exit is a HALT naming both SHAs: Phase 1 was committed without the re
 Then judge the test bodies. The gate proves each spec still carries its contract and passes, but never reads the body, so a body can keep its contract comment and stop asserting it. That judgment goes to one fresh `uat-fidelity-judge` agent per run, never to the orchestrator, which would be grading its own phases' work. Skip this step when the gate printed `no owned e2e specs`.
 
 1. Pre-clear the verdict file: `rm -f <PLAN_DIR>/uat-fidelity.json`.
-2. Dispatch `Agent(subagent_type: "uat-fidelity-judge")` with a prompt of these lines, one `Spec:` line per `e2e` row of the routing table in `<PLAN_DIR>/README.md`, the path joined from `<RESOLVED_ROOT>`, the frontend package, `.playwright/e2e/`, the row's `feature_folder` and its `file_name`:
+2. Dispatch `Agent(subagent_type: "uat-fidelity-judge")` with a prompt of these lines, one `Spec:` line per `e2e` row of the routing table in `<PLAN_DIR>/README.md`, the path joined from `<RESOLVED_ROOT>`, `<frontend package>/.playwright/e2e/`, the row's `feature_folder` and its `file_name`:
 
    ```
    SPEC path: <SPEC_PATH>
@@ -72,7 +72,7 @@ Then judge the test bodies. The gate proves each spec still carries its contract
    bash .gaia/scripts/audit-noop-detect.sh --shape agent-report-file --path <PLAN_DIR>/uat-fidelity.json --expect-count <number of Spec lines>
    ```
 
-   Exit 1 is a no-op: re-dispatch exactly once against the re-cleared path. A second consecutive no-op is a HALT, never a judgment the orchestrator makes itself. Its message names the verdict file and the specs from the `Spec:` lines, and gives the next step: resume the plan to run this step again, or have a human read each listed spec against its contract, then tell the orchestrator to continue to the final summary when every body still asserts it, or fix a diverging one as step 4 states.
+   Exit 1 is a no-op: re-dispatch exactly once against the re-cleared path. A second consecutive no-op is a HALT, never a judgment the orchestrator makes itself. This departs from the general inline ending (`wiki/concepts/Code Review Audit Agent.md`, `### The terminal action, stated once`) deliberately: the orchestrator wrote the phases under judgment, so it cannot legitimately do the work itself. The halt message names the verdict file and the specs from the `Spec:` lines, and gives the next step: resume the plan to run this step again, or have a human read each listed spec against its contract, then tell the orchestrator to continue to the final summary when every body still asserts it, or fix a diverging one as step 4 states.
 4. Halt on any divergence:
 
    ```bash
