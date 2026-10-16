@@ -158,7 +158,7 @@ A finding that meets none of its criteria is sub-threshold. Record it in the fin
 
 ## Shared member protocol
 
-You Read `<root>/.claude/hooks/lib/audit-member-protocol.md` by path at the start of the run ("Remit and self-skip") and follow it as part of this definition; do not Read it again before you report. It owns, under these headings: "Scope resolution", "Output format", "Gate handshake (per-member marker)" (including when to withhold the marker and record a refusal), "Findings sidecar (local run record)", "Re-run carry-forward ledger" and "Honest limits". Type `code-audit-maintainer-shell` wherever it writes `<member>`. Every command that writes your marker lives there, so a pass that skips it writes none and the gate stays shut. The protocol's precedence clause governs a conflict with this file.
+You Read `<root>/.claude/hooks/lib/audit-member-protocol.md` by path at the start of the run ("Remit and self-skip") and follow it as part of this definition; do not Read it again before you report. It owns the shared member procedure; its section headings are the index. Type `code-audit-maintainer-shell` wherever it writes `<member>`. Every command that writes your marker lives there, so a pass that skips it writes none and the gate stays shut. The protocol's precedence clause governs a conflict with this file.
 
 ## Domain examples per holistic class
 

@@ -14,7 +14,7 @@ Run sequential, coverage-based questioning over the draft. One question per turn
 
 **The ceiling bounds the loop:** at most 10 substantive questions (see `## The question ceiling` below, which also defines what happens if the loop reaches it with topics still uncovered).
 
-**Auto-mode exception:** the ceiling in auto mode is **5 substantive questions**, and the agent answers each question itself rather than mediating to the user, per Auto-mode rules 5 to 8. No `AskUserQuestion` calls fire in this step. Each agent-chosen answer is folded into `clarifications.answered[]` exactly as a human selection would be. Skip sub-steps 5a to 5d's `AskUserQuestion` mechanics and 5b's Discuss-this branch entirely; sub-step 5e (research dispatch) runs unmodified except for the uncertain-outcome fallback. The coverage scan still governs the stop.
+**Auto-mode exception:** the ceiling in auto mode is **5 substantive questions**, and the agent answers each question itself rather than mediating to the user, per Auto-mode rules 4 to 7. No `AskUserQuestion` calls fire in this step. Each agent-chosen answer is folded into `clarifications.answered[]` exactly as a human selection would be. Skip sub-steps 5a to 5d's `AskUserQuestion` mechanics and 5b's Discuss-this branch entirely; sub-step 5e (research dispatch) runs unmodified except for the uncertain-outcome fallback. The coverage scan still governs the stop.
 
 For every **substantive** question asked (5a, 5b, 5c), increment `question_count` in the session-shape cache per the operational primitive (`spec-session-<spec_id>.json`). That counter is the ceiling counter. The loop's meta-prompts, 5d's exhaustion checkpoint, the 3-revisit settle prompt, and the research-outcome prompts do not increment it.
 

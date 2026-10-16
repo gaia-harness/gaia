@@ -21,7 +21,7 @@ Contents: Step 1. Find the unanswered files; Step 2. Decide which path applies; 
 `--check` is read-only. It exits non-zero whenever it finds any of five conditions, so capture stdout and parse it as JSON regardless of the exit code; a non-zero exit here is not a failure, it is the normal signal that something needs attention. The payload shape is:
 
 ```json
-{"missing": [{"expected": "owned", "file": ".gaia/statusline/example.sh"}], "extra": [], "drift": [], "regionDrift": [], "versionDrift": null}
+{"missing": [{"expected": "owned", "file": ".gaia/statusline/example.sh"}], "extra": [], "drift": [], "regionDrift": []}
 ```
 
 `missing` is an array of objects, not of path strings: the path lives in `.file`, and `.expected` is the update class the classifier would assign. Extract paths with:

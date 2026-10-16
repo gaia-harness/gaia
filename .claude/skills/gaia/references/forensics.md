@@ -9,7 +9,7 @@ Contents: Hard constraints; Steps; Cost record (run end); Output schema (load-be
 These four rules are non-negotiable and apply to every code path:
 
 1. **Read-only end-to-end.** The skill inspects state; it never modifies, installs, fetches, or remediates anything.
-2. **Write surface allowlist.** Writes go to exactly two directories: `.gaia/local/forensics/<tree_key>/` (the report; `<tree_key>` resolved in step 7) and `.gaia/local/telemetry/` (GAIA's local ledger sink, writes non-blocking). No other path is writable.
+2. **Write surface allowlist.** Writes go to two directories: `.gaia/local/forensics/<tree_key>/` (the report; `<tree_key>` resolved in step 7) and `.gaia/local/telemetry/` (GAIA's local ledger sink, writes non-blocking), plus one temp file holding the issue body for `gh issue create --body-file`. No other path is writable.
 3. **Uniform redaction.** Every output surface, the local file body and the GH issue body, passes through the same single redaction pass. The two bodies are byte-identical post-redaction. Never re-redact, never partially redact.
 4. **Strict body schema.** Frontmatter fields, section headers, and section order are fixed. Phase-2 automation parses this without LLM fallback; any drift breaks downstream triage.
 

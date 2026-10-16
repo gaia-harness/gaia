@@ -39,7 +39,7 @@ class: <tag>
 evidence: <verbatim user phrase> + <named state file>
 ```
 
-Three sub-cases:
+Sub-cases:
 
 - **Phrase and state file both apply:** `evidence: "scaffold failed" + frontend/.claude/skills/new-component/SKILL.md`
 - **Phrase only (no state file inspected):** `evidence: "merge conflict"`

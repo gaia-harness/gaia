@@ -43,6 +43,7 @@ The rest of the skill, write-surface allowlist, no-machine-local-memory rule, wo
    - `.notebook/specs/**`
    - `.gaia/local/cache/**`
    - `.gaia/local/telemetry/**`
+   - `.notebook/catalog.json` (written only through the ledger and notebook libraries this skill invokes, never by hand)
      Never edit source files (`frontend/app/**`, `src/**`, repo root configs, etc.). No automated backstop enforces this allowlist: the step-10 lint checks only the saved SPEC artifact's immutability, not which paths a session wrote. You self-police it at the agent-instruction level.
 3. **One question at a time.** No multi-question forms. Closed-set questions go through `AskUserQuestion` with options ordered: recommended FIRST, then alternatives, then `Other` (free text), then `Discuss this` (escape to plain Q&A). Open-ended questions use a plain prompt with no enumerated options.
 4. **Two-gate ceremony.** Confirm intent + UATs in plain English BEFORE authoring the artifact. Confirm the rendered artifact BEFORE saving to disk. No silent advances between gates.
@@ -110,6 +111,7 @@ The self-review (step 6) and adversarial audit (step 7) route their finding, ver
 - `findings/completeness.json`: the Deep completeness critic (the findings file schema in `spec/lens-dispatch.md`).
 - `verdicts/<finding-id>.json`: a Standard single-refuter verdict, or a batched refuter's verdict on either tier (7b-i, above the cap).
 - `verdicts/<finding-id>-<refuter-lens>.json`: a Deep verdict, one per refuter lens. The refuter lens is **slugified**: `correctness` stays `correctness`, `security/safety` maps to `security-safety`, `reproduces-as-described` stays as is. The completeness critic's single-refuter verdicts use the same naming.
+- `coverage.jsonl`: one thin phase, lens and disposition record per in-scope dispatch, appended by main; the applier reads it for `## Coverage`.
 
 Per-lens and per-finding-plus-lens filenames avoid write collisions in the parallel fan-out: each agent owns exactly one path, so many agents write the cache concurrently without contending.
 

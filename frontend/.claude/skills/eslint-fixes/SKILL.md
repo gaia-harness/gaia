@@ -10,13 +10,11 @@ How to resolve specific ESLint errors in this project.
 
 ## no-void
 
-In an event handler, don't use the `void` operator: make the handler `async` and `await` the promise. Any other fire-and-forget statement (an effect body, a module-level call) uses `void`, never `.catch(() => {})`.
+`no-void` reports `void` in expression position (an arrow body such as `() => void navigate(...)`); a `void expr;` statement is allowed. In an event handler, prefer an `async` handler that awaits the promise. Any other fire-and-forget statement (an effect body, a module-level call) uses `void`, never `.catch(() => {})`.
 
 ```tsx
 // BAD
-const handleClickNavigate = () => {
-  void navigate('/path');
-};
+const handleClickNavigate = () => void navigate('/path');
 
 // GOOD
 const handleClickNavigate = async () => {
@@ -40,7 +38,7 @@ export const FITNESS_GOALS = ['weight_loss'] as const;
 
 ## no-shadow trailing underscores
 
-ESLint's `no-shadow` autofixes by appending `_`. Once shadowing is resolved, remove the trailing `_`.
+`no-shadow` has no autofix: rename the inner binding to a descriptive name, not a trailing `_`.
 
 ## sonarjs/deprecation
 

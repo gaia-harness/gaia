@@ -186,17 +186,17 @@ Replace the JSX:
 
 ```tsx
 <I18nextProvider i18n={i18n}>
-  <ServerRouter context={entryContext} url={request.url} />
+  <ServerRouter context={entryContext} nonce={nonce} url={request.url} />
 </I18nextProvider>
 ```
 
 with:
 
 ```tsx
-<ServerRouter context={entryContext} url={request.url} />
+<ServerRouter context={entryContext} nonce={nonce} url={request.url} />
 ```
 
-The `routerContext` parameter is now unused, drop it from the `handleRequest` signature.
+The `routerContext` parameter is now unused, drop it from the `handleRequest` signature, and drop `RouterContextProvider` from the `import type {EntryContext, RouterContextProvider} from 'react-router'` line.
 
 ### B4. `frontend/app/components/errors/root-error-boundary/index.tsx`
 
@@ -249,14 +249,12 @@ Remove:
 import i18n from './i18next';
 ```
 
-Remove the `initialGlobals` block:
+Remove the `locale` and `locales` entries from `initialGlobals`, keeping `theme: 'light'` with its comment:
 
 ```ts
-initialGlobals: {
-  locale: 'en',
-  locales: {
-    en: {left: '🇺🇸', right: 'en', title: 'English'},
-  },
+locale: 'en',
+locales: {
+  en: {left: '🇺🇸', right: 'en', title: 'English'},
 },
 ```
 
@@ -433,7 +431,7 @@ Edit each (skip any file that does not exist in this project):
 Discovery sweep:
 
 ```bash
-grep -rln "i18n\|useTranslation\|languages/\|i18next" wiki .claude
+grep -rln "i18n\|useTranslation\|languages/\|i18next" wiki .claude frontend/.claude
 ```
 
 Review every match. Edit or delete each, the only acceptable surviving matches are inside this very file (`remove-i18n.md`) and inside the `add-locale.md` template. Both will be self-deleted after they run.

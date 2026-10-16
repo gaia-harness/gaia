@@ -6,7 +6,7 @@ Contents: Playbook; Step 1: Create the report shell; Step 2: GAIA check #11: Wik
 
 ## Playbook
 
-GAIA-native wiki lint. Builds its own report shell, then writes GAIA-specific checks: **#11: Wiki drift check**, **#12: Dead repo-relative paths**, **#13: UAT/SPEC narrative-ref drift**, **#14: Orphan pages**, **#15: Frontmatter gaps**, **#16: Empty sections**, and **#17: Broken wikilinks**. Every check re-derives from a live `.gaia/cli/gaia wiki` CLI primitive on each run; the report is plain markdown that GAIA owns end to end.
+GAIA-native wiki lint. Builds its own report shell, then writes GAIA-specific checks: **#11: Wiki drift check**, **#12: Dead repo-relative paths**, **#13: UAT/SPEC narrative-ref drift**, **#14: Orphan pages**, **#15: Frontmatter gaps**, **#16: Empty sections**, and **#17: Broken wikilinks**. Every check except #13 (two greps) re-derives from a live `.gaia/cli/gaia wiki` CLI primitive on each run; the report is plain markdown that GAIA owns end to end.
 
 ## Step 1: Create the report shell
 
@@ -34,7 +34,7 @@ status: developing
 EOF
 ```
 
-Use `wiki/meta/lint-report.md` as the canonical report path for every subsequent step and the Step 9 summary. The GAIA checks below write into this same file: each **replaces** its own `## #NN` section if one already exists, otherwise appends it at the bottom. Never trust or carry over a pre-existing GAIA section: every check re-derives from its live CLI primitive on each run.
+Use `wiki/meta/lint-report.md` as the canonical report path for every subsequent step and the Step 9 summary. The GAIA checks below write into this same file: each **replaces** its own `## #NN` section if one already exists, otherwise appends it at the bottom. Never trust or carry over a pre-existing GAIA section: every check re-derives on each run, from its live CLI primitive or, for #13, its two greps.
 
 ## Step 2: GAIA check #11: Wiki drift
 
@@ -176,7 +176,7 @@ If both scans produce zero narrative findings (all matches are structural):
 ```markdown
 ## #13: UAT/SPEC narrative-ref drift
 
-✓ No narrative `UAT-NNN` or concrete maintainer `SPEC-NNN` references detected outside the structural exemptions in `.claude/rules/wiki-style.md`.
+✓ No narrative `UAT-NNN` or concrete maintainer `SPEC-NNN` references detected outside the structural exemptions in `.claude/rules/working-doc-ids.md`.
 ```
 
 Otherwise:
@@ -263,7 +263,7 @@ Otherwise:
 ⚠ {gaps.length} page(s) missing required frontmatter:
 
 - `wiki/concepts/Foo.md`: missing status
-- `wiki/modules/Bar.md`: missing status, tags
+- `wiki/modules/Bar.md`: missing type, status
 ```
 
 List every gap (one per line) as ``- `wiki/path.md`: missing {comma-joined fields}``.
