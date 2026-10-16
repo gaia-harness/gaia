@@ -149,7 +149,7 @@ Loading is cwd-based: the closest-up `CLAUDE.md` wins per Claude Code's conventi
 
 The governing rule from root `CLAUDE.md`: **don't cross-load domains.**
 
-- Technical work → `wiki/modules/`, `wiki/concepts/`, `wiki/decisions/`, `wiki/components/`, `wiki/flows/`, `wiki/dependencies/` only.
+- Technical work → the technical wiki folders named in CLAUDE.md (Wiki and memory) only.
 - Only cross-load when the task genuinely spans domains.
 
 When adding new wiki top-level folders, keep them single-domain. Claude must refuse to auto-include cross-domain content during normal operation. When in doubt, ask rather than load.

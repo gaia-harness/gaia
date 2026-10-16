@@ -20,7 +20,7 @@ GAIA has no form wrapper components. A form is composed from the ui `Field` part
 
 For each field: a ui `Field` (with `data-invalid` when the field has errors) holding a `FieldLabel` (`htmlFor` the field id), the control (`Input`, `Textarea`, `NativeSelect`, `Checkbox`, `RadioGroup`) spread with Conform's `getInputProps`, `getSelectProps` or `getTextareaProps`, an optional `FieldDescription`, and a `FieldError` (`id` the field's `errorId`). Groups of checkboxes or radios sit in a `FieldSet` with a `FieldLegend`; checkboxes share one name through `getCollectionProps`. The submit button is a `ui/button` that shows a `ui/spinner` and disables itself while the navigation is submitting.
 
-The step-by-step pattern, the Zod schema and action wiring, and error-message translation are in `frontend/.claude/skills/react-code/references/conform-forms.md`. The runnable reference is `frontend/app/components/form/tests/composed-form.tsx` and its story and test.
+The step-by-step pattern, the Zod schema and action wiring, and error-message translation are in `frontend/.claude/skills/react-code/references/conform-forms.md`. The runnable reference is `frontend/app/components/form/tests/composed-form.tsx` and its story, whose play functions are the tests.
 
 ## App-logic form components
 

@@ -38,12 +38,11 @@ handles that diff:
 
 ## Trade-offs
 
-- **`style-src 'unsafe-inline'`.** The Google Fonts stylesheet injects an
-  inline `<style>` block that cannot carry a nonce, so `style-src` keeps
-  `'unsafe-inline'`. This forfeits CSP protection for styles. Self-hosting the
-  Inter font (already loaded from `fonts.gstatic.com`) eliminates the inline
-  stylesheet and lets `'unsafe-inline'` drop, the path to take if style-level
-  CSP protection becomes a requirement.
+- **`style-src 'unsafe-inline'`.** React inline `style=` attributes and
+  framework-injected inline styles cannot carry a nonce, so `style-src` keeps
+  `'unsafe-inline'`. This forfeits CSP protection for styles. Dropping it means
+  removing every inline style source, the path to take if style-level CSP
+  protection becomes a requirement.
 - **No reporting endpoint.** GAIA's shipped policy carries no `report-uri` / `report-to`
   directive. A violation-reporting pipeline is adopter-owned infrastructure,
   out of scope for the template.

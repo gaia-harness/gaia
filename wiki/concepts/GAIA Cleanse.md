@@ -18,7 +18,7 @@ The deterministic inputs come from the `gaia fitness` CLI rather than from the m
 - After an ingestion spree that may have introduced overlap
 - When auto-load payload starts feeling heavy (CLAUDE.md or rules growing)
 - Periodic hygiene pass
-- When the statusline shows `Run /gaia-cleanse (<reason>)`: GAIA nudges on per-machine memory drift (the memory count comes from `gaia fitness inventory --json`), an auto-load file over budget, or a pending draft to resume. The over-budget signal is a live recompute with no debounce of its own.
+- When the statusline shows `Run /gaia-cleanse (<reason>)`: GAIA nudges on a pending draft to resume, per-machine memory drift (the memory count comes from `gaia fitness inventory --json`), time since the last review, or an auto-load file over budget (`.gaia/scripts/check-updates.sh` owns the reasons and thresholds). The over-budget signal is a live recompute with no debounce of its own.
 
 ## Two-stage execution with a decision gate
 

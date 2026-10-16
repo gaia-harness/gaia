@@ -38,7 +38,7 @@ The project uses **pnpm** for installs and dependency resolution. The `packageMa
 
 ## Pinning
 
-Caret ranges (`^x.y.z`) are kept in `package.json`. The lockfile is the authoritative pin; `--frozen-lockfile` guarantees CI installs the exact tree on disk regardless of the `^` specifier. `minimumReleaseAge` provides the supply-chain delay. Packages already pinned exactly stay that way; no bulk conversion in either direction.
+Dependencies are pinned exactly in `package.json` (`savePrefix: ''` makes `pnpm add` pin exact versions). The lockfile is still the authoritative pin; `--frozen-lockfile` guarantees CI installs the exact tree on disk. `minimumReleaseAge` provides the supply-chain delay.
 
 <!-- gaia:maintainer-only:start -->
 

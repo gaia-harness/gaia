@@ -180,7 +180,7 @@ GAIA maintainers: `.gaia/scripts/lint-hook-jq-availability.sh` holds the layer t
 
 A matcher is an unanchored regex over the **tool name**, so `"Bash"` selects the `Bash` tool and nothing else. More than one tool hands a hook a raw shell command in the same `tool_input.command` field and runs it in the same shell environment, and `Monitor` is the second one.
 
-Every **blocking** command-reading hook's `PreToolUse` registration names `Bash|Monitor`. `block-no-verify.sh`, `block-main-destructive-git.sh`, and `block-rm-rf.sh` carry no `tool_name` test at all, so they act on a call through either tool; `block-handrolled-pr-poll.sh` acts on both too. Every other blocking command-reading hook admits `Bash` alone in its own `tool_name` test and stands down on a call through `Monitor`. An **advisory** command-reading hook (`post-findings-block-on-merge.sh`) registers on `Bash` alone.
+Every **blocking** command-reading hook's `PreToolUse` registration names `Bash|Monitor`. Which tools each hook acts on is set by its own `tool_name` test (`git grep -n GAIA_HOOK_TOOL_NAME .claude/hooks`), and a hook with none acts on both: some act on a `Monitor` call as on a `Bash` call, others admit `Bash` alone and stand down on `Monitor`. An **advisory** command-reading hook (`post-findings-block-on-merge.sh`) registers on `Bash` alone.
 
 ### Wiki coherence (multiple events)
 

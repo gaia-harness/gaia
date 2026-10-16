@@ -32,7 +32,7 @@ All browser projects need Chromium. See [[Testing]] for the `pnpm install:browse
 
 A story with an **effective play function**: its own `play`, an inherited meta-level `play`, or one reached through a spread or factory. A render-only story still runs under Vitest and still passes axe, but the RED and worthiness machinery does not count it as a test. A story tagged `!test` (story or meta level) is skipped by the Vitest run and the harness alike.
 
-`.gaia/scripts/red-ledger/extract-story-signals.mjs` resolves the effective play and names each story the way addon-vitest does. Its header comment owns the supported CSF shapes and the refusal list. A shape it cannot resolve (a play bound to an import, a `meta.story()` story, `includeStories` or `excludeStories`, a computed export, a factory from another file) exits 7, and the merge-time [[Worthiness Presence Gate]] denies on that exit with the file and the extractor's one-line reason. The fix is to rewrite the story in a supported shape.
+`.gaia/scripts/red-ledger/extract-story-signals.mjs` resolves the effective play and names each story the way addon-vitest does. Its header comment owns the supported CSF shapes and the refusal list. A shape it cannot resolve (a play bound to an import, a `meta.story()` story, `includeStories` or `excludeStories`, a computed export, a factory from another file) makes `extract-test-signals.mjs` exit 7 in story mode, and the merge-time [[Worthiness Presence Gate]] denies on that exit with the file and the extractor's one-line reason. The fix is to rewrite the story in a supported shape.
 
 ## Classification and gates
 

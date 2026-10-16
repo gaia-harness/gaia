@@ -8,7 +8,7 @@ tags: [concept, git, workflow]
 
 # Git Workflow
 
-Two invariants, machine-enforced by `.claude/hooks/block-main-destructive-git.sh` (a PreToolUse `Bash` hook that short-circuits on any command whose command word is not `git`, so only real `git` invocations are evaluated). The hook emits `permissionDecision: "deny"` with a reason string, so Claude cannot bypass it without explicit user override.
+The rules below are machine-enforced by `.claude/hooks/block-main-destructive-git.sh` (a PreToolUse `Bash` hook that short-circuits on any command whose command word is not `git`, so only real `git` invocations are evaluated). The hook emits `permissionDecision: "deny"` with a reason string, so Claude cannot bypass it without explicit user override.
 
 The guard is **repo-scoped** via `.claude/hooks/lib/repo-scope.sh`: it governs this repo only. A `git` command positively aimed at a different repository (`git -C <other>` or `cd <other> &&`) is allowed; that sibling repo's own policy applies there, not this one's. The verdict covers the whole tool call, so a call that also holds a command acting on this repository, even a read-only one, is enforced: run the sibling command as its own call. A linked worktree of this repository is not a different repository, whichever checkout the command runs from. Scoping is fail-closed: any ambiguity still enforces.
 
@@ -30,13 +30,13 @@ No `--force`, `--force-with-lease`, or `-f` to `main`/`master`; upstream history
 
 ## 3. Never push directly to `main` or `master`
 
-The hook denies several independent conditions on `git push`, each with its own message and its own repair: a plain push while HEAD sits on `main`/`master` (switch to a feature branch and open a PR); a push whose refspec names `main`, `master`, or `HEAD` as the destination from any branch (name the branch being pushed explicitly and open a PR instead); and a push the hook cannot place, because the command names a directory it cannot read and one of the checkouts that directory could name is on `main`/`master` (spell the directory literally, or create a feature branch).
+The hook denies several independent conditions on `git push`, each with its own message and its own repair: a plain push while HEAD sits on `main`/`master` (switch to a feature branch and open a PR); a push whose refspec names `main`, `master`, or `HEAD` as the source (bare, or before a colon) from any branch (name the branch being pushed explicitly and open a PR instead); and a push the hook cannot place, because the command names a directory it cannot read and one of the checkouts that directory could name is on `main`/`master` (spell the directory literally, or create a feature branch).
 
 They answer in that order, and the order is by how much of the verdict each message can stand behind. Standing on `main` answers first, since its repair settles the refspec too. The refspec answers ahead of the unreadable directory because it holds whatever checkout the push turns out to run from, where the unreadable-directory message reports an unanswered question and offers repairs that do nothing for a refspec.
 
 ## Setup standdown
 
-Both invariants above have one temporary, explicit exception. `/setup-gaia` provisions a greenfield repo by landing GAIA's own CI-install commit directly on the default branch: that commit has nothing to audit and the branch is not yet a collaboration surface. An admin run also lands the project's recorded setup decisions the same way. For each such commit+push it suspends the hook via a machine-local, gitignored sentinel `.gaia/local/setup-in-progress`, then removes it. The sentinel is honored only while fresh (mtime within 10 minutes), so a stale one left behind by a crashed setup self-heals and enforcement resumes on its own; it is gitignored, so it never rides into a clone. Resting state is fully enforcing.
+The rules above have one temporary, explicit exception. `/setup-gaia` provisions a greenfield repo by landing GAIA's own CI-install commit directly on the default branch: that commit has nothing to audit and the branch is not yet a collaboration surface. An admin run also lands the project's recorded setup decisions the same way. For each such commit+push it suspends the hook via a machine-local, gitignored sentinel `.gaia/local/setup-in-progress`, then removes it. The sentinel is honored only while fresh (mtime within 10 minutes), so a stale one left behind by a crashed setup self-heals and enforcement resumes on its own; it is gitignored, so it never rides into a clone. Resting state is fully enforcing.
 
 ## Splitting an already-staged tree into commits
 

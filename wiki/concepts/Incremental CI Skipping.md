@@ -30,11 +30,11 @@ Incremental skipping applies to the expensive check, `Vitest and Playwright`
 (`.github/workflows/tests.yml`). The audit is not a CI job: it runs locally
 through the [[PR Merge Workflow]], which keeps its own per-member review base.
 
-`Run Chromatic` is left always-on. It is the cheapest of the two (TurboSnap
-`onlyChanged` already skips unchanged snapshots), and its `UI Review` /
-`UI Tests` / `Storybook Publish` results are commit **statuses** the Chromatic
-app posts only when it runs. Leaving Chromatic always-on keeps it adopter-safe
-regardless of which Chromatic context an adopter chooses to require.
+`Run Chromatic` is not gated on the delta since its last green run (TurboSnap
+`onlyChanged` already skips unchanged snapshots). It skips its build and upload on
+a manifest-only `chore(deps)` push and on a change set that matches none of its
+`paths-filter` entries, still reporting the check green
+(`.github/workflows/chromatic.yml`).
 
 ## Mechanism
 

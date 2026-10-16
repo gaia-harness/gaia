@@ -42,7 +42,7 @@ GAIA renders under `<StrictMode>`, which double-invokes render and inflates timi
 
 ## react-doctor cross-reference
 
-Each finding maps to one of three conceptual cross-reference labels: `jsx-no-new-object-as-prop`, `jsx-no-constructed-context-values`, and `no-unstable-nested-components`. These name the static cause and the structural-first fix (hoist to a module constant first; for a value that depends on render state, fix the compiler bailout or apply an escape case per `frontend/.claude/skills/react-code/SKILL.md`, `## Memoization: compiler-first`). They are guidance labels, **not** live `react-doctor/` rule ids, and are never matched against lint output. [[react-doctor]] is the always-on static prevention layer; this runtime tool is the complementary diagnosis layer for instability that only manifests at render time.
+Each finding maps to `jsx-no-constructed-context-values`, `jsx-no-new-object-as-prop`, or no label (state-only instability or none); `no-unstable-nested-components` is not emitted. These name the static cause and the structural-first fix (hoist to a module constant first; for a value that depends on render state, fix the compiler bailout or apply an escape case per `frontend/.claude/skills/react-code/SKILL.md`, `## Memoization: compiler-first`). They are guidance labels, **not** live `react-doctor/` rule ids, and are never matched against lint output. [[react-doctor]] is the always-on static prevention layer; this runtime tool is the complementary diagnosis layer for instability that only manifests at render time.
 
 ## Trigger and scope boundaries
 
