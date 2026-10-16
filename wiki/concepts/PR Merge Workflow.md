@@ -206,7 +206,7 @@ The PR body's `## Audit rounds` section is the published record of the loop: tot
 
 #### Skipping already-cleared members
 
-There is no carry-forward clearance machinery: no anchor selection, no delta computation, no minting step, and no `.carried` marker family. A member not already cleared for its own current digest simply gets re-dispatched; the digest key itself is what shrinks how often that happens, since an out-of-glob change never rotates it and only an owned-file or machinery change does.
+There is no carried clearance family. A member not already cleared for its own current digest is re-dispatched, or Light-routed ([[Audit Round Procedure#Light routing]]); the digest key itself is what shrinks how often that happens, since an out-of-glob change never rotates it and only an owned-file or machinery change does.
 
 A **refusal** is a first-class artifact keyed the same way as an earned marker (`<digest>[.<member>].refused`), the only way a member records "I read this exact content and I withhold." The gate checks the refusal family before the earned family and treats a live refusal of the current digest as absolute against every earned signal: no earned marker for the same digest, however clean, ever overrides it. The manifest-only `chore(deps)` waiver for `code-audit-frontend` is the exception, because it is asked before any digest is derived (see [[Code Audit Team]]).
 
@@ -339,7 +339,7 @@ A queued `--auto` merge, and any wait on CI or on a `GAIA-Audit` status between 
 The repair is the catch-up merge from [[#Before the first dispatch: verify your own work]]:
 
 1. `git fetch origin main` and `git merge --no-edit origin/main`, resolve the conflict, re-run the deterministic checks, and push.
-2. Re-run `bash .gaia/scripts/resolve-audit-members.sh`, and for each member it names read its current digest with `bash .gaia/scripts/audit-member-digest.sh --root <root> --member <member>`. A member owes a re-spawn only when the merge changed the branch's own patch on its paths, which a blend does, as does a base edit within three lines of a branch hunk; otherwise a clean catch-up leaves every digest as it was. A member with no `.gaia/local/audit/<digest>.ok` marker for its current digest is re-spawned as a normal round.
+2. Re-run `bash .gaia/scripts/resolve-audit-members.sh`, and for each member it names read its current digest with `bash .gaia/scripts/audit-member-digest.sh --root <root> --member <member>`. A member owes a re-spawn only when the merge changed the branch's own patch on its paths, which a blend does, as does a base edit within three lines of a branch hunk; otherwise a clean catch-up leaves every digest as it was. A member with no own earned marker for its current digest (`<digest>.ok` for the default member, `<digest>.<member>.ok` otherwise) is re-spawned as a normal round.
 3. When every named member still holds a marker for its current digest, the existing markers still cover the tree, but the `GAIA-Audit` status is keyed to the head sha, which the merge commit moved. Re-post it on the new head with `.claude/hooks/post-audit-status.sh <existing-marker>`, then resume the poll, re-running `gh pr merge` first if `gh pr view <N> --json autoMergeRequest` shows the merge is no longer queued.
 
 A conflict found this way is not a merge failure, and it costs no audit round unless step 2 finds a member without a current marker.
@@ -363,8 +363,8 @@ If it prints `MERGED`, do NOT retry the merge. Treat it as merged, run any post-
 emergent test the PR changed (matching the package's `emergentTests` globs in its `gaia.package.json`, as
 the [[Determinism Classifier]] labels it) has no worthiness-ledger line matching
 its current content. It checks presence and signal match only, never the
-keep/fix/delete verdict, scopes to the emergent tests this PR changed (a no-op
-when none changed), and fails open on missing tooling. It is a separate denial
+keep/fix/delete verdict, and scopes to the emergent tests this PR changed (a no-op
+when none changed). It is a separate denial
 from the Code Audit Team markers above; both must clear.
 See [[Worthiness Presence Gate]] for the full contract.
 

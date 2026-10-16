@@ -35,7 +35,7 @@ Can the roughly 109 shipped `.sh` files (hooks, `.gaia/scripts`, spec-lifecycle 
 - **Statusline latency budget.** `gaia-statusline.sh` renders on a tight budget that Node cold-start blows.
 - **Shared-class call sites.** `.claude/settings.json` and `.github/workflows/tests.yml` are both manifest class `shared`. Rewriting either to call the binary writes a `.gaia-merge/` conflict for every customizing adopter, the exact per-adopter merge cost the premise wants to remove.
 - **Binary-to-`.sh` reverse edges.** The binary already spawns `token-tally.sh` (via `gaia wiki chain`) and writes a `gaia-statusline.sh` invocation into settings during init, so no `.sh` reachable from `.gaia/cli/src` is a fold candidate regardless of its class.
-- **Adopter customizability.** Editable hook files (`block-rm-rf.sh` is about 490 lines) are a template value proposition; a compiled binary forecloses adopter guard tuning.
+- **Adopter customizability.** Editable hook files are a template value proposition; a compiled binary forecloses adopter guard tuning.
 
 ## Options considered
 

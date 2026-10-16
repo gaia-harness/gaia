@@ -16,10 +16,6 @@ The [[Code Audit Team]] gate dispatches specialized auditor members by file glob
 
 Write `.claude/agents/<name>.md` following the shape of the existing members: `name` / `description` / `model` / `color` frontmatter, a **Remit and self-skip** section with the heading, the root fence and the scope resolver call, **Review dimensions**, a **Finding Proof Gate**, **Findings grading** (which severities the member may use), a read-only stance (the member reports and gates its marker; it edits no tracked file), **Cross-remit findings** handling, a protocol section pointing at `.claude/hooks/lib/audit-member-protocol.md` (which owns the scope resolution, output format, gate handshake and findings sidecar), and a **Methodology** summary. Leave the glob list and the filter instruction to the generated remit region, which the next step produces. The `description` still states the member's subject matter and read-only stance in one line, since that's what a dispatching agent reads first, but no longer restates a glob.
 
-<!-- gaia:maintainer-only:start -->
-A maintainer-only member carries one **Report, gate handshake and findings sidecar** section that points at `.claude/hooks/lib/audit-member-protocol.md`, the protocol every member shares, and names any clean-pass condition it adds.
-<!-- gaia:maintainer-only:end -->
-
 The **Remit and self-skip** section runs the root fence, sends the member to the `## Scope resolution` section of `.claude/hooks/lib/audit-member-protocol.md` before the scope resolver runs, and then runs the resolver under the member's own name. It keeps only what is the member's own: the resolver's flags and what a narrower increment obliges the member to check in its domain. The protocol section holds everything else about the scope once for every member, including the scope-resolution obligation: Capture your own branch-own digest at scope resolution with `.gaia/scripts/audit-scope-digest.sh --capture`, and at marker-write time read that captured value back with `--read` and pass it as `--scope-digest`; never re-derive it in the writing call, and a rotation between the two means the review was superseded and you must be re-dispatched on the new HEAD.
 
 ### 2. Register in the roster
@@ -32,7 +28,7 @@ Run `bash .gaia/scripts/write-audit-remits.sh`. It reads `.gaia/audit-ci.yml` an
 
 ### 4. Wire into the machinery set
 
-Add the new agent file's path to `AUDIT_MACHINERY_PATHS` in `.claude/hooks/lib/audit-machinery.sh`. Every member's clearance marker keys to a branch-own digest computed over the branch's own change to the files it owns plus this machinery set; an agent file missing from the list rotates no digest when it changes, so a rewrite of the member's own instructions would merge unaudited by that member. `.gaia/scripts/verify-audit-roster.sh` asserts every roster member's agent file is listed.
+Add the new agent file's path to `AUDIT_MACHINERY_PATHS` in `.claude/hooks/lib/audit-machinery.sh`. Every member's clearance marker keys to a branch-own digest computed over the branch's own change to the files it owns plus this machinery set; an agent file missing from the list rotates no digest when it changes, so a rewrite of the member's own instructions would merge unaudited by that member. The roster check's bats suite (maintainer-only) asserts every roster member's agent file is listed; the script itself does not.
 
 ### 5. Add a finding_class bucket, if the member needs new classes
 

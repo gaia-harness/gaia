@@ -31,7 +31,7 @@ A `*-lib` file is sourced and runs nothing on its own. Everything else is run as
 | `usage-` and `token-` | The usage ledger and its readouts: recording, merging, rendering, and the pricing definitions and rate card the readouts share. Opens no network connection. | Hooks, the statusline, workflows that record or read cost | Ships |
 | `verify-` | Drift checks of a repository state against an external authority: the audit roster, the committed CLI bundles, the required-checks ruleset, vendored skills. | Run by hand, CI, release preflight | Mixed, mostly withheld |
 | Dev-server plumbing (no shared prefix) | Per-worktree port allocation, background server lifecycle, Storybook launch, a smoke check, and the package prerequisite step. | Skills, the pre-commit hook, the quality gate | Ships |
-| `*-lib` shared libraries | The one definition of a cross-cutting rule: main-checkout resolution, branch naming, ledger paths, the state registry, the context checkpoint, the GitHub artifact breadcrumb, the awk interpreter and guard scaffolding. Each is read through whatever sources it. | Sourced by hooks and scripts | Mixed |
+| `*-lib` shared libraries | The one definition of a cross-cutting rule: main-checkout resolution, branch naming, the state registry, the context checkpoint, the GitHub artifact breadcrumb, the awk interpreter and guard scaffolding. Each is read through whatever sources it. | Sourced by hooks and scripts | Mixed |
 | Workflow helpers (no shared prefix) | Single-purpose commands a skill or workflow shells out to: plan archive and resume point, the merge wait, member resolution, findings posting, fitness ownership and publish, the knowledge inventory, summary verification, worktree linking, and the chore(deps) predicate. | Skills, slash commands, the merge workflow, hooks | Mostly ships |
 | Release and test tooling (no shared prefix) | Release leak assertion, release-body composition, CLI auto-bundle, vendoring, bats runners, and the changed-file to bats-suite mapping. | `release.yml`, pre-commit, the bats runners, the audit gate | Maintainer-only |
 
@@ -44,6 +44,7 @@ The root holds the shell layer; each subdirectory holds one family that is not r
 | `spec/` | The spec and plan lifecycle: id allocation, the ledger and its lock, reconcile and archive passes, the UAT gate and divergence check, title normalization, and the working-doc-id scan. Invoked by `/gaia-spec`, `/gaia-plan`, and their close flows. |
 | `audit-ledger/` | The Node writer that appends a worthiness verdict to the audit ledger. |
 | `classifier/` | The Node helper that classifies a test as deterministic or not. |
+| `notebook/` | The notebook library (catalog, paths, research), the one-time move, the catalog reconcile and the research reaper. |
 | `red-ledger/` | The Node extractors that read test and story signals out of a RED run. |
 | `lib/` | Helpers sourced or imported by a root script rather than run on their own. |
 
