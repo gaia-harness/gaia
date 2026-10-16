@@ -32521,7 +32521,9 @@ var HELP_TEXT9 = `Usage: gaia init bootstrap-env
 
   Exit codes:
     0  success (no stdout)
+    1  unknown flag
     2  unexpected filesystem failure
+    30 package registry could not resolve the frontend package root
 `;
 var HELP_TOKENS9 = /* @__PURE__ */ new Set(["--help", "-h", "help"]);
 var UNEXPECTED_EXIT = 2;
@@ -35134,7 +35136,7 @@ var HELP_TEXT19 = `Usage: gaia init <subcommand> [args]
   wire-statusline --mode <global|project|skip>
                             Wire the GAIA statusline into Claude settings.
   bootstrap-env             Copy .env.example to .env if .env is absent.
-  write-project-config --sandbox-recommended <bool>
+  write-project-config --sandbox-recommended <bool> [--isolation-policy <policy>]
                             Write .gaia/project.json (sandbox + isolation policy).
   finalize                  Final cleanup steps for the init runbook.
   resume [--from-step <N>]  Resume a partially-completed init via state file.
@@ -39843,7 +39845,7 @@ var writeLocaleFiles = (args) => {
     result.skipped.push(localeBarrel);
     return null;
   }
-  return `locale barrel not found at ${localeBarrel}; the locale file was written but its import was not wired. Run from the repo root, or add "import ${importName} from './${moduleName}';" to the barrel by hand.`;
+  return `locale barrel not found at ${localeBarrel}; the locale file was written but its import was not wired. Add "import ${importName} from './${moduleName}';" to the barrel by hand.`;
 };
 
 // src/scaffold/route-service.ts

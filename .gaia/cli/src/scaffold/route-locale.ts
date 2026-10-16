@@ -259,7 +259,7 @@ export const writeLocaleFiles = (args: WriteLocaleFilesArgs): null | string => {
   // an actionable message rather than reporting a misleading success.
   return (
     `locale barrel not found at ${localeBarrel}; the locale file was ` +
-    'written but its import was not wired. Run from the repo root, or ' +
-    `add "import ${importName} from './${moduleName}';" to the barrel by hand.`
+    'written but its import was not wired. ' +
+    `Add "import ${importName} from './${moduleName}';" to the barrel by hand.`
   );
 };

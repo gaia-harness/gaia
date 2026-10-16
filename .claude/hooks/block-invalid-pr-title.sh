@@ -35,7 +35,8 @@
 #     subshell, or a compound-command body (`if`, `while`, `{ }`), which the
 #     top-level read does not enter;
 #   - no commitlint installed (`pnpm install` not run), or an unloadable
-#     hook library;
+#     lib/verb-arming.sh or lib/repo-scope.sh (an unloadable
+#     jq-availability.sh or hook-payload.sh denies, fail-loud);
 #   - a commitlint that cannot run (node missing from the hook's PATH, a config
 #     that fails to load): only output carrying commitlint's own problem report
 #     denies, so any other non-zero exit is an internal error, not a bad title.

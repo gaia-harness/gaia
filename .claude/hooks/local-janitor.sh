@@ -17,9 +17,10 @@
 #      also runs for an owed catch-up with none present.
 #   b. a bounded, rate-limited `git fetch --prune` of origin. Bounded by
 #      GAIA_WIKI_FETCH_TIMEOUT_SECONDS (default 5, floor 1, ceiling 30;
-#      0 disables the fetch outright, and with it the reap in (c) and the
-#      fast-forward in (d), both of which require evidence only a completed
-#      fetch establishes) and rate-limited by
+#      0 disables the fetch outright, and with it the reap in (c), which
+#      requires evidence only a completed fetch establishes; the fast-forward
+#      in (d) is skipped only after a fetch that was attempted and did not
+#      complete) and rate-limited by
 #      GAIA_WIKI_FETCH_MINIMUM_INTERVAL_MINUTES (default 60, floor 5; 0 removes
 #      the rate limit rather than disabling anything), with the attempt
 #      timestamped BEFORE launch so a hung remote cannot buy an unbounded
