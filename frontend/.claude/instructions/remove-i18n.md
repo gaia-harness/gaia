@@ -340,7 +340,7 @@ Each file below still references a package Section E removes or a path Section C
 'accept-language-parser',
 ```
 
-`frontend/.playwright/e2e/storybook-a11y.spec.ts`: the language select story is the only member of `RENDERS_NOTHING_BY_DESIGN`. Replace the comment and the set with an empty typed set, which keeps the `.has` call below it compiling:
+`frontend/.playwright/e2e/storybook-a11y.spec.ts`: the language select story is the only member of `RENDERS_NOTHING_BY_DESIGN`. Delete the comment and the set, and drop the set from `isExempt`. An emptied set would fail `pnpm lint` (`sonarjs/no-empty-collection` has no autofix):
 
 ```ts
 // Stories whose subject renders nothing in this project: the language select
@@ -350,10 +350,17 @@ const RENDERS_NOTHING_BY_DESIGN = new Set([
 ]);
 ```
 
+is deleted, and
+
+```ts
+  const isExempt =
+    TOAST_STORY_IDS.has(storyId) || RENDERS_NOTHING_BY_DESIGN.has(storyId);
+```
+
 becomes
 
 ```ts
-const RENDERS_NOTHING_BY_DESIGN = new Set<string>();
+  const isExempt = TOAST_STORY_IDS.has(storyId);
 ```
 
 ---
