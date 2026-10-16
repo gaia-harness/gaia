@@ -28,7 +28,7 @@ wiki/
 <!-- gaia:maintainer-only:start -->
 ├── entities/           # GAIA project, contributors, ecosystem actors
 <!-- gaia:maintainer-only:end -->
-├── concepts/           # ideas/patterns (Quality Gate, Co-location, Thin Routes)
+├── concepts/           # ideas/patterns (Workflow Doctrine, Worktrees, Update Workflow)
 <!-- gaia:maintainer-only:start -->
 └── meta/               # lint and consolidate reports
 <!-- gaia:maintainer-only:end -->

@@ -9,7 +9,7 @@ tags: [concept, cli]
 
 # GAIA CLI
 
-GAIA ships a single bundled CLI binary that hooks and slash commands invoke, plus a fire-and-forget adoption ping that reports coarse setup usage back to the GAIA team. The ping is the only unattended call GAIA makes to a GAIA-operated service. The only other unattended network call is a git fetch that reaches nothing but the repository's own configured `origin` (see below). Cost pricing opens no network connection.
+GAIA ships a single bundled CLI binary that hooks and slash commands invoke, plus a fire-and-forget adoption ping that reports coarse setup usage back to the GAIA team. The ping is the only unattended call GAIA makes to a GAIA-operated service. The only other unattended GAIA network calls are the session-start janitor's git fetch of the repository's own configured `origin` (see below) and the statusline's background update check (`.gaia/scripts/check-updates.sh`), which queries GitHub and the package registry, never a GAIA-operated service. Cost pricing opens no network connection.
 
 ## CLI workspace
 

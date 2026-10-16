@@ -34,7 +34,6 @@ See [[GAIA Philosophy]] for the long version.
 
 ```
 frontend/app/
-├── assets/           images, svgs
 ├── components/       shared UI (button, form/*, toast, layout, ...)
 ├── hooks/            use-breakpoint, use-component-rect, use-debounce, use-theme, use-timeout
 ├── languages/        TS-based i18n (en by default)
@@ -44,7 +43,7 @@ frontend/app/
 ├── services/         api wrapper (Ky) + gaia/* domain services
 ├── sessions.server/  server-only signed cookie (language)
 ├── state/            React Context providers
-├── styles/           tailwind.css
+├── styles/           tailwind.css, theme.css
 ├── types/            global TS types
 ├── utils/            pure helpers (date, dom, http, string, ...)
 ├── root.tsx          root layout, i18n hookup, theme, toast

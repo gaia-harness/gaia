@@ -17,7 +17,7 @@ GAIA uses `.ts` files for translations instead of the JSON convention.
 - ESLint + Prettier keep them tidy
 - TypeScript catches typos and renamed keys at compile time
 - Auto-completion in editors
-- Lint-staged blocks commits referencing missing keys
+- The pre-commit typecheck blocks commits referencing missing keys
 - Strings can be `import`ed into tests (Playwright assertions)
 - Composition: `pages.account.profile.fullName` via dot-chain imports
 

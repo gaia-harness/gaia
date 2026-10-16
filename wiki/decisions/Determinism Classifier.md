@@ -24,7 +24,7 @@ A file classifies **STRICT only when ALL of conditions 1 through 4 hold.** Faili
 
 ### Condition 1: path + hook/non-hook discriminator
 
-The file path matches the owning package's `tddStrictCandidates` globs, which the package descriptor declares ([[Package Descriptor]]). Any other path, and any path no registered package owns, classifies EMERGENT. The shipped `frontend` package lists its utilities, services, hooks, and non-JSX component files there.
+The file path matches the owning package's `tddStrictCandidates` globs, which the package descriptor declares ([[Package Descriptor]]). Any other path, and any path no registered package owns, classifies EMERGENT. The shipped `frontend` package's list is in `frontend/gaia.package.json`.
 
 A file that exports a `use*` symbol is a hook (even under a utilities folder the descriptor lists) and is judged by condition 3. Non-hook files skip condition 3.
 
@@ -40,7 +40,7 @@ A default-parameter or class-field initializer evaluates per call or per instant
 
 ### Condition 3: hook call-surface rule (applies only to `use*` files)
 
-A hook is EMERGENT if it calls a react-router runtime hook (`useFetchers` / `useRouteLoaderData` / `useNavigate` / …), a DOM-layout API (`getBoundingClientRect` / `ResizeObserver` / `IntersectionObserver` / a resize-or-scroll subscription), or a context read whose correctness depends on the rendered tree. Otherwise it is STRICT (`useState` / `useReducer` / `useMemo` / `useCallback`, timers behind fake timers, discrete DOM APIs such as `matchMedia`).
+A hook is EMERGENT if it calls a react-router runtime hook (`useFetchers` / `useRouteLoaderData` / `useNavigate` / …) or a DOM-layout API (`getBoundingClientRect` / `ResizeObserver` / `IntersectionObserver` / a resize-or-scroll subscription). Otherwise it is STRICT (`useState` / `useReducer` / `useMemo` / `useCallback`, timers behind fake timers, discrete DOM APIs such as `matchMedia`).
 
 Condition 3 is **whole-hook by design**: one emergent call routes the entire hook EMERGENT. Over-loose on a mixed hook is the intended trade, not a gap, the alternative is splitting a hook's call surface, which the file-granular mechanism cannot do.
 

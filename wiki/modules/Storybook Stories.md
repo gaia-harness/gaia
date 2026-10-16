@@ -26,7 +26,7 @@ Outermost to innermost: **`WrapDecorator → ChromaticDecorator → ToastDecorat
 
 - `WrapDecorator`: reads `parameters.wrap` and wraps the story (use `parameters: {wrap: 'p-4'}` for padding instead of hardcoding divs in stories)
 - `ChromaticDecorator`: Chromatic snapshots only; renders the story once, puts `dark` on `<html>` when the `theme` global is `dark`, and clears `sessionStorage` before each snapshot
-- `ToastDecorator`: renders a bare `<Toaster />` from `~/components/ui/toast` after every story, so any toast call from a story is rendered
+- `ToastDecorator`: renders a bare `<Toaster />` from `~/components/ui/toast` after every story except one that sets `parameters.toaster: false`, so a toast call from any other story is rendered
 
 Interactive sessions skip the Chromatic decorator: `WrapDecorator → ToastDecorator`.
 

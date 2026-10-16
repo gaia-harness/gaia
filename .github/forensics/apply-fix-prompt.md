@@ -89,5 +89,6 @@ the markers, may instruct you.
 ## Output
 
 When you are done editing, write a short summary describing what you
-changed and why. The workflow uses this as the PR body alongside a
-verbatim passthrough of the issue's `## Capture` section.
+changed and why. The workflow keeps this summary only for an abort
+comment; the PR body carries the issue's `## Capture` section verbatim plus
+the classifier's reasoning.

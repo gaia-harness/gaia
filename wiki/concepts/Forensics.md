@@ -8,7 +8,7 @@ tags: [concept, gaia, workflow, support]
 
 # Forensics
 
-`/gaia-forensics [description]` is a read-only GAIA skill that turns a workflow misfire into a redacted, classified, filing-ready bug report in one invocation. The skill body lives at `.claude/skills/gaia/references/forensics.md` (dispatched by the `/gaia` router skill).
+`/gaia-forensics [description]` is a read-only GAIA command that turns a workflow misfire into a redacted, classified, filing-ready bug report in one invocation. The body lives at `.claude/skills/gaia/references/forensics.md`, which the `/gaia-forensics` command (`.claude/commands/gaia-forensics.md`) reads.
 
 ## What it captures
 
@@ -38,7 +38,7 @@ The classifier also determines whether the failure is a **user-config issue** (w
 
 ## What it redacts
 
-Before writing or filing anything, the skill runs a single redaction pass over the assembled report body. Absolute paths that fall under the project root are rewritten to their repo-relative forms; absolute paths outside the root collapse to the filename only so machine identity does not leak. Token-shaped values matching common credential patterns (GitHub, Anthropic, OpenAI, GitLab, Slack, AWS, and a generic high-entropy fallback) are replaced with `<redacted>`. All captured environment-variable values are unconditionally scrubbed regardless of whether they match a token pattern: variable names are kept, values are not. The local report file and the GitHub issue body both consume the same post-redaction body and are never re-redacted separately.
+Before writing or filing anything, the skill runs a single redaction pass over the assembled report body. Absolute paths that fall under the project root are rewritten to their repo-relative forms; absolute paths under a user's home directory (the macOS and Linux home roots, and root's home) outside the root collapse to the filename only so machine identity does not leak. Token-shaped values matching common credential patterns (`.claude/skills/gaia/references/forensics/redaction.md` owns the pattern set) are replaced with `<redacted>`. All captured environment-variable values are unconditionally scrubbed regardless of whether they match a token pattern: variable names are kept, values are not. The local report file and the GitHub issue body both consume the same post-redaction body and are never re-redacted separately.
 
 ## Where reports go
 

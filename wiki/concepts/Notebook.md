@@ -31,7 +31,7 @@ A catalog that is present but unreadable makes every writer and reaper refuse an
 - **Specs and plans.** Each is allocated, reconciled from git ground truth, consolidated once its work lands, and reaped once past `GAIA_SPEC_RETENTION_DAYS`. [[GAIA Spec]] and [[Task Orchestration]] describe the steps around them.
 - **Research.** A writer registers a folder and closes it once its outcome lands in tracked output. A migrated or unregistered folder stays `untagged` and is only reported. The research reaper deletes only a closed, aged (`GAIA_RESEARCH_RETENTION_DAYS`), uncited, unsnoozed folder, and only after a human confirms in that run, with an advisory landed verdict.
 
-`.claude/skills/gaia/references/spec/lifecycle.md` (`## Pre-flight sweep`) owns the pass order and the confirmation question. The reaper script's header owns its keep rules and exit codes.
+`.claude/skills/gaia/references/spec/lifecycle.md` (`## Pre-flight sweep`) owns the pass order and the confirmation question. The reaper script's header owns its exit codes; the header of `.gaia/scripts/notebook/notebook-lib-research.sh` owns the keep rules and the landed verdict.
 
 ## Readiness and the one-time move
 
