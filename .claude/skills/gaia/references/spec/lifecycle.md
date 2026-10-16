@@ -72,7 +72,7 @@ Then judge the test bodies. The gate proves each spec still carries its contract
    bash .gaia/scripts/audit-noop-detect.sh --shape agent-report-file --path <PLAN_DIR>/uat-fidelity.json --expect-count <number of Spec lines>
    ```
 
-   Exit 1 is a no-op: re-dispatch exactly once against the re-cleared path. A second consecutive no-op is a HALT naming the verdict file, never a judgment the orchestrator makes itself.
+   Exit 1 is a no-op: re-dispatch exactly once against the re-cleared path. A second consecutive no-op is a HALT, never a judgment the orchestrator makes itself. Its message names the verdict file and the specs from the `Spec:` lines, and gives the next step: resume the plan to run this step again, or have a human read each listed spec against its contract, then tell the orchestrator to continue to the final summary when every body still asserts it, or fix a diverging one as step 4 states.
 4. Halt on any divergence:
 
    ```bash
