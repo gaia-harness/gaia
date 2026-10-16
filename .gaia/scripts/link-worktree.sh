@@ -39,7 +39,6 @@
 #   linked: <abs-path>
 #   already-linked: <abs-path>
 #   linked-after-backup: <abs-path> (backup: <abs-backup-path>)
-#   skipped-no-target: <abs-path>
 #   skipped: .notebook is not gitignored in <abs-main-root>; add a .notebook line to its .gitignore
 #   failed: <abs-path>: <reason>
 #   failed: <abs-registry-path>: <gaia-packages message>   (root-only linking continues)
@@ -177,7 +176,7 @@ link_env_files_in() {
     [ -e "$env_file" ] || continue
     base="$(basename "$env_file")"
     [ "$base" = ".env.example" ] && continue
-    [[ "$base" =~ $re ]] || continue   # identical set to CLI ENV_BASENAME_RE + read guard
+    [[ "$base" =~ $re ]] || continue   # same set as the env-file check in .claude/hooks/block-sensitive-read.sh
     link_one "$prefix$base" "$package_path"
   done
 }

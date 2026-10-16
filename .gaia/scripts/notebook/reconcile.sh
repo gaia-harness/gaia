@@ -26,7 +26,8 @@
 # <tree_dir> names the checkout or worktree to resolve the notebook from;
 # without it the notebook is resolved from the current directory.
 #
-# Exit: 0, 2 usage, 3 the one-time move has not run (the move command on
+# Exit: 0, 1 the library cannot load, no temp directory, or the main checkout
+# is unresolvable, 2 usage, 3 the one-time move has not run (the move command on
 # stderr, nothing changed), 4 the catalog is unreadable (nothing changed).
 set -uo pipefail
 

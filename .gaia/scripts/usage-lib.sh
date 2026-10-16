@@ -10,7 +10,8 @@
 # sourced lazily by the first function that needs one, located from
 # BASH_SOURCE[0]. A dependent function returns 1 when its sibling is missing.
 # Under zsh BASH_SOURCE is empty, so a zsh caller can source this file and call
-# the pure functions (valid_ref, encode_path, inactive_reason, in_ci), while
+# the pure functions (gaia_usage_valid_reference, gaia_usage_encode_path,
+# gaia_usage_inactive_reason, gaia_usage_in_ci), while
 # every function that needs a sibling returns 1. A relative source path must
 # stay valid from the caller's working directory at call time.
 #
@@ -19,8 +20,9 @@
 # builds the map with gaia_usage_branch_map, and passes it with
 # `--argjson branch_map`. usage_key($branch; $session_id; $default; $branch_map) returns
 # {key, inherit}: a raw `worktree-agent-` branch keys `session:<sid>` with
-# inherit true; otherwise $branch_map[$branch].norm empty, `HEAD`, or equal to
-# $default keys `session:<sid>`, and any other norm takes $branch_map[$branch].key.
+# inherit true; otherwise $branch_map[$branch].norm empty, `HEAD`, equal to
+# $default, or with a null $branch_map[$branch].key, keys `session:<sid>`, and
+# any other norm takes $branch_map[$branch].key.
 # usage_research_slug returns the slug string, or null when nothing binds.
 
 # Loads <relative_path> (relative to this file's directory) when <function_name> is not yet defined.
@@ -101,9 +103,8 @@ gaia_usage_projects_root() {
   printf '%s\n' "${CLAUDE_CONFIG_DIR:-$HOME/.claude}/projects"
 }
 
-# Every byte outside [A-Za-z0-9] becomes `-`. Wider than the Cost Data
-# Contract's session_cwd note, which names only `/` and `.`: `_`, `+`, and
-# space also map to `-` in Claude Code's projects-directory names.
+# Every byte outside [A-Za-z0-9] becomes `-`. `/`, `.`, `_`, `+`, and space
+# all map to `-` in Claude Code's projects-directory names.
 gaia_usage_encode_path() { printf '%s' "$1" | LC_ALL=C sed 's/[^A-Za-z0-9]/-/g'; }
 
 # Only a filter: a directory that passes still has each line checked against

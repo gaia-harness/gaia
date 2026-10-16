@@ -190,7 +190,8 @@ _branch_reference() {
 
 # _edge_rows <rows_file> <kind> <source> <skip_live 0|1> <child> <parent>...:
 # appends one row per pair to the rows file. A cycle refuses the whole call
-# unless skip_live is set (lineage), where the pair is skipped instead.
+# unless skip_live is set (lineage and link --pr), where the pair is skipped
+# instead.
 _edge_rows() {
   local rows="$1" kind="$2" edge_source="$3" skip="$4" edges child parent cycle_path session_id written_count=0
   shift 4

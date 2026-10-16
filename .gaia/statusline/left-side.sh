@@ -13,7 +13,7 @@
 # yellow from yellow, red from red, fire and skull markers above), the same
 # bands the audit-loop checkpoint reads, so the bar and the checkpoint cannot
 # disagree. Hot path: bash arithmetic and builtins only, plus the one git call
-# for the branch.
+# for the branch and, when a checkpoint override file exists, one jq call.
 
 # gaia_statusline_left <state-root> <session-directory> <is-worktree> <model> <effort> <used_percentage> <window_size> <used_tokens>
 # Sets _GAIA_STATUSLINE_LEFT to the rendered string (ANSI escapes included); returns 1

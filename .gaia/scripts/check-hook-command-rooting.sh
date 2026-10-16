@@ -31,7 +31,7 @@
 # catch it; the verdict below names the file it read rather than claiming
 # every registered command on the machine.
 #
-# WHAT COUNTS AS ROOTED. Two shapes, and the test is a property rather than
+# WHAT COUNTS AS ROOTED. Three rules, and the test is a property rather than
 # a spelling, so a future registration that reaches its root another way is
 # not forced to match a literal:
 #
@@ -43,8 +43,9 @@
 #      and `x/../.claude/...` the `.claude` IS preceded by `/`, so rule 1 alone
 #      passes a command that is relative anyway.
 #   3. the command's executed token, after an optional bare interpreter word,
-#      is anchored: it begins with `/`, or with a `$`-expansion or command
-#      substitution. Rules 1 and 2 only ever look at `.claude/` and `.gaia/`
+#      is anchored: it begins with `/`, an unquoted `~`, or a `$`-expansion
+#      or command substitution (a leading double quote is allowed before `/`
+#      or `$`). Rules 1 and 2 only ever look at `.claude/` and `.gaia/`
 #      occurrences, so on their own they pass `tools/session-guard.sh` and a
 #      bare `hook.sh` -- relative commands in directories they do not
 #      enumerate. Rule 3 is what makes the check about ANCHORING rather than

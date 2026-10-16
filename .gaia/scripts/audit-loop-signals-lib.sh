@@ -19,7 +19,7 @@ _GAIA_LOOP_HARD_CAP=10
 # The signal block of the snapshot program. It runs inside
 # audit-loop-eval.sh's verdict program, after $counted, $authored_count, $previous_authored_count, $second_previous_authored_count, $verdict and
 # $round are bound, and reads $previous_snapshot and $second_previous_snapshot (the stored snapshots of rounds r-1 and
-# r-2), $is_maintainer_repo and $waivedkeys. A legacy stored snapshot is one without
+# r-2), $is_maintainer_repo, $waivedkeys and $findings. A legacy stored snapshot is one without
 # counted_keys: it predates the signals, so its keys, raw_count and
 # waived_count are unknown, never zero.
 # shellcheck disable=SC2016

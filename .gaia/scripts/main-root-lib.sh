@@ -4,7 +4,7 @@
 # GAIA shared main-checkout resolver (single-sourced).
 #
 # The one definition of "main checkout root": the working tree that owns
-# git's common directory. Dual-mode: source it for the two functions below,
+# git's common directory. Dual-mode: source it for the functions below,
 # or run it directly as a script.
 #
 # Git version floor: git >= 2.31. `--absolute-git-dir` (used below) shipped in
@@ -16,14 +16,6 @@
 # physical-resolution note below), so relying on it would silently reintroduce
 # the logical/physical mismatch this resolver exists to close. Empirically
 # probed against git 2.55.0.
-#
-# This floor is this library's own, not a repo-wide guarantee that every
-# consumer holds to it. One shipped surface sits above it: the orphaned-worktree
-# reap in .claude/hooks/local-janitor.sh proves a squash merge with
-# `git patch-id --verbatim`, which needs git >= 2.39. Below that its reads fail
-# and the sweep declines every candidate, which destroys nothing but reclaims
-# nothing either. Named here so the two floors are reconciled in one place
-# rather than each looking authoritative on its own.
 #
 # Physical resolution: every path this library treats as an answer is passed
 # through `cd <path> && pwd -P` (never `realpath`/`readlink -f`, which are not
@@ -98,7 +90,7 @@
 #   FAILURE (`directory` is not inside a repository): prints nothing on stdout;
 #   returns non-zero.
 #
-# Neither function holds state between calls: two independent resolutions,
+# No function here holds state between calls: two independent resolutions,
 # for two different directories, are safe in one process.
 #
 # Usage (sourced):

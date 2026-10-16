@@ -1,13 +1,14 @@
 #!/usr/bin/env bash
 # audit-member-digest.sh: CLI entrypoint over the per-member branch-own digest,
-# for non-sourcing callers (CI, the clearance writer, the light-review steps).
+# for non-sourcing callers (the light-review steps, the audit loop unit, the
+# merge workflow's clearance checks).
 # Prints the member's line of the digest library's local-base listing, the
 # 64-hex digest, on stdout and exits 0. The digest is measured against the local
 # base reference, and `--ref` names the tree-ish whose patch is digested (HEAD by
 # default; a bare tree id works because the merge base is always derived from
 # HEAD). On ANY fail-closed condition (missing sha256 tool, unloadable library,
 # no local base reference, a merge base that is not unique, absent member) it
-# prints nothing and exits NON-ZERO. CI and the merge gate rely on a non-zero
+# prints nothing and exits NON-ZERO. The merge gate relies on a non-zero
 # exit meaning "could not derive, fail closed" -- it is never swallowed into 0.
 #
 # Bash 3.2 compatible. Never `cd` (outside the source-time lib resolution).
@@ -72,7 +73,7 @@ if ! command -v audit_branch_digests_local >/dev/null 2>&1; then
   exit 1
 fi
 
-# Fail closed: propagate the digest listing's non-zero exit verbatim (never swallow).
+# Fail closed: exit 1 on any non-zero digest listing status (never swallow).
 digest_lines="$(audit_branch_digests_local "$root" "$git_reference")" || exit 1
 digest=""
 tab="$(printf '\t')"

@@ -15,13 +15,13 @@
 # Best-effort and fail-open by contract: a missing gh / jq / network,
 # an unmatched SPEC, or a ledger-update failure never blocks a caller. The only
 # observable effect is the catalog rows it can confidently advance. It prints one
-# line per reconciled SPEC to stdout.
+# line per reconciled or normalized row to stdout.
 #
 # Usage:
 #   spec-reconcile.sh <repo_root>
 #
 # Exit: always 0 (advisory). The PR scan is capped at the 200 most recent merged
-# PRs; a SPEC whose PR is older than that is left as-is (logged to stderr), it is
+# PRs; a SPEC whose PR is older than that is left as-is, silently, it is
 # already shipped and the stale status label is cosmetic, not a correctness gate.
 # Not ready (the one-time move to the notebook has not run): prints the move
 # command on stderr, changes nothing, still exits 0.

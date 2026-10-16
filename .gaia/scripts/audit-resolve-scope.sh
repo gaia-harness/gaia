@@ -69,7 +69,7 @@
 #   unresolved scalar prints with an empty value: AUDIT_KEY is empty
 #   whenever KEY_BASE or the branch is undeterminable, a detached HEAD among
 #   them, and every artifact keyed on it is skipped fail-open. FULL_BASE is
-#   omitted under --skip-full-base; ELIG_BASE and both eligibility lists are
+#   omitted under --skip-full-base; ELIG_BASE and ELIG_CHANGED are
 #   omitted without --eligibility.
 #
 # Exit status:

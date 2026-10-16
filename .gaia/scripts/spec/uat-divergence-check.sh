@@ -13,7 +13,8 @@
 #   0  every selected spec's contract matches the SPEC
 #   1  at least one mismatch; stdout names one `<path> <uat_id> <field>` per
 #      problem, field being given, when, then, or file for a missing spec
-#   2  invalid input (usage, malformed SPEC, invalid routing table); stderr only
+#   2  invalid input (usage, malformed SPEC, invalid routing table) or an
+#      unresolvable frontend e2e directory; stderr only
 #
 # Honest limit: it reads only the three contract comment lines, never the test
 # body, so a body edit (selectors, labels, copy) never changes the verdict. Whether

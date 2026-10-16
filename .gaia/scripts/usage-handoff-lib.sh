@@ -15,10 +15,13 @@
 # The origin is the run's first start, never the previous session's join, so a
 # chain of handoffs binds every session to the one run.
 #
-# Exit codes. handoff: 0 always once its flags parse (no open run prints
-# nothing, since a handoff of work that is not a recorded run owes no line); 2
-# usage error. join: 0 written or already joined; 1 refused with nothing written
-# (no session id, ledger lock timed out, append failed); 2 usage error.
+# Exit codes. handoff: 0 once its flags parse and the ledger is readable (no
+# open run prints nothing, since a handoff of work that is not a recorded run
+# owes no line); 2 usage error, jq absent, or an unreadable usage ledger. join:
+# 0 written or already joined; 1 refused (no session id, no ledger mutex or
+# directory, ledger lock timed out: nothing written; or an append failure, after
+# which check the last row); 2 usage error, jq absent, or an unreadable usage
+# ledger.
 #
 # Sourced by usage.sh at top level, after usage-record-lib.sh, and relies on its
 # helpers and usage.sh's globals.

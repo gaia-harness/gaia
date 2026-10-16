@@ -66,8 +66,9 @@
 # probe, dedup, a second visibility read as the last gh call before the first
 # write, label creation, create, verify-after-file. A security-class finding
 # files only when BOTH reads answer exactly PRIVATE and the backend is present;
-# every other path diverts, running no gh write verb (issue create/edit, label
-# create, api POST/PATCH/PUT). A divert writes
+# every other path runs no gh write verb (issue create/edit, label
+# create, api POST/PATCH/PUT): it diverts, ends `failed <reason>` when a check
+# fails, or ends `filed` on a dedup match. A divert writes
 # <root>/.gaia/local/audit/security/<sha256 of the wrapped key>.md and nothing
 # else leaves the machine. Visibility counts as PRIVATE only when
 # `gh repo view <repo> --json visibility` answers exactly `PRIVATE`; an error,

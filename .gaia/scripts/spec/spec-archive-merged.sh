@@ -54,8 +54,8 @@
 #
 # Best-effort and fail-open by contract, exactly like spec-reconcile.sh: a
 # missing jq or an unrecorded run never blocks a caller. One stdout
-# line summarizes what was deleted, and one names each kept folder;
-# diagnostics go to stderr.
+# line summarizes what was deleted, and one names each folder the usage-ledger
+# gate keeps; the other keeps are diagnostics on stderr.
 #
 # Usage:
 #   spec-archive-merged.sh <repo_root> [<spec_id>] [--close]

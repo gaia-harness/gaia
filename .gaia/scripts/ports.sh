@@ -5,8 +5,9 @@
 #
 #   bash .gaia/scripts/ports.sh [--tree <directory>] [--field slot|dev|storybook|site-url]
 #
-# Exit codes: 0 success, 2 usage, 3 linked worktree with no port file (nothing
-# on stdout), 4 malformed port file, 5 no package with a react-router config.
+# Exit codes: 0 success, 2 usage (or a tree outside a git checkout), 3 linked
+# worktree with no port file (nothing on stdout), 4 malformed port file, 5 no
+# package with a react-router config.
 #
 # site_url precedence: an exported SITE_URL, then the port file, then (slot 0)
 # the port package's .env, then http://localhost:<dev>.

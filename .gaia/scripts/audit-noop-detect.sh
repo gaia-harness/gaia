@@ -81,7 +81,7 @@
 #                         backticked `` `<path>:<line>` `` token. Deliberately
 #                         does NOT key on a literal "Location:" label: the
 #                         real specialist template emits markdown-bold
-#                         "- **Location**: `path:line`" (code-review-audit.md),
+#                         "- **Location**: `path:line`" (.claude/agents/code-audit-frontend.md),
 #                         so a bare "Location:" substring never appears and
 #                         keying on it would misclassify a real finding as a
 #                         no-op. Under --expect-count <n> the return must ALSO
@@ -105,9 +105,9 @@
 #                         `` `<path>:<line>` `` finding location (every Code
 #                         Audit Team member's shared Output Format template
 #                         bolds each reported finding's Location field this
-#                         way, blocking or not), or code-audit-frontend's
-#                         terse LOCAL return-contract preamble, the literal
-#                         string "Remaining in-scope:". A report token
+#                         way, blocking or not), or a terse return that opens
+#                         with the literal "Remaining in-scope:" (no current
+#                         agent emits it). A report token
 #                         classifies REAL on its own, whether or not the
 #                         resolve arm was passed: no earned marker or
 #                         sidecar is required beside it. Real outcomes
