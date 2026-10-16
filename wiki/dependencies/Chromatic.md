@@ -12,13 +12,8 @@ tags: [dependency, testing, visual]
 
 Visual regression service that consumes Storybook stories. Runs in CI via `.github/workflows/chromatic.yml`.
 
-- `pnpm chromatic`: uploads stories
+- `pnpm chromatic`: uploads stories from a local run (flags in `frontend/package.json`); CI uses `chromaui/action` with the inputs in `chromatic.yml`
 - `CHROMATIC_PROJECT_TOKEN`: env var on CI
-- `--auto-accept-changes 'main'`: auto-accept baseline shifts on `main`
-- `--only-changed`, `--exit-zero-on-changes`: efficient PR runs
-- `--exit-once-uploaded`: return after upload instead of waiting for the build
-- `--storybook-build-dir 'storybook-static'`: consume the prebuilt Storybook
-- `--skip '@(renovate/**|dependabot/**)'`: skip visual review on bot branches
 
 ## Modes: one snapshot per theme
 

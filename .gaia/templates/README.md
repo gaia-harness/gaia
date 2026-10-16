@@ -16,7 +16,7 @@ The terminal prints the dev server URL. Each worktree gets its own port.
 
 This project ships with [GAIA](https://gaiareact.com/). Run these slash commands from inside Claude Code:
 
-- `/gaia-plan`: plan a feature as a graph of tasks and execute via subagents
+- `/gaia-plan`: plan a feature as a graph of tasks for fresh-context subagents to execute (it plans only; paste the kickoff prompt it prints into a fresh session to run it)
 - `/gaia-spec`: run Socratic discovery and produce an immutable SPEC artifact
 - `/gaia-forensics`: file a redacted, classified report when GAIA itself misfires
 

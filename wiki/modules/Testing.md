@@ -54,7 +54,7 @@ Test a component or page with a story that has a `play` function. Never manually
 
 ### a11y scanning
 
-Most shipped e2e specs are axe-core a11y scans; others cover hydration errors and render-performance smoke. `frontend/.playwright/a11y.ts` exports `expectNoSeriousA11yViolations(page, testInfo, options?)`: critical and serious violations fail the test; moderate and minor violations attach as an `axe-advisory.json` and surface via `console.warn`. `frontend/.playwright/fixtures.ts` exposes the `makeAxeBuilder` fixture (WCAG 2.0/2.1 A and AA tags) for custom scans.
+The shipped specs live in `frontend/.playwright/e2e/`. `frontend/.playwright/a11y.ts` exports `expectNoSeriousA11yViolations(page, testInfo, options?)`: critical and serious violations fail the test; moderate and minor violations attach as an `axe-advisory.json` and surface via `console.warn`. `frontend/.playwright/fixtures.ts` exposes the `makeAxeBuilder` fixture (WCAG 2.0/2.1 A and AA tags) for custom scans.
 
 ### Cold-start hydration self-heal
 
@@ -62,8 +62,7 @@ Most shipped e2e specs are axe-core a11y scans; others cover hydration errors an
 
 ## Chromatic
 
-- Visual regression on every PR
-- `pnpm chromatic` (run in CI), `CHROMATIC_PROJECT_TOKEN` env var on CI
+- Visual regression in CI; gating and token in [[Chromatic#CI gating]]
 - To remove it, see the Opt-out section of [[Chromatic]]
 
 ## ESLint rules on test files
