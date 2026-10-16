@@ -8,12 +8,13 @@
 # Every member declares which files it owns twice: once in the roster
 # (.gaia/audit-ci.yml), which decides dispatch and the clearance the merge gate
 # demands, and once in its own .claude/agents/code-audit-<name>.md prose, which
-# the spawned agent filters the changed-file list against. Nothing checks that
-# the two agree, so they drift. This script makes the prose a GENERATED
-# statement of the roster: it rewrites each member's marker-delimited remit
-# region (between `<!-- gaia:audit-remit:start -->` and
-# `<!-- gaia:audit-remit:end -->`) from the roster's raw globs, and is
-# idempotent on an already-agreeing tree -- a second run changes nothing.
+# the spawned agent filters the changed-file list against.
+# verify-audit-roster.sh (invariant 1) catches the two disagreeing; this script
+# is the repair. It makes the prose a GENERATED statement of the roster: it
+# rewrites each member's marker-delimited remit region (between
+# `<!-- gaia:audit-remit:start -->` and `<!-- gaia:audit-remit:end -->`)
+# from the roster's raw globs, and is idempotent on an already-agreeing tree --
+# a second run changes nothing.
 #
 # It obtains the roster's raw globs from verify-audit-roster.sh's read-only
 # `--emit-roster` mode rather than carrying a second YAML scrape: that mode
@@ -51,8 +52,9 @@ Usage: write-audit-remits.sh [--root <dir>] [--config <file>]
   --help | -h      this text.
 
 Exit codes:
-  0  every member's region is in the generated state (whether or not
-     anything changed).
+  0  every member whose agent file exists is in the generated state (whether
+     or not anything changed); a member with no agent file is skipped with a
+     stderr line.
   1  a hard failure: the check script is missing, the --emit-roster call
      failed, a definition's markers are duplicated, unbalanced, or reversed,
      the definition has no insertion anchor, region generation failed, or

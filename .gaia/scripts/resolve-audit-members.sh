@@ -35,8 +35,8 @@
 #
 # Dispatch algorithm, per changed file, in two precedence tiers (owned by
 # audit-scope.sh, sourced below):
-#   1. Every CLAIMANT (non-default) member whose globs match the path wins,
-#      first-match-wins over roster order.
+#   1. The first CLAIMANT (non-default) member in roster order whose globs
+#      match the path owns it.
 #   2. Else, if the default member's own declared globs match the path, the
 #      default member is added.
 #   3. Else the file has no owner (out of scope). No routing decision
@@ -63,9 +63,10 @@
 # `app/**` matches anything under app/.
 #
 # Bash 3.2 compatible (macOS default): no associative arrays, no `mapfile`,
-# no `${var^^}`. No `cd` (per .claude/rules/shell-cwd.md); the repo root is
-# resolved via `git rev-parse --show-toplevel` and every git call is scoped
-# to it with `git -C`.
+# no `${var^^}`. No `cd` into the audited root (per .claude/rules/shell-cwd.md;
+# one subshell cd locates this script's own library directory); the repo root
+# is resolved via `git rev-parse --show-toplevel` and every git call after it
+# is scoped to that root with `git -C`.
 
 set -euo pipefail
 
@@ -220,8 +221,7 @@ base="$(resolve_base)"
 # quoting outright rather than narrowing it -- `core.quotePath=false` still
 # quotes a path containing a quote, a backslash, or a control byte -- and the
 # `tr` is what turns the NUL-terminated output back into the newline-delimited
-# list every consumer below reads. Same spelling the roster's own definitions
-# use (.claude/agents/code-audit-*.md).
+# list every consumer below reads.
 #
 # Quote-safe is not the same as faithful to every path, and the `tr` is where
 # the difference lives: a path containing a literal newline survives `-z` and
@@ -229,8 +229,7 @@ base="$(resolve_base)"
 # for it exactly as it did before. That is not a regression (the quoted
 # spelling produced one ownerless token instead of two) and closing it means
 # consuming the NUL stream without the round-trip, which every consumer below
-# would have to want. code-audit-frontend.md records the same residue against
-# its own eligibility set.
+# would have to want.
 #
 # `--no-renames`, because under rename detection a move lists only its new
 # path: moving app/x.ts to a root-level .md would dispatch nobody for the app/

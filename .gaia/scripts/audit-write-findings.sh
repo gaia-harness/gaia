@@ -71,8 +71,8 @@
 #
 # Per-finding shape (every field REQUIRED unless noted)
 #   finding_class  non-empty string. The closed vocabulary the finding_class
-#                  schema seeds across its four closed buckets (holistic,
-#                  rule, workflow, prose) plus the open oracle-tool id space
+#                  schema seeds across its three closed buckets (holistic,
+#                  rule, workflow) plus the open oracle-tool id space
 #                  (react-doctor/, axe/, knip/, cve/), or
 #                  `holistic/unclassified` when no seeded class fits.
 # gaia:maintainer-only:start
@@ -474,7 +474,7 @@ if [ -z "$temporary_file" ]; then
 fi
 
 # review_base is appended the same way audit-write-clearance.sh appends its
-# optional supersedes block (audit-write-clearance.sh:354-375): a conditional
+# optional supersedes block: a conditional
 # `+ (if ... then {...} else {} end)` on the same object literal, every value
 # passed through --arg so it stays escaped by construction.
 if ! printf '%s' "$raw" | jq -c \

@@ -18,7 +18,7 @@
  *
  * Both paths are idempotent; re-running with the same args is a no-op.
  *
- * Stdout: nothing on success. Exit codes: 0 / 1 / 2.
+ * Stdout: nothing on success. Exit codes: see HELP_TEXT.
  */
 import {existsSync, readFileSync} from 'node:fs';
 import path from 'node:path';
@@ -41,6 +41,8 @@ const HELP_TEXT = `Usage: gaia init configure-i18n --locales <list> --strip <boo
     0  success (no stdout)
     1  user-correctable error (missing flags, invalid locale list)
     2  unexpected (filesystem failure)
+    30 the package registry (.gaia/packages.json) cannot resolve the frontend
+       package (with --strip false)
 `;
 
 const HELP_TOKENS = new Set(['--help', '-h', 'help']);

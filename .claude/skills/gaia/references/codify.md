@@ -281,7 +281,7 @@ Then proceed to `## Record the review (end of run)`.
 
 Runs once, after the last candidate is dispositioned and `## Unclassified recurrence signal (seed-a-class-or-investigate)` has run. An abandoned run, one where a candidate was left without an answer or the human chose **Stop without changes**, never reaches this section and writes nothing. A `gh_ok` false fetch never reaches it either.
 
-Record the snapshot from this run's own start-of-run tally (the file `## Fetch the live candidate list` saved), then, only on exit `0`, clear the cached nudge so the next statusline render stops showing it (model on `.claude/skills/gaia/references/cleanse.md`'s cache-bust, main-root-resolved, jq with an `rm -f` fallback). Run both as one Bash call: shell variables do not persist across separate calls.
+Record the snapshot from this run's own start-of-run tally (the file `## Fetch the live candidate list` saved), then, only on exit `0`, clear the cached nudge so the next statusline render stops showing it (model on `.claude/skills/gaia/references/cleanse/apply.md`'s cache-bust, main-root-resolved, jq with an `rm -f` fallback). Run both as one Bash call: shell variables do not persist across separate calls.
 
 ```bash
 .gaia/cli/gaia codify-ledger snapshot record --tally-file .gaia/local/codify/review-tally.json

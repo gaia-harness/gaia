@@ -15,8 +15,8 @@
 #                        i.e. one reached without a resolved-root variable. A
 #                        comment mention is allowed.
 #   2. Resolver-backed   every hook outside .claude/hooks/lib/ that holds any
-#                        live `.gaia/local` reference names a resolver-backed
-#                        lib (main-root-lib.sh, state-registry-lib.sh,
+#                        live `.gaia/local` or `.notebook` reference names a
+#                        resolver-backed lib (main-root-lib.sh, state-registry-lib.sh,
 #                        red-ledger.sh, or gh-artifact-lib.sh), so the joined root traces back
 #                        to one. A sourced lib under .claude/hooks/lib/ may
 #                        instead take its root from its caller, as
@@ -137,7 +137,7 @@ gaia_check_hook_scope_manifest() {
     case "$_gaia_hookcheck_resolver_files" in
       *$'\n'"$hook_path"$'\n'*) ;;
       *)
-        printf 'NO RESOLVER: %s holds a resolved .gaia/local reference but names no resolver-backed lib; source main-root-lib.sh and derive the root with gaia_resolve_main_root\n' "$hook_path"
+        printf 'NO RESOLVER: %s holds a resolved .gaia/local or .notebook reference but names no resolver-backed lib; source main-root-lib.sh and derive the root with gaia_resolve_main_root\n' "$hook_path"
         exit_status=1
         ;;
     esac

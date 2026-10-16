@@ -81,7 +81,7 @@ Rules-vs-wiki: a `.claude/rules/*.md` file is allowed to duplicate wiki content 
 
 ### Provenance-marked rules (`gaia-harden:`)
 
-A `.claude/rules/*.md` rule whose first line after frontmatter starts with the provenance marker prefix `<!-- gaia-harden: promoted from recurring finding_class`, whichever tail follows (`pruned by /gaia-cleanse ...`, or the 1.x `pruned by /gaia-audit ...`), is recognized by that prefix alone. The current form:
+A `.claude/rules/*.md` rule that carries a line starting with the provenance marker prefix `<!-- gaia-harden: promoted from recurring finding_class`, whichever tail follows (`pruned by /gaia-cleanse ...`, or the 1.x `pruned by /gaia-audit ...`), is recognized by that prefix alone. The current form:
 
 ```
 <!-- gaia-harden: promoted from recurring finding_class <class>; pruned by /gaia-cleanse on obsolescence/redundancy/supersession/duplication only, never for non-recurrence -->

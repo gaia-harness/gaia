@@ -228,8 +228,9 @@ usage_rates_load() {
 }
 
 # usage_models_of <keys-json>: the models list a gaia_usage_keys_json object
-# carries, printed compact (nothing when it could not be listed); rc 1 when the
-# object has none, so the caller lists them itself.
+# carries, printed compact (nothing when it could not be listed); a non-zero rc
+# (the jq error, status 5) when the object has none, so the caller lists them
+# itself.
 usage_models_of() {
   jq -r 'if has("models") then (.models | if . == null then empty else tojson end) else error("no models") end' \
     <<<"$1" 2>/dev/null

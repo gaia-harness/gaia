@@ -53,6 +53,8 @@
 #   0  ok
 #   1  not found, main root unresolvable, or jq missing
 #   2  usage, invalid kind, invalid id, non-canonical status, row already exists
+#     (a spec or plan register, or a rename target; re-registering research
+#     is a no-op, exit 0)
 #   3  not ready: the one-time move is pending
 #   4  corrupt catalog (present but unparseable or schema-invalid); nothing changed
 #   5  .notebook is not gitignored in main; nothing created

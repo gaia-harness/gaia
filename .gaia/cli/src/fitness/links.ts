@@ -265,9 +265,9 @@ const collectLevelOne = (
  * Builds the reference graph the depth and orphan rules read.
  *
  * Entry files (level 0) are each SKILL.md, each command, and each playbook a
- * command routes to. A file an entry links is level 1. A level 1 file may link
- * its siblings (same directory) and they stay level 1. Any other file a level 1
- * file links is a depth violation on the linking line.
+ * command or skill routes to. A file an entry links is level 1. A level 1 file
+ * may link its siblings (same directory) and they stay level 1. Any other file a
+ * level 1 file links is a depth violation on the linking line.
  */
 export const buildLinkGraph = (context: RuleContext): LinkGraph => {
   const nodes = context.files.filter((file) => hasKind(file, GRAPH_KINDS));

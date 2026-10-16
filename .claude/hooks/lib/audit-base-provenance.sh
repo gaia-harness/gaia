@@ -73,11 +73,9 @@
 # branch, on any path. The merge gate refuses an environment-sourced base by
 # name, because an exported base-ref variable would let a caller shrink a
 # fail-closed check's diff until every remaining path looked out of scope, and
-# lifting an arm that read one would import that hole here. The disposition
-# sidecar this ladder is generalized from keeps its own two-source read
-# (GITHUB_BASE_REF under Actions, else the pull request's own record) at its
-# own call site, and passes the resulting branch name in as
-# <record-base-branch> instead.
+# lifting an arm that read one would import that hole here. The merge gate
+# reads the pull request record itself and passes its base branch name in as
+# <record-base-branch>.
 
 # audit_resolve_base_provenance <root> <anchor-request> [<supplied-base>]
 #                                [<record-base-branch>]

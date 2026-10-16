@@ -28946,7 +28946,7 @@ var AUTHORING_RULES = [
       message: `${violation.target} is reachable only through another reference, two levels below the entry file.`,
       remediation: "Link it from the entry file or a sibling reference so every file is one level from an entry."
     })),
-    detection: "A file reachable only through a level 1 reference and not a sibling of the file that links it; entries are each SKILL.md, each command and each playbook a command routes to.",
+    detection: "A file reachable only through a level 1 reference and not a sibling of the file that links it; entries are each SKILL.md, each command and each playbook a command or skill routes to.",
     ruleId: "authoring.reference.depth.one-level",
     severity: "warning"
   },
@@ -29034,7 +29034,7 @@ var missingRootCheck = (context) => context.allTrackedPaths.has(ROOT_CLAUDE_MD) 
   {
     file: ROOT_CLAUDE_MD,
     line: 0,
-    message: "The project has no root CLAUDE.md, so no instructions load automatically.",
+    message: "The project has no root CLAUDE.md, so no project instructions load from the root.",
     remediation: "Create a CLAUDE.md at the project root with the instructions every session needs."
   }
 ];
@@ -29261,7 +29261,7 @@ var FITNESS_CONFIG_RULES = [
     appliesTo: ["fitness-config"],
     category: "settings",
     check: parseCheck,
-    detection: "The fitness config is not valid JSON, or its version is not 1; no suppression applies.",
+    detection: 'The fitness config is not valid JSON, is not an object with "version": 1, or has an "ignore" that is not a list; no suppression applies.',
     ruleId: "settings.fitness-config.parse",
     severity: "error"
   },
@@ -33364,6 +33364,8 @@ var HELP_TEXT11 = `Usage: gaia init configure-data-layer [--casing <c>] [--query
     0  success (one JSON line on stdout)
     1  user-correctable error (bad flags, missing anchor; nothing written)
     2  unexpected (filesystem failure)
+    30 the package registry (.gaia/packages.json) cannot resolve the frontend
+       package
 `;
 var HELP_TOKENS10 = /* @__PURE__ */ new Set(["--help", "-h", "help"]);
 var UNEXPECTED_EXIT2 = 2;
@@ -33759,6 +33761,8 @@ var HELP_TEXT12 = `Usage: gaia init configure-i18n --locales <list> --strip <boo
     0  success (no stdout)
     1  user-correctable error (missing flags, invalid locale list)
     2  unexpected (filesystem failure)
+    30 the package registry (.gaia/packages.json) cannot resolve the frontend
+       package (with --strip false)
 `;
 var HELP_TOKENS11 = /* @__PURE__ */ new Set(["--help", "-h", "help"]);
 var UNEXPECTED_EXIT3 = 2;
@@ -33995,7 +33999,7 @@ var escapeJsLiteralValue = (value, quote) => value.replaceAll("\\", "\\\\").repl
 var HELP_TEXT14 = `Usage: gaia init rename --title <T> --kebab <K>
 
   Rename the project across package.json, CLAUDE.md, and seeded language
-  files (Step 6 of /gaia-init).
+  files (Step 3 of /gaia-init).
 
   Required flags:
     --title <T>     Project title (Title Case, e.g. "Hello World").
@@ -34006,6 +34010,8 @@ var HELP_TEXT14 = `Usage: gaia init rename --title <T> --kebab <K>
     1  user-correctable error (missing flags, invalid kebab, no package.json,
        no CLAUDE.md heading)
     2  unexpected (filesystem failure)
+    30 the package registry (.gaia/packages.json) cannot resolve the frontend
+       package
 `;
 var HELP_TOKENS13 = /* @__PURE__ */ new Set(["--help", "-h", "help"]);
 var UNEXPECTED_EXIT5 = 2;
@@ -34209,6 +34215,8 @@ var HELP_TEXT15 = `Usage: gaia init strip-branding --title <T>
     0  success (no stdout)
     1  user-correctable error (missing flag, missing template)
     2  unexpected (filesystem failure)
+    30 the package registry (.gaia/packages.json) cannot resolve the frontend
+       package
 `;
 var HELP_TOKENS14 = /* @__PURE__ */ new Set(["--help", "-h", "help"]);
 var UNEXPECTED_EXIT6 = 2;
@@ -34956,7 +34964,8 @@ var HELP_TEXT18 = `Usage: gaia init resume [--from-step <N>]
   Exit codes:
     0  resume completed
     1  user-correctable error (unknown step, missing saved args)
-    2  unexpected (filesystem / step failure)
+    2  unexpected (filesystem failure)
+    other  a failing step's own exit code, passed through
 `;
 var HELP_TOKENS17 = /* @__PURE__ */ new Set(["--help", "-h", "help"]);
 var UNEXPECTED_EXIT9 = 2;
@@ -35132,7 +35141,8 @@ var HELP_TEXT19 = `Usage: gaia init <subcommand> [args]
                             Writes one JSON line to stdout. Rerunnable after
                             init finalizes, e.g. --query true adds Query later.
   rename --title <T> --kebab <K>
-                            Rename the project across package.json + locales.
+                            Rename the project across package.json, CLAUDE.md
+                            and seeded language files.
   wire-statusline --mode <global|project|skip>
                             Wire the GAIA statusline into Claude settings.
   bootstrap-env             Copy .env.example to .env if .env is absent.
@@ -35741,8 +35751,8 @@ var run25 = (argv) => {
 // src/labels/index.ts
 var HELP_TEXT21 = `Usage: gaia labels <subcommand> [args]
 
-  sync [--repo <owner/name>] [--dry-run] [--adopt] [--adopt-palette]
-       [--prune-deprecated] [--enforce-blocked] [--json]
+  sync [--repo <owner/name>] [--repo-root <path>] [--dry-run] [--adopt]
+       [--adopt-palette] [--prune-deprecated] [--enforce-blocked] [--json]
        [--audience adopter|maintainer] [--feature <key>]...
                              Reconcile a repository against the registry.
 `;
@@ -39845,7 +39855,7 @@ var writeLocaleFiles = (args) => {
     result.skipped.push(localeBarrel);
     return null;
   }
-  return `locale barrel not found at ${localeBarrel}; the locale file was written but its import was not wired. Add "import ${importName} from './${moduleName}';" to the barrel by hand.`;
+  return `locale barrel at ${localeBarrel} is missing or has no \`export default { ... }\` block; the locale file was written but not wired. Add "import ${importName} from './${moduleName}';" and its default-export entry to the barrel by hand.`;
 };
 
 // src/scaffold/route-service.ts
@@ -40413,7 +40423,8 @@ var run39 = (argv) => {
 var HELP_TEXT34 = `Usage: gaia setup check-admin --owner <o> --repo <r> [--json]
 
   Probe repo admin permission via \`gh\`. Returns admin: false for any
-  non-ok auth status. Exits 0 in every branch.
+  non-ok auth status. Exits 0 for every probe outcome; exits 1 on a usage
+  error.
 `;
 var HELP_TOKENS32 = /* @__PURE__ */ new Set(["--help", "-h", "help"]);
 var printHuman2 = (output2) => {
@@ -44577,7 +44588,8 @@ var HELP_TEXT56 = `Usage: gaia update merge-audit-ci --baseline <file> --latest 
 
   Field-aware three-way verdict for .gaia/audit-ci.yml. Reads three YAML files
   (baseline / latest tarball + working-tree current), classifies the auditors
-  roster members, and emits a JSON report of {applied, conflicts, suggestions}.
+  roster members, and reports {applied, conflicts, suggestions} (JSON with
+  --json, a human summary otherwise).
 
   Read-only: never writes the file. The /update-gaia skill applies the 'applied'
   entries with the Edit tool to preserve comments and order.
@@ -45043,7 +45055,8 @@ var HELP_TEXT58 = `Usage: gaia update merge-workspace --baseline <file> --latest
   Field-aware three-way verdict for pnpm-workspace.yaml. Reads three YAML
   files (baseline / latest tarball + working-tree current), classifies the
   GAIA-managed keys and the adopter-shared overrides / allowBuilds maps, and
-  emits a JSON report of {applied, conflicts, suggestions}.
+  reports {applied, conflicts, suggestions} (JSON with --json, a human summary
+  otherwise).
 
   Read-only: never writes the workspace file. The /update-gaia skill applies
   the 'applied' entries with the Edit tool to preserve comments and order.

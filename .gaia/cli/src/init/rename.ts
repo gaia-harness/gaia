@@ -1,7 +1,7 @@
 /**
  * `gaia init rename --title <T> --kebab <K>` handler.
  *
- * Codifies Step 6 of `/gaia-init`. Renames the project across the small
+ * Codifies Step 3 of `/gaia-init`. Renames the project across the small
  * set of files that carry an identity:
  *
  *   - `package.json` "name" → kebab-case title.
@@ -20,7 +20,7 @@
  * Idempotent: re-running with the same args is a no-op once the rename
  * has been applied.
  *
- * Stdout: nothing on success. Exit codes: 0 / 1 / 2.
+ * Stdout: nothing on success. Exit codes: see HELP_TEXT.
  */
 import {existsSync, readFileSync} from 'node:fs';
 import path from 'node:path';
@@ -36,7 +36,7 @@ import {markStepCompleted} from './util/state.js';
 const HELP_TEXT = `Usage: gaia init rename --title <T> --kebab <K>
 
   Rename the project across package.json, CLAUDE.md, and seeded language
-  files (Step 6 of /gaia-init).
+  files (Step 3 of /gaia-init).
 
   Required flags:
     --title <T>     Project title (Title Case, e.g. "Hello World").
@@ -47,6 +47,8 @@ const HELP_TEXT = `Usage: gaia init rename --title <T> --kebab <K>
     1  user-correctable error (missing flags, invalid kebab, no package.json,
        no CLAUDE.md heading)
     2  unexpected (filesystem failure)
+    30 the package registry (.gaia/packages.json) cannot resolve the frontend
+       package
 `;
 
 const HELP_TOKENS = new Set(['--help', '-h', 'help']);

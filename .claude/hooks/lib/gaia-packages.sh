@@ -15,13 +15,14 @@
 # crashes. Status:
 #   0  ok: the registry, or the built-in default registry when
 #      `.gaia/packages.json` is absent, loaded and every descriptor validated
-#   2  the registry is present and malformed
+#   2  the registry is malformed, the built-in registry cannot be read, or no
+#      repository root was given
 #   3  a registered package's descriptor is missing, malformed or invalid
 #   4  jq is not on PATH; nothing was read
-# On any non-zero status `GAIA_PACKAGES_ERROR` holds one line of the fixed shape
-# `gaia-packages: <file> is <missing|malformed|invalid: reason>. Next step:
-# <imperative>.` and every query function answers as if nothing were loaded, so
-# a guard that ignores the status sees an empty ERE rather than a stale one.
+# On any non-zero status `GAIA_PACKAGES_ERROR` holds one line beginning
+# `gaia-packages:` and ending `Next step: <imperative>.`, and every query
+# function answers as if nothing were loaded, so a guard that ignores the
+# status sees an empty ERE rather than a stale one.
 #
 # FAIL-CLOSED. An absent registry is the built-in default (frontend at
 # `frontend`), never "nothing in scope", and its descriptor is still read from

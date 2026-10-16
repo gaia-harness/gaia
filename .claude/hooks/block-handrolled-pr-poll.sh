@@ -170,8 +170,8 @@ DONE_RE='(^|[[:space:];&(])done([[:space:]]|[;)]|$)'
 # `gh pr checks` is included because the workflow's own rule covers it: "any
 # wait on CI or on a GAIA-Audit status between audit rounds" can go dead the
 # same way, and `wiki/concepts/PR Merge Workflow.md`'s "Conflict found
-# mid-wait" says every wait in this workflow exits on CONFLICTING for that
-# reason. A CI wait is a merge wait wearing a different hat.
+# mid-wait" says the merge wait (`pr-wait-merge.sh`) exits on CONFLICTING for
+# that reason. A CI wait is a merge wait wearing a different hat.
 #
 # `gh pr view` is narrowed to a call that actually reads STATE, either as a
 # `--json` field or through a `.state` filter expression. A loop over

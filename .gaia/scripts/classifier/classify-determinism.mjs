@@ -340,8 +340,9 @@ const checkNonDeterminism = () => {
 };
 
 // True when `node` has a function-like ancestor (arrow, function, method,
-// constructor, accessor). A default-parameter or class-field initializer is NOT
-// inside a function body, so its non-determinism is correctly module-reachable.
+// constructor, accessor). A class-field initializer outside a constructor or
+// method has no function-like ancestor, so it reads as module scope; a
+// default-parameter initializer sits under its function and does not.
 const insideFunction = (node) => {
   let cur = node.parent;
   while (cur) {
@@ -417,9 +418,7 @@ const checkHookSurface = () => {
 };
 
 // A member call is a DOM-API candidate when its receiver root is a recognized
-// DOM/browser host: a `navigator`/`document`/`window`/`globalThis` global, or a
-// value typed as an Element/HTMLElement. Without type info we treat the known
-// host globals plus parameter names that read as elements; for anything we
+// DOM/browser host: one of the DOM_HOST_GLOBALS below. For anything we
 // cannot resolve we only flag NAMED layout APIs (handled above) and otherwise
 // stay silent, so a domain method call (e.g. `result.map`) is not mistaken for
 // a DOM API.

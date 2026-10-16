@@ -34,8 +34,8 @@
 #
 # Exit 0: classified. Exit 2: usage error. Exit 3: an input could not be read
 # (not a git work tree, jq missing, the manifest missing or without a `files`
-# object, a vendor pin without a `target`). Both print nothing on stdout and
-# one `fitness-ownership: <reason>` line on stderr. The caller heals nothing
+# object, a vendor pin without a `target`, `git check-ignore` failing). Both
+# print nothing on stdout and one `fitness-ownership: <reason>` line on stderr. The caller heals nothing
 # on a non-zero exit: a classifier that answered without its inputs would call
 # vendored and GAIA-shipped files the project's own.
 

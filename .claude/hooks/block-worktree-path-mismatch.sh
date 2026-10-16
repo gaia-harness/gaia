@@ -29,9 +29,7 @@
 # denying any write whose target lands in a different checkout -- the main
 # checkout or a sibling linked worktree. The acting tree is the one the hook
 # process cwd sits in; the target's own tree is compared against
-# it, not against main alone. This is the defense-in-depth role isolation.md contracts: deny an
-# Edit/Write/MultiEdit whose file_path resolves to a different worktree than
-# RESOLVED_ROOT.
+# it, not against main alone. wiki/concepts/Claude Hooks.md owns the contract.
 #
 # Fail-open, matching the other block-*.sh guards: any ambiguity (identity
 # undeterminable, a target directory that does not exist yet, `git` unavailable,

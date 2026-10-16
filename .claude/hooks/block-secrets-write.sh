@@ -208,8 +208,9 @@ value_allowed() {
 # too, and is accepted rather than hidden: an ordinary value carrying a 13+
 # mixed run, say a hostname like `myapp123456789.example.com`, is refused here.
 #
-# The match is this exact basename, so `.env`, `.env.local`, and
-# `.env.example.local` reach the full allowlist below as before. `basename --`
+# The match is this exact basename, so any other file reaches the full
+# allowlist below as before (`.env` and `.env.*` never get that far: the dotenv
+# path deny above refuses them). `basename --`
 # because a path may begin with a dash, matching `block-sensitive-read.sh`.
 if [ "$(basename -- "${file_path:-}")" = ".env.example" ]; then
   while IFS= read -r line; do

@@ -6,8 +6,8 @@
 # segment.
 #
 # This refresh is INDEPENDENT of the 6h aggregate update-check refresher
-# (check-updates.sh). The two debt-invalidation events (the audit filing a
-# tech-debt issue; a /gaia-debt PR merging) drop a staleness sentinel
+# (check-updates.sh). Debt-count-mutating events (see
+# .claude/hooks/debt-sentinel-touch.sh for the set) drop a staleness sentinel
 # (.gaia/local/debt/refresh-requested); this script honors it on the next tick
 # so the count refreshes promptly instead of waiting up to the aggregate TTL.
 #

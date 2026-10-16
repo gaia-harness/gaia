@@ -27,8 +27,8 @@
 #     (finding code invalid_lineage)
 #   - no placeholder text ([PLACEHOLDER], <TODO>, TBD, FIXME, <TBD>)
 #   - reopen ceremony: when status == reopened, body must contain a UAT diff capture
-#     and a rationale block (markers: "## Reopen rationale" and "## UAT diff" or
-#     equivalent fenced sentinels)
+#     and a rationale block (markers: "## Reopen rationale" and "## UAT diff"
+#     headings, case-insensitive)
 set -euo pipefail
 
 if [ "$#" -ne 1 ]; then

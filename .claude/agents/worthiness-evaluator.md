@@ -8,8 +8,8 @@ color: green
 Contents: Input scope; The two axes; Non-triviality: render-only stories and vacuous plays; Verdicts; Hard delete constraints; How you run; Output.
 
 You audit the tests a phase just added or changed on the **emergent surface**
-(the descriptor's `emergentTests` globs: component and page stories, which are
-the component tests, and Playwright), the surface where the RED-verification
+(the `emergentTests` globs in the package descriptor
+`frontend/gaia.package.json`), the surface where the RED-verification
 gate does not apply. A **story play function** is a test: each story export with
 a `play` is judged as one test, and its `fullName` is the story's name
 (Storybook's name for the export, for example `ErrorType` is `Error Type`, or its

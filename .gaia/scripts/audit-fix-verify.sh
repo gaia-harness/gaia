@@ -30,10 +30,11 @@
 #   audit-fix-verify.sh drift       --root <R> --baseline <f>
 #   audit-fix-verify.sh round-check --run-folder <dir> --round <r>
 #
-# Exit codes: 0 pass, 1 findings (each printed to stderr on its own line as
-# `kind: detail`), 2 usage or missing jq, 3 baseline refusal (index differs
-# from HEAD; no output file is written), 4 baseline refusal because the member
-# wave left the tree dirty (a modified tracked file or an untracked, non-ignored
+# Exit codes: 0 pass, 1 findings (check prints each to stderr on its own line as
+# `kind: detail`; drift and round-check print their own one-line messages), 2
+# usage or missing jq, 3 baseline refusal (index differs from HEAD, or the repo
+# state cannot be read; no output file is written), 4 baseline refusal because
+# the member wave left the tree dirty (a modified tracked file or an untracked, non-ignored
 # file; stdout is `member-wave-dirty` then one `dirty <path>` line per path, no
 # output file is written, and the caller stops without committing). Git-ignored
 # paths never trip it. `check` writes its verifier file on every outcome,
@@ -94,7 +95,7 @@
 #      "index_digest":"<sha256 of git ls-files -s -z output>",
 #      "verifier_files":["<file name in verifier-bin-<r>/>"],
 #      "verifier_digest":"<sha256 over each pinned file's sha256 and name>",
-#      "dirty":{"<path>":"<blob hash of working content, or deleted>"},
+#      "dirty":{"<path>":"<blob hash of working content, deleted, or unreadable>"},
 #      "untracked":["<path>"]}
 #
 #   fixer-<r>-audit.json (the fixer):

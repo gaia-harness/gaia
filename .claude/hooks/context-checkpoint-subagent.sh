@@ -7,8 +7,9 @@
 # through hookSpecificOutput.additionalContext, two header lines (the band and
 # the reading summary, the handoff path) followed by
 # .claude/doctrine/context-yield.md verbatim; it does so once more at each of
-# the fire and skull bands. Every band, window and read bound comes from
-# context-checkpoint-lib.sh; none is spelled here.
+# the fire and skull bands. Every band, window and transcript read bound
+# comes from context-checkpoint-lib.sh; only the doctrine byte cap
+# (maximum_doctrine_bytes) is spelled here.
 #
 # Opt-in: the dispatcher ends the dispatch prompt with the line
 # `Yield handoff: <absolute path>`. Only the first transcript record (the

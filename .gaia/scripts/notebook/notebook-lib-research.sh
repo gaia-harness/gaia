@@ -26,8 +26,9 @@
 #   citation-query-unanswered    GitHub could not answer, so nothing is eligible
 #   named-by-open-issue-or-pr    an open issue or pull request names the slug
 # Two more refuse before those: invalid-slug (an id that could name a path
-# outside the research folder) and no-folder (a closed row with nothing to
-# reap).
+# outside the research folder) and unreadable-catalog (the catalog facts cannot
+# be read). A third, no-folder (a closed row with nothing to reap), sits between
+# the status_changed_at and the mtime halves of too-young.
 # A spec or plan row that is abandoned, merged or carries a reap record never
 # cites.
 #
@@ -182,8 +183,8 @@ gaia_notebook_research_prefetch_citations() {
 }
 
 # Sets _GAIA_RESEARCH_PULL_REQUESTS_JSON to a JSON array of
-# {number, state, headRefName} for every pull request, or to the word
-# unavailable when GitHub cannot answer.
+# {number, state, headRefName} for the 1000 most recent pull requests, or to
+# the word unavailable when GitHub cannot answer.
 gaia_notebook_research_prefetch_pull_requests() {
   local repository work_directory
   _GAIA_RESEARCH_PULL_REQUESTS_JSON="unavailable"

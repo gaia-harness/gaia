@@ -2,7 +2,7 @@
 
 The procedures a generated `ORCHESTRATOR.md` and both pre-flights point at. `.claude/skills/gaia/references/plan/planner.md` owns the order of the orchestrator's steps and the verbatim blocks a planner copies; this page owns what each step does. Every command runs from the directory each section names, with the placeholders the orchestrator holds: `<SPEC_PATH>` (the absolute, main-anchored `SPEC.md`), `<PLAN_DIR>` (the absolute, main-anchored plan folder), `<RESOLVED_ROOT>` (the working copy the isolation reference resolved) and `<N>` (the PR number).
 
-Contents: Owning-phase UAT gate; Phase N, <title> (HALTED); Pre-audit UAT checks; Consolidation; Wiki promotion; Post-merge close; Pre-flight sweep.
+Contents: Owning-phase UAT gate; Pre-audit UAT checks; Consolidation; Post-merge close; Pre-flight sweep.
 
 ## Owning-phase UAT gate
 
@@ -150,7 +150,7 @@ Runs after `gh pr merge`, in this order. Each step runs only after the one befor
    bash .gaia/scripts/plan-archive.sh <PLAN_DIR>
    ```
 
-   A spec-colocated plan subfolder is deleted; a spec-less plan folder is reduced to `SUMMARY.md`, with its `RUNNING` sentinel cleared. Without a verified `SUMMARY.md` the helper leaves the folder untouched. It always exits 0.
+   A spec-colocated plan subfolder is deleted; a spec-less plan folder is reduced to `SUMMARY.md`, with its `RUNNING` sentinel cleared. The helper leaves the folder untouched until the usage ledger holds a `gaia-plan` close for the run and a consolidated `SUMMARY.md` exists (the parent SPEC's, passing its verifier, for a spec-colocated plan). It always exits 0.
 
 **Retention.** The SPEC folder's `SUMMARY.md` and a reduced spec-less plan folder, stay for `GAIA_SPEC_RETENTION_DAYS` (default 30). Nothing reaps them early; the pre-flight sweep reaps them once past the window.
 

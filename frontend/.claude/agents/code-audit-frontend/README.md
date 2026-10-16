@@ -6,7 +6,7 @@ This directory contains library-specific audit rules for the `code-audit-fronten
 
 At startup the agent Globs `*.md` files in this directory (skipping this README), reads each one, parses its `subagents:` frontmatter field, and injects the file's content into the matching specialist subagent's prompt before dispatching.
 
-If this directory is empty or missing, the agent runs its generic review without library-specific checks.
+If this directory is empty or missing, the agent reports an error finding naming it rather than reviewing without the library rules (Extension Loading in `.claude/agents/code-audit-frontend.md`).
 
 ## Extension file format
 

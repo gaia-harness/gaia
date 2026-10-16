@@ -19,7 +19,7 @@
  * written, so a missing anchor leaves the tree untouched. This step never runs
  * pnpm; it reports what to run next.
  *
- * Stdout: one JSON line, `{changed, next}`. Exit codes: 0 / 1 / 2.
+ * Stdout: one JSON line, `{changed, next}`. Exit codes: see HELP_TEXT.
  */
 import {existsSync, readFileSync} from 'node:fs';
 import path from 'node:path';
@@ -64,6 +64,8 @@ const HELP_TEXT = `Usage: gaia init configure-data-layer [--casing <c>] [--query
     0  success (one JSON line on stdout)
     1  user-correctable error (bad flags, missing anchor; nothing written)
     2  unexpected (filesystem failure)
+    30 the package registry (.gaia/packages.json) cannot resolve the frontend
+       package
 `;
 
 const HELP_TOKENS = new Set(['--help', '-h', 'help']);

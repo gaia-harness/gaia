@@ -20536,7 +20536,7 @@ var HELP_TEXT4 = `Usage: gaia-maintainer release changelog [--draft] [--version 
   Exit codes:
     0  success
     1  user-correctable error
-    2  unexpected (git failure)
+    2  unexpected (git or write failure)
 `;
 var HELP_TOKENS4 = /* @__PURE__ */ new Set(["--help", "-h", "help"]);
 var UNEXPECTED_EXIT2 = 2;

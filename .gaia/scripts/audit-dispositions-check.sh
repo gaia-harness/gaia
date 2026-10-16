@@ -60,7 +60,7 @@
 # defines one, so elsewhere no mark is honored), the roster at
 # <R>/.gaia/audit-ci.yml gives its
 # path to that member, its security is exactly false and its severity is not
-# error; otherwise it is graded and disposed like any finding. The roster half
+# critical; otherwise it is graded and disposed like any finding. The roster half
 # is applied when the lookup is built (an unreadable roster honors nothing), so
 # the lookup's `triage` is already roster-bounded. A dispositions entry for the
 # key wins over the mark.

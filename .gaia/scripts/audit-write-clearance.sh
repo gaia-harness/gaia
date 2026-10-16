@@ -88,7 +88,7 @@
 #   - Every write lands unconditionally: it overwrites a stale body at the
 #     same path. There is no create-only guard and no carried family to
 #     dominate; provenance is earned or refused only.
-#   - On a REFUSAL, and outside CI, also calls .claude/hooks/post-audit-status.sh
+#   - On a REFUSAL, also calls .claude/hooks/post-audit-status.sh
 #     with the refusal it just wrote, so the required GAIA-Audit status falls to
 #     `failure` and the merge paths that never run the local hook (GitHub's
 #     auto-merge) cannot complete over a live refusal. Best-effort: its output
@@ -165,9 +165,10 @@
 #
 # Ledger write (armed by --base; best-effort, after publish)
 #   Path: <root>/.gaia/local/audit/<key>.rerun.json, at the derived key above.
-#   Shape: schema 1, as the frontend member's "Re-run carry-forward ledger"
-#   defines it, plus a `member` field and a writer-assigned `entry_id` on each
-#   entry, and a top-level `member_provenance` object. One ledger serves the
+#   Shape: schema 1, as `.claude/hooks/lib/audit-member-protocol.md` ("Re-run
+#   carry-forward ledger") defines it, plus a `member` field and a
+#   writer-assigned `entry_id` on each entry, and a top-level
+#   `member_provenance` object. One ledger serves the
 #   whole dispatched set (its key is the base, not a digest), so without the
 #   `member` field a second member's write would silently clobber the first's
 #   remaining work.
@@ -186,9 +187,10 @@
 #     1. `member_provenance[<member>]` records this refusal's digest, tree, sha,
 #     and version, the link the resolver checks before anchoring the member on
 #     it. Other members' entries and provenance pass through untouched.
-#   earned: the loop ended for this member, so its `remaining[]` entries are
-#     retired: each moves to `fixed_last_round[]` stamped with the current HEAD
-#     sha, its `entry_id`, and its resolution rationale when the sidecar
+#   earned: once this member's own refusal is gone, its `remaining[]` entries
+#     are retired (a surviving refusal leaves the ledger untouched): each moves
+#     to `fixed_last_round[]` stamped with the current HEAD sha, its
+#     `entry_id`, and its resolution rationale when the sidecar
 #     resolved it, and `member_provenance[<member>]` is removed. The FILE is
 #     removed only when no member has anything left, matching the documented
 #     clean-pass cleanup without discarding a co-dispatched member's still-open
@@ -202,7 +204,8 @@
 # marker must now be writer-shaped) but does not close the pool's
 # write-integrity weakness; that remains its own separate concern.
 #
-# Bash 3.2 compatible (macOS-default bash). Never `cd`.
+# Bash 3.2 compatible (macOS-default bash). Never cds the main shell (only
+# subshells and command substitutions cd).
 
 set -uo pipefail
 
@@ -628,9 +631,7 @@ fi
 # refusal is a claim that content should not merge, and suppressing THAT is
 # the one genuinely fail-open outcome available here. Each arm below is its
 # own explicit refusal rather than a `[ -n "$SCOPE_DIGEST" ] && …` guard, so
-# an absent value refuses instead of silently skipping the comparison (the
-# fail-open shape the inert `AUDIT_TREE_SHA` in the four specialists already
-# shows the cost of).
+# an absent value refuses instead of silently skipping the comparison.
 #
 # This gate does not make a stale-scope marker unreachable. A --provenance
 # refused write is itself exempt and needs no digest, so the same outcome
