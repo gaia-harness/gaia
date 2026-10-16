@@ -115,7 +115,6 @@ The context checkpoint hook runs after every tool call of every main session, so
 | In an audit loop | 48.2 ms | 50 ms |
 | 200 KB tool result, below red | 39.8 ms | 50 ms |
 | No-op baseline (`/bin/sh -c true`) | 4.3 ms | none |
-| Injected bytes on the firing path | 3,251 | none |
 
 The figures come from the quietest of several runs on a shared machine, whose 1-minute load stayed above 10 throughout.
 

@@ -258,7 +258,7 @@ Two steps come first, in this order:
 Once **every dispatched member's** marker exists for HEAD and the `GAIA-Audit` status is posted (see [[#Posting the status last]]), run `gh pr merge`. The hook short-circuits to allow the call.
 
 <!-- gaia:maintainer-only:start -->
-GAIA maintainers: light routing appends one event per route and per light outcome to `.gaia/local/telemetry/audit-light-routing.jsonl` in the main checkout, and `bash .gaia/scripts/audit-light-telemetry.sh tally` prints engagement, escalation, and light-miss rates and median light-path tokens against a baseline. The script is release-excluded and writes nothing outside this repo.
+GAIA maintainers: light routing appends one event per route and per light outcome to `.gaia/local/telemetry/audit-light-routing.jsonl` in the main checkout, and `bash .gaia/scripts/audit-light-telemetry.sh tally` prints the engagement and escalation rates, the light-miss count, and median light-path tokens against a baseline. The script is release-excluded and writes nothing outside this repo.
 <!-- gaia:maintainer-only:end -->
 
 <!-- gaia:maintainer-only:start -->

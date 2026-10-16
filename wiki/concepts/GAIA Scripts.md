@@ -8,7 +8,7 @@ tags: [concept, gaia, scripts]
 
 # GAIA Scripts
 
-`.gaia/scripts/` is GAIA's shell layer: the shared libraries its hooks and skills source, the deterministic checks its gates run, and the small command-line helpers its workflows shell out to. It is flat by design, one level of files at the root plus a handful of single-purpose subdirectories, and the flatness is a tested contract rather than a convention, so a script is added beside its siblings rather than filed under a new folder.
+`.gaia/scripts/` is GAIA's shell layer: the shared libraries its hooks and skills source, the deterministic checks its gates run, and the small command-line helpers its workflows shell out to. It is flat by design, one level of files at the root plus a handful of single-purpose subdirectories, so a script is added beside its siblings rather than filed under a new folder.
 
 The directory carries one structure, the name prefix, and the prefix tracks what a script is for. This page describes each family at that level and names no individual file, so adding a script to a family cannot make it false. Two other sources answer the per-file questions:
 
@@ -18,7 +18,7 @@ The directory carries one structure, the name prefix, and the prefix tracks what
   In GAIA's source, `.gaia/release-exclude` owns the withheld side, and its comment above each withheld entry says why. See [[Bundle-time Scrub]] and [[Release Workflow]].
 <!-- gaia:maintainer-only:end -->
 
-A `*-lib` file is sourced and runs nothing on its own. Everything else is run as a command by whatever the family's invoker is.
+A `*-lib` file is sourced for its functions; some also run as commands when executed directly. Everything else is run as a command by whatever the family's invoker is.
 
 ## Root families
 
