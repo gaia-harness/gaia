@@ -36,7 +36,7 @@ const HELP_TEXT = `Usage: gaia wiki <subcommand> [args]
   frontmatter [--json]                        Pages missing required frontmatter (type, status).
   empty-sections [--json]                     Headings with no content before the next heading.
   broken-links [--json]                       Wikilinks whose target page does not exist.
-  chain <begin|commit|finish>               One-branch / one-PR orchestration of the
+  chain <begin|commit|finish|refresh-nudge> One-branch / one-PR orchestration of the
                                               full /gaia-wiki chain.
 `;
 

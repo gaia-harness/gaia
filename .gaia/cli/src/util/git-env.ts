@@ -6,8 +6,8 @@
  * Those three, when set by a caller (a git hook, a `git rebase -x` step),
  * override repository discovery for every git subprocess regardless of
  * `-C`/`cwd`. An unstripped call would let an ambient override stand in for
- * the checkout's own on-disk layout, so every git-shelling resolver in this
- * tree routes through here rather than `execFileSync('git', ...)` directly.
+ * the checkout's own on-disk layout, so the git-shelling root resolvers
+ * route through here rather than `execFileSync('git', ...)` directly.
  */
 import {execFileSync} from 'node:child_process';
 import {MAX_GIT_BUFFER_BYTES} from './git-buffer.js';

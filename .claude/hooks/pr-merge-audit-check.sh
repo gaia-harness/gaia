@@ -168,7 +168,7 @@ command_line=$GAIA_HOOK_COMMAND
 #
 # This runs BEFORE arming, ahead of even knowing whether the tool call is a
 # merge, so an unloadable library denies every Bash tool call here, not merge
-# attempts alone, unlike the five-lib deny further down which only ever denies
+# attempts alone, unlike the library deny further down which only ever denies
 # a merge once armed.
 _hook_library_directory="$(cd "$(dirname "${BASH_SOURCE[0]}")/lib" 2>/dev/null && pwd)"
 _verb_arming_ok=0
@@ -264,7 +264,7 @@ fi
 # The fork check is on this list because a missing one must not read as "not a
 # fork", and the stamp because a bypass allow without it leaves the pull
 # request waiting forever on a status nothing posts.
-_repo_scope_library="$_library_directory/audit-scope.sh"
+_audit_scope_library="$_library_directory/audit-scope.sh"
 _machinery_library="$_library_directory/audit-machinery.sh"
 _digest_library="$_library_directory/audit-digest.sh"
 _branch_patch_library="$_library_directory/audit-branch-patch.sh"
@@ -273,7 +273,7 @@ _provenance_library="$_library_directory/audit-base-provenance.sh"
 _repo_scope_library="$_library_directory/repo-scope.sh"
 _cross_repo_library="$_library_directory/cross-repo-refusal.sh"
 _bypass_stamp_library="$_library_directory/audit-bypass-stamp.sh"
-if [ -z "$_library_directory" ] || [ ! -f "$_repo_scope_library" ] || [ ! -f "$_machinery_library" ] || [ ! -f "$_digest_library" ] || [ ! -f "$_branch_patch_library" ] || [ ! -f "$_version_library" ] || [ ! -f "$_provenance_library" ] || [ ! -f "$_repo_scope_library" ] || [ ! -f "$_cross_repo_library" ] || [ ! -f "$_bypass_stamp_library" ]; then
+if [ -z "$_library_directory" ] || [ ! -f "$_audit_scope_library" ] || [ ! -f "$_machinery_library" ] || [ ! -f "$_digest_library" ] || [ ! -f "$_branch_patch_library" ] || [ ! -f "$_version_library" ] || [ ! -f "$_provenance_library" ] || [ ! -f "$_repo_scope_library" ] || [ ! -f "$_cross_repo_library" ] || [ ! -f "$_bypass_stamp_library" ]; then
   jq -n --arg reason "PR merge gate: cannot load the ownership classifier, the digest engine, the branch-own patch library, the version normalizer, the base provenance resolver, the command scanner, the fork check, or the bypass stamp (.claude/hooks/lib/audit-scope.sh, .claude/hooks/lib/audit-machinery.sh, .claude/hooks/lib/audit-digest.sh, .claude/hooks/lib/audit-branch-patch.sh, .claude/hooks/lib/gaia-version.sh, .claude/hooks/lib/audit-base-provenance.sh, .claude/hooks/lib/repo-scope.sh, .claude/hooks/lib/cross-repo-refusal.sh, and .claude/hooks/lib/audit-bypass-stamp.sh must all exist and be readable). Every marker check below is keyed to a member's branch-own digest and to a version literal this gate compares for equality against the stamped one; this gate's out-of-scope bypass depends on the classifier to know what a changed path is, and on the provenance resolver to know what base its change set is read against; every permit this gate issues is bound to the pull request the merge names, which it reads through the command scanner; a fork pull request is refused through the fork check; and a bypass allow posts its GAIA-Audit status through the stamp. So it denies rather than guess. Restore every file named above (they ship with the framework; a missing or corrupted checkout is the usual cause) and retry.${gate_arm_note}" '{
     hookSpecificOutput: {
       hookEventName: "PreToolUse",
@@ -353,7 +353,7 @@ tree=$(git rev-parse "HEAD^{tree}" 2>/dev/null || true)
 #   tree_root  WHAT a clearance attests to. The ACTING tree: the content
 #              being merged is this tree's HEAD, not main's. Every writer
 #              agrees -- the agent definitions pass
-#              `--root "$(git rev-parse --show-toplevel)"` to
+#              the acting tree's root as `--root <root>` to
 #              audit-write-clearance.sh, and resolve-audit-members.sh derives the same
 #              way -- so digesting main's HEAD here would compare a marker against content
 #              nobody is merging. From a linked worktree the two trees
@@ -1142,9 +1142,8 @@ gate_empty_is_decisive() {
 # no marker is required. The allowlist itself lives in the
 # shared classifier (audit_out_of_scope_allowlisted), the ONE place this
 # literal set is defined.
-# Legacy-gate only: the member roster's auditable-base set mirrors this check's complement, so
-# any in-scope path here also dispatches a member, a non-empty dispatched set
-# never reaches this function.
+# Legacy-gate only: a non-empty dispatched set never reaches this function; an in-scope path no
+# member owns dispatches nobody and lands here.
 #
 # Strict allowlist, evaluated fail-closed: the diff base must resolve, the diff
 # must be non-empty OR its emptiness must be decisive under

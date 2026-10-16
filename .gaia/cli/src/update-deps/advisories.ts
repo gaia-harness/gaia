@@ -4,9 +4,8 @@ import semver from 'semver';
  *
  * The one place advisory data enters GAIA: `check-updates.sh` (with
  * `--count-only`), the /update-deps skill, and its report all read the payload
- * this writes, never gh or pnpm output directly. Dependabot alerts are the
- * primary source of advisory rows and `pnpm audit` the fallback; the count
- * covers both, since Dependabot's dependency graph can miss the lockfile's
+ * this writes, never gh or pnpm output directly. Advisory rows come from Dependabot alerts and
+ * `pnpm audit`, unioned; the count covers both, since Dependabot's dependency graph can miss the lockfile's
  * transitive packages. Exit 0 whenever a payload was written,
  * `source: "unavailable"` included; callers read the payload, not the exit
  * status, to learn whether a source answered.
@@ -54,8 +53,8 @@ import {readCliWorkspaceMember, readWorkspaceYaml} from './workspace-member.js';
 
 const HELP_TEXT = `Usage: gaia update-deps advisories --emit <path> [--count-only] [--updates <path>] [--no-alerts]
 
-  Fetch open dependency security advisories (Dependabot alerts first,
-  \`pnpm audit\` as the fallback), keep only validated fields, rank them, and
+  Fetch open dependency security advisories (Dependabot alerts and
+  \`pnpm audit\`, unioned), keep only validated fields, rank them, and
   write one JSON payload to <path>. The count covers both sources. Exits 0
   whenever the payload was written, including when no source answered
   (source "unavailable").

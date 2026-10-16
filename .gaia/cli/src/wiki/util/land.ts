@@ -130,8 +130,8 @@ const readPullRequestRecord = (
  * PR ready for review (a PR opened ready is left as is). Call it after
  * `gh pr create` and before the auto-merge step.
  *
- * The subject is the pull request, not the local checkout: both landers cut
- * their branch from a local default branch that can carry commits origin never
+ * The subject is the pull request, not the local checkout: the lander cuts
+ * its branch from a local default branch that can carry commits origin never
  * received, and a diff against it would hide those commits from the roster
  * while the PR still contains them. So the changed set is the PR's own file
  * list, its recorded head must be the commit this checkout holds, and the

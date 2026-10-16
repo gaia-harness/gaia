@@ -462,7 +462,7 @@ main() {
   # depend on it, so if the resolver or registry is unreachable the guard keeps every
   # protection and loses only the scratch carve-outs (an absolute scratch path then falls
   # to the absolute-path deny -- the safe direction for a deny guard). No hardcoded
-  # fallback list (Prime Directive #5): an unreadable registry yields an empty whitelist,
+  # fallback list: an unreadable registry yields an empty whitelist,
   # never a hand-maintained copy of the set the registry now owns.
   # Both loads are bracketed in `set +e` because the errexit above sits in a
   # FUNCTION, not a subshell, so an abort here is the hook's exit -- and exit 2 is

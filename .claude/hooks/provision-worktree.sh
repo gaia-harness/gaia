@@ -190,7 +190,7 @@ carry_forward_directory_contents() {
 # the single-symlink cutover. The linker's next act is to move that whole
 # directory aside to .gaia/local.bak.<ts> and put one symlink in its place,
 # and its contract is explicit that nothing under the backup is inspected or
-# merged. So without this step the four per-tree entries -- including the ones
+# merged. So without this step the per-tree entries -- including the ones
 # the carry-forward above has just keyed correctly -- end up inside a backup
 # nobody reads. A stranded RED observation is not a missing file: it silently
 # BLOCKS a commit the gate should pass, which is precisely the failure the

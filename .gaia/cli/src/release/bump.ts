@@ -23,8 +23,8 @@
  * app reads it through `npm_package_version`), and `.gaia/VERSION`, then
  * prints the new version on stdout.
  *
- * Major bumps are surfaced but never auto-applied: the CLI always
- * exits 0 on `--auto` for major and writes nothing, expecting the
+ * Major bumps are surfaced but never auto-applied: the CLI refuses
+ * `--auto` for major with exit 1 and writes nothing, expecting the
  * maintainer-facing slash command to confirm before re-invoking.
  */
 import type {SpawnSyncReturns} from 'node:child_process';

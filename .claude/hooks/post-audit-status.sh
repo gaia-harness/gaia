@@ -53,8 +53,9 @@
 #   Best-effort and fail-safe-asymmetric: when gh is absent or unauthenticated,
 #   or, on the SUCCESS arm, when a dispatched member other than the caller
 #   hasn't cleared yet, the POST is skipped (the button stays blocked) but the
-#   clearance the caller already wrote is untouched. A SUCCESS status is never
-#   posted without every dispatched member's marker present and none of them
+#   clearance the caller already wrote is untouched. With the resolver present, a SUCCESS status is never
+#   posted without every dispatched member's marker present (an absent or
+#   non-executable resolver falls back to the caller's own marker) and none of them
 #   holding a live refusal, save a code-audit-frontend marker the chore(deps)
 #   manifest-only waiver excuses (a frontend refusal is never excused), and an
 #   absent status never inverts into a cleared gate. The caller may hand in

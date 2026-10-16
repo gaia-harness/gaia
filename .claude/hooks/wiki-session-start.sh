@@ -12,7 +12,7 @@ git rev-parse --git-dir >/dev/null 2>&1 || exit 0
 
 _hook_directory="$(cd "$(dirname "${BASH_SOURCE[0]}")" 2>/dev/null && pwd)" || exit 0
 
-# Runs the wiki-landing catch-up (a merged wiki-sync branch's local reap and
+# Runs the wiki-landing catch-up (a merged wiki landing branch's local reap and
 # base fast-forward). Never blocks the session.
 [ -f "$_hook_directory/local-janitor.sh" ] && bash "$_hook_directory/local-janitor.sh" || true
 

@@ -1,7 +1,5 @@
 /**
- * Replicates Phases 1-3 of `.claude/skills/update-deps/SKILL.md` as a
- * deterministic shell primitive so major bumps split into per-group PRs
- * before the LLM-driven flow runs.
+ * Discovers and groups the outdated packages for the /update-deps skill.
  */
 import {EXIT_CODES} from '../exit.js';
 import {structuredError} from '../stderr.js';
@@ -29,7 +27,7 @@ const HELP_TEXT = `Usage: gaia update-deps <subcommand> [args]
   advisories --emit <path> [--count-only] [--updates <path>] [--no-alerts]
                                               Fetch, validate, and rank open
                                               security advisories (Dependabot
-                                              alerts, else pnpm audit) into a
+                                              alerts plus pnpm audit) into a
                                               JSON payload at <path>.
   advisory-landed --package <name> --vulnerable-range <range>
                                               Exit 0 when no installed version

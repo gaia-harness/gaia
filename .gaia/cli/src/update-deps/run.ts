@@ -1,9 +1,7 @@
 /**
  * `gaia update-deps run --emit-updates <path>` handler.
  *
- * Replicates Phases 1-3 of `.claude/skills/update-deps/SKILL.md` as a
- * deterministic shell primitive so major bumps split into per-group PRs
- * before the LLM-driven flow is dispatched.
+ * Discovers and groups the outdated packages for the /update-deps skill.
  *
  * Phase 1: Discover via `pnpm outdated --json`. ESLint 9.x cap rewrites
  *          a `latest >= 10.x` to the highest available `9.x`; if already
@@ -16,13 +14,12 @@
  *          with no aged upgrade is recorded as `skipped`.
  * Phase 2: Map each outdated package to its companion group via
  *          `groups.ts`. Packages with no rule become `singleton:<name>`.
- * Phase 3: Classify each group: any major bump → Wave B (per-group PR),
+ * Phase 3: Classify each group: any major bump → Wave B (per-group),
  *          else Wave A (batched). Groups with one major member pull all
  *          outdated siblings along; so the group moves together.
  *
- * Output: a JSON payload at the path passed to `--emit-updates`. The
- * shape is fixed and shared with the workflow template author. Schema in
- * the README of the surrounding PR; mirrored as a type below.
+ * Output: a JSON payload at the path passed to `--emit-updates`,
+ * mirrored as a type below.
  */
 import {spawnSync} from 'node:child_process';
 import {mkdirSync, readFileSync, writeFileSync} from 'node:fs';
@@ -265,7 +262,7 @@ const lookupSpec = (pkg: PackageJsonShape, name: string): string | undefined =>
   pkg.peerDependencies?.[name];
 
 /**
- * Pinning rule per SKILL: no `^` or `~` prefix in the spec. Anything else
+ * Pinning rule: no `^` or `~` prefix in the spec. Anything else
  * (exact `1.2.3`, `>=`, tag refs, etc.) counts as pinned.
  */
 const isPinnedSpec = (spec: string | undefined): boolean => {
@@ -905,7 +902,7 @@ type ExpandSiblingResult =
 
 /**
  * Companion-group sibling expansion for one sibling not flagged by `pnpm
- * outdated` (Phase 2 SKILL contract): resolves its current/latest, runs it
+ * outdated`: resolves its current/latest, runs it
  * through the same hold + cooldown pipeline as a trigger member, and reports
  * either a new group member or a skipped entry.
  */
@@ -1031,7 +1028,7 @@ const expandOneGroup = (args: ExpandOneGroupArgs): SkippedEntry[] => {
 };
 
 /**
- * Companion-group sibling expansion (Phase 2 SKILL contract). For every
+ * Companion-group sibling expansion. For every
  * non-singleton group with at least one outdated trigger member, scans
  * `allPackageNames` for group members `pnpm outdated` did not flag and pulls
  * each in via {@link expandOneGroup}, mutating `byGroup`'s member arrays in
@@ -1217,7 +1214,7 @@ const buildWorkspaceWaves = (args: {
     else list.push(entry);
   }
 
-  // Companion-group sibling expansion (Phase 2 SKILL contract).
+  // Companion-group sibling expansion.
   // For every non-singleton group with at least one outdated trigger member,
   // scan package.json for ALL members of that group and pull in any that
   // were not flagged by `pnpm outdated`. Fetch their `latest` via

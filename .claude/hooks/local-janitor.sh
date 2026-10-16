@@ -3,8 +3,8 @@
 # working state.
 #
 # Side-effect only. A wiki landing whose session ended before /gaia-wiki's own
-# merge wait and cleanup ran (`gaia wiki chain finish` cuts a throwaway branch,
-# pushes it, and enables auto-merge with `gh pr merge --auto`, a call that
+# merge wait and cleanup ran (`gaia wiki chain begin` cuts a throwaway branch and
+# `gaia wiki chain finish` pushes it and enables auto-merge with `gh pr merge --auto`, a call that
 # returns BEFORE the merge lands) leaves both a local wiki/<YYYY-MM-DD-HHMM>
 # branch (or a legacy wiki/sync-<date>-<sha> or wiki-sync/<date>-<sha> one)
 # and a stale local base branch behind. This hook
@@ -12,9 +12,9 @@
 # skips the current branch and the fast-forward runs only with HEAD on base,
 # so a session left on the landing branch is reconciled from the first
 # session started after checking out base):
-#   a. an existence gate. Everything below runs only when a local wiki
-#      landing branch of one of those three shapes is present at all, so an
-#      ordinary session pays nothing for any of it.
+#   a. an existence gate. Steps (b) and (c) run only when a local wiki
+#      landing branch of one of those three shapes is present at all; (d)
+#      also runs for an owed catch-up with none present.
 #   b. a bounded, rate-limited `git fetch --prune` of origin. Bounded by
 #      GAIA_WIKI_FETCH_TIMEOUT_SECONDS (default 5, floor 1, ceiling 30;
 #      0 disables the fetch outright, and with it the reap in (c) and the
