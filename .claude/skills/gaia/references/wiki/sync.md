@@ -8,7 +8,7 @@ Contents: Playbook; Step 1: Read state and compute drift; Step 2: Drift cap chec
 
 Evaluate every commit between `wiki/.state.json` `last_evaluated_sha` and HEAD. For each, decide whether the wiki needs an update. Edit pages, log decisions, advance state. Sync commits nothing: its edits stay uncommitted, and the router lands them with the later stages' edits in the run's one commit (`gaia wiki chain commit`, `references/wiki.md` → "The run", step 6). Never commit here.
 
-`wiki/.state.json` is written by two workflows: this one writes the sync-related fields (`last_evaluated_sha`, `last_evaluated_at`); the consolidate stage writes the consolidate-related field (`last_consolidated_sha`). Each must preserve fields owned by the other when writing. Everything else that reads it, the statusline nudge included, is a read-only consumer.
+`wiki/.state.json` is written by two workflows: this one writes the sync-related fields (`last_evaluated_sha`, `last_evaluated_at`); the consolidate stage writes the consolidate-related fields (`last_consolidated_sha`, `last_consolidated_at`). Each must preserve fields owned by the other when writing. Everything else that reads it, the statusline nudge included, is a read-only consumer.
 
 ## Step 1: Read state and compute drift
 

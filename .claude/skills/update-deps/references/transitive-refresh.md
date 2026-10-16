@@ -2,7 +2,7 @@
 
 Operate on the root workspace and its `frontend` package only: run every `pnpm` command from the repository root, never with `-r` or `cd`; `-C frontend` is the one allowed path argument. Frozen names: `{FROZEN_NAMES}`.
 
-1. **Snapshot** the three files the refresh could touch, and the direct dependencies' resolved versions:
+1. **Snapshot** the files the refresh could touch, and the direct dependencies' resolved versions:
    ```bash
    mkdir -p /tmp/update-deps-refresh
    mkdir -p /tmp/update-deps-refresh/frontend

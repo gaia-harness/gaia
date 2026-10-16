@@ -121,7 +121,7 @@ This roll-up renders into the single end-of-task summary (see "Surfacing the adv
 
 ### 6. Worthiness Audit (emergent surface)
 
-The deterministic surface earns its honesty proof from the RED gate. The emergent surface (the descriptor's `emergentTests` globs: component and page stories, which are the component tests, and Playwright) has no stable failing-then-passing run to gate on, so its honesty and worthiness come from an **advisory audit** instead. Run this audit after green, on the emergent-surface test and story files the task changed (the classifier roll-up above tells you which touched files are `emergent`).
+The deterministic surface earns its honesty proof from the RED gate. The emergent surface (the `emergentTests` globs in the package descriptor `frontend/gaia.package.json`) has no stable failing-then-passing run to gate on, so its honesty and worthiness come from an **advisory audit** instead. Run this audit after green, on the emergent-surface test and story files the task changed (the classifier roll-up above tells you which touched files are `emergent`).
 
 #### Dispatch a fresh-context audit (no-orchestrator path)
 

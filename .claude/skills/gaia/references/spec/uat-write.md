@@ -21,7 +21,7 @@ bash .gaia/scripts/spec/working-doc-id-scan.sh
 
 Capture the renderer's stdout JSON as is: `{"ok":true,"e2e_directory":"...","summary":{"written":0,"rewritten":0,"unchanged":0,"preserved":0,"deleted":0,"conflict":0},"details":[{"uat_id":"...","path":"...","action":"written"}]}`. A conflict detail also carries `reason`. The renderer validates the routing table and the SPEC before it writes anything, and keeps a render ledger (`uat-render.json`) beside the plan README so a later run finds the spec of a removed or re-routed UAT. The ledger lives in the plan folder and is never committed.
 
-The id scan checks every path and every file under `frontend/.playwright/` (the frontend package's Playwright directory) for a working-document id. Run it even when the renderer reported nothing changed.
+The id scan checks every path and every text file under `frontend/.playwright/` (the frontend package's Playwright directory), except the `output/` run-artifacts folder, for a working-document id. Run it even when the renderer reported nothing changed.
 
 ## Exit codes
 

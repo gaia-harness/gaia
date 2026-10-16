@@ -72,7 +72,7 @@ If every section is clean:
 
 ## Notes
 
-- This hook is the last automated gate before the human-facing gate 2. Surface every candidate finding in each section, including borderline and low-confidence ones; do not pre-filter for importance or confidence. Gate 2 (the human) triages. Suppressing a borderline finding here is the failure mode this gate exists to catch.
+- Surface every candidate finding in each section, including borderline and low-confidence ones; do not pre-filter for importance or confidence. Gate 2 (the human) triages. Suppressing a borderline finding here is the failure mode this gate exists to catch.
 - Self-review applies the minor fixes to the draft itself and returns a thin digest; the wrapper gates only the critical and major findings. The authoritative return/apply contract is the 6a dispatch prompt in `.claude/skills/gaia/references/spec/self-review-dispatch.md`.
 - The pending-clarifications gate is itself a required behavior. The agent reports the items; the wrapper asks, honors the user's choice, and loops until each item is answered or deferred.
 - The first-tool-call contract (lead with a Read, no prose before it) lives in the 6a dispatch prompt in `.claude/skills/gaia/references/spec/self-review-dispatch.md`, this file's dispatcher, not here.

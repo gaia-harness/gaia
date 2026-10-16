@@ -55,7 +55,7 @@ Read `wiki_promote_targets` from the resolved source's frontmatter (`SUMMARY.md`
 Allowed subdomain values:
 
 ```
-{decisions, concepts, modules, flows, components, dependencies}
+{decisions, concepts, modules, flows, dependencies}
 ```
 
 Validate the list:
@@ -80,7 +80,7 @@ For each valid target subdomain:
 4. Build the routing plan tuple:
 
    ```yaml
-   - subdomain: <decisions|concepts|modules|flows|components|dependencies>
+   - subdomain: <decisions|concepts|modules|flows|dependencies>
      slug: <slug>
      target_path: wiki/<subdomain>/<slug>.md
      exists_already: <bool>
@@ -129,7 +129,6 @@ Emit YAML frontmatter at the top of the file matching the contract. Map `subdoma
 | `concepts`     | `concept`    |
 | `modules`      | `module`     |
 | `flows`        | `flow`       |
-| `components`   | `component`  |
 | `dependencies` | `dependency` |
 
 
@@ -229,7 +228,6 @@ After all pages have been written and the body is rendered, update `wiki/index.m
       | `concepts`     | `## Concepts`                     |
       | `modules`      | `## Modules (architecture)`       |
       | `flows`        | `## Flows`                        |
-      | `components`   | `## Components (Form deep dives)` |
       | `dependencies` | `## Dependencies`                 |
 
    2. Compute the wikilink: `- [[<page-title>]]` where `<page-title>` is the H1 of the rendered page (same value used in `## Related`).
