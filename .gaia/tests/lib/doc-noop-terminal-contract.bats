@@ -8,6 +8,8 @@
 # several prose surfaces, and one of them states a DIFFERENT ending on purpose:
 # the pre-merge audit gate (stop and surface, never inline fallback, because a
 # Code Audit Team member's clearance marker is that member's own attestation).
+# The plan orchestrator's UAT fidelity judge departs too, halting rather than
+# letting the orchestrator grade its own phases' specs inline.
 # An undeclared deliberate exception is worse than drift: the safe-looking
 # reading of an unexplained difference is that the agreeing sites are right and
 # the odd one is stale, and acting on that turns a fail-closed merge gate into
@@ -60,6 +62,9 @@ setup() {
   GATE_RELATIVE_PATH='wiki/concepts/Audit Round Procedure.md'
   # The runbook states the same stop for the unit file the main thread reads.
   RUNBOOK_RELATIVE_PATH='wiki/concepts/PR Merge Workflow.md'
+  # The second deliberate departure: the plan orchestrator halts rather than
+  # judge its own phases' UAT specs inline.
+  LIFECYCLE_RELATIVE_PATH='.claude/skills/gaia/references/spec/lifecycle.md'
 
   OWNER="$ROOT/$OWNER_RELATIVE_PATH"
   GATE="$ROOT/$GATE_RELATIVE_PATH"
@@ -72,6 +77,7 @@ setup() {
     '.claude/skills/gaia/references/plan/decomposition-audit.md'
     '.claude/skills/gaia/references/spec/audit.md'
     '.claude/skills/gaia/references/spec/lens-dispatch.md'
+    '.claude/skills/gaia/references/spec/lifecycle.md'
     '.claude/rules/subagent-dispatch.md'
     'wiki/concepts/Code Review Audit Agent.md'
     'wiki/concepts/Audit Round Procedure.md'
@@ -201,6 +207,7 @@ terminal_segments() {
   for relative_path in "${ROSTER[@]}"; do
     [ "$relative_path" = "$GATE_RELATIVE_PATH" ] && continue
     [ "$relative_path" = "$RUNBOOK_RELATIVE_PATH" ] && continue
+    [ "$relative_path" = "$LIFECYCLE_RELATIVE_PATH" ] && continue
     lines="$(terminal_segments "$ROOT/$relative_path")"
     [ -n "$lines" ] || { echo "no terminal statement read in ${relative_path}" >&2; return 1; }
     # Per statement, not per file: a file whose ending drifted at one of
@@ -245,11 +252,30 @@ terminal_segments() {
 }
 
 @test "the owner page admits the merge gate's exception and states its reason" {
-  grep -qF -- 'One surface departs from that ending, on purpose' "$OWNER"
+  grep -qF -- 'Some surfaces depart from that ending, on purpose' "$OWNER"
   grep -qF -- '[[Audit Round Procedure]]' "$OWNER"
   # The reason, not merely the fact. Without it a reader cannot tell a
   # deliberate exception from an unmaintained one, which is the whole defect.
   grep -qF -- "own attestation" "$OWNER"
+}
+
+@test "the owner page admits the UAT fidelity judge's exception and states its reason" {
+  grep -qF -- "$LIFECYCLE_RELATIVE_PATH" "$OWNER"
+  grep -qF -- 'the implementer grading its own work' "$OWNER"
+}
+
+@test "the UAT fidelity judge's terminal statement halts and does not fall back inline" {
+  local lines
+  lines="$(terminal_segments "$ROOT/$LIFECYCLE_RELATIVE_PATH")"
+  [ -n "$lines" ] || { echo "no terminal statement read in $LIFECYCLE_RELATIVE_PATH" >&2; return 1; }
+  printf '%s\n' "$lines" | grep -qi -- 'inline' && return 1
+  printf '%s\n' "$lines" | grep -qF -- 'HALT'
+}
+
+@test "the UAT fidelity judge declares its departure as deliberate and names the owner" {
+  grep -qF -- 'departs from the general inline ending' "$ROOT/$LIFECYCLE_RELATIVE_PATH"
+  grep -qF -- 'wiki/concepts/Code Review Audit Agent.md' "$ROOT/$LIFECYCLE_RELATIVE_PATH"
+  grep -qF -- 'cannot legitimately do the work itself' "$ROOT/$LIFECYCLE_RELATIVE_PATH"
 }
 
 @test "the owner page no longer asserts a uniform ending across every surface" {

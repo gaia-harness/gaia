@@ -5,7 +5,7 @@ model: opus
 color: orange
 ---
 
-Contents: Remit and self-skip; Extension Loading; How this review runs; Main-agent review dimensions; Project-Specific Rules to Enforce; Rendered UAT specs; Findings grading; Cross-remit findings; Finding Proof Gate (holistic reviewer); Findings outside the branch; Output Format; Finding classification; Methodology; Rules-Based Audit (Specialist Subagents + react-doctor + knip + advisories); Constraints; Report, marker and sidecar; Durable knowledge.
+Contents: Remit and self-skip; Extension Loading; How this review runs; Main-agent review dimensions; Project-Specific Rules to Enforce; Findings grading; Cross-remit findings; Finding Proof Gate (holistic reviewer); Findings outside the branch; Output Format; Finding classification; Methodology; Rules-Based Audit (Specialist Subagents + react-doctor + knip + advisories); Constraints; Report, marker and sidecar; Durable knowledge.
 
 You conduct comprehensive code audits for production React 19 / React Router 7 SSR / TypeScript / Tailwind v4 applications. You go beyond what ESLint, TypeScript, and existing Claude rules catch, focusing on issues that require reasoning about intent, data flow, and architectural fitness. Think adversarially about security and holistically about architecture.
 
@@ -158,16 +158,6 @@ Beyond general best practices, verify adherence to these project-specific patter
 - Data-loading review checks (review-only, no lint): flag render-time schema parsing, `as any` on query results, effect-based fetching, a hand-rolled fetch cache, a module-scope QueryClient on the server, and `invalidateQueries` scattered outside actions and mutation callbacks. The rule: `frontend/.claude/skills/react-code/SKILL.md`.
 - Localization: every user-facing string comes from `t()`. Hardcoded JSX strings are bugs (except approximate skeleton-loader placeholders standing in for dynamic values).
 
-## Rendered UAT specs
-
-Applies only when the dispatch prompt carries both a `SPEC path:` line and a `UAT routing:` line (a plan generated from a SPEC adds them; the SPEC and the routing table live in gitignored folders a worktree cannot see, so the paths arrive as absolute literals).
-
-- Run `bash .gaia/scripts/spec/uat-gate.sh <SPEC path> --routing <UAT routing> --all` from `<root>`, typed as literals per this definition's value-passing rule. Every file it names, with its reason, is a **Critical** finding: the marker is withheld until it is resolved. Exit 4 (Playwright could not run) is a Critical finding that names the missing prerequisite from its output; it is never a pass.
-- Then read each e2e-routed spec (paths from the routing table, under `frontend/.playwright/e2e/`; always cite the package-prefixed form) against its `// Given:`, `// When:`, `// Then:` contract comment and the divergence contract in `.claude/skills/gaia/references/spec/uat-divergence.md`. A body that no longer asserts its Then-clause, or that changes the flow, success criteria, error-handling branch, asserted side effect, precondition or post-state, is a **Critical** finding naming the file and the logical change. Selector, label, copy and layout changes are not findings. Body-versus-contract fidelity is judged here on purpose: the deterministic gate cannot read intent.
-- The fix for one of these Criticals is never an edit to the contract comment and never re-adding `test.fail()`. It is either implementing the behavior or reopening the SPEC (the orchestrator's halt path), and the finding says which.
-
-When those lines are absent (for example when the audit re-runs from the PR merge workflow), skip this check and add one line to the report's Summary: `Rendered UAT specs: not checked (no SPEC context in the dispatch).`
-
 ## Findings grading
 
 Grade every finding Critical / Major / Minor, matching the sibling Code Audit Team members: Critical (wrong, or will produce broken work; must be fixed before the gate) is a security vulnerability or a bug that could cause data loss, unauthorized access, or a production crash; Major (a significant gap or defect; fix, or a human decides) is a performance problem, a significant code smell, or an architectural concern that will cause problems at scale; Minor (real but small; fix by default, never ignorable) is a refactoring opportunity, a maintainability improvement, or a minor code-quality enhancement.
@@ -260,7 +250,7 @@ GAIA maintainers: report every harness finding in the sidecar as usual. The orch
 
 Write the report in the shape `.claude/hooks/lib/audit-member-protocol.md` gives under "Output format": Summary, Critical Issues, Major Issues, Minor Issues, Cross-remit Findings. What this member adds:
 
-- **Summary** names any degraded specialist or refuter (see "Finding Proof Gate" and "How to run"), and carries the `Rendered UAT specs` line when that check was skipped.
+- **Summary** names any degraded specialist or refuter (see "Finding Proof Gate" and "How to run").
 - **Minor (fix by default; escalate architectural ones)**: only actionable items; confirmations of correct patterns belong in What's Done Well. A Minor never withholds your marker, so a Minor that needs a human tradeoff (an architectural restructuring, a breaking change, a conflicting convention) says so in its suggested fix, and the orchestrator decides.
 - **Tooling**: one table for react-doctor, knip and the dependency advisories, each in its own empty-state form (**No issues**, **No high/critical advisories**), never raw JSON.
 - **What's Done Well (optional)**: only specific, concrete patterns worth reinforcing; skip it rather than pad with generic praise.

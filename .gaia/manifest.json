@@ -5,6 +5,7 @@
     ".claude/agents/code-audit-frontend.md": "owned",
     ".claude/agents/code-audit-github-workflows.md": "owned",
     ".claude/agents/fitness-judge.md": "owned",
+    ".claude/agents/uat-fidelity-judge.md": "owned",
     ".claude/agents/worthiness-evaluator.md": "owned",
     ".claude/commands/gaia-cleanse.md": "owned",
     ".claude/commands/gaia-codify.md": "owned",

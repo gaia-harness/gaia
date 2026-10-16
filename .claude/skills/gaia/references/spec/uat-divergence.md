@@ -17,7 +17,7 @@ Three layers, each independent of the others:
 
 1. **Deterministic divergence check.** `.gaia/scripts/spec/uat-divergence-check.sh` compares the contract comment of each rendered spec with the SPEC's UAT text. `uat-gate.sh` runs it at every owning-phase gate and before the audit, so a spec whose contract lines were edited blocks the commit. It never reads the test body, so a cosmetic edit never changes its verdict.
 2. **Executor report.** An executor that needs a logical change does not make it. It reports the change under `## Reporting` and stops; the orchestrator halts the phase.
-3. **Audit member.** The pre-merge audit member judges whether each test body still asserts its contract: a body can keep the contract comment intact and still stop asserting it.
+3. **Fidelity judge.** At the pre-audit UAT checks (`lifecycle.md` `## Pre-audit UAT checks`), the orchestrator dispatches a fresh `uat-fidelity-judge` agent that judges whether each test body still asserts its contract: a body can keep the contract comment intact and still stop asserting it. A `diverges` verdict halts the run.
 
 Re-rendering after a reopen follows the digest embedded in each spec: an unedited spec is rewritten from the corrected UAT, an edited one comes back as a conflict the human resolves (`uat-write.md` `## Conflicts`).
 

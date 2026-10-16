@@ -393,6 +393,7 @@ unowned:
   # member has a lens for instruction prose: the same footing as the skills.
   - ".gaia/migrations/**"
   - ".claude/agents/worthiness-evaluator.md"
+  - ".claude/agents/uat-fidelity-judge.md"
   - ".claude/commands/**/*.md"
   - ".gaia/cli/health/**/*.md"
   - ".github/forensics/prompt.md"

@@ -33,9 +33,10 @@
 #
 # Honest limit: the gate proves a spec turned green and still carries its
 # contract. Whether the test body truly exercises the UAT is judged by the
-# pre-merge audit member, not here. The Playwright step boots the dev server and
-# the Storybook server, needs a local Chromium, and aborts when `pnpm storybook`
-# holds the Storybook port, so it runs only the owned files, never the suite.
+# uat-fidelity-judge agent at the pre-audit UAT checks, not here. The Playwright
+# step boots the dev server and the Storybook server, needs a local Chromium,
+# and aborts when `pnpm storybook` holds the Storybook port, so it runs only the
+# owned files, never the suite.
 set -uo pipefail
 
 usage() {

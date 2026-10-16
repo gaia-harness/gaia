@@ -18,7 +18,7 @@ Here `<N>` is the phase number.
 
 **Prerequisites and cost.** Playwright's Chromium is installed and `pnpm storybook` is stopped (the run boots its own servers). Each run boots two webServers, so budget roughly a minute per owning phase.
 
-**What it checks.** Per owned spec: the file exists and starts with its contract marker; no `test.fail`, `test.fixme`, `test.skip`, `.only` or skipped or fixme `describe` annotation remains; the deterministic floor holds (a `page.` call and an `expect(` on a real value); the contract comment still matches the SPEC UAT; no working-doc id appears in the e2e tree; and Playwright's JSON reporter records every test in the file as passed. Whether the test body still asserts the contract is not decided here: the pre-merge Code Audit Team audit judges it.
+**What it checks.** Per owned spec: the file exists and starts with its contract marker; no `test.fail`, `test.fixme`, `test.skip`, `.only` or skipped or fixme `describe` annotation remains; the deterministic floor holds (a `page.` call and an `expect(` on a real value); the contract comment still matches the SPEC UAT; no working-doc id appears in the e2e tree; and Playwright's JSON reporter records every test in the file as passed. Whether the test body still asserts the contract is not decided here: the `uat-fidelity-judge` agent judges it once, in `## Pre-audit UAT checks`.
 
 **Outcome.**
 
@@ -54,6 +54,32 @@ git -C <RESOLVED_ROOT> merge-base --is-ancestor <render sha> <Phase 1 sha>
 ```
 
 A non-zero exit is a HALT naming both SHAs: Phase 1 was committed without the rendered red specs under it.
+
+Then judge the test bodies. The gate proves each spec still carries its contract and passes, but never reads the body, so a body can keep its contract comment and stop asserting it. That judgment goes to one fresh `uat-fidelity-judge` agent per run, never to the orchestrator, which would be grading its own phases' work. Skip this step when the gate printed `no owned e2e specs`.
+
+1. Pre-clear the verdict file: `rm -f <PLAN_DIR>/uat-fidelity.json`.
+2. Dispatch `Agent(subagent_type: "uat-fidelity-judge")` with a prompt of these lines, one `Spec:` line per `e2e` row of the routing table in `<PLAN_DIR>/README.md`, the path joined from `<RESOLVED_ROOT>`, `<frontend package>/.playwright/e2e/`, the row's `feature_folder` and its `file_name`:
+
+   ```
+   SPEC path: <SPEC_PATH>
+   Verdict file: <PLAN_DIR>/uat-fidelity.json
+   Spec: <uat_id> <absolute path of the rendered spec>
+   ```
+
+3. Wait for the agent's completion notification, never classifying when the dispatch call returns, then classify the file, which is a JSON array with one entry per `Spec:` line:
+
+   ```bash
+   bash .gaia/scripts/audit-noop-detect.sh --shape agent-report-file --path <PLAN_DIR>/uat-fidelity.json --expect-count <number of Spec lines>
+   ```
+
+   Exit 1 is a no-op: re-dispatch exactly once against the re-cleared path. A second consecutive no-op is a HALT, never a judgment the orchestrator makes itself. This departs from the general inline ending (`wiki/concepts/Code Review Audit Agent.md`, `### The terminal action, stated once`) deliberately: the orchestrator wrote the phases under judgment, so it cannot legitimately do the work itself. The halt message names the verdict file and the specs from the `Spec:` lines, and gives the next step: resume the plan to run this step again, or have a human read each listed spec against its contract, then tell the orchestrator to continue to the final summary when every body still asserts it, or fix a diverging one as step 4 states.
+4. Halt on any divergence:
+
+   ```bash
+   jq -e 'all(.[]; .verdict == "asserts")' <PLAN_DIR>/uat-fidelity.json
+   ```
+
+   A non-zero exit is a HALT: surface each `diverges` entry's file and reason. The fix is implementing the behavior or reopening the SPEC (`.claude/skills/gaia/references/spec/uat-divergence.md` `## Reopen`), never an edit to the contract comment and never re-adding `test.fail()`. Like the gate, it is never an audit finding to fix inside a fix round.
 
 ## Consolidation
 

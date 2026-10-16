@@ -185,7 +185,7 @@ Then write the following files directly to `{PLAN_DIR}/`:
 
           bash .gaia/scripts/spec/uat-gate.sh {SPEC_PATH} --routing {PLAN_DIR}/README.md --all
 
-      then the render-ancestry check, both per `.claude/skills/gaia/references/spec/lifecycle.md` `## Pre-audit UAT checks`. A non-zero exit from either is a HALT, never an audit finding to fix in a fix round.
+      then the render-ancestry check, then the `uat-fidelity-judge` dispatch that judges each rendered spec's test body against its contract, all per `.claude/skills/gaia/references/spec/lifecycle.md` `## Pre-audit UAT checks`. A failure of any of the three is a HALT, never an audit finding to fix in a fix round.
       ```
 
     - **Pre-merge Code Audit Team audit (roster-first, non-skippable).** Before any `gh pr merge` call, resolve which Code Audit Team members this branch's diff dispatches:
