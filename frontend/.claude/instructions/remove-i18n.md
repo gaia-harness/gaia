@@ -305,6 +305,64 @@ testIgnore:
 
 The spec the property gated is deleted in Section C.
 
+### D5. Tooling config that still names the i18n stack
+
+Each file below still references a package Section E removes or a path Section C deletes. Leaving any of them breaks Storybook, the Vitest storybook project, the Playwright story scan, or `pnpm knip`.
+
+`frontend/.storybook/main.ts`: remove the addon from `addons`:
+
+```ts
+'storybook-react-i18next',
+```
+
+`frontend/vite.config.ts`: remove these entries from `optimizeDeps.include`:
+
+```ts
+'accept-language-parser',
+'i18next',
+'i18next-browser-languagedetector',
+'react-i18next',
+'remix-i18next',
+```
+
+`frontend/vitest.config.ts`:
+
+- Remove `'i18next',` from the storybook project's `optimizeDeps.include`.
+- In `test.coverage.exclude`, change `'app/{languages,routes,sessions.server,state,types}/**/*'` to `'app/{routes,sessions.server,state,types}/**/*'`, and change `'app/{entry.client,entry.server,env.server,i18n,i18next.server,root}.*'` to `'app/{entry.client,entry.server,env.server,root}.*'`.
+
+`frontend/knip.config.ts`: remove the `'app/languages/index.ts',` entry from `entry`, and remove this comment and these entries from `ignoreDependencies`:
+
+```ts
+// remix-i18next's Accept-Language SSR fallback pulls accept-language-parser
+// transitively; it's pre-bundled in vite optimizeDeps and has no direct
+// import, so knip can't see the usage (and its @types pairs with it).
+'@types/accept-language-parser',
+'accept-language-parser',
+```
+
+`frontend/.playwright/e2e/storybook-a11y.spec.ts`: the language select story is the only member of `RENDERS_NOTHING_BY_DESIGN`. Delete the comment and the set, and drop the set from `isExempt`. An emptied set would fail `pnpm lint` (`sonarjs/no-empty-collection` has no autofix):
+
+```ts
+// Stories whose subject renders nothing in this project: the language select
+// hides itself in a single-language project.
+const RENDERS_NOTHING_BY_DESIGN = new Set([
+  'components-languageselect--default',
+]);
+```
+
+is deleted, and
+
+```ts
+  const isExempt =
+    TOAST_STORY_IDS.has(storyId) || RENDERS_NOTHING_BY_DESIGN.has(storyId);
+```
+
+becomes
+
+```ts
+  const isExempt = TOAST_STORY_IDS.has(storyId);
+```
+
 ---
 
 ## Section E, package.json
@@ -441,7 +499,7 @@ Review every match. Edit or delete each, the only acceptable surviving matches a
 ## Section I, Verify
 
 ```bash
-pnpm typecheck && pnpm lint && pnpm test --run && pnpm build
+pnpm typecheck && pnpm lint && pnpm knip && pnpm test --run && pnpm build
 ```
 
 If any step fails, **stop** and report the failing command + output verbatim. Do **not** proceed to Section J.
