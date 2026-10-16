@@ -5,7 +5,7 @@ library: '@conform-to/zod'
 
 # Conform + Zod Audit Rules
 
-- `@conform-to/zod` must **always** be imported from the `/v4` subpath. Flag any import from the bare `@conform-to/zod` package as **Critical**. The default export targets Zod v3 and causes a silent runtime failure, typecheck, lint, and build do not catch it.
+- `@conform-to/zod` must **always** be imported from the `/v4` subpath. Flag any import from the bare `@conform-to/zod` package as **Critical**. The default export targets Zod v3 and causes a silent runtime failure that typecheck and build do not catch (lint does, via `no-restricted-imports`).
 
 ```tsx
 // BAD, runtime failure, no build-time error

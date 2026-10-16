@@ -156,13 +156,13 @@ ARIA attributes are role-scoped. Look up the role; only attrs in its allowed lis
 
 ## aria-required-attr
 
-Some roles require companion attrs. Disclosure widgets (`aria-expanded`) need `aria-controls` pointing at the controlled element's id.
+Some roles require companion attrs. `role="combobox"` requires `aria-expanded` and `aria-controls`. On a disclosure button axe does not require `aria-controls`, but pointing it at the controlled element's id is still good practice.
 
 ```tsx
-// BAD, aria-expanded with no aria-controls
+// Passes axe, but aria-expanded with no aria-controls leaves the panel unnamed
 <button aria-expanded={open}>{t('menu')}</button>
 
-// GOOD, aria-controls names the panel
+// Better, aria-controls names the panel
 <button aria-expanded={open} aria-controls="menu-panel">
   {t('menu')}
 </button>

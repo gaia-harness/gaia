@@ -52,7 +52,7 @@ Most hook bugs come from misidentifying the type of problem being solved. Before
 
 A raw ui control carries no label or error wiring. Compose it with Conform exactly as `references/conform-forms.md` shows (one pattern per control type, with the `Field` wiring). Options are rendered from an array with `.map`, not written as inline `<option>` elements.
 
-**CRITICAL, `@conform-to/zod`:** Always import from `/v4` subpath. The default export targets Zod v3 and causes a runtime error that typecheck/lint/build do NOT catch.
+**CRITICAL, `@conform-to/zod`:** Always import from `/v4` subpath. The default export targets Zod v3 and causes a runtime error that typecheck and build do NOT catch (lint flags the bare import).
 
 ```tsx
 // BAD, runtime error
@@ -148,7 +148,7 @@ A hand-written memo's deps array is also a stale-closure risk, one more reason n
 - **Named React imports:** `import {useState} from 'react'`, never `React.useState()`, avoids the React namespace and makes tree-shaking explicit
 - **Type imports:** `import type {ChangeEventHandler} from 'react'`, never the `React.` namespace
 - **Event handler types:** Prefer `ChangeEventHandler<HTMLInputElement>` over inline event typing
-- **Event handler naming:** `handle{Action}{Element}`, the `{Element}` is required so the name says _what it does_, not just _when it fires_; e.g. `handleClickSave`, `handleChangeInput`, `handleCopyStack`. A bare event name (`handleClick`, `handleChange`, `handleSubmit`) trips `react-doctor/no-generic-handler-names`.
+- **Event handler naming:** `handle{Action}{Element}`, the `{Element}` is required so the name says _what it does_, not just _when it fires_; e.g. `handleClickSave`, `handleChangeInput`, `handleCopyStack`. A bare event name (`handleClick`, `handleChange`, `handleSubmit`) breaks this convention (react-doctor's `no-generic-handler-names` is off by default, so review catches it).
 
 ### Component Extraction
 

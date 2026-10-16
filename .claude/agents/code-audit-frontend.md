@@ -257,7 +257,7 @@ Write the report in the shape `.claude/hooks/lib/audit-member-protocol.md` gives
 
 ## Finding classification
 
-Assign each finding a `finding_class` by the per-bucket convention below. It is carried into the findings sidecar and the re-run ledger. A finding that maps to no seeded bucket below, after every one has been checked, is stamped `holistic/unclassified` rather than omitted, and counts at any severity as the distinct unclassified recurrence signal, never a draftable candidate. Free-text or invented classes are never assigned; the writer rejects them.
+Assign each finding a `finding_class` by the per-bucket convention below. It is carried into the findings sidecar and the re-run ledger. A finding that maps to no seeded bucket below, after every one has been checked, is stamped `holistic/unclassified` rather than omitted, and counts at any severity as the distinct unclassified recurrence signal, never a draftable candidate. Free-text or invented classes are never assigned; the tally skips them.
 
 ### Per-bucket `finding_class` convention
 
