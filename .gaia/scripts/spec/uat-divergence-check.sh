@@ -17,7 +17,8 @@
 #
 # Honest limit: it reads only the three contract comment lines, never the test
 # body, so a body edit (selectors, labels, copy) never changes the verdict. Whether
-# a body still honors its contract is judged by the pre-merge audit member.
+# a body still honors its contract is judged by the uat-fidelity-judge agent at
+# the pre-audit UAT checks.
 set -uo pipefail
 
 usage() {
