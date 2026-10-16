@@ -17,7 +17,7 @@ Casing is each language's own convention; for TypeScript, see the typescript ski
 
 > **Exception, React event handlers** follow `handle{Action}{Element}` from the react-code skill
 > (e.g. `handleClickSave`, `handleChangeInput`), the `{Element}` is required, since a bare
-> `handleClick` or `handleChange` trips `react-doctor/no-generic-handler-names`. The descriptive
+> `handleClick` or `handleChange` says when it fires, not what it does. The descriptive
 > naming guidelines above apply to utilities, hooks, callbacks, and non-event-handler functions.
 
 Read `references/examples.md` for extended BAD/GOOD examples of each naming pattern.

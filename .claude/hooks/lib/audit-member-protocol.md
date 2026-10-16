@@ -243,7 +243,7 @@ The ledger carries the audit loop's state across rounds in one gitignored file p
 
 ## Holistic class assignment
 
-The holistic classes name language-neutral root causes, and each is assigned from the finding alone. When a finding matches none of them unambiguously, `holistic/unclassified` is the correct record and a nearby class is not; a finding matching two of them with no tie-break below separating that pair takes the same record. Free-text or invented classes are never assigned: the writer rejects them. Your definition supplies the domain examples for your own surface.
+The holistic classes name language-neutral root causes, and each is assigned from the finding alone. When a finding matches none of them unambiguously, `holistic/unclassified` is the correct record and a nearby class is not; a finding matching two of them with no tie-break below separating that pair takes the same record. Free-text or invented classes are never assigned: the tally skips them. Your definition supplies the domain examples for your own surface.
 
 <!-- gaia:maintainer-only:start -->
 The machine-checked vocabulary is `HOLISTIC_FINDING_CLASSES` in `.gaia/cli/src/schemas/finding-class.ts`; a parity test holds the list below to it, as sets.

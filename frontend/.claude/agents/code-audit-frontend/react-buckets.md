@@ -26,7 +26,7 @@ Component structure:
 - Named React imports: `import {useState} from 'react'`; never `React.useState()`; never import `FC` or `FunctionComponent`
 - Type-only imports: `import type {ChangeEventHandler} from 'react'`
 - Event handler typing: prefer `ChangeEventHandler<HTMLInputElement>` over inline `(e: ChangeEvent<HTMLInputElement>)`
-- Event handler naming: `handle{Action}{Element}`, the `{Element}` is required; flag bare event names (`handleClick`, `handleChange`, `handleSubmit`), which trip `react-doctor/no-generic-handler-names`
+- Event handler naming: `handle{Action}{Element}`, the `{Element}` is required; flag bare event names (`handleClick`, `handleChange`, `handleSubmit`); react-doctor's `no-generic-handler-names` is off by default, so review is what catches them
 - One component per file
 
 Component extraction:
