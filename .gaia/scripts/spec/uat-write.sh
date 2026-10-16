@@ -10,6 +10,8 @@
 # Exit codes the caller branches on:
 #   0  success, no conflict; stdout is the JSON summary
 #   1  operational failure; stdout is {"ok":false,"error":"..."}; nothing written
+#      when it fails before the apply phase, otherwise some renders may already
+#      be on disk
 #   2  invalid input (usage, malformed SPEC, invalid routing table, a
 #      working-document id in an e2e-routed UAT); stderr only; nothing written
 #   3  conflict: every other action applied, the JSON summary printed, every

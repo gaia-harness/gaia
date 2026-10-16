@@ -6,7 +6,7 @@
 #       [--body-in <file> --body-out <file>]
 #
 # The one deterministic writer of the marker-delimited section below, used by
-# the main thread after each round.
+# the audit loop unit at each round end.
 # Branch state is local and gitignored; the PR body is the published,
 # cross-machine record of how many audit rounds a PR took. Publication only:
 # nothing reads the section back to grant a round or set a count, so a

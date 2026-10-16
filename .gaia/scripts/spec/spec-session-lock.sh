@@ -82,7 +82,9 @@
 #
 # Executable script, sibling of spec-allocator.sh / spec-abandon-empty.sh.
 # Best-effort / fail-open by contract: except for acquire's two meaningful
-# non-zero codes (3, 4), every path exits 0 and never blocks a caller.
+# non-zero codes (3, 4), the exit-1 answers of resolve-host and match-host (no
+# host, no match) and a usage error's exit 1, every path exits 0 and never
+# blocks a caller.
 #
 # Lock file path: <main_root>/.gaia/local/cache/spec-session-<spec_id>.lock,
 #   where main_root is resolved from <repo_root> via the shared main-root

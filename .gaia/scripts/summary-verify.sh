@@ -11,11 +11,12 @@
 # Exit 0 iff the file exists, is non-empty, and is well-formed per the pinned
 # shape (frozen contract, plan/README.md #2): a closed leading frontmatter
 # block (`---` ... `---`) containing wiki_promote_default: and
-# wiki_promote_targets: keys, exactly one non-empty H1 (`# <title>`), and a
-# non-empty body after it. An optional `## Divergence` section is allowed but
-# not required. The first wiki_promote_default: line must carry yes, ask, no,
-# true or false (optionally in matching quotes; true and false are accepted
-# aliases of yes and no, normalized by the consolidation and promotion steps).
+# wiki_promote_targets: keys, a non-empty H1 (`# <title>`; later H1 lines are
+# body), and a non-empty body after it. An optional `## Divergence` section is
+# allowed but not required. The first wiki_promote_default: line must carry
+# yes, ask, no, true or false (optionally in matching quotes; true and false
+# are accepted aliases of yes and no, normalized by the consolidation and
+# promotion steps).
 # The wiki_promote_targets value is not deep-validated here: target routing is
 # validated by the wiki promotion step. This gate checks key presence, the
 # default's vocabulary and shape.

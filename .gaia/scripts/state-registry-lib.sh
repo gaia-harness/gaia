@@ -36,9 +36,11 @@
 # gaia_registry_path
 #   Prints the absolute path to <main-root>/.gaia/state-registry.json.
 #   FAILURE (registry not locatable, main root unresolvable, or jq missing):
-#   prints nothing to stdout, writes ONE diagnostic line to stderr, returns
-#   1. This is the STRICT function: callers that need a hard failure (a
-#   conformance check, a diagnostic) call it directly. gaia_registry_recognizes
+#   prints nothing to stdout, writes a diagnostic line to stderr (an
+#   unresolvable main root also surfaces the resolver's own
+#   GAIA_MAIN_ROOT_UNRESOLVABLE line first), returns 1. This is the STRICT
+#   function: callers that need a hard failure (a conformance check, a
+#   diagnostic) call it directly. gaia_registry_recognizes
 #   below deliberately does NOT propagate this failure -- see its own
 #   contract.
 #
@@ -132,7 +134,7 @@
 #                        row outranks any residue or live row beneath it, so
 #                        nothing under such a root is listed elsewhere.
 #   An empty Residue or Unknown section prints "Residue: none." / "Unknown: none.";
-#   the other two headings appear only when non-empty. Without --apply nothing
+#   the other headings appear only when non-empty. Without --apply nothing
 #   changes. With --apply it deletes exactly the Residue paths, printing
 #   "Removed: <path>" for each, after re-checking that no symlink sits on the
 #   path; live, unknown, kept, symlinked and report-only paths are never deleted

@@ -28,12 +28,15 @@
 #                        `security` field that is not exactly `false`, or no
 #                        readable severity, security, key, path or line; or the
 #                        refusal's findings cannot be read at all
-#   rules-reset-global   a global-rules path changed since the anchor
+#   rules-reset-global   a global-rules path changed since the anchor (a newline
+#                        in a changed path routes unclassifiable-path first)
 #   rules-reset-member   this member's own agent definition changed
 #   unclassifiable-path  raw and numstat rows disagree, a path holds a newline,
 #                        the classifiers misalign, or the anchor's change cannot
 #                        be replayed onto HEAD's merge base (all before
-#                        special-file); the glob matcher errors (after it)
+#                        special-file); the glob matcher errors or the
+#                        reviewer input (checklist rows or diff) cannot be
+#                        built (after it)
 #   special-file         binary, mode change, symlink or submodule row
 #   machinery            a gate-machinery path changed
 #   ownerless            an in-scope path no member owns changed
@@ -84,7 +87,7 @@
 # record under <root>/.gaia/local/audit/light/, a light decision also writes
 # the reviewer input file, and a full decision removes a stale one. A
 # refusal-anchored record carries `checklist`, the refusal's open findings as
-# {key, path, line, severity, title}, and the input file lists them as `finding`
+# {key, path, line, severity, security, title}, and the input file lists them as `finding`
 # rows inside the fence; the light-mark script holds the reviewer to them.
 #
 # Bash 3.2 compatible, BWK awk safe. `cd` only inside a command substitution

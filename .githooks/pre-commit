@@ -8,7 +8,8 @@ printf '\n🔎 Running pre-commit check\n'
 
 # The package-aware decisions live in a bash helper (this file must stay POSIX
 # sh, and the registry reader is bash). It prints one TAB-separated record per
-# line: `exempt`, `doctor<TAB>dir`, `doctor-file<TAB>path`, `package<TAB>dir`.
+# line; the record kinds are listed in the header of
+# .gaia/scripts/precommit-packages.sh.
 # It exits 1 with the reason on stderr when the registry or a descriptor cannot
 # be read, and no descriptor failure lets a commit through.
 ROOT=$(git rev-parse --show-toplevel) || exit 1

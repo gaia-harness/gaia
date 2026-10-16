@@ -360,8 +360,8 @@ refute_code() {
 @test "RED: a malformed key line is reported even when a valid key stands beside it" {
   # The ladder this replaced stopped at the first arm that held, so a valid key
   # made every later check unreachable. The stray line is not inert: the
-  # debt-count refresher collects covered paths with a looser scan than this
-  # gate's shape test, so the bogus path would enter that set.
+  # residue tally's suppression reads keys with a looser grammar than this
+  # gate's shape test, so the bogus path would enter its suppression set.
   {
     good_body
     printf '<!-- gaia-debt-key: v1 class=x path=app/bogus.ts line=nope -->\n'

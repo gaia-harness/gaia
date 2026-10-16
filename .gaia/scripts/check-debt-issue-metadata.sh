@@ -50,9 +50,8 @@ readonly PROGRAM_NAME="check-debt-issue-metadata"
 # `.claude/skills/file-tech-debt/SKILL.md`. That file owns the vocabulary and
 # the rubric for choosing within it; this one owns nothing but the read-back, so
 # a value outside a set is reported as a finding rather than tolerated as a
-# variant. The recipe's lockstep note lists this script as a consumer for
-# exactly that reason: a spelling changed there and not here fails a filing
-# immediately, which is the loud direction to fail in.
+# variant. A spelling changed there and not here fails a filing immediately,
+# which is the loud direction to fail in.
 #
 # `investigate` is not a fourth rung on the critical/major/minor ramp.
 # It is the admission that no rung was chosen, and it is the one value in this
@@ -290,11 +289,10 @@ readonly KEY_RE='^<!-- gaia-debt-key: v1 class=[^ ]+ path=.+ line=[0-9]+ -->$'
 # not. Counting candidates apart from well-formed keys is what lets a malformed
 # key be reported while a valid one stands beside it. Testing only for the
 # absence of a well-formed key cannot see that case, and the case is not
-# harmless: `.gaia/scripts/debt-count-refresh.sh` collects covered paths with a
-# looser `scan` than this file's shape test, so a malformed second key line
-# contributes its bogus path to the set the statusline nudge suppression reads,
-# even though dedup identity itself is unaffected (the drain's own capture takes
-# the first well-formed match).
+# harmless: the residue tally's suppression (`gaia residue-tally`) reads keys
+# with a looser grammar than this file's shape test, so a malformed second key line contributes its bogus
+# path to the set it suppresses on, even though dedup identity itself is
+# unaffected (the drain's own capture takes the first well-formed match).
 #
 # Anchoring on the line start is also what preserves the deliberate tolerance
 # for a key mentioned inside running prose, which a correction comment quoting
@@ -438,7 +436,7 @@ run_pre_file() {
   [ -f "$body_file" ] || fatal "body file not found: $body_file"
 
   labels="$(parse_labels_csv "$labels_csv")"
-  # `|| fatal` for the same reason the two gh reads below carry one: a bare
+  # `|| fatal` for the same reason the gh reads below carry one: a bare
   # assignment under `set -e` propagates `cat`'s exit 1, which this script
   # documents as "findings were reported", so an unreadable file that passed the
   # `[ -f ]` test above would tell the caller to fix findings it never printed.

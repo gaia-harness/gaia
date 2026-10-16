@@ -33,6 +33,8 @@
 #   - securitySource (dependabot, pnpm-audit, or unavailable)
 #   - securityUnavailableReason (comma-joined closed-set reason tokens; empty
 #                     for dependabot)
+#   - serenaLangDrift (git-tracked manifests whose language Serena is not
+#                     configured for; [] when none or Serena is unregistered)
 #   - checkedAt      (Unix epoch seconds)
 #
 # TTL is 6 hours (21600s). Re-runs within the TTL exit immediately so the
@@ -68,9 +70,9 @@ PROJECT_ROOT="$(cd "$GAIA_DIRECTORY/.." && pwd)"
 #
 # STATE_ROOT anchors machine-local STATE only. Everything this script measures
 # out of the checkout itself -- CLAUDE.md, .claude/rules/*.md, the
-# Serena language drift, and the two CLI invocations below -- stays on
-# PROJECT_ROOT, because those are tracked files that legitimately differ per
-# branch. Repointing them wholesale would make this refresher report a fact
+# Serena language drift, and the CLI invocations below that name
+# PROJECT_ROOT -- stays on PROJECT_ROOT, because those are tracked files that
+# legitimately differ per branch. Repointing them wholesale would make this refresher report a fact
 # about a tree nobody is in.
 if [ -f "$GAIA_DIRECTORY/scripts/main-root-lib.sh" ]; then
   # shellcheck source=/dev/null
@@ -515,8 +517,9 @@ esac
 # staleness > project drift (keeps the segment to one line).
 #
 # Last-cleanse anchor: the newest .gaia/local/cleanse/KNOWLEDGE-*.md whose frontmatter
-# `status:` is `applied` (gitignored, machine-local). Its mtime is "last cleanse on
-# this machine". The newest whose `status:` is `draft` sets the resume signal.
+# `status:` is `applied` or `applied-partial` (gitignored, machine-local). Its
+# mtime is "last cleanse on this machine". Any report whose `status:` is
+# `draft` sets the resume signal.
 cleanse_last_applied_at="$previous_cleanse_last_applied_at"
 cleanse_memory_count="$previous_cleanse_memory_count"
 cleanse_memory_baseline="$previous_cleanse_memory_baseline"

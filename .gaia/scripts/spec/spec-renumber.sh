@@ -5,7 +5,8 @@
 # .gaia/local/cache/. The inner SPEC.md keeps its name; any sibling artifacts in
 # the folder move with it.
 # Does NOT touch external state (branch names, GH issue titles, commit-message
-# history), those are reported as next steps for the caller to handle consciously.
+# history). Branch names and commit-message history are reported as next steps
+# for the caller to handle consciously; GH issue titles are not reported.
 #
 # Usage:
 #   spec-renumber.sh <repo_root> <old_id> <new_id>

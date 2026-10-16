@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 #
 # Publish mechanics for the /gaia-fitness heal diff
-# (.claude/skills/gaia/references/fitness.md, Step 8). It owns only the
+# (.claude/skills/gaia/references/fitness.md, Step 9). It owns only the
 # commit, the push and the draft pull request, so a bats suite with a bare
 # remote and a `gh` shim can assert what each publish option does. It has no
 # merge subcommand and never calls the merge verb: the playbook runs the merge

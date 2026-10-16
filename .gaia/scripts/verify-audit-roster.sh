@@ -49,8 +49,8 @@
 #      nothing wider.
 #   3. Roster-reader drift: this check's raw-glob scrape and the classifier's
 #      compiled globs must agree per member on the count. On drift the
-#      remit-parity and unowned-dialect verdicts are withheld; region-shape and
-#      coverage verdicts still render.
+#      remit-parity, unowned-dialect and light_hard_full dialect-and-coverage
+#      verdicts are withheld; region-shape and coverage verdicts still render.
 #   4. Light-review keys. Every member carrying `light_review`,
 #      `light_line_cap` or `light_hard_full` states them in a form the router
 #      can trust: `light_review` is the literal `true` or `false`;
@@ -93,7 +93,9 @@
 #
 #   REJECTED as undecidable, never passed: an empty glob or an empty segment
 #   (`a//b`, a leading or trailing `/`); any of ? [ ] { } or \, which a reader may
-#   intend as wildcards and which the classifier silently escapes into literals;
+#   intend as wildcards and which the classifier does not compile as one (it
+#   escapes them into literals, except `?`, which it leaves as a regex
+#   quantifier);
 #   `**` inside a segment rather than as a whole one (`app/**.ts`), whose
 #   compiled form the segment model cannot represent; a run of three or more
 #   `*`; whitespace, which the classifier's record contract cannot carry.
@@ -491,7 +493,7 @@ violation_records="$(
       REJECTION_REASON = ""
       if (glob == "") { REJECTION_REASON = "the glob is empty"; return -1 }
       if (index(glob, " ") || index(glob, "\t")) { REJECTION_REASON = "the glob contains whitespace, which the classifier record contract cannot carry"; return -1 }
-      if (index(glob, "?")) { REJECTION_REASON = "the glob contains `?`, which the classifier escapes into a literal"; return -1 }
+      if (index(glob, "?")) { REJECTION_REASON = "the glob contains `?`, which the classifier does not treat as a wildcard"; return -1 }
       if (index(glob, "[") || index(glob, "]")) { REJECTION_REASON = "the glob contains a bracket, which the classifier escapes into a literal"; return -1 }
       if (index(glob, "{") || index(glob, "}")) { REJECTION_REASON = "the glob contains a brace, which the classifier escapes into a literal"; return -1 }
       if (index(glob, "\\")) { REJECTION_REASON = "the glob contains a backslash, which the classifier escapes into a literal"; return -1 }
@@ -647,9 +649,9 @@ while IFS=$'\t' read -r kind first_field second_field third_field fourth_field; 
       printf '  This check scrapes the raw globs while the classifier compiles\n'
       printf '  them, and the two disagree, so no remit-parity verdict was\n'
       printf '  produced: one of the two readers has drifted from the roster\n'
-      printf '  format. The remit-region parity and unowned-dialect checks below\n'
-      printf '  did not run either, for the same reason. Fix that before trusting\n'
-      printf '  this check.\n'
+      printf '  format. The remit-region parity, unowned-dialect and\n'
+      printf '  light_hard_full dialect-and-coverage checks below did not run\n'
+      printf '  either, for the same reason. Fix that before trusting this check.\n'
       printf '\n'
       ;;
     REMITMISSING)
@@ -924,16 +926,16 @@ if [ -n "$coverage_universe" ]; then
   # points are honored, which is why audit_scope_init takes the config here
   # rather than deriving it from the root.
   #
-  # This call is the script's dominant cost, roughly 0.6s of its ~0.8s on this
-  # tree, because audit_owners_for_paths matches in bash across every tracked
-  # path rather than in the awk pass below, and the obvious optimization is to
-  # interpolate the compiled regexes into that awk and match there. DO NOT. The
+  # This call is the script's dominant cost, because audit_owners_for_paths
+  # matches in bash across every tracked path rather than in the awk pass
+  # below, and the obvious optimization is to interpolate the compiled regexes
+  # into that awk and match there. DO NOT. The
   # compiler would still be shared, but the PRECEDENCE ALGORITHM would not:
   # every claimant first in roster order, then the default member's own tier,
   # then ownerless. Reimplementing that here is precisely the second opinion the
   # paragraph above forbids, and a coverage check that disagrees with dispatch
-  # about who owns a path reports the wrong set in both directions. Sub-second
-  # on a read-only advisory job is not worth buying with that.
+  # about who owns a path reports the wrong set in both directions. Speed on a
+  # read-only advisory job is not worth buying with that.
   audit_scope_init "$root" "$config"
 
   coverage_records="$(

@@ -11,8 +11,10 @@
 # _is_pr, _is_iso, _rows_file, the flag variables). Defines functions only; no
 # side effects at source time.
 #
-# Exit codes. record: 0 recorded; 1 refused with nothing written (no session id,
-# no unclaimed start, already recorded, ledger lock timed out); 2 usage error
+# Exit codes. record: 0 recorded; 1 refused (no session id, no unclaimed start,
+# already recorded, ledger lock timed out, no ledger mutex, directory or scratch
+# directory, link rows not built: nothing written; or an append failure, where
+# the close row may be partly written); 2 usage error
 # (bad ref, unknown flag, missing or disallowed --workflow, --pr or --issue on a
 # non-command ref, jq absent, unreadable ledger). A non-zero exit prints one
 # stderr line and no Cost line. represented: 0 a close with that ref and

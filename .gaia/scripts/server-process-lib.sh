@@ -7,10 +7,11 @@
 # Dual-mode: source it for the functions below, or run it for the CLI at the
 # bottom. Bash 3.2 safe, BSD and GNU tools, no `set -e`.
 #
-# Every automated signal GAIA sends to a dev server goes through this file, and
-# a wrong match stops another session's or a human's server. So the rule here
-# is "refuse, do not guess": this is a per-tree reaper, and an identity it
-# cannot establish with positive evidence is a reason to do nothing.
+# Every automated signal GAIA sends to a dev server it did not launch itself
+# goes through this file, and a wrong match stops another session's or a
+# human's server. So the rule here is "refuse, do not guess": this is a
+# per-tree reaper, and an identity it cannot establish with positive evidence
+# is a reason to do nothing.
 #
 # Process backend, chosen by GAIA_PORTS_PROCESS_PROBE (`auto`, the default,
 # `lsof`, or `proc`): `lsof` reads listeners and working directories on macOS

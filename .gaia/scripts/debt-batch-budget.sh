@@ -4,7 +4,7 @@
 # issues from the ordered backlog and prints one JSON document with each
 # member's cost, the set's total against the budget, a verdict, and, when the
 # set is over budget, the best within-budget subsets to offer instead. Called
-# by the named-set section of .claude/skills/gaia/references/debt.md.
+# by the named-set section of .claude/skills/gaia/references/debt/named.md.
 #
 # The budget is deterministic and costs no model tokens: it is computed from
 # labels and the dedup-key path alone, never from judgment.

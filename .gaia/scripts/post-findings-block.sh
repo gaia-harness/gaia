@@ -60,7 +60,8 @@
 #   ancestor of HEAD exactly as this round's is.
 #
 # Output contract
-#   One stdout marker line, always. Exit 0 on EVERY path.
+#   Past the argument and jq checks: one stdout marker line, always, and exit 0
+#   on every path.
 #     findings: posted <n> finding(s) from <m> member(s) to PR #<N>
 #     findings: updated <n> finding(s) from <m> member(s) on PR #<N>
 #   Decline lines (prefix "findings: declined: "), never a non-zero exit:
@@ -71,8 +72,8 @@
 #     gh unauthenticated
 #     pr unresolved
 #     post failed
-#   An unrecognized flag is a USAGE error (exit 2, stderr), the one path that
-#   is not a decline line.
+#   An unrecognized flag or an absent jq is an exit 2 error on stderr, not a
+#   decline line.
 #
 # Caller contract (load-bearing, not this script's own concern)
 #   Call this ONLY from the local orchestrator, once per local dispatch wave,
@@ -165,11 +166,13 @@
 #   BRANCH-OWN DIGEST, a 64-hex sha256 (audit-digest.sh). A findings sidecar is
 #   keyed to <key-base>.<branch-slug> (gaia_audit_key), never a bare 64-hex
 #   value, so a findings sidecar can never be mistaken for, or glob-matched
-#   as, a marker by VALUE. Direction two: no marker reader globs the audit
-#   directory for `.ok`/`.refused` files by pattern.
+#   as, a marker by VALUE. Direction two: the one marker reader that globs,
+#   clearance_scan (.claude/hooks/lib/audit-clearance.sh), matches only `*.ok`
+#   and `*.refused` and accepts a file only when its body digest equals the
+#   filename stem, so a `.findings.json` sidecar never reaches it.
 #   post-audit-status.sh operates only on the single marker path an agent
 #   hands it as an argument; pr-merge-audit-check.sh reads only its own single
-#   exact digest-keyed path. Nothing else globs the audit directory.
+#   exact digest-keyed path.
 #
 # Bash 3.2 compatible (macOS default). Never `cd`s. jq required (fails
 # closed, matching every other digest/clearance script in this directory).
