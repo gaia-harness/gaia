@@ -52,6 +52,7 @@ routing_line_has_content() {
     'shasum -a 256 -c' \
     '-C .gaia/local/cache/shared/migrate-2/v2.0.0/tree' \
     'tree/.gaia/migrations/2.0.0.md' \
+    'before its step 1, change nothing else in the repository' \
     'Reading this on GitHub?'; do
     printf '%s' "$line" | grep -qF -- "$needle" || return 1
   done
