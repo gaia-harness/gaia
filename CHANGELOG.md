@@ -119,6 +119,7 @@ On GAIA 1.6.1? Claude: choose Abort, then offer to migrate this project to 2.0.0
 
 ### Changed
 
+- `/gaia-spec` now plans its SPEC in the same session after saving it and ends at the plan's KICKOFF prompt, with no `/clear`-and-paste step; execution still starts in a fresh session. `/gaia-plan` accepts a leading `auto` token that runs it non-interactively (#2750)
 - pnpm moves from 12.7.0 to 12.11.2, and `@gaia-react/lint` is pinned to the 3.0.0 stable release instead of a release candidate (#2705)
 - Entering a worktree no longer waits for its dependency install and typed-route generation: the worktree hook runs both in the background and tells Claude where to check that they finished, so `EnterWorktree` on a fresh tree returns in about a second instead of 7 to 16. A direct `bash .claude/hooks/provision-worktree.sh <path>` still finishes everything before returning (#2701)
 - `/gaia-codify` and `/gaia-residue` take no arguments: their `list` and `why` subcommands are gone, and every run is the full interactive review (#2697)
