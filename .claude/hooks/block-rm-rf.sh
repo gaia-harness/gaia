@@ -321,6 +321,29 @@ _rm_whitelist_hint() {
   printf ' An absolute path is removable only inside a scratch root: %s.' "$roots"
 }
 
+# _rm_repository_relative_hint <token> <repository_root>...
+# The other next step for an absolute-path deny: when <token> sits strictly inside one of
+# the roots, the repo-relative spelling of it, which the absolute-path arm never judges.
+# The caller passes the root's logical and physical spellings, because the path Claude
+# types and the hook's own location can differ by a symlink (/tmp and /private/tmp on
+# macOS). The hint names a spelling, never a verdict: the relative form still meets every
+# other arm, so `.git`, `.claude`, and `node_modules` stay denied in it. Prints nothing
+# when no root contains the token, or when every root is empty.
+_rm_repository_relative_hint() {
+  local token="$1" root
+  shift
+  for root in "$@"; do
+    [[ -n "$root" && "$root" != / ]] || continue
+    case "$token" in
+      "$root/"?*)
+        printf " From the repository root, its repo-relative spelling '%s' is judged by the relative-path rules instead." "${token#"$root/"}"
+        return 0
+        ;;
+    esac
+  done
+  return 0
+}
+
 main() {
   set -euo pipefail
 
@@ -337,7 +360,7 @@ main() {
   # the guard stopped guarding rather than losing only the carve-outs. Empty is the
   # degrade _rm_whitelisted_absolute is already written for: it matches nothing, so an
   # absolute scratch path falls to the absolute-path deny.
-  local repository_root rm_whitelist=""
+  local repository_root repository_root_physical rm_whitelist=""
   local flags_given rm_label user_id temporary_root temporary_root_alias="" scratchpad_hint=""
 
   payload=$(cat)
@@ -726,7 +749,8 @@ main() {
       # shellcheck disable=SC2088
       case "$token" in
         /|/*)
-          deny "BLOCKED: ${rm_label} of absolute path '$token' is forbidden.$(_rm_whitelist_hint "$rm_whitelist" "$scratchpad_hint")"
+          repository_root_physical="$(cd "${repository_root:-/}" 2>/dev/null && pwd -P)" || repository_root_physical=''
+          deny "BLOCKED: ${rm_label} of absolute path '$token' is forbidden.$(_rm_whitelist_hint "$rm_whitelist" "$scratchpad_hint")$(_rm_repository_relative_hint "$token" "${repository_root:-}" "$repository_root_physical")"
           ;;
         # The brace form is matched alongside the bare one. `${HOME}` is if anything
         # the more careful spelling of the expansion, and leaving it out reproduced
