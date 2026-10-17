@@ -139,8 +139,9 @@ fi
 
 # Setup standdown: while /setup-gaia provisions a greenfield repo it lands
 # GAIA's own known-safe CI-install commit directly on main (main is not yet a
-# collaboration surface and the commit has nothing to audit). setup-gaia
-# creates this machine-local sentinel around that single commit+push and
+# collaboration surface and the commit has nothing to audit), and /gaia-init
+# lands its init output the same way before any remote exists. Each creates
+# this machine-local sentinel around that single commit (and push) and
 # removes it right after, suspending the PR-only policy only for that window.
 # The sentinel lives in .gaia/local/ (gitignored), so it never rides along in a
 # teammate's clone: a fresh checkout always has this hook fully enforcing. The

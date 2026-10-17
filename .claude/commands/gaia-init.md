@@ -446,11 +446,26 @@ Step 8 recorded each per-machine step through the shared reference, so stamp com
 
 If the CLI exits non-zero, it surfaces a structured error whose `code` field explains the cause (e.g. `not_a_git_repo`, `state_malformed`); surface that JSON line verbatim and stop. Do not retry or self-heal.
 
-Then run the CLI's init finalize step, it deletes this command file:
+Then run the CLI's init finalize step, it deletes this command file and, once every init step is recorded complete, the `.gaia/init-state.json` resume cursor:
 
 ```bash
 .gaia/cli/gaia init finalize
 ```
+
+### Commit the init output
+
+`/gaia-init` lands its own changes as one commit on the current branch, so `/setup-gaia`'s first push carries them: `gh repo create --push` pushes commits only, and every branch or worktree cut later starts from the last commit, never from uncommitted files. The `block-main-destructive-git.sh` PreToolUse hook denies `git commit` on `main` or `master`, so the same machine-local sentinel `/setup-gaia` uses (`.gaia/local/setup-in-progress`, gitignored) suspends it for this one commit.
+
+**First, in its own call**, since the hook reads the sentinel before a command runs: `mkdir -p .gaia/local && touch .gaia/local/setup-in-progress`
+
+**Then, in its own call.** The `rm` runs whether or not the commit succeeds, because a lingering sentinel keeps main-branch protection suspended on this machine:
+
+```bash
+git add -A && git commit -m "chore: initialize project with /gaia-init" && echo COMMITTED || echo COMMIT_FAILED
+rm -f .gaia/local/setup-in-progress
+```
+
+On `COMMIT_FAILED`, surface the commit's error and prepend this required follow-up to the closing message below: "⚠ Required: the init changes are not committed. Review them with `git status`, then commit them before `/setup-gaia`, which pushes only what is committed." Do not retry with `--no-verify`.
 
 ### Send the adoption ping
 

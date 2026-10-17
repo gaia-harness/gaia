@@ -9,7 +9,12 @@ import {
 import {tmpdir} from 'node:os';
 import path from 'node:path';
 import {run} from './finalize.js';
-import {readState} from './util/state.js';
+import {
+  markStepCompleted,
+  readState,
+  stateFilePath,
+  STEP_ORDER,
+} from './util/state.js';
 
 type Sandbox = {
   cleanup: () => void;
@@ -93,6 +98,29 @@ describe('init finalize CLI', () => {
 
     const state = readState(sandbox.root);
     expect(state.completed_steps).toContain('finalize');
+  });
+
+  test('deletes the state file once every earlier step is complete', async () => {
+    sandbox = setupSandbox();
+
+    for (const step of STEP_ORDER.filter((name) => name !== 'finalize')) {
+      markStepCompleted(sandbox.root, step);
+    }
+
+    const exit = await run([], {cwd: sandbox.root});
+    expect(exit).toBe(0);
+    expect(existsSync(stateFilePath(sandbox.root))).toBe(false);
+  });
+
+  test('keeps the state file while an earlier step is incomplete', async () => {
+    sandbox = setupSandbox();
+    markStepCompleted(sandbox.root, 'strip-branding');
+
+    const exit = await run([], {cwd: sandbox.root});
+    expect(exit).toBe(0);
+
+    const state = readState(sandbox.root);
+    expect(state.completed_steps).toEqual(['strip-branding', 'finalize']);
   });
 
   test('idempotent: re-running is safe', async () => {

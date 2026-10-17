@@ -36,7 +36,7 @@ They answer in that order, and the order is by how much of the verdict each mess
 
 ## Setup standdown
 
-The rules above have one temporary, explicit exception. `/setup-gaia` provisions a greenfield repo by landing GAIA's own CI-install commit directly on the default branch: that commit has nothing to audit and the branch is not yet a collaboration surface. An admin run also lands the project's recorded setup decisions the same way. For each such commit+push it suspends the hook via a machine-local, gitignored sentinel `.gaia/local/setup-in-progress`, then removes it. The sentinel is honored only while fresh (mtime within 10 minutes), so a stale one left behind by a crashed setup self-heals and enforcement resumes on its own; it is gitignored, so it never rides into a clone. Resting state is fully enforcing.
+The rules above have one temporary, explicit exception. `/setup-gaia` provisions a greenfield repo by landing GAIA's own CI-install commit directly on the default branch: that commit has nothing to audit and the branch is not yet a collaboration surface. An admin run also lands the project's recorded setup decisions the same way, and `/gaia-init` lands its own init output as one commit before any remote exists. For each such commit (and push, when there is a remote) the command suspends the hook via a machine-local, gitignored sentinel `.gaia/local/setup-in-progress`, then removes it. The sentinel is honored only while fresh (mtime within 10 minutes), so a stale one left behind by a crashed setup self-heals and enforcement resumes on its own; it is gitignored, so it never rides into a clone. Resting state is fully enforcing.
 
 ## Splitting an already-staged tree into commits
 
