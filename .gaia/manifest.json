@@ -258,6 +258,7 @@
     ".gaia/scripts/notebook/notebook-lib.sh": "owned",
     ".gaia/scripts/notebook/reconcile.sh": "owned",
     ".gaia/scripts/notebook/research-reaper.sh": "owned",
+    ".gaia/scripts/override-audit-advisory-ids.sh": "owned",
     ".gaia/scripts/plan-archive.sh": "owned",
     ".gaia/scripts/plan-resume-point.sh": "owned",
     ".gaia/scripts/ports.sh": "owned",
@@ -719,7 +720,7 @@
     "wiki/overview.md": "wiki-owned",
     "wiki/README.md": "wiki-owned"
   },
-  "generated": "2026-10-15T13:58:06.044Z",
+  "generated": "2026-10-17T12:51:58.834Z",
   "regions": [
     {
       "endMarker": "<!-- gaia:audit-remit:end -->",
