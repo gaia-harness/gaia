@@ -34,7 +34,7 @@ This project uses Zod 4; default to the Zod 4 form in every schema.
 
 ## Strict objects
 
-`.strict()` / `.passthrough()` / `.strip()` are deprecated methods. Use the top-level factories.
+Use the top-level factories. Of the chained methods only `.passthrough()` is deprecated (use `z.looseObject()`); `.strict()` still works but has the `z.strictObject()` factory, and `.strip()` is the default behavior, so calling it is redundant.
 
 ```ts
 // BAD, Zod 3 chained method

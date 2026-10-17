@@ -56,9 +56,10 @@ You operate under the SPEC's `scope_boundaries` field. The load-bearing
 rules for the Socratic loop:
 
 1. **Closed-set questions use `AskUserQuestion`** with recommended
-   option first, ranked alternatives next, then `Other` (free text)
-   and `Discuss this` (drops to plain Q&A). See `clarify-prompts.md`
-   for the templates.
+   option first, ranked alternatives next, then `Other` (free text),
+   `Discuss this` (drops to plain Q&A), and `Save partial and resume
+   later` (see `clarify-loop.md`, `## Escape option`). See
+   `clarify-prompts.md` for the templates.
 2. **Open-ended questions use plain prompts.** No enumerated options
    when enumeration would be reductive.
 3. **Per-topic exhaustion checkpoint is required.** When you run out

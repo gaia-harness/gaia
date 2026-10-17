@@ -44,6 +44,9 @@ following option ordering:
 4. **`Discuss this`**, drops to plain Q&A on this question until the
    user signals settlement, then resumes the structured loop on the
    next topic.
+5. **`Save partial and resume later`**, writes the draft to cache and
+   stops; re-invoking `/gaia-spec` resumes it. `clarify-loop.md`
+   (`## Escape option`) owns what selecting it does.
 
 ### Closed-set template
 
@@ -60,9 +63,11 @@ Options:
   2. <alternative-option-A>, <Short reason this is plausible.>
   3. <alternative-option-B>, <Short reason this is plausible.>
   …
-  N-1. Other, type your own answer.
-  N.   Discuss this, talk it through; we'll resume the structured
+  N-2. Other, type your own answer.
+  N-1. Discuss this, talk it through; we'll resume the structured
        loop after you signal settlement.
+  N.   Save partial and resume later, write the draft to cache and
+       stop; re-invoke /gaia-spec to continue.
 ```
 
 When code-context is available (a known component, an existing pattern,
@@ -146,6 +151,7 @@ Options:
   2. Push deeper on <topic>, I'll mine for follow-ups; you can
      provide a seed if there's something specific I'm missing.
   3. Other, name a different topic to jump to.
+  4. Save partial and resume later, write the draft to cache and stop.
 ```
 
 Slot semantics:

@@ -150,12 +150,25 @@ If it is empty, nothing landed; say so and stop.
 
 **On the default branch (main/master):** branch, commit through a message file (never `-m`), push, and open a PR. Subject: `chore(residue): <what the drain promoted or dismissed>`.
 
+**Create the branch, as its own Bash call.** The uncommitted changes follow the checkout. Mint the name first and carry its output as a literal, `<RESIDUE_BRANCH>`, into every later call, since shell variables do not persist between calls:
+
 ```bash
-BRANCH="$(bash .gaia/scripts/branch-name-lib.sh name residue)"
-git checkout -b "$BRANCH"
-git add -A
-git commit -F <commit-message-file>
-git push -u origin "$BRANCH"
+bash .gaia/scripts/branch-name-lib.sh name residue
+```
+
+```bash
+git checkout -b "<RESIDUE_BRANCH>"
+```
+
+Never fold this into the commit call. The main-branch guard reads a whole command before any of it runs, so a `git checkout -b … && git commit …` call still looks like a commit on `main` and is refused.
+
+**Commit and push, then open the PR, as two calls.**
+
+```bash
+git add -A && git commit -F <commit-message-file> && git push -u origin <RESIDUE_BRANCH>
+```
+
+```bash
 gh pr create --draft --title "<commit subject>" --body-file <pr-body-file>
 ```
 
@@ -177,7 +190,7 @@ Empty output confirms no marker is owed, and the merge gate's out-of-scope bypas
 
 **Merge** → drive it to merge through `wiki/concepts/PR Merge Workflow.md` (read it, don't merge from memory): `gh pr merge <N> --squash --delete-branch --auto`, then run the merge wait, `bash .gaia/scripts/pr-wait-merge.sh --pr <N>`, per `.claude/skills/gaia/references/work-lifecycle.md` `## 7. Merge (when asked)`. The merge above is already queued and the script issues no `gh pr merge` of its own, so nothing here re-merges. One arm per verdict plus one for the exit-2 refusal. Every arm below but `CONFLICTING` ends the run and writes its cost record (`## Cost record (run end)`):
 
-- On `MERGED` (exit 0), clean up per `.claude/skills/gaia/references/work-lifecycle.md` `## 8. Cleanup` `### Feature branch`, with `<branch-name>` = `$BRANCH`, and print the merged PR URL.
+- On `MERGED` (exit 0), clean up per `.claude/skills/gaia/references/work-lifecycle.md` `## 8. Cleanup` `### Feature branch`, with `<branch-name>` = `<RESIDUE_BRANCH>`, and print the merged PR URL.
 - On `CONFLICTING` (exit 3), repair it per `wiki/concepts/PR Merge Workflow.md`'s `### Conflict found mid-wait` and run the wait again.
 - On `CHECK_FAILED` (exit 4), print the PR URL and the failing check, and leave the branch in place.
 - On `TIMEOUT` (exit 5), the window closed with the pull request still open: print the PR URL, note the merge is queued, and leave the branch in place.

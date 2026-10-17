@@ -373,7 +373,7 @@ test('formats MM/yy', () =>
 
 A story with no play renders the component and is axe-checked by addon-a11y (WCAG 2.0/2.1 A and AA, any impact fails; `region` is off). That is **complete evidence ONLY for a component with no interactive behavior** (a Spinner, a static badge). For a behavior-rich component a render-only story is the start of a test, not the whole of it: the interactions, state transitions, and error paths still need a story with a play per behavior.
 
-An axe pass says nothing about focus order, keyboard operation, or the accessible state of controls a user drives. For an interactive component, the plays assert a keyboard path (Tab, Enter, Escape, arrows as the widget requires) and a focus outcome (where focus lands, or that it returns to the trigger). Page stories also assert the landmark structure (one `main`, one level-1 heading), which the story-level axe run does not check. Opting a story out of addon-a11y needs a reason written beside it.
+An axe pass says nothing about focus order, keyboard operation, or the accessible state of controls a user drives. For an interactive component, the plays assert a keyboard path (Tab, Enter, Escape, arrows as the widget requires) and a focus outcome (where focus lands, or that it returns to the trigger). Page stories also assert the landmark structure (one `main`, one level-1 heading), which the story-level axe run does not check. Opting a story out of addon-a11y needs its story id and a reason recorded in `A11Y_OPT_OUT_REASONS` in `test/story-a11y-opt-out.test.tsx`.
 
 ## Red Flags
 
