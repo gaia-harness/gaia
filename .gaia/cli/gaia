@@ -33933,7 +33933,10 @@ import path33 from "node:path";
 var HELP_TEXT13 = `Usage: gaia init finalize
 
   Final cleanup steps for /gaia-init: delete the gaia-init.md command
-  file so init cannot be run a second time.
+  file so init cannot be run a second time, then delete
+  .gaia/init-state.json once every earlier step is recorded complete.
+  While a step is still incomplete the state file stays, so
+  \`gaia init resume\` can finish the run.
 
   Exit codes:
     0  success (no stdout)
@@ -33977,6 +33980,10 @@ var run18 = async (argv, options = {}) => {
   }
   try {
     markStepCompleted(cwd, STEP_NAME4);
+    const { completed_steps: completedSteps } = readState(cwd);
+    if (STEP_ORDER.every((step) => completedSteps.includes(step))) {
+      removeIfPresent(cwd, STATE_FILE_RELATIVE);
+    }
   } catch (error62) {
     structuredError({
       code: "state_write_failed",

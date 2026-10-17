@@ -9,12 +9,20 @@ import {existsSync, rmSync} from 'node:fs';
 import path from 'node:path';
 import {EXIT_CODES} from '../exit.js';
 import {structuredError} from '../stderr.js';
-import {markStepCompleted} from './util/state.js';
+import {
+  markStepCompleted,
+  readState,
+  STATE_FILE_RELATIVE,
+  STEP_ORDER,
+} from './util/state.js';
 
 const HELP_TEXT = `Usage: gaia init finalize
 
   Final cleanup steps for /gaia-init: delete the gaia-init.md command
-  file so init cannot be run a second time.
+  file so init cannot be run a second time, then delete
+  .gaia/init-state.json once every earlier step is recorded complete.
+  While a step is still incomplete the state file stays, so
+  \`gaia init resume\` can finish the run.
 
   Exit codes:
     0  success (no stdout)
@@ -79,6 +87,13 @@ export const run = async (
 
   try {
     markStepCompleted(cwd, STEP_NAME);
+    const {completed_steps: completedSteps} = readState(cwd);
+
+    // The resume cursor is machine-local and a finished init has nothing left
+    // to resume, so leaving it behind only invites a `git add -A` to commit it.
+    if (STEP_ORDER.every((step) => completedSteps.includes(step))) {
+      removeIfPresent(cwd, STATE_FILE_RELATIVE);
+    }
   } catch (error) {
     structuredError({
       code: 'state_write_failed',
