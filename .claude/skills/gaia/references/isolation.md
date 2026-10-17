@@ -67,10 +67,10 @@ Read the team's isolation policy, once. This runs after the forced-worktree arm 
 can reach or relax that correctness rule, and before the arms below, so the policy can steer them:
 
 ```bash
-POLICY="$(jq -r '.isolation_policy // "prefer-branch"' .gaia/project.json 2>/dev/null || echo prefer-branch)"
+POLICY="$(jq -r '.isolation_policy // "prefer-worktree"' .gaia/project.json 2>/dev/null || echo prefer-worktree)"
 ```
 
-The `2>/dev/null || echo prefer-branch` tail is load-bearing, not decoration. jq's `//` fires only on `null`
+The `2>/dev/null || echo prefer-worktree` tail is load-bearing, not decoration. jq's `//` fires only on `null`
 or `false` from a document that PARSED. On a missing file, or an unreadable one (`chmod 000`), jq errors,
 exits non-zero, and prints nothing, so without the tail the command substitution would yield an EMPTY string,
 not the default.
@@ -81,14 +81,14 @@ case "$POLICY" in
   prefer-worktree) ;;
   prefer-branch)   ;;
   *)
-    printf 'Unrecognized isolation_policy "%s": treating as prefer-branch.\n' "$POLICY" >&2
-    POLICY=prefer-branch
+    printf 'Unrecognized isolation_policy "%s": treating as prefer-worktree.\n' "$POLICY" >&2
+    POLICY=prefer-worktree
     ;;
 esac
 ```
 
 An absent key, an unreadable config, a missing file, and an unrecognized value all resolve to
-`prefer-branch` (below). The `*)` arm's message names the unrecognized value so
+`prefer-worktree` (below). The `*)` arm's message names the unrecognized value so
 a typo is discoverable: one line, no warning banner, no error.
 
 ### `always-worktree`
@@ -145,19 +145,15 @@ the `prefer-branch` row). Append the marker ` (Recommended)` to the **lead** opt
 option's. This is the one and only site that applies the marker; it is never baked into a label literal, so
 which option leads can change without editing a literal.
 
-Prefix the `branch` option's description with `Default. ` when, and only when, `branch` is the **lead**
-option. This is the one and only site that applies the prefix; like the marker, it is never baked into a
-description literal. The prompt then carries exactly one recommendation signal: under `prefer-branch` the
-branch option both leads and calls itself the default; under
-`prefer-worktree` the worktree option leads and the branch option no longer contradicts it by claiming to be
-the default.
+Neither description literal calls its option the default, so the marker is the prompt's one recommendation
+signal and no description can contradict whichever option leads.
 
-##### `prefer-branch` (also the default: absent key, unreadable config, missing file, unrecognized value)
+##### `prefer-branch`
 
 - order: `branch`, `worktree`
 - lead: `branch`
 
-##### `prefer-worktree`
+##### `prefer-worktree` (also the default: absent key, unreadable config, missing file, unrecognized value)
 
 - order: `worktree`, `branch`
 - lead: `worktree`

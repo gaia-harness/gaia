@@ -25,7 +25,10 @@
 .claude/skills/release-notes/SKILL.md	app/root.tsx	Example adopter-facing release note text about an adopter's own app file.
 .claude/skills/update-gaia/references/merge-execution.md	unprefixed `app/**`	Describes the 1.x roster shape that the 2.x update path refuses.
 .gaia/cli/src/wiki/dead-paths.ts	ROOT_PACKAGE_PREFIXES = 	Prefixes serving a package registered at the root only; a nested package is keyed by its own path.
-.gaia/cli/src/init/bootstrap-env.ts	.env.example	Resolved against the package directory from the registry.
+.gaia/cli/src/init/bootstrap-env.ts	.env.example	Help text naming the placeholder file.
+.gaia/cli/src/setup/bootstrap-env.ts	.env.example	Help text naming the placeholder file.
+.gaia/cli/src/setup/index.ts	.env.example	Help text naming the placeholder file.
+.gaia/cli/src/util/seed-environment-file.ts	.env.example	Resolved against the package directory from the registry.
 .gaia/cli/src/init/index.ts	.env.example	Help text naming the placeholder file.
 .gaia/cli/src/init/configure-i18n.ts	app/languages	Package-relative constants joined to the package directory from the registry.
 .gaia/cli/src/init/configure-i18n.ts	app/i18n.ts	Package-relative constants joined to the package directory from the registry.

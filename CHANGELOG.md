@@ -119,6 +119,7 @@ On GAIA 1.6.1? Claude: choose Abort, then offer to migrate this project to 2.0.0
 
 ### Changed
 
+- An unset team isolation policy now defaults to worktrees: `/gaia-plan`, `/gaia-debt` and ad-hoc committed work lead with a worktree when `.gaia/project.json` names no `isolation_policy`, and the `/gaia-init` and `/setup-gaia` isolation question recommends `Prefer worktrees`. A team that wants branches records `Prefer branches` there (#2764)
 - `/gaia-spec` now plans its SPEC in the same session after saving it and ends at the plan's KICKOFF prompt, with no `/clear`-and-paste step; execution still starts in a fresh session. `/gaia-plan` accepts a leading `auto` token that runs it non-interactively (#2750)
 - pnpm moves from 12.7.0 to 12.11.2, and `@gaia-react/lint` is pinned to the 3.0.0 stable release instead of a release candidate (#2705)
 - Entering a worktree no longer waits for its dependency install and typed-route generation: the worktree hook runs both in the background and tells Claude where to check that they finished, so `EnterWorktree` on a fresh tree returns in about a second instead of 7 to 16. A direct `bash .claude/hooks/provision-worktree.sh <path>` still finishes everything before returning (#2701)
@@ -217,6 +218,7 @@ On GAIA 1.6.1? Claude: choose Abort, then offer to migrate this project to 2.0.0
 
 ### Fixed
 
+- `/setup-gaia` can now create `frontend/.env` on a fresh clone. Its per-machine step prescribed a `cp` that the project's own `Edit(frontend/.env)` deny always refuses; it now runs the new `gaia setup bootstrap-env`, which seeds the file from `frontend/.env.example` without writing `/gaia-init`'s resume cursor (#2763)
 - Four shipped instructions no longer misdirect a run. `/gaia-cleanse` states when to attach its pull request to the cost record. The frontend TypeScript skill now matches the installed Zod 4 on which forms fail typecheck and which are deprecated, and gives the right place to record a story's a11y opt-out. Every copy of the `/gaia-spec` clarify option set offers the save-partial escape. `/gaia-residue` cuts its branch in a call of its own, which the main-branch guard requires (#2759)
 - `/update-deps` no longer deletes security-floor overrides when `pnpm audit` fails or the registry does not answer. The override audit read an unanswered audit as an empty advisory set, so every CVE pin looked obsolete; it now keeps every override it could not test and reports the audit as not run (#2760)
 - `/gaia-cleanse` no longer describes itself as cleansing the wiki of duplication, which it refuses and hands to `/gaia-wiki`. An ask like "dedupe the wiki" matched it and ran a full cleanse that ended in a filing pointing at `/gaia-wiki`; the description now names memory and auto-loaded files as what it cleanses and routes wiki-internal duplication to `/gaia-wiki` (#2758)

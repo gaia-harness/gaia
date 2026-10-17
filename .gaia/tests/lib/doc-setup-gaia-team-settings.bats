@@ -177,7 +177,7 @@ check_project_json() {
 # no automation config anywhere.
 check_isolation_reference() {
   local file="$1"
-  grep -qF -- "jq -r '.isolation_policy // \"prefer-branch\"' .gaia/project.json 2>/dev/null || echo prefer-branch" "$file" || {
+  grep -qF -- "jq -r '.isolation_policy // \"prefer-worktree\"' .gaia/project.json 2>/dev/null || echo prefer-worktree" "$file" || {
     echo "the policy read does not target .gaia/project.json with its fallback tail" >&2
     return 1
   }

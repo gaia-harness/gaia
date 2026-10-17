@@ -1,16 +1,9 @@
-/**
- * Runs as a CLI subprocess so it bypasses the project's Edit(.env) deny
- * rule; the deny rule guards against Claude writing secrets into .env, not
- * against the init scaffolding seeding it from the example file.
- *
- * The env the app reads lives in the frontend package root, so both files are
- * resolved there through the package registry, never from `cwd` itself.
- */
-import {copyFileSync, existsSync} from 'node:fs';
-import path from 'node:path';
 import {EXIT_CODES} from '../exit.js';
 import {structuredError} from '../stderr.js';
-import {resolvePackageTarget} from '../util/package-target.js';
+import {
+  seedEnvironmentFile,
+  UNEXPECTED_EXIT,
+} from '../util/seed-environment-file.js';
 import {markStepCompleted} from './util/state.js';
 
 const HELP_TEXT = `Usage: gaia init bootstrap-env
@@ -27,7 +20,6 @@ const HELP_TEXT = `Usage: gaia init bootstrap-env
 `;
 
 const HELP_TOKENS = new Set(['--help', '-h', 'help']);
-const UNEXPECTED_EXIT = 2;
 const STEP_NAME = 'bootstrap-env';
 
 type RunOptions = {
@@ -57,34 +49,9 @@ export const run = (
   }
 
   const cwd = options.cwd ?? process.cwd();
-  const target = resolvePackageTarget(cwd);
+  const seeded = seedEnvironmentFile(cwd, 'init bootstrap-env');
 
-  if (!target.ok) {
-    structuredError({
-      code: 'gaia_packages',
-      message: target.message,
-      subcommand: 'init bootstrap-env',
-    });
-
-    return EXIT_CODES.CONFIG_INVALID;
-  }
-
-  const envPath = path.join(target.packageDir, '.env');
-  const examplePath = path.join(target.packageDir, '.env.example');
-
-  if (!existsSync(envPath) && existsSync(examplePath)) {
-    try {
-      copyFileSync(examplePath, envPath);
-    } catch (error) {
-      structuredError({
-        code: 'bootstrap_env_failed',
-        message: error instanceof Error ? error.message : String(error),
-        subcommand: 'init bootstrap-env',
-      });
-
-      return UNEXPECTED_EXIT;
-    }
-  }
+  if (seeded !== EXIT_CODES.OK) return seeded;
 
   try {
     markStepCompleted(cwd, STEP_NAME);
