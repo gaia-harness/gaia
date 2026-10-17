@@ -4,8 +4,8 @@
 # The transforms below run in the order they are listed, against the staging
 # tree. The transform types:
 #
-#   - marker-strip: remove maintainer-only blocks delimited by HTML
-#     comment markers from in-scope markdown files.
+#   - marker-strip: remove maintainer-only blocks delimited by each
+#     transform's configured start and end markers from its in-scope files.
 #
 #   - json-strip: delete maintainer-only keys from structured JSON files.
 #     Keys use dot-notation to address nested paths (e.g. "scripts.foo").
