@@ -1,36 +1,35 @@
 import {useTranslation} from 'react-i18next';
 import {useFetcher} from 'react-router';
 import {Monitor, Moon, Sun} from 'lucide-react';
+import type {LucideIcon} from 'lucide-react';
 import {ACTION_PATHS} from '~/action-paths';
 import {Button} from '~/components/ui/button';
 import {useOptimisticThemeMode} from '~/hooks/use-theme';
 import type {action} from '~/routes/resources.theme-switch';
+import type {ThemePreference} from '~/utils/theme';
 import type {Theme} from '~/utils/theme.server';
 
 export type ThemeSwitchProps = {
   userPreference?: Theme;
 };
 
-const NEXT_MODE: Record<
-  'dark' | 'light' | 'system',
-  'dark' | 'light' | 'system'
-> = {
+const NEXT_MODE = {
   dark: 'system',
   light: 'dark',
   system: 'light',
-};
+} as const satisfies Record<ThemePreference, ThemePreference>;
 
 const ICONS = {
   dark: Moon,
   light: Sun,
   system: Monitor,
-} as const;
+} as const satisfies Record<ThemePreference, LucideIcon>;
 
 const LABEL_KEYS = {
   dark: 'useSystemTheme',
   light: 'enableDarkMode',
   system: 'enableLightMode',
-} as const;
+} as const satisfies Record<ThemePreference, string>;
 
 const ThemeSwitch = ({userPreference}: ThemeSwitchProps) => {
   const {t} = useTranslation('common', {keyPrefix: 'theme'});

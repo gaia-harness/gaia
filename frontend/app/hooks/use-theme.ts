@@ -2,6 +2,8 @@ import {useSyncExternalStore} from 'react';
 import {useFetchers} from 'react-router';
 import {ACTION_PATHS} from '~/action-paths';
 import {useOptionalRequestInfo} from '~/utils/request-info';
+import {isThemePreference} from '~/utils/theme';
+import type {ThemePreference} from '~/utils/theme';
 import type {Theme} from '~/utils/theme.server';
 
 const COLOR_SCHEME_QUERY = '(prefers-color-scheme: dark)';
@@ -27,14 +29,13 @@ export const useSystemTheme = (): Theme | undefined =>
     getColorSchemeServerSnapshot
   );
 
-export const useOptimisticThemeMode = ():
-  'dark' | 'light' | 'system' | undefined => {
+export const useOptimisticThemeMode = (): ThemePreference | undefined => {
   const fetchers = useFetchers();
   const themeFetcher = fetchers.find(
     (fetcher) => fetcher.formAction === ACTION_PATHS.themeSwitch
   );
   const theme = themeFetcher?.formData?.get('theme');
-  if (theme === 'dark' || theme === 'light' || theme === 'system') return theme;
+  if (isThemePreference(theme)) return theme;
 
   return undefined;
 };
