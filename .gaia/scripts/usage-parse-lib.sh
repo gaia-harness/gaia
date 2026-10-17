@@ -1,6 +1,6 @@
 # shellcheck shell=bash
 # jq programs for the usage-ledger flusher (usage-flush.sh). Sourced after
-# usage-lib.sh, whose GAIA_USAGE_JQ_DEFS every program here is prefixed with.
+# usage-lib.sh, whose GAIA_USAGE_JQ_DEFS prefixes the parse and segment programs.
 # Defines variables only; sourcing runs no command.
 #
 # GAIA_USAGE_PARSE_JQ reads one file's complete lines (`jq -nR`) and prints the

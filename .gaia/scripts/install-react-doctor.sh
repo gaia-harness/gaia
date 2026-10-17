@@ -80,8 +80,8 @@ if ! pnpm remove react-doctor --config.ignore-scripts=true 2>/dev/null; then
   warn "pnpm remove react-doctor failed; the dependency may already be absent, continuing"
 fi
 
-# The hyphenated key needs bracket-and-quote form: a bare scripts.react-doctor throws
-# ERR_PNPM_UNEXPECTED_TOKEN_IN_PROPERTY_PATH and aborts, leaving `doctor` behind too.
+# The hyphenated key is written in bracket-and-quote form to be safe across pnpm
+# versions.
 pnpm --dir "$package_directory" pkg delete scripts.doctor 'scripts["react-doctor"]' \
   || fail "pnpm pkg delete step failed removing the react-doctor package scripts"
 

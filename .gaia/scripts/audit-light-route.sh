@@ -70,7 +70,7 @@
 # Fail direction: everything this script cannot establish routes Full. A wrong
 # `light` is the one outcome that lets the merge gate pass on content no full
 # member read, so there is no flag and no environment variable that can force
-# or prefer Light. No environment variable is read.
+# or prefer Light.
 #
 # Only `review: full` markers and refusals anchor. A light clearance attests
 # that a cheap reviewer read one small delta; anchoring on it would let a chain

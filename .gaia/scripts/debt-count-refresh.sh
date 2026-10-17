@@ -19,8 +19,9 @@
 # Otherwise exit immediately (the no-network statusline hot path stays fast;
 # this runs detached in the background).
 #
-# Partial failures are tolerated: on any gh failure the previous cached count
-# is preserved (never blanked). Backend absent (no gh / unauthenticated) with
+# Partial failures are tolerated: with jq present, a gh failure leaves the previous
+# cached count untouched; without jq the prior cache is unreadable and is
+# reseeded to openCount 0 until gh recovers. Backend absent (no gh / unauthenticated) with
 # no prior cache seeds openCount 0 so no segment renders. Do NOT add `set -e`.
 
 TTL=21600
@@ -100,8 +101,8 @@ mkdir -p "$DEBT_DIRECTORY" 2>/dev/null
 # park labels are excluded on identical terms: an issue is no less parked for
 # having started, and the split exists so a stalled handoff stays visible as
 # such, not so the count can tell them apart.
-# Guarded on gh presence + auth + network; on ANY failure keep the previous
-# cached count (never blank it).
+# Guarded on gh presence + auth + network; on ANY failure with jq present keep the
+# previous cached count (never blank it).
 #
 # With local jq the raw issue list is pulled and filtered here; without it,
 # gh's own `--jq` computes the count server-side.
@@ -126,7 +127,7 @@ if command -v gh >/dev/null 2>&1; then
   fi
 fi
 
-# Backend absent / unauthenticated / network failure with a prior cache: leave
+# Backend absent / unauthenticated / network failure with a prior cache jq can read: leave
 # the cache untouched and keep the sentinel so the next tick retries. Only when
 # there is NO prior cache do we seed a definite openCount 0, so the statusline
 # reads 0 and renders nothing rather than inventing a count.
