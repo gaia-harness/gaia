@@ -456,22 +456,12 @@ Then run the CLI's init finalize step, it deletes this command file and, once ev
 
 `/gaia-init` lands its own changes as one commit on the current branch, so `/setup-gaia`'s first push carries them: `gh repo create --push` pushes commits only, and every branch or worktree cut later starts from the last commit, never from uncommitted files. The `block-main-destructive-git.sh` PreToolUse hook denies `git commit` on `main` or `master`, so the same machine-local sentinel `/setup-gaia` uses (`.gaia/local/setup-in-progress`, gitignored) suspends it for this one commit.
 
-**First, in its own call** (the hook reads the sentinel before a command runs, so it must exist before the call holding the commit):
-
-```bash
-mkdir -p .gaia/local
-touch .gaia/local/setup-in-progress
-```
+**First, in its own call**, since the hook reads the sentinel before a command runs: `mkdir -p .gaia/local && touch .gaia/local/setup-in-progress`
 
 **Then, in its own call.** The `rm` runs whether or not the commit succeeds, because a lingering sentinel keeps main-branch protection suspended on this machine:
 
 ```bash
-git add -A
-if git commit -m "chore: initialize project with /gaia-init"; then
-  echo "COMMITTED $(git rev-parse --short HEAD)"
-else
-  echo "COMMIT_FAILED"
-fi
+git add -A && git commit -m "chore: initialize project with /gaia-init" && echo COMMITTED || echo COMMIT_FAILED
 rm -f .gaia/local/setup-in-progress
 ```
 
