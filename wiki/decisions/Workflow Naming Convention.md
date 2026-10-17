@@ -39,10 +39,6 @@ The maintainer-only workflows exist because this repository is the GAIA project 
 
 `GAIA: X` contains `": "`, so an unquoted plain scalar is a YAML error in a workflow `name:` and parses as a one-key mapping inside a list. Every prefixed value is single-quoted (`name: 'GAIA: CLI Tests'`).
 
-### Exceptions
-
-- `audit-ci-tests.yml` keeps a file name that does not fit rule 1: renaming it has a reference blast radius that outweighs the naming gain.
-
 ### Required contexts in this repository
 
 The `main` ruleset's required contexts are mirrored by `REQUIRED_CONTEXTS` in `.gaia/scripts/verify-required-checks.sh`. A required job's `name:` is a live branch-ruleset cutover: ask-first, maintainer-run.

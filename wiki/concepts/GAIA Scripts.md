@@ -59,7 +59,7 @@ A new root file takes the family prefix that matches what it does, and `*-lib` f
 **Do not reorganize the directory into subfolders.** The single-level layout is not a hazard to be tidied away: each member of a family is named across dozens of files, so relocating one family is a several-hundred-file rename for no functional gain.
 
 <!-- gaia:maintainer-only:start -->
-In GAIA's source a bats suite asserts the glob too. This directory has already paid for a location change once, recorded in GAIA's own release health taxonomy: moving it across the release boundary added it as a manifest-owned tree without adding it as a scan target to either distribution-boundary primitive, and the repair covered the one file its finding named rather than the tree it had un-excluded.
+This directory has already paid for a location change once, recorded in GAIA's own release health taxonomy: moving it across the release boundary added it as a manifest-owned tree without adding it as a scan target to either distribution-boundary primitive, and the repair covered the one file its finding named rather than the tree it had un-excluded.
 
 Three further decisions ride with a new root script in the maintainer repository, and each one is a real edit somewhere else:
 

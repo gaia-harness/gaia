@@ -18,8 +18,9 @@ suite on a tree it has already cleared.
 ## Scope
 
 <!-- gaia:maintainer-only:start -->
-`main`'s ruleset requires the `Run Chromatic` and `Vitest and Playwright`
-checks plus the `GAIA-Audit` commit status, which the local audit posts.
+`main`'s ruleset requires the checks `REQUIRED_CONTEXTS` names in
+`.gaia/scripts/verify-required-checks.sh`, among them the `GAIA-Audit` status,
+which the local audit posts.
 <!-- gaia:maintainer-only:end -->
 GAIA's expensive required checks are **job-level**: the required context equals
 the job `name:`. A job that runs but gates its expensive steps off still

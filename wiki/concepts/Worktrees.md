@@ -116,7 +116,7 @@ The one genuinely-close pair is **shared vs main-only**, since both resolve to m
 There is **one file** declaring every `.gaia/local/` entry: its scope, a plain-language reason, and, for a shared entry, its key. Everything that needs that information reads this registry; nothing keeps its own copy. That is the whole product: the registry is the only list, so "someone forgot to update one of the hand-written lists" has nowhere left to happen, and drift from the registry is reported rather than silently absorbed.
 
 <!-- gaia:maintainer-only:start -->
-GAIA maintainers: because the directory is gitignored and empty on a fresh CI checkout, enforcement is limited to what a checkout without it can still see. One CI check requires that a single canonical resolver definition exists per language.
+GAIA maintainers: because the directory is gitignored and empty on a fresh CI checkout, enforcement is limited to what a checkout without it can still see. One CI check (`.gaia/scripts/check-main-root-derivation.sh`) scans tracked source for hand-rolled main-root derivation outside the resolver.
 <!-- gaia:maintainer-only:end --> The directory is deliberately discoverable, so a human or an adopter may keep their own folder there; a machine on one GAIA version may carry a folder a different version owns; and enumerating an allowlist to police what may exist is the hardcoded-list reflex this whole model removes.
 
 ### Keys and guards

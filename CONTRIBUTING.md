@@ -43,7 +43,7 @@ Read **Contributing code** above first; unassigned and unsolicited PRs are close
 1. Fork. Branch from `main`. Name the branch `<type>/[<issue>-]<slug>` with a Conventional Commits type, lowercase kebab.
 2. Commit subjects and the PR title follow Conventional Commits: `fix(scope): what`, `feat(scope): what`. A `commit-msg` hook enforces the subject locally (run `pnpm install` once so it can find commitlint), and the `PR Conventions` check enforces the PR title and branch name. The format is documented in [wiki/decisions/Naming Conventions.md](wiki/decisions/Naming%20Conventions.md).
 3. The quality gate must pass locally before you push (steps in `wiki/decisions/Quality Gate.md`). Zero warnings allowed. This is the project's distinguishing stance, not a starting position to negotiate.
-4. The Code Audit Team audit will run on your PR (see `wiki/concepts/PR Merge Workflow.md`). It dispatches React Patterns, TypeScript and Architecture, and Translation specialists in parallel against your diff. It blocks the merge until findings are resolved.
+4. The Code Audit Team audit will run on your PR (see `wiki/concepts/PR Merge Workflow.md`). It dispatches the members your diff routes to, as that page's `Who audits` section describes. It blocks the merge until findings are resolved.
 5. No `eslint-disable`, no `@ts-ignore`, no `eslint-disable-next-line`. If a rule is wrong for the case, open a separate PR to refine the rule. If the rule is right, fix the source.
 6. Update `CHANGELOG.md` under `## [Unreleased]` if your change is user-visible.
 7. PRs that lower the bar will be requested-changes back. PRs that raise it will be merged.
@@ -75,7 +75,7 @@ A statusline nudge and Claude Code hooks keep you informed about wiki state:
 
 The full hook set is in `wiki/concepts/Claude Hooks.md`.
 
-The workhorse is the sync stage of `/gaia-wiki`. It's the only thing that advances `last_evaluated_sha` in `wiki/.state.json`. Hooks are read-only consumers.
+The workhorse is the sync stage of `/gaia-wiki`. It advances `last_evaluated_sha` in `wiki/.state.json` between releases; the release commit-and-tag step also rewrites it, and `gaia wiki state-init` sets it. Hooks are read-only consumers.
 
 `/gaia-release` refuses to bump the version while the wiki has substantive drift (see Step 1 of `.claude/commands/gaia-release.md`). There is no opt-out.
 
@@ -105,7 +105,7 @@ Before running `/gaia-release`, you should have:
 - [ ] `/gaia-wiki` run, with all WORTHY commits its sync stage returned resulting in defensible wiki edits
 - [ ] Working tree clean
 
-If the sync stage of `/gaia-wiki` finds drift but you decide a commit doesn't warrant a wiki update, it logs that as a SKIP entry in `wiki/log.md`. State still advances. That's the convergence: wiki is "in sync" once every commit has been classified as either WORTHY (and the page updated) or SKIP (and the reason logged).
+If the sync stage of `/gaia-wiki` finds drift but you decide a commit doesn't warrant a wiki update, it gets no `wiki/log.md` line. State still advances. That's the convergence: wiki is "in sync" once every commit has been classified as either WORTHY (and the page updated) or SKIP (and recorded as evaluated).
 
 ### What ships, what doesn't
 
