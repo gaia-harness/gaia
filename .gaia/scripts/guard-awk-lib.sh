@@ -31,9 +31,11 @@
 # The contract a consuming guard is written against
 # ---------------------------------------------------------------------------
 #
-# Bash surface: the readonly `GAIA_GUARD_AWK` (the awk source), and
+# Bash surface: the readonly `GAIA_GUARD_AWK` (the awk source),
 # `gaia_guard_bats_files <label>`, which fills the global array
-# `GAIA_GUARD_BATS_FILES` and returns non-zero on an empty bats surface. The
+# `GAIA_GUARD_BATS_FILES` and returns non-zero on an empty bats surface, and
+# `gaia_guard_scan_files <label> <set>...`, which fills `GAIA_GUARD_SCAN_FILES`
+# the same way (its own header at its definition owns the sets). The
 # caller reads that status directly:
 #
 #     gaia_guard_bats_files my-guard || exit 1
@@ -211,12 +213,9 @@
 #     invocation at all, which is the closed direction for the ordinary case.
 #   - Function bodies are closed by a `}` at column 1. A suite that indents its
 #     closing brace carries its function scope further than it should.
-#   - A name marked as executed anywhere in the file is executed everywhere in
-#     it. That direction is closed for the region rule and open for nothing else.
 #
-# NEITHER, because they end in the desync verdict rather than in a verdict about
-# a line: more than one heredoc opened on a single line, and the split ANSI-C
-# opener above. An unread region leaves a quote, a substitution, a continuation
+# NEITHER, because it ends in the desync verdict rather than in a verdict about
+# a line: the split ANSI-C opener above. An unread region leaves a quote, a substitution, a continuation
 # or a heredoc open at end of input, and gaia_scan_end says so rather than
 # letting a guard certify a file it never classified.
 

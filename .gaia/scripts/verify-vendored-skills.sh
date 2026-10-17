@@ -11,7 +11,8 @@
 #
 # Exit 0: every marker's target matches. Exit 1: drift, one line per path
 # prefixed MODIFIED, UNEXPECTED, or MISSING. Exit 2: usage error, no jq, no
-# sha256 tool, or no markers (a scan of nothing never reports clean).
+# sha256 tool, no markers, or a marker with no target or no recorded files (a
+# scan of nothing never reports clean).
 #
 # Maintainer-only and release-excluded: it guards the maintainer's re-vendor
 # workflow, and an adopter clone has no re-vendor script to restore a drifted

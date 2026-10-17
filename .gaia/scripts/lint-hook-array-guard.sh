@@ -53,11 +53,9 @@ set -euo pipefail
 # silently dropped, which is what a hook layer organized into subfolders would
 # otherwise cost this gate.
 #
-# The roots are a variable rather than literal `find` arguments because the set
-# differs between this repo and an adopter's. A root that ships must stay on the
-# base assignment; one that does not must be appended inside a maintainer-only
-# block, or the release runtime-dependency check reads it as a shipped script
-# reaching for a path the bundle does not carry, and fails the staging build.
+# The roots are a variable rather than literal `find` arguments so adding one is
+# a single line below. This script is release-excluded, so it ships to no
+# adopter and the release runtime-dependency check never reads it.
 scan_roots=(.claude/hooks .gaia/scripts)
 # gaia:maintainer-only:start
 # .gaia/tests is release-excluded, so it exists only in the GAIA maintainer

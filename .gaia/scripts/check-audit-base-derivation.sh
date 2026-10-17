@@ -18,7 +18,7 @@
 # that posts a status, so a divergent base costs that reader nothing. The ledger is what still binds co-dispatched
 # members to one key, within a round.
 #
-# Executing the five real derivation snippets proves they agree TODAY. It
+# Executing the real derivation snippets proves they agree TODAY. It
 # cannot stop tomorrow's edit from reintroducing a private derivation in a
 # definition the run does not happen to exercise. This static check closes
 # that gap the way check-audit-key-callers.sh closes the matching one for the
@@ -75,7 +75,8 @@
 #      is what tells a legitimate whole-PR base apart from a drifted review
 #      base. The assignment that owns a `merge-base` call is the nearest
 #      `IDENT=` to its left, and `FULL_BASE` and `ELIG_BASE` are the only names
-#      allowed to own a call that does not pass `BASE_REF`.
+#      allowed to own a call that does not pass `BASE_REF`, apart from the one
+#      the next paragraph adds.
 #
 #      A second bare merge-base is exempted the same way: `KEY_BASE`, the
 #      shared, pull-request-wide artifact key base every dispatched member
@@ -199,7 +200,8 @@
 # gaia_check_audit_base_derivation <repo_root>
 #   Runs `git -C <repo_root> grep` over `.claude/agents/` (recursive), the
 #   protocol file, and the resolver script for every assertion. Prints every match line, then one verdict line per
-#   assertion. Returns 0 when ALL THREE hold, 1 otherwise.
+#   assertion. Returns 0 when ALL THREE hold, 1 when one fails, and 2 when
+#   <repo_root> is not a git repository root and nothing was scanned.
 #   <repo_root> is a required parameter -- this check never derives it
 #   itself: a CI caller passes the plain checkout root, a bats fixture
 #   passes a temp repo, so "would this literal fail the check" is testable
@@ -340,8 +342,8 @@ _gaia_drop_full_base_matches() {
 # (git grep's -n format) and keeps only the `diff --name-only` calls that
 # consume a base which never reached the fork point.
 #
-# A call survives when, inside its own text, `resolve-audit-base.sh` or
-# `BASE_REF` appears with no `...` range before it. Both tests are per CALL and
+# A call survives when its own text names a base (any spelling in the
+# `consumes` test below) and carries no `...` range. Both tests are per CALL and
 # measured from the call, never line-wide: a line may legitimately carry a
 # correct diff and, further along, prose naming the resolver.
 #

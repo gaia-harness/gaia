@@ -71,9 +71,9 @@
 #   tracked `*.sh` and the extensionless git hooks -- armed only where the
 #     file turns errexit on, tracked line by line so a `set +e` disarms and a
 #     later `set -e` re-arms. Off by default is the truthful model here: a
-#     script with no `set -e` does not carry the class at all, and roughly
-#     twenty legitimate assignment/`rc=$?` pairs in this tree sit in exactly
-#     such files. Arming unconditionally would demand a rewrite of every one of
+#     script with no `set -e` does not carry the class at all, and
+#     legitimate assignment/`rc=$?` pairs in this tree sit in exactly such
+#     files. Arming unconditionally would demand a rewrite of every one of
 #     them with no defect behind any.
 #
 #   `.github/workflows/` and the composite actions under `.github/actions/` --
@@ -92,8 +92,8 @@
 #     reads may be a fixture the test writes rather than shell the test runs.
 #     Telling those apart is not this file's job: the shared
 #     .gaia/scripts/guard-awk-lib.sh owns the argument-region rule, the
-#     suppression pragma, and the invocation census, and all three gates that
-#     scan suites read the same answers from it. The convention and the
+#     suppression pragma, and the invocation census, and every gate that
+#     scans suites reads the same answers from it. The convention and the
 #     reasoning behind it live in
 #     wiki/decisions/Shell Guard Fixture Discrimination.md.
 #
@@ -179,7 +179,9 @@
 #     reads whose value depends on when the body runs, which a line-oriented
 #     scan cannot resolve.
 #   - More than one heredoc opened on a single line (`cat <<A <<B`): only the
-#     first delimiter is recorded, so the second body is read as shell.
+#     last delimiter is recorded, which swallows every body through its terminator
+#     as data, so only a body line equal to that last delimiter ends the swallow
+#     early.
 #   - A `<<` inside a bare `(( ))` arithmetic command, as opposed to the `$(( ))`
 #     expansion the walk does track, is read as a heredoc redirection. No tracked
 #     file here uses the bare form.
@@ -256,7 +258,7 @@
 #     and only where no command word follows.
 #
 # This list is kept honest by measurement rather than by memory. The sibling bats
-# suite ends with a differential test that runs a matrix of prefix shapes under a
+# suite carries a differential test that runs a matrix of prefix shapes under a
 # real shell and requires the gate to agree with what the shell did, so a shape
 # stops being a bound when it is fixed rather than when someone remembers to edit
 # this comment. Enumerating shapes by hand is what put four defects on the old
@@ -274,7 +276,7 @@
 # the suffix, so the same-word spellings cannot be expressed as rows at all.
 # Named tests in the suite pin both, and this list is still maintained by hand.
 #
-# None of those fails SILENTLY. Tokenizer state is carried across lines, so any
+# None of those can leave the tokenizer silently out of sync. Tokenizer state is carried across lines, so any
 # bound that loses sync leaves a quote, a substitution, or a heredoc open at the
 # end of the region, and `check_desync` below reports the region as one this gate
 # cannot certify rather than printing `clean` over lines it never read. That
@@ -354,7 +356,7 @@ readonly CORE_AWK='
 # apostrophe in the remaining literal opens a quote state that never closes.
 # Because state is carried across lines, the rest of the FILE is then swallowed
 # as quoted text and never classified, while this gate still prints `clean`.
-# `.claude/hooks/block-sensitive-read.sh` is the exemplar, where a `sed -E` pattern
+# `.claude/hooks/lib/git-segments.sh` is the exemplar, where a `sed -E` pattern
 # carries a `)` inside a bracket expression. No count is given: how many files
 # reach the shape depends entirely on which counterfactual is measured, and three
 # defensible readings give three different answers, so a number here would read
@@ -482,11 +484,10 @@ function walk(line,   line_length, i, character, j, delimiter_opener, delimiter,
     #
     # This runs at ANY substitution depth, above the depth guard below, because
     # a heredoc body occupies lines of this file no matter what opened it.
-    # `AUDIT_GLOBAL_RULES_PATHS="$(cat <<\047EOF\047` is the live shape here,
-    # and two tracked files reach it: gated at depth zero the body is read as
-    # shell inside the substitution, and in one of them a Python docstring in
-    # that body opens a quote that never closes, so the rest of the file goes
-    # unclassified. Skipped inside `$(( ))`, where `<<` is a left shift rather
+    # `AUDIT_GLOBAL_RULES_PATHS="$(cat <<\047EOF\047` is the live shape here:
+    # gated at depth zero the body is read as shell inside the substitution, so
+    # a lone apostrophe in that body opens a quote that never closes and the
+    # rest of the file goes unclassified. Skipped inside `$(( ))`, where `<<` is a left shift rather
     # than a redirection.
     if (character == "<" && substr(line, i + 1, 1) == "<" && W_arithmetic_count == 0) {
       # `<<<` is a herestring: its operand is a word on this same line, not a
@@ -677,9 +678,8 @@ function eat_word(remaining_text,   text_length, i, character, quote_character, 
 # not a read at all. That discrimination is load-bearing rather than cosmetic:
 # the ordinary way to capture an exit status for a cleanup handler is
 # `trap \047rc=$?; ...\047 EXIT`, whose body the shell stores unexpanded and
-# runs when the trap fires. Five such traps sit in this tree, each on the line
-# after a `mktemp` assignment, and reading them as status reads would red the
-# tree on correct code. Inside DOUBLE quotes a `$?` does expand, so `echo "rc
+# runs when the trap fires. Reading one as a status read would red the tree on
+# correct code. Inside DOUBLE quotes a `$?` does expand, so `echo "rc
 # $?"` is a read like any other, and a single quote appearing inside a
 # double-quoted string is an ordinary character rather than a quote.
 function has_status_read(line,   line_length, i, character, quote_character, previous_character) {

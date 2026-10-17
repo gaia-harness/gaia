@@ -16,7 +16,8 @@
 #
 # Exit codes:
 #   0  nothing to do, bundles rebuilt and staged, or the CLI has no install
-#   1  unstaged or untracked CLI source, or the build failed
+#   1  unstaged or untracked CLI source, the staged paths could not be read,
+#      the build failed, or the rebuilt bundles could not be staged
 #   2  usage error
 #
 # Why it refuses on unstaged or untracked .gaia/cli/src changes: the bundle

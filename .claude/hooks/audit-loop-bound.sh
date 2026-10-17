@@ -348,7 +348,7 @@ window_message() {
     "$BRANCH_KEY" "$window" "$(($2 + 1))"
 }
 
-# set_member <state-json> <index> : append $member to round <index> when absent.
+# add_member <state-json> <index> : append $member to round <index> when absent.
 add_member() {
   jq -c --argjson round_index "$2" --arg member_name "$member" \
     '.history.rounds[$round_index].members |= (if index($member_name) then . else . + [$member_name] end)' <<<"$1"

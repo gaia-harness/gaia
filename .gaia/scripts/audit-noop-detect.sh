@@ -105,8 +105,8 @@
 #                         `` `<path>:<line>` `` finding location (every Code
 #                         Audit Team member's shared Output Format template
 #                         bolds each reported finding's Location field this
-#                         way, blocking or not), or a terse return that opens
-#                         with the literal "Remaining in-scope:" (no current
+#                         way, blocking or not), or a terse return that carries
+#                         the literal "Remaining in-scope:" (no current
 #                         agent emits it). A report token
 #                         classifies REAL on its own, whether or not the
 #                         resolve arm was passed: no earned marker or

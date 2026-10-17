@@ -74,7 +74,7 @@ gaia_pretooluse_hooks() {
 #
 # The comment exclusion reads text rather than control flow, so an `exit 2`
 # inside a heredoc or a string over-classifies. That direction is the safe one
-# for both consumers: over-classifying can only red a hook a human then reads,
+# for its consumer: over-classifying can only red a hook a human then reads,
 # while under-classifying returns a silent wrong answer about whether an action
 # stops.
 gaia_hook_blocks() {

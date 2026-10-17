@@ -2,8 +2,9 @@
 # Single source of truth for the chore(deps) skip predicate: does the given
 # subject (a PR title or a commit subject, depending on caller) begin with
 # `chore(deps):` or `chore(deps-dev):`, AND is the changed-path list on stdin
-# confined to a dependency manifest? A manifest is the root package.json,
-# pnpm-lock.yaml or pnpm-workspace.yaml (exact case-arm literals), or a path
+# confined to a dependency manifest? A manifest is a path the case arm below
+# lists literally (led by the root package.json, pnpm-lock.yaml and
+# pnpm-workspace.yaml), or a path
 # matching a registered package's `dependencyManifests` globs (registry and
 # descriptor: `.claude/hooks/lib/gaia-packages.sh`), so `frontend/package.json`
 # is one and a nested manifest such as `frontend/app/foo/package.json`, or one
