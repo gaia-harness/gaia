@@ -571,7 +571,7 @@ check_github_status() {
     repo=$(gh repo view --json nameWithOwner --jq .nameWithOwner 2>/dev/null || true)
     [ -n "$repo" ] || return 1
     case "$repo" in
-      */*) ;;  # must contain exactly one slash (owner/name)
+      */*) ;;  # must contain a slash (owner/name)
       *) return 1 ;;
     esac
   fi

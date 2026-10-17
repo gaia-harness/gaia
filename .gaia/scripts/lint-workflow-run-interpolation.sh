@@ -12,11 +12,11 @@
 # `bash .gaia/scripts/lint-workflow-run-interpolation.sh`.
 #
 # Exit 0 when clean, and 1 either with a file:line report on any hit or on a
-# scan surface that came back empty. Four statuses say the gate never ran at
+# scan surface that came back empty. These statuses say the gate never ran at
 # all: 2 when guard-awk-lib.sh is missing beside this script, 3 when the
 # scan-surface discovery failed, 5 when no awk interpreter is present at all,
-# and 6 when GAIA_AWK resolves to an interpreter that identifies as neither
-# mawk nor BWK one-true-awk.
+# and 6 when GAIA_AWK resolves to an interpreter
+# that identifies as neither mawk nor BWK one-true-awk.
 # gaia:maintainer-only:start
 #
 # Enforced by the sibling bats suite

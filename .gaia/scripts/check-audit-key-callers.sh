@@ -11,9 +11,8 @@
 # over a broken writer -- the false-green shape this program cares most
 # about.
 #
-# Over `.claude/agents/` and the maintainer members' shared protocol file
-# where one exists (their sidecar and handshake prose lives there; an adopter
-# clone has none, so it scans `.claude/agents/` alone), TWO assertions:
+# Over `.claude/agents/` and the members' shared protocol file (their sidecar
+# and handshake prose lives there), TWO assertions:
 #
 #   1. No bare `${BASE_SHA}.`/`${base}.`/`${KEY_BASE}.` sidecar or ledger path
 #      literal survives anywhere. That shell-interpolated shape
@@ -36,8 +35,8 @@
 #      so descriptive prose satisfies it exactly as an executable call does.
 #      That is deliberate. Only `code-audit-frontend.md` derives a path
 #      itself; every other definition delegates keying to
-#      `.gaia/scripts/audit-write-findings.sh` and names `gaia_audit_key` only
-#      to say so, so a call-shape check would fail each of them for correctly
+#      the shared protocol file, which names `gaia_audit_key` only to say so,
+#      so a call-shape check would fail each of them for correctly
 #      delegating.
 #
 #      The two assertions are therefore not symmetric. (1) is the one that
@@ -71,8 +70,7 @@
 #
 # GREEN against this repo's real `.claude/agents/`: `code-audit-frontend.md`
 # derives its ledger path through `gaia_audit_key`, and the other members
-# reach the same key by delegating to the sidecar writer, the two maintainer
-# members through the protocol file. A red
+# reach the same key through the shared protocol file. A red
 # here means a definition has drifted back to hand-building a path from a
 # bare base sha, which is the collision this key exists to remove.
 

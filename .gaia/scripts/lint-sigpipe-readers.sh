@@ -278,9 +278,9 @@
 # both of them FALSE NEGATIVES. A `run:` whose value is a multi-line plain or
 # quoted flow scalar has only its first line read, the rest being scanned as
 # though they were not part of the value. A mustache partial include inside a
-# body ends the scan there. Both mirror
+# body ends the scan there. The first mirrors
 # .gaia/scripts/lint-workflow-run-interpolation.sh, which states its own version
-# of each and scans the same two arms, and neither shape appears in this tree.
+# of it and scans the same two arms, and neither shape appears in this tree.
 #
 # Bash 3.2 compatible. Never `cd`.
 

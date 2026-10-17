@@ -14,7 +14,7 @@
 # Exit 0 when clean, and 1 either with a file:line report on any hit or on a
 # scan surface that came back empty or short. Exit 2 says the gate never ran:
 # git is unavailable, its own root is unresolvable, the discovery command
-# failed, or awk could not read a file in the surface.
+# failed, a scratch file for it could not be created, or awk could not read a file in the surface.
 # gaia:maintainer-only:start
 #
 # Enforced by the sibling bats suite

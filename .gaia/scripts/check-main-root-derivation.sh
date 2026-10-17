@@ -47,12 +47,12 @@
 #   review and the shell/frontend audit agents.
 #
 #   Parsing a `.git` FILE for its `gitdir:` line (a linked worktree's `.git`
-#   is a one-line file naming the real git dir, not a directory). Zero
-#   occurrences exist anywhere in tracked source to design a detector
-#   against, and the literal string `gitdir:` already collides with
+#   is a one-line file naming the real git dir, not a directory). Only
+#   two tracked hooks (the context-checkpoint pair) parse it, too few cases to
+#   design a detector against, and the literal string `gitdir:` already collides with
 #   unrelated prose in this repo (a bats helper is named
 #   `make_separate_gitdir`, matched by a naive substring scan) -- a check
-#   with no real case to prove it right and a demonstrated false positive is
+#   with too few real cases to prove it right and a demonstrated false positive is
 #   worse than the gap it would claim to close.
 #
 # How far this reaches, stated so the coverage is not overread. The scan
@@ -171,8 +171,7 @@ _gaia_scan_porcelain_first_line() {
   # which changes the record's own delimiter and would need the split rewritten.
   # `.gaia/scripts/lint-git-path-quoting.sh` does not and will not flag this
   # call, because a `-n` record's path field is parsed by some callers and only
-  # displayed by others and nothing in the call text tells those apart; that
-  # guard's blind-spot block names this site as the live instance of the shape.
+  # displayed by others and nothing in the call text tells those apart.
   #
   # What the flag does NOT close, so the next reader does not treat it as a
   # general remedy: it stops only bytes above 0x80 counting as unusual, so a

@@ -37,7 +37,7 @@
 # so the main checkout pays nothing for it. In order: reclaim ledger entries
 # whose tree is gone and retire the entry of a tree recreated at the same path
 # (under the ledger lock); stop servers left by removed trees; stop servers
-# recorded by ended Claude sessions, behind a stat-only gate; then keep or
+# recorded by ended Claude sessions, behind a files-and-`ps` gate; then keep or
 # allocate this tree's slot and rewrite its port file from the ledger (under
 # the lock again). The lock guards only the ledger, is never held across a
 # signal or a wait, and a lock timeout keeps any existing port file and never

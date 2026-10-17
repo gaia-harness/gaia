@@ -4,10 +4,11 @@
 # `scan_files` pathspec below declares and the comment above it explains. Exit
 # 1 with a file:line report on any hit, exit 0 when clean. Run it directly from
 # the repo root: `bash .gaia/scripts/lint-git-path-quoting.sh`.#
-# Four statuses say the gate never ran at all: 2 when guard-awk-lib.sh is
-# missing beside this script, 3 when the scan-surface discovery failed, 5 when
-# no awk interpreter is present at all, and 6 when GAIA_AWK resolves to an
-# interpreter that identifies as neither mawk nor BWK one-true-awk.
+# These statuses say the gate never ran at all: 2 when guard-awk-lib.sh is
+# missing beside this script, 5 when no awk interpreter is present at all, and
+# 6 when GAIA_AWK resolves to an interpreter that identifies as neither mawk nor
+# BWK one-true-awk. A scan surface that came back empty exits 1 with an ERROR
+# line.
 #
 # TypeScript is not this script's surface. The CLI's git listing calls are argv
 # arrays rather than shell words, and route through `gitZArgs` in
@@ -116,7 +117,7 @@
 # which is what makes the rule affordable as well as closed.
 #
 # What the fence rule reads is stated in the scanner beside the code that does
-# it: a closer matches the opener's character and length, and a leading `>` is
+# it: a closer matches the opener's character and is at least as long, and a leading `>` is
 # part of the delimiter's run. Its remaining blind spots:
 #   - An illustrative fenced block that DELIBERATELY shows an unquoted call as a
 #     counter-example is flagged. That is FAIL-CLOSED, and the repair is to write
