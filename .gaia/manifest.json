@@ -171,9 +171,9 @@
     ".gaia/cli/templates/.gitkeep": "owned",
     ".gaia/cli/templates/component/index.stories.tsx.tmpl": "owned",
     ".gaia/cli/templates/component/index.tsx.tmpl": "owned",
+    ".gaia/cli/templates/data-layer/query-client-decorator.tsx.tmpl": "owned",
     ".gaia/cli/templates/data-layer/query-client.ts.tmpl": "owned",
     ".gaia/cli/templates/data-layer/query-provider.tsx.tmpl": "owned",
-    ".gaia/cli/templates/data-layer/QueryClientDecorator.tsx.tmpl": "owned",
     ".gaia/cli/templates/hook/hook.test.ts.tmpl": "owned",
     ".gaia/cli/templates/hook/hook.ts.tmpl": "owned",
     ".gaia/cli/templates/route/hydrate-fallback.stories.tsx.tmpl": "owned",
@@ -409,8 +409,8 @@
     "frontend/.storybook/a11y.ts": "owned",
     "frontend/.storybook/chromatic/decorator.tsx": "owned",
     "frontend/.storybook/chromatic/index.ts": "owned",
-    "frontend/.storybook/decorators/ToastDecorator.tsx": "owned",
-    "frontend/.storybook/decorators/WrapDecorator.tsx": "owned",
+    "frontend/.storybook/decorators/toast-decorator.tsx": "owned",
+    "frontend/.storybook/decorators/wrap-decorator.tsx": "owned",
     "frontend/.storybook/i18next.ts": "owned",
     "frontend/.storybook/main.ts": "owned",
     "frontend/.storybook/modes.ts": "owned",
@@ -720,7 +720,7 @@
     "wiki/overview.md": "wiki-owned",
     "wiki/README.md": "wiki-owned"
   },
-  "generated": "2026-10-17T12:51:58.834Z",
+  "generated": "2026-10-17T14:20:51.264Z",
   "regions": [
     {
       "endMarker": "<!-- gaia:audit-remit:end -->",

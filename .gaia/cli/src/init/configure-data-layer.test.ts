@@ -223,8 +223,8 @@ describe('query on', () => {
       ['query-client.ts.tmpl', 'app/query-client.ts'],
       ['query-provider.tsx.tmpl', 'app/state/query-provider.tsx'],
       [
-        'QueryClientDecorator.tsx.tmpl',
-        '.storybook/decorators/QueryClientDecorator.tsx',
+        'query-client-decorator.tsx.tmpl',
+        '.storybook/decorators/query-client-decorator.tsx',
       ],
     ];
 
