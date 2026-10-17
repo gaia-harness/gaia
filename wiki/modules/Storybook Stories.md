@@ -48,6 +48,6 @@ Chromatic loads only the preview iframe, so the toolbar toggle never fires there
 
 `msw-storybook-addon` is wired: `.storybook/main.ts` registers the addon and serves `public/` as a static directory (so built Storybook and Chromatic find `mockServiceWorker.js`), and `.storybook/preview.ts` registers `mswLoader()` from `msw-storybook-addon/csf3`. A story supplies handlers through `parameters.msw.handlers`. Handlers read a mutation body with `request.json()`. Seed data comes from the `@msw/data` collections in `frontend/test/mocks/database`. See `frontend/.claude/rules/storybook.md` for the usage pattern and [[MSW Handlers]] for the handler structure.
 
-When TanStack Query is on, a Storybook decorator (`.storybook/decorators/QueryClientDecorator.tsx`) gives each story a fresh QueryClient. See [[Data Loading]].
+When TanStack Query is on, a Storybook decorator (`.storybook/decorators/query-client-decorator.tsx`) gives each story a fresh QueryClient. See [[Data Loading]].
 
 For the current `frontend/.storybook/` file inventory, query Serena (`.claude/rules/code-search.md`).

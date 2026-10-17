@@ -285,14 +285,14 @@ const planStateIndex = (packageDir: string): Plan => {
 };
 
 const DECORATOR_IMPORT =
-  "import QueryClientDecorator from './decorators/QueryClientDecorator';";
+  "import QueryClientDecorator from './decorators/query-client-decorator';";
 
 const planPreview = (packageDir: string): Plan => {
   const relative = '.storybook/preview.ts';
   const file = path.join(packageDir, relative);
   const source = readIfPresent(file);
   const handEdit =
-    'add QueryClientDecorator to the decorators array and import it from ./decorators/QueryClientDecorator';
+    'add QueryClientDecorator to the decorators array and import it from ./decorators/query-client-decorator';
 
   if (source === null) return missingFile(relative, handEdit);
 
@@ -381,8 +381,8 @@ const TEMPLATE_TARGETS: readonly (readonly [string, string])[] = [
   ['query-client.ts.tmpl', 'app/query-client.ts'],
   ['query-provider.tsx.tmpl', 'app/state/query-provider.tsx'],
   [
-    'QueryClientDecorator.tsx.tmpl',
-    '.storybook/decorators/QueryClientDecorator.tsx',
+    'query-client-decorator.tsx.tmpl',
+    '.storybook/decorators/query-client-decorator.tsx',
   ],
 ];
 
