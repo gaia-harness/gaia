@@ -13,7 +13,7 @@ describe('http utils', () => {
   });
 
   test('toHeadersObject should work with object', () => {
-    expect(toHeadersObject(new Headers(plainHeaders))).toEqual(plainHeaders);
+    expect(toHeadersObject(plainHeaders)).toEqual(plainHeaders);
   });
 
   test('toHeadersObject should work with undefined', () => {
