@@ -1,6 +1,6 @@
 /**
  * The two advisory sources: Dependabot alerts through `gh api`, and
- * `pnpm audit --json` as the fallback. Each returns raw parsed records or a
+ * `pnpm audit --json`, whose records are unioned with them. Each returns raw parsed records or a
  * reason token; neither ever returns gh or pnpm stderr, which can carry a
  * token or attacker-controlled text. Field selection and validation happen in
  * `advisory-model.ts`.

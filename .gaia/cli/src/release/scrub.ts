@@ -6,8 +6,8 @@
  * `.gaia/release-exclude`) and the final `tar -czf`. The transforms run in
  * config order against the staging tree:
  *
- *   - marker-strip: remove maintainer-only blocks delimited by HTML
- *     comment markers. Source becomes superset; bundle is subset.
+ *   - marker-strip: remove maintainer-only blocks delimited by
+ *     configured start and end comment markers. Source becomes superset; bundle is subset.
  *
  *   - json-strip: delete maintainer-only keys from structured JSON files
  *     using dot-notation paths (e.g. "scripts.test:forensics"). Dots are
@@ -791,7 +791,8 @@ const isInCheckScope = (
   !matchesAnyGlob(relativePath, scopeSkip);
 
 /**
- * Shared skeleton for every leak-check kind: walk each file `isInCheckScope`
+ * Shared skeleton for the literal, wikilink, excluded-workflow and refs leak
+ * checks (the titles check walks lines itself): walk each file `isInCheckScope`
  * admits, split into lines, skip line-allowlisted lines, and delegate to
  * `findLeaksInLine` for the check-specific match logic (literal regex,
  * wikilink lookup, or excluded-workflow substring search).

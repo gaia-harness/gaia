@@ -57,8 +57,8 @@
  *
  * `GIT_CONFIG_COUNT` set to `0` for the duration of a call restores git's own
  * resolution, which a test proving the suppression works needs and nothing else
- * should. `wiki/commit-classify.test.ts`'s control repository is the one such
- * caller: an environment entry outranks repo-local config, the same way
+ * should. `git-maintenance-env.test.ts` and `wiki/commit-classify.test.ts`'s
+ * control repository are the two such callers: an environment entry outranks repo-local config, the same way
  * `git -c` does, so a repository that writes the gates at git's defaults still
  * inherits the suppression from here.
  *

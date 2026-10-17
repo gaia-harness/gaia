@@ -3,7 +3,7 @@
  *
  * Walks every commit in `<since>..HEAD` and emits a deterministic
  * WORTHY/SKIP suggestion plus the rule that fired. Replaces the
- * subject-only first pass in `wiki/sync.md` Step 3.
+ * subject-only first pass in Step 3 of `.claude/skills/gaia/references/wiki/sync.md`.
  *
  * This module is the WORTHY/SKIP contract. The sync playbook at
  * `.claude/skills/gaia/references/wiki/sync.md` defers to it ("Trust the CLI's
@@ -26,17 +26,18 @@
  *   5. `chore(deps):`, `chore(cli):`, `wiki:`, `ci:`, `build:` : SKIP unless
  *      body mentions `architecture` or trade-off / invariant / gotcha
  *      keywords.
- *   6. `feat:` / `fix:` / `perf:` / `refactor:` / `debt:` touching a
- *      configured source-bearing non-test path: WORTHY.
+ *   6. `feat:` / `fix:` / `perf:` / `refactor:` / `debt:` / `revert:` touching
+ *      a configured source-bearing non-test path: WORTHY.
  *   7. Those same types touching only test files OR only configured inventory
  *      paths without body decision keywords: SKIP (Serena handles inventory).
- *   8. `chore:`, `docs:`, `test:` (without earlier override): SKIP.
+ *   8. `chore:`, `docs:`, `test:` (without earlier override): SKIP, except a
+ *      `chore:` whose body mentions `architecture` is WORTHY.
  *   9. Anything else: WORTHY (false positive better than false negative).
  *
  * Every type match reads a parsed conventional-commit header from
  * `util/conventional-commit.ts`, so a scoped or breaking-marked subject
- * reaches the same rule as its bare equivalent: `fix:`, `fix(hooks):`,
- * `fix!:`, and `fix(hooks)!:` are all rule 6. Rules keyed on a specific scope
+ * reaches the same rule as its bare equivalent: `fix:` and `fix(hooks):` are
+ * both rule 6; the `!` forms stop at rule 2. Rules keyed on a specific scope
  * (`chore(deps):`, `docs(decision):`) live in earlier groups than their
  * generic counterparts, so they still win.
  *

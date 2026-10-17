@@ -151,8 +151,7 @@ const defaultPnpmRunner: PnpmRunner = (args, options) => {
 
 /**
  * Compare current/latest by leading segments. Major if `[0]` differs,
- * else minor if `[1]` differs, else patch. Matches the SKILL's
- * "compare leading integers" rule.
+ * else minor if `[1]` differs, else patch.
  */
 export const classifyKind = (current: string, latest: string): Kind => {
   const a = parseSegments(current);

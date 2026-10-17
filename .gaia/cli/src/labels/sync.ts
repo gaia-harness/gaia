@@ -18,9 +18,8 @@ import {resolveRepoRoot} from '../util/repo-root.js';
  * `gaia labels sync` reconciles a repository's labels against
  * `.gaia/labels.json`.
  *
- * `planSync` holds the whole decision table and is pure; `run` does exactly
- * three impure things, one `gh label list`, the `gh` mutations the plan names,
- * and printing the report.
+ * `planSync` holds the whole decision table and is pure; `run` does all the
+ * I/O around it.
  *
  * # Two contracts other files key on
  *

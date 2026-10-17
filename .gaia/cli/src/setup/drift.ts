@@ -1,7 +1,7 @@
 /**
  * Compares the setup feature list against the decision records and reports
- * the ids nobody has decided yet. Read-only: `/update-gaia`, `/setup-gaia`
- * and the statusline read this to learn what a project or machine is owed.
+ * the ids nobody has decided yet. Read-only: `/update-gaia` and `/setup-gaia`
+ * read this to learn what a project or machine is owed.
  *
  * A record counts only for an id the list holds, in that id's own scope, with
  * a known decision value. Anything else (an unlisted id, a bad value, a

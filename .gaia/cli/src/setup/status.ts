@@ -2,9 +2,8 @@
  * `gaia setup status [--json]` handler.
  *
  * Reports whether the per-machine setup recorded by `.gaia/local/setup-state.json`
- * is complete. The statusline indicator and `/setup-gaia` slash command both
- * read this output to decide whether the indicator should appear and what
- * remains to do.
+ * is complete. The `/setup-gaia` slash command reads this output to decide
+ * what remains to do.
  *
  * JSON shape (the canonical machine-readable contract):
  *

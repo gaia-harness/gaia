@@ -1,9 +1,8 @@
 /**
  * Shared IO + schema for `.gaia/local/setup-state.json`.
  *
- * Every clone needs to run a one-shot per-machine setup (install React
- * Doctor, Playwright CLI, Serena MCP, plugins, chmod the
- * statusline). The slash command `/setup-gaia` orchestrates the steps;
+ * Every clone needs to run a one-shot per-machine setup (the steps in
+ * `SETUP_STEPS`). The slash command `/setup-gaia` orchestrates the steps;
  * this state file records progress so a partial run can resume
  * idempotently.
  *
@@ -27,8 +26,8 @@ export const STATE_DIRECTORY_RELATIVE = path.join('.gaia', 'local');
 /**
  * Canonical step identifiers. The slash command decides which steps it
  * runs; the CLI is just a recorder. Adding a new step here requires
- * updating both the slash command and the statusline gate (any
- * incomplete step in this list keeps the indicator visible).
+ * updating the slash command; `finalize` refuses while any step in this list
+ * is incomplete, which keeps the indicator visible.
  */
 export const SETUP_STEPS = [
   'install-tools',

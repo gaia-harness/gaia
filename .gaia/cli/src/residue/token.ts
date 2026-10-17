@@ -5,8 +5,8 @@
  * The skill drives the CLI as agent Bash, which is a shell string, so a
  * body-derived `--path` would put residual text on a shell command line no
  * matter how it is quoted. A token closed over `[A-Za-z0-9_-]` cannot carry a
- * metacharacter, a space, a quote, or a leading dash, so it is the only
- * argv-safe way to name a candidate. `decodeToken` re-validates the decoded
+ * metacharacter, a space, or a quote, and a minted one starts with a digit,
+ * never a dash, so it is the only argv-safe way to name a candidate. `decodeToken` re-validates the decoded
  * path and line through the same validators the attribution grammar uses, so
  * a hand-forged token is caught here rather than trusted downstream.
  */

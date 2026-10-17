@@ -7,8 +7,7 @@
  * whose behavior (a real fetch, or `unresolvedResolver`) encodes the
  * `--count-only` degradation entirely at the call site.
  *
- * The order below is fixed by `plan/README.md`'s "Resolution budget and
- * ordering" section and may not be reordered: `aged_candidate_count` is
+ * The order below is fixed and may not be reordered: `aged_candidate_count` is
  * counted before the cap so the statusline nudge's five-candidate threshold
  * stays reachable at any legal cap, and resolution happens only for a
  * store-coordinate match (step 4) and the emitted batch (step 7), never for

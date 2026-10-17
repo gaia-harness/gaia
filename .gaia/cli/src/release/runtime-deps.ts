@@ -25,8 +25,9 @@
  *   - an adopter-owned sentinel (`ADOPTER_OWNED_SENTINELS` below), or
  *   - a runtime-allocated path on adopter machines (under
  *     `.gaia/local/`,
- *     `.claude/worktrees/`, `.claude/agent-memory/`, `.claude/audit/`,
- *     or one of the per-session marker files).
+ *     `.claude/worktrees/`, `.claude/agent-memory/`, `.claude/audit/`), or
+ *   - a bare directory with a manifest entry beneath it, or
+ *   - an exact `PROSE_PATH_ALLOWLIST` token.
  *
  * Anything else is a runtime-dependency leak.
  *
@@ -121,14 +122,14 @@ const PATH_PREFIXES = ['.gaia/', '.claude/', '.github/'] as const;
  * longer token its literal spelling would produce.
  *
  *   - `.github/workflows`: named in `.claude/hooks/pr-merge-audit-check.sh`'s
- *     merge-gate error message as an example in-scope path, alongside `app/`,
- *     `test/`, `configs`. The directory is release-excluded; the reference is
+ *     merge-gate error message as an example in-scope path, alongside
+ *     `frontend/app/`, `frontend/test/`, `configs`. The directory is release-excluded; the reference is
  *     descriptive, not an invocation. An inline-ignore comment cannot annotate
  *     the occurrence because it lives inside a multi-line quoted `reason="..."`
  *     string that renders to the operator, hence this central allowlist.
  *   - `.claude/projects`: Claude Code's own global per-project directory,
- *     `$HOME/.claude/projects`, referenced by `check-updates.sh` and
- *     `knowledge-inventory.sh` to locate a project's auto-memory directory. It
+ *     `$HOME/.claude/projects`, referenced by `knowledge-inventory.sh` and
+ *     `notebook-lib-paths.sh` to locate a project's auto-memory directory. It
  *     lives outside the repo on every machine and structurally can never have
  *     a manifest entry.
  *   - `.claude/shell-snapshots`: Claude Code's own per-Bash-call snapshot

@@ -5,10 +5,11 @@
  * declines as a duplicate, and nothing is ever recorded.
  *
  * Arms 1 and 2 read issue-body keys through `parseWrappedKeys`, never
- * `parseKey`: the filer's own grammar anchors on the wrapped
- * `<!-- gaia-debt-key:` opener and does not require the `v1` token, which
- * `parseKey`'s stricter gate grammar would refuse. Suppression must agree
- * with the filer on its own leniencies, not with the merge gate.
+ * `parseKey`: the lenient grammar anchors on the wrapped
+ * `<!-- gaia-debt-key:` opener and does not require the `v1` token, so it reads
+ * a superset of the filer's keys; `parseKey`'s stricter gate grammar would
+ * refuse some of them. Suppression must read every key the filer reads, so it
+ * uses the lenient grammar, not the merge gate's.
  */
 import {escapeRegExp} from '../util/escape-regexp.js';
 import type {IssueRecord} from './corpus.js';

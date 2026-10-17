@@ -4,7 +4,7 @@
  * Detects pre-existing dependency-bot configurations that would
  * collide with `/update-deps`. Read-only by design; never auto-disables
  * either tool. The `/setup-gaia` slash command surfaces the warning
- * text and asks the user to confirm before continuing.
+ * text and continues.
  *
  * Detected files:
  *   - .github/dependabot.yml

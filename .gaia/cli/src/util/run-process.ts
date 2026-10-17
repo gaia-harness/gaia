@@ -1,6 +1,6 @@
 /**
- * The one place the CLI spawns `gh` and `git` child processes, shared by every
- * feature folder. Tests intercept by stubbing the exported symbols directly
+ * The shared runner the feature folders use to spawn `gh` and `git` child
+ * processes. Tests intercept by stubbing the exported symbols directly
  * (`vi.mock` or `vi.spyOn` on this module) to verify argv verbatim and supply
  * canned responses.
  *

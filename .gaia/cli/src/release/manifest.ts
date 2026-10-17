@@ -6,8 +6,8 @@
  * and adopter-owned sentinels, classifies each remaining path, and returns
  * a deterministic (alphabetically sorted) manifest shape.
  *
- * The CLI flag grammar, `--check` report rendering, and the `run` entrypoint
- * that consume the pieces here live in `manifest-cli.ts`.
+ * The CLI that consumes the pieces here lives in `manifest-cli.ts` and its
+ * siblings `manifest-cli-args.ts` and `manifest-cli-check.ts`.
  */
 import {z} from 'zod';
 import {execFileSync} from 'node:child_process';

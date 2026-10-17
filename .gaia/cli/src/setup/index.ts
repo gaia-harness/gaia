@@ -1,7 +1,6 @@
 /**
  * The `gaia setup` namespace, the CLI primitives the `/setup-gaia` slash
- * command shells out to. It orchestrates the externally-shelled installs
- * (React Doctor, Playwright CLI, Serena MCP, plugins) and records per-machine
+ * command shells out to. It records per-machine
  * progress in `.gaia/local/setup-state.json` (`status`, `mark-step`,
  * `finalize`). The remote-integration and repository-policy verbs cover
  * remote detection, admin probe, branch setting, Dependabot alert settings and

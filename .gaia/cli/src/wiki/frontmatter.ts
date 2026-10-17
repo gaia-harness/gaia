@@ -10,7 +10,7 @@
  * not follow the page frontmatter convention).
  *
  * That is the shared base exemption and nothing else: this scan deliberately
- * does NOT take the generated-content tier its two sibling scanners take.
+ * does NOT take the generated-content tier the other wiki scanners take.
  * `wiki/log.md` does follow the frontmatter convention, and its renderer emits
  * the floor on purpose, so a gap on it is a real break in the renderer rather
  * than noise about a regenerated file.

@@ -3,8 +3,9 @@
  *
  * Pure: merges the sandbox seed fragment into an arbitrary existing
  * settings object, preserving every unrelated top-level key and any
- * pre-existing nested `sandbox.*` keys the adopter already set (this is a
- * seed, not a config manager, so it merges rather than clobbers). Array
+ * pre-existing nested `sandbox.*` keys the fragment does not set (this is a
+ * seed, not a config manager, so it merges rather than clobbers; a value the
+ * fragment does set wins). Array
  * values (e.g. `allowedDomains`) are replaced wholesale, not merged
  * element-wise. The CLI handler in `./index.ts` does the file IO around
  * this.

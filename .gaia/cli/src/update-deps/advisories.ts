@@ -2,9 +2,9 @@ import semver from 'semver';
 /**
  * `gaia update-deps advisories --emit <path>` handler.
  *
- * The one place advisory data enters GAIA: `check-updates.sh` (with
- * `--count-only`), the /update-deps skill, and its report all read the payload
- * this writes, never gh or pnpm output directly. Advisory rows come from Dependabot alerts and
+ * Writes the advisories payload that `check-updates.sh` (with
+ * `--count-only`) and the /update-deps skill read.
+ * Advisory rows come from Dependabot alerts and
  * `pnpm audit`, unioned; the count covers both, since Dependabot's dependency graph can miss the lockfile's
  * transitive packages. Exit 0 whenever a payload was written,
  * `source: "unavailable"` included; callers read the payload, not the exit

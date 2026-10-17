@@ -6,7 +6,7 @@
  * provenance-marked rules) are prefix-bound and tail-agnostic, so a rule
  * promoted under an earlier tail keeps its never-prune-for-non-recurrence
  * guardrail. The doc copies (`codify.md` template + frozen-marker section,
- * `cleanse.md`, and `wiki/concepts/Policy-Memory Loop.md`) reproduce
+ * `cleanse/research.md`, and `wiki/concepts/Policy-Memory Loop.md`) reproduce
  * `markerComment(...)` byte for byte so the head never drifts.
  */
 

@@ -6,7 +6,8 @@
  * Field selection is an allowlist: a record is read only through the fields
  * named here, so summary, description, references, and every other free-text
  * field never reach a value that can be emitted. Each kept value is validated;
- * a record with one failing value is dropped whole and counted as rejected.
+ * a record with one failing value is dropped whole and counted as rejected,
+ * except the optional EPSS percentage, which reads as null when invalid.
  */
 import semver from 'semver';
 import type {AdvisoryReasonToken} from './advisory-reasons.js';

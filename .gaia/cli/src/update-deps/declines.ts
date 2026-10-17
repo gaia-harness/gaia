@@ -7,8 +7,9 @@
  * suppresses while its group's target versions are unchanged AND it is younger
  * than the 14-day cap, so a newer release or the cap elapsing resurfaces it.
  *
- * Scope: this ledger feeds the statusline count ONLY. The preview always shows
- * snoozed groups as updatable; nothing here gates the apply set.
+ * Scope: this ledger feeds the statusline count and the payload's snoozed
+ * list, which the preview uses to mark and default-skip those groups; nothing
+ * here gates the apply set.
  *
  * The file lives at `.gaia/local/declined-updates.json`, which is gitignored,
  * so it is local to this clone: a fresh checkout starts with no declines on

@@ -65,9 +65,9 @@ const CATEGORY_HEADER = /^# --- (\d+)\. (.+?) ---\s*$/;
  * the line masks.
  *
  * `.`, `+`, `-`, `_`, `~`, `@`, `,`, `!`, and `=` are deliberately allowed:
- * all three release-exclude parsers (the regex compiler in `manifest.ts`,
- * `release.yml`'s sed, and the distribution harness's literal test) escape
- * `.` and `+` identically, and React Router's generated `+types` directories
+ * both release-exclude consumers (the regex compiler in `manifest.ts`, which
+ * `release.yml` reaches through `release exclude-regex`, and the distribution
+ * harness's literal test) escape `.` and `+` identically, and React Router's generated `+types` directories
  * and an adopter's own paths can carry a `+`. Over-rejecting them would make
  * a legitimate file unwithholdable.
  */

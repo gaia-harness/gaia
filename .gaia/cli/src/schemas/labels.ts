@@ -5,7 +5,7 @@
  * This module is the validator the CLI runs. Uniqueness of names and colors,
  * the per-entry blocked/color/reason invariant, and the no-em-dash/no-en-dash
  * house rule on every description are all enforced here. `isCreatable` is the
- * one predicate every consumer (sync, `/gaia-setup`, `/gaia-update`) uses to
+ * one predicate every consumer (`gaia labels sync` and the label registry) uses to
  * decide whether an entry belongs on a given repository.
  */
 import {z} from 'zod';

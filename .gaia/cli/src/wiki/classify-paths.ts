@@ -5,15 +5,14 @@
  * The classifier ships to adopters, whose product source lives in the frontend
  * package's `app/**`, so the defaults come from that package's descriptor.
  * What the literals could not express is a repo whose source lives
- * anywhere else: GAIA's own clone keeps its product in `.gaia/` and `.claude/`
- * and touches `app/` in zero commits, so every one of rules 6/7's
- * discriminating branches was unreachable and every source commit fell
- * through to the fail-open default.
+ * anywhere else: GAIA's own clone keeps most of its product in `.gaia/` and
+ * `.claude/`, so the `app/**` literals matched few of its source commits and
+ * most fell through to the fail-open default.
  *
  * Configured under `gaia.wikiClassify` in the repo's `package.json`, matching
- * the existing `gaia.updateDepsHold` convention. `package.json` is
- * adopter-owned and never rewritten by `/update-gaia`, so an adopter's tuning
- * survives an update; a `.gaia/` file would not.
+ * the existing `gaia.updateDepsHold` convention. `/update-gaia` merges only
+ * `package.json`'s managed sections and leaves the `gaia` key alone, so an
+ * adopter's tuning survives an update; a `.gaia/` file would not.
  *
  * Every `gaia.wikiClassify` failure mode falls back to the defaults; a registry
  * or descriptor that cannot load throws instead, because the defaults
@@ -35,9 +34,9 @@ export type ClassifyPaths = {
    * so a commit touching only these needs no wiki narration.
    *
    * GAIA's own clone deliberately leaves this at the default while overriding
-   * the other two: it has no directory of that shape. The key exists because
-   * the branch is load-bearing for the React template it ships, not on the
-   * chance someone might want it.
+   * the other two: the default already names the template it ships under
+   * `frontend/app/`. The key exists because the branch is load-bearing for
+   * the React template it ships, not on the chance someone might want it.
    */
   inventoryPaths: readonly string[];
   /** Paths that hold product source, as opposed to tooling or plumbing. */

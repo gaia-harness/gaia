@@ -9,8 +9,8 @@ export const OWNERSHIP_CLASSIFIER_ENV = 'GAIA_FITNESS_OWNERSHIP_CLASSIFIER';
 const DEFAULT_CLASSIFIER = '.gaia/scripts/fitness-ownership.sh';
 
 /**
- * A classifier that hangs would hang the whole check; ownership only gates
- * heal, so a slow classifier degrades to `unknown` instead.
+ * A classifier that hangs would hang the whole check; a slow classifier
+ * degrades every path to `unknown` instead.
  */
 const CLASSIFIER_TIMEOUT_MS = 30_000;
 

@@ -7,7 +7,8 @@
  * raw string.
  *
  * Replaces the prose `jq ... > tmp && mv tmp wiki/.state.json` recipe in
- * `wiki/sync.md` Step 6 and `wiki/consolidate.md` Step 5.
+ * `.claude/skills/gaia/references/wiki/sync.md` Step 6 and
+ * `.claude/skills/gaia/references/wiki/consolidate.md` Step 5.
  */
 import {existsSync, readFileSync} from 'node:fs';
 import path from 'node:path';

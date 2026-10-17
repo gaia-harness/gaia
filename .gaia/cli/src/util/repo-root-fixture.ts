@@ -2,7 +2,7 @@
  * Repo-root fixture locator for tests.
  *
  * Walks up from a test file's own `import.meta.url` until it finds a `.git`
- * directory. Deliberately independent of `process.cwd()` (the test runner's
+ * entry (a directory, or the file a linked worktree has). Deliberately independent of `process.cwd()` (the test runner's
  * invocation directory varies) and deliberately NOT the git-based
  * `resolveRepoRoot` (`util/repo-root.ts`): a vitest fixture locator should
  * not shell out to git.

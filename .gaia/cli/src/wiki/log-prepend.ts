@@ -2,16 +2,16 @@
  * `gaia wiki log-prepend --sha <h> --decision <WORTHY|SKIP|RE_ANCHOR> --reason "..."` handler.
  *
  * Prepends a single canonical line to `wiki/log.md` immediately after the
- * frontmatter block. Replaces the prose recipe in `wiki/sync.md` Step 5
- * and the manual re-anchor write in `wiki/sync.md` Step 1.
+ * frontmatter block. Replaces the prose recipe in Step 5 and
+ * the manual re-anchor write in Step 1 of `.claude/skills/gaia/references/wiki/sync.md`.
  *
  * Line shape:
  *
  *   - <YYYY-MM-DD> <sha> <decision> - <reason>
  *
  * Date is today (UTC). Newest entries land at the top under the same
- * `## [Unreleased]` heading the log already uses; we insert immediately
- * after the heading line if present, otherwise after the closing `---`
+ * `## [Unreleased]` heading the log already uses; we insert after the
+ * heading line (and the one blank line under it) if present, otherwise after the closing `---`
  * frontmatter fence.
  *
  * Decisions:
@@ -135,8 +135,7 @@ const findInsertionIndex = (
   endFenceIndex: number
 ): number => {
   // Insert immediately after the `## [Unreleased]` (or first H2 heading)
-  // when present; otherwise insert immediately after the closing fence
-  // plus any leading blank lines + the H1 heading.
+  // when present; otherwise insert immediately after the closing fence.
   for (let index = endFenceIndex + 1; index < lines.length; index += 1) {
     const line = (lines[index] ?? '').trim();
 
