@@ -1,3 +1,5 @@
+import {z} from 'zod';
+
 export const toHeadersObject = (
   headers?: Headers | Record<string, string>
 ): Record<string, string> | undefined =>
@@ -7,15 +9,32 @@ export const toHeadersObject = (
     : headers
   : undefined;
 
+// A reserved .invalid host, so no real origin can equal it.
+const LOCAL_ORIGIN = 'https://local.invalid';
+
 /*
-  True only for same-origin, path-relative redirect targets. Rejects
-  protocol-relative ("//host") and backslash ("/\host") forms, which
-  browsers normalize to an absolute off-site URL, the open-redirect vector.
+  The same-origin path a redirect target resolves to, or undefined when it
+  leaves this origin. The target is resolved the way a browser resolves a
+  Location header, so the consumer redirects to the returned path, never the
+  raw input. A resolved path starting with "//" is rejected too, because a
+  browser reads it as another host.
 */
-export const isLocalRedirect = (
+export const resolveLocalRedirect = (
   url: null | string | undefined
-): url is string =>
-  url != null &&
-  url.startsWith('/') &&
-  !url.startsWith('//') &&
-  !url.startsWith('/\\');
+): string | undefined => {
+  if (!url?.startsWith('/')) return undefined;
+
+  const resolved = new URL(url, LOCAL_ORIGIN);
+
+  if (resolved.origin !== LOCAL_ORIGIN || resolved.pathname.startsWith('//')) {
+    return undefined;
+  }
+
+  return resolved.pathname + resolved.search + resolved.hash;
+};
+
+/** A form field that parses to the resolved same-origin path, or fails. */
+export const LocalRedirectSchema = z
+  .string()
+  .transform(resolveLocalRedirect)
+  .pipe(z.string({error: 'Redirect must stay on this site'}));
