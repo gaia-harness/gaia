@@ -22,7 +22,7 @@ Storybook v10 with the `@storybook/react-vite` framework. Configured to discover
 
 ## Decorator stack: the load-bearing convention
 
-Outermost to innermost: **`WrapDecorator → ChromaticDecorator → ToastDecorator`**. The order matters because each decorator depends on the layout established by the one outside it.
+Innermost to outermost (array order in `.storybook/chromatic/index.ts`): **`WrapDecorator → ChromaticDecorator → ToastDecorator`**.
 
 - `WrapDecorator`: reads `parameters.wrap` and wraps the story (use `parameters: {wrap: 'p-4'}` for padding instead of hardcoding divs in stories)
 - `ChromaticDecorator`: Chromatic snapshots only; renders the story once, puts `dark` on `<html>` when the `theme` global is `dark`, and clears `sessionStorage` before each snapshot
