@@ -1,20 +1,22 @@
 import {parseCookie, stringifySetCookie} from 'cookie';
 import {env} from '~/env.server';
+import {isThemePreference} from '~/utils/theme';
+import type {ThemePreference} from '~/utils/theme';
 
 const COOKIE_NAME = '__theme';
 
-export type Theme = 'dark' | 'light';
+export type Theme = Exclude<ThemePreference, 'system'>;
 
 export const getTheme = (request: Request): Theme | undefined => {
   const cookieHeader = request.headers.get('Cookie');
   if (!cookieHeader) return undefined;
   const parsed = parseCookie(cookieHeader)[COOKIE_NAME];
-  if (parsed === 'light' || parsed === 'dark') return parsed;
+  if (isThemePreference(parsed) && parsed !== 'system') return parsed;
 
   return undefined;
 };
 
-export const setTheme = (theme: 'system' | Theme): string => {
+export const setTheme = (theme: ThemePreference): string => {
   if (theme === 'system') {
     return stringifySetCookie({
       httpOnly: true,

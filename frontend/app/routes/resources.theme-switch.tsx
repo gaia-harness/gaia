@@ -1,12 +1,13 @@
 import {data, redirect} from 'react-router';
 import {z} from 'zod';
 import {LocalRedirectSchema} from '~/utils/http';
+import {THEME_PREFERENCES} from '~/utils/theme';
 import {setTheme} from '~/utils/theme.server';
 import type {Route} from './+types/resources.theme-switch';
 
 export const ThemeFormSchema = z.object({
   redirectTo: LocalRedirectSchema.optional(),
-  theme: z.literal(['dark', 'light', 'system']),
+  theme: z.literal(THEME_PREFERENCES),
 });
 
 export const action = async ({request}: Route.ActionArgs) => {
