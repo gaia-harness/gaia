@@ -10,8 +10,9 @@
 # Phase 7 Security section's source line, introduced marker, and cache rewrite,
 # the Phase 8 security-only subject, acceptance only after a per-advisory
 # question, the release-age and trust settings rule, no fixed /tmp scratch path,
-# the worktree state line's null-versus-zero read, the report-only reading, and
-# the security phase's own snapshot directories.
+# the worktree state line's null-versus-zero read, the report-only reading,
+# the security phase's own snapshot directories, and the override audit's
+# fail-closed read of an unanswered `pnpm audit`.
 #
 # Each check is a function over a file path, so every test that proves the
 # real page passes has a twin that runs the same function over a scratch copy
@@ -481,5 +482,61 @@ check_own_snapshots() {
   copy="$(scratch_copy "$SECURITY" "snapshot.md")"
   replace_fixed "$copy" "$RESOLUTION_MKTEMP" 'resolution_snapshot=/tmp/update-deps-refresh'
   run check_own_snapshots "$copy"
+  [ "$status" -ne 0 ]
+}
+
+# ---------------------------------------------------------------------------
+# 19. The override audit fails closed when pnpm audit does not answer
+# ---------------------------------------------------------------------------
+
+ADVISORY_CAPTURE='bash .gaia/scripts/override-audit-advisory-ids.sh'
+PER_KEY_CAPTURE='bash .gaia/scripts/override-audit-advisory-ids.sh "$audit_now"'
+BASELINE_UNANSWERED='remove no key, change nothing, and note the audit as **Not run (pnpm audit unavailable: <reason>)**'
+PER_KEY_UNANSWERED='This key and every key not yet tested are **retained (pnpm audit unavailable: <reason>)**'
+
+check_override_audit_fails_closed() {
+  if grep -qF -- 'pnpm audit --json' "$1"; then
+    echo "the override audit reads pnpm audit directly instead of through the capture script" >&2
+    return 1
+  fi
+  [ "$(grep -cF -- "$ADVISORY_CAPTURE" "$1")" -eq 2 ] || {
+    echo "the baseline and per-key captures do not both use the capture script" >&2
+    return 1
+  }
+  grep -qF -- "$BASELINE_UNANSWERED" "$1" || {
+    echo "an unanswered baseline audit no longer stops the loop" >&2
+    return 1
+  }
+  grep -qF -- "$PER_KEY_UNANSWERED" "$1" || {
+    echo "an unanswered per-key audit no longer retains the untested keys" >&2
+    return 1
+  }
+}
+
+@test "the override audit fails closed when pnpm audit does not answer" {
+  check_override_audit_fails_closed "$OVERRIDE_AUDIT"
+}
+
+@test "the fail-closed check fails with a capture reading pnpm audit directly" {
+  local copy
+  copy="$(scratch_copy "$OVERRIDE_AUDIT" "direct.md")"
+  replace_fixed "$copy" "$PER_KEY_CAPTURE" 'pnpm audit --json 2>/dev/null | jq -r ".advisories // {} | keys[]?" | sort -u > "$audit_now"'
+  run check_override_audit_fails_closed "$copy"
+  [ "$status" -ne 0 ]
+}
+
+@test "the fail-closed check fails with the unanswered-baseline stop deleted" {
+  local copy
+  copy="$(scratch_copy "$OVERRIDE_AUDIT" "baseline.md")"
+  remove_fixed "$copy" "$BASELINE_UNANSWERED"
+  run check_override_audit_fails_closed "$copy"
+  [ "$status" -ne 0 ]
+}
+
+@test "the fail-closed check fails with the per-key retention deleted" {
+  local copy
+  copy="$(scratch_copy "$OVERRIDE_AUDIT" "per-key.md")"
+  remove_fixed "$copy" "$PER_KEY_UNANSWERED"
+  run check_override_audit_fails_closed "$copy"
   [ "$status" -ne 0 ]
 }
