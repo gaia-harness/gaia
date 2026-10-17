@@ -5,7 +5,9 @@
 # The one definition of how GAIA names the branches it creates, in both
 # directions: minting a name (gaia_branch_name) and reading one back
 # (gaia_branch_classify, gaia_branch_members, gaia_branch_spec_number). Every
-# reader that recovers meaning from a branch name reads it through here, and
+# reader that recovers meaning from a branch name reads it through here, except
+# local-janitor.sh and the wiki CLI, which match the wiki landing shapes with
+# their own patterns, and
 # every bash flow that cuts a branch or a worktree mints its name here; the two
 # kinds minted outside bash are pinned to this table by the suite instead, as
 # the note below the table states. So a convention change is one edit to this
