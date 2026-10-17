@@ -91,6 +91,10 @@ An absent key, an unreadable config, a missing file, and an unrecognized value a
 `prefer-worktree` (below). The `*)` arm's message names the unrecognized value so
 a typo is discoverable: one line, no warning banner, no error.
 
+This fallback deliberately differs from the `always-worktree` option the setup question recommends: the
+recommendation is what GAIA advises a team to choose, and the fallback is what it assumes when nobody chose,
+so a team that never answered is still asked, with the worktree option leading.
+
 ### `always-worktree`
 
 `POLICY` is `always-worktree`: skip the question entirely. Set `RESOLVED_MODE=worktree` and go straight to
