@@ -1,6 +1,6 @@
 # GitHub repository connection and remaining defaults
 
-`/setup-gaia` Phase 3 reads this file, whole, when the repo does not exist yet or its default branch is not pushed. Run `## Connect the repository` first; Options 1 and 2 return to `### Recommended defaults` in `setup-gaia.md`, and Option 3 and the authentication refusal skip the rest of Phase 3 and continue at Phase 3.5 in `setup-gaia.md`. After the registration there, `## Remaining defaults` runs. `setup-gaia.md` Phase 3.5 also reads this file to run `## Owed and recorded settings`, when a GitHub setting has no recorded decision.
+`/setup-gaia` Phase 3 reads this file, whole, when the repo does not exist yet or its default branch is not pushed. Run `## Connect the repository` first; Options 1 and 2 return to `### Recommended defaults` in `setup-gaia.md`, and Option 3, the authentication refusal, and the clean-tree refusal skip the rest of Phase 3 and continue at Phase 3.5 in `setup-gaia.md`. After the registration there, `## Remaining defaults` runs. `setup-gaia.md` Phase 3.5 also reads this file to run `## Owed and recorded settings`, when a GitHub setting has no recorded decision.
 
 Every project-scope record line below is gated on `MAY_RECORD_PROJECT` (`setup-decisions.md`), and the owed and declined checks are the lines that file defines. In each block, declare `OWNER`, `REPO`, `DEFAULT_BRANCH` and `MAY_RECORD_PROJECT` with the cached values.
 
@@ -31,6 +31,20 @@ Creating a GitHub repo needs an authenticated gh with repo-creation rights. Run 
 ```
 
 Exit the repo phase without mutating GitHub: skip the rest of Phase 3 and continue at Phase 3.5 in `setup-gaia.md`.
+
+**Clean-tree check.** `gh repo create --push` pushes commits only, so uncommitted changes never reach the new repository, and every branch or worktree cut later starts without them. Before asking anything else, read the working tree:
+
+```bash
+git status --porcelain
+```
+
+If it prints anything, do NOT create the repository. Print the paths it listed, then:
+
+```
+These changes are not committed, and creating the repo pushes only what is committed. Review them with `git status`, commit them on your default branch from your terminal, then re-run /setup-gaia and pick "Create the repo on GitHub".
+```
+
+Exit the repo phase without mutating GitHub, the same way as the authentication refusal above.
 
 **Choose the owner (personal account or organization).** Before creating, decide *where* the repo lives. Resolve the personal login and enumerate the orgs the user belongs to:
 
