@@ -4,7 +4,20 @@ Plan a complex feature using the task orchestration pattern. Do not implement an
 
 This command is the plan-specific case of the Workflow Doctrine (`wiki/concepts/Workflow Doctrine.md`), which defines roles, git ownership, checkpoint and resume, and model choice. For plan runs, the plan contract in `.claude/skills/gaia/references/plan/planner.md` (per-phase commits and gates, `PROGRESS.md`, the orchestrator's executor pins) governs where the two differ.
 
-Contents: `## Steps` (0 pre-flight sweep; 1 description, 1a SPEC reference; 2 planner model; 3 plan directory; 4 planning agent; 4.5 verify output; 4.6 decomposition audit; 4.7 record the run; 5 report and kickoff prompt).
+Contents: `## Argument parsing`; `## Steps` (0 pre-flight sweep; 1 description, 1a SPEC reference; 2 planner model; 3 plan directory; 4 planning agent; 4.5 verify output; 4.6 decomposition audit; 4.7 record the run; 5 report and kickoff prompt).
+
+## Argument parsing
+
+Tokenize the first whitespace-separated word of `$ARGUMENTS`:
+
+- If it is `auto`, set `auto_mode = true`, strip the token, and treat the remainder as the feature description.
+- Otherwise `auto_mode = false` and the entire `$ARGUMENTS` is the feature description.
+
+A first word of `auto` is always the mode token, so a description that starts with the word "auto" must be rephrased. With `auto_mode = true` and an empty remainder, abort before step 0 with the one line `"/gaia-plan auto requires a description. Re-invoke as: /gaia-plan auto <description>"`: no prompt, no sweep, no plan folder.
+
+Steps 1 and 1a read the remainder as `$ARGUMENTS`, so `auto SPEC-NNN` takes step 1a's bare-id form exactly as `SPEC-NNN` does. `/gaia-spec` step 11 invokes this skill in the same session with `SPEC-NNN`, or `auto SPEC-NNN` in auto mode.
+
+`auto_mode` selects two branches: step 2 defaults the planner to Opus with no model prompt, and step 4.6b surfaces no question (it auto-applies or records under the README's `## Audit notes`). Every other step runs identically, and none of them prompts.
 
 ## Steps
 
@@ -63,7 +76,7 @@ Colocated plans live inside the SPEC folder, so plan→SPEC discovery is structu
 The deep synthesis runs in the planner spawned at step 4, and the planner's model is pinned at spawn time, so it can be a top-tier model even when this orchestration runs on Sonnet. Opus and Fable are both top-tier planning models. Decide the planner's model:
 
 - If you are on Opus or Fable, the planner inherits your current model; skip to step 3.
-- If you are running non-interactively (a headless or automation context with no interactive user to prompt), default the planner to Opus: spawn it with `model: opus` at step 4. Skip to step 3.
+- If `auto_mode` is true, or you are running non-interactively (a headless or automation context with no interactive user to prompt), default the planner to Opus: spawn it with `model: opus` at step 4. Skip to step 3.
 - Otherwise (you are on Sonnet, Haiku, or another lesser model) call `AskUserQuestion` with:
   - question: `"You're on [model name]. Which model should plan?"`
   - header: `"Model"`
@@ -185,7 +198,7 @@ A lightweight multi-agent audit of the **decomposition itself**, the one artifac
 
 **Gauge the plan (this is the decision).** Read `README.md` and the `task-*.md` files once. A trivial plan (one or two tasks, a single phase, no cross-task interface contract) → **skip the audit** and proceed to step 4.7. Anything with parallel tasks in a phase, multiple phases, or a shared frozen contract → **run the audit**.
 
-**Auto-mode.** Identical to interactive: gauge the plan, run the audit if it is non-trivial, apply its dispositions non-interactively. Interactive and auto now differ only in how 4.6b surfaces findings, not in whether the audit runs.
+**Auto-mode.** Auto mode is `auto_mode` true (set by `## Argument parsing`). Identical to interactive: gauge the plan, run the audit if it is non-trivial, apply its dispositions non-interactively. Interactive and auto now differ only in how 4.6b surfaces findings, not in whether the audit runs.
 
 **Fallback (never block).** If the parallel `general-purpose` Agent fan-out is unavailable (a restricted context that cannot spawn subagents), do NOT block the handoff: note the skip (`decomposition audit unavailable`) and proceed to step 4.7. The orchestrator's per-phase quality gates and the non-skippable pre-merge Code Audit Team audit remain the safety net.
 

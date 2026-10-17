@@ -118,7 +118,7 @@ GAIA ships a complete, opinionated Claude Code workflow. Everything is wired in 
 <table>
 <thead><tr><th nowrap>Command</th><th>What it does</th></tr></thead>
 <tbody>
-<tr><td><code>/gaia-spec</code></td><td>Author an immutable SPEC through Socratic discovery: two-gate ceremony, self-review pass, UATs written into the SPEC before implementation begins, rendered to red-state Playwright specs automatically when the plan's orchestrator runs. Hands off to <code>/gaia-plan</code></td></tr>
+<tr><td><code>/gaia-spec</code></td><td>Author an immutable SPEC through Socratic discovery: two-gate ceremony, self-review pass, UATs written into the SPEC before implementation begins, rendered to red-state Playwright specs automatically when the plan's orchestrator runs. Then plans it with <code>/gaia-plan</code> in the same session</td></tr>
 <tr><td><code>/gaia-plan</code></td><td>Plan a complex feature. Claude structures the work, you approve, then an orchestrator drives focused subagents through execution</td></tr>
 <tr><td><code>/gaia-cleanse</code></td><td>Cleanse memory, wiki, and autoloaded files for duplication, conflicting instructions, and bloat</td></tr>
 <tr><td><code>/gaia-wiki</code></td><td>Run wiki maintenance as one commit and PR: sync new commits into wiki pages, consolidate redundant or superseded content, then lint for orphans, dead links, and drift and fix what it finds</td></tr>

@@ -379,9 +379,53 @@ scratch_scripts() {
   [ "$(jq -r '.tokens' <<<"$plan_line")" -eq 4000 ]
   [ "$(initiative_tokens spec:SPEC-901)" -eq 5000 ]
   [ "$(close_count)" -eq 2 ]
+  run usage represented spec:SPEC-901 --workflow gaia-spec
+  [ "$status" -eq 0 ]
+  run usage represented spec:SPEC-901 --workflow gaia-plan
+  [ "$status" -eq 0 ]
   run usage initiative spec:SPEC-901 --line
   [ "$status" -eq 0 ]
   [[ "$(last_stdout_line)" == "Cost: ~0.0M tokens, "* ]]
+}
+
+@test "a spec session joined from another session closes the spec run, then pairs a same-session plan start" {
+  mkdir -p "$(dirname "$(main_file)")"
+  main_start s1 10:00 gaia-spec
+  main_usage m1 10:10 1000 0
+  SID=sess-2
+  export CLAUDE_CODE_SESSION_ID="$SID"
+  mkdir -p "$(dirname "$(main_file)")"
+  run usage join --workflow gaia-spec --session sess-1 --start "$(stamp 10:00)"
+  [ "$status" -eq 0 ]
+  main_usage j1 11:00 2000 0
+  run record spec:SPEC-912 --workflow gaia-spec
+  [ "$status" -eq 0 ]
+  main_start p1 12:00 gaia-plan
+  main_usage j2 12:10 4000 0
+  run record spec:SPEC-912 --workflow gaia-plan
+  [ "$status" -eq 0 ]
+  [[ "$(last_stdout_line)" == "Cost: "* ]]
+  run usage represented spec:SPEC-912 --workflow gaia-spec
+  [ "$status" -eq 0 ]
+  run usage represented spec:SPEC-912 --workflow gaia-plan
+  [ "$status" -eq 0 ]
+}
+
+@test "a resumed spec session with no start refuses the spec record, then pairs a same-session plan start" {
+  mkdir -p "$(dirname "$(main_file)")"
+  main_usage m1 10:10 1000 0
+  run --separate-stderr record spec:SPEC-913 --workflow gaia-spec
+  [ "$status" -eq 1 ]
+  [ -z "$output" ]
+  [ "${#stderr_lines[@]}" -eq 1 ]
+  [[ "$stderr" == *"no unclaimed gaia-spec start in this session"* ]]
+  main_start p1 12:00 gaia-plan
+  main_usage m2 12:10 4000 0
+  run record spec:SPEC-913 --workflow gaia-plan
+  [ "$status" -eq 0 ]
+  [[ "$(last_stdout_line)" == "Cost: "* ]]
+  run usage represented spec:SPEC-913 --workflow gaia-plan
+  [ "$status" -eq 0 ]
 }
 
 @test "a recovery inside a live run leaves the live run's start unclaimed and its interval intact" {
