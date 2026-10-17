@@ -198,3 +198,55 @@ check_isolation_reference() {
   run check_isolation_reference "$copy"
   [ "$status" -ne 0 ]
 }
+
+# ---------------------------------------------------------------------------
+# The isolation question recommends always using worktrees
+# ---------------------------------------------------------------------------
+
+# check_isolation_question <file>: the question's options, in order, lead with
+# always-worktree as the one recommended option, and each answer-mapping label
+# matches its option's label.
+check_isolation_question() {
+  local file="$1" options answers
+  options="$(grep -oE '^- \*\*[^*]+\*\*:' "$file")"
+  [ "$options" = "$(printf '%s\n' \
+    '- **Always use worktrees (Recommended)**:' \
+    '- **Prefer worktrees**:' \
+    '- **Prefer branches**:')" ] || {
+    printf 'the isolation question options are out of order or mislabelled:\n%s\n' "$options" >&2
+    return 1
+  }
+  answers="$(grep -E '^- `[^`]+` is `[a-z-]+`\.$' "$file")"
+  [ "$answers" = "$(printf '%s\n' \
+    '- `Always use worktrees (Recommended)` is `always-worktree`.' \
+    '- `Prefer worktrees` is `prefer-worktree`.' \
+    '- `Prefer branches` is `prefer-branch`.')" ] || {
+    printf 'the isolation answer mapping does not match the options:\n%s\n' "$answers" >&2
+    return 1
+  }
+}
+
+@test "the isolation question leads with always using worktrees, recommended" {
+  check_isolation_question "${REFERENCES_DIRECTORY}/isolation-question.md"
+}
+
+@test "the isolation question check fails with the recommendation back on prefer-worktree" {
+  local copy
+  copy="$(scratch_copy "${REFERENCES_DIRECTORY}/isolation-question.md" "isolation-question-old.md")"
+  sed -e 's/^- \*\*Always use worktrees (Recommended)\*\*:/- **Always use worktrees**:/' \
+    -e 's/^- \*\*Prefer worktrees\*\*:/- **Prefer worktrees (Recommended)**:/' \
+    "${REFERENCES_DIRECTORY}/isolation-question.md" >"$copy"
+  cmp -s "${REFERENCES_DIRECTORY}/isolation-question.md" "$copy" && return 1
+  run check_isolation_question "$copy"
+  [ "$status" -ne 0 ]
+}
+
+@test "the isolation question check fails when an answer label drifts from its option" {
+  local copy
+  copy="$(scratch_copy "${REFERENCES_DIRECTORY}/isolation-question.md" "isolation-question-drift.md")"
+  sed 's/^- `Always use worktrees (Recommended)` is/- `Always use worktrees` is/' \
+    "${REFERENCES_DIRECTORY}/isolation-question.md" >"$copy"
+  cmp -s "${REFERENCES_DIRECTORY}/isolation-question.md" "$copy" && return 1
+  run check_isolation_question "$copy"
+  [ "$status" -ne 0 ]
+}
