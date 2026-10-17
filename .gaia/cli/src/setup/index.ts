@@ -2,13 +2,14 @@
  * The `gaia setup` namespace, the CLI primitives the `/setup-gaia` slash
  * command shells out to. It records per-machine
  * progress in `.gaia/local/setup-state.json` (`status`, `mark-step`,
- * `finalize`). The remote-integration and repository-policy verbs cover
+ * `finalize`) and seeds the app `.env` (`bootstrap-env`). The remote-integration and repository-policy verbs cover
  * remote detection, admin probe, branch setting, Dependabot alert settings and
  * the isolation policy writer.
  */
 import {EXIT_CODES} from '../exit.js';
 import {structuredError} from '../stderr.js';
 import {lookupOwn} from '../util/argv.js';
+import {run as runBootstrapEnv} from './bootstrap-env.js';
 import {run as runCheckAdmin} from './check-admin.js';
 import {run as runConfigureDependabotAlerts} from './configure-dependabot-alerts.js';
 import {run as runDetectRemote} from './detect-remote.js';
@@ -27,6 +28,7 @@ const HELP_TEXT = `Usage: gaia setup <subcommand> [args]
   status [--json]            Print whether per-machine setup is complete.
   mark-step <step>           Record a setup step as complete.
   finalize [--force]         Mark setup as complete (refuses if steps pending).
+  bootstrap-env              Copy .env.example to .env if .env is absent.
   detect-remote [--json]                   Read git remote get-url origin.
   warn-existing-tools [--json]             Detect Dependabot / Renovate configs.
   check-admin --owner <o> --repo <r> [--json]
@@ -50,6 +52,7 @@ type SubcommandHandler = (args: readonly string[]) => number | Promise<number>;
 const SUBCOMMAND_HANDLERS: Readonly<
   Partial<Record<string, SubcommandHandler>>
 > = {
+  'bootstrap-env': runBootstrapEnv,
   'check-admin': runCheckAdmin,
   'configure-dependabot-alerts': runConfigureDependabotAlerts,
   'detect-remote': runDetectRemote,

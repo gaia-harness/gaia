@@ -23,14 +23,14 @@ Show the explainer (this block stays English regardless of UI language, it's the
 
 Then use `AskUserQuestion`, header **`Isolation policy`** (in the user's language), question "How should this team isolate `/gaia-plan`, `/gaia-debt` and ad-hoc committed work?", with these three options in this exact order:
 
-- **Prefer branches (Recommended)**: Default. GAIA cuts a feature branch and works in the current checkout.
-- **Prefer worktrees**: GAIA leads with a worktree, so you can keep working, or run another GAIA task, at the same time.
+- **Prefer worktrees (Recommended)**: Default. GAIA leads with a worktree, so you can keep working, or run another GAIA task, at the same time.
 - **Always use worktrees**: GAIA always works in a worktree, no question asked.
+- **Prefer branches**: GAIA leads with a feature branch and works in the current checkout.
 
 ## The answer
 
-- `Prefer branches (Recommended)` is `prefer-branch`.
-- `Prefer worktrees` is `prefer-worktree`.
+- `Prefer worktrees (Recommended)` is `prefer-worktree`.
 - `Always use worktrees` is `always-worktree`.
+- `Prefer branches` is `prefer-branch`.
 
 "Other" or a dismissal is no answer.

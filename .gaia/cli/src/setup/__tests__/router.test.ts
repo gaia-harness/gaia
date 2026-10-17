@@ -41,6 +41,11 @@ describe('gaia setup router', () => {
     }
   );
 
+  test('dispatches bootstrap-env to its own handler', async () => {
+    await expect(run(['bootstrap-env', '--help'])).resolves.toBe(EXIT_CODES.OK);
+    expect(outputs.join('')).toContain('Usage: gaia setup bootstrap-env');
+  });
+
   test('the help lists every verb the router serves', async () => {
     await expect(run(['--help'])).resolves.toBe(EXIT_CODES.OK);
 
@@ -50,6 +55,7 @@ describe('gaia setup router', () => {
       'status',
       'mark-step',
       'finalize',
+      'bootstrap-env',
       ...REPOSITORY_POLICY_VERBS,
     ]) {
       expect(help).toContain(verb);
