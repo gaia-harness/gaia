@@ -8,8 +8,7 @@ slots (`<topic>`, `<question>`, `<option-N>`, `<next>`) at runtime.
 These templates are visible and editable here by design; never
 hardcode a question bank outside this directory. Phrasing of the
 fixed-text portions is normative, do not paraphrase the per-topic
-exhaustion checkpoint, the "Other" option, or the "Discuss this"
-option.
+exhaustion checkpoint or the "Discuss this" option.
 
 Contents: Rule 1: One question at a time; Rule 2: Closed-set questions use `AskUserQuestion`; Rule 3: "Discuss this" escape and resume; Rule 4: Open-ended questions use plain prompts; Rule 5: Per-topic exhaustion checkpoint; Rule 6: Research dispatch announce; Rule 7: Coach voice, not interrogator; Rule 8: Coverage scan (Clear / Partial / Missing); Rule 9: The question budget; Topic-bank scaffolding (suggested seed).
 
@@ -32,21 +31,25 @@ without asking it:
 ## Rule 2: Closed-set questions use `AskUserQuestion`
 
 A "closed-set" question is one with discrete possible answers the PO
-can enumerate. These ALWAYS use the `AskUserQuestion` tool with the
-following option ordering:
+can enumerate. These ALWAYS use the `AskUserQuestion` tool, which
+takes at most four options and adds its own free-text `Other` to
+every question, with the following option ordering:
 
 1. **Recommended option first.** The PO names the option it would
    choose given the discovery so far, with a short reason.
-2. **Ranked alternatives.** Other plausible options, ordered by how
-   close they are to the recommendation.
-3. **`Other`**, free-text escape. The user types an answer the PO
-   did not enumerate.
-4. **`Discuss this`**, drops to plain Q&A on this question until the
+2. **Up to two ranked alternatives.** The next most plausible options,
+   ordered by how close they are to the recommendation. When more are
+   viable, the PO lists the strongest two and names the rest in the
+   question text, so the user can still pick one through `Other`.
+3. **`Discuss this`**, drops to plain Q&A on this question until the
    user signals settlement, then resumes the structured loop on the
    next topic.
-5. **`Save partial and resume later`**, writes the draft to cache and
-   stops; re-invoking `/gaia-spec` resumes it. `clarify-loop.md`
-   (`## Escape option`) owns what selecting it does.
+
+The PO never lists `Other`: the tool supplies it, and the user types
+an answer the PO did not enumerate there. Nor does it list `Save
+partial and resume later`: the user reaches it by typing a save
+request into `Other` or from inside `Discuss this`, and
+`clarify-loop.md` (`## Escape option`) owns what taking it does.
 
 ### Closed-set template
 
@@ -56,18 +59,16 @@ Question:
 
 Why this matters:
   <One sentence. The downstream consequence of the choice.>
+  <Only when more alternatives are viable: "Also viable: <option-C>,
+  <option-D>; type one into Other to pick it.">
 
 Options:
   1. <recommended-option>, recommended. <Short reason. Name the
      trade-off the PO weighed.>
   2. <alternative-option-A>, <Short reason this is plausible.>
   3. <alternative-option-B>, <Short reason this is plausible.>
-  …
-  N-2. Other, type your own answer.
-  N-1. Discuss this, talk it through; we'll resume the structured
-       loop after you signal settlement.
-  N.   Save partial and resume later, write the draft to cache and
-       stop; re-invoke /gaia-spec to continue.
+  4. Discuss this, talk it through; we'll resume the structured
+     loop after you signal settlement.
 ```
 
 When code-context is available (a known component, an existing pattern,
@@ -150,9 +151,10 @@ Options:
   1. Move to <next>, recommended. <Short reason if useful.>
   2. Push deeper on <topic>, I'll mine for follow-ups; you can
      provide a seed if there's something specific I'm missing.
-  3. Other, name a different topic to jump to.
-  4. Save partial and resume later, write the draft to cache and stop.
 ```
+
+The tool's own `Other` takes a typed topic name to jump to, or a save
+request (`clarify-loop.md`, `## Escape option`); the PO lists neither.
 
 Slot semantics:
 

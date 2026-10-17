@@ -17,7 +17,7 @@ The workflow runs on GAIA's own scripts in `.gaia/scripts/spec/`, Claude-read pr
 
 - **No machine-local memory for project decisions.** The skill must never write to `~/.claude/projects/.../memory/`. Project-relevant decisions belong only in the SPEC artifact, the wiki, or `.claude/rules/`.
 - **Write-surface allowlist.** Every write during a session lands in `.notebook/specs/**`, `.gaia/local/cache/**`, `.gaia/local/telemetry/**`, or `.notebook/catalog.json` (through the ledger and notebook libraries). Source files are off-limits. No automated check enforces this allowlist; the session polices it at the instruction level, and the step-10 lint checks only the saved SPEC's immutability.
-- **One question at a time.** Closed-set questions go through `AskUserQuestion` with options ordered: recommended FIRST, alternatives, `Other`, `Discuss this`, `Save partial and resume later`. Open-ended questions use plain prompts.
+- **One question at a time.** Closed-set questions go through `AskUserQuestion` within its four-option cap: recommended FIRST, up to two alternatives, `Discuss this`. The tool supplies `Other`, which also takes a typed save request; `.claude/skills/gaia/references/spec/clarify-loop.md` owns the full option contract. Open-ended questions use plain prompts.
 - **Two-gate ceremony.** Gate 1 confirms intent + UATs in plain English before the clarify loop. Gate 2 confirms the rendered artifact before save. No silent advances.
 - **Coach tone, not interrogator.** Mirror back, name trade-offs, propose candidates. Never punt research to the human.
 
