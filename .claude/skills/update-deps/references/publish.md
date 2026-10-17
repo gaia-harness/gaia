@@ -6,6 +6,8 @@
 A re-vendor diff from the Vendored skill sync step counts as an update: publish it even when no package moved, with the subject `chore(deps): re-vendor playwright-cli skill <version>`. It touches paths beyond the dependency manifests, so it gets the normal audit handshake, not the dep-bump bypass.
 <!-- gaia:maintainer-only:end -->
 
+**If `/gaia-init` invoked the run** (`INVOKED_BY_INIT=true`), skip the rest of this phase: do not commit, push, open a PR, or merge. Leave the changes uncommitted on the current branch, say so in one line, and return to `/gaia-init`, whose init commit carries them into the first push.
+
 **Commit the update.** Stage and commit the applied changes on the current branch. Write the message to a temp file first, then commit from it:
 
 ```bash
