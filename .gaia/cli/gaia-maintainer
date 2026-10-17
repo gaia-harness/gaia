@@ -20963,8 +20963,18 @@ var runCommitMode = (ctx) => {
   }
   const amendFailure = amendStateFile(ctx);
   if (amendFailure !== null) return amendFailure;
+  const releaseResult = ctx.runner("git", ["rev-parse", "HEAD"], {
+    cwd: ctx.cwd
+  });
+  if (!stepSucceeded(releaseResult)) {
+    return passthroughFailure(releaseResult, {
+      args: ["rev-parse", "HEAD"],
+      command: "git"
+    });
+  }
+  const releaseSha = releaseResult.stdout.trim();
   process.stdout.write(
-    `commit-and-tag: committed v${ctx.version} (${newSha.slice(0, 7)})
+    `commit-and-tag: committed v${ctx.version} (${releaseSha.slice(0, 7)})
 `
   );
   return EXIT_CODES.OK;

@@ -182,6 +182,18 @@ describe('init strip-branding', () => {
     expect(stdio.errors.join('')).toContain('--title is required');
   });
 
+  test.each([
+    ['a line feed', 'Hello\nWorld'],
+    ['a carriage return', 'Hello\rWorld'],
+  ])('exit 1 when --title carries %s', (_label, title) => {
+    sandbox = setupSandbox();
+    const exit = run(['--title', title], {cwd: sandbox.root});
+    expect(exit).toBe(1);
+    expect(stdio.errors.join('')).toContain(
+      '--title must not contain a line ending'
+    );
+  });
+
   // A title carrying a quote, a backslash or a `$` is an ordinary title and is
   // escaped rather than refused. Scoped to this command's own sink: these rows
   // assert what `debrandStorybook` does, and say nothing about any other sink.

@@ -33995,6 +33995,9 @@ import path34 from "node:path";
 // src/init/util/js-literal.ts
 var escapeJsLiteralValue = (value, quote) => value.replaceAll("\\", "\\\\").replaceAll(quote, `\\${quote}`);
 
+// src/init/util/title-flag.ts
+var titleFlagError = (title) => /[\n\r]/u.test(title) ? "--title must not contain a line ending" : null;
+
 // src/init/rename.ts
 var HELP_TEXT14 = `Usage: gaia init rename --title <T> --kebab <K>
 
@@ -34038,6 +34041,8 @@ var parseFlags4 = (argv) => {
   if (title === void 0) {
     return { message: "--title is required", ok: false };
   }
+  const titleError = titleFlagError(title);
+  if (titleError !== null) return { message: titleError, ok: false };
   if (kebab === void 0) {
     return { message: "--kebab is required", ok: false };
   }
@@ -34237,6 +34242,8 @@ var parseFlags5 = (argv) => {
   if (title === void 0) {
     return { message: "--title is required", ok: false };
   }
+  const titleError = titleFlagError(title);
+  if (titleError !== null) return { message: titleError, ok: false };
   return { flags: { title }, ok: true };
 };
 var FUNDING_PATH = ".github/FUNDING.yml";
