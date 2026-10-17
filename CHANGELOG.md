@@ -217,6 +217,7 @@ On GAIA 1.6.1? Claude: choose Abort, then offer to migrate this project to 2.0.0
 
 ### Fixed
 
+- Four shipped instructions no longer misdirect a run. `/gaia-cleanse` states when to attach its pull request to the cost record. The frontend TypeScript skill now matches the installed Zod 4 on which forms fail typecheck and which are deprecated, and gives the right place to record a story's a11y opt-out. Every copy of the `/gaia-spec` clarify option set offers the save-partial escape. `/gaia-residue` cuts its branch in a call of its own, which the main-branch guard requires (#2759)
 - `gaia init rename` and `gaia init strip-branding` now refuse a `--title` containing a line break with a usage error. The title is written into single-line string literals and Markdown headings, so a multi-line value broke the generated source (#2746)
 - `gaia-maintainer release commit-and-tag --commit` now prints the SHA of the final release commit. It printed the SHA from before the state-file amend, a commit no longer on the branch (#2746)
 - The forensics triage classifier step now runs with no tools at all. It used a six-tool denylist, so Glob, Grep and LS stayed available to an unattended run over untrusted issue text; `--tools=` now removes every built-in tool, as the step's comment and prompt always said (#2734)
