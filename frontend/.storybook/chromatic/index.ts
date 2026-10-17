@@ -1,8 +1,8 @@
 import {DARK_MODE_EVENT_NAME} from '@vueless/storybook-dark-mode';
 import isChromatic from 'chromatic/isChromatic';
 import {addons} from 'storybook/preview-api';
-import ToastDecorator from '../decorators/ToastDecorator';
-import WrapDecorator from '../decorators/WrapDecorator';
+import ToastDecorator from '../decorators/toast-decorator';
+import WrapDecorator from '../decorators/wrap-decorator';
 import ChromaticDecorator from './decorator';
 
 export const isChromaticSnapshot =

@@ -13,7 +13,7 @@ import {
 const DATA_LAYER_TEMPLATES = [
   'query-client.ts.tmpl',
   'query-provider.tsx.tmpl',
-  'QueryClientDecorator.tsx.tmpl',
+  'query-client-decorator.tsx.tmpl',
 ];
 
 describe('hasTanstackQuery', () => {

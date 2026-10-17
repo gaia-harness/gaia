@@ -33503,12 +33503,12 @@ var planStateIndex = (packageDir) => {
     file: file2
   };
 };
-var DECORATOR_IMPORT = "import QueryClientDecorator from './decorators/QueryClientDecorator';";
+var DECORATOR_IMPORT = "import QueryClientDecorator from './decorators/query-client-decorator';";
 var planPreview = (packageDir) => {
   const relative = ".storybook/preview.ts";
   const file2 = path31.join(packageDir, relative);
   const source = readIfPresent(file2);
-  const handEdit = "add QueryClientDecorator to the decorators array and import it from ./decorators/QueryClientDecorator";
+  const handEdit = "add QueryClientDecorator to the decorators array and import it from ./decorators/query-client-decorator";
   if (source === null) return missingFile(relative, handEdit);
   if (source.includes("QueryClientDecorator")) return null;
   const shorthand = [...source.matchAll(/^[ \t]*decorators,[ \t]*$/gmu)];
@@ -33576,8 +33576,8 @@ var TEMPLATE_TARGETS = [
   ["query-client.ts.tmpl", "app/query-client.ts"],
   ["query-provider.tsx.tmpl", "app/state/query-provider.tsx"],
   [
-    "QueryClientDecorator.tsx.tmpl",
-    ".storybook/decorators/QueryClientDecorator.tsx"
+    "query-client-decorator.tsx.tmpl",
+    ".storybook/decorators/query-client-decorator.tsx"
   ]
 ];
 var planTemplateFiles = (packageDir) => TEMPLATE_TARGETS.flatMap(([template, target]) => {
