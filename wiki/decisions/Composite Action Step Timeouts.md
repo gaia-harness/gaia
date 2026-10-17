@@ -24,7 +24,7 @@ A workflow may still give a provisioning step its own cap, set strictly under it
 
 GAIA declines to replace `pnpm/action-setup` with hand-rolled provisioning, which a per-attempt timeout could otherwise bound below the caller's cap. The one recorded stall degraded at least six provisioning legs across two concurrent runs over roughly seven and a half minutes, a sustained condition that a second attempt starting fifteen to sixty seconds later re-enters rather than escapes. Two of the degraded legs cleared at exactly sixty-one seconds, so a bound sized near sixty seconds would have aborted those attempts rather than rescued them. A bounded retry therefore buys **attribution**, which step is named when the lane reds, not **recovery**: a stall still consumes the caller's whole budget at every surface GAIA provisions pnpm.
 
-Wherever provisioning newly routes through the composite, that routing reaches an already-installed adopter's own CI only on their next `/setup-gaia` re-render, never through `/update-gaia`.
+Wherever provisioning newly routes through the composite, that routing reaches an already-installed adopter's own CI through `/update-gaia` as a `shared` file merge (a drifted copy gets a sidecar patch).
 
 This decision reopens on either a second recorded stall event, or a base rate established from raw job logs. Absence of recorded stalls is not a measured base rate: zero events across the unbiased sample bounds the per-run rate no tighter than roughly thirteen percent.
 

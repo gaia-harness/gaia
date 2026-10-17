@@ -132,7 +132,8 @@ try {
 
 // createSourceFile is lenient and records syntactic diagnostics rather than
 // throwing. A genuinely broken file must fail the helper so the caller can
-// fall back to fail-open (capture) / fail-closed-but-named (check).
+// fall back: the capture and check hooks skip the file (fail-open; only the
+// exit-7 story shape denies), and append-worthiness.mjs refuses by name.
 const diagnostics = sourceFile.parseDiagnostics ?? [];
 if (diagnostics.length > 0) {
   const first = diagnostics[0];

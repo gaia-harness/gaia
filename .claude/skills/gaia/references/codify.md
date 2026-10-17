@@ -335,7 +335,7 @@ Never fold this into the commit call. The main-branch guard reads a whole comman
 <!-- gaia:maintainer-only:start -->
 **Clear the obligations a rule file carries**, before `gh pr create`. Each is invisible in the diff. The first two apply only to a new rule file:
 - **Tier it in the audit partition** per `.claude/rules/maintainers/hook-registration.md`. Nearly always merely-shared, which needs no entry; this is a judgment call no check enforces.
-- **Answer distribution** through `/distribution-vet`, which regenerates `.gaia/manifest.json`. The distribution pre-flight refuses `gh pr create` for a newly-shipping file with no ship-or-withhold answer.
+- **Answer distribution** through `/distribution-vet`, which regenerates `.gaia/manifest.json`. The release `manifest` command refuses to write while a newly-shipping file has no ship-or-withhold answer.
 - **Keep release-excluded citations out of a shipped rule's visible body** (see `## The prose-rule template (fill in, then write)`, its filling rules).
 <!-- gaia:maintainer-only:end -->
 

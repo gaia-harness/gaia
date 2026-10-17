@@ -18,8 +18,8 @@
 # GAIA_NOTEBOOK_TREE, so the library resolves the main checkout from it: from a
 # linked worktree the update lands in main's catalog, never a forked copy.
 #
-# Readiness is checked right after the arguments are validated and before
-# anything else: while the one-time move is pending the script exits 3 and the
+# Readiness is checked right after the id kind is validated and before the
+# patch is checked: while the one-time move is pending the script exits 3 and the
 # library's stderr line names the move command.
 #
 # Canonical status vocabulary (ledger-lib.sh): spec draft|ready|merged|abandoned,

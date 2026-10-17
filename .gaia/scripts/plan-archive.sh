@@ -47,8 +47,9 @@
 #     stdout naming the recovery command.
 #   - stdout carries at most one human summary line describing what
 #     happened; diagnostics and refusals go to stderr only.
-#   - Idempotent: a missing plan_dir, or a second run after a successful
-#     reduce or delete, is a no-op.
+#   - Idempotent: a missing plan_dir is a no-op. A second run after a delete
+#     is a no-op; after a reduce it leaves the folder as is but re-stamps
+#     merged_at.
 #   - No git dependency for the delete itself -- the notebook is gitignored,
 #     so this is plain filesystem work. git is only consulted (best-effort,
 #     $PWD fallback) to resolve the repo root, and to resolve the main

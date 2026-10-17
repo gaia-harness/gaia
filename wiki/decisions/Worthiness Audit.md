@@ -124,7 +124,6 @@ ledger:
   the no-orchestrator path (otherwise principle-6 always-on is violated). Its
   surviving no-orchestrator guarantees (static honesty lint, RED on the
   deterministic surface, the fresh-subagent audit if dispatched) are distinct
-  from the orchestrated-only guarantees (the merge presence gate, leaf
-  isolation).
+  from the orchestrated-only guarantee (leaf isolation).
 - The merge presence gate reads this ledger, recomputes each test's signal, and
   scopes to the emergent set the [[Determinism Classifier]] defines.
