@@ -5,7 +5,7 @@ description: Remediates dependencies in place of Dependabot version and security
 
 Contents: Pre-flight: Worktree check; Pre-flight: Branch check; Package layout; Flags and run modes; Companion groups; Phase 1: Discover, preview, decide (orchestrator); Branch creation (after discovery); Override audit + Wave A: Haiku agent; Phase 5: Wave B (per-group major bumps); Phase 5b: Transitive refresh (Haiku agent); Phase 5c: Security resolutions; Phase 6: Post-update override audit; Phase 7: Final report; Phase 8: Publish.
 
-Dependency remediation: outdated packages and security advisories, through one quality gate, in one record. Discover outdated packages and open advisories, preview them (advisories first, ranked) so you can snooze what you are not ready for, audit overrides, apply codebase migrations for major bumps, resolve dependency conflicts, refresh transitive dependencies within range, resolve each advisory by the least invasive method that clears it or accept it by dismissing its alert, and run the quality gate. In CI it runs unattended (no preview); interactively it shows the preview first. On a `main`/`master` run it opens the PR and merges it once checks are green, then cleans up locally; on any other branch it pushes and leaves the PR to you.
+Dependency remediation: outdated packages and security advisories, through one quality gate, in one record. Discover outdated packages and open advisories, preview them (advisories first, ranked) so you can snooze what you are not ready for, audit overrides, apply codebase migrations for major bumps, resolve dependency conflicts, refresh transitive dependencies within range, resolve each advisory by the least invasive method that clears it or accept it by dismissing its alert, and run the quality gate. In CI it runs unattended (no preview); interactively it shows the preview first. On a `main`/`master` run it opens the PR and merges it once checks are green, then cleans up locally; on any other branch it pushes and leaves the PR to you. Run by `/gaia-init`, it leaves its changes uncommitted for the init commit.
 
 ## Pre-flight: Worktree check
 
@@ -54,6 +54,8 @@ git branch --show-current
 If the current branch is `main` or `master` **and not running in CI**, set a flag (`SHOULD_CREATE_BRANCH=true`) but **do not create the branch yet**, branch creation is deferred until the run has confirmed work: right after the Phase 1 decision when the apply set is non-empty or the security plan has a resolution to apply, before anything is installed, or after Phase 5b lands on a refresh-only run (see Branch creation). Creating a branch when there is nothing to update pollutes the branch list.
 
 In CI (`CI=true`, set by GitHub Actions, GitLab CI, CircleCI, and most CI providers), skip branch creation, the workflow owns branch management and pre-creates the appropriate branch before this skill runs.
+
+When `/gaia-init` invoked the run, set `SHOULD_CREATE_BRANCH=false` and remember `INVOKED_BY_INIT=true` for Phase 8. A fresh project has no remote yet, so a branch's push, PR and merge cannot run; the run applies its changes on the current branch and leaves them uncommitted, and `/gaia-init`'s own init commit carries them.
 
 Otherwise set `SHOULD_CREATE_BRANCH=false` and proceed on the current branch.
 
@@ -343,7 +345,8 @@ non-empty, the security plan has a resolution to apply, or the run is
 refresh-only. When the apply set is non-empty or the security plan has at least
 one resolution to apply, run this section right after the decision, before the
 Override audit + Wave A agent, so no install, lockfile rewrite, or quality gate
-runs on `main`/`master`. A security-only run (an empty apply set, or
+runs on `main`/`master` (a `/gaia-init` run stays where it is, see Pre-flight:
+Branch check). A security-only run (an empty apply set, or
 `--security` with no chain-head bump) then goes on to the security phase even
 when Phase 5b reports `Nothing moved` or `Reverted (<reason>)`. On a
 refresh-only run with nothing in the security plan, run it after Phase 5b
@@ -437,4 +440,4 @@ The orchestrating session builds and prints the report itself, from the agent re
 
 ## Phase 8: Publish
 
-The orchestrating session commits, pushes, and, on a run that created its branch, opens the PR, merges it once checks are green, and cleans up locally, because the merge-gate hooks fire only in the invoking session: read `.claude/skills/update-deps/references/publish.md` and follow it exactly.
+Except on a run `/gaia-init` invoked, which publishes nothing, the orchestrating session commits, pushes, and, on a run that created its branch, opens the PR, merges it once checks are green, and cleans up locally, because the merge-gate hooks fire only in the invoking session: read `.claude/skills/update-deps/references/publish.md` and follow it exactly.
