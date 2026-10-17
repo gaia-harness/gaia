@@ -196,6 +196,7 @@ On exit 0 relay the last stdout line (the `Cost:` line) verbatim as the last lin
   ```
 
   The issue always lives in `gaia-react/gaia`, which is not necessarily the repo the command ran in; that is why the same-repo check gates `--issue`.
+- The step 5 sanity-recheck halt and the step 7 tree-key stop end the run with no saved report: run the bare call above before ending (the usage ledger is not a `.gaia/local/forensics/` write).
 - `gh issue create` failing is the one path with a real shell exit status to preserve. That record is already written inline by step 8's exit-status shim (no `--issue`, there is no issue) and is not repeated at step 9, that path exits non-zero before step 9 runs.
 
 Exactly one record per run, on every path.

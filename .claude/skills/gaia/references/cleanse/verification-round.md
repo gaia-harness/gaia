@@ -86,7 +86,7 @@ This is NOT the spec round's "default to refuted" refuter; it is a second opinio
 - A cross-store CONFLICT-driven `replace` / `delete` action **survives** only if the CF lens AND its re-adjudicator agree the conflict is genuine AND agree on the same authoritative source.
 - On any disagreement (the re-adjudicator finds the conflict spurious, or picks a different authoritative source), **drop or downgrade** the action: do not execute a `replace` / `delete` that could clobber a legitimately-distinct local statement when two adjudicators cannot agree it is wrong.
 
-This default (disagreement → drop the action) is the deliberate INVERSION of `spec/audit.md` 7b's "disagreement → keep the finding refuted → SPEC unchanged", driven by the irreversibility asymmetry: there, keeping the SPEC as-authored is safe; here, the safe direction is to not execute the destructive edit.
+This default (disagreement → drop the action) is the deliberate counterpart of `spec/audit.md` 7b-i (a refuter defaults to refuted unless it substantiates the defect), driven by the irreversibility asymmetry: there, keeping the SPEC as-authored is safe; here, the safe direction is to not execute the destructive edit.
 
 ## Disposition routing and the stamp
 

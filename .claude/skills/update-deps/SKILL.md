@@ -194,7 +194,7 @@ window; reverted whole if the quality gate fails.` and ask with `AskUserQuestion
 (single-select): **Refresh transitive dependencies** (default, first option) or
 **Skip** (exit now, no branch, no changes, no ledger write). Each `wave_a[]` and `wave_b[].packages[]` entry
 carries `bucket` (`patch` | `minor` | `major` | `nonsemver`), `current`, `latest`,
-`group`, `is_pinned`, and `kind`. `total_count` is the genuine-upgrade count;
+`is_pinned`, and `kind` (a `wave_a[]` entry also carries `group`; a `wave_b[]` element carries `group` once). `total_count` is the genuine-upgrade count;
 `actionable_count` is for the statusline only (it already subtracts local
 snoozes), ignore it here.
 
