@@ -198,3 +198,97 @@ sections_owned() {
   run sections_owned "$copy"
   [ "$status" -ne 0 ]
 }
+
+# --- d. every closed-set menu fits AskUserQuestion ---------------------------
+
+# AskUserQuestion takes at most four options and supplies its own free-text
+# Other, so a menu listing Other or the save-partial escape crowds out a real
+# choice, and one of five or more entries fails the call.
+
+# menu_report <file>: one `menu <line> <entries>` line per menu, and one
+# `explicit <line>` line per listed Other or save-partial entry: a label, or a
+# numbered item whose text opens with the option name and its `,` or `:`
+# delimiter, so a prose rule that merely names the escape is not one. A menu is a run
+# of `- \`{ label:` lines, or the numbered lines under an `Options:` line, where
+# a line indented five or more spaces continues the entry above it.
+menu_report() {
+  awk '
+    function flush() {
+      if (run > 0) printf "menu %d %d\n", start, run
+      run = 0
+    }
+    /\{ label: "(Other|Save partial)/ { printf "explicit %d\n", FNR }
+    /^[[:space:]]*([0-9]+|N(-[0-9]+)?)\.[[:space:]]+(\*\*)?`?(Other|Save partial and resume later)`?(\*\*)?[,:]/ { printf "explicit %d\n", FNR }
+    /^[[:space:]]*- `\{ label:/ { if (run == 0) start = FNR; run++; next }
+    in_options && /^[[:space:]]+([0-9]+|N(-[0-9]+)?)\.[[:space:]]/ { if (run == 0) start = FNR; run++; next }
+    in_options && /^[[:space:]][[:space:]][[:space:]][[:space:]][[:space:]]+[^[:space:]]/ { next }
+    /^[[:space:]]*Options:[[:space:]]*$/ { flush(); in_options = 1; next }
+    { flush(); in_options = 0 }
+    END { flush() }
+  ' "$1"
+}
+
+menus_fit() {
+  local root="$1" files file report menus=0 bad=0
+  files="$(playbook_files "$root")" || return 1
+  while IFS= read -r file; do
+    report="$(menu_report "$file")"
+    [ -n "$report" ] || continue
+    while read -r kind line entries; do
+      if [ "$kind" = menu ]; then
+        menus=$((menus + 1))
+        if [ "$entries" -gt 4 ]; then
+          printf '%s:%s: menu of %s entries\n' "${file#"$root"/}" "$line" "$entries" >&2
+          bad=1
+        fi
+      else
+        printf '%s:%s: lists an option the tool supplies or the menu omits\n' "${file#"$root"/}" "$line" >&2
+        bad=1
+      fi
+    done <<<"$report"
+  done <<<"$files"
+  [ "$menus" -gt 0 ] || return 1
+  [ "$bad" -eq 0 ]
+}
+
+@test "d. no closed-set menu lists Other, the save escape, or more than four entries" {
+  menus_fit "$PLAYBOOK_ROOT"
+}
+
+@test "d. the menu check goes red on an explicit Other label" {
+  copy="$(scratch_copy)"
+  printf '\n- options:\n  - `{ label: "Other", description: "x" }`\n' >>"$copy/$REFERENCES/spec/clarify-loop.md"
+  run menus_fit "$copy"
+  [ "$status" -ne 0 ]
+}
+
+@test "d. the menu check goes red on a numbered save-partial entry" {
+  copy="$(scratch_copy)"
+  printf '\n5. **`Save partial and resume later`**: escape.\n' >>"$copy/$REFERENCES/spec/clarify-loop.md"
+  run menus_fit "$copy"
+  [ "$status" -ne 0 ]
+}
+
+@test "d. the menu check goes red on a five-entry label menu" {
+  copy="$(scratch_copy)"
+  printf '\n- options:\n  - `{ label: "a" }`\n  - `{ label: "b" }`\n  - `{ label: "c" }`\n  - `{ label: "d" }`\n  - `{ label: "e" }`\n' >>"$copy/$REFERENCES/spec/clarify-loop.md"
+  run menus_fit "$copy"
+  [ "$status" -ne 0 ]
+}
+
+@test "d. the menu check goes red on a five-entry numbered template" {
+  copy="$(scratch_copy)"
+  printf '\n```\nOptions:\n  1. a\n  2. b\n     wrapped\n  3. c\n  4. d\n  5. e\n```\n' >>"$copy/$REFERENCES/spec/clarify-prompts.md"
+  run menus_fit "$copy"
+  [ "$status" -ne 0 ]
+}
+
+@test "d. the menu check goes red when no menu is found" {
+  copy="$(scratch_copy)"
+  for file in "$copy/$REFERENCES/spec.md" "$copy/$REFERENCES"/spec/*.md; do
+    grep -vE -- '\{ label:|^[[:space:]]*Options:' "$file" >"$file.new"
+    mv "$file.new" "$file"
+  done
+  run menus_fit "$copy"
+  [ "$status" -ne 0 ]
+}

@@ -20,11 +20,12 @@ For every **substantive** question asked (5a, 5b, 5c), increment `question_count
 
 ## Escape option (used in step 5 AskUserQuestion sets)
 
-Closed-set `AskUserQuestion` calls during the clarify loop append a fifth option after `Discuss this`:
+`Save partial and resume later` is never a listed option: `AskUserQuestion` takes at most four options, and each of them goes to a real answer or to `Discuss this`. The user reaches the escape two ways:
 
-    { label: "Save partial and resume later", description: "Write the draft to cache and stop; re-invoke /gaia-spec to continue." }
+- **Typed into `Other`.** The tool adds a free-text `Other` to every question. When the user types a save request there ("save", "save partial", "resume later", or the like), take this escape rather than folding the text as an answer.
+- **From inside `Discuss this`.** While discussing a topic (5b), offer saving as one way to end the discussion, and take this escape when the user picks it.
 
-Selection triggers: write draft cache (the working-draft checkpoint in `spec.md`'s Operational primitives), **Release the session lock (save-partial escape)** (`bash .gaia/scripts/spec/spec-session-lock.sh release "$PWD" "$SPEC_ID" || true`), print one-line resume hint (`SPEC-NNN saved as draft. Re-invoke /gaia-spec to resume.`), and exit gracefully.
+Taking the escape triggers: write draft cache (the working-draft checkpoint in `spec.md`'s Operational primitives), **Release the session lock (save-partial escape)** (`bash .gaia/scripts/spec/spec-session-lock.sh release "$PWD" "$SPEC_ID" || true`), print one-line resume hint (`SPEC-NNN saved as draft. Re-invoke /gaia-spec to resume.`), and exit gracefully.
 
 The session-shape cache is NOT deleted on the `Save partial and resume later` path, a future resume reads it and continues counting questions against the same `start_at`. (Cache deletion happens only on canonical save at step 9, or on the `Discard SPEC-NNN draft cache` branch in step 2, see `spec/resume.md` for the discard handler, or on an abandoned-exit branch other than this one, see `### Abandoned exit` in `spec.md`.) The session lock, by contrast, IS released on this path; see the **Save-partial asymmetry** note in `spec/resume.md`'s `## Session-lock` for why the two caches are released on different schedules by design.
 
@@ -37,7 +38,8 @@ Track `push_deeper[<topic>] = <count>` in working memory. Increment on every "Pu
   - `{ label: "Settle on the recommended option (Recommended)", description: "Accept the PO's best-judgment candidate and move on." }`
   - `{ label: "Defer <topic> with rationale", description: "Mark unresolved with a note for the planner." }`
   - `{ label: "Push deeper anyway", description: "Mine the topic further despite repeated revisits." }`
-  - `{ label: "Save partial and resume later", description: "Write the draft to cache and stop." }`
+
+A save request typed into `Other` takes the escape in `## Escape option`.
 
 ## The question ceiling
 
@@ -55,21 +57,21 @@ The per-topic revisit counter and the escape option above both fit inside this b
 
 ## 5a. AskUserQuestion mediation (closed-set questions)
 
-For every question with discrete possible answers, surface it via `AskUserQuestion` with options ordered exactly:
+For every question with discrete possible answers, surface it via `AskUserQuestion`. The tool takes at most four options and adds its own free-text `Other` to every question, so list exactly these, in this order:
 
 1. **Recommended option FIRST**: labeled `"<option text> (Recommended)"`. Use the PO's best judgment; the recommendation is annotated with code-context where helpful (e.g. `"Cards (reuses existing Card component)"`).
-2. **Alternatives**: remaining viable options, in descending order of plausibility.
-3. **`Other`**: free-text escape for an answer not in the list.
-4. **`Discuss this`**: escape to plain Q&A (see 5b).
-5. **`Save partial and resume later`**: escape per `## Escape option`.
+2. **Up to two alternatives**: the next most plausible options, in descending order of plausibility. When more than two alternatives are viable, list the strongest two and name the rest in the question text, so none is dropped silently and the user can still pick one through `Other`.
+3. **`Discuss this`**: escape to plain Q&A (see 5b).
+
+Never list `Other`: the tool supplies it. Text typed there is a free-form answer, or, when it asks to save, the escape in `## Escape option`.
 
 Ask exactly one question per turn. No multi-question forms. No silent stacking.
 
-After the user selects an option (or supplies `Other` text), persist the fold via a single `Write` per the working-draft checkpoint primitive (answer into `clarifications.answered[]`, topic removed from `clarifications.pending[]`, statusline updated, all in one call). `Discuss this` and `Save partial and resume later` follow their own paths (5b and `## Escape option` respectively).
+After the user selects an option (or types an answer into `Other`), persist the fold via a single `Write` per the working-draft checkpoint primitive (answer into `clarifications.answered[]`, topic removed from `clarifications.pending[]`, statusline updated, all in one call). `Discuss this` and a save request follow their own paths (5b and `## Escape option` respectively).
 
 ## 5b. Discuss-this escape
 
-When the user picks `Discuss this`, drop the structured loop and engage in plain Q&A on that single topic. Mirror, name trade-offs, propose candidates. When the user signals settlement (an explicit "ok, that one" or equivalent):
+When the user picks `Discuss this`, drop the structured loop and engage in plain Q&A on that single topic. Mirror, name trade-offs, propose candidates. Offer saving as one way to end the discussion; if the user takes it, follow `## Escape option` instead of folding. When the user signals settlement (an explicit "ok, that one" or equivalent):
 
 1. Persist the fold per the working-draft checkpoint primitive, single `Write` covering: discussion outcome appended to `clarifications.answered[]` as `{ q: "<original question>", a: "<settled outcome from discussion>" }`, topic removed from `clarifications.pending[]`, statusline updated. Once folded, **do not re-quote the raw Q&A** in downstream prompts.
 2. Resume the structured loop on the next topic.
@@ -89,8 +91,8 @@ When the loop is about to leave the current topic, whether because its coverage 
 - options:
   - `{ label: "Move to <next topic> (Recommended)", description: "Advance to the next discovery area." }`
   - `{ label: "Push deeper on <topic>", description: "Mine the current topic further." }`
-  - `{ label: "Other", description: "Name a different topic to jump to." }`
-  - `{ label: "Save partial and resume later", description: "Write the draft to cache and stop." }`
+
+The tool's `Other` takes a typed topic name to jump to, or a save request (`## Escape option`); list neither.
 
 Silent topic advance is forbidden. On `Push deeper on <topic>`, increment `push_deeper[<topic>]`. When that counter reaches 3 for any topic, switch to the revisit-counter prompt (see `## Per-topic revisit counter`) instead of repeating this checkpoint.
 
@@ -107,7 +109,7 @@ Spawn a `general-purpose` Agent with a focused research prompt. Handle the retur
 - **Found (useful findings).** Fold into `research_summary` of the draft. Cite sources. Write draft cache. Continue the loop.
 - **Inconclusive (agent searched but found nothing definitive).** Fold the inconclusive note into `research_summary` as a known gap. Re-prompt the original closed-set question with the research context attached as a footnote so the user can decide informed.
 - **Error (agent did not return findings or returned an error).** Surface to the user via plain prompt: `"Research agent did not return findings on \"<question>\". Answer manually, defer with rationale, or skip this question?"`. Wait for direction. Do not silently continue.
-- **Contradictory (agent returned multiple plausible answers).** Surface both candidates via `AskUserQuestion` with each candidate as an option (plus `Other` and `Save partial and resume later`). Let the user pick.
+- **Contradictory (agent returned multiple plausible answers).** Surface the candidates via `AskUserQuestion` in the 5a shape: each candidate as an option, the recommended one first and at most three in all, then `Discuss this`; name any further candidate in the question text. Let the user pick.
 
 If the user has selected `Discuss this` on a question that turns out to need research, dispatch the research subagent and surface findings in the discussion before requesting settlement.
 
