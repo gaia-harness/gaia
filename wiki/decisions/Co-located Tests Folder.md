@@ -21,6 +21,6 @@ Tests and Storybook stories live in a `tests/` folder **next to** the component,
 
 ## Enforcement
 
-ESLint enforces the placement via `eslint-plugin-check-file/folder-match-with-fex` (stories and test files must live under a `tests/` folder), with `check-file/folder-naming-convention` restricting component subfolder names to `assets`, `hooks`, `state`, `tests`, `utils`, and nested kebab-case component folders; a story or test file is `tests/<source basename>.<kind>.tsx` (and `ui/tests/` for flat `ui/` components). See `frontend/.claude/rules/coding-guidelines-react.md`.
+ESLint enforces the placement via `eslint-plugin-check-file/folder-match-with-fex` (stories and test files must live under a `tests/` folder), with `check-file/folder-naming-convention` requiring kebab-case component and page folders (the reserved subfolders `assets`, `hooks`, `state`, `tests`, `utils` are set by the coding guidelines); a story or test file is `tests/<source basename>.<kind>.tsx` (and `ui/tests/` for flat `ui/` components). See `frontend/.claude/rules/coding-guidelines-react.md`.
 
 See [[Components]], [[Component Testing]].
