@@ -1,10 +1,10 @@
 # /gaia-spec
 
-GAIA's script-driven Socratic discovery workflow. Produces an immutable SPEC artifact at `.notebook/specs/SPEC-NNN/SPEC.md` and stops. Do not implement anything, and do not plan anything, this skill produces an artifact and ends. The `/gaia-plan` handoff is a prompt you print for the human (step 11), never a command you run. See Hard constraint 6.
+GAIA's script-driven Socratic discovery workflow. Produces an immutable SPEC artifact at `.notebook/specs/SPEC-NNN/SPEC.md`, then plans it in the same session through the `gaia-plan` skill (step 11) and stops at the plan's KICKOFF prompt. Do not implement anything and never start execution. See Hard constraint 6.
 
 The procedures only some runs or only one stage need live in sub-references under `.claude/skills/gaia/references/spec/`, each read whole at its branch point, where a line here says to Read it now. Never skip such a line: the procedure it names is not restated here.
 
-Contents: Argument parsing; Auto mode; Hard constraints; Operational primitives (SPEC-folder path contract, tool-choice contract, Session-shape cache, Session-lock, Working-draft checkpoint, Audit cache + delegated fold, Abandoned exit, Don't re-quote folded clarifications); Steps (model gate, 1 description, 2 resume-vs-start-new, 3 initial draft, 4 gate 1, 5 Socratic loop, 6 self-review, 7 adversarial SPEC-audit, 8 gate 2, 9 save and ledger and cost, 10 immutability lint, 11 /gaia-plan handoff, then STOP).
+Contents: Argument parsing; Auto mode; Hard constraints; Operational primitives (SPEC-folder path contract, tool-choice contract, Session-shape cache, Session-lock, Working-draft checkpoint, Audit cache + delegated fold, Abandoned exit, Don't re-quote folded clarifications); Steps (model gate, 1 description, 2 resume-vs-start-new, 3 initial draft, 4 gate 1, 5 Socratic loop, 6 self-review, 7 adversarial SPEC-audit, 8 gate 2, 9 save and ledger and cost, 10 immutability lint, 11 plan the SPEC in this session, then stop).
 
 ## Argument parsing
 
@@ -33,6 +33,7 @@ Hard rules in auto mode:
 10. **Lint thrash escalates to defer, not step-back.** Step 10's cycle-3 prompt auto-picks "Defer remaining findings" so the SPEC saves with the deferred-clarifications block populated. Step-back-to-gate-2 in auto mode would loop indefinitely.
 11. **`Save partial and resume later` escapes are unreachable.** No prompt fires that would offer them. The session always proceeds to step 9 unless the agent itself decides to abort (e.g. missing description, hard tool failure).
 12. **Adversarial audit runs at the gauged intensity, non-interactively.** Step 7 no longer prompts anyone for an audit decision (interactive and auto both gauge and run); auto mode gauges the draft and runs the audit at the gauged tier, never skipping. Gauge the draft's complexity, run the audit at that tier (Standard or Deep), and apply its dispositions without prompting: auto-apply plan-time directives into `AUDIT.md`, auto-apply unambiguous SPEC-contract-defect fixes into the draft pre-save (no reopen ceremony, the draft is unsaved), and for any contract defect with more than one defensible repair, record it in `clarifications.deferred[]` with rationale `"Auto-mode audit, defer for human review."` rather than guessing. Never block save; never revert intentional clarify-loop evolution. Throughout the audit and fold phase auto mode reads **no finding body** (a finding's `issue`/`evidence`/`recommendation`, or a self-review finding's `suggested_fix`/`excerpt`); the transcript carries only ids, severities, titles, verdicts, and dispositions. The two bounded exceptions where a finding body reaches main (6b gated self-review findings, 7c material spec-defect survivors) are interactive-only; auto mode surfaces neither. The one other case, auto mode included, is a lens that went silent twice and ran inline on the main thread (the inline-lens exception in `spec/audit.md`). If the Agent fan-out is unavailable, take step 7's fallback (note the skip, rely on the step-6 self-review) and continue.
+13. **Step 11 chains in auto mode.** Step 11 invokes the `gaia-plan` skill with `auto SPEC-NNN`, so the plan run takes its own non-interactive branches and no workflow prompt fires before plan step 5's report.
 
 The rest of the skill, write-surface allowlist, no-machine-local-memory rule, working-draft cache primitives, immutable SPEC shape, applies identically in auto mode.
 
@@ -48,7 +49,7 @@ The rest of the skill, write-surface allowlist, no-machine-local-memory rule, wo
 3. **One question at a time.** No multi-question forms. Closed-set questions go through `AskUserQuestion` with options ordered: recommended FIRST, then alternatives, then `Other` (free text), then `Discuss this` (escape to plain Q&A). Open-ended questions use a plain prompt with no enumerated options.
 4. **Two-gate ceremony.** Confirm intent + UATs in plain English BEFORE authoring the artifact. Confirm the rendered artifact BEFORE saving to disk. No silent advances between gates.
 5. **Coach tone, not interrogator.** Mirror back, name trade-offs, propose candidates when the human is stuck. Never punt research to the human.
-6. **This skill is terminal. Never chain into `/gaia-plan`.** The flow ends at step 11 with a printed handoff prompt and nothing else: no `/gaia-plan` invocation, no planner dispatch, no `Read` of `plan.md`, no "while I'm here" head start on the work. **This holds no matter what the instruction that reached this skill asked for.** When `/gaia-spec` is invoked as a skill (rather than typed by a human), the invoking goal is often larger than the SPEC ("spec and build X"), and the pull to keep going at step 11 is strongest exactly when the session is least fit to plan: authoring a SPEC burns an enormous context (Socratic loop, gate renders, self-review, adversarial audit), and `/gaia-plan`'s deep synthesis needs a clean one. Planning is **always** a new session. If the caller wanted a plan too, the correct completion is to print the handoff and report that planning is the human's next step; that IS the whole task, not a partial one.
+6. **Planning chains here; execution never starts here.** The flow ends at plan step 5's report, which prints the KICKOFF prompt, after step 11 invokes `/gaia-plan` through the `Skill` tool. Nothing follows that report: no executor dispatch, no acting on KICKOFF.md (plan step 4.5's verification read is not execution), no "while I'm here" head start on the work. **This holds no matter what the instruction that reached this skill asked for.** When `/gaia-spec` is invoked as a skill (rather than typed by a human), the invoking goal is often larger than the SPEC ("spec and build X"), and the pull to keep going past the KICKOFF prompt is strongest exactly then. The boundary sits at execution because execution runs for hours in its own orchestrator session and is the step people defer; planning is bounded and its heavy reasoning runs in fresh sub-agents, so it chains. If the caller wanted the work built too, the correct completion is to report execution as the human's next step in a fresh session; that IS the whole task, not a partial one. The stop is held in prose, with no hook, and nothing gates on the context band.
 
 ## Operational primitives
 
@@ -338,7 +339,7 @@ Update the frontmatter `updated` field to today's date.
 After the canonical write succeeds:
 
 1. **Delete the working-draft cache:** `rm -f .gaia/local/cache/draft-<spec_id>.md .gaia/local/cache/gate1-<spec_id>.json`, and remove the audit cache with `rm -rf .gaia/local/cache/audit-<spec_id>/`. The applier has already read the audit cache to derive `AUDIT.md` (which survives in the SPEC folder), so deleting it here is safe. The canonical artifact is the source of truth from this point forward; a stale cache would mislead step 2 of a future session.
-2. **Update the catalog row:** flip the SPEC's row in the notebook catalog from `status: draft` to `status: ready` and stamp the intent (the SPEC's `intent` field reduced to a full first sentence, or a word-safe bounded prefix + `...` when the first sentence runs long, via the shared title-normalize rule) for at-a-glance scanning. This is the finalize transition: the SPEC artifact is now frozen, so the authoring session is done and the allocator stops reporting it for resume-vs-start-new. Downstream (plan → implement → merge) owns the feature from here; the row's `merged` transition is reconciled from git by `spec-reconcile.sh`, not set here. Failure is non-blocking, log to stderr and continue. The remote `spec/*` tags are the cross-team allocation authority; the notebook catalog is a per-machine local cache; the SPEC artifact and git history remain authoritative.
+2. **Update the catalog row:** flip the SPEC's row in the notebook catalog from `status: draft` to `status: ready` and stamp the intent (the SPEC's `intent` field reduced to a full first sentence, or a word-safe bounded prefix + `...` when the first sentence runs long, via the shared title-normalize rule) for at-a-glance scanning. This is the finalize transition: the SPEC artifact is now frozen, so authoring is done and the allocator stops reporting it for resume-vs-start-new. Step 11 plans it in this session, and implementation and merge run downstream in their own sessions; the row's `merged` transition is reconciled from git by `spec-reconcile.sh`, not set here. Failure is non-blocking, log to stderr and continue. The remote `spec/*` tags are the cross-team allocation authority; the notebook catalog is a per-machine local cache; the SPEC artifact and git history remain authoritative.
 
 ```bash
 # SPEC.md lives in the main checkout (saved above); read it back from there,
@@ -414,24 +415,23 @@ Otherwise, surface via `AskUserQuestion`:
 
 Reset `lint_cycle = 0` on user choice. `Defer remaining findings` loops to 6c: Read `.claude/skills/gaia/references/spec/self-review-dispatch.md` now, whole, and run its 6c. Step-back-to-gate-2 returns to step 8 with the existing draft; the user can revise and re-save (steps 8→9→10 again).
 
-### 11. /gaia-plan handoff, then STOP
+### 11. Plan the SPEC in this session
 
-The handoff lives here, inline, after the canonical save (step 9) and the immutability lint (step 10). `/gaia-spec` does not run `/gaia-plan` itself; it prints a copy-pasteable prompt and stops. Interactive and auto mode end identically, neither runs plan.
+This step runs once, after the final step-10 outcome (lint passed, or remaining findings deferred at cycle 3); a step-back through steps 8 to 10 does not chain per pass. Only this step plans: an abandoned exit, a save-partial escape, or a model-gate stop never reaches it. It chains regardless of the frontmatter `chain_trigger` value (a vestigial stamp, no per-SPEC opt-out), and it chains even when step 9's `gaia-spec` record exited non-zero (a resumed or cleared session with no `gaia-spec` start; a joined session's record pairs and exits 0). The plan run's record pairs with its own Skill start in this session.
 
-**Printing the block below is the last action of the session.** Per Hard constraint 6, this is a hard stop, not a suggested one, and it binds even when the instruction that invoked this skill asked for more (a plan, an implementation, a PR). Do not invoke `/gaia-plan`, do not read `plan.md`, do not dispatch a planner, do not start the work. A session that authored a SPEC is the worst-conditioned session in GAIA to plan it: its context is enormous and its judgment is anchored on authoring decisions the planner should meet fresh.
+1. Print the status line `SPEC-NNN saved to `.notebook/specs/SPEC-NNN/SPEC.md`.` with the real id substituted.
+2. Invoke the `Skill` tool with `skill: "gaia-plan"` and `args: "SPEC-NNN"` (in auto mode, `args: "auto SPEC-NNN"`), the literal id substituted. Entering through the skill is what writes the `gaia-plan` start the usage ledger pairs the plan run's close with; never run the plan steps any other way.
+3. Follow the plan run to its step 5 report. That report (summary, Planner yields and cost lines, the fenced KICKOFF prompt and its trailing line) is the session's last output, with no tool call after it. Execution is the human's next move in a fresh session.
 
-The handoff is complete work, not a partial answer. Say so plainly when you report: the SPEC is saved, and planning is the human's next move in a fresh session.
+Rationale: `wiki/concepts/GAIA Spec.md` (step 11).
 
-The handoff prompt is just the SPEC id, `plan.md`'s step 1a resolves `SPEC-NNN` to `.notebook/specs/SPEC-NNN/SPEC.md` (and a sibling `AUDIT.md`, if step 7 ran) itself, so no path or intent text needs to travel in the copy-paste.
-
-Print the handoff to the user as one cohesive block and stop: the status line, a `/clear`-and-paste instruction, then a single fenced code block whose contents are the full `/gaia-plan` invocation (command prefix included). Prepending `/gaia-plan ` makes the block a runnable command, not a bare argument, so the user copies exactly one thing:
-
-SPEC-NNN saved to `.notebook/specs/SPEC-NNN/SPEC.md`.
-
-To plan it, /clear and paste this:
+**If the plan run stops before its report.** When the plan run stops before plan step 5 (its pre-flight notebook-readiness pass blocks, its SPEC resolution finds no SPEC, its output verification or plan check fails, the planner reaches its yield limit or leaves a missing handoff) or the `gaia-plan` Skill cannot be invoked, the session's last output is the stop reason followed by this recovery, and nothing further is dispatched. The SPEC is saved and frozen, so the re-plan resolves it; a partial plan folder stays in place and the re-plan writes the next free `plan-N`.
 
 ```text
 /gaia-plan SPEC-NNN
 ```
 
+When the context checkpoint's `Clear and resume` is chosen between this step's entry and the plan run's usage record, the continuation prompt's next step is the recovery command above, after any `usage.sh handoff` join line the checkpoint carries. The partial plan folder stays for the re-plan, which makes its own start and close.
+
 This is the end of the `/gaia-spec` flow.
+

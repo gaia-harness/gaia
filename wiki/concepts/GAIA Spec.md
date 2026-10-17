@@ -3,13 +3,13 @@ type: concept
 title: GAIA Spec
 status: active
 created: 2026-05-06
-updated: 2026-10-15
+updated: 2026-10-17
 tags: [concept, claude, skill, orchestration]
 ---
 
 # GAIA Spec
 
-`/gaia-spec [description]` is GAIA's script-driven Socratic discovery workflow; no spec-kit runtime is involved. It produces an immutable SPEC artifact at `.notebook/specs/SPEC-NNN/SPEC.md` (see [[Notebook]]) and stops, printing a handoff prompt the human pastes into a fresh [[GAIA Plan]] session. The skill body lives at `.claude/skills/gaia/references/spec.md` (dispatched by the `/gaia-spec` command, which reads this reference).
+`/gaia-spec [description]` is GAIA's script-driven Socratic discovery workflow; no spec-kit runtime is involved. It produces an immutable SPEC artifact at `.notebook/specs/SPEC-NNN/SPEC.md` (see [[Notebook]]), then plans the SPEC in the same session through [[GAIA Plan]] and stops at the plan's KICKOFF prompt; execution starts in a fresh session. The skill body lives at `.claude/skills/gaia/references/spec.md` (dispatched by the `/gaia-spec` command, which reads this reference).
 
 The workflow runs on GAIA's own scripts in `.gaia/scripts/spec/`, Claude-read prose in `.claude/skills/gaia/references/spec/`, and script-consumed templates in `.gaia/templates/spec/`, called directly by the skill.
 
@@ -35,7 +35,7 @@ The workflow runs on GAIA's own scripts in `.gaia/scripts/spec/`, Claude-read pr
 8. **Gate 2: artifact confirmation.** Render the full draft and present for review. Plain prompt, not `AskUserQuestion`. Revise to convergence, then proceed.
 9. **Save** to `.notebook/specs/SPEC-NNN/SPEC.md`. The folder is the archival unit. Sibling artifacts (reports, evidence) live beside `SPEC.md` in the same folder; a flat `SPEC-NNN-<rest>.md` file maps to `SPEC-NNN/<REST>.md` (remainder uppercased, hyphens kept).
 10. **Immutability lint.** The skill runs `.gaia/scripts/spec/lint.sh` itself on the saved SPEC (frontmatter, frozen UAT-NNN ids, no placeholders; `lint.sh`'s header owns the check list). For mutations of an already-saved SPEC, the lint enforces the explicit reopen ceremony: `## Reopen rationale` and `## UAT diff` sections required.
-11. **`/gaia-plan` handoff, then stop.** The handoff lives inline at the end of the skill. After the canonical save, `/gaia-spec` prints a copy-pasteable `/gaia-plan SPEC-NNN` prompt (just the bare id), then stops; the human runs it in a fresh session. `/gaia-plan` resolves the id to `.notebook/specs/SPEC-NNN/SPEC.md` (and a sibling `AUDIT.md`, when the audit produced one) itself. Planning is always a new session: authoring a SPEC burns an enormous context (Socratic loop, gate renders, self-review, adversarial audit), and `/gaia-plan`'s deep synthesis needs a clean one, so the handoff is a prompt the human pastes into a fresh session rather than a chain the wrapper runs. See [[Task Orchestration#Topology]].
+11. **Plan in the same session, then stop.** After the final lint outcome, and only after a step-9 save, `/gaia-spec` invokes the `gaia-plan` skill once with the bare id (`auto SPEC-NNN` in auto mode); `/gaia-plan` resolves the id to `.notebook/specs/SPEC-NNN/SPEC.md` (and a sibling `AUDIT.md`, when the audit produced one) itself. The session ends at the plan's KICKOFF report; execution never starts in this session. The planner synthesis and the decomposition auditors run as fresh sub-agents, so a `/clear` between spec and plan buys no cleaner planning. The plan run's main-thread steps (its gauge read and the fold of material decomposition findings) do carry the spec context, so a chained plan's Cost line reads higher than a fresh-session one, an accepted trade. The boundary sits at execution, which runs for hours in its own orchestrator session and is the step people defer. Entering through the skill is what lets the usage ledger pair the plan run's close with a start ([[Usage Ledger]]). A chained plan run that stops before its report ends on the stop reason and a fresh-session `/gaia-plan SPEC-NNN` recovery. The stop is held in prose with no hook. See [[Task Orchestration#Topology]].
 
 ## UAT divergence contract
 
@@ -94,5 +94,5 @@ script instead. A folder's routine reap is not data loss.
 
 ## Pairs with
 
-- [[GAIA Plan]]: the downstream handoff target.
+- [[GAIA Plan]]: the planning run step 11 chains into.
 - [[Task Orchestration]]: what `/gaia-plan` produces.

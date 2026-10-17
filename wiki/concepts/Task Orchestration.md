@@ -2,7 +2,7 @@
 type: concept
 status: active
 created: 2026-04-21
-updated: 2026-10-15
+updated: 2026-10-17
 tags: [concept, claude, workflow]
 ---
 
@@ -40,7 +40,7 @@ Plan runs follow the topology in [[Workflow Doctrine]]; what is specific to plan
 
 - **`/gaia-plan`** runs its thin orchestration on the invoking thread and spawns one planner leaf for the deep synthesis. The planner investigates with parallel tool calls and writes the plan files; it does not spawn sub-agents.
 - **The execution orchestrator** (a fresh session started from `KICKOFF.md`) is itself a main thread, so it dispatches the per-phase implementation sub-agents as leaves and runs the pre-merge Code Audit Team audit.
-- **`/gaia-spec`** ends by printing a `/gaia-plan` handoff prompt and stops; it spawns nothing downstream. The human runs `/gaia-plan` in a fresh session, where the planner is the single spawned leaf.
+- **`/gaia-spec`** ends by invoking `/gaia-plan` through the skill in the same session; it spawns nothing itself. The planner stays the single spawned leaf and the decomposition auditors still spawn fresh. The session ends at the KICKOFF prompt, and the execution orchestrator always starts in a fresh session.
 
 Models pin at spawn, so the main thread, even on Sonnet, puts the synthesis on a top-tier model (Opus or Fable) by spawning the planner with an explicit `model` override. The execution orchestrator pins the opposite direction: each per-phase implementation sub-agent spawns with `model: sonnet`, because the spec and plan audits resolve the feature's complexity upstream so execution runs on the cheaper model regardless of the orchestrator's own session model. The planner escalates a specific phase to Opus only when it names a genuinely deep-synthesis reason. Interactive steps stay on the main thread because only it can prompt.
 
