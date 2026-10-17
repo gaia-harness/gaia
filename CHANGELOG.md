@@ -216,6 +216,8 @@ On GAIA 1.6.1? Claude: choose Abort, then offer to migrate this project to 2.0.0
 
 ### Fixed
 
+- `gaia init rename` and `gaia init strip-branding` now refuse a `--title` containing a line break with a usage error. The title is written into single-line string literals and Markdown headings, so a multi-line value broke the generated source (#2746)
+- `gaia-maintainer release commit-and-tag --commit` now prints the SHA of the final release commit. It printed the SHA from before the state-file amend, a commit no longer on the branch (#2746)
 - The forensics triage classifier step now runs with no tools at all. It used a six-tool denylist, so Glob, Grep and LS stayed available to an unattended run over untrusted issue text; `--tools=` now removes every built-in tool, as the step's comment and prompt always said (#2734)
 - The i18n removal runbook now also strips the Storybook addon, the Vite and Vitest pre-bundle entries, the coverage and knip entries, and the language select story id that still named the removed stack, and its verify step runs `pnpm knip`. Before this, a project that ran it had a broken Storybook and silent knip leftovers (#2721)
 - A SPEC-derived `/gaia-plan` now checks that each rendered Playwright UAT spec's test body still asserts its contract before the pre-merge audit. The frontend auditor was documented as making this check but never received the context to run it, so a body that kept its contract comment and stopped asserting it could merge. A fresh `uat-fidelity-judge` agent now makes the judgment at the orchestrator's pre-audit UAT checks, and a divergence halts the run. A plan already generated keeps its old steps; regenerate it with `/gaia-plan` to get the new one (#2719)
