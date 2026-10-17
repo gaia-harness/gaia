@@ -26,9 +26,8 @@
 # read. Claude Code merges hooks from .claude/settings.local.json, which is
 # gitignored and per-machine, so it is deliberately out of THIS check's set:
 # nothing here holds it to the rooting form. It is not unheld in general.
-# Nothing else in this tree reads it either, so a bare local spelling fails
-# open in exactly the way described above with nothing to
-# catch it; the verdict below names the file it read rather than claiming
+# The hooks.rooted-command rule of `gaia fitness` reads it; the verdict below
+# names the file it read rather than claiming
 # every registered command on the machine.
 #
 # WHAT COUNTS AS ROOTED. Three rules, and the test is a property rather than
@@ -69,9 +68,9 @@
 # ADOPTERS: that hand run is how you invoke this. It ships because
 # .claude/settings.json is manifest `shared`, so you inherit GAIA's
 # registrations and add your own, and a bare relative registration on your side
-# reintroduces the same fail-open. But the only automated runner of this check,
-# the sibling bats suite's live-repo case, is maintainer-only and
-# release-excluded, so on your clone NOTHING invokes it for you. Run it
+# reintroduces the same fail-open. But the automated runners of this check are
+# maintainer-only bats suites and release-excluded, so on your clone NOTHING
+# invokes it for you. Run it
 # yourself after editing your hook registrations. It is stated
 # here rather than left implied because the alternative is a check an adopter
 # has, believes is armed, and is never told anything by.

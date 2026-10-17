@@ -146,7 +146,7 @@ Surface the evaluator's verdicts in the same end-of-task summary (see "Surfacing
 The guarantee this audit provides is scoped to **the subset a same-model fresh-context reviewer reliably flags**, not a proof of test worthiness. State the surviving guarantees by path:
 
 - **No-orchestrator path (this skill alone), surviving guarantees:** static honesty lint on every test; a real RED on the deterministic surface; the fresh-subagent worthiness audit **if it was dispatched**. The audit is advisory and depends on this dispatch step running; a skipped dispatch leaves only the static lint and the RED gate.
-- **Orchestrated path, additional guarantees (NOT available here):** the post-phase merge presence gate (which recomputes signals and refuses a merge whose audit ledger is absent or mismatched) and leaf isolation enforced by the orchestrator. These are orchestrator-owned; the no-orchestrator path does not provide them.
+- **Orchestrated path, additional guarantees (NOT available here):** leaf isolation enforced by the orchestrator. That is orchestrator-owned; the no-orchestrator path does not provide it. The merge presence gate (which recomputes signals and refuses a merge whose audit ledger is absent or mismatched) is a repo-wide hook that fires on every `gh pr merge`: see `wiki/concepts/PR Merge Workflow.md`, "Second merge gate: the worthiness presence gate".
 
 ### 7. Surfacing the advisory findings
 
@@ -164,7 +164,7 @@ Cap the list: show the **top-N by severity with a count** (`delete` proposals be
 #### Where it renders
 
 - **No-orchestrator path (main loop):** one end-of-task summary before commit, sharing the surface with the determinism roll-up and the worthiness verdicts. One summary, not three.
-- **Orchestrated path:** the same two-tier content goes into the leaf's `SUMMARY.md` ledger entry and the pre-merge summary, so the orchestrator's merge presence gate and the human reviewer see the deletes and their inline evidence before a merge.
+- **Orchestrated path:** the same two-tier content goes into the leaf's `SUMMARY.md` ledger entry and the pre-merge summary, so the merge presence gate and the human reviewer see the deletes and their inline evidence before a merge.
 
 ## Checklist Per Cycle
 
