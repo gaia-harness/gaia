@@ -2,7 +2,7 @@
 
 ## File Naming
 
-- **Other files**: kebab-case
+- **Files and folders**: kebab-case, ASCII English, except names a tool or convention fixes: React Router route modules (`_public._index.tsx`, `$id`) and the language files that mirror them, wiki pages (Title Case with spaces), the uppercase convention files (`CLAUDE.md`, `README.md`, `SKILL.md`, `Dockerfile`, `VERSION`), and tool-generated files (`mockServiceWorker.js`)
 - **React components and hooks** (file and folder layout, naming): `frontend/.claude/rules/coding-guidelines-react.md`, loaded on frontend files
 
 ## 1. Simplicity First

@@ -14,7 +14,6 @@ The React half of `.claude/rules/coding-guidelines.md`; the universal principles
 
 This section owns the layout rule. Every other rule, skill, agent and wiki page points here instead of restating it.
 
-- **Case**: every file and folder under `app/components`, `app/pages` and `app/hooks` is kebab-case, ASCII English.
 - **Components**: `components/ui/` holds flat shadcn files (`button.tsx`) and its only subfolder is `tests/`. Any other component is `<kebab>/index.tsx` with a default export that is the PascalCase of the folder, plus nested `tests/`, `hooks/` and sub-component folders (`<kebab-sub>/index.tsx`).
 - **Tests and stories**: `tests/<source basename>.<kind>.tsx`; the exact shape lives in `storybook.md`.
 - **Pages**: `pages/<route path>/page.tsx` exporting `<Name>Page`. Derive the folder from the route file name: drop pathless-layout segments (leading `_`), turn each `.` into a nested folder, keep static segments as they are, `_index` becomes `index`, `$slug` becomes `slug`, `$` becomes `splat`, optional `($x)` segments drop out. `_public.about.tsx` becomes `pages/about/page.tsx`; `account._index.tsx` becomes `pages/account/index/page.tsx`. A trailing nesting-escape underscore on a static segment is dropped (`_public.items_.$id.tsx` becomes `pages/items/id/page.tsx`). On a rare collision between a derived folder and a static sibling, pick a distinguishing name. Route files keep their names and import `~/pages/<path>/page`.
