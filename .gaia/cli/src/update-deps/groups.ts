@@ -25,8 +25,7 @@
 type GroupRule = {
   /**
    * Exact package names (highest precedence). Listed packages that are not
-   * outdated still count as group members when computing wave grouping;
-   * but only outdated packages appear in the emitted JSON.
+   * outdated still count as group members when computing wave grouping.
    */
   readonly exactNames: readonly string[];
   readonly group: string;
@@ -35,9 +34,9 @@ type GroupRule = {
 };
 
 /**
- * Order matters only for the singleton fallback; exact / prefix lookups
- * are precomputed below into maps. The `prettier` rule precedes `eslint`
- * not because of ordering but because exact-name lookup runs first.
+ * Order only breaks ties: a later rule wins an exact-name conflict and an
+ * earlier one an equal-length prefix tie. Exact / prefix lookups are
+ * precomputed below into maps and the singleton fallback runs last.
  */
 const GROUP_RULES: readonly GroupRule[] = [
   {
@@ -131,8 +130,8 @@ const GROUP_RULES: readonly GroupRule[] = [
     group: 'stylelint',
     prefixes: ['stylelint-config-'],
   },
-  // Prettier MUST come before eslint so its eslint-config-prettier and
-  // eslint-plugin-prettier exact entries beat eslint's broader prefixes.
+  // Prettier's eslint-config-prettier and eslint-plugin-prettier exact entries
+  // beat eslint's broader prefixes through the exact index, whatever the order.
   {
     exactNames: [
       'eslint-config-prettier',

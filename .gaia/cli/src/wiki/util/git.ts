@@ -1,9 +1,9 @@
 /**
  * Shared git helpers for the `gaia wiki` subcommand family.
  *
- * Every function shells out to git via `child_process` synchronously and
- * returns trimmed stdout. Errors are surfaced as thrown `Error`s; the
- * subcommand handler is responsible for translating to exit codes.
+ * Every function shells out to git via `child_process` synchronously. Errors
+ * are surfaced as thrown `Error`s; the subcommand handler is responsible for
+ * translating to exit codes. Each helper's own doc states what it returns.
  */
 import {execFileSync} from 'node:child_process';
 import {MAX_GIT_BUFFER_BYTES} from '../../util/git-buffer.js';
@@ -143,7 +143,7 @@ export type RecentCommit = {
 
 /**
  * Return up to `limit` commits from `<sinceSha>..HEAD` in oldest-first order.
- * Each entry is `{sha (7-char), subject}`. Empty array if `sinceSha` is
+ * Each entry is `{sha (abbreviated), subject}`. Empty array if `sinceSha` is
  * unreachable or there are no commits.
  */
 export const recentCommits = (

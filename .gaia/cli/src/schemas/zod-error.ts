@@ -2,8 +2,8 @@ import type {z} from 'zod';
 
 /**
  * Render a `ZodError` into a single-line, human-readable summary prefixed
- * with the offending file path. Shared by the schema `read*` helpers
- * (`project-config`, `decline-ledger`) so the malformed-file message format stays consistent.
+ * with the offending file path. Shared by every reader of a schema-validated
+ * file so the malformed-file message format stays consistent.
  */
 export const summarizeZodError = (
   filePath: string,

@@ -18,8 +18,7 @@ import {tmpdir} from 'node:os';
 import path from 'node:path';
 import {execGaiaGit} from './git-env.js';
 
-// Routes through execGaiaGit like every other git-shelling site in this tree,
-// rather than shelling git directly. Under an ambient GIT_DIR a bare
+// Routes through execGaiaGit rather than shelling git directly. Under an ambient GIT_DIR a bare
 // execFileSync would point `git init` at $GIT_DIR and let the follow-on
 // `git worktree add` leave a stray branch in the real checkout -- and this is
 // the one fixture whose sibling test asserts the resolver ignores exactly

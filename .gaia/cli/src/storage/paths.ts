@@ -22,7 +22,7 @@ type ResolveArgs = {
  * directory inside any worktree of it.
  *
  * `.project-id` is one identity per clone (state registry: `scope: main-only`)
- * and its value is `sha256(repoRootPath)`, so the path this returns decides the
+ * and its value is a UUIDv4 derived from `sha256(repoRootPath)`, so the path this returns decides the
  * id. Anything that answers with the *calling* tree's root — the worktree's own
  * root, or a subdirectory of the checkout — mints a second identity for one
  * clone, and adoption telemetry then counts one adopter as N.

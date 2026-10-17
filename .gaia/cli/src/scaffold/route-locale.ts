@@ -148,7 +148,7 @@ type InsertIntoLocaleBarrelArgs = {
 };
 
 /**
- * Insert an `import <name> from './<Folder>';` line and a corresponding
+ * Insert an `import <name> from './<module>';` line and a corresponding
  * entry in the `export default { ... }` block, both alphabetically.
  *
  * The pages locale barrel uses a different shape than the generic

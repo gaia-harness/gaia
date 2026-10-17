@@ -9,8 +9,8 @@
  * to find every key in a pull-request body, and `parseKey` serves that side
  * and keeps the mandatory `v1` token.
  *
- * `LENIENT_KEY_PATTERN` reproduces the tech-debt filer's grammar
- * (`.gaia/scripts/debt-count-refresh.sh`). Suppression matching against
+ * `LENIENT_KEY_PATTERN` reads a superset of the tech-debt filer's grammar
+ * (`key_of` in `.gaia/scripts/debt-dedup.sh`, which requires `v1`). Suppression matching against
  * tech-debt issue bodies uses it, because the thing suppression must agree
  * with is the filer. It anchors on the wrapped comment opener and it does not
  * require `v1`. Both grammars terminate the path on the key comment's own
@@ -28,13 +28,13 @@
 /**
  * The recognized wrapped key grammar; group 1 is the inner key.
  *
- * Spelled `[0-9]` rather than `\d` to read the same as the POSIX ERE key
- * grammar in `.gaia/scripts/check-debt-issue-metadata.sh` (`KEY_RE`).
+ * Spelled `\d`, which matches the same ASCII digits as `[0-9]` in the POSIX ERE
+ * key grammar in `.gaia/scripts/check-debt-issue-metadata.sh` (`KEY_RE`).
  */
 export const KEY_PATTERN =
   /<!-- gaia-debt-key: (v1 class=[^ ]+ path=[^>]+ line=\d+) -->/;
 
-/** The filer's grammar, applied to a whole issue body; group 1 is the path. */
+/** The lenient grammar, applied to a whole issue body; group 1 is the path. */
 export const LENIENT_KEY_PATTERN =
   /<!-- gaia-debt-key:[^>]*?path=([^>\n]+) line=/;
 

@@ -5,14 +5,13 @@
  *   {{var}}                 : scalar substitution (string or stringified bool/array).
  *   {{#flag}}...{{/flag}}   : boolean section. Body is included iff `flag` is truthy
  *                             (true, non-empty string, non-empty array). Bodies do
- *                             not nest sub-sections in this implementation.
+ *                             may nest up to four levels.
  *   {{#each items}}...{{/each}}: iterates an array. Inside, `{{this}}` is the
  *                                 current scalar. Bodies do not nest sub-sections.
  *
- * Intentional minimalism: the four scaffolder tasks each ship one template file
- * with simple variable substitution and a couple of boolean flags. If a future
- * template needs nested sections, simplify the template instead of growing the
- * engine. See task-scaffold-shared.md ("Template engine").
+ * Intentional minimalism: scalar substitution, boolean sections and array
+ * iteration only. Section nesting is capped at MAX_SECTION_DEPTH so a
+ * malformed template cannot loop forever.
  */
 import {existsSync, readFileSync} from 'node:fs';
 import path from 'node:path';

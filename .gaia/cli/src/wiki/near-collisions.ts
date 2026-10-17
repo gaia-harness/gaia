@@ -6,7 +6,8 @@
  *
  *   <domain>  <slugA>  <slugB>  <distance>
  *
- * Replaces the prose near-collision pass in `wiki/consolidate.md` Step 2c.
+ * Replaces the prose near-collision pass in Step 2c of
+ * `.claude/skills/gaia/references/wiki/consolidate.md`.
  */
 import {existsSync, readdirSync, statSync} from 'node:fs';
 import type {Dirent} from 'node:fs';

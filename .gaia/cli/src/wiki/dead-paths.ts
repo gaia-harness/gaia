@@ -7,7 +7,8 @@
  * resolve on a single-repo clone.
  *
  * Output: newline-separated `wiki/path:line  dead-path` entries. Exit 0
- * always; finding rot is informational, not a failure.
+ * whatever the findings (non-zero on a bad flag or a failed scan); finding rot
+ * is informational, not a failure.
  */
 import {readFileSync, statSync} from 'node:fs';
 import path from 'node:path';
@@ -93,8 +94,7 @@ const RUNTIME_PREFIXES = ['.gaia/local/'] as const;
 /**
  * Exact repo-relative paths that are adopter-owned and legitimately absent
  * on a checkout that hasn't opted in: `.gaia/project.json` is written by
- * `/gaia-init` and `/setup-gaia`, not shipped by GAIA itself, so it is correctly missing here
- * on the GAIA source repo.
+ * `/gaia-init` and `/setup-gaia`, not shipped by GAIA itself, so a checkout that has not opted in lacks it.
  *
  * `release/runtime-deps.ts` keeps its own `ADOPTER_OWNED_SENTINELS` naming the
  * same file. The two sets intersect on the runtime-created entries only: that
@@ -132,6 +132,7 @@ const PLACEHOLDER_PATTERN = /[<>*${}]|N{3,}|X{3,}/;
  *   - **Deleted** `...`
  *   - **Renamed** `...`
  *   - **Migrated** `...`
+ *   - **Replaced** `...`
  */
 const HISTORICAL_BULLET_PATTERN =
   /^\s*-\s+\*\*(?:Removed|Deleted|Renamed|Migrated|Replaced)\*\*/i;

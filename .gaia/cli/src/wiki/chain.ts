@@ -23,7 +23,8 @@
  * way.
  *
  * Determinism contract: no prose narration on stdout (one-line summaries
- * only), every git/gh call routes through an injectable `runner`, and exit
+ * only), every branch, commit, push and PR git/gh call routes through an
+ * injectable `runner`, and exit
  * codes are 0 (ok) / 1 (user-correctable refusal) / 2 (unexpected git/gh
  * process failure, stderr piped through).
  */

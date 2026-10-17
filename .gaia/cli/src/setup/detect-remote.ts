@@ -6,7 +6,7 @@
  * `{ found: false, ... }` on missing remote.
  *
  * Exits 0 in every branch where the working directory is a git repo;
- * `detect-remote` is a query. Exits non-zero only for `not_a_git_repo`.
+ * `detect-remote` is a query. Exits non-zero for `not_a_git_repo` and for an unknown flag.
  */
 import {execFileSync} from 'node:child_process';
 import {EXIT_CODES} from '../exit.js';

@@ -1,5 +1,5 @@
 /**
- * Named exit codes for the gaia CLI. Hooks parse these to distinguish
+ * Named exit codes for the gaia CLI. The `/gaia-codify` playbook (`codify.md`) reads these to distinguish
  * payload/config validation failure (PAYLOAD_VALIDATION_FAILED,
  * CONFIG_INVALID) from operational failure (STORAGE_INACCESSIBLE).
  *

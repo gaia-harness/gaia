@@ -1,8 +1,7 @@
 /**
  * The closed set of reasons an advisory source did not answer, each with fixed
- * text. Every surface that explains a missing source (the advisories payload,
- * the update-check cache, the statusline, the /update-deps report) renders one
- * of these strings, never gh or pnpm stderr, which can carry a token or
+ * text. Every surface that explains a missing advisories source (the
+ * advisories payload, the update-check cache) renders one of these strings, never gh or pnpm stderr, which can carry a token or
  * attacker-controlled text.
  */
 

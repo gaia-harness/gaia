@@ -11,7 +11,8 @@
  * counts when no review snapshot exists); `/gaia-codify` re-runs this
  * to get the live list.
  *
- * No LLM, no drafting, no writes other than (indirectly) the ledger prune. The
+ * No LLM, no drafting, no writes other than (indirectly) the ledger prune and the one-time
+ * state-directory move `resolveCodifyRoot` may do. The
  * window read is the only network access and it is non-fatal: a gh failure or
  * a window the paged read cannot finish yields an empty candidate list and
  * `gh_ok: false` rather than aborting the refresher.

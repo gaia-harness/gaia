@@ -27,7 +27,7 @@
  * `+x`, also yields an empty corpus and a clean pass over a tree nothing read.
  * That is an accepted miss rather than the condition the guard states: which
  * errors should stop a scan is a question about the scanners, and narrowing it
- * here would answer it for all three without any of them asking.
+ * here would answer it for every scanner without any of them asking.
  */
 import {statSync} from 'node:fs';
 import path from 'node:path';

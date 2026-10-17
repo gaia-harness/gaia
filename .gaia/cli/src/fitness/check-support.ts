@@ -56,7 +56,7 @@ export const registerTemporaryDirectories = (): (() => string) => {
   };
 };
 
-/** Writes an executable-looking stub classifier that always exits `code`. */
+/** Writes an executable-looking stub classifier that always exits 3. */
 export const writeFailingClassifier = (directory: string): string => {
   const stub = path.join(directory, 'classifier.sh');
 

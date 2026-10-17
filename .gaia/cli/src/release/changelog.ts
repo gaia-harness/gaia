@@ -2,8 +2,8 @@
  * `gaia-maintainer release changelog [--draft]` handler.
  *
  * Step 5 of the maintainer release runbook. The hand-written
- * `## [Unreleased]` block is the release content: every merge gates on an
- * entry there (`.claude/rules/pr-merge.md`), and those entries are
+ * `## [Unreleased]` block is the release content: every merge decides
+ * whether it needs an entry there (`.claude/rules/pr-merge.md`), and those entries are
  * adopter-facing prose a conventional-commit subject cannot stand in for.
  *
  * With `--draft`, renders a Keep-a-Changelog block from conventional-commit

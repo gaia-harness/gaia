@@ -9,9 +9,10 @@
  * on the filer's three arms plus the dismissal store, resolves the emitted
  * batch's cited lines, and prints the frozen JSON contract to stdout.
  *
- * Always exits 0: a failed read of the merged-PR window or of the tech-debt
- * issue list is reported through `gh_ok`, never a non-zero exit, so the statusline refresher and the skill never treat a
- * network outage as a crash.
+ * Exits 0 on every read outcome (invalid arguments exit 1): a failed read of
+ * the merged-PR window or of the tech-debt issue list is reported through
+ * `gh_ok`, never a non-zero exit, so the statusline refresher and the skill
+ * never treat a network outage as a crash.
  */
 import {EXIT_CODES} from '../exit.js';
 import {structuredError} from '../stderr.js';

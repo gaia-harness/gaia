@@ -118,8 +118,7 @@ const trimTrailingSpace = (line: string): string => {
 /**
  * The unit's human-readable one-liner, derived from its list item's lines.
  *
- * Carries no newline or carriage return by construction: the store serializer
- * refuses those, and this normalization is what that refusal rests on.
+ * Carries no newline or carriage return by construction.
  */
 const deriveFailureMode = (textLines: readonly string[]): string =>
   textLines

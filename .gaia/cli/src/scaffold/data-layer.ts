@@ -12,7 +12,8 @@ export const TANSTACK_QUERY_PACKAGE = '@tanstack/react-query';
 /**
  * The exact version the init subcommand pins, and the only place it is
  * written. It must be at least 5.104.0, the first release with
- * `queryClient.query`, which every clientLoader the scaffolds emit awaits. It
+ * `queryClient.query`, which the `--data query` clientLoader the route
+ * scaffold emits awaits. It
  * must also be older than the workspace's `minimumReleaseAge`: the adopter's
  * `pnpm install` is strict about that window and refuses a younger pin.
  */

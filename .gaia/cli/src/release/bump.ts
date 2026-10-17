@@ -4,7 +4,7 @@
  * Step 2 of the maintainer release runbook. Scans conventional-commit
  * subjects (and bodies) since the last tag, classifies the highest
  * semver bump, and either reports the proposal or applies it to
- * `package.json` and `.gaia/VERSION`.
+ * `package.json`, `frontend/package.json` and `.gaia/VERSION`.
  *
  * Bump rules; highest severity wins:
  *
@@ -45,7 +45,7 @@ const HELP_TEXT = `Usage: gaia-maintainer release bump [--auto]
 
   Compute the next semver bump from conventional-commit subjects since
   the last tag. Without --auto, prints the proposal. With --auto, writes
-  package.json and .gaia/VERSION.
+  package.json, frontend/package.json and .gaia/VERSION.
 
   Exit codes:
     0  success

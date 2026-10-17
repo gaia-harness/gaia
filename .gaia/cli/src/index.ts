@@ -1,8 +1,8 @@
 /**
  * gaia CLI entrypoint (adopter binary).
  *
- * Top-level subcommand router. Maintainer-only namespaces (currently just
- * `release`) live in `index.maintainer.ts` and bundle to a separate
+ * Top-level subcommand router. Maintainer-only commands (the `release`
+ * namespace and `labels docs`) live in `index.maintainer.ts` and bundle to a separate
  * binary (`gaia-maintainer`) excluded from the adopter tarball by
  * `.gaia/release-exclude`. The adopter binary must not import any
  * maintainer-only handler, so esbuild tree-shakes their code out of this

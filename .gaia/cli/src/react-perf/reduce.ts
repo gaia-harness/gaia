@@ -5,14 +5,14 @@
  * It reads a raw bippy render dump (~172 KB for a trivial flow), filters
  * framework noise, recomputes `memoDefeated` per record, aggregates per app
  * component, ranks by blast-radius x cost, applies a frame-budget timing
- * GATE (not a trigger), and prints a small `ReducedSummary` JSON to stdout.
+ * gate (an over-budget component is a finding even with no memo defeat), and prints a small `ReducedSummary` JSON to stdout.
  * That summary is the only thing the Phase-3 skill reads; the raw dump never
  * enters the model context.
  *
  * The signal is `memoDefeated` (a `React.memo` component that re-rendered with
  * every changed input referentially unstable), NOT the naive "nothing changed"
- * flag, which false-positives. Timing filters out the trivial; it never flags
- * a cheap memo defeat on its own.
+ * flag, which false-positives. Timing adds over-budget components and weights
+ * the ranking; it never filters out a memo defeat, however cheap.
  */
 import type {z} from 'zod';
 import {readFileSync} from 'node:fs';

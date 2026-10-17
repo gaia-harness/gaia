@@ -3,9 +3,9 @@
  *
  * The resumable per-run cursor (RD-005): `advance` records the coordinate the
  * skill just confirmed a disposition for, so a later `residue-tally` run
- * resumes after it rather than re-emitting it. `advance` only ever accepts a
- * token this tally itself minted: `decodeToken` re-validates the decoded path
- * and line, so a hand-forged or path-traversal token is refused rather than
+ * resumes after it rather than re-emitting it. `advance` only accepts a
+ * well-formed token: `decodeToken` re-validates the decoded path
+ * and line, so a malformed or path-traversal token is refused rather than
  * written to disk.
  */
 import {EXIT_CODES} from '../exit.js';

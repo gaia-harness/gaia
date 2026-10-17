@@ -1,7 +1,7 @@
 /**
  * `gaia init configure-i18n --locales <list> --strip <bool>` handler.
  *
- * Codifies Step 5 of `/gaia-init`. Two paths:
+ * Codifies Step 3 of `/gaia-init`. Two paths:
  *
  *   --strip false   Keep the i18n scaffolding wired up. Edits
  *                   `app/languages/index.ts` so `LANGUAGES` and the

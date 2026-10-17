@@ -27,13 +27,13 @@
  *
  * The `--props "name:type,name:type"` flag emits a Props type alias and
  * annotates the destructured parameter with it (`({a, b}: NameProps) =>`);
- * without the flag the component takes no parameters. Each entry must be `name:type`; empty entries
- * and malformed pairs are rejected with exit 1. Only depth-0 commas separate
+ * without the flag the component takes no parameters. Each entry must be `name:type`; malformed
+ * pairs are rejected with exit 1 and empty entries are ignored. Only depth-0 commas separate
  * props, so comma-bearing types (`Record<K, V>`, `(a, b) => void`, tuples) are
  * supported within a single entry.
  *
  * The handler uses the shared scaffold utilities (`writeAndRecord`,
- * `loadTemplate`, `renderTemplate`) so behavior matches the other
+ * `templatePath`, `renderTemplate`) so behavior matches the other
  * scaffolders shipped in Phase 2.
  */
 import {existsSync, statSync} from 'node:fs';

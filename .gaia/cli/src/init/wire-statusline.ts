@@ -1,7 +1,7 @@
 /**
  * `gaia init wire-statusline --mode <global|project|skip>` handler.
  *
- * Replaces the model-authored JSON-merge in Step 9 of `/gaia-init` with
+ * Replaces the model-authored JSON-merge in Step 3 of `/gaia-init` with
  * a deterministic CLI write. Edits one of the two Claude settings files:
  *
  *   project   → `<cwd>/.claude/settings.json`

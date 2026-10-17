@@ -37,8 +37,8 @@ const plainSample = (value: boolean | number): Sample => ({
 });
 
 // The record the handlers serve and the values the play submits differ for
-// every field, so the play can tell a value it typed from one it was served. A
-// boolean is served false so that checking its box submits true.
+// every field with more than one possible value, so the play can tell a value
+// it typed from one it was served. A boolean is served false so that checking its box submits true.
 const SAMPLE_BUILDERS: Record<
   FieldKind,
   (field: ServiceField, isRecord: boolean) => Sample

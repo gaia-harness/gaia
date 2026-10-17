@@ -158,7 +158,7 @@ const buildSideState = (scan: RegionScan, masked: boolean): RegionSideState =>
  * Pure computation: masks the declared region on each side and classifies
  * the normalized result. No I/O.
  */
-/* eslint-disable max-params -- signature frozen by README.md C3 / task-region-oracle.md's interface contract; positional (baseline, latest, current) matches merge-audit-ci.ts and merge-workspace.ts, plus the marker pair the other two oracles don't need. */
+/* eslint-disable max-params -- positional (baseline, latest, current) matches merge-audit-ci.ts and merge-workspace.ts, plus the marker pair the other two oracles don't need. */
 export const computeRegionMerge = (
   baseline: string,
   latest: string,

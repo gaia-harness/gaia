@@ -29,7 +29,7 @@ const HELP_TEXT = `Usage: gaia-maintainer release <subcommand> [args]
                                               (--draft: render a review block, write nothing).
   scrub-wiki [--version <X.Y.Z>] [--date <D>] [--check]
                                               Reset wiki/log.md
-                                              (--check: verify they are fresh, write nothing).
+                                              (--check: verify it is fresh, write nothing).
   manifest [--ship <path>]... [--withhold <path> --category <N> --reason <text>]...
                                               Regenerate .gaia/manifest.json. Refuses while any
                                               newly-shipping file is unanswered; see manifest --help.

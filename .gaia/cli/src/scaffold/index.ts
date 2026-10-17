@@ -31,7 +31,7 @@ const HELP_TOKENS = new Set(['--help', '-h', 'help']);
 
 /**
  * Entry point invoked by the top-level CLI router (`src/index.ts`).
- * Returns the process exit code; the top-level caller `process.exit`s.
+ * Returns the process exit code; the top-level router assigns it to `process.exitCode`.
  */
 export const run = (argv: readonly string[]): number => {
   const subcommand = argv[0];

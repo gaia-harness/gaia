@@ -65,7 +65,7 @@ const MANIFEST_RELATIVE = path.join('.gaia', 'manifest.json');
 
 /**
  * `.gaia/cli/src` is the CLI's TypeScript source, which is excluded from the
- * adopter bundle: adopters get the compiled `.gaia/cli/gaia` and nothing else,
+ * adopter bundle: adopters get the compiled `.gaia/cli/gaia` and `.gaia/cli/templates/`,
  * so the directory is present only in the GAIA template source itself.
  */
 const CLI_SOURCE_RELATIVE = path.join('.gaia', 'cli', 'src');

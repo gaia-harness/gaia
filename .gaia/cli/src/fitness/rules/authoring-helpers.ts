@@ -304,7 +304,8 @@ export const linkResolvesCheck = (
       if (!checked) return [];
 
       // An ignored target is no broken link, and one that leaves the root is
-      // reported by its own rule, never read.
+      // never read (`claudemd.path-outside-root` reports it, but only in
+      // CLAUDE.md and rule files).
       if (resolveLink(context, file.path, reference).status !== 'dead') {
         return [];
       }

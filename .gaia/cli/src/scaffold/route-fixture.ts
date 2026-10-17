@@ -95,7 +95,8 @@ const listFilesRecursively = (dir: string): string[] =>
 
 /**
  * The lint boundary forbids `app/pages` importing `app/routes`, type-only
- * imports included, and exempts only stories and tests. A regression fails
+ * imports included, and exempts stories, tests and the typed `actions.*` and
+ * `resources.*` data-endpoint routes. A regression fails
  * `pnpm lint` in an adopter tree alone, so the suites check it here.
  */
 export const expectNoRouteImports = (pageDir: string): void => {

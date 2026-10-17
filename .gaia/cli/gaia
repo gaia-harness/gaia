@@ -42693,8 +42693,8 @@ var GROUP_RULES = [
     group: "stylelint",
     prefixes: ["stylelint-config-"]
   },
-  // Prettier MUST come before eslint so its eslint-config-prettier and
-  // eslint-plugin-prettier exact entries beat eslint's broader prefixes.
+  // Prettier's eslint-config-prettier and eslint-plugin-prettier exact entries
+  // beat eslint's broader prefixes through the exact index, whatever the order.
   {
     exactNames: [
       "eslint-config-prettier",

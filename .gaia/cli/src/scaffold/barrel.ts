@@ -1,19 +1,18 @@
 /**
  * Alphabetical insert into a barrel file (`index.ts` or similar).
  *
- * The four scaffolders all need to register a new module by appending an
- * `export * from './name'` (or named-export) line to a barrel. Sorting
- * barrel entries alphabetically is project convention; doing it once here
- * keeps the four scaffolder tasks free of duplicated string-manipulation
- * code.
+ * Registers a new module by adding an `export * from './name'` (or
+ * named-export) line to a barrel. Sorting barrel entries alphabetically is
+ * project convention; doing it once here keeps callers free of duplicated
+ * string-manipulation code.
  *
  * Idempotent: a second call with the same `exportLine` is a no-op.
  *
  * Heuristic: lines beginning with `export * from` or `export {...} from` are
  * treated as the "sortable region". Comments, blank lines, and other
  * statements at the top or bottom are preserved in place; the new line is
- * inserted into the longest contiguous run of export-from lines that bounds
- * the alphabetically-correct slot.
+ * inserted at its alphabetical slot within the span from the first to the last
+ * export-from line.
  */
 import {readFileSync} from 'node:fs';
 import {atomicWriteFileSync} from '../util/atomic-write.js';

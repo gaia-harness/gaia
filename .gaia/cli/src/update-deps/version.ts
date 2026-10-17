@@ -1,5 +1,5 @@
 /**
- * Strip leading range operators (`^`, `~`, `>=`, `>`, `=`, `v`) so we can
+ * Strip leading range operators (`^`, `~`, `>=`, `<=`, `>`, `<`, `=`, `v`) so we can
  * compare leading numeric segments. Whitespace is trimmed too.
  */
 export const stripRange = (raw: string): string => {
@@ -25,8 +25,8 @@ export const stripRange = (raw: string): string => {
 export const parseSegments = (raw: string): readonly number[] => {
   const cleaned = stripRange(raw);
   // Take only the dot-separated leading numeric part. `1.2.3-beta.1` →
-  // `[1, 2, 3]`. Non-numeric chunks beyond the first three slots are
-  // ignored; the SKILL only needs leading-integer comparison.
+  // `[1, 2, 3]`. A non-numeric chunk parses as 0 and every chunk is kept;
+  // a short version pads to three slots.
   const parts = cleaned.split(/[+-]/u, 1)[0]?.split('.') ?? [];
   const out: number[] = [];
 

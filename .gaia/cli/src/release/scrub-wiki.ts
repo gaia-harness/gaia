@@ -2,8 +2,8 @@
  * `gaia-maintainer release scrub-wiki` handler.
  *
  * Step 6 of the maintainer release runbook. Overwrites
- * `wiki/log.md` with release-clean content. The exact
- * field reset list is codified verbatim from the runbook so adopters
+ * `wiki/log.md` with release-clean content. `renderLogMd` holds the exact
+ * content, so adopters
  * who scaffold via `create-gaia` start from a consistent slate.
  *
  * No stdout on success. Exit 0 / 1 / 2.

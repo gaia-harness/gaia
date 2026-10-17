@@ -11,7 +11,7 @@
  * Each step's saved arguments live in `step_args` keyed by step name.
  * Resume reads them back and re-invokes the step's `run()` with the
  * original argv-shape; so a step that ran with `--title "X"` resumes
- * with the same `--title "X"`. Steps that were never run before this
+ * with the same `--title "X"`. Steps that take arguments and were never run before this
  * resume cannot be replayed (their args are unknown); resume stops with
  * exit 1 and asks the maintainer to invoke the missing step manually
  * with its real flags.
