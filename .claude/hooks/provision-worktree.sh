@@ -293,7 +293,7 @@ fi
 gaia_is_linked_worktree "$tree" || exit 0
 
 # ---------- re-link the shared state ----------
-# link-worktree.sh reads the shared set from the state registry and is
+# link-worktree.sh links the shared set its own header names and is
 # idempotent per path, so a correct worktree is a no-op and a broken one is
 # repaired. It derives the tree it acts on from its own process cwd, so it is
 # invoked with cwd at the worktree, in a subshell that cannot disturb ours.

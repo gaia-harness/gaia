@@ -229,9 +229,10 @@ _audit_github_fail() {
 }
 
 # _audit_github_deadline_seconds: 15 seconds per function call. It sits well
-# under the 60-second hook timeout and leaves room for the two gh calls a gate
-# run makes. GAIA_AUDIT_GH_DEADLINE_SECONDS may only lower it (an integer from
-# 1 to 15; anything else is ignored), which keeps the expiry path testable
+# under the hook timeout (the merge hooks set none, so Claude Code's default
+# applies) and leaves room for the two gh calls a gate run makes.
+# GAIA_AUDIT_GH_DEADLINE_SECONDS may only lower it (an integer from 1 to 15;
+# anything else is ignored), which keeps the expiry path testable
 # without a quarter-minute wait.
 _audit_github_deadline_seconds() {
   local seconds="${GAIA_AUDIT_GH_DEADLINE_SECONDS:-15}"

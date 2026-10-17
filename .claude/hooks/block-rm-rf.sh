@@ -19,7 +19,9 @@
 #   - rm -rf .claude (the Claude config: hooks, skills, agents, rules, settings)
 #     and .claude/<child>
 #   - an unscoped brace glob
-#   - rm -rf node_modules (anywhere)
+#   - rm -rf node_modules (bare, or as a relative path's first or last segment;
+#     an absolute path is denied unless it is a whitelisted scratch path such
+#     as <repo>/dist/node_modules)
 #
 # Allowed (whitelist of safe scratch paths):
 #   The safe-scratch set is declared in .gaia/state-registry.json's

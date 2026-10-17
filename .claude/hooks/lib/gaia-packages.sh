@@ -30,9 +30,8 @@
 # present registry that fails any check returns an error and never a partial
 # answer. A missing jq returns 4 rather
 # than guessing: this library parses JSON with nothing else, so it cannot
-# answer without it, and the PreToolUse hooks that call it carry their own
-# `gaia_require_jq` arm (`.claude/hooks/lib/jq-availability.sh`) for their
-# payload.
+# answer without it. Each caller's own missing-jq decision is in
+# wiki/concepts/Claude Hooks.md ("Shared jq-availability decision").
 #
 # GLOB DIALECT: `**/` is zero or more whole directories, a trailing `/**`
 # is everything beneath, `*` is any run excluding `/`, `?` is one character

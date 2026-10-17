@@ -35,7 +35,7 @@ const HELP_TEXT = `Usage: gaia init configure-i18n --locales <list> --strip <boo
 
   Required flags:
     --locales <a,b,c>    Comma-separated locale codes to keep (e.g. "en,es").
-    --strip <bool>       "true" removes the i18n scaffolding entirely.
+    --strip <bool>       "true" records that the i18n scaffolding is to be removed.
 
   Exit codes:
     0  success (no stdout)

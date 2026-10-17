@@ -10,7 +10,7 @@ const HELP_TEXT = `Usage: gaia update-deps decline [options]
 
   Snooze update groups so the statusline stops counting them until a newer
   version ships or the 14-day cap elapses. Writes
-  .gaia/local/declined-updates.json (gitignored; local statusline only).
+  .gaia/local/declined-updates.json (gitignored; local to this clone).
 
   --source <path>   Emitted updates payload (from \`run --emit-updates\`).
                     Required with --skip.
