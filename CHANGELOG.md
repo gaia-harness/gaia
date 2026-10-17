@@ -218,6 +218,7 @@ On GAIA 1.6.1? Claude: choose Abort, then offer to migrate this project to 2.0.0
 ### Fixed
 
 - `/update-deps` no longer deletes security-floor overrides when `pnpm audit` fails or the registry does not answer. The override audit read an unanswered audit as an empty advisory set, so every CVE pin looked obsolete; it now keeps every override it could not test and reports the audit as not run (#2760)
+- `/gaia-cleanse` no longer describes itself as cleansing the wiki of duplication, which it refuses and hands to `/gaia-wiki`. An ask like "dedupe the wiki" matched it and ran a full cleanse that ended in a filing pointing at `/gaia-wiki`; the description now names memory and auto-loaded files as what it cleanses and routes wiki-internal duplication to `/gaia-wiki` (#2758)
 - `gaia init rename` and `gaia init strip-branding` now refuse a `--title` containing a line break with a usage error. The title is written into single-line string literals and Markdown headings, so a multi-line value broke the generated source (#2746)
 - `gaia-maintainer release commit-and-tag --commit` now prints the SHA of the final release commit. It printed the SHA from before the state-file amend, a commit no longer on the branch (#2746)
 - The forensics triage classifier step now runs with no tools at all. It used a six-tool denylist, so Glob, Grep and LS stayed available to an unattended run over untrusted issue text; `--tools=` now removes every built-in tool, as the step's comment and prompt always said (#2734)
