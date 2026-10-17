@@ -8,7 +8,7 @@
 #
 # Sourced by usage.sh at top level, after the other libraries, and relies on
 # the globals and helpers it defines (_parse, _resolve_context, _error, _now,
-# _is_pr, _is_iso, _rows_file, the flag variables). Defines functions only; no
+# _is_pr, the flag variables). Defines functions only; no
 # side effects at source time.
 #
 # Exit codes. record: 0 recorded; 1 refused (no session id, no unclaimed start,

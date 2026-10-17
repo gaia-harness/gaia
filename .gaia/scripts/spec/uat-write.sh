@@ -20,8 +20,9 @@
 #
 # Render ledger: uat-render.json beside the routing file lists the paths this
 # renderer owns, so a later run can find the spec of a removed or re-routed UAT
-# without globbing (a glob would reach hand-written neighbours). Only a file
-# whose first line is the contract marker is ever rewritten or deleted.
+# without globbing (a glob would reach hand-written neighbours). Only a marker
+# file is deleted, and an unmarked file at a target is rewritten only when
+# --overwrite names its path.
 set -euo pipefail
 
 usage() {

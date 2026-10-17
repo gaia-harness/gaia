@@ -47,7 +47,7 @@
 #              when none is stored. On a capture that cannot be removed:
 #              a diagnostic on stderr, exits non-zero. A round that ends
 #              without publishing a conclusion calls this (the clearance
-#              writer's forfeiture recovery names it); see the SPENT-capture
+#              writer's member-refusal accounting-failure recovery names it); see the SPENT-capture
 #              block below for why such a round cannot be seen to end any
 #              other way.
 #
@@ -92,7 +92,8 @@
 # that is the accepted gap: an edit here cannot make a member whose globs
 # exclude this path re-examine what its clearance attests.
 #
-# Bash 3.2 compatible (macOS default). Never `cd`. Resolves every lib from
+# Bash 3.2 compatible (macOS default). Never cds the main shell (only a command
+# substitution cds). Resolves every lib from
 # this script's own on-disk location, never cwd, never $ROOT (the same
 # discipline audit-member-digest.sh and audit-write-clearance.sh follow).
 

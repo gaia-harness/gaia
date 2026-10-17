@@ -16,15 +16,17 @@
 #                    files; refuses a symlink; runs no part of the move.
 #
 # Exit: 0 ok, 2 usage, 3 (check only) move pending, 9 refused (a precondition
-# failed; nothing moved), 1 any other failure. After a 1 a re-run converges:
+# failed; nothing moved), 1 any other failure, or a status passed through from
+# the notebook or lock library (for example 4 corrupt catalog, 75 lock
+# timeout). After a 1 a re-run converges:
 # every step is idempotent and the marker is written last.
 #
 # Never deletes: items move by rename (never copy), a both-present collision
 # keeps both copies, ledgers are renamed in place, and this file calls no rm.
 #
 # Why the order matters: the fold comes first and the marker last, so a move
-# interrupted anywhere leaves the library refusing consumers (legacy ledger
-# still present, or marker still absent) rather than serving a half-moved
+# interrupted before the ledgers are frozen leaves the library refusing
+# consumers (legacy ledger present, marker absent) rather than serving a half-moved
 # notebook. A rename is atomic on one device, which the device check enforces
 # because mv across devices silently copies and then deletes.
 #
