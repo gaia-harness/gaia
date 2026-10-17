@@ -1091,6 +1091,21 @@ t'
   assert_denied_because "/tmp/claude-$CURRENT_USER_ID/*/scratchpad/*"
 }
 
+# /setup-gaia removes its main-branch standdown sentinel with `rm -f`, and shell-cwd.md
+# has Claude spell that path absolutely. A denied removal leaves the commit guard
+# suspended until the sentinel ages out, so both spellings must pass. The absolute case
+# runs against the staged fixture further down, because the registry is read from the
+# main checkout and a linked worktree's edit to it is invisible to this suite's hook.
+@test "rm -f of the relative setup-in-progress sentinel is allowed" {
+  run_hook_bash 'rm -f .gaia/local/setup-in-progress'
+  assert_allowed_by_json
+}
+
+@test "rm -rf of the absolute .gaia/local container is still denied beside the sentinel entry" {
+  run_hook_bash 'rm -rf /Users/you/projects/my-app/.gaia/local'
+  assert_denied_because 'rm -rf of absolute path'
+}
+
 # --- the observed worktree-cleanup incident ---
 #
 # An agent working inside a linked worktree could not delete its own scratch
@@ -1508,6 +1523,26 @@ run_fixture_main_rmrf() {
   assert_denied_because "BLOCKED: rm -rf of absolute path '$FIXTURE_MAIN_PHYSICAL/.gaia/local/specs/SPEC-001' is forbidden."
 }
 
+@test "rm -f of the absolute setup-in-progress sentinel is allowed" {
+  stage_main_checkout_fixture
+  run_fixture_main_rmrf "rm -f $FIXTURE_MAIN_PHYSICAL/.gaia/local/setup-in-progress"
+  assert_allowed_by_json
+}
+
+@test "an absolute-path deny inside the repository names the repo-relative spelling" {
+  stage_main_checkout_fixture
+  run_fixture_main_rmrf "rm -f $FIXTURE_MAIN_PHYSICAL/.gaia/local/stray-file"
+  assert_denied_because "its repo-relative spelling '.gaia/local/stray-file' is judged by the relative-path rules instead."
+}
+
+@test "an absolute-path deny outside the repository names no repo-relative spelling" {
+  stage_main_checkout_fixture
+  run_fixture_main_rmrf "rm -f /Users/you/elsewhere/notes.txt"
+  assert_denied_because "rm -f of absolute path"
+  grep -qF 'repo-relative' <<<"$output" && return 1
+  true
+}
+
 @test "notebook allowance: a fixture registry still whitelisting the old local specs root would allow what the real one denies" {
   stage_main_checkout_fixture
   jq '.rm_whitelist += [{"path": ".gaia/local/specs", "children_only": true, "why": "x"}]' "$FIXTURE_MAIN/.gaia/state-registry.json" >"$FIXTURE_MAIN/registry.tmp"
@@ -1655,6 +1690,31 @@ run_fixture_main_rmrf() {
 @test "_rm_whitelist_hint: an empty tsv prints nothing" {
   source_hook
   run _rm_whitelist_hint ""
+  [ "$status" -eq 0 ]
+  [ -z "$output" ]
+}
+
+@test "_rm_repository_relative_hint: a path inside a root names its relative spelling" {
+  source_hook
+  run _rm_repository_relative_hint /repo/.gaia/local/x /repo
+  [ "$status" -eq 0 ]
+  [ "$output" = " From the repository root, its repo-relative spelling '.gaia/local/x' is judged by the relative-path rules instead." ]
+}
+
+@test "_rm_repository_relative_hint: every root is tried, so the physical spelling matches" {
+  source_hook
+  run _rm_repository_relative_hint /private/tmp/repo/notes.txt /tmp/repo /private/tmp/repo
+  [ "$status" -eq 0 ]
+  [ "$output" = " From the repository root, its repo-relative spelling 'notes.txt' is judged by the relative-path rules instead." ]
+}
+
+@test "_rm_repository_relative_hint: the root itself, a sibling, and an empty or / root print nothing" {
+  source_hook
+  run _rm_repository_relative_hint /repo /repo
+  [ -z "$output" ]
+  run _rm_repository_relative_hint /repository-two/x /repo
+  [ -z "$output" ]
+  run _rm_repository_relative_hint /repo/x "" /
   [ "$status" -eq 0 ]
   [ -z "$output" ]
 }
