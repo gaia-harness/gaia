@@ -10,9 +10,8 @@ tags: [decision, shell, lint, bats, awk-lib]
 
 # Shell Guard Fixture Discrimination
 
-Three GAIA shell guards scan the tree for a class of shell defect: an unquoted
-path-listing call, an unescaped ERE metacharacter, an unguarded status read under
-errexit. Each guard reads tracked shell scripts, git hooks, workflow YAML, and
+GAIA's shell guards each scan the tree for a class of shell defect, such as an
+unquoted path-listing call or an unguarded status read under errexit. Each guard reads tracked shell scripts, git hooks, workflow YAML, and
 the fenced code blocks of tracked markdown, and until now none of them read `*.bats`
 at all. The exclusion existed because a bats suite is exactly where the defect class
 gets demonstrated on purpose: a suite proves a guard's own claim by writing a
@@ -131,7 +130,7 @@ spots to be about.
 
 ## Adopting the convention in a new guard
 
-A fourth guard adopts this convention by sourcing the shared awk library beside its
+A new guard adopts this convention by sourcing the shared awk library beside its
 own script, resolved script-relative rather than against the current working
 directory, because a guard can be invoked from anywhere. It then concatenates the
 library's exported awk source ahead of its own program at call time, roughly:

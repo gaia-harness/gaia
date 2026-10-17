@@ -31,5 +31,5 @@ This decision reopens on either a second recorded stall event, or a base rate es
 <!-- gaia:maintainer-only:start -->
 ## Pairs with
 
-- [[Sharded CI Test Matrix]]: a different, job-level `timeout-minutes` ceiling on the dispatched-audit path; that page's zero-headroom arithmetic is unrelated to this composite-action bound.
+- [[Sharded CI Test Matrix]]: a different, job-level `timeout-minutes` cap on the audit CI test jobs, unrelated to this composite-action bound.
 <!-- gaia:maintainer-only:end -->

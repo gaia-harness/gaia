@@ -22,7 +22,7 @@ The two surfaces are not a strict superset relationship: each entry point includ
 
 ## Why
 
-A single binary that bakes in the entire `release` namespace (preflight, bump, changelog, scrub-wiki, manifest, scrub, runtime-deps, commit-and-tag) leaks that surface to adopters: `release-exclude` strips the source directory and the `/gaia-release` slash command, but a binary built before staging still exposes `release …` under `gaia --help` and lets adopters invoke release subcommands. Release is maintainer-only: adopters never cut GAIA releases.
+A single binary that bakes in the entire `release` namespace leaks that surface to adopters: `release-exclude` strips the source directory and the `/gaia-release` slash command, but a binary built before staging still exposes `release …` under `gaia --help` and lets adopters invoke release subcommands. Release is maintainer-only: adopters never cut GAIA releases.
 
 Tree-shaking via esbuild at build time requires two entry points:
 

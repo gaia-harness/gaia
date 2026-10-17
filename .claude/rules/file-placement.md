@@ -14,9 +14,9 @@ paths:
 
 Two obligations, each with its check in your own tree, so you can verify either one locally.
 
-### No bare `.gaia/local` literal
+### No bare `.gaia/local` or `.notebook` literal
 
-**A hook reaches `.gaia/local` only by joining a root from `main-root-lib.sh`** (or a caller-supplied root, in a lib under `.claude/hooks/lib/`). A bare literal resolves against whatever tree the hook runs in, so from a linked worktree the write lands in the wrong tree with no error.
+**A hook reaches `.gaia/local` or `.notebook` only by joining a root from `main-root-lib.sh`** (or a caller-supplied root, in a lib under `.claude/hooks/lib/`). A bare literal resolves against whatever tree the hook runs in, so from a linked worktree the write lands in the wrong tree with no error.
 
 ```bash
 bash .gaia/scripts/check-hook-scope-manifest.sh

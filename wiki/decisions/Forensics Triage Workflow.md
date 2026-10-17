@@ -28,9 +28,9 @@ Lifecycle:
    - `needs-human`: label `needs-human`, comment with the reasoning, mention the maintainer. Issue stays open.
    - `auto-fixable`: proceed to the fix-attempt path.
 5. **Scope check (pre-fix).** `check-scope.sh` runs over the classifier's `Proposed paths` block. Any path outside the allowlist (or on the explicit denylist) demotes the issue to `needs-human` with a comment naming the rejected paths. No branch is created.
-6. **Apply fix.** A second `claude-code-action` invocation runs the fix-application prompt with `--allowedTools Edit,Write` only; no shell, no git, no network. The branch `forensics/<issue-num>-<class-slug>` is created locally from `origin/main`.
+6. **Apply fix.** A second `claude-code-action` invocation runs the fix-application prompt with `--allowedTools Edit,Write,Read` and `--disallowedTools Bash,WebFetch,WebSearch`; no shell, no git, no network. The branch `forensics/<issue-num>-<class-slug>` is created locally from `origin/main`.
 7. **Post-fix scope check.** Even within the allowlist, the diff must be a subset of the classifier's proposed paths. Any deviation aborts before commit and demotes to `needs-human`.
-8. **Quality Gate.** `.github/forensics/run-quality-gate.sh` runs `pnpm install --frozen-lockfile`, a Chromium install (Vitest's browser and story projects launch headless Chromium), `pnpm typecheck`, `pnpm lint`, `pnpm test --run`, and `pnpm knip` in order, halt-on-first-fail. Gate failure abandons the branch (it was never pushed) and demotes the issue to `needs-human` with a comment naming the failed step and a log excerpt.
+8. **Quality Gate.** `.github/forensics/run-quality-gate.sh` runs `pnpm install --frozen-lockfile`, `pnpm typecheck`, `pnpm lint`, a Chromium install (Vitest's browser and story projects launch headless Chromium), `pnpm test --run`, and `pnpm knip` in order, halt-on-first-fail. Gate failure abandons the branch (it was never pushed) and demotes the issue to `needs-human` with a comment naming the failed step and a log excerpt.
 9. **Open draft PR.** Gate pass pushes the branch and opens a draft PR. PR body cites the `## Capture` section verbatim. Label `auto-fixable` attaches to the issue.
 10. **Idempotency key.** Every triaged issue receives the `gaia-triaged` label as the final, always-run step.
 
@@ -72,7 +72,7 @@ Everything else, including `.github/forensics/` (the triage harness itself) and 
 
 ## Label vocabulary
 
-The labels in the vocabulary come from `.gaia/labels.json`, the five in the table below plus the `gaia-forensics` trigger label. `gaia labels sync` reconciles them on the upstream repo: color drift is operator-wins (existing color stays, a notice logs the mismatch), description drift is GAIA-wins (the registry's description overwrites the live one). See `wiki/concepts/GitHub Labels.md` for the canonical colors and descriptions.
+The labels in the vocabulary come from `.gaia/labels.json`, the four in the table below plus the `gaia-forensics` trigger label. `gaia labels sync` reconciles them on the upstream repo: color drift is operator-wins (existing color stays, a notice logs the mismatch), description drift is GAIA-wins (the registry's description overwrites the live one). See `wiki/concepts/GitHub Labels.md` for the canonical colors and descriptions.
 
 | Label                | Meaning                                                                                                                                   |
 | -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
@@ -98,7 +98,7 @@ Branch protection and the draft-PR contract are the autonomous-mode safety rails
 
 - Every PR opens as `draft: true`. The workflow has no `gh pr ready` invocation.
 - The workflow has no `gh pr merge` invocation.
-- Branch protection on `main` requires at least one human review and the standard required status checks. The workflow never bypasses either.
+- Branch protection on `main` requires a pull request and the standard required status checks, with no approving-review count. The workflow never bypasses either.
 
 ## Failure modes
 
@@ -132,7 +132,7 @@ Adding a new label to the vocabulary:
 4. Update the label vocabulary table on this page.
 5. Wire any handler that needs to apply the new label.
 
-The code-parity check fails a pull request that uses a label the registry does not carry, so this procedure is enforced rather than remembered.
+No check compares the labels code uses against the registry (its tests pin only the registry file), so this procedure is remembered, not enforced.
 
 Modifying the workflow YAML or any `.github/forensics/` script is a normal PR; except those paths are themselves on the workflow's denylist, so the changes ship through human-authored PRs only, never through autonomous triage.
 
@@ -163,7 +163,7 @@ The maintainer reviews both signals by aggregating the reason-codes and watching
 
 The workflow is idempotent on `gaia-triaged`. To force a re-run:
 
-1. On the issue: remove `gaia-triaged`. (Removing the label re-fires the workflow because of the `issues.labeled` trigger.)
+1. On the issue: remove `gaia-triaged`, then remove and re-add `gaia-forensics`. (Removing a label fires nothing; adding `gaia-forensics` fires the workflow through the `issues.labeled` trigger.)
 2. The next run treats the issue as untriaged and re-classifies from scratch. Any prior labels (`non-issue`, `needs-human`, etc.) stay attached unless the new run replaces them.
 
 To pre-empt a re-run, leave `gaia-triaged` attached.

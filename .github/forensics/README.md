@@ -10,6 +10,7 @@ unit-testable primitives the workflow shells out to.
 | Script                 | Purpose                                                                                                                                            |
 | ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `check-scope.sh`       | Default-deny path-policy primitive. Classifies candidate paths against the forensics allowlist/denylist. JSON to stdout.                          |
+| `neutralize-untrusted.sh` | Defangs untrusted issue-section text before it is substituted into the prompt. |
 | `parse-issue-body.sh`  | Deterministic issue-body parser. JSON to stdout.                                                                                                  |
 | `parse-verdict.sh`     | Extracts the classifier verdict + proposed paths. JSON to stdout.                                                                                 |
 | `render-prompt.sh`     | Literal single-pass prompt-template renderer.                                                                                                     |

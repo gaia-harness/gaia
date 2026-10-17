@@ -39,8 +39,9 @@ script's own header carries the reasoning for its cap. This page does not
 restate it, because a second copy is a second thing to keep current and the
 runner's own header is what cannot go stale.
 
-`shell-lint.sh`'s guards source a bats parallel backend or an alternate awk
-interpreter when one is available. Neither backend is required: adopters
+The guards source an alternate awk interpreter when one is available, and
+`.gaia/scripts/bats5.sh` uses a bats parallel backend when one is installed.
+Neither backend is required: adopters
 never need either, since none of the files that use them ship.
 
 ## The awk interpreter resolver's stated non-claim

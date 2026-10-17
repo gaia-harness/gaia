@@ -48,7 +48,7 @@ The wiki is critical infrastructure; it decays when drift between code and docum
 <!-- gaia:maintainer-only:start -->
 ## Shipped-surface boundary check
 
-`wiki/` ships, so a page the sync stage of `/gaia-wiki` authors is a newly-shipping file the moment it's created. Before landing, sync stages its own authored pages and runs the release-staging build against them, the same check CI's advisory shipped-surface leak check runs, moved ahead of the pull request rather than discovered after it's open. It repairs what a page's own prose caused (a pointer at a release-excluded path, a wikilink to a release-excluded page), bounded at three attempts, and records what it can't repair or what a newly-created page still owes the distribution manifest in the sync summary instead of staying silent about it.
+`wiki/` ships, so a page the sync stage of `/gaia-wiki` authors is a newly-shipping file the moment it's created. Sync itself runs no release-staging build: the advisory shipped-surface leak check in CI is what catches a pointer at a release-excluded path or a wikilink to a release-excluded page, after the pull request is open.
 <!-- gaia:maintainer-only:end -->
 
 ## State file
