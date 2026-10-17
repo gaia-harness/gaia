@@ -85,7 +85,7 @@ export const orderStatusLabels = {
 
 ## Zod
 
-**This project uses Zod 4**, in every schema. Zod 3 habits fail typecheck here (single-arg `z.record()`, `.args().returns()`), except `.strict()`, which still compiles and lints clean, so reach for `z.strictObject()` deliberately. The deprecated string formats (`z.string().email()` and similar) also compile, but `sonarjs/deprecation` flags them.
+**This project uses Zod 4**, in every schema. Most Zod 3 forms still compile; several fail typecheck, among them single-arg `z.record()`, `.args().returns()`, `.deepPartial()`, `z.string().ip()`, and the `required_error` / `invalid_type_error` / `errorMap` params. `.strict()` compiles and lints clean, so reach for `z.strictObject()` deliberately. The deprecated forms (`.passthrough()`, `z.string().email()` and the other string formats, the `message` param) also compile, but `sonarjs/deprecation` flags them.
 
 - **`z.literal([...])` not `z.enum()`** for string unions, sort values alphanumerically
 

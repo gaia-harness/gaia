@@ -89,7 +89,7 @@ When the loop is about to leave the current topic, whether because its coverage 
 - options:
   - `{ label: "Move to <next topic> (Recommended)", description: "Advance to the next discovery area." }`
   - `{ label: "Push deeper on <topic>", description: "Mine the current topic further." }`
-  - `{ label: "Other", description: "Free-text alternative." }`
+  - `{ label: "Other", description: "Name a different topic to jump to." }`
   - `{ label: "Save partial and resume later", description: "Write the draft to cache and stop." }`
 
 Silent topic advance is forbidden. On `Push deeper on <topic>`, increment `push_deeper[<topic>]`. When that counter reaches 3 for any topic, switch to the revisit-counter prompt (see `## Per-topic revisit counter`) instead of repeating this checkpoint.

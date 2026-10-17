@@ -144,7 +144,7 @@ Standalone final step, one call:
 bash .gaia/scripts/usage.sh record command:gaia-cleanse --workflow gaia-cleanse
 ```
 
-and the pull request is on the current repo, append:
+**Artifact pass-through.** When this run opened a pull request and the URL `gh pr create` printed appeared in this run's own Bash tool result, and the pull request is on the current repo, append:
 
 ```bash
   --pr <N>
