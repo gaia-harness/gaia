@@ -6,14 +6,14 @@ import {
 } from '../http';
 
 describe('http utils', () => {
-  const obj = {fizz: 'buzz', foo: 'bar'};
+  const plainHeaders = {fizz: 'buzz', foo: 'bar'};
 
   test('toHeadersObject should work with Headers', () => {
-    expect(toHeadersObject(new Headers(obj))).toEqual(obj);
+    expect(toHeadersObject(new Headers(plainHeaders))).toEqual(plainHeaders);
   });
 
   test('toHeadersObject should work with object', () => {
-    expect(toHeadersObject(new Headers(obj))).toEqual(obj);
+    expect(toHeadersObject(new Headers(plainHeaders))).toEqual(plainHeaders);
   });
 
   test('toHeadersObject should work with undefined', () => {
@@ -58,8 +58,16 @@ describe('http utils', () => {
     expect(resolveLocalRedirect('/a/..//example.com')).toBeUndefined();
   });
 
+  test('resolveLocalRedirect returns undefined for targets the URL parser rejects', () => {
+    expect(resolveLocalRedirect('//')).toBeUndefined();
+    expect(resolveLocalRedirect('/\\')).toBeUndefined();
+    expect(resolveLocalRedirect('//[')).toBeUndefined();
+    expect(resolveLocalRedirect('//a b')).toBeUndefined();
+  });
+
   test('LocalRedirectSchema parses to the resolved path or fails', () => {
     expect(LocalRedirectSchema.safeParse('/a/../b').data).toBe('/b');
     expect(LocalRedirectSchema.safeParse('//example.com').success).toBe(false);
+    expect(LocalRedirectSchema.safeParse('//').success).toBe(false);
   });
 });

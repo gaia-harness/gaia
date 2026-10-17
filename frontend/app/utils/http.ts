@@ -17,20 +17,30 @@ const LOCAL_ORIGIN = 'https://local.invalid';
   leaves this origin. The target is resolved the way a browser resolves a
   Location header, so the consumer redirects to the returned path, never the
   raw input. A resolved path starting with "//" is rejected too, because a
-  browser reads it as another host.
+  browser reads it as another host. A target the URL parser cannot resolve is
+  undefined, never a throw.
 */
 export const resolveLocalRedirect = (
   url: null | string | undefined
 ): string | undefined => {
   if (!url?.startsWith('/')) return undefined;
 
-  const resolved = new URL(url, LOCAL_ORIGIN);
+  let resolvedUrl: URL;
 
-  if (resolved.origin !== LOCAL_ORIGIN || resolved.pathname.startsWith('//')) {
+  try {
+    resolvedUrl = new URL(url, LOCAL_ORIGIN);
+  } catch {
     return undefined;
   }
 
-  return resolved.pathname + resolved.search + resolved.hash;
+  if (
+    resolvedUrl.origin !== LOCAL_ORIGIN ||
+    resolvedUrl.pathname.startsWith('//')
+  ) {
+    return undefined;
+  }
+
+  return resolvedUrl.pathname + resolvedUrl.search + resolvedUrl.hash;
 };
 
 /** A form field that parses to the resolved same-origin path, or fails. */
