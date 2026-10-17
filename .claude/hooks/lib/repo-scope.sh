@@ -145,11 +145,13 @@ command_targets_foreign_repo() {
 # calling shell and every later command is certain to run after it. The scan
 # splits at newlines, `&` and `|` without modelling what groups them, so a `cd`
 # inside a subshell, a `$( )`, a function body, a heredoc body, a loop or an
-# `if`, a pipeline, or a backgrounded command would otherwise move it for
+# `if` would otherwise move it for
 # commands the shell runs in the original directory, and read a home command
 # after it as foreign. So once any command opens one of those constructs the
 # walk goes opaque and every later `cd` makes the directory unknown, which is
-# home. A `cd` reached through `&&` runs only if everything before it
+# home. A `cd` beside `|` or `&` is only skipped (its directory is unknown)
+# without going opaque, so a later absolute `cd` knows the directory again. A
+# `cd` reached through `&&` runs only if everything before it
 # succeeded, so its move ends with its and-or list, and a `||` after a move
 # makes the directory unknown.
 _gaia_repo_scope_verdict() {

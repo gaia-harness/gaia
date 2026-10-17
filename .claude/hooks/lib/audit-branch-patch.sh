@@ -46,7 +46,7 @@
 # passes flags and `-c` settings that override every diff-shaping config key
 # git reads, so a hostile local config or a tracked `.gitattributes` cannot
 # change an identity. Attributes are neutralized with `attr.tree` set to the
-# empty tree. Its honest limit: git older than 2.46 ignores that key and
+# empty tree. Its honest limit: git older than 2.43 ignores that key and
 # honors attributes, which can only turn a text path into a binary one; a
 # binary path is keyed on blob ids, which rotate on every content change, so
 # the residue over-rotates and never hides an edit. `$GIT_DIR/info/attributes`
@@ -386,7 +386,7 @@ audit_branch_patch_changed_paths() (
 )
 
 # audit_branch_patch_supports_remerge_diff <root>: 0 when this git accepts
-# `--remerge-diff`, 1 otherwise. An unknown option is a usage error, which is
+# `--remerge-diff`, non-zero otherwise. An unknown option is a usage error, which is
 # the only way the probe on the empty tree fails.
 audit_branch_patch_supports_remerge_diff() {
   [ -n "${1:-}" ] || return 1

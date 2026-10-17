@@ -8,7 +8,7 @@
 # owns the branch it holds the main checkout on; it relies on the branch-keyed
 # filename and the session and branch match below, and passes a long ttl
 # because a session id never repeats. No cost record reads it: the writing hook
-# links the pull request to its branch with `usage.sh link --pr`. The five
+# links the pull request to its branch with `usage.sh link --pr`. The
 # prose maintenance commands and the /gaia-wiki chain bind their artifact by
 # direct pass-through instead: the agent reads the URL `gh pr create` printed
 # into its own tool result and hands the number to `usage.sh record`, because

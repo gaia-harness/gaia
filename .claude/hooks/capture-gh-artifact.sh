@@ -5,7 +5,7 @@
 # session-ownership check reads, as proof that a session owns the branch it
 # holds the main checkout on. GAIA_USAGE_HOOKS_DISABLE=1 skips the edge; it is
 # a test seam for suites that run this real hook. Every cost-recording surface
-# (the five prose maintenance commands and the /gaia-wiki chain) binds its
+# (the prose maintenance commands and the /gaia-wiki chain) binds its
 # artifact by direct pass-through instead and reads no breadcrumb; see
 # .gaia/scripts/gh-artifact-lib.sh for the full rationale.
 #

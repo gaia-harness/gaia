@@ -137,7 +137,7 @@
 # FAIL LOUD, NOT FAIL OPEN. Every unknown denies with a message, never allows.
 # Deny causes: a corrupt state file (never rewritten, with the human-run
 # repair in the message), a missing jq (exit 2 through the shared arm, only
-# for a call that names a member or a unit) or git, a library or the
+# for a call that names a member, the unit or the light reviewer) or git, a library or the
 # dispositions check script that will not load, an audited checkout that
 # cannot be resolved, a detached HEAD or an unkeyable branch name, an
 # unreadable HEAD, a dirty audited checkout where a round or the first unit
@@ -201,7 +201,7 @@ payload=$(cat)
 # jq-availability arm: refuse loudly rather than fail open when the interpreter
 # this hook reads its payload with is absent. What that buys, and the contract
 # the literals below satisfy, live in .claude/hooks/lib/jq-availability.sh.
-# The literals are the two scope spellings; a subagent_type that reaches the
+# The literals are the three scope spellings; a subagent_type that reaches the
 # scope check only through JSON escapes inside the name is not matched.
 _jq_library_directory="$(cd "$(dirname "${BASH_SOURCE[0]}")/lib" 2>/dev/null && pwd)" || _jq_library_directory=''
 # shellcheck source=lib/jq-availability.sh

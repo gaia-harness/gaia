@@ -33755,7 +33755,7 @@ var HELP_TEXT12 = `Usage: gaia init configure-i18n --locales <list> --strip <boo
 
   Required flags:
     --locales <a,b,c>    Comma-separated locale codes to keep (e.g. "en,es").
-    --strip <bool>       "true" removes the i18n scaffolding entirely.
+    --strip <bool>       "true" records that the i18n scaffolding is to be removed.
 
   Exit codes:
     0  success (no stdout)
@@ -43998,7 +43998,7 @@ var HELP_TEXT51 = `Usage: gaia update-deps decline [options]
 
   Snooze update groups so the statusline stops counting them until a newer
   version ships or the 14-day cap elapses. Writes
-  .gaia/local/declined-updates.json (gitignored; local statusline only).
+  .gaia/local/declined-updates.json (gitignored; local to this clone).
 
   --source <path>   Emitted updates payload (from \`run --emit-updates\`).
                     Required with --skip.
