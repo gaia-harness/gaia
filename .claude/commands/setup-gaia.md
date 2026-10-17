@@ -475,7 +475,13 @@ Keep **`$REPO_CHOICE`**, the answer to Phase 3's connect-to-GitHub question. "Cr
 
 Then run `land-decisions.md`'s `## The setup ping` with `SETUP_TYPE`, `REPO_CHOICE` and `OWED_AT_START` (Read `.claude/skills/gaia/references/setup/land-decisions.md` now first when Phase 5.5 skipped it). It sends the ping, or skips it when nothing was newly decided.
 
-Then output (in the user's language): "GAIA setup complete. Restart Claude Code so the new plugin and skill state are picked up. The statusline will surface `/update-deps` and `/update-gaia` indicators when applicable."
+Then output (in the user's language), with a blank line between the two lines:
+
+```text
+You're all set: your GAIA project is ready. Restart Claude Code to load your new plugins and skills.
+
+New to GAIA? The docs walk you through your first feature: https://docs.gaiareact.com/
+```
 
 ## Idempotence / re-run safety
 
