@@ -25,6 +25,7 @@ import {atomicWriteFileSync} from '../util/atomic-write.js';
 import {resolvePackageTarget} from '../util/package-target.js';
 import {escapeJsLiteralValue} from './util/js-literal.js';
 import {markStepCompleted} from './util/state.js';
+import {titleFlagError} from './util/title-flag.js';
 
 const HELP_TEXT = `Usage: gaia init strip-branding --title <T>
 
@@ -81,6 +82,10 @@ const parseFlags = (argv: readonly string[]): FlagParseResult => {
   if (title === undefined) {
     return {message: '--title is required', ok: false};
   }
+
+  const titleError = titleFlagError(title);
+
+  if (titleError !== null) return {message: titleError, ok: false};
 
   return {flags: {title}, ok: true};
 };

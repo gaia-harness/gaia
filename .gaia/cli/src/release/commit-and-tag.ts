@@ -273,8 +273,22 @@ const runCommitMode = (ctx: CommitContext): number => {
 
   if (amendFailure !== null) return amendFailure;
 
+  // The amend rewrote HEAD, so newSha no longer names the release commit the
+  // tag and push act on; report the amended one.
+  const releaseResult = ctx.runner('git', ['rev-parse', 'HEAD'], {
+    cwd: ctx.cwd,
+  });
+
+  if (!stepSucceeded(releaseResult)) {
+    return passthroughFailure(releaseResult, {
+      args: ['rev-parse', 'HEAD'],
+      command: 'git',
+    });
+  }
+  const releaseSha = releaseResult.stdout.trim();
+
   process.stdout.write(
-    `commit-and-tag: committed v${ctx.version} (${newSha.slice(0, 7)})\n`
+    `commit-and-tag: committed v${ctx.version} (${releaseSha.slice(0, 7)})\n`
   );
 
   return EXIT_CODES.OK;

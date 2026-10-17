@@ -351,6 +351,20 @@ describe('init rename', () => {
     expect(run(['--kebab', 'x'], {cwd: sandbox.root})).toBe(1);
   });
 
+  test.each([
+    ['a line feed', 'Hello\nWorld'],
+    ['a carriage return', 'Hello\rWorld'],
+  ])('exit 1 when --title carries %s', (_label, title) => {
+    sandbox = setupSandbox();
+    const exit = run(['--title', title, '--kebab', 'hello-world'], {
+      cwd: sandbox.root,
+    });
+    expect(exit).toBe(1);
+    expect(stdio.errors.join('')).toContain(
+      '--title must not contain a line ending'
+    );
+  });
+
   // Ordinary titles that the sinks, not the flag boundary, have to handle:
   // `$1` and `$&` are match references in a replacement string, and an
   // apostrophe closes the literal the value is being written into. Asserted

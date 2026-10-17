@@ -210,6 +210,15 @@ describe('release commit-and-tag --commit', () => {
         encoding: 'utf8',
       });
       expect(status.trim()).toBe('');
+
+      // The printed SHA names the amended release commit the tag and push act
+      // on, not the pre-amend one the state file records.
+      const head = execFileSync('git', ['rev-parse', 'HEAD'], {
+        cwd: sandbox.root,
+        encoding: 'utf8',
+      }).trim();
+      expect(out).toContain(`committed v1.2.0 (${head.slice(0, 7)})`);
+      expect(head).not.toBe(state.last_evaluated_sha);
     }
   );
 

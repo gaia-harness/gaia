@@ -32,6 +32,7 @@ import {resolvePackageTarget} from '../util/package-target.js';
 import {escapeJsLiteralValue} from './util/js-literal.js';
 import type {JsLiteralQuote} from './util/js-literal.js';
 import {markStepCompleted} from './util/state.js';
+import {titleFlagError} from './util/title-flag.js';
 
 const HELP_TEXT = `Usage: gaia init rename --title <T> --kebab <K>
 
@@ -99,6 +100,10 @@ const parseFlags = (argv: readonly string[]): FlagParseResult => {
   if (title === undefined) {
     return {message: '--title is required', ok: false};
   }
+
+  const titleError = titleFlagError(title);
+
+  if (titleError !== null) return {message: titleError, ok: false};
 
   if (kebab === undefined) {
     return {message: '--kebab is required', ok: false};
