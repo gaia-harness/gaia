@@ -249,11 +249,12 @@ blocked_ledger_run() {
 @test "the --main-root form lists the same trees as the resolved form" {
   seed_ledger "$TREE" "$BRANCH" "uncommitted changes"
   remind
-  local resolved_output=$output
+  local resolved_output
+  resolved_output=$(plain_output)
   run bash "$KEPT" remind --main-root "$MAIN"
   [ "$status" -eq 0 ] || return 1
   plain_output | grep -Fxq -- "- $TREE (branch $BRANCH): uncommitted changes" || { printf '%s\n' "$output"; return 1; }
-  [ "$output" = "$resolved_output" ] || { printf '%s\n---\n%s\n' "$output" "$resolved_output"; return 1; }
+  [ "$(plain_output)" = "$resolved_output" ] || { printf '%s\n---\n%s\n' "$output" "$resolved_output"; return 1; }
 }
 
 @test "outside a git repository the reminder is silent and exits 0" {
@@ -284,9 +285,10 @@ blocked_ledger_run() {
   [ "$status" -eq 0 ] || { printf '%s\n' "$output"; return 1; }
   plain_output | grep -Fxq -- "- $TREE (branch $BRANCH): uncommitted changes" || { printf '%s\n' "$output"; return 1; }
   [ "$(grep -c '' "$LEDGER")" -eq 1 ] || { cat "$LEDGER"; return 1; }
-  local old_shell_output=$output
+  local old_shell_output
+  old_shell_output=$(plain_output)
   remind
-  [ "$output" = "$old_shell_output" ] || { printf 'bash 5:\n%s\n/bin/bash:\n%s\n' "$output" "$old_shell_output"; return 1; }
+  [ "$(plain_output)" = "$old_shell_output" ] || { printf 'bash 5:\n%s\n/bin/bash:\n%s\n' "$output" "$old_shell_output"; return 1; }
 }
 
 @test "under /bin/bash the check still records the tree it stops" {
