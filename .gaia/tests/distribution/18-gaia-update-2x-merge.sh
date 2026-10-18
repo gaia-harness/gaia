@@ -5,19 +5,22 @@
 # From 2.0.0 the app lives under frontend/, so the update has two package.json
 # files to merge and one generated settings file to rebuild:
 #
-#   1. Step 7a runs once per package.json (root plus each package in
-#      .gaia/packages.json). The merge is SKILL prose with an inline jq program,
-#      so this scenario extracts that program from merge-execution.md and runs
-#      it, instead of re-implementing it: an upstream pin change to the root and
-#      to frontend/package.json yields an `apply` verdict, and an adopter
-#      re-pin of another key yields `conflict`.
-#   2. Step 7e regenerates frontend/.claude/settings.json after the root
+#   1. The field-aware walk runs once per package.json (root plus each package
+#      in .gaia/packages.json). This scenario extracts the package-directory
+#      program from merge-execution.md and runs it against the staged registry.
+#   2. Each package.json merges through the CLI's `gaia update merge-package`,
+#      the command merge-execution.md calls, run from the source tree's built
+#      CLI: an upstream pin change the adopter still tracks lands in `applied`
+#      for the root and for frontend/package.json, and an adopter re-pin of
+#      another key lands in `conflicts` as a version-valued key.
+#   3. Step 7e regenerates frontend/.claude/settings.json after the root
 #      settings merge. A root settings change that the generated file lacks is
 #      drift (the check exits 1); `gaia packages sync-settings` repairs it and
 #      the drift check goes clean.
 #
 # The staged tree is the shipped file set (the same one an adopter extracts),
-# so the CLI, the drift script, and the registry are the release's own.
+# so the drift script, the generated settings and the registry are the
+# release's own.
 #
 # Layer 0.5: runs on the host or runner, no Docker, no pnpm install.
 set -euo pipefail
@@ -47,16 +50,6 @@ git -C "$ADOPTER" init -q
 
 capture_cli_stderr "$WORK/cli-stderr.txt"
 
-# The fenced bash block following the first line that starts with $2.
-extract_block() {
-  awk -v marker="$2" '
-    index($0, marker) == 1 { seen = 1; next }
-    seen && /^```bash$/ { inside = 1; next }
-    seen && inside && /^```$/ { exit }
-    seen && inside { print }
-  ' "$1"
-}
-
 # The first fenced bash block whose first line starts with $2.
 extract_block_starting() {
   awk -v marker="$2" '
@@ -69,15 +62,13 @@ extract_block_starting() {
   ' "$1"
 }
 
-# The marker is literal markdown with backticks, not a shell expansion.
-# shellcheck disable=SC2016
-VERDICT_MARKER='**Compute the per-key verdicts** with `jq`'
-VERDICT_BLOCK="$(extract_block "$MERGE_EXECUTION" "$VERDICT_MARKER")"
-[ -n "$VERDICT_BLOCK" ] \
-  || { fail "could not extract the Step 7a verdict program from merge-execution.md"; exit 1; }
 DIRS_BLOCK="$(extract_block_starting "$MERGE_EXECUTION" 'PKG_DIRS=')"
 [ -n "$DIRS_BLOCK" ] \
-  || { fail "could not extract the Step 7a package-directory list from merge-execution.md"; exit 1; }
+  || { fail "could not extract the package-directory list from merge-execution.md"; exit 1; }
+
+GAIA_CLI="$PROJECT_ROOT/.gaia/cli/gaia"
+[ -x "$GAIA_CLI" ] \
+  || { fail "the built CLI is missing from the source tree: $GAIA_CLI"; exit 1; }
 
 # --- Scenario 1: the registry yields the root and frontend ------------------
 PKG_DIRS="$(cd "$ADOPTER" && bash -c "$DIRS_BLOCK; printf '%s\n' \"\$PKG_DIRS\"")" \
@@ -109,29 +100,41 @@ set_dev_dependency "$ADOPTER/package.json" "$ROOT_KEY" "0.0.1-baseline"
 set_dev_dependency "$ADOPTER/frontend/package.json" "$FRONTEND_KEY_A" "0.0.1-baseline"
 set_dev_dependency "$ADOPTER/frontend/package.json" "$FRONTEND_KEY_B" "9.9.9-adopter"
 
-verdicts_for() {
-  (cd "$ADOPTER" && PKG_DIR="$1" BASELINE_DIR="$BASELINE" LATEST_DIR="$STAGING" bash -c "$VERDICT_BLOCK")
+merge_package_for() {
+  local directory="$1"
+  (cd "$ADOPTER" && run_cli "$GAIA_CLI" update merge-package \
+    --baseline "$BASELINE/$directory/package.json" \
+    --latest "$STAGING/$directory/package.json" \
+    --current "$directory/package.json" \
+    --json)
 }
 
-ROOT_VERDICTS="$(verdicts_for .)" \
-  || { fail "scenario 2: the verdict program failed for the root package.json"; exit 1; }
-FRONTEND_VERDICTS="$(verdicts_for frontend)" \
-  || { fail "scenario 2: the verdict program failed for frontend/package.json"; exit 1; }
+ROOT_MERGE="$(merge_package_for .)" \
+  || fail_with_stderr "scenario 2: gaia update merge-package failed for the root package.json"
+FRONTEND_MERGE="$(merge_package_for frontend)" \
+  || fail_with_stderr "scenario 2: gaia update merge-package failed for frontend/package.json"
 
-verdict_of() {
-  printf '%s' "$1" | jq -r --arg k "$2" '[.[] | select(.section == "devDependencies" and .key == $k)][0].verdict // "none"'
+# 0 when merge report $1 lists devDependencies key $3 in bucket $2.
+in_bucket() {
+  printf '%s' "$1" | jq -e --arg bucket "$2" --arg k "$3" \
+    '[.[$bucket][]? | select(.section == "devDependencies" and .key == $k)] | length == 1' > /dev/null
 }
 
-[ "$(verdict_of "$ROOT_VERDICTS" "$ROOT_KEY")" = "apply" ] \
-  || { fail "scenario 2: root $ROOT_KEY should be apply, got $(verdict_of "$ROOT_VERDICTS" "$ROOT_KEY")"; exit 1; }
-[ "$(verdict_of "$FRONTEND_VERDICTS" "$FRONTEND_KEY_A")" = "apply" ] \
-  || { fail "scenario 2: frontend $FRONTEND_KEY_A should be apply, got $(verdict_of "$FRONTEND_VERDICTS" "$FRONTEND_KEY_A")"; exit 1; }
-[ "$(verdict_of "$FRONTEND_VERDICTS" "$FRONTEND_KEY_B")" = "conflict" ] \
-  || { fail "scenario 2: frontend $FRONTEND_KEY_B (adopter re-pin) should be conflict, got $(verdict_of "$FRONTEND_VERDICTS" "$FRONTEND_KEY_B")"; exit 1; }
-# The root program must not see frontend keys: a package's verdicts stay its own.
-[ "$(verdict_of "$ROOT_VERDICTS" "$FRONTEND_KEY_A")" != "apply" ] \
-  || { fail "scenario 2: the root verdicts carried a frontend-only change"; exit 1; }
-log "scenario 2 (apply and conflict verdicts per package.json): OK"
+in_bucket "$ROOT_MERGE" applied "$ROOT_KEY" \
+  || { fail "scenario 2: root $ROOT_KEY should be applied, got: $ROOT_MERGE"; exit 1; }
+in_bucket "$FRONTEND_MERGE" applied "$FRONTEND_KEY_A" \
+  || { fail "scenario 2: frontend $FRONTEND_KEY_A should be applied, got: $FRONTEND_MERGE"; exit 1; }
+in_bucket "$FRONTEND_MERGE" conflicts "$FRONTEND_KEY_B" \
+  || { fail "scenario 2: frontend $FRONTEND_KEY_B (adopter re-pin) should be a conflict, got: $FRONTEND_MERGE"; exit 1; }
+printf '%s' "$FRONTEND_MERGE" | jq -e --arg k "$FRONTEND_KEY_B" \
+  '[.conflicts[] | select(.section == "devDependencies" and .key == $k and .versionValued == true)] | length == 1' > /dev/null \
+  || { fail "scenario 2: the frontend $FRONTEND_KEY_B conflict is not marked version-valued"; exit 1; }
+# Each package's verdicts stay its own: the root merge never sees a frontend key.
+if in_bucket "$ROOT_MERGE" applied "$FRONTEND_KEY_A"; then
+  fail "scenario 2: the root merge applied a frontend-only change"
+  exit 1
+fi
+log "scenario 2 (applied and conflict verdicts per package.json): OK"
 
 # --- Scenario 3: generated settings drift, then regenerate -------------------
 GENERATED="$ADOPTER/frontend/.claude/settings.json"

@@ -60,7 +60,7 @@ Then write the following files directly to `{PLAN_DIR}/`:
 
 3.  **`{PLAN_DIR}/ORCHESTRATOR.md`**: instructions for running the plan. Must cover:
     - **Resume detection (cold-start, before the sentinel write).** Before writing this run's RUNNING sentinel, and before the pre-flight isolation below, check for a pre-existing `{PLAN_DIR}/RUNNING`.
-      - **No prior sentinel.** This is a fresh first run: skip resume entirely, proceed to the pre-flight isolation, and let it write this run's own sentinel afterward as usual. The detection read MUST precede the sentinel write, or every fresh run would self-detect as a resume.
+      - **No prior sentinel.** This is a fresh first run: skip resume entirely, run `gaia_pull_gate "/gaia-plan"` (sourcing `.gaia/scripts/main-only-lib.sh` first) before the pre-flight isolation, and on a non-zero exit follow `.claude/skills/update-gaia/references/pull-gate.md`, restarting by printing the fenced KICKOFF re-run; then proceed to the pre-flight isolation, and let it write this run's own sentinel afterward as usual. The generated `ORCHESTRATOR.md` carries this gate instruction; the RUNNING-sentinel resume arm below runs ungated. The detection read MUST precede the sentinel write, or every fresh run would self-detect as a resume.
       - **Merged-PR guard.** If a sentinel exists, check whether its plan's PR is already merged before reconnecting to anything. The sentinel carries no PR number, so recover it from the sentinel's `branch:` line:
 
         ```bash

@@ -189,6 +189,59 @@ run_verify_bundles() {
   true
 }
 
+@test "verify-bundles: an extra tag is verified, extracted and named after LATEST_DIR" {
+  verify_bundles_setup
+  write_release v2.0.4
+  run_preflight verify-bundles --baseline 2.0.0 --latest-tag v2.1.0 --extra-tag v2.0.4
+  [ "$status" -eq 0 ]
+  printf '%s\n' "$output" | grep -qxF 'VERIFIED v2.0.4'
+  [ "$(printf '%s\n' "$output" | grep -c '^EXTRA_DIR=')" -eq 1 ]
+  [ "$(printf '%s\n' "$output" | tail -n 1)" = 'EXTRA_DIR=v2.0.4:.gaia/local/cache/shared/update-gaia/v2.0.4/tree' ]
+  [ "$(printf '%s\n' "$output" | tail -n 2 | head -n 1)" = 'LATEST_DIR=.gaia/local/cache/shared/update-gaia/v2.1.0/tree' ]
+  [ "$(cat "$CACHE/v2.0.4/tree/.gaia/VERSION")" = 2.0.4 ]
+}
+
+@test "verify-bundles: an extra tag equal to the baseline is fetched once" {
+  verify_bundles_setup
+  run_preflight verify-bundles --baseline 2.0.0 --latest-tag v2.1.0 --extra-tag v2.0.0 --extra-tag v2.0.0
+  [ "$status" -eq 0 ]
+  [ "$(grep -cxF v2.0.0 "$GH_LOG")" -eq 1 ]
+  [ "$(grep -c . "$GH_LOG")" -eq 2 ]
+  printf '%s\n' "$output" | grep -qxF 'EXTRA_DIR=v2.0.0:.gaia/local/cache/shared/update-gaia/v2.0.0/tree'
+}
+
+@test "verify-bundles: an extra tag the fetch cannot reach stops with FETCH_FAILED and removes that tag" {
+  verify_bundles_setup
+  run_preflight verify-bundles --baseline 2.0.0 --latest-tag v2.1.0 --extra-tag v2.0.4
+  [ "$status" -eq 1 ]
+  printf '%s\n' "$output" | grep -qxF 'FETCH_FAILED v2.0.4'
+  [ -e "$CACHE/v2.0.4" ] && return 1
+  printf '%s\n' "$output" | grep -qF 'EXTRA_DIR=' && return 1
+  true
+}
+
+@test "verify-bundles: an extra tag with a mismatched checksum stops with VERIFY_FAILED" {
+  verify_bundles_setup
+  write_release v2.0.4
+  printf '%064d  gaia-bundle-v2.0.4.tar.gz\n' 0 > "$FIXTURE_RELEASES/v2.0.4/gaia-bundle-v2.0.4.tar.gz.sha256"
+  run_preflight verify-bundles --baseline 2.0.0 --latest-tag v2.1.0 --extra-tag v2.0.4
+  [ "$status" -eq 1 ]
+  printf '%s\n' "$output" | grep -qxF 'VERIFY_FAILED v2.0.4'
+  [ -e "$CACHE/v2.0.4" ] && return 1
+  true
+}
+
+@test "verify-bundles: an extra tag that is not a version exits 2 before any gh call" {
+  verify_bundles_setup
+  for bad in latest 2.0.4 'v2.0' 'v2.0.4;x' 'v2.0.4/../x'; do
+    run_preflight verify-bundles --baseline 2.0.0 --latest-tag v2.1.0 --extra-tag "$bad"
+    [ "$status" -eq 2 ] || { echo "$bad exited $status" >&2; return 1; }
+  done
+  [ ! -s "$GH_LOG" ]
+  [ -e "$CACHE" ] && return 1
+  true
+}
+
 # --- select-notes ------------------------------------------------------------------
 
 # A fixture verified bundle holding the repository's own selector and the
@@ -350,6 +403,62 @@ run_changelog() {
   true
 }
 
+run_changelog_save_from() {
+  run env CURL_FIXTURE="$BATS_TEST_TMPDIR/CHANGELOG-wide.md" PATH="$BATS_TEST_TMPDIR/bin:$PATH" bash -c 'cd "$1" || exit 99; bash "$2" changelog --baseline 2.0.4 --latest 2.0.7 --latest-tag v2.0.7 --save-from "$3"' _ "$PROJECT" "$PREFLIGHT" "$1"
+}
+
+wide_changelog_setup() {
+  changelog_setup
+  mkdir -p "$CACHE/v2.0.7/tree"
+  : > "$BATS_TEST_TMPDIR/CHANGELOG-wide.md"
+  local version
+  printf '%s\n' '# Changelog' '' '## [Unreleased]' '' >> "$BATS_TEST_TMPDIR/CHANGELOG-wide.md"
+  for version in 2.0.7 2.0.6 2.0.5 2.0.4 2.0.3 2.0.2 2.0.1 2.0.0; do
+    printf '## [%s]\n\n- change %s\n\n' "$version" "$version" >> "$BATS_TEST_TMPDIR/CHANGELOG-wide.md"
+  done
+}
+
+@test "changelog: --save-from saves the wider range and prints only the baseline-to-latest range" {
+  wide_changelog_setup
+  run_changelog_save_from 2.0.0
+  [ "$status" -eq 0 ]
+  printf '%s\n' "$output" | grep -qxF '## [2.0.5]'
+  printf '%s\n' "$output" | grep -qxF '## [2.0.7]'
+  printf '%s\n' "$output" | grep -qxF '## [2.0.4]' && return 1
+  printf '%s\n' "$output" | grep -qxF '## [2.0.1]' && return 1
+  saved="$CACHE/v2.0.7/changelog-range.md"
+  [ "$(grep -c '^## \[' "$saved")" -eq 7 ]
+  grep -qxF '## [2.0.1]' "$saved"
+  grep -qxF '## [2.0.4]' "$saved"
+  grep -qxF '## [2.0.0]' "$saved" && return 1
+  true
+}
+
+@test "changelog: a prerelease --save-from saves the same file as its core version" {
+  wide_changelog_setup
+  run_changelog_save_from 2.0.0
+  cp "$CACHE/v2.0.7/changelog-range.md" "$BATS_TEST_TMPDIR/core-range.md"
+  rm -f "$CACHE/v2.0.7/changelog-range.md"
+  run_changelog_save_from 2.0.0-rc.1
+  [ "$status" -eq 0 ]
+  cmp "$CACHE/v2.0.7/changelog-range.md" "$BATS_TEST_TMPDIR/core-range.md"
+}
+
+@test "changelog: a --save-from that is not a version exits 2 and saves nothing" {
+  wide_changelog_setup
+  run_changelog_save_from latest
+  [ "$status" -eq 2 ]
+  [ -e "$CACHE/v2.0.7/changelog-range.md" ] && return 1
+  true
+}
+
+@test "changelog: without --save-from the saved file is the printed range" {
+  wide_changelog_setup
+  run env CURL_FIXTURE="$BATS_TEST_TMPDIR/CHANGELOG-wide.md" PATH="$BATS_TEST_TMPDIR/bin:$PATH" bash -c 'cd "$1" || exit 99; bash "$2" changelog --baseline 2.0.4 --latest 2.0.7 --latest-tag v2.0.7' _ "$PROJECT" "$PREFLIGHT"
+  [ "$status" -eq 0 ]
+  [ "$(printf '%s\n' "$output")" = "$(cat "$CACHE/v2.0.7/changelog-range.md")" ]
+}
+
 # --- prune -----------------------------------------------------------------------
 
 make_prune_fixture() {
@@ -363,15 +472,47 @@ make_prune_fixture() {
   printf 'patch\n' > "$PROJECT/.gaia-merge/a.patch"
 }
 
-@test "prune: keeps the verified baseline and target and the populated merge folder" {
+@test "prune: keeps the verified baseline and target and removes other cached tags" {
   make_prune_fixture
   run_preflight prune --baseline 2.0.0 --latest-tag v2.1.0
   [ "$status" -eq 0 ]
   [ "$(ls "$PROJECT/.gaia/local/cache/shared/update-gaia" | tr '\n' ' ')" = 'v2.0.0 v2.1.0 ' ]
   [ -e "$PROJECT/.gaia-backup" ] && return 1
-  [ -f "$PROJECT/.gaia-merge/a.patch" ]
-  printf '%s\n' "$output" | grep -qF 'Heads up: .gaia-merge/ still holds unresolved patches'
-  printf '%s\n' "$output" | grep -qxF 'a.patch'
+  true
+}
+
+@test "prune: --keep-tag keeps that tag directory and removes the leftover run directory" {
+  make_prune_fixture
+  mkdir -p "$PROJECT/.gaia/local/cache/shared/update-gaia/run/candidates"
+  printf '{}\n' > "$PROJECT/.gaia/local/cache/shared/update-gaia/run/report.json"
+  run_preflight prune --baseline 2.0.0 --latest-tag v2.1.0 --keep-tag v2.0.5
+  [ "$status" -eq 0 ]
+  [ "$(ls "$PROJECT/.gaia/local/cache/shared/update-gaia" | tr '\n' ' ')" = 'v2.0.0 v2.0.5 v2.1.0 ' ]
+}
+
+@test "prune: a tag not named by --keep-tag is removed, and a repeated --keep-tag keeps each" {
+  make_prune_fixture
+  run_preflight prune --baseline 2.0.0 --latest-tag v2.1.0 --keep-tag v2.0.5 --keep-tag v1.9.0
+  [ "$status" -eq 0 ]
+  [ "$(ls "$PROJECT/.gaia/local/cache/shared/update-gaia" | tr '\n' ' ')" = 'v1.9.0 v2.0.0 v2.0.5 v2.1.0 ' ]
+}
+
+@test "prune: a --keep-tag that is not a version exits 2 and removes nothing" {
+  make_prune_fixture
+  run_preflight prune --baseline 2.0.0 --latest-tag v2.1.0 --keep-tag latest
+  [ "$status" -eq 2 ]
+  [ -d "$PROJECT/.gaia/local/cache/shared/update-gaia/v1.9.0" ]
+  [ -d "$PROJECT/.gaia-backup" ]
+}
+
+@test "prune: a populated .gaia-merge folder is left exactly as it was, with no warning" {
+  make_prune_fixture
+  run_preflight prune --baseline 2.0.0 --latest-tag v2.1.0
+  [ "$status" -eq 0 ]
+  [ "$(cat "$PROJECT/.gaia-merge/a.patch")" = patch ]
+  [ "$(ls -A "$PROJECT/.gaia-merge")" = a.patch ]
+  printf '%s\n' "$output" | grep -qF 'Heads up' && return 1
+  [ -z "$output" ]
 }
 
 @test "prune: a resumed run keeps .gaia-backup" {
@@ -380,15 +521,6 @@ make_prune_fixture() {
   [ "$status" -eq 0 ]
   [ -d "$PROJECT/.gaia-backup/20200101-000000" ]
   [ "$(ls "$PROJECT/.gaia/local/cache/shared/update-gaia" | tr '\n' ' ')" = 'v2.0.0 v2.1.0 ' ]
-}
-
-@test "prune: an empty merge folder is removed" {
-  make_prune_fixture
-  rm -f "$PROJECT/.gaia-merge/a.patch"
-  run_preflight prune --baseline 2.0.0 --latest-tag v2.1.0
-  [ "$status" -eq 0 ]
-  [ -e "$PROJECT/.gaia-merge" ] && return 1
-  true
 }
 
 @test "prune: files one level above the tag directories survive" {

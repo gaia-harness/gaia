@@ -56,7 +56,6 @@ coverage
 .notebook
 .notebook.bak.*
 .gaia-backup/
-.gaia-merge/
 
 
 # Scratch copies of the bats sharder that its guard suite doctors in

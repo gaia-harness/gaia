@@ -1,0 +1,650 @@
+{
+  "schemaVersion": 1,
+  "baseline": "2.0.4",
+  "latest": "2.0.7",
+  "latestTag": "v2.0.7",
+  "backupDir": ".gaia-backup/20261018-120000",
+  "files": [
+    {
+      "path": "skip.md",
+      "class": "owned",
+      "baselineTag": "v2.0.4",
+      "status": "skip",
+      "note": "no-upstream-change"
+    },
+    {
+      "path": "overwrite.md",
+      "class": "owned",
+      "baselineTag": "v2.0.4",
+      "status": "overwrite",
+      "backedUp": true
+    },
+    {
+      "path": "merge.md",
+      "class": "shared",
+      "baselineTag": "v2.0.4",
+      "status": "merge",
+      "backedUp": true
+    },
+    {
+      "path": "auto.md",
+      "class": "shared",
+      "baselineTag": "v2.0.4",
+      "status": "auto-merged"
+    },
+    {
+      "path": "autoc.md",
+      "class": "shared",
+      "baselineTag": "v2.0.4",
+      "status": "auto-merged",
+      "autoCandidate": "candidates/autoc.md.auto"
+    },
+    {
+      "path": "pending.md",
+      "class": "shared",
+      "baselineTag": "v2.0.4",
+      "status": "pending-judgment"
+    },
+    {
+      "path": "oc-text-conflict.md",
+      "class": "shared",
+      "baselineTag": "v2.0.4",
+      "status": "open",
+      "items": [
+        {
+          "id": "oc-text-conflict.md",
+          "kind": "text-conflict",
+          "adopterChange": "adopter edit",
+          "gaiaChange": "gaia edit",
+          "changelogReason": null,
+          "recommended": "combine",
+          "reason": "why",
+          "earlierDecision": null,
+          "options": [
+            {
+              "id": "combine",
+              "label": "COMBINE",
+              "decision": "blend",
+              "candidate": "candidates/oc-text-conflict.md.combine",
+              "preview": "combined lines"
+            },
+            {
+              "id": "keep",
+              "label": "KEEP",
+              "decision": "keep"
+            },
+            {
+              "id": "gaia",
+              "label": "GAIA",
+              "decision": "gaia",
+              "candidate": "candidates/oc-text-conflict.md.gaia"
+            },
+            {
+              "id": "defer",
+              "label": "DEFER",
+              "decision": "deferred"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "path": "oc-fallback.md",
+      "class": "shared",
+      "baselineTag": "v2.0.4",
+      "status": "open",
+      "items": [
+        {
+          "id": "oc-fallback.md",
+          "kind": "text-conflict",
+          "adopterChange": "adopter edit",
+          "gaiaChange": "gaia edit",
+          "changelogReason": null,
+          "recommended": "keep",
+          "reason": "why",
+          "earlierDecision": null,
+          "options": [
+            {
+              "id": "keep",
+              "label": "KEEP",
+              "decision": "keep"
+            },
+            {
+              "id": "gaia",
+              "label": "GAIA",
+              "decision": "gaia",
+              "candidate": "candidates/oc-fallback.md.gaia"
+            },
+            {
+              "id": "defer",
+              "label": "DEFER",
+              "decision": "deferred"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "path": "oc-same-gaia.md",
+      "class": "shared",
+      "baselineTag": "v2.0.4",
+      "status": "open",
+      "items": [
+        {
+          "id": "oc-same-gaia.md",
+          "kind": "same-concern-gaia",
+          "adopterChange": "adopter edit",
+          "gaiaChange": "gaia edit",
+          "changelogReason": null,
+          "recommended": "combine",
+          "reason": "why",
+          "earlierDecision": null,
+          "options": [
+            {
+              "id": "combine",
+              "label": "COMBINE",
+              "decision": "blend",
+              "candidate": "candidates/oc-same-gaia.md.combine",
+              "preview": "combined lines"
+            },
+            {
+              "id": "keep",
+              "label": "KEEP",
+              "decision": "keep"
+            },
+            {
+              "id": "gaia",
+              "label": "GAIA",
+              "decision": "gaia",
+              "candidate": "candidates/oc-same-gaia.md.gaia"
+            },
+            {
+              "id": "defer",
+              "label": "DEFER",
+              "decision": "deferred"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "path": "oc-same-adopter.md",
+      "class": "shared",
+      "baselineTag": "v2.0.4",
+      "status": "open",
+      "items": [
+        {
+          "id": "oc-same-adopter.md",
+          "kind": "same-concern-adopter",
+          "adopterChange": "adopter edit",
+          "gaiaChange": "gaia edit",
+          "changelogReason": null,
+          "recommended": "combine",
+          "reason": "why",
+          "earlierDecision": null,
+          "options": [
+            {
+              "id": "combine",
+              "label": "COMBINE",
+              "decision": "blend",
+              "candidate": "candidates/oc-same-adopter.md.combine",
+              "preview": "combined lines"
+            },
+            {
+              "id": "keep",
+              "label": "KEEP",
+              "decision": "keep"
+            },
+            {
+              "id": "gaia",
+              "label": "GAIA",
+              "decision": "gaia",
+              "candidate": "candidates/oc-same-adopter.md.gaia"
+            },
+            {
+              "id": "defer",
+              "label": "DEFER",
+              "decision": "deferred"
+            }
+          ],
+          "suggestion": "open an issue on gaia-react/gaia describing what theirs covers"
+        }
+      ]
+    },
+    {
+      "path": "oc-contradictory.md",
+      "class": "shared",
+      "baselineTag": "v2.0.4",
+      "status": "open",
+      "items": [
+        {
+          "id": "oc-contradictory.md",
+          "kind": "contradictory",
+          "adopterChange": "adopter edit",
+          "gaiaChange": "gaia edit",
+          "changelogReason": null,
+          "recommended": "gaia",
+          "reason": "why",
+          "earlierDecision": null,
+          "options": [
+            {
+              "id": "gaia",
+              "label": "GAIA",
+              "decision": "gaia",
+              "candidate": "candidates/oc-contradictory.md.gaia"
+            },
+            {
+              "id": "combine",
+              "label": "COMBINE",
+              "decision": "blend",
+              "candidate": "candidates/oc-contradictory.md.combine",
+              "preview": "combined lines"
+            },
+            {
+              "id": "keep",
+              "label": "KEEP",
+              "decision": "keep"
+            },
+            {
+              "id": "defer",
+              "label": "DEFER",
+              "decision": "deferred"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "path": "oc-binary.md",
+      "class": "owned",
+      "baselineTag": "v2.0.4",
+      "status": "open",
+      "items": [
+        {
+          "id": "oc-binary.md",
+          "kind": "binary",
+          "adopterChange": "adopter edit",
+          "gaiaChange": "gaia edit",
+          "changelogReason": null,
+          "recommended": "gaia",
+          "reason": "why",
+          "earlierDecision": null,
+          "options": [
+            {
+              "id": "gaia",
+              "label": "GAIA",
+              "decision": "gaia",
+              "candidate": "candidates/oc-binary.md.gaia"
+            },
+            {
+              "id": "keep",
+              "label": "KEEP",
+              "decision": "keep"
+            },
+            {
+              "id": "defer",
+              "label": "DEFER",
+              "decision": "deferred"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "path": "oc-merge-error.md",
+      "class": "shared",
+      "baselineTag": "v2.0.4",
+      "status": "open",
+      "items": [
+        {
+          "id": "oc-merge-error.md",
+          "kind": "merge-error",
+          "adopterChange": "adopter edit",
+          "gaiaChange": "gaia edit",
+          "changelogReason": null,
+          "recommended": "keep",
+          "reason": "why",
+          "earlierDecision": null,
+          "options": [
+            {
+              "id": "keep",
+              "label": "KEEP",
+              "decision": "keep"
+            },
+            {
+              "id": "gaia",
+              "label": "GAIA",
+              "decision": "gaia",
+              "candidate": "candidates/oc-merge-error.md.gaia"
+            },
+            {
+              "id": "defer",
+              "label": "DEFER",
+              "decision": "deferred"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "path": "oc-absent-baseline.md",
+      "class": "shared",
+      "baselineTag": "v2.0.4",
+      "status": "open",
+      "items": [
+        {
+          "id": "oc-absent-baseline.md",
+          "kind": "absent-baseline",
+          "adopterChange": "adopter edit",
+          "gaiaChange": "gaia edit",
+          "changelogReason": null,
+          "recommended": "keep",
+          "reason": "why",
+          "earlierDecision": null,
+          "options": [
+            {
+              "id": "keep",
+              "label": "KEEP",
+              "decision": "keep"
+            },
+            {
+              "id": "gaia",
+              "label": "GAIA",
+              "decision": "gaia",
+              "candidate": "candidates/oc-absent-baseline.md.gaia"
+            },
+            {
+              "id": "defer",
+              "label": "DEFER",
+              "decision": "deferred"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "path": "add.md",
+      "class": "owned",
+      "baselineTag": "v2.0.4",
+      "status": "add"
+    },
+    {
+      "path": "removed.md",
+      "class": null,
+      "baselineTag": "v2.0.4",
+      "status": "removed"
+    },
+    {
+      "path": "deleted.md",
+      "class": null,
+      "baselineTag": "v2.0.4",
+      "status": "deleted",
+      "backedUp": true
+    },
+    {
+      "path": "rm-unref.md",
+      "class": null,
+      "baselineTag": "v2.0.4",
+      "status": "open",
+      "items": [
+        {
+          "id": "rm-unref.md",
+          "kind": "removal",
+          "adopterChange": "adopter edit",
+          "gaiaChange": "gaia edit",
+          "changelogReason": null,
+          "recommended": "remove",
+          "reason": "why",
+          "earlierDecision": null,
+          "options": [
+            {
+              "id": "remove",
+              "label": "REMOVE",
+              "decision": "gaia"
+            },
+            {
+              "id": "keep",
+              "label": "KEEP",
+              "decision": "keep"
+            },
+            {
+              "id": "defer",
+              "label": "DEFER",
+              "decision": "deferred"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "path": "rm-ref.md",
+      "class": null,
+      "baselineTag": "v2.0.4",
+      "status": "open",
+      "items": [
+        {
+          "id": "rm-ref.md",
+          "kind": "removal",
+          "adopterChange": "adopter edit",
+          "gaiaChange": "gaia edit",
+          "changelogReason": null,
+          "recommended": "keep",
+          "reason": "why",
+          "earlierDecision": null,
+          "options": [
+            {
+              "id": "keep",
+              "label": "KEEP",
+              "decision": "keep"
+            },
+            {
+              "id": "remove",
+              "label": "REMOVE",
+              "decision": "gaia"
+            },
+            {
+              "id": "defer",
+              "label": "DEFER",
+              "decision": "deferred"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "path": "deferred.md",
+      "class": "shared",
+      "baselineTag": "v2.0.0",
+      "status": "overwrite"
+    },
+    {
+      "path": "gone.md",
+      "class": null,
+      "baselineTag": "v2.0.0",
+      "status": "removed"
+    },
+    {
+      "path": "package.json",
+      "class": "shared",
+      "baselineTag": "v2.0.4",
+      "status": "field-aware",
+      "fieldMerge": {
+        "applied": [],
+        "alreadyLatest": [],
+        "keptRemoved": [],
+        "removedUpstream": []
+      },
+      "items": [
+        {
+          "id": "package.json#devDependencies.vite",
+          "kind": "version-pin",
+          "key": "devDependencies.vite",
+          "adopterChange": "adopter value",
+          "gaiaChange": "gaia value",
+          "changelogReason": null,
+          "recommended": "higher",
+          "reason": "why",
+          "earlierDecision": null,
+          "options": [
+            {
+              "id": "higher",
+              "label": "HIGHER",
+              "decision": "gaia",
+              "value": "v-higher"
+            },
+            {
+              "id": "keep",
+              "label": "KEEP",
+              "decision": "keep",
+              "value": "v-keep"
+            },
+            {
+              "id": "gaia",
+              "label": "GAIA",
+              "decision": "gaia",
+              "value": "v-gaia"
+            },
+            {
+              "id": "defer",
+              "label": "DEFER",
+              "decision": "deferred",
+              "value": "v-defer"
+            }
+          ]
+        },
+        {
+          "id": "package.json#scripts.build",
+          "kind": "field-conflict",
+          "key": "scripts.build",
+          "adopterChange": "adopter value",
+          "gaiaChange": "gaia value",
+          "changelogReason": null,
+          "recommended": "keep",
+          "reason": "why",
+          "earlierDecision": null,
+          "options": [
+            {
+              "id": "keep",
+              "label": "KEEP",
+              "decision": "keep",
+              "value": "v-keep"
+            },
+            {
+              "id": "gaia",
+              "label": "GAIA",
+              "decision": "gaia",
+              "value": "v-gaia"
+            },
+            {
+              "id": "defer",
+              "label": "DEFER",
+              "decision": "deferred",
+              "value": "v-defer"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "path": "frontend/package.json",
+      "class": "shared",
+      "baselineTag": "v2.0.4",
+      "status": "field-aware",
+      "fieldMerge": {
+        "applied": [],
+        "alreadyLatest": [],
+        "keptRemoved": [],
+        "removedUpstream": []
+      },
+      "items": [
+        {
+          "id": "frontend/package.json#dependencies.react",
+          "kind": "version-pin",
+          "key": "dependencies.react",
+          "adopterChange": "adopter value",
+          "gaiaChange": "gaia value",
+          "changelogReason": null,
+          "recommended": "keep",
+          "reason": "why",
+          "earlierDecision": null,
+          "options": [
+            {
+              "id": "keep",
+              "label": "KEEP",
+              "decision": "keep",
+              "value": "v-keep"
+            },
+            {
+              "id": "gaia",
+              "label": "GAIA",
+              "decision": "gaia",
+              "value": "v-gaia"
+            },
+            {
+              "id": "defer",
+              "label": "DEFER",
+              "decision": "deferred",
+              "value": "v-defer"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "path": "pnpm-workspace.yaml",
+      "class": "shared",
+      "baselineTag": "v2.0.4",
+      "status": "field-aware",
+      "fieldMerge": {
+        "applied": [],
+        "alreadyLatest": [],
+        "keptRemoved": [],
+        "removedUpstream": []
+      }
+    },
+    {
+      "path": ".gaia/audit-ci.yml",
+      "class": "shared",
+      "baselineTag": "v2.0.4",
+      "status": "field-aware",
+      "fieldMerge": {
+        "applied": [],
+        "alreadyLatest": [],
+        "keptRemoved": [],
+        "removedUpstream": []
+      }
+    },
+    {
+      "path": "wiki/concepts/Design System.md",
+      "class": "wiki-owned",
+      "baselineTag": "v2.0.4",
+      "status": "skip",
+      "note": "design-system"
+    },
+    {
+      "path": "frontend/.claude/rules/design-baseline.md",
+      "class": "owned",
+      "baselineTag": "v2.0.4",
+      "status": "skip",
+      "note": "design-system"
+    }
+  ],
+  "regions": {
+    "awarenessOff": [],
+    "declarationsLoaded": [],
+    "droppedDeclarations": [],
+    "fallbacks": [],
+    "malformedDeclarations": [],
+    "regen": [],
+    "rewrittenPaths": [],
+    "unregeneratedPaths": []
+  },
+  "settings": {
+    "state": "regenerated",
+    "detail": ""
+  },
+  "labels": {
+    "state": "applied"
+  },
+  "adopterActions": []
+}

@@ -4,7 +4,11 @@
 # update-gaia-drift.sh: report the setup features a release lists that this
 # project has not decided yet, one token per line.
 #
-#   bash .gaia/scripts/update-gaia-drift.sh --features <path to the target bundle's .gaia/setup-features.json>
+#   bash .gaia/scripts/update-gaia-drift.sh --features <path to the target bundle's .gaia/setup-features.json> [--scope machine]
+#
+# `--scope machine` keeps only the machine-scope features and never runs the
+# admin probe (admin applies to project scope only). It is the one scope value
+# accepted; without the flag every undecided feature is reported.
 #
 # Tokens: `SETUP <id>`, `OWED_ADMIN <id>`, `APPLY <id> <reference>`,
 # `ASK <id> <reference>`, or one `DRIFT_FAILED <reason>`. Exit 0 always, except
@@ -16,13 +20,21 @@
 # substitutions this logic needs when they sit in a command's text.
 
 features=''
+scope=''
+scope_given=no
+usage_line="usage: update-gaia-drift.sh --features <path> [--scope machine]"
 while [ "$#" -gt 0 ]; do
   case "$1" in
-    --features) [ "$#" -ge 2 ] || { echo "usage: update-gaia-drift.sh --features <path>" >&2; exit 2; }; features="$2"; shift 2 ;;
-    *) echo "usage: update-gaia-drift.sh --features <path>" >&2; exit 2 ;;
+    --features) [ "$#" -ge 2 ] || { echo "$usage_line" >&2; exit 2; }; features="$2"; shift 2 ;;
+    --scope) [ "$#" -ge 2 ] || { echo "$usage_line" >&2; exit 2; }; scope="$2"; scope_given=yes; shift 2 ;;
+    *) echo "$usage_line" >&2; exit 2 ;;
   esac
 done
-[ -n "$features" ] || { echo "usage: update-gaia-drift.sh --features <path>" >&2; exit 2; }
+[ -n "$features" ] || { echo "$usage_line" >&2; exit 2; }
+case "$scope_given:$scope" in
+  no: | yes:machine) ;;
+  *) echo "$usage_line" >&2; exit 2 ;;
+esac
 
 drift_error_file="$(mktemp)"
 if ! drift_json="$(.gaia/cli/gaia setup drift --json --features "$features" 2>"$drift_error_file")" \
@@ -33,6 +45,12 @@ if ! drift_json="$(.gaia/cli/gaia setup drift --json --features "$features" 2>"$
   exit 0
 fi
 rm -f "$drift_error_file"
+
+# Only machine-scope features survive the filter, so the probe below finds no
+# project-scope admin feature and never runs.
+if [ "$scope" = machine ]; then
+  drift_json="$(jq -c '.undecided |= map(select(.scope == "machine"))' <<<"$drift_json")"
+fi
 
 # The admin probe runs once, and only when a project-scope admin feature is
 # due to be applied or asked. No GitHub origin or a failed probe is not an admin.

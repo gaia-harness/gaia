@@ -39,15 +39,13 @@ setup() {
 }
 
 @test "the why names every condition that stopped the removal" {
-  mkdir "$TREE/.gaia-merge"
-  printf 'p\n' >"$TREE/.gaia-merge/a.patch"
   printf 'edited\n' >>"$TREE/base"
   git -C "$TREE" commit -q -am more
   printf 'again\n' >>"$TREE/base"
   run bash "$CHECK" --tree "$TREE"
   [ "$status" -eq 1 ] || { printf '%s\n' "$output"; return 1; }
   remind
-  plain_output | grep -Fxq -- "- $TREE (branch $BRANCH): unresolved .gaia-merge/ files, uncommitted changes, 1 unpushed commit(s)" || { printf '%s\n' "$output"; return 1; }
+  plain_output | grep -Fxq -- "- $TREE (branch $BRANCH): uncommitted changes, 1 unpushed commit(s)" || { printf '%s\n' "$output"; return 1; }
 }
 
 @test "a CLEAR verdict records nothing" {

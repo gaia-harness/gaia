@@ -9,7 +9,7 @@ import {
 import {tmpdir} from 'node:os';
 import path from 'node:path';
 import {resolveRepoRootFromImportMeta} from '../util/repo-root-fixture.js';
-import {extractPathRefs, run} from './runtime-deps.js';
+import {ADOPTER_OWNED_SENTINELS, extractPathRefs, run} from './runtime-deps.js';
 import {SCAN_GLOBS} from './scan-globs.js';
 
 type ManifestFiles = Record<string, 'owned' | 'shared' | 'wiki-owned'>;
@@ -404,6 +404,31 @@ describe('release runtime-deps CLI', () => {
 
     const exit = run([], {cwd: sandbox.rootDir});
     expect(exit).toBe(0);
+  });
+
+  test('allowlists the adopter-owned update decision log, and reports it once the sentinel is gone', () => {
+    sandbox.writeManifest({
+      '.claude/hooks/wiki-session-start.sh': 'owned',
+      '.gaia/cli/gaia': 'owned',
+    });
+    sandbox.writeFile(
+      '.claude/hooks/wiki-session-start.sh',
+      ['#!/usr/bin/env bash', 'cat .gaia/update-decisions.json', ''].join('\n')
+    );
+
+    expect(run([], {cwd: sandbox.rootDir})).toBe(0);
+
+    const sentinels = ADOPTER_OWNED_SENTINELS as Set<string>;
+    sentinels.delete('.gaia/update-decisions.json');
+
+    try {
+      stdio.outputs.length = 0;
+
+      expect(run([], {cwd: sandbox.rootDir})).toBe(1);
+      expect(stdio.outputs.join('')).toContain('.gaia/update-decisions.json');
+    } finally {
+      sentinels.add('.gaia/update-decisions.json');
+    }
   });
 
   test('allowlists runtime-allocated prefixes (.gaia/local)', () => {

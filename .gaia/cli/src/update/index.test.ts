@@ -81,7 +81,20 @@ describe('update router', () => {
 
     const help = stdio.outputs.join('');
     expect(help).toContain('merge-workspace');
+    expect(help).toContain('merge-package');
+    expect(help).toContain('lockfile-command');
     // The generic per-manifest-class walk is gone from the help surface.
     expect(help).not.toContain('Three-way file compare per manifest class');
   });
+
+  test.each(['merge-package', 'lockfile-command'])(
+    'routes `%s` to its handler instead of the unknown-subcommand error',
+    async (subcommand) => {
+      const exit = await run([subcommand, '--help']);
+
+      expect(exit).toBe(EXIT_CODES.OK);
+      expect(stdio.outputs.join('')).toContain(`gaia update ${subcommand}`);
+      expect(stdio.errors.join('')).not.toContain('unknown_subcommand');
+    }
+  );
 });

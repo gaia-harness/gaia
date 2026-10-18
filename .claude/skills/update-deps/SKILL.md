@@ -37,6 +37,15 @@ Decide the run mode in this order. The first matching mode wins, and the `/gaia-
    git worktree list --porcelain
    ```
    When any record holds a `refs/heads/deps/` branch, or a `refs/heads/worktree-deps+` branch (a run interrupted between creating the worktree and renaming its branch), stop before discovery and create nothing. Report its path and branch with two next steps: re-run `/update-deps` inside it, which continues there; or remove it with the removal commands in the worktree notice (`references/worktree.md`, `## The worktree notice`).
+
+   Then, still before discovery, run the pull gate:
+
+   ```bash
+   . .gaia/scripts/main-only-lib.sh
+   gaia_pull_gate "/update-deps"
+   ```
+
+   On a non-zero exit, read `.claude/skills/update-gaia/references/pull-gate.md` and follow it with `/update-deps`, this run's original arguments and the exit code, before anything below creates a branch, worktree, claim or SPEC id.
 5. **Any other branch.** The run works in place: no worktree, no branch, push only. `SHOULD_CREATE_WORKTREE=false`, and `<main checkout path>` is `git rev-parse --show-toplevel`.
 
 In modes 1 and 2 `<main checkout path>` is also `git rev-parse --show-toplevel`: the cache bust in Branch creation needs it in every mode.

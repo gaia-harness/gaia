@@ -48,19 +48,19 @@ check_tree() {
   run bash "$CHECK" --tree "$TREE"
 }
 
-@test "an absent .gaia-merge and a clean pushed tree is CLEAR" {
+@test "a clean pushed tree is CLEAR" {
   check_tree
   [ "$status" -eq 0 ] || { printf '%s\n' "$output"; return 1; }
   [ "$output" = "CLEAR" ] || { printf '%s\n' "$output"; return 1; }
 }
 
-@test "an empty .gaia-merge is CLEAR" {
+@test "an empty .gaia-merge directory is CLEAR because git ignores empty directories" {
   mkdir "$TREE/.gaia-merge"
   check_tree
   [ "$status" -eq 0 ] || { printf '%s\n' "$output"; return 1; }
 }
 
-@test "a populated .gaia-backup with no .gaia-merge is CLEAR" {
+@test "a populated .gaia-backup that is ignored is CLEAR" {
   mkdir "$TREE/.gaia-backup"
   printf 'x\n' >"$TREE/.gaia-backup/old.txt"
   printf '.gaia-backup/\n' >>"$MAIN/.git/info/exclude"
@@ -68,29 +68,16 @@ check_tree() {
   [ "$status" -eq 0 ] || { printf '%s\n' "$output"; return 1; }
 }
 
-@test "failing state: .gaia-merge files are listed under PENDING and stop the removal" {
-  mkdir -p "$TREE/.gaia-merge/nested"
-  printf 'p\n' >"$TREE/.gaia-merge/a.patch"
-  printf 'n\n' >"$TREE/.gaia-merge/package.json.notes"
-  printf 'd\n' >"$TREE/.gaia-merge/nested/deep.patch"
-  check_tree
-  [ "$status" -eq 1 ] || { printf '%s\n' "$output"; return 1; }
-  [ "$(printf '%s\n' "$output" | head -n 1)" = "PENDING" ] || { printf '%s\n' "$output"; return 1; }
-  printf '%s\n' "$output" | grep -Fxq ".gaia-merge/a.patch" || { printf '%s\n' "$output"; return 1; }
-  printf '%s\n' "$output" | grep -Fxq ".gaia-merge/package.json.notes" || { printf '%s\n' "$output"; return 1; }
-  printf '%s\n' "$output" | grep -Fxq ".gaia-merge/nested/deep.patch" || { printf '%s\n' "$output"; return 1; }
-  printf '%s\n' "$output" | grep -Fxq "Worktree: $TREE" || { printf '%s\n' "$output"; return 1; }
-  printf '%s\n' "$output" | grep -Fq "Next step:" || { printf '%s\n' "$output"; return 1; }
-  printf '%s\n' "$output" | grep -Fxq "DIRTY" && { printf '%s\n' "$output"; return 1; }
-  true
-}
-
-@test "a .gaia-merge file does not also count as a dirty tree" {
+@test "failing state: a populated .gaia-merge is an ordinary untracked directory and reads DIRTY" {
   mkdir "$TREE/.gaia-merge"
   printf 'p\n' >"$TREE/.gaia-merge/a.patch"
   check_tree
-  [ "$status" -eq 1 ] || return 1
+  [ "$status" -eq 1 ] || { printf '%s\n' "$output"; return 1; }
+  [ "$(printf '%s\n' "$output" | head -n 1)" = "DIRTY" ] || { printf '%s\n' "$output"; return 1; }
+  printf '%s\n' "$output" | grep -Fq "?? .gaia-merge/" || { printf '%s\n' "$output"; return 1; }
+  printf '%s\n' "$output" | grep -Fxq "PENDING" && { printf '%s\n' "$output"; return 1; }
   [ "$(printf '%s\n' "$output" | grep -c '^Next step:')" -eq 1 ] || { printf '%s\n' "$output"; return 1; }
+  true
 }
 
 @test "no --tree is a usage refusal" {
@@ -146,17 +133,6 @@ check_tree() {
   git -C "$MAIN" update-ref -d "refs/remotes/origin/$BRANCH"
   check_tree
   [ "$status" -eq 0 ] || { printf '%s\n' "$output"; return 1; }
-}
-
-@test "failing state: a .gaia-merge file plus a dirty file prints both blocks and both next steps" {
-  mkdir "$TREE/.gaia-merge"
-  printf 'p\n' >"$TREE/.gaia-merge/a.patch"
-  printf 'edited\n' >>"$TREE/base"
-  check_tree
-  [ "$status" -eq 1 ] || { printf '%s\n' "$output"; return 1; }
-  printf '%s\n' "$output" | grep -Fxq "PENDING" || { printf '%s\n' "$output"; return 1; }
-  printf '%s\n' "$output" | grep -Fxq "DIRTY" || { printf '%s\n' "$output"; return 1; }
-  [ "$(printf '%s\n' "$output" | grep -c '^Next step:')" -eq 2 ] || { printf '%s\n' "$output"; return 1; }
 }
 
 # --- red twins: a mutated copy of the script must fail the matching case ---

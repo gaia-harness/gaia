@@ -427,6 +427,9 @@ unowned:
   - ".gaia/tests/**/*.json"
   - ".gaia/tests/**/*.tsv"
   - ".gaia/tests/**/*.yml"
+  # Merge-report fixture corpus: baseline, latest and adopter trees plus the
+  # candidate files the report suite reads as input data; executed by nothing.
+  - ".gaia/tests/lib/fixtures/update-gaia-report/**"
   # Scoped to `tests/` rather than the whole subtree: the two prompts the
   # forensics run executes are named individually above. What this entry
   # covers is the fixture corpus -- malformed and

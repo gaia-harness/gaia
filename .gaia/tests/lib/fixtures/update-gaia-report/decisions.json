@@ -1,0 +1,5 @@
+{"schemaVersion":1,"decisions":[
+  {"path":"deferred.md","decision":"deferred","tag":"v2.0.4","baselineTag":"v2.0.0","reason":"later"},
+  {"path":"gone.md","decision":"deferred","tag":"v2.0.4","baselineTag":"v2.0.0"},
+  {"path":"kept-out.md","decision":"keep","tag":"v2.0.4","baselineTag":"v2.0.0"}
+]}

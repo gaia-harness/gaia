@@ -1,0 +1,17 @@
+# Review checklist
+
+## Naming
+
+- Components use PascalCase.
+- Hooks start with `use`.
+
+## Testing
+
+- Every component has a story.
+- Every hook has a unit test.
+
+## Accessibility
+
+- Every image has alt text.
+- Every form control has a label.
+- Focus order follows the visual order.

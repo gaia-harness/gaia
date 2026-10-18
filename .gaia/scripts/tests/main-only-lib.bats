@@ -459,6 +459,7 @@ CALL_SITE_FILES=(
   ".claude/skills/release-notes/SKILL.md"
   ".claude/skills/update-deps/SKILL.md"
   ".claude/skills/update-gaia/SKILL.md"
+  ".claude/commands/gaia-residue.md"
 )
 CALL_SITE_FLOW_NAMES=(
   "/gaia-cleanse"
@@ -473,6 +474,7 @@ CALL_SITE_FLOW_NAMES=(
   "/release-notes"
   "/update-deps"
   "/update-gaia"
+  "/gaia-residue"
 )
 
 # The flows that must never carry the refusal: each provisions or drives
@@ -519,6 +521,7 @@ EXPECTED_DISPATCHER_FILES=(
   ".claude/commands/setup-gaia.md"
   ".claude/skills/gaia-wiki/SKILL.md"
   "frontend/.claude/skills/gaia-react-perf/SKILL.md"
+  ".claude/commands/gaia-residue.md"
 )
 
 # extract_block <file>: pulls the fenced code block (```...```) that
@@ -740,4 +743,221 @@ assert_prefix_pins() {
 @test "update skills' call sites: own branch passes, every other worktree refuses like no prefix, under zsh" {
   command -v zsh >/dev/null 2>&1 || skip "zsh not installed"
   assert_prefix_pins zsh
+}
+
+# ---------- gaia_pull_gate ----------
+
+# make_gate_repo <local_version> <cache_json>: a repo carrying the libraries, a
+# live `.gaia/VERSION` (omitted when <local_version> is "-") and an
+# update-check cache (omitted when <cache_json> is "-"). Sets REPO and GH_LOG,
+# and puts a logging `gh` stub first on PATH through GATE_PATH.
+make_gate_repo() {
+  local local_version="$1" cache_json="$2" stub_directory
+  make_repo
+  install_libraries "$REPO"
+  [ "$local_version" = "-" ] || printf '%s\n' "$local_version" >"$REPO/.gaia/VERSION"
+  if [ "$cache_json" != "-" ]; then
+    mkdir -p "$REPO/.gaia/local/cache/shared"
+    printf '%s' "$cache_json" >"$REPO/.gaia/local/cache/shared/update-check.json"
+  fi
+  stub_directory="$REPO/.gate-stub-bin"
+  GH_LOG="$REPO/.gate-gh.log"
+  mkdir -p "$stub_directory"
+  : >"$GH_LOG"
+  printf '#!/bin/sh\necho "gh $*" >>"%s"\nexit 0\n' "$GH_LOG" >"$stub_directory/gh"
+  chmod +x "$stub_directory/gh"
+  GATE_PATH="$stub_directory:$PATH"
+}
+
+# run_gate <directory> <shell> <command_name> [library]: sources the library
+# (the repo's own copy unless <library> is given) and calls the gate.
+run_gate() {
+  local directory="$1" shell_name="$2" command_name="$3" library="${4:-}"
+  [ -n "$library" ] || library="$REPO/.gaia/scripts/main-only-lib.sh"
+  run run_in "$directory" -- env PATH="$GATE_PATH" "$shell_name" -c '. "$1"; gaia_pull_gate "$2"' _ "$library" "$command_name"
+}
+
+GATE_BEHIND_CACHE='{"gaiaOriginVersion":"2.0.4","gaiaHasUpdate":false,"gaiaUpdateClaims":[]}'
+GATE_BEHIND_LINE="GAIA 2.0.4 is on origin/main and this checkout has 2.0.3. New work needs it first."
+
+assert_gate_silent_pass() {
+  [ "$status" -eq 0 ] || { echo "expected exit 0, got $status; output: $output" >&2; return 1; }
+  [ -z "$output" ] || { echo "expected no output, got: $output" >&2; return 1; }
+  [ ! -s "$GH_LOG" ] || { echo "gate called gh: $(cat "$GH_LOG")" >&2; return 1; }
+}
+
+@test "pull gate: behind from the main checkout returns 1 with the exact line" {
+  make_gate_repo 2.0.3 "$GATE_BEHIND_CACHE"
+  run_gate "$REPO" bash /gaia-plan
+  [ "$status" -eq 1 ]
+  [ "$output" = "$GATE_BEHIND_LINE" ]
+  [ ! -s "$GH_LOG" ]
+}
+
+@test "pull gate: behind from a linked worktree returns 2 with the next step naming the main root and command" {
+  make_gate_repo 2.0.3 "$GATE_BEHIND_CACHE"
+  make_worktree "$REPO" gate-w gate-branch
+  run_gate "$WORKTREE" bash /gaia-plan
+  [ "$status" -eq 2 ]
+  local expected="$GATE_BEHIND_LINE
+Next step: run /update-gaia in the main checkout at $REPO to pull, then start /gaia-plan again."
+  [ "$output" = "$expected" ]
+  [ ! -s "$GH_LOG" ]
+}
+
+@test "pull gate: a worktree session reads the main checkout's live version, not its own copy" {
+  make_gate_repo 2.0.3 "$GATE_BEHIND_CACHE"
+  make_worktree "$REPO" gate-live gate-live-branch
+  printf '2.0.4\n' >"$WORKTREE/.gaia/VERSION"
+  run_gate "$WORKTREE" bash /gaia-plan
+  [ "$status" -eq 2 ]
+}
+
+@test "pull gate: a repo whose origin has only master names origin/master" {
+  make_gate_repo 2.0.3 "$GATE_BEHIND_CACHE"
+  git -C "$REPO" update-ref refs/remotes/origin/master HEAD
+  run_gate "$REPO" bash /gaia-plan
+  [ "$status" -eq 1 ]
+  [ "$output" = "GAIA 2.0.4 is on origin/master and this checkout has 2.0.3. New work needs it first." ]
+}
+
+@test "pull gate: origin/HEAD names the default branch when set" {
+  make_gate_repo 2.0.3 "$GATE_BEHIND_CACHE"
+  git -C "$REPO" update-ref refs/remotes/origin/trunk HEAD
+  git -C "$REPO" symbolic-ref refs/remotes/origin/HEAD refs/remotes/origin/trunk
+  run_gate "$REPO" bash /gaia-plan
+  [ "$status" -eq 1 ]
+  [ "$output" = "GAIA 2.0.4 is on origin/trunk and this checkout has 2.0.3. New work needs it first." ]
+}
+
+@test "pull gate: equal versions pass silently" {
+  make_gate_repo 2.0.4 "$GATE_BEHIND_CACHE"
+  run_gate "$REPO" bash /gaia-plan
+  assert_gate_silent_pass
+}
+
+@test "pull gate: a local version ahead of origin passes silently" {
+  make_gate_repo 2.0.5 "$GATE_BEHIND_CACHE"
+  run_gate "$REPO" bash /gaia-plan
+  assert_gate_silent_pass
+}
+
+@test "pull gate: versions compare numerically, not as strings" {
+  make_gate_repo 2.0.9 '{"gaiaOriginVersion":"2.0.10"}'
+  run_gate "$REPO" bash /gaia-plan
+  [ "$status" -eq 1 ]
+  make_gate_repo 2.0.10 '{"gaiaOriginVersion":"2.0.9"}'
+  run_gate "$REPO" bash /gaia-plan
+  assert_gate_silent_pass
+}
+
+@test "pull gate: a prerelease is below its release" {
+  make_gate_repo 2.0.4-rc.1 "$GATE_BEHIND_CACHE"
+  run_gate "$REPO" bash /gaia-plan
+  [ "$status" -eq 1 ]
+  [ "$output" = "GAIA 2.0.4 is on origin/main and this checkout has 2.0.4-rc.1. New work needs it first." ]
+  make_gate_repo 2.0.4 '{"gaiaOriginVersion":"2.0.4-rc.1"}'
+  run_gate "$REPO" bash /gaia-plan
+  assert_gate_silent_pass
+}
+
+@test "pull gate: missing cache passes silently" {
+  make_gate_repo 2.0.3 -
+  run_gate "$REPO" bash /gaia-plan
+  assert_gate_silent_pass
+}
+
+@test "pull gate: unreadable cache passes silently" {
+  make_gate_repo 2.0.3 "not json {"
+  run_gate "$REPO" bash /gaia-plan
+  assert_gate_silent_pass
+}
+
+@test "pull gate: cache without gaiaOriginVersion passes silently" {
+  make_gate_repo 2.0.3 '{"gaiaHasUpdate":true}'
+  run_gate "$REPO" bash /gaia-plan
+  assert_gate_silent_pass
+}
+
+@test "pull gate: null gaiaOriginVersion passes silently" {
+  make_gate_repo 2.0.3 '{"gaiaOriginVersion":null}'
+  run_gate "$REPO" bash /gaia-plan
+  assert_gate_silent_pass
+}
+
+@test "pull gate: non-version gaiaOriginVersion passes silently" {
+  local bad
+  for bad in '"latest"' '"2.0"' '"2.0.x"' '"v2.0.4"' '7'; do
+    make_gate_repo 2.0.3 "{\"gaiaOriginVersion\":$bad}"
+    run_gate "$REPO" bash /gaia-plan
+    assert_gate_silent_pass || { echo "origin value $bad did not pass" >&2; return 1; }
+  done
+}
+
+@test "pull gate: missing local VERSION passes silently" {
+  make_gate_repo - "$GATE_BEHIND_CACHE"
+  run_gate "$REPO" bash /gaia-plan
+  assert_gate_silent_pass
+}
+
+@test "pull gate: non-version local VERSION passes silently" {
+  make_gate_repo "not-a-version" "$GATE_BEHIND_CACHE"
+  run_gate "$REPO" bash /gaia-plan
+  assert_gate_silent_pass
+}
+
+@test "pull gate: a teammate's claim with origin equal to local passes" {
+  make_gate_repo 2.0.4 '{"gaiaOriginVersion":"2.0.4","gaiaHasUpdate":false,"gaiaUpdateClaims":[{"login":"teammate","branch":"update/2.0.5","pr":1}]}'
+  run_gate "$REPO" bash /gaia-plan
+  assert_gate_silent_pass
+}
+
+@test "pull gate: update available with origin equal to local passes" {
+  make_gate_repo 2.0.4 '{"gaiaOriginVersion":"2.0.4","gaiaHasUpdate":true,"gaiaLatest":"2.0.9"}'
+  run_gate "$REPO" bash /gaia-plan
+  assert_gate_silent_pass
+}
+
+@test "pull gate: sourced under zsh it still returns 1 when behind, and 2 from a worktree" {
+  command -v zsh >/dev/null 2>&1 || skip "zsh not installed"
+  make_gate_repo 2.0.3 "$GATE_BEHIND_CACHE"
+  make_worktree "$REPO" gate-zsh gate-zsh-branch
+  run_gate "$REPO" zsh /gaia-plan
+  [ "$status" -eq 1 ]
+  [ "$output" = "$GATE_BEHIND_LINE" ]
+  run_gate "$WORKTREE" zsh /gaia-plan
+  [ "$status" -eq 2 ]
+  grep -qF -- "Next step: run /update-gaia in the main checkout at $REPO to pull, then start /gaia-plan again." <<<"$output" || return 1
+}
+
+@test "pull gate: relative source from a checkout root works as the call sites run it" {
+  make_gate_repo 2.0.3 "$GATE_BEHIND_CACHE"
+  run run_in "$REPO" -- env PATH="$GATE_PATH" bash -c '. .gaia/scripts/main-only-lib.sh; gaia_pull_gate "/gaia-plan"'
+  [ "$status" -eq 1 ]
+  [ "$output" = "$GATE_BEHIND_LINE" ]
+}
+
+@test "pull gate mutation: an inverted comparison fails the behind case" {
+  make_gate_repo 2.0.3 "$GATE_BEHIND_CACHE"
+  local mutant="$BATS_TEST_TMPDIR/mutant-lib"
+  mkdir -p "$mutant"
+  cp "$REPO/.gaia/scripts/main-root-lib.sh" "$mutant/"
+  sed 's/^  _gaia_pull_gate_is_behind "\$local_version" "\$origin_version" || return 0$/  _gaia_pull_gate_is_behind "$local_version" "$origin_version" \&\& return 0/' \
+    "$REPO/.gaia/scripts/main-only-lib.sh" >"$mutant/main-only-lib.sh"
+  ! cmp -s "$mutant/main-only-lib.sh" "$REPO/.gaia/scripts/main-only-lib.sh" || { echo "mutation did not apply" >&2; return 1; }
+  run_gate "$REPO" bash /gaia-plan "$mutant/main-only-lib.sh"
+  [ "$status" -ne 1 ]
+}
+
+@test "pull gate mutation: without the linked-worktree branch a worktree returns 1, not 2" {
+  make_gate_repo 2.0.3 "$GATE_BEHIND_CACHE"
+  make_worktree "$REPO" gate-mut gate-mut-branch
+  local mutant="$BATS_TEST_TMPDIR/mutant-lib"
+  mkdir -p "$mutant"
+  cp "$REPO/.gaia/scripts/main-root-lib.sh" "$mutant/"
+  sed 's/^  if gaia_is_linked_worktree; then$/  if false; then/' \
+    "$REPO/.gaia/scripts/main-only-lib.sh" >"$mutant/main-only-lib.sh"
+  ! cmp -s "$mutant/main-only-lib.sh" "$REPO/.gaia/scripts/main-only-lib.sh" || { echo "mutation did not apply" >&2; return 1; }
+  run_gate "$WORKTREE" bash /gaia-plan "$mutant/main-only-lib.sh"
+  [ "$status" -eq 1 ]
 }

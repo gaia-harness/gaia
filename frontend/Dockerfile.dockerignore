@@ -49,7 +49,6 @@ wiki
 .gaia/local.bak.*
 **/.gaia-backup
 **/.gaia-ports
-**/.gaia-merge
 **/.bats-shards-scratch.*
 .serena/cache
 .serena/project.local.yml

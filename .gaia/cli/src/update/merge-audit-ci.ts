@@ -17,21 +17,11 @@
  * file; the `/update-gaia` skill applies `applied[]` with the Edit tool so
  * comments, key order, and quote style survive.
  *
- * Verdict table (identical to the package.json / pnpm-workspace steps), per
- * roster member, with baseline `B` / latest `L` / adopter `A`:
- *
- *   in B and L, B == L                     → no-op  (adopter's value stands)
- *   in B and L, B != L, A present, A == B  → apply  (take latest)
- *   in B and L, B != L, A present, A != B  → conflict (keep adopter, note both)
- *   in B and L, B != L, A removed          → suggestion (removed-then-changed)
- *   in L, not in B                         → suggestion (added)
- *   in B, not in L                         → no-op  (adopter keeps theirs)
- *
- * The `auditors` roster list is keyed on member `name` exactly (not
- * case-folded: a member name is an agent filename) and iterated the same
- * keys(B) ∪ keys(L) way. **One row is
- * changed for this section only**: `in L, not in B` resolves to `apply`, not
- * `suggestion (added)`. See the comment at the roster-merge call site for why.
+ * The verdict table, the deferred-baseline override and the conflict
+ * recommendation are shared with `merge-package` and `merge-workspace`: see
+ * `field-verdict.ts`. The roster is keyed on member `name` exactly (not
+ * case-folded: a member name is an agent filename) and iterated keys(B) ∪
+ * keys(L), so a member the adopter added of their own is never visited.
  *
  * Object-map dispatch and no-switch style per the project's typescript rules.
  */
@@ -42,13 +32,31 @@ import {EXIT_CODES} from '../exit.js';
 import {structuredError} from '../stderr.js';
 import {parseValueFlags} from '../util/parse-value-flags.js';
 import type {ValueFlagMap} from '../util/parse-value-flags.js';
+import {
+  absent,
+  asRecord,
+  classifyTriples,
+  extractDeferredBaselines,
+  renderHumanReport,
+  triplesWithDeferred,
+} from './field-verdict.js';
+import type {
+  FieldMergeReport,
+  Presence,
+  Triple,
+  VerdictItem,
+} from './field-verdict.js';
 
-const HELP_TEXT = `Usage: gaia update merge-audit-ci --baseline <file> --latest <file> --current <file> [--json]
+const HELP_TEXT = `Usage: gaia update merge-audit-ci --baseline <file> --latest <file> --current <file> [--deferred-baseline <key>=<file>]... [--json]
 
   Field-aware three-way verdict for .gaia/audit-ci.yml. Reads three YAML files
   (baseline / latest tarball + working-tree current), classifies the auditors
-  roster members, and reports {applied, conflicts, suggestions} (JSON with
-  --json, a human summary otherwise).
+  roster members, and reports {applied, conflicts, alreadyLatest, keptRemoved,
+  removedUpstream} (JSON with --json, a human summary otherwise).
+
+  --deferred-baseline <key>=<file> reads that key's baseline from <file>
+  instead of --baseline, so a key deferred at an earlier bundle is merged
+  against it. <key> is auditors.<member name>. Repeatable.
 
   Read-only: never writes the file. The /update-gaia skill applies the 'applied'
   entries with the Edit tool to preserve comments and order.
@@ -63,25 +71,14 @@ const HELP_TOKENS = new Set(['--help', '-h', 'help']);
 /** The GAIA-authored-and-adopter-extensible roster list. */
 const ROSTER_SECTION = 'auditors';
 
-export type AuditCiMergeReport = {
-  applied: AuditCiVerdictItem[];
-  conflicts: AuditCiVerdictItem[];
-  suggestions: AuditCiVerdictItem[];
-};
+export type AuditCiMergeReport = FieldMergeReport;
 
-export type AuditCiVerdictItem = {
-  adopter?: unknown;
-  baseline?: unknown;
-  key: string;
-  kind: 'entry' | 'key';
-  latest?: unknown;
-  reason?: 'added' | 'removed-then-changed';
-  section?: string;
-};
+export type AuditCiVerdictItem = VerdictItem;
 
 type Flags = {
   baseline: string;
   current: string;
+  deferred: ReadonlyMap<string, string>;
   json: boolean;
   latest: string;
 };
@@ -96,7 +93,11 @@ const VALUE_FLAGS: ValueFlagMap<keyof Flags> = {
 };
 
 const parseFlags = (argv: readonly string[]): ParsedFlagsResult => {
-  const parsed = parseValueFlags(argv, VALUE_FLAGS);
+  const split = extractDeferredBaselines(argv);
+
+  if (!split.ok) return split;
+
+  const parsed = parseValueFlags(split.rest, VALUE_FLAGS);
 
   if (!parsed.ok) return parsed;
 
@@ -113,44 +114,11 @@ const parseFlags = (argv: readonly string[]): ParsedFlagsResult => {
   if (current === undefined)
     return {message: '--current is required', ok: false};
 
-  return {flags: {baseline, current, json, latest}, ok: true};
+  return {
+    flags: {baseline, current, deferred: split.deferred, json, latest},
+    ok: true,
+  };
 };
-
-const deepEqual = (a: unknown, b: unknown): boolean => {
-  if (a === b) return true;
-  if (a === null || b === null) return a === b;
-  if (typeof a !== typeof b) return false;
-
-  if (Array.isArray(a) || Array.isArray(b)) {
-    if (!Array.isArray(a) || !Array.isArray(b)) return false;
-    if (a.length !== b.length) return false;
-
-    return a.every((value, index) => deepEqual(value, b[index]));
-  }
-
-  if (typeof a === 'object' && typeof b === 'object') {
-    const aKeys = Object.keys(a);
-    const bKeys = Object.keys(b);
-
-    if (aKeys.length !== bKeys.length) return false;
-
-    return aKeys.every((key) =>
-      deepEqual(
-        (a as Record<string, unknown>)[key],
-        (b as Record<string, unknown>)[key]
-      )
-    );
-  }
-
-  return false;
-};
-
-type Presence = {has: boolean; value: unknown};
-
-const asRecord = (value: unknown): Record<string, unknown> =>
-  typeof value === 'object' && value !== null && !Array.isArray(value) ?
-    (value as Record<string, unknown>)
-  : {};
 
 /**
  * Parse a YAML `auditors:` list into a name → member-config map. Each
@@ -192,178 +160,35 @@ const parseRoster = (value: unknown): Map<string, RosterMember> => {
   return entries;
 };
 
-type Verdict =
-  'apply' | 'conflict' | 'noop' | 'suggest-add' | 'suggest-removed';
-
-type VerdictInputs = {
-  a: Presence;
-  /**
-   * The verdict for the `in L, not in B` row: every section defaults to
-   * `suggest-add`, except the `auditors` roster (see the roster-merge call
-   * site), which passes `apply`.
-   */
-  addedVerdict?: 'apply' | 'suggest-add';
-  b: Presence;
-  l: Presence;
-};
-
-const computeVerdict = ({
-  a,
-  addedVerdict = 'suggest-add',
-  b,
-  l,
-}: VerdictInputs): Verdict => {
-  if (b.has && l.has) {
-    if (deepEqual(b.value, l.value)) return 'noop';
-    if (!a.has) return 'suggest-removed';
-    if (deepEqual(a.value, b.value)) return 'apply';
-
-    return 'conflict';
-  }
-
-  if (l.has) return addedVerdict;
-
-  return 'noop';
-};
-
-type Triple = {
-  a: Presence;
-  addedVerdict?: 'apply' | 'suggest-add';
-  b: Presence;
-  key: string;
-  kind: 'entry' | 'key';
-  l: Presence;
-  section?: string;
-};
-
-const buildItem = (triple: Triple): AuditCiVerdictItem => {
-  const item: AuditCiVerdictItem = {key: triple.key, kind: triple.kind};
-
-  if (triple.section !== undefined) item.section = triple.section;
-  if (triple.b.has) item.baseline = triple.b.value;
-  if (triple.l.has) item.latest = triple.l.value;
-  if (triple.a.has) item.adopter = triple.a.value;
-
-  return item;
-};
-
-const sortKey = (item: AuditCiVerdictItem): string =>
-  `${item.section ?? ''} ${item.key}`;
-
-const bySortKey = (a: AuditCiVerdictItem, b: AuditCiVerdictItem): number =>
-  sortKey(a).localeCompare(sortKey(b));
-
 const rosterPresence = (
   entries: Map<string, RosterMember>,
   name: string
 ): Presence => {
   const entry = entries.get(name);
 
-  return entry === undefined ?
-      {has: false, value: undefined}
-    : {has: true, value: entry};
+  return entry === undefined ? absent : {has: true, value: entry};
 };
 
-const computeReport = (
-  baseline: Record<string, unknown>,
-  latest: Record<string, unknown>,
-  current: Record<string, unknown>
-): AuditCiMergeReport => {
-  const applied: AuditCiVerdictItem[] = [];
-  const conflicts: AuditCiVerdictItem[] = [];
-  const suggestions: AuditCiVerdictItem[] = [];
+const buildTriples =
+  (latest: Record<string, unknown>, current: Record<string, unknown>) =>
+  (baseline: Record<string, unknown>): Triple[] => {
+    const baseRoster = parseRoster(baseline[ROSTER_SECTION]);
+    const latestRoster = parseRoster(latest[ROSTER_SECTION]);
+    const currentRoster = parseRoster(current[ROSTER_SECTION]);
+    const rosterNames = [
+      ...new Set([...baseRoster.keys(), ...latestRoster.keys()]),
+    ];
 
-  const triples: Triple[] = [];
-
-  // auditors: the roster is GAIA-authored and adopter-extensible at once. It
-  // merges over keys(B) ∪ keys(L), keyed on member `name` exactly, with exactly
-  // one changed row: `in L, not in B` (a GAIA-authored member the adopter's file
-  // has never seen) resolves to `apply`, not `suggest-add`. Every other
-  // section treats that row as an opt-in suggestion, surfaced but never
-  // written; a roster member is a capability the adopter cannot opt into if
-  // it never arrives, so leaving it a suggestion would mean a new
-  // GAIA-authored member (e.g. code-audit-github-workflows) reaches no
-  // existing adopter. This is a
-  // named, deliberate divergence from every other section's added-row
-  // semantics, not an inconsistency to "fix". Bounded precisely: an
-  // adopter's *edit* to a GAIA-authored member is still a conflict below, and
-  // an adopter's *own* member (present only in current) is never visited.
-  const baseRoster = parseRoster(baseline[ROSTER_SECTION]);
-  const latestRoster = parseRoster(latest[ROSTER_SECTION]);
-  const currentRoster = parseRoster(current[ROSTER_SECTION]);
-  const rosterNames = [
-    ...new Set([...baseRoster.keys(), ...latestRoster.keys()]),
-  ];
-
-  for (const name of rosterNames) {
-    triples.push({
+    return rosterNames.map((name) => ({
       a: rosterPresence(currentRoster, name),
-      addedVerdict: 'apply',
       b: rosterPresence(baseRoster, name),
       key: name,
-      kind: 'entry',
+      kind: 'entry' as const,
       l: rosterPresence(latestRoster, name),
       section: ROSTER_SECTION,
-    });
-  }
-
-  for (const triple of triples) {
-    const verdict = computeVerdict({
-      a: triple.a,
-      addedVerdict: triple.addedVerdict,
-      b: triple.b,
-      l: triple.l,
-    });
-
-    if (verdict !== 'noop') {
-      const item = buildItem(triple);
-
-      if (verdict === 'apply') {
-        applied.push(item);
-      } else if (verdict === 'conflict') {
-        conflicts.push(item);
-      } else {
-        item.reason =
-          verdict === 'suggest-add' ? 'added' : 'removed-then-changed';
-        suggestions.push(item);
-      }
-    }
-  }
-
-  return {
-    applied: applied.toSorted(bySortKey),
-    conflicts: conflicts.toSorted(bySortKey),
-    suggestions: suggestions.toSorted(bySortKey),
+      versionValued: false,
+    }));
   };
-};
-
-const printHuman = (report: AuditCiMergeReport): void => {
-  const lines = [
-    'gaia update merge-audit-ci',
-    `  Applied:     ${report.applied.length}`,
-    `  Conflicts:   ${report.conflicts.length}`,
-    `  Suggestions: ${report.suggestions.length}`,
-  ];
-
-  const label = (item: AuditCiVerdictItem): string =>
-    item.section === undefined ? item.key : `${item.section}.${item.key}`;
-
-  const sections: [string, readonly AuditCiVerdictItem[]][] = [
-    ['Applied', report.applied],
-    ['Conflicts', report.conflicts],
-    ['Suggestions', report.suggestions],
-  ];
-
-  for (const [heading, items] of sections) {
-    if (items.length > 0) {
-      lines.push('', `${heading}:`);
-
-      for (const item of items) lines.push(`  ${label(item)}`);
-    }
-  }
-
-  process.stdout.write(`${lines.join('\n')}\n`);
-};
 
 type LoadResult =
   | {
@@ -438,8 +263,19 @@ export const run = (
   ];
 
   const roots: Record<string, unknown>[] = [];
+  const deferredRoots = new Map<string, Record<string, unknown>>();
+  const deferredInputs: [string, string, string][] = [
+    ...parsed.flags.deferred,
+  ].map(([key, file]) => [
+    key,
+    `deferred baseline ${key}`,
+    resolvePath(cwd, file),
+  ]);
 
-  for (const [role, absPath] of inputs) {
+  for (const [key, role, absPath] of [
+    ...inputs.map(([name, file]): [string, string, string] => ['', name, file]),
+    ...deferredInputs,
+  ]) {
     const result = loadAuditCi(absPath, role);
 
     if (!result.ok) {
@@ -452,7 +288,11 @@ export const run = (
       return EXIT_CODES.UNKNOWN_SUBCOMMAND;
     }
 
-    roots.push(result.root);
+    if (key === '') {
+      roots.push(result.root);
+    } else {
+      deferredRoots.set(key, result.root);
+    }
   }
 
   const [baseline, latest, current] = roots as [
@@ -460,12 +300,16 @@ export const run = (
     Record<string, unknown>,
     Record<string, unknown>,
   ];
-  const report = computeReport(baseline, latest, current);
+  const report = classifyTriples(
+    triplesWithDeferred(buildTriples(latest, current), baseline, deferredRoots)
+  );
 
   if (parsed.flags.json) {
     process.stdout.write(`${JSON.stringify(report)}\n`);
   } else {
-    printHuman(report);
+    process.stdout.write(
+      renderHumanReport('gaia update merge-audit-ci', report)
+    );
   }
 
   return EXIT_CODES.OK;
