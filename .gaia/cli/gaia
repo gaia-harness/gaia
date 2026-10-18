@@ -46912,7 +46912,6 @@ var refreshWikiDriftInCache = (repoRoot) => {
 };
 
 // src/wiki/chain.ts
-var WIKI_CHAIN_BRANCH_PREFIX = "wiki/";
 var WIKI_CHAIN_BRANCH_PATTERN = /^wiki\/(\d{4}-\d{2}-\d{2})-(\d{2})(\d{2})$/u;
 var utcTimestamp = (now) => ({
   date: todayUtc(now),
@@ -46926,7 +46925,6 @@ var branchTimestamp = (branch) => {
   return { date: date5, hours, minutes };
 };
 var wikiLandingSubject = ({ date: date5, hours, minutes }) => `wiki: ${date5} ${hours}:${minutes} UTC`;
-var wikiBranchName = ({ date: date5, hours, minutes }) => `${WIKI_CHAIN_BRANCH_PREFIX}${date5}-${hours}${minutes}`;
 var USAGE_SCRIPT = ".gaia/scripts/usage.sh";
 var passthroughFailure2 = (result, command, args) => passthroughFailure({ args, command, prefix: "chain", result });
 var stepOk = commandSucceeded;
@@ -46934,26 +46932,26 @@ var safeOutput3 = (value) => value ?? "";
 var HELP_TOKENS63 = /* @__PURE__ */ new Set(["--help", "-h", "help"]);
 var HELP_TEXT64 = `Usage: gaia wiki chain <begin|commit|finish|refresh-nudge> [args]
 
-  begin [--branch-aware]       On main/master: cut wiki/<YYYY-MM-DD-HHMM> so the
-                               run lands on one branch + PR. On a feature branch:
-                               no-op (the run commits in place).
+  begin                        Refuse main/master: the run must already be
+                               isolated on its own branch. No-op elsewhere.
   commit                       Commit every stage's wiki/ changes in place as
                                "wiki: <YYYY-MM-DD> <HH:MM> UTC", then
                                invalidate the statusline cache. No-op when
                                nothing changed; refuses non-wiki changes and
                                main/master.
-  finish [--branch-aware]      Push the wiki branch, open one PR, and enable
+  finish                       Push the wiki branch, open one PR, and enable
                                auto-merge, staying on the branch. The merge wait
                                and local cleanup follow the work lifecycle.
-                               Removes an empty wiki branch; no-op for in-place
-                               runs.
+                               Removes an empty wiki branch held in place, and
+                               leaves one in a linked worktree to the caller;
+                               no-op on any other branch.
   refresh-nudge                Recompute the main checkout's wiki drift and write
                                it into the statusline cache now, rather than on
                                the next background refresh. Run after cleanup.
 
   Exit codes:
     0  success
-    1  user-correctable refusal (on main without --branch-aware, non-wiki changes, ...)
+    1  user-correctable refusal (begin on main, non-wiki changes, ...)
     2  unexpected (git/gh failure)
 `;
 var resolveRoot6 = (cwdOption, action) => {
@@ -46975,23 +46973,13 @@ var resolveRepoRootOrNull = (cwd) => {
     return null;
   }
 };
-var parseBranchAware = (argv) => {
-  let branchAware = false;
-  for (const token of argv) {
-    if (token === "--branch-aware") {
-      branchAware = true;
-    } else {
-      return { message: `unknown flag: ${token}`, ok: false };
-    }
-  }
-  return { branchAware, ok: true };
-};
+var unknownFlag = (argv) => argv[0] === void 0 ? void 0 : `unknown flag: ${argv[0]}`;
 var begin = (argv, options) => {
-  const parsed = parseBranchAware(argv);
-  if (!parsed.ok) {
+  const refusal = unknownFlag(argv);
+  if (refusal !== void 0) {
     structuredError({
       code: "invalid_arguments",
-      message: parsed.message,
+      message: refusal,
       subcommand: "wiki chain begin"
     });
     return EXIT_CODES.UNKNOWN_SUBCOMMAND;
@@ -47010,21 +46998,12 @@ var begin = (argv, options) => {
     );
     return UNEXPECTED_EXIT10;
   }
-  if (!isProtectedBranch(branch)) {
-    process.stdout.write(`chain begin: in-place on ${branch}
-`);
-    return EXIT_CODES.OK;
-  }
-  if (!parsed.branchAware) {
+  if (isProtectedBranch(branch)) {
     return refuse2(
-      "chain begin: refusing to start a wiki run on main; pass --branch-aware or check out a feature branch"
+      "chain begin: refusing to start a wiki run on main; run /gaia-wiki, which isolates the run on its own wiki branch before begin"
     );
   }
-  const branchName = wikiBranchName(utcTimestamp(options.now ?? /* @__PURE__ */ new Date()));
-  const args = ["checkout", "-b", branchName];
-  const result = runner("git", args, { cwd: repoRoot });
-  if (!stepOk(result)) return passthroughFailure2(result, "git", args);
-  process.stdout.write(`chain begin: started ${branchName}
+  process.stdout.write(`chain begin: in-place on ${branch}
 `);
   return EXIT_CODES.OK;
 };
@@ -47053,7 +47032,7 @@ var commit = (argv, options) => {
   }
   if (isProtectedBranch(branch)) {
     return refuse2(
-      `chain commit: refusing to commit on ${branch}; run /gaia-wiki, whose chain begin --branch-aware cuts a wiki branch, or switch to a non-protected branch`
+      `chain commit: refusing to commit on ${branch}; run /gaia-wiki, which isolates the run on its own wiki branch, or switch to a non-protected branch`
     );
   }
   let workingTree;
@@ -47090,6 +47069,13 @@ var commit = (argv, options) => {
 `);
   return EXIT_CODES.OK;
 };
+var isLinkedWorktree = (repoRoot) => {
+  try {
+    return !sameRealPath(repoRoot, resolveMainWorktreeRoot(repoRoot));
+  } catch {
+    return false;
+  }
+};
 var finishEmptyBranch = (options) => {
   const { base, branch, repoRoot, runner } = options;
   let dirty = true;
@@ -47102,6 +47088,13 @@ var finishEmptyBranch = (options) => {
   if (dirty) {
     process.stdout.write(
       `chain finish: ${branch} has uncommitted changes and no commits; left in place for review
+`
+    );
+    return EXIT_CODES.OK;
+  }
+  if (isLinkedWorktree(repoRoot)) {
+    process.stdout.write(
+      `chain finish: nothing to land; ${branch} is held by a linked worktree, left for the caller to remove
 `
     );
     return EXIT_CODES.OK;
@@ -47232,11 +47225,11 @@ var queueAutoMerge = (options) => {
   return { artifact };
 };
 var runFinish = (argv, options) => {
-  const parsed = parseBranchAware(argv);
-  if (!parsed.ok) {
+  const refusal = unknownFlag(argv);
+  if (refusal !== void 0) {
     structuredError({
       code: "invalid_arguments",
-      message: parsed.message,
+      message: refusal,
       subcommand: "wiki chain finish"
     });
     return { code: EXIT_CODES.UNKNOWN_SUBCOMMAND };
@@ -47264,7 +47257,21 @@ var runFinish = (argv, options) => {
     return { code: EXIT_CODES.OK };
   }
   const base = defaultBranch(repoRoot, runner);
-  const countArgs = ["rev-list", "--count", `${base}..HEAD`];
+  const remoteBase = `origin/${base}`;
+  const remoteBaseExists = stepOk(
+    runner(
+      "git",
+      ["rev-parse", "--verify", "--quiet", `refs/remotes/${remoteBase}`],
+      {
+        cwd: repoRoot
+      }
+    )
+  );
+  const countArgs = [
+    "rev-list",
+    "--count",
+    `${remoteBaseExists ? remoteBase : base}..HEAD`
+  ];
   const countResult = runner("git", countArgs, { cwd: repoRoot });
   if (!stepOk(countResult))
     return { code: passthroughFailure2(countResult, "git", countArgs) };

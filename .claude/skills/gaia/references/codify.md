@@ -167,6 +167,14 @@ Accepting a recommended decline or defer is a decision, the same as choosing it 
 
 ## Per-form action handling
 
+**Isolate before the first working-tree write**, once per run: before the first approve handler that writes a file (new prose rule, edit existing prose rule, enforcement edit) runs, so the approved changes land on this run's own branch and never on whatever branch the checkout holds. Mint the name and carry it as a literal, `<CODIFY_BRANCH>`, into every later call, since shell variables do not persist between calls:
+
+```bash
+bash .gaia/scripts/branch-name-lib.sh name codify
+```
+
+Then read `.claude/skills/gaia/references/isolation.md` and apply it now, with `{{SUBJECT}}` = "this codify run", `{{WORKER}}` = "the run", `{{OWNER}}` = "this codify run", `{{SIBLING}}` = "another task", passing `<CODIFY_BRANCH>` as the branch name. Carry `RESOLVED_MODE` and `RESOLVED_ROOT` to the publish step; every write, and everything after it, runs from `RESOLVED_ROOT`. A run whose approvals write no file (scaffolds, declines, defers) never isolates.
+
 ### approve, prose rule
 
 Draft the rule file into the working tree using the template below. The rule is MANDATORILY path-scoped: a `paths:` frontmatter glob is always present, derived from the candidate's `area_tags`. When `area_tags` is empty or holds non-path strings (holistic classes often carry semantic tags, not path globs), fall back: derive the glob from the finding's bucket/surface (e.g. a `rule/*` React class scopes to `frontend/app/**/*`) or ask the human for the intended scope. Never write a frontmatter-less / always-loaded rule, and never emit an unscoped `**/*` glob, that defeats the path-scoping invariant that bounds per-task context weight. Immediately after the frontmatter, write the provenance marker verbatim (see the frozen marker below). Then write present-tense body prose describing the anti-pattern and the correct pattern.
@@ -308,29 +316,19 @@ Runs once, after `## Record the review (end of run)`. It exists so an engineer w
 
 **Precondition.** While applying the dispositions, track whether any candidate was approved through a handler that writes to the working tree: **new prose rule**, **edit existing prose rule**, or **enforcement edit**. The scaffold-only handlers (deterministic-check sketch, skill scaffold) write no file and never count, and decline / defer produce no change. If no approval produced a working-tree change, there is nothing to publish: say so briefly and stop. (Run ends here; see `## Cost record (run end)`.)
 
-**Confirm there are real changes.** Before branching, verify the working tree actually carries the edits:
+Publish runs from `RESOLVED_ROOT`, on `<CODIFY_BRANCH>` (`## Per-form action handling` isolated it), whichever branch the main checkout holds.
+
+**Confirm there are real changes.** Before committing, verify the working tree actually carries the edits:
 
 ```bash
 git status --porcelain
 ```
 
-If it is empty, no-op (a redirect or an unapplied too-invasive edit can leave the approval count and the tree disagreeing); report that nothing landed and stop. (Run ends here; see `## Cost record (run end)`.)
+If it is empty, no-op (a redirect or an unapplied too-invasive edit can leave the approval count and the tree disagreeing): release the isolation per isolation.md's `## Releasing an isolation that holds nothing`, report that nothing landed, and stop. (Run ends here; see `## Cost record (run end)`.)
 
-**Repo-state safety.** Branching needs a safe state. If HEAD is detached or a rebase / merge / cherry-pick / bisect is in progress, do not branch: leave the approved changes in the working tree, tell the engineer they ship through normal PR review, and stop. (Run ends here; see `## Cost record (run end)`.)
+**Repo-state safety.** If a merge / cherry-pick / bisect is in progress in `RESOLVED_ROOT`, do not commit: leave the approved changes on `<CODIFY_BRANCH>`, name its path, tell the engineer they ship through normal PR review, and stop. (Run ends here; see `## Cost record (run end)`.)
 
-**On the default branch (main/master):** publish runs to a terminal state, the way `/update-deps` does on a main-branch run: merged and cleaned up, left open because the human chose to, or stopped on a named failure. It never ends at "PR opened, audit pending", because nothing else ever dispatches the audit a codify PR owes.
-
-**Create the branch, as its own Bash call.** The uncommitted approved edits follow the checkout. Mint the name first and carry its output as a literal, `<CODIFY_BRANCH>`, into every later call, since shell variables do not persist between calls:
-
-```bash
-bash .gaia/scripts/branch-name-lib.sh name codify
-```
-
-```bash
-git checkout -b "<CODIFY_BRANCH>"
-```
-
-Never fold this into the commit call. The main-branch guard reads a whole command before any of it runs, so a `git checkout -b … && git commit …` call still looks like a commit on `main` and is refused.
+Publish runs to a terminal state, the way `/update-deps` does on a main-branch run: merged and cleaned up, left open because the human chose to, or stopped on a named failure. It never ends at "PR opened, audit pending", because nothing else ever dispatches the audit a codify PR owes.
 
 <!-- gaia:maintainer-only:start -->
 **Clear the obligations a rule file carries**, before `gh pr create`. Each is invisible in the diff. The first two apply only to a new rule file:
@@ -371,16 +369,14 @@ A fix to a drafted rule is a commit to a file in a member's remit, so it rotates
 
 **Merge, verify, clean up.** Run `gh pr merge <N> --squash --delete-branch --auto` directly, so a merge reached after the watch window closed with checks pending queues behind them rather than being refused by branch policy. Then run the merge wait, `bash .gaia/scripts/pr-wait-merge.sh --pr <N> --attempts 20`, with a 20-attempt bound in place of its default 5, since a full CI run outlasts the default, per `.claude/skills/gaia/references/work-lifecycle.md` `## 7. Merge (when asked)`. The merge above is already queued and the script issues no `gh pr merge` of its own, so nothing here re-merges. One arm per verdict plus one for the exit-2 refusal:
 
-- On `MERGED` (exit 0), clean up per `.claude/skills/gaia/references/work-lifecycle.md` `## 8. Cleanup` `### Feature branch`, with `<branch-name>` = `<CODIFY_BRANCH>`.
+- On `MERGED` (exit 0), clean up per `.claude/skills/gaia/references/work-lifecycle.md` `## 8. Cleanup`, with `<branch-name>` = `<CODIFY_BRANCH>`: `### Worktree entered by name in this session` under `RESOLVED_MODE=worktree`, `### Feature branch` under `feature-branch`.
 - On `CONFLICTING` (exit 3), repair per `wiki/concepts/PR Merge Workflow.md`'s `### Conflict found mid-wait` and run the wait again.
 - On `CHECK_FAILED` (exit 4), print the PR URL and the failing check, and leave the branch in place.
 - On `TIMEOUT` (exit 5), the window closed with the pull request still open: print the PR URL, say the merge queued above has not landed yet, and leave the branch in place.
 - On `CLOSED` (exit 6), the pull request was closed without merging: report that and leave the branch in place, since no wait can clear it.
 - On exit 2 the wait refused rather than answered: report the refusal and the PR URL, leave the branch in place, and assert no state for the pull request itself, since nothing about it was read. The merge queued above may still land.
 
-Every stop above ends the run; see `## Cost record (run end)`, which is written once, as the last thing printed.
-
-**On any other branch:** do not branch, commit, or PR. Leave the approved changes in the working tree and tell the engineer they ride the current branch's own PR (today's behavior). The end-of-run automation targets only the main-branch case, where a branch has to be made. (Run ends here; see `## Cost record (run end)`.)
+Every stop above ends the run; see `## Cost record (run end)`, which is written once, as the last thing printed. Every stop that leaves the branch in place names its worktree path under `RESOLVED_MODE=worktree`, so a kept worktree never goes unreported.
 
 If any `git` or `gh` command above exits non-zero, print the error and STOP. Do not retry, force-push, or amend; a rejected push is the engineer's call to resolve. (Run ends here; see `## Cost record (run end)`, passing `--pr` only if `gh pr create` already succeeded before the failure.)
 
@@ -392,10 +388,9 @@ Every path that ends a `/gaia-codify` run appends exactly one cost record, the r
 - **Stop without changes** at the plan question.
 - Publish's no-change stop (no approval touched the working tree, or `git status --porcelain` came back empty).
 - Publish's unsafe-repo-state stop.
-- Publish's other-branch no-op.
-- Publish's terminal outcomes on the default branch: `MERGED` after cleanup, a merge still queued when the wait's window closes, a "Leave open" the human chose, a "Stop and file" the human chose at the audit's branch checkpoint, a failing check, a pull request closed without merging, a merge wait that refused because it read nothing, or a non-zero-exit STOP on a `git` or `gh` command.
+- Publish's terminal outcomes: `MERGED` after cleanup, a merge still queued when the wait's window closes, a "Leave open" the human chose, a "Stop and file" the human chose at the audit's branch checkpoint, a failing check, a pull request closed without merging, a merge wait that refused because it read nothing, or a non-zero-exit STOP on a `git` or `gh` command.
 
-On the default-branch publish path the record is written once, at one of those outcomes, and its `Cost:` line is the last thing the run prints. Opening the PR is not a run end: the audit, the checks, and the merge question still follow it.
+On the publish path the record is written once, at one of those outcomes, and its `Cost:` line is the last thing the run prints. Opening the PR is not a run end: the audit, the checks, and the merge question still follow it.
 
 Apply the shared record recipe in `.claude/skills/gaia/references/cost-record.md` with `{{COMMAND}}` = `gaia-codify`.
 

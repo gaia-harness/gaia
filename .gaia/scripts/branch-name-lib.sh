@@ -8,9 +8,9 @@
 # reader that recovers meaning from a branch name reads it through here, except
 # local-janitor.sh and the wiki CLI, which match the wiki landing shapes with
 # their own patterns, and
-# every bash flow that cuts a branch or a worktree mints its name here; the two
-# kinds minted outside bash are pinned to this table by the suite instead, as
-# the note below the table states. So a convention change is one edit to this
+# every bash flow that cuts a branch or a worktree mints its name here; the one
+# kind minted outside bash, and the wiki CLI's own pattern, are pinned to this
+# table by the suite instead, as the note below the table states. So a convention change is one edit to this
 # file and its suite.
 #
 # THE CONVENTION. Every GAIA branch is `<kind>/<rest>`, one kind per row, first
@@ -58,10 +58,10 @@
 # require the timestamp suffix, so a hand-named `chore/fix-typo` or `wiki/docs`
 # stays adhoc.
 #
-# Two kinds are minted outside bash and are therefore not arms of
-# gaia_branch_name: `wiki/`, by the GAIA CLI's `gaia wiki chain begin`, and
-# `forensics/`, by `forensics-triage.yml`. GAIA's own test suite pins each
-# prefix to this table, so neither can drift without a red suite.
+# One kind is minted outside bash and is therefore not an arm of
+# gaia_branch_name: `forensics/`, by `forensics-triage.yml`. The wiki CLI
+# reads the `wiki/` shape this file mints with a pattern of its own. GAIA's own
+# test suite pins both to this table, so neither can drift without a red suite.
 #
 # THE WORKTREE SPELLING. A worktree created with `EnterWorktree({name: <n>})`
 # sits on a branch the harness names `worktree-<n>`, with every `/` in <n>
@@ -123,7 +123,7 @@
 #                                         <type>/<id>[-<slug>]
 #     adhoc --type <type> [--issue <n>] --slug <text>
 #                                         <type>/[<issue>-]<slug>
-#     cleanse | codify | fitness | residue | deps
+#     cleanse | codify | fitness | residue | deps | wiki
 #                                         <kind>/<UTC YYYY-MM-DD-HHMM>
 #     update <version>                    update/v<version>-<UTC YYYY-MM-DD-HHMM>
 #     release <version>                   release/v<version>
@@ -633,7 +633,7 @@ gaia_branch_name() {
       fi
       printf '%s\n' "$name"
       ;;
-    cleanse | codify | fitness | residue | deps)
+    cleanse | codify | fitness | residue | deps | wiki)
       if [ "$#" -gt 0 ]; then
         printf 'gaia_branch_name: unexpected argument %s\n' "$1" >&2
         return 2
@@ -656,7 +656,7 @@ gaia_branch_name() {
       fi
       ;;
     *)
-      printf 'gaia_branch_name: unknown kind %s (debt, plan, adhoc, cleanse, codify, fitness, residue, deps, update, release)\n' "${kind:-<none>}" >&2
+      printf 'gaia_branch_name: unknown kind %s (debt, plan, adhoc, cleanse, codify, fitness, residue, deps, wiki, update, release)\n' "${kind:-<none>}" >&2
       return 2
       ;;
   esac

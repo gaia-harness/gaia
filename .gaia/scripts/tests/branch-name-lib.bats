@@ -13,7 +13,8 @@
 #   7. round trip: every minted name reads back as its own kind and validates
 #   8. branch listing across local and remote-tracking refs, fail-open on an
 #      unreadable ref store
-#   9. lockstep: the kinds minted outside bash still carry the table's prefix
+#   9. lockstep: the kind minted outside bash still carries the table's prefix,
+#      and the wiki CLI's own pattern still reads the wiki name bash mints
 #  10. no creation site spells a GAIA branch literal instead of minting it
 #  11. validate: what it accepts, what it refuses, and that it never fails open
 #  12. every `name <kind>` call in the instruction surface mints
@@ -270,7 +271,7 @@ plan_type_in() {
 
 @test "name: each argument-free maintenance kind appends a UTC minute stamp" {
   local kind
-  for kind in cleanse codify fitness residue deps; do
+  for kind in cleanse codify fitness residue deps wiki; do
     run --separate-stderr gaia_branch_name "$kind"
     [ "$status" -eq 0 ] || { echo "kind '$kind': status $status" >&2; return 1; }
     grep -qE "^${kind}/[0-9]{4}-[0-9]{2}-[0-9]{2}-[0-9]{4}\$" <<<"$output" || {
@@ -635,7 +636,7 @@ adhoc_mint_in() {
     expect_classify "$(worktree_spelling "$name")" "$want"
   done
   local kind
-  for kind in cleanse codify fitness residue deps "update v2.0.0"; do
+  for kind in cleanse codify fitness residue deps wiki "update v2.0.0"; do
     # shellcheck disable=SC2086
     name="$(gaia_branch_name $kind)"
     [ "$(gaia_branch_classify "$name" | cut -d' ' -f1)" = "maintenance" ]
@@ -687,10 +688,11 @@ corrupt_packed_refs() {
 
 # ========== 9. lockstep with the kinds minted outside bash ==========
 
-# quoted_prefix <file> <anchor-regex>: the text between the opening quote of the
-# first matching line's literal and either the closing quote or the first `${`.
-chain_prefix() {
-  sed -nE "s/^const WIKI_CHAIN_BRANCH_PREFIX = '([^']*)';\$/\\1/p" "$1"
+# chain_pattern <file>: the CLI's wiki branch regex literal, rewritten as an
+# extended regex grep reads (`\d` to `[0-9]`, `\/` to `/`).
+chain_pattern() {
+  sed -nE 's#^const WIKI_CHAIN_BRANCH_PATTERN = /(.*)/u;$#\1#p' "$1" \
+    | sed -e 's#\\d#[0-9]#g' -e 's#\\/#/#g'
 }
 
 forensics_prefix() {
@@ -708,22 +710,22 @@ prefix_conforms() {
   gaia_branch_validate "$sample" 2>/dev/null
 }
 
-@test "lockstep: the CLI wiki chain mints one prefix, and it classifies and validates" {
-  local chain_value
-  chain_value="$(chain_prefix "$REPO_ROOT/.gaia/cli/src/wiki/chain.ts")"
-  [ -n "$chain_value" ]
-  prefix_conforms "$chain_value" "2026-09-20-1432"
-  expect_classify "${chain_value}2026-09-20-1432" "maintenance 2026-09-20-1432"
+@test "lockstep: the CLI wiki chain pattern reads the wiki name bash mints" {
+  local pattern name
+  pattern="$(chain_pattern "$REPO_ROOT/.gaia/cli/src/wiki/chain.ts")"
+  [ -n "$pattern" ]
+  name="$(gaia_branch_name wiki)"
+  grep -qE -- "$pattern" <<<"$name"
+  prefix_conforms "wiki/" "2026-09-20-1432"
 }
 
-@test "the wiki lockstep can fail: a source file with a different prefix literal is reported" {
-  local scratch_chain="$BATS_TEST_TMPDIR/chain.ts"
-  sed "s#WIKI_CHAIN_BRANCH_PREFIX = 'wiki/'#WIKI_CHAIN_BRANCH_PREFIX = 'wiki-chain/'#" \
+@test "the wiki lockstep can fail: a source file with a different pattern rejects the minted name" {
+  local scratch_chain="$BATS_TEST_TMPDIR/chain.ts" pattern
+  sed 's#WIKI_CHAIN_BRANCH_PATTERN = /^wiki\\/#WIKI_CHAIN_BRANCH_PATTERN = /^wiki-chain\\/#' \
     "$REPO_ROOT/.gaia/cli/src/wiki/chain.ts" >"$scratch_chain"
-  [ "$(chain_prefix "$scratch_chain")" = "wiki-chain/" ]
-  # A prefix the table does not know is refused by the same helper the real
-  # lockstep calls.
-  prefix_conforms "wiki-chain/" "2026-09-20-1432" && return 1
+  pattern="$(chain_pattern "$scratch_chain")"
+  [ -n "$pattern" ]
+  grep -qE -- "$pattern" <<<"$(gaia_branch_name wiki)" && return 1
   true
 }
 
@@ -859,7 +861,7 @@ expect_invalid() {
   local branch
   for branch in "$(gaia_branch_name debt 2159 --slug "reconcile claim")" "$(gaia_branch_name debt 3 1 2)" \
     "$(gaia_branch_name plan plan-023 --type feat --slug naming)" "$(gaia_branch_name cleanse)" "$(gaia_branch_name codify)" \
-    "$(gaia_branch_name fitness)" "$(gaia_branch_name residue)" "$(gaia_branch_name deps)" \
+    "$(gaia_branch_name fitness)" "$(gaia_branch_name residue)" "$(gaia_branch_name deps)" "$(gaia_branch_name wiki)" \
     "$(gaia_branch_name update v2.0.0)" "$(gaia_branch_name release 2.0.0)"; do
     expect_valid "$branch"
   done
@@ -1055,7 +1057,7 @@ unmintable_kinds() {
   kinds="$(name_call_kinds "$REPO_ROOT")"
   # A short read would leave the loop green over a subset: every kind a bash
   # flow mints must have been found.
-  for kind in debt plan adhoc release cleanse codify fitness residue deps update; do
+  for kind in debt plan adhoc release cleanse codify fitness residue deps wiki update; do
     grep -qx "$kind" <<<"$kinds" || { echo "no call site found for kind '$kind'" >&2; return 1; }
   done
   unmintable="$(unmintable_kinds "$REPO_ROOT")"

@@ -2,7 +2,7 @@
 
 The one statement of how committed work moves from its first edit to a cleaned-up checkout: claim, name, isolate, enter the worktree, commit and open the draft PR, audit, merge, clean up. A session working outside any GAIA skill follows it in full, and every skill that drives its own PR points here for the steps it shares.
 
-Contents: When this applies; 1. Claim; 2. Name; 3. Isolate; 4. Enter the worktree; 5. Commit and open the draft PR; 6. Audit; 7. Merge (when asked); 8. Cleanup (worktree entered by name in this session, worktree entered by path or in an earlier session, feature branch, sub-agent context); The git worktree add backstop.
+Contents: When this applies; 1. Claim; 2. Name; 3. Isolate; 4. Enter the worktree; 5. Commit and open the draft PR; 6. Audit; 7. Merge (when asked); 8. Cleanup (worktree entered by name in this session, worktree entered by path or in an earlier session, feature branch, sub-agent context); Releasing an empty worktree; The git worktree add backstop.
 
 ## When this applies
 
@@ -263,6 +263,14 @@ PR #<N> squash-merged as <short-sha>. From a shell at
 `<DEFAULT-BRANCH>` is the default branch, resolved the way the arms above resolve it. A caller with steps of its own appends its lines to the end of that command list; the plan orchestrator appends its two post-merge close lines.
 
 The prompt carries no `ExitWorktree({...})` call because it runs from another context, a shell or a fresh session in the main checkout, not from the session that entered the tree; the tool's schema also rejects a `worktree` parameter. The plain `git worktree remove --force` is the cleanup that works from any context.
+
+## Releasing an empty worktree
+
+`.claude/skills/gaia/references/isolation.md` (`## Releasing an isolation that holds nothing`) sends a worktree it created in this session here only after both of its reads came back empty: nothing uncommitted, and no commit past the base. That emptiness stands in for the `MERGED` gate of `## 8. Cleanup`, so call:
+
+`ExitWorktree({action: "remove", discard_changes: true})`
+
+`discard_changes` loses nothing, because both reads were empty. `ExitWorktree` deletes only the branch name it created, so from the main checkout, which the call returned the session to, delete the renamed branch with the plain `git branch -D <branch-name>`. No fetch, pull or install follows: nothing merged.
 
 ## The git worktree add backstop
 

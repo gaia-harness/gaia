@@ -10,16 +10,14 @@
 # handshake sits between this script's `open` and that call.
 #
 # Usage:
-#   fitness-publish.sh open   --branch <name> --message-file <path> --title <text> --body-file <path> [--root <dir>]
-#   fitness-publish.sh commit --message-file <path> [--root <dir>]
+#   fitness-publish.sh open --branch <name> --message-file <path> --title <text> --body-file <path> [--root <dir>]
 #
 #   open    git add -A, git commit -F <message-file>, git push -u origin
 #           <name>, gh pr create --draft. Prints the pull request number alone
 #           on stdout. The pull request opens as a draft because the
-#           `GAIA-Audit` success post is what marks it ready.
-#   commit  git add -A, git commit -F <message-file>, git push -u origin on the
-#           current branch, for a heal applied in place on a non-default
-#           branch. Opens no pull request.
+#           `GAIA-Audit` success post is what marks it ready. A heal always
+#           lands on the run's own isolated branch, so there is no in-place
+#           commit-and-push mode.
 #   --root  the working tree to publish; defaults to the git top level of the
 #           working directory. Every git call goes through `git -C <root>`.
 #
@@ -36,7 +34,6 @@ set -euo pipefail
 usage_error() {
   echo "fitness-publish: $1" >&2
   echo "usage: fitness-publish.sh open --branch <name> --message-file <path> --title <text> --body-file <path> [--root <dir>]" >&2
-  echo "       fitness-publish.sh commit --message-file <path> [--root <dir>]" >&2
   exit 2
 }
 
@@ -47,13 +44,8 @@ fail_command() {
   exit 1
 }
 
-subcommand="${1:-}"
-[ -n "$subcommand" ] || usage_error "a subcommand is required"
+[ "${1:-}" = open ] || usage_error "unknown subcommand: ${1:-<none>}"
 shift
-case "$subcommand" in
-  open | commit) ;;
-  *) usage_error "unknown subcommand: $subcommand" ;;
-esac
 
 branch=""
 message_file=""
@@ -86,16 +78,14 @@ done
 
 [ -n "$message_file" ] || usage_error "--message-file is required"
 [ -r "$message_file" ] || usage_error "message file is not readable: $message_file"
-if [ "$subcommand" = "open" ]; then
-  [ -n "$branch" ] || usage_error "--branch is required"
-  [ -n "$title" ] || usage_error "--title is required"
-  [ -n "$body_file" ] || usage_error "--body-file is required"
-  [ -r "$body_file" ] || usage_error "body file is not readable: $body_file"
-  # A leading dash would be read by git and gh as an option, not a branch.
-  case "$branch" in
-    -*) usage_error "branch name must not start with a dash: $branch" ;;
-  esac
-fi
+[ -n "$branch" ] || usage_error "--branch is required"
+[ -n "$title" ] || usage_error "--title is required"
+[ -n "$body_file" ] || usage_error "--body-file is required"
+[ -r "$body_file" ] || usage_error "body file is not readable: $body_file"
+# A leading dash would be read by git and gh as an option, not a branch.
+case "$branch" in
+  -*) usage_error "branch name must not start with a dash: $branch" ;;
+esac
 
 if [ -z "$root" ]; then
   root="$(git rev-parse --show-toplevel 2>/dev/null)" || usage_error "not inside a git work tree and no --root given"
@@ -103,12 +93,6 @@ fi
 
 git -C "$root" add -A || fail_command "git add -A"
 git -C "$root" commit -q -F "$message_file" || fail_command "git commit -F"
-
-if [ "$subcommand" = "commit" ]; then
-  current_branch="$(git -C "$root" symbolic-ref --short HEAD 2>/dev/null)" || fail_command "git symbolic-ref --short HEAD"
-  git -C "$root" push -q -u origin "$current_branch" || fail_command "git push -u origin $current_branch"
-  exit 0
-fi
 
 git -C "$root" push -q -u origin "$branch" || fail_command "git push -u origin $branch"
 

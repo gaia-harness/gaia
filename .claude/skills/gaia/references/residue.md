@@ -95,7 +95,15 @@ A snooze, not a permanent disposition. It appends a `kept` record; the tally sup
 
 ## Record
 
-A promotion is recorded by the filed issue itself, which carries the residual's key; no second store entry is needed for it. A dismissal, a keep, and a filing refusal each append one record to `.gaia/audit-residual-dismissals.jsonl`, and the only way this command writes that file is the CLI:
+A promotion is recorded by the filed issue itself, which carries the residual's key; no second store entry is needed for it. A dismissal, a keep, and a filing refusal each append one record to `.gaia/audit-residual-dismissals.jsonl`, and the only way this command writes that file is the CLI.
+
+**Isolate before the first append**, once per run, so the store's change lands on this run's own branch and never on whatever branch the checkout holds. Mint the name and carry it as a literal, `<RESIDUE_BRANCH>`, into every later call, since shell variables do not persist between calls:
+
+```bash
+bash .gaia/scripts/branch-name-lib.sh name residue
+```
+
+Then read `.claude/skills/gaia/references/isolation.md` and apply it now, with `{{SUBJECT}}` = "this residue triage", `{{WORKER}}` = "the triage", `{{OWNER}}` = "this triage", `{{SIBLING}}` = "another task", passing `<RESIDUE_BRANCH>` as the branch name. Carry `RESOLVED_MODE` and `RESOLVED_ROOT` to the publish step. Every append, and everything after it, runs from `RESOLVED_ROOT`. A run that appends nothing (every disposition a promotion that filed) never isolates.
 
 ```bash
 printf '%s\n' "<the reason text>" > .gaia/local/audit/residue-reason-<unique>.txt
@@ -136,7 +144,7 @@ fi
 
 ## Publish approved changes (end of run)
 
-Runs once, after the last disposition, only when the store was actually written this run.
+Runs once, after the last disposition, only when this run isolated (`## Record`). It runs from `RESOLVED_ROOT`, on `<RESIDUE_BRANCH>`, whichever branch the main checkout holds.
 
 **Confirm there are real changes.**
 
@@ -144,23 +152,11 @@ Runs once, after the last disposition, only when the store was actually written 
 git status --porcelain
 ```
 
-If it is empty, nothing landed; say so and stop.
+If it is empty, nothing landed: release the isolation per isolation.md's `## Releasing an isolation that holds nothing`, say so, and stop.
 
-**Repo-state safety.** If HEAD is detached or a rebase / merge / cherry-pick / bisect is in progress, do not branch: leave the changes in the working tree, tell the engineer they ship through normal PR review, and stop.
+**Repo-state safety.** If a merge / cherry-pick / bisect is in progress in `RESOLVED_ROOT`, do not commit: leave the changes on `<RESIDUE_BRANCH>`, name its path, tell the engineer they ship through normal PR review, and stop.
 
-**On the default branch (main/master):** branch, commit through a message file (never `-m`), push, and open a PR. Subject: `chore(residue): <what the drain promoted or dismissed>`.
-
-**Create the branch, as its own Bash call.** The uncommitted changes follow the checkout. Mint the name first and carry its output as a literal, `<RESIDUE_BRANCH>`, into every later call, since shell variables do not persist between calls:
-
-```bash
-bash .gaia/scripts/branch-name-lib.sh name residue
-```
-
-```bash
-git checkout -b "<RESIDUE_BRANCH>"
-```
-
-Never fold this into the commit call. The main-branch guard reads a whole command before any of it runs, so a `git checkout -b … && git commit …` call still looks like a commit on `main` and is refused.
+Commit through a message file (never `-m`), push, and open a PR. Subject: `chore(residue): <what the drain promoted or dismissed>`.
 
 **Commit and push, then open the PR, as two calls.**
 
@@ -190,7 +186,7 @@ Empty output confirms no marker is owed, and the merge gate's out-of-scope bypas
 
 **Merge** → drive it to merge through `wiki/concepts/PR Merge Workflow.md` (read it, don't merge from memory): `gh pr merge <N> --squash --delete-branch --auto`, then run the merge wait, `bash .gaia/scripts/pr-wait-merge.sh --pr <N>`, per `.claude/skills/gaia/references/work-lifecycle.md` `## 7. Merge (when asked)`. The merge above is already queued and the script issues no `gh pr merge` of its own, so nothing here re-merges. One arm per verdict plus one for the exit-2 refusal. Every arm below but `CONFLICTING` ends the run and writes its cost record (`## Cost record (run end)`):
 
-- On `MERGED` (exit 0), clean up per `.claude/skills/gaia/references/work-lifecycle.md` `## 8. Cleanup` `### Feature branch`, with `<branch-name>` = `<RESIDUE_BRANCH>`, and print the merged PR URL.
+- On `MERGED` (exit 0), clean up per `.claude/skills/gaia/references/work-lifecycle.md` `## 8. Cleanup`, with `<branch-name>` = `<RESIDUE_BRANCH>`: `### Worktree entered by name in this session` under `RESOLVED_MODE=worktree`, `### Feature branch` under `feature-branch`. Print the merged PR URL.
 - On `CONFLICTING` (exit 3), repair it per `wiki/concepts/PR Merge Workflow.md`'s `### Conflict found mid-wait` and run the wait again.
 - On `CHECK_FAILED` (exit 4), print the PR URL and the failing check, and leave the branch in place.
 - On `TIMEOUT` (exit 5), the window closed with the pull request still open: print the PR URL, note the merge is queued, and leave the branch in place.
@@ -199,7 +195,7 @@ Empty output confirms no marker is owed, and the merge gate's out-of-scope bypas
 
 **Leave open** → report the PR URL and stop.
 
-**On any other branch:** do not branch, commit, or PR. Leave the changes in the working tree; they ride the current branch's own PR.
+Every arm that leaves the branch in place names its worktree path under `RESOLVED_MODE=worktree`, so a kept worktree never goes unreported.
 
 If any `git` or `gh` command above exits non-zero, print the error and STOP. Do not retry, force-push, or amend.
 
@@ -210,9 +206,9 @@ Every path that ends a `/gaia-residue` run appends exactly one cost record, the 
 - The `gh_ok: false` and zero-candidate stops from the live candidate fetch.
 - Publish's no-change stop (nothing landed in the working tree).
 - Publish's unsafe-repo-state stop.
+- A run that appended nothing, which never isolated and publishes nothing.
 - Publish's merge outcomes: `MERGED`, still queued, a failed required check, a pull request closed without merging, a merge wait that refused because it read nothing, or "Leave open".
 - Publish's non-zero-exit STOP on a `git` or `gh` command.
-- Any other-branch no-op.
 
 Apply the shared record recipe in `.claude/skills/gaia/references/cost-record.md` with `{{COMMAND}}` = `gaia-residue`.
 

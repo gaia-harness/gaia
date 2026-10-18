@@ -35,17 +35,7 @@ Run it as a single Bash call. No output means the state is safe. Each `unsafe:` 
 
 **Any `unsafe:` line routes to the triage-only path.** Run Steps 2 through 5 as normal, then skip Steps 6 through 9: state clearly that heal was skipped because the working state is not safe to mutate, name the specific reason (for example "HEAD is detached" or "rebase in progress"), give the resolution (complete or abort the rebase, or check out a branch, then re-run `/gaia-fitness`), make no working-tree mutation, create no branch, record cost (see **Cost record (run end)**, no pass-through) and STOP.
 
-**Otherwise** determine the current branch and the default branch:
-
-```bash
-CURRENT_BRANCH=$(git -C "$PROJECT_ROOT" symbolic-ref --short HEAD)
-DEFAULT_BRANCH=$(git -C "$PROJECT_ROOT" symbolic-ref --short refs/remotes/origin/HEAD 2>/dev/null | sed 's@^origin/@@')
-DEFAULT_BRANCH="${DEFAULT_BRANCH:-main}"
-ON_DEFAULT_BRANCH=false
-[[ "$CURRENT_BRANCH" == "$DEFAULT_BRANCH" ]] && ON_DEFAULT_BRANCH=true
-```
-
-Remember `CURRENT_BRANCH`, `DEFAULT_BRANCH` and `ON_DEFAULT_BRANCH` as values: Step 6 and Step 8 use them in later Bash calls, and a shell variable set here is gone by then.
+Steps 2 through 5 read this checkout in place, so the grade is the grade of the branch it holds. The heal writes nowhere here: Step 6 isolates it on the run's own branch first.
 
 ---
 
@@ -171,21 +161,20 @@ Only findings with `fixable: true` are healed; the CLI decides that, never this 
    - **options (this exact order):** `{ label: "Apply", description: "Write the proposed change to <file>." }`, `{ label: "Skip", description: "Leave <file> as it is; the finding stays in the report." }`
 
    Never put two files in one question: the human approves each file they own separately.
-3. **Apply what was accepted.** On a main-branch run (`ON_DEFAULT_BRANCH` true), create and switch to a new branch before the first apply:
+3. **Apply what was accepted.** Before the first apply, isolate the heal. Mint the name and carry it as `<BRANCH>`:
 
    ```bash
-   BRANCH="$(bash .gaia/scripts/branch-name-lib.sh name fitness)"
-   git -C "$PROJECT_ROOT" checkout -b "$BRANCH"
+   bash .gaia/scripts/branch-name-lib.sh name fitness
    ```
 
-   Carry the minted name as `<BRANCH>`. On any other branch, apply in place on `CURRENT_BRANCH` and create no branch. Then, per accepted proposal:
+   Then read `.claude/skills/gaia/references/isolation.md` and apply it now, with `{{SUBJECT}}` = "this fitness heal", `{{WORKER}}` = "the heal", `{{OWNER}}` = "this heal", `{{SIBLING}}` = "another task", passing `<BRANCH>` as the branch name. Carry `RESOLVED_MODE` and `RESOLVED_ROOT`: every apply, and Steps 7 through 9, run from `RESOLVED_ROOT`. A file that differs there from the copy its digest was taken from is refused by `fitness apply` below, never overwritten. Then, per accepted proposal:
 
    ```bash
    .gaia/cli/gaia fitness apply --target <file> --proposal <SCRATCH>/proposals/<n>.after --base-sha256 <digest-or-absent>
    ```
 
    Exit 0 means written. Exit 1 with a `refuse: <reason>` line on stderr is a refusal (exit 1 without that line is the router's unknown-subcommand code, a could-not-run failure): report the file and the reason and leave it unresolved. Never retry a refusal and never write the file by hand. Exit 2 or 3 stops the heal with the stderr line.
-4. **Carry the rest to the report.** A skipped proposal, a refused one and every too-invasive fix is unresolved, with the proposed change or recommended approach as its remediation. When nothing was applied, no branch exists (cut it only when the first apply is about to run) and the run ends as the second row of the Step 5 routing table says (record cost, no pass-through, then print its `No fixes applied.` line).
+4. **Carry the rest to the report.** A skipped proposal, a refused one and every too-invasive fix is unresolved, with the proposed change or recommended approach as its remediation. When nothing was applied, the run ends as the second row of the Step 5 routing table says (record cost, no pass-through, then print its `No fixes applied.` line): with no proposal accepted no isolation exists, and when every accepted apply was refused, release it first per isolation.md's `## Releasing an isolation that holds nothing`.
 
 Heal never commits. Applied fixes stay in the working tree until the publish gate.
 
@@ -208,17 +197,15 @@ Apply the same exit-code rule as Step 3: exits 0 and 1 both yield a report to re
 Ask once, via `AskUserQuestion`, after the verify card:
 
 - **header:** `"Publish fixes?"`
-- **Main-branch run** (a branch `<BRANCH>` exists). Question: `"Fitness healed {N} finding(s) on branch <BRANCH>. How should they be published?"`. Options, this exact order:
+- **question:** `"Fitness healed {N} finding(s) on branch <BRANCH>. How should they be published?"`
+- **options (this exact order):**
   1. `{ label: "Publish", description: "Commit, push, open a PR and merge it through the project's PR merge gate." }`
   2. `{ label: "Open PR only", description: "Commit, push and open a draft PR; do not merge." }`
   3. `{ label: "Keep for review", description: "Leave the healed changes in the working tree; commit nothing." }`
-- **Any other branch.** Question: `"Fitness healed {N} finding(s) on <CURRENT_BRANCH>. Commit and push them?"`. Options, this exact order:
-  1. `{ label: "Publish", description: "Commit and push the healed changes to <CURRENT_BRANCH>." }`
-  2. `{ label: "Keep for review", description: "Leave the healed changes in the working tree; commit nothing." }`
 
-**Keep for review** runs nothing: record cost (no pass-through), print the review line and STOP.
-- Branch created: `Changes applied on branch <BRANCH>. Review with git diff main; discard with git checkout main && git branch -D <BRANCH>.`
-- In place: `Changes applied on <CURRENT_BRANCH>. Review with git diff; discard with git checkout -- .`
+**Keep for review** runs nothing: record cost (no pass-through), print the review line for `RESOLVED_MODE` and STOP.
+- `feature-branch`: `Changes applied on branch <BRANCH>. Review with git diff <base>; discard with git checkout -- . && git checkout <base> && git branch -D <BRANCH>.`, `<base>` the branch the heal was isolated from.
+- `worktree`: `Changes applied on branch <BRANCH> in the worktree <RESOLVED_ROOT>. Review with git -C <RESOLVED_ROOT> diff; discard with git worktree remove --force <RESOLVED_ROOT> && git branch -D <BRANCH>.`
 
 **Publish** and **Open PR only** go to Step 9.
 
@@ -236,20 +223,10 @@ Clear the **CHANGELOG gate** per `wiki/concepts/PR Merge Workflow.md` before com
 
 Write the commit message to `<SCRATCH>/commit-message.txt` (subject `chore(fitness): <concise summary of the fixes applied>`). The script's header owns its exit codes; run it, do not read it.
 
-### Any other branch (in-place heal)
+Step 6 already isolated the heal on `<BRANCH>`; do not create a second branch. Write the PR body to `<SCRATCH>/pr-body.md`, then:
 
 ```bash
-bash .gaia/scripts/fitness-publish.sh commit --message-file <SCRATCH>/commit-message.txt
-```
-
-Then record cost (no pass-through, no PR) and relay its `Cost:` line as the last line of the reply. Open no PR and do not merge; the branch owner drives it from here.
-
-### Main-branch run
-
-Heal already cut and switched to `<BRANCH>`; do not create a second branch. Write the PR body to `<SCRATCH>/pr-body.md`, then:
-
-```bash
-bash .gaia/scripts/fitness-publish.sh open --branch <BRANCH> --message-file <SCRATCH>/commit-message.txt --title "<commit subject>" --body-file <SCRATCH>/pr-body.md
+bash .gaia/scripts/fitness-publish.sh open --root <RESOLVED_ROOT> --branch <BRANCH> --message-file <SCRATCH>/commit-message.txt --title "<commit subject>" --body-file <SCRATCH>/pr-body.md
 ```
 
 It commits everything, pushes, opens the PR as a draft and prints the PR number alone: that line, read from this run's own Bash result, is `<N>`. A non-zero exit means the printed `fitness-publish: failed: <command>` line names the step that stopped it: record cost, print that line and STOP. Pass `--pr <N>` only if the PR had already been opened before the failure, which the script's stdout shows. Do not retry, force-push or amend: a rejected push is the user's call to resolve.
@@ -279,12 +256,14 @@ gh pr merge <N> --squash --delete-branch --auto
 
 The merge above is already queued and the wait issues no `gh pr merge` of its own, so nothing here re-merges. One arm per verdict plus one for the exit-2 refusal; every arm records cost with `--pr <N>` (see **Cost record (run end)**):
 
-- **`MERGED`** (exit 0) → clean up per `.claude/skills/gaia/references/work-lifecycle.md` `## 8. Cleanup` `### Feature branch`, with `<branch-name>` = `<BRANCH>`, record cost, print the merged PR URL, then relay the record's `Cost:` line as the last line of the reply.
+- **`MERGED`** (exit 0) → clean up per `.claude/skills/gaia/references/work-lifecycle.md` `## 8. Cleanup`, with `<branch-name>` = `<BRANCH>`: `### Worktree entered by name in this session` under `RESOLVED_MODE=worktree`, `### Feature branch` under `feature-branch`. Record cost, print the merged PR URL, then relay the record's `Cost:` line as the last line of the reply.
 - **`CONFLICTING`** (exit 3) → repair it per `wiki/concepts/PR Merge Workflow.md`'s `### Conflict found mid-wait` and run the wait again.
 - **`CHECK_FAILED`** (exit 4) → name the check and say the merge will not land until it is fixed, record cost, print the PR URL, and keep the local branch.
 - **`TIMEOUT`** (exit 5) → the window closed with the PR still open: record cost, print the PR URL, note auto-merge is queued and lands when checks pass, and do **not** delete the local branch or switch off it.
 - **`CLOSED`** (exit 6) → the PR was closed without merging: report the closure, record cost, print the PR URL, and keep the local branch.
 - **exit 2** → the wait refused rather than answered: report what it could not read, record cost, print the PR URL, and keep the local branch. Assert no state for the PR, since nothing about it was read: no lands-when-checks-pass note and no claim that the merge did or did not land; the merge queued above may still land.
+
+Every arm that keeps the local branch names its worktree path under `RESOLVED_MODE=worktree`, so a kept worktree never goes unreported.
 
 A heal edit to a nested `CLAUDE.md` under an in-scope path such as `frontend/app/` is exactly the reached-an-audited-surface diff the member check above detects; if it named a member, the handshake ran before the merge.
 
@@ -315,6 +294,5 @@ Every run-ending path records here:
 - Step 3, a failed CLI run STOP.
 - Step 5 routing: clean run, and no fix applied (including a Step 6 that applied nothing).
 - Step 8, Keep for review STOP.
-- Step 9, in-place heal (any other branch): no pass-through, no PR.
-- Step 9, main-branch run: `Open PR only`, `MERGED`, `TIMEOUT`, `CHECK_FAILED`, `CLOSED`, or a merge wait that refused because it read nothing: pass-through.
+- Step 9: `Open PR only`, `MERGED`, `TIMEOUT`, `CHECK_FAILED`, `CLOSED`, or a merge wait that refused because it read nothing: pass-through.
 - Step 9, publish failure STOP: pass-through only if the PR had already been opened and its number printed before the later step failed.

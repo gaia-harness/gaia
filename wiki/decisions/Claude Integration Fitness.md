@@ -53,7 +53,7 @@ A classifier that cannot read its inputs leaves every path `unknown`; that run h
 
 ### Publish
 
-After a heal that applied at least one fix, a single gate chooses between publishing (commit, push, open a PR and drive it through the merge gate), opening the PR only, or keeping the changes in the working tree. On a non-default branch the gate commits and pushes in place. The mechanics live in `.gaia/scripts/fitness-publish.sh` and the playbook.
+After a heal that applied at least one fix, a single gate chooses between publishing (commit, push, open a PR and drive it through the merge gate), opening the PR only, or keeping the changes in the working tree. The heal lands on the run's own branch, isolated through `.claude/skills/gaia/references/isolation.md` before the first fix is applied, so a run from any branch publishes through its own PR and never commits onto the branch the checkout holds. The mechanics live in `.gaia/scripts/fitness-publish.sh` and the playbook.
 
 ## See also
 

@@ -87,11 +87,11 @@ run_open() {
   git -C "$CLONE" show --name-only --format= HEAD | grep -q '^untracked.txt$'
 }
 
-@test "commit makes one commit and one push and opens no pull request" {
+@test "an in-place commit subcommand is a usage error and commits nothing" {
   run bash "$PUBLISH_SCRIPT" commit --root "$CLONE" --message-file "$BASE/message.txt"
-  [ "$status" -eq 0 ]
-  [ "$(git -C "$CLONE" rev-list --count main..fitness-branch)" -eq 1 ]
-  remote_branch_exists fitness-branch
+  [ "$status" -eq 2 ]
+  [ "$(git -C "$CLONE" rev-list --count main..fitness-branch)" -eq 0 ]
+  remote_branch_exists fitness-branch && return 1
   [ ! -s "$SHIM_LOG" ]
 }
 
@@ -132,13 +132,6 @@ run_open() {
   [[ "$output" == *"git push"* ]]
   grep -q '^pr create' "$SHIM_LOG" && return 1
   true
-}
-
-@test "a rejecting remote fails the commit subcommand and names the push" {
-  reject_pushes
-  run bash "$PUBLISH_SCRIPT" commit --root "$CLONE" --message-file "$BASE/message.txt"
-  [ "$status" -ne 0 ]
-  [[ "$output" == *"git push"* ]]
 }
 
 @test "a failing pull request creation fails the open and names the command" {

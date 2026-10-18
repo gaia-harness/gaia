@@ -168,7 +168,7 @@ const wikiOnlyStatus = {
 };
 
 const finishLanding = (cwd: string, runner: CommandRunner): number =>
-  run(['finish', '--branch-aware'], {
+  run(['finish'], {
     cwd,
     runner,
   });
@@ -221,7 +221,7 @@ describe('wiki chain', () => {
       expect(recorded.find((c) => c.args[0] === 'checkout')).toBeUndefined();
     });
 
-    test('on main without --branch-aware: exit 1, no branch cut', () => {
+    test('on main: exit 1, no branch cut, names the isolating command', () => {
       sandbox = setupSandbox();
       const recorded: RecordedCall[] = [];
       const runner = buildRunner(
@@ -237,41 +237,23 @@ describe('wiki chain', () => {
       const exit = run(['begin'], {cwd: sandbox.root, runner});
       expect(exit).toBe(1);
       expect(stdio.errors.join('')).toContain(
-        'refusing to start a wiki run on main'
+        'refusing to start a wiki run on main; run /gaia-wiki, which isolates the run'
       );
       expect(recorded.find((c) => c.args[0] === 'checkout')).toBeUndefined();
     });
 
-    test('on main with --branch-aware: cuts wiki/<UTC YYYY-MM-DD-HHMM>, exit 0', () => {
+    test('rejects the retired --branch-aware flag rather than cutting a branch', () => {
       sandbox = setupSandbox();
       const recorded: RecordedCall[] = [];
-      const runner = buildRunner(
-        [
-          {
-            argv: ['rev-parse', '--abbrev-ref', 'HEAD'],
-            result: okResult('main\n'),
-          },
-          {
-            argv: ['rev-parse', 'HEAD'],
-            result: okResult('bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\n'),
-          },
-        ],
-        recorded
-      );
+      const runner = buildRunner([], recorded);
 
       const exit = run(['begin', '--branch-aware'], {
         cwd: sandbox.root,
-        now: NOW,
         runner,
       });
-      expect(exit).toBe(0);
-      expect(stdio.outputs.join('')).toContain(
-        'chain begin: started wiki/2026-05-07-0532'
-      );
-      expect(gitCalls(recorded).at(-1)).toMatchObject({
-        args: ['checkout', '-b', 'wiki/2026-05-07-0532'],
-        command: 'git',
-      });
+      expect(exit).toBe(1);
+      expect(stdio.errors.join('')).toContain('unknown flag: --branch-aware');
+      expect(recorded.find((c) => c.args[0] === 'checkout')).toBeUndefined();
     });
 
     test('treats master like main', () => {
@@ -301,7 +283,7 @@ describe('wiki chain', () => {
       expect(stdio.errors.join('')).toContain('unknown flag');
     });
 
-    test('makes zero record calls, on-main or in-place', () => {
+    test('makes zero record calls, refused on main or in place', () => {
       sandbox = setupSandbox();
       const inPlaceRecorded: RecordedCall[] = [];
       const inPlaceRunner = buildRunner(
@@ -324,19 +306,11 @@ describe('wiki chain', () => {
             argv: ['rev-parse', '--abbrev-ref', 'HEAD'],
             result: okResult('main\n'),
           },
-          {
-            argv: ['rev-parse', 'HEAD'],
-            result: okResult('bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\n'),
-          },
         ],
         onMainRecorded
       );
 
-      run(['begin', '--branch-aware'], {
-        cwd: sandbox.root,
-        now: NOW,
-        runner: onMainRunner,
-      });
+      run(['begin'], {cwd: sandbox.root, runner: onMainRunner});
       expect(recordCalls(onMainRecorded)).toHaveLength(0);
     });
   });
@@ -662,7 +636,7 @@ describe('wiki chain', () => {
         });
         expect(exit).toBe(1);
         expect(stdio.errors.join('')).toContain(
-          `chain commit: refusing to commit on ${protectedBranch}; run /gaia-wiki, whose chain begin --branch-aware cuts a wiki branch, or switch to a non-protected branch`
+          `chain commit: refusing to commit on ${protectedBranch}; run /gaia-wiki, which isolates the run on its own wiki branch, or switch to a non-protected branch`
         );
         expect(recorded.find((c) => c.args[0] === 'add')).toBeUndefined();
         expect(recorded.find((c) => c.args[0] === 'commit')).toBeUndefined();
@@ -740,7 +714,7 @@ describe('wiki chain', () => {
         recorded
       );
 
-      const exit = run(['finish', '--branch-aware'], {
+      const exit = run(['finish'], {
         cwd: sandbox.root,
         runner,
       });
@@ -788,7 +762,7 @@ describe('wiki chain', () => {
             result: okResult('origin/main\n'),
           },
           {
-            argv: ['rev-list', '--count', 'main..HEAD'],
+            argv: ['rev-list', '--count', 'origin/main..HEAD'],
             result: okResult('3\n'),
           },
           {
@@ -799,7 +773,7 @@ describe('wiki chain', () => {
         recorded
       );
 
-      const exit = run(['finish', '--branch-aware'], {
+      const exit = run(['finish'], {
         cwd: sandbox.root,
         runner,
       });
@@ -848,7 +822,7 @@ describe('wiki chain', () => {
         recorded
       );
 
-      const exit = run(['finish', '--branch-aware'], {
+      const exit = run(['finish'], {
         cwd: sandbox.root,
         runner,
       });
@@ -873,7 +847,7 @@ describe('wiki chain', () => {
             result: okResult('origin/main\n'),
           },
           {
-            argv: ['rev-list', '--count', 'main..HEAD'],
+            argv: ['rev-list', '--count', 'origin/main..HEAD'],
             result: okResult('0\n'),
           },
         ],
@@ -910,7 +884,7 @@ describe('wiki chain', () => {
             result: okResult('origin/main\n'),
           },
           {
-            argv: ['rev-list', '--count', 'main..HEAD'],
+            argv: ['rev-list', '--count', 'origin/main..HEAD'],
             result: okResult('0\n'),
           },
           {
@@ -931,6 +905,95 @@ describe('wiki chain', () => {
       expect(ghCalls(recorded)).toHaveLength(0);
     });
 
+    test('empty chain branch in a linked worktree: no checkout or delete, left to the caller', () => {
+      sandbox = setupSandbox();
+      execFileSync(
+        'git',
+        [
+          '-c',
+          'user.name=t',
+          '-c',
+          'user.email=t@example.com',
+          'commit',
+          '-q',
+          '--allow-empty',
+          '-m',
+          'init',
+        ],
+        {cwd: sandbox.root}
+      );
+      const worktreeRoot = `${sandbox.root}-wt`;
+      execFileSync(
+        'git',
+        ['worktree', 'add', '-q', '-b', 'wiki/2026-05-07-0536', worktreeRoot],
+        {cwd: sandbox.root}
+      );
+      const recorded: RecordedCall[] = [];
+      const runner = buildRunner(
+        [
+          {
+            argv: ['rev-parse', '--abbrev-ref', 'HEAD'],
+            result: okResult('wiki/2026-05-07-0536\n'),
+          },
+          {
+            argv: ['rev-list', '--count', 'origin/main..HEAD'],
+            result: okResult('0\n'),
+          },
+        ],
+        recorded
+      );
+
+      try {
+        const exit = run(['finish'], {cwd: worktreeRoot, runner});
+        expect(exit).toBe(0);
+        expect(stdio.outputs.join('')).toContain(
+          'wiki/2026-05-07-0536 is held by a linked worktree, left for the caller to remove'
+        );
+        expect(recorded.find((c) => c.args[0] === 'checkout')).toBeUndefined();
+        expect(recorded.find((c) => c.args[0] === 'branch')).toBeUndefined();
+        expect(ghCalls(recorded)).toHaveLength(0);
+      } finally {
+        rmSync(worktreeRoot, {force: true, recursive: true});
+      }
+    });
+
+    test('with no remote base ref: counts against the local base', () => {
+      sandbox = setupSandbox();
+      const recorded: RecordedCall[] = [];
+      const runner = buildRunner(
+        [
+          {
+            argv: ['rev-parse', '--abbrev-ref', 'HEAD'],
+            result: okResult('wiki/2026-05-07-0537\n'),
+          },
+          {
+            argv: [
+              'rev-parse',
+              '--verify',
+              '--quiet',
+              'refs/remotes/origin/main',
+            ],
+            result: failResult(1, ''),
+          },
+          {
+            argv: ['rev-list', '--count', 'main..HEAD'],
+            result: okResult('0\n'),
+          },
+        ],
+        recorded
+      );
+
+      const exit = run(['finish'], {cwd: sandbox.root, runner});
+      expect(exit).toBe(0);
+      expect(stdio.outputs.join('')).toContain(
+        'removed empty branch wiki/2026-05-07-0537'
+      );
+      expect(gitCalls(recorded)).toContainEqual({
+        args: ['rev-list', '--count', 'main..HEAD'],
+        command: 'git',
+      });
+    });
+
     test('push failure short-circuits before any gh call, exit 2', () => {
       sandbox = setupSandbox();
       const recorded: RecordedCall[] = [];
@@ -945,7 +1008,7 @@ describe('wiki chain', () => {
             result: okResult('origin/main\n'),
           },
           {
-            argv: ['rev-list', '--count', 'main..HEAD'],
+            argv: ['rev-list', '--count', 'origin/main..HEAD'],
             result: okResult('2\n'),
           },
           {
@@ -1000,7 +1063,7 @@ describe('wiki chain', () => {
             result: okResult('origin/main\n'),
           },
           {
-            argv: ['rev-list', '--count', 'main..HEAD'],
+            argv: ['rev-list', '--count', 'origin/main..HEAD'],
             result: okResult('3\n'),
           },
           {
@@ -1039,7 +1102,7 @@ describe('wiki chain', () => {
         recorded
       );
 
-      const exit = run(['finish', '--branch-aware'], {
+      const exit = run(['finish'], {
         cwd: sandbox.root,
         runner,
       });
@@ -1093,7 +1156,7 @@ describe('wiki chain', () => {
             result: okResult('origin/main\n'),
           },
           {
-            argv: ['rev-list', '--count', 'main..HEAD'],
+            argv: ['rev-list', '--count', 'origin/main..HEAD'],
             result: okResult('0\n'),
           },
         ],
@@ -1124,7 +1187,7 @@ describe('wiki chain', () => {
             result: okResult('origin/main\n'),
           },
           {
-            argv: ['rev-list', '--count', 'main..HEAD'],
+            argv: ['rev-list', '--count', 'origin/main..HEAD'],
             result: okResult('0\n'),
           },
           {
@@ -1182,7 +1245,7 @@ describe('wiki chain', () => {
             result: okResult('origin/main\n'),
           },
           {
-            argv: ['rev-list', '--count', 'main..HEAD'],
+            argv: ['rev-list', '--count', 'origin/main..HEAD'],
             result: okResult('2\n'),
           },
           {
@@ -1221,7 +1284,7 @@ describe('wiki chain', () => {
             result: okResult('origin/main\n'),
           },
           {
-            argv: ['rev-list', '--count', 'main..HEAD'],
+            argv: ['rev-list', '--count', 'origin/main..HEAD'],
             result: okResult('2\n'),
           },
           {
@@ -1272,7 +1335,7 @@ describe('wiki chain', () => {
             result: okResult('origin/main\n'),
           },
           {
-            argv: ['rev-list', '--count', 'main..HEAD'],
+            argv: ['rev-list', '--count', 'origin/main..HEAD'],
             result: okResult('2\n'),
           },
           {
@@ -1324,7 +1387,7 @@ describe('wiki chain', () => {
             result: okResult('origin/main\n'),
           },
           {
-            argv: ['rev-list', '--count', 'main..HEAD'],
+            argv: ['rev-list', '--count', 'origin/main..HEAD'],
             result: failResult(128, 'fatal: bad revision'),
           },
         ],
@@ -1355,7 +1418,7 @@ describe('wiki chain', () => {
             result: okResult('origin/main\n'),
           },
           {
-            argv: ['rev-list', '--count', 'main..HEAD'],
+            argv: ['rev-list', '--count', 'origin/main..HEAD'],
             result: okResult('2\n'),
           },
           {
@@ -1378,7 +1441,7 @@ describe('wiki chain', () => {
         recorded
       );
 
-      const exit = run(['finish', '--branch-aware'], {
+      const exit = run(['finish'], {
         cwd: sandbox.root,
         runner,
       });
@@ -1405,7 +1468,7 @@ describe('wiki chain', () => {
             result: okResult('origin/main\n'),
           },
           {
-            argv: ['rev-list', '--count', 'main..HEAD'],
+            argv: ['rev-list', '--count', 'origin/main..HEAD'],
             result: okResult('2\n'),
           },
           {
@@ -1467,7 +1530,7 @@ describe('wiki chain', () => {
             result: okResult('origin/main\n'),
           },
           {
-            argv: ['rev-list', '--count', 'main..HEAD'],
+            argv: ['rev-list', '--count', 'origin/main..HEAD'],
             result: okResult('2\n'),
           },
           {
@@ -1530,7 +1593,7 @@ describe('wiki chain', () => {
             result: okResult('origin/main\n'),
           },
           {
-            argv: ['rev-list', '--count', 'main..HEAD'],
+            argv: ['rev-list', '--count', 'origin/main..HEAD'],
             result: okResult('2\n'),
           },
           {
@@ -1691,7 +1754,7 @@ describe('wiki chain', () => {
             result: okResult('origin/main\n'),
           },
           {
-            argv: ['rev-list', '--count', 'main..HEAD'],
+            argv: ['rev-list', '--count', 'origin/main..HEAD'],
             result: okResult('3\n'),
           },
           {argv: ['rev-parse', 'HEAD'], result: okResult(`${HEAD_SHA}\n`)},

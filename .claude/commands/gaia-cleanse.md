@@ -8,7 +8,7 @@ Run the GAIA **cleanse** workflow with these arguments: `$ARGUMENTS`
 
 ## Pre-flight: Worktree check
 
-This command applies a repo-wide report, opens a pull request, and merges it on a main-branch run. If invoked from a linked worktree, reject hard: `gaia_refuse_if_worktree` (`.gaia/scripts/main-only-lib.sh`) asks the shared resolver which tree this is and refuses out loud, naming the main checkout, when the answer is a worktree.
+This command applies a repo-wide report, opens a pull request, and merges it. It starts from the main checkout and isolates its own work right before its first write, through `.claude/skills/gaia/references/isolation.md`, so it never writes onto the branch the checkout holds. A linked worktree holds someone else's work, so if invoked from one, reject hard: `gaia_refuse_if_worktree` (`.gaia/scripts/main-only-lib.sh`) asks the shared resolver which tree this is and refuses out loud, naming the main checkout, when the answer is a worktree.
 
 Detection (run this first, before anything else):
 
@@ -18,5 +18,7 @@ gaia_refuse_if_worktree "/gaia-cleanse" || exit 1
 ```
 
 If the detection does not fire, fall through to the workflow dispatch line below.
+
+Anchor for the next pre-flight step: a check that must pass before this command starts goes here, after the worktree check and before the workflow dispatch line.
 
 Read `.claude/skills/gaia/references/cleanse.md` from the project root and follow it exactly. That reference is written to consume an argument string, treat the arguments above as that input. If no arguments were provided, follow the reference's no-argument (default research-then-gate) path: spawn Stage 1, then **in this conversation** relay Stage 1's summary and either auto-apply (when Stage 1 found 0 actions and the reference's inventory recount verifies the report, a clean cleanse needs no approval) or, otherwise, run the recommended-but-optional **classification-verification round** (it hardens Stage 1's classifications against ground truth) and then the `AskUserQuestion` decision gate, both described in the reference's "Branch on `$ARGUMENTS`" section, before branching. The gate (Apply / Discuss / Decline) MUST run here in the main conversation, not in a subagent, because only this layer can prompt the user.
