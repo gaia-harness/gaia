@@ -156,13 +156,22 @@ describe('update lockfile-command', () => {
   });
 
   test('a registry path outside the tree is ignored', () => {
+    const siblingName = `${path.basename(root)}-outside`;
+    const sibling = path.join(path.dirname(root), siblingName);
+
+    mkdirSync(sibling);
+    writeFileSync(path.join(sibling, 'package.json'), packageJson(), 'utf8');
     writeTree(
       '.gaia/packages.json',
-      JSON.stringify([{name: 'evil', path: '../outside'}])
+      JSON.stringify([{name: 'evil', path: `../${siblingName}`}])
     );
     commit();
 
-    expect(lockfileCommand(root, 'HEAD')).toBe('none');
+    try {
+      expect(lockfileCommand(root, 'HEAD')).toBe('none');
+    } finally {
+      rmSync(sibling, {force: true, recursive: true});
+    }
   });
 
   test('a file absent at the ref reads as empty', () => {

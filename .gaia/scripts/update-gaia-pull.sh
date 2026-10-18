@@ -14,8 +14,10 @@
 # (tracked files only: an untracked file never blocks a fast-forward).
 #
 # `pull` runs the same guards, fetches `origin <default branch>` only, refuses
-# `diverged` when the checkout has commits origin lacks, fast-forwards, and
-# prints `PULLED <old version> <new version>` then `LOCKFILE_CHANGED yes|no`.
+# `diverged` when the checkout and origin each have commits the other lacks,
+# fast-forwards, and prints `PULLED <old version> <new version>` then
+# `LOCKFILE_CHANGED yes|no`. A checkout only ahead of origin is left as is and
+# reports PULLED with the same version twice.
 # A fetch or merge that fails prints `PULL_FAILED <reason>` (exit 1). Exit 2 is
 # a usage error.
 #
