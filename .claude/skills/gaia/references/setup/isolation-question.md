@@ -6,26 +6,15 @@
 
 Show the explainer (this block stays English regardless of UI language, it's the canonical contract):
 
-> Worktrees buy you the ability to run a GAIA task without touching your current checkout, so you can keep
-> coding, or run a second GAIA task, while it works. They cost:
+> GAIA lets you work on several tasks at once (features, fixes, updates), each in its own copy of your project called a git worktree. Tasks run in parallel without touching each other or your own checkout, so you can keep coding while they run.
 >
-> - a separate checkout per task, whose first quality-gate run installs its own `node_modules` (a one-time
->   install; the real disk cost ranges from tens of megabytes on a copy-on-write filesystem to the full
->   install size elsewhere);
-> - your editor indexes that second checkout as well as the main one;
-> - a dev server started inside a worktree collides on the same port as one in the main checkout;
-> - a crashed session can leave a worktree behind for you to remove by hand.
->
-> Scope limit: this policy governs `/gaia-plan`, `/gaia-debt` and ad-hoc committed work. `/gaia-cleanse`, `/gaia-codify`, and
-> `/gaia-wiki` still work in the main checkout. And while a GAIA task holds your session in a worktree,
-> `/update-deps` and `/update-gaia` refuse to run there; run them from a separate session on the main
-> checkout.
+> GAIA is built for this, and it's the fastest way to work. The alternative is one task at a time on a branch in your current checkout: slower, but everything happens in one place.
 
-Then use `AskUserQuestion`, header **`Isolation policy`** (in the user's language), question "How should this team isolate `/gaia-plan`, `/gaia-debt` and ad-hoc committed work?", with these three options in this exact order:
+Then use `AskUserQuestion`, header **`Isolation policy`** (in the user's language), question "How do you want to work: tasks in parallel, or one at a time?", with these three options in this exact order:
 
-- **Always use worktrees (Recommended)**: GAIA always works in a worktree, no question asked.
-- **Prefer worktrees**: GAIA leads with a worktree, so you can keep working, or run another GAIA task, at the same time.
-- **Prefer branches**: GAIA leads with a feature branch and works in the current checkout.
+- **Always use worktrees (Recommended)**: every task uses its own worktree, so they can always run in parallel.
+- **Prefer worktrees**: GAIA suggests a worktree for each task, or you can choose a branch instead.
+- **Prefer branches**: GAIA suggests a branch for a task, or you can choose a worktree instead. Note that if you attempt to start a parallel task while on a branch, GAIA will automatically use a worktree for that task.
 
 ## The answer
 
