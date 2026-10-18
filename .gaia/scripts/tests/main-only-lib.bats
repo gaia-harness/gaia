@@ -669,3 +669,75 @@ extract_block() {
   [ "$status" -eq 1 ]
   grep -qF -- "Run \`cd $REPO\` then re-invoke /setup-gaia." <<<"$output"
 }
+
+# ---------- the update skills' own-branch-prefix call sites ----------
+#
+# The execution tests above run every block from a worktree whose branch
+# matches neither update prefix, so a dropped, typo'd or swapped prefix
+# argument leaves them green. These pins run the two update skills' real blocks
+# from worktrees on each kind of branch.
+
+PREFIX_PIN_SKILL_FILES=(
+  ".claude/skills/update-deps/SKILL.md"
+  ".claude/skills/update-gaia/SKILL.md"
+)
+PREFIX_PIN_OWN_KINDS=("deps" "update")
+PREFIX_PIN_OTHER_KINDS=("update" "deps")
+
+# strip_prefix_argument <block>: the block with the trailing quoted prefix
+# argument removed from the guard call.
+strip_prefix_argument() {
+  sed -E 's/ "[a-z]+\/"( \|\| exit 1)/\1/' <<<"$1"
+}
+
+# run_pin_block <shell> <directory> <block>: runs the block under the shell.
+run_pin_block() {
+  run run_in "$2" -- "$1" -c "$3"
+}
+
+# assert_prefix_pins <shell>: the own-branch pass-through, the refusals and the
+# red twin for both update skills, under one shell.
+assert_prefix_pins() {
+  local shell_name="$1" index block stripped baseline skill_file label kind refused_kind
+  make_repo
+  install_libraries "$REPO"
+  for kind in deps update spec debt; do
+    make_worktree "$REPO" "pin-$kind" "$kind/x"
+  done
+  for index in 0 1; do
+    skill_file="${PREFIX_PIN_SKILL_FILES[$index]}"
+    label="$skill_file ($shell_name)"
+    block="$(extract_block "$REPO_ROOT/$skill_file")"
+    [ -n "$block" ] || { echo "$label: extractor found no block" >&2; return 1; }
+    stripped="$(strip_prefix_argument "$block")"
+    [ "$stripped" != "$block" ] || { echo "$label: removing the prefix argument changed nothing" >&2; return 1; }
+
+    kind="${PREFIX_PIN_OWN_KINDS[$index]}"
+    run_pin_block "$shell_name" "$REPO/.claude/worktrees/pin-$kind" "$block"
+    [ "$status" -eq 0 ] || { echo "$label: own kind $kind expected exit 0, got $status; output: $output" >&2; return 1; }
+    [ -z "$output" ] || { echo "$label: own kind $kind expected empty output, got: $output" >&2; return 1; }
+
+    run_pin_block "$shell_name" "$REPO/.claude/worktrees/pin-$kind" "$stripped"
+    [ "$status" -eq 1 ] || { echo "$label: red twin from $kind expected exit 1, got $status" >&2; return 1; }
+
+    for refused_kind in "${PREFIX_PIN_OTHER_KINDS[$index]}" spec debt; do
+      run_pin_block "$shell_name" "$REPO/.claude/worktrees/pin-$refused_kind" "$stripped"
+      [ "$status" -eq 1 ] || { echo "$label: no-prefix variant from $refused_kind expected exit 1, got $status" >&2; return 1; }
+      baseline="$output"
+      [ -n "$baseline" ] || { echo "$label: no-prefix refusal from $refused_kind was empty" >&2; return 1; }
+      run_pin_block "$shell_name" "$REPO/.claude/worktrees/pin-$refused_kind" "$block"
+      [ "$status" -eq 1 ] || { echo "$label: from $refused_kind expected exit 1, got $status; output: $output" >&2; return 1; }
+      [ "$output" = "$baseline" ] || { echo "$label: from $refused_kind the refusal differs from the no-prefix variant's" >&2; return 1; }
+    done
+  done
+  return 0
+}
+
+@test "update skills' call sites: own branch passes, every other worktree refuses like no prefix, under bash" {
+  assert_prefix_pins bash
+}
+
+@test "update skills' call sites: own branch passes, every other worktree refuses like no prefix, under zsh" {
+  command -v zsh >/dev/null 2>&1 || skip "zsh not installed"
+  assert_prefix_pins zsh
+}
