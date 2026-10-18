@@ -525,6 +525,17 @@
       "reaped_by": "slot reclaim in worktree provisioning and in the ports session-start cleanup"
     },
     {
+      "id": "kept-worktrees-ledger",
+      "path": "kept-worktrees.tsv",
+      "match": "exact",
+      "kind": "file",
+      "scope": "shared",
+      "keyed_by": "tree root, one line per linked worktree a post-merge cleanup kept (tree, branch, why); a second stop of the same tree replaces its line, written temp-then-mv",
+      "why": "The worktree removal check records each tree it stops removing, so the session-start reminder can list it until it is removed. Main-anchored so every tree reads and writes one ledger.",
+      "writer": "code",
+      "reaped_by": "the kept-worktree reminder (kept-worktrees.sh remind) drops the line of a tree git no longer lists as a live worktree"
+    },
+    {
       "id": "ports-tombstones",
       "path": "ports/tombstones/",
       "match": "prefix",

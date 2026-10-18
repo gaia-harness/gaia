@@ -183,6 +183,10 @@ Every checkout owns stable dev, Storybook, and Playwright ports, so two trees ne
 
 **What Claude is told.** Worktree entry, session start, and `/clear` or compaction inside a linked worktree print one context line carrying the tree's ports and the ask-first rule. The rule for Claude's own behavior is `frontend/.claude/rules/ports.md`.
 
+## Kept worktrees
+
+Post-merge cleanup runs `.gaia/scripts/worktree-removal-check.sh` before it removes a tree, and stops rather than discard work the tree still holds (its header names the conditions). When it stops, it records the tree in a main-anchored ledger that `.gaia/state-registry.json` declares. At every session start, `.claude/hooks/wiki-session-start.sh` lists each tree in that ledger, plus each linked worktree whose upstream reads `[gone]`, with why it was kept and the removal commands, and prints nothing when the list is empty. The `[gone]` source catches trees no cleanup ever ran on; the ledger covers the window before a fetch prune marks a kept tree's upstream gone. The reminder reads local git state only, never removes a tree, and drops a ledger line once git no longer lists its tree, so a tree leaves the list when it is removed. The logic is in `.gaia/scripts/kept-worktrees.sh`.
+
 ## What is permanent
 
 The registry is the only list. Inside a linked worktree, `.claude/hooks/block-worktree-path-mismatch.sh` denies an Edit, Write, or MultiEdit to a `.gaia/local/` path that no registry entry recognizes, so drift written there surfaces rather than vanishing. Writes from the main checkout, or through Bash, are not checked. That is the defense an adopter clone carries.

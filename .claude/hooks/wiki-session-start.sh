@@ -5,6 +5,11 @@
 # stdout reaches Claude's context, so the print is the delivery. The report is
 # read, then deleted, so it surfaces exactly once.
 #
+# Then prints the kept-worktree reminder (.gaia/scripts/kept-worktrees.sh):
+# every worktree a post-merge cleanup stopped before removing, or whose
+# upstream reads [gone], with its removal commands, at every start until the
+# tree is removed. Nothing when none is kept. Local reads only: no fetch.
+#
 # Fail-open: no ERR trap and no `set -e`, so a library that fails to parse
 # costs the main-root lookup, never the print.
 
@@ -36,5 +41,8 @@ if [ -f "$catchup_report" ]; then
   head -n 1 "$catchup_report" 2>/dev/null
   rm -f "$catchup_report" 2>/dev/null
 fi
+
+_kept_worktrees="$_hook_directory/../../.gaia/scripts/kept-worktrees.sh"
+[ -f "$_kept_worktrees" ] && bash "$_kept_worktrees" remind --main-root "$main_root" 2>/dev/null
 
 exit 0

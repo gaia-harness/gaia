@@ -63,7 +63,7 @@ The sourced libraries under `.claude/hooks/lib/` are deliberately absent. They a
 | `provision-worktree.sh` | PostToolUse (EnterWorktree), SessionStart (startup\|resume) | Re-links a linked worktree's shared state, assigns its port slot and port file, and regenerates what it needs generated. |
 | `red-verify-commit-check.sh` | PreToolUse (Bash, Monitor) | Denies `git commit` when a new-at-HEAD passing test has no matching failing run on record. |
 | `usage-capture.sh` | Stop, SessionStart (startup\|resume) | Launches the detached usage flusher and returns. |
-| `wiki-session-start.sh` | SessionStart (startup\|resume) | Runs `local-janitor.sh`, then prints the janitor's one-line base-catch-up report on SessionStart stdout. |
+| `wiki-session-start.sh` | SessionStart (startup\|resume) | Runs `local-janitor.sh`, then prints the janitor's one-line base-catch-up report and the kept-worktree reminder on SessionStart stdout. |
 | `workflow-doctrine-inject.sh` | PostToolUse (Bash, EnterWorktree), SessionStart (startup\|resume\|clear\|compact) | Injects the execution doctrine into a session on a non-default branch or in a linked worktree, once per branch key. On EnterWorktree onto the harness's `worktree-<name>` spelling it also names the `git branch -m` rename to the canonical branch. A Bash `git worktree add` that creates a tree under `.claude/worktrees/` injects the backstop (enter with `EnterWorktree({path})`, rename a non-minted branch) on every such call, outside the once-per-branch dedupe. |
 | `worthiness-presence-check.sh` | PreToolUse (Bash, Monitor) | Denies `gh pr merge` when an emergent test the pull request changed carries no worthiness verdict. |
 
@@ -186,7 +186,7 @@ Every **blocking** command-reading hook's `PreToolUse` registration names `Bash|
 
 The wiki sync system is convergent: the user's already-paid-for Claude session does the work via the sync stage of `/gaia-wiki`. Hooks only keep Claude _informed_; they never spawn `claude -p` sub-processes. See [[Wiki Sync]] for the full design.
 
-- **`wiki-session-start.sh`** (SessionStart, startup|resume): runs `local-janitor.sh`, then prints the first line of the base-catch-up report the janitor writes when its fast-forward of the base branch is refused, and deletes the report, so the line reaches the conversation once. SessionStart stdout reaches the model. The hook never fails the session and commits no wiki edit. See [[Claude Integration Conventions]] § Wiki vendor relationship.
+- **`wiki-session-start.sh`** (SessionStart, startup|resume): runs `local-janitor.sh`, then prints the first line of the base-catch-up report the janitor writes when its fast-forward of the base branch is refused, and deletes the report, so the line reaches the conversation once. It then prints the kept-worktree reminder, described in [[Worktrees#Kept worktrees]]. SessionStart stdout reaches the model. The hook never fails the session and commits no wiki edit. See [[Claude Integration Conventions]] § Wiki vendor relationship.
 
 Wiki drift has no hook: the only drift signal is the `🧠 Run /gaia-wiki` statusline nudge, see [[Wiki Sync]]. `update-deps` and `update-gaia` are surfaced via the **statusline** (not a hook); see [[Claude Skills]] § Statusline update indicators.
 
