@@ -442,10 +442,10 @@ render_statusline_against_refresher_cache() {
   # its own dirname when no main-root resolver is present, as here, so a copy
   # elsewhere reads the wrong cache and proves nothing) and confirm the raw
   # escape byte now reaches the render.
-  search='tr -d'
+  search='def clean:'
   # shellcheck disable=SC2016 # single-quoted on purpose: this is the literal
   # replacement line to write, not an expression to expand here.
-  broken_line='      codify_reason="${codify_reason_raw#?}"'
+  broken_line='        def clean: tostring;'
   count=$(grep -cF -- "$search" "$MAIN/.gaia/statusline/gaia-statusline.sh")
   [ "$count" -eq 1 ]
   broken="$MAIN/.gaia/statusline/gaia-statusline-broken.sh"

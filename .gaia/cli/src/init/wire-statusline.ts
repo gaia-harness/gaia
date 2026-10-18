@@ -115,11 +115,16 @@ const parseFlags = (argv: readonly string[]): FlagParseResult => {
  * the root either: it does not follow entry into a linked worktree, so it
  * serves only as the fallback for a working directory outside any
  * repository.
+ *
+ * `refreshInterval` re-runs the command on a timer because Claude Code does
+ * not re-run it when the terminal is resized, so a width-fitted line would
+ * otherwise stay stale until the next message.
  */
 /* eslint-disable no-template-curly-in-string -- literal shell `${ }` syntax, not JS interpolation */
 const STATUSLINE_BLOCK = {
   command:
     'bash "$(git rev-parse --show-toplevel 2>/dev/null || printf %s "${CLAUDE_PROJECT_DIR:-.}")/.gaia/statusline/gaia-statusline.sh"',
+  refreshInterval: 15,
   type: 'command',
 } as const;
 /* eslint-enable no-template-curly-in-string */
@@ -202,7 +207,10 @@ const matchesCanonical = (existing: unknown): boolean => {
 
   return (
     candidate.type === STATUSLINE_BLOCK.type &&
-    candidate.command === STATUSLINE_BLOCK.command
+    candidate.command === STATUSLINE_BLOCK.command &&
+    // Any interval counts, so an adopter's tuned value survives a re-run;
+    // only a block without one is rewritten to gain it.
+    typeof candidate.refreshInterval === 'number'
   );
 };
 

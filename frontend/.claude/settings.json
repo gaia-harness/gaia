@@ -432,7 +432,8 @@
   },
   "statusLine": {
     "type": "command",
-    "command": "bash \"$(git rev-parse --show-toplevel 2>/dev/null || printf %s \"${CLAUDE_PROJECT_DIR:-.}\")/.gaia/statusline/gaia-statusline.sh\""
+    "command": "bash \"$(git rev-parse --show-toplevel 2>/dev/null || printf %s \"${CLAUDE_PROJECT_DIR:-.}\")/.gaia/statusline/gaia-statusline.sh\"",
+    "refreshInterval": 15
   },
   "enabledPlugins": {
     "typescript-lsp@claude-plugins-official": true
