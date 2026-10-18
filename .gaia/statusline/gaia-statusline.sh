@@ -287,7 +287,9 @@ else
       # a process with. Count first, then completed_at: the count never holds
       # a comma.
       if [ -f "$SETUP_FEATURES_FILE" ]; then
+        # shellcheck disable=SC2016 # jq variables, expanded by jq.
         GAIA_SETUP_OWED_JQ='def gaia_setup_owed($list_text; $project_text): [];'
+        # shellcheck source=/dev/null
         . "$GAIA_DIRECTORY/statusline/setup-owed.sh" 2>/dev/null || true
         SETUP_PROJECT_FILE="$STATE_ROOT/.gaia/project.json"
         if [ -f "$SETUP_PROJECT_FILE" ]; then
