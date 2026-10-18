@@ -588,6 +588,21 @@ server.on("error", (error) => { process.stdout.write(`bind-failed ${error.code}\
   [ -f "$STATE/sessions/session-a.tsv" ]
 }
 
+@test "dead session: the reap also drops that session's kept-worktree occupancy record" {
+  start_host_process
+  write_session session-a "$HOST_PID"
+  mkdir -p "$STATE/../worktree-occupancy"
+  printf '%s\n' "$SCRATCH/tree" >"$STATE/../worktree-occupancy/session-a.tsv"
+  printf '%s\n' "$SCRATCH/tree" >"$STATE/../worktree-occupancy/session-b.tsv"
+  kill -KILL "$HOST_PID"
+  wait_until_gone "$HOST_PID"
+  run run_library gaia_server_reap_dead_sessions "$STATE"
+  [ "$status" -eq 0 ]
+  [ ! -e "$STATE/sessions/session-a.tsv" ]
+  [ ! -e "$STATE/../worktree-occupancy/session-a.tsv" ]
+  [ -f "$STATE/../worktree-occupancy/session-b.tsv" ]
+}
+
 # ---------- session registration ----------
 
 @test "session register: records the host named by GAIA_PORTS_HOST_PID and rewrites only on change" {

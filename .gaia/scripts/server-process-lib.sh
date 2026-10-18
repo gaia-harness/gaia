@@ -916,7 +916,10 @@ gaia_server_cleanup_needed() {
 # gaia_server_reap_dead_sessions <state-directory>: stops the servers of
 # launch records whose session host has died, after verifying identity; drops
 # records whose process is gone or no longer matches; then drops session files
-# whose host is dead and which no launch record names.
+# whose host is dead and which no launch record names, together with that
+# session's kept-worktree occupancy record (worktree-occupancy/<id>.tsv, beside
+# the state directory): the reminder judges a tree's holder from the session
+# file, so an occupancy record outliving it would hold its tree forever.
 gaia_server_reap_dead_sessions() {
   local state_directory="$1" record_file identity stop_status
   [ -n "$state_directory" ] && [ -d "$state_directory" ] || return 0
@@ -969,7 +972,10 @@ gaia_server_reap_dead_sessions() {
         break
       fi
     done
-    [ "$named" -eq 0 ] && rm -f "$session_file"
+    if [ "$named" -eq 0 ]; then
+      rm -f "$session_file"
+      rm -f "${state_directory%/*}/worktree-occupancy/$session_id.tsv"
+    fi
   done
   return 0
 }

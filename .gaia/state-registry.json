@@ -544,7 +544,7 @@
       "keyed_by": "Claude Code session id, one file per session holding the tree root it last provisioned or entered",
       "why": "Lets the kept-worktree reminder leave out a tree a live Claude session is working in. Main-anchored so a session in any tree is seen from every other.",
       "writer": "code",
-      "reaped_by": "the kept-worktree reminder deletes a record once the session's host process has exited"
+      "reaped_by": "the ports dead-session reap (gaia_server_reap_dead_sessions) deletes a session's record with its host record once the host has exited; the kept-worktree reminder also deletes the record of a tree it checks whose host has exited"
     },
     {
       "id": "ports-tombstones",

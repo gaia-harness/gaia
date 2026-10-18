@@ -44,7 +44,11 @@
 #            the session's tree; the session's host process comes from the
 #            record ports-session-start.sh writes. A host that has exited, or
 #            whose pid now names another process, releases the tree and its
-#            occupancy is pruned; a host that cannot be read holds it.
+#            occupancy is pruned; a host that cannot be read holds it. The
+#            ports dead-session reap (gaia_server_reap_dead_sessions) deletes
+#            a dead session's host record, which would then read as
+#            unreadable, so it deletes that session's occupancy record in the
+#            same step.
 #   not own  the tree the starting session is in (`--own-tree`).
 # Held trees are counted in one line rather than listed. Nothing detects a
 # person working in a tree outside Claude, so the block tells Claude to remove
@@ -52,8 +56,9 @@
 #
 # Every subcommand exits 0 on every path and prints nothing when a read or
 # write fails, so none can fail the check's stop or a session start. The
-# reminder never removes a tree: it only drops ledger lines and occupancy
-# records whose tree git no longer lists, or whose session has exited.
+# reminder never removes a tree: it only drops ledger lines whose tree
+# is no longer listed, and the occupancy records of a tree it checks whose
+# session has exited. The ports reap drops the rest.
 #
 # Cost, paid at every session start: one `git worktree list --porcelain`, one
 # `git for-each-ref`, one ledger read and one awk. Only when a candidate
