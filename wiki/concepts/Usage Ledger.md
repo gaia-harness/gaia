@@ -3,7 +3,7 @@ type: concept
 title: Usage Ledger
 status: active
 created: 2026-09-30
-updated: 2026-10-15
+updated: 2026-10-18
 tags: [concept, cost, usage, data-contract]
 ---
 
@@ -36,7 +36,7 @@ Row shapes, abridged:
  "ref":"research:<slug>","source":"transcript"}
 
 {"schema_version":1,"kind":"binding","type":"close","session_id":"<sid>","ts":"<iso>",
- "ref":"spec:SPEC-NNN","workflow":"gaia-spec","source":"record-command"}
+ "ref":"spec:SPEC-NNN","workflow":"gaia-spec","source":"record-command","effort":"high"}
 
 {"schema_version":1,"kind":"edge","child":"<ref>","parent":"<ref>","source":"link-command","ts":"<iso>","session_id":"<sid>|null","sidechain":false}
 
@@ -98,6 +98,8 @@ Two figures come out of the graph and are kept apart. The **per-PR figure** is t
 
 `bash .gaia/scripts/usage.sh` is the adopter-facing command. With no arguments it prints its usage, which is the list of subcommands and flags; this page does not repeat it. Writes refuse invalid refs and cycles without writing anything. Readouts always exit 0 and degrade to a marked figure instead of failing.
 
+The close binding row's `effort` field is optional. It holds the effort level the statusline last saw for the session the row names, read when `record` ran, with no freshness limit. The key is absent when that session has no valid reading: no statusline render carried a level, or GAIA's statusline is not installed. `schema_version` stays 1.
+
 A SPEC's `lineage:` frontmatter is the authoring-time link: `usage.sh lineage <path-to-SPEC.md>` turns each entry into an edge. The wiki page for authoring a SPEC is [[GAIA Spec]].
 
 ## Recording a run
@@ -116,7 +118,9 @@ A SPEC's `lineage:` frontmatter is the authoring-time link: `usage.sh lineage <p
 
 **A run continued in another session.** A start binding belongs to the session that wrote it, and `/clear` or a fresh launch mints a new session id. So a session handing a run off runs `bash .gaia/scripts/usage.sh handoff`, which flushes it and prints the join line for its newest open run, and the continuation prompt carries that line as its first step: `bash .gaia/scripts/usage.sh join --workflow <w> --session <sid> --start <iso>`. `join` writes the continuing session a start binding that names the run's origin, the session and start time of the run's first start, so a chain of handoffs binds every session to one run. The binding sits at the origin's start when the session holds no spend from before it, and at the join time otherwise. `handoff` prints nothing when no recorded run is open. The context checkpoint and the audit loop's new-session option both run it before printing their continuation prompt.
 
-When `record` pairs a close with a start bound to an origin, or with an origin other sessions joined, it also closes each of those sessions under the same ref, so every readout attributes their spend to the run. The Cost line sums them and measures elapsed time from the origin's start. A session whose start an earlier `record` already claimed is left out, so nothing counts twice. A joined session that invokes the workflow again before any close claims its join keeps the join's origin, so the re-invocation does not drop the origin session from the run. Once a close has claimed the join, a later start in that session begins a new run of its own.
+When `record` pairs a close with a start bound to an origin, or with an origin other sessions joined, it also closes each of those sessions under the same ref, so every readout attributes their spend to the run. The Cost line sums them and measures elapsed time from the origin's start. A session whose start an earlier `record` already claimed is left out, so nothing counts twice.
+
+Every close row `record` writes, the recording session's and each bound session's, gets `"effort":"<level>"` from the per-session effort reading the statusline writes beside the context reading (`.gaia/local/cache/shared/context/<session id>.effort.json`). Each row takes its own session's reading, never the recording session's. A session the statusline never saw a level for records no `effort` key, and a failure reading it leaves the rows as they were: the exit status and the Cost line never change because of it. `CLAUDE_CODE_EFFORT_LEVEL` overrides every effort level and the row does not show it; see [[Workflow Doctrine]]. A joined session that invokes the workflow again before any close claims its join keeps the join's origin, so the re-invocation does not drop the origin session from the run. Once a close has claimed the join, a later start in that session begins a new run of its own.
 
 **Recovery.** A session with no start of its own, joined or not, refuses a bare `record`. The refusal names both ways on: run the join line the continuation prompt carries, then record again, or rerun with `--start <iso>`, `<iso>` being the UTC time the run began. `--start` writes a start binding at `<iso>` and a close carrying `start_ts`, under one lock. Unless that start is an origin other sessions joined, the figure covers only the current session, and the Cost line ends ` (partial: this session only)`. A second call with the same `--start` reports already recorded.
 

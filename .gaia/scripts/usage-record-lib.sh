@@ -23,6 +23,9 @@
 # exits 0: an archive gate that read "nothing owed" from a missing jq would
 # delete a folder it could not check.
 #
+# A close row may carry an optional `effort` field: the level the statusline
+# last saw for the session the row names (context-checkpoint-lib.sh).
+#
 # Which close pairs with which start is decided by usage_intervals alone
 # (usage-resolve-lib.sh), and the figures come from gaia_usage_interval_view
 # (usage-render-lib.sh); this file holds neither an attribution rule nor a
@@ -173,6 +176,7 @@ _record_locked() {
   esac
   jq -c '.rows[]' <<<"$decision" >"$RECORD_WORK/usage_rows" || return 6
   _record_bound_sessions "$ledger" "$decision" || return 6
+  _record_effort_rows
   # The edges go first: they name a run ref nothing else uses yet, so one left
   # behind by a failed close append is inert, and the close row is the commit.
   if [ -s "$RECORD_WORK/link_rows" ]; then cat "$RECORD_WORK/link_rows" >>"$TELEMETRY_DIRECTORY/links.jsonl" || return 7; fi
@@ -209,6 +213,32 @@ _record_bound_sessions() {
   jq -r '.origin_ts' <<<"$bound" >"$RECORD_WORK/origin_ts" || return 1
   jq -r '.members[] | @tsv' <<<"$bound" >"$RECORD_WORK/members" || return 1
   jq -c '.rows[]' <<<"$bound" >"$RECORD_WORK/bound_rows" || return 1
+}
+
+# _record_effort_rows: gives each close row the effort level the statusline last
+# saw for the session that row names, read now with no freshness limit. A
+# session with no valid reading gets no key. The rows are rewritten into
+# scratch files and swapped in only once both are whole, and every failure
+# leaves them as they were and returns 0: the record never fails over this step.
+# shellcheck disable=SC2016  # jq source, no shell expansion
+_record_effort_rows() {
+  local usage_rows="$RECORD_WORK/usage_rows" bound_rows="$RECORD_WORK/bound_rows" sessions session_id level effort_map='{}'
+  [ -n "${MAIN_ROOT:-}" ] || return 0
+  command -v gaia_context_effort_read >/dev/null 2>&1 || return 0
+  sessions="$(jq -r 'select(type == "object" and .type == "close" and (.session_id | type) == "string") | .session_id' "$usage_rows" "$bound_rows" 2>/dev/null)" || return 0
+  while IFS= read -r session_id; do
+    [ -n "$session_id" ] || continue
+    level="$(gaia_context_effort_read "$MAIN_ROOT" "$session_id")" || continue
+    effort_map="$(jq -c --arg session_id "$session_id" --arg level "$level" '. + {($session_id): $level}' <<<"$effort_map")" || return 0
+  done <<<"$sessions"
+  [ "$effort_map" != '{}' ] || return 0
+  jq -c --argjson map "$effort_map" 'if type == "object" and .type == "close" and (.session_id | type) == "string" and ($map[.session_id] | type) == "string"
+      then . + {effort: $map[.session_id]} else . end' "$usage_rows" >"$usage_rows.effort" 2>/dev/null &&
+    jq -c --argjson map "$effort_map" 'if type == "object" and .type == "close" and (.session_id | type) == "string" and ($map[.session_id] | type) == "string"
+      then . + {effort: $map[.session_id]} else . end' "$bound_rows" >"$bound_rows.effort" 2>/dev/null &&
+    mv -f "$usage_rows.effort" "$usage_rows" && mv -f "$bound_rows.effort" "$bound_rows"
+  rm -f "$usage_rows.effort" "$bound_rows.effort"
+  return 0
 }
 
 # _record_link_rows: the edge rows --pr and --issue ask for, written with the

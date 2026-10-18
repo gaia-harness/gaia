@@ -19,8 +19,8 @@
       "match": "prefix",
       "kind": "dir",
       "scope": "shared",
-      "keyed_by": "session id, one file per Claude Code session",
-      "why": "The statusline writes each session's context reading (<session_id>.json, tmp + mv) for the audit loop's checkpoint to read. Anchored to the main root so every worktree's render lands in one place the bound hook finds. Must precede cache-shared, whose prefix would otherwise claim these files first.",
+      "keyed_by": "session id, two files per Claude Code session: the context reading (<session_id>.json) and the effort reading (<session_id>.effort.json)",
+      "why": "The statusline writes each session's context reading (<session_id>.json, tmp + mv) for the audit loop's checkpoint to read, and beside it the session's effort reading (<session_id>.effort.json, tmp + mv), which usage.sh record reads for the ledger's close rows. Anchored to the main root so every worktree's render lands in one place the bound hook finds. Must precede cache-shared, whose prefix would otherwise claim these files first.",
       "writer": "code",
       "reaped_by": "check-updates.sh (sweeps regular files older than 7 days on its TTL-gated pass)"
     },

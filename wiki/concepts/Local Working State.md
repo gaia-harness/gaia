@@ -2,7 +2,7 @@
 type: concept
 status: active
 created: 2026-07-01
-updated: 2026-10-15
+updated: 2026-10-18
 tags: [concept, claude, hooks]
 ---
 
@@ -32,7 +32,7 @@ A removed feature has no owner left to prune what it wrote, so retiring one mean
 
 `.gaia/local/protected/checkpoint-override.json` is a machine-local, lower-only override of the audit loop's context checkpoint line, hand-edited by a human. It is not a `.gaia/project.json` key because teammates can run different models with different context windows, so the line is a per-machine choice (see [[Project Config]]). A value that would raise the line, or any invalid value, reads as the shipped default, and the file's fields and the default live in `.gaia/scripts/context-checkpoint-lib.sh`.
 
-The context readings under `cache/shared/context/` are guarded cache outside the protected folder: the statusline writes one per session and they are swept by age, and the audit loop reads them, so a session that could forge one would widen its own bound. The same guard denies Claude tool writes to that directory. It is a text guard over commands that name those paths, so a reading minted from Bash by running the statusline or `gaia_context_write` is outside it and stands until the next real render; the hook's header lists its limits.
+The context readings under `cache/shared/context/` are guarded cache outside the protected folder: the statusline writes one per session, plus an effort reading per session that `usage.sh record` reads for the ledger's close rows, and they are swept by age, and the audit loop reads the context readings, so a session that could forge one would widen its own bound. The same guard denies Claude tool writes to that directory. It is a text guard over commands that name those paths, so a reading minted from Bash by running the statusline or `gaia_context_write` is outside it and stands until the next real render; the hook's header lists its limits.
 
 `.gaia/local/settings.json` is the other machine-local settings file, and the writable one: GAIA's per-machine opt-ins, `{"version":1,"statusline":{"left":"gaia"|"user"}}`. `/setup-gaia` writes it and the statusline reads it (see [[Claude Integration]]); no guard covers it, since nothing in it widens a bound.
 

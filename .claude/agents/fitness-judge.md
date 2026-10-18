@@ -2,6 +2,7 @@
 name: fitness-judge
 description: 'Dispatched only by /gaia-fitness: reads one input file listing a project''s skills, commands, agents and path-scoped rules, makes four advisory judgments no script can, and replies with one JSON array. Never invoked directly.'
 model: sonnet
+effort: medium
 tools: Read
 ---
 

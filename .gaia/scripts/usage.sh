@@ -39,6 +39,8 @@ _usage_missing_library() { printf 'usage: cannot load %s\n' "$1" >&2; exit 1; }
 . "$_usage_script_directory/usage-record-lib.sh" 2>/dev/null || _usage_missing_library "$_usage_script_directory/usage-record-lib.sh"
 # shellcheck source=.gaia/scripts/usage-handoff-lib.sh
 . "$_usage_script_directory/usage-handoff-lib.sh" 2>/dev/null || _usage_missing_library "$_usage_script_directory/usage-handoff-lib.sh"
+# shellcheck source=.gaia/scripts/context-checkpoint-lib.sh
+. "$_usage_script_directory/context-checkpoint-lib.sh" 2>/dev/null || _usage_missing_library "$_usage_script_directory/context-checkpoint-lib.sh"
 
 usage_help() {
   cat <<'EOF'

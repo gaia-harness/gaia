@@ -132,7 +132,7 @@ assert_context_file() {
 
 @test "red: no context_window writes nothing and still renders" {
   local json
-  json=$(payload "$MAIN" "$SESSION_ID" 25 1000000 | jq 'del(.context_window)')
+  json=$(payload "$MAIN" "$SESSION_ID" 25 1000000 | jq 'del(.context_window, .effort)')
   render "$(main_script)" "$json"
   [ "$status" -eq 0 ]
   [ -n "$output" ]
@@ -141,7 +141,7 @@ assert_context_file() {
 
 @test "red: a context_window without a size writes nothing" {
   local json
-  json=$(payload "$MAIN" "$SESSION_ID" 25 1000000 | jq 'del(.context_window.context_window_size)')
+  json=$(payload "$MAIN" "$SESSION_ID" 25 1000000 | jq 'del(.context_window.context_window_size, .effort)')
   render "$(main_script)" "$json"
   [ "$status" -eq 0 ]
   [ ! -e "$CONTEXT_DIRECTORY" ]

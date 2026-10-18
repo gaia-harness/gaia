@@ -166,6 +166,9 @@ fi
 # or a write that fails never prints and never stops the render. The lib is
 # sourced as "$GAIA_DIRECTORY/scripts/...", not from SCRIPT_DIRECTORY: a maintainer wrapper
 # execs a patched copy that sits in a different directory.
+# The session's effort level is written beside the context reading, from the
+# same render but independent of the context_window fields: usage.sh record
+# reads it for the close rows, and only this script sees the level.
 if [ -f "$GAIA_DIRECTORY/scripts/context-checkpoint-lib.sh" ]; then
   # shellcheck source=/dev/null
   . "$GAIA_DIRECTORY/scripts/context-checkpoint-lib.sh" 2>/dev/null || true
@@ -176,6 +179,9 @@ if [ -f "$GAIA_DIRECTORY/statusline/context-reading.sh" ]; then
 fi
 if command -v gaia_statusline_write_context >/dev/null 2>&1; then
   gaia_statusline_write_context "$STATE_ROOT" "$session_id" "$context_percentage" "$context_window_size" "$context_used_tokens" >/dev/null 2>&1 || true
+fi
+if command -v gaia_statusline_write_effort >/dev/null 2>&1; then
+  gaia_statusline_write_effort "$STATE_ROOT" "$session_id" "$effort_level" >/dev/null 2>&1 || true
 fi
 
 # ---------- Left side ----------

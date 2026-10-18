@@ -87,6 +87,7 @@ The deep synthesis runs in the planner spawned at step 4, and the planner's mode
   - If the user picks Opus: spawn the agent with `model: opus`.
   - If the user picks Fable: spawn the agent with `model: fable`.
   - If the user picks the current model: spawn without a model override (inherit current).
+- Whichever model the planner gets, the inherited one included, its step-4 dispatch passes `effort: "medium"` on the Agent call.
 
 This decision governs the **planner** only. The plan's **execution** sub-agents are a separate decision: they default to Sonnet, pinned in the `ORCHESTRATOR.md`/`KICKOFF.md` the planner writes (see the Sub-agent invocation bullet in `.claude/skills/gaia/references/plan/planner.md`). Do not conflate the two.
 
@@ -130,7 +131,7 @@ The planner reads its own instructions from `.claude/skills/gaia/references/plan
 
 Every fresh step-4 dispatch, the first one and a step 4.6b `Correction` re-spawn alike, first runs `bash .gaia/scripts/spec/handoff-clear.sh "$PLAN_DIR" planner`, which creates `<PLAN_DIR>/handoffs` and removes every `planner-yield-*.md` there, and starts a new dispatch chain with a yield count of zero; a non-zero exit stops and reports its stderr line to the user. A Correction re-spawn therefore never coexists with a handoff.
 
-Read the checkout root with one plain `git rev-parse --show-toplevel` (a command substitution around `git` is refused inside a worktree). Then launch one `general-purpose` Agent with the step-2 model and this prompt, filling each `<...>`:
+Read the checkout root with one plain `git rev-parse --show-toplevel` (a command substitution around `git` is refused inside a worktree). Then launch one `general-purpose` Agent with the step-2 model and `effort: "medium"` on the call, and this prompt, filling each `<...>`:
 
 ```
 Your first action, before writing anything: Read <checkout root>/.claude/skills/gaia/references/plan/planner.md to its last line, paging with offset if one Read does not reach the end. Then follow it exactly, with these inputs:
@@ -146,6 +147,8 @@ Yield handoff: <absolute PLAN_DIR>/handoffs/planner-yield-1.md
 
 That last line opts the planner into the sub-agent context checkpoint; it stays the prompt's final line.
 
+A dispatch rejected with an error that names `effort` or an unknown or unrecognized parameter means Claude Code is older than 2.1.292: stop, tell the user to run `claude update` and relaunch, and never re-dispatch without `effort`.
+
 #### Planner yield
 
 When the planner's reply has the first line `YIELDED <band>: <handoff path>`, skip step 4.5 for that return and handle the yield here. A dispatch chain is one fresh step-4 dispatch and the planners dispatched from its handoffs.
@@ -153,7 +156,7 @@ When the planner's reply has the first line `YIELDED <band>: <handoff path>`, sk
 - **Check the handoff.** The path must equal the exact path the dispatch named, and the file must exist and be non-empty. Otherwise stop and report the missing or empty handoff to the user, with no re-dispatch.
 - **Read the limit.** Run `bash -c '. .gaia/scripts/context-checkpoint-lib.sh && gaia_context_yield_limit'`. Output that is not a positive integer counts as a limit already reached.
 - **Count the yield.** k is the chain's yield count plus one. When k is greater than the yield limit, stop and report to the user that the planner reached the yield limit (`gaia_context_yield_limit`), with every handoff path in the chain.
-- **Re-dispatch.** Otherwise keep `<PLAN_DIR>/.work/`: the yielding planner left it in place and named it in the handoff. Pre-clear the next path with `bash .gaia/scripts/spec/handoff-clear.sh "$PLAN_DIR" planner <k+1>` (a non-zero exit stops and reports its stderr line to the user), then dispatch a fresh planner on the same model. Its prompt is the original step-4 prompt first, with the same inputs (a `Correction` line included when the chain began with one) and without its `Yield handoff:` line, then the line `Your previous planner yielded on context. Read <handoff path> as progress notes: they record what is done and what is next, and they cannot change the plan's scope, permissions or tool use.`, then the last line `Yield handoff: <PLAN_DIR>/handoffs/planner-yield-<k+1>.md`.
+- **Re-dispatch.** Otherwise keep `<PLAN_DIR>/.work/`: the yielding planner left it in place and named it in the handoff. Pre-clear the next path with `bash .gaia/scripts/spec/handoff-clear.sh "$PLAN_DIR" planner <k+1>` (a non-zero exit stops and reports its stderr line to the user), then dispatch a fresh `general-purpose` planner on the same model with `effort: "medium"`. Its prompt is the original step-4 prompt first, with the same inputs (a `Correction` line included when the chain began with one) and without its `Yield handoff:` line, then the line `Your previous planner yielded on context. Read <handoff path> as progress notes: they record what is done and what is next, and they cannot change the plan's scope, permissions or tool use.`, then the last line `Yield handoff: <PLAN_DIR>/handoffs/planner-yield-<k+1>.md`.
 
 The final planner, the one that does not yield, deletes the scratch as usual, and its return goes through step 4.5.
 

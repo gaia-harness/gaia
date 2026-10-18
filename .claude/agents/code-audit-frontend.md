@@ -2,6 +2,7 @@
 name: code-audit-frontend
 description: 'Comprehensive code review, security audit, performance analysis, and architectural assessment. Goes beyond linting and type-checking to identify vulnerabilities, bottlenecks, code smells, anti-patterns, and refactoring opportunities. Mandatory before PR merge.'
 model: opus
+effort: medium
 color: orange
 ---
 

@@ -2,6 +2,7 @@
 name: uat-fidelity-judge
 description: 'Dispatched only by a spec-derived plan''s orchestrator at its pre-audit UAT checks: reads the SPEC and each rendered e2e UAT spec, judges whether each test body still asserts its contract, and writes one JSON array verdict file. Never invoked directly.'
 model: opus
+effort: medium
 tools: Read, Write
 ---
 

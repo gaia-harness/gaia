@@ -256,6 +256,7 @@ After the user confirms, determine the model for the execution agent:
 - Compare `LATEST` major vs `BASELINE` major (leading integer).
 - **Major bump** → spawn an **Opus agent** (`model: "opus"`).
 - **Minor or patch bump** → spawn a **Sonnet agent** (`model: "sonnet"`).
+- Either way, pass `effort: "medium"` on the Agent call.
 
 Spawn the agent for Steps 6 to 9, passing `BASELINE`, `LATEST`, `LATEST_TAG`, `BASELINE_DIR`, `LATEST_DIR`, and the acting tree's absolute path. Its prompt tells it that tree is its working root: every path in `merge-execution.md` is relative to it, and it runs nothing against any other checkout. The prompt also tells it to read `.claude/skills/update-gaia/references/merge-execution.md` in full before starting Step 6 (in chunks if the Read tool refuses the size, but every chunk before Step 6) and follow it exactly. It must finish reading before Step 6 because the Step 7 walk can overwrite this skill's own files partway through the run, and the agent keeps executing the copy it read. The agent ends after its Step 9 summary and returns its `UpdateMergeReport`; relay the summary to the user, then continue with Step 9b.
 
