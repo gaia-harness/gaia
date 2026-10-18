@@ -29,6 +29,7 @@ See the `tailwind` skill (`frontend/.claude/skills/tailwind/`, which owns class 
 
 The pipeline (query Serena for current paths):
 
+- `frontend/app/utils/theme.ts`: owns the one `THEME_PREFERENCES` list; the `ThemePreference` type, the `isThemePreference` guard, the action schema, and the `ThemeSwitch` maps all derive from it
 - `frontend/app/utils/theme.server.ts`: reads/writes the `__theme` cookie
 - `frontend/app/hooks/use-theme.ts`: tracks OS `prefers-color-scheme` via `useSyncExternalStore` (`useSystemTheme`), derives the optimistic theme from pending `useFetchers()` (`useOptimisticThemeMode`), and resolves the effective theme (`useOptionalTheme`) from optimistic value, then the loader cookie preference, then OS
 - `frontend/app/routes/resources.theme-switch.tsx`: action + `ThemeFormSchema` only
