@@ -11,6 +11,33 @@ tags: [meta, log]
 
 ## [Unreleased]
 
+- 2026-10-18 e38c7cc WORTHY - single cost box; GAIA Spec, Token Cost Readout, Usage Ledger updated in the commit
+- 2026-10-18 a8ccd03 WORTHY - statusline refit cadence; Claude Skills and Claude Integration updated in the commit
+- 2026-10-18 fc5a79c WORTHY - statusline nudge format; Claude Integration and related pages updated in the commit
+- 2026-10-18 195f876 WORTHY - planner inherits session effort; Workflow Doctrine updated in the commit
+- 2026-10-18 268bf98 WORTHY - subagent effort pinning; doctrine and merge pages updated in the commit
+- 2026-10-18 feef85e WORTHY - kept worktrees listed at session start; Claude Hooks and Worktrees updated in the commit
+- 2026-10-18 f613c50 WORTHY - worktree/sandbox defaults; Init, OS Sandbox, Project Config, Setup Features updated in the commit
+- 2026-10-18 d1cbf5d WORTHY - default branch resolution; PR Merge Workflow updated in the commit
+- 2026-10-18 0f5b33e WORTHY - update commands run in own worktree; Update Workflow and PR Merge Workflow updated in the commit
+- 2026-10-18 c14384b WORTHY - model-fit doctrine and pricing; Workflow Doctrine updated in the commit
+- 2026-10-18 e1cb6ff WORTHY - redirect origin pinning; remix-utils dependency page updated in the commit
+- 2026-10-18 bbddc72 WORTHY - clarify menus capped at four options; GAIA Spec updated in the commit
+- 2026-10-18 c3e0c17 WORTHY - update-deps defers to init commit; Init Workflow and Audit Gate Reference updated in the commit
+- 2026-10-18 e0cbd8e WORTHY - onboarding copy; Claude Hooks updated in the commit
+- 2026-10-18 355175b WORTHY - init commit behavior; GAIA Init Workflow and Git Workflow updated in the commit
+- 2026-10-18 a4e4d5e WORTHY - setup .env seeding and worktree default; Task Orchestration updated in the commit
+- 2026-10-18 248169f WORTHY - Storybook Stories updated in the commit
+- 2026-10-18 262ae36 WORTHY - GAIA Spec corrections landed in the commit
+- 2026-10-18 4432805 WORTHY - plan-in-spec session; GAIA Plan, GAIA Spec, Task Orchestration updated in the commit
+- 2026-10-18 7d33ebe WORTHY - wiki corrections landed in the commit
+- 2026-10-18 7750fb0 WORTHY - wiki corrections landed in the commit
+- 2026-10-18 28a4e4e WORTHY - Worthiness Audit correction landed in the commit
+- 2026-10-18 9429bcb WORTHY - theme preference list derived from utils/theme.ts → wiki/modules/Styles.md
+- 2026-10-18 f62cccd WORTHY - parallel sub-agent check scoping lives in plan references, no wiki change
+- 2026-10-18 79aeb10 WORTHY - isolation question recommends worktrees; skill reference owns it, no wiki change
+- 2026-10-18 cf1c725 WORTHY - override audit fails closed via override-audit-advisory-ids.sh; skill reference owns it, no wiki change
+- 2026-10-18 ddf4df7 WORTHY - release commit-and-tag prints the amended SHA; init rename/strip-branding refuse multi-line --title; no page owns the detail
 - 2026-10-16 5bdabfd WORTHY - wiki correction commit; edits landed in-commit
 - 2026-10-16 7b1d06e WORTHY - wiki correction commit; edits landed in-commit
 - 2026-10-16 73d246b WORTHY - wiki correction commit; edits landed in-commit
