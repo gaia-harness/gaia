@@ -24,7 +24,8 @@
 #            window.
 #   [gone]   a linked worktree whose branch's upstream reads [gone]: its
 #            remote branch was deleted, usually by the merge, and the tree was
-#            never removed.
+#            never removed. No removal check ran on it, so its next step
+#            runs the check and compares the branch against the base first.
 #
 # Both subcommands exit 0 on every path and print nothing when a read or write
 # fails, so neither can fail the check's stop or a session start. The reminder
@@ -91,7 +92,8 @@ remind() { # [directory] | --main-root <path>
   # prunable (its directory is gone). The first entry is the main checkout,
   # never a kept tree. Ledger lines for trees that are not live are dropped,
   # and the survivors are written only when something was dropped. Each
-  # listed tree is printed once, `tree<US>branch<US>why`, ledger first; US,
+  # listed tree is printed once, `tree<US>branch<US>why<US>source`, ledger
+  # first (source `checked`: the removal check ran) then [gone] (`unchecked`); US,
   # not tab, because a tab IFS collapses an empty field.
   kept=$(KEPT_PORCELAIN="$porcelain" KEPT_REFERENCES="$references" KEPT_SURVIVORS="$survivors" awk -F '\t' '
   function short(reference) { sub(/^refs\/heads\//, "", reference); return reference }
@@ -123,14 +125,14 @@ remind() { # [directory] | --main-root <path>
   }
   survivor[++survivor_count] = $0
   branch = (tree in branch_reference) ? short(branch_reference[tree]) : $2
-  print tree us branch us $3
+  print tree us branch us $3 us "checked"
   printed[tree] = 1
   }
   END {
     for (i = 2; i <= tree_count; i++) {
       path = order[i]
       if ((path in printed) || !(path in listed) || !(path in branch_reference)) continue
-      if (branch_reference[path] in gone) print path us short(branch_reference[path]) us "its upstream branch is gone"
+      if (branch_reference[path] in gone) print path us short(branch_reference[path]) us "its upstream branch is gone" us "unchecked"
     }
     if (dropped) {
       printf "" > ENVIRON["KEPT_SURVIVORS"]
@@ -144,12 +146,20 @@ remind() { # [directory] | --main-root <path>
   fi
 
   [ -n "$kept" ] || return 0
-  printf 'Kept worktrees: post-merge cleanup stopped before removing these, or their merged branch was never cleaned up. Each stays listed until it is removed.\n'
-  while IFS=$separator read -r tree branch why; do
+  printf 'Kept worktrees: post-merge cleanup stopped before removing these, or their upstream branch is gone and they were never removed. Each stays listed until it is removed.\n'
+  while IFS=$separator read -r tree branch why source; do
     [ -n "$tree" ] || continue
     printf -- '- %s (branch %s): %s\n' "$tree" "$branch" "$why"
-    printf '  Next step: finish or discard what it holds, then %s\n' \
-      "$(bash "$here/worktree-removal-check.sh" --removal-step --tree "$tree" --branch "$branch" 2>/dev/null)"
+    if [ "$source" = unchecked ]; then
+      # No removal check ran on this tree, and with the upstream gone the
+      # check cannot count its unpushed commits, so the step verifies first.
+      printf '  Next step: run \140%s\140, confirm every commit on %s landed on the base branch (a squash merge leaves them in \140git log\140), then \140%s\140 and \140%s\140.\n' \
+        "bash .gaia/scripts/worktree-removal-check.sh --tree $tree" "$branch" \
+        "git worktree remove $tree" "git branch -D $branch"
+    else
+      printf '  Next step: finish or discard what it holds, then %s\n' \
+        "$(bash "$here/worktree-removal-check.sh" --removal-step --tree "$tree" --branch "$branch" 2>/dev/null)"
+    fi
   done <<EOF
 $kept
 EOF

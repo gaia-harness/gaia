@@ -199,6 +199,23 @@ blocked_ledger_run() {
   printf '%s\n' "$output" | grep -Fq "git branch -D $BRANCH" || { printf '%s\n' "$output"; return 1; }
 }
 
+@test "a [gone] tree's next step runs the removal check first and does not force or claim a merge" {
+  gone_upstream || return 1
+  remind
+  [ "$status" -eq 0 ] || { printf '%s\n' "$output"; return 1; }
+  printf '%s\n' "$output" | grep -Fq "worktree-removal-check.sh --tree $TREE" || { printf '%s\n' "$output"; return 1; }
+  printf '%s\n' "$output" | grep -Fq -- "--force" && { printf 'forced: %s\n' "$output"; return 1; }
+  printf '%s\n' "$output" | grep -Fq "merged branch" && { printf 'claims a merge: %s\n' "$output"; return 1; }
+  true
+}
+
+@test "red twin: a [gone] tree treated as already checked is handed the forced removal" {
+  mutate kept-worktrees.sh -e 's/us "unchecked"/us "checked"/' || return 1
+  gone_upstream || return 1
+  remind
+  printf '%s\n' "$output" | grep -Fq -- "--force" || { printf 'stayed green: %s\n' "$output"; return 1; }
+}
+
 @test "red twin: a reminder blind to [gone] does not list it" {
   mutate kept-worktrees.sh -e 's/"\[gone\]"/"[never]"/' || return 1
   gone_upstream || return 1
