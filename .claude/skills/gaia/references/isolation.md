@@ -1,10 +1,13 @@
 # Isolation: branch vs worktree
 
-The shared branch-vs-worktree decision. Its callers read this file and apply it: `/gaia-plan` (through the
-`ORCHESTRATOR.md` it generates), `/gaia-debt`, and ad-hoc work (through `.claude/skills/gaia/references/work-lifecycle.md`). This is the only definition of the decision order, the
-prompt, and the worktree-creation call. No caller restates any of it.
+The shared branch-vs-worktree decision. Every GAIA flow that writes its own work onto a branch of its own reads this
+file and applies it before its first write to the working tree: `/gaia-plan` (through the `ORCHESTRATOR.md` it
+generates), ad-hoc work (through `.claude/skills/gaia/references/work-lifecycle.md`), and each command that publishes
+its own pull request. This is the only definition of the decision order, the prompt, and the worktree-creation call.
+No caller restates any of it, and no caller keeps an "on any other branch, write in place" arm of its own: off
+`main`/`master` the answer is always a worktree.
 
-Contents: Slots the caller supplies; Decide, in this order; Worktree creation; Export: `RESOLVED_MODE` and `RESOLVED_ROOT`.
+Contents: Slots the caller supplies; Decide, in this order; Worktree creation; Releasing an isolation that holds nothing; Export: `RESOLVED_MODE` and `RESOLVED_ROOT`.
 
 ## Slots the caller supplies
 
@@ -17,7 +20,8 @@ The caller's pointer binds four slots. There is no fifth.
 | `{{OWNER}}` | who owns the separate working copy | `this plan` | `this fix` |
 | `{{SIBLING}}` | what else could run at the same time | `another plan` | `another task` |
 
-Substitute every slot before any of this text reaches the user.
+Every other caller binds the same four slots in its own pointer. Substitute every slot before any of this text
+reaches the user.
 
 The **branch name** is the caller's, not this reference's. Every caller mints it from
 `.gaia/scripts/branch-name-lib.sh`, which owns GAIA's branch-naming convention, and this file never
@@ -207,6 +211,32 @@ concern from creating it, and it runs on entry rather than at creation: `.claude
 fires on session start and on entering a worktree, and repairs whatever it finds. So a worktree whose links
 were broken by hand, and one made with a plain `git worktree add` outside this flow, are both provisioned
 the next time a session works in them. Nothing here needs a manual repair step.
+
+## Releasing an isolation that holds nothing
+
+A caller that isolates right before its first write can still end with nothing to publish: every write it attempted
+was refused or skipped, or the run stopped before the write landed. Releasing the branch, and the worktree when there
+is one, keeps such runs from piling up empty branches. Release only when both reads below come back empty, run from
+`RESOLVED_ROOT` as plain commands:
+
+```bash
+git -C <RESOLVED_ROOT> status --porcelain
+```
+
+```bash
+git -C <RESOLVED_ROOT> log --oneline <base>..HEAD
+```
+
+`<base>` is `refs/remotes/origin/<default branch>` under `worktree`, the ref the worktree was cut from, and under
+`feature-branch` the branch HEAD was on when this reference cut the branch. Anything printed by either read means the
+isolation holds work: keep it, and report its path and branch so the user decides.
+
+When both are empty:
+
+- **`worktree`**: call `ExitWorktree({action: "remove", discard_changes: true})`. Both reads came back empty, so
+  `discard_changes` loses nothing. `ExitWorktree` deletes only the `worktree-<name>` spelling it created, so from the
+  main checkout, which the call returned the session to, delete the renamed branch: `git branch -D <branch-name>`.
+- **`feature-branch`**: `git checkout <base>`, then `git branch -D <branch-name>`.
 
 ## Export: `RESOLVED_MODE` and `RESOLVED_ROOT`
 

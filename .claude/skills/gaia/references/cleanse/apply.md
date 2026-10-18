@@ -8,6 +8,8 @@ Contents: Step 5 Apply procedure (pre-flight, per-action loop); Post-apply verif
 
 You are executing, not reasoning. Follow this loop exactly.
 
+**Paths.** The report was written from the main checkout, so every in-repo path it names sits under `$PROJECT_ROOT`. You write `$TREE_ROOT`, which is `$PROJECT_ROOT` itself or the run's isolated worktree. Read, drift-check and write every in-repo path, the report's and this procedure's own (`wiki/log.md`, `wiki/index.md`), at the same relative path under `$TREE_ROOT`, and run every `git` command in `$TREE_ROOT`. Run the owner check on the report's path as written, with `--root "$PROJECT_ROOT"`, since ownership follows the relative path and the memory directory is keyed by `$PROJECT_ROOT`. Paths under `$MEMORY_DIR` and `$AGENT_MEMORY_DIR` are used as written. The report and the cleanse state stay under `$PROJECT_ROOT/.gaia/local/`, one copy shared by every worktree.
+
 ### Pre-flight
 
 1. Run `bash .gaia/scripts/knowledge-inventory.sh relocate-reports`, then find the most recent non-`applied` report under `$PROJECT_ROOT/.gaia/local/cleanse/`: the newest `KNOWLEDGE-*.md` whose frontmatter `status:` is `draft`, `applied-partial`, or `scoped-partial` (an `applied` or `scoped-applied` report has already been executed and must not be re-applied; skip it). If none, stop and print `no fresh report, run /gaia-cleanse first`. Otherwise check its mtime:
@@ -24,7 +26,7 @@ For each unchecked action block:
 
 1. Dependency gate (`delete-entry` carrying `depends_on` only; every other action skips this step): look up the `depends_on` action id's checkbox in the report. If it is anything other than `[x]` (skipped `[~]`, failed `[!]`, still unchecked `[ ]`, or the id is not found), mark this delete-entry `[~]` skipped, record reason `paired action {id} not applied`, and move on WITHOUT removing anything. The `## Ordering` guarantees the referenced `promote`/`delete` is already processed by the time this runs, so its checkbox is authoritative.
 2. Verify drift signal. The first three bullets below cover every action type: each names its field-to-file pairings, so a type whose fields are spelled differently is not a separate case. A field the block omits is not checked.
-   - **owner** (every action): re-run `bash .gaia/scripts/knowledge-inventory.sh classify` on the files the action writes (the block's `path`, or a promote's `target_page` plus, unless `source_action: keep`, its `source_path`). Any class other than `project-memory` / `adopter`, a non-zero exit, or an `owner:` that disagrees with the result → `[~]` skipped, `owner drift`, move on. An `adopter` file missing from the `Owner-approved files:` line → `[~]` skipped, `owner declined`, move on.
+   - **owner** (every action): re-run `bash .gaia/scripts/knowledge-inventory.sh classify --root "$PROJECT_ROOT"` on the files the action writes, as the report names them (the block's `path`, or a promote's `target_page` plus, unless `source_action: keep`, its `source_path`). Any class other than `project-memory` / `adopter`, a non-zero exit, or an `owner:` that disagrees with the result → `[~]` skipped, `owner drift`, move on. An `adopter` file missing from the `Owner-approved files:` line → `[~]` skipped, `owner declined`, move on.
    - **sha field** (`expect_sha256` over `path`, `source_expect_sha256` over `source_path`): compute sha256 of the named file. Mismatch → `[~]` skipped, `sha drift`, move on.
    - **verbatim snippet field** (`expect` and `before` over `path`, `target_expect` over `target_page`, `source_before` over `source_path`): confirm the snippet appears verbatim in the named file. Missing → `[~]` skipped, `snippet drift`, move on.
    - **`promote` only:** confirm `source_action` is one of `delete` / `replace` / `keep`, and that a `replace` carries both `source_before` and `source_after`. Absent, unrecognized, or missing one of that pair → `[!]` failed, reason `unknown source_action`, **source untouched, do not apply**; never guess which was meant. This is a schema-validity check rather than a drift signal, and it runs here because its input is knowable before any write: in the apply step it would fail only after the wiki page, `wiki/log.md` and `wiki/index.md` had already been written.
@@ -98,7 +100,7 @@ applied: {n} shrink · {n} delete-entry · {n} promote · {n} delete | skipped: 
 out-of-scope: filed {n} · diverted {n} · deduped {n} (tech-debt issues)
 diff footprint:
 {git status --short}
-handoff: changes are uncommitted; the main conversation runs Publish next (branch → commit → PR → merge on a main-branch run, commit → push on any other branch). An empty diff footprint means Publish no-ops.
+handoff: changes are uncommitted in TREE_ROOT; the main conversation runs Publish next (commit → PR → merge on the run's own branch, commit → push in CI). An empty diff footprint means Publish no-ops.
 
 ```
 

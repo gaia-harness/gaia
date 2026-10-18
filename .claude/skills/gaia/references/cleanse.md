@@ -2,7 +2,7 @@
 
 Cleanse memory and the wiki: duplication across stores, promotable memory, stale entries, and auto-load bloat. The store listing, counts, budgets and dead-path signals come from the `gaia fitness` CLI; the model judges only what a script cannot. Conflicts between two committed instruction files are not judged here: `/doctor prompt-audit` owns them.
 
-Contents: Execution model; Sub-references; Path resolution; Branch on `$ARGUMENTS`; Stage 1 subagent; Stage 2 subagent; After the subagents return; Cost record.
+Contents: Execution model; Sub-references; Path resolution; Branch on `$ARGUMENTS`; Isolate before Stage 2; Stage 1 subagent; Stage 2 subagent; After the subagents return; Cost record.
 
 ## Execution model, READ FIRST
 
@@ -36,6 +36,8 @@ MEMORY_DIR="$HOME/.claude/projects/$(echo "$PROJECT_ROOT" | sed 's/[^A-Za-z0-9-]
 AGENT_MEMORY_DIR="$HOME/.claude/agent-memory"
 ```
 
+Stage 1 runs in the main checkout, so its `PROJECT_ROOT` is the main checkout's root. Stage 2 can run in an isolated worktree (`### Isolate before Stage 2`), so its prompt resolves `PROJECT_ROOT` as the main checkout's root, the identity the report records and the memory directory is keyed by, and `TREE_ROOT` as the working copy it writes.
+
 Every path below referenced as `$PROJECT_ROOT/...`, `$MEMORY_DIR/...`, or `$AGENT_MEMORY_DIR/...` is resolved by the subagent, not by this file. `$AGENT_MEMORY_DIR` is user scope, shared by every project on the machine: the audit inventories it and reports on it, and never edits it.
 
 ### Branch on `$ARGUMENTS`
@@ -50,10 +52,10 @@ Every path below referenced as `$PROJECT_ROOT/...`, `$MEMORY_DIR/...`, or `$AGEN
    - **header:** `"Apply audit?"`
    - **question:** `"Stage 1 found {N} actions. Apply them?"`
    - **options (this exact order):**
-     1. `{ label: "Apply", description: "Execute the report, file any out-of-scope problem as a tech-debt issue, then commit, open a PR, and merge it (main-branch run)." }`
+     1. `{ label: "Apply", description: "Execute the report on its own branch, file any out-of-scope problem as a tech-debt issue, then commit, open a PR, and merge it." }`
      2. `{ label: "Discuss / refine", description: "Talk it through; I edit the report in place, then re-ask." }`
      3. `{ label: "Decline", description: "Delete the report; nothing is applied, filed, or published." }`
-   - **Apply** → run the **owner question**, then spawn the Stage 2 (Apply) subagent below, appending `Owner-approved files: <the selected files, or none>` to its prompt. Stage 2 finds the newest non-`applied` report, no path argument needed. When Stage 2 returns, run the Publish procedure (`cleanse/publish.md`) in the main conversation. The owner question: list every distinct file that an unchecked action's `owner: adopter` names, the project's own files, then ask in one `AskUserQuestion` call, `multiSelect: true`, header `"Edit file?"`, question `"Which of your own files may the audit edit?"`, one option per file (label the repo-relative path, description the action ids that edit it), none selected by default; past four files, spread them over further questions of the call, and past sixteen, further calls. An unselected file's actions are skipped and recorded. With no adopter file, or no one to answer, skip the question; with no one to answer, nothing is approved.
+   - **Apply** → run the **owner question**, isolate per `### Isolate before Stage 2`, then spawn the Stage 2 (Apply) subagent below, appending `Owner-approved files: <the selected files, or none>` to its prompt. Stage 2 finds the newest non-`applied` report, no path argument needed. When Stage 2 returns, run the Publish procedure (`cleanse/publish.md`) in the main conversation. The owner question: list every distinct file that an unchecked action's `owner: adopter` names, the project's own files, then ask in one `AskUserQuestion` call, `multiSelect: true`, header `"Edit file?"`, question `"Which of your own files may the audit edit?"`, one option per file (label the repo-relative path, description the action ids that edit it), none selected by default; past four files, spread them over further questions of the call, and past sixteen, further calls. An unselected file's actions are skipped and recorded. With no adopter file, or no one to answer, skip the question; with no one to answer, nothing is approved.
    - **Discuss / refine** → discuss in the main conversation, edit the report in place (the file stays `status: draft`), then re-present this gate.
    - **Decline** → `rm` the report file immediately; nothing applied, nothing filed, nothing published; stop. (Run ends here; see `## Cost record (run end)`.)
 
@@ -63,13 +65,25 @@ This gate runs in the main conversation, not in a subagent (only the main conver
 
 Skip Stage 1 and the decision gate, but always ask the gate's owner question afresh and pass its answer to Stage 2: an earlier run's answer is never inherited. Then check the target report's frontmatter for `audit_hardened: true`:
 
-- **Present** → the report is already hardened; spawn the Stage 2 (Apply) subagent below.
-- **Absent** (an un-hardened draft, e.g. one where the round was skipped or unavailable) → Read `.claude/skills/gaia/references/cleanse/verification-round.md` now, run the classification-verification round non-interactively at the recommended setting (no gate prompt) against that report first, stamp it, then spawn Stage 2.
+- **Present** → the report is already hardened; isolate per `### Isolate before Stage 2`, then spawn the Stage 2 (Apply) subagent below.
+- **Absent** (an un-hardened draft, e.g. one where the round was skipped or unavailable) → Read `.claude/skills/gaia/references/cleanse/verification-round.md` now, run the classification-verification round non-interactively at the recommended setting (no gate prompt) against that report first, stamp it, isolate per `### Isolate before Stage 2`, then spawn Stage 2.
 - A 0-action report has nothing to harden; proceed straight to Stage 2.
 
 In every case, when Stage 2 returns run the Publish procedure (`cleanse/publish.md`), exactly as the gated Apply path does.
 
 Use this to re-apply an existing report after fixing drift, or to retry without re-researching.
+
+### Isolate before Stage 2
+
+Stage 2 writes the report's in-repo edits, so a Stage 2 spawned on a report holding at least one action isolates first, so those edits land on this run's own branch and never on whatever branch the checkout holds. A 0-action Stage 2 writes no in-repo file and does not isolate. Under `CI=true` the CI workflow owns the branch, so nothing isolates.
+
+Mint the name and carry it as a literal, `<CLEANSE_BRANCH>`, into every later call:
+
+```bash
+bash .gaia/scripts/branch-name-lib.sh name cleanse
+```
+
+Then read `.claude/skills/gaia/references/isolation.md` and apply it now, with `{{SUBJECT}}` = "this cleanse", `{{WORKER}}` = "the cleanse", `{{OWNER}}` = "this cleanse", `{{SIBLING}}` = "another task", passing `<CLEANSE_BRANCH>` as the branch name. Carry `RESOLVED_MODE` and `RESOLVED_ROOT` to `cleanse/publish.md`. Stage 2 is spawned after this, from `RESOLVED_ROOT`, and reads its own `TREE_ROOT` there.
 
 ### Stage 1 subagent (Research)
 
@@ -110,14 +124,15 @@ Use this to re-apply an existing report after fixing drift, or to retry without 
   > `Before doing anything else, resolve these variables and use them for every path in the playbook:`
   >
   > ```bash
-  > PROJECT_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || printf %s "${CLAUDE_PROJECT_DIR:-$(pwd)}")"
+  > TREE_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || printf %s "${CLAUDE_PROJECT_DIR:-$(pwd)}")"
+  > PROJECT_ROOT="$(bash "$TREE_ROOT/.gaia/scripts/main-root-lib.sh" "$TREE_ROOT" 2>/dev/null || printf %s "$TREE_ROOT")"
   > MEMORY_DIR="$HOME/.claude/projects/$(echo "$PROJECT_ROOT" | sed 's/[^A-Za-z0-9-]/-/g')/memory"
   > AGENT_MEMORY_DIR="$HOME/.claude/agent-memory"
   > ```
   >
-  > `Compare these to the "project_root" / "memory_dir" fields recorded in the report's frontmatter. If they differ, STOP and print a clear error, do not improvise.`
+  > `Compare PROJECT_ROOT, MEMORY_DIR and AGENT_MEMORY_DIR to the "project_root" / "memory_dir" / "agent_memory_dir" fields recorded in the report's frontmatter. If they differ, STOP and print a clear error, do not improvise. TREE_ROOT is the working copy you write: apply.md's "Paths" paragraph says how report paths map onto it.`
   >
-  > `Read $PROJECT_ROOT/.claude/skills/gaia/references/cleanse/apply.md in full and execute its "Apply procedure" section (Step 5). For every action: verify the expected-current-content drift signal matches; if it does, apply the change verbatim; if it does not, SKIP and note it in the final summary. The owner check runs before every write, against the "Owner-approved files:" line at the end of this prompt. Never improvise. Never invent replacements. If anything is ambiguous, skip.`
+  > `Read $TREE_ROOT/.claude/skills/gaia/references/cleanse/apply.md in full and execute its "Apply procedure" section (Step 5). For every action: verify the expected-current-content drift signal matches; if it does, apply the change verbatim; if it does not, SKIP and note it in the final summary. The owner check runs before every write, against the "Owner-approved files:" line at the end of this prompt. Never improvise. Never invent replacements. If anything is ambiguous, skip.`
   >
   > `Then, before printing your summary, execute the "Dispose out-of-scope findings (Stage 2)" section of that file: file every finding in the report's "## Out-of-scope findings" section as a tech-debt issue per that section's procedure (idempotent, so a re-run never double-files). Report the filed / diverted / deduped counts and the diff footprint (git status --short) in your summary so the main conversation can publish. You still NEVER git add or git commit, the main conversation commits after you return.`
 
@@ -136,8 +151,8 @@ Every path that ends a `/gaia-cleanse` run appends exactly one cost record, the 
 - Stage 1 failure (no report path).
 - The decision gate's Decline.
 - Publish's empty-diff-footprint no-op.
-- Publish's merge outcomes on a main-branch run: `MERGED`, still-queued, a failed required check, a pull request closed without merging, or a merge wait that refused because it read nothing.
-- Publish's no-PR path on any other branch or in CI.
+- Publish's merge outcomes on an isolated run: `MERGED`, still-queued, a failed required check, a pull request closed without merging, or a merge wait that refused because it read nothing.
+- Publish's no-PR path in CI.
 - Publish's non-zero-exit STOP on `git push` / `gh pr create` / `gh pr merge`.
 
 Standalone final step, one call:

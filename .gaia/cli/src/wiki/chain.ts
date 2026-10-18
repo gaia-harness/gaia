@@ -2,8 +2,10 @@
  * `gaia wiki chain <begin|commit|finish|refresh-nudge>` handler.
  *
  * Lands a `/gaia-wiki` run (sync → consolidate → lint) as ONE commit on ONE
- * branch and ONE PR. The router (`references/wiki.md`) calls:
- *   begin   once, before sync         → cut `wiki/<YYYY-MM-DD-HHMM>` on main
+ * branch and ONE PR. The router (`references/wiki.md`) isolates the run on its
+ * own `wiki/<YYYY-MM-DD-HHMM>` branch first (`references/isolation.md`), then
+ * calls:
+ *   begin   once, before sync         → refuse a protected branch
  *   commit  once, after lint          → commit every stage's wiki/ edits as
  *                                        `wiki: <YYYY-MM-DD> <HH:MM> UTC`
  *   finish  once, after commit        → push + PR + auto-merge
@@ -15,12 +17,12 @@
  * (`references/work-lifecycle.md`, `## 7. Merge` and `## 8. Cleanup`), like
  * every other GAIA command that opens a PR.
  *
- * `begin` runs BEFORE sync on purpose: the stages then edit on a feature
- * branch, and `commit` refuses on main/master, so a run whose `begin` failed
- * cannot commit straight onto the base branch. On a feature branch every
- * action degrades to a no-op or a plain in-place commit, so a run from a
- * feature branch leaves its commit there for the developer to land their own
- * way.
+ * `begin` runs BEFORE sync on purpose: a run whose isolation never left
+ * main/master stops before any stage edits, and `commit` refuses there too, so
+ * nothing commits straight onto the base branch. The CLI never cuts a branch:
+ * the isolation decision (feature branch in place, or a linked worktree) is the
+ * router's. On a branch outside the `wiki/<YYYY-MM-DD-HHMM>` shape, `finish`
+ * opens no PR and leaves the commit for the developer to land their own way.
  *
  * Determinism contract: no prose narration on stdout (one-line summaries
  * only), every branch, commit, push and PR git/gh call routes through an
@@ -32,6 +34,7 @@ import type {SpawnSyncReturns} from 'node:child_process';
 import {EXIT_CODES} from '../exit.js';
 import {structuredError} from '../stderr.js';
 import {lookupOwn} from '../util/argv.js';
+import {resolveMainWorktreeRoot, sameRealPath} from '../util/main-root.js';
 import {resolveRepoRoot} from '../util/repo-root.js';
 import {
   currentBranch,
@@ -55,12 +58,11 @@ import {
   refreshWikiDriftInCache,
 } from './util/statusline-cache.js';
 
-const WIKI_CHAIN_BRANCH_PREFIX = 'wiki/';
-
-// The full shape `begin` mints (UTC date and minute, the timestamp every GAIA
-// maintenance branch carries). `finish` and `commit` match this, not the bare
-// prefix, so a hand-named `wiki/<slug>` branch stays in place; the groups
-// carry the branch's timestamp into the commit subject and PR title.
+// The full shape `.gaia/scripts/branch-name-lib.sh name wiki` mints (UTC date
+// and minute, the timestamp every GAIA maintenance branch carries). `finish`
+// and `commit` match this, not the bare prefix, so a hand-named `wiki/<slug>`
+// branch stays in place; the groups carry the branch's timestamp into the
+// commit subject and PR title.
 const WIKI_CHAIN_BRANCH_PATTERN = /^wiki\/(\d{4}-\d{2}-\d{2})-(\d{2})(\d{2})$/u;
 
 type Timestamp = {date: string; hours: string; minutes: string};
@@ -88,9 +90,6 @@ const branchTimestamp = (branch: string): null | Timestamp => {
 const wikiLandingSubject = ({date, hours, minutes}: Timestamp): string =>
   `wiki: ${date} ${hours}:${minutes} UTC`;
 
-const wikiBranchName = ({date, hours, minutes}: Timestamp): string =>
-  `${WIKI_CHAIN_BRANCH_PREFIX}${date}-${hours}${minutes}`;
-
 const USAGE_SCRIPT = '.gaia/scripts/usage.sh';
 
 const passthroughFailure = (
@@ -111,26 +110,26 @@ const HELP_TOKENS = new Set(['--help', '-h', 'help']);
 
 const HELP_TEXT = `Usage: gaia wiki chain <begin|commit|finish|refresh-nudge> [args]
 
-  begin [--branch-aware]       On main/master: cut wiki/<YYYY-MM-DD-HHMM> so the
-                               run lands on one branch + PR. On a feature branch:
-                               no-op (the run commits in place).
+  begin                        Refuse main/master: the run must already be
+                               isolated on its own branch. No-op elsewhere.
   commit                       Commit every stage's wiki/ changes in place as
                                "wiki: <YYYY-MM-DD> <HH:MM> UTC", then
                                invalidate the statusline cache. No-op when
                                nothing changed; refuses non-wiki changes and
                                main/master.
-  finish [--branch-aware]      Push the wiki branch, open one PR, and enable
+  finish                       Push the wiki branch, open one PR, and enable
                                auto-merge, staying on the branch. The merge wait
                                and local cleanup follow the work lifecycle.
-                               Removes an empty wiki branch; no-op for in-place
-                               runs.
+                               Removes an empty wiki branch held in place, and
+                               leaves one in a linked worktree to the caller;
+                               no-op on any other branch.
   refresh-nudge                Recompute the main checkout's wiki drift and write
                                it into the statusline cache now, rather than on
                                the next background refresh. Run after cleanup.
 
   Exit codes:
     0  success
-    1  user-correctable refusal (on main without --branch-aware, non-wiki changes, ...)
+    1  user-correctable refusal (begin on main, non-wiki changes, ...)
     2  unexpected (git/gh failure)
 `;
 
@@ -175,30 +174,17 @@ const resolveRepoRootOrNull = (cwd: string): null | string => {
   }
 };
 
-type BranchAwareParse =
-  {branchAware: boolean; ok: true} | {message: string; ok: false};
-
-const parseBranchAware = (argv: readonly string[]): BranchAwareParse => {
-  let branchAware = false;
-
-  for (const token of argv) {
-    if (token === '--branch-aware') {
-      branchAware = true;
-    } else {
-      return {message: `unknown flag: ${token}`, ok: false};
-    }
-  }
-
-  return {branchAware, ok: true};
-};
+// `begin` and `finish` take no flags; the first token names what was refused.
+const unknownFlag = (argv: readonly string[]): string | undefined =>
+  argv[0] === undefined ? undefined : `unknown flag: ${argv[0]}`;
 
 const begin = (argv: readonly string[], options: RunOptions): number => {
-  const parsed = parseBranchAware(argv);
+  const refusal = unknownFlag(argv);
 
-  if (!parsed.ok) {
+  if (refusal !== undefined) {
     structuredError({
       code: 'invalid_arguments',
-      message: parsed.message,
+      message: refusal,
       subcommand: 'wiki chain begin',
     });
 
@@ -223,25 +209,13 @@ const begin = (argv: readonly string[], options: RunOptions): number => {
     return UNEXPECTED_EXIT;
   }
 
-  if (!isProtectedBranch(branch)) {
-    process.stdout.write(`chain begin: in-place on ${branch}\n`);
-
-    return EXIT_CODES.OK;
-  }
-
-  if (!parsed.branchAware) {
+  if (isProtectedBranch(branch)) {
     return refuse(
-      'chain begin: refusing to start a wiki run on main; pass --branch-aware or check out a feature branch'
+      'chain begin: refusing to start a wiki run on main; run /gaia-wiki, which isolates the run on its own wiki branch before begin'
     );
   }
 
-  const branchName = wikiBranchName(utcTimestamp(options.now ?? new Date()));
-  const args = ['checkout', '-b', branchName];
-  const result = runner('git', args, {cwd: repoRoot});
-
-  if (!stepOk(result)) return passthroughFailure(result, 'git', args);
-
-  process.stdout.write(`chain begin: started ${branchName}\n`);
+  process.stdout.write(`chain begin: in-place on ${branch}\n`);
 
   return EXIT_CODES.OK;
 };
@@ -277,7 +251,7 @@ const commit = (argv: readonly string[], options: RunOptions): number => {
 
   if (isProtectedBranch(branch)) {
     return refuse(
-      `chain commit: refusing to commit on ${branch}; run /gaia-wiki, whose chain begin --branch-aware cuts a wiki branch, or switch to a non-protected branch`
+      `chain commit: refusing to commit on ${branch}; run /gaia-wiki, which isolates the run on its own wiki branch, or switch to a non-protected branch`
     );
   }
 
@@ -333,6 +307,16 @@ const commit = (argv: readonly string[], options: RunOptions): number => {
   return EXIT_CODES.OK;
 };
 
+// An unresolvable main root reads as the main checkout, so the empty-branch
+// cleanup still tries its checkout and reports that failure itself.
+const isLinkedWorktree = (repoRoot: string): boolean => {
+  try {
+    return !sameRealPath(repoRoot, resolveMainWorktreeRoot(repoRoot));
+  } catch {
+    return false;
+  }
+};
+
 type FinishEmptyBranchOptions = {
   base: string;
   branch: string;
@@ -346,6 +330,11 @@ type FinishEmptyBranchOptions = {
  * base rather than open an empty PR. A dirty tree means the run stopped
  * before its commit (sync's fabrication guard aborts without committing);
  * leave the branch and changes in place for the maintainer to resolve.
+ *
+ * In a linked worktree the base is checked out in the main checkout, so
+ * `git checkout <base>` would fail, and the checked-out branch cannot be
+ * deleted from inside its own tree. The router removes the tree and the
+ * branch together (`references/isolation.md`).
  */
 const finishEmptyBranch = (options: FinishEmptyBranchOptions): number => {
   const {base, branch, repoRoot, runner} = options;
@@ -361,6 +350,14 @@ const finishEmptyBranch = (options: FinishEmptyBranchOptions): number => {
   if (dirty) {
     process.stdout.write(
       `chain finish: ${branch} has uncommitted changes and no commits; left in place for review\n`
+    );
+
+    return EXIT_CODES.OK;
+  }
+
+  if (isLinkedWorktree(repoRoot)) {
+    process.stdout.write(
+      `chain finish: nothing to land; ${branch} is held by a linked worktree, left for the caller to remove\n`
     );
 
     return EXIT_CODES.OK;
@@ -599,12 +596,12 @@ const runFinish = (
   argv: readonly string[],
   options: RunOptions
 ): FinishOutcome => {
-  const parsed = parseBranchAware(argv);
+  const refusal = unknownFlag(argv);
 
-  if (!parsed.ok) {
+  if (refusal !== undefined) {
     structuredError({
       code: 'invalid_arguments',
-      message: parsed.message,
+      message: refusal,
       subcommand: 'wiki chain finish',
     });
 
@@ -632,8 +629,8 @@ const runFinish = (
   const timestamp = branchTimestamp(branch);
 
   if (timestamp === null) {
-    // In-place run (begin was a no-op on a feature branch). The commit
-    // already lives on the developer's branch; opening a PR is their call.
+    // Not a branch the router isolated the run on. The commit already lives
+    // on the developer's branch; opening a PR is their call.
     process.stdout.write(
       `chain finish: in-place commits remain on ${branch}; no PR opened\n`
     );
@@ -642,7 +639,24 @@ const runFinish = (
   }
 
   const base = defaultBranch(repoRoot, runner);
-  const countArgs = ['rev-list', '--count', `${base}..HEAD`];
+  // A worktree is cut from the remote's base, not the local one, so a local
+  // base that trails the remote would count the remote's own commits as this
+  // run's and push a branch with nothing to land.
+  const remoteBase = `origin/${base}`;
+  const remoteBaseExists = stepOk(
+    runner(
+      'git',
+      ['rev-parse', '--verify', '--quiet', `refs/remotes/${remoteBase}`],
+      {
+        cwd: repoRoot,
+      }
+    )
+  );
+  const countArgs = [
+    'rev-list',
+    '--count',
+    `${remoteBaseExists ? remoteBase : base}..HEAD`,
+  ];
   const countResult = runner('git', countArgs, {cwd: repoRoot});
 
   if (!stepOk(countResult))

@@ -273,18 +273,22 @@ assert_wiki_icon() {
 
 # Run the real CLI's chain landing in <directory>: begin, one commit of the
 # staged wiki change, then finish, stopping at the first non-zero exit. <mode>
-# is `--branch-aware` on main; empty on a feature branch, where begin and
-# finish are in-place no-ops.
+# `isolated` first cuts the branch `branch-name-lib.sh name wiki` mints, the way
+# /gaia-wiki's isolation step does on main; empty runs on the branch already
+# checked out, where finish opens no PR.
 run_chain_landing() {
   local directory="$1" mode="${2:-}"
   run env HOME="$TEMPORARY_HOME" \
     bash -c '
       set -e
       cd "$1"
-      "$2" wiki chain begin $3
+      if [ "$3" = isolated ]; then
+        git checkout --quiet -b "$(bash "$4" name wiki)"
+      fi
+      "$2" wiki chain begin
       "$2" wiki chain commit
-      "$2" wiki chain finish $3
-    ' _ "$directory" "$REAL_GAIA" "$mode"
+      "$2" wiki chain finish
+    ' _ "$directory" "$REAL_GAIA" "$mode" "$REPO_ROOT/.gaia/scripts/branch-name-lib.sh"
 }
 
 # Stage the change a sync makes: state advanced to the current HEAD.
@@ -548,7 +552,7 @@ assert_nudge_cleared_without_refresher() {
   make_repo
   seed_nudge_and_stage_sync
   landed_sha=$(git -C "$REPOSITORY_FIXTURE" rev-parse HEAD)
-  run_chain_landing "$REPOSITORY_FIXTURE" --branch-aware
+  run_chain_landing "$REPOSITORY_FIXTURE" isolated
   [ "$status" -eq 0 ]
   grep -qF -- "auto-merge queued, merge not yet confirmed" <<<"$output"
   grep -qF -- "statuses/" "$GH_LOG"
@@ -578,7 +582,7 @@ assert_nudge_cleared_without_refresher() {
 @test "a queued landing whose merge has not landed leaves the cached count and the checkout on its branch" {
   make_repo
   seed_nudge_and_stage_sync
-  MOCK_GH_MERGE=defer run_chain_landing "$REPOSITORY_FIXTURE" --branch-aware
+  MOCK_GH_MERGE=defer run_chain_landing "$REPOSITORY_FIXTURE" isolated
   [ "$status" -eq 0 ]
   grep -qF -- "auto-merge queued, merge not yet confirmed" <<<"$output"
   [ "$(cached_wiki_count)" = "20" ]
@@ -602,7 +606,7 @@ assert_nudge_cleared_without_refresher() {
 
   stage_state_advance "${REPOSITORY_FIXTURE}-wt"
   landed_sha=$(git -C "${REPOSITORY_FIXTURE}-wt" rev-parse HEAD)
-  run_chain_landing "${REPOSITORY_FIXTURE}-wt" --branch-aware
+  run_chain_landing "${REPOSITORY_FIXTURE}-wt" isolated
   [ "$status" -eq 0 ]
   run_lifecycle_cleanup "${REPOSITORY_FIXTURE}-wt"
   [ "$(jq -r '.last_evaluated_sha' "${REPOSITORY_FIXTURE}-wt/wiki/.state.json")" = "$landed_sha" ]
