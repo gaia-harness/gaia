@@ -1,6 +1,6 @@
 ---
 name: update-deps
-description: Remediates dependencies in place of Dependabot version and security updates. Discovers outdated packages and open security advisories, resolves advisories (in-range refresh, chain-head bump, security-floor override, or alert dismissal), audits overrides, applies migrations for major bumps, and runs the quality gate. Trigger when the user clicks the statusline `Run /update-deps` indicator or asks "update dependencies", "bump deps", "run dependabot", "fix Dependabot alerts", "fix security advisories".
+description: Remediates dependencies in place of Dependabot version and security updates. Discovers outdated packages and open security advisories, resolves advisories (in-range refresh, chain-head bump, security-floor override, or alert dismissal), audits overrides, applies migrations for major bumps, and runs the quality gate. Trigger when the user clicks the statusline `📦 /update-deps` indicator or asks "update dependencies", "bump deps", "run dependabot", "fix Dependabot alerts", "fix security advisories".
 ---
 
 Contents: Pre-flight: Worktree check; Pre-flight: Branch check; Package layout; Flags and run modes; Companion groups; Phase 1: Discover, preview, decide (orchestrator); Branch creation (after discovery); Override audit + Wave A: Haiku agent; Phase 5: Wave B (per-group major bumps); Phase 5b: Transitive refresh (Haiku agent); Phase 5c: Security resolutions; Phase 6: Post-update override audit; Phase 7: Final report; Phase 8: Publish.

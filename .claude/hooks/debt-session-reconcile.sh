@@ -1,5 +1,5 @@
 #!/bin/bash
-# SessionStart hook: reconcile a currently-shown `Run /gaia-debt` nudge against
+# SessionStart hook: reconcile a currently-shown `🐛 /gaia-debt` nudge against
 # GitHub on session start/resume.
 #
 # The debt count invalidates promptly only through first-party sentinel events

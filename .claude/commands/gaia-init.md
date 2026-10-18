@@ -408,7 +408,7 @@ Append-only. New entries at the TOP.
 
 ## Step 11: Finalize
 
-Step 8 recorded each per-machine step through the shared reference, so stamp completion now. This clears "Run /setup-gaia (Required)" from the statusline, which then shows a `Run /setup-gaia` nudge until `/setup-gaia` records this machine's remaining choices (the sandbox, the statusline left side):
+Step 8 recorded each per-machine step through the shared reference, so stamp completion now. This clears "⚙️ /setup-gaia (Required)" from the statusline, which then shows a `⚙️ /setup-gaia` nudge until `/setup-gaia` records this machine's remaining choices (the sandbox, the statusline left side):
 
 ```bash
 .gaia/cli/gaia setup finalize

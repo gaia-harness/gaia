@@ -1,6 +1,6 @@
 ---
 name: update-gaia
-description: Pulls the latest GAIA release into this project without clobbering customizations, with a three-way merge per file using .gaia/manifest.json classes. Trigger when the user clicks the statusline `Run /update-gaia` indicator or asks "update GAIA", "pull the latest GAIA", "apply the new GAIA release".
+description: Pulls the latest GAIA release into this project without clobbering customizations, with a three-way merge per file using .gaia/manifest.json classes. Trigger when the user clicks the statusline `🚀 /update-gaia` indicator or asks "update GAIA", "pull the latest GAIA", "apply the new GAIA release".
 ---
 
 Contents: Pre-flight: Worktree check; Pre-flight: Branch check (run modes); Step 1: Read baseline version; Step 2: Resolve latest release; Step 3: Compare versions (default branch, worktree run in place, in place); Step 3b: Refuse a 1.x baseline; Step 3c: Download and verify the bundles; Step 3d: Select migration notes; Step 4: Show the release notes and confirm (on Proceed: the update worktree, the worktree notice, the stop rule); Step 4b: Prune prior-run artifacts; Model selection; Step 9b: Follow the after-merge notes; Step 9c: Carry new setup features; Step 9d: Record the update; Step 10: Next steps for the user; Step 11 (orchestrator, after the user commits); Step 12: Offer the residue sweep.

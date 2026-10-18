@@ -47,7 +47,7 @@ render_at() {
   render_at 200
   [ "$status" -eq 0 ]
   case "$plain" in
-    *"Run /update-deps (2 security)") ;;
+    *"📦 /update-deps (2 security)") ;;
     *) return 1 ;;
   esac
   grep -qF -- "outdated" <<<"$plain" && return 1
@@ -59,7 +59,7 @@ render_at() {
   render_at 200
   [ "$status" -eq 0 ]
   case "$plain" in
-    *"Run /update-deps (3 outdated)") ;;
+    *"📦 /update-deps (3 outdated)") ;;
     *) return 1 ;;
   esac
   grep -qF -- "security" <<<"$plain" && return 1
@@ -88,7 +88,7 @@ render_at() {
   render_at 200
   [ "$status" -eq 0 ]
   case "$plain" in
-    *"Run /update-deps (3 outdated)") ;;
+    *"📦 /update-deps (3 outdated)") ;;
     *) return 1 ;;
   esac
   grep -qF -- "null" <<<"$plain" && return 1
@@ -100,7 +100,7 @@ render_at() {
   render_at 200
   [ "$status" -eq 0 ]
   case "$plain" in
-    *"Run /update-deps (3 outdated)") ;;
+    *"📦 /update-deps (3 outdated)") ;;
     *) return 1 ;;
   esac
 }
@@ -110,7 +110,7 @@ render_at() {
   render_at 200
   [ "$status" -eq 0 ]
   case "$plain" in
-    *"Run /update-deps (3 outdated)") ;;
+    *"📦 /update-deps (3 outdated)") ;;
     *) return 1 ;;
   esac
 }

@@ -164,7 +164,7 @@ assert_context_file() {
   rm -f "$MAIN/.gaia/local/setup-state.json"
   render "$(main_script)" "$(payload "$MAIN" "$SESSION_ID" 25 1000000)"
   [ "$status" -eq 0 ]
-  grep -qF "Run /setup-gaia" <<<"$output"
+  grep -qF "⚙️ /setup-gaia" <<<"$output"
   assert_context_file
 }
 

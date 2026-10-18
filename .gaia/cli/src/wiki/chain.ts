@@ -325,7 +325,7 @@ const commit = (argv: readonly string[], options: RunOptions): number => {
   }
 
   // The nudge reads a cached drift count; without this a feature-branch run
-  // leaves `Run /gaia-wiki` showing until the cache expires on its own.
+  // leaves `🧠 /gaia-wiki` showing until the cache expires on its own.
   invalidateStatuslineCache(repoRoot);
 
   process.stdout.write(`chain commit: ${subject}\n`);
