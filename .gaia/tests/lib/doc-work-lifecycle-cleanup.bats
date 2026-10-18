@@ -15,6 +15,9 @@
 #
 # What is asserted, per arm:
 #
+#   - Every arm resolves the default branch rather than assuming `main`: a
+#     fixture whose remote's default is `master` (no `origin/HEAD`) and one
+#     whose `origin/HEAD` names `trunk` must pull that branch.
 #   - Feature branch: the main checkout ends on `main` at `origin/main`, the
 #     merged branch and its remote-tracking ref are gone; a peer branch held
 #     by the main checkout is left alone (no pull); a linked worktree holding
@@ -58,6 +61,11 @@ setup() {
   CHECK_SCRIPT="$REPO_ROOT/.gaia/scripts/worktree-removal-check.sh"
   DEBT_REFERENCE="$REPO_ROOT/.claude/skills/gaia/references/debt.md"
   LIFECYCLE_REFERENCE="$REPO_ROOT/.claude/skills/gaia/references/spec/lifecycle.md"
+  # The fixture's default branch, and whether origin/HEAD is recorded for it.
+  # A fixture made with `git init` plus `remote add` has no origin/HEAD, which
+  # is the shape a locally created and then pushed repository has.
+  FIXTURE_DEFAULT=main
+  FIXTURE_ORIGIN_HEAD=""
 
   # A pnpm stand-in on PATH: it logs "<physical cwd>|<arguments>" and exits
   # with PNPM_STUB_EXIT, so a case can tell how and from where it was called.
@@ -146,7 +154,8 @@ commit_file() { # repo name
 }
 
 # make_fixture <dir> <branch> [lock]: sets ORIGIN, MAIN, OLD_SHA. The main
-# checkout is left on `main`, one commit behind `origin/main`; <branch> exists
+# checkout is left on FIXTURE_DEFAULT, one commit behind its remote-tracking
+# ref, and origin/HEAD is recorded only when FIXTURE_ORIGIN_HEAD is set; <branch> exists
 # locally and its remote-tracking ref exists, while the remote has dropped it.
 # With a third argument of `lock` the squash commit also changes
 # `pnpm-lock.yaml`.
@@ -156,24 +165,27 @@ make_fixture() {
   ORIGIN="$dir/origin.git"
   MAIN="$dir/main-checkout"
   other="$dir/other"
-  git init -q --bare -b main "$ORIGIN" || return 1
-  git init -q -b main "$MAIN" || return 1
+  git init -q --bare -b "$FIXTURE_DEFAULT" "$ORIGIN" || return 1
+  git init -q -b "$FIXTURE_DEFAULT" "$MAIN" || return 1
   git -C "$MAIN" remote add origin "$ORIGIN" || return 1
   commit_file "$MAIN" base || return 1
-  git -C "$MAIN" push -q -u origin main 2>/dev/null || return 1
-  OLD_SHA=$(git -C "$MAIN" rev-parse main) || return 1
+  git -C "$MAIN" push -q -u origin "$FIXTURE_DEFAULT" 2>/dev/null || return 1
+  if [ -n "$FIXTURE_ORIGIN_HEAD" ]; then
+    git -C "$MAIN" remote set-head origin "$FIXTURE_DEFAULT" >/dev/null || return 1
+  fi
+  OLD_SHA=$(git -C "$MAIN" rev-parse "$FIXTURE_DEFAULT") || return 1
   git -C "$MAIN" checkout -q -b "$branch" || return 1
   commit_file "$MAIN" feature || return 1
   git -C "$MAIN" push -q -u origin "$branch" 2>/dev/null || return 1
-  git -C "$MAIN" checkout -q main || return 1
-  # The squash merge: origin/main gains a commit that is not an ancestor of
+  git -C "$MAIN" checkout -q "$FIXTURE_DEFAULT" || return 1
+  # The squash merge: the default branch on origin gains a commit that is not an ancestor of
   # the feature branch, and the remote drops the feature branch.
   git clone -q "$ORIGIN" "$other" 2>/dev/null || return 1
   commit_file "$other" squashed || return 1
   if [ "${3:-}" = lock ]; then
     commit_file "$other" pnpm-lock.yaml || return 1
   fi
-  git -C "$other" push -q origin main 2>/dev/null || return 1
+  git -C "$other" push -q origin "$FIXTURE_DEFAULT" 2>/dev/null || return 1
   git -C "$other" push -q origin --delete "$branch" 2>/dev/null || return 1
 }
 
@@ -218,7 +230,7 @@ run_fences() {
 ref_exists() { git -C "$MAIN" show-ref --verify --quiet "$1"; }
 
 main_matches_origin() {
-  [ "$(git -C "$MAIN" rev-parse main)" = "$(git -C "$MAIN" rev-parse origin/main)" ]
+  [ "$(git -C "$MAIN" rev-parse "$FIXTURE_DEFAULT")" = "$(git -C "$MAIN" rev-parse "origin/$FIXTURE_DEFAULT")" ]
 }
 
 # ---------------------------------------------------------------------------
@@ -232,8 +244,8 @@ check_feature_head_on_merged_branch() {
   body=$(rendered_body "$FEATURE_ARM" 1 "$branch" "") || { echo "$body"; return 1; }
   run_body "$body"
   [ "$STATUS" -eq 0 ] || { echo "FAIL: exit $STATUS: $OUT"; return 1; }
-  [ "$(git -C "$MAIN" rev-parse --abbrev-ref HEAD)" = main ] || { echo "FAIL: HEAD is not main"; return 1; }
-  main_matches_origin || { echo "FAIL: main is not at origin/main"; return 1; }
+  [ "$(git -C "$MAIN" rev-parse --abbrev-ref HEAD)" = "$FIXTURE_DEFAULT" ] || { echo "FAIL: HEAD is not $FIXTURE_DEFAULT"; return 1; }
+  main_matches_origin || { echo "FAIL: $FIXTURE_DEFAULT is not at origin/$FIXTURE_DEFAULT"; return 1; }
   ref_exists "refs/heads/$branch" && { echo "FAIL: local branch survives"; return 1; }
   ref_exists "refs/remotes/origin/$branch" && { echo "FAIL: remote-tracking ref survives"; return 1; }
   return 0
@@ -245,8 +257,8 @@ check_feature_head_on_main() {
   body=$(rendered_body "$FEATURE_ARM" 1 "$branch" "") || { echo "$body"; return 1; }
   run_body "$body"
   [ "$STATUS" -eq 0 ] || { echo "FAIL: exit $STATUS: $OUT"; return 1; }
-  [ "$(git -C "$MAIN" rev-parse --abbrev-ref HEAD)" = main ] || { echo "FAIL: HEAD is not main"; return 1; }
-  main_matches_origin || { echo "FAIL: main is not at origin/main"; return 1; }
+  [ "$(git -C "$MAIN" rev-parse --abbrev-ref HEAD)" = "$FIXTURE_DEFAULT" ] || { echo "FAIL: HEAD is not $FIXTURE_DEFAULT"; return 1; }
+  main_matches_origin || { echo "FAIL: $FIXTURE_DEFAULT is not at origin/$FIXTURE_DEFAULT"; return 1; }
   ref_exists "refs/heads/$branch" && { echo "FAIL: local branch survives"; return 1; }
   ref_exists "refs/remotes/origin/$branch" && { echo "FAIL: remote-tracking ref survives"; return 1; }
   return 0
@@ -272,14 +284,14 @@ check_feature_stops_when_linked_worktree_holds_main() {
   local branch=feat-merged body head_before
   make_fixture "$1" "$branch" || return 1
   git -C "$MAIN" checkout -q "$branch" || return 1
-  git -C "$MAIN" worktree add -q "$1/linked-main" main || return 1
+  git -C "$MAIN" worktree add -q "$1/linked-main" "$FIXTURE_DEFAULT" || return 1
   head_before=$(git -C "$MAIN" rev-parse --abbrev-ref HEAD)
   body=$(rendered_body "$FEATURE_ARM" 1 "$branch" "") || { echo "$body"; return 1; }
   run_body "$body"
   [ "$STATUS" -ne 0 ] || { echo "FAIL: the script exited 0: $OUT"; return 1; }
   [ "$(git -C "$MAIN" rev-parse --abbrev-ref HEAD)" = "$head_before" ] || { echo "FAIL: HEAD moved"; return 1; }
   ref_exists "refs/heads/$branch" || { echo "FAIL: the merged branch was deleted"; return 1; }
-  printf '%s\n' "$OUT" | grep -Fq "linked worktree holds main" || { echo "FAIL: the stop was not the linked-worktree check: $OUT"; return 1; }
+  printf '%s\n' "$OUT" | grep -Fq "linked worktree holds $FIXTURE_DEFAULT" || { echo "FAIL: the stop was not the linked-worktree check: $OUT"; return 1; }
   return 0
 }
 
@@ -302,7 +314,7 @@ check_name_arm_tail() {
   if [ "$2" = peer ]; then
     [ "$(git -C "$MAIN" rev-parse refs/heads/peer)" = "$OLD_SHA" ] || { echo "FAIL: the peer branch moved: a pull ran"; return 1; }
   else
-    main_matches_origin || { echo "FAIL: main is not at origin/main"; return 1; }
+    main_matches_origin || { echo "FAIL: $FIXTURE_DEFAULT is not at origin/$FIXTURE_DEFAULT"; return 1; }
   fi
   return 0
 }
@@ -337,7 +349,7 @@ check_path_arm_addresses_tree_and_branch_separately() {
   [ -e "$wt_path" ] && { echo "FAIL: the worktree directory survives"; return 1; }
   ref_exists "refs/heads/$branch" && { echo "FAIL: local branch survives"; return 1; }
   ref_exists "refs/remotes/origin/$branch" && { echo "FAIL: remote-tracking ref survives"; return 1; }
-  main_matches_origin || { echo "FAIL: main is not at origin/main"; return 1; }
+  main_matches_origin || { echo "FAIL: $FIXTURE_DEFAULT is not at origin/$FIXTURE_DEFAULT"; return 1; }
   return 0
 }
 
@@ -502,7 +514,7 @@ check_arm_skips_install_for_peer() {
   [ "$STATUS" -eq 0 ] || { echo "FAIL: the arm stopped (exit $STATUS): $OUT"; return 1; }
   [ "$(git -C "$MAIN" rev-parse refs/heads/peer)" = "$OLD_SHA" ] || { echo "FAIL: the peer branch moved: a pull ran"; return 1; }
   [ ! -s "$PNPM_LOG" ] || { echo "FAIL: pnpm was called: $(cat "$PNPM_LOG")"; return 1; }
-  printf '%s\n' "$OUT" | grep -Fq "git pull --ff-only origin main" || { echo "FAIL: the pull is not a named next step: $OUT"; return 1; }
+  printf '%s\n' "$OUT" | grep -Fq "git pull --ff-only origin $FIXTURE_DEFAULT" || { echo "FAIL: the pull is not a named next step: $OUT"; return 1; }
   printf '%s\n' "$OUT" | grep -Fq "pnpm install --frozen-lockfile" || { echo "FAIL: the install is not a named next step: $OUT"; return 1; }
   tree_removed
 }
@@ -516,7 +528,7 @@ check_arm_skips_install_when_pull_fails() {
   [ "$STATUS" -ne 0 ] || { echo "FAIL: a failed pull exited 0: $OUT"; return 1; }
   [ ! -s "$PNPM_LOG" ] || { echo "FAIL: pnpm was called after a failed pull: $(cat "$PNPM_LOG")"; return 1; }
   printf '%s\n' "$OUT" | grep -Fq "The pull failed" || { echo "FAIL: no failed-pull report: $OUT"; return 1; }
-  printf '%s\n' "$OUT" | grep -Fq "git pull --ff-only origin main" || { echo "FAIL: the pull is not a named next step: $OUT"; return 1; }
+  printf '%s\n' "$OUT" | grep -Fq "git pull --ff-only origin $FIXTURE_DEFAULT" || { echo "FAIL: the pull is not a named next step: $OUT"; return 1; }
   printf '%s\n' "$OUT" | grep -Fq "pnpm install --frozen-lockfile" || { echo "FAIL: the install is not a named next step: $OUT"; return 1; }
   tree_removed
 }
@@ -685,7 +697,7 @@ assert_check_red() { # expected reason, then function name and arguments
 }
 
 @test "red twin: an unconditional pull moves the peer branch" {
-  mutate_reference -e 's/^if \[ "\$head_branch" = main \]; then$/if true; then/' || return 1
+  mutate_reference -e 's/^if \[ "\$head_branch" = "\$default_branch" \]; then$/if true; then/' || return 1
   assert_check_red "the peer branch moved" \
     check_feature_peer_branch_left_alone "$BATS_TEST_TMPDIR/fixture"
 }
@@ -885,4 +897,55 @@ assert_check_red() { # expected reason, then function name and arguments
   sed -e 's/ A stop at the pre-removal check goes into[^;]*; the merge itself still counts as done\.//' "$LIFECYCLE_REFERENCE" >"$BATS_TEST_TMPDIR/lifecycle-copy.md" || return 1
   cmp -s "$BATS_TEST_TMPDIR/lifecycle-copy.md" "$LIFECYCLE_REFERENCE" && { echo "the mutation changed nothing"; return 1; }
   assert_check_red "has no report sentence" check_report_pin "$BATS_TEST_TMPDIR/lifecycle-copy.md"
+}
+
+# ---------------------------------------------------------------------------
+# A default branch other than main
+
+@test "master default, no origin/HEAD: feature branch ends on master at origin/master" {
+  FIXTURE_DEFAULT=master
+  assert_check_green check_feature_head_on_merged_branch "$BATS_TEST_TMPDIR/fixture"
+}
+
+@test "master default, no origin/HEAD: a linked worktree holding master stops the feature script" {
+  FIXTURE_DEFAULT=master
+  assert_check_green check_feature_stops_when_linked_worktree_holds_main "$BATS_TEST_TMPDIR/fixture"
+}
+
+@test "master default, no origin/HEAD: the by-name tail pulls master" {
+  FIXTURE_DEFAULT=master
+  assert_check_green check_name_arm_tail "$BATS_TEST_TMPDIR/fixture" main
+}
+
+@test "master default, no origin/HEAD: the by-path arm pulls master" {
+  FIXTURE_DEFAULT=master
+  assert_check_green check_path_arm_addresses_tree_and_branch_separately "$BATS_TEST_TMPDIR/fixture"
+}
+
+@test "master default, no origin/HEAD: a peer branch names the master pull as the next step" {
+  FIXTURE_DEFAULT=master
+  assert_check_green check_arm_skips_install_for_peer "$BATS_TEST_TMPDIR/fixture" name
+}
+
+@test "origin/HEAD naming trunk: every arm pulls trunk" {
+  FIXTURE_DEFAULT=trunk
+  FIXTURE_ORIGIN_HEAD=1
+  assert_check_green check_feature_head_on_merged_branch "$BATS_TEST_TMPDIR/fixture-feature"
+  assert_check_green check_name_arm_tail "$BATS_TEST_TMPDIR/fixture-name" main
+  assert_check_green check_path_arm_addresses_tree_and_branch_separately "$BATS_TEST_TMPDIR/fixture-path"
+}
+
+@test "red twin: a literal main default leaves a master repository unpulled in every arm" {
+  mutate_reference -e 's/^\( *\)\[ -n "\$default_branch" \] || default_branch=main$/\1default_branch=main/' || return 1
+  FIXTURE_DEFAULT=master
+  assert_check_red "FAIL:" check_feature_head_on_merged_branch "$BATS_TEST_TMPDIR/fixture-feature"
+  assert_check_red "FAIL:" check_name_arm_tail "$BATS_TEST_TMPDIR/fixture-name" main
+  assert_check_red "FAIL:" check_path_arm_addresses_tree_and_branch_separately "$BATS_TEST_TMPDIR/fixture-path"
+}
+
+@test "red twin: without the origin/HEAD read a trunk default is not pulled" {
+  mutate_reference -e 's|symbolic-ref --quiet --short refs/remotes/origin/HEAD|symbolic-ref --quiet --short refs/remotes/origin/NONE|' || return 1
+  FIXTURE_DEFAULT=trunk
+  FIXTURE_ORIGIN_HEAD=1
+  assert_check_red "is not at origin/trunk" check_name_arm_tail "$BATS_TEST_TMPDIR/fixture-name" main
 }

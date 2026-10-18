@@ -452,12 +452,17 @@ step_11_holds() {
   local section
   section="$(section_file "$1" "$STEP_11")" || return 1
   grep -qF '$(' "$section" && return 1
+  # A repository whose default branch is master has no origin/main to fetch,
+  # count against, or open a pull request into.
+  grep -qE 'origin main|origin/main\.\.|--base main' "$section" && return 1
   in_order "$section" \
-    'git -C <acting tree> fetch origin main' \
-    'git -C <acting tree> rev-list --count origin/main..<branch>' \
+    'git -C <acting tree> symbolic-ref --quiet --short refs/remotes/origin/HEAD' \
+    'git -C <acting tree> fetch origin <default branch>' \
+    'git -C <acting tree> rev-list --count origin/<default branch>..<branch>' \
     'git -C <acting tree> show <branch>:.gaia/VERSION' \
     'git -C <acting tree> push -u origin <branch>' \
-    'gh pr create --draft --base main --head <branch>' || return 1
+    'gh pr create --draft --base <default branch> --head <branch>' || return 1
+  grep -qF 'git -C <acting tree> branch -r --list origin/main origin/master' "$section" || return 1
   # An open PR is reused, never duplicated.
   grep -F 'gh pr create --draft' "$section" | grep -qF 'gh pr list --head <branch> --state open' || return 1
   return 0
@@ -474,7 +479,12 @@ step_11_holds() {
     /^4\. `git -C <acting tree> push / && held != "" { print held }
   ' "$SKILL" > "$COPY"
   step_11_holds "$COPY" && return 1
-  grep -vF 'fetch origin main' "$SKILL" > "$COPY"
+  grep -vF 'fetch origin <default branch>' "$SKILL" > "$COPY"
+  step_11_holds "$COPY" && return 1
+  # The literal main a master-default repository cannot use.
+  sed 's|--base <default branch>|--base main|' "$SKILL" > "$COPY"
+  step_11_holds "$COPY" && return 1
+  grep -vF 'symbolic-ref --quiet --short refs/remotes/origin/HEAD' "$SKILL" > "$COPY"
   step_11_holds "$COPY" && return 1
   true
 }

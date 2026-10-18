@@ -101,8 +101,9 @@ Runs only after the merge wait prints `MERGED`. Pick the arm by how the session 
 Rules every arm shares:
 
 - Never force a pull, and never stash.
-- When a pull fails (a dirty tree, a diverged `main`), report it and stop.
-- When the main checkout's HEAD is a branch other than `main` and other than the merged branch, a peer session holds it: skip the checkout and the pull, and say so.
+- Every arm resolves the default branch before it reads HEAD: the branch `refs/remotes/origin/HEAD` names, else whichever of `main` and `master` the remote has, else `main`. Never compare against a literal `main`: on a repository whose default branch is `master` every pull would be skipped.
+- When a pull fails (a dirty tree, a diverged default branch), report it and stop.
+- When the main checkout's HEAD is a branch other than the default branch and other than the merged branch, a peer session holds it: skip the checkout and the pull, and say so.
 - Every worktree arm runs the pre-removal check, `bash .gaia/scripts/worktree-removal-check.sh --tree <worktree path>`, before it removes anything. It stops on a file under the tree's `.gaia-merge/` (unresolved update patches), on uncommitted changes, and on commits ahead of the branch's upstream while that ref exists. A non-zero exit ends cleanup with the worktree and branch kept: no `ExitWorktree` removal, no `git worktree remove --force`, no branch delete, no pull, no install.
 - A stop is reported, never swallowed. Relay the check's whole output (the paths, the unpushed count, the `.gaia-merge/` files, and the next step with the exact removal commands), and the calling run's report names the kept worktree. An unattended run puts it in its final report, so kept worktrees never pile up silently.
 - The worktree arms run `pnpm install --frozen-lockfile` in the main checkout only when the pull ran and `pnpm-lock.yaml` differs between the pre-pull and post-pull HEAD. When the pull fails or is skipped, run no install and print the pull and the install as the next steps. A failed install is reported with its next step and does not undo the removal.
@@ -123,7 +124,7 @@ On a clear check, call:
 
 `ExitWorktree({action: "remove", discard_changes: true})`
 
-Gate the call on the confirmed `MERGED`. The squash absorbed every commit on the branch without making them ancestors of `main`, and the check found nothing uncommitted or unpushed, so `discard_changes` loses nothing. Never call `ExitWorktree` first and treat its refusal as the trigger.
+Gate the call on the confirmed `MERGED`. The squash absorbed every commit on the branch without making them ancestors of the default branch, and the check found nothing uncommitted or unpushed, so `discard_changes` loses nothing. Never call `ExitWorktree` first and treat its refusal as the trigger.
 
 `ExitWorktree` deletes only the branch name it created, so the renamed `<branch-name>` survives it. The session is back in the main checkout; from there run:
 
@@ -132,11 +133,17 @@ if git show-ref --verify --quiet refs/heads/<branch-name>; then
   git branch -D <branch-name>
 fi
 git fetch --prune origin
+default_branch=$(git symbolic-ref --quiet --short refs/remotes/origin/HEAD 2>/dev/null)
+default_branch=${default_branch#origin/}
+for candidate in main master; do
+  [ -z "$default_branch" ] && git show-ref --verify --quiet "refs/remotes/origin/$candidate" && default_branch=$candidate
+done
+[ -n "$default_branch" ] || default_branch=main
 head_branch=$(git rev-parse --abbrev-ref HEAD)
-if [ "$head_branch" = main ]; then
+if [ "$head_branch" = "$default_branch" ]; then
   pre_pull_head=$(git rev-parse HEAD)
-  if ! git pull --ff-only origin main; then
-    printf 'The pull failed. Next steps, from the main checkout: git pull --ff-only origin main, then pnpm install --frozen-lockfile.\n' >&2
+  if ! git pull --ff-only origin "$default_branch"; then
+    printf 'The pull failed. Next steps, from the main checkout: git pull --ff-only origin %s, then pnpm install --frozen-lockfile.\n' "$default_branch" >&2
     exit 1
   fi
   if ! git diff --quiet "$pre_pull_head" HEAD -- pnpm-lock.yaml; then
@@ -146,7 +153,7 @@ if [ "$head_branch" = main ]; then
     fi
   fi
 else
-  printf 'The main checkout is on %s, held by a peer session: skipped the pull and the install. Next steps, from the main checkout: git pull --ff-only origin main, then pnpm install --frozen-lockfile.\n' "$head_branch"
+  printf 'The main checkout is on %s, held by a peer session: skipped the pull and the install. Next steps, from the main checkout: git pull --ff-only origin %s, then pnpm install --frozen-lockfile.\n' "$head_branch" "$default_branch"
 fi
 ```
 
@@ -176,11 +183,17 @@ if git -C <main checkout path> show-ref --verify --quiet refs/heads/<branch-name
   git -C <main checkout path> branch -D <branch-name>
 fi
 git -C <main checkout path> fetch --prune origin
+default_branch=$(git -C <main checkout path> symbolic-ref --quiet --short refs/remotes/origin/HEAD 2>/dev/null)
+default_branch=${default_branch#origin/}
+for candidate in main master; do
+  [ -z "$default_branch" ] && git -C <main checkout path> show-ref --verify --quiet "refs/remotes/origin/$candidate" && default_branch=$candidate
+done
+[ -n "$default_branch" ] || default_branch=main
 head_branch=$(git -C <main checkout path> rev-parse --abbrev-ref HEAD)
-if [ "$head_branch" = main ]; then
+if [ "$head_branch" = "$default_branch" ]; then
   pre_pull_head=$(git -C <main checkout path> rev-parse HEAD)
-  if ! git -C <main checkout path> pull --ff-only origin main; then
-    printf 'The pull failed. Next steps, from <main checkout path>: git pull --ff-only origin main, then pnpm install --frozen-lockfile.\n' >&2
+  if ! git -C <main checkout path> pull --ff-only origin "$default_branch"; then
+    printf 'The pull failed. Next steps, from <main checkout path>: git pull --ff-only origin %s, then pnpm install --frozen-lockfile.\n' "$default_branch" >&2
     exit 1
   fi
   if ! git -C <main checkout path> diff --quiet "$pre_pull_head" HEAD -- pnpm-lock.yaml; then
@@ -190,26 +203,32 @@ if [ "$head_branch" = main ]; then
     fi
   fi
 else
-  printf 'The main checkout is on %s, held by a peer session: skipped the pull and the install. Next steps, from <main checkout path>: git pull --ff-only origin main, then pnpm install --frozen-lockfile.\n' "$head_branch"
+  printf 'The main checkout is on %s, held by a peer session: skipped the pull and the install. Next steps, from <main checkout path>: git pull --ff-only origin %s, then pnpm install --frozen-lockfile.\n' "$head_branch" "$default_branch"
 fi
 ```
 
 ### Feature branch
 
-The session holds the branch in the main checkout. Run this script from a shell there. It checks out `main` only when HEAD is the merged branch and no linked worktree holds `main`; when one does, it says so and exits non-zero having deleted nothing.
+The session holds the branch in the main checkout. Run this script from a shell there. It checks out the default branch only when HEAD is the merged branch and no linked worktree holds the default branch; when one does, it says so and exits non-zero having deleted nothing.
 
 ```bash
+default_branch=$(git symbolic-ref --quiet --short refs/remotes/origin/HEAD 2>/dev/null)
+default_branch=${default_branch#origin/}
+for candidate in main master; do
+  [ -z "$default_branch" ] && git show-ref --verify --quiet "refs/remotes/origin/$candidate" && default_branch=$candidate
+done
+[ -n "$default_branch" ] || default_branch=main
 head_branch=$(git rev-parse --abbrev-ref HEAD)
 if [ "$head_branch" = "<branch-name>" ]; then
-  if git worktree list --porcelain | awk '/^worktree / { n++ } n > 1 && $0 == "branch refs/heads/main" { held = 1 } END { exit !held }'; then
-    printf 'A linked worktree holds main, so the main checkout cannot check it out. Nothing was deleted.\n' >&2
+  if git worktree list --porcelain | awk -v held_line="branch refs/heads/$default_branch" '/^worktree / { n++ } n > 1 && $0 == held_line { held = 1 } END { exit !held }'; then
+    printf 'A linked worktree holds %s, so the main checkout cannot check it out. Nothing was deleted.\n' "$default_branch" >&2
     exit 1
   fi
-  git checkout main || exit 1
-  head_branch=main
+  git checkout "$default_branch" || exit 1
+  head_branch=$default_branch
 fi
-if [ "$head_branch" = main ]; then
-  git pull --ff-only origin main || exit 1
+if [ "$head_branch" = "$default_branch" ]; then
+  git pull --ff-only origin "$default_branch" || exit 1
 else
   printf 'The main checkout is on %s, held by a peer session: skipped the pull.\n' "$head_branch"
 fi
@@ -237,11 +256,11 @@ PR #<N> squash-merged as <short-sha>. From a shell at
     git worktree remove --force <ABSOLUTE-PATH-TO-WORKTREE>
     git branch -D <branch-name>   # if it still exists
     git -C <ABSOLUTE-PATH-TO-MAIN-CHECKOUT> fetch --prune origin
-    git -C <ABSOLUTE-PATH-TO-MAIN-CHECKOUT> pull --ff-only origin main   # only when `git rev-parse --abbrev-ref HEAD` there prints main
+    git -C <ABSOLUTE-PATH-TO-MAIN-CHECKOUT> pull --ff-only origin <DEFAULT-BRANCH>   # only when `git rev-parse --abbrev-ref HEAD` there prints <DEFAULT-BRANCH>
     pnpm -C <ABSOLUTE-PATH-TO-MAIN-CHECKOUT> install --frozen-lockfile   # only when that pull ran and changed pnpm-lock.yaml
 ```
 
-A caller with steps of its own appends its lines to the end of that command list; the plan orchestrator appends its two post-merge close lines.
+`<DEFAULT-BRANCH>` is the default branch, resolved the way the arms above resolve it. A caller with steps of its own appends its lines to the end of that command list; the plan orchestrator appends its two post-merge close lines.
 
 The prompt carries no `ExitWorktree({...})` call because it runs from another context, a shell or a fresh session in the main checkout, not from the session that entered the tree; the tool's schema also rejects a `worktree` parameter. The plain `git worktree remove --force` is the cleanup that works from any context.
 
