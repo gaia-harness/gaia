@@ -79,7 +79,8 @@ remind() { # [directory]
 }
 
 # plain_output: the reminder's output with each tree line's `, last commit <age>`
-# dropped, so a case can match the line exactly without a clock.
+# dropped, so a case can match the line exactly, or compare two runs, without a
+# clock: the age is relative to now, so two runs a second boundary apart differ.
 plain_output() {
   # shellcheck disable=SC2154 # set by bats' run
   printf '%s\n' "$output" | sed 's/, last commit [^)]*)/)/'
