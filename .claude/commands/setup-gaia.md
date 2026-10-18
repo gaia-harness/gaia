@@ -477,10 +477,30 @@ Keep **`$REPO_CHOICE`**, the answer to Phase 3's connect-to-GitHub question. "Cr
 
 Then run `land-decisions.md`'s `## The setup ping` with `SETUP_TYPE`, `REPO_CHOICE` and `OWED_AT_START` (Read `.claude/skills/gaia/references/setup/land-decisions.md` now first when Phase 5.5 skipped it). It sends the ping, or skips it when nothing was newly decided.
 
-Then output (in the user's language), with a blank line between the two lines:
+**Closing message.** A run can reach this phase with its GitHub setup left undone: Phase 3's clean-tree refusal on Create, the set-up-manually answer, or an authentication or admin refusal each skip the rest of Phase 3, so the closing line must not claim completion on the run's reaching the end. Read the project-scope ids still owed now, after every record this run made:
+
+```bash
+if DRIFT_JSON="$(.gaia/cli/gaia setup drift --json)"; then
+  printf 'OWED_AT_END=%s\n' "$(printf '%s' "$DRIFT_JSON" | jq -r '[.undecided[]? | select(.scope == "project") | .id] | join(" ")')"
+else
+  echo DRIFT_FAILED
+fi
+```
+
+`DRIFT_FAILED` leaves `OWED_AT_END` empty, the owed check's own rule (`setup-decisions.md`). Then clear it when `admin` is `false` and `auth_status` is `"ok"`, reading the latest cached values (Phase 3's when it re-probed, else Phase 1's): the repo exists and the runner is a non-admin, for whom no project setting is theirs to record, so nothing is owed by them.
+
+Then output (in the user's language), with a blank line between the two lines. When `OWED_AT_END` is empty:
 
 ```text
 You're all set: your GAIA project is ready. Restart Claude Code to load your new plugins and skills.
+
+New to GAIA? The docs walk you through your first feature: https://docs.gaiareact.com/
+```
+
+When `OWED_AT_END` is not empty, name its ids in place of the placeholder:
+
+```text
+Setup isn't finished: these project settings are still owed: <the OWED_AT_END ids>. Fix what stopped them above, then re-run /setup-gaia; it resumes from the first owed step. Restart Claude Code to load your new plugins and skills.
 
 New to GAIA? The docs walk you through your first feature: https://docs.gaiareact.com/
 ```
