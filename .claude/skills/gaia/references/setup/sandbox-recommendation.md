@@ -1,6 +1,6 @@
 # Sandbox recommendation question
 
-`/gaia-init` Step 9 and `/setup-gaia` Phase 3.5 read this file, whole, to ask the team sandbox-recommendation question and map the answer to a value. The calling command says what to do with a value and what no answer does.
+`/setup-gaia --reconfigure` reads this file, whole, in Phase 3.5 to ask the team sandbox-recommendation question and map the answer to a value; a plain run and `/gaia-init` never ask it, because an unset recommendation means not recommended. The calling command says what to do with a value and what no answer does.
 
 The value is a committed **recommendation** only, never an enablement: each machine still decides for itself at `/setup-gaia`.
 

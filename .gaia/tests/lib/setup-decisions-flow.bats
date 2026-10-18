@@ -8,7 +8,8 @@
 # Each block is extracted from the shipped file by its heading and run inside
 # a fixture repository under $BATS_TEST_TMPDIR, whose `.gaia/cli/gaia` is a
 # wrapper around the real CLI bundle: it answers `labels sync`, `sandbox
-# status` (when a test sets a stub answer) and `ping` itself, and passes every
+# status` and `sandbox detect` (when a test sets a stub answer) and `ping`
+# itself, and passes every
 # other call, `setup record` and `setup drift` included, to the real bundle.
 # `gh` is a stub on PATH answering the API paths the blocks read.
 #
@@ -92,6 +93,12 @@ case "$1 ${2:-}" in
   "sandbox status")
     if [ -n "${STUB_SANDBOX_STATUS:-}" ]; then
       printf '%s\n' "$STUB_SANDBOX_STATUS"
+      exit 0
+    fi
+    ;;
+  "sandbox detect")
+    if [ -n "${STUB_SANDBOX_CAPABILITY:-}" ]; then
+      printf '{"capability": "%s", "reason": "stub"}\n' "$STUB_SANDBOX_CAPABILITY"
       exit 0
     fi
     ;;
@@ -659,4 +666,147 @@ standalone_block() {
   [ "$(undecided_ids "$repo" | wc -w | tr -d ' ')" -gt 0 ]
   output_text="$(run_block "$repo" "$(standalone_block)" MAY_RECORD_PROJECT=admin)"
   [ -z "$output_text" ]
+}
+
+# ---------------------------------------------------------------------------
+# Shipped defaults: worktrees, sandbox off, no recommendation
+# ---------------------------------------------------------------------------
+
+INIT_COMMAND_PATH='.claude/commands/gaia-init.md'
+
+sandbox_route_block() {
+  block_under "$SETUP_COMMAND" '## Phase 2: Per-machine setup (skip if finalized and nothing is owed)'
+}
+
+default_off_block() {
+  block_under "${REFERENCES}/sandbox.md" '## Default off'
+}
+
+isolation_block() {
+  block_under "$SETUP_COMMAND" '### The isolation policy'
+}
+
+recommendation_block() {
+  block_under "$SETUP_COMMAND" '### The sandbox recommendation'
+}
+
+init_settings_block() {
+  block_under "${REPO_ROOT}/${INIT_COMMAND_PATH}" '## Step 9: Project settings'
+}
+
+@test "the sandbox route: a plain run with no marker and no recommendation takes the default, asking nothing" {
+  local repo
+  repo="$(make_repo route-default)"
+  [ "$(run_block "$repo" "$(sandbox_route_block)")" = SANDBOX=default-off ]
+  printf '%s\n' '{"version": 1, "sandbox_recommended": false}' >"${repo}/.gaia/project.json"
+  [ "$(run_block "$repo" "$(sandbox_route_block)")" = SANDBOX=default-off ]
+}
+
+@test "the sandbox route: a team recommendation asks a machine whose default-off record has no marker" {
+  local repo
+  repo="$(make_repo route-recommended)"
+  in_repo "$repo" .gaia/cli/gaia setup record sandbox declined >/dev/null
+  printf '%s\n' '{"version": 1, "sandbox_recommended": true}' >"${repo}/.gaia/project.json"
+  [ "$(run_block "$repo" "$(sandbox_route_block)")" = SANDBOX=ask ]
+}
+
+@test "the sandbox route: an answered machine stands on a plain run and is asked again under --reconfigure" {
+  local repo
+  repo="$(make_repo route-answered)"
+  in_repo "$repo" .gaia/cli/gaia sandbox record --outcome declined --capability ready >/dev/null
+  printf '%s\n' '{"version": 1, "sandbox_recommended": true}' >"${repo}/.gaia/project.json"
+  [ "$(run_block "$repo" "$(sandbox_route_block)")" = SANDBOX=stands ]
+  [ "$(run_block "$repo" "$(sandbox_route_block)" RECONFIGURE=true)" = SANDBOX=ask ]
+  rm -f "${repo}/.gaia/local/sandbox.json"
+  [ "$(run_block "$repo" "$(sandbox_route_block)" RECONFIGURE=true)" = SANDBOX=ask ]
+}
+
+@test "the default-off block records declined on a ready machine and writes no marker" {
+  local repo
+  repo="$(make_repo default-off-ready)"
+  run_block "$repo" "$(default_off_block)" STUB_SANDBOX_CAPABILITY=ready >/dev/null
+  [ "$(decision "$repo" sandbox)" = declined ]
+  [ ! -e "${repo}/.gaia/local/sandbox.json" ]
+}
+
+@test "the default-off block records not-applicable on an incapable machine and prints no install hint" {
+  local repo capability output_text
+  for capability in needs-deps unsupported; do
+    repo="$(make_repo "default-off-${capability}")"
+    output_text="$(run_block "$repo" "$(default_off_block)" STUB_SANDBOX_CAPABILITY="$capability")"
+    [ -z "$output_text" ] || {
+      echo "the default-off block printed on ${capability}: ${output_text}" >&2
+      return 1
+    }
+    [ "$(decision "$repo" sandbox)" = not-applicable ]
+    [ ! -e "${repo}/.gaia/local/sandbox.json" ]
+  done
+}
+
+@test "the default-off block records nothing once sandbox is decided" {
+  local repo before
+  repo="$(make_repo default-off-decided)"
+  in_repo "$repo" .gaia/cli/gaia setup record sandbox not-applicable >/dev/null
+  before="$(cat "${repo}/.gaia/local/setup-state.json")"
+  run_block "$repo" "$(default_off_block)" STUB_SANDBOX_CAPABILITY=ready >/dev/null
+  [ "$(cat "${repo}/.gaia/local/setup-state.json")" = "$before" ]
+}
+
+@test "the isolation block: a plain admin run records the shipped default and writes no key" {
+  local repo output_text
+  repo="$(make_repo isolation-default)"
+  output_text="$(run_block "$repo" "$(isolation_block)" MAY_RECORD_PROJECT=admin)"
+  grep -qF 'ISOLATION=ask' <<<"$output_text" && return 1
+  [ "$(decision "$repo" isolation-policy)" = applied ]
+  [ "$(jq -r 'has("isolation_policy")' "${repo}/.gaia/project.json")" = false ]
+}
+
+@test "the isolation block: a non-admin records nothing, and --reconfigure asks" {
+  local repo
+  repo="$(make_repo isolation-other)"
+  run_block "$repo" "$(isolation_block)" MAY_RECORD_PROJECT=none >/dev/null
+  [ -z "$(decision "$repo" isolation-policy)" ]
+  [ "$(run_block "$repo" "$(isolation_block)" MAY_RECORD_PROJECT=admin RECONFIGURE=true)" = ISOLATION=ask ]
+  [ -z "$(decision "$repo" isolation-policy)" ]
+}
+
+@test "the recommendation block: an absent key records declined with no write, and a set key records its value" {
+  local repo output_text
+  repo="$(make_repo recommendation-default)"
+  output_text="$(run_block "$repo" "$(recommendation_block)" MAY_RECORD_PROJECT=admin)"
+  grep -qF 'RECOMMENDATION=ask' <<<"$output_text" && return 1
+  [ "$(decision "$repo" sandbox-recommendation)" = declined ]
+  [ "$(jq -r 'has("sandbox_recommended")' "${repo}/.gaia/project.json")" = false ]
+  repo="$(make_repo recommendation-set)"
+  printf '%s\n' '{"version": 1, "sandbox_recommended": true}' >"${repo}/.gaia/project.json"
+  run_block "$repo" "$(recommendation_block)" MAY_RECORD_PROJECT=admin >/dev/null
+  [ "$(decision "$repo" sandbox-recommendation)" = applied ]
+}
+
+@test "the recommendation block asks under --reconfigure and records nothing first" {
+  local repo
+  repo="$(make_repo recommendation-reconfigure)"
+  [ "$(run_block "$repo" "$(recommendation_block)" MAY_RECORD_PROJECT=admin RECONFIGURE=true)" = RECOMMENDATION=ask ]
+  [ -z "$(decision "$repo" sandbox-recommendation)" ]
+}
+
+@test "a fresh init then a plain setup owe none of the isolation, sandbox and recommendation ids" {
+  local repo id route
+  repo="$(make_repo fresh-defaults)"
+  # The init CLI refuses a tree with no manifest, the mark of a GAIA scaffold.
+  cp "${REPO_ROOT}/.gaia/manifest.json" "${repo}/.gaia/manifest.json"
+  run_block "$repo" "$(init_settings_block)" >/dev/null
+  route="$(run_block "$repo" "$(sandbox_route_block)")"
+  [ "$route" = SANDBOX=default-off ]
+  run_block "$repo" "$(default_off_block)" STUB_SANDBOX_CAPABILITY=ready >/dev/null
+  run_block "$repo" "$(isolation_block)" MAY_RECORD_PROJECT=admin >/dev/null
+  run_block "$repo" "$(recommendation_block)" MAY_RECORD_PROJECT=admin >/dev/null
+  for id in isolation-policy sandbox sandbox-recommendation; do
+    grep -qxF -- "$id" <<<"$(undecided_ids "$repo" | tr ' ' '\n')" && {
+      echo "${id} is still owed after the defaults" >&2
+      return 1
+    }
+  done
+  [ "$(jq -r 'has("isolation_policy")' "${repo}/.gaia/project.json")" = false ]
+  [ ! -e "${repo}/.gaia/local/sandbox.json" ]
 }

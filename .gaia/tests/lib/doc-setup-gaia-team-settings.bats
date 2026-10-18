@@ -96,13 +96,15 @@ real_surface() {
 # ---------------------------------------------------------------------------
 
 # check_project_json <file>: every jq read of a .gaia/*.json file targets
-# .gaia/project.json, the expected keys are read from it, and exactly two
+# .gaia/project.json, the sandbox recommendation is read from it (the
+# isolation policy is read only by the isolation reference, checked below),
+# and exactly two
 # commits stage it: the isolation-policy commit and the land step that commits
 # recorded setup decisions. A read of .gaia/local/settings.json is not a
 # team setting: it is the per-machine opt-ins file (the statusline left-side
 # choice), so it is left out of the read set.
 check_project_json() {
-  local file="$1" reads stray key staged
+  local file="$1" reads stray staged
   reads="$(grep -E "jq -r '[^']*' \.gaia/[^ ]*\.json" "$file" | grep -vF "' .gaia/local/settings.json" || true)"
   [ -n "$reads" ] || {
     echo "no jq read of a .gaia/*.json file found" >&2
@@ -113,12 +115,10 @@ check_project_json() {
     echo "a key read targets another file: ${stray}" >&2
     return 1
   }
-  for key in sandbox_recommended isolation_policy; do
-    grep -qF -- "$key" <<<"$reads" || {
-      echo "no .gaia/project.json read for ${key}" >&2
-      return 1
-    }
-  done
+  grep -qF -- sandbox_recommended <<<"$reads" || {
+    echo "no .gaia/project.json read for sandbox_recommended" >&2
+    return 1
+  }
   staged="$(grep -cE '^git add \.gaia/project\.json' "$file" || true)"
   [ "$staged" -eq 2 ] || {
     echo "expected 2 commits staging .gaia/project.json (the isolation policy and the land step), found ${staged}" >&2
@@ -133,7 +133,7 @@ check_project_json() {
 @test "the project.json check fails on a read of another config file" {
   local copy surface
   copy="$(scratch_copy "$PAGE" "project-json-read.md")"
-  sed "s#has(\"isolation_policy\")' \.gaia/project\.json#has(\"isolation_policy\")' .gaia/other.json#" \
+  sed "s#sandbox_recommended // false' \.gaia/project\.json#sandbox_recommended // false' .gaia/other.json#" \
     "$PAGE" >"$copy"
   grep -qF '.gaia/other.json' "$copy"
   surface="$(build_surface "$copy" "$REFERENCES_DIRECTORY" surface-project-json-read.md)"
@@ -173,14 +173,23 @@ check_project_json() {
 }
 
 # check_isolation_reference <file>: the policy read targets
-# .gaia/project.json with its load-bearing fallback tail, and the file names
-# no automation config anywhere.
+# .gaia/project.json with its load-bearing fallback tail, an unset or
+# unrecognized policy falls back to always-worktree, and the file names no
+# automation config anywhere.
 check_isolation_reference() {
   local file="$1"
-  grep -qF -- "jq -r '.isolation_policy // \"prefer-worktree\"' .gaia/project.json 2>/dev/null || echo prefer-worktree" "$file" || {
-    echo "the policy read does not target .gaia/project.json with its fallback tail" >&2
+  grep -qF -- "jq -r '.isolation_policy // \"always-worktree\"' .gaia/project.json 2>/dev/null || echo always-worktree" "$file" || {
+    echo "the policy read does not target .gaia/project.json with its always-worktree fallback tail" >&2
     return 1
   }
+  grep -qxF -- '    POLICY=always-worktree' "$file" || {
+    echo "the unrecognized-value arm does not fall back to always-worktree" >&2
+    return 1
+  }
+  if grep -n 'POLICY=prefer-worktree' "$file"; then
+    echo "a fallback still resolves to prefer-worktree" >&2
+    return 1
+  fi
   if grep -n 'automation' "$file"; then
     echo "the isolation reference still mentions automation" >&2
     return 1
@@ -189,6 +198,26 @@ check_isolation_reference() {
 
 @test "the isolation reference reads its policy from .gaia/project.json" {
   check_isolation_reference "$ISOLATION_REFERENCE"
+}
+
+@test "the isolation check fails with the fallback back on prefer-worktree" {
+  local copy
+  copy="$(scratch_copy "$ISOLATION_REFERENCE" "isolation-prefer.md")"
+  sed -e 's/"always-worktree"'"'"' \.gaia/"prefer-worktree"'"'"' .gaia/' \
+    -e 's/|| echo always-worktree)/|| echo prefer-worktree)/' \
+    "$ISOLATION_REFERENCE" >"$copy"
+  cmp -s "$ISOLATION_REFERENCE" "$copy" && return 1
+  run check_isolation_reference "$copy"
+  [ "$status" -ne 0 ]
+}
+
+@test "the isolation check fails when the unrecognized-value arm falls back to prefer-worktree" {
+  local copy
+  copy="$(scratch_copy "$ISOLATION_REFERENCE" "isolation-arm.md")"
+  sed 's/^    POLICY=always-worktree$/    POLICY=prefer-worktree/' "$ISOLATION_REFERENCE" >"$copy"
+  cmp -s "$ISOLATION_REFERENCE" "$copy" && return 1
+  run check_isolation_reference "$copy"
+  [ "$status" -ne 0 ]
 }
 
 @test "the isolation check fails on the old config path put back" {
@@ -248,5 +277,51 @@ check_isolation_question() {
     "${REFERENCES_DIRECTORY}/isolation-question.md" >"$copy"
   cmp -s "${REFERENCES_DIRECTORY}/isolation-question.md" "$copy" && return 1
   run check_isolation_question "$copy"
+  [ "$status" -ne 0 ]
+}
+
+# ---------------------------------------------------------------------------
+# --reconfigure re-opens the sandbox recommendation
+# ---------------------------------------------------------------------------
+
+# check_reconfigure_lists <file>: the frontmatter description and the
+# argument-parse list of what --reconfigure re-opens both name the sandbox
+# recommendation, and no line says --reconfigure leaves it closed.
+check_reconfigure_lists() {
+  local file="$1" line
+  for line in "$(grep -E '^description: ' "$file")" "$(grep -E '^Parse `\$ARGUMENTS` for the `--reconfigure` flag' "$file")"; do
+    [ -n "$line" ] || {
+      echo "a --reconfigure list is absent" >&2
+      return 1
+    }
+    grep -qE 'sandbox[- ]recommendation' <<<"$line" || {
+      printf 'a --reconfigure list omits the sandbox recommendation: %s\n' "$line" >&2
+      return 1
+    }
+  done
+  if grep -n 'does not re-open' "$file"; then
+    echo "the page still says --reconfigure does not re-open a decision" >&2
+    return 1
+  fi
+}
+
+@test "every --reconfigure list on the setup page names the sandbox recommendation" {
+  check_reconfigure_lists "$PAGE"
+}
+
+@test "the reconfigure check fails with the does-not-re-open sentence put back" {
+  local copy
+  copy="$(scratch_copy "$PAGE" "reconfigure-closed.md")"
+  printf '\nRun only when `MAY_RECORD_PROJECT` is `admin`. `--reconfigure` does not re-open it.\n' >>"$copy"
+  run check_reconfigure_lists "$copy"
+  [ "$status" -ne 0 ]
+}
+
+@test "the reconfigure check fails when the description drops the sandbox recommendation" {
+  local copy
+  copy="$(scratch_copy "$PAGE" "reconfigure-description.md")"
+  sed -E '/^description: /s/ sandbox-recommendation,//' "$PAGE" >"$copy"
+  cmp -s "$PAGE" "$copy" && return 1
+  run check_reconfigure_lists "$copy"
   [ "$status" -ne 0 ]
 }
