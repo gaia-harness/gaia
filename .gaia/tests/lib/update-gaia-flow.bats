@@ -2,16 +2,19 @@
 # The /update-gaia orchestrator as SKILL.md writes it: the guard fence and its
 # own-worktree prefix, every command block in the shape a worktree session
 # admits, the run modes' classification of an earlier run's update branch
-# (Step 3), the update worktree on Proceed (Step 4), the provisioning waits,
-# the version written last (Step 9d), the cache bust, the draft PR (Step 11)
-# and the deferred residue sweep (Step 12). The pre-merge blocks moved into
-# .gaia/scripts/update-gaia-preflight.sh and the drift block into
+# (Step 3), the decision log check before any download, the update worktree on
+# Proceed (Step 4), the provisioning waits, the dispatch, classify and
+# validate order around the merge report, the questions, answers and decision
+# records, the follow-ups, the version written last (Step 9d), the quality
+# gate, the single commit confirm at the review point, the draft PR (Step 11)
+# and the deferred residue sweep (Step 12). The pre-merge blocks live in
+# .gaia/scripts/update-gaia-preflight.sh and the drift block in
 # update-gaia-drift.sh; their behavior is driven by update-gaia-preflight.bats
 # and update-gaia-drift.bats, so this suite pins the skill's calls and prose.
-# Step 3's in-place block and Step 4's changelog call still run here, extracted
-# by heading, against fixtures under $BATS_TEST_TMPDIR. Every pin has a red
-# twin: a fixture copy carrying the forbidden content, or missing the
-# required content.
+# Step 3's in-place block still runs here, extracted by heading, against
+# fixtures under $BATS_TEST_TMPDIR. Every pin has a red twin: a fixture copy
+# carrying the forbidden content, or missing or reordering the required
+# content.
 #
 # Assertion style per .claude/rules/bats-assertions.md: no bare mid-test
 # [[ ... ]]; POSIX [ ] and grep; `&& return 1` for a non-final absence.
@@ -23,10 +26,9 @@
 setup() {
   REPO_ROOT="$(cd "$(dirname "$BATS_TEST_FILENAME")/../../.." && pwd)"
   SKILL="$REPO_ROOT/.claude/skills/update-gaia/SKILL.md"
-  MERGE_EXECUTION="$REPO_ROOT/.claude/skills/update-gaia/references/merge-execution.md"
+  CONFLICT_FLOW="$REPO_ROOT/.claude/skills/update-gaia/references/conflict-flow.md"
   PREFLIGHT="$REPO_ROOT/.gaia/scripts/update-gaia-preflight.sh"
   SELECTOR="$REPO_ROOT/.gaia/scripts/select-migration-notes.sh"
-  COMPARE_LIB="$REPO_ROOT/.gaia/scripts/lib/version-compare.awk"
   COPY="$BATS_TEST_TMPDIR/skill-copy.md"
 }
 
@@ -38,7 +40,8 @@ STEP_3D='## Step 3d: Select migration notes'
 STEP_4='## Step 4: Show the release notes and confirm'
 STEP_4_WORKTREE='### Step 4, on Proceed: the update worktree'
 STEP_9D='## Step 9d: Record the update'
-STEP_10='## Step 10: Next steps for the user'
+STEP_CONFLICT_FLOW='## Conflict flow: dispatch, questions, decisions, follow-ups'
+STEP_REVIEW='## Review point'
 STEP_11='### Step 11: Open a pull request'
 STEP_12='### Step 12: Offer the residue sweep'
 
@@ -135,6 +138,7 @@ fence_violations() {
   # The exemption covers one real block, so it widens nothing it does not name.
   block_after_heading "$SKILL" "$STEP_3_IN_PLACE" | grep -qF '$(git branch --show-current)'
   [ -z "$(fence_violations "$SKILL")" ]
+  [ -z "$(fence_violations "$CONFLICT_FLOW")" ]
   # Failing state: the old Step 11 capture reinserted as a block.
   awk -v anchor="$STEP_11" '
     { print }
@@ -203,6 +207,10 @@ default_arm_holds() {
     arm="$(arm_line "$section" "$outcome")"
     printf '%s\n' "$arm" | grep -qF 'Exit' || return 1
     printf '%s\n' "$arm" | grep -qF 'Step 3b' && return 1
+    printf '%s\n' "$arm" | grep -qF 'decision log check' && return 1
+  done
+  for outcome in NONE RESUME_IN_WORKTREE RESUME_ADD_WORKTREE; do
+    arm_line "$section" "$outcome" | grep -qF 'Continue to the decision log check' || return 1
   done
   arm="$(arm_line "$section" COMMITTED)"
   printf '%s\n' "$arm" | grep -qF 'gh pr list --head <branch> --state all --json number,state,url' || return 1
@@ -214,7 +222,10 @@ default_arm_holds() {
 
 @test "Step 3, default branch: classify names all five outcomes and the applied and committed arms exit" {
   default_arm_holds "$SKILL"
-  sed 's|inside it to open the PR. Exit. Never resume|inside it to open the PR. Continue to Step 3b. Never resume|' "$SKILL" > "$COPY"
+  sed 's|then opens the PR. Exit. Never resume|then opens the PR. Continue to Step 3b. Never resume|' "$SKILL" > "$COPY"
+  default_arm_holds "$COPY" && return 1
+  # Failing state: a fresh run skipping the decision log check.
+  sed 's|a fresh run. Continue to the decision log check.|a fresh run. Continue to Step 3b.|' "$SKILL" > "$COPY"
   default_arm_holds "$COPY" && return 1
   sed 's|and the removal commands from the worktree notice|and nothing else|' "$SKILL" > "$COPY"
   default_arm_holds "$COPY" && return 1
@@ -230,16 +241,16 @@ worktree_arm_holds() {
   section_of "$1" "$STEP_3" | grep -qF 'In mode 1, run `### Step 3, worktree run in place` first' || return 1
   printf '%s\n' "$section" | grep -qF 'must start `update/<LATEST_TAG>-`; otherwise stop' || return 1
   printf '%s\n' "$section" | grep -qxF 'bash .gaia/scripts/update-gaia-branch-state.sh classify --tag <LATEST_TAG> --latest <LATEST> --branch <current branch>' || return 1
-  arm_line "$section" RESUME_IN_WORKTREE | grep -qF 'Step 3b' || return 1
-  arm_line "$section" APPLIED_UNCOMMITTED | grep -qF "Step 10's hand-off" || return 1
-  arm_line "$section" APPLIED_UNCOMMITTED | grep -qF 'Step 3b' && return 1
+  arm_line "$section" RESUME_IN_WORKTREE | grep -qF 'decision log check' || return 1
+  arm_line "$section" APPLIED_UNCOMMITTED | grep -qF 'Go straight to `## Quality gate`, then `## Review point`' || return 1
+  arm_line "$section" APPLIED_UNCOMMITTED | grep -qF 'decision log check' && return 1
   arm_line "$section" COMMITTED | grep -qF 'Step 11' || return 1
   return 0
 }
 
-@test "Step 3, worktree run in place: applied goes to Step 10, committed to Step 11, an older release stops" {
+@test "Step 3, worktree run in place: applied goes to the quality gate, committed to Step 11, an older release stops" {
   worktree_arm_holds "$SKILL"
-  sed "s|Go straight to Step 10's hand-off|Continue to Step 3b|" "$SKILL" > "$COPY"
+  sed 's|Go straight to `## Quality gate`, then `## Review point`|Continue to the decision log check|' "$SKILL" > "$COPY"
   worktree_arm_holds "$COPY" && return 1
   sed 's|must start `update/<LATEST_TAG>-`; otherwise stop|may be any update branch|' "$SKILL" > "$COPY"
   worktree_arm_holds "$COPY" && return 1
@@ -412,35 +423,33 @@ provisioning_wait_holds() {
   true
 }
 
-# --- Step 10: the hand-off --------------------------------------------------------
+# --- Review point --------------------------------------------------------------
 
-# 0 when SKILL.md copy `$1` waits before any pnpm step of the hand-off and
-# names the log path and the worktree in every step.
-step_10_holds() {
-  local section wait pnpm
-  section="$(section_file "$1" "$STEP_10")" || return 1
-  wait="$(grep -nxF -- "$WAIT_CALL" "$section" | head -n 1 | cut -d: -f1)"
-  pnpm="$(grep -n 'pnpm' "$section" | head -n 1 | cut -d: -f1)"
-  [ -n "$wait" ] && [ -n "$pnpm" ] || return 1
-  [ "$wait" -lt "$pnpm" ] || return 1
-  in_order "$section" "$WAIT_CALL" '1. Review any conflict patches' || return 1
+# 0 when SKILL.md copy `$1` waits before showing the diff, shows the stat, the
+# untracked files and the diff before the commit question, and names the log
+# path.
+review_point_holds() {
+  local section
+  section="$(section_file "$1" "$STEP_REVIEW")" || return 1
+  in_order "$section" "$WAIT_CALL" 'git -C <acting tree> diff --stat' 'git -C <acting tree> status --short' 'Commit this update?' || return 1
+  grep -qxF 'git -C <acting tree> diff' "$section" || return 1
   grep -qF '`INSTALL_FAILED` stops only when `CREATED_WORKTREE=true`' "$section" || return 1
   grep -qF 'naming the provisioning `Log:` path' "$section" || return 1
-  grep -qF '`<worktree path>/.gaia-merge/`' "$section" || return 1
-  grep -qF '`pnpm -C <worktree path> install`' "$section" || return 1
-  grep -qF '`pnpm -C <worktree path> dedupe`' "$section" || return 1
-  grep -qF '`git -C <worktree path> diff`' "$section" || return 1
+  grep -qF 'every `auto-merged` file by name' "$section" || return 1
+  grep -qF 'Never commit without the `Commit` answer.' "$section" || return 1
   return 0
 }
 
-@test "Step 10: the wait precedes every pnpm step and the hand-off names the log and the worktree" {
-  step_10_holds "$SKILL"
-  insert_after "$SKILL" "$STEP_10" 'Run `pnpm install` first.'
-  step_10_holds "$COPY" && return 1
+@test "review point: the wait, the stat, the untracked files and the diff precede the one commit question" {
+  review_point_holds "$SKILL"
   sed 's|naming the provisioning `Log:` path|naming nothing|' "$SKILL" > "$COPY"
-  step_10_holds "$COPY" && return 1
-  sed 's|`git -C <worktree path> diff`|`git diff`|' "$SKILL" > "$COPY"
-  step_10_holds "$COPY" && return 1
+  review_point_holds "$COPY" && return 1
+  grep -vxF 'git -C <acting tree> status --short' "$SKILL" > "$COPY"
+  review_point_holds "$COPY" && return 1
+  sed 's|every `auto-merged` file by name|the files|' "$SKILL" > "$COPY"
+  review_point_holds "$COPY" && return 1
+  grep -vF 'Never commit without the `Commit` answer.' "$SKILL" > "$COPY"
+  review_point_holds "$COPY" && return 1
   true
 }
 
@@ -575,68 +584,6 @@ prose_pins_hold() {
   true
 }
 
-# --- Step 4 and Step 9: the CHANGELOG range reaches the execution agent -------
-
-# The release bundle withholds CHANGELOG.md, so Step 4's fetched range is the
-# only copy Step 9's adopter-action suggestions can read.
-
-STEP_9_ACTIONS='**Documented adopter actions (opt-in).**'
-
-# Block text on stdin with the skill's typed-literal placeholders filled.
-fill_placeholders() {
-  sed -e 's/<BASELINE>/2.0.0/g' -e 's/<LATEST_TAG>/v2.1.0/g' -e 's/<LATEST>/2.1.0/g'
-}
-
-# A project holding the preflight script and the range walk, a verified-cache
-# directory for v2.1.0, and stub curl and gh executables. The stub curl prints
-# $CURL_FIXTURE, or fails when it is unset; the stub gh always fails.
-step_4_setup() {
-  PROJECT="$BATS_TEST_TMPDIR/project"
-  CACHE="$PROJECT/.gaia/local/cache/shared/update-gaia"
-  mkdir -p "$PROJECT/.gaia/scripts/lib" "$CACHE/v2.1.0/tree" "$BATS_TEST_TMPDIR/bin"
-  cp "$PREFLIGHT" "$REPO_ROOT/.gaia/scripts/changelog-range.sh" "$PROJECT/.gaia/scripts/"
-  cp "$COMPARE_LIB" "$PROJECT/.gaia/scripts/lib/"
-  cat > "$BATS_TEST_TMPDIR/bin/curl" <<'STUB'
-#!/usr/bin/env bash
-[ -n "${CURL_FIXTURE:-}" ] || exit 22
-cat "$CURL_FIXTURE"
-STUB
-  printf '#!/usr/bin/env bash\nexit 1\n' > "$BATS_TEST_TMPDIR/bin/gh"
-  chmod +x "$BATS_TEST_TMPDIR/bin/curl" "$BATS_TEST_TMPDIR/bin/gh"
-  printf '%s\n' '# Changelog' '' '## [Unreleased]' '' '## [2.1.0]' '' '### Removed' '' '- dropped `pnpm remove left-pad`' '' '## [2.0.0]' '' '- base' > "$BATS_TEST_TMPDIR/CHANGELOG.md"
-  BLOCK_4="$(block_after_heading "$SKILL" "$STEP_4" | fill_placeholders)"
-  printf '%s\n' "$BLOCK_4" | grep -qxF 'bash .gaia/scripts/update-gaia-preflight.sh changelog --baseline 2.0.0 --latest 2.1.0 --latest-tag v2.1.0'
-}
-
-run_step_4() {
-  run_block_in "$PROJECT" "$BLOCK_4" PATH="$BATS_TEST_TMPDIR/bin:$PATH" "$@"
-}
-
-run_step_9_actions() {
-  local block
-  block="$(block_after_heading "$MERGE_EXECUTION" "$STEP_9_ACTIONS")"
-  [ -n "$block" ] || return 1
-  run_block_in "$PROJECT" "$block" LATEST_DIR=.gaia/local/cache/shared/update-gaia/v2.1.0/tree BASELINE=2.0.0 LATEST=2.1.0
-}
-
-@test "Step 9: adopter actions read the range Step 4 saved, never a CHANGELOG inside the bundle" {
-  step_4_setup
-  run_step_4 CURL_FIXTURE="$BATS_TEST_TMPDIR/CHANGELOG.md"
-  [ "$status" -eq 0 ]
-  run_step_9_actions
-  [ "$status" -eq 0 ]
-  printf '%s\n' "$output" | grep -qxF -- '- dropped `pnpm remove left-pad`'
-  section_of "$MERGE_EXECUTION" '### Step 9: Summary' | grep -qF 'LATEST_DIR/CHANGELOG.md' && return 1
-  true
-}
-
-@test "Step 9: a missing saved range is announced, not read as an empty range" {
-  step_4_setup
-  run_step_9_actions
-  [ "$status" -eq 0 ]
-  printf '%s\n' "$output" | grep -qxF 'CHANGELOG_RANGE_UNAVAILABLE'
-}
-
 # --- Step 9c prose ----------------------------------------------------------------
 
 STEP_9C='## Step 9c: Carry new setup features'
@@ -668,21 +615,12 @@ PROCEED_QUESTION='"Update GAIA from v$BASELINE to $LATEST_TAG?"'
 # 0 when SKILL.md copy `$1` keeps the orchestrator order.
 skill_order_holds() {
   local file="$1" anchor
-  for anchor in 'EnterWorktree(' 'bash .gaia/scripts/update-gaia-preflight.sh prune' '## Model selection'; do
+  for anchor in 'EnterWorktree(' 'bash .gaia/scripts/update-gaia-preflight.sh prune' "$STEP_CONFLICT_FLOW"; do
     in_order "$file" "$SELECTOR_CALL" "$PROCEED_QUESTION" "$anchor" || return 1
   done
   in_order "$file" '## Step 9b' 'update-gaia-drift.sh --features' 'GAIA_MANIFEST_WRITE=release cp <LATEST_DIR>' 'ping --event update' 'echo <LATEST> > .gaia/VERSION' || return 1
   in_order "$file" '## Step 9d' '### Step 12' || return 1
   section_of "$file" '## Step 11 (orchestrator' | sed -n 3p | grep -qF "The execution agent's work ends at Step 9," || return 1
-  return 0
-}
-
-# 0 when merge-execution.md copy `$1` holds none of the orchestrator's writes.
-merge_execution_is_merge_only() {
-  grep -qF 'gh release download' "$1" && return 1
-  grep -qE '>[[:space:]]*\.gaia/VERSION' "$1" && return 1
-  grep -qF 'GAIA_MANIFEST_WRITE=release cp' "$1" && return 1
-  grep -qF 'ping --event update' "$1" && return 1
   return 0
 }
 
@@ -708,27 +646,326 @@ merge_execution_is_merge_only() {
   true
 }
 
-@test "prose order: merge-execution.md downloads nothing and writes no version, manifest or ping" {
-  merge_execution_is_merge_only "$MERGE_EXECUTION"
-  local copy="$BATS_TEST_TMPDIR/merge-execution-readded.md" line
-  for line in 'gh release download "$tag" --repo gaia-react/gaia' 'echo "$LATEST" > .gaia/VERSION' \
-    'GAIA_MANIFEST_WRITE=release cp "$LATEST_DIR/.gaia/manifest.json" .gaia/manifest.json' \
-    '.gaia/cli/gaia ping --event update --from "$BASELINE" --to "$LATEST" || true'; do
-    { cat "$MERGE_EXECUTION"; printf '%s\n' "$line"; } > "$copy"
-    merge_execution_is_merge_only "$copy" && { echo "not reported: $line" >&2; return 1; }
+# --- The conflict flow: decision log, dispatch, answers, one commit ----------
+
+DECISIONS_CHECK='bash .gaia/scripts/update-decisions.sh check --file <starting checkout>/.gaia/update-decisions.json'
+VERIFY_CALL='bash .gaia/scripts/update-gaia-preflight.sh verify-bundles --baseline <BASELINE> --latest-tag <LATEST_TAG>'
+PREPARE_CALL='bash <main checkout path>/.gaia/scripts/update-gaia-report.sh prepare --run-dir <main checkout path>/.gaia/local/cache/shared/update-gaia/run'
+CLASSIFY_CALL='bash <main checkout path>/.gaia/scripts/audit-noop-detect.sh --shape agent-report-file --path <run dir>/report.json --report-key files --expect-count <n>'
+LOCKFILE_CALL='<LATEST_DIR>/.gaia/cli/gaia update lockfile-command --root <acting tree>'
+RECORD_CALL='bash <main checkout path>/.gaia/scripts/update-decisions.sh record --file <acting tree>/.gaia/update-decisions.json'
+COMMIT_QUESTION='Commit this update?'
+ADD_CALL='git -C <acting tree> add -A'
+COMMIT_CALL='git -C <acting tree> commit -m "chore(gaia): update to <LATEST_TAG>"'
+
+# The line number of the line in file `$1` that is exactly `$2`; empty if none.
+exact_line() {
+  grep -nxF -- "$2" "$1" | head -n 1 | cut -d: -f1
+}
+
+# 0 when the lines exactly equal to `$2`, `$3`, ... appear in file `$1` in that
+# order, each present. Headings are matched whole, so a prose mention of a
+# heading earlier in the file never stands in for it.
+exact_in_order() {
+  local file="$1" previous=0 needle line
+  shift
+  for needle in "$@"; do
+    line="$(exact_line "$file" "$needle")"
+    [ -n "$line" ] || { echo "missing line: $needle" >&2; return 1; }
+    [ "$line" -gt "$previous" ] || { echo "out of order: $needle" >&2; return 1; }
+    previous="$line"
+  done
+}
+
+# Writes file `$1` to $COPY with the line exactly `$2` moved to just after the
+# line exactly `$3`.
+move_line_after() {
+  awk -v moved="$2" -v anchor="$3" '
+    $0 == moved { next }
+    { print }
+    $0 == anchor { print moved }
+  ' "$1" > "$COPY"
+  [ "$(exact_line "$COPY" "$2")" -gt "$(exact_line "$COPY" "$3")" ]
+}
+
+# 0 when SKILL.md copy `$1` checks the decision log before Step 3b and the
+# first download, and its stop writes nothing.
+decision_log_check_holds() {
+  local section
+  section="$(section_file "$1" '## Pre-flight: Decision log check')" || return 1
+  grep -qxF -- "$DECISIONS_CHECK" "$section" || return 1
+  grep -F '**Exit 1**' "$section" | grep -qF 'writing nothing: no download, and no worktree, branch, prune or cache change' || return 1
+  exact_in_order "$1" '## Pre-flight: Decision log check' "$DECISIONS_CHECK" '## Step 3b: Refuse a 1.x baseline' "$VERIFY_CALL" || return 1
+  return 0
+}
+
+@test "decision log check: it precedes Step 3b and the download, and an invalid log stops writing nothing" {
+  decision_log_check_holds "$SKILL"
+  # Failing state: the check moved after the download.
+  move_line_after "$SKILL" "$DECISIONS_CHECK" "$VERIFY_CALL"
+  decision_log_check_holds "$COPY" && return 1
+  # Failing state: the stop no longer says it writes nothing.
+  sed 's|writing nothing: no download, and no worktree, branch, prune or cache change|then clean up|' "$SKILL" > "$COPY"
+  decision_log_check_holds "$COPY" && return 1
+  true
+}
+
+# 0 when SKILL.md copy `$1` verifies each deferred baseline tag, keeps it
+# through the prune, and saves the CHANGELOG range from the oldest one.
+deferred_baselines_hold() {
+  section_of "$1" '## Step 3c: Download and verify the bundles' | grep -qF 'adding one `--extra-tag <tag>` per extra baseline tag' || return 1
+  section_of "$1" '## Step 3c: Download and verify the bundles' | grep -qF 'one `EXTRA_DIR=<tag>:<path>` line per extra tag' || return 1
+  section_of "$1" '## Step 3c: Download and verify the bundles' | grep -qF 'Name each deferred path whose `DEFERRED` line carries that tag' || return 1
+  section_of "$1" '## Step 4: Show the release notes and confirm' | grep -qF '`--save-from <oldest extra tag' || return 1
+  section_of "$1" '## Step 4b: Prune prior-run artifacts' | grep -qF 'one `--keep-tag <tag>` per extra baseline tag' || return 1
+  return 0
+}
+
+@test "deferred baselines: Step 3c verifies each extra tag, Step 4 saves from the oldest, the prune keeps them" {
+  deferred_baselines_hold "$SKILL"
+  local pin
+  for pin in 'adding one `--extra-tag <tag>`' 'line per extra tag' 'carries that tag' '`--save-from <oldest extra tag' 'one `--keep-tag <tag>`'; do
+    grep -vF -- "$pin" "$SKILL" > "$COPY"
+    deferred_baselines_hold "$COPY" && { echo "pin not enforced: $pin" >&2; return 1; }
   done
   true
+}
+
+# The snapshot copies in file `$1`, one `<source name> <snapshot name>` line
+# each, sorted.
+snapshot_copies() {
+  grep -F '<run dir>/instructions/' "$1" | grep -E '^cp ' |
+    sed -E 's|^cp <acting tree>/\.claude/skills/update-gaia/references/([^ ]+) <run dir>/instructions/([^ ]+)$|\1 \2|' | sort
+}
+
+SNAPSHOT_SET='merge-execution.md merge-execution.md
+merge-generated.md merge-generated.md
+merge-report.md merge-report.md'
+
+# 0 when SKILL.md copy `$1` snapshots exactly the three instruction files,
+# after the run directory is prepared and before the dispatch.
+snapshot_holds() {
+  [ "$(snapshot_copies "$1")" = "$SNAPSHOT_SET" ] || return 1
+  exact_in_order "$1" "$PREPARE_CALL" \
+    'cp <acting tree>/.claude/skills/update-gaia/references/merge-report.md <run dir>/instructions/merge-report.md' \
+    '### Dispatch the execution agent' || return 1
+  return 0
+}
+
+@test "snapshot: exactly merge-execution.md, merge-generated.md and merge-report.md are copied before dispatch" {
+  snapshot_holds "$CONFLICT_FLOW"
+  # Failing state: a fourth file joins the snapshot.
+  insert_after "$CONFLICT_FLOW" '### Snapshot the instructions' 'cp <acting tree>/.claude/skills/update-gaia/SKILL.md <run dir>/instructions/SKILL.md'
+  snapshot_holds "$COPY" && return 1
+  # Failing state: one of the three is missing.
+  grep -vF 'references/merge-generated.md <run dir>' "$CONFLICT_FLOW" > "$COPY"
+  snapshot_holds "$COPY" && return 1
+  true
+}
+
+# 0 when SKILL.md copy `$1` derives the count with expect-count and splits the
+# both-changed files with the chunk subcommand before the dispatch.
+count_and_chunk_hold() {
+  local section expect chunk
+  section="$(section_file "$1" '### Count the expected entries and split the judgment work')" || return 1
+  expect="$(grep -E '^bash <main checkout path>/\.gaia/scripts/update-gaia-report\.sh expect-count ' "$section")"
+  chunk="$(grep -E '^bash <main checkout path>/\.gaia/scripts/update-gaia-report\.sh chunk ' "$section")"
+  [ -n "$expect" ] && [ -n "$chunk" ] || return 1
+  printf '%s\n' "$chunk" | grep -qF -- '--run-dir <run dir> --size 25' || return 1
+  grep -qF 'never a count made by hand' "$section" || return 1
+  exact_in_order "$1" "$expect" "$chunk" '### Dispatch the execution agent' "$CLASSIFY_CALL" || return 1
+  return 0
+}
+
+@test "count and chunks: expect-count derives n, update-gaia-report.sh chunk splits the work, both before dispatch" {
+  count_and_chunk_hold "$CONFLICT_FLOW"
+  grep -vE 'update-gaia-report\.sh chunk ' "$CONFLICT_FLOW" > "$COPY"
+  count_and_chunk_hold "$COPY" && return 1
+  grep -vE 'update-gaia-report\.sh expect-count ' "$CONFLICT_FLOW" > "$COPY"
+  count_and_chunk_hold "$COPY" && return 1
+  true
+}
+
+# 0 when SKILL.md copy `$1` classifies the report with its key and derived
+# count, clears only the report on a no-op, re-dispatches once and then runs
+# the merge inline, and prepares the run directory exactly once, before that.
+classify_holds() {
+  local section
+  section="$(section_file "$1" '### Classify the report')" || return 1
+  grep -qxF -- "$CLASSIFY_CALL" "$section" || return 1
+  grep -qxF 'rm -f <run dir>/report.json' "$section" || return 1
+  grep -qF 'update-gaia-report.sh prepare' "$section" && return 1
+  in_order "$section" "$CLASSIFY_CALL" 'rm -f <run dir>/report.json' 're-dispatch exactly once' || return 1
+  grep -qE 're-dispatch exactly once.* second consecutive no-op means the orchestrator runs the merge inline itself' "$section" || return 1
+  grep -qF 'never classify at the moment the Agent call returns' "$section" || return 1
+  [ "$(grep -cF 'update-gaia-report.sh prepare' "$1")" -eq 1 ] || return 1
+  in_order "$1" "$PREPARE_CALL" "$CLASSIFY_CALL" || return 1
+  return 0
+}
+
+@test "classify: the report key and derived count, clear only the report, re-dispatch once, then inline" {
+  classify_holds "$CONFLICT_FLOW"
+  # Failing state: the no-op branch re-prepares, deleting the snapshot and candidates.
+  sed 's|^rm -f <run dir>/report.json$|bash <main checkout path>/.gaia/scripts/update-gaia-report.sh prepare --run-dir <run dir>|' "$CONFLICT_FLOW" > "$COPY"
+  classify_holds "$COPY" && return 1
+  sed 's|--report-key files --expect-count <n>|--expect-count <n>|' "$CONFLICT_FLOW" > "$COPY"
+  classify_holds "$COPY" && return 1
+  sed 's|re-dispatch exactly once with the same prompt|re-dispatch with the same prompt|' "$CONFLICT_FLOW" > "$COPY"
+  classify_holds "$COPY" && return 1
+  sed 's|never classify at the moment the Agent call returns|classify when the Agent call returns|' "$CONFLICT_FLOW" > "$COPY"
+  classify_holds "$COPY" && return 1
+  sed 's|means the orchestrator runs the merge inline itself|means the run stops|' "$CONFLICT_FLOW" > "$COPY"
+  classify_holds "$COPY" && return 1
+  true
+}
+
+# 0 when SKILL.md copy `$1` validates the final report before copying any clean
+# merge, and copies clean merges before any answer's candidate.
+validate_before_copy_holds() {
+  in_order "$1" 'update-gaia-report.sh validate --final' 'update-gaia-report.sh apply-auto' \
+    '## Apply answers and record decisions' 'cp <run dir>/candidates/' || return 1
+  return 0
+}
+
+@test "validate --final precedes apply-auto, which precedes any candidate copy for an answer" {
+  validate_before_copy_holds "$CONFLICT_FLOW"
+  local validate apply
+  validate="$(grep -E '^bash .*update-gaia-report\.sh validate --final ' "$CONFLICT_FLOW")"
+  apply="$(grep -E '^bash .*update-gaia-report\.sh apply-auto ' "$CONFLICT_FLOW")"
+  [ -n "$validate" ]
+  [ -n "$apply" ]
+  # Failing state: the clean merges copied before the report validates.
+  move_line_after "$CONFLICT_FLOW" "$validate" "$apply"
+  validate_before_copy_holds "$COPY" && return 1
+  # Failing state: an answer's candidate copied before validation.
+  insert_after "$CONFLICT_FLOW" '### Judgment chunks' 'cp <run dir>/candidates/x.combine <acting tree>/x'
+  validate_before_copy_holds "$COPY" && return 1
+  true
+}
+
+# 0 when SKILL.md copy `$1` runs the conflict flow, which records decisions
+# (reference copy `$2`), before the commit question and stages before it
+# commits, so the decision log lands in the update commit.
+record_before_commit_holds() {
+  in_order "$1" "$STEP_CONFLICT_FLOW" "$COMMIT_QUESTION" || return 1
+  exact_in_order "$1" "$ADD_CALL" "$COMMIT_CALL" || return 1
+  in_order "$1" "$COMMIT_QUESTION" "$ADD_CALL" || return 1
+  grep -qF -- "$RECORD_CALL" "$2" || return 1
+  return 0
+}
+
+@test "decision records precede the commit question, and add -A precedes the update commit" {
+  record_before_commit_holds "$SKILL" "$CONFLICT_FLOW"
+  # Failing state: the reference no longer records.
+  grep -vF -- "$RECORD_CALL" "$CONFLICT_FLOW" > "$BATS_TEST_TMPDIR/flow-copy.md"
+  record_before_commit_holds "$SKILL" "$BATS_TEST_TMPDIR/flow-copy.md" && return 1
+  # Failing state: the conflict flow step moved after the commit question.
+  move_line_after "$SKILL" "$STEP_CONFLICT_FLOW" "$COMMIT_CALL"
+  record_before_commit_holds "$COPY" "$CONFLICT_FLOW" && return 1
+  # Failing state: the commit runs before the staging.
+  move_line_after "$SKILL" "$ADD_CALL" "$COMMIT_CALL"
+  record_before_commit_holds "$COPY" "$CONFLICT_FLOW" && return 1
+  true
+}
+
+# 0 when SKILL.md copy `$1` runs the conflict flow, then Steps 9b to 9d, then
+# the gate, then the review, and reference copy `$2` runs the questions, the
+# answers, then the follow-ups (lockfile, regions, settings).
+post_merge_order_holds() {
+  local section
+  exact_in_order "$1" "$STEP_CONFLICT_FLOW" \
+    '## Step 9b: Follow the after-merge notes' '## Step 9c: Carry new setup features' \
+    '## Step 9d: Record the update' '## Quality gate' '## Review point' || return 1
+  [ "$(first_line "$1" "$COMMIT_QUESTION")" -gt "$(exact_line "$1" '## Review point')" ] || return 1
+  exact_in_order "$2" '## Questions' '## Apply answers and record decisions' '## Follow-ups' || return 1
+  section="$(section_file "$2" '## Follow-ups')" || return 1
+  in_order "$section" 'update lockfile-command' 'update regen-regions' 'packages sync-settings' || return 1
+  return 0
+}
+
+@test "order: the conflict flow, Steps 9b to 9d, the quality gate, then the review point" {
+  post_merge_order_holds "$SKILL" "$CONFLICT_FLOW"
+  # Failing state: the gate runs before the conflict flow.
+  sed -e 's/^## Quality gate$/## SWAPPED/' -e "s/^$STEP_CONFLICT_FLOW\$/## Quality gate/" -e 's/^## SWAPPED$/'"$STEP_CONFLICT_FLOW"'/' "$SKILL" > "$COPY"
+  post_merge_order_holds "$COPY" "$CONFLICT_FLOW" && return 1
+  # Failing state: the version written after the gate.
+  sed -e 's/^## Quality gate$/## SWAPPED/' -e 's/^## Step 9d: Record the update$/## Quality gate/' -e 's/^## SWAPPED$/## Step 9d: Record the update/' "$SKILL" > "$COPY"
+  post_merge_order_holds "$COPY" "$CONFLICT_FLOW" && return 1
+  # Failing state: the follow-ups run before the answers.
+  sed -e 's/^## Follow-ups$/## SWAPPED/' -e 's/^## Apply answers and record decisions$/## Follow-ups/' -e 's/^## SWAPPED$/## Apply answers and record decisions/' "$CONFLICT_FLOW" > "$COPY"
+  post_merge_order_holds "$SKILL" "$COPY" && return 1
+  # Failing state: the region regeneration before the lockfile.
+  move_line_after "$CONFLICT_FLOW" "$LOCKFILE_CALL" '<LATEST_DIR>/.gaia/cli/gaia update regen-regions --manifest <LATEST_DIR>/.gaia/manifest.json --root <acting tree> --backup-dir <backupDir> --json'
+  post_merge_order_holds "$SKILL" "$COPY" && return 1
+  true
+}
+
+# 0 when SKILL.md copy `$1` asks the commit question exactly once and holds no
+# commit command before it.
+single_confirm_holds() {
+  local question
+  [ "$(grep -cF "$COMMIT_QUESTION" "$1")" -eq 1 ] || return 1
+  question="$(first_line "$1" "$COMMIT_QUESTION")"
+  [ "$(grep -cxF -- "$COMMIT_CALL" "$1")" -eq 1 ] || return 1
+  grep -nF 'commit -m' "$1" | cut -d: -f1 | while read -r line; do
+    [ "$line" -gt "$question" ] || exit 1
+  done || return 1
+  return 0
+}
+
+@test "the commit question appears exactly once, and the commit command only after it" {
+  single_confirm_holds "$SKILL"
+  # Failing state: a second confirm.
+  insert_after "$SKILL" '## Quality gate' "Ask \"$COMMIT_QUESTION\" here too."
+  single_confirm_holds "$COPY" && return 1
+  # Failing state: a commit before the question.
+  insert_after "$SKILL" '## Quality gate' "$COMMIT_CALL"
+  single_confirm_holds "$COPY" && return 1
+  true
+}
+
+# 0 when SKILL.md copy `$1` picks the lockfile command with lockfile-command
+# and runs dedupe or install once.
+lockfile_follow_up_holds() {
+  local section
+  section="$(section_file "$1" '## Follow-ups')" || return 1
+  grep -qxF -- "$LOCKFILE_CALL" "$section" || return 1
+  grep -qF '`pnpm -C <acting tree> dedupe` once' "$section" || return 1
+  grep -qF '`pnpm -C <acting tree> install` once' "$section" || return 1
+  return 0
+}
+
+@test "follow-ups: the lockfile command comes from lockfile-command" {
+  lockfile_follow_up_holds "$CONFLICT_FLOW"
+  grep -vxF -- "$LOCKFILE_CALL" "$CONFLICT_FLOW" > "$COPY"
+  lockfile_follow_up_holds "$COPY" && return 1
+  true
+}
+
+# Prints every line of file `$1` naming the retired patch directory or the
+# retired report name, both assembled so this suite never matches itself.
+retired_names() {
+  grep -nE "$(printf '%s|%s' '\.gaia-''merge' 'UpdateMerge''Report')" "$1" || true
+}
+
+@test "no line in SKILL.md names the retired patch directory or report name" {
+  [ -z "$(retired_names "$SKILL")" ]
+  [ -z "$(retired_names "$CONFLICT_FLOW")" ]
+  { cat "$SKILL"; printf 'Review patches in .gaia-%s/\n' merge; } > "$COPY"
+  [ -n "$(retired_names "$COPY")" ]
+  { cat "$SKILL"; printf 'returns its UpdateMerge%s\n' Report; } > "$COPY"
+  [ -n "$(retired_names "$COPY")" ]
+  { cat "$CONFLICT_FLOW"; printf 'Review patches in .gaia-%s/\n' merge; } > "$COPY"
+  [ -n "$(retired_names "$COPY")" ]
 }
 
 # --- Bundle-root pin ------------------------------------------------------------
 
 # Prints every line of the given files naming .gaia/migrations/ other than
-# through the target bundle (`<LATEST_DIR>/` in SKILL.md, `$LATEST_DIR/` in
-# merge-execution.md, `$latest_dir/` in the preflight script) or the refusal's
-# bundled note path.
+# through the target bundle (`<LATEST_DIR>/` in SKILL.md, `$latest_dir/` in the
+# preflight script) or the refusal's bundled note path.
 bare_migration_paths() {
   sed -e 's|<LATEST_DIR>/\.gaia/migrations/||g' \
-    -e 's|\$LATEST_DIR/\.gaia/migrations/||g' \
     -e 's|\$latest_dir/\.gaia/migrations/||g' \
     -e 's|\.gaia/local/cache/shared/migrate-2/v2\.0\.0/tree/\.gaia/migrations/2\.0\.0\.md||g' "$@" |
     grep -F '.gaia/migrations/' || true
@@ -747,7 +984,7 @@ stray_selector_calls() {
   [ "$(grep -cF 'bash "$latest_dir/.gaia/scripts/select-migration-notes.sh" "$latest_dir" ' "$PREFLIGHT")" -eq 1 ]
   [ -z "$(stray_selector_calls "$SKILL")" ]
   [ -z "$(stray_selector_calls "$PREFLIGHT")" ]
-  [ -z "$(bare_migration_paths "$SKILL" "$MERGE_EXECUTION" "$PREFLIGHT")" ]
+  [ -z "$(bare_migration_paths "$SKILL" "$CONFLICT_FLOW" "$PREFLIGHT")" ]
   local copy="$BATS_TEST_TMPDIR/skill-bare.md"
   { cat "$SKILL"; printf '%s\n' 'cat .gaia/migrations/2.1.0.md'; } > "$copy"
   [ -n "$(bare_migration_paths "$copy")" ]
