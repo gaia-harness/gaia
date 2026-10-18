@@ -103,16 +103,27 @@ Rules every arm shares:
 - Never force a pull, and never stash.
 - When a pull fails (a dirty tree, a diverged `main`), report it and stop.
 - When the main checkout's HEAD is a branch other than `main` and other than the merged branch, a peer session holds it: skip the checkout and the pull, and say so.
+- Every worktree arm runs the pre-removal check, `bash .gaia/scripts/worktree-removal-check.sh --tree <worktree path>`, before it removes anything. It stops on a file under the tree's `.gaia-merge/` (unresolved update patches), on uncommitted changes, and on commits ahead of the branch's upstream while that ref exists. A non-zero exit ends cleanup with the worktree and branch kept: no `ExitWorktree` removal, no `git worktree remove --force`, no branch delete, no pull, no install.
+- A stop is reported, never swallowed. Relay the check's whole output (the paths, the unpushed count, the `.gaia-merge/` files, and the next step with the exact removal commands), and the calling run's report names the kept worktree. An unattended run puts it in its final report, so kept worktrees never pile up silently.
+- The worktree arms run `pnpm install --frozen-lockfile` in the main checkout only when the pull ran and `pnpm-lock.yaml` differs between the pre-pull and post-pull HEAD. When the pull fails or is skipped, run no install and print the pull and the install as the next steps. A failed install is reported with its next step and does not undo the removal.
 
-Why the worktree arms carry no `git checkout` and why the worktree removal needs `--force`: `wiki/concepts/PR Merge Workflow.md`, `### Cleanup under worktree isolation`.
+Why the worktree arms carry no `git checkout`, why the worktree removal needs `--force`, why the check stops before it, and why the install is conditional: `wiki/concepts/PR Merge Workflow.md`, `### Cleanup under worktree isolation`.
 
 ### Worktree entered by name in this session
 
-The session entered the tree with `EnterWorktree({name})` in this session. Call:
+The session entered the tree with `EnterWorktree({name})` in this session. First run the pre-removal check from inside the tree, one plain call; `<worktree path>` is the session's `RESOLVED_ROOT`:
+
+```bash
+bash .gaia/scripts/worktree-removal-check.sh --tree <worktree path>
+```
+
+A non-zero exit stops here: relay its output and call nothing below. A tree whose branch predates the script has no copy of it (exit 127): then run the plain `ls -A <worktree path>/.gaia-merge` and the plain `git -C <worktree path> status --porcelain`, and stop, relaying the output and the matching next step above, when the first lists any file or the second lists anything outside `.gaia-merge/`. An absent folder and an empty status are clear.
+
+On a clear check, call:
 
 `ExitWorktree({action: "remove", discard_changes: true})`
 
-Gate the call on the confirmed `MERGED`. The squash absorbed every commit on the branch without making them ancestors of `main`, so `discard_changes` loses nothing. Never call `ExitWorktree` first and treat its refusal as the trigger.
+Gate the call on the confirmed `MERGED`. The squash absorbed every commit on the branch without making them ancestors of `main`, and the check found nothing uncommitted or unpushed, so `discard_changes` loses nothing. Never call `ExitWorktree` first and treat its refusal as the trigger.
 
 `ExitWorktree` deletes only the branch name it created, so the renamed `<branch-name>` survives it. The session is back in the main checkout; from there run:
 
@@ -123,9 +134,19 @@ fi
 git fetch --prune origin
 head_branch=$(git rev-parse --abbrev-ref HEAD)
 if [ "$head_branch" = main ]; then
-  git pull --ff-only origin main
+  pre_pull_head=$(git rev-parse HEAD)
+  if ! git pull --ff-only origin main; then
+    printf 'The pull failed. Next steps, from the main checkout: git pull --ff-only origin main, then pnpm install --frozen-lockfile.\n' >&2
+    exit 1
+  fi
+  if ! git diff --quiet "$pre_pull_head" HEAD -- pnpm-lock.yaml; then
+    if ! pnpm install --frozen-lockfile; then
+      printf 'The install failed; the worktree and branch stay removed. Next step: run pnpm install --frozen-lockfile in the main checkout and read its output.\n' >&2
+      exit 1
+    fi
+  fi
 else
-  printf 'The main checkout is on %s, held by a peer session: skipped the pull.\n' "$head_branch"
+  printf 'The main checkout is on %s, held by a peer session: skipped the pull and the install. Next steps, from the main checkout: git pull --ff-only origin main, then pnpm install --frozen-lockfile.\n' "$head_branch"
 fi
 ```
 
@@ -136,22 +157,40 @@ fi
 When the session is inside the tree, leave it with `ExitWorktree({action: "keep"})`. Then, from the main checkout, read the worktree records:
 
 ```bash
-git worktree list --porcelain
+git -C <main checkout path> worktree list --porcelain
 ```
 
-Take the tree's path from its `worktree <path>` line as `<worktree path>`, and the branch from the same record's `branch refs/heads/<branch>` line as `<branch-name>`. Address the tree by that path and the branch by that name; never derive one from the other, because the directory name and the branch name can differ. Then run:
+Every git and pnpm command in the first and third fences takes the `-C <main checkout path>` form, with `<main checkout path>` a typed literal, so the arm works when the session was launched inside the tree it removes (a re-run of an update command inside its own worktree reaches cleanup this way, with no `EnterWorktree` entry to exit and `cd` banned by `.claude/rules/shell-cwd.md`).
+
+Take the tree's path from its `worktree <path>` line as `<worktree path>`, and the branch from the same record's `branch refs/heads/<branch>` line as `<branch-name>`. Address the tree by that path and the branch by that name; never derive one from the other, because the directory name and the branch name can differ. Then run the pre-removal check; a non-zero exit stops here, so run nothing below and relay its output:
 
 ```bash
-git worktree remove --force <worktree path> || exit 1
-if git show-ref --verify --quiet refs/heads/<branch-name>; then
-  git branch -D <branch-name>
+bash .gaia/scripts/worktree-removal-check.sh --tree <worktree path>
+```
+
+On a clear check, run:
+
+```bash
+git -C <main checkout path> worktree remove --force <worktree path> || exit 1
+if git -C <main checkout path> show-ref --verify --quiet refs/heads/<branch-name>; then
+  git -C <main checkout path> branch -D <branch-name>
 fi
-git fetch --prune origin
-head_branch=$(git rev-parse --abbrev-ref HEAD)
+git -C <main checkout path> fetch --prune origin
+head_branch=$(git -C <main checkout path> rev-parse --abbrev-ref HEAD)
 if [ "$head_branch" = main ]; then
-  git pull --ff-only origin main
+  pre_pull_head=$(git -C <main checkout path> rev-parse HEAD)
+  if ! git -C <main checkout path> pull --ff-only origin main; then
+    printf 'The pull failed. Next steps, from <main checkout path>: git pull --ff-only origin main, then pnpm install --frozen-lockfile.\n' >&2
+    exit 1
+  fi
+  if ! git -C <main checkout path> diff --quiet "$pre_pull_head" HEAD -- pnpm-lock.yaml; then
+    if ! pnpm -C <main checkout path> install --frozen-lockfile; then
+      printf 'The install failed; the worktree and branch stay removed. Next step: run pnpm install --frozen-lockfile in <main checkout path> and read its output.\n' >&2
+      exit 1
+    fi
+  fi
 else
-  printf 'The main checkout is on %s, held by a peer session: skipped the pull.\n' "$head_branch"
+  printf 'The main checkout is on %s, held by a peer session: skipped the pull and the install. Next steps, from <main checkout path>: git pull --ff-only origin main, then pnpm install --frozen-lockfile.\n' "$head_branch"
 fi
 ```
 
@@ -194,10 +233,12 @@ The worktree at <ABSOLUTE-PATH-TO-WORKTREE> is ready to discard.
 PR #<N> squash-merged as <short-sha>. From a shell at
 <ABSOLUTE-PATH-TO-MAIN-CHECKOUT>, run:
 
+    bash .gaia/scripts/worktree-removal-check.sh --tree <ABSOLUTE-PATH-TO-WORKTREE>   # stop and report its output when it exits non-zero
     git worktree remove --force <ABSOLUTE-PATH-TO-WORKTREE>
     git branch -D <branch-name>   # if it still exists
     git -C <ABSOLUTE-PATH-TO-MAIN-CHECKOUT> fetch --prune origin
     git -C <ABSOLUTE-PATH-TO-MAIN-CHECKOUT> pull --ff-only origin main   # only when `git rev-parse --abbrev-ref HEAD` there prints main
+    pnpm -C <ABSOLUTE-PATH-TO-MAIN-CHECKOUT> install --frozen-lockfile   # only when that pull ran and changed pnpm-lock.yaml
 ```
 
 A caller with steps of its own appends its lines to the end of that command list; the plan orchestrator appends its two post-merge close lines.

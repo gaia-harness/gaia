@@ -23,14 +23,19 @@ In this checkout `.gaia/cli/package.json` also counts as a dependency manifest. 
 
 Then branch on where the run started.
 
-**If a new branch was created** (interactive run, you were on `main`/`master` at pre-flight and branched off):
+**If this is a worktree run** (`CREATED_WORKTREE=true`, or a worktree run in place because the session started inside its own update worktree, mode 3). Every command takes the plain, literal-value shape; `<branch-name>` is the update branch and `<worktree path>` the worktree's root.
 
 1. Push the branch:
    ```bash
    git push -u origin <branch-name>
    ```
-2. Open a draft PR against `main` (`gh pr create --draft`). Title: the commit subject. Body: the migration report rendered as markdown, via `--body-file` on a temp file (same false-positive reason). Capture the PR number `<N>` and its URL.
-3. **Merge when green, then clean up locally.** This step runs only on a `main`/`master` run, it is what "completes the flow." Merge per `wiki/concepts/PR Merge Workflow.md`: when the PR's diff is manifest-only, the `chore(deps)` title clears its audit-marker gate via the dep-bump bypass; otherwise run the full audit handshake in that page (the `audit-loop-unit` agent, per its `## Dispatch the audit loop unit`, for every member `resolve-audit-members.sh` names, `code-audit-frontend` included) before the merge call below.
+2. Check for an open PR on the branch with one plain command:
+   ```bash
+   gh pr list --head <branch-name> --state open --json number,url
+   ```
+   When one exists, reuse it: a re-run after a `TIMEOUT`, a `CHECK_FAILED` or a refused wait left it open, and its number is `<N>`. Otherwise open a draft PR against `main` (`gh pr create --draft`). Title: the commit subject. Body: the migration report rendered as markdown, via `--body-file` on a temp file (same false-positive reason). Capture the PR number `<N>` and its URL.
+3. Print the worktree notice from `.claude/skills/update-deps/references/worktree.md` (`## The worktree notice`) with `<worktree path>`, `<branch-name>` and `<main checkout path>` filled in.
+4. **Merge when green, then clean up locally.** This step runs only on a worktree run, it is what "completes the flow." Merge per `wiki/concepts/PR Merge Workflow.md`: when the PR's diff is manifest-only, the `chore(deps)` title clears its audit-marker gate via the dep-bump bypass; otherwise run the full audit handshake in that page (the `audit-loop-unit` agent, per its `## Dispatch the audit loop unit`, for every member `resolve-audit-members.sh` names, `code-audit-frontend` included) before the merge call below.
 
 <!-- gaia:maintainer-only:start -->
 
@@ -47,14 +52,14 @@ gh pr merge <N> --squash --delete-branch --auto
 
 The 20-attempt bound replaces the default 5, for the reason the sibling callers give: the merge queued above lands only after a fresh full CI run, which outlasts the ~2.5 minutes the default spends, so a default-bound wait would report `TIMEOUT` on essentially every run and the cleanup below would never be reached.
 
-- **`MERGED`** (exit 0) → clean up per `.claude/skills/gaia/references/work-lifecycle.md` `## 8. Cleanup` `### Feature branch`, with `<branch-name>` = the branch created above, then print the merged PR URL.
-- **`TIMEOUT`** (exit 5, the bound was spent with the pull request still open) → print the PR URL and note that the merge queued above has not landed yet. **Do not** delete the local branch or switch off it, the PR is still open.
+- **`MERGED`** (exit 0) → clean up per `.claude/skills/gaia/references/work-lifecycle.md` `## 8. Cleanup`, then print the merged PR URL. Pick the arm by how this session holds the worktree: `### Worktree entered by name in this session` when this run created and entered it (`CREATED_WORKTREE=true`), `### Worktree entered by path or in an earlier session` on a worktree run in place. Fill `<main checkout path>`, `<worktree path>` and `<branch-name>` in; that arm's fences take `git -C <main checkout path>` forms, so they run from a session launched inside the tree. The `.gaia-merge/` check and the lockfile-triggered install live in those arms and are not restated here.
+- **`TIMEOUT`** (exit 5, the bound was spent with the pull request still open) → print the PR URL and note that the merge queued above has not landed yet, then print the cleanup to run once it lands: a pointer to `.claude/skills/gaia/references/work-lifecycle.md` `### Worktree entered by path or in an earlier session`, with the worktree path and the branch filled in. **Do not** delete or leave anything: the worktree, the branch and the session stay as they are, the PR is still open.
 - **`CONFLICTING`** (exit 3) → repair it per `wiki/concepts/PR Merge Workflow.md`'s `### Conflict found mid-wait` and run the wait again.
-- **`CHECK_FAILED`** (exit 4) → print the PR URL and the failing check, and leave the branch in place as for a queued merge.
-- **`CLOSED`** (exit 6) → the pull request was closed without merging, so no wait can clear it: report that, leave the branch in place, and stop.
-- **the wait refused rather than answered** (exit 2) → report what it could not read, leave the branch in place, and assert no state for the pull request.
+- **`CHECK_FAILED`** (exit 4) → print the PR URL and the failing check, and leave the worktree and branch in place as for a queued merge.
+- **`CLOSED`** (exit 6) → the pull request was closed without merging, so no wait can clear it: report that, leave the worktree and branch in place, and stop.
+- **the wait refused rather than answered** (exit 2) → report what it could not read, leave the worktree and branch in place, and assert no state for the pull request.
 
-**If you were already on a non-main branch** at pre-flight, or running in CI (no new branch was created):
+**If you were already on a non-default branch** at pre-flight (mode 5), or running in CI (mode 2); neither creates a worktree or a branch:
 
 1. Push the branch:
    ```bash
@@ -62,4 +67,6 @@ The 20-attempt bound replaces the default 5, for the reason the sibling callers 
    ```
 2. Do not open a PR and do not merge, the branch owner (the user, or the CI job that invoked it) drives it from here.
 
-If any `git push`, `gh pr create`, or `gh pr merge` above exits non-zero, print the command's error and STOP. Do not retry, force-push, or amend, a rejected push, failed PR creation, or blocked merge is the user's call to resolve (usually a manual rebase, a remote-side block, or a failing check).
+If any `git push` or `gh pr create` above exits non-zero, print the command's error and STOP. Do not retry, force-push, or amend, a rejected push or failed PR creation is the user's call to resolve (usually a manual rebase or a remote-side block).
+
+`gh pr merge` is the exception for a worktree run. It can exit non-zero on its local branch delete after the GitHub-side merge succeeded, because the branch is checked out in the worktree. That is the local-sync failure in `wiki/concepts/PR Merge Workflow.md` `## Local-sync failure mode`, not a STOP: confirm it with the merge wait above, and when the wait prints `MERGED`, do not retry the merge and clean up as that verdict says. Any other non-zero exit from `gh pr merge` that the wait does not show as merged prints the command's error and STOPs on the same terms as the commands above (a blocked merge or a failing check is the user's call to resolve).

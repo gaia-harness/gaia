@@ -28,7 +28,7 @@
 # derivation of its own, so it cannot count as a second resolver
 # definition.
 #
-# gaia_refuse_if_worktree <flow-name> [state_line_function]
+# gaia_refuse_if_worktree <flow-name> [state_line_function] [own_branch_prefix]
 #   <flow-name>: the slash command's own name as the caller wants it printed
 #   (e.g. "/update-gaia"), used verbatim in the message.
 #
@@ -38,6 +38,16 @@
 #   print one line on stdout summarizing cached state relevant to the flow
 #   (or nothing, when the cache is unusable). Its stderr and exit status are
 #   ignored; only what it prints on stdout is used.
+#
+#   [own_branch_prefix]: optional. When non-empty and the session is in a
+#   linked worktree whose current branch starts with it, the function returns 0
+#   and prints nothing, so an update command re-run inside the worktree it
+#   created continues there. The caller chooses the prefix because
+#   `gaia_branch_classify` maps both update branch kinds and seven others to
+#   one mode, so the classifier cannot tell one update command from the other;
+#   matching on the caller's own prefix keeps every other worktree, including
+#   the other command's, refused. A detached HEAD never matches. Pass "" as
+#   the second argument to supply a prefix without a state line function.
 #
 #   Returns 0 (the caller falls through and continues) when the session is
 #   NOT in a linked worktree, or when the main root cannot be resolved. The
@@ -115,7 +125,7 @@ fi
 _GAIA_MAIN_ONLY_FALLBACK_STATE_LINE="Cached state unavailable on main; symlinks may be broken, run \`bash .gaia/scripts/link-worktree.sh\` to repair."
 
 gaia_refuse_if_worktree() {
-  local flow_name="$1" state_line_function="${2:-}"
+  local flow_name="$1" state_line_function="${2:-}" own_branch_prefix="${3:-}"
 
   gaia_is_linked_worktree || return 0
 
@@ -124,6 +134,14 @@ gaia_refuse_if_worktree() {
 
   local current_root
   current_root="$(gaia_resolve_tree_root)"
+
+  if [ -n "$own_branch_prefix" ]; then
+    local current_branch
+    current_branch="$(git -C "$current_root" symbolic-ref --short -q HEAD 2>/dev/null)" || current_branch=""
+    case "$current_branch" in
+      "$own_branch_prefix"*) return 0 ;;
+    esac
+  fi
 
   local message
   message="$flow_name must run from the main checkout, not a worktree.

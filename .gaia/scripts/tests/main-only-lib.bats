@@ -151,6 +151,167 @@ gaia_refuse_if_worktree "/update-gaia" my_state
   [ "$(cat "$captured")" = "$REPO/.gaia/local/cache/shared/update-check.json" ]
 }
 
+# ---------- own-branch-prefix exemption ----------
+#
+# The third argument lets an update command continue inside the worktree it
+# created. Every refusal below is compared byte for byte against the same call
+# with no third argument, so a prefix can only ever remove the refusal, never
+# reword it.
+
+# call_refuse <directory> <prefix>: calls
+# gaia_refuse_if_worktree "/flow" with an empty state function and the prefix
+# ("" means no third argument at all), under bash.
+call_refuse() {
+  local directory="$1" prefix="$2"
+  if [ -n "$prefix" ]; then
+    run run_in "$directory" -- bash -c '. "$1"; gaia_refuse_if_worktree "/flow" "" "$2"' _ "$LIBRARY_SCRIPT" "$prefix"
+  else
+    run run_in "$directory" -- bash -c '. "$1"; gaia_refuse_if_worktree "/flow"' _ "$LIBRARY_SCRIPT"
+  fi
+}
+
+@test "own prefix: deps/ from a deps/x worktree returns 0 and prints nothing" {
+  make_repo
+  make_worktree "$REPO" w-deps deps/x
+  call_refuse "$WORKTREE" "deps/"
+  [ "$status" -eq 0 ]
+  [ -z "$output" ]
+}
+
+@test "own prefix: update/ from a deps/x worktree refuses, byte-identical to the no-prefix refusal" {
+  make_repo
+  make_worktree "$REPO" w-deps deps/x
+  call_refuse "$WORKTREE" ""
+  [ "$status" -eq 1 ]
+  local baseline="$output"
+  [ -n "$baseline" ]
+  call_refuse "$WORKTREE" "update/"
+  [ "$status" -eq 1 ]
+  [ "$output" = "$baseline" ]
+}
+
+@test "own prefix: update/ from an update/x worktree returns 0; deps/ from it refuses identically to no prefix" {
+  make_repo
+  make_worktree "$REPO" w-update update/x
+  call_refuse "$WORKTREE" "update/"
+  [ "$status" -eq 0 ]
+  [ -z "$output" ]
+  call_refuse "$WORKTREE" ""
+  [ "$status" -eq 1 ]
+  local baseline="$output"
+  call_refuse "$WORKTREE" "deps/"
+  [ "$status" -eq 1 ]
+  [ "$output" = "$baseline" ]
+}
+
+@test "own prefix: spec/x and debt/x worktrees refuse for both prefixes, byte-identical to no prefix" {
+  make_repo
+  local kind prefix baseline
+  for kind in spec debt; do
+    make_worktree "$REPO" "w-$kind" "$kind/x"
+    call_refuse "$WORKTREE" ""
+    [ "$status" -eq 1 ] || return 1
+    baseline="$output"
+    for prefix in "deps/" "update/"; do
+      call_refuse "$WORKTREE" "$prefix"
+      [ "$status" -eq 1 ] || { echo "$kind/x with $prefix: expected exit 1, got $status" >&2; return 1; }
+      [ "$output" = "$baseline" ] || { echo "$kind/x with $prefix: output differs from the no-prefix refusal" >&2; return 1; }
+    done
+  done
+  return 0
+}
+
+@test "own prefix: a detached HEAD worktree refuses with either prefix" {
+  make_repo
+  git -C "$REPO" worktree add -q --detach "$REPO/.claude/worktrees/w-detached"
+  local detached="$REPO/.claude/worktrees/w-detached" prefix baseline
+  call_refuse "$detached" ""
+  [ "$status" -eq 1 ]
+  baseline="$output"
+  for prefix in "deps/" "update/"; do
+    call_refuse "$detached" "$prefix"
+    [ "$status" -eq 1 ] || { echo "detached with $prefix: expected exit 1, got $status" >&2; return 1; }
+    [ "$output" = "$baseline" ] || { echo "detached with $prefix: output differs from the no-prefix refusal" >&2; return 1; }
+  done
+  return 0
+}
+
+@test "own prefix: the legacy harness branch spelling is not matched" {
+  make_repo
+  make_worktree "$REPO" w-legacy worktree-deps+x
+  call_refuse "$WORKTREE" "deps/"
+  [ "$status" -eq 1 ]
+}
+
+@test "own prefix: a matching prefix does not call the state function" {
+  make_repo
+  make_worktree "$REPO" w-deps deps/x
+  local marker="$BATS_TEST_TMPDIR/state-called"
+  run run_in "$WORKTREE" -- bash -c '
+. "$1"
+my_state() { : > "$2"; printf "state\n"; }
+gaia_refuse_if_worktree "/flow" my_state "deps/"
+' _ "$LIBRARY_SCRIPT" "$marker"
+  [ "$status" -eq 0 ]
+  [ -z "$output" ]
+  [ ! -e "$marker" ]
+}
+
+@test "own prefix: an empty state function with a non-matching prefix refuses with no state paragraph" {
+  make_repo
+  make_worktree "$REPO" w-spec spec/x
+  call_refuse "$WORKTREE" ""
+  local baseline="$output"
+  call_refuse "$WORKTREE" "deps/"
+  [ "$status" -eq 1 ]
+  [ "$output" = "$baseline" ]
+  grep -qF -- "Cached state unavailable" <<<"$output" && return 1
+  return 0
+}
+
+@test "own prefix: from the main checkout any prefix returns 0 and prints nothing" {
+  make_repo
+  local prefix
+  for prefix in "deps/" "update/" "nonsense/"; do
+    call_refuse "$REPO" "$prefix"
+    [ "$status" -eq 0 ] || return 1
+    [ -z "$output" ] || return 1
+  done
+  return 0
+}
+
+@test "own prefix: a main-only flow without a prefix still passes from main while a deps worktree is live" {
+  make_repo
+  make_worktree "$REPO" w-deps deps/x
+  call_refuse "$REPO" ""
+  [ "$status" -eq 0 ]
+  [ -z "$output" ]
+}
+
+@test "own prefix: deps/ from a deps/x worktree returns 0 and prints nothing, under zsh" {
+  command -v zsh >/dev/null 2>&1 || skip "zsh not installed"
+  make_repo
+  install_libraries "$REPO"
+  make_worktree "$REPO" w-deps deps/x
+  run run_in "$WORKTREE" -- zsh -c '. .gaia/scripts/main-only-lib.sh; gaia_refuse_if_worktree "/flow" "" "deps/"'
+  [ "$status" -eq 0 ]
+  [ -z "$output" ]
+}
+
+@test "own prefix: update/ from a deps/x worktree refuses, byte-identical to no prefix, under zsh" {
+  command -v zsh >/dev/null 2>&1 || skip "zsh not installed"
+  make_repo
+  install_libraries "$REPO"
+  make_worktree "$REPO" w-deps deps/x
+  run run_in "$WORKTREE" -- zsh -c '. .gaia/scripts/main-only-lib.sh; gaia_refuse_if_worktree "/flow"'
+  [ "$status" -eq 1 ]
+  local baseline="$output"
+  grep -qF -- "/flow must run from the main checkout, not a worktree." <<<"$baseline" || return 1
+  run run_in "$WORKTREE" -- zsh -c '. .gaia/scripts/main-only-lib.sh; gaia_refuse_if_worktree "/flow" "" "update/"'
+  [ "$status" -eq 1 ]
+  [ "$output" = "$baseline" ]
+}
+
 # ---------- unresolvable main (fail-open) ----------
 
 @test "linked worktree, unresolvable main: fails open, returns 0, prints nothing" {
@@ -212,7 +373,7 @@ install_libraries() {
   local repo="$1" scripts_directory
   scripts_directory="$(cd "$BATS_TEST_DIRNAME/.." && pwd)"
   mkdir -p "$repo/.gaia/scripts"
-  cp "$scripts_directory/main-only-lib.sh" "$scripts_directory/main-root-lib.sh" "$repo/.gaia/scripts/"
+  cp "$scripts_directory/main-only-lib.sh" "$scripts_directory/main-root-lib.sh" "$scripts_directory/update-state-line-lib.sh" "$repo/.gaia/scripts/"
   git -C "$repo" add .gaia/scripts
   git -C "$repo" commit -q -m "libs"
 }
@@ -507,4 +668,76 @@ extract_block() {
   run run_in "$WORKTREE" -- bash -c "$block"
   [ "$status" -eq 1 ]
   grep -qF -- "Run \`cd $REPO\` then re-invoke /setup-gaia." <<<"$output"
+}
+
+# ---------- the update skills' own-branch-prefix call sites ----------
+#
+# The execution tests above run every block from a worktree whose branch
+# matches neither update prefix, so a dropped, typo'd or swapped prefix
+# argument leaves them green. These pins run the two update skills' real blocks
+# from worktrees on each kind of branch.
+
+PREFIX_PIN_SKILL_FILES=(
+  ".claude/skills/update-deps/SKILL.md"
+  ".claude/skills/update-gaia/SKILL.md"
+)
+PREFIX_PIN_OWN_KINDS=("deps" "update")
+PREFIX_PIN_OTHER_KINDS=("update" "deps")
+
+# strip_prefix_argument <block>: the block with the trailing quoted prefix
+# argument removed from the guard call.
+strip_prefix_argument() {
+  sed -E 's/ "[a-z]+\/"( \|\| exit 1)/\1/' <<<"$1"
+}
+
+# run_pin_block <shell> <directory> <block>: runs the block under the shell.
+run_pin_block() {
+  run run_in "$2" -- "$1" -c "$3"
+}
+
+# assert_prefix_pins <shell>: the own-branch pass-through, the refusals and the
+# red twin for both update skills, under one shell.
+assert_prefix_pins() {
+  local shell_name="$1" index block stripped baseline skill_file label kind refused_kind
+  make_repo
+  install_libraries "$REPO"
+  for kind in deps update spec debt; do
+    make_worktree "$REPO" "pin-$kind" "$kind/x"
+  done
+  for index in 0 1; do
+    skill_file="${PREFIX_PIN_SKILL_FILES[$index]}"
+    label="$skill_file ($shell_name)"
+    block="$(extract_block "$REPO_ROOT/$skill_file")"
+    [ -n "$block" ] || { echo "$label: extractor found no block" >&2; return 1; }
+    stripped="$(strip_prefix_argument "$block")"
+    [ "$stripped" != "$block" ] || { echo "$label: removing the prefix argument changed nothing" >&2; return 1; }
+
+    kind="${PREFIX_PIN_OWN_KINDS[$index]}"
+    run_pin_block "$shell_name" "$REPO/.claude/worktrees/pin-$kind" "$block"
+    [ "$status" -eq 0 ] || { echo "$label: own kind $kind expected exit 0, got $status; output: $output" >&2; return 1; }
+    [ -z "$output" ] || { echo "$label: own kind $kind expected empty output, got: $output" >&2; return 1; }
+
+    run_pin_block "$shell_name" "$REPO/.claude/worktrees/pin-$kind" "$stripped"
+    [ "$status" -eq 1 ] || { echo "$label: red twin from $kind expected exit 1, got $status" >&2; return 1; }
+
+    for refused_kind in "${PREFIX_PIN_OTHER_KINDS[$index]}" spec debt; do
+      run_pin_block "$shell_name" "$REPO/.claude/worktrees/pin-$refused_kind" "$stripped"
+      [ "$status" -eq 1 ] || { echo "$label: no-prefix variant from $refused_kind expected exit 1, got $status" >&2; return 1; }
+      baseline="$output"
+      [ -n "$baseline" ] || { echo "$label: no-prefix refusal from $refused_kind was empty" >&2; return 1; }
+      run_pin_block "$shell_name" "$REPO/.claude/worktrees/pin-$refused_kind" "$block"
+      [ "$status" -eq 1 ] || { echo "$label: from $refused_kind expected exit 1, got $status; output: $output" >&2; return 1; }
+      [ "$output" = "$baseline" ] || { echo "$label: from $refused_kind the refusal differs from the no-prefix variant's" >&2; return 1; }
+    done
+  done
+  return 0
+}
+
+@test "update skills' call sites: own branch passes, every other worktree refuses like no prefix, under bash" {
+  assert_prefix_pins bash
+}
+
+@test "update skills' call sites: own branch passes, every other worktree refuses like no prefix, under zsh" {
+  command -v zsh >/dev/null 2>&1 || skip "zsh not installed"
+  assert_prefix_pins zsh
 }

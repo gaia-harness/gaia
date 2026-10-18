@@ -27,8 +27,9 @@ setup() {
   PUBLISH="${REPO_ROOT}/.claude/skills/update-deps/references/publish.md"
   SECURITY="${REPO_ROOT}/.claude/skills/update-deps/references/security.md"
   OVERRIDE_AUDIT="${REPO_ROOT}/.claude/skills/update-deps/references/override-audit.md"
+  STATE_LINE_LIB="${REPO_ROOT}/.gaia/scripts/update-state-line-lib.sh"
   local file
-  for file in "$SKILL" "$FINAL_REPORT" "$PUBLISH" "$SECURITY" "$OVERRIDE_AUDIT"; do
+  for file in "$SKILL" "$FINAL_REPORT" "$PUBLISH" "$SECURITY" "$OVERRIDE_AUDIT" "$STATE_LINE_LIB"; do
     [ -f "$file" ] || {
       echo "an audited page is absent: ${file}" >&2
       return 1
@@ -114,7 +115,7 @@ check_zero_outdated_with_advisory() {
 # ---------------------------------------------------------------------------
 
 check_revert_and_cap() {
-  grep -qF -- 'A failure reverts that resolution alone from its own `$resolution_snapshot`' "$1" || {
+  grep -qF -- 'A failure reverts that resolution alone from its own resolution snapshot' "$1" || {
     echo "the per-resolution revert is not stated" >&2
     return 1
   }
@@ -131,7 +132,7 @@ check_revert_and_cap() {
 @test "the revert check fails with the revert sentence deleted" {
   local copy
   copy="$(scratch_copy "$SECURITY" "revert.md")"
-  remove_fixed "$copy" 'A failure reverts that resolution alone from its own `$resolution_snapshot`'
+  remove_fixed "$copy" 'A failure reverts that resolution alone from its own resolution snapshot'
   run check_revert_and_cap "$copy"
   [ "$status" -ne 0 ]
 }
@@ -171,7 +172,7 @@ check_cache_rewrite() {
     echo "Phase 7 does not call write-security-cache" >&2
     return 1
   }
-  grep -qF -- '.gaia/cli/gaia update-deps advisories --emit "$count_json" --count-only' <<<"$body" || {
+  grep -qF -- '.gaia/cli/gaia update-deps advisories --emit .gaia/local/cache/shared/update-deps-advisories-count.json --count-only' <<<"$body" || {
     echo "the cache count does not come from advisories --count-only" >&2
     return 1
   }
@@ -200,7 +201,7 @@ check_cache_rewrite() {
 @test "the cache-rewrite check fails with the --count-only call deleted" {
   local copy
   copy="$(scratch_copy "$FINAL_REPORT" "cache-count.md")"
-  remove_fixed "$copy" '.gaia/cli/gaia update-deps advisories --emit "$count_json" --count-only'
+  remove_fixed "$copy" '.gaia/cli/gaia update-deps advisories --emit .gaia/local/cache/shared/update-deps-advisories-count.json --count-only'
   run check_cache_rewrite "$copy"
   [ "$status" -ne 0 ]
 }
@@ -384,6 +385,8 @@ check_no_tmp() {
 # 16. The worktree state line reads null apart from zero
 # ---------------------------------------------------------------------------
 
+# The function lives in the sourced state-line library, which the skill's
+# guard fence sources.
 # state_line_body <file>: the gaia_update_deps_state_line definition, from its
 # opening line to the first line that is exactly a closing brace.
 state_line_body() {
@@ -402,7 +405,7 @@ run_state_line() {
     return 1
   }
   local function_file="${BATS_TEST_TMPDIR}/state-line.sh" cache="${BATS_TEST_TMPDIR}/update-check.json"
-  state_line_body "$SKILL" >"$function_file"
+  state_line_body "$STATE_LINE_LIB" >"$function_file"
   [ -s "$function_file" ] || return 1
   printf '%s\n' "$1" >"$cache"
   run bash -c '. "$1" && gaia_update_deps_state_line "$2"' _ "$function_file" "$cache"
@@ -456,15 +459,19 @@ check_report_only_reading() {
 # 18. The security phase keeps its own snapshot directories
 # ---------------------------------------------------------------------------
 
-RESOLUTION_MKTEMP='resolution_snapshot="$(mktemp -d .gaia/local/cache/shared/.update-deps-security-resolution.XXXXXX)"'
+RESOLUTION_SNAPSHOT_PATH='.gaia/local/cache/shared/update-deps-security-resolution'
 
 check_own_snapshots() {
-  grep -qF -- 'batch_snapshot="$(mktemp -d .gaia/local/cache/shared/' "$1" || {
+  grep -qF -- '.gaia/local/cache/shared/update-deps-security-batch' "$1" || {
     echo "no batch snapshot under .gaia/local/cache/shared/" >&2
     return 1
   }
-  grep -qF -- 'resolution_snapshot="$(mktemp -d .gaia/local/cache/shared/' "$1" || {
+  grep -qF -- "$RESOLUTION_SNAPSHOT_PATH" "$1" || {
     echo "no per-resolution snapshot under .gaia/local/cache/shared/" >&2
+    return 1
+  }
+  grep -qF -- 'rm -rf <snapshot>' "$1" || {
+    echo "a snapshot directory is not cleared before it is taken" >&2
     return 1
   }
   if grep -qF -- 'update-deps-refresh' "$1"; then
@@ -480,7 +487,7 @@ check_own_snapshots() {
 @test "the snapshot check fails with the per-resolution snapshot moved to the refresh directory" {
   local copy
   copy="$(scratch_copy "$SECURITY" "snapshot.md")"
-  replace_fixed "$copy" "$RESOLUTION_MKTEMP" 'resolution_snapshot=/tmp/update-deps-refresh'
+  replace_fixed "$copy" "$RESOLUTION_SNAPSHOT_PATH" '.gaia/local/cache/shared/update-deps-refresh'
   run check_own_snapshots "$copy"
   [ "$status" -ne 0 ]
 }

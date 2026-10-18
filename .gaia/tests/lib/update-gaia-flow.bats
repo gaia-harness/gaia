@@ -1,12 +1,17 @@
 #!/usr/bin/env bats
-# The /update-gaia orchestrator order: download and verify before the Proceed
-# question (SKILL.md Step 3c), migration notes from the verified target bundle
-# (Step 3d), resume on the update branch (Step 3 and Step 4), the prune that
-# keeps the verified bundles (Step 4b), setup drift (Step 9c), and the version
-# written last (Step 9d). Each SKILL.md block runs extracted by its heading,
-# against fixtures under $BATS_TEST_TMPDIR with stub `gh` and stub
-# `.gaia/cli/gaia` executables. Every absence pin has a red twin: a fixture
-# copy carrying the forbidden content, or missing the required content.
+# The /update-gaia orchestrator as SKILL.md writes it: the guard fence and its
+# own-worktree prefix, every command block in the shape a worktree session
+# admits, the run modes' classification of an earlier run's update branch
+# (Step 3), the update worktree on Proceed (Step 4), the provisioning waits,
+# the version written last (Step 9d), the cache bust, the draft PR (Step 11)
+# and the deferred residue sweep (Step 12). The pre-merge blocks moved into
+# .gaia/scripts/update-gaia-preflight.sh and the drift block into
+# update-gaia-drift.sh; their behavior is driven by update-gaia-preflight.bats
+# and update-gaia-drift.bats, so this suite pins the skill's calls and prose.
+# Step 3's in-place block and Step 4's changelog call still run here, extracted
+# by heading, against fixtures under $BATS_TEST_TMPDIR. Every pin has a red
+# twin: a fixture copy carrying the forbidden content, or missing the
+# required content.
 #
 # Assertion style per .claude/rules/bats-assertions.md: no bare mid-test
 # [[ ... ]]; POSIX [ ] and grep; `&& return 1` for a non-final absence.
@@ -19,9 +24,27 @@ setup() {
   REPO_ROOT="$(cd "$(dirname "$BATS_TEST_FILENAME")/../../.." && pwd)"
   SKILL="$REPO_ROOT/.claude/skills/update-gaia/SKILL.md"
   MERGE_EXECUTION="$REPO_ROOT/.claude/skills/update-gaia/references/merge-execution.md"
+  PREFLIGHT="$REPO_ROOT/.gaia/scripts/update-gaia-preflight.sh"
   SELECTOR="$REPO_ROOT/.gaia/scripts/select-migration-notes.sh"
   COMPARE_LIB="$REPO_ROOT/.gaia/scripts/lib/version-compare.awk"
+  COPY="$BATS_TEST_TMPDIR/skill-copy.md"
 }
+
+STEP_3='## Step 3: Compare versions'
+STEP_3_DEFAULT='### Step 3, default branch: classify the update branch'
+STEP_3_WORKTREE='### Step 3, worktree run in place'
+STEP_3_IN_PLACE="### Step 3, in place: an interrupted run's update branch"
+STEP_3D='## Step 3d: Select migration notes'
+STEP_4='## Step 4: Show the release notes and confirm'
+STEP_4_WORKTREE='### Step 4, on Proceed: the update worktree'
+STEP_9D='## Step 9d: Record the update'
+STEP_10='## Step 10: Next steps for the user'
+STEP_11='### Step 11: Open a pull request'
+STEP_12='### Step 12: Offer the residue sweep'
+
+CREATE_CALL='EnterWorktree({name: "<branch-name>"})'
+WAIT_CALL='bash <main checkout path>/.gaia/scripts/provision-wait.sh --tree <worktree path>'
+PRUNE_CALL='bash .gaia/scripts/update-gaia-preflight.sh prune --baseline <BASELINE> --latest-tag <LATEST_TAG>'
 
 # The fenced bash block that follows the heading line `$2` in file `$1`. The
 # heading matches as a line prefix, so callers pass a full heading.
@@ -44,6 +67,16 @@ section_of() {
   ' "$1"
 }
 
+# Writes the section headed `$2` in file `$1` to a scratch file and prints its
+# path; fails when the section is empty.
+section_file() {
+  local out
+  out="$BATS_TEST_TMPDIR/section-$RANDOM.md"
+  section_of "$1" "$2" > "$out"
+  [ -s "$out" ] || { echo "no section: $2" >&2; return 1; }
+  printf '%s\n' "$out"
+}
+
 # Runs block text `$2` with `$1` as its working directory. Extra arguments are
 # NAME=value pairs exported into the block's environment.
 run_block_in() {
@@ -52,244 +85,463 @@ run_block_in() {
   run env "$@" bash -c 'cd "$1" || exit 99; eval "$2"' _ "$directory" "$block"
 }
 
-# --- Step 3c: download and verify ---------------------------------------------
-
-STEP_3C='## Step 3c: Download and verify the bundles'
-
-# Writes a release fixture for tag `$1` under $FIXTURE_RELEASES/<tag>/: the
-# tarball (a staging top directory holding a note and VERSION) and a matching
-# checksum file.
-write_release() {
-  local tag="$1" stage="$BATS_TEST_TMPDIR/stage/$1" assets="$FIXTURE_RELEASES/$1" hex
-  mkdir -p "$stage/gaia-$tag/.gaia/migrations" "$assets"
-  printf '%s\n' "${tag#v}" > "$stage/gaia-$tag/.gaia/VERSION"
-  printf -- '---\nmode: after-merge\n---\n\npristine\n' > "$stage/gaia-$tag/.gaia/migrations/${tag#v}.md"
-  tar -czf "$assets/gaia-bundle-$tag.tar.gz" -C "$stage" "gaia-$tag"
-  hex="$(shasum -a 256 "$assets/gaia-bundle-$tag.tar.gz" | awk '{ print $1 }')"
-  printf '%s  gaia-bundle-%s.tar.gz\n' "$hex" "$tag" > "$assets/gaia-bundle-$tag.tar.gz.sha256"
+# The first line number in file `$1` holding fixed string `$2`; empty if none.
+first_line() {
+  grep -nF -- "$2" "$1" | head -n 1 | cut -d: -f1
 }
 
-# A stub gh: `release download <tag> ... --dir <dir>` copies the fixture
-# assets for <tag> and logs the tag to $GH_LOG.
-write_stub_gh() {
-  mkdir -p "$BATS_TEST_TMPDIR/bin"
-  cat > "$BATS_TEST_TMPDIR/bin/gh" <<'STUB'
-#!/usr/bin/env bash
-[ "$1" = release ] && [ "$2" = download ] || exit 2
-tag="$3"
-target=''
-while [ "$#" -gt 0 ]; do
-  case "$1" in
-    --dir) target="$2"; shift 2 ;;
-    *) shift ;;
-  esac
-done
-printf '%s\n' "$tag" >> "$GH_LOG"
-[ -d "$FIXTURE_RELEASES/$tag" ] || exit 1
-mkdir -p "$target"
-cp "$FIXTURE_RELEASES/$tag"/* "$target"/
-STUB
-  chmod +x "$BATS_TEST_TMPDIR/bin/gh"
-}
-
-step_3c_setup() {
-  export FIXTURE_RELEASES="$BATS_TEST_TMPDIR/releases"
-  export GH_LOG="$BATS_TEST_TMPDIR/gh.log"
-  : > "$GH_LOG"
-  write_release v2.0.0
-  write_release v2.1.0
-  write_stub_gh
-  PROJECT="$BATS_TEST_TMPDIR/project"
-  mkdir -p "$PROJECT"
-  CACHE="$PROJECT/.gaia/local/cache/shared/update-gaia"
-  BLOCK_3C="$(block_after_heading "$SKILL" "$STEP_3C")"
-  [ -n "$BLOCK_3C" ]
-}
-
-run_step_3c() {
-  run_block_in "$PROJECT" "$BLOCK_3C" PATH="$BATS_TEST_TMPDIR/bin:$PATH" BASELINE=2.0.0 LATEST_TAG=v2.1.0
-}
-
-@test "Step 3c: fresh downloads verify and extract both bundles" {
-  step_3c_setup
-  run_step_3c
-  [ "$status" -eq 0 ]
-  printf '%s\n' "$output" | grep -qxF 'VERIFIED v2.0.0'
-  printf '%s\n' "$output" | grep -qxF 'VERIFIED v2.1.0'
-  printf '%s\n' "$output" | grep -qxF 'LATEST_DIR=.gaia/local/cache/shared/update-gaia/v2.1.0/tree'
-  printf '%s\n' "$output" | grep -qxF 'BASELINE_DIR=.gaia/local/cache/shared/update-gaia/v2.0.0/tree'
-  [ "$(cat "$CACHE/v2.0.0/tree/.gaia/VERSION")" = 2.0.0 ]
-  [ "$(cat "$CACHE/v2.1.0/tree/.gaia/VERSION")" = 2.1.0 ]
-  [ "$(grep -c . "$GH_LOG")" -eq 2 ]
-}
-
-@test "Step 3c: a freshly downloaded mismatched checksum stops with VERIFY_FAILED and removes the tag" {
-  step_3c_setup
-  printf '%064d  gaia-bundle-v2.1.0.tar.gz\n' 0 > "$FIXTURE_RELEASES/v2.1.0/gaia-bundle-v2.1.0.tar.gz.sha256"
-  run_step_3c
-  [ "$status" -eq 1 ]
-  printf '%s\n' "$output" | grep -qxF 'VERIFY_FAILED v2.1.0'
-  [ -e "$CACHE/v2.1.0" ] && return 1
-  printf '%s\n' "$output" | grep -qxF 'VERIFIED v2.1.0' && return 1
-  true
-}
-
-@test "Step 3c: a cached tarball that no longer matches its checksum stops with VERIFY_FAILED" {
-  step_3c_setup
-  run_step_3c
-  [ "$status" -eq 0 ]
-  printf 'tampered' >> "$CACHE/v2.0.0/gaia-bundle-v2.0.0.tar.gz"
-  : > "$GH_LOG"
-  run_step_3c
-  [ "$status" -eq 1 ]
-  printf '%s\n' "$output" | grep -qxF 'VERIFY_FAILED v2.0.0'
-  [ -e "$CACHE/v2.0.0" ] && return 1
-  # The cached pair was reused, not downloaded again.
-  grep -qxF v2.0.0 "$GH_LOG" && return 1
-  true
-}
-
-@test "Step 3c: a cached tree with an edited note or a stray file is replaced by a pristine extract" {
-  step_3c_setup
-  run_step_3c
-  [ "$status" -eq 0 ]
-  note="$CACHE/v2.1.0/tree/.gaia/migrations/2.1.0.md"
-  printf 'edited\n' >> "$note"
-  printf 'stray\n' > "$CACHE/v2.1.0/tree/.gaia/migrations/2.2.0.md"
-  : > "$GH_LOG"
-  run_step_3c
-  [ "$status" -eq 0 ]
-  printf '%s\n' "$output" | grep -qxF 'VERIFIED v2.1.0'
-  grep -qF edited "$note" && return 1
-  [ -e "$CACHE/v2.1.0/tree/.gaia/migrations/2.2.0.md" ] && return 1
-  grep -qF pristine "$note"
-  # Reuse skipped only the download.
-  [ ! -s "$GH_LOG" ]
-}
-
-@test "Step 3c: a legacy cache directory without a checksum is removed, downloaded and verified" {
-  step_3c_setup
-  mkdir -p "$CACHE/v2.0.0/.gaia"
-  printf 'legacy\n' > "$CACHE/v2.0.0/.gaia/VERSION"
-  cp "$FIXTURE_RELEASES/v2.0.0/gaia-bundle-v2.0.0.tar.gz" "$CACHE/v2.0.0/"
-  run_step_3c
-  [ "$status" -eq 0 ]
-  printf '%s\n' "$output" | grep -qxF 'VERIFIED v2.0.0'
-  grep -qxF v2.0.0 "$GH_LOG"
-  [ -f "$CACHE/v2.0.0/gaia-bundle-v2.0.0.tar.gz.sha256" ]
-  [ -e "$CACHE/v2.0.0/.gaia" ] && return 1
-  true
-}
-
-@test "Step 3c: a release without the checksum asset stops with CHECKSUM_MISSING" {
-  step_3c_setup
-  rm -f "$FIXTURE_RELEASES/v2.1.0/gaia-bundle-v2.1.0.tar.gz.sha256"
-  run_step_3c
-  [ "$status" -eq 1 ]
-  printf '%s\n' "$output" | grep -qxF 'CHECKSUM_MISSING v2.1.0'
-  [ -e "$CACHE/v2.1.0" ] && return 1
-  true
-}
-
-@test "Step 3c: a checklist naming another file never vouches for the tarball" {
-  step_3c_setup
-  hex="$(shasum -a 256 "$FIXTURE_RELEASES/v2.1.0/gaia-bundle-v2.1.0.tar.gz.sha256" | awk '{ print $1 }')"
-  printf '%s  gaia-bundle-v2.1.0.tar.gz.sha256\n' "$hex" > "$BATS_TEST_TMPDIR/other.sha256"
-  cp "$BATS_TEST_TMPDIR/other.sha256" "$FIXTURE_RELEASES/v2.1.0/gaia-bundle-v2.1.0.tar.gz.sha256"
-  run_step_3c
-  [ "$status" -eq 1 ]
-  printf '%s\n' "$output" | grep -qxF 'VERIFY_FAILED v2.1.0'
-}
-
-# --- Step 3d: select migration notes ------------------------------------------
-
-STEP_3D='## Step 3d: Select migration notes'
-
-# A fixture verified bundle holding the repository's own selector and the
-# notes given as version:mode pairs.
-make_bundle() {
-  BUNDLE="$BATS_TEST_TMPDIR/bundle"
-  rm -rf "$BUNDLE"
-  mkdir -p "$BUNDLE/.gaia/scripts/lib" "$BUNDLE/.gaia/migrations"
-  cp "$SELECTOR" "$BUNDLE/.gaia/scripts/select-migration-notes.sh"
-  cp "$COMPARE_LIB" "$BUNDLE/.gaia/scripts/lib/version-compare.awk"
-  local pair
-  for pair in "$@"; do
-    printf -- '---\nmode: %s\n---\n\nnote\n' "${pair#*:}" > "$BUNDLE/.gaia/migrations/${pair%%:*}.md"
+# 0 when the fixed strings `$2`, `$3`, ... first appear in file `$1` in that
+# order, each present.
+in_order() {
+  local file="$1" previous=0 needle line
+  shift
+  for needle in "$@"; do
+    line="$(first_line "$file" "$needle")"
+    [ -n "$line" ] || { echo "missing: $needle" >&2; return 1; }
+    [ "$line" -gt "$previous" ] || { echo "out of order: $needle" >&2; return 1; }
+    previous="$line"
   done
 }
 
-run_step_3d() {
-  local block
-  block="$(block_after_heading "$SKILL" "$STEP_3D")"
-  [ -n "$block" ] || return 1
-  run env LATEST_DIR="$BUNDLE" BASELINE="$1" LATEST="$2" bash -c "$block"
+# Inserts line `$3` after the first line of file `$1` starting with `$2`,
+# writing the result to $COPY.
+insert_after() {
+  awk -v anchor="$2" -v added="$3" '
+    { print }
+    !done && index($0, anchor) == 1 { print added; done = 1 }
+  ' "$1" > "$COPY"
+  grep -qxF -- "$3" "$COPY"
 }
 
-@test "Step 3d: after-merge notes print in version order with no BLOCKING" {
-  make_bundle 2.2.0:after-merge 2.1.0:after-merge 2.0.0:after-merge
-  run_step_3d 2.0.0 2.2.0
-  [ "$status" -eq 0 ]
-  [ "$(printf '%s\n' "$output" | sed -n 1p)" = "AFTER_MERGE 2.1.0 $BUNDLE/.gaia/migrations/2.1.0.md" ]
-  [ "$(printf '%s\n' "$output" | sed -n 2p)" = "AFTER_MERGE 2.2.0 $BUNDLE/.gaia/migrations/2.2.0.md" ]
-  [ "$(printf '%s\n' "$output" | grep -c .)" -eq 2 ]
-  printf '%s\n' "$output" | grep -qF BLOCKING && return 1
-  true
+# --- Command shape ---------------------------------------------------------------
+
+# Prints each line of a fenced bash block in file `$1` that a worktree session
+# refuses: a command substitution, a backtick, a heredoc, or a shell variable.
+# The block under Step 3's in-place heading is exempt: it runs only in the main
+# checkout on a non-default branch, never inside a worktree session.
+fence_violations() {
+  awk -v exempt="$STEP_3_IN_PLACE" '
+    !inside && /^#+ / { heading = $0; next }
+    !inside && /^```bash$/ { inside = 1; next }
+    inside && /^```$/ { inside = 0; next }
+    inside && index(heading, exempt) != 1 {
+      if (index($0, "$(") || index($0, "`") || index($0, "<<") || $0 ~ /\$[A-Za-z_{]/) print NR ": " $0
+    }
+  ' "$1"
 }
 
-@test "Step 3d: a blocking note names its path inside the bundle and lists the after-merge notes below it" {
-  make_bundle 2.2.0:after-merge 2.3.0:blocking
-  run_step_3d 2.1.0 2.3.0
-  [ "$status" -eq 0 ]
-  printf '%s\n' "$output" | grep -qxF "AFTER_MERGE 2.2.0 $BUNDLE/.gaia/migrations/2.2.0.md"
-  printf '%s\n' "$output" | grep -qxF "BLOCKING 2.3.0 $BUNDLE/.gaia/migrations/2.3.0.md"
+@test "command shape: no bash block outside Step 3's in-place block substitutes, interpolates or uses a heredoc" {
+  [ "$(grep -cxF '```bash' "$SKILL")" -gt 10 ]
+  # The exemption covers one real block, so it widens nothing it does not name.
+  block_after_heading "$SKILL" "$STEP_3_IN_PLACE" | grep -qF '$(git branch --show-current)'
+  [ -z "$(fence_violations "$SKILL")" ]
+  # Failing state: the old Step 11 capture reinserted as a block.
+  awk -v anchor="$STEP_11" '
+    { print }
+    index($0, anchor) == 1 { print "```bash"; print "branch=\"$(git branch --show-current)\""; print "```" }
+  ' "$SKILL" > "$COPY"
+  [ -n "$(fence_violations "$COPY")" ]
+  # Failing state: a shell variable in the guard block.
+  insert_after "$SKILL" '. .gaia/scripts/update-state-line-lib.sh' 'cat "$HOME/.gaia/VERSION"'
+  [ -n "$(fence_violations "$COPY")" ]
 }
 
-@test "Step 3d: the first blocking note wins and later notes are left for the next run" {
-  make_bundle 2.2.0:blocking 2.3.0:blocking 2.4.0:after-merge
-  run_step_3d 2.1.0 2.4.0
-  [ "$status" -eq 0 ]
-  [ "$output" = "BLOCKING 2.2.0 $BUNDLE/.gaia/migrations/2.2.0.md" ]
-}
-
-@test "Step 3d: a malformed note stops with NOTES_FAILED and a next step" {
-  make_bundle 2.2.0:after-merge
-  printf 'no frontmatter\n' > "$BUNDLE/.gaia/migrations/2.3.0.md"
-  run_step_3d 2.1.0 2.2.0
-  [ "$status" -eq 1 ]
-  printf '%s\n' "$output" | grep -qxF NOTES_FAILED
-  printf '%s\n' "$output" | grep -qF "select-migration-notes: $BUNDLE/.gaia/migrations/2.3.0.md"
-  printf '%s\n' "$output" | grep -qF 'Next step:'
-  printf '%s\n' "$output" | grep -qF AFTER_MERGE && return 1
-  true
-}
-
-# 0 when block text `$1` holds no git call, no rm, no .gaia/VERSION and no
-# spawn.
-block_is_read_only() {
-  printf '%s\n' "$1" | grep -qF 'git ' && return 1
-  printf '%s\n' "$1" | grep -qF 'rm ' && return 1
-  printf '%s\n' "$1" | grep -qF '.gaia/VERSION' && return 1
-  printf '%s\n' "$1" | grep -qiE 'spawn|Agent\(' && return 1
+# 0 when file `$1` holds no branch-moving or worktree-adding git command.
+no_branch_moves() {
+  grep -qE 'git checkout -b|git switch|git worktree add' "$1" && return 1
   return 0
 }
 
-@test "Step 3d: the block changes nothing, and a copy that writes the version is reported" {
-  block="$(block_after_heading "$SKILL" "$STEP_3D")"
+@test "no git checkout -b, git switch or git worktree add anywhere in SKILL.md" {
+  no_branch_moves "$SKILL"
+  insert_after "$SKILL" "$STEP_4_WORKTREE" 'git switch x'
+  no_branch_moves "$COPY" && return 1
+  true
+}
+
+# --- Pre-flight guard --------------------------------------------------------------
+
+# 0 when SKILL.md copy `$1` sources the state-line library, defines no state
+# line inline, and admits its own update/ worktree.
+guard_holds() {
+  local block
+  block="$(block_after_heading "$1" '## Pre-flight: Worktree check')"
+  printf '%s\n' "$block" | grep -qxF '. .gaia/scripts/main-only-lib.sh' || return 1
+  printf '%s\n' "$block" | grep -qxF '. .gaia/scripts/update-state-line-lib.sh' || return 1
+  printf '%s\n' "$block" | grep -qF 'gaia_update_gaia_state_line()' && return 1
+  printf '%s\n' "$block" | grep -qxF 'gaia_refuse_if_worktree "/update-gaia" gaia_update_gaia_state_line "update/" || exit 1' || return 1
+  return 0
+}
+
+@test "guard: the fence sources the state-line library, defines nothing inline, and passes update/" {
+  guard_holds "$SKILL"
+  grep -vxF '. .gaia/scripts/update-state-line-lib.sh' "$SKILL" > "$COPY"
+  guard_holds "$COPY" && return 1
+  insert_after "$SKILL" '. .gaia/scripts/main-only-lib.sh' 'gaia_update_gaia_state_line() {'
+  guard_holds "$COPY" && return 1
+  sed 's|gaia_update_gaia_state_line "update/" |gaia_update_gaia_state_line |' "$SKILL" > "$COPY"
+  guard_holds "$COPY" && return 1
+  true
+}
+
+# --- Step 3: classify by the branch's own state ----------------------------------
+
+# The arm line of section text `$1` for outcome `$2`.
+arm_line() {
+  printf '%s\n' "$1" | grep -E '^- \*\*`'"$2"'[` ]'
+}
+
+# 0 when SKILL.md copy `$1` keeps the default-branch classification.
+default_arm_holds() {
+  local section outcome arm
+  section="$(section_of "$1" "$STEP_3_DEFAULT")"
+  printf '%s\n' "$section" | grep -qxF 'bash .gaia/scripts/update-gaia-branch-state.sh classify --tag <LATEST_TAG> --latest <LATEST>' || return 1
+  for outcome in NONE RESUME_IN_WORKTREE RESUME_ADD_WORKTREE APPLIED_UNCOMMITTED COMMITTED; do
+    [ -n "$(arm_line "$section" "$outcome")" ] || { echo "no arm: $outcome" >&2; return 1; }
+  done
+  for outcome in APPLIED_UNCOMMITTED COMMITTED; do
+    arm="$(arm_line "$section" "$outcome")"
+    printf '%s\n' "$arm" | grep -qF 'Exit' || return 1
+    printf '%s\n' "$arm" | grep -qF 'Step 3b' && return 1
+  done
+  arm="$(arm_line "$section" COMMITTED)"
+  printf '%s\n' "$arm" | grep -qF 'gh pr list --head <branch> --state all --json number,state,url' || return 1
+  printf '%s\n' "$arm" | grep -qF "the PR's state" || return 1
+  printf '%s\n' "$arm" | grep -qF 'the worktree path' || return 1
+  printf '%s\n' "$arm" | grep -qF 'the removal commands' || return 1
+  return 0
+}
+
+@test "Step 3, default branch: classify names all five outcomes and the applied and committed arms exit" {
+  default_arm_holds "$SKILL"
+  sed 's|inside it to open the PR. Exit. Never resume|inside it to open the PR. Continue to Step 3b. Never resume|' "$SKILL" > "$COPY"
+  default_arm_holds "$COPY" && return 1
+  sed 's|and the removal commands from the worktree notice|and nothing else|' "$SKILL" > "$COPY"
+  default_arm_holds "$COPY" && return 1
+  sed 's|`gh pr list --head <branch> --state all --json number,state,url`|the PR|' "$SKILL" > "$COPY"
+  default_arm_holds "$COPY" && return 1
+  true
+}
+
+# 0 when SKILL.md copy `$1` routes a worktree run in place by its classification.
+worktree_arm_holds() {
+  local section
+  section="$(section_of "$1" "$STEP_3_WORKTREE")"
+  section_of "$1" "$STEP_3" | grep -qF 'In mode 1, run `### Step 3, worktree run in place` first' || return 1
+  printf '%s\n' "$section" | grep -qF 'must start `update/<LATEST_TAG>-`; otherwise stop' || return 1
+  printf '%s\n' "$section" | grep -qxF 'bash .gaia/scripts/update-gaia-branch-state.sh classify --tag <LATEST_TAG> --latest <LATEST> --branch <current branch>' || return 1
+  arm_line "$section" RESUME_IN_WORKTREE | grep -qF 'Step 3b' || return 1
+  arm_line "$section" APPLIED_UNCOMMITTED | grep -qF "Step 10's hand-off" || return 1
+  arm_line "$section" APPLIED_UNCOMMITTED | grep -qF 'Step 3b' && return 1
+  arm_line "$section" COMMITTED | grep -qF 'Step 11' || return 1
+  return 0
+}
+
+@test "Step 3, worktree run in place: applied goes to Step 10, committed to Step 11, an older release stops" {
+  worktree_arm_holds "$SKILL"
+  sed "s|Go straight to Step 10's hand-off|Continue to Step 3b|" "$SKILL" > "$COPY"
+  worktree_arm_holds "$COPY" && return 1
+  sed 's|must start `update/<LATEST_TAG>-`; otherwise stop|may be any update branch|' "$SKILL" > "$COPY"
+  worktree_arm_holds "$COPY" && return 1
+  sed 's|- \*\*`COMMITTED`\*\*: go straight to Step 11|- **`COMMITTED`**: continue|' "$SKILL" > "$COPY"
+  worktree_arm_holds "$COPY" && return 1
+  true
+}
+
+# --- Step 3, in place: the interrupted run's update branch -------------------------
+
+# A fixture git repository on main with one commit.
+make_repository() {
+  REPOSITORY="$BATS_TEST_TMPDIR/repository"
+  rm -rf "$REPOSITORY"
+  mkdir -p "$REPOSITORY"
+  git -C "$REPOSITORY" init -q -b main
+  git -C "$REPOSITORY" config user.email fixture@example.com
+  git -C "$REPOSITORY" config user.name fixture
+  git -C "$REPOSITORY" commit -q --allow-empty -m base
+}
+
+# Creates branch `$1` at a new commit dated `$2`.
+branch_at_date() {
+  git -C "$REPOSITORY" checkout -q -b "$1" main
+  GIT_COMMITTER_DATE="$2" GIT_AUTHOR_DATE="$2" git -C "$REPOSITORY" commit -q --allow-empty -m "$1"
+  git -C "$REPOSITORY" checkout -q main
+}
+
+@test "Step 3, in place: an interrupted run's update branch is found by its prefix" {
+  make_repository
+  git -C "$REPOSITORY" branch update/v2.1.0-2020-01-01-0000
+  block="$(block_after_heading "$SKILL" "$STEP_3_IN_PLACE")"
   [ -n "$block" ]
-  block_is_read_only "$block"
-  block_is_read_only "$block
-echo x > .gaia/VERSION" && return 1
-  block_is_read_only "$block
-git switch main" && return 1
-  block_is_read_only "$block
-rm -rf .gaia-backup" && return 1
+  run_block_in "$REPOSITORY" "$block" LATEST_TAG=v2.1.0
+  [ "$status" -eq 0 ]
+  printf '%s\n' "$output" | grep -qxF 'RESUME update/v2.1.0-2020-01-01-0000'
+  printf '%s\n' "$output" | grep -qxF 'RESUME_UPDATE=true'
+}
+
+@test "Step 3, in place: a branch for another tag is not a resume" {
+  make_repository
+  git -C "$REPOSITORY" branch update/v2.0.9-2020-01-01-0000
+  block="$(block_after_heading "$SKILL" "$STEP_3_IN_PLACE")"
+  [ -n "$block" ]
+  run_block_in "$REPOSITORY" "$block" LATEST_TAG=v2.1.0
+  [ "$status" -eq 0 ]
+  printf '%s\n' "$output" | grep -qF RESUME_UPDATE=false
+  printf '%s\n' "$output" | grep -qE '^RESUME ' && return 1
+  true
+}
+
+@test "Step 3, in place: with two matching branches the more recently committed one wins" {
+  make_repository
+  branch_at_date update/v2.1.0-2020-06-01-0000 '2021-01-01T00:00:00Z'
+  branch_at_date update/v2.1.0-2020-01-01-0000 '2022-01-01T00:00:00Z'
+  block="$(block_after_heading "$SKILL" "$STEP_3_IN_PLACE")"
+  [ -n "$block" ]
+  run_block_in "$REPOSITORY" "$block" LATEST_TAG=v2.1.0
+  printf '%s\n' "$output" | grep -qxF 'RESUME update/v2.1.0-2020-01-01-0000'
+}
+
+# --- Step 4, on Proceed: the update worktree ---------------------------------------
+
+# 0 when SKILL.md copy `$1` creates, re-enters or adds the update worktree in
+# the documented order, and moves no branch in the main checkout.
+worktree_subsection_holds() {
+  local section
+  section="$(section_file "$1" "$STEP_4_WORKTREE")" || return 1
+  grep -qF 'Only when `SHOULD_CREATE_WORKTREE=true`' "$section" || return 1
+  in_order "$section" 'bash .gaia/scripts/branch-name-lib.sh name update <LATEST_TAG>' "$CREATE_CALL" '`## Worktree creation`' || return 1
+  grep -F '(`RESUME_IN_WORKTREE`)' "$section" | grep -qF '`### Resume`' || return 1
+  in_order "$section" '(`RESUME_ADD_WORKTREE`)' 'bash .gaia/scripts/update-gaia-branch-state.sh add-worktree --branch <branch>' 'EnterWorktree({path: "<worktree path>"})' || return 1
+  grep -F 'It prints `ADDED <absolute path>`' "$section" | grep -qF '`<main checkout path>/.gaia-backup/` holds that run'"'"'s backups and leave it in place' || return 1
+  grep -qE 'git checkout|git switch' "$section" && return 1
+  return 0
+}
+
+@test "Step 4: a fresh run mints, creates and renames; a resume re-enters or adds a worktree" {
+  worktree_subsection_holds "$SKILL"
+  grep -vF 'branch-name-lib.sh name update' "$SKILL" > "$COPY"
+  worktree_subsection_holds "$COPY" && return 1
+  insert_after "$SKILL" "$STEP_4_WORKTREE" 'git switch x'
+  worktree_subsection_holds "$COPY" && return 1
+  insert_after "$SKILL" "$STEP_4_WORKTREE" 'git checkout -b x'
+  worktree_subsection_holds "$COPY" && return 1
+  sed 's|and enter it with `EnterWorktree({path: "<worktree path>"})`|and enter it|' "$SKILL" > "$COPY"
+  worktree_subsection_holds "$COPY" && return 1
+  sed 's|`<main checkout path>/.gaia-backup/` holds|the backups hold|' "$SKILL" > "$COPY"
+  worktree_subsection_holds "$COPY" && return 1
+  sed 's|per `isolation.md` `### Resume`|by checking it out|' "$SKILL" > "$COPY"
+  worktree_subsection_holds "$COPY" && return 1
+  true
+}
+
+NOTICE_TEXT='Update worktree: <worktree path>
+Branch: <branch>
+To discard it, run from the main checkout (<main checkout path>):
+  git worktree remove --force <worktree path>
+  git branch -D <branch>
+Warning: --force discards any uncommitted changes in the worktree.'
+
+# 0 when SKILL.md copy `$1` prints the worktree notice after creation, names it
+# in the stop rule, and prints it again after the draft PR opens.
+notice_holds() {
+  local section step_11 notice
+  section="$(section_file "$1" "$STEP_4_WORKTREE")" || return 1
+  notice="$(awk '/^```text$/ { inside = 1; next } inside && /^```$/ { exit } inside { print }' "$section")"
+  [ "$notice" = "$NOTICE_TEXT" ] || return 1
+  in_order "$section" "$CREATE_CALL" '**The worktree notice.**' 'Warning: --force discards' || return 1
+  grep -F '**The stop rule.**' "$section" | grep -qF 'prints the worktree notice again' || return 1
+  step_11="$(section_file "$1" "$STEP_11")" || return 1
+  in_order "$step_11" 'gh pr create --draft' 'print the worktree notice' || return 1
+  return 0
+}
+
+@test "the worktree notice: verbatim after creation, named by the stop rule and after the PR opens" {
+  notice_holds "$SKILL"
+  grep -vxF 'Warning: --force discards any uncommitted changes in the worktree.' "$SKILL" > "$COPY"
+  notice_holds "$COPY" && return 1
+  grep -vF '6. On a worktree run, print the worktree notice' "$SKILL" > "$COPY"
+  notice_holds "$COPY" && return 1
+  sed 's|and prints the worktree notice again|and says nothing|' "$SKILL" > "$COPY"
+  notice_holds "$COPY" && return 1
+  true
+}
+
+# 0 when SKILL.md copy `$1` checks the fresh worktree's baseline after creation
+# and skips the check on a resume.
+baseline_check_holds() {
+  local section line
+  section="$(section_file "$1" "$STEP_4_WORKTREE")" || return 1
+  in_order "$section" "$CREATE_CALL" '**Baseline check.**' || return 1
+  line="$(grep -F '**Baseline check.**' "$section")"
+  printf '%s\n' "$line" | grep -qF 'run `cat .gaia/VERSION` in the worktree' || return 1
+  printf '%s\n' "$line" | grep -qF 'does not print `<BASELINE>`' || return 1
+  printf '%s\n' "$line" | grep -qF 'Skip it on a resume' || return 1
+  return 0
+}
+
+@test "Step 4: the baseline check follows creation and is skipped on a resume" {
+  baseline_check_holds "$SKILL"
+  grep -vF '**Baseline check.**' "$SKILL" > "$COPY"
+  baseline_check_holds "$COPY" && return 1
+  sed 's|Skip it on a resume: classification|Run it on a resume too: classification|' "$SKILL" > "$COPY"
+  baseline_check_holds "$COPY" && return 1
+  true
+}
+
+# 0 when SKILL.md copy `$1` waits for provisioning after creation and before
+# the Step 4b prune, stopping on a failed install only in a tree it created.
+provisioning_wait_holds() {
+  local section heading wait prune
+  section="$(section_file "$1" "$STEP_4_WORKTREE")" || return 1
+  in_order "$section" "$CREATE_CALL" "$WAIT_CALL" || return 1
+  grep -qF '`INSTALL_FAILED` stops when `CREATED_WORKTREE=true`' "$section" || return 1
+  heading="$(first_line "$1" "$STEP_4_WORKTREE")"
+  wait="$(grep -nxF -- "$WAIT_CALL" "$1" | awk -F: -v after="$heading" '$1 > after { print $1; exit }')"
+  prune="$(first_line "$1" "$PRUNE_CALL")"
+  [ -n "$heading" ] && [ -n "$wait" ] && [ -n "$prune" ] || return 1
+  [ "$wait" -lt "$prune" ] || return 1
+  return 0
+}
+
+@test "Step 4: the provisioning wait follows creation and precedes the Step 4b prune" {
+  provisioning_wait_holds "$SKILL"
+  grep -vxF -- "$WAIT_CALL" "$SKILL" > "$COPY"
+  provisioning_wait_holds "$COPY" && return 1
+  sed 's|`INSTALL_FAILED` stops when `CREATED_WORKTREE=true`|`INSTALL_FAILED` stops|' "$SKILL" > "$COPY"
+  provisioning_wait_holds "$COPY" && return 1
+  true
+}
+
+# --- Step 10: the hand-off --------------------------------------------------------
+
+# 0 when SKILL.md copy `$1` waits before any pnpm step of the hand-off and
+# names the log path and the worktree in every step.
+step_10_holds() {
+  local section wait pnpm
+  section="$(section_file "$1" "$STEP_10")" || return 1
+  wait="$(grep -nxF -- "$WAIT_CALL" "$section" | head -n 1 | cut -d: -f1)"
+  pnpm="$(grep -n 'pnpm' "$section" | head -n 1 | cut -d: -f1)"
+  [ -n "$wait" ] && [ -n "$pnpm" ] || return 1
+  [ "$wait" -lt "$pnpm" ] || return 1
+  in_order "$section" "$WAIT_CALL" '1. Review any conflict patches' || return 1
+  grep -qF '`INSTALL_FAILED` stops only when `CREATED_WORKTREE=true`' "$section" || return 1
+  grep -qF 'naming the provisioning `Log:` path' "$section" || return 1
+  grep -qF '`<worktree path>/.gaia-merge/`' "$section" || return 1
+  grep -qF '`pnpm -C <worktree path> install`' "$section" || return 1
+  grep -qF '`pnpm -C <worktree path> dedupe`' "$section" || return 1
+  grep -qF '`git -C <worktree path> diff`' "$section" || return 1
+  return 0
+}
+
+@test "Step 10: the wait precedes every pnpm step and the hand-off names the log and the worktree" {
+  step_10_holds "$SKILL"
+  insert_after "$SKILL" "$STEP_10" 'Run `pnpm install` first.'
+  step_10_holds "$COPY" && return 1
+  sed 's|naming the provisioning `Log:` path|naming nothing|' "$SKILL" > "$COPY"
+  step_10_holds "$COPY" && return 1
+  sed 's|`git -C <worktree path> diff`|`git diff`|' "$SKILL" > "$COPY"
+  step_10_holds "$COPY" && return 1
+  true
+}
+
+# --- Step 11: the draft PR ----------------------------------------------------------
+
+# 0 when SKILL.md copy `$1` opens the PR with plain commands, verifying the
+# commit is on the update branch before the push.
+step_11_holds() {
+  local section
+  section="$(section_file "$1" "$STEP_11")" || return 1
+  grep -qF '$(' "$section" && return 1
+  in_order "$section" \
+    'git -C <acting tree> fetch origin main' \
+    'git -C <acting tree> rev-list --count origin/main..<branch>' \
+    'git -C <acting tree> show <branch>:.gaia/VERSION' \
+    'git -C <acting tree> push -u origin <branch>' \
+    'gh pr create --draft --base main --head <branch>' || return 1
+  # An open PR is reused, never duplicated.
+  grep -F 'gh pr create --draft' "$section" | grep -qF 'gh pr list --head <branch> --state open' || return 1
+  return 0
+}
+
+@test "Step 11: plain commands fetch, count, verify the version on the branch, then push and open" {
+  step_11_holds "$SKILL"
+  insert_after "$SKILL" "$STEP_11" 'branch="$(git branch --show-current)"'
+  step_11_holds "$COPY" && return 1
+  # The push moved ahead of the version check.
+  awk '
+    /^3\. `git -C <acting tree> show / { held = $0; next }
+    { print }
+    /^4\. `git -C <acting tree> push / && held != "" { print held }
+  ' "$SKILL" > "$COPY"
+  step_11_holds "$COPY" && return 1
+  grep -vF 'fetch origin main' "$SKILL" > "$COPY"
+  step_11_holds "$COPY" && return 1
+  true
+}
+
+# --- Step 9d: the cache bust and the manifest copy -------------------------------
+
+BUST_CALL='bash <main checkout path>/.gaia/scripts/update-check-bust.sh --cache <main checkout path>/.gaia/local/cache/shared/update-check.json --mode gaia --version <LATEST>'
+
+# 0 when SKILL.md copy `$1` busts the cache through the script at the main
+# checkout's path, reads it back, cites the contract, and uses no Write tool.
+bust_holds() {
+  local section
+  section="$(section_file "$1" "$STEP_9D")" || return 1
+  grep -qxF -- "$BUST_CALL" "$section" || return 1
+  in_order "$section" "$BUST_CALL" 'Then read the file back' || return 1
+  grep -qF '`.claude/skills/gaia/references/spec.md`, `## Operational primitives`' "$section" || return 1
+  grep -qF 'Write tool' "$section" && return 1
+  return 0
+}
+
+@test "Step 9d: the bust runs the script at the main checkout's cache path and reads it back" {
+  bust_holds "$SKILL"
+  insert_after "$SKILL" "$STEP_9D" 'Use the Write tool to overwrite `.gaia/local/cache/shared/update-check.json`.'
+  bust_holds "$COPY" && return 1
+  sed 's|Then read the file back|Then|' "$SKILL" > "$COPY"
+  bust_holds "$COPY" && return 1
+  grep -vxF -- "$BUST_CALL" "$SKILL" > "$COPY"
+  bust_holds "$COPY" && return 1
+  true
+}
+
+MANIFEST_STOP='A non-zero exit from the `cp` command is the `MANIFEST_COPY_FAILED` stop'
+
+@test "Step 9d prose: a failed manifest copy is the MANIFEST_COPY_FAILED stop" {
+  section_of "$SKILL" "$STEP_9D" | grep -qF "$MANIFEST_STOP"
+  grep -vF "$MANIFEST_STOP" "$SKILL" > "$COPY"
+  section_of "$COPY" "$STEP_9D" | grep -qF 'MANIFEST_COPY_FAILED' && return 1
+  true
+}
+
+# --- Step 12: the residue sweep ---------------------------------------------------
+
+# 0 when SKILL.md copy `$1` runs no sweep on a worktree run, printing the
+# post-merge --apply step, and keeps the ask in mode 3.
+step_12_holds() {
+  local section worktree_arm sweeps applies
+  section="$(section_of "$1" "$STEP_12")"
+  worktree_arm="$(printf '%s\n' "$section" | grep -F '**Worktree run.**')"
+  printf '%s\n' "$worktree_arm" | grep -qF 'Run no residue sweep' || return 1
+  printf '%s\n' "$worktree_arm" | grep -qF '`bash .gaia/scripts/state-registry-lib.sh residue-sweep --apply` from the main checkout' || return 1
+  sweeps="$(printf '%s\n' "$worktree_arm" | grep -oF 'residue-sweep' | wc -l | tr -d ' ')"
+  applies="$(printf '%s\n' "$worktree_arm" | grep -oF 'residue-sweep --apply' | wc -l | tr -d ' ')"
+  [ "$sweeps" -eq "$applies" ] || return 1
+  printf '%s\n' "$section" | grep -F '**Mode 3.**' | grep -qF 'AskUserQuestion' || return 1
+  return 0
+}
+
+@test "Step 12: a worktree run runs no sweep and prints the post-merge --apply step; mode 3 asks" {
+  step_12_holds "$SKILL"
+  sed 's|Run no residue sweep: it refuses|Run `bash .gaia/scripts/state-registry-lib.sh residue-sweep`: it refuses|' "$SKILL" > "$COPY"
+  step_12_holds "$COPY" && return 1
+  grep -vF '**Mode 3.**' "$SKILL" > "$COPY"
+  step_12_holds "$COPY" && return 1
   true
 }
 
 # --- Step 3d and Step 4 prose ---------------------------------------------------
-
-STEP_4='## Step 4: Show the release notes and confirm'
 
 # 0 when the SKILL.md copy `$1` carries the blocking-note and Proceed pins.
 prose_pins_hold() {
@@ -320,14 +572,19 @@ prose_pins_hold() {
 
 STEP_9_ACTIONS='**Documented adopter actions (opt-in).**'
 
-# A project holding the range walk, a verified-cache directory for v2.1.0, and
-# stub curl and gh executables. The stub curl prints $CURL_FIXTURE, or fails
-# when it is unset; the stub gh always fails.
+# Block text on stdin with the skill's typed-literal placeholders filled.
+fill_placeholders() {
+  sed -e 's/<BASELINE>/2.0.0/g' -e 's/<LATEST_TAG>/v2.1.0/g' -e 's/<LATEST>/2.1.0/g'
+}
+
+# A project holding the preflight script and the range walk, a verified-cache
+# directory for v2.1.0, and stub curl and gh executables. The stub curl prints
+# $CURL_FIXTURE, or fails when it is unset; the stub gh always fails.
 step_4_setup() {
   PROJECT="$BATS_TEST_TMPDIR/project"
   CACHE="$PROJECT/.gaia/local/cache/shared/update-gaia"
   mkdir -p "$PROJECT/.gaia/scripts/lib" "$CACHE/v2.1.0/tree" "$BATS_TEST_TMPDIR/bin"
-  cp "$REPO_ROOT/.gaia/scripts/changelog-range.sh" "$PROJECT/.gaia/scripts/"
+  cp "$PREFLIGHT" "$REPO_ROOT/.gaia/scripts/changelog-range.sh" "$PROJECT/.gaia/scripts/"
   cp "$COMPARE_LIB" "$PROJECT/.gaia/scripts/lib/"
   cat > "$BATS_TEST_TMPDIR/bin/curl" <<'STUB'
 #!/usr/bin/env bash
@@ -337,30 +594,12 @@ STUB
   printf '#!/usr/bin/env bash\nexit 1\n' > "$BATS_TEST_TMPDIR/bin/gh"
   chmod +x "$BATS_TEST_TMPDIR/bin/curl" "$BATS_TEST_TMPDIR/bin/gh"
   printf '%s\n' '# Changelog' '' '## [Unreleased]' '' '## [2.1.0]' '' '### Removed' '' '- dropped `pnpm remove left-pad`' '' '## [2.0.0]' '' '- base' > "$BATS_TEST_TMPDIR/CHANGELOG.md"
-  BLOCK_4="$(block_after_heading "$SKILL" "$STEP_4")"
-  [ -n "$BLOCK_4" ]
+  BLOCK_4="$(block_after_heading "$SKILL" "$STEP_4" | fill_placeholders)"
+  printf '%s\n' "$BLOCK_4" | grep -qxF 'bash .gaia/scripts/update-gaia-preflight.sh changelog --baseline 2.0.0 --latest 2.1.0 --latest-tag v2.1.0'
 }
 
 run_step_4() {
-  run_block_in "$PROJECT" "$BLOCK_4" PATH="$BATS_TEST_TMPDIR/bin:$PATH" BASELINE=2.0.0 LATEST=2.1.0 LATEST_TAG=v2.1.0 "$@"
-}
-
-@test "Step 4: a fetched range is saved beside the verified target bundle" {
-  step_4_setup
-  run_step_4 CURL_FIXTURE="$BATS_TEST_TMPDIR/CHANGELOG.md"
-  [ "$status" -eq 0 ]
-  grep -qxF '## [2.1.0]' "$CACHE/v2.1.0/changelog-range.md"
-  grep -qxF -- '- dropped `pnpm remove left-pad`' "$CACHE/v2.1.0/changelog-range.md"
-  grep -qxF '## [2.0.0]' "$CACHE/v2.1.0/changelog-range.md" && return 1
-  true
-}
-
-@test "Step 4: a failed fetch leaves no saved range, removing one an earlier run saved" {
-  step_4_setup
-  printf 'stale\n' > "$CACHE/v2.1.0/changelog-range.md"
-  run_step_4
-  [ -e "$CACHE/v2.1.0/changelog-range.md" ] && return 1
-  true
+  run_block_in "$PROJECT" "$BLOCK_4" PATH="$BATS_TEST_TMPDIR/bin:$PATH" "$@"
 }
 
 run_step_9_actions() {
@@ -388,208 +627,15 @@ run_step_9_actions() {
   printf '%s\n' "$output" | grep -qxF 'CHANGELOG_RANGE_UNAVAILABLE'
 }
 
-# --- Step 3d: the target bundle's own selector judges the notes ---------------
-
-@test "Step 3d: a mode only the target's selector knows is accepted, while this repository's selector rejects it" {
-  make_bundle
-  awk '{ print } /^    "mode: after-merge"\) mode="after-merge" ;;$/ { print "    \"mode: future\") mode=\"future\" ;;" }' \
-    "$SELECTOR" > "$BUNDLE/.gaia/scripts/select-migration-notes.sh"
-  grep -qF '"mode: future"' "$BUNDLE/.gaia/scripts/select-migration-notes.sh"
-  printf -- '---\nmode: future\n---\n\nnote\n' > "$BUNDLE/.gaia/migrations/2.1.0.md"
-  run_step_3d 2.0.0 2.1.0
-  [ "$status" -eq 0 ]
-  printf '%s\n' "$output" | grep -qxF "BLOCKING 2.1.0 $BUNDLE/.gaia/migrations/2.1.0.md"
-  # Control: this repository's selector rejects the same folder.
-  run bash "$SELECTOR" "$BUNDLE" 2.0.0 2.1.0
-  [ "$status" -eq 1 ]
-}
-
-# --- Step 3 and Step 4: resume on the update branch ---------------------------
-
-STEP_3='## Step 3: Compare versions'
-STEP_4_BRANCH='### Step 4, on Proceed: the update branch'
-
-# A fixture git repository on main with one commit.
-make_repository() {
-  REPOSITORY="$BATS_TEST_TMPDIR/repository"
-  rm -rf "$REPOSITORY"
-  mkdir -p "$REPOSITORY/.gaia/scripts"
-  git -C "$REPOSITORY" init -q -b main
-  git -C "$REPOSITORY" config user.email fixture@example.com
-  git -C "$REPOSITORY" config user.name fixture
-  git -C "$REPOSITORY" commit -q --allow-empty -m base
-  cp "$REPO_ROOT/.gaia/scripts/branch-name-lib.sh" "$REPOSITORY/.gaia/scripts/"
-  cp "$REPO_ROOT/.gaia/conventional-commits.json" "$REPOSITORY/.gaia/"
-}
-
-# Creates branch `$1` at a new commit dated `$2`.
-branch_at_date() {
-  git -C "$REPOSITORY" checkout -q -b "$1" main
-  GIT_COMMITTER_DATE="$2" GIT_AUTHOR_DATE="$2" git -C "$REPOSITORY" commit -q --allow-empty -m "$1"
-  git -C "$REPOSITORY" checkout -q main
-}
-
-@test "Step 3: an interrupted run's update branch is found by its prefix" {
-  make_repository
-  git -C "$REPOSITORY" branch update/v2.1.0-2020-01-01-0000
-  block="$(block_after_heading "$SKILL" "$STEP_3")"
-  [ -n "$block" ]
-  run_block_in "$REPOSITORY" "$block" LATEST_TAG=v2.1.0
-  [ "$status" -eq 0 ]
-  printf '%s\n' "$output" | grep -qxF 'RESUME update/v2.1.0-2020-01-01-0000'
-  printf '%s\n' "$output" | grep -qxF 'RESUME_UPDATE=true'
-}
-
-@test "Step 3: a branch for another tag is not a resume" {
-  make_repository
-  git -C "$REPOSITORY" branch update/v2.0.9-2020-01-01-0000
-  block="$(block_after_heading "$SKILL" "$STEP_3")"
-  run_block_in "$REPOSITORY" "$block" LATEST_TAG=v2.1.0
-  [ "$status" -eq 0 ]
-  printf '%s\n' "$output" | grep -qF RESUME_UPDATE=false
-  printf '%s\n' "$output" | grep -qE '^RESUME ' && return 1
-  true
-}
-
-@test "Step 3: with two matching branches the more recently committed one wins" {
-  make_repository
-  branch_at_date update/v2.1.0-2020-06-01-0000 '2021-01-01T00:00:00Z'
-  branch_at_date update/v2.1.0-2020-01-01-0000 '2022-01-01T00:00:00Z'
-  block="$(block_after_heading "$SKILL" "$STEP_3")"
-  run_block_in "$REPOSITORY" "$block" LATEST_TAG=v2.1.0
-  printf '%s\n' "$output" | grep -qxF 'RESUME update/v2.1.0-2020-01-01-0000'
-}
-
-@test "Step 4: a resumed run on main switches to the update branch and creates none" {
-  make_repository
-  git -C "$REPOSITORY" branch update/v2.1.0-2020-01-01-0000
-  before="$(git -C "$REPOSITORY" for-each-ref --format='%(refname)' refs/heads | sort)"
-  block="$(block_after_heading "$SKILL" "$STEP_4_BRANCH")"
-  [ -n "$block" ]
-  run_block_in "$REPOSITORY" "$block" LATEST_TAG=v2.1.0 RESUME_UPDATE=true \
-    UPDATE_BRANCH=update/v2.1.0-2020-01-01-0000 SHOULD_CREATE_BRANCH=true
-  [ "$status" -eq 0 ]
-  [ "$(git -C "$REPOSITORY" branch --show-current)" = update/v2.1.0-2020-01-01-0000 ]
-  [ "$(git -C "$REPOSITORY" for-each-ref --format='%(refname)' refs/heads | sort)" = "$before" ]
-}
-
-@test "Step 4: a fresh run on main creates the update branch" {
-  make_repository
-  block="$(block_after_heading "$SKILL" "$STEP_4_BRANCH")"
-  printf '%s\n' "$block" | grep -qF 'git checkout -b'
-  run_block_in "$REPOSITORY" "$block" LATEST_TAG=v2.1.0 RESUME_UPDATE=false \
-    UPDATE_BRANCH='' SHOULD_CREATE_BRANCH=true
-  [ "$status" -eq 0 ]
-  case "$(git -C "$REPOSITORY" branch --show-current)" in
-    update/v2.1.0-*) true ;;
-    *) return 1 ;;
-  esac
-}
-
-# --- Step 4b: prune --------------------------------------------------------------
-
-STEP_4B='## Step 4b: Prune prior-run artifacts'
-
-make_prune_fixture() {
-  PROJECT="$BATS_TEST_TMPDIR/prune"
-  rm -rf "$PROJECT"
-  local tag
-  for tag in v2.0.0 v2.1.0 v1.9.0 v2.0.5; do
-    mkdir -p "$PROJECT/.gaia/local/cache/shared/update-gaia/$tag/tree"
-  done
-  mkdir -p "$PROJECT/.gaia-backup/20200101-000000" "$PROJECT/.gaia-merge"
-  printf 'patch\n' > "$PROJECT/.gaia-merge/a.patch"
-}
-
-@test "Step 4b: the prune keeps the verified baseline and target and the populated merge folder" {
-  block="$(block_after_heading "$SKILL" "$STEP_4B")"
-  [ -n "$block" ]
-  make_prune_fixture
-  run_block_in "$PROJECT" "$block" BASELINE=2.0.0 LATEST_TAG=v2.1.0 RESUME_UPDATE=false
-  [ "$status" -eq 0 ]
-  [ "$(ls "$PROJECT/.gaia/local/cache/shared/update-gaia" | tr '\n' ' ')" = 'v2.0.0 v2.1.0 ' ]
-  [ -e "$PROJECT/.gaia-backup" ] && return 1
-  [ -f "$PROJECT/.gaia-merge/a.patch" ]
-}
-
-@test "Step 4b: a resumed run keeps .gaia-backup" {
-  block="$(block_after_heading "$SKILL" "$STEP_4B")"
-  make_prune_fixture
-  run_block_in "$PROJECT" "$block" BASELINE=2.0.0 LATEST_TAG=v2.1.0 RESUME_UPDATE=true
-  [ "$status" -eq 0 ]
-  [ -d "$PROJECT/.gaia-backup/20200101-000000" ]
-  [ "$(ls "$PROJECT/.gaia/local/cache/shared/update-gaia" | tr '\n' ' ')" = 'v2.0.0 v2.1.0 ' ]
-}
-
-# --- Step 9c: setup drift -------------------------------------------------------
+# --- Step 9c prose ----------------------------------------------------------------
 
 STEP_9C='## Step 9c: Carry new setup features'
-
-# A fixture project with a stub CLI. $DRIFT_JSON is what `setup drift` prints;
-# $ADMIN_ANSWER is check-admin's `admin` value; $DRIFT_FAILS makes drift fail.
-make_drift_fixture() {
-  PROJECT="$BATS_TEST_TMPDIR/drift"
-  rm -rf "$PROJECT"
-  mkdir -p "$PROJECT/.gaia/cli"
-  cat > "$PROJECT/.gaia/cli/gaia" <<'STUB'
-#!/usr/bin/env bash
-case "$1 $2" in
-  'setup drift')
-    [ -z "$DRIFT_FAILS" ] || { echo 'features list unreadable' >&2; exit 1; }
-    printf '%s\n' "$DRIFT_JSON"
-    ;;
-  'setup detect-remote')
-    printf '%s\n' '{"found":true,"host":"github.com","owner":"acme","repo":"app"}'
-    ;;
-  'setup check-admin')
-    printf '{"admin":%s,"auth_status":"ok"}\n' "$ADMIN_ANSWER"
-    ;;
-  *) exit 2 ;;
-esac
-STUB
-  chmod +x "$PROJECT/.gaia/cli/gaia"
-}
-
-DRIFT_FIXTURE='{"features":"x","recorded":{"project":1,"machine":1},"decided":{},"undecided":[
-{"id":"A","scope":"project","required":true,"admin":false,"standalone":true,"reference":"ref/a.md","action":"apply"},
-{"id":"B","scope":"machine","required":false,"admin":false,"standalone":true,"reference":"ref/b.md","action":"ask"},
-{"id":"C","scope":"project","required":true,"admin":true,"standalone":true,"reference":"ref/c.md","action":"apply"},
-{"id":"D","scope":"machine","required":true,"admin":false,"standalone":true,"reference":"ref/d.md","action":"apply"},
-{"id":"W","scope":"project","required":true,"admin":true,"standalone":false,"reference":"ref/w.md","action":"setup"}]}'
-
-@test "Step 9c: drift splits undecided features into apply, ask, owed-by-admin and setup" {
-  block="$(block_after_heading "$SKILL" "$STEP_9C")"
-  [ -n "$block" ]
-  make_drift_fixture
-  run_block_in "$PROJECT" "$block" LATEST_DIR=bundle DRIFT_JSON="$DRIFT_FIXTURE" ADMIN_ANSWER=false
-  [ "$status" -eq 0 ]
-  expected="$(printf '%s\n' 'APPLY A ref/a.md' 'ASK B ref/b.md' 'OWED_ADMIN C' 'APPLY D ref/d.md' 'SETUP W')"
-  [ "$output" = "$expected" ]
-}
-
-@test "Step 9c: an admin applies the admin-gated feature" {
-  block="$(block_after_heading "$SKILL" "$STEP_9C")"
-  make_drift_fixture
-  run_block_in "$PROJECT" "$block" LATEST_DIR=bundle DRIFT_JSON="$DRIFT_FIXTURE" ADMIN_ANSWER=true
-  [ "$status" -eq 0 ]
-  printf '%s\n' "$output" | grep -qxF 'APPLY C ref/c.md'
-  printf '%s\n' "$output" | grep -qF OWED_ADMIN && return 1
-  true
-}
-
-@test "Step 9c: a failing drift prints DRIFT_FAILED and never fails the update" {
-  block="$(block_after_heading "$SKILL" "$STEP_9C")"
-  make_drift_fixture
-  run_block_in "$PROJECT" "$block" LATEST_DIR=bundle DRIFT_JSON='' ADMIN_ANSWER=false DRIFT_FAILS=1
-  [ "$status" -eq 0 ]
-  printf '%s\n' "$output" | grep -qxF 'DRIFT_FAILED features list unreadable'
-}
 
 # 0 when SKILL.md copy `$1` states that a failed apply records nothing and
 # that the summary names every drift outcome by id.
 drift_prose_holds() {
   section_of "$1" "$STEP_9C" | grep -qF 'A failed apply records nothing' || return 1
-  section_of "$1" '## Step 9d: Record the update' |
+  section_of "$1" "$STEP_9D" |
     grep -qF 'the setup features applied, asked (with the answer), owed by an admin, failed, and handed to `/setup-gaia`, each by id' || return 1
   return 0
 }
@@ -606,34 +652,16 @@ drift_prose_holds() {
 
 # --- Prose order --------------------------------------------------------------
 
-# The first line number in file `$1` holding fixed string `$2`; empty if none.
-first_line() {
-  grep -nF -- "$2" "$1" | head -n 1 | cut -d: -f1
-}
-
-# 0 when the fixed strings `$2`, `$3`, ... first appear in file `$1` in that
-# order, each present.
-in_order() {
-  local file="$1" previous=0 needle line
-  shift
-  for needle in "$@"; do
-    line="$(first_line "$file" "$needle")"
-    [ -n "$line" ] || { echo "missing: $needle" >&2; return 1; }
-    [ "$line" -gt "$previous" ] || { echo "out of order: $needle" >&2; return 1; }
-    previous="$line"
-  done
-}
-
-SELECTOR_CALL='bash "$LATEST_DIR/.gaia/scripts/select-migration-notes.sh"'
+SELECTOR_CALL='bash .gaia/scripts/update-gaia-preflight.sh select-notes --latest-dir <LATEST_DIR>'
 PROCEED_QUESTION='"Update GAIA from v$BASELINE to $LATEST_TAG?"'
 
 # 0 when SKILL.md copy `$1` keeps the orchestrator order.
 skill_order_holds() {
   local file="$1" anchor
-  for anchor in 'git checkout -b' 'git switch' 'rm -rf .gaia-backup' '## Model selection'; do
+  for anchor in 'EnterWorktree(' 'bash .gaia/scripts/update-gaia-preflight.sh prune' '## Model selection'; do
     in_order "$file" "$SELECTOR_CALL" "$PROCEED_QUESTION" "$anchor" || return 1
   done
-  in_order "$file" '## Step 9b' 'gaia setup drift --json' 'GAIA_MANIFEST_WRITE=release cp' 'ping --event update' 'echo "$LATEST" > .gaia/VERSION' || return 1
+  in_order "$file" '## Step 9b' 'update-gaia-drift.sh --features' 'GAIA_MANIFEST_WRITE=release cp <LATEST_DIR>' 'ping --event update' 'echo <LATEST> > .gaia/VERSION' || return 1
   in_order "$file" '## Step 9d' '### Step 12' || return 1
   section_of "$file" '## Step 11 (orchestrator' | sed -n 3p | grep -qF "The execution agent's work ends at Step 9," || return 1
   return 0
@@ -653,22 +681,20 @@ merge_execution_is_merge_only() {
 }
 
 @test "prose order: a reordered SKILL.md copy is reported" {
-  local copy="$BATS_TEST_TMPDIR/skill-reordered.md"
   # The version write moved ahead of the ping.
   awk '
     /^\.gaia\/cli\/gaia ping --event update/ { held = $0; next }
     { print }
-    /^echo "\$LATEST" > \.gaia\/VERSION$/ && held != "" { print held }
-  ' "$SKILL" > "$copy"
-  [ "$(first_line "$copy" 'ping --event update')" -gt "$(first_line "$copy" 'echo "$LATEST" > .gaia/VERSION')" ]
-  skill_order_holds "$copy" && return 1
-  # A branch created before the Proceed question.
-  sed '/^## Step 3b: Refuse a 1.x baseline$/i\
-git checkout -b early' "$SKILL" > "$copy"
-  skill_order_holds "$copy" && return 1
+    /^echo <LATEST> > \.gaia\/VERSION$/ && held != "" { print held }
+  ' "$SKILL" > "$COPY"
+  [ "$(first_line "$COPY" 'ping --event update')" -gt "$(first_line "$COPY" 'echo <LATEST> > .gaia/VERSION')" ]
+  skill_order_holds "$COPY" && return 1
+  # A worktree created before the Proceed question.
+  insert_after "$SKILL" '## Step 3b: Refuse a 1.x baseline' 'EnterWorktree({name: "early"})'
+  skill_order_holds "$COPY" && return 1
   # Step 11 claiming the executor runs through Step 10.
-  sed "s/The execution agent's work ends at Step 9,/The execution agent's work ends at Step 10,/" "$SKILL" > "$copy"
-  skill_order_holds "$copy" && return 1
+  sed "s/The execution agent's work ends at Step 9,/The execution agent's work ends at Step 10,/" "$SKILL" > "$COPY"
+  skill_order_holds "$COPY" && return 1
   true
 }
 
@@ -687,29 +713,39 @@ git checkout -b early' "$SKILL" > "$copy"
 # --- Bundle-root pin ------------------------------------------------------------
 
 # Prints every line of the given files naming .gaia/migrations/ other than
-# through $LATEST_DIR/ or the refusal's bundled note path.
+# through the target bundle (`<LATEST_DIR>/` in SKILL.md, `$LATEST_DIR/` in
+# merge-execution.md, `$latest_dir/` in the preflight script) or the refusal's
+# bundled note path.
 bare_migration_paths() {
-  sed -e 's|\$LATEST_DIR/\.gaia/migrations/||g' \
+  sed -e 's|<LATEST_DIR>/\.gaia/migrations/||g' \
+    -e 's|\$LATEST_DIR/\.gaia/migrations/||g' \
+    -e 's|\$latest_dir/\.gaia/migrations/||g' \
     -e 's|\.gaia/local/cache/shared/migrate-2/v2\.0\.0/tree/\.gaia/migrations/2\.0\.0\.md||g' "$@" |
     grep -F '.gaia/migrations/' || true
 }
 
-# Prints every line of file `$1` naming the selector that is not a call of the
-# target bundle's selector with the target bundle as its root. SKILL.md names
-# the selector only where it calls it.
+# Prints every line of file `$1` naming the selector that is not the preflight
+# script's call of the target bundle's selector with the target bundle as its
+# root. SKILL.md names the selector nowhere: its select-notes call runs it.
 stray_selector_calls() {
   grep -F 'select-migration-notes.sh' "$1" |
-    grep -vF 'bash "$LATEST_DIR/.gaia/scripts/select-migration-notes.sh" "$LATEST_DIR" ' || true
+    grep -vF 'bash "$latest_dir/.gaia/scripts/select-migration-notes.sh" "$latest_dir" ' || true
 }
 
 @test "bundle root: notes are selected and read only from the verified target bundle" {
   [ "$(grep -cF "$SELECTOR_CALL" "$SKILL")" -ge 1 ]
+  [ "$(grep -cF 'bash "$latest_dir/.gaia/scripts/select-migration-notes.sh" "$latest_dir" ' "$PREFLIGHT")" -eq 1 ]
   [ -z "$(stray_selector_calls "$SKILL")" ]
-  [ -z "$(bare_migration_paths "$SKILL" "$MERGE_EXECUTION")" ]
+  [ -z "$(stray_selector_calls "$PREFLIGHT")" ]
+  [ -z "$(bare_migration_paths "$SKILL" "$MERGE_EXECUTION" "$PREFLIGHT")" ]
   local copy="$BATS_TEST_TMPDIR/skill-bare.md"
   { cat "$SKILL"; printf '%s\n' 'cat .gaia/migrations/2.1.0.md'; } > "$copy"
   [ -n "$(bare_migration_paths "$copy")" ]
-  { cat "$SKILL"; printf '%s\n' 'selection="$(bash .gaia/scripts/select-migration-notes.sh . "$BASELINE" "$LATEST")"'; } > "$copy"
+  { cat "$PREFLIGHT"; printf '%s\n' 'cat .gaia/migrations/2.1.0.md'; } > "$copy"
+  [ -n "$(bare_migration_paths "$copy")" ]
+  { cat "$SKILL"; printf '%s\n' 'bash .gaia/scripts/select-migration-notes.sh . <BASELINE> <LATEST>'; } > "$copy"
+  [ -n "$(stray_selector_calls "$copy")" ]
+  { cat "$PREFLIGHT"; printf '%s\n' 'selection="$(bash .gaia/scripts/select-migration-notes.sh . "$baseline" "$latest")"'; } > "$copy"
   [ -n "$(stray_selector_calls "$copy")" ]
 }
 

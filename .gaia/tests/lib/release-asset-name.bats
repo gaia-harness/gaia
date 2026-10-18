@@ -8,11 +8,12 @@
 # 1.6.1 stops at its fetch step before it writes anything.
 #
 #   A1-A5  the asset name in release.yml, the 2.x /update-gaia pattern (read
-#          from the SKILL.md Step 3c download block), and the glob semantics
+#          from the update-gaia-preflight.sh verify-bundles code), and the glob semantics
 #          that make the fence hold. A2 and A3 drive the failing state: the
 #          retired name is matched by v1.6.1's pattern, and a pattern that
 #          drifts from the upload name is reported.
-#   B1-B6  the 1.x baseline refusal in SKILL.md Step 3b: the printed
+#   B1-B6  the 1.x baseline refusal (update-gaia-preflight.sh refuse-1x; B4
+#          pins the skill's prose order): the printed
 #          download-and-verify command equals the routing line's, agrees with
 #          the 2.0.0 note's own Step 2, and works and fails closed when run.
 #   C1-C5  .gaia/scripts/compose-release-body.sh, which puts the routing line
@@ -27,6 +28,7 @@ setup() {
   REPO_ROOT="$(cd "$(dirname "$BATS_TEST_FILENAME")/../../.." && pwd)"
   RELEASE_YML="$REPO_ROOT/.github/workflows/release.yml"
   SKILL="$REPO_ROOT/.claude/skills/update-gaia/SKILL.md"
+  PREFLIGHT="$REPO_ROOT/.gaia/scripts/update-gaia-preflight.sh"
   COMPOSE="$REPO_ROOT/.gaia/scripts/compose-release-body.sh"
   ROUTING_LINE="$(bash "$COMPOSE" --routing-line)"
 }
@@ -69,7 +71,7 @@ uploaded_asset_name() {
   ' "$1"
 }
 
-# The first --pattern a /update-gaia Step 3c download passes, with ${tag} left
+# The first --pattern a /update-gaia bundle download passes, with ${tag} left
 # unexpanded. The block puts each pattern on its own line, tarball first; a
 # line holding both would make this greedy match return the .sha256 name.
 update_pattern() {
@@ -86,6 +88,11 @@ glob_matches() {
     $1) return 0 ;;
   esac
   return 1
+}
+
+# The body of the verify_bundles function in script `$1`.
+verify_bundles_body() {
+  awk '/^verify_bundles\(\) \{$/ { inside = 1; next } inside && /^}$/ { exit } inside { print }' "$1"
 }
 
 # The fenced bash block that follows the heading line `$2` in file `$1`.
@@ -134,8 +141,8 @@ block_after_heading() {
   [ "$(uploaded_asset_name "$RELEASE_YML")" != "$old_name" ]
 }
 
-@test "A4: the /update-gaia Step 3c pattern equals the upload name, and drift is reported" {
-  block="$(block_after_heading "$SKILL" '## Step 3c')"
+@test "A4: the /update-gaia verify-bundles pattern equals the upload name, and drift is reported" {
+  block="$(verify_bundles_body "$PREFLIGHT")"
   [ -n "$block" ]
   printf '%s\n' "$block" > "$BATS_TEST_TMPDIR/step-3c.sh"
   pattern="$(update_pattern "$BATS_TEST_TMPDIR/step-3c.sh")"
@@ -161,8 +168,9 @@ block_after_heading() {
   [ "$(update_pattern "$joined")" = 'gaia-bundle-${tag}.tar.gz.sha256' ]
 }
 
-@test "A5: the Step 3c extract uses --strip-components, so the staging directory name never shows" {
-  block="$(block_after_heading "$SKILL" '## Step 3c')"
+@test "A5: the verify-bundles extract uses --strip-components, so the staging directory name never shows" {
+  block="$(verify_bundles_body "$PREFLIGHT")"
+  [ -n "$block" ]
   printf '%s\n' "$block" | grep -qF -- '--strip-components=1'
   grep -qF -- 'tar -czf "gaia-bundle-${TAG}.tar.gz" -C /tmp "gaia-${TAG}"' "$RELEASE_YML"
 }
@@ -178,9 +186,7 @@ refusal_command() {
 }
 
 @test "B1: a 1.6.1 baseline is refused with the routing line's download-and-verify command" {
-  block="$(block_after_heading "$SKILL" '## Step 3b')"
-  [ -n "$block" ]
-  run env BASELINE=1.6.1 bash -c "$block"
+  run bash "$PREFLIGHT" refuse-1x --baseline 1.6.1
   [ "$status" -eq 1 ]
   printf '%s' "$output" | grep -qF 'REFUSED'
   printf '%s' "$output" | grep -qF '.gaia/local/cache/shared/migrate-2/v2.0.0/tree/.gaia/migrations/2.0.0.md'
@@ -199,38 +205,49 @@ refusal_command() {
 }
 
 @test "B2: a 2.0.0 baseline proceeds silently" {
-  block="$(block_after_heading "$SKILL" '## Step 3b')"
-  run env BASELINE=2.0.0 bash -c "$block"
+  run bash "$PREFLIGHT" refuse-1x --baseline 2.0.0
   [ "$status" -eq 0 ]
   [ -z "$output" ]
 }
 
 @test "B3: a malformed baseline is refused, never read as proceed" {
-  block="$(block_after_heading "$SKILL" '## Step 3b')"
-  for bad in '' 'v2.0.0' 'abc' '1x.0.0'; do
-    run env BASELINE="$bad" bash -c "$block"
+  for bad in '' 'v2.0.0' 'abc' '1x.0.0' 'x.y'; do
+    run bash "$PREFLIGHT" refuse-1x --baseline "$bad"
     [ "$status" -eq 1 ]
   done
 }
 
-@test "B4: the refusal block creates no branch and precedes every branch and download outside it" {
-  block="$(block_after_heading "$SKILL" '## Step 3b')"
-  printf '%s' "$block" | grep -qF 'checkout -b' && return 1
-  printf '%s' "$block" | grep -qF 'git switch' && return 1
-  refusal_line="$(grep -n '^## Step 3b' "$SKILL" | head -n 1 | cut -d: -f1)"
-  refusal_end="$(awk -v start="$refusal_line" 'NR > start && /^```$/ { print NR; exit }' "$SKILL")"
-  branch_line="$(grep -n 'git checkout -b' "$SKILL" | head -n 1 | cut -d: -f1)"
-  switch_line="$(grep -n 'git switch' "$SKILL" | head -n 1 | cut -d: -f1)"
-  download_line="$(grep -n 'gh release download' "$SKILL" |
-    awk -F: -v start="$refusal_line" -v end="$refusal_end" '$1 < start || $1 > end { print $1; exit }')"
-  [ -n "$refusal_line" ]
-  [ -n "$refusal_end" ]
-  [ -n "$branch_line" ]
-  [ -n "$switch_line" ]
-  [ -n "$download_line" ]
-  [ "$refusal_line" -lt "$branch_line" ]
-  [ "$refusal_line" -lt "$switch_line" ]
-  [ "$refusal_line" -lt "$download_line" ]
+# 0 when SKILL.md copy `$1` runs the 1.x refusal from Step 3b, before the
+# first bundle download, the first worktree entry and the worktree add, and
+# moves no branch anywhere.
+refusal_precedes_branching() {
+  local section refusal_line verify_line enter_line add_line
+  section="$(awk '/^## Step 3b/ { inside = 1; print; next } inside && /^##+ / { exit } inside { print }' "$1")"
+  printf '%s\n' "$section" | grep -qxF 'bash .gaia/scripts/update-gaia-preflight.sh refuse-1x --baseline <BASELINE>' || return 1
+  printf '%s\n' "$section" | grep -qE 'checkout -b|git switch|EnterWorktree' && return 1
+  grep -qE 'git checkout -b|git switch' "$1" && return 1
+  refusal_line="$(grep -nF 'update-gaia-preflight.sh refuse-1x' "$1" | head -n 1 | cut -d: -f1)"
+  verify_line="$(grep -nF 'update-gaia-preflight.sh verify-bundles' "$1" | head -n 1 | cut -d: -f1)"
+  enter_line="$(grep -nF 'EnterWorktree(' "$1" | head -n 1 | cut -d: -f1)"
+  add_line="$(grep -nF 'update-gaia-branch-state.sh add-worktree' "$1" | head -n 1 | cut -d: -f1)"
+  [ -n "$refusal_line" ] && [ -n "$verify_line" ] && [ -n "$enter_line" ] && [ -n "$add_line" ] || return 1
+  [ "$refusal_line" -lt "$verify_line" ] || return 1
+  [ "$refusal_line" -lt "$enter_line" ] || return 1
+  [ "$refusal_line" -lt "$add_line" ] || return 1
+  return 0
+}
+
+@test "B4: the refusal call creates no branch and precedes every download and worktree outside it" {
+  refusal_precedes_branching "$SKILL"
+  local copy="$BATS_TEST_TMPDIR/skill-early-worktree.md"
+  # Failing state: a worktree entered before Step 3b.
+  awk '/^## Step 3b/ && !done { print "EnterWorktree({name: \"early\"})"; done = 1 } { print }' "$SKILL" > "$copy"
+  grep -qxF 'EnterWorktree({name: "early"})' "$copy"
+  refusal_precedes_branching "$copy" && return 1
+  # Failing state: a branch switch reinserted anywhere.
+  { cat "$SKILL"; printf '%s\n' 'git switch x'; } > "$copy"
+  refusal_precedes_branching "$copy" && return 1
+  true
 }
 
 # The `## Step 2` section of a 2.0.0 note.
@@ -251,8 +268,7 @@ note_agrees_with_command() {
 }
 
 @test "B5: the refusal's assets and cache directory match the 2.0.0 note's Step 2, and drift is reported" {
-  block="$(block_after_heading "$SKILL" '## Step 3b')"
-  run env BASELINE=1.6.1 bash -c "$block"
+  run bash "$PREFLIGHT" refuse-1x --baseline 1.6.1
   command_line="$(refusal_command "$output")"
   [ -n "$command_line" ]
   note="$REPO_ROOT/.gaia/migrations/2.0.0.md"
@@ -294,8 +310,7 @@ write_fixture_release() {
 }
 
 @test "B6: the printed command downloads, verifies and extracts the note, and fails closed on a bad checksum" {
-  block="$(block_after_heading "$SKILL" '## Step 3b')"
-  run env BASELINE=1.6.1 bash -c "$block"
+  run bash "$PREFLIGHT" refuse-1x --baseline 1.6.1
   command_line="$(refusal_command "$output")"
   [ -n "$command_line" ]
   export FIXTURE_ASSETS="$BATS_TEST_TMPDIR/assets"
