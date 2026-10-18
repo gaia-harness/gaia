@@ -168,8 +168,8 @@ frontend/.playwright/e2e/react-perf-smoke.spec.ts
 # decisions: assertions about this repository's code that are false about
 # an adopter's. The machinery ships and the data does not. Without this
 # line the store would ship as an `owned` file, costing an adopter one
-# overwrite at the newly-owned transition and perpetual `.gaia-merge`
-# patch noise thereafter. The manifest is derived by skipping what this
+# overwrite at the newly-owned transition and a perpetual conflict
+# question thereafter. The manifest is derived by skipping what this
 # file excludes, so the store's absence from `.gaia/manifest.json` is a
 # consequence of this line and never the mechanism.
 .gaia/audit-residual-dismissals.jsonl
@@ -253,7 +253,6 @@ frontend/.playwright/e2e/react-perf-smoke.spec.ts
 .raw
 .gaia/local
 .gaia-backup
-.gaia-merge
 
 # --- 8. Per-machine plan / handoff / agent state ---
 # Generated at runtime under the user's clone; not template content.

@@ -1,0 +1,1 @@
+adopter auto.md

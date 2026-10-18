@@ -1,0 +1,4 @@
+---
+established: true
+---
+adopter

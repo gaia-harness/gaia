@@ -161,7 +161,7 @@ Master catalog of every page in the wiki. Newly created pages must be added here
 - [[Notebook]]: the gitignored, main-anchored `.notebook/` that holds specs, plans and research, its catalog, lifecycle and one-time move.
 - [[Worktrees]]: the worktree model a feature author needs: tree identity from the acting event's working directory, the single main-checkout resolver, the single `.gaia/local` symlink, and the state registry's four scopes.
 - [[Claude Skills]]
-- [[Update Workflow]]: `/update-gaia` three-way diff, manifest classes (`owned` / `shared` / `wiki-owned`), `.gaia-merge` sidecar patches.
+- [[Update Workflow]]: `/update-gaia` three-way diff, manifest classes (`owned` / `shared` / `wiki-owned`), conflicts answered during the run.
 - [[Generated Regions]]: marker-delimited spans inside shipped files a shipped command regenerates; the region-aware merge oracle, the regeneration runner, and the trust model they operate inside.
 <!-- gaia:maintainer-only:start -->
 - [[Release Workflow]]: Maintainer flow: `/gaia-release`, `release.yml`, tarball scrubbing, `create-gaia` bootstrapper.

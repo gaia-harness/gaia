@@ -104,8 +104,8 @@ Rules every arm shares:
 - Every arm resolves the default branch before it reads HEAD: the branch `refs/remotes/origin/HEAD` names, else whichever of `main` and `master` the remote has, else `main`. Never compare against a literal `main`: on a repository whose default branch is `master` every pull would be skipped.
 - When a pull fails (a dirty tree, a diverged default branch), report it and stop.
 - When the main checkout's HEAD is a branch other than the default branch and other than the merged branch, a peer session holds it: skip the checkout and the pull, and say so.
-- Every worktree arm runs the pre-removal check, `bash .gaia/scripts/worktree-removal-check.sh --tree <worktree path>`, before it removes anything. It stops on a file under the tree's `.gaia-merge/` (unresolved update patches), on uncommitted changes, and on commits ahead of the branch's upstream while that ref exists. A non-zero exit ends cleanup with the worktree and branch kept: no `ExitWorktree` removal, no `git worktree remove --force`, no branch delete, no pull, no install.
-- A stop is reported, never swallowed. Relay the check's whole output (the paths, the unpushed count, the `.gaia-merge/` files, and the next step with the exact removal commands), and the calling run's report names the kept worktree. An unattended run puts it in its final report, so kept worktrees never pile up silently.
+- Every worktree arm runs the pre-removal check, `bash .gaia/scripts/worktree-removal-check.sh --tree <worktree path>`, before it removes anything. It stops on uncommitted changes (untracked files included), and on commits ahead of the branch's upstream while that ref exists. A non-zero exit ends cleanup with the worktree and branch kept: no `ExitWorktree` removal, no `git worktree remove --force`, no branch delete, no pull, no install.
+- A stop is reported, never swallowed. Relay the check's whole output (the paths, the unpushed count, and the next step with the exact removal commands), and the calling run's report names the kept worktree. An unattended run puts it in its final report, so kept worktrees never pile up silently.
 - The worktree arms run `pnpm install --frozen-lockfile` in the main checkout only when the pull ran and `pnpm-lock.yaml` differs between the pre-pull and post-pull HEAD. When the pull fails or is skipped, run no install and print the pull and the install as the next steps. A failed install is reported with its next step and does not undo the removal.
 
 Why the worktree arms carry no `git checkout`, why the worktree removal needs `--force`, why the check stops before it, and why the install is conditional: `wiki/concepts/PR Merge Workflow.md`, `### Cleanup under worktree isolation`.
@@ -118,7 +118,7 @@ The session entered the tree with `EnterWorktree({name})` in this session. First
 bash .gaia/scripts/worktree-removal-check.sh --tree <worktree path>
 ```
 
-A non-zero exit stops here: relay its output and call nothing below. A tree whose branch predates the script has no copy of it (exit 127): then run the plain `ls -A <worktree path>/.gaia-merge` and the plain `git -C <worktree path> status --porcelain`, and stop, relaying the output and the matching next step above, when the first lists any file or the second lists anything outside `.gaia-merge/`. An absent folder and an empty status are clear.
+A non-zero exit stops here: relay its output and call nothing below. A tree whose branch predates the script has no copy of it (exit 127): then run the plain `git -C <worktree path> status --porcelain`, and stop, relaying the output and the matching next step above, when it lists anything. An empty status is clear.
 
 On a clear check, call:
 

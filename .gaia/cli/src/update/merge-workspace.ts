@@ -15,16 +15,9 @@
  * tool so comments, key order, and quote style survive (js-yaml `dump` would
  * strip every comment).
  *
- * Verdict table (identical to the package.json step), per managed key or per
- * `overrides` / `allowBuilds` entry key, with baseline `B` / latest `L` /
- * adopter `A`:
- *
- *   in B and L, B == L                     → no-op  (adopter's value stands)
- *   in B and L, B != L, A present, A == B  → apply  (take latest)
- *   in B and L, B != L, A present, A != B  → conflict (keep adopter, note both)
- *   in B and L, B != L, A removed          → suggestion (removed-then-changed)
- *   in L, not in B                         → suggestion (added)
- *   in B, not in L                         → no-op  (adopter keeps theirs)
+ * The verdict table, the deferred-baseline override and the conflict
+ * recommendation are shared with `merge-package` and `merge-audit-ci`: see
+ * `field-verdict.ts`.
  *
  * Object-map dispatch and no-switch style per the project's typescript rules.
  */
@@ -35,14 +28,27 @@ import {EXIT_CODES} from '../exit.js';
 import {structuredError} from '../stderr.js';
 import {parseValueFlags} from '../util/parse-value-flags.js';
 import type {ValueFlagMap} from '../util/parse-value-flags.js';
+import {
+  asRecord,
+  classifyTriples,
+  extractDeferredBaselines,
+  lookup,
+  renderHumanReport,
+  triplesWithDeferred,
+} from './field-verdict.js';
+import type {FieldMergeReport, Triple, VerdictItem} from './field-verdict.js';
 
-const HELP_TEXT = `Usage: gaia update merge-workspace --baseline <file> --latest <file> --current <file> [--json]
+const HELP_TEXT = `Usage: gaia update merge-workspace --baseline <file> --latest <file> --current <file> [--deferred-baseline <key>=<file>]... [--json]
 
   Field-aware three-way verdict for pnpm-workspace.yaml. Reads three YAML
   files (baseline / latest tarball + working-tree current), classifies the
   GAIA-managed keys and the adopter-shared overrides / allowBuilds maps, and
-  reports {applied, conflicts, suggestions} (JSON with --json, a human summary
-  otherwise).
+  reports {applied, conflicts, alreadyLatest, keptRemoved, removedUpstream}
+  (JSON with --json, a human summary otherwise).
+
+  --deferred-baseline <key>=<file> reads that key's baseline from <file>
+  instead of --baseline, so a key deferred at an earlier bundle is merged
+  against it. <key> is section.key (or the bare key). Repeatable.
 
   Read-only: never writes the workspace file. The /update-gaia skill applies
   the 'applied' entries with the Edit tool to preserve comments and order.
@@ -77,25 +83,16 @@ const MANAGED_WHOLE_VALUE_KEYS: readonly string[] = [
  */
 const SHARED_MAP_SECTIONS: readonly string[] = ['overrides', 'allowBuilds'];
 
-export type WorkspaceMergeReport = {
-  applied: WorkspaceVerdictItem[];
-  conflicts: WorkspaceVerdictItem[];
-  suggestions: WorkspaceVerdictItem[];
-};
+export type WorkspaceMergeReport = FieldMergeReport;
 
-export type WorkspaceVerdictItem = {
-  adopter?: unknown;
-  baseline?: unknown;
-  key: string;
-  kind: 'entry' | 'key';
-  latest?: unknown;
-  reason?: 'added' | 'removed-then-changed';
-  section?: string;
-};
+export type WorkspaceVerdictItem = VerdictItem;
+
+type DeferredPaths = ReadonlyMap<string, string>;
 
 type Flags = {
   baseline: string;
   current: string;
+  deferred: DeferredPaths;
   json: boolean;
   latest: string;
 };
@@ -110,7 +107,11 @@ const VALUE_FLAGS: ValueFlagMap<keyof Flags> = {
 };
 
 const parseFlags = (argv: readonly string[]): ParsedFlagsResult => {
-  const parsed = parseValueFlags(argv, VALUE_FLAGS);
+  const split = extractDeferredBaselines(argv);
+
+  if (!split.ok) return split;
+
+  const parsed = parseValueFlags(split.rest, VALUE_FLAGS);
 
   if (!parsed.ok) return parsed;
 
@@ -127,97 +128,11 @@ const parseFlags = (argv: readonly string[]): ParsedFlagsResult => {
   if (current === undefined)
     return {message: '--current is required', ok: false};
 
-  return {flags: {baseline, current, json, latest}, ok: true};
+  return {
+    flags: {baseline, current, deferred: split.deferred, json, latest},
+    ok: true,
+  };
 };
-
-const deepEqual = (a: unknown, b: unknown): boolean => {
-  if (a === b) return true;
-  if (a === null || b === null) return a === b;
-  if (typeof a !== typeof b) return false;
-
-  if (Array.isArray(a) || Array.isArray(b)) {
-    if (!Array.isArray(a) || !Array.isArray(b)) return false;
-    if (a.length !== b.length) return false;
-
-    return a.every((value, index) => deepEqual(value, b[index]));
-  }
-
-  if (typeof a === 'object' && typeof b === 'object') {
-    const aKeys = Object.keys(a);
-    const bKeys = Object.keys(b);
-
-    if (aKeys.length !== bKeys.length) return false;
-
-    return aKeys.every((key) =>
-      deepEqual(
-        (a as Record<string, unknown>)[key],
-        (b as Record<string, unknown>)[key]
-      )
-    );
-  }
-
-  return false;
-};
-
-type Presence = {has: boolean; value: unknown};
-
-const lookup = (root: Record<string, unknown>, key: string): Presence =>
-  Object.hasOwn(root, key) ?
-    {has: true, value: root[key]}
-  : {has: false, value: undefined};
-
-const asRecord = (value: unknown): Record<string, unknown> =>
-  typeof value === 'object' && value !== null && !Array.isArray(value) ?
-    (value as Record<string, unknown>)
-  : {};
-
-type Verdict =
-  'apply' | 'conflict' | 'noop' | 'suggest-add' | 'suggest-removed';
-
-const computeVerdict = (b: Presence, l: Presence, a: Presence): Verdict => {
-  if (b.has && l.has) {
-    if (deepEqual(b.value, l.value)) return 'noop';
-    if (!a.has) return 'suggest-removed';
-    if (deepEqual(a.value, b.value)) return 'apply';
-
-    return 'conflict';
-  }
-
-  if (l.has) return 'suggest-add';
-
-  return 'noop';
-};
-
-type Triple = {
-  a: Presence;
-  b: Presence;
-  key: string;
-  kind: 'entry' | 'key';
-  l: Presence;
-  section?: string;
-};
-
-const buildItem = (triple: Triple): WorkspaceVerdictItem => {
-  const item: WorkspaceVerdictItem = {key: triple.key, kind: triple.kind};
-
-  if (triple.section !== undefined) item.section = triple.section;
-  if (triple.b.has) item.baseline = triple.b.value;
-  if (triple.l.has) item.latest = triple.l.value;
-  if (triple.a.has) item.adopter = triple.a.value;
-
-  return item;
-};
-
-// U+0000 separates section from key because collation ignores it entirely, so
-// items order by section-then-key with nothing of the separator's own weight
-// competing in the comparison. It stays written as an escape: a raw NUL byte
-// here lands inside git's binary-sniff window and makes the whole file read as
-// binary, which drops it out of `git grep` and every plain-text diff.
-const sortKey = (item: WorkspaceVerdictItem): string =>
-  `${item.section ?? ''}\u0000${item.key}`;
-
-const bySortKey = (a: WorkspaceVerdictItem, b: WorkspaceVerdictItem): number =>
-  sortKey(a).localeCompare(sortKey(b));
 
 const buildManagedKeyTriples = (
   baseline: Record<string, unknown>,
@@ -230,6 +145,7 @@ const buildManagedKeyTriples = (
     key,
     kind: 'key' as const,
     l: lookup(latest, key),
+    versionValued: false,
   }));
 
 type MapEntryTriplesArgs = {
@@ -259,89 +175,18 @@ const buildMapEntryTriples = ({
     kind: 'entry' as const,
     l: lookup(latestSection, key),
     section,
+    versionValued: section === 'overrides',
   }));
 };
 
-type ClassifiedTriples = {
-  applied: WorkspaceVerdictItem[];
-  conflicts: WorkspaceVerdictItem[];
-  suggestions: WorkspaceVerdictItem[];
-};
-
-const classifyTriples = (triples: readonly Triple[]): ClassifiedTriples => {
-  const applied: WorkspaceVerdictItem[] = [];
-  const conflicts: WorkspaceVerdictItem[] = [];
-  const suggestions: WorkspaceVerdictItem[] = [];
-
-  for (const triple of triples) {
-    const verdict = computeVerdict(triple.b, triple.l, triple.a);
-
-    if (verdict !== 'noop') {
-      const item = buildItem(triple);
-
-      if (verdict === 'apply') {
-        applied.push(item);
-      } else if (verdict === 'conflict') {
-        conflicts.push(item);
-      } else {
-        item.reason =
-          verdict === 'suggest-add' ? 'added' : 'removed-then-changed';
-        suggestions.push(item);
-      }
-    }
-  }
-
-  return {applied, conflicts, suggestions};
-};
-
-const computeReport = (
-  baseline: Record<string, unknown>,
-  latest: Record<string, unknown>,
-  current: Record<string, unknown>
-): WorkspaceMergeReport => {
-  const triples = [
+const buildTriples =
+  (latest: Record<string, unknown>, current: Record<string, unknown>) =>
+  (baseline: Record<string, unknown>): Triple[] => [
     ...buildManagedKeyTriples(baseline, latest, current),
     ...SHARED_MAP_SECTIONS.flatMap((section) =>
       buildMapEntryTriples({baseline, current, latest, section})
     ),
   ];
-
-  const {applied, conflicts, suggestions} = classifyTriples(triples);
-
-  return {
-    applied: applied.toSorted(bySortKey),
-    conflicts: conflicts.toSorted(bySortKey),
-    suggestions: suggestions.toSorted(bySortKey),
-  };
-};
-
-const printHuman = (report: WorkspaceMergeReport): void => {
-  const lines = [
-    'gaia update merge-workspace',
-    `  Applied:     ${report.applied.length}`,
-    `  Conflicts:   ${report.conflicts.length}`,
-    `  Suggestions: ${report.suggestions.length}`,
-  ];
-
-  const label = (item: WorkspaceVerdictItem): string =>
-    item.section === undefined ? item.key : `${item.section}.${item.key}`;
-
-  const sections: [string, readonly WorkspaceVerdictItem[]][] = [
-    ['Applied', report.applied],
-    ['Conflicts', report.conflicts],
-    ['Suggestions', report.suggestions],
-  ];
-
-  for (const [heading, items] of sections) {
-    if (items.length > 0) {
-      lines.push('', `${heading}:`);
-
-      for (const item of items) lines.push(`  ${label(item)}`);
-    }
-  }
-
-  process.stdout.write(`${lines.join('\n')}\n`);
-};
 
 type LoadResult =
   | {
@@ -416,8 +261,19 @@ export const run = (
   ];
 
   const roots: Record<string, unknown>[] = [];
+  const deferredRoots = new Map<string, Record<string, unknown>>();
+  const deferredInputs: [string, string, string][] = [
+    ...parsed.flags.deferred,
+  ].map(([key, file]) => [
+    key,
+    `deferred baseline ${key}`,
+    resolvePath(cwd, file),
+  ]);
 
-  for (const [role, absPath] of inputs) {
+  for (const [key, role, absPath] of [
+    ...inputs.map(([name, file]): [string, string, string] => ['', name, file]),
+    ...deferredInputs,
+  ]) {
     const result = loadWorkspace(absPath, role);
 
     if (!result.ok) {
@@ -430,7 +286,11 @@ export const run = (
       return EXIT_CODES.UNKNOWN_SUBCOMMAND;
     }
 
-    roots.push(result.root);
+    if (key === '') {
+      roots.push(result.root);
+    } else {
+      deferredRoots.set(key, result.root);
+    }
   }
 
   const [baseline, latest, current] = roots as [
@@ -438,12 +298,16 @@ export const run = (
     Record<string, unknown>,
     Record<string, unknown>,
   ];
-  const report = computeReport(baseline, latest, current);
+  const report = classifyTriples(
+    triplesWithDeferred(buildTriples(latest, current), baseline, deferredRoots)
+  );
 
   if (parsed.flags.json) {
     process.stdout.write(`${JSON.stringify(report)}\n`);
   } else {
-    printHuman(report);
+    process.stdout.write(
+      renderHumanReport('gaia update merge-workspace', report)
+    );
   }
 
   return EXIT_CODES.OK;

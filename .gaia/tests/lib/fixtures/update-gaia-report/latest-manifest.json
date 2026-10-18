@@ -1,0 +1,7 @@
+{"version":"2.0.7","generated":[],"regions":{},"files":{
+"skip.md":"owned","overwrite.md":"owned","merge.md":"shared","auto.md":"shared","autoc.md":"shared","pending.md":"shared",
+"oc-text-conflict.md":"shared","oc-fallback.md":"shared","oc-same-gaia.md":"shared","oc-same-adopter.md":"shared",
+"oc-contradictory.md":"shared","oc-binary.md":"owned","oc-merge-error.md":"shared","oc-absent-baseline.md":"shared",
+"add.md":"owned","deferred.md":"shared",
+"package.json":"shared","frontend/package.json":"shared","pnpm-workspace.yaml":"shared",".gaia/audit-ci.yml":"shared",
+"wiki/concepts/Design System.md":"wiki-owned","frontend/.claude/rules/design-baseline.md":"owned"}}
