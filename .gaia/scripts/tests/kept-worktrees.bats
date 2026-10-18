@@ -3,86 +3,17 @@
 # post-merge cleanup kept and the session-start reminder that lists them, and
 # for the record call worktree-removal-check.sh makes when it stops a removal.
 #
-# Every case builds a throwaway repository under BATS_TEST_TMPDIR (a bare
-# origin, a main checkout, and a linked worktree on a pushed branch) and runs
-# copies of the scripts staged side by side, so a red twin can mutate one copy
-# and leave the other real. No case touches the real repository.
+# Every case runs against the throwaway repository and staged script copies
+# helpers/kept-worktrees-fixture.sh builds; no case touches the real
+# repository. Which trees count as orphaned (merged, no live session, not the
+# session's own tree) is kept-worktrees-orphan.bats.
 #
 # Assertion style: .claude/rules/bats-assertions.md.
 
 setup() {
-  REPO_ROOT="$(cd "${BATS_TEST_DIRNAME}/../../.." && pwd)"
-  unset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE GIT_COMMON_DIR GIT_PREFIX
-  export GIT_CONFIG_GLOBAL=/dev/null
-  export GIT_CONFIG_NOSYSTEM=1
-  export GIT_AUTHOR_NAME="Fixture" GIT_AUTHOR_EMAIL="fixture@example.invalid"
-  export GIT_COMMITTER_NAME="Fixture" GIT_COMMITTER_EMAIL="fixture@example.invalid"
-  BRANCH=feat-tree
-  make_tree "$BATS_TEST_TMPDIR/fixture"
-  stage_scripts
-}
-
-# make_tree <dir>: sets MAIN, TREE and LEDGER. The worktree holds BRANCH, which
-# is pushed with its upstream set and sits level with its remote-tracking ref.
-# Both paths are physical, the spelling git itself prints for a worktree.
-make_tree() {
-  local dir=$1
-  mkdir -p "$dir" || return 1
-  dir=$(cd "$dir" && pwd -P) || return 1
-  git init -q --bare -b main "$dir/origin.git" || return 1
-  MAIN="$dir/main-checkout"
-  git init -q -b main "$MAIN" || return 1
-  git -C "$MAIN" remote add origin "$dir/origin.git" || return 1
-  printf 'base\n' >"$MAIN/base" || return 1
-  git -C "$MAIN" add base || return 1
-  git -C "$MAIN" commit -q -m base || return 1
-  git -C "$MAIN" push -q -u origin main 2>/dev/null || return 1
-  git -C "$MAIN" branch "$BRANCH" || return 1
-  git -C "$MAIN" push -q -u origin "$BRANCH" 2>/dev/null || return 1
-  TREE="$dir/tree"
-  git -C "$MAIN" worktree add -q "$TREE" "$BRANCH" || return 1
-  LEDGER="$MAIN/.gaia/local/kept-worktrees.tsv"
-}
-
-# stage_scripts: copies the check, the ledger script and the main-root library
-# into one directory, the layout the scripts find each other by.
-stage_scripts() {
-  SCRIPTS="$BATS_TEST_TMPDIR/scripts"
-  mkdir -p "$SCRIPTS" || return 1
-  cp "$REPO_ROOT/.gaia/scripts/worktree-removal-check.sh" \
-    "$REPO_ROOT/.gaia/scripts/kept-worktrees.sh" \
-    "$REPO_ROOT/.gaia/scripts/main-root-lib.sh" "$SCRIPTS/" || return 1
-  CHECK="$SCRIPTS/worktree-removal-check.sh"
-  KEPT="$SCRIPTS/kept-worktrees.sh"
-}
-
-# mutate <script name> <sed args...>: rewrites the staged copy in place; fails
-# when the mutation changed nothing, so a twin cannot go vacuous.
-mutate() {
-  local name=$1
-  shift
-  sed "$@" "$REPO_ROOT/.gaia/scripts/$name" >"$SCRIPTS/$name.mutated" || return 1
-  if cmp -s "$SCRIPTS/$name.mutated" "$REPO_ROOT/.gaia/scripts/$name"; then
-    echo "the mutation changed nothing"
-    return 1
-  fi
-  mv "$SCRIPTS/$name.mutated" "$SCRIPTS/$name"
-}
-
-seed_ledger() { # tree branch why
-  mkdir -p "${LEDGER%/*}" || return 1
-  printf '%s\t%s\t%s\n' "$1" "$2" "$3" >>"$LEDGER"
-}
-
-remind() { # [directory]
-  run bash "$KEPT" remind "${1:-$MAIN}"
-}
-
-# gone_upstream: deletes BRANCH on the origin and prunes, so the tree's
-# upstream reads [gone], the state a squash merge leaves after a later prune.
-gone_upstream() {
-  git -C "$MAIN" push -q origin --delete "$BRANCH" 2>/dev/null || return 1
-  git -C "$MAIN" fetch -q --prune origin || return 1
+  # shellcheck source=.gaia/scripts/tests/helpers/kept-worktrees-fixture.sh
+  . "$BATS_TEST_DIRNAME/helpers/kept-worktrees-fixture.sh"
+  kept_worktrees_setup
 }
 
 # --- the record the check makes ---
@@ -93,7 +24,7 @@ gone_upstream() {
   [ "$status" -eq 1 ] || { printf '%s\n' "$output"; return 1; }
   remind
   [ "$status" -eq 0 ] || { printf '%s\n' "$output"; return 1; }
-  printf '%s\n' "$output" | grep -Fxq -- "- $TREE (branch $BRANCH): uncommitted changes" || { printf '%s\n' "$output"; return 1; }
+  plain_output | grep -Fxq -- "- $TREE (branch $BRANCH): uncommitted changes" || { printf '%s\n' "$output"; return 1; }
   printf '%s\n' "$output" | grep -Fq "git worktree remove --force $TREE" || { printf '%s\n' "$output"; return 1; }
   printf '%s\n' "$output" | grep -Fq "git branch -D $BRANCH" || { printf '%s\n' "$output"; return 1; }
 }
@@ -116,7 +47,7 @@ gone_upstream() {
   run bash "$CHECK" --tree "$TREE"
   [ "$status" -eq 1 ] || { printf '%s\n' "$output"; return 1; }
   remind
-  printf '%s\n' "$output" | grep -Fxq -- "- $TREE (branch $BRANCH): unresolved .gaia-merge/ files, uncommitted changes, 1 unpushed commit(s)" || { printf '%s\n' "$output"; return 1; }
+  plain_output | grep -Fxq -- "- $TREE (branch $BRANCH): unresolved .gaia-merge/ files, uncommitted changes, 1 unpushed commit(s)" || { printf '%s\n' "$output"; return 1; }
 }
 
 @test "a CLEAR verdict records nothing" {
@@ -179,7 +110,7 @@ blocked_ledger_run() {
   seed_ledger "$TREE" "$BRANCH" "uncommitted changes"
   remind
   [ "$status" -eq 0 ] || { printf '%s\n' "$output"; return 1; }
-  printf '%s\n' "$output" | grep -Fxq -- "- $TREE (branch $BRANCH): uncommitted changes" || { printf '%s\n' "$output"; return 1; }
+  plain_output | grep -Fxq -- "- $TREE (branch $BRANCH): uncommitted changes" || { printf '%s\n' "$output"; return 1; }
   printf '%s\n' "$output" | grep -Fq "git worktree remove --force $TREE" || { printf '%s\n' "$output"; return 1; }
 }
 
@@ -195,7 +126,7 @@ blocked_ledger_run() {
   gone_upstream || return 1
   remind
   [ "$status" -eq 0 ] || { printf '%s\n' "$output"; return 1; }
-  printf '%s\n' "$output" | grep -Fxq -- "- $TREE (branch $BRANCH): its upstream branch is gone" || { printf '%s\n' "$output"; return 1; }
+  plain_output | grep -Fxq -- "- $TREE (branch $BRANCH): merged, and its upstream branch is gone" || { printf '%s\n' "$output"; return 1; }
   printf '%s\n' "$output" | grep -Fq "git branch -D $BRANCH" || { printf '%s\n' "$output"; return 1; }
 }
 
@@ -228,7 +159,7 @@ blocked_ledger_run() {
   gone_upstream || return 1
   remind
   [ "$(printf '%s\n' "$output" | grep -c -- "^- $TREE ")" -eq 1 ] || { printf '%s\n' "$output"; return 1; }
-  printf '%s\n' "$output" | grep -Fxq -- "- $TREE (branch $BRANCH): uncommitted changes" || { printf '%s\n' "$output"; return 1; }
+  plain_output | grep -Fxq -- "- $TREE (branch $BRANCH): uncommitted changes" || { printf '%s\n' "$output"; return 1; }
 }
 
 @test "a live branch is not listed, level or ahead of its upstream" {
@@ -241,7 +172,7 @@ blocked_ledger_run() {
 }
 
 @test "red twin: a reminder that reads any tracking state as gone lists a live branch" {
-  mutate kept-worktrees.sh -e 's/substr(references\[i\], tab + 1) == "\[gone\]"/1/' || return 1
+  mutate kept-worktrees.sh -e 's/fields\[2\] == "\[gone\]"/1/' || return 1
   remind
   printf '%s\n' "$output" | grep -Fq -- "- $TREE" || { printf 'stayed green: %s\n' "$output"; return 1; }
 }
@@ -254,7 +185,7 @@ blocked_ledger_run() {
 }
 
 @test "red twin: a reminder without the empty guard prints a header for nothing" {
-  mutate kept-worktrees.sh -e 's/^  \[ -n "\$kept" \] || return 0$/  :/' || return 1
+  mutate kept-worktrees.sh -e 's/^  \[ -n "\$candidates" \] || return 0$/  :/' -e 's/^  if \[ -n "\$listing" \]; then$/  if true; then/' || return 1
   git -C "$MAIN" worktree remove --force "$TREE" || return 1
   remind
   [ -n "$output" ] || { printf 'stayed green\n'; return 1; }
@@ -314,7 +245,7 @@ blocked_ledger_run() {
 @test "the reminder from inside the linked worktree reads the main checkout's ledger" {
   seed_ledger "$TREE" "$BRANCH" "uncommitted changes"
   remind "$TREE"
-  printf '%s\n' "$output" | grep -Fxq -- "- $TREE (branch $BRANCH): uncommitted changes" || { printf '%s\n' "$output"; return 1; }
+  plain_output | grep -Fxq -- "- $TREE (branch $BRANCH): uncommitted changes" || { printf '%s\n' "$output"; return 1; }
 }
 
 @test "the --main-root form lists the same trees as the resolved form" {
@@ -323,7 +254,7 @@ blocked_ledger_run() {
   local resolved_output=$output
   run bash "$KEPT" remind --main-root "$MAIN"
   [ "$status" -eq 0 ] || return 1
-  printf '%s\n' "$output" | grep -Fxq -- "- $TREE (branch $BRANCH): uncommitted changes" || { printf '%s\n' "$output"; return 1; }
+  plain_output | grep -Fxq -- "- $TREE (branch $BRANCH): uncommitted changes" || { printf '%s\n' "$output"; return 1; }
   [ "$output" = "$resolved_output" ] || { printf '%s\n---\n%s\n' "$output" "$resolved_output"; return 1; }
 }
 
@@ -353,7 +284,7 @@ blocked_ledger_run() {
   seed_ledger "$BATS_TEST_TMPDIR/gone-tree" other "uncommitted changes"
   run /bin/bash "$KEPT" remind "$MAIN"
   [ "$status" -eq 0 ] || { printf '%s\n' "$output"; return 1; }
-  printf '%s\n' "$output" | grep -Fxq -- "- $TREE (branch $BRANCH): uncommitted changes" || { printf '%s\n' "$output"; return 1; }
+  plain_output | grep -Fxq -- "- $TREE (branch $BRANCH): uncommitted changes" || { printf '%s\n' "$output"; return 1; }
   [ "$(grep -c '' "$LEDGER")" -eq 1 ] || { cat "$LEDGER"; return 1; }
   local old_shell_output=$output
   remind

@@ -536,6 +536,17 @@
       "reaped_by": "the kept-worktree reminder (kept-worktrees.sh remind) drops the line of a tree git no longer lists as a live worktree"
     },
     {
+      "id": "worktree-occupancy",
+      "path": "worktree-occupancy/",
+      "match": "prefix",
+      "kind": "dir",
+      "scope": "shared",
+      "keyed_by": "Claude Code session id, one file per session holding the tree root it last provisioned or entered",
+      "why": "Lets the kept-worktree reminder leave out a tree a live Claude session is working in. Main-anchored so a session in any tree is seen from every other.",
+      "writer": "code",
+      "reaped_by": "the kept-worktree reminder deletes a record once the session's host process has exited"
+    },
+    {
       "id": "ports-tombstones",
       "path": "ports/tombstones/",
       "match": "prefix",

@@ -304,8 +304,27 @@ kept_tree_fixture() {
   invoke_hook_in "$REPO" '' "$hook"
   [ "$status" -eq 0 ]
   [ "$(printf '%s\n' "$output" | head -n 1)" = "$REPORT_LINE" ] || { printf '%s\n' "$output"; return 1; }
-  printf '%s\n' "$output" | grep -Fxq -- "- $WORKTREE_PATH (branch wt-branch): uncommitted changes" || { printf '%s\n' "$output"; return 1; }
+  printf '%s\n' "$output" | grep -Fq -- "- $WORKTREE_PATH (branch wt-branch, last commit " || { printf '%s\n' "$output"; return 1; }
   printf '%s\n' "$output" | grep -Fq "git worktree remove --force $WORKTREE_PATH" || { printf '%s\n' "$output"; return 1; }
+}
+
+@test "a session starting inside a kept tree is not shown its own tree" {
+  REPO=$("$HELPERS/tmp-git-repo.sh")
+  kept_tree_fixture
+  invoke_hook_in "$WORKTREE_PATH" '' "$hook"
+  [ "$status" -eq 0 ]
+  printf '%s\n' "$output" | grep -Fq -- "- $WORKTREE_PATH" && { printf 'own tree listed: %s\n' "$output"; return 1; }
+  true
+}
+
+@test "guard: a hook that passes no own tree shows a session its own tree" {
+  REPO=$("$HELPERS/tmp-git-repo.sh")
+  kept_tree_fixture
+  grep -q -- '--own-tree "$_own_tree"' "$hook" || return 1
+  sed -e 's/ --own-tree "\$_own_tree"//' "$hook" > "$hook.mutated"
+  mv "$hook.mutated" "$hook"
+  invoke_hook_in "$WORKTREE_PATH" '' "$hook"
+  printf '%s\n' "$output" | grep -Fq -- "- $WORKTREE_PATH" || { printf 'stayed green: %s\n' "$output"; return 1; }
 }
 
 @test "guard: a hook without the reminder call prints no reminder" {

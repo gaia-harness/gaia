@@ -60,7 +60,7 @@ The sourced libraries under `.claude/hooks/lib/` are deliberately absent. They a
 | `pr-merge-audit-check.sh` | PreToolUse (Bash, Monitor) | Blocks `gh pr merge` until every dispatched Code Audit Team member has written its clearance marker. |
 | `pr-merge-cost.sh` | PostToolUse (Bash) | Renders the per-PR usage-ledger block, the Code Audit Team line included, once a pull request merges. |
 | `ports-session-start.sh` | SessionStart (startup\|resume\|clear\|compact) | Registers the session host so its servers stay attributable; stops dead sessions' and removed trees' servers on a real start only. |
-| `provision-worktree.sh` | PostToolUse (EnterWorktree), SessionStart (startup\|resume) | Re-links a linked worktree's shared state, assigns its port slot and port file, and regenerates what it needs generated. |
+| `provision-worktree.sh` | PostToolUse (EnterWorktree), SessionStart (startup\|resume) | Re-links a linked worktree's shared state, records which session is in it, assigns its port slot and port file, and regenerates what it needs generated. |
 | `red-verify-commit-check.sh` | PreToolUse (Bash, Monitor) | Denies `git commit` when a new-at-HEAD passing test has no matching failing run on record. |
 | `usage-capture.sh` | Stop, SessionStart (startup\|resume) | Launches the detached usage flusher and returns. |
 | `wiki-session-start.sh` | SessionStart (startup\|resume) | Runs `local-janitor.sh`, then prints the janitor's one-line base-catch-up report and the kept-worktree reminder on SessionStart stdout. |
