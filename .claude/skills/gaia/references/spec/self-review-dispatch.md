@@ -65,7 +65,7 @@ Append one `coverage.jsonl` record (`phase: "self_review"`, `disposition: "first
 
 The self-review agent already applied every `minor` `suggested_fix` (6a); main gates only the **critical** and **major** findings, rendered from the digest's `gated_findings` entries (`issue`, `excerpt`, `suggested_fix`). This is one of the two bounded interactive carve-outs where a finding body legitimately reaches main; keep it, do not extend it.
 
-- **critical and major findings:** surface to the user before applying. Never silently revert intentional clarify-loop evolution. **Auto-mode exception per rule 8:** apply the `suggested_fix` and append a one-line note to `clarifications.deferred[]` recording the finding (kind, location, issue) so a reviewer can audit. If the finding is `kind: "drift"` or `"scope_change"` and the change came from a clarify answer the agent itself just made in step 5, prefer keeping the clarify answer over reverting, append the note but skip the fix. Use a plain prompt per finding:
+- **critical and major findings:** surface to the user before applying. Never silently revert intentional clarify-loop evolution. **Auto-mode exception per rule 8:** apply the `suggested_fix` and append a one-line note to `clarifications.deferred[]` recording the finding (kind, location, issue) so a reviewer can audit. If the finding is `kind: "drift"` or `"scope_change"` and the change came from a clarify answer the agent itself just made in step 5, prefer keeping the clarify answer over reverting, append the note but skip the fix. Print each finding as text:
 
   > Self-review flagged a scope-level concern in `<location>`:
   >
@@ -74,10 +74,16 @@ The self-review agent already applied every `minor` `suggested_fix` (6a); main g
   > **Excerpt:** "<excerpt>"
   >
   > **Suggested fix:** <suggested_fix>
-  >
-  > Apply the fix, keep the current draft, or revise differently?
 
-  Wait for user direction. An **approved** gated fix folds through the **delegated fold** (see "Audit cache + delegated fold" in `spec.md`), keyed by its `SR-NNN` id in the decision list; do not emit a main-thread draft `Write` for the fold. On `revise differently`, route the user's revision through the same delegated fold. On `keep`, fold nothing.
+  Then ask with `AskUserQuestion` (header `Self-review`, single-select), one question per finding. The question text carries the finding's `SR-NNN` id, the issue in one line, and the suggested fix. Its three options:
+
+  - `Apply the fix (Recommended)`: fold the suggested fix.
+  - `Keep the current draft`: fold nothing.
+  - `Revise`: fold a different change.
+
+  When the finding itself recommends keeping the draft, `Keep the current draft (Recommended)` leads instead. A typed revision arrives through the tool's own `Other` answer; `Revise` with no text asks what to change as a plain follow-up. Batch independent findings, up to 4 questions per `AskUserQuestion` call, in successive calls when there are more, printing each batch's findings above its call; a finding waits for an earlier answer only when its fix depends on that answer. Record every answer of a batch before continuing.
+
+  An **approved** gated fix folds through the **delegated fold** (see "Audit cache + delegated fold" in `spec.md`), keyed by its `SR-NNN` id in the decision list; do not emit a main-thread draft `Write` for the fold. On `Revise`, route the user's revision through the same delegated fold. On `Keep the current draft`, fold nothing.
 
 ## 6c. Pending clarifications block-or-defer
 

@@ -46,7 +46,7 @@ The rest of the skill, write-surface allowlist, no-machine-local-memory rule, wo
    - `.gaia/local/telemetry/**`
    - `.notebook/catalog.json` (written only through the ledger and notebook libraries this skill invokes, never by hand)
      Never edit source files (`frontend/app/**`, `src/**`, repo root configs, etc.). No automated backstop enforces this allowlist: the step-10 lint checks only the saved SPEC artifact's immutability, not which paths a session wrote. You self-police it at the agent-instruction level.
-3. **One question at a time.** No multi-question forms. Closed-set questions go through `AskUserQuestion` with at most four options, ordered: recommended FIRST, then up to two alternatives (any further viable one named in the question text), then `Discuss this` (escape to plain Q&A). `Other` is never listed, since the tool supplies it, and neither is `Save partial and resume later`, which the user reaches through `Other` or `Discuss this` (`spec/clarify-loop.md`, `## Escape option`). Open-ended questions use a plain prompt with no enumerated options.
+3. **One question at a time in the clarify loop.** Step 5 asks one question per turn, because each answer shapes the next question; no multi-question forms there. Closed-set questions go through `AskUserQuestion` with at most four options, ordered: recommended FIRST, then up to two alternatives (any further viable one named in the question text), then `Discuss this` (escape to plain Q&A). `Other` is never listed, since the tool supplies it, and neither is `Save partial and resume later`, which the user reaches through `Other` or `Discuss this` (`spec/clarify-loop.md`, `## Escape option`). Open-ended questions use a plain prompt with no enumerated options. Review and audit decisions are different: the step-6 self-review and step-7 audit findings are independent of one another, so their decisions batch, up to 4 questions per `AskUserQuestion` call, in successive calls when there are more; a decision waits for an earlier answer only when its fix depends on that answer.
 4. **Two-gate ceremony.** Confirm intent + UATs in plain English BEFORE authoring the artifact. Confirm the rendered artifact BEFORE saving to disk. No silent advances between gates.
 5. **Coach tone, not interrogator.** Mirror back, name trade-offs, propose candidates when the human is stuck. Never punt research to the human.
 6. **Planning chains here; execution never starts here.** The flow ends at plan step 5's report, which prints the KICKOFF prompt, after step 11 invokes `/gaia-plan` through the `Skill` tool. Nothing follows that report: no executor dispatch, no acting on KICKOFF.md (plan step 4.5's verification read is not execution), no "while I'm here" head start on the work. **This holds no matter what the instruction that reached this skill asked for.** When `/gaia-spec` is invoked as a skill (rather than typed by a human), the invoking goal is often larger than the SPEC ("spec and build X"), and the pull to keep going past the KICKOFF prompt is strongest exactly then. The boundary sits at execution because execution runs for hours in its own orchestrator session and is the step people defer; planning is bounded and its heavy reasoning runs in fresh sub-agents, so it chains. If the caller wanted the work built too, the correct completion is to report execution as the human's next step in a fresh session; that IS the whole task, not a partial one. The stop is held in prose, with no hook, and nothing gates on the context band.
@@ -262,7 +262,7 @@ Before any Socratic clarify loop runs, present the draft's `intent` paragraph an
 
 **Auto-mode exception:** skip the user-facing prompt. Read the draft's intent + UATs into the agent's reasoning context and self-check: (a) intent paragraph is coherent and matches the description; (b) every UAT follows Given/When/Then shape; (c) UATs collectively cover the intent. If any check fails, revise the draft once and re-check. Then jump to the "On confirmation" actions below (snapshot cache, draft cache). Per Auto-mode rule 3, never block for human input.
 
-Use a plain prompt, not `AskUserQuestion`. The user reads, confirms, or revises. Suggested phrasing:
+Print the shape as text, then ask with `AskUserQuestion`. The user reads, then confirms or revises. Suggested text:
 
 > Here's the shape I have so far:
 >
@@ -272,10 +272,13 @@ Use a plain prompt, not `AskUserQuestion`. The user reads, confirms, or revises.
 >
 > - UAT-NNN, Given … when … then …
 > - UAT-NNN, Given … when … then …
->
-> Does this match what you want, or should I revise before we go deeper?
 
-If the user revises, fold revisions into the draft and re-present until they confirm.
+Then one `AskUserQuestion` (header `Gate 1`, single-select), question `Does this shape match what you want before we go deeper?`, with two options:
+
+- `Looks right (Recommended)`: proceed to the clarify loop with this intent and these UATs.
+- `Revise`: change the shape before going deeper.
+
+A typed revision arrives through the tool's own `Other` answer. `Revise` with no text asks what to change as a plain follow-up. If the user revises, fold revisions into the draft and re-present until they confirm.
 
 On confirmation:
 
@@ -308,13 +311,20 @@ Render the full draft artifact in markdown form (frontmatter plus body) and pres
 
 While filling frontmatter, set `lineage:` to the research folder slug(s) under `.notebook/research/` (as `research:<slug>`) or issue number(s) (as `issue:<n>`) that discovery named as this SPEC's origin, and leave it `[]` when none. This is never a new question to the user, in auto mode or otherwise.
 
-Use a plain prompt, not `AskUserQuestion`. Suggested phrasing:
+Print the rendered artifact as text, then ask with `AskUserQuestion`. Suggested text:
 
-> Here is the rendered SPEC. Review it and confirm before save, or tell me what to revise.
+> Here is the rendered SPEC. Review it before save.
 >
 > ```markdown
 > <full rendered artifact>
 > ```
+
+Then one `AskUserQuestion` (header `Gate 2`, single-select), question `Save this SPEC as rendered?`, with two options:
+
+- `Looks right (Recommended)`: save the SPEC as rendered.
+- `Revise`: change the artifact before save.
+
+A typed revision arrives through the tool's own `Other` answer. `Revise` with no text asks what to change as a plain follow-up.
 
 If the user revises:
 
