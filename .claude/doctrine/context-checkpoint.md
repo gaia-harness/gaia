@@ -10,7 +10,7 @@ This session's context reached a checkpoint band. The hook cannot see whether a 
 
 ## Stopping point
 
-Act only at a stopping point: no background task, sub-agent or monitor is running and nothing is half-applied. The hook cannot detect this; you judge it. Not at one yet: finish the step, then act.
+Act only at a stopping point: no background task, sub-agent or monitor is running and nothing is half-applied. Not at one yet: finish the step, then act.
 
 ## Save first, then ask
 
@@ -37,7 +37,7 @@ At fire and skull, always recommend `Clear and resume`, whatever the remaining w
 ## Answers
 
 - `Continue here`: keep working until the next band.
-- `Clear and resume`: print one instruction line (run `/clear`, then paste the prompt below) and a continuation prompt in a fenced code block with info string `text`, naming the state file path, the goal and the next step. It carries its own context and never points at this session's scrollback. Then end the turn with no further tool calls.
+- `Clear and resume`: print one instruction line (run `/clear`, then paste the prompt below) and a continuation prompt naming the state file path, the goal and the next step. Then end the turn with no further tool calls.
 
 ## Carry the run's cost across
 

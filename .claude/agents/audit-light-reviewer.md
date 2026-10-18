@@ -1,6 +1,6 @@
 ---
 name: audit-light-reviewer
-description: 'Dispatched only by the audit-loop unit on a Light route: reads one delta file and replies with one JSON verdict. Never invoked directly.'
+description: 'Dispatched only by the audit-loop unit on a Light route. Never invoked directly.'
 model: sonnet
 effort: medium
 tools: Read

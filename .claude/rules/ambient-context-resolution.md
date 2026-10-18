@@ -15,7 +15,7 @@ Every mechanism acts on a subject: a repository root, a working tree, a base com
 ## Anti-pattern
 
 - A hook that gates a command runs `git rev-parse --show-toplevel` or `git diff` in its own working directory, while the command it gates targets another tree through `git -C <path>` or a `cd` inside the command string.
-- A script derives the main checkout's root, or an audit base, with its own inline `git` chain instead of calling the shared resolver, so it agrees with the resolver today and diverges on the next worktree or fallback case.
+- A script derives the root of the main checkout (the clone's primary working directory, on any branch), or an audit base, with its own inline `git` chain instead of calling the shared resolver, so it agrees with the resolver today and diverges on the next worktree or fallback case.
 - A workflow step reads `git rev-parse HEAD` or the default branch when the event payload already names the commit or base ref it is acting for.
 - A bats suite exercises a script without pinning the tree it acts on, so it passes from the repository root and fails, or passes vacuously, from a worktree or in CI.
 

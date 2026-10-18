@@ -11,7 +11,7 @@ macOS ships bash 3.2.57 as `/bin/bash`, which is what bats-core resolves to by d
 
 A bash-3.2 local `bats` run is a **weaker signal than CI** (ubuntu bash 5), and the gap is not limited to the `[[ ]]` skip above. A second, independent gap is BSD-vs-GNU CLI divergence: a macOS-only green misses commands that only exist in one flavor. The concrete case is `date -v` (BSD) versus `date -d` (GNU): the losing form exits non-zero on Linux, and under bats' `set -e` that aborts the test before any fallback runs.
 
-Run bats through the guard in `.gaia/scripts/bats5.sh` instead of calling `bats` directly: `source .gaia/scripts/bats5.sh`, then call `bats5` wherever the rest of this page says `bats` (or run `.gaia/scripts/bats5.sh <args>` directly). It prefers a Homebrew bash 5 when one is installed (Apple Silicon: `/opt/homebrew/bin/bash`, Intel: `/usr/local/bin/bash`) and warns loudly on stderr when the bash bats will actually use resolves to major version < 4, so the warning fires only where the gap is real (silent on any bash 5 host, macOS or Linux).
+Run bats through the guard in `.gaia/scripts/bats5.sh` instead of calling `bats` directly: `source .gaia/scripts/bats5.sh`, then call `bats5` wherever the rest of this page says `bats` (or run `.gaia/scripts/bats5.sh <args>` directly). It prefers a Homebrew bash 5 and warns on stderr only when the bash bats will use is older than 4.
 
 ## `!`-negated assertions never fail a non-final test line (all bash versions)
 
@@ -38,7 +38,7 @@ The mirror image, and the reason the two forms swap places: `&& return 1` is saf
 
 ## A guard over a set derives the set and asserts per element
 
-A different axis from everything above. Those sections decide whether an assertion *can* fail. This one decides whether it covers what its name claims. A guard that pins one representative element and names itself for the set is green, non-vacuous, and still blind to every element it never drove.
+Those sections decide whether an assertion *can* fail; this one decides whether it covers what its name claims.
 
 **The rule: a guard over a set derives the set from the artifact that owns it and asserts per element. It never asserts one element and names itself for the set.**
 

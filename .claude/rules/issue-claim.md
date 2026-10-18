@@ -16,7 +16,7 @@ Already carrying `in-progress` means someone else holds it. Say so and pick diff
 gh issue edit <n> --add-label in-progress
 ```
 
-The window the claim exists to close is the one between picking the work and having a branch that names it, so claiming after isolation closes nothing.
+Outside a GAIA skill, before the first edit this session will commit, read and follow `.claude/skills/gaia/references/work-lifecycle.md`: it covers the claim, branch name, isolation, draft PR, audit, merge when asked, and cleanup.
 
 ## Release
 
@@ -25,4 +25,3 @@ The window the claim exists to close is the one between picking the work and hav
 ## Scope
 
 Claim a `tech-debt` issue only through `/gaia-debt`, never by hand: it owns that claim and the stale-claim reconcile that would release a hand-set one.
-- Outside a GAIA skill, before the first edit this session will commit, read and follow `.claude/skills/gaia/references/work-lifecycle.md`: it covers the claim, branch name, isolation, draft PR, audit, merge when asked, and cleanup.

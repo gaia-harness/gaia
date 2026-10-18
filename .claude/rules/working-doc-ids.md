@@ -25,7 +25,7 @@ Code, comments, test names, user-facing strings, and prose never cite the projec
 
 ## Why
 
-These ids and paths point at documents no other reader can open. A SPEC or plan lives under the gitignored `.gaia/local/` or `.notebook/` on the one machine that wrote it and is deleted when the plan is archived, so a teammate, a CI run, or an adopter meeting the id has nothing to follow. The ids are per-project working references: they get renumbered, superseded, or deleted, and an adopter's SPEC of the same number is a different document. A reference to a closed or historical issue adds nothing the change's history does not already record, and it stays behind after the reasoning it stood for has moved on.
+These ids and paths point at documents no other reader can open: a SPEC or plan lives under the gitignored `.gaia/local/` or `.notebook/` on one machine and is deleted when archived, and an adopter's SPEC of the same number is a different document. A reference to a closed or historical issue adds nothing the change's history does not already record.
 
 The usual way one gets written is copying: a plan task doc cites the directive it honors, and the executor copies the citation into the file it edits. A directive id belongs in the plan, never in the files the plan changes.
 

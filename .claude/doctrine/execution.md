@@ -7,6 +7,7 @@ This session is on a working branch or in a linked worktree, so it executes. The
 - Read-only advisors investigate and write plan JSON; the main thread decides; executors edit files; a verifier checks executor output against the plan JSON before the Quality Gate.
 - Only the main thread runs git that changes state: stage, commit, push, branch. Executors and advisors never run git that changes state; read-only queries such as `git rev-parse` are allowed.
 - The main thread runs the Quality Gate (`wiki/decisions/Quality Gate.md`) once per commit: after that commit's executors finish and the verifier passes, and before the commit.
+- To open, merge and clean up this branch's pull request, follow `.claude/skills/gaia/references/work-lifecycle.md` (`## 7. Merge (when asked)` and `## 8. Cleanup`); a running command's own contract still governs.
 
 ## Inline floor
 
@@ -20,7 +21,7 @@ One per normalized branch key, `branch:` prefix dropped, slashes nesting: `branc
 - One JSON artifact per dispatch, named `<role>-<round>-<slug>.json`.
 - `log.md`, append-only. Append only with Bash (`printf '...\n' >> <abs path>/log.md`), never Edit or Write, so appending never loads it.
 
-In a linked worktree, `.gaia/local` resolves into the shared main checkout: write the run-folder files, and append `log.md`, with Bash at the main checkout's absolute path, then read them back; never through Edit or Write there.
+In a linked worktree, `.gaia/local` resolves into the shared main checkout (the clone's primary working directory, on any branch): write the run-folder files, and append `log.md`, with Bash at the main checkout's absolute path, then read them back; never through Edit or Write there.
 
 ## Resume
 
@@ -28,7 +29,4 @@ Read `STATE.md` and list the artifacts. Never read `log.md`. Re-dispatch any dis
 
 ## Initiative linking and research
 
-Once per branch, unless the branch name already derives the issue edge, link the initiative: `bash .gaia/scripts/usage.sh link branch:<normalized> research:<date>-<topic>` (or `issue:<n>`). The key line above this doctrine carries the concrete command for the current key.
-
-Every worktree shares one `.gaia/local`, so run folders are keyed by branch and never shared. A research Write binds only when made with the Write tool to the main checkout's absolute `.notebook/research/<date>-<topic>/...` path; a worktree-relative or symlinked path (including `<wt>/.notebook/...`) does not bind. Research done with Edit or Bash binds with `bash .gaia/scripts/usage.sh declare research:<date>-<topic>`. A binding re-keys only `session:` spend.
-- To open, merge and clean up this branch's pull request, follow `.claude/skills/gaia/references/work-lifecycle.md` (`## 7. Merge (when asked)` and `## 8. Cleanup`); a running command's own contract still governs.
+Once per branch, run the key line's `usage.sh link` command unless the branch name already derives the issue edge. How a research write binds: `wiki/concepts/Workflow Doctrine.md` (`## Research attribution`).

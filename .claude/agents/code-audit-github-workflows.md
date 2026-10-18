@@ -1,6 +1,6 @@
 ---
 name: code-audit-github-workflows
-description: 'Audits GitHub Actions workflow YAML and composite-action YAML for supply-chain, injection, permission, and secret-handling defects. Read-only: reports findings and gates its marker; edits no tracked file. One member of the Code Audit Team gate.'
+description: 'Dispatched only by the audit loop as the workflow-YAML member of the Code Audit Team: read-only audit for supply-chain, injection, permission and secret defects. Never invoked directly.'
 model: opus
 effort: medium
 color: purple

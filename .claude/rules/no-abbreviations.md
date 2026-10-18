@@ -30,7 +30,7 @@ paths:
 
 # No Abbreviations
 
-Spell out words in full unless the abbreviation is universally known (`url`, `id`, `api`). This is one piece of the descriptive-naming standard in the `naming-conventions` skill, which follows Apple's Swift API Design Guidelines: names should be clear at the point of use without consulting documentation.
+Spell out words in full unless the abbreviation is universally known (`url`, `id`, `api`). The `naming-conventions` skill carries the wider standard.
 
 It applies wherever a name is coined, not only in application code: a GitHub Actions job, an env var name, a Dockerfile `ARG` or `ENV` name.
 

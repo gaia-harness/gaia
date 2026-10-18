@@ -28,8 +28,6 @@ Reactivity is biased toward action: more alarm, more fixes, more scope, never le
 
 Fetch wiki pages on demand, never preloaded: start at `wiki/index.md`, take only the page you need, and stay in your domain (technical work is `wiki/{modules,concepts,decisions,flows,dependencies}/`).
 
-Wiki prose follows `.claude/rules/wiki-style.md` and code comments follow `.claude/rules/code-comments.md`; both auto-load on the paths they govern, and neither covers every path this repo edits.
-
 ## Universal Principles
 
 - No hardcoded secrets or tokens in source; use environment variables.

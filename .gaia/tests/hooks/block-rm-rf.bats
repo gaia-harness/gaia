@@ -1194,15 +1194,14 @@ t'
 # it was spelled, so the denial only ever fired when a harmless sibling like
 # `rm -rf dist` happened to share the invocation. Nothing was prevented that
 # dropping the sibling would not have carried straight through; the cost was
-# denying prose that quotes a non-recursive `rm`, including this repo's own
-# always-loaded shell-cwd rule.
+# denying prose that quotes a non-recursive `rm`.
 
 @test "an unflagged rm segment is not judged on a sibling's flag" {
   run_hook_bash 'rm -rf dist && rm /abs/path/file'
   assert_allowed_by_json
 }
 
-@test "a heredoc quoting shell-cwd.md's own example beside a real rm -rf is allowed" {
+@test "a heredoc quoting a non-recursive rm example beside a real rm -rf is allowed" {
   run_hook_bash 'rm -rf dist
 cat > /tmp/body.md <<EOF
 - `rm /abs/path/file`, not `cd /abs/path && rm file`

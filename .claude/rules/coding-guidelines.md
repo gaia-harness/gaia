@@ -21,6 +21,4 @@ When building new features or fixing bugs, follow the TDD workflow described in 
 
 ## 4. Always Verify Your Work
 
-Quality Gate: `.claude/rules/quality-gate.md`.
-
-Don't hand-polish formatting or auto-fixable lint while authoring, the gate's `pnpm lint` (`eslint --fix`, with Prettier wired in as an `eslint` rule) normalizes it in one terminal pass. Spend tokens only on non-auto-fixable lint.
+Leave formatting and auto-fixable lint to the gate's `pnpm lint` (`eslint --fix`, with Prettier wired in as an `eslint` rule), which normalizes it in one terminal pass; spend tokens only on non-auto-fixable lint.
