@@ -1,8 +1,8 @@
 #!/usr/bin/env bats
 #
 # Doc-conformance suite for the post-merge cleanup, owned by the shared
-# work-lifecycle reference: it pulls `main` into the main checkout only when
-# that checkout is on `main`, and its worktree arms still run no `git checkout`.
+# work-lifecycle reference: it pulls the default branch into the main checkout
+# only when that checkout is on it, and its worktree arms still run no `git checkout`.
 #
 # Every check is a function taking a root laid out like the repository, so the
 # red twins run the same function against a mutated scratch copy: removing a
@@ -14,7 +14,8 @@ setup() {
   REPO_ROOT="$(cd "$BATS_TEST_DIRNAME/../../.." && pwd)"
   REFERENCES='.claude/skills/gaia/references'
   RUNBOOK='wiki/concepts/PR Merge Workflow.md'
-  PULL='pull --ff-only origin main'
+  PULL='pull --ff-only origin "$default_branch"'
+  PULL_PATTERN='pull --ff-only origin "\$default_branch"'
 }
 
 # section <file> <heading prefix>: prints the section whose heading line starts
@@ -60,8 +61,8 @@ scratch_copy() {
 worktree_arm_pulls() {
   local path_arm prose
   path_arm="$(section "$1/$REFERENCES/work-lifecycle.md" '### Worktree entered by path or in an earlier session')"
-  fence_bodies bash <<<"$path_arm" | grep -qE -- "git( -C ([^ <][^ ]*|<[^>]*>))? $PULL" || return 1
-  fence_bodies bash <<<"$path_arm" | grep -qF -- '= main ]' || return 1
+  fence_bodies bash <<<"$path_arm" | grep -qE -- "git( -C ([^ <][^ ]*|<[^>]*>))? $PULL_PATTERN" || return 1
+  fence_bodies bash <<<"$path_arm" | grep -qF -- '= "$default_branch" ]' || return 1
   prose="$(section "$1/$REFERENCES/work-lifecycle.md" '## 8. Cleanup')"
   grep -qF -- 'skip the checkout and the pull' <<<"$prose" || return 1
   grep -qF -- 'Never force a pull, and never stash' <<<"$prose"
@@ -95,7 +96,7 @@ main_checkout_paragraph_uses_digest() {
   fi
 }
 
-@test "the worktree arm pulls main only when the main checkout holds main, and never forces" {
+@test "the worktree arm pulls the default branch only when the main checkout holds it, and never forces" {
   worktree_arm_pulls "$REPO_ROOT"
 }
 

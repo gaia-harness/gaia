@@ -347,16 +347,18 @@ The execution agent's work ends at Step 9, it returns its `UpdateMergeReport`, a
 
 ### Step 11: Open a pull request
 
-After the Step 10 commit lands, `/update-gaia` must not leave the branch stranded: open a PR so the update can be reviewed and merged. The orchestrator waits for the user to confirm the commit landed; the checks below are a backstop, not a replacement for that confirmation. `<branch>` is the update branch (`<branch-name>`, the resumed branch, or the current branch in modes 1 and 3). Run each as its own plain command, in order, stopping on a failure and printing the worktree notice on a worktree run:
+After the Step 10 commit lands, `/update-gaia` must not leave the branch stranded: open a PR so the update can be reviewed and merged. The orchestrator waits for the user to confirm the commit landed; the checks below are a backstop, not a replacement for that confirmation. `<branch>` is the update branch (`<branch-name>`, the resumed branch, or the current branch in modes 1 and 3). Run each as its own plain command, in order, stopping on a failure and printing the worktree notice on a worktree run.
 
-1. `git -C <acting tree> fetch origin main`
-2. `git -C <acting tree> rev-list --count origin/main..<branch>`: `0` means nothing is committed, so tell the user to finish Step 10 and stop.
+`<default branch>` is the repository's default branch, never a literal `main`. Read it first with `git -C <acting tree> symbolic-ref --quiet --short refs/remotes/origin/HEAD`, which prints `origin/<name>`; carry `<name>` as a typed literal. When it prints nothing, run `git -C <acting tree> branch -r --list origin/main origin/master` and take `main` when it lists `origin/main`, else `master` when it lists `origin/master`, else `main`.
+
+1. `git -C <acting tree> fetch origin <default branch>`
+2. `git -C <acting tree> rev-list --count origin/<default branch>..<branch>`: `0` means nothing is committed, so tell the user to finish Step 10 and stop.
 3. `git -C <acting tree> show <branch>:.gaia/VERSION` must print `<LATEST>`; otherwise the update commit is not on `<branch>`, so say so and stop.
-4. `git -C <acting tree> push -u origin <branch>`; on a failure, relay git's error and tell the user to open the PR manually: `<branch>` → `main`.
-5. `gh pr list --head <branch> --state open --json number,url`: when one is open, report that the push updated it. Otherwise run `gh pr create --draft --base main --head <branch> --title "chore(gaia): update to <LATEST_TAG>" --body "Pulls GAIA <LATEST_TAG> into the project. Per-file outcomes are in the update summary above."`
+4. `git -C <acting tree> push -u origin <branch>`; on a failure, relay git's error and tell the user to open the PR manually: `<branch>` → `<default branch>`.
+5. `gh pr list --head <branch> --state open --json number,url`: when one is open, report that the push updated it. Otherwise run `gh pr create --draft --base <default branch> --head <branch> --title "chore(gaia): update to <LATEST_TAG>" --body "Pulls GAIA <LATEST_TAG> into the project. Per-file outcomes are in the update summary above."`
 6. On a worktree run, print the worktree notice: a PR later closed unmerged leaves the user with the removal commands already in hand. Nothing is removed automatically; the PR's merge and cleanup run later through the PR Merge Workflow (`.claude/skills/gaia/references/work-lifecycle.md` `## 8. Cleanup`, which stops while `.gaia-merge/` holds a file).
 
-If `gh` is unavailable or errors, tell the user to open the PR manually: `<branch>` → `main`.
+If `gh` is unavailable or errors, tell the user to open the PR manually: `<branch>` → `<default branch>`.
 
 ### Step 12: Offer the residue sweep
 
