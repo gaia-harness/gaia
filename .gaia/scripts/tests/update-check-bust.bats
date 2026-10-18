@@ -230,3 +230,103 @@ write_cache_with_claims() {
   [ "$status" -eq 2 ]
   cmp "$CACHE" "$BATS_TEST_TMPDIR/original"
 }
+
+write_cache_behind_origin() {
+  cat >"$CACHE" <<'JSON'
+{
+  "outdatedCount": 3,
+  "checkedAt": 1000,
+  "gaiaCurrent": "2.0.3",
+  "gaiaLatest": "2.0.5",
+  "gaiaOriginVersion": "2.0.4",
+  "gaiaHasUpdate": true,
+  "gaiaUpdateClaims": [{"number": 41, "login": "ada"}],
+  "cleanseMemoryBaseline": {"files": 12, "bytes": 3456}
+}
+JSON
+}
+
+@test "pull sets gaiaCurrent and gaiaOriginVersion to the version" {
+  write_cache_behind_origin
+  run bash "$BUST" --cache "$CACHE" --mode pull --version 2.0.4
+  [ "$status" -eq 0 ]
+  [ "$output" = "BUSTED" ]
+  [ "$(jq -r '.gaiaCurrent' "$CACHE")" = "2.0.4" ]
+  [ "$(jq -r '.gaiaOriginVersion' "$CACHE")" = "2.0.4" ]
+}
+
+@test "pull keeps a newer release visible: gaiaHasUpdate true and gaiaLatest untouched" {
+  write_cache_behind_origin
+  run bash "$BUST" --cache "$CACHE" --mode pull --version 2.0.4
+  [ "$status" -eq 0 ]
+  [ "$(jq '.gaiaHasUpdate' "$CACHE")" = "true" ]
+  [ "$(jq -r '.gaiaLatest' "$CACHE")" = "2.0.5" ]
+}
+
+@test "pull clears gaiaHasUpdate when gaiaLatest is the pulled version" {
+  write_cache_behind_origin
+  jq '.gaiaLatest = "2.0.4"' "$CACHE" >"$BATS_TEST_TMPDIR/edited"
+  cp "$BATS_TEST_TMPDIR/edited" "$CACHE"
+  run bash "$BUST" --cache "$CACHE" --mode pull --version 2.0.4
+  [ "$status" -eq 0 ]
+  [ "$(jq '.gaiaHasUpdate' "$CACHE")" = "false" ]
+}
+
+@test "pull zeroes checkedAt so the next render refreshes" {
+  write_cache_behind_origin
+  run bash "$BUST" --cache "$CACHE" --mode pull --version 2.0.4
+  [ "$status" -eq 0 ]
+  [ "$(jq '.checkedAt' "$CACHE")" = "0" ]
+}
+
+@test "pull carries the claims and every other field across" {
+  write_cache_behind_origin
+  local expected actual
+  expected="$(jq -S 'del(.gaiaCurrent, .gaiaOriginVersion, .gaiaHasUpdate, .checkedAt)' "$CACHE")"
+  run bash "$BUST" --cache "$CACHE" --mode pull --version 2.0.4
+  [ "$status" -eq 0 ]
+  actual="$(jq -S 'del(.gaiaCurrent, .gaiaOriginVersion, .gaiaHasUpdate, .checkedAt)' "$CACHE")"
+  [ "$actual" = "$expected" ]
+  [ "$(jq -c '[.gaiaUpdateClaims[].number]' "$CACHE")" = "[41]" ]
+}
+
+@test "pull replaces the cache file and leaves no temp file behind" {
+  write_cache_behind_origin
+  run bash "$BUST" --cache "$CACHE" --mode pull --version 2.0.4
+  [ "$status" -eq 0 ]
+  [ -f "$CACHE" ]
+  [ "$(find "$BATS_TEST_TMPDIR" -name '.update-check-bust.*' | wc -l | tr -d ' ')" = "0" ]
+}
+
+@test "pull on a missing cache prints SKIPPED no cache and creates nothing" {
+  run bash "$BUST" --cache "$CACHE" --mode pull --version 2.0.4
+  [ "$status" -eq 0 ]
+  [ "$output" = "SKIPPED no cache" ]
+  [ ! -e "$CACHE" ]
+}
+
+@test "pull rejects a version that is not x.y.z and leaves the cache byte-identical" {
+  local bad_version
+  write_cache_behind_origin
+  cp "$CACHE" "$BATS_TEST_TMPDIR/original"
+  for bad_version in 2.0 latest 2.0.4.1 v2.0.4 ''; do
+    run bash "$BUST" --cache "$CACHE" --mode pull --version "$bad_version"
+    [ "$status" -eq 2 ]
+    cmp "$CACHE" "$BATS_TEST_TMPDIR/original"
+  done
+}
+
+@test "pull accepts a prerelease version" {
+  write_cache_behind_origin
+  run bash "$BUST" --cache "$CACHE" --mode pull --version 2.0.4-rc.1
+  [ "$status" -eq 0 ]
+  [ "$(jq -r '.gaiaCurrent' "$CACHE")" = "2.0.4-rc.1" ]
+}
+
+@test "pull with --drop-claim exits 2" {
+  write_cache_behind_origin
+  cp "$CACHE" "$BATS_TEST_TMPDIR/original"
+  run bash "$BUST" --cache "$CACHE" --mode pull --version 2.0.4 --drop-claim 41
+  [ "$status" -eq 2 ]
+  cmp "$CACHE" "$BATS_TEST_TMPDIR/original"
+}

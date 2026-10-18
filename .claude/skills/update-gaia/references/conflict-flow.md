@@ -2,6 +2,13 @@
 
 The orchestrator reads this file at the "Conflict flow" step of `../SKILL.md`, after Step 4b, and follows it in full: dispatch, report check, judgment chunks, clean merges, questions, applied answers with the decision log, and the follow-ups. "The stop rule" below is the one in `../SKILL.md` Step 4, on Proceed. This file ends when the decisions are recorded and the follow-ups are done; `../SKILL.md` then continues at Step 9b.
 
+Contents:
+
+- Model selection and dispatch
+- Questions
+- Apply answers and record decisions
+- Follow-ups
+
 ## Model selection and dispatch
 
 From here on every command runs with the working directory at the acting tree. Scripts are called at `<main checkout path>/.gaia/scripts/`, because the merge walk may rewrite or remove the acting tree's copies and the orchestrator keeps following the text it already read. `<run dir>` is the typed literal `<main checkout path>/.gaia/local/cache/shared/update-gaia/run`; it sits under `.gaia/local`, so from a worktree every write to it goes through Bash, never Edit or Write.

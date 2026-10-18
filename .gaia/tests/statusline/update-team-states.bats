@@ -1,8 +1,9 @@
 #!/usr/bin/env bats
 
-# The update nudge (slot 1) resolves to one of three states from the cache
-# alone: a teammate's live update claim ("in progress"), the reader's own
-# claim ("resume"), or a plain available update. The in-progress nudge names a
+# The update nudge (slot 1) resolves to one of four states from the cache and
+# the live local version file: a checkout behind origin ("pull"), a teammate's
+# live update claim ("in progress"), the reader's own claim ("resume"), or a
+# plain available update. The in-progress nudge names a
 # teammate and a version and carries no command, so it never shrinks past its
 # Medium form: the loop keeps shrinking every other nudge and, when even that
 # does not fit, the line renders past the available width with the `+N`.
@@ -214,4 +215,117 @@ render_at() {
   PATH="$BATS_TEST_TMPDIR/bin:$PATH" HOME="$TEMPORARY_HOME" COLUMNS=200 bash -c "printf '%s' '$json' | bash '$SCRIPT'" < /dev/null > /dev/null
   sleep 2
   [ ! -s "$BATS_TEST_TMPDIR/gh.log" ]
+}
+
+# Origin ahead of the checkout's own version file, with a teammate's live claim
+# and a plain update both cached underneath.
+write_pull_cache() {
+  printf '%s' '{"gaiaHasUpdate":true,"gaiaLatest":"2.0.5","gaiaOriginVersion":"'"${1:-2.0.4}"'","ghLogin":"me","gaiaUpdateClaims":[{"number":7,"tag":"v2.0.4","authorLogin":"octo-cat"}]}' > "$CACHE_FILE"
+}
+
+@test "origin ahead of the live local version renders the pull nudge, with or without a teammate's claim" {
+  printf '2.0.3\n' > "$MAIN/.gaia/VERSION"
+  write_pull_cache
+  render_at 120
+  [ "$status" -eq 0 ]
+  [ "$right_side" = "🚀 /update-gaia (pull 2.0.4)" ]
+  render_at 40
+  [ "$right_side" = "🚀 /update-gaia" ]
+  printf '%s' '{"gaiaOriginVersion":"2.0.4"}' > "$CACHE_FILE"
+  render_at 120
+  [ "$right_side" = "🚀 /update-gaia (pull 2.0.4)" ]
+}
+
+@test "the pull nudge keeps its slot at every width and never shows progress or resume text" {
+  printf '2.0.3' > "$MAIN/.gaia/VERSION"
+  printf '%s' '{"gaiaOriginVersion":"2.0.4","ghLogin":"me","gaiaUpdateClaims":[{"number":7,"tag":"v2.0.4","authorLogin":"octo-cat"},{"number":9,"tag":"v2.0.4","authorLogin":"me"}],"outdatedCount":28,"codifyNudgeReason":"1 new pattern","codifyCandidateCount":6,"residueCandidateCount":15,"cleanseNudge":true,"cleanseNudgeReason":"34 days since review"}' > "$CACHE_FILE"
+  printf '{"openCount":1}' > "$MAIN/.gaia/local/debt/count.json"
+  local width
+  for width in 300 200 150 120 100 80 60 50 40 30; do
+    render_at "$width"
+    [ "$status" -eq 0 ]
+    case "$right_side" in *"in progress"*|*"resume"*|*"⌛"*) return 1 ;; esac
+    case "$right_side" in "🚀 "*) ;; *) echo "width $width: got [$right_side]" >&2; return 1 ;; esac
+  done
+  render_at 300
+  case "$right_side" in "🚀 /update-gaia (pull 2.0.4) │ "*) ;; *) return 1 ;; esac
+}
+
+@test "the local version is read live: bumping only the version file removes pull" {
+  printf '2.0.3\n' > "$MAIN/.gaia/VERSION"
+  write_pull_cache
+  render_at 120
+  [ "$right_side" = "🚀 /update-gaia (pull 2.0.4)" ]
+  printf '2.0.4\n' > "$MAIN/.gaia/VERSION"
+  render_at 120
+  [ "$right_side" = "⌛️ GAIA 2.0.4 in progress (@octo-cat)" ]
+}
+
+@test "a missing or non-version local file renders no pull" {
+  write_pull_cache
+  render_at 120
+  [ "$right_side" = "⌛️ GAIA 2.0.4 in progress (@octo-cat)" ]
+  printf 'garbage\n' > "$MAIN/.gaia/VERSION"
+  render_at 120
+  [ "$right_side" = "⌛️ GAIA 2.0.4 in progress (@octo-cat)" ]
+  : > "$MAIN/.gaia/VERSION"
+  render_at 120
+  [ "$right_side" = "⌛️ GAIA 2.0.4 in progress (@octo-cat)" ]
+}
+
+@test "a non-version origin value renders no pull" {
+  printf '2.0.3\n' > "$MAIN/.gaia/VERSION"
+  local origin
+  for origin in '"latest"' '7' 'null' '"2.0"' '"v2.0.4"' '"2.0.4\n"'; do
+    printf '%s' '{"gaiaHasUpdate":true,"gaiaLatest":"2.0.5","gaiaOriginVersion":'"$origin"'}' > "$CACHE_FILE"
+    render_at 120
+    [ "$right_side" = "🚀 /update-gaia (2.0.5)" ] || {
+      echo "origin $origin: got [$right_side]" >&2
+      return 1
+    }
+  done
+}
+
+@test "versions compare by their numeric core, so 2.0.10 is ahead of 2.0.9 and a prerelease does not outrank its release" {
+  printf '2.0.9\n' > "$MAIN/.gaia/VERSION"
+  printf '%s' '{"gaiaOriginVersion":"2.0.10"}' > "$CACHE_FILE"
+  render_at 120
+  [ "$right_side" = "🚀 /update-gaia (pull 2.0.10)" ]
+  printf '2.0.4\n' > "$MAIN/.gaia/VERSION"
+  printf '%s' '{"gaiaOriginVersion":"2.0.4-rc.1"}' > "$CACHE_FILE"
+  render_at 120
+  [ -z "$right_side" ]
+}
+
+@test "the pull state arms without gh on the render path" {
+  printf '2.0.3\n' > "$MAIN/.gaia/VERSION"
+  write_pull_cache
+  mkdir -p "$MAIN/.gaia/scripts" "$BATS_TEST_TMPDIR/bin"
+  cp "$REPO_ROOT/.gaia/scripts/check-updates.sh" "$MAIN/.gaia/scripts/check-updates.sh"
+  printf '#!/bin/bash\necho "$@" >> "%s/gh.log"\nexit 1\n' "$BATS_TEST_TMPDIR" > "$BATS_TEST_TMPDIR/bin/gh"
+  chmod +x "$BATS_TEST_TMPDIR/bin/gh"
+  : > "$BATS_TEST_TMPDIR/gh.log"
+  jq --argjson now "$(date +%s)" '. + {checkedAt: $now, securitySource: "unavailable"}' "$CACHE_FILE" > "$CACHE_FILE.next"
+  mv "$CACHE_FILE.next" "$CACHE_FILE"
+  local json rendered
+  json=$(jq -n --arg current_directory "$MAIN" '{workspace: {current_dir: $current_directory}, cwd: $current_directory, model: {display_name: "Test"}, context_window: {used_percentage: 10}}')
+  rendered=$(PATH="$BATS_TEST_TMPDIR/bin:$PATH" HOME="$TEMPORARY_HOME" COLUMNS=200 bash -c "printf '%s' '$json' | bash '$SCRIPT'" < /dev/null)
+  case "$rendered" in *"pull 2.0.4"*) ;; *) return 1 ;; esac
+  sleep 2
+  [ ! -s "$BATS_TEST_TMPDIR/gh.log" ]
+}
+
+@test "an inverted version comparison renders pull for a local version ahead of origin, so the pull assertions fail on it" {
+  sed 's/\$origin_core > \$local_core/$origin_core < $local_core/' "$SCRIPT" > "$BATS_TEST_TMPDIR/inverted.sh"
+  cmp -s "$SCRIPT" "$BATS_TEST_TMPDIR/inverted.sh" && return 1
+  cp "$BATS_TEST_TMPDIR/inverted.sh" "$MAIN/.gaia/statusline/inverted.sh"
+  SCRIPT="$MAIN/.gaia/statusline/inverted.sh"
+  printf '2.0.4\n' > "$MAIN/.gaia/VERSION"
+  printf '%s' '{"gaiaOriginVersion":"2.0.3"}' > "$CACHE_FILE"
+  render_at 120
+  [ "$right_side" = "🚀 /update-gaia (pull 2.0.3)" ]
+  printf '2.0.3\n' > "$MAIN/.gaia/VERSION"
+  printf '%s' '{"gaiaOriginVersion":"2.0.4"}' > "$CACHE_FILE"
+  render_at 120
+  [ "$right_side" != "🚀 /update-gaia (pull 2.0.4)" ]
 }

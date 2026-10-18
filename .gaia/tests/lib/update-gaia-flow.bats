@@ -28,6 +28,7 @@ setup() {
   SKILL="$REPO_ROOT/.claude/skills/update-gaia/SKILL.md"
   CONFLICT_FLOW="$REPO_ROOT/.claude/skills/update-gaia/references/conflict-flow.md"
   CLAIM_REF="$REPO_ROOT/.claude/skills/update-gaia/references/claim-flow.md"
+  PULL_REF="$REPO_ROOT/.claude/skills/update-gaia/references/pull-mode.md"
   PREFLIGHT="$REPO_ROOT/.gaia/scripts/update-gaia-preflight.sh"
   SELECTOR="$REPO_ROOT/.gaia/scripts/select-migration-notes.sh"
   COPY="$BATS_TEST_TMPDIR/skill-copy.md"
@@ -210,9 +211,10 @@ default_arm_holds() {
     printf '%s\n' "$arm" | grep -qF 'Step 3b' && return 1
     printf '%s\n' "$arm" | grep -qF 'decision log check' && return 1
   done
-  for outcome in NONE RESUME_IN_WORKTREE RESUME_ADD_WORKTREE; do
+  for outcome in RESUME_IN_WORKTREE RESUME_ADD_WORKTREE; do
     arm_line "$section" "$outcome" | grep -qF 'Continue to the decision log check' || return 1
   done
+  arm_line "$section" NONE | grep -qF 'Continue to the pull check' || return 1
   arm="$(arm_line "$section" COMMITTED)"
   printf '%s\n' "$arm" | grep -qF 'gh pr list --head <branch> --state all --json number,state,url' || return 1
   printf '%s\n' "$arm" | grep -qF "the PR's state" || return 1
@@ -225,8 +227,8 @@ default_arm_holds() {
   default_arm_holds "$SKILL"
   sed 's|then opens the PR. Exit. Never resume|then opens the PR. Continue to Step 3b. Never resume|' "$SKILL" > "$COPY"
   default_arm_holds "$COPY" && return 1
-  # Failing state: a fresh run skipping the decision log check.
-  sed 's|a fresh run. Continue to the decision log check.|a fresh run. Continue to Step 3b.|' "$SKILL" > "$COPY"
+  # Failing state: a fresh run skipping the pull check.
+  sed 's|a fresh run. Continue to the pull check.|a fresh run. Continue to Step 3b.|' "$SKILL" > "$COPY"
   default_arm_holds "$COPY" && return 1
   sed 's|and the removal commands from the worktree notice|and nothing else|' "$SKILL" > "$COPY"
   default_arm_holds "$COPY" && return 1
@@ -678,20 +680,20 @@ claim_calls_without_tree() {
   [ -n "$(claim_calls_without_tree "$COPY")" ]
 }
 
-# 0 when file `$1` holds no forced push, no bypassed hook and no pull-mode name.
+# 0 when file `$1` holds no forced push, no bypassed hook and no pull gate name.
 no_forced_or_bypassed_git() {
   grep -qE 'push --force|push -f|--force-with-lease|--no-verify' "$1" && return 1
-  grep -qE 'pull mode|pull-gate|gaia_pull_gate' "$1" && return 1
+  grep -qE 'pull-gate|gaia_pull_gate' "$1" && return 1
   return 0
 }
 
-@test "no push is forced, no hook is bypassed, and no pull-mode name appears in the skill or the claim reference" {
+@test "no push is forced, no hook is bypassed, and no pull gate name appears in the skill or the claim reference" {
   no_forced_or_bypassed_git "$SKILL"
   no_forced_or_bypassed_git "$CLAIM_REF"
   # The worktree notice's own removal flag is not a push flag.
   grep -qF 'git worktree remove --force <worktree path>' "$SKILL"
   local needle
-  for needle in 'git push --force origin x' 'git push -f' 'git push --force-with-lease' 'git commit --no-verify' 'pull mode' 'gaia_pull_gate x'; do
+  for needle in 'git push --force origin x' 'git push -f' 'git push --force-with-lease' 'git commit --no-verify' 'pull-gate.md' 'gaia_pull_gate x'; do
     { cat "$SKILL"; printf '%s\n' "$needle"; } > "$COPY"
     no_forced_or_bypassed_git "$COPY" && { echo "not caught: $needle" >&2; return 1; }
     { cat "$CLAIM_REF"; printf '%s\n' "$needle"; } > "$COPY"
@@ -743,6 +745,187 @@ claim_step_11_holds() {
   sed -n 6p "$SKILL" | grep -qF 'Pre-flight: Claim check'
   sed -n 6p "$SKILL" | grep -qF 'references/claim-flow.md'
   sed 's|Pre-flight: Claim check|Pre-flight: Gone|' "$SKILL" | sed -n 6p | grep -qF 'Pre-flight: Claim check' && return 1
+  true
+}
+
+# --- Pull mode: the pull check and references/pull-mode.md -------------------------
+
+PULL_CHECK='## Pre-flight: Pull check'
+DECISION_LOG_HEADING='## Pre-flight: Decision log check'
+STEP_3C='## Step 3c: Download and verify the bundles'
+PULL_REF_LOCKFILE='## Step 3: Install when the lockfile changed'
+PULL_RESIDUE_CALL='bash <main checkout path>/.gaia/scripts/state-registry-lib.sh residue-sweep'
+PULL_BUST_CALL='bash <main checkout path>/.gaia/scripts/update-check-bust.sh --cache <main checkout path>/.gaia/local/cache/shared/update-check.json --mode pull --version <new version>'
+PULL_DRIFT_CALL='bash <main checkout path>/.gaia/scripts/update-gaia-drift.sh --features <main checkout path>/.gaia/setup-features.json --scope machine'
+PULL_INSTALL_CALL='pnpm -C <main checkout path> install --frozen-lockfile'
+
+# 0 when SKILL.md copy `$1` runs the pull check before the decision log check,
+# which runs before the claim check, which runs before Step 3c.
+pull_check_order_holds() {
+  exact_in_order "$1" "$PULL_CHECK" "$DECISION_LOG_HEADING" "$CLAIM_CHECK" "$STEP_3C" || return 1
+  sed -n 6p "$1" | grep -qF 'references/pull-mode.md' || return 1
+  return 0
+}
+
+@test "pull check: it precedes the decision log check, which precedes the claim check, which precedes Step 3c" {
+  pull_check_order_holds "$SKILL"
+  # Failing state: the pull check moved after the decision log check.
+  move_line_after "$SKILL" "$PULL_CHECK" "$DECISION_LOG_HEADING"
+  pull_check_order_holds "$COPY" && return 1
+  # Failing state: the decision log check moved after the claim check.
+  move_line_after "$SKILL" "$DECISION_LOG_HEADING" "$CLAIM_CHECK"
+  pull_check_order_holds "$COPY" && return 1
+  # Failing state: the pull check moved after Step 3c.
+  move_line_after "$SKILL" "$PULL_CHECK" "$STEP_3C"
+  pull_check_order_holds "$COPY" && return 1
+  # Failing state: the pull check gone.
+  grep -vxF -- "$PULL_CHECK" "$SKILL" > "$COPY"
+  pull_check_order_holds "$COPY" && return 1
+  # Failing state: the Contents line no longer names the reference.
+  sed '6s|references/pull-mode.md|references/gone.md|' "$SKILL" > "$COPY"
+  pull_check_order_holds "$COPY" && return 1
+  true
+}
+
+# 0 when SKILL.md copy `$1` limits the pull check to a fresh default-branch run,
+# reads origin's version with update-claim.sh, fails open on exit 3 and hands
+# off to the reference with the update-gaia caller.
+pull_check_content_holds() {
+  local section
+  section="$(section_file "$1" "$PULL_CHECK")" || return 1
+  grep -F 'Applies only in' "$section" | grep -qF 'mode 2' || return 1
+  grep -F 'Applies only in' "$section" | grep -qF '`NONE`' || return 1
+  grep -qxF 'bash .gaia/scripts/update-claim.sh origin-version --tree <main checkout path>' "$section" || return 1
+  grep -qF 'Exit 3' "$section" || return 1
+  grep -qF 'fails open' "$section" || return 1
+  grep -qF 'references/pull-mode.md' "$section" || return 1
+  grep -qF 'caller `update-gaia`' "$section" || return 1
+  return 0
+}
+
+@test "pull check: it names mode 2 and NONE, reads origin with update-claim.sh, fails open and follows pull-mode.md" {
+  pull_check_content_holds "$SKILL"
+  sed 's|^Applies only in mode 2 when|Applies in every mode when|' "$SKILL" > "$COPY"
+  pull_check_content_holds "$COPY" && return 1
+  sed 's|the classifier printed `NONE`|the classifier ran|' "$SKILL" > "$COPY"
+  pull_check_content_holds "$COPY" && return 1
+  sed 's|update-claim.sh origin-version --tree|update-claim.sh origin-version|' "$SKILL" > "$COPY"
+  pull_check_content_holds "$COPY" && return 1
+  sed 's|the check fails open|the check stops|' "$SKILL" > "$COPY"
+  pull_check_content_holds "$COPY" && return 1
+  sed 's|read `references/pull-mode.md` and follow it|continue|' "$SKILL" > "$COPY"
+  pull_check_content_holds "$COPY" && return 1
+  true
+}
+
+# Prints each line inside a fenced code block of file `$1` that runs a stash,
+# fetch, checkout, switch or reset, or carries --force. Prose is not checked.
+pull_command_violations() {
+  awk '
+    /^```/ { inside = !inside; next }
+    inside && ($0 ~ /git (-C [^ ]+ )?(stash|fetch|checkout|switch|reset)/ || index($0, "--force")) { print NR ": " $0 }
+  ' "$1"
+}
+
+@test "pull mode: no command line stashes, fetches, switches or resets, or forces, and prose prohibitions stay" {
+  local section_copy needle
+  section_copy="$(section_file "$SKILL" "$PULL_CHECK")"
+  [ -z "$(pull_command_violations "$PULL_REF")" ]
+  [ -z "$(pull_command_violations "$section_copy")" ]
+  # The prose prohibition is allowed, and the fence scan sees real blocks.
+  grep -qF 'It never stashes, never forces and never switches branches' "$PULL_REF"
+  [ "$(grep -c '^```bash$' "$PULL_REF")" -ge 6 ]
+  [ "$(grep -c '^```bash$' "$section_copy")" -ge 1 ]
+  # The frozen install carries --frozen-lockfile, not --force, so it stays clean.
+  grep -qF -- 'install --frozen-lockfile' "$PULL_REF"
+  # Failing state: each forbidden command inside a fence of the reference and of the skill's section.
+  for needle in 'git stash' 'git -C <main checkout path> fetch origin main' 'git checkout main' 'git switch main' 'git reset --hard' 'bash x pull --force'; do
+    awk -v added="$needle" '{ print } /^## Step 2: Pull$/ { print "```bash"; print added; print "```" }' "$PULL_REF" > "$COPY"
+    [ -n "$(pull_command_violations "$COPY")" ] || { echo "not caught: $needle" >&2; return 1; }
+    { cat "$section_copy"; printf '%s\n' '```bash' "$needle" '```'; } > "$COPY"
+    [ -n "$(pull_command_violations "$COPY")" ] || { echo "not caught in the skill: $needle" >&2; return 1; }
+  done
+  true
+}
+
+@test "pull mode: drift runs with --scope machine and the bust with --mode pull" {
+  grep -qxF -- "$PULL_DRIFT_CALL" "$PULL_REF"
+  grep -qxF -- "$PULL_BUST_CALL" "$PULL_REF"
+  sed 's| --scope machine$||' "$PULL_REF" > "$COPY"
+  grep -qxF -- "$PULL_DRIFT_CALL" "$COPY" && return 1
+  sed 's| --mode pull | --mode gaia |' "$PULL_REF" > "$COPY"
+  grep -qxF -- "$PULL_BUST_CALL" "$COPY" && return 1
+  true
+}
+
+# 0 when reference copy `$1` runs the frozen install once, under the
+# LOCKFILE_CHANGED yes condition.
+pull_install_holds() {
+  local section
+  [ "$(grep -cF 'install --frozen-lockfile' "$1")" -eq 1 ] || return 1
+  section="$(section_file "$1" "$PULL_REF_LOCKFILE")" || return 1
+  in_order "$section" 'Only on `LOCKFILE_CHANGED yes`' "$PULL_INSTALL_CALL" || return 1
+  return 0
+}
+
+@test "pull mode: the frozen install runs only under LOCKFILE_CHANGED yes" {
+  pull_install_holds "$PULL_REF"
+  grep -vF 'Only on `LOCKFILE_CHANGED yes`' "$PULL_REF" > "$COPY"
+  pull_install_holds "$COPY" && return 1
+  awk '{ print } /^## Step 2: Pull$/ { print "pnpm -C <main checkout path> install --frozen-lockfile" }' "$PULL_REF" > "$COPY"
+  pull_install_holds "$COPY" && return 1
+  true
+}
+
+@test "pull mode: the residue sweep is offered before the cache bust" {
+  exact_in_order "$PULL_REF" "$PULL_RESIDUE_CALL" "$PULL_BUST_CALL"
+  move_line_after "$PULL_REF" "$PULL_RESIDUE_CALL" "$PULL_BUST_CALL"
+  exact_in_order "$COPY" "$PULL_RESIDUE_CALL" "$PULL_BUST_CALL" && return 1
+  grep -vxF -- "$PULL_RESIDUE_CALL" "$PULL_REF" > "$COPY"
+  exact_in_order "$COPY" "$PULL_RESIDUE_CALL" "$PULL_BUST_CALL" && return 1
+  true
+}
+
+@test "pull mode: the continue offer comes after the cache bust" {
+  in_order "$PULL_REF" '--mode pull' 'Continue to the full update'
+  # Failing state: the offer ahead of the bust.
+  awk '/^## Step 6:/ && !done { print "Continue to the full update"; done = 1 } { print }' "$PULL_REF" > "$COPY"
+  in_order "$COPY" '--mode pull' 'Continue to the full update' && return 1
+  # Failing state: no offer.
+  grep -vF 'Continue to the full update' "$PULL_REF" > "$COPY"
+  in_order "$COPY" '--mode pull' 'Continue to the full update' && return 1
+  true
+}
+
+@test "pull mode: continuing invokes /update-gaia through the Skill tool after the bust" {
+  in_order "$PULL_REF" '--mode pull' 'invoke `/update-gaia` again through the Skill tool'
+  # Failing state: the invocation without the Skill tool.
+  sed 's|invoke `/update-gaia` again through the Skill tool|run it again|' "$PULL_REF" > "$COPY"
+  in_order "$COPY" '--mode pull' 'invoke `/update-gaia` again through the Skill tool' && return 1
+  # Failing state: the invocation ahead of the bust.
+  awk '/^## Step 2: Pull$/ { print "invoke `/update-gaia` again through the Skill tool" } { print }' "$PULL_REF" | grep -vF 'On continue, invoke' > "$COPY"
+  in_order "$COPY" '--mode pull' 'invoke `/update-gaia` again through the Skill tool' && return 1
+  true
+}
+
+# 0 when reference copy `$1` names the update-gaia caller only and no gate.
+pull_callers_hold() {
+  grep -qE 'pull-gate|gaia_pull_gate' "$1" && return 1
+  grep -F '**Caller**' "$1" | grep -qF '`update-gaia`' || return 1
+  grep -F '**Caller**' "$1" | grep -qE 'gated|new-work|gate' && return 1
+  return 0
+}
+
+@test "pull mode: the only caller is update-gaia and no gate is named" {
+  pull_callers_hold "$PULL_REF"
+  { cat "$PULL_REF"; printf '%s\n' 'See pull-gate.md.'; } > "$COPY"
+  pull_callers_hold "$COPY" && return 1
+  { cat "$PULL_REF"; printf '%s\n' 'gaia_pull_gate x'; } > "$COPY"
+  pull_callers_hold "$COPY" && return 1
+  sed 's|^- \*\*Caller\*\*: `update-gaia`\.|- **Caller**: `update-gaia` or a gated command.|' "$PULL_REF" > "$COPY"
+  pull_callers_hold "$COPY" && return 1
+  sed 's|^- \*\*Caller\*\*: `update-gaia`\.|- **Caller**: none.|' "$PULL_REF" > "$COPY"
+  pull_callers_hold "$COPY" && return 1
   true
 }
 

@@ -75,6 +75,18 @@ Two teammates never update at once: an update run claims its release with a draf
 - **Step 11 pushes into the existing PR.** The update commit goes onto the claim's branch and fills in the same draft PR rather than opening another.
 - **The statusline shows it.** A teammate's claim renders as an in-progress nudge, the user's own as a resume nudge; see [[Claude Integration]] (`### Statusline (no hook)`).
 
+## Pull mode
+
+A main checkout whose `.gaia/VERSION` lags origin's can catch up without a full update. A fresh `/update-gaia` run on the default branch in the main checkout reads origin's version live, with `update-claim.sh origin-version`, before the decision log check and any download. When origin's version is higher, the run follows `.claude/skills/update-gaia/references/pull-mode.md` and ends there, creating no worktree. The steps live in that reference; the shape is:
+
+- **Guards.** It runs only in the main checkout, on the default branch, with no uncommitted tracked changes, and it never stashes, forces or switches branches. A linked worktree, another branch, a dirty tree or a diverged branch is refused with the reason and the next step.
+- **What it applies.** A fast-forward of the default branch, a frozen-lockfile install only when the pull changed the lockfile, and the machine-scope setup features the pulled release lists, under the same rules as the update's drift step ([[Setup Features]]). Project-scope features wait for the full update.
+- **The residue sweep.** It offers the sweep once, then refreshes the update-check cache so the statusline stops showing the pull nudge.
+- **Fail open.** An unreadable origin version (gh missing, unauthenticated or failing) skips the pull check and the update continues as before.
+- **The continue offer.** When a newer release than the pulled version exists, it offers the full update and, on yes, invokes `/update-gaia` again so the update runs from the pulled copy of the skill.
+- **It reads no decision log.** `.gaia/update-decisions.json` is never read in a pull, so a pull can repair a log already fixed on origin.
+- **The statusline points here.** A lagging main checkout renders a pull nudge; see [[Claude Integration]] (`### Statusline (no hook)`).
+
 ## Decision table
 
 For every file `P` in the latest manifest. **Rows match in declared order; the first matching row wins**, which is what keeps a file the release never touched from being overwritten or merged:

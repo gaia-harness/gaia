@@ -8,6 +8,7 @@
 #   bash .gaia/scripts/update-check-bust.sh --cache <absolute path> --mode deps
 #   bash .gaia/scripts/update-check-bust.sh --cache <absolute path> --mode gaia --version <x.y.z>
 #   bash .gaia/scripts/update-check-bust.sh --cache <absolute path> --mode gaia --version <x.y.z> --drop-claim <number>
+#   bash .gaia/scripts/update-check-bust.sh --cache <absolute path> --mode pull --version <x.y.z>
 #
 # `deps` sets outdatedCount to 0 and checkedAt to now. `gaia` sets gaiaCurrent
 # and gaiaLatest to the version, gaiaHasUpdate to false, outdatedCount to 0 and
@@ -46,10 +47,11 @@ usage() {
   cat <<EOF
 Usage: bash .gaia/scripts/$PROGRAM_NAME --cache <absolute path> --mode deps
        bash .gaia/scripts/$PROGRAM_NAME --cache <absolute path> --mode gaia --version <x.y.z> [--drop-claim <number>]
+       bash .gaia/scripts/$PROGRAM_NAME --cache <absolute path> --mode pull --version <x.y.z>
 
   --cache    the update-check cache file. Required, absolute.
-  --mode     deps or gaia. Required.
-  --version  the version the run landed on. Required with --mode gaia.
+  --mode     deps, gaia or pull. Required.
+  --version  the version the run landed on. Required with --mode gaia or pull.
   --drop-claim  a pull request number whose claim entry is removed. Digits only; --mode gaia only.
 
 Prints BUSTED, SKIPPED no cache, or BUST_FAILED <reason>. Exit 2 is a usage error.
@@ -131,8 +133,14 @@ case "$MODE" in
         ;;
     esac
     ;;
+  pull)
+    if ! grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$' <<<"$VERSION"; then
+      printf '%s: --mode pull needs --version as x.y.z, got: %s\n' "$PROGRAM_NAME" "$VERSION" >&2
+      exit 2
+    fi
+    ;;
   *)
-    printf '%s: --mode must be deps or gaia, got: %s\n' "$PROGRAM_NAME" "$MODE" >&2
+    printf '%s: --mode must be deps, gaia or pull, got: %s\n' "$PROGRAM_NAME" "$MODE" >&2
     usage >&2
     exit 2
     ;;
@@ -156,6 +164,11 @@ case "$MODE" in
     ;;
   gaia)
     jq_program='if type == "object" then .gaiaCurrent = $version | .gaiaLatest = $version | .gaiaHasUpdate = false | .outdatedCount = 0 | .checkedAt = ($now | tonumber) | (if $drop != "" and (.gaiaUpdateClaims | type) == "array" then .gaiaUpdateClaims |= map(select((.number | tostring) != $drop)) else . end) else error("not an object") end'
+    ;;
+  pull)
+    jq_program='def core: split("-")[0] | split(".") | map(tonumber? // 0);
+      def higher($a; $b): ($a | core) as $x | ($b | core) as $y | if $x != $y then $y > $x else (($a | contains("-")) and (($b | contains("-")) | not)) end;
+      if type == "object" then .gaiaCurrent = $version | .gaiaOriginVersion = $version | .gaiaHasUpdate = ((.gaiaLatest | type) == "string" and higher($version; .gaiaLatest)) | .checkedAt = 0 else error("not an object") end'
     ;;
 esac
 

@@ -385,24 +385,37 @@ else
       #
       # The update nudge's state resolves in this same call: one ordered chain
       # of conditions yields the state, version and login fields, first match
-      # wins (a teammate's live update claim, then the reader's own, then a
-      # plain available update). A claim whose tag or login falls outside the
+      # wins (the checkout is behind origin, then a teammate's live update
+      # claim, then the reader's own, then a plain available update). A claim whose tag or login falls outside the
       # sets the claim writer validates against is ignored rather than
       # stripped, and \A..\z anchor the whole value because ^ and $ match at
       # line breaks in jq. A cache without the claim fields resolves to the
       # plain update state.
-      cache_fields=$(jq -r '
+      #
+      # The pull state sits above all of them: origin's default branch carries a
+      # higher version than the checkout's own version file, which is read live
+      # with a shell builtin and passed in. Only the numeric core orders two
+      # versions, and a local value or origin value that is not a version never
+      # yields pull.
+      local_version=""
+      [ -r "$STATE_ROOT/.gaia/VERSION" ] && { read -r local_version <"$STATE_ROOT/.gaia/VERSION" || true; }
+      local_version="${local_version%"${local_version##*[![:space:]]}"}"
+      cache_fields=$(jq -r --arg local "$local_version" '
         def clean: tostring | gsub("[\u0000-\u001f\u007f]"; "");
+        def version_core: if type == "string" then (capture("\\A(?<a>[0-9]+)\\.(?<b>[0-9]+)\\.(?<c>[0-9]+)(-[0-9A-Za-z.-]+)?\\z") | [(.a | tonumber), (.b | tonumber), (.c | tonumber)]) else null end;
         def valid_login: type == "string" and length <= 39 and test("\\A[A-Za-z0-9](-?[A-Za-z0-9])*\\z");
         def valid_tag: type == "string" and test("\\Av[0-9]+\\.[0-9]+\\.[0-9]+(-[0-9A-Za-z.-]+)?\\z");
-        (if (.ghLogin | valid_login) then .ghLogin else "" end) as $me
+        (($local | version_core) // null) as $local_core
+        | ((.gaiaOriginVersion | version_core) // null) as $origin_core
+        | (if (.ghLogin | valid_login) then .ghLogin else "" end) as $me
         | ((if (.gaiaUpdateClaims | type) == "array" then .gaiaUpdateClaims else [] end)
             | map(select(type == "object" and (.number | type) == "number"
                          and (.tag | valid_tag) and (.authorLogin | valid_login)))
             | sort_by(.number)) as $claims
         | ([$claims[] | select(.authorLogin != $me)][0]) as $teammate
         | ([$claims[] | select(.authorLogin == $me)][0]) as $own
-        | (if $me != "" and $teammate != null then ["progress", ($teammate.tag | .[1:]), $teammate.authorLogin]
+        | (if $local_core != null and $origin_core != null and $origin_core > $local_core then ["pull", .gaiaOriginVersion, ""]
+           elif $me != "" and $teammate != null then ["progress", ($teammate.tag | .[1:]), $teammate.authorLogin]
            elif $me != "" and $own != null then ["resume", ($own.tag | .[1:]), ""]
            elif ((.gaiaHasUpdate // false | tostring) == "true") and ((.gaiaLatest // "" | clean) != "")
              then ["update", (.gaiaLatest | clean), ""]
@@ -435,6 +448,9 @@ else
       [ "$codify_count" -gt 0 ] 2>/dev/null && codify_mid="$codify_count"
 
       case "$update_state" in
+        pull)
+          nudge_set 1 '01;36' '/update-gaia' "/update-gaia (pull $update_version)" "pull $update_version" '🚀'
+          ;;
         progress)
           # A teammate holds the update, so there is nothing for this person to
           # run: no command, and the floor keeps the version and who is on it

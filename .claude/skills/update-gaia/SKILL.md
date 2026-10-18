@@ -3,7 +3,7 @@ name: update-gaia
 description: Pulls the latest GAIA release into this project without clobbering customizations, with a three-way merge per file using .gaia/manifest.json classes. Trigger when the user clicks the statusline `🚀 /update-gaia` indicator or asks "update GAIA", "pull the latest GAIA", "apply the new GAIA release".
 ---
 
-Contents: Pre-flight: Worktree check; Pre-flight: Branch check (run modes); Step 1: Read baseline version; Step 2: Resolve latest release; Step 3: Compare versions (default branch, worktree run in place, in place); Pre-flight: Decision log check; Pre-flight: Claim check (reads `references/claim-flow.md`); Step 3b: Refuse a 1.x baseline; Step 3c: Download and verify the bundles; Step 3d: Select migration notes; Step 4: Show the release notes and confirm (on Proceed: the update worktree, the worktree notice, the stop rule, the claim); Step 4b: Prune prior-run artifacts; Conflict flow (reads `references/conflict-flow.md`: dispatch, questions, decisions, follow-ups); Step 9b: Follow the after-merge notes; Step 9c: Carry new setup features; Step 9d: Record the update; Quality gate; Review point; Step 11 (orchestrator, after the review-point commit); Step 12: Offer the residue sweep.
+Contents: Pre-flight: Worktree check; Pre-flight: Branch check (run modes); Step 1: Read baseline version; Step 2: Resolve latest release; Step 3: Compare versions (default branch, worktree run in place, in place); Pre-flight: Pull check (reads `references/pull-mode.md`); Pre-flight: Decision log check; Pre-flight: Claim check (reads `references/claim-flow.md`); Step 3b: Refuse a 1.x baseline; Step 3c: Download and verify the bundles; Step 3d: Select migration notes; Step 4: Show the release notes and confirm (on Proceed: the update worktree, the worktree notice, the stop rule, the claim); Step 4b: Prune prior-run artifacts; Conflict flow (reads `references/conflict-flow.md`: dispatch, questions, decisions, follow-ups); Step 9b: Follow the after-merge notes; Step 9c: Carry new setup features; Step 9d: Record the update; Quality gate; Review point; Step 11 (orchestrator, after the review-point commit); Step 12: Offer the residue sweep.
 
 Pull the latest GAIA release into this project without clobbering customizations. Does a three-way comparison per file (adopter / baseline / latest) and respects explicit classes in `.gaia/manifest.json`:
 
@@ -98,7 +98,7 @@ bash .gaia/scripts/update-gaia-branch-state.sh classify --tag <LATEST_TAG> --lat
 
 It classifies the most recently committed `update/<LATEST_TAG>-*` branch by the branch's own state and never reads the main checkout's `.gaia/VERSION`. Branch on its one line:
 
-- **`NONE`**: a fresh run. Continue to the decision log check.
+- **`NONE`**: a fresh run. Continue to the pull check.
 - **`RESUME_IN_WORKTREE <branch> <path>`**: tell the user a prior run to `<LATEST_TAG>` stopped after its merge and before its `.gaia/VERSION` write, and that this run resumes inside that worktree, keeps its `.gaia-backup/`, and repeats the merge, the questions, the after-merge notes and the setup drift through to the version write. Persist both values. Continue to the decision log check.
 - **`RESUME_ADD_WORKTREE <branch>`**: the same message, except that the run resumes in a worktree it adds for the branch at Step 4. Persist the branch. Continue to the decision log check.
 - **`APPLIED_UNCOMMITTED <branch> <path>`**: report the update as applied but not committed, with the worktree path and the branch. The next step is re-running `/update-gaia` inside that worktree, which runs the quality gate and the review point there and then opens the PR. Exit. Never resume the merge or write the version again.
@@ -137,6 +137,16 @@ echo "RESUME_UPDATE=$RESUME_UPDATE"
 
 The current branch wins when it carries the prefix; otherwise the most recently committed matching local branch does. On `RESUME <branch>`, tell the user this is a merged-but-unbumped tree and that this run keeps `.gaia-backup` and repeats the merge, the questions, the after-merge notes and the setup drift through to the version write. Persist `RESUME_UPDATE`. The run stays on its current branch either way. Continue to the decision log check.
 
+## Pre-flight: Pull check
+
+Applies only in mode 2 when the classifier printed `NONE`: a fresh default-branch run in the main checkout. A worktree run in place, an in-place run on another branch and every resume skip it. Before the decision log check and any download, read origin's version:
+
+```bash
+bash .gaia/scripts/update-claim.sh origin-version --tree <main checkout path>
+```
+
+Exit 3 (`ORIGIN_VERSION_UNAVAILABLE`) continues to the decision log check: the check fails open. When `ORIGIN_VERSION <x.y.z>` is above `BASELINE`, the checkout lags origin: read `references/pull-mode.md` and follow it with caller `update-gaia` and the main checkout path, creating no worktree and downloading nothing. The run ends there; pull mode's continue offer invokes this skill again from the pulled copy. Otherwise continue to the decision log check.
+
 ## Pre-flight: Decision log check
 
 `.gaia/update-decisions.json` is the committed decision log: the adopter's earlier answers, including the items they chose to decide later. A `deferred` entry is merged against the bundle it was deferred from, so this run has to fetch that bundle too, and its tags reach download commands, so the log is validated before anything else reads it. Run this in the checkout the run starts in (the main checkout in modes 2 and 3, the worktree in mode 1), before Step 3b and any download:
@@ -160,6 +170,8 @@ bash .gaia/scripts/update-decisions.sh deferred --file <starting checkout>/.gaia
 ```
 
 Persist its `DEFERRED <baselineTag> <path> [<key>]` lines: Step 3c names these paths when a tag fails, and the review summary lists the items still deferred.
+
+Pull mode never reads the log, so a pull can repair a log already fixed on origin.
 
 From Step 4b on, the acting tree's copy, `<acting tree>/.gaia/update-decisions.json`, is the one every step reads and writes. On a fresh default-branch run it matches the main checkout's: the Step 4 baseline check confirms the worktree sits at the same release, and the log changes only in an update commit.
 
