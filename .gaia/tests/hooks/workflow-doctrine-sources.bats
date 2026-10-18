@@ -60,7 +60,7 @@ payload_ok() {
   local file_path="$1" name keyline total
   name="feat/$(head -c 123 /dev/zero | tr '\0' a)"
   [ "${#name}" = 128 ] || return 1
-  keyline="Branch key: branch:$name. Link its initiative once with: bash .gaia/scripts/usage.sh link branch:$name research:<topic>-<date> (or issue:<n>)"
+  keyline="Branch key: branch:$name. Link its initiative once with: bash .gaia/scripts/usage.sh link branch:$name research:<date>-<topic> (or issue:<n>)"
   total=$(($(printf '%s\n' "$keyline" | wc -c) + $(wc -c <"$file_path")))
   [ "$total" -le 4096 ] || return 1
   return 0

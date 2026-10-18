@@ -112,7 +112,7 @@ assert_silent() {
   git -C "$REPO" checkout -q -b feat/123-example
   run_hook "$(session_start_payload s4 startup "$REPO")"
   assert_envelope SessionStart
-  [ "$(head -n 1 "$TEMPORARY_DIRECTORY/ctx")" = "Branch key: branch:feat/123-example. Link its initiative once with: bash .gaia/scripts/usage.sh link branch:feat/123-example research:<topic>-<date> (or issue:<n>)" ]
+  [ "$(head -n 1 "$TEMPORARY_DIRECTORY/ctx")" = "Branch key: branch:feat/123-example. Link its initiative once with: bash .gaia/scripts/usage.sh link branch:feat/123-example research:<date>-<topic> (or issue:<n>)" ]
   tail -n +2 "$TEMPORARY_DIRECTORY/ctx" >"$TEMPORARY_DIRECTORY/rest"
   cmp "$TEMPORARY_DIRECTORY/rest" "$DOCTRINE_PATH"
 }

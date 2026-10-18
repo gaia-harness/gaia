@@ -24,7 +24,7 @@ The wiki promotion step writes correctly for its SPEC or plan. Consolidate is th
 
 ## What it detects
 
-1. **Supersession candidates.** Two pages in the same domain whose titles are near-identical (Jaccard ≥ 0.7) and whose `promoted_from` provenance differs by ≥ 30 days. Newer is canonical; older is the candidate.
+1. **Supersession candidates.** Two pages in the same domain whose titles are near-identical (Jaccard ≥ 0.7) and whose `pr_number` provenance differs and whose `promoted_at` differs by ≥ 30 days. Newer is canonical; older is the candidate.
 2. **Reversed decisions.** A newer decision page whose body references the older page's title with negation phrases (`"no longer use"`, `"supersedes"`, `"replaces"`, etc.). Older page is flagged for retirement.
 3. **Near-collision slugs.** Pairs of slugs in the same domain with Levenshtein distance ≤ 2 (`gaia wiki near-collisions`). Editorial disambiguation prompt. Distance 2 is the floor; distance 3 produces excessive false positives in dense domains with short slugs.
 4. **Subject-orphaned pages.** Pages with zero inbound wikilinks whose title is also unmentioned in `wiki/concepts/` and `wiki/modules/`, untouched for 90+ days.
@@ -56,4 +56,4 @@ Consolidate runs on every `/gaia-wiki` chain whose sync completes normally. A fi
 ## Pairs with
 
 - [[Wiki Sync]]: drives the commit and owns the parallel sync-state fields.
-- [[GAIA Spec]]: the workflow that produces SPECs. the wiki promotion step is the orchestrator's pre-merge step; consolidate audits its writes. The wiki promotion step writes `promoted_from` provenance.
+- [[GAIA Spec]]: the workflow that produces SPECs. the wiki promotion step is the orchestrator's pre-merge step; consolidate audits its writes. The wiki promotion step writes `pr_number` provenance.

@@ -2734,7 +2734,7 @@ describe('shipped local-artifact-paths check', () => {
   test('flags a dated notebook research path in a shipped file', () => {
     sandbox.writeStaged(
       'wiki/concepts/example.md',
-      'See .notebook/research/topic-2026-10-01/README.md.\n'
+      'See .notebook/research/2026-10-01-topic/README.md.\n'
     );
 
     expect(run([sandbox.stagingDir, '--config', sandbox.configPath])).toBe(1);
@@ -2744,17 +2744,17 @@ describe('shipped local-artifact-paths check', () => {
   test('still flags a dated .gaia/local research path', () => {
     sandbox.writeStaged(
       'wiki/concepts/example.md',
-      'See .gaia/local/research/topic-2026-10-01/README.md.\n'
+      'See .gaia/local/research/2026-10-01-topic/README.md.\n'
     );
 
     expect(run([sandbox.stagingDir, '--config', sandbox.configPath])).toBe(1);
     expect(stdio.outputs.join('')).toContain('wiki/concepts/example.md');
   });
 
-  test('does not flag the topic-date placeholder', () => {
+  test('does not flag the date-topic placeholder', () => {
     sandbox.writeStaged(
       'wiki/concepts/example.md',
-      'Folders look like .notebook/research/<topic>-<date>/.\n'
+      'Folders look like .notebook/research/<date>-<topic>/.\n'
     );
 
     expect(run([sandbox.stagingDir, '--config', sandbox.configPath])).toBe(0);

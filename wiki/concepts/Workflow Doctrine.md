@@ -82,11 +82,11 @@ The injection hook decides from the session's own tree. Two spellings therefore 
 
 ## Initiative linking
 
-A branch's spend is tied to the initiative it serves with `bash .gaia/scripts/usage.sh link branch:<normalized> research:<topic>-<date>`, or with `issue:<n>` when an issue is the anchor. The link is made once per branch. Issue edges the branch name already derives need no link: `debt/<n>` and the `(fix|feat|chore|docs|refactor)/<n>-` forms. The key line the hook injects carries the concrete command for the current key. See [[Usage Ledger]].
+A branch's spend is tied to the initiative it serves with `bash .gaia/scripts/usage.sh link branch:<normalized> research:<date>-<topic>`, or with `issue:<n>` when an issue is the anchor. The link is made once per branch. Issue edges the branch name already derives need no link: `debt/<n>` and the `(fix|feat|chore|docs|refactor)/<n>-` forms. The key line the hook injects carries the concrete command for the current key. See [[Usage Ledger]].
 
 ## Research attribution
 
-A research Write binds to its initiative only when it is made with the Write tool to the main checkout's absolute `.notebook/research/<topic>-<date>/...` path (see [[Notebook]]). A worktree-relative path or a symlinked path does not bind. Research done with Edit or Bash binds with `bash .gaia/scripts/usage.sh declare research:<topic>-<date>`. A binding re-keys only `session:` spend, so spend already attributed to a branch or an issue stays where it is. The research ref is the full folder name, date included.
+A research Write binds to its initiative only when it is made with the Write tool to the main checkout's absolute `.notebook/research/<date>-<topic>/...` path (see [[Notebook]]). A worktree-relative path or a symlinked path does not bind. Research done with Edit or Bash binds with `bash .gaia/scripts/usage.sh declare research:<date>-<topic>`. A binding re-keys only `session:` spend, so spend already attributed to a branch or an issue stays where it is. The research ref is the full folder name, date included.
 
 ## Injection hook
 
