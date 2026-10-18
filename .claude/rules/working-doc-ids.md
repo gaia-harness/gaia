@@ -31,7 +31,7 @@ The usual way one gets written is copying: a plan task doc cites the directive i
 
 ## Not covered
 
-- **Placeholders**: `SPEC-NNN`, `#<N>`, `Closes #<N>`, `.notebook/research/<topic>-<date>/`, and illustrative `(e.g. SPEC-002)` examples in usage docs.
+- **Placeholders**: `SPEC-NNN`, `#<N>`, `Closes #<N>`, `.notebook/research/<date>-<topic>/`, and illustrative `(e.g. SPEC-002)` examples in usage docs.
 - **GAIA's own state locations**: a `.gaia/local/` path GAIA's tooling creates and owns on every machine (`.gaia/local/runs/<branch>/STATE.md`, `.gaia/local/debt/count.json`) and the generic notebook layout (`.notebook/specs/<SPEC-ID>/`, `.notebook/catalog.json`), in the code that reads or writes it and in the docs describing it.
 - **Data, not references**: template format examples showing a SPEC's shape, fixture values (CLI args, JSON/YAML literals, URLs in test fixtures), regex targets that match SPEC structure, filename literals, and identifier fragments inside variable names (`uat_id`).
 - **An upstream third-party tracker** cited beside the platform quirk it documents (a dependency's own issue). It names a public, stable record outside this project.

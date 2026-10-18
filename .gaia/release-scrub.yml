@@ -239,7 +239,7 @@ transforms:
       # tool-owned state locations shipped code must name; a concrete SPEC or
       # plan folder is caught by the id checks above, and any other named
       # artifact rests on `.claude/rules/working-doc-ids.md`. The placeholder
-      # `<topic>-<date>` never matches.
+      # `<date>-<topic>` never matches.
       - id: local-artifact-paths
         description: "Dated .gaia/local/research/ or .notebook/research/ artifact paths in shipped files"
         pattern: "\\.(gaia/local|notebook)/research/[A-Za-z0-9._-]*20[0-9]{2}-[0-9]{2}-[0-9]{2}"

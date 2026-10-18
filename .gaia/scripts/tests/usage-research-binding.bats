@@ -1,7 +1,7 @@
 #!/usr/bin/env bats
 #
 # Research attribution path form: a research Write binds session spend to
-# research:<topic>-<date> only when it goes through the main checkout's absolute
+# research:<date>-<topic> only when it goes through the main checkout's absolute
 # notebook research path. The same Write through a linked worktree's notebook
 # symlink, or under the retired local research root, binds nothing;
 # `usage.sh declare` is the route that does.
