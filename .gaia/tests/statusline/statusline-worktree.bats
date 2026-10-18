@@ -225,26 +225,16 @@ wait_for_file() {
 # stages the command file: create-gaia commits the whole scaffold before it
 # launches /gaia-init, so the file is tracked mid-init too.
 
-@test "the source repo renders from any tree: its command file is an artifact" {
-  # Both halves anchor on STATE_ROOT, so a worktree session asks the same
-  # question of the same checkout and gets the same answer.
+@test "the source repo renders: its command file is an artifact" {
+  # Main checkout only. The source repo also treats its setup as complete, so
+  # a linked worktree's right side is empty whether or not the mid-init gate
+  # fires there, and no worktree render can tell the two apart.
   mkdir -p "$MAIN/.claude/commands" "$MAIN/.gaia/cli/src"
   printf 'x\n' > "$MAIN/.claude/commands/gaia-init.md"
 
   run_statusline "$MAIN"
   [ "$status" -eq 0 ]
   grep -qF -- "update-deps" <<<"$output"
-
-  # The worktree gate would suppress every indicator here regardless of
-  # whether the mid-init gate fired, so a complete setup marker cannot
-  # distinguish the two. Flip main's setup marker incomplete: only the
-  # mid-init gate produces an empty right side under that condition, and the
-  # worktree gate keeps the setup-gaia nudge, so its presence here proves the
-  # mid-init gate did not fire.
-  printf '{"completed_at":null}' > "$MAIN/.gaia/local/setup-state.json"
-  run_statusline "$WORKTREE"
-  [ "$status" -eq 0 ]
-  grep -qF -- "setup-gaia" <<<"$output"
 }
 
 @test "an adopter's stripped copy suppresses even with the marker dir present" {

@@ -327,6 +327,17 @@ else
       fi
     fi
   fi
+  # gaia:maintainer-only:start
+  # GAIA's own source repo never runs /setup-gaia, so neither setup segment
+  # below applies here: its setup state, when it has one, records no choices,
+  # and a fresh clone has none at all. Treat setup as complete with nothing
+  # pending. Same `.gaia/cli/src` discriminator as the mid-init exception
+  # above, and the release tarball strips this block the same way.
+  if [ -d "$STATE_ROOT/.gaia/cli/src" ]; then
+    setup_complete="true"
+    setup_pending_count=0
+  fi
+  # gaia:maintainer-only:end
 
   if [ "$setup_complete" != "true" ]; then
     measure_left
