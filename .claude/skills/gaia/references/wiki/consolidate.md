@@ -10,7 +10,7 @@ This workflow complements but does not replace the orchestrator's wiki promotion
 
 **Follow `.claude/rules/wiki-style.md` when writing prose during apply actions.** Present tense; no UAT-NNN, SPEC-NNN, PR-number, or commit-SHA references in body prose. The `## Historical context (from <older-title>)` archival heading defined in Step 4 is a deliberate exception, it labels content lifted from a superseded page so it remains discoverable.
 
-Wiki pages emitted by the wiki promotion step carry `promoted_from: SPEC-NNN` and `promoted_at: <ISO>` frontmatter. Those fields are the consolidation seam, they tie pages back to source SPECs and let the audit detect when newer SPECs have superseded older ones.
+Wiki pages emitted by the wiki promotion step carry `pr_number: <N>` and `promoted_at: <ISO>` frontmatter. Those fields are the consolidation seam: they tie each page to the pull request that promoted it and let the audit detect when a newer promotion has superseded an older one.
 
 ## Step 1, Build the page index
 
@@ -19,7 +19,7 @@ Run `.gaia/cli/gaia wiki page-index --json` and use the returned shape. Ignore e
 Each entry in `pages[]` provides `path`, `domain`, `title`, `type`, `status`, `tags`, `inbound_links`, and `outbound_links`. Augment with the consolidation-only fields the CLI does not surface, read each page's frontmatter for:
 
 - `slug`, last path component of `path` without `.md`
-- `promoted_from`, string, list, or null
+- `pr_number`, number, list of numbers, or null
 - `promoted_at`, ISO or null
 - `consolidation_ack`, list of slugs the user previously confirmed should coexist (skip-flags written by prior runs)
 
@@ -34,7 +34,7 @@ Run all four passes; collect findings before prompting any actions.
 For each pair of pages in the same `domain`, compare:
 
 - **Title match**: case-insensitive equality OR Jaccard similarity ≥ 0.7 over title tokens (split on whitespace + punctuation, lowercase, drop tokens shorter than 3 chars).
-- **Provenance gap**: both pages have non-null `promoted_from`, the values differ, and `promoted_at` of one is at least 30 days newer than the other.
+- **Provenance gap**: both pages have non-null `pr_number`, the values differ, and `promoted_at` of one is at least 30 days newer than the other.
 
 When both conditions hold, flag a **supersession candidate**: newer page is the canonical, older is the supersession candidate.
 
@@ -151,11 +151,11 @@ Process findings in this order: **supersession → reversed → near-collision �
 
 1. Read older page body. Extract any content not already present in the newer page (LLM judgment, preserve newer page's structure, no duplication).
 2. If non-empty unique content: append to newer page under H2 `## Historical context (from <older-title>)`. The heading itself is the archival label; do NOT add a SPEC-NNN reference in the preamble (per `.claude/rules/wiki-style.md`).
-3. Update older page's frontmatter: `status: superseded`, `superseded_by: <newer-slug>`, `superseded_at: <ISO>`. Preserve `created`, `promoted_from`, `promoted_at`.
+3. Update older page's frontmatter: `status: superseded`, `superseded_by: <newer-slug>`, `superseded_at: <ISO>`. Preserve `created`, `pr_number`, `promoted_at`.
 4. Move older page: `mkdir -p wiki/_archived/ && git mv <older-path> wiki/_archived/<older-slug>.md`. (Use `mv` if `git mv` fails due to staging state.)
 5. Update `wiki/index.md`: remove the older page's entry from its domain section.
 6. Repoint every wikilink to the older page at the newer page, which now holds its content. Find them with `grep -rnF "[[<older-title>" wiki/ --include="*.md"`, skipping `wiki/_archived/`, `wiki/meta/`, and `wiki/log.md` (archived pages and history ledgers keep their record). A match is a link to the older page only when `]]`, `|`, or `#` follows the title. Replace the title with `<newer-title>`, keeping any `|alias`; drop a `#heading` anchor the newer page has no matching heading for. A link that would now point the newer page at itself is removed, along with its list item when it is the item's only content. Lint's check #17 reports any link this step misses, and lint's fix loop repairs it later in the same `/gaia-wiki` run.
-7. Update newer page's `promoted_from`: if currently a string, convert to a list `[<old_provenance>, <new_provenance>]` so future runs of the wiki promotion step treat it as a known consolidated page. If already a list, append.
+7. Update newer page's `pr_number`: if currently a number, convert to a list `[<old_provenance>, <new_provenance>]` so future runs of the wiki promotion step treat it as a known consolidated page. If already a list, append.
 
 **Near-collision:**
 
@@ -205,7 +205,7 @@ If any HIGH-severity supersession or reversed-decision was applied, prefix the s
 
 ## Notes
 
-- **Boundary with the wiki promotion step.** The wiki promotion step writes per-SPEC; consolidate merges across SPECs. After a merge action, the canonical page's `promoted_from` becomes a list so future promotion runs treat it as a known consolidated page (no `foreign-collision` skip).
+- **Boundary with the wiki promotion step.** The wiki promotion step writes per-SPEC; consolidate merges across SPECs. After a merge action, the canonical page's `pr_number` becomes a list so future promotion runs treat it as a known consolidated page (no `foreign-collision` skip).
 - **Boundary with lint.** Lint finds and fixes broken things (dead repo paths, orphan pages, missing frontmatter, empty sections, broken wikilinks (#17)). Consolidate finds redundant things (two pages with competing claims). `/gaia-wiki` runs lint after consolidate, so lint's checks see the pages consolidate moved, renamed, or archived, and check #17 catches any link the apply actions above leave dangling.
 - **`wiki/_archived/`** is excluded from the index and from future consolidation candidacy. Pages there remain readable but are out of the live spec.
 - **Idempotence.** Re-running consolidate on the same wiki state surfaces the same findings, minus those acknowledged via `consolidation_ack`. Apply actions are not idempotent (they mutate); the apply guard is "did the user already say apply", implicit in "the older page is no longer in its original domain," which the page index would reflect on the next run.
