@@ -528,7 +528,7 @@ CEILING_USAGE_MERGE_MS=4000
     cp "$HOOKS_DIRECTORY/lib/$copied_file" "$REPO/.claude/hooks/lib/"
   done
   for copied_file in "$HOOKS_DIRECTORY"/../../.gaia/scripts/usage*.sh "$HOOKS_DIRECTORY"/../../.gaia/scripts/token-pricing-lib.sh \
-    "$HOOKS_DIRECTORY"/../../.gaia/scripts/main-root-lib.sh \
+    "$HOOKS_DIRECTORY"/../../.gaia/scripts/main-root-lib.sh "$HOOKS_DIRECTORY"/../../.gaia/scripts/context-checkpoint-lib.sh \
     "$HOOKS_DIRECTORY"/../../.gaia/scripts/branch-name-lib.sh; do
     cp "$copied_file" "$REPO/.gaia/scripts/"
   done

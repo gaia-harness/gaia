@@ -13,6 +13,8 @@ tags: [concept, claude, skill, orchestration]
 
 The workflow runs on GAIA's own scripts in `.gaia/scripts/spec/`, Claude-read prose in `.claude/skills/gaia/references/spec/`, and script-consumed templates in `.gaia/templates/spec/`, called directly by the skill.
 
+For cross-cutting architecture, consider `/effort high` before starting.
+
 ## Hard constraints
 
 - **No machine-local memory for project decisions.** The skill must never write to `~/.claude/projects/.../memory/`. Project-relevant decisions belong only in the SPEC artifact, the wiki, or `.claude/rules/`.

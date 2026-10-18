@@ -75,6 +75,7 @@ Use this to re-apply an existing report after fixing drift, or to retry without 
 
 - `subagent_type`: `"general-purpose"`
 - `model`: `"sonnet"`
+- `effort`: `"medium"`
 - `description`: `"Knowledge audit (research)"`
 - `prompt`: the string below (literal, no paraphrasing):
 
@@ -100,6 +101,7 @@ Use this to re-apply an existing report after fixing drift, or to retry without 
 
 - `subagent_type`: `"general-purpose"`
 - `model`: `"sonnet"`
+- `effort`: `"medium"`
 - `description`: `"Knowledge audit (apply)"`
 - `prompt`: the string below (literal):
 

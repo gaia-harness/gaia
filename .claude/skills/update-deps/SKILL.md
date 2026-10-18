@@ -381,7 +381,7 @@ Do the following in order:
 
 ## Override audit + Wave A: Haiku agent
 
-Spawn a **Haiku agent** (`model: "haiku"`) to run the override audit and the
+Spawn a **Haiku agent** (`model: "haiku"`, `effort: "medium"`) to run the override audit and the
 Wave A batch install on the **apply set** computed above. Its prompt tells it to
 read `.claude/skills/update-deps/references/override-audit.md` and
 `.claude/skills/update-deps/references/wave-a.md`, run Phase 0 (skipped under
@@ -409,18 +409,18 @@ group the human skipped). If there are none, skip to Phase 5b.
 
 For each Wave B group, classify complexity and assign a model:
 
-**Opus** (`model: "opus"`): `react-router`, `react`, `storybook`,
+**Opus** (`model: "opus"`, `effort: "medium"`): `react-router`, `react`, `storybook`,
 `singleton:typescript`
 
-**Sonnet** (`model: "sonnet"`): `eslint`, all other groups
+**Sonnet** (`model: "sonnet"`, `effort: "medium"`): `eslint`, all other groups
 
-Spawn one agent per group (or sequentially if resource-constrained). Its prompt tells it to read `.claude/skills/update-deps/references/wave-b-group.md` and follow it exactly, with GROUP, FROM and TO filled in.
+Spawn one agent per group, on its model above and `effort: "medium"` (or sequentially if resource-constrained). Its prompt tells it to read `.claude/skills/update-deps/references/wave-b-group.md` and follow it exactly, with GROUP, FROM and TO filled in.
 
 ## Phase 5b: Transitive refresh (Haiku agent)
 
 Waves A and B move direct specs only, and pnpm keeps a transitive dependency's locked version for as long as its parent's range still admits it, so a vulnerable transitive whose patched release is already in range survives every earlier phase. This phase asks pnpm for the newest in-range version of every transitive dependency. It runs before Phase 6 so the post-update override audit reads the refreshed tree.
 
-Skip it when the human skipped `transitive-refresh` in the preview (report `Declined in preview`), under `--scope` (report `Not run (--scope)`), or under `--security` (report `Not run (--security)`). An advisory this refresh clears (its `advisory-landed` check exits 0 afterwards) is resolved by `in-range refresh` and gets no further resolution. Otherwise spawn a **Haiku agent** (`model: "haiku"`). Its prompt tells it to read `.claude/skills/update-deps/references/transitive-refresh.md` and follow it exactly, with the frozen names as FROZEN_NAMES. The **frozen names** are every package in `skipped[]` with `reason: "held"`, plus every member of a group in the skip set (empty when nothing was held or skipped).
+Skip it when the human skipped `transitive-refresh` in the preview (report `Declined in preview`), under `--scope` (report `Not run (--scope)`), or under `--security` (report `Not run (--security)`). An advisory this refresh clears (its `advisory-landed` check exits 0 afterwards) is resolved by `in-range refresh` and gets no further resolution. Otherwise spawn a **Haiku agent** (`model: "haiku"`, `effort: "medium"`). Its prompt tells it to read `.claude/skills/update-deps/references/transitive-refresh.md` and follow it exactly, with the frozen names as FROZEN_NAMES. The **frozen names** are every package in `skipped[]` with `reason: "held"`, plus every member of a group in the skip set (empty when nothing was held or skipped).
 
 ## Phase 5c: Security resolutions
 
@@ -432,7 +432,7 @@ The key scope is every key retained in Phase 0 plus every security override Phas
 
 On a refresh-only run Phase 0 did not run: Phase 6 runs only when Phase 5b reported `landed` or Phase 5c landed an override, and treats every key in the `overrides:` map as retained. Under `--security` it treats only the Phase 5c overrides as in scope.
 
-Run this as a **Haiku agent**. Its dispatch carries every Phase 6 duty, so pass it all four of these:
+Run this as a **Haiku agent** (`model: "haiku"`, `effort: "medium"`). Its dispatch carries every Phase 6 duty, so pass it all four of these:
 
 - **The recipe.** `.claude/skills/update-deps/references/override-audit.md` (tell the agent to read it), restricted to the keys in scope above, so every quality-gate run it owes runs those same commands. Pass each security override with the advisory id Phase 5c recorded for it, so a retained floor is reported by that id.
 - **When to gate.** Run the quality gate once, after the lockfile assertion, whenever it removed any key or repaired lockfile drift. No Wave agent gated that change. This replaces the drift-only trigger in the Phase 0 section.

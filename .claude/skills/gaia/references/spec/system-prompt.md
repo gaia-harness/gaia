@@ -72,7 +72,8 @@ rules for the Socratic loop:
    a question needs prior-art lookup, repo-convention inspection, or
    competitive comparison, announce `"Dispatching research agent for
 <question>"`, then actually dispatch by calling the Agent tool
-   (`subagent_type: general-purpose`) with that question, the announce
+   (`subagent_type: general-purpose`, `effort: "medium"`) with that
+   question, the announce
    line is narration, not the dispatch. Fold the returned findings into
    `research_summary`. Never punt the research to the human.
 5. **Two-gate ceremony.** After discovery is materially complete:

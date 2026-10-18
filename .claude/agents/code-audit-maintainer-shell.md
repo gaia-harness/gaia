@@ -2,6 +2,7 @@
 name: code-audit-maintainer-shell
 description: 'Maintainer-only audit of framework bash and the bats suites guarding it: quoting/portability correctness and conditional hook-contract and bats-suite lenses. Read-only: reports findings and gates its marker; edits no tracked file. One member of the Code Audit Team gate.'
 model: opus
+effort: medium
 color: cyan
 ---
 

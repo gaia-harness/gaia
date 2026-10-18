@@ -7,7 +7,8 @@
 #
 # Owns: the checkpoint line (tokens capped by percent of the window), the
 # yellow/red/fire/skull bands, K (rounds per unit), the freshness window for a
-# context reading, and the per-session context file (path, write, read).
+# context reading, the per-session context file (path, write, read), and the
+# per-session effort reading beside it (path, write, read).
 # Does not own: the round count, the grant size or the rubric defaults; those
 # stay in audit-loop-eval.sh.
 #
@@ -42,6 +43,7 @@ GAIA_CONTEXT_SKULL_NUMERATOR=3
 GAIA_CONTEXT_SKULL_DENOMINATOR=2
 GAIA_CONTEXT_FRESH_SECONDS=1800
 GAIA_CONTEXT_FILE_VERSION=1
+GAIA_CONTEXT_EFFORT_FILE_VERSION=1
 GAIA_CONTEXT_DEFAULT_WINDOW=1000000
 GAIA_CONTEXT_YIELD_LIMIT=2
 # shellcheck disable=SC2034 # read by the sub-agent hook that sources this lib
@@ -149,6 +151,52 @@ gaia_context_read() {
     return 1
   fi
   printf 'fresh %s %s\n' "$used" "$window"
+}
+
+# gaia_context_is_effort_level <level>: rc 0 for a level Claude Code reports.
+gaia_context_is_effort_level() {
+  case "${1:-}" in
+    low | medium | high | xhigh | max) return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
+# gaia_context_effort_file <main-root> <session_id>: print the effort file path.
+gaia_context_effort_file() {
+  gaia_context_is_session_id "${2:-}" || return 1
+  printf '%s/.gaia/local/cache/shared/context/%s.effort.json\n' "${1:-}" "$2"
+}
+
+# gaia_context_effort_write <main-root> <session_id> <level> <epoch>
+# A sibling of the context file, not a field on it, so no reader of the context
+# file changes. Atomic the same way: the `.tmp.<pid>` orphan rule covers it.
+gaia_context_effort_write() {
+  local root="${1:-}" session_id="${2:-}" level="${3:-}" epoch="${4:-}"
+  local integer_pattern='^[0-9]{1,12}$' file directory temporary_file
+  gaia_context_is_effort_level "$level" || return 1
+  [[ $epoch =~ $integer_pattern ]] || return 1
+  file=$(gaia_context_effort_file "$root" "$session_id") || return 1
+  directory="${file%/*}"
+  mkdir -p "$directory" 2>/dev/null || return 1
+  temporary_file="$file.tmp.$$"
+  printf '{"version":%s,"session_id":"%s","effort":"%s","written_at":%s}\n' \
+    "$GAIA_CONTEXT_EFFORT_FILE_VERSION" "$session_id" "$level" "$epoch" >"$temporary_file" 2>/dev/null || { rm -f "$temporary_file"; return 1; }
+  mv -f "$temporary_file" "$file" 2>/dev/null || { rm -f "$temporary_file"; return 1; }
+}
+
+# gaia_context_effort_read <main-root> <session_id>: print the level and return
+# 0, or print nothing and return 1. No freshness window: the value is the level
+# last seen, whatever its age, and the context directory's age sweep bounds it.
+gaia_context_effort_read() {
+  local file level
+  file=$(gaia_context_effort_file "${1:-}" "${2:-}") || return 1
+  [ -f "$file" ] || return 1
+  command -v jq >/dev/null 2>&1 || return 1
+  level=$(jq -r --argjson version "$GAIA_CONTEXT_EFFORT_FILE_VERSION" --arg session_id "$2" '
+    if type == "object" and .version == $version and .session_id == $session_id and (.effort | type) == "string"
+    then .effort else empty end' "$file" 2>/dev/null) || return 1
+  gaia_context_is_effort_level "$level" || return 1
+  printf '%s\n' "$level"
 }
 
 # gaia_context_effective_line <main-root> <window_size>: the checkpoint line with

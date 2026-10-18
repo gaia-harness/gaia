@@ -2,7 +2,7 @@
 
 Step 6 of `/gaia-spec`: how the main thread dispatches the self-review agent and applies its findings. `spec/self-review.md` is that agent's own checklist; this file is its dispatcher. `spec.md` routes here at step 6, and step 10's lint routes back here to 6c. Control returns to `spec.md` step 7 at the end of 6c.
 
-After the Socratic loop settles, run the GAIA self-review. Rather than running the audit in the wrapper's own context (which would re-load the full draft plus the gate-1 snapshot into wrapper memory), **dispatch it as a `general-purpose` Agent** so the heavy reads stay in fresh context and only structured findings flow back. This is the largest token saver in the spec flow.
+After the Socratic loop settles, run the GAIA self-review. Rather than running the audit in the wrapper's own context (which would re-load the full draft plus the gate-1 snapshot into wrapper memory), **dispatch it as a `general-purpose` Agent** with `effort: "medium"` on the call so the heavy reads stay in fresh context and only structured findings flow back. This is the largest token saver in the spec flow.
 
 The self-review is dispatched here, by this step.
 
@@ -22,7 +22,7 @@ Before dispatching, pre-clear the findings path:
 rm -f .gaia/local/cache/audit-${SPEC_ID}/findings/self-review.json
 ```
 
-Spawn a `general-purpose` Agent with this prompt (interpolate `<DRAFT_PATH>` and `<spec_id>`):
+Spawn a `general-purpose` Agent, passing `effort: "medium"` on the Agent call, with this prompt (interpolate `<DRAFT_PATH>` and `<spec_id>`):
 
 > Run the self-review audit defined in `.claude/skills/gaia/references/spec/self-review.md` over the draft at `<DRAFT_PATH>` against the gate-1 snapshot at `.gaia/local/cache/gate1-<spec_id>.json`.
 >
