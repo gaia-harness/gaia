@@ -63,20 +63,20 @@ Validate the list:
 - Any value not in the allowed set → emit warning `wiki-promote: unrecognized target '<value>' in wiki_promote_targets; skipped.` and drop that value.
 - All values invalid after filtering → write nothing and return Choice `no`, `Pages: none`, `Reason: no valid wiki_promote_targets after filtering`.
 
-Compute `<slug>` once for this run:
+Compute the base `<slug>` once for this run, then each target's own slug from it:
 
 1. Read the resolved source's H1 heading (the first `# ` line in the body).
 2. Lowercase it, strip non-ASCII, replace any run of non-alphanumeric characters with a single hyphen, trim leading/trailing hyphens.
-3. If no H1 is found or the slug ends up empty, fall back to the id itself (e.g. `SPEC-NNN` or `PLAN-NNN`).
-
+3. If no H1 is found or the slug ends up empty, write nothing and return Choice `no`, `Pages: none`, `Reason: the source has no H1 to name the page`. The id is never a fallback: it would land in the filename and in every link to the page, and those ship.
+4. When more than one valid target remains after the filtering above, append each target's `type` (the Step 5 table) to its slug: `<slug>-<type>`, e.g. `-decision` and `-concept`. Every page then has a filename of its own, so a slug link names exactly one page even though the pages share an H1.
 
 **Notebook material.** When the source describes the notebook's layout, lifecycle or keep rules (its catalog, the reapers, the research folders), the target is the existing `wiki/concepts/Notebook.md`: merge the material into that page per Step 5's status classification rather than creating a new page.
 
 For each valid target subdomain:
 
-1. Compute target path: `wiki/<subdomain>/<slug>.md`.
+1. Compute target path: `wiki/<subdomain>/<slug>.md`, with the target's own slug.
 2. Check if the file already exists on disk (`test -f wiki/<subdomain>/<slug>.md`).
-3. If it exists, read its frontmatter and check whether `promoted_from` equals the current id.
+3. If it exists, read its frontmatter and check whether `pr_number` equals the open PR's `pr_number` from Step 3. The PR number is the page's lineage key: a re-promotion on the same PR matches it, and it carries no working-document id.
 4. Build the routing plan tuple:
 
    ```yaml
@@ -84,7 +84,7 @@ For each valid target subdomain:
      slug: <slug>
      target_path: wiki/<subdomain>/<slug>.md
      exists_already: <bool>
-     promoted_from_match: <bool>
+     pr_number_match: <bool>
    ```
 
 
@@ -103,12 +103,12 @@ For each tuple in the routing plan from Step 4, classify the page status, render
 For each tuple:
 
 1. **New page** (`exists_already: false`) → status `new`.
-2. **Existing page, our promotion** (`exists_already: true` AND `promoted_from_match: true`) → run hand-edit detection with a content hash, which survives a squash merge (a commit subject does not):
+2. **Existing page, our promotion** (`exists_already: true` AND `pr_number_match: true`) → run hand-edit detection with a content hash, which survives a squash merge (a commit subject does not):
    1. Read the page's frontmatter `promoted_hash` (`sha256:<hex>`, written at render time).
    2. Hash the page's current body, everything below the closing `---` of the frontmatter, and compare.
    3. Hashes equal → status `our-update`. Hashes differ → status `hand-edited`.
    4. No `promoted_hash` field (the page was promoted before the field existed) → status `hand-edited`. This fails safe: a page whose provenance cannot be proven is never overwritten.
-3. **Existing page, NOT our promotion** (`exists_already: true` AND `promoted_from_match: false`) → status `foreign-collision`.
+3. **Existing page, NOT our promotion** (`exists_already: true` AND `pr_number_match: false`) → status `foreign-collision`.
 
 ### Action per status
 
@@ -117,7 +117,7 @@ For each tuple:
 | `new`               | Render frontmatter + body (per Step 5b). Write file. Append to `pages_written`. |
 | `our-update`        | Read existing frontmatter, preserve `created`. Render fresh frontmatter (advancing `updated`, `promoted_at` and `promoted_hash`) + body. Write file. Append to `pages_updated`. |
 | `hand-edited`       | Do NOT write. Emit warning to stdout: `wiki-promote: skipped wiki/<subdomain>/<slug>.md (hand-edited since last promotion).`. Append a log line `WARN: skipped wiki/<subdomain>/<slug>.md (hand-edited since last promotion)`. Append the path to `pages_skipped`. |
-| `foreign-collision` | Do NOT write. Emit warning to stdout: `wiki-promote: target wiki/<subdomain>/<slug>.md exists with no promoted_from match; skipped to avoid clobbering hand-authored content.`. Append a log line `WARN: skipped wiki/<subdomain>/<slug>.md (foreign-collision; no promoted_from match)`. Append the path to `pages_skipped`. |
+| `foreign-collision` | Do NOT write. Emit warning to stdout: `wiki-promote: target wiki/<subdomain>/<slug>.md exists with no pr_number match; skipped to avoid clobbering hand-authored content.`. Append a log line `WARN: skipped wiki/<subdomain>/<slug>.md (foreign-collision; no pr_number match)`. Append the path to `pages_skipped`. |
 
 ### Frontmatter rendering
 
@@ -138,12 +138,23 @@ Fields:
 - `status`: `active` (always).
 - `created`: for `new`, today's ISO date (`YYYY-MM-DD`). For `our-update`, preserve the value from the existing file's frontmatter.
 - `updated`: today's ISO date.
-- `promoted_from`: the folder id (`SPEC-NNN` for the spec arm, `PLAN-NNN` for the plan arm).
 - `promoted_at`: current ISO 8601 UTC timestamp.
 - `promoted_hash`: `sha256:<hex of the body below the frontmatter>`, computed over the final rendered body (Step 5b) after it is complete. Render the body first, hash it, then write the frontmatter.
-- `pr_number`: from Step 3.
-- `pr_url`: from Step 3.
+- `pr_number`: from Step 3, as a bare number. It is the page's lineage key (Step 4).
 - `tags`: copied from the resolved source's frontmatter `tags` if present and non-empty; otherwise `[promoted, <subdomain>]`.
+
+```yaml
+type: <type>
+status: active
+created: <YYYY-MM-DD>
+updated: <YYYY-MM-DD>
+promoted_at: <ISO 8601 UTC>
+promoted_hash: sha256:<hex>
+pr_number: NNN
+tags: [promoted, <subdomain>]
+```
+
+The frontmatter carries no id and no PR URL. Frontmatter cannot hold the maintainer-only markers that keep them out of a release bundle, so the id and the URL live only in the marker-wrapped blocks of Step 5b.
 
 ### `wiki/log.md` append
 
@@ -165,10 +176,10 @@ If `wiki/log.md` does not contain a `## [Unreleased]` section, prepend the secti
 Render the body in the following sections, in order, immediately after the closing `---` of the frontmatter. No template engine, emit markdown directly.
 
 1. **Title**, H1 line copied verbatim from the resolved source's H1 (the `SUMMARY.md` H1, or the legacy `SPEC.md`'s H1 under the Step 1 fallback).
-2. **Lede**, first paragraph of the source body immediately after the H1. **Legacy `SPEC.md` fallback only:** first paragraph of the SPEC's `## One-line summary` section if present; else the first paragraph of its `## Intent` section; if neither exists, fall back to a single-line lede `Promoted from <id>.`.
+2. **Lede**, first paragraph of the source body immediately after the H1. **Legacy `SPEC.md` fallback only:** first paragraph of the SPEC's `## One-line summary` section if present; else the first paragraph of its `## Intent` section; if neither exists, omit the lede. The id never stands in for it: body prose outside the marker-wrapped blocks ships.
 3. **Decisions / behaviors**, under an H2 `## Decisions` (for `type: decision`) or `## Behavior` (for all other types). For the consolidated `SUMMARY.md` source, render the body prose as-is, it is already present-tense final-state prose written by the consolidation producer, no voice adaptation needed. **Legacy `SPEC.md` fallback only:** include the SPEC's `## Intent` body and, if present, any H2 in the SPEC body whose heading begins with `## Composition with ` (the section that explains how the SPEC composes with prior architecture); adapt voice from future-tense ("will promote") to present-tense ("promotes") where the change is mechanical, leave wording alone where rewriting risks meaning drift.
 4. **Divergence**, if the resolved source has a `## Divergence` section (consolidated `SUMMARY.md` only, an optional section the consolidation producer writes when shipped scope is materially narrower than the stated intent), render it verbatim under its own `## Divergence` heading. Omit entirely when absent.
-5. **UAT references**, under an H2 `## UAT references`, render a bullet list. **Legacy `SPEC.md` fallback only** (the consolidated `SUMMARY.md` frontmatter carries no `uats:` list, so this section is omitted entirely on that path): for each entry in the SPEC's frontmatter `uats:` list, emit `- **<UAT-ID>**, <one-line summary>`. Source the one-line summary from the UAT entry's `summary` field if present; otherwise the first sentence of its `intent` field. If `uats:` is empty or absent, omit the entire `## UAT references` section.
+5. **UAT references**, under an H2 `## UAT references`, render a bullet list. **Legacy `SPEC.md` fallback only** (the consolidated `SUMMARY.md` frontmatter carries no `uats:` list, so this section is omitted entirely on that path): for each entry in the SPEC's frontmatter `uats:` list, emit `- **<UAT-ID>**, <one-line summary>`. Source the one-line summary from the UAT entry's `summary` field if present; otherwise the first sentence of its `intent` field. If `uats:` is empty or absent, omit the entire `## UAT references` section. When emitted, the section carries UAT ids, so it sits inside the maintainer-only marker pair §7 describes, the heading included.
 6. **Related**, sibling wikilinks. Determine the set of sibling pages produced by the **current run**: every entry in the union of `pages_written` and `pages_updated` whose `target_path` is not the page being rendered. (Skipped pages, `hand-edited`, `foreign-collision`, are excluded; their files were not written and a wikilink would dangle.)
    - **Solo-page promotion** (no siblings): omit the entire `## Related` section. Do not emit the H2 at all.
    - **Has siblings**: emit:
@@ -178,23 +189,28 @@ Render the body in the following sections, in order, immediately after the closi
 
      Promoted from the same source:
 
-     - [[<sibling-page-title>]]
-     - [[<sibling-page-title>]]
+     - [[<sibling-slug>|<sibling-page-title>]]
+     - [[<sibling-slug>|<sibling-page-title>]]
      ```
 
-     `<sibling-page-title>` is the H1 of the sibling page (same value used as the H1 in Step 5b §1, since all sibling pages share it). Sort sibling entries alphabetically by title. Use exact wikilink form `[[Title]]`, Obsidian resolves the link by page title across the vault, so no path is needed.
+     `<sibling-slug>` is the sibling's filename without `.md` (its Step 4 slug, type suffix included) and `<sibling-page-title>` is its H1, shown as the alias. Sort sibling entries alphabetically by slug. Link by slug, never by title: siblings share one H1, so a title link cannot tell them apart, and a title containing `/` reads as a path and dangles.
 
 7. **References**, emit an H2 `## References` followed by a bullet list with the source backlink, the PR URL, and the promotion timestamp:
 
    ```markdown
+   <maintainer-only start marker>
    ## References
 
-   - Source: [<id>](<relative-path>) (local artifact, gitignored, link does not resolve from GitHub web view; removed once the folder reaps, the PR link and `promoted_from` below are the durable provenance)
+   - Source: [<id>](<relative-path>) (local artifact, gitignored, link does not resolve from GitHub web view; removed once the folder reaps, the PR link and the frontmatter `pr_number` are the durable provenance)
    - Implementing PR: [PR #NNN](<pr_url>)
    - Promoted at: <ISO 8601 UTC>
+   <maintainer-only end marker>
    ```
 
+   The block names a working-document id and a pull request URL, which point at records no other clone has, so it sits inside the `gaia:maintainer-only` marker pair: a release bundle built from this repository strips the block, and the frontmatter `pr_number` keeps the lineage. In a repository that never builds a bundle the markers are inert comments.
+
    Substitutions:
+   - `<maintainer-only start marker>` and `<maintainer-only end marker>`, each on a line of its own: an HTML comment holding `gaia:maintainer-only:start` and one holding `gaia:maintainer-only:end`, the pair `.claude/rules/wiki-style.md` wraps its maintainer note in. This page names them rather than writing them, because the release scrub strips the lines between a literal pair from every shipped `.claude/` page, this one included.
    - `<id>`, the `SPEC-NNN` or `PLAN-NNN` id from Step 1.
    - `<relative-path>`, the resolved source's repo-relative path with a `../../` prefix (promoted wiki pages live at `wiki/<subdomain>/<page>.md`, two segments deep from the repo root): `../../.notebook/specs/SPEC-NNN/SUMMARY.md`, `../../.notebook/plans/PLAN-NNN/SUMMARY.md`, or the legacy `../../.notebook/specs/SPEC-NNN/SPEC.md` under the Step 1 fallback (`.notebook/` sits at the repo root, so the `../../` prefix holds for it as it did for any root-level source).
    - `<owner>/<repo>`, resolved once per run by running, via the Bash tool:
@@ -230,9 +246,9 @@ After all pages have been written and the body is rendered, update `wiki/index.m
       | `flows`        | `## Flows`                        |
       | `dependencies` | `## Dependencies`                 |
 
-   2. Compute the wikilink: `- [[<page-title>]]` where `<page-title>` is the H1 of the rendered page (same value used in `## Related`).
+   2. Compute the wikilink: `- [[<slug>|<page-title>]]` where `<slug>` is the page's filename without `.md` and `<page-title>` is the H1 of the rendered page, linked by slug for the reason `## Related` gives.
    3. Locate the section in the index. If the section header is absent, emit warning `wiki-promote: section '<header>' not found in wiki/index.md; skipped entry for <page-title>.` and continue with the next entry.
-   4. Scan the section's existing bullets. If any bullet's wikilink target equals `<page-title>` (case-sensitive match on the text inside `[[…]]`, ignoring any `- description` suffix after the closing `]]`), skip, the entry already exists. (Idempotent: re-running the promotion does not duplicate.)
+   4. Scan the section's existing bullets. If any bullet's wikilink target, the text inside `[[…]]` before any `|`, equals `<slug>` or `<page-title>` (case-sensitive, ignoring any `- description` suffix after the closing `]]`), skip, the entry already exists. (Idempotent: re-running the promotion does not duplicate.)
    5. Insert the new bullet in alphabetical order by `<page-title>` (case-insensitive comparison) within the section. The section ends at the next `## ` heading or end-of-file.
 
 3. Write `wiki/index.md` back to disk.
