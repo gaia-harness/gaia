@@ -41,8 +41,15 @@ capture() {
 }
 
 # same_capture <tagA> <tagB>: stdout, stderr and exit status all match.
+# The pinned baseline words the flush condition as `partial: flush incomplete`; the
+# working tree words it as a plain sentence. Both read as one placeholder here, so
+# every other byte of the two readouts is still compared.
+normalize_flush_note() {
+  sed -e 's/^  ! partial: flush incomplete$/  ! FLUSH-NOTE/' -e 's/^  ! Some usage was still being saved, so these figures may be low\..*$/  ! FLUSH-NOTE/' "$1" >"$1.normalized"
+}
 same_capture() {
-  assert_same "$CAPTURE_DIRECTORY/$1.out" "$CAPTURE_DIRECTORY/$2.out" &&
+  normalize_flush_note "$CAPTURE_DIRECTORY/$1.out" && normalize_flush_note "$CAPTURE_DIRECTORY/$2.out" &&
+  assert_same "$CAPTURE_DIRECTORY/$1.out.normalized" "$CAPTURE_DIRECTORY/$2.out.normalized" &&
     assert_same "$CAPTURE_DIRECTORY/$1.err" "$CAPTURE_DIRECTORY/$2.err" &&
     assert_same "$CAPTURE_DIRECTORY/$1.rc" "$CAPTURE_DIRECTORY/$2.rc"
 }

@@ -154,6 +154,6 @@ bash .gaia/scripts/usage.sh record command:gaia-cleanse --workflow gaia-cleanse
 
 Never look the number up (`gh pr list`, `gh pr view`), never reuse a number from an earlier run, a different branch, or a `gh` command run outside this workflow, and never guess. If this run did not itself print a creation URL, pass no `--pr` at all; the record correctly carries no artifact, and that is not an error.
 
-**Report the line verbatim.** On exit 0 the last stdout line is the Cost line, e.g. `Cost: ~5.2M tokens, $4.12, 6m39s`. Relay it as the last line of the run's report; do not reassemble, reformat, or re-derive it. On a non-zero exit nothing was recorded and no Cost line prints: relay the one stderr line in its place.
+**Report the line verbatim.** On exit 0 the first stdout line is the Cost line, e.g. `Cost: 5.2M tokens, $4.12, 6m39s`, and a `Note:` line under it says when the figure may be low or a minimum. Relay them, unchanged, as the last of the run's report; do not reassemble, reformat, or re-derive them. On a non-zero exit nothing was recorded and no Cost line prints: relay the one stderr line in its place.
 
 The record never blocks and never turns a failed run into a successful one: a non-zero exit is reported, not retried. On a path that ends in an error (a rejected push, a blocked merge), record the cost, then report the failure exactly as before; recording the cost never implies success.

@@ -90,7 +90,7 @@ same_capture() {
   done
   [ "$seen" -eq "${#readouts[@]}" ]
   grep -qF '  spec:SPEC-601  tokens 101,000' "$CAPTURE_DIRECTORY/r2-clean.out"
-  grep -q '^Cost: ~' "$CAPTURE_DIRECTORY/r3-clean.out"
+  grep -q '^Cost: ' "$CAPTURE_DIRECTORY/r3-clean.out"
 }
 
 @test "the poison is real: the pre-change scripts print different per-PR and reconcile figures with it" {

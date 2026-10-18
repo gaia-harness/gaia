@@ -131,7 +131,7 @@ scratch_scripts() {
   run --separate-stderr record spec:SPEC-901 --workflow gaia-spec
   [ "$status" -eq 0 ]
   [ -z "$stderr" ]
-  [[ "$(last_stdout_line)" =~ ^Cost:\ ~0\.7M\ tokens,\ \$1\.36,\ [0-9hms]+$ ]]
+  [[ "$(last_stdout_line)" =~ ^Cost:\ 0\.7M\ tokens,\ \$1\.36,\ [0-9hms]+$ ]]
   # Every byte of the main file and the sidecar is behind its cursor.
   [ "$(jq --arg path "$main_path" '.files[$path].offset' "$TEL/usage-cursors.json")" -eq "$(wc -c <"$main_path" | tr -d ' ')" ]
   [ "$(jq --arg path "$sidecar_path" '.files[$path].offset' "$TEL/usage-cursors.json")" -eq "$(wc -c <"$sidecar_path" | tr -d ' ')" ]
@@ -186,7 +186,7 @@ scratch_scripts() {
   main_usage m1 10:10 4000 0
   run record command:gaia-fitness --workflow gaia-fitness
   [ "$status" -eq 0 ]
-  [[ "$(last_stdout_line)" =~ ^Cost:\ ~0\.0M\ tokens,\ \$0\.01,\ [0-9hms]+$ ]]
+  [[ "$(last_stdout_line)" =~ ^Cost:\ 0\.0M\ tokens,\ \$0\.01,\ [0-9hms]+$ ]]
   main_start f2 "$(after_last_close 1)" gaia-fitness
   main_usage m2 "$(after_last_close 2)" 6000 0
   sleep 3
@@ -385,7 +385,7 @@ scratch_scripts() {
   [ "$status" -eq 0 ]
   run usage initiative spec:SPEC-901 --line
   [ "$status" -eq 0 ]
-  [[ "$(last_stdout_line)" == "Cost: ~0.0M tokens, "* ]]
+  [[ "$(last_stdout_line)" == "Cost: 0.0M tokens, "* ]]
 }
 
 @test "a spec session joined from another session closes the spec run, then pairs a same-session plan start" {
@@ -489,10 +489,44 @@ straddling_segments() {
   jq -s --arg close_ts "$close_ts" '[.[] | select(.kind == "segment" and .first_ts < $close_ts and .last_ts >= $close_ts)] | length' "$(ledger)"
 }
 
+@test "record --quiet writes the close and prints nothing, and a refusal still reaches stderr" {
+  spec_run_fixture sess-1
+  run --separate-stderr record spec:SPEC-901 --workflow gaia-spec --quiet
+  [ "$status" -eq 0 ]
+  [ -z "$output" ]
+  [ -z "$stderr" ]
+  [ "$(close_count)" -eq 1 ]
+  run --separate-stderr record spec:SPEC-901 --workflow gaia-spec --quiet
+  [ "$status" -eq 1 ]
+  [ -z "$output" ]
+  [[ "$stderr" == *"already recorded"* ]]
+}
+
+@test "guard red: without --quiet the same record prints the Cost line" {
+  spec_run_fixture sess-1
+  run --separate-stderr record spec:SPEC-901 --workflow gaia-spec
+  [ "$status" -eq 0 ]
+  [[ "${lines[0]}" == Cost:* ]]
+}
+
+@test "an unpriced model puts a plain minimum note under the Cost line, never a partial suffix" {
+  spec_run_fixture sess-1
+  printf '{"type":"assistant","uuid":"u-z","timestamp":"%s","cwd":"%s","sessionId":"%s","gitBranch":"main","message":{"id":"z","model":"claude-zeta-1","role":"assistant","usage":{"input_tokens":10,"cache_creation_input_tokens":0,"cache_read_input_tokens":0,"output_tokens":0},"content":[{"type":"text","text":"ok"}]}}\n' \
+    "$(stamp 10:02:30)" "$MAIN" "$SID" >>"$(main_file)"
+  run --separate-stderr record spec:SPEC-901 --workflow gaia-spec
+  [ "$status" -eq 0 ]
+  [[ "${lines[0]}" == Cost:* ]]
+  [ "${lines[1]}" = 'Note: Includes a model GAIA has no price for, so the cost is a minimum.' ]
+  [[ "$output" == *partial* ]] && return 1
+  true
+}
+
 @test "a flusher that outlasts the cap leaves the close written once and the line marked partial; its late commit splits at the close" {
   partial_scenario
   [ "$status" -eq 0 ]
-  [[ "$(last_stdout_line)" =~ ^Cost:.*\ \(partial:\ flush\ incomplete\)$ ]]
+  [[ "${lines[0]}" =~ ^Cost:\ [0-9.]+M\ tokens,\ \$[0-9.]+,\ [0-9hms]+$ ]]
+  [ "${lines[1]}" = 'Note: Some usage was still being saved, so these figures may be low. For the final numbers run: bash .gaia/scripts/usage.sh initiative SPEC-901 --box' ]
+  grep -qF 'partial' <<<"$output" && return 1
   [ "$(close_count)" -eq 1 ]
   [ "$(straddling_segments)" -eq 0 ]
 }

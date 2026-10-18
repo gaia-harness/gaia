@@ -20,8 +20,8 @@
 #
 # Both background jobs share one cap, GAIA_USAGE_MERGE_CAP_SECONDS (default 5).
 # The flusher is never killed at the cap, because a kill could land mid-append;
-# it is left to commit on its own and the block says `partial: flush
-# incomplete`. Both jobs close descriptor 3 so a bats run that captures this
+# it is left to commit on its own and the block says some usage was still
+# being saved. Both jobs close descriptor 3 so a bats run that captures this
 # script does not wait on the survivor. The `gh` read is killed at the cap and treated as unavailable.
 # The ledger writes run with the lock timeout set to the seconds the cap has
 # left (at least 1), so a held lock cannot stretch the merge past the cap by
