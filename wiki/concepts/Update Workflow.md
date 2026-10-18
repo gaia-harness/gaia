@@ -46,15 +46,15 @@ The step list, its order, and every command live in the `update-gaia` skill (`.c
 - **Every bundle is verified in the run that reads it.** The baseline and target tarballs are checked against the release's `.sha256` asset, and the trees the merge reads are extracted again from those verified tarballs. A cached tarball skips only the download. The tarball name, `gaia-bundle-<tag>.tar.gz`, is also the 2.0.0 release fence: a 1.6.1 `/update-gaia` asks for `gaia-<tag>.tar.gz`, finds nothing, and stops at its fetch step before it writes a file.
 - **A 1.x baseline migrates through the bundled 2.0.0 note.** The 2.0.0 layout moved the app into `frontend/`, and a three-way merge across that move would read every baseline app path as an upstream deletion. The refusal prints a command that downloads, verifies and extracts the v2.0.0 release, and points at the migration note inside it.
 - **Migration notes come from the verified target bundle only.** The target release's own selector picks the notes the update crosses, so a mode a later release adds is judged by that release. A blocking note stops the run before anything is branched, pruned or merged, and owns the hop to its own version. After-merge notes are followed after the three-way merge and before the version bump. See [[Migration Notes]] for the note format and what each mode obliges.
-- **The adopter sees the full CHANGELOG range** from the baseline to the target, and confirms. On `main`/`master` the update worktree and its branch are created only after that confirmation.
-- **A default-branch run works in its own worktree.** Everything before Proceed runs read-only in the main checkout. Proceed creates a linked worktree on the update branch, cut from the default branch on `origin`, and the merge, backups, questions, version write, the adopter's commit and the draft PR all happen there; the main checkout's branch, files and `node_modules` do not move. A run on a non-default branch works in place. A re-run classifies an existing update branch from its own state: merged but not bumped resumes in a worktree holding it, and applied but uncommitted, or committed, is reported with its next step and never re-merged. See [Worktree isolation](#worktree-isolation).
+- **The adopter sees the full CHANGELOG range** from the baseline to the target, and confirms. The update worktree and its branch are created only after that confirmation.
+- **A run in the main checkout works in its own worktree, on any branch.** Everything before Proceed runs read-only in the main checkout. Proceed creates a linked worktree on the update branch, cut from the default branch on `origin`, and the merge, backups, questions, version write, the adopter's commit and the draft PR all happen there; the main checkout's branch, files and `node_modules` do not move, whichever branch it holds. A re-run classifies an existing update branch from its own state: merged but not bumped resumes in a worktree holding it, and applied but uncommitted, or committed, is reported with its next step and never re-merged. See [Worktree isolation](#worktree-isolation).
 - **The merge agent merges and reports.** It walks the target manifest with the decision table below, applies what merges cleanly, and writes a report of every file it could not settle. The orchestrator asks those questions, applies the answers, and runs the follow-ups. The summary cross-references `**Action required:**`-anchored CHANGELOG entries and surfaces opt-in cleanup actions; it never auto-removes a dependency, and it deletes a file only when the adopter never edited it.
 - **Setup drift carries new setup features.** The target bundle's feature list is compared with the project's decision records: a standalone feature is applied or asked through its own setup reference and recorded, an admin-gated one met by a non-admin is left owed, and the rest are handed to `/setup-gaia`. See [[Setup Features]].
 - **The version is written last.** The manifest copy and the update ping come first, then `.gaia/VERSION`. The adopter then reviews the diff and the summary and answers one "Commit this update?" confirm; the [[Quality Gate]] runs before that confirm.
 
 ## Worktree isolation
 
-`/update-deps` and `/update-gaia` share one shape on a default-branch interactive run: every mutating step runs in a fresh linked worktree on the command's own branch (`deps/` or `update/`). The reason is that the user keeps editing, keeps a dev server running and keeps running main-only skills in the main checkout while an update runs, and none of that should see a half-merged tree or a switched branch. CI, `/gaia-init` and a run on a non-default branch create no worktree.
+`/update-deps` and `/update-gaia` share one shape on an interactive run from the main checkout, whichever branch it holds: every mutating step runs in a fresh linked worktree on the command's own branch (`deps/` or `update/`). The reason is that the user keeps editing, keeps a dev server running and keeps running main-only skills in the main checkout while an update runs, and none of that should see a half-merged tree or a switched branch. A run started on a feature branch cuts its worktree from the default branch on `origin` like any other, so the update lands in its own pull request rather than inside the feature work. CI and `/gaia-init` create no worktree.
 
 - **The guard admits only its own worktree.** The main-only guard (`.gaia/scripts/main-only-lib.sh`) admits a session inside the command's own update worktree and refuses every other linked worktree, including the other command's, with the cached update state from the main checkout.
 - **The worktree notice.** Each skill prints the worktree path, the branch, and the two removal commands, with a warning that `--force` discards uncommitted changes, right after creation, at every skill-controlled stop, and when the run opens its PR. A stop never removes the tree.
@@ -198,13 +198,6 @@ git branch -D <branch>
 ```bash
 git -C <worktree path> restore --staged --worktree .
 rm -rf <worktree path>/.gaia-backup
-```
-
-**Before commit, in-place run** (a non-default branch): discard the entire update in that checkout:
-
-```bash
-git -C <checkout path> restore --staged --worktree .
-rm -rf <checkout path>/.gaia-backup
 ```
 
 `git restore` reverts every overwritten file (including `.gaia/VERSION` and `.gaia/manifest.json`) to its committed baseline. The `.gaia-backup/` directory is gitignored, so `git restore` does not touch it; the `rm -rf` is the cleanup pass.

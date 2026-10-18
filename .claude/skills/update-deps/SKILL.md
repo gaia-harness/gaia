@@ -5,7 +5,7 @@ description: Remediates dependencies in place of Dependabot version and security
 
 Contents: Pre-flight: Worktree check; Pre-flight: Branch check; Package layout; Flags and run modes; Companion groups; Phase 1: Discover, preview, decide (orchestrator); Branch creation (after discovery); Override audit + Wave A: Haiku agent; Phase 5: Wave B (per-group major bumps); Phase 5b: Transitive refresh (Haiku agent); Phase 5c: Security resolutions; Phase 6: Post-update override audit; Phase 7: Final report; Phase 8: Publish.
 
-Dependency remediation: outdated packages and security advisories, through one quality gate, in one record. Discover outdated packages and open advisories, preview them (advisories first, ranked) so you can snooze what you are not ready for, audit overrides, apply codebase migrations for major bumps, resolve dependency conflicts, refresh transitive dependencies within range, resolve each advisory by the least invasive method that clears it or accept it by dismissing its alert, and run the quality gate. In CI it runs unattended (no preview); interactively it shows the preview first. On a `main`/`master` run it works in its own worktree on its own branch, opens the PR, merges it once checks are green, then cleans up locally; on any other branch it pushes and leaves the PR to you. Run by `/gaia-init`, it leaves its changes uncommitted for the init commit.
+Dependency remediation: outdated packages and security advisories, through one quality gate, in one record. Discover outdated packages and open advisories, preview them (advisories first, ranked) so you can snooze what you are not ready for, audit overrides, apply codebase migrations for major bumps, resolve dependency conflicts, refresh transitive dependencies within range, resolve each advisory by the least invasive method that clears it or accept it by dismissing its alert, and run the quality gate. In CI it runs unattended (no preview); interactively it shows the preview first. Run from the main checkout, on `main`/`master` or any other branch, it works in its own worktree on its own branch cut from the default branch, opens the PR, merges it once checks are green, then cleans up locally, leaving the branch the main checkout holds as it was. Run by `/gaia-init`, it leaves its changes uncommitted for the init commit.
 
 ## Pre-flight: Worktree check
 
@@ -32,7 +32,7 @@ Decide the run mode in this order. The first matching mode wins, and the `/gaia-
    bash .gaia/scripts/provision-wait.sh --tree <worktree path>
    ```
    Handle the result as `references/worktree.md` step 4 does, with one difference: this run did not create the tree, so exit 3 (`INSTALL_FAILED`) is reported and the run continues. Discovery reads this worktree's manifests. The run creates no worktree, publishes as a worktree run (the PR is opened or reused, merged when green, and cleaned up by path), and never takes the push-only arm of Phase 8.
-4. **On `main` or `master`.** Set `SHOULD_CREATE_WORKTREE=true` but **do not create the worktree yet**: creation is deferred until the run has confirmed work, right after the Phase 1 decision when the apply set is non-empty or the security plan has a resolution to apply, before anything is installed, or before Phase 5b on a refresh-only run (see Branch creation). Creating a worktree when there is nothing to update pollutes the branch list. Read the main checkout's root once with `git rev-parse --show-toplevel` and carry it as the literal `<main checkout path>`. Before discovery, check for an update worktree a run left behind:
+4. **In the main checkout, on `main`, `master` or any other branch.** The worktree is cut from the default branch on `origin` whichever branch the main checkout holds, so a run started on a feature branch publishes its own `deps/` pull request and leaves that branch, its files and its `node_modules` as they were. Set `SHOULD_CREATE_WORKTREE=true` but **do not create the worktree yet**: creation is deferred until the run has confirmed work, right after the Phase 1 decision when the apply set is non-empty or the security plan has a resolution to apply, before anything is installed, or before Phase 5b on a refresh-only run (see Branch creation). Creating a worktree when there is nothing to update pollutes the branch list. Read the main checkout's root once with `git rev-parse --show-toplevel` and carry it as the literal `<main checkout path>`. Before discovery, check for an update worktree a run left behind:
    ```bash
    git worktree list --porcelain
    ```
@@ -46,7 +46,6 @@ Decide the run mode in this order. The first matching mode wins, and the `/gaia-
    ```
 
    On a non-zero exit, read `.claude/skills/update-gaia/references/pull-gate.md` and follow it with `/update-deps`, this run's original arguments and the exit code, before anything below creates a branch, worktree, claim or SPEC id.
-5. **Any other branch.** The run works in place: no worktree, no branch, push only. `SHOULD_CREATE_WORKTREE=false`, and `<main checkout path>` is `git rev-parse --show-toplevel`.
 
 In modes 1 and 2 `<main checkout path>` is also `git rev-parse --show-toplevel`: the cache bust in Branch creation needs it in every mode.
 
@@ -341,8 +340,8 @@ refresh-only. The branch is cut inside a worktree, never in the main checkout.
 
 - **Apply set non-empty, or the security plan has at least one resolution to
   apply.** Run this section right after the decision, before the Override audit
-  + Wave A agent, so no install, lockfile rewrite, or quality gate runs on
-  `main`/`master` (a `/gaia-init` run stays where it is, see Pre-flight: Branch
+  + Wave A agent, so no install, lockfile rewrite, or quality gate runs in
+  the main checkout (a `/gaia-init` run stays where it is, see Pre-flight: Branch
   check). A security-only run (an empty apply set, or `--security` with no
   chain-head bump) then goes on to the security phase even when Phase 5b reports
   `Nothing moved` or `Reverted (<reason>)`.
@@ -385,7 +384,8 @@ Do the following in order:
    earlier in this run (the vendored-skill sync may already have created it).
 3. **Otherwise** (`SHOULD_CREATE_WORKTREE=false`) create nothing and proceed in
    place. Remember whether this run created a worktree (`CREATED_WORKTREE=true`),
-   runs inside its own update worktree (mode 3), or works in place; Phase 8
+   runs inside its own update worktree (mode 3), or works in place (modes 1
+   and 2, `/gaia-init` and CI); Phase 8
    branches on it.
 
 ## Override audit + Wave A: Haiku agent

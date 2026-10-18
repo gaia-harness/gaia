@@ -48,7 +48,7 @@ Handle `APPLY`, `ASK`, `SETUP` and `DRIFT_FAILED` exactly as SKILL.md Step 9c do
 
 ## Step 5: Offer the residue sweep
 
-Offer it as SKILL.md Step 12's mode-3 block does:
+Offer it in the main checkout:
 
 ```bash
 bash <main checkout path>/.gaia/scripts/state-registry-lib.sh residue-sweep

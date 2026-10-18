@@ -59,13 +59,13 @@ The 20-attempt bound replaces the default 5, for the reason the sibling callers 
 - **`CLOSED`** (exit 6) → the pull request was closed without merging, so no wait can clear it: report that, leave the worktree and branch in place, and stop.
 - **the wait refused rather than answered** (exit 2) → report what it could not read, leave the worktree and branch in place, and assert no state for the pull request.
 
-**If you were already on a non-default branch** at pre-flight (mode 5), or running in CI (mode 2); neither creates a worktree or a branch:
+**If running in CI** (mode 2), which creates no worktree and no branch:
 
 1. Push the branch:
    ```bash
    git push
    ```
-2. Do not open a PR and do not merge, the branch owner (the user, or the CI job that invoked it) drives it from here.
+2. Do not open a PR and do not merge, the CI job that invoked the run drives the branch from here.
 
 If any `git push` or `gh pr create` above exits non-zero, print the command's error and STOP. Do not retry, force-push, or amend, a rejected push or failed PR creation is the user's call to resolve (usually a manual rebase or a remote-side block).
 

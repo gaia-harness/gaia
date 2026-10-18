@@ -7,6 +7,8 @@
 #   1. Each command in the roster: its reference names isolation.md, binds the
 #      slots, and mints the branch name from branch-name-lib.sh; no file of
 #      the command carries an in-place arm.
+#      The update commands isolate through their own worktree references
+#      rather than the roster's slots, so they get the in-place scan alone.
 #   2. Each command file keeps its worktree refusal, then the anchor line a
 #      later pre-flight check goes beside, then the dispatch line, in that
 #      order.
@@ -42,15 +44,25 @@ setup() {
     "$REFERENCES/cost-record.md"
     # The isolation reference itself.
     "$REFERENCES/isolation.md"
-    # Publishes from the worktree its own references/worktree.md creates.
+    # Publishes from the worktree its own references/worktree.md creates; the
+    # update-command scan below still reads it for an in-place arm.
     ".claude/skills/update-deps/references/publish.md"
+  )
+  # Update-command files that must keep no in-place arm.
+  UPDATE_FILES=(
+    ".claude/skills/update-deps/SKILL.md"
+    ".claude/skills/update-deps/references/publish.md"
+    ".claude/skills/update-deps/references/worktree.md"
+    ".claude/skills/update-gaia/SKILL.md"
+    ".claude/skills/update-gaia/references/claim-flow.md"
+    ".claude/skills/update-gaia/references/pull-mode.md"
   )
   ANCHOR='Anchor for the next pre-flight step'
 }
 
 # in_place_arms <file>: prints each line holding an in-place publish arm.
 in_place_arms() {
-  grep -nE 'On any other branch|Any other branch \(in-place|ride the current branch|apply in place|the run commits in place' "$1" || true
+  grep -nE 'On any other branch|Any other branch \(in-place|[Aa]ny other branch.*in place|[Ii]n place.*[Aa]ny other branch|already on a non-default branch|ride the current branch|apply in place|the run commits in place' "$1" || true
 }
 
 # check_roster <root>
@@ -78,6 +90,20 @@ check_roster() {
         failed=1
       fi
     done
+  done
+  return "$failed"
+}
+
+# check_update_commands <root>
+check_update_commands() {
+  local root="$1" file failed=0
+  [ "${#UPDATE_FILES[@]}" -eq 6 ] || { printf 'update: expected 6 files, read %s\n' "${#UPDATE_FILES[@]}"; return 1; }
+  for file in "${UPDATE_FILES[@]}"; do
+    [ -f "$root/$file" ] || { printf 'update: %s missing\n' "$file"; failed=1; continue; }
+    if [ -n "$(in_place_arms "$root/$file")" ]; then
+      printf 'update: %s keeps an in-place arm:\n%s\n' "$file" "$(in_place_arms "$root/$file")"
+      failed=1
+    fi
   done
   return "$failed"
 }
@@ -153,6 +179,12 @@ scratch_copy() {
   [ "$status" -eq 0 ]
 }
 
+@test "neither update command keeps an in-place arm" {
+  run check_update_commands "$REPO_ROOT"
+  printf '%s\n' "$output"
+  [ "$status" -eq 0 ]
+}
+
 @test "each publishing command orders its refusal, the pre-flight anchor, then the dispatch line" {
   run check_preflight "$REPO_ROOT"
   printf '%s\n' "$output"
@@ -209,4 +241,37 @@ scratch_copy() {
   run check_census "$copy"
   [ "$status" -ne 0 ]
   printf '%s\n' "$output" | grep -qF -- 'census: .claude/commands/new-flow.md cuts a branch or opens a PR'
+}
+
+@test "red twin: the update-deps in-place mode restored to a SKILL.md copy fails the update scan and names it" {
+  local copy
+  copy="$(scratch_copy)"
+  run check_update_commands "$copy"
+  [ "$status" -eq 0 ]
+  printf '\n5. **Any other branch.** The run works in place: no worktree, no branch, push only.\n' >>"$copy/.claude/skills/update-deps/SKILL.md"
+  run check_update_commands "$copy"
+  [ "$status" -ne 0 ]
+  printf '%s\n' "$output" | grep -qF -- 'update: .claude/skills/update-deps/SKILL.md keeps an in-place arm'
+}
+
+@test "red twin: the update-gaia in-place mode restored to a SKILL.md copy fails the update scan and names it" {
+  local copy
+  copy="$(scratch_copy)"
+  run check_update_commands "$copy"
+  [ "$status" -eq 0 ]
+  printf '\n3. **In place.** Any other branch: set `SHOULD_CREATE_WORKTREE=false` and work on the current branch.\n' >>"$copy/.claude/skills/update-gaia/SKILL.md"
+  run check_update_commands "$copy"
+  [ "$status" -ne 0 ]
+  printf '%s\n' "$output" | grep -qF -- 'update: .claude/skills/update-gaia/SKILL.md keeps an in-place arm'
+}
+
+@test "red twin: the push-only arm for a non-default branch restored to a publish.md copy fails the update scan" {
+  local copy
+  copy="$(scratch_copy)"
+  run check_update_commands "$copy"
+  [ "$status" -eq 0 ]
+  printf '\n**If you were already on a non-default branch** at pre-flight, push only.\n' >>"$copy/.claude/skills/update-deps/references/publish.md"
+  run check_update_commands "$copy"
+  [ "$status" -ne 0 ]
+  printf '%s\n' "$output" | grep -qF -- 'update: .claude/skills/update-deps/references/publish.md keeps an in-place arm'
 }
