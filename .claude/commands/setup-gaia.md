@@ -272,18 +272,13 @@ fi
 ```
 
 - `ISOLATION=ask` → continue to Gate 2.
-- Anything else → the policy stands: the key's value when present, the default when absent. Skip the rest of
-  this clause. The block recorded `isolation-policy` as `applied` when it was owed and the run may record
-  project decisions; Phase 5.5 lands that record.
+- Anything else → the policy stands: the key's value when present, the default when absent. Skip the rest of this clause. The block recorded `isolation-policy` as `applied` when it was owed and the run may record project decisions; Phase 5.5 lands that record.
 
-No separate marker file, no `SETUP_STEPS` entry, no `mark-step` call: `.gaia/project.json` is the source of
-truth here. A missing `.gaia/project.json` reads as the default, and the write below creates the file when it
-is absent.
+No separate marker file, no `SETUP_STEPS` entry, no `mark-step` call: `.gaia/project.json` is the source of truth here. A missing `.gaia/project.json` reads as the default, and the write below creates the file when it is absent.
 
 ### Gate 2: this clause's own `check-admin` probe (fail closed)
 
-Gated behind Gate 1, so the `gh api` round-trip only costs anything on a `--reconfigure` run. Reuse
-Phase 1's cached `detect-remote` values (`found`, `host`, `owner`, `repo`):
+Gated behind Gate 1, so the `gh api` round-trip only costs anything on a `--reconfigure` run. Reuse Phase 1's cached `detect-remote` values (`found`, `host`, `owner`, `repo`):
 
 ```bash
 .gaia/cli/gaia setup check-admin --owner <owner> --repo <repo> --json
@@ -300,15 +295,13 @@ A developer who is not a repo admin is never asked for the team policy and sees 
 
 ### The question
 
-Tell the user (in their language, detected from earlier context): "Let's set your team's default git
-isolation policy."
+Tell the user (in their language, detected from earlier context): "Let's set your team's default git isolation policy."
 
 Read `.claude/skills/gaia/references/setup/isolation-question.md` now, the whole file, and ask its question.
 
 On a choice, run **The write** below with the value `isolation-question.md`'s `## The answer` maps it to.
 
-**Declining** ("Other", or dismissing the question) writes nothing and commits nothing. The policy on file,
-or the default, stays in force.
+**Declining** ("Other", or dismissing the question) writes nothing and commits nothing. The policy on file, or the default, stays in force.
 
 ### The write
 
@@ -316,20 +309,13 @@ or the default, stays in force.
 .gaia/cli/gaia setup write-isolation-policy <always-worktree|prefer-worktree|prefer-branch>
 ```
 
-If this exits non-zero, surface the structured-error JSON verbatim and skip **The commit** below. Do not
-retry, do not hand-write the key. On success, record it:
-`[ "$MAY_RECORD_PROJECT" != admin ] || .gaia/cli/gaia setup record isolation-policy applied`.
+If this exits non-zero, surface the structured-error JSON verbatim and skip **The commit** below. Do not retry, do not hand-write the key. On success, record it: `[ "$MAY_RECORD_PROJECT" != admin ] || .gaia/cli/gaia setup record isolation-policy applied`.
 
 ### The commit
 
-This clause carries its own commit, including the main-branch hook standdown. Right after `gh repo create
---push`, HEAD is on the default branch; when that branch is `main` or `master`, the `block-main-destructive-git.sh`
-PreToolUse hook denies `git commit` and `git push` there, so a machine-local sentinel in `.gaia/local/`
-(gitignored, never reaching a teammate's clone) suspends it for this one commit+push. The hook does not recognize
-a custom default-branch name, so on one the sentinel is inert but harmless.
+This clause carries its own commit, including the main-branch hook standdown. HEAD is on the default branch; when that branch is `main` or `master`, the `block-main-destructive-git.sh` PreToolUse hook denies `git commit` and `git push` there, so a machine-local sentinel in `.gaia/local/` (gitignored, never reaching a teammate's clone) suspends it for this one commit+push. The hook does not recognize a custom default-branch name, so on one the sentinel is inert but harmless.
 
-**Separate Bash call, first** (the `block-main-destructive-git.sh` PreToolUse hook reads this sentinel before
-the command runs, so bundling it into the same call as `git commit` would not yet exist when the hook checks):
+**Separate Bash call, first** (the `block-main-destructive-git.sh` PreToolUse hook reads this sentinel before the command runs, so bundling it into the same call as `git commit` would not yet exist when the hook checks):
 
 ```bash
 mkdir -p .gaia/local
@@ -344,17 +330,13 @@ git commit -m "chore(gaia): set the team git isolation policy to <value>"
 git push origin <current-branch>
 ```
 
-**Then, in its own call, unconditionally** (even if the commit or push failed, a lingering sentinel keeps
-main-branch protection suspended on this machine):
+**Then, in its own call, unconditionally** (even if the commit or push failed, a lingering sentinel keeps main-branch protection suspended on this machine):
 
 ```bash
 rm -f .gaia/local/setup-in-progress
 ```
 
-**Branch on the push result honestly.** A repository ruleset can reject even an admin's direct push (`GH006`).
-If the push fails, say so in one line and tell the admin the value is committed locally and needs a push (or
-a PR); do not report success on a failed push. The commit itself makes the policy real for this machine's next
-run; the push is what makes it real for the team.
+**Branch on the push result honestly.** A repository ruleset can reject even an admin's direct push (`GH006`). If the push fails, say so in one line and tell the admin the value is committed locally and needs a push (or a PR); do not report success on a failed push. The commit itself makes the policy real for this machine's next run; the push is what makes it real for the team.
 
 ### The sandbox recommendation
 
