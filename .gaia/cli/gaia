@@ -34414,6 +34414,7 @@ var parseFlags6 = (argv) => {
 };
 var STATUSLINE_BLOCK = {
   command: 'bash "$(git rev-parse --show-toplevel 2>/dev/null || printf %s "${CLAUDE_PROJECT_DIR:-.}")/.gaia/statusline/gaia-statusline.sh"',
+  refreshInterval: 15,
   type: "command"
 };
 var insertAlphabetical = (source, key, value) => {
@@ -34458,7 +34459,9 @@ var matchesCanonical = (existing) => {
     return false;
   }
   const candidate = existing;
-  return candidate.type === STATUSLINE_BLOCK.type && candidate.command === STATUSLINE_BLOCK.command;
+  return candidate.type === STATUSLINE_BLOCK.type && candidate.command === STATUSLINE_BLOCK.command && // Any interval counts, so an adopter's tuned value survives a re-run;
+  // only a block without one is rewritten to gain it.
+  typeof candidate.refreshInterval === "number";
 };
 var mergeStatusline = (source) => {
   if (matchesCanonical(source[STATUSLINE_KEY])) return source;
