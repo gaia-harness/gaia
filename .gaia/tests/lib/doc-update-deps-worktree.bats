@@ -573,24 +573,39 @@ check_cache_bust() {
 }
 
 # ---------------------------------------------------------------------------
-# 16. A non-default branch is unchanged
+# 16. A non-default branch takes the worktree path
 # ---------------------------------------------------------------------------
 
-IN_PLACE_SENTENCE='The run works in place: no worktree, no branch, push only.'
+MAIN_CHECKOUT_MODE='4. **In the main checkout, on `main`, `master` or any other branch.**'
+UNDECLARED_RECONCILE='and so does a package neither of the worktree'"'"'s `package.json` files declares'
 
-check_in_place_mode() {
-  must_contain "$SKILL" "$IN_PLACE_SENTENCE" "the non-default-branch mode is not stated as in place, push only"
+check_feature_branch_worktree() {
+  must_contain "$SKILL" "$MAIN_CHECKOUT_MODE" "the worktree mode does not cover a non-default branch" || return 1
+  must_contain "$WORKTREE" "$UNDECLARED_RECONCILE" "the reconcile does not drop a package the default branch does not declare" || return 1
+  grep -qF -- 'push only' "$SKILL" && {
+    echo "SKILL.md still states a push-only mode" >&2
+    return 1
+  }
+  must_contain "$PUBLISH" '**If running in CI** (mode 2), which creates no worktree and no branch:' "publish's push-only arm is not CI-only"
 }
 
-@test "a run on a non-default branch works in place and pushes only" {
-  check_in_place_mode
+@test "a run on a non-default branch takes the worktree path, and only CI pushes without a PR" {
+  check_feature_branch_worktree
 }
 
-@test "the in-place check fails with the mode sentence deleted" {
+@test "the feature-branch check fails with the in-place mode restored" {
   local copy
   copy="$(scratch_copy "$SKILL" "in-place.md")"
-  remove_fixed "$copy" "$IN_PLACE_SENTENCE"
-  SKILL="$copy" run check_in_place_mode
+  printf '5. **Any other branch.** The run works in place: no worktree, no branch, push only.\n' >>"$copy"
+  SKILL="$copy" run check_feature_branch_worktree
+  [ "$status" -ne 0 ]
+}
+
+@test "the feature-branch check fails with the undeclared-package reconcile deleted" {
+  local copy
+  copy="$(scratch_copy "$WORKTREE" "reconcile.md")"
+  remove_fixed "$copy" "$UNDECLARED_RECONCILE"
+  WORKTREE="$copy" run check_feature_branch_worktree
   [ "$status" -ne 0 ]
 }
 

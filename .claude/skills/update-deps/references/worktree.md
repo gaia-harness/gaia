@@ -2,7 +2,7 @@ Contents: When it runs; Create the worktree; The rules after creation; The workt
 
 # Create the update worktree
 
-This is the one place `/update-deps` creates a worktree. `SKILL.md` routes three points here: the maintainer-only vendored-skill sync, the post-decision point in `## Branch creation (after discovery)`, and the refresh-only path (before Phase 5b). Every other arm of the command (CI, `/gaia-init`, a non-default branch, a run already inside its own update worktree) creates no worktree and no branch.
+This is the one place `/update-deps` creates a worktree. `SKILL.md` routes three points here: the maintainer-only vendored-skill sync, the post-decision point in `## Branch creation (after discovery)`, and the refresh-only path (before Phase 5b). Every other arm of the command (CI, `/gaia-init`, a run already inside its own update worktree) creates no worktree and no branch.
 
 ## When it runs
 
@@ -25,7 +25,7 @@ Run it only when `SHOULD_CREATE_WORKTREE=true` and no worktree was created earli
    bash .gaia/scripts/provision-wait.sh --tree <worktree path>
    ```
    Exit 0 continues. Exit 3 (`INSTALL_FAILED`) stops here, because this run created the tree: the stop rule below applies. Exits 5, 6 and 2 stop the same way. A stop prints the worktree path, the `Log:` path the script printed, the next step (read the log, then re-run `/update-deps` inside the worktree), and the worktree notice.
-5. Reconcile discovery with the worktree. The worktree is cut from the default branch on `origin`, while discovery read the main checkout's manifests. Re-read each apply-set package's declared version from the worktree's `package.json` files (`package.json` and `frontend/package.json`) and compare it with what discovery read. Where it differs, the worktree's value is the current version every agent prompt and the final report use; a package the worktree already declares at or above its target leaves the apply set; the final report lists each difference. A refresh-only run has no apply set to reconcile.
+5. Reconcile discovery with the worktree. The worktree is cut from the default branch on `origin`, while discovery read the main checkout's manifests. Re-read each apply-set package's declared version from the worktree's `package.json` files (`package.json` and `frontend/package.json`) and compare it with what discovery read. Where it differs, the worktree's value is the current version every agent prompt and the final report use; a package the worktree already declares at or above its target leaves the apply set, and so does a package neither of the worktree's `package.json` files declares (a run started on a feature branch discovers that branch's manifests, which can declare a package the default branch does not); the final report lists each difference. A refresh-only run has no apply set to reconcile.
 
 ## The rules after creation
 

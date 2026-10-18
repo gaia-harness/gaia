@@ -11,8 +11,7 @@
 # .gaia/scripts/update-gaia-preflight.sh and the drift block in
 # update-gaia-drift.sh; their behavior is driven by update-gaia-preflight.bats
 # and update-gaia-drift.bats, so this suite pins the skill's calls and prose.
-# Step 3's in-place block still runs here, extracted by heading, against
-# fixtures under $BATS_TEST_TMPDIR. Every pin has a red twin: a fixture copy
+# Every pin has a red twin: a fixture copy
 # carrying the forbidden content, or missing or reordering the required
 # content.
 #
@@ -36,9 +35,8 @@ setup() {
 }
 
 STEP_3='## Step 3: Compare versions'
-STEP_3_DEFAULT='### Step 3, default branch: classify the update branch'
+STEP_3_DEFAULT='### Step 3, main checkout: classify the update branch'
 STEP_3_WORKTREE='### Step 3, worktree run in place'
-STEP_3_IN_PLACE="### Step 3, in place: an interrupted run's update branch"
 STEP_3D='## Step 3d: Select migration notes'
 STEP_4='## Step 4: Show the release notes and confirm'
 STEP_4_WORKTREE='### Step 4, on Proceed: the update worktree'
@@ -83,14 +81,6 @@ section_file() {
   printf '%s\n' "$out"
 }
 
-# Runs block text `$2` with `$1` as its working directory. Extra arguments are
-# NAME=value pairs exported into the block's environment.
-run_block_in() {
-  local directory="$1" block="$2"
-  shift 2
-  run env "$@" bash -c 'cd "$1" || exit 99; eval "$2"' _ "$directory" "$block"
-}
-
 # The first line number in file `$1` holding fixed string `$2`; empty if none.
 first_line() {
   grep -nF -- "$2" "$1" | head -n 1 | cut -d: -f1
@@ -123,23 +113,18 @@ insert_after() {
 
 # Prints each line of a fenced bash block in file `$1` that a worktree session
 # refuses: a command substitution, a backtick, a heredoc, or a shell variable.
-# The block under Step 3's in-place heading is exempt: it runs only in the main
-# checkout on a non-default branch, never inside a worktree session.
 fence_violations() {
-  awk -v exempt="$STEP_3_IN_PLACE" '
-    !inside && /^#+ / { heading = $0; next }
+  awk '
     !inside && /^```bash$/ { inside = 1; next }
     inside && /^```$/ { inside = 0; next }
-    inside && index(heading, exempt) != 1 {
+    inside {
       if (index($0, "$(") || index($0, "`") || index($0, "<<") || $0 ~ /\$[A-Za-z_{]/) print NR ": " $0
     }
   ' "$1"
 }
 
-@test "command shape: no bash block outside Step 3's in-place block substitutes, interpolates or uses a heredoc" {
+@test "command shape: no bash block substitutes, interpolates or uses a heredoc" {
   [ "$(grep -cxF '```bash' "$SKILL")" -gt 10 ]
-  # The exemption covers one real block, so it widens nothing it does not name.
-  block_after_heading "$SKILL" "$STEP_3_IN_PLACE" | grep -qF '$(git branch --show-current)'
   [ -z "$(fence_violations "$SKILL")" ]
   [ -z "$(fence_violations "$CONFLICT_FLOW")" ]
   # Failing state: the old Step 11 capture reinserted as a block.
@@ -198,7 +183,7 @@ arm_line() {
   printf '%s\n' "$1" | grep -E '^- \*\*`'"$2"'[` ]'
 }
 
-# 0 when SKILL.md copy `$1` keeps the default-branch classification.
+# 0 when SKILL.md copy `$1` keeps the main-checkout classification.
 default_arm_holds() {
   local section outcome arm
   section="$(section_of "$1" "$STEP_3_DEFAULT")"
@@ -224,7 +209,7 @@ default_arm_holds() {
   return 0
 }
 
-@test "Step 3, default branch: classify names all five outcomes and the applied and committed arms exit" {
+@test "Step 3, main checkout: classify names all five outcomes and the applied and committed arms exit" {
   default_arm_holds "$SKILL"
   sed 's|then opens the PR. Exit. Never resume|then opens the PR. Continue to Step 3b. Never resume|' "$SKILL" > "$COPY"
   default_arm_holds "$COPY" && return 1
@@ -263,57 +248,30 @@ worktree_arm_holds() {
   true
 }
 
-# --- Step 3, in place: the interrupted run's update branch -------------------------
+# --- Branch check: any branch in the main checkout takes the worktree ----------
 
-# A fixture git repository on main with one commit.
-make_repository() {
-  REPOSITORY="$BATS_TEST_TMPDIR/repository"
-  rm -rf "$REPOSITORY"
-  mkdir -p "$REPOSITORY"
-  git -C "$REPOSITORY" init -q -b main
-  git -C "$REPOSITORY" config user.email fixture@example.com
-  git -C "$REPOSITORY" config user.name fixture
-  git -C "$REPOSITORY" commit -q --allow-empty -m base
+MAIN_CHECKOUT_MODE='2. **Main checkout.** On `main`, `master` or any other branch:'
+
+# 0 when SKILL.md copy `$1` sends every main-checkout run, on any branch, to the
+# deferred update worktree and keeps no mode that works on the current branch.
+branch_check_holds() {
+  local section
+  section="$(section_file "$1" '## Pre-flight: Branch check')" || return 1
+  grep -F -- "$MAIN_CHECKOUT_MODE" "$section" | grep -qF 'Set `SHOULD_CREATE_WORKTREE=true`' || return 1
+  grep -qF 'SHOULD_CREATE_WORKTREE=false` and work on the current branch' "$section" && return 1
+  grep -qE '^3\. ' "$section" && return 1
+  return 0
 }
 
-# Creates branch `$1` at a new commit dated `$2`.
-branch_at_date() {
-  git -C "$REPOSITORY" checkout -q -b "$1" main
-  GIT_COMMITTER_DATE="$2" GIT_AUTHOR_DATE="$2" git -C "$REPOSITORY" commit -q --allow-empty -m "$1"
-  git -C "$REPOSITORY" checkout -q main
-}
-
-@test "Step 3, in place: an interrupted run's update branch is found by its prefix" {
-  make_repository
-  git -C "$REPOSITORY" branch update/v2.1.0-2020-01-01-0000
-  block="$(block_after_heading "$SKILL" "$STEP_3_IN_PLACE")"
-  [ -n "$block" ]
-  run_block_in "$REPOSITORY" "$block" LATEST_TAG=v2.1.0
-  [ "$status" -eq 0 ]
-  printf '%s\n' "$output" | grep -qxF 'RESUME update/v2.1.0-2020-01-01-0000'
-  printf '%s\n' "$output" | grep -qxF 'RESUME_UPDATE=true'
-}
-
-@test "Step 3, in place: a branch for another tag is not a resume" {
-  make_repository
-  git -C "$REPOSITORY" branch update/v2.0.9-2020-01-01-0000
-  block="$(block_after_heading "$SKILL" "$STEP_3_IN_PLACE")"
-  [ -n "$block" ]
-  run_block_in "$REPOSITORY" "$block" LATEST_TAG=v2.1.0
-  [ "$status" -eq 0 ]
-  printf '%s\n' "$output" | grep -qF RESUME_UPDATE=false
-  printf '%s\n' "$output" | grep -qE '^RESUME ' && return 1
+@test "branch check: a run on any branch of the main checkout takes the update worktree" {
+  branch_check_holds "$SKILL"
+  # Failing state: the in-place mode restored.
+  insert_after "$SKILL" "$MAIN_CHECKOUT_MODE" '3. **In place.** Any other branch: set `SHOULD_CREATE_WORKTREE=false` and work on the current branch, creating no branch and no worktree.'
+  branch_check_holds "$COPY" && return 1
+  # Failing state: the main-checkout mode narrowed back to the default branch.
+  sed 's|2. \*\*Main checkout.\*\* On `main`, `master` or any other branch:|2. **Default branch.** On `main` or `master`:|' "$SKILL" > "$COPY"
+  branch_check_holds "$COPY" && return 1
   true
-}
-
-@test "Step 3, in place: with two matching branches the more recently committed one wins" {
-  make_repository
-  branch_at_date update/v2.1.0-2020-06-01-0000 '2021-01-01T00:00:00Z'
-  branch_at_date update/v2.1.0-2020-01-01-0000 '2022-01-01T00:00:00Z'
-  block="$(block_after_heading "$SKILL" "$STEP_3_IN_PLACE")"
-  [ -n "$block" ]
-  run_block_in "$REPOSITORY" "$block" LATEST_TAG=v2.1.0
-  printf '%s\n' "$output" | grep -qxF 'RESUME update/v2.1.0-2020-01-01-0000'
 }
 
 # --- Step 4, on Proceed: the update worktree ---------------------------------------
@@ -596,7 +554,7 @@ claim_start_holds() {
   local skill="$1" ref="$2" section
   section="$(section_file "$skill" "$STEP_4_WORKTREE")" || return 1
   in_order "$section" "$WAIT_CALL" "$CLAIM_PARAGRAPH" || return 1
-  grep -F "$CLAIM_PARAGRAPH" "$section" | grep -qF 'mode 3' || return 1
+  grep -F "$CLAIM_PARAGRAPH" "$section" | grep -qF 'Unless the claim check was skipped' || return 1
   exact_in_order "$skill" "$STEP_4B" "$STEP_CONFLICT_FLOW" || return 1
   [ "$(first_line "$skill" "$CLAIM_PARAGRAPH")" -lt "$(first_line "$skill" "$STEP_4B")" ] || return 1
   section="$(section_file "$ref" "$CLAIM_REF_AFTER_PROCEED")" || return 1
@@ -619,7 +577,7 @@ claim_start_holds() {
   awk -v anchor="$STEP_4_WORKTREE" '
     index($0, "**Claim.**") == 1 { next }
     { print }
-    index($0, anchor) == 1 { print "**Claim.** early (mode 3)"; print "" }
+    index($0, anchor) == 1 { print "**Claim.** early. Unless the claim check was skipped"; print "" }
   ' "$SKILL" > "$COPY"
   claim_start_holds "$COPY" "$CLAIM_REF" && return 1
   # Failing state: the claim paragraph after the prune heading.
@@ -785,7 +743,7 @@ pull_check_order_holds() {
   true
 }
 
-# 0 when SKILL.md copy `$1` limits the pull check to a fresh default-branch run,
+# 0 when SKILL.md copy `$1` limits the pull check to a fresh main-checkout run,
 # reads origin's version with update-claim.sh, fails open on exit 3 and hands
 # off to the reference with the update-gaia caller.
 pull_check_content_holds() {
@@ -1105,26 +1063,27 @@ MANIFEST_STOP='A non-zero exit from the `cp` command is the `MANIFEST_COPY_FAILE
 
 # --- Step 12: the residue sweep ---------------------------------------------------
 
-# 0 when SKILL.md copy `$1` runs no sweep on a worktree run, printing the
-# post-merge --apply step, and keeps the ask in mode 3.
+# 0 when SKILL.md copy `$1` runs no sweep, printing the post-merge --apply
+# step, and keeps no in-place ask.
 step_12_holds() {
   local section worktree_arm sweeps applies
   section="$(section_of "$1" "$STEP_12")"
-  worktree_arm="$(printf '%s\n' "$section" | grep -F '**Worktree run.**')"
+  worktree_arm="$(printf '%s\n' "$section" | grep -F 'Run no residue sweep')"
   printf '%s\n' "$worktree_arm" | grep -qF 'Run no residue sweep' || return 1
   printf '%s\n' "$worktree_arm" | grep -qF '`bash .gaia/scripts/state-registry-lib.sh residue-sweep --apply` from the main checkout' || return 1
   sweeps="$(printf '%s\n' "$worktree_arm" | grep -oF 'residue-sweep' | wc -l | tr -d ' ')"
   applies="$(printf '%s\n' "$worktree_arm" | grep -oF 'residue-sweep --apply' | wc -l | tr -d ' ')"
   [ "$sweeps" -eq "$applies" ] || return 1
-  printf '%s\n' "$section" | grep -F '**Mode 3.**' | grep -qF 'AskUserQuestion' || return 1
+  printf '%s\n' "$section" | grep -qF 'AskUserQuestion' && return 1
   return 0
 }
 
-@test "Step 12: a worktree run runs no sweep and prints the post-merge --apply step; mode 3 asks" {
+@test "Step 12: the run runs no sweep and prints the post-merge --apply step" {
   step_12_holds "$SKILL"
-  sed 's|Run no residue sweep: it refuses|Run `bash .gaia/scripts/state-registry-lib.sh residue-sweep`: it refuses|' "$SKILL" > "$COPY"
+  sed 's|Run no residue sweep here: it refuses|Run `bash .gaia/scripts/state-registry-lib.sh residue-sweep`: it refuses|' "$SKILL" > "$COPY"
   step_12_holds "$COPY" && return 1
-  grep -vF '**Mode 3.**' "$SKILL" > "$COPY"
+  # Failing state: an in-place ask restored.
+  insert_after "$SKILL" "$STEP_12" '**Mode 3.** Ask once with `AskUserQuestion` whether to delete the residue paths.'
   step_12_holds "$COPY" && return 1
   true
 }

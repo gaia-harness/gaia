@@ -4,7 +4,7 @@ SKILL.md reads this file at its claim check, at Step 4's claim paragraph and at 
 
 ## Claim check
 
-Runs in every mode, in the checkout the run starts in (`<starting checkout>`: the main checkout in modes 2 and 3, the worktree in mode 1), after the decision log check and before Step 3b. It creates nothing, so each stop below leaves no download, worktree, branch, prune or cache change. Run the two reads as separate calls:
+Runs in both modes, in the checkout the run starts in (`<starting checkout>`: the main checkout in mode 2, the worktree in mode 1), after the decision log check and before Step 3b. It creates nothing, so each stop below leaves no download, worktree, branch, prune or cache change. Run the two reads as separate calls:
 
 ```bash
 bash .gaia/scripts/update-claim.sh list --tree <starting checkout>
@@ -22,9 +22,9 @@ bash .gaia/scripts/update-claim.sh login --tree <starting checkout>
   `GAIA <tag> is already being updated in PR #<number> by @<login>, opened <age> ago. Wait for it to merge, then run /update-gaia again.`
 
 - **The user's own claim for `<LATEST_TAG>`** is this person's earlier run:
-  - Its branch is the current branch (mode 1 or 3): continue.
-  - Modes 1 and 3 on any other branch: stop, naming the PR and its branch, and tell the user to run `/update-gaia` from the default branch's checkout.
-  - Mode 2: when `git -C <starting checkout> show-ref --verify --quiet refs/heads/<headRefName>` finds no local branch, fetch it with `bash <starting checkout>/.gaia/scripts/update-claim.sh fetch-branch --tree <starting checkout> --branch <headRefName>`; `FETCH_FAILED` stops, naming the branch and the PR. Then classify the claim's own branch, not the most recent one Step 3 found:
+  - Its branch is the current branch (mode 1): continue.
+  - Mode 1 on any other branch: stop, naming the PR and its branch, and tell the user to run `/update-gaia` from the default branch's checkout.
+  - Mode 2, on whichever branch the main checkout holds: when `git -C <starting checkout> show-ref --verify --quiet refs/heads/<headRefName>` finds no local branch, fetch it with `bash <starting checkout>/.gaia/scripts/update-claim.sh fetch-branch --tree <starting checkout> --branch <headRefName>`; `FETCH_FAILED` stops, naming the branch and the PR. Then classify the claim's own branch, not the most recent one Step 3 found:
 
     ```bash
     bash .gaia/scripts/update-gaia-branch-state.sh classify --tag <LATEST_TAG> --latest <LATEST> --branch <headRefName>
@@ -41,7 +41,7 @@ bash .gaia/scripts/update-claim.sh login --tree <starting checkout>
 
 ## Claim after Proceed
 
-Runs in Step 4 after the provisioning wait and before Step 4b, in modes 1 and 2 only, and not when the claim check was skipped. Read `<default branch>` the way Step 11 does, then call:
+Runs in Step 4 after the provisioning wait and before Step 4b, in both modes, and not when the claim check was skipped. Read `<default branch>` the way Step 11 does, then call:
 
 ```bash
 bash <main checkout path>/.gaia/scripts/update-claim.sh start --tree <worktree path> --tag <LATEST_TAG> --branch <branch> --base <default branch>
@@ -57,7 +57,7 @@ bash <main checkout path>/.gaia/scripts/update-claim.sh tie-break --tree <worktr
 - `WON` or `TIE_BREAK_SKIPPED <reason>`: continue.
 - `LOST <other> <login>`: this run's PR is closed and its remote branch deleted. Unset `CLAIM_PR`. When `CREATED_WORKTREE=true`, the worktree holds only the claim commit, so release it per `.claude/skills/gaia/references/work-lifecycle.md` (`## Releasing an empty worktree`), which also deletes the branch. Otherwise print the worktree notice instead. Stop, naming PR `<other>` and its author.
 
-A resumed run (mode 1, or mode 2 resuming a claimed branch) calls `start` too: it adds no second commit and no second pull request. Mode 3 makes no claim. A claimed run reaches the merge agent with exactly one empty claim commit pushed to origin and its draft PR open.
+A resumed run (mode 1, or mode 2 resuming a claimed branch) calls `start` too: it adds no second commit and no second pull request. A claimed run reaches the merge agent with exactly one empty claim commit pushed to origin and its draft PR open.
 
 ## Step 11: the claim-aware pull request
 
