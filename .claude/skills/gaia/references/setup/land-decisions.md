@@ -78,7 +78,7 @@ fi
 
 ## The closing message
 
-A run can reach Phase 6 with its GitHub setup undone: Phase 3's clean-tree refusal on Create, the set-up-manually answer, or an authentication or admin refusal each skip the rest of Phase 3. So the closing line never claims completion just because the run reached the end. It reads the project settings still owed that this machine can act on, after every record this run made, through the same predicate the statusline's `⚙️ /setup-gaia` nudge counts, so the message and the nudge never disagree:
+A run can reach Phase 6 with its GitHub setup undone: Phase 3's clean-tree refusal on Create, the set-up-manually answer, or an authentication or admin refusal each skip the rest of Phase 3. So the closing line never claims completion just because the run reached the end, except for a non-admin: project settings are an admin's to record, so an admin refusal (cached admin false) owes nothing on this machine and ends on the done line. It reads the project settings still owed that this machine can act on, after every record this run made, through the same predicate the statusline's `⚙️ /setup-gaia` nudge counts, so the message and the nudge never disagree:
 
 ```bash
 . .gaia/statusline/setup-owed.sh && printf 'OWED_AT_END=%s\n' "$(gaia_setup_owed_ids .)"
