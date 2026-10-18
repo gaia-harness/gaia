@@ -2,11 +2,11 @@
 
 A triage drain over the keyed audit residue recorded under the two canonical headings in merged pull-request bodies. It never fixes anything and never edits a file a residual cites; fixing is `/gaia-debt`'s job.
 
-Contents: Execution model, READ FIRST; Naming disambiguation; Invocation; Fetch the live candidate list; Bounding the run; Present each candidate; The three arms; Record; Refresh the statusline nudge (end of run); Publish approved changes (end of run); Cost record (run end); Guardrails.
+Contents: Execution model, READ FIRST; Naming disambiguation; Invocation; Fetch the live candidate list; Bounding the run; Present each candidate; The three arms; Record; Sweep batch by batch; Resume after /clear; Refresh the statusline nudge (end of run); Publish approved changes (end of run); Cost record (run end); Guardrails.
 
 ## Execution model, READ FIRST
 
-Interactive and human-gated. Promote is one question per entry and never auto-advances. The agent never runs `git add`, `git commit`, or `git push` during the per-candidate loop; one end-of-run publish step runs after the last disposition.
+Interactive and human-gated. Promote is one question per entry and never auto-advances. One run sweeps batch after batch (`## Sweep batch by batch`): every aged residual without asking, then newer ones a batch at a time on a yes. The agent never runs `git add`, `git commit`, or `git push` during the sweep; one end-of-run publish step runs after the sweep ends, so the whole sweep lands in one pull request.
 
 ## Naming disambiguation
 
@@ -17,6 +17,19 @@ This tree spends the word "residue" on a second meaning: orphaned machine-local 
 `/gaia-residue` takes no arguments: every run is the full interactive triage.
 
 ## Fetch the live candidate list
+
+**An owed run first.** A run cleared at the context checkpoint whose continuation prompt was never pasted still holds store changes on its own branch. Before the tally, list the state files such runs leave, from the main checkout's root:
+
+```bash
+find .gaia/local/runs/residue -name STATE.md -exec grep -l 'Publish: owed' {} + 2>/dev/null
+```
+
+For each path printed, ask one `AskUserQuestion` (header `"Residue"`), naming the file's `Branch:` line:
+
+1. `{ label: "Resume it (Recommended)", description: "Continue that sweep, then publish it." }` → follow `## Resume after /clear` with that path.
+2. `{ label: "Publish it now", description: "Publish what that sweep recorded, without more batches." }` → follow `## Resume after /clear` steps 1 to 4 with that path, then go straight to the refresh and the publish.
+
+Anything typed into the built-in Other, or a declined or dismissed prompt, stops this run before the tally: report the path and that a fresh run would append to the store on a second branch, which conflicts with the owed one. Nothing printed means no run is owed; go on to the tally.
 
 Read the live list from the tally primitive. Re-run it; never trust a stale count.
 
@@ -29,7 +42,7 @@ Bind to the top-level fields it prints: `gh_ok`, `count_approximate`, `candidate
 - `total_keyed_count` is every keyed unit attributed, before any suppression. The corpus size. It never shrinks as the drain proceeds.
 - `remaining_count` is the suppression survivors, before the cursor skip and before the cap. What is still open.
 - `aged_candidate_count` is the subset of `remaining_count` whose age crosses the nudge's threshold. The nudge's numerator.
-- `candidate_count` is this run's emitted batch, after the cursor skip and the cap.
+- `candidate_count` is this tally's emitted batch, after the cursor skip and the cap.
 
 `count_approximate: true` means the counts came from a mode that performed no line resolution, so a dismissal whose recorded line content no longer matches the current one may still be suppressed. The interactive run never sets it.
 
@@ -50,7 +63,7 @@ These populations never reach the triage loop, so nothing else will mention them
 
 ## Bounding the run
 
-The per-run cap defaults to 10, overridden with `GAIA_RESIDUE_CAP`. Candidates are ordered oldest merge date first. The cursor at `.gaia/local/cache/residual-cursor.json` advances after each confirmed disposition, so an interrupted run resumes where it stopped rather than re-asking; `.gaia/cli/gaia residue-cursor clear` starts the list over.
+`GAIA_RESIDUE_CAP` (default 10) sets the size of one batch, which is also the most one batch-dismiss confirmation lists. It does not bound the run: `## Sweep batch by batch` below triages batch after batch. Candidates are ordered oldest merge date first. The cursor at `.gaia/local/cache/residual-cursor.json` advances after each confirmed disposition, so an interrupted run resumes where it stopped rather than re-asking; `.gaia/cli/gaia residue-cursor clear` starts the list over.
 
 ```bash
 .gaia/cli/gaia residue-cursor advance --token <the candidate's cursor_token>
@@ -58,7 +71,7 @@ The per-run cap defaults to 10, overridden with `GAIA_RESIDUE_CAP`. Candidates a
 
 Pass only the candidate's own `cursor_token` from the tally emit, never a path. A residual's path is text from a merged pull request, and this call is agent Bash, a shell; the token is closed over `[A-Za-z0-9_-]` by construction so it cannot carry a shell metacharacter, a space, or a leading dash, and there is no `--path` flag to reach for instead.
 
-The cap means the candidate list is a batch, not the whole population. Report `remaining_count` as what is left when a human asks, never `total_keyed_count`.
+Each tally emits one batch, never the whole population. Report `remaining_count` as what is left when a human asks, never `total_keyed_count`.
 
 ## Present each candidate
 
@@ -87,7 +100,7 @@ When the recipe refuses to file because the key matches one of its own dedup arm
 
 ### Dismiss
 
-The safe arm, and the default. It may be offered in a batch, bounded by the same per-run cap, and the batch takes an explicit confirmation that lists every entry it will dismiss before anything is appended. Each dismissal appends one `dismissed` record.
+The safe arm, and the default. It may be offered in a batch, bounded by the batch size, and the batch takes an explicit confirmation that lists every entry it will dismiss before anything is appended. Each dismissal appends one `dismissed` record.
 
 ### Keep
 
@@ -118,9 +131,76 @@ Delete the reason file in a **separate** tool call, for the same reason the fili
 
 The store is append-only JSON Lines, carries a schema version, and is named above; point at the CLI rather than restating its fields. Never hand-write a line into the store.
 
+## Sweep batch by batch
+
+After the last disposition of a batch, re-run `.gaia/cli/gaia residue-tally` and bind its fields afresh; never reuse the previous emit. Every confirmed disposition already suppresses its residual and the cursor already sits past the batch, so the fresh emit is the next batch.
+
+A fresh emit whose `gh_ok` is `false` ends the sweep: report it in the words `## Fetch the live candidate list` gives, then run the end-of-run steps below, since the dispositions this run already confirmed still refresh and publish. Otherwise report `malformed`, `store_skipped`, and a truncated `window` as that section says, but only where one differs from what this run already reported.
+
+### Required: every aged residual
+
+While `aged_candidate_count` and `candidate_count` are both above `0`, triage the next batch without asking. The aged residuals are what the statusline nudge counts, so a run that stops with any left keeps telling the user to run the command they just ran. A sweep that clears them leaves the end-of-run refresh writing `0`, and the nudge stays gone until aged residue builds up again.
+
+A promotion whose filing ends diverted, absent, transient, or failed files no issue the tally reads, so its residual stays open and, once aged, stays in `aged_candidate_count`. Hold the `cursor_token` of every candidate this run disposed of, and never present a held one again in this run. When a fresh batch holds nothing new to present, or `candidate_count` is `0` while `aged_candidate_count` is above `0`, every aged residual left is one this run cannot clear (held, or sitting behind the cursor), and the end-of-run refresh still counts it. End the sweep, and never silently: report the count, that it keeps the statusline nudge up while it meets the nudge's threshold, and the next step for each kind. A held promotion that ended absent, transient, or failed is promoted again on a later run once its filing can complete; one that ended diverted waits on its local record, then takes dismiss or keep on a later run. Anything behind the cursor is offered again after `.gaia/cli/gaia residue-cursor clear`. Without this arm the loop re-tallies forever.
+
+### Extended: newer residuals, one batch per yes
+
+Once `aged_candidate_count` is `0`, a `candidate_count` above `0` means newer residuals remain, ones the nudge does not count yet. Sweeping them is optional work, so never start one of their batches without asking. Before each batch ask one `AskUserQuestion`, its numbers taken from the fresh emit:
+
+- **header:** `"Residue"`
+- **question:** `"Sweep the next <candidate_count> newer residuals? More: https://docs.gaiareact.com/maintenance/residue/"`
+- **options (this exact order):**
+  1. `{ label: "Sweep the next <candidate_count> (of <remaining_count> remaining)", description: "Triage one more batch, then ask again." }`
+  2. `{ label: "Stop here", description: "End the sweep and publish what this run recorded." }`
+
+`<candidate_count>` is the batch size, smaller than the cap on the last batch. The question leads with the action and the count and never explains what the newer residue is; the link carries that. `Stop here`, anything typed into the built-in Other, or a declined or dismissed prompt ends the sweep. A `candidate_count` of `0`, or a batch holding nothing new to present, ends it with no question.
+
+### Between batches
+
+Between two batches is the sweep's stopping point for the context checkpoint (`.claude/doctrine/context-checkpoint.md`): every disposition is in the store and the cursor has moved, so nothing is half-applied. When the checkpoint fires mid-batch, finish the batch first.
+
+At that point, save before asking, as the checkpoint says, to this run's own state file:
+
+- once this run has isolated (`## Record`), the run folder of `<RESIDUE_BRANCH>`: `.gaia/local/runs/<RESIDUE_BRANCH>/STATE.md`;
+- before it has, the checkpoint's `Save path:` fallback.
+
+`.gaia/local` is shared with the main checkout, so write the file with Bash at the main checkout's absolute path (`bash .gaia/scripts/main-root-lib.sh` prints it), never with Edit or Write from a worktree. It holds these lines, its one `NEXT:` line last:
+
+- `Command: /gaia-residue`
+- `Phase: required` or `Phase: extended`
+- `Branch: <RESIDUE_BRANCH>` and `Tree: <RESOLVED_ROOT>` and `Mode: <RESOLVED_MODE>`, or `Branch: none` before isolating
+- `Publish: owed` once this run has isolated, `Publish: none` before
+- `Disposed: <count of dispositions this run confirmed>`, which the refresh's run condition reads
+- `Held: <the held cursor tokens, space-separated>`, or `Held: none`
+- `NEXT: re-run residue-tally and start the next batch`
+
+Then ask the checkpoint's question. On `Continue here`, start the next batch. On `Clear and resume`, run `bash .gaia/scripts/usage.sh handoff` as the checkpoint says, and print the continuation prompt in a fenced code block with info string `text`, filling in the state file's absolute path and, when the handoff printed one, its line as the first step:
+
+```text
+<the usage.sh handoff line, when it printed one: run it first, verbatim>
+Resume an interrupted /gaia-residue sweep. The sweep triages the keyed audit residue recorded in merged pull-request bodies, batch after batch, until no aged residual is left, then offers newer ones one batch per yes. Every disposition confirmed so far is in the dismissal store and the cursor has moved past it; one end-of-run publish lands the whole sweep in a single pull request. Read .claude/skills/gaia/references/residue.md and follow its `## Resume after /clear`, with the state file <absolute path to STATE.md>. Do not run /gaia-residue: the resume enters residue.md directly.
+```
+
+Then end the turn. Clearing ends the session's turn, not the run: no cost record is written here, and the resumed session writes it when the run ends.
+
+When the sweep ends, by any arm above, run the refresh and the publish below once. A user who stops between batches, by `Stop here` or by saying so, ends the sweep the same way: the store changes this run made always reach the publish step.
+
+## Resume after /clear
+
+A resumed run never enters through `/gaia-residue`: the continuation prompt sends it here, so the command file's pre-flight runs on fresh starts only. Resume is detectable from the state file alone, a `Command: /gaia-residue` STATE.md under `.gaia/local/runs/`, carrying `Publish: owed` once the run has isolated.
+
+1. Read the state file the prompt names. Bind `Phase`, `Branch`, `Tree`, `Mode`, `Publish`, `Disposed`, and `Held` from it.
+2. **`Branch: none`**: the run never isolated. Stay in the main checkout; the isolate step in `## Record` runs before the first append as on any run.
+3. **Otherwise**, find the run's tree. Under `Mode: worktree`, read `git worktree list --porcelain` and take the `worktree <path>` line whose following `branch refs/heads/<Branch>` line matches. When the session is not already inside that path, re-enter it with `EnterWorktree({name: "<Branch>"})`. Under `Mode: feature-branch`, `git branch --show-current` in the main checkout must print `<Branch>`. Set `RESOLVED_MODE` from `Mode` and `RESOLVED_ROOT` from the path found, and skip the isolate step in `## Record`: this run already isolated, and the publish step reads both values.
+4. **The tree or branch is not found**: stop. Report the state file path and the branch, that the store changes it held may be lost, and that `git branch --list "<Branch>"` and `git worktree list` show what remains. Never start a new branch over it.
+5. Restore the held tokens, then continue at `## Sweep batch by batch` with a fresh tally: in `Phase: extended`, that batch's question comes first. The run's refresh, publish, and cost record follow as on any run, with `Disposed` counting toward the refresh's run condition. One difference: the tree was created in an earlier session, so on `MERGED` the publish step's cleanup takes `.claude/skills/gaia/references/work-lifecycle.md` `### Worktree entered by path or in an earlier session` in place of `### Worktree entered by name in this session`.
+6. Once the publish step ends the run, delete the state file (`rm <absolute path to STATE.md>`), so no finished run reads as owed.
+
+A run whose user cleared and never pasted the prompt still owes its publish. `## Fetch the live candidate list` finds it on the next fresh start.
+
 ## Refresh the statusline nudge (end of run)
 
-Runs once, after the last disposition and before the publish step, whenever this run confirmed at least one disposition: a store record, or a promotion's filed issue. The statusline reads `residueCandidateCount` from the shared update-check cache, which `.gaia/scripts/check-updates.sh` recomputes only once its 6-hour TTL lapses, so without this step a user who just drained the residue keeps being told to run the command again.
+Runs once, after the sweep ends and before the publish step, whenever this run confirmed at least one disposition: a store record, or a promotion's filed issue. The statusline reads `residueCandidateCount` from the shared update-check cache, which `.gaia/scripts/check-updates.sh` recomputes only once its 6-hour TTL lapses, so without this step a user who just drained the residue keeps being told to run the command again.
 
 Rewrite that one field from a fresh count, and leave every other field alone:
 
@@ -144,7 +224,7 @@ fi
 
 ## Publish approved changes (end of run)
 
-Runs once, after the last disposition, only when this run isolated (`## Record`). It runs from `RESOLVED_ROOT`, on `<RESIDUE_BRANCH>`, whichever branch the main checkout holds.
+Runs once, after the sweep ends, only when this run isolated (`## Record`). It runs from `RESOLVED_ROOT`, on `<RESIDUE_BRANCH>`, whichever branch the main checkout holds.
 
 **Confirm there are real changes.**
 
@@ -209,6 +289,8 @@ Every path that ends a `/gaia-residue` run appends exactly one cost record, the 
 - A run that appended nothing, which never isolated and publishes nothing.
 - Publish's merge outcomes: `MERGED`, still queued, a failed required check, a pull request closed without merging, a merge wait that refused because it read nothing, or "Leave open".
 - Publish's non-zero-exit STOP on a `git` or `gh` command.
+- The owed-run question declined at a fresh start, which stops before the tally.
+- A resume whose tree or branch is not found.
 
 Apply the shared record recipe in `.claude/skills/gaia/references/cost-record.md` with `{{COMMAND}}` = `gaia-residue`.
 
@@ -230,6 +312,7 @@ Apply the shared record recipe in `.claude/skills/gaia/references/cost-record.md
 - `.gaia/audit-residual-dismissals.jsonl`, the dismissal store;
 - `.gaia/local/cache/residual-attribution.json`, the derived read cache;
 - `.gaia/local/cache/residual-cursor.json`, the resumable cursor;
+- the sweep's state file, `.gaia/local/runs/<RESIDUE_BRANCH>/STATE.md` or the context checkpoint's fallback, written only when the checkpoint fires between batches and deleted when the run ends;
 - the `residueCandidateCount` field of `.gaia/local/cache/shared/update-check.json`, the statusline cache, rewritten by the end-of-run refresh and no other field of it;
 - the transient reason file under `.gaia/local/audit/`, deleted in its own tool call;
 - the filing recipe's own transient issue-body file under `.gaia/local/audit/`, and the debt-count staleness sentinel that recipe touches;
