@@ -404,15 +404,23 @@ const parsePrUrl = (text: string): GhArtifact | undefined => {
   return {number, repo};
 };
 
-const lastLine = (value: null | string | undefined): string =>
-  safeOutput(value)
+// The `Cost:` line and the `Note:` lines `record` prints under it. With no
+// `Cost:` line (a `!` readout notice, a stderr line) the last line stands alone.
+const costReadout = (value: null | string | undefined): string => {
+  const lines = safeOutput(value)
     .split('\n')
     .map((line) => line.trim())
-    .findLast((line) => line !== '') ?? '';
+    .filter((line) => line !== '');
+  const costIndex = lines.findIndex((line) => line.startsWith('Cost:'));
+
+  return costIndex === -1 ?
+      (lines.at(-1) ?? '')
+    : lines.slice(costIndex).join('\n');
+};
 
 /**
- * Close this run's usage-ledger record and write the `Cost:` line through to
- * stdout. `defaultRunner` captures a spawned child's stdout instead of
+ * Close this run's usage-ledger record and write the `Cost:` line, with any
+ * `Note:` lines under it, through to stdout. `defaultRunner` captures a spawned child's stdout instead of
  * inheriting it, so without this explicit write the line is silently
  * swallowed and `/gaia-wiki` prints no cost at all.
  *
@@ -438,7 +446,9 @@ const recordWikiCost = (options: RunOptions, artifact?: GhArtifact): void => {
     ];
 
     const result = runner('bash', args, {cwd: repoRoot});
-    const line = lastLine(result.status === 0 ? result.stdout : result.stderr);
+    const line = costReadout(
+      result.status === 0 ? result.stdout : result.stderr
+    );
 
     if (line !== '') process.stdout.write(`${line}\n`);
   } catch {

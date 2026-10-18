@@ -1033,7 +1033,7 @@ describe('wiki chain', () => {
           },
           {
             argv: SUCCESS_RECORD_ARGV,
-            result: okResult('Cost: ~1.2M tokens, $0.90, 3m4s\n'),
+            result: okResult('Cost: 1.2M tokens, $0.90, 3m4s\n'),
           },
         ],
         recorded
@@ -1049,7 +1049,33 @@ describe('wiki chain', () => {
       expect(calls).toHaveLength(1);
       expect(calls[0]).toEqual({args: SUCCESS_RECORD_ARGV, command: 'bash'});
       expect(stdio.outputs.join('')).toContain(
-        'Cost: ~1.2M tokens, $0.90, 3m4s'
+        'Cost: 1.2M tokens, $0.90, 3m4s'
+      );
+    });
+
+    test('record call printing Note lines under the Cost line relays the Cost line and every Note', () => {
+      sandbox = setupSandbox();
+      const recorded: RecordedCall[] = [];
+      const runner = buildRunner(
+        [
+          {
+            argv: ['rev-parse', '--abbrev-ref', 'HEAD'],
+            result: okResult('feature/x\n'),
+          },
+          {
+            argv: NO_ARTIFACT_RECORD_ARGV,
+            result: okResult(
+              'Cost: 1.2M tokens, $0.90, 3m4s\nNote: Includes a model GAIA has no price for, so the cost is a minimum.\n'
+            ),
+          },
+        ],
+        recorded
+      );
+
+      const exit = run(['finish'], {cwd: sandbox.root, runner});
+      expect(exit).toBe(0);
+      expect(stdio.outputs.join('')).toContain(
+        'Cost: 1.2M tokens, $0.90, 3m4s\nNote: Includes a model GAIA has no price for, so the cost is a minimum.\n'
       );
     });
 
@@ -1588,7 +1614,7 @@ describe('wiki chain', () => {
           },
           {
             argv: NO_ARTIFACT_RECORD_ARGV,
-            result: okResult('Cost: ~1.2M tokens, $0.90, 3m4s\n'),
+            result: okResult('Cost: 1.2M tokens, $0.90, 3m4s\n'),
           },
         ],
         recorded
