@@ -27,7 +27,7 @@
 #   - Worktree entered by path: the tree is addressed by the path and the
 #     branch by the name the porcelain record shows, which differ; the arm
 #     also runs with the session's cwd inside the tree it removes.
-#   - Both worktree arms: a stop at the pre-removal check (a `.gaia-merge/`
+#   - Both worktree arms: a stop at the pre-removal check (an untracked
 #     file, an uncommitted edit) leaves the tree, the branch, `main` and the
 #     package manager untouched; an ignored file, a populated `.gaia-backup/`
 #     and a local commit with no upstream ref do not stop it; the install in
@@ -358,7 +358,7 @@ check_path_arm_addresses_tree_and_branch_separately() {
 # a few states, then an arm's fences run in order the way a caller runs them.
 
 # prepare_tree <dir> <lock|nolock> <state>: sets BRANCH, TREE, MAIN, OLD_SHA.
-# States: clean, merge-file, backup-only, dirty, ignored, no-upstream (a local
+# States: clean, untracked, backup-only, dirty, ignored, no-upstream (a local
 # commit while the remote branch is deleted and pruned).
 prepare_tree() {
   rm -f "$PNPM_LOG"
@@ -368,9 +368,8 @@ prepare_tree() {
   git -C "$MAIN" worktree add -q "$TREE" "$BRANCH" || return 1
   case "$3" in
     clean) ;;
-    merge-file)
-      mkdir -p "$TREE/.gaia-merge" || return 1
-      printf 'patch\n' >"$TREE/.gaia-merge/package.json.patch" || return 1
+    untracked)
+      printf 'notes\n' >"$TREE/stray-notes.txt" || return 1
       ;;
     backup-only)
       mkdir -p "$TREE/.gaia-backup" || return 1
@@ -431,14 +430,14 @@ tree_removed() {
   return 0
 }
 
-# check_arm_stops_on_merge_file <dir> <arm>: a file in `.gaia-merge/` stops the
+# check_arm_stops_on_untracked_file <dir> <arm>: an untracked file stops the
 # arm at its check fence with nothing touched.
-check_arm_stops_on_merge_file() {
-  prepare_tree "$1" nolock merge-file || return 1
+check_arm_stops_on_untracked_file() {
+  prepare_tree "$1" nolock untracked || return 1
   run_arm "$2" || return 1
   [ "$STATUS" -ne 0 ] || { echo "FAIL: the arm exited 0: $OUT"; return 1; }
   [ "$STOPPED_AT" -eq 1 ] || { echo "FAIL: the check fence did not stop the arm: $OUT"; return 1; }
-  printf '%s\n' "$OUT" | grep -Fq "package.json.patch" || { echo "FAIL: the stop does not list the file: $OUT"; return 1; }
+  printf '%s\n' "$OUT" | grep -Fq "stray-notes.txt" || { echo "FAIL: the stop does not list the file: $OUT"; return 1; }
   tree_untouched
 }
 
@@ -719,12 +718,12 @@ assert_check_red() { # expected reason, then function name and arguments
 # ---------------------------------------------------------------------------
 # Worktree arms: the pre-removal check, the pull gate and the conditional install
 
-@test "worktree by path: a .gaia-merge file stops at the check with the tree, branch, main and pnpm untouched" {
-  assert_check_green check_arm_stops_on_merge_file "$BATS_TEST_TMPDIR/fixture" path
+@test "worktree by path: an untracked file stops at the check with the tree, branch, main and pnpm untouched" {
+  assert_check_green check_arm_stops_on_untracked_file "$BATS_TEST_TMPDIR/fixture" path
 }
 
-@test "worktree by name: a .gaia-merge file stops at the check before the tail is reached" {
-  assert_check_green check_arm_stops_on_merge_file "$BATS_TEST_TMPDIR/fixture" name
+@test "worktree by name: an untracked file stops at the check before the tail is reached" {
+  assert_check_green check_arm_stops_on_untracked_file "$BATS_TEST_TMPDIR/fixture" name
 }
 
 @test "worktree by path: a populated .gaia-backup does not stop the removal" {
@@ -811,16 +810,16 @@ assert_check_red() { # expected reason, then function name and arguments
 # ---------------------------------------------------------------------------
 # Red twins for the worktree arms
 
-@test "red twin: a by-path arm whose check fence does nothing removes a tree holding a .gaia-merge file" {
+@test "red twin: a by-path arm whose check fence does nothing removes a tree holding an untracked file" {
   mutate_reference -e '/^### Worktree entered by path/,/^### Feature branch/s|^bash .gaia/scripts/worktree-removal-check.sh --tree <worktree path>$|true|' || return 1
   assert_check_red "the arm exited 0" \
-    check_arm_stops_on_merge_file "$BATS_TEST_TMPDIR/fixture" path
+    check_arm_stops_on_untracked_file "$BATS_TEST_TMPDIR/fixture" path
 }
 
-@test "red twin: a by-name arm whose check fence does nothing reaches the tail with a .gaia-merge file" {
+@test "red twin: a by-name arm whose check fence does nothing reaches the tail with an untracked file" {
   mutate_reference -e '/^### Worktree entered by name/,/^### Worktree entered by path/s|^bash .gaia/scripts/worktree-removal-check.sh --tree <worktree path>$|true|' || return 1
   assert_check_red "the arm exited 0" \
-    check_arm_stops_on_merge_file "$BATS_TEST_TMPDIR/fixture" name
+    check_arm_stops_on_untracked_file "$BATS_TEST_TMPDIR/fixture" name
 }
 
 @test "red twin: a check script without the status test lets a dirty tree through both arms" {

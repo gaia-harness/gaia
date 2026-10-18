@@ -25194,7 +25194,8 @@ var HELP_TOKENS10 = /* @__PURE__ */ new Set(["--help", "-h", "help"]);
 var UNEXPECTED_EXIT7 = 2;
 var ADOPTER_OWNED_SENTINELS2 = /* @__PURE__ */ new Set([
   ...ADOPTER_OWNED_SENTINELS,
-  ".gaia/project.json"
+  ".gaia/project.json",
+  ".gaia/update-decisions.json"
 ]);
 var RUNTIME_PREFIXES = [
   ".gaia/local",

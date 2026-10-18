@@ -316,7 +316,7 @@ type Sandbox = {
 };
 
 const setupSandbox = (): Sandbox => {
-  const root = mkdtempSync(path.join(tmpdir(), 'gaia-merge-region-'));
+  const root = mkdtempSync(path.join(tmpdir(), 'gaia-field-merge-region-'));
   const baselinePath = path.join(root, 'baseline.txt');
   const latestPath = path.join(root, 'latest.txt');
   const currentPath = path.join(root, 'current.txt');

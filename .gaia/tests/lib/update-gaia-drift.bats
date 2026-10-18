@@ -26,9 +26,11 @@ case "$1 $2" in
     printf '%s\n' "$DRIFT_JSON"
     ;;
   'setup detect-remote')
+    [ -z "$PROBE_LOG" ] || echo detect-remote >> "$PROBE_LOG"
     printf '%s\n' '{"found":true,"host":"github.com","owner":"acme","repo":"app"}'
     ;;
   'setup check-admin')
+    [ -z "$PROBE_LOG" ] || echo check-admin >> "$PROBE_LOG"
     printf '{"admin":%s,"auth_status":"ok"}\n' "$ADMIN_ANSWER"
     ;;
   *) exit 2 ;;
@@ -88,5 +90,61 @@ DRIFT_FIXTURE='{"features":"x","recorded":{"project":1,"machine":1},"decided":{}
   run bash "$SCRIPT" --features
   [ "$status" -eq 2 ]
   run bash "$SCRIPT" --bogus x
+  [ "$status" -eq 2 ]
+}
+
+# Runs the script with extra arguments after --features; NAME=value pairs come
+# first, then a literal --, then the extra arguments.
+run_drift_with_args() {
+  local -a environment_pairs=()
+  while [ "$#" -gt 0 ] && [ "$1" != -- ]; do
+    environment_pairs+=("$1")
+    shift
+  done
+  shift
+  # shellcheck disable=SC2016  # the inner script expands its own positional arguments
+  run env "${environment_pairs[@]}" bash -c 'cd "$1" || exit 99; script="$2"; shift 2; exec bash "$script" --features bundle/.gaia/setup-features.json "$@"' _ "$PROJECT" "$SCRIPT" "$@"
+}
+
+MIXED_SCOPE_FIXTURE='{"features":"x","recorded":{"project":1,"machine":1},"decided":{},"undecided":[
+{"id":"M","scope":"machine","required":true,"admin":false,"standalone":true,"reference":"ref/m.md","action":"apply"},
+{"id":"P","scope":"project","required":true,"admin":false,"standalone":true,"reference":"ref/p.md","action":"apply"},
+{"id":"Q","scope":"project","required":false,"admin":true,"standalone":true,"reference":"ref/q.md","action":"ask"}]}'
+
+@test "--scope machine emits only the machine-scope token" {
+  make_drift_fixture
+  run_drift_with_args DRIFT_JSON="$MIXED_SCOPE_FIXTURE" ADMIN_ANSWER=true -- --scope machine
+  [ "$status" -eq 0 ]
+  [ "$output" = 'APPLY M ref/m.md' ]
+}
+
+@test "--scope machine never calls the admin probe" {
+  make_drift_fixture
+  local probe_log="$BATS_TEST_TMPDIR/probe.log"
+  : >"$probe_log"
+  run_drift_with_args DRIFT_JSON="$MIXED_SCOPE_FIXTURE" ADMIN_ANSWER=true PROBE_LOG="$probe_log" -- --scope machine
+  [ "$status" -eq 0 ]
+  [ ! -s "$probe_log" ]
+}
+
+@test "without --scope the project admin feature still probes and all scopes report" {
+  make_drift_fixture
+  local probe_log="$BATS_TEST_TMPDIR/probe.log"
+  : >"$probe_log"
+  run_drift_with_args DRIFT_JSON="$MIXED_SCOPE_FIXTURE" ADMIN_ANSWER=true PROBE_LOG="$probe_log" --
+  [ "$status" -eq 0 ]
+  expected="$(printf '%s\n' 'APPLY M ref/m.md' 'APPLY P ref/p.md' 'ASK Q ref/q.md')"
+  [ "$output" = "$expected" ]
+  [ -s "$probe_log" ]
+}
+
+@test "--scope project and any other scope value exit 2" {
+  make_drift_fixture
+  local bad_scope
+  for bad_scope in project all ''; do
+    run_drift_with_args DRIFT_JSON="$MIXED_SCOPE_FIXTURE" ADMIN_ANSWER=true -- --scope "$bad_scope"
+    [ "$status" -eq 2 ]
+  done
+  run_drift_with_args DRIFT_JSON="$MIXED_SCOPE_FIXTURE" ADMIN_ANSWER=true -- --scope
   [ "$status" -eq 2 ]
 }

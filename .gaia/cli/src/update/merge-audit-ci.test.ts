@@ -9,6 +9,7 @@ import {afterEach, beforeEach, describe, expect, test, vi} from 'vitest';
 import {mkdtempSync, rmSync, writeFileSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import path from 'node:path';
+import {occupiedBucket, VERDICT_ROWS} from './field-verdict-table-fixture.js';
 import {run} from './merge-audit-ci.js';
 import type {AuditCiMergeReport} from './merge-audit-ci.js';
 
@@ -22,7 +23,7 @@ type Sandbox = {
 };
 
 const setupSandbox = (): Sandbox => {
-  const root = mkdtempSync(path.join(tmpdir(), 'gaia-merge-audit-ci-'));
+  const root = mkdtempSync(path.join(tmpdir(), 'gaia-field-merge-audit-ci-'));
   const baselinePath = path.join(root, 'baseline.yaml');
   const latestPath = path.join(root, 'latest.yaml');
   const currentPath = path.join(root, 'current.yaml');
@@ -144,7 +145,6 @@ describe('update merge-audit-ci', () => {
     const report = parseJson(stdio.outputs);
     expect(report.applied).toEqual([]);
     expect(report.conflicts).toEqual([]);
-    expect(report.suggestions).toEqual([]);
   });
 
   test('legacy top-level keys in the adopter file are neither applied nor flagged', () => {
@@ -169,7 +169,6 @@ describe('update merge-audit-ci', () => {
     const report = parseJson(stdio.outputs);
     expect(report.applied).toEqual([]);
     expect(report.conflicts).toEqual([]);
-    expect(report.suggestions).toEqual([]);
   });
 
   test('a top-level key only latest carries is not suggested', () => {
@@ -183,10 +182,9 @@ describe('update merge-audit-ci', () => {
     const report = parseJson(stdio.outputs);
     expect(report.applied).toEqual([]);
     expect(report.conflicts).toEqual([]);
-    expect(report.suggestions).toEqual([]);
   });
 
-  test('a new GAIA-authored roster member the adopter never saw lands in applied[], not suggestions[]', () => {
+  test('a new GAIA-authored roster member the adopter never saw lands in applied[] with reason added', () => {
     // The exact FC-2 scenario this task exists for: code-audit-github-workflows
     // ships in latest and was never in the adopter's baseline or current file.
     const frontendOnly = [
@@ -214,7 +212,6 @@ describe('update merge-audit-ci', () => {
     expect(exit).toBe(0);
 
     const report = parseJson(stdio.outputs);
-    expect(report.suggestions).toEqual([]);
     expect(report.conflicts).toEqual([]);
     expect(report.applied).toEqual([
       {
@@ -225,6 +222,7 @@ describe('update merge-audit-ci', () => {
           globs: ['.github/workflows/*.yml'],
           push_fixes: false,
         },
+        reason: 'added',
         section: 'auditors',
       },
     ]);
@@ -278,7 +276,7 @@ describe('update merge-audit-ci', () => {
     const touchedNames = [
       ...report.applied,
       ...report.conflicts,
-      ...report.suggestions,
+      ...report.keptRemoved,
     ]
       .filter((item) => item.section === 'auditors')
       .map((item) => item.key);
@@ -308,6 +306,7 @@ describe('update merge-audit-ci', () => {
           globs: ['app/**', 'test/**'],
           push_fixes: true,
         },
+        reason: 'changed',
         section: 'auditors',
       },
     ]);
@@ -352,7 +351,6 @@ describe('update merge-audit-ci', () => {
 
     const report = parseJson(stdio.outputs);
     expect(report.applied).toEqual([]);
-    expect(report.suggestions).toEqual([]);
     expect(report.conflicts).toHaveLength(1);
     expect(report.conflicts[0]).toMatchObject({
       key: 'code-audit-frontend',
@@ -396,7 +394,6 @@ describe('update merge-audit-ci', () => {
 
     const report = parseJson(stdio.outputs);
     expect(report.conflicts).toEqual([]);
-    expect(report.suggestions).toEqual([]);
     expect(report.applied).toHaveLength(1);
     expect(report.applied[0]).toMatchObject({
       key: 'code-audit-frontend',
@@ -420,7 +417,6 @@ describe('update merge-audit-ci', () => {
 
     const report = parseJson(stdio.outputs);
     expect(report.applied).toEqual([]);
-    expect(report.suggestions).toEqual([]);
     expect(report.conflicts).toHaveLength(1);
     expect(report.conflicts[0]).toMatchObject({
       adopter: {light_line_cap: 20},
@@ -431,7 +427,7 @@ describe('update merge-audit-ci', () => {
     });
   });
 
-  test('a roster member removed upstream but still present in baseline is a no-op', () => {
+  test('a roster member removed upstream that the adopter still has lands in removedUpstream', () => {
     sandbox.write(
       'baseline',
       `auditors:
@@ -460,7 +456,11 @@ describe('update merge-audit-ci', () => {
     const report = parseJson(stdio.outputs);
     expect(report.applied).toEqual([]);
     expect(report.conflicts).toEqual([]);
-    expect(report.suggestions).toEqual([]);
+    expect(report.removedUpstream).toHaveLength(1);
+    expect(report.removedUpstream[0]).toMatchObject({
+      key: 'code-audit-legacy',
+      section: 'auditors',
+    });
   });
 
   test('a malformed roster entry (missing or non-string name) is skipped without crashing', () => {
@@ -507,7 +507,6 @@ describe('update merge-audit-ci', () => {
     const report = parseJson(stdio.outputs);
     expect(report.applied).toEqual([]);
     expect(report.conflicts).toEqual([]);
-    expect(report.suggestions).toEqual([]);
   });
 
   test('a key upstream dropped from a member is carried out by applying the whole mapping, so it does not survive', () => {
@@ -522,7 +521,6 @@ describe('update merge-audit-ci', () => {
 
     const report = parseJson(stdio.outputs);
     expect(report.conflicts).toEqual([]);
-    expect(report.suggestions).toEqual([]);
     expect(report.applied).toHaveLength(1);
 
     const [item] = report.applied;
@@ -557,5 +555,109 @@ describe('update merge-audit-ci', () => {
 
     expect(exit).not.toBe(0);
     expect(stdio.errors.join('')).toContain('invalid_arguments');
+  });
+});
+
+const memberYaml = (value: number | undefined): string =>
+  value === undefined ? 'auditors: []\n' : (
+    `auditors:\n  - name: reviewer\n    cap: ${value}\n`
+  );
+
+describe('update merge-audit-ci verdict table', () => {
+  let sandbox: Sandbox;
+  let stdio: ReturnType<typeof captureStdio>;
+
+  beforeEach(() => {
+    stdio = captureStdio();
+    sandbox = setupSandbox();
+  });
+
+  afterEach(() => {
+    stdio.restore();
+    sandbox.cleanup();
+    vi.restoreAllMocks();
+  });
+
+  test.each(VERDICT_ROWS)('$name', (row) => {
+    sandbox.write('baseline', memberYaml(row.baseline));
+    sandbox.write('latest', memberYaml(row.latest));
+    sandbox.write('current', memberYaml(row.adopter));
+
+    expect(run(argv(sandbox))).toBe(0);
+
+    const report = parseJson(stdio.outputs);
+    expect(occupiedBucket(report)).toBe(row.expected);
+
+    expect(report.applied[0]?.reason).toBe(row.reason);
+  });
+
+  test('a roster conflict is not version valued and recommends keep', () => {
+    sandbox.write('baseline', memberYaml(1));
+    sandbox.write('latest', memberYaml(2));
+    sandbox.write('current', memberYaml(3));
+
+    expect(run(argv(sandbox))).toBe(0);
+
+    expect(parseJson(stdio.outputs).conflicts[0]).toMatchObject({
+      recommendation: {option: 'keep'},
+      versionValued: false,
+    });
+  });
+});
+
+describe('update merge-audit-ci deferred baselines', () => {
+  let sandbox: Sandbox;
+  let stdio: ReturnType<typeof captureStdio>;
+
+  const deferredPath = (): string => path.join(sandbox.root, 'deferred.yaml');
+
+  beforeEach(() => {
+    stdio = captureStdio();
+    sandbox = setupSandbox();
+    sandbox.write('baseline', memberYaml(2));
+    sandbox.write('latest', memberYaml(2));
+    sandbox.write('current', memberYaml(1));
+  });
+
+  afterEach(() => {
+    stdio.restore();
+    sandbox.cleanup();
+    vi.restoreAllMocks();
+  });
+
+  test('a member deferred where it was 1 applies against that bundle', () => {
+    writeFileSync(deferredPath(), memberYaml(1), 'utf8');
+
+    expect(
+      run([
+        ...argv(sandbox),
+        '--deferred-baseline',
+        `auditors.reviewer=${deferredPath()}`,
+      ])
+    ).toBe(0);
+
+    const report = parseJson(stdio.outputs);
+    expect(report.applied).toHaveLength(1);
+    expect(report.applied[0]).toMatchObject({
+      key: 'reviewer',
+      reason: 'changed',
+      section: 'auditors',
+    });
+  });
+
+  test('without the deferred baseline the same member is a no-op', () => {
+    expect(run(argv(sandbox))).toBe(0);
+    expect(occupiedBucket(parseJson(stdio.outputs))).toBe('none');
+  });
+
+  test('a missing deferred file exits non-zero with a structured error', () => {
+    const exit = run([
+      ...argv(sandbox),
+      '--deferred-baseline',
+      `auditors.reviewer=${deferredPath()}`,
+    ]);
+
+    expect(exit).not.toBe(0);
+    expect(stdio.errors.join('')).toContain('audit_ci_file_missing');
   });
 });

@@ -21,4 +21,11 @@ If the detection does not fire, fall through to the workflow dispatch line below
 
 Anchor for the next pre-flight step: a check that must pass before this command starts goes here, after the worktree check and before the workflow dispatch line.
 
+```bash
+. .gaia/scripts/main-only-lib.sh
+gaia_pull_gate "/gaia-fitness"
+```
+
+On a non-zero exit, read `.claude/skills/update-gaia/references/pull-gate.md` and follow it with `/gaia-fitness`, this run's original arguments and the exit code, before anything below creates a branch, worktree, claim or SPEC id.
+
 Read `.claude/skills/gaia/references/fitness.md` from the project root and follow it exactly.
