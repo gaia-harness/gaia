@@ -108,7 +108,7 @@ Spawn a `general-purpose` Agent, passing `effort: "medium"` on the Agent call, w
 
 - **Found (useful findings).** Fold into `research_summary` of the draft. Cite sources. Write draft cache. Continue the loop.
 - **Inconclusive (agent searched but found nothing definitive).** Fold the inconclusive note into `research_summary` as a known gap. Re-prompt the original closed-set question with the research context attached as a footnote so the user can decide informed.
-- **Error (agent did not return findings or returned an error).** Surface to the user via plain prompt: `"Research agent did not return findings on \"<question>\". Answer manually, defer with rationale, or skip this question?"`. Wait for direction. Do not silently continue.
+- **Error (agent did not return findings or returned an error).** Surface to the user via `AskUserQuestion` (header `Research`, single-select), question `Research agent did not return findings on "<question>". How should this question proceed?`, with the options `Answer manually (Recommended)`, `Defer with rationale` and `Skip this question`. Wait for direction. Do not silently continue.
 - **Contradictory (agent returned multiple plausible answers).** Surface the candidates via `AskUserQuestion` in the 5a shape: each candidate as an option, the recommended one first and at most three in all, then `Discuss this`; name any further candidate in the question text. Let the user pick.
 
 If the user has selected `Discuss this` on a question that turns out to need research, dispatch the research subagent (the same `general-purpose` dispatch with `effort: "medium"`) and surface findings in the discussion before requesting settlement.
