@@ -66,6 +66,9 @@ has_line() { grep -qxF -- "$1" <<<"$output" || { printf 'missing line: [%s]\nin:
 
 line_count() { grep -cxF -- "$1" <<<"$output" || true; }
 
+# has_cost <dollars>: the block's Cost line carries that price, `at least` when a model is unpriced.
+has_cost() { grep -qE "^Cost: [0-9]+\.[0-9]M tokens, (at least )?\\\$${1//./\\.}, " <<<"$output" || { printf 'no Cost line at $%s in:\n%s\n' "$1" "$output" >&2; return 1; }; }
+
 assert_no_network() {
   [ ! -s "$SENTINEL" ] || { printf 'a network tool was called:\n%s\n' "$(cat "$SENTINEL")" >&2; return 1; }
 }
@@ -76,7 +79,7 @@ RATE_MARKER='  ! rate override ignored (unparseable): .gaia/local/telemetry/toke
   install_override override-valid.json
   run run_pr
   [ "$status" -eq 0 ]
-  has_line "  est. cost (USD): \$7.50"
+  has_cost 7.50
   has_line "  ! lower bound: unpriced model(s) claude-zzz-1"
   [ "$(line_count "$RATE_MARKER")" -eq 0 ]
   assert_no_network
@@ -87,7 +90,7 @@ RATE_MARKER='  ! rate override ignored (unparseable): .gaia/local/telemetry/toke
   run run_pr
   [ "$status" -eq 0 ]
   [ "$(line_count "$RATE_MARKER")" -eq 1 ]
-  has_line "  est. cost (USD): \$1.50"
+  has_cost 1.50
   has_line "  ! lower bound: unpriced model(s) claude-ccc-1, claude-zzz-1"
   assert_no_network
 }
@@ -97,7 +100,7 @@ RATE_MARKER='  ! rate override ignored (unparseable): .gaia/local/telemetry/toke
   run run_pr
   [ "$status" -eq 0 ]
   [ "$(line_count "$RATE_MARKER")" -eq 1 ]
-  has_line "  est. cost (USD): \$1.50"
+  has_cost 1.50
   assert_no_network
 }
 
@@ -117,7 +120,7 @@ RATE_MARKER='  ! rate override ignored (unparseable): .gaia/local/telemetry/toke
   run run_pr
   [ "$status" -eq 0 ]
   [ "$(line_count "$RATE_MARKER")" -eq 0 ]
-  has_line "  est. cost (USD): \$1.50"
+  has_cost 1.50
 }
 
 @test "a seeded machine-local token-rates.json is never read" {
@@ -138,7 +141,7 @@ RATE_MARKER='  ! rate override ignored (unparseable): .gaia/local/telemetry/toke
   run bash "$USAGE" pr 601 --main-root "$MAIN" --rate-table "$TEMPORARY_DIRECTORY/seam-rates.json" \
     --projects-root "$TEMPORARY_DIRECTORY/projects"
   [ "$status" -eq 0 ]
-  has_line "  est. cost (USD): \$3.00"
+  has_cost 3.00
 }
 
 # mutant_scripts <name>: a scratch copy of the scripts directory (files only, no
@@ -162,5 +165,5 @@ mutant_scripts() {
   run run_pr "$MUTANT_SCRIPTS/usage.sh"
   [ "$status" -eq 0 ]
   grep -qF -- '$7.50' <<<"$output" && return 1
-  has_line "  est. cost (USD): \$1.50"
+  has_cost 1.50
 }

@@ -88,7 +88,7 @@ A qualifying condition prints as one plain `Note:` sentence under the figures, n
 
 ## Per-PR and initiative readouts
 
-The per-PR block, the Code Audit Team line, and the initiative readouts are documented in [[Usage Ledger]]. They reprice raw buckets at read time through the lib above, so they follow the distributed table and the override together. `bash .gaia/scripts/usage.sh` prints its subcommands.
+The per-PR block prints through the same box and Cost line, as `PR #<N> Cost` with `Execute` and `Audit` rows. It and the initiative readouts are documented in [[Usage Ledger]]. They reprice raw buckets at read time through the lib above, so they follow the distributed table and the override together. `bash .gaia/scripts/usage.sh` prints its subcommands.
 
 ## Pairs with
 

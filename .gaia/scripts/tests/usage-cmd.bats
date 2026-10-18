@@ -146,13 +146,14 @@ seed_links() {
   cmp "$TEMPORARY_DIRECTORY/links-before" "$TELEMETRY_DIRECTORY/links.jsonl"
 }
 
-@test "pr --branch with no number renders the numberless header with a window through now" {
+@test "pr --branch with no number reads the branch's spend over a window open at both ends" {
   printf '%s\n' '{"schema_version":1,"kind":"segment","key":"branch:fix/bar","session_id":"s","inherit":false,"first_ts":"2026-10-01T00:00:00Z","last_ts":"2026-10-01T00:00:00Z","messages":1,"by_model":{"claude-opus-5-5":{"fresh_input":100000,"output":10000}}}' >"$TELEMETRY_DIRECTORY/usage.jsonl"
   run run_usage pr --branch fix/bar
   [ "$status" -eq 0 ]
-  has_line "[PR cost] pr:? branch:fix/bar"
-  has_line "  tokens: 110,000 (fresh 100,000, cache write 0, cache read 0, output 10,000)"
-  has_line "  window: after start of record through now"
+  grep -qE '^Cost: 0\.1M tokens, \$[0-9]+\.[0-9]{2}, 0s$' <<<"$output" || { printf '%s\n' "$output" >&2; return 1; }
+  run run_usage pr --branch fix/bar --json
+  [ "$status" -eq 0 ]
+  [ "$(jq -c '[.pr, .key, .sum.total, .sum.fresh, .sum.out, .window.from_iso, .window.to_iso]' <<<"$output")" = '[null,"branch:fix/bar",110000,100000,10000,null,null]' ]
 }
 
 # ---------- UAT-025 markers ----------
@@ -191,13 +192,13 @@ cursors() {
   make_transcript 1000
   cursors 400
   run run_usage pr 503
-  has_line "  tokens: 440,000 (fresh 400,000, cache write 0, cache read 0, output 40,000)"
+  grep -q '^Cost: 0\.4M tokens, ' <<<"$output" || { printf '%s\n' "$output" >&2; return 1; }
   has_line "  ! unflushed: 1 file(s), 600 bytes not yet recorded"
   run run_usage initiative issue:200
   has_line "  ! unflushed: 1 file(s), 600 bytes not yet recorded"
   cursors 1000
   run run_usage pr 503
-  has_line "  tokens: 440,000 (fresh 400,000, cache write 0, cache read 0, output 40,000)"
+  grep -q '^Cost: 0\.4M tokens, ' <<<"$output" || { printf '%s\n' "$output" >&2; return 1; }
   grep -qF 'unflushed' <<<"$output" && return 1
   true
 }

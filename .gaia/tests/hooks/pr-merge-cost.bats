@@ -67,8 +67,7 @@ run_nojq() {
   gh_view 103 103 fix/foo MERGED 2026-09-25T02:00:00Z
   run_merge "gh pr merge 103 --squash"
   [ "$status" -eq 0 ]
-  has_line "[PR cost] pr:103 branch:fix/foo"
-  has_line "  tokens: 440,000 (fresh 400,000, cache write 0, cache read 0, output 40,000)"
+  has_line "Cost: 0.4M tokens, \$1.20, 0s"
   lacks "[cycle cost at merge]"
 }
 

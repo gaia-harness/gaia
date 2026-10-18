@@ -1,6 +1,6 @@
 #!/usr/bin/env bats
 #
-# Bats suite for the Code Audit Team line of the per-PR block that
+# Bats suite for the Code Audit Team row of the per-PR block that
 # .gaia/scripts/usage-merge.sh prints at every `gh pr merge`, run through the
 # real pr-merge-cost.sh hook: the roster read from .gaia/audit-ci.yml, the
 # `--auditors` pass-through, the unreadable-roster marker, and the hard-error
@@ -62,8 +62,10 @@ seed_audit_branch() {
   [ -z "$(find "$REPO" "$TELEMETRY_DIRECTORY" -name 'cost.js*' -print 2>/dev/null)" ]
   run_merge "gh pr merge 101"
   [ "$status" -eq 0 ]
-  has_line "[PR cost] pr:101 branch:fix/foo"
-  has_line "  audit (Code Audit Team): tokens 530,000  est. cost (USD): \$1.30"
+  has_line "PR #101 Cost"
+  has_line "| Execute: 1.1M tokens, \$2.20, 50m0s |"
+  has_line "|   Audit: 0.5M tokens, \$1.30, 10m0s |"
+  has_line "|   Total: 1.6M tokens, \$3.50, 50m0s |"
   has_line "  ! lower bound: 1 segment(s) predate agent fields"
   lacks "audit line unavailable"
   lacks "[cycle cost at merge]"
@@ -80,19 +82,18 @@ auditors:
 EOF
   run_merge "gh pr merge 101"
   [ "$status" -eq 0 ]
-  has_line "  audit (Code Audit Team): tokens 400,000  est. cost (USD): \$0.80"
+  has_line "|   Audit: 0.4M tokens, \$0.80, 0s    |"
 }
 
-@test "an unreadable roster prints the marker once after the block, no audit line, and the rest of the block" {
+@test "an unreadable roster prints the marker once after the block, no Audit row, and the PR as one Cost line" {
   seed_audit_branch
   rm "$REPO/.gaia/audit-ci.yml"
   run_merge "gh pr merge 101"
   [ "$status" -eq 0 ]
-  has_line "[PR cost] pr:101 branch:fix/foo"
-  has_line "  est. cost (USD): \$3.50"
+  has_line "Cost: 1.6M tokens, \$3.50, 50m0s"
   has_line "  ! audit line unavailable: no auditors roster in .gaia/audit-ci.yml"
   [ "$(grep -c 'audit line unavailable' <<<"$output")" -eq 1 ]
-  lacks "audit (Code Audit Team)"
+  lacks "Audit:"
   [ "$(printf '%s\n' "$output" | tail -n 1)" = "  ! audit line unavailable: no auditors roster in .gaia/audit-ci.yml" ] || return 1
 }
 
@@ -103,7 +104,7 @@ EOF
   cmp -s "$REPO/.gaia/scripts/usage-merge.sh" "$REPO/.gaia/scripts/usage-merge-mutant.sh" && return 1
   run_script "$REPO/.gaia/scripts/usage-merge-mutant.sh" "gh pr merge 101"
   [ "$status" -eq 0 ]
-  has_line "[PR cost] pr:101 branch:fix/foo"
+  has_line "Cost: 1.6M tokens, \$3.50, 50m0s"
   grep -qF "audit line unavailable" <<<"$output" && return 1
   true
 }

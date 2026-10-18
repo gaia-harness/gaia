@@ -38,8 +38,8 @@ setup() {
 # never read through gh.
 assert_foreign_ignored() {
   [ "$status" -eq 0 ]
-  lacks "pr:45"
-  lacks "tokens:"
+  lacks "Cost"
+  lacks "--merge 45 "
   [ ! -f "$TELEMETRY_DIRECTORY/links.jsonl" ] || [ "$(merge_rows 45)" -eq 0 ] || return 1
   [ ! -f "$TELEMETRY_DIRECTORY/links.jsonl" ] || ! grep -q '"pr:45"' "$TELEMETRY_DIRECTORY/links.jsonl" || return 1
   [ ! -f "$GH_STUB_DIRECTORY/argv.log" ] || ! grep -q 'pr view 45' "$GH_STUB_DIRECTORY/argv.log" || return 1
@@ -56,11 +56,12 @@ assert_foreign_ignored() {
   git -C "$REPO" remote add origin git@github.com:O/R.git
   run_merge "gh pr merge https://github.com/o/r/pull/45"
   [ "$status" -eq 0 ]
-  has_line "[PR cost] pr:45 branch:fix/foo"
+  has_line "Cost: 0.4M tokens, \$1.20, 0s"
   [ "$(merge_rows 45)" -eq 1 ]
+  [ "$(merge_key 45)" = branch:fix/foo ]
   git -C "$REPO" remote set-url origin https://github.com/o/r.git
   run_merge "gh pr merge https://github.com/o/r/pull/45"
-  has_line "[PR cost] pr:45 branch:fix/foo"
+  has_line "Cost: 0.4M tokens, \$1.20, 0s"
   [ "$(merge_rows 45)" -eq 2 ]
   # The stub's view.json fallback answers an operand-less read too, so the
   # operand itself must have reached gh.
@@ -92,8 +93,9 @@ no_trace_of_12() {
 assert_nothing_touched() {
   [ "$status" -eq 0 ] || return 1
   lacks "[PR cost]" || return 1
-  lacks "pr:12" || return 1
-  lacks "pr:45" || return 1
+  lacks "Cost" || return 1
+  lacks "--merge 12 " || return 1
+  lacks "--merge 45 " || return 1
   if [ -f "$TELEMETRY_DIRECTORY/links.jsonl" ]; then
     [ "$(jq -s '[.[] | select(.kind == "merge")] | length' "$TELEMETRY_DIRECTORY/links.jsonl")" -eq 0 ] || return 1
     grep -q '"pr:' "$TELEMETRY_DIRECTORY/links.jsonl" && return 1
@@ -147,7 +149,7 @@ run_foreign_spellings() {
   use_feature_branch OPEN
   run_merge "gh pr merge --squash"
   [ "$status" -eq 0 ]
-  has_line "[PR cost] pr:12 branch:feat/cur"
+  has_line "  ! merge not confirmed; boundary not recorded (record it: bash .gaia/scripts/usage.sh link --merge 12 --key branch:feat/cur)"
   argv_has '^pr view --json'
 }
 
@@ -155,8 +157,9 @@ run_foreign_spellings() {
   use_feature_branch MERGED 2026-09-25T02:00:00Z
   run_merge "gh pr merge"
   [ "$status" -eq 0 ]
-  has_line "[PR cost] pr:12 branch:feat/cur"
+  grep -q '^Cost: ' <<<"$output"
   [ "$(merge_rows 12)" -eq 1 ]
+  [ "$(merge_key 12)" = branch:feat/cur ]
 }
 
 @test "a branch-name operand resolves that branch's PR, never the current branch's" {
@@ -164,8 +167,9 @@ run_foreign_spellings() {
   gh_view mybranch 77 mybranch MERGED 2026-09-26T02:00:00Z
   run_merge "gh pr merge mybranch --squash"
   [ "$status" -eq 0 ]
-  has_line "[PR cost] pr:77 branch:mybranch"
+  grep -q '^Cost: ' <<<"$output"
   [ "$(merge_rows 77)" -eq 1 ]
+  [ "$(merge_key 77)" = branch:mybranch ]
   [ "$(merge_rows 12)" -eq 0 ]
   argv_has '^pr view mybranch '
   argv_has '^pr view --json' && return 1
@@ -176,7 +180,7 @@ run_foreign_spellings() {
   use_feature_branch MERGED 2026-09-25T02:00:00Z
   run_merge "gh pr merge ghostbranch"
   [ "$status" -eq 0 ]
-  lacks "pr:12"
+  lacks "--merge 12 "
   no_trace_of_12
   argv_has '^pr view ghostbranch '
   argv_has '^pr view --json' && return 1
@@ -187,14 +191,14 @@ run_foreign_spellings() {
   use_feature_branch MERGED 2026-09-25T02:00:00Z
   run_merge 'gh pr merge $(echo 45)'
   [ "$status" -eq 0 ]
-  lacks "pr:12"
+  lacks "--merge 12 "
   no_trace_of_12
   argv_has '^pr view' && return 1
   # A multi-line body cuts the statement inside a quote, hiding the operand.
   rm -f "$GH_STUB_DIRECTORY/argv.log"
   run_merge $'gh pr merge --body "line one\nline two" 45'
   [ "$status" -eq 0 ]
-  lacks "pr:12"
+  lacks "--merge 12 "
   no_trace_of_12
   argv_has '^pr view' && return 1
   true
@@ -207,7 +211,7 @@ run_foreign_spellings() {
     rm -f "$GH_STUB_DIRECTORY/argv.log"
     run_merge "gh pr merge $flag_spelling"
     [ "$status" -eq 0 ]
-    has_line "[PR cost] pr:12 branch:feat/cur" || { printf 'failed for: %s\n' "$flag_spelling" >&2; return 1; }
+    has_line "  ! merge not confirmed; boundary not recorded (record it: bash .gaia/scripts/usage.sh link --merge 12 --key branch:feat/cur)" || { printf 'failed for: %s\n' "$flag_spelling" >&2; return 1; }
     argv_has '^pr view 99' && return 1
     argv_has '^pr view --json' || return 1
   done

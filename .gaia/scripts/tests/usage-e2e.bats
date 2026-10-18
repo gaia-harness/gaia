@@ -41,10 +41,11 @@ teardown() {
   gh_view 101 101 debt/123-slug MERGED 2026-10-02T00:00:00Z
   fire pr-merge-cost.sh "$(merge_payload 'gh pr merge 101 --squash' s-m "$TRANSCRIPT_PATH_MAIN")"
   [ "$status" -eq 0 ]
-  has_line "[PR cost] pr:101 branch:debt/123-slug"
-  has_line "  tokens: 7,812 (fresh 7, cache write 770, cache read 7,000, output 35)"
-  grep -Eq '^  sessions: 2  span: 2026-10-01\.\.2026-10-01  coverage start: 2026-10-01$' <<<"$output"
+  grep -q '^Cost: 0\.0M tokens, ' <<<"$output" || { printf '%s\n' "$output" >&2; return 1; }
   lacks "merge not confirmed"
+  run run_usage pr 101 --json
+  [ "$(jq -c '[.key, .sum.total, .sum.fresh, .sum.cw, .sum.cr, .sum.out, .sum.sessions, .sum.span_from, .sum.span_to, .coverage]' <<<"$output")" = \
+    '["branch:debt/123-slug",7812,7,770,7000,35,2,"2026-10-01","2026-10-01","2026-10-01"]' ]
 }
 
 # ---------- UAT-010 (full) ----------
@@ -202,9 +203,8 @@ snapshot() {
   run run_usage link --merge 88 --branch docs/wiki-chain --merged-at 2026-10-02T00:00:00Z
   [ "$status" -eq 0 ]
   [ "$(jq -s '[.[] | select(.kind == "merge" and .pr == 88 and .key == "branch:docs/wiki-chain")] | length' "$TELEMETRY_DIRECTORY/links.jsonl")" -eq 1 ]
-  run run_usage pr 88
-  has_line "[PR cost] pr:88 branch:docs/wiki-chain"
-  has_line "  tokens: 3,340 (fresh 3, cache write 330, cache read 3,000, output 7)"
+  run run_usage pr 88 --json
+  [ "$(jq -c '[.pr, .key, .sum.total, .sum.fresh, .sum.cw, .sum.cr, .sum.out]' <<<"$output")" = '[88,"branch:docs/wiki-chain",3340,3,330,3000,7]' ]
 }
 
 # ---------- UAT-027 ----------
@@ -233,7 +233,7 @@ net_clean() {
   fire usage-capture.sh "$(hook_payload Stop s-m "$TRANSCRIPT_PATH_MAIN")"
   fire usage-capture.sh "$(hook_payload SessionStart s-m "$TRANSCRIPT_PATH_MAIN")"
   fire pr-merge-cost.sh "$(merge_payload 'gh pr merge 101' s-m "$TRANSCRIPT_PATH_MAIN")"
-  has_line "[PR cost] pr:101 branch:debt/123-slug"
+  grep -q '^Cost: ' <<<"$output" || { printf '%s\n' "$output" >&2; return 1; }
   fire capture-gh-artifact.sh "$(jq -nc '{hook_event_name:"PostToolUse",tool_name:"Bash",tool_input:{command:"gh pr create --title x"},tool_response:{stdout:"https://github.com/o/r/pull/9\n",stderr:""},session_id:"s-m"}')"
   [ "$status" -eq 0 ]
   for subcommand in $(derive_subcommands "$REPO/.gaia/scripts/usage.sh"); do
