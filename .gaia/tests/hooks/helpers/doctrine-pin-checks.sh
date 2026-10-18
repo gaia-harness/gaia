@@ -32,11 +32,26 @@ GP_DISPATCH_RE='(spawn|dispatch|launch)[^.;]{0,80}general-purpose|subagent_type[
 # shellcheck disable=SC2016 # the backticks are literal markdown
 SUBAGENT_TYPE_RE='subagent_type[`"]*:[[:space:]]*[`"\\]*[^`"\\[:space:],)]+'
 
+# The planner's session-effort mark (ERE). A dispatch block carrying it runs at
+# the session level on purpose: blocks_anchored_pinned_ok exempts it from the
+# pin and fails it if it carries one anyway. The exemption is per block, so a
+# second dispatch written into a marked block's own paragraph is not seen; that
+# is why session_effort_mark_files confines the mark to the planner's file.
+SESSION_EFFORT_MARK_RE='runs at the session effort'
+
 # Prints every tracked file outside the doctrine page that pins a model or a
 # dispatch effort.
 pin_site_files() {
   git -C "$1" grep -l -i -E -e "$PIN_RE" -e "$EFFORT_PIN_RE" -- .claude frontend/.claude wiki .gaia/cli/health \
     ':!wiki/log.md' ':!wiki/hot.md' ':!wiki/meta' ':!wiki/concepts/Workflow Doctrine.md'
+}
+
+# Prints every tracked file in the same scan roots, same exclusions, that
+# carries the session-effort mark.
+session_effort_mark_files() {
+  git -C "$1" grep -l -i -E -e "$SESSION_EFFORT_MARK_RE" -- .claude frontend/.claude wiki .gaia/cli/health \
+    ':!wiki/log.md' ':!wiki/hot.md' ':!wiki/meta' ':!wiki/concepts/Workflow Doctrine.md'
+  return 0
 }
 
 # Prints every tracked markdown file in the same scan roots, same exclusions.
@@ -187,7 +202,9 @@ dispatch_blocks() {
 }
 
 UNPINNED_BLOCKS=""
-# Every block of every file that matches the anchor also matches EFFORT_PIN_RE.
+# Every block of every file that matches the anchor also matches EFFORT_PIN_RE,
+# except a block carrying SESSION_EFFORT_MARK_RE, which must not match it and
+# is reported as marked-pinned when it does.
 blocks_anchored_pinned_ok() {
   local anchor="$1" file_path block_number block_text
   shift
@@ -198,6 +215,12 @@ blocks_anchored_pinned_ok() {
     grep -qiE -- "$anchor" "$file_path" || continue
     while IFS=$'\t' read -r block_number block_text; do
       printf '%s' "$block_text" | grep -qiE -- "$anchor" || continue
+      if printf '%s' "$block_text" | grep -qiE -- "$SESSION_EFFORT_MARK_RE"; then
+        if printf '%s' "$block_text" | grep -qiE -- "$EFFORT_PIN_RE"; then
+          UNPINNED_BLOCKS="$UNPINNED_BLOCKS marked-pinned:$file_path:$block_number"
+        fi
+        continue
+      fi
       printf '%s' "$block_text" | grep -qiE -- "$EFFORT_PIN_RE" || UNPINNED_BLOCKS="$UNPINNED_BLOCKS $file_path:$block_number"
     done < <(dispatch_blocks "$file_path")
   done

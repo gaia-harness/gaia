@@ -39,11 +39,13 @@ Models are ranked by fit to the task class. Fit has two halves: the reasoning de
 
 An Effort cell is the level every pin site in that row sets: a named agent sets it in its `effort:` frontmatter, and a general-purpose or fresh dispatch passes it as the `Agent` tool's `effort` parameter on the call, never as text in the prompt the subagent reads. A dispatch with no pin, and work the main thread does inline in place of a dispatch, run at the session level. Forks ignore `effort`, so a dispatch that needs a fixed level is a named or fresh agent, never a fork. `CLAUDE_CODE_EFFORT_LEVEL`, when set, overrides every pin, frontmatter and per-call alike. The per-call parameter needs a Claude Code version that supports it.
 
+The `/gaia-plan` planner runs unpinned on purpose: it generates the plan, so it runs at the session level and a user's `/effort` choice reaches the plan, while the `/gaia-spec` and `/gaia-plan` audit pipelines stay pinned because they grade the work and must grade it at a constant level.
+
 The cost ratios come from the published price card, not from measurement. `.gaia/scripts/token-rates.json` carries the same rates for GAIA's cost readouts, with Haiku at its short-prompt rate, so a Haiku cost readout is a lower bound.
 
 Among the doctrine sources (the rule, `.claude/doctrine/execution.md`, and this page), the table is the only text edited when a model ships. A pin site is any other place that names a model or an effort level for a skill, an agent, or one dispatch. Each follows the table and is re-checked against it in the same change.
 <!-- gaia:maintainer-only:start -->
-`.gaia/tests/hooks/workflow-doctrine-sources.bats` fails when a file that pins a model or a dispatch effort matches no entry below. `.gaia/tests/hooks/workflow-doctrine-effort-pins.bats` fails when an agent does not carry exactly one valid `effort:`, when a dispatch at a listed site pins a model (or, in the audit pipelines, dispatches `general-purpose`) without an effort pin, or when a named-agent dispatch or a skill's frontmatter carries one.
+`.gaia/tests/hooks/workflow-doctrine-sources.bats` fails when a file that pins a model or a dispatch effort matches no entry below. `.gaia/tests/hooks/workflow-doctrine-effort-pins.bats` fails when an agent does not carry exactly one valid `effort:`, when a dispatch at a listed site pins a model (or, in the audit pipelines and the `/gaia-plan` playbook, dispatches `general-purpose`) without an effort pin, or when a named-agent dispatch, a skill's frontmatter, or a planner dispatch marked as running at the session level carries one.
 <!-- gaia:maintainer-only:end -->
 
 ### Pin sites

@@ -20,9 +20,13 @@ PIPELINE_FILES=(
   .claude/skills/gaia/references/spec/clarify-loop.md
   .claude/skills/gaia/references/spec/clarify-prompts.md
   .claude/skills/gaia/references/spec/system-prompt.md
-  .claude/skills/gaia/references/plan.md
   .claude/skills/gaia/references/plan/decomposition-audit.md
 )
+
+# The /gaia-plan playbook. Its planner dispatches carry the session-effort mark
+# and no pin, so it holds no pin to satisfy the pipeline check; its other
+# general-purpose dispatch blocks are checked by the planner tests below.
+PLANNER_FILE=.claude/skills/gaia/references/plan.md
 
 REFERENCES=.claude/skills/gaia/references
 AUDIT_PROCEDURE="wiki/concepts/Audit Round Procedure.md"
@@ -87,6 +91,23 @@ copy_into_scratch() {
   [ "${#PIPELINE_FILES[@]}" -gt 0 ]
   pipeline_files_ok "$REPO_ROOT" "$WIKI" "${PIPELINE_FILES[@]}" || {
     echo "pipeline:$PIPELINE_BAD" >&2
+    return 1
+  }
+}
+
+@test "planner: plan.md pins every general-purpose dispatch block but the marked planner blocks, which carry no pin" {
+  blocks_anchored_pinned_ok "$GP_DISPATCH_RE" "$REPO_ROOT/$PLANNER_FILE" || {
+    echo "planner file:$UNPINNED_BLOCKS" >&2
+    return 1
+  }
+  grep -qiE -- "$SESSION_EFFORT_MARK_RE" "$REPO_ROOT/$PLANNER_FILE"
+}
+
+@test "planner: only plan.md carries the session-effort mark" {
+  local marked
+  marked="$(session_effort_mark_files "$REPO_ROOT")"
+  [ "$marked" = "$PLANNER_FILE" ] || {
+    echo "marked files: $marked" >&2
     return 1
   }
 }
@@ -225,6 +246,69 @@ unpinned_block_count() {
   mv "$copy.new" "$copy"
   if grep -qiE -- "$EFFORT_PIN_RE" "$copy"; then return 1; fi
   if pipeline_files_ok "$SCRATCH_ROOT" "$WIKI" "$REFERENCES/plan/decomposition-audit.md"; then return 1; fi
+}
+
+# -------------------------------------------------- red twins: the planner
+
+# anchored_blocks_pinned_ok <file>: both anchored checks pass on the file.
+anchored_blocks_pinned_ok() {
+  blocks_anchored_pinned_ok "$GP_DISPATCH_RE" "$1" && blocks_anchored_pinned_ok "$MODEL_PIN_RE" "$1"
+}
+
+@test "planner red twin: each marked planner site that regains an effort pin fails" {
+  local copy line_number seen=0
+  copy="$(copy_into_scratch "$PLANNER_FILE")"
+  anchored_blocks_pinned_ok "$copy"
+  while IFS= read -r line_number; do
+    [ -n "$line_number" ] || continue
+    seen=$((seen + 1))
+    # shellcheck disable=SC2016 # the backticks are literal markdown
+    awk -v target="$line_number" 'NR == target { $0 = $0 " Pass `effort: \"medium\"`." } { print }' "$copy" >"$copy.new"
+    if cmp -s "$copy" "$copy.new"; then return 1; fi
+    if anchored_blocks_pinned_ok "$copy.new"; then
+      echo "pin at line $line_number passed" >&2
+      return 1
+    fi
+    case "$UNPINNED_BLOCKS" in *marked-pinned:*) ;; *) return 1 ;; esac
+  done < <(grep -niE -- "$SESSION_EFFORT_MARK_RE" "$copy" | cut -d: -f1)
+  [ "$seen" -gt 0 ]
+}
+
+@test "planner red twin: an unpinned general-purpose dispatch in plan.md fails, and so does a planner launch stripped of its mark" {
+  local copy
+  copy="$(copy_into_scratch "$PLANNER_FILE")"
+  blocks_anchored_pinned_ok "$GP_DISPATCH_RE" "$copy"
+  # shellcheck disable=SC2016 # the backticks are literal markdown
+  printf '\nSpawn one `general-purpose` Agent per lens.\n' >"$copy.added"
+  cat "$copy" "$copy.added" >"$copy.new"
+  if blocks_anchored_pinned_ok "$GP_DISPATCH_RE" "$copy.new"; then return 1; fi
+  sed 's/ (the planner runs at the session effort, per step 2)//' "$copy" >"$copy.unmarked"
+  if cmp -s "$copy" "$copy.unmarked"; then return 1; fi
+  if blocks_anchored_pinned_ok "$GP_DISPATCH_RE" "$copy.unmarked"; then return 1; fi
+}
+
+@test "planner red twin: the decomposition audit's lens dispatch block without its pins fails while the file keeps a pin" {
+  local relative="$REFERENCES/plan/decomposition-audit.md" copy
+  copy="$(copy_into_scratch "$relative")"
+  pipeline_files_ok "$SCRATCH_ROOT" "$WIKI" "$relative"
+  # shellcheck disable=SC2016 # the backticks are literal markdown
+  sed -E '/^[34]\. / s/`effort: "medium"`/the effort/g' "$copy" >"$copy.new"
+  if cmp -s "$copy" "$copy.new"; then return 1; fi
+  mv "$copy.new" "$copy"
+  grep -qiE -- "$EFFORT_PIN_RE" "$copy"
+  if pipeline_files_ok "$SCRATCH_ROOT" "$WIKI" "$relative"; then return 1; fi
+  case "$PIPELINE_BAD" in *gp-unpinned:*) ;; *) return 1 ;; esac
+}
+
+@test "planner red twin: the session-effort mark in a second file is reported" {
+  local relative="$REFERENCES/spec/resume.md" scratch_repo="$TEMPORARY_DIRECTORY/repo"
+  mkdir -p "$scratch_repo/$(dirname "$relative")" "$scratch_repo/$(dirname "$PLANNER_FILE")"
+  cp "$REPO_ROOT/$PLANNER_FILE" "$scratch_repo/$PLANNER_FILE"
+  cp "$REPO_ROOT/$relative" "$scratch_repo/$relative"
+  printf '\nThe resumed author runs at the session effort.\n' >>"$scratch_repo/$relative"
+  git -C "$scratch_repo" init -q
+  git -C "$scratch_repo" add "$relative" "$PLANNER_FILE"
+  [ "$(session_effort_mark_files "$scratch_repo" | grep -c .)" -eq 2 ]
 }
 
 # remove_pin_site_entry <relative path> <output page>: writes the doctrine page
