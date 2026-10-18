@@ -76,13 +76,16 @@ const UNEXPECTED_EXIT = 2;
  * The git-tracked subset is the single canonical set exported by
  * `manifest.ts` (`classifyPath` maps those to `null`). This scan adds
  * `.gaia/project.json`, a file created on the adopter side by `/gaia-init`
- * or `/setup-gaia`, never in the manifest so `/update-gaia` leaves it alone;
- * it cannot live in the manifest's set, so it is added here to cover
- * references found in the extracted staging tree.
+ * or `/setup-gaia`, and `.gaia/update-decisions.json`, the committed decision
+ * log `/update-gaia` writes on the adopter side and shipped scripts read. Both
+ * are never in the manifest so `/update-gaia` leaves them alone; neither can
+ * live in the manifest's set, so they are added here to cover references found
+ * in the extracted staging tree.
  */
 export const ADOPTER_OWNED_SENTINELS: ReadonlySet<string> = new Set([
   ...GIT_TRACKED_SENTINELS,
   '.gaia/project.json',
+  '.gaia/update-decisions.json',
 ]);
 
 /**

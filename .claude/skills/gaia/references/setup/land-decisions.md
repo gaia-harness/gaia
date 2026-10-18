@@ -1,8 +1,8 @@
-# Land setup decisions and the setup ping
+# Land setup decisions, the setup ping and the closing message
 
-`/setup-gaia` reads this file, whole: Phase 5.5 runs `## Land the decisions` when project decisions may be recorded, and Phase 6 runs `## The setup ping` on every run.
+`/setup-gaia` reads this file, whole: Phase 5.5 runs `## Land the decisions` when project decisions may be recorded, and Phase 6 runs `## The setup ping` and then `## The closing message` on every run.
 
-Contents: Land the decisions; The setup ping.
+Contents: Land the decisions; The setup ping; The closing message.
 
 ## Land the decisions
 
@@ -75,3 +75,35 @@ fi
 - `--type` rides only when `SETUP_TYPE` is set. With it empty (a plain re-run on a provisioned project), the ping fires only when this run decided an id that was owed at its start; a run that decided nothing sends no ping, so a no-op re-run never inflates setup counts.
 - `--repo` rides only when this run answered the connect question. The CLI's values (`create`, `adopt`, `manual`) describe that choice, and a run that made none has no honest value to send.
 - A drift failure counts as nothing newly decided.
+
+## The closing message
+
+A run can reach Phase 6 with its GitHub setup undone: Phase 3's clean-tree refusal on Create, the set-up-manually answer, or an authentication or admin refusal each skip the rest of Phase 3. So the closing line never claims completion just because the run reached the end, except for a non-admin: project settings are an admin's to record, so an admin refusal (cached admin false) owes nothing on this machine and ends on the done line. It reads the project settings still owed that this machine can act on, after every record this run made, through the same predicate the statusline's `⚙️ /setup-gaia` nudge counts, so the message and the nudge never disagree:
+
+```bash
+. .gaia/statusline/setup-owed.sh && printf 'OWED_AT_END=%s\n' "$(gaia_setup_owed_ids .)"
+```
+
+The predicate's header in `.gaia/statusline/setup-owed.sh` says which owed ids count for an admin, a non-admin and a machine with no cached admin answer.
+
+When the run's summary lists what changed on GitHub and this run applied the Dependabot posture, its Dependabot item is this line verbatim, never a shortened form, because the reason is what keeps a first-time adopter from turning Dependabot's security fix pull requests back on:
+
+```text
+Dependabot security alerts are on. GAIA updates vulnerable packages for you and tests the result before anything changes, so Dependabot's own security fix pull requests are turned off.
+```
+
+Then output (in the user's language), with a blank line between the two lines. When `OWED_AT_END` is empty:
+
+```text
+You're all set: your GAIA project is ready. Restart Claude Code to load your new plugins and skills.
+
+New to GAIA? The docs walk you through your first feature: https://docs.gaiareact.com/
+```
+
+When `OWED_AT_END` is not empty, name its ids in place of the placeholder:
+
+```text
+Setup isn't finished: these project settings are still owed: <the OWED_AT_END ids>. Fix what stopped them above, then re-run /setup-gaia; it resumes from the first owed step. Restart Claude Code to load your new plugins and skills.
+
+New to GAIA? The docs walk you through your first feature: https://docs.gaiareact.com/
+```

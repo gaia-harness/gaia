@@ -9,6 +9,7 @@ import {afterEach, beforeEach, describe, expect, test, vi} from 'vitest';
 import {mkdtempSync, rmSync, writeFileSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import path from 'node:path';
+import {occupiedBucket, VERDICT_ROWS} from './field-verdict-table-fixture.js';
 import {run} from './merge-workspace.js';
 import type {WorkspaceMergeReport} from './merge-workspace.js';
 
@@ -22,7 +23,7 @@ type Sandbox = {
 };
 
 const setupSandbox = (): Sandbox => {
-  const root = mkdtempSync(path.join(tmpdir(), 'gaia-merge-workspace-'));
+  const root = mkdtempSync(path.join(tmpdir(), 'gaia-field-merge-workspace-'));
   const baselinePath = path.join(root, 'baseline.yaml');
   const latestPath = path.join(root, 'latest.yaml');
   const currentPath = path.join(root, 'current.yaml');
@@ -117,7 +118,6 @@ describe('update merge-workspace', () => {
     const report = parseJson(stdio.outputs);
     expect(report.applied).toEqual([]);
     expect(report.conflicts).toEqual([]);
-    expect(report.suggestions).toEqual([]);
   });
 
   test('scalar apply: GAIA bumped, adopter undrifted → applied with latest value', () => {
@@ -136,10 +136,10 @@ describe('update merge-workspace', () => {
         key: 'minimumReleaseAge',
         kind: 'key',
         latest: 20_160,
+        reason: 'changed',
       },
     ]);
     expect(report.conflicts).toEqual([]);
-    expect(report.suggestions).toEqual([]);
   });
 
   test('scalar conflict: GAIA changed, adopter re-pinned independently → conflict, adopter kept', () => {
@@ -159,11 +159,17 @@ describe('update merge-workspace', () => {
         key: 'minimumReleaseAge',
         kind: 'key',
         latest: 20_160,
+        recommendation: {
+          option: 'keep',
+          reason: expect.any(String),
+          value: 5000,
+        },
+        versionValued: false,
       },
     ]);
   });
 
-  test('GAIA-added managed key → suggestion (added), never auto-inserted', () => {
+  test('GAIA-added managed key the adopter lacks → applied (added)', () => {
     sandbox.write('baseline', 'minimumReleaseAge: 10080\n');
     sandbox.write(
       'latest',
@@ -175,8 +181,7 @@ describe('update merge-workspace', () => {
     expect(exit).toBe(0);
 
     const report = parseJson(stdio.outputs);
-    expect(report.applied).toEqual([]);
-    expect(report.suggestions).toEqual([
+    expect(report.applied).toEqual([
       {
         key: 'strictPeerDependencies',
         kind: 'key',
@@ -186,7 +191,7 @@ describe('update merge-workspace', () => {
     ]);
   });
 
-  test('auditConfig is managed: an accepted advisory GAIA adds → suggestion (added)', () => {
+  test('auditConfig is managed: an accepted advisory GAIA adds → applied (added)', () => {
     sandbox.write('baseline', 'minimumReleaseAge: 4320\n');
     sandbox.write(
       'latest',
@@ -198,8 +203,7 @@ describe('update merge-workspace', () => {
     expect(exit).toBe(0);
 
     const report = parseJson(stdio.outputs);
-    expect(report.applied).toEqual([]);
-    expect(report.suggestions).toEqual([
+    expect(report.applied).toEqual([
       {
         key: 'auditConfig',
         kind: 'key',
@@ -209,7 +213,7 @@ describe('update merge-workspace', () => {
     ]);
   });
 
-  test('adopter removed a key GAIA then changed → suggestion (removed-then-changed), never re-added', () => {
+  test('adopter removed a key GAIA then changed → keptRemoved, never re-added', () => {
     sandbox.write('baseline', 'trustPolicy: no-downgrade\n');
     sandbox.write('latest', 'trustPolicy: strict\n');
     sandbox.write('current', 'savePrefix: ""\n');
@@ -220,13 +224,12 @@ describe('update merge-workspace', () => {
     const report = parseJson(stdio.outputs);
     expect(report.applied).toEqual([]);
     // savePrefix in current only (not in B or L) is never visited.
-    expect(report.suggestions).toEqual([
+    expect(report.keptRemoved).toEqual([
       {
         baseline: 'no-downgrade',
         key: 'trustPolicy',
         kind: 'key',
         latest: 'strict',
-        reason: 'removed-then-changed',
       },
     ]);
   });
@@ -257,11 +260,11 @@ describe('update merge-workspace', () => {
         key: 'qs',
         kind: 'entry',
         latest: '>=6.16.0',
+        reason: 'changed',
         section: 'overrides',
       },
     ]);
     expect(report.conflicts).toEqual([]);
-    expect(report.suggestions).toEqual([]);
   });
 
   test('overrides map: adopter re-pinned an entry → conflict, adopter kept', () => {
@@ -280,12 +283,19 @@ describe('update merge-workspace', () => {
         key: 'qs',
         kind: 'entry',
         latest: '>=6.16.0',
+        recommendation: {
+          option: 'higher',
+          reason: expect.any(String),
+          side: 'adopter',
+          value: '>=6.99.0',
+        },
         section: 'overrides',
+        versionValued: true,
       },
     ]);
   });
 
-  test('allowBuilds map: boolean flip applied; GAIA-added build → suggestion', () => {
+  test('allowBuilds map: boolean flip applied; GAIA-added build → applied (added)', () => {
     sandbox.write('baseline', 'allowBuilds:\n  core-js-pure: true\n');
     sandbox.write(
       'latest',
@@ -304,10 +314,9 @@ describe('update merge-workspace', () => {
         key: 'core-js-pure',
         kind: 'entry',
         latest: false,
+        reason: 'changed',
         section: 'allowBuilds',
       },
-    ]);
-    expect(report.suggestions).toEqual([
       {
         key: 'msw',
         kind: 'entry',
@@ -337,6 +346,7 @@ describe('update merge-workspace', () => {
         key: 'publicHoistPattern',
         kind: 'key',
         latest: ['*stylelint*', 'prettier-plugin-*'],
+        reason: 'changed',
       },
     ]);
   });
@@ -363,6 +373,12 @@ describe('update merge-workspace', () => {
         key: 'publicHoistPattern',
         kind: 'key',
         latest: ['*stylelint*', 'prettier-plugin-*'],
+        recommendation: {
+          option: 'keep',
+          reason: expect.any(String),
+          value: ['*stylelint*', 'my-tool-*'],
+        },
+        versionValued: false,
       },
     ]);
   });
@@ -378,7 +394,6 @@ describe('update merge-workspace', () => {
     const report = parseJson(stdio.outputs);
     expect(report.applied).toEqual([]);
     expect(report.conflicts).toEqual([]);
-    expect(report.suggestions).toEqual([]);
   });
 
   test('non-managed top-level key is ignored entirely', () => {
@@ -392,7 +407,6 @@ describe('update merge-workspace', () => {
     const report = parseJson(stdio.outputs);
     expect(report.applied).toEqual([]);
     expect(report.conflicts).toEqual([]);
-    expect(report.suggestions).toEqual([]);
   });
 
   test('malformed adopter YAML → non-zero exit with structured error', () => {
@@ -482,5 +496,171 @@ describe('update merge-workspace', () => {
       ['allowBuilds', 'esbuild'],
       [undefined, 'trustPolicy'],
     ]);
+  });
+});
+
+const ageYaml = (value: number | undefined): string =>
+  value === undefined ?
+    'nodeLinker: hoisted\n'
+  : `minimumReleaseAge: ${value}\n`;
+
+describe('update merge-workspace verdict table', () => {
+  let sandbox: Sandbox;
+  let stdio: ReturnType<typeof captureStdio>;
+
+  beforeEach(() => {
+    stdio = captureStdio();
+    sandbox = setupSandbox();
+  });
+
+  afterEach(() => {
+    stdio.restore();
+    sandbox.cleanup();
+    vi.restoreAllMocks();
+  });
+
+  test.each(VERDICT_ROWS)('$name', (row) => {
+    sandbox.write('baseline', ageYaml(row.baseline));
+    sandbox.write('latest', ageYaml(row.latest));
+    sandbox.write('current', ageYaml(row.adopter));
+
+    expect(run(argv(sandbox))).toBe(0);
+
+    const report = parseJson(stdio.outputs);
+    expect(occupiedBucket(report)).toBe(row.expected);
+
+    expect(report.applied[0]?.reason).toBe(row.reason);
+  });
+
+  test('a GAIA-changed key the adopter removed is kept removed and never applied', () => {
+    sandbox.write('baseline', 'trustPolicy: no-downgrade\n');
+    sandbox.write('latest', 'trustPolicy: strict\n');
+    sandbox.write('current', 'nodeLinker: hoisted\n');
+
+    expect(run(argv(sandbox))).toBe(0);
+
+    const report = parseJson(stdio.outputs);
+    expect(report.applied).toEqual([]);
+    expect(report.keptRemoved).toHaveLength(1);
+  });
+
+  test('a workspace-setting conflict and an allowBuilds conflict are not version valued', () => {
+    sandbox.write(
+      'baseline',
+      'minimumReleaseAge: 1\nallowBuilds:\n  msw: true\n'
+    );
+    sandbox.write(
+      'latest',
+      'minimumReleaseAge: 2\nallowBuilds:\n  msw: false\n'
+    );
+    sandbox.write(
+      'current',
+      'minimumReleaseAge: 3\nallowBuilds:\n  msw: null\n'
+    );
+
+    expect(run(argv(sandbox))).toBe(0);
+
+    const report = parseJson(stdio.outputs);
+    expect(report.conflicts).toHaveLength(2);
+
+    for (const item of report.conflicts) {
+      expect(item.versionValued).toBe(false);
+      expect(item.recommendation?.option).toBe('keep');
+      expect(item.recommendation?.reason).not.toBe('');
+    }
+  });
+
+  test('an overrides conflict is version valued and recommends the higher range', () => {
+    sandbox.write('baseline', "overrides:\n  qs: '>=6.0.0'\n");
+    sandbox.write('latest', "overrides:\n  qs: '>=6.5.0'\n");
+    sandbox.write('current', "overrides:\n  qs: '>=6.2.0'\n");
+
+    expect(run(argv(sandbox))).toBe(0);
+
+    expect(parseJson(stdio.outputs).conflicts[0]).toMatchObject({
+      recommendation: {option: 'higher', side: 'gaia', value: '>=6.5.0'},
+      versionValued: true,
+    });
+  });
+});
+
+describe('update merge-workspace deferred baselines', () => {
+  let sandbox: Sandbox;
+  let stdio: ReturnType<typeof captureStdio>;
+
+  const deferredPath = (): string => path.join(sandbox.root, 'deferred.yaml');
+
+  beforeEach(() => {
+    stdio = captureStdio();
+    sandbox = setupSandbox();
+    sandbox.write('baseline', ageYaml(2));
+    sandbox.write('latest', ageYaml(2));
+    sandbox.write('current', ageYaml(1));
+  });
+
+  afterEach(() => {
+    stdio.restore();
+    sandbox.cleanup();
+    vi.restoreAllMocks();
+  });
+
+  test('a key deferred where it was 1 applies against that bundle', () => {
+    writeFileSync(deferredPath(), ageYaml(1), 'utf8');
+
+    expect(
+      run([
+        ...argv(sandbox),
+        '--deferred-baseline',
+        `minimumReleaseAge=${deferredPath()}`,
+      ])
+    ).toBe(0);
+
+    const report = parseJson(stdio.outputs);
+    expect(report.applied).toHaveLength(1);
+    expect(report.applied[0]).toMatchObject({
+      baseline: 1,
+      key: 'minimumReleaseAge',
+      reason: 'changed',
+    });
+  });
+
+  test('without the deferred baseline the same key is a no-op', () => {
+    expect(run(argv(sandbox))).toBe(0);
+    expect(occupiedBucket(parseJson(stdio.outputs))).toBe('none');
+  });
+
+  test('a map entry key splits its section at the first dot', () => {
+    sandbox.write('baseline', "overrides:\n  '@scope/pkg': '>=2.0.0'\n");
+    sandbox.write('latest', "overrides:\n  '@scope/pkg': '>=2.0.0'\n");
+    sandbox.write('current', "overrides:\n  '@scope/pkg': '>=1.0.0'\n");
+    writeFileSync(
+      deferredPath(),
+      "overrides:\n  '@scope/pkg': '>=1.0.0'\n",
+      'utf8'
+    );
+
+    expect(
+      run([
+        ...argv(sandbox),
+        '--deferred-baseline',
+        `overrides.@scope/pkg=${deferredPath()}`,
+      ])
+    ).toBe(0);
+
+    expect(parseJson(stdio.outputs).applied[0]).toMatchObject({
+      key: '@scope/pkg',
+      section: 'overrides',
+    });
+  });
+
+  test('a missing deferred file exits non-zero with a structured error', () => {
+    const exit = run([
+      ...argv(sandbox),
+      '--deferred-baseline',
+      `minimumReleaseAge=${deferredPath()}`,
+    ]);
+
+    expect(exit).not.toBe(0);
+    expect(stdio.errors.join('')).toContain('workspace_file_missing');
   });
 });

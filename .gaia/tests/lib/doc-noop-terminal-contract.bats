@@ -79,6 +79,7 @@ setup() {
     '.claude/skills/gaia/references/spec/lens-dispatch.md'
     '.claude/skills/gaia/references/spec/lifecycle.md'
     '.claude/rules/subagent-dispatch.md'
+    '.claude/skills/update-gaia/references/conflict-flow.md'
     'wiki/concepts/Code Review Audit Agent.md'
     'wiki/concepts/Audit Round Procedure.md'
     'wiki/concepts/PR Merge Workflow.md'

@@ -5,10 +5,10 @@
 # subcommands, run with the working directory at the checkout root (the main
 # checkout, or the update worktree). Every path stays repo-relative.
 #   bash .gaia/scripts/update-gaia-preflight.sh refuse-1x      --baseline <v>
-#   bash .gaia/scripts/update-gaia-preflight.sh verify-bundles --baseline <v> --latest-tag <tag>
+#   bash .gaia/scripts/update-gaia-preflight.sh verify-bundles --baseline <v> --latest-tag <tag> [--extra-tag <tag>]...
 #   bash .gaia/scripts/update-gaia-preflight.sh select-notes   --latest-dir <dir> --baseline <v> --latest <v>
-#   bash .gaia/scripts/update-gaia-preflight.sh changelog      --baseline <v> --latest <v> --latest-tag <tag>
-#   bash .gaia/scripts/update-gaia-preflight.sh prune          --baseline <v> --latest-tag <tag> [--resume]
+#   bash .gaia/scripts/update-gaia-preflight.sh changelog      --baseline <v> --latest <v> --latest-tag <tag> [--save-from <v>]
+#   bash .gaia/scripts/update-gaia-preflight.sh prune          --baseline <v> --latest-tag <tag> [--resume] [--keep-tag <tag>]...
 #
 # WHY A SCRIPT. Inside a linked worktree session the Claude Code runtime
 # refuses a command it cannot verify stays inside the worktree: a captured
@@ -28,10 +28,10 @@
 usage() {
   cat >&2 <<'USAGE'
 usage: update-gaia-preflight.sh refuse-1x      --baseline <v>
-       update-gaia-preflight.sh verify-bundles --baseline <v> --latest-tag <tag>
+       update-gaia-preflight.sh verify-bundles --baseline <v> --latest-tag <tag> [--extra-tag <tag>]...
        update-gaia-preflight.sh select-notes   --latest-dir <dir> --baseline <v> --latest <v>
-       update-gaia-preflight.sh changelog      --baseline <v> --latest <v> --latest-tag <tag>
-       update-gaia-preflight.sh prune          --baseline <v> --latest-tag <tag> [--resume]
+       update-gaia-preflight.sh changelog      --baseline <v> --latest <v> --latest-tag <tag> [--save-from <v>]
+       update-gaia-preflight.sh prune          --baseline <v> --latest-tag <tag> [--resume] [--keep-tag <tag>]...
 USAGE
   exit 2
 }
@@ -47,6 +47,13 @@ baseline=''
 latest=''
 latest_tag=''
 latest_dir=''
+save_from=''
+extra_tags=()
+keep_tags=()
+
+# An extra or kept tag reaches a download command and a path, so it is checked
+# before anything touches the network or the cache.
+tag_pattern='^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$'
 
 [ "$#" -ge 1 ] || usage
 subcommand="$1"
@@ -61,6 +68,21 @@ while [ "$#" -gt 0 ]; do
         --latest) latest="$2"; have_latest=true ;;
         --latest-tag) latest_tag="$2"; have_latest_tag=true ;;
         --latest-dir) latest_dir="$2"; have_latest_dir=true ;;
+      esac
+      shift 2
+      ;;
+    --extra-tag | --keep-tag | --save-from)
+      [ "$#" -ge 2 ] || usage
+      case "$1" in
+        --extra-tag)
+          [[ "$2" =~ $tag_pattern ]] || usage
+          extra_tags+=("$2")
+          ;;
+        --keep-tag)
+          [[ "$2" =~ $tag_pattern ]] || usage
+          keep_tags+=("$2")
+          ;;
+        --save-from) save_from="$2" ;;
       esac
       shift 2
       ;;
@@ -111,8 +133,16 @@ verify_checklist() {
 # from the earlier gaia-<tag>.tar.gz is what makes a 1.6.1 /update-gaia fail at
 # its fetch step, before it writes anything.
 verify_bundles() {
-  local tag dir tarball
-  for tag in "v$baseline" "$latest_tag"; do
+  local tag dir tarball extra_tag
+  local tags=("v$baseline" "$latest_tag")
+  # An extra tag equal to one already listed is fetched once.
+  for extra_tag in ${extra_tags[@]+"${extra_tags[@]}"}; do
+    case " ${tags[*]} " in
+      *" $extra_tag "*) ;;
+      *) tags+=("$extra_tag") ;;
+    esac
+  done
+  for tag in "${tags[@]}"; do
     dir=".gaia/local/cache/shared/update-gaia/$tag"
     tarball="gaia-bundle-${tag}.tar.gz"
     # A cached directory with no checksum predates verification: a cache miss.
@@ -155,6 +185,9 @@ verify_bundles() {
   done
   echo "BASELINE_DIR=.gaia/local/cache/shared/update-gaia/v$baseline/tree"
   echo "LATEST_DIR=.gaia/local/cache/shared/update-gaia/$latest_tag/tree"
+  for extra_tag in ${extra_tags[@]+"${extra_tags[@]}"}; do
+    echo "EXTRA_DIR=$extra_tag:.gaia/local/cache/shared/update-gaia/$extra_tag/tree"
+  done
 }
 
 # Step: select migration notes. The verified target bundle's own selector
@@ -190,9 +223,13 @@ SELECTED
 # Step: the baseline-to-latest CHANGELOG range. The range is saved beside the
 # target's verified tree for the summary step's documented adopter actions: the
 # release bundle withholds CHANGELOG.md, so this fetch is the only copy. A
-# failed fetch removes the file so a stale range is never read.
+# failed fetch removes the file so a stale range is never read. With
+# --save-from the saved file starts at that older version (the oldest deferred
+# baseline, whose reasons the merge may need) while stdout stays the
+# baseline-to-latest range. A prerelease value is cut to its core version
+# because the range helper reads only x.y.z.
 changelog() {
-  local changelog_text range range_file
+  local changelog_text range range_file saved_range
   changelog_text="$(curl -fsSL "https://raw.githubusercontent.com/gaia-react/gaia/$latest_tag/CHANGELOG.md" 2>/dev/null)"
   if [ -z "$changelog_text" ] && command -v gh >/dev/null 2>&1; then
     changelog_text="$(gh api "repos/gaia-react/gaia/contents/CHANGELOG.md?ref=$latest_tag" \
@@ -201,9 +238,14 @@ changelog() {
 
   range="$(printf '%s\n' "$changelog_text" | bash .gaia/scripts/changelog-range.sh "$baseline" "$latest")"
   range_file=".gaia/local/cache/shared/update-gaia/$latest_tag/changelog-range.md"
+  saved_range="$range"
+  if [ -n "$save_from" ]; then
+    saved_range="$(printf '%s\n' "$changelog_text" | bash .gaia/scripts/changelog-range.sh "$save_core" "$latest")"
+  fi
 
   if [ -n "$range" ]; then
-    printf '%s\n' "$range" | tee "$range_file"
+    printf '%s\n' "$saved_range" > "$range_file"
+    printf '%s\n' "$range"
   else
     rm -f "$range_file"
     # Fetch failed (offline, private, missing file): fall back to the
@@ -212,12 +254,12 @@ changelog() {
   fi
 }
 
-# Step: prune prior-run artifacts. Three gitignored directories accumulate
+# Step: prune prior-run artifacts. Two gitignored directories accumulate
 # across updates; this runs at the start of a confirmed update and before the
 # run creates any merge artifact of its own, so the current run's fresh safety
 # net is never touched.
 prune() {
-  local d
+  local d kept_tag
   # .gaia-backup/: prior runs' pre-overwrite copies. Once an update is
   # committed, git history is the durable recovery, so prior backups are
   # redundant. A resumed run keeps them: they are the only copy of what the
@@ -227,30 +269,23 @@ prune() {
   fi
 
   # .gaia/local/cache/shared/update-gaia/: keep the baseline and target
-  # directories verify-bundles just extracted, and delete every other cached
-  # tag dir. The loop only ever touches tag dirs here: update-check.json and
-  # serena-guard/ live one level up at shared/, structurally outside this glob.
+  # directories verify-bundles just extracted, plus each --keep-tag (a deferred
+  # baseline the merge reads), and delete every other entry. That includes
+  # run/, the previous update run's merge report and candidates, which is how a
+  # stopped run's leftovers are cleaned up. The glob is the update-gaia/
+  # directory only: update-check.json and serena-guard/ live one level up at
+  # shared/, structurally outside it.
   if [ -d .gaia/local/cache/shared/update-gaia ]; then
     for d in .gaia/local/cache/shared/update-gaia/*/; do
       [ -d "$d" ] || continue
       case "$(basename "$d")" in
         "v$baseline" | "$latest_tag") continue ;;
       esac
+      for kept_tag in ${keep_tags[@]+"${keep_tags[@]}"}; do
+        [ "$(basename "$d")" = "$kept_tag" ] && continue 2
+      done
       rm -rf "$d"
     done
-  fi
-
-  # .gaia-merge/: conflict patches and .notes the operator resolves by hand.
-  # Remove only when empty; a populated dir holds unresolved action items, so
-  # never delete it, warn and name the leftovers instead.
-  if [ -d .gaia-merge ]; then
-    if [ -n "$(ls -A .gaia-merge 2>/dev/null)" ]; then
-      echo "Heads up: .gaia-merge/ still holds unresolved patches from a prior run, NOT deleted:"
-      ls -A .gaia-merge
-      echo "Resolve or delete them by hand, then re-run /update-gaia."
-    else
-      rmdir .gaia-merge
-    fi
   fi
 }
 
@@ -269,6 +304,10 @@ case "$subcommand" in
     ;;
   changelog)
     [ "$have_baseline" = true ] && [ "$have_latest" = true ] && [ "$have_latest_tag" = true ] || usage
+    if [ -n "$save_from" ]; then
+      save_core="${save_from%%-*}"
+      [[ "$save_core" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || usage
+    fi
     changelog
     ;;
   prune)

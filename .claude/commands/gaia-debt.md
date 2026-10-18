@@ -19,6 +19,13 @@ gaia_refuse_if_worktree "/gaia-debt" || exit 1
 
 If the detection does not fire, fall through to the workflow dispatch line below.
 
+```bash
+. .gaia/scripts/main-only-lib.sh
+gaia_pull_gate "/gaia-debt"
+```
+
+On a non-zero exit, read `.claude/skills/update-gaia/references/pull-gate.md` and follow it with `/gaia-debt`, this run's original arguments and the exit code, before anything below creates a branch, worktree, claim or SPEC id.
+
 Read `.claude/skills/gaia/references/debt.md` from the project root and follow it exactly, treating the arguments above as its input: zero or more issue numbers (one fixes that issue, several name your own batch) and an optional trailing isolation mode. The reference's argument parser owns the grammar, and an unrecognized argument stops the run with the accepted form; no argument runs the top-of-backlog flow.
 
 `debt.md` routes each run to at most a few of these sub-references, all under `.claude/skills/gaia/references/debt/`. Read one only when a "Read ... now" line sends you there, and then read the whole file:

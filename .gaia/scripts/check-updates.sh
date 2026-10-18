@@ -35,6 +35,12 @@
 #                     for dependabot)
 #   - serenaLangDrift (git-tracked manifests whose language Serena is not
 #                     configured for; [] when none or Serena is unregistered)
+#   - gaiaOriginVersion (origin's default-branch .gaia/VERSION, from
+#                     update-claim.sh; the previous value when the read fails)
+#   - gaiaUpdateClaims (live update claims, open same-repo update/v* pull
+#                     requests; [] when the list fails)
+#   - ghLogin        (the current GitHub login; "" when unavailable, which
+#                     hides the claim states)
 #   - checkedAt      (Unix epoch seconds)
 #
 # TTL is 6 hours (21600s). Re-runs within the TTL exit immediately so the
@@ -134,6 +140,7 @@ now=$(date +%s)
 previous_checked_at=0
 previous_outdated_count=0
 previous_gaia_latest=""
+previous_origin_version=""
 previous_codify_count=0
 previous_codify_unclassified=0
 previous_codify_reason=""
@@ -150,6 +157,7 @@ if [ -f "$CACHE_FILE" ] && command -v jq >/dev/null 2>&1; then
   # cached value would be worse than none), and gaiaHasUpdate is derived from
   # gaia_current + gaia_latest, both of which already carry their own fallbacks.
   previous_gaia_latest=$(jq -r '.gaiaLatest // ""' "$CACHE_FILE" 2>/dev/null)
+  previous_origin_version=$(jq -r '.gaiaOriginVersion // ""' "$CACHE_FILE" 2>/dev/null)
   previous_codify_count=$(jq -r '.codifyCandidateCount // 0' "$CACHE_FILE" 2>/dev/null)
   previous_codify_unclassified=$(jq -r '.codifyUnclassifiedCount // 0' "$CACHE_FILE" 2>/dev/null)
   # A cache written before codifyNudgeReason existed (the upgrade window) has
@@ -729,6 +737,23 @@ if [ -n "$gaia_current" ] && [ -n "$gaia_latest" ] && [ "$gaia_current" != "$gai
   fi
 fi
 
+# ---------- gaiaOriginVersion, gaiaUpdateClaims, ghLogin ----------
+# update-claim.sh owns the claim definition and every gh call it needs; every
+# failure inside it comes back as an empty field, never a non-zero exit.
+origin_version=""
+update_claims_json="[]"
+github_login=""
+if command -v jq >/dev/null 2>&1; then
+  claim_fields="$(bash "$SCRIPT_DIRECTORY/update-claim.sh" cache-fields --tree "$STATE_ROOT" 2>/dev/null)"
+  if printf '%s' "$claim_fields" | jq -e 'type == "object" and (.gaiaUpdateClaims | type) == "array"' >/dev/null 2>&1; then
+    origin_version=$(printf '%s' "$claim_fields" | jq -r '.gaiaOriginVersion // ""' 2>/dev/null)
+    update_claims_json=$(printf '%s' "$claim_fields" | jq -c '.gaiaUpdateClaims' 2>/dev/null)
+    github_login=$(printf '%s' "$claim_fields" | jq -r '.ghLogin // ""' 2>/dev/null)
+  fi
+fi
+[ -n "$origin_version" ] || origin_version="$previous_origin_version"
+[ -n "$update_claims_json" ] || update_claims_json="[]"
+
 # ---------- codify reason race check ----------
 # A completed review clears codifyNudgeReason in the cache directly (the
 # /gaia-cleanse precedent), so a refresh already in flight when that happens
@@ -765,6 +790,9 @@ if command -v jq >/dev/null 2>&1; then
     --argjson outdatedCount "$outdated_count" \
     --arg gaiaCurrent "$gaia_current" \
     --arg gaiaLatest "$gaia_latest" \
+    --arg gaiaOriginVersion "$origin_version" \
+    --argjson gaiaUpdateClaims "$update_claims_json" \
+    --arg ghLogin "$github_login" \
     --argjson gaiaHasUpdate "$gaia_has_update" \
     --argjson codifyCandidateCount "$codify_count" \
     --argjson codifyUnclassifiedCount "$unclassified_count" \
@@ -781,7 +809,7 @@ if command -v jq >/dev/null 2>&1; then
     --argjson securityCount "$security_count" \
     --arg securitySource "$security_source" \
     --arg securityUnavailableReason "$security_reason" \
-    '{checkedAt: $checkedAt, outdatedCount: $outdatedCount, gaiaCurrent: $gaiaCurrent, gaiaLatest: $gaiaLatest, gaiaHasUpdate: $gaiaHasUpdate, codifyCandidateCount: $codifyCandidateCount, codifyUnclassifiedCount: $codifyUnclassifiedCount, codifyNudgeReason: $codifyNudgeReason, residueCandidateCount: $residueCandidateCount, wikiDriftCount: $wikiDriftCount, wikiStateSha: $wikiStateSha, cleanseNudge: $cleanseNudge, cleanseNudgeReason: $cleanseNudgeReason, cleanseLastAppliedAt: $cleanseLastAppliedAt, cleanseMemoryCount: $cleanseMemoryCount, cleanseMemoryBaseline: $cleanseMemoryBaseline, serenaLangDrift: $serenaLangDrift, securityCount: $securityCount, securitySource: $securitySource, securityUnavailableReason: $securityUnavailableReason}' \
+    '{checkedAt: $checkedAt, outdatedCount: $outdatedCount, gaiaCurrent: $gaiaCurrent, gaiaLatest: $gaiaLatest, gaiaHasUpdate: $gaiaHasUpdate, gaiaOriginVersion: $gaiaOriginVersion, gaiaUpdateClaims: $gaiaUpdateClaims, ghLogin: $ghLogin, codifyCandidateCount: $codifyCandidateCount, codifyUnclassifiedCount: $codifyUnclassifiedCount, codifyNudgeReason: $codifyNudgeReason, residueCandidateCount: $residueCandidateCount, wikiDriftCount: $wikiDriftCount, wikiStateSha: $wikiStateSha, cleanseNudge: $cleanseNudge, cleanseNudgeReason: $cleanseNudgeReason, cleanseLastAppliedAt: $cleanseLastAppliedAt, cleanseMemoryCount: $cleanseMemoryCount, cleanseMemoryBaseline: $cleanseMemoryBaseline, serenaLangDrift: $serenaLangDrift, securityCount: $securityCount, securitySource: $securitySource, securityUnavailableReason: $securityUnavailableReason}' \
     > "$temporary_file" 2>/dev/null
 else
   # jq not available; emit valid JSON via printf. serenaLangDrift is empty:
@@ -790,7 +818,7 @@ else
   # compute it (the tally-driven composition above and the cache seed at
   # startup) require jq themselves, so neither branch ever runs without it.
   # Nothing here needs escaping.
-  printf '{"checkedAt":%s,"outdatedCount":%s,"gaiaCurrent":"%s","gaiaLatest":"%s","gaiaHasUpdate":%s,"codifyCandidateCount":%s,"codifyUnclassifiedCount":%s,"codifyNudgeReason":"%s","residueCandidateCount":%s,"wikiDriftCount":%s,"cleanseNudge":%s,"cleanseNudgeReason":"%s","cleanseLastAppliedAt":%s,"cleanseMemoryCount":%s,"cleanseMemoryBaseline":%s,"serenaLangDrift":[],"securityCount":null,"securitySource":"unavailable","securityUnavailableReason":"jq-missing"}\n' \
+  printf '{"checkedAt":%s,"outdatedCount":%s,"gaiaCurrent":"%s","gaiaLatest":"%s","gaiaHasUpdate":%s,"gaiaOriginVersion":null,"gaiaUpdateClaims":[],"ghLogin":"","codifyCandidateCount":%s,"codifyUnclassifiedCount":%s,"codifyNudgeReason":"%s","residueCandidateCount":%s,"wikiDriftCount":%s,"cleanseNudge":%s,"cleanseNudgeReason":"%s","cleanseLastAppliedAt":%s,"cleanseMemoryCount":%s,"cleanseMemoryBaseline":%s,"serenaLangDrift":[],"securityCount":null,"securitySource":"unavailable","securityUnavailableReason":"jq-missing"}\n' \
     "$checked_at_to_write" "$outdated_count" "$gaia_current" "$gaia_latest" "$gaia_has_update" "$codify_count" "$unclassified_count" "$codify_reason" "$residue_count" "$wiki_drift_count" "$cleanse_nudge" "$cleanse_nudge_reason" "$cleanse_last_applied_at" "$cleanse_memory_count" "$cleanse_memory_baseline" \
     > "$temporary_file" 2>/dev/null
 fi

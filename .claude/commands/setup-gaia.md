@@ -26,7 +26,7 @@ This command reads these references, all under `.claude/skills/gaia/references/s
 - `squash-only.md`: Phase 3.7, once both gates say the question is owed.
 - `statusline-left.md`: Phase 4.6, every invocation for the routing warning, and when a choice or record is owed.
 - `standalone-features.md`: Phase 5, every run.
-- `land-decisions.md`: Phase 5.5, to land project decisions, and Phase 6, for the setup ping.
+- `land-decisions.md`: Phase 5.5, to land project decisions, and Phase 6, for the setup ping and the closing message.
 
 ## Pre-flight: Worktree check
 
@@ -477,13 +477,7 @@ Keep **`$REPO_CHOICE`**, the answer to Phase 3's connect-to-GitHub question. "Cr
 
 Then run `land-decisions.md`'s `## The setup ping` with `SETUP_TYPE`, `REPO_CHOICE` and `OWED_AT_START` (Read `.claude/skills/gaia/references/setup/land-decisions.md` now first when Phase 5.5 skipped it). It sends the ping, or skips it when nothing was newly decided.
 
-Then output (in the user's language), with a blank line between the two lines:
-
-```text
-You're all set: your GAIA project is ready. Restart Claude Code to load your new plugins and skills.
-
-New to GAIA? The docs walk you through your first feature: https://docs.gaiareact.com/
-```
+Then run `land-decisions.md`'s `## The closing message`. It prints the done line only when no project setting this machine can act on is still owed, and a setup-not-finished line naming them otherwise, so a run whose GitHub setup was refused or skipped never ends on a line that reads as done.
 
 ## Idempotence / re-run safety
 

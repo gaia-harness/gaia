@@ -278,18 +278,33 @@ else
   setup_pending_count=0
   if [ -f "$SETUP_STATE_FILE" ]; then
     if command -v jq >/dev/null 2>&1; then
-      # The pending machine-scope setup choices ride the completion read, so a
-      # render spawns one jq whether or not the list exists. The list goes in
-      # as a raw string and is parsed under try, so a malformed list yields a
-      # zero count and never fails the completion read it shares a process
-      # with. Count first, then completed_at: the count never holds a comma.
+      # The pending setup choices ride the completion read, so a render spawns
+      # one jq whether or not the list exists: the undecided machine-scope ids
+      # plus the project-scope ids this machine can act on (setup-owed.sh,
+      # shared with /setup-gaia's closing message). The list and the project
+      # config go in as raw strings and are parsed under try, so a malformed
+      # file yields a zero count and never fails the completion read it shares
+      # a process with. Count first, then completed_at: the count never holds
+      # a comma.
       if [ -f "$SETUP_FEATURES_FILE" ]; then
-        setup_read=$(jq -r --rawfile list "$SETUP_FEATURES_FILE" '
+        # shellcheck disable=SC2016 # jq variables, expanded by jq.
+        GAIA_SETUP_OWED_JQ='def gaia_setup_owed($list_text; $project_text): [];'
+        # shellcheck source=/dev/null
+        . "$GAIA_DIRECTORY/statusline/setup-owed.sh" 2>/dev/null || true
+        SETUP_PROJECT_FILE="$STATE_ROOT/.gaia/project.json"
+        if [ -f "$SETUP_PROJECT_FILE" ]; then
+          setup_project_arguments=(--rawfile project "$SETUP_PROJECT_FILE")
+        else
+          setup_project_arguments=(--arg project "")
+        fi
+        setup_read=$(jq -r --rawfile list "$SETUP_FEATURES_FILE" "${setup_project_arguments[@]}" "$GAIA_SETUP_OWED_JQ"'
           (.decisions | if type == "object" then . else {} end) as $decisions
-          | [ (try ([$list | fromjson | .features | arrays | .[] | objects
-                     | select((.scope == "machine") and ((.id | type) == "string")
-                              and (($decisions[.id] // "") | IN("applied", "declined", "not-applicable") | not))]
-                    | length | tostring) catch "0"),
+          | [ ((try ([$list | fromjson | .features | arrays | .[] | objects
+                      | select((.scope == "machine") and ((.id | type) == "string")
+                               and (($decisions[.id] // "") | IN("applied", "declined", "not-applicable") | not))]
+                     | length) catch 0)
+               + (try (gaia_setup_owed($list; $project) | length) catch 0)
+               | tostring),
               (.completed_at // "null") ]
           | join(",")' "$SETUP_STATE_FILE" 2>/dev/null)
         setup_pending_count="${setup_read%%,*}"
@@ -340,20 +355,30 @@ else
     # independently (Large, then Medium, then Small, then icon, then folded
     # into the trailing `+N`), and shows an icon's mid as its count only when
     # mid is all digits.
+    #
+    # A slot may also carry a floor (empty means none; 1 means Medium): the
+    # smallest size the shrink loop will take that nudge down to. Its mid text
+    # is what names who the nudge is about, so it never shrinks past the form
+    # that still shows it; the loop keeps shrinking and hiding every other
+    # nudge, and when the line still does not fit it renders past the
+    # available width with the `+N`.
     nudge_color=()
     nudge_small=()
     nudge_large=()
     nudge_mid=()
     nudge_icon=()
+    nudge_floor=()
     nudge_set() {
       nudge_color[$1]="$2"
       nudge_small[$1]="$3"
       nudge_large[$1]="$4"
       nudge_mid[$1]="$5"
       nudge_icon[$1]="$6"
+      nudge_floor[$1]="${7:-}"
     }
     # Post-completion setup nudge: machine-scope setup choices the shipped list
-    # holds and this machine has not decided. Highest priority because it is
+    # holds and this machine has not decided, plus the owed project-scope ones
+    # this machine can act on (setup-owed.sh). Highest priority because it is
     # the only nudge that tells a teammate who pulled a release about a choice
     # only they can make.
     if [ "$setup_pending_count" -gt 0 ] 2>/dev/null; then
@@ -373,12 +398,47 @@ else
       # unreadable value yields an empty field. A cache written before
       # codifyNudgeReason existed has no key, which the has_codify_reason flag
       # carries. Silent on jq failure: every field then reads empty.
-      cache_fields=$(jq -r '
+      #
+      # The update nudge's state resolves in this same call: one ordered chain
+      # of conditions yields the state, version and login fields, first match
+      # wins (the checkout is behind origin, then a teammate's live update
+      # claim, then the reader's own, then a plain available update). A claim whose tag or login falls outside the
+      # sets the claim writer validates against is ignored rather than
+      # stripped, and \A..\z anchor the whole value because ^ and $ match at
+      # line breaks in jq. A cache without the claim fields resolves to the
+      # plain update state.
+      #
+      # The pull state sits above all of them: origin's default branch carries a
+      # higher version than the checkout's own version file, which is read live
+      # with a shell builtin and passed in. Only the numeric core orders two
+      # versions, and a local value or origin value that is not a version never
+      # yields pull.
+      local_version=""
+      [ -r "$STATE_ROOT/.gaia/VERSION" ] && { read -r local_version <"$STATE_ROOT/.gaia/VERSION" || true; }
+      local_version="${local_version%"${local_version##*[![:space:]]}"}"
+      cache_fields=$(jq -r --arg local "$local_version" '
         def clean: tostring | gsub("[\u0000-\u001f\u007f]"; "");
-        [ (.outdatedCount // 0 | clean),
+        def version_core: if type == "string" then (capture("\\A(?<a>[0-9]+)\\.(?<b>[0-9]+)\\.(?<c>[0-9]+)(-[0-9A-Za-z.-]+)?\\z") | [(.a | tonumber), (.b | tonumber), (.c | tonumber)]) else null end;
+        def valid_login: type == "string" and length <= 39 and test("\\A[A-Za-z0-9](-?[A-Za-z0-9])*\\z");
+        def valid_tag: type == "string" and test("\\Av[0-9]+\\.[0-9]+\\.[0-9]+(-[0-9A-Za-z.-]+)?\\z");
+        (($local | version_core) // null) as $local_core
+        | ((.gaiaOriginVersion | version_core) // null) as $origin_core
+        | (if (.ghLogin | valid_login) then .ghLogin else "" end) as $me
+        | ((if (.gaiaUpdateClaims | type) == "array" then .gaiaUpdateClaims else [] end)
+            | map(select(type == "object" and (.number | type) == "number"
+                         and (.tag | valid_tag) and (.authorLogin | valid_login)))
+            | sort_by(.number)) as $claims
+        | ([$claims[] | select(.authorLogin != $me)][0]) as $teammate
+        | ([$claims[] | select(.authorLogin == $me)][0]) as $own
+        | (if $local_core != null and $origin_core != null and $origin_core > $local_core then ["pull", .gaiaOriginVersion, ""]
+           elif $me != "" and $teammate != null then ["progress", ($teammate.tag | .[1:]), $teammate.authorLogin]
+           elif $me != "" and $own != null then ["resume", ($own.tag | .[1:]), ""]
+           elif ((.gaiaHasUpdate // false | tostring) == "true") and ((.gaiaLatest // "" | clean) != "")
+             then ["update", (.gaiaLatest | clean), ""]
+           else ["", "", ""] end) as $state
+        | [ (.outdatedCount // 0 | clean),
           (.securityCount | if type == "number" then (floor | tostring) else "" end),
-          (.gaiaHasUpdate // false | clean),
-          (.gaiaLatest // "" | clean),
+          $state[0], $state[1], $state[2],
           ((.codifyCandidateCount // 0) | if type == "number" then (floor | tostring) else "0" end),
           (if has("codifyNudgeReason") then "1" else "0" end),
           ((.codifyNudgeReason // "") | clean),
@@ -389,7 +449,7 @@ else
           (.residueCandidateCount // 0 | clean),
           (.wikiDriftCount // 0 | clean) ]
         | join("\u001f")' "$CACHE_FILE" 2>/dev/null) || cache_fields=""
-      IFS=$'\037' read -r outdated_count security_count gaia_has_update gaia_latest \
+      IFS=$'\037' read -r outdated_count security_count update_state update_version update_login \
         codify_count has_codify_reason codify_reason cleanse_nudge cleanse_reason \
         serena_drift codify_unclassified residue_count wiki_drift_count <<<"$cache_fields"
       case "$security_count" in
@@ -403,10 +463,24 @@ else
       codify_mid=""
       [ "$codify_count" -gt 0 ] 2>/dev/null && codify_mid="$codify_count"
 
-      if [ "$gaia_has_update" = "true" ] && [ -n "$gaia_latest" ]; then
-        # No Medium: the Large reason is already just the version.
-        nudge_set 1 '01;36' '/update-gaia' "/update-gaia ($gaia_latest)" '' '🚀'
-      fi
+      case "$update_state" in
+        pull)
+          nudge_set 1 '01;36' '/update-gaia' "/update-gaia (pull $update_version)" "pull $update_version" '🚀'
+          ;;
+        progress)
+          # A teammate holds the update, so there is nothing for this person to
+          # run: no command, and the floor keeps the version and who is on it
+          # visible at every width.
+          nudge_set 1 '01;93' "GAIA $update_version" "GAIA $update_version in progress (@$update_login)" "@$update_login" '⌛️' 1
+          ;;
+        resume)
+          nudge_set 1 '01;36' '/update-gaia' "/update-gaia (resume $update_version)" "resume $update_version" '🚀'
+          ;;
+        update)
+          # No Medium: the Large reason is already just the version.
+          nudge_set 1 '01;36' '/update-gaia' "/update-gaia ($update_version)" '' '🚀'
+          ;;
+      esac
       deps_outdated=0
       deps_security=0
       [ -n "$outdated_count" ] && [ "$outdated_count" -gt 0 ] 2>/dev/null && deps_outdated="$outdated_count"
@@ -519,6 +593,7 @@ else
     dense_large=()
     dense_mid=()
     dense_icon=()
+    dense_floor=()
     dense_iconcount=()
     for slot in "${!nudge_small[@]}"; do
       dense_color+=("${nudge_color[$slot]}")
@@ -526,6 +601,7 @@ else
       dense_large+=("${nudge_large[$slot]}")
       dense_mid+=("${nudge_mid[$slot]}")
       dense_icon+=("${nudge_icon[$slot]}")
+      dense_floor+=("${nudge_floor[$slot]:-}")
       case "${nudge_mid[$slot]}" in
         ''|*[!0-9]*) dense_iconcount+=("") ;;
         *) dense_iconcount+=("${nudge_mid[$slot]}") ;;
@@ -612,17 +688,24 @@ else
       # Shrink the lowest-priority nudge still at the current size, one step
       # at a time: every nudge to Medium bottom-up, then Medium to Small
       # bottom-up, then Small to icon bottom-up, then icon to hidden
-      # bottom-up. shrink_step caps at 4 * nudge_count (every nudge through every step), the point
-      # at which every nudge is hidden and `+N` renders alone, even past
-      # available_width, rather than emitting nothing. The measure() call right before
-      # the break leaves `right` and `right_width` set to what gets printed.
+      # bottom-up. A nudge with a floor skips any step past it but the step
+      # still counts, so the others keep shrinking. shrink_step caps at
+      # 4 * nudge_count (every nudge through every step), the point at which
+      # every nudge that can be is hidden and the rest render with `+N`, even
+      # past available_width, rather than emitting nothing. The measure() call
+      # right before the break leaves `right` and `right_width` set to what
+      # gets printed.
       shrink_step=0
       while :; do
         measure
         if [ "$right_width" -le "$available_width" ] || [ "$shrink_step" -ge $((4 * nudge_count)) ]; then
           break
         fi
-        nudge_size[nudge_count - 1 - shrink_step % nudge_count]=$((shrink_step / nudge_count + 1))
+        shrink_target=$((nudge_count - 1 - shrink_step % nudge_count))
+        shrink_size=$((shrink_step / nudge_count + 1))
+        if [ -z "${dense_floor[$shrink_target]}" ] || [ "$shrink_size" -le "${dense_floor[$shrink_target]}" ]; then
+          nudge_size[shrink_target]=$shrink_size
+        fi
         shrink_step=$((shrink_step + 1))
       done
     fi

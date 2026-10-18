@@ -35,6 +35,7 @@ Project-scope decisions live in `.gaia/project.json` under `setup_decisions` (se
 - **`/gaia-init`** records the shipped defaults for the sandbox recommendation and the isolation policy, asking nothing.
 - **`/setup-gaia`** treats a phase whose id is undecided as owed on every run, even once setup is complete, and probes first: a feature already in place is recorded with no question. The command routes; the phase bodies live in its setup references (`.claude/skills/gaia/references/setup/`), and `.claude/commands/setup-gaia.md` is the map. Project-scope records are made only by an admin run on the default branch, and that run lands them there. A standalone feature is run by its own reference.
 - **`/update-gaia`**'s drift step compares the target bundle's list with the records. It applies or asks only standalone features, names every other undecided feature as "run /setup-gaia", and never applies or asks a non-admin what needs an admin. See [[Update Workflow]].
+- **Pull mode** applies the machine-scope features the pulled release lists, with the same `APPLY`, `ASK` and `SETUP` handling as the update's drift step, and leaves project-scope features to the full update. See [[Update Workflow]] (`## Pull mode`).
 - **The statusline** arms a `/setup-gaia` nudge on the main checkout when setup is complete and a machine-scope id has no recorded decision. Project ids never arm it.
 
 ## Precedence

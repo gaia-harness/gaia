@@ -12,13 +12,9 @@
 #   0   CLEAR   nothing in the tree is lost by removing it
 #   1   a block per condition that holds, then the tree path and one
 #       `Next step:` line per block:
-#         PENDING   a file under `<tree>/.gaia-merge/`: the update command
-#                   writes conflict patches and notes there and asks the user
-#                   to delete each one once resolved, so a file is unresolved
-#                   work
-#         DIRTY     a `git status --porcelain` line outside `.gaia-merge/`
-#                   (untracked files count, ignored files never do), and an
-#                   `Unpushed:` line when HEAD is ahead of the branch's upstream
+#         DIRTY     a `git status --porcelain` line (untracked files count,
+#                   ignored files never do), and an `Unpushed:` line when HEAD
+#                   is ahead of the branch's upstream
 #   2   a refusal rather than a verdict: a usage error, or the path is not a
 #       git work tree
 #
@@ -97,12 +93,7 @@ if [ "$(git -C "$tree" rev-parse --is-inside-work-tree 2>/dev/null)" != true ]; 
   exit 2
 fi
 
-pending=""
-if [ -d "$tree/.gaia-merge" ]; then
-  pending=$(find "$tree/.gaia-merge" ! -type d | awk -v prefix="$tree/" 'index($0, prefix) == 1 { print substr($0, length(prefix) + 1) }' | LC_ALL=C sort)
-fi
-
-dirty=$(git -C "$tree" status --porcelain | awk 'substr($0, 4) !~ /^"?\.gaia-merge\//')
+dirty=$(git -C "$tree" status --porcelain)
 
 unpushed_line=""
 if upstream=$(git -C "$tree" rev-parse --abbrev-ref --symbolic-full-name '@{upstream}' 2>/dev/null); then
@@ -112,7 +103,7 @@ if upstream=$(git -C "$tree" rev-parse --abbrev-ref --symbolic-full-name '@{upst
   fi
 fi
 
-if [ -z "$pending" ] && [ -z "$dirty" ] && [ -z "$unpushed_line" ]; then
+if [ -z "$dirty" ] && [ -z "$unpushed_line" ]; then
   printf 'CLEAR\n'
   exit 0
 fi
@@ -120,25 +111,18 @@ fi
 branch=$(git -C "$tree" rev-parse --abbrev-ref HEAD 2>/dev/null || printf '<branch>')
 
 why=""
-[ -z "$pending" ] || why="unresolved .gaia-merge/ files"
-[ -z "$dirty" ] || why="${why:+$why, }uncommitted changes"
+[ -z "$dirty" ] || why="uncommitted changes"
 [ -z "$unpushed_line" ] || why="${why:+$why, }$ahead unpushed commit(s)"
 if [ -f "$here/kept-worktrees.sh" ]; then
   bash "$here/kept-worktrees.sh" record --tree "$tree" --branch "$branch" --why "$why" >/dev/null 2>&1 || true
 fi
 
-if [ -n "$pending" ]; then
-  printf 'PENDING\n%s\n' "$pending"
-fi
 if [ -n "$dirty" ] || [ -n "$unpushed_line" ]; then
   printf 'DIRTY\n'
   [ -z "$dirty" ] || printf '%s\n' "$dirty"
   [ -z "$unpushed_line" ] || printf '%s\n' "$unpushed_line"
 fi
 printf 'Worktree: %s\n' "$tree"
-if [ -n "$pending" ]; then
-  printf 'Next step: resolve each file under .gaia-merge/ and delete it, or delete .gaia-merge/ to discard them, then re-run the cleanup.\n'
-fi
 if [ -n "$dirty" ] || [ -n "$unpushed_line" ]; then
   printf 'Next step: commit and push or discard those changes, then re-run the cleanup, or %s' "$(removal_step "$tree" "$branch")"
   printf '\n'
