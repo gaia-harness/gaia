@@ -49,7 +49,7 @@ rate_for() {
   # Every model key that has appeared in a real ledger. An absent row here is
   # the #1088 failure: silently priced at zero.
   for model in claude-opus-5-5 claude-opus-5 claude-opus-4-8 claude-sonnet-5-5 claude-sonnet-5 \
-           claude-fable-5-1 claude-haiku-4-5-20251001; do
+           claude-fable-5-1 claude-haiku-5-5 claude-haiku-4-5-20251001; do
     got="$(rate_for "$model" 2026-07-30)"
     [ "$got" != "NULL" ] || { echo "no rate window for $model" >&2; return 1; }
   done
@@ -86,10 +86,21 @@ rate_for() {
   [ "$(jq -r '.models["claude-sonnet-5"] | length' "$TABLE")" -eq 1 ]
 }
 
-@test "shipped table: claude-sonnet-5-5 prices at 2/10 with one unconditional window" {
-  [ "$(rate_for claude-sonnet-5-5 2026-09-30)" = "2 10" ]
+@test "shipped table: claude-sonnet-5-5 prices at 2/10 on both sides of the cache-read cut" {
+  # Only the cache-read rate changed on 2026-10-07, so both windows resolve
+  # 2/10; the cache-read tests below assert the cut itself.
   [ "$(rate_for claude-sonnet-5-5 2020-01-01)" = "2 10" ]
-  [ "$(jq -r '.models["claude-sonnet-5-5"] | length' "$TABLE")" -eq 1 ]
+  [ "$(rate_for claude-sonnet-5-5 2026-10-06)" = "2 10" ]
+  [ "$(rate_for claude-sonnet-5-5 2026-10-07)" = "2 10" ]
+  [ "$(rate_for claude-sonnet-5-5 2030-01-01)" = "2 10" ]
+}
+
+@test "shipped table: claude-haiku-5-5 prices at the short-prompt card, 0.1/0.5, with no dated window" {
+  # The table holds one rate per window, so a prompt over 100k tokens, which the
+  # card prices 5x higher, is priced at this short-prompt rate: a lower bound.
+  [ "$(rate_for claude-haiku-5-5 2026-10-07)" = "0.1 0.5" ]
+  [ "$(rate_for claude-haiku-5-5 2030-01-01)" = "0.1 0.5" ]
+  jq -e '.models["claude-haiku-5-5"] | all(has("effective_through") | not)' "$TABLE" >/dev/null
 }
 
 @test "shipped table: claude-fable-5-1 and claude-mythos-5-1 price at 10/50" {
@@ -97,13 +108,14 @@ rate_for() {
   [ "$(rate_for claude-mythos-5-1 2026-09-30)" = "10 50" ]
 }
 
-# price_cache_read <model> <tokens> -> dollars for a cache_read-only row, through
-# the REAL priced_row, so a per-window cache-read multiplier the lib ignores
-# fails here rather than passing a has-key check on the table.
+# price_cache_read <model> <tokens> [<date>] -> dollars for a cache_read-only
+# row dated <date> (default 2026-09-30), through the REAL priced_row, so a
+# per-window cache-read multiplier the lib ignores fails here rather than
+# passing a has-key check on the table.
 price_cache_read() {
-  jq -r --arg model "$1" --argjson token_count "$2" --slurpfile table "$TABLE" \
+  jq -r --arg model "$1" --argjson token_count "$2" --arg date "${3:-2026-09-30}" --slurpfile table "$TABLE" \
     '$table[0] as $rates | '"$GAIA_PRICING_JQ_DEFS"'
-     priced_row({ts: "2026-09-30T00:00:00Z", by_model: {($model): {cache_read: $token_count}}}) | .dollars' \
+     priced_row({ts: ($date + "T00:00:00Z"), by_model: {($model): {cache_read: $token_count}}}) | .dollars' \
     <<<'null' 2>/dev/null
 }
 
@@ -113,12 +125,19 @@ price_cache_read() {
   [ "$(price_cache_read claude-opus-5-5 1000000)" = "0.2" ]
   [ "$(price_cache_read claude-fable-5-1 1000000)" = "0.25" ]
   [ "$(price_cache_read claude-mythos-5-1 1000000)" = "0.25" ]
+
+  # Sonnet 5.5 cache reads are 0.05x of $2 from the 2026-10-07 cut on.
+  [ "$(price_cache_read claude-sonnet-5-5 1000000 2026-10-07)" = "0.1" ]
+  [ "$(price_cache_read claude-sonnet-5-5 1000000 2030-01-01)" = "0.1" ]
 }
 
 @test "shipped table: cache reads fall back to the global multiplier without an override" {
-  # Sonnet 5.5 and Fable 5 carry no override: 0.1x of $2 and of $10.
+  # Sonnet 5.5 before the cut, Fable 5, and Haiku 5.5 carry no override: 0.1x
+  # of $2, of $10, and of $0.10. 2026-10-06 is the pre-cut window's last day.
   [ "$(price_cache_read claude-sonnet-5-5 1000000)" = "0.2" ]
+  [ "$(price_cache_read claude-sonnet-5-5 1000000 2026-10-06)" = "0.2" ]
   [ "$(price_cache_read claude-fable-5 1000000)" = "1" ]
+  [ "$(price_cache_read claude-haiku-5-5 1000000 2026-10-07)" = "0.01" ]
 }
 
 @test "shipped table: the model key set is exactly this, and every window array is non-empty" {
@@ -128,7 +147,7 @@ price_cache_read() {
   # job is guarding the shipped table.
   jq -e '.models | keys == [
            "claude-fable-5", "claude-fable-5-1", "claude-haiku-4-5",
-           "claude-haiku-4-5-20251001", "claude-mythos-5", "claude-mythos-5-1",
+           "claude-haiku-4-5-20251001", "claude-haiku-5-5", "claude-mythos-5", "claude-mythos-5-1",
            "claude-opus-4-6", "claude-opus-4-7", "claude-opus-4-8",
            "claude-opus-5", "claude-opus-5-5", "claude-sonnet-4-6",
            "claude-sonnet-5", "claude-sonnet-5-5"

@@ -2,7 +2,7 @@
 type: concept
 status: active
 created: 2026-10-01
-updated: 2026-10-15
+updated: 2026-10-18
 tags: [concept, claude, workflow, doctrine]
 ---
 
@@ -26,14 +26,20 @@ Delegation has a fixed cost: a brief to write, a result to read back, and a cont
 
 ## Model table
 
-Models are ranked by fit to the task class. Cost is a secondary note, never the selector: choosing by price alone trades quality for a saving the measurements show is small.
+Models are ranked by fit to the task class. Fit has two halves: the reasoning depth the task needs, and how tightly the work must keep to the brief. Model and effort set both together: a top model, or any model at its highest effort, reads wider and reaches past the brief, which a review wants and a written plan does not. Narrow focus helps only when the brief carries the judgment; with a loose brief it turns into literal-minded shortcuts. Cost decides only between models that fit equally.
 
-| Task class | Model | Why it fits | Cost note |
-| --- | --- | --- | --- |
-| sweep | Sonnet | Wide reads and mechanical extraction return a small result; reasoning depth adds little. | Cache reads are about 97.5% of debt-run tokens and are priced the same on both top models, so moving a whole run to the cheaper model saves at most about a quarter. The smaller model's cache-read price is derived from the rate table, not measured. |
-| scoped implementation | Sonnet | A bounded change with a written plan and a verifier behind it; the plan carries the judgment. | Same cache-read dominance as the sweep row; the saving is bounded by it. |
-| synthesis | Opus (Fable as the named alternative) | Wording, positioning, and design decisions where one weak choice propagates into everything after it. | Priced at the top-model rates. Cache reads dominate here too, so the cost difference never outranks fit. |
-| lookup, scaffold, mechanical | Haiku | The answer is fixed by a template, a rule id, or a written convention: scaffolding from a pattern, a fix keyed to a lint or accessibility rule id, a rule-based check. Reasoning depth adds nothing the template does not already carry. | Fit selects it and the lower price follows. A pin is a ceiling: an inline skill's pin holds for the rest of the turn it loads in, so a skill that triggers in the middle of general implementation work is not this class. |
+| Task class | Model | Effort | Why it fits | Cost note |
+| --- | --- | --- | --- | --- |
+| extraction, classification, inventory | Haiku | never `low` for agentic work | Each item is decided by a written rule and the result is checkable: a JSON array verified with a count, or a fixed template. Narrow focus keeps it on the brief. At `low` it can stop early in a long agent prompt. Not for code changes. | A twentieth of Sonnet's input and output rates and a tenth of its cache-read rate, for prompts up to 100k tokens. A prompt over 100k tokens pays five times those rates. |
+| judgment sweep | Sonnet | default | Wide reads where each item needs a call, such as research, refutation, or verification reads, returning a small result. The brief carries the judgment, and narrow focus keeps each call inside it. | Half of Opus's rate on every tier, cache reads included. |
+| scoped implementation | Sonnet | never `max` | A bounded change with a written plan and a verifier behind it. The plan carries the judgment, and Sonnet stays inside the brief. At `max` it reaches for extra review, extra sub-agents, and out-of-scope edits. | Half of Opus's rate on every tier, cache reads included. |
+| review and adversarial check | Opus | default | Finding what a change got wrong needs sustained judgment and the wider view. The Code Audit Team members are this class. | Top-model rates. A missed defect costs more than the rate difference. |
+| synthesis | Opus (Fable when the session is on it or the user picks it) | default | Wording, positioning, architecture, and design decisions where one weak choice propagates into everything after it. | Top-model rates; Fable's input and output rates are two and a half times Opus's. Fit selects it. |
+| lookup, scaffold, mechanical | Haiku | never `low` for agentic work | The answer is fixed by a template, a rule id, or a written convention: scaffolding from a pattern, a fix keyed to a lint or accessibility rule id, a rule-based check. Reasoning depth adds nothing the template does not already carry. | Fit selects it and the lower price follows. A pin is a ceiling: an inline skill's pin holds for the rest of the turn it loads in, so a skill that triggers in the middle of general implementation work is not this class. |
+
+An Effort cell is an instruction for the `Agent` tool's `effort` parameter: "default" means omit it, and only a named limit is a reason to pass it.
+
+The cost ratios come from the published price card, not from measurement. `.gaia/scripts/token-rates.json` carries the same rates for GAIA's cost readouts, with Haiku at its short-prompt rate, so a Haiku cost readout is a lower bound.
 
 Among the doctrine sources (the rule, `.claude/doctrine/execution.md`, and this page), the table is the only text edited when a model ships. A pin site is any other place that names a model for a skill, an agent, or one dispatch. Each follows the table and is re-checked against it in the same change.
 <!-- gaia:maintainer-only:start -->

@@ -119,6 +119,7 @@ On GAIA 1.6.1? Claude: choose Abort, then offer to migrate this project to 2.0.0
 
 ### Changed
 
+- The Workflow Doctrine model table now picks a model by fit, meaning both the reasoning a task needs and how tightly it must keep to its brief: it adds Haiku for checkable extraction and classification, splits judgment sweeps from them, adds a review row on Opus, and says when to set effort. Cost readouts now price Sonnet 5.5 cache reads at the current rate from 2026-10-07 on, and price Haiku 5.5 runs instead of reporting them unpriced
 - An unset team isolation policy now defaults to worktrees: `/gaia-plan`, `/gaia-debt` and ad-hoc committed work still ask when `.gaia/project.json` names no `isolation_policy`, leading with a worktree, and the `/gaia-init` and `/setup-gaia` isolation question recommends `Always use worktrees`, since GAIA is built for concurrent multi-agent work. A team that wants branches records `Prefer branches` there (#2764)
 - `/gaia-spec` now plans its SPEC in the same session after saving it and ends at the plan's KICKOFF prompt, with no `/clear`-and-paste step; execution still starts in a fresh session. `/gaia-plan` accepts a leading `auto` token that runs it non-interactively (#2750)
 - pnpm moves from 12.7.0 to 12.11.2, and `@gaia-react/lint` is pinned to the 3.0.0 stable release instead of a release candidate (#2705)
