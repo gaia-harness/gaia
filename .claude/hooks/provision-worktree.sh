@@ -82,17 +82,20 @@ source "$self_directory/../../.gaia/scripts/main-root-lib.sh" 2>/dev/null || exi
 tree="${1:-}"
 payload=""
 payload_event=""
+session_id=""
 if [ -z "$tree" ] && [ ! -t 0 ]; then
   payload="$(cat)"
   if [ -n "$payload" ] && command -v jq >/dev/null 2>&1; then
     tree="$(jq -r '.tool_response.worktreePath // .cwd // empty' <<<"$payload" 2>/dev/null)"
     payload_event="$(jq -r '.hook_event_name // empty' <<<"$payload" 2>/dev/null)"
+    session_id="$(jq -r '.session_id // empty' <<<"$payload" 2>/dev/null)"
   elif [ -n "$payload" ]; then
     # Without jq the flat fields are read with sed, the shape
     # workflow-doctrine-inject.sh uses.
     tree="$(printf '%s\n' "$payload" | sed -n 's/.*"worktreePath"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' | sed -n 1p)"
     [ -n "$tree" ] || tree="$(printf '%s\n' "$payload" | sed -n 's/.*"cwd"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' | sed -n 1p)"
     payload_event="$(printf '%s\n' "$payload" | sed -n 's/.*"hook_event_name"[[:space:]]*:[[:space:]]*"\([A-Za-z]*\)".*/\1/p' | sed -n 1p)"
+    session_id="$(printf '%s\n' "$payload" | sed -n 's/.*"session_id"[[:space:]]*:[[:space:]]*"\([A-Za-z0-9_-]*\)".*/\1/p' | sed -n 1p)"
   fi
 fi
 [ -n "$tree" ] || tree="$PWD"
@@ -291,6 +294,14 @@ fi
 # tree whose identity is unknown could write symlinks into a checkout that
 # owns its own state.
 gaia_is_linked_worktree "$tree" || exit 0
+
+# ---------- record which session is in this tree ----------
+# The kept-worktree reminder never lists a tree a live session occupies, and
+# both triggers of this hook are exactly where a session comes to be in one.
+kept_worktrees_script="$self_directory/../../.gaia/scripts/kept-worktrees.sh"
+if [ -n "$session_id" ] && [ -f "$kept_worktrees_script" ]; then
+  bash "$kept_worktrees_script" occupy --session "$session_id" --tree "$tree" >/dev/null 2>&1 || true
+fi
 
 # ---------- re-link the shared state ----------
 # link-worktree.sh links the shared set its own header names and is

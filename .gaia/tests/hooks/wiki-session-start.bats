@@ -2,11 +2,12 @@
 
 # Tests for .claude/hooks/wiki-session-start.sh.
 #
-# SessionStart hook with two jobs: hand off to the bounded working-state
-# janitor, then deliver the janitor's one-line base-catch-up report on stdout,
-# which a SessionStart hook's plain stdout puts in front of Claude. The report
-# surfaces exactly once (read, then delete), the hook writes nothing into the
-# git dir, and it always exits 0.
+# SessionStart hook with three jobs: hand off to the bounded working-state
+# janitor, deliver the janitor's one-line base-catch-up report on stdout,
+# which a SessionStart hook's plain stdout puts in front of Claude, then print
+# the kept-worktree reminder. The report surfaces exactly once (read, then
+# delete), the hook writes nothing into the git dir, and it always exits 0.
+# The reminder's own behavior is .gaia/scripts/tests/kept-worktrees.bats.
 #
 # The print is the load-bearing half. If it stops happening, a refused
 # fast-forward of the base branch goes unreported, with no error and nothing
@@ -280,6 +281,70 @@ write_conflicted_library() {
   [ "$status" -eq 0 ]
   grep -qF -- "$REPORT_LINE" <<<"$output" || return 1
   return 0
+}
+
+# --- the kept-worktree reminder ---
+
+# kept_tree_fixture: a linked worktree with a ledger entry under the main root,
+# the reminder's scripts beside the installed hook, and the report seeded.
+# Sets WORKTREE_PATH to the physical spelling git prints for the tree.
+kept_tree_fixture() {
+  hook=$(install_hook)
+  cp "$REPO_ROOT/.gaia/scripts/kept-worktrees.sh" "$REPO_ROOT/.gaia/scripts/worktree-removal-check.sh" "$REPO/.gaia/scripts/"
+  git -C "$REPO" worktree add --quiet -b wt-branch "$REPO/.claude/worktrees/wt" main
+  WORKTREE_PATH=$(git -C "$REPO/.claude/worktrees/wt" rev-parse --show-toplevel)
+  mkdir -p "$REPO/.gaia/local"
+  printf '%s\twt-branch\tuncommitted changes\n' "$WORKTREE_PATH" > "$REPO/.gaia/local/kept-worktrees.tsv"
+  seed_report "$REPO"
+}
+
+@test "prints the kept-worktree reminder after the report" {
+  REPO=$("$HELPERS/tmp-git-repo.sh")
+  kept_tree_fixture
+  invoke_hook_in "$REPO" '' "$hook"
+  [ "$status" -eq 0 ]
+  [ "$(printf '%s\n' "$output" | head -n 1)" = "$REPORT_LINE" ] || { printf '%s\n' "$output"; return 1; }
+  printf '%s\n' "$output" | grep -Fq -- "- $WORKTREE_PATH (branch wt-branch, last commit " || { printf '%s\n' "$output"; return 1; }
+  printf '%s\n' "$output" | grep -Fq "git worktree remove --force $WORKTREE_PATH" || { printf '%s\n' "$output"; return 1; }
+}
+
+@test "a session starting inside a kept tree is not shown its own tree" {
+  REPO=$("$HELPERS/tmp-git-repo.sh")
+  kept_tree_fixture
+  invoke_hook_in "$WORKTREE_PATH" '' "$hook"
+  [ "$status" -eq 0 ]
+  printf '%s\n' "$output" | grep -Fq -- "- $WORKTREE_PATH" && { printf 'own tree listed: %s\n' "$output"; return 1; }
+  true
+}
+
+@test "guard: a hook that passes no own tree shows a session its own tree" {
+  REPO=$("$HELPERS/tmp-git-repo.sh")
+  kept_tree_fixture
+  grep -q -- '--own-tree "$_own_tree"' "$hook" || return 1
+  sed -e 's/ --own-tree "\$_own_tree"//' "$hook" > "$hook.mutated"
+  mv "$hook.mutated" "$hook"
+  invoke_hook_in "$WORKTREE_PATH" '' "$hook"
+  printf '%s\n' "$output" | grep -Fq -- "- $WORKTREE_PATH" || { printf 'stayed green: %s\n' "$output"; return 1; }
+}
+
+@test "guard: a hook without the reminder call prints no reminder" {
+  REPO=$("$HELPERS/tmp-git-repo.sh")
+  kept_tree_fixture
+  grep -q '_kept_worktrees" remind' "$hook" || return 1
+  sed -e '/_kept_worktrees" remind/d' "$hook" > "$hook.mutated"
+  mv "$hook.mutated" "$hook"
+  invoke_hook_in "$REPO" '' "$hook"
+  printf '%s\n' "$output" | grep -Fq -- "- $WORKTREE_PATH" && { printf 'stayed green: %s\n' "$output"; return 1; }
+  true
+}
+
+@test "a reminder script that fails never fails the session or the report" {
+  REPO=$("$HELPERS/tmp-git-repo.sh")
+  kept_tree_fixture
+  printf '#!/usr/bin/env bash\necho boom >&2\nexit 3\n' > "$REPO/.gaia/scripts/kept-worktrees.sh"
+  invoke_hook_in "$REPO" '' "$hook"
+  [ "$status" -eq 0 ]
+  [ "$output" = "$REPORT_LINE" ] || { printf '%s\n' "$output"; return 1; }
 }
 
 # --- structural ---

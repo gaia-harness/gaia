@@ -5,6 +5,12 @@
 # stdout reaches Claude's context, so the print is the delivery. The report is
 # read, then deleted, so it surfaces exactly once.
 #
+# Then prints the kept-worktree reminder (.gaia/scripts/kept-worktrees.sh):
+# each orphaned worktree (merged, no live Claude session in it) with its
+# removal commands, at every start until the tree is removed. The session's
+# own tree is passed so it is never listed to itself. Nothing when none is
+# orphaned. Local reads only: no fetch.
+#
 # Fail-open: no ERR trap and no `set -e`, so a library that fails to parse
 # costs the main-root lookup, never the print.
 
@@ -36,5 +42,9 @@ if [ -f "$catchup_report" ]; then
   head -n 1 "$catchup_report" 2>/dev/null
   rm -f "$catchup_report" 2>/dev/null
 fi
+
+_kept_worktrees="$_hook_directory/../../.gaia/scripts/kept-worktrees.sh"
+_own_tree="$(git rev-parse --show-toplevel 2>/dev/null)" || _own_tree=''
+[ -f "$_kept_worktrees" ] && bash "$_kept_worktrees" remind --main-root "$main_root" --own-tree "$_own_tree" 2>/dev/null
 
 exit 0

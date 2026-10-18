@@ -22,6 +22,15 @@
 #   2   a refusal rather than a verdict: a usage error, or the path is not a
 #       git work tree
 #
+# On exit 1 it also records the tree in the kept-worktree ledger through
+# kept-worktrees.sh beside it, whose session-start reminder lists the tree
+# until it is removed. The record's status is ignored: a ledger that cannot be
+# written never changes the stop, its output, or its exit code.
+#
+#   bash .gaia/scripts/worktree-removal-check.sh --removal-step --tree <path> --branch <branch>
+# prints only the deliberate-removal clause, the one wording of the removal
+# commands, for that reminder to reuse.
+#
 # `.gaia-backup/` is never consulted: it is gitignored, and after the merge its
 # pre-image is the worktree's base commit, which git still holds.
 #
@@ -39,16 +48,34 @@
 set -u
 
 usage() {
-  printf 'usage: worktree-removal-check.sh --tree <absolute worktree path>\n' >&2
+  printf 'usage: worktree-removal-check.sh --tree <absolute worktree path>\n       worktree-removal-check.sh --removal-step --tree <path> --branch <branch>\n' >&2
 }
 
+removal_step() { # <tree> <branch>
+  printf "remove the worktree deliberately from the main checkout with \`git worktree remove --force %s\` then \`git branch -D %s\`, knowing --force discards what it holds.\n" "$1" "$2"
+}
+
+here=${BASH_SOURCE[0]%/*}
+[ "$here" != "${BASH_SOURCE[0]}" ] || here=.
+
 tree=""
+branch=""
+removal_step_only=false
 while [ $# -gt 0 ]; do
   case "$1" in
     --tree)
       [ $# -ge 2 ] || { usage; exit 2; }
       tree=$2
       shift 2
+      ;;
+    --branch)
+      [ $# -ge 2 ] || { usage; exit 2; }
+      branch=$2
+      shift 2
+      ;;
+    --removal-step)
+      removal_step_only=true
+      shift
       ;;
     *)
       usage
@@ -58,6 +85,12 @@ while [ $# -gt 0 ]; do
 done
 
 [ -n "$tree" ] || { usage; exit 2; }
+
+if [ "$removal_step_only" = true ]; then
+  [ -n "$branch" ] || { usage; exit 2; }
+  removal_step "$tree" "$branch"
+  exit 0
+fi
 
 if [ "$(git -C "$tree" rev-parse --is-inside-work-tree 2>/dev/null)" != true ]; then
   printf 'worktree-removal-check: %s is not a git work tree\n' "$tree" >&2
@@ -86,6 +119,14 @@ fi
 
 branch=$(git -C "$tree" rev-parse --abbrev-ref HEAD 2>/dev/null || printf '<branch>')
 
+why=""
+[ -z "$pending" ] || why="unresolved .gaia-merge/ files"
+[ -z "$dirty" ] || why="${why:+$why, }uncommitted changes"
+[ -z "$unpushed_line" ] || why="${why:+$why, }$ahead unpushed commit(s)"
+if [ -f "$here/kept-worktrees.sh" ]; then
+  bash "$here/kept-worktrees.sh" record --tree "$tree" --branch "$branch" --why "$why" >/dev/null 2>&1 || true
+fi
+
 if [ -n "$pending" ]; then
   printf 'PENDING\n%s\n' "$pending"
 fi
@@ -99,6 +140,7 @@ if [ -n "$pending" ]; then
   printf 'Next step: resolve each file under .gaia-merge/ and delete it, or delete .gaia-merge/ to discard them, then re-run the cleanup.\n'
 fi
 if [ -n "$dirty" ] || [ -n "$unpushed_line" ]; then
-  printf "Next step: commit and push or discard those changes, then re-run the cleanup, or remove the worktree deliberately from the main checkout with \`git worktree remove --force %s\` then \`git branch -D %s\`, knowing --force discards them.\n" "$tree" "$branch"
+  printf 'Next step: commit and push or discard those changes, then re-run the cleanup, or %s' "$(removal_step "$tree" "$branch")"
+  printf '\n'
 fi
 exit 1

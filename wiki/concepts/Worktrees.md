@@ -183,6 +183,18 @@ Every checkout owns stable dev, Storybook, and Playwright ports, so two trees ne
 
 **What Claude is told.** Worktree entry, session start, and `/clear` or compaction inside a linked worktree print one context line carrying the tree's ports and the ask-first rule. The rule for Claude's own behavior is `frontend/.claude/rules/ports.md`.
 
+## Kept worktrees
+
+Post-merge cleanup runs `.gaia/scripts/worktree-removal-check.sh` before it removes a tree, and stops rather than discard work the tree still holds (its header names the conditions). When it stops, it records the tree in a main-anchored ledger that `.gaia/state-registry.json` declares. At every session start, `.claude/hooks/wiki-session-start.sh` lists the orphaned kept trees with why each was kept, how long since its last commit, and the removal commands, and prints nothing when there are none. Candidates are the ledger's trees plus each linked worktree whose upstream reads `[gone]`; the ledger covers the window before a fetch prune marks a kept tree's upstream gone.
+
+A candidate is orphaned, and listed, only when all of these are confirmed; unknown on any of them means it is not listed:
+
+- **Merged.** A ledger tree is merged by construction, because cleanup runs only after the merge. A `[gone]` tree is merged when its tip is on its remote's default branch, or when a cached `gh` lookup found a merged pull request whose head is that tip. A squash merge defeats the tip test, so the lookup confirms it; the lookup runs detached, at most once an hour, never on the session-start path, and with `gh` unavailable the tree stays unlisted until it can run. This is also what lists a kept tree whose ledger write failed. The reminder lists merged trees only: an abandoned or unmerged tree is out of its scope.
+- **No live Claude session in it.** Worktree provisioning records which tree each session starts in or enters, and the reminder checks that session's host process, read from the record the ports hook keeps. A host that has exited releases the tree; one that cannot be read holds it. The ports dead-session reap deletes an exited session's host record, so it deletes that session's occupancy record in the same step, rather than leaving the tree reading as unreadable. Held trees are counted in one line instead of listed.
+- **Not the starting session's own tree.**
+
+Nothing detects a person working in a tree outside Claude, so the block tells Claude to remove a listed tree only when the user names it, and to confirm each one when asked to remove them all. A `[gone]` tree had no removal check run on it and, with the upstream gone, the check cannot count its unpushed commits, so its next step runs the check and compares the branch against the base before a plain `git worktree remove`; ledger trees, which the check already examined, keep the forced removal wording. The reminder never removes a tree. It drops a ledger line once git no longer lists its tree, and an occupancy record of a checked tree once its session has exited (the ports reap drops the rest). The logic is in `.gaia/scripts/kept-worktrees.sh`.
+
 ## What is permanent
 
 The registry is the only list. Inside a linked worktree, `.claude/hooks/block-worktree-path-mismatch.sh` denies an Edit, Write, or MultiEdit to a `.gaia/local/` path that no registry entry recognizes, so drift written there surfaces rather than vanishing. Writes from the main checkout, or through Bash, are not checked. That is the defense an adopter clone carries.

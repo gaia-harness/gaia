@@ -525,6 +525,28 @@
       "reaped_by": "slot reclaim in worktree provisioning and in the ports session-start cleanup"
     },
     {
+      "id": "kept-worktrees-ledger",
+      "path": "kept-worktrees.tsv",
+      "match": "exact",
+      "kind": "file",
+      "scope": "shared",
+      "keyed_by": "tree root, one line per linked worktree a post-merge cleanup kept (tree, branch, why); a second stop of the same tree replaces its line, written temp-then-mv",
+      "why": "The worktree removal check records each tree it stops removing, so the session-start reminder can list it until it is removed. Main-anchored so every tree reads and writes one ledger.",
+      "writer": "code",
+      "reaped_by": "the kept-worktree reminder (kept-worktrees.sh remind) drops the line of a tree git no longer lists as a live worktree"
+    },
+    {
+      "id": "worktree-occupancy",
+      "path": "worktree-occupancy/",
+      "match": "prefix",
+      "kind": "dir",
+      "scope": "shared",
+      "keyed_by": "Claude Code session id, one file per session holding the tree root it last provisioned or entered",
+      "why": "Lets the kept-worktree reminder leave out a tree a live Claude session is working in. Main-anchored so a session in any tree is seen from every other.",
+      "writer": "code",
+      "reaped_by": "the ports dead-session reap (gaia_server_reap_dead_sessions) deletes a session's record with its host record once the host has exited; the kept-worktree reminder also deletes the record of a tree it checks whose host has exited"
+    },
+    {
       "id": "ports-tombstones",
       "path": "ports/tombstones/",
       "match": "prefix",

@@ -245,6 +245,7 @@
     ".gaia/scripts/fitness-publish.sh": "owned",
     ".gaia/scripts/gh-artifact-lib.sh": "owned",
     ".gaia/scripts/install-react-doctor.sh": "owned",
+    ".gaia/scripts/kept-worktrees.sh": "owned",
     ".gaia/scripts/knowledge-inventory.sh": "owned",
     ".gaia/scripts/lib/serena-lang.sh": "owned",
     ".gaia/scripts/lib/version-compare.awk": "owned",
@@ -730,7 +731,7 @@
     "wiki/overview.md": "wiki-owned",
     "wiki/README.md": "wiki-owned"
   },
-  "generated": "2026-10-18T01:42:52.882Z",
+  "generated": "2026-10-18T02:37:23.100Z",
   "regions": [
     {
       "endMarker": "<!-- gaia:audit-remit:end -->",
