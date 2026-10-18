@@ -130,7 +130,7 @@ Runs after `gh pr merge`, in this order. Each step runs only after the one befor
    ```
 
    Passing the confirmed PR number stamps `pr_number` on the plan's catalog row, which the pre-flight sweep's reap reads.
-4. **Clean up.** Run `.claude/skills/gaia/references/work-lifecycle.md` `## 8. Cleanup`. Feature-branch mode runs `### Feature branch` with the plan's branch. Worktree mode runs the arm that matches how the worktree was entered (`### Worktree entered by name in this session` or `### Worktree entered by path or in an earlier session`). From an isolated sub-agent context, run its `### Sub-agent context: continuation prompt`, whose appended lines carry steps 5 and 6 for the human to run from the main checkout.
+4. **Clean up.** Run `.claude/skills/gaia/references/work-lifecycle.md` `## 8. Cleanup`. Feature-branch mode runs `### Feature branch` with the plan's branch. Worktree mode runs the arm that matches how the worktree was entered (`### Worktree entered by name in this session` or `### Worktree entered by path or in an earlier session`). From an isolated sub-agent context, run its `### Sub-agent context: continuation prompt`, whose appended lines carry steps 5 and 6 for the human to run from the main checkout. A stop at the pre-removal check goes into the close's report with the check's output and the removal commands; the merge itself still counts as done.
 5. **Verify, then remove the layers.** From the main checkout:
 
    ```bash

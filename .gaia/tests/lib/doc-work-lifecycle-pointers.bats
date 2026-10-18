@@ -42,6 +42,7 @@ setup() {
     "$REFERENCES/residue.md"
     .claude/skills/update-deps/SKILL.md
     .claude/skills/update-deps/references/publish.md
+    .claude/skills/update-gaia/SKILL.md
     "$ISSUE_CLAIM"
     "$EXECUTION"
   )

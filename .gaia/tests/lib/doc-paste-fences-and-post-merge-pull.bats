@@ -60,7 +60,7 @@ scratch_copy() {
 worktree_arm_pulls() {
   local path_arm prose
   path_arm="$(section "$1/$REFERENCES/work-lifecycle.md" '### Worktree entered by path or in an earlier session')"
-  fence_bodies bash <<<"$path_arm" | grep -qF -- "git $PULL" || return 1
+  fence_bodies bash <<<"$path_arm" | grep -qE -- "git( -C ([^ <][^ ]*|<[^>]*>))? $PULL" || return 1
   fence_bodies bash <<<"$path_arm" | grep -qF -- '= main ]' || return 1
   prose="$(section "$1/$REFERENCES/work-lifecycle.md" '## 8. Cleanup')"
   grep -qF -- 'skip the checkout and the pull' <<<"$prose" || return 1
@@ -72,7 +72,7 @@ worktree_arm_has_no_checkout() {
   for heading in '### Worktree entered by name in this session' '### Worktree entered by path or in an earlier session'; do
     arm="$(section "$1/$REFERENCES/work-lifecycle.md" "$heading")"
     [ -n "$(fence_bodies bash <<<"$arm")" ] || return 1
-    if fence_bodies bash <<<"$arm" | grep -qE -- 'git( -C [^ ]+)? (checkout|switch)'; then
+    if fence_bodies bash <<<"$arm" | grep -qE -- 'git( -C ([^ <][^ ]*|<[^>]*>))? (checkout|switch)'; then
       return 1
     fi
   done
