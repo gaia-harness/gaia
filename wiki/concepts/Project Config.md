@@ -16,8 +16,8 @@ All keys are optional except `version`, which is `1`.
 
 | Key | Values | Meaning |
 | --- | --- | --- |
-| `sandbox_recommended` | `true` or `false` | The owner's recommendation to run Claude Code's OS sandbox. Each machine still resolves it for itself; see [[OS Sandbox]]. |
-| `isolation_policy` | `always-worktree`, `prefer-worktree`, `prefer-branch` | How a session isolates work that closes an issue, runs a plan, or is ad-hoc committed work (through `## 3. Isolate` in `.claude/skills/gaia/references/work-lifecycle.md`). The reading rules live in `.claude/skills/gaia/references/isolation.md`. |
+| `sandbox_recommended` | `true` or `false` | The owner's recommendation to run Claude Code's OS sandbox; absent means not recommended. Each machine still resolves it for itself; see [[OS Sandbox]]. |
+| `isolation_policy` | `always-worktree`, `prefer-worktree`, `prefer-branch` | How a session isolates work that closes an issue, runs a plan, or is ad-hoc committed work (through `## 3. Isolate` in `.claude/skills/gaia/references/work-lifecycle.md`); absent means `always-worktree`. The reading rules live in `.claude/skills/gaia/references/isolation.md`. |
 | `setup_decisions` | an object of setup feature id to `applied`, `declined` or `not-applicable` | The project-scope decisions made through `/gaia-init`, `/setup-gaia` and `/update-gaia`. See [[Setup Features]]. |
 
 A reader treats an unknown or invalid value as absent, so a typo or a value a newer GAIA wrote never breaks the file. The known values are enforced when the file is written.
@@ -26,16 +26,16 @@ A reader treats an unknown or invalid value as absent, so a typo or a value a ne
 
 These CLI commands write the file, each creating it (with `version` set) when it does not exist:
 
-- `gaia init write-project-config`, called by `/gaia-init` for the sandbox recommendation and the isolation policy (see [[GAIA Init Workflow]]).
-- `gaia setup write-isolation-policy`, called by `/setup-gaia` when a repo admin records the isolation policy.
-- `gaia setup write-sandbox-recommendation`, called by `/setup-gaia` when a repo admin answers the team sandbox recommendation.
+- `gaia init write-project-config`, called by `/gaia-init` to write the not-recommended sandbox default (see [[GAIA Init Workflow]]).
+- `gaia setup write-isolation-policy`, called by `/setup-gaia --reconfigure` when a repo admin answers the isolation policy.
+- `gaia setup write-sandbox-recommendation`, called by `/setup-gaia --reconfigure` when a repo admin answers the team sandbox recommendation.
 - `gaia setup record`, which merges one setup decision into `setup_decisions`.
 
 A writer merges into the raw file, so a key or a `setup_decisions` entry it does not know survives, and writes atomically.
 
 ## Readers
 
-`/setup-gaia` reads the file to resolve the sandbox recommendation and the isolation policy before it asks anything a prior answer already settled. The isolation policy is also read at the start of work that cuts a branch or worktree. `gaia setup drift` reads `setup_decisions` to report the undecided setup features, and `/setup-gaia` uses that to route owed phases.
+`/setup-gaia` reads the sandbox recommendation to decide whether a machine is asked about the sandbox. The isolation policy is also read at the start of work that cuts a branch or worktree. `gaia setup drift` reads `setup_decisions` to report the undecided setup features, and `/setup-gaia` uses that to route owed phases.
 
 ## Ownership
 

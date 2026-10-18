@@ -67,10 +67,10 @@ Read the team's isolation policy, once. This runs after the forced-worktree arm 
 can reach or relax that correctness rule, and before the arms below, so the policy can steer them:
 
 ```bash
-POLICY="$(jq -r '.isolation_policy // "prefer-worktree"' .gaia/project.json 2>/dev/null || echo prefer-worktree)"
+POLICY="$(jq -r '.isolation_policy // "always-worktree"' .gaia/project.json 2>/dev/null || echo always-worktree)"
 ```
 
-The `2>/dev/null || echo prefer-worktree` tail is load-bearing, not decoration. jq's `//` fires only on `null`
+The `2>/dev/null || echo always-worktree` tail is load-bearing, not decoration. jq's `//` fires only on `null`
 or `false` from a document that PARSED. On a missing file, or an unreadable one (`chmod 000`), jq errors,
 exits non-zero, and prints nothing, so without the tail the command substitution would yield an EMPTY string,
 not the default.
@@ -81,19 +81,16 @@ case "$POLICY" in
   prefer-worktree) ;;
   prefer-branch)   ;;
   *)
-    printf 'Unrecognized isolation_policy "%s": treating as prefer-worktree.\n' "$POLICY" >&2
-    POLICY=prefer-worktree
+    printf 'Unrecognized isolation_policy "%s": treating as always-worktree.\n' "$POLICY" >&2
+    POLICY=always-worktree
     ;;
 esac
 ```
 
 An absent key, an unreadable config, a missing file, and an unrecognized value all resolve to
-`prefer-worktree` (below). The `*)` arm's message names the unrecognized value so
-a typo is discoverable: one line, no warning banner, no error.
-
-This fallback deliberately differs from the `always-worktree` option the setup question recommends: the
-recommendation is what GAIA advises a team to choose, and the fallback is what it assumes when nobody chose,
-so a team that never answered is still asked, with the worktree option leading.
+`always-worktree` (below), GAIA's default, so a team that never chose a policy works in a worktree with no
+question. The `*)` arm's message names the unrecognized value so a typo is discoverable: one line, no warning
+banner, no error.
 
 ### `always-worktree`
 
@@ -157,7 +154,7 @@ signal and no description can contradict whichever option leads.
 - order: `branch`, `worktree`
 - lead: `branch`
 
-##### `prefer-worktree` (also the default: absent key, unreadable config, missing file, unrecognized value)
+##### `prefer-worktree`
 
 - order: `worktree`, `branch`
 - lead: `worktree`

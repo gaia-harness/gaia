@@ -1,8 +1,8 @@
 # Sandbox decision
 
-`/setup-gaia` Phase 2 reads this file, whole, when its sandbox gate says the decision is owed (no recorded resolution, or `--reconfigure`), and also when the decision is already settled but has no record, to run `## Record a settled decision` alone. For an owed decision, run the four steps below in order, then the honesty message on the enable path; control returns to Phase 2 of `setup-gaia.md`, which continues to Phase 3.
+`/setup-gaia` Phase 2 reads this file, whole, and runs the part its sandbox route names. On `SANDBOX=ask` (`--reconfigure`, or a team recommendation and no marker), run the four steps below in order, then the honesty message on the enable path. On `SANDBOX=stands`, run `## Record a settled decision` alone when `sandbox` is owed. On `SANDBOX=default-off`, run `## Default off` alone. Control then returns to Phase 2 of `setup-gaia.md`, which continues to Phase 3.
 
-The marker `.gaia/local/sandbox.json` governs the decision; the `sandbox` record only says it was made. Each outcome below records once its marker is written, and a failed command records nothing.
+The marker `.gaia/local/sandbox.json` governs the decision; the `sandbox` record only says it was made. Each outcome the steps below reach records once its marker is written, and a failed command records nothing.
 
 1. **Read the recommendation.** Absent file, absent key, or an unreadable config all mean "no recommendation", so the default is off:
 
@@ -63,6 +63,23 @@ The marker `.gaia/local/sandbox.json` governs the decision; the `sandbox` record
 > Note: enabling the sandbox alone does not protect .env. The sandbox's default read policy is permissive (it still reads ~/.aws, ~/.ssh, .env). What protects `.env` is GAIA's committed `sandbox.filesystem.denyRead` entries, which reach subprocesses spawned by sandboxed Bash and cover `.env`, the `.env.local` / `.env.production` variant family, and the key, certificate, credential, and secrets-directory classes, each at any depth in the project rather than at its root only; `.env.example` stays readable. They do NOT cover MCP shell execution, NOT a `docker *`-excluded command that runs outside the sandbox, and NOT `~/.ssh` or `~/.aws`: no entry names either one, and an ordinary private key there (`id_rsa`, `id_ed25519`) carries none of those names or extensions and sits under no `secrets/` directory, so it stays readable. The same denied read also blocks the app's own `.env` reads under Claude-run tooling (Vite, tests). And if bubblewrap/socat later goes missing, an enabled machine degrades to unsandboxed by default, at which point only the `block-sensitive-read.sh` tool-tier guard remains.
 >
 > The minimal seed itself only adds the registry host to `allowedDomains` and, when docker is present, a `docker *` exclusion. It still leaves `gh`/git-over-https, `uvx`, `curl`, and claude plugin installs BLOCKED until you allowlist them yourself.
+
+## Default off
+
+Run when no marker exists, the team does not recommend the sandbox, and the run is not `--reconfigure`. It asks nothing, enables nothing, and writes no marker, so the sandbox stays off and a later team recommendation still reaches this machine's question. It records the default only while `sandbox` is owed, so a re-run changes nothing:
+
+```bash
+if .gaia/cli/gaia setup drift --json | jq -e --arg id sandbox 'any(.undecided[]?; .id == $id)' >/dev/null; then
+  CAPABILITY="$(.gaia/cli/gaia sandbox detect --json 2>/dev/null | jq -r '.capability // empty' 2>/dev/null)"
+  case "$CAPABILITY" in
+    ready) .gaia/cli/gaia setup record sandbox declined >/dev/null ;;
+    needs-deps | unsupported) .gaia/cli/gaia setup record sandbox not-applicable >/dev/null ;;
+    *) echo "The sandbox capability probe returned nothing; nothing recorded." ;;
+  esac
+fi
+```
+
+An incapable machine gets no install hint here: nobody asked for the sandbox, so the hint is noise. The ask path above still prints it whenever the question is reached.
 
 ## Record a settled decision
 

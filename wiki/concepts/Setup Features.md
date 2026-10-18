@@ -32,7 +32,7 @@ Project-scope decisions live in `.gaia/project.json` under `setup_decisions` (se
 
 ## Who uses it
 
-- **`/gaia-init`** records the decisions it makes itself, the sandbox recommendation and the isolation policy.
+- **`/gaia-init`** records the shipped defaults for the sandbox recommendation and the isolation policy, asking nothing.
 - **`/setup-gaia`** treats a phase whose id is undecided as owed on every run, even once setup is complete, and probes first: a feature already in place is recorded with no question. The command routes; the phase bodies live in its setup references (`.claude/skills/gaia/references/setup/`), and `.claude/commands/setup-gaia.md` is the map. Project-scope records are made only by an admin run on the default branch, and that run lands them there. A standalone feature is run by its own reference.
 - **`/update-gaia`**'s drift step compares the target bundle's list with the records. It applies or asks only standalone features, names every other undecided feature as "run /setup-gaia", and never applies or asks a non-admin what needs an admin. See [[Update Workflow]].
 - **The statusline** arms a `/setup-gaia` nudge on the main checkout when setup is complete and a machine-scope id has no recorded decision. Project ids never arm it.
@@ -41,12 +41,13 @@ Project-scope decisions live in `.gaia/project.json` under `setup_decisions` (se
 
 A feature's own state (the sandbox marker, the user's statusline setting, a `.gaia/project.json` key, a GitHub setting) governs behavior and its phase's own gate. The record only answers whether the id has been decided.
 
-- A `declined` record satisfies the phase's gate on a plain run, so only `--reconfigure` re-asks a declined feature.
+- A `declined` record satisfies the phase's gate on a plain run, so only `--reconfigure` re-asks a declined feature. The one exception is a `sandbox` record with no sandbox marker: that is the shipped default-off, not an answer, so a later team recommendation still asks the machine.
+- A feature with a shipped default (the isolation policy, the sandbox recommendation, and the sandbox when the team does not recommend it) records the default on a plain run without asking.
 - An `applied` or `not-applicable` record never suppresses a gate that says the feature is owed. The phase asks or applies again and the new answer overwrites the record.
 
 ## Known limits
 
-- On a non-GitHub origin the team settings (the isolation policy and the sandbox recommendation) are never asked, so they stay undecided and `/update-gaia` names them as "run /setup-gaia" on every update.
+- On a non-GitHub origin the team settings (the isolation policy and the sandbox recommendation) are never recorded by `/setup-gaia`, so on a project `/gaia-init` did not record them they stay undecided and `/update-gaia` names them as "run /setup-gaia" on every update.
 - A non-admin's run, and any run off the default branch, records machine decisions only. Project ids wait for an admin run of `/setup-gaia` on the default branch.
 
 ## See also

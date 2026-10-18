@@ -12,7 +12,7 @@ Claude Code ships an OS-level Bash sandbox that isolates filesystem and network 
 
 ## GAIA's stance: owner recommends, each machine resolves
 
-Enabling the sandbox is a two-tier preference, not a single flip. Tier one is a committed recommendation: the project owner records intent (`sandbox_recommended`) once, in the committed `.gaia/project.json` described in [[Project Config]], never a raw Claude Code enable. Tier two is per-machine resolution: `/setup-gaia` reads that recommendation, detects what the current machine can actually support, and resolves through one informed prompt, writing the real enable only to the gitignored per-machine settings.
+Enabling the sandbox is a two-tier preference, not a single flip. Tier one is a committed recommendation: the project owner records intent (`sandbox_recommended`) once, in the committed `.gaia/project.json` described in [[Project Config]], never a raw Claude Code enable. Tier two is per-machine resolution: `/setup-gaia` reads that recommendation and detects what the current machine can actually support. With no recommendation the sandbox stays off and nobody is asked, because it breaks `gh`, git-over-https and `docker` until they are allowlisted and GAIA's lifecycle runs on `gh`. With one, a capable machine gets one informed prompt; `/setup-gaia --reconfigure` asks either way. The real enable is written only to the gitignored per-machine settings.
 
 A checked-in raw enable would be worse than no recommendation at all. Sandbox capability is machine-specific, an owner's Linux box with the right dependencies installed says nothing about a teammate's WSL1 setup or a fresh clone with none of them present. Baking in a hard "on" degrades silently to warn-and-unsandboxed the moment a machine can't back it, and forces avoidable friction on every clone that has to work around a setting it didn't choose. Recommend the intent, resolve it locally, every time.
 
@@ -48,4 +48,4 @@ Sandbox capability can also change under a machine after it's been enabled: if a
 
 ## Enabling it
 
-Run `/setup-gaia`. It prompts once for the sandbox decision and, if you opt in, seeds a minimal starter config for your machine. See the [official sandboxing docs](https://code.claude.com/docs/en/sandboxing.md) for what that config actually contains and how to extend it.
+Run `/setup-gaia --reconfigure` (or plain `/setup-gaia` when your team recommends the sandbox). It prompts once for the sandbox decision and, if you opt in, seeds a minimal starter config for your machine. See the [official sandboxing docs](https://code.claude.com/docs/en/sandboxing.md) for what that config actually contains and how to extend it.

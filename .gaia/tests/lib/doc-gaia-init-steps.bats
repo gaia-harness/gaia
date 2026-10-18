@@ -4,10 +4,9 @@
 # command writes the project settings through `gaia init write-project-config`,
 # and its resume step list names the same steps, in the same order, as the CLI's
 # STEP_ORDER. It also pins the shared-reference shape: the command reads exactly
-# the per-machine, isolation-question and sandbox-recommendation references,
-# lists them in its references block, and the setup command reads each too
-# (finalize deletes only this command); and it finalizes with the plain setup
-# finalize call.
+# the per-machine reference (it asks no team-setting question), lists it in its
+# references block, and the setup command reads it too (finalize deletes only
+# this command); and it finalizes with the plain setup finalize call.
 
 # The exact opening sentence of a command's references block.
 REFERENCES_OPENING='This command reads these references, all under `.claude/skills/gaia/references/setup/`. Read one only when a "Read ... now" line sends you there, and then read the whole file:'
@@ -42,14 +41,12 @@ state_steps() {
 }
 
 # writer_call_present <file>: rc 0 when the file calls write-project-config
-# with --sandbox-recommended.
+# with the shipped not-recommended default.
 writer_call_present() {
-  grep -qF 'gaia init write-project-config' "$1" || return 1
-  grep -qF -- '--sandbox-recommended <true|false>' "$1" || return 1
-  return 0
+  grep -qF -- 'gaia init write-project-config --sandbox-recommended false' "$1"
 }
 
-@test "gaia-init.md calls write-project-config with --sandbox-recommended" {
+@test "gaia-init.md calls write-project-config with the not-recommended default" {
   writer_call_present "$INIT_MD"
 }
 
@@ -85,7 +82,7 @@ writer_call_present() {
 # Shared references only
 # ---------------------------------------------------------------------------
 
-SHARED_REFERENCES="isolation-question.md per-machine.md sandbox-recommendation.md"
+SHARED_REFERENCES="per-machine.md"
 
 # references_block_names <file>: the basenames of the bullets directly below
 # the references block's exact opening sentence, sorted, one per line. Fails
@@ -153,18 +150,27 @@ check_shared_references_only() {
   grep -qF 'other than the shared ones' <<<"$output"
 }
 
-@test "the shared-reference check fails when the setup command stops naming isolation-question.md" {
+@test "the shared-reference check fails when the init command reads the isolation question again" {
+  local scratch="$BATS_TEST_TMPDIR/gaia-init.scratch.md"
+  cp "$INIT_MD" "$scratch"
+  printf '\nRead `.claude/skills/gaia/references/setup/isolation-question.md` now, the whole file.\n' >>"$scratch"
+  run check_shared_references_only "$scratch" "$SETUP_MD" "$REFERENCES_DIRECTORY"
+  [ "$status" -ne 0 ]
+  grep -qF 'other than the shared ones' <<<"$output"
+}
+
+@test "the shared-reference check fails when the setup command stops naming per-machine.md" {
   local scratch="$BATS_TEST_TMPDIR/setup-gaia.scratch.md"
-  sed 's#references/setup/isolation-question\.md#references/setup/gone.md#g' "$SETUP_MD" >"$scratch"
+  sed 's#references/setup/per-machine\.md#references/setup/gone.md#g' "$SETUP_MD" >"$scratch"
   cmp -s "$SETUP_MD" "$scratch" && return 1
   run check_shared_references_only "$INIT_MD" "$scratch" "$REFERENCES_DIRECTORY"
   [ "$status" -ne 0 ]
-  grep -qF 'no longer names isolation-question.md' <<<"$output"
+  grep -qF 'no longer names per-machine.md' <<<"$output"
 }
 
 @test "the shared-reference check fails when the references block drops a bullet" {
   local scratch="$BATS_TEST_TMPDIR/gaia-init.scratch.md"
-  grep -v -- '^- `isolation-question.md`: ' "$INIT_MD" >"$scratch" || true
+  grep -v -- '^- `per-machine.md`: ' "$INIT_MD" >"$scratch" || true
   cmp -s "$INIT_MD" "$scratch" && return 1
   run check_shared_references_only "$scratch" "$SETUP_MD" "$REFERENCES_DIRECTORY"
   [ "$status" -ne 0 ]
@@ -183,7 +189,6 @@ check_shared_references_only() {
 @test "the shared-reference check fails when a shared reference file is absent" {
   local directory="$BATS_TEST_TMPDIR/references"
   mkdir -p "$directory"
-  cp "$REFERENCES_DIRECTORY/per-machine.md" "$directory/"
   run check_shared_references_only "$INIT_MD" "$SETUP_MD" "$directory"
   [ "$status" -ne 0 ]
   grep -qF 'a shared reference is absent' <<<"$output"

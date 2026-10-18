@@ -1,6 +1,6 @@
 # Isolation policy question
 
-`/gaia-init` Step 9 and `/setup-gaia` Phase 3.5 read this file, whole, to ask the team git isolation-policy question and map the answer to a value. The calling command says what to do with a value and what no answer does.
+`/setup-gaia --reconfigure` reads this file, whole, in Phase 3.5 to ask the team git isolation-policy question and map the answer to a value; a plain run and `/gaia-init` never ask it, because an unset policy is GAIA's default, `always-worktree`. The calling command says what to do with a value and what no answer does.
 
 ## The question
 

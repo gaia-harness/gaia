@@ -100,7 +100,7 @@ fence_table() {
   cat <<'TABLE'
 fork-check|--json isCrossRepository|static|reaches github.com for a live PR's fork flag
 audit-check-state|grep GAIA-Audit|static|reaches github.com for a live PR's check rows
-catchup-merge|git merge --no-edit origin/main|static|merges `origin/main` into this checkout
+catchup-merge|git merge --no-edit "origin/$default_branch"|static|merges the default branch from origin into this checkout
 spawn-roster|resolve-audit-members.sh|exec|runs verbatim against this checkout
 noop-classify|audit-noop-detect.sh --shape audit-team-member|exec|runs against a fixture root, marker and sidecar
 wave-stamp|WAVE_STAMP="$(mktemp)"|exec|runs verbatim, and the claim under test is where mktemp puts the file

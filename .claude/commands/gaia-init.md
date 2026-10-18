@@ -12,8 +12,6 @@ Contents: Interactive gates: run mode and non-response policy; Step 0: Ensure pn
 
 This command reads these references, all under `.claude/skills/gaia/references/setup/`. Read one only when a "Read ... now" line sends you there, and then read the whole file:
 - `per-machine.md`: Step 8, the per-machine tool, plugin, statusline and `.env` steps with their probes.
-- `isolation-question.md`: Step 9, interactive mode only, the team git isolation-policy question.
-- `sandbox-recommendation.md`: Step 9, interactive mode only, the team sandbox-recommendation question.
 
 ## Interactive gates: run mode and non-response policy
 
@@ -61,14 +59,12 @@ Every gate is one of two tiers. The tier is fixed here, do not reclassify by jud
 | Project title                                                        | Step 2, Q4    |
 | kebab-case slug                                                      | Step 2, Q5    |
 
-**SAFE-DEFAULT** (reversible, the recommended default is the safe outcome). On non-response in interactive mode: re-ask once; if still no answer, apply the stated default, name it plainly ("Defaulting the sandbox recommendation to not recommended, you can reconfigure later"), and continue. Do not claim the user is absent.
+**SAFE-DEFAULT** (reversible, the recommended default is the safe outcome). On non-response in interactive mode: re-ask once; if still no answer, apply the stated default, name it plainly ("Defaulting backend casing to camelCase, you can change it later"), and continue. Do not claim the user is absent.
 
-| Gate                      | Default on non-response        | Where  |
-| ------------------------- | ------------------------------ | ------ |
-| Backend casing            | `camelCase`                    | Step 2 |
-| TanStack Query            | `No`                           | Step 2 |
-| Sandbox recommendation    | `false` (don't recommend)      | Step 9 |
-| Team git isolation policy | flag omitted (key stays unset) | Step 9 |
+| Gate           | Default on non-response | Where  |
+| -------------- | ----------------------- | ------ |
+| Backend casing | `camelCase`             | Step 2 |
+| TanStack Query | `No`                    | Step 2 |
 
 ### Free-text identity values are never fabricated
 
@@ -104,8 +100,8 @@ When the user chose Automatic, first detect the project folder name (`basename "
 > | CODEOWNERS handle         | {gh-detected handle when available, else `REPLACE-WITH-YOUR-GITHUB-HANDLE` placeholder} | Placeholder: one-line edit required. Detected handle: none |
 > | Backend casing            | camelCase                                                                               | Yes, rerun `gaia init configure-data-layer --casing`       |
 > | TanStack Query            | No                                                                                      | Yes, rerun `gaia init configure-data-layer --query true`   |
-> | Sandbox recommendation    | Not recommended                                                                         | Yes, reconfigure                                           |
-> | Team git isolation policy | Left unset, `/setup-gaia` asks later                                                    | Yes, reconfigure                                           |
+> | Sandbox recommendation    | Not recommended (GAIA's default, never asked)                                           | Yes, `/setup-gaia --reconfigure`                           |
+> | Team git isolation policy | Always use worktrees (GAIA's default, never asked)                                      | Yes, `/setup-gaia --reconfigure`                           |
 
 Exactly one row per setting. For the CODEOWNERS row, show the gh-detected handle when detection succeeds (it is the user's own authenticated identity, not a guess), otherwise the `REPLACE-WITH-YOUR-GITHUB-HANDLE` placeholder. **Never** put a guessed or git-config-derived handle there: the only non-placeholder value allowed is the gh-detected login.
 
@@ -119,8 +115,8 @@ Then apply the defaults and proceed without stopping (the user chose Automatic; 
 - kebab slug (Q5): folder name.
 - Backend casing (Step 2): `camelCase` (`CASING=camel`).
 - TanStack Query (Step 2): `No` (`QUERY=false`).
-- Sandbox recommendation (Step 9): not recommended (`false`).
-- Team git isolation policy (Step 9): omitted (the key stays unset).
+
+Step 9's two team defaults are the same in both modes, so they need no Automatic default of their own.
 
 ## Step 0: Ensure pnpm is available (and new enough)
 
@@ -366,45 +362,19 @@ When every step is recorded, continue to Step 9. `/setup-gaia` runs the same ref
 
 ## Step 9: Project settings
 
-Record two team-level settings in `.gaia/project.json`: the sandbox recommendation and the git isolation policy. The file is committed and team-shared, and `/update-gaia`'s merge never overwrites it.
+Write GAIA's two team-level defaults to `.gaia/project.json` and record them, with no question: the sandbox is not recommended, and the git isolation policy is left unset, which is GAIA's default, `always-worktree` (every `/gaia-plan`, `/gaia-debt` and ad-hoc task works in its own worktree). GAIA is built for concurrent multi-agent work, so worktrees are the default; the OS-level Bash sandbox breaks `gh`, git-over-https and `docker` until allowlisted, and GAIA's lifecycle runs on `gh`, so it is not recommended. The file is committed and team-shared, and `/update-gaia`'s merge never overwrites it. A repo admin changes either setting later with `/setup-gaia --reconfigure`.
 
-**The unconditional terminal action of Step 9, on every exit path (an enumerated answer, a free-text answer, a non-response, or a resumed run), is a single `gaia init write-project-config` call.** No branch may end Step 9 without it.
-
-### Sandbox recommendation
-
-Record whether this project recommends Claude Code's OS-level Bash sandbox. This is a committed **recommendation** only, never an enablement, each machine still resolves it for itself at `/setup-gaia`.
-
-_Non-response: SAFE-DEFAULT. Default to "No, don't recommend" (`false`). Automatic mode: same default, no re-ask._
-
-In Automatic mode, skip the question. Otherwise, read `.claude/skills/gaia/references/setup/sandbox-recommendation.md` now, the whole file, and ask its question.
-
-Hold the answer as `true` (recommend) or `false` (don't recommend, including the non-response/Automatic default).
-
-### Team git isolation policy
-
-Independent of the sandbox recommendation above, record how this team wants `/gaia-plan` and `/gaia-debt` to isolate their work: a feature branch cut in the current checkout, or a separate git worktree. Unlike the sandbox recommendation, this is a **committed, team-level setting**, not something every machine resolves for itself.
-
-_Non-response: SAFE-DEFAULT. Omit the flag entirely, which leaves the key absent and leaves the `/setup-gaia` question live for the owner to answer later. Automatic mode: same, no re-ask._
-
-In Automatic mode, skip the question (the flag is omitted). Otherwise, read `.claude/skills/gaia/references/setup/isolation-question.md` now, the whole file, and ask its question.
-
-Hold the answer as `prefer-branch`, `prefer-worktree`, or `always-worktree`, or as "omitted" on a non-response, "Other", or Automatic mode.
-
-### Apply the answer
-
-Once you have the sandbox recommendation and the isolation-policy answer above (or a resumed run's saved arguments), run, ALWAYS, the terminal write:
+Run, always, including on a resumed run:
 
 ```bash
-.gaia/cli/gaia init write-project-config \
-  --sandbox-recommended <true|false> \
-  [--isolation-policy <always-worktree|prefer-worktree|prefer-branch>]
+.gaia/cli/gaia init write-project-config --sandbox-recommended false &&
+  .gaia/cli/gaia setup record sandbox-recommendation declined &&
+  .gaia/cli/gaia setup record isolation-policy applied
 ```
 
-Substitute `<true|false>` with the sandbox recommendation. Append `--isolation-policy <value>` **only** when the user chose one of the three labels above. On a non-response, on "Other", or in Automatic mode, **omit the flag entirely**: omitting it omits the key, which leaves the team policy unset and leaves `/setup-gaia`'s question live for the owner to answer later. Never substitute a default value for a missing answer here. The command writes `.gaia/project.json` (creating it when absent), which is committed and team-shared. This call is mandatory on every exit path, there is no Step 9 branch that skips it.
+If it exits non-zero, surface the structured-error JSON verbatim and stop. The user can re-run the failing command manually after addressing the cause, then resume `/gaia-init` with `.gaia/cli/gaia init resume`.
 
-If the CLI exits non-zero, surface the structured-error JSON verbatim and stop. The user can re-run the failing command manually after addressing the cause, then resume `/gaia-init` with `.gaia/cli/gaia init resume`.
-
-Then record both decisions, so `/setup-gaia` never re-asks them. The sandbox recommendation always: `.gaia/cli/gaia setup record sandbox-recommendation applied` for `true`, `.gaia/cli/gaia setup record sandbox-recommendation declined` for `false` (the non-response and Automatic default included). The isolation policy only when the user chose one: `.gaia/cli/gaia setup record isolation-policy applied`.
+The two records mean `/setup-gaia` owes neither decision.
 
 End of Step 9.
 
