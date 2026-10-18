@@ -3,7 +3,8 @@
 # The statusline's post-completion setup nudge: once setup is complete, a
 # machine-scope setup choice the shipped list holds and this machine has not
 # decided arms a `⚙️ /setup-gaia (<N> choice[s] pending)` segment at the
-# highest priority. Project-scope ids never arm it, the incomplete-setup
+# highest priority. An undecided project-scope id arms it only when this
+# machine can act on it (the predicate in setup-owed.sh), the incomplete-setup
 # `⚙️ /setup-gaia (Required)` segment is untouched, and a linked worktree
 # stays dark because the nudge is a main-checkout task like the rest.
 #
@@ -27,6 +28,7 @@ setup() {
 
   mkdir -p "$MAIN/.gaia/statusline" "$MAIN/.gaia/scripts" "$MAIN/.gaia/local/cache/shared" "$MAIN/.gaia/local/debt"
   cp "$STATUSLINE_SOURCE/gaia-statusline.sh" "$MAIN/.gaia/statusline/gaia-statusline.sh"
+  cp "$STATUSLINE_SOURCE/setup-owed.sh" "$MAIN/.gaia/statusline/setup-owed.sh"
   cp "$SCRIPTS_SOURCE/main-root-lib.sh" "$MAIN/.gaia/scripts/main-root-lib.sh"
   echo "x" > "$MAIN/README.md"
   write_features alpha beta gamma
@@ -47,17 +49,19 @@ teardown() {
   return 0
 }
 
-# Write the fixture list: alpha and beta are machine scope, gamma is project
-# scope. Each argument names which of the three to include, in list order.
+# Write the fixture list: alpha and beta are machine scope, gamma is an
+# admin-gated project id, and github-repository is the project id anyone can
+# act on. Each argument names which to include, in list order.
 write_features() {
-  local entries="" id scope
+  local entries="" id scope admin
   for id in "$@"; do
     case "$id" in
-      gamma) scope="project" ;;
-      *) scope="machine" ;;
+      gamma) scope="project" admin="true" ;;
+      github-repository) scope="project" admin="false" ;;
+      *) scope="machine" admin="false" ;;
     esac
     [ -n "$entries" ] && entries="${entries},"
-    entries="${entries}{\"id\":\"${id}\",\"scope\":\"${scope}\",\"required\":false,\"admin\":false,\"standalone\":false,\"reference\":\"README.md\"}"
+    entries="${entries}{\"id\":\"${id}\",\"scope\":\"${scope}\",\"required\":false,\"admin\":${admin},\"standalone\":false,\"reference\":\"README.md\"}"
   done
   printf '{"version":1,"description":"Fixture list for the statusline setup nudge.","features":[%s]}\n' "$entries" > "$MAIN/.gaia/setup-features.json"
 }
@@ -67,6 +71,14 @@ write_features() {
 # it.
 write_setup_state() {
   printf '{"version":1,"started_at":"2026-01-01T00:00:00Z","completed_at":%s,"completed_steps":[]}\n' "$1" > "$MAIN/.gaia/local/setup-state.json"
+}
+
+# Cache this machine's admin answer in main's setup-state, as an ok
+# `setup check-admin` probe does.
+cache_admin() {
+  local state
+  state=$(jq --argjson admin "$1" '.admin = $admin' "$MAIN/.gaia/local/setup-state.json")
+  printf '%s\n' "$state" > "$MAIN/.gaia/local/setup-state.json"
 }
 
 record_decision() {
@@ -123,7 +135,7 @@ render() {
   return 0
 }
 
-@test "a project-scope id never arms the nudge" {
+@test "an admin-gated project id never arms the nudge without a cached admin answer" {
   # Positive control: with a machine id pending the slot renders.
   render "$MAIN"
   grep -qF -- "⚙️ /setup-gaia" <<<"$output"
@@ -133,6 +145,71 @@ render() {
   [ "$status" -eq 0 ]
   grep -qF -- "/setup-gaia" <<<"$output" && return 1
   return 0
+}
+
+@test "an undecided github-repository arms the nudge with no cached admin answer" {
+  write_features github-repository gamma
+  render "$MAIN"
+  [ "$status" -eq 0 ]
+  grep -qF -- "⚙️ /setup-gaia (1 choice pending)" <<<"$output"
+}
+
+@test "a cached admin counts every undecided project id with the machine ones" {
+  write_features alpha github-repository gamma
+  cache_admin true
+  render "$MAIN"
+  [ "$status" -eq 0 ]
+  grep -qF -- "⚙️ /setup-gaia (3 choices pending)" <<<"$output"
+}
+
+@test "a cached non-admin is never nagged about project ids, github-repository included" {
+  write_features github-repository gamma
+  cache_admin false
+  render "$MAIN"
+  [ "$status" -eq 0 ]
+  grep -qF -- "/setup-gaia" <<<"$output" && return 1
+
+  # Positive control: the same machine as an admin is nagged.
+  cache_admin true
+  render "$MAIN"
+  grep -qF -- "⚙️ /setup-gaia (2 choices pending)" <<<"$output"
+}
+
+@test "project ids decided in the committed project config stay quiet for an admin" {
+  write_features github-repository gamma
+  cache_admin true
+  printf '{"setup_decisions":{"github-repository":"applied","gamma":"declined"}}\n' > "$MAIN/.gaia/project.json"
+  render "$MAIN"
+  [ "$status" -eq 0 ]
+  grep -qF -- "/setup-gaia" <<<"$output" && return 1
+
+  printf '{"setup_decisions":{"github-repository":"applied"}}\n' > "$MAIN/.gaia/project.json"
+  render "$MAIN"
+  grep -qF -- "⚙️ /setup-gaia (1 choice pending)" <<<"$output"
+}
+
+@test "a malformed project config counts no project id decided and exits 0" {
+  write_features github-repository
+  printf '{' > "$MAIN/.gaia/project.json"
+  render "$MAIN"
+  [ "$status" -eq 0 ]
+  grep -qF -- "⚙️ /setup-gaia (1 choice pending)" <<<"$output"
+}
+
+@test "the closing-line helper names the same owed ids the nudge counts" {
+  write_features alpha github-repository gamma
+  run bash -c ". '$MAIN/.gaia/statusline/setup-owed.sh' && gaia_setup_owed_ids '$MAIN'"
+  [ "$status" -eq 0 ]
+  [ "$output" = "github-repository" ]
+
+  cache_admin true
+  run bash -c ". '$MAIN/.gaia/statusline/setup-owed.sh' && gaia_setup_owed_ids '$MAIN'"
+  [ "$output" = "github-repository gamma" ]
+
+  cache_admin false
+  run bash -c ". '$MAIN/.gaia/statusline/setup-owed.sh' && gaia_setup_owed_ids '$MAIN'"
+  [ "$status" -eq 0 ]
+  [ -z "$output" ]
 }
 
 @test "the other nudges keep rendering, after the setup nudge, in their existing order" {

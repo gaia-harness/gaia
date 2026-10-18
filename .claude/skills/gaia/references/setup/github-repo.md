@@ -16,6 +16,8 @@ Ask (AskUserQuestion) with these three options:
 > - **Adopt an existing repo**: you already have a github `origin`; I'll skip creation and apply the recommended defaults.
 > - **Set one up manually**: I'll print guidance and leave GitHub untouched.
 
+Cache the answer as `REPO_CHOICE`: `create`, `adopt` or `manual`, in option order. The merge-setting defaults read it (`delete_branch_on_merge` below and the squash-only question in Phase 3.7 apply silently on `create`), and so does the setup ping in Phase 6.
+
 ### Option 1: Create the repo on GitHub
 
 **Pre-creation authz check (distinct from the existing-repo admin probe).** `check-admin` needs a repo that already exists, so it cannot gate creation. Confirm an **authenticated gh with repo-creation rights** first:
@@ -168,9 +170,9 @@ else
 fi
 ```
 
-If `false`, run the declined check for `delete-branch-on-merge` first: when it passes, the question was declined before, so skip it silently. Otherwise AskUserQuestion:
+If `false` and this run created the repo (`REPO_CHOICE` is `create`) with `RECONFIGURE` not set, run the Enable block below with no question: a brand-new repo has no merge convention to preserve, so the shipped default applies, the way the isolation policy's does. Otherwise run the declined check for `delete-branch-on-merge` first: when it passes, the question was declined before, so skip it silently. Otherwise AskUserQuestion:
 
-> GitHub is set to NOT delete branches when PRs merge, so every merged branch stays on the remote until someone deletes it by hand. GAIA runs no branch cleanup of its own. Enabling `delete_branch_on_merge` has GitHub delete each pull request's branch as it merges.
+> GitHub is set to NOT delete branches when PRs merge, so a merged branch can stay on the remote until someone deletes it by hand. GAIA's own merges usually delete their branch, but not every time, and a pull request merged on github.com leaves its branch behind. Enabling `delete_branch_on_merge` has GitHub delete each pull request's branch as it merges, however it was merged.
 >
 > - **Enable delete_branch_on_merge** (Recommended)
 > - **Skip** (merged branches stay on the remote)

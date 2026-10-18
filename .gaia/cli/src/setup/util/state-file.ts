@@ -37,6 +37,11 @@ export const SETUP_STEPS = [
 ] as const;
 
 export type SetupState = {
+  /**
+   * This machine's last ok `setup check-admin` answer; the statusline reads it
+   * to count admin-gated project settings only for an admin.
+   */
+  admin?: boolean;
   completed_at: null | string;
   completed_steps: SetupStep[];
   /** Machine-scope setup decisions, id to value; kept through every write. */
@@ -95,6 +100,7 @@ export const readStateFile = (repoRoot: string): null | SetupState => {
   const decisions = keepStringValues(parsed.decisions);
 
   return {
+    ...(typeof parsed.admin === 'boolean' ? {admin: parsed.admin} : {}),
     completed_at: parsed.completed_at ?? null,
     completed_steps: rawSteps.filter(isSetupStep),
     ...(decisions === undefined ? {} : {decisions}),
