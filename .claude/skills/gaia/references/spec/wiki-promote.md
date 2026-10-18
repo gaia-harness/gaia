@@ -154,7 +154,7 @@ pr_number: NNN
 tags: [promoted, <subdomain>]
 ```
 
-The frontmatter carries no id and no PR URL. Frontmatter cannot hold the maintainer-only markers that keep them out of a release bundle, so the id and the URL live only in the marker-wrapped blocks of Step 5b.
+The frontmatter carries no id and no PR URL. Frontmatter cannot hold the marker lines that keep them out of a release bundle, so the id and the URL live only in the marker-wrapped blocks of Step 5b.
 
 ### `wiki/log.md` append
 
@@ -179,7 +179,7 @@ Render the body in the following sections, in order, immediately after the closi
 2. **Lede**, first paragraph of the source body immediately after the H1. **Legacy `SPEC.md` fallback only:** first paragraph of the SPEC's `## One-line summary` section if present; else the first paragraph of its `## Intent` section; if neither exists, omit the lede. The id never stands in for it: body prose outside the marker-wrapped blocks ships.
 3. **Decisions / behaviors**, under an H2 `## Decisions` (for `type: decision`) or `## Behavior` (for all other types). For the consolidated `SUMMARY.md` source, render the body prose as-is, it is already present-tense final-state prose written by the consolidation producer, no voice adaptation needed. **Legacy `SPEC.md` fallback only:** include the SPEC's `## Intent` body and, if present, any H2 in the SPEC body whose heading begins with `## Composition with ` (the section that explains how the SPEC composes with prior architecture); adapt voice from future-tense ("will promote") to present-tense ("promotes") where the change is mechanical, leave wording alone where rewriting risks meaning drift.
 4. **Divergence**, if the resolved source has a `## Divergence` section (consolidated `SUMMARY.md` only, an optional section the consolidation producer writes when shipped scope is materially narrower than the stated intent), render it verbatim under its own `## Divergence` heading. Omit entirely when absent.
-5. **UAT references**, under an H2 `## UAT references`, render a bullet list. **Legacy `SPEC.md` fallback only** (the consolidated `SUMMARY.md` frontmatter carries no `uats:` list, so this section is omitted entirely on that path): for each entry in the SPEC's frontmatter `uats:` list, emit `- **<UAT-ID>**, <one-line summary>`. Source the one-line summary from the UAT entry's `summary` field if present; otherwise the first sentence of its `intent` field. If `uats:` is empty or absent, omit the entire `## UAT references` section. When emitted, the section carries UAT ids, so it sits inside the maintainer-only marker pair §7 describes, the heading included.
+5. **UAT references**, under an H2 `## UAT references`, render a bullet list. **Legacy `SPEC.md` fallback only** (the consolidated `SUMMARY.md` frontmatter carries no `uats:` list, so this section is omitted entirely on that path): for each entry in the SPEC's frontmatter `uats:` list, emit `- **<UAT-ID>**, <one-line summary>`. Source the one-line summary from the UAT entry's `summary` field if present; otherwise the first sentence of its `intent` field. If `uats:` is empty or absent, omit the entire `## UAT references` section. When emitted, the section carries UAT ids, so it sits inside the same marker lines as §7's References block, the heading included, under the same rule for when they apply.
 6. **Related**, sibling wikilinks. Determine the set of sibling pages produced by the **current run**: every entry in the union of `pages_written` and `pages_updated` whose `target_path` is not the page being rendered. (Skipped pages, `hand-edited`, `foreign-collision`, are excluded; their files were not written and a wikilink would dangle.)
    - **Solo-page promotion** (no siblings): omit the entire `## Related` section. Do not emit the H2 at all.
    - **Has siblings**: emit:
@@ -207,10 +207,13 @@ Render the body in the following sections, in order, immediately after the closi
    <maintainer-only end marker>
    ```
 
-   The block names a working-document id and a pull request URL, which point at records no other clone has, so it sits inside the `gaia:maintainer-only` marker pair: a release bundle built from this repository strips the block, and the frontmatter `pr_number` keeps the lineage. In a repository that never builds a bundle the markers are inert comments.
+   The block names a working-document id and a pull request URL, which point at records no other clone has. The two marker lines apply only in GAIA's own source repository, where they keep the block out of the release bundle while the frontmatter `pr_number` keeps the lineage; anywhere else, omit both lines.
+
+   <!-- gaia:maintainer-only:start -->
+   In GAIA's own source repository, write each marker line exactly as the HTML comment on the line above this paragraph (the start marker) and the one on the line below it (the end marker). This page cannot spell them inside the template: the release scrub strips the lines between a literal pair from every shipped `.claude/` page, and a literal marker that survived the strip fails the distribution check.
+   <!-- gaia:maintainer-only:end -->
 
    Substitutions:
-   - `<maintainer-only start marker>` and `<maintainer-only end marker>`, each on a line of its own: an HTML comment holding `gaia:maintainer-only:start` and one holding `gaia:maintainer-only:end`, the pair `.claude/rules/wiki-style.md` wraps its maintainer note in. This page names them rather than writing them, because the release scrub strips the lines between a literal pair from every shipped `.claude/` page, this one included.
    - `<id>`, the `SPEC-NNN` or `PLAN-NNN` id from Step 1.
    - `<relative-path>`, the resolved source's repo-relative path with a `../../` prefix (promoted wiki pages live at `wiki/<subdomain>/<page>.md`, two segments deep from the repo root): `../../.notebook/specs/SPEC-NNN/SUMMARY.md`, `../../.notebook/plans/PLAN-NNN/SUMMARY.md`, or the legacy `../../.notebook/specs/SPEC-NNN/SPEC.md` under the Step 1 fallback (`.notebook/` sits at the repo root, so the `../../` prefix holds for it as it did for any root-level source).
    - `<owner>/<repo>`, resolved once per run by running, via the Bash tool:
