@@ -690,6 +690,10 @@ recommendation_block() {
   block_under "$SETUP_COMMAND" '### The sandbox recommendation'
 }
 
+team_from_sandbox_block() {
+  block_under "${REFERENCES}/sandbox.md" "## The admin's answer sets the team recommendation"
+}
+
 init_settings_block() {
   block_under "${REPO_ROOT}/${INIT_COMMAND_PATH}" '## Step 9: Project settings'
 }
@@ -783,10 +787,52 @@ init_settings_block() {
   [ "$(decision "$repo" sandbox-recommendation)" = applied ]
 }
 
-@test "the recommendation block asks under --reconfigure and records nothing first" {
+@test "the recommendation block asks under --reconfigure when the sandbox answer set nothing, and records nothing first" {
   local repo
   repo="$(make_repo recommendation-reconfigure)"
   [ "$(run_block "$repo" "$(recommendation_block)" MAY_RECORD_PROJECT=admin RECONFIGURE=true)" = RECOMMENDATION=ask ]
+  [ -z "$(decision "$repo" sandbox-recommendation)" ]
+}
+
+@test "the recommendation block asks nothing under --reconfigure once the admin's sandbox answer set it" {
+  local repo output_text
+  repo="$(make_repo recommendation-set-by-sandbox)"
+  output_text="$(run_block "$repo" "$(recommendation_block)" MAY_RECORD_PROJECT=admin RECONFIGURE=true SANDBOX_TEAM_SET=true)"
+  grep -qF 'RECOMMENDATION=ask' <<<"$output_text" && return 1
+  true
+}
+
+@test "the admin-ready arm: a --reconfigure admin's sandbox answer sets the team recommendation" {
+  local repo answer value record
+  for answer in enable decline; do
+    case "$answer" in
+      enable) value=true record=applied ;;
+      decline) value=false record=declined ;;
+    esac
+    repo="$(make_repo "team-from-sandbox-${answer}")"
+    [ "$(run_block "$repo" "$(team_from_sandbox_block)" RECONFIGURE=true MAY_RECORD_PROJECT=admin SANDBOX_ANSWER="$answer")" = SANDBOX_TEAM_SET=true ]
+    [ "$(jq -r '.sandbox_recommended' "${repo}/.gaia/project.json")" = "$value" ]
+    [ "$(decision "$repo" sandbox-recommendation)" = "$record" ]
+  done
+}
+
+@test "the admin-incapable arm: no sandbox answer leaves the team recommendation to its own question" {
+  local repo
+  [ -n "$(team_from_sandbox_block)" ]
+  repo="$(make_repo team-from-sandbox-incapable)"
+  [ -z "$(run_block "$repo" "$(team_from_sandbox_block)" RECONFIGURE=true MAY_RECORD_PROJECT=admin)" ]
+  [ ! -e "${repo}/.gaia/project.json" ]
+  [ -z "$(decision "$repo" sandbox-recommendation)" ]
+  [ "$(run_block "$repo" "$(recommendation_block)" MAY_RECORD_PROJECT=admin RECONFIGURE=true)" = RECOMMENDATION=ask ]
+}
+
+@test "the non-admin arm: a sandbox answer keeps to this machine, on --reconfigure or a plain run" {
+  local repo
+  [ -n "$(team_from_sandbox_block)" ]
+  repo="$(make_repo team-from-sandbox-other)"
+  [ -z "$(run_block "$repo" "$(team_from_sandbox_block)" RECONFIGURE=true MAY_RECORD_PROJECT=none SANDBOX_ANSWER=enable)" ]
+  [ -z "$(run_block "$repo" "$(team_from_sandbox_block)" MAY_RECORD_PROJECT=admin SANDBOX_ANSWER=enable)" ]
+  [ ! -e "${repo}/.gaia/project.json" ]
   [ -z "$(decision "$repo" sandbox-recommendation)" ]
 }
 
