@@ -14,7 +14,7 @@ The agent never runs `git add`, `git commit`, or `git push` *while dispositions 
 
 ## Invocation
 
-`/gaia-codify` takes no arguments: every run is the full interactive review. The statusline nudge points here. Its text is the count form (`Run /gaia-codify (N recurring pattern)` for one, `Run /gaia-codify (N recurring patterns)` for more) only on a clone with no review snapshot; after a completed review it instead names the trigger (`tally changed`, `N new pattern(s)`, `<class> rising` per rising class (the last path segment of the class name), `unclassified rising`), and it stays silent while nothing has changed since that review. See `wiki/concepts/Policy-Memory Loop.md` for the trigger model.
+`/gaia-codify` takes no arguments: every run is the full interactive review. The statusline nudge points here. Its text is the count form (`🔨 /gaia-codify (N recurring pattern)` for one, `🔨 /gaia-codify (N recurring patterns)` for more) only on a clone with no review snapshot; after a completed review it instead names the trigger (`tally changed`, `N new pattern(s)`, `<class> rising` per rising class (the last path segment of the class name), `unclassified rising`), and it stays silent while nothing has changed since that review. See `wiki/concepts/Policy-Memory Loop.md` for the trigger model.
 
 ## Fetch the live candidate list
 

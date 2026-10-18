@@ -1,6 +1,6 @@
 #!/usr/bin/env bats
 # Tests for `.claude/hooks/debt-session-reconcile.sh`, the SessionStart hook that
-# reconciles a currently-shown `Run /gaia-debt` nudge against GitHub on session
+# reconciles a currently-shown `🐛 /gaia-debt` nudge against GitHub on session
 # start. It arms the debt-count sentinel when, and only when, the pinned cache
 # already shows an open count > 0, so an empty backlog stays fully network-free.
 # This backstops a `tech-debt` close that never reached a first-party hook (web

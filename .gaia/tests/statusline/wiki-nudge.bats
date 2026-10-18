@@ -257,18 +257,18 @@ assert_no_wiki_nudge() {
 }
 
 assert_wiki_nudge() {
-  grep -qF -- "Run /gaia-wiki ($1 commits)" <<<"$plain"
+  grep -qF -- "🧠 /gaia-wiki ($1 commits)" <<<"$plain"
 }
 
 # The icon form only exists at a width too narrow for any text form: with the
-# 11-column left side, 24 columns leaves the lone nudge room for `🧠<count>`
+# 11-column left side, 24 columns leaves the lone nudge room for `🧠 <count>`
 # and nothing wider.
 render_fix_narrow() {
   render_statusline "$REPOSITORY_FIXTURE/.gaia/statusline/gaia-statusline.sh" "$REPOSITORY_FIXTURE" 24
 }
 
 assert_wiki_icon() {
-  grep -qF -- "🧠$1" <<<"$plain"
+  grep -qF -- "🧠 $1" <<<"$plain"
 }
 
 # Run the real CLI's chain landing in <directory>: begin, one commit of the
@@ -367,8 +367,8 @@ stage_state_advance() {
   make_statusline_fixture
   render_with_cache '{"gaiaHasUpdate":true,"gaiaLatest":"9.9.9","outdatedCount":3,"residueCandidateCount":5,"wikiDriftCount":22}'
   [ "$status" -eq 0 ]
-  order=$(grep -oE 'Run /[a-z][a-z0-9-]*' <<<"$plain")
-  expected=$(printf '%s\n' "Run /update-gaia" "Run /update-deps" "Run /gaia-residue" "Run /gaia-wiki")
+  order=$(grep -oE ' /(update|gaia)-[a-z0-9-]*' <<<"$plain" | sed 's/^ //')
+  expected=$(printf '%s\n' "/update-gaia" "/update-deps" "/gaia-residue" "/gaia-wiki")
   [ "$order" = "$expected" ]
 }
 
@@ -376,7 +376,7 @@ stage_state_advance() {
   make_statusline_fixture
   render_with_cache '{"gaiaHasUpdate":true,"gaiaLatest":"9.9.9","outdatedCount":3,"residueCandidateCount":5,"wikiDriftCount":22}'
   [ "$status" -eq 0 ]
-  grep -qF -- $'\033[01;96mRun /gaia-wiki (22 commits)\033[00m' <<<"$output"
+  grep -qF -- $'\033[01;96m🧠 /gaia-wiki (22 commits)\033[00m' <<<"$output"
   [ "$(grep -oF -- $'\033[01;96m' <<<"$output" | wc -l | tr -d ' ')" -eq 1 ]
 }
 
@@ -422,7 +422,7 @@ stage_state_advance() {
   printf '{}' > "$REPOSITORY_FIXTURE/.gaia/local/setup-state.json"
   render_fix
   [ "$status" -eq 0 ]
-  grep -qF -- "Run /setup-gaia" <<<"$plain"
+  grep -qF -- "⚙️ /setup-gaia" <<<"$plain"
   assert_no_wiki_nudge
 }
 

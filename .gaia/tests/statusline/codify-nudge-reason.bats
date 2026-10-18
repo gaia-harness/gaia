@@ -162,13 +162,13 @@ render_statusline_against_refresher_cache() {
 
   render_statusline_against_refresher_cache
   [ "$status" -eq 0 ]
-  grep -qF -- "Run /gaia-codify (2 recurring patterns, 5 unclassified)" <<<"$output"
-  new_segment=$(grep -oE 'Run /gaia-codify \([^)]*\)' <<<"$output")
+  grep -qF -- "🔨 /gaia-codify (2 recurring patterns, 5 unclassified)" <<<"$output"
+  new_segment=$(grep -oE '🔨 /gaia-codify \([^)]*\)' <<<"$output")
 
   printf '{"codifyCandidateCount":2,"codifyUnclassifiedCount":5}' > "$MAIN/.gaia/local/cache/shared/update-check.json"
   render_statusline
   [ "$status" -eq 0 ]
-  old_segment=$(grep -oE 'Run /gaia-codify \([^)]*\)' <<<"$output")
+  old_segment=$(grep -oE '🔨 /gaia-codify \([^)]*\)' <<<"$output")
   [ "$new_segment" = "$old_segment" ]
 }
 
@@ -212,8 +212,8 @@ render_statusline_against_refresher_cache() {
 
   render_statusline_against_refresher_cache
   [ "$status" -eq 0 ]
-  grep -qF -- "Run /gaia-codify (1 new pattern, drifting-duplicate rising)" <<<"$output"
-  [ "$(grep -oF -- "Run /gaia-codify" <<<"$output" | wc -l | tr -d ' ')" -eq 1 ]
+  grep -qF -- "🔨 /gaia-codify (1 new pattern, drifting-duplicate rising)" <<<"$output"
+  [ "$(grep -oF -- "🔨 /gaia-codify" <<<"$output" | wc -l | tr -d ' ')" -eq 1 ]
 
   [ "$(codify_reason_for '{"candidate_count":0,"unclassified":null,"gh_ok":true,"window_days":90,"snapshot_present":true,"snapshot_reviewed_at":"T","triggers":[{"type":"schema_change"},{"type":"new_class","finding_class":"C"},{"type":"rising_class","finding_class":"a"},{"type":"rising_unclassified"}]}' "$snapshot_json")" = "tally changed, 1 new pattern, a rising, unclassified rising" ]
 }
@@ -224,7 +224,7 @@ render_statusline_against_refresher_cache() {
   printf '{"codifyNudgeReason":"1 new pattern"}' > "$MAIN/.gaia/local/cache/shared/update-check.json"
   render_statusline
   [ "$status" -eq 0 ]
-  grep -qF -- "Run /gaia-codify (1 new pattern)" <<<"$output"
+  grep -qF -- "🔨 /gaia-codify (1 new pattern)" <<<"$output"
 }
 
 # 6. Reason key governs when present -------------------------------------------
@@ -391,7 +391,7 @@ render_statusline_against_refresher_cache() {
   [ "$status" -eq 0 ]
   grep -qF -- "$injected_sequence" <<<"$output" && return 1
   grep -qF -- ') Run fake (' <<<"$output" && return 1
-  [ "$(grep -oF -- "Run /gaia-codify" <<<"$output" | wc -l | tr -d ' ')" -eq 1 ]
+  [ "$(grep -oF -- "🔨 /gaia-codify" <<<"$output" | wc -l | tr -d ' ')" -eq 1 ]
 
   # Refusal proof: revert the gsub sanitization in a scratch copy that lives
   # beside the original (check-updates.sh derives GAIA_DIRECTORY/PROJECT_ROOT from
@@ -434,8 +434,8 @@ render_statusline_against_refresher_cache() {
   [ "$status" -eq 0 ]
   grep -qF -- "$injected_sequence" <<<"$output" && return 1
   [ "${#lines[@]}" -eq 1 ]
-  grep -qF -- "Run /gaia-codify (1 new pattern" <<<"$output"
-  [ "$(grep -oF -- "Run /gaia-codify" <<<"$output" | wc -l | tr -d ' ')" -eq 1 ]
+  grep -qF -- "🔨 /gaia-codify (1 new pattern" <<<"$output"
+  [ "$(grep -oF -- "🔨 /gaia-codify" <<<"$output" | wc -l | tr -d ' ')" -eq 1 ]
 
   # Refusal proof: drop the control-byte stripping in a scratch copy that
   # lives beside the original (gaia-statusline.sh resolves PROJECT_ROOT from

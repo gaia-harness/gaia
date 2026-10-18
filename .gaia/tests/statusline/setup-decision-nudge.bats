@@ -2,9 +2,9 @@
 
 # The statusline's post-completion setup nudge: once setup is complete, a
 # machine-scope setup choice the shipped list holds and this machine has not
-# decided arms a `Run /setup-gaia (<N> choice[s] pending)` segment at the
+# decided arms a `⚙️ /setup-gaia (<N> choice[s] pending)` segment at the
 # highest priority. Project-scope ids never arm it, the incomplete-setup
-# `Run /setup-gaia (Required)` segment is untouched, and a linked worktree
+# `⚙️ /setup-gaia (Required)` segment is untouched, and a linked worktree
 # stays dark because the nudge is a main-checkout task like the rest.
 #
 # The fixture is a MAIN git checkout holding copies of the statusline and the
@@ -94,12 +94,12 @@ render() {
 @test "two pending machine choices nudge, and recording them clears the nudge one by one" {
   render "$MAIN"
   [ "$status" -eq 0 ]
-  grep -qF -- "Run /setup-gaia (2 choices pending)" <<<"$output"
+  grep -qF -- "⚙️ /setup-gaia (2 choices pending)" <<<"$output"
 
   record_decision alpha applied
   render "$MAIN"
   [ "$status" -eq 0 ]
-  grep -qF -- "Run /setup-gaia (1 choice pending)" <<<"$output"
+  grep -qF -- "⚙️ /setup-gaia (1 choice pending)" <<<"$output"
 
   record_decision beta applied
   render "$MAIN"
@@ -126,7 +126,7 @@ render() {
 @test "a project-scope id never arms the nudge" {
   # Positive control: with a machine id pending the slot renders.
   render "$MAIN"
-  grep -qF -- "Run /setup-gaia" <<<"$output"
+  grep -qF -- "⚙️ /setup-gaia" <<<"$output"
 
   write_features gamma
   render "$MAIN"
@@ -139,7 +139,7 @@ render() {
   arm_other_nudges
   render "$MAIN"
   [ "$status" -eq 0 ]
-  grep -qE -- "Run /setup-gaia \(2 choices pending\) +Run /update-gaia .* +Run /update-deps .* +Run /gaia-debt " <<<"$output"
+  grep -qE -- "⚙️ /setup-gaia \(2 choices pending\) │ 🚀 /update-gaia .* │ 📦 /update-deps .* │ 🐛 /gaia-debt " <<<"$output"
 }
 
 @test "the setup nudge is the last to shrink and has its own Medium and icon forms" {
@@ -148,39 +148,39 @@ render() {
   # Medium for setup while every lower-priority nudge is already at Small.
   render "$MAIN" 90
   [ "$status" -eq 0 ]
-  grep -qF -- "Run /setup-gaia (2)" <<<"$output"
-  grep -qF -- "Run /update-gaia" <<<"$output"
+  grep -qF -- "⚙️ /setup-gaia (2)" <<<"$output"
+  grep -qF -- "🚀 /update-gaia" <<<"$output"
   grep -qF -- "9.9.9" <<<"$output" && return 1
 
   # Small for setup while lower-priority nudges have reached icons.
   render "$MAIN" 60
   [ "$status" -eq 0 ]
-  grep -qF -- "Run /setup-gaia" <<<"$output"
-  grep -qF -- "Run /setup-gaia (" <<<"$output" && return 1
-  grep -qF -- "📦3" <<<"$output"
+  grep -qF -- "⚙️ /setup-gaia" <<<"$output"
+  grep -qF -- "⚙️ /setup-gaia (" <<<"$output" && return 1
+  grep -qF -- "📦 3" <<<"$output"
 
   # Icon form last, with the count.
   render "$MAIN" 30
   [ "$status" -eq 0 ]
-  grep -qF -- "🔧2" <<<"$output"
-  grep -qF -- "Run /setup-gaia" <<<"$output" && return 1
+  grep -qF -- "⚙️ 2" <<<"$output"
+  grep -qF -- "⚙️ /setup-gaia" <<<"$output" && return 1
   return 0
 }
 
 @test "no list renders no setup slot and leaves the rest of the render unchanged" {
   arm_other_nudges
   render "$MAIN"
-  grep -qF -- "Run /setup-gaia" <<<"$output"
+  grep -qF -- "⚙️ /setup-gaia" <<<"$output"
   with_list="$output"
 
   rm -f "$MAIN/.gaia/setup-features.json"
   render "$MAIN"
   [ "$status" -eq 0 ]
   grep -qF -- "/setup-gaia" <<<"$output" && return 1
-  grep -qF -- "Run /update-gaia (GAIA 9.9.9 available)" <<<"$output"
-  grep -qF -- "Run /update-deps (3 outdated)" <<<"$output"
-  grep -qF -- "Run /gaia-debt (5 issues)" <<<"$output"
-  [ "${output//[[:space:]]/}" = "$(sed -E 's/Run \/setup-gaia \(2 choices pending\)//' <<<"$with_list" | tr -d '[:space:]')" ]
+  grep -qF -- "🚀 /update-gaia (9.9.9)" <<<"$output"
+  grep -qF -- "📦 /update-deps (3 outdated)" <<<"$output"
+  grep -qF -- "🐛 /gaia-debt (5 issues)" <<<"$output"
+  [ "${output//[[:space:]]/}" = "$(sed -E 's/⚙️ \/setup-gaia \(2 choices pending\) │ //' <<<"$with_list" | tr -d '[:space:]')" ]
 }
 
 @test "a malformed list renders no setup slot, no Required segment, and exits 0" {
@@ -190,7 +190,7 @@ render() {
   [ "$status" -eq 0 ]
   grep -qF -- "/setup-gaia" <<<"$output" && return 1
   # The shared read still reported completion, so the other nudges render.
-  grep -qF -- "Run /update-deps" <<<"$output"
+  grep -qF -- "📦 /update-deps" <<<"$output"
 }
 
 @test "a list with a non-array features value renders no setup slot and exits 0" {
@@ -201,16 +201,16 @@ render() {
   return 0
 }
 
-@test "an incomplete setup still renders Run /setup-gaia (Required) alone" {
+@test "an incomplete setup still renders ⚙️ /setup-gaia (Required) alone" {
   arm_other_nudges
   write_setup_state null
   render "$MAIN"
   [ "$status" -eq 0 ]
-  grep -qF -- "Run /setup-gaia (Required)" <<<"$output"
+  grep -qF -- "⚙️ /setup-gaia (Required)" <<<"$output"
   grep -qF -- "setup choice" <<<"$output" && return 1
   grep -qF -- "🔧" <<<"$output" && return 1
   grep -qF -- "+" <<<"$output" && return 1
-  grep -qF -- "Run /update-gaia" <<<"$output" && return 1
+  grep -qF -- "🚀 /update-gaia" <<<"$output" && return 1
   return 0
 }
 
@@ -226,16 +226,16 @@ render() {
   run env -i HOME="$TEMPORARY_HOME" COLUMNS=400 PATH="$bin_directory" "$bin_directory/bash" -c "printf '%s' '$json' | '$bin_directory/bash' '$MAIN/.gaia/statusline/gaia-statusline.sh'"
   [ "$status" -eq 0 ]
   grep -qF -- "setup choice" <<<"$output" && return 1
-  grep -qF -- "Run /setup-gaia" <<<"$output" && return 1
+  grep -qF -- "⚙️ /setup-gaia" <<<"$output" && return 1
 
   # Positive control: the same fixture renders the slot once jq is on PATH.
   render "$MAIN"
-  grep -qF -- "Run /setup-gaia (2 choices pending)" <<<"$output"
+  grep -qF -- "⚙️ /setup-gaia (2 choices pending)" <<<"$output"
 }
 
 @test "a linked worktree shows no setup choice nudge, the main checkout does" {
   render "$MAIN"
-  grep -qF -- "Run /setup-gaia (2 choices pending)" <<<"$output"
+  grep -qF -- "⚙️ /setup-gaia (2 choices pending)" <<<"$output"
 
   render "$WORKTREE"
   [ "$status" -eq 0 ]
@@ -247,7 +247,7 @@ render() {
   write_setup_state null
   render "$WORKTREE"
   [ "$status" -eq 0 ]
-  grep -qF -- "Run /setup-gaia (Required)" <<<"$output"
+  grep -qF -- "⚙️ /setup-gaia (Required)" <<<"$output"
 }
 
 @test "the list adds no jq process to a render" {
@@ -262,14 +262,14 @@ render() {
   : > "$log_file"
   run env HOME="$TEMPORARY_HOME" COLUMNS=400 PATH="$shim_directory:$PATH" bash -c "printf '%s' '$json' | bash '$MAIN/.gaia/statusline/gaia-statusline.sh'"
   [ "$status" -eq 0 ]
-  grep -qF -- "Run /setup-gaia" <<<"$output"
+  grep -qF -- "⚙️ /setup-gaia" <<<"$output"
   calls_with_list=$(wc -l < "$log_file" | tr -d ' ')
 
   rm -f "$MAIN/.gaia/setup-features.json"
   : > "$log_file"
   run env HOME="$TEMPORARY_HOME" COLUMNS=400 PATH="$shim_directory:$PATH" bash -c "printf '%s' '$json' | bash '$MAIN/.gaia/statusline/gaia-statusline.sh'"
   [ "$status" -eq 0 ]
-  grep -qF -- "Run /setup-gaia" <<<"$output" && return 1
+  grep -qF -- "⚙️ /setup-gaia" <<<"$output" && return 1
   calls_without_list=$(wc -l < "$log_file" | tr -d ' ')
 
   # The shim logged something, so an inert shim cannot pass this.

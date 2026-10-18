@@ -161,7 +161,7 @@ run_statusline_with_cache() {
 @test "statusline renders the plural residue segment at 8" {
   run_statusline_with_cache '{"residueCandidateCount":8}'
   [ "$status" -eq 0 ]
-  grep -qF -- "Run /gaia-residue (8 aged residuals)" <<<"$output"
+  grep -qF -- "🧹 /gaia-residue (8 residuals)" <<<"$output"
 }
 
 @test "the count threshold boundary: 4 renders nothing, 5 renders the segment" {
@@ -171,7 +171,7 @@ run_statusline_with_cache() {
 
   run_statusline_with_cache '{"residueCandidateCount":5}'
   [ "$status" -eq 0 ]
-  grep -qF -- "Run /gaia-residue (5 aged residuals)" <<<"$output"
+  grep -qF -- "🧹 /gaia-residue (5 residuals)" <<<"$output"
 }
 
 @test "0, an absent field, an empty string, and a non-numeric value each render no segment" {

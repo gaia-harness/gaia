@@ -12,7 +12,7 @@ Drift between code and knowledge is detected and resolved in the user's existing
 
 ## The pieces
 
-1. **Statusline nudge.** The only drift signal. When the count of commits since the last sync reaches the threshold the statusline wrapper declares, the wrapper shows `🧠 Run /gaia-wiki` in the last nudge slot, below `/gaia-residue`. The count is computed by the cache refresher `.gaia/scripts/check-updates.sh` from `gaia wiki state --json`'s `drift_count` and cached as `wikiDriftCount`, so it catches anything that landed in the repo since the last sync, including commits made outside Claude (terminal, GitHub UI, automerge, teammate's pull). The threshold lives in `.gaia/statusline/gaia-statusline.sh`; adopters can neither tune nor disable it. No hook injects a drift reminder into the conversation.
+1. **Statusline nudge.** The only drift signal. When the count of commits since the last sync reaches the threshold the statusline wrapper declares, the wrapper shows `🧠 /gaia-wiki` in the last nudge slot, below `/gaia-residue`. The count is computed by the cache refresher `.gaia/scripts/check-updates.sh` from `gaia wiki state --json`'s `drift_count` and cached as `wikiDriftCount`, so it catches anything that landed in the repo since the last sync, including commits made outside Claude (terminal, GitHub UI, automerge, teammate's pull). The threshold lives in `.gaia/statusline/gaia-statusline.sh`; adopters can neither tune nor disable it. No hook injects a drift reminder into the conversation.
 
 2. **`/gaia-wiki` command.** The workhorse; its sync stage does the drift work. Reads commits between `last_evaluated_sha` and `HEAD`, classifies each as WORTHY or SKIP (subjects-and-stats first, deep-read only the worthy ones), edits relevant pages, appends `wiki/log.md`, advances `wiki/.state.json`.
 
@@ -89,7 +89,7 @@ Consolidate runs on every chain whose sync completes normally: sync's summary en
 
 ## When to run `/gaia-wiki`
 
-- When the `🧠 Run /gaia-wiki` nudge shows
+- When the `🧠 /gaia-wiki` nudge shows
 - After landing a meaningful change yourself
 - Before opening a PR with substantive code changes
 - When the lint stage of `/gaia-wiki` flags drift as WARN or ERROR

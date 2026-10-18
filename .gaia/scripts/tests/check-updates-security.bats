@@ -207,7 +207,7 @@ assert_security() {
   [ "$status" -eq 0 ]
   plain=$(printf '%s' "$output" | sed 's/\x1b\[[0-9;]*m//g')
   case "$plain" in
-    *"Run /update-deps (1 security)"*) ;;
+    *"📦 /update-deps (1 security)"*) ;;
     *) return 1 ;;
   esac
 }

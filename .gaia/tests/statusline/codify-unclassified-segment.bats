@@ -123,13 +123,13 @@ run_statusline_with_cache() {
 @test "statusline renders the unclassified segment when codifyUnclassifiedCount > 0" {
   run_statusline_with_cache 0 3
   [ "$status" -eq 0 ]
-  grep -qF -- "Run /gaia-codify (3 unclassified)" <<<"$output"
+  grep -qF -- "🔨 /gaia-codify (3 unclassified)" <<<"$output"
 }
 
 @test "statusline renders the candidate segment alone, singular noun intact, when only codifyCandidateCount > 0" {
   run_statusline_with_cache 1 0
   [ "$status" -eq 0 ]
-  grep -qF -- "Run /gaia-codify (1 recurring pattern)" <<<"$output"
+  grep -qF -- "🔨 /gaia-codify (1 recurring pattern)" <<<"$output"
   grep -qF -- "unclassified" <<<"$output" && return 1
   return 0
 }
@@ -140,10 +140,10 @@ run_statusline_with_cache() {
 @test "statusline folds both counts into one codify segment when both are non-zero" {
   run_statusline_with_cache 2 3
   [ "$status" -eq 0 ]
-  grep -qF -- "Run /gaia-codify (2 recurring patterns, 3 unclassified)" <<<"$output"
+  grep -qF -- "🔨 /gaia-codify (2 recurring patterns, 3 unclassified)" <<<"$output"
   # The statusline is one line, so `grep -c` would count that line once
   # whether it holds one segment or two. Count the occurrences themselves.
-  [ "$(grep -oF -- "Run /gaia-codify" <<<"$output" | wc -l | tr -d ' ')" -eq 1 ]
+  [ "$(grep -oF -- "🔨 /gaia-codify" <<<"$output" | wc -l | tr -d ' ')" -eq 1 ]
 }
 
 @test "statusline renders no codify segment when both counts are 0" {

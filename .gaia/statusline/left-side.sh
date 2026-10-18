@@ -21,7 +21,7 @@
 gaia_statusline_left() {
   local root="${1:-}" session_directory="${2:-}" is_worktree="${3:-}" model="${4:-}" effort="${5:-}"
   local used_percentage="${6:-}" window="${7:-}" tokens="${8:-}"
-  local escape_character=$'\033' reset=$'\033[00m' rendered="" separator=" | " project branch effort_capitalized
+  local escape_character=$'\033' reset=$'\033[00m' rendered="" separator=" │ " project branch effort_capitalized
   local integer_part fraction_part used_percentage_rounded filled i bar="" color marker="" checkpoint_override ask_tokens ask_window_percent line bands
   local yellow red fire skull
   _GAIA_STATUSLINE_LEFT=""

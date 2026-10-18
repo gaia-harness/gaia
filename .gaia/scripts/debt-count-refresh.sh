@@ -2,7 +2,7 @@
 # GAIA tech-debt count refresher.
 #
 # Recomputes the number of open `tech-debt` GitHub issues into a pinned cache
-# (.gaia/local/debt/count.json) consumed by the statusline `Run /gaia-debt`
+# (.gaia/local/debt/count.json) consumed by the statusline `🐛 /gaia-debt`
 # segment.
 #
 # This refresh is INDEPENDENT of the 6h aggregate update-check refresher

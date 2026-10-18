@@ -229,7 +229,7 @@ DEBT_REFRESH_SCRIPT="$STATE_ROOT/.gaia/scripts/debt-count-refresh.sh"
 
 # ---------- Right side from cache ----------
 # Per-clone setup gate: when .gaia/local/setup-state.json is missing or its
-# completed_at is null, the right side shows ONLY `Run /setup-gaia`; the other
+# completed_at is null, the right side shows ONLY `/setup-gaia`; the other
 # indicators are suppressed until the developer has run through the per-clone
 # setup at least once. The setup file is gitignored and shared across the
 # clone's trees, so an unset-up clone reads as unset-up from every one of them
@@ -315,9 +315,10 @@ else
 
   if [ "$setup_complete" != "true" ]; then
     measure_left
-    setup_text='Run /setup-gaia (Required)'
-    right=$'\033[01;35m'"$setup_text"$'\033[00m'
-    right_width=${#setup_text}
+    setup_text='/setup-gaia (Required)'
+    right=$'\033[01;35m''⚙️ '"$setup_text"$'\033[00m'
+    # The icon is counted as 2 columns, the same as every nudge's icon below.
+    right_width=$((3 + ${#setup_text}))
   elif [ "$IS_WORKTREE" = "true" ]; then
     : # linked worktree, setup complete: the rest is a main-checkout task
       # queue, nothing to build; right stays empty and falls through to the
@@ -358,8 +359,8 @@ else
     if [ "$setup_pending_count" -gt 0 ] 2>/dev/null; then
       setup_noun="choices"
       [ "$setup_pending_count" -eq 1 ] && setup_noun="choice"
-      printf -v full 'Run /setup-gaia (%d %s pending)' "$setup_pending_count" "$setup_noun"
-      nudge_set 0 '01;95' 'Run /setup-gaia' "$full" "$setup_pending_count" '🔧'
+      printf -v full '/setup-gaia (%d %s pending)' "$setup_pending_count" "$setup_noun"
+      nudge_set 0 '01;95' '/setup-gaia' "$full" "$setup_pending_count" '⚙️'
     fi
     if [ -f "$CACHE_FILE" ] && command -v jq >/dev/null 2>&1; then
       # One spawn for both update-deps counts. securityCount is never defaulted
@@ -398,8 +399,8 @@ else
       serena_drift=$(jq -r '(.serenaLangDrift // []) | join(", ")' "$CACHE_FILE" 2>/dev/null)
 
       if [ "$gaia_has_update" = "true" ] && [ -n "$gaia_latest" ]; then
-        printf -v full 'Run /update-gaia (GAIA %s available)' "$gaia_latest"
-        nudge_set 1 '01;36' 'Run /update-gaia' "$full" "$gaia_latest" '🌍'
+        # No Medium: the Large reason is already just the version.
+        nudge_set 1 '01;36' '/update-gaia' "/update-gaia ($gaia_latest)" '' '🚀'
       fi
       deps_outdated=0
       deps_security=0
@@ -407,13 +408,13 @@ else
       [ -n "$security_count" ] && [ "$security_count" -gt 0 ] 2>/dev/null && deps_security="$security_count"
       if [ "$deps_outdated" -gt 0 ] || [ "$deps_security" -gt 0 ]; then
         if [ "$deps_outdated" -gt 0 ] && [ "$deps_security" -gt 0 ]; then
-          printf -v full 'Run /update-deps (%d outdated, %d security)' "$deps_outdated" "$deps_security"
+          printf -v full '/update-deps (%d outdated, %d security)' "$deps_outdated" "$deps_security"
         elif [ "$deps_outdated" -gt 0 ]; then
-          printf -v full 'Run /update-deps (%d outdated)' "$deps_outdated"
+          printf -v full '/update-deps (%d outdated)' "$deps_outdated"
         else
-          printf -v full 'Run /update-deps (%d security)' "$deps_security"
+          printf -v full '/update-deps (%d security)' "$deps_security"
         fi
-        nudge_set 3 '01;33' 'Run /update-deps' "$full" "$((deps_outdated + deps_security))" '📦'
+        nudge_set 3 '01;33' '/update-deps' "$full" "$((deps_outdated + deps_security))" '📦'
       fi
       # Both signals are discharged by the same bare `/gaia-codify` run, and no
       # argument selects between them, so they stack into one segment's reason
@@ -426,8 +427,8 @@ else
       # upgrade-window seed does.
       if [ "$has_codify_reason" = "1" ]; then
         if [ -n "$codify_reason" ]; then
-          printf -v full 'Run /gaia-codify (%s)' "$codify_reason"
-          nudge_set 5 '01;35' 'Run /gaia-codify' "$full" "$codify_mid" '🔨'
+          printf -v full '/gaia-codify (%s)' "$codify_reason"
+          nudge_set 5 '01;35' '/gaia-codify' "$full" "$codify_mid" '🔨'
         fi
       else
         codify_unclassified=$(jq -r '.codifyUnclassifiedCount // 0' "$CACHE_FILE" 2>/dev/null)
@@ -442,24 +443,24 @@ else
           fallback_reason=$(printf '%s%d unclassified' "$fallback_reason" "$codify_unclassified")
         fi
         if [ -n "$fallback_reason" ]; then
-          printf -v full 'Run /gaia-codify (%s)' "$fallback_reason"
-          nudge_set 5 '01;35' 'Run /gaia-codify' "$full" "$codify_mid" '🔨'
+          printf -v full '/gaia-codify (%s)' "$fallback_reason"
+          nudge_set 5 '01;35' '/gaia-codify' "$full" "$codify_mid" '🔨'
         fi
       fi
       if [ "$cleanse_nudge" = "true" ]; then
         if [ -n "$cleanse_reason" ]; then
-          printf -v full 'Run /gaia-cleanse (%s)' "$cleanse_reason"
-          nudge_set 4 '01;32' 'Run /gaia-cleanse' "$full" '' '🔎'
+          printf -v full '/gaia-cleanse (%s)' "$cleanse_reason"
+          nudge_set 4 '01;32' '/gaia-cleanse' "$full" '' '🔎'
         else
-          nudge_set 4 '01;32' 'Run /gaia-cleanse' 'Run /gaia-cleanse' '' '🔎'
+          nudge_set 4 '01;32' '/gaia-cleanse' '/gaia-cleanse' '' '🔎'
         fi
       fi
       if [ -n "$serena_drift" ]; then
-        printf -v full 'Run /gaia-serena-sync (Serena missing: %s)' "$serena_drift"
+        printf -v full '/gaia-serena-sync (missing: %s)' "$serena_drift"
         # Language count from the already-joined string: commas plus one.
         serena_commas="${serena_drift//[!,]/}"
         serena_language_count=$(( ${#serena_commas} + 1 ))
-        nudge_set 2 '01;31' 'Run /gaia-serena-sync' "$full" "$serena_language_count" '🔭'
+        nudge_set 2 '01;31' '/gaia-serena-sync' "$full" "$serena_language_count" '🔭'
       fi
       # Residue nudge: renders once at least RESIDUE_NUDGE_THRESHOLD keyed
       # candidates have aged past 30 days (the age dial lives in the tally,
@@ -475,8 +476,8 @@ else
       if [ "$residue_count" -ge "$RESIDUE_NUDGE_THRESHOLD" ] 2>/dev/null; then
         residue_suffix="s"
         [ "$residue_count" -eq 1 ] && residue_suffix=""
-        printf -v full 'Run /gaia-residue (%d aged residual%s)' "$residue_count" "$residue_suffix"
-        nudge_set 7 '01;37' 'Run /gaia-residue' "$full" "$residue_count" '🧹'
+        printf -v full '/gaia-residue (%d residual%s)' "$residue_count" "$residue_suffix"
+        nudge_set 7 '01;37' '/gaia-residue' "$full" "$residue_count" '🧹'
       fi
       # Wiki nudge: renders once the wiki trails HEAD by at least
       # WIKI_NUDGE_THRESHOLD non-bookkeeping commits. A maintainer constant,
@@ -490,7 +491,7 @@ else
       if [ "$wiki_drift_count" -ge "$WIKI_NUDGE_THRESHOLD" ] 2>/dev/null; then
         # 01;96 (bright cyan) is the one color no other slot or the setup
         # segment uses.
-        nudge_set 8 '01;96' 'Run /gaia-wiki' "Run /gaia-wiki ($wiki_drift_count commits)" "$wiki_drift_count" '🧠'
+        nudge_set 8 '01;96' '/gaia-wiki' "/gaia-wiki ($wiki_drift_count commits)" "$wiki_drift_count" '🧠'
       fi
     fi
     # Debt-backlog nudge, read from the pinned debt cache. Independent of
@@ -500,8 +501,8 @@ else
       if [ -n "$debt_count" ] && [ "$debt_count" -gt 0 ] 2>/dev/null; then
         debt_noun="issues"
         [ "$debt_count" -eq 1 ] && debt_noun="issue"
-        printf -v full 'Run /gaia-debt (%d %s)' "$debt_count" "$debt_noun"
-        nudge_set 6 '01;34' 'Run /gaia-debt' "$full" "$debt_count" '💸'
+        printf -v full '/gaia-debt (%d %s)' "$debt_count" "$debt_noun"
+        nudge_set 6 '01;34' '/gaia-debt' "$full" "$debt_count" '🐛'
       fi
     fi
 
@@ -510,7 +511,7 @@ else
     # walks an indexed array's set keys in ascending order, which is what
     # makes the slot numbers double as the render order. dense_iconcount is
     # derived in the same pass: a nudge's mid is shown on its icon only when
-    # it is all digits (update-gaia's version mid stays bare).
+    # it is all digits.
     dense_color=()
     dense_small=()
     dense_large=()
@@ -545,48 +546,48 @@ else
 
       # Sets right_width, hidden_count, and right (composed inline, since
       # only the last call before the shrink loop below breaks is ever
-      # printed) from the current $nudge_size values. A visible segment is 2
-      # columns from its neighbor, except two adjacent icons, or an icon
-      # next to the trailing `+N`, which are 1 (an icon already reads as a
-      # unit with what immediately follows it). An icon's width is hardcoded
-      # rather than measured off its text: a single emoji is one character
-      # to bash's `${#...}` but renders two columns wide.
+      # printed) from the current $nudge_size values. Visible segments are
+      # divided by ` │ `, and the trailing `+N` sits 1 column from its
+      # neighbor. Every form leads with the nudge's emoji, so the icon form
+      # is the one the text forms already taught; whatever follows sits 1
+      # column from it, since flush the glyphs crowd together at statusline
+      # font sizes. The emoji's width is hardcoded at 2 and only the ASCII
+      # body after it is measured: `${#...}` counts an emoji as one
+      # character in a UTF-8 locale, as several bytes in the C locale, and
+      # counts a trailing U+FE0F presentation selector (⚙️) as another.
       measure() {
         right_width=0
         hidden_count=0
         right=""
-        local i text_length text icon_form last=-1
+        local i text_length text body icon_form last=-1
         for ((i = 0; i < nudge_count; i++)); do
           if [ "${nudge_size[$i]}" -eq 4 ]; then
             hidden_count=$((hidden_count + 1))
             continue
           fi
           case "${nudge_size[$i]}" in
-            0) text="${dense_large[$i]}"; icon_form=0 ;;
+            0) body="${dense_large[$i]}"; icon_form=0 ;;
             1)
               if [ -n "${dense_mid[$i]}" ]; then
-                text="${dense_small[$i]} (${dense_mid[$i]})"
+                body="${dense_small[$i]} (${dense_mid[$i]})"
               else
-                text="${dense_small[$i]}"
+                body="${dense_small[$i]}"
               fi
               icon_form=0
               ;;
-            2) text="${dense_small[$i]}"; icon_form=0 ;;
-            3) text="${dense_icon[$i]}${dense_iconcount[$i]}"; icon_form=1 ;;
+            2) body="${dense_small[$i]}"; icon_form=0 ;;
+            3) body="${dense_iconcount[$i]}"; icon_form=1 ;;
           esac
-          if [ "$icon_form" -eq 1 ]; then
-            text_length=$((2 + ${#dense_iconcount[$i]}))
+          if [ -n "$body" ]; then
+            text="${dense_icon[$i]} ${body}"
+            text_length=$((3 + ${#body}))
           else
-            text_length=${#text}
+            text="${dense_icon[$i]}"
+            text_length=2
           fi
           if [ "$last" -ge 0 ]; then
-            if [ "${nudge_size[$last]}" -eq 3 ] && [ "$icon_form" -eq 1 ]; then
-              right_width=$((right_width + 1))
-              right="${right} "
-            else
-              right_width=$((right_width + 2))
-              right="${right}  "
-            fi
+            right_width=$((right_width + 3))
+            right="${right} │ "
           fi
           right_width=$((right_width + text_length))
           if [ "$icon_form" -eq 1 ]; then

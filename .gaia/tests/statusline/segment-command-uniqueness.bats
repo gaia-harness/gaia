@@ -77,7 +77,7 @@ JSON
 # counting as a segment of its own. `LC_ALL=C` so the order never depends on
 # the invoking locale's collation of the hyphen.
 rendered_commands() {
-  grep -oE 'Run /[a-z][a-z0-9-]*' <<<"$1" | LC_ALL=C sort
+  grep -oE ' /(setup|update|gaia)-[a-z0-9-]*' <<<"$1" | sed 's/^ //' | LC_ALL=C sort
 }
 
 # The saturated fixture is what gives the uniqueness test below anything to
@@ -89,14 +89,14 @@ rendered_commands() {
   run_saturated_statusline
   [ "$status" -eq 0 ]
   expected=$(printf '%s\n' \
-    "Run /gaia-cleanse" \
-    "Run /gaia-codify" \
-    "Run /gaia-debt" \
-    "Run /gaia-residue" \
-    "Run /gaia-serena-sync" \
-    "Run /gaia-wiki" \
-    "Run /update-deps" \
-    "Run /update-gaia")
+    "/gaia-cleanse" \
+    "/gaia-codify" \
+    "/gaia-debt" \
+    "/gaia-residue" \
+    "/gaia-serena-sync" \
+    "/gaia-wiki" \
+    "/update-deps" \
+    "/update-gaia")
   [ "$(rendered_commands "$output")" = "$expected" ]
 }
 
@@ -129,8 +129,8 @@ JSON
   json=$(jq -n --arg current_directory "$MAIN" '{workspace: {current_dir: $current_directory}, cwd: $current_directory, model: {display_name: "Test"}, context_window: {used_percentage: 10}}')
   run env HOME="$TEMPORARY_HOME" COLUMNS=400 bash -c "printf '%s' '$json' | bash '$MAIN/.gaia/statusline/gaia-statusline.sh'"
   [ "$status" -eq 0 ]
-  grep -qF -- "Run /gaia-codify (1 new pattern, drifting-duplicate rising)" <<<"$output"
-  [ "$(grep -oF -- "Run /gaia-codify" <<<"$output" | wc -l | tr -d ' ')" -eq 1 ]
+  grep -qF -- "🔨 /gaia-codify (1 new pattern, drifting-duplicate rising)" <<<"$output"
+  [ "$(grep -oF -- "🔨 /gaia-codify" <<<"$output" | wc -l | tr -d ' ')" -eq 1 ]
   duplicate_commands=$(rendered_commands "$output" | uniq -d)
   [ -z "$duplicate_commands" ]
 }

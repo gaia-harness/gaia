@@ -5,7 +5,7 @@
 #
 # The render is a thin consumer of the cache field serenaLangDrift: it
 # comma-joins the array via `jq '(.serenaLangDrift // []) | join(", ")'` and
-# emits `Run /gaia-serena-sync (Serena missing: <langs>)`. The gate is two
+# emits `🔭 /gaia-serena-sync (missing: <langs>)`. The gate is two
 # conditions, not one: per-clone setup complete, and the session sits on the
 # main checkout. The cache itself is shared state read from the resolved main
 # root, one fact about the clone -- but that fact alone does not make the
@@ -21,7 +21,7 @@
 #
 # Assertion style: bash-3.2-safe per .claude/rules/bats-assertions.md.
 
-SEGMENT='Run /gaia-serena-sync (Serena missing:'
+SEGMENT='🔭 /gaia-serena-sync (missing:'
 
 assert_contains() {
   grep -qF -- "$1" <<<"$output"
@@ -115,7 +115,7 @@ render() {
   write_setup "$root" complete
   render "$root"
   [ "$status" -eq 0 ]
-  assert_contains 'Run /gaia-serena-sync (Serena missing: python, go)'
+  assert_contains '🔭 /gaia-serena-sync (missing: python, go)'
 }
 
 @test "UAT-015 statusline: empty array and absent field both render no segment" {
@@ -156,14 +156,14 @@ render() {
   write_setup "$MAIN" complete
   render "$LINKED"
   [ "$status" -eq 0 ]
-  refute_contains 'Run /gaia-serena-sync (Serena missing: go)'
+  refute_contains '🔭 /gaia-serena-sync (missing: go)'
 
   # Mirror: the identical cache and setup state still renders from main.
   # Without this, the refutation above would stay green even if the segment
   # stopped rendering anywhere at all.
   render "$MAIN"
   [ "$status" -eq 0 ]
-  assert_contains 'Run /gaia-serena-sync (Serena missing: go)'
+  assert_contains '🔭 /gaia-serena-sync (missing: go)'
 }
 
 @test "UAT-017 statusline: non-empty drift but setup not complete (missing or null) -> no segment" {
