@@ -54,7 +54,8 @@ const HELP_TEXT = `Usage: gaia residue-tally [options]
                      suppression matches on path and line alone
                      (count_approximate: true).
 
-  The emitted batch is capped at GAIA_RESIDUE_CAP (default 10).
+  One call emits one batch, capped at GAIA_RESIDUE_CAP (default 10); a
+  sweep re-runs the tally after each batch.
 
   Network failures are non-fatal: a failed read of either the merged-PR
   window or the tech-debt issue list emits gh_ok: false with an empty
