@@ -81,7 +81,7 @@ A candidate whose resolution is `gone` is labelled a likely-already-fixed dismis
 
 ## The three arms
 
-State the default posture explicitly before offering them: dismiss or keep is the default, and promotion is the exception that needs a reason. A drainer whose happy path files issues is a migration wearing a drain's clothes, and promoting freely would grow the backlog rather than drain it.
+State the default posture explicitly before offering them: dismiss or keep is the default, and promotion is the exception that needs a reason. Offer the arms for each candidate as one `AskUserQuestion` with the options `Dismiss`, `Keep` and `Promote`, the arm the evidence supports leading and marked ` (Recommended)`; that is `Dismiss` for a `gone` or previously promoted candidate, and never `Promote` without a reason stated in its description. A drainer whose happy path files issues is a migration wearing a drain's clothes, and promoting freely would grow the backlog rather than drain it.
 
 ### Promote
 
@@ -89,7 +89,7 @@ One human answer per residual, never batched, collected through an explicit user
 
 - **The finding class is the residual's own.** Pass the `class` carried in the candidate's `raw_key` verbatim as the recipe's `<finding_class>`, so the filed issue's dedup key is byte-identical to the residual's own key. Never mint a fresh class.
 - **`footprint:<class>`** comes from the recipe's own step 6 rubric, applied to the cited line the command has already read. It is a reach grade (`narrow`, `wide`, or `spec`), never the finding class above.
-- **`severity:<tier>`** comes from the recipe's own severity vocabulary, chosen from the residual's failure-mode text and its canonical disposition, and it is a judgment asked of the human alongside the promote answer, not guessed by the command.
+- **`severity:<tier>`** comes from the recipe's own severity vocabulary, chosen from the residual's failure-mode text and its canonical disposition, and it is a judgment asked of the human after the promote answer, not guessed by the command: one more `AskUserQuestion` call asks it, the tier the failure mode suggests first and marked ` (Recommended)`, any tier past four options named in the question text, together with the `security` read below as a second question.
   <!-- gaia:maintainer-only:start -->
 - **`audience:<side>`** comes from the cited path, per the recipe's own adopter/maintainer split. Maintainer repository only; scrubbed from adopter bundles.
   <!-- gaia:maintainer-only:end -->
@@ -100,7 +100,7 @@ When the recipe refuses to file because the key matches one of its own dedup arm
 
 ### Dismiss
 
-The safe arm, and the default. It may be offered in a batch, bounded by the batch size, and the batch takes an explicit confirmation that lists every entry it will dismiss before anything is appended. Each dismissal appends one `dismissed` record.
+The safe arm, and the default. It may be offered in a batch, bounded by the batch size, and the batch takes an explicit confirmation that lists every entry it will dismiss before anything is appended, asked as an `AskUserQuestion`: `Dismiss them all (Recommended)` or `Review them one at a time`. Each dismissal appends one `dismissed` record.
 
 ### Keep
 
@@ -152,6 +152,7 @@ Once `aged_candidate_count` is `0`, a `candidate_count` above `0` means newer re
 - **options (this exact order):**
   1. `{ label: "Sweep the next <candidate_count> (of <remaining_count> remaining)", description: "Triage one more batch, then ask again." }`
   2. `{ label: "Stop here", description: "End the sweep and publish what this run recorded." }`
+- **Recommended:** mark the sweep option ` (Recommended)`.
 
 `<candidate_count>` is the batch size, smaller than the cap on the last batch. The question leads with the action and the count and never explains what the newer residue is; the link carries that. `Stop here`, anything typed into the built-in Other, or a declined or dismissed prompt ends the sweep. A `candidate_count` of `0`, or a batch holding nothing new to present, ends it with no question.
 
@@ -263,6 +264,7 @@ Empty output confirms no marker is owed, and the merge gate's out-of-scope bypas
 - **options (this exact order):**
   1. `{ label: "Merge", description: "Squash-merge PR #<N> now." }`
   2. `{ label: "Leave open", description: "Keep the PR open; you merge it after review." }`
+- **Recommended:** mark `Merge` ` (Recommended)`.
 
 **Merge** → drive it to merge through `wiki/concepts/PR Merge Workflow.md` (read it, don't merge from memory): `gh pr merge <N> --squash --delete-branch --auto`, then run the merge wait, `bash .gaia/scripts/pr-wait-merge.sh --pr <N>`, per `.claude/skills/gaia/references/work-lifecycle.md` `## 7. Merge (when asked)`. The merge above is already queued and the script issues no `gh pr merge` of its own, so nothing here re-merges. One arm per verdict plus one for the exit-2 refusal. Every arm below but `CONFLICTING` ends the run and writes its cost record (`## Cost record (run end)`):
 

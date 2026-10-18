@@ -173,6 +173,7 @@ When a recommendation already contains the concrete decisions (file paths, speci
 - After laying out a clear, specific plan, default to executing it. Do not issue `AskUserQuestion` to confirm "should we do X" when X was already in the plan.
 - Reserve `AskUserQuestion` for genuinely branching decisions where the user's preference cannot be inferred (e.g., scope bundling vs. splitting, two valid approaches with different trade-offs).
 - A brief verification pass (path audit, wiki-style check) before commit is not a question; it is verifying the work.
+- When a question is warranted and its answer is a choice, `.claude/rules/user-questions.md` sets its form: an `AskUserQuestion`, recommended option first.
 
 ---
 

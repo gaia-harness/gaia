@@ -69,7 +69,7 @@ Why the gate: project decisions land in a commit pushed straight to the default 
 An owed phase probes before it asks or applies:
 
 - The feature is already in place: record the value its own state shows, with no question.
-- Optional and undecided: ask once and record the answer. A dismissed question records nothing. A feature with a shipped default (the isolation policy, the sandbox recommendation, and the sandbox unless the team recommends it) asks nothing on a plain run: it records the default, and `--reconfigure` asks.
+- Optional and undecided: ask once, as an `AskUserQuestion` with the recommended answer first and marked ` (Recommended)`, and record the answer. A dismissed question records nothing. A feature with a shipped default (the isolation policy, the sandbox recommendation, and the sandbox unless the team recommends it) asks nothing on a plain run: it records the default, and `--reconfigure` asks.
 - Required and missing: apply it and record `applied` on success. A failed apply records nothing, so the next run retries.
 - The feature cannot apply here (no global statusline, an incapable sandbox, an origin not on github.com): record `not-applicable`.
 

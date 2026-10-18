@@ -92,6 +92,7 @@
     ".claude/rules/serena-cc-override.md": "owned",
     ".claude/rules/shell-cwd.md": "owned",
     ".claude/rules/subagent-dispatch.md": "owned",
+    ".claude/rules/user-questions.md": "owned",
     ".claude/rules/wiki-style.md": "owned",
     ".claude/rules/working-doc-ids.md": "owned",
     ".claude/settings.json": "shared",
@@ -742,7 +743,7 @@
     "wiki/overview.md": "wiki-owned",
     "wiki/README.md": "wiki-owned"
   },
-  "generated": "2026-10-18T16:33:05.331Z",
+  "generated": "2026-10-18T19:14:31.707Z",
   "regions": [
     {
       "endMarker": "<!-- gaia:audit-remit:end -->",

@@ -123,7 +123,7 @@ hand_edit_sentences() {
   grep -qF -- 'bash <RUN_FOLDER>/verifier-bin-<r>/audit-fix-verify.sh drift --root <RESOLVED_ROOT> --baseline <RUN_FOLDER>/baseline-<r>.json' <<<"$section_text" || return 1
   sentences <<<"$section_text" | grep -qF -- "overrides the execution doctrine's generic rule to re-dispatch any dispatch whose artifact is missing: a round with \`baseline-<r>.json\` and no \`fixer-<r>-audit.json\`" || return 1
   sentences <<<"$section_text" | grep -qF -- 'means a fixer edited and never wrote its result: do not re-dispatch the fixer' || return 1
-  grep -qF -- 'An interactive run asks the human, an unattended run stops and reports. A second fixer on top of those edits' <<<"$(sentences <<<"$section_text" | tr '\n' ' ')"
+  grep -qF -- 'An interactive run asks the human through `AskUserQuestion`, an unattended run stops and reports. A second fixer on top of those edits' <<<"$(sentences <<<"$section_text" | tr '\n' ' ')"
 }
 
 @test "UAT-017: the closing round after an accept has no fixer and records the residuals under the heading" {
@@ -149,7 +149,7 @@ hand_edit_sentences() {
 }
 
 @test "the Quality Gate page's stop-and-report step carries the fix-round clause" {
-  grep -qF -- '10. **Stop and report**: wait for user approval, except inside a workflow whose own instructions commit without stopping: the audit fix round ([[Audit Round Procedure#The fix round: fixer, verifier, gate]]),' "$QUALITY_GATE_PAGE"
+  grep -qF -- '10. **Stop and report**: ask for approval with `AskUserQuestion` (`Commit` (Recommended) or `Hold for review`), except inside a workflow whose own instructions commit without stopping: the audit fix round ([[Audit Round Procedure#The fix round: fixer, verifier, gate]]),' "$QUALITY_GATE_PAGE"
 }
 
 # --- the audit loop unit ----------------------------------------------------
@@ -245,7 +245,7 @@ anchors_resolve() {
 @test "UAT-007: the unit section maps member-wave-dirty to its own main-thread action and a dirty closing wave to the same stop" {
   local section_text
   section_text="$(unit_halves)" || return 1
-  grep -qF -- '| `member-wave-dirty` | Asks the human what to do, naming the wave'"'"'s members and the dirty paths from `stop_detail`' <<<"$section_text" || return 1
+  grep -qF -- '| `member-wave-dirty` | Asks the human what to do through `AskUserQuestion`, naming the wave'"'"'s members and the dirty paths from `stop_detail`' <<<"$section_text" || return 1
   sentences <<<"$section_text" | grep -qF -- 'a dirty tree after the closing wave stops the unit the same way.' || return 1
 }
 

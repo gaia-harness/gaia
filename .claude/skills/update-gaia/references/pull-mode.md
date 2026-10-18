@@ -54,7 +54,7 @@ Offer it in the main checkout:
 bash <main checkout path>/.gaia/scripts/state-registry-lib.sh residue-sweep
 ```
 
-Show its output. When its Residue section lists paths, ask once with `AskUserQuestion` (question `Delete the residue paths listed above?`, header `Residue`, options `Delete them` and `Keep them`), and on `Delete them` run the same command with `--apply`. Unknown paths are listed, never deleted. A non-zero exit names its cause on stderr: relay it and continue.
+Show its output. When its Residue section lists paths, ask once with `AskUserQuestion` (question `Delete the residue paths listed above?`, header `Residue`, options `Delete them` (Recommended) and `Keep them`), and on `Delete them` run the same command with `--apply`. Unknown paths are listed, never deleted. A non-zero exit names its cause on stderr: relay it and continue.
 
 ## Step 6: Refresh the update-check cache
 

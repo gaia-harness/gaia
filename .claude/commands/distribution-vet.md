@@ -85,7 +85,7 @@ Ask the maintainer about these, and about nothing else:
 
 A withhold that matched a category cleanly is not asked about. Its category and reason are recorded, and Step 4 lands them in `.gaia/release-exclude` where the diff carries them. This is what turns a forty-question pass into a handful of real ones, which is a thing a human can actually review.
 
-When a maintainer answers "keep internal" for a file that matched **no** category, the CLI still needs a category number and rejects one that names no numbered category, so ask a follow-up offering the numbered list. If none of the numbered categories fits, the file stays unanswered: extending the taxonomy is a separate, deliberate edit to `.gaia/release-exclude` and this command does not make it.
+When a maintainer answers "keep internal" for a file that matched **no** category, the CLI still needs a category number and rejects one that names no numbered category, so ask a follow-up `AskUserQuestion` offering the numbered categories: at most 4 options, any further category named in the question text so the maintainer can type it through Other, and no option marked `(Recommended)`, per 3c. If none of the numbered categories fits, the file stays unanswered: extending the taxonomy is a separate, deliberate edit to `.gaia/release-exclude` and this command does not make it.
 
 ### 3c. How every question is written
 

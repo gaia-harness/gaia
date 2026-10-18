@@ -17,7 +17,7 @@ The action follows the entry's `required` flag. Drift's own `action` field is ig
 For each `OWED_FEATURE <id> <action> <reference>` line, read the named reference, whole, and run it:
 
 - `apply`: apply the feature with no question, then record `applied` with `.gaia/cli/gaia setup record <id> applied`.
-- `ask`: ask its question once, then record the answer with `.gaia/cli/gaia setup record <id> <value>`. A dismissed question records nothing.
+- `ask`: ask its question once, as an `AskUserQuestion` with the reference's recommended answer first and marked ` (Recommended)`, then record the answer with `.gaia/cli/gaia setup record <id> <value>`. A dismissed question records nothing.
 - A feature that cannot apply on this machine or project records `not-applicable`.
 - A failed apply records nothing, so the next run retries it.
 
