@@ -93,9 +93,9 @@ plant_legacy_ledger() {
     run notebook path $invalid
     [ "$status" -eq 2 ] || { echo "path $invalid exited $status"; return 1; }
   done
-  run notebook path research a.b-2026-10-01
+  run notebook path research 2026-10-01-a.b
   [ "$status" -eq 0 ]
-  [ "$output" = "$REPO/.notebook/research/a.b-2026-10-01" ]
+  [ "$output" = "$REPO/.notebook/research/2026-10-01-a.b" ]
   run notebook path plan
   [ "$status" -eq 0 ]
   [ "$output" = "$REPO/.notebook/plans" ]
@@ -121,9 +121,9 @@ plant_legacy_ledger() {
   run in_directory "$worktree" bash "$worktree/.gaia/scripts/notebook/notebook-lib.sh" root
   [ "$status" -eq 0 ]
   [ "$output" = "$REPO/.notebook" ]
-  run in_directory "$worktree" bash "$worktree/.gaia/scripts/notebook/notebook-lib.sh" register research topic-2026-10-01 active
+  run in_directory "$worktree" bash "$worktree/.gaia/scripts/notebook/notebook-lib.sh" register research 2026-10-01-topic active
   [ "$status" -eq 0 ]
-  [ "$(catalog_field '.items[0].id')" = topic-2026-10-01 ]
+  [ "$(catalog_field '.items[0].id')" = 2026-10-01-topic ]
   [ ! -e "$worktree/.notebook" ]
 }
 
@@ -134,25 +134,25 @@ plant_legacy_ledger() {
   git -C "$REPO" worktree add -q -b side "$worktree"
   before_other="$(file_digest "$other/.notebook/catalog.json")"
 
-  run in_directory "$other" env GAIA_NOTEBOOK_TREE="$REPO" bash "$LIBRARY" register research t-2026-10-01 active
+  run in_directory "$other" env GAIA_NOTEBOOK_TREE="$REPO" bash "$LIBRARY" register research 2026-10-01-t active
   [ "$status" -eq 0 ]
-  run in_directory "$other" env GAIA_NOTEBOOK_TREE="$REPO" bash -c 'source "$1"; gaia_notebook_register research sourced-2026-10-01 active' _ "$LIBRARY"
+  run in_directory "$other" env GAIA_NOTEBOOK_TREE="$REPO" bash -c 'source "$1"; gaia_notebook_register research 2026-10-01-sourced active' _ "$LIBRARY"
   [ "$status" -eq 0 ]
-  run in_directory "$SCRATCH" env GAIA_NOTEBOOK_TREE="$worktree" bash "$LIBRARY" register research via-worktree-2026-10-01 active
+  run in_directory "$SCRATCH" env GAIA_NOTEBOOK_TREE="$worktree" bash "$LIBRARY" register research 2026-10-01-via-worktree active
   [ "$status" -eq 0 ]
-  [ "$(catalog_field '[.items[].id] | sort | join(",")')" = "sourced-2026-10-01,t-2026-10-01,via-worktree-2026-10-01" ]
+  [ "$(catalog_field '[.items[].id] | sort | join(",")')" = "2026-10-01-sourced,2026-10-01-t,2026-10-01-via-worktree" ]
   [ "$(file_digest "$other/.notebook/catalog.json")" = "$before_other" ]
   [ ! -e "$other/.notebook" ]
   [ ! -e "$worktree/.notebook" ]
 
-  run in_directory "$other" bash "$LIBRARY" register research t-2026-10-01 active
+  run in_directory "$other" bash "$LIBRARY" register research 2026-10-01-t active
   [ "$status" -eq 0 ]
-  [ "$(jq -r '.items[0].id' "$other/.notebook/catalog.json")" = t-2026-10-01 ]
+  [ "$(jq -r '.items[0].id' "$other/.notebook/catalog.json")" = 2026-10-01-t ]
 }
 
 @test "folders lists item folders only and loose_files lists regular files only" {
   mkdir -p "$REPO/.notebook/specs/SPEC-001/plan" "$REPO/.notebook/specs/SPEC-002" "$REPO/.notebook/specs/.hidden" \
-    "$REPO/.notebook/research/topic-2026-10-01" "$SCRATCH/elsewhere"
+    "$REPO/.notebook/research/2026-10-01-topic" "$SCRATCH/elsewhere"
   : >"$REPO/.notebook/specs/notes.md"
   : >"$REPO/.notebook/specs/catalog.json"
   ln -s "$SCRATCH/elsewhere" "$REPO/.notebook/specs/SPEC-009"
@@ -179,7 +179,7 @@ plant_legacy_ledger() {
     '.notebook/specs/SPEC-001|spec SPEC-001'
     '.notebook/specs/SPEC-001/plan-2/README.md|spec-plan SPEC-001 plan-2'
     '.notebook/plans/PLAN-003|plan PLAN-003'
-    '.notebook/research/t-2026-10-01/notes.md|research t-2026-10-01'
+    '.notebook/research/2026-10-01-t/notes.md|research 2026-10-01-t'
   )
   local case_line
   for case_line in "${cases[@]}"; do

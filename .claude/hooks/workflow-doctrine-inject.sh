@@ -509,8 +509,8 @@ keyline=""
 if gaia_usage_valid_reference "$key"; then
   case "$key" in
     branch:%*) ;;
-    branch:*) keyline="Branch key: $key. Link its initiative once with: $run .gaia/scripts/usage.sh link $key research:<topic>-<date> (or issue:<n>)" ;;
-    session:*) keyline="Session key: $key. Bind research with: $run .gaia/scripts/usage.sh declare research:<topic>-<date> --session $session_id" ;;
+    branch:*) keyline="Branch key: $key. Link its initiative once with: $run .gaia/scripts/usage.sh link $key research:<date>-<topic> (or issue:<n>)" ;;
+    session:*) keyline="Session key: $key. Bind research with: $run .gaia/scripts/usage.sh declare research:<date>-<topic> --session $session_id" ;;
   esac
 fi
 if [ -n "$rename_line" ]; then

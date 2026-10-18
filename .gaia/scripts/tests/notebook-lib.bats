@@ -116,23 +116,23 @@ path spec
 get spec SPEC-001
 list spec
 folders spec
-register research topic-2026-10-01 active
-set-status research topic-2026-10-01 closed
-update research topic-2026-10-01 {}
+register research 2026-10-01-topic active
+set-status research 2026-10-01-topic closed
+update research 2026-10-01-topic {}
 classify .notebook/specs/SPEC-001
 EOF
 }
 
 @test "register then set-status keeps one research row and restamps the status change" {
-  run notebook register research topic-2026-10-01 active
+  run notebook register research 2026-10-01-topic active
   [ "$status" -eq 0 ]
   [ "$(catalog_field '[.items[] | select(.kind == "research")] | length')" = 1 ]
   [ "$(catalog_field '.items[0].status')" = active ]
   [ "$(catalog_field '.items[0].created_at')" = "$(catalog_field '.items[0].status_changed_at')" ]
-  [ "$(catalog_field '.items[0].path')" = research/topic-2026-10-01 ]
+  [ "$(catalog_field '.items[0].path')" = research/2026-10-01-topic ]
   [ "$(catalog_field 'has("move_complete")')" = false ]
   seed_old_stamps
-  run notebook set-status research topic-2026-10-01 closed
+  run notebook set-status research 2026-10-01-topic closed
   [ "$status" -eq 0 ]
   [ "$(catalog_field '[.items[] | select(.kind == "research")] | length')" = 1 ]
   [ "$(catalog_field '.items[0].status')" = closed ]
@@ -145,11 +145,11 @@ EOF
 }
 
 @test "registering an existing research row leaves it unchanged; an existing spec row refuses" {
-  run notebook register research topic-2026-10-01 active
+  run notebook register research 2026-10-01-topic active
   [ "$status" -eq 0 ]
   local before
   before="$(file_digest "$CATALOG")"
-  run notebook register research topic-2026-10-01 closed
+  run notebook register research 2026-10-01-topic closed
   [ "$status" -eq 0 ]
   [ "$(file_digest "$CATALOG")" = "$before" ]
   run notebook register spec SPEC-001 draft
@@ -199,7 +199,7 @@ EOF
   plant_legacy_ledger specs
   mkdir -p "$REPO/.notebook"
   printf '{"version":1,"move_complete":{"at":"2026-10-01T00:00:00Z"},"items":[]}\n' >"$CATALOG"
-  run notebook register research topic-2026-10-01 active
+  run notebook register research 2026-10-01-topic active
   [ "$status" -eq 0 ]
   run notebook list spec
   [ "$status" -eq 0 ]
@@ -209,7 +209,7 @@ EOF
   LIBRARY="$REPO/.gaia/scripts/notebook/notebook-lib.sh"
   CATALOG="$REPO/.notebook/catalog.json"
   [ ! -e "$CATALOG" ]
-  run notebook register research topic-2026-10-01 active
+  run notebook register research 2026-10-01-topic active
   [ "$status" -eq 0 ]
   [ "$(catalog_field 'has("move_complete")')" = false ]
   [ "$(catalog_field '.version')" = 1 ]
@@ -244,9 +244,9 @@ EOF
   )
   local invocations=(
     'list research'
-    'register research topic-2026-10-01 active'
-    'update research topic-2026-10-01 {"status":"closed"}'
-    'set-status research topic-2026-10-01 closed'
+    'register research 2026-10-01-topic active'
+    'update research 2026-10-01-topic {"status":"closed"}'
+    'set-status research 2026-10-01-topic closed'
   )
   mkdir -p "$REPO/.notebook"
   local corrupt invocation before checked=0
@@ -270,24 +270,24 @@ EOF
   printf '{"version":1,"items":[]}\n' >"$CATALOG"
   run notebook list research
   [ "$status" -eq 0 ]
-  run notebook register research topic-2026-10-01 active
+  run notebook register research 2026-10-01-topic active
   [ "$status" -eq 0 ]
-  run notebook update research topic-2026-10-01 '{"status":"closed"}'
+  run notebook update research 2026-10-01-topic '{"status":"closed"}'
   [ "$status" -eq 0 ]
-  run notebook set-status research topic-2026-10-01 active
+  run notebook set-status research 2026-10-01-topic active
   [ "$status" -eq 0 ]
 }
 
 @test "register refuses with 5 and creates nothing when main does not ignore .notebook" {
   REPO="$(make_repo unignored no-ignore)"
   LIBRARY="$REPO/.gaia/scripts/notebook/notebook-lib.sh"
-  run --separate-stderr notebook register research topic-2026-10-01 active
+  run --separate-stderr notebook register research 2026-10-01-topic active
   [ "$status" -eq 5 ]
   [[ "$stderr" == *".notebook"* ]]
   [[ "$stderr" == *".gitignore"* ]]
   [ ! -e "$REPO/.notebook" ]
   printf '.notebook\n' >>"$REPO/.gitignore"
-  run notebook register research topic-2026-10-01 active
+  run notebook register research 2026-10-01-topic active
   [ "$status" -eq 0 ]
   [ -f "$REPO/.notebook/catalog.json" ]
 }
@@ -392,20 +392,20 @@ EOF
 }
 
 @test "get prints one row, list filters by status, and record_reap and snooze write their fields" {
-  run notebook register research a-2026-10-01 active
-  run notebook register research b-2026-10-01 closed
-  run notebook get research a-2026-10-01
+  run notebook register research 2026-10-01-a active
+  run notebook register research 2026-10-01-b closed
+  run notebook get research 2026-10-01-a
   [ "$status" -eq 0 ]
   [ "$(printf '%s' "$output" | jq -r .status)" = active ]
-  run notebook get research c-2026-10-01
+  run notebook get research 2026-10-01-c
   [ "$status" -eq 1 ]
   run notebook list research --status closed
   [ "$status" -eq 0 ]
-  [ "$(printf '%s' "$output" | jq -r '[.[].id] | join(",")')" = b-2026-10-01 ]
+  [ "$(printf '%s' "$output" | jq -r '[.[].id] | join(",")')" = 2026-10-01-b ]
   run notebook list research --status bogus
   [ "$status" -eq 2 ]
-  run notebook_sourced 'gaia_notebook_record_reap research b-2026-10-01 research-reaper && gaia_notebook_snooze a-2026-10-01 2030-01-01T00:00:00Z'
+  run notebook_sourced 'gaia_notebook_record_reap research 2026-10-01-b research-reaper && gaia_notebook_snooze 2026-10-01-a 2030-01-01T00:00:00Z'
   [ "$status" -eq 0 ]
-  [ "$(catalog_field '.items[] | select(.id == "b-2026-10-01") | .reap.by')" = research-reaper ]
-  [ "$(catalog_field '.items[] | select(.id == "a-2026-10-01") | .snoozed_until')" = 2030-01-01T00:00:00Z ]
+  [ "$(catalog_field '.items[] | select(.id == "2026-10-01-b") | .reap.by')" = research-reaper ]
+  [ "$(catalog_field '.items[] | select(.id == "2026-10-01-a") | .snoozed_until')" = 2030-01-01T00:00:00Z ]
 }
