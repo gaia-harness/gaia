@@ -27,6 +27,7 @@ setup() {
   REPO_ROOT="$(cd "$(dirname "$BATS_TEST_FILENAME")/../../.." && pwd)"
   SKILL="$REPO_ROOT/.claude/skills/update-gaia/SKILL.md"
   CONFLICT_FLOW="$REPO_ROOT/.claude/skills/update-gaia/references/conflict-flow.md"
+  CLAIM_REF="$REPO_ROOT/.claude/skills/update-gaia/references/claim-flow.md"
   PREFLIGHT="$REPO_ROOT/.gaia/scripts/update-gaia-preflight.sh"
   SELECTOR="$REPO_ROOT/.gaia/scripts/select-migration-notes.sh"
   COPY="$BATS_TEST_TMPDIR/skill-copy.md"
@@ -467,23 +468,39 @@ step_11_holds() {
   in_order "$section" \
     'git -C <acting tree> symbolic-ref --quiet --short refs/remotes/origin/HEAD' \
     'git -C <acting tree> fetch origin <default branch>' \
-    'git -C <acting tree> rev-list --count origin/<default branch>..<branch>' \
     'git -C <acting tree> show <branch>:.gaia/VERSION' \
+    'bash <main checkout path>/.gaia/scripts/update-claim.sh list --tree <main checkout path>' \
     'git -C <acting tree> push -u origin <branch>' \
     'gh pr create --draft --base <default branch> --head <branch>' || return 1
-  grep -qF 'git -C <acting tree> branch -r --list origin/main origin/master' "$section" || return 1
+  # The claim commit defeats a commits-ahead count, so the VERSION check alone
+  # proves the update commit is on the branch.
+  grep -qF 'rev-list --count' "$section" && return 1
+  grep -qF 'git -C <acting tree> show-ref --verify --quiet refs/remotes/origin/main' "$section" || return 1
+  grep -qF 'git -C <acting tree> show-ref --verify --quiet refs/remotes/origin/master' "$section" || return 1
   # An open PR is reused, never duplicated.
   grep -F 'gh pr create --draft' "$section" | grep -qF 'gh pr list --head <branch> --state open' || return 1
   return 0
 }
 
-@test "Step 11: plain commands fetch, count, verify the version on the branch, then push and open" {
+@test "Step 11: plain commands fetch, verify the version on the branch, re-list the claims, then push and open" {
   step_11_holds "$SKILL"
   insert_after "$SKILL" "$STEP_11" 'branch="$(git branch --show-current)"'
   step_11_holds "$COPY" && return 1
   # The push moved ahead of the version check.
   awk '
-    /^3\. `git -C <acting tree> show / { held = $0; next }
+    /^2\. `git -C <acting tree> show / { held = $0; next }
+    { print }
+    /^4\. `git -C <acting tree> push / && held != "" { print held }
+  ' "$SKILL" > "$COPY"
+  step_11_holds "$COPY" && return 1
+  # The commits-ahead count is back.
+  insert_after "$SKILL" "$STEP_11" 'git -C <acting tree> rev-list --count origin/<default branch>..<branch>'
+  step_11_holds "$COPY" && return 1
+  # The re-list is gone, and the re-list moved after the push.
+  grep -vF 'update-claim.sh list --tree <main checkout path>' "$SKILL" > "$COPY"
+  step_11_holds "$COPY" && return 1
+  awk '
+    /^3\. `bash <main checkout path>\/.gaia\/scripts\/update-claim.sh list / { held = $0; next }
     { print }
     /^4\. `git -C <acting tree> push / && held != "" { print held }
   ' "$SKILL" > "$COPY"
@@ -495,6 +512,237 @@ step_11_holds() {
   step_11_holds "$COPY" && return 1
   grep -vF 'symbolic-ref --quiet --short refs/remotes/origin/HEAD' "$SKILL" > "$COPY"
   step_11_holds "$COPY" && return 1
+  sed 's|show-ref --verify --quiet refs/remotes/origin/master|branch -r --list origin/master|' "$SKILL" > "$COPY"
+  step_11_holds "$COPY" && return 1
+  true
+}
+
+# --- The team claim: SKILL.md's pointer steps and references/claim-flow.md -----------
+
+CLAIM_CHECK='## Pre-flight: Claim check'
+CLAIM_PARAGRAPH='**Claim.**'
+STEP_3B='## Step 3b: Refuse a 1.x baseline'
+STEP_4B='## Step 4b: Prune prior-run artifacts'
+CLAIM_REF_CHECK='## Claim check'
+CLAIM_REF_AFTER_PROCEED='## Claim after Proceed'
+CLAIM_REF_STEP_11='## Step 11: the claim-aware pull request'
+CLAIM_STOP_LINE='`GAIA <tag> is already being updated in PR #<number> by @<login>, opened <age> ago. Wait for it to merge, then run /update-gaia again.`'
+CLAIM_START_CALL='bash <main checkout path>/.gaia/scripts/update-claim.sh start --tree <worktree path> --tag <LATEST_TAG> --branch <branch> --base <default branch>'
+CLAIM_TIE_BREAK_CALL='bash <main checkout path>/.gaia/scripts/update-claim.sh tie-break --tree <worktree path> --own <number>'
+
+# Writes the claim reference `$1` into $COPY_REF.
+use_ref_copy() {
+  COPY_REF="$BATS_TEST_TMPDIR/claim-flow-copy.md"
+  cp "$1" "$COPY_REF"
+}
+
+# 0 when SKILL.md copy `$1` runs the claim check before Step 3b, the download,
+# the first worktree entry and the prune, pointing at the reference; and
+# reference copy `$2` reads the claims and the current login, stops on a
+# teammate's claim with the pinned line before creating anything, and
+# classifies an own claim by its own branch.
+claim_check_holds() {
+  local skill="$1" ref="$2" section
+  in_order "$skill" '## Pre-flight: Decision log check' "$CLAIM_CHECK" || return 1
+  exact_in_order "$skill" "$CLAIM_CHECK" "$STEP_3B" "$VERIFY_CALL" || return 1
+  [ "$(first_line "$skill" "$CLAIM_CHECK")" -lt "$(first_line "$skill" 'EnterWorktree(')" ] || return 1
+  [ "$(first_line "$skill" "$CLAIM_CHECK")" -lt "$(first_line "$skill" "$PRUNE_CALL")" ] || return 1
+  section="$(section_file "$skill" "$CLAIM_CHECK")" || return 1
+  grep -qF 'references/claim-flow.md' "$section" || return 1
+  section="$(section_file "$ref" "$CLAIM_REF_CHECK")" || return 1
+  grep -qF -- "$CLAIM_STOP_LINE" "$section" || return 1
+  grep -qF 'leaves no download, worktree, branch, prune or cache change' "$section" || return 1
+  in_order "$section" \
+    'update-claim.sh list --tree <starting checkout>' \
+    'update-claim.sh login --tree <starting checkout>' \
+    'Warning: team claim skipped (<reason>).' \
+    "$CLAIM_STOP_LINE" || return 1
+  grep -F 'update-gaia-branch-state.sh classify' "$section" | grep -qF -- '--branch <headRefName>' || return 1
+  grep -qF 'update-claim.sh close-own --tree <starting checkout> --number <number> --branch <headRefName>' "$section" || return 1
+  return 0
+}
+
+@test "claim check: it precedes Step 3b and every download and worktree, and a teammate's claim stops with the pinned line" {
+  claim_check_holds "$SKILL" "$CLAIM_REF"
+  # Failing state: the check moved after the download.
+  move_line_after "$SKILL" "$CLAIM_CHECK" "$VERIFY_CALL"
+  claim_check_holds "$COPY" "$CLAIM_REF" && return 1
+  # Failing state: the check removed.
+  grep -vxF -- "$CLAIM_CHECK" "$SKILL" > "$COPY"
+  claim_check_holds "$COPY" "$CLAIM_REF" && return 1
+  use_ref_copy "$CLAIM_REF"
+  # Failing state: the pinned stop line reworded.
+  sed 's|Wait for it to merge, then run /update-gaia again.|Try later.|' "$CLAIM_REF" > "$COPY_REF"
+  claim_check_holds "$SKILL" "$COPY_REF" && return 1
+  # Failing state: the current-user source missing.
+  sed 's|update-claim.sh login --tree|update-claim.sh whoami --tree|' "$CLAIM_REF" > "$COPY_REF"
+  claim_check_holds "$SKILL" "$COPY_REF" && return 1
+  # Failing state: the own-claim classify call loses its branch.
+  sed 's| --branch <headRefName>$||' "$CLAIM_REF" > "$COPY_REF"
+  claim_check_holds "$SKILL" "$COPY_REF" && return 1
+  # Failing state: the stop no longer promises to create nothing.
+  sed 's|leaves no download, worktree, branch, prune or cache change|cleans up|' "$CLAIM_REF" > "$COPY_REF"
+  claim_check_holds "$SKILL" "$COPY_REF" && return 1
+  true
+}
+
+# 0 when SKILL.md copy `$1` claims after the provisioning wait and before the
+# Step 4b prune and the conflict flow's dispatch, and reference copy `$2` starts
+# the claim, then breaks a tie, and removes a lost run's own worktree and branch.
+claim_start_holds() {
+  local skill="$1" ref="$2" section
+  section="$(section_file "$skill" "$STEP_4_WORKTREE")" || return 1
+  in_order "$section" "$WAIT_CALL" "$CLAIM_PARAGRAPH" || return 1
+  grep -F "$CLAIM_PARAGRAPH" "$section" | grep -qF 'mode 3' || return 1
+  exact_in_order "$skill" "$STEP_4B" "$STEP_CONFLICT_FLOW" || return 1
+  [ "$(first_line "$skill" "$CLAIM_PARAGRAPH")" -lt "$(first_line "$skill" "$STEP_4B")" ] || return 1
+  section="$(section_file "$ref" "$CLAIM_REF_AFTER_PROCEED")" || return 1
+  grep -qxF -- "$CLAIM_START_CALL" "$section" || return 1
+  grep -qxF -- "$CLAIM_TIE_BREAK_CALL" "$section" || return 1
+  in_order "$section" \
+    'update-claim.sh start --tree' \
+    'update-claim.sh tie-break --tree' \
+    '`LOST <other> <login>`' || return 1
+  grep -F '`LOST <other> <login>`' "$section" | grep -qE 'ExitWorktree\(\{action: "remove", discard_changes: true\}\).*branch -D <branch>' || return 1
+  return 0
+}
+
+@test "claim: it follows the provisioning wait, precedes the prune and the dispatch, and a lost tie-break removes the run's own worktree" {
+  claim_start_holds "$SKILL" "$CLAIM_REF"
+  # Failing state: the claim paragraph missing.
+  grep -vF "$CLAIM_PARAGRAPH" "$SKILL" > "$COPY"
+  claim_start_holds "$COPY" "$CLAIM_REF" && return 1
+  # Failing state: the claim paragraph above the wait.
+  awk -v anchor="$STEP_4_WORKTREE" '
+    index($0, "**Claim.**") == 1 { next }
+    { print }
+    index($0, anchor) == 1 { print "**Claim.** early (mode 3)"; print "" }
+  ' "$SKILL" > "$COPY"
+  claim_start_holds "$COPY" "$CLAIM_REF" && return 1
+  # Failing state: the claim paragraph after the prune heading.
+  awk '
+    index($0, "**Claim.**") == 1 { held = $0; next }
+    { print }
+    index($0, "## Step 4b: Prune prior-run artifacts") == 1 { print ""; print held }
+  ' "$SKILL" > "$COPY"
+  claim_start_holds "$COPY" "$CLAIM_REF" && return 1
+  use_ref_copy "$CLAIM_REF"
+  # Failing state: the worktree is left behind after a lost tie-break.
+  sed 's|ExitWorktree({action: "remove", discard_changes: true})|leave the worktree|' "$CLAIM_REF" > "$COPY_REF"
+  claim_start_holds "$SKILL" "$COPY_REF" && return 1
+  # Failing state: the branch is left behind after a lost tie-break.
+  sed 's|`git -C <main checkout path> branch -D <branch>`|nothing|' "$CLAIM_REF" > "$COPY_REF"
+  claim_start_holds "$SKILL" "$COPY_REF" && return 1
+  # Failing state: the tie-break runs before the start.
+  grep -vxF -- "$CLAIM_START_CALL" "$CLAIM_REF" > "$COPY_REF"
+  claim_start_holds "$SKILL" "$COPY_REF" && return 1
+  true
+}
+
+# 0 when SKILL.md copy `$1` adds the claim PR's close command to the worktree
+# notice and says a stop leaves the claim PR open.
+claim_notice_holds() {
+  local section
+  section="$(section_file "$1" "$STEP_4_WORKTREE")" || return 1
+  grep -F 'The worktree notice.' "$section" >/dev/null || return 1
+  grep -qF 'gh pr close <CLAIM_PR> --delete-branch' "$section" || return 1
+  grep -F '**The stop rule.**' "$section" | grep -qF 'leaves the claim PR open' || return 1
+  return 0
+}
+
+@test "the worktree notice and the stop rule account for a claim PR that exists before Step 11" {
+  claim_notice_holds "$SKILL"
+  sed 's|gh pr close <CLAIM_PR> --delete-branch|gh pr close|' "$SKILL" > "$COPY"
+  claim_notice_holds "$COPY" && return 1
+  sed 's|leaves the claim PR open|leaves nothing open|' "$SKILL" > "$COPY"
+  claim_notice_holds "$COPY" && return 1
+  true
+}
+
+# Prints each line of file `$1` that runs a bash call of the claim script
+# without the --tree flag every subcommand takes.
+claim_calls_without_tree() {
+  grep -E 'bash .*update-claim\.sh' "$1" | grep -vF -- '--tree' || true
+}
+
+@test "every update-claim.sh call in SKILL.md and the reference carries --tree" {
+  local calls
+  calls="$(cat "$SKILL" "$CLAIM_REF" | grep -cE 'bash .*update-claim\.sh')"
+  [ "$calls" -ge 6 ]
+  [ -z "$(claim_calls_without_tree "$SKILL")" ]
+  [ -z "$(claim_calls_without_tree "$CLAIM_REF")" ]
+  # Failing state: a call without the tree.
+  sed 's| --tree <worktree path> --tag| --tag|' "$CLAIM_REF" > "$COPY"
+  [ -n "$(claim_calls_without_tree "$COPY")" ]
+  sed 's|update-claim.sh list --tree <main checkout path>|update-claim.sh list|' "$SKILL" > "$COPY"
+  [ -n "$(claim_calls_without_tree "$COPY")" ]
+}
+
+# 0 when file `$1` holds no forced push, no bypassed hook and no pull-mode name.
+no_forced_or_bypassed_git() {
+  grep -qE 'push --force|push -f|--force-with-lease|--no-verify' "$1" && return 1
+  grep -qE 'pull mode|pull-gate|gaia_pull_gate' "$1" && return 1
+  return 0
+}
+
+@test "no push is forced, no hook is bypassed, and no pull-mode name appears in the skill or the claim reference" {
+  no_forced_or_bypassed_git "$SKILL"
+  no_forced_or_bypassed_git "$CLAIM_REF"
+  # The worktree notice's own removal flag is not a push flag.
+  grep -qF 'git worktree remove --force <worktree path>' "$SKILL"
+  local needle
+  for needle in 'git push --force origin x' 'git push -f' 'git push --force-with-lease' 'git commit --no-verify' 'pull mode' 'gaia_pull_gate x'; do
+    { cat "$SKILL"; printf '%s\n' "$needle"; } > "$COPY"
+    no_forced_or_bypassed_git "$COPY" && { echo "not caught: $needle" >&2; return 1; }
+    { cat "$CLAIM_REF"; printf '%s\n' "$needle"; } > "$COPY"
+    no_forced_or_bypassed_git "$COPY" && { echo "not caught: $needle" >&2; return 1; }
+  done
+  true
+}
+
+# 0 when SKILL.md copy `$1` pushes before it hands the claim PR to the
+# reference, and reference copy `$2` rewrites the PR body and then drops the
+# claim from the cache, both after the push.
+claim_step_11_holds() {
+  local skill="$1" ref="$2" section
+  section="$(section_file "$skill" "$STEP_11")" || return 1
+  in_order "$section" 'git -C <acting tree> push -u origin <branch>' 'When `CLAIM_PR` is set' || return 1
+  grep -F 'When `CLAIM_PR` is set' "$section" | grep -qF 'references/claim-flow.md' || return 1
+  section="$(section_file "$ref" "$CLAIM_REF_STEP_11")" || return 1
+  in_order "$section" \
+    '**Re-list before the push.**' \
+    '**After the push, when `CLAIM_PR` is set.**' \
+    'pr-body.md' \
+    'gh pr edit <CLAIM_PR> --body-file <main checkout path>/.gaia/local/cache/shared/update-gaia/run/pr-body.md' \
+    '--mode gaia --version <LATEST> --drop-claim <CLAIM_PR>' || return 1
+  return 0
+}
+
+@test "Step 11 with a claim: the body is rewritten and the claim dropped from the cache after the push" {
+  claim_step_11_holds "$SKILL" "$CLAIM_REF"
+  use_ref_copy "$CLAIM_REF"
+  # Failing state: the cache drop above the push.
+  awk '
+    /^\*\*After the push, when `CLAIM_PR` is set\.\*\*/ { print "bash x update-check-bust.sh --mode gaia --version <LATEST> --drop-claim <CLAIM_PR>" }
+    { print }
+  ' "$CLAIM_REF" > "$COPY_REF"
+  claim_step_11_holds "$SKILL" "$COPY_REF" && return 1
+  # Failing state: the drop is gone.
+  sed 's| --drop-claim <CLAIM_PR>||' "$CLAIM_REF" > "$COPY_REF"
+  claim_step_11_holds "$SKILL" "$COPY_REF" && return 1
+  # Failing state: the body is never rewritten.
+  grep -vF 'gh pr edit <CLAIM_PR>' "$CLAIM_REF" > "$COPY_REF"
+  claim_step_11_holds "$SKILL" "$COPY_REF" && return 1
+  # Failing state: SKILL.md no longer hands over.
+  grep -vF 'references/claim-flow.md' "$SKILL" > "$COPY"
+  claim_step_11_holds "$COPY" "$CLAIM_REF" && return 1
+  true
+}
+
+@test "the Contents line names the claim check and the claim reference" {
+  sed -n 6p "$SKILL" | grep -qF 'Pre-flight: Claim check'
+  sed -n 6p "$SKILL" | grep -qF 'references/claim-flow.md'
+  sed 's|Pre-flight: Claim check|Pre-flight: Gone|' "$SKILL" | sed -n 6p | grep -qF 'Pre-flight: Claim check' && return 1
   true
 }
 

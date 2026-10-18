@@ -3,7 +3,7 @@ name: update-gaia
 description: Pulls the latest GAIA release into this project without clobbering customizations, with a three-way merge per file using .gaia/manifest.json classes. Trigger when the user clicks the statusline `🚀 /update-gaia` indicator or asks "update GAIA", "pull the latest GAIA", "apply the new GAIA release".
 ---
 
-Contents: Pre-flight: Worktree check; Pre-flight: Branch check (run modes); Step 1: Read baseline version; Step 2: Resolve latest release; Step 3: Compare versions (default branch, worktree run in place, in place); Pre-flight: Decision log check; Step 3b: Refuse a 1.x baseline; Step 3c: Download and verify the bundles; Step 3d: Select migration notes; Step 4: Show the release notes and confirm (on Proceed: the update worktree, the worktree notice, the stop rule); Step 4b: Prune prior-run artifacts; Conflict flow (reads `references/conflict-flow.md`: dispatch, questions, decisions, follow-ups); Step 9b: Follow the after-merge notes; Step 9c: Carry new setup features; Step 9d: Record the update; Quality gate; Review point; Step 11 (orchestrator, after the review-point commit); Step 12: Offer the residue sweep.
+Contents: Pre-flight: Worktree check; Pre-flight: Branch check (run modes); Step 1: Read baseline version; Step 2: Resolve latest release; Step 3: Compare versions (default branch, worktree run in place, in place); Pre-flight: Decision log check; Pre-flight: Claim check (reads `references/claim-flow.md`); Step 3b: Refuse a 1.x baseline; Step 3c: Download and verify the bundles; Step 3d: Select migration notes; Step 4: Show the release notes and confirm (on Proceed: the update worktree, the worktree notice, the stop rule, the claim); Step 4b: Prune prior-run artifacts; Conflict flow (reads `references/conflict-flow.md`: dispatch, questions, decisions, follow-ups); Step 9b: Follow the after-merge notes; Step 9c: Carry new setup features; Step 9d: Record the update; Quality gate; Review point; Step 11 (orchestrator, after the review-point commit); Step 12: Offer the residue sweep.
 
 Pull the latest GAIA release into this project without clobbering customizations. Does a three-way comparison per file (adopter / baseline / latest) and respects explicit classes in `.gaia/manifest.json`:
 
@@ -102,7 +102,7 @@ It classifies the most recently committed `update/<LATEST_TAG>-*` branch by the 
 - **`RESUME_IN_WORKTREE <branch> <path>`**: tell the user a prior run to `<LATEST_TAG>` stopped after its merge and before its `.gaia/VERSION` write, and that this run resumes inside that worktree, keeps its `.gaia-backup/`, and repeats the merge, the questions, the after-merge notes and the setup drift through to the version write. Persist both values. Continue to the decision log check.
 - **`RESUME_ADD_WORKTREE <branch>`**: the same message, except that the run resumes in a worktree it adds for the branch at Step 4. Persist the branch. Continue to the decision log check.
 - **`APPLIED_UNCOMMITTED <branch> <path>`**: report the update as applied but not committed, with the worktree path and the branch. The next step is re-running `/update-gaia` inside that worktree, which runs the quality gate and the review point there and then opens the PR. Exit. Never resume the merge or write the version again.
-- **`COMMITTED <branch> <path or ->`**: read the PR state with `gh pr list --head <branch> --state all --json number,state,url`. Report the branch, the PR's state (or that none exists), the worktree path when one holds it, and the removal commands from the worktree notice in Step 4 (only `git branch -D <branch>` when the path is `-`). Exit, creating no worktree. When the PR is `MERGED`, the next step is pulling the main checkout's default branch, not removal.
+- **`COMMITTED <branch> <path or ->`**: read the PR state with `gh pr list --head <branch> --state all --json number,state,url`. A claim PR may exist before Step 11, so report the branch, the PR's state (or that none exists), the worktree path when one holds it, and the removal commands from the worktree notice in Step 4 (only `git branch -D <branch>` when the path is `-`). Exit, creating no worktree. When the PR is `MERGED`, the next step is pulling the main checkout's default branch, not removal.
 
 ### Step 3, worktree run in place
 
@@ -162,6 +162,10 @@ bash .gaia/scripts/update-decisions.sh deferred --file <starting checkout>/.gaia
 Persist its `DEFERRED <baselineTag> <path> [<key>]` lines: Step 3c names these paths when a tag fails, and the review summary lists the items still deferred.
 
 From Step 4b on, the acting tree's copy, `<acting tree>/.gaia/update-decisions.json`, is the one every step reads and writes. On a fresh default-branch run it matches the main checkout's: the Step 4 baseline check confirms the worktree sits at the same release, and the log changes only in an update commit.
+
+## Pre-flight: Claim check
+
+Before Step 3b and any download, in every mode, read `references/claim-flow.md` `## Claim check` and follow it in the checkout the run starts in. It reads the live update claims and the current login with `update-claim.sh`; a teammate's claim stops the run, creating no worktree, branch or cache entry; the user's own claim resumes the run, or is closed to start fresh; a skipped check continues with no claim.
 
 ## Step 3b: Refuse a 1.x baseline
 
@@ -254,9 +258,9 @@ To discard it, run from the main checkout (<main checkout path>):
 Warning: --force discards any uncommitted changes in the worktree.
 ```
 
-`<branch>` is the update branch: `<branch-name>`, the resumed branch, or the current branch in mode 1.
+`<branch>` is the update branch: `<branch-name>`, the resumed branch, or the current branch in mode 1. When `CLAIM_PR` is set, the notice also lists `gh pr close <CLAIM_PR> --delete-branch` before the removal commands.
 
-**The stop rule.** Every skill-controlled stop after the worktree exists and before Step 11 opens the PR (a failed baseline check, a provisioning stop, a failed dispatch or report check, a note that cannot be completed, a manifest copy failure, a red quality gate the user stops at, a "Not yet" at the review point, a failed Step 11 check or push, the user declining at a prompt) leaves the worktree in place, changes nothing in the main checkout, and prints the worktree notice again. Nothing is removed automatically, and the run directory stays for the next run's prune. A stop after the Step 9d version write gives the next step as re-running `/update-gaia` inside the worktree (in mode 3, in this checkout), which classifies the update as applied but uncommitted and resumes at the quality gate.
+**The stop rule.** Every skill-controlled stop after the worktree exists and before Step 11 pushes the update (a failed baseline check, a provisioning stop, a failed dispatch or report check, a note that cannot be completed, a manifest copy failure, a red quality gate the user stops at, a "Not yet" at the review point, a failed Step 11 check or push, the user declining at a prompt) leaves the worktree in place, changes nothing in the main checkout, leaves the claim PR open when `CLAIM_PR` is set, and prints the worktree notice again. Nothing is removed automatically, and the run directory stays for the next run's prune. A stop after the Step 9d version write gives the next step as re-running `/update-gaia` inside the worktree (in mode 3, in this checkout), which classifies the update as applied but uncommitted and resumes at the quality gate.
 
 **Baseline check.** On a fresh run, run `cat .gaia/VERSION` in the worktree. The worktree is cut from the default branch on `origin`, so when it does not print `<BASELINE>` (the local default branch lags or leads `origin`), stop: print what each holds, the worktree notice, and the next step (pull or push the main checkout's default branch, then re-run). Skip it on a resume: classification already placed the branch at the baseline.
 
@@ -267,6 +271,8 @@ bash <main checkout path>/.gaia/scripts/provision-wait.sh --tree <worktree path>
 ```
 
 Line 1 is the verdict, line 2 the `Log:` path. `STILL_RUNNING` (exit 4): call it again. `FINISHED`: continue. `INSTALL_FAILED` stops when `CREATED_WORKTREE=true`; otherwise report it and continue, since a re-entered tree whose manifest and lockfile disagree fails a frozen install by design. `DEADLINE_PASSED`, `STOPPED` and a refusal (exit 2) stop. A stop prints the worktree path, the `Log:` path, the next step (read the log, then re-run `/update-gaia` inside the worktree) and the worktree notice.
+
+**Claim.** In modes 1 and 2, unless the claim check was skipped (mode 3 makes no claim), read `references/claim-flow.md` `## Claim after Proceed` and follow it: it makes the one empty claim commit and the draft PR, persists the PR number as `CLAIM_PR`, and settles a race with another run. A run that loses stops there; a claim that cannot be made prints a warning and continues with no claim.
 
 ## Step 4b: Prune prior-run artifacts
 
@@ -407,13 +413,13 @@ The execution agent's work ends at Step 9, with its report; the orchestrator run
 
 After the review-point commit lands, `/update-gaia` must not leave the branch stranded: open a PR so the update can be reviewed and merged. The checks below are a backstop for that commit. `<branch>` is the update branch (`<branch-name>`, the resumed branch, or the current branch in modes 1 and 3). Run each as its own plain command, in order, stopping on a failure and printing the worktree notice on a worktree run.
 
-`<default branch>` is the repository's default branch, never a literal `main`. Read it first with `git -C <acting tree> symbolic-ref --quiet --short refs/remotes/origin/HEAD`, which prints `origin/<name>`; carry `<name>` as a typed literal. When it prints nothing, run `git -C <acting tree> branch -r --list origin/main origin/master` and take `main` when it lists `origin/main`, else `master` when it lists `origin/master`, else `main`.
+`<default branch>` is the repository's default branch, never a literal `main`. Read it first with `git -C <acting tree> symbolic-ref --quiet --short refs/remotes/origin/HEAD`, which prints `origin/<name>`; carry `<name>` as a typed literal. When it prints nothing, take `main` when `git -C <acting tree> show-ref --verify --quiet refs/remotes/origin/main` exits 0, else `master` when `git -C <acting tree> show-ref --verify --quiet refs/remotes/origin/master` exits 0, else `main`.
 
 1. `git -C <acting tree> fetch origin <default branch>`
-2. `git -C <acting tree> rev-list --count origin/<default branch>..<branch>`: `0` means nothing is committed, so tell the user the review point did not commit and stop.
-3. `git -C <acting tree> show <branch>:.gaia/VERSION` must print `<LATEST>`; otherwise the update commit is not on `<branch>`, so say so and stop.
-4. `git -C <acting tree> push -u origin <branch>`; on a failure, relay git's error and tell the user to open the PR manually: `<branch>` → `<default branch>`.
-5. `gh pr list --head <branch> --state open --json number,url`: when one is open, report that the push updated it. Otherwise run `gh pr create --draft --base <default branch> --head <branch> --title "chore(gaia): update to <LATEST_TAG>" --body "Pulls GAIA <LATEST_TAG> into the project. Per-file outcomes are in the update summary above."`
+2. `git -C <acting tree> show <branch>:.gaia/VERSION` must print `<LATEST>`; otherwise the update commit is not on `<branch>`, so say so and stop.
+3. `bash <main checkout path>/.gaia/scripts/update-claim.sh list --tree <main checkout path>`: a live claim on another branch by a different login stops before the push, the commit left local, as the claim reference's Step 11 section details. Exit 3 continues.
+4. `git -C <acting tree> push -u origin <branch>`; on a failure, relay git's error and tell the user to open the PR manually: `<branch>` → `<default branch>`. Never force the push.
+5. When `CLAIM_PR` is set, the push updated the claim PR: follow `references/claim-flow.md` `## Step 11: the claim-aware pull request` to rewrite its body and drop the claim from the cache. Otherwise run `gh pr list --head <branch> --state open --json number,url`: when one is open, report that the push updated it; else run `gh pr create --draft --base <default branch> --head <branch> --title "chore(gaia): update to <LATEST_TAG>" --body "Pulls GAIA <LATEST_TAG> into the project. Per-file outcomes are in the update summary above."`
 6. On a worktree run, print the worktree notice: a PR later closed unmerged leaves the user with the removal commands already in hand. Nothing is removed automatically; the PR's merge and cleanup run later through the PR Merge Workflow (`.claude/skills/gaia/references/work-lifecycle.md` `## 8. Cleanup`).
 
 If `gh` is unavailable or errors, tell the user to open the PR manually: `<branch>` → `<default branch>`.

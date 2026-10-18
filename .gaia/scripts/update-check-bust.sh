@@ -7,6 +7,7 @@
 # assumes a shell at the checkout root:
 #   bash .gaia/scripts/update-check-bust.sh --cache <absolute path> --mode deps
 #   bash .gaia/scripts/update-check-bust.sh --cache <absolute path> --mode gaia --version <x.y.z>
+#   bash .gaia/scripts/update-check-bust.sh --cache <absolute path> --mode gaia --version <x.y.z> --drop-claim <number>
 #
 # `deps` sets outdatedCount to 0 and checkedAt to now. `gaia` sets gaiaCurrent
 # and gaiaLatest to the version, gaiaHasUpdate to false, outdatedCount to 0 and
@@ -44,11 +45,12 @@ PROGRAM_NAME="update-check-bust.sh"
 usage() {
   cat <<EOF
 Usage: bash .gaia/scripts/$PROGRAM_NAME --cache <absolute path> --mode deps
-       bash .gaia/scripts/$PROGRAM_NAME --cache <absolute path> --mode gaia --version <x.y.z>
+       bash .gaia/scripts/$PROGRAM_NAME --cache <absolute path> --mode gaia --version <x.y.z> [--drop-claim <number>]
 
   --cache    the update-check cache file. Required, absolute.
   --mode     deps or gaia. Required.
   --version  the version the run landed on. Required with --mode gaia.
+  --drop-claim  a pull request number whose claim entry is removed. Digits only; --mode gaia only.
 
 Prints BUSTED, SKIPPED no cache, or BUST_FAILED <reason>. Exit 2 is a usage error.
 EOF
@@ -57,6 +59,7 @@ EOF
 CACHE=""
 MODE=""
 VERSION=""
+DROP_CLAIM=""
 
 while [ "$#" -gt 0 ]; do
   case "$1" in
@@ -73,6 +76,11 @@ while [ "$#" -gt 0 ]; do
     --version)
       [ "$#" -ge 2 ] || { printf '%s: --version needs a value\n' "$PROGRAM_NAME" >&2; exit 2; }
       VERSION="$2"
+      shift 2
+      ;;
+    --drop-claim)
+      [ "$#" -ge 2 ] || { printf '%s: --drop-claim needs a value\n' "$PROGRAM_NAME" >&2; exit 2; }
+      DROP_CLAIM="$2"
       shift 2
       ;;
     -h | --help)
@@ -95,6 +103,19 @@ case "$CACHE" in
     exit 2
     ;;
 esac
+
+if [ -n "$DROP_CLAIM" ]; then
+  case "$DROP_CLAIM" in
+    *[!0-9]*)
+      printf '%s: --drop-claim must be digits only, got: %s\n' "$PROGRAM_NAME" "$DROP_CLAIM" >&2
+      exit 2
+      ;;
+  esac
+  if [ "$MODE" != "gaia" ]; then
+    printf '%s: --drop-claim is valid only with --mode gaia\n' "$PROGRAM_NAME" >&2
+    exit 2
+  fi
+fi
 
 case "$MODE" in
   deps) ;;
@@ -127,14 +148,14 @@ if ! command -v jq >/dev/null 2>&1; then
   exit 3
 fi
 
-# The jq programs name jq variables ($now, $version), not shell ones.
+# The jq programs name jq variables ($now, $version, $drop), not shell ones.
 # shellcheck disable=SC2016
 case "$MODE" in
   deps)
     jq_program='if type == "object" then .outdatedCount = 0 | .checkedAt = ($now | tonumber) else error("not an object") end'
     ;;
   gaia)
-    jq_program='if type == "object" then .gaiaCurrent = $version | .gaiaLatest = $version | .gaiaHasUpdate = false | .outdatedCount = 0 | .checkedAt = ($now | tonumber) else error("not an object") end'
+    jq_program='if type == "object" then .gaiaCurrent = $version | .gaiaLatest = $version | .gaiaHasUpdate = false | .outdatedCount = 0 | .checkedAt = ($now | tonumber) | (if $drop != "" and (.gaiaUpdateClaims | type) == "array" then .gaiaUpdateClaims |= map(select((.number | tostring) != $drop)) else . end) else error("not an object") end'
     ;;
 esac
 
@@ -147,7 +168,7 @@ if ! temporary_file="$(mktemp "$cache_directory/.update-check-bust.XXXXXX" 2>/de
   exit 3
 fi
 
-if ! jq --arg now "$now" --arg version "$VERSION" "$jq_program" "$CACHE" >"$temporary_file" 2>/dev/null; then
+if ! jq --arg now "$now" --arg version "$VERSION" --arg drop "$DROP_CLAIM" "$jq_program" "$CACHE" >"$temporary_file" 2>/dev/null; then
   rm -f "$temporary_file"
   printf 'BUST_FAILED cache is not a JSON object jq can read\n'
   exit 3

@@ -140,10 +140,10 @@ Apply each answer in the acting tree; every candidate path was validated inside 
 Then bring the decision log in line with the tree, dropping entries whose file or key is back in line with GAIA's copy:
 
 ```bash
-bash <main checkout path>/.gaia/scripts/update-decisions.sh reconcile --file <acting tree>/.gaia/update-decisions.json --tree <acting tree> --latest-dir <LATEST_DIR> --report <run dir>/report.json
+bash <main checkout path>/.gaia/scripts/update-decisions.sh reconcile --file <acting tree>/.gaia/update-decisions.json --tree <acting tree> --latest-dir <LATEST_DIR> --report <run dir>/report.json --latest-tag <LATEST_TAG>
 ```
 
-and record one decision per answered item, as its own call:
+A deferred path this run resolved without a question is rebased to the latest tag (`REBASED <path>[#<key>] <latest tag>`), so it stops pulling its old bundle. Then record one decision per answered item, as its own call:
 
 ```bash
 bash <main checkout path>/.gaia/scripts/update-decisions.sh record --file <acting tree>/.gaia/update-decisions.json --path <path> --key <key> --decision <decision> --tag <LATEST_TAG> --baseline-tag <baselineTag>

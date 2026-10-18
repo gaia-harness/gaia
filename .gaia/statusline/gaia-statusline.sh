@@ -340,17 +340,26 @@ else
     # independently (Large, then Medium, then Small, then icon, then folded
     # into the trailing `+N`), and shows an icon's mid as its count only when
     # mid is all digits.
+    #
+    # A slot may also carry a floor (empty means none; 1 means Medium): the
+    # smallest size the shrink loop will take that nudge down to. Its mid text
+    # is what names who the nudge is about, so it never shrinks past the form
+    # that still shows it; the loop keeps shrinking and hiding every other
+    # nudge, and when the line still does not fit it renders past the
+    # available width with the `+N`.
     nudge_color=()
     nudge_small=()
     nudge_large=()
     nudge_mid=()
     nudge_icon=()
+    nudge_floor=()
     nudge_set() {
       nudge_color[$1]="$2"
       nudge_small[$1]="$3"
       nudge_large[$1]="$4"
       nudge_mid[$1]="$5"
       nudge_icon[$1]="$6"
+      nudge_floor[$1]="${7:-}"
     }
     # Post-completion setup nudge: machine-scope setup choices the shipped list
     # holds and this machine has not decided. Highest priority because it is
@@ -373,12 +382,34 @@ else
       # unreadable value yields an empty field. A cache written before
       # codifyNudgeReason existed has no key, which the has_codify_reason flag
       # carries. Silent on jq failure: every field then reads empty.
+      #
+      # The update nudge's state resolves in this same call: one ordered chain
+      # of conditions yields the state, version and login fields, first match
+      # wins (a teammate's live update claim, then the reader's own, then a
+      # plain available update). A claim whose tag or login falls outside the
+      # sets the claim writer validates against is ignored rather than
+      # stripped, and \A..\z anchor the whole value because ^ and $ match at
+      # line breaks in jq. A cache without the claim fields resolves to the
+      # plain update state.
       cache_fields=$(jq -r '
         def clean: tostring | gsub("[\u0000-\u001f\u007f]"; "");
-        [ (.outdatedCount // 0 | clean),
+        def valid_login: type == "string" and length <= 39 and test("\\A[A-Za-z0-9](-?[A-Za-z0-9])*\\z");
+        def valid_tag: type == "string" and test("\\Av[0-9]+\\.[0-9]+\\.[0-9]+(-[0-9A-Za-z.-]+)?\\z");
+        (if (.ghLogin | valid_login) then .ghLogin else "" end) as $me
+        | ((if (.gaiaUpdateClaims | type) == "array" then .gaiaUpdateClaims else [] end)
+            | map(select(type == "object" and (.number | type) == "number"
+                         and (.tag | valid_tag) and (.authorLogin | valid_login)))
+            | sort_by(.number)) as $claims
+        | ([$claims[] | select(.authorLogin != $me)][0]) as $teammate
+        | ([$claims[] | select(.authorLogin == $me)][0]) as $own
+        | (if $me != "" and $teammate != null then ["progress", ($teammate.tag | .[1:]), $teammate.authorLogin]
+           elif $me != "" and $own != null then ["resume", ($own.tag | .[1:]), ""]
+           elif ((.gaiaHasUpdate // false | tostring) == "true") and ((.gaiaLatest // "" | clean) != "")
+             then ["update", (.gaiaLatest | clean), ""]
+           else ["", "", ""] end) as $state
+        | [ (.outdatedCount // 0 | clean),
           (.securityCount | if type == "number" then (floor | tostring) else "" end),
-          (.gaiaHasUpdate // false | clean),
-          (.gaiaLatest // "" | clean),
+          $state[0], $state[1], $state[2],
           ((.codifyCandidateCount // 0) | if type == "number" then (floor | tostring) else "0" end),
           (if has("codifyNudgeReason") then "1" else "0" end),
           ((.codifyNudgeReason // "") | clean),
@@ -389,7 +420,7 @@ else
           (.residueCandidateCount // 0 | clean),
           (.wikiDriftCount // 0 | clean) ]
         | join("\u001f")' "$CACHE_FILE" 2>/dev/null) || cache_fields=""
-      IFS=$'\037' read -r outdated_count security_count gaia_has_update gaia_latest \
+      IFS=$'\037' read -r outdated_count security_count update_state update_version update_login \
         codify_count has_codify_reason codify_reason cleanse_nudge cleanse_reason \
         serena_drift codify_unclassified residue_count wiki_drift_count <<<"$cache_fields"
       case "$security_count" in
@@ -403,10 +434,21 @@ else
       codify_mid=""
       [ "$codify_count" -gt 0 ] 2>/dev/null && codify_mid="$codify_count"
 
-      if [ "$gaia_has_update" = "true" ] && [ -n "$gaia_latest" ]; then
-        # No Medium: the Large reason is already just the version.
-        nudge_set 1 '01;36' '/update-gaia' "/update-gaia ($gaia_latest)" '' '🚀'
-      fi
+      case "$update_state" in
+        progress)
+          # A teammate holds the update, so there is nothing for this person to
+          # run: no command, and the floor keeps the version and who is on it
+          # visible at every width.
+          nudge_set 1 '01;93' "GAIA $update_version" "GAIA $update_version in progress (@$update_login)" "@$update_login" '⌛️' 1
+          ;;
+        resume)
+          nudge_set 1 '01;36' '/update-gaia' "/update-gaia (resume $update_version)" "resume $update_version" '🚀'
+          ;;
+        update)
+          # No Medium: the Large reason is already just the version.
+          nudge_set 1 '01;36' '/update-gaia' "/update-gaia ($update_version)" '' '🚀'
+          ;;
+      esac
       deps_outdated=0
       deps_security=0
       [ -n "$outdated_count" ] && [ "$outdated_count" -gt 0 ] 2>/dev/null && deps_outdated="$outdated_count"
@@ -519,6 +561,7 @@ else
     dense_large=()
     dense_mid=()
     dense_icon=()
+    dense_floor=()
     dense_iconcount=()
     for slot in "${!nudge_small[@]}"; do
       dense_color+=("${nudge_color[$slot]}")
@@ -526,6 +569,7 @@ else
       dense_large+=("${nudge_large[$slot]}")
       dense_mid+=("${nudge_mid[$slot]}")
       dense_icon+=("${nudge_icon[$slot]}")
+      dense_floor+=("${nudge_floor[$slot]:-}")
       case "${nudge_mid[$slot]}" in
         ''|*[!0-9]*) dense_iconcount+=("") ;;
         *) dense_iconcount+=("${nudge_mid[$slot]}") ;;
@@ -612,17 +656,24 @@ else
       # Shrink the lowest-priority nudge still at the current size, one step
       # at a time: every nudge to Medium bottom-up, then Medium to Small
       # bottom-up, then Small to icon bottom-up, then icon to hidden
-      # bottom-up. shrink_step caps at 4 * nudge_count (every nudge through every step), the point
-      # at which every nudge is hidden and `+N` renders alone, even past
-      # available_width, rather than emitting nothing. The measure() call right before
-      # the break leaves `right` and `right_width` set to what gets printed.
+      # bottom-up. A nudge with a floor skips any step past it but the step
+      # still counts, so the others keep shrinking. shrink_step caps at
+      # 4 * nudge_count (every nudge through every step), the point at which
+      # every nudge that can be is hidden and the rest render with `+N`, even
+      # past available_width, rather than emitting nothing. The measure() call
+      # right before the break leaves `right` and `right_width` set to what
+      # gets printed.
       shrink_step=0
       while :; do
         measure
         if [ "$right_width" -le "$available_width" ] || [ "$shrink_step" -ge $((4 * nudge_count)) ]; then
           break
         fi
-        nudge_size[nudge_count - 1 - shrink_step % nudge_count]=$((shrink_step / nudge_count + 1))
+        shrink_target=$((nudge_count - 1 - shrink_step % nudge_count))
+        shrink_size=$((shrink_step / nudge_count + 1))
+        if [ -z "${dense_floor[$shrink_target]}" ] || [ "$shrink_size" -le "${dense_floor[$shrink_target]}" ]; then
+          nudge_size[shrink_target]=$shrink_size
+        fi
         shrink_step=$((shrink_step + 1))
       done
     fi

@@ -14,8 +14,13 @@
 # outside the manifest, so the merge walk never touches it.
 #
 # Output tokens are machine lines (DECISIONS_OK, DEFERRED, EARLIER, RECORDED,
-# DROPPED); the skill formats any sentence itself. Exit 0 ok, 1 invalid file or
+# DROPPED, REBASED); the skill formats any sentence itself. Exit 0 ok, 1 invalid file or
 # refused record, 2 usage error or missing jq.
+#
+# reconcile ends a deferred entry that a run resolved without a question: it
+# is dropped when the tree file equals the latest copy, and otherwise rebased
+# to a blend entry at --latest-tag so later runs stop downloading its old
+# baseline bundle. An entry still open in the report is left alone.
 #
 # Entries stay sorted by (path, key) so a repeated run writes a byte-identical
 # file; writes go to a temp file beside the target and `mv` over it.
@@ -25,7 +30,7 @@ NEXT_STEP_SUFFIX='or restore it with git checkout -- FILE, then re-run /update-g
 usage() {
   echo "usage: update-decisions.sh check|deferred|deferred-tags --file <path>" >&2
   echo "       update-decisions.sh record --file <path> --path <p> [--key <k>] --decision <d> --tag <t> --baseline-tag <bt> [--reason <r>]" >&2
-  echo "       update-decisions.sh reconcile --file <path> --tree <dir> --latest-dir <dir> --report <report.json>" >&2
+  echo "       update-decisions.sh reconcile --file <path> --tree <dir> --latest-dir <dir> --report <report.json> --latest-tag <tag>" >&2
   echo "       update-decisions.sh context --file <path> --path <p> [--key <k>]" >&2
   exit 2
 }
@@ -120,7 +125,7 @@ subcommand="${1:-}"
 shift
 
 file='' target_path='' key='' has_key=0 decision='' tag='' baseline_tag='' reason='' has_reason=0
-tree='' latest_dir='' report=''
+tree='' latest_dir='' report='' latest_tag=''
 while [ "$#" -gt 0 ]; do
   [ "$#" -ge 2 ] || usage
   case "$1" in
@@ -134,6 +139,7 @@ while [ "$#" -gt 0 ]; do
     --tree) tree="$2" ;;
     --latest-dir) latest_dir="$2" ;;
     --report) report="$2" ;;
+    --latest-tag) latest_tag="$2" ;;
     *) usage ;;
   esac
   shift 2
@@ -199,14 +205,16 @@ case "$subcommand" in
     ;;
 
   reconcile)
-    [ -n "$tree" ] && [ -n "$latest_dir" ] && [ -n "$report" ] || usage
+    [ -n "$tree" ] && [ -n "$latest_dir" ] && [ -n "$report" ] && [ -n "$latest_tag" ] || usage
+    printf '%s' "$latest_tag" | grep -Eq '^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$' || usage
     [ -f "$report" ] || { echo "report not found: $report" >&2; exit 2; }
     require_valid_file "$file"
     [ -f "$file" ] || exit 0
     drop_indexes=''
+    rebase_indexes=''
     drop_lines=''
     tab="$(printf '\t')"
-    while IFS="$tab" read -r index entry_path entry_has_key entry_key; do
+    while IFS="$tab" read -r index entry_path entry_has_key entry_decision entry_key; do
       [ -n "$index" ] || continue
       if [ "$entry_has_key" = '1' ]; then
         # An item matches by its own key or by section.key, since the report's
@@ -219,6 +227,16 @@ case "$subcommand" in
 "
           drop_lines="$drop_lines
 DROPPED $entry_path#$entry_key"
+        # REBASE-KEY-BEGIN
+        elif [ "$entry_decision" = 'deferred' ] && jq -e --arg path "$entry_path" --arg key "$entry_key" '
+             [.files[]? | select(.path == $path) | .fieldMerge | (.applied, .keptRemoved, .removedUpstream)[]?
+              | (.key, (if .section then "\(.section).\(.key)" else empty end))]
+             | index($key) != null' "$report" >/dev/null 2>&1; then
+          rebase_indexes="$rebase_indexes$index
+"
+          drop_lines="$drop_lines
+REBASED $entry_path#$entry_key $latest_tag"
+        # REBASE-KEY-END
         fi
       else
         tree_file="$tree/$entry_path"
@@ -229,13 +247,35 @@ DROPPED $entry_path#$entry_key"
 "
           drop_lines="$drop_lines
 DROPPED $entry_path"
+        # REBASE-FILE-BEGIN
+        elif [ "$entry_decision" = 'deferred' ]; then
+          # A path the run resolved without a question no longer needs its old
+          # baseline bundle; an open, pending or unreported path stays put.
+          path_status="$(jq -r --arg path "$entry_path" \
+            '[.files[]? | select(.path == $path) | .status] | first // ""' "$report" 2>/dev/null)"
+          case "$path_status" in
+            '' | open | pending-judgment) ;;
+            *)
+              rebase_indexes="$rebase_indexes$index
+"
+              drop_lines="$drop_lines
+REBASED $entry_path $latest_tag"
+              ;;
+          esac
+        # REBASE-FILE-END
         fi
       fi
     done < <(jq -r '.decisions | to_entries[]
-      | [.key, .value.path, (if .value | has("key") then 1 else 0 end), (.value.key // "")] | join("\t")' "$file")
-    [ -n "$drop_indexes" ] || exit 0
-    indexes_json="$(printf '%s' "$drop_indexes" | jq -s -c '.')"
-    jq --argjson drop "$indexes_json" '.decisions |= [to_entries[] | select(.key as $i | $drop | index($i) | not) | .value]' "$file" \
+      | [.key, .value.path, (if .value | has("key") then 1 else 0 end), .value.decision, (.value.key // "")] | join("\t")' "$file")
+    [ -n "$drop_indexes$rebase_indexes" ] || exit 0
+    drop_json="$(printf '%s' "$drop_indexes" | jq -s -c '.')"
+    rebase_json="$(printf '%s' "$rebase_indexes" | jq -s -c '.')"
+    jq --argjson drop "$drop_json" --argjson rebase "$rebase_json" --arg tag "$latest_tag" '
+      .decisions |= [to_entries[] | select(.key as $i | $drop | index($i) | not)
+        | if (.key as $i | $rebase | index($i)) != null
+          then .value |= (del(.reason) | .decision = "blend" | .tag = $tag | .baselineTag = $tag)
+          else . end
+        | .value]' "$file" \
       | write_atomically "$file" || { echo "could not write $file" >&2; exit 1; }
     printf '%s\n' "${drop_lines#?}"
     ;;

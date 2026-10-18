@@ -177,7 +177,7 @@ assert_invalid() {
   [ "$(cat "$LOG")" = 'nonsense' ]
   mkdir -p "$BATS_TEST_TMPDIR/tree" "$BATS_TEST_TMPDIR/latest"
   printf '%s\n' '{"files": []}' > "$BATS_TEST_TMPDIR/report.json"
-  run bash "$SCRIPT" reconcile --file "$LOG" --tree "$BATS_TEST_TMPDIR/tree" --latest-dir "$BATS_TEST_TMPDIR/latest" --report "$BATS_TEST_TMPDIR/report.json"
+  run bash "$SCRIPT" reconcile --file "$LOG" --tree "$BATS_TEST_TMPDIR/tree" --latest-dir "$BATS_TEST_TMPDIR/latest" --report "$BATS_TEST_TMPDIR/report.json" --latest-tag v2.0.7
   [ "$status" -eq 1 ]
   [ "$(cat "$LOG")" = 'nonsense' ]
 }
@@ -274,7 +274,7 @@ make_reconcile_dirs() {
   printf 'mine\n' > "$TREE/wiki/differs.md"; printf 'gaia\n' > "$LATEST/wiki/differs.md"
   write_decisions '{"path": "wiki/differs.md", "decision": "deferred", "tag": "v2.0.4", "baselineTag": "v2.0.0"}, {"path": "wiki/same.md", "decision": "deferred", "tag": "v2.0.4", "baselineTag": "v2.0.0"}'
   printf '%s\n' '{"files": []}' > "$BATS_TEST_TMPDIR/report.json"
-  run bash "$SCRIPT" reconcile --file "$LOG" --tree "$TREE" --latest-dir "$LATEST" --report "$BATS_TEST_TMPDIR/report.json"
+  run bash "$SCRIPT" reconcile --file "$LOG" --tree "$TREE" --latest-dir "$LATEST" --report "$BATS_TEST_TMPDIR/report.json" --latest-tag v2.0.7
   [ "$status" -eq 0 ]
   [ "$output" = 'DROPPED wiki/same.md' ]
   jq -e '[.decisions[].path] == ["wiki/differs.md"]' "$LOG" >/dev/null
@@ -284,7 +284,7 @@ make_reconcile_dirs() {
   make_reconcile_dirs
   write_decisions '{"path": "wiki/gone.md", "decision": "deferred", "tag": "v2.0.4", "baselineTag": "v2.0.0"}'
   printf '%s\n' '{"files": []}' > "$BATS_TEST_TMPDIR/report.json"
-  run bash "$SCRIPT" reconcile --file "$LOG" --tree "$TREE" --latest-dir "$LATEST" --report "$BATS_TEST_TMPDIR/report.json"
+  run bash "$SCRIPT" reconcile --file "$LOG" --tree "$TREE" --latest-dir "$LATEST" --report "$BATS_TEST_TMPDIR/report.json" --latest-tag v2.0.7
   [ "$status" -eq 0 ]
   [ "$output" = 'DROPPED wiki/gone.md' ]
   jq -e '.decisions == []' "$LOG" >/dev/null
@@ -295,7 +295,7 @@ make_reconcile_dirs() {
   printf 'mine\n' > "$TREE/wiki/a.md"
   write_decisions '{"path": "wiki/a.md", "decision": "deferred", "tag": "v2.0.4", "baselineTag": "v2.0.0"}'
   printf '%s\n' '{"files": []}' > "$BATS_TEST_TMPDIR/report.json"
-  run bash "$SCRIPT" reconcile --file "$LOG" --tree "$TREE" --latest-dir "$LATEST" --report "$BATS_TEST_TMPDIR/report.json"
+  run bash "$SCRIPT" reconcile --file "$LOG" --tree "$TREE" --latest-dir "$LATEST" --report "$BATS_TEST_TMPDIR/report.json" --latest-tag v2.0.7
   [ "$status" -eq 0 ]
   [ -z "$output" ]
   jq -e '.decisions | length == 1' "$LOG" >/dev/null
@@ -310,7 +310,7 @@ make_reconcile_dirs() {
   "alreadyLatest": [{"kind": "key", "section": "devDependencies", "key": "vite"}, {"kind": "key", "key": "engines.node"}],
   "keptRemoved": [], "removedUpstream": []}}]}
 JSON
-  run bash "$SCRIPT" reconcile --file "$LOG" --tree "$TREE" --latest-dir "$LATEST" --report "$BATS_TEST_TMPDIR/report.json"
+  run bash "$SCRIPT" reconcile --file "$LOG" --tree "$TREE" --latest-dir "$LATEST" --report "$BATS_TEST_TMPDIR/report.json" --latest-tag v2.0.7
   [ "$status" -eq 0 ]
   [ "$output" = "$(printf 'DROPPED package.json#devDependencies.vite\nDROPPED package.json#engines.node')" ]
   jq -e '[.decisions[].key] == ["scripts.build"]' "$LOG" >/dev/null
@@ -321,9 +321,118 @@ JSON
   write_decisions '{"path": "package.json", "key": "scripts.build", "decision": "keep", "tag": "v2.0.4", "baselineTag": "v2.0.0"}'
   before="$(cat "$LOG")"
   printf '%s\n' '{"files": []}' > "$BATS_TEST_TMPDIR/report.json"
-  run bash "$SCRIPT" reconcile --file "$LOG" --tree "$TREE" --latest-dir "$LATEST" --report "$BATS_TEST_TMPDIR/report.json"
+  run bash "$SCRIPT" reconcile --file "$LOG" --tree "$TREE" --latest-dir "$LATEST" --report "$BATS_TEST_TMPDIR/report.json" --latest-tag v2.0.7
   [ "$status" -eq 0 ]
   [ "$before" = "$(cat "$LOG")" ]
+}
+
+# $1 is a JSON array body of file entries.
+write_report() {
+  RECONCILE_REPORT="$BATS_TEST_TMPDIR/report.json"
+  printf '{"files": [%s]}\n' "$1" > "$RECONCILE_REPORT"
+}
+
+@test "reconcile rebases a deferred whole-file entry the run auto-merged, and deferred-tags stops listing its old tag" {
+  make_reconcile_dirs
+  printf 'merged\n' > "$TREE/wiki/a.md"; printf 'gaia\n' > "$LATEST/wiki/a.md"
+  write_decisions '{"path": "wiki/a.md", "decision": "deferred", "tag": "v2.0.4", "baselineTag": "v2.0.0", "reason": "later"}'
+  write_report '{"path": "wiki/a.md", "status": "auto-merged"}'
+  run bash "$SCRIPT" deferred-tags --file "$LOG"
+  [ "$output" = 'v2.0.0' ]
+  run bash "$SCRIPT" reconcile --file "$LOG" --tree "$TREE" --latest-dir "$LATEST" --report "$RECONCILE_REPORT" --latest-tag v2.0.7
+  [ "$status" -eq 0 ]
+  [ "$output" = 'REBASED wiki/a.md v2.0.7' ]
+  jq -e '.decisions == [{path: "wiki/a.md", decision: "blend", tag: "v2.0.7", baselineTag: "v2.0.7"}]' "$LOG" >/dev/null
+  run bash "$SCRIPT" deferred-tags --file "$LOG"
+  [ -z "$output" ]
+  run bash "$SCRIPT" context --file "$LOG" --path wiki/a.md
+  [ "$output" = 'EARLIER v2.0.7 blend' ]
+}
+
+@test "reconcile drops rather than rebases a resolved deferred entry whose file equals the latest copy" {
+  make_reconcile_dirs
+  printf 'gaia\n' > "$TREE/wiki/a.md"; printf 'gaia\n' > "$LATEST/wiki/a.md"
+  write_decisions '{"path": "wiki/a.md", "decision": "deferred", "tag": "v2.0.4", "baselineTag": "v2.0.0"}'
+  write_report '{"path": "wiki/a.md", "status": "overwrite"}'
+  run bash "$SCRIPT" reconcile --file "$LOG" --tree "$TREE" --latest-dir "$LATEST" --report "$RECONCILE_REPORT" --latest-tag v2.0.7
+  [ "$output" = 'DROPPED wiki/a.md' ]
+  jq -e '.decisions == []' "$LOG" >/dev/null
+}
+
+@test "reconcile leaves a deferred entry untouched while its report entry is open or pending judgment" {
+  make_reconcile_dirs
+  printf 'mine\n' > "$TREE/wiki/a.md"; printf 'gaia\n' > "$LATEST/wiki/a.md"
+  printf 'mine\n' > "$TREE/wiki/b.md"; printf 'gaia\n' > "$LATEST/wiki/b.md"
+  write_decisions '{"path": "wiki/a.md", "decision": "deferred", "tag": "v2.0.4", "baselineTag": "v2.0.0"}, {"path": "wiki/b.md", "decision": "deferred", "tag": "v2.0.4", "baselineTag": "v2.0.0"}'
+  write_report '{"path": "wiki/a.md", "status": "open"}, {"path": "wiki/b.md", "status": "pending-judgment"}'
+  before="$(cat "$LOG")"
+  run bash "$SCRIPT" reconcile --file "$LOG" --tree "$TREE" --latest-dir "$LATEST" --report "$RECONCILE_REPORT" --latest-tag v2.0.7
+  [ "$status" -eq 0 ]
+  [ -z "$output" ]
+  [ "$before" = "$(cat "$LOG")" ]
+}
+
+@test "reconcile rebases a deferred key entry under applied, keptRemoved or removedUpstream and drops alreadyLatest" {
+  make_reconcile_dirs
+  write_decisions '{"path": "package.json", "key": "scripts.a", "decision": "deferred", "tag": "v2.0.4", "baselineTag": "v2.0.0"}, {"path": "package.json", "key": "scripts.b", "decision": "deferred", "tag": "v2.0.4", "baselineTag": "v2.0.0"}, {"path": "package.json", "key": "scripts.c", "decision": "deferred", "tag": "v2.0.4", "baselineTag": "v2.0.0"}, {"path": "package.json", "key": "scripts.d", "decision": "deferred", "tag": "v2.0.4", "baselineTag": "v2.0.0"}, {"path": "package.json", "key": "scripts.e", "decision": "deferred", "tag": "v2.0.4", "baselineTag": "v2.0.0"}'
+  write_report '{"path": "package.json", "status": "field-aware", "fieldMerge": {
+    "applied": [{"kind": "key", "section": "scripts", "key": "a"}],
+    "alreadyLatest": [{"kind": "key", "section": "scripts", "key": "d"}],
+    "keptRemoved": [{"kind": "key", "key": "scripts.b"}],
+    "removedUpstream": [{"kind": "key", "section": "scripts", "key": "c"}]},
+    "items": [{"kind": "key", "section": "scripts", "key": "e"}]}'
+  run bash "$SCRIPT" reconcile --file "$LOG" --tree "$TREE" --latest-dir "$LATEST" --report "$RECONCILE_REPORT" --latest-tag v2.0.7
+  [ "$status" -eq 0 ]
+  [ "$output" = "$(printf 'REBASED package.json#scripts.a v2.0.7\nREBASED package.json#scripts.b v2.0.7\nREBASED package.json#scripts.c v2.0.7\nDROPPED package.json#scripts.d')" ]
+  jq -e '[.decisions[] | [.key, .decision, .baselineTag]] == [["scripts.a", "blend", "v2.0.7"], ["scripts.b", "blend", "v2.0.7"], ["scripts.c", "blend", "v2.0.7"], ["scripts.e", "deferred", "v2.0.0"]]' "$LOG" >/dev/null
+}
+
+@test "reconcile does not rebase a non-deferred entry" {
+  make_reconcile_dirs
+  printf 'mine\n' > "$TREE/wiki/a.md"; printf 'gaia\n' > "$LATEST/wiki/a.md"
+  write_decisions '{"path": "wiki/a.md", "decision": "keep", "tag": "v2.0.4", "baselineTag": "v2.0.0"}'
+  write_report '{"path": "wiki/a.md", "status": "auto-merged"}'
+  before="$(cat "$LOG")"
+  run bash "$SCRIPT" reconcile --file "$LOG" --tree "$TREE" --latest-dir "$LATEST" --report "$RECONCILE_REPORT" --latest-tag v2.0.7
+  [ "$status" -eq 0 ]
+  [ -z "$output" ]
+  [ "$before" = "$(cat "$LOG")" ]
+}
+
+@test "reconcile refuses a missing or malformed latest tag with exit 2 and leaves the file byte-identical" {
+  make_reconcile_dirs
+  printf 'merged\n' > "$TREE/wiki/a.md"; printf 'gaia\n' > "$LATEST/wiki/a.md"
+  write_decisions '{"path": "wiki/a.md", "decision": "deferred", "tag": "v2.0.4", "baselineTag": "v2.0.0"}'
+  write_report '{"path": "wiki/a.md", "status": "auto-merged"}'
+  before="$(cat "$LOG")"
+  run bash "$SCRIPT" reconcile --file "$LOG" --tree "$TREE" --latest-dir "$LATEST" --report "$RECONCILE_REPORT"
+  [ "$status" -eq 2 ]
+  [ "$before" = "$(cat "$LOG")" ]
+  for bad in 'main; rm -rf' '2.0.7' 'v2.0' 'v2.0.7 extra'; do
+    run bash "$SCRIPT" reconcile --file "$LOG" --tree "$TREE" --latest-dir "$LATEST" --report "$RECONCILE_REPORT" --latest-tag "$bad"
+    [ "$status" -eq 2 ] || return 1
+    [ "$before" = "$(cat "$LOG")" ] || return 1
+  done
+}
+
+@test "mutation: without the rebase branches an auto-merged deferred entry stays deferred" {
+  make_reconcile_dirs
+  printf 'merged\n' > "$TREE/wiki/a.md"; printf 'gaia\n' > "$LATEST/wiki/a.md"
+  write_decisions '{"path": "wiki/a.md", "decision": "deferred", "tag": "v2.0.4", "baselineTag": "v2.0.0"}, {"path": "package.json", "key": "scripts.a", "decision": "deferred", "tag": "v2.0.4", "baselineTag": "v2.0.0"}'
+  write_report '{"path": "wiki/a.md", "status": "auto-merged"}, {"path": "package.json", "status": "field-aware", "fieldMerge": {"applied": [{"kind": "key", "section": "scripts", "key": "a"}], "alreadyLatest": [], "keptRemoved": [], "removedUpstream": []}}'
+  before="$(cat "$LOG")"
+  run bash "$SCRIPT" reconcile --file "$LOG" --tree "$TREE" --latest-dir "$LATEST" --report "$RECONCILE_REPORT" --latest-tag v2.0.7
+  [ "$status" -eq 0 ]
+  [ "$before" != "$(cat "$LOG")" ]
+  MUTANT="$BATS_TEST_TMPDIR/mutant-update-decisions.sh"
+  sed -e '/# REBASE-KEY-BEGIN/,/# REBASE-KEY-END/d' -e '/# REBASE-FILE-BEGIN/,/# REBASE-FILE-END/d' "$SCRIPT" > "$MUTANT"
+  grep -q 'REBASED \$entry_path' "$MUTANT" && return 1
+  write_log "$before"
+  run bash "$MUTANT" reconcile --file "$LOG" --tree "$TREE" --latest-dir "$LATEST" --report "$RECONCILE_REPORT" --latest-tag v2.0.7
+  [ "$status" -eq 0 ]
+  [ -z "$output" ]
+  [ "$before" = "$(cat "$LOG")" ]
+  jq -e '[.decisions[].decision] == ["deferred", "deferred"]' "$LOG" >/dev/null
 }
 
 @test "deferred lists deferred entries only, with their baseline tag and key" {

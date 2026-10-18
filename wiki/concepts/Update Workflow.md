@@ -62,6 +62,19 @@ The step list, its order, and every command live in the `update-gaia` skill (`.c
 - **Main-anchored writes.** The update-check cache lives in the main checkout's `.gaia/local`, which every worktree shares. After a run the skill busts it through `.gaia/scripts/update-check-bust.sh` at the main checkout's absolute path. The statusline keeps the post-run state until its refresher next recomputes from the main checkout, which reports the main checkout's own state until the PR merges.
 - **Who finishes the run.** `/update-deps` merges its PR and cleans up itself. `/update-gaia` stops at its draft PR and is cleaned up through the PR Merge Workflow. Cleanup stops while the worktree holds uncommitted or unpushed work, and installs in the main checkout only when the pull changed the lockfile; the reasons are in [[PR Merge Workflow]] (`### Cleanup under worktree isolation`).
 
+## Team claim
+
+Two teammates never update at once: an update run claims its release with a draft pull request, and every other run sees the claim before it downloads anything. The steps live in `.claude/skills/update-gaia/SKILL.md` and its claim-flow reference; the shape is:
+
+- **A live claim is a same-repository open PR** whose head branch is `update/v<semver>-<suffix>`. Fork PRs and other `update/*` branches are ignored, and an entry whose tag or author login fails validation is dropped.
+- **Preflight checks for one.** A live claim by someone else stops the run, naming the PR, its author and its age, whatever its tag.
+- **Own claims route, they do not duplicate.** A claim by the current GitHub user for the latest release's tag is resumed (the branch is fetched first when only origin has it). One for an older tag is reported, and the run offers to close that PR and delete its remote branch before starting fresh. A run never opens a second PR while its own claim is open.
+- **The claim follows the provisioning wait.** On a default-branch run, after Proceed and the worktree's provisioning wait, the run makes one empty claim commit, pushes it (never forced) and opens a draft PR for the update branch. The claim commit is not the update, so the adopter's commit confirm still gates the update commit.
+- **A tie-break leaves one PR.** The run re-lists after opening its PR. When a claim with a lower PR number exists, it closes only its own PR and remote branch, removes its own worktree and local branch, and stops, naming the other claim.
+- **Every gh failure fails open.** A missing or unauthenticated gh, a failed list, a refused claim commit, a rejected push or a failed create warns, skips the claim and continues the update.
+- **Step 11 pushes into the existing PR.** The update commit goes onto the claim's branch and fills in the same draft PR rather than opening another.
+- **The statusline shows it.** A teammate's claim renders as an in-progress nudge, the user's own as a resume nudge; see [[Claude Integration]] (`### Statusline (no hook)`).
+
 ## Decision table
 
 For every file `P` in the latest manifest. **Rows match in declared order; the first matching row wins**, which is what keeps a file the release never touched from being overwritten or merged:

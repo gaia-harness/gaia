@@ -175,3 +175,58 @@ EOF
   [ "$status" -eq 2 ]
   cmp "$CACHE" "$BATS_TEST_TMPDIR/original"
 }
+
+write_cache_with_claims() {
+  jq -n '{
+    checkedAt: 1000, gaiaCurrent: "1.0.0", gaiaLatest: "2.0.0", gaiaHasUpdate: true,
+    ghLogin: "octo-cat",
+    gaiaUpdateClaims: [
+      {number: 41, headRefName: "update/v2.0.0-2026-10-18-1200", tag: "v2.0.0", authorLogin: "other", createdAt: "2026-10-18T12:00:00Z"},
+      {number: 42, headRefName: "update/v2.0.0-2026-10-18-1300", tag: "v2.0.0", authorLogin: "octo-cat", createdAt: "2026-10-18T13:00:00Z"}
+    ]
+  }' >"$CACHE"
+}
+
+@test "gaia --drop-claim removes only that claim and carries every other field" {
+  write_cache_with_claims
+  run bash "$BUST" --cache "$CACHE" --mode gaia --version 2.0.0 --drop-claim 42
+  [ "$status" -eq 0 ]
+  [ "$(jq -c '[.gaiaUpdateClaims[].number]' "$CACHE")" = "[41]" ]
+  [ "$(jq -r '.ghLogin' "$CACHE")" = "octo-cat" ]
+  [ "$(jq -r '.gaiaUpdateClaims[0].authorLogin' "$CACHE")" = "other" ]
+}
+
+@test "gaia without --drop-claim leaves every claim in place" {
+  write_cache_with_claims
+  run bash "$BUST" --cache "$CACHE" --mode gaia --version 2.0.0
+  [ "$status" -eq 0 ]
+  [ "$(jq -c '[.gaiaUpdateClaims[].number]' "$CACHE")" = "[41,42]" ]
+}
+
+@test "--drop-claim leaves a missing or malformed gaiaUpdateClaims alone" {
+  write_populated_cache
+  run bash "$BUST" --cache "$CACHE" --mode gaia --version 2.0.0 --drop-claim 42
+  [ "$status" -eq 0 ]
+  [ "$(jq 'has("gaiaUpdateClaims")' "$CACHE")" = "false" ]
+  jq '.gaiaUpdateClaims = "oops"' "$CACHE" >"$BATS_TEST_TMPDIR/malformed"
+  cp "$BATS_TEST_TMPDIR/malformed" "$CACHE"
+  run bash "$BUST" --cache "$CACHE" --mode gaia --version 2.0.0 --drop-claim 42
+  [ "$status" -eq 0 ]
+  [ "$(jq -r '.gaiaUpdateClaims' "$CACHE")" = "oops" ]
+}
+
+@test "--drop-claim with a non-numeric value exits 2 and leaves the file unchanged" {
+  write_cache_with_claims
+  cp "$CACHE" "$BATS_TEST_TMPDIR/original"
+  run bash "$BUST" --cache "$CACHE" --mode gaia --version 2.0.0 --drop-claim abc
+  [ "$status" -eq 2 ]
+  cmp "$CACHE" "$BATS_TEST_TMPDIR/original"
+}
+
+@test "--drop-claim with --mode deps exits 2 and leaves the file unchanged" {
+  write_cache_with_claims
+  cp "$CACHE" "$BATS_TEST_TMPDIR/original"
+  run bash "$BUST" --cache "$CACHE" --mode deps --drop-claim 42
+  [ "$status" -eq 2 ]
+  cmp "$CACHE" "$BATS_TEST_TMPDIR/original"
+}

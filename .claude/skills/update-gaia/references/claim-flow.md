@@ -1,0 +1,82 @@
+# Update claim flow
+
+SKILL.md reads this file at its claim check, at Step 4's claim paragraph and at Step 11. A **claim** is an open, same-repository pull request whose head branch is `update/<tag>-...`: it tells a teammate the update is in progress. `update-claim.sh` owns the definition and takes `--tree` on every call. A `gh` failure never blocks an update: it warns and the run continues with no claim.
+
+## Claim check
+
+Runs in every mode, in the checkout the run starts in (`<starting checkout>`: the main checkout in modes 2 and 3, the worktree in mode 1), after the decision log check and before Step 3b. It creates nothing, so each stop below leaves no download, worktree, branch, prune or cache change. Run the two reads as separate calls:
+
+```bash
+bash .gaia/scripts/update-claim.sh list --tree <starting checkout>
+```
+
+```bash
+bash .gaia/scripts/update-claim.sh login --tree <starting checkout>
+```
+
+`list` prints one `CLAIM <number> <tag> <login> <createdAt> <headRefName>` line per live claim, and `login` prints `LOGIN <login>`: the current login, which decides whose claim each one is. Persist the login.
+
+- **Exit 3 from either** (`CLAIM_CHECK_SKIPPED` or `LOGIN_UNAVAILABLE`): print `Warning: team claim skipped (<reason>).` and continue with no claim. Step 4 makes none, and Step 11 opens the PR after the commit.
+- **A claim whose login differs from the current login**, whatever its tag: stop before any download. Take the lowest-numbered such claim. Compute `<age>` from `createdAt` against `date -u +%Y-%m-%dT%H:%M:%SZ`, in whole days, or whole hours under a day. Print exactly:
+
+  `GAIA <tag> is already being updated in PR #<number> by @<login>, opened <age> ago. Wait for it to merge, then run /update-gaia again.`
+
+- **The user's own claim for `<LATEST_TAG>`** is this person's earlier run:
+  - Its branch is the current branch (mode 1 or 3): continue.
+  - Modes 1 and 3 on any other branch: stop, naming the PR and its branch, and tell the user to run `/update-gaia` from the default branch's checkout.
+  - Mode 2: when `git -C <starting checkout> show-ref --verify --quiet refs/heads/<headRefName>` finds no local branch, fetch it with `bash <starting checkout>/.gaia/scripts/update-claim.sh fetch-branch --tree <starting checkout> --branch <headRefName>`; `FETCH_FAILED` stops, naming the branch and the PR. Then classify the claim's own branch, not the most recent one Step 3 found:
+
+    ```bash
+    bash .gaia/scripts/update-gaia-branch-state.sh classify --tag <LATEST_TAG> --latest <LATEST> --branch <headRefName>
+    ```
+
+    Follow Step 3's default-branch routes for that result and persist what they persist. A `COMMITTED` own claim reports the PR's state and exits instead of resuming. Step 4's claim is then idempotent.
+- **The user's own claim for another tag**: report its PR number and age, then ask with `AskUserQuestion` "Close it and start fresh (Recommended)" or "Stop". On Stop, exit. On close, run the call below, then continue as a fresh run. A second update PR is never opened while an own claim is open.
+
+  ```bash
+  bash .gaia/scripts/update-claim.sh close-own --tree <starting checkout> --number <number> --branch <headRefName>
+  ```
+
+  `CLOSED <number>` continues. `CLOSE_REFUSED <reason>` or exit 3 stops, relaying the line.
+
+## Claim after Proceed
+
+Runs in Step 4 after the provisioning wait and before Step 4b, in modes 1 and 2 only, and not when the claim check was skipped. Read `<default branch>` the way Step 11 does, then call:
+
+```bash
+bash <main checkout path>/.gaia/scripts/update-claim.sh start --tree <worktree path> --tag <LATEST_TAG> --branch <branch> --base <default branch>
+```
+
+- `CLAIM_SKIPPED <reason>`: print `Warning: team claim skipped (<reason>).` and continue; `CLAIM_PR` stays unset.
+- `CLAIMED <number> <url>`: persist `<number>` as `CLAIM_PR`, then settle a race with another run:
+
+```bash
+bash <main checkout path>/.gaia/scripts/update-claim.sh tie-break --tree <worktree path> --own <number>
+```
+
+- `WON` or `TIE_BREAK_SKIPPED <reason>`: continue.
+- `LOST <other> <login>`: this run's PR is closed and its remote branch deleted. Unset `CLAIM_PR`. When `CREATED_WORKTREE=true`, the worktree holds only the claim commit, so remove it: `ExitWorktree({action: "remove", discard_changes: true})`, then `git -C <main checkout path> branch -D <branch>`. Otherwise print the worktree notice instead. Stop, naming PR `<other>` and its author.
+
+A resumed run (mode 1, or mode 2 resuming a claimed branch) calls `start` too: it adds no second commit and no second pull request. Mode 3 makes no claim. A claimed run reaches the merge agent with exactly one empty claim commit pushed to origin and its draft PR open.
+
+## Step 11: the claim-aware pull request
+
+**Re-list before the push.** Step 11's `list` call catches a teammate who claimed since the claim check, and is the only check a run with no claim has. A `CLAIM` line on a branch other than `<branch>` whose login differs from the current login stops before pushing: name its PR and author with the claim check's stop line, leave the update commit local, and print the worktree notice. Run `login` the same way first when the claim check did not persist one. Exit 3 continues.
+
+**After the push, when `CLAIM_PR` is set.** The push updated the claim PR, so replace its placeholder body with the review point's summary: the counts per status, the auto-merged files, the answers and what is still deferred, the follow-ups, the report states, the Step 9d addendum and the quality gate result, in Markdown under the line `Pulls GAIA <LATEST_TAG> into the project.`. Write it with one `printf '%s\n'` command, each line single-quoted (a quote inside a line is written `'\''`):
+
+```bash
+printf '%s\n' '<summary line>' '<summary line>' > <main checkout path>/.gaia/local/cache/shared/update-gaia/run/pr-body.md
+```
+
+```bash
+gh pr edit <CLAIM_PR> --body-file <main checkout path>/.gaia/local/cache/shared/update-gaia/run/pr-body.md
+```
+
+A failed `gh pr edit` prints the summary for the user to paste into the PR and continues; the push has landed. Then clear the claim from the cache so the statusline stops offering resume:
+
+```bash
+bash <main checkout path>/.gaia/scripts/update-check-bust.sh --cache <main checkout path>/.gaia/local/cache/shared/update-check.json --mode gaia --version <LATEST> --drop-claim <CLAIM_PR>
+```
+
+`SKIPPED no cache` and a non-zero exit are reported and never fail the update.
