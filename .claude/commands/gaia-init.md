@@ -148,7 +148,7 @@ If this fails, stop and report the error. Then proceed to Step 1.
 
 _Non-response: HARD-BLOCK. Re-ask; never auto-upgrade or auto-exit on a timeout. Automatic mode: upgrade (Yes)._
 
-- **Yes (Required)**: "Upgrade pnpm to a supported version (12+). Required to continue with /gaia-init."
+- **Yes (Recommended)**: "Upgrade pnpm to a supported version (12+). Required to continue with /gaia-init."
 - **No**: "Keep the current pnpm and stop /gaia-init. Nothing has been installed or renamed yet, so it's safe to exit and re-run later."
 
 On **No** (or anything that is not an explicit Yes): stop `/gaia-init` immediately with a one-line message. Step 0 runs before any file is installed or renamed, so exiting here leaves the clone untouched.
@@ -205,17 +205,14 @@ Use AskUserQuestion with this single question:
 
 > What should be the primary language for this app's UI?
 >
-> - {detected user language} (default, what you've been typing in)
+> - {detected user language} (Recommended): what you've been typing in.
 > - English
-> - Other (you'll specify the ISO 639-1 code and English name in a follow-up free-text prompt)
 
-If the user picks "Other", ask for the value as a plain chat message and wait for the user to type their reply in the prompt. Do **not** use AskUserQuestion here: its preset options can't capture free text, and a hand-added "Other" option is an inert button with no input field.
+Do not add an "Other" option: the tool adds its own, and a hand-added one is an inert button with no input field. A language not listed arrives as typed text through the tool's own Other answer, however the user likes to write it, a name or a code, in English or its own script (e.g. `Polish`, `pl`, or `polski`).
 
-> What language? Type it however you like, a name or a code, in English or its own script (e.g. `Polish`, `pl`, or `polski`).
+Interpret a typed reply yourself: resolve it to an ISO 639-1 code plus English name. Only ask again if it's genuinely ambiguous or you can't identify the language.
 
-Interpret the reply yourself: resolve it to an ISO 639-1 code plus English name. Only ask again if it's genuinely ambiguous or you can't identify the language.
-
-Then echo the resolved choice back as a plain chat message so the user can catch a misread before anything runs, e.g. `Primary language: French (fr). Look right?` Wait for confirmation (or apply their correction and echo again) before continuing.
+Then confirm a typed reply with an AskUserQuestion so the user can catch a misread before anything runs, e.g. `Primary language: French (fr). Look right?`, options `Looks right (Recommended)` and `Change it`. A correction typed through Other, or `Change it`, resolves the language again and re-confirms.
 
 Hold the resolved choice as `{primary}` (ISO code + English name); the next batch interpolates it into its labels, which is why Q1 is asked first and alone.
 
@@ -239,7 +236,7 @@ If the user picks "Add more languages now", ask for the languages as a plain cha
 
 Interpret the reply yourself: resolve each entry to an ISO 639-1 code, dedupe, and drop any that match {primary}. Only ask again about an entry you genuinely can't identify, don't make the user learn code syntax.
 
-Then echo the resolved list back as a plain chat message so the user can catch a misread before anything runs, e.g. `Adding: German (de), Japanese (ja), Spanish (es). Look right?` Wait for confirmation (or apply their corrections and echo again) before moving to Step 3.
+Then confirm the resolved list with an AskUserQuestion so the user can catch a misread before anything runs, e.g. `Adding: German (de), Japanese (ja), Spanish (es). Look right?`, options `Looks right (Recommended)` and `Change it`. Corrections typed through Other, or `Change it`, resolve the list again and re-confirm before moving to Step 3.
 
 Resolve two values from the answer:
 
@@ -250,9 +247,9 @@ Resolve two values from the answer:
 
 _Non-response: title and slug are HARD-BLOCK, re-ask, never guess. CODEOWNERS: offer the gh-detected handle as the recommended default; HARD-BLOCK only when detection failed (no default to fall back to), re-ask, never guess. Automatic mode: title-cased folder name (title), folder name (slug), and the gh-detected handle (CODEOWNERS) when available, else the `REPLACE-WITH-YOUR-GITHUB-HANDLE` placeholder flagged as a required Step 11 follow-up._
 
-These three go together as a group. Ask them in a single AskUserQuestion call:
+These three go together as a group. Ask them in a single AskUserQuestion call, each question's default as its first option, marked ` (Recommended)`; the tool's own Other takes a typed value:
 
-**GitHub username for CODEOWNERS.** First run the GitHub-handle detection from "Free-text identity values are never fabricated" above (reuse the automatic-mode result if it already ran). If it yields a handle, offer it as the recommended default (first option); a gh-detected handle is the user's own authenticated identity, not a guess, so it is safe to default to. The user can still override it with a different handle via free text. If detection fails there is no default, so this stays a free-text identity value that is **never fabricated**: on interactive non-response, HARD-BLOCK and re-ask rather than guessing; in automatic mode, use the loud placeholder so a wrong owner never ships. Suggest `@username` format; store the bare handle.
+**GitHub username for CODEOWNERS.** First run the GitHub-handle detection from "Free-text identity values are never fabricated" above (reuse the automatic-mode result if it already ran). If it yields a handle, offer it as the recommended default (first option, marked ` (Recommended)`); a gh-detected handle is the user's own authenticated identity, not a guess, so it is safe to default to. The user can still override it with a different handle via free text. If detection fails there is no default, so this stays a free-text identity value that is **never fabricated**: on interactive non-response, HARD-BLOCK and re-ask rather than guessing; in automatic mode, use the loud placeholder so a wrong owner never ships. Suggest `@username` format; store the bare handle.
 
 **Project title** (default: title-cased folder name from above)
 

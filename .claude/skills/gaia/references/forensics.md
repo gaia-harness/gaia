@@ -22,7 +22,7 @@ Parse `$ARGUMENTS`.
 - **With an argument:** use the argument verbatim as the problem description. Do not ask a clarifying question.
 - **Without an argument:** ask a single open-ended clarifying question such as "What went wrong? Describe what you were doing, what you expected, and what happened." Wait for the response before continuing. Ask at most one question.
 
-Do NOT use `AskUserQuestion` here, plain prose question only.
+Do NOT use `AskUserQuestion` here, plain prose question only: the answer is an open-ended problem description, not a choice.
 
 ### 2. Capture
 

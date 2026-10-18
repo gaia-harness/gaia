@@ -32,6 +32,7 @@ If drift > 30 commits, ASK the user via `AskUserQuestion`:
   - `Sync all {N} commits` (description: full evaluation)
   - `Sync recent N commits only` (description: evaluate the last 20 commits, re-anchor state)
   - `Cancel` (description: do nothing)
+- Mark `Sync all {N} commits` ` (Recommended)`: the full evaluation is the one that leaves no drift behind.
 
 `Cancel` is an abort: do nothing and emit no `SYNC_COMPLETE: true` line.
 

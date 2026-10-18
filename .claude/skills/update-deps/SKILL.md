@@ -148,7 +148,7 @@ out of the discovery payload and the statusline count.
 - **`status` is `current` or `unknown`**: report the row only.
 - **Interactively with `offerInstall: true`**: show the row, then ask with
   `AskUserQuestion` (single-select): **Upgrade playwright-cli to `<latest>`
-  globally** or **Skip**. Only after the Upgrade answer, run
+  globally** (first, marked ` (Recommended)`) or **Skip**. Only after the Upgrade answer, run
   `npm install -g @playwright/cli@latest`. Record `upgraded` or `declined` as
   the action taken.
 
@@ -188,7 +188,7 @@ and the run is **refresh-only** (see Decision): in CI it proceeds straight to
 Phase 5b; interactively, print `Transitive refresh: re-resolve every
 transitive dependency to the newest in-range version past the release-age
 window; reverted whole if the quality gate fails.` and ask with `AskUserQuestion`
-(single-select): **Refresh transitive dependencies** (default, first option) or
+(single-select): **Refresh transitive dependencies** (Recommended, first option) or
 **Skip** (exit now, no branch, no changes, no ledger write). Each `wave_a[]` and `wave_b[].packages[]` entry
 carries `bucket` (`patch` | `minor` | `major` | `nonsemver`), `current`, `latest`,
 `is_pinned`, and `kind` (a `wave_a[]` entry also carries `group`; a `wave_b[]` element carries `group` once). `total_count` is the genuine-upgrade count;
@@ -255,7 +255,7 @@ window; reverted whole if the quality gate fails. Name transitive-refresh under
 Then ask with `AskUserQuestion` (single-select). **When `snoozedGroups` is
 non-empty**, offer these options in this order:
 
-- **Update the rest** (default, first option): apply every group EXCEPT the
+- **Update the rest** (Recommended, first option): apply every group EXCEPT the
   snoozed ones; leave the snoozes intact.
 - **Choose what to skip**: the human names further package or group names to
   skip; the snoozed groups stay skipped too.
@@ -264,7 +264,7 @@ non-empty**, offer these options in this order:
 
 **When `snoozedGroups` is empty**, offer the original three:
 
-- **Update all** (default, first option): apply every group.
+- **Update all** (Recommended, first option): apply every group.
 - **Choose what to skip**: the human names the package or group names to skip;
   everything else applies.
 - **Cancel**: exit now, no branch, no changes, no ledger write.
@@ -297,7 +297,8 @@ snoozes AND any newly named), or the omitted ones are dropped from the ledger.
   ```
   Each name expands to its whole companion group (a partial group cannot be
   skipped); an unknown name errors so you can re-ask. Apply set = the payload
-  minus the skip set. Echo the resulting apply set back for confirmation.
+  minus the skip set. Confirm the resulting apply set with `AskUserQuestion`:
+  **Apply these** (Recommended) or **Change the skip set**.
   **If the apply set is now empty** (everything is skipped), print
   `Snoozed N group(s); nothing else to update.`, then continue as a
   refresh-only run, or exit (no branch) when `transitive-refresh` was also

@@ -155,7 +155,7 @@ Then ask one question through an explicit user-question step (`AskUserQuestion`,
 2. **Change some**: pick which rows to change, then choose their actions; every other row takes its recommendation.
 3. **Stop without changes**: disposition nothing, author nothing, record nothing.
 
-On **Change some**, ask which rows to change. Only candidate rows are selectable: the unclassified row carries no disposition, so it keeps its suppression unless the human chooses **Stop without changes**. With four or fewer candidates, use one multi-select `AskUserQuestion` naming each row; with more, ask the human to reply with the row numbers. Then, for each chosen row only, ask one single-select question with the action set **approve / decline / defer / redirect**, the recommended action first and marked `(Recommended)`. `AskUserQuestion` takes up to four questions per call, so group them in fours. Any row the human did not choose takes its recommendation.
+On **Change some**, ask which rows to change. Only candidate rows are selectable: the unclassified row carries no disposition, so it keeps its suppression unless the human chooses **Stop without changes**. Ask in one multi-select `AskUserQuestion` naming each row; past four candidates, spread them over further questions of the call, and past sixteen, further calls. Then, for each chosen row only, ask one single-select question with the action set **approve / decline / defer / redirect**, the recommended action first and marked `(Recommended)`. `AskUserQuestion` takes up to four questions per call, so group them in fours. Any row the human did not choose takes its recommendation.
 
 On **Stop without changes**, apply nothing, write no ledger entry, skip the unclassified suppression, and do not reach `## Record the review (end of run)` or `## Publish approved changes (end of run)`. (Run ends here; see `## Cost record (run end)`.)
 
@@ -177,7 +177,7 @@ Then read `.claude/skills/gaia/references/isolation.md` and apply it now, with `
 
 ### approve, prose rule
 
-Draft the rule file into the working tree using the template below. The rule is MANDATORILY path-scoped: a `paths:` frontmatter glob is always present, derived from the candidate's `area_tags`. When `area_tags` is empty or holds non-path strings (holistic classes often carry semantic tags, not path globs), fall back: derive the glob from the finding's bucket/surface (e.g. a `rule/*` React class scopes to `frontend/app/**/*`) or ask the human for the intended scope. Never write a frontmatter-less / always-loaded rule, and never emit an unscoped `**/*` glob, that defeats the path-scoping invariant that bounds per-task context weight. Immediately after the frontmatter, write the provenance marker verbatim (see the frozen marker below). Then write present-tense body prose describing the anti-pattern and the correct pattern.
+Draft the rule file into the working tree using the template below. The rule is MANDATORILY path-scoped: a `paths:` frontmatter glob is always present, derived from the candidate's `area_tags`. When `area_tags` is empty or holds non-path strings (holistic classes often carry semantic tags, not path globs), fall back: derive the glob from the finding's bucket/surface (e.g. a `rule/*` React class scopes to `frontend/app/**/*`) or ask the human for the intended scope with `AskUserQuestion`, the derived glob first and marked ` (Recommended)`, a typed glob arriving through the tool's own Other. Never write a frontmatter-less / always-loaded rule, and never emit an unscoped `**/*` glob, that defeats the path-scoping invariant that bounds per-task context weight. Immediately after the frontmatter, write the provenance marker verbatim (see the frozen marker below). Then write present-tense body prose describing the anti-pattern and the correct pattern.
 
 After writing, tell the engineer the rule is in the working tree. Do not commit or PR here; the end-of-run publish step handles that (`## Publish approved changes (end of run)`).
 
@@ -246,7 +246,7 @@ paths:
 
 Rules for filling it in:
 
-- **`paths:` is mandatory.** Derive the glob from the candidate's `area_tags` (e.g. an `area_tags` of `["frontend/app/components"]` becomes `frontend/app/components/**/*`; the rule file lives in the root `.claude/rules/`, whose globs anchor at the repository root, so the glob keeps the `frontend/` prefix). When `area_tags` is empty or holds non-path strings, fall back: derive the glob from the finding's bucket/surface (e.g. a `rule/*` React class scopes to `frontend/app/**/*`) or ask the human for the intended scope. One or more single-quoted globs, one per line. A rule with no `paths:` frontmatter is never produced, and an unscoped `**/*` glob is never emitted; path-scoping is what bounds per-task context weight regardless of how many promoted rules accumulate.
+- **`paths:` is mandatory.** Derive the glob from the candidate's `area_tags` (e.g. an `area_tags` of `["frontend/app/components"]` becomes `frontend/app/components/**/*`; the rule file lives in the root `.claude/rules/`, whose globs anchor at the repository root, so the glob keeps the `frontend/` prefix). When `area_tags` is empty or holds non-path strings, fall back: derive the glob from the finding's bucket/surface (e.g. a `rule/*` React class scopes to `frontend/app/**/*`) or ask the human for the intended scope with `AskUserQuestion`, the derived glob first and marked ` (Recommended)`, a typed glob arriving through the tool's own Other. One or more single-quoted globs, one per line. A rule with no `paths:` frontmatter is never produced, and an unscoped `**/*` glob is never emitted; path-scoping is what bounds per-task context weight regardless of how many promoted rules accumulate.
 - **The provenance marker is verbatim and single-line**, placed immediately after the closing `---` of the frontmatter, with `<class>` replaced by the actual finding_class. It references the `finding_class`, never a SPEC or UAT id.
 - **Body prose is present tense** and follows `.claude/rules/wiki-style.md` and `.claude/rules/working-doc-ids.md`, which carry the authoritative ban lists. Use repo-relative paths only.
 - **Verify every path, script, and owner the rule cites before writing it.** Open each file and confirm it holds what the sentence says it holds. A rule that names the wrong owner teaches the wrong thing, and fixing it after the audit costs a whole extra round.
@@ -364,6 +364,7 @@ A fix to a drafted rule is a commit to a file in a member's remit, so it rotates
 - **options (this exact order):**
   1. `{ label: "Merge", description: "Squash-merge PR #<N> now and clean up the branch." }`
   2. `{ label: "Leave open", description: "Keep the PR open; you merge it after review." }`
+- **Recommended:** mark `Merge` ` (Recommended)`.
 
 **Leave open** → report the PR URL and stop.
 

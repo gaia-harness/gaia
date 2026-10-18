@@ -82,7 +82,7 @@ bash .gaia/scripts/branch-name-lib.sh name release "<NEW_VERSION>"
 git checkout -b "<RELEASE_BRANCH>"
 ```
 
-If the branch already exists (a previous attempt aborted), STOP and ask the maintainer whether to delete it and retry, or resume from the next pending step.
+If the branch already exists (a previous attempt aborted), STOP and ask the maintainer with `AskUserQuestion`: `Resume from the next pending step (Recommended)` or `Delete it and retry`.
 
 ### 5. Graduate the CHANGELOG
 
@@ -93,7 +93,8 @@ If the branch already exists (a previous attempt aborted), STOP and ask the main
 The draft is a **review aid, not the release content**: it is rendered from commit
 subjects and is never written to the file. Present it to the maintainer alongside the
 hand-written `## [Unreleased]` block and fold anything the block is missing into it by
-hand. On approval (or "looks good"), apply:
+hand. Then ask with `AskUserQuestion`: `Apply the block (Recommended)` or `Revise`, a
+typed revision arriving through the tool's own Other. On approval, apply:
 
 ```bash
 .gaia/cli/gaia-maintainer release changelog            # graduate Unreleased → vX.Y.Z
@@ -298,7 +299,7 @@ Example: current is `installed=1.2.0, available=1.2.2`. On `1.3.0` → `installe
 **Public changelog page (release notes).** The three edits above are version strings; the human-readable "what's new" entry on the site's changelog page is a separate artifact owned by the `release-notes` skill. Generate it for the version just cut:
 
 - Invoke the `release-notes` skill with `<NEW_VERSION>` (no leading `v`). It reads the graduated `## [<NEW_VERSION>]` block from `CHANGELOG.md`, translates it to adopter-facing notes, writes `$WEB/src/pages/changelog/releases/<NEW_VERSION>.ts` (the page auto-discovers the file via `import.meta.glob`; there is no index to update), and prints an editorial-decisions report.
-- The report is a human gate: review the **Dropped** and **Consolidated** lists and resolve every **Needs a human ruling** item before accepting, then adjust the file per the maintainer's rulings.
+- The report is a human gate: review the **Dropped** and **Consolidated** lists and resolve every **Needs a human ruling** item before accepting, then adjust the file per the maintainer's rulings. Ask each ruling through `AskUserQuestion`, up to 4 questions per call, the skill's suggested reading first and marked `(Recommended)`; then ask `Accept the notes (Recommended)` or `Adjust`.
 - The skill only reads `CHANGELOG.md`; never edit the changelog here.
 
 Stage the generated `<NEW_VERSION>.ts` alongside the three version edits so all four land in one website commit.

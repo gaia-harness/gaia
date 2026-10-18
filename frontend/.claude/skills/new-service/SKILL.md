@@ -10,8 +10,8 @@ Trigger: user asks to scaffold an API service.
 
 ## Workflow
 
-1. Confirm: name (kebab), endpoints, schema (`name:type` pairs), with mocks?
-2. Run from the repo root: `./.gaia/cli/gaia scaffold service <name> --endpoints "..." --schema "..." [--mocks]`. It writes into the domain-layer folder under `app/services/`, found as the one folder there besides `api/` (shipped as `gaia/`, often renamed to the company or API name). If it refuses because several folders qualify, ask which one and rerun with `--layer <folder>`. Flags and schema types: `./.gaia/cli/gaia scaffold service --help`.
+1. Confirm: name (kebab), endpoints and schema (`name:type` pairs) as free text, then mocks as an `AskUserQuestion`: `With mocks` (Recommended) or `Without mocks`.
+2. Run from the repo root: `./.gaia/cli/gaia scaffold service <name> --endpoints "..." --schema "..." [--mocks]`. It writes into the domain-layer folder under `app/services/`, found as the one folder there besides `api/` (shipped as `gaia/`, often renamed to the company or API name). If it refuses because several folders qualify, ask which one with `AskUserQuestion`, one option per qualifying folder, and rerun with `--layer <folder>`. Flags and schema types: `./.gaia/cli/gaia scaffold service --help`.
 3. Verify: `pnpm typecheck` clean; if `--mocks`, run a single MSW round-trip in a vitest test.
 4. Wire the service into the consuming route and page. Which data-loading variant applies is the rule in `frontend/.claude/skills/react-code/SKILL.md`; the `new-route` skill scaffolds a route bound to the service. Before wiring by hand, read how an existing service is wired and follow that pattern.
 
@@ -21,7 +21,7 @@ When `@tanstack/react-query` is installed and the service has `get`, the scaffol
 
 ## A new API domain
 
-A backend with its own base URL or casing needs its own `create()` instance. Ask the backend's casing first (camelCase or snake_case). Then create `app/services/<new-layer>/api.ts` modelled on the shipped layer's `api.ts`, passing `create({isSnakeCaseEnabled: true})` for a snake_case backend, and scaffold with `--layer <new-layer>`; the scaffolder reads that flag to pick the mock data's key casing.
+A backend with its own base URL or casing needs its own `create()` instance. Ask the backend's casing first with `AskUserQuestion`: `camelCase` (Recommended) or `snake_case`. Then create `app/services/<new-layer>/api.ts` modelled on the shipped layer's `api.ts`, passing `create({isSnakeCaseEnabled: true})` for a snake_case backend, and scaffold with `--layer <new-layer>`; the scaffolder reads that flag to pick the mock data's key casing.
 
 For an SDK-client backend (Supabase, Firebase), the Ky layer stays in place for any REST domain. An SDK-backed domain's request functions wrap the SDK's calls instead of `api`, and the data-loading rule applies unchanged.
 

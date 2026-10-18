@@ -31,7 +31,7 @@ First normalize `wiki_promote_default`: a legacy `true` is `yes` and a legacy `f
 |---|---|---|---|---|
 | `yes` | `wiki_promote_targets` non-empty | continue to Step 3; ends `promoted` | the pages written | omitted |
 | `yes` | `wiki_promote_targets` empty or absent | `no` | `none` | `yes with no wiki_promote_targets; nothing to promote` |
-| `ask` | human present | ask once with `AskUserQuestion` (`Promote <id> to the wiki?`, options `Promote` / `Skip`); `Promote` continues to Step 3 and ends `promoted`; `Skip` returns `declined` | none on `declined` | `declined`: the human chose to skip |
+| `ask` | human present | ask once with `AskUserQuestion` (`Promote <id> to the wiki?`, options `Promote` (Recommended) / `Skip`); `Promote` continues to Step 3 and ends `promoted`; `Skip` returns `declined` | none on `declined` | `declined`: the human chose to skip |
 | `ask` | no human present (unattended or auto) | `skipped-unattended`, without asking | `none` | `ask with no human present` |
 | `no` | any | `no` | `none` | `wiki_promote_default is no` |
 | any other value | any | `no` | `none` | names the value: `unrecognized wiki_promote_default '<value>'` |

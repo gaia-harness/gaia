@@ -54,7 +54,7 @@ Before writing any code:
 - [ ] Identify opportunities for [deep modules](deep-modules.md), small interface, deep implementation
 - [ ] Design interfaces for [testability](interface-design.md)
 - [ ] List the behaviors to test (not implementation steps)
-- [ ] Get user approval on the plan
+- [ ] Get user approval on the plan with `AskUserQuestion`: `Approve the plan` (Recommended) or `Revise`
 
 Ask: "What should the public interface look like? Which behaviors are most important to test?"
 
@@ -157,7 +157,7 @@ Advisory findings (the worthiness verdicts) NEVER interrupt mid-implementation. 
 The summary presents advisory findings in two tiers:
 
 - **HONESTY findings auto-fix.** A test that fails the honesty axis (couples to implementation, asserts a tautology, asserts platform bytes) is rewritten in place and left in the working tree for normal review. No confirmation prompt: the fix is a normal code edit the human reviews like any other.
-- **Every proposed DELETE requires human confirmation and renders its evidence INLINE.** A delete is never acted on. Each proposed delete renders, in the summary, the cited redundant sibling assertion AND the subsuming seam assertion that makes it redundant, so the human confirms against the evidence without opening files. A delete whose cited sibling cannot be machine-verified is downgraded, never shown as a delete.
+- **Every proposed DELETE requires human confirmation and renders its evidence INLINE.** A delete is never acted on. Each proposed delete renders, in the summary, the cited redundant sibling assertion AND the subsuming seam assertion that makes it redundant, so the human confirms against the evidence without opening files. Ask each confirmation with `AskUserQuestion`, one delete per question and up to 4 questions per call: `Confirm the delete` (Recommended) or `Keep the test`. A delete whose cited sibling cannot be machine-verified is downgraded, never shown as a delete.
 
 Cap the list: show the **top-N by severity with a count** (`delete` proposals before `fix` findings; "3 of 11 findings shown"), never a wall of every line.
 
