@@ -1,10 +1,10 @@
 /**
- * The scaffold-time writer of `.gaia/project.json`. `/gaia-init` collects
- * the values with AskUserQuestion and passes them through as flags.
+ * The scaffold-time writer of `.gaia/project.json`. `/gaia-init` passes
+ * GAIA's team defaults through as flags, asking nothing.
  *
- * `--sandbox-recommended` is required so an adopter who skipped the prompt
- * cannot be silently configured; `--isolation-policy` is optional because
- * leaving the key absent keeps `/setup-gaia`'s isolation question live.
+ * `--sandbox-recommended` is required so the recommendation is always
+ * written explicitly; `--isolation-policy` is optional because an absent key
+ * is GAIA's default policy, `always-worktree`.
  *
  * Idempotent: re-running with the same flags rewrites byte-identical content.
  */

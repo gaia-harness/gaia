@@ -1,6 +1,6 @@
 ---
 name: setup-gaia
-description: Runs the single post-init onboarding. Detects the situation and runs only the owed phases; safe to re-run. --reconfigure re-asks the sandbox, isolation-policy, squash-only-merge, and statusline decisions.
+description: Runs the single post-init onboarding. Detects the situation and runs only the owed phases; safe to re-run. --reconfigure re-asks the sandbox, isolation-policy, sandbox-recommendation, squash-only-merge, and statusline decisions.
 disable-model-invocation: true
 ---
 
@@ -8,9 +8,9 @@ Run this once after `/gaia-init`, and re-run it any time. `/setup-gaia` is the s
 
 - **Per-machine work** every clone needs (tool installs, plugins, statusline bit, `.env`, the sandbox decision, and, for a developer with a global statusline, which statusline draws the left side).
 - **GitHub repository provisioning** (create / adopt / manual, private by default), plus branch protection, the `GAIA-Audit` required-check registration, and squash-only merge settings when the runner is a repo admin.
-- **Team settings** a repo admin records once in `.gaia/project.json`: the git isolation policy and the sandbox recommendation.
+- **Team settings** in `.gaia/project.json`: the git isolation policy and the sandbox recommendation. Both ship with a default (worktrees always, sandbox not recommended), so a plain run records the default and asks nothing; a repo admin changes either with `--reconfigure`.
 
-It is safe for **any developer** to run at any time. A phase is owed when its own gate says so, or when the shipped setup feature list (`.gaia/setup-features.json`) holds its feature with no recorded decision; each decision it makes is recorded. A plain (no-flag) re-run on a provisioned project whose decisions are all recorded prints the already-provisioned line and mutates nothing: it never re-provisions the repo or changes branch protection. The one exception is a repo admin re-running it on a repo whose required checks still lack `GAIA-Audit` (or still carry the stale `code-review-audit` context): that run owes the registration and makes it. Pass `--reconfigure` to re-ask the sandbox decision (Phase 2), the team git isolation policy (Phase 3.5), the squash-only-merge offer (Phase 3.7), and the statusline left-side choice (Phase 4.6).
+It is safe for **any developer** to run at any time. A phase is owed when its own gate says so, or when the shipped setup feature list (`.gaia/setup-features.json`) holds its feature with no recorded decision; each decision it makes is recorded. A plain (no-flag) re-run on a provisioned project whose decisions are all recorded prints the already-provisioned line and mutates nothing: it never re-provisions the repo or changes branch protection. The one exception is a repo admin re-running it on a repo whose required checks still lack `GAIA-Audit` (or still carry the stale `code-review-audit` context): that run owes the registration and makes it. Pass `--reconfigure` to re-ask the sandbox decision (Phase 2), the team git isolation policy and sandbox recommendation (Phase 3.5), the squash-only-merge offer (Phase 3.7), and the statusline left-side choice (Phase 4.6).
 
 The slash command name intentionally does NOT start with `gaia-` so it does not pollute the `/gaia` autocomplete namespace.
 
@@ -21,8 +21,8 @@ This command reads these references, all under `.claude/skills/gaia/references/s
 - `sandbox.md`: Phase 2, when the sandbox gate says the decision is owed, or to record a settled decision.
 - `per-machine.md`: Phase 2, when `completed_at` is null or a per-machine id is owed.
 - `github-repo.md`: Phase 3, when no repo exists yet or its default branch is not pushed; Phase 3.5, for owed GitHub settings.
-- `isolation-question.md`: Phase 3.5, once both gates say the question is owed.
-- `sandbox-recommendation.md`: Phase 3.5, when the team sandbox recommendation is owed.
+- `isolation-question.md`: Phase 3.5, on `--reconfigure` once both gates pass.
+- `sandbox-recommendation.md`: Phase 3.5, on `--reconfigure`.
 - `squash-only.md`: Phase 3.7, once both gates say the question is owed.
 - `statusline-left.md`: Phase 4.6, every invocation for the routing warning, and when a choice or record is owed.
 - `standalone-features.md`: Phase 5, every run.
@@ -43,7 +43,7 @@ If the detection does not fire, fall through to `## Argument parse` below.
 
 ## Argument parse
 
-Parse `$ARGUMENTS` for the `--reconfigure` flag. Cache the boolean as `RECONFIGURE`. It re-opens four settled decisions and nothing else: the sandbox decision in Phase 2, the isolation policy in Phase 3.5, the squash-only-merge offer in Phase 3.7, and the statusline left-side choice in Phase 4.6.
+Parse `$ARGUMENTS` for the `--reconfigure` flag. Cache the boolean as `RECONFIGURE`. It re-opens these settled decisions and nothing else: the sandbox decision in Phase 2, the isolation policy and the sandbox recommendation in Phase 3.5, the squash-only-merge offer in Phase 3.7, and the statusline left-side choice in Phase 4.6.
 
 ## Phase 0: Prerequisites (every invocation, never skipped)
 
@@ -137,19 +137,31 @@ The classification only routes the phases below; each phase re-checks its own co
 
 If `setup status --json` reports a non-null `completed_at` and no per-machine id is owed, this whole phase no-ops **except for the sandbox decision below** (a first adopter finished per-machine work inside `/gaia-init`, so the repo prompt in Phase 3 is their first real interaction, with no tool-install log lines before it, and the recorded per-machine steps are unchanged).
 
-**Sandbox decision (runs even when `completed_at` is non-null).** This clause surfaces the OS-level Bash sandbox enablement decision whenever no per-machine resolution has been recorded. It runs even when `completed_at` is non-null because Phase 2 otherwise short-circuits once per-machine setup is complete and would skip the decision. So before falling through to Phase 3, always evaluate this:
+**Sandbox decision (runs even when `completed_at` is non-null).** The OS-level Bash sandbox is off by default: it breaks `gh`, git-over-https and `docker` until they are allowlisted, and GAIA's lifecycle runs on `gh`. A plain run asks about it only when the team recommends it. This clause runs even when `completed_at` is non-null because Phase 2 otherwise short-circuits once per-machine setup is complete and would skip the decision. So before falling through to Phase 3, always run this route, with `RECONFIGURE` declared from the cached value (`true`, or empty):
 
 ```bash
 RESOLVED="$(.gaia/cli/gaia sandbox status --json 2>/dev/null | jq -r '.resolved // false')"
+RECOMMENDED="$(jq -r '.sandbox_recommended // false' .gaia/project.json 2>/dev/null || echo false)"
+if [ "$RECONFIGURE" = true ]; then
+  echo SANDBOX=ask
+elif [ "$RESOLVED" = true ]; then
+  echo SANDBOX=stands
+elif [ "$RECOMMENDED" = true ]; then
+  echo SANDBOX=ask
+else
+  echo SANDBOX=default-off
+fi
 ```
 
-- `RESOLVED` is `true` and `RECONFIGURE` is NOT set: the decision stands; do NOT re-prompt and do NOT flip the settled value. When `sandbox` is owed (the owed check), run `sandbox.md`'s `## Record a settled decision` alone, with no question.
-- The marker is absent, `RECONFIGURE` is NOT set, and the declined check passes for `sandbox`: the developer declined it before; skip silently.
-- Otherwise (marker absent, or `--reconfigure`): run the decision body, which records the outcome.
+Read `.claude/skills/gaia/references/setup/sandbox.md` now, the whole file, and run the part the route names:
+
+- `SANDBOX=ask`: the decision steps, which ask on a `ready` machine and record the outcome.
+- `SANDBOX=stands`: the marker holds this machine's answer (or its incapability); do NOT re-prompt and do NOT flip it. When `sandbox` is owed (the owed check), run `## Record a settled decision` alone.
+- `SANDBOX=default-off`: `## Default off` alone, which asks nothing and leaves the sandbox off.
+
+Only an answered question or an incapable machine found while asking writes the marker; the default writes none. So a team that sets `sandbox_recommended: true` after a machine took the default still gets that machine asked on its next run, while a developer who answered the question is never re-asked on a plain run.
 
 This clause is gated on the `gaia sandbox status` marker, never on a `SETUP_STEPS` value: no `SETUP_STEPS` entry is added and `gaia setup mark-step` is never called for the sandbox decision. The marker governs the decision; the record only says it was made.
-
-Except when skipping silently, Read `.claude/skills/gaia/references/setup/sandbox.md` now, the whole file, and run it (only its `## Record a settled decision` when the decision stands).
 
 **Per-machine steps (when `completed_at` is null, or any of `install-tools`, `install-plugins`, `chmod-statusline`, `bootstrap-env` is owed).** Read `.claude/skills/gaia/references/setup/per-machine.md` now, the whole file, and run its steps. On a halt, the user fixes the cause and re-runs `/setup-gaia`; each step resumes from its recorded state.
 
@@ -245,29 +257,32 @@ When `MAY_RECORD_PROJECT` is not `none` and the owed check passes for any of `gi
 
 ### The isolation policy
 
-A **committed team setting**: whether `/gaia-plan` and `/gaia-debt` isolate their work in a feature branch or a git worktree by default. It carries its own commit, because a first adopter's policy belongs on the default branch at once.
+A **committed team setting**: whether `/gaia-plan`, `/gaia-debt` and ad-hoc committed work isolate in a feature branch or a git worktree. An absent `isolation_policy` key is GAIA's default, `always-worktree` (`.claude/skills/gaia/references/isolation.md`), and is settled: a plain run never asks. Only `--reconfigure` asks, and its answer carries its own commit, because a team's policy belongs on the default branch at once.
 
-### Gate 1: the key's own presence
+### Gate 1: `--reconfigure`
+
+Run with `RECONFIGURE` and `MAY_RECORD_PROJECT` declared from the cached values:
 
 ```bash
-HAS_POLICY="$(jq -r 'has("isolation_policy")' .gaia/project.json 2>/dev/null || echo false)"
+if [ "$RECONFIGURE" = true ]; then
+  echo ISOLATION=ask
+elif .gaia/cli/gaia setup drift --json | jq -e --arg id isolation-policy 'any(.undecided[]?; .id == $id)' >/dev/null; then
+  [ "$MAY_RECORD_PROJECT" != admin ] || .gaia/cli/gaia setup record isolation-policy applied >/dev/null
+fi
 ```
 
-- `HAS_POLICY` is `true` and `RECONFIGURE` is NOT set → the decision stands. **Skip silently**: do not
-  re-prompt, do not flip the settled value.
-- `HAS_POLICY` is `true`, `RECONFIGURE` is NOT set, and `isolation-policy` is owed → record it, no question:
-  `[ "$MAY_RECORD_PROJECT" != admin ] || .gaia/cli/gaia setup record isolation-policy applied`.
-- `HAS_POLICY` is `false`, OR `RECONFIGURE` is set → an answer is owed. Continue to Gate 2.
+- `ISOLATION=ask` → continue to Gate 2.
+- Anything else → the policy stands: the key's value when present, the default when absent. Skip the rest of
+  this clause. The block recorded `isolation-policy` as `applied` when it was owed and the run may record
+  project decisions; Phase 5.5 lands that record.
 
-Answering the question below writes the key, so its presence alone is a sufficient "already asked" signal. No
-separate marker file, no `SETUP_STEPS` entry, no `mark-step` call; `.gaia/project.json` is the source of
-truth here, the same shape as the sandbox decision's `gaia sandbox status` marker above. A missing
-`.gaia/project.json` reads as an absent key (the `|| echo false` tail covers jq's error on a missing file), and
-the write below creates the file when it is absent.
+No separate marker file, no `SETUP_STEPS` entry, no `mark-step` call: `.gaia/project.json` is the source of
+truth here. A missing `.gaia/project.json` reads as the default, and the write below creates the file when it
+is absent.
 
 ### Gate 2: this clause's own `check-admin` probe (fail closed)
 
-Gated behind Gate 1, so the `gh api` round-trip only costs anything on a repo that still owes an answer. Reuse
+Gated behind Gate 1, so the `gh api` round-trip only costs anything on a `--reconfigure` run. Reuse
 Phase 1's cached `detect-remote` values (`found`, `host`, `owner`, `repo`):
 
 ```bash
@@ -292,9 +307,8 @@ Read `.claude/skills/gaia/references/setup/isolation-question.md` now, the whole
 
 On a choice, run **The write** below with the value `isolation-question.md`'s `## The answer` maps it to.
 
-**Declining** ("Other", or dismissing the question) writes nothing and commits nothing. The key stays absent,
-so the question re-fires on a later explicit `/setup-gaia` run, a bounded cost since this is a setup command,
-not a per-task prompt.
+**Declining** ("Other", or dismissing the question) writes nothing and commits nothing. The policy on file,
+or the default, stays in force.
 
 ### The write
 
@@ -344,16 +358,22 @@ run; the push is what makes it real for the team.
 
 ### The sandbox recommendation
 
-Run only when `MAY_RECORD_PROJECT` is `admin`. `--reconfigure` does not re-open it, and Phase 5.5 lands what it writes.
+Run only when `MAY_RECORD_PROJECT` is `admin`; Phase 5.5 lands what it writes. An absent `sandbox_recommended` key means not recommended, so a plain run never asks; `--reconfigure` re-opens it. Run with `RECONFIGURE` declared from the cached value:
 
 ```bash
 TEAM_RECOMMENDATION="$(jq -r 'if has("sandbox_recommended") then .sandbox_recommended else "absent" end' .gaia/project.json 2>/dev/null || echo absent)"
-echo "sandbox_recommended=$TEAM_RECOMMENDATION"
+if [ "$RECONFIGURE" = true ]; then
+  echo RECOMMENDATION=ask
+elif .gaia/cli/gaia setup drift --json | jq -e --arg id sandbox-recommendation 'any(.undecided[]?; .id == $id)' >/dev/null; then
+  if [ "$TEAM_RECOMMENDATION" = true ]; then
+    .gaia/cli/gaia setup record sandbox-recommendation applied >/dev/null
+  else
+    .gaia/cli/gaia setup record sandbox-recommendation declined >/dev/null
+  fi
+fi
 ```
 
-- `true` or `false` and `sandbox-recommendation` is owed: record it with no question, `.gaia/cli/gaia setup record sandbox-recommendation applied` for `true` or `.gaia/cli/gaia setup record sandbox-recommendation declined` for `false`.
-- `absent` and the declined check passes: skip silently.
-- `absent` otherwise: Read `.claude/skills/gaia/references/setup/sandbox-recommendation.md` now, the whole file, and ask its question. On an answer, write it with `.gaia/cli/gaia setup write-sandbox-recommendation <true|false>`, then record it as above. A dismissal writes and records nothing.
+On `RECOMMENDATION=ask`, Read `.claude/skills/gaia/references/setup/sandbox-recommendation.md` now, the whole file, and ask its question. On an answer, write it with `.gaia/cli/gaia setup write-sandbox-recommendation <true|false>`, then record it: `.gaia/cli/gaia setup record sandbox-recommendation applied` for `true`, `.gaia/cli/gaia setup record sandbox-recommendation declined` for `false`. A dismissal writes and records nothing. Any other output means the recommendation stands, recorded when it was owed.
 
 Fall through to Phase 3.7.
 
@@ -485,7 +505,7 @@ New to GAIA? The docs walk you through your first feature: https://docs.gaiareac
 
 ## Idempotence / re-run safety
 
-A plain (no-flag) re-run on a provisioned project whose listed setup features are all decided prints the already-provisioned line and mutates nothing: default-branch protection JSON and `.gaia/project.json` are byte-identical before and after, and no mutating `gh` call fires. A run that records a decision for an id undecided at its start relaxes that promise for `setup_decisions` and the keys an owed question writes (`isolation_policy`, `sandbox_recommended`), and lands them through Phase 5.5. Never re-provision the repo or change branch protection on a plain re-run; the one branch-protection change a re-run makes is the owed `GAIA-Audit` registration (Phase 3) for an admin on a repo whose required contexts lack `GAIA-Audit` or still carry `code-review-audit`. Only `--reconfigure` re-opens the settled sandbox, isolation-policy, squash-only-merge, and statusline decisions, and their new answers overwrite the records.
+A plain (no-flag) re-run on a provisioned project whose listed setup features are all decided prints the already-provisioned line and mutates nothing: default-branch protection JSON and `.gaia/project.json` are byte-identical before and after, and no mutating `gh` call fires. A run that records a decision for an id undecided at its start relaxes that promise for `setup_decisions`, and lands it through Phase 5.5. Never re-provision the repo or change branch protection on a plain re-run; the one branch-protection change a re-run makes is the owed `GAIA-Audit` registration (Phase 3) for an admin on a repo whose required contexts lack `GAIA-Audit` or still carry `code-review-audit`. Only `--reconfigure` re-opens the settled sandbox, isolation-policy, sandbox-recommendation, squash-only-merge, and statusline decisions, and their new answers overwrite the records.
 
 ## On failure: re-run
 
