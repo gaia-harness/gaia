@@ -65,6 +65,24 @@ is_prefix() { head -c "$(wc -c <"$1" | tr -d ' ')" "$2" | cmp -s - "$1"; }
 
 total_line() { printf '  total (distinct segments): tokens %s  est. %s' "$(gold "$1" "$2" tokens)" "$(gold "$1" "$2" usd)"; }
 
+# pr_figures <pr args...>: the per-PR view from `pr --json`, unrounded, one
+# figure per line in golden.json's display form, so a figure the cost box
+# rounds away is still compared exactly.
+# shellcheck disable=SC2016  # jq source
+pr_figures() {
+  run_usage pr "$@" --json | jq -r '
+    def commify: tostring | . as $digits | ($digits | length) as $length
+      | [range(0; $length) | $digits[.:. + 1] + (if . < $length - 1 and ($length - . - 1) % 3 == 0 then "," else "" end)] | join("");
+    def money: if . == null then "unavailable" else (. * 100 | round) as $cents
+      | "$\($cents / 100 | floor).\($cents % 100 | tostring | if length < 2 then "0" + . else . end)" end;
+    "tokens: \(.sum.total | commify) (fresh \(.sum.fresh | commify), cache write \(.sum.cw | commify), cache read \(.sum.cr | commify), output \(.sum.out | commify))",
+    "usd: \(.sum.usd | money)",
+    "sessions: \(.sum.sessions)  span: \(if .sum.span_from == null then "none" else "\(.sum.span_from)..\(.sum.span_to)" end)  coverage start: \(.coverage // "none")",
+    "window: after \(.window.from_iso // "start of record") through \(.window.to_iso // "now")",
+    "lower bound: \(.lower_bound)",
+    (.roots[] | "root \(.root): tokens \(.sum.total | commify)  usd \(.sum.usd | money)")'
+}
+
 @test "UAT-004: spend before the topic-b write resolves to topic-a, after it to topic-b, none unattributed; ledger untouched" {
   load_fixture research
   cp "$TELEMETRY_DIRECTORY/usage.jsonl" "$TEMPORARY_DIRECTORY/before"
@@ -105,10 +123,10 @@ total_line() { printf '  total (distinct segments): tokens %s  est. %s' "$(gold 
 
 @test "UAT-017: a command interval on a feature branch leaves the PR figure; plan spend stays on the branch" {
   load_fixture command
-  run run_usage pr --branch fix/other
+  run pr_figures --branch fix/other
   [ "$status" -eq 0 ]
-  has_line "  tokens: $(gold command pr_fix_other tokens) (fresh 500,000, cache write 0, cache read 0, output 50,000)"
-  has_line "  est. cost (USD): $(gold command pr_fix_other usd)"
+  has_line "tokens: $(gold command pr_fix_other tokens) (fresh 500,000, cache write 0, cache read 0, output 50,000)"
+  has_line "usd: $(gold command pr_fix_other usd)"
   run run_usage initiative command:gaia-debt-20261001T110000Z-a1b2
   has_line "$(total_line command command:gaia-debt-20261001T110000Z-a1b2)"
 }
@@ -208,40 +226,40 @@ total_line() { printf '  total (distinct segments): tokens %s  est. %s' "$(gold 
 @test "UAT-021: each merge's window holds only the spend since the previous merge of the same key" {
   load_fixture window
   run run_usage pr 602
-  has_line "[PR cost] pr:602 branch:fix/foo"
-  has_line "  tokens: $(gold window 602 tokens) (fresh 400,000, cache write 0, cache read 0, output 40,000)"
-  has_line "  est. cost (USD): $(gold window 602 usd)"
-  has_line "  window: after 2026-10-05T00:00:00Z through 2026-10-10T00:00:00Z"
-  run run_usage pr 601
-  has_line "  tokens: $(gold window 601 tokens) (fresh 300,000, cache write 0, cache read 0, output 30,000)"
-  has_line "  est. cost (USD): $(gold window 601 usd)"
-  has_line "  window: after start of record through 2026-10-05T00:00:00Z"
+  grep -q "^Cost: 0\.4M tokens, \\$(gold window 602 usd), " <<<"$output" || { printf '%s\n' "$output" >&2; return 1; }
+  run pr_figures 602
+  has_line "tokens: $(gold window 602 tokens) (fresh 400,000, cache write 0, cache read 0, output 40,000)"
+  has_line "usd: $(gold window 602 usd)"
+  has_line "window: after 2026-10-05T00:00:00Z through 2026-10-10T00:00:00Z"
+  run pr_figures 601
+  has_line "tokens: $(gold window 601 tokens) (fresh 300,000, cache write 0, cache read 0, output 30,000)"
+  has_line "usd: $(gold window 601 usd)"
+  has_line "window: after start of record through 2026-10-05T00:00:00Z"
 }
 
 @test "UAT-007: per-PR blocks equal golden; roots print for the SPEC and debt branches only; a rate swap reprices" {
   load_fixture prs
   cp "$TELEMETRY_DIRECTORY/usage.jsonl" "$TEMPORARY_DIRECTORY/before"
   run run_usage pr 501
-  has_line "[PR cost] pr:501 branch:plan/spec-090-foo"
-  has_line "  tokens: $(gold prs 501 tokens) (fresh $(gold prs 501 fresh), cache write $(gold prs 501 cw), cache read $(gold prs 501 cr), output $(gold prs 501 out))"
-  has_line "  est. cost (USD): $(gold prs 501 usd_a)"
-  has_line "  sessions: 2  span: 2026-09-20..2026-09-21  coverage start: 2026-09-20"
+  grep -q "^Cost: 1\.4M tokens, \\$(gold prs 501 usd_a), " <<<"$output" || { printf '%s\n' "$output" >&2; return 1; }
   has_line "  ! lower bound: branch spend may predate coverage start"
-  has_line "[initiative research:topic-a-2026-10-01 to date; initiative totals overlap, never sum them across roots]"
-  has_line "  tokens: $(gold prs 501 tokens)  est. cost (USD): $(gold prs 501 usd_a)"
-  [ "$(grep -c '^\[initiative ' <<<"$output")" -eq 1 ]
-  run run_usage pr 502
-  has_line "  tokens: $(gold prs 502 tokens) (fresh 300,000, cache write 0, cache read 0, output 30,000)"
-  has_line "[initiative issue:200 to date; initiative totals overlap, never sum them across roots]"
-  has_line "  tokens: $(gold prs 502 tokens)  est. cost (USD): $(gold prs 502 usd_a)"
-  run run_usage pr 503
-  has_line "  tokens: $(gold prs 503 tokens) (fresh 400,000, cache write 0, cache read 0, output 40,000)"
-  has_line "  est. cost (USD): $(gold prs 503 usd_a)"
-  grep -q '^\[initiative ' <<<"$output" && return 1
-  grep -qF 'lower bound' <<<"$output" && return 1
+  run pr_figures 501
+  has_line "tokens: $(gold prs 501 tokens) (fresh $(gold prs 501 fresh), cache write $(gold prs 501 cw), cache read $(gold prs 501 cr), output $(gold prs 501 out))"
+  has_line "usd: $(gold prs 501 usd_a)"
+  has_line "sessions: 2  span: 2026-09-20..2026-09-21  coverage start: 2026-09-20"
+  has_line "root research:topic-a-2026-10-01: tokens $(gold prs 501 tokens)  usd $(gold prs 501 usd_a)"
+  [ "$(grep -c '^root ' <<<"$output")" -eq 1 ]
+  run pr_figures 502
+  has_line "tokens: $(gold prs 502 tokens) (fresh 300,000, cache write 0, cache read 0, output 30,000)"
+  has_line "root issue:200: tokens $(gold prs 502 tokens)  usd $(gold prs 502 usd_a)"
+  run pr_figures 503
+  has_line "tokens: $(gold prs 503 tokens) (fresh 400,000, cache write 0, cache read 0, output 40,000)"
+  has_line "usd: $(gold prs 503 usd_a)"
+  has_line "lower bound: false"
+  grep -q '^root ' <<<"$output" && return 1
   RATES="$FIXTURES_DIRECTORY/rates-b.json"
-  run run_usage pr 501
-  has_line "  est. cost (USD): $(gold prs 501 usd_b)"
+  run pr_figures 501
+  has_line "usd: $(gold prs 501 usd_b)"
   cmp "$TEMPORARY_DIRECTORY/before" "$TELEMETRY_DIRECTORY/usage.jsonl"
 }
 
@@ -253,9 +271,9 @@ total_line() { printf '  total (distinct segments): tokens %s  est. %s' "$(gold 
   register_hooks "$MAIN"
   mkdir -p "$TELEMETRY_DIRECTORY"
   load_fixture inherit
-  run run_usage pr --branch feat/agent
-  has_line "  tokens: $(gold inherit branch:feat/agent tokens) (fresh 600,000, cache write 0, cache read 0, output 60,000)"
-  has_line "  est. cost (USD): $(gold inherit branch:feat/agent usd)"
+  run pr_figures --branch feat/agent
+  has_line "tokens: $(gold inherit branch:feat/agent tokens) (fresh 600,000, cache write 0, cache read 0, output 60,000)"
+  has_line "usd: $(gold inherit branch:feat/agent usd)"
   run run_usage initiative research:r24
   has_line "$(total_line inherit research:r24)"
   run run_usage reconcile

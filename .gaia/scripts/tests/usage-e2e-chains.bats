@@ -124,7 +124,7 @@ parity() {
 
 # ---------- coverage and markers on every readout ----------
 
-@test "every readout prints the earliest first_ts date as coverage start, and capture hooks not registered replaces its figures when the registrations are gone" {
+@test "the initiative and reconcile readouts print the earliest first_ts date as coverage start, pr --json carries it, and capture hooks not registered replaces every figure when the registrations are gone" {
   local usage_arguments
   seed_debt
   seed_early
@@ -132,17 +132,24 @@ parity() {
   flush_session s-w
   flush_session s-early
   run_usage link --merge 88 --branch debt/123-slug --merged-at 2026-10-02T00:00:00Z
-  for usage_arguments in "pr 88" "initiative issue:123" "reconcile"; do
+  for usage_arguments in "initiative issue:123" "reconcile"; do
     # shellcheck disable=SC2086  # the argument list is split on purpose
     run run_usage $usage_arguments
     grep -qF 'coverage start: 2026-09-28' <<<"$output" || { printf '%s: %s\n' "$usage_arguments" "$output" >&2; return 1; }
     lacks "capture hooks not registered"
   done
+  run run_usage pr 88 --json
+  [ "$(jq -r .coverage <<<"$output")" = 2026-09-28 ]
+  run run_usage pr 88
+  grep -q '^Cost: ' <<<"$output" || { printf 'pr 88: %s\n' "$output" >&2; return 1; }
+  lacks "capture hooks not registered"
   printf '{}\n' >"$REPO/.claude/settings.json"
   for usage_arguments in "pr 88" "initiative issue:123" "reconcile"; do
     # shellcheck disable=SC2086  # the argument list is split on purpose
     run run_usage $usage_arguments
-    grep -qF 'coverage start: 2026-09-28' <<<"$output" || { printf '%s: %s\n' "$usage_arguments" "$output" >&2; return 1; }
+    if [ "$usage_arguments" != "pr 88" ]; then
+      grep -qF 'coverage start: 2026-09-28' <<<"$output" || { printf '%s: %s\n' "$usage_arguments" "$output" >&2; return 1; }
+    fi
     has_line "  ! capture hooks not registered"
     lacks "tokens"
   done

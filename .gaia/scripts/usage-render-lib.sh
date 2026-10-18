@@ -3,7 +3,7 @@
 # printers for the per-PR block, the initiative readout, the reconcile, and
 # the shared Cost line with the interval view it prices.
 #
-# The merge hook prints the per-PR block verbatim, so its line shapes and
+# The merge hook prints the per-PR block verbatim, so its box, Cost line and
 # marker literals are a contract with that hook and with the usage-ledger
 # wiki page, not free text. Refs appear only inside labeled data lines.
 #
@@ -135,6 +135,11 @@ def usage_unattributed: (.rkey | type) != "string" or (.rkey | startswith("sessi
 # $closure_set is usage_set of a closure: a lookup per segment, not a scan of the closure.
 def usage_set($references): reduce $references[] as $reference ({}; .[$reference] = true);
 def usage_in($closure_set): (.rkey | type) == "string" and $closure_set[.rkey] == true;
+# Elapsed seconds from the earliest first_ts to the latest last_ts of the group.
+def usage_elapsed($group):
+  ([$group[] | ._t | select(. != null)] | min) as $first
+  | ([$group[] | (.last_ts // .first_ts) | usage_epoch | select(. != null)] | max) as $last
+  | if $first == null or $last == null then 0 else ([$last - $first, 0] | max | floor) end;
 
 # The views read rows and keys only through their parameters; the wrappers
 # below bind the globals $usage_store, $links_store, and $keys for the filters that still use
@@ -161,11 +166,15 @@ def usage_view_pr_of($usage_records; $links; $pr; $key; $keys; $auditors):
       | [$mine[] | ._t as $epoch
           | select($epoch != null and ($window.from == null or $window.from < $epoch) and ($window.to == null or $epoch <= $window.to))] as $in_window
       | ([$mine[] | ._t | select(. != null)] | min) as $earliest
+      | ($in_window | map(usage_priced)) as $priced
+      # rest is the window minus the audit segments, so the two partition sum.
       | (if $auditors == null then null
-         else {sum: usage_sum([$in_window[] | select((.agent_type | type) == "string" and (.agent_type as $agent_type | any($auditors[]; . == $agent_type)))
-                 | usage_priced]),
-               predate: ([$in_window[] | select((.agent_type | type) != "string")] | length)} end) as $audit
-      | {pr: $pr, key: $pr_key, window: $window, sum: usage_sum($in_window | map(usage_priced)), coverage: $coverage, audit: $audit,
+         else [$priced[] | select((.agent_type | type) == "string" and (.agent_type as $agent_type | any($auditors[]; . == $agent_type)))] as $audit_segments
+           | [$priced[] | select(((.agent_type | type) == "string" and (.agent_type as $agent_type | any($auditors[]; . == $agent_type))) | not)] as $rest_segments
+           | {sum: usage_sum($audit_segments), elapsed_seconds: usage_elapsed($audit_segments),
+              rest: {sum: usage_sum($rest_segments), elapsed_seconds: usage_elapsed($rest_segments)},
+              predate: ([$in_window[] | select((.agent_type | type) != "string")] | length)} end) as $audit
+      | {pr: $pr, key: $pr_key, window: $window, sum: usage_sum($priced), elapsed_seconds: usage_elapsed($priced), coverage: $coverage, audit: $audit,
          lower_bound: ($earliest != null and $coverage_start != null and ($earliest - $coverage_start.epoch) < 86400),
          roots: [$root_closures[] | . as $root_closure
            | {root: $root_closure.root, sum: usage_sum([$segments[] | select(usage_in($root_closure.closure_set)) | usage_priced])}]}
@@ -230,11 +239,7 @@ def usage_view_box_of($usage_records; $links; $reference; $keys):
          then ([$mine[] | select(.session_id == $segment.session_id and .t0 <= $segment._t and $segment._t < .t1)] | sort_by(.t0) | last)
          else null end) as $interval
       | $segment + {_workflow: ($interval.workflow // null)}] as $segments
-  | def elapsed($group):
-      ([$group[] | ._t | select(. != null)] | min) as $first
-      | ([$group[] | (.last_ts // .first_ts) | usage_epoch | select(. != null)] | max) as $last
-      | if $first == null or $last == null then 0 else ([$last - $first, 0] | max | floor) end;
-    def row($label; $group; $elapsed_seconds):
+  | def row($label; $group; $elapsed_seconds):
       usage_sum($group) as $sum
       | {label: $label, tokens: $sum.total, dollars: $sum.usd, unpriced: (($sum.unpriced | length) > 0), elapsed_seconds: $elapsed_seconds};
     ([$segments[] | select(._workflow != null)] | group_by(._workflow)
@@ -248,10 +253,10 @@ def usage_view_box_of($usage_records; $links; $reference; $keys):
   | [$rest[] | select((.rkey | type) == "string" and (.rkey | test("^(branch|pr):")))] as $execute
   | [$rest[] | select(((.rkey | type) == "string" and (.rkey | test("^(branch|pr):"))) | not)] as $other
   | {rows: ($workflow_rows
-      + (if ($execute | length) > 0 then [row("Execute"; $execute; elapsed($execute))] else [] end)
-      + (if ($other | length) > 0 then [row("Other work"; $other; elapsed($other))] else [] end)),
+      + (if ($execute | length) > 0 then [row("Execute"; $execute; usage_elapsed($execute))] else [] end)
+      + (if ($other | length) > 0 then [row("Other work"; $other; usage_elapsed($other))] else [] end)),
      total: ({tokens: $root.sum.total, dollars: $root.sum.usd, unpriced: (($root.sum.unpriced | length) > 0)}
-       + {elapsed_seconds: elapsed($root.segments)})};
+       + {elapsed_seconds: usage_elapsed($root.segments)})};
 
 def usage_view_box($reference):
   usage_view_box_of(usage_rows($usage_store); usage_rows($links_store); $reference; $keys);
@@ -327,16 +332,21 @@ _usage_markers() {
   if [ -n "$unpriced_models" ]; then printf '  ! lower bound: unpriced model(s) %s\n' "$(_usage_safe "$unpriced_models")"; fi
 }
 
-# usage_render_pr <view-json> <hooks_ok> <unflushed> <partial 0|1> <unconfirmed 0|1> <raw branch or "">
+# usage_render_pr <view-json> <hooks_ok> <unflushed> <partial 0|1> <unconfirmed 0|1> <raw branch or ""> [json 0|1]
+# The figures print as the cost box: an Execute row (the window minus the Code
+# Audit Team) and an Audit row when the team spent, else one plain Cost line.
+# json prints the view itself, every figure unrounded.
 # Tab is IFS whitespace, so `read` collapses an empty field; every field the
 # view can leave empty is emitted as `-` and mapped back here.
 usage_render_pr() {
-  local view_json="$1" hooks="$2" unflushed="$3" partial="$4" unconfirmed="$5" raw_branch="$6" rerun_flags
-  local pr key coverage_start total_tokens fresh_tokens cache_write_tokens cache_read_tokens output_tokens usd session_count span_from span_to window_from window_to lower_bound
-  IFS=$'\t' read -r pr key coverage_start total_tokens fresh_tokens cache_write_tokens cache_read_tokens output_tokens usd session_count span_from span_to window_from window_to lower_bound < <(jq -r '[(.pr // "?"), (.key // "-"),
-      (.coverage // "none"), (.sum.total // 0), (.sum.fresh // 0), (.sum.cw // 0), (.sum.cr // 0), (.sum.out // 0),
-      (.sum.usd // "null"), (.sum.sessions // 0), (.sum.span_from // "-"), (.sum.span_to // "-"),
-      (.window.from_iso // "start of record"), (.window.to_iso // "now"), (.lower_bound // false)] | @tsv' <<<"$view_json")
+  local view_json="$1" hooks="$2" unflushed="$3" partial="$4" unconfirmed="$5" raw_branch="$6" as_json="${7:-0}" rerun_flags
+  local pr key coverage_start lower_bound audit_predate title
+  if [ "$as_json" = 1 ]; then
+    jq -c . <<<"$view_json"
+    return 0
+  fi
+  IFS=$'\t' read -r pr key coverage_start lower_bound audit_predate < <(jq -r '[(.pr // "?"), (.key // "-"),
+      (.coverage // "none"), (.lower_bound // false), (.audit.predate // 0)] | @tsv' <<<"$view_json")
   [ "$key" = - ] && key=""
   local -a extra=()
   if [ "$partial" = 1 ]; then
@@ -358,28 +368,20 @@ usage_render_pr() {
     return 0
   fi
   [ "$lower_bound" = true ] && extra[${#extra[@]}]="lower bound: branch spend may predate coverage start"
-  printf '[PR cost] pr:%s %s\n' "$(_usage_safe "$pr")" "$(_usage_safe "$key")"
+  [ "$audit_predate" = 0 ] || extra[${#extra[@]}]="lower bound: $(_usage_safe "$audit_predate") segment(s) predate agent fields"
+  if [[ $pr =~ ^[1-9][0-9]*$ ]]; then title="PR #$pr Cost"; else title="$(_usage_safe "$key") Cost"; fi
   if [ "$hooks" = 1 ]; then
-    printf '  tokens: %s (fresh %s, cache write %s, cache read %s, output %s)\n' "$(commify "$total_tokens")" \
-      "$(commify "$fresh_tokens")" "$(commify "$cache_write_tokens")" "$(commify "$cache_read_tokens")" "$(commify "$output_tokens")"
-    printf '  est. cost (USD): %s\n' "$(_usage_money "$usd")"
-    local audit_tokens audit_usd audit_predate
-    IFS=$'\t' read -r audit_tokens audit_usd audit_predate < <(jq -r 'if .audit == null then "-\t-\t-"
-      else [.audit.sum.total, (.audit.sum.usd // "null"), .audit.predate] | @tsv end' <<<"$view_json")
-    if [ "$audit_tokens" != - ]; then
-      printf '  audit (Code Audit Team): tokens %s  est. cost (USD): %s\n' "$(commify "$audit_tokens")" "$(_usage_money "$audit_usd")"
-      if [ "$audit_predate" != 0 ]; then printf '  ! lower bound: %s segment(s) predate agent fields\n' "$(_usage_safe "$audit_predate")"; fi
-    fi
+    _usage_box_print "$(jq -c 'def row($label; $sum; $elapsed_seconds):
+        {label: $label, tokens: $sum.total, dollars: $sum.usd, unpriced: (($sum.unpriced | length) > 0), elapsed_seconds: $elapsed_seconds};
+      ((if .audit == null or .audit.rest.sum.total == 0 then [] else [row("Execute"; .audit.rest.sum; .audit.rest.elapsed_seconds)] end)
+        + (if .audit == null or .audit.sum.total == 0 then [] else [row("Audit"; .audit.sum; .audit.elapsed_seconds)] end)) as $rows
+      | {rows: (if ($rows | length) > 1 then $rows else [row("Total"; .sum; .elapsed_seconds)] end),
+         total: {elapsed_seconds: .elapsed_seconds}}' <<<"$view_json")" "$title" ""
+  else
+    printf '%s\n' "$title"
   fi
-  if [ "$span_from" != - ]; then span_to="$span_from..$span_to"; else span_to=none; fi
-  printf '  sessions: %s  span: %s  coverage start: %s\n' "$session_count" "$(_usage_safe "$span_to")" "$(_usage_safe "$coverage_start")"
-  printf '  window: after %s through %s\n' "$(_usage_safe "$window_from")" "$(_usage_safe "$window_to")"
-  _usage_markers "$view_json" "$hooks" "$unflushed" ${extra[@]+"${extra[@]}"}
-  [ "$hooks" = 1 ] || return 0
-  while IFS=$'\t' read -r key total_tokens usd; do
-    printf '[initiative %s to date; initiative totals overlap, never sum them across roots]\n' "$(_usage_safe "$key")"
-    printf '  tokens: %s  est. cost (USD): %s\n' "$(commify "$total_tokens")" "$(_usage_money "$usd")"
-  done < <(jq -r '.roots[] | [.root, .sum.total, (.sum.usd // "null")] | @tsv' <<<"$view_json")
+  # Only the PR's own spend names unpriced models; the roots are not shown.
+  _usage_markers "$(jq -c '{sum}' <<<"$view_json")" "$hooks" "$unflushed" ${extra[@]+"${extra[@]}"}
 }
 
 usage_render_initiative() {
@@ -428,20 +430,28 @@ _usage_box_money() {
 }
 
 # usage_render_box <view-json> <hooks_ok> <unflushed> <display ref> <json 0|1> <flush_incomplete 0|1>:
-# the cost box. Every figure is rounded once, to the 0.1M and the cent it
-# shows, and the Total row adds those rounded rows, so the column on screen
-# always sums. The box is plain ASCII, so its width counted in bytes is its width
-# on screen, and the script pads it: the right border is one column whatever the
-# figures' widths.
+# the initiative cost box.
 usage_render_box() {
-  local view_json="$1" display_reference="$4" as_json="$5" flush_incomplete="$6"
-  local label tokens dollars elapsed unpriced tenths cents row_count=0 label_width=0 content_width=0 total_tenths=0 total_cents=0 total_unpriced=false cents_unavailable=false
-  local row_total total_elapsed total_cents_or_null inner line border figure total_figure
-  local -a labels=() figures=()
+  local view_json="$1" display_reference="$4" as_json="$5" flush_incomplete="$6" flush_command=""
   if [ "$as_json" = 1 ]; then
     jq -c '{rows: [.rows[] | {label, tokens, dollars, elapsed_seconds}], total: (.total | {tokens, dollars, elapsed_seconds})}' <<<"$view_json"
     return 0
   fi
+  [ "$flush_incomplete" = 0 ] || flush_command="bash .gaia/scripts/usage.sh initiative $(_usage_safe "$display_reference") --box"
+  _usage_box_print "$view_json" "$(_usage_safe "$display_reference") Cost" "$flush_command"
+}
+
+# _usage_box_print <box-json {rows, total.elapsed_seconds}> <title> <flush note command or "">:
+# the box, or the plain Cost line for one row. The caller makes the title safe.
+# Every figure is rounded once, to the 0.1M and the cent it shows, and the Total
+# row adds those rounded rows, so the column on screen always sums. The box is
+# plain ASCII, so its width counted in bytes is its width on screen, and the
+# script pads it: the right border is one column whatever the figures' widths.
+_usage_box_print() {
+  local view_json="$1" title="$2" flush_command="$3"
+  local label tokens dollars elapsed unpriced tenths cents row_count=0 label_width=0 content_width=0 total_tenths=0 total_cents=0 total_unpriced=false cents_unavailable=false
+  local row_total total_elapsed total_cents_or_null inner line border figure total_figure
+  local -a labels=() figures=()
   row_total="$(jq -r '.rows | length' <<<"$view_json")"
   if [ "$row_total" = 1 ]; then
     # One line item is one plain Cost line, the shape `record` prints.
@@ -449,11 +459,11 @@ usage_render_box() {
     _usage_override_marker
     gaia_usage_cost_line "$tokens" "$dollars" "$elapsed"
     printf '\n'
-    if [ "$flush_incomplete" = 1 ]; then printf 'Note: %s\n' "$(usage_note_flush_incomplete "bash .gaia/scripts/usage.sh initiative $(_usage_safe "$display_reference") --box")"; fi
+    if [ -n "$flush_command" ]; then printf 'Note: %s\n' "$(usage_note_flush_incomplete "$flush_command")"; fi
     if [ "$unpriced" = true ]; then printf 'Note: %s\n' "$(usage_note_lower_bound)"; fi
     return 0
   fi
-  printf '%s Cost\n\n' "$(_usage_safe "$display_reference")"
+  printf '%s\n\n' "$title"
   while IFS=$'\t' read -r label tokens dollars elapsed unpriced; do
     tenths="$(LC_ALL=C awk -v tokens="$tokens" 'BEGIN { printf "%d", tokens / 100000 + 0.5 }')"
     if [ "$dollars" = null ]; then cents=null; cents_unavailable=true
@@ -502,8 +512,8 @@ usage_render_box() {
   fi
   printf '%s\n' "$border"
   _usage_override_marker
-  if [ "$flush_incomplete" = 1 ] || [ "$total_unpriced" = true ]; then printf '\n'; fi
-  if [ "$flush_incomplete" = 1 ]; then printf 'Note: %s\n' "$(usage_note_flush_incomplete "bash .gaia/scripts/usage.sh initiative $(_usage_safe "$display_reference") --box")"; fi
+  if [ -n "$flush_command" ] || [ "$total_unpriced" = true ]; then printf '\n'; fi
+  if [ -n "$flush_command" ]; then printf 'Note: %s\n' "$(usage_note_flush_incomplete "$flush_command")"; fi
   if [ "$total_unpriced" = true ]; then printf 'Note: %s\n' "$(usage_note_lower_bound)"; fi
   return 0
 }

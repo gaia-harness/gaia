@@ -108,6 +108,13 @@ gaia_resolve_rate_table() {
   fi
 }
 SHIM
+  # The working tree prints the per-PR figures as a box rounded to 0.1M tokens,
+  # which hides a difference between the two views on these small fixtures.
+  # Rendering the new tree's view through the baseline's own printer keeps the
+  # comparison at full precision and on the figures alone.
+  awk '/^usage_render_pr\(\) \{/,/^\}/' "$UM_BASELINE_DIRECTORY/usage-render-lib.sh" >"$UM_TEMPORARY_DIRECTORY/legacy-render-pr.sh" || return 1
+  grep -q '^usage_render_pr() {' "$UM_TEMPORARY_DIRECTORY/legacy-render-pr.sh" || { _umemo_fail "no usage_render_pr in the pinned baseline"; return 1; }
+  cat "$UM_TEMPORARY_DIRECTORY/legacy-render-pr.sh" >>"$UM_NEW/.gaia/scripts/usage-render-lib.sh" || return 1
   # The frozen baseline loads the ledger lock only from its old relative path.
   mkdir -p "$UM_OLD/.specify/extensions/gaia/lib" || return 1
   cp "$UM_SOURCE_ROOT/.gaia/scripts/spec/with-ledger-lock.sh" "$UM_OLD/.specify/extensions/gaia/lib/" || return 1

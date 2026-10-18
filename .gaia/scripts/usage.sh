@@ -52,7 +52,8 @@ usage: bash .gaia/scripts/usage.sh <subcommand> [args]
   lineage <path-to-SPEC.md>                         record a SPEC's lineage: entries
   declare <research:slug|init:slug> [--session <sid>] [--at <iso>]
   pr [<pr>] [--branch <raw> | --key <branch-ref>] [--merged-at <iso>] [--partial] [--unconfirmed]
-     [--auditors <name>[,<name>...]]                adds the Code Audit Team line
+     [--auditors <name>[,<name>...]] [--json]       the PR's cost box; --auditors splits it into
+                                                    Execute and Audit rows, --json prints the view
   pr-branch <pr>                                    the branch key a PR is linked to
   initiative <ref>                                  spend under each root of <ref>
   initiative <ref> --line [--json]                  one Cost line for <ref> as the root
@@ -404,7 +405,7 @@ subcommand_pr() {
   fi
   _readout 'usage_view_pr_of($usage_records; $links; $pr; (if $key == "" then null else $key end); $memo_keys; $auditors)' \
     'usage_view_pr($pr; (if $key == "" then null else $key end); $auditors)' usage_render_pr \
-    "$PARTIAL" "$UNCONFIRMED" "$BRANCH"
+    "$PARTIAL" "$UNCONFIRMED" "$BRANCH" "$JSON"
 }
 
 # _auditors_json <list>: the comma-separated names as a JSON array; rc 1 when a
