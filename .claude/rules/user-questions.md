@@ -11,7 +11,6 @@ paths:
   - 'wiki/concepts/Audit Disposition and Debt Fix.md'
   - 'wiki/concepts/Code Review Audit Agent.md'
   - 'wiki/concepts/Workflow Doctrine.md'
-  - 'wiki/concepts/Release Workflow.md'
   - 'wiki/decisions/Quality Gate.md'
 ---
 
