@@ -25,11 +25,12 @@ setup() {
 }
 
 # read_targets <root> <file>: the repo-relative .md paths a `Read` line in
-# <file> names, as `Read \`<path>\`` or `Read $PROJECT_ROOT/<path>`.
+# <file> names, as `Read \`<path>\``, `Read $PROJECT_ROOT/<path>` or
+# `Read $TREE_ROOT/<path>` (cleanse's Stage 2 reads from the isolated tree).
 read_targets() {
   local root="$1" file="$2" target
-  grep -oE 'Read (`|\$PROJECT_ROOT/)\.claude/[^` ]+\.md' "$root/$file" 2>/dev/null |
-    sed -E 's/^Read (`|\$PROJECT_ROOT\/)//' |
+  grep -oE 'Read (`|\$(PROJECT|TREE)_ROOT/)\.claude/[^` ]+\.md' "$root/$file" 2>/dev/null |
+    sed -E 's/^Read (`|\$(PROJECT|TREE)_ROOT\/)//' |
     while IFS= read -r target; do
       [ -f "$root/$target" ] && printf '%s\n' "$target"
     done

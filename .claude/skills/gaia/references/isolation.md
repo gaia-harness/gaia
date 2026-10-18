@@ -233,9 +233,8 @@ isolation holds work: keep it, and report its path and branch so the user decide
 
 When both are empty:
 
-- **`worktree`**: call `ExitWorktree({action: "remove", discard_changes: true})`. Both reads came back empty, so
-  `discard_changes` loses nothing. `ExitWorktree` deletes only the `worktree-<name>` spelling it created, so from the
-  main checkout, which the call returned the session to, delete the renamed branch: `git branch -D <branch-name>`.
+- **`worktree`**: remove the worktree and its branch per `.claude/skills/gaia/references/work-lifecycle.md`,
+  `## Releasing an empty worktree`.
 - **`feature-branch`**: `git checkout <base>`, then `git branch -D <branch-name>`.
 
 ## Export: `RESOLVED_MODE` and `RESOLVED_ROOT`
