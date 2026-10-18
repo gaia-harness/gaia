@@ -363,23 +363,38 @@ else
       nudge_set 0 '01;95' '/setup-gaia' "$full" "$setup_pending_count" '⚙️'
     fi
     if [ -f "$CACHE_FILE" ] && command -v jq >/dev/null 2>&1; then
-      # One spawn for both update-deps counts. securityCount is never defaulted
-      # to 0: null (no advisory source answered) must stay distinguishable from
-      # a real zero, so an unreadable value yields an empty field.
-      deps_counts=$(jq -r '"\(.outdatedCount // 0),\(.securityCount | if type == "number" then (floor | tostring) else "" end)"' "$CACHE_FILE" 2>/dev/null)
-      outdated_count="${deps_counts%%,*}"
-      security_count="${deps_counts#*,}"
+      # One jq call reads every cache field this block uses, joined by a control
+      # character no value contains; each value has control bytes stripped
+      # (escape sequences, newlines, the delimiter itself) before it reaches a
+      # terminal, since codify-tally's finding_class segments and the review
+      # snapshot behind the cached reasons originate in PR text any author
+      # controls. securityCount is never defaulted to 0: null (no advisory
+      # source answered) must stay distinguishable from a real zero, so an
+      # unreadable value yields an empty field. A cache written before
+      # codifyNudgeReason existed has no key, which the has_codify_reason flag
+      # carries. Silent on jq failure: every field then reads empty.
+      cache_fields=$(jq -r '
+        def clean: tostring | gsub("[\u0000-\u001f\u007f]"; "");
+        [ (.outdatedCount // 0 | clean),
+          (.securityCount | if type == "number" then (floor | tostring) else "" end),
+          (.gaiaHasUpdate // false | clean),
+          (.gaiaLatest // "" | clean),
+          ((.codifyCandidateCount // 0) | if type == "number" then (floor | tostring) else "0" end),
+          (if has("codifyNudgeReason") then "1" else "0" end),
+          ((.codifyNudgeReason // "") | clean),
+          (.cleanseNudge // false | clean),
+          (.cleanseNudgeReason // "" | clean),
+          ((.serenaLangDrift // []) | join(", ") | clean),
+          (.codifyUnclassifiedCount // 0 | clean),
+          (.residueCandidateCount // 0 | clean),
+          (.wikiDriftCount // 0 | clean) ]
+        | join("\u001f")' "$CACHE_FILE" 2>/dev/null) || cache_fields=""
+      IFS=$'\037' read -r outdated_count security_count gaia_has_update gaia_latest \
+        codify_count has_codify_reason codify_reason cleanse_nudge cleanse_reason \
+        serena_drift codify_unclassified residue_count wiki_drift_count <<<"$cache_fields"
       case "$security_count" in
         ''|*[!0-9]*) security_count="" ;;
       esac
-      gaia_has_update=$(jq -r '.gaiaHasUpdate // false' "$CACHE_FILE" 2>/dev/null)
-      gaia_latest=$(jq -r '.gaiaLatest // empty' "$CACHE_FILE" 2>/dev/null)
-      # One spawn for three reads: a digit-string candidate count, a comma,
-      # then a leading 1 or 0 saying whether codifyNudgeReason exists,
-      # followed by the reason itself.
-      codify_all=$(jq -r '((.codifyCandidateCount // 0) | if type == "number" then (floor | tostring) else "0" end) + "," + (if has("codifyNudgeReason") then "1" + ((.codifyNudgeReason // "") | tostring) else "0" end)' "$CACHE_FILE" 2>/dev/null)
-      codify_count="${codify_all%%,*}"
-      codify_reason_raw="${codify_all#*,}"
       case "$codify_count" in
         ''|*[!0-9]*) codify_count=0 ;;
       esac
@@ -387,16 +402,6 @@ else
       # candidate count, so the segment goes straight to Small.
       codify_mid=""
       [ "$codify_count" -gt 0 ] 2>/dev/null && codify_mid="$codify_count"
-      has_codify_reason="${codify_reason_raw:0:1}"
-      # A cached reason is untrusted: codify-tally's finding_class segments and
-      # the review snapshot both originate in PR text any author controls, so
-      # strip control bytes (escape sequences, newlines) before this reaches a
-      # terminal, even though the refresher's own composition already
-      # constrains the class-name segment it builds the reason from.
-      codify_reason="$(printf '%s' "${codify_reason_raw#?}" | tr -d '\000-\037\177')"
-      cleanse_nudge=$(jq -r '.cleanseNudge // false' "$CACHE_FILE" 2>/dev/null)
-      cleanse_reason=$(jq -r '.cleanseNudgeReason // empty' "$CACHE_FILE" 2>/dev/null)
-      serena_drift=$(jq -r '(.serenaLangDrift // []) | join(", ")' "$CACHE_FILE" 2>/dev/null)
 
       if [ "$gaia_has_update" = "true" ] && [ -n "$gaia_latest" ]; then
         # No Medium: the Large reason is already just the version.
@@ -431,7 +436,6 @@ else
           nudge_set 5 '01;35' '/gaia-codify' "$full" "$codify_mid" '🔨'
         fi
       else
-        codify_unclassified=$(jq -r '.codifyUnclassifiedCount // 0' "$CACHE_FILE" 2>/dev/null)
         fallback_reason=""
         if [ "$codify_count" -gt 0 ] 2>/dev/null; then
           codify_noun="recurring patterns"
@@ -469,7 +473,6 @@ else
       # against a corpus younger than one quarter and are re-measured after
       # two.
       RESIDUE_NUDGE_THRESHOLD=5
-      residue_count=$(jq -r '.residueCandidateCount // 0' "$CACHE_FILE" 2>/dev/null)
       case "$residue_count" in
         ''|*[!0-9]*) residue_count=0 ;;
       esac
@@ -484,7 +487,6 @@ else
       # deliberately not adopter-configurable. Reads only the count the
       # refresher cached; no repository query runs on this render path.
       WIKI_NUDGE_THRESHOLD=20
-      wiki_drift_count=$(jq -r '.wikiDriftCount // 0' "$CACHE_FILE" 2>/dev/null)
       case "$wiki_drift_count" in
         ''|*[!0-9]*) wiki_drift_count=0 ;;
       esac

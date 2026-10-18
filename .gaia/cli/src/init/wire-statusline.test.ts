@@ -107,6 +107,7 @@ describe('mergeStatusline', () => {
     expect(keys).toEqual(['env', 'permissions', 'statusLine']);
     expect(merged.statusLine).toEqual({
       command: CANONICAL_STATUSLINE_COMMAND,
+      refreshInterval: 15,
       type: 'command',
     });
   });
@@ -116,6 +117,7 @@ describe('mergeStatusline', () => {
       env: {},
       statusLine: {
         command: CANONICAL_STATUSLINE_COMMAND,
+        refreshInterval: 15,
         type: 'command',
       },
     };
@@ -130,8 +132,34 @@ describe('mergeStatusline', () => {
     });
     expect(merged.statusLine).toEqual({
       command: CANONICAL_STATUSLINE_COMMAND,
+      refreshInterval: 15,
       type: 'command',
     });
+  });
+
+  test('upgrades a canonical command that lacks refreshInterval', () => {
+    const merged = mergeStatusline({
+      env: {},
+      statusLine: {command: CANONICAL_STATUSLINE_COMMAND, type: 'command'},
+    });
+    expect(merged.statusLine).toEqual({
+      command: CANONICAL_STATUSLINE_COMMAND,
+      refreshInterval: 15,
+      type: 'command',
+    });
+  });
+
+  test('keeps a canonical command whose refreshInterval was tuned', () => {
+    const source = {
+      env: {},
+      statusLine: {
+        command: CANONICAL_STATUSLINE_COMMAND,
+        refreshInterval: 30,
+        type: 'command',
+      },
+    };
+    const merged = mergeStatusline(source);
+    expect(merged).toBe(source);
   });
 });
 
@@ -196,6 +224,7 @@ describe('init wire-statusline CLI', () => {
         permissions: {allow: ['Bash(pnpm test:ci)'], deny: []},
         statusLine: {
           command: CANONICAL_STATUSLINE_COMMAND,
+          refreshInterval: 15,
           type: 'command',
         },
       },
