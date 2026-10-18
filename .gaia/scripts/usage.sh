@@ -56,9 +56,10 @@ usage: bash .gaia/scripts/usage.sh <subcommand> [args]
   pr-branch <pr>                                    the branch key a PR is linked to
   initiative <ref>                                  spend under each root of <ref>
   initiative <ref> --line [--json]                  one Cost line for <ref> as the root
+  initiative <ref> --box [--json]                   the labelled cost box for <ref> (SPEC-NNN and PLAN-NNN work bare)
   reconcile                                         attributed vs unattributed spend
-  record <ref> --workflow <w> [--pr <N>] [--issue <N>] [--start <iso>] [--json]
-                                                    close a run, print its Cost line
+  record <ref> --workflow <w> [--pr <N>] [--issue <N>] [--start <iso>] [--json] [--quiet]
+                                                    close a run, print its Cost line (--quiet prints none)
   represented <ref> --workflow <w>                  exit 0 when the run's close is on the ledger
   handoff                                           print the join line for this session's open run
   join --workflow <w> --session <sid> --start <iso> bind this session to a run started in another
@@ -83,7 +84,7 @@ _is_iso() { [[ "${1-}" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}
 
 MAIN_ROOT="" TELEMETRY_DIRECTORY="" RATE_TABLE="" PROJECTS_ROOT="" SESSION="" SIDECHAIN=false
 SOURCE="" MERGE="" PR_NUMBER="" BRANCH="" KEY="" MERGED_AT="" AT="" PARTIAL=0 UNCONFIRMED=0
-LINE=0 JSON=0 AUDITORS="" AUDITORS_GIVEN=0 WORKFLOW="" ISSUE_NUMBER="" START_ISO=""
+LINE=0 BOX=0 QUIET=0 JSON=0 AUDITORS="" AUDITORS_GIVEN=0 WORKFLOW="" ISSUE_NUMBER="" START_ISO=""
 ARGS=()
 
 # rc 2 on a malformed flag; the caller decides whether that exits 2 or 0.
@@ -91,11 +92,14 @@ _parse() {
   local flag
   while [ $# -gt 0 ]; do
     flag="$1"
+    # shellcheck disable=SC2034  # QUIET is read by usage-record-lib.sh
     case "$flag" in
       --sidechain) SIDECHAIN=true; shift; continue ;;
       --partial) PARTIAL=1; shift; continue ;;
       --unconfirmed) UNCONFIRMED=1; shift; continue ;;
       --line) LINE=1; shift; continue ;;
+      --box) BOX=1; shift; continue ;;
+      --quiet) QUIET=1; shift; continue ;;
       --json) JSON=1; shift; continue ;;
       --main-root | --telemetry-dir | --rate-table | --projects-root | --session | --source | \
         --merge | --pr | --branch | --key | --merged-at | --at | --auditors | --workflow | --issue | --start)
@@ -417,8 +421,16 @@ _auditors_json() {
 }
 
 subcommand_initiative() {
+  [ "${#ARGS[@]}" -ne 1 ] || ARGS[0]="$(gaia_usage_bare_reference "${ARGS[0]}")"
   if [ "${#ARGS[@]}" -ne 1 ] || ! gaia_usage_valid_reference "${ARGS[0]}"; then
     _error "initiative takes one valid ref"
+    return 0
+  fi
+  if [ "$BOX" = 1 ]; then
+    [ "$LINE" = 0 ] || { _error "--box and --line are exclusive"; return 0; }
+    _box_flush_wait
+    _readout 'usage_view_box_of($usage_records; $links; $reference; $memo_keys)' 'usage_view_box($reference)' \
+      usage_render_box "${ARGS[0]#*:}" "$JSON" "$BOX_FLUSH_INCOMPLETE"
     return 0
   fi
   if [ "$LINE" = 1 ]; then
@@ -426,7 +438,7 @@ subcommand_initiative() {
       usage_render_initiative_line "$JSON"
     return 0
   fi
-  [ "$JSON" = 0 ] || { _error "--json needs --line"; return 0; }
+  [ "$JSON" = 0 ] || { _error "--json needs --line or --box"; return 0; }
   _readout 'usage_view_initiative_of($usage_records; $links; $reference; $memo_keys)' 'usage_view_initiative($reference)' \
     usage_render_initiative
 }

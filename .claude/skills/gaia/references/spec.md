@@ -375,13 +375,13 @@ bash .gaia/scripts/notebook/notebook-lib.sh update spec "$SPEC_ID" '{"links":{"r
 ```
 
 3. **Delete the session-shape cache:** `rm -f .gaia/local/cache/spec-session-${SPEC_ID}.json`. The cache's job, tracking `question_count` against the ceiling across a pause and resume, ends once the SPEC is saved. **Release the session lock (canonical save):** `bash .gaia/scripts/spec/spec-session-lock.sh release "$PWD" "$SPEC_ID" || true`. The canonical save is the holder's own graceful exit, so it drops its own lock here, alongside the session-shape cache.
-4. **Record the run (never blocks):** close the session's usage record and print its Cost line. This call never blocks or fails the save.
+4. **Record the run (never blocks):** close the session's usage record. This call never blocks or fails the save.
 
 ```bash
-bash .gaia/scripts/usage.sh record spec:${SPEC_ID} --workflow gaia-spec
+bash .gaia/scripts/usage.sh record spec:${SPEC_ID} --workflow gaia-spec --quiet
 ```
 
-The command pairs this session's `gaia-spec` start with now, flushes the session's token usage into the usage ledger, and prints the Cost line as its last stdout line. Report that line verbatim and nothing else from the output: `Cost: ~<total> tokens, $<dollars>, <elapsed>`, with the suffixes the command adds when the figure is partial. Never compute or restate a figure yourself. On a non-zero exit, relay the command's one stderr line in place of the Cost line and continue; when start detection missed (the session was cleared or resumed), that line names the `--start <iso>` recovery, which runs outside a live `gaia-spec` run. This line reads identically to the `/gaia-plan` cost line (plan reference, step 5) and the orchestrator's full-cycle line; keep the three in sync.
+The command pairs this session's `gaia-spec` start with now and flushes the session's token usage into the usage ledger. `--quiet` prints no Cost line on success: the user sees the run's cost once, as the box at the end of the plan run (step 11). On a non-zero exit, relay the command's one stderr line and continue; when start detection missed (the session was cleared or resumed), that line names the `--start <iso>` recovery, which runs outside a live `gaia-spec` run.
 
 5. **Lineage edges (never blocks):** materialize each `lineage:` entry as an edge in the usage links ledger now, because the SPEC folder is reaped later and nothing reads `SPEC.md` for edges at read time. Shell state does not survive between Bash calls, so this block re-derives its own paths. Substitute the literal SPEC id for `SPEC-NNN`:
 
@@ -392,7 +392,7 @@ bash .gaia/scripts/usage.sh lineage "$SPEC_PATH" || true
 
 A wrong path prints a `no SPEC file` line to stderr even behind `|| true`. A SPEC saved without `lineage:` links later with `bash .gaia/scripts/usage.sh link spec:SPEC-NNN <parent-ref>`.
 
-**Auto-mode:** the record call fires identically in interactive and auto mode; it is a mechanical command, not a user prompt, so no auto-mode branch is needed. In auto mode the Cost line simply lands in the transcript, nothing to prompt.
+**Auto-mode:** the record call fires identically in interactive and auto mode; it is a mechanical command, not a user prompt, so no auto-mode branch is needed. In auto mode the cost box simply lands in the transcript at the end of the plan run, nothing to prompt.
 
 ### 10. Immutability lint
 
@@ -423,11 +423,11 @@ This step runs once, after the final step-10 outcome (lint passed, or remaining 
 
 1. Print the status line `SPEC-NNN saved to `.notebook/specs/SPEC-NNN/SPEC.md`.` with the real id substituted.
 2. Invoke the `Skill` tool with `skill: "gaia-plan"` and `args: "SPEC-NNN"` (in auto mode, `args: "auto SPEC-NNN"`), the literal id substituted. Entering through the skill is what writes the `gaia-plan` start the usage ledger pairs the plan run's close with; never run the plan steps any other way.
-3. Follow the plan run to its step 5 report. That report (summary, Planner yields and cost lines, the fenced KICKOFF prompt and its trailing line) is the session's last output, with no tool call after it. Execution is the human's next move in a fresh session.
+3. Follow the plan run to its step 5 report. That report (summary, the cost box, the fenced KICKOFF prompt and its trailing line) is the session's last output, with no tool call after it. Execution is the human's next move in a fresh session.
 
 Rationale: `wiki/concepts/GAIA Spec.md` (step 11).
 
-**If the plan run stops before its report.** When the plan run stops before plan step 5 (its pre-flight notebook-readiness pass blocks, its SPEC resolution finds no SPEC, its output verification or plan check fails, the planner reaches its yield limit or leaves a missing handoff) or the `gaia-plan` Skill cannot be invoked, the session's last output is the stop reason followed by this recovery, and nothing further is dispatched. The SPEC is saved and frozen, so the re-plan resolves it; a partial plan folder stays in place and the re-plan writes the next free `plan-N`.
+**If the plan run stops before its report.** When the plan run stops before plan step 5 (its pre-flight notebook-readiness pass blocks, its SPEC resolution finds no SPEC, its output verification or plan check fails, the planner reaches its yield limit or leaves a missing handoff) or the `gaia-plan` Skill cannot be invoked, the session's last output is the stop reason, then the cost so far, then this recovery, and nothing further is dispatched. Print the cost so far with `bash .gaia/scripts/usage.sh initiative SPEC-NNN --box` (the real id), relayed verbatim: fenced as a `text` code block when it is a box, unfenced when it is one plain `Cost:` line, which is what the saved spec alone shows. The SPEC is saved and frozen, so the re-plan resolves it; a partial plan folder stays in place and the re-plan writes the next free `plan-N`.
 
 ```text
 /gaia-plan SPEC-NNN

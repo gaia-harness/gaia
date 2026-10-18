@@ -209,22 +209,23 @@ To run the audit, read `.claude/skills/gaia/references/plan/decomposition-audit.
 
 The plan folder is written and verified, so every planner and auditor sub-agent this action spawned has flushed its sidecar to disk. Close the `/gaia-plan` run in the usage ledger before the handoff, with the ref that matches the plan's origin:
 
-- **Spec-derived** (`SPEC_PATH` set): `bash .gaia/scripts/usage.sh record spec:<SPEC-NNN> --workflow gaia-plan`, where `<SPEC-NNN>` is the name of `SPEC_PATH`'s parent folder.
-- **Spec-less**: `bash .gaia/scripts/usage.sh record plan:<PLAN-NNN> --workflow gaia-plan`, where `<PLAN-NNN>` is the basename of `$PLAN_DIR`, the id allocated in step 3.
+- **Spec-derived** (`SPEC_PATH` set): `bash .gaia/scripts/usage.sh record spec:<SPEC-NNN> --workflow gaia-plan --quiet`, where `<SPEC-NNN>` is the name of `SPEC_PATH`'s parent folder. `--quiet` prints no Cost line on success: the run's cost is shown once, as the box in step 5.
+- **Spec-less**: `bash .gaia/scripts/usage.sh record plan:<PLAN-NNN> --workflow gaia-plan`, where `<PLAN-NNN>` is the basename of `$PLAN_DIR`, the id allocated in step 3. It prints the Cost line (and any `Note:` lines under it) that step 5 relays.
 
-The command flushes the session's token usage into the ledger and prints the Cost line as its last stdout line. It **never blocks the handoff**: on a non-zero exit, keep the one stderr line it prints for the step-5 report and continue. A `/clear` or a resumed session has a new session id, so a plan authored across one is refused with "no unclaimed start"; the stderr line then names the `--start <iso>` recovery, which runs outside a live `gaia-plan` run. The call is a mechanical command, not a prompt, so it runs identically in interactive and auto mode.
+The command flushes the session's token usage into the ledger. It **never blocks the handoff**: on a non-zero exit, keep the one stderr line it prints for the step-5 report and continue. A `/clear` or a resumed session has a new session id, so a plan authored across one is refused with "no unclaimed start"; the stderr line then names the `--start <iso>` recovery, which runs outside a live `gaia-plan` run. The call is a mechanical command, not a prompt, so it runs identically in interactive and auto mode.
 
 ### 5. Report to user
 
 Output a short summary of what's in `$PLAN_DIR/`, then report the cost, then emit the copy-paste prompt the user drops into a fresh Claude Code session to start the orchestrator cold.
 
-Planner yields: print one line per planner dispatch chain this run made, `Planner yields: <n>`, where `<n>` is that chain's yield count (`Planner yields: 0` when the planner never yielded).
+Cost: never compute or restate a figure yourself.
 
-Cost line: relay the Cost line `record` printed in step 4.7 verbatim (`Cost: ~<total> tokens, $<dollars>, <elapsed>`, plus any partial suffix it carries); it covers this plan's own interval. Never compute or restate a figure yourself. When `record` exited non-zero, relay its one stderr line in its place.
+- **Spec-derived:** run `bash .gaia/scripts/usage.sh initiative <SPEC-NNN> --box` with the same `<SPEC-NNN>` and relay its output verbatim, inside a fenced `text` code block when it is a box (a bare box is reflowed by the Markdown renderer and loses its alignment). The box lists the spec's own run and this plan with a total. When the output is one plain `Cost:` line (the spec's run was never recorded), relay that line unfenced. The command waits briefly for usage still being saved, so the figures are complete in the common case; a `Note:` line under the figures says when they are not.
+- **Spec-less:** relay the Cost line `record` printed in step 4.7, with any `Note:` lines under it, verbatim and unfenced. It is one line item, so there is no box.
 
-A spec-derived plan then also prints the full-cycle-to-date line as the next line, verbatim: `bash .gaia/scripts/usage.sh initiative spec:<SPEC-NNN> --line`, with the same `<SPEC-NNN>`. A spec-less plan prints no second line.
+When `record` exited non-zero in step 4.7, relay its one stderr line in place of the cost.
 
-This line reads identically to the `/gaia-spec` cost line (spec reference, step 9) and the orchestrator's full-cycle line; keep the three in sync.
+This readout matches the cost shown when `/gaia-spec` stops before the plan report (spec reference, step 11) and the orchestrator's full-cycle readout; keep the three in sync.
 
 The prompt is a single line, exactly:
 

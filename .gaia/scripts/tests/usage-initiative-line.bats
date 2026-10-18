@@ -94,20 +94,14 @@ full_cycle_rows() {
   grep -qxF '  total (distinct segments): tokens 0  est. $0.00' <<<"$output"
 }
 
-@test "--line prints one Cost line with a term per node, in the initiative's node order" {
-  local nodes terms
+@test "--line prints one plain Cost line with no node terms and no parenthesised suffix" {
   full_cycle_rows
   run run_usage initiative spec:SPEC-402 --line
   [ "$status" -eq 0 ]
   [ "${#lines[@]}" -eq 1 ]
-  [[ "$output" =~ ^Cost:\ ~[0-9]+\.[0-9]M\ tokens,\ \$[0-9]+\.[0-9]{2},\ ([0-9]+h)?([0-9]+m)?[0-9]+s\ \(.+\ \$[0-9]+\.[0-9]{2}(\ \+\ .+\ \$[0-9]+\.[0-9]{2})*\)$ ]]
-  [ "$(grep -o '~' <<<"$output" | wc -l | tr -d ' ')" -eq 1 ]
-  [ "$output" = 'Cost: ~1.3M tokens, $2.73, 2h35m0s (branch:feat/build-x $2.10 + pr:88 $0.00 + spec:SPEC-402 $0.63)' ]
-  run run_usage initiative spec:SPEC-402
-  nodes="$(awk '/^  [a-z]+:/ && !/^  total / && !/^  note: / { print $1 }' <<<"$output" | paste -sd ' ' -)"
-  terms="$(run_usage initiative spec:SPEC-402 --line | sed -E 's/^[^(]*\((.*)\)$/\1/; s/ \$[0-9]+\.[0-9]{2}//g; s/ \+ / /g')"
-  [ "$nodes" = 'branch:feat/build-x pr:88 spec:SPEC-402' ]
-  [ "$terms" = "$nodes" ]
+  [ "$output" = 'Cost: 1.3M tokens, $2.73, 2h35m0s' ]
+  [[ "$output" == *'('* ]] && return 1
+  true
 }
 
 @test "--line --json exposes the raw figures, its tokens equal the initiative's distinct-segment total, and the line formats those numbers" {
@@ -125,7 +119,7 @@ full_cycle_rows() {
   [ "$dollars" = 2.73 ]
   elapsed="$(jq -r '.elapsed_seconds' <<<"$figures")"
   line="$(run_usage initiative spec:SPEC-402 --line)"
-  [ "${line%% (*}" = "Cost: ~$(LC_ALL=C awk -v tokens="$tokens" 'BEGIN { printf "%.1fM", tokens / 1000000 }') tokens, \$$dollars, $((elapsed / 3600))h$((elapsed % 3600 / 60))m$((elapsed % 60))s" ]
+  [ "$line" = "Cost: $(LC_ALL=C awk -v tokens="$tokens" 'BEGIN { printf "%.1fM", tokens / 1000000 }') tokens, \$$dollars, $((elapsed / 3600))h$((elapsed % 3600 / 60))m$((elapsed % 60))s" ]
 }
 
 @test "--line marks an unpriced model as a lower bound" {
@@ -133,8 +127,9 @@ full_cycle_rows() {
   printf '{"schema_version":1,"kind":"segment","key":"branch:feat/build-x","session_id":"s5","inherit":false,"first_ts":"2026-10-02T11:10:00Z","last_ts":"2026-10-02T11:20:00Z","messages":1,"agent_type":"main","by_model":{"claude-zeta-1":{"fresh_input":10,"cache_write_5m":0,"cache_write_1h":0,"cache_read":0,"output":0}}}\n' >>"$TELEMETRY_DIRECTORY/usage.jsonl"
   run run_usage initiative spec:SPEC-402 --line
   [ "$status" -eq 0 ]
-  [ "${#lines[@]}" -eq 1 ]
-  [[ "$output" == *') (partial: lower bound)' ]]
+  [ "${#lines[@]}" -eq 2 ]
+  [[ "$output" == *'(partial'* ]] && return 1
+  [ "${lines[1]}" = 'Note: Includes a model GAIA has no price for, so the cost is a minimum.' ]
 }
 
 @test "--json without --line is a usage error: stderr says so, stdout is empty, and the readout exits 0" {
@@ -142,5 +137,5 @@ full_cycle_rows() {
   run --separate-stderr run_usage initiative spec:SPEC-402 --json
   [ "$status" -eq 0 ]
   [ -z "$output" ]
-  [ "$stderr" = 'usage initiative: --json needs --line' ]
+  [ "$stderr" = 'usage initiative: --json needs --line or --box' ]
 }

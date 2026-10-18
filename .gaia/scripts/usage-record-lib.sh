@@ -33,7 +33,7 @@
 #
 # Waits, each with its own reason:
 #   GAIA_USAGE_MERGE_CAP_SECONDS (5)     how long record waits on the flusher
-#       before it closes anyway and marks the line partial. The flusher is
+#       before it closes anyway and notes that the figures may be low. The flusher is
 #       never killed, because a kill could land mid-append.
 #   GAIA_LEDGER_LOCK_TIMEOUT_SECONDS (10)   the close append waits on the ledger
 #       lock this long: at least one full flusher commit hold (about 2 s) plus
@@ -51,7 +51,7 @@ _record_preamble() {
   [ -z "$(gaia_usage_inactive_reason)" ] || { _error "jq not found; nothing was done"; return 2; }
   _parse "$@" || return 2
   _resolve_context || return 2
-  if [ -n "$SESSION$SOURCE$MERGE$BRANCH$KEY$MERGED_AT$AT" ] || [ "$PARTIAL$UNCONFIRMED$LINE$AUDITORS_GIVEN" != 0000 ] || [ "$SIDECHAIN" != false ]; then
+  if [ -n "$SESSION$SOURCE$MERGE$BRANCH$KEY$MERGED_AT$AT" ] || [ "$PARTIAL$UNCONFIRMED$LINE$BOX$AUDITORS_GIVEN" != 00000 ] || [ "$SIDECHAIN" != false ]; then
     _error "unknown flag; see usage.sh --help"
     return 2
   fi
@@ -124,6 +124,43 @@ _record_flush() {
     wait "$flush_pid" 2>/dev/null
   fi
   return 0
+}
+
+# _box_flush_wait: the cost box reads a ledger this session's flusher has
+# finished writing when it can. It waits for a flusher already running for the
+# session (the one `record` leaves behind at its cap) or starts one, for at most
+# GAIA_USAGE_BOX_FLUSH_CAP_SECONDS (45: a session of a few dozen sidecars needs
+# the flusher well past record's cap). BOX_FLUSH_INCOMPLETE is 1 when it is still
+# running at the cap. The flusher is never killed, for the reason _record_flush
+# gives. With no session id there is nothing to wait for.
+_box_flush_wait() {
+  local cap="${GAIA_USAGE_BOX_FLUSH_CAP_SECONDS:-45}" session_id="${CLAUDE_CODE_SESSION_ID:-}" flush_pid="" started_at pattern
+  BOX_FLUSH_INCOMPLETE=0
+  gaia_usage_valid_reference "session:$session_id" || return 0
+  case "$cap" in '' | *[!0-9]* | 0) cap=45 ;; esac
+  pattern="usage-flush.sh --session $session_id "
+  if ! command -v pgrep >/dev/null 2>&1 || ! pgrep -f "$pattern" >/dev/null 2>&1; then
+    bash "$_usage_script_directory/usage-flush.sh" --session "$session_id" --finished-main --all-sidecars-finished \
+      --main-root "$MAIN_ROOT" --telemetry-dir "$TELEMETRY_DIRECTORY" --projects-root "$PROJECTS_ROOT" \
+      </dev/null >/dev/null 2>&1 3>&- &
+    flush_pid=$!
+  fi
+  started_at="$(date +%s)"
+  while _box_flusher_running "$flush_pid" "$pattern" && [ $(($(date +%s) - started_at)) -lt "$cap" ]; do sleep 0.1; done
+  if _box_flusher_running "$flush_pid" "$pattern"; then
+    # shellcheck disable=SC2034  # read by usage.sh
+    BOX_FLUSH_INCOMPLETE=1
+    [ -z "$flush_pid" ] || disown "$flush_pid" 2>/dev/null
+  elif [ -n "$flush_pid" ]; then
+    wait "$flush_pid" 2>/dev/null
+  fi
+  return 0
+}
+
+# _box_flusher_running <pid or ""> <pgrep pattern>: the flusher this shell started, else any for the session.
+_box_flusher_running() {
+  if [ -n "$1" ]; then kill -0 "$1" 2>/dev/null; return; fi
+  command -v pgrep >/dev/null 2>&1 && pgrep -f "$2" >/dev/null 2>&1
 }
 
 # _record_locked: runs under with_ledger_lock, which may be a subshell, so the
@@ -280,8 +317,8 @@ _record_run_view() {
             unpriced: any(.[]; .unpriced)} end'
 }
 
-# _record_print_cost <close ts>: the Cost line (or its JSON) as the last
-# stdout line, bounded by the render cap. The close row is already written, so a
+# _record_print_cost <close ts>: the Cost line (or its JSON) first, then one
+# Note line per condition that qualifies it, bounded by the render cap. The close row is already written, so a
 # cap or a failure prints a marker and the exit stays 0.
 _record_print_cost() {
   local interval_end="$1" view_file="$RECORD_WORK/view" view_pid pids render_cap="${GAIA_USAGE_RENDER_CAP_SECONDS:-10}" started_at wait_ticks
@@ -301,13 +338,13 @@ _record_print_cost() {
     while [ "$wait_ticks" -lt 10 ] && kill -0 "$view_pid" 2>/dev/null; do sleep 0.1; wait_ticks=$((wait_ticks + 1)); done
     # shellcheck disable=SC2086  # one pid per word
     kill -KILL $pids 2>/dev/null
-    printf '! readout timed out after %ss; the run is recorded, read its cost with: bash .gaia/scripts/usage.sh initiative %s --line\n' "$render_cap" "$RUN_REF"
+    printf '! readout timed out after %ss; the run is recorded, read its cost with: %s\n' "$render_cap" "$(_record_final_command)"
     return 0
   fi
   wait "$view_pid" 2>/dev/null
   view_json="$(cat "$view_file")"
   if ! jq -e 'type == "object" and (.tokens | type) == "number"' <<<"$view_json" >/dev/null 2>&1; then
-    printf '! readout unavailable; the run is recorded, read its cost with: bash .gaia/scripts/usage.sh initiative %s --line\n' "$RUN_REF"
+    printf '! readout unavailable; the run is recorded, read its cost with: %s\n' "$(_record_final_command)"
     return 0
   fi
   if [ "$JSON" = 1 ]; then
@@ -317,12 +354,21 @@ _record_print_cost() {
   IFS=$'\t' read -r tokens dollars elapsed unpriced < <(jq -r '[.tokens, (.dollars // "null"), .elapsed_seconds, .unpriced] | @tsv' <<<"$view_json")
   _usage_override_marker
   gaia_usage_cost_line "$tokens" "$dollars" "$elapsed"
-  [ "$RECORD_PARTIAL" = 0 ] || printf ' (partial: flush incomplete)'
-  [ "$unpriced" != true ] || printf ' (partial: lower bound)'
+  printf '\n'
+  if [ "$RECORD_PARTIAL" != 0 ]; then printf 'Note: %s\n' "$(usage_note_flush_incomplete "$(_record_final_command)")"; fi
+  if [ "$unpriced" = true ]; then printf 'Note: %s\n' "$(usage_note_lower_bound)"; fi
   # A recovery start bound to no other session may stand in for a run that
   # began elsewhere, so its figure is never offered as the run's total.
-  if [ -n "$START_ISO" ] && [ "$(wc -l <"$RECORD_WORK/members" | tr -d ' ')" = 1 ]; then printf ' (partial: this session only)'; fi
-  printf '\n'
+  if [ -n "$START_ISO" ] && [ "$(wc -l <"$RECORD_WORK/members" | tr -d ' ')" = 1 ]; then printf 'Note: %s\n' "$(usage_note_session_only)"; fi
+}
+
+# _record_final_command: the command that reads this run's figures once the
+# flusher has finished; a spec or plan run reads them as its box.
+_record_final_command() {
+  case "$RUN_REF" in
+    spec:* | plan:*) printf 'bash .gaia/scripts/usage.sh initiative %s --box' "${RUN_REF#*:}" ;;
+    *) printf 'bash .gaia/scripts/usage.sh initiative %s --line' "$RUN_REF" ;;
+  esac
 }
 
 _record_run() {
@@ -362,7 +408,7 @@ _record_run() {
     6) _error "could not read the usage ledger; nothing was written"; return 2 ;;
     *) _error "could not append to the usage ledger; check the close row before rerunning"; return 1 ;;
   esac
-  _record_print_cost "$NOW"
+  [ "$QUIET" = 1 ] || _record_print_cost "$NOW"
 }
 
 # shellcheck disable=SC2329  # reached through usage.sh's dispatch
@@ -381,7 +427,7 @@ _represented_main() {
   _record_preamble "$@" || return 2
   ref="${ARGS[0]-}"
   if [ "${#ARGS[@]}" -ne 1 ] || ! gaia_usage_valid_reference "$ref"; then _error "represented takes one valid ref"; return 2; fi
-  if [ -n "$PR_NUMBER$ISSUE_NUMBER$START_ISO" ] || [ "$JSON" != 0 ]; then _error "unknown flag; represented takes only --workflow"; return 2; fi
+  if [ -n "$PR_NUMBER$ISSUE_NUMBER$START_ISO" ] || [ "$JSON$QUIET" != 00 ]; then _error "unknown flag; represented takes only --workflow"; return 2; fi
   [[ "$WORKFLOW" =~ ^[a-z][a-z-]{0,31}$ ]] || { _error "--workflow takes a workflow name"; return 2; }
   usage_file="$TELEMETRY_DIRECTORY/usage.jsonl"
   [ -f "$usage_file" ] || { _error "the usage ledger is missing"; return 2; }

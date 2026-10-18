@@ -116,11 +116,11 @@ interval_rows() {
 @test "the Cost line rounds tokens to one decimal of millions behind one ~, prints dollars or cost unavailable, and appends terms" {
   run render gaia_usage_cost_line 10600000 1.5 399
   [ "$status" -eq 0 ]
-  [ "$output" = 'Cost: ~10.6M tokens, $1.50, 6m39s' ]
+  [ "$output" = 'Cost: 10.6M tokens, $1.50, 6m39s' ]
   run render gaia_usage_cost_line 10600000 null 399
-  [ "$output" = 'Cost: ~10.6M tokens, cost unavailable, 6m39s' ]
+  [ "$output" = 'Cost: 10.6M tokens, cost unavailable, 6m39s' ]
   run render gaia_usage_cost_line 49999 0.004 45 'spec:SPEC-001 $0.00'
-  [ "$output" = 'Cost: ~0.0M tokens, $0.00, 45s (spec:SPEC-001 $0.00)' ]
+  [ "$output" = 'Cost: 0.0M tokens, $0.00, 45s' ]
 }
 
 @test "the duration formatter drops leading zero units" {

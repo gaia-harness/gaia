@@ -39816,13 +39816,13 @@ var insertExportEntry = (lines, args) => {
     }
   }
   const lastEntry = entries.at(-1);
-  const lastLine2 = lastEntry === void 0 ? void 0 : lines[lastEntry.lineIdx];
-  if (lastEntry === void 0 || lastLine2 === void 0)
+  const lastLine = lastEntry === void 0 ? void 0 : lines[lastEntry.lineIdx];
+  if (lastEntry === void 0 || lastLine === void 0)
     throw new Error(
       "insertExportEntry: the export block has no source line for its last entry; refusing to report a skipped registration as done"
     );
-  if (!lastLine2.endsWith(",")) {
-    lines[lastEntry.lineIdx] = `${lastLine2},`;
+  if (!lastLine.endsWith(",")) {
+    lines[lastEntry.lineIdx] = `${lastLine},`;
   }
   lines.splice(lastEntry.lineIdx + 1, 0, newEntryLine);
 };
@@ -47128,7 +47128,11 @@ var parsePrUrl = (text) => {
   if (!Number.isSafeInteger(number4) || number4 <= 0) return void 0;
   return { number: number4, repo };
 };
-var lastLine = (value) => safeOutput3(value).split("\n").map((line) => line.trim()).findLast((line) => line !== "") ?? "";
+var costReadout = (value) => {
+  const lines = safeOutput3(value).split("\n").map((line) => line.trim()).filter((line) => line !== "");
+  const costIndex = lines.findIndex((line) => line.startsWith("Cost:"));
+  return costIndex === -1 ? lines.at(-1) ?? "" : lines.slice(costIndex).join("\n");
+};
 var recordWikiCost = (options, artifact) => {
   try {
     const cwd = options.cwd ?? process.cwd();
@@ -47144,7 +47148,9 @@ var recordWikiCost = (options, artifact) => {
       ...artifact === void 0 ? [] : ["--pr", String(artifact.number)]
     ];
     const result = runner("bash", args, { cwd: repoRoot });
-    const line = lastLine(result.status === 0 ? result.stdout : result.stderr);
+    const line = costReadout(
+      result.status === 0 ? result.stdout : result.stderr
+    );
     if (line !== "") process.stdout.write(`${line}
 `);
   } catch {

@@ -196,7 +196,10 @@ join_with() {
   [[ "$stderr" == *"--start <iso>, with <iso> the UTC time the run began"* ]]
   run --separate-stderr usage record command:gaia-debt --workflow gaia-debt --start "$(stamp 10:00)"
   [ "$status" -eq 0 ]
-  [[ "$(last_stdout_line)" =~ ^Cost:\ .*\ \(partial:\ this\ session\ only\)$ ]]
+  [[ "${lines[0]}" =~ ^Cost:\  ]]
+  [ "${lines[1]}" = 'Note: Only this session is counted; if the run also used earlier sessions, their usage is not included.' ]
+  grep -qF 'partial' <<<"$output" && return 1
+  true
 }
 
 @test "recording in the origin session after a join also closes the joined session, unmarked" {

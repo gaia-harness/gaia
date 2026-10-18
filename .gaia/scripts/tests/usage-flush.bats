@@ -418,3 +418,47 @@ cas_run() {
   [ -e "$TEL/usage-sweep.lock.d" ] && return 1
   true
 }
+
+# ---------- settled files ----------
+
+# jq_calls <flusher args...>: how many jq processes one flush starts.
+jq_calls() {
+  local shim_directory="$TEMPORARY_DIRECTORY/jq-shim" real_jq
+  real_jq="$(command -v jq)"
+  mkdir -p "$shim_directory"
+  printf '#!/usr/bin/env bash\nprintf x >>"%s/jq-calls"\nexec "%s" "$@"\n' "$shim_directory" "$real_jq" >"$shim_directory/jq"
+  chmod +x "$shim_directory/jq"
+  : >"$shim_directory/jq-calls"
+  PATH="$shim_directory:$PATH" flush "$@" >/dev/null 2>&1
+  wc -c <"$shim_directory/jq-calls" | tr -d ' '
+}
+
+@test "a session whose files all sit at their cursors costs a flush no per-file work" {
+  local settled_calls
+  install multi
+  flush --session s-multi --finished-main --all-sidecars-finished
+  assert_golden multi
+  settled_calls="$(jq_calls --session s-multi --finished-main --all-sidecars-finished)"
+  [ "$settled_calls" -le 2 ] || { printf 'a settled session started %s jq processes\n' "$settled_calls" >&2; return 1; }
+  assert_golden multi
+}
+
+@test "guard red: with the settled-file skip removed in a scratch copy, a settled session starts a jq process per file" {
+  local settled_calls
+  install multi
+  flush --session s-multi --finished-main --all-sidecars-finished
+  scratch_flusher 's/^    case "\$settled_files" in .*$/    :/' usage-flush.sh
+  settled_calls="$(jq_calls --session s-multi --finished-main --all-sidecars-finished)"
+  [ "$settled_calls" -gt 5 ]
+}
+
+@test "a file that grew past its cursor is still flushed when its siblings are settled" {
+  local transcript_file
+  install multi
+  flush --session s-multi --finished-main --all-sidecars-finished
+  transcript_file="$(main_projects_directory)/s-multi.jsonl"
+  head -n 1 "$transcript_file" | sed 's/"id":"\([^"]*\)"/"id":"grown-\1"/; s/"uuid":"\([^"]*\)"/"uuid":"grown-\1"/' >>"$transcript_file"
+  before="$(jq -s '[.[] | select(.kind == "cursor")] | length' "$TEL/usage.jsonl")"
+  flush --session s-multi --finished-main --all-sidecars-finished
+  [ "$(jq -s '[.[] | select(.kind == "cursor")] | length' "$TEL/usage.jsonl")" -gt "$before" ]
+}

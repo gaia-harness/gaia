@@ -459,9 +459,21 @@ _uf_session() {
   for candidate_directory in ${candidate_directories[@]+"${candidate_directories[@]}"}; do
     for transcript_file in "$candidate_directory/$UF_SESSION"/subagents/workflows/*/agent-*.jsonl; do _uf_add "$transcript_file"; done
   done
+  # A file the cursor cache already holds at its current size has nothing to
+  # parse, and _uf_prepare pays two ledger scans and a cache fold to learn that.
+  # A session with dozens of finished sidecars spent most of a capped flush on
+  # them. A stale or unreadable cache lists fewer files, never one at the wrong
+  # size, so a miss only falls through to the full check.
+  local settled_files=$'\n'
+  if [ -f "$UF_CACHE" ]; then
+    settled_files="$settled_files$(jq -r --arg session_id "$UF_SESSION" \
+      '(.files // {}) | to_entries[] | select(.value.session_id == $session_id and (.value.offset | type) == "number") | "\(.value.offset)\t\(.key)"' \
+      "$UF_CACHE" 2>/dev/null)"$'\n'
+  fi
   for transcript_file in ${files[@]+"${files[@]}"}; do
     size_and_mtime="$(_uf_stat "$transcript_file")" || continue
     size="${size_and_mtime%% *}" mtime="${size_and_mtime##* }"
+    case "$settled_files" in *$'\n'"$size"$'\t'"$transcript_file"$'\n'*) continue ;; esac
     _uf_identify "$transcript_file"
     [ "$UF_SESSION_ID" = "$UF_SESSION" ] || continue
     if [ "$UF_ROLE" = main ]; then

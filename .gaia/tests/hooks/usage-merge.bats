@@ -241,7 +241,7 @@ seed_unflushed() {
   ended_at_seconds="$(date +%s)"
   [ "$status" -eq 0 ]
   [ "$((ended_at_seconds - started_at_seconds))" -le 4 ]
-  has_line "  ! partial: flush incomplete"
+  has_line "  ! Some usage was still being saved, so these figures may be low. For the final numbers run: bash .gaia/scripts/usage.sh pr 106"
   grep -qF '! merge not confirmed; boundary not recorded' <<<"$output"
   [ ! -s "$TELEMETRY_DIRECTORY/links.jsonl" ]
   rmdir "$TELEMETRY_DIRECTORY/specs.lock.d"
@@ -269,7 +269,7 @@ seed_unflushed() {
   [ "$status" -eq 0 ]
   has_line "[PR cost] pr:106 branch:fix/unfl"
   has_line "  tokens: 1,500 (fresh 1,000, cache write 0, cache read 0, output 500)"
-  lacks "partial: flush incomplete"
+  lacks "Some usage was still being saved"
   lacks "merge not confirmed"
   lacks "unflushed:"
   [ "$(merge_rows 106)" -eq 1 ]
