@@ -55,7 +55,7 @@ bash <main checkout path>/.gaia/scripts/update-claim.sh tie-break --tree <worktr
 ```
 
 - `WON` or `TIE_BREAK_SKIPPED <reason>`: continue.
-- `LOST <other> <login>`: this run's PR is closed and its remote branch deleted. Unset `CLAIM_PR`. When `CREATED_WORKTREE=true`, the worktree holds only the claim commit, so remove it: `ExitWorktree({action: "remove", discard_changes: true})`, then `git -C <main checkout path> branch -D <branch>`. Otherwise print the worktree notice instead. Stop, naming PR `<other>` and its author.
+- `LOST <other> <login>`: this run's PR is closed and its remote branch deleted. Unset `CLAIM_PR`. When `CREATED_WORKTREE=true`, the worktree holds only the claim commit, so release it per `.claude/skills/gaia/references/work-lifecycle.md` (`## Releasing an empty worktree`), which also deletes the branch. Otherwise print the worktree notice instead. Stop, naming PR `<other>` and its author.
 
 A resumed run (mode 1, or mode 2 resuming a claimed branch) calls `start` too: it adds no second commit and no second pull request. Mode 3 makes no claim. A claimed run reaches the merge agent with exactly one empty claim commit pushed to origin and its draft PR open.
 

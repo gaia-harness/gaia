@@ -29,6 +29,7 @@ setup() {
   CONFLICT_FLOW="$REPO_ROOT/.claude/skills/update-gaia/references/conflict-flow.md"
   CLAIM_REF="$REPO_ROOT/.claude/skills/update-gaia/references/claim-flow.md"
   PULL_REF="$REPO_ROOT/.claude/skills/update-gaia/references/pull-mode.md"
+  GATE_REF="$REPO_ROOT/.claude/skills/update-gaia/references/pull-gate.md"
   PREFLIGHT="$REPO_ROOT/.gaia/scripts/update-gaia-preflight.sh"
   SELECTOR="$REPO_ROOT/.gaia/scripts/select-migration-notes.sh"
   COPY="$BATS_TEST_TMPDIR/skill-copy.md"
@@ -605,7 +606,7 @@ claim_start_holds() {
     'update-claim.sh start --tree' \
     'update-claim.sh tie-break --tree' \
     '`LOST <other> <login>`' || return 1
-  grep -F '`LOST <other> <login>`' "$section" | grep -qE 'ExitWorktree\(\{action: "remove", discard_changes: true\}\).*branch -D <branch>' || return 1
+  grep -F '`LOST <other> <login>`' "$section" | grep -qF 'work-lifecycle.md` (`## Releasing an empty worktree`)' || return 1
   return 0
 }
 
@@ -630,10 +631,7 @@ claim_start_holds() {
   claim_start_holds "$COPY" "$CLAIM_REF" && return 1
   use_ref_copy "$CLAIM_REF"
   # Failing state: the worktree is left behind after a lost tie-break.
-  sed 's|ExitWorktree({action: "remove", discard_changes: true})|leave the worktree|' "$CLAIM_REF" > "$COPY_REF"
-  claim_start_holds "$SKILL" "$COPY_REF" && return 1
-  # Failing state: the branch is left behind after a lost tie-break.
-  sed 's|`git -C <main checkout path> branch -D <branch>`|nothing|' "$CLAIM_REF" > "$COPY_REF"
+  sed 's|(`## Releasing an empty worktree`)|(nowhere)|' "$CLAIM_REF" > "$COPY_REF"
   claim_start_holds "$SKILL" "$COPY_REF" && return 1
   # Failing state: the tie-break runs before the start.
   grep -vxF -- "$CLAIM_START_CALL" "$CLAIM_REF" > "$COPY_REF"
@@ -908,24 +906,164 @@ pull_install_holds() {
   true
 }
 
-# 0 when reference copy `$1` names the update-gaia caller only and no gate.
+# 0 when pull-mode copy `$1` names both callers and confines the full-update
+# offer to the update-gaia caller, with the gate returning to the restart step.
 pull_callers_hold() {
-  grep -qE 'pull-gate|gaia_pull_gate' "$1" && return 1
+  local section
   grep -F '**Caller**' "$1" | grep -qF '`update-gaia`' || return 1
-  grep -F '**Caller**' "$1" | grep -qE 'gated|new-work|gate' && return 1
+  grep -F '**Caller**' "$1" | grep -qF '`gate`' || return 1
+  section="$(section_of "$1" '## Step 7')"
+  grep -F 'Caller `gate`' <<<"$section" | grep -qF 'restart step' || return 1
+  [ "$(grep -cF 'Continue to the full update' "$1")" -eq 1 ] || return 1
+  grep -F 'Continue to the full update' "$1" | grep -qF 'Caller `update-gaia`' || return 1
+  grep -F 'Caller `gate`' <<<"$section" | grep -qF 'Continue to the full update' && return 1
   return 0
 }
 
-@test "pull mode: the only caller is update-gaia and no gate is named" {
+@test "pull mode: both callers are named and the continue offer belongs to update-gaia only" {
   pull_callers_hold "$PULL_REF"
-  { cat "$PULL_REF"; printf '%s\n' 'See pull-gate.md.'; } > "$COPY"
+  # Failing state: the gate caller dropped.
+  sed 's|`update-gaia` or `gate`|`update-gaia`|' "$PULL_REF" > "$COPY"
   pull_callers_hold "$COPY" && return 1
-  { cat "$PULL_REF"; printf '%s\n' 'gaia_pull_gate x'; } > "$COPY"
+  # Failing state: the update-gaia caller dropped.
+  sed 's|`update-gaia` or `gate`|`gate`|' "$PULL_REF" > "$COPY"
   pull_callers_hold "$COPY" && return 1
-  sed 's|^- \*\*Caller\*\*: `update-gaia`\.|- **Caller**: `update-gaia` or a gated command.|' "$PULL_REF" > "$COPY"
+  # Failing state: the offer no longer named for update-gaia alone.
+  sed 's|^Caller `update-gaia`: when|When|' "$PULL_REF" > "$COPY"
   pull_callers_hold "$COPY" && return 1
-  sed 's|^- \*\*Caller\*\*: `update-gaia`\.|- **Caller**: none.|' "$PULL_REF" > "$COPY"
+  # Failing state: the gate arm offers the update too.
+  sed 's|^Caller `gate` skips the update offer and returns|Caller `gate` offers "Continue to the full update" and returns|' "$PULL_REF" > "$COPY"
   pull_callers_hold "$COPY" && return 1
+  # Failing state: the gate arm no longer returns to the restart step.
+  sed 's|restart step\.|end.|' "$PULL_REF" > "$COPY"
+  pull_callers_hold "$COPY" && return 1
+  true
+}
+
+# --- The pull gate: references/pull-gate.md -----------------------------------
+
+GATE_STEP_1='## Step 1: A linked worktree (exit 2)'
+GATE_STEP_2='## Step 2: Ask (exit 1)'
+GATE_STEP_4='## Step 4: Pull'
+GATE_STEP_5='## Step 5: Restart'
+
+# 0 when gate reference copy `$1` puts the linked-worktree arm before the question.
+gate_exit_2_order_holds() {
+  in_order "$1" "$GATE_STEP_1" "$GATE_STEP_2" "$GATE_STEP_4" "$GATE_STEP_5"
+}
+
+# 0 when gate reference copy `$1`'s linked-worktree arm stops, offers no pull
+# and no restart.
+gate_exit_2_arm_holds() {
+  local arm
+  arm="$(section_of "$1" "$GATE_STEP_1")"
+  [ -n "$arm" ] || return 1
+  grep -qF 'Stop the command' <<<"$arm" || return 1
+  grep -qF 'Never offer to pull and never restart' <<<"$arm" || return 1
+  grep -qF 'AskUserQuestion' <<<"$arm" && return 1
+  grep -qF 'Skill tool' <<<"$arm" && return 1
+  grep -qF 'pull-mode.md' <<<"$arm" && return 1
+  return 0
+}
+
+@test "pull gate: the linked-worktree arm precedes the question and offers no pull and no restart" {
+  gate_exit_2_order_holds "$GATE_REF"
+  gate_exit_2_arm_holds "$GATE_REF"
+  # Failing state: the arm after the question.
+  { grep -vF "$GATE_STEP_1" "$GATE_REF"; printf '%s\n' "$GATE_STEP_1"; } > "$COPY"
+  gate_exit_2_order_holds "$COPY" && return 1
+  # Failing state: the arm gone.
+  grep -vF "$GATE_STEP_1" "$GATE_REF" > "$COPY"
+  gate_exit_2_order_holds "$COPY" && return 1
+  # Failing state: the prohibition dropped.
+  sed 's|Never offer to pull and never restart|Offer to pull|' "$GATE_REF" > "$COPY"
+  gate_exit_2_arm_holds "$COPY" && return 1
+  # Failing state: the arm asks.
+  insert_after "$GATE_REF" "$GATE_STEP_1" 'Ask with `AskUserQuestion`.'
+  gate_exit_2_arm_holds "$COPY" && return 1
+  # Failing state: the arm restarts through the Skill tool.
+  insert_after "$GATE_REF" "$GATE_STEP_1" 'Invoke it again through the Skill tool.'
+  gate_exit_2_arm_holds "$COPY" && return 1
+  # Failing state: the arm follows pull mode.
+  insert_after "$GATE_REF" "$GATE_STEP_1" 'Follow `pull-mode.md`.'
+  gate_exit_2_arm_holds "$COPY" && return 1
+  true
+}
+
+# 0 when gate reference copy `$1` names the three commands only a user can
+# start and the plan orchestrator's KICKOFF re-run line.
+gate_restart_kinds_hold() {
+  local restart command_name
+  restart="$(section_of "$1" "$GATE_STEP_5")"
+  for command_name in '/gaia-codify' '/gaia-fitness' '/gaia-residue'; do
+    grep -qF "\`$command_name\`" <<<"$restart" || return 1
+  done
+  grep -qF 'disable-model-invocation' <<<"$restart" || return 1
+  grep -qF 'Read <absolute KICKOFF.md path> and execute it.' <<<"$restart" || return 1
+  return 0
+}
+
+@test "pull gate: the disable-model-invocation commands and the KICKOFF re-run line are listed" {
+  gate_restart_kinds_hold "$GATE_REF"
+  local command_name
+  for command_name in '/gaia-codify' '/gaia-fitness' '/gaia-residue'; do
+    # Failing state: one of the three commands dropped.
+    sed "s|\`$command_name\`|\`/other\`|" "$GATE_REF" > "$COPY"
+    gate_restart_kinds_hold "$COPY" && { echo "not caught: $command_name" >&2; return 1; }
+  done
+  # Failing state: the KICKOFF line gone.
+  grep -vF 'KICKOFF.md path' "$GATE_REF" > "$COPY"
+  gate_restart_kinds_hold "$COPY" && return 1
+  # Failing state: the marker gone.
+  sed 's|disable-model-invocation|other|' "$GATE_REF" > "$COPY"
+  gate_restart_kinds_hold "$COPY" && return 1
+  true
+}
+
+# 0 when gate reference copy `$1`'s question carries the auto arm and keeps
+# the auto token in the restart arguments.
+gate_auto_arm_holds() {
+  local ask
+  ask="$(section_of "$1" "$GATE_STEP_2")"
+  grep -qF 'choose the Recommended option without asking' <<<"$ask" || return 1
+  grep -qF 'keep the `auto` token in the restart arguments' <<<"$ask" || return 1
+  grep -qF 'verbatim, an `auto` token included' "$1" || return 1
+  return 0
+}
+
+@test "pull gate: the auto arm picks Recommended and keeps the auto token" {
+  gate_auto_arm_holds "$GATE_REF"
+  sed 's|choose the Recommended option without asking|ask anyway|' "$GATE_REF" > "$COPY"
+  gate_auto_arm_holds "$COPY" && return 1
+  sed 's|keep the `auto` token in the restart arguments|drop it|' "$GATE_REF" > "$COPY"
+  gate_auto_arm_holds "$COPY" && return 1
+  sed 's|, an `auto` token included||' "$GATE_REF" > "$COPY"
+  gate_auto_arm_holds "$COPY" && return 1
+  true
+}
+
+# 0 when gate reference copy `$1` and pull-mode copy `$2` never restart after
+# a refused or failed pull.
+gate_refusal_never_restarts() {
+  local pull_step
+  pull_step="$(section_of "$1" "$GATE_STEP_4")"
+  grep -qF 'It never restarts' <<<"$pull_step" || return 1
+  grep -qF 'stops here with pull mode' <<<"$pull_step" || return 1
+  grep -qF 'Caller `gate` never restarts after a refusal' "$2" || return 1
+  grep -qF 'caller `gate` never restarts after either' "$2" || return 1
+  return 0
+}
+
+@test "pull gate: a pull refusal or failure never restarts the command" {
+  gate_refusal_never_restarts "$GATE_REF" "$PULL_REF"
+  sed 's|It never restarts\.|It restarts anyway.|' "$GATE_REF" > "$COPY"
+  gate_refusal_never_restarts "$COPY" "$PULL_REF" && return 1
+  sed 's|stops here with pull mode|continues with pull mode|' "$GATE_REF" > "$COPY"
+  gate_refusal_never_restarts "$COPY" "$PULL_REF" && return 1
+  sed 's|Caller `gate` never restarts after a refusal\.||' "$PULL_REF" > "$COPY"
+  gate_refusal_never_restarts "$GATE_REF" "$COPY" && return 1
+  sed 's|; caller `gate` never restarts after either||' "$PULL_REF" > "$COPY"
+  gate_refusal_never_restarts "$GATE_REF" "$COPY" && return 1
   true
 }
 

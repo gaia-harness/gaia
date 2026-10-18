@@ -4,7 +4,8 @@ SKILL.md reads this file at its pull check. Pull mode brings a main checkout tha
 
 ## Inputs
 
-- **Caller**: `update-gaia`. A later caller is added as another value here.
+- **Caller**: `update-gaia` or `gate`. The gate is `pull-gate.md`, which follows this file before restarting a gated command.
+- **Command and arguments** (caller `gate` only): the gated command and its arguments, verbatim, which `pull-gate.md` restarts after the pull.
 - **Main checkout path**: `<main checkout path>`, carried as a literal in every command below.
 
 Every command is one plain command with each value typed as a literal.
@@ -15,7 +16,7 @@ Every command is one plain command with each value typed as a literal.
 bash <main checkout path>/.gaia/scripts/update-gaia-pull.sh check --tree <main checkout path>
 ```
 
-`PULL_READY <default branch>` continues. Exit 1 prints `PULL_REFUSED <code>`, a `Reason:` line and a `Next step:` line: relay all three and stop, changing nothing.
+`PULL_READY <default branch>` continues. Exit 1 prints `PULL_REFUSED <code>`, a `Reason:` line and a `Next step:` line: relay all three and stop, changing nothing. Caller `gate` never restarts after a refusal.
 
 ## Step 2: Pull
 
@@ -23,7 +24,7 @@ bash <main checkout path>/.gaia/scripts/update-gaia-pull.sh check --tree <main c
 bash <main checkout path>/.gaia/scripts/update-gaia-pull.sh pull --tree <main checkout path>
 ```
 
-It prints `PULLED <old version> <new version>` and `LOCKFILE_CHANGED yes` or `no`. Persist the new version as `<new version>`. `PULL_REFUSED` (a diverged branch, with nothing merged) or `PULL_FAILED`: relay its lines and stop.
+It prints `PULLED <old version> <new version>` and `LOCKFILE_CHANGED yes` or `no`. Persist the new version as `<new version>`. `PULL_REFUSED` (a diverged branch, with nothing merged) or `PULL_FAILED`: relay its lines and stop; caller `gate` never restarts after either.
 
 ## Step 3: Install when the lockfile changed
 
@@ -63,6 +64,8 @@ bash <main checkout path>/.gaia/scripts/update-check-bust.sh --cache <main check
 
 Then read the cache file back and confirm `gaiaCurrent` is `<new version>`. `SKIPPED no cache` means there was nothing to refresh; a non-zero exit is reported and never undoes the pull.
 
-## Step 7: Offer the full update
+## Step 7: Offer the full update, or return to the gate
 
-When the cache's `gaiaLatest` is above `<new version>`, ask with `AskUserQuestion`: "Continue to the full update to <tag> (Recommended)" or "Stop here". On continue, invoke `/update-gaia` again through the Skill tool so the update runs from the pulled copy of the skill. Otherwise report the pull and finish.
+Caller `gate` skips the update offer and returns to `pull-gate.md`'s restart step.
+
+Caller `update-gaia`: when the cache's `gaiaLatest` is above `<new version>`, ask with `AskUserQuestion`: "Continue to the full update to <tag> (Recommended)" or "Stop here". On continue, invoke `/update-gaia` again through the Skill tool so the update runs from the pulled copy of the skill. Otherwise report the pull and finish.

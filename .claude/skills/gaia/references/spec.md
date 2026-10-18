@@ -208,6 +208,13 @@ If the allocator printed a `SPEC-NNN` id and the run is interactive, Read `.clau
 
 Step 3 allocates the SPEC id, creates the main-anchored SPEC folder, and writes the first draft. Run its parts in this order.
 
+```bash
+. .gaia/scripts/main-only-lib.sh
+gaia_pull_gate "/gaia-spec"
+```
+
+On a non-zero exit, read `.claude/skills/update-gaia/references/pull-gate.md` and follow it with `/gaia-spec`, this run's original arguments and the exit code, before anything below creates a branch, worktree, claim or SPEC id.
+
 **Subject.** The allocator subject is the step-1 description. If it is empty, first compose the draft's `# ` title in working memory and use that title. The subject is never empty.
 
 **Allocate.** Run the allocator and capture its stdout `SPEC-NNN` token as `SPEC_ID`:

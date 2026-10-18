@@ -74,9 +74,29 @@
 #   not supplied at all, the state paragraph and its surrounding blank line
 #   are omitted entirely.
 #
+# gaia_pull_gate <command-name>
+#   The pull gate for a command that starts new work (a branch, worktree,
+#   claim or id). Compares the main checkout's live `.gaia/VERSION` with the
+#   origin version cached as `gaiaOriginVersion` in
+#   "<main_root>/.gaia/local/cache/shared/update-check.json". It reads only
+#   those two files and never calls gh or the network.
+#
+#   Returns 0, printing nothing, when the checkout is not behind origin or
+#   when anything needed is unavailable: no main root, no jq, a missing or
+#   unreadable cache, a missing or non-version `gaiaOriginVersion`, a missing
+#   or non-version local `.gaia/VERSION`. A teammate's claim or an available
+#   update never gates; only a local version below origin's does.
+#
+#   When behind, prints `GAIA <origin> is on origin/<default branch> and this
+#   checkout has <local>. New work needs it first.` and returns 1 from a
+#   session that can pull. From inside a linked worktree, which cannot pull,
+#   it also prints a `Next step:` line naming the main checkout and
+#   <command-name>, and returns 2.
+#
 # Usage:
 #   . .gaia/scripts/main-only-lib.sh
 #   gaia_refuse_if_worktree "/some-flow" || exit 1
+#   gaia_pull_gate "/some-flow"
 #
 #   # With a flow-specific state line:
 #   my_state_line() { local cache_file="$1"; ...; printf '%s\n' "$line"; }
@@ -164,5 +184,112 @@ $state_line"
 Run \`cd $main_root\` then re-invoke $flow_name."
 
   printf '%s\n' "$message"
+  return 1
+}
+
+# _gaia_pull_gate_core <version>: prints "<major> <minor> <patch>" and returns
+# 0 for `N.N.N` with an optional `-prerelease`, else returns 1. Leading zeros
+# are stripped so arithmetic never reads a part as octal. Parameter expansion
+# only, so it behaves the same sourced from bash or zsh.
+_gaia_pull_gate_core() {
+  local version="$1" core rest part parts="" dots
+  version="${version%%+*}"
+  core="${version%%-*}"
+  case "$core" in
+    *[!0-9.]* | .* | *. | *..* | "") return 1 ;;
+  esac
+  dots="${core//[!.]/}"
+  [ "${#dots}" -eq 2 ] || return 1
+  rest="$core"
+  while [ -n "$rest" ]; do
+    part="${rest%%.*}"
+    case "$rest" in
+      *.*) rest="${rest#*.}" ;;
+      *) rest="" ;;
+    esac
+    part="${part#"${part%%[!0]*}"}"
+    parts="$parts ${part:-0}"
+  done
+  printf '%s\n' "${parts# }"
+}
+
+# _gaia_pull_gate_is_behind <local> <origin>: returns 0 when local is below
+# origin. Core parts compare numerically; at equal cores a prerelease is below
+# its release, and two prereleases compare as strings.
+_gaia_pull_gate_is_behind() {
+  local local_version="$1" origin_version="$2" local_core origin_core
+  local local_major local_minor local_patch origin_major origin_minor origin_patch
+  local local_prerelease="" origin_prerelease=""
+  local_core="$(_gaia_pull_gate_core "$local_version")" || return 1
+  origin_core="$(_gaia_pull_gate_core "$origin_version")" || return 1
+  read -r local_major local_minor local_patch <<<"$local_core"
+  read -r origin_major origin_minor origin_patch <<<"$origin_core"
+  if [ "$local_major" -ne "$origin_major" ]; then
+    [ "$local_major" -lt "$origin_major" ]
+    return $?
+  fi
+  if [ "$local_minor" -ne "$origin_minor" ]; then
+    [ "$local_minor" -lt "$origin_minor" ]
+    return $?
+  fi
+  if [ "$local_patch" -ne "$origin_patch" ]; then
+    [ "$local_patch" -lt "$origin_patch" ]
+    return $?
+  fi
+  case "$local_version" in *-*) local_prerelease="${local_version#*-}" ;; esac
+  case "$origin_version" in *-*) origin_prerelease="${origin_version#*-}" ;; esac
+  [ "$local_prerelease" = "$origin_prerelease" ] && return 1
+  [ -z "$local_prerelease" ] && return 1
+  [ -z "$origin_prerelease" ] && return 0
+  [[ "$local_prerelease" < "$origin_prerelease" ]]
+}
+
+# _gaia_pull_gate_default_branch <tree>: the default branch name without its
+# `origin/` prefix, read in that order: origin/HEAD, origin/main, origin/master,
+# else `main`.
+_gaia_pull_gate_default_branch() {
+  local tree="$1" branch
+  branch="$(git -C "$tree" symbolic-ref --quiet --short refs/remotes/origin/HEAD 2>/dev/null)" || branch=""
+  if [ -n "$branch" ]; then
+    printf '%s\n' "${branch#origin/}"
+  elif git -C "$tree" show-ref --verify --quiet refs/remotes/origin/main 2>/dev/null; then
+    printf 'main\n'
+  elif git -C "$tree" show-ref --verify --quiet refs/remotes/origin/master 2>/dev/null; then
+    printf 'master\n'
+  else
+    printf 'main\n'
+  fi
+}
+
+gaia_pull_gate() {
+  local command_name="$1" main_root cache_file origin_version version_file local_version="" default_branch
+
+  command -v jq >/dev/null 2>&1 || return 0
+
+  main_root="$(gaia_resolve_main_root 2>/dev/null)" || return 0
+  [ -n "$main_root" ] || return 0
+
+  cache_file="$main_root/.gaia/local/cache/shared/update-check.json"
+  [ -r "$cache_file" ] || return 0
+  origin_version="$(jq -r '.gaiaOriginVersion // ""' "$cache_file" 2>/dev/null)" || return 0
+  _gaia_pull_gate_core "$origin_version" >/dev/null || return 0
+
+  version_file="$main_root/.gaia/VERSION"
+  [ -r "$version_file" ] || return 0
+  IFS= read -r local_version <"$version_file" || [ -n "$local_version" ] || return 0
+  local_version="${local_version//[[:space:]]/}"
+  _gaia_pull_gate_core "$local_version" >/dev/null || return 0
+
+  _gaia_pull_gate_is_behind "$local_version" "$origin_version" || return 0
+
+  default_branch="$(_gaia_pull_gate_default_branch "$main_root")"
+  printf 'GAIA %s is on origin/%s and this checkout has %s. New work needs it first.\n' \
+    "$origin_version" "$default_branch" "$local_version"
+
+  if gaia_is_linked_worktree; then
+    printf 'Next step: run /update-gaia in the main checkout at %s to pull, then start %s again.\n' \
+      "$main_root" "$command_name"
+    return 2
+  fi
   return 1
 }

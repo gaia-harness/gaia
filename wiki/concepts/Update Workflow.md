@@ -87,6 +87,18 @@ A main checkout whose `.gaia/VERSION` lags origin's can catch up without a full 
 - **It reads no decision log.** `.gaia/update-decisions.json` is never read in a pull, so a pull can repair a log already fixed on origin.
 - **The statusline points here.** A lagging main checkout renders a pull nudge; see [[Claude Integration]] (`### Statusline (no hook)`).
 
+## Pull gate
+
+New work started from a main checkout that lags origin's GAIA version would branch from a stale default branch, so a gated command checks first. The shape:
+
+- **What it gates.** A fresh start of a command that creates a branch, a worktree, a claim or a SPEC id. Each gated site calls `gaia_pull_gate` from `.gaia/scripts/main-only-lib.sh` before it creates anything, and the site files name the call.
+- **What passes.** A resume, such as an earlier run's branch, a half-finished plan or an owed publish, and every command that creates none of those. The gate also passes when the cached origin version or the checkout's own version is missing or unreadable, when the checkout is at or above origin's version, and when the main checkout does not resolve. It reads only the update-check cache and the local version file, never the network.
+- **The question.** In the main checkout, the gate prints the version gap and the command asks to pull now and restart, or stop. Pull mode does the pull, with the gate as its caller. In auto mode the command picks the pull and keeps its `auto` argument in the restart.
+- **The restart.** After the pull the command starts again with its original arguments: through the Skill tool where the command allows it, as a printed command to paste where it does not, and as the plan's kickoff line for a generated plan. A refused or failed pull stops with pull mode's reason and next step and never restarts.
+- **The linked-worktree arm.** Pull mode never runs from a linked worktree, so a gated command started inside one stops with a next step that names the main checkout, creates nothing, and offers no pull.
+
+`.claude/skills/update-gaia/references/pull-gate.md` owns the steps, and the pull itself is the Pull mode section above.
+
 ## Decision table
 
 For every file `P` in the latest manifest. **Rows match in declared order; the first matching row wins**, which is what keeps a file the release never touched from being overwritten or merged:

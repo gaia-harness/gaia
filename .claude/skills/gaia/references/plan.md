@@ -25,6 +25,13 @@ Steps 1 and 1a read the remainder as `$ARGUMENTS`, so `auto SPEC-NNN` takes step
 
 Read `.claude/skills/gaia/references/spec/lifecycle.md` and run its `## Pre-flight sweep` now. Pass 0 (notebook readiness) blocks: if it exits non-zero, stop and surface its one stderr line, and plan nothing. Every other pass is best-effort and never blocks planning. Run it with the caller label `/gaia-plan`, so its research pass is list-only: it prints one eligible-count line, never asks and never runs `apply`.
 
+```bash
+. .gaia/scripts/main-only-lib.sh
+gaia_pull_gate "/gaia-plan"
+```
+
+On a non-zero exit, read `.claude/skills/update-gaia/references/pull-gate.md` and follow it with `/gaia-plan`, this run's original arguments and the exit code, before anything below creates a branch, worktree, claim or SPEC id.
+
 ### 1. Get description
 
 If `$ARGUMENTS` (the args after `plan`) is non-empty, use it as the feature description.

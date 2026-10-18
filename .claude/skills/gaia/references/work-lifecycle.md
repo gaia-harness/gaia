@@ -31,6 +31,15 @@ A new file git does not yet track is not in that diff: copy it into the worktree
 
 Work that closes a GitHub issue claims it per `.claude/rules/issue-claim.md` before step 3. That rule owns the label read and the claim command.
 
+A fresh start runs the pull gate before the claim, with `ad-hoc work` as the command name. Work whose branch already exists locally or as a worktree is a resume and skips the gate.
+
+```bash
+. .gaia/scripts/main-only-lib.sh
+gaia_pull_gate "ad-hoc work"
+```
+
+On a non-zero exit, read `.claude/skills/update-gaia/references/pull-gate.md` and follow it with `ad-hoc work`, this run's original arguments and the exit code, before anything below creates a branch, worktree, claim or SPEC id.
+
 A `tech-debt` issue is never claimed by hand. Tell the user to run `/gaia-debt <n>` instead, adding `worktree` or `branch` when they named an isolation mode, because `/gaia-debt` owns that claim and the stale-claim reconcile that reads it.
 
 ## 2. Name
@@ -266,11 +275,11 @@ The prompt carries no `ExitWorktree({...})` call because it runs from another co
 
 ## Releasing an empty worktree
 
-`.claude/skills/gaia/references/isolation.md` (`## Releasing an isolation that holds nothing`) sends a worktree it created in this session here only after both of its reads came back empty: nothing uncommitted, and no commit past the base. That emptiness stands in for the `MERGED` gate of `## 8. Cleanup`, so call:
+`.claude/skills/gaia/references/isolation.md` (`## Releasing an isolation that holds nothing`) sends a worktree it created in this session here only after both of its reads came back empty: nothing uncommitted, and no commit past the base. That emptiness stands in for the `MERGED` gate of `## 8. Cleanup`. `/update-gaia`'s claim flow also sends one here when its claim loses: that worktree's only commit is the claim commit, already pushed to a pull request now closed with its remote branch deleted, so it holds none of the user's work either. In both cases, call:
 
 `ExitWorktree({action: "remove", discard_changes: true})`
 
-`discard_changes` loses nothing, because both reads were empty. `ExitWorktree` deletes only the branch name it created, so from the main checkout, which the call returned the session to, delete the renamed branch with the plain `git branch -D <branch-name>`. No fetch, pull or install follows: nothing merged.
+`discard_changes` loses nothing, because both reads were empty or the only commit is that claim. `ExitWorktree` deletes only the branch name it created, so from the main checkout, which the call returned the session to, delete the renamed branch with the plain `git branch -D <branch-name>`. No fetch, pull or install follows: nothing merged.
 
 ## The git worktree add backstop
 
