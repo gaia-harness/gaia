@@ -278,18 +278,31 @@ else
   setup_pending_count=0
   if [ -f "$SETUP_STATE_FILE" ]; then
     if command -v jq >/dev/null 2>&1; then
-      # The pending machine-scope setup choices ride the completion read, so a
-      # render spawns one jq whether or not the list exists. The list goes in
-      # as a raw string and is parsed under try, so a malformed list yields a
-      # zero count and never fails the completion read it shares a process
-      # with. Count first, then completed_at: the count never holds a comma.
+      # The pending setup choices ride the completion read, so a render spawns
+      # one jq whether or not the list exists: the undecided machine-scope ids
+      # plus the project-scope ids this machine can act on (setup-owed.sh,
+      # shared with /setup-gaia's closing message). The list and the project
+      # config go in as raw strings and are parsed under try, so a malformed
+      # file yields a zero count and never fails the completion read it shares
+      # a process with. Count first, then completed_at: the count never holds
+      # a comma.
       if [ -f "$SETUP_FEATURES_FILE" ]; then
-        setup_read=$(jq -r --rawfile list "$SETUP_FEATURES_FILE" '
+        GAIA_SETUP_OWED_JQ='def gaia_setup_owed($list_text; $project_text): [];'
+        . "$GAIA_DIRECTORY/statusline/setup-owed.sh" 2>/dev/null || true
+        SETUP_PROJECT_FILE="$STATE_ROOT/.gaia/project.json"
+        if [ -f "$SETUP_PROJECT_FILE" ]; then
+          setup_project_arguments=(--rawfile project "$SETUP_PROJECT_FILE")
+        else
+          setup_project_arguments=(--arg project "")
+        fi
+        setup_read=$(jq -r --rawfile list "$SETUP_FEATURES_FILE" "${setup_project_arguments[@]}" "$GAIA_SETUP_OWED_JQ"'
           (.decisions | if type == "object" then . else {} end) as $decisions
-          | [ (try ([$list | fromjson | .features | arrays | .[] | objects
-                     | select((.scope == "machine") and ((.id | type) == "string")
-                              and (($decisions[.id] // "") | IN("applied", "declined", "not-applicable") | not))]
-                    | length | tostring) catch "0"),
+          | [ ((try ([$list | fromjson | .features | arrays | .[] | objects
+                      | select((.scope == "machine") and ((.id | type) == "string")
+                               and (($decisions[.id] // "") | IN("applied", "declined", "not-applicable") | not))]
+                     | length) catch 0)
+               + (try (gaia_setup_owed($list; $project) | length) catch 0)
+               | tostring),
               (.completed_at // "null") ]
           | join(",")' "$SETUP_STATE_FILE" 2>/dev/null)
         setup_pending_count="${setup_read%%,*}"

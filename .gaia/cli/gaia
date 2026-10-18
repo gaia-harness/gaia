@@ -40476,6 +40476,77 @@ var run40 = (argv, options = {}) => {
   return seedEnvironmentFile(options.cwd ?? process.cwd(), SUBCOMMAND4);
 };
 
+// src/setup/util/state-file.ts
+import {
+  existsSync as existsSync31,
+  mkdirSync as mkdirSync15,
+  readFileSync as readFileSync38,
+  renameSync as renameSync4,
+  writeFileSync as writeFileSync4
+} from "node:fs";
+import path55 from "node:path";
+var STATE_FILENAME = "setup-state.json";
+var STATE_DIRECTORY_RELATIVE = path55.join(".gaia", "local");
+var SETUP_STEPS = [
+  "install-tools",
+  "install-plugins",
+  "chmod-statusline",
+  "bootstrap-env"
+];
+var isSetupStep = (value) => SETUP_STEPS.includes(value);
+var resolveStateFilePath = (repoRoot) => path55.join(repoRoot, STATE_DIRECTORY_RELATIVE, STATE_FILENAME);
+var keepStringValues = (value) => {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) {
+    return void 0;
+  }
+  const kept = {};
+  for (const [id, entry] of Object.entries(value)) {
+    if (typeof entry === "string") kept[id] = entry;
+  }
+  return kept;
+};
+var readStateFile = (repoRoot) => {
+  const filePath = resolveStateFilePath(repoRoot);
+  if (!existsSync31(filePath)) return null;
+  const raw = readFileSync38(filePath, "utf8");
+  const parsed = JSON.parse(raw);
+  if (parsed.version !== 1) {
+    throw new Error(
+      `setup-state.json has unexpected version: ${String(parsed.version)}`
+    );
+  }
+  const rawSteps = parsed.completed_steps ?? [];
+  if (typeof parsed.started_at !== "string") {
+    throw new TypeError("setup-state.json is missing a valid started_at");
+  }
+  const decisions = keepStringValues(parsed.decisions);
+  return {
+    ...typeof parsed.admin === "boolean" ? { admin: parsed.admin } : {},
+    completed_at: parsed.completed_at ?? null,
+    completed_steps: rawSteps.filter(isSetupStep),
+    ...decisions === void 0 ? {} : { decisions },
+    started_at: parsed.started_at,
+    version: 1
+  };
+};
+var writeStateFile = (repoRoot, state) => {
+  const filePath = resolveStateFilePath(repoRoot);
+  const parent = path55.dirname(filePath);
+  if (!existsSync31(parent)) {
+    mkdirSync15(parent, { mode: 493, recursive: true });
+  }
+  const serialized = `${JSON.stringify(state, null, 2)}
+`;
+  const tmpPath = `${filePath}.tmp`;
+  writeFileSync4(tmpPath, serialized, "utf8");
+  renameSync4(tmpPath, filePath);
+};
+var pendingSteps = (state) => {
+  const completed = new Set(state?.completed_steps);
+  return SETUP_STEPS.filter((step) => !completed.has(step));
+};
+var isComplete = (state) => state?.completed_at !== null && state?.completed_at !== void 0;
+
 // src/setup/check-admin.ts
 var HELP_TEXT35 = `Usage: gaia setup check-admin --owner <o> --repo <r> [--json]
 
@@ -40518,6 +40589,19 @@ var probeAdmin = async (owner, repo, cwd) => {
   const trimmed = apiResult.stdout.trim();
   return { admin: trimmed === "true", auth_status: "ok" };
 };
+var cacheAdmin = (cwd, admin) => {
+  try {
+    const mainRoot = resolveMainWorktreeRoot(cwd);
+    const state = readStateFile(mainRoot) ?? {
+      completed_at: null,
+      completed_steps: [],
+      started_at: (/* @__PURE__ */ new Date()).toISOString(),
+      version: 1
+    };
+    writeStateFile(mainRoot, { ...state, admin });
+  } catch {
+  }
+};
 var run41 = async (argv, options = {}) => {
   let json2 = false;
   let owner;
@@ -40555,7 +40639,9 @@ var run41 = async (argv, options = {}) => {
     });
     return EXIT_CODES.UNKNOWN_SUBCOMMAND;
   }
-  const output2 = await probeAdmin(owner, repo, options.cwd ?? process.cwd());
+  const cwd = options.cwd ?? process.cwd();
+  const output2 = await probeAdmin(owner, repo, cwd);
+  if (output2.auth_status === "ok") cacheAdmin(cwd, output2.admin);
   printOutput(output2, json2);
   return EXIT_CODES.OK;
 };
@@ -40858,13 +40944,13 @@ var run43 = (argv, options = {}) => {
 import path57 from "node:path";
 
 // src/setup/util/setup-features.ts
-import { readFileSync as readFileSync38 } from "node:fs";
-import path55 from "node:path";
-var setupFeaturesPath = (repoRoot) => path55.join(repoRoot, ".gaia", "setup-features.json");
+import { readFileSync as readFileSync39 } from "node:fs";
+import path56 from "node:path";
+var setupFeaturesPath = (repoRoot) => path56.join(repoRoot, ".gaia", "setup-features.json");
 var readSetupFeatures = (filePath) => {
   let text;
   try {
-    text = readFileSync38(filePath, "utf8");
+    text = readFileSync39(filePath, "utf8");
   } catch (error62) {
     const detail = error62 instanceof Error ? error62.message : String(error62);
     throw new Error(`${filePath}: unreadable: ${detail}`);
@@ -40882,76 +40968,6 @@ var readSetupFeatures = (filePath) => {
   }
   return result.data;
 };
-
-// src/setup/util/state-file.ts
-import {
-  existsSync as existsSync31,
-  mkdirSync as mkdirSync15,
-  readFileSync as readFileSync39,
-  renameSync as renameSync4,
-  writeFileSync as writeFileSync4
-} from "node:fs";
-import path56 from "node:path";
-var STATE_FILENAME = "setup-state.json";
-var STATE_DIRECTORY_RELATIVE = path56.join(".gaia", "local");
-var SETUP_STEPS = [
-  "install-tools",
-  "install-plugins",
-  "chmod-statusline",
-  "bootstrap-env"
-];
-var isSetupStep = (value) => SETUP_STEPS.includes(value);
-var resolveStateFilePath = (repoRoot) => path56.join(repoRoot, STATE_DIRECTORY_RELATIVE, STATE_FILENAME);
-var keepStringValues = (value) => {
-  if (typeof value !== "object" || value === null || Array.isArray(value)) {
-    return void 0;
-  }
-  const kept = {};
-  for (const [id, entry] of Object.entries(value)) {
-    if (typeof entry === "string") kept[id] = entry;
-  }
-  return kept;
-};
-var readStateFile = (repoRoot) => {
-  const filePath = resolveStateFilePath(repoRoot);
-  if (!existsSync31(filePath)) return null;
-  const raw = readFileSync39(filePath, "utf8");
-  const parsed = JSON.parse(raw);
-  if (parsed.version !== 1) {
-    throw new Error(
-      `setup-state.json has unexpected version: ${String(parsed.version)}`
-    );
-  }
-  const rawSteps = parsed.completed_steps ?? [];
-  if (typeof parsed.started_at !== "string") {
-    throw new TypeError("setup-state.json is missing a valid started_at");
-  }
-  const decisions = keepStringValues(parsed.decisions);
-  return {
-    completed_at: parsed.completed_at ?? null,
-    completed_steps: rawSteps.filter(isSetupStep),
-    ...decisions === void 0 ? {} : { decisions },
-    started_at: parsed.started_at,
-    version: 1
-  };
-};
-var writeStateFile = (repoRoot, state) => {
-  const filePath = resolveStateFilePath(repoRoot);
-  const parent = path56.dirname(filePath);
-  if (!existsSync31(parent)) {
-    mkdirSync15(parent, { mode: 493, recursive: true });
-  }
-  const serialized = `${JSON.stringify(state, null, 2)}
-`;
-  const tmpPath = `${filePath}.tmp`;
-  writeFileSync4(tmpPath, serialized, "utf8");
-  renameSync4(tmpPath, filePath);
-};
-var pendingSteps = (state) => {
-  const completed = new Set(state?.completed_steps);
-  return SETUP_STEPS.filter((step) => !completed.has(step));
-};
-var isComplete = (state) => state?.completed_at !== null && state?.completed_at !== void 0;
 
 // src/setup/drift.ts
 var SUBCOMMAND6 = "setup drift";

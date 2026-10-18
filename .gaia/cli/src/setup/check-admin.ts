@@ -11,11 +11,15 @@
  *
  * Contract: `admin: false` whenever `auth_status != "ok"`. Never
  * false-positive admin. Exits 0 for every probe outcome and 1 on a
- * usage error; `check-admin` is a query, not a gate.
+ * usage error; `check-admin` is a query, not a gate. An `ok` answer is
+ * also cached as `admin` in `.gaia/local/setup-state.json`.
  */
 import {EXIT_CODES} from '../exit.js';
 import {structuredError} from '../stderr.js';
+import {resolveMainWorktreeRoot} from '../util/main-root.js';
 import {runGhAsync} from '../util/run-process.js';
+import {readStateFile, writeStateFile} from './util/state-file.js';
+import type {SetupState} from './util/state-file.js';
 
 const HELP_TEXT = `Usage: gaia setup check-admin --owner <o> --repo <r> [--json]
 
@@ -85,6 +89,25 @@ const probeAdmin = async (
   return {admin: trimmed === 'true', auth_status: 'ok'};
 };
 
+// Only an ok probe is an answer: a failed one says nothing about permission, so
+// it keeps whatever an earlier ok probe cached. Best-effort: the cache feeds a
+// statusline nudge, so a missing repo or an unreadable state file never turns
+// this query into a failure.
+const cacheAdmin = (cwd: string, admin: boolean): void => {
+  try {
+    const mainRoot = resolveMainWorktreeRoot(cwd);
+    const state: SetupState = readStateFile(mainRoot) ?? {
+      completed_at: null,
+      completed_steps: [],
+      started_at: new Date().toISOString(),
+      version: 1,
+    };
+    writeStateFile(mainRoot, {...state, admin});
+  } catch {
+    // The probe's answer still prints; only the cache is skipped.
+  }
+};
+
 export const run = async (
   argv: readonly string[],
   options: RunOptions = {}
@@ -133,7 +156,10 @@ export const run = async (
     return EXIT_CODES.UNKNOWN_SUBCOMMAND;
   }
 
-  const output = await probeAdmin(owner, repo, options.cwd ?? process.cwd());
+  const cwd = options.cwd ?? process.cwd();
+  const output = await probeAdmin(owner, repo, cwd);
+
+  if (output.auth_status === 'ok') cacheAdmin(cwd, output.admin);
 
   printOutput(output, json);
 

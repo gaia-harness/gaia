@@ -1,9 +1,11 @@
 import {afterEach, beforeEach, describe, expect, test, vi} from 'vitest';
+import {writeFileSync} from 'node:fs';
 import {EXIT_CODES} from '../../exit.js';
 import {run as runDrift} from '../drift.js';
 import {run as runFinalize} from '../finalize.js';
 import {run as runMarkStep} from '../mark-step.js';
 import {run as runRecord} from '../record.js';
+import {resolveStateFilePath} from '../util/state-file.js';
 import {setupSandbox} from './sandbox.js';
 import type {Sandbox} from './sandbox.js';
 import {
@@ -76,5 +78,18 @@ describe('machine decisions across setup-state writes', () => {
     expect(runFinalize(['--force'], cwd())).toBe(EXIT_CODES.OK);
     expect(readStateJson(sandbox.root).completed_steps).toEqual([]);
     expectDecisionKept();
+  });
+
+  test('mark-step, record and finalize keep the cached admin answer', () => {
+    const statePath = resolveStateFilePath(sandbox.root);
+    writeFileSync(
+      statePath,
+      JSON.stringify({...readStateJson(sandbox.root), admin: true}),
+      'utf8'
+    );
+    runMarkStep(['install-tools'], cwd());
+    runRecord(['mach-a', 'applied'], cwd());
+    runFinalize(['--force'], cwd());
+    expect(readStateJson(sandbox.root).admin).toBe(true);
   });
 });

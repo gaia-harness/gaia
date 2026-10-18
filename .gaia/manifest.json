@@ -325,6 +325,7 @@
     ".gaia/statusline/context-reading.sh": "owned",
     ".gaia/statusline/gaia-statusline.sh": "owned",
     ".gaia/statusline/left-side.sh": "owned",
+    ".gaia/statusline/setup-owed.sh": "owned",
     ".gaia/templates/README.md": "owned",
     ".gaia/templates/spec/uat-spec.ts.tmpl": "owned",
     ".gaia/vendor/playwright-cli.json": "owned",
@@ -731,7 +732,7 @@
     "wiki/overview.md": "wiki-owned",
     "wiki/README.md": "wiki-owned"
   },
-  "generated": "2026-10-18T02:37:23.100Z",
+  "generated": "2026-10-18T15:33:58.354Z",
   "regions": [
     {
       "endMarker": "<!-- gaia:audit-remit:end -->",
