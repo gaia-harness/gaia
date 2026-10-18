@@ -23,7 +23,7 @@ Carry into the later phases the security plan: per advisory, its candidate order
 
 This recipe resolves the security advisories the run's Phase 1 plan still owes, after the waves and Phase 5b. The orchestrating session runs it itself, because acceptance asks the human with `AskUserQuestion`; the resolution steps may be delegated to an agent only while no question is pending. Operate on the root workspace and its `frontend` package only: run every `pnpm` command from the repository root, never with `-r` or `cd`; `-C frontend` is the one allowed path argument.
 
-Inputs from Phase 1: the opening advisories payload (`$advisories_json`), the security plan (per advisory: the candidate order after the apply-set step, and each ask-first answer), the opening `dismissedGhsas`, whether alerts were read this run, and the run mode. Shell variables do not survive between Bash tool calls, so carry every path below (`$advisories_json`, `$batch_snapshot`, each `$resolution_snapshot`) yourself. The untrusted-text rule in `### Security preview` binds this phase too.
+Inputs from Phase 1: the opening advisories payload (`.gaia/local/cache/shared/update-deps-advisories.json`), the security plan (per advisory: the candidate order after the apply-set step, and each ask-first answer), the opening `dismissedGhsas`, whether alerts were read this run, and the run mode. Shell variables do not survive between Bash tool calls, and a worktree session refuses a shell variable inside a path, so every path below is a fixed literal: the batch snapshot is `.gaia/local/cache/shared/update-deps-security-batch`, the resolution snapshot is `.gaia/local/cache/shared/update-deps-security-resolution`, and a command takes the literal wherever this page writes `<snapshot>`. The untrusted-text rule in `### Security preview` binds this phase too.
 
 #### 1. Scope
 
@@ -38,13 +38,12 @@ An advisory with `blockedReason: "release-age"` is never forced in. Report it st
 No resolution ever touches the five release-age and trust settings: never add a `minimumReleaseAgeExclude` entry, and never change `minimumReleaseAge`, `minimumReleaseAgeStrict`, `minimumReleaseAgeExclude`, `trustPolicy`, or `trustPolicyExclude` to land a resolution. Before gating each resolution, prove it left them alone by extracting them from the resolution's snapshot and from the working tree and comparing:
 
 ```bash
-release_age_settings() {
-  awk '/^[^ #]/ { keep = ($0 ~ /^(minimumReleaseAge|minimumReleaseAgeStrict|minimumReleaseAgeExclude|trustPolicy|trustPolicyExclude):/) } keep && !/^[[:space:]]*#/' "$1"
-}
-release_age_settings "$resolution_snapshot/pnpm-workspace.yaml" > "$resolution_snapshot/release-age-before"
-release_age_settings pnpm-workspace.yaml > "$resolution_snapshot/release-age-after"
-cmp "$resolution_snapshot/release-age-before" "$resolution_snapshot/release-age-after"
+awk '/^[^ #]/ { keep = ($0 ~ /^(minimumReleaseAge|minimumReleaseAgeStrict|minimumReleaseAgeExclude|trustPolicy|trustPolicyExclude):/) } keep && !/^[[:space:]]*#/' .gaia/local/cache/shared/update-deps-security-resolution/pnpm-workspace.yaml > .gaia/local/cache/shared/update-deps-security-resolution/release-age-before
+awk '/^[^ #]/ { keep = ($0 ~ /^(minimumReleaseAge|minimumReleaseAgeStrict|minimumReleaseAgeExclude|trustPolicy|trustPolicyExclude):/) } keep && !/^[[:space:]]*#/' pnpm-workspace.yaml > .gaia/local/cache/shared/update-deps-security-resolution/release-age-after
+cmp .gaia/local/cache/shared/update-deps-security-resolution/release-age-before .gaia/local/cache/shared/update-deps-security-resolution/release-age-after
 ```
+
+Run each of the three lines as its own call.
 
 A difference reverts that resolution (step 6) and reports the advisory still open with `quality gate failed`, naming the changed setting in the report.
 
@@ -53,32 +52,25 @@ A difference reverts that resolution (step 6) and reports the advisory still ope
 This phase keeps its own snapshot directories under `.gaia/local/cache/shared/` and never reuses the directory Phase 5b filled. Before the batch, take one batch snapshot; before each resolution, and before each individual re-apply in step 6, take a fresh resolution snapshot with the same files:
 
 ```bash
-take_snapshot() {
-  mkdir -p "$1/frontend"
-  cp package.json pnpm-lock.yaml pnpm-workspace.yaml "$1/"
-  cp frontend/package.json "$1/frontend/"
-  pnpm -C frontend ls --depth 0 --json | jq '.[0] | (.dependencies // {}) + (.devDependencies // {}) | map_values(.version)' > "$1/direct.json"
-}
-mkdir -p .gaia/local/cache/shared
-batch_snapshot="$(mktemp -d .gaia/local/cache/shared/.update-deps-security-batch.XXXXXX)"
-take_snapshot "$batch_snapshot"
+rm -rf <snapshot>
+mkdir -p <snapshot>/frontend
+cp package.json pnpm-lock.yaml pnpm-workspace.yaml <snapshot>/
+cp frontend/package.json <snapshot>/frontend/
+pnpm -C frontend ls --depth 0 --json | jq '.[0] | (.dependencies // {}) + (.devDependencies // {}) | map_values(.version)' > <snapshot>/direct.json
 ```
 
-```bash
-resolution_snapshot="$(mktemp -d .gaia/local/cache/shared/.update-deps-security-resolution.XXXXXX)"
-take_snapshot "$resolution_snapshot"
-```
+Run each line as its own call, with `<snapshot>` the batch snapshot literal for the batch snapshot and the resolution snapshot literal for a resolution snapshot. Clearing the directory first means a snapshot never holds a stale file from an earlier resolution; the resolution snapshot is live only while its resolution is being tried, so one fixed directory serves every resolution in turn.
 
 **Revert** restores one snapshot whole, never part of it:
 
 ```bash
-cp "$snapshot/package.json" "$snapshot/pnpm-lock.yaml" "$snapshot/pnpm-workspace.yaml" .
-cp "$snapshot/frontend/package.json" frontend/package.json
+cp <snapshot>/package.json <snapshot>/pnpm-lock.yaml <snapshot>/pnpm-workspace.yaml .
+cp <snapshot>/frontend/package.json frontend/package.json
 pnpm install --frozen-lockfile
-cmp pnpm-lock.yaml "$snapshot/pnpm-lock.yaml"
+cmp pnpm-lock.yaml <snapshot>/pnpm-lock.yaml
 ```
 
-`$snapshot` is `$batch_snapshot` for a failed batch and the resolution's own `$resolution_snapshot` for one resolution, so reverting one resolution never restores another's state. Remove every snapshot directory this phase created when it ends.
+`<snapshot>` is the batch snapshot for a failed batch and the resolution snapshot for one resolution, so reverting one resolution never restores another's state. Remove both snapshot directories (`rm -rf` on each literal path) when this phase ends.
 
 #### 4. Methods
 
@@ -92,8 +84,8 @@ pnpm -C frontend update --no-save <package>
 
 Name the package only, never `name@version`. `--no-save` leaves every declared range as it is, and pnpm 12 re-resolves to unlimited depth by default (it rejects `--depth Infinity`), so the command moves only the named package to the newest version its parents' ranges admit, or nothing when it is already newest. Then run the guards Phase 5b runs, against this resolution's snapshot:
 
-- `package.json`, `frontend/package.json`, and `pnpm-workspace.yaml` must be byte-identical to `$resolution_snapshot` (`cmp`). A difference means pnpm rewrote a range or recorded a release-age exemption: revert and report `quality gate failed`, naming the rewritten file.
-- Re-run the snapshot's `pnpm -C frontend ls` line into `$resolution_snapshot/direct-after.json` and compare each held package's version with `direct.json`. The held packages are the payload's `skipped[]` entries with `reason: "held"`; a snoozed group never blocks a security resolution. A held package whose version moved reverts the resolution and reports `held by config (<pkg> ceiling <ceiling>)`.
+- `package.json`, `frontend/package.json`, and `pnpm-workspace.yaml` must be byte-identical to the resolution snapshot (`cmp`). A difference means pnpm rewrote a range or recorded a release-age exemption: revert and report `quality gate failed`, naming the rewritten file.
+- Re-run the snapshot's `pnpm -C frontend ls` line into `.gaia/local/cache/shared/update-deps-security-resolution/direct-after.json` and compare each held package's version with `direct.json`. The held packages are the payload's `skipped[]` entries with `reason: "held"`; a snoozed group never blocks a security resolution. A held package whose version moved reverts the resolution and reports `held by config (<pkg> ceiling <ceiling>)`.
 
 A non-zero exit reverts and moves on to the next candidate.
 
@@ -120,7 +112,7 @@ Pass `vulnerableRange` verbatim; comma-separated ranges are accepted as written.
 Apply every in-range and override resolution first, each behind its own resolution snapshot, guards, and landed check. Then run the quality gate in `override-audit.md` once over the whole batch.
 
 - **The gate passes:** every resolution stands.
-- **The gate fails:** revert the whole batch from `$batch_snapshot`. Then re-apply the resolutions one at a time in ranked order, each on top of the ones already accepted, so the final accepted set was gated as a whole: take a fresh `$resolution_snapshot`, re-apply, rerun its guards and landed check, and gate. A pass keeps it. A failure reverts that resolution alone from its own `$resolution_snapshot` and reports it still open with `quality gate failed`. Stop after 5 individual re-gates: every resolution not yet re-applied when the cap is reached stays reverted with `quality gate failed (batch not isolated)`.
+- **The gate fails:** revert the whole batch from the batch snapshot. Then re-apply the resolutions one at a time in ranked order, each on top of the ones already accepted, so the final accepted set was gated as a whole: take a fresh resolution snapshot, re-apply, rerun its guards and landed check, and gate. A pass keeps it. A failure reverts that resolution alone from its own resolution snapshot and reports it still open with `quality gate failed`. Stop after 5 individual re-gates: every resolution not yet re-applied when the cap is reached stays reverted with `quality gate failed (batch not isolated)`.
 
 The expected gate count is 1 on a clean batch and at most 6 (one batch gate plus five individual re-gates). No resolution applied means no gate.
 

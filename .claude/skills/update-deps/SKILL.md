@@ -5,59 +5,41 @@ description: Remediates dependencies in place of Dependabot version and security
 
 Contents: Pre-flight: Worktree check; Pre-flight: Branch check; Package layout; Flags and run modes; Companion groups; Phase 1: Discover, preview, decide (orchestrator); Branch creation (after discovery); Override audit + Wave A: Haiku agent; Phase 5: Wave B (per-group major bumps); Phase 5b: Transitive refresh (Haiku agent); Phase 5c: Security resolutions; Phase 6: Post-update override audit; Phase 7: Final report; Phase 8: Publish.
 
-Dependency remediation: outdated packages and security advisories, through one quality gate, in one record. Discover outdated packages and open advisories, preview them (advisories first, ranked) so you can snooze what you are not ready for, audit overrides, apply codebase migrations for major bumps, resolve dependency conflicts, refresh transitive dependencies within range, resolve each advisory by the least invasive method that clears it or accept it by dismissing its alert, and run the quality gate. In CI it runs unattended (no preview); interactively it shows the preview first. On a `main`/`master` run it opens the PR and merges it once checks are green, then cleans up locally; on any other branch it pushes and leaves the PR to you. Run by `/gaia-init`, it leaves its changes uncommitted for the init commit.
+Dependency remediation: outdated packages and security advisories, through one quality gate, in one record. Discover outdated packages and open advisories, preview them (advisories first, ranked) so you can snooze what you are not ready for, audit overrides, apply codebase migrations for major bumps, resolve dependency conflicts, refresh transitive dependencies within range, resolve each advisory by the least invasive method that clears it or accept it by dismissing its alert, and run the quality gate. In CI it runs unattended (no preview); interactively it shows the preview first. On a `main`/`master` run it works in its own worktree on its own branch, opens the PR, merges it once checks are green, then cleans up locally; on any other branch it pushes and leaves the PR to you. Run by `/gaia-init`, it leaves its changes uncommitted for the init commit.
 
 ## Pre-flight: Worktree check
 
-This wrapper writes a new `pnpm-lock.yaml` and opens a PR, both belong on the main checkout, not a per-SPEC worktree branch. If invoked from a linked worktree, reject hard with a message that surfaces the cached state from main so the user knows whether action is even pending.
+This wrapper writes a new `pnpm-lock.yaml` and opens a PR, which belong on the main checkout or in this command's own update worktree, not a per-SPEC worktree branch. The guard keeps the command out of every other linked worktree, rejecting hard with a message that surfaces the cached state from main so the user knows whether action is even pending. It admits only the command's own `deps/` update worktree, so a re-run continues there.
 
 Detection (run this first, before anything else):
 
 ```bash
 . .gaia/scripts/main-only-lib.sh
-gaia_update_deps_state_line() {
-  local cache_file="$1"
-  [ -f "$cache_file" ] && command -v jq >/dev/null 2>&1 || return 0
-  local outdated_count checked_at security_count security_term
-  outdated_count="$(jq -r '.outdatedCount // 0' "$cache_file" 2>/dev/null)"
-  checked_at="$(jq -r '.checkedAt // 0' "$cache_file" 2>/dev/null)"
-  # A null security count means no source answered, which is not zero.
-  security_count="$(jq -r 'if (.securityCount | type) == "number" and .securitySource != "unavailable" then (.securityCount | tostring) else "null" end' "$cache_file" 2>/dev/null)"
-  [ -n "$outdated_count" ] && [ -n "$checked_at" ] && [ "$checked_at" != "0" ] || return 0
-  if [ -z "$security_count" ] || [ "$security_count" = "null" ]; then
-    security_term="security advisories unavailable"
-  else
-    security_term="$security_count open security advisories"
-  fi
-  local now age ago_unit ago_value
-  now=$(date +%s)
-  age=$((now - checked_at))
-  # Format age as <Nm ago> / <Nh ago> / <Nd ago>.
-  ago_unit="s"; ago_value="$age"
-  if [ "$age" -ge 86400 ]; then ago_unit="d"; ago_value=$((age / 86400));
-  elif [ "$age" -ge 3600 ]; then ago_unit="h"; ago_value=$((age / 3600));
-  elif [ "$age" -ge 60 ]; then ago_unit="m"; ago_value=$((age / 60));
-  fi
-  printf 'Cached on main: %s packages outdated, %s (last checked %s%s ago).\n' "$outdated_count" "$security_term" "$ago_value" "$ago_unit"
-}
-gaia_refuse_if_worktree "/update-deps" gaia_update_deps_state_line || exit 1
+. .gaia/scripts/update-state-line-lib.sh
+gaia_refuse_if_worktree "/update-deps" gaia_update_deps_state_line "deps/" || exit 1
 ```
 
 If the detection does not fire, fall through to the existing `## Pre-flight: Branch check` section.
 
 ## Pre-flight: Branch check
 
-```bash
-git branch --show-current
-```
+Decide the run mode in this order. The first matching mode wins, and the `/gaia-init` check comes first so it holds whatever the worktree decision would otherwise be.
 
-If the current branch is `main` or `master` **and not running in CI**, set a flag (`SHOULD_CREATE_BRANCH=true`) but **do not create the branch yet**, branch creation is deferred until the run has confirmed work: right after the Phase 1 decision when the apply set is non-empty or the security plan has a resolution to apply, before anything is installed, or after Phase 5b lands on a refresh-only run (see Branch creation). Creating a branch when there is nothing to update pollutes the branch list.
+1. **`/gaia-init` invoked the run.** Set `INVOKED_BY_INIT=true` and `SHOULD_CREATE_WORKTREE=false`, which disables worktree creation for the whole run. A fresh project has no remote yet, so a branch's push, PR and merge cannot run; the run applies its changes on the current branch and leaves them uncommitted, and `/gaia-init`'s own init commit carries them. It creates no worktree and no branch.
+2. **`CI=true`** (set by GitHub Actions, GitLab CI, CircleCI, and most CI providers). Set `SHOULD_CREATE_WORKTREE=false`: the run creates no worktree and no branch, because the workflow owns branch management and pre-creates the appropriate branch before this skill runs.
+3. **Inside its own update worktree.** Read the branch with `git branch --show-current`. When it starts `deps/` and `bash .gaia/scripts/main-root-lib.sh --is-worktree` exits 0, this is a worktree run in place. Set `SHOULD_CREATE_WORKTREE=false`. Read `<worktree path>` with `git rev-parse --show-toplevel` and `<main checkout path>` with `bash .gaia/scripts/main-root-lib.sh`, each carried as a literal. Wait for provisioning before discovery, because the session-start hook re-provisions the tree on every entry:
+   ```bash
+   bash .gaia/scripts/provision-wait.sh --tree <worktree path>
+   ```
+   Handle the result as `references/worktree.md` step 4 does, with one difference: this run did not create the tree, so exit 3 (`INSTALL_FAILED`) is reported and the run continues. Discovery reads this worktree's manifests. The run creates no worktree, publishes as a worktree run (the PR is opened or reused, merged when green, and cleaned up by path), and never takes the push-only arm of Phase 8.
+4. **On `main` or `master`.** Set `SHOULD_CREATE_WORKTREE=true` but **do not create the worktree yet**: creation is deferred until the run has confirmed work, right after the Phase 1 decision when the apply set is non-empty or the security plan has a resolution to apply, before anything is installed, or before Phase 5b on a refresh-only run (see Branch creation). Creating a worktree when there is nothing to update pollutes the branch list. Read the main checkout's root once with `git rev-parse --show-toplevel` and carry it as the literal `<main checkout path>`. Before discovery, check for an update worktree a run left behind:
+   ```bash
+   git worktree list --porcelain
+   ```
+   When any record holds a `refs/heads/deps/` branch, or a `refs/heads/worktree-deps+` branch (a run interrupted between creating the worktree and renaming its branch), stop before discovery and create nothing. Report its path and branch with two next steps: re-run `/update-deps` inside it, which continues there; or remove it with the removal commands in the worktree notice (`references/worktree.md`, `## The worktree notice`).
+5. **Any other branch.** The run works in place: no worktree, no branch, push only. `SHOULD_CREATE_WORKTREE=false`, and `<main checkout path>` is `git rev-parse --show-toplevel`.
 
-In CI (`CI=true`, set by GitHub Actions, GitLab CI, CircleCI, and most CI providers), skip branch creation, the workflow owns branch management and pre-creates the appropriate branch before this skill runs.
-
-When `/gaia-init` invoked the run, set `SHOULD_CREATE_BRANCH=false` and remember `INVOKED_BY_INIT=true` for Phase 8. A fresh project has no remote yet, so a branch's push, PR and merge cannot run; the run applies its changes on the current branch and leaves them uncommitted, and `/gaia-init`'s own init commit carries them.
-
-Otherwise set `SHOULD_CREATE_BRANCH=false` and proceed on the current branch.
+In modes 1 and 2 `<main checkout path>` is also `git rev-parse --show-toplevel`: the cache bust in Branch creation needs it in every mode.
 
 ## Package layout
 
@@ -116,14 +98,21 @@ independent risk and independent migration guides, so they never move as a unit.
 
 Discover deterministically via the CLI primitive, the single source of truth for
 grouping, the ESLint 9.x cap, the `gaia.updateDepsHold` config hold, and the
-release-age cooldown (all already applied):
+release-age cooldown (all already applied). The two payloads land at fixed paths
+under `.gaia/local/cache/shared/`, so every block stays a plain command that
+runs the same inside a worktree; every later reference to a payload is that
+literal path:
 
 ```bash
 mkdir -p .gaia/local/cache/shared
-updates_json="$(mktemp .gaia/local/cache/shared/.updates.XXXXXX)"
-.gaia/cli/gaia update-deps run --emit-updates "$updates_json"
-advisories_json="$(mktemp .gaia/local/cache/shared/.advisories.XXXXXX)"
-.gaia/cli/gaia update-deps advisories --emit "$advisories_json" --updates "$updates_json"
+```
+
+```bash
+.gaia/cli/gaia update-deps run --emit-updates .gaia/local/cache/shared/update-deps-updates.json
+```
+
+```bash
+.gaia/cli/gaia update-deps advisories --emit .gaia/local/cache/shared/update-deps-advisories.json --updates .gaia/local/cache/shared/update-deps-updates.json
 ```
 
 Under `CI=true` add `--no-alerts` to the advisories call. It runs in every mode and writes a payload even when no source answered (`source: "unavailable"`). Keep from it, for later phases: the `source` and `reasonText`, whether alerts were read (`source` is `dependabot`), `rejectedCount`, the opening advisory key set (every `advisories[].key`, every `auditKeys` entry, and every `dismissedGhsas` entry), and the opening `dismissedGhsas`. `auditKeys` lists every key the opening `pnpm audit` reported, so in alerts mode it also carries the advisories already in the lockfile that no open Dependabot alert backs; without it the final-tree `pnpm audit` would read those as introduced by this run.
@@ -165,11 +154,9 @@ also runs on an otherwise up-to-date run. Compare that marker's `version` with
 the global-tools row's `latest`. When `latest` is unknown or equal, report
 `Vendored skills: current` (or `unknown`) and move on. Otherwise:
 
-1. If no branch exists yet and the run is on `main`/`master`, create one now and
-   remember `CREATED_NEW_BRANCH=true` for Phase 8:
-   ```bash
-   git checkout -b "$(bash .gaia/scripts/branch-name-lib.sh name deps)"
-   ```
+1. When `SHOULD_CREATE_WORKTREE=true` and no worktree exists yet, run
+   `references/worktree.md` now. The re-vendor and verify below, the rest of
+   discovery, the preview and the decision all continue in that worktree.
 2. Re-vendor, then verify offline:
    ```bash
    bash .gaia/scripts/revendor-playwright-cli.sh --version <latest>
@@ -298,7 +285,7 @@ snoozes AND any newly named), or the omitted ones are dropped from the ledger.
 - **Choose what to skip** → collect the names, union with `snoozedGroups`, then
   record the whole skip set:
   ```bash
-  .gaia/cli/gaia update-deps decline --source "$updates_json" --skip "<snoozed…,named…>"
+  .gaia/cli/gaia update-deps decline --source .gaia/local/cache/shared/update-deps-updates.json --skip "<snoozed…,named…>"
   ```
   Each name expands to its whole companion group (a partial group cannot be
   skipped); an unknown name errors so you can re-ask. Apply set = the payload
@@ -331,9 +318,8 @@ from the advisories call.
 
 A **refresh-only run** has an empty apply set but still runs Phase 5b: every
 direct dependency is current, or every outstanding group is snoozed or skipped.
-It skips the Override audit + Wave A agent and Phase 5, runs Phase 5b first, and
-creates its branch only when the refresh lands or the security plan has a
-resolution to apply (see Branch creation). Phase 0 does not run, so Phase 6
+It skips the Override audit + Wave A agent and Phase 5, and creates its
+worktree before Phase 5b (see Branch creation), then runs Phase 5b first. Phase 0 does not run, so Phase 6
 runs only after a landed refresh or a landed security override, and treats
 every key in the `overrides:` map as retained.
 
@@ -342,31 +328,56 @@ every key in the `overrides:` map as retained.
 Phase 1 already exited if the human cancelled, or declined the transitive
 refresh with nothing else to apply, so reaching here means the apply set is
 non-empty, the security plan has a resolution to apply, or the run is
-refresh-only. When the apply set is non-empty or the security plan has at least
-one resolution to apply, run this section right after the decision, before the
-Override audit + Wave A agent, so no install, lockfile rewrite, or quality gate
-runs on `main`/`master` (a `/gaia-init` run stays where it is, see Pre-flight:
-Branch check). A security-only run (an empty apply set, or
-`--security` with no chain-head bump) then goes on to the security phase even
-when Phase 5b reports `Nothing moved` or `Reverted (<reason>)`. On a
-refresh-only run with nothing in the security plan, run it after Phase 5b
-returns, and only when it reports `landed`; on `Nothing moved` or
-`Reverted (<reason>)`, skip this section and every phase up to Phase 7 and go
-straight to the report (no branch exists, and Phase 8's nothing-updated rule
-skips publish):
+refresh-only. The branch is cut inside a worktree, never in the main checkout.
 
-- Updates were confirmed. **Immediately bust the update-check cache** so the statusline reflects the post-update state on the next session regardless of whether this run completes. Use the Write tool to overwrite `.gaia/local/cache/shared/update-check.json`: read the existing cache first, then write it back unchanged **except** `outdatedCount` set to `0` and `checkedAt` set to the current Unix timestamp. **Carry every other field across verbatim, named here or not.** The cache holds fields this step has no reason to know about, and several are observations nothing later can reconstruct (`cleanseMemoryBaseline` and the two `codify*` counts), so dropping one silently disarms the nudge it belongs to instead of causing a visible error. If the cache file does not exist, skip this step. (Snoozed groups are already excluded by the ledger on the next real check.)
+- **Apply set non-empty, or the security plan has at least one resolution to
+  apply.** Run this section right after the decision, before the Override audit
+  + Wave A agent, so no install, lockfile rewrite, or quality gate runs on
+  `main`/`master` (a `/gaia-init` run stays where it is, see Pre-flight: Branch
+  check). A security-only run (an empty apply set, or `--security` with no
+  chain-head bump) then goes on to the security phase even when Phase 5b reports
+  `Nothing moved` or `Reverted (<reason>)`.
+- **Refresh-only run.** The refresh installs, rewrites the lockfile and gates,
+  so the worktree exists before Phase 5b starts. Run `references/worktree.md`
+  (step 2 below) as soon as an interactive run becomes refresh-only: the human picks **Refresh transitive
+  dependencies** at the zero-outdated prompt, **Update the rest** leaves an empty
+  apply set because every group is snoozed, or **Choose what to skip** leaves an
+  empty apply set. In CI nothing creates a worktree. When Phase 5b then reports
+  `Nothing moved` or `Reverted (<reason>)` and the security plan owes nothing,
+  skip every phase up to Phase 7 and go straight to the report (Phase 8's
+  nothing-updated rule skips publish); the worktree stays in place and its
+  notice is printed, as the stop rule says.
 
-- If an earlier step of this run already created the branch (`CREATED_NEW_BRANCH=true`), stay on it and create nothing: it is this run's branch.
+Do the following in order:
 
-- Otherwise, if `SHOULD_CREATE_BRANCH=true`, create the branch now and **remember that you created it** (this determines publish behavior in Phase 8):
-
-```bash
-git checkout -b "$(bash .gaia/scripts/branch-name-lib.sh name deps)"
-# CREATED_NEW_BRANCH=true, used in Phase 8
-```
-
-When `SHOULD_CREATE_BRANCH=false`, proceed on the current branch and **remember that you did NOT create a new branch**.
+1. **Cache bust, once updates are confirmed.** Bust the update-check cache so the
+   statusline reflects the post-update state on the next session regardless of
+   whether this run completes. It always names the main checkout's cache by its
+   absolute path, so the same call works from the main checkout and from a
+   worktree:
+   ```bash
+   bash .gaia/scripts/update-check-bust.sh --cache <main checkout path>/.gaia/local/cache/shared/update-check.json --mode deps
+   ```
+   The script sets `outdatedCount` to `0` and `checkedAt` to now, and carries
+   every other field across unchanged: the cache holds fields this step has no
+   reason to know about, and several are observations nothing later can
+   reconstruct (`cleanseMemoryBaseline` and the two `codify*` counts), so
+   dropping one silently disarms the nudge it belongs to instead of causing a
+   visible error. It prints `BUSTED` or `SKIPPED no cache` (the cache file does
+   not exist) and exits 0, or prints `BUST_FAILED <reason>` and exits 3 with the
+   file left as it was. A non-zero exit is reported and never stops the run. Then
+   read the file back (the `Read` tool, at that main-checkout path) and confirm
+   `outdatedCount` is `0`. Where this step runs depends on the path:
+   - Post-decision path: before step 2, in the main checkout.
+   - Refresh-only path: after Phase 5b reports `landed`, in the worktree.
+   - After a vendored-sync worktree: at the decision, in the worktree.
+   (Snoozed groups are already excluded by the ledger on the next real check.)
+2. **Worktree.** Create it with `references/worktree.md` now, when `SHOULD_CREATE_WORKTREE=true` and no worktree was created
+   earlier in this run (the vendored-skill sync may already have created it).
+3. **Otherwise** (`SHOULD_CREATE_WORKTREE=false`) create nothing and proceed in
+   place. Remember whether this run created a worktree (`CREATED_WORKTREE=true`),
+   runs inside its own update worktree (mode 3), or works in place; Phase 8
+   branches on it.
 
 ## Override audit + Wave A: Haiku agent
 
@@ -440,4 +451,4 @@ The orchestrating session builds and prints the report itself, from the agent re
 
 ## Phase 8: Publish
 
-Except on a run `/gaia-init` invoked, which publishes nothing, the orchestrating session commits, pushes, and, on a run that created its branch, opens the PR, merges it once checks are green, and cleans up locally, because the merge-gate hooks fire only in the invoking session: read `.claude/skills/update-deps/references/publish.md` and follow it exactly.
+Except on a run `/gaia-init` invoked, which publishes nothing, the orchestrating session commits, pushes, and, on a worktree run (one that created its worktree, or runs inside its own update worktree), opens or reuses the PR, merges it once checks are green, and cleans up the worktree and branch, because the merge-gate hooks fire only in the invoking session: read `.claude/skills/update-deps/references/publish.md` and follow it exactly.

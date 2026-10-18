@@ -1,6 +1,6 @@
 # update-gaia: merge execution (Steps 6 to 9)
 
-The execution agent that `/update-gaia` spawns follows this file. Read all of it before starting Step 6: the Step 7 walk can overwrite this file partway through the run, and the agent keeps executing the copy it read. The orchestrator has already downloaded both bundles and verified each against its release checksum (`../SKILL.md` Step 3c), and passes the verified, freshly extracted trees as `BASELINE_DIR` and `LATEST_DIR`; this file downloads nothing. Steps 9b to 12 run in the orchestrator and live in `../SKILL.md`.
+The execution agent that `/update-gaia` spawns follows this file. Read all of it before starting Step 6: the Step 7 walk can overwrite this file partway through the run, and the agent keeps executing the copy it read. The orchestrator has already downloaded both bundles and verified each against its release checksum (`../SKILL.md` Step 3c), and passes the verified, freshly extracted trees as `BASELINE_DIR` and `LATEST_DIR`; this file downloads nothing. The orchestrator also names the acting tree, the update worktree on a default-branch run: it is this agent's working root, every path in this file is relative to it, and the agent runs nothing against any other checkout. Steps 9b to 12 run in the orchestrator and live in `../SKILL.md`.
 
 Contents:
 

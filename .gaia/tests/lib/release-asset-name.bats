@@ -217,24 +217,37 @@ refusal_command() {
   done
 }
 
-@test "B4: the refusal block creates no branch and precedes every branch and download outside it" {
-  block="$(block_after_heading "$SKILL" '## Step 3b')"
-  printf '%s' "$block" | grep -qF 'checkout -b' && return 1
-  printf '%s' "$block" | grep -qF 'git switch' && return 1
-  refusal_line="$(grep -n '^## Step 3b' "$SKILL" | head -n 1 | cut -d: -f1)"
-  refusal_end="$(awk -v start="$refusal_line" 'NR > start && /^```$/ { print NR; exit }' "$SKILL")"
-  branch_line="$(grep -n 'git checkout -b' "$SKILL" | head -n 1 | cut -d: -f1)"
-  switch_line="$(grep -n 'git switch' "$SKILL" | head -n 1 | cut -d: -f1)"
-  download_line="$(grep -n 'gh release download' "$SKILL" |
-    awk -F: -v start="$refusal_line" -v end="$refusal_end" '$1 < start || $1 > end { print $1; exit }')"
-  [ -n "$refusal_line" ]
-  [ -n "$refusal_end" ]
-  [ -n "$branch_line" ]
-  [ -n "$switch_line" ]
-  [ -n "$download_line" ]
-  [ "$refusal_line" -lt "$branch_line" ]
-  [ "$refusal_line" -lt "$switch_line" ]
-  [ "$refusal_line" -lt "$download_line" ]
+# 0 when SKILL.md copy `$1` runs the 1.x refusal from Step 3b, before the
+# first bundle download, the first worktree entry and the worktree add, and
+# moves no branch anywhere.
+refusal_precedes_branching() {
+  local section refusal_line verify_line enter_line add_line
+  section="$(awk '/^## Step 3b/ { inside = 1; print; next } inside && /^##+ / { exit } inside { print }' "$1")"
+  printf '%s\n' "$section" | grep -qxF 'bash .gaia/scripts/update-gaia-preflight.sh refuse-1x --baseline <BASELINE>' || return 1
+  printf '%s\n' "$section" | grep -qE 'checkout -b|git switch|EnterWorktree' && return 1
+  grep -qE 'git checkout -b|git switch' "$1" && return 1
+  refusal_line="$(grep -nF 'update-gaia-preflight.sh refuse-1x' "$1" | head -n 1 | cut -d: -f1)"
+  verify_line="$(grep -nF 'update-gaia-preflight.sh verify-bundles' "$1" | head -n 1 | cut -d: -f1)"
+  enter_line="$(grep -nF 'EnterWorktree(' "$1" | head -n 1 | cut -d: -f1)"
+  add_line="$(grep -nF 'update-gaia-branch-state.sh add-worktree' "$1" | head -n 1 | cut -d: -f1)"
+  [ -n "$refusal_line" ] && [ -n "$verify_line" ] && [ -n "$enter_line" ] && [ -n "$add_line" ] || return 1
+  [ "$refusal_line" -lt "$verify_line" ] || return 1
+  [ "$refusal_line" -lt "$enter_line" ] || return 1
+  [ "$refusal_line" -lt "$add_line" ] || return 1
+  return 0
+}
+
+@test "B4: the refusal call creates no branch and precedes every download and worktree outside it" {
+  refusal_precedes_branching "$SKILL"
+  local copy="$BATS_TEST_TMPDIR/skill-early-worktree.md"
+  # Failing state: a worktree entered before Step 3b.
+  awk '/^## Step 3b/ && !done { print "EnterWorktree({name: \"early\"})"; done = 1 } { print }' "$SKILL" > "$copy"
+  grep -qxF 'EnterWorktree({name: "early"})' "$copy"
+  refusal_precedes_branching "$copy" && return 1
+  # Failing state: a branch switch reinserted anywhere.
+  { cat "$SKILL"; printf '%s\n' 'git switch x'; } > "$copy"
+  refusal_precedes_branching "$copy" && return 1
+  true
 }
 
 # The `## Step 2` section of a 2.0.0 note.
