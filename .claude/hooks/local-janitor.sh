@@ -3,8 +3,8 @@
 # working state.
 #
 # Side-effect only. A wiki landing whose session ended before /gaia-wiki's own
-# merge wait and cleanup ran (`gaia wiki chain begin` cuts a throwaway branch and
-# `gaia wiki chain finish` pushes it and enables auto-merge with `gh pr merge --auto`, a call that
+# merge wait and cleanup ran (/gaia-wiki cuts the throwaway landing branch
+# through isolation.md before `gaia wiki chain begin`, and `gaia wiki chain finish` pushes it and enables auto-merge with `gh pr merge --auto`, a call that
 # returns BEFORE the merge lands) leaves both a local wiki/<YYYY-MM-DD-HHMM>
 # branch (or a legacy wiki/sync-<date>-<sha> or wiki-sync/<date>-<sha> one)
 # and a stale local base branch behind. This hook
