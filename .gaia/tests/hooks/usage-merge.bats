@@ -108,7 +108,11 @@ assert_gh_only_pr_view() {
 
 # ---------- 1. the per-PR block through the hook ----------
 
-@test "gh pr merge 101/102/103 print each branch's golden tokens and dollars, the right initiative line, and one merge row each" {
+# cost_line <figures>: the block's plain Cost line starts with <figures> (the
+# tokens and dollars; the elapsed time follows).
+cost_line() { grep -q "^Cost: $1, [0-9hms]*\$" <<<"$output" || { printf 'no "Cost: %s" line in:\n%s\n' "$1" "$output" >&2; return 1; }; }
+
+@test "gh pr merge 101/102/103 print each branch's golden tokens and dollars as one Cost line, no initiative line, and one merge row each" {
   seed_uat007
   gh_view 101 101 plan/spec-090-foo MERGED 2026-09-25T00:00:00Z
   gh_view 102 102 debt/200-x MERGED 2026-09-25T01:00:00Z
@@ -116,26 +120,18 @@ assert_gh_only_pr_view() {
 
   run_merge "gh pr merge 101 --squash"
   [ "$status" -eq 0 ]
-  has_line "[PR cost] pr:101 branch:plan/spec-090-foo"
-  has_line "  tokens: 1,210,000 (fresh 100,000, cache write 100,000, cache read 1,000,000, output 10,000)"
-  has_line "  est. cost (USD): \$0.75"
-  has_line "[initiative research:topic-a to date; initiative totals overlap, never sum them across roots]"
-  has_line "  tokens: 1,210,000  est. cost (USD): \$0.75"
+  cost_line '1\.2M tokens, \$0\.75'
+  lacks "[initiative "
   lacks "merge not confirmed"
 
   run_merge "gh pr merge 102"
   [ "$status" -eq 0 ]
-  has_line "[PR cost] pr:102 branch:debt/200-x"
-  has_line "  tokens: 330,000 (fresh 300,000, cache write 0, cache read 0, output 30,000)"
-  has_line "  est. cost (USD): \$0.90"
-  has_line "[initiative issue:200 to date; initiative totals overlap, never sum them across roots]"
-  lacks "research:topic-a"
+  cost_line '0\.3M tokens, \$0\.90'
+  lacks "[initiative "
 
   run_merge "gh pr merge 103"
   [ "$status" -eq 0 ]
-  has_line "[PR cost] pr:103 branch:fix/foo"
-  has_line "  tokens: 440,000 (fresh 400,000, cache write 0, cache read 0, output 40,000)"
-  has_line "  est. cost (USD): \$1.20"
+  cost_line '0\.4M tokens, \$1\.20'
   lacks "[initiative "
 
   [ "$(jq -s '[.[] | select(.kind == "merge")] | length' "$TELEMETRY_DIRECTORY/links.jsonl")" -eq 3 ]
@@ -154,22 +150,21 @@ assert_gh_only_pr_view() {
 
   run_merge "gh pr merge 104"
   [ "$status" -eq 0 ]
-  has_line "[PR cost] pr:104 branch:fix/foo"
-  has_line "  tokens: 440,000 (fresh 400,000, cache write 0, cache read 0, output 40,000)"
+  cost_line '0\.4M tokens, \$1\.20'
   grep -qF 'merge not confirmed; boundary not recorded (record it: bash .gaia/scripts/usage.sh link --merge 104 --key branch:fix/foo)' <<<"$output"
   [ "$(merge_rows 104)" -eq 0 ]
 
   run_merge "gh pr merge 105"
   [ "$status" -eq 0 ]
   has_line "[PR cost] pr:105 (branch unresolved)"
-  lacks "tokens:"
+  lacks "tokens"
 }
 
 @test "no operand on worktree-fix+bar with gh failing: the current branch names the block, not confirmed" {
   git -C "$REPO" checkout -q -b worktree-fix+bar
   run_merge "gh pr merge"
   [ "$status" -eq 0 ]
-  has_line "[PR cost] pr:? branch:fix/bar"
+  cost_line '0\.0M tokens, \$0\.00'
   grep -qF 'merge not confirmed; boundary not recorded (record it: bash .gaia/scripts/usage.sh link --merge <N> --key branch:fix/bar)' <<<"$output"
 }
 
@@ -179,13 +174,14 @@ assert_gh_only_pr_view() {
   [ "$output" = "[PR cost] unresolved: no PR number or branch" ]
 }
 
-@test "a hostile headRefName creates no file and renders a hashed branch key" {
+@test "a hostile headRefName creates no file, never reaches the block, and records a hashed branch key" {
   gh_view 107 107 'x$(touch pwn)' MERGED 2026-09-25T00:00:00Z
   run_merge "gh pr merge 107"
   [ "$status" -eq 0 ]
   [ ! -e "$REPO/pwn" ]
   [ ! -e "$BATS_TEST_TMPDIR/pwn" ]
-  grep -Eq '^\[PR cost\] pr:107 branch:%[0-9a-f]{16}$' <<<"$output"
+  grep -q '^Cost: ' <<<"$output" || { printf '%s\n' "$output" >&2; return 1; }
+  grep -qF 'touch' <<<"$output" && return 1
   [ "$(jq -s '[.[] | select(.kind == "merge")] | .[0].key | test("^branch:%[0-9a-f]{16}$")' "$TELEMETRY_DIRECTORY/links.jsonl")" = true ]
 }
 
@@ -267,8 +263,7 @@ seed_unflushed() {
   export GAIA_USAGE_MERGE_CAP_SECONDS=5
   run_merge "gh pr merge 106" s-un
   [ "$status" -eq 0 ]
-  has_line "[PR cost] pr:106 branch:fix/unfl"
-  has_line "  tokens: 1,500 (fresh 1,000, cache write 0, cache read 0, output 500)"
+  grep -q '^Cost: 0\.0M tokens, \$0\.0[1-9]' <<<"$output" || { printf '%s\n' "$output" >&2; return 1; }
   lacks "Some usage was still being saved"
   lacks "merge not confirmed"
   lacks "unflushed:"
@@ -350,8 +345,7 @@ slow_render() {
   export GAIA_USAGE_RENDER_CAP_SECONDS=5
   run_merge "gh pr merge 103"
   [ "$status" -eq 0 ]
-  has_line "[PR cost] pr:103 branch:fix/foo"
-  has_line "  tokens: 440,000 (fresh 400,000, cache write 0, cache read 0, output 40,000)"
+  cost_line '0\.4M tokens, \$1\.20'
   lacks "readout timed out"
 }
 
@@ -366,10 +360,9 @@ slow_render() {
   gh_view 602 602 fix/foo MERGED 2026-09-26T00:00:00Z
 
   run_merge "gh pr merge 601"
-  has_line "  tokens: 440,000 (fresh 400,000, cache write 0, cache read 0, output 40,000)"
+  cost_line '0\.4M tokens, \$1\.20'
   run_merge "gh pr merge 602"
-  has_line "  tokens: 110,000 (fresh 100,000, cache write 0, cache read 0, output 10,000)"
-  has_line "  window: after 2026-09-24T00:00:00Z through 2026-09-26T00:00:00Z"
+  cost_line '0\.1M tokens, \$0\.30'
   [ "$(jq -s '[.[] | select(.kind == "merge")] | length' "$TELEMETRY_DIRECTORY/links.jsonl")" -eq 2 ]
 }
 

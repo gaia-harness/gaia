@@ -110,3 +110,5 @@ run_script() {
 has_line() { grep -qxF -- "$1" <<<"$output" || { printf 'missing line: [%s]\nin:\n%s\n' "$1" "$output" >&2; return 1; }; }
 lacks() { grep -qF -- "$1" <<<"$output" && { printf 'unexpected [%s] in:\n%s\n' "$1" "$output" >&2; return 1; }; return 0; }
 merge_rows() { jq -s --argjson pr_number "$1" '[.[] | select(.kind == "merge" and .pr == $pr_number)] | length' "$TELEMETRY_DIRECTORY/links.jsonl"; }
+# merge_key <pr>: the branch key of that PR's latest merge row, the branch the block read.
+merge_key() { jq -rs --argjson pr_number "$1" '[.[] | select(.kind == "merge" and .pr == $pr_number)] | last | .key' "$TELEMETRY_DIRECTORY/links.jsonl"; }

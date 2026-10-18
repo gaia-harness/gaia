@@ -1,9 +1,9 @@
 #!/usr/bin/env bats
 #
-# The Code Audit Team line of the per-PR block (`usage.sh pr ... --auditors`):
+# The Code Audit Team row of the per-PR box (`usage.sh pr ... --auditors`):
 # it sums the in-window branch segments whose agent_type is a listed name, and
-# a segment with no agent_type stays out of that sum and is only counted, for
-# the lower-bound marker. Figures are hand-added literals: opus at $2 per
+# a segment with no agent_type stays out of that sum, lands in Execute, and is
+# counted for the lower-bound marker. Figures are hand-added literals: opus at $2 per
 # million input and $10 per million output, fresh input and output only.
 #
 # Run under bash 5 (.claude/rules/bats-assertions.md):
@@ -52,22 +52,28 @@ audit_rows() {
   segment '' 2026-10-01T09:50:00Z 600000 6000
 }
 
-@test "the audit line sums exactly the roster sidecars, right after the block's cost line, and the field-less segment is only counted" {
-  local cost_line_number
+@test "the Audit row sums exactly the roster sidecars, Execute takes the rest, and the field-less segment is only counted" {
   run run_usage pr --key branch:feat/audit --auditors code-audit-frontend,code-audit-maintainer-shell
   [ "$status" -eq 0 ]
-  grep -qxF '  tokens: 2,121,000 (fresh 2,100,000, cache write 0, cache read 0, output 21,000)' <<<"$output" || { printf '%s\n' "$output" >&2; return 1; }
-  cost_line_number="$(grep -nxF '  est. cost (USD): $4.41' <<<"$output" | cut -d: -f1)"
-  [ -n "$cost_line_number" ]
-  [ "${lines[$cost_line_number]}" = '  audit (Code Audit Team): tokens 505,000  est. cost (USD): $1.05' ]
-  [ "${lines[$((cost_line_number + 1))]}" = '  ! lower bound: 1 segment(s) predate agent fields' ]
-  [ "$(grep -c 'audit (Code Audit Team)' <<<"$output")" -eq 1 ]
+  [ "$output" = 'branch:feat/audit Cost
+
++------------------------------------+
+| Execute: 1.6M tokens, $3.36, 50m0s |
+|   Audit: 0.5M tokens, $1.05, 10m0s |
++------------------------------------+
+|   Total: 2.1M tokens, $4.41, 50m0s |
++------------------------------------+
+  ! lower bound: branch spend may predate coverage start
+  ! lower bound: 1 segment(s) predate agent fields' ] || { printf '%s\n' "$output" >&2; return 1; }
+  run run_usage pr --key branch:feat/audit --auditors code-audit-frontend,code-audit-maintainer-shell --json
+  [ "$status" -eq 0 ]
+  [ "$(jq -c '[.sum.total, .audit.sum.total, .audit.rest.sum.total, (.audit.sum.usd * 100 | round), .audit.predate]' <<<"$output")" = '[2121000,505000,1616000,105,1]' ]
 }
 
 @test "listing one more name adds only that agent type's spend" {
-  run run_usage pr --key branch:feat/audit --auditors code-audit-frontend,code-audit-maintainer-shell,general-purpose
+  run run_usage pr --key branch:feat/audit --auditors code-audit-frontend,code-audit-maintainer-shell,general-purpose --json
   [ "$status" -eq 0 ]
-  grep -qxF '  audit (Code Audit Team): tokens 909,000  est. cost (USD): $1.89' <<<"$output"
+  [ "$(jq -c '[.audit.sum.total, (.audit.sum.usd * 100 | round), .audit.rest.sum.total]' <<<"$output")" = '[909000,189,1212000]' ]
 }
 
 @test "with every segment carrying agent fields, the lower-bound marker does not print" {
@@ -76,16 +82,16 @@ audit_rows() {
   cp "$BATS_TEST_TMPDIR/fielded" "$TELEMETRY_DIRECTORY/usage.jsonl"
   run run_usage pr --key branch:feat/audit --auditors code-audit-frontend
   [ "$status" -eq 0 ]
-  grep -qxF '  audit (Code Audit Team): tokens 202,000  est. cost (USD): $0.42' <<<"$output"
+  grep -qE '^\|   Audit: 0\.2M tokens, \$0\.42, 0s +\|$' <<<"$output" || { printf '%s\n' "$output" >&2; return 1; }
   grep -qF 'predate agent fields' <<<"$output" && return 1
   true
 }
 
-@test "without --auditors neither the audit line nor its marker prints" {
+@test "without --auditors the PR prints as one Cost line with no Audit row and no marker" {
   run run_usage pr --key branch:feat/audit
   [ "$status" -eq 0 ]
-  grep -qxF '  est. cost (USD): $4.41' <<<"$output"
-  grep -qF 'audit (Code Audit Team)' <<<"$output" && return 1
+  [ "${lines[0]}" = 'Cost: 2.1M tokens, $4.41, 50m0s' ] || { printf '%s\n' "$output" >&2; return 1; }
+  grep -qF 'Audit' <<<"$output" && return 1
   grep -qF 'predate agent fields' <<<"$output" && return 1
   true
 }

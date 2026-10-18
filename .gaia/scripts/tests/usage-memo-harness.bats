@@ -73,12 +73,18 @@ probe_index() { jq -r --arg category "$1" '[.probes[].category] | index($categor
   case "$output" in *"no line for usage-render-lib.sh"*) ;; *) printf '%s\n' "$output" >&2; return 1 ;; esac
 }
 
-@test "the old tree runs the pinned files and the new tree runs the working tree's" {
-  local pinned_file
+@test "the old tree runs the pinned files and the new tree runs the working tree's, its per-PR printer the pinned one" {
+  local pinned_file expected_file
   for pinned_file in "${PINNED[@]}"; do
     cmp -s "$UM_OLD/.gaia/scripts/$pinned_file" "$UM_BASELINE_DIRECTORY/$pinned_file"
-    cmp -s "$UM_NEW/.gaia/scripts/$pinned_file" "$UM_SOURCE_ROOT/.gaia/scripts/$pinned_file"
+    expected_file="$UM_SOURCE_ROOT/.gaia/scripts/$pinned_file"
+    if [ "$pinned_file" = usage-render-lib.sh ]; then
+      cat "$expected_file" "$UM_TEMPORARY_DIRECTORY/legacy-render-pr.sh" >"$BATS_TEST_TMPDIR/expected-render-lib.sh"
+      expected_file="$BATS_TEST_TMPDIR/expected-render-lib.sh"
+    fi
+    cmp -s "$UM_NEW/.gaia/scripts/$pinned_file" "$expected_file"
   done
+  grep -qF "printf '  tokens: %s (fresh" "$UM_TEMPORARY_DIRECTORY/legacy-render-pr.sh"
 }
 
 @test "probes.json passes the C8 schema validator" {

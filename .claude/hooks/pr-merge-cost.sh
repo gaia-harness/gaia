@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # PostToolUse Bash hook on `gh pr merge`. Runs .gaia/scripts/usage-merge.sh with
 # the payload on stdin, so the session's context gets the per-PR usage-ledger
-# block, the Code Audit Team line included, and nothing else.
+# block, its cost split into Execute and Code Audit Team rows, and nothing else.
 #
 # Exit contract: 0 on every path except a missing library, which exits non-zero
 # with stderr naming the file. That is the one documented exception to
