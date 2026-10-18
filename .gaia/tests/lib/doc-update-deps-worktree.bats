@@ -16,6 +16,8 @@
 #
 # Assertion style: .claude/rules/bats-assertions.md.
 
+# bats file_tags=whole-tree
+
 setup() {
   REPO_ROOT="$(cd "${BATS_TEST_DIRNAME}/../../.." && pwd)"
   SKILL_DIR="${REPO_ROOT}/.claude/skills/update-deps"
