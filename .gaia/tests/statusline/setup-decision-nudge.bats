@@ -353,3 +353,81 @@ render() {
   [ "$calls_without_list" -gt 0 ]
   [ "$calls_with_list" -eq "$calls_without_list" ]
 }
+
+# --- GAIA's own source repo -------------------------------------------------
+#
+# The source repo never runs /setup-gaia, so neither setup segment applies to
+# it. The discriminator is `.gaia/cli/src`, the one the mid-init exception
+# uses: release-excluded, so no adopter has it. Every case above renders an
+# adopter-shaped fixture, which lacks it.
+
+# Write a copy of MAIN's script with every maintainer-only block removed and
+# print its path: what an adopter runs. The same hand-kept model of the shipped
+# parser (`stripMarkerBlocks` in `.gaia/cli/src/release/marker-strip.ts`) that
+# statusline-worktree.bats carries; a change to one belongs in both.
+stripped_copy() {
+  local destination="$MAIN/.gaia/statusline/gaia-statusline-stripped.sh"
+  awk -v start_marker='# gaia:maintainer-only:start' -v end_marker='# gaia:maintainer-only:end' '
+    {
+      has_start_marker = index($0, start_marker) > 0
+      has_end_marker = index($0, end_marker) > 0
+      if (!skip && has_start_marker) { if (!has_end_marker) skip = 1; next }
+      if (skip) { if (has_end_marker) skip = 0; next }
+      print
+    }
+  ' "$MAIN/.gaia/statusline/gaia-statusline.sh" > "$destination"
+  printf '%s' "$destination"
+}
+
+# Render the stripped copy from MAIN, colors stripped like render.
+render_stripped() {
+  local json script
+  json=$(status_payload "$MAIN")
+  script=$(stripped_copy)
+  run env HOME="$TEMPORARY_HOME" COLUMNS=400 bash -c "printf '%s' '$json' | bash '$script' | sed \$'s/\\x1b\\\\[[0-9;]*m//g'"
+}
+
+@test "the source repo shows no pending-choices nudge" {
+  # Positive control: the adopter-shaped fixture nudges.
+  render "$MAIN"
+  [ "$status" -eq 0 ]
+  grep -qF -- "⚙️ /setup-gaia (2 choices pending)" <<<"$output"
+
+  mkdir -p "$MAIN/.gaia/cli/src"
+  render "$MAIN"
+  [ "$status" -eq 0 ]
+  grep -qF -- "/setup-gaia" <<<"$output" && return 1
+  return 0
+}
+
+@test "the source repo shows no Required segment and keeps its other nudges" {
+  arm_other_nudges
+  write_setup_state null
+  mkdir -p "$MAIN/.gaia/cli/src"
+  render "$MAIN"
+  [ "$status" -eq 0 ]
+  grep -qF -- "🚀 /update-gaia" <<<"$output"
+  grep -qF -- "/setup-gaia" <<<"$output" && return 1
+
+  # A clone that has never written a setup state reads the same.
+  rm -f "$MAIN/.gaia/local/setup-state.json"
+  render "$MAIN"
+  [ "$status" -eq 0 ]
+  grep -qF -- "🚀 /update-gaia" <<<"$output"
+  grep -qF -- "/setup-gaia" <<<"$output" && return 1
+  return 0
+}
+
+@test "an adopter's stripped copy keeps both setup segments with the marker dir present" {
+  # The exception lives inside maintainer-only markers, so the tarball does not
+  # carry it, and running the stripped script proves it is still valid bash.
+  mkdir -p "$MAIN/.gaia/cli/src"
+  render_stripped
+  [ "$status" -eq 0 ]
+  grep -qF -- "⚙️ /setup-gaia (2 choices pending)" <<<"$output"
+
+  write_setup_state null
+  render_stripped
+  [ "$status" -eq 0 ]
+  grep -qF -- "⚙️ /setup-gaia (Required)" <<<"$output"
+}
