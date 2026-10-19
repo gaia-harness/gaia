@@ -5,13 +5,13 @@ description: Applies descriptive, self-documenting naming in any language (TypeS
 
 # Naming Conventions
 
-Follow Apple's Swift API Design Guidelines: names should be clear at the point of use, reading like prose. Favor long, descriptive names over short or abbreviated ones. Code should be readable without consulting documentation.
+Follow Apple's Swift API Design Guidelines: names should be clear at the point of use, reading like prose. Favor long, descriptive names over short or abbreviated ones.
 
 - **Functions and methods**: imperative verb phrases: `calculateProgressPercentageFromCompletedSets`, `processUserOnboardingProfile`
 - **Parameters**: role, not type: `totalSeconds` not `n`, `emailAddress` not `s`
 - **Variables**: what they hold: `restDurationInSeconds`, `submitButton`, `weightInputValue`
 - **No abbreviations**: owned by `.claude/rules/no-abbreviations.md`
-- **No redundant words**: `availableExercises` not `exerciseArray`, but don't sacrifice clarity for brevity
+- **No type noise**: `availableExercises` not `exerciseArray`, and never so short it loses clarity
 
 Casing is each language's own convention; for TypeScript, see the typescript skill.
 

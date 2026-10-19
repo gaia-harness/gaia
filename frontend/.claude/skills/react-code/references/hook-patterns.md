@@ -1,21 +1,6 @@
 # Hook Patterns, Extended Examples
 
-## Contents
-
-- [useEffect Anti-Patterns](#useeffect-anti-patterns)
-- [When Effects ARE Correct](#when-effects-are-correct)
-- [Strict Mode & Cleanup](#strict-mode--cleanup)
-- [Memoization](#memoization)
-- [useEffectEvent, Non-Reactive Effect Logic](#useeffectevent-non-reactive-effect-logic)
-- [Ref Callback Cleanup](#ref-callback-cleanup)
-
----
-
-## useEffect Anti-Patterns
-
-Lint (`react-you-might-not-need-an-effect`, in `@gaia-react/lint`'s `react` block) reports the Effects that should not be Effects: data transformed for rendering, redundant derived state, user-event logic, chained Effects, notifying a parent, and resetting state on a prop change (use `key`). Its message names the fix.
-
----
+Contents: When Effects ARE Correct; Strict Mode & Cleanup; Memoization; useEffectEvent, Non-Reactive Effect Logic; Ref Callback Cleanup.
 
 ## When Effects ARE Correct
 
@@ -67,7 +52,7 @@ Lint (`no-external-store-subscription`) steers a store with a subscribe/getSnaps
 
 ## Strict Mode & Cleanup
 
-Strict Mode mounts, unmounts, and remounts every component in development, so Effects run twice and cleanup must fully undo the setup. Lint (`@eslint-react/web-api-no-leaked-*`) reports a listener, timer, interval, observer, or fetch with no cleanup. It does not see subscriptions or third-party widgets: tear those down by hand.
+Strict Mode runs every Effect twice in development, so cleanup must fully undo the setup. Lint (`@eslint-react/web-api-no-leaked-*`) reports a listener, timer, interval, observer, or fetch with no cleanup. It does not see subscriptions or third-party widgets: tear those down by hand.
 
 ---
 
@@ -125,7 +110,7 @@ useEffect(() => {
 }, [url]); // numItems intentionally absent, and lint won't demand it
 ```
 
-Use sparingly, only for values that are genuinely non-reactive (the Effect should not re-run when they change). If the Effect should react to the value, keep it in the deps array.
+Use it only for genuinely non-reactive values; a value the Effect should react to stays in the deps array.
 
 ---
 

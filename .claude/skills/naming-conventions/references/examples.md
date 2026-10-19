@@ -16,8 +16,6 @@ const processUserOnboardingProfile = (user: User) => { ... }
 const calculateProgressPercentageFromCompletedSets = (completedSets: number, totalSets: number) => { ... }
 ```
 
-> React event handlers are the exception (`handle{Action}{Element}`); see the event-handler note in `naming-conventions/SKILL.md`. The descriptive guidelines above apply to utilities, hooks, callbacks, and non-event-handler functions.
-
 ## Parameters and Arguments
 
 Named for their role, not their type.
@@ -50,13 +48,9 @@ const restDurationInSeconds = calculateRestDuration();
 const maximumRetryAttemptCount = 3;
 ```
 
-## Avoiding Abbreviations
-
-Examples live in `.claude/rules/no-abbreviations.md`.
-
 ## Omitting Redundant Words
 
-Don't pad names with type noise, but don't sacrifice readability for brevity.
+Name the value, not its container type, and keep it readable.
 
 ```ts
 // BAD, redundant type noise

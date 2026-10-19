@@ -25,10 +25,7 @@ established: false
 **While `established: false`:**
 
 - Use the existing role tokens (the contract is in `frontend/.claude/rules/tailwind.md`). Ask the adopter before choosing brand values, changing a token value, or restyling a component.
-- Treat the token values (and the font stack, spacing and radius) as a blank slate.
-- Do not infer or extend a "house style" from the neutral values.
-- Do not invent palettes, type scales, or color pairings based on the existing values.
-- When a styling question arises, ask the adopter what they want rather than extrapolating from the current tokens.
+- Treat the token values, font stack, spacing and radius as a blank slate: ask the adopter rather than extrapolating a house style, palette, type scale or color pairing from them.
 
 **Once an adopter records a real design system** (`established: true` in `wiki/concepts/Design System.md`), read that page for their chosen decisions and follow it instead.
 
@@ -45,9 +42,3 @@ Do this regardless of how the design was arrived at: Figma handoff, verbal direc
 ### When the adopter defers the choice
 
 If the adopter hands the choice to Claude ("you decide", "pick something") rather than directing it, avoid these default styles: a cream or off-white background, italic accent words in headings, numbered "01 / 02 / 03" section labels, monospace text used as decorative labels, pill-shaped buttons as the default shape, and purple or violet gradients. A general instruction to avoid a generic look only swaps one default for another, while naming the patterns steers away from them. Whatever gets picked instead is still a design decision, so the wiki update above still applies.
-
-If design decisions are being implemented without Claude's involvement (a designer editing files directly, a skill running autonomously, etc.), Claude cannot act. In that case `wiki/concepts/Design System.md` carries instructions for the adopter to perform the update manually.
-
-## Why this rule exists
-
-A coherent token set, even a deliberately neutral one, can be read by a code assistant as a signal that the palette and type stack are decided. They are not. Extending them without adopter direction would silently lock in an unintended aesthetic.

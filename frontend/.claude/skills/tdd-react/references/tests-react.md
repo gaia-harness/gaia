@@ -62,8 +62,6 @@ One story per behavior, named for the behavior. The story export name becomes th
 
 A spy reaches the component through story `args`. Declare it in the meta (`args: {onChange: fn()}`), spread `{...args}` onto the component **last** in the story's render, after any hardcoded default, and read the spy in the play through `args`. `args` only reaches the real component through that spread, so a story that hardcodes the callback, or spreads `{...args}` before it, silently drops the spy and a `not.toHaveBeenCalled()` assertion passes vacuously.
 
-Storybook's own examples spread every prop from `args`, so there is nothing to order against. GAIA's stories hardcode structural/demo props inline (labels, names, options) and spread `{...args}` only for the controllable knobs, so ordering is load-bearing: `{...args}` must come after the hardcoded props for an override to win.
-
 ```tsx
 // app/components/toggle/tests/index.stories.tsx
 // GOOD - args carries the spy and is spread LAST, so the play's assertion is real
@@ -103,8 +101,6 @@ export const DoesNotEmitWhileDisabled: StoryObj<typeof meta> = {
 };
 ```
 
-Why bad: the render hardcodes `onChange`, so the component never sees the spy. `not.toHaveBeenCalled()` passes no matter what the component does; it would stay green even if the disabled guard were removed. (A positive `toHaveBeenCalledWith` on the same broken story fails loudly instead.)
-
 ### The router stub
 
 `stubs.reactRouter()` from `test/stubs` wraps the story in a memory router. For a play that submits a form or navigates:
@@ -140,7 +136,7 @@ describe('useToggle', () => {
 });
 ```
 
-Assert on `result.current`, the observable hook surface. Don't reach into closures or internal state. A `*.test.tsx` file also runs in the `browser` project; use `vitest-browser-react`'s `render` and `expect.element` there for a component that has no story.
+Assert on `result.current`, the observable hook surface. A `*.test.tsx` file also runs in the `browser` project; use `vitest-browser-react`'s `render` and `expect.element` there for a component that has no story.
 
 ## Service Tests via MSW
 
@@ -190,11 +186,11 @@ Mock at **system boundaries** only:
 | Randomness              | `vi.spyOn` at boundary                 | IDs, crypto                                   |
 | Navigation (story scope) | `stubs.reactRouter({destinations})`   | Buttons that push to `/done`                  |
 
-**Never mock:**
+**Run for real:**
 
-- Your own services, hooks, components, or utilities. If a component uses `useThings()`, test it against the real hook reading from real MSW. Mocking `useThings` means you're testing a fiction.
-- `react-router` or `react-i18next`. Use `stubs.reactRouter()` / `stubs.state()` from `test/stubs`. Global i18n is wired for stories in `.storybook/i18next.ts`.
-- Zod schemas. If a service fails to parse, that's a real bug the test should surface.
+- Your own services, hooks, components and utilities: a component using `useThings()` reads the real hook from real MSW.
+- `react-router` and `react-i18next`, through `stubs.reactRouter()` / `stubs.state()` from `test/stubs` (i18n for stories is wired in `.storybook/i18next.ts`).
+- Zod schemas: a parse failure is a real bug the test should surface.
 
 **Mutating data in a test**: write to `database` directly; reset in `afterEach` via `resetTestData()` from `test/mocks/database`. The read-then-verify shape tests the interface end-to-end and survives schema renames as long as the public service contract holds.
 
@@ -341,10 +337,7 @@ test('renders nothing for a null amount', () =>
 test('converts cents to major units', () =>
   expect(formatPrice(4999, 'USD')).toBe('$49.99'));
 test('picks the locale for the currency', () => {
-  // Assert the locale SELECTION you own with a TOLERANT matcher, never byte-exact
-  // glyphs. Intl uses a narrow no-break space that varies by ICU version, so
-  // toBe('49,99 €') is itself the platform-coupled anti-pattern this rule warns
-  // against - it breaks on a Node/ICU upgrade with no bug in your code.
+  // Tolerant matcher: Intl spacing varies by ICU version.
   const out = formatPrice(4999, 'EUR');
   expect(out).toMatch(/49,99/);
   expect(out).toContain('€');
@@ -352,22 +345,6 @@ test('picks the locale for the currency', () => {
 ```
 
 The null-amount guard and the cents-to-major conversion and the currency-to-locale selection are yours. The decimal separator, currency glyph, and spacing belong to `Intl`. Assert the first set; tolerate the second.
-
-### Thin wrappers over a platform formatter
-
-A helper that only selects a locale or format and delegates to `Intl` or `date-fns` is the platform rule's most common shape. GAIA's `formatMY` in `app/utils/date.ts` delegates straight to `date-fns`'s `format` with a fixed `MM/yy` pattern:
-
-```ts
-export const formatMY = (date = new Date()): string => format(date, 'MM/yy');
-```
-
-```ts
-// WORTHLESS - re-proves date-fns formats MM/yy; the bug would be in date-fns
-test('formats MM/yy', () =>
-  expect(formatMY(new Date('2026-01-15'))).toBe('01/26'));
-```
-
-`formatMY` owns no branching logic to test, so it has nothing worth a unit test of its own; it is exercised through the components that render a card expiry. A sibling like `formatFullYear`, which DOES branch on language (`'en'` versus the `年` suffix), is worth testing on the branch you own, not on the year digits `date-fns` produces.
 
 ## Render-only stories and a11y
 
@@ -381,8 +358,4 @@ An axe pass says nothing about focus order, keyboard operation, or the accessibl
 - `toHaveBeenCalled` as the only assertion (you're testing call-through, not behavior)
 - Importing from `../internals` or `.server.ts` files the public consumer wouldn't touch
 - Test names like "`useX` returns an object with `a`, `b`, `c`", that's testing shape, not behavior
-- Asserting on i18n keys, raw class lists, or DOM structure instead of accessible roles and text
-- `vi.mock('~/services/...')`, you've mocked something MSW already handles
-- `vi.mock('~/hooks/...')` or `vi.mock('~/components/...')`, internal collaborator mocking
-- Test setup that reimplements application logic to seed data (write to `database` instead)
 - A fixture file larger than the code it tests

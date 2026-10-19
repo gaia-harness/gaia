@@ -5,9 +5,7 @@ description: Builds skeleton loading states that are pixel-perfect matches of re
 
 # Skeleton Loaders
 
-Build skeleton loading states that are pixel-perfect matches of real content.
-
-Contents: Transparent Text Technique; 200ms Delay Pattern; When to Use; Accessibility; Full Example Implementation.
+Contents: Transparent Text Technique; 200ms Delay Pattern; Accessibility.
 
 ## Transparent Text Technique
 
@@ -102,41 +100,9 @@ if (!showSkeleton) return null; // or return stale content
 return <MySkeleton />;
 ```
 
-## When to Use
-
-- Lazy-loaded panels (side panels, detail views)
-- Fetcher-driven content swaps
-- Async data sections (lists, profiles, detail views)
-- Route transitions with pending loader data
-
 ## Accessibility
 
 Skeleton text is transparent, but screen readers still announce it (placeholder text and any `t()` labels). Hide the skeleton from assistive tech and announce loading instead:
 
 - Put `aria-hidden` on the skeleton's root element so assistive tech skips the decorative placeholders.
 - Mark the region that will receive the content with `aria-busy="true"` while loading, or render a visually-hidden `role="status"` "Loading" message so screen-reader users know content is on the way.
-
-## Full Example Implementation
-
-```tsx
-import {cn} from 'cn';
-
-const shimmer =
-  'animate-shimmer rounded-sm bg-linear-to-r from-muted via-accent to-muted bg-size-[200%_100%] text-transparent select-none';
-
-const ExampleSkeleton = () => (
-  <div aria-hidden className="border border-border bg-card">
-    <div className="flex items-center gap-3 p-3">
-      <div className={cn('size-14 shrink-0', shimmer)} />
-      <div className="min-w-0 flex-1">
-        <p className={cn('truncate text-sm font-semibold', shimmer)}>
-          Name
-        </p>
-        <p className={cn('truncate text-xs', shimmer)}>Example value</p>
-      </div>
-    </div>
-  </div>
-);
-
-export default ExampleSkeleton;
-```

@@ -1,8 +1,8 @@
 # Conform + Zod Form Wiring
 
-Forms are composed directly from the ui `Field` parts, ui controls and Conform; GAIA has no form wrappers. Conform's Zod helpers import from the `@conform-to/zod/v4` subpath: the bare `@conform-to/zod` targets Zod 3 and throws at runtime (typecheck and build don't catch it; lint flags the bare import). The react-code SKILL.md carries this as the always-on rule; the examples below use `/v4` throughout.
+Forms are composed directly from the ui `Field` parts, ui controls and Conform; GAIA has no form wrappers. Import Conform's Zod helpers from `@conform-to/zod/v4` (react-code Gate 2); the examples use `/v4` throughout.
 
-Contents: Form setup; The composed Field; Actions and disabled states; Typing; Zod Patterns.
+Contents: Form setup; The composed Field; Actions and disabled states; Zod Patterns.
 
 ## Form setup
 
@@ -232,10 +232,6 @@ import {RadioGroup, RadioGroupItem} from '~/components/ui/radio-group';
 ## Actions and disabled states
 
 A disabled action renders a disabled `ui/button`, never a disabled link: `<Button disabled>` keeps the button role and the disabled semantics, while an `<a>` cannot be disabled and a styled link stays focusable and clickable. Pass `disabled` to the controls and the `FieldSet` together when a whole form is disabled. A button that navigates is `<Button nativeButton={false} render={<Link to="/path" role="link" />}>`; Base UI sets `role="button"` on a non-native render target, so the explicit `role="link"` restores the link role.
-
-## Typing
-
-Components are typed inline (`type FormProps = {...}; const Form = ({...}: FormProps) => ...`); do not import `FC` or `FunctionComponent`.
 
 ## Zod Patterns
 

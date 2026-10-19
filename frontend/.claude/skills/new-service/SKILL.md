@@ -6,8 +6,6 @@ model: haiku
 
 # new-service
 
-Trigger: user asks to scaffold an API service.
-
 ## Workflow
 
 1. Confirm: name (kebab), endpoints and schema (`name:type` pairs) as free text, then mocks as an `AskUserQuestion`: `With mocks` (Recommended) or `Without mocks`.

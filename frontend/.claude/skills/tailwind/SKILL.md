@@ -5,19 +5,7 @@ description: Applies GAIA's patterns and conventions for all Tailwind styling. U
 
 # Tailwind
 
-Contents: units; Colors; cn; Conditional classes; Variants with cva; Custom Values; When to create a role token.
-
-## units
-
-Always use Tailwind units first. Custom values are a last resort (see Custom Values) and always `rem`, never `px`.
-
-```jsx
-// BAD - tailwind units available but custom rem used
-return <div className="p-[1.0625rem]" />;
-
-// GOOD - uses tailwind units
-return <div className="p-4.25" />;
-```
+Contents: Colors; cn; Conditional classes; Variants with cva; Custom Values; When to create a role token.
 
 ## Colors
 
@@ -71,9 +59,7 @@ cn('base', isActive && 'bg-accent', !isDisabled && 'hover:bg-muted');
 cn('base', condition ? 'text-foreground' : 'text-muted-foreground');
 ```
 
-Lint rejects object conditionals and ternaries with an empty branch passed to `cn` (`cn-conditional/cn-conditional` from `@gaia-react/lint`), in components, tests, and stories alike. Use `cond && 'class'` instead.
-
-Don't wrap class lists in template literals to concatenate, pass each class as a separate argument.
+Lint rejects object conditionals and ternaries with an empty branch passed to `cn` (`cn-conditional/cn-conditional` from `@gaia-react/lint`), in components, tests, and stories alike.
 
 ## Variants with cva
 
@@ -121,8 +107,6 @@ Prefer Tailwind's scale (`p-4.25`, `min-w-9`, `text-xs`) and existing tokens. An
 ```
 
 ## When to create a role token
-
-This section is the single owner of token-creation guidance; the rules, wiki and audit files point here.
 
 1. **Use an existing token first.** Search the `:root` and `.dark` blocks in `app/styles/theme.css`. Most needs are covered (`muted`, `accent`, `destructive`, `border`, `input`, `ring`).
 2. **A token equal to an existing value needs no approval.** Adding a role token whose value equals an existing token, or a value the code already repeats in more than one place, just names a role that already exists. Add it to both blocks of `theme.css` and map it in the `@theme inline` block of `tailwind.css`.

@@ -6,8 +6,6 @@ model: haiku
 
 # Accessibility Fix Patterns
 
-How to resolve specific axe-core violations in this project.
-
 Contents: Fix-then-verify loop; color-contrast; label; label-title-only; image-alt; button-name; link-name; region / landmark-one-main; heading-order; aria-allowed-attr; aria-required-attr; aria-required-children / aria-required-parent; aria-valid-attr-value; focus-trap (focus management); tabindex; html-has-lang; document-title; duplicate-id; listitem; definition-list; Upstream shadcn and Base UI findings.
 
 Violations come from addon-a11y, which axe-checks every story under Vitest (configured in `.storybook/a11y.ts`), `.playwright/a11y.ts` (Playwright), or the `code-audit-frontend` agent's a11y bucket. General a11y guidance lives in `frontend/.claude/rules/accessibility.md`.

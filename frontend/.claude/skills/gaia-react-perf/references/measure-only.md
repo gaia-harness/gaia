@@ -1,12 +1,5 @@
 # /gaia-react-perf (measure-only)
 
-A trigger-gated React render-performance diagnostic. It drives one targeted
-micro-interaction, captures the real renders bippy observes, reduces the raw
-capture to a small ranked summary, and presents a noise-filtered diagnosis: the
-memo-defeating reference instability behind an over-render, the matching
-react-doctor cross-reference, and the recommended structural-first fix. After a
-fix it re-captures to confirm the targeted finding goes to zero, then stops.
-
 Contents: Boundaries (read first, do not exceed); Step 1: Confirm intent and target; Step 2: Drive and capture; Step 3: Reduce; Step 4: Diagnose; Step 5: Hand off the fix; Step 6: Verify; Step 7: Stop.
 
 ## Boundaries (read first, do not exceed)
@@ -21,15 +14,12 @@ Contents: Boundaries (read first, do not exceed); Step 1: Confirm intent and tar
   drill-down is a targeted query (for example `jq`) against the on-disk raw, not
   a full read.
 - **Surfacing is out of scope.** The skill reports a diagnosis and stops: no
-  trip-wire offer, audit prompt, CI label, or decline persistence. The reduced
-  summary's `findings` array is the seam a surfacing flow would consume;
-  reserve it, do not build one here.
+  trip-wire offer, audit prompt, CI label, or decline persistence.
 
 ## Step 1: Confirm intent and target
 
 Proceed only on an explicit perf-investigation intent ("profile renders",
-"measure renders", "why is X re-rendering", "diagnose render performance"). Do
-not run off vague "feels slow" or "janky".
+"measure renders", "why is X re-rendering", "diagnose render performance").
 
 **Require a concrete micro-interaction target:** a button click or a local state
 change on a specific page (for example "the theme toggle in the header on `/`",
@@ -61,9 +51,7 @@ import {collectRenderDump, installRenderCapture} from '../react-perf/capture';
 import {hydration} from '../utils';
 
 test('drive the target micro-interaction and capture renders', async ({page}) => {
-  // Honest (non-doubled) timings: isStrictModeDisabled sets window.__PERF_NO_STRICT
-  // so app/entry.client.tsx skips <StrictMode>. The dump's meta.strictMode is
-  // stamped false, and the reduce reports strictModeTimingCaveat: false.
+  // StrictMode off for non-doubled timings (see the honest-timing note below).
   await installRenderCapture(page, {isStrictModeDisabled: true});
 
   await page.goto('/'); // the target route
@@ -113,7 +101,7 @@ Run the deterministic reduce over the raw dump and read only its stdout JSON:
 The frame budget defaults to 16ms; pass `--frame-budget-ms <n>` to override the
 timing gate. The command prints a `ReducedSummary` (Contract B) to stdout and
 exits 0; malformed input prints a structured error and exits non-zero. The
-`ReducedSummary` is the ONLY thing you ingest. Do not open the raw dump.
+`ReducedSummary` is the ONLY thing you ingest.
 
 ## Step 4: Diagnose
 
@@ -163,16 +151,11 @@ perceptible.
 
 ### react-doctor cross-reference
 
-These three values are CONCEPTUAL static-cause labels for human guidance, not
-live `react-doctor/` ESLint rule ids. `react-doctor` is GAIA's static layer (an
-ESLint-based, always-on, pre-merge `react-doctor/`-namespaced rule set surfaced
-via the `react-doctor` skill); this runtime tool is the complementary diagnosis
-layer. But none of the three labels below is an enabled `react-doctor/` rule:
-`jsx-no-new-object-as-prop` has no literal lint-rule equivalent in GAIA's lint config, and
-`jsx-no-constructed-context-values` / `no-unstable-nested-components` exist only
-as `eslint-plugin-react` `react/*` names that are not enabled. Present them as
-symptom-to-cause-to-fix guidance. Never claim a named lint rule catches the
-pattern, and never match these strings against ESLint output.
+The three `reactDoctorRule` values are conceptual static-cause labels, not
+enabled `react-doctor/` rule ids (`jsx-no-new-object-as-prop` has no lint
+equivalent; the other two exist only as unenabled `eslint-plugin-react` names).
+Present them as symptom-to-cause-to-fix guidance; never claim a lint rule catches
+the pattern, and never match these strings against ESLint output.
 
 The recommended fix is **structural-first**: prefer hoisting a stable value to a
 module-level constant. A value that depends on render state is memoized
@@ -198,12 +181,9 @@ component's render.
 
 ## Step 5: Hand off the fix
 
-The human (or Claude, in normal conversation) applies the fix. This is not an
-auto-fix loop. Offer the structural-first option first; when the value depends
-on render state, the fix is compiler-first per the table (fix the bailout or
-apply an escape case, see `frontend/.claude/skills/react-code/SKILL.md`,
-`## Memoization: compiler-first`). The right fix is context-dependent (hoist vs
-fix the bailout vs context-split), which is why a human stays in the loop.
+Offer the structural-first option first; when the value depends on render state,
+the fix is compiler-first per the table. The right fix is context-dependent
+(hoist, fix the bailout, or split the context).
 
 ## Step 6: Verify
 
@@ -213,20 +193,12 @@ component does not appear in `findings` at all: the capture only records fibers
 that actually rendered, so a memo that now correctly skips leaves no record.
 That absence is the cleanest "gone" proof.
 
-To confirm a compiler gain rather than a fix, re-capture with the shared
-compiler switch off and on and compare update-phase render counts; a compiled
-component that still shows `memoDefeated` points at the uncompiled code feeding
-it unstable inputs.
-
 ## Step 7: Stop
 
 Apply the composite stop rule from the summary's `stopSignal`:
 
 > **STOP when `stopSignal.zeroAppMemoDefeated` is true AND
 > `stopSignal.noAppFrameBudgetBreach` is true.**
-
-With the compiler on, a residual `memoDefeated` on a compiled component is an
-uncompiled upstream boundary (an escape case), not a missing manual memo.
 
 The memo-defeat count catches the cheap-but-wrong cases (a memo silently
 defeated); the frame-budget gate catches the rare expensive-subtree case that
@@ -238,8 +210,7 @@ Call out residual findings explicitly as out of scope:
   router or library internal that the name denylist did not catch) are not
   app-fixable. Name them and stop; do not chase them.
 - **Sub-perceptible residuals** (an app finding well under the frame budget with
-  no remaining memo defeat) are not worth fixing. Do not tempt
-  memoize-everything over-optimization.
+  no remaining memo defeat) are not worth fixing.
 
 When the stop rule is met, report the closed finding, the confirmed
 `memoDefeatedCount: 0`, and the residuals you are deliberately leaving, then

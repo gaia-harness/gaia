@@ -6,8 +6,6 @@ model: haiku
 
 # new-component
 
-Trigger: user asks to create a component, scaffold a card, etc.
-
 ## Workflow
 
 1. Registry check first. Before writing any component by hand, check whether shadcn has it: `pnpm shadcn view <name>` for a known item, or `pnpm shadcn search` (for example `pnpm shadcn search dialog`) to look. A registry counterpart means a button, dialog, tabs, popover, select, table and the like.
