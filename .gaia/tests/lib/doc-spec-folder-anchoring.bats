@@ -487,7 +487,7 @@ read_site_ranges() {
   local spec_md="$1" lifecycle_md="$2" resume_md="$3" sweep_range resume_range session_helper_range
   sweep_range="$(range_between "$lifecycle_md" '**3. Cold consolidation.**' '**4. Reap merged past retention.**')" || return 1
   resume_range="$(range_between "$resume_md" 'Before prompting, gather context' 'Before presenting the resume choice')" || return 1
-  session_helper_range="$(range_between "$spec_md" '4. **Record the run (never blocks):**' '**Auto-mode:** the record call fires identically')" || return 1
+  session_helper_range="$(range_between "$spec_md" '4. **Record the run (never blocks):**' '### 10. Immutability lint')" || return 1
 
   # The range is the save step's record call. It must hold the call itself,
   # so a prose reflow that moves an anchor cannot leave the range measuring

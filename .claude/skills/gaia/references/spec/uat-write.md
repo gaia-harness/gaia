@@ -4,11 +4,11 @@ description: 'Render step of the generated plan orchestrator: render the routed 
 
 # UAT render step
 
-The orchestrator runs this step before Phase 1 on every start and every resume. It renders each e2e-routed UAT of the plan's SPEC into one red Playwright spec (`test.fail()`) under `frontend/.playwright/e2e/` (the e2e directory of the frontend package registered in `.gaia/packages.json`), so a failing harness exists before source is edited. A re-run on an unchanged SPEC changes nothing.
+The orchestrator runs this step before Phase 1 on every start and every resume. It renders each e2e-routed UAT of the plan's SPEC into one red Playwright spec (`test.fail()`) under `frontend/.playwright/e2e/` (the e2e directory of the frontend package registered in `.gaia/packages.json`), so a failing harness exists before source is edited. The render is idempotent.
 
 ## Inputs
 
-- `SPEC_PATH`: the absolute, main-anchored path of the plan's `SPEC.md`.
+- `SPEC_PATH`: the absolute, main-anchored (stored in the main checkout: the clone's primary working directory, on any branch) path of the plan's `SPEC.md`.
 - The plan `README.md` holding the UAT routing table, absolute and main-anchored. Its table sits between the `gaia:uat-routing` start and end marker lines, one row per UAT with columns `uat_id`, `surface`, `phase`, `feature_folder`, `file_name`.
 - cwd: `RESOLVED_ROOT`, the isolation root the plan runs in.
 

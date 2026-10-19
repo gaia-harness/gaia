@@ -4,7 +4,7 @@ description: 'The cosmetic versus logical line for a rendered UAT spec, how it i
 
 # UAT Divergence Policy
 
-When an owning phase turns a red Playwright UAT spec green, the test body has to bind abstract user-acceptance language ("the user sees a confirmation") to concrete UI surface (selectors, button labels, copy strings, route paths). Some of that binding is editable; some of it is not. This rule names the line.
+When an owning phase turns a red Playwright UAT spec green, the test body has to bind abstract user-acceptance language ("the user sees a confirmation") to concrete UI surface (selectors, button labels, copy strings, route paths).
 
 ## Contract
 
@@ -36,7 +36,7 @@ Needed change: <one or two sentences>
 
 A logical divergence is resolved by a SPEC reopen. `/gaia-spec` has no reopen entry, so the steps are manual edits, which the halted phase's `PROGRESS.md` block points here for:
 
-1. Edit `SPEC.md` at its absolute, main-anchored path: set `status: reopened` and today's `updated:`, add a `## Reopen rationale` section (why the UAT cannot hold) and a `## UAT diff` section holding the pre-change UAT text verbatim, then change the UAT.
+1. Edit `SPEC.md` at its absolute, main-anchored path (stored in the main checkout: the clone's primary working directory, on any branch): set `status: reopened` and today's `updated:`, add a `## Reopen rationale` section (why the UAT cannot hold) and a `## UAT diff` section holding the pre-change UAT text verbatim, then change the UAT.
 2. Run `bash .gaia/scripts/spec/lint.sh <SPEC.md path>` until it prints `{"ok":true,...}`. Its reopen check fails a `reopened` SPEC that lacks either section.
 3. The human (not the orchestrator) updates the plan README's routing row when the change re-routes the UAT or moves its owning phase, and the owning task doc's acceptance criteria when they quoted the old text. The render step's routing validation fails loudly on a forgotten row.
 4. Stash or discard the halted phase's uncommitted edits (resume refuses a dirty tree), then resume with the plan's `KICKOFF.md`. The render step re-renders the changed UAT; an edited spec comes back as a conflict.

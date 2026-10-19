@@ -1,6 +1,6 @@
 # /gaia-spec: adversarial SPEC-audit
 
-Step 7 of `/gaia-spec`: gauge the draft, fan out the lens auditors, refute, route each survivor, and persist `AUDIT.md`. `spec.md` routes here at step 7 together with `spec/lens-dispatch.md`, which owns the lens preamble, the findings file schema, the thin digest, and the pre-clear, classify, and re-dispatch rule; this file owns lens selection, refutation, and disposition. Control returns to `spec.md` step 8 (gate 2) at the end of this file.
+Step 7 of `/gaia-spec`: gauge the draft, fan out the lens auditors, refute, route each survivor, and persist `AUDIT.md`. `spec.md` routes here at step 7 together with `spec/lens-dispatch.md`, which owns the lens preamble, the findings file schema, the short summary, and the pre-clear, classify, and re-dispatch rule; this file owns lens selection, refutation, and disposition. Control returns to `spec.md` step 8 (gate 2) at the end of this file.
 
 Contents: Gauge; 7a. Dispatch the lens auditors; 7b. Refutation pass (7b-i. Refutation, 7b-ii. Completeness critic, 7b-iii. Completeness-critic refuter); 7c. Disposition routing + apply; 7d. Persist AUDIT.md.
 
@@ -8,7 +8,7 @@ Contents: Gauge; 7a. Dispatch the lens auditors; 7b. Refutation pass (7b-i. Refu
 
 This phase complements, never replaces, step 6: the single-agent self-review is the always-on baseline; the audit is the heavyweight, ground-truth pass that runs on every spec. It dispatches the skill's own parallel `general-purpose` Agent fan-out, each call passing `effort: "medium"` (the same dispatch primitive step 6a uses), not the Workflow tool, so it is available in every context including headless and auto-mode runs.
 
-**The audit always runs; the gauge sets its intensity.** After step 6 completes, gauge the draft (below) and run the audit at the gauged tier with no prompt. Auditing is always worth it, so there is no skip option and no user choice: interactive and auto mode both proceed straight into the fan-out. The one exception is the fan-out-unavailable Fallback below, a capability limit rather than a choice.
+**The audit always runs; the gauge sets its intensity.** After step 6 completes, gauge the draft (below) and run the audit at the gauged tier with no prompt and no skip option, interactive or auto. The one exception is the fan-out-unavailable Fallback below, a capability limit rather than a choice.
 
 **Gauge the draft (this sets the tier and lens set).** Read the draft once and decide two independent things:
 
@@ -17,7 +17,7 @@ This phase complements, never replaces, step 6: the single-agent self-review is 
 
 Record the gauged tier as `audit_intensity` (`standard` | `deep`) and the selected lens set. **Standard** verifies every checkable claim against ground truth with one refuter per material finding (7b-i); **Deep** adds perspective-diverse refuters (correctness, security, reproducibility) per material finding plus a completeness critic (7b-ii). Above the 7b-i refuter cap, either tier refutes with one batched refuter per lens and Deep skips the critic.
 
-**Auto-mode.** Auto mode gauges and runs the audit exactly as interactive does; the prompt is gone from both. The two auto-specific differences (Auto-mode rule 12) are in the fold, not the run: auto mode reads **no finding body** during the audit and fold phase (the transcript carries only ids, severities, titles, verdicts, and dispositions), and it applies every disposition non-interactively at 7c. It never skips the audit.
+**Auto-mode.** Auto mode differs only in the fold (Auto-mode rule 12): auto mode reads **no finding body** during the audit and fold phase (the transcript carries only ids, severities, titles, verdicts, and dispositions), and it applies every disposition non-interactively at 7c.
 
 **Fallback (never block).** If the parallel `general-purpose` Agent fan-out is unavailable (a restricted context that cannot spawn subagents), do NOT block save: note the skip (`adversarial audit unavailable, relying on step-6 self-review`), remove the audit cache with `rm -rf .gaia/local/cache/audit-<spec_id>/` (so the step-6 `self-review.json` is not orphaned), and proceed to gate 2. The step-6 self-review already ran and is the safety net.
 
@@ -27,7 +27,7 @@ Announce once, verbatim, naming each lens in full with its id code in parenthese
 
 > Dispatching adversarial SPEC-audit (<audit_intensity>): lenses <selected lens names, each with its id in parentheses>, then refutation (typically a dozen-plus agents, several minutes).
 
-Spawn **one `general-purpose` Agent per selected lens, all in parallel** (one message, one Agent tool call per lens, each passing `effort: "medium"` beside `subagent_type`): the four core lenses always, plus each specialist the gauge selected. Each agent audits the working-draft cache (`.gaia/local/cache/draft-<spec_id>.md`, the post-self-review working draft) and is dispatched per `spec/lens-dispatch.md` with the spec column of its caller slots (`<DRAFT_PATH>` = the working-draft cache, `<spec_id>`, `<repo_root>` = `$PWD`, `<LENS>` = the lens id prefix): the shared preamble, then a `LENS: <name> (id prefix <ID>)` line and the lens's focus text below. It **writes its findings to `.gaia/local/cache/audit-<spec_id>/findings/<LENS>.json`** under the findings file schema in `spec/lens-dispatch.md` (writing the file even when its findings array is empty), then returns only the contract's thin digest, no finding bodies.
+Spawn **one `general-purpose` Agent per selected lens, all in parallel** (one message, one Agent tool call per lens, each passing `effort: "medium"` beside `subagent_type`): the four core lenses always, plus each specialist the gauge selected. Each agent audits the working-draft cache (`.gaia/local/cache/draft-<spec_id>.md`, the post-self-review working draft) and is dispatched per `spec/lens-dispatch.md` with the spec column of its caller slots (`<DRAFT_PATH>` = the working-draft cache, `<spec_id>`, `<repo_root>` = `$PWD`, `<LENS>` = the lens id prefix): the shared preamble, then a `LENS: <name> (id prefix <ID>)` line and the lens's focus text below. It **writes its findings to `.gaia/local/cache/audit-<spec_id>/findings/<LENS>.json`** under the findings file schema in `spec/lens-dispatch.md` (writing the file even when its findings array is empty), then returns only the contract's short summary, no finding bodies.
 
 The four core lenses (always dispatched; the set is chosen for low overlap, each reliably finds defects the others miss):
 
@@ -56,13 +56,13 @@ This heading covers three distinct dispatch sites, delimited below by their own 
 
 ### 7b-i. Refutation
 
-From the 7a thin digests, main selects every **material** finding id (severity `critical` or `major`) across all selected lenses; `minor` findings skip refutation and carry forward unchanged, to be applied by default. Each refuter defaults to "refuted" unless it can substantiate the defect from ground truth, so this pass is severity discipline as much as false-positive killing. The refuter count scales with `audit_intensity`, up to a cap:
+From the 7a short summaries, main selects every **material** finding id (severity `critical` or `major`) across all selected lenses; `minor` findings skip refutation and carry forward unchanged, to be applied by default. Each refuter defaults to "refuted" unless it can substantiate the defect from ground truth, so this pass is severity discipline as much as false-positive killing. The refuter count scales with `audit_intensity`, up to a cap:
 
 - **Standard:** one refuter per material finding, all in parallel.
 - **Deep:** three refuters per material finding, all in parallel, each given a distinct verification lens, prepend one of `correctness`, `security/safety`, or `reproduces-as-described` to the refuter prompt below. A finding is refuted only on a ≥2-of-3 majority; its corrected severity is the median of the non-refuting refuters over the order `none < minor < major < critical`.
 - **Batched (either tier, above the cap):** when the shape above would dispatch more than **24** refuters (Standard: more than 24 material findings; Deep: more than 8), dispatch instead **one refuter per lens** that raised a material finding, all in parallel, each covering every material finding in that lens's findings file. On Deep, prepend all three verification lenses to that one refuter's prompt; its single verdict decides each finding, with no majority.
 
-The cap exists because the per-finding shapes grow with finding volume: a broad Deep audit that raises 87 material findings would pay 261 refuters. High volume is also where per-finding refutation buys least, since a defect several lenses raised independently already carries the cross-check the extra refuters add. Batched, the dispatch count is bounded by the lens count however many findings the lenses raise.
+The cap bounds the dispatch count by the lens count however many findings the lenses raise; high volume is also where per-finding refutation buys least, since a defect several lenses raised independently is already cross-checked.
 
 Main dispatches each refuter as a `general-purpose` Agent with `effort: "medium"` on the call, keyed by `{ finding_id, findings_file, refuter_lens? }`, **no finding fields interpolated**, where `findings_file` is the lens's `.gaia/local/cache/audit-<spec_id>/findings/<LENS>.json` and `verdict_file` is the refuter's output path (`verdicts/<finding-id>.json` for Standard, `verdicts/<finding-id>-<slug-lens>.json` for Deep, slug per the frozen mapping). The refuter reads the finding body from the file itself. Before dispatch, pre-clear `<verdict_file>` (`rm -f`) so its presence is a fresh-write signal.
 
@@ -100,13 +100,13 @@ Dispatch prompt (interpolate `<DRAFT_PATH>`, `<spec_id>`, `<surviving_findings>`
 
 > You are the completeness critic for a GAIA SPEC draft at `<DRAFT_PATH>` (spec `<spec_id>`). The surviving findings so far are `<surviving_findings>`; do not re-raise them. Hunt for what the lenses missed: an unverified load-bearing claim, an untested UAT, a `success_criteria` entry with no covering UAT, a consumer or blast-radius site the SPEC overlooked.
 >
-> Lead with a tool call, not prose: your first action is a Read of the artifact under audit, and you emit your structured result before any prose. Read `<DRAFT_PATH>` first.
+> Lead with a tool call, not prose: your first action is a Read of `<DRAFT_PATH>`, and you emit your structured result before any prose.
 >
 > **Write** your fresh findings to `.gaia/local/cache/audit-<spec_id>/findings/completeness.json` under the findings file schema in `.claude/skills/gaia/references/spec/lens-dispatch.md` (`{ "dimension": "completeness", "findings": [...] }`), writing the file even if your findings array is empty.
 >
-> **Return** only the thin digest, no finding bodies: `{ "dimension": "completeness", "counts": { "critical": <int>, "major": <int>, "minor": <int> }, "findings": [ { "id": "CPL-NNN", "severity": "...", "title": "..." } ] }`.
+> **Return** only the short summary, no finding bodies: `{ "dimension": "completeness", "counts": { "critical": <int>, "major": <int>, "minor": <int> }, "findings": [ { "id": "CPL-NNN", "severity": "...", "title": "..." } ] }`.
 
-It **writes its fresh findings to `.gaia/local/cache/audit-<spec_id>/findings/completeness.json`** (the findings file schema in `spec/lens-dispatch.md`) and returns the thin digest above; its bodies never flow into main. After it finishes, classify `findings/completeness.json` the same way as a lens file (`## Pre-clear, classify, re-dispatch` in `spec/lens-dispatch.md`): re-dispatch once on a no-op (same `effort: "medium"`), and run the critic inline on a second.
+It **writes its fresh findings to `.gaia/local/cache/audit-<spec_id>/findings/completeness.json`** (the findings file schema in `spec/lens-dispatch.md`) and returns the short summary above; its bodies never flow into main. After it finishes, classify `findings/completeness.json` the same way as a lens file (`## Pre-clear, classify, re-dispatch` in `spec/lens-dispatch.md`): re-dispatch once on a no-op (same `effort: "medium"`), and run the critic inline on a second.
 
 Append one `coverage.jsonl` record (`phase: "completeness"`, `disposition: "first_pass"|"not_applicable"`).
 
@@ -116,11 +116,11 @@ Any fresh findings from 7b-ii run through a single-refuter round, dispatching ea
 
 Append one `coverage.jsonl` record (`phase: "refuter"`, `disposition: "first_pass"|"not_applicable"`).
 
-Its bodies never flow into main.
+
 
 ## 7c. Disposition routing + apply
 
-Resolve the main-anchored SPEC folder first, before any dispatch below consumes it. The SPEC folder is main-anchored state (state registry `specs-main`), so the report lands beside the artifact the catalog row indexes rather than in a second specs tree inside a linked worktree. The `mkdir -p` keeps this self-sufficient: step 3 already created the folder earlier in the session, and this step's `mkdir -p` keeps it self-sufficient however it is reached. Whoever writes `AUDIT.md` there, the delegated applier or main's inline fallback, does so per the tool-choice contract in `spec.md`'s Operational primitives.
+Resolve the main-anchored SPEC folder (stored in the main checkout: the clone's primary working directory, on any branch) first, before any dispatch below consumes it. The SPEC folder is main-anchored state (state registry `specs-main`), so the report lands beside the artifact the catalog row indexes rather than in a second specs tree inside a linked worktree. The `mkdir -p` keeps this step self-sufficient however it is reached (step 3 already created the folder). Whoever writes `AUDIT.md` there, the delegated applier or main's inline fallback, does so per the tool-choice contract in `spec.md`'s Operational primitives.
 
 ```bash
 SPEC_DIR="$(bash .gaia/scripts/notebook/notebook-lib.sh path spec "$SPEC_ID")" || SPEC_DIR=""
@@ -149,7 +149,7 @@ Before dispatching, finalize `.gaia/local/cache/audit-<spec_id>/coverage.jsonl`,
 
 `${SPEC_DIR}` and `${AUDIT_MD}` are already resolved at the top of 7c, which is where the applier dispatch consumes them; this step writes the report, it resolves no path of its own.
 
-The **applier** writes a sibling report at `${AUDIT_MD}`, the report path main hands it, from the on-disk findings and verdicts (it already holds the complete record, so main never loads a finding body to produce it). `${SPEC_DIR}` sits inside the `.notebook/specs/**` write-surface allowlist entry. Keep it lean:
+The **applier** writes a sibling report at `${AUDIT_MD}`, the report path main hands it, from the on-disk findings and verdicts. `${SPEC_DIR}` sits inside the `.notebook/specs/**` write-surface allowlist entry. Keep it lean:
 
 ```markdown
 # <spec_id> Adversarial Audit

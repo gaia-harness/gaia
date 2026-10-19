@@ -6,7 +6,7 @@ argument-hint: "[auto] [description]"
 
 Run the GAIA **spec** workflow with these arguments: `$ARGUMENTS`
 
-Read `.claude/skills/gaia/references/spec.md` from the project root and follow it exactly. That reference is written to consume an argument string, treat the arguments above as that input (including a leading `auto` token, which the reference detects). If no arguments were provided, follow the reference's no-argument path.
+Read `.claude/skills/gaia/references/spec.md` from the project root and follow it exactly. Treat the arguments above as the reference's `$ARGUMENTS`.
 
 `spec.md` routes each run to these sub-references. Read one only when a line in `spec.md` says to, and then read the whole file:
 

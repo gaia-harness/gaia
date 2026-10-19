@@ -6,7 +6,7 @@ argument-hint: "[auto] [feature description]"
 
 Run the GAIA **plan** workflow with these arguments: `$ARGUMENTS`
 
-Read `.claude/skills/gaia/references/plan.md` from the project root and follow it exactly. That reference is written to consume an argument string, treat the arguments above as that input (including a leading `auto` token, which the reference detects). If no arguments were provided, follow the reference's no-argument path.
+Read `.claude/skills/gaia/references/plan.md` from the project root and follow it exactly. Treat the arguments above as the reference's `$ARGUMENTS`.
 
 `plan.md` routes a run to these. Read one only when a line in `plan.md` says to, and then read the whole file:
 

@@ -4,7 +4,7 @@ description: 'GAIA self-review: pre-gate-2 review pass on the in-progress SPEC d
 
 # Self-review pass before gate 2
 
-The `/gaia-spec` wrapper dispatches this directly at step 6 as a `general-purpose` Agent, after the Socratic clarify loop and before the GAIA wrapper presents the rendered artifact for gate-2 confirmation.
+The `/gaia-spec` wrapper dispatches this at step 6 as a `general-purpose` Agent, after the clarify loop and before gate 2.
 
 ## Inputs
 
@@ -47,13 +47,13 @@ Each UAT must be testable. Flag UATs that:
 
 ### 5. Pending clarifications
 
-For each item in `clarifications.pending[]`, list it in the digest `pending_clarifications` as `{topic, question}`. The agent does not ask: the wrapper asks at `.claude/skills/gaia/references/spec/self-review-dispatch.md` 6c, offering `Answer now`, `Defer with rationale` (recorded in `clarifications.deferred[]`), or `Discuss this`.
+For each item in `clarifications.pending[]`, list it in the summary's `pending_clarifications` as `{topic, question}`. The agent does not ask: the wrapper asks at `.claude/skills/gaia/references/spec/self-review-dispatch.md` 6c, offering `Answer now`, `Defer with rationale` (recorded in `clarifications.deferred[]`), or `Discuss this`.
 
 Save stays blocked while any pending item is neither answered nor deferred.
 
 ## Output
 
-When run as the dispatched 6a self-review agent, return the JSON digest defined by the 6a dispatch prompt in `.claude/skills/gaia/references/spec/self-review-dispatch.md` (that prompt is authoritative); the plaintext shape below is the fallback for a non-dispatched read.
+When run as the dispatched 6a self-review agent, return the JSON summary defined by the 6a dispatch prompt in `.claude/skills/gaia/references/spec/self-review-dispatch.md` (that prompt is authoritative); the plaintext shape below is the fallback for a non-dispatched read.
 
 Emit a structured report the wrapper can fold back in:
 
@@ -72,7 +72,7 @@ If every section is clean:
 
 ## Notes
 
-- Surface every candidate finding in each section, including borderline and low-confidence ones; do not pre-filter for importance or confidence. Gate 2 (the human) triages. Suppressing a borderline finding here is the failure mode this gate exists to catch.
-- Self-review applies the minor fixes to the draft itself and returns a thin digest; the wrapper gates only the critical and major findings. The authoritative return/apply contract is the 6a dispatch prompt in `.claude/skills/gaia/references/spec/self-review-dispatch.md`.
+- Surface every candidate finding in each section, including borderline and low-confidence ones; gate 2 (the human) triages.
+- Self-review applies the minor fixes to the draft itself and returns a short summary; the wrapper gates only the critical and major findings.
 - The pending-clarifications gate is itself a required behavior. The agent reports the items; the wrapper asks, honors the user's choice, and loops until each item is answered or deferred.
-- The first-tool-call contract (lead with a Read, no prose before it) lives in the 6a dispatch prompt in `.claude/skills/gaia/references/spec/self-review-dispatch.md`, this file's dispatcher, not here.
+

@@ -59,7 +59,7 @@ fill_placeholders() {
 render_promoted_page() {
   local frontmatter references
   frontmatter="$(fenced_block_after yaml '### Frontmatter rendering' | fill_placeholders)"
-  references="$(fenced_block_after markdown '7. **References**, emit an H2 `## References` followed by a bullet list with the source backlink, the PR URL, and the promotion timestamp:' | fill_placeholders)"
+  references="$(fenced_block_after markdown '6. **References**, emit an H2 `## References` followed by a bullet list with the source backlink, the PR URL, and the promotion timestamp:' | fill_placeholders)"
   [ -n "$frontmatter" ] || return 1
   [ -n "$references" ] || return 1
   printf -- '---\n%s\n---\n\n# Example Concept\n\nThe lede.\n\n%s\n' "$frontmatter" "$references" > "$1"
