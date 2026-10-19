@@ -40,8 +40,8 @@
 #   rename          package.json "name" == "test-project"; CLAUDE.md
 #                   first H1 line == "# Test Project";
 #                   frontend/app/languages/en/common.ts has siteName: 'Test
-#                   Project'; frontend/app/languages/en/pages/_index.ts has
-#                   title: 'Test Project'.
+#                   Project'; frontend/app/languages/en/pages/_index.ts keeps
+#                   title: '$t(common:meta.siteName)'.
 #
 #   wire-statusline .claude/settings.json contains the canonical GAIA
 #                   statusline command. --mode project so the test never
@@ -108,7 +108,7 @@ rsync -a "$STAGING"/ "$SCAFFOLD"/
 [ -f "$SCAFFOLD/frontend/app/languages/en/common.ts" ] \
   || { fail "staged tree missing frontend/app/languages/en/common.ts (rename siteName target)"; exit 1; }
 [ -f "$SCAFFOLD/frontend/app/languages/en/pages/_index.ts" ] \
-  || { fail "staged tree missing frontend/app/languages/en/pages/_index.ts (rename title target)"; exit 1; }
+  || { fail "staged tree missing frontend/app/languages/en/pages/_index.ts (rename siteName reference target)"; exit 1; }
 
 # finalize target; the staged tree must ship the command file so
 # finalize has something to delete.
@@ -243,10 +243,11 @@ first_h1="$(grep -m1 '^# ' "$SCAFFOLD/CLAUDE.md" || true)"
 # common.ts siteName.
 grep -qE "siteName:\s*['\"]Test Project['\"]" "$SCAFFOLD/frontend/app/languages/en/common.ts" \
   || { fail "rename did not set siteName: 'Test Project' in en/common.ts"; exit 1; }
-# _index.ts title (rewritten globally, including nested meta.title; see
-# rename.ts replaceStringPropertyAll).
-grep -qE "title:\s*['\"]Test Project['\"]" "$SCAFFOLD/frontend/app/languages/en/pages/_index.ts" \
-  || { fail "rename did not set title: 'Test Project' in en/pages/_index.ts"; exit 1; }
+# _index.ts title: the shipped meta.title is a nesting reference to
+# common:meta.siteName, so the title lives only in common.ts (asserted above)
+# and rename leaves the reference untouched.
+grep -qF "title: '\$t(common:meta.siteName)'" "$SCAFFOLD/frontend/app/languages/en/pages/_index.ts" \
+  || { fail "rename altered the \$t(common:meta.siteName) title reference in en/pages/_index.ts"; exit 1; }
 
 # Step 5; wire-statusline. --mode project so the merge writes to the
 # scaffold's .claude/settings.json; never the host's ~/.claude.

@@ -38,7 +38,7 @@ Translation rules:
 
 - Translate all user-visible string values from English to `{{LANGUAGE_NAME_EN}}`.
 - If a confident translation cannot be produced for a key (proper noun, brand name, code identifier embedded in a string, placeholder like `{{count}}` or `{{name}}`), copy the English value verbatim, an English placeholder is better than a wrong translation.
-- Keep all TypeScript structure, export shapes, key names, and template literals (`{{count}}`, `{{name}}`, `{{status}}`) identical to the `en/` source. Only string values change.
+- Keep all TypeScript structure, export shapes, key names, template literals (`{{count}}`, `{{name}}`, `{{status}}`), and nesting references (`$t(common:meta.siteName)`) identical to the `en/` source. Only string values change. A value that is wholly a nesting reference is copied verbatim, never replaced by the text it resolves to.
 
 ---
 

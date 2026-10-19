@@ -44,7 +44,7 @@ const PAGE_INDEX_TS = `export default {
   heroTitle: 'Start with something solid.',
   meta: {
     description: 'Description of the index page',
-    title: 'Index Page',
+    title: '$t(common:meta.siteName)',
   },
   title: 'Old Title',
 };
@@ -184,10 +184,8 @@ describe('init rename', () => {
     );
     expect(page).toContain("heroTitle: 'Hello World'");
     expect(page).toContain("title: 'Hello World'");
-    // The nested meta.title was rewritten too.
-    expect(page.match(/title: 'Hello World'/gu)?.length).toBeGreaterThanOrEqual(
-      2
-    );
+    // meta.title nests common:meta.siteName, so the title lives in one place.
+    expect(page).toContain("title: '$t(common:meta.siteName)'");
 
     const state = readState(sandbox.root);
     expect(state.completed_steps).toContain('rename');
@@ -267,9 +265,10 @@ describe('init rename', () => {
     // Seed identity keys rewritten.
     expect(page).toContain("heroTitle: 'Hello World'");
     expect(page).toContain("title: 'Hello World'");
-    // meta.title rewritten.
+    // The top-level title only: meta.title is not an identity key.
     const helloMatches = page.match(/title: 'Hello World'/gu)?.length ?? 0;
-    expect(helloMatches).toBe(2);
+    expect(helloMatches).toBe(1);
+    expect(page).toContain("title: 'Index Page'");
     // Unrelated route titles preserved.
     expect(page).toContain("title: 'About Us'");
     expect(page).toContain("title: 'Contact'");
@@ -412,7 +411,9 @@ describe('init rename', () => {
       );
       expect(page.heroTitle).toBe(title);
       expect(page.title).toBe(title);
-      expect((page.meta as Record<string, unknown>).title).toBe(title);
+      expect((page.meta as Record<string, unknown>).title).toBe(
+        '$t(common:meta.siteName)'
+      );
 
       // The markdown sink takes the value verbatim: a heading needs no escaping,
       // so an escape leaking out of a language-file sink would show up here.
@@ -548,8 +549,8 @@ describe('init rename', () => {
     }
   );
 
-  // The keys are optional, not required: the shipped `_index.ts` carries only
-  // `meta.title`, so a file missing `heroTitle` and a top-level `title`
+  // The keys are optional, not required: the shipped `_index.ts` carries
+  // neither, so a file missing `heroTitle` and a top-level `title`
   // entirely has to stay a clean pass. Only a key that is present and
   // unmatchable fails.
   test('a language file missing the optional keys still succeeds', () => {
@@ -564,7 +565,7 @@ describe('init rename', () => {
     );
     writeFileSync(
       target,
-      "export default {\n  meta: {\n    description: 'Description of the index page',\n    title: 'Index Page',\n  },\n};\n",
+      "export default {\n  meta: {\n    description: 'Description of the index page',\n    title: '$t(common:meta.siteName)',\n  },\n};\n",
       'utf8'
     );
 
@@ -575,7 +576,9 @@ describe('init rename', () => {
     ).toBe(0);
 
     const page = evaluateDefaultExport(readFileSync(target, 'utf8'));
-    expect((page.meta as Record<string, unknown>).title).toBe('Hello World');
+    expect((page.meta as Record<string, unknown>).title).toBe(
+      '$t(common:meta.siteName)'
+    );
   });
 });
 
@@ -669,7 +672,10 @@ describe('language template invariant', () => {
           {encoding: 'utf8'}
         )
       );
-      expect((page.meta as Record<string, unknown>).title).toBe('Hello World');
+      // The index title nests siteName rather than carrying a second copy.
+      expect((page.meta as Record<string, unknown>).title).toBe(
+        '$t(common:meta.siteName)'
+      );
     } finally {
       rmSync(root, {force: true, recursive: true});
     }
