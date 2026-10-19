@@ -6,7 +6,8 @@
 # STEP_ORDER. It also pins the shared-reference shape: the command reads exactly
 # the per-machine reference (it asks no team-setting question), lists it in its
 # references block, and the setup command reads it too (finalize deletes only
-# this command); and it finalizes with the plain setup finalize call.
+# this command); it finalizes with the plain setup finalize call; and Step 1
+# refreshes the statusline's update-check cache after its /update-deps call.
 
 # The exact opening sentence of a command's references block.
 REFERENCES_OPENING='This command reads these references, all under `.claude/skills/gaia/references/setup/`. Read one only when a "Read ... now" line sends you there, and then read the whole file:'
@@ -231,4 +232,75 @@ check_plain_finalize() {
   run check_plain_finalize "$scratch"
   [ "$status" -ne 0 ]
   grep -qF 'plain setup finalize call is absent' <<<"$output"
+}
+
+# check_step1_bust <file>: Step 1 runs the deps-mode update-check bust after
+# its /update-deps call and before Step 2. An init-invoked /update-deps cuts no
+# branch, so it never reaches the bust /update-deps runs at branch creation.
+check_step1_bust() {
+  awk '
+    /^## Step 1:/ { inside = 1; next }
+    inside && /^## Step 2:/ { exit }
+    inside && /run `\/update-deps`/ { saw_update_deps = 1 }
+    inside && saw_update_deps && /update-check-bust\.sh .*--mode deps/ { busted = 1 }
+    END {
+      if (!saw_update_deps) { print "Step 1 has no /update-deps call"; exit 1 }
+      if (!busted) { print "Step 1 runs no deps-mode bust after /update-deps"; exit 1 }
+    }
+  ' "$1"
+}
+
+# move_bust_line <file> <anchor ERE> <before|after>: prints the file with the
+# bust command line moved next to the first line matching the anchor.
+move_bust_line() {
+  ANCHOR="$2" PLACEMENT="$3" awk '
+    NR == FNR { if (/update-check-bust\.sh/) bust = $0; next }
+    /update-check-bust\.sh/ { next }
+    !moved && $0 ~ ENVIRON["ANCHOR"] {
+      moved = 1
+      if (ENVIRON["PLACEMENT"] == "before") { print bust; print; next }
+      print; print bust; next
+    }
+    { print }
+  ' "$1" "$1"
+}
+
+@test "gaia-init.md Step 1 busts the update-check cache after /update-deps" {
+  check_step1_bust "$INIT_MD"
+}
+
+@test "the Step 1 bust check fails when the bust is removed" {
+  local scratch="$BATS_TEST_TMPDIR/gaia-init.scratch.md"
+  grep -vF -- 'update-check-bust.sh' "$INIT_MD" >"$scratch" || true
+  cmp -s "$INIT_MD" "$scratch" && return 1
+  run check_step1_bust "$scratch"
+  [ "$status" -ne 0 ]
+  grep -qF 'no deps-mode bust after /update-deps' <<<"$output"
+}
+
+@test "the Step 1 bust check fails when the bust moves before /update-deps" {
+  local scratch="$BATS_TEST_TMPDIR/gaia-init.scratch.md"
+  move_bust_line "$INIT_MD" 'run `/update-deps`' before >"$scratch"
+  cmp -s "$INIT_MD" "$scratch" && return 1
+  run check_step1_bust "$scratch"
+  [ "$status" -ne 0 ]
+  grep -qF 'no deps-mode bust after /update-deps' <<<"$output"
+}
+
+@test "the Step 1 bust check fails when the bust leaves Step 1" {
+  local scratch="$BATS_TEST_TMPDIR/gaia-init.scratch.md"
+  move_bust_line "$INIT_MD" '^## Step 2:' after >"$scratch"
+  cmp -s "$INIT_MD" "$scratch" && return 1
+  run check_step1_bust "$scratch"
+  [ "$status" -ne 0 ]
+  grep -qF 'no deps-mode bust after /update-deps' <<<"$output"
+}
+
+@test "the Step 1 bust check fails on a deps bust in the wrong mode" {
+  local scratch="$BATS_TEST_TMPDIR/gaia-init.scratch.md"
+  sed 's/update-check-bust\.sh \(.*\)--mode deps/update-check-bust.sh \1--mode gaia/' "$INIT_MD" >"$scratch"
+  cmp -s "$INIT_MD" "$scratch" && return 1
+  run check_step1_bust "$scratch"
+  [ "$status" -ne 0 ]
+  grep -qF 'no deps-mode bust after /update-deps' <<<"$output"
 }
