@@ -2,7 +2,7 @@
 type: concept
 status: active
 created: 2026-04-20
-updated: 2026-10-14
+updated: 2026-10-19
 tags: [concept, ci, review]
 ---
 
@@ -30,7 +30,7 @@ The order matters because every script step here (the member resolver, the clear
 
 ## Who audits: the dispatched member set
 
-The gate is a roster, not a single agent. `bash .gaia/scripts/resolve-audit-members.sh` (run from the repo root, or with `--root <path>`) names the Code Audit Team members this diff owes an audit to, one per line, deduped and sorted. The owed members are audited by dispatching the audit loop unit ([[#Dispatch the audit loop unit]]). An empty or unanswerable result still owes `code-audit-frontend`, fail-closed. An in-scope file no member owns also owes `code-audit-frontend`: its branch-own digest folds in every in-scope-but-ownerless path (see [[Code Audit Team#Ownership classifier]]). The merge gate enforces that only when the resolver names nobody, where its legacy path denies without the frontend marker. When the resolver names specialists, the gate checks only those, so an audit by `code-audit-frontend` is the only coverage an ownerless file gets. Every named member writes its own clearance (see [[Audit Round Procedure#Marker key]]). See [[Code Audit Team]] for the roster and dispatch mechanism.
+The gate is a roster, not a single agent. `bash .gaia/scripts/resolve-audit-members.sh` (run from the repo root, or with `--root <path>`) names the Code Audit Team members this diff owes an audit to, one per line, deduped and sorted. The owed members are audited by dispatching the audit loop unit ([[#Dispatch the audit loop unit]]). Empty output means no member owns a changed file: when every changed file is out of audit scope, the merge hook clears the out-of-scope bypass itself and no marker is owed ([[Audit Gate Reference#Signals]]); otherwise an empty result still owes `code-audit-frontend`, and so does an unanswerable one, fail-closed. An in-scope file no member owns also owes `code-audit-frontend`: its branch-own digest folds in every in-scope-but-ownerless path (see [[Code Audit Team#Ownership classifier]]). The merge gate enforces that only when the resolver names nobody, where its legacy path denies without the frontend marker. When the resolver names specialists, the gate checks only those, so an audit by `code-audit-frontend` is the only coverage an ownerless file gets. Every named member writes its own clearance (see [[Audit Round Procedure#Marker key]]). See [[Code Audit Team]] for the roster and dispatch mechanism.
 
 **Two layers decide a finding.** First, a member's marker gates on Critical (fix) and Major (fix or acknowledge); no Minor withholds a marker. Second, the dispositions file decides every finding, Minor included: fix by default; `accept-residual`, `waive-out-of-scope` or `file` need a reason; architectural ones escalate to the human. `audit-dispositions-check.sh`'s `undisposed` rule enforces the second layer.
 
@@ -298,7 +298,7 @@ Then wait. The wait is the reusable part, and it ships as a script: a caller tha
 bash .gaia/scripts/pr-wait-merge.sh --pr <N>
 ```
 
-It prints one verdict token on stdout and exits on it: `MERGED` (0), `CONFLICTING` (3), `CHECK_FAILED` (4), `TIMEOUT` (5), `CLOSED` (6). `--attempts` changes the default bound of five and `--interval` the default thirty-second spacing, which together are the ~2-3 minutes every caller here cites; a release or a full CI run passes `--attempts 20`. `--repo owner/name` waits on another repository's pull request; omitted, `gh` resolves the repository from the working directory.
+It prints one verdict token on stdout and exits on it: `MERGED` (0), `CONFLICTING` (3), `CHECK_FAILED` (4), `TIMEOUT` (5), `CLOSED` (6). `--attempts` changes the default bound of five and `--interval` the default thirty-second spacing, about two and a half minutes together. A caller waiting on a merge it queued with `--auto` passes `--attempts 20`, as a release does: the required checks restart when the pull request leaves draft, and even on a docs-only change they often finish well past the default bound. `--repo owner/name` waits on another repository's pull request; omitted, `gh` resolves the repository from the working directory.
 
 <!-- gaia:maintainer-only:start -->
 `/gaia-release`'s `create-gaia` lockstep wait uses `--repo`.
@@ -309,6 +309,15 @@ It prints one verdict token on stdout and exits on it: `MERGED` (0), `CONFLICTIN
 The script issues no `gh pr merge` of its own, which is what lets the same invocation serve a caller that queued its merge with `--squash`, one that queued it with `--merge --auto`, and one resuming the wait after a conflict repair, where re-merging would be wrong.
 
 That wait is the whole verification. A local error printed by `gh pr merge` after the state reads `MERGED` does not revise the answer; see [[#Local-sync failure mode]] below.
+
+**Act on the verdict.** Every caller that runs the wait follows these arms, with `<branch-name>` its own branch, and adds only what is its own (a cost record, a cleanup to print for later). Keeping the branch means deleting neither the local branch nor its worktree, and naming the worktree path when the branch lives in one, so a kept worktree never goes unreported.
+
+- **`MERGED`** (exit 0): clean up per `.claude/skills/gaia/references/work-lifecycle.md` `## 8. Cleanup`, its arm picked by how the session holds the branch, then print the merged PR URL.
+- **`CONFLICTING`** (exit 3): repair per [[#Conflict found mid-wait]] and run the wait again.
+- **`CHECK_FAILED`** (exit 4): print the PR URL and name the failing required check, which must be fixed before the merge can land. Keep the branch.
+- **`TIMEOUT`** (exit 5): the bound ran out with the pull request still open. Print the PR URL and say the queued merge has not landed yet and lands once the required checks pass. Keep the branch, and do not switch off it.
+- **`CLOSED`** (exit 6): the pull request was closed without merging, so no wait can clear it. Report the closure, print the PR URL, and keep the branch.
+- **Exit 2**: the wait refused rather than answered. Report what it could not read, print the PR URL, keep the branch, and assert no state for the pull request, since nothing about it was read; a merge queued earlier may still land.
 
 Rules the script preserves, each of which exists to stop the wait abandoning a merge that is about to land. `mergeable` reads `UNKNOWN` for a short while after any push, while GitHub recomputes it, so that counts as still waiting rather than as clean. Only required checks count: a failed optional check does not block a queued merge, so exiting on one would give up on a live merge. `gh pr checks` prints nothing and exits non-zero while no check has registered yet, which is also still waiting.
 

@@ -48,16 +48,10 @@ gh pr merge <N> --squash --delete-branch --auto
 
 `--auto` queues the merge so GitHub lands it once the required checks pass (or immediately if they are already green). If the repo has auto-merge disabled and `gh` rejects `--auto`, wait for the required checks to pass by reading `gh pr checks <N>` as a bounded series of single calls, not a shell loop (`.claude/hooks/block-handrolled-pr-poll.sh` denies a loop naming `gh pr checks` that reads no `mergeable`), then re-run the merge without `--auto`.
 
-`gh pr merge` can exit success while the merge is still queued, so verify the terminal state before touching the local checkout: run the merge wait, `bash .gaia/scripts/pr-wait-merge.sh --pr <N> --attempts 20`, per `.claude/skills/gaia/references/work-lifecycle.md` `## 7. Merge (when asked)`.
+`gh pr merge` can exit success while the merge is still queued, so verify the terminal state before touching the local checkout: run `bash .gaia/scripts/pr-wait-merge.sh --pr <N> --attempts 20` and follow the verdict arms in `wiki/concepts/PR Merge Workflow.md` `## Post-merge verification before cleanup`. Two arms carry this run's own detail:
 
-The 20-attempt bound replaces the default 5: the queued merge lands only after a fresh full CI run, which outlasts the default's ~2.5 minutes.
-
-- **`MERGED`** (exit 0) → clean up per `.claude/skills/gaia/references/work-lifecycle.md` `## 8. Cleanup`, then print the merged PR URL. Pick the arm by how this session holds the worktree: `### Worktree entered by name in this session` when this run created and entered it (`CREATED_WORKTREE=true`), `### Worktree entered by path or in an earlier session` on a worktree run in place. Fill `<main checkout path>`, `<worktree path>` and `<branch-name>` in; that arm's fences take `git -C <main checkout path>` forms, so they run from a session launched inside the tree. The pre-removal check and the lockfile-triggered install live in those arms and are not restated here.
-- **`TIMEOUT`** (exit 5, the bound was spent with the pull request still open) → print the PR URL and note that the merge queued above has not landed yet, then print the cleanup to run once it lands: a pointer to `.claude/skills/gaia/references/work-lifecycle.md` `### Worktree entered by path or in an earlier session`, with the worktree path and the branch filled in. **Do not** delete or leave anything: the worktree, the branch and the session stay as they are, the PR is still open.
-- **`CONFLICTING`** (exit 3) → repair it per `wiki/concepts/PR Merge Workflow.md`'s `### Conflict found mid-wait` and run the wait again.
-- **`CHECK_FAILED`** (exit 4) → print the PR URL and the failing check, and leave the worktree and branch in place as for a queued merge.
-- **`CLOSED`** (exit 6) → the pull request was closed without merging, so no wait can clear it: report that, leave the worktree and branch in place, and stop.
-- **the wait refused rather than answered** (exit 2) → report what it could not read, leave the worktree and branch in place, and assert no state for the pull request.
+- **`MERGED`** (exit 0) → pick the cleanup arm by how this session holds the worktree: `### Worktree entered by name in this session` when this run created and entered it (`CREATED_WORKTREE=true`), `### Worktree entered by path or in an earlier session` on a worktree run in place. Fill `<main checkout path>`, `<worktree path>` and `<branch-name>` in; that arm's fences take `git -C <main checkout path>` forms, so they run from a session launched inside the tree.
+- **`TIMEOUT`** (exit 5) → also print the cleanup to run once the merge lands: a pointer to `.claude/skills/gaia/references/work-lifecycle.md` `### Worktree entered by path or in an earlier session`, with the worktree path and the branch filled in. The session stays as it is too.
 
 **If running in CI** (mode 2), which creates no worktree and no branch:
 

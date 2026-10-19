@@ -154,20 +154,4 @@ Every path that ends a `/gaia-cleanse` run appends exactly one cost record, the 
 - Publish's no-PR path in CI.
 - Publish's non-zero-exit STOP on `git push` / `gh pr create` / `gh pr merge`.
 
-Standalone final step, one call:
-
-```bash
-bash .gaia/scripts/usage.sh record command:gaia-cleanse --workflow gaia-cleanse
-```
-
-**Artifact pass-through.** When this run opened a pull request and the URL `gh pr create` printed appeared in this run's own Bash tool result, and the pull request is on the current repo, append:
-
-```bash
-  --pr <N>
-```
-
-Never look the number up (`gh pr list`, `gh pr view`), never reuse a number from an earlier run, a different branch, or a `gh` command run outside this workflow, and never guess. If this run did not itself print a creation URL, pass no `--pr` at all; the record correctly carries no artifact, and that is not an error.
-
-**Report the line verbatim.** On exit 0 the first stdout line is the Cost line, e.g. `Cost: 5.2M tokens, $4.12, 6m39s`, and a `Note:` line under it says when the figure may be low or a minimum. Relay them, unchanged, as the last of the run's report; do not reassemble, reformat, or re-derive them. On a non-zero exit nothing was recorded and no Cost line prints: relay the one stderr line in its place.
-
-The record never blocks and never turns a failed run into a successful one: a non-zero exit is reported, not retried. On a path that ends in an error (a rejected push, a blocked merge), record the cost, then report the failure exactly as before; recording the cost never implies success.
+Apply the shared record recipe in `.claude/skills/gaia/references/cost-record.md` with `{{COMMAND}}` = `gaia-cleanse`.

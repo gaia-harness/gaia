@@ -226,13 +226,7 @@ It commits everything, pushes, opens the PR as a draft and prints the PR number 
 - **Open PR only** → record cost (pass-through with `<N>`), print the PR number and that the PR is a draft with no merge attempted, STOP.
 - **Publish** → continue below.
 
-**Audit handshake.** Read `wiki/concepts/PR Merge Workflow.md`; do not merge from memory. Then:
-
-```bash
-bash .gaia/scripts/resolve-audit-members.sh
-```
-
-Empty output confirms the bypass applies and no marker is owed. If it names any member, this run's heal diff reached an audited surface: dispatch the `audit-loop-unit` agent per `wiki/concepts/PR Merge Workflow.md` `## Dispatch the audit loop unit` (never the members directly), then post the status per `#### Posting the status last`:
+**Audit handshake.** Read `wiki/concepts/PR Merge Workflow.md`; do not merge from memory. Resolve the members per its `## Who audits: the dispatched member set` and run whatever audit it owes; a named member means this run's heal diff reached an audited surface. Then post the status per `#### Posting the status last`:
 
 ```bash
 bash .claude/hooks/post-audit-status.sh <current-member-marker>
@@ -244,41 +238,13 @@ bash .claude/hooks/post-audit-status.sh <current-member-marker>
 gh pr merge <N> --squash --delete-branch --auto
 ```
 
-`--auto` queues the merge behind required checks. Then run the merge wait for `<N>` exactly as `wiki/concepts/PR Merge Workflow.md` and `.claude/skills/gaia/references/work-lifecycle.md` `## 7. Merge (when asked)` give it (the wait script takes the PR number and prints one verdict).
-
-The merge above is already queued and the wait issues no `gh pr merge` of its own, so nothing here re-merges. One arm per verdict plus one for the exit-2 refusal; every arm records cost with `--pr <N>` (see **Cost record (run end)**):
-
-- **`MERGED`** (exit 0) → clean up per `.claude/skills/gaia/references/work-lifecycle.md` `## 8. Cleanup`, with `<branch-name>` = `<BRANCH>`: `### Worktree entered by name in this session` under `RESOLVED_MODE=worktree`, `### Feature branch` under `feature-branch`. Record cost, print the merged PR URL, then relay the record's `Cost:` line as the last line of the reply.
-- **`CONFLICTING`** (exit 3) → repair it per `wiki/concepts/PR Merge Workflow.md`'s `### Conflict found mid-wait` and run the wait again.
-- **`CHECK_FAILED`** (exit 4) → name the check and say the merge will not land until it is fixed, record cost, print the PR URL, and keep the local branch.
-- **`TIMEOUT`** (exit 5) → the window closed with the PR still open: record cost, print the PR URL, note auto-merge is queued and lands when checks pass, and do **not** delete the local branch or switch off it.
-- **`CLOSED`** (exit 6) → the PR was closed without merging: report the closure, record cost, print the PR URL, and keep the local branch.
-- **exit 2** → the wait refused rather than answered: report what it could not read, record cost, print the PR URL, and keep the local branch. Assert no state for the PR, since nothing about it was read: no lands-when-checks-pass note and no claim that the merge did or did not land; the merge queued above may still land.
-
-Every arm that keeps the local branch names its worktree path under `RESOLVED_MODE=worktree`, so a kept worktree never goes unreported.
+`--auto` queues the merge behind required checks. Then run `bash .gaia/scripts/pr-wait-merge.sh --pr <N> --attempts 20` and follow the verdict arms in `wiki/concepts/PR Merge Workflow.md` `## Post-merge verification before cleanup`, with `<branch-name>` = `<BRANCH>`. Every arm but `CONFLICTING` ends the run, recording cost with `--pr <N>` (see **Cost record (run end)**).
 
 ---
 
 ## Cost record (run end)
 
-Every path that ends the run appends exactly one cost record immediately before its final printed line, and relays the record's `Cost:` line verbatim as the last line of the reply (on a non-zero exit nothing was recorded; relay the one stderr line in its place). The shared recipe is `.claude/skills/gaia/references/cost-record.md`:
-
-```bash
-bash .gaia/scripts/usage.sh record command:gaia-fitness --workflow gaia-fitness
-```
-
-**Pass-through.** When this run opened a pull request and the number `fitness-publish.sh open` printed appeared in this run's own Bash tool result, append the artifact (`--pr` is same-repo only, since a ref carries no repo):
-
-```bash
-bash .gaia/scripts/usage.sh record command:gaia-fitness --workflow gaia-fitness \
-  --pr <N>
-```
-
-Never look the number up (`gh pr list`, `gh pr view`), never reuse one from an earlier run, a different branch or a manually-run `gh`, and never guess. If this run did not itself print a PR number, pass no `--pr`; the record correctly carries no artifact.
-
-The record never blocks and never turns a failed run into a successful one. On a failure STOP, record the cost, then report the failure exactly as before; do not report success.
-
-Every run-ending path records here:
+Every path that ends the run appends exactly one cost record immediately before its final printed line. Every run-ending path records here:
 
 - Step 1, triage-only (unsafe state) STOP.
 - Step 3, a failed CLI run STOP.
@@ -286,3 +252,5 @@ Every run-ending path records here:
 - Step 8, Keep for review STOP.
 - Step 9: `Open PR only`, `MERGED`, `TIMEOUT`, `CHECK_FAILED`, `CLOSED`, or a merge wait that refused because it read nothing: pass-through.
 - Step 9, publish failure STOP: pass-through only if the PR had already been opened and its number printed before the later step failed.
+
+Apply the shared record recipe in `.claude/skills/gaia/references/cost-record.md` with `{{COMMAND}}` = `gaia-fitness`. The PR number for `--pr` is the one `fitness-publish.sh open` printed in this run's own Bash result, in place of a `gh pr create` URL.
