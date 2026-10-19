@@ -119,6 +119,7 @@ On GAIA 1.6.1? Claude: choose Abort, then offer to migrate this project to 2.0.0
 
 ### Changed
 
+- `/gaia-residue` triages 25 residuals per batch by default instead of 10, so a large backlog drains in fewer confirmations; `GAIA_RESIDUE_CAP` still overrides it (#2835)
 - The audit light reviewer and the `/gaia-fitness` judge now run without the project's CLAUDE.md and rules, which they never used: each dispatch reads about 10,000 fewer tokens with unchanged verdicts. In the maintainer repo, the harness triage threshold now loads only at the steps that grade a finding instead of in every session (#2830)
 - GAIA's always-loaded rules, the execution doctrine injected on branch sessions, and six internal agent descriptions are shorter and clearer. Restatements are gone, "don't" lines now say what to do instead, and a fresh session starts with a few hundred fewer tokens of base context. Behavior is unchanged (#2820)
 - The references behind `/gaia-codify`, forensics capture, worktree isolation, the work lifecycle and cost recording are shorter and clearer: restated rules are cut, terms are used consistently, and "don't" lines now say what to do instead, so each costs about a tenth fewer tokens to load. Behavior is unchanged (#2825)

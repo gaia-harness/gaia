@@ -431,8 +431,8 @@ describe('gaia residue-tally', () => {
     expect(emitted.aged_candidate_count).toBe(0);
   });
 
-  test('GAIA_RESIDUE_CAP=3 emits 3; a large GAIA_RESIDUE_CAP emits every survivor; an invalid GAIA_RESIDUE_CAP falls back to 10', () => {
-    const prs = Array.from({length: 25}, (_, index) => ({
+  test('GAIA_RESIDUE_CAP=3 emits 3; a large GAIA_RESIDUE_CAP emits every survivor; an invalid GAIA_RESIDUE_CAP falls back to 25', () => {
+    const prs = Array.from({length: 30}, (_, index) => ({
       body: bodyWithKey(ACCEPT_HEADING, 'x/y', `app/file${index}.ts`, 1),
       headRefOid: 'sha',
       mergedAt: new Date(Date.UTC(2026, 0, 1 + index)).toISOString(),
@@ -458,7 +458,7 @@ describe('gaia residue-tally', () => {
       env: {GAIA_RESIDUE_CAP: '1000', GAIA_RESIDUE_FIXTURE_DIR: rootNoCap},
     });
     expect((noCapOut.json() as {candidate_count: number}).candidate_count).toBe(
-      25
+      30
     );
 
     for (const badCap of ['', '0', '-2', 'abc']) {
@@ -471,7 +471,7 @@ describe('gaia residue-tally', () => {
       });
       expect(
         (fallbackOut.json() as {candidate_count: number}).candidate_count
-      ).toBe(10);
+      ).toBe(25);
     }
   });
 

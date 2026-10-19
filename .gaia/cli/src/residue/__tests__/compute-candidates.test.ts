@@ -305,7 +305,7 @@ describe('computeCandidates, store suppression modes', () => {
 });
 
 describe('computeCandidates, counts, ordering, and cursor', () => {
-  test('at the default cap of 10, emits 10 ordered oldest-merge-first, with all four counts correct', () => {
+  test('at a cap of 10, emits 10 ordered oldest-merge-first, with all four counts correct', () => {
     const result = computeCandidates({...baseArgs, cap: 10, prs: corpusOf25()});
 
     expect(result.total_keyed_count).toBe(25);
