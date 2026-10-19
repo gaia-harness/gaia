@@ -21,7 +21,7 @@ Build the report **only** from the agent reports returned to you, the snooze and
 
 - **Updated packages**: every package the Wave A agent or a Wave B agent reports as `updated`. Then, on a run that created a worktree, one line per package whose declared version in the worktree differed from the version discovery read, naming both values and whether it left the apply set (`references/worktree.md`, step 5 of `## Create the worktree`).
 - **Breaking changes applied**: only what Wave B agents report editing in the codebase. Empty if no Wave B group ran.
-- **Transitive refresh**: the Phase 5b agent's result: one row per package it moved (from and to), or one of `Nothing moved`, `Declined in preview`, `Not run (--scope)`, `Not run (--security)`, or `Reverted (<reason>)` followed by the rows that would have moved. Always include this section; `Nothing moved` is a result, not an empty section. These rows never go in Updated packages, and a reverted refresh is reported here, not in Skipped packages.
+- **Sub-dependency updates** (the transitive refresh): the Phase 5b agent's result: one row per package it moved (from and to), or one of `Nothing moved`, `Declined in preview`, `Not run (--scope)`, `Not run (--security)`, or `Reverted (<reason>)` followed by the rows that would have moved. Always include this section; `Nothing moved` is a result, not an empty section. These rows never go in Updated packages, and a reverted refresh is reported here, not in Skipped packages.
 - **Overrides audited**: only what the Phase 0 / Phase 6 audit reports. If the `overrides:` map was empty, write "None" and move on. On a refresh-only run where Phase 6 did not run, write `Not run (refresh-only, tree unchanged)`.
 - **Security**: always present, printed on every exit path, and never a bare `None`: the heading is always followed by the source line and all three tables, and an empty table reads `None.`. The source line is `Source: pnpm audit, enriched by Dependabot alerts` when alerts were read, `Source: pnpm audit. Dependabot alerts: Not run (<reasonText>)` when they were unavailable, `Source: pnpm audit. Dependabot alerts: Not run (CI run)` in CI, or `Source: Not run (<reason>)` when the final-tree audit failed.
   - **Resolved**: an opening advisory absent from the final-tree audit. Package, advisory key, method (`in-range refresh`, `chain-head bump (<pkg> <from> → <to>)`, `override (<key>: <value>)`, `chain-head major (<group>)`), new installed version. Append `(on this branch, pending merge)` when its alert is still open in alerts mode.
@@ -63,7 +63,7 @@ Print the report.
 ### Breaking changes applied
 - [group] description
 
-### Transitive refresh
+### Sub-dependency updates
 | Package | From | To |
 | --- | --- | --- |
 

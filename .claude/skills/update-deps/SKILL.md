@@ -180,10 +180,9 @@ report-only. With zero advisories the paths below stand.
 If `total_count` is `0` and `advisories[]` is empty, print `All packages are up to date.`
 (the Phase 7 `### Security` section, and `### Global tools` when it has a row to show, are still printed first). Under `--scope`, exit (no branch, no changes). Otherwise the apply set is empty
 and the run is **refresh-only** (see Decision): in CI it proceeds straight to
-Phase 5b; interactively, print `Transitive refresh: re-resolve every
-transitive dependency to the newest in-range version past the release-age
-window; reverted whole if the quality gate fails.` and ask with `AskUserQuestion`
-(single-select): **Refresh transitive dependencies** (Recommended, first option) or
+Phase 5b; interactively, print the sub-dependency line (defined under the
+preview below) without its last sentence, and ask with `AskUserQuestion`
+(single-select): **Update sub-dependencies** (Recommended, first option) or
 **Skip** (exit now, no branch, no changes, no ledger write). Each `wave_a[]` and `wave_b[].packages[]` entry
 carries `bucket` (`patch` | `minor` | `major` | `nonsemver`), `current`, `latest`,
 `is_pinned`, and `kind` (a `wave_a[]` entry also carries `group`; a `wave_b[]` element carries `group` once). `total_count` is the genuine-upgrade count;
@@ -242,26 +241,35 @@ sections listing them, e.g. `Held by config (not offered): vite (current
 any apply set; the line just keeps the active holds visible.
 
 Below the sections, print one line for the transitive refresh (Phase 5b),
-which runs by default after the waves: `Transitive refresh: re-resolve every
-transitive dependency to the newest in-range version past the release-age
-window; reverted whole if the quality gate fails. Name transitive-refresh under
-"Choose what to skip" to skip it this run.`
+which runs by default after the waves. This is the **sub-dependency line**:
+`Sub-dependencies: also updates the packages your packages use to the newest
+versions they allow, skipping versions released too recently to trust. Undone as
+a whole if checks fail. To skip it this run, pick "Choose what to skip" and say
+sub-dependencies.`
+
+Phase 5b is the transitive refresh internally; everything printed to the user
+(this line, option labels and descriptions, progress narration, the report)
+calls it the sub-dependency update and never says "transitive refresh".
 
 Then ask with `AskUserQuestion` (single-select). **When `snoozedGroups` is
 non-empty**, offer these options in this order:
 
 - **Update the rest** (Recommended, first option): apply every group EXCEPT the
-  snoozed ones; leave the snoozes intact.
+  snoozed ones; leave the snoozes intact. Description: `Apply every update
+  except the snoozed ones, including sub-dependencies.`
 - **Choose what to skip**: the human names further package or group names to
-  skip; the snoozed groups stay skipped too.
+  skip; the snoozed groups stay skipped too. Description: `Name the packages to
+  skip, or say "sub-dependencies" to skip that part.`
 - **Update everything incl. snoozed**: apply every group AND clear the snoozes.
 - **Cancel**: exit now, no branch, no changes, no ledger write.
 
 **When `snoozedGroups` is empty**, offer the original three:
 
-- **Update all** (Recommended, first option): apply every group.
+- **Update all** (Recommended, first option): apply every group. Description:
+  `Apply every update, including sub-dependencies.`
 - **Choose what to skip**: the human names the package or group names to skip;
-  everything else applies.
+  everything else applies. Description: `Name the packages to skip, or say
+  "sub-dependencies" to skip that part.`
 - **Cancel**: exit now, no branch, no changes, no ledger write.
 
 ### Decision
@@ -298,7 +306,8 @@ snoozes AND any newly named), or the omitted ones are dropped from the ledger.
   `Snoozed N group(s); nothing else to update.`, then continue as a
   refresh-only run, or exit (no branch) when `transitive-refresh` was also
   named.
-  The name `transitive-refresh` is not a group: strip it from the names before
+  The name `transitive-refresh`, which the human may type as `sub-dependencies`
+  or `sub-dependency` (any case), is not a group: strip it from the names before
   the `decline` call and skip Phase 5b for this run only, it is never recorded
   in the ledger. If it was the only name given, handle the choice as **Update
   all** (or **Update the rest** when snoozed groups are present) with Phase 5b
@@ -342,8 +351,8 @@ refresh-only. The branch is cut inside a worktree, never in the main checkout.
   `Nothing moved` or `Reverted (<reason>)`.
 - **Refresh-only run.** The refresh installs, rewrites the lockfile and gates,
   so the worktree exists before Phase 5b starts. Run `references/worktree.md`
-  (step 2 below) as soon as an interactive run becomes refresh-only: the human picks **Refresh transitive
-  dependencies** at the zero-outdated prompt, **Update the rest** leaves an empty
+  (step 2 below) as soon as an interactive run becomes refresh-only: the human picks **Update
+  sub-dependencies** at the zero-outdated prompt, **Update the rest** leaves an empty
   apply set because every group is snoozed, or **Choose what to skip** leaves an
   empty apply set. In CI nothing creates a worktree. When Phase 5b then reports
   `Nothing moved` or `Reverted (<reason>)` and the security plan owes nothing,
