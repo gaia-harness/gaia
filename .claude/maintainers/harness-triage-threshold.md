@@ -31,6 +31,6 @@ Otherwise **workable**: the close names Claude's signal and recovery. No signal:
 - Severity is separate: meeting a criterion earns its severity; meeting none waives at any severity.
 - Disposes every harness finding from every Code Audit Team member, code-audit-frontend and code-audit-github-workflows included; on harness paths it overrides fix-every-Minor and file-every-out-of-scope-finding in PR Merge Workflow and file-tech-debt.
 - Outranks `guards-must-fail.md`, `bats-assertions.md` when grading: a violation needs a criterion too.
-- /gaia-debt re-triages a harness issue before fixing and proposes closing workable ones. /gaia-residue never promotes a waived one. /gaia-codify drafts no check for a waived class. /gaia-cleanse and /gaia-fitness apply this before filing.
+- /gaia-debt re-triages a harness issue before fixing and proposes closing workable ones. /gaia-residue never promotes a waived one. /gaia-codify drafts no check for a waived class. /gaia-cleanse and file-tech-debt apply this before filing.
 - Waived findings: one line each under `## Waived below triage threshold (not filed)` in the PR body (no gaia-debt-key; /gaia-residue ignores it). Never waive silently.
 - Unchanged: markers, refusals, the branch checkpoint, GAIA-Audit posting. A Critical still withholds its marker until resolved.

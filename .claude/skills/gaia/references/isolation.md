@@ -1,6 +1,6 @@
 # Isolation: branch vs worktree
 
-The shared branch-vs-worktree decision. Every GAIA flow that writes its own work onto a branch of its own reads this
+The shared branch-vs-worktree decision. Every shipped GAIA flow that writes its own work onto a branch of its own reads this
 file and applies it before its first write to the working tree: `/gaia-plan` (through the `ORCHESTRATOR.md` it
 generates), ad-hoc work (through `.claude/skills/gaia/references/work-lifecycle.md`), and each command that publishes
 its own pull request. This is the only definition of the decision order, the prompt, and the worktree-creation call.

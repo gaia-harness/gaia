@@ -5,7 +5,7 @@ paths:
 
 # State Pattern
 
-All React Context creation lives in `app/state/`.
+All app-state React Context creation lives in `app/state/`; the CSP nonce context co-locates with its utility in `app/utils/nonce.ts`.
 
 ## When to Use Context
 

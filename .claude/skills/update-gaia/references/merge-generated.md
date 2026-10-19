@@ -48,7 +48,7 @@ Each declaration is `{id, startMarker, endMarker, paths[], regenerate: {interpre
 
 A path that appears in one of the declarations takes a single oracle call in place of the whole-file `cmp -s` comparisons, so a divergence confined to the machine-generated region does not read as adopter drift.
 
-**Presence triage still runs first, unchanged.** The walk's presence rows (`add`, `removed`, the owned newly-owned overwrite and the absent-baseline rows) resolve before the oracle is consulted. A path the adopter deleted, a path the release no longer ships, and a path absent from the baseline are settled there: no oracle call, and no regeneration in Step 7d either.
+**Presence triage still runs first, unchanged.** The walk's presence rows (`add`, `removed`, the owned newly-owned overwrite and the absent-baseline rows) resolve before the oracle is consulted. A path the adopter deleted, a path the release no longer ships, and a path absent from the baseline are settled there: no oracle call; Step 7d's suppression flags (below) decide which of them are regenerated.
 
 For a declared path that survives triage:
 
