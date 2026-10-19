@@ -14,7 +14,7 @@ bash .gaia/scripts/usage.sh record command:{{COMMAND}} --workflow {{COMMAND}}
   --pr <N>
 ```
 
-Never look the number up (`gh pr list`, `gh pr view`), never reuse a number from an earlier run, a different branch, or a `gh` command run outside this workflow, and never guess. A ref carries no repo, so pass `--pr` only for a pull request on the current repo. If this run did not itself print a creation URL, pass no `--pr` at all; the record correctly carries no artifact, and that is not an error.
+Take `<N>` only from that printed URL (a ref carries no repo, hence the current-repo condition). Without one, pass no `--pr`: the record correctly carries no artifact, and that is not an error.
 
 **A run continued from another session.** Its continuation prompt carries a `usage.sh join` line. If this session has not run it yet, run it before the record call, so the Cost line covers every session of the run.
 

@@ -74,10 +74,8 @@ can reach or relax that correctness rule, and before the arms below, so the poli
 POLICY="$(jq -r '.isolation_policy // "always-worktree"' .gaia/project.json 2>/dev/null || echo always-worktree)"
 ```
 
-The `2>/dev/null || echo always-worktree` tail is load-bearing, not decoration. jq's `//` fires only on `null`
-or `false` from a document that PARSED. On a missing file, or an unreadable one (`chmod 000`), jq errors,
-exits non-zero, and prints nothing, so without the tail the command substitution would yield an EMPTY string,
-not the default.
+The `2>/dev/null || echo always-worktree` tail is load-bearing: on a missing or unreadable file jq prints
+nothing and `//` never fires, so without the tail `POLICY` would be empty, not the default.
 
 ```bash
 case "$POLICY" in
@@ -93,8 +91,7 @@ esac
 
 An absent key, an unreadable config, a missing file, and an unrecognized value all resolve to
 `always-worktree` (below), GAIA's default, so a team that never chose a policy works in a worktree with no
-question. The `*)` arm's message names the unrecognized value so a typo is discoverable: one line, no warning
-banner, no error.
+question. The `*)` arm's message names the unrecognized value so a typo is discoverable.
 
 ### `always-worktree`
 
@@ -109,7 +106,7 @@ its worktree behind. So when worktree creation fails under this policy:
 1. surface the failure in plain language: say what failed, and name the path or branch that collided;
 2. fall back to the branch-vs-worktree question below, presented in the `prefer-branch` order, so the user
    still has an escape;
-3. never dead-end, and never silently proceed in the main checkout without saying so.
+3. never dead-end, and never silently proceed in the current checkout without saying so.
 
 Set `RESOLVED_MODE` from whichever answer the fallback question resolves to.
 
@@ -146,9 +143,8 @@ and set `RESOLVED_MODE=feature-branch`. On the worktree answer, set `RESOLVED_MO
 #### Option order and the recommendation marker
 
 Present the two options in the order the resolved `POLICY` names below (the `always-worktree` fallback uses
-the `prefer-branch` row). Append the marker ` (Recommended)` to the **lead** option's label, and to no other
-option's. This is the one and only site that applies the marker; it is never baked into a label literal, so
-which option leads can change without editing a literal.
+the `prefer-branch` row). Append ` (Recommended)` to the **lead** option's label only. Apply it here, never in a
+label literal, so which option leads can change without editing a literal.
 
 Neither description literal calls its option the default, so the marker is the prompt's one recommendation
 signal and no description can contradict whichever option leads.
@@ -206,11 +202,9 @@ name and stops, the same way the `always-worktree` creation-failure paragraph tr
 `.gaia/scripts/branch-name-lib.sh` remains for branches that predate the rename (ledgers and pull request heads that still carry the
 `worktree-` spelling), so both the prefix and the `+` separator change only in lockstep with that library.
 
-Provisioning the worktree (the shared-state symlinks and the generated typed routes) is a separate
-concern from creating it, and it runs on entry rather than at creation: `.claude/hooks/provision-worktree.sh`
-fires on session start and on entering a worktree, and repairs whatever it finds. So a worktree whose links
-were broken by hand, and one made with a plain `git worktree add` outside this flow, are both provisioned
-the next time a session works in them. Nothing here needs a manual repair step.
+Provisioning (the shared-state symlinks and the generated typed routes) runs on entry, not at creation:
+`.claude/hooks/provision-worktree.sh` fires on session start and on entering a worktree and repairs whatever
+it finds, including hand-broken links and a tree made by a plain `git worktree add`. No manual repair step.
 
 ## Releasing an isolation that holds nothing
 

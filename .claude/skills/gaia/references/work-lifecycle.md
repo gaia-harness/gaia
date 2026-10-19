@@ -12,7 +12,7 @@ A draft PR is part of every committed ad-hoc task, whether or not the request as
 
 Skills that drive their own PR (`/gaia-debt`, `/gaia-plan`'s orchestrator, `/gaia-fitness`, `/gaia-cleanse`, `/gaia-codify`, `/gaia-residue`, `/gaia-wiki`, `/update-deps`) point at the steps below for what they share and keep their own extras. Where a skill's own contract differs from this page, the skill's contract governs.
 
-**Edits already on `main`.** The main checkout may already hold uncommitted edits for this work when the lifecycle starts. A feature branch cut from HEAD carries them as they are. `EnterWorktree` cuts the worktree fresh from the default base and does not carry them, so in worktree mode move them as a patch. Before entering, write the diff of tracked files to a scratch file outside the repository:
+**Edits already on `main`.** The main checkout (the clone's primary working directory, whatever branch it has checked out) may already hold uncommitted edits for this work when the lifecycle starts. A feature branch cut from HEAD carries them as they are. `EnterWorktree` cuts the worktree fresh from the default base and does not carry them, so in worktree mode move them as a patch. Before entering, write the diff of tracked files to a scratch file outside the repository:
 
 ```bash
 git diff --binary HEAD > <scratch file>
@@ -283,8 +283,6 @@ The prompt carries no `ExitWorktree({...})` call because it runs from another co
 
 ## The git worktree add backstop
 
-A session that creates a tree under `.claude/worktrees/` with a Bash `git worktree add` gets a context injection from `.claude/hooks/workflow-doctrine-inject.sh` right after the command. It names the new tree's absolute path and the branch it holds, and instructs entering it with `EnterWorktree({path: "<absolute path>"})` before working there. When that branch is not a minted name, it also instructs renaming the branch to a minted ad-hoc name (step 2) before the first push.
-
-Entering provisions the tree. Cleanup for such a tree is `### Worktree entered by path or in an earlier session`.
+A Bash `git worktree add` under `.claude/worktrees/` triggers a context injection from `.claude/hooks/workflow-doctrine-inject.sh`: follow it (enter the tree with `EnterWorktree({path: "<absolute path>"})`, and rename a non-minted branch per step 2 before the first push). Cleanup for such a tree is `### Worktree entered by path or in an earlier session`.
 
 A tree created outside `.claude/worktrees/` gets no backstop: those are deliberate side trees, not lifecycle worktrees. Without `jq` the hook injects nothing on PostToolUse, so on a machine without `jq` the backstop is absent.

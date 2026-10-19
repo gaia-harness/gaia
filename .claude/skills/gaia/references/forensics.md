@@ -22,7 +22,7 @@ Parse `$ARGUMENTS`.
 - **With an argument:** use the argument verbatim as the problem description. Do not ask a clarifying question.
 - **Without an argument:** ask a single open-ended clarifying question such as "What went wrong? Describe what you were doing, what you expected, and what happened." Wait for the response before continuing. Ask at most one question.
 
-Do NOT use `AskUserQuestion` here, plain prose question only: the answer is an open-ended problem description, not a choice.
+Ask it as a plain prose question: the answer is an open-ended problem description, not a choice.
 
 ### 2. Capture
 
@@ -30,19 +30,13 @@ Read `.claude/skills/gaia/references/forensics/capture.md` and apply it now.
 
 Execute every command in the **Universal capture** table. Then, for the provisionally detected class (the class you expect based on the problem description, you will confirm in step 3), execute the corresponding **Class-specific state files** table. If the class is ambiguous at this point, capture the universal envelope and defer class-specific reads until after step 3.
 
-Apply the exclusion rules in `capture.md` before assembling the snapshot. Never capture bodies from `frontend/app/` or `wiki/`; never capture Claude Code session JSONL paths; never capture `.env*` or `node_modules/`; truncate any entry exceeding ~80 lines or 4 KB.
+Apply the exclusion rules in `capture.md` before assembling the snapshot.
 
 ### 3. Classify and cite evidence
 
 Read `.claude/skills/gaia/references/forensics/taxonomy.md` and apply it now.
 
-Walk the taxonomy table in declared order (`init`, `update`, `wiki-sync`, `quality-gate`, `hook`, `scaffold`, `dev-server`, `other`). Match signal phrases against the problem description using case-insensitive substring match.
-
-- Exactly one match → that is the class.
-- Multiple matches → use the first in declared order; cite all matched phrases.
-- Zero matches → class is `other`; evidence note is `no taxonomy class matched`.
-
-Cite the classification evidence in this exact shape:
+Apply its classification heuristic to the problem description. Cite the classification evidence in this exact shape:
 
 ```
 class: <tag>
@@ -55,12 +49,7 @@ If a class-specific read from step 2 was deferred because of ambiguity, complete
 
 Apply the diagnose-branch table from `taxonomy.md`.
 
-Decide whether the failure is a **user-config issue** or a **probable bug**:
-
-- Wrong Node version, missing required env var, or dirty working tree blocking a workflow → **user-config**.
-- Any other failure pattern → **probable bug**.
-- Class is `other` → always **probable bug**.
-- If multiple signals fire (e.g. wrong Node version AND an unexpected crash), apply the **user-config** branch, the environment is the more likely root cause. Record the co-occurring probable-bug signal in the report under `## Reproduction context` with a note that if fixing the environment does not resolve the issue, the user should re-run the forensics flow. Do not discard the probable-bug signal silently.
+It decides whether the failure is a **user-config issue** or a **probable bug**. If multiple signals fire (e.g. wrong Node version AND an unexpected crash), apply the **user-config** branch, the environment is the more likely root cause. Record the co-occurring probable-bug signal in the report under `## Reproduction context` with a note that if fixing the environment does not resolve the issue, the user should re-run the forensics flow. Do not discard the probable-bug signal silently.
 
 Record the diagnosis. It gates the branch in step 8.
 
@@ -79,13 +68,11 @@ Do not pass frontmatter through redaction. Frontmatter is written after the body
 
 ### 6. Render
 
-Emit the strict-schema body. The frontmatter heads the body, and the same body is posted to the GH issue verbatim, at creation time (before `gh_issue_url` is back-filled into the local file in step 8) the local file and the GH issue are byte-identical, so downstream triage parses either with the same parser.
-
 Set `created` from `date +%F` (shell), never guess the current date.
 
 Emit the strict-schema body exactly as shown in the **Output schema (load-bearing)** section below, frontmatter plus the four sections; that block is the single canonical parse contract.
 
-The body posted to the GH issue is the full body, frontmatter and all sections, byte-identical to the local file body. The `gh_issue_url` frontmatter key is set after the issue is created (step 8) so the initial GH-issue render omits it; the local file is rewritten with the URL once known.
+The GH issue gets this same body, so it omits `gh_issue_url`; step 8 back-fills that key into the local file once the issue exists.
 
 ### 7. Save
 
@@ -160,7 +147,7 @@ command -v gh
       - `gaia-forensics` absent (silently dropped): keep the issue and the back-filled `gh_issue_url`, the report is filed. Do NOT attempt to add the label yourself (an adopter without triage access cannot) and do NOT fail the run. Continue to step 9, which prints the label-dropped warning.
     - On non-zero `gh` exit: surface `gh`'s stderr verbatim (the Bash tool result already carries it). The cost record was already written above and `rc` already carries the non-zero status through to the caller. Leave the local report in place. Do not retry or partially file.
 
-    Do NOT pre-check `gh auth status`. Do NOT pre-check label existence before create. Rely on `gh`'s native error for both conditions. The label verification above runs only *after* a successful create, on the issue that now exists.
+    Run `gh issue create` directly and rely on `gh`'s native error for auth and a missing label; the label verification above runs only after a successful create.
 
 ### 9. Confirm
 
@@ -197,13 +184,8 @@ On exit 0 relay the last stdout line (the `Cost:` line) verbatim as the last lin
 
   The issue always lives in `gaia-react/gaia`, which is not necessarily the repo the command ran in; that is why the same-repo check gates `--issue`.
 - The step 5 sanity-recheck halt and the step 7 tree-key stop end the run with no saved report: run the bare call above before ending (the usage ledger is not a `.gaia/local/forensics/` write).
-- `gh issue create` failing is the one path with a real shell exit status to preserve. That record is already written inline by step 8's exit-status shim (no `--issue`, there is no issue) and is not repeated at step 9, that path exits non-zero before step 9 runs.
-
-Exactly one record per run, on every path.
 
 ## Output schema (load-bearing)
-
-Phase-2 automation parses this schema without LLM fallback. Any deviation, field names, section headers, header order, frontmatter field names, breaks downstream triage. Do not drift.
 
 ```markdown
 ---
