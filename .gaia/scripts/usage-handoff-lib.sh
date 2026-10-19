@@ -57,7 +57,7 @@ _handoff_main() {
   mkdir -p "$TELEMETRY_DIRECTORY" 2>/dev/null || return 0
   # The flush puts this session's start row, and its spend so far, on the
   # ledger before the line naming them is printed.
-  _record_flush
+  _box_flush_wait own
   { LC_ALL=C grep -F -- "$SESSION_ID" "$TELEMETRY_DIRECTORY/usage.jsonl" 2>/dev/null || true; } | LC_ALL=C grep -F '"kind":"binding"' |
     jq -nRr --arg session_id "$SESSION_ID" --argjson start_set "$GAIA_USAGE_START_SET" "$GAIA_USAGE_JQ_DEFS$GAIA_USAGE_RESOLVE_JQ"'
       [inputs | (try fromjson catch null) | select(type == "object" and .schema_version == 1 and .kind == "binding"
@@ -117,7 +117,7 @@ _join_main() {
   [ "$SESSION_ID" != "$SESSION" ] || { printf 'this session started the run; nothing to join\n'; return 0; }
   _gaia_usage_load with_ledger_lock spec/with-ledger-lock.sh || { _error "no ledger mutex available; nothing was written"; return 1; }
   mkdir -p "$TELEMETRY_DIRECTORY" || { _error "no ledger directory; nothing was written"; return 1; }
-  _record_flush
+  _box_flush_wait own
   NOW="$(_now)"
   GAIA_LEDGER_LOCK_TIMEOUT_SECONDS="${GAIA_LEDGER_LOCK_TIMEOUT_SECONDS:-10}" with_ledger_lock "$TELEMETRY_DIRECTORY" _join_locked 2>/dev/null || status=$?
   case "$status" in
