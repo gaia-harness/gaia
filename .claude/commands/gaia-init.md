@@ -214,7 +214,20 @@ Use AskUserQuestion with this single question:
 > What should be the primary language for this app's UI?
 >
 > - {detected user language} (Recommended): what you've been typing in.
-> - English
+> - {second language}
+
+`{second language}` is always a real language different from the first option, never a repeat of it:
+
+- Detected language is not English: English.
+- Detected language is English: the system locale's language when it is not English, else Spanish. Read the locale with the command below; an empty value, `C`, `POSIX`, or an English code (`en`) counts as English.
+
+```bash
+locale_code="${LC_ALL:-${LC_MESSAGES:-$LANG}}"
+[ -z "$locale_code" ] && command -v defaults >/dev/null 2>&1 && locale_code="$(defaults read -g AppleLocale 2>/dev/null)"
+printf '%s\n' "${locale_code%%[_.@-]*}"
+```
+
+Resolve the printed code to its English language name (e.g. `de` → German).
 
 Do not add an "Other" option: the tool adds its own, and a hand-added one is an inert button with no input field. A language not listed arrives as typed text through the tool's own Other answer, however the user likes to write it, a name or a code, in English or its own script (e.g. `Polish`, `pl`, or `polski`).
 
