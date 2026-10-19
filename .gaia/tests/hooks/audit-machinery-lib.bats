@@ -46,6 +46,7 @@ setup() {
 .claude/agents/code-audit-maintainer-shell.md
 .claude/agents/code-audit-maintainer-node.md
 .claude/agents/code-audit-github-workflows.md
+.claude/maintainers/harness-triage-threshold.md
 .gaia/VERSION
 EOF
   [ -z "$unmatched" ] || { printf 'not matched by audit_path_is_machinery:%s\n' "$unmatched" >&2; return 1; }
