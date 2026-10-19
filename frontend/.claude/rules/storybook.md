@@ -6,6 +6,8 @@ paths:
 
 # Storybook Conventions
 
+Contents: Stories are the tests; When to write a story; Accessibility; Vitest and Chromatic; File location; Typing; Title convention; Decorator order; Padding / layout; Story variant naming; Dark-mode and Chromatic; i18n in stories; Test data.
+
 The `new-component` skill scaffolds the canonical story shape. This rule covers what to do when authoring or extending a story beyond that scaffold.
 
 ## Stories are the tests
@@ -32,7 +34,7 @@ A story or test is `tests/<source basename>.<kind>.tsx` beside its source: `inde
 
 ## Typing
 
-Use `Meta` and `StoryFn` from `@storybook/react-vite`. Never use `Story` (deprecated alias).
+Use `Meta` and `StoryFn` from `@storybook/react-vite`.
 
 ## Title convention
 

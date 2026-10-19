@@ -18,7 +18,7 @@ Every color comes from a theme role token (`bg-background`, `text-foreground`, `
 
 The light and dark values live in the token, so write one utility, not a `dark:` pair. A `dark:` variant on a color is a sign the wrong token was picked.
 
-Lint enforces the contract: `shadcn/no-raw-colors` rejects raw palette classes and color literals in source files.
+No color literal (hex, `rgb()`, `hsl()`, `oklch()`) in `[]` or in a component's CSS: colors live in `theme.css` only. Lint rejects raw palette classes and color literals (`shadcn/no-raw-colors`) and arbitrary color classes (`better-tailwindcss/no-restricted-classes`). Other arbitrary values are allowed where no scale step or token fits (the tailwind skill's "Custom Values").
 
 ## Adding a token
 
@@ -29,7 +29,3 @@ Lint enforces the contract: `shadcn/no-raw-colors` rejects raw palette classes a
 ## Dark mode
 
 Class strategy: `@custom-variant dark (&:where(.dark, .dark *))`. The `.dark` block in `theme.css` swaps the token values, so components do not branch on theme.
-
-## No arbitrary colors
-
-No hex, `rgb()`, `hsl()` or `oklch()` literals in `[]` or in a component's CSS. Colors live in `theme.css` only. Lint rejects an arbitrary color class (`better-tailwindcss/no-restricted-classes`, set by `@gaia-react/lint`'s `shadcn` bundle); other arbitrary values are allowed where no scale step or token fits (the tailwind skill's "Custom Values").

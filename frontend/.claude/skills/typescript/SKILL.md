@@ -5,8 +5,6 @@ description: Applies GAIA's patterns and conventions for all TypeScript code. Us
 
 # TypeScript
 
-Patterns and conventions for all TypeScript code.
-
 ## Types
 
 - `import type {}` for type-only imports: `import type {ReactNode} from 'react'`
@@ -46,22 +44,22 @@ export const formatDate = (date: Date): string => format(date, 'yyyy-MM-dd');
 
 ## General Rules
 
-- Use `type` not `interface`, interfaces support declaration merging, which creates unpredictable behavior; `type` is consistent and predictable
+- Use `type` not `interface`
 - Arrays: `string[]` not `Array<string>`
 - Boolean naming: `^((can|has|hide|is|show)[A-Z]|checked|disabled|required)`
 
 ## Code Patterns
 
-- No `switch` statements, use if/else chains or object maps; switch requires `break`, is prone to fallthrough bugs, and is harder to type-check exhaustively
-- No TypeScript enums, use `as const` objects with derived types; enums compile to runtime objects with surprising behavior and don't tree-shake well
-- JSX boolean props: always explicit `={true}`, makes props grep-able and avoids confusion when a prop is later refactored to a non-boolean type
-- Max 3 function parameters, use an options object beyond that; call sites with 4+ positional args are hard to read and argument order mistakes are common
+- No `switch` statements, use if/else chains or object maps
+- No TypeScript enums, use `as const` objects with derived types
+- JSX boolean props: always explicit `={true}`
+- Max 3 function parameters, use an options object beyond that
 - Inline boolean coercion uses `!!x`, never `Boolean(x)`; reserve `Boolean` for point-free use (e.g. `array.filter(Boolean)`), and coerce per operand in a nullable `||` chain (`!!a || !!b`), since `!!(a || b)` trips `@typescript-eslint/prefer-nullish-coalescing`
 - Prefer `undefined` over `null` for GAIA-controlled absence (state, optional fields, internal sentinels); reserve `null` for external contracts that require it: DOM `useRef(null)`, ref-callback params, React Router `data(null)`, Zod `.nullable()`, and platform/library APIs that return `null`
 
 ## One Source of Truth
 
-A set of values (statuses, roles, locales, route paths, config keys) or a shared helper has exactly one definition. A second copy drifts: a later change updates one copy, and the other goes stale with no error.
+A set of values (statuses, roles, locales, route paths, config keys) or a shared helper has exactly one definition.
 
 - **Search before you define.** Before writing a constant list, union type, schema, lookup map, or helper, search `app/` and `test/` for an existing one and import it. Search by its values, not only its name: a duplicate usually has a different name.
 - **Derive, don't restate.** Every other shape of the set is computed from the one source, so adding a member reaches all of them:
@@ -89,4 +87,4 @@ export const orderStatusLabels = {
 
 - **`z.literal([...])` not `z.enum()`** for string unions, sort values alphanumerically
 
-Read `references/zod.md` for the full Zod 3 → Zod 4 migration map (`z.strictObject`, top-level string formats, `z.record` arity, function and error shapes). It opens with a standing directive to verify uncertain or suspect Zod forms against the official docs (WebFetched, auto-discovered from `node_modules/zod/package.json`) rather than trusting v3-era memory.
+Read `references/zod.md` for the Zod 3 → Zod 4 migration map and how to verify an uncertain Zod form against the official docs rather than v3-era memory.

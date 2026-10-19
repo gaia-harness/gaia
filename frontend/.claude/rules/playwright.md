@@ -6,19 +6,14 @@ paths:
 
 # Playwright E2E Conventions
 
+Contents: File locations; Spec file naming; Selectors, prefer semantic over structural; Waiting, web-first assertions only; Hydration barrier; MSW + real dev server; Auth / session setup; Locale / language; Parallelism and CI; Accessibility scans.
+
 ## File locations
 
 - Config: `playwright.config.ts` (package root)
 - Specs: `.playwright/e2e/<feature>/<flow>.spec.ts`, grouped in feature folders; a flat `.playwright/e2e/*.spec.ts` stays valid for cross-cutting checks
 - Shared helpers: `.playwright/utils.ts`
 - Output/traces: `.playwright/output/` (gitignored)
-
-## Scripts
-
-```
-pnpm pw         # run all e2e tests (headless)
-pnpm pw-ui      # run with Playwright UI (interactive)
-```
 
 ## Spec file naming
 
@@ -47,8 +42,8 @@ Do **not** use CSS class selectors or XPath.
 
 ## Waiting, web-first assertions only
 
-Never use `page.waitForTimeout`. Use `expect(locator).toBeVisible()` or any
-web-first `expect` assertion; Playwright retries until timeout.
+Wait with web-first `expect` assertions (`expect(locator).toBeVisible()` and the
+rest), which retry until timeout, not `page.waitForTimeout`.
 
 ## Hydration barrier
 
@@ -67,7 +62,8 @@ That import is for a flat spec. From a feature folder the helpers are one level 
 ## MSW + real dev server
 
 E2E tests run against this tree's `pnpm dev` server, on the port
-`bash .gaia/scripts/ports.sh` prints (5173 in the main checkout). Playwright
+`bash .gaia/scripts/ports.sh` prints; the main checkout (the clone's primary
+working directory, on any branch) uses 5173. Playwright
 refuses to reuse a server on that port that is not this tree's own. A second
 `webServer` serves the built `storybook-static` on this tree's Storybook port for
 the story scan (see Accessibility scans). With
@@ -110,17 +106,7 @@ await page.setExtraHTTPHeaders({'Accept-Language': 'ja'});
 
 ## Parallelism and CI
 
-GAIA's `playwright.config.ts` ships these defaults:
-
-- `fullyParallel: true`, all specs run in parallel by default.
-- CI: `workers: '100%'` (one per core), `retries: 2`, `forbidOnly: true`.
-- Locally: Playwright default workers (half the cores), no retries, multi-browser opt-in via `TEST_ALL_BROWSERS`.
-- Primary browser: Chromium only by default. Other browsers (webkit, firefox, mobile) guarded behind `TEST_ALL_BROWSERS` flag.
-
-## Traces
-
-- `trace: 'retain-on-failure'`, traces saved to `.playwright/output/` on failure.
-- Use the trace viewer for debugging.
+Chromium only by default. Setting the `TEST_ALL_BROWSERS` constant in `playwright.config.ts` to `true` adds webkit, firefox and mobile locally; CI stays on Chromium. Workers, retries and `forbidOnly` are in the config.
 
 ## Accessibility scans
 

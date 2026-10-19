@@ -2,29 +2,9 @@
 
 Good interfaces make testing natural:
 
-1. **Accept dependencies, don't create them**
+1. **Dependency injection**: take collaborators as parameters (`processOrder(order, paymentGateway)`) rather than constructing them inside.
 
-   ```typescript
-   // Testable
-   function processOrder(order, paymentGateway) {}
-
-   // Hard to test
-   function processOrder(order) {
-     const gateway = new StripeGateway();
-   }
-   ```
-
-2. **Return results, don't produce side effects**
-
-   ```typescript
-   // Testable
-   function calculateDiscount(cart): Discount {}
-
-   // Hard to test
-   function applyDiscount(cart): void {
-     cart.total -= discount;
-   }
-   ```
+2. **Pure functions**: return a result (`calculateDiscount(cart): Discount`) rather than mutating inputs or producing side effects.
 
 3. **Small surface area**
    - Fewer methods = fewer tests needed

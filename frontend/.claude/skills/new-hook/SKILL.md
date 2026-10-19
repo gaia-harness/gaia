@@ -6,8 +6,6 @@ model: haiku
 
 # new-hook
 
-Trigger: user asks to create a custom React hook.
-
 ## Workflow
 
 1. Confirm: name (`use-kebab` or `useCamel`), params, return type.

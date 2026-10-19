@@ -5,7 +5,7 @@ paths:
 
 # State Pattern
 
-Applies to `app/state/**`. All React Context creation lives there by convention.
+All React Context creation lives in `app/state/`.
 
 ## When to Use Context
 
@@ -75,10 +75,7 @@ XProvider.displayName = 'XProvider';
 
 ## Rules
 
-- **Never export the Context**: only export the Provider and hook(s)
-- **Always set `displayName`** on the Provider component
-- **Always throw** in `useX()` when called outside the Provider
 - **`useMaybeX()`** (no throw) is appropriate when the value is genuinely optional (e.g., `useUser` vs `useMaybeUser`)
 - **`initialState` prop** passes SSR loader data into the Provider; avoids hydration mismatches
 - Providers are composed in `app/state/index.tsx`, register new ones there; `QueryProvider` is composed there when Query is on and obtains its client once per render tree (`wiki/concepts/Data Loading.md`)
-- Do not reach into `app/state/` from outside `app/`, consumers import the hook only
+- Code outside `app/` imports the hook only

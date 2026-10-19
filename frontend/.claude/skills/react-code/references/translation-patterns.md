@@ -4,8 +4,6 @@ Contents: Core Rule; keyPrefix; Dynamic Translation Keys; Inline Styled Segments
 
 ## Core Rule
 
-One `useTranslation()` per component. Use `{ns: 'other'}` for cross-namespace access.
-
 ```tsx
 // GOOD
 const {t} = useTranslation('pages');
@@ -90,20 +88,13 @@ import {Trans} from 'react-i18next';
 
 ## String Deduplication
 
-Before adding a new key:
-
-1. Search `app/languages/en/common.ts` for generic labels
-2. Search all `app/languages/en/` files for the exact string value
-3. If found, reuse with namespace override: `t('key', {ns: 'namespace'})`
-4. If not found, add to the most appropriate namespace
+Reuse an existing string (check `app/languages/en/common.ts` first) through a namespace override: `t('key', {ns: 'namespace'})`.
 
 ### Where shared labels belong
 
 - **Enum display labels** → `common` namespace, snake_case keys matching DB values (enables ``t(`key.${dbValue}`, {ns: 'common'})``)
 - **Generic UI actions** (Save, Cancel, Edit, etc.) → already in `common`
 - **Page-specific content** → page's namespace
-
-**Locale placeholders:** when adding a new locale folder, copy the English string verbatim, no empty strings, no TODO comments. Translation happens in a separate pass.
 
 ## Plurals
 

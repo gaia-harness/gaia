@@ -12,7 +12,7 @@ paths:
 
 # Ports
 
-Every checkout owns its own dev, Storybook, and Playwright ports. The main checkout is slot 0 (5173 and 6006); each linked worktree holds a slot of its own.
+Every checkout owns its own dev, Storybook, and Playwright ports. The main checkout (the clone's primary working directory, on any branch) is slot 0 (5173 and 6006); each linked worktree holds a slot of its own.
 
 - Read this tree's ports from `bash .gaia/scripts/ports.sh` (`--field dev|storybook|site-url|slot` prints one value). Never hardcode 5173 or 6006.
 - Start servers with `pnpm dev`, `pnpm storybook`, and `pnpm pw`, so the strict port and the launch record apply. Only `pnpm storybook` is strict about Storybook's port; a direct `storybook dev` bypasses the launcher and can drift to another port.
