@@ -136,6 +136,15 @@ codify_count_reason() {
 
 now=$(date +%s)
 
+# Fingerprint of the cache as this run read it; empty when there is no cache.
+# The pre-write check below compares it to catch a writer that does not take
+# the refresh lock.
+cache_fingerprint() {
+  [ -f "$CACHE_FILE" ] || return 0
+  cksum < "$CACHE_FILE" 2>/dev/null
+}
+cache_fingerprint_before="$(cache_fingerprint)"
+
 # Read previous cache values (used as fallbacks on partial failure).
 previous_checked_at=0
 previous_outdated_count=0
@@ -776,6 +785,19 @@ if [ "$snapshot_token_now" != "$snapshot_token_before" ] \
   || { [ "$snapshot_present" = "true" ] && [ "$snapshot_token_now" != "$snapshot_reviewed_at" ]; }; then
   codify_reason=""
   checked_at_to_write=0
+fi
+
+# ---------- concurrent cache write check ----------
+# The skills' cache busts (update-check-bust.sh) take no lock: they rewrite
+# the cache right after an update lands, while a refresh started earlier may
+# still be running against the pre-update tree. That refresh's counts are
+# older than the bust's, so when the cache changed since this run read it,
+# the newer write wins and this run writes nothing. The bust carries every
+# field it does not set and stamps checkedAt, so skipping costs at most one
+# TTL of staleness in the fields this run would have refreshed. Honest limit:
+# a write landing between this check and the mv below is still overwritten.
+if [ "$(cache_fingerprint)" != "$cache_fingerprint_before" ]; then
+  exit 0
 fi
 
 # ---------- Write cache atomically ----------
