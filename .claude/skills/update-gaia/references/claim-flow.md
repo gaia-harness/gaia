@@ -4,7 +4,7 @@ SKILL.md reads this file at its claim check, at Step 4's claim paragraph and at 
 
 ## Claim check
 
-Runs in both modes, in the checkout the run starts in (`<starting checkout>`: the main checkout in mode 2, the worktree in mode 1), after the decision log check and before Step 3b. It creates nothing, so each stop below leaves no download, worktree, branch, prune or cache change. Run the two reads as separate calls:
+Runs in both modes, in the checkout the run starts in (`<starting checkout>`: the main checkout in mode 2, the worktree in mode 1), after the decision log check and before Step 3b. It creates nothing except the local branch `fetch-branch` fetches for a mode-2 own claim, so each stop below leaves no download, worktree, prune or cache change and no other branch change. Run the two reads as separate calls:
 
 ```bash
 bash .gaia/scripts/update-claim.sh list --tree <starting checkout>

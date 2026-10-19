@@ -153,7 +153,7 @@ perceptible.
 
 The three `reactDoctorRule` values are conceptual static-cause labels, not
 enabled `react-doctor/` rule ids (`jsx-no-new-object-as-prop` has no lint
-equivalent; the other two exist only as unenabled `eslint-plugin-react` names).
+equivalent).
 Present them as symptom-to-cause-to-fix guidance; never claim a lint rule catches
 the pattern, and never match these strings against ESLint output.
 

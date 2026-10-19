@@ -332,7 +332,7 @@ git push origin <current-branch>
 rm -f .gaia/local/setup-in-progress
 ```
 
-**Branch on the push result honestly.** A repository ruleset can reject even an admin's direct push (`GH006`). If the push fails, say so in one line and tell the admin the value is committed locally and needs a push (or a PR); do not report success on a failed push. The commit itself makes the policy real for this machine's next run; the push is what makes it real for the team.
+**Branch on the push result honestly.** A repository ruleset can reject even an admin's direct push (`GH013`). If the push fails, say so in one line and tell the admin the value is committed locally and needs a push (or a PR); do not report success on a failed push. The commit itself makes the policy real for this machine's next run; the push is what makes it real for the team.
 
 ### The sandbox recommendation
 

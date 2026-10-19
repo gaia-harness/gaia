@@ -205,7 +205,7 @@ SYNC_COMPLETE: true
 
 The line is omitted on the state-init path, the fallback re-anchor path (`suggested_base` empty), the Step 2 `Cancel` answer, and every entry under Failure modes.
 
-`SYNC_PARTIAL: true`, on its own line and never alongside `SYNC_COMPLETE: true`, marks an incomplete sync the router still commits. It prints only on the state-init path, the fallback re-anchor path, and a mid-sync interruption; every other path prints neither, so the router commits nothing there.
+`SYNC_PARTIAL: true`, on its own line and never alongside `SYNC_COMPLETE: true`, marks an incomplete sync the router still commits. It prints only on the state-init path, the fallback re-anchor path, and a mid-sync interruption; every other path that omits `SYNC_COMPLETE: true` prints neither, so the router commits nothing there.
 
 ## Failure modes
 

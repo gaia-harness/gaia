@@ -16,7 +16,7 @@ Contents:
 
 ## The run directory
 
-Every write of an update run other than the merged tree itself and `.gaia-backup/` lands in one directory, always named by this absolute literal:
+Every merge artifact of an update run lands in one directory, always named by this absolute literal:
 
 ```text
 <main checkout path>/.gaia/local/cache/shared/update-gaia/run
