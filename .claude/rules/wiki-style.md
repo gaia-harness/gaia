@@ -36,7 +36,7 @@ Body prose, and the prose a code comment carries, describes **what is** in prese
 ## Exceptions
 
 - **`wiki/log.md`**: append-only change ledger, exempt by design.
-- **`wiki/meta/`**: audit artifacts (lint reports, consolidate reports). Their purpose is referencing specific commits / SHAs / dates, so the no-inline-refs rule does not apply.
+- **`wiki/meta/`**: audit artifacts (lint reports, consolidate reports). Their purpose is referencing specific commits / SHAs / dates, so the present-tense rule's ban on PR, commit and date-of-change references does not apply.
 - **Frontmatter (`created`, `updated`, `status`, etc.)**: metadata, not prose.
 <!-- gaia:maintainer-only:start -->
 - **`.gaia/tests/` is out of scope entirely.** It is release-excluded maintainer-only test infrastructure that never reaches an adopter, so a UAT/SPEC reference there is never shipped-surface drift. Its suites use `UAT-NNN` / `SEC-N` / `TST-NN` test-name prefixes, header comments, and section headers as deliberate SPEC-conformance traceability; those stay. The audit greps below omit `.gaia/tests/` for this reason, matching the release boundary. Do not add `.gaia/tests/` to any of them.
