@@ -195,6 +195,23 @@ describe('wiki dead-paths', () => {
     ]);
   });
 
+  test('ignores shipped citations of files a post-init adopter tree lacks by design, by exact token', () => {
+    // The sandbox is a post-init adopter tree: init finalize has deleted the
+    // init command, and the optional fitness config was never shipped.
+    sandbox.writeFile(
+      'wiki/concepts/GAIA Init Workflow.md',
+      '# Init\n\nFinalize deletes `.claude/commands/gaia-init.md`.\n'
+    );
+    sandbox.writeFile(
+      'wiki/decisions/Claude Integration Fitness.md',
+      '# Fitness\n\nOptional `.claude/gaia-fitness.json` suppresses a finding; `.claude/gaia-fitness.json.bak` does not.\n'
+    );
+
+    expect(scanWikiPaths(sandbox.root).dead.map((d) => d.path)).toEqual([
+      '.claude/gaia-fitness.json.bak',
+    ]);
+  });
+
   test('exempts the sentinel by exact token, not by prefix', () => {
     // A path that merely extends the sentinel is a distinct, longer token and
     // must still flag. Loosening the `.has()` membership check to a prefix
