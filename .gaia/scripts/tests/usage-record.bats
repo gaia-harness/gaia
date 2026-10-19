@@ -36,7 +36,7 @@ setup() {
   ENCODED_MAIN="$(printf '%s' "$MAIN" | LC_ALL=C sed 's/[^A-Za-z0-9]/-/g')"
   mkdir -p "$PROJECTS/$ENCODED_MAIN"
   unset GAIA_TALLY_PROJECTS_ROOT GITHUB_ACTIONS GAIA_USAGE_TEST_BARRIER GAIA_USAGE_DEBUG_HOLD GAIA_LEDGER_LOCK_TIMEOUT_SECONDS
-  unset GAIA_USAGE_MERGE_CAP_SECONDS GAIA_USAGE_RENDER_CAP_SECONDS GAIA_LEDGER_LOCK_FORCE_FALLBACK
+  unset GAIA_USAGE_MERGE_CAP_SECONDS GAIA_USAGE_BOX_FLUSH_CAP_SECONDS GAIA_USAGE_RENDER_CAP_SECONDS GAIA_LEDGER_LOCK_FORCE_FALLBACK
   SID=sess-1
   export CLAUDE_CODE_SESSION_ID="$SID"
   USAGE_SCRIPT="$SCRIPTS/usage.sh"
@@ -474,7 +474,7 @@ partial_scenario() {
   main_usage m2 10:20 2000 0
   printf '{"type":"assistant","uuid":"u-late","timestamp":"2099-01-01T00:00:00Z","cwd":"%s","sessionId":"%s","gitBranch":"main","message":{"id":"late","model":"claude-opus-5-5","role":"assistant","usage":{"input_tokens":9000,"cache_creation_input_tokens":0,"cache_read_input_tokens":0,"output_tokens":0},"content":[{"type":"text","text":"ok"}]}}\n' \
     "$MAIN" "$SID" >>"$(main_file)"
-  GAIA_USAGE_TEST_BARRIER="$barrier" GAIA_USAGE_MERGE_CAP_SECONDS=1 run record spec:SPEC-901 --workflow gaia-spec
+  GAIA_USAGE_TEST_BARRIER="$barrier" GAIA_USAGE_BOX_FLUSH_CAP_SECONDS=1 run record spec:SPEC-901 --workflow gaia-spec
   touch "$barrier"
   while ! jq -s -e '[.[] | select(.kind == "segment" and (.last_ts | startswith("2099")))] | length > 0' "$(ledger)" >/dev/null 2>&1 && [ "$i" -lt 100 ]; do
     sleep 0.1
@@ -529,6 +529,21 @@ straddling_segments() {
   grep -qF 'partial' <<<"$output" && return 1
   [ "$(close_count)" -eq 1 ]
   [ "$(straddling_segments)" -eq 0 ]
+}
+
+# A workflow close flushes every sidecar the run dispatched, which takes well
+# past the merge hook's cap on a large ledger, so record waits as long as the
+# box does and a flusher that finishes inside that wait leaves no note.
+@test "a flusher slower than the merge hook's cap but inside the box flush cap leaves the Cost line without a note" {
+  local scratch="$TEMPORARY_DIRECTORY/slow-flusher"
+  spec_run_fixture record-slow-sess
+  scratch_scripts "$scratch"
+  printf '#!/usr/bin/env bash\nsleep 6\n' >"$scratch/usage-flush.sh"
+  USAGE_SCRIPT="$scratch/usage.sh" run --separate-stderr record spec:SPEC-901 --workflow gaia-spec
+  [ "$status" -eq 0 ]
+  [[ "${lines[0]}" == Cost:* ]]
+  grep -qF 'Some usage was still being saved' <<<"$output" && return 1
+  [ "$(close_count)" -eq 1 ]
 }
 
 @test "the commit-time close re-check is what keeps a late flusher from straddling the close" {

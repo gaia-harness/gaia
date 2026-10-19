@@ -248,6 +248,8 @@ On GAIA 1.6.1? Claude: choose Abort, then offer to migrate this project to 2.0.0
 
 ### Fixed
 
+- The cost line at the end of a workflow (`/gaia-debt`, `/gaia-wiki` and the others) no longer warns "Some usage was still being saved, so these figures may be low" on nearly every close. Saving a run's subagent usage routinely takes longer than the 5 seconds `usage.sh record` waited, so the note fired on figures that were already final; record now waits as long as the cost box does (`GAIA_USAGE_BOX_FLUSH_CAP_SECONDS`, 45 s), and the note appears only when saving really outlasts that.
+- A fresh project's first `/gaia-fitness` card no longer carries an upstream warning about GAIA's own sandbox setup reference, which lacked the Contents line every reference over 100 lines needs.
 - Audit rounds, plans, specs and residue sweeps run from a worktree no longer have their writes into the main checkout's `.gaia/local` or `.notebook` refused. Claude Code's worktree isolation refuses Write, Edit and heredoc writes there, so the procedures now write into the session scratchpad and copy the file in with one plain `cp` (#2856)
 - `/gaia-init` writes the project title once, into `common` `meta.siteName`. The index page's `meta.title` now references `siteName` instead of holding a copy, so renaming the project later updates the home page's tab title too, and the duplicate no longer draws an audit finding on the first change to the index language files (#2861)
 - `/gaia-fitness` no longer grades a freshly initialized project B- for GAIA's own wiki pages citing files the project lacks on purpose: the init command that `/gaia-init` deletes when it finishes, and the optional fitness config GAIA does not ship (#2860)

@@ -32,9 +32,10 @@
 # pricing rule.
 #
 # Waits, each with its own reason:
-#   GAIA_USAGE_MERGE_CAP_SECONDS (5)     how long record waits on the flusher
-#       before it closes anyway and notes that the figures may be low. The flusher is
-#       never killed, because a kill could land mid-append.
+#   GAIA_USAGE_BOX_FLUSH_CAP_SECONDS (45)   how long record, like the cost box,
+#       waits on the flusher before it closes anyway and notes that the figures
+#       may be low. The flusher is never killed, because a kill could land
+#       mid-append.
 #   GAIA_LEDGER_LOCK_TIMEOUT_SECONDS (10)   the close append waits on the ledger
 #       lock this long: at least one full flusher commit hold (about 2 s) plus
 #       the poll interval, and never the remainder of the flush cap, which a
@@ -101,38 +102,18 @@ _record_command_ref() {
   printf '%s' "$candidate"
 }
 
-# _record_flush: runs the session's flusher in the background and waits up to
-# the cap. Sets RECORD_PARTIAL to 1 when it is still running at the cap. This
-# loop is not shared with usage-merge.sh because that script's loop is
-# interleaved with its merge confirmation and its render, which record has
-# neither of. Descriptor 3 is closed so a caller capturing this process does
-# not wait on a survivor.
-_record_flush() {
-  local cap="${GAIA_USAGE_MERGE_CAP_SECONDS:-5}" flush_pid started_at
-  case "$cap" in '' | *[!0-9]* | 0) cap=5 ;; esac
-  RECORD_PARTIAL=0
-  bash "$_usage_script_directory/usage-flush.sh" --session "$SESSION_ID" --finished-main --all-sidecars-finished \
-    --main-root "$MAIN_ROOT" --telemetry-dir "$TELEMETRY_DIRECTORY" --projects-root "$PROJECTS_ROOT" \
-    </dev/null >/dev/null 2>&1 3>&- &
-  flush_pid=$!
-  started_at="$(date +%s)"
-  while kill -0 "$flush_pid" 2>/dev/null && [ $(($(date +%s) - started_at)) -lt "$cap" ]; do sleep 0.1; done
-  if kill -0 "$flush_pid" 2>/dev/null; then
-    RECORD_PARTIAL=1
-    disown "$flush_pid" 2>/dev/null
-  else
-    wait "$flush_pid" 2>/dev/null
-  fi
-  return 0
-}
-
-# _box_flush_wait: the cost box reads a ledger this session's flusher has
-# finished writing when it can. It waits for a flusher already running for the
-# session (the one `record` leaves behind at its cap) or starts one, for at most
-# GAIA_USAGE_BOX_FLUSH_CAP_SECONDS (45: a session of a few dozen sidecars needs
-# the flusher well past record's cap). BOX_FLUSH_INCOMPLETE is 1 when it is still
-# running at the cap. The flusher is never killed, for the reason _record_flush
-# gives. With no session id there is nothing to wait for.
+# _box_flush_wait: record and the cost box read a ledger this session's flusher
+# has finished writing when they can, under one wait and one cap. It waits for a
+# flusher already running for the session (a Stop hook's, or the one an earlier
+# readout left behind at the cap) or starts one, for at most
+# GAIA_USAGE_BOX_FLUSH_CAP_SECONDS (45: a workflow close flushes every sidecar
+# the run dispatched, which takes well past the merge hook's cap on a large
+# ledger). BOX_FLUSH_INCOMPLETE is 1 when it is still running at the cap. The
+# flusher is never killed, for the reason the header gives. Descriptor
+# 3 is closed so a caller capturing this process does not wait on a survivor.
+# The merge hook keeps its own shorter loop because it is interleaved with the
+# merge confirmation and the render. With no session id there is nothing to
+# wait for.
 _box_flush_wait() {
   local cap="${GAIA_USAGE_BOX_FLUSH_CAP_SECONDS:-45}" session_id="${CLAUDE_CODE_SESSION_ID:-}" flush_pid="" started_at pattern
   BOX_FLUSH_INCOMPLETE=0
@@ -394,7 +375,8 @@ _record_run() {
   }
   _gaia_usage_load with_ledger_lock spec/with-ledger-lock.sh || { _error "no ledger mutex available; nothing was written"; return 1; }
   mkdir -p "$TELEMETRY_DIRECTORY" || { _error "no ledger directory; nothing was written"; return 1; }
-  _record_flush
+  _box_flush_wait
+  RECORD_PARTIAL="$BOX_FLUSH_INCOMPLETE"
   NOW="$(_now)"
   RUN_REF="$REF"
   [ "${REF%%:*}" != command ] || RUN_REF="$(_record_command_ref "$NOW")"

@@ -4,6 +4,8 @@
 
 The marker `.gaia/local/sandbox.json` governs the decision; the `sandbox` record only says it was made. Each outcome the steps below reach records once its marker is written, and a failed command records nothing.
 
+Contents: Read the recommendation; Classify capability; Branch on capability; The single informed prompt; Sandbox honesty message; The admin's answer sets the team recommendation; Default off; Record a settled decision.
+
 1. **Read the recommendation.** Absent file, absent key, or an unreadable config all mean "no recommendation", so the default is off:
 
    ```bash
