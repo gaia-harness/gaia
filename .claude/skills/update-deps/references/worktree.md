@@ -2,7 +2,11 @@ Contents: When it runs; Create the worktree; The rules after creation; The workt
 
 # Create the update worktree
 
-This is the one place `/update-deps` creates a worktree. `SKILL.md` routes three points here: the maintainer-only vendored-skill sync, the post-decision point in `## Branch creation (after discovery)`, and the refresh-only path (before Phase 5b). Every other arm of the command (CI, `/gaia-init`, a run already inside its own update worktree) creates no worktree and no branch.
+This is the one place `/update-deps` creates a worktree. `SKILL.md` routes here from the post-decision point in `## Branch creation (after discovery)` and from the refresh-only path (before Phase 5b). Every other arm of the command (CI, `/gaia-init`, a run already inside its own update worktree) creates no worktree and no branch.
+
+<!-- gaia:maintainer-only:start -->
+GAIA maintainers: the vendored-skill sync in `SKILL.md` routes here too, ahead of both.
+<!-- gaia:maintainer-only:end -->
 
 ## When it runs
 
