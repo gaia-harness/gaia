@@ -71,7 +71,7 @@ gh api graphql -f query='
   | sort_by(-.n) | .[].owner'
 ```
 
-Order the org set by this ranking; orgs the ranker omits fall to the end in membership order. If the GraphQL call fails or returns nothing (older gh, missing scope, no recent activity), fall back to plain `/user/orgs` order. Ranking is cosmetic: it only decides which orgs appear as buttons; the final choice is always correct.
+Order the org set by this ranking; orgs the ranker omits fall to the end in membership order. If the GraphQL call fails or returns nothing (older gh, missing scope, no recent activity), fall back to plain `/user/orgs` order.
 
 Then AskUserQuestion with these options **in this exact order**:
 
@@ -91,7 +91,7 @@ gh repo create --source=. --push --private
 gh repo create "<owner>/$(basename "$PWD")" --source=. --push --private
 ```
 
-Because the repo is created `--private`, the pushed history lands in a private repo and is never publicly exposed by this push. A **public or internal** repo is created **only** after a separate, explicit confirmation:
+A **public or internal** repo is created **only** after a separate, explicit confirmation:
 
 > Create this repository **public or internal** instead of private? Its full pushed git history becomes visible to everyone who can see the repo.
 >
@@ -99,7 +99,7 @@ Because the repo is created `--private`, the pushed history lands in a private r
 > - **Make it public**
 > - **Make it internal** (org-visible)
 
-Never flip the repo to public/internal without this second confirmation. Private-by-default is the primary mitigation for exposing historical secrets in the pushed history.
+Flip the repo to public or internal only after this second confirmation.
 
 **Secret-scanning push-protection (best-effort).** Immediately after create, run `## Push protection` below, so it guards every later push and is in place before any public/internal flip.
 
@@ -152,7 +152,7 @@ else
 fi
 ```
 
-When GitHub does not offer it for this repository (e.g. a private repo without GitHub Advanced Security), the one-line note says so and the id records `not-applicable`. Any other failure records nothing, so the next run retries. Never halt here.
+When GitHub does not offer it for this repository (e.g. a private repo without GitHub Advanced Security), the one-line note says so and the id records `not-applicable`. Any other failure records nothing, so the next run retries; continue setup.
 
 ## Remaining defaults
 
@@ -224,11 +224,9 @@ Then set the posture through the CLI, which owns the GitHub calls:
 .gaia/cli/gaia setup configure-dependabot-alerts --owner <owner> --repo <repo> --json
 ```
 
-On success, print `Dependabot security alerts are on. GAIA updates vulnerable packages for you and tests the result before anything changes, so Dependabot's own security fix pull requests are turned off.` and record it: `[ "$MAY_RECORD_PROJECT" != admin ] || .gaia/cli/gaia setup record dependabot-posture applied`. When `changed` is non-empty, also print each change; the change is reported, not asked about. On failure, record nothing, print `GAIA couldn't change the security settings on <owner>/<repo>. Someone with admin access can finish it with:` followed by each `manual_commands` entry, then `If your organization manages these settings, an organization admin needs to make this change.` Do not halt setup on a failure.
+On success, print `Dependabot security alerts are on. GAIA updates vulnerable packages for you and tests the result before anything changes, so Dependabot's own security fix pull requests are turned off.` and record it: `[ "$MAY_RECORD_PROJECT" != admin ] || .gaia/cli/gaia setup record dependabot-posture applied`. When `changed` is non-empty, also print each change; the change is reported, not asked about. On failure, record nothing, print `GAIA couldn't change the security settings on <owner>/<repo>. Someone with admin access can finish it with:` followed by each `manual_commands` entry, then `If your organization manages these settings, an organization admin needs to make this change.` Setup continues either way.
 
-GAIA writes no `.github/dependabot.yml` and enables no setting that makes Dependabot open pull requests. `/update-deps` resolves security advisories through the local quality gate, with Dependabot alerts as its data source. Turning automated security fixes off is repository-wide, so it also stops Dependabot security pull requests for any other ecosystem your own `dependabot.yml` covers.
-
-All Phase-3 GitHub mutations (create, protection, required-check registration, the Dependabot alerts-on and security-fixes-off posture, delete-branch) are net-new, admin-gated, security-sensitive calls. A non-admin runner degrades gracefully: skip the mutation, print the admin-note in `setup-gaia.md`'s `### Recommended defaults (admin-gated)`, and continue to Phase 3.5.
+Turning automated security fixes off is repository-wide, so it also stops Dependabot security pull requests for any other ecosystem your own `dependabot.yml` covers.
 
 ## Owed and recorded settings
 

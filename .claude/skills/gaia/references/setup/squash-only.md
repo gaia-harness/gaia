@@ -14,7 +14,7 @@ else
 fi
 ```
 
-If they already match the PATCH below, the block prints `Merges are already squash-only.` and records `applied`; fall through to Phase 4.5. Otherwise, when this run created the repo (`REPO_CHOICE` is `create`) and `RECONFIGURE` is not set, run the PATCH below with no question: a brand-new repo has no history or merge convention to preserve, so the shipped default applies. An adopted repo can have a reason to keep merge commits, such as a release flow, so it is asked. Otherwise AskUserQuestion:
+When the block printed `Merges are already squash-only.`, fall through to Phase 4.5. Otherwise, when this run created the repo (`REPO_CHOICE` is `create`) and `RECONFIGURE` is not set, run the PATCH below with no question: a brand-new repo has no history or merge convention to preserve, so the shipped default applies. An adopted repo can have a reason to keep merge commits, such as a release flow, so it is asked. Otherwise AskUserQuestion:
 
 > This repository allows merges that bypass the squash path, or squashes under a title other than the PR title. A merge commit, a rebase merge, or a default squash title can land a non-Conventional subject on the default branch, so the PR title lint stops describing what lands. Squash-only turns off merge commits and rebase merges, and has every squash commit take the PR title as its subject and the branch's commit messages as its body.
 >

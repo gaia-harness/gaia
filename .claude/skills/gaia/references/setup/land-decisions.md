@@ -48,8 +48,6 @@ fi
 rm -f .gaia/local/setup-in-progress
 ```
 
-**Report the push result honestly.** A repository ruleset can reject even an admin's direct push (`GH006`). On a failed push, say so in one line and tell the admin the decisions are committed locally and need a push or a pull request; never report success on a failed push.
-
 ## The setup ping
 
 A fire-and-forget adoption ping, the last substantive step of the run. Run with `SETUP_TYPE` and `REPO_CHOICE` from Phase 6 and the cached `OWED_AT_START`:

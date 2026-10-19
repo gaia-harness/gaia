@@ -32,9 +32,9 @@ if [ "$REGION_AWARE" = true ]; then
 fi
 ```
 
-**`has("regions")`, not `.regions // []`.** jq's `//` fires on `false` and `null` as well as on absent, so `"regions": null` and `"regions": false` would collapse to `[]` here, and Step 7d's `[ "$REGION_DECLS" != "[]" ]` gate would then skip the runner entirely, leaving the wrong-typed key to render as `Regions: none declared by this release`. That is precisely the adopter-misleading outcome the `kind: 'manifest'` refusal exists to prevent, and `null` is the likeliest wrong shape a broken generator emits. Testing for the key's presence instead lets every wrong-typed **value of that key** through to the runner, which is the one component that classifies it.
+**`has("regions")`, not `.regions // []`.** jq's `//` also fires on `false` and `null`, so a wrong-typed `regions` would collapse to `[]`, skip the Step 7d runner, and render `Regions: none declared by this release` instead of the runner's `kind: 'manifest'` refusal. Testing presence lets every wrong-typed value reach the runner, which classifies it.
 
-**One manifest shape does not reach the runner.** The `type == "object"` half of the same guard absorbs a manifest whose top level is not an object at all: it yields `[]`, so the Step 7d gate skips the runner and no `kind: 'manifest'` refusal is ever produced for it. That shape is not a region problem in the first place, because the Step 7 walk iterates this same manifest's `.files` and finds nothing there either, so the whole update, not just its region handling, is already reading a manifest it cannot use. Do not describe a non-object manifest as a refused region; the update itself has failed by then.
+**A manifest whose top level is not an object** yields `[]` through the `type == "object"` half of the guard, so the runner never sees it and no `kind: 'manifest'` refusal is produced. The Step 7 walk finds no `.files` in it either, so the whole update has failed: report an unusable manifest, not a refused region.
 
 Each declaration is `{id, startMarker, endMarker, paths[], regenerate: {interpreter, operand, args[]}}`. Build a lookup of declared path to declaration so the Step 7 walk can test each path in one step, and fill the report's `regions` object as you go (`declarationsLoaded` counts the declarations loaded, `awarenessOff` records the off switch).
 
@@ -211,6 +211,4 @@ The empty test comes first. `$labels_sync_json` is emptied by the `||` on **any*
 
 **Count all four applied kinds, not three.** Description drift is written on every sync (the registry wins on description), while color drift is withheld without `--adopt` and only reported. Counting creates, renames, and color drift alone would render a repository whose descriptions were just rewritten as unchanged.
 
-**Read `degradedAt`, do not assume the list is the remainder.** The sync degrades on a refused read and on a refused write, and the manual list means something different in each case; the plan carries which one happened as `degradedAt` (`"read"` or `"write"`). The fallback is `unknown`, not `write`: a CLI predating the field degraded on a refused read exactly as readily, and nothing in its output says which refusal it was.
-
-Every count goes through one `count_kind` helper so the fallback is written once, and every count is a `jq` length rather than a line count: `grep -c` prints `0` and still exits 1 when nothing matches, so a trailing `|| echo 0` would append a second value.
+**Read `degradedAt`** (`"read"` or `"write"`) before treating the manual list as the remainder: it is the remainder only after a refused write, and `merge-report.md`'s three `degraded` rows own the literal each case prints. The fallback is `unknown`, not `write`: a CLI predating the field gives no way to tell which refusal degraded it.

@@ -23,11 +23,11 @@ After a gate sits unanswered for a while, the harness injects a stock note like 
 
 ### No cascade
 
-Evaluate each gate independently. A non-response on one gate is **never** evidence the user is away for any other gate. A timeout on the language question tells you nothing about the title, the CODEOWNERS handle, or the backend casing question. Never carry an "away" inference forward, re-ask the next gate normally.
+Evaluate each gate independently. A non-response on one gate is **never** evidence the user is away for any other gate. A timeout on the language question tells you nothing about the title, the CODEOWNERS handle, or the backend casing question. Re-ask the next gate normally.
 
 ### Tone
 
-Never narrate "since you're away" or otherwise assert the user is absent. Non-response is not proof of absence, the user may be reading, thinking, or opening a docs link. State what you are doing plainly, without diagnosing why the user paused.
+State plainly what you are doing and make no claim about why the user paused or whether they are present: non-response is not absence, and they may be reading, thinking, or opening a docs link.
 
 ### Run mode, the first gate
 
@@ -103,14 +103,14 @@ When the user chose Automatic, first detect the project folder name (`basename "
 > | Sandbox recommendation    | Not recommended (GAIA's default, never asked)                                           | Yes, `/setup-gaia --reconfigure`                           |
 > | Team git isolation policy | Always use worktrees (GAIA's default, never asked)                                      | Yes, `/setup-gaia --reconfigure`                           |
 
-Exactly one row per setting. For the CODEOWNERS row, show the gh-detected handle when detection succeeds (it is the user's own authenticated identity, not a guess), otherwise the `REPLACE-WITH-YOUR-GITHUB-HANDLE` placeholder. **Never** put a guessed or git-config-derived handle there: the only non-placeholder value allowed is the gh-detected login.
+Exactly one row per setting. The CODEOWNERS row shows the gh-detected handle, otherwise the `REPLACE-WITH-YOUR-GITHUB-HANDLE` placeholder, and nothing else.
 
 Then apply the defaults and proceed without stopping (the user chose Automatic; do not block, they can interrupt if they want to change something):
 
 - pnpm upgrade (0c): upgrade (Yes), it is required to continue.
 - Primary language (Q1): the detected user language.
 - Additional languages / i18n (Q2): primary-only, keep i18n scaffolding (`STRIP_I18N=false`). The teardown is never auto-selected.
-- CODEOWNERS (Q3): the gh-detected handle when available; otherwise the `REPLACE-WITH-YOUR-GITHUB-HANDLE` placeholder, flagged as a required Step 11 follow-up. Never a guessed or git-derived handle.
+- CODEOWNERS (Q3): the gh-detected handle when available; otherwise the `REPLACE-WITH-YOUR-GITHUB-HANDLE` placeholder, flagged as a required Step 11 follow-up.
 - Project title (Q4): title-cased folder name.
 - kebab slug (Q5): folder name.
 - Backend casing (Step 2): `camelCase` (`CASING=camel`).
@@ -120,7 +120,7 @@ Step 9's two team defaults are the same in both modes, so they need no Automatic
 
 ## Step 0: Ensure pnpm is available (and new enough)
 
-**First, ask the run-mode gate** from "Interactive gates: run mode and non-response policy" above, it is the very first thing `/gaia-init` asks. Hold the answer (interactive or automatic) for every later gate. Then continue with the pnpm check.
+**First, ask the run-mode gate** ("Interactive gates: run mode and non-response policy" above) and hold the answer for every later gate. Then continue with the pnpm check.
 
 GAIA needs pnpm 12+. Tell the user: "Checking for pnpm…" then read the currently-resolved version **from the project root** (so corepack's `packageManager` pin applies when it's active):
 
@@ -165,7 +165,7 @@ fi
 
 Then **re-verify from the project root** with `pnpm --version`.
 
-If the major version is still < 12, a non-corepack pnpm (Homebrew, the standalone installer) is shadowing the upgrade earlier on `PATH`. Do **not** loop or silently continue. Show which binary wins with `command -v pnpm` (e.g. `/opt/homebrew/bin/pnpm`, the shadowing install) and halt so the user can resolve it. Halt with: "pnpm <version> at <path> is older than the required 12+ and takes precedence on your PATH. Upgrade or remove it (e.g. `brew upgrade pnpm`, `pnpm self-update`) so corepack's pinned version wins, then re-run /gaia-init."
+If the major version is still < 12, a non-corepack pnpm (Homebrew, the standalone installer) is shadowing the upgrade earlier on `PATH`. Show which binary wins with `command -v pnpm` (e.g. `/opt/homebrew/bin/pnpm`, the shadowing install) and halt so the user can resolve it. Halt with: "pnpm <version> at <path> is older than the required 12+ and takes precedence on your PATH. Upgrade or remove it (e.g. `brew upgrade pnpm`, `pnpm self-update`) so corepack's pinned version wins, then re-run /gaia-init."
 
 ## Step 1: Install dependencies
 
@@ -179,13 +179,13 @@ pnpm install --config.confirm-modules-purge=false
 
 `--config.confirm-modules-purge=false` keeps the install non-interactive. `/gaia-init` runs with no TTY, so if the clone carries a stale or mismatched `node_modules/`, a bare `pnpm install` aborts with `ERR_PNPM_ABORTED_REMOVE_MODULES_DIR_NO_TTY` waiting for a purge confirmation it can never receive. The flag suppresses only that prompt and leaves lockfile resolution untouched, so the immediately-following `/update-deps` step can still mutate dependencies. (Do not use `CI=true`: it forces `--frozen-lockfile`, which refuses any lockfile change.)
 
-If install fails, stop and report the error. Do not continue.
+If install fails, stop and report the error.
 
 Then run `/update-deps` to bring all packages to their latest compatible versions before continuing. Tell it that `/gaia-init` invoked it: that run resolves every security advisory it can, asks no acceptance question (an advisory it cannot resolve is reported still open), reverts a failing resolution on its own, and cuts no branch and commits nothing, since no remote exists yet to push to; Step 11's init commit carries its changes. If `/update-deps` reports anything as **skipped** with a reason, surface it so the user can investigate, but proceed. Note `/update-deps` runs its own quality gate at the end, if it halts on a quality-gate failure or peer-dep error, stop here and surface the report to the user; do not silently continue.
 
 ## Step 2: Gather user input (in the user's language)
 
-This whole conversation has been in the user's language so far. Continue in that language for every prompt below. Do not translate source files, rules, skills, or wiki entries, those stay English regardless. Only translate the prompts you show the user.
+This whole conversation has been in the user's language so far. Continue in that language for every prompt below.
 
 Before asking any questions, detect the project folder name:
 
@@ -230,7 +230,7 @@ The primary is now known, so its name can appear in the labels below. Ask this a
 
 Mark "{primary} only, keep i18n scaffolding" as the recommended/default option.
 
-If the user picks "Add more languages now", ask for the languages as a plain chat message and wait for the user to type their reply in the prompt. Do **not** use AskUserQuestion here: its preset options can't capture free text, and a hand-added "Other" option is an inert button with no input field.
+If the user picks "Add more languages now", ask for the languages as a plain chat message, not AskUserQuestion (its preset options cannot capture free text, and a hand-added "Other" option is an inert button), and wait for the user to type their reply in the prompt.
 
 > Which languages? List them however you like, names or codes, in English or their own script, separated by commas (e.g. `fr, german, 日本語`).
 
@@ -280,7 +280,7 @@ Ask this as its own AskUserQuestion:
 > - No (Recommended): route loaders own the data; nothing extra is installed.
 > - Yes: pins TanStack Query and wires its provider and Storybook decorator. You can also add it later with `gaia init configure-data-layer --query true`.
 
-Map the answer to `QUERY`: `No` is `false`, `Yes` is `true`. Step 2 asks no rendering-mode question.
+Map the answer to `QUERY`: `No` is `false`, `Yes` is `true`.
 
 ## Step 3: Run the init CLI
 
@@ -327,7 +327,7 @@ printf '* @%s\n' "<github-username>" > .github/CODEOWNERS
 
 `<github-username>` is the handle Q3 resolved: the user's typed handle, or the gh-detected login when the user accepted (or automatic mode used) that default. Any of these is a real handle, write `* @<handle>` and emit **no** Step 11 follow-up warning.
 
-Only when Q3 obtained no real handle (automatic mode where gh detection also failed) is `<github-username>` the placeholder `REPLACE-WITH-YOUR-GITHUB-HANDLE`. Write it anyway, GitHub flags the unknown owner in its CODEOWNERS validation, so the gap is visible. Add a required follow-up to the Step 11 summary: "Edit `.github/CODEOWNERS`, it holds a placeholder owner, set your real GitHub handle." Never substitute a guessed handle.
+Only when Q3 obtained no real handle (automatic mode where gh detection also failed) is `<github-username>` the placeholder `REPLACE-WITH-YOUR-GITHUB-HANDLE`. Write it anyway, GitHub flags the unknown owner in its CODEOWNERS validation, so the gap is visible. Add a required follow-up to the Step 11 summary: "Edit `.github/CODEOWNERS`, it holds a placeholder owner, set your real GitHub handle."
 
 ## Step 6: Check `.env`
 
@@ -447,7 +447,7 @@ Derive the two values from state this run already holds, never from a state file
 - **`$MODE`** is the run-mode answer from the very first gate ("Interactive gates: run mode and non-response policy" above): `interactive` or `automatic`. Held for the whole run.
 - **`$I18N_COUNT`** is `0` when `STRIP_I18N` is `true` (Step 2 Q2, i18n stripped); otherwise the number of locales in `LOCALES` (the count passed to `gaia init configure-i18n --locales`). Automatic mode keeps i18n with only the detected primary language, so `$I18N_COUNT` is `1` there.
 
-Then output the message below verbatim. Output the `cd` line exactly as written, even though Claude is currently running inside the project folder: when the user exits Claude back to the terminal, their shell returns to the directory they launched from (the parent), not the project folder. Do not tell the user they are "already inside" the folder or that they can skip the `cd`.
+Then output the message below verbatim. Output the `cd` line exactly as written, even though Claude is running inside the project folder: when the user exits Claude, their shell returns to the directory they launched from (the parent), not the project folder.
 
 **If `.github/CODEOWNERS` holds the `REPLACE-WITH-YOUR-GITHUB-HANDLE` placeholder** (automatic mode where gh detection also failed, or any run where a real handle was never obtained), prepend this required follow-up to the message: "⚠ Required: `.github/CODEOWNERS` has a placeholder owner. Edit it to set your real GitHub handle before you push." A gh-detected or user-typed handle writes a real owner, so this warning does not appear.
 

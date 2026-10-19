@@ -26,7 +26,7 @@ The marker `.gaia/local/sandbox.json` governs the decision; the `sandbox` record
      .gaia/cli/gaia setup record sandbox not-applicable
      ```
 
-   - `needs-deps` (Linux/WSL2 missing bubblewrap/socat): do NOT enable, do NOT half-enable. Print the concrete `installCommand` (plus the Fedora form carried in `reason`) and tell the developer the sandbox stays off until those are installed and `/setup-gaia` is re-run. Record the outcome and skip the prompt:
+   - `needs-deps` (Linux/WSL2 missing bubblewrap/socat): do NOT enable. Print the concrete `installCommand` (plus the Fedora form carried in `reason`) and tell the developer the sandbox stays off until those are installed and `/setup-gaia` is re-run. Record the outcome and skip the prompt:
 
      ```bash
      .gaia/cli/gaia sandbox record --outcome incapable --capability needs-deps
@@ -35,7 +35,7 @@ The marker `.gaia/local/sandbox.json` governs the decision; the `sandbox` record
 
    - `ready` (macOS Seatbelt, or Linux/WSL2 with both deps present): run the single prompt below.
 
-4. **The single informed prompt** (`ready` only). Use AskUserQuestion exactly once, there is no promptless auto-enable branch anywhere in this file. Its default option tracks `RECOMMENDED`: when `true`, "Enable the sandbox" is Recommended; when `false` (including when nothing was recommended), "Don't enable" is Recommended. The Recommended option is listed first.
+4. **The single informed prompt** (`ready` only). Ask with AskUserQuestion exactly once; never enable without it. Its default option tracks `RECOMMENDED`: when `true`, "Enable the sandbox" is Recommended; when `false` (including when nothing was recommended), "Don't enable" is Recommended. The Recommended option is listed first.
 
    > Enable Claude Code's OS-level Bash sandbox on this machine? It sandboxes Bash commands and their child processes, but it can break local tools: `docker`, `gh`, `terraform`, and other commands that need network or host access may fail or need allowlisting. Your project owner {recommends / does not recommend} it; each machine decides for itself.
    >
@@ -51,7 +51,7 @@ The marker `.gaia/local/sandbox.json` governs the decision; the `sandbox` record
    .gaia/cli/gaia sandbox apply --registry "$REGISTRY" --docker-present "$DOCKER_PRESENT" --capability ready && .gaia/cli/gaia setup record sandbox applied
    ```
 
-   `apply` deep-merges the minimal seed into `.claude/settings.local.json` (gitignored) and writes the `enabled` marker. Then print the honesty message below. Tell the developer the enable takes effect on the NEXT Claude Code session (this setup run stays unsandboxed), matching the existing "restart Claude Code" closing line in Phase 6.
+   `apply` deep-merges the minimal seed into `.claude/settings.local.json` (gitignored) and writes the `enabled` marker. Then print the honesty message below. Tell the developer the enable takes effect on the NEXT Claude Code session (this setup run stays unsandboxed).
 
    On **don't enable**:
 

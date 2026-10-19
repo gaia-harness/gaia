@@ -62,7 +62,7 @@ printf 'DEFAULT_BRANCH=%s\nMAY_RECORD_PROJECT=%s\n' "$DEFAULT_BRANCH" "$MAY_RECO
 
 Every project-scope record line is gated on this value (`[ "$MAY_RECORD_PROJECT" != admin ] || .gaia/cli/gaia setup record <id> <value>`); declare it with the cached value in the same call. Machine-scope record lines are never gated.
 
-Why the gate: project decisions land in a commit pushed straight to the default branch, which only an admin can do past GAIA's branch protection, and a project record made on another branch could not land in this run. A run that cannot record one leaves the id owed, and the next admin run on the default branch records it.
+A run that cannot record a project id leaves it owed; the next admin run on the default branch records it.
 
 ## Probe first
 
