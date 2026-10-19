@@ -10,7 +10,7 @@ Interactive and human-gated. Promote is one question per entry and never auto-ad
 
 ## Naming disambiguation
 
-This tree spends the word "residue" on a second meaning: orphaned machine-local state, carried by the `residue` array in `.gaia/state-registry.json`. That is a different thing from what this command drains. The audit sense this command triages is always spelled "residual": a residual is one keyed entry recorded under a canonical heading in a merged pull request's body. The collision is confined to maintainer-internal registry vocabulary and shadows nothing a user types, but any prose where both senses could be read together disambiguates explicitly, the way this paragraph does.
+This tree spends the word "residue" on a second meaning: orphaned machine-local state, carried by the `residue` array in `.gaia/state-registry.json`. That is a different thing from what this command drains. The audit sense this command triages is always spelled "residual": a residual is one keyed entry recorded under a canonical heading in a merged pull request's body. Prose where both senses could be read together disambiguates explicitly, as this paragraph does.
 
 ## Invocation
 
@@ -81,7 +81,7 @@ A candidate whose resolution is `gone` is labelled a likely-already-fixed dismis
 
 ## The three arms
 
-State the default posture explicitly before offering them: dismiss or keep is the default, and promotion is the exception that needs a reason. Offer the arms for each candidate as one `AskUserQuestion` with the options `Dismiss`, `Keep` and `Promote`, the arm the evidence supports leading and marked ` (Recommended)`; that is `Dismiss` for a `gone` or previously promoted candidate, and never `Promote` without a reason stated in its description. A drainer whose happy path files issues is a migration wearing a drain's clothes, and promoting freely would grow the backlog rather than drain it.
+State the default posture explicitly before offering them: dismiss or keep is the default, and promotion is the exception that needs a reason. Offer the arms for each candidate as one `AskUserQuestion` with the options `Dismiss`, `Keep` and `Promote`, the arm the evidence supports leading and marked ` (Recommended)`; that is `Dismiss` for a `gone` or previously promoted candidate, and never `Promote` without a reason stated in its description. Promoting freely grows the backlog instead of draining it.
 
 ### Promote
 

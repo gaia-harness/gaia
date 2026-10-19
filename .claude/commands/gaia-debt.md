@@ -17,8 +17,6 @@ Detection (run this first, before anything else):
 gaia_refuse_if_worktree "/gaia-debt" || exit 1
 ```
 
-If the detection does not fire, fall through to the workflow dispatch line below.
-
 ```bash
 . .gaia/scripts/main-only-lib.sh
 gaia_pull_gate "/gaia-debt"
