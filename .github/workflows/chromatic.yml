@@ -115,6 +115,26 @@ jobs:
             fi
           fi
           echo "skip=${skip}" >> "$GITHUB_OUTPUT"
+      # Git-mode paths-filter diffs a pull request from the base branch tip, so
+      # a branch behind `main` would see everything `main` changed since the
+      # fork as its own and pay for a build. Handing the filter the merge base
+      # makes it list only the branch's own changes. Fails closed: when the
+      # merge base cannot be computed, the base falls back to the repository's
+      # root commit, so the diff spans the whole history, lists frontend/app,
+      # and the filter reports code=true and runs the build.
+      - name: Resolve merge base
+        id: merge-base
+        if: github.event_name == 'pull_request' && steps.chore-deps.outputs.skip == 'false'
+        env:
+          BASE_REF: ${{ github.event.pull_request.base.ref || github.event.repository.default_branch }}
+        run: |
+          set -u
+          if base=$(git merge-base "refs/remotes/origin/${BASE_REF}" HEAD) && [ -n "$base" ]; then
+            :
+          else
+            base=$(git rev-list --max-parents=0 HEAD | tail -n 1)
+          fi
+          echo "sha=${base}" >> "$GITHUB_OUTPUT"
       # Allowlist of paths that can affect a Storybook build. Anything outside
       # this list reports the required check green without running Chromatic.
       - uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # v4.0.3
@@ -123,8 +143,11 @@ jobs:
         with:
           # Git mode. With a token, a `pull_request` run lists the PR's files
           # through the REST API, which needs `pull-requests: read`; git mode
-          # diffs against the base branch from the full-history checkout.
+          # diffs from the full-history checkout. On a pull request the base
+          # is the merge base resolved above; elsewhere it is empty and the
+          # action applies its own default.
           token: ''
+          base: ${{ steps.merge-base.outputs.sha }}
           filters: |
             code:
               - 'frontend/app/**'
