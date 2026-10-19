@@ -11,8 +11,9 @@
  *     carrying none fails the step instead of passing silently.
  *   - `app/languages/en/common.ts` `meta.siteName` → `<Title>` (when the
  *     key exists).
- *   - `app/languages/en/pages/_index.ts` `meta.title`, `title`, and
- *     `heroTitle` → `<Title>` (when the keys exist).
+ *   - `app/languages/en/pages/_index.ts` `title` and `heroTitle` →
+ *     `<Title>` (when the keys exist). Its `meta.title` is left alone: it
+ *     nests `$t(common:meta.siteName)`, so the title lives in one place.
  *
  * A language-file key that is absent is tolerated; one that is present is
  * rewritten wherever its value is a quoted string literal.
@@ -298,32 +299,22 @@ const topLevelKey = (key: string): RewriteKey => ({
 });
 
 /**
- * The `title` nested directly inside the top-level `meta: { … }` block: the
- * block opened at the top object level, then the first `title:` within it
- * before the block closes. Scoped so other `title` keys are untouched.
- */
-const META_TITLE_KEY: RewriteKey = {
-  global: false,
-  prefix: String.raw`^\x20\x20meta\s*:\s*\{[^}]*?\btitle\s*:\s*`,
-};
-
-/**
  * Every identity key this step rewrites, grouped by the file carrying it.
  *
  * `common.ts` carries a single identity-bearing key. Other `*Name` properties
  * exist there (form labels) but no second `siteName`, so an unscoped rewrite is
- * safe. `_index.ts` has three, each scoped to the precise location it occupies:
- * a global `title` rewrite would clobber `title` keys in extra routes a user
- * may have added, which is data loss on a diverged file.
+ * safe. `_index.ts` has two, each scoped to the top object level: a global
+ * `title` rewrite would clobber `title` keys in extra routes a user may have
+ * added, which is data loss on a diverged file.
  *
- * Every key is optional. The shipped `_index.ts` carries only `meta.title`, so
- * a file missing the others is a clean pass.
+ * Every key is optional. The shipped `_index.ts` carries neither, so a file
+ * missing them is a clean pass.
  */
 const LANGUAGE_FILES: readonly LanguageFile[] = [
   {file: COMMON_TS, keys: [unscopedKey('siteName')]},
   {
     file: INDEX_PAGE_TS,
-    keys: [topLevelKey('heroTitle'), topLevelKey('title'), META_TITLE_KEY],
+    keys: [topLevelKey('heroTitle'), topLevelKey('title')],
   },
 ];
 

@@ -34160,15 +34160,11 @@ var topLevelKey = (key) => ({
   global: true,
   prefix: String.raw`^\x20\x20${key}\s*:\s*`
 });
-var META_TITLE_KEY = {
-  global: false,
-  prefix: String.raw`^\x20\x20meta\s*:\s*\{[^}]*?\btitle\s*:\s*`
-};
 var LANGUAGE_FILES = [
   { file: COMMON_TS, keys: [unscopedKey("siteName")] },
   {
     file: INDEX_PAGE_TS,
-    keys: [topLevelKey("heroTitle"), topLevelKey("title"), META_TITLE_KEY]
+    keys: [topLevelKey("heroTitle"), topLevelKey("title")]
   }
 ];
 var renameLanguageFile = (cwd, { file: file2, keys }, title) => {
