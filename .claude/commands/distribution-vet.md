@@ -8,7 +8,7 @@ disable-model-invocation: true
 
 Maintainer-only. Thin orchestrator over `.gaia/cli/gaia-maintainer`, which owns every deterministic step. This command supplies the one thing the CLI cannot: a classification of each newly-shipping file against the written distribution boundary, and a maintainer's answer on the few the taxonomy does not settle.
 
-Contents: Step 1. Find the unanswered files; Step 2. Decide which path applies; Step 3. Classify against the categories, then ask only what needs asking; Step 4. Apply every answer in one call; What this command never does; Coverage note.
+Contents: Step 1. Find the unanswered files; Step 2. Decide which path applies; Step 3. Classify against the categories, then ask only what needs asking; Step 4. Apply every answer in one call; What this command never does.
 
 `.gaia/release-exclude` is the distribution boundary: a file ships to adopters if and only if git tracks it and no line in that file masks it. `.gaia/manifest.json` is the update policy `/update-gaia` consumes, and incidentally the ledger of which shipping files a maintainer has acknowledged. A file that git tracks, that no exclude line masks, and that the manifest does not yet list is "unanswered": it would ship, but nobody has said so on purpose.
 
@@ -30,8 +30,6 @@ Contents: Step 1. Find the unanswered files; Step 2. Decide which path applies; 
 jq -r '.missing[].file'
 ```
 
-Treating `missing`'s entries as if they were bare strings prints JSON blobs instead of paths and silently breaks Step 3's classification.
-
 `missing` is not "everything that ships." The paths in `ADOPTER_OWNED_SENTINELS` (`.gaia/cli/src/release/manifest.ts`: `.gaia/manifest.json`, `.gaia/packages.json`, `.gaia/VERSION`, and `wiki/log.md`) are permanent adopter-owned fixtures that ship with baseline content but are never classified, so they never enter `missing` and this command never asks about them. That is correct, not a gap.
 
 ## Step 2. Decide which path applies
@@ -44,7 +42,7 @@ Treating `missing`'s entries as if they were bare strings prints JSON blobs inst
 
 `.gaia/release-exclude` carries numbered categories, each with a rationale paragraph, and is the single authoritative list of what stays maintainer-only. Most of `missing` is already answered there: category 3 settles a shipped script's verification rig in one line, category 4 settles everything under `.gaia/cli/src/`, category 1 settles the `/gaia-*` command split and names the adopter-useful exceptions.
 
-So classify first and ask second. This is not "use judgment": it is matching each file against a written taxonomy and saying which entry it matched and why. A wrong decision then surfaces as a wrong **citation**, which a reader can check against the category's own text, instead of as a verdict they would have to re-derive from scratch.
+So classify first and ask second: match each file against the written taxonomy and say which entry it matched and why, so a wrong decision surfaces as a wrong **citation** a reader can check against the category's own text.
 
 ### 3a. Classify every path
 
@@ -69,11 +67,7 @@ The categories are **exclusion** categories, so a match is a withhold and a ship
 - A wrong **ship** is corrected by an upstream deletion, and the Update Workflow's deletion table prompts the adopter rather than auto-deleting. One prompt on every adopter's next update, forever after it is noticed.
 - A wrong **withhold** costs nothing. Ship it next release; it lands as an ordinary addition.
 
-That default settles the **classification**, not the answer. It never becomes an answer on its own: a file whose question goes unanswered stays unanswered, and Step 4 cannot proceed for it.
-
-Rule for this step:
-
-- **Supply the classification, never the answer.** Every file gets a citation and a reason from this command; every question this command asks gets its answer from the maintainer. State no answer the maintainer has not actually given.
+**Supply the classification, never the answer.** The withhold default settles the classification only: a file whose question goes unanswered stays unanswered, and Step 4 cannot proceed for it. Every file gets a citation and a reason from this command; every answer comes from the maintainer, so state no answer the maintainer has not given.
 
 ### 3b. Ask about three classes only
 
@@ -117,8 +111,6 @@ The rules:
 - Option labels are plain: `Keep internal` and `Ship to adopters`, never `withhold` and `ship`.
 - Mention a category only when the maintainer needs it to answer, and then say what it means rather than citing its number alone.
 
-This is the ordering leak one level up: a question that is hard to parse gets answered by position rather than on its merits. Plain language is part of what lets the gate go red.
-
 ### 3d. Record every decision, ship as well as withhold
 
 A withhold's citation is durable already: Step 4's CLI writes its `--category` and `--reason` into `.gaia/release-exclude` as the comment above the path.
@@ -148,23 +140,13 @@ A re-audit of the ledger can reverse an earlier ship: a file that already ships,
 
 The CLI snapshots the unanswered set once, validates the whole answer set against that snapshot, and only then writes: it appends the withheld entries to `.gaia/release-exclude` itself and regenerates the manifest. If it exits non-zero, surface its stderr verbatim and stop, do not retry with a different flag shape, and do not work around it by any other means.
 
-The CLI is the sole writer of `.gaia/release-exclude`. This command never edits that file itself: no direct file write, no in-place edit, no shell redirect into it. Every withheld entry is written by the CLI's own answer machinery, which is the only place the literal-path rule is enforced and under test. If this command hand-edited the boundary instead, that rule would be enforced by nothing at all, no code would own the write, and it would be exactly the kind of unenforced promise this feature exists to eliminate.
+The CLI is the sole writer of `.gaia/release-exclude`: never write, edit or redirect into it from this command. The CLI's answer machinery is the only place the literal-path rule is enforced and under test.
 
 Commit what the CLI wrote, `.gaia/manifest.json` plus any `.gaia/release-exclude` change, as the **manifest-answer commit**, with the subject `chore(manifest): answer distribution for <what ships>` (lowercase, so the `commit-msg` hook's commitlint accepts it) and one ship line per shipped path in its body in the format 3d gives. Land it before starting a PR's Code Audit Team pre-merge audit handshake, not after; see `wiki/concepts/PR Merge Workflow.md` for why the ordering matters.
 
 ## What this command never does
 
 - **Never take the CLI's undecided escape hatch.** That flag waives the answer requirement entirely and exists for the release path, where relitigating what a file is for is out of scope on release day. This command exists precisely to not take it.
-- **Never regenerate through the command that cuts a release.** That command carries the escape hatch above by design; routing through it here is the same violation as using it directly, a single sentence pointing there would need no flag and no new file, so there is no reason to.
+- **Never regenerate through the command that cuts a release.** That command carries the escape hatch above by design; routing through it here is the same violation as using it directly.
 - **Never mutate the git index or the ignore file to change what the CLI sees.** The unanswered set comes from what git already tracks; changing that set to make the accounting trivially satisfiable defeats the point of asking.
 - **Never use a manifest-write bypass marker.** This command needs none; the CLI's own gate is what stands between an unanswered file and a produced manifest, and nothing here should route around it.
-
-## Coverage note
-
-Step 3 has no automated test: its actor is a conversation, and nothing can run a conversation as a unit test.
-
-Every decision carries a citation, so a wrong decision is a **wrong citation** rather than an unexaminable verdict, and checking one is bounded: read the named category's rationale in `.gaia/release-exclude` and compare it to the file. Nobody re-derives the decision from scratch.
-
-Both halves of the record land in the same commit (3d), and a later pass over the accumulated ledger reads that record rather than the files alone.
-
-Prose is the only enforcement for two things: that the questions in 3b get asked at all, and that they are written the way 3c requires.

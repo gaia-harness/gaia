@@ -424,6 +424,7 @@
     "gaia-debt": "name-only",
     "gaia-plan": "name-only",
     "gaia-spec": "name-only",
+    "release-notes": "name-only",
     "update-deps": "name-only",
     "update-gaia": "name-only"
   },

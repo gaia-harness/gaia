@@ -5,13 +5,13 @@ description: Maintainer-only. Translates a version's GAIA CHANGELOG entries into
 
 # release-notes
 
-Translate one version's CHANGELOG entries into adopter-facing release notes. The CHANGELOG is written for GAIA's own contributors: terse, imperative, full of internal mechanics and issue numbers. Adopters read the website. They don't care that an ADR was reframed or a memory was promoted; they care what GAIA now does for _their_ project. This skill is the translation layer between the two audiences.
+Translate one version's CHANGELOG entries into adopter-facing release notes. The CHANGELOG is written for contributors (terse, internal mechanics, issue numbers); adopters read the website and care what GAIA now does for _their_ project.
 
 Contents: Pre-flight: Worktree check; Inputs; Output (a): the release data file; Output (b): the editorial-decisions report; The translation contract; Worked exemplars; Workflow; See.
 
-**Maintainer-only.** Adopters never release GAIA, so this skill ships nowhere, it's excluded from the distribution tarball by `.gaia/release-exclude` (category 1), the same as `/gaia-release`. It pairs with `/gaia-release` but runs independently: you can point it at the `[Unreleased]` block while cutting a release, or at any historical `## [x.y.z]` block to backfill the website.
+It pairs with `/gaia-release` but runs independently: point it at the `[Unreleased]` block while cutting a release, or at any historical `## [x.y.z]` block to backfill the website.
 
-**It never edits `CHANGELOG.md`.** The changelog stays technical and precise, that's its job. This skill only _reads_ it.
+**It never edits `CHANGELOG.md`; it only reads it.**
 
 ## Pre-flight: Worktree check
 
@@ -24,8 +24,6 @@ Detection (run this first, before anything else):
 gaia_refuse_if_worktree "/release-notes" || exit 1
 ```
 
-If the detection does not fire, fall through to `## Inputs` below.
-
 ## Inputs
 
 Invocation carries a target version, e.g. `release-notes 1.4.0` (no leading `v`). Resolve which CHANGELOG block to translate, and where the date comes from, by that version:
@@ -37,7 +35,7 @@ If no version was supplied and an `[Unreleased]` block exists, ask the maintaine
 
 ### The date is never yours to invent
 
-Whether historical or live, the date comes from the CHANGELOG header or the shell, **never** from your own notion of "today." Models routinely misdate by months; a wrong `date` silently ships a wrong timeline to every visitor. For a live cut, run `date +%F` and use exactly that. This is the same discipline GAIA enforces for wiki playbook dates.
+Whether historical or live, the date comes from the CHANGELOG header or the shell, **never** from your own notion of "today." Models routinely misdate by months; a wrong `date` silently ships a wrong timeline to every visitor. For a live cut, run `date +%F` and use exactly that.
 
 ## Output (a): the release data file
 
@@ -59,7 +57,7 @@ export default {
 ```
 
 - `added` → "New" (capabilities that didn't exist before). `improved` → "Improved" (changed/enhanced behavior). `fixed` → "Fixed".
-- `headline`, **required for any bucketed release** (one or more `added`/`improved`/`fixed` items). A short title or one plain sentence, leading with the release's reason to exist. The buckets render with no title of their own, so a bucketed card with no `headline` ships titleless. A grab-bag with no single story still gets a `headline`: use a descriptive umbrella line naming the two or three biggest items ("Built-in a11y testing, dead-code detection, and Serena code intelligence"), never nothing. The only way to omit `headline` is to let a `summary` carry the lead instead (see below). For a newly-shipped capability, carry the rule 1 `now` into the headline too, "GAIA apps now ship with a CSP", not "ship with". The website build enforces this: `scripts/check-release-titles.mjs` (wired into `pnpm build` and `pnpm check:releases`) fails if any release file has neither a `headline` nor a `summary`, and the `Release` type in `types.ts` encodes the same lead-required rule.
+- `headline`, **required for any bucketed release** (one or more `added`/`improved`/`fixed` items). A short title or one plain sentence, leading with the release's reason to exist. The buckets render with no title of their own, so a bucketed card with no `headline` ships titleless. A grab-bag with no single story still gets a `headline`: use a descriptive umbrella line naming the two or three biggest items ("Built-in a11y testing, dead-code detection, and Serena code intelligence"), never nothing. The only way to omit `headline` is to let a `summary` carry the lead instead (see below). For a newly-shipped capability, carry the rule 1 `now` into the headline too, "GAIA apps now ship with a CSP", not "ship with".
 - `summary` vs buckets, **mutually exclusive.** The renderer shows `summary` as a single paragraph _instead of_ the `added`/`improved`/`fixed` lists. The choice is driven by **how many distinct adopter-facing items survive the cut, not by the release's age or whether it's a backfill.** Use **buckets** whenever one or more itemizable adopter-facing changes remain; each lands as its own bullet under New/Improved/Fixed. Reserve `summary` for: (1) an **internal-only** release where every change was dropped as maintainer plumbing, a one-line "no adopter-facing changes" note (e.g. "Internal release-tooling fixes. No change to how GAIA apps behave."); (2) a genuine **one-sentence** story; or (3) a broad **inaugural / overview** release where a narrative reads better than a long list (the `1.0.0` entry). Never set both.
 - Bullet strings are markdown-lite: inline code in backticks, links as `[text](url)` (rendered as a new-tab link). Entry-reference links are _optional_ and are built from the trailing `(#N)` the entry carries: `https://github.com/gaia-react/gaia/issues/N` for the issue an entry closes, `https://github.com/gaia-react/gaia/pull/N` for an entry carrying a pull-request number. Include one only when a reader would genuinely follow it for detail, never as decoration. The exemplars below omit them.
 
@@ -88,9 +86,9 @@ Omit a section if it's empty. Never drop something silently: if it didn't make t
 
 This is the substance of the skill, the rules that turn a contributor's changelog into an adopter's release notes.
 
-1. **Restate at capability/impact altitude, with a concrete subject.** Name the component the adopter touches, CI, Code Review Audit, `/update-gaia`, the quality gate. "what changed and what it means for me," not "which function moved." Avoid vague subjects, "the app", "the system", "the tooling", "things" read as placeholders. The scaffolded React app is **GAIA apps** (apps built from the template); effects on the developer's own code or files are **your …** (your utility classes, your `package.json`). So "the app ships with a CSP" becomes "GAIA apps now ship with a CSP."
+1. **Restate at capability/impact altitude, with a concrete subject.** Name the component the adopter touches, CI, Code Review Audit, `/update-gaia`, the quality gate. "what changed and what it means for me," not "which function moved." The scaffolded React app is **GAIA apps** (apps built from the template); effects on the developer's own code or files are **your …** (your utility classes, your `package.json`). So "the app ships with a CSP" becomes "GAIA apps now ship with a CSP."
 2. **Be more specific, not less.** Plain language is not vague language. One dense technical line often _splits_ into two clear ones. Resist the urge to compress meaning out.
-3. **Ban filler.** No "improved performance," "various fixes," "enhanced reliability," "general improvements." If you write "optimized," say optimized _what_ and the _observable result_. A bullet a reader can't act on or verify is noise. Don't restate the semver tier either: a "Patch release" / "Minor release" / "Major release" lead is redundant with the version number, which already conveys it. Descriptive framing ("Maintenance release", "Security release") is fine.
+3. **Every bullet names what changed and its observable result.** "Optimized" says optimized _what_, with what result; a bullet a reader can't act on or verify is noise, so cut or rewrite it. Frame the lead descriptively ("Maintenance release", "Security release"), never by semver tier, which the version number already conveys.
 4. **Drop changes with no adopter relevance, judge by relevance, not residence.** The test is whether an adopter _building their own product_ would notice or benefit, not whether the changed file physically ships to their machine. A hook, guard, or workflow can ship to every adopter and still be maintainer-only in effect. Drop: ADR reframes, leak-check tweaks, internal status stamping, test-harness changes, docs-only edits, and fixes to GAIA's _own_ development and release plumbing, sibling-repo push handling, release lockstep, contributor-only guard edge cases. The adopter's product behaves identically with or without them. Trap: "strip surrounding quotes from literal `git -C` captures so a quoted sibling-repo push is recognized as foreign" ships inside an adopter hook, yet only fires when _you_ push across GAIA's own sibling repos during a release, drop it. (Contrast: a change to the Code Review Audit an adopter runs before every merge _is_ adopter-facing, residence aside, an adopter who runs it sees the benefit, so keep it.)
 5. **Drop maintainer housekeeping on GAIA's own repo/wiki.** Promoting memories, reorganizing the wiki, dated audit artifacts, version-stamp bumps. These change GAIA's _own_ state, not what GAIA _does_ for an adopter.
 6. **Flag ambiguous actors, don't guess.** Imperative/passive changelog voice often hides the subject. "promote machine-local feedback memories into shared wiki" _reads_ like a feature ("GAIA now promotes memories") but was the maintainer running `/gaia-cleanse` on GAIA's own wiki, housekeeping, drop it. When a line could mean "GAIA now does X" (keep) or "I did X to the repo" (drop) and the voice won't tell you which, put it under **Needs a human ruling** rather than picking. Guessing wrong either invents a feature or buries a real one.
@@ -102,7 +100,7 @@ This is the substance of the skill, the rules that turn a contributor's changelo
 
 ## Worked exemplars
 
-These are the calibration. Study how dense, internal-sounding changelog blocks collapse into a few adopter-meaningful bullets, and what gets cut. They show the _editorial result_ and house style; take the literal export form and key order from a live `releases/*.ts` (see Output (a)), since the convention drifts.
+These are the calibration. Study how dense, internal-sounding changelog blocks collapse into a few adopter-meaningful bullets, and what gets cut. They show the _editorial result_ and house style.
 
 ### `1.3.5`, seven Added, five Changed, four Fixed → two / three / one
 
@@ -164,8 +162,6 @@ Report for `1.4.0`:
 - promote machine-local feedback memories into shared wiki, reads like a feature but was the maintainer running /gaia-cleanse, a content action on GAIA's own wiki, not adopter-visible behavior (rule 5/6)
 ```
 
-The housekeeping trap is the whole point of rule 6: under `### Changed`, in imperative voice, it looks exactly like a shipped capability. It isn't. When the voice hides the subject and you can't resolve it from context, surface it under "Needs a human ruling" instead of dropping or keeping on instinct.
-
 ### When `summary` fits, internal-only or one-line releases
 
 A release with no distinct adopter-facing items left after the cut, an internal-only patch where everything was dropped as maintainer plumbing, or a genuinely one-sentence story, collapses to a single `summary` paragraph. This is about item count, not age: a backfilled old release with two real adopter changes still earns buckets. The shape, for an internal-only patch like `1.1.1`:
@@ -180,19 +176,17 @@ export default {
 };
 ```
 
-Use this only for an internal-only release or a genuinely one-line story. Anything with two or more distinct adopter-facing changes earns buckets, backfill or not.
-
 ## Workflow
 
 1. Resolve the version → block → date (Inputs above). For a live cut, run `date +%F` now.
 2. Read `../website/src/pages/changelog/types.ts` for the current `Release` fields and the newest `releases/*.ts` for the current file form (export style + key order). Then read the version's block from `CHANGELOG.md`. Classify every line: keep, drop (rule 4/5), consolidate-with-siblings (rule 7), reframe-or-drop a `/update-gaia`-automated cleanup (rule 11), or ambiguous (rule 6).
 3. Translate the kept lines through the contract. Group by bucket (rule 10). Merge consolidations.
-4. Draft the `headline`: required for any bucketed release. Lead with its reason to exist; for a grab-bag use a descriptive umbrella line, never omit it. Omit `headline` only for a `summary`-only release. For a coarse backfill with no bucket-worthy detail, write a `summary` paragraph instead of buckets.
-5. Assemble the `.ts` in the exact form of the file you read in step 2 (today: bare default export, keys alphabetical). Omit empty optional keys. Sweep for em-dashes and banned filler before writing (rule 3/9).
+4. Draft the `headline` per Output (a), or a `summary` in place of buckets when one of Output (a)'s three `summary` cases applies.
+5. Assemble the `.ts` in the exact form of the file you read in step 2 (today: bare default export, keys alphabetical). Omit empty optional keys. Sweep for em-dashes and for bullets with no observable result before writing (rule 3/9).
 6. `mkdir -p ../website/src/pages/changelog/releases` and write `<version>.ts`. No index to update, the page globs the directory.
 7. Print the editorial-decisions report. Every changelog line that didn't survive appears under Dropped or Needs a human ruling, no silent cuts.
 
 ## See
 
 - `.claude/commands/gaia-release.md`, the release process this feeds: Step 14 invokes this skill for the changelog page entry and locksteps the other website version sites.
-- `CHANGELOG.md`, the source. Read-only. Never edited here.
+- `CHANGELOG.md`, the source.

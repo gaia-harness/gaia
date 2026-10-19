@@ -93,6 +93,21 @@ transforms:
       - "scripts.test:sandbox"
       - "scripts.lint:cli"
 
+  # Maintainer-only skill overrides in the committed Claude settings. The
+  # release-notes skill is release-excluded, so its `name-only` entry would
+  # name a skill adopters do not have. A separate block, not a path added to
+  # the package.json one: release-fence-config.bats S1 reads the first
+  # json-strip block's paths and keys. The frontend copy is generated from the
+  # root settings and ships too, so it loses the key as well and a fresh
+  # scaffold stays drift-clean. A key the file no longer carries is a silent
+  # no-op.
+  - type: json-strip
+    paths:
+      - ".claude/settings.json"
+      - "frontend/.claude/settings.json"
+    keys:
+      - "skillOverrides.release-notes"
+
   # Maintainer-audience entries in the label registry. `audience:adopter` and
   # `audience:maintainer` classify a defect against GAIA's own distribution
   # boundary, and the forensics-audience entries name a workflow an adopter
