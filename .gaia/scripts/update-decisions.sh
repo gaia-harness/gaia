@@ -14,7 +14,7 @@
 # outside the manifest, so the merge walk never touches it.
 #
 # Output tokens are machine lines; the skill formats any sentence itself.
-# Exit 0 ok, 1 invalid file or refused record, 2 usage error or missing jq.
+# Exit 0 ok, 1 invalid file, refused record, or file that could not be written, 2 usage error or missing jq.
 #
 # reconcile ends a deferred entry that a run resolved without a question: it
 # is dropped when the tree file equals the latest copy, and otherwise rebased

@@ -20,8 +20,8 @@ setup() {
 }
 
 # identity_questions_ok <file>: prints each failure on stdout and returns 1
-# when any asked question has fewer than two options or an option that
-# points at Other. A question starts at a bold `**Qn, ...` line whose
+# when any asked question has fewer than two options or an option line
+# containing the word Other. A question starts at a bold `**Qn, ...` line whose
 # heading does not say it is derived; its options are the `- \`` lines up to
 # the next question or the block's end.
 identity_questions_ok() {
