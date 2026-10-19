@@ -356,3 +356,40 @@ one_space_margins() {
   grep -qF 'Some usage was still being saved' <<<"$box" && return 1
   true
 }
+
+# box_join_scenario <session id> <flag>...: runs the box while a sleeping
+# process whose command line is a flusher for <session id> with <flag>... is
+# live. The box's own flusher is a stub that leaves $scratch/own-started.
+box_join_scenario() {
+  local session_id="$1" file other_pid
+  shift
+  scratch="$TEMPORARY_DIRECTORY/scripts"
+  mkdir -p "$scratch/spec" "$scratch/notebook" "$TEMPORARY_DIRECTORY/other"
+  for file in "$SCRIPTS"/usage*.sh "$SCRIPTS"/token-*.sh "$SCRIPTS"/token-rates.json "$SCRIPTS"/branch-name-lib.sh \
+    "$SCRIPTS"/main-root-lib.sh "$SCRIPTS"/context-checkpoint-lib.sh; do
+    [ -f "$file" ] && cp "$file" "$scratch/"
+  done
+  cp "$SCRIPTS/spec/with-ledger-lock.sh" "$scratch/spec/"
+  cp "$SCRIPTS"/notebook/*.sh "$scratch/notebook/"
+  printf '#!/usr/bin/env bash\n: >"%s/own-started"\n' "$scratch" >"$scratch/usage-flush.sh"
+  printf '#!/usr/bin/env bash\nsleep 30\n' >"$TEMPORARY_DIRECTORY/other/usage-flush.sh"
+  spec_and_plan_rows
+  bash "$TEMPORARY_DIRECTORY/other/usage-flush.sh" --session "$session_id" "$@" </dev/null >/dev/null 2>&1 3>&- &
+  other_pid=$!
+  box="$(CLAUDE_CODE_SESSION_ID="$session_id" GAIA_USAGE_BOX_FLUSH_CAP_SECONDS=1 bash "$scratch/usage.sh" initiative SPEC-402 --box \
+    --main-root "$MAIN" --rate-table "$RATES" --projects-root "$TEMPORARY_DIRECTORY/projects")"
+  kill "$other_pid" 2>/dev/null || true
+}
+
+@test "a running Stop-hook flusher, which holds back sidecars, is not joined: the box starts its own" {
+  local scratch box
+  box_join_scenario box-stop-sess --transcript x --finished-main
+  [ -f "$scratch/own-started" ]
+}
+
+@test "a running flusher with --finished-main --all-sidecars-finished is joined: the box starts none and notes it outlasted the cap" {
+  local scratch box
+  box_join_scenario box-join-sess --finished-main --all-sidecars-finished --main-root x
+  [ -f "$scratch/own-started" ] && return 1
+  grep -qF 'Some usage was still being saved' <<<"$box"
+}
