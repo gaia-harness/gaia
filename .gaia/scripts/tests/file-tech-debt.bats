@@ -523,6 +523,28 @@ CASES
   true
 }
 
+@test "a difficulty key in place of grade is refused by name and files nothing" {
+  local filter
+  for filter in '.difficulty = "hard" | del(.grade)' '.difficulty = "hard" | .grade = ""'; do
+    reset_state
+    make_finding "$filter"
+    run_file
+    [ "$status" -eq 1 ] || { echo "$filter: status $status"; return 1; }
+    [ "$output" = "failed difficulty-key-use-grade" ] || { echo "$filter: $output"; return 1; }
+    [ "$(jq -r '.outcome' "$OUTCOMES")" = failed ] || { echo "$filter: outcome"; return 1; }
+    grep -q '^issue create' "$STUB/log" && { echo "$filter: created"; return 1; }
+  done
+  true
+}
+
+@test "a difficulty key beside a grade files with the grade's label" {
+  make_finding '.difficulty = "easy" | .grade = "hard"'
+  run_file
+  [ "$status" -eq 0 ]
+  [ "$output" = "filed 101" ]
+  grep -q -e '--label difficulty:hard' "$STUB/log"
+}
+
 # --- severity:investigate ------------------------------------------------------
 
 investigate_filter='.severity = "investigate" | .investigate_question = "QUESTION-SENTINEL" | .investigate_settled_by = "SETTLED-SENTINEL"'
