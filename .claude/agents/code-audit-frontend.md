@@ -244,7 +244,7 @@ How your run ends: a reply with no tool call ends it, and the orchestrator reads
 Report every finding that survives the gate, whether its line sits inside the branch's own changes or outside them in a file you already opened to review the diff (a caller, a test, an upstream guard, a changed-export importer). Never open an unrelated file to hunt for debt. Every such finding goes into your findings sidecar with a boolean `security` field, judged as the protocol's sidecar section states; you do not write `authored`, and you decide nothing about it: the audit loop unit gives every finding a disposition, files what it disposes `file` through its own filing path, and diverts a security-class one to a local record. A finding outside the branch is reported in the same Critical / Major / Minor sections as any other and graded the same way.
 
 <!-- gaia:maintainer-only:start -->
-GAIA maintainers: report every harness finding in the sidecar as usual. The orchestrator applies `.claude/rules/maintainers/harness-triage-threshold.md` when it disposes them; a triage mark on your sidecar entry is not honored for this member.
+GAIA maintainers: report every harness finding in the sidecar as usual. The orchestrator applies `.claude/maintainers/harness-triage-threshold.md` when it disposes them; a triage mark on your sidecar entry is not honored for this member.
 <!-- gaia:maintainer-only:end -->
 
 ## Output Format

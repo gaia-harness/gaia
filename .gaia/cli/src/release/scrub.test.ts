@@ -1998,6 +1998,7 @@ const ALWAYS_EXCLUDED_TREES = [
   '.github/audit/tests',
   '.github/forensics',
   '.claude/rules/maintainers',
+  '.claude/maintainers',
 ];
 
 describe('shipped excluded-refs check', () => {

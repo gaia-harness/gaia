@@ -83,6 +83,10 @@ A candidate whose resolution is `gone` is labelled a likely-already-fixed dismis
 
 State the default posture explicitly before offering them: dismiss or keep is the default, and promotion is the exception that needs a reason. Offer the arms for each candidate as one `AskUserQuestion` with the options `Dismiss`, `Keep` and `Promote`, the arm the evidence supports leading and marked ` (Recommended)`; that is `Dismiss` for a `gone` or previously promoted candidate, and never `Promote` without a reason stated in its description. Promoting freely grows the backlog instead of draining it.
 
+<!-- gaia:maintainer-only:start -->
+GAIA maintainers: before recommending an arm for a residual on a harness path, Read `.claude/maintainers/harness-triage-threshold.md`; never promote a residual it waives.
+<!-- gaia:maintainer-only:end -->
+
 ### Promote
 
 One human answer per residual, never batched, collected through an explicit user-question step. It files through `bash .gaia/scripts/file-tech-debt.sh file --finding <finding.json> --outcome-file <outcome.jsonl>` (the recipe in `.claude/skills/file-tech-debt/SKILL.md` section 0 owns the finding JSON, the screen, the probe and the divert) rather than reimplementing filing, and hands it:

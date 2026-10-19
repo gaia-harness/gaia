@@ -238,6 +238,9 @@ auditors:
       # machinery path needs an owner, and no `*.sh` glob reaches a `.md`.
       - ".claude/hooks/lib/audit-member-protocol.md"
       - ".claude/rules/**"
+      # Maintainer-only rule bodies an always-loaded pointer rule sends Claude
+      # to read on demand: rule prose, owned like the rules.
+      - ".claude/maintainers/**"
       # The execution doctrine a hook injects into branch and worktree
       # sessions: instruction prose like the rules, never auto-loaded.
       - ".claude/doctrine/**"

@@ -344,7 +344,7 @@ An accepted in-scope residual adds no dependence on any gitignored `.gaia/local`
 The fix loop above says to re-spawn until the audit reports clean, and the digest economics beside it license accept-and-note instead. Choosing between them *after* a finding is on the table is the failure, because at that point the question is no longer what the rule was, it is whether this particular finding is worth one more round, and asked that way it answers yes almost every time. Write the rule down before the round runs.
 
 <!-- gaia:maintainer-only:start -->
-GAIA maintainers: before disposing any harness-path finding in `dispositions-<r>.json`, read `.claude/rules/maintainers/harness-triage-threshold.md`. On harness paths it decides which findings are marked `fix` or `file` and which are waived, and it overrides this page's fix-every-Minor and file-every-out-of-scope-finding terms.
+GAIA maintainers: before disposing any harness-path finding in `dispositions-<r>.json`, Read `.claude/maintainers/harness-triage-threshold.md`. On harness paths it decides which findings are marked `fix` or `file` and which are waived, and it overrides this page's fix-every-Minor and file-every-out-of-scope-finding terms.
 <!-- gaia:maintainer-only:end -->
 
 A usable rule names a disposition for **every** way the round can come back, including carrying on. A rule that says only "stop and reconsider" has decided nothing: the same question returns one round later with no rule left standing. Three branches, and the third is the one commonly left open:

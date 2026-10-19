@@ -156,6 +156,9 @@ wiki/decisions/Dependabot as a Data Source.md
 .gaia/tests
 .gaia/scripts/tests
 .claude/rules/maintainers
+# Maintainer-only instruction bodies read on demand, never auto-loaded: an
+# always-loaded pointer under .claude/rules/maintainers/ names when to Read each.
+.claude/maintainers
 .github/audit/tests
 # react-perf-smoke.spec.ts is the bippy version-bump canary: it asserts GAIA's
 # capture harness still resolves a known GAIA component (ThemeSwitch) by name +

@@ -53,6 +53,10 @@ This verification is the single authority for the report's terminal `status`: af
 
 After applying the in-scope actions, file every finding in the report's `## Out-of-scope findings` section as a `tech-debt` issue: **you file, you never fix**, and never edit the working tree for one. If that report section reads `None.`, skip this step entirely.
 
+<!-- gaia:maintainer-only:start -->
+GAIA maintainers: before filing a finding on a harness path, Read `.claude/maintainers/harness-triage-threshold.md`; file none it waives, and name each waived one in your summary so the PR body lists it under `## Waived below triage threshold (not filed)`.
+<!-- gaia:maintainer-only:end -->
+
 Filing goes through `.gaia/scripts/file-tech-debt.sh` and nothing else; the file-tech-debt skill (`.claude/skills/file-tech-debt/SKILL.md`, section 0) owns the security screen, the issue-backend check, the dedup, the labels and the divert. For each finding, write one finding JSON to a scratch file under `.gaia/local/cleanse/` and run, with one outcome file for the whole run:
 
 ```bash

@@ -62,7 +62,7 @@ Follow the page in this order: `#### The audit loop unit` for the unit's shape, 
 - After each member's result lands, run `[ -f <root>/.gaia/scripts/audit-light-telemetry.sh ] && bash <root>/.gaia/scripts/audit-light-telemetry.sh member-result --root <root> --member <m> || true`.
 <!-- gaia:maintainer-only:end -->
 <!-- gaia:maintainer-only:start -->
-- Dispose findings under `.claude/rules/maintainers/harness-triage-threshold.md` when that file exists.
+- Before writing any disposition, Read `.claude/maintainers/harness-triage-threshold.md` and dispose findings under it.
 <!-- gaia:maintainer-only:end -->
 - Never set `enforcement_paths_allowed`. A finding that needs an ENFORCEMENT_PATHS edit means no commit for the round: stop `needs-human` and name the path.
 - Every `waive-out-of-scope` entry carries `basis`: `cross-remit` only for a finding whose sidecar entry has `cross_remit: true`, otherwise `triage-threshold`.

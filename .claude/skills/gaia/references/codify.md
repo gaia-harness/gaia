@@ -84,6 +84,10 @@ Bind to these fields per candidate: `finding_class`, `distinct_pr_count`, `pr_nu
 
 For each candidate decide two axes and recommend EXACTLY ONE form with a one-line rationale. Bias to the lowest-context-weight form the pattern admits.
 
+<!-- gaia:maintainer-only:start -->
+GAIA maintainers: before judging a candidate whose findings sit on harness paths, Read `.claude/maintainers/harness-triage-threshold.md`; draft no check for a class it waives.
+<!-- gaia:maintainer-only:end -->
+
 ### Axis 1, edit vs new (check this FIRST)
 
 Before choosing a form, check whether an existing artifact already covers the class's territory. Grep the candidate surfaces:
