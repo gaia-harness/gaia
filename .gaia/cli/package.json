@@ -15,10 +15,10 @@
     "gaia-maintainer": "tsx ./src/index.maintainer.ts"
   },
   "dependencies": {
-    "js-yaml": "5.4.3",
+    "js-yaml": "5.5.0",
     "picomatch": "4.0.7",
     "semver": "7.8.5",
-    "zod": "4.6.6"
+    "zod": "4.6.7"
   },
   "devDependencies": {
     "@gaia-react/lint": "3.0.0",
@@ -32,6 +32,6 @@
     "tsx": "4.23.15",
     "typescript": "6.0.3",
     "vite": "8.3.4",
-    "vitest": "5.0.3"
+    "vitest": "5.0.5"
   }
 }
