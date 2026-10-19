@@ -36,12 +36,14 @@ Copy the form from a registration already in the file rather than inventing one;
 
 ## `.gaia/scripts/**`: do not add files here
 
-`.gaia/` is GAIA's own machinery, not a place for project files.
+`.gaia/` is GAIA's own machinery; put project scripts outside it.
+
+<!-- gaia:maintainer-only:start -->
+GAIA maintainers: in this repo `.gaia/scripts/` is GAIA's own source tree, and adding a script there is ordinary work; the line above is for adopters.
+<!-- gaia:maintainer-only:end -->
 
 <!-- gaia:maintainer-only:start -->
 ## Maintainer: the rest of the obligations and the other trees
 
-**A new file under `.claude/hooks/lib/**` or `.claude/rules/**` needs a tier**, and a registered hook owes one further obligation the shipped half above leaves out: a jq-availability arm. `.claude/rules/maintainers/hook-registration.md` owns the whole set and names the checks that enforce the checkable ones. The tier for a convention rule like this one is merely-shared; global is reserved for rules that decide what the gate does with a clearance.
-
-That obligation is omitted from the shipped half because its checker is release-excluded: an instruction to satisfy something nothing in the reader's tree can verify is an instruction they cannot act on and we cannot enforce. The rooting check ships and runs standalone on an adopter clone; the tier obligation has no check, which is why the rooting obligation is stated up there rather than here.
+**A new file under `.claude/hooks/lib/**` or `.claude/rules/**` needs a tier, and a registered hook owes a jq-availability arm.** `.claude/rules/maintainers/hook-registration.md` owns both and names the checks.
 <!-- gaia:maintainer-only:end -->

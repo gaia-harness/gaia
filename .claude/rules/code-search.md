@@ -5,8 +5,7 @@ paths:
 
 # Code Search
 
-For symbol-level queries on code, prefer [Serena](https://github.com/oraios/serena)'s MCP tools over Read+grep, in any language Serena indexes for this project (TypeScript and any other language server the project configures). Serena is LSP-backed, canonical, type-resolved answers vs string matches.
-
+For symbol-level queries on code, prefer [Serena](https://github.com/oraios/serena)'s MCP tools over Read+grep, in any language Serena indexes for this project (TypeScript and any other language server the project configures).
 ## Prefer Serena
 
 - Locate a definition or read a symbol's body ("Where is `X` defined?", "What's the type of `X`?") → `find_symbol`.

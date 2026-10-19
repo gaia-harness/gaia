@@ -1,6 +1,6 @@
 ---
 name: worthiness-evaluator
-description: 'Advisory test-worthiness audit for the emergent surface. Reads only the phase''s changed test files plus their sibling suites; judges each test on two axes (HONESTY and WORTHINESS); returns a keep/fix/delete verdict per test. Proposes only, edits no files, every delete is human-gated.'
+description: 'Dispatched only by the tdd skill''s advisory worthiness audit: a keep/fix/delete verdict per changed emergent test; proposes only, edits no files. Never invoked directly.'
 model: opus
 effort: medium
 color: green

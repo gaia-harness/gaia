@@ -1,6 +1,6 @@
 ---
 name: audit-loop-unit
-description: 'Dispatched only by the PR Merge Workflow main thread to run a stretch of audit rounds off-thread (members, the Sonnet fixer, verifier, gate, commit, push, PR-body records) and return a thin unit report. Never invoked directly.'
+description: 'Dispatched only by the PR Merge Workflow main thread to run audit rounds off-thread and return a thin unit report. Never invoked directly.'
 model: opus
 effort: medium
 ---

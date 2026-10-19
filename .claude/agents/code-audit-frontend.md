@@ -1,6 +1,6 @@
 ---
 name: code-audit-frontend
-description: 'Comprehensive code review, security audit, performance analysis, and architectural assessment. Goes beyond linting and type-checking to identify vulnerabilities, bottlenecks, code smells, anti-patterns, and refactoring opportunities. Mandatory before PR merge.'
+description: 'Dispatched only by the audit loop as the frontend member of the Code Audit Team: reviews code for security, performance, architecture and defects beyond lint and types. Never invoked directly.'
 model: opus
 effort: medium
 color: orange
