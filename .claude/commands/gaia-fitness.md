@@ -8,16 +8,12 @@ Run the GAIA **fitness** workflow.
 
 ## Pre-flight: Worktree check
 
-This command grades this clone's Claude integration and heals it through a pull request of its own. It starts from the main checkout and isolates the heal right before its first write, through `.claude/skills/gaia/references/isolation.md`, so it never writes onto the branch the checkout holds. A linked worktree holds someone else's work, so if invoked from one, reject hard: `gaia_refuse_if_worktree` (`.gaia/scripts/main-only-lib.sh`) asks the shared resolver which tree this is and refuses out loud, naming the main checkout, when the answer is a worktree.
-
-Detection (run this first, before anything else):
+This command grades this clone's Claude integration and heals it through a pull request of its own. It starts from the main checkout (the clone's primary working directory, on any branch) and isolates the heal right before its first write, through `.claude/skills/gaia/references/isolation.md`, so it never writes onto the branch the checkout holds. A linked worktree holds someone else's work, so it refuses to run from one. Run this first, before anything else; a non-zero exit is the refusal: relay it and stop.
 
 ```bash
 . .gaia/scripts/main-only-lib.sh
 gaia_refuse_if_worktree "/gaia-fitness" || exit 1
 ```
-
-If the detection does not fire, fall through to the workflow dispatch line below.
 
 Anchor for the next pre-flight step: a check that must pass before this command starts goes here, after the worktree check and before the workflow dispatch line.
 

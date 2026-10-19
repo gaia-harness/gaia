@@ -6,7 +6,7 @@ Contents: Playbook; Step 1: Create the report shell; Step 2: GAIA check #11: Wik
 
 ## Playbook
 
-GAIA-native wiki lint. Builds its own report shell, then writes GAIA-specific checks: **#11: Wiki drift check**, **#12: Dead repo-relative paths**, **#13: UAT/SPEC narrative-ref drift**, **#14: Orphan pages**, **#15: Frontmatter gaps**, **#16: Empty sections**, and **#17: Broken wikilinks**. Every check except #13 (two greps) re-derives from a live `.gaia/cli/gaia wiki` CLI primitive on each run; the report is plain markdown that GAIA owns end to end.
+Builds the report shell, then runs checks #11 to #17 into it. Every check except #13 (two greps) re-derives from a live `.gaia/cli/gaia wiki` primitive on each run.
 
 ## Step 1: Create the report shell
 
@@ -16,7 +16,7 @@ Compute today's date from the shell clock first: no LLM has a clock, so the mode
 DATE=$(date +%F)
 ```
 
-**Regenerate the report from scratch every run.** The report lives at one fixed path, `wiki/meta/lint-report.md`, and each run overwrites it: it is a point-in-time snapshot, and the commit history holds earlier runs. A stale report must never be reused or patched in place. `wiki/meta/` is release-excluded, so a freshly scaffolded adopter clone has no such directory yet; create it, then write the report shell with the standard frontmatter and H1 heading. The `cat >` truncates the previous run's report:
+**Regenerate the report from scratch every run.** The report lives at one fixed path, `wiki/meta/lint-report.md`, and each run overwrites it: it is a point-in-time snapshot, and the commit history holds earlier runs. `wiki/meta/` is release-excluded, so a freshly scaffolded adopter clone has no such directory yet; create it, then write the report shell with the standard frontmatter and H1 heading. The `cat >` truncates the previous run's report:
 
 ```bash
 mkdir -p wiki/meta/
@@ -34,11 +34,11 @@ status: developing
 EOF
 ```
 
-Use `wiki/meta/lint-report.md` as the canonical report path for every subsequent step and the Step 9 summary. The GAIA checks below write into this same file: each **replaces** its own `## #NN` section if one already exists, otherwise appends it at the bottom. Never trust or carry over a pre-existing GAIA section: every check re-derives on each run, from its live CLI primitive or, for #13, its two greps.
+Use `wiki/meta/lint-report.md` as the canonical report path for every subsequent step and the Step 9 summary. The GAIA checks below write into this same file: each **replaces** its own `## #NN` section if one already exists, otherwise appends it at the bottom.
 
 ## Step 2: GAIA check #11: Wiki drift
 
-Always run `.gaia/cli/gaia wiki state --json` fresh and write the `## #11: Wiki drift check` section from its output, replacing any existing `## #11` section in the report. Never carry over a `#11` section from a reused report: drift state is the most time-sensitive check, and a stale `#11` is exactly how a wiki that was just synced or recovered gets mis-reported as drifting.
+Always run `.gaia/cli/gaia wiki state --json` fresh and write the `## #11: Wiki drift check` section from its output, replacing any existing `## #11` section in the report.
 
 ### 2a. Run the primitive
 
@@ -89,20 +89,6 @@ Example WARN (`medium`) section:
 - a1b2c3d feat: add new module
 - d4e5f6g fix: edge case in router
 - h7i8j9k chore: bump deps
-```
-
-Example ERROR (`high`) section:
-
-```markdown
-## #11: Wiki drift check
-
-✗ 14 commits behind HEAD. Wiki is significantly out of date. Run `/gaia-wiki` now. Recent unsynced commits:
-
-- a1b2c3d feat: ...
-- d4e5f6g fix: ...
-- h7i8j9k chore: ...
-- l0m1n2o docs: ...
-- p3q4r5s refactor: ...
 ```
 
 ## Step 3: GAIA check #12: Dead repo-relative paths
@@ -190,7 +176,7 @@ Otherwise:
 - `.claude/skills/gaia/references/spec/bar.md:88` → `operate under SPEC-001's scope_boundaries` prose
 ```
 
-List every narrative finding (one per line). Structural matches are not listed: they are the regex's false positives by design.
+List every narrative finding (one per line).
 
 ## Step 5: GAIA check #14: Orphan pages
 
@@ -345,16 +331,17 @@ Print to the user:
 1. The report path, `wiki/meta/lint-report.md`.
 2. A one-line summary that includes the drift severity and count, plus dead-path count, orphan count, frontmatter-gap count, empty-section count, and broken-link count when any of those is non-zero, plus narrative-ref count if non-zero.
 
-If `drift_severity` is **`high`**, surface it prominently (separate line, prefixed with `WIKI DRIFT:`).
-If `dead.length > 0`, surface as a separate line prefixed with `WIKI DEAD-PATHS:` followed by the count.
-If narrative-ref findings > 0, surface as a separate line prefixed with `UAT-SPEC DRIFT:` followed by the count.
-If `orphans.length > 0`, surface as a separate line prefixed with `WIKI ORPHANS:` followed by the count.
-If `gaps.length > 0`, surface as a separate line prefixed with `WIKI FRONTMATTER:` followed by the count.
-If `empty.length > 0`, surface as a separate line prefixed with `WIKI EMPTY-SECTIONS:` followed by the count.
-If `broken.length > 0`, surface as a separate line prefixed with `WIKI BROKEN-LINKS:` followed by the count.
+Then print each line below whose condition holds, on its own line, as the prefix followed by the count:
+
+- `WIKI DRIFT:` when `drift_severity` is `high` (count: `commits_ahead`)
+- `WIKI DEAD-PATHS:` when `dead.length > 0`
+- `UAT-SPEC DRIFT:` when narrative-ref findings > 0
+- `WIKI ORPHANS:` when `orphans.length > 0`
+- `WIKI FRONTMATTER:` when `gaps.length > 0`
+- `WIKI EMPTY-SECTIONS:` when `empty.length > 0`
+- `WIKI BROKEN-LINKS:` when `broken.length > 0`
 
 ## Notes
 
 - This workflow does not write `wiki/.state.json`. The writers are named in the sync.md Playbook.
 - Drift count semantics: missing state file or unreachable SHA are surfaced as advisories, not silent zeroes. See [[Wiki Sync]] for the full design.
-- Severity table thresholds are the canonical thresholds for this plan; if changing, update both this file and any sibling tooling that classifies drift.

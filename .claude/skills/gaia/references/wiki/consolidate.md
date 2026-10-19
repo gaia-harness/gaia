@@ -8,7 +8,7 @@ Contents: Playbook; Step 1, Build the page index; Step 2, Detection passes; Step
 
 This workflow complements but does not replace the orchestrator's wiki promotion step (per-SPEC writes, before the merge, acting on `SUMMARY.md` frontmatter), the sync stage (commit-driven updates), or the lint stage (broken-thing detection and repair). It detects **redundancy and contradiction** across the wiki and proposes merges so the wiki stays an accurate "today's state of the app" snapshot.
 
-**Follow `.claude/rules/wiki-style.md` when writing prose during apply actions.** Present tense; no UAT-NNN, SPEC-NNN, PR-number, or commit-SHA references in body prose. The `## Historical context (from <older-title>)` archival heading defined in Step 4 is a deliberate exception, it labels content lifted from a superseded page so it remains discoverable.
+**Follow `.claude/rules/wiki-style.md` when writing prose during apply actions.** The `## Historical context (from <older-title>)` archival heading defined in Step 4 is a deliberate exception, it labels content lifted from a superseded page so it remains discoverable.
 
 Wiki pages emitted by the wiki promotion step carry `pr_number: <N>` and `promoted_at: <ISO>` frontmatter. Those fields are the consolidation seam: they tie each page to the pull request that promoted it and let the audit detect when a newer promotion has superseded an older one.
 
@@ -186,8 +186,6 @@ Update `wiki/.state.json` via the CLI primitive (preserves sibling fields and ke
 2. Run `.gaia/cli/gaia wiki state-bump last_consolidated_sha "$(git rev-parse HEAD)"` (full 40-char SHA at consolidate-completion time, before any of this run's edits get committed).
 3. Run `.gaia/cli/gaia wiki state-bump last_consolidated_at "$(date -u +%FT%TZ)"`.
 
-`state-bump` performs an atomic write (`writeFileSync` to `.tmp` + `renameSync`) and preserves `last_evaluated_sha`, `last_evaluated_at`, and any future sibling fields verbatim.
-
 Advance state on every completion regardless of how many findings were applied, including zero findings and all-skip runs.
 
 The `wiki/.state.json` file is committed by the router's one `chain commit` after lint (`references/wiki.md` → "The run", step 6). Consolidate itself does not commit, see Step 6.
@@ -210,4 +208,4 @@ If any HIGH-severity supersession or reversed-decision was applied, prefix the s
 - **`wiki/_archived/`** is excluded from the index and from future consolidation candidacy. Pages there remain readable but are out of the live spec.
 - **Idempotence.** Re-running consolidate on the same wiki state surfaces the same findings, minus those acknowledged via `consolidation_ack`. Apply actions are not idempotent (they mutate); the apply guard is "did the user already say apply", implicit in "the older page is no longer in its original domain," which the page index would reflect on the next run.
 - **Runs every time.** Consolidate runs on every `/gaia-wiki` run whose sync completes normally. A `Skip`ped finding resurfaces on the next `/gaia-wiki` run, and `Keep both` is the only permanent dismissal.
-- **Shared state file ownership.** `wiki/.state.json` holds fields written by both sync (`last_evaluated_sha`, `last_evaluated_at`) and this workflow (`last_consolidated_sha`, `last_consolidated_at`). Each writer preserves the other's fields. Do not delete `wiki/.state.json`: sync and consolidate both write it, and the statusline and lint read it.
+- **Shared state file.** Do not delete `wiki/.state.json`: sync and consolidate both write it, and the statusline and lint read it.
