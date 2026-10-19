@@ -1,6 +1,6 @@
 # SPEC and plan lifecycle procedures
 
-The procedures a generated `ORCHESTRATOR.md` and both pre-flights point at. `.claude/skills/gaia/references/plan/planner.md` owns the order of the orchestrator's steps and the verbatim blocks a planner copies; this page owns what each step does. Every command runs from the directory each section names, with the placeholders the orchestrator holds: `<SPEC_PATH>` (the absolute, main-anchored `SPEC.md`), `<PLAN_DIR>` (the absolute, main-anchored plan folder), `<RESOLVED_ROOT>` (the working copy the isolation reference resolved) and `<N>` (the PR number).
+The procedures a generated `ORCHESTRATOR.md` and both pre-flights point at. `.claude/skills/gaia/references/plan/planner.md` owns the order of the orchestrator's steps and the verbatim blocks a planner copies; this page owns what each step does. Every command runs from the directory each section names, with the placeholders the orchestrator holds: `<SPEC_PATH>` (the absolute, main-anchored `SPEC.md`, stored in the main checkout: the clone's primary working directory, on any branch), `<PLAN_DIR>` (the absolute, main-anchored plan folder), `<RESOLVED_ROOT>` (the working copy the isolation reference resolved) and `<N>` (the PR number).
 
 Contents: Owning-phase UAT gate; Pre-audit UAT checks; Consolidation; Post-merge close; Pre-flight sweep.
 
@@ -85,13 +85,13 @@ Then judge the test bodies. The gate proves each spec still carries its contract
 
 The one consolidation recipe. Two callers run it: the orchestrator, after audit clearance and the human's ready-to-merge confirmation, and the pre-flight sweep's cold consolidation, against a folder whose PR already merged.
 
-**Synthesis.** The caller (the warm orchestrator, or the session running the sweep; never a task sub-agent) writes `SUMMARY.md` by layered override-resolution: read the layers in precedence `SPEC.md`, then `AUDIT.md`, then the plan's `PROGRESS.md`; the top layer wins on conflict. A spec-less plan has no `SPEC.md` or `AUDIT.md`, so its `PROGRESS.md` is the only layer; a cold consolidation reads the plan's `PROGRESS.md` when one is present. Ground the result in the merged code and passing tests, write it present-tense as final-state prose, and surface any material narrowing between the stated intent and the shipped scope under an optional `## Divergence` section. This step is agent synthesis, not a template: a mechanical concatenation cannot resolve conflicts between the layers or judge what "materially narrower" means. Yield blocks in `PROGRESS.md` are resumption records, not findings, so consolidation ignores them.
+**Synthesis.** The caller (the warm orchestrator, or the session running the sweep; never a task sub-agent) writes `SUMMARY.md` by layered override-resolution: read the layers in precedence `SPEC.md`, then `AUDIT.md`, then the plan's `PROGRESS.md`; the top layer wins on conflict. A spec-less plan has no `SPEC.md` or `AUDIT.md`, so its `PROGRESS.md` is the only layer; a cold consolidation reads the plan's `PROGRESS.md` when one is present. Ground the result in the merged code and passing tests, write it present-tense as final-state prose, and surface any material narrowing between the stated intent and the shipped scope under an optional `## Divergence` section. Yield blocks in `PROGRESS.md` are resumption records, not findings, so consolidation ignores them.
 
 **Location.** A spec-colocated plan's `SUMMARY.md` sits beside `SPEC.md`, in the SPEC folder one level above the plan subfolder; a spec-less plan's sits in `<PLAN_DIR>`. Both folders are main-anchored. From a linked worktree, the write follows the tool-choice contract in `.claude/skills/gaia/references/spec.md` Operational primitives, which applies the same way to a spec-less plan folder.
 
 **Shape.** Frontmatter with `wiki_promote_default` and `wiki_promote_targets`, a non-empty H1, a non-empty body, and an optional `## Divergence`.
 
-- `wiki_promote_default` is exactly `yes`, `ask` or `no`. A spec-colocated plan copies the SPEC's value, normalizing a legacy `true` to `yes` and `false` to `no`; a spec-less plan stamps `ask`. Consolidation never writes `true` or `false` (`summary-verify.sh` accepts them only so an older `SUMMARY.md` still verifies).
+- `wiki_promote_default` is exactly `yes`, `ask` or `no`. A spec-colocated plan copies the SPEC's value, normalizing a legacy `true` to `yes` and `false` to `no`; a spec-less plan stamps `ask`.
 - `wiki_promote_targets` is the SPEC's list, or `[decisions]` for a spec-less plan.
 
 **Verify.**

@@ -12,7 +12,7 @@ Each caller fills the `<...>` placeholders of the shared preamble from its own c
 - **Major:** a significant gap or defect; fix, or a human decides (acknowledge).
 - **Minor:** real but small; fix by default, never ignorable.
 
-There is no tier below Minor: what is worth reporting is Minor, what is not is not reported. A finding between Major and Minor is graded by these definitions, Major when unsure.
+There is no tier below Minor: what is worth reporting is Minor, what is not is not reported.
 
 | Slot | Spec audit | Plan audit |
 | --- | --- | --- |
@@ -29,7 +29,7 @@ There is no tier below Minor: what is worth reporting is Minor, what is not is n
 
 A plan written from a spec is audited by `plan/decomposition-audit.md` (the plan's own decomposition audit), not by a re-run of the SPEC audit.
 
-Plan write tool: `<PLAN_DIR>` is a main-anchored absolute path. When the session runs in a linked worktree, the harness refuses `Edit` and `Write` at that path, so the lens agent, and the main thread's inline fallback, write the findings file with `Bash` at the main-checkout path and read it back to confirm both its content and its location before it is classified. Keep the fallback to the findings files: a `Bash` redirect is never the way to write into another checkout where the edit tools already work.
+Plan write tool: `<PLAN_DIR>` is a main-anchored absolute path (stored in the main checkout: the clone's primary working directory, on any branch). When the session runs in a linked worktree, the harness refuses `Edit` and `Write` at that path, so the lens agent, and the main thread's inline fallback, write the findings file with `Bash` at the main-checkout path and read it back to confirm both its content and its location before it is classified. Keep the fallback to the findings files: a `Bash` redirect is never the way to write into another checkout where the edit tools already work; use the edit tools there.
 
 ## Shared preamble
 
@@ -45,13 +45,13 @@ Send this to every lens, interpolating the slots. The caller appends a `LENS: <n
 > - Give each finding a stable id prefixed with your lens code.
 > - Be concrete and falsifiable. A finding a verifier can refute by reading one file is a good finding; vague "could be clearer" is not.
 > - **Write** your full findings to `<FINDINGS_DIR><LENS>.json` (the fully qualified path) under the file schema, using <write tool>. Write the file even if your findings array is empty.
-> - **Return** only the thin digest, no finding bodies.
+> - **Return** only the short summary, no finding bodies.
 
 ## Write and return
 
-The agent writes its full findings to `<FINDINGS_DIR><LENS>.json`, always the fully qualified path, never a bare relative one, and writes the file even when the array is empty. The file on disk is what the caller trusts; the reply is a digest of it.
+The agent, or the main thread running a lens inline, writes `<FINDINGS_DIR><LENS>.json` at its fully qualified path, even when the array is empty. The file on disk is what the caller trusts; the reply is a short summary of it.
 
-The reply is the thin digest and nothing else. It lists every finding, material and minor, as `{ id, severity, title }`:
+The reply is the short summary and nothing else. It lists every finding, material and minor, as `{ id, severity, title }`:
 
     { "dimension": "<lens>", "counts": { "critical": <int>, "major": <int>, "minor": <int> },
       "findings": [ { "id": "<lens>-NNN", "severity": "...", "title": "..." } ] }
@@ -60,7 +60,7 @@ Whether the main thread later reads a finding body is the caller's rule: the spe
 
 ## Findings file schema
 
-What each agent writes to `<LENS>.json`. This is not a return contract; the thin digest above is what flows back.
+What each agent writes to `<LENS>.json`. This is not a return contract; the short summary above is what flows back.
 
     {
       "dimension": "<lens name>",

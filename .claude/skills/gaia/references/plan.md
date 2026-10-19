@@ -1,6 +1,6 @@
 # /gaia-plan
 
-Plan a complex feature using the task orchestration pattern. Do not implement anything.
+Plan a complex feature using the task orchestration pattern. Do not implement anything. Term: UAT (an automated acceptance spec rendered from the SPEC; no human performs it).
 
 This command is the plan-specific case of the Workflow Doctrine (`wiki/concepts/Workflow Doctrine.md`), which defines roles, git ownership, checkpoint and resume, and model choice. For plan runs, the plan contract in `.claude/skills/gaia/references/plan/planner.md` (per-phase commits and gates, `PROGRESS.md`, the orchestrator's executor pins) governs where the two differ.
 
@@ -49,9 +49,10 @@ Check the description for a SPEC reference. Three forms are recognized:
 If any form matched, extract the `SPEC-\d+` id from wherever it appeared (the bare token, the path segment, or the text before the colon), then resolve it against the actual filesystem, self-healing a zero-padding mismatch (e.g. `SPEC-026` also resolves from the bare `SPEC-26`):
 
 ```bash
-# SPEC folders are main-anchored state (state registry specs-main); the
-# notebook library resolves each one through main, so a linked worktree reads
-# main's folder, never a forked copy.
+# SPEC folders are main-anchored state (stored in the main checkout: the
+# clone's primary working directory, on any branch; state registry
+# specs-main); the notebook library resolves each one through main, so a
+# linked worktree reads main's folder, never a forked copy.
 RAW="<the SPEC-\d+ id extracted above, e.g. SPEC-026 or SPEC-26>"
 NUM="${RAW#SPEC-}"
 PADDED="SPEC-$(printf '%03d' "$((10#$NUM))")"
@@ -130,7 +131,7 @@ else
 fi
 ```
 
-Cache the resolved absolute `PLAN_DIR`; pass it in step 4's dispatch and the kickoff prompt in step 5. The collision suffix lets parallel `/gaia-plan` invocations coexist on the spec-derived arm without overwriting each other; the spec-less arm does not collide, the allocator serializes concurrent callers under a mutex.
+Cache the resolved absolute `PLAN_DIR`; pass it in step 4's dispatch and the kickoff prompt in step 5.
 
 ### 4. Spawn planning agent
 
@@ -196,17 +197,17 @@ else
 fi
 ```
 
-A non-zero exit is handled exactly like a missing file: surface its output to the user, do not retry silently, and do not proceed to step 4.6. `WARN:` lines on a passing run are surfaced too; they flag a UAT that may be misrouted. This check runs even when step 4.6 skips the decomposition audit.
+A non-zero exit is handled exactly like a missing file. `WARN:` lines on a passing run are surfaced too; they flag a UAT that may be misrouted. This check runs even when step 4.6 skips the decomposition audit.
 
 ### 4.6. Adversarial decomposition audit
 
-A lightweight multi-agent audit of the **decomposition itself**, the one artifact neither the upstream SPEC audit nor the downstream pre-merge Code Audit Team audit can inspect: parallel lens agents check that the task graph is a sound factoring of the work, that the frozen interface contracts resolve against the real repo, and that the SPEC's binding criteria are all covered, before a cold orchestrator builds against a flawed plan.
+Audits the **decomposition itself** (task graph, frozen interface contracts, SPEC coverage) before a cold orchestrator builds against it; `plan/decomposition-audit.md` owns what it checks.
 
-**The audit runs automatically on a non-trivial plan; the gauge decides.** After step 4.5 confirms the artifacts exist, gauge the plan (below) and act on the gauge with no prompt: run the audit when the plan is non-trivial, skip it when the plan is trivial. There is no user choice; the gauge is the whole decision.
+**The audit runs automatically on a non-trivial plan; the gauge decides.** After step 4.5 confirms the artifacts exist, gauge the plan (below) and act on the gauge with no prompt: run the audit when the plan is non-trivial, skip it when the plan is trivial.
 
 **Gauge the plan (this is the decision).** Read `README.md` and the `task-*.md` files once. A trivial plan (one or two tasks, a single phase, no cross-task interface contract) → **skip the audit** and proceed to step 4.7. Anything with parallel tasks in a phase, multiple phases, or a shared frozen contract → **run the audit**.
 
-**Auto-mode.** Auto mode is `auto_mode` true (set by `## Argument parsing`). Identical to interactive: gauge the plan, run the audit if it is non-trivial, apply its dispositions non-interactively. Interactive and auto now differ only in how 4.6b surfaces findings, not in whether the audit runs.
+**Auto-mode.** `auto_mode` does not change whether the audit runs, only how 4.6b surfaces findings.
 
 **Fallback (never block).** If the parallel `general-purpose` Agent fan-out is unavailable (a restricted context that cannot spawn subagents), do NOT block the handoff: note the skip (`decomposition audit unavailable`) and proceed to step 4.7. The orchestrator's per-phase quality gates and the non-skippable pre-merge Code Audit Team audit remain the safety net.
 
@@ -219,7 +220,7 @@ The plan folder is written and verified, so every planner and auditor sub-agent 
 - **Spec-derived** (`SPEC_PATH` set): `bash .gaia/scripts/usage.sh record spec:<SPEC-NNN> --workflow gaia-plan --quiet`, where `<SPEC-NNN>` is the name of `SPEC_PATH`'s parent folder. `--quiet` prints no Cost line on success: the run's cost is shown once, as the box in step 5.
 - **Spec-less**: `bash .gaia/scripts/usage.sh record plan:<PLAN-NNN> --workflow gaia-plan`, where `<PLAN-NNN>` is the basename of `$PLAN_DIR`, the id allocated in step 3. It prints the Cost line (and any `Note:` lines under it) that step 5 relays.
 
-The command flushes the session's token usage into the ledger. It **never blocks the handoff**: on a non-zero exit, keep the one stderr line it prints for the step-5 report and continue. A `/clear` or a resumed session has a new session id, so a plan authored across one is refused with "no unclaimed start"; the stderr line then names the `--start <iso>` recovery, which runs outside a live `gaia-plan` run. The call is a mechanical command, not a prompt, so it runs identically in interactive and auto mode.
+The command flushes the session's token usage into the ledger. It **never blocks the handoff**: on a non-zero exit, keep the one stderr line it prints for the step-5 report and continue. A `/clear` or a resumed session has a new session id, so a plan authored across one is refused with "no unclaimed start"; the stderr line then names the `--start <iso>` recovery, which runs outside a live `gaia-plan` run.
 
 ### 5. Report to user
 
@@ -232,15 +233,13 @@ Cost: never compute or restate a figure yourself.
 
 When `record` exited non-zero in step 4.7, relay its one stderr line in place of the cost.
 
-This readout matches the cost shown when `/gaia-spec` stops before the plan report (spec reference, step 11) and the orchestrator's full-cycle readout; keep the three in sync.
-
 The prompt is a single line, exactly:
 
 ```text
 Read <absolute-path-to-PLAN_DIR>/KICKOFF.md and execute it.
 ```
 
-For example `.../.notebook/specs/SPEC-NNN/plan/KICKOFF.md` for a spec-derived plan, or `.../.notebook/plans/PLAN-NNN/KICKOFF.md` for a spec-less plan. Use `$PLAN_DIR/KICKOFF.md` (the absolute path resolved in step 3). The path MUST be absolute so the cold Claude session has no working-directory ambiguity. Do not include any other instruction, the orchestrator's behavior lives in `KICKOFF.md`.
+For example `.../.notebook/specs/SPEC-NNN/plan/KICKOFF.md` for a spec-derived plan, or `.../.notebook/plans/PLAN-NNN/KICKOFF.md` for a spec-less plan. Use `$PLAN_DIR/KICKOFF.md` (the absolute path resolved in step 3). The path MUST be absolute so the cold Claude session has no working-directory ambiguity.
 
 **Print the prompt inside a `text` fenced code block** so the user can select and copy it manually.
 

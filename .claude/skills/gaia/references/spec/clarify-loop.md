@@ -43,13 +43,13 @@ A save request typed into `Other` takes the escape in `## Escape option`.
 
 ## The question ceiling
 
-The interactive Socratic loop asks **at most 10 substantive questions**. Auto mode asks **at most 5**. Both numbers are GAIA's own (see step 5).
+The interactive Socratic loop asks **at most 10 substantive questions**. Auto mode asks **at most 5**.
 
 **Substantive** means a closed-set question (5a), a Discuss-this settlement (5b), or an open-ended question (5c), counted once on first surfacing. Nothing that merely re-surfaces or resolves an already-counted question spends a second unit, and the loop's own meta-prompts, 5d's exhaustion checkpoint, the 3-revisit settle prompt, and the research-outcome prompts, never count.
 
 There is exactly one counter and it needs no new storage: `question_count` in the session-shape cache (`.gaia/local/cache/spec-session-<spec_id>.json`, see the session-shape cache in `spec.md`'s Operational primitives) already counts substantive questions and already survives a pause and resume. The ceiling is therefore enforced against the **total across all sittings** of a session; a resumed session does not get a fresh budget.
 
-**The ceiling is a bound, not a goal.** The loop's normal termination is the coverage scan in `.claude/skills/gaia/references/spec/clarify-prompts.md` (Rule 8): ask until no topic is Partial or Missing, then stop. On a simple feature that fires after 2 to 4 questions and the ceiling is never felt. Do not pad toward it, and do not treat an unspent budget as work left undone.
+**The ceiling is a bound, not a goal**: the coverage scan stops the loop (`## The loop`), and an unspent budget is the normal outcome.
 
 **When the ceiling is reached with coverage incomplete**, the loop stops asking. Every topic still marked Partial or Missing is written to `clarifications.deferred[]` with a rationale naming it as ceiling-truncated (for example: `"Ceiling-truncated: 10 substantive questions asked; <topic> remained Partial."`). The loop does not push past the ceiling, and it does not advance to gate 2 as though coverage were complete.
 
@@ -65,7 +65,7 @@ For every question with discrete possible answers, surface it via `AskUserQuesti
 
 Never list `Other`: the tool supplies it. Text typed there is a free-form answer, or, when it asks to save, the escape in `## Escape option`.
 
-Ask exactly one question per turn. No multi-question forms. No silent stacking.
+Ask exactly one question per turn.
 
 After the user selects an option (or types an answer into `Other`), persist the fold via a single `Write` per the working-draft checkpoint primitive (answer into `clarifications.answered[]`, topic removed from `clarifications.pending[]`, statusline updated, all in one call). `Discuss this` and a save request follow their own paths (5b and `## Escape option` respectively).
 
@@ -94,15 +94,13 @@ When the loop is about to leave the current topic, whether because its coverage 
 
 The tool's `Other` takes a typed topic name to jump to, or a save request (`## Escape option`); list neither.
 
-Silent topic advance is forbidden. On `Push deeper on <topic>`, increment `push_deeper[<topic>]`. When that counter reaches 3 for any topic, switch to the revisit-counter prompt (see `## Per-topic revisit counter`) instead of repeating this checkpoint.
+On `Push deeper on <topic>`, increment `push_deeper[<topic>]`. When that counter reaches 3 for any topic, switch to the revisit-counter prompt (see `## Per-topic revisit counter`) instead of repeating this checkpoint.
 
 ## 5e. Research subagent dispatch
 
 For any question that requires prior-art lookup, repo-convention investigation, or competitive analysis, dispatch a research subagent, never punt the research to the user.
 
-**Announce the dispatch BEFORE dispatching**, verbatim:
-
-> Dispatching research agent for `<question>`
+**Announce the dispatch before dispatching**, verbatim per `clarify-prompts.md` Rule 6.
 
 Spawn a `general-purpose` Agent, passing `effort: "medium"` on the Agent call, with a focused research prompt. Handle the return based on outcome:
 

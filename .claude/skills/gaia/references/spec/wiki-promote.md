@@ -10,16 +10,14 @@ Contents: Step 1 - Resolve the source; Step 2 - Read promotion gate; Step 3 - Re
 
 ## Step 1 - Resolve the source
 
-The orchestrator passes the `SPEC-NNN` or `PLAN-NNN` id as the invocation argument. Resolve the source path by id shape, anchored at the main checkout through the library's `path` verb, because the gitignored notebook lives there and not in an isolation worktree:
+The orchestrator passes the `SPEC-NNN` or `PLAN-NNN` id as the invocation argument. Resolve the source path by id shape, anchored at the main checkout (the clone's primary working directory, on any branch) through the library's `path` verb, because the gitignored notebook lives there and not in an isolation worktree:
 
 - `SPEC-NNN` → `$(bash .gaia/scripts/notebook/notebook-lib.sh path spec SPEC-NNN)/SUMMARY.md`
 - `PLAN-NNN` → `$(bash .gaia/scripts/notebook/notebook-lib.sh path plan PLAN-NNN)/SUMMARY.md`
 
 Read the consolidated `SUMMARY.md` frontmatter. Required fields: `wiki_promote_default`, `wiki_promote_targets` (may be an empty list).
 
-**Legacy fallback (pre-consolidation SPECs):** if `SUMMARY.md` is absent but a legacy `SPEC.md` still exists in the same folder, fall back to reading `SPEC.md`'s frontmatter and body instead; downstream steps (title, body, routing) source from whichever file resolved here.
-
-If neither `SUMMARY.md` nor a legacy `SPEC.md` exists, return Choice `no`, `Pages: none`, `Reason: no consolidated SUMMARY.md or SPEC artifact found; nothing to promote`.
+If `SUMMARY.md` does not exist, return Choice `no`, `Pages: none`, `Reason: no consolidated SUMMARY.md found; nothing to promote`.
 
 ## Step 2 - Read promotion gate
 
@@ -50,7 +48,7 @@ Capture `pr_number` and `pr_url` for downstream steps. If `gh` is unavailable, u
 
 ## Step 4 - Route to wiki destinations
 
-Read `wiki_promote_targets` from the resolved source's frontmatter (`SUMMARY.md`, or the legacy `SPEC.md` under the Step 1 fallback). Step 2 guarantees it is non-empty here.
+Read `wiki_promote_targets` from the resolved source's frontmatter (`SUMMARY.md`). Step 2 guarantees it is non-empty here.
 
 Allowed subdomain values:
 
@@ -169,18 +167,17 @@ Line format:
 - `<YYYY-MM-DD>`: today.
 - `<comma-separated paths>`: union of `pages_written` and `pages_updated`, in the order they were processed. If the union is empty (everything skipped), do NOT append a `PROMOTED:` line, instead append `WARN: <id> promotion produced no writes; see warnings above.`.
 
-If `wiki/log.md` does not contain a `## [Unreleased]` section, prepend the section header above the existing first `## ` heading. (Defensive, the file should already have one per the existing wiki convention.)
+If `wiki/log.md` does not contain a `## [Unreleased]` section, prepend the section header above the existing first `## ` heading.
 
 ## Step 5b - Page body rendering
 
 Render the body in the following sections, in order, immediately after the closing `---` of the frontmatter. No template engine, emit markdown directly.
 
-1. **Title**, H1 line copied verbatim from the resolved source's H1 (the `SUMMARY.md` H1, or the legacy `SPEC.md`'s H1 under the Step 1 fallback).
-2. **Lede**, first paragraph of the source body immediately after the H1. **Legacy `SPEC.md` fallback only:** first paragraph of the SPEC's `## One-line summary` section if present; else the first paragraph of its `## Intent` section; if neither exists, omit the lede. The id never stands in for it: body prose outside the marker-wrapped blocks ships.
-3. **Decisions / behaviors**, under an H2 `## Decisions` (for `type: decision`) or `## Behavior` (for all other types). For the consolidated `SUMMARY.md` source, render the body prose as-is, it is already present-tense final-state prose written by the consolidation producer, no voice adaptation needed. **Legacy `SPEC.md` fallback only:** include the SPEC's `## Intent` body and, if present, any H2 in the SPEC body whose heading begins with `## Composition with ` (the section that explains how the SPEC composes with prior architecture); adapt voice from future-tense ("will promote") to present-tense ("promotes") where the change is mechanical, leave wording alone where rewriting risks meaning drift.
-4. **Divergence**, if the resolved source has a `## Divergence` section (consolidated `SUMMARY.md` only, an optional section the consolidation producer writes when shipped scope is materially narrower than the stated intent), render it verbatim under its own `## Divergence` heading. Omit entirely when absent.
-5. **UAT references**, under an H2 `## UAT references`, render a bullet list. **Legacy `SPEC.md` fallback only** (the consolidated `SUMMARY.md` frontmatter carries no `uats:` list, so this section is omitted entirely on that path): for each entry in the SPEC's frontmatter `uats:` list, emit `- **<UAT-ID>**, <one-line summary>`. Source the one-line summary from the UAT entry's `summary` field if present; otherwise the first sentence of its `intent` field. If `uats:` is empty or absent, omit the entire `## UAT references` section. When emitted, the section carries UAT ids, so it sits inside the same marker lines as §7's References block, the heading included, under the same rule for when they apply.
-6. **Related**, sibling wikilinks. Determine the set of sibling pages produced by the **current run**: every entry in the union of `pages_written` and `pages_updated` whose `target_path` is not the page being rendered. (Skipped pages, `hand-edited`, `foreign-collision`, are excluded; their files were not written and a wikilink would dangle.)
+1. **Title**, H1 line copied verbatim from the resolved source's H1 (the `SUMMARY.md` H1).
+2. **Lede**, first paragraph of the source body immediately after the H1. The id never stands in for it: body prose outside the marker-wrapped blocks ships.
+3. **Decisions / behaviors**, under an H2 `## Decisions` (for `type: decision`) or `## Behavior` (for all other types). For the consolidated `SUMMARY.md` source, render the body prose as-is, it is already present-tense final-state prose written by the consolidation producer, no voice adaptation needed.
+4. **Divergence**, if the resolved source has a `## Divergence` section (an optional section the consolidation producer writes when shipped scope is materially narrower than the stated intent), render it verbatim under its own `## Divergence` heading. Omit entirely when absent.
+5. **Related**, sibling wikilinks. Determine the set of sibling pages produced by the **current run**: every entry in the union of `pages_written` and `pages_updated` whose `target_path` is not the page being rendered. (Skipped pages, `hand-edited`, `foreign-collision`, are excluded; their files were not written and a wikilink would dangle.)
    - **Solo-page promotion** (no siblings): omit the entire `## Related` section. Do not emit the H2 at all.
    - **Has siblings**: emit:
 
@@ -195,7 +192,7 @@ Render the body in the following sections, in order, immediately after the closi
 
      `<sibling-slug>` is the sibling's filename without `.md` (its Step 4 slug, type suffix included) and `<sibling-page-title>` is its H1, shown as the alias. Sort sibling entries alphabetically by slug. Link by slug, never by title: siblings share one H1, so a title link cannot tell them apart, and a title containing `/` reads as a path and dangles.
 
-7. **References**, emit an H2 `## References` followed by a bullet list with the source backlink, the PR URL, and the promotion timestamp:
+6. **References**, emit an H2 `## References` followed by a bullet list with the source backlink, the PR URL, and the promotion timestamp:
 
    ```markdown
    <maintainer-only start marker>
@@ -215,18 +212,8 @@ Render the body in the following sections, in order, immediately after the closi
 
    Substitutions:
    - `<id>`, the `SPEC-NNN` or `PLAN-NNN` id from Step 1.
-   - `<relative-path>`, the resolved source's repo-relative path with a `../../` prefix (promoted wiki pages live at `wiki/<subdomain>/<page>.md`, two segments deep from the repo root): `../../.notebook/specs/SPEC-NNN/SUMMARY.md`, `../../.notebook/plans/PLAN-NNN/SUMMARY.md`, or the legacy `../../.notebook/specs/SPEC-NNN/SPEC.md` under the Step 1 fallback (`.notebook/` sits at the repo root, so the `../../` prefix holds for it as it did for any root-level source).
-   - `<owner>/<repo>`, resolved once per run by running, via the Bash tool:
+   - `<relative-path>`, the resolved source's repo-relative path with a `../../` prefix (promoted wiki pages live at `wiki/<subdomain>/<page>.md`, two segments deep from the repo root): `../../.notebook/specs/SPEC-NNN/SUMMARY.md` or `../../.notebook/plans/PLAN-NNN/SUMMARY.md`.
 
-     ```bash
-     repo_slug=$(gh repo view --json owner,name -q '"\(.owner.login)/\(.name)"' 2>/dev/null)
-     ```
-
-     Fallback when `gh` is unavailable: parse `git remote get-url origin`. Handle both forms:
-     - SSH: `git@github.com:<owner>/<repo>.git` → strip the `git@github.com:` prefix and the `.git` suffix.
-     - HTTPS: `https://github.com/<owner>/<repo>.git` → strip the `https://github.com/` prefix and the `.git` suffix.
-
-     If both methods fail (no `gh`, no `origin` remote), substitute the literal `<owner>/<repo>` placeholder and emit a warning `wiki-promote: could not resolve repo slug; PR URL placeholder left in references.`. Nothing downstream fixes the placeholder: Step 6 returns the warning with the page list so the orchestrator reports it to the human in its wiki-promotion record, and the human corrects the URL by hand.
 
    - `NNN` and `<pr_url>`, the open PR's `pr_number` and `pr_url` from Step 3.
    - `<ISO 8601 UTC>`, same value as `promoted_at` in the page frontmatter.
@@ -258,7 +245,7 @@ After all pages have been written and the body is rendered, update `wiki/index.m
 
 The orchestrator stages the modified `wiki/index.md` together with the returned pages (Step 6); no separate staging is needed here.
 
-Match the existing wiki voice: declarative, no preamble, concrete examples where useful. End the file with a single trailing newline.
+Write page prose per `.claude/rules/wiki-style.md`, and end each written file with a single trailing newline.
 
 ## Step 6 - Return the page list
 

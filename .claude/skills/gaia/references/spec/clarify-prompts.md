@@ -75,8 +75,7 @@ Options:
 ```
 
 When code-context is available (a known component, an existing pattern,
-a prior SPEC's decision), annotate the option with that context inline,
-borrowing GSD's pattern:
+a prior SPEC's decision), annotate the option with that context inline:
 
 > 1. Cards (reuses existing `Card` component), recommended. Lowest
 >    delta vs. shipped UI.
@@ -205,10 +204,7 @@ human to do the research themselves.
 
 ## Rule 7: Coach voice, not interrogator
 
-All prompts read as a thinking partner, not a checklist. Mirror back
-what the user said. Name the trade-offs the PO is weighing. Propose
-candidates when the user is stuck. See `system-prompt.md` for the
-persona contract.
+Persona contract: `system-prompt.md`, read alongside this file.
 
 ---
 
@@ -265,9 +261,7 @@ disposition. On a simple feature it fires after two to four questions,
 and that is the correct outcome; a loop that keeps asking after the
 scan is clean is padding.
 
-The question ceiling (Rule 9) is a **bound on the loop, not a target
-for it**. An unspent budget is not work left undone. If the scan is
-clean at question three, the loop stops at question three.
+
 
 If the loop reaches the ceiling while topics are still Partial or
 Missing, it stops asking and hands the uncovered topics forward as
@@ -296,13 +290,8 @@ narrate it every turn. Surface it at exactly two moments:
 
 The Socratic loop's question ceiling is owned by
 `.claude/skills/gaia/references/spec/clarify-loop.md` (its section
-`## The question ceiling`). That file is the single source of truth
-for the interactive ceiling, the auto-mode ceiling, what counts as a
-substantive question, and what the loop does on reaching the bound
-with coverage incomplete.
-
-This file deliberately restates none of it. A budget written down in
-two places is a budget that drifts, and the loop reads both files.
+`## The question ceiling`). It owns both ceilings, what counts as a substantive
+question, and the loop's action at the bound; this file restates none of it.
 
 ---
 
@@ -311,7 +300,7 @@ two places is a budget that drifts, and the loop reads both files.
 The PO seeds its topic plan from these defaults and adapts to the
 feature at hand. Each topic carries a `Suggest` field, a fallback
 candidate the PO offers when the user shrugs or asks "what would you
-pick?" (borrowed from SEED's prevent-dead-ends pattern).
+pick?".
 
 | Topic      | First question to seed it                                              | Suggest                                     |
 | ---------- | ---------------------------------------------------------------------- | ------------------------------------------- |
