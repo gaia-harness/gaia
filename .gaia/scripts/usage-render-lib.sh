@@ -142,8 +142,9 @@ def usage_elapsed($group):
   | if $first == null or $last == null then 0 else ([$last - $first, 0] | max | floor) end;
 
 # The views read rows and keys only through their parameters; the wrappers
-# below bind the globals $usage_store, $links_store, and $keys for the filters that still use
-# the old names. A $keys parameter also defines a filter named keys that
+# below bind the globals $usage_store, $links_store, and $keys for the legacy
+# readout, which usage.sh falls back to when the memo readout fails and which
+# still calls the views by these names. A $keys parameter also defines a filter named keys that
 # shadows the builtin inside the def, so these bodies spell it to_entries.
 #
 # $auditors is null, or the agent_type names whose in-window segments the

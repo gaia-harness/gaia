@@ -1,8 +1,9 @@
 #!/usr/bin/env bats
 
 # Doc pin for /gaia-init's setup menus: every identity question it asks names
-# at least two real options, no option only points at the tool's own Other (an
-# inert button that returns no value), and the primary-language question's
+# at least two real options, no option line contains the word "Other" (the
+# tool's own Other is an inert button that returns no value; an option that
+# points at it in other words is not caught), and the primary-language question's
 # second option can never repeat the first. Runs once on the real file (must
 # pass) and on mutated scratch copies (must fail).
 

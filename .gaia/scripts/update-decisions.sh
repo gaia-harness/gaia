@@ -7,15 +7,14 @@
 #
 #   bash .gaia/scripts/update-decisions.sh check|deferred|deferred-tags|record|reconcile|context ...
 #
-# Contract with callers (the update skill and update-gaia-report.sh): every
+# Contract with callers (the update skill): every
 # subcommand except `check` validates the file first and exits 1 with the same
 # output `check` prints, so no caller acts on an invalid file. Tag fields reach
 # download commands, so the validation insists on semver tags. The file is
 # outside the manifest, so the merge walk never touches it.
 #
-# Output tokens are machine lines (DECISIONS_OK, DEFERRED, EARLIER, RECORDED,
-# DROPPED, REBASED); the skill formats any sentence itself. Exit 0 ok, 1 invalid file or
-# refused record, 2 usage error or missing jq.
+# Output tokens are machine lines; the skill formats any sentence itself.
+# Exit 0 ok, 1 invalid file or refused record, 2 usage error or missing jq.
 #
 # reconcile ends a deferred entry that a run resolved without a question: it
 # is dropped when the tree file equals the latest copy, and otherwise rebased

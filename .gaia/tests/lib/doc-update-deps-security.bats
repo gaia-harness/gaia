@@ -11,9 +11,10 @@
 # the Phase 8 security-only subject, acceptance only after a per-advisory
 # question, the release-age and trust settings rule, no fixed /tmp scratch path,
 # the worktree state line's null-versus-zero read, the report-only reading,
-# the security phase's own snapshot directories, the override audit's
-# fail-closed read of an unanswered `pnpm audit`, and the plain wording every
-# printed mention of the transitive refresh uses.
+# the security phase's own snapshot directories, the override audit's two
+# captures through the capture script and its stop-and-retain wording for an
+# unanswered `pnpm audit`, and the plain sub-dependency wording of the
+# SKILL.md preview, menu and skip lines and the final report's heading.
 #
 # Each check is a function over a file path, so every test that proves the
 # real page passes has a twin that runs the same function over a scratch copy
