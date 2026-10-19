@@ -81,7 +81,7 @@ The self-review agent already applied every `minor` `suggested_fix` (6a); main g
   - `Keep the current draft`: fold nothing.
   - `Revise`: fold a different change.
 
-  When the finding itself recommends keeping the draft, `Keep the current draft (Recommended)` leads instead. A typed revision arrives through the tool's own `Other` answer; `Revise` with no text asks what to change as a plain follow-up. Batch independent findings, up to 4 questions per `AskUserQuestion` call, in successive calls when there are more, printing each batch's findings above its call; a finding waits for an earlier answer only when its fix depends on that answer. Record every answer of a batch before continuing.
+  When the finding itself recommends keeping the draft, `Keep the current draft (Recommended)` leads instead. A typed revision arrives through the tool's own `Other` answer; `Revise` with no text asks what to change as a plain follow-up. Batch independent findings, up to 4 questions per `AskUserQuestion` call, in successive calls when there are more, printing each batch's findings above its call; a finding waits for an earlier answer only when its fix depends on that answer. Never mix recommendations in one call: batch the findings that recommend applying apart from those that recommend keeping, in successive calls, so the first option means the same action on every tab of one menu. Record every answer of a batch before continuing.
 
   An **approved** gated fix folds through the **delegated fold** (see "Audit cache + delegated fold" in `spec.md`), keyed by its `SR-NNN` id in the decision list; do not emit a main-thread draft `Write` for the fold. On `Revise`, route the user's revision through the same delegated fold. On `Keep the current draft`, fold nothing.
 
