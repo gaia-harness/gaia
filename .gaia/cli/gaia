@@ -30583,6 +30583,10 @@ var ADOPTER_OWNED_SENTINELS = /* @__PURE__ */ new Set([
 var MACHINE_LOCAL_PATHS = /* @__PURE__ */ new Set([
   ".claude/settings.local.json"
 ]);
+var ABSENT_BY_DESIGN_PATHS = /* @__PURE__ */ new Set([
+  ".claude/commands/gaia-init.md",
+  ".claude/gaia-fitness.json"
+]);
 var PATH_TOKEN_PATTERN = /`([^`\n]+)`/g;
 var PLACEHOLDER_PATTERN = /[<>*${}]|N{3,}|X{3,}/;
 var HISTORICAL_BULLET_PATTERN = /^\s*-\s+\*\*(?:Removed|Deleted|Renamed|Migrated|Replaced)\*\*/i;
@@ -30592,6 +30596,7 @@ var isTrackedPath = (token, prefixes) => {
   if (!/\.[a-z0-9]{1,8}$/i.test(token)) return false;
   if (ADOPTER_OWNED_SENTINELS.has(token)) return false;
   if (MACHINE_LOCAL_PATHS.has(token)) return false;
+  if (ABSENT_BY_DESIGN_PATHS.has(token)) return false;
   if (RUNTIME_PREFIXES.some((prefix) => token.startsWith(prefix))) return false;
   if (SIBLING_REPO_PATTERN.test(token)) return true;
   return prefixes.some((prefix) => token.startsWith(prefix));
