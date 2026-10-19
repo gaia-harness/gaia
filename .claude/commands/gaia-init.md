@@ -57,7 +57,7 @@ Every gate is one of two tiers. The tier is fixed here, do not reclassify by jud
 | Additional languages / i18n teardown, `STRIP_I18N` (+ free-text)     | Step 2, Q2    |
 | CODEOWNERS GitHub handle (HARD-BLOCK only when `gh` can't detect it) | Step 2, Q3    |
 | Project title                                                        | Step 2, Q4    |
-| kebab-case slug                                                      | Step 2, Q5    |
+| kebab-case slug (derived from the title, never asked on its own)     | Step 2, Q5    |
 
 **SAFE-DEFAULT** (reversible, the recommended default is the safe outcome). On non-response in interactive mode: re-ask once; if still no answer, apply the stated default, name it plainly ("Defaulting backend casing to camelCase, you can change it later"), and continue. Do not claim the user is absent.
 
@@ -183,6 +183,14 @@ If install fails, stop and report the error.
 
 Then run `/update-deps` to bring all packages to their latest compatible versions before continuing. Tell it that `/gaia-init` invoked it: that run resolves every security advisory it can, asks no acceptance question (an advisory it cannot resolve is reported still open), reverts a failing resolution on its own, and cuts no branch and commits nothing, since no remote exists yet to push to; Step 11's init commit carries its changes. If `/update-deps` reports anything as **skipped** with a reason, surface it so the user can investigate, but proceed. Note `/update-deps` runs its own quality gate at the end, if it halts on a quality-gate failure or peer-dep error, stop here and surface the report to the user; do not silently continue.
 
+After `/update-deps` returns, and before Step 2, refresh the statusline's update-check cache. The init-invoked run cuts no branch, so it never reaches the refresh `/update-deps` runs at branch creation, and the cache would otherwise keep showing the bumps just applied as outdated until its TTL expires:
+
+```bash
+bash .gaia/scripts/update-check-bust.sh --cache "$(git rev-parse --show-toplevel)/.gaia/local/cache/shared/update-check.json" --mode deps
+```
+
+The refresh is cosmetic: report a non-zero exit and continue.
+
 ## Step 2: Gather user input (in the user's language)
 
 This whole conversation has been in the user's language so far. Continue in that language for every prompt below.
@@ -195,7 +203,7 @@ basename "$(git rev-parse --show-toplevel)"
 
 Use this as the slug default. Derive the title default by replacing hyphens and underscores with spaces and applying title case (e.g. `my-cool-app` → `My Cool App`).
 
-Ask the two language questions one at a time (Q2 interpolates Q1's answer), then batch the three project-identity questions, then ask the two data-layer questions one at a time.
+Ask the two language questions one at a time (Q2 interpolates Q1's answer), then batch the two asked project-identity questions (the slug is derived), then ask the two data-layer questions one at a time.
 
 ### Q1, Primary app language (asked alone)
 
@@ -206,7 +214,20 @@ Use AskUserQuestion with this single question:
 > What should be the primary language for this app's UI?
 >
 > - {detected user language} (Recommended): what you've been typing in.
-> - English
+> - {second language}
+
+`{second language}` is always a real language different from the first option, never a repeat of it:
+
+- Detected language is not English: English.
+- Detected language is English: the system locale's language when it is not English, else Spanish. Read the locale with the command below; an empty value, `C`, `POSIX`, or an English code (`en`) counts as English.
+
+```bash
+locale_code="${LC_ALL:-${LC_MESSAGES:-$LANG}}"
+[ -z "$locale_code" ] && command -v defaults >/dev/null 2>&1 && locale_code="$(defaults read -g AppleLocale 2>/dev/null)"
+printf '%s\n' "${locale_code%%[_.@-]*}"
+```
+
+Resolve the printed code to its English language name (e.g. `de` → German).
 
 Do not add an "Other" option: the tool adds its own, and a hand-added one is an inert button with no input field. A language not listed arrives as typed text through the tool's own Other answer, however the user likes to write it, a name or a code, in English or its own script (e.g. `Polish`, `pl`, or `polski`).
 
@@ -243,17 +264,25 @@ Resolve two values from the answer:
 - `LOCALES = unique({primary} code, any additional codes entered above)`. Either {primary}-only option leaves `LOCALES` as just `[{primary}]`.
 - `STRIP_I18N = true` only when the user chose "{primary} only, remove i18n entirely"; otherwise `false`. Adding languages or keeping the scaffolding both leave it `false`.
 
-### Q3–Q5, Project identity (one AskUserQuestion, three questions)
+### Q3–Q5, Project identity (one AskUserQuestion; the slug is derived)
 
-_Non-response: title and slug are HARD-BLOCK, re-ask, never guess. CODEOWNERS: offer the gh-detected handle as the recommended default; HARD-BLOCK only when detection failed (no default to fall back to), re-ask, never guess. Automatic mode: title-cased folder name (title), folder name (slug), and the gh-detected handle (CODEOWNERS) when available, else the `REPLACE-WITH-YOUR-GITHUB-HANDLE` placeholder flagged as a required Step 11 follow-up._
+_Non-response: title is HARD-BLOCK, re-ask, never guess. CODEOWNERS: offer the gh-detected handle as the recommended default; HARD-BLOCK only when detection failed (no default to fall back to), re-ask, never guess. The slug is never asked: it is derived from the chosen title. Automatic mode: title-cased folder name (title), folder name (slug), and the gh-detected handle (CODEOWNERS) when available, else the `REPLACE-WITH-YOUR-GITHUB-HANDLE` placeholder flagged as a required Step 11 follow-up._
 
-These three go together as a group. Ask them in a single AskUserQuestion call, each question's default as its first option, marked ` (Recommended)`; the tool's own Other takes a typed value:
+Ask Q3 and Q4 in a single AskUserQuestion call. Each question carries exactly the two real options below, its default first and marked ` (Recommended)`; the tool's own Other takes a typed value. Never add an option that only points at Other (such as "Enter another" or "Type a value"): the tool adds its own, and a hand-added one is an inert button that returns no value.
 
-**GitHub username for CODEOWNERS.** First run the GitHub-handle detection from "Free-text identity values are never fabricated" above (reuse the automatic-mode result if it already ran). If it yields a handle, offer it as the recommended default (first option, marked ` (Recommended)`); a gh-detected handle is the user's own authenticated identity, not a guess, so it is safe to default to. The user can still override it with a different handle via free text. If detection fails there is no default, so this stays a free-text identity value that is **never fabricated**: on interactive non-response, HARD-BLOCK and re-ask rather than guessing; in automatic mode, use the loud placeholder so a wrong owner never ships. Suggest `@username` format; store the bare handle.
+**Q3, GitHub username for CODEOWNERS.** First run the GitHub-handle detection from "Free-text identity values are never fabricated" above (reuse the automatic-mode result if it already ran). If it yields a handle, ask with these options:
 
-**Project title** (default: title-cased folder name from above)
+- `@{handle} (Recommended)`, description: `your authenticated GitHub login`. A gh-detected handle is the user's own identity, not a guess, so it is safe to default to.
+- `Set it later`: writes the `REPLACE-WITH-YOUR-GITHUB-HANDLE` placeholder to `.github/CODEOWNERS` and flags it as a required Step 11 follow-up.
 
-**kebab-case slug** derived from the title (default: folder name from above)
+A different handle arrives through Other. Suggest `@username` format; store the bare handle. If detection fails there is no default, so this stays a free-text identity value that is **never fabricated**: leave Q3 out of the call and ask for the handle as a plain chat message (its answer is open-ended free text), and on interactive non-response HARD-BLOCK and re-ask rather than guessing; in automatic mode, use the loud placeholder so a wrong owner never ships.
+
+**Q4, Project title.** Options:
+
+- `{title-cased folder name} (Recommended)`, description: `slug {the slug it derives}`.
+- `{folder name as-is}`, description: `slug {the slug it derives}`. When the folder name already equals its title-cased form (e.g. `Convene`), offer the folder name lowercased instead.
+
+**Q5, kebab-case slug (derived, not asked).** Derive the slug from the chosen title: lowercase it, replace each run of characters other than `a-z` and `0-9` with one hyphen, and trim leading and trailing hyphens. When that leaves nothing (a title with no ASCII letters or digits, such as one in a non-Latin script), ask for the slug as a plain chat message, since its answer is free text, and re-ask until it is valid kebab-case. A title typed through Other re-derives the slug from it. A typed reply of the form `Title / slug` (e.g. `Convene / convene-app`) sets both: the part before ` / ` is the title and the part after is the slug, used as typed once it is valid kebab-case (re-ask if it is not).
 
 ### Q6, Backend casing (asked alone)
 
@@ -327,7 +356,7 @@ printf '* @%s\n' "<github-username>" > .github/CODEOWNERS
 
 `<github-username>` is the handle Q3 resolved: the user's typed handle, or the gh-detected login when the user accepted (or automatic mode used) that default. Any of these is a real handle, write `* @<handle>` and emit **no** Step 11 follow-up warning.
 
-Only when Q3 obtained no real handle (automatic mode where gh detection also failed) is `<github-username>` the placeholder `REPLACE-WITH-YOUR-GITHUB-HANDLE`. Write it anyway, GitHub flags the unknown owner in its CODEOWNERS validation, so the gap is visible. Add a required follow-up to the Step 11 summary: "Edit `.github/CODEOWNERS`, it holds a placeholder owner, set your real GitHub handle."
+Only when Q3 obtained no real handle (the user picked `Set it later`, or automatic mode where gh detection also failed) is `<github-username>` the placeholder `REPLACE-WITH-YOUR-GITHUB-HANDLE`. Write it anyway, GitHub flags the unknown owner in its CODEOWNERS validation, so the gap is visible. Add a required follow-up to the Step 11 summary: "Edit `.github/CODEOWNERS`, it holds a placeholder owner, set your real GitHub handle."
 
 ## Step 6: Check `.env`
 
