@@ -4,23 +4,13 @@
 
 Grades come only from the CLI. The judgment pass, the built-ins and any model reading are advisory and never move a grade.
 
-Contents: Path resolution; Step 1, Repo-state pre-flight; Step 2, Scratch; Step 3, Run the CLI; Step 4, Judgment; Step 5, Report; Step 6, Heal; Step 7, Verify; Step 8, Publish gate; Step 9, Publish; Cost record (run end).
-
----
-
-## Path resolution (portable, no hardcoding)
-
-All paths in this file are repo-relative or derived from `$PROJECT_ROOT`, never hardcoded. Run every command from the project root.
-
-```bash
-PROJECT_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || printf %s "${CLAUDE_PROJECT_DIR:-$(pwd)}")"
-```
+Contents: Step 1, Repo-state pre-flight; Step 2, Scratch; Step 3, Run the CLI; Step 4, Judgment; Step 5, Report; Step 6, Heal; Step 7, Verify; Step 8, Publish gate; Step 9, Publish; Cost record (run end).
 
 ---
 
 ## Step 1, Repo-state pre-flight
 
-Before any heal-phase mutation, determine whether the repo is in a safe state.
+Run every command in this file from the project root; paths are repo-relative. Before any heal-phase mutation, determine whether the repo is in a safe state.
 
 ```bash
 PROJECT_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || printf %s "${CLAUDE_PROJECT_DIR:-$(pwd)}")"
@@ -31,7 +21,7 @@ for marker in rebase-merge rebase-apply MERGE_HEAD CHERRY_PICK_HEAD BISECT_LOG; 
 done
 ```
 
-Run it as a single Bash call. No output means the state is safe. Each `unsafe:` line is a reason to report: rebase-merge/rebase-apply mean a rebase is in progress, MERGE_HEAD a merge, CHERRY_PICK_HEAD a cherry-pick, BISECT_LOG a bisect.
+Run it as a single Bash call. No output means the state is safe. Each `unsafe:` line is a reason to report.
 
 **Any `unsafe:` line routes to the triage-only path.** Run Steps 2 through 5 as normal, then skip Steps 6 through 9: state clearly that heal was skipped because the working state is not safe to mutate, name the specific reason (for example "HEAD is detached" or "rebase in progress"), give the resolution (complete or abort the rebase, or check out a branch, then re-run `/gaia-fitness`), make no working-tree mutation, create no branch, record cost (see **Cost record (run end)**, no pass-through) and STOP.
 
@@ -266,8 +256,6 @@ The merge above is already queued and the wait issues no `gh pr merge` of its ow
 - **exit 2** → the wait refused rather than answered: report what it could not read, record cost, print the PR URL, and keep the local branch. Assert no state for the PR, since nothing about it was read: no lands-when-checks-pass note and no claim that the merge did or did not land; the merge queued above may still land.
 
 Every arm that keeps the local branch names its worktree path under `RESOLVED_MODE=worktree`, so a kept worktree never goes unreported.
-
-A heal edit to a nested `CLAUDE.md` under an in-scope path such as `frontend/app/` is exactly the reached-an-audited-surface diff the member check above detects; if it named a member, the handshake ran before the merge.
 
 ---
 

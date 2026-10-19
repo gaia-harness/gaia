@@ -6,8 +6,6 @@ Contents: Step 5 Apply procedure (pre-flight, per-action loop); Post-apply verif
 
 ## Step 5, Apply procedure (Stage 2, Sonnet)
 
-You are executing, not reasoning. Follow this loop exactly.
-
 **Paths.** The report was written from the main checkout, so every in-repo path it names sits under `$PROJECT_ROOT`. You write `$TREE_ROOT`, which is `$PROJECT_ROOT` itself or the run's isolated worktree. Read, drift-check and write every in-repo path, the report's and this procedure's own (`wiki/log.md`, `wiki/index.md`), at the same relative path under `$TREE_ROOT`, and run every `git` command in `$TREE_ROOT`. Run the owner check on the report's path as written, with `--root "$PROJECT_ROOT"`, since ownership follows the relative path and the memory directory is keyed by `$PROJECT_ROOT`. Paths under `$MEMORY_DIR` and `$AGENT_MEMORY_DIR` are used as written. The report and the cleanse state stay under `$PROJECT_ROOT/.gaia/local/`, one copy shared by every worktree.
 
 ### Pre-flight
@@ -39,7 +37,7 @@ For each unchecked action block:
 
 ### Post-apply verification (mechanical, no judgment)
 
-Before printing the summary, verify each flipped action actually landed. This is mechanical, no judgment, no re-deciding whether an action was correct:
+Before printing the summary, verify each flipped action landed:
 
 1. **Every `promote` flipped `[x]`:**
    - If the action's `target_action: create_new`: confirm `target_page` exists and is non-empty (the `body` *is* the new page).
@@ -69,7 +67,7 @@ Record the filed, diverted and deduped counts (the script's stdout words: `filed
 
 ### Post-flight
 
-Set the report frontmatter `status:` to the terminal value the verification step above decided: `applied` if every action is `[x]`, otherwise `applied-partial`; on a report whose `scope:` is not `full`, write `scoped-applied` / `scoped-partial` instead, so a scoped run never advances the statusline's last-audit anchor (it reads only `applied` and `applied-partial`). The partial forms are kept so `--apply` can retry the remainder. That verification checklist is the authority for this value, do not re-derive it here.
+Set the report frontmatter `status:` to the terminal value the verification step above decided: `applied` if every action is `[x]`, otherwise `applied-partial`; on a report whose `scope:` is not `full`, write `scoped-applied` / `scoped-partial` instead, so a scoped run never advances the statusline's last-audit anchor (it reads only `applied` and `applied-partial`). The partial forms are kept so `--apply` can retry the remainder.
 
 Then bust the statusline cache so the audit nudge clears and a fresh check is triggered on the next render (mirrors the `/update-deps` post-run cache-bust). This runs on every Stage 2 completion: the gated Apply path, the `--apply` path, and the 0-action auto-apply path.
 
@@ -90,8 +88,6 @@ if [ -f "$CACHE" ]; then
 fi
 ```
 
-`cleanseNudge = false` / `cleanseNudgeReason = ""` clear the displayed nudge immediately; `checkedAt = 0` forces `check-updates.sh` past its TTL gate on the next statusline render (which fires it in the background), recomputing every signal (including any over-budget condition a partial apply left unresolved) from the source of truth. All other cached fields (`outdatedCount`, `gaia*`) are preserved, so no other indicator flickers. If the cache file is absent, skip.
-
 Then print a final summary to stdout:
 
 ```
@@ -109,8 +105,6 @@ handoff: changes are uncommitted in TREE_ROOT; the main conversation runs Publis
 - Never delete a memory entry unless the action's `reason` cites a canonical wiki location. (Stage 1 must supply this; Stage 2 doesn't judge.)
 - Never edit `wiki/log.md` anywhere except prepending a new line at the top.
 - Never write a committed instruction file (a CLAUDE.md file, rule, skill, command or agent) on CONFLICT grounds: a report action that does so is skipped and noted.
-- **Stage 2** never `git add` or `git commit`; it leaves the applied changes in the working tree and returns. The main conversation's Publish procedure commits after Stage 2 returns.
 - Never improvise: if drift-check fails, skip and report. Do not search for the "right" target.
 - Never merge two actions: each block is atomic.
 - If an action targets a path that doesn't exist, mark `[!]` with `target missing` and continue.
-- File out-of-scope findings, never fix them: no working-tree edit for an out-of-scope finding.

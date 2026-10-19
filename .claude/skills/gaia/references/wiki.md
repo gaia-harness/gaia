@@ -20,7 +20,7 @@ Note: /gaia-wiki takes no arguments; ignoring "<arguments>" and running sync, co
 
 ## The run
 
-The run lands as **one commit on one branch and one PR**. The stages commit nothing: each leaves its edits uncommitted in the working tree, and step 6 commits them all at once. The parent (the agent reading this file) owns the branch lifecycle: step 1 isolates the run, and every later git/branch/PR action goes through `gaia wiki chain`; each stage still runs as its own subagent. The playbook bans inlining any other branch logic, manual `git commit` or `gh pr` calls, or push narrative.
+The run lands as **one commit on one branch and one PR**. The stages commit nothing: each leaves its edits uncommitted in the working tree, and step 6 commits them all at once. The parent (the agent reading this file) owns the branch lifecycle: step 1 isolates the run, and every later git, branch, and PR action goes through `gaia wiki chain`, with no manual `git commit`, `gh pr`, or other branch logic.
 
 1. **Isolate, then begin.** Mint the run's branch name and carry it as `<WIKI_BRANCH>`:
 
@@ -46,16 +46,16 @@ The run lands as **one commit on one branch and one PR**. The stages commit noth
 7. **Finish.** Run `.gaia/cli/gaia wiki chain finish`. On the wiki branch it pushes, opens ONE PR titled with the commit's subject, posts the out-of-scope `GAIA-Audit` stamp, and queues auto-merge, then stays on the branch and prints `chain finish: opened PR #<N> for <branch>; auto-merge queued, merge not yet confirmed`. That line means the PR is open, not merged: the run is not done, so go on to step 8. If the run produced no commit, it leaves a dirty tree in place (step 3), or, on a clean tree, drops the empty branch and returns to base under `feature-branch`, or under `worktree` reports `nothing to land` and leaves the tree to you: release it per isolation.md's `## Releasing an isolation that holds nothing`. In those cases no PR was opened, so the run ends here: relay the summary, naming a kept dirty tree's path and branch. A non-zero exit also ends the run: relay its stderr, which names the next step.
 
 8. **Merge and clean up.** The wiki PR lands like every other GAIA PR, through `.claude/skills/gaia/references/work-lifecycle.md`. The stamp in step 7 is this skill's audit, so the lifecycle's `## 6. Audit` does not run, and the merge is already queued, so nothing here re-merges. Run the merge wait from `## 7. Merge (when asked)` on the PR number `finish` printed (when it printed no number, read it with `gh pr view <branch> --json number --jq .number`), passing `--attempts 30`. Run it as a background Bash command and act on its verdict when it exits. A full CI run on the merge outlasts the default bound, and the wait returns the moment it reads `MERGED`, so a high ceiling costs nothing on a fast repository. Act on the verdict:
-   - **`MERGED`**: clean up per `## 8. Cleanup`, with `<branch-name>` = `<WIKI_BRANCH>`: `### Worktree entered by name in this session` under `RESOLVED_MODE=worktree`, `### Feature branch` under `feature-branch`. Then, from the main checkout, run `.gaia/cli/gaia wiki chain refresh-nudge`, which writes the main checkout's new drift into the statusline cache so the `/gaia-wiki` nudge clears now rather than on a later background refresh. Report the merged PR URL and that the nudge was refreshed. The run is complete.
+   - **`MERGED`**: clean up per `## 8. Cleanup`, with `<branch-name>` = `<WIKI_BRANCH>`: `### Worktree entered by name in this session` under `RESOLVED_MODE=worktree`, `### Feature branch` under `feature-branch`. Then, from the main checkout (the clone's primary working directory, on any branch), run `.gaia/cli/gaia wiki chain refresh-nudge`, which writes the main checkout's new drift into the statusline cache so the `/gaia-wiki` nudge clears now rather than on a later background refresh. Report the merged PR URL and that the nudge was refreshed. The run is complete.
    - **Any other verdict, or the exit-2 refusal**: the run is **not** complete. Report the PR URL and the verdict, follow `wiki/concepts/PR Merge Workflow.md`'s arm for it, and leave the branch in place. Never report the wiki as landed. Under `feature-branch`, tell the user to check out the base branch once they are done with the queued PR: the session-start janitor reaps the wiki branch and fast-forwards base only when HEAD is off the wiki branch. Under `worktree`, name the worktree's path and branch, and the `## 8. Cleanup` arm that removes it once the PR merges.
 
 A `chain commit` that exits non-zero stops the run before `finish`: surface its message. For the non-wiki-changes refusal, tell the user to commit or stash the non-wiki changes, then rerun `/gaia-wiki`. For the protected-branch refusal, the run's isolation did not take: relay the CLI's own next step.
 
-Each stage still dispatches its own subagent; never run a subagent's playbook yourself in this conversation. The parent-side stages, consolidate's apply loop and lint's fix loop, are the ones that run here.
+Sync, consolidate detection, and lint detection run only in their dispatched subagents; the parent runs only consolidate's apply loop and lint's fix loop.
 
 ## Sync
 
-Dispatch a Sonnet subagent via `Agent`. Sync generates judgment and prose (deep-reading WORTHY diffs, locating the right page, writing accurate edits and ADRs), which is beyond Haiku's reliability on a long multi-step run; a fresh context also keeps git diffs and log content out of the parent.
+Dispatch a Sonnet subagent via `Agent`.
 
 Spawn:
 
@@ -67,7 +67,7 @@ Spawn:
 
   > `You are running the GAIA wiki-sync workflow in a fresh context. Read .claude/skills/gaia/references/wiki/sync.md from the project root and execute the "Playbook" section (Steps 1–8) verbatim. Your working directory is the project root. Print only the final summary block from Step 8, ending with the SYNC_COMPLETE: true line when Step 8 emits it, or the SYNC_PARTIAL: true line when the playbook says to print it, no preamble, no recap, no narration of intermediate steps.`
 
-When the subagent returns, relay its final summary verbatim. Do not redo the work in the parent.
+When the subagent returns, relay its final summary verbatim.
 
 ## Consolidate
 
@@ -115,11 +115,11 @@ If any HIGH-severity supersession or reversed-decision finding is applied, surfa
 
 ## Lint
 
-Two-stage, like consolidate. **Detection runs in a Haiku subagent** and writes the report. **Fixing runs in the parent** because it asks the user where a fix needs judgment, and `AskUserQuestion` is unavailable inside dispatched subagents. Both stages run every time: a report that lists defects and leaves them standing fixes nothing.
+Two-stage, like consolidate. **Detection runs in a Haiku subagent** and writes the report. **Fixing runs in the parent** because it asks the user where a fix needs judgment, and `AskUserQuestion` is unavailable inside dispatched subagents. Both stages run every time.
 
 ### Stage 1, detection subagent
 
-Dispatch a Haiku subagent via `Agent` to run the playbook in `references/wiki/lint.md`. The work is mechanical (rule-based orphan, dead-link, broken-wikilink, and frontmatter checks plus a deterministic drift severity table), Haiku is sufficient.
+Dispatch a Haiku subagent via `Agent` to run the playbook in `references/wiki/lint.md`.
 
 Spawn:
 
@@ -131,7 +131,7 @@ Spawn:
 
   > `You are running the GAIA wiki-lint workflow in a fresh context. Read .claude/skills/gaia/references/wiki/lint.md from the project root and execute the "Playbook" section (Steps 1–9) verbatim. Your working directory is the project root. Return only the report path and the one-line summary required by Step 9: no recap of the report contents.`
 
-When the subagent returns, relay its summary verbatim. If the drift severity is **`high`**, prefix the surfaced line with `WIKI DRIFT:` per Step 9. If the subagent returns a `WIKI DEAD-PATHS:`, `UAT-SPEC DRIFT:`, `WIKI ORPHANS:`, `WIKI FRONTMATTER:`, `WIKI EMPTY-SECTIONS:`, or `WIKI BROKEN-LINKS:` line, surface it too.
+When the subagent returns, relay its summary and every prefixed line its Step 9 prints (`WIKI DRIFT:` and the rest), verbatim.
 
 ### Stage 2, parent fix loop
 
