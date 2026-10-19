@@ -4,7 +4,7 @@ The Stage 1 procedure and the report schema Stage 2 parses. Read whole by the St
 
 The report you produce is a **contract** to a Sonnet-level executor. Assume it can read, edit, and run bash, but will not reason about intent. Every action needs a literal before/after.
 
-Contents: Stores and load behavior; Step 0 Prune old reports; Step 1 Inventory; Step 2 Cross-store duplication; Provenance-marked rules; Ownership; Step 3 Auto-load budget; Step 4 Report (template, out-of-scope findings, ordering, re-apply).
+Contents: Stores and load behavior; Step 0 Prune old reports; Step 1 Inventory; Step 2 Cross-store duplication; Provenance-marked rules; Ownership; Step 3 Auto-load budget; Step 4 Report (template, out-of-scope findings, ordering, end of run).
 
 ## Stores and load behavior
 
@@ -87,9 +87,9 @@ A `.claude/rules/*.md` rule that carries a line starting with the provenance mar
 <!-- gaia-harden: promoted from recurring finding_class <class>; pruned by /gaia-cleanse on obsolescence/redundancy/supersession/duplication only, never for non-recurrence -->
 ```
 
-A marked rule is an **ordinary rule** for this cleanse: inventory it, budget it, and apply DUPLICATE / obsolescence / supersession exactly as for a hand-authored rule. The marker grants **no policy-memory exemption**. Such a rule always carries a `paths:` glob, so it is the path-scoped case the Rules-vs-wiki note already permits to duplicate wiki content, no special-casing needed.
+A marked rule is an **ordinary rule** for this cleanse: inventory it, budget it, and apply DUPLICATE / obsolescence / supersession exactly as for a hand-authored rule. It always carries a `paths:` glob, so it is the path-scoped case the Rules-vs-wiki note permits to duplicate wiki content.
 
-The marker is documentation of WHY the rule exists, not a magic token. It also encodes one guardrail: **do NOT classify the rule STALE merely because its anti-pattern is no longer recurring.** A suppressed pattern going quiet is the rule working, not evidence it is stale, and lessons do not expire. The STALE definition already keys on "references a file/branch/feature no longer present", which does not include "the pattern stopped recurring"; non-recurrence is never a prune signal. Prune a provenance-marked rule only on **obsolescence** (its `paths:`-governed surface was removed), **redundancy** (a lint rule, hook, or test now enforces the same thing), **supersession**, or **duplication**.
+**Never classify it STALE because its anti-pattern stopped recurring:** a suppressed pattern going quiet is the rule working. Prune a provenance-marked rule only on **obsolescence** (its `paths:`-governed surface was removed), **redundancy** (a lint rule, hook, or test now enforces the same thing), **supersession**, or **duplication**.
 
 ### Ownership (every action)
 
@@ -116,7 +116,7 @@ For each over-budget file, propose one of: inline facts → wiki, consolidate du
 
 Write `$PROJECT_ROOT/.gaia/local/cleanse/KNOWLEDGE-{YYYY-MM-DD-HHMM}.md`. Create `$PROJECT_ROOT/.gaia/local/cleanse/` if missing. Also snapshot `git status --short` into the report's frontmatter so Stage 2 can detect drift.
 
-Derive the timestamp from the shell, never guess the current date/time: `date '+%Y-%m-%d-%H%M'` for the `{YYYY-MM-DD-HHMM}` filename, `date '+%Y-%m-%d %H:%M'` for the `generated:` field.
+Take the timestamp from the shell: `date '+%Y-%m-%d-%H%M'` for the `{YYYY-MM-DD-HHMM}` filename, `date '+%Y-%m-%d %H:%M'` for the `generated:` field.
 
 ### Report template (strict schema, Stage 2 parses this)
 
@@ -259,10 +259,8 @@ audience: {adopter | maintainer, against the rubric in .claude/skills/file-tech-
 
 Stage 2 must apply actions in this order: `shrink` → `promote` → `delete` → `delete-entry`. Rationale: shrinks never reference content that later gets touched; promotes run before the deletes that remove their sources; and index-pointer removals (`delete-entry`) come last so a `delete-entry` carrying `depends_on` is gated on its referenced `promote`/`delete` having already landed. Removing a pointer only after its target is confirmed gone means a `promote`/`delete` that skips on drift never strands a source file with its index line already deleted.
 
-Wiki-internal redundancy and broken-link repair are handled by `/gaia-wiki` (its consolidate and lint stages), `merge` and `fix-link` action types are not part of this workflow. The audit does not fix them, but it does not drop them either: it records each in `## Out-of-scope findings` so Stage 2 files a `tech-debt` issue whose suggested fix names `/gaia-wiki`.
+Wiki-internal redundancy and broken links belong to `/gaia-wiki`, so there are no `merge` or `fix-link` action types: record each in `## Out-of-scope findings` with a suggested fix naming `/gaia-wiki`.
 
-## To re-apply
+## End of run
 
-Apply runs immediately after this report (or at the decision gate). To re-apply later (e.g., after fixing drift): `/gaia-cleanse --apply` within 72h.
-
-End the research run by printing: report path and total actions per category. (Stage 2 runs next automatically.)
+End the research run by printing: report path and total actions per category.

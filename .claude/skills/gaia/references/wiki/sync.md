@@ -6,7 +6,7 @@ Contents: Playbook; Step 1: Read state and compute drift; Step 2: Drift cap chec
 
 ## Playbook
 
-Evaluate every commit between `wiki/.state.json` `last_evaluated_sha` and HEAD. For each, decide whether the wiki needs an update. Edit pages, log decisions, advance state. Sync commits nothing: its edits stay uncommitted, and the router lands them with the later stages' edits in the run's one commit (`gaia wiki chain commit`, `references/wiki.md` → "The run", step 6). Never commit here.
+Evaluate every commit between `wiki/.state.json` `last_evaluated_sha` and HEAD. For each, decide whether the wiki needs an update. Edit pages, log decisions, advance state. Sync commits nothing: its edits stay uncommitted, and the router lands them with the later stages' edits in the run's one commit (`gaia wiki chain commit`, `references/wiki.md` → "The run", step 6).
 
 `wiki/.state.json` is written by two workflows: this one writes the sync-related fields (`last_evaluated_sha`, `last_evaluated_at`); the consolidate stage writes the consolidate-related fields (`last_consolidated_sha`, `last_consolidated_at`). Each must preserve fields owned by the other when writing. Everything else that reads it, the statusline nudge included, is a read-only consumer.
 
@@ -52,7 +52,7 @@ Run, using the evaluation baseline from Step 1 (normal path: `last_evaluated_sha
 
 On the recovery path, classify from `suggested_base`, NOT the orphaned `last_evaluated_sha`. The orphaned SHA's `..HEAD` range is topologically unreliable after a squash; `suggested_base` is reachable and time-anchored.
 
-The CLI emits a deterministic `suggestion` field per commit (`WORTHY` or `SKIP`) along with `subject`, `body`, file stats, and `suggestion_reason`. Treat the `WORTHY` subset as candidates for deep-read. Trust the CLI's classification, do not re-derive WORTHY/SKIP rules in prose. Log the `suggestion_reason` verbatim alongside the decision in Step 5.
+The CLI emits a deterministic `suggestion` field per commit (`WORTHY` or `SKIP`) along with `subject`, `body`, file stats, and `suggestion_reason`. Treat the `WORTHY` subset as candidates for deep-read. Take the CLI's `suggestion` as the classification. Log the `suggestion_reason` verbatim alongside the decision in Step 5.
 
 ## Step 4: Second-pass, read diffs for WORTHY commits only
 
@@ -85,9 +85,9 @@ Read the diff. Decide what wiki page(s) need updating:
 
   Derive `<today>` from `date +%F` (shell), never guess the current date. Take the `date`/`created` commit-date values from the commit itself: `git show -s --format=%cs <sha>`.
 
-Match the existing wiki voice: declarative, no preamble, concrete examples where useful. Don't paraphrase the commit message, extract the load-bearing facts and integrate them into the page's narrative.
+Match the existing wiki voice: declarative, no preamble, concrete examples where useful. Extract the load-bearing facts from the commit and integrate them into the page's narrative.
 
-**Follow `.claude/rules/wiki-style.md` when writing or editing prose.** Present tense only. Never reference UAT-NNN, SPEC-NNN, PR numbers, commit SHAs, or "changed from X to Y on date" inside body prose. The historical record lives in `wiki/log.md` (which Step 5 maintains) and in git, not in pages.
+**Follow `.claude/rules/wiki-style.md` when writing or editing prose.**
 
 If a commit's diff turns out NOT to be wiki-worthy on closer inspection (e.g. subject suggested feature but it was a refactor), demote to SKIP and proceed.
 
@@ -101,8 +101,6 @@ Log WORTHY commits only. A skipped commit gets no line: its class and reason are
 grep -qF "<short_sha>" wiki/log.md && continue
 .gaia/cli/gaia wiki log-prepend --sha <short_sha> --decision WORTHY --reason "<one-line reason>"
 ```
-
-The dedup guard matters on the recovery path (Step 1), where the resolved `suggested_base` can sit behind commits a prior sync already logged as WORTHY. Skip any commit whose short SHA is already in `wiki/log.md` rather than appending a duplicate line.
 
 The CLI inserts a single canonical line `- <YYYY-MM-DD> <sha> <decision> - <reason>` at the top of `wiki/log.md` (after frontmatter), atomically, newest entries on top. Example:
 
@@ -165,13 +163,11 @@ NEW_HEAD_AT=$(date -u +%Y-%m-%dT%H:%M:%SZ)
 .gaia/cli/gaia wiki state-bump last_evaluated_at "$NEW_HEAD_AT"
 ```
 
-`state-bump` writes atomically, preserving sibling fields (`last_consolidated_sha`, which the consolidate stage owns) and key order.
-
 If `last_consolidated_sha` is absent on the existing state (first sync ever): bootstrap it with `.gaia/cli/gaia wiki state-bump last_consolidated_sha "$NEW_HEAD"`. This seeds `last_consolidated_sha` on the first sync so the field always holds a commit.
 
 ## Step 7: Leave the edits uncommitted
 
-Do not commit. The page edits, the log lines, and the advanced state file stay in the working tree for the router's one commit. Do NOT inline branch logic, a commit of your own, manual `gh pr` calls, or any push narrative: the router and the CLI own all of it.
+Commit nothing, and run no branch, push, or `gh pr` command: the page edits, the log lines, and the advanced state file stay in the working tree for the router's one commit.
 
 ## Step 8: Report
 
@@ -191,8 +187,6 @@ Wiki sync complete.
 
 `{baseline}` is `state_sha` on the normal path and `suggested_base` on the recovery path, the ref the range was actually evaluated from.
 
-(On the no-op path from Step 1's drift=0 branch: print `Wiki already in sync at {short_sha}.` instead of the block above.)
-
 After the summary block, print `SYNC_COMPLETE: true` on its own line (no leading whitespace). The router (`references/wiki.md` → "The run") reads this line to decide whether consolidate and lint run next. Example final summary:
 
 ```
@@ -211,7 +205,7 @@ SYNC_COMPLETE: true
 
 The line is omitted on the state-init path, the fallback re-anchor path (`suggested_base` empty), the Step 2 `Cancel` answer, and every entry under Failure modes.
 
-`SYNC_PARTIAL: true`, on its own line, is the other signal the router reads: it marks an incomplete sync whose edits the router still commits. It is printed on exactly three paths, the state-init path, the fallback re-anchor path, and a mid-sync interruption, and never alongside `SYNC_COMPLETE: true`. Every other path that omits `SYNC_COMPLETE: true` omits it too, so the router commits nothing there.
+`SYNC_PARTIAL: true`, on its own line and never alongside `SYNC_COMPLETE: true`, marks an incomplete sync the router still commits. It prints only on the state-init path, the fallback re-anchor path, and a mid-sync interruption; every other path prints neither, so the router commits nothing there.
 
 ## Failure modes
 

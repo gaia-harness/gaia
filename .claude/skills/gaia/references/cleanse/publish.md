@@ -1,6 +1,6 @@
 # /gaia-cleanse publish
 
-Runs in the **main conversation** after Stage 2 returns, on any finalizing path (gated Apply, 0-action auto-apply, `--apply`). It does for the audit's in-repo edits what `/update-deps` Phase 8 does for a dep bump and `/gaia-debt`'s "Drive the PR to merge" does for a fix. It never runs on Decline.
+Runs in the **main conversation** after Stage 2 returns, on any finalizing path (gated Apply, 0-action auto-apply, `--apply`). It never runs on Decline.
 
 Contents: Empty diff footprint; Isolated run (not in CI); In CI; Failure handling.
 
@@ -35,7 +35,7 @@ Every command below runs from `RESOLVED_ROOT`, on `<CLEANSE_BRANCH>`, whichever 
    Then clear the **CHANGELOG gate** per `wiki/concepts/PR Merge Workflow.md`: decide whether the change warrants a `## [Unreleased]` entry (pure pruning / consolidation is usually an internal, no-entry change; a rule or concept-page behavior change is worthy) and, if so, land it on the branch before merging (HEAD moves, so any bypass/marker must still cover the new HEAD). Scrubbed from adopter bundles.
    <!-- gaia:maintainer-only:end -->
 
-2. **Open the PR and drive it to merge** through `wiki/concepts/PR Merge Workflow.md` (read it, don't merge from memory), exactly as `/gaia-debt`:
+2. **Open the PR and drive it to merge** through `wiki/concepts/PR Merge Workflow.md` (read it, don't merge from memory):
 
    ```bash
    git push -u origin <CLEANSE_BRANCH>

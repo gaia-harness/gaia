@@ -1,6 +1,6 @@
 # /gaia-serena-sync
 
-The on-demand reconcile surface for Serena language drift. When an adopter's Serena-registered project grows a language Serena is not indexing, `/gaia-serena-sync` reports the missing languages, prints a literal in-place edit instruction, and presents **one** consent prompt covering the whole drifted set. On an explicit yes it appends the missing tokens to the `language_servers:` list (`languages:` before Serena 1.7) in `.serena/project.yml` via the shared library, reusing the list's exact indentation and style, keeping every other line byte-identical, then tells the adopter to restart Serena. With no drift it reports in sync and writes nothing. Any config form it cannot edit safely routes to a prompt-only fallback. It never runs `serena project create`.
+The on-demand reconcile for Serena language drift: it reports the languages Serena is not indexing, asks one consent question for the whole set, and on yes appends them to the `language_servers:` list (`languages:` before Serena 1.7) in `.serena/project.yml` through the shared library, then prompts a restart.
 
 Contents: Execution model, READ FIRST; Step 0: Preconditions and inert exit; Step 1: Recompute current drift (the cache may be stale); Step 2: Report the drift and classify the config form; Step 3: One consent prompt covering the whole drifted set; Step 4: Prompt-only fallback (unsafe form); Guardrails.
 
@@ -100,13 +100,13 @@ bash .gaia/scripts/lib/serena-lang.sh append .serena/project.yml <tok1> [tok2 ..
   fi
   ```
 
-  Update only `serenaLangDrift`; do not stamp `checkedAt` and leave every other field untouched. This is the resolving-command half of the cache-field contract: peer cache-busts must not drop the field, and this command must update it once the drift is resolved.
+  Update only `serenaLangDrift`: leave `checkedAt` and every other field untouched.
 
 - **If it prints `FALLBACK:<reason>` and exits non-zero** (a form that looked safe to `classify` but failed a check at append time, or a race): fall through to **Step 4**.
 
 ### On Skip
 
-Leave `.serena/project.yml` unchanged. The literal manual instruction from Step 2 stands; the adopter can apply it by hand. Never invoke `serena project create`.
+Leave `.serena/project.yml` unchanged. The literal manual instruction from Step 2 stands; the adopter can apply it by hand. Never invoke `serena project create`: it can regenerate the file and clobber `.serena/project.local.yml` customizations.
 
 If the command otherwise completes without an explicit yes, treat it as Skip: no write.
 
@@ -120,10 +120,5 @@ Reached when the config form cannot be edited safely (from `classify` in Step 2,
 
 ## Guardrails
 
-- **Never mutate `.serena/project.yml` without explicit consent.** Default posture: show the instruction, do not write.
-- **One `AskUserQuestion` for the whole drifted set.** Apply all on yes, none on no. A subset is only reachable via the manual path, never by prompting per language.
-- **Never run `serena project create`.** It may regenerate the file and clobber `.serena/project.local.yml` customizations. This command only ever appends to an existing list, never regenerates the file.
-- **Never remove or reorder existing entries, never rewrite unrelated fields, never leave the file invalid YAML.** Any unsafe form routes to the Step 4 prompt-only fallback. The library owns byte-identity; this command only decides whether to invoke it.
-- **Always instruct a Serena or session restart on a successful apply.** The appended language is not indexed until Serena restarts.
-- **Always show the literal manual instruction** naming `.serena/project.yml` and the `language_servers:` list (`languages:` before 1.7), in every path once drift is found.
+- **Never remove or reorder existing entries, rewrite unrelated fields, or leave the file invalid YAML.** Any unsafe form routes to the Step 4 prompt-only fallback. The library owns byte-identity; this command only decides whether to invoke it.
 - Use repo-relative paths only.
