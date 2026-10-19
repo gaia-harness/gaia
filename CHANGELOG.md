@@ -248,6 +248,7 @@ On GAIA 1.6.1? Claude: choose Abort, then offer to migrate this project to 2.0.0
 
 ### Fixed
 
+- The `/gaia-spec` self-review and SPEC-audit menus and the `/gaia-plan` decomposition-audit menu no longer mix findings that recommend applying with findings that recommend keeping in one batched question, so the recommended first option means the same action on every tab and a quick pick no longer keeps text the user meant to change (#2854)
 - `/gaia-init`'s project-identity menu now offers a real second choice for each question instead of a dead option that pointed at the tool's own Other: the title question offers the folder name as-is, CODEOWNERS offers Set it later (a placeholder flagged as a follow-up), and the slug is derived from the chosen title rather than asked, with a custom slug typed as `Title / slug`. The primary-language question no longer shows `English (Recommended) / English` to an English speaker: its second option is the system locale's language, or Spanish when that is English too (#2847)
 - The first statusline after `/gaia-init` no longer shows `/update-deps` outdated packages that init's own dependency update already applied: init now refreshes the update-check cache itself once `/update-deps` returns (#2849)
 - `/update-deps`'s worktree reference no longer tells adopters that three points in the skill route to it, one of them a maintainer-only section the release strips. It now names only the two routes an adopter's copy has (#2846)
