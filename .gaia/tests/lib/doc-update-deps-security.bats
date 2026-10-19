@@ -11,8 +11,9 @@
 # the Phase 8 security-only subject, acceptance only after a per-advisory
 # question, the release-age and trust settings rule, no fixed /tmp scratch path,
 # the worktree state line's null-versus-zero read, the report-only reading,
-# the security phase's own snapshot directories, and the override audit's
-# fail-closed read of an unanswered `pnpm audit`.
+# the security phase's own snapshot directories, the override audit's
+# fail-closed read of an unanswered `pnpm audit`, and the plain wording every
+# printed mention of the transitive refresh uses.
 #
 # Each check is a function over a file path, so every test that proves the
 # real page passes has a twin that runs the same function over a scratch copy
@@ -545,5 +546,86 @@ check_override_audit_fails_closed() {
   copy="$(scratch_copy "$OVERRIDE_AUDIT" "per-key.md")"
   remove_fixed "$copy" "$PER_KEY_UNANSWERED"
   run check_override_audit_fails_closed "$copy"
+  [ "$status" -ne 0 ]
+}
+
+# ---------------------------------------------------------------------------
+# 20. Printed copy calls the transitive refresh the sub-dependency update
+# ---------------------------------------------------------------------------
+
+SUB_DEPENDENCY_LINE='`Sub-dependencies: also updates the packages your packages use to the newest'
+SKIP_DESCRIPTION='skip, or say "sub-dependencies" to skip that part.`'
+SKIP_SPELLING='which the human may type as `sub-dependencies`'
+
+check_plain_sub_dependency_copy() {
+  local skill="$1" report="$2"
+  grep -qF -- "$SUB_DEPENDENCY_LINE" "$skill" || {
+    echo "the preview's sub-dependency line is not stated" >&2
+    return 1
+  }
+  grep -qF -- '**Update sub-dependencies** (Recommended, first option)' "$skill" || {
+    echo "the zero-outdated option is not labelled Update sub-dependencies" >&2
+    return 1
+  }
+  grep -qF -- '`Apply every update, including sub-dependencies.`' "$skill" || {
+    echo "the Update all description does not name sub-dependencies" >&2
+    return 1
+  }
+  grep -qF -- "$SKIP_DESCRIPTION" "$skill" || {
+    echo "the Choose what to skip description does not offer the plain skip word" >&2
+    return 1
+  }
+  grep -qF -- "$SKIP_SPELLING" "$skill" || {
+    echo "the plain skip word is not accepted for transitive-refresh" >&2
+    return 1
+  }
+  grep -qF -- '`Transitive refresh:' "$skill" && {
+    echo "a printed line still opens with Transitive refresh:" >&2
+    return 1
+  }
+  grep -qxF -- '### Sub-dependency updates' "$report" || {
+    echo "the final report heading is not Sub-dependency updates" >&2
+    return 1
+  }
+  grep -qxF -- '### Transitive refresh' "$report" && {
+    echo "the final report still prints a Transitive refresh heading" >&2
+    return 1
+  }
+  true
+}
+
+@test "printed copy names the transitive refresh as the sub-dependency update" {
+  check_plain_sub_dependency_copy "$SKILL" "$FINAL_REPORT"
+}
+
+@test "the plain-copy check fails with the preview line reverted to jargon" {
+  local copy
+  copy="$(scratch_copy "$SKILL" "preview.md")"
+  replace_fixed "$copy" "$SUB_DEPENDENCY_LINE" '`Transitive refresh: re-resolve every'
+  run check_plain_sub_dependency_copy "$copy" "$FINAL_REPORT"
+  [ "$status" -ne 0 ]
+}
+
+@test "the plain-copy check fails with the plain skip word no longer accepted" {
+  local copy
+  copy="$(scratch_copy "$SKILL" "spelling.md")"
+  remove_fixed "$copy" "$SKIP_SPELLING"
+  run check_plain_sub_dependency_copy "$copy" "$FINAL_REPORT"
+  [ "$status" -ne 0 ]
+}
+
+@test "the plain-copy check fails with the skip description deleted" {
+  local copy
+  copy="$(scratch_copy "$SKILL" "description.md")"
+  remove_fixed "$copy" "$SKIP_DESCRIPTION"
+  run check_plain_sub_dependency_copy "$copy" "$FINAL_REPORT"
+  [ "$status" -ne 0 ]
+}
+
+@test "the plain-copy check fails with the report heading reverted to jargon" {
+  local copy
+  copy="$(scratch_copy "$FINAL_REPORT" "report.md")"
+  replace_fixed "$copy" '### Sub-dependency updates' '### Transitive refresh'
+  run check_plain_sub_dependency_copy "$SKILL" "$copy"
   [ "$status" -ne 0 ]
 }

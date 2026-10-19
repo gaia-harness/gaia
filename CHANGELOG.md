@@ -119,6 +119,7 @@ On GAIA 1.6.1? Claude: choose Abort, then offer to migrate this project to 2.0.0
 
 ### Changed
 
+- `/update-deps` now describes its transitive refresh in plain words: its preview, menus and final report call it updating sub-dependencies (the packages your packages use), and you can skip it by saying "sub-dependencies"; the old `transitive-refresh` name still works (#2850)
 - `/gaia-cleanse`, `/gaia-fitness`, `/gaia-codify`, `/gaia-residue` and `/update-deps` now follow one merge-wait procedure, kept in the PR Merge Workflow wiki page, instead of five copies that had drifted apart, and each waits up to ten minutes for its queued merge: required checks restart when a pull request leaves draft and often outlast the old two-and-a-half-minute wait, which then reported a timeout on a merge about to land. `gaia-react-perf` now points vague "feels slow" asks at react-doctor's `scan` mode. Together about 2,000 fewer tokens of instructions (#2844)
 - Chromatic now builds on pushes to `main` and on pull requests that are ready for review, not on every branch push, and skips draft pull requests until they are marked ready. Chromatic bills each story TurboSnap skips at a fifth of a snapshot, so every build costs a share of your whole story count; fewer builds cut snapshot spend directly. A repository that cannot open drafts builds on every pull request push (#2842)
 - `/gaia-residue` triages 25 residuals per batch by default instead of 10, so a large backlog drains in fewer confirmations; `GAIA_RESIDUE_CAP` still overrides it (#2835)
