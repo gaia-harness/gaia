@@ -431,7 +431,7 @@ check_publish_local_sync() {
 @test "the TIMEOUT-arm check fails with the by-path pointer deleted" {
   local copy
   copy="$(scratch_copy "$PUBLISH" "timeout.md")"
-  replace_fixed "$copy" 'then print the cleanup to run once it lands: a pointer to `.claude/skills/gaia/references/work-lifecycle.md` `### Worktree entered by path or in an earlier session`, with the worktree path and the branch filled in' 'and stop'
+  replace_fixed "$copy" 'also print the cleanup to run once the merge lands: a pointer to `.claude/skills/gaia/references/work-lifecycle.md` `### Worktree entered by path or in an earlier session`, with the worktree path and the branch filled in' 'and stop'
   PUBLISH="$copy" run check_publish_timeout_arm
   [ "$status" -ne 0 ]
 }
