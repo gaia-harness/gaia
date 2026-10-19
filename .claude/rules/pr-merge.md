@@ -10,6 +10,7 @@ In this repo that means `bash .gaia/tests/verify-harness.sh branch`, the last st
 ## Merging
 
 Before any `gh pr merge`, **read `wiki/concepts/PR Merge Workflow.md` and complete its audit + marker handshake, then post the `GAIA-Audit` status yourself as its final step (`#### Posting the status last`); do not merge from memory.** Its `## Who audits: the dispatched member set` section owns which members owe a marker, and `## Dispatch the audit loop unit` owns dispatching the unit that runs them.
+
 **The audit loop runs on its own until the branch checkpoint (a stop awaiting a human answer, not a saved state).** `.claude/hooks/audit-loop-bound.sh` enforces it, only a human's answer to its pinned question or a typed grant or accept line records a grant, and Claude never writes grants or loop state: `wiki/concepts/PR Merge Workflow.md`, `#### The branch checkpoint`.
 
 <!-- gaia:maintainer-only:start -->
