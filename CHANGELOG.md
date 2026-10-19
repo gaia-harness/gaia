@@ -247,6 +247,7 @@ On GAIA 1.6.1? Claude: choose Abort, then offer to migrate this project to 2.0.0
 
 ### Fixed
 
+- A dispatched agent in a worktree session no longer has its report-file Write refused. The dispatch rule named no location, so sessions picked `.gaia/local` or `.notebook`, which a worktree reaches through a symlink into the main checkout, and the agent re-sent its whole report after each refusal. The rule now names the session scratchpad, and the plan's UAT fidelity check keeps its verdict file there instead of the plan folder (#2853)
 - `/update-deps`'s worktree reference no longer tells adopters that three points in the skill route to it, one of them a maintainer-only section the release strips. It now names only the two routes an adopter's copy has (#2846)
 - The statusline no longer keeps showing outdated dependencies after `/update-deps` finishes. A background update check that started before the run could finish after it and write back its pre-update count, so the stale nudge stayed up for up to six hours. The check now notices that the cache changed while it was running and leaves the newer result in place. The fix reaches adopters on their next `/update-gaia` (#2841)
 - The Storybook rule's typing guidance now agrees with the TDD reference and the shipped stories: `Meta` for the default export, `StoryFn` for a render-function story, and `StoryObj` for an object story with `args` and `play`. It named only `Meta` and `StoryFn`, so an agent following it typed object stories differently from the example loaded beside it (#2836)
