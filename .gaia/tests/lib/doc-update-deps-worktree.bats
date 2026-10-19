@@ -5,8 +5,8 @@
 #
 # Static checks over `.claude/skills/update-deps/SKILL.md` and its references
 # `worktree.md` (the one worktree-creation instruction) and `publish.md`:
-# the run modes and their order, the single creation subsection and the three
-# points that route to it, the worktree notice and the provisioning wait, the
+# the run modes and their order, the single creation subsection, the points
+# that route to it and how its adopter copy names them, the worktree notice and the provisioning wait, the
 # cache bust call, the publish arms, and that no orchestrator block holds a
 # command substitution a worktree session refuses.
 #
@@ -196,7 +196,7 @@ check_no_bare_branch_cut() {
 }
 
 # ---------------------------------------------------------------------------
-# 4, 5. One creation subsection, routed from three points
+# 4, 5. One creation subsection, routed from every branch point
 # ---------------------------------------------------------------------------
 
 # section_between <file> <start-fixed> <end-fixed>: the lines from the first
@@ -215,18 +215,50 @@ VENDORED_END='<!-- gaia:maintainer-only:end -->'
 REFRESH_START='- **Refresh-only run.**'
 REFRESH_END='Do the following in order:'
 POST_DECISION_STEP='2. **Worktree.**'
+MAINTAINER_START='<!-- gaia:maintainer-only:start -->'
+MAINTAINER_END='<!-- gaia:maintainer-only:end -->'
 
-check_three_branch_points() {
+# is_maintainer_copy <file>: the file still carries maintainer-only markers, so
+# it is the source repo's copy rather than the scrubbed one an adopter gets.
+is_maintainer_copy() {
+  grep -qF -- "$MAINTAINER_START" "$1"
+}
+
+# stripped_copy <file> <name>: write a copy of the file with every
+# maintainer-only block removed and print its path: what an adopter reads. A
+# hand-kept model of the shipped parser (`stripMarkerBlocks` in
+# `.gaia/cli/src/release/marker-strip.ts`), the same one
+# setup-decision-nudge.bats carries for the statusline's shell markers.
+stripped_copy() {
+  local copy="${BATS_TEST_TMPDIR}/$2"
+  awk -v start_marker="$MAINTAINER_START" -v end_marker="$MAINTAINER_END" '
+    {
+      has_start_marker = index($0, start_marker) > 0
+      has_end_marker = index($0, end_marker) > 0
+      if (!skip && has_start_marker) { if (!has_end_marker) skip = 1; next }
+      if (skip) { if (has_end_marker) skip = 0; next }
+      print
+    }
+  ' "$1" >"$copy"
+  printf '%s\n' "$copy"
+}
+
+# check_branch_points: every branch point names the creation subsection. The
+# vendored-skill sync is maintainer-only, so the check requires it only in the
+# source repo's copy; the scrubbed copy an adopter gets has no such section.
+check_branch_points() {
   local vendored refresh
-  vendored="$(section_between "$SKILL" "$VENDORED_START" "$VENDORED_END")"
-  [ -n "$vendored" ] || {
-    echo "the vendored-skill sync section is not found" >&2
-    return 1
-  }
-  grep -qF -- 'references/worktree.md' <<<"$vendored" || {
-    echo "the vendored-skill sync does not name references/worktree.md" >&2
-    return 1
-  }
+  if is_maintainer_copy "$SKILL"; then
+    vendored="$(section_between "$SKILL" "$VENDORED_START" "$VENDORED_END")"
+    [ -n "$vendored" ] || {
+      echo "the vendored-skill sync section is not found" >&2
+      return 1
+    }
+    grep -qF -- 'references/worktree.md' <<<"$vendored" || {
+      echo "the vendored-skill sync does not name references/worktree.md" >&2
+      return 1
+    }
+  fi
   grep -F -- "$POST_DECISION_STEP" "$SKILL" | grep -qF -- 'references/worktree.md' || {
     echo "the post-decision step does not name references/worktree.md" >&2
     return 1
@@ -255,23 +287,53 @@ check_three_branch_points() {
   done
 }
 
-@test "the three branch points name the one creation subsection" {
-  check_three_branch_points
+@test "every branch point names the one creation subsection" {
+  check_branch_points
 }
 
 @test "the branch-point check fails when the refresh-only path names no subsection" {
   local copy
   copy="$(scratch_copy "$SKILL" "refresh.md")"
   replace_fixed "$copy" 'Run `references/worktree.md`' 'Run the creation step'
-  SKILL="$copy" run check_three_branch_points
+  SKILL="$copy" run check_branch_points
   [ "$status" -ne 0 ]
 }
 
 @test "the branch-point check fails when the vendored-skill sync names no subsection" {
+  is_maintainer_copy "$SKILL" || skip "the scrubbed copy has no vendored-skill sync"
   local copy
   copy="$(scratch_copy "$SKILL" "vendored.md")"
   replace_fixed "$copy" '`references/worktree.md` now. The re-vendor' 'the branch now. The re-vendor'
-  SKILL="$copy" run check_three_branch_points
+  SKILL="$copy" run check_branch_points
+  [ "$status" -ne 0 ]
+}
+
+# check_route_sentence: the creation subsection names the routes an adopter's
+# SKILL.md has, and names the maintainer-only vendored-skill sync only inside a
+# maintainer-only block, so neither copy names a caller its SKILL.md lacks.
+check_route_sentence() {
+  local adopter
+  adopter="$(stripped_copy "$WORKTREE" "worktree-adopter.md")"
+  must_contain "$adopter" '`## Branch creation (after discovery)`' "the adopter copy does not name the post-decision route" || return 1
+  must_contain "$adopter" 'the refresh-only path' "the adopter copy does not name the refresh-only route" || return 1
+  grep -qiF -- 'vendored-skill sync' "$adopter" && {
+    echo "the adopter copy names the maintainer-only vendored-skill sync" >&2
+    return 1
+  }
+  if is_maintainer_copy "$SKILL"; then
+    must_contain "$WORKTREE" 'vendored-skill sync' "the maintainer copy does not name the vendored-skill sync route"
+  fi
+}
+
+@test "the adopter copy of the creation subsection names only the routes its SKILL.md has" {
+  check_route_sentence
+}
+
+@test "the route-sentence check fails with the vendored-skill sync named outside a maintainer-only block" {
+  local copy
+  copy="$(scratch_copy "$WORKTREE" "route.md")"
+  printf 'The maintainer-only vendored-skill sync routes here too.\n' >>"$copy"
+  WORKTREE="$copy" run check_route_sentence
   [ "$status" -ne 0 ]
 }
 
