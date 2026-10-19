@@ -30,7 +30,7 @@ Chromatic rejects the legacy `chromatic.viewports` parameter alongside modes, so
 
 ## CI gating
 
-The `.github/workflows/chromatic.yml` workflow triggers on every `push` but does not always run Chromatic:
+The `.github/workflows/chromatic.yml` workflow triggers on a push to `main` and on pull requests, and skips a draft: marking a pull request ready for review runs it. Chromatic bills each story TurboSnap skips at a fifth of a captured snapshot, so every build costs a share of the whole story count, and the number of builds drives spend. Within a run it does not always run Chromatic:
 
 - A commit whose subject matches `chore(deps):` or `chore(deps-dev):` short-circuits only when its changed-path set is also confined to a dependency manifest (the pushed range on the default branch, the whole branch against the default branch otherwise): dep-bump PRs run the quality gate locally before pushing, but that pre-verification covers the manifest bump only.
 - A `paths-filter` allowlists Storybook-affecting paths; see the `code:` filter block in `.github/workflows/chromatic.yml` for the current list. Pushes touching nothing on the list report the required check green without running Chromatic.
@@ -40,6 +40,12 @@ The `.github/workflows/chromatic.yml` workflow triggers on every `push` but does
 `onlyChanged` turns on TurboSnap, which re-tests only the stories whose import graph a change reaches. When a commit touches `frontend/package.json` or `pnpm-lock.yaml`, TurboSnap pairs `frontend/package.json` with the root `pnpm-lock.yaml`, reads the `frontend` importer's resolved dependencies at HEAD and at the baseline, and re-tests only the stories that import a package whose version changed.
 
 pnpm writes `pnpm-lock.yaml` as two YAML documents. Only a Chromatic CLI at 18.10.0 or later parses that, so the `chromaui/action` pin in `.github/workflows/chromatic.yml` must stay at or above it. On an older CLI the build log prints `Could not retrieve dependency changes from lockfiles; checking package.json`, and any edit to `package.json`, a script change included, disables TurboSnap for a full build. That line in a build log means the lockfile trace failed.
+
+The trace fails as a whole when any changed `package.json` cannot be resolved. TurboSnap pairs each changed manifest with a lockfile beside it, else with the root one, so a manifest the root `pnpm-lock.yaml` has no importer for breaks it. `untraced: '.gaia/**'` keeps any manifest under the harness, which holds no story code, out of the pairing; untrace any other directory that holds such a manifest and no story code.
+
+<!-- gaia:maintainer-only:start -->
+In the GAIA source repo, `.gaia/` holds such manifests: the CLI's `package.json` and the update-gaia test fixtures. Neither ships, so on an adopter the untrace line is inert.
+<!-- gaia:maintainer-only:end -->
 
 Do not list `package.json` under `untraced` to suppress those full builds: it also hides the visual effect of a real dependency bump.
 
