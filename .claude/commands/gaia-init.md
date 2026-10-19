@@ -57,7 +57,7 @@ Every gate is one of two tiers. The tier is fixed here, do not reclassify by jud
 | Additional languages / i18n teardown, `STRIP_I18N` (+ free-text)     | Step 2, Q2    |
 | CODEOWNERS GitHub handle (HARD-BLOCK only when `gh` can't detect it) | Step 2, Q3    |
 | Project title                                                        | Step 2, Q4    |
-| kebab-case slug                                                      | Step 2, Q5    |
+| kebab-case slug (derived from the title, never asked on its own)     | Step 2, Q5    |
 
 **SAFE-DEFAULT** (reversible, the recommended default is the safe outcome). On non-response in interactive mode: re-ask once; if still no answer, apply the stated default, name it plainly ("Defaulting backend casing to camelCase, you can change it later"), and continue. Do not claim the user is absent.
 
@@ -112,7 +112,7 @@ Then apply the defaults and proceed without stopping (the user chose Automatic; 
 - Additional languages / i18n (Q2): primary-only, keep i18n scaffolding (`STRIP_I18N=false`). The teardown is never auto-selected.
 - CODEOWNERS (Q3): the gh-detected handle when available; otherwise the `REPLACE-WITH-YOUR-GITHUB-HANDLE` placeholder, flagged as a required Step 11 follow-up.
 - Project title (Q4): title-cased folder name.
-- kebab slug (Q5): folder name.
+- kebab slug (Q5): folder name (the slug the default title derives).
 - Backend casing (Step 2): `camelCase` (`CASING=camel`).
 - TanStack Query (Step 2): `No` (`QUERY=false`).
 
@@ -195,7 +195,7 @@ basename "$(git rev-parse --show-toplevel)"
 
 Use this as the slug default. Derive the title default by replacing hyphens and underscores with spaces and applying title case (e.g. `my-cool-app` → `My Cool App`).
 
-Ask the two language questions one at a time (Q2 interpolates Q1's answer), then batch the three project-identity questions, then ask the two data-layer questions one at a time.
+Ask the two language questions one at a time (Q2 interpolates Q1's answer), then batch the two asked project-identity questions (the slug is derived), then ask the two data-layer questions one at a time.
 
 ### Q1, Primary app language (asked alone)
 
@@ -243,17 +243,25 @@ Resolve two values from the answer:
 - `LOCALES = unique({primary} code, any additional codes entered above)`. Either {primary}-only option leaves `LOCALES` as just `[{primary}]`.
 - `STRIP_I18N = true` only when the user chose "{primary} only, remove i18n entirely"; otherwise `false`. Adding languages or keeping the scaffolding both leave it `false`.
 
-### Q3–Q5, Project identity (one AskUserQuestion, three questions)
+### Q3–Q5, Project identity (one AskUserQuestion, two questions)
 
-_Non-response: title and slug are HARD-BLOCK, re-ask, never guess. CODEOWNERS: offer the gh-detected handle as the recommended default; HARD-BLOCK only when detection failed (no default to fall back to), re-ask, never guess. Automatic mode: title-cased folder name (title), folder name (slug), and the gh-detected handle (CODEOWNERS) when available, else the `REPLACE-WITH-YOUR-GITHUB-HANDLE` placeholder flagged as a required Step 11 follow-up._
+_Non-response: title is HARD-BLOCK, re-ask, never guess. CODEOWNERS: offer the gh-detected handle as the recommended default; HARD-BLOCK only when detection failed (no default to fall back to), re-ask, never guess. The slug is never asked: it is derived from the chosen title. Automatic mode: title-cased folder name (title), folder name (slug), and the gh-detected handle (CODEOWNERS) when available, else the `REPLACE-WITH-YOUR-GITHUB-HANDLE` placeholder flagged as a required Step 11 follow-up._
 
-These three go together as a group. Ask them in a single AskUserQuestion call, each question's default as its first option, marked ` (Recommended)`; the tool's own Other takes a typed value:
+Ask Q3 and Q4 in a single AskUserQuestion call. Each question carries exactly the two real options below, its default first and marked ` (Recommended)`; the tool's own Other takes a typed value. Never add an option that only points at Other (such as "Enter another" or "Type a value"): the tool adds its own, and a hand-added one is an inert button that returns no value.
 
-**GitHub username for CODEOWNERS.** First run the GitHub-handle detection from "Free-text identity values are never fabricated" above (reuse the automatic-mode result if it already ran). If it yields a handle, offer it as the recommended default (first option, marked ` (Recommended)`); a gh-detected handle is the user's own authenticated identity, not a guess, so it is safe to default to. The user can still override it with a different handle via free text. If detection fails there is no default, so this stays a free-text identity value that is **never fabricated**: on interactive non-response, HARD-BLOCK and re-ask rather than guessing; in automatic mode, use the loud placeholder so a wrong owner never ships. Suggest `@username` format; store the bare handle.
+**Q3, GitHub username for CODEOWNERS.** First run the GitHub-handle detection from "Free-text identity values are never fabricated" above (reuse the automatic-mode result if it already ran). If it yields a handle, ask with these options:
 
-**Project title** (default: title-cased folder name from above)
+- `@{handle} (Recommended)`: your authenticated GitHub login. A gh-detected handle is the user's own identity, not a guess, so it is safe to default to.
+- `Set it later`: writes the `REPLACE-WITH-YOUR-GITHUB-HANDLE` placeholder to `.github/CODEOWNERS` and flags it as a required Step 11 follow-up.
 
-**kebab-case slug** derived from the title (default: folder name from above)
+A different handle arrives through Other. Suggest `@username` format; store the bare handle. If detection fails there is no default, so this stays a free-text identity value that is **never fabricated**: leave Q3 out of the call and ask for the handle as a plain chat message (its answer is open-ended free text), and on interactive non-response HARD-BLOCK and re-ask rather than guessing; in automatic mode, use the loud placeholder so a wrong owner never ships.
+
+**Q4, Project title.** Options:
+
+- `{title-cased folder name} (Recommended)`, description: `slug {the slug it derives}`.
+- `{folder name as-is}`, description: `slug {the slug it derives}`. When the folder name already equals its title-cased form (e.g. `Convene`), offer the folder name lowercased instead.
+
+**Q5, kebab-case slug (derived, not asked).** Derive the slug from the chosen title: lowercase it, replace each run of characters other than `a-z` and `0-9` with one hyphen, and trim leading and trailing hyphens. A title typed through Other re-derives the slug from it. A typed reply of the form `Title / slug` (e.g. `Convene / convene-app`) sets both: the part before ` / ` is the title and the part after is the slug, used as typed once it is valid kebab-case (re-ask if it is not).
 
 ### Q6, Backend casing (asked alone)
 
@@ -327,7 +335,7 @@ printf '* @%s\n' "<github-username>" > .github/CODEOWNERS
 
 `<github-username>` is the handle Q3 resolved: the user's typed handle, or the gh-detected login when the user accepted (or automatic mode used) that default. Any of these is a real handle, write `* @<handle>` and emit **no** Step 11 follow-up warning.
 
-Only when Q3 obtained no real handle (automatic mode where gh detection also failed) is `<github-username>` the placeholder `REPLACE-WITH-YOUR-GITHUB-HANDLE`. Write it anyway, GitHub flags the unknown owner in its CODEOWNERS validation, so the gap is visible. Add a required follow-up to the Step 11 summary: "Edit `.github/CODEOWNERS`, it holds a placeholder owner, set your real GitHub handle."
+Only when Q3 obtained no real handle (the user picked `Set it later`, or automatic mode where gh detection also failed) is `<github-username>` the placeholder `REPLACE-WITH-YOUR-GITHUB-HANDLE`. Write it anyway, GitHub flags the unknown owner in its CODEOWNERS validation, so the gap is visible. Add a required follow-up to the Step 11 summary: "Edit `.github/CODEOWNERS`, it holds a placeholder owner, set your real GitHub handle."
 
 ## Step 6: Check `.env`
 
