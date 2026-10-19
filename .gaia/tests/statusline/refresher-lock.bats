@@ -38,7 +38,8 @@ teardown() {
   return 0
 }
 
-# A `gaia` stub. `codify-tally` appends one line to $MOCK_LOG per invocation,
+# A `gaia` stub. `update-deps run` emits $MOCK_ACTIONABLE_COUNT (default 0) as
+# the actionable count. `codify-tally` appends one line to $MOCK_LOG per invocation,
 # touches $MOCK_ENTERED, then, while $MOCK_HOLD exists, waits (bounded) so a
 # test can hold a run open mid-refresh. Every other subcommand answers empty.
 write_mock_gaia() {
@@ -53,7 +54,7 @@ case "$1" in
         *) shift ;;
       esac
     done
-    [ -n "$output_path" ] && printf '{"actionable_count":0}' > "$output_path"
+    [ -n "$output_path" ] && printf '{"actionable_count":%s}' "${MOCK_ACTIONABLE_COUNT:-0}" > "$output_path"
     exit 0
     ;;
   codify-tally)
@@ -191,4 +192,36 @@ EOF
   [ "$status" -eq 0 ]
   [ "$(jq -r '.codifyCandidateCount' "$CACHE_FILE")" -eq 2 ]
   [ ! -e "$LOCK_DIRECTORY" ]
+}
+
+# The refresh counts outdated packages early and writes the cache only at the
+# end. A /update-deps cache bust that lands in between states the post-run
+# truth, so the refresh's older count must not overwrite it.
+@test "a cache bust that lands mid-refresh is not overwritten by the refresh" {
+  export MOCK_ACTIONABLE_COUNT=16
+  printf '{"checkedAt":0,"outdatedCount":16,"securitySource":"dependabot"}' > "$CACHE_FILE"
+  : > "$MOCK_HOLD"
+  bash "$REFRESH_ROOT/.gaia/scripts/check-updates.sh" &
+  held_pid=$!
+  wait_for_entered
+
+  run bash "$BATS_TEST_DIRNAME/../../scripts/update-check-bust.sh" --cache "$CACHE_FILE" --mode deps
+  [ "$status" -eq 0 ]
+  [ "$output" = "BUSTED" ]
+  busted_cache=$(cat "$CACHE_FILE")
+
+  rm -f "$MOCK_HOLD"
+  wait "$held_pid"
+  [ "$(jq -r '.outdatedCount' "$CACHE_FILE")" -eq 0 ]
+  [ "$(cat "$CACHE_FILE")" = "$busted_cache" ]
+  [ ! -e "$LOCK_DIRECTORY" ]
+}
+
+@test "a refresh that nothing interrupts rewrites a stale cache" {
+  export MOCK_ACTIONABLE_COUNT=16
+  printf '{"checkedAt":0,"outdatedCount":3,"securitySource":"dependabot"}' > "$CACHE_FILE"
+  run bash "$REFRESH_ROOT/.gaia/scripts/check-updates.sh"
+  [ "$status" -eq 0 ]
+  [ "$(jq -r '.outdatedCount' "$CACHE_FILE")" -eq 16 ]
+  [ "$(jq -r '.checkedAt' "$CACHE_FILE")" -gt 0 ]
 }
