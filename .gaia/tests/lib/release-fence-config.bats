@@ -9,6 +9,8 @@
 #          root frontend path; X1 also drives a fixture that does and asserts
 #          the check reports it.
 #   S1     the scrub strips maintainer-only keys from both package.json files.
+#   S2     the scrub strips the release-notes skill override from the shipped
+#          root and frontend .claude/settings.json and keeps their siblings.
 #   L1-L2  the CHANGELOG [Unreleased] Breaking entry leads with the routing
 #          line and carries no U+2014.
 #
@@ -105,6 +107,33 @@ manifest_keys() {
   [ "$(jq -r '.bin // "absent"' "$staging/frontend/package.json")" = absent ]
   [ "$(jq -r '.scripts["test:forensics"] // "absent"' "$staging/frontend/package.json")" = absent ]
   [ "$(jq -r '.scripts.dev' "$staging/frontend/package.json")" = c ]
+}
+
+@test "S2: the release-notes skill override is stripped from both shipped .claude/settings.json files and their siblings stay" {
+  staging="$BATS_TEST_TMPDIR/staging"
+  mkdir -p "$staging/.claude" "$staging/frontend/.claude"
+  printf '{"skillOverrides":{"gaia-debt":"name-only","release-notes":"name-only"},"model":"x"}\n' > "$staging/.claude/settings.json"
+  cp "$staging/.claude/settings.json" "$staging/frontend/.claude/settings.json"
+  # The json-strip block whose paths name .claude/settings.json, taken from the
+  # real config so the test follows its keys.
+  block="$(awk '
+    /^  - type: /{ if (keep) exit; inblock = ($0 == "  - type: json-strip"); buf = ""; next }
+    inblock && /^    paths:/{ buf = buf $0 "\n"; next }
+    inblock && /^    keys:/{ buf = buf $0 "\n"; next }
+    inblock && /^      - /{ buf = buf $0 "\n"; if ($0 ~ /"\.claude\/settings\.json"/) keep = 1; next }
+    END { if (keep) printf "%s", buf }
+  ' "$REPO_ROOT/.gaia/release-scrub.yml")"
+  printf '%s\n' "$block" | grep -qF '"skillOverrides.release-notes"'
+  printf '%s\n' "$block" | grep -qF '"frontend/.claude/settings.json"'
+  config="$BATS_TEST_TMPDIR/scrub.yml"
+  printf 'transforms:\n  - type: json-strip\n%s\n' "$block" > "$config"
+  run "$MAINTAINER_CLI" release scrub "$staging" --config "$config"
+  [ "$status" -eq 0 ]
+  for settings in "$staging/.claude/settings.json" "$staging/frontend/.claude/settings.json"; do
+    [ "$(jq -r '.skillOverrides["release-notes"] // "absent"' "$settings")" = absent ]
+    [ "$(jq -r '.skillOverrides["gaia-debt"]' "$settings")" = name-only ]
+    [ "$(jq -r '.model' "$settings")" = x ]
+  done
 }
 
 # The `## [Unreleased]` body of CHANGELOG.md, up to the next `## [` heading.

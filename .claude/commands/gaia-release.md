@@ -9,7 +9,7 @@ Contents: Required argument; Pre-flight: Worktree check; Workflow; Recovery: I t
 
 Cut a new GAIA release. Thin orchestrator over the `.gaia/cli/gaia-maintainer release` CLI namespace, which owns every deterministic step (preflight checks, semver bump, CHANGELOG graduation, wiki scrub, manifest regen, commit + tag dance). This command sequences the CLI subcommands and surfaces user-facing prompts where human judgment is required.
 
-This command is **maintainer-only**, both this slash command and the `gaia-maintainer` binary are stripped from distributed tarballs by `.gaia/release-exclude` so adopters never see them. The adopter `gaia` binary has no `release` namespace at all; only `gaia-maintainer` does. Unlike `/gaia-init`, this command does not self-delete; it runs every release.
+This command is **maintainer-only**: it and the `gaia-maintainer` binary are release-excluded.
 
 > [!important] `main` is protected
 > Direct pushes to `main` are blocked. The release commit lands on a release branch, goes through a PR, and the tag is created on the merge commit _after_ it lands on `main`. The release PR is subject to the same CI gate and the same Code Audit Team merge handshake as any other PR. Expect `Vitest and Playwright`, `Run Chromatic`, and `Vitest (.gaia/cli)`: a release PR bumps root `package.json`, which that job's paths filter lists, so it always runs the job's full typecheck, lint, vitest, and bundle-freshness path rather than its filter-miss fast pass (it touches `.gaia/cli/**` only when Step 7b rebuilt the bundles). `gh pr merge --merge --auto` is the normal path: base-branch protection rejects a plain `--merge`, so `--auto` is required to queue the merge until checks pass. See `wiki/concepts/PR Merge Workflow.md`.
@@ -32,8 +32,6 @@ Detection (run this first, before anything else):
 . .gaia/scripts/main-only-lib.sh
 gaia_refuse_if_worktree "/gaia-release" || exit 1
 ```
-
-If the detection does not fire, fall through to `### 1. Preflight` below.
 
 ## Workflow
 
@@ -137,7 +135,7 @@ Rebuilds both `.gaia/cli/gaia` (adopter binary) and `.gaia/cli/gaia-maintainer` 
 .gaia/cli/gaia-maintainer release commit-and-tag --commit
 ```
 
-Stages `package.json`, `frontend/package.json`, `.gaia/VERSION`, `.gaia/manifest.json`, `CHANGELOG.md`, `wiki/log.md` (and `wiki/.state.json` after the amend). The maintainer adds `.gaia/cli/gaia` and `.gaia/cli/gaia-maintainer` manually if Step 7b rebuilt them. Commits as `chore(release): vX.Y.Z`, captures the new SHA, records it in `wiki/.state.json`, then amends the commit so the tree contains the state file (the recorded SHA is the pre-amend commit's: a commit cannot contain its own hash). Adopters who scaffold via `create-gaia` get a state file that says "wiki is in sync at this release."
+Stages `package.json`, `frontend/package.json`, `.gaia/VERSION`, `.gaia/manifest.json`, `CHANGELOG.md`, `wiki/log.md` (and `wiki/.state.json` after the amend). The maintainer adds `.gaia/cli/gaia` and `.gaia/cli/gaia-maintainer` manually if Step 7b rebuilt them. Commits as `chore(release): vX.Y.Z`, captures the new SHA, records it in `wiki/.state.json`, then amends the commit so the tree contains the state file (the recorded SHA is the pre-amend commit's: a commit cannot contain its own hash).
 
 If the pre-commit hook fails, STOP and report, fix the issue and create a **new** commit; do not `--amend`.
 
@@ -154,7 +152,7 @@ gh pr create --draft --base main --head "<RELEASE_BRANCH>" \
 
 The release PR is **not** exempt from the merge gate, `.claude/hooks/pr-merge-audit-check.sh` denies `gh pr merge` until every dispatched Code Audit Team member holds a marker for its current branch-own digest. Resolve the members (`bash .gaia/scripts/resolve-audit-members.sh`), then dispatch the `audit-loop-unit` agent per `wiki/concepts/PR Merge Workflow.md` `## Dispatch the audit loop unit`: the unit runs the members, fixes every Critical and Major finding, pushes (the tree changes), and repeats on the new HEAD until every member writes its marker (see `wiki/concepts/Audit Round Procedure.md` `#### Marker key` for the marker filename, keyed to the member's branch-own digest, not the tree sha). Post the status per `#### Posting the status last` before the merge. Knip / react-doctor advisories never block the marker.
 
-The re-audit of each member reads the re-run carry-forward ledger (`.gaia/local/audit/<audit-key>.rerun.json`, `<audit-key>` the incremental base sha plus the acting tree's own branch, `.gaia/scripts/audit-key-lib.sh`) for the deterministic list of what remains (`remaining[]`) and what the last round already fixed (`fixed_last_round[]`), instead of relying on the previous round's full report; the fixer is briefed from the round's dispositions file, not the ledger (`.claude/hooks/lib/audit-member-protocol.md` `## Re-run carry-forward ledger`). Every member re-spawned in the same round reads the same ledger, because neither half of the key moves with HEAD, and the key stays distinct from a sibling worktree's ledger even when both share a base sha. A round that clears posts a `GAIA-Audit` status and the next round keys on the commit carrying it, so each round that advances the key has its own ledger rather than one file accumulating across the loop; a round that clears without advancing the key reuses the previous round's ledger. The audit's LOCAL Task return is terse (pointer + counts); the per-finding detail is in the ledger. Every member's open entries live in this shared ledger (each entry names its `member`), and each clearance write must account for the writing member's entries by `entry_id` or the writer refuses it. If the ledger is absent, corrupt, or stale, fix from the report's open findings as today.
+Members re-audit from the re-run carry-forward ledger, whose keying, accounting and absent-or-stale fallback `.claude/hooks/lib/audit-member-protocol.md` `## Re-run carry-forward ledger` owns; the fixer is briefed from the round's dispositions file, not the ledger.
 
 Members write their markers only; they do not post the `GAIA-Audit` success status. Once `wiki/concepts/PR Merge Workflow.md` `#### Posting the status last` conditions hold, post it yourself, `bash .claude/hooks/post-audit-status.sh <path to a current member marker>`, before Step 11's merge; otherwise `--auto` queues against a required check nothing ever posts.
 
@@ -218,7 +216,7 @@ Set both version sites to `<NEW_VERSION>` (no `v` in `package.json`, `v`-prefixe
 - `$CG/bin/index.js` → `const FALLBACK_VERSION = 'v<NEW_VERSION>';`
 - For the 2.0.0 cut only: releases from 2.0.0 on publish `gaia-bundle-${version}.tar.gz` (`wiki/concepts/Release Workflow.md`). Make sure `$CG/bin/index.js` downloads `gaia-bundle-${version}.tar.gz` for versions at or above `v2.0.0` and keeps `gaia-${version}.tar.gz` below it; step 12's gate requires this `create-gaia` published before the `v2.0.0` tag.
 
-Commit on a branch, open + merge a PR, then tag. The PR-merge and main-push guards are repo-scoped (`.claude/hooks/lib/repo-scope.sh`), but the two surfaces resolve the sibling differently. `gh pr merge -R gaia-react/create-gaia` is recognized as foreign by repo-**name** (basename) comparison, so this repo's audit gate does **not** fire, no manual-UI detour needed. Raw-git operations (`git -C <path>`, `cd <path> &&`) are recognized as foreign only by resolving the **filesystem path** from the raw command string: `repo-scope.sh` reads `tool_input.command` verbatim and cannot expand shell variables, so a `$CG` form fails to resolve, the guard falls back to enforcing home-repo main-protection, and a legitimate sibling push is denied. Every sibling `git -C … push` below therefore inlines the **literal absolute path** the discovery step printed, never `$CG`. `create-gaia` has no audit infrastructure or branch protection of its own; a plain `--merge` (not `--auto`) is correct there.
+Commit on a branch, open + merge a PR, then tag. The PR-merge and main-push guards are repo-scoped (`.claude/hooks/lib/repo-scope.sh`), but the two surfaces resolve the sibling differently. `gh pr merge -R gaia-react/create-gaia` is recognized as foreign by repo-**name** (basename) comparison, so this repo's audit gate does **not** fire, no manual-UI detour needed. Raw-git pushes follow the sibling-repo push protocol below. `create-gaia` has no audit infrastructure or branch protection of its own; a plain `--merge` (not `--auto`) is correct there.
 
 > [!important] Sibling-repo push protocol
 > `repo-scope.sh` classifies a raw-git command as foreign only when it can resolve a concrete target path from the **raw command string**. Two things defeat that, and both make the guard fail closed and deny a legitimate sibling push:
@@ -236,7 +234,7 @@ git -C "$CG" add package.json bin/index.js
 git -C "$CG" commit -m "chore: release v<NEW_VERSION>"
 ```
 
-Branch push, own Bash invocation, **literal path inlined** (substitute the path printed by the discovery step for the placeholder; do not pass `$CG`):
+Branch push, per the push protocol:
 
 ```bash
 git -C /abs/path/to/create-gaia push -u origin "<RELEASE_BRANCH>"
@@ -253,7 +251,7 @@ git -C "$CG" fetch origin --quiet && git -C "$CG" checkout main --quiet && git -
 git -C "$CG" tag "v<NEW_VERSION>"
 ```
 
-Tag push, own Bash invocation, **literal path inlined** (same substitution as the branch push; not `$CG`):
+Tag push, per the push protocol:
 
 ```bash
 git -C /abs/path/to/create-gaia push origin "v<NEW_VERSION>"
@@ -304,7 +302,7 @@ Example: current is `installed=1.2.0, available=1.2.2`. On `1.3.0` → `installe
 
 Stage the generated `<NEW_VERSION>.ts` alongside the three version edits so all four land in one website commit.
 
-Commit and push directly to `main` in the website repo (no branch protection on `website`). Apply the sibling-repo push protocol from Step 13: the `add`/`commit` chain keeps `$WEB` and combines freely, but the `git push` runs in its **own Bash tool invocation** with the **literal path inlined**. A `git -C "$WEB" push origin main` resolves the target to the literal string `$WEB`, fails closed, and is denied as a home-repo push to `main`.
+Commit and push directly to `main` in the website repo (no branch protection on `website`). The push follows Step 13's sibling-repo push protocol.
 
 ```bash
 git -C "$WEB" add src/pages/get-started/sections/GetStarted.tsx \
@@ -314,7 +312,7 @@ git -C "$WEB" add src/pages/get-started/sections/GetStarted.tsx \
 git -C "$WEB" commit -m "chore: lockstep GAIA v<NEW_VERSION>"
 ```
 
-Push, own Bash invocation, **literal path inlined** (substitute the path printed by the discovery step for the placeholder; not `$WEB`):
+Push, per the push protocol:
 
 ```bash
 git -C /abs/path/to/website push origin main
@@ -350,14 +348,14 @@ echo "docs resolved to: $DOCS"                       # ← note this literal pat
 
 - `$DOCS/src/version.ts` → `export const GAIA_VERSION = '<NEW_VERSION>';` (imported by `src/overrides/PageSidebar.astro`'s colophon)
 
-Commit and push directly to `main` in the docs repo (mirror Step 14's website push; if docs enforces branch protection, route through a PR as in Step 11). Apply the sibling-repo push protocol from Step 13: the `add`/`commit` chain keeps `$DOCS` and combines freely, but the `git push` runs in its **own Bash tool invocation** with the **literal path inlined**.
+Commit and push directly to `main` in the docs repo (mirror Step 14's website push; if docs enforces branch protection, route through a PR as in Step 11). The push follows Step 13's sibling-repo push protocol.
 
 ```bash
 git -C "$DOCS" add src/version.ts
 git -C "$DOCS" commit -m "chore: lockstep GAIA v<NEW_VERSION>"
 ```
 
-Push, own Bash invocation, **literal path inlined** (substitute the path printed by the discovery step for the placeholder; not `$DOCS`):
+Push, per the push protocol:
 
 ```bash
 git -C /abs/path/to/docs push origin main
