@@ -11,6 +11,31 @@ tags: [meta, log]
 
 ## [Unreleased]
 
+- 2026-10-19 396f902 WORTHY - box flush cap waits; covered in wiki/concepts/Usage Ledger.md by the commit
+- 2026-10-19 f471fc1 WORTHY - worktree main-checkout writes via scratchpad and cp; covered in Audit Round Procedure and PR Merge Workflow by the commit
+- 2026-10-19 0418de0 WORTHY - project title kept in one place via nested siteName; updated wiki/concepts/GAIA Init Workflow.md
+- 2026-10-19 e8ed88e WORTHY - dead-paths ignores shipped-absent citations; CLI internal, no wiki edit
+- 2026-10-19 a3f64aa WORTHY - agent report files outside .gaia/local; covered by the rule file, no wiki edit
+- 2026-10-19 8457969 WORTHY - no mixed recommendations in batched menus; skill-reference detail, no wiki edit
+- 2026-10-19 b999784 WORTHY - gaia-init identity options and cache refresh; interactive prompt detail, no wiki page owns it
+- 2026-10-19 d7c051e WORTHY - one merge-wait procedure per owner; covered in wiki/concepts/PR Merge Workflow.md by the commit
+- 2026-10-19 8d6981c WORTHY - Chromatic spend cut; covered in wiki/dependencies/Chromatic.md by the commit
+- 2026-10-19 9fbfc2d WORTHY - statusline refresher cache-bust race fix; script-internal, no wiki edit
+- 2026-10-19 1586e7e WORTHY - file-tech-debt grade key guard; script-internal, no wiki page owns it
+- 2026-10-19 264e534 WORTHY - triage threshold on demand; covered in wiki/concepts/Audit Round Procedure.md by the commit
+- 2026-10-19 0b068ec WORTHY - AskUserQuestion harness-wide; covered in GAIA Spec, Audit Round Procedure, PR Merge Workflow, Quality Gate by the commit
+- 2026-10-19 fcbd88b WORTHY - promoted pages scrub-clean; covered in wiki/concepts/Wiki Consolidate.md by the commit
+- 2026-10-19 6bf0f8b WORTHY - date-first research folders; covered in wiki/concepts/Workflow Doctrine.md by the commit
+- 2026-10-19 8cca8b9 WORTHY - closed-set spec questions; covered in wiki/concepts/GAIA Spec.md by the commit
+- 2026-10-19 2a835d7 WORTHY - update branch isolation; covered in wiki/concepts/Update Workflow.md by the commit
+- 2026-10-19 edd7569 WORTHY - maintainer-only statusline setup suppression; maintainer-scrubbed, no wiki edit
+- 2026-10-19 dcc997f WORTHY - setup sandbox question on reconfigure; operational detail in setup references, no wiki page owns it
+- 2026-10-19 d72d0ea WORTHY - setup-owed statusline and decision preservation; operational detail, no wiki page owns it
+- 2026-10-19 e368196 WORTHY - update conflicts/claim/pull mode; covered in wiki/concepts/Update Workflow.md by the commit
+- 2026-10-19 c03f50f WORTHY - residue sweep; covered in wiki/concepts/Audit Disposition and Debt Fix.md by the commit
+- 2026-10-19 aa0d8b0 WORTHY - isolation routing; covered in wiki/concepts/Wiki Sync.md and wiki/decisions/Wiki Management.md by the commit
+- 2026-10-19 dec2cb1 WORTHY - cost box print; covered in wiki/concepts/Token Cost Readout.md, Usage Ledger.md, Claude Hooks.md by the commit
+- 2026-10-19 dcaaa58 WORTHY - prior wiki sync already updated GAIA Init Workflow and Styles pages
 - 2026-10-18 e38c7cc WORTHY - single cost box; GAIA Spec, Token Cost Readout, Usage Ledger updated in the commit
 - 2026-10-18 a8ccd03 WORTHY - statusline refit cadence; Claude Skills and Claude Integration updated in the commit
 - 2026-10-18 fc5a79c WORTHY - statusline nudge format; Claude Integration and related pages updated in the commit
