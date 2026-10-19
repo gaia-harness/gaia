@@ -252,8 +252,10 @@ _gaia_repo_scope_tool_end() {
 # heredoc nor ANSI-C quoting, so an apostrophe in a heredoc body, or a `$'\''`,
 # can open a quoted span the shell never opened and carry the commands after
 # it into one word of this command. A foreign command holding one would hide
-# them, so it enforces instead. A `--body` that only mentions git stays
-# foreign; one that also holds a `;` enforces.
+# them, so it enforces instead. A single-line `--body` that only mentions git
+# stays foreign; one that also holds a `;`, `&`, `|` or a newline enforces, so
+# a multi-line body naming git or gh enforces, and `-F` or `--body-file` is the
+# way around it.
 _gaia_repo_scope_swallowed() {
   local i word_count=${#GAIA_FIRST_COMMAND_WORDS[@]} token NEWLINE=$'\n'
   i=1
