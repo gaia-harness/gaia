@@ -999,7 +999,7 @@ fix_fixture() {
   printf 'untouched\n' >>"${FIX_ROOT}/b.txt"
   script="$(materialize 'gate_snapshot() {')"
   sub_literal "$script" '<RESOLVED_ROOT>' "$FIX_ROOT"
-  sub_literal "$script" '<RUN_FOLDER>' "$FIX_RUN_FOLDER"
+  sub_literal "$script" '<SCRATCH>' "$FIX_RUN_FOLDER"
   sub_literal "$script" '<r>' 1
   sub_literal "$script" '<k>' 1
   # The stand-in autofix: rewrites a staged path and creates a new one. The
@@ -1021,7 +1021,7 @@ fix_fixture() {
   [ -z "$(git -C "$FIX_ROOT" ls-files -z --others --exclude-standard | tr '\0' '\n')" ]
   script="$(materialize 'gate_snapshot() {')"
   sub_literal "$script" '<RESOLVED_ROOT>' "$FIX_ROOT"
-  sub_literal "$script" '<RUN_FOLDER>' "$FIX_RUN_FOLDER"
+  sub_literal "$script" '<SCRATCH>' "$FIX_RUN_FOLDER"
   sub_literal "$script" '<r>' 1
   sub_literal "$script" '<k>' 1
   sub_literal "$script" '# run the per-round verification here' "echo new >'${FIX_ROOT}/n.txt' #"

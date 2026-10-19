@@ -69,7 +69,7 @@ payload_ok() {
 ANCHORS=(
   'I|never run git'
   'F|stage, commit, push, branch'
-  'I|never through Edit or Write'
+  'I|copy it in with one plain command'
   'F|audit-loop-unit'
   'I|sanctioned depth-2 orchestrator'
   'I|state-changing git and the Quality Gate'
@@ -200,8 +200,8 @@ pad_to() { # pad_to <src> <dst> <total bytes>: src plus filler so dst ends in on
   anchors_ok "$DOCTRINE_PATH"
 }
 
-@test "execution.md anchors red twin: the Edit-or-Write clause fails" {
-  sed 's/never through Edit or Write//g' "$DOCTRINE_PATH" >"$TEMPORARY_DIRECTORY/noewr.md"
+@test "execution.md anchors red twin: the copy-in clause fails" {
+  sed 's/copy it in with one plain command//g' "$DOCTRINE_PATH" >"$TEMPORARY_DIRECTORY/noewr.md"
   if cmp -s "$DOCTRINE_PATH" "$TEMPORARY_DIRECTORY/noewr.md"; then return 1; fi
   if anchors_ok "$TEMPORARY_DIRECTORY/noewr.md"; then return 1; fi
 }
