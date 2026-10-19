@@ -419,7 +419,7 @@ Track `lint_cycle = <count>` in working memory (initialize to 1 on the first att
 
 On lint pass: continue to step 11.
 
-On lint fail (cycles 1–2): surface the failures verbatim. The user can fix and re-run the lint, or defer with rationale (which loops back to 6c's pending handling: Read `.claude/skills/gaia/references/spec/self-review-dispatch.md` now, whole, and run its 6c). For mutations of an already-saved SPEC, the helper enforces the explicit reopen ceremony, `## Reopen rationale` and `## UAT diff` sections required. Increment `lint_cycle` and continue.
+On lint fail (cycles 1–2): surface the failures verbatim, then ask with `AskUserQuestion`: `Fix and re-run the lint` (Recommended) or `Defer with rationale` (which loops back to 6c's pending handling: Read `.claude/skills/gaia/references/spec/self-review-dispatch.md` now, whole, and run its 6c). For mutations of an already-saved SPEC, the helper enforces the explicit reopen ceremony, `## Reopen rationale` and `## UAT diff` sections required. Increment `lint_cycle` and continue.
 
 **On lint fail at cycle 3 (3 failed cycles in a row):** **Auto-mode exception per rule 10:** skip the prompt and auto-pick "Defer remaining findings", capture each remaining finding as a deferred clarification with rationale `"Auto-mode session, lint thrash, defer for human review."` and continue to step 11. Step-back-to-gate-2 in auto mode would loop indefinitely.
 

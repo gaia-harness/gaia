@@ -93,6 +93,7 @@ For each item in `pending_clarifications[]`, surface via `AskUserQuestion`:
   - `{ label: "Answer now", description: "Resolve <topic> inline." }`
   - `{ label: "Defer with rationale", description: "Mark unresolved; capture rationale in clarifications.deferred[]." }`
   - `{ label: "Discuss this", description: "Drop to plain Q&A, then settle." }`
+- Mark `Answer now` ` (Recommended)`. The items are independent: batch them, up to 4 questions per `AskUserQuestion` call.
 
 **Auto-mode exception per rule 9:** skip the `AskUserQuestion` and auto-defer every pending item with rationale `"Auto-mode session, defer for human review."` Save proceeds unblocked.
 

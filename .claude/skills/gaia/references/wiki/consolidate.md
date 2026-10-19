@@ -159,14 +159,14 @@ Process findings in this order: **supersession → reversed → near-collision �
 
 **Near-collision:**
 
-1. Surface a follow-up `AskUserQuestion`: `Which slug should be canonical?` with options for each candidate slug. (Do not assume newer wins, slug choice is editorial.)
+1. Surface a follow-up `AskUserQuestion`: `Which slug should be canonical?` with options for each candidate slug, the one with more inbound wikilinks first and marked ` (Recommended)`. (Do not assume newer wins, slug choice is editorial.)
 2. Rename the non-canonical page: `git mv <non-canonical-path> <canonical-domain>/<canonical-slug>.md`.
 3. Repoint every wikilink from `<old-title>` to `<canonical-title>` by the matching rules of the supersession step that repoints links, aliased and anchored links included.
 4. Update `wiki/index.md` to drop the old entry and ensure the canonical entry is present.
 
 **Subject-orphan:**
 
-1. Surface a follow-up `AskUserQuestion`: `Retire <title>, or confirm still relevant?`.
+1. Surface a follow-up `AskUserQuestion`: `Retire <title>, or confirm still relevant?`, options `Retire (Recommended)` and `Confirm relevant`.
 2. **Retire:** move to `wiki/_archived/<slug>.md`, set `status: archived`, drop entry from `wiki/index.md`.
 3. **Confirm relevant:** add `consolidation_ack: [self]` to the page's frontmatter. Suppresses future subject-orphan flags for this page.
 

@@ -1,0 +1,29 @@
+---
+paths:
+  - '.claude/skills/**'
+  - '.claude/commands/**'
+  - '.claude/agents/**'
+  - 'frontend/.claude/skills/**'
+  - 'frontend/.claude/agents/**'
+  - 'wiki/concepts/PR Merge Workflow.md'
+  - 'wiki/concepts/Audit Round Procedure.md'
+  - 'wiki/concepts/Audit Gate Reference.md'
+  - 'wiki/concepts/Audit Disposition and Debt Fix.md'
+  - 'wiki/concepts/Code Review Audit Agent.md'
+  - 'wiki/concepts/Workflow Doctrine.md'
+  - 'wiki/decisions/Quality Gate.md'
+---
+
+# User Questions
+
+A question whose answer is a choice is an `AskUserQuestion`:
+
+- **Recommended option first**, its label ending ` (Recommended)`. A gate whose contract deliberately recommends nothing (a neutral classification) says so in the question and keeps a fixed option order.
+- **At most 4 options.** A `Discuss this` escape, where the skill offers one, counts toward the 4. Never list `Other`: the tool adds it, and it keeps a free-form answer available.
+- **One question per decision.** Batch independent decisions, up to 4 questions per call, with successive calls when there are more. A decision waits for an earlier answer only when it depends on it; a Socratic or clarify loop, where each answer shapes the next question, stays one question per turn.
+
+This covers every confirmation and approval ("Does this match?", "Proceed?", "Commit this?", "Apply, keep or revise?"), every pick-one, and every "choose these or discuss it". Auto-mode, CI and other unattended arms never prompt, so they are out of scope.
+
+**The one exception:** a plain prompt only when the expected answer is genuinely free text (a feature description, a name, a reason). A skill that keeps one plain says why it is open-ended beside it.
+
+Why: a free-text confirmation makes the user type "yes" to an A-or-B question, mixed styles break the flow, and a menu is easier to answer on mobile.

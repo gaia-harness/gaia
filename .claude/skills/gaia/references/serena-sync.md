@@ -70,6 +70,7 @@ Present exactly **one** `AskUserQuestion` for the entire drifted set (never one 
 - **options (this exact order):**
   1. `{ label: "Apply", description: "Append all missing languages to .serena/project.yml now." }`
   2. `{ label: "Skip", description: "Show the manual instruction; write nothing." }`
+- **Recommended:** mark `Apply` ` (Recommended)`.
 
 **Write nothing before the adopter answers.** The manual instruction from Step 2 already stands regardless of the answer.
 

@@ -30,6 +30,9 @@ without asking it:
 
 ## Rule 2: Closed-set questions use `AskUserQuestion`
 
+`.claude/rules/user-questions.md` owns the general rule; this section
+adds the PO's option ordering and template.
+
 A "closed-set" question is one with discrete possible answers the PO
 can enumerate. These ALWAYS use the `AskUserQuestion` tool, which
 takes at most four options and adds its own free-text `Other` to

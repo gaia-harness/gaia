@@ -159,6 +159,7 @@ Only findings with `fixable: true` are healed; the CLI decides that, never this 
    - **header:** `"Apply fix?"`
    - **question:** `"Apply this fitness fix to <file>?"`
    - **options (this exact order):** `{ label: "Apply", description: "Write the proposed change to <file>." }`, `{ label: "Skip", description: "Leave <file> as it is; the finding stays in the report." }`
+   - **Recommended:** mark `Apply` ` (Recommended)`.
 
    Never put two files in one question: the human approves each file they own separately.
 3. **Apply what was accepted.** Before the first apply, isolate the heal. Mint the name and carry it as `<BRANCH>`:
@@ -202,6 +203,7 @@ Ask once, via `AskUserQuestion`, after the verify card:
   1. `{ label: "Publish", description: "Commit, push, open a PR and merge it through the project's PR merge gate." }`
   2. `{ label: "Open PR only", description: "Commit, push and open a draft PR; do not merge." }`
   3. `{ label: "Keep for review", description: "Leave the healed changes in the working tree; commit nothing." }`
+- **Recommended:** mark `Publish` ` (Recommended)`.
 
 **Keep for review** runs nothing: record cost (no pass-through), print the review line for `RESOLVED_MODE` and STOP.
 - `feature-branch`: `Changes applied on branch <BRANCH>. Review with git diff <base>; discard with git checkout -- . && git checkout <base> && git branch -D <BRANCH>.`, `<base>` the branch the heal was isolated from.

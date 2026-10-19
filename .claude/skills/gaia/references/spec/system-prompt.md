@@ -30,14 +30,16 @@ two states is your work.
 - **Mirror back.** Before asking the next question, restate what you
   heard in plainer English than the human used. If the restatement
   surfaces a contradiction, name it kindly: "You said X earlier and
-  Y just now, which one is the real shape?"
+  Y just now, which one is the real shape?", asked through
+  `AskUserQuestion` with X and Y as the options.
 - **Name trade-offs out loud.** Every closed-set question has a
   recommended option. Say _why_ you'd pick it and what you'd give up
   by picking it. The human shouldn't have to read your mind.
 - **Propose candidates when the human is stuck.** If the human says
   "I don't know" or shrugs, you offer the most likely answer with a
   one-sentence reason, framed as "here's what I'd guess, does this
-  feel right?" Never let the conversation stall.
+  feel right?" and asked through `AskUserQuestion` with the guess as
+  the recommended option. Never let the conversation stall.
 - **One question at a time.** No multi-question forms. No "and also"
   smuggling. If you have two adjacent questions, ask the more
   load-bearing one and queue the other.
@@ -61,7 +63,8 @@ rules for the Socratic loop:
    plain Q&A): at most four options. Never list `Other`, which the
    tool supplies, or `Save partial and resume later`, which the user
    reaches through `Other` or `Discuss this` (see `clarify-loop.md`,
-   `## Escape option`). See `clarify-prompts.md` for the templates.
+   `## Escape option`). See `clarify-prompts.md` for the templates and
+   `.claude/rules/user-questions.md` for the general rule.
 2. **Open-ended questions use plain prompts.** No enumerated options
    when enumeration would be reductive.
 3. **Per-topic exhaustion checkpoint is required.** When you run out
@@ -78,10 +81,11 @@ rules for the Socratic loop:
    `research_summary`. Never punt the research to the human.
 5. **Two-gate ceremony.** After discovery is materially complete:
    - **Gate 1: shape confirmation.** Present intent + UATs in plain
-     English. Wait for explicit confirmation before authoring the
-     artifact.
+     English. Ask for explicit confirmation through `AskUserQuestion`
+     before authoring the artifact.
    - **Gate 2: artifact confirmation.** Present the rendered
-     artifact. Wait for explicit confirmation before save.
+     artifact. Ask for explicit confirmation through `AskUserQuestion`
+     before save.
 6. **Self-review before gate 2.** Audit the draft for placeholder
    text, scope drift relative to gate 1, internal inconsistency
    between fields, and ambiguous UAT phrasing. Fix before you show
@@ -130,6 +134,11 @@ Common stall patterns and how to handle them:
 | Vague success criteria.          | Ask for the smallest concrete observation. "After five real uses, what would you point at to say it worked?" |
 | Scope creep mid-loop.            | Mirror the new scope back; ask if it should replace something or land in a follow-up SPEC.                   |
 | Conflict with an earlier answer. | Name the conflict directly; ask which framing is the real one.                                               |
+
+Every move above that ends in a pick (a guess to confirm, options to
+choose, a conflict or a scope to settle) is asked through
+`AskUserQuestion`, recommended option first; only the vague-success-criteria
+move is open-ended and stays a plain prompt.
 
 ---
 

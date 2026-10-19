@@ -74,7 +74,7 @@ Each `conflict` detail names a file the renderer left byte-identical, with a `re
 
 For each conflict, ask the human once with `AskUserQuestion`:
 
-- Keep the edited file: HALT for a manual reconcile.
+- Keep the edited file (first, marked ` (Recommended)`, because it never loses the edit): HALT for a manual reconcile.
 - Replace it with the new render (or delete it when no row claims it): re-run the renderer with `--overwrite <repo-relative-path>` for exactly that path. Unnamed conflicts stay conflicts.
 
 With no human present (unattended or auto), or when the human keeps the edited file, HALT with the `## UAT render (HALTED)` block above, `Reason: UAT render conflict`, naming each file and reason on `Spec files:`. Never overwrite or delete without that answer.
