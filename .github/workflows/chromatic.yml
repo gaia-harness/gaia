@@ -1,7 +1,17 @@
 name: Chromatic
 
+# Builds on `main` and on pull requests that are ready for review, never on a
+# bare branch push or a draft. Chromatic bills every story TurboSnap skips at a
+# fifth of a captured snapshot, so the build count, not the per-build capture
+# count, is what drives spend: a branch pushed several times while in draft
+# pays once, when it is marked ready. `ready_for_review` is the trigger that
+# fires that one build. A repository that cannot open drafts builds on every
+# pull request push, as before.
 on:
   push:
+    branches: [main]
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
   workflow_dispatch:
 
 concurrency:
@@ -15,6 +25,10 @@ permissions: {}
 jobs:
   has-chromatic-token:
     name: Check for Chromatic token
+    # A draft skips here, and `Run Chromatic` skips with it through `needs`. A
+    # draft cannot merge, so the required check has nothing to gate until
+    # `ready_for_review` runs the workflow again.
+    if: github.event_name != 'pull_request' || !github.event.pull_request.draft
     runs-on: ubuntu-latest
     # One echo into $GITHUB_OUTPUT, with no checkout and no network. The cap
     # bounds execution, so a hung job reports an ordinary red check instead of
@@ -33,7 +47,7 @@ jobs:
   chromatic:
     name: Run Chromatic
     needs: has-chromatic-token
-    if: needs.has-chromatic-token.outputs.present == 'true' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
+    if: needs.has-chromatic-token.outputs.present == 'true'
     # The cap bounds execution, so a hung upload reports an ordinary red check
     # instead of hanging. `exitOnceUploaded` keeps the real work near 2 minutes,
     # so this caps the failure mode that matters here, an upload that hangs
@@ -41,9 +55,10 @@ jobs:
     timeout-minutes: 12
     runs-on: ubuntu-latest
     # `contents: read` is the complete set, not an under-scoped starting point.
-    # Checkout needs it to clone, and paths-filter and setup-node both default
-    # their `token` input to `github.token` for the compare API and the
-    # node-versions download. chromaui/action calls no GitHub API and takes no
+    # Checkout needs it to clone, and setup-node defaults its `token` input to
+    # `github.token` for the node-versions download. paths-filter runs in git
+    # mode (`token: ''` below), so it needs no `pull-requests: read` on a pull
+    # request. chromaui/action calls no GitHub API and takes no
     # token: Chromatic authenticates with `projectToken`, and its commit
     # statuses arrive through the Chromatic GitHub App installation. Nothing
     # here needs write, so do not widen this when Chromatic statuses misbehave.
@@ -54,14 +69,20 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
+          # The pull request's head, not the ephemeral merge commit a
+          # `pull_request` run checks out by default. That merge commit has the
+          # latest `main` build as an ancestor the branch does not, so
+          # Chromatic picks the wrong baseline and TurboSnap diffs in changes
+          # that landed on `main` after the branch was cut.
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
       # Pre-verified dep-bump PRs (the /update-deps wrapper runs the full
       # quality gate locally before pushing) skip Chromatic, but only when the
       # dep-bump subject is matched AND the changed-path set is confined to
-      # dependency manifests. This workflow triggers on `push`, so the gate
-      # inspects the HEAD commit subject rather than a PR title, and the
-      # changed-path set is the pushed range on the default branch (what a
-      # squash-merge lands), or the whole branch against the default branch
-      # otherwise (what that branch's own PR would merge, so a manifest-only
+      # dependency manifests. The gate inspects the HEAD commit subject (the
+      # pull request's head on a `pull_request` run, per the checkout above),
+      # and the changed-path set is the pushed range on the default branch
+      # (what a squash-merge lands), or the whole branch against the default
+      # branch otherwise (what that branch's own PR would merge, so a manifest-only
       # follow-up commit cannot hide an earlier frontend/app/ change on the same
       # branch). Predicate lives in .gaia/scripts/chore-deps-skip.sh.
       - name: Check chore-deps commit
@@ -100,6 +121,10 @@ jobs:
         if: steps.chore-deps.outputs.skip == 'false'
         id: filter
         with:
+          # Git mode. With a token, a `pull_request` run lists the PR's files
+          # through the REST API, which needs `pull-requests: read`; git mode
+          # diffs against the base branch from the full-history checkout.
+          token: ''
           filters: |
             code:
               - 'frontend/app/**'
@@ -211,6 +236,13 @@ jobs:
       - if: steps.chore-deps.outputs.skip == 'false' && steps.filter.outputs.code == 'true'
         name: Run Chromatic
         uses: chromaui/action@a18e9f57b71eb05f941848c0b927aab2ee644e3e # v18.10.2
+        # The checkout above is a detached head on a `pull_request` run, so
+        # name the branch and commit the build belongs to rather than leaving
+        # Chromatic to read them off the merge ref.
+        env:
+          CHROMATIC_BRANCH: ${{ github.event.pull_request.head.ref || github.ref_name }}
+          CHROMATIC_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+          CHROMATIC_SLUG: ${{ github.repository }}
         with:
           projectToken: ${{ secrets.CHROMATIC_PROJECT_TOKEN }}
           exitZeroOnChanges: true

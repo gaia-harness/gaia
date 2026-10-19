@@ -30,7 +30,7 @@ Chromatic rejects the legacy `chromatic.viewports` parameter alongside modes, so
 
 ## CI gating
 
-The `.github/workflows/chromatic.yml` workflow triggers on every `push` but does not always run Chromatic:
+The `.github/workflows/chromatic.yml` workflow triggers on a push to `main` and on pull requests, and skips a draft: marking a pull request ready for review runs it. Chromatic bills each story TurboSnap skips at a fifth of a captured snapshot, so every build costs a share of the whole story count, and the number of builds drives spend. Within a run it does not always run Chromatic:
 
 - A commit whose subject matches `chore(deps):` or `chore(deps-dev):` short-circuits only when its changed-path set is also confined to a dependency manifest (the pushed range on the default branch, the whole branch against the default branch otherwise): dep-bump PRs run the quality gate locally before pushing, but that pre-verification covers the manifest bump only.
 - A `paths-filter` allowlists Storybook-affecting paths; see the `code:` filter block in `.github/workflows/chromatic.yml` for the current list. Pushes touching nothing on the list report the required check green without running Chromatic.
