@@ -17,7 +17,7 @@ Tokenize the first whitespace-separated word of `$ARGUMENTS`:
 
 ## Auto mode
 
-When `auto_mode = true` the agent answers the Socratic questions itself rather than asking the user. **The Socratic loop's ceiling in auto mode is 5 substantive questions** (see `## The question ceiling` in `spec/clarify-loop.md`). The flow is non-interactive end-to-end: no `AskUserQuestion` call or plain prompt waits for the human. Make best-judgment calls from the description, the draft state, and dispatched research.
+When `auto_mode = true` the agent answers the Socratic questions itself rather than asking the user. **The Socratic loop's ceiling in auto mode is 5 substantive questions** (see `## The question ceiling` in `spec/clarify-loop.md`). The flow is non-interactive end-to-end: no `AskUserQuestion` call or plain-prompt block waits for the human. Make best-judgment calls from the description, the draft state, and dispatched research.
 
 Hard rules in auto mode:
 
@@ -155,7 +155,7 @@ Once a Q&A pair has been folded into the draft's `clarifications.answered[]` (st
 
 Runs on entry, before step 1, before any SPEC id is allocated or any file is written, so a "switch" outcome stops cleanly with nothing to clean up. **Auto mode** skips this section and proceeds on whatever model the automation runs.
 
-SPEC synthesis, both gates and the clarify loop run on the **main thread** at your session model: `AskUserQuestion` and plain prompts do not work in subagents, so unlike `/gaia-plan` no spec-writer can be pinned to Opus. Opus and Fable are both top-tier.
+SPEC synthesis, both gates and the clarify loop run on the **main thread** at your session model: `AskUserQuestion` and plain-prompt steps do not work in subagents, so unlike `/gaia-plan` no spec-writer can be pinned to Opus. Opus and Fable are both top-tier.
 
 - If you are on Opus or Fable, proceed to step 1 (no prompt).
 - Otherwise (you are on Sonnet, Haiku, or another lesser model) call `AskUserQuestion` with:
