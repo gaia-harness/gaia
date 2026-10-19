@@ -13,7 +13,8 @@
 #   keys (empty when there are none).
 # Exit 1: the audit did not answer; the file is left empty and one stderr line
 #   names the reason. The caller treats the set as unknown, never as empty.
-# Exit 2: usage error, or jq is missing.
+# Exit 2: usage error, jq is missing, or the output file or its temporary
+#   files cannot be written.
 #
 # `pnpm audit` exits non-zero whenever an advisory is open, so its exit status
 # says nothing about whether it answered; the JSON shape is the only signal.
