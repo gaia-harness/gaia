@@ -40,18 +40,7 @@ Read-and-order-the-backlog passes (reconcile, ordering, and the backlog pass), a
 `## Validate named numbers` above, and it replaces the no-argument offer for this invocation, except on the one operator-chosen
 fall-through noted inline (option 3 of the cluster offer).
 
-**Validate the target.** `## Validate named numbers` above decides whether
-`#<N>` is drainable; its table owns the reasons and their precedence, and this
-section restates neither.
-
-**Ineligible** (any row of that table matches) → print that row's line and
-stop. The run ends with nothing claimed, no branch, and no prompt; it never
-offers or drains a different issue in place of the one named. (Run ends here;
-see `## Cost record (run end)` in `debt.md`.)
-
-**Eligible** (open, `tech-debt`-labeled, not in-progress, not parked, not
-investigate-graded) →
-resolve which cluster, if any, anchors it, reusing the backlog pass's `clusters`
+`#<N>` arrives here eligible, since `## Validate named numbers` above stops on any other. Resolve which cluster, if any, anchors it, reusing the backlog pass's `clusters`
 and the offer-time security and spec reads `debt.md` defines in `### Offer-time reads` (one visibility read, never a second prompt):
 
 - **Heads a public-batch-eligible cluster of 2 or more** → one `AskUserQuestion`

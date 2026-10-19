@@ -21,10 +21,4 @@ How you present the choice depends on backlog size and cluster shape, counted ov
 
 Cap the option set at **4** (plus the built-in Other), the `AskUserQuestion` maximum. When the backlog is deeper than the shown options, first print the full ordered backlog (per issue: number, title, severity band, age), now annotated with cluster membership (e.g. `[batch with #B #C]`), so numbers beyond the shown options are visible before choosing.
 
-**Opt-out guarantee.** One-at-a-time stays an explicit, always-available choice: the `#<A> only` option, the built-in Other (type any open issue number to fix it alone), and the unchanged singleton path together guarantee it. A batch is always a recommendation the human approves, never a default that skips the choice.
-
-**Security-class members never appear inside a public batch option.** On a non-PRIVATE repo the offer-time security read already withholds them, they surface only as single candidates. On a confirmed-PRIVATE repo they may appear as batch members.
-
-**Spec-class members never appear inside a batch option, on any repo.** The offer-time spec read withholds them unconditionally; unlike the security peel, this hold never relaxes on a confirmed-PRIVATE repo.
-
 Handle the pick, and anything typed into **Other**, as `### Offer-time reads` in `debt.md` states, then continue at `## Claim the fix unit` in `debt.md`.

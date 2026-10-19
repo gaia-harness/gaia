@@ -17,8 +17,6 @@ Detection (run this first, before anything else):
 gaia_refuse_if_worktree "/gaia-residue" || exit 1
 ```
 
-If the detection does not fire, fall through to the workflow dispatch line below.
-
 Anchor for the next pre-flight step: a check that must pass before this command starts goes here, after the worktree check and before the workflow dispatch line.
 
 ```bash

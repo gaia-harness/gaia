@@ -181,16 +181,6 @@ validate_has_row() {
 
 # --- 3. the direct-number path ----------------------------------------------
 
-@test "the direct-number ineligible arm stops instead of falling through" {
-  section="$(extract_section '## Fix a specific issue (direct-number path)' "$NAMED_MD")"
-  [ -n "$section" ]
-  ineligible="$(extract_between '**Ineligible**' '**Eligible**' <<<"$section")"
-  [ -n "$ineligible" ]
-  grep -qiF -- 'stop' <<<"$ineligible"
-  grep -qF -- 'then fall through to' <<<"$ineligible" && return 1
-  true
-}
-
 @test "the direct-number path stops when the named issue is lost at claim time" {
   section="$(extract_section '## Fix a specific issue (direct-number path)' "$NAMED_MD")"
   [ -n "$section" ]

@@ -1,6 +1,6 @@
 ---
 name: file-tech-debt
-description: Files a new tech-debt GitHub issue for an out-of-scope code-review finding. Builds the dedup key, checks for an existing open or declined-closed match, and only if none exists, creates the issue with the right labels and touches the debt-count staleness sentinel. Trigger on natural-language asks like "file a tech-debt issue", "record this as tech-debt", "open a tech-debt issue for this out-of-scope finding", or "file this finding as debt". Do NOT trigger on draining, fixing, listing, or prioritizing existing debt (that's `/gaia-debt`), nor on general "clean up the code" or "fix this bug" asks that aren't about filing a new tracked issue.
+description: Files a new tech-debt GitHub issue for an out-of-scope code-review finding. Builds the dedup key, skips an open or declined-closed match, else creates the labeled issue and touches the debt-count sentinel. Trigger on asks like "file a tech-debt issue", "record this as tech-debt", "file this finding as debt". Do NOT trigger on draining, fixing, listing, or prioritizing existing debt (that's `/gaia-debt`), nor on general "clean up the code" or "fix this bug" asks that aren't about filing a new tracked issue.
 ---
 
 # File a tech-debt issue
@@ -135,9 +135,9 @@ Then, as its own tool call, spelling the path literally:
 rm -f .gaia/local/audit/issue-body-<something-unique>.md
 ```
 
-The body-file is scratch, and this recipe is its only owner: nothing else reaps it, so a file left behind is permanent litter in the adopter's working tree. **Delete it unconditionally**, whether the create succeeded or failed. The body is fully reconstructible from step 5, so there is nothing worth keeping on a failed create, and the cleanup cannot mask that failure: `gh`'s own output and exit status are what you report.
+The body-file is scratch and this recipe is its only owner, so **delete it unconditionally**, whether the create succeeded or failed (the body is reconstructible from step 5), and report `gh`'s own output and exit status.
 
-**Two tool calls, not one.** A `PreToolUse` hook returns a single allow/deny decision for an entire Bash invocation before any of it reaches the shell, so a hook that denies the cleanup drops the create standing beside it too: no issue filed, and no output naming the cause. Splitting them keeps a denied cleanup from costing you the filing. One consequence for how the second call is written: shell variables do not survive between tool calls, so spell the path literally rather than reusing `$body_file`. Either spelling of it works, relative or absolute, and the destructive-command guard whitelists this directory both ways.
+**Two tool calls, not one.** A `PreToolUse` hook allows or denies a whole Bash invocation, so a denied cleanup would drop the create beside it with no output naming the cause. Shell variables do not survive between calls, so spell the path literally in the second call (relative or absolute; the destructive-command guard whitelists both).
 
 ## 5. Issue body schema
 
@@ -209,7 +209,7 @@ Being advisory also sets how strictly it is checked. `.gaia/scripts/check-debt-i
 
 See step 7 for the difficulty label's three permitted values and the rubric for choosing between them.
 
-A finding that gets deliberately declined (closed without fixing) carries GitHub's `wontfix` label, that's what step 2 checks for to avoid re-filing it.
+A finding deliberately declined (closed without fixing) is closed as not planned or carries GitHub's `wontfix` label; step 2 treats either as declined and never re-files it. Close a tech-debt issue as not planned only when the finding is declined: use completed for a fix and a duplicate link for a duplicate.
 
 The registry is reconciled before the first filing in a run, then anything still missing is created directly. This is the idiom `.claude/skills/gaia/references/debt.md` already uses: key the fallback on the labels the repository actually has, never on whether the sync announced a problem. A sync that cannot run at all announces nothing, so a guard reading its output treats the worst case as the healthy one.
 
