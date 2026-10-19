@@ -34,7 +34,7 @@ A story or test is `tests/<source basename>.<kind>.tsx` beside its source: `inde
 
 ## Typing
 
-Import the types from `@storybook/react-vite`: `Meta` for the default export, `StoryFn` for a render-only story, and `StoryObj` for a story with a `play` function.
+Import the types from `@storybook/react-vite`: `Meta` for the default export, `StoryFn` for a render-function story (a `.play` may be assigned to it), and `StoryObj` for an object story with `args` and `play`.
 
 ## Title convention
 
