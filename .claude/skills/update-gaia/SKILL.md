@@ -7,9 +7,9 @@ Contents: Pre-flight: Worktree check; Pre-flight: Branch check (run modes); Step
 
 Pull the latest GAIA release into this project without clobbering customizations. Does a three-way comparison per file (adopter / baseline / latest) and respects explicit classes in `.gaia/manifest.json`:
 
-- **`owned`**: GAIA controls fully.
+- **`owned`** (GAIA-owned, not the adopter's): GAIA controls fully.
 - **`shared`**: GAIA seeds, you customize.
-- **`wiki-owned`**: GAIA-seeded wiki pages.
+- **`wiki-owned`** (adopter-editable; handled exactly like `shared`): GAIA-seeded wiki pages.
 - **adopter-owned (implicit)**: anything not in the manifest, plus sentinels like `wiki/log.md`, `CHANGELOG.md`, `.gaia/VERSION`, `.gaia/manifest.json`, `.gaia/update-decisions.json`. The merge walk never touches them; Step 9d rewrites `.gaia/manifest.json` and `.gaia/VERSION` once the merge is done, and the decision steps below write `.gaia/update-decisions.json`.
 
 The first three take the same Step 7 rows. The class changes only two of them: which status a clean overwrite reports (`owned` → `overwrite`, the other two → `merge`), and what happens when the release newly owns a path the adopter already has (`owned` backs up and overwrites, the other two fall through to the ordinary rows). Step 7 is authoritative.
@@ -22,7 +22,7 @@ Every command block below is one plain command with each value typed as a litera
 
 ## Pre-flight: Worktree check
 
-This wrapper changes `.gaia/VERSION` and opens a PR, which belong to the main checkout or to this command's own update worktree, never to a SPEC, debt or feature worktree or to `/update-deps`'s `deps/` worktree. Invoked from any other linked worktree, it refuses hard with a message that surfaces the cached version state from main, so the user knows whether a GAIA update is even pending. The `"update/"` argument admits a worktree on an `update/` branch, so a re-run inside this command's own update worktree continues there.
+This wrapper changes `.gaia/VERSION` and opens a PR, which belong to the main checkout (the clone's primary working directory, on any branch) or to this command's own update worktree, never to a SPEC, debt or feature worktree or to `/update-deps`'s `deps/` worktree. Invoked from any other linked worktree, it refuses hard with a message that surfaces the cached version state from main, so the user knows whether a GAIA update is even pending. The `"update/"` argument admits a worktree on an `update/` branch, so a re-run inside this command's own update worktree continues there.
 
 Detection (run this first, before anything else):
 
@@ -34,8 +34,6 @@ gaia_refuse_if_worktree "/update-gaia" gaia_update_gaia_state_line "update/" || 
 
 The state-line function lives in `update-state-line-lib.sh` rather than inline here because the runtime inspects a command's text: an inline definition holding captured substitutions would get this whole block refused on a re-run inside the own update worktree, before the guard could admit it.
 
-If the detection does not fire, fall through to `## Pre-flight: Branch check`.
-
 ## Pre-flight: Branch check
 
 ```bash
@@ -45,7 +43,7 @@ git branch --show-current
 Decide the run mode, in this order:
 
 1. **Worktree run in place.** The branch starts `update/` and `bash .gaia/scripts/main-root-lib.sh --is-worktree` exits 0: a re-run inside this command's own update worktree. Read `<worktree path>` with `git rev-parse --show-toplevel` and `<main checkout path>` with `bash .gaia/scripts/main-root-lib.sh`, each carried as a literal. No worktree is created. Set `WORKTREE_RUN=true`, `CREATED_WORKTREE=false`, `SHOULD_CREATE_WORKTREE=false`. Wait for provisioning now with `bash <main checkout path>/.gaia/scripts/provision-wait.sh --tree <worktree path>`, handled as in Step 4's wait except that `INSTALL_FAILED` is reported and the run continues.
-2. **Main checkout.** On `main`, `master` or any other branch: the worktree is cut from the default branch on `origin` whichever branch the main checkout holds, so a run started on a feature branch publishes its own `update/` pull request and leaves that branch as it was. Set `SHOULD_CREATE_WORKTREE=true` and read `<main checkout path>` once with `git rev-parse --show-toplevel`, but **do not create the worktree yet**: creation is deferred until after the Step 4 Proceed confirmation. Steps 1 to 4 can exit early (already up to date, an invalid decision log, a refused baseline, a failed Step 3c verification, a Step 3d stop, or the user aborts); creating it before then leaves an orphan worktree and branch when there was nothing to update.
+2. **Main checkout.** On `main`, `master` or any other branch: the worktree is cut from the default branch on `origin` whichever branch the main checkout holds, so a run started on a feature branch publishes its own `update/` pull request and leaves that branch as it was. Set `SHOULD_CREATE_WORKTREE=true`, read `<main checkout path>` once with `git rev-parse --show-toplevel`, and defer creating the worktree until after the Step 4 Proceed confirmation. Steps 1 to 4 can exit early (already up to date, an invalid decision log, a refused baseline, a failed Step 3c verification, a Step 3d stop, or the user aborts); creating it before then leaves an orphan worktree and branch when there was nothing to update.
 
 The **acting tree** is `<worktree path>` in both modes; every later step that names a path names that literal. A **worktree run** is mode 1, or mode 2 once Step 4 has created or entered the worktree.
 

@@ -12,8 +12,6 @@ Run this once after `/gaia-init`, and re-run it any time. `/setup-gaia` is the s
 
 It is safe for **any developer** to run at any time. A phase is owed when its own gate says so, or when the shipped setup feature list (`.gaia/setup-features.json`) holds its feature with no recorded decision; each decision it makes is recorded. A plain (no-flag) re-run on a provisioned project whose decisions are all recorded prints the already-provisioned line and mutates nothing: it never re-provisions the repo or changes branch protection. The one exception is a repo admin re-running it on a repo whose required checks still lack `GAIA-Audit` (or still carry the stale `code-review-audit` context): that run owes the registration and makes it. Pass `--reconfigure` to re-ask the sandbox decision (Phase 2), whose answer from a repo admin also sets the team sandbox recommendation, the team git isolation policy (Phase 3.5), the squash-only-merge offer (Phase 3.7), and the statusline left-side choice (Phase 4.6).
 
-The slash command name intentionally does NOT start with `gaia-` so it does not pollute the `/gaia` autocomplete namespace.
-
 Contents: Pre-flight: Worktree check; Argument parse; Phase 0: Prerequisites; Phase 1: Detect situation; Phase 2: Per-machine setup; Phase 3: GitHub repository; Phase 3.5: Team settings; Phase 3.7: Squash-only merges; Phase 4.5: Label sync; Phase 4.6: Statusline left side; Phase 5: Owed setup features; Phase 5.5: Land setup decisions; Phase 6: Finalize; Idempotence / re-run safety; On failure: re-run.
 
 This command reads these references, all under `.claude/skills/gaia/references/setup/`. Read one only when a "Read ... now" line sends you there, and then read the whole file:
@@ -30,7 +28,7 @@ This command reads these references, all under `.claude/skills/gaia/references/s
 
 ## Pre-flight: Worktree check
 
-This command does per-machine and per-clone provisioning, writes `.gaia/local/setup-state.json`, and provisions the GitHub repository. If invoked from a linked worktree, reject hard: `gaia_refuse_if_worktree` (`.gaia/scripts/main-only-lib.sh`) asks the shared resolver which tree this is and refuses out loud, naming the main checkout, when the answer is a worktree.
+This command does per-machine and per-clone provisioning, writes `.gaia/local/setup-state.json`, and provisions the GitHub repository. If invoked from a linked worktree, reject hard: `gaia_refuse_if_worktree` (`.gaia/scripts/main-only-lib.sh`) asks the shared resolver which tree this is and refuses out loud, naming the main checkout (the clone's primary working directory, on any branch), when the answer is a worktree.
 
 Detection (run this first, before anything else):
 
@@ -39,15 +37,13 @@ Detection (run this first, before anything else):
 gaia_refuse_if_worktree "/setup-gaia" || exit 1
 ```
 
-If the detection does not fire, fall through to `## Argument parse` below.
-
 ## Argument parse
 
 Parse `$ARGUMENTS` for the `--reconfigure` flag. Cache the boolean as `RECONFIGURE`. It re-opens these settled decisions and nothing else: the sandbox decision in Phase 2, whose answer from an admin also sets the sandbox recommendation, the isolation policy in Phase 3.5 (and the sandbox recommendation there, only when Phase 2's answer did not set it), the squash-only-merge offer in Phase 3.7, and the statusline left-side choice in Phase 4.6.
 
 ## Phase 0: Prerequisites (every invocation, never skipped)
 
-These run on every invocation and record no setup-state step. They sit outside the per-machine skip gate.
+These record no setup-state step.
 
 ### 0a. Self-heal worktree symlinks
 
@@ -137,7 +133,7 @@ The classification only routes the phases below; each phase re-checks its own co
 
 If `setup status --json` reports a non-null `completed_at` and no per-machine id is owed, this whole phase no-ops **except for the sandbox decision below** (a first adopter finished per-machine work inside `/gaia-init`, so the repo prompt in Phase 3 is their first real interaction, with no tool-install log lines before it, and the recorded per-machine steps are unchanged).
 
-**Sandbox decision (runs even when `completed_at` is non-null).** The OS-level Bash sandbox is off by default: it breaks `gh`, git-over-https and `docker` until they are allowlisted, and GAIA's lifecycle runs on `gh`. A plain run asks about it only when the team recommends it. This clause runs even when `completed_at` is non-null because Phase 2 otherwise short-circuits once per-machine setup is complete and would skip the decision. So before falling through to Phase 3, always run this route, with `RECONFIGURE` declared from the cached value (`true`, or empty):
+**Sandbox decision (runs even when `completed_at` is non-null).** The OS-level Bash sandbox is off by default: it breaks `gh`, git-over-https and `docker` until they are allowlisted, and GAIA's lifecycle runs on `gh`. A plain run asks about it only when the team recommends it. Before falling through to Phase 3, always run this route, with `RECONFIGURE` declared from the cached value (`true`, or empty):
 
 ```bash
 RESOLVED="$(.gaia/cli/gaia sandbox status --json 2>/dev/null | jq -r '.resolved // false')"
@@ -161,7 +157,7 @@ Read `.claude/skills/gaia/references/setup/sandbox.md` now, the whole file, and 
 
 Only an answered question or an incapable machine found while asking writes the marker; the default writes none. So a team that sets `sandbox_recommended: true` after a machine took the default still gets that machine asked on its next run, while a developer who answered the question is never re-asked on a plain run.
 
-This clause is gated on the `gaia sandbox status` marker, never on a `SETUP_STEPS` value: no `SETUP_STEPS` entry is added and `gaia setup mark-step` is never called for the sandbox decision. The marker governs the decision; the record only says it was made.
+The `gaia sandbox status` marker governs this decision, never a `SETUP_STEPS` value: never call `gaia setup mark-step` for it. The record only says it was made.
 
 **Per-machine steps (when `completed_at` is null, or any of `install-tools`, `install-plugins`, `chmod-statusline`, `bootstrap-env` is owed).** Read `.claude/skills/gaia/references/setup/per-machine.md` now, the whole file, and run its steps. On a halt, the user fixes the cause and re-runs `/setup-gaia`; each step resumes from its recorded state.
 
@@ -211,7 +207,7 @@ fi
 
 When the PUT runs, `required_status_checks.contexts` starts empty; the registration below adds `GAIA-Audit` to it and keeps any sibling contexts.
 
-`required_approving_review_count` is `0` and `enforce_admins` is `false` on purpose. GAIA's merge gate is the `GAIA-Audit` required status check (plus any sibling checks), not a human approval, so a review requirement would wedge a solo adopter: nobody can approve their own PR, and `enforce_admins: true` would block the admin override, leaving them unable to merge anything to the default branch. `enforce_admins: false` also lets the admin push the Phase 3.5 team-setting commit **directly onto the default branch**, past this protection: it records one decision in `.gaia/project.json`, so setup-gaia lands it straight rather than through a PR + audit (it suspends the local `block-main-destructive-git.sh` hook for the single commit+push via a `.gaia/local/setup-in-progress` sentinel, see Phase 3.5's **The commit**). Do not tighten these to require approvals or enforce admins without a merge path that a solo repo can actually satisfy.
+`required_approving_review_count` is `0` and `enforce_admins` is `false` on purpose: the merge gate is the `GAIA-Audit` required check (plus any sibling checks), not a human approval, and a review requirement or enforced admins would leave a solo adopter unable to merge to the default branch. `enforce_admins: false` also lets the admin push the Phase 3.5 team-setting commit **directly onto the default branch** (see Phase 3.5's **The commit**).
 
 #### Register GAIA-Audit as the required check
 
@@ -241,7 +237,7 @@ Could not register the GAIA-Audit required check (admin permission and a branch-
 Until GAIA-Audit is registered, GitHub does not require the audit: a pull request merged from the github.com button skips it. While code-review-audit stays a required context, every pull request on <default-branch> stays blocked, because nothing posts it.
 ```
 
-Do not halt on a registration failure; continue with the reference's `## Remaining defaults` (already read on this path), or, on the registration-only re-run path at the top of Phase 3, fall through to Phase 3.5.
+On a registration failure, continue with the reference's `## Remaining defaults` (already read on this path), or, on the registration-only re-run path at the top of Phase 3, fall through to Phase 3.5.
 
 #### Remaining defaults
 
@@ -401,7 +397,7 @@ fi
 
 Surface its report verbatim: labels created, labels renamed, and any color drift found. The plain sync prints its degraded marker on stdout, so the block reads stdout for it; `label-sync` records `applied` only for a clean sync. Color drift is never applied here, no `--adopt` flag; an operator's own recolor of a label always wins over the registry's suggested color.
 
-This step is advisory, never halting. A token without label-write scope gets the manual `gh label create` / `gh label edit` commands the command itself prints, and setup continues either way; `gaia labels sync` already exits 0 in that case, so this step adds no failure path of its own. It is idempotent and safe to re-run on every plain `/setup-gaia` invocation: a repo already in sync reports zero creates and zero renames.
+This step is advisory, never halting. A token without label-write scope gets the manual `gh label create` / `gh label edit` commands the command itself prints, and setup continues either way.
 
 Fall through to Phase 4.6.
 
@@ -481,7 +477,7 @@ Then run `land-decisions.md`'s `## The closing message`. It prints the done line
 
 ## Idempotence / re-run safety
 
-A plain (no-flag) re-run on a provisioned project whose listed setup features are all decided prints the already-provisioned line and mutates nothing: default-branch protection JSON and `.gaia/project.json` are byte-identical before and after, and no mutating `gh` call fires. A run that records a decision for an id undecided at its start relaxes that promise for `setup_decisions`, and lands it through Phase 5.5. Never re-provision the repo or change branch protection on a plain re-run; the one branch-protection change a re-run makes is the owed `GAIA-Audit` registration (Phase 3) for an admin on a repo whose required contexts lack `GAIA-Audit` or still carry `code-review-audit`. Only `--reconfigure` re-opens the settled sandbox, isolation-policy, sandbox-recommendation, squash-only-merge, and statusline decisions, and their new answers overwrite the records; an admin's sandbox answer sets the sandbox recommendation with it.
+A plain re-run on a fully decided project mutates nothing, and its one branch-protection exception is the owed `GAIA-Audit` registration (the opening paragraph owns both, and Argument parse owns what `--reconfigure` re-opens). A run that records a decision for an id undecided at its start relaxes that promise for `setup_decisions`, and lands it through Phase 5.5. New `--reconfigure` answers overwrite the records.
 
 ## On failure: re-run
 

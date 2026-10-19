@@ -14,7 +14,7 @@ A failed command, or a probe that still fails after the install: print one `[ok]
 
 Three external tools need per-machine setup. Probes: React Doctor, Playwright CLI, Serena.
 
-- [React Doctor](https://github.com/millionco/react-doctor): Run `bash .gaia/scripts/install-react-doctor.sh`. It installs the Claude Code skill under `frontend/.claude/skills/`, strips the installer's extras, and leaves `package.json`, `pnpm-lock.yaml` and `.githooks/pre-commit` unchanged; `wiki/dependencies/react-doctor.md` holds the verification record. It scans for React-specific issues, and `code-audit-frontend` runs it pre-merge.
+- [React Doctor](https://github.com/millionco/react-doctor): Run `bash .gaia/scripts/install-react-doctor.sh`. It installs the Claude Code skill under `frontend/.claude/skills/`, strips the installer's extras, and leaves `package.json`, `pnpm-lock.yaml` and `.githooks/pre-commit` unchanged; `wiki/dependencies/react-doctor.md` holds the verification record.
 - [Playwright CLI](https://github.com/microsoft/playwright-cli): `npm install -g @playwright/cli@latest`. The bundled skill shells out to the global binary; `/update-deps` keeps it current; `wiki/dependencies/playwright-cli.md` covers the fallback.
 - [Serena](https://github.com/oraios/serena) MCP server: semantic code search and editing backed by language servers. It needs `uv` first:
 
@@ -30,7 +30,7 @@ Three external tools need per-machine setup. Probes: React Doctor, Playwright CL
   claude mcp add serena -s user -- uvx --from git+https://github.com/oraios/serena@v1.7.0 serena start-mcp-server --context claude-code --project-from-cwd --open-web-dashboard false
   ```
 
-  `claude mcp add` exiting non-zero with a "name already exists" error is success. A stale pin on an existing registration needs `claude mcp remove serena -s user`, then the add above. The pinned ref keeps every install on one Serena baseline.
+  `claude mcp add` exiting non-zero with a "name already exists" error is success. A stale pin on an existing registration needs `claude mcp remove serena -s user`, then the add above.
 
   Serena's tools only win over Claude's built-in Read, Grep and Edit when Claude Code loads Serena's system-prompt override. Tell the user the recommended way to start sessions in this project:
 

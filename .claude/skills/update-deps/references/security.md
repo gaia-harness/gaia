@@ -29,7 +29,7 @@ Inputs from Phase 1: the opening advisories payload (`.gaia/local/cache/shared/u
 
 Resolve only an advisory that is still open after the waves and Phase 5b (its `advisory-landed` check in step 5 exits non-zero), is not blocked (`split-patch` is not a block: it is resolved through its candidates, which never include `override`), and was not declined in the preview. An advisory Phase 5b already cleared is resolved by `in-range refresh` and gets nothing further here.
 
-In a report-only run (`CI=true`, or `--scope <group>`) stop here: every advisory is reported still open with `report-only run`, and this phase adds, edits, and removes no `overrides:` key and applies no bump. Report-only is a property of this phase only; the Phase 0 and Phase 6 override audit runs in those modes exactly as it does without security work.
+In a report-only run (`CI=true`, or `--scope <group>`) stop here: every advisory is reported still open with `report-only run` (SKILL.md `**Report-only.**` owns the rest).
 
 #### 2. Release age and trust settings
 

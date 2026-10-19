@@ -4,9 +4,8 @@ You are upgrading the `{GROUP}` dependency group from `{FROM}` to `{TO}`.
 
 **Scope.** Operate on the **root pnpm workspace and its `frontend` package only**.
 
-- Run every `pnpm` command from the repository root, using `-C frontend` for app dependencies. Never `cd` into subdirectories.
-- For code edits and grep-style searches, scan only `frontend/app/`, `frontend/test/`, and the frontend config files (`frontend/*.config.*`, `frontend/tsconfig*.json`). Do **not** scan the entire repository, sibling directories may be independent pnpm projects with their own `package.json`/`pnpm-lock.yaml`, and they are out of scope for this skill.
-- A directory is "out of scope" if it contains its own `package.json` or `pnpm-lock.yaml` and is not `frontend`. Skip those subtrees entirely.
+- Run every `pnpm` command from the repository root, using `-C frontend` for app dependencies.
+- For code edits and grep-style searches, scan only `frontend/app/`, `frontend/test/`, and the frontend config files (`frontend/*.config.*`, `frontend/tsconfig*.json`). Skip every other directory that has its own `package.json` or `pnpm-lock.yaml`: it is an independent pnpm project, out of scope.
 
 1. **Fetch migration guide** via WebFetch using the table below. If no URL applies, scan the GitHub release notes.
 2. **Install** the group, **from the repository root only**:

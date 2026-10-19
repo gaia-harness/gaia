@@ -5,11 +5,11 @@ description: Remediates dependencies in place of Dependabot version and security
 
 Contents: Pre-flight: Worktree check; Pre-flight: Branch check; Package layout; Flags and run modes; Companion groups; Phase 1: Discover, preview, decide (orchestrator); Branch creation (after discovery); Override audit + Wave A: Haiku agent; Phase 5: Wave B (per-group major bumps); Phase 5b: Transitive refresh (Haiku agent); Phase 5c: Security resolutions; Phase 6: Post-update override audit; Phase 7: Final report; Phase 8: Publish.
 
-Dependency remediation: outdated packages and security advisories, through one quality gate, in one record. Discover outdated packages and open advisories, preview them (advisories first, ranked) so you can snooze what you are not ready for, audit overrides, apply codebase migrations for major bumps, resolve dependency conflicts, refresh transitive dependencies within range, resolve each advisory by the least invasive method that clears it or accept it by dismissing its alert, and run the quality gate. In CI it runs unattended (no preview); interactively it shows the preview first. Run from the main checkout, on `main`/`master` or any other branch, it works in its own worktree on its own branch cut from the default branch, opens the PR, merges it once checks are green, then cleans up locally, leaving the branch the main checkout holds as it was. Run by `/gaia-init`, it leaves its changes uncommitted for the init commit.
+Dependency remediation (outdated packages and security advisories) through one quality gate, in one record. Interactively it previews first, advisories ranked first, so you can snooze what you are not ready for; in CI it runs unattended with no preview. Run from the main checkout, on `main`/`master` or any other branch, it works in its own worktree on its own branch cut from the default branch, opens the PR, merges it once checks are green, then cleans up locally, leaving the branch the main checkout holds as it was. Run by `/gaia-init`, it leaves its changes uncommitted for the init commit.
 
 ## Pre-flight: Worktree check
 
-This wrapper writes a new `pnpm-lock.yaml` and opens a PR, which belong on the main checkout or in this command's own update worktree, not a per-SPEC worktree branch. The guard keeps the command out of every other linked worktree, rejecting hard with a message that surfaces the cached state from main so the user knows whether action is even pending. It admits only the command's own `deps/` update worktree, so a re-run continues there.
+This wrapper writes a new `pnpm-lock.yaml` and opens a PR, which belong on the main checkout (the clone's primary working directory, on any branch) or in this command's own update worktree, not a per-SPEC worktree branch. The guard keeps the command out of every other linked worktree, rejecting hard with a message that surfaces the cached state from main so the user knows whether action is even pending. It admits only the command's own `deps/` update worktree, so a re-run continues there.
 
 Detection (run this first, before anything else):
 
@@ -19,14 +19,12 @@ Detection (run this first, before anything else):
 gaia_refuse_if_worktree "/update-deps" gaia_update_deps_state_line "deps/" || exit 1
 ```
 
-If the detection does not fire, fall through to the existing `## Pre-flight: Branch check` section.
-
 ## Pre-flight: Branch check
 
 Decide the run mode in this order. The first matching mode wins, and the `/gaia-init` check comes first so it holds whatever the worktree decision would otherwise be.
 
 1. **`/gaia-init` invoked the run.** Set `INVOKED_BY_INIT=true` and `SHOULD_CREATE_WORKTREE=false`, which disables worktree creation for the whole run. A fresh project has no remote yet, so a branch's push, PR and merge cannot run; the run applies its changes on the current branch and leaves them uncommitted, and `/gaia-init`'s own init commit carries them. It creates no worktree and no branch.
-2. **`CI=true`** (set by GitHub Actions, GitLab CI, CircleCI, and most CI providers). Set `SHOULD_CREATE_WORKTREE=false`: the run creates no worktree and no branch, because the workflow owns branch management and pre-creates the appropriate branch before this skill runs.
+2. **`CI=true`**. Set `SHOULD_CREATE_WORKTREE=false`: the run creates no worktree and no branch, because the workflow owns branch management and pre-creates the appropriate branch before this skill runs.
 3. **Inside its own update worktree.** Read the branch with `git branch --show-current`. When it starts `deps/` and `bash .gaia/scripts/main-root-lib.sh --is-worktree` exits 0, this is a worktree run in place. Set `SHOULD_CREATE_WORKTREE=false`. Read `<worktree path>` with `git rev-parse --show-toplevel` and `<main checkout path>` with `bash .gaia/scripts/main-root-lib.sh`, each carried as a literal. Wait for provisioning before discovery, because the session-start hook re-provisions the tree on every entry:
    ```bash
    bash .gaia/scripts/provision-wait.sh --tree <worktree path>
@@ -84,9 +82,6 @@ When invoked with `--scope <group-name>` (e.g. `/update-deps --scope react-route
   the whole tree.
 - The security phase is report-only (see Report-only above).
 - Quality gate, return value, and final report still run.
-
-Invoked manually, one group per run, when a maintainer wants a single
-major-bump group's own PR rather than the combined Wave A/B run.
 
 ## Companion groups
 
@@ -314,9 +309,8 @@ snoozes AND any newly named), or the omitted ones are dropped from the ledger.
 
 The snooze ledger (`.gaia/local/declined-updates.json`) is local-only and
 gitignored: it suppresses the statusline nudge and default-skips the group in
-this preview until a newer version ships or 14 days pass. It never HARD-gates a
-run, the human can always choose to refresh a snoozed group, and CI ignores it
-entirely (CI is the freshness backstop and keeps opening PRs).
+this preview until a newer version ships or 14 days pass. It never blocks a run
+(the preview always offers a snoozed group), and CI ignores it.
 
 Carry the **apply set** (filtered `wave_a` and `wave_b`) into the phases below,
 together with whether Phase 5b runs: yes by default and in CI, no when the human
@@ -446,7 +440,7 @@ Run this as a **Haiku agent** (`model: "haiku"`, `effort: "medium"`). Its dispat
 
 - **The recipe.** `.claude/skills/update-deps/references/override-audit.md` (tell the agent to read it), restricted to the keys in scope above, so every quality-gate run it owes runs those same commands. Pass each security override with the advisory id Phase 5c recorded for it, so a retained floor is reported by that id.
 - **When to gate.** Run the quality gate once, after the lockfile assertion, whenever it removed any key or repaired lockfile drift. No Wave agent gated that change. This replaces the drift-only trigger in the Phase 0 section.
-- **On a failed gate.** Restore every key it removed to the value it held when this Phase 6 run began, run `pnpm dedupe` to apply the restore, and re-run the lockfile assertion. This is the counterpart of Wave A reverting its whole batch: one gate run cannot say which key broke it, so the restore takes them all. Report each restored removal as **retained (quality gate failed)**. When it changed no key and the gate ran only for a drift repair, there is nothing to restore: report the failure for the maintainer to resolve.
+- **On a failed gate.** Restore every key it removed to the value it held when this Phase 6 run began, run `pnpm dedupe` to apply the restore, and re-run the lockfile assertion. One gate run cannot say which key broke it, so the restore takes them all. Report each restored removal as **retained (quality gate failed)**. When it changed no key and the gate ran only for a drift repair, there is nothing to restore: report the failure for the maintainer to resolve.
 - **What to return.** The override audit results (removed / retained) and the quality gate results, including a failed gate and whatever restore followed it, so the Phase 7 Quality gate section has the Phase 6 run to report.
 
 <!-- gaia:maintainer-only:start -->

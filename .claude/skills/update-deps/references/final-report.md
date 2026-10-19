@@ -15,7 +15,7 @@ jq -r '.advisories // {} | .[] | [(.github_advisory_id // ("pnpm:" + (.id | tost
 
 `pnpm audit` exits non-zero whenever an advisory is open, so read the JSON, not the exit status. When the second command prints a line (no `advisories` object: `pnpm audit` reported an error or the registry did not answer), the source line reads `Source: Not run (<that line>)` and the run's applied resolutions are listed `unverified`. Otherwise each row is `key, pnpm id, package, severity, installed, patched, chain, path count`; the key is the GHSA id, or `pnpm:<id>` without one, the same key the advisories payload uses. In alerts mode you may re-run `advisories --emit` against the final tree for fresh joins. List every severity: the frontend audit's advisory oracle (`gaia update-deps advisories`) surfaces only high and critical, and on a manifest-only `chore(deps)` PR the frontend member is waived. Remove the two capture files (`update-deps-final-audit.json` and `update-deps-final-audit-err.txt` under `.gaia/local/cache/shared/`) once the report is printed.
 
-Build the report **only** from the agent reports returned to you, the snooze and transitive-refresh decisions from Phase 1, the Phase 5c result, and the final-tree audit above. Do not add rows from your own memory of the run.
+Build the report **only** from the agent reports returned to you, the snooze and transitive-refresh decisions from Phase 1, the Phase 5c result, and the final-tree audit above.
 
 **What goes in each section:**
 
@@ -38,7 +38,7 @@ Build the report **only** from the agent reports returned to you, the snooze and
 
   When its source is `dependabot` or `pnpm-audit`, run `.gaia/cli/gaia update-deps write-security-cache --count <count> --source <source>`, adding `--reason <reasons>` when the reasons field is non-empty. When it is `unavailable`, do not call it: the three security fields stay as they are. The verb counts what the background refresh counts (open alerts together with the final tree's `pnpm audit` advisories, less dismissed alerts and baseline acknowledgments of advisories no open alert backs, so this run's dismissals are already gone and branch-only resolutions still count; or, without alerts, the final tree minus baseline acknowledgments), so the two agree. Never hand-edit the cache's security fields. Remove `.gaia/local/cache/shared/update-deps-advisories-count.json` afterwards.
 
-- **Skipped packages**: _only_ packages that were attempted and reverted mid-run (peer-dep conflict, quality-gate failure, manual revert by an agent). **Never** include packages filtered out before installation by a policy rule (e.g. the ESLint 9.x cap or the release-age cooldown). Those are silent by design, surfacing them is noise the user sees every run. When you cannot tell whether a package was policy-filtered before installation or attempted and reverted mid-run, include it in Skipped, a spurious row is recoverable but a silently dropped real failure is not. If nothing was actually skipped during the run, write "None" or omit the table.
+- **Skipped packages**: _only_ packages that were attempted and reverted mid-run (peer-dep conflict, quality-gate failure, manual revert by an agent). Omit packages a policy rule filtered out before installation (the ESLint 9.x cap, the release-age cooldown): they are silent by design. When you cannot tell whether a package was policy-filtered before installation or attempted and reverted mid-run, include it in Skipped, a spurious row is recoverable but a silently dropped real failure is not. If nothing was actually skipped during the run, write "None" or omit the table.
 - **Snoozed (deferred this run)**: the companion groups the human chose to skip in the preview, with the version each was snoozed at. These quiet the statusline for 14 days (or until a newer version ships); they are not failures. Omit the section if the human chose "Update all".
 - **Quality gate**: the gate result reported by the agents, verbatim.
 - **Global tools**: the playwright-cli row from the Phase 1 global-tools step: status, installed, latest, and the action taken (`upgraded`, `declined`, `report-only`, `not installed`). Print the section only when the row's status is not `current` (a newer release, not installed, or a failed probe); a `current` tool has nothing to act on, so omit the section rather than writing `None`. When it applies, print it on every exit path, including the all-up-to-date and Skip exits. It is built inline, so it is an exception to building the report only from agent reports, like the Security section.
@@ -49,9 +49,9 @@ Build the report **only** from the agent reports returned to you, the snooze and
 
 <!-- gaia:maintainer-only:end -->
 
-If a section would be empty, write "None" rather than leaving it blank or fabricating filler.
+If a section with no omit rule of its own would be empty, write "None".
 
-Print the report. Do not commit.
+Print the report.
 
 ```
 ## Migration Report
