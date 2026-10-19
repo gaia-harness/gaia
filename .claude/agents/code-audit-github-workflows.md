@@ -63,7 +63,7 @@ For every in-remit changed file, the workflow-security core:
 Grade every finding Critical / Major / Minor, matching the sibling Code Audit Team members: Critical breaks the merge gate, exposes a secret, or is exploitable with adversary-controlled input; Major is a real defect with a narrower blast radius; Minor is style or robustness with no live failure mode.
 
 <!-- gaia:maintainer-only:start -->
-GAIA maintainers: before grading, Read `.claude/rules/maintainers/harness-triage-threshold.md` by path; do not rely on it auto-loading inside a subagent.
+GAIA maintainers: before grading, Read `.claude/maintainers/harness-triage-threshold.md`.
 <!-- gaia:maintainer-only:end -->
 
 ## Read-only: report and gate, never edit

@@ -211,7 +211,7 @@ Field contract:
 - Never write `authored`: the round's evaluator annotates authorship against the branch's own changes.
 
 <!-- gaia:maintainer-only:start -->
-- `triage` (optional boolean) with `triage_reason` (non-empty string, required when `triage` is true) marks a harness finding below `.claude/rules/maintainers/harness-triage-threshold.md`'s threshold. The dispositions check honors the mark as disposed only when the entry's member is `code-audit-maintainer-shell` or `code-audit-maintainer-node`, its path is inside that member's roster globs, its severity is not `critical`, and `security` is exactly `false`; any other mark is ignored and the finding is graded and disposed like any other. An adopter copy of the check honors no mark at all.
+- `triage` (optional boolean) with `triage_reason` (non-empty string, required when `triage` is true) marks a harness finding below `.claude/maintainers/harness-triage-threshold.md`'s threshold. The dispositions check honors the mark as disposed only when the entry's member is `code-audit-maintainer-shell` or `code-audit-maintainer-node`, its path is inside that member's roster globs, its severity is not `critical`, and `security` is exactly `false`; any other mark is ignored and the finding is graded and disposed like any other. An adopter copy of the check honors no mark at all.
 <!-- gaia:maintainer-only:end -->
 
 `[]` when your report is empty is still a real "this run found nothing" record: write it. A marker on disk with no sidecar beside it reads as a lost report and gets your dispatch retried. Every Critical, Major and Minor finding goes in, inside the branch's changes or outside them, and every cross-remit finding too.

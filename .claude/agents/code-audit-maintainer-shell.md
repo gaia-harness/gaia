@@ -44,6 +44,7 @@ You also own the declarative half of that same subsystem: the roster your own di
 - `.claude/gaia-fitness.json`
 - `.claude/hooks/lib/audit-member-protocol.md`
 - `.claude/rules/**`
+- `.claude/maintainers/**`
 - `.claude/doctrine/**`
 
 Filter the changed-file list against the globs above. **If none match, self-skip cleanly.** Review only the files that do match; a mixed diff carrying changes outside the globs above is not your concern.
@@ -153,7 +154,7 @@ A candidate that fails a check is dropped or demoted, not silently discarded fro
 
 ## Triage threshold
 
-Before grading, Read `.claude/rules/maintainers/harness-triage-threshold.md` by path; do not rely on it auto-loading inside a subagent. It governs every finding you grade, including those on rules and agent files.
+Before grading, Read `.claude/maintainers/harness-triage-threshold.md`. It governs every finding you grade, including those on rules and agent files.
 
 A finding that meets none of its criteria is sub-threshold. Record it in the findings sidecar with `"triage": true`, a one-line `triage_reason` naming why no criterion applies, `"security": false`, and a severity below `critical`; list it one line under "Waived" in your report as well. The audit loop renders the PR body's waived list from those marks. Never triage-mark a finding with any security doubt, a finding at severity `critical`, or one whose `security` is anything but exactly `false`: grade and record it normally. The threshold governs harness paths only; a finding on a product path is graded as usual.
 
