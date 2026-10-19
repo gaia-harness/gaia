@@ -23,7 +23,7 @@ bash .gaia/scripts/file-tech-debt.sh file --finding <finding.json> --outcome-fil
 GAIA maintainers: before filing a finding on a harness path, Read `.claude/maintainers/harness-triage-threshold.md`; one it waives is never filed, only listed under `## Waived below triage threshold (not filed)` in the PR body.
 <!-- gaia:maintainer-only:end -->
 
-Execute it; do not read it for the mechanics. Its header owns the outcome line, the stdout words, the exit codes, the screened fields (`security`, `severity`, `finding_class`) and the grade fields; the `file` branch also requires non-empty `member`, `path`, `line`, `title`, `failure_mode` and `suggested_fix`. Steps 1 to 8 below are the reference the script implements, for a caller that needs to understand a filing or a label rather than reproduce one.
+Execute it; do not read it for the mechanics. Its header owns the outcome line, the stdout words, the exit codes, the screened fields (`security`, `severity`, `finding_class`) and the label fields (the difficulty grade rides in `grade`, never `difficulty`); the `file` branch also requires non-empty `member`, `path`, `line`, `title`, `failure_mode` and `suggested_fix`. Steps 1 to 8 below are the reference the script implements, for a caller that needs to understand a filing or a label rather than reproduce one.
 
 The caller owns one judgment: the finding's boolean `security` flag, true when the content reads as an exploitable weakness (missing authentication or authorization, injection, secret exposure, SSRF, path traversal, unsafe deserialization, crypto misuse). Everything else is mechanical and fails safe toward diverting:
 

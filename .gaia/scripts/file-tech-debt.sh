@@ -42,25 +42,35 @@
 #   its dispositions; it never carries a title, failure mode, fix or trigger.
 #   The outcome file lives under .gaia/local on the one machine.
 #
-# The finding's grade: `severity` critical|major|minor|investigate, or
+# The finding's severity: `severity` critical|major|minor|investigate, or
 # `issue_severity` Critical|Major|Minor|Investigate, which wins when both are
-# set. The screen reads each of the two on its own, so a caller re-grading a
+# set. The screen reads each of the two on its own, so a caller re-rating a
 # reviewer's finding to investigate sets `issue_severity` and leaves the
 # reviewer's `severity` in place: overwriting a `critical` would drop the
-# finding off the security path. An investigate grade also needs two non-empty strings,
-# `investigate_question` (the fact whose value decides the grade) and
+# finding off the security path. An investigate severity also needs two non-empty strings,
+# `investigate_question` (the fact whose value decides the severity) and
 # `investigate_settled_by` (the evidence that would establish it); each is
 # folded onto one line and written into the body's research block:
 #   <!-- gaia-investigate: v1 -->
 #   **Question:** <investigate_question>
 #   **Settled by:** <investigate_settled_by>
 # Either field empty fails `missing-investigate-question` or
-# `missing-investigate-settled-by`; either field set on any other grade fails
+# `missing-investigate-settled-by`; either field set on any other severity fails
 # `investigate-fields-on-graded-finding`. Every filing then runs the
-# investigate-cap check, which reads the network only for an investigate grade:
+# investigate-cap check, which reads the network only for an investigate severity:
 # a full queue fails `investigate-cap` with the check's report, naming the open
 # investigations, on stderr; a tracker it cannot read is reported on stderr and
 # the filing goes on.
+#
+# The optional label fields, each becoming one label when set and none when
+# absent or empty: `grade` easy|medium|hard (the `difficulty:` label; a
+# `difficulty` key with no `grade` fails `difficulty-key-use-grade`), `footprint`
+# narrow|wide|spec (the `footprint:` label). The metadata check refuses a value
+# outside its vocabulary as `metadata-check`.
+# gaia:maintainer-only:start
+# On the maintainer repository, `audience` adopter|maintainer is required and
+# becomes the `audience:` label.
+# gaia:maintainer-only:end
 #
 # Order for file: screen, then (security-class only) a first visibility read,
 # probe, dedup, a second visibility read as the last gh call before the first
@@ -587,6 +597,9 @@ cmd_file() {
   [ -n "$failure_mode" ] || finish_failed "missing-failure-mode"
   [ -n "$suggested_fix" ] || finish_failed "missing-suggested-fix"
   [ -n "$tier" ] || finish_failed "missing-severity"
+  # The label is difficulty:<grade>, so `difficulty` is the natural misspelling
+  # of `grade`; unrefused, it files with exit 0 and silently drops the label.
+  [ -z "$grade" ] && jq -e 'has("difficulty")' "$finding_file" >/dev/null 2>&1 && finish_failed "difficulty-key-use-grade"
 
   local investigate_question investigate_settled_by
   investigate_question="$(investigate_field "$finding_file" investigate_question)"

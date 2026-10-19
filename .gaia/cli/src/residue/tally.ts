@@ -54,7 +54,7 @@ const HELP_TEXT = `Usage: gaia residue-tally [options]
                      suppression matches on path and line alone
                      (count_approximate: true).
 
-  One call emits one batch, capped at GAIA_RESIDUE_CAP (default 10); a
+  One call emits one batch, capped at GAIA_RESIDUE_CAP (default 25); a
   sweep re-runs the tally after each batch.
 
   Network failures are non-fatal: a failed read of either the merged-PR
@@ -63,7 +63,7 @@ const HELP_TEXT = `Usage: gaia residue-tally [options]
 `;
 
 const HELP_TOKENS = new Set(['--help', '-h', 'help']);
-const DEFAULT_CAP = 10;
+const DEFAULT_CAP = 25;
 
 type RunOptions = {
   cwd?: string;

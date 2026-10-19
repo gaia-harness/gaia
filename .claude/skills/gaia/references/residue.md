@@ -63,7 +63,7 @@ These populations never reach the triage loop, so nothing else will mention them
 
 ## Bounding the run
 
-`GAIA_RESIDUE_CAP` (default 10) sets the size of one batch, which is also the most one batch-dismiss confirmation lists. It does not bound the run: `## Sweep batch by batch` below triages batch after batch. Candidates are ordered oldest merge date first. The cursor at `.gaia/local/cache/residual-cursor.json` advances after each confirmed disposition, so an interrupted run resumes where it stopped rather than re-asking; `.gaia/cli/gaia residue-cursor clear` starts the list over.
+`GAIA_RESIDUE_CAP` (default 25) sets the size of one batch, which is also the most one batch-dismiss confirmation lists. It does not bound the run: `## Sweep batch by batch` below triages batch after batch. Candidates are ordered oldest merge date first. The cursor at `.gaia/local/cache/residual-cursor.json` advances after each confirmed disposition, so an interrupted run resumes where it stopped rather than re-asking; `.gaia/cli/gaia residue-cursor clear` starts the list over.
 
 ```bash
 .gaia/cli/gaia residue-cursor advance --token <the candidate's cursor_token>
