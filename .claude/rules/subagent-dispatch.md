@@ -2,7 +2,7 @@
 
 When a dispatched agent's output is something you will act on, do not ask for it in the reply: an absent report reads as "it found nothing", the conclusion you must not draw.
 
-**Give it a file, and say in the dispatch prompt that the file is JSON.** Pre-clear the output path (`rm -f`), have the agent write its result there and return only a short summary, then classify the file. The artifact must be a JSON **array**, either the top-level value or the value at the one top-level key `--report-key` names; a Markdown or plain-text report classifies NO-OP however complete it is.
+**Give it a file, and say in the dispatch prompt that the file is JSON.** Put the file in the session's scratchpad directory, or a `mktemp -d` directory when the session lists none, never under `.gaia/local` or `.notebook` when the agent writes it with the Write tool: in a worktree both are symlinks into the main checkout, so worktree isolation refuses the agent's Write there. A procedure whose own steps have the agent write the artifact with Bash at the main checkout's absolute path (a run folder, a plan folder) keeps that location. Pre-clear the output path (`rm -f`), have the agent write its result there and return only a short summary, then classify the file. The artifact must be a JSON **array**, either the top-level value or the value at the one top-level key `--report-key` names; a Markdown or plain-text report classifies NO-OP however complete it is.
 
 ```bash
 bash .gaia/scripts/audit-noop-detect.sh --shape agent-report-file --path <path> \
