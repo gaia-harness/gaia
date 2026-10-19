@@ -28,7 +28,7 @@ For every match in `frontend/app/` (excluding `frontend/app/i18n.ts`, `frontend/
 1. Open the file.
 2. Delete the import line: `import {useTranslation} from 'react-i18next';`
 3. Delete the destructure: `const {t} = useTranslation();` (or `useTranslation('namespace')`).
-4. Replace every `t('key')` and `t('key', {…})` call with the literal English string from `frontend/app/languages/en/`.
+4. Replace every `t('key')` and `t('key', {…})` call with the literal English string from `frontend/app/languages/en/`. A value that is an i18next nesting reference such as `$t(common:meta.siteName)` is resolved to the string it names (here `meta.siteName` in `common.ts`) before inlining, never copied verbatim.
 5. If the file used `<Trans>` from `react-i18next`, replace the JSX with the literal English markup.
 
 The discovery grep above owns the set of files to unwrap. Stories are the component tests, so a `tests/*.stories.tsx` file beside a matched component is a match too, and no `.test.tsx` sits beside it.
