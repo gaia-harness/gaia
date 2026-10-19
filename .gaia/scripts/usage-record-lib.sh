@@ -102,10 +102,13 @@ _record_command_ref() {
   printf '%s' "$candidate"
 }
 
-# _box_flush_wait: record and the cost box read a ledger this session's flusher
-# has finished writing when they can, under one wait and one cap. It waits for a
-# flusher already running for the session (a Stop hook's, or the one an earlier
-# readout left behind at the cap) or starts one, for at most
+# _box_flush_wait [own]: record and the cost box read a ledger this session's
+# flusher has finished writing when they can, under one wait and one cap. The
+# box waits for a flusher already running for the session (the one an earlier
+# readout left behind at the cap) or starts one. With `own` it always starts its
+# own, because a running flusher may be a Stop hook's, which lacks
+# --all-sidecars-finished and so holds back every sidecar still inside its quiet
+# window: record and handoff write rows that need those flushed. The wait lasts at most
 # GAIA_USAGE_BOX_FLUSH_CAP_SECONDS (45: a workflow close flushes every sidecar
 # the run dispatched, which takes well past the merge hook's cap on a large
 # ledger). BOX_FLUSH_INCOMPLETE is 1 when it is still running at the cap. The
@@ -120,7 +123,7 @@ _box_flush_wait() {
   gaia_usage_valid_reference "session:$session_id" || return 0
   case "$cap" in '' | *[!0-9]* | 0) cap=45 ;; esac
   pattern="usage-flush.sh --session $session_id "
-  if ! command -v pgrep >/dev/null 2>&1 || ! pgrep -f "$pattern" >/dev/null 2>&1; then
+  if [ "${1:-}" = own ] || ! command -v pgrep >/dev/null 2>&1 || ! pgrep -f "$pattern" >/dev/null 2>&1; then
     bash "$_usage_script_directory/usage-flush.sh" --session "$session_id" --finished-main --all-sidecars-finished \
       --main-root "$MAIN_ROOT" --telemetry-dir "$TELEMETRY_DIRECTORY" --projects-root "$PROJECTS_ROOT" \
       </dev/null >/dev/null 2>&1 3>&- &
@@ -375,7 +378,7 @@ _record_run() {
   }
   _gaia_usage_load with_ledger_lock spec/with-ledger-lock.sh || { _error "no ledger mutex available; nothing was written"; return 1; }
   mkdir -p "$TELEMETRY_DIRECTORY" || { _error "no ledger directory; nothing was written"; return 1; }
-  _box_flush_wait
+  _box_flush_wait own
   RECORD_PARTIAL="$BOX_FLUSH_INCOMPLETE"
   NOW="$(_now)"
   RUN_REF="$REF"

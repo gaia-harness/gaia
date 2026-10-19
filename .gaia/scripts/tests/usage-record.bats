@@ -546,6 +546,24 @@ straddling_segments() {
   [ "$(close_count)" -eq 1 ]
 }
 
+# A Stop hook's flusher may be running for the session, and it holds back
+# sidecars inside their quiet window, so record runs its own flush rather than
+# waiting on it.
+@test "record flushes the session itself while another flusher for the session is running" {
+  local other="$TEMPORARY_DIRECTORY/other-flusher" other_pid
+  spec_run_fixture record-own-sess
+  mkdir -p "$other"
+  printf '#!/usr/bin/env bash\nsleep 30\n' >"$other/usage-flush.sh"
+  bash "$other/usage-flush.sh" --session "$SID" --transcript x </dev/null >/dev/null 2>&1 3>&- &
+  other_pid=$!
+  GAIA_USAGE_BOX_FLUSH_CAP_SECONDS=10 run --separate-stderr record spec:SPEC-901 --workflow gaia-spec
+  kill "$other_pid" 2>/dev/null || true
+  [ "$status" -eq 0 ]
+  [[ "${lines[0]}" =~ ^Cost:\ 0\.7M\ tokens, ]]
+  grep -qF 'Some usage was still being saved' <<<"$output" && return 1
+  true
+}
+
 @test "the commit-time close re-check is what keeps a late flusher from straddling the close" {
   local mutated="$TEMPORARY_DIRECTORY/mutated-flusher"
   scratch_scripts "$mutated"
