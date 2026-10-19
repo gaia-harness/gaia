@@ -112,7 +112,7 @@ Then apply the defaults and proceed without stopping (the user chose Automatic; 
 - Additional languages / i18n (Q2): primary-only, keep i18n scaffolding (`STRIP_I18N=false`). The teardown is never auto-selected.
 - CODEOWNERS (Q3): the gh-detected handle when available; otherwise the `REPLACE-WITH-YOUR-GITHUB-HANDLE` placeholder, flagged as a required Step 11 follow-up.
 - Project title (Q4): title-cased folder name.
-- kebab slug (Q5): folder name (the slug the default title derives).
+- kebab slug (Q5): folder name.
 - Backend casing (Step 2): `camelCase` (`CASING=camel`).
 - TanStack Query (Step 2): `No` (`QUERY=false`).
 
@@ -183,6 +183,14 @@ If install fails, stop and report the error.
 
 Then run `/update-deps` to bring all packages to their latest compatible versions before continuing. Tell it that `/gaia-init` invoked it: that run resolves every security advisory it can, asks no acceptance question (an advisory it cannot resolve is reported still open), reverts a failing resolution on its own, and cuts no branch and commits nothing, since no remote exists yet to push to; Step 11's init commit carries its changes. If `/update-deps` reports anything as **skipped** with a reason, surface it so the user can investigate, but proceed. Note `/update-deps` runs its own quality gate at the end, if it halts on a quality-gate failure or peer-dep error, stop here and surface the report to the user; do not silently continue.
 
+After `/update-deps` returns, and before Step 2, refresh the statusline's update-check cache. The init-invoked run cuts no branch, so it never reaches the refresh `/update-deps` runs at branch creation, and the cache would otherwise keep showing the bumps just applied as outdated until its TTL expires:
+
+```bash
+bash .gaia/scripts/update-check-bust.sh --cache "$(git rev-parse --show-toplevel)/.gaia/local/cache/shared/update-check.json" --mode deps
+```
+
+The refresh is cosmetic: report a non-zero exit and continue.
+
 ## Step 2: Gather user input (in the user's language)
 
 This whole conversation has been in the user's language so far. Continue in that language for every prompt below.
@@ -243,7 +251,7 @@ Resolve two values from the answer:
 - `LOCALES = unique({primary} code, any additional codes entered above)`. Either {primary}-only option leaves `LOCALES` as just `[{primary}]`.
 - `STRIP_I18N = true` only when the user chose "{primary} only, remove i18n entirely"; otherwise `false`. Adding languages or keeping the scaffolding both leave it `false`.
 
-### Q3–Q5, Project identity (one AskUserQuestion, two questions)
+### Q3–Q5, Project identity (one AskUserQuestion; the slug is derived)
 
 _Non-response: title is HARD-BLOCK, re-ask, never guess. CODEOWNERS: offer the gh-detected handle as the recommended default; HARD-BLOCK only when detection failed (no default to fall back to), re-ask, never guess. The slug is never asked: it is derived from the chosen title. Automatic mode: title-cased folder name (title), folder name (slug), and the gh-detected handle (CODEOWNERS) when available, else the `REPLACE-WITH-YOUR-GITHUB-HANDLE` placeholder flagged as a required Step 11 follow-up._
 
@@ -251,7 +259,7 @@ Ask Q3 and Q4 in a single AskUserQuestion call. Each question carries exactly th
 
 **Q3, GitHub username for CODEOWNERS.** First run the GitHub-handle detection from "Free-text identity values are never fabricated" above (reuse the automatic-mode result if it already ran). If it yields a handle, ask with these options:
 
-- `@{handle} (Recommended)`: your authenticated GitHub login. A gh-detected handle is the user's own identity, not a guess, so it is safe to default to.
+- `@{handle} (Recommended)`, description: `your authenticated GitHub login`. A gh-detected handle is the user's own identity, not a guess, so it is safe to default to.
 - `Set it later`: writes the `REPLACE-WITH-YOUR-GITHUB-HANDLE` placeholder to `.github/CODEOWNERS` and flags it as a required Step 11 follow-up.
 
 A different handle arrives through Other. Suggest `@username` format; store the bare handle. If detection fails there is no default, so this stays a free-text identity value that is **never fabricated**: leave Q3 out of the call and ask for the handle as a plain chat message (its answer is open-ended free text), and on interactive non-response HARD-BLOCK and re-ask rather than guessing; in automatic mode, use the loud placeholder so a wrong owner never ships.
@@ -261,7 +269,7 @@ A different handle arrives through Other. Suggest `@username` format; store the 
 - `{title-cased folder name} (Recommended)`, description: `slug {the slug it derives}`.
 - `{folder name as-is}`, description: `slug {the slug it derives}`. When the folder name already equals its title-cased form (e.g. `Convene`), offer the folder name lowercased instead.
 
-**Q5, kebab-case slug (derived, not asked).** Derive the slug from the chosen title: lowercase it, replace each run of characters other than `a-z` and `0-9` with one hyphen, and trim leading and trailing hyphens. A title typed through Other re-derives the slug from it. A typed reply of the form `Title / slug` (e.g. `Convene / convene-app`) sets both: the part before ` / ` is the title and the part after is the slug, used as typed once it is valid kebab-case (re-ask if it is not).
+**Q5, kebab-case slug (derived, not asked).** Derive the slug from the chosen title: lowercase it, replace each run of characters other than `a-z` and `0-9` with one hyphen, and trim leading and trailing hyphens. When that leaves nothing (a title with no ASCII letters or digits, such as one in a non-Latin script), ask for the slug as a plain chat message, since its answer is free text, and re-ask until it is valid kebab-case. A title typed through Other re-derives the slug from it. A typed reply of the form `Title / slug` (e.g. `Convene / convene-app`) sets both: the part before ` / ` is the title and the part after is the slug, used as typed once it is valid kebab-case (re-ask if it is not).
 
 ### Q6, Backend casing (asked alone)
 
