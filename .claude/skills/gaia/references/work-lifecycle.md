@@ -101,7 +101,7 @@ Squash merge per `wiki/concepts/PR Merge Workflow.md`: its `### 4. Merge` and `#
 bash .gaia/scripts/pr-wait-merge.sh --pr <N>
 ```
 
-Only `MERGED` (exit 0) reaches `## 8. Cleanup`. Every other verdict, and the exit-2 refusal, follows that page's arm for it and stops before cleanup. A caller may pass its own `--attempts`, as a skill that waits on a full CI run does.
+Add `--attempts 20` when the merge was queued with `--auto`; that page says why. Only `MERGED` (exit 0) reaches `## 8. Cleanup`. Every other verdict, and the exit-2 refusal, follows that page's arm for it and stops before cleanup.
 
 ## 8. Cleanup
 

@@ -253,13 +253,7 @@ git add -A && git commit -F <commit-message-file> && git push -u origin <RESIDUE
 gh pr create --draft --title "<commit subject>" --body-file <pr-body-file>
 ```
 
-Before any `gh pr merge`:
-
-```bash
-bash .gaia/scripts/resolve-audit-members.sh
-```
-
-Empty output confirms no marker is owed, and the merge gate's out-of-scope bypass posts the status itself, but only for a `gh pr merge <N>` run as its own command: a merge sharing its tool call with anything else (a `cd` before it, a pipe into `tail`) denies until it is respelled. If it names any member, dispatch the `audit-loop-unit` agent per `wiki/concepts/PR Merge Workflow.md` `## Dispatch the audit loop unit` like any in-scope PR, then post the status per `#### Posting the status last`.
+Before any `gh pr merge`, resolve the members per `wiki/concepts/PR Merge Workflow.md` `## Who audits: the dispatched member set` and run whatever audit it owes. Where the out-of-scope bypass applies, the merge hook posts the status itself only for a `gh pr merge <N>` run as its own command: a merge sharing its tool call with anything else (a `cd` before it, a pipe into `tail`) denies until it is respelled.
 
 **Merge decision.** Ask once via `AskUserQuestion` whether to merge:
 
@@ -270,18 +264,9 @@ Empty output confirms no marker is owed, and the merge gate's out-of-scope bypas
   2. `{ label: "Leave open", description: "Keep the PR open; you merge it after review." }`
 - **Recommended:** mark `Merge` ` (Recommended)`.
 
-**Merge** → drive it to merge through `wiki/concepts/PR Merge Workflow.md` (read it, don't merge from memory): `gh pr merge <N> --squash --delete-branch --auto`, then run the merge wait, `bash .gaia/scripts/pr-wait-merge.sh --pr <N>`, per `.claude/skills/gaia/references/work-lifecycle.md` `## 7. Merge (when asked)`. The merge above is already queued and the script issues no `gh pr merge` of its own, so nothing here re-merges. One arm per verdict plus one for the exit-2 refusal. Every arm below but `CONFLICTING` ends the run and writes its cost record (`## Cost record (run end)`):
+**Merge** → drive it to merge through `wiki/concepts/PR Merge Workflow.md` (read it, don't merge from memory): `gh pr merge <N> --squash --delete-branch --auto`, then run `bash .gaia/scripts/pr-wait-merge.sh --pr <N> --attempts 20` and follow the verdict arms in `wiki/concepts/PR Merge Workflow.md` `## Post-merge verification before cleanup`, with `<branch-name>` = `<RESIDUE_BRANCH>`. Every arm but `CONFLICTING` ends the run and writes its cost record (`## Cost record (run end)`).
 
-- On `MERGED` (exit 0), clean up per `.claude/skills/gaia/references/work-lifecycle.md` `## 8. Cleanup`, with `<branch-name>` = `<RESIDUE_BRANCH>`: `### Worktree entered by name in this session` under `RESOLVED_MODE=worktree`, `### Feature branch` under `feature-branch`. Print the merged PR URL.
-- On `CONFLICTING` (exit 3), repair it per `wiki/concepts/PR Merge Workflow.md`'s `### Conflict found mid-wait` and run the wait again.
-- On `CHECK_FAILED` (exit 4), print the PR URL and the failing check, and leave the branch in place.
-- On `TIMEOUT` (exit 5), the window closed with the pull request still open: print the PR URL, note the merge is queued, and leave the branch in place.
-- On `CLOSED` (exit 6), the pull request was closed without merging, so no wait can clear it: report the closure, print the PR URL, and leave the branch in place.
-- On exit 2 the wait refused rather than answered: report what it could not read, print the PR URL, leave the branch in place, and assert no state for the pull request, since nothing about it was read. The merge queued above may still land.
-
-**Leave open** → report the PR URL and stop.
-
-Every arm that leaves the branch in place names its worktree path under `RESOLVED_MODE=worktree`, so a kept worktree never goes unreported.
+**Leave open** → report the PR URL, name the worktree path under `RESOLVED_MODE=worktree`, and stop.
 
 If any `git` or `gh` command above exits non-zero, print the error and STOP. Do not retry, force-push, or amend.
 
