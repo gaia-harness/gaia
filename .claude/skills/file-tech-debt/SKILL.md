@@ -1,6 +1,6 @@
 ---
 name: file-tech-debt
-description: Files a new tech-debt GitHub issue for an out-of-scope code-review finding: builds the dedup key, skips an open or declined-closed match, else creates the labeled issue and touches the debt-count sentinel. Trigger on asks like "file a tech-debt issue", "record this as tech-debt", "file this finding as debt". Do NOT trigger on draining, fixing, listing, or prioritizing existing debt (that's `/gaia-debt`), nor on general "clean up the code" or "fix this bug" asks that aren't about filing a new tracked issue.
+description: Files a new tech-debt GitHub issue for an out-of-scope code-review finding. Builds the dedup key, skips an open or declined-closed match, else creates the labeled issue and touches the debt-count sentinel. Trigger on asks like "file a tech-debt issue", "record this as tech-debt", "file this finding as debt". Do NOT trigger on draining, fixing, listing, or prioritizing existing debt (that's `/gaia-debt`), nor on general "clean up the code" or "fix this bug" asks that aren't about filing a new tracked issue.
 ---
 
 # File a tech-debt issue
