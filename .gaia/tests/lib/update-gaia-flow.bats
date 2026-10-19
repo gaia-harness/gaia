@@ -512,7 +512,7 @@ claim_check_holds() {
   grep -qF 'references/claim-flow.md' "$section" || return 1
   section="$(section_file "$ref" "$CLAIM_REF_CHECK")" || return 1
   grep -qF -- "$CLAIM_STOP_LINE" "$section" || return 1
-  grep -qF 'leaves no download, worktree, branch, prune or cache change' "$section" || return 1
+  grep -qF 'leaves no download, worktree, prune or cache change and no other branch change' "$section" || return 1
   in_order "$section" \
     'update-claim.sh list --tree <starting checkout>' \
     'update-claim.sh login --tree <starting checkout>' \
@@ -542,7 +542,7 @@ claim_check_holds() {
   sed 's| --branch <headRefName>$||' "$CLAIM_REF" > "$COPY_REF"
   claim_check_holds "$SKILL" "$COPY_REF" && return 1
   # Failing state: the stop no longer promises to create nothing.
-  sed 's|leaves no download, worktree, branch, prune or cache change|cleans up|' "$CLAIM_REF" > "$COPY_REF"
+  sed 's|leaves no download, worktree, prune or cache change and no other branch change|cleans up|' "$CLAIM_REF" > "$COPY_REF"
   claim_check_holds "$SKILL" "$COPY_REF" && return 1
   true
 }
