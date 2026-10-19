@@ -227,7 +227,7 @@ anchors_resolve() {
   section_text="$(section "$DISPATCH_UNIT" "$RUNBOOK")" || return 1
   grep -qF -- 'audit-dispositions-check.sh waiver-table --root <RESOLVED_ROOT> --run-folder <RUN_FOLDER> --rounds <a>-<b>' <<<"$section_text" || return 1
   grep -qF -- 'never from the informational `waiver_table` in `unit-<u>.json`' <<<"$section_text" || return 1
-  grep -qF -- '`<RUN_FOLDER>/vetoes.json` with Bash at the main checkout' <<<"$section_text" || return 1
+  grep -qF -- '`<RUN_FOLDER>/vetoes.json` the way `.claude/doctrine/execution.md` (`## Run folder`) prescribes' <<<"$section_text" || return 1
   sentences <<<"$section_text" | grep -qF -- 'Each veto'"'"'s `effective_from_round` is the `<s>` that `next-unit` prints at that moment, so a veto binds the next unit'"'"'s rounds and never re-grades the round that held the waiver.' || return 1
   sentences <<<"$section_text" | grep -qF -- 'its commit rotates the owning member'"'"'s digest' || return 1
 }

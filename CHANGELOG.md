@@ -248,6 +248,7 @@ On GAIA 1.6.1? Claude: choose Abort, then offer to migrate this project to 2.0.0
 
 ### Fixed
 
+- Audit rounds, plans, specs and residue sweeps run from a worktree no longer have their writes into the main checkout's `.gaia/local` or `.notebook` refused. Claude Code's worktree isolation refuses Write, Edit and heredoc writes there, so the procedures now write into the session scratchpad and copy the file in with one plain `cp` (#2856)
 - `/gaia-init` writes the project title once, into `common` `meta.siteName`. The index page's `meta.title` now references `siteName` instead of holding a copy, so renaming the project later updates the home page's tab title too, and the duplicate no longer draws an audit finding on the first change to the index language files (#2861)
 - `/gaia-fitness` no longer grades a freshly initialized project B- for GAIA's own wiki pages citing files the project lacks on purpose: the init command that `/gaia-init` deletes when it finishes, and the optional fitness config GAIA does not ship (#2860)
 - A dispatched agent in a worktree session no longer has its report-file Write refused. The dispatch rule named no location, so sessions picked `.gaia/local` or `.notebook`, which a worktree reaches through a symlink into the main checkout, and the agent re-sent its whole report after each refusal. The rule now names the session scratchpad, and the plan's UAT fidelity check keeps its verdict file there instead of the plan folder (#2853)

@@ -169,7 +169,7 @@ At that point, save before asking, as the checkpoint says, to this run's own sta
 - once this run has isolated (`## Record`), the run folder of `<RESIDUE_BRANCH>`: `.gaia/local/runs/<RESIDUE_BRANCH>/STATE.md`;
 - before it has, the checkpoint's `Save path:` fallback.
 
-`.gaia/local` is shared with the main checkout, so write the file with Bash at the main checkout's absolute path (`bash .gaia/scripts/main-root-lib.sh` prints it), never with Edit or Write from a worktree. It holds these lines, its one `NEXT:` line last:
+`.gaia/local` is shared with the main checkout, so write the file at the main checkout's absolute path (`bash .gaia/scripts/main-root-lib.sh` prints it), never with Edit or Write from a worktree: Write it into the session scratchpad and copy it in with one plain `cp`, as `.claude/doctrine/execution.md` (`## Run folder`) prescribes. It holds these lines, its one `NEXT:` line last:
 
 - `Command: /gaia-residue`
 - `Phase: required` or `Phase: extended`
