@@ -8,7 +8,7 @@ Run the GAIA **codify** workflow.
 
 ## Pre-flight: Worktree check
 
-This command drafts repo-wide rules, checks, and skills from a repo-wide finding tally and publishes them through a pull request of its own. It starts from the main checkout and isolates its own work right before its first write, through `.claude/skills/gaia/references/isolation.md`, so it never writes onto the branch the checkout holds. A linked worktree holds someone else's work, so if invoked from one, reject hard: `gaia_refuse_if_worktree` (`.gaia/scripts/main-only-lib.sh`) asks the shared resolver which tree this is and refuses out loud, naming the main checkout, when the answer is a worktree.
+This command drafts repo-wide rules, checks, and skills from a repo-wide finding tally and publishes them through a pull request of its own. It starts from the main checkout and isolates its own work right before its first write, through `.claude/skills/gaia/references/isolation.md`, so it never writes onto the branch the checkout holds. A linked worktree holds someone else's work, so it refuses to run in one (`gaia_refuse_if_worktree`, `.gaia/scripts/main-only-lib.sh`).
 
 Detection (run this first, before anything else):
 
@@ -16,8 +16,6 @@ Detection (run this first, before anything else):
 . .gaia/scripts/main-only-lib.sh
 gaia_refuse_if_worktree "/gaia-codify" || exit 1
 ```
-
-If the detection does not fire, fall through to the workflow dispatch line below.
 
 Anchor for the next pre-flight step: a check that must pass before this command starts goes here, after the worktree check and before the workflow dispatch line.
 

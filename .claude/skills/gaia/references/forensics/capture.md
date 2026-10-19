@@ -17,7 +17,7 @@ Always-included envelope, regardless of class:
 | `branch`       | git                                   | `git rev-parse --abbrev-ref HEAD 2>/dev/null \|\| echo unknown`                                         |
 | `dirty`        | git                                   | `[[ -n "$(git status --porcelain 2>/dev/null)" ]] && echo true \|\| echo false`                         |
 
-Every command except `dirty` is wrapped so a missing tool or failing exit yields `unknown` rather than a hard failure; `dirty` reads `false`. No command writes, installs, fetches, or shells out to any script that mutates state.
+Every command except `dirty` is wrapped so a missing tool or failing exit yields `unknown` rather than a hard failure; `dirty` reads `false`.
 
 ## Class-specific state files
 
@@ -87,14 +87,7 @@ The following are never captured, not even filenames in some cases:
 
 ## Read-only guarantees
 
-Every command in this fragment is read-only. The capture step:
-
-- Does not run `pnpm install`, `npm install`, or any package manager install command.
-- Does not run `git fetch`, `git pull`, `git stash`, or any command that mutates git state.
-- Does not invoke `gh` in any form.
-- Does not shell out to any GAIA skill, hook, or script that writes to disk.
-
-The working-tree mtimes across `frontend/app/`, `wiki/`, `.gaia/cli/`, and `.claude/` do not change across the capture step. This is verifiable by snapshotting mtimes before and after invocation.
+Read-only: no package install, no git mutation (`fetch`, `pull`, `stash`), no `gh` in any form, and no GAIA skill, hook, or script that writes to disk.
 
 ## Output format
 

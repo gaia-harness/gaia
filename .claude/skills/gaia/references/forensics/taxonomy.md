@@ -60,12 +60,6 @@ After classification, the agent decides whether the failure is a user-config iss
 | any other failure pattern                                                            | probable bug | offer GH issue                     |
 | classifier fell to `other`                                                           | probable bug | offer GH issue                     |
 
-**User-config branch:** print the remediation steps inline. Do NOT offer to file a GH issue. Saving the local report still happens unconditionally.
-
-**Probable-bug branch:** save locally, then offer the GH issue. Do NOT print user-config remediation, the problem is not the user's environment.
-
-The two branches are mutually exclusive per invocation. If multiple signals fire (e.g. wrong Node version AND an unexpected crash), apply the user-config branch, the environment is the more likely root cause and the user can rerun after fixing it.
-
 ## Disjointness from other taxonomies
 
 This forensics taxonomy is the only classifier the skill consults. A user-facing failure that does not fit one of the eight classes above is `other`; the correct action is to offer a GH issue, not to look elsewhere for a match.

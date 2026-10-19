@@ -2,7 +2,7 @@
 
 Lazy-loaded by the forensics runbook at the redact step. Apply this algorithm verbatim to the assembled report body before writing or filing. No external lookups, this fragment is self-contained.
 
-Contents: Inputs; Path conversion; Token patterns; Boundary anchors; Env-var policy; Audit table; Order of operations; Idempotency.
+Contents: Inputs; Path conversion; Token patterns; Boundary anchors; Env-var policy; Order of operations; Idempotency.
 
 This fragment is the authoritative redaction contract for `/gaia-forensics`.
 
@@ -189,20 +189,6 @@ Replace:  \1=<redacted>
 
 ---
 
-## Audit table
-
-The following examples demonstrate the complete algorithm. All values are illustrative placeholders; no real credential appears in this file.
-
-| Input (before redaction)                    | Output (after redaction)       | Rule applied                                                             |
-| ------------------------------------------- | ------------------------------ | ------------------------------------------------------------------------ |
-| `<home>/Development/my-project/app/i18n.ts` | `app/i18n.ts`                  | Path Rule A (under project root `<home>/Development/my-project`)         |
-| `<home>/.config/some-other-tool.json`       | `some-other-tool.json`         | Path Rule B (outside project root, filename only)                        |
-| `<github-token-shaped-string>`              | `<redacted>`                   | Token pattern 1 (GitHub token; prefix `gho_` + 20 alphanumerics)         |
-| `ANTHROPIC_API_KEY=<value-shaped-string>`   | `ANTHROPIC_API_KEY=<redacted>` | Env-var policy (value scrubbed; name kept)                               |
-| `<aws-access-key-id-shaped-string>`         | `<redacted>`                   | Token pattern 9 (AWS access key; four uppercase + sixteen alphanumerics) |
-
----
-
 ## Order of operations
 
 1. **Path conversion**: Rule A (project-root strip), then Rule B (machine-leak fallback: trailing-component collapse for `/Users`, `/home`, `/root`, then bare-home collapse to `<home>`).
@@ -214,6 +200,4 @@ The following examples demonstrate the complete algorithm. All values are illust
 
 ## Idempotency
 
-Running this algorithm twice on already-redacted text is a no-op. `<redacted>` and `<home>` do not match any token pattern, do not look like a credential prefix, and do not satisfy the generic-fallback length threshold. `<home>` contains no `/Users/`, `/home/`, or `/root` segment, so Rule B leaves it unchanged. Path conversion on an already-repo-relative path leaves it unchanged (the path begins with a directory component, not `/Users/`, `/home/`, or `/root`).
-
-The harness verifies idempotency: it applies redaction to the output of a prior redaction run and asserts the two outputs are byte-identical.
+The algorithm is idempotent: `<redacted>`, `<home>`, and repo-relative paths match no token pattern, credential prefix, generic-fallback threshold, or Rule A/B path prefix.
