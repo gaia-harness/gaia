@@ -118,6 +118,17 @@ const MACHINE_LOCAL_PATHS: ReadonlySet<string> = new Set([
   '.claude/settings.local.json',
 ]);
 
+/**
+ * Shipped files an adopter tree lacks on purpose, which the GAIA source repo
+ * still has, so a citation of one reads as rot only after install:
+ * `.claude/commands/gaia-init.md` is deleted by `gaia init finalize`, and
+ * `.claude/gaia-fitness.json` is optional and release-excluded.
+ */
+const ABSENT_BY_DESIGN_PATHS: ReadonlySet<string> = new Set([
+  '.claude/commands/gaia-init.md',
+  '.claude/gaia-fitness.json',
+]);
+
 const PATH_TOKEN_PATTERN = /`([^`\n]+)`/g;
 
 /**
@@ -161,6 +172,7 @@ const isTrackedPath = (token: string, prefixes: readonly string[]): boolean => {
   if (!/\.[a-z0-9]{1,8}$/i.test(token)) return false;
   if (ADOPTER_OWNED_SENTINELS.has(token)) return false;
   if (MACHINE_LOCAL_PATHS.has(token)) return false;
+  if (ABSENT_BY_DESIGN_PATHS.has(token)) return false;
   if (RUNTIME_PREFIXES.some((prefix) => token.startsWith(prefix))) return false;
   if (SIBLING_REPO_PATTERN.test(token)) return true;
 
