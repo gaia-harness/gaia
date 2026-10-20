@@ -22,6 +22,10 @@ An `ephemeral` entry is consumed once and then orphaned; its owner is meant to p
 
 A removed feature has no owner left to prune what it wrote, so retiring one means adding a `residue` row naming its paths, and the residue sweep does the rest. `bash .gaia/scripts/state-registry-lib.sh residue-sweep` lists every present path a residue row names, with the row's reason, and paths no row claims under a separate Unknown heading; `--apply` deletes exactly the residue paths. It never deletes a live or unknown path, never follows a symlink, and never leaves `.gaia/local/`. A row whose state moves once to a new name carries a `successor`, and the sweep keeps its paths until that successor exists. `/update-gaia` offers the sweep after every update; the script's header owns the exit codes and output format.
 
+## The blend record
+
+`.gaia/local/fitness/blend-record.json` lists the harness files an `/update-gaia` run blended, each with the update's version. `.gaia/scripts/fitness-blend-record.sh` writes it at the update's record step, and the statusline refresher reads it to arm the `/gaia-fitness` nudge once the main checkout reaches the version. It is a shared, `keep` entry in `.gaia/state-registry.json`, so the reaper never ages it out: an entry stays until a `/gaia-fitness` run answers it, and the writer drops answered entries on its next run.
+
 ## Pruning
 
 Two triggers apply the registry's retention classes. The classes decide whether an entry's branch is gone, its tree is gone, its SPEC has left draft, it has aged out, another owner prunes it, or it is kept; the header of `.gaia/scripts/state-reaper-lib.sh` owns their semantics, and each row's own `retention` holds its window.

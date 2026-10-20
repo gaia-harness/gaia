@@ -55,6 +55,18 @@ A classifier that cannot read its inputs leaves every path `unknown`; that run h
 
 After a heal that applied at least one fix, a single gate chooses between publishing (commit, push, open a PR and drive it through the merge gate), opening the PR only, or keeping the changes in the working tree. The heal lands on the run's own branch, isolated through `.claude/skills/gaia/references/isolation.md` before the first fix is applied, so a run from any branch publishes through its own PR and never commits onto the branch the checkout holds. The mechanics live in `.gaia/scripts/fitness-publish.sh` and the playbook.
 
+## The statusline nudge
+
+The statusline shows `/gaia-fitness` when one of three reasons holds, in this order:
+
+- **Grade.** The check finds something in a file the project owns, so the report carries a grade worth improving.
+- **Blended files.** An `/update-gaia` run blended the team's edits into harness files and no fitness run has answered them since the update landed.
+- **Harness commits.** The team has made at least the configured threshold of harness commits since the last fitness run.
+
+The over-budget `CLAUDE.md` finding belongs to `/gaia-cleanse` and never arms this nudge. A run alone does not clear the grade reason: only a fix, or a suppression with a reason in `.claude/gaia-fitness.json`, removes the finding that arms it. A run does answer the blend and commit reasons, since both count from the run's close record, and it refreshes the nudge at once.
+
+Two limits are accepted. A run whose close record fails to write leaves the blend and commit reasons armed until the next recorded run. The commit reason counts commits reachable from the main checkout's own `HEAD`, so a teammate's harness commits count only once they are pulled into it. `.gaia/scripts/check-updates.sh` holds the arms' detail and [[Project Config]] the threshold.
+
 ## See also
 
 [[Wiki Management]]: `gaia wiki dead-paths`, `gaia wiki orphans`, and the other primitives the wiki rules of the catalog run.
