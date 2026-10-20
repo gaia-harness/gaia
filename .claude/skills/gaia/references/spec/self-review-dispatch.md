@@ -65,17 +65,7 @@ Append one `coverage.jsonl` record (`phase: "self_review"`, `disposition: "first
 
 The self-review agent already applied every `minor` `suggested_fix` (6a); main gates only the **critical** and **major** findings, rendered from the summary's `gated_findings` entries (`issue`, `excerpt`, `suggested_fix`).
 
-- **critical and major findings:** surface to the user before applying. Never silently revert intentional clarify-loop evolution. **Auto-mode exception per rule 8:** apply the `suggested_fix` and append a one-line note to `clarifications.deferred[]` recording the finding (kind, location, issue) so a reviewer can audit. If the finding is `kind: "drift"` or `"scope_change"` and the change came from a clarify answer the agent itself just made in step 5, prefer keeping the clarify answer over reverting, append the note but skip the fix. Print each finding as text:
-
-  > Self-review flagged a scope-level concern in `<location>`:
-  >
-  > **Issue:** <issue>
-  >
-  > **Excerpt:** "<excerpt>"
-  >
-  > **Suggested fix:** <suggested_fix>
-
-  Print every gated finding this way, each block ending with its `SR-NNN` id and its recommendation: apply the suggested fix, or keep the current draft when the finding itself recommends keeping. List every gated finding, never a count, a summary, or a pointer to a findings file; response-length or terseness preferences do not shorten the list. Then ask one `AskUserQuestion` for the whole list (header `Self-review`, single-select), per `.claude/rules/user-questions.md`'s review-list rule:
+- **critical and major findings:** surface to the user before applying. Never silently revert intentional clarify-loop evolution. **Auto-mode exception per rule 8:** apply the `suggested_fix` and append a one-line note to `clarifications.deferred[]` recording the finding (kind, location, issue) so a reviewer can audit. If the finding is `kind: "drift"` or `"scope_change"` and the change came from a clarify answer the agent itself just made in step 5, prefer keeping the clarify answer over reverting, append the note but skip the fix. Print the list as text in the review-list format of `.claude/rules/user-questions.md` (`How a review list prints`), headed `Self-review` and noting how many minor fixes 6a already applied. Each finding's `Where` is its `location`, `Problem` its `issue`, `The draft says` its `excerpt`, and `Recommendation` either applying its `suggested_fix` or keeping the current draft when the finding itself recommends keeping, with the reason. The `SR-NNN` id maps to the printed number in the decision list and is never printed. List every gated finding, never a count, a summary, or a pointer to a findings file; response-length or terseness preferences do not shorten the list. Then ask one `AskUserQuestion` for the whole list (header `Self-review`, single-select), per `.claude/rules/user-questions.md`'s review-list rule:
 
   - `Accept all as recommended (Recommended)`: every finding takes its own recommendation.
   - `Revise`: change some findings.
