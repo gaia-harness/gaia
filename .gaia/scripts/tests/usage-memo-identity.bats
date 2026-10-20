@@ -35,7 +35,7 @@ capture() {
   local tag="$1" variant="$2" exit_status=0
   shift 2
   rm -f "$CAPTURE_DIRECTORY/$tag.trace"
-  GAIA_USAGE_MEMO_TRACE="$CAPTURE_DIRECTORY/$tag.trace" UM_OUTPUT_FILE="$CAPTURE_DIRECTORY/$tag.out" UM_ERROR_FILE="$CAPTURE_DIRECTORY/$tag.err" "u_$variant" "$@" || exit_status=$?
+  GAIA_USAGE_MEMO_TRACE_FILE="$CAPTURE_DIRECTORY/$tag.trace" UM_OUTPUT_FILE="$CAPTURE_DIRECTORY/$tag.out" UM_ERROR_FILE="$CAPTURE_DIRECTORY/$tag.err" "u_$variant" "$@" || exit_status=$?
   printf '%s\n' "$exit_status" >"$CAPTURE_DIRECTORY/$tag.rc"
   return 0
 }

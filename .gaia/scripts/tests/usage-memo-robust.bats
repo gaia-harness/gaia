@@ -5,7 +5,7 @@
 # ledger lock, all print the pre-change bytes with an empty stderr. Every case
 # compares the working tree's readout with the pre-change one pinned at
 # e4b57e23 over the same committed fixture stores, and reads the memo trace
-# (GAIA_USAGE_MEMO_TRACE) to prove which path ran.
+# (GAIA_USAGE_MEMO_TRACE_FILE) to prove which path ran.
 #
 # A guard-red case builds a scratch copy of the changed tree with one
 # substitution (`mutate` fails unless it matched exactly once) and proves the
@@ -30,8 +30,8 @@ setup() {
   . "$BATS_TEST_DIRNAME/helpers/usage-memo-env.sh"
   umemo_setup
   umemo_load_store identity
-  export GAIA_USAGE_MEMO_TRACE="$BATS_TEST_TMPDIR/trace"
-  : >"$GAIA_USAGE_MEMO_TRACE"
+  export GAIA_USAGE_MEMO_TRACE_FILE="$BATS_TEST_TMPDIR/trace"
+  : >"$GAIA_USAGE_MEMO_TRACE_FILE"
   PROBES="$UM_FIXTURES/identity/probes.json"
   ROBUST="$UM_FIXTURES/robust"
   MEMO="$UM_TELEMETRY_DIRECTORY/usage-branch-memo.json"
@@ -77,7 +77,7 @@ assert_figures() {
 check_same() {
   local new_exit_status=0 old_exit_status=0
   _paths
-  : >"$GAIA_USAGE_MEMO_TRACE"
+  : >"$GAIA_USAGE_MEMO_TRACE_FILE"
   run_new_tree "$NEW_OUTPUT_FILE" "$NEW_ERROR_FILE" "$@" || new_exit_status=$?
   run_old_tree "$OLD_OUTPUT_FILE" "$OLD_ERROR_FILE" "$@" || old_exit_status=$?
   [ "$new_exit_status" = 0 ] && [ "$old_exit_status" = 0 ] || { printf 'exit status: new %s, old %s\n' "$new_exit_status" "$old_exit_status" >&2; return 1; }
@@ -90,23 +90,23 @@ check_same() {
 # --- trace -------------------------------------------------------------------
 
 # trace_has <line> [file]: the trace holds that exact line.
-trace_has() { grep -qxF -- "$1" "${2:-$GAIA_USAGE_MEMO_TRACE}"; }
+trace_has() { grep -qxF -- "$1" "${2:-$GAIA_USAGE_MEMO_TRACE_FILE}"; }
 
 assert_trace() {
   trace_has "$@" && return 0
-  printf 'the trace lacks the line "%s":\n%s\n' "$1" "$(cat "${2:-$GAIA_USAGE_MEMO_TRACE}")" >&2
+  printf 'the trace lacks the line "%s":\n%s\n' "$1" "$(cat "${2:-$GAIA_USAGE_MEMO_TRACE_FILE}")" >&2
   return 1
 }
 
 assert_trace_matches() {
-  grep -qE -- "$1" "$GAIA_USAGE_MEMO_TRACE" && return 0
-  printf 'no trace line matches %s:\n%s\n' "$1" "$(cat "$GAIA_USAGE_MEMO_TRACE")" >&2
+  grep -qE -- "$1" "$GAIA_USAGE_MEMO_TRACE_FILE" && return 0
+  printf 'no trace line matches %s:\n%s\n' "$1" "$(cat "$GAIA_USAGE_MEMO_TRACE_FILE")" >&2
   return 1
 }
 
 assert_no_trace() {
-  if grep -qE -- "$1" "$GAIA_USAGE_MEMO_TRACE"; then
-    printf 'the trace holds a line matching %s:\n%s\n' "$1" "$(cat "$GAIA_USAGE_MEMO_TRACE")" >&2
+  if grep -qE -- "$1" "$GAIA_USAGE_MEMO_TRACE_FILE"; then
+    printf 'the trace holds a line matching %s:\n%s\n' "$1" "$(cat "$GAIA_USAGE_MEMO_TRACE_FILE")" >&2
     return 1
   fi
   return 0
@@ -224,7 +224,7 @@ differs() { if cmp -s "$1" "$2"; then return 1; fi; return 0; }
 
   make_tree stamp
   mutate "$MUTANT_TREE/$LIBRARY" '[ "$stamp_hash" != "$_gaia_usage_memo_stamp" ]' 'false'
-  : >"$GAIA_USAGE_MEMO_TRACE"
+  : >"$GAIA_USAGE_MEMO_TRACE_FILE"
   run_mutant_tree "$MUTANT_TREE" "$NEW_OUTPUT_FILE" "$NEW_ERROR_FILE" pr "$PR"
   assert_trace "path=warm"
   assert_priced "$NEW_OUTPUT_FILE"
@@ -248,7 +248,7 @@ differs() { if cmp -s "$1" "$2"; then return 1; fi; return 0; }
   run_old_tree "$OLD_OUTPUT_FILE" "$OLD_ERROR_FILE" pr "$PR"
   make_tree sum
   mutate "$MUTANT_TREE/$LIBRARY" '[ "$(_gaia_usage_hash16 "$body" 2>/dev/null)" != "$sum_hash" ]' 'false'
-  : >"$GAIA_USAGE_MEMO_TRACE"
+  : >"$GAIA_USAGE_MEMO_TRACE_FILE"
   run_mutant_tree "$MUTANT_TREE" "$NEW_OUTPUT_FILE" "$NEW_ERROR_FILE" pr "$PR"
   assert_trace "path=warm"
   assert_priced "$NEW_OUTPUT_FILE"
@@ -412,7 +412,7 @@ differs() { if cmp -s "$1" "$2"; then return 1; fi; return 0; }
   warm
   export UMEMO_SEAM_TELEMETRY_DIRECTORY="$UM_TELEMETRY_DIRECTORY" GAIA_USAGE_MEMO_SEAM="$ROBUST/seam-append.sh"
   _paths
-  : >"$GAIA_USAGE_MEMO_TRACE"
+  : >"$GAIA_USAGE_MEMO_TRACE_FILE"
   run_new_tree "$NEW_OUTPUT_FILE" "$NEW_ERROR_FILE" pr 2501
   unset GAIA_USAGE_MEMO_SEAM
   grep -qF '"session_id":"s-seam"' "$UM_TELEMETRY_DIRECTORY/usage.jsonl"
@@ -443,7 +443,7 @@ differs() { if cmp -s "$1" "$2"; then return 1; fi; return 0; }
   # The newline and indentation pick the legacy plan/ arm the probed key takes;
   # the type-prefixed plan arm repeats the assignment at a deeper indent.
   mutate "$MUTANT_TREE/.gaia/scripts/branch-name-lib.sh" $'\n              unit="SPEC-${lead}"' $'\n              unit="SPEC-9${lead}"'
-  : >"$GAIA_USAGE_MEMO_TRACE"
+  : >"$GAIA_USAGE_MEMO_TRACE_FILE"
   run_mutant_tree "$MUTANT_TREE" "$NEW_OUTPUT_FILE" "$NEW_ERROR_FILE" pr "$pr"
   assert_trace "path=cold reason=stamp"
   assert_priced "$NEW_OUTPUT_FILE"
@@ -485,7 +485,7 @@ differs() { if cmp -s "$1" "$2"; then return 1; fi; return 0; }
   run_old_tree "$OLD_OUTPUT_FILE" "$OLD_ERROR_FILE" pr "$PR"
   rm -f "$MEMO"
   for shell_path in "${shell_sequence[@]}"; do
-    : >"$GAIA_USAGE_MEMO_TRACE"
+    : >"$GAIA_USAGE_MEMO_TRACE_FILE"
     "$shell_path" "$UM_NEW/.gaia/scripts/usage.sh" pr "$PR" --main-root "$UM_MAIN" --telemetry-dir "$UM_TELEMETRY_DIRECTORY" \
       --rate-table "$UM_RATES" --projects-root "$UM_PROJECTS_DIRECTORY" >"$output_file" 2>"$error_file"
     assert_priced "$output_file"
@@ -513,7 +513,7 @@ forced_failure_tree() {
     return 1
   fi
   _paths
-  : >"$GAIA_USAGE_MEMO_TRACE"
+  : >"$GAIA_USAGE_MEMO_TRACE_FILE"
   run_new_tree "$NEW_OUTPUT_FILE" "$NEW_ERROR_FILE" pr "$PR" || new_exit_status=$?
   run_old_tree "$OLD_OUTPUT_FILE" "$OLD_ERROR_FILE" pr "$PR" || old_exit_status=$?
   [ -s "$OLD_ERROR_FILE" ]
@@ -528,7 +528,7 @@ forced_failure_tree() {
 @test "fallback: a single-parse jq that fails prints the pre-change bytes with an empty stderr" {
   forced_failure_tree jqfail
   _paths
-  : >"$GAIA_USAGE_MEMO_TRACE"
+  : >"$GAIA_USAGE_MEMO_TRACE_FILE"
   run_mutant_tree "$MUTANT_TREE" "$NEW_OUTPUT_FILE" "$NEW_ERROR_FILE" pr "$PR"
   run_old_tree "$OLD_OUTPUT_FILE" "$OLD_ERROR_FILE" pr "$PR"
   assert_priced "$NEW_OUTPUT_FILE"
@@ -542,7 +542,7 @@ forced_failure_tree() {
   forced_failure_tree jqerr
   mutate "$MUTANT_TREE/$LIBRARY" $'$filter end end" \\\n      2>/dev/null' '$filter end end"'
   _paths
-  : >"$GAIA_USAGE_MEMO_TRACE"
+  : >"$GAIA_USAGE_MEMO_TRACE_FILE"
   run_mutant_tree "$MUTANT_TREE" "$NEW_OUTPUT_FILE" "$NEW_ERROR_FILE" pr "$PR"
   run_old_tree "$OLD_OUTPUT_FILE" "$OLD_ERROR_FILE" pr "$PR"
   assert_trace "fallback=legacy"
@@ -588,7 +588,7 @@ forced_failure_tree() {
   # no miss, so the trace line the shipped copy writes is absent.
   make_tree extra
   mutate "$MUTANT_TREE/$LIBRARY" '($memo.models - $present.models) as $extra_models' '[] as $extra_models'
-  : >"$GAIA_USAGE_MEMO_TRACE"
+  : >"$GAIA_USAGE_MEMO_TRACE_FILE"
   run_mutant_tree "$MUTANT_TREE" "$BATS_TEST_TMPDIR/m.out" "$BATS_TEST_TMPDIR/m.err" pr "$PR"
   jq -e --arg zeta_model "$zeta_model" '.models | index($zeta_model) != null' <<<"$(memo_body)" >/dev/null
   assert_no_trace '^rerun=miss'
@@ -600,4 +600,35 @@ forced_failure_tree() {
 
   check_same pr "$PR"
   assert_no_trace '^rerun=miss'
+}
+
+# --- 15. trace variable ------------------------------------------------------
+
+# bats test_tags=whole-tree
+@test "trace: the old flag-style variable writes no file and the file variable receives the trace" {
+  local root scratch="$BATS_TEST_TMPDIR/cwd" trace_path="$BATS_TEST_TMPDIR/named.trace" before after
+  warm
+  root="$(jq -r --arg derive_key "$KEY" '.derive[$derive_key][0]' <<<"$(memo_body)")"
+  mkdir -p "$scratch"
+  unset GAIA_USAGE_MEMO_TRACE_FILE
+  export GAIA_USAGE_MEMO_TRACE=1
+  cd "$scratch"
+
+  before="$(ls -A "$scratch")"
+  run_new_tree "$BATS_TEST_TMPDIR/t.out" "$BATS_TEST_TMPDIR/t.err" initiative "$root" --box
+  after="$(ls -A "$scratch")"
+  [ "$before" = "$after" ]
+
+  rm -f "$MEMO"
+  GAIA_USAGE_MEMO_TRACE_FILE="$trace_path" run_new_tree "$BATS_TEST_TMPDIR/t.out" "$BATS_TEST_TMPDIR/t.err" initiative "$root" --box
+  [ -f "$trace_path" ]
+  grep -q '^path=' "$trace_path"
+  grep -q '^write=' "$trace_path"
+
+  # Guard red: a copy that reads the old name creates the file `1` here.
+  make_tree trace
+  mutate "$MUTANT_TREE/$LIBRARY" '[ -n "${GAIA_USAGE_MEMO_TRACE_FILE:-}" ]' '[ -n "${GAIA_USAGE_MEMO_TRACE:-}" ]'
+  mutate "$MUTANT_TREE/$LIBRARY" '>>"$GAIA_USAGE_MEMO_TRACE_FILE"' '>>"$GAIA_USAGE_MEMO_TRACE"'
+  run_mutant_tree "$MUTANT_TREE" "$BATS_TEST_TMPDIR/m.out" "$BATS_TEST_TMPDIR/m.err" initiative "$root" --box
+  [ -f "$scratch/1" ]
 }

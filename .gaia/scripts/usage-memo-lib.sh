@@ -75,8 +75,8 @@ def usage_memo_keys($present; $memo; $default):
 gaia_usage_memo_path() { printf '%s\n' "${1%/}/usage-branch-memo.json"; }
 
 gaia_usage_memo_trace() {
-  [ -n "${GAIA_USAGE_MEMO_TRACE:-}" ] || return 0
-  printf '%s\n' "$1" 2>/dev/null >>"$GAIA_USAGE_MEMO_TRACE" || true
+  [ -n "${GAIA_USAGE_MEMO_TRACE_FILE:-}" ] || return 0
+  printf '%s\n' "$1" 2>/dev/null >>"$GAIA_USAGE_MEMO_TRACE_FILE" || true
   return 0
 }
 
