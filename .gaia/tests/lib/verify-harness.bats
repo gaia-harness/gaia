@@ -85,7 +85,7 @@ missing_manifest_diagnostic() {
   has 'frontend/app/gone.ts'
   has_line '^PASS  shell-lint \([0-9]+s\)$'
   has '  reproduce: bash .gaia/tests/distribution/01-files-present.sh'
-  has '  reproduce: bash .gaia/scripts/bats5.sh suites/whole.bats < /dev/null'
+  has '  reproduce: bash .gaia/scripts/bats5.sh --filter-tags whole-tree suites/whole.bats < /dev/null'
   lacks 'PRE-EXISTING'
   has 'No pass record written'
   [ ! -e "$VHF_RECORD" ]
@@ -102,6 +102,56 @@ missing_manifest_diagnostic() {
   has_line '^FAIL  bats selected \([0-9]+s\)$'
   has 'suites/x.bats: x input'
   has '  reproduce: bash .gaia/scripts/bats5.sh suites/x.bats < /dev/null'
+  lacks '--filter-tags suites/x.bats'
+}
+
+@test "the whole-tree step runs only the per-test-marked tests of a suite nothing selects" {
+  fixture --no-branch
+  vhf_write_suite suites/pertest.bats tests:keep keep dropone droptwo
+  vhf_write_suite suites/listed.bats tests+:listed listed other
+  vhf_commit "suites marking one test each"
+  vhf_branch
+  printf 'page two\n' >frontend/app/page.txt
+  vhf_commit "an unrelated branch change"
+  run_runner branch
+  [ "$status" -eq 0 ]
+  every_label_is PASS 'bats whole-tree'
+  [ "$(vhf_suite_runs suites/pertest.bats "$VHF_ROOT")" = "pertest keep" ]
+  [ "$(vhf_suite_runs suites/listed.bats "$VHF_ROOT")" = "listed listed" ]
+}
+
+@test "the whole-tree step runs every test of a file-marked suite nothing selects" {
+  fixture
+  printf 'page two\n' >frontend/app/page.txt
+  vhf_commit "an unrelated branch change"
+  run_runner branch
+  [ "$status" -eq 0 ]
+  every_label_is PASS 'bats whole-tree'
+  [ "$(vhf_suite_runs suites/whole.bats "$VHF_ROOT" | LC_ALL=C sort | tr '\n' ',')" = "whole content,whole one,whole zero," ]
+}
+
+@test "a per-test-marked suite the change selects runs every test exactly once" {
+  fixture --no-branch
+  vhf_write_suite suites/pertest.bats tests:keep keep dropone droptwo
+  vhf_commit "a suite marking one test"
+  vhf_branch
+  vhf_add_test suites/pertest.bats extra
+  vhf_commit "the branch changes the marked suite"
+  run_runner branch
+  [ "$status" -eq 0 ]
+  every_label_is PASS 'bats whole-tree' 'bats selected'
+  [ "$(vhf_suite_runs suites/pertest.bats "$VHF_ROOT" | LC_ALL=C sort | tr '\n' ',')" = "pertest dropone,pertest droptwo,pertest extra,pertest keep," ]
+}
+
+@test "a file-marked suite the change selects runs once in full and the whole-tree step says so" {
+  fixture
+  vhf_add_test suites/whole.bats two
+  vhf_commit "the branch changes the file-marked suite"
+  run_runner branch
+  [ "$status" -eq 0 ]
+  has_line '^SKIP  bats whole-tree: every marked suite runs in full under bats selected$'
+  has_line '^PASS  bats selected \([0-9]+s\)$'
+  [ "$(vhf_suite_runs suites/whole.bats "$VHF_ROOT" | LC_ALL=C sort | tr '\n' ',')" = "whole content,whole one,whole two,whole zero," ]
 }
 
 @test "round mode skips both bats steps when no suite references its delta" {
@@ -346,9 +396,12 @@ EOF
 
 @test "the runner's own suites carry no whole-tree mark and pass the mark guard" {
   local own_suite
+  # shellcheck source=/dev/null
+  . "$REPO_ROOT/.gaia/tests/helpers/verify-harness-bats-lib.sh"
   for own_suite in "$BATS_TEST_DIRNAME/verify-harness.bats" "$BATS_TEST_DIRNAME/verify-harness-baseline.bats"; do
     [ -f "$own_suite" ] || { printf 'missing suite %s\n' "$own_suite" >&2; return 1; }
-    grep -qE '^# bats file_tags=([^,]*,)*whole-tree(,|$)' "$own_suite" && { printf 'marked: %s\n' "$own_suite" >&2; return 1; }
+    # shellcheck disable=SC2154 # assigned by the sourced bats lib
+    grep -qE "$verify_whole_tree_mark_pattern" "$own_suite" && { printf 'marked: %s\n' "$own_suite" >&2; return 1; }
   done
   [ -f "$REPO_ROOT/.gaia/tests/whole-tree-mark-guard.sh" ] || skip "the whole-tree mark guard is not in this tree"
   run bash "$REPO_ROOT/.gaia/tests/whole-tree-mark-guard.sh" --root "$REPO_ROOT" \

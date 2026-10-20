@@ -44,14 +44,23 @@ Those sections decide whether an assertion *can* fail; this one decides whether 
 
 - **A short read is more dangerous than an empty one.** A derivation that yields nothing trips a non-empty guard. A derivation that yields three of four entries does not: the guard stays satisfied and the suite drives a subset while its names still say "every". Count the entries the derivation should have produced, compare against the names it actually read, and fail on the difference. Symmetrically, a per-element claim over an empty set is true without meaning anything, so a derivation that can legitimately come back empty reports that as a failure, never as a pass.
 
-## Mark a whole-tree suite with `# bats file_tags=whole-tree`
+## Mark a whole-tree test with `# bats test_tags=whole-tree`
 
-The change selector picks a suite only when the suite names a changed file. A suite whose outcome depends on tracked files it does not name (an invariant over every agent file, every shell script, every workflow) is never picked, so it goes red on CI after the push. Mark such a suite with the bats-native file tag, on a line of its own after the header comment and before `setup`, `setup_file` and the first `@test`:
+The change selector picks a suite only when the suite names a changed file. A test whose outcome depends on tracked files its suite does not name (an invariant over every agent file, every shell script, every workflow) is never picked, so it goes red on CI after the push. Mark it.
+
+**The per-test mark is the default.** Put `# bats test_tags=whole-tree` on a line of its own at column 0, directly above each `@test` that depends on unnamed tracked files:
 
 ```bash
-# bats file_tags=whole-tree
+# bats test_tags=whole-tree
+@test "every agent file declares a model" {
 ```
 
-If the suite already carries tags, `whole-tree` joins the comma list (`# bats file_tags=foo,whole-tree`). The verification runner (`.gaia/tests/verify-harness.sh`) runs every marked suite in branch mode and leaves them out of round mode, which runs a marked suite only when the round's delta selects it, so CI's full run is what catches a round fix that breaks a whole-tree invariant; the marked set is `git grep -l -E '^# bats file_tags=([^,]*,)*whole-tree(,|$)' -- '*.bats'`.
+`whole-tree` joins an existing comma list (`# bats test_tags=foo,whole-tree`), because bats keeps only the last `test_tags` line before a test.
 
-`.gaia/tests/whole-tree-mark-guard.sh` flags an unmarked suite that enumerates the real tracked tree through an idiom it recognizes; its header lists the idioms. It does not see enumeration delegated to a script the suite calls (a lint script, a roster check), so mark such a suite by hand. A suite that writes fixture suites carrying the tag assembles the line at run time (`printf '# bats %s\n' 'file_tags=whole-tree'`) so it never holds the line at column 0 itself.
+**The file mark is the exception.** `# bats file_tags=whole-tree`, on a line of its own after the header comment and before `setup`, `setup_file` and the first `@test`, is for a suite whose every test depends on unnamed tracked files, or whose `setup`, `setup_file` or a helper enumerates the tracked tree without a waiver. It joins a comma list the same way.
+
+**The waiver.** A statement that enumerates the tracked tree outside a test body is waived with `# gaia-lint-ignore whole-tree-mark-guard: <reason>` on the comment line directly above it. Two reasons are accepted: every test that depends on the idiom carries the per-test mark, or the idiom's operand is not the tracked tree. One recorded exception exists, the `setup_file` waiver in the pre-push end-to-end suite, whose reason records the decision to keep that suite out of the whole-tree step. Shell-lint's owner guard reports an empty reason as malformed; review checks that the reason is true. Write the pragma form inside backticks in prose, never as a line whose first token after `#` is `gaia-lint-ignore`.
+
+**How the runner uses the marks.** The verification runner (`.gaia/tests/verify-harness.sh`) runs every marked test in branch mode (`--filter-tags whole-tree`), runs a suite the change selector picks in full under bats selected, and leaves marks out of round mode, so CI's full run is what catches a round fix that breaks a whole-tree invariant. The patterns in `.gaia/tests/helpers/verify-harness-bats-lib.sh` define the marked set.
+
+`.gaia/tests/whole-tree-mark-guard.sh` flags an unmarked test or suite that enumerates the real tracked tree through an idiom it recognizes; its header lists the idioms. It does not see a test that reaches the tracked tree through a script it calls (a lint script, a roster check), so mark such a test by hand; in a per-test suite a new delegated real-tree test left unmarked is caught only by CI's full run. A suite that writes fixture suites carrying either tag assembles the line at run time (`printf '# bats %s\n' 'test_tags=whole-tree'`) so it never holds the line at column 0 itself.

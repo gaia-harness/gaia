@@ -21,8 +21,6 @@
 #
 # Assertion style: bash-3.2-safe per .claude/rules/bats-assertions.md.
 
-# bats file_tags=whole-tree
-
 setup() {
   SCRIPT_DIRECTORY="$(cd "$(dirname "$BATS_TEST_FILENAME")/.." && pwd)"
   CHECK="$SCRIPT_DIRECTORY/check-audit-key-callers.sh"
@@ -242,6 +240,7 @@ LEDGER=".gaia/local/audit/$(gaia_audit_key "$KEY_BASE").rerun.json"
 
 # ---------- real repo: the standing guarantee ----------
 
+# bats test_tags=whole-tree
 @test "real repo: every Code Audit Team definition derives its path through gaia_audit_key" {
   run gaia_check_audit_key_callers "$REPO_ROOT"
   [ "$status" -eq 0 ]
@@ -249,6 +248,7 @@ LEDGER=".gaia/local/audit/$(gaia_audit_key "$KEY_BASE").rerun.json"
   grep -qF "agent files naming a sidecar/ledger without a gaia_audit_key call: 0" <<<"$output" || return 1
 }
 
+# bats test_tags=whole-tree
 @test "real repo: the guarantee above is not vacuous -- agent definitions do name these artifacts" {
   # Both of the check's verdicts are counts of violations, so a scan that saw
   # no candidate at all reports zero and passes. Pin the candidate set as

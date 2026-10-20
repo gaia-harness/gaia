@@ -8,8 +8,6 @@
 # helpers/doctrine-pin-checks.sh; the model pin guards stay in
 # workflow-doctrine-sources.bats.
 
-# bats file_tags=whole-tree
-
 bats_require_minimum_version 1.5.0
 
 PIPELINE_FILES=(
@@ -50,6 +48,7 @@ copy_into_scratch() {
 
 # ------------------------------------------------------------- real tree
 
+# bats test_tags=whole-tree
 @test "agents: every definition pins exactly one valid effort, and each is medium" {
   agents_effort_ok "$REPO_ROOT/.claude/agents" || {
     echo "bad agents:$AGENT_EFFORT_BAD" >&2
@@ -61,6 +60,7 @@ copy_into_scratch() {
   }
 }
 
+# bats test_tags=whole-tree
 @test "skills: no tracked skill frontmatter pins an effort" {
   local skill_paths=() skill_path
   while IFS= read -r skill_path; do
@@ -74,6 +74,7 @@ copy_into_scratch() {
   }
 }
 
+# bats test_tags=whole-tree
 @test "dispatch files: every model-pinning block in a dispatch file also pins effort" {
   local dispatch_paths=() dispatch_path
   while IFS= read -r dispatch_path; do
@@ -103,6 +104,7 @@ copy_into_scratch() {
   grep -qiE -- "$SESSION_EFFORT_MARK_RE" "$REPO_ROOT/$PLANNER_FILE"
 }
 
+# bats test_tags=whole-tree
 @test "planner: only plan.md carries the session-effort mark" {
   local marked
   marked="$(session_effort_mark_files "$REPO_ROOT")"
@@ -112,6 +114,7 @@ copy_into_scratch() {
   }
 }
 
+# bats test_tags=whole-tree
 @test "named agents: no named-agent or fork dispatch block carries an effort pin" {
   local scan_paths=() scan_path
   while IFS= read -r scan_path; do
@@ -129,6 +132,7 @@ copy_into_scratch() {
   lens_preamble_no_effort_ok "$REPO_ROOT/$REFERENCES/spec/lens-dispatch.md"
 }
 
+# bats test_tags=whole-tree
 @test "descriptive pages: none restates an effort pin" {
   descriptive_pages_no_pin_ok "$WIKI" "$REPO_ROOT" || {
     echo "descriptive pages:$DESCRIPTIVE_PINNED" >&2
@@ -147,6 +151,7 @@ copy_agents() {
   find "$SCRATCH_ROOT/agents" -name '*.md' | sort | head -n 1
 }
 
+# bats test_tags=whole-tree
 @test "agents red twin: a deleted effort line fails" {
   local target
   target="$(copy_agents)"
@@ -156,12 +161,14 @@ copy_agents() {
   if agents_effort_ok "$SCRATCH_ROOT/agents"; then return 1; fi
 }
 
+# bats test_tags=whole-tree
 @test "agents red twin: a new agent with a model and no effort fails" {
   copy_agents >/dev/null
   printf -- '---\nname: scratch-agent\nmodel: sonnet\n---\nBody.\n' >"$SCRATCH_ROOT/agents/scratch-agent.md"
   if agents_effort_ok "$SCRATCH_ROOT/agents"; then return 1; fi
 }
 
+# bats test_tags=whole-tree
 @test "agents red twin: an invalid level fails" {
   local target
   target="$(copy_agents)"
@@ -171,6 +178,7 @@ copy_agents() {
   if agents_effort_ok "$SCRATCH_ROOT/agents"; then return 1; fi
 }
 
+# bats test_tags=whole-tree
 @test "agents red twin: a second effort line fails" {
   local target
   target="$(copy_agents)"
@@ -180,6 +188,7 @@ copy_agents() {
   if agents_effort_ok "$SCRATCH_ROOT/agents"; then return 1; fi
 }
 
+# bats test_tags=whole-tree
 @test "agents red twin: a valid level other than medium passes the shape check and fails the level check" {
   local target
   target="$(copy_agents)"
@@ -321,6 +330,7 @@ remove_pin_site_entry() {
   return 0
 }
 
+# bats test_tags=whole-tree
 @test "coverage red twins: an uncovered pipeline file fails both the pipeline check and the coverage check" {
   local relative page
   for relative in "$REFERENCES/spec/audit.md" "$REFERENCES/plan/decomposition-audit.md"; do
@@ -375,6 +385,7 @@ remove_pin_site_entry() {
   named_dispatch_no_effort_ok "$TEMPORARY_DIRECTORY/general.md"
 }
 
+# bats test_tags=whole-tree
 @test "skills red twin: an effort line in a skill frontmatter fails" {
   local source_path copy
   source_path="$(git -C "$REPO_ROOT" ls-files -z -- '.claude/skills/*/SKILL.md' | tr '\0' '\n' | head -n 1)"
@@ -398,6 +409,7 @@ remove_pin_site_entry() {
   if lens_preamble_no_effort_ok "$copy.renamed"; then return 1; fi
 }
 
+# bats test_tags=whole-tree
 @test "descriptive page red twin: a restated effort pin on a descriptive page fails" {
   local entry
   while IFS= read -r entry; do

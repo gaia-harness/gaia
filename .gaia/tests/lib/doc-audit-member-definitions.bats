@@ -22,8 +22,6 @@
 # so a mutant copy proves a case can fail without touching the tree.
 # Assertion style: .claude/rules/bats-assertions.md.
 
-# bats file_tags=whole-tree
-
 setup() {
   REPO_ROOT="$(cd "$BATS_TEST_DIRNAME/../../.." && pwd)"
   AGENTS_DIRECTORY="${DOC_MEMBER_DEFINITIONS_AGENTS:-$REPO_ROOT/.claude/agents}"
@@ -35,6 +33,8 @@ setup() {
 
   MEMBERS=()
   local member_file
+  # gaia-lint-ignore whole-tree-mark-guard: every test that uses the member roster this collects carries the
+  # per-test mark
   for member_file in "$AGENTS_DIRECTORY"/code-audit-*.md; do
     [ -f "$member_file" ] && MEMBERS+=("$member_file")
   done
@@ -62,6 +62,7 @@ section_text() {
 
 # --- the roster every per-member loop walks ---------------------------------
 
+# bats test_tags=whole-tree
 @test "the member glob resolves to at least the four known members, none empty" {
   [ "${#MEMBERS[@]}" -ge 4 ] || { echo "only ${#MEMBERS[@]} member definitions found" >&2; return 1; }
   local member
@@ -72,6 +73,7 @@ section_text() {
 
 # --- UAT-001: members run no gh issue command and carry no disposition pipeline
 
+# bats test_tags=whole-tree
 @test "UAT-001: no member definition names a gh issue command or the file-tech-debt procedure" {
   local member_file hits
   for member_file in "${MEMBERS[@]}"; do
@@ -84,6 +86,7 @@ section_text() {
 
 # --- UAT-009: one shared protocol, pointed at by every member -----------------
 
+# bats test_tags=whole-tree
 @test "UAT-009: no member definition carries a handshake, marker, sidecar or holistic class heading, and each names the protocol" {
   local member_file hits
   for member_file in "${MEMBERS[@]}"; do
@@ -136,6 +139,7 @@ conditional_reread_line() {
   grep -F -- 'DEFINITION=reread' "$1" | grep -F -- 'DEFINITION=unchanged' | grep -wF -- 'only' || true
 }
 
+# bats test_tags=whole-tree
 @test "UAT-011: every member definition and the protocol make the re-read conditional on DEFINITION=reread" {
   local audited_file
   for audited_file in "${MEMBERS[@]}" "$PROTOCOL"; do

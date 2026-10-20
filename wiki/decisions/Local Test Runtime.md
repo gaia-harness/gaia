@@ -4,7 +4,7 @@ status: active
 priority: 3
 date: 2026-09-22
 created: 2026-09-22
-updated: 2026-09-22
+updated: 2026-10-20
 tags: [decision, testing, performance, shell, bats]
 ---
 
@@ -84,9 +84,10 @@ schedules the full corpus differently, and re-deriving this as an
 infrastructure task from the raw wall-clock figure alone is the mistake this
 section exists to prevent.
 
-The runner's branch mode does not reopen this: it runs the suites tagged
-`whole-tree` plus the suites the change selector picks for the branch, never
-the full corpus, so the non-goal stands.
+The runner's branch mode does not reopen this: it runs the tests tagged
+`whole-tree` plus the suites the change selector picks for the branch (in
+full), never the full corpus, so the non-goal stands. The mark syntax lives in
+`.claude/rules/bats-assertions.md`.
 
 One consequence worth carrying forward: the shard-partition suite itself
 forks under `--jobs`, so running it and a full corpus run at the same time

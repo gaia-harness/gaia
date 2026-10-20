@@ -51,8 +51,6 @@
 # excluded, so a GitHub reference in this header would be correct here; there
 # is none because the tree, not an issue, is this suite's subject.
 
-# bats file_tags=whole-tree
-
 setup() {
   ROOT="$(cd "$BATS_TEST_DIRNAME/../../.." && pwd)"
 
@@ -109,6 +107,7 @@ derive_surfaces() {
   # would be tr's, which is always 0, and the exit_status>1 arm that separates "git could
   # not read this repository" from "the marker phrase moved" would go dead.
   exit_status=0
+  # gaia-lint-ignore whole-tree-mark-guard: every test that reaches this search carries the per-test mark
   raw="$(set -o pipefail; git -C "$ROOT" grep -lEI -z -- "$TERMINAL_REGEX" -- \
     ':!.gaia/tests/*' ':!.gaia/local/*' \
     ':!wiki/log.md' ':!wiki/hot.md' ':!CHANGELOG.md' | tr '\0' '\n')" || exit_status=$?
@@ -179,6 +178,7 @@ terminal_segments() {
 
 # --- The roster: who states an ending at all --------------------------------
 
+# bats test_tags=whole-tree
 @test "the set of surfaces stating a terminal action is the roster, in both directions" {
   local derived expected exit_status
   # `|| exit_status=$?` rather than a bare assignment followed by a `$?` read. bats runs

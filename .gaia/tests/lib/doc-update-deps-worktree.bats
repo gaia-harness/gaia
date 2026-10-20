@@ -16,8 +16,6 @@
 #
 # Assertion style: .claude/rules/bats-assertions.md.
 
-# bats file_tags=whole-tree
-
 setup() {
   REPO_ROOT="$(cd "${BATS_TEST_DIRNAME}/../../.." && pwd)"
   SKILL_DIR="${REPO_ROOT}/.claude/skills/update-deps"
@@ -108,10 +106,12 @@ check_creation_condition() {
   must_contain "$WORKTREE" "$CREATION_CONDITION" "the creation subsection is not conditioned on SHOULD_CREATE_WORKTREE=true"
 }
 
+# bats test_tags=whole-tree
 @test "worktree creation is conditioned on the flag" {
   check_creation_condition
 }
 
+# bats test_tags=whole-tree
 @test "the creation-condition check fails with the condition deleted" {
   local copy
   copy="$(scratch_copy "$WORKTREE" "condition.md")"
@@ -142,10 +142,12 @@ check_no_bare_branch_cut() {
   }
 }
 
+# bats test_tags=whole-tree
 @test "no file of the skill cuts a branch with git checkout -b" {
   check_no_bare_branch_cut "$SKILL_DIR"
 }
 
+# bats test_tags=whole-tree
 @test "the bare-branch-cut check fails with a checkout -b in the Branch creation section" {
   local copy_dir="${BATS_TEST_TMPDIR}/skill-copy"
   mkdir -p "${copy_dir}/references"
@@ -239,6 +241,7 @@ check_branch_points() {
     return 1
   }
   local other
+  # gaia-lint-ignore whole-tree-mark-guard: every test that reaches this glob carries the per-test mark
   for other in "$SKILL" "$SKILL_DIR"/references/*.md; do
     [ "$other" = "$WORKTREE" ] && continue
     if grep -qF -- 'EnterWorktree(' "$other"; then
@@ -248,10 +251,12 @@ check_branch_points() {
   done
 }
 
+# bats test_tags=whole-tree
 @test "every branch point names the one creation subsection" {
   check_branch_points
 }
 
+# bats test_tags=whole-tree
 @test "the branch-point check fails when the refresh-only path names no subsection" {
   local copy
   copy="$(scratch_copy "$SKILL" "refresh.md")"
@@ -260,6 +265,7 @@ check_branch_points() {
   [ "$status" -ne 0 ]
 }
 
+# bats test_tags=whole-tree
 @test "the branch-point check fails when the vendored-skill sync names no subsection" {
   is_maintainer_copy "$SKILL" || skip "the scrubbed copy has no vendored-skill sync"
   local copy
@@ -474,10 +480,12 @@ check_mode_one_publish() {
   must_precede "$PUBLISH" 'gh pr list --head <branch-name> --state open' '`gh pr create --draft`' "the open-PR check does not come before gh pr create"
 }
 
+# bats test_tags=whole-tree
 @test "mode 1 publishes as a worktree run and checks for an open PR before creating one" {
   check_mode_one_publish
 }
 
+# bats test_tags=whole-tree
 @test "the mode-1 check fails with mode 1 dropped from the worktree run" {
   local copy
   copy="$(scratch_copy "$PUBLISH" "mode1.md")"
@@ -617,6 +625,7 @@ check_feature_branch_worktree() {
   true
 }
 
+# bats test_tags=whole-tree
 @test "a run on a non-default branch takes the worktree path, and no run pushes without a PR" {
   check_feature_branch_worktree
 }
@@ -647,10 +656,12 @@ check_mode_one_wait() {
   must_precede "$SKILL" "$PROVISION_CALL" "$DISCOVERY_CALL" "mode 1 has no provisioning wait before discovery"
 }
 
+# bats test_tags=whole-tree
 @test "mode 1 waits for provisioning before discovery" {
   check_mode_one_wait
 }
 
+# bats test_tags=whole-tree
 @test "the mode-1 wait check fails with the wait call deleted" {
   local copy
   copy="$(scratch_copy "$SKILL" "wait.md")"

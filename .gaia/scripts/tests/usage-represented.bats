@@ -6,8 +6,6 @@
 # Run under bash 5 (.claude/rules/bats-assertions.md):
 #   .gaia/scripts/bats5.sh .gaia/scripts/tests/usage-represented.bats
 
-# bats file_tags=whole-tree
-
 bats_require_minimum_version 1.5.0
 
 setup() {
@@ -94,6 +92,8 @@ close() {
 traced_scripts() {
   local scratch="$1" file
   mkdir -p "$scratch/spec"
+  # gaia-lint-ignore whole-tree-mark-guard: the tests that reach this helper
+  # carry the per-test whole-tree mark, because they copy the scripts directory.
   for file in "$SCRIPTS"/usage*.sh "$SCRIPTS"/token-*.sh "$SCRIPTS"/token-rates.json "$SCRIPTS"/branch-name-lib.sh \
     "$SCRIPTS"/main-root-lib.sh "$SCRIPTS"/context-checkpoint-lib.sh; do
     [ -f "$file" ] && cp "$file" "$scratch/"
@@ -115,6 +115,7 @@ traced_scripts() {
   printf '\ngaia_usage_branch_map() { : >"$GAIA_TEST_SENTINEL"; exit 99; }\n' >>"$scratch/usage-lib.sh"
 }
 
+# bats test_tags=whole-tree
 @test "represented answers without entering the memo, keys or branch-map paths" {
   local scratch="$TEMPORARY_DIRECTORY/traced"
   traced_scripts "$scratch"
@@ -128,6 +129,7 @@ traced_scripts() {
   [ ! -e "$GAIA_TEST_SENTINEL" ]
 }
 
+# bats test_tags=whole-tree
 @test "the call trace can fail: a represented that reads the keys writes the sentinel" {
   local scratch="$TEMPORARY_DIRECTORY/traced-mutated"
   traced_scripts "$scratch"

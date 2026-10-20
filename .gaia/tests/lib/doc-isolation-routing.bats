@@ -22,8 +22,6 @@
 #
 # Assertion style: .claude/rules/bats-assertions.md.
 #
-# bats file_tags=whole-tree
-
 setup() {
   REPO_ROOT="$(cd "$BATS_TEST_DIRNAME/../../.." && pwd)"
   REFERENCES='.claude/skills/gaia/references'
@@ -191,6 +189,7 @@ scratch_copy() {
   [ "$status" -eq 0 ]
 }
 
+# bats test_tags=whole-tree
 @test "every instruction file that cuts a branch or opens a PR names isolation.md or is exempt" {
   run check_census "$REPO_ROOT"
   printf '%s\n' "$output"
@@ -232,6 +231,7 @@ scratch_copy() {
   printf '%s\n' "$output" | grep -qF -- 'preflight: .claude/commands/gaia-fitness.md lacks'
 }
 
+# bats test_tags=whole-tree
 @test "red twin: a new command that opens a PR without isolation.md fails the census and names it" {
   local copy
   copy="$(scratch_copy)"

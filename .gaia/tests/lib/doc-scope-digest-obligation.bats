@@ -31,8 +31,6 @@
 # excluded, so the SPEC traceability above is correct and expected here,
 # unlike in the shipped prose this suite guards.
 
-# bats file_tags=whole-tree
-
 setup() {
   ROOT="$(cd "$BATS_TEST_DIRNAME/../../.." && pwd)"
 
@@ -42,6 +40,8 @@ setup() {
   # carried the literal at all.
   AGENTS=()
   local agent
+  # gaia-lint-ignore whole-tree-mark-guard: every test that uses the agent roster this collects carries the
+  # per-test mark
   for agent in "$ROOT"/.claude/agents/code-audit-*.md; do
     [ -f "$agent" ] && AGENTS+=("$agent")
   done
@@ -77,6 +77,7 @@ scope_section() {
   }
 }
 
+# bats test_tags=whole-tree
 @test "Group 1: every agent definition sends its member to that section and carries no copy of its own" {
   local agent_file count
   for agent_file in "${AGENTS[@]}"; do

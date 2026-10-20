@@ -6,8 +6,6 @@
 # linked from its entry. Every invariant has a red twin on a scratch copy.
 # Assertion style: .claude/rules/bats-assertions.md.
 
-# bats file_tags=whole-tree
-
 setup_file() {
   REPO_ROOT="$(cd "$BATS_TEST_DIRNAME/../../.." && pwd)"
   CLI_REPORT="$BATS_FILE_TMPDIR/check-report.json"
@@ -101,6 +99,7 @@ scratch_tree() {
   printf '%s\n' "$scratch"
 }
 
+# bats test_tags=whole-tree
 @test "the loaded set is derived and holds both entry playbooks" {
   run loaded_set "$REPO_ROOT"
   [ "$status" -eq 0 ]
@@ -113,6 +112,7 @@ scratch_tree() {
   done
 }
 
+# bats test_tags=whole-tree
 @test "every file in the loaded set is under 500 lines" {
   local set
   set="$(loaded_set "$REPO_ROOT")"
@@ -123,6 +123,7 @@ scratch_tree() {
   [ "$status" -eq 0 ]
 }
 
+# bats test_tags=whole-tree
 @test "the committed CLI raises no authoring finding against the loaded set" {
   [ -s "$CLI_REPORT" ]
   local set
@@ -137,6 +138,7 @@ scratch_tree() {
   [ -z "$hits" ] || { printf '%s\n' "$hits" >&2; return 1; }
 }
 
+# bats test_tags=whole-tree
 @test "every sub-reference is linked from its entry playbook" {
   [ -d "$REPO_ROOT/.claude/skills/gaia/references/cleanse" ]
   run unlinked_references "$REPO_ROOT"

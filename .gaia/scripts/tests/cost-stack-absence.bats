@@ -38,8 +38,6 @@
 #
 # Assertion style: bash-3.2-safe per .claude/rules/bats-assertions.md.
 
-# bats file_tags=whole-tree
-
 setup() {
   REPO_ROOT="$(cd "$BATS_TEST_DIRNAME/../../.." && pwd)"
   REGISTRY="$REPO_ROOT/.gaia/state-registry.json"
@@ -70,15 +68,19 @@ setup() {
 # The one allowed literal retired-ledger name per file, asserted by count so a
 # second hit in either file still fails.
 allowed_hit_count() {
+  # gaia-lint-ignore whole-tree-mark-guard: the operand is one named tracked file
+  # passed by the caller, not the tracked tree, so a change to it selects the suite.
   git -C "$REPO_ROOT" grep -h -o -E 'cost\.jsonl' -- "$1" | wc -l | tr -d ' '
 }
 
+# bats test_tags=whole-tree
 @test "the grep's input set is non-empty and plausibly sized" {
   tracked="$(git -C "$REPO_ROOT" ls-files -z | tr -cd '\0' | wc -c | tr -d ' ')"
   # Floor: half the tracked-file count at authoring time (1927).
   [ "$tracked" -gt 963 ]
 }
 
+# bats test_tags=whole-tree
 @test "no tracked file outside the exclusions names a retired symbol" {
   # The two files that may carry the retired ledger's name are held to the
   # rest of the pattern here and to a pinned count of that name below.
@@ -98,6 +100,7 @@ allowed_hit_count() {
   [ "$(allowed_hit_count '.gaia/state-registry.json')" -eq "$residue_hits" ]
 }
 
+# bats test_tags=whole-tree
 @test "every retired file is absent from the tracked tree" {
   [ "${#RETIRED_FILES[@]}" -gt 0 ]
   tracked="$(git -C "$REPO_ROOT" ls-files -z | tr '\0' '\n')"
