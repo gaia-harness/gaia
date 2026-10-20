@@ -4,7 +4,7 @@ status: active
 package: serena
 role: code-intelligence-mcp
 created: 2026-05-04
-updated: 2026-10-03
+updated: 2026-10-20
 tags: [dependency, mcp, code-search]
 ---
 
@@ -19,7 +19,7 @@ LSP-backed MCP server. Gives Claude live, always-fresh access to symbol definiti
 - Runtime: requires `uv` (Astral Python toolchain runner).
 - Context: `--context claude-code`, which trims Serena to its symbol and memory tools and drops the file read/create, shell, directory-list, and pattern-search tools that Claude Code's own tools already cover.
 - Activation: `--project-from-cwd` auto-activates the project from the working directory, so the language server indexes the repo without a manual `activate_project` call. The context is single-project, so project switching is off.
-- Override: Claude Code loads Serena's system-prompt override so Opus reaches for the symbol tools instead of defaulting to its built-in Read/Grep. The recommended launch is `claude --append-system-prompt="$(serena prompts print-cc-system-prompt-override)"` (the append form, never `--system-prompt`, which would replace Claude Code's base prompt); the always-loaded `.claude/rules/serena-cc-override.md` is the durable fallback when a session starts without the flag.
+- Override: GAIA does not use Serena's system-prompt override. That override makes Serena's MCP editing tools the primary edit path, and GAIA's edit guards match only Claude Code's Edit, Write and MultiEdit tools, so edits made through Serena would bypass them. The read-side nudge is the always-loaded `.claude/rules/serena-cc-override.md`, with `.claude/rules/code-search.md` owning the routing.
 
 The prescribed registration passes `--project-from-cwd` (see Pin above), so the project auto-activates from the session's own working directory rather than through `activate_project`. That resolves each linked worktree to its own tree directly, sidestepping Serena's machine-global registry (`~/.serena/serena_config.yml`), which would otherwise resolve the `project_name` that `.serena/project.yml` carries identically across every linked worktree to whichever checkout first registered it. See [[Worktrees]] for the underlying per-tree identity model.
 

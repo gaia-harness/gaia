@@ -32,14 +32,6 @@ Three external tools need per-machine setup. Probes: React Doctor, Playwright CL
 
   `claude mcp add` exiting non-zero with a "name already exists" error is success. A stale pin on an existing registration needs `claude mcp remove serena -s user`, then the add above.
 
-  Serena's tools only win over Claude's built-in Read, Grep and Edit when Claude Code loads Serena's system-prompt override. Tell the user the recommended way to start sessions in this project:
-
-  ```bash
-  claude --append-system-prompt="$(serena prompts print-cc-system-prompt-override)"
-  ```
-
-  This is optional and adopter-safe: a plain `claude` still works, and `.claude/rules/serena-cc-override.md` is the durable fallback. Use the append form, never `--system-prompt`, which replaces Claude Code's base prompt.
-
   Serena picks one language at first startup and freezes it into `.serena/project.yml`. When the project grows another language, update the `language_servers:` list (`languages:` before Serena 1.7) in that file and restart Serena; `/gaia-serena-sync` automates the same edit on explicit consent.
 
 Record line: `.gaia/cli/gaia setup record install-tools applied`.
