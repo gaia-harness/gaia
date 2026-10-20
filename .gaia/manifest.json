@@ -250,6 +250,8 @@
     ".gaia/scripts/debt-stale-claims.sh": "owned",
     ".gaia/scripts/dev-smoke.sh": "owned",
     ".gaia/scripts/file-tech-debt.sh": "owned",
+    ".gaia/scripts/fitness-blend-record.sh": "owned",
+    ".gaia/scripts/fitness-nudge-lib.sh": "owned",
     ".gaia/scripts/fitness-ownership.sh": "owned",
     ".gaia/scripts/fitness-publish.sh": "owned",
     ".gaia/scripts/gh-artifact-lib.sh": "owned",
@@ -753,7 +755,7 @@
     "wiki/overview.md": "wiki-owned",
     "wiki/README.md": "wiki-owned"
   },
-  "generated": "2026-10-20T13:25:56.149Z",
+  "generated": "2026-10-20T17:42:42.577Z",
   "regions": [
     {
       "endMarker": "<!-- gaia:audit-remit:end -->",
