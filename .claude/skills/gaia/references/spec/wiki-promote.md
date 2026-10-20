@@ -152,7 +152,7 @@ pr_number: NNN
 tags: [promoted, <subdomain>]
 ```
 
-The frontmatter carries no id and no PR URL. Frontmatter cannot hold the marker lines that keep them out of a release bundle, so the id and the URL live only in the marker-wrapped blocks of Step 5b.
+No part of the page carries the id, the source path or the PR URL: the id and the source name a document only this machine has, and a promoted page ships. `pr_number` is the page's provenance; `git log` on the page carries the rest.
 
 ### `wiki/log.md` append
 
@@ -161,11 +161,12 @@ After all pages have been processed (and at least one was written or updated), p
 Line format:
 
 ```
-- <YYYY-MM-DD> PROMOTED: <id> → <comma-separated paths>
+- <YYYY-MM-DD> PROMOTED: <comma-separated paths> (PR #NNN)
 ```
 
 - `<YYYY-MM-DD>`: today.
-- `<comma-separated paths>`: union of `pages_written` and `pages_updated`, in the order they were processed. If the union is empty (everything skipped), do NOT append a `PROMOTED:` line, instead append `WARN: <id> promotion produced no writes; see warnings above.`.
+- `<comma-separated paths>`: union of `pages_written` and `pages_updated`, in the order they were processed. If the union is empty (everything skipped), do NOT append a `PROMOTED:` line, instead append `WARN: promotion for PR #NNN produced no writes; see warnings above.`.
+- `NNN`: the open PR's `pr_number` from Step 3. The line never names the id: the ledger ships, and the id names a document only this machine has.
 
 If `wiki/log.md` does not contain a `## [Unreleased]` section, prepend the section header above the existing first `## ` heading.
 
@@ -192,33 +193,7 @@ Render the body in the following sections, in order, immediately after the closi
 
      `<sibling-slug>` is the sibling's filename without `.md` (its Step 4 slug, type suffix included) and `<sibling-page-title>` is its H1, shown as the alias. Sort sibling entries alphabetically by slug. Link by slug, never by title: siblings share one H1, so a title link cannot tell them apart, and a title containing `/` reads as a path and dangles.
 
-6. **References**, emit an H2 `## References` followed by a bullet list with the source backlink, the PR URL, and the promotion timestamp:
-
-   ```markdown
-   <maintainer-only start marker>
-   ## References
-
-   - Source: [<id>](<relative-path>) (local artifact, gitignored, link does not resolve from GitHub web view; removed once the folder reaps, the PR link and the frontmatter `pr_number` are the durable provenance)
-   - Implementing PR: [PR #NNN](<pr_url>)
-   - Promoted at: <ISO 8601 UTC>
-   <maintainer-only end marker>
-   ```
-
-   The block names a working-document id and a pull request URL, which point at records no other clone has. The two marker lines apply only in GAIA's own source repository, where they keep the block out of the release bundle while the frontmatter `pr_number` keeps the lineage; anywhere else, omit both lines.
-
-   <!-- gaia:maintainer-only:start -->
-   In GAIA's own source repository, write each marker line exactly as the HTML comment on the line above this paragraph (the start marker) and the one on the line below it (the end marker). This page cannot spell them inside the template: the release scrub strips the lines between a literal pair from every shipped `.claude/` page, and a literal marker that survived the strip fails the distribution check.
-   <!-- gaia:maintainer-only:end -->
-
-   Substitutions:
-   - `<id>`, the `SPEC-NNN` or `PLAN-NNN` id from Step 1.
-   - `<relative-path>`, the resolved source's repo-relative path with a `../../` prefix (promoted wiki pages live at `wiki/<subdomain>/<page>.md`, two segments deep from the repo root): `../../.notebook/specs/SPEC-NNN/SUMMARY.md` or `../../.notebook/plans/PLAN-NNN/SUMMARY.md`.
-
-
-   - `NNN` and `<pr_url>`, the open PR's `pr_number` and `pr_url` from Step 3.
-   - `<ISO 8601 UTC>`, same value as `promoted_at` in the page frontmatter.
-
-   The "(local artifact, gitignored, ...)" note appears on this first-occurrence line only. If the source backlink is referenced again later in the body, omit the parenthetical.
+The body ends there: no references or provenance section, for the reason the frontmatter section gives.
 
 ### `wiki/index.md` update
 
@@ -261,7 +236,7 @@ This command does NOT commit or push; the orchestrator does. Return a structured
   "pages_written": ["wiki/<subdomain>/<slug>.md", ...],
   "pages_updated": [...],
   "pages_skipped": [...],
-  "log_line": "<YYYY-MM-DD> PROMOTED: <id> → <comma-separated paths>"
+  "log_line": "<YYYY-MM-DD> PROMOTED: <comma-separated paths> (PR #NNN)"
 }
 ```
 

@@ -182,8 +182,8 @@ uats_block=$(printf '%s' "$frontmatter_block" | awk '
 
 if [ -n "$uats_block" ]; then
   # Count list entries (lines starting with "  - ") and uat_id occurrences.
-  # uat_id can appear either inline on the dash line ("  - uat_id: UAT-001")
-  # or on a continuation line ("    uat_id: UAT-001"). Match both.
+  # uat_id can appear either inline on the dash line ("  - uat_id: UAT-<n>")
+  # or on a continuation line ("    uat_id: UAT-<n>"). Match both.
   entry_count=$(printf '%s\n' "$uats_block" | grep -cE '^[[:space:]]*-[[:space:]]' || true)
   uat_id_count=$(printf '%s\n' "$uats_block" | grep -cE '^[[:space:]]*(-[[:space:]]+)?uat_id:[[:space:]]+UAT-[0-9]+' || true)
   if [ "$entry_count" -gt 0 ] && [ "$uat_id_count" -lt "$entry_count" ]; then

@@ -85,6 +85,8 @@ Commit through the Quality Gate (`.claude/rules/quality-gate.md`). Push the bran
 
 When the work closes an issue, the PR body carries `Closes #<n>`, and no commit message on the branch carries a closing keyword against it. A squash merge concatenates the branch's commit bodies into the merge commit, and GitHub reads closing keywords from that message, so a keyword in a commit closes the issue whatever the PR body says. The PR body is the sole carrier.
 
+The PR title, the PR body and every commit message describe the change in words, never by a SPEC, UAT or plan id or a path under `.notebook/` or `.gaia/local/`: those name documents only this machine has (`.claude/rules/working-doc-ids.md`). The `commit-msg` hook refuses a message that cites one.
+
 In worktree mode, every command runs from inside the worktree.
 
 ## 6. Audit

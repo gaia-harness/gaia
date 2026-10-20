@@ -63,7 +63,7 @@ jobs:
       # `run-quality-gate.sh` on the apply-fix path.
 
       # ----------------------------------------------------------------
-      # UAT-006: idempotency early-exit. If `gaia-triaged` is already on
+      # Idempotency early-exit. If `gaia-triaged` is already on
       # the issue, run `handle-already-triaged.sh` and skip the rest. The
       # always-run final step (gaia-triaged-fallback) detects this via
       # `already_triaged == 'true'` and skips its own application too.
@@ -82,7 +82,7 @@ jobs:
           fi
 
       # ----------------------------------------------------------------
-      # UAT-013: deterministic body parser. If the body is malformed, run
+      # Deterministic body parser. If the body is malformed, run
       # `handle-malformed-body.sh` (labels needs-human, names the missing
       # / malformed sections, no LLM fallback) and end the meaningful
       # work. The final fallback step still applies `gaia-triaged`.
@@ -107,7 +107,7 @@ jobs:
           parsed_file="${RUNNER_TEMP}/forensics/parsed.json"
           "$FORENSICS_DIR/parse-issue-body.sh" "${RUNNER_TEMP}/forensics/issue-body.md" > "$parsed_file"
 
-          # SPEC-003 UAT-006: parse-issue-body.sh emits an internal-error
+          # parse-issue-body.sh emits an internal-error
           # JSON envelope when one of its awk pipelines fails. Distinct
           # from valid:false; route to needs-human with reason-code
           # `internal-error` rather than letting the workflow fall
@@ -137,7 +137,7 @@ jobs:
             "$PARSED_FILE"
 
       # ----------------------------------------------------------------
-      # UAT-009 + UAT-010: classifier prompt. The LLM is invoked at
+      # Classifier prompt. The LLM is invoked at
       # exactly this step (judgment) and one more (fix application). All
       # other extraction is deterministic.
       #
@@ -163,7 +163,7 @@ jobs:
 
           # Defense-in-depth: mask anything that looks like a leftover
           # secret in the parsed body. Phase 1 should have redacted these
-          # already (UAT-015 requires verbatim passthrough), but the
+          # already (the capture passes through verbatim), but the
           # workflow never trusts upstream. `::add-mask::` is a no-op for
           # the redaction tokens themselves and only masks any literal
           # secret-shaped bytes the parser might have surfaced.
@@ -180,7 +180,7 @@ jobs:
           # The allowlist / denylist are markdown literals (backticks
           # inside strings); shellcheck flags single-quoted strings that
           # LOOK like command substitution. They're not, these are the
-          # canonical SPEC-002 path lists rendered into the classifier
+          # canonical scope path lists rendered into the classifier
           # prompt verbatim. Disable SC2016 for this block.
           # shellcheck disable=SC2016
           allowlist='- `.gaia/cli/`
@@ -222,7 +222,7 @@ jobs:
           # forge or close a marker.
           SENTINEL="UNTRUSTED_$(openssl rand -hex 12)"
 
-          # Render via the standalone helper (SPEC-003 UAT-004). Bash
+          # Render via the standalone helper. Bash
           # parameter-expansion-based substitution sidesteps both the
           # multi-line `awk -v` rejection and the `gsub` `&`-replacement
           # corruption that the previous inline awk shipped with.
@@ -299,7 +299,7 @@ jobs:
           parsed="${RUNNER_TEMP}/forensics/verdict.json"
           "$FORENSICS_DIR/parse-verdict.sh" "$verdict_text" > "$parsed"
 
-          # SPEC-003 UAT-006: parse-verdict.sh emits an internal-error
+          # parse-verdict.sh emits an internal-error
           # JSON envelope when one of its awk pipelines fails. Route to
           # needs-human with reason-code `internal-error` before the
           # ambiguous-verdict dispatch (the two are deliberately
@@ -329,7 +329,7 @@ jobs:
           } >> "$GITHUB_OUTPUT"
 
       # ----------------------------------------------------------------
-      # UAT-003 case (b): ambiguous verdict → needs-human, reason-code
+      # Ambiguous verdict → needs-human, reason-code
       # `ambiguous-verdict`.
       # ----------------------------------------------------------------
       - name: Handle ambiguous verdict
@@ -347,7 +347,7 @@ jobs:
             "ambiguous-verdict"
 
       # ----------------------------------------------------------------
-      # UAT-002: non-issue → close + comment + label.
+      # Non-issue → close + comment + label.
       # ----------------------------------------------------------------
       - name: Handle non-issue
         if: |
@@ -363,7 +363,7 @@ jobs:
             "$REASONING_FILE"
 
       # ----------------------------------------------------------------
-      # UAT-003 case (a): needs-human verdict from the classifier.
+      # Needs-human verdict from the classifier.
       # ----------------------------------------------------------------
       - name: Handle needs-human (classifier verdict)
         if: |
@@ -380,7 +380,7 @@ jobs:
             "out-of-scope"
 
       # ----------------------------------------------------------------
-      # auto-fixable path. UAT-007 / UAT-014: scope check is the FIRST
+      # auto-fixable path. The scope check is the FIRST
       # gate; cross-boundary attempts fall through to needs-human before
       # any branch is created.
       # ----------------------------------------------------------------
@@ -545,8 +545,8 @@ jobs:
           prompt: ${{ steps.render-apply.outputs.body }}
           # File-edit tools only. NO Bash, NO git, NO push tools, NO web.
           # Post-step verification asserts diffs touch only `proposed_paths`.
-          # max-turns bumped to 60 after Phase 4a UAT-004 surfaced 30 was
-          # too tight on a moderate-complexity fixture; the fix-abort and
+          # max-turns is 60 because 30 proved too tight on a
+          # moderate-complexity fixture; the fix-abort and
           # quality-gate backstops contain runaway behavior.
           claude_args: |
             --max-turns 60
@@ -616,7 +616,7 @@ jobs:
           fi
 
           # Re-run check-scope on the actual touched paths. This is the
-          # post-step UAT-007 / UAT-014 backstop: even if the model lied
+          # post-step scope backstop: even if the model lied
           # about its proposed paths, the diff has to clear scope.
           mapfile -d '' -t touched < "$touched_file"
           touched_scope="${RUNNER_TEMP}/forensics/touched-scope.json"
@@ -685,7 +685,7 @@ jobs:
           # pushed, but resetting keeps the runner's working tree clean
           # in case any always-run step inspects it.
           git reset --hard HEAD
-          # UAT-010: `diff-not-in-proposed` is a deviation (the model
+          # `diff-not-in-proposed` is a deviation (the model
           # touched in-allowlist paths it did not declare upfront), not a
           # scope violation. Other abort reasons remain `out-of-scope`.
           if [ "$ABORT_REASON" = "diff-not-in-proposed" ]; then
@@ -699,7 +699,7 @@ jobs:
             "$reason_code"
 
       # ----------------------------------------------------------------
-      # UAT-005: Quality Gate. Branch is local-only; we push only when
+      # Quality Gate. Branch is local-only; we push only when
       # the gate passes. `run-quality-gate.sh` is owned by the parallel
       # task-quality-gate-runner sub-agent. CLI: `<output-summary-file>`.
       # ----------------------------------------------------------------
@@ -780,7 +780,7 @@ jobs:
           REASONING_FILE: ${{ steps.verdict.outputs.reasoning_file }}
         run: |
           set -eu
-          # UAT-005: branch is never pushed. We're on a local-only branch;
+          # The branch is never pushed. We're on a local-only branch;
           # nothing to clean up on origin. Compose the comment, demote.
           reason_file="${RUNNER_TEMP}/forensics/gate-failure-reason.md"
           # shellcheck disable=SC2016 # jq filters are intentionally single-quoted
@@ -806,9 +806,9 @@ jobs:
             "gate-failure"
 
       # ----------------------------------------------------------------
-      # UAT-004: gate passed → push branch and open draft PR. The push
+      # Gate passed → push branch and open draft PR. The push
       # step is gated on quality-gate succeeding (step's `outcome` is
-      # `success`); UAT-005 is preserved by construction.
+      # `success`), so a failing gate never pushes, by construction.
       # ----------------------------------------------------------------
       - name: Push fix branch
         if: |
@@ -838,7 +838,7 @@ jobs:
           REASONING_FILE: ${{ steps.verdict.outputs.reasoning_file }}
         run: |
           set -eu
-          # UAT-015: `## Capture` is passed through verbatim. No
+          # `## Capture` is passed through verbatim. No
           # re-redaction, no de-redaction, no normalization. The parsed
           # JSON's `.sections.capture` field is the byte-for-byte content
           # the body parser pulled from the issue (modulo the at-most-one
@@ -881,7 +881,7 @@ jobs:
             "$PR_BODY_FILE"
 
       # ----------------------------------------------------------------
-      # UAT-012 fail-forward: if the workflow did meaningful work but
+      # Fail-forward: if the workflow did meaningful work but
       # bombed before any handler attached `gaia-triaged`, this final
       # always-run step ensures the idempotency key sticks. The early-
       # exit path (step 3) already applied the label via its handler;
