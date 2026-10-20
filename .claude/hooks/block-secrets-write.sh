@@ -58,7 +58,7 @@ file_path=$(jq -r '.tool_input.file_path // empty' <<<"$payload")
 if [[ -n "$file_path" ]]; then
   dotenv_base=$(basename -- "$file_path")
   if [[ "$dotenv_base" != ".env.example" && ( "$dotenv_base" == ".env" || "$dotenv_base" == .env.* ) ]]; then
-    jq -n --arg reason "BLOCKED: writes to '$file_path' are forbidden. .env files must remain gitignored and edited manually by the developer." '{
+    jq -n --arg reason "BLOCKED: writes to '$file_path' are forbidden. .env files must remain gitignored and edited manually by the developer. They hold local secrets this session is kept from reading, so a write here would overwrite values it cannot see." '{
       hookSpecificOutput: {
         hookEventName: "PreToolUse",
         permissionDecision: "deny",

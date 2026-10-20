@@ -410,6 +410,43 @@ t'
   assert_denied_because 'BLOCKED: rm with --no-preserve-root is forbidden.'
 }
 
+# Every gate explains itself: each arm's denial says what the removal would
+# destroy, not only that it is forbidden.
+@test "the --no-preserve-root denial states its reason" {
+  run_hook_bash 'rm --no-preserve-root -rf /'
+  assert_denied_because "It switches off rm's own refusal to remove the filesystem root."
+}
+
+@test "the absolute-path denial states its reason" {
+  run_hook_bash 'rm -rf /etc'
+  assert_denied_because 'An absolute path can reach anywhere on this machine, outside the repository this session works in.'
+}
+
+@test "the absolute-path traversal denial states its reason" {
+  run_hook_bash 'rm -rf /tmp/../etc'
+  assert_denied_because "Its '..' segment makes it resolve somewhere its spelling does not name."
+}
+
+@test "the \$HOME denial states its reason" {
+  run_hook_bash 'rm -rf ~'
+  assert_denied_because 'The home directory holds far more than this repository, and git history cannot restore what it holds outside it. Name the target by a repository-relative path instead.'
+}
+
+@test "the cwd denial states its reason" {
+  run_hook_bash 'rm -rf .'
+  assert_denied_because 'It asks to wipe the whole working directory, .git and .claude included.'
+}
+
+@test "the unscoped-glob denial states its reason" {
+  run_hook_bash 'rm -rf *'
+  assert_denied_because 'It removes every file and folder in the working directory that is not hidden.'
+}
+
+@test "the .git denial states its reason" {
+  run_hook_bash 'rm -rf .git'
+  assert_denied_because "It holds the repository's history and refs, and a commit not yet pushed exists nowhere else."
+}
+
 @test "a chained dangerous segment denies via the target's own arm" {
   # Proves the second segment is what fired, not an accidental match on the first.
   run_hook_bash 'rm -rf dist && rm -rf .git'

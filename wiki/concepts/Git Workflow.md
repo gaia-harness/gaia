@@ -2,7 +2,7 @@
 type: concept
 status: active
 created: 2026-04-21
-updated: 2026-10-14
+updated: 2026-10-20
 tags: [concept, git, workflow]
 ---
 
@@ -14,7 +14,7 @@ The guard is **repo-scoped** via `.claude/hooks/lib/repo-scope.sh`: it governs t
 
 ## 1. Never commit directly to `main` or `master`
 
-Always work on a feature branch. If HEAD is on `main`/`master`, create one first:
+Always work on a feature branch. Work reaches `main`/`master` only through a pull request, where the audit gate reviews it before it merges ([[PR Merge Workflow]]). If HEAD is on `main`/`master`, create one first:
 
 ```bash
 git switch -c <type>/<issue>-<slug>
@@ -26,9 +26,11 @@ Branches GAIA's own commands create, and branches for any committed work a sessi
 
 ## 2. Never force-push to `main` or `master`
 
-No `--force`, `--force-with-lease`, or `-f` to `main`/`master`; upstream history is shared. Fix conflicts with a merge or rebase on the feature branch, then open a PR.
+No `--force`, `--force-with-lease`, or `-f` to `main`/`master`; upstream history is shared, so rewriting it pulls commits out from under every clone and branch built on it. Fix conflicts with a merge or rebase on the feature branch, then open a PR.
 
 ## 3. Never push directly to `main` or `master`
+
+A push from `main`/`master` lands local commits on the shared branch without the pull request and audit every change passes through.
 
 The hook denies several independent conditions on `git push`, each with its own message and its own repair: a plain push while HEAD sits on `main`/`master` (switch to a feature branch and open a PR); a push whose refspec names `main`, `master`, or `HEAD` as the source (bare, or before a colon) from any branch (name the branch being pushed explicitly and open a PR instead); and a push the hook cannot place, because the command names a directory it cannot read and one of the checkouts that directory could name is on `main`/`master` (spell the directory literally, or create a feature branch).
 
