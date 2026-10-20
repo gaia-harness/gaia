@@ -10,7 +10,7 @@
 #
 # Transcripts are written line by line through helpers/usage-transcript.sh. The
 # "mixed" scenario is also pinned against fixtures/usage/activity/mixed.base.jsonl
-# and mixed.counts, the rows the flusher wrote before `act` existed (cursor ts,
+# and mixed.counts.txt, the rows the flusher wrote before `act` existed (cursor ts,
 # size, offset and path normalized), so the existing row shapes stay byte-identical.
 
 # shellcheck disable=SC2016  # jq filters and sed expressions; no shell expansion
@@ -123,8 +123,8 @@ frozen_strings_ok() {
   build_mixed
   run flush_session
   [ "$status" -eq 0 ]
-  [ "$(jq -r -s 'group_by(.kind)[] | "\(.[0].kind) \(length)"' "$TEL/usage.jsonl")" = "$(cat "$FIXTURES_DIRECTORY/mixed.counts")" ]
-  [ "$(cat "$FIXTURES_DIRECTORY/mixed.counts")" = "$(printf 'binding 1\ncursor 2\nsegment 3')" ]
+  [ "$(jq -r -s 'group_by(.kind)[] | "\(.[0].kind) \(length)"' "$TEL/usage.jsonl")" = "$(cat "$FIXTURES_DIRECTORY/mixed.counts.txt")" ]
+  [ "$(cat "$FIXTURES_DIRECTORY/mixed.counts.txt")" = "$(printf 'binding 1\ncursor 2\nsegment 3')" ]
   [ "$(first_act)" = "$(expected_mixed_act)" ]
   # the away_summary stamp (14:00) is no chunk end: the chunk stops at the last work entry
   [ "$(first_act | jq -c '.c | map(.[0] + .[1]) | max')" = "33" ]
