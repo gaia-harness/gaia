@@ -699,6 +699,19 @@ write_review_ledger() {
   [ "$output" = '{"total":0,"members":{},"grants":0,"light":{"code-audit-frontend":1},"quick":{"code-audit-frontend":1}}' ]
 }
 
+@test "record-values: a member with a full round is dropped from quick, a quick-only member stays" {
+  cli_copy
+  alf_seed_state '{}'
+  alf_state_edit '.history.knobs = {checkpoint_round: 5, grant_rounds: 3}
+    | .history.rounds = [{round: 1, tree: ("a" * 40), commit: ("b" * 40), raw_branch_slug: "feat-loop",
+        dispatched_at: "2026-01-01T00:00:00Z", members: ["code-audit-frontend"], closing: false, snapshot: null}]'
+  write_review_ledger merge-base clear code-audit-frontend code-audit-maintainer-shell
+  run "$CLI/audit-loop-eval.sh" record-values --root "$ALF_ROOT"
+  [ "$status" -eq 0 ]
+  [ "$(jq -c '.quick' <<<"$output")" = '{"code-audit-maintainer-shell":1}' ]
+  [ "$(jq -c '.members' <<<"$output")" = '{"code-audit-frontend":1}' ]
+}
+
 @test "record-values: a merge-base escalate and a merge-base failed run count in neither quick nor light" {
   cli_copy
   write_review_ledger merge-base escalate code-audit-frontend

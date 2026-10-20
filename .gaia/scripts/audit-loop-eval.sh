@@ -30,7 +30,9 @@
 # record-values adds optional `light` (post-clearance light reviews) and `quick`
 # (merge-base clears, so a quick clear never also counts as light) objects of
 # per-member counts, read from the branch's light-review ledger; each is left
-# out when it has no positive count, and `total` never includes either.
+# out when it has no positive count, and `total` never includes either. `quick`
+# also omits any member that has a full round in `members`, since that member
+# was not cleared by a quick review alone.
 # Exit 0 ok, 2 usage or no recorded round (unit-window: no unit;
 # pinned-question: no pending pinned question), 4 detached HEAD, 5 corrupt
 # state, an unreadable vetoes.json, or a branch that is not keyable, 6 jq or
@@ -577,7 +579,8 @@ _gaia_loop_usage() {
 
 # _gaia_loop_with_review_counts <root> <record-values-json>: adds the `light`
 # (post-clearance reviews) and `quick` (merge-base clears) per-member counts
-# from the branch's light-review ledger. They never enter `total`, and each key
+# from the branch's light-review ledger; `quick` drops members that have a full
+# round. They never enter `total`, and each key
 # is left out when the ledger is absent, unreadable or has no positive count.
 _gaia_loop_with_review_counts() {
   local root="$1" values_json="$2" light_ledger review_counts=''
@@ -589,7 +592,10 @@ _gaia_loop_with_review_counts() {
       | with_entries(select(.value != {}))' "$light_ledger" 2>/dev/null)" || review_counts=''
   fi
   if [ -n "$review_counts" ] && [ "$review_counts" != '{}' ]; then
-    printf '%s' "$values_json" | jq -c --argjson counts "$review_counts" '. + $counts'
+    printf '%s' "$values_json" | jq -c --argjson counts "$review_counts" '. as $values
+      | ($counts | if has("quick") then .quick |= with_entries(select(.key as $member | $values.members | has($member) | not)) else . end
+         | with_entries(select(.value != {}))) as $kept
+      | $values + $kept'
   else
     printf '%s\n' "$values_json"
   fi

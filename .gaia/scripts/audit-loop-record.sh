@@ -27,7 +27,8 @@
 # lists each member's light reviews (a review that clears or escalates and
 # never counts as a round) and is left out whole when there are none. The
 # `quick review, no full member:` clause names each member cleared by a quick
-# review alone and is left out whole when there are none.
+# review alone, never a member that also has a full round, and is left out whole
+# when there are none.
 #
 # Values: `--values-json` takes {"total":n,"members":{"code-audit-x":n},
 # "grants":g} (the shape `audit-loop-eval.sh record-values` prints; `-` reads
