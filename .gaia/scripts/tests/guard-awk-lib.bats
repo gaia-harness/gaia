@@ -18,8 +18,6 @@
 # library into a tmpdir and require a NAMED test here to red against it. Nothing
 # outside this suite sets either.
 
-# bats file_tags=whole-tree
-
 setup() {
   THIS_DIRECTORY="$( cd "$( dirname "$BATS_TEST_FILENAME" )" && pwd )"
   REPO_ROOT="$( cd "$THIS_DIRECTORY/../../.." && pwd )"
@@ -1065,6 +1063,8 @@ library_consumers() {
   # a non-ASCII byte, and the quoted spelling names no file the caller can open.
   while IFS= read -r -d '' consumer_file; do
     printf '%s\n' "$REPO_ROOT/$consumer_file"
+  # gaia-lint-ignore whole-tree-mark-guard: the only test that reaches this helper,
+  # the roster-equality test, carries the per-test whole-tree mark.
   done < <(git -C "$REPO_ROOT" grep -l -z -- '_gaia_guard_library_directory/guard-awk-lib.sh' \
              -- ':(exclude)*.bats')
 }
@@ -1099,6 +1099,7 @@ assert_consumer_count() {
 # added to it is invisible to any check the roster drives. This is the one
 # assertion that can see it, and it reds both ways -- a roster entry with no awk
 # program, and an awk-carrying consumer with no roster entry.
+# bats test_tags=whole-tree
 @test "the participating roster is exactly the library consumers that concatenate GAIA_GUARD_AWK" {
   local consumer_file derived
   assert_consumer_count || return 1
@@ -1369,6 +1370,7 @@ mutate_guard_copy() {
 
 # --- no phantom coverage ----------------------------------------------------
 
+# bats test_tags=whole-tree
 @test "the real scan surface holds a workflow and a composite action" {
   surface_has_workflow_and_action "$REPO_ROOT" "$LIBRARY"
 }

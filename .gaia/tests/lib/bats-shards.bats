@@ -26,8 +26,6 @@
 # Maintainer-only. `.gaia/tests` is wholesale release-excluded via
 # `.gaia/release-exclude`, so this never reaches an adopter.
 
-# bats file_tags=whole-tree
-
 setup() {
   SCRIPT="$BATS_TEST_DIRNAME/../bats-shards.sh"
   REPO_ROOT="$(cd "$BATS_TEST_DIRNAME/../../.." && pwd)"
@@ -56,6 +54,7 @@ teardown() {
 # itself.
 discover_independent() {
   local directory="$1" suite_file
+  # gaia-lint-ignore whole-tree-mark-guard: every test that reaches this discovery carries the per-test mark
   for suite_file in "$REPO_ROOT/$directory"/*.bats; do
     if [ -e "$suite_file" ]; then
       printf '%s\n' "${suite_file#"$REPO_ROOT"/}"
@@ -215,27 +214,32 @@ write_trivial_bats() {
   } >"$path"
 }
 
+# bats test_tags=whole-tree
 @test "S1: shards partition equals the independently discovered file set" {
   run check_partition "$SCRIPT"
   [ "$status" -eq 0 ]
 }
 
+# bats test_tags=whole-tree
 @test "S2: no duplicate path across the shard partition" {
   run check_no_duplicates "$SCRIPT"
   [ "$status" -eq 0 ]
 }
 
+# bats test_tags=whole-tree
 @test "S3: no shard resolves to zero files" {
   run check_no_empty_shard "$SCRIPT"
   [ "$status" -eq 0 ]
 }
 
+# bats test_tags=whole-tree
 @test "S5: hooks-1 is exactly the pinned singleton" {
   run bash "$SCRIPT" files hooks-1
   [ "$status" -eq 0 ]
   [ "$output" = ".gaia/tests/hooks/local-janitor.bats" ]
 }
 
+# bats test_tags=whole-tree
 @test "S6: files output is deterministic across repeated calls" {
   local first second
   first="$(bash "$SCRIPT" files hooks-2)"
@@ -349,6 +353,7 @@ within_load_bound() {
 # the shard set. Checked as a partition rather than against a transcript of
 # today's groups, so a fifth hooks bucket or a second pinned file is covered by
 # construction rather than by a fixture that would have to be re-typed.
+# bats test_tags=whole-tree
 @test "S14: group reports an exchange group, and the groups partition the shard set" {
   local ids id member group_ids member_group_ids union sorted_ids
   ids="$(bash "$SCRIPT" shards)"
@@ -419,6 +424,7 @@ doctor_groupless_shard() {
   printf '%s\n' "$destination"
 }
 
+# bats test_tags=whole-tree
 @test "A5: a known shard with no group case fails closed rather than reporting an empty group" {
   local copy
   copy="$(doctor_groupless_shard)"
@@ -435,6 +441,7 @@ doctor_groupless_shard() {
   grep -qF -- 'lib' <<<"$output"
 }
 
+# bats test_tags=whole-tree
 @test "S9: each weighted group's shards respect the greedy load bound" {
   local total largest pinned
   # The held-out set is asked for rather than spelled out. Written as a literal
@@ -630,6 +637,7 @@ seed_anchor_tree() {
 # Byte weight cannot see what these suites cost, so which bucket each lands in
 # is otherwise decided by the packing of every other file in the group, and a
 # tree change anywhere in it can put two together and red the leg on the cap.
+# bats test_tags=whole-tree
 @test "S16: no two declared cost outliers share a scripts shard" {
   local base shard seen declaration declared_words
   seen=""
@@ -684,6 +692,7 @@ seed_anchor_tree() {
 # the silent failure the whole check exists for: anchoring stops applying, every
 # shard still exits 0 with a whole partition, and nothing says the guarantee is
 # gone.
+# bats test_tags=whole-tree
 @test "A7: an anchor naming a missing file is a fail-closed error" {
   local copy
   copy="$(doctor_outliers a7-stale.sh 'no-such-suite.bats')"
@@ -742,6 +751,7 @@ hooks_shard_of() {
 # S16 for the hooks group: its cost outliers are the suites whose runtime lives
 # in what they run, so their byte weight says nothing about which leg can hold
 # two of them.
+# bats test_tags=whole-tree
 @test "S16: no two declared cost outliers share a hooks shard" {
   local base shard seen
   seen=""
@@ -757,6 +767,7 @@ hooks_shard_of() {
 
 # A7 for the hooks group: a stale name fails closed on the default seam, and a
 # seam override is not read as a stale list.
+# bats test_tags=whole-tree
 @test "A7: a hooks anchor naming a missing file is a fail-closed error" {
   local copy directory
   copy="$(doctor_outliers a7-hooks-stale.sh 'no-such-hook-suite.bats' HOOKS_COST_OUTLIERS)"
@@ -1020,6 +1031,7 @@ covering_row() {
 # missing from the workflow's `code:` filter still skips on the change that
 # breaks it; workflow-filter-coverage.bats (.gaia/scripts/tests/) is the guard
 # for that half.
+# bats test_tags=whole-tree
 @test "S13: every tracked .bats file is run by a shard or a named non-shard runner" {
   local tracked covered orphans orphan prefix file needle label row exit_status
   tracked="$(cd "$REPO_ROOT" && git -c core.quotepath=false ls-files -z '*.bats' | tr '\0' '\n' | LC_ALL=C sort)"
@@ -1066,6 +1078,7 @@ EOF
   [ "$exit_status" -eq 0 ]
 }
 
+# bats test_tags=whole-tree
 @test "S13 adversarial: an orphan suite outside the seam is caught" {
   # The real failure shape: a .bats file tracked by git, in no seam directory
   # and on no allowlist prefix. Written into a directory the seam does not
@@ -1105,6 +1118,7 @@ EOF
   }
 }
 
+# bats test_tags=whole-tree
 @test "S13 adversarial: a file-path allowlist row does not excuse a suite beside it" {
   # The waiver's own blind spot. `.gaia/tests/concurrency/concurrency.bats` is
   # allowlisted because meter-gate.sh pins that one file; matched as a prefix,
@@ -1145,6 +1159,7 @@ EOF
   covering_row '.github/forensics/tests/any-suite.bats' >/dev/null || return 1
 }
 
+# bats test_tags=whole-tree
 @test "A1: dropped file reds the partition check" {
   local copy
   copy="$(doctor_dropped_file)"
@@ -1152,6 +1167,7 @@ EOF
   [ "$status" -eq 1 ]
 }
 
+# bats test_tags=whole-tree
 @test "A2: duplicated file reds the no-duplicates check" {
   local copy
   copy="$(doctor_duplicated_file)"

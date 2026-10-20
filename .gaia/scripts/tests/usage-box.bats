@@ -11,8 +11,6 @@
 # Expected lines carry literal dollar signs, so they are single-quoted on purpose.
 # shellcheck disable=SC2016
 
-# bats file_tags=whole-tree
-
 bats_require_minimum_version 1.5.0
 
 setup() {
@@ -335,6 +333,7 @@ one_space_margins() {
   [ "${lines[1]}" = 'Note: Includes a model GAIA has no price for, so the cost is a minimum.' ]
 }
 
+# bats test_tags=whole-tree
 @test "the box waits for a still-running flusher and, when it outlasts the cap, notes that the figures may be low" {
   local scratch="$TEMPORARY_DIRECTORY/scripts" file box
   mkdir -p "$scratch/spec" "$scratch/notebook"
@@ -365,6 +364,8 @@ box_join_scenario() {
   shift
   scratch="$TEMPORARY_DIRECTORY/scripts"
   mkdir -p "$scratch/spec" "$scratch/notebook" "$TEMPORARY_DIRECTORY/other"
+  # gaia-lint-ignore whole-tree-mark-guard: the only tests that reach this helper
+  # carry the per-test whole-tree mark, because they copy the scripts directory.
   for file in "$SCRIPTS"/usage*.sh "$SCRIPTS"/token-*.sh "$SCRIPTS"/token-rates.json "$SCRIPTS"/branch-name-lib.sh \
     "$SCRIPTS"/main-root-lib.sh "$SCRIPTS"/context-checkpoint-lib.sh; do
     [ -f "$file" ] && cp "$file" "$scratch/"
@@ -381,12 +382,14 @@ box_join_scenario() {
   kill "$other_pid" 2>/dev/null || true
 }
 
+# bats test_tags=whole-tree
 @test "a running Stop-hook flusher, which holds back sidecars, is not joined: the box starts its own" {
   local scratch box
   box_join_scenario box-stop-sess --transcript x --finished-main
   [ -f "$scratch/own-started" ]
 }
 
+# bats test_tags=whole-tree
 @test "a running flusher with --finished-main --all-sidecars-finished is joined: the box starts none and notes it outlasted the cap" {
   local scratch box
   box_join_scenario box-join-sess --finished-main --all-sidecars-finished --main-root x

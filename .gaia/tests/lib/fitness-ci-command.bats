@@ -13,8 +13,6 @@
 #
 # Assertion style: .claude/rules/bats-assertions.md.
 #
-# bats file_tags=whole-tree
-
 setup_file() {
   local repo_root tree
   repo_root="$(cd "$BATS_TEST_DIRNAME/../../.." && pwd)"
@@ -77,11 +75,13 @@ commit_tree() {
   done
 }
 
+# bats test_tags=whole-tree
 @test "the unmodified tree passes" {
   run run_ci_lint "$WORKFLOW" "$TREE" "$BASE_CONFIG"
   [ "$status" -eq 0 ]
 }
 
+# bats test_tags=whole-tree
 @test "a skill description past 1024 characters fails and names the file and rule" {
   skill=".claude/skills/tdd/SKILL.md"
   long="$(printf 'x%.0s' $(seq 1 1100))"
@@ -94,6 +94,7 @@ commit_tree() {
   grep -qF -- "frontmatter.skill.description.max-length" <<<"$output" || return 1
 }
 
+# bats test_tags=whole-tree
 @test "a skill name that gains the reserved word claude fails and names the rule" {
   skill=".claude/skills/tdd/SKILL.md"
   sed -i.bak -E "s|^name: tdd\$|name: claude-tdd|" "$TREE/$skill"
@@ -104,6 +105,7 @@ commit_tree() {
   grep -qF -- "frontmatter.skill.name.reserved-word" <<<"$output" || return 1
 }
 
+# bats test_tags=whole-tree
 @test "a pull request that suppresses its own violation still fails, because suppressions come from the base" {
   skill=".claude/skills/tdd/SKILL.md"
   long="$(printf 'x%.0s' $(seq 1 1100))"
@@ -118,6 +120,7 @@ commit_tree() {
   grep -qF -- "frontmatter.skill.description.max-length" <<<"$output" || return 1
 }
 
+# bats test_tags=whole-tree
 @test "red twin: a workflow copy without --enforce frontmatter changes the extracted line and lets the reserved-word case pass" {
   broken="$BATS_TEST_TMPDIR/cli-tests.yml"
   sed 's| --enforce frontmatter||' "$WORKFLOW" >"$broken"

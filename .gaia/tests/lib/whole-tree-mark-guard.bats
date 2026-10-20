@@ -2,8 +2,9 @@
 
 # Suite for .gaia/tests/whole-tree-mark-guard.sh, the guard that flags a bats
 # test enumerating the tracked tree through a recognized idiom without the
-# whole-tree mark. It runs the guard over the real tracked tree, so it carries
-# the mark itself.
+# whole-tree mark. Only the test that runs the guard over the real tracked tree
+# carries the mark; every other test reads fixtures under $BATS_TEST_TMPDIR or
+# named files.
 #
 # Fixture suites live under $BATS_TEST_TMPDIR. Every tag line and waiver line a
 # fixture needs is assembled at run time (write_mark, write_test_mark,
@@ -12,8 +13,6 @@
 # fixtures' text, and no waiver in a fixture is live in this file.
 #
 # Assertion style: bash-3.2-safe per .claude/rules/bats-assertions.md.
-
-# bats file_tags=whole-tree
 
 setup() {
   REPO_ROOT="$(cd "$BATS_TEST_DIRNAME/../../.." && pwd)"
@@ -100,6 +99,7 @@ write_fixture() {
 IDIOMS="git-ls-files git-grep find glob-loop"
 SEEDS="dirname filename second-assignment"
 
+# bats test_tags=whole-tree
 @test "the guard passes over the real tracked tree" {
   run bash "$GUARD" --root "$REPO_ROOT"
   [ "$status" -eq 0 ]

@@ -42,8 +42,6 @@
 # every fixture is a real git repository with its files added. That is also
 # what pins the untracked-file test below: an untracked script is not scanned.
 
-# bats file_tags=whole-tree
-
 setup() {
   THIS_DIRECTORY="$( cd "$( dirname "$BATS_TEST_FILENAME" )" && pwd )"
   REPO_ROOT="$( cd "$THIS_DIRECTORY/../../.." && pwd )"
@@ -90,6 +88,7 @@ run_linter() {
 
 # 1. The real scanned tree is clean (regression gate)
 
+# bats test_tags=whole-tree
 @test "the real scanned tree passes the lint" {
   run bash -c "cd '$REPO_ROOT' && bash '$LINTER'"
   [ "$status" -eq 0 ]
@@ -1047,6 +1046,7 @@ EOF
 # .gaia/tests/lib/bats-shards.bats:662 carries a diagnostic message string that
 # contains the literal text "git ls-files". This pins the substantive claim:
 # the armed guard does not misread that string as an executed call.
+# bats test_tags=whole-tree
 @test "the diagnostic message string in bats-shards.bats is not misread as a call" {
   run bash -c "cd '$REPO_ROOT' && bash '$LINTER'"
   grep -qF -- "ls-files without -z" <<<"$output" && return 1

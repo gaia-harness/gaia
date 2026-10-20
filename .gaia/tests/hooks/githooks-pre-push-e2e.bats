@@ -14,10 +14,9 @@
 # is built once per file and copied per test. Every test pays real staging
 # builds, which is why the cases stay few.
 #
-# The suite's outcome depends on tracked files it does not name (the staged
-# tree is every tracked file), so it carries the whole-tree mark.
-
-# bats file_tags=whole-tree
+# The fixture copies every tracked file, yet the suite carries no whole-tree
+# mark: branch mode's distribution steps check the real tree directly, and the
+# refusal cases run when the change selector picks the suite.
 
 setup_file() {
   SOURCE_ROOT="$(cd "$BATS_TEST_DIRNAME/../../.." && pwd -P)"
@@ -29,6 +28,9 @@ setup_file() {
   # A path tracked but deleted in the working tree makes rsync exit 23 for
   # that one entry and copy the rest; any other status is a real failure.
   local copy_status=0
+  # gaia-lint-ignore whole-tree-mark-guard: no whole-tree mark by decision. Branch mode's distribution steps check
+  # the real tree directly, the refusal cases (injected leaks, deletions, unbalanced markers) run when the
+  # change selector picks the suite because a file it names changed, and the full CI run covers any other change.
   git -C "$SOURCE_ROOT" ls-files -z --cached --others --exclude-standard \
     | rsync -a --from0 --files-from=- "$SOURCE_ROOT/" "$BASE_FIXTURE/" || copy_status=$?
   [ "$copy_status" -eq 0 ] || [ "$copy_status" -eq 23 ]

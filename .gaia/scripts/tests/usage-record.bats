@@ -13,8 +13,6 @@
 # Expected lines carry literal dollar signs, so they are single-quoted on purpose.
 # shellcheck disable=SC2016
 
-# bats file_tags=whole-tree
-
 bats_require_minimum_version 1.5.0
 
 setup() {
@@ -112,6 +110,8 @@ spec_run_fixture() {
 scratch_scripts() {
   local scratch="$1" file
   mkdir -p "$scratch/spec"
+  # gaia-lint-ignore whole-tree-mark-guard: the tests that reach this helper
+  # carry the per-test whole-tree mark, because they copy the scripts directory.
   for file in "$SCRIPTS"/usage*.sh "$SCRIPTS"/token-*.sh "$SCRIPTS"/token-rates.json "$SCRIPTS"/branch-name-lib.sh \
     "$SCRIPTS"/main-root-lib.sh "$SCRIPTS"/context-checkpoint-lib.sh; do
     [ -f "$file" ] && cp "$file" "$scratch/"
@@ -300,6 +300,7 @@ scratch_scripts() {
 
 # ---------- pairing ----------
 
+# bats test_tags=whole-tree
 @test "an abandoned start is superseded: the close pairs with the newest start, and a second record is refused" {
   local mutated="$TEMPORARY_DIRECTORY/mutated"
   mkdir -p "$(dirname "$(main_file)")"
@@ -534,6 +535,7 @@ straddling_segments() {
 # A workflow close flushes every sidecar the run dispatched, which takes well
 # past the merge hook's cap on a large ledger, so record waits as long as the
 # box does and a flusher that finishes inside that wait leaves no note.
+# bats test_tags=whole-tree
 @test "a flusher slower than the merge hook's cap but inside the box flush cap leaves the Cost line without a note" {
   local scratch="$TEMPORARY_DIRECTORY/slow-flusher"
   spec_run_fixture record-slow-sess
@@ -564,6 +566,7 @@ straddling_segments() {
   true
 }
 
+# bats test_tags=whole-tree
 @test "the commit-time close re-check is what keeps a late flusher from straddling the close" {
   local mutated="$TEMPORARY_DIRECTORY/mutated-flusher"
   scratch_scripts "$mutated"

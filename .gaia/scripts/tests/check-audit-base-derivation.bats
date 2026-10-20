@@ -18,8 +18,6 @@
 #
 # Assertion style: bash-3.2-safe per .claude/rules/bats-assertions.md.
 
-# bats file_tags=whole-tree
-
 setup() {
   SCRIPT_DIRECTORY="$(cd "$(dirname "$BATS_TEST_FILENAME")/.." && pwd)"
   CHECK="$SCRIPT_DIRECTORY/check-audit-base-derivation.sh"
@@ -766,6 +764,7 @@ mutate_resolver() {
 
 # ---------- real repo: the standing guarantee ----------
 
+# bats test_tags=whole-tree
 @test "real repo: every Code Audit Team definition resolves its review base through the resolver" {
   run gaia_check_audit_base_derivation "$REPO_ROOT"
   [ "$status" -eq 0 ]
@@ -774,6 +773,7 @@ mutate_resolver() {
   grep -qF "review diffs consuming a base that never reached the fork point: 0" <<<"$output" || return 1
 }
 
+# bats test_tags=whole-tree
 @test "real repo: every changed-file diff in the roster is a three-dot range" {
   # Assertion 3 states the rule negatively (a count of violations), so this
   # pins the positive form directly: every `diff --name-only` the five
@@ -814,6 +814,7 @@ mutate_resolver() {
   done <<< "$output"
 }
 
+# bats test_tags=whole-tree
 @test "real repo: the guarantee above is not vacuous -- the scan surface names BASE_SHA and keeps an exempt whole-PR base" {
   # Both verdicts are counts of violations, so a scan that saw no candidate
   # at all reports zero and passes. Pin both candidate sets as non-empty: the

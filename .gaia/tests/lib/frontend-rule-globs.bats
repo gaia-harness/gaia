@@ -13,8 +13,6 @@
 #
 # Assertion style follows .claude/rules/bats-assertions.md.
 
-# bats file_tags=whole-tree
-
 setup() {
   REPO_ROOT_REAL="$(cd "$BATS_TEST_DIRNAME/../../.." && pwd)"
   RULES_DIR="$REPO_ROOT_REAL/frontend/.claude/rules"
@@ -50,6 +48,7 @@ glob_form_problem() {
 # Does the package-relative glob match at least one tracked file under frontend/?
 glob_matches_tracked_file() {
   local first
+  # gaia-lint-ignore whole-tree-mark-guard: every test that reaches this listing carries the per-test mark
   first="$(git -C "$REPO_ROOT_REAL" ls-files -z -- ":(glob)frontend/$1" | head -c 1 | wc -c | tr -d ' ')"
   [ "$first" -gt 0 ]
 }
@@ -73,6 +72,7 @@ check_rules_dir() {
   [ "$found" -eq 0 ]
 }
 
+# bats test_tags=whole-tree
 @test "every moved frontend rule is present (a short read of the directory fails)" {
   local name missing=""
   for name in accessibility api-service design-baseline i18n playwright react-router-docs routes state-pattern storybook tailwind; do
@@ -81,6 +81,7 @@ check_rules_dir() {
   [ -z "$missing" ] || { echo "missing rules:$missing" >&2; return 1; }
 }
 
+# bats test_tags=whole-tree
 @test "every moved rule declares at least one paths glob" {
   local name globs bare=""
   for name in accessibility api-service design-baseline i18n playwright react-router-docs routes state-pattern storybook tailwind; do
@@ -90,6 +91,7 @@ check_rules_dir() {
   [ -z "$bare" ] || { echo "rules with no paths globs:$bare" >&2; return 1; }
 }
 
+# bats test_tags=whole-tree
 @test "every glob in frontend/.claude/rules is package-relative and matches a tracked file" {
   run check_rules_dir "$RULES_DIR"
   [ "$status" -eq 0 ] || { echo "$output" >&2; return 1; }
@@ -104,6 +106,7 @@ check_rules_dir() {
   true
 }
 
+# bats test_tags=whole-tree
 @test "the check refuses a copy with one glob reverted to the repo-root form" {
   local copy="$BATS_TEST_TMPDIR/rules"
   mkdir -p "$copy"
@@ -118,6 +121,7 @@ check_rules_dir() {
   grep -qF -- "accessibility.md: 'frontend/app/components/**/*': repo-root form" <<<"$output"
 }
 
+# bats test_tags=whole-tree
 @test "the check refuses a glob that matches no tracked file" {
   local copy="$BATS_TEST_TMPDIR/rules-dead"
   mkdir -p "$copy"

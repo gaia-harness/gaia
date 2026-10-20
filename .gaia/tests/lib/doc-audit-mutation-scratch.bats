@@ -23,8 +23,6 @@
 #
 # Assertion style: .claude/rules/bats-assertions.md.
 
-# bats file_tags=whole-tree
-
 setup() {
   ROOT="$(cd "$BATS_TEST_DIRNAME/../../.." && pwd)"
   PROTOCOL="$ROOT/.claude/hooks/lib/audit-member-protocol.md"
@@ -33,12 +31,15 @@ setup() {
   REMOVE_LINE='rm -rf <scratch>'
 
   MEMBERS=()
+  # gaia-lint-ignore whole-tree-mark-guard: every test that uses the member roster this collects carries the
+  # per-test mark
   for audited_file in "$ROOT"/.claude/agents/code-audit-*.md; do
     [ -s "$audited_file" ] || continue
     grep -qF -- 'mutation-scratch' "$audited_file" && MEMBERS+=("$audited_file")
   done
 }
 
+# bats test_tags=whole-tree
 @test "the protocol and every member that names mutation-scratch are read" {
   [ -s "$PROTOCOL" ] || { echo "the member protocol is missing or empty" >&2; return 1; }
   for member in \
@@ -63,6 +64,7 @@ setup() {
   grep -qxF -- "$REMOVE_LINE" "$PROTOCOL" || { echo "protocol lacks: $REMOVE_LINE" >&2; return 1; }
 }
 
+# bats test_tags=whole-tree
 @test "every member points at the protocol's scratch section rather than restating a name" {
   for audited_file in "${MEMBERS[@]}"; do
     grep -qF -- '"Scratch directory"' "$audited_file" || {
@@ -72,6 +74,7 @@ setup() {
   done
 }
 
+# bats test_tags=whole-tree
 @test "no spec still prescribes a scratch name built from the member name alone" {
   for audited_file in "$PROTOCOL" "${MEMBERS[@]}"; do
     grep -nE -- 'named with (your|its) (own )?member name|with your own member name' "$audited_file" && {
@@ -82,6 +85,7 @@ setup() {
   true
 }
 
+# bats test_tags=whole-tree
 @test "two concurrent mints for one member get separate directories, and one removal spares the other" {
   scratch_root="$BATS_TEST_TMPDIR/root"
   mkdir -p "$scratch_root"

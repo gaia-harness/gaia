@@ -30,8 +30,6 @@
 #
 # Assertion style: bash-3.2-safe per .claude/rules/bats-assertions.md.
 
-# bats file_tags=whole-tree
-
 bats_require_minimum_version 1.5.0
 
 setup() {
@@ -166,18 +164,22 @@ check_entry_hard_errors() {
   done <<<"$libraries"
 }
 
+# bats test_tags=whole-tree
 @test "usage.sh fails loud on each missing library, for every subcommand it drives" {
   check_entry_hard_errors .gaia/scripts/usage.sh
 }
 
+# bats test_tags=whole-tree
 @test "usage-flush.sh fails loud on each missing library" {
   check_entry_hard_errors .gaia/scripts/usage-flush.sh
 }
 
+# bats test_tags=whole-tree
 @test "usage-merge.sh fails loud on each missing library" {
   check_entry_hard_errors .gaia/scripts/usage-merge.sh
 }
 
+# bats test_tags=whole-tree
 @test "pr-merge-cost.sh fails loud on each missing library" {
   check_entry_hard_errors .claude/hooks/pr-merge-cost.sh
 }

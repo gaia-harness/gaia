@@ -8,8 +8,6 @@
 # infrastructure, which builds the folder as a fixture to prove it is now an
 # ordinary directory.
 
-# bats file_tags=whole-tree
-
 FOLDER_NAME='.gaia-merge'
 
 setup() {
@@ -32,6 +30,8 @@ scanned_paths() {
   local tracked_path
   while IFS= read -r -d '' tracked_path; do
     is_allowed_path "$tracked_path" || printf '%s\n' "$tracked_path"
+  # gaia-lint-ignore whole-tree-mark-guard: every test that scans the real tracked tree through this listing
+  # carries the per-test mark
   done < <(git -C "$SCAN_ROOT" ls-files -z)
 }
 
@@ -79,6 +79,7 @@ make_scratch_repo() {
   done
 }
 
+# bats test_tags=whole-tree
 @test "the scan covers the update skill, so discovery is not vacuous" {
   run scanned_paths
   [ "$status" -eq 0 ]
@@ -88,6 +89,7 @@ make_scratch_repo() {
   true
 }
 
+# bats test_tags=whole-tree
 @test "the scan leaves the allowed paths out" {
   run scanned_paths
   [ "$status" -eq 0 ]
@@ -97,6 +99,7 @@ make_scratch_repo() {
   true
 }
 
+# bats test_tags=whole-tree
 @test "no tracked shipped file names the retired folder" {
   run run_check
   if [ "$status" -ne 0 ]; then

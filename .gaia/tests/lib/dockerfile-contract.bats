@@ -14,8 +14,6 @@
 #     for the `**/` and literal patterns the dotenv checks depend on. The guard
 #     test proves the evaluation can report a dotenv file as included.
 
-# bats file_tags=whole-tree
-
 setup() {
   REPO_ROOT="$(cd "$BATS_TEST_DIRNAME/../../.." && pwd)"
   DOCKERFILE="$REPO_ROOT/frontend/Dockerfile"
@@ -110,6 +108,7 @@ copies_whole_context() {
   [ "$status" -eq 1 ]
 }
 
+# bats test_tags=whole-tree
 @test "no root Dockerfile or .dockerignore remains tracked" {
   local tracked=0 path
   while IFS= read -r -d '' path; do

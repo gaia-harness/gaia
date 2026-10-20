@@ -21,8 +21,6 @@
 #
 # Assertion style: .claude/rules/bats-assertions.md.
 #
-# bats file_tags=whole-tree
-
 setup() {
   REPO_ROOT="$(cd "$BATS_TEST_DIRNAME/../../.." && pwd)"
   REFERENCE='.claude/skills/gaia/references/work-lifecycle.md'
