@@ -174,9 +174,9 @@ machine_local_ref_explain() {
 A machine-local reference names a document that exists on one machine only: a
 SPEC, UAT or plan number, or a concrete path under .notebook/ or .gaia/local/.
 Nobody else can open it, so write out what the reference means instead: the
-behavior, decision or evidence it stood for. A placeholder passes (SPEC-NNN,
-.notebook/research/<date>-<topic>/), and so does a state location GAIA owns on
-every machine (.gaia/local/runs/<branch>/STATE.md).
+behavior, decision or evidence it stood for. A placeholder passes (SPEC-NNN, a
+<date>-<topic> folder), and so does a state location GAIA owns on every
+machine (.gaia/local/runs/<branch>/STATE.md).
 Rule: .claude/rules/working-doc-ids.md
 EXPLAIN
 }

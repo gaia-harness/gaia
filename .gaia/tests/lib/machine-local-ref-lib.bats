@@ -96,7 +96,7 @@ write_lines() {
     'the run folder is .gaia/local/runs/<branch>/STATE.md' \
     'a detached HEAD uses .gaia/local/runs/session-$session_id/STATE.md' \
     'the residue drainer reads .gaia/local/runs/residue' \
-    'the count is .gaia/local/debt/count.json and the ledger .gaia/local/specs/ledger.json' \
+    'the count is .gaia/local/debt/count.json' \
     'the gate cache is .gaia/local/cache/gate1-${SPEC_ID}.json' \
     'the migration cache is .gaia/local/cache/shared/migrate-2/v2.0.0/tree'
   run bash "$LIB" text "$WORK/text"
