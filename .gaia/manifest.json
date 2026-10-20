@@ -330,6 +330,7 @@
     ".gaia/scripts/update-gaia-pull.sh": "owned",
     ".gaia/scripts/update-gaia-report.sh": "owned",
     ".gaia/scripts/update-state-line-lib.sh": "owned",
+    ".gaia/scripts/usage-active-lib.sh": "owned",
     ".gaia/scripts/usage-flush.sh": "owned",
     ".gaia/scripts/usage-handoff-lib.sh": "owned",
     ".gaia/scripts/usage-lib.sh": "owned",
@@ -758,7 +759,7 @@
     "wiki/overview.md": "wiki-owned",
     "wiki/README.md": "wiki-owned"
   },
-  "generated": "2026-10-20T18:28:40.072Z",
+  "generated": "2026-10-20T19:17:57.973Z",
   "regions": [
     {
       "endMarker": "<!-- gaia:audit-remit:end -->",

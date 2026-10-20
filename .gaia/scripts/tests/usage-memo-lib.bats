@@ -22,7 +22,7 @@ setup() {
   MEMO="$TELEMETRY_DIRECTORY/usage-branch-memo.json"
   TRACE="$TEMPORARY_DIRECTORY/trace"
   : >"$TRACE"
-  export GAIA_USAGE_MEMO_TRACE="$TRACE"
+  export GAIA_USAGE_MEMO_TRACE_FILE="$TRACE"
   unset GAIA_USAGE_MEMO_SEAM
   # shellcheck disable=SC1091
   source "$SCRIPTS/usage-lib.sh"
@@ -646,7 +646,7 @@ cover() {
   [ ! -s "$error_file" ]
   gaia_usage_memo_reap "$TEMPORARY_DIRECTORY/no-such-dir" 2>"$error_file"
   [ ! -s "$error_file" ]
-  GAIA_USAGE_MEMO_TRACE="$TEMPORARY_DIRECTORY/no-such-dir/trace" gaia_usage_memo_trace "x" 2>"$error_file"
+  GAIA_USAGE_MEMO_TRACE_FILE="$TEMPORARY_DIRECTORY/no-such-dir/trace" gaia_usage_memo_trace "x" 2>"$error_file"
   [ ! -s "$error_file" ]
   gaia_usage_memo_seam 2>"$error_file"
   [ ! -s "$error_file" ]

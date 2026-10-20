@@ -7,8 +7,11 @@
 # marker literals are a contract with that hook and with the usage-ledger
 # wiki page, not free text. Refs appear only inside labeled data lines.
 #
-# Sourced by usage.sh after usage-lib.sh and usage-resolve-lib.sh. Defines
-# GAIA_USAGE_VIEW_JQ and functions only; no side effects at source time.
+# Sourced by usage.sh after usage-lib.sh, usage-resolve-lib.sh and
+# usage-active-lib.sh: GAIA_USAGE_VIEW_JQ is composed from GAIA_USAGE_ACTIVE_JQ
+# at source time, so a caller that sources the active lib later gets views that
+# do not compile. Defines GAIA_USAGE_VIEW_JQ and functions only; no side
+# effects at source time.
 
 # Display only: stored values and arithmetic stay raw.
 commify() {
@@ -34,15 +37,24 @@ gaia_usage_human_duration() {
   else printf '%ds' "$seconds"; fi
 }
 
-# gaia_usage_cost_line <tokens> <dollars|null> <elapsed_seconds>: the shared
-# Cost line, without a newline. Tokens print in millions with one decimal.
+# _usage_cost_active_suffix <active_seconds> <lower_bound true|false>: ` (<dur> active)`,
+# or ` (<dur>+ active)` for a minimum, and nothing unless the first argument is
+# a whole number of seconds. A caller with no figure (null, empty, or the terms
+# string some callers still pass fourth) gets the plain line.
+_usage_cost_active_suffix() {
+  [[ ${1-} =~ ^[0-9]+$ ]] || return 0
+  printf ' (%s%s active)' "$(gaia_usage_human_duration "$1")" "$([ "${2-}" = true ] && printf '+')"
+}
+
+# gaia_usage_cost_line <tokens> <dollars|null> <elapsed_seconds> [<active_seconds> [<lower_bound>]]:
+# the shared Cost line, without a newline. Tokens print in millions with one decimal.
 gaia_usage_cost_line() {
   local tokens="$1" dollars="$2" elapsed="$3" total money
   case "$tokens" in '' | *[!0-9]*) tokens=0 ;; esac
   total="$(LC_ALL=C awk -v tokens="$tokens" 'BEGIN { printf "%.1fM", tokens / 1000000 }')"
   if [ -z "$dollars" ] || [ "$dollars" = null ]; then money='cost unavailable'
   else money="$(LC_ALL=C printf '$%.2f' "$dollars" 2>/dev/null)" || money='cost unavailable'; fi
-  printf 'Cost: %s tokens, %s, %s' "$total" "$money" "$(gaia_usage_human_duration "$elapsed")"
+  printf 'Cost: %s tokens, %s, %s%s' "$total" "$money" "$(gaia_usage_human_duration "$elapsed")" "$(_usage_cost_active_suffix "${4-}" "${5-}")"
 }
 
 # The one wording of each condition that qualifies a figure, printed under the
@@ -52,6 +64,9 @@ gaia_usage_cost_line() {
 usage_note_flush_incomplete() { printf 'Some usage was still being saved, so these figures may be low. For the final numbers run: %s' "$1"; }
 usage_note_lower_bound() { printf 'Includes a model GAIA has no price for, so the cost is a minimum.'; }
 usage_note_session_only() { printf 'Only this session is counted; if the run also used earlier sessions, their usage is not included.'; }
+usage_note_active_minimum() { printf 'Some of this spend predates active-time tracking, so the active time is a minimum.'; }
+# The per-PR block says the same through a `  ! ` marker instead of a Note.
+usage_marker_active_minimum() { printf 'lower bound: some spend predates active-time tracking'; }
 
 # gaia_usage_bare_reference <ref>: a SPEC-NNN or PLAN-NNN as the user types it
 # becomes its spec: or plan: key; anything else passes through unchanged.
@@ -64,8 +79,12 @@ gaia_usage_bare_reference() {
 }
 
 # gaia_usage_interval_view <session_id> <t0> <t1>: one compact JSON line
-# {tokens, dollars, elapsed_seconds, unpriced} for the segments of that session
-# the attribution rule assigns to the interval [t0, t1) (UTC ISO stamps). The
+# {tokens, dollars, elapsed_seconds, unpriced, active_pieces, active_covered,
+# active_uncovered} for the segments of that session the attribution rule
+# assigns to the interval [t0, t1) (UTC ISO stamps). active_pieces are the
+# segments' busy windows as [start, end] fractional epochs clipped to the
+# interval, for a caller that unions several sessions; the two flags say
+# whether the segments include one with facts and one without. The
 # interval is the paired start and close at exactly those instants when the
 # ledger holds one, so a branch segment counts only under a command interval,
 # as it does in every readout; otherwise a stand-in interval with no ref.
@@ -81,7 +100,7 @@ gaia_usage_interval_view() {
   LC_ALL=C grep -F -- "$session_id" "$usage_file" 2>/dev/null |
     jq -nRc --arg session_id "$session_id" --arg interval_start "$interval_start" --arg interval_end "$interval_end" \
       --argjson rates "${USAGE_RATES:-null}" --arg usage_store "" --arg links_store "" --argjson keys '{}' \
-      "$GAIA_USAGE_JQ_DEFS$pricing$GAIA_USAGE_RESOLVE_JQ$GAIA_USAGE_MODEL_JQ"'
+      "$GAIA_USAGE_JQ_DEFS$pricing$GAIA_USAGE_RESOLVE_JQ$GAIA_USAGE_MODEL_JQ$GAIA_USAGE_ACTIVE_JQ"'
       [inputs | (try fromjson catch null) | select(type == "object" and .schema_version == 1 and .session_id == $session_id)] as $rows
       | ($interval_start | usage_epoch) as $start | ($interval_end | usage_epoch) as $end
       | [$rows[] | select(.kind == "binding")] as $bindings
@@ -89,13 +108,22 @@ gaia_usage_interval_view() {
       | (([$intervals[] | select(.t0 == $start and .t1 == $end)] | last)
           // {session_id: $session_id, t0: $start, t1: $end, key: "interval-view"}) as $interval
       | (if any($intervals[]; . == $interval) then $intervals else $intervals + [$interval] end) as $all_intervals
+      | usage_resolve_t([$rows[] | select(.kind == "segment")]; $bindings; $all_intervals) as $resolved
       | (if $start == null or $end == null then []
-         else [usage_resolve_t([$rows[] | select(.kind == "segment")]; $bindings; $all_intervals)[]
+         else [$resolved[]
            | select(.rkey == $interval.key and ._t != null and $start <= ._t and ._t < $end) | usage_priced] end) as $segments
       | usage_sum($segments) as $sum
+      # The index sees every segment of the session, so each territory is cut
+      # against its real neighbors, not only those inside the interval.
+      | usage_active_index($rows; $resolved) as $active_index
+      | usage_active_figure($active_index; $segments; $start; $end) as $active
       | {tokens: $sum.total, dollars: $sum.usd,
          elapsed_seconds: (if $start == null or $end == null then 0 else ([$end - $start, 0] | max | floor) end),
-         unpriced: (($sum.unpriced | length) > 0)}'
+         unpriced: (($sum.unpriced | length) > 0),
+         active_pieces: (if $start == null or $end == null then []
+           else [usage_active_pieces($active_index; $segments)[] | [([.[0], $start] | max), ([.[1], $end] | min)] | select(.[1] > .[0])] end),
+         active_covered: ($active.active_seconds != null),
+         active_uncovered: ($active.active_lower_bound or ($active.active_seconds == null and ($segments | length) > 0))}'
 }
 
 # _usage_safe <text>: a value read from a transcript, the ledger, or gh, with
@@ -118,6 +146,8 @@ _usage_money() {
 # A session is a candidate through a research, declare or close binding whose
 # ref is in $reference_set, or a segment whose raw key is in $reference_set. The id is
 # grouped as `tojson` so a non-string id compares as usage_by_session_id treats it.
+# fact_rows are the candidates' cursor rows that carry facts and their activity
+# rows, which the active-time index reads beside the segments and bindings.
 # shellcheck disable=SC2034,SC2016  # consumed by usage.sh; jq source, no shell expansion
 GAIA_USAGE_PRUNE_JQ='
 def usage_pr_scope($usage_records; $reference_set):
@@ -126,7 +156,9 @@ def usage_pr_scope($usage_records; $reference_set):
             ($usage_records[] | select(.kind == "segment" and (.key | type) == "string" and $reference_set[.key] == true)))
            | .session_id | tojson) as $session ({}; .[$session] = true)) as $session_set
   | {segs: [$usage_records[] | select(.kind == "segment" and $session_set[.session_id | tojson] == true)],
-     bindings: [$usage_records[] | select(.kind == "binding" and $session_set[.session_id | tojson] == true)]};
+     bindings: [$usage_records[] | select(.kind == "binding" and $session_set[.session_id | tojson] == true)],
+     fact_rows: [$usage_records[] | select(((.kind == "cursor" and (.act | type) == "object") or .kind == "activity")
+                and $session_set[.session_id | tojson] == true)]};
 '
 
 # shellcheck disable=SC2034,SC2016  # consumed by usage.sh; jq source, no shell expansion
@@ -140,6 +172,19 @@ def usage_elapsed($group):
   ([$group[] | ._t | select(. != null)] | min) as $first
   | ([$group[] | (.last_ts // .first_ts) | usage_epoch | select(. != null)] | max) as $last
   | if $first == null or $last == null then 0 else ([$last - $first, 0] | max | floor) end;
+# {active_seconds, active_lower_bound} of the group, clipped to the span usage_elapsed measures.
+def usage_elapsed_active($active_index; $group):
+  usage_active_figure($active_index; $group;
+    ([$group[] | ._t | select(. != null)] | min);
+    ([$group[] | (.last_ts // .first_ts) | usage_epoch | select(. != null)] | max));
+# The active-time index over the sessions $group touches: their raw rows and
+# every resolved segment of theirs. A segment the index never saw gets no
+# pieces, and a territory cut only against the group would claim windows that
+# belong to its neighbors, so each session goes in whole, never the ledger.
+def usage_readout_active_index($usage_records; $resolved; $group):
+  usage_set([$group[] | .session_id | tojson]) as $sessions
+  | usage_active_index([$usage_records[] | select($sessions[.session_id | tojson] == true)];
+      [$resolved[] | select($sessions[.session_id | tojson] == true)]);
 
 # The views read rows and keys only through their parameters; the wrappers
 # below bind the globals $usage_store, $links_store, and $keys for the legacy
@@ -168,14 +213,18 @@ def usage_view_pr_of($usage_records; $links; $pr; $key; $keys; $auditors):
           | select($epoch != null and ($window.from == null or $window.from < $epoch) and ($window.to == null or $epoch <= $window.to))] as $in_window
       | ([$mine[] | ._t | select(. != null)] | min) as $earliest
       | ($in_window | map(usage_priced)) as $priced
+      # A mutant scope may return only segs and bindings; its index then reads the facts the segments carry.
+      | usage_active_index($scope.segs + $scope.bindings + ($scope.fact_rows // []); $segments) as $active_index
       # rest is the window minus the audit segments, so the two partition sum.
       | (if $auditors == null then null
          else [$priced[] | select((.agent_type | type) == "string" and (.agent_type as $agent_type | any($auditors[]; . == $agent_type)))] as $audit_segments
            | [$priced[] | select(((.agent_type | type) == "string" and (.agent_type as $agent_type | any($auditors[]; . == $agent_type))) | not)] as $rest_segments
-           | {sum: usage_sum($audit_segments), elapsed_seconds: usage_elapsed($audit_segments),
-              rest: {sum: usage_sum($rest_segments), elapsed_seconds: usage_elapsed($rest_segments)},
-              predate: ([$in_window[] | select((.agent_type | type) != "string")] | length)} end) as $audit
-      | {pr: $pr, key: $pr_key, window: $window, sum: usage_sum($priced), elapsed_seconds: usage_elapsed($priced), coverage: $coverage, audit: $audit,
+           | {sum: usage_sum($audit_segments), elapsed_seconds: usage_elapsed($audit_segments)} + usage_elapsed_active($active_index; $audit_segments)
+             + {rest: ({sum: usage_sum($rest_segments), elapsed_seconds: usage_elapsed($rest_segments)} + usage_elapsed_active($active_index; $rest_segments)),
+                predate: ([$in_window[] | select((.agent_type | type) != "string")] | length)} end) as $audit
+      | {pr: $pr, key: $pr_key, window: $window, sum: usage_sum($priced), elapsed_seconds: usage_elapsed($priced)}
+        + usage_elapsed_active($active_index; $priced)
+        + {coverage: $coverage, audit: $audit,
          lower_bound: ($earliest != null and $coverage_start != null and ($earliest - $coverage_start.epoch) < 86400),
          roots: [$root_closures[] | . as $root_closure
            | {root: $root_closure.root, sum: usage_sum([$segments[] | select(usage_in($root_closure.closure_set)) | usage_priced])}]}
@@ -212,12 +261,15 @@ def usage_view_initiative($reference):
 # ancestors). Elapsed runs from the earliest first_ts to the latest last_ts
 # under the root.
 def usage_view_initiative_line_of($usage_records; $links; $reference; $keys):
-  usage_initiative_root(usage_model_base_of($usage_records; $links; $keys); $reference) as $root
+  usage_model_base_of($usage_records; $links; $keys) as $readout_model
+  | usage_initiative_root($readout_model; $reference) as $root
   | ([$root.segments[] | ._t | select(. != null)] | min) as $first
   | ([$root.segments[] | (.last_ts // .first_ts) | usage_epoch | select(. != null)] | max) as $last
+  | usage_readout_active_index($usage_records; $readout_model.segs; $root.segments) as $active_index
   | {tokens: $root.sum.total, dollars: $root.sum.usd, unpriced: $root.sum.unpriced,
-     elapsed_seconds: (if $first == null or $last == null then 0 else ([$last - $first, 0] | max | floor) end),
-     terms: [$root.nodes[] | {ref, usd: .sum.usd}]};
+     elapsed_seconds: (if $first == null or $last == null then 0 else ([$last - $first, 0] | max | floor) end)}
+    + usage_active_figure($active_index; $root.segments; $first; $last)
+    + {terms: [$root.nodes[] | {ref, usd: .sum.usd}]};
 
 def usage_view_initiative_line($reference):
   usage_view_initiative_line_of(usage_rows($usage_store); usage_rows($links_store); $reference; $keys);
@@ -240,24 +292,32 @@ def usage_view_box_of($usage_records; $links; $reference; $keys):
          then ([$mine[] | select(.session_id == $segment.session_id and .t0 <= $segment._t and $segment._t < .t1)] | sort_by(.t0) | last)
          else null end) as $interval
       | $segment + {_workflow: ($interval.workflow // null)}] as $segments
-  | def row($label; $group; $elapsed_seconds):
+  | usage_readout_active_index($usage_records; $readout_model.segs; $root.segments) as $active_index
+  # A workflow row clips its active figure to its runs, the rest to their own
+  # spend, and the total to the whole root, so a window two rows share counts
+  # once in the total.
+  | def row($label; $group; $elapsed_seconds; $active):
       usage_sum($group) as $sum
-      | {label: $label, tokens: $sum.total, dollars: $sum.usd, unpriced: (($sum.unpriced | length) > 0), elapsed_seconds: $elapsed_seconds};
+      | {label: $label, tokens: $sum.total, dollars: $sum.usd, unpriced: (($sum.unpriced | length) > 0), elapsed_seconds: $elapsed_seconds}
+        + $active;
     ([$segments[] | select(._workflow != null)] | group_by(._workflow)
       | map(. as $group | $group[0]._workflow as $workflow
           | [$mine[] | select(.workflow == $workflow)] as $workflow_intervals
+          | ($workflow_intervals | map(.t0) | min) as $workflow_from
+          | ($workflow_intervals | map(.t1) | max) as $workflow_to
           | {t0: ([$workflow_intervals[].t0] | min),
              row: row(({"gaia-spec": "Spec", "gaia-plan": "Plan"}[$workflow] // $workflow); $group;
-                      ([($workflow_intervals | map(.t1) | max) - ($workflow_intervals | map(.t0) | min), 0] | max | floor))})
+                      ([($workflow_intervals | map(.t1) | max) - ($workflow_intervals | map(.t0) | min), 0] | max | floor);
+                      usage_active_figure($active_index; $group; $workflow_from; $workflow_to))})
       | sort_by(.t0) | map(.row)) as $workflow_rows
   | [$segments[] | select(._workflow == null)] as $rest
   | [$rest[] | select((.rkey | type) == "string" and (.rkey | test("^(branch|pr):")))] as $execute
   | [$rest[] | select(((.rkey | type) == "string" and (.rkey | test("^(branch|pr):"))) | not)] as $other
   | {rows: ($workflow_rows
-      + (if ($execute | length) > 0 then [row("Execute"; $execute; usage_elapsed($execute))] else [] end)
-      + (if ($other | length) > 0 then [row("Other work"; $other; usage_elapsed($other))] else [] end)),
+      + (if ($execute | length) > 0 then [row("Execute"; $execute; usage_elapsed($execute); usage_elapsed_active($active_index; $execute))] else [] end)
+      + (if ($other | length) > 0 then [row("Other work"; $other; usage_elapsed($other); usage_elapsed_active($active_index; $other))] else [] end)),
      total: ({tokens: $root.sum.total, dollars: $root.sum.usd, unpriced: (($root.sum.unpriced | length) > 0)}
-       + {elapsed_seconds: usage_elapsed($root.segments)})};
+       + {elapsed_seconds: usage_elapsed($root.segments)} + usage_elapsed_active($active_index; $root.segments))};
 
 def usage_view_box($reference):
   usage_view_box_of(usage_rows($usage_store); usage_rows($links_store); $reference; $keys);
@@ -278,7 +338,7 @@ def usage_view_reconcile:
 '
 
 # shellcheck disable=SC2034  # consumed by usage.sh
-GAIA_USAGE_VIEW_JQ="$GAIA_USAGE_PRUNE_JQ$GAIA_USAGE_VIEW_BODY_JQ"
+GAIA_USAGE_VIEW_JQ="$GAIA_USAGE_ACTIVE_JQ$GAIA_USAGE_PRUNE_JQ$GAIA_USAGE_VIEW_BODY_JQ"
 
 # usage_rates_load <table-override> <main_root> [models_json]: sets USAGE_RATES
 # to the distributed rate table with the local override overlaid, or null when
@@ -341,13 +401,13 @@ _usage_markers() {
 # view can leave empty is emitted as `-` and mapped back here.
 usage_render_pr() {
   local view_json="$1" hooks="$2" unflushed="$3" partial="$4" unconfirmed="$5" raw_branch="$6" as_json="${7:-0}" rerun_flags
-  local pr key coverage_start lower_bound audit_predate title
+  local pr key coverage_start lower_bound audit_predate active_lower_bound title
   if [ "$as_json" = 1 ]; then
     jq -c . <<<"$view_json"
     return 0
   fi
-  IFS=$'\t' read -r pr key coverage_start lower_bound audit_predate < <(jq -r '[(.pr // "?"), (.key // "-"),
-      (.coverage // "none"), (.lower_bound // false), (.audit.predate // 0)] | @tsv' <<<"$view_json")
+  IFS=$'\t' read -r pr key coverage_start lower_bound audit_predate active_lower_bound < <(jq -r '[(.pr // "?"), (.key // "-"),
+      (.coverage // "none"), (.lower_bound // false), (.audit.predate // 0), (.active_lower_bound // false)] | @tsv' <<<"$view_json")
   [ "$key" = - ] && key=""
   local -a extra=()
   if [ "$partial" = 1 ]; then
@@ -372,12 +432,16 @@ usage_render_pr() {
   [ "$audit_predate" = 0 ] || extra[${#extra[@]}]="lower bound: $(_usage_safe "$audit_predate") segment(s) predate agent fields"
   if [[ $pr =~ ^[1-9][0-9]*$ ]]; then title="PR #$pr Cost"; else title="$(_usage_safe "$key") Cost"; fi
   if [ "$hooks" = 1 ]; then
-    _usage_box_print "$(jq -c 'def row($label; $sum; $elapsed_seconds):
-        {label: $label, tokens: $sum.total, dollars: $sum.usd, unpriced: (($sum.unpriced | length) > 0), elapsed_seconds: $elapsed_seconds};
-      ((if .audit == null or .audit.rest.sum.total == 0 then [] else [row("Execute"; .audit.rest.sum; .audit.rest.elapsed_seconds)] end)
-        + (if .audit == null or .audit.sum.total == 0 then [] else [row("Audit"; .audit.sum; .audit.elapsed_seconds)] end)) as $rows
-      | {rows: (if ($rows | length) > 1 then $rows else [row("Total"; .sum; .elapsed_seconds)] end),
-         total: {elapsed_seconds: .elapsed_seconds}}' <<<"$view_json")" "$title" ""
+    # Every shown figure is the whole window or a part of it, so the window's
+    # own flag says whether any of them is a minimum.
+    [ "$active_lower_bound" = true ] && extra[${#extra[@]}]="$(usage_marker_active_minimum)"
+    _usage_box_print "$(jq -c 'def row($label; $figures):
+        {label: $label, tokens: $figures.sum.total, dollars: $figures.sum.usd, unpriced: (($figures.sum.unpriced | length) > 0),
+         elapsed_seconds: $figures.elapsed_seconds, active_seconds: $figures.active_seconds, active_lower_bound: $figures.active_lower_bound};
+      ((if .audit == null or .audit.rest.sum.total == 0 then [] else [row("Execute"; .audit.rest)] end)
+        + (if .audit == null or .audit.sum.total == 0 then [] else [row("Audit"; .audit)] end)) as $rows
+      | {rows: (if ($rows | length) > 1 then $rows else [row("Total"; .)] end),
+         total: {elapsed_seconds, active_seconds, active_lower_bound}}' <<<"$view_json")" "$title" "" marker
   else
     printf '%s\n' "$title"
   fi
@@ -411,17 +475,24 @@ usage_render_initiative() {
 # the full-cycle Cost line (or its JSON) and nothing else, bar the override
 # marker every readout owes.
 usage_render_initiative_line() {
-  local view_json="$1" as_json="$4" tokens dollars elapsed unpriced_count
+  local view_json="$1" as_json="$4" tokens dollars elapsed unpriced_count active active_lower_bound
   if [ "$as_json" = 1 ]; then
-    jq -c '{tokens, dollars, elapsed_seconds}' <<<"$view_json"
+    jq -c '{tokens, dollars, elapsed_seconds, active_seconds, active_lower_bound}' <<<"$view_json"
     return 0
   fi
-  IFS=$'\t' read -r tokens dollars elapsed unpriced_count < <(jq -r '[.tokens, (.dollars // "null"), .elapsed_seconds, (.unpriced | length)] | @tsv' <<<"$view_json")
+  IFS=$'\t' read -r tokens dollars elapsed unpriced_count active active_lower_bound < <(jq -r '[.tokens, (.dollars // "null"), .elapsed_seconds, (.unpriced | length),
+      (.active_seconds // "-"), (.active_lower_bound // false)] | @tsv' <<<"$view_json")
   _usage_override_marker
-  gaia_usage_cost_line "$tokens" "$dollars" "$elapsed"
+  gaia_usage_cost_line "$tokens" "$dollars" "$elapsed" "$active" "$active_lower_bound"
   printf '\n'
   if [ "$unpriced_count" != 0 ]; then printf 'Note: %s\n' "$(usage_note_lower_bound)"; fi
+  if _usage_active_minimum_shown "$active" "$active_lower_bound"; then printf 'Note: %s\n' "$(usage_note_active_minimum)"; fi
+  return 0
 }
+
+# _usage_active_minimum_shown <active_seconds> <lower_bound>: rc 0 when the
+# figure prints and carries `+`, the case the minimum Note or marker explains.
+_usage_active_minimum_shown() { [[ ${1-} =~ ^[0-9]+$ ]] && [ "${2-}" = true ]; }
 
 # _usage_box_money <cents|null> <unpriced true|false>: the price as the box shows it.
 _usage_box_money() {
@@ -435,37 +506,45 @@ _usage_box_money() {
 usage_render_box() {
   local view_json="$1" display_reference="$4" as_json="$5" flush_incomplete="$6" flush_command=""
   if [ "$as_json" = 1 ]; then
-    jq -c '{rows: [.rows[] | {label, tokens, dollars, elapsed_seconds}], total: (.total | {tokens, dollars, elapsed_seconds})}' <<<"$view_json"
+    jq -c '{rows: [.rows[] | {label, tokens, dollars, elapsed_seconds, active_seconds, active_lower_bound}],
+      total: (.total | {tokens, dollars, elapsed_seconds, active_seconds, active_lower_bound})}' <<<"$view_json"
     return 0
   fi
   [ "$flush_incomplete" = 0 ] || flush_command="bash .gaia/scripts/usage.sh initiative $(_usage_safe "$display_reference") --box"
-  _usage_box_print "$view_json" "$(_usage_safe "$display_reference") Cost" "$flush_command"
+  _usage_box_print "$view_json" "$(_usage_safe "$display_reference") Cost" "$flush_command" note
 }
 
-# _usage_box_print <box-json {rows, total.elapsed_seconds}> <title> <flush note command or "">:
+# _usage_box_print <box-json {rows, total}> <title> <flush note command or ""> [note|marker]:
 # the box, or the plain Cost line for one row. The caller makes the title safe.
+# A row or total whose active_seconds is a number shows it beside the wall
+# clock. When one shown figure is a minimum, `note` (the default) prints the
+# active Note; `marker` prints nothing about it, for a caller that says it as a
+# marker of its own.
 # Every figure is rounded once, to the 0.1M and the cent it shows, and the Total
 # row adds those rounded rows, so the column on screen always sums. The box is
 # plain ASCII, so its width counted in bytes is its width on screen, and the
 # script pads it: the right border is one column whatever the figures' widths.
 _usage_box_print() {
-  local view_json="$1" title="$2" flush_command="$3"
+  local view_json="$1" title="$2" flush_command="$3" announce="${4:-note}"
   local label tokens dollars elapsed unpriced tenths cents row_count=0 label_width=0 content_width=0 total_tenths=0 total_cents=0 total_unpriced=false cents_unavailable=false
-  local row_total total_elapsed total_cents_or_null inner line border figure total_figure
+  local row_total total_elapsed total_cents_or_null inner line border figure total_figure active active_lower_bound total_active total_active_lower_bound
+  local minimum_shown=false
   local -a labels=() figures=()
   row_total="$(jq -r '.rows | length' <<<"$view_json")"
   if [ "$row_total" = 1 ]; then
     # One line item is one plain Cost line, the shape `record` prints.
-    IFS=$'\t' read -r tokens dollars elapsed unpriced < <(jq -r '.rows[0] | [.tokens, (.dollars // "null"), .elapsed_seconds, .unpriced] | @tsv' <<<"$view_json")
+    IFS=$'\t' read -r tokens dollars elapsed unpriced active active_lower_bound < <(jq -r '.rows[0] | [.tokens, (.dollars // "null"), .elapsed_seconds, .unpriced,
+        (.active_seconds // "-"), (.active_lower_bound // false)] | @tsv' <<<"$view_json")
     _usage_override_marker
-    gaia_usage_cost_line "$tokens" "$dollars" "$elapsed"
+    gaia_usage_cost_line "$tokens" "$dollars" "$elapsed" "$active" "$active_lower_bound"
     printf '\n'
     if [ -n "$flush_command" ]; then printf 'Note: %s\n' "$(usage_note_flush_incomplete "$flush_command")"; fi
     if [ "$unpriced" = true ]; then printf 'Note: %s\n' "$(usage_note_lower_bound)"; fi
+    if [ "$announce" = note ] && _usage_active_minimum_shown "$active" "$active_lower_bound"; then printf 'Note: %s\n' "$(usage_note_active_minimum)"; fi
     return 0
   fi
   printf '%s\n\n' "$title"
-  while IFS=$'\t' read -r label tokens dollars elapsed unpriced; do
+  while IFS=$'\t' read -r label tokens dollars elapsed unpriced active active_lower_bound; do
     tenths="$(LC_ALL=C awk -v tokens="$tokens" 'BEGIN { printf "%d", tokens / 100000 + 0.5 }')"
     if [ "$dollars" = null ]; then cents=null; cents_unavailable=true
     else
@@ -476,20 +555,24 @@ _usage_box_print() {
     [ "$unpriced" != true ] || total_unpriced=true
     label="$(_usage_safe "$label")"
     [ "${#label}" -le "$label_width" ] || label_width=${#label}
-    figure="$((tenths / 10)).$((tenths % 10))M tokens, $(_usage_box_money "$cents" "$unpriced"), $(gaia_usage_human_duration "$elapsed")"
+    figure="$((tenths / 10)).$((tenths % 10))M tokens, $(_usage_box_money "$cents" "$unpriced"), $(gaia_usage_human_duration "$elapsed")$(_usage_cost_active_suffix "$active" "$active_lower_bound")"
+    if _usage_active_minimum_shown "$active" "$active_lower_bound"; then minimum_shown=true; fi
     labels[${#labels[@]}]="$label"
     figures[${#figures[@]}]="$figure"
     row_count=$((row_count + 1))
-  done < <(jq -r '.rows[] | [.label, .tokens, (.dollars // "null"), .elapsed_seconds, .unpriced] | @tsv' <<<"$view_json")
+  done < <(jq -r '.rows[] | [.label, .tokens, (.dollars // "null"), .elapsed_seconds, .unpriced,
+      (.active_seconds // "-"), (.active_lower_bound // false)] | @tsv' <<<"$view_json")
   if [ "$row_count" = 0 ]; then
     printf 'No usage has been recorded for this yet.\n'
     return 0
   fi
-  total_elapsed="$(jq -r '.total.elapsed_seconds' <<<"$view_json")"
+  IFS=$'\t' read -r total_elapsed total_active total_active_lower_bound < <(jq -r '.total | [.elapsed_seconds,
+      (.active_seconds // "-"), (.active_lower_bound // false)] | @tsv' <<<"$view_json")
   if [ "$cents_unavailable" = true ]; then total_cents_or_null=null; else total_cents_or_null=$total_cents; fi
   if [ "$row_count" -gt 1 ]; then
     [ "$label_width" -ge 5 ] || label_width=5
-    total_figure="$((total_tenths / 10)).$((total_tenths % 10))M tokens, $(_usage_box_money "$total_cents_or_null" "$total_unpriced"), $(gaia_usage_human_duration "$total_elapsed")"
+    total_figure="$((total_tenths / 10)).$((total_tenths % 10))M tokens, $(_usage_box_money "$total_cents_or_null" "$total_unpriced"), $(gaia_usage_human_duration "$total_elapsed")$(_usage_cost_active_suffix "$total_active" "$total_active_lower_bound")"
+    if _usage_active_minimum_shown "$total_active" "$total_active_lower_bound"; then minimum_shown=true; fi
   fi
   local index=0
   while [ "$index" -lt "$row_count" ]; do
@@ -513,9 +596,11 @@ _usage_box_print() {
   fi
   printf '%s\n' "$border"
   _usage_override_marker
-  if [ -n "$flush_command" ] || [ "$total_unpriced" = true ]; then printf '\n'; fi
+  [ "$announce" = note ] || minimum_shown=false
+  if [ -n "$flush_command" ] || [ "$total_unpriced" = true ] || [ "$minimum_shown" = true ]; then printf '\n'; fi
   if [ -n "$flush_command" ]; then printf 'Note: %s\n' "$(usage_note_flush_incomplete "$flush_command")"; fi
   if [ "$total_unpriced" = true ]; then printf 'Note: %s\n' "$(usage_note_lower_bound)"; fi
+  if [ "$minimum_shown" = true ]; then printf 'Note: %s\n' "$(usage_note_active_minimum)"; fi
   return 0
 }
 

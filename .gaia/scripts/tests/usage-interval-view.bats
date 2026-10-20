@@ -31,7 +31,7 @@ setup() {
 # usage.sh sets up its own before a subcommand runs.
 view() {
   # shellcheck disable=SC2016  # the child shell expands these
-  bash -c '. "$1/usage-lib.sh" && . "$1/usage-resolve-lib.sh" && . "$1/usage-render-lib.sh" && . "$1/token-pricing-lib.sh" || exit 9
+  bash -c '. "$1/usage-lib.sh" && . "$1/usage-resolve-lib.sh" && . "$1/usage-active-lib.sh" && . "$1/usage-render-lib.sh" && . "$1/token-pricing-lib.sh" || exit 9
     TELEMETRY_DIRECTORY="$2" MAIN_ROOT="$3"
     usage_rates_load "$4" "$MAIN_ROOT"
     gaia_usage_interval_view "$5" "$6" "$7"' _ "$SCRIPTS" "$TELEMETRY_DIRECTORY" "$MAIN" "$RATES" "$@"
@@ -39,7 +39,7 @@ view() {
 
 render() {
   # shellcheck disable=SC2016  # the child shell expands these
-  bash -c '. "$1/usage-render-lib.sh" || exit 9; shift; "$@"' _ "$SCRIPTS" "$@"
+  bash -c '. "$1/usage-active-lib.sh" && . "$1/usage-render-lib.sh" || exit 9; shift; "$@"' _ "$SCRIPTS" "$@"
 }
 
 # segment <key> <sid> <first_ts> <fresh_input> <output> [model]

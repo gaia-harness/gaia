@@ -131,7 +131,7 @@ scratch_scripts() {
   run --separate-stderr record spec:SPEC-901 --workflow gaia-spec
   [ "$status" -eq 0 ]
   [ -z "$stderr" ]
-  [[ "$(last_stdout_line)" =~ ^Cost:\ 0\.7M\ tokens,\ \$1\.36,\ [0-9hms]+$ ]]
+  [[ "$(last_stdout_line)" =~ ^Cost:\ 0\.7M\ tokens,\ \$1\.36,\ [0-9hms]+(\ \([0-9hms]+\+?\ active\))?$ ]]
   # Every byte of the main file and the sidecar is behind its cursor.
   [ "$(jq --arg path "$main_path" '.files[$path].offset' "$TEL/usage-cursors.json")" -eq "$(wc -c <"$main_path" | tr -d ' ')" ]
   [ "$(jq --arg path "$sidecar_path" '.files[$path].offset' "$TEL/usage-cursors.json")" -eq "$(wc -c <"$sidecar_path" | tr -d ' ')" ]
@@ -151,7 +151,7 @@ scratch_scripts() {
   spec_run_fixture sess-1
   run record spec:SPEC-901 --workflow gaia-spec --json
   [ "$status" -eq 0 ]
-  [ "$(jq -c 'keys' <<<"$(last_stdout_line)")" = '["dollars","elapsed_seconds","tokens"]' ]
+  [ "$(jq -c 'keys' <<<"$(last_stdout_line)")" = '["active_lower_bound","active_seconds","dollars","elapsed_seconds","tokens"]' ]
   record_tokens="$(jq -r '.tokens' <<<"$(last_stdout_line)")"
   [ "$record_tokens" -eq 656000 ]
   [ "$(initiative_tokens spec:SPEC-901)" -eq "$record_tokens" ]
@@ -186,7 +186,7 @@ scratch_scripts() {
   main_usage m1 10:10 4000 0
   run record command:gaia-fitness --workflow gaia-fitness
   [ "$status" -eq 0 ]
-  [[ "$(last_stdout_line)" =~ ^Cost:\ 0\.0M\ tokens,\ \$0\.01,\ [0-9hms]+$ ]]
+  [[ "$(last_stdout_line)" =~ ^Cost:\ 0\.0M\ tokens,\ \$0\.01,\ [0-9hms]+(\ \([0-9hms]+\+?\ active\))?$ ]]
   main_start f2 "$(after_last_close 1)" gaia-fitness
   main_usage m2 "$(after_last_close 2)" 6000 0
   sleep 3
@@ -525,7 +525,7 @@ straddling_segments() {
 @test "a flusher that outlasts the cap leaves the close written once and the line marked partial; its late commit splits at the close" {
   partial_scenario
   [ "$status" -eq 0 ]
-  [[ "${lines[0]}" =~ ^Cost:\ [0-9.]+M\ tokens,\ \$[0-9.]+,\ [0-9hms]+$ ]]
+  [[ "${lines[0]}" =~ ^Cost:\ [0-9.]+M\ tokens,\ \$[0-9.]+,\ [0-9hms]+(\ \([0-9hms]+\+?\ active\))?$ ]]
   [ "${lines[1]}" = 'Note: Some usage was still being saved, so these figures may be low. For the final numbers run: bash .gaia/scripts/usage.sh initiative SPEC-901 --box' ]
   grep -qF 'partial' <<<"$output" && return 1
   [ "$(close_count)" -eq 1 ]

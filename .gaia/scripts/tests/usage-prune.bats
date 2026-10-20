@@ -28,6 +28,8 @@ setup() {
   . "$SCRIPTS/usage-lib.sh"
   # shellcheck source=.gaia/scripts/usage-resolve-lib.sh
   . "$SCRIPTS/usage-resolve-lib.sh"
+  # shellcheck source=.gaia/scripts/usage-active-lib.sh
+  . "$SCRIPTS/usage-active-lib.sh"
   # shellcheck source=.gaia/scripts/usage-render-lib.sh
   . "$SCRIPTS/usage-render-lib.sh"
   # shellcheck source=.gaia/scripts/token-pricing-lib.sh
@@ -77,7 +79,7 @@ assert_mutant_red() {
   [ -s "$mutant_filter" ]
   printf '%s' "$GAIA_USAGE_PRUNE_JQ" >"$TEMPORARY_DIRECTORY/shipped.jq"
   if cmp -s "$mutant_filter" "$TEMPORARY_DIRECTORY/shipped.jq"; then return 1; fi
-  run_diff "$(cat "$mutant_filter")$GAIA_USAGE_VIEW_BODY_JQ"
+  run_diff "$GAIA_USAGE_ACTIVE_JQ$(cat "$mutant_filter")$GAIA_USAGE_VIEW_BODY_JQ"
   jq -e '.full != .pruned' "$TEMPORARY_DIRECTORY/diff.json" >/dev/null
 }
 
@@ -123,7 +125,7 @@ assert_mutant_red() {
 }
 
 # equiv_run <library_directory> <mode>: runs the views over the prune fixture with the
-# libs in <library_directory> (usage-resolve-lib.sh, usage-render-lib.sh) and prints one
+# libs in <library_directory> (usage-resolve-lib.sh, usage-active-lib.sh, usage-render-lib.sh) and prints one
 # JSON document. Modes: `wrapper` binds $usage_store $links_store $keys to the real stores and
 # keys; `empty-keys` is the wrapper with $keys = {}; `of` binds $usage_store $links_store to ""
 # and $keys to {} and hands the real parsed rows and keys to the `_of` views. Every pr view
@@ -132,6 +134,7 @@ EQUIV_SH='
 library_directory="$1" mode="$2" scripts="$3" fixtures_directory="$4" keys="$5" rates="$6"
 . "$scripts/usage-lib.sh"
 . "$library_directory/usage-resolve-lib.sh"
+. "$library_directory/usage-active-lib.sh"
 . "$library_directory/usage-render-lib.sh"
 . "$scripts/token-pricing-lib.sh"
 program="$GAIA_USAGE_JQ_DEFS$GAIA_PRICING_JQ_DEFS$GAIA_USAGE_RESOLVE_JQ$GAIA_USAGE_MODEL_JQ$GAIA_USAGE_VIEW_JQ"
@@ -189,7 +192,7 @@ equiv_run() {
 apply_sed_mutant() {
   local library_file="$1" sed_file="$FIXTURES_DIRECTORY/mutants/$2.sed" pattern="$3"
   mkdir -p "$TEMPORARY_DIRECTORY/mut"
-  cp "$SCRIPTS/usage-resolve-lib.sh" "$SCRIPTS/usage-render-lib.sh" "$TEMPORARY_DIRECTORY/mut/"
+  cp "$SCRIPTS/usage-resolve-lib.sh" "$SCRIPTS/usage-active-lib.sh" "$SCRIPTS/usage-render-lib.sh" "$TEMPORARY_DIRECTORY/mut/"
   [ "$(grep -cF -- "$pattern" "$TEMPORARY_DIRECTORY/mut/$library_file")" -ge 1 ]
   sed -f "$sed_file" "$TEMPORARY_DIRECTORY/mut/$library_file" >"$TEMPORARY_DIRECTORY/mut/$library_file.new"
   mv "$TEMPORARY_DIRECTORY/mut/$library_file.new" "$TEMPORARY_DIRECTORY/mut/$library_file"

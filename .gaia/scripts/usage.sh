@@ -29,6 +29,8 @@ _usage_missing_library() { printf 'usage: cannot load %s\n' "$1" >&2; exit 1; }
 . "$_usage_script_directory/usage-lib.sh" 2>/dev/null || _usage_missing_library "$_usage_script_directory/usage-lib.sh"
 # shellcheck source=.gaia/scripts/usage-resolve-lib.sh
 . "$_usage_script_directory/usage-resolve-lib.sh" 2>/dev/null || _usage_missing_library "$_usage_script_directory/usage-resolve-lib.sh"
+# shellcheck source=.gaia/scripts/usage-active-lib.sh
+. "$_usage_script_directory/usage-active-lib.sh" 2>/dev/null || _usage_missing_library "$_usage_script_directory/usage-active-lib.sh"
 # shellcheck source=.gaia/scripts/usage-render-lib.sh
 . "$_usage_script_directory/usage-render-lib.sh" 2>/dev/null || _usage_missing_library "$_usage_script_directory/usage-render-lib.sh"
 # shellcheck source=.gaia/scripts/usage-memo-lib.sh
@@ -71,7 +73,12 @@ EOF
 }
 
 _error() { printf 'usage %s: %s\n' "$SUBCOMMAND" "$*" >&2; }
-_now() { date -u +%Y-%m-%dT%H:%M:%SZ; }
+# A bats run pins the clock through GAIA_USAGE_TEST_NOW; outside one the
+# variable is ignored, so a stray export can never move a real close.
+_now() {
+  if [ -n "${GAIA_USAGE_TEST_NOW:-}" ] && [ -n "${BATS_TEST_TMPDIR:-}" ]; then printf '%s\n' "$GAIA_USAGE_TEST_NOW"; return 0; fi
+  date -u +%Y-%m-%dT%H:%M:%SZ
+}
 _is_pr() { [[ "${1-}" =~ ^[1-9][0-9]{0,9}$ ]]; }
 # The ref grammar admits `..` and empty path segments; git refuses both in a
 # ref name, so no normalized branch carries one and a --key that does is a typo

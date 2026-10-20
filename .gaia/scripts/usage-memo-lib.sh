@@ -75,8 +75,8 @@ def usage_memo_keys($present; $memo; $default):
 gaia_usage_memo_path() { printf '%s\n' "${1%/}/usage-branch-memo.json"; }
 
 gaia_usage_memo_trace() {
-  [ -n "${GAIA_USAGE_MEMO_TRACE:-}" ] || return 0
-  printf '%s\n' "$1" 2>/dev/null >>"$GAIA_USAGE_MEMO_TRACE" || true
+  [ -n "${GAIA_USAGE_MEMO_TRACE_FILE:-}" ] || return 0
+  printf '%s\n' "$1" 2>/dev/null >>"$GAIA_USAGE_MEMO_TRACE_FILE" || true
   return 0
 }
 
@@ -411,9 +411,9 @@ _GAIA_USAGE_MEMO_PRELUDE_JQ='
 # gaia_usage_memo_view <usage> <links> <default-branch> <filter> [jq args...]:
 # runs <filter> (a view over $usage_records, $links and $memo_keys) in one jq process
 # over the stores and GAIA_USAGE_MEMO, printing the view, {"miss":...} or
-# {"legacy":true}. rc 1 when a store cannot be read or jq fails. Cursor rows are
-# dropped before jq, since no view reads them; only the flusher's own spelling
-# is dropped, so any other line reaches jq and is kept or skipped as before.
+# {"legacy":true}. rc 1 when a store cannot be read or jq fails. Fact-less cursor
+# rows (the flusher's own spelling) are dropped before jq; a cursor row carrying
+# facts spells `act` first, so it reaches the views; any other line is kept or skipped as before.
 # The globals the defs name are bound empty: no view the filter calls reads them.
 # The memo reaches jq on fd 3, never argv: Linux refuses any one argument over
 # 128 KiB (MAX_ARG_STRLEN), which a year of memo passes, so --argjson would fail
@@ -427,13 +427,13 @@ gaia_usage_memo_view() {
   [ -f "$usage_store" ] || usage_store=/dev/null
   [ -f "$links_store" ] || links_store=/dev/null
   [ -n "$pricing" ] || pricing='def priced_row($row): {dollars: 0, unpriced: []};'
-  LC_ALL=C grep -v '^{"schema_version":1,"kind":"cursor",' "$usage_store" 2>/dev/null |
+  LC_ALL=C grep -v '^{"schema_version":1,"kind":"cursor","session_id":' "$usage_store" 2>/dev/null |
     jq -nRc --rawfile _links_raw "$links_store" --rawfile _memo_raw /dev/fd/3 \
       --arg _default "$default_branch" --arg usage_store "" --arg links_store "" --argjson keys '{}' "$@" \
       "$GAIA_USAGE_JQ_DEFS$pricing$GAIA_USAGE_RESOLVE_JQ$GAIA_USAGE_MODEL_JQ$GAIA_USAGE_VIEW_JQ$GAIA_USAGE_MEMO_JQ$_GAIA_USAGE_MEMO_PRELUDE_JQ$filter end end" \
       2>/dev/null 3<<<"${GAIA_USAGE_MEMO:-null}"
   pipe_statuses="${PIPESTATUS[0]} ${PIPESTATUS[1]}"
-  # grep exits 1 when it selects no line (an empty store, or only cursor rows).
+  # grep exits 1 when it selects no line (an empty store, or only fact-less cursor rows).
   case "$pipe_statuses" in "0 0" | "1 0") return 0 ;; *) return 1 ;; esac
 }
 

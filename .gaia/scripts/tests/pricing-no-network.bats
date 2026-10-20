@@ -14,7 +14,7 @@ bats_require_minimum_version 1.5.0
 
 # Files whose non-comment lines must name no network tool and no retired
 # rate-library entry point. Appending a path here extends the static check.
-READOUT_FILES=(usage-render-lib.sh usage-memo-lib.sh usage.sh)
+READOUT_FILES=(usage-active-lib.sh usage-render-lib.sh usage-memo-lib.sh usage.sh)
 # The retired entry points are spelled in two pieces so this file holds no
 # retired name literally.
 READOUT_PATTERN='curl|wget|/dev/tcp|GAIA_RATES_FEED_|gaia_rates_he''al|gaia_rates_prep''are|gaia_resolve_rate_table'

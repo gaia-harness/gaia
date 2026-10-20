@@ -172,7 +172,7 @@ Every path that ends the run appends exactly one cost record:
 bash .gaia/scripts/usage.sh record command:gaia-forensics --workflow gaia-forensics
 ```
 
-On exit 0 relay the last stdout line (the `Cost:` line) verbatim as the last line of the reply; on a non-zero exit nothing was recorded, so relay the one stderr line in its place. The record never blocks the run or changes its exit status.
+On exit 0 relay the `Cost:` line and every `Note:` line under it verbatim as the last lines of the reply; on a non-zero exit nothing was recorded, so relay the one stderr line in its place. The record never blocks the run or changes its exit status.
 
 - User-config branch, `gh` not installed, and the user answering `No` all exit zero with no issue filed: run the bare call above at step 9, no `--issue`.
 - Issue filed successfully: at step 9, append `--issue <N>` only when the current repo is `gaia-react/gaia` (check with `gh repo view --json nameWithOwner -q .nameWithOwner`, which must print `gaia-react/gaia`; an `issue:N` ref carries no repo, so in any other repo it would collide with that repo's own issue N), otherwise record the bare call. `<N>` is sourced from the `gh_issue_url` frontmatter this run already persisted to its own report, never reconstructed, never looked up:
