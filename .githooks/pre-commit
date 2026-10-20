@@ -15,6 +15,13 @@ printf '\n🔎 Running pre-commit check\n'
 ROOT=$(git rev-parse --show-toplevel) || exit 1
 PATH="$ROOT/node_modules/.bin:$PATH"
 export PATH
+
+# Machine-local references in the lines this commit adds
+# (.claude/rules/working-doc-ids.md). The detector is read beside this hook
+# rather than under ROOT, so a hook always runs the detector it shipped with; a
+# missing detector exits non-zero and refuses too.
+bash "$(dirname "$0")/../.gaia/scripts/machine-local-ref-lib.sh" check staged "$ROOT" || exit 1
+
 PLAN=$(bash "$ROOT/.gaia/scripts/precommit-packages.sh" "$ROOT") || {
   printf "\x1b[31m✖ Pre-commit could not read the package registry\x1b[0m\n"
   exit 1

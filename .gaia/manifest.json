@@ -257,6 +257,7 @@
     ".gaia/scripts/lib/serena-lang.sh": "owned",
     ".gaia/scripts/lib/version-compare.awk": "owned",
     ".gaia/scripts/link-worktree.sh": "owned",
+    ".gaia/scripts/machine-local-ref-lib.sh": "owned",
     ".gaia/scripts/main-only-lib.sh": "owned",
     ".gaia/scripts/main-root-lib.sh": "owned",
     ".gaia/scripts/notebook/legacy-roots.sh": "owned",
@@ -745,7 +746,7 @@
     "wiki/overview.md": "wiki-owned",
     "wiki/README.md": "wiki-owned"
   },
-  "generated": "2026-10-20T11:42:45.927Z",
+  "generated": "2026-10-20T12:17:51.529Z",
   "regions": [
     {
       "endMarker": "<!-- gaia:audit-remit:end -->",

@@ -136,7 +136,7 @@ Master catalog of every page in the wiki. Newly created pages must be added here
 - [[Accessibility]]
 - [[ESLint Fixes]]
 - [[Forensics]]: read-only bug-report bridge with redaction and classification
-- [[Pre-commit Hooks]]
+- [[Pre-commit Hooks]]: the native commit hooks: per-package gate, generated-settings and retired-path guards, and the machine-local reference scan on staged lines and commit messages
 - [[Git Workflow]]
 - [[PR Merge Workflow]]: the main-thread merge runbook: fork-PR refusal, pre-dispatch verification, dispatching the audit loop unit, the branch checkpoint, the status post, the merge and the post-merge cleanup.
 - [[Audit Round Procedure]]: the audit loop unit's only procedure source: member dispatch, light routing, the fix round, dispositions, cross-remit findings and the marker key.

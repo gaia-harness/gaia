@@ -10,13 +10,13 @@
 # Why this script exists: the previous inline `awk -v` rendering blocks in
 # `.github/workflows/forensics-triage.yml` had two critical bugs, POSIX
 # awk and gawk both reject `-v var=value` assignments containing literal
-# newlines (UAT-001), and `gsub(re, repl, target)` expands `&` in `repl`
-# to the matched text, corrupting any user content containing `&`
-# (UAT-002). This helper sidesteps both failures by walking the template
+# newlines, and `gsub(re, repl, target)` expands `&` in `repl`
+# to the matched text, corrupting any user content containing `&`.
+# This helper sidesteps both failures by walking the template
 # once and replacing tokens with literal-string values, no regex, no
 # `awk -v`, no replacement-string escape semantics.
 #
-# Single-pass guarantee (UAT-003): the template is walked exactly once.
+# Single-pass guarantee: the template is walked exactly once.
 # At each cursor position we look for the LEFTMOST placeholder token; if
 # found, we emit the literal prefix and the substituted value, then
 # advance the cursor PAST the inserted value (not re-scanning it). A

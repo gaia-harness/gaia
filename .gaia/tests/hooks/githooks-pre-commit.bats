@@ -647,6 +647,45 @@ OLD_HOOK
   assert_gate_skipped
 }
 
+# --- machine-local references: the staged scan runs before any gate step ---
+
+@test "machine-local refs: a staged prose line naming a plan number is refused and runs no gate step" {
+  use_frontend_package
+  mkdir -p "$REPO/wiki"
+  printf '# Page\n\nShipped by PLAN-007.\n' > "$REPO/wiki/page.md"
+  git -C "$REPO" add wiki/page.md
+  run_hook
+  [ "$status" -ne 0 ]
+  grep -qF -- "wiki/page.md:3: PLAN-007" <<<"$output"
+  grep -qF -- ".claude/rules/working-doc-ids.md" <<<"$output"
+  [ ! -s "$PNPM_LOG" ]
+}
+
+@test "machine-local refs: a staged placeholder passes the scan" {
+  use_frontend_package
+  mkdir -p "$REPO/wiki"
+  printf '# Page\n\nA SPEC folder is .notebook/specs/SPEC-NNN/.\n' > "$REPO/wiki/page.md"
+  git -C "$REPO" add wiki/page.md
+  run_hook
+  assert_gate_skipped
+}
+
+# The hook reads the detector beside its own tree. A copy with no detector
+# there must refuse rather than commit unscanned.
+@test "machine-local refs: the hook refuses when the detector cannot run" {
+  use_frontend_package
+  mkdir -p "$REPO/.githooks" "$REPO/wiki"
+  cp "$HOOK_ABSOLUTE_PATH" "$REPO/.githooks/pre-commit"
+  chmod +x "$REPO/.githooks/pre-commit"
+  echo a > "$REPO/wiki/a.md"
+  git -C "$REPO" add wiki/a.md
+  run env PATH="$STUB_BIN:$PATH" PNPM_LOG="$PNPM_LOG" \
+    sh -c 'cd "$1" && "$2"' _ "$REPO" "$REPO/.githooks/pre-commit"
+  [ "$status" -ne 0 ]
+  grep -qF -- "machine-local-ref-lib.sh" <<<"$output"
+  [ ! -s "$PNPM_LOG" ]
+}
+
 @test "built-in default: with no registry, frontend/app/x.tsx runs the gate in frontend/" {
   rm -f "$REPO/.gaia/packages.json"
   . "$BATS_TEST_DIRNAME/helpers/package-fixture.sh"
@@ -797,6 +836,8 @@ STUB
 install_hook_into_sandbox() {
   mkdir -p "$REPO/.githooks"
   cp -p "$HOOK_ABSOLUTE_PATH" "$REPO/.githooks/pre-commit"
+  # The hook reads the machine-local reference detector beside itself.
+  cp "$REPO_ROOT/.gaia/scripts/machine-local-ref-lib.sh" "$REPO/.gaia/scripts/"
   git -C "$REPO" config core.hooksPath .githooks
 }
 

@@ -21,7 +21,7 @@ On GAIA 1.6.1? Claude: choose Abort, then offer to migrate this project to 2.0.0
 A 1.6.1 project moves to 2.0.0 through the migration note bundled in the v2.0.0 release (`.gaia/migrations/2.0.0.md`), reached through the line above. It performs GAIA's side of every change in this release and applies or lists each **Action required:** item below that concerns your own code.
 
 - **`frontend/` layout and release bundles.** The React app and its frontend-only Claude harness live in `frontend/`, and the root is a pnpm workspace holding the shared harness. 2.x releases ship as `gaia-bundle-<tag>.tar.gz` with a `.sha256`, which `/update-gaia` verifies before following the release's bundled migration notes. A 1.6.1 `/update-gaia` cannot cross the move: choosing Proceed there stops with `FETCH_FAILED` and changes nothing else. **Action required:** on 1.x, choose Abort and migrate with the bundled 2.0.0 migration note (#2443)
-- **Native pre-commit hook.** The pre-commit floor runs as a native git hook at `.githooks/pre-commit`, activated by `pnpm install` through the root `prepare` script; husky and is-ci are gone and lint-staged stays. A clone still pointing at `.husky/_` runs no pre-commit hook and reports nothing. **Action required:** in every other existing clone, run `pnpm install` or `git config core.hooksPath .githooks`, then confirm `git config --get core.hooksPath` prints `.githooks` (the migration handles the clone that runs it) (#2456)
+- **Native pre-commit hook.** The pre-commit floor runs as a native git hook at `.githooks/pre-commit`, activated by `pnpm install` through the root `prepare` script; husky and is-ci are gone and lint-staged stays. The `pre-commit` and `commit-msg` hooks also refuse a SPEC, UAT or plan number, or a concrete `.notebook/` or `.gaia/local/` path, in staged prose, code comments and commit messages, since those name documents only one machine has; write out what the reference means instead (#2894). A clone still pointing at `.husky/_` runs no pre-commit hook and reports nothing. **Action required:** in every other existing clone, run `pnpm install` or `git config core.hooksPath .githooks`, then confirm `git config --get core.hooksPath` prints `.githooks` (the migration handles the clone that runs it) (#2456)
 - **Kebab-case frontend layout.** Files and folders under `frontend/app/components`, `pages` and `hooks` are kebab-case: a component is `components/<name>/index.tsx`, shadcn components sit flat in `components/ui/`, a page is `pages/<route path>/page.tsx`, and a hook is `use-<name>.ts`. `@gaia-react/lint` enforces it and `gaia scaffold` emits it; the migration's rename-before-merge step renames GAIA's files and your own so the merge keeps your edits (#2482)
 - shadcn/ui is now GAIA's component layer. The vendored components live in `frontend/app/components/ui/` (Base UI primitives, `class-variance-authority` variants, `lucide-react` icons), forms compose them with Conform instead of GAIA's form wrappers, and every color comes from a shadcn role token in `frontend/app/styles/theme.css` instead of the old `primary-*` ramp, paired light and dark palette classes, and custom utilities. GAIA's own `Button`, `LinkButton`, `Toast`, the form wrappers and `react-icons` are gone, and `@gaia-react/lint` now fails raw palette classes, arbitrary values, restyled shadcn components and `FC` types. You get one registry to add components from (`pnpm shadcn add <name>`), and a theme you change by editing token values. **Action required:** migrate your own code with the steps below, then run the closing grep until it prints nothing (#2492)
   1. Run `/update-gaia`, then `pnpm add lucide-react @base-ui/react class-variance-authority tw-animate-css`, `pnpm add -D shadcn` and `pnpm remove autosize @types/autosize @tailwindcss/forms` (add `react-icons` to that remove only if none of your own code imports it; you may keep it as your own dependency, GAIA no longer uses it). `@tailwindcss/forms` is gone together with the global form block, so a raw native `<input>`, `<select>`, `<textarea>`, checkbox or radio loses its styling: move each to the `ui` control that replaces it.
@@ -300,7 +300,7 @@ A 1.6.1 project moves to 2.0.0 through the migration note bundled in the v2.0.0 
 ### Added
 
 - dependency-CVE deterministic-oracle advisory (#299)
-- mechanical TDD RED-verification (SPEC-003) (#297)
+- mechanical TDD RED-verification (#297)
 - decouple from upstream claude-obsidian, add native checks (#289)
 - add maintainer-only release-notes skill (#283)
 
@@ -519,10 +519,10 @@ A 1.6.1 project moves to 2.0.0 through the migration note bundled in the v2.0.0 
 - robust a11y tooling stack (#156)
 - close slice-4 forward-refs (wiki + update-deps) (#153)
 - add Phase A configure-automation step (#148)
-- spec-001 slice 4: /setup-gaia-ci slash command (Phase B) (#147)
-- spec-001 slice 3: GAIA CI workflow YAML generation (#146)
-- spec-001 slice 2: auto-merge + auto-revert workflow shape (#145)
-- spec-001 slice 1: smart-cron + per-tool state files (#144)
+- GAIA CI slice 4: /setup-gaia-ci slash command (Phase B) (#147)
+- GAIA CI slice 3: workflow YAML generation (#146)
+- GAIA CI slice 2: auto-merge + auto-revert workflow shape (#145)
+- GAIA CI slice 1: smart-cron + per-tool state files (#144)
 - add probe-after verification pass to Step 8 (#139)
 - surface GAIA-Audit trailer invalidation count in summary (#140)
 - rename /wiki-{sync,consolidate,lint} → /gaia wiki <sub> to resolve plugin collision (#121)
@@ -531,8 +531,8 @@ A 1.6.1 project moves to 2.0.0 through the migration note bundled in the v2.0.0 
 - autonomous triage workflow for gaia-forensics issues (#104)
 - /gaia forensics: end-user bug-report bridge (#105)
 - bundle-time scrub + runtime-deps primitives (#98)
-- telemetry v1 (SPEC-001): three-stream architecture (#91)
-- tree READMEs + inventory audit appended to SPEC-005
+- telemetry v1: three-stream architecture (#91)
+- tree READMEs + inventory audit for the shared-state symlinks
 - rule file + port smoke-uat-write + relocate serena
 - wire before_implement hook + speckit.gaia.uat-write into manifest
 - wiki-sync handoff + revised-contracts §2 amendment
@@ -569,12 +569,12 @@ A 1.6.1 project moves to 2.0.0 through the migration note bundled in the v2.0.0 
 - surface code-review-audit aborts as red checks (#123)
 - CI source-changes gate, knip binaries, instruction-file paths (#122)
 - relocate audit-stamp bats + repair latent path bug in 4 existing bats (#119)
-- SPEC-005 shared-state symlinks + slash-command worktree guards (#118)
+- shared-state symlinks + slash-command worktree guards (#118)
 - address remaining audit suggestions from PR #114 (#116)
 - audit advisory follow-ups (S-1/S-2/S-3) (#114)
 - bootstrap-labels.sh: shorten needs-human desc, add gaia-forensics (#113)
-- SPEC-003 triage workflow correctness + hardening (#110)
-- close SPEC-004 sharp edges (setup-state, pre-merge audit, post-merge cleanup) (#109)
+- forensics triage workflow correctness + hardening (#110)
+- close sharp edges in setup-state, the pre-merge audit and post-merge cleanup (#109)
 - address pre-merge audit findings (#106)
 - enforce exclusive ceiling in spec-kit version-check
 

@@ -158,7 +158,7 @@ header_of_length() {
 
 @test "commit-msg hook end to end: git refuses debt and accepts feat" {
   local scratch="$BATS_TEST_TMPDIR/end-to-end"
-  mkdir -p "$scratch/.githooks" "$scratch/.gaia" "$scratch/shim"
+  mkdir -p "$scratch/.githooks" "$scratch/.gaia/scripts" "$scratch/shim"
   # `pnpm exec` in a scratch directory tries to install into the node_modules
   # symlinked below, which would reach the real tree. The shim stands in for it:
   # the hook's `pnpm -C <root> exec <command> ...` runs the real commitlint
@@ -177,6 +177,8 @@ SHIM
   cp "$REAL_CONFIG" "$scratch/commitlint.config.mjs"
   cp "$TYPES_FILE" "$scratch/.gaia/conventional-commits.json"
   cp "$REPO_ROOT/.githooks/commit-msg" "$scratch/.githooks/commit-msg"
+  # The hook reads the machine-local reference detector beside itself.
+  cp "$REPO_ROOT/.gaia/scripts/machine-local-ref-lib.sh" "$scratch/.gaia/scripts/"
   ln -s "$REPO_ROOT/node_modules" "$scratch/node_modules"
   # The real hook, activated the way the root `prepare` script activates it.
   git -C "$scratch" config core.hooksPath .githooks

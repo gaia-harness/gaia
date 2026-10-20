@@ -381,7 +381,7 @@ readonly OWN_AWK='
     # Ahead of every next below, so the pragma reader sees the full-line
     # comments the fence and comment-skip rules discard.
     { gaia_scan_feed($0, is_bats) }
-    # UAT-009s off-surface arm: a pragma naming this guard waives nothing
+    # Off-surface arm: a pragma naming this guard waives nothing
     # outside `*.bats`, so it is reported here regardless of whether its target
     # line also carries an instance, which the detector below may still print.
     !is_bats && gaia_scan_pragma_here("lint-git-path-quoting") {

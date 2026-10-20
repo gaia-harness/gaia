@@ -85,8 +85,38 @@ edit_argument_was_recorded() {
   true
 }
 
+@test "commit-msg: REFUSES a message citing a SPEC number, naming the line and the rule" {
+  printf 'feat: add a thing\n\nImplements SPEC-128.\n' > "$MESSAGE_FILE"
+  run_hook
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"line 3: SPEC-128"* ]]
+  [[ "$output" == *".claude/rules/working-doc-ids.md"* ]]
+}
+
+@test "commit-msg: a placeholder and an issue number pass the scan" {
+  printf 'feat: add a thing\n\nA SPEC-NNN id resolves under .notebook/specs/<SPEC-ID>/.\n\nCloses #12\n' > "$MESSAGE_FILE"
+  run_hook
+  [ "$status" -eq 0 ]
+  edit_argument_was_recorded
+}
+
+# The hook reads the detector beside its own tree. A copy with no detector
+# there must refuse rather than commit unscanned.
+@test "commit-msg: REFUSES when the detector cannot run" {
+  local orphan_hook="$SANDBOX/hooks/commit-msg"
+  mkdir -p "$SANDBOX/hooks"
+  cp "$HOOK_ABSOLUTE_PATH" "$orphan_hook"
+  chmod +x "$orphan_hook"
+  run_hook "$orphan_hook"
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"machine-local-ref-lib.sh"* ]]
+}
+
 @test "commit-msg: the pass-through assertion can fail (hook with the argument dropped)" {
-  local broken_hook="$SANDBOX/commit-msg-broken"
+  # The copy reads the detector beside itself, so it gets one.
+  local broken_hook="$SANDBOX/.githooks/commit-msg-broken"
+  mkdir -p "$SANDBOX/.githooks" "$SANDBOX/.gaia/scripts"
+  cp "$REPO_ROOT/.gaia/scripts/machine-local-ref-lib.sh" "$SANDBOX/.gaia/scripts/"
   sed 's/--edit "\$1"/--edit/' "$HOOK_ABSOLUTE_PATH" > "$broken_hook"
   # The mutation must have changed the hook, or this twin proves nothing.
   cmp -s "$HOOK_ABSOLUTE_PATH" "$broken_hook" && return 1

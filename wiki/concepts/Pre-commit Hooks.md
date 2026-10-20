@@ -2,7 +2,7 @@
 type: concept
 status: active
 created: 2026-04-20
-updated: 2026-10-13
+updated: 2026-10-20
 tags: [concept, ci, quality]
 ---
 
@@ -21,6 +21,10 @@ Any non-empty `CI`, including `CI=false` or `CI=0`, skips hook setup. A shell th
 ## What it runs
 
 The hook decides which package a staged path belongs to from the registry and descriptors in [[Package Descriptor]], and refuses to commit when that registry cannot be read. For each affected package it runs typecheck, lint-staged, and `test:lint-staged`. It also guards generated settings drift, retired root frontend paths, and duplicate react-doctor configs. The hook file is the source of truth for the arms.
+
+## Machine-local references
+
+Before any gate step, `pre-commit` scans the lines the commit adds, and `.githooks/commit-msg` scans the message before commitlint. Both refuse a SPEC, UAT or plan number, or a concrete path under `.notebook/` or `.gaia/local/`, since each names a document only one machine has; the refusal names the line and says to write out what the reference means. One detector, `.gaia/scripts/machine-local-ref-lib.sh`, serves both hooks and the UAT gate, and its header owns the patterns and what it skips. Each hook reads the detector beside its own tree and refuses the commit when the detector cannot run. A merge, cherry-pick or revert being concluded is not scanned: its lines were already scanned when first committed. What the rule bans and why: `.claude/rules/working-doc-ids.md`.
 <!-- gaia:maintainer-only:start -->
 
 When a commit stages CLI source, the CLI package manifest or its lockfile, the hook rebuilds both CLI bundles and stages them. It refuses when CLI source has unstaged or untracked changes, and warns and continues when the CLI has no install. The rules live in `.gaia/scripts/cli-autobundle.sh`.

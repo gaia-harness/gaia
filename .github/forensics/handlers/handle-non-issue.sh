@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# handle-non-issue.sh: UAT-002 action handler.
+# handle-non-issue.sh: the non-issue verdict's action handler.
 #
 # Closes a forensics-triaged issue, applies the `non-issue` and (last)
 # `gaia-triaged` labels, and posts the classifier reasoning as a comment
@@ -16,11 +16,12 @@
 # script error (bad usage, missing file, gh failure not related to
 # already-applied state).
 #
-# Contract: UAT-002 / UAT-006 / UAT-015 (passthrough).
+# Contract: close, comment and label, idempotent on re-fire, with the
+# reasoning passed through verbatim.
 # Idempotency: gh issue edit --add-label re-applying an existing label is
 # a no-op; gh issue close on an already-closed issue is a no-op for our
 # purposes. The final --add-label gaia-triaged is the durable idempotency
-# key the workflow's UAT-006 early-exit reads on the next fire.
+# key the workflow's idempotency early-exit reads on the next fire.
 
 set -euo pipefail
 
@@ -51,7 +52,7 @@ comment_file="$work_directory/comment.md"
 #      reasoning may contain shell metacharacters even after redaction).
 #   3. Close the issue.
 #   4. Apply `gaia-triaged` LAST so the idempotency key is the final
-#      mutation to land. Under UAT-011's concurrency-queued re-fire, any
+#      mutation to land. Under a concurrency-queued re-fire, any
 #      partial completion that lands `gaia-triaged` has, by construction,
 #      already done the rest.
 gh issue edit "$issue_number" --add-label "non-issue"

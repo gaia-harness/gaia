@@ -2,7 +2,7 @@
 # SC2016 is intentional file-wide: single-quoted printf formats whose backticks
 # are literal markdown in the emitted text, not command substitution.
 # shellcheck disable=SC2016
-# handle-auto-fixable.sh: UAT-004 action handler.
+# handle-auto-fixable.sh: the auto-fixable verdict's action handler.
 #
 # Pre-conditions: the workflow has already created `<fix-branch>` from
 # `main`, applied the candidate fix, run the Quality Gate green, and
@@ -11,7 +11,7 @@
 # Usage:
 #   handle-auto-fixable.sh <issue-num> <class-slug> <fix-branch> <pr-body-file>
 #
-# <pr-body-file> path to a file holding the PR body. Per UAT-015 the
+# <pr-body-file> path to a file holding the PR body. The
 # body cites `## Capture` from the issue verbatim, the workflow that
 # composes this file is responsible for the passthrough; this handler
 # never re-redacts.
@@ -19,8 +19,8 @@
 # Exit code: 0 on success. 1 if `<fix-branch>` is missing on origin
 # (sanity check). gh-level failures propagate.
 #
-# Contract: UAT-004 / UAT-008 (PR is draft) / UAT-015 (passthrough). The
-# contract requires the `--draft` flag on `gh pr create`.
+# Contract: the PR opens as a draft (the `--draft` flag on `gh pr create`)
+# and its body passes `## Capture` through verbatim.
 
 set -euo pipefail
 
@@ -71,7 +71,7 @@ titled_body_file="$work_directory/pr-body.md"
   cat "$pr_body_file"
 } > "$titled_body_file"
 
-# 3. Open the draft PR. --draft is the UAT-008 hard requirement; the
+# 3. Open the draft PR. --draft is a hard requirement; the
 #    handler MUST NEVER mark it ready-for-review. --body-file (never
 #    --body "$(...)") is the same shell-metacharacter discipline the
 #    issue-comment paths use; PR body content is phase-1-redacted but
@@ -91,7 +91,7 @@ pr_url="$(gh pr create \
 gh issue edit "$issue_number" --add-label "auto-fixable"
 
 # 5. Link the PR back from the issue. Comment last (before triaged) so
-#    a re-fire under UAT-011 sees the triaged label and exits before
+#    a concurrency-queued re-fire sees the triaged label and exits before
 #    duplicating the link.
 link_file="$work_directory/link.md"
 {

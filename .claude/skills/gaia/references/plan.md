@@ -42,18 +42,18 @@ Otherwise, ask: **"What do you want me to orchestrate?"** and wait for the respo
 
 Check the description for a SPEC reference. Three forms are recognized:
 
-1. **Bare id** (the canonical form `/gaia-spec` hands off): `$ARGUMENTS`, trimmed, is exactly `SPEC-\d+` and nothing else, e.g. `SPEC-026`.
+1. **Bare id** (the canonical form `/gaia-spec` hands off): `$ARGUMENTS`, trimmed, is exactly `SPEC-\d+` and nothing else.
 2. **Path form**: a path matching `.notebook/specs/SPEC-\d+/SPEC\.md` appears anywhere in the description.
 3. **Prefix form** (the older, verbose handoff shape, still accepted for pasted history): a `SPEC-\d+:` prefix at the start of the description.
 
-If any form matched, extract the `SPEC-\d+` id from wherever it appeared (the bare token, the path segment, or the text before the colon), then resolve it against the actual filesystem, self-healing a zero-padding mismatch (e.g. `SPEC-026` also resolves from the bare `SPEC-26`):
+If any form matched, extract the `SPEC-\d+` id from wherever it appeared (the bare token, the path segment, or the text before the colon), then resolve it against the actual filesystem, self-healing a zero-padding mismatch (an unpadded id also resolves to its three-digit zero-padded folder):
 
 ```bash
 # SPEC folders are main-anchored state (stored in the main checkout: the
 # clone's primary working directory, on any branch; state registry
 # specs-main); the notebook library resolves each one through main, so a
 # linked worktree reads main's folder, never a forked copy.
-RAW="<the SPEC-\d+ id extracted above, e.g. SPEC-026 or SPEC-26>"
+RAW="<the SPEC-\d+ id extracted above, padded or not>"
 NUM="${RAW#SPEC-}"
 PADDED="SPEC-$(printf '%03d' "$((10#$NUM))")"
 SPEC_ID=""
@@ -73,7 +73,7 @@ Once `SPEC_ID` resolves:
 1. Cache `SPEC_DIR="$(bash .gaia/scripts/notebook/notebook-lib.sh path spec "$SPEC_ID")"` and the absolute `SPEC_PATH="${SPEC_DIR}/SPEC.md"` for use in the planner prompt (step 4), the planner will reference it in `README.md`.
 2. Read `SPEC_PATH`. Its full content is the source-of-truth feature description; any dispatch summary in the original description is just a label.
 3. Check for a sibling audit: if `${SPEC_DIR}/AUDIT.md` exists, cache its absolute path as `AUDIT_PATH` for use in step 4, the planner reads it too. If absent, `AUDIT_PATH` is unset.
-4. Cache the lowercased SPEC id (`spec-005`) as `SPEC_SLUG_SEED` for use in step 4's branch-naming policy.
+4. Cache the lowercased SPEC id (`spec-NNN`) as `SPEC_SLUG_SEED` for use in step 4's branch-naming policy.
 
 If no SPEC reference is detected, `SPEC_SLUG_SEED`, `SPEC_PATH`, and `AUDIT_PATH` are unset; step 3 allocates a `PLAN-NNN` id from the notebook catalog for the spec-less plan.
 
