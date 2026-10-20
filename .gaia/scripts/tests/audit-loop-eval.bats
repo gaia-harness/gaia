@@ -642,14 +642,92 @@ write_light_ledger() {
   [ "$output" = '{"total":1,"members":{"code-audit-frontend":1},"grants":0}' ]
 }
 
-@test "record-values: a ledger with no loop state keeps the early return without a light key" {
+@test "record-values: a ledger with no loop state still reads the ledger, counting legacy lines under light only" {
   cli_copy
   write_light_ledger code-audit-frontend code-audit-frontend
   [ -f "$(light_ledger_path)" ]
   [ ! -f "$ALF_STATE" ]
   run "$CLI/audit-loop-eval.sh" record-values --root "$ALF_ROOT"
   [ "$status" -eq 0 ]
+  [ "$output" = '{"total":0,"members":{},"grants":0,"light":{"code-audit-frontend":2}}' ]
+}
+
+# write_review_ledger <anchor-kind|null> <verdict> <member>...: append one ledger line per member.
+write_review_ledger() {
+  local ledger_path member anchor_kind="$1" verdict="$2"
+  ledger_path="$(light_ledger_path)"
+  mkdir -p "$(dirname "$ledger_path")"
+  shift 2
+  for member in "$@"; do
+    jq -n -c --arg member "$member" --arg verdict "$verdict" --arg tree "$ALF_TREE" --arg anchor_kind "$anchor_kind" \
+      '{member: $member, digest: ("a" * 64), tree: $tree, verdict: $verdict, at: "2026-01-01T00:00:00Z",
+        anchor_kind: (if $anchor_kind == "null" then null else $anchor_kind end),
+        marked_at: "2026-01-01T00:00:00Z", reviewer_duration_ms: null}' >>"$ledger_path"
+  done
+}
+
+@test "record-values with no state: one merge-base clear is a quick count, total 0 and no light key" {
+  cli_copy
+  write_review_ledger merge-base clear code-audit-frontend
+  [ ! -f "$ALF_STATE" ]
+  run "$CLI/audit-loop-eval.sh" record-values --root "$ALF_ROOT"
+  [ "$status" -eq 0 ]
+  [ "$output" = '{"total":0,"members":{},"grants":0,"quick":{"code-audit-frontend":1}}' ]
+}
+
+@test "record-values with one admitted unit and no rounds: the same quick count, total 0, empty members and no light key" {
+  cli_copy
+  alf_seed_state '{}'
+  alf_state_edit '.history.units = [{unit: 1, start_round: 1, k: 3, through_round: 3, admitted_on: "context",
+    after_checkpoint: 0, recorded_at: "2026-01-01T00:00:00Z", session_id: "s1"}]'
+  [ "$(jq -c '.history.rounds' "$ALF_STATE")" = '[]' ]
+  write_review_ledger merge-base clear code-audit-frontend
+  run "$CLI/audit-loop-eval.sh" record-values --root "$ALF_ROOT"
+  [ "$status" -eq 0 ]
+  [ "$output" = '{"total":0,"members":{},"grants":0,"quick":{"code-audit-frontend":1}}' ]
+  run "$CLI/audit-loop-eval.sh" unit-window --root "$ALF_ROOT"
+  [ "$status" -eq 0 ]
+  [ "$output" = "1 1 3 false" ]
+}
+
+@test "record-values: a merge-base clear and a post-clearance clear count once each, in quick and in light" {
+  cli_copy
+  write_review_ledger merge-base clear code-audit-frontend
+  write_review_ledger full clear code-audit-frontend
+  run "$CLI/audit-loop-eval.sh" record-values --root "$ALF_ROOT"
+  [ "$status" -eq 0 ]
+  [ "$output" = '{"total":0,"members":{},"grants":0,"light":{"code-audit-frontend":1},"quick":{"code-audit-frontend":1}}' ]
+}
+
+@test "record-values: a merge-base escalate and a merge-base failed run count in neither quick nor light" {
+  cli_copy
+  write_review_ledger merge-base escalate code-audit-frontend
+  write_review_ledger merge-base failed code-audit-frontend
+  run "$CLI/audit-loop-eval.sh" record-values --root "$ALF_ROOT"
+  [ "$status" -eq 0 ]
   [ "$output" = '{"total":0,"members":{},"grants":0}' ]
+}
+
+@test "record-values: a refusal-anchored escalate and a null anchor kind still count under light" {
+  cli_copy
+  write_review_ledger refusal escalate code-audit-frontend
+  write_review_ledger null clear code-audit-maintainer-shell
+  run "$CLI/audit-loop-eval.sh" record-values --root "$ALF_ROOT"
+  [ "$status" -eq 0 ]
+  [ "$output" = '{"total":0,"members":{},"grants":0,"light":{"code-audit-frontend":1,"code-audit-maintainer-shell":1}}' ]
+}
+
+@test "record-values: the anchor filter is what keeps a quick clear out of light" {
+  cli_copy
+  write_review_ledger merge-base clear code-audit-frontend
+  write_review_ledger full clear code-audit-frontend
+  grep -qF 'tally(.anchor_kind != "merge-base")' "$CLI/audit-loop-eval.sh"
+  sed 's/tally(\.anchor_kind != "merge-base")/tally(true)/' "$CLI/audit-loop-eval.sh" >"$CLI/audit-loop-eval.mutant.sh"
+  chmod +x "$CLI/audit-loop-eval.mutant.sh"
+  grep -qF 'tally(true)' "$CLI/audit-loop-eval.mutant.sh"
+  run "$CLI/audit-loop-eval.mutant.sh" record-values --root "$ALF_ROOT"
+  [ "$status" -eq 0 ]
+  [ "$(jq -c '.light' <<<"$output")" = '{"code-audit-frontend":2}' ]
 }
 
 @test "exit codes: detached is 4, corrupt state is 5, missing jq is 6, each with one diagnostic line" {

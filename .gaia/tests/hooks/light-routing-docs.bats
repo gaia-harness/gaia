@@ -169,3 +169,51 @@ long_waits() {
   out="$(long_waits "$BATS_TEST_TMPDIR/long-section.md")"
   [ "$out" = "long wait: 90" ]
 }
+
+# light_routing_section <file>: prints the "#### Light routing" section of the
+# page (heading line to the next heading), nothing when the heading is absent.
+light_routing_section() {
+  awk '/^#### Light routing$/ {inside_light_section=1; next} /^##+ / {inside_light_section=0} inside_light_section' "$1"
+}
+
+# bats test_tags=whole-tree
+@test "page light-routing section names the classifier and the merge-base anchor" {
+  local section
+  section="$(light_routing_section "$PAGE")"
+  [ -n "$section" ]
+  local needle
+  for needle in '.claude/hooks/lib/audit-quick-classify-lib.sh' 'anchor_kind: merge-base'; do
+    grep -qF -- "$needle" <<<"$section" || { echo "not under Light routing: $needle" >&2; return 1; }
+  done
+}
+
+# bats test_tags=whole-tree
+@test "page light-routing section does not enumerate the hiding and focus tokens" {
+  local section
+  section="$(light_routing_section "$PAGE")"
+  [ -n "$section" ]
+  local token
+  for token in 'sr-only' 'outline-none'; do
+    if grep -qF -- "$token" <<<"$section"; then
+      echo "enumerated: $token" >&2
+      return 1
+    fi
+  done
+}
+
+@test "token-enumeration guard fails on a scratch page that adds one" {
+  awk '{print} /^#### Light routing$/ {print "\nHidden tokens include sr-only."}' "$PAGE" >"$BATS_TEST_TMPDIR/enumerated-page.md"
+  local section
+  section="$(light_routing_section "$BATS_TEST_TMPDIR/enumerated-page.md")"
+  grep -qF -- 'sr-only' <<<"$section"
+}
+
+# bats test_tags=whole-tree
+@test "kill-rule section names the quick-route telemetry lines" {
+  local team_page="${GAIA_LIGHT_ROUTING_TEAM_PAGE:-$ROOT/wiki/decisions/Code Audit Team.md}"
+  local section
+  section="$(awk '/^### Light routing: the kill rule$/ {inside_kill_section=1; next} /^##+ / {inside_kill_section=0} inside_kill_section' "$team_page")"
+  [ -n "$section" ]
+  grep -qF -- 'quick_routes' <<<"$section"
+  grep -qF -- 'quick_cleared' <<<"$section"
+}

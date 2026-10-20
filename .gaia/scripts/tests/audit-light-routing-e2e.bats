@@ -107,7 +107,7 @@ escalate_through_light() {
 
 # --- routing outcomes ------------------------------------------------------------
 
-@test "without an earned full clearance a delta the classifier rejects routes full quick-path anchored on the merge base and writes no reviewer input" {
+@test "on a first dispatch whose route is full no reviewer input is written, and a member that has no quick route gets none either" {
   lsb_init
   lsb_commit frontend/app/notes.md "one line"
   lsb_route "$FRONTEND"
@@ -119,7 +119,153 @@ escalate_through_light() {
     || { jq -c . "$record" >&2; return 1; }
   [ ! -e "$(route_input_path)" ]
   find "$(light_directory)" -name '*.input.md' 2>/dev/null | grep -q . && return 1
+  lsb_route code-audit-maintainer-shell
+  expect_full no-full-clearance
+  find "$(light_directory)" -name '*.input.md' 2>/dev/null | grep -q . && return 1
   true
+}
+
+# --- the first-dispatch quick route, end to end ------------------------------------
+
+QUICK_ENGLISH="frontend/app/languages/en/common.ts"
+QUICK_JAPANESE="frontend/app/languages/ja/common.ts"
+QUICK_DIALOG="frontend/app/components/ui/dialog.tsx"
+QUICK_CONSUMER="frontend/app/components/confirm-dialog/index.tsx"
+QUICK_STORY="frontend/app/components/confirm-dialog/tests/index.stories.tsx"
+
+# quick_locale_text <title>: a one-key language file.
+quick_locale_text() {
+  printf 'export default {\n  title: '"'"'%s'"'"',\n};' "$1"
+}
+
+quick_dialog_text() {
+  cat <<'EOF'
+import {cn} from 'cn';
+
+const DialogContent = ({className}: {className?: string}) => (
+  <div className={cn('fixed', className)} />
+);
+
+const DialogHeader = ({className}: {className?: string}) => (
+  <div className={cn('flex', className)} />
+);
+
+export {DialogContent, DialogHeader};
+EOF
+}
+
+# quick_consumer_text <content-tokens> <header-tokens> <span-token>
+quick_consumer_text() {
+  cat <<EOF
+import {cn} from 'cn';
+import {DialogContent, DialogHeader} from '../ui/dialog';
+
+const ConfirmDialog = () => (
+  <DialogContent
+    className="$1"
+  >
+    <DialogHeader
+      className="$2"
+    >
+      Confirm
+    </DialogHeader>
+    <span className={cn('$3', 'py-1')}>Body</span>
+  </DialogContent>
+);
+
+export default ConfirmDialog;
+EOF
+}
+
+# quick_story_text <label>
+quick_story_text() {
+  cat <<EOF
+import type {Meta, StoryObj} from '@storybook/react-vite';
+import ConfirmDialog from '..';
+
+const meta: Meta<typeof ConfirmDialog> = {
+  component: ConfirmDialog,
+  title: 'Components/ConfirmDialog',
+};
+
+export default meta;
+
+type Story = StoryObj<typeof ConfirmDialog>;
+
+export const Default: Story = {
+  args: {
+    label: '$1',
+  },
+};
+EOF
+}
+
+record_for_frontend() {
+  printf '%s/%s.%s.route.json' "$(light_directory)" "$(lsb_member_digest "$FRONTEND")" "$FRONTEND"
+}
+
+@test "the landing-page string change routes light quick-eligible on a first dispatch, a clean reply clears it and the merge gate passes on that marker alone" {
+  lsb_init
+  lsb_main_base_begin
+  lsb_commit "$QUICK_ENGLISH" "$(quick_locale_text Hello)"
+  lsb_commit "$QUICK_JAPANESE" "$(quick_locale_text こんにちは)"
+  lsb_main_base_end
+  lsb_commit "$QUICK_ENGLISH" "$(quick_locale_text Welcome)"
+  lsb_commit "$QUICK_JAPANESE" "$(quick_locale_text ようこそ)"
+  assert_gate_denies
+  lsb_route "$FRONTEND"
+  expect_line "$(printf 'light\tquick-eligible')"
+  grep -qxF 'anchor_kind: merge-base' "$(route_input_path)"
+  [ "$(jq -r .anchor_kind "$(record_for_frontend)")" = "merge-base" ]
+  clear_through_light
+  expect_line "light-cleared"
+  [ "$(jq -r '[.provenance, .review] | join(" ")' "$(marker_path)")" = "earned light" ]
+  [ "$(find "$(audit_directory)" -maxdepth 1 -name '*.ok' | wc -l | tr -d ' ')" = "1" ]
+  assert_gate_allows
+}
+
+@test "the slight modal redesign with its own story routes light quick-eligible, clears on a clean reply and the story did not trip the test floor" {
+  lsb_init
+  lsb_main_base_begin
+  lsb_commit "$QUICK_DIALOG" "$(quick_dialog_text)"
+  lsb_commit "$QUICK_CONSUMER" "$(quick_consumer_text 'max-w-md p-4' 'gap-2 text-left' px-2)"
+  lsb_commit "$QUICK_STORY" "$(quick_story_text Save)"
+  lsb_main_base_end
+  lsb_commit "$QUICK_CONSUMER" "$(quick_consumer_text 'max-w-lg p-6' 'gap-3 text-left' px-3)"
+  lsb_commit "$QUICK_STORY" "$(quick_story_text Confirm)"
+  [ "$(lsb_git diff --numstat refs/remotes/origin/main HEAD | awk '{ total += $1 + $2 } END { print (total <= 40) }')" = "1" ]
+  assert_gate_denies
+  lsb_route "$FRONTEND"
+  expect_line "$(printf 'light\tquick-eligible')"
+  [ "$(jq -c '[.hard_full_rule, .anchor_kind]' "$(record_for_frontend)")" = '[null,"merge-base"]' ]
+  grep -qF "$QUICK_STORY" "$(route_input_path)"
+  clear_through_light
+  expect_line "light-cleared"
+  [ "$(jq -r '[.provenance, .review] | join(" ")' "$(marker_path)")" = "earned light" ]
+  [ "$(find "$(audit_directory)" -maxdepth 1 -name '*.ok' | wc -l | tr -d ' ')" = "1" ]
+  assert_gate_allows
+}
+
+@test "a quick route whose reply carries a minor note is refused, the router still sends the delta to the reviewer, and the merge gate keeps denying" {
+  lsb_init
+  lsb_main_base_begin
+  lsb_commit "$QUICK_ENGLISH" "$(quick_locale_text Hello)"
+  lsb_commit "$QUICK_JAPANESE" "$(quick_locale_text こんにちは)"
+  lsb_main_base_end
+  lsb_commit "$QUICK_ENGLISH" "$(quick_locale_text Welcome)"
+  lsb_commit "$QUICK_JAPANESE" "$(quick_locale_text ようこそ)"
+  lsb_route "$FRONTEND"
+  expect_line "$(printf 'light\tquick-eligible')"
+  lsb_clear_reply "$FRONTEND" | jq -c '.files[0].note = "Minor: wording"' >"$REPLY_FILE"
+  lsb_mark "$FRONTEND" "$REPLY_FILE"
+  expect_full verdict-malformed
+  assert_no_marker
+  lsb_route "$FRONTEND" --check
+  expect_line "$(printf 'light\tquick-eligible')"
+  assert_gate_denies
+  clear_through_light
+  expect_line "light-cleared"
+  assert_gate_allows
 }
 
 @test "a clear reply after a full clearance and a small owned Markdown commit clears light, and the merge gate allows it" {
