@@ -384,6 +384,19 @@
       }
     },
     {
+      "id": "fitness-blend-record",
+      "path": "fitness/",
+      "match": "prefix",
+      "kind": "dir",
+      "scope": "shared",
+      "keyed_by": "singleton per clone: one blend-record.json, replaced atomically (temp file in the same directory, then mv) by the update recorder",
+      "why": "The harness files an /update-gaia run blended (a clean both-sides merge, or an open item answered Combine), each stamped with the update's version. The merge report that names them is deleted when the run ends, so this is the only record. fitness-blend-record.sh writes it at the update's record step; the statusline refresher reads it and counts an entry once the main checkout reaches its version. The writer drops answered and never-landed entries on its next run, so the reaper never ages the record out: an old unreviewed blend still owes a review. Shared so a record made from an update worktree lands in the main checkout's copy.",
+      "writer": "code",
+      "retention": {
+        "class": "keep"
+      }
+    },
+    {
       "id": "codify-review-snapshot",
       "path": "codify/reviewed.json|codify/review-tally.json",
       "match": "exact",

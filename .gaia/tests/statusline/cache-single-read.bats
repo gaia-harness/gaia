@@ -46,7 +46,7 @@ render_with_cache() {
 }
 
 @test "every cached field reaches its own nudge" {
-  render_with_cache '{"outdatedCount":3,"securityCount":2,"gaiaHasUpdate":true,"gaiaLatest":"v9.9.9","codifyCandidateCount":4,"codifyNudgeReason":"4 recurring patterns","cleanseNudge":true,"cleanseNudgeReason":"memory grew","serenaLangDrift":["go","rust"],"residueCandidateCount":6,"wikiDriftCount":25}'
+  render_with_cache '{"outdatedCount":3,"securityCount":2,"gaiaHasUpdate":true,"gaiaLatest":"v9.9.9","codifyCandidateCount":4,"codifyNudgeReason":"4 recurring patterns","cleanseNudge":true,"cleanseNudgeReason":"memory grew","serenaLangDrift":["go","rust"],"residueCandidateCount":6,"wikiDriftCount":25,"fitnessGrade":"B+","fitnessBlendCount":3,"fitnessCommitCount":20,"fitnessCommitThreshold":18}'
   [ "$status" -eq 0 ]
   grep -qF '/update-gaia (v9.9.9)' <<<"$plain"
   grep -qF '/update-deps (3 outdated, 2 security)' <<<"$plain"
@@ -55,11 +55,13 @@ render_with_cache() {
   grep -qF '/gaia-serena-sync (missing: go, rust)' <<<"$plain"
   grep -qF '/gaia-residue (6 residuals)' <<<"$plain"
   grep -qF '/gaia-wiki (25 commits)' <<<"$plain"
+  grep -qF '/gaia-fitness (grade B+)' <<<"$plain"
 }
 
 @test "a control character in a cached reason cannot shift the fields after it" {
-  render_with_cache '{"cleanseNudge":true,"cleanseNudgeReason":"memory\u001fgrew\nfast","serenaLangDrift":["go"],"residueCandidateCount":6,"wikiDriftCount":25}'
+  render_with_cache '{"cleanseNudge":true,"cleanseNudgeReason":"memory\u001fgrew\nfast","serenaLangDrift":["go"],"residueCandidateCount":6,"wikiDriftCount":25,"fitnessGrade":"Q\u001fX"}'
   [ "$status" -eq 0 ]
+  grep -qF '/gaia-fitness' <<<"$plain" && return 1
   grep -qF '/gaia-cleanse (memorygrewfast)' <<<"$plain"
   grep -qF '/gaia-serena-sync (missing: go)' <<<"$plain"
   grep -qF '/gaia-residue (6 residuals)' <<<"$plain"

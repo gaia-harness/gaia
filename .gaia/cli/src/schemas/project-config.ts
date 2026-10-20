@@ -28,6 +28,7 @@ export const isIsolationPolicy = (value: string): value is IsolationPolicy =>
  * wraps each field so a bad value degrades instead of failing the read.
  */
 export const ProjectConfigStrictShape = {
+  fitness_commit_threshold: z.number().int().positive().optional(),
   isolation_policy: z.literal(ISOLATION_POLICIES).optional(),
   sandbox_recommended: z.boolean().optional(),
   // Values stay free strings at the write boundary so a decision value a newer
@@ -69,6 +70,10 @@ const withFallback = <Schema extends z.ZodType>(
  * consumer can compare against a literal without re-validating.
  */
 export const ProjectConfigSchema = z.object({
+  fitness_commit_threshold: withFallback(
+    ProjectConfigStrictShape.fitness_commit_threshold,
+    undefined
+  ),
   isolation_policy: withFallback(
     ProjectConfigStrictShape.isolation_policy,
     undefined

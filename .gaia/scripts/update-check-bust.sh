@@ -9,10 +9,14 @@
 #   bash .gaia/scripts/update-check-bust.sh --cache <absolute path> --mode gaia --version <x.y.z>
 #   bash .gaia/scripts/update-check-bust.sh --cache <absolute path> --mode gaia --version <x.y.z> --drop-claim <number>
 #   bash .gaia/scripts/update-check-bust.sh --cache <absolute path> --mode pull --version <x.y.z>
+#   bash .gaia/scripts/update-check-bust.sh --cache <absolute path> --mode fitness
 #
 # `deps` sets outdatedCount to 0 and checkedAt to now. `gaia` sets gaiaCurrent
 # and gaiaLatest to the version, gaiaHasUpdate to false, outdatedCount to 0 and
-# checkedAt to now. checkedAt is integer Unix seconds.
+# checkedAt to now. `fitness` sets checkedAt to 0 and nothing else, so the next
+# refresh recomputes; run it after the run's cost record is appended, because a
+# refresh landing between the two would stamp the old anchor. checkedAt is
+# integer Unix seconds.
 #
 # EVERY OTHER FIELD CARRIES ACROSS UNCHANGED, named above or not. The cache
 # holds observations nothing can reconstruct (cleanseMemoryBaseline, the
@@ -48,10 +52,11 @@ usage() {
 Usage: bash .gaia/scripts/$PROGRAM_NAME --cache <absolute path> --mode deps
        bash .gaia/scripts/$PROGRAM_NAME --cache <absolute path> --mode gaia --version <x.y.z> [--drop-claim <number>]
        bash .gaia/scripts/$PROGRAM_NAME --cache <absolute path> --mode pull --version <x.y.z>
+       bash .gaia/scripts/$PROGRAM_NAME --cache <absolute path> --mode fitness
 
   --cache    the update-check cache file. Required, absolute.
-  --mode     deps, gaia or pull. Required.
-  --version  the version the run landed on. Required with --mode gaia or pull.
+  --mode     deps, gaia, pull or fitness. Required.
+  --version  the version the run landed on. Required with --mode gaia or pull; refused with --mode fitness.
   --drop-claim  a pull request number whose claim entry is removed. Digits only; --mode gaia only.
 
 Prints BUSTED, SKIPPED no cache, or BUST_FAILED <reason>. Exit 2 is a usage error.
@@ -139,8 +144,14 @@ case "$MODE" in
       exit 2
     fi
     ;;
+  fitness)
+    if [ -n "$VERSION" ]; then
+      printf '%s: --version is not valid with --mode fitness\n' "$PROGRAM_NAME" >&2
+      exit 2
+    fi
+    ;;
   *)
-    printf '%s: --mode must be deps, gaia or pull, got: %s\n' "$PROGRAM_NAME" "$MODE" >&2
+    printf '%s: --mode must be deps, gaia, pull or fitness, got: %s\n' "$PROGRAM_NAME" "$MODE" >&2
     usage >&2
     exit 2
     ;;
@@ -169,6 +180,9 @@ case "$MODE" in
     jq_program='def core: split("-")[0] | split(".") | map(tonumber? // 0);
       def higher($a; $b): ($a | core) as $x | ($b | core) as $y | if $x != $y then $y > $x else (($a | contains("-")) and (($b | contains("-")) | not)) end;
       if type == "object" then .gaiaCurrent = $version | .gaiaOriginVersion = $version | .gaiaHasUpdate = ((.gaiaLatest | type) == "string" and higher($version; .gaiaLatest)) | .checkedAt = 0 else error("not an object") end'
+    ;;
+  fitness)
+    jq_program='if type == "object" then .checkedAt = 0 else error("not an object") end'
     ;;
 esac
 

@@ -34749,6 +34749,7 @@ var ISOLATION_POLICIES = [
 ];
 var isIsolationPolicy = (value) => ISOLATION_POLICIES.includes(value);
 var ProjectConfigStrictShape = {
+  fitness_commit_threshold: external_exports.number().int().positive().optional(),
   isolation_policy: external_exports.literal(ISOLATION_POLICIES).optional(),
   sandbox_recommended: external_exports.boolean().optional(),
   // Values stay free strings at the write boundary so a decision value a newer
@@ -34765,6 +34766,10 @@ var ReadSetupDecisionsSchema = external_exports.record(external_exports.string()
 });
 var withFallback = (schema, fallback) => schema.catch(fallback);
 var ProjectConfigSchema = external_exports.object({
+  fitness_commit_threshold: withFallback(
+    ProjectConfigStrictShape.fitness_commit_threshold,
+    void 0
+  ),
   isolation_policy: withFallback(
     ProjectConfigStrictShape.isolation_policy,
     void 0

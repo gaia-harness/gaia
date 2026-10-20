@@ -167,14 +167,14 @@ run_in_registry_repo() {
 # cutover-risk scenarios run against the shipped registry: the concrete proof
 # that a per-tree entry is genuinely not shared.
 
-@test "gaia_registry_linkable_paths: prints exactly the 19 shared paths, each by name" {
+@test "gaia_registry_linkable_paths: prints exactly the 20 shared paths, each by name" {
   run_in_registry_repo gaia_registry_linkable_paths
   [ "$status" -eq 0 ]
-  [ "${#lines[@]}" -eq 19 ]
+  [ "${#lines[@]}" -eq 20 ]
   local expected_path
   for expected_path in setup-state.json cache/shared/context cache cache/shared protected \
     settings.json audit audit/light telemetry telemetry/usage-sweep.lock.d debt codify runs \
-    ports ports/tombstones ports/launches ports/sessions kept-worktrees.tsv worktree-occupancy; do
+    ports ports/tombstones ports/launches ports/sessions kept-worktrees.tsv worktree-occupancy fitness; do
     grep -qxF -- "$expected_path" <<<"$output" || return 1
   done
   grep -qxF -- "$OLD_OVERRIDE_RELATIVE" <<<"$output" && return 1
@@ -707,6 +707,7 @@ audit-worthiness-ledger tree-gone - - - - -
 forensics tree-gone - - - - -
 codify-declines keep - - - - -
 codify-review-snapshot keep - - - - -
+fitness-blend-record keep - - - - -
 specs-main owned - - - - -
 plans-main owned - - - - -
 research-main owned - - - - -

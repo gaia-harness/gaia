@@ -330,3 +330,83 @@ JSON
   [ "$status" -eq 2 ]
   cmp "$CACHE" "$BATS_TEST_TMPDIR/original"
 }
+
+write_cache_with_fitness_fields() {
+  cat >"$CACHE" <<'JSON'
+{
+  "outdatedCount": 7,
+  "checkedAt": 1000,
+  "gaiaCurrent": "1.0.0",
+  "gaiaLatest": "2.0.0",
+  "gaiaHasUpdate": true,
+  "cleanseMemoryBaseline": {"files": 12, "bytes": 3456},
+  "fitnessGrade": "B",
+  "fitnessBlendCount": 3,
+  "fitnessCommitCount": 41,
+  "fitnessCommitThreshold": 50,
+  "fitnessBlendLandedAt": 900,
+  "fitnessBasisVersion": "2.0.0",
+  "fitnessBasisCloseAt": 800,
+  "wikiStateSha": "abc123"
+}
+JSON
+}
+
+@test "fitness sets checkedAt to 0 and carries every other field across" {
+  write_cache_with_fitness_fields
+  jq -S 'del(.checkedAt)' "$CACHE" >"$BATS_TEST_TMPDIR/expected"
+  run bash "$BUST" --cache "$CACHE" --mode fitness
+  [ "$status" -eq 0 ]
+  [ "$output" = "BUSTED" ]
+  [ "$(jq -c '.checkedAt' "$CACHE")" = "0" ]
+  jq -S 'del(.checkedAt)' "$CACHE" >"$BATS_TEST_TMPDIR/actual"
+  cmp "$BATS_TEST_TMPDIR/expected" "$BATS_TEST_TMPDIR/actual"
+}
+
+@test "fitness replaces the cache file and leaves no temp file behind" {
+  write_cache_with_fitness_fields
+  run bash "$BUST" --cache "$CACHE" --mode fitness
+  [ "$status" -eq 0 ]
+  [ "$(find "$BATS_TEST_TMPDIR" -name '.update-check-bust.*' | wc -l | tr -d ' ')" = "0" ]
+}
+
+@test "fitness with --version exits 2 and leaves the cache byte-identical" {
+  write_cache_with_fitness_fields
+  cp "$CACHE" "$BATS_TEST_TMPDIR/original"
+  run bash "$BUST" --cache "$CACHE" --mode fitness --version 2.0.4
+  [ "$status" -eq 2 ]
+  cmp "$CACHE" "$BATS_TEST_TMPDIR/original"
+}
+
+@test "fitness with --drop-claim exits 2 and leaves the cache byte-identical" {
+  write_cache_with_fitness_fields
+  cp "$CACHE" "$BATS_TEST_TMPDIR/original"
+  run bash "$BUST" --cache "$CACHE" --mode fitness --drop-claim 12
+  [ "$status" -eq 2 ]
+  cmp "$CACHE" "$BATS_TEST_TMPDIR/original"
+}
+
+@test "fitness on a missing cache prints SKIPPED no cache and creates nothing" {
+  run bash "$BUST" --cache "$CACHE" --mode fitness
+  [ "$status" -eq 0 ]
+  [ "$output" = "SKIPPED no cache" ]
+  [ ! -e "$CACHE" ]
+}
+
+@test "fitness on unparsable JSON exits 3 BUST_FAILED and leaves no temp file" {
+  printf 'not json{' >"$CACHE"
+  cp "$CACHE" "$BATS_TEST_TMPDIR/original"
+  run bash "$BUST" --cache "$CACHE" --mode fitness
+  [ "$status" -eq 3 ]
+  case "$output" in BUST_FAILED*) ;; *) return 1 ;; esac
+  cmp "$CACHE" "$BATS_TEST_TMPDIR/original"
+  [ "$(find "$BATS_TEST_TMPDIR" -name '.update-check-bust.*' | wc -l | tr -d ' ')" = "0" ]
+}
+
+@test "fitness on a non-object exits 3 BUST_FAILED and leaves the cache unchanged" {
+  printf '[1,2]' >"$CACHE"
+  cp "$CACHE" "$BATS_TEST_TMPDIR/original"
+  run bash "$BUST" --cache "$CACHE" --mode fitness
+  [ "$status" -eq 3 ]
+  cmp "$CACHE" "$BATS_TEST_TMPDIR/original"
+}

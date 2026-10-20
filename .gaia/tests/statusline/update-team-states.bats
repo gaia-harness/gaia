@@ -209,7 +209,7 @@ render_at() {
   printf '#!/bin/bash\necho "$@" >> "%s/gh.log"\nexit 1\n' "$BATS_TEST_TMPDIR" > "$BATS_TEST_TMPDIR/bin/gh"
   chmod +x "$BATS_TEST_TMPDIR/bin/gh"
   : > "$BATS_TEST_TMPDIR/gh.log"
-  jq --argjson now "$(date +%s)" '. + {checkedAt: $now, securitySource: "unavailable"}' "$CACHE_FILE" > "$CACHE_FILE.next"
+  jq --argjson now "$(date +%s)" '. + {checkedAt: $now, securitySource: "unavailable", fitnessBasisVersion: ""}' "$CACHE_FILE" > "$CACHE_FILE.next"
   mv "$CACHE_FILE.next" "$CACHE_FILE"
   local json
   json=$(jq -n --arg current_directory "$MAIN" '{workspace: {current_dir: $current_directory}, cwd: $current_directory, model: {display_name: "Test"}, context_window: {used_percentage: 10}}')
@@ -306,7 +306,7 @@ write_pull_cache() {
   printf '#!/bin/bash\necho "$@" >> "%s/gh.log"\nexit 1\n' "$BATS_TEST_TMPDIR" > "$BATS_TEST_TMPDIR/bin/gh"
   chmod +x "$BATS_TEST_TMPDIR/bin/gh"
   : > "$BATS_TEST_TMPDIR/gh.log"
-  jq --argjson now "$(date +%s)" '. + {checkedAt: $now, securitySource: "unavailable"}' "$CACHE_FILE" > "$CACHE_FILE.next"
+  jq --argjson now "$(date +%s)" '. + {checkedAt: $now, securitySource: "unavailable", fitnessBasisVersion: "2.0.3"}' "$CACHE_FILE" > "$CACHE_FILE.next"
   mv "$CACHE_FILE.next" "$CACHE_FILE"
   local json rendered
   json=$(jq -n --arg current_directory "$MAIN" '{workspace: {current_dir: $current_directory}, cwd: $current_directory, model: {display_name: "Test"}, context_window: {used_percentage: 10}}')

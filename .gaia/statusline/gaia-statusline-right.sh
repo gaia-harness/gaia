@@ -73,6 +73,7 @@ gaia_statusline_right() {
   local codify_count has_codify_reason codify_reason cleanse_nudge cleanse_reason serena_drift
   local codify_unclassified residue_count wiki_drift_count codify_mid deps_outdated deps_security
   local fallback_reason codify_noun serena_commas serena_language_count
+  local fitness_grade fitness_blend_count fitness_commit_count fitness_commit_threshold fitness_large fitness_mid
   local RESIDUE_NUDGE_THRESHOLD residue_suffix WIKI_NUDGE_THRESHOLD debt_count debt_noun
   local dense_color dense_small dense_large dense_mid dense_icon dense_floor dense_iconcount slot nudge_count
   local available_width nudge_size i hidden_count shrink_step shrink_target shrink_size
@@ -202,11 +203,11 @@ gaia_statusline_right() {
     else
       # Nudge slots, indexed by render priority rather than by where each one
       # is armed below: setup-gaia 0, update-gaia 1, gaia-serena-sync 2,
-      # update-deps 3, gaia-cleanse 4, gaia-codify 5, gaia-debt 6, gaia-residue 7,
-      # gaia-wiki 8. The update-check-derived nudges stay gated on $cache_file;
+      # update-deps 3, gaia-cleanse 4, gaia-fitness 5, gaia-codify 6, gaia-debt 7,
+      # gaia-residue 8, gaia-wiki 9. The update-check-derived nudges stay gated on $cache_file;
       # the setup nudge and the debt nudge are gated independently (on the setup
       # read above and on $debt_cache) so they still render when update-check.json
-      # is absent, which is why debt (6) is armed after residue (7) in source
+      # is absent, which is why debt (7) is armed after residue (8) in source
       # order but renders before it.
       #
       # Each slot carries its Large text, its bare Small command, and `mid`,
@@ -308,11 +309,16 @@ gaia_statusline_right() {
             ((.serenaLangDrift // []) | join(", ") | clean),
             (.codifyUnclassifiedCount // 0 | clean),
             (.residueCandidateCount // 0 | clean),
-            (.wikiDriftCount // 0 | clean) ]
+            (.wikiDriftCount // 0 | clean),
+            (.fitnessGrade // "" | clean),
+            (.fitnessBlendCount | if type == "number" then (floor | tostring) else "" end | clean),
+            (.fitnessCommitCount | if type == "number" then (floor | tostring) else "" end | clean),
+            (.fitnessCommitThreshold | if type == "number" then (floor | tostring) else "" end | clean) ]
           | join("\u001f")' "$cache_file" 2>/dev/null) || cache_fields=""
         IFS=$'\037' read -r outdated_count security_count update_state update_version update_login \
           codify_count has_codify_reason codify_reason cleanse_nudge cleanse_reason \
-          serena_drift codify_unclassified residue_count wiki_drift_count <<<"$cache_fields"
+          serena_drift codify_unclassified residue_count wiki_drift_count \
+          fitness_grade fitness_blend_count fitness_commit_count fitness_commit_threshold <<<"$cache_fields"
         case "$security_count" in
           ''|*[!0-9]*) security_count="" ;;
         esac
@@ -368,7 +374,7 @@ gaia_statusline_right() {
         if [ "$has_codify_reason" = "1" ]; then
           if [ -n "$codify_reason" ]; then
             printf -v full '/gaia-codify (%s)' "$codify_reason"
-            nudge_set 5 '01;35' '/gaia-codify' "$full" "$codify_mid" '🔨'
+            nudge_set 6 '01;35' '/gaia-codify' "$full" "$codify_mid" '🔨'
           fi
         else
           fallback_reason=""
@@ -383,7 +389,7 @@ gaia_statusline_right() {
           fi
           if [ -n "$fallback_reason" ]; then
             printf -v full '/gaia-codify (%s)' "$fallback_reason"
-            nudge_set 5 '01;35' '/gaia-codify' "$full" "$codify_mid" '🔨'
+            nudge_set 6 '01;35' '/gaia-codify' "$full" "$codify_mid" '🔨'
           fi
         fi
         if [ "$cleanse_nudge" = "true" ]; then
@@ -393,6 +399,48 @@ gaia_statusline_right() {
           else
             nudge_set 4 '01;32' '/gaia-cleanse' '/gaia-cleanse' '' '🔎'
           fi
+        fi
+        # Fitness nudge: arms on the first true of a cached grade, a positive
+        # blended-file count, or a harness-commit count at or past the cached
+        # threshold (15 when the cache holds none usable). Reads only the
+        # fields the refresher cached.
+        fitness_large=""
+        fitness_mid=""
+        case "$fitness_grade" in
+          'A+'|A|A-|'B+'|B|B-|'C+'|C|C-|'D+'|D|D-|F)
+            fitness_large="/gaia-fitness (grade $fitness_grade)"
+            fitness_mid="$fitness_grade"
+            ;;
+        esac
+        case "$fitness_blend_count" in
+          ''|*[!0-9]*) fitness_blend_count=0 ;;
+        esac
+        case "$fitness_commit_count" in
+          ''|*[!0-9]*) fitness_commit_count=0 ;;
+        esac
+        case "$fitness_commit_threshold" in
+          ''|*[!0-9]*) fitness_commit_threshold=15 ;;
+        esac
+        [ "$((10#$fitness_commit_threshold))" -ge 1 ] || fitness_commit_threshold=15
+        if [ -z "$fitness_large" ] && [ "$((10#$fitness_blend_count))" -gt 0 ]; then
+          if [ "$((10#$fitness_blend_count))" -eq 1 ]; then
+            fitness_large="/gaia-fitness (1 blended file)"
+          else
+            fitness_large="/gaia-fitness ($((10#$fitness_blend_count)) blended files)"
+          fi
+          fitness_mid="$((10#$fitness_blend_count))"
+        fi
+        if [ -z "$fitness_large" ] && [ "$((10#$fitness_commit_count))" -gt 0 ] \
+          && [ "$((10#$fitness_commit_count))" -ge "$((10#$fitness_commit_threshold))" ]; then
+          if [ "$((10#$fitness_commit_count))" -eq 1 ]; then
+            fitness_large="/gaia-fitness (1 harness commit)"
+          else
+            fitness_large="/gaia-fitness ($((10#$fitness_commit_count)) harness commits)"
+          fi
+          fitness_mid="$((10#$fitness_commit_count))"
+        fi
+        if [ -n "$fitness_large" ]; then
+          nudge_set 5 '01;94' '/gaia-fitness' "$fitness_large" "$fitness_mid" '💪'
         fi
         if [ -n "$serena_drift" ]; then
           printf -v full '/gaia-serena-sync (missing: %s)' "$serena_drift"
@@ -415,7 +463,7 @@ gaia_statusline_right() {
           residue_suffix="s"
           [ "$residue_count" -eq 1 ] && residue_suffix=""
           printf -v full '/gaia-residue (%d residual%s)' "$residue_count" "$residue_suffix"
-          nudge_set 7 '01;37' '/gaia-residue' "$full" "$residue_count" '🧹'
+          nudge_set 8 '01;37' '/gaia-residue' "$full" "$residue_count" '🧹'
         fi
         # Wiki nudge: renders once the wiki trails HEAD by at least
         # WIKI_NUDGE_THRESHOLD non-bookkeeping commits. A maintainer constant,
@@ -428,7 +476,7 @@ gaia_statusline_right() {
         if [ "$wiki_drift_count" -ge "$WIKI_NUDGE_THRESHOLD" ] 2>/dev/null; then
           # 01;96 (bright cyan) is the one color no other slot or the setup
           # segment uses.
-          nudge_set 8 '01;96' '/gaia-wiki' "/gaia-wiki ($wiki_drift_count commits)" "$wiki_drift_count" '🧠'
+          nudge_set 9 '01;96' '/gaia-wiki' "/gaia-wiki ($wiki_drift_count commits)" "$wiki_drift_count" '🧠'
         fi
       fi
       # Debt-backlog nudge, read from the pinned debt cache. Independent of
@@ -439,7 +487,7 @@ gaia_statusline_right() {
           debt_noun="issues"
           [ "$debt_count" -eq 1 ] && debt_noun="issue"
           printf -v full '/gaia-debt (%d %s)' "$debt_count" "$debt_noun"
-          nudge_set 6 '01;34' '/gaia-debt' "$full" "$debt_count" '🐛'
+          nudge_set 7 '01;34' '/gaia-debt' "$full" "$debt_count" '🐛'
         fi
       fi
 

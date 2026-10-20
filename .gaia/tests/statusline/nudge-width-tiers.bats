@@ -9,14 +9,15 @@
 # lower-priority one (a nudge with no Medium form, such as /gaia-cleanse,
 # shows its Small text at that step). This suite pins the exact boundaries
 # and the priority order
-# (update-gaia, serena-sync, update-deps, cleanse, codify, debt, residue, wiki)
+# (update-gaia, serena-sync, update-deps, cleanse, fitness, codify, debt, residue, wiki)
 # against exact widths, so a regression in the arithmetic reds here rather
 # than silently shifting a boundary.
 #
 # Fixture mirrors segment-command-uniqueness.bats: a MAIN git checkout with
 # setup marked complete, HOME pointing at an empty dir (left resolves to the
 # "Claude Code" fallback, 11 columns), and a cache that arms every right-side
-# nudge at once, at the widths the issue table names: update-gaia 9.9.9,
+# nudge except /gaia-fitness at once (its order and shrink coverage live in
+# fitness-nudge-render.bats), at the widths the issue table names: update-gaia 9.9.9,
 # serena missing go+rust (2 languages), 28 outdated deps, a cleanse reason,
 # a codify reason with 6 candidates, 1 open debt issue, 15 residuals.
 

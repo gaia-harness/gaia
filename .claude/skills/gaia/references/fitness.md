@@ -254,3 +254,11 @@ Every path that ends the run appends exactly one cost record immediately before 
 - Step 9, publish failure STOP: pass-through only if the PR had already been opened and its number printed before the later step failed.
 
 Apply the shared record recipe in `.claude/skills/gaia/references/cost-record.md` with `{{COMMAND}}` = `gaia-fitness`. The PR number for `--pr` is the one `fitness-publish.sh open` printed in this run's own Bash result, in place of a `gh pr create` URL.
+
+Then bust the update-check cache on every one of those paths, as its own Bash call after the record call and before the final printed line, so the next statusline refresh recomputes from the new close row (a refresh landing between the two would stamp the old anchor). Read `<main checkout path>` once with `bash .gaia/scripts/main-root-lib.sh` and carry it as a literal:
+
+```bash
+bash <main checkout path>/.gaia/scripts/update-check-bust.sh --cache <main checkout path>/.gaia/local/cache/shared/update-check.json --mode fitness
+```
+
+`SKIPPED no cache` needs nothing. A non-zero exit is reported and never changes the run's outcome.

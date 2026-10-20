@@ -107,6 +107,47 @@ describe('updateProjectConfig', () => {
     expect(read()).toBe(before);
   });
 
+  test('writes fitness_commit_threshold and keeps unknown keys', () => {
+    seed(JSON.stringify({future: 'x', version: 1}));
+
+    updateProjectConfig(root, {fitness_commit_threshold: 20});
+
+    expect(JSON.parse(read())).toEqual({
+      fitness_commit_threshold: 20,
+      future: 'x',
+      version: 1,
+    });
+  });
+
+  test.each([0, 15.5, '25'])(
+    'refuses fitness_commit_threshold %j, naming the key, and leaves the file byte-identical',
+    (value) => {
+      seed('{"version": 1, "future": "x"}\n');
+      const before = read();
+
+      expect(() => {
+        updateProjectConfig(root, {fitness_commit_threshold: value});
+      }).toThrow(expect.objectContaining({kind: 'invalid_value'}));
+      expect(() => {
+        updateProjectConfig(root, {fitness_commit_threshold: value});
+      }).toThrow(/fitness_commit_threshold/u);
+      expect(read()).toBe(before);
+    }
+  );
+
+  test('a file already holding fitness_commit_threshold 0 refuses an unrelated patch', () => {
+    seed('{"version": 1, "fitness_commit_threshold": 0}\n');
+    const before = read();
+
+    expect(() => {
+      updateProjectConfig(root, {sandbox_recommended: true});
+    }).toThrow(expect.objectContaining({kind: 'invalid_value'}));
+    expect(() => {
+      updateProjectConfig(root, {sandbox_recommended: true});
+    }).toThrow(/fitness_commit_threshold/u);
+    expect(read()).toBe(before);
+  });
+
   test('throws a malformed error naming the file and leaves it unchanged', () => {
     seed('{not json');
 

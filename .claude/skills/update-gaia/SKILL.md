@@ -248,7 +248,7 @@ Warning: --force discards any uncommitted changes in the worktree.
 
 `<branch>` is the update branch: `<branch-name>`, the resumed branch, or the current branch in mode 1. When `CLAIM_PR` is set, the notice also lists `gh pr close <CLAIM_PR> --delete-branch` before the removal commands.
 
-**The stop rule.** Every skill-controlled stop after the worktree exists and before Step 11 pushes the update (a failed baseline check, a provisioning stop, a failed dispatch or report check, a note that cannot be completed, a manifest copy failure, a red quality gate the user stops at, a "Not yet" at the review point, a failed Step 11 check or push, the user declining at a prompt) leaves the worktree in place, changes nothing in the main checkout, leaves the claim PR open when `CLAIM_PR` is set, and prints the worktree notice again. Nothing is removed automatically, and the run directory stays for the next run's prune. A stop after the Step 9d version write gives the next step as re-running `/update-gaia` inside the worktree, which classifies the update as applied but uncommitted and resumes at the quality gate.
+**The stop rule.** Every skill-controlled stop after the worktree exists and before Step 11 pushes the update (a failed baseline check, a provisioning stop, a failed dispatch or report check, a note that cannot be completed, a manifest copy failure, a red quality gate the user stops at, a "Not yet" at the review point, a failed Step 11 check or push, the user declining at a prompt) leaves the worktree in place, changes nothing in the main checkout (the one exception is the machine-local blend record Step 9d's recording call may have written in the main checkout's `.gaia/local` before a later stop; the next writer run drops an entry whose update never landed), leaves the claim PR open when `CLAIM_PR` is set, and prints the worktree notice again. Nothing is removed automatically, and the run directory stays for the next run's prune. A stop after the Step 9d version write gives the next step as re-running `/update-gaia` inside the worktree, which classifies the update as applied but uncommitted and resumes at the quality gate.
 
 **Baseline check.** On a fresh run, run `cat .gaia/VERSION` in the worktree. The worktree is cut from the default branch on `origin`, so when it does not print `<BASELINE>` (the local default branch lags or leads `origin`), stop: print what each holds, the worktree notice, and the next step (pull or push the main checkout's default branch, then re-run). Skip it on a resume: classification already placed the branch at the baseline.
 
@@ -301,7 +301,7 @@ A failed apply records nothing, and neither does a `record` that refuses: name t
 
 ## Step 9d: Record the update
 
-The merge, the answers, the follow-ups, the notes and the drift are done, so record the update. Run these three commands in the acting tree as separate calls; the order is the contract:
+The merge, the answers, the follow-ups, the notes and the drift are done, so record the update. Run these four commands in the acting tree as separate calls; the order is the contract:
 
 ```bash
 GAIA_MANIFEST_WRITE=release cp <LATEST_DIR>/.gaia/manifest.json .gaia/manifest.json
@@ -312,10 +312,16 @@ GAIA_MANIFEST_WRITE=release cp <LATEST_DIR>/.gaia/manifest.json .gaia/manifest.j
 ```
 
 ```bash
+bash <main checkout path>/.gaia/scripts/fitness-blend-record.sh record --main-root <main checkout path> --tree <acting tree> --report <run dir>/report.json --decisions <acting tree>/.gaia/update-decisions.json --tag <LATEST_TAG>
+```
+
+```bash
 echo <LATEST> > .gaia/VERSION
 ```
 
-A non-zero exit from the `cp` command is the `MANIFEST_COPY_FAILED` stop: run neither later command, relay it, and print the worktree notice on a worktree run; the version stays at the baseline and a re-run resumes.
+A non-zero exit from the `cp` command is the `MANIFEST_COPY_FAILED` stop: run none of the later commands, relay it, and print the worktree notice on a worktree run; the version stays at the baseline and a re-run resumes.
+
+The third command records the harness files this update blended (a clean both-sides merge, or an open item answered Combine) for the `/gaia-fitness` statusline nudge. It runs before the version write because the version write is the update's last act. It is best-effort: a `RECORD_FAILED` line or a missing script is relayed and never stops the update. The main checkout's copy of the script is called for the same reason as the other main-copy calls (Step 9c), so on the update that first ships the script the main checkout has none and the call is skipped. The record write deliberately does not invalidate the update-check cache: the refresher's pre-TTL gate does not checksum the record, so the later `--mode gaia` bust holds as before, and the record is read on the recompute that main's `.gaia/VERSION` change triggers once the update lands.
 
 `.gaia/VERSION` is written last. An interruption anywhere before that write leaves it at the baseline, so the next run finds the update branch and resumes (Step 3), repeating the idempotent merge, the answers, the after-merge notes and the drift. An interruption between the ping and the version write can repeat the ping on that re-run, which beats losing it. The ping records the version transition for adoption analytics and is best-effort; it never gates the update.
 
