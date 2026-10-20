@@ -65,6 +65,8 @@ For every question with discrete possible answers, surface it via `AskUserQuesti
 
 Never list `Other`: the tool supplies it. Text typed there is a free-form answer, or, when it asks to save, the escape in `## Escape option`.
 
+Word the question and every option in plain language the user can answer without opening the research, the audit or the draft: never cite an id or label from them, and never lift a phrase coined there. Not `How much of the incident-born rationale prose (L6) does this SPEC cut?` but `The rules carry about 14 KB of text explaining past incidents. How much of it should this change remove?` (`spec/system-prompt.md`, Plain language).
+
 Ask exactly one question per turn.
 
 After the user selects an option (or types an answer into `Other`), persist the fold via a single `Write` per the working-draft checkpoint primitive (answer into `clarifications.answered[]`, topic removed from `clarifications.pending[]`, statusline updated, all in one call). `Discuss this` and a save request follow their own paths (5b and `## Escape option` respectively).
