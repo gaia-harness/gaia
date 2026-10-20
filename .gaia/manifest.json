@@ -409,6 +409,7 @@
     "frontend/.claude/skills/playwright-cli/SKILL.md": "owned",
     "frontend/.claude/skills/react-code/references/conform-forms.md": "owned",
     "frontend/.claude/skills/react-code/references/hook-patterns.md": "owned",
+    "frontend/.claude/skills/react-code/references/query-patterns.md": "owned",
     "frontend/.claude/skills/react-code/references/translation-patterns.md": "owned",
     "frontend/.claude/skills/react-code/SKILL.md": "owned",
     "frontend/.claude/skills/skeleton-loaders/SKILL.md": "owned",
@@ -753,7 +754,7 @@
     "wiki/overview.md": "wiki-owned",
     "wiki/README.md": "wiki-owned"
   },
-  "generated": "2026-10-20T13:25:56.149Z",
+  "generated": "2026-10-20T15:53:32.000Z",
   "regions": [
     {
       "endMarker": "<!-- gaia:audit-remit:end -->",
