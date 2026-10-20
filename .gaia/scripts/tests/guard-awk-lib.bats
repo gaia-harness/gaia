@@ -1073,6 +1073,7 @@ participating_files() {
   printf '%s\n' \
     "$REPO_ROOT/.gaia/scripts/lint-git-path-quoting.sh" \
     "$REPO_ROOT/.gaia/scripts/lint-errexit-status-read.sh" \
+    "$REPO_ROOT/.gaia/tests/whole-tree-mark-guard.sh" \
     "$REPO_ROOT/.gaia/scripts/tests/fixtures/stub-guard.sh"
 }
 
@@ -1124,17 +1125,23 @@ assert_consumer_count() {
   done < <(participating_files)
 }
 
-# README C1.3 freezes nine entry points. The stub is capped at a 40-line
-# non-boilerplate body (asserted below by "the stub guard non-boilerplate
-# body stays inside its line budget") and its own header states it calls the
-# five common ones above and none of the other four: no prepass (it reports
-# on one surface with no need for a second pass), no gaia_scan_pragma_here
-# (it has no off-surface pragma to name), and no gaia_scan_run_only (it
-# detects a class errexit arming does not reach).
+# The library header's awk surface freezes ten entry points. The stub is
+# capped at a 40-line non-boilerplate body (asserted below by "the stub guard
+# non-boilerplate body stays inside its line budget") and its own header states
+# it calls the five common ones above and none of the prepass, pragma-here or
+# run-only ones: no prepass (it reports on one surface with no need for a
+# second pass), no gaia_scan_pragma_here (it has no off-surface pragma to
+# name), and no gaia_scan_run_only (it detects a class errexit arming does not
+# reach).
+#
+# The whole-tree mark guard is exempt from the gaia_scan_pragma_here half: it
+# scans bats suites only, so it has no off-surface pragma to name, and a call
+# made only to satisfy this check would be dead code.
 @test "each production guard calls gaia_scan_prepass and gaia_scan_pragma_here; only the errexit gate also calls gaia_scan_run_only" {
   local guard_file
   while IFS= read -r guard_file; do
     grep -qF -- "gaia_scan_prepass(" "$guard_file" || { echo "$guard_file: never calls gaia_scan_prepass" >&2; return 1; }
+    [ "$guard_file" = "$REPO_ROOT/.gaia/tests/whole-tree-mark-guard.sh" ] && continue
     grep -qF -- "gaia_scan_pragma_here(" "$guard_file" || { echo "$guard_file: never calls gaia_scan_pragma_here" >&2; return 1; }
   done < <(production_guards)
   grep -qF -- "gaia_scan_run_only(" "$REPO_ROOT/.gaia/scripts/lint-errexit-status-read.sh" || return 1
@@ -1158,13 +1165,13 @@ assert_consumer_count() {
   true
 }
 
-@test "no participating file calls a gaia_scan_* name outside the frozen nine" {
+@test "no participating file calls a gaia_scan_* name outside the frozen entry-point set" {
   local guard_file name
   while IFS= read -r guard_file; do
     while IFS= read -r name; do
       [ -n "$name" ] || continue
       case "$name" in
-        gaia_scan_reset|gaia_scan_prepass|gaia_scan_prepass_end|gaia_scan_feed|gaia_scan_skip|gaia_scan_suppressed|gaia_scan_pragma_here|gaia_scan_run_only|gaia_scan_end) ;;
+        gaia_scan_reset|gaia_scan_prepass|gaia_scan_prepass_end|gaia_scan_feed|gaia_scan_skip|gaia_scan_suppressed|gaia_scan_pragma_here|gaia_scan_run_only|gaia_scan_in_test|gaia_scan_end) ;;
         *) echo "$guard_file: calls unrecognized entry point $name" >&2; return 1 ;;
       esac
     done < <(grep -oE 'gaia_scan_[A-Za-z_]+\(' "$guard_file" | sed 's/(//' | sort -u)
@@ -1206,6 +1213,10 @@ own_awk_functions() {
   # doc.
   actual="$(own_awk_functions "$REPO_ROOT/.gaia/scripts/lint-errexit-status-read.sh")"
   expected="$(printf '%s\n' arm check_desync eat_word feed has_status_read pragma_offsurface report reset_state walk yaml_feed)"
+  [ "$actual" = "$expected" ]
+
+  actual="$(own_awk_functions "$REPO_ROOT/.gaia/tests/whole-tree-mark-guard.sh")"
+  expected="$(printf '%s\n' bats_applies_whole_tree collect_line find_hits finding idiom_priority is_comment names_only read_tag_line refers test_name_of)"
   [ "$actual" = "$expected" ]
 
   actual="$(own_awk_functions "$REPO_ROOT/.gaia/scripts/tests/fixtures/stub-guard.sh")"
