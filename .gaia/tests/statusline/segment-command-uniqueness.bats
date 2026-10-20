@@ -64,6 +64,7 @@ run_saturated_statusline() {
   "wikiDriftCount": 20,
   "cleanseNudge": true,
   "cleanseNudgeReason": "stale",
+  "fitnessCommitCount": 20,
   "serenaLangDrift": ["go"]
 }
 JSON
@@ -93,6 +94,7 @@ rendered_commands() {
     "/gaia-cleanse" \
     "/gaia-codify" \
     "/gaia-debt" \
+    "/gaia-fitness" \
     "/gaia-residue" \
     "/gaia-serena-sync" \
     "/gaia-wiki" \

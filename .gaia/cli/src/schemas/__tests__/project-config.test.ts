@@ -70,6 +70,35 @@ describe('ProjectConfigSchema', () => {
     }
   );
 
+  test.each([[25], [1]])(
+    'fitness_commit_threshold %j reads as itself',
+    (value) => {
+      expect(
+        ProjectConfigSchema.parse({fitness_commit_threshold: value})
+          .fitness_commit_threshold
+      ).toBe(value);
+    }
+  );
+
+  test.each([[0], [-3], [15.5], ['25'], [true], [null], [{}]])(
+    'fitness_commit_threshold %j reads as absent without malforming',
+    (value) => {
+      const parsed = ProjectConfigSchema.parse({
+        fitness_commit_threshold: value,
+        isolation_policy: 'prefer-branch',
+      });
+
+      expect(parsed.fitness_commit_threshold).toBeUndefined();
+      expect(parsed.isolation_policy).toBe('prefer-branch');
+    }
+  );
+
+  test('an absent fitness_commit_threshold reads as undefined', () => {
+    expect(
+      ProjectConfigSchema.parse({}).fitness_commit_threshold
+    ).toBeUndefined();
+  });
+
   test('the guards accept only the known literals', () => {
     expect(isIsolationPolicy('always-worktree')).toBe(true);
     expect(isIsolationPolicy('worktree')).toBe(false);
@@ -139,6 +168,37 @@ describe('readProjectConfig', () => {
       expect(result).not.toHaveProperty('config.dependabot_security_updates');
     }
   );
+
+  test.each([0, -3, 15.5, '25', true, null, {}])(
+    'readProjectConfig reads an invalid fitness_commit_threshold %j as undefined and still ok',
+    (value) => {
+      write(
+        JSON.stringify({
+          fitness_commit_threshold: value,
+          sandbox_recommended: true,
+        })
+      );
+
+      const result = readProjectConfig(root);
+
+      expect(result.status).toBe('ok');
+      expect(result).toMatchObject({
+        config: {
+          fitness_commit_threshold: undefined,
+          sandbox_recommended: true,
+        },
+      });
+    }
+  );
+
+  test('readProjectConfig reads a valid fitness_commit_threshold', () => {
+    write(JSON.stringify({fitness_commit_threshold: 25}));
+
+    expect(readProjectConfig(root)).toMatchObject({
+      config: {fitness_commit_threshold: 25},
+      status: 'ok',
+    });
+  });
 
   test('reports malformed for invalid JSON, naming the file', () => {
     write('{not json');

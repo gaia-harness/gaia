@@ -323,6 +323,19 @@ JSON
   return 0
 }
 
+@test "the fitness nudge renders from main, not from a worktree" {
+  printf '{"fitnessGrade":"B+"}' > "$MAIN/.gaia/local/cache/shared/update-check.json"
+
+  run_statusline "$MAIN"
+  [ "$status" -eq 0 ]
+  grep -qF -- "gaia-fitness" <<<"$output"
+
+  run_statusline "$WORKTREE"
+  [ "$status" -eq 0 ]
+  grep -qF -- "gaia-fitness" <<<"$output" && return 1
+  return 0
+}
+
 @test "the update-check and debt refreshers fire from main, not from a worktree" {
   local check_marker="$BATS_TEST_TMPDIR/check-ran"
   local debt_marker="$BATS_TEST_TMPDIR/debt-ran"
