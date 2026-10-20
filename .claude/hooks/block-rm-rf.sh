@@ -768,7 +768,7 @@ main() {
         # literal in bash and removes a directory named `~foo`, so denying it is a
         # false deny, which fails safe.
         '~'*|'$HOME'|'$HOME/'*|'\$HOME'|'\$HOME/'*|'${HOME}'|'${HOME}/'*|'\${HOME}'|'\${HOME}/'*)
-          deny "BLOCKED: ${rm_label} of \$HOME / ~ is forbidden. A path under the home directory lies outside the repository, and nothing in git history can restore it."
+          deny "BLOCKED: ${rm_label} of \$HOME / ~ is forbidden. The home directory holds far more than this repository, and git history cannot restore what it holds outside it. Name the target by a repository-relative path instead."
           ;;
         '.'|'./')
           deny "BLOCKED: ${rm_label} of cwd ('.') is forbidden. It asks to wipe the whole working directory, .git and .claude included."

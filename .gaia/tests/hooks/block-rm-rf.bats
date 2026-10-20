@@ -429,7 +429,7 @@ t'
 
 @test "the \$HOME denial states its reason" {
   run_hook_bash 'rm -rf ~'
-  assert_denied_because 'A path under the home directory lies outside the repository, and nothing in git history can restore it.'
+  assert_denied_because 'The home directory holds far more than this repository, and git history cannot restore what it holds outside it. Name the target by a repository-relative path instead.'
 }
 
 @test "the cwd denial states its reason" {
