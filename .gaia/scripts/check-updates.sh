@@ -280,41 +280,6 @@ fi
 printf '%s\n' "$$" > "$LOCK_DIRECTORY/owner" 2>/dev/null
 trap '[ "$(cat "$LOCK_DIRECTORY/owner" 2>/dev/null)" = "$$" ] && rm -rf "$LOCK_DIRECTORY" 2>/dev/null' EXIT
 
-# ---------- context-reading sweep ----------
-# The statusline writes one context file per session and no SessionEnd hook
-# reaps them (the SPEC forbids one), so this TTL-gated pass does: regular files
-# (never symlinks or directories) directly in the context directory, older than
-# the age below. Orphaned writer tmp files (<id>.json.tmp.<pid>) go with them.
-# 7 days: far past the statusline's freshness window, so a live session's file
-# is never swept. A failed sweep never fails this script.
-CONTEXT_SWEEP_DAYS=7
-CONTEXT_DIRECTORY="$CACHE_DIRECTORY/context"
-if [ -d "$CONTEXT_DIRECTORY" ] && [ ! -L "$CONTEXT_DIRECTORY" ]; then
-  find "$CONTEXT_DIRECTORY" -maxdepth 1 -type f \( -name '*.json' -o -name '*.json.tmp.*' \) -mtime +"$CONTEXT_SWEEP_DAYS" -exec rm -f {} + 2>/dev/null || true
-fi
-
-# ---------- context-checkpoint marker sweep ----------
-# The context checkpoint hook writes one marker per session and nothing reaps it
-# when the session ends, so this pass does: regular files (never symlinks or
-# directories) directly in the marker directory, older than the age above. The
-# hook's orphaned tmp files (.<session id>.<pid>) go with them. A failed sweep
-# never fails this script.
-CHECKPOINT_DIRECTORY="$STATE_ROOT/.gaia/local/cache/context-checkpoint"
-if [ -d "$CHECKPOINT_DIRECTORY" ] && [ ! -L "$CHECKPOINT_DIRECTORY" ]; then
-  find "$CHECKPOINT_DIRECTORY" -maxdepth 1 -type f \( -name '[!.]*' -o -name '.*.*' \) -mtime +"$CONTEXT_SWEEP_DAYS" -exec rm -f {} + 2>/dev/null || true
-fi
-
-# ---------- context-checkpoint agent marker sweep ----------
-# The sub-agent checkpoint hook writes one marker per sub-agent and nothing reaps
-# it when the agent finishes, so this pass does, with the same rules as the
-# session markers above. The hook's orphaned tmp files
-# (.<session id>.<agent id>.<pid>) go with them. A failed sweep never fails this
-# script.
-CHECKPOINT_AGENT_DIRECTORY="$STATE_ROOT/.gaia/local/cache/context-checkpoint-agents"
-if [ -d "$CHECKPOINT_AGENT_DIRECTORY" ] && [ ! -L "$CHECKPOINT_AGENT_DIRECTORY" ]; then
-  find "$CHECKPOINT_AGENT_DIRECTORY" -maxdepth 1 -type f \( -name '[!.]*' -o -name '.*.*' \) -mtime +"$CONTEXT_SWEEP_DAYS" -exec rm -f {} + 2>/dev/null || true
-fi
-
 # ---------- outdatedCount ----------
 # Count only the updates /update-deps will actually apply. The `update-deps
 # run` primitive runs the same Phase 1-3 filtering the skill does; the ESLint
