@@ -429,12 +429,12 @@ t'
 
 @test "the \$HOME denial states its reason" {
   run_hook_bash 'rm -rf ~'
-  assert_denied_because 'It removes a home directory, which no git history can restore.'
+  assert_denied_because 'A path under the home directory lies outside the repository, and nothing in git history can restore it.'
 }
 
 @test "the cwd denial states its reason" {
   run_hook_bash 'rm -rf .'
-  assert_denied_because 'It removes the whole working directory, .git and .claude included.'
+  assert_denied_because 'It asks to wipe the whole working directory, .git and .claude included.'
 }
 
 @test "the unscoped-glob denial states its reason" {

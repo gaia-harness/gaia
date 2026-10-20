@@ -768,10 +768,10 @@ main() {
         # literal in bash and removes a directory named `~foo`, so denying it is a
         # false deny, which fails safe.
         '~'*|'$HOME'|'$HOME/'*|'\$HOME'|'\$HOME/'*|'${HOME}'|'${HOME}/'*|'\${HOME}'|'\${HOME}/'*)
-          deny "BLOCKED: ${rm_label} of \$HOME / ~ is forbidden. It removes a home directory, which no git history can restore."
+          deny "BLOCKED: ${rm_label} of \$HOME / ~ is forbidden. A path under the home directory lies outside the repository, and nothing in git history can restore it."
           ;;
         '.'|'./')
-          deny "BLOCKED: ${rm_label} of cwd ('.') is forbidden. It removes the whole working directory, .git and .claude included."
+          deny "BLOCKED: ${rm_label} of cwd ('.') is forbidden. It asks to wipe the whole working directory, .git and .claude included."
           ;;
         '*'|'./*')
           deny "BLOCKED: ${rm_label} of unscoped glob ('*') is forbidden. It removes every file and folder in the working directory that is not hidden."
