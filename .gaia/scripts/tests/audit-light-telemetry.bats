@@ -123,6 +123,40 @@ tally_value() {
   [ -n "$(jq -r '.at' <<<"$event")" ]
 }
 
+# route_event_anchor_kind <json or ->: route a light record whose anchor_kind is
+# set to the given JSON value ("-" leaves the key out) and print the event's
+# anchor_kind as JSON (MISSING when the event has no such key).
+route_event_anchor_kind() {
+  local record="$LIGHT_DIRECTORY/$DIGEST.$MEMBER.route.json"
+  write_light_route_record
+  if [ "$1" != "-" ]; then
+    jq -c --argjson kind "$1" '. + {anchor_kind: $kind}' "$record" > "$record.tmp"
+    mv "$record.tmp" "$record"
+  fi
+  run_route
+  jq -c 'if has("anchor_kind") then .anchor_kind else "MISSING" end' "$LOG"
+}
+
+@test "route copies a merge-base anchor_kind from the record" {
+  enable_maintainer_repo
+  [ "$(route_event_anchor_kind '"merge-base"')" = '"merge-base"' ]
+}
+
+@test "route copies a full anchor_kind from the record" {
+  enable_maintainer_repo
+  [ "$(route_event_anchor_kind '"full"')" = '"full"' ]
+}
+
+@test "route writes a null anchor_kind when the record's is null" {
+  enable_maintainer_repo
+  [ "$(route_event_anchor_kind 'null')" = 'null' ]
+}
+
+@test "route writes a null anchor_kind when the record has no such key" {
+  enable_maintainer_repo
+  [ "$(route_event_anchor_kind '-')" = 'null' ]
+}
+
 @test "route with an unparseable record exits 0 and writes nothing" {
   enable_maintainer_repo
   printf 'not json' > "$LIGHT_DIRECTORY/$DIGEST.$MEMBER.route.json"
@@ -188,6 +222,29 @@ tally_value() {
   [ "$status" -eq 0 ]
   event="$(cat "$LOG")"
   [ "$(jq -r '.route' <<<"$event")" = "null" ]
+}
+
+@test "outcome --anchor-kind merge-base writes the field" {
+  enable_maintainer_repo
+  run run_outcome --verdict clear --anchor-kind merge-base
+  [ "$status" -eq 0 ]
+  [ -z "$output" ]
+  [ "$(jq -c '.anchor_kind' "$LOG")" = '"merge-base"' ]
+}
+
+@test "outcome without --anchor-kind writes a null anchor_kind" {
+  enable_maintainer_repo
+  run run_outcome --verdict clear
+  [ "$status" -eq 0 ]
+  [ "$(jq -c '.anchor_kind' "$LOG")" = 'null' ]
+}
+
+@test "outcome --anchor-kind with an unknown value exits 0 and appends nothing" {
+  enable_maintainer_repo
+  run run_outcome --verdict clear --anchor-kind bogus
+  [ "$status" -eq 0 ]
+  [ -e "$LOG" ] && return 1
+  true
 }
 
 @test "outcome refuses an unknown verdict: exit 0, nothing written" {
@@ -463,6 +520,8 @@ write_kill_log() {
   grep -qxF 'eligible_reaudits: 0' <<<"$output"
   grep -qxF 'light_cleared: 0' <<<"$output"
   grep -qxF 'light_cleared_rate: n/a' <<<"$output"
+  grep -qxF 'quick_routes: 0' <<<"$output"
+  grep -qxF 'quick_cleared: 0' <<<"$output"
 }
 
 @test "tally prints the window PR count, the eligible re-audit count and the light-cleared count over the fixture log" {
@@ -549,4 +608,90 @@ write_kill_log() {
   cmp -s "$SCRIPT" "$scratch/audit-light-telemetry.sh" && return 1
   broken="$(bash "$scratch/audit-light-telemetry.sh" tally --root "$ROOT" | awk -F': ' '$1 == "eligible_reaudits" { print $2 }')"
   [ "$broken" = "6" ]
+}
+
+# ---------------------------------------------------------------------------
+# tally: merge-base (quick) events stay out of the re-audit figures
+# ---------------------------------------------------------------------------
+
+# log_json <json>: one raw fixture event line.
+log_json() {
+  mkdir -p "$TELEMETRY_DIRECTORY"
+  printf '%s\n' "$1" >> "$LOG"
+}
+
+# write_reaudit_log: re-audit events on b1 b2 b3: mixed reasons, some with no
+# anchor_kind key, some null, full or refusal; light_outcome tokens; and a
+# member_result a clear covers (one light miss).
+write_reaudit_log() {
+  log_json '{"event":"route","branch":"b1","member":"code-audit-frontend","digest":"d1","tree":"t","route":"light","reason":"light-eligible","ranges":[{"path":"frontend/app/x.tsx","post_ranges":[[10,14]]}]}'
+  log_json '{"event":"light_outcome","branch":"b1","member":"code-audit-frontend","digest":"d1","verdict":"clear","tokens":1000,"anchor_kind":null}'
+  log_json '{"event":"member_result","branch":"b1","member":"code-audit-frontend","result":"refused","locations":[{"path":"frontend/app/x.tsx","line":12}]}'
+  log_json '{"event":"route","branch":"b2","member":"code-audit-frontend","digest":"d2","tree":"t","route":"full","reason":"no-full-clearance","anchor_kind":null}'
+  log_json '{"event":"route","branch":"b2","member":"code-audit-maintainer-shell","digest":"d3","tree":"t","route":"light","reason":"refusal-anchored","anchor_kind":"refusal"}'
+  log_json '{"event":"light_outcome","branch":"b2","member":"code-audit-maintainer-shell","digest":"d3","verdict":"clear","tokens":3000,"anchor_kind":"refusal"}'
+  log_json '{"event":"route","branch":"b3","member":"code-audit-frontend","digest":"d4","tree":"t","route":"full","reason":"over-cap","anchor_kind":"full"}'
+  log_json '{"event":"route","branch":"b3","member":"code-audit-maintainer-shell","digest":"d5","tree":"t","route":"full","reason":"over-cap"}'
+  log_json '{"event":"light_outcome","branch":"b3","member":"code-audit-maintainer-shell","digest":"d5","verdict":"escalate","tokens":2000}'
+  log_json '{"event":"escalation_followup","branch":"b3","member":"code-audit-maintainer-shell","route_digest":"d5","result":"refused","findings":2}'
+  log_json '{"event":"route","branch":"b3","member":"code-audit-frontend","digest":"d6","tree":"t","route":"full","reason":"not-opted-in"}'
+}
+
+# write_quick_events: merge-base events on branches the re-audit log already
+# places in the window: three routes (one light, two ending full), three
+# outcomes (two clear with tokens, one escalate), and a member_result whose
+# location only the merge-base clear covers.
+write_quick_events() {
+  log_json '{"event":"route","branch":"b1","member":"code-audit-frontend","digest":"q1","tree":"t","route":"light","reason":"quick-eligible","anchor_kind":"merge-base","ranges":[{"path":"frontend/app/y.tsx","post_ranges":[[1,5]]}]}'
+  log_json '{"event":"route","branch":"b2","member":"code-audit-frontend","digest":"q2","tree":"t","route":"full","reason":"hard-full","anchor_kind":"merge-base"}'
+  log_json '{"event":"route","branch":"b3","member":"code-audit-frontend","digest":"q3","tree":"t","route":"full","reason":"machinery","anchor_kind":"merge-base"}'
+  log_json '{"event":"light_outcome","branch":"b1","member":"code-audit-frontend","digest":"q1","verdict":"clear","tokens":500,"anchor_kind":"merge-base"}'
+  log_json '{"event":"light_outcome","branch":"b2","member":"code-audit-frontend","digest":"q2","verdict":"clear","tokens":700,"anchor_kind":"merge-base"}'
+  log_json '{"event":"light_outcome","branch":"b3","member":"code-audit-frontend","digest":"q3","verdict":"escalate","tokens":100,"anchor_kind":"merge-base"}'
+  log_json '{"event":"member_result","branch":"b1","member":"code-audit-frontend","result":"refused","locations":[{"path":"frontend/app/y.tsx","line":3}]}'
+}
+
+# preexisting_lines [script]: every tally line that is not a quick_ line.
+preexisting_lines() {
+  bash "${1:-$SCRIPT}" tally --root "$ROOT" | grep -v '^quick_'
+}
+
+@test "merge-base events leave every pre-existing tally line byte-identical and add only the two quick lines" {
+  write_reaudit_log
+  [ "$(wc -l < "$LOG" | tr -d ' ')" -gt 0 ]
+  baseline_figures="$(preexisting_lines)"
+  [ "$(tally_value rotations)" = "6" ]
+  [ "$(tally_value light_routes)" = "2" ]
+  [ "$(tally_value light_misses)" = "1" ]
+  [ "$(tally_value window_prs)" = "3" ]
+  [ "$(tally_value quick_routes)" = "0" ]
+  [ "$(tally_value quick_cleared)" = "0" ]
+
+  write_quick_events
+  [ "$(preexisting_lines)" = "$baseline_figures" ]
+  [ "$(tally_value quick_routes)" = "3" ]
+  [ "$(tally_value quick_cleared)" = "2" ]
+}
+
+@test "quick_routes and quick_cleared print directly after light_cleared_rate" {
+  write_reaudit_log
+  write_quick_events
+  run bash "$SCRIPT" tally --root "$ROOT"
+  [ "$status" -eq 0 ]
+  rate_line="$(grep -n '^light_cleared_rate:' <<<"$output" | cut -d: -f1)"
+  [ "$(sed -n "$((rate_line + 1))p" <<<"$output")" = "quick_routes: 3" ]
+  [ "$(sed -n "$((rate_line + 2))p" <<<"$output")" = "quick_cleared: 2" ]
+}
+
+@test "a scratch copy without the merge-base filter changes a pre-existing tally figure on the same fixture" {
+  write_reaudit_log
+  write_quick_events
+  baseline_figures="$(preexisting_lines)"
+
+  scratch="$BATS_TEST_TMPDIR/scratch-quick"
+  mkdir -p "$scratch"
+  cp "$SCRIPT" "$REPO_ROOT/.gaia/scripts/main-root-lib.sh" "$REPO_ROOT/.gaia/scripts/audit-key-lib.sh" "$scratch/"
+  sed 's/def quick_anchor: .*;$/def quick_anchor: false;/' "$SCRIPT" > "$scratch/audit-light-telemetry.sh"
+  cmp -s "$SCRIPT" "$scratch/audit-light-telemetry.sh" && return 1
+  [ "$(preexisting_lines "$scratch/audit-light-telemetry.sh")" != "$baseline_figures" ]
 }

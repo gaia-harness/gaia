@@ -235,3 +235,96 @@ set_frontmatter_line() {
   grep -qE 'audit-light-reviewer\.md' <<<"$output"
   awk -F'\t' '$2 == "code-audit-maintainer-shell" && index($0, "audit-light-reviewer.md") { found = 1 } END { exit !found }' <<<"$output"
 }
+
+# The body of the `## First-dispatch mode` section of $1, up to the next `## `.
+first_dispatch_section_of() {
+  body_of "$1" | awk '/^## First-dispatch mode$/ { inside = 1; next } inside && /^## / { exit } inside { print }'
+}
+
+# Prints one reason per violated rule of the first-dispatch section; non-zero on any.
+check_first_dispatch() {
+  local file="$1" failed=0 section item
+  local -a checklist=(
+    'Element semantics and heading order are preserved'
+    'Every control keeps an accessible name'
+    'No content is newly hidden'
+    'The focus indicator is kept'
+    'Foreground and background token roles stay paired'
+    'paired with `motion-reduce:`'
+    'Visual order matches DOM order'
+    'No placeholder is the only label'
+    'keep meaningful text'
+    'keep the text readable'
+  )
+  if ! grep -qx -- '## First-dispatch mode' "$file"; then
+    printf 'no First-dispatch mode heading\n'
+    return 1
+  fi
+  section="$(first_dispatch_section_of "$file")"
+  [ "${#checklist[@]}" -eq 10 ] || { printf 'checklist list size drifted\n'; failed=1; }
+  grep -qF -- 'anchor_kind: merge-base' <<<"$section" || { printf 'section lacks the header line\n'; failed=1; }
+  grep -qF -- 'No Code Audit Team member has read this branch.' <<<"$section" || { printf 'section lacks the no-member-read sentence\n'; failed=1; }
+  grep -qF -- '.claude/hooks/lib/audit-quick-classify-lib.sh' <<<"$section" || { printf 'section lacks the classifier pointer\n'; failed=1; }
+  grep -qF -- 'Do not report or mention minor or nit observations at all' <<<"$section" || { printf 'section lacks the minor and nit ban\n'; failed=1; }
+  for item in "${checklist[@]}"; do
+    grep -qF -- "$item" <<<"$section" || { printf 'section lacks checklist item: %s\n' "$item"; failed=1; }
+  done
+  return "$failed"
+}
+
+# Prints a reason and returns non-zero when the file names a hiding or focus token.
+check_no_token_enumeration() {
+  local file="$1" failed=0 token
+  for token in sr-only outline-none pointer-events-none; do
+    if grep -qF -- "$token" "$file"; then
+      printf 'definition enumerates token: %s\n' "$token"
+      failed=1
+    fi
+  done
+  return "$failed"
+}
+
+# bats test_tags=whole-tree
+@test "the definition has a First-dispatch mode section with its rule, pointer and checklist" {
+  run check_first_dispatch "$DEFINITION"
+  [ "$status" -eq 0 ] || { printf '%s\n' "$output" >&2; return 1; }
+}
+
+@test "the First-dispatch mode guard refuses a definition missing a checklist item" {
+  local copy
+  copy="$(scratch_copy first-dispatch-missing-item)"
+  grep -vF -- 'No content is newly hidden' "$REAL_DEFINITION" > "$copy"
+  run check_first_dispatch "$copy"
+  [ "$status" -ne 0 ]
+  grep -qF -- 'checklist item: No content is newly hidden' <<<"$output"
+}
+
+# bats test_tags=whole-tree
+@test "the header list names anchor_kind as the first-dispatch switch" {
+  body_of "$DEFINITION" | grep -qF -- 'carries the line `anchor_kind: merge-base` after `deleted:`'
+  body_of "$DEFINITION" | grep -qF -- 'Any other value, or no such line'
+}
+
+# bats test_tags=whole-tree
+@test "the definition does not enumerate the hiding and focus token set" {
+  run check_no_token_enumeration "$DEFINITION"
+  [ "$status" -eq 0 ] || { printf '%s\n' "$output" >&2; return 1; }
+}
+
+@test "the token enumeration guard refuses a scratch copy that names a token" {
+  local copy
+  copy="$(scratch_copy token-enumeration)"
+  printf '\nWatch for sr-only.\n' >> "$copy"
+  run check_no_token_enumeration "$copy"
+  [ "$status" -ne 0 ]
+  grep -qF -- 'enumerates token: sr-only' <<<"$output"
+}
+
+# bats test_tags=whole-tree
+@test "the post-clearance open_findings behavior survives unchanged" {
+  local body
+  body="$(body_of "$DEFINITION")"
+  grep -qF -- 'When the header carries `open_findings`, the member refused this branch' <<<"$body"
+  grep -qF -- 'decide, from the hunks alone, whether this delta resolves each finding where it was cited' <<<"$body"
+  grep -qF -- 'a clear needs every key listed' <<<"$body"
+}

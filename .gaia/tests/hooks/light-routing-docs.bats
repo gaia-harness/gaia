@@ -94,3 +94,78 @@ assert_pinned() {
     | grep -viE 'never|no marker|light-marker|audit-light-mark' || true)"
   [ -n "$offending" ]
 }
+
+# long_waits <file>: prints every wait of a minute or more the unit definition
+# could prescribe: any select(undef,undef,undef,<n>) or sleep <n> in the file,
+# and any <n> s or <n> seconds inside the "Waiting for a dispatch" subsection
+# only. Prints "none-found-input" when nothing at all was extracted, so an
+# empty extraction fails loudly instead of passing.
+long_waits() {
+  local wait_values
+  wait_values="$(
+    {
+      grep -oE 'select\(undef,undef,undef,[0-9.]+\)' "$1" | grep -oE '[0-9.]+\)$' | tr -d ')'
+      grep -oE 'sleep [0-9.]+' "$1" | grep -oE '[0-9.]+$'
+      awk '/^### Waiting for a dispatch$/ {inside_wait_section=1; next} /^##+ / {inside_wait_section=0} inside_wait_section' "$1" \
+        | grep -oE '[0-9.]+ (s|seconds)\b' | grep -oE '^[0-9.]+'
+    } || true
+  )"
+  [ -n "$wait_values" ] || { echo none-found-input; return 0; }
+  local wait_value
+  while IFS= read -r wait_value; do
+    awk -v v="$wait_value" 'BEGIN { exit !(v+0 >= 60) }' && echo "long wait: $wait_value"
+  done <<<"$wait_values"
+  true
+}
+
+# bats test_tags=whole-tree
+@test "unit names the first-dispatch anchor and the bounded wait wording" {
+  assert_pinned "$UNIT" '(the reason says `quick-eligible`)'
+  local waiting
+  waiting="$(awk '/^### Waiting for a dispatch$/ {inside_wait_section=1; next} /^##+ / {inside_wait_section=0} inside_wait_section' "$UNIT")"
+  [ -n "$waiting" ]
+  local needle
+  for needle in '(5 s)' 'at most 30 s' 'No single wait reaches a minute.' '24 steps'; do
+    grep -qF -- "$needle" <<<"$waiting" || { echo "not under Waiting for a dispatch: $needle" >&2; return 1; }
+  done
+}
+
+# bats test_tags=whole-tree
+@test "unit forbids a fix round on a light-cleared member" {
+  assert_pinned "$UNIT" 'A member that light-cleared in a round is never dispatched to a fixer and never the subject of a fix round'
+}
+
+# bats test_tags=whole-tree
+@test "quick-clear path writes an unopened clean round and skips unit-window" {
+  local quick
+  quick="$(awk '/^### Quick-clear path$/ {inside_quick_section=1; next} /^##+ / {inside_quick_section=0} inside_quick_section' "$UNIT")"
+  [ -n "$quick" ]
+  local needle
+  for needle in '"opened":false' 'stop_reason: "clean"' 'Skip `unit-window`'; do
+    grep -qF -- "$needle" <<<"$quick" || { echo "not under Quick-clear path: $needle" >&2; return 1; }
+  done
+}
+
+# bats test_tags=whole-tree
+@test "unit prescribes no wait of a minute or more" {
+  local out
+  out="$(long_waits "$UNIT")"
+  [ "$out" != none-found-input ]
+  [ -z "$out" ]
+  # The 600-second limit sentence sits outside the guarded subsection.
+  grep -qF -- '600-second limit' "$UNIT"
+}
+
+@test "no-long-wait guard fails on an appended 60 s select" {
+  { cat "$UNIT"; printf '%s\n' "perl -e 'select(undef,undef,undef,60)'"; } >"$BATS_TEST_TMPDIR/long-select.md"
+  local out
+  out="$(long_waits "$BATS_TEST_TMPDIR/long-select.md")"
+  [ "$out" = "long wait: 60" ]
+}
+
+@test "no-long-wait guard fails on a 90 s wait inside the subsection" {
+  awk '{print} /^### Waiting for a dispatch$/ {print "\nOn a quiet run, wait 90 s."}' "$UNIT" >"$BATS_TEST_TMPDIR/long-section.md"
+  local out
+  out="$(long_waits "$BATS_TEST_TMPDIR/long-section.md")"
+  [ "$out" = "long wait: 90" ]
+}
