@@ -23,7 +23,9 @@
 #
 # HONEST LIMITS, all allowing:
 #   - `--body-file -` (stdin), and a body file whose path carries `$` or a
-#     backtick or cannot be read (gh refuses an unreadable one itself);
+#     backtick; a body file absent or unreadable when the hook runs is allowed
+#     too, including one the same tool call creates or overwrites before gh
+#     reads it (the hook then reads nothing, or the earlier contents);
 #   - text a substitution produces rather than text written inside it: a
 #     `"$(cat <file>)"` body is not read (and a concrete run-folder path in
 #     that `cat` is refused as written text; pass the file as --body-file);
