@@ -79,7 +79,8 @@ STUB
 # Prints its path.
 make_repo() {
   local repo="${BATS_TEST_TMPDIR}/$1" list="${2:-$FEATURE_LIST}"
-  mkdir -p "${repo}/.gaia/cli"
+  mkdir -p "${repo}/.gaia/cli" "${repo}/.gaia/scripts"
+  cp "${REPO_ROOT}/.gaia/scripts/setup-ping.sh" "${repo}/.gaia/scripts/"
   git init -q -b main "$repo"
   printf '.gaia/local/\n.gaia/cli/\n' >"${repo}/.gitignore"
   cp "$list" "${repo}/.gaia/setup-features.json"
