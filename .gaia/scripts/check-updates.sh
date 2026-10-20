@@ -41,13 +41,24 @@
 #                     requests; [] when the list fails)
 #   - ghLogin        (the current GitHub login; "" when unavailable, which
 #                     hides the claim states)
+#   - fitnessGrade / fitnessBlendCount / fitnessCommitCount /
+#                     fitnessCommitThreshold / fitnessBlendLandedAt /
+#                     fitnessBasisVersion / fitnessBasisCloseAt (the
+#                     /gaia-fitness nudge signals, all measured against the
+#                     main checkout; the statusline reads only these fields)
 #   - checkedAt      (Unix epoch seconds)
 #
 # TTL is 6 hours (21600s). Re-runs within the TTL exit immediately so the
 # statusline can start this in the background on every render without paying
 # the cost each time. A cache with no securitySource key is treated as past its
 # TTL once, so the first refresh after an upgrade fills the security fields. A
-# cache whose wikiStateSha differs from the state file's is past its TTL too.
+# cache whose wikiStateSha differs from the state file's is past its TTL too,
+# and so is one whose fitnessBasisVersion differs from the main checkout's
+# .gaia/VERSION (a cache with no such key, once). The blend record is
+# deliberately not a basis: /update-gaia writes it before its own cache bust,
+# so a record checksum here would undo that bust and recompute against a
+# .gaia/VERSION that has not landed yet. A record change cannot raise the count
+# before its update lands, and the landing changes .gaia/VERSION.
 #
 # Partial failures are tolerated; exit 0 even if some fields could not be
 # refreshed. Do NOT add `set -e`.
@@ -74,12 +85,17 @@ PROJECT_ROOT="$(cd "$GAIA_DIRECTORY/.." && pwd)"
 # .gaia/statusline/gaia-statusline.sh: with no resolver to ask, the local root
 # is the honest answer and the refresher still refreshes.
 #
-# STATE_ROOT anchors machine-local STATE only. Everything this script measures
-# out of the checkout itself -- CLAUDE.md, .claude/rules/*.md, the
-# Serena language drift, and the CLI invocations below that name
-# PROJECT_ROOT -- stays on PROJECT_ROOT, because those are tracked files that
-# legitimately differ per branch. Repointing them wholesale would make this refresher report a fact
-# about a tree nobody is in.
+# STATE_ROOT anchors machine-local STATE, and the one fitness check that
+# serves both the cleanse and the fitness nudges. Everything else this script
+# measures out of the checkout itself -- the Serena language drift and the
+# other CLI invocations below that name PROJECT_ROOT -- stays on PROJECT_ROOT,
+# because those are tracked files that legitimately differ per branch.
+# Repointing them wholesale would make this refresher report a fact about a
+# tree nobody is in. The fitness check runs against STATE_ROOT because the
+# fitness nudge is a fact about the main checkout's history; that is harmless
+# for the cleanse nudge in production, since the statusline launches the main
+# checkout's own copy of this refresher, so STATE_ROOT and PROJECT_ROOT are the
+# same tree there.
 if [ -f "$GAIA_DIRECTORY/scripts/main-root-lib.sh" ]; then
   # shellcheck source=/dev/null
   . "$GAIA_DIRECTORY/scripts/main-root-lib.sh" 2>/dev/null || true
@@ -113,6 +129,12 @@ codify_snapshot_token() {
 SERENA_LIBRARY="$GAIA_DIRECTORY/scripts/lib/serena-lang.sh"
 # shellcheck source=.gaia/scripts/lib/serena-lang.sh
 [ -f "$SERENA_LIBRARY" ] && . "$SERENA_LIBRARY"
+
+# Source the fitness-nudge signal library. Guarded the same way: without it
+# every fitness field carries its previous cached value.
+FITNESS_NUDGE_LIBRARY="$GAIA_DIRECTORY/scripts/fitness-nudge-lib.sh"
+# shellcheck source=.gaia/scripts/fitness-nudge-lib.sh
+[ -f "$FITNESS_NUDGE_LIBRARY" ] && . "$FITNESS_NUDGE_LIBRARY"
 
 # Today's codify-nudge count text: shared by the no-snapshot composition
 # below and the upgrade-window seed for a cache written before
@@ -158,6 +180,14 @@ previous_wiki_drift_count=0
 previous_cleanse_last_applied_at=0
 previous_cleanse_memory_count=0
 previous_cleanse_memory_baseline=0
+previous_fitness_grade=""
+previous_fitness_blend_count=0
+previous_fitness_commit_count=0
+previous_fitness_blend_landed='{}'
+previous_fitness_basis_close_at=0
+# The cache's own checkedAt as this run read it, before any staleness gate below
+# zeroes previous_checked_at: the pre-write bust check compares against it.
+cache_checked_at_before=0
 if [ -f "$CACHE_FILE" ] && command -v jq >/dev/null 2>&1; then
   previous_checked_at=$(jq -r '.checkedAt // 0' "$CACHE_FILE" 2>/dev/null)
   previous_outdated_count=$(jq -r '.outdatedCount // 0' "$CACHE_FILE" 2>/dev/null)
@@ -184,9 +214,15 @@ if [ -f "$CACHE_FILE" ] && command -v jq >/dev/null 2>&1; then
   previous_cleanse_last_applied_at=$(jq -r '.cleanseLastAppliedAt // 0' "$CACHE_FILE" 2>/dev/null)
   previous_cleanse_memory_count=$(jq -r '.cleanseMemoryCount // 0' "$CACHE_FILE" 2>/dev/null)
   previous_cleanse_memory_baseline=$(jq -r '.cleanseMemoryBaseline // 0' "$CACHE_FILE" 2>/dev/null)
+  previous_fitness_grade=$(jq -r '.fitnessGrade | if type == "string" then . else "" end' "$CACHE_FILE" 2>/dev/null)
+  previous_fitness_blend_count=$(jq -r '.fitnessBlendCount // 0' "$CACHE_FILE" 2>/dev/null)
+  previous_fitness_commit_count=$(jq -r '.fitnessCommitCount // 0' "$CACHE_FILE" 2>/dev/null)
+  previous_fitness_blend_landed=$(jq -c '.fitnessBlendLandedAt | if type == "object" then . else {} end' "$CACHE_FILE" 2>/dev/null)
+  previous_fitness_basis_close_at=$(jq -r '.fitnessBasisCloseAt // 0' "$CACHE_FILE" 2>/dev/null)
   case "$previous_checked_at" in
     ''|*[!0-9]*) previous_checked_at=0 ;;
   esac
+  cache_checked_at_before="$previous_checked_at"
   case "$previous_wiki_drift_count" in
     ''|*[!0-9]*) previous_wiki_drift_count=0 ;;
   esac
@@ -199,6 +235,16 @@ if [ -f "$CACHE_FILE" ] && command -v jq >/dev/null 2>&1; then
   case "$previous_cleanse_memory_baseline" in
     ''|*[!0-9]*) previous_cleanse_memory_baseline=0 ;;
   esac
+  case "$previous_fitness_blend_count" in
+    ''|*[!0-9]*) previous_fitness_blend_count=0 ;;
+  esac
+  case "$previous_fitness_commit_count" in
+    ''|*[!0-9]*) previous_fitness_commit_count=0 ;;
+  esac
+  case "$previous_fitness_basis_close_at" in
+    ''|*[!0-9]*) previous_fitness_basis_close_at=0 ;;
+  esac
+  [ -n "$previous_fitness_blend_landed" ] || previous_fitness_blend_landed='{}'
 fi
 
 # A cache written before the security fields existed is stale once, whatever
@@ -217,6 +263,23 @@ if command -v jq >/dev/null 2>&1; then
   wiki_state_sha=$(jq -r '.last_evaluated_sha // ""' "$STATE_ROOT/wiki/.state.json" 2>/dev/null)
   if [ -f "$CACHE_FILE" ] \
     && [ "$(jq -r '.wikiStateSha // ""' "$CACHE_FILE" 2>/dev/null)" != "$wiki_state_sha" ]; then
+    previous_checked_at=0
+  fi
+fi
+
+# The fitness signals are a function of the main checkout's .gaia/VERSION (a
+# blended file counts only once main reaches its version), and a hand `git
+# pull` moves that file by a route that never touches this cache. O(1) on
+# purpose: this gate runs on every render, so it never reads the usage ledger
+# or runs git. The close-row anchor is not a basis either: a fitness run busts
+# the cache itself after it records its close row.
+fitness_basis_version=""
+if [ -f "$STATE_ROOT/.gaia/VERSION" ]; then
+  fitness_basis_version=$(tr -d '[:space:]' < "$STATE_ROOT/.gaia/VERSION" 2>/dev/null)
+fi
+if [ -f "$CACHE_FILE" ] && command -v jq >/dev/null 2>&1; then
+  if ! jq -e 'has("fitnessBasisVersion")' "$CACHE_FILE" >/dev/null 2>&1 \
+    || [ "$(jq -r '.fitnessBasisVersion // ""' "$CACHE_FILE" 2>/dev/null)" != "$fitness_basis_version" ]; then
     previous_checked_at=0
   fi
 fi
@@ -613,25 +676,41 @@ fi
 
 # (b) Project drift: any committed auto-load file over budget, judged by the
 # CLI's budget rule so the numbers live in one place. Budget-only, no committed
-# marker; clears for everyone once a dev fixes + commits. Measured against
-# PROJECT_ROOT. Exit 1 is shared with an unknown subcommand, so it counts as a
-# result only when stdout parses as a check report; any other outcome leaves
-# the signal off.
+# marker; clears for everyone once a dev fixes + commits. One adopter-scope
+# fitness check serves both this nudge and the /gaia-fitness nudge, measured
+# against the main checkout (STATE_ROOT). The default scope matters: findings
+# in GAIA-shipped files land in `upstream` and do not move the overall grade
+# the fitness nudge reports, while the budget count below still reads both
+# lists. Exit 1 is shared with an unknown subcommand, so it counts as a result
+# only when stdout parses as a check report; any other outcome leaves both
+# signals as they were.
 project_drift=false
+fitness_report_usable=false
+fitness_grade_computed=""
+fitness_pathspecs=""
 # shellcheck disable=SC2329 # called by name through run_cli_into_temporary_file
-flag_project_drift_from_budget_report() {
-  local exit_code="$1" budget_file="$2" budget_finding_count
+flag_project_drift_from_check_report() {
+  local exit_code="$1" report_file="$2" budget_finding_count
   { [ "$exit_code" -eq 0 ] || [ "$exit_code" -eq 1 ]; } || return 0
-  jq -e 'has("findings") and has("upstream")' "$budget_file" >/dev/null 2>&1 || return 0
-  budget_finding_count=$(jq -r '[.findings[], .upstream[]] | map(select(.rule_id == "claudemd.budget")) | length' "$budget_file" 2>/dev/null)
+  jq -e 'has("findings") and has("upstream")' "$report_file" >/dev/null 2>&1 || return 0
+  budget_finding_count=$(jq -r '[.findings[], .upstream[]] | map(select(.rule_id == "claudemd.budget")) | length' "$report_file" 2>/dev/null)
   case "$budget_finding_count" in
     ''|*[!0-9]*|0) ;;
     *) project_drift=true ;;
   esac
+  if command -v gaia_fitness_report_usable >/dev/null 2>&1 && gaia_fitness_report_usable "$report_file"; then
+    if fitness_grade_computed="$(gaia_fitness_grade "$report_file")" \
+      && fitness_pathspecs="$(gaia_fitness_harness_pathspecs "$report_file")"; then
+      fitness_report_usable=true
+    else
+      fitness_grade_computed=""
+      fitness_pathspecs=""
+    fi
+  fi
 }
 
-run_cli_into_temporary_file flag_project_drift_from_budget_report \
-  "$GAIA_BIN" fitness check --json --scope all --only claudemd.budget --root "$PROJECT_ROOT"
+run_cli_into_temporary_file flag_project_drift_from_check_report \
+  "$GAIA_BIN" fitness check --json --root "$STATE_ROOT"
 
 # Pick the single highest-priority reason. The two machine-drift arms each get
 # a self-describing label; when both fire, the concrete new-memory count wins.
@@ -657,6 +736,69 @@ case "$cleanse_memory_count" in
 esac
 case "$cleanse_memory_baseline" in
   ''|*[!0-9]*) cleanse_memory_baseline=0 ;;
+esac
+
+# ---------- fitness nudge ----------
+# Three reasons share one cached verdict: an adopter finding's grade, blended
+# harness files an update left behind, and the team's harness commits since the
+# last fitness run. Every git and file read is against STATE_ROOT, the main
+# checkout. Each signal that cannot be read this run keeps its previous cached
+# value, so a transient failure never arms or clears the nudge falsely; the
+# ledger is the one input that gates two signals, so an unreadable ledger
+# freezes both the blend and the commit count rather than counting the whole
+# history.
+fitness_threshold=15
+fitness_grade="$previous_fitness_grade"
+fitness_blend_count="$previous_fitness_blend_count"
+fitness_commit_count="$previous_fitness_commit_count"
+fitness_blend_landed="$previous_fitness_blend_landed"
+fitness_basis_close_at="$previous_fitness_basis_close_at"
+if command -v jq >/dev/null 2>&1 \
+  && command -v gaia_fitness_newest_close >/dev/null 2>&1 \
+  && command -v gaia_fitness_blend_signal >/dev/null 2>&1 \
+  && command -v gaia_fitness_count_commits >/dev/null 2>&1 \
+  && command -v gaia_fitness_commit_threshold >/dev/null 2>&1; then
+  fitness_threshold="$(gaia_fitness_commit_threshold "$STATE_ROOT/.gaia/project.json")"
+  [ "$fitness_report_usable" != "true" ] || fitness_grade="$fitness_grade_computed"
+  fitness_close_epoch="$(gaia_fitness_newest_close "$STATE_ROOT/.gaia/local/telemetry/usage.jsonl")"
+  fitness_ledger_status=$?
+  if [ "$fitness_ledger_status" -eq 0 ]; then
+    fitness_basis_close_at="${fitness_close_epoch:-0}"
+    if fitness_blend_signal="$(gaia_fitness_blend_signal "$STATE_ROOT/.gaia/local/fitness/blend-record.json" \
+      "$fitness_basis_version" "$fitness_close_epoch" "$previous_fitness_blend_landed" "$now")"; then
+      fitness_blend_parsed="$(printf '%s' "$fitness_blend_signal" | jq -r '.count' 2>/dev/null)"
+      fitness_landed_parsed="$(printf '%s' "$fitness_blend_signal" | jq -c '.landed | if type == "object" then . else empty end' 2>/dev/null)"
+      case "$fitness_blend_parsed" in
+        ''|*[!0-9]*) ;;
+        *)
+          if [ -n "$fitness_landed_parsed" ]; then
+            fitness_blend_count="$fitness_blend_parsed"
+            fitness_blend_landed="$fitness_landed_parsed"
+          fi
+          ;;
+      esac
+    fi
+    if [ "$fitness_report_usable" = "true" ]; then
+      fitness_pathspec_list=()
+      while IFS= read -r fitness_pathspec; do
+        [ -z "$fitness_pathspec" ] || fitness_pathspec_list+=("$fitness_pathspec")
+      done <<<"$fitness_pathspecs"
+      fitness_commits_parsed="$(gaia_fitness_count_commits "$STATE_ROOT" "$fitness_close_epoch" \
+        "$GAIA_FITNESS_COMMIT_CAP" ${fitness_pathspec_list[@]+"${fitness_pathspec_list[@]}"})"
+      case $? in
+        0)
+          case "$fitness_commits_parsed" in
+            ''|*[!0-9]*) ;;
+            *) fitness_commit_count="$fitness_commits_parsed" ;;
+          esac
+          ;;
+        2) fitness_commit_count=0 ;;
+      esac
+    fi
+  fi
+fi
+case "$fitness_threshold" in
+  ''|*[!0-9]*|0) fitness_threshold=15 ;;
 esac
 
 # ---------- serenaLangDrift ----------
@@ -765,6 +907,18 @@ if [ "$(cache_fingerprint)" != "$cache_fingerprint_before" ]; then
   exit 0
 fi
 
+# A fitness run busts the cache (checkedAt 0) right after it records its close
+# row, while a refresh that read the ledger earlier may still be running. This
+# write rebuilds the whole object with a fresh checkedAt, which would replace
+# that bust and hold a stale commit or blend reason for a full TTL. A cache
+# that reads 0 now but did not at the start was busted mid-run: write 0 so the
+# next render recomputes.
+if [ -f "$CACHE_FILE" ] && command -v jq >/dev/null 2>&1 \
+  && [ "$cache_checked_at_before" != "0" ] \
+  && [ "$(jq -r '.checkedAt // 0' "$CACHE_FILE" 2>/dev/null)" = "0" ]; then
+  checked_at_to_write=0
+fi
+
 # ---------- Write cache atomically ----------
 temporary_file="$(mktemp "$CACHE_DIRECTORY/.update-check.XXXXXX" 2>/dev/null)"
 if [ -z "$temporary_file" ]; then
@@ -796,7 +950,14 @@ if command -v jq >/dev/null 2>&1; then
     --argjson securityCount "$security_count" \
     --arg securitySource "$security_source" \
     --arg securityUnavailableReason "$security_reason" \
-    '{checkedAt: $checkedAt, outdatedCount: $outdatedCount, gaiaCurrent: $gaiaCurrent, gaiaLatest: $gaiaLatest, gaiaHasUpdate: $gaiaHasUpdate, gaiaOriginVersion: $gaiaOriginVersion, gaiaUpdateClaims: $gaiaUpdateClaims, ghLogin: $ghLogin, codifyCandidateCount: $codifyCandidateCount, codifyUnclassifiedCount: $codifyUnclassifiedCount, codifyNudgeReason: $codifyNudgeReason, residueCandidateCount: $residueCandidateCount, wikiDriftCount: $wikiDriftCount, wikiStateSha: $wikiStateSha, cleanseNudge: $cleanseNudge, cleanseNudgeReason: $cleanseNudgeReason, cleanseLastAppliedAt: $cleanseLastAppliedAt, cleanseMemoryCount: $cleanseMemoryCount, cleanseMemoryBaseline: $cleanseMemoryBaseline, serenaLangDrift: $serenaLangDrift, securityCount: $securityCount, securitySource: $securitySource, securityUnavailableReason: $securityUnavailableReason}' \
+    --arg fitnessGrade "$fitness_grade" \
+    --argjson fitnessBlendCount "$fitness_blend_count" \
+    --argjson fitnessCommitCount "$fitness_commit_count" \
+    --argjson fitnessCommitThreshold "$fitness_threshold" \
+    --argjson fitnessBlendLandedAt "$fitness_blend_landed" \
+    --arg fitnessBasisVersion "$fitness_basis_version" \
+    --argjson fitnessBasisCloseAt "$fitness_basis_close_at" \
+    '{checkedAt: $checkedAt, outdatedCount: $outdatedCount, gaiaCurrent: $gaiaCurrent, gaiaLatest: $gaiaLatest, gaiaHasUpdate: $gaiaHasUpdate, gaiaOriginVersion: $gaiaOriginVersion, gaiaUpdateClaims: $gaiaUpdateClaims, ghLogin: $ghLogin, codifyCandidateCount: $codifyCandidateCount, codifyUnclassifiedCount: $codifyUnclassifiedCount, codifyNudgeReason: $codifyNudgeReason, residueCandidateCount: $residueCandidateCount, wikiDriftCount: $wikiDriftCount, wikiStateSha: $wikiStateSha, cleanseNudge: $cleanseNudge, cleanseNudgeReason: $cleanseNudgeReason, cleanseLastAppliedAt: $cleanseLastAppliedAt, cleanseMemoryCount: $cleanseMemoryCount, cleanseMemoryBaseline: $cleanseMemoryBaseline, serenaLangDrift: $serenaLangDrift, securityCount: $securityCount, securitySource: $securitySource, securityUnavailableReason: $securityUnavailableReason, fitnessGrade: $fitnessGrade, fitnessBlendCount: $fitnessBlendCount, fitnessCommitCount: $fitnessCommitCount, fitnessCommitThreshold: $fitnessCommitThreshold, fitnessBlendLandedAt: $fitnessBlendLandedAt, fitnessBasisVersion: $fitnessBasisVersion, fitnessBasisCloseAt: $fitnessBasisCloseAt}' \
     > "$temporary_file" 2>/dev/null
 else
   # jq not available; emit valid JSON via printf. serenaLangDrift is empty:

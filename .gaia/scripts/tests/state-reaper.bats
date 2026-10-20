@@ -506,6 +506,16 @@ plant_git_failure_fixture() {
   absent cache/doctrine-injected.sess
 }
 
+@test "an old blend record survives while an equally old age-classed entry beside it is removed" {
+  make_fixture
+  plant_file fitness/blend-record.json 400
+  plant_file cache/doctrine-injected.sess 400
+  run_reaper
+  [ "$status" -eq 0 ]
+  absent cache/doctrine-injected.sess
+  present fitness/blend-record.json
+}
+
 # bats test_tags=whole-tree
 @test "a registry whose rows carry the old reaped_by field and no retention removes nothing" {
   make_fixture

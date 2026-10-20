@@ -176,7 +176,7 @@ assert_security() {
 
 @test "a fresh cache that has securitySource is not refreshed" {
   export MOCK_ADVISORIES_PAYLOAD='{"version":1,"source":"dependabot","count":4,"reasons":[]}'
-  printf '{"checkedAt":%s,"outdatedCount":0,"securityCount":1,"securitySource":"dependabot","securityUnavailableReason":""}' "$(date +%s)" > "$CACHE_FILE"
+  printf '{"checkedAt":%s,"outdatedCount":0,"securityCount":1,"securitySource":"dependabot","securityUnavailableReason":"","fitnessBasisVersion":""}' "$(date +%s)" > "$CACHE_FILE"
   run bash "$REFRESH_ROOT/.gaia/scripts/check-updates.sh" < /dev/null
   [ "$status" -eq 0 ]
   [ ! -e "$MOCK_LOG" ]

@@ -1050,6 +1050,33 @@ bust_holds() {
   true
 }
 
+BLEND_RECORD_CALL='bash <main checkout path>/.gaia/scripts/fitness-blend-record.sh record --main-root <main checkout path> --tree <acting tree> --report <run dir>/report.json --decisions <acting tree>/.gaia/update-decisions.json --tag <LATEST_TAG>'
+
+# 0 when SKILL.md copy `$1` records the blended harness files in Step 9d after
+# the ping and before the version write, as its own command.
+blend_record_order_holds() {
+  local section
+  section="$(section_file "$1" "$STEP_9D")" || return 1
+  grep -qxF -- "$BLEND_RECORD_CALL" "$section" || return 1
+  in_order "$section" 'ping --event update' 'fitness-blend-record.sh record' 'echo <LATEST> > .gaia/VERSION' || return 1
+}
+
+@test "Step 9d: the blend record is written after the ping and before the version write" {
+  blend_record_order_holds "$SKILL"
+  # The writer call dropped.
+  grep -vxF -- "$BLEND_RECORD_CALL" "$SKILL" > "$COPY"
+  blend_record_order_holds "$COPY" && return 1
+  # The writer block moved after the version write.
+  awk -v call="$BLEND_RECORD_CALL" '
+    $0 == call { next }
+    { print }
+    /^echo <LATEST> > \.gaia\/VERSION$/ { getline; print; print ""; print "```bash"; print call; print "```" }
+  ' "$SKILL" > "$COPY"
+  [ "$(first_line "$COPY" 'fitness-blend-record.sh record')" -gt "$(first_line "$COPY" 'echo <LATEST> > .gaia/VERSION')" ]
+  blend_record_order_holds "$COPY" && return 1
+  true
+}
+
 MANIFEST_STOP='A non-zero exit from the `cp` command is the `MANIFEST_COPY_FAILED` stop'
 
 @test "Step 9d prose: a failed manifest copy is the MANIFEST_COPY_FAILED stop" {
