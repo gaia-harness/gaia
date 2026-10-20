@@ -74,12 +74,17 @@ rules for the Socratic loop:
    `effort: "medium"`) with that question and fold the findings into
    `research_summary`.
 5. **Two-gate ceremony.** After discovery is materially complete:
-   - **Gate 1: shape confirmation.** Present intent + UATs in plain
-     English. Ask for explicit confirmation through `AskUserQuestion`
+   - **Gate 1: shape confirmation.** Print the intent in one or two
+     plain sentences, then every UAT as one plain-English line with
+     its id (what is set up, what the user does, what must be true).
+     Never a count, a theme list, or a pointer to the draft file.
+     Ask for explicit confirmation through `AskUserQuestion`
      before authoring the artifact.
-   - **Gate 2: artifact confirmation.** Present the rendered
-     artifact. Ask for explicit confirmation through `AskUserQuestion`
-     before save.
+   - **Gate 2: artifact confirmation.** Print the whole rendered
+     artifact, never a summary or a pointer to the draft file. Ask
+     for explicit confirmation through `AskUserQuestion` before save.
+   - Response-length or terseness preferences do not shorten either
+     gate's print.
 6. **Self-review before gate 2.** Audit the draft for placeholder
    text, scope drift relative to gate 1, internal inconsistency
    between fields, and ambiguous UAT phrasing. Fix before you show

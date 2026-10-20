@@ -32,6 +32,30 @@ SITES=(
   "$REFERENCES/spec/clarify-loop.md|^- \*\*Error|^- \*\*Contradictory|yes|no"
 )
 
+# What each gate or review list must print before it asks, so the user can
+# approve from the print alone. One pin per row: file|start ERE|end ERE|phrase,
+# the phrase matched case-insensitively against the site with its line breaks
+# folded to spaces. A gate that softens back to "Suggested text" drops its
+# required print, so that phrase is forbidden at both gates.
+PRINT_PINS=(
+  "$REFERENCES/spec.md|^### 4\. Gate 1|^### 5\.|every UAT in the draft, one plain-English line each"
+  "$REFERENCES/spec.md|^### 4\. Gate 1|^### 5\.|never summarize the UATs as a count or a theme list"
+  "$REFERENCES/spec.md|^### 4\. Gate 1|^### 5\.|never point the user at the draft file"
+  "$REFERENCES/spec.md|^### 4\. Gate 1|^### 5\.|terseness preferences do not shorten gate content"
+  "$REFERENCES/spec.md|^### 8\. Gate 2|^### 9\.|print the whole rendered artifact"
+  "$REFERENCES/spec.md|^### 8\. Gate 2|^### 9\.|terseness preferences do not shorten gate content"
+  "$REFERENCES/spec/system-prompt.md|Gate 1: shape confirmation|Self-review before gate 2|every UAT as one plain-English line"
+  "$REFERENCES/spec/system-prompt.md|Gate 1: shape confirmation|Self-review before gate 2|print the whole rendered artifact"
+  "$REFERENCES/spec/self-review-dispatch.md|^## 6b\.|^## 6c\.|never a count, a summary, or a pointer to a findings file"
+  "$REFERENCES/spec/audit.md|^\*\*Interactive\.\*\*|^$|never a count, a summary, or a pointer to a findings file"
+  "$REFERENCES/plan/decomposition-audit.md|^\*\*Interactive:\*\*|^$|never a count, a summary, or a pointer to a findings file"
+)
+FORBIDDEN_PRINT_PHRASE='Suggested text'
+GATE_SITES=(
+  "$REFERENCES/spec.md|^### 4\. Gate 1|^### 5\."
+  "$REFERENCES/spec.md|^### 8\. Gate 2|^### 9\."
+)
+
 # The trees the user-questions rule governs, minus the vendored playwright-cli
 # skill, plus the wiki pages Claude executes that exist in an adopter tree.
 # Keep in step with the rule's paths: frontmatter.
@@ -108,6 +132,41 @@ sites_ok() {
   return "$failed"
 }
 
+# prints_ok <root>: checks every print pin and gate under <root>; prints each
+# failure on stderr and returns 1 when any fails.
+prints_ok() {
+  local root="$1" row file start end phrase text failed=0
+  for row in "${PRINT_PINS[@]}"; do
+    IFS='|' read -r file start end phrase <<<"$row"
+    text="$(site_text "$root/$file" "$start" "$end" | tr '\n' ' ' | tr -s ' ')"
+    if [ -z "$text" ]; then
+      echo "site not found: $file /$start/" >&2
+      failed=1
+    elif ! grep -qiF -- "$phrase" <<<"$text"; then
+      echo "print pin missing: $file /$start/: $phrase" >&2
+      failed=1
+    fi
+  done
+  for row in "${GATE_SITES[@]}"; do
+    IFS='|' read -r file start end <<<"$row"
+    if site_text "$root/$file" "$start" "$end" | grep -qiF -- "$FORBIDDEN_PRINT_PHRASE"; then
+      echo "gate print is only suggested: $file /$start/" >&2
+      failed=1
+    fi
+  done
+  return "$failed"
+}
+
+# copy_print_pin_files_into_scratch: copies every print-pin file to the scratch root.
+copy_print_pin_files_into_scratch() {
+  local row file
+  for row in "${PRINT_PINS[@]}"; do
+    file="${row%%|*}"
+    mkdir -p "$(dirname "$SCRATCH_ROOT/$file")"
+    cp "$REPO_ROOT/$file" "$SCRATCH_ROOT/$file"
+  done
+}
+
 # swept_files <root>: prints every Markdown file the rule governs, one per line.
 swept_files() {
   local root="$1" directory page
@@ -173,6 +232,50 @@ copy_tree_into_scratch() {
 
 @test "real tree: every converted site asks through AskUserQuestion, and review lists ask once" {
   sites_ok "$REPO_ROOT"
+}
+
+@test "real tree: every gate and review list prints its full content before asking" {
+  prints_ok "$REPO_ROOT"
+}
+
+@test "red twin: a gate 1 that stops requiring every UAT line fails" {
+  copy_print_pin_files_into_scratch
+  local file="$SCRATCH_ROOT/$REFERENCES/spec.md"
+  sed 's/every UAT in the draft, one plain-English line each/the UATs in brief/' "$file" >"$file.new"
+  mv "$file.new" "$file"
+  run prints_ok "$SCRATCH_ROOT"
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"print pin missing"*"every UAT in the draft"* ]]
+}
+
+@test "red twin: a gate 1 that may point at the draft file fails" {
+  copy_print_pin_files_into_scratch
+  local file="$SCRATCH_ROOT/$REFERENCES/spec.md"
+  sed 's/never point the user at the draft file/point the user at the draft file when long/' "$file" >"$file.new"
+  mv "$file.new" "$file"
+  run prints_ok "$SCRATCH_ROOT"
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"print pin missing"*"never point the user at the draft file"* ]]
+}
+
+@test "red twin: a gate whose print goes back to suggested text fails" {
+  copy_print_pin_files_into_scratch
+  local file="$SCRATCH_ROOT/$REFERENCES/spec.md"
+  awk '{ print } /^### 4\. Gate 1/ { print "Suggested text:" }' "$file" >"$file.new"
+  mv "$file.new" "$file"
+  run prints_ok "$SCRATCH_ROOT"
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"gate print is only suggested"* ]]
+}
+
+@test "red twin: a review list that may print a count fails" {
+  copy_print_pin_files_into_scratch
+  local file="$SCRATCH_ROOT/$REFERENCES/plan/decomposition-audit.md"
+  sed 's/never a count, a summary, or a pointer to a findings file/a count is enough/' "$file" >"$file.new"
+  mv "$file.new" "$file"
+  run prints_ok "$SCRATCH_ROOT"
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"print pin missing: $REFERENCES/plan/decomposition-audit.md"* ]]
 }
 
 @test "real tree: the open-ended prompts stay plain" {
