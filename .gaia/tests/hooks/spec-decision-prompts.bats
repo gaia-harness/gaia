@@ -58,6 +58,13 @@ PRINT_PINS=(
   "$REFERENCES/spec/system-prompt.md|^- \*\*Plain language|^- \*\*Concision|never cite an id or label the human has not read"
   "$REFERENCES/spec/clarify-loop.md|^## 5a\.|^## 5b\.|never cite an id or label from them"
   "$REFERENCES/spec.md|^### 8\. Gate 2|^### 9\.|no finding, lens, directive or section id"
+  ".claude/rules/user-questions.md|^\*\*How a review list prints|^This covers|never a blockquote or a code fence"
+  ".claude/rules/user-questions.md|^\*\*How a review list prints|^This covers|\`**Recommendation:**\` as its own paragraph"
+  ".claude/rules/user-questions.md|^\*\*How a review list prints|^This covers|Internal finding ids stay in the decision list and are never printed"
+  "$REFERENCES/spec/self-review-dispatch.md|^## 6b\.|^## 6c\.|How a review list prints"
+  "$REFERENCES/spec/audit.md|^\*\*Interactive\.\*\*|^$|How a review list prints"
+  "$REFERENCES/plan/decomposition-audit.md|^\*\*Interactive:\*\*|^$|How a review list prints"
+  "$REFERENCES/spec.md|^### 4\. Gate 1|^### 5\.|never in a blockquote or a code fence"
   "$REFERENCES/spec/self-review-dispatch.md|^## 6b\.|^## 6c\.|never a count, a summary, or a pointer to a findings file"
   "$REFERENCES/spec/audit.md|^\*\*Interactive\.\*\*|^$|never a count, a summary, or a pointer to a findings file"
   "$REFERENCES/plan/decomposition-audit.md|^\*\*Interactive:\*\*|^$|never a count, a summary, or a pointer to a findings file"
@@ -75,6 +82,16 @@ WHOLE_ARTIFACT_PINS=(
   "$REFERENCES/spec.md|^### 8\. Gate 2|^### 9\.|<full rendered artifact>"
   "$REFERENCES/spec.md|^### 8\. Gate 2|^### 9\.|full draft artifact in markdown form"
   "$REFERENCES/spec.md|^### 8\. Gate 2|^### 9\.|Here is the rendered SPEC"
+)
+
+# A print template written as a blockquote renders with a bar down its left
+# edge, so no gate 1 or review-list site holds a blockquote line.
+# One row per site: file|start ERE|end ERE.
+BLOCKQUOTE_FREE_SITES=(
+  "$REFERENCES/spec.md|^### 4\. Gate 1|^### 5\."
+  "$REFERENCES/spec/self-review-dispatch.md|^## 6b\.|^## 6c\."
+  "$REFERENCES/spec/audit.md|^\*\*Interactive\.\*\*|^$"
+  "$REFERENCES/plan/decomposition-audit.md|^\*\*Interactive:\*\*|^$"
 )
 
 # The trees the user-questions rule governs, minus the vendored playwright-cli
@@ -179,6 +196,13 @@ prints_ok() {
     IFS='|' read -r file start end phrase <<<"$row"
     if site_text "$root/$file" "$start" "$end" | grep -qiF -- "$phrase"; then
       echo "gate prints the whole artifact: $file /$start/: $phrase" >&2
+      failed=1
+    fi
+  done
+  for row in "${BLOCKQUOTE_FREE_SITES[@]}"; do
+    IFS='|' read -r file start end <<<"$row"
+    if site_text "$root/$file" "$start" "$end" | grep -qE -- '^[[:space:]]*>'; then
+      echo "print template is a blockquote: $file /$start/" >&2
       failed=1
     fi
   done
@@ -344,6 +368,26 @@ copy_tree_into_scratch() {
   run prints_ok "$SCRATCH_ROOT"
   [ "$status" -eq 1 ]
   [[ "$output" == *"print pin missing: $REFERENCES/spec/clarify-loop.md"* ]]
+}
+
+@test "red twin: a review-list template that goes back to a blockquote fails" {
+  copy_print_pin_files_into_scratch
+  local file="$SCRATCH_ROOT/$REFERENCES/spec/self-review-dispatch.md"
+  awk '{ print } /^## 6b\./ { print "  > Self-review flagged a concern in `<location>`:" }' "$file" >"$file.new"
+  mv "$file.new" "$file"
+  run prints_ok "$SCRATCH_ROOT"
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"print template is a blockquote: $REFERENCES/spec/self-review-dispatch.md"* ]]
+}
+
+@test "red twin: a review-list format that may print finding ids fails" {
+  copy_print_pin_files_into_scratch
+  local file="$SCRATCH_ROOT/.claude/rules/user-questions.md"
+  sed 's/Internal finding ids stay in the decision list and are never printed/Each finding shows its id/' "$file" >"$file.new"
+  mv "$file.new" "$file"
+  run prints_ok "$SCRATCH_ROOT"
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"print pin missing: .claude/rules/user-questions.md"* ]]
 }
 
 @test "red twin: a review list that may print a count fails" {

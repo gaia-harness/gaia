@@ -267,16 +267,18 @@ Print the shape as text, then ask with `AskUserQuestion`. The print is required,
 - **Intent:** the draft's intent in one or two plain sentences.
 - **UATs:** every UAT in the draft, one plain-language line each, keeping its `UAT-NNN` id: what is set up, what the user does, and what must be true.
 
-Never summarize the UATs as a count or a theme list, never drop or merge one, and never point the user at the draft file in place of printing. Response-length or terseness preferences do not shorten gate content. Print it in this shape:
+Never summarize the UATs as a count or a theme list, never drop or merge one, and never point the user at the draft file in place of printing. Response-length or terseness preferences do not shorten gate content. Print it as plain Markdown, never in a blockquote or a code fence, in this shape:
 
-> Here's the shape I have so far:
->
-> **Intent:** <one or two plain sentences>
->
-> **UATs:**
->
-> - UAT-NNN: <what is set up>; <what the user does>; <what must be true>
-> - UAT-NNN: <what is set up>; <what the user does>; <what must be true>
+```markdown
+Here's the shape I have so far:
+
+**Intent:** <one or two plain sentences>
+
+**UATs:**
+
+- UAT-NNN: <what is set up>; <what the user does>; <what must be true>
+- UAT-NNN: <what is set up>; <what the user does>; <what must be true>
+```
 
 Then one `AskUserQuestion` (header `Gate 1`, single-select), question `Does this shape match what you want before we go deeper?`, with two options:
 
