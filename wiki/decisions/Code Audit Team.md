@@ -4,7 +4,7 @@ status: active
 priority: 1
 date: 2026-07-09
 created: 2026-07-09
-updated: 2026-10-09
+updated: 2026-10-21
 tags: [decision, claude, audit]
 ---
 
@@ -199,6 +199,19 @@ The gate is local-only: no GitHub Actions workflow runs the audit. Two things po
 A status-based gate has known limits that exist whatever produces the status. A hand-posted `GAIA-Audit` status and an admin bypass of the repository ruleset each pass the gate without the attested audit. They are accepted, pre-existing limits of a status-based gate, not defects to close here. A commit-message trailer is not a signal: the status is the only commit-level signal the gate reads.
 
 The branch-own digest adds two accepted limits, stated here once for every page that points to this section. Semantic breakage that arises from the base's content without a textual conflict is not a Code Audit Team finding: CI and the whole-tree deterministic checks, which still run on every catch-up merge, own it. A stricter rule that lands on the base does not re-check an open branch whose own patch is unchanged. The trust boundary under the base branch's own gate is recorded in [[#Clearance digest keying]].
+
+## Why not Claude Code's built-in review
+
+Claude Code ships its own review commands (`/code-review` at every level, its cloud `ultra` mode, `/security-review`) and a managed pull-request review service. The gate uses none of them, because a merge gate needs four things a review command does not provide.
+
+- **A reviewer the gate can version.** A clearance is believed only when the reviewer that produced it is part of the audit machinery: changing a member's definition rotates every digest and re-opens every clearance it gave (see [[#Ownership classifier]]). A built-in review's prompt and model change with Claude Code releases, outside the repository, so a change in what it checks would leave every earlier clearance standing. Its reply also has no fixed shape for the clearance writer and the no-op classifier to read.
+- **Every owner clears.** A change can belong to several members, and the merge waits until each clears its own part ([[#AND-aggregation at the merge gate]]). A built-in review is one reviewer over the whole diff, with no notion of who owns which file.
+- **Fail closed, locally.** The gate runs on the developer's machine and denies `gh pr merge` until every dispatched member has cleared. The local built-in commands only report findings, the managed service runs in the cloud and its check does not block a merge, and GAIA runs no Claude on GitHub Actions ([[#Status producers and accepted limits]]).
+- **Every finding is disposed.** Each finding is fixed in a bounded fix-and-recheck loop, waived with a reason, or filed as tech-debt, and its class feeds `/gaia-codify` ([[Audit Disposition and Debt Fix]], [[Policy-Memory Loop]]). A built-in review leaves its findings in the conversation.
+
+The cheaper tier the built-in levels might seem to offer already exists inside the gate. A small presentational frontend change on its first audit goes to a quick reviewer instead of the full member, chosen by a deterministic classifier ([[Audit Round Procedure#Light routing]]). That reviewer is GAIA's own for the same two reasons as above: its definition is audit machinery, and its reply has a fixed shape the gate reads. Its brief also fits the change: the risks on a copy or class edit are accessibility, translation and design tokens, while `/code-review` hunts correctness bugs.
+
+The built-in commands stay useful as a second opinion a developer runs by hand, before or after the audit. They are advisory: nothing they report clears or blocks a merge.
 
 ## Pairs with
 
