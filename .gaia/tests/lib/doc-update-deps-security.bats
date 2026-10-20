@@ -182,13 +182,9 @@ check_cache_rewrite() {
     echo "the cache count is not barred from the report tables" >&2
     return 1
   }
-  grep -qF -- 'never in CI: there the rewrite is skipped entirely' <<<"$body" || {
-    echo "the CI skip of the cache rewrite is not stated" >&2
-    return 1
-  }
 }
 
-@test "Phase 7 rewrites the security cache from advisories --count-only, skipped in CI" {
+@test "Phase 7 rewrites the security cache from advisories --count-only" {
   check_cache_rewrite "$FINAL_REPORT"
 }
 
@@ -204,14 +200,6 @@ check_cache_rewrite() {
   local copy
   copy="$(scratch_copy "$FINAL_REPORT" "cache-count.md")"
   remove_fixed "$copy" '.gaia/cli/gaia update-deps advisories --emit .gaia/local/cache/shared/update-deps-advisories-count.json --count-only'
-  run check_cache_rewrite "$copy"
-  [ "$status" -ne 0 ]
-}
-
-@test "the cache-rewrite check fails with the CI skip sentence deleted" {
-  local copy
-  copy="$(scratch_copy "$FINAL_REPORT" "cache-ci.md")"
-  remove_fixed "$copy" 'never in CI: there the rewrite is skipped entirely'
   run check_cache_rewrite "$copy"
   [ "$status" -ne 0 ]
 }
@@ -302,22 +290,10 @@ check_acceptance() {
     echo "--confirmed is not tied to the per-advisory question" >&2
     return 1
   }
-  grep -qF -- 'Never dismiss in CI' <<<"$body" || {
-    echo "acceptance does not state it never runs in CI" >&2
-    return 1
-  }
 }
 
-@test "acceptance dismisses with --confirmed only after a per-advisory question, never in CI" {
+@test "acceptance dismisses with --confirmed only after a per-advisory question" {
   check_acceptance "$SECURITY"
-}
-
-@test "the acceptance check fails with the CI sentence deleted" {
-  local copy
-  copy="$(scratch_copy "$SECURITY" "acceptance-ci.md")"
-  remove_fixed "$copy" 'Never dismiss in CI'
-  run check_acceptance "$copy"
-  [ "$status" -ne 0 ]
 }
 
 @test "the acceptance check fails with the --confirmed ordering deleted" {
@@ -432,7 +408,7 @@ run_state_line() {
 # ---------------------------------------------------------------------------
 
 REPORT_ONLY_SECURITY='the security phase adds, edits, and removes no `overrides:` key and applies no advisory-driven bump'
-REPORT_ONLY_AUDIT='The existing Phase 0 and Phase 6 override audit is unchanged in those runs'
+REPORT_ONLY_AUDIT='The existing Phase 6 override audit is unchanged in that run'
 
 check_report_only_reading() {
   grep -qF -- "$REPORT_ONLY_SECURITY" "$1" || {
@@ -440,12 +416,12 @@ check_report_only_reading() {
     return 1
   }
   grep -qF -- "$REPORT_ONLY_AUDIT" "$1" || {
-    echo "report-only no longer states the Phase 0/6 audit is unchanged" >&2
+    echo "report-only no longer states the Phase 6 audit is unchanged" >&2
     return 1
   }
 }
 
-@test "report-only runs leave overrides to the unchanged Phase 0/6 audit" {
+@test "a report-only run leaves overrides to the unchanged Phase 6 audit" {
   check_report_only_reading "$SKILL"
 }
 

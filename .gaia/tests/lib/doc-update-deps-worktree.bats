@@ -99,38 +99,24 @@ must_precede() {
 }
 
 # ---------------------------------------------------------------------------
-# 1. CI creates no worktree and no branch
+# 1. Creation is conditioned on the flag
 # ---------------------------------------------------------------------------
 
-CI_SENTENCE='the run creates no worktree and no branch, because the workflow owns branch management'
 CREATION_CONDITION='Run it only when `SHOULD_CREATE_WORKTREE=true`'
 
-check_ci_pin() {
-  must_contain "$SKILL" "$CI_SENTENCE" "the CI arm does not state no worktree and no branch" || return 1
-  grep -F -- "$CI_SENTENCE" "$SKILL" | grep -qF -- 'SHOULD_CREATE_WORKTREE=false' || {
-    echo "the CI arm does not set the flag that disables worktree creation" >&2
-    return 1
-  }
+check_creation_condition() {
   must_contain "$WORKTREE" "$CREATION_CONDITION" "the creation subsection is not conditioned on SHOULD_CREATE_WORKTREE=true"
 }
 
-@test "the CI arm states no worktree and no branch, and creation is conditioned on the flag" {
-  check_ci_pin
+@test "worktree creation is conditioned on the flag" {
+  check_creation_condition
 }
 
-@test "the CI pin fails with the CI sentence deleted" {
-  local copy
-  copy="$(scratch_copy "$SKILL" "ci.md")"
-  remove_fixed "$copy" "$CI_SENTENCE"
-  SKILL="$copy" run check_ci_pin
-  [ "$status" -ne 0 ]
-}
-
-@test "the CI pin fails with the creation condition deleted" {
+@test "the creation-condition check fails with the condition deleted" {
   local copy
   copy="$(scratch_copy "$WORKTREE" "condition.md")"
   remove_fixed "$copy" "$CREATION_CONDITION"
-  WORKTREE="$copy" run check_ci_pin
+  WORKTREE="$copy" run check_creation_condition
   [ "$status" -ne 0 ]
 }
 
@@ -481,21 +467,22 @@ check_publish_local_sync() {
   [ "$status" -ne 0 ]
 }
 
-check_mode_three_publish() {
-  must_contain "$SKILL" 'and never takes the push-only arm of Phase 8' "mode 3 is not kept off the push-only arm" || return 1
-  must_contain "$PUBLISH" 'a worktree run in place because the session started inside its own update worktree, mode 3' "publish's worktree-run arm does not take mode 3" || return 1
+IN_PLACE_PUBLISH='a worktree run in place because the session started inside its own update worktree (mode 1)'
+
+check_mode_one_publish() {
+  must_contain "$PUBLISH" "$IN_PLACE_PUBLISH" "publish does not take mode 1 as a worktree run" || return 1
   must_precede "$PUBLISH" 'gh pr list --head <branch-name> --state open' '`gh pr create --draft`' "the open-PR check does not come before gh pr create"
 }
 
-@test "mode 3 publishes as a worktree run and checks for an open PR before creating one" {
-  check_mode_three_publish
+@test "mode 1 publishes as a worktree run and checks for an open PR before creating one" {
+  check_mode_one_publish
 }
 
-@test "the mode-3 check fails with mode 3 routed to the push-only arm" {
+@test "the mode-1 check fails with mode 1 dropped from the worktree run" {
   local copy
-  copy="$(scratch_copy "$SKILL" "mode3.md")"
-  replace_fixed "$copy" 'and never takes the push-only arm of Phase 8' 'and takes the push-only arm of Phase 8'
-  SKILL="$copy" run check_mode_three_publish
+  copy="$(scratch_copy "$PUBLISH" "mode1.md")"
+  remove_fixed "$copy" "$IN_PLACE_PUBLISH"
+  PUBLISH="$copy" run check_mode_one_publish
   [ "$status" -ne 0 ]
 }
 
@@ -613,7 +600,7 @@ check_cache_bust() {
 # 16. A non-default branch takes the worktree path
 # ---------------------------------------------------------------------------
 
-MAIN_CHECKOUT_MODE='3. **In the main checkout, on `main`, `master` or any other branch.**'
+MAIN_CHECKOUT_MODE='2. **In the main checkout, on `main`, `master` or any other branch.**'
 UNDECLARED_RECONCILE='and so does a package neither of the worktree'"'"'s `package.json` files declares'
 
 check_feature_branch_worktree() {
@@ -623,10 +610,14 @@ check_feature_branch_worktree() {
     echo "SKILL.md still states a push-only mode" >&2
     return 1
   }
-  must_contain "$PUBLISH" '**If running in CI** (mode 1), which creates no worktree and no branch:' "publish's push-only arm is not CI-only"
+  grep -qx -- '   git push' "$PUBLISH" && {
+    echo "publish still has a push-only arm" >&2
+    return 1
+  }
+  true
 }
 
-@test "a run on a non-default branch takes the worktree path, and only CI pushes without a PR" {
+@test "a run on a non-default branch takes the worktree path, and no run pushes without a PR" {
   check_feature_branch_worktree
 }
 
@@ -647,23 +638,23 @@ check_feature_branch_worktree() {
 }
 
 # ---------------------------------------------------------------------------
-# 17. Mode 2 waits for provisioning before discovery
+# 17. Mode 1 waits for provisioning before discovery
 # ---------------------------------------------------------------------------
 
 PROVISION_CALL='bash .gaia/scripts/provision-wait.sh --tree <worktree path>'
 
-check_mode_two_wait() {
-  must_precede "$SKILL" "$PROVISION_CALL" "$DISCOVERY_CALL" "mode 2 has no provisioning wait before discovery"
+check_mode_one_wait() {
+  must_precede "$SKILL" "$PROVISION_CALL" "$DISCOVERY_CALL" "mode 1 has no provisioning wait before discovery"
 }
 
-@test "mode 2 waits for provisioning before discovery" {
-  check_mode_two_wait
+@test "mode 1 waits for provisioning before discovery" {
+  check_mode_one_wait
 }
 
-@test "the mode-2 wait check fails with the wait call deleted" {
+@test "the mode-1 wait check fails with the wait call deleted" {
   local copy
   copy="$(scratch_copy "$SKILL" "wait.md")"
   remove_fixed "$copy" "$PROVISION_CALL"
-  SKILL="$copy" run check_mode_two_wait
+  SKILL="$copy" run check_mode_one_wait
   [ "$status" -ne 0 ]
 }

@@ -19,9 +19,7 @@ The commit **subject** must be `chore(deps): <concise summary of what moved>` (u
 In this checkout `.gaia/cli/package.json` also counts as a dependency manifest. A CLI dependency change touches it and the root `pnpm-lock.yaml`, so the diff routes to `code-audit-maintainer-node`.
 <!-- gaia:maintainer-only:end -->
 
-Then branch on where the run started.
-
-**If this is a worktree run** (`CREATED_WORKTREE=true`, or a worktree run in place because the session started inside its own update worktree, mode 3). Every command takes the plain, literal-value shape; `<branch-name>` is the update branch and `<worktree path>` the worktree's root.
+Then publish from the worktree. Every run that reaches this point is a worktree run: one that created its worktree (`CREATED_WORKTREE=true`), or a worktree run in place because the session started inside its own update worktree (mode 1). Every command takes the plain, literal-value shape; `<branch-name>` is the update branch and `<worktree path>` the worktree's root.
 
 1. Push the branch:
    ```bash
@@ -50,14 +48,6 @@ gh pr merge <N> --squash --delete-branch --auto
 
 - **`MERGED`** (exit 0) → pick the cleanup arm by how this session holds the worktree: `### Worktree entered by name in this session` when this run created and entered it (`CREATED_WORKTREE=true`), `### Worktree entered by path or in an earlier session` on a worktree run in place. Fill `<main checkout path>`, `<worktree path>` and `<branch-name>` in; that arm's fences take `git -C <main checkout path>` forms, so they run from a session launched inside the tree.
 - **`TIMEOUT`** (exit 5) → also print the cleanup to run once the merge lands: a pointer to `.claude/skills/gaia/references/work-lifecycle.md` `### Worktree entered by path or in an earlier session`, with the worktree path and the branch filled in. The session stays as it is too.
-
-**If running in CI** (mode 1), which creates no worktree and no branch:
-
-1. Push the branch:
-   ```bash
-   git push
-   ```
-2. Do not open a PR and do not merge, the CI job that invoked the run drives the branch from here.
 
 If any `git push` or `gh pr create` above exits non-zero, print the command's error and STOP. Do not retry, force-push, or amend, a rejected push or failed PR creation is the user's call to resolve (usually a manual rebase or a remote-side block).
 

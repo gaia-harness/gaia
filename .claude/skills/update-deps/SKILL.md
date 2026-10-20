@@ -5,7 +5,7 @@ description: Remediates dependencies in place of Dependabot version and security
 
 Contents: Pre-flight: Worktree check; Pre-flight: Branch check; Package layout; Flags and run modes; Companion groups; Phase 1: Discover, preview, decide (orchestrator); Branch creation (after discovery); Override audit + Wave A: Haiku agent; Phase 5: Wave B (per-group major bumps); Phase 5b: Transitive refresh (Haiku agent); Phase 5c: Security resolutions; Phase 6: Post-update override audit; Phase 7: Final report; Phase 8: Publish.
 
-Dependency remediation (outdated packages and security advisories) through one quality gate, in one record. Interactively it previews first, advisories ranked first, so you can snooze what you are not ready for; in CI it runs unattended with no preview. Run from the main checkout, on `main`/`master` or any other branch, it works in its own worktree on its own branch cut from the default branch, opens the PR, merges it once checks are green, then cleans up locally, leaving the branch the main checkout holds as it was.
+Dependency remediation (outdated packages and security advisories) through one quality gate, in one record. Interactively it previews first, advisories ranked first, so you can snooze what you are not ready for. Run from the main checkout, on `main`/`master` or any other branch, it works in its own worktree on its own branch cut from the default branch, opens the PR, merges it once checks are green, then cleans up locally, leaving the branch the main checkout holds as it was.
 
 ## Pre-flight: Worktree check
 
@@ -23,13 +23,12 @@ gaia_refuse_if_worktree "/update-deps" gaia_update_deps_state_line "deps/" || ex
 
 Decide the run mode in this order. The first matching mode wins.
 
-1. **`CI=true`**. Set `SHOULD_CREATE_WORKTREE=false`: the run creates no worktree and no branch, because the workflow owns branch management and pre-creates the appropriate branch before this skill runs.
-2. **Inside its own update worktree.** Read the branch with `git branch --show-current`. When it starts `deps/` and `bash .gaia/scripts/main-root-lib.sh --is-worktree` exits 0, this is a worktree run in place. Set `SHOULD_CREATE_WORKTREE=false`. Read `<worktree path>` with `git rev-parse --show-toplevel` and `<main checkout path>` with `bash .gaia/scripts/main-root-lib.sh`, each carried as a literal. Wait for provisioning before discovery, because the session-start hook re-provisions the tree on every entry:
+1. **Inside its own update worktree.** Read the branch with `git branch --show-current`. When it starts `deps/` and `bash .gaia/scripts/main-root-lib.sh --is-worktree` exits 0, this is a worktree run in place. Set `SHOULD_CREATE_WORKTREE=false`. Read `<worktree path>` with `git rev-parse --show-toplevel` and `<main checkout path>` with `bash .gaia/scripts/main-root-lib.sh`, each carried as a literal. Wait for provisioning before discovery, because the session-start hook re-provisions the tree on every entry:
    ```bash
    bash .gaia/scripts/provision-wait.sh --tree <worktree path>
    ```
-   Handle the result as `references/worktree.md` step 4 does, with one difference: this run did not create the tree, so exit 3 (`INSTALL_FAILED`) is reported and the run continues. Discovery reads this worktree's manifests. The run creates no worktree, publishes as a worktree run (the PR is opened or reused, merged when green, and cleaned up by path), and never takes the push-only arm of Phase 8.
-3. **In the main checkout, on `main`, `master` or any other branch.** The worktree is cut from the default branch on `origin` whichever branch the main checkout holds, so a run started on a feature branch publishes its own `deps/` pull request and leaves that branch, its files and its `node_modules` as they were. Set `SHOULD_CREATE_WORKTREE=true` but **do not create the worktree yet**: creation is deferred until the run has confirmed work, right after the Phase 1 decision when the apply set is non-empty or the security plan has a resolution to apply, before anything is installed, or before Phase 5b on a refresh-only run (see Branch creation). Creating a worktree when there is nothing to update pollutes the branch list. Read the main checkout's root once with `git rev-parse --show-toplevel` and carry it as the literal `<main checkout path>`. Before discovery, check for an update worktree a run left behind:
+   Handle the result as `references/worktree.md` step 4 does, with one difference: this run did not create the tree, so exit 3 (`INSTALL_FAILED`) is reported and the run continues. Discovery reads this worktree's manifests. The run creates no worktree, publishes as a worktree run (the PR is opened or reused, merged when green, and cleaned up by path).
+2. **In the main checkout, on `main`, `master` or any other branch.** The worktree is cut from the default branch on `origin` whichever branch the main checkout holds, so a run started on a feature branch publishes its own `deps/` pull request and leaves that branch, its files and its `node_modules` as they were. Set `SHOULD_CREATE_WORKTREE=true` but **do not create the worktree yet**: creation is deferred until the run has confirmed work, right after the Phase 1 decision when the apply set is non-empty or the security plan has a resolution to apply, before anything is installed, or before Phase 5b on a refresh-only run (see Branch creation). Creating a worktree when there is nothing to update pollutes the branch list. Read the main checkout's root once with `git rev-parse --show-toplevel` and carry it as the literal `<main checkout path>`. Before discovery, check for an update worktree a run left behind:
    ```bash
    git worktree list --porcelain
    ```
@@ -44,8 +43,6 @@ Decide the run mode in this order. The first matching mode wins.
 
    On a non-zero exit, read `.claude/skills/update-gaia/references/pull-gate.md` and follow it with `/update-deps`, this run's original arguments and the exit code, before anything below creates a branch, worktree, claim or SPEC id.
 
-In modes 1 and 2 `<main checkout path>` is also `git rev-parse --show-toplevel`: the cache bust in Branch creation needs it in every mode.
-
 ## Package layout
 
 The repository is a pnpm workspace with one lockfile at the root. App dependencies (everything the React app imports or builds with) are declared in `frontend/package.json`; harness dependencies (lint-staged, prettier, `typescript` for the harness helpers) and the `gaia.updateDepsHold` map are in the root `package.json`. `overrides:` and `minimumReleaseAge` stay in the root `pnpm-workspace.yaml`. Add or bump an app dependency with `pnpm -C frontend add <pkg>@<spec>`, a harness dependency with `pnpm add -w <pkg>@<spec>` from the root. The quality gate runs the root `pnpm typecheck`, `pnpm lint`, `pnpm test`, `pnpm pw`, and `pnpm build`, which proxy to `frontend`.
@@ -59,10 +56,9 @@ Parse the arguments before any other work. `--security` together with `--scope` 
 | Interactive, no flag                   | yes, Security section first                       | yes                         | yes                           | yes (default)               | applies        | keys retained in Phase 0 plus every security override    | ask per advisory | yes                   |
 | Interactive `--security`               | Security section plus the chain-head bumps needed | no                          | only those chain-head bumps   | no                          | applies        | only if a security override landed, those overrides only | ask per advisory | yes                   |
 | `--scope <group>`                      | no                                                | no                          | the group                     | no                          | report-only    | unchanged                                                | no               | yes (enrichment only) |
-| `CI=true` (with or without --security) | no                                                | yes / no under `--security` | yes / none under `--security` | yes / no under `--security` | report-only    | unchanged                                                | no               | no                    |
 | `--security --scope`                   | refused, naming both flags                        |                             |                               |                             |                |                                                          |                  |                       |
 
-**Report-only.** Under `CI=true` and `--scope <group>`, which both skip the preview, the security phase is report-only: every advisory is listed still open with `report-only run`, and the security phase adds, edits, and removes no `overrides:` key and applies no advisory-driven bump. The existing Phase 0 and Phase 6 override audit is unchanged in those runs and may still prune an obsolete key exactly as it does today, so report-only is a property of the security phase, not a promise that the whole run leaves the `overrides:` map untouched. In CI the advisories call runs with `--no-alerts` (the verb also refuses alerts by itself under CI), so no Dependabot output reaches the run.
+**Report-only.** Under `--scope <group>`, which skips the preview, the security phase is report-only: every advisory is listed still open with `report-only run`, and the security phase adds, edits, and removes no `overrides:` key and applies no advisory-driven bump. The existing Phase 6 override audit is unchanged in that run and may still prune an obsolete key exactly as it does today, so report-only is a property of the security phase, not a promise that the whole run leaves the `overrides:` map untouched.
 
 **`--security`** runs Phase 1 (preview), the Wave A/B agents only for the chain-head bumps an accepted advisory needs, the security phase, Phase 6 only when the security phase landed an override, Phase 7, and Phase 8. It runs neither Phase 0 nor Phase 5b, and leaves every other outdated package untouched.
 
@@ -117,7 +113,7 @@ mkdir -p .gaia/local/cache/shared
 .gaia/cli/gaia update-deps advisories --emit .gaia/local/cache/shared/update-deps-advisories.json --updates .gaia/local/cache/shared/update-deps-updates.json
 ```
 
-Under `CI=true` add `--no-alerts` to the advisories call. It runs in every mode and writes a payload even when no source answered (`source: "unavailable"`). Keep from it, for later phases: the `source` and `reasonText`, whether alerts were read (`source` is `dependabot`), `rejectedCount`, the opening advisory key set (every `advisories[].key`, every `auditKeys` entry, and every `dismissedGhsas` entry), and the opening `dismissedGhsas`. `auditKeys` lists every key the opening `pnpm audit` reported, so in alerts mode it also carries the advisories already in the lockfile that no open Dependabot alert backs; without it the final-tree `pnpm audit` would read those as introduced by this run.
+The advisories call runs in every mode and writes a payload even when no source answered (`source: "unavailable"`). Keep from it, for later phases: the `source` and `reasonText`, whether alerts were read (`source` is `dependabot`), `rejectedCount`, the opening advisory key set (every `advisories[].key`, every `auditKeys` entry, and every `dismissedGhsas` entry), and the opening `dismissedGhsas`. `auditKeys` lists every key the opening `pnpm audit` reported, so in alerts mode it also carries the advisories already in the lockfile that no open Dependabot alert backs; without it the final-tree `pnpm audit` would read those as introduced by this run.
 
 ### Global tools (before any exit below)
 
@@ -135,7 +131,6 @@ changes `outdatedCount`, never writes the update-check cache, and never creates
 a branch by itself: a global tool cannot be cleared through pnpm, so it stays
 out of the discovery payload and the statusline count.
 
-- **In CI (`CI=true`)**: report the row only. Never run `npm install -g`.
 - **Under `--scope`**: report the row only.
 - **`status` is `not-installed`**: report `not installed, skipped` with the
   row's `installCommand` as text. No prompt, no error.
@@ -173,13 +168,11 @@ Read the payload. **A zero `total_count` with at least one advisory** (a
 non-empty `advisories[]`) is a real run, not "nothing to do": interactively it
 goes to the full preview below (Security section, then the transitive refresh
 line), never to the refresh-only prompt and never to `All packages are up to
-date.`; in CI it continues as a refresh-only run whose security phase is
-report-only. With zero advisories the paths below stand.
+date.`. With zero advisories the paths below stand.
 
 If `total_count` is `0` and `advisories[]` is empty, print `All packages are up to date.`
 (the Phase 7 `### Security` section, and `### Global tools` when it has a row to show, are still printed first). Under `--scope`, exit (no branch, no changes). Otherwise the apply set is empty
-and the run is **refresh-only** (see Decision): in CI it proceeds straight to
-Phase 5b; interactively, print the sub-dependency line (defined under the
+and the run is **refresh-only** (see Decision): print the sub-dependency line (defined under the
 preview below) without its last sentence, and ask with `AskUserQuestion`
 (single-select): **Update sub-dependencies** (Recommended, first option) or
 **Skip** (exit now, no branch, no changes, no ledger write). Each `wave_a[]` and `wave_b[].packages[]` entry
@@ -192,11 +185,11 @@ snoozes), ignore it here.
 currently-offered targets. Each entry carries `group`, `targets`, `snoozed_at`,
 and `resurfaces_at` (ISO stamp when the snooze lapses). Build `snoozedGroups`,
 the set of their `group` ids, this is what you mark and default-skip below. It
-is empty in CI and whenever no active snooze matches the current offer.
+is empty whenever no active snooze matches the current offer.
 
 `skipped[]` entries with `reason: "held"` are packages capped by the committed
 `gaia.updateDepsHold` map in the root `package.json` (a durable version ceiling, distinct
-from a snooze: it holds in CI too and never lapses until the maintainer lifts
+from a snooze: it never lapses until the maintainer lifts
 it). They are already excluded from both waves, never installed, so nothing to
 apply. Surface them once (see Preview) so the maintainer remembers a hold is
 active.
@@ -207,9 +200,8 @@ line. If a sibling release's peer range demands a version above the ceiling, hol
 the sibling too by adding it to the map. The quality gate catches a peer conflict
 before merge regardless.
 
-**In CI (`CI=true`) or with `--scope <group>`, skip the preview and decision
-entirely.** The apply set is the full payload (CI) or the named group
-(`--scope`); jump straight to the apply phases with an empty skip set and no
+**With `--scope <group>`, skip the preview and decision
+entirely.** The apply set is the named group; jump straight to the apply phases with an empty skip set and no
 ledger write.
 
 ### Preview
@@ -318,10 +310,10 @@ snoozes AND any newly named), or the omitted ones are dropped from the ledger.
 The snooze ledger (`.gaia/local/declined-updates.json`) is local-only and
 gitignored: it suppresses the statusline nudge and default-skips the group in
 this preview until a newer version ships or 14 days pass. It never blocks a run
-(the preview always offers a snoozed group), and CI ignores it.
+(the preview always offers a snoozed group).
 
 Carry the **apply set** (filtered `wave_a` and `wave_b`) into the phases below,
-together with whether Phase 5b runs: yes by default and in CI, no when the human
+together with whether Phase 5b runs: yes by default, no when the human
 skipped `transitive-refresh`, never under `--scope` or `--security`. Carry the
 **security plan** too (empty in a report-only run), with the opening advisory
 key set, the opening `dismissedGhsas`, whether alerts were read, and the source
@@ -352,7 +344,7 @@ refresh-only. The branch is cut inside a worktree, never in the main checkout.
   (step 2 below) as soon as an interactive run becomes refresh-only: the human picks **Update
   sub-dependencies** at the zero-outdated prompt, **Update the rest** leaves an empty
   apply set because every group is snoozed, or **Choose what to skip** leaves an
-  empty apply set. In CI nothing creates a worktree. When Phase 5b then reports
+  empty apply set. When Phase 5b then reports
   `Nothing moved` or `Reverted (<reason>)` and the security plan owes nothing,
   skip every phase up to Phase 7 and go straight to the report (Phase 8's
   nothing-updated rule skips publish); the worktree stays in place and its
@@ -384,10 +376,10 @@ Do the following in order:
    (Snoozed groups are already excluded by the ledger on the next real check.)
 2. **Worktree.** Create it with `references/worktree.md` now, when `SHOULD_CREATE_WORKTREE=true` and no worktree was created
    earlier in this run (the vendored-skill sync may already have created it).
-3. **Otherwise** (`SHOULD_CREATE_WORKTREE=false`) create nothing and proceed in
-   place. Remember whether this run created a worktree (`CREATED_WORKTREE=true`),
-   runs inside its own update worktree (mode 2), or works in place (mode 1,
-   CI); Phase 8 branches on it.
+3. **Otherwise** (`SHOULD_CREATE_WORKTREE=false`, a run inside its own update
+   worktree, mode 1) create nothing and proceed there. Remember whether this run
+   created a worktree (`CREATED_WORKTREE=true`) or runs inside its own update
+   worktree; Phase 8 branches on it.
 
 ## Override audit + Wave A: Haiku agent
 

@@ -29,7 +29,7 @@ Inputs from Phase 1: the opening advisories payload (`.gaia/local/cache/shared/u
 
 Resolve only an advisory that is still open after the waves and Phase 5b (its `advisory-landed` check in step 5 exits non-zero), is not blocked (`split-patch` is not a block: it is resolved through its candidates, which never include `override`), and was not declined in the preview. An advisory Phase 5b already cleared is resolved by `in-range refresh` and gets nothing further here.
 
-In a report-only run (`CI=true`, or `--scope <group>`) stop here: every advisory is reported still open with `report-only run` (SKILL.md `**Report-only.**` owns the rest).
+In a report-only run (`--scope <group>`) stop here: every advisory is reported still open with `report-only run` (SKILL.md `**Report-only.**` owns the rest).
 
 #### 2. Release age and trust settings
 
@@ -118,7 +118,7 @@ The expected gate count is 1 on a clean batch and at most 6 (one batch gate plus
 
 #### 7. Acceptance
 
-Acceptance runs only in an interactive run the user started directly: never under `CI=true`, never when another skill or command invoked the run, and never under `--scope`. In those runs an advisory left open stays open with its reason, and no question is asked.
+Acceptance runs only in an interactive run the user started directly: never when another skill or command invoked the run, and never under `--scope`. In those runs an advisory left open stays open with its reason, and no question is asked.
 
 It covers each advisory left open with `no patch`, and any other advisory the user says they want to live with. Ask with `AskUserQuestion`, one advisory per question, up to 4 questions per call, never a single "accept all" question: options `Dismiss the alert` (Recommended) and `Keep it open`. The question names every alert number and manifest path that will be dismissed for that advisory, which is one package (from the payload's `alerts`), the proposed reason (`tolerable_risk` or `not_used`), and the proposed comment: at most 280 characters, built only from structured fields (package, installed version, severity, key, and why it is tolerable), never from advisory text.
 
@@ -126,7 +126,7 @@ It covers each advisory left open with `no patch`, and any other advisory the us
   ```bash
   .gaia/cli/gaia update-deps dismiss-alert --alert <n> --reason <tolerable_risk|not_used> --comment '<comment>' --confirmed
   ```
-  `--confirmed` is passed only after that advisory's `AskUserQuestion` was answered yes. A call that prints `"dismissed": false` leaves the advisory still open with `dismissal refused (<token>)`, `<token>` being its `error`; it is not accepted. Never dismiss in CI; the verb also refuses there by itself.
+  `--confirmed` is passed only after that advisory's `AskUserQuestion` was answered yes. A call that prints `"dismissed": false` leaves the advisory still open with `dismissal refused (<token>)`, `<token>` being its `error`; it is not accepted.
 - **Declined:** the advisory stays open with `acceptance declined`.
 - **Alerts unavailable** (the payload's source is `pnpm-audit`): propose the `.gaia/local/dep-audit-baseline.json` entry text for the user to add, `{"id": <pnpm id>, "module": "<pkg>", "note": "<why>"}` (one per pnpm id), and do not write the file; the baseline is operator-authored. The Accepted row reads `baseline entry proposed`.
 
