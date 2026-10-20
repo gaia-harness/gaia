@@ -408,6 +408,19 @@ _gaia_reaper_age_filters_pass() {
   return 1
 }
 
+# _gaia_reaper_refusal_shadows_earned <local-root> <relative-path>: rc 0 when
+# the path is a clearance `.refused` whose same-digest, same-member `.ok` is
+# still inside the row's window. The merge gate checks the refusal before the
+# earned marker, so expiring the refusal first would flip the member to
+# CLEARED with no supersede record; the refusal waits for its sibling.
+_gaia_reaper_refusal_shadows_earned() {
+  local earned="$1/${2%.refused}.ok"
+  [ "$_gaia_reaper_row_id" = audit-clearance-markers ] || return 1
+  case "$2" in *.refused) ;; *) return 1 ;; esac
+  [ -e "$earned" ] || [ -L "$earned" ] || return 1
+  ! gaia_reaper_entry_older_than "$earned" "$_gaia_reaper_row_days"
+}
+
 # _gaia_reaper_spec_spent <local-root> <relative-path>: a draft catalog row
 # keeps the entry, any other status spends it; no row, or an id-less
 # alternative, falls back to age.
@@ -471,6 +484,7 @@ gaia_reaper_reap_row() {
       age)
         _gaia_reaper_age_filters_pass "$local_root/$relative" || continue
         gaia_reaper_entry_older_than "$local_root/$relative" "$_gaia_reaper_row_days" || continue
+        ! _gaia_reaper_refusal_shadows_earned "$local_root" "$relative" || continue
         ;;
       tree-gone) _gaia_reaper_line_in "${relative##*/}" "$GAIA_REAPER_LIVE_TREE_KEYS" && continue ;;
       spec-finalized) _gaia_reaper_spec_spent "$local_root" "$relative" || continue ;;

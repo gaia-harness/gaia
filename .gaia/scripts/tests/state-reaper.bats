@@ -314,6 +314,25 @@ plant_git_failure_fixture() {
 }
 
 # bats test_tags=whole-tree
+@test "an aged refusal beside a younger same-digest earned marker is kept, an aged lone refusal and aged pair go" {
+  make_fixture
+  local days
+  days="$(window audit-clearance-markers)"
+  plant_file audit/shadowed-digest.member.refused $((days + 1))
+  plant_file audit/shadowed-digest.member.ok $((days - 1))
+  plant_file audit/lone-digest.member.refused $((days + 1))
+  plant_file audit/pair-digest.member.refused $((days + 2))
+  plant_file audit/pair-digest.member.ok $((days + 1))
+  run_reaper
+  [ "$status" -eq 0 ]
+  present audit/shadowed-digest.member.refused
+  present audit/shadowed-digest.member.ok
+  absent audit/lone-digest.member.refused
+  absent audit/pair-digest.member.ok
+  absent audit/pair-digest.member.refused
+}
+
+# bats test_tags=whole-tree
 @test "spec scratch of a ready or merged SPEC goes, a draft SPEC's stays" {
   make_fixture
   make_catalog '{"version":1,"items":[{"id":"draftone","kind":"spec","status":"draft"},{"id":"readyone","kind":"spec","status":"ready"},{"id":"mergedone","kind":"spec","status":"merged"}]}'

@@ -143,7 +143,7 @@
       "kind": "file",
       "scope": "shared",
       "keyed_by": "branch-own digest over the branch's own patch to the files the audited member owns (per member), bound to the branch",
-      "why": "A clearance marker attests a Code Audit Team member reviewed the branch's own change, measured against the PR's base branch, so content the base brought in does not rotate it; the symlinked drop zone lets one gate judge every checkout's markers.",
+      "why": "A clearance marker attests a Code Audit Team member reviewed the branch's own change, measured against the PR's base branch, so content the base brought in does not rotate it; the symlinked drop zone lets one gate judge every checkout's markers. A refusal outlives its same-digest, same-member earned marker while that marker is inside the window, because the gate reads the refusal first and expiring it alone would clear the member.",
       "writer": "code",
       "retention": {
         "class": "age",
