@@ -96,6 +96,61 @@ member_digest() {
   [ -z "$leftover" ]
 }
 
+# add_linked_worktree <path>: a linked worktree of ROOT on a branch of its own,
+# carrying a change so its branch-own digest is derivable.
+add_linked_worktree() {
+  local tree="$1"
+  git -C "$ROOT" worktree add --quiet -b feature "$tree"
+  echo "tree branch content" > "$tree/w.txt"
+  git -C "$tree" add w.txt
+  git -C "$tree" commit --quiet -m "tree: branch change"
+}
+
+@test "an unprovisioned linked worktree refuses with exit 2, names the provisioner, and creates no .gaia/local" {
+  # The merge gate reads the main checkout's audit store, so a marker written
+  # into a worktree's own real .gaia/local is a marker nothing reads.
+  tree="$BATS_TEST_TMPDIR/tree"
+  add_linked_worktree "$tree"
+  digest="$(member_digest "$tree" code-audit-frontend)"
+  run bash "$WRITER" --root "$tree" --member code-audit-frontend --provenance earned --scope-digest "$digest"
+  [ "$status" -eq 2 ]
+  grep -qF "provision-worktree.sh" <<<"$output" || return 1
+  [ ! -e "$tree/.gaia/local" ]
+  leftover="$(find "$tree" "$ROOT/.gaia" -name '*.ok' 2>/dev/null || true)"
+  [ -z "$leftover" ]
+}
+
+@test "an unprovisioned linked worktree holding a real .gaia/local refuses and writes nothing into it" {
+  tree="$BATS_TEST_TMPDIR/tree"
+  add_linked_worktree "$tree"
+  mkdir -p "$tree/.gaia/local/audit"
+  run bash "$WRITER" --root "$tree" --member code-audit-frontend --provenance refused
+  [ "$status" -eq 2 ]
+  grep -qF "provision-worktree.sh" <<<"$output" || return 1
+  leftover="$(find "$tree/.gaia/local" -type f 2>/dev/null || true)"
+  [ -z "$leftover" ]
+}
+
+@test "a provisioned linked worktree writes through its .gaia/local link into the main checkout" {
+  tree="$BATS_TEST_TMPDIR/tree"
+  add_linked_worktree "$tree"
+  mkdir -p "$ROOT/.gaia/local"
+  ln -s "$ROOT/.gaia/local" "$tree/.gaia/local"
+  digest="$(member_digest "$tree" code-audit-frontend)"
+  run bash "$WRITER" --root "$tree" --member code-audit-frontend --provenance earned --scope-digest "$digest"
+  [ "$status" -eq 0 ]
+  [ -f "$AUDIT_DIRECTORY/${digest}.ok" ]
+}
+
+@test "the main checkout writes with a real .gaia/local and never takes the provisioning refusal" {
+  mkdir -p "$ROOT/.gaia/local"
+  digest="$(member_digest "$ROOT" code-audit-frontend)"
+  run bash "$WRITER" --root "$ROOT" --member code-audit-frontend --provenance earned --scope-digest "$digest"
+  [ "$status" -eq 0 ]
+  grep -qF "provision-worktree.sh" <<<"$output" && return 1
+  [ -f "$AUDIT_DIRECTORY/${digest}.ok" ]
+}
+
 @test "resolves the digest from --root, never the caller's CWD" {
   other="$BATS_TEST_TMPDIR/other"
   mkdir -p "$other"
