@@ -59,4 +59,4 @@ Component extraction:
 
 **From `frontend/.claude/rules/i18n.md`:**
 
-- Every user-visible string in JSX, labels, headings, placeholders, button text, error messages, tooltips, status text, `aria-label`, `alt`, `title`, must come from a `t()` call. Flag hardcoded English strings. Exceptions: punctuation-only strings, single-character symbols, developer-facing content (console.log, comments, test assertions), and approximate skeleton-loader placeholder text standing in for a dynamic runtime value (skeleton text mirroring static `t()` content must still use `t()`).
+- Every user-visible string in JSX, labels, headings, placeholders, button text, error messages, tooltips, status text, `aria-label`, `alt`, `title`, must come from a `t()` call. Flag hardcoded strings. Exceptions: punctuation-only strings, single-character symbols, developer-facing content (console.log, comments, test assertions), and approximate skeleton-loader placeholder text standing in for a dynamic runtime value (skeleton text mirroring static `t()` content must still use `t()`).
