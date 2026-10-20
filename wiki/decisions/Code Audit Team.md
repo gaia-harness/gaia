@@ -170,7 +170,9 @@ Adding a `.sh` under `.claude/hooks/**` needs to reach `.gaia/local` only throug
 
 Members opt in to light routing one by one through `light_review` in `.gaia/audit-ci.yml`, so a small repair after a refusal, and a small delta after a full clearance, can be re-checked by a cheap reviewer instead of a full member dispatch (see [[Audit Round Procedure#Light routing]]). The mechanism earns its place only if it clears re-audits in practice, so a measured threshold retires it.
 
-**The rule.** Retire light routing if the light-cleared count stays under 10 percent of the eligible re-audit count, with both summed across every opted-in member, over the 30 most recent merged pull requests that touched `code-audit-frontend`'s remit. Retiring it means removing the `light_review` keys from the roster and deleting the routing scripts, the reviewer definition and their suites.
+**The rule.** The rule governs the post-clearance arm, the re-audits whose anchor is a full clearance or a refusal. Retire that arm if the light-cleared count stays under 10 percent of the eligible re-audit count, with both summed across every opted-in member, over the 30 most recent merged pull requests that touched `code-audit-frontend`'s remit. Retiring it means removing the `light_review` keys from the roster and deleting the post-clearance routing and its suites. Retiring the post-clearance arm does not retire the first-dispatch quick arm; `light_review: false` on a member turns both off.
+
+**The quick arm.** First-dispatch quick routes carry `anchor_kind: merge-base` and are excluded from every kill-rule figure above. They are measured separately on `tally`'s `quick_routes` and `quick_cleared` lines.
 
 **The measurement.** `bash .gaia/scripts/audit-light-telemetry.sh tally` prints the window PR count, the eligible re-audit count and the light-cleared count, overall and per member, from the local telemetry log. Read `light_cleared_rate` only once `window_prs` reaches 30. The log records a branch, not a merge, so the window counts branches that touched the frontend member's remit; check that they merged before acting on the figure.
 

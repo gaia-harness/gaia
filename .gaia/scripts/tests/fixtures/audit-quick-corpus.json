@@ -1,0 +1,1652 @@
+{
+  "schema": 1,
+  "entries": [
+    {
+      "id": "modal-slight-redesign",
+      "expected": "quick",
+      "expected_line": "light\tquick-eligible",
+      "shape": "static className token changes on an existing capitalized element, a token change inside static cn() literals, and a static story arg value in one component and its own story",
+      "files": [
+        {
+          "path": "frontend/app/components/modal/index.tsx",
+          "before": "import {cn} from 'cn';\nimport Dialog from '../dialog';\n\ntype ModalProps = {\n  readonly title: string;\n};\n\nconst Modal = ({title}: ModalProps) => (\n  <Dialog\n    className=\"max-w-md rounded-lg p-4\"\n    title={title}\n  >\n    <div\n      className=\"flex flex-col gap-2\"\n      data-slot=\"body\"\n    >\n      <p className={cn('text-sm', 'text-muted-foreground')}>Body copy</p>\n      <span\n        className={cn(\n          'font-medium',\n          'text-foreground'\n        )}\n      >\n        Label\n      </span>\n    </div>\n  </Dialog>\n);\n\nexport default Modal;\n",
+          "after": "import {cn} from 'cn';\nimport Dialog from '../dialog';\n\ntype ModalProps = {\n  readonly title: string;\n};\n\nconst Modal = ({title}: ModalProps) => (\n  <Dialog\n    className=\"max-w-lg rounded-xl p-6\"\n    title={title}\n  >\n    <div\n      className=\"flex flex-col gap-2\"\n      data-slot=\"body\"\n    >\n      <p className={cn('text-base', 'text-muted-foreground')}>Body copy</p>\n      <span\n        className={cn(\n          'font-semibold',\n          'text-foreground'\n        )}\n      >\n        Label\n      </span>\n    </div>\n  </Dialog>\n);\n\nexport default Modal;\n"
+        },
+        {
+          "path": "frontend/app/components/modal/tests/index.stories.tsx",
+          "before": "import type {Meta, StoryObj} from '@storybook/react-vite';\nimport Modal from '..';\n\nconst meta: Meta<typeof Modal> = {\n  component: Modal,\n  title: 'Components/Modal',\n};\n\nexport default meta;\n\ntype Story = StoryObj<typeof Modal>;\n\nexport const Default: Story = {\n  args: {\n    title: 'Settings',\n  },\n};\n",
+          "after": "import type {Meta, StoryObj} from '@storybook/react-vite';\nimport Modal from '..';\n\nconst meta: Meta<typeof Modal> = {\n  component: Modal,\n  title: 'Components/Modal',\n};\n\nexport default meta;\n\ntype Story = StoryObj<typeof Modal>;\n\nexport const Default: Story = {\n  args: {\n    title: 'Preferences',\n  },\n};\n"
+        }
+      ],
+      "mutation_targets": [
+        {
+          "path": "frontend/app/components/modal/index.tsx",
+          "context": "jsx-child",
+          "after_line": 17
+        },
+        {
+          "path": "frontend/app/components/modal/index.tsx",
+          "context": "opening-tag",
+          "after_line": 14
+        }
+      ]
+    },
+    {
+      "id": "landing-page-string",
+      "expected": "quick",
+      "expected_line": "light\tquick-eligible",
+      "shape": "one landing page string value changed in the en common file and the same key changed in the ja file",
+      "files": [
+        {
+          "path": "frontend/app/languages/en/common.ts",
+          "before": "export default {\n  close: 'Close',\n  counters: {\n    clicks_one: '{{count}} click',\n    clicks_other: '{{count}} clicks',\n  },\n  heroTitle: 'Build faster',\n  long:\n    'A value that prettier wrapped onto its own line',\n  month: 'month',\n  nested: '$t(common:close) now',\n  title: 'Hello',\n  welcome: 'Hi {{name}}',\n};\n",
+          "after": "export default {\n  close: 'Close',\n  counters: {\n    clicks_one: '{{count}} click',\n    clicks_other: '{{count}} clicks',\n  },\n  heroTitle: 'Build faster with GAIA',\n  long:\n    'A value that prettier wrapped onto its own line',\n  month: 'month',\n  nested: '$t(common:close) now',\n  title: 'Hello',\n  welcome: 'Hi {{name}}',\n};\n"
+        },
+        {
+          "path": "frontend/app/languages/ja/common.ts",
+          "before": "export default {\n  close: '\u9589\u3058\u308b',\n  counters: {\n    clicks_one: '{{count}} \u30af\u30ea\u30c3\u30af',\n    clicks_other: '{{count}} \u30af\u30ea\u30c3\u30af',\n  },\n  heroTitle: '\u3088\u308a\u901f\u304f\u4f5c\u308b',\n  long:\n    '\u9577\u3044\u5024',\n  month: '\u6708',\n  nested: '$t(common:close) \u4eca',\n  title: '\u3053\u3093\u306b\u3061\u306f',\n  welcome: '\u3088\u3046\u3053\u305d {{name}}',\n};\n",
+          "after": "export default {\n  close: '\u9589\u3058\u308b',\n  counters: {\n    clicks_one: '{{count}} \u30af\u30ea\u30c3\u30af',\n    clicks_other: '{{count}} \u30af\u30ea\u30c3\u30af',\n  },\n  heroTitle: 'GAIA \u3067\u3088\u308a\u901f\u304f\u4f5c\u308b',\n  long:\n    '\u9577\u3044\u5024',\n  month: '\u6708',\n  nested: '$t(common:close) \u4eca',\n  title: '\u3053\u3093\u306b\u3061\u306f',\n  welcome: '\u3088\u3046\u3053\u305d {{name}}',\n};\n"
+        }
+      ],
+      "mutation_targets": [
+        {
+          "path": "frontend/app/languages/en/common.ts",
+          "context": "language-value",
+          "after_line": 7
+        }
+      ]
+    },
+    {
+      "id": "n01-real-date-month-capitalize",
+      "expected": "quick",
+      "expected_line": "light\tquick-eligible",
+      "shape": "a single language value capitalized, the key present in the ja sibling",
+      "files": [
+        {
+          "path": "frontend/app/languages/en/common.ts",
+          "before": "export default {\n  close: 'Close',\n  counters: {\n    clicks_one: '{{count}} click',\n    clicks_other: '{{count}} clicks',\n  },\n  heroTitle: 'Build faster',\n  long:\n    'A value that prettier wrapped onto its own line',\n  month: 'month',\n  nested: '$t(common:close) now',\n  title: 'Hello',\n  welcome: 'Hi {{name}}',\n};\n",
+          "after": "export default {\n  close: 'Close',\n  counters: {\n    clicks_one: '{{count}} click',\n    clicks_other: '{{count}} clicks',\n  },\n  heroTitle: 'Build faster',\n  long:\n    'A value that prettier wrapped onto its own line',\n  month: 'Month',\n  nested: '$t(common:close) now',\n  title: 'Hello',\n  welcome: 'Hi {{name}}',\n};\n"
+        },
+        {
+          "path": "frontend/app/languages/ja/common.ts",
+          "before": "export default {\n  close: '\u9589\u3058\u308b',\n  counters: {\n    clicks_one: '{{count}} \u30af\u30ea\u30c3\u30af',\n    clicks_other: '{{count}} \u30af\u30ea\u30c3\u30af',\n  },\n  heroTitle: '\u3088\u308a\u901f\u304f\u4f5c\u308b',\n  long:\n    '\u9577\u3044\u5024',\n  month: '\u6708',\n  nested: '$t(common:close) \u4eca',\n  title: '\u3053\u3093\u306b\u3061\u306f',\n  welcome: '\u3088\u3046\u3053\u305d {{name}}',\n};\n",
+          "after": "export default {\n  close: '\u9589\u3058\u308b',\n  counters: {\n    clicks_one: '{{count}} \u30af\u30ea\u30c3\u30af',\n    clicks_other: '{{count}} \u30af\u30ea\u30c3\u30af',\n  },\n  heroTitle: '\u3088\u308a\u901f\u304f\u4f5c\u308b',\n  long:\n    '\u9577\u3044\u5024',\n  month: '\u6708',\n  nested: '$t(common:close) \u4eca',\n  title: '\u3053\u3093\u306b\u3061\u306f',\n  welcome: '\u3088\u3046\u3053\u305d {{name}}',\n};\n"
+        }
+      ]
+    },
+    {
+      "id": "n02-real-story-pin-stack",
+      "expected": "deep",
+      "expected_line": "full\thard-full",
+      "shape": "a story-only change under the errors components folder adding a template literal and a spread, its component unchanged",
+      "files": [
+        {
+          "path": "frontend/app/components/errors/root-error-boundary/tests/index.stories.tsx",
+          "before": "import type {Meta, StoryObj} from '@storybook/react-vite';\nimport RootErrorBoundary from '..';\n\nconst meta: Meta<typeof RootErrorBoundary> = {\n  component: RootErrorBoundary,\n  title: 'Components/Errors/RootErrorBoundary',\n};\n\nexport default meta;\n\ntype Story = StoryObj<typeof RootErrorBoundary>;\n\nexport const ServerError: Story = {\n  render: () => (\n    <RootErrorBoundary {...createBoundaryProps(new Error('Something broke while rendering'))} />\n  ),\n};\n",
+          "after": "import type {Meta, StoryObj} from '@storybook/react-vite';\nimport RootErrorBoundary from '..';\n\nconst meta: Meta<typeof RootErrorBoundary> = {\n  component: RootErrorBoundary,\n  title: 'Components/Errors/RootErrorBoundary',\n};\n\nexport default meta;\n\ntype Story = StoryObj<typeof RootErrorBoundary>;\n\nconst serverError = new Error('Something broke while rendering');\nserverError.stack = `Error: broke\n    at Dashboard (app/pages/dashboard/index.tsx:42:11)`;\n\nexport const ServerError: Story = {\n  render: () => (\n    <RootErrorBoundary {...createBoundaryProps(serverError)} />\n  ),\n};\n"
+        }
+      ]
+    },
+    {
+      "id": "n03-synthetic-copy-tweak",
+      "expected": "quick",
+      "expected_line": "light\tquick-eligible",
+      "shape": "a plain copy edit in the en common file with the same key present in the ja sibling",
+      "files": [
+        {
+          "path": "frontend/app/languages/en/common.ts",
+          "before": "export default {\n  close: 'Close',\n  counters: {\n    clicks_one: '{{count}} click',\n    clicks_other: '{{count}} clicks',\n  },\n  heroTitle: 'Build faster',\n  long:\n    'A value that prettier wrapped onto its own line',\n  month: 'month',\n  nested: '$t(common:close) now',\n  title: 'Hello',\n  welcome: 'Hi {{name}}',\n};\n",
+          "after": "export default {\n  close: 'Close',\n  counters: {\n    clicks_one: '{{count}} click',\n    clicks_other: '{{count}} clicks',\n  },\n  heroTitle: 'Build faster',\n  long:\n    'A value that prettier wrapped onto its own line',\n  month: 'month',\n  nested: '$t(common:close) now',\n  title: 'Hello there',\n  welcome: 'Hi {{name}}',\n};\n"
+        },
+        {
+          "path": "frontend/app/languages/ja/common.ts",
+          "before": "export default {\n  close: '\u9589\u3058\u308b',\n  counters: {\n    clicks_one: '{{count}} \u30af\u30ea\u30c3\u30af',\n    clicks_other: '{{count}} \u30af\u30ea\u30c3\u30af',\n  },\n  heroTitle: '\u3088\u308a\u901f\u304f\u4f5c\u308b',\n  long:\n    '\u9577\u3044\u5024',\n  month: '\u6708',\n  nested: '$t(common:close) \u4eca',\n  title: '\u3053\u3093\u306b\u3061\u306f',\n  welcome: '\u3088\u3046\u3053\u305d {{name}}',\n};\n",
+          "after": "export default {\n  close: '\u9589\u3058\u308b',\n  counters: {\n    clicks_one: '{{count}} \u30af\u30ea\u30c3\u30af',\n    clicks_other: '{{count}} \u30af\u30ea\u30c3\u30af',\n  },\n  heroTitle: '\u3088\u308a\u901f\u304f\u4f5c\u308b',\n  long:\n    '\u9577\u3044\u5024',\n  month: '\u6708',\n  nested: '$t(common:close) \u4eca',\n  title: '\u3053\u3093\u306b\u3061\u306f',\n  welcome: '\u3088\u3046\u3053\u305d {{name}}',\n};\n"
+        }
+      ]
+    },
+    {
+      "id": "n04-synthetic-spacing-class",
+      "expected": "quick",
+      "expected_line": "light\tquick-eligible",
+      "shape": "spacing utility tokens changed on a footer element",
+      "files": [
+        {
+          "path": "frontend/app/components/footer/index.tsx",
+          "before": "const Footer = () => (\n  <footer className=\"mt-8 px-4\">\n    <p className=\"text-sm\">Made with care</p>\n  </footer>\n);\n\nexport default Footer;\n",
+          "after": "const Footer = () => (\n  <footer className=\"mt-10 px-6\">\n    <p className=\"text-sm\">Made with care</p>\n  </footer>\n);\n\nexport default Footer;\n"
+        }
+      ]
+    },
+    {
+      "id": "n05-synthetic-role-token-swap",
+      "expected": "quick",
+      "expected_line": "light\tquick-eligible",
+      "shape": "one role color token swapped for another role token, no raw palette color",
+      "files": [
+        {
+          "path": "frontend/app/components/notice/index.tsx",
+          "before": "const Notice = ({message}: {readonly message: string}) => (\n  <p className=\"text-muted-foreground\">{message}</p>\n);\n\nexport default Notice;\n",
+          "after": "const Notice = ({message}: {readonly message: string}) => (\n  <p className=\"text-foreground\">{message}</p>\n);\n\nexport default Notice;\n"
+        }
+      ]
+    },
+    {
+      "id": "n06-synthetic-story-arg-label",
+      "expected": "quick",
+      "expected_line": "light\tquick-eligible",
+      "shape": "a story arg label string changed together with a static className token change in its own component",
+      "files": [
+        {
+          "path": "frontend/app/components/input-text/index.tsx",
+          "before": "type InputTextProps = {\n  readonly label: string;\n};\n\nconst InputText = ({label}: InputTextProps) => (\n  <label className=\"grid gap-1 text-sm\">\n    <span className=\"font-medium\">{label}</span>\n    <input className=\"rounded border px-2\" type=\"text\" />\n  </label>\n);\n\nexport default InputText;\n",
+          "after": "type InputTextProps = {\n  readonly label: string;\n};\n\nconst InputText = ({label}: InputTextProps) => (\n  <label className=\"grid gap-2 text-sm\">\n    <span className=\"font-medium\">{label}</span>\n    <input className=\"rounded border px-2\" type=\"text\" />\n  </label>\n);\n\nexport default InputText;\n"
+        },
+        {
+          "path": "frontend/app/components/input-text/tests/index.stories.tsx",
+          "before": "import type {Meta, StoryObj} from '@storybook/react-vite';\nimport {expect} from 'storybook/test';\nimport InputText from '..';\n\nconst meta: Meta<typeof InputText> = {\n  component: InputText,\n  title: 'Components/InputText',\n};\n\nexport default meta;\n\ntype Story = StoryObj<typeof InputText>;\n\nexport const Default: Story = {\n  args: {\n    label: 'Name',\n  },\n  parameters: {\n    a11y: {\n      test: 'error',\n    },\n  },\n};\n\nexport const Filled: Story = {\n  args: {\n    label: 'Name',\n  },\n  play: async ({canvas, userEvent}) => {\n    await userEvent.type(canvas.getByRole('textbox'), 'Ada');\n    await expect(canvas.getByRole('textbox')).toHaveValue('Ada');\n  },\n};\n",
+          "after": "import type {Meta, StoryObj} from '@storybook/react-vite';\nimport {expect} from 'storybook/test';\nimport InputText from '..';\n\nconst meta: Meta<typeof InputText> = {\n  component: InputText,\n  title: 'Components/InputText',\n};\n\nexport default meta;\n\ntype Story = StoryObj<typeof InputText>;\n\nexport const Default: Story = {\n  args: {\n    label: 'Full name',\n  },\n  parameters: {\n    a11y: {\n      test: 'error',\n    },\n  },\n};\n\nexport const Filled: Story = {\n  args: {\n    label: 'Name',\n  },\n  play: async ({canvas, userEvent}) => {\n    await userEvent.type(canvas.getByRole('textbox'), 'Ada');\n    await expect(canvas.getByRole('textbox')).toHaveValue('Ada');\n  },\n};\n"
+        }
+      ]
+    },
+    {
+      "id": "n07-synthetic-jsx-wrapper-layout",
+      "expected": "quick",
+      "expected_line": "light\tquick-eligible",
+      "shape": "layout utility tokens changed on a page's wrapper div",
+      "files": [
+        {
+          "path": "frontend/app/pages/home/page.tsx",
+          "before": "const HomePage = () => (\n  <div className=\"flex flex-col gap-2\">\n    <p className=\"text-sm\">Welcome</p>\n  </div>\n);\n\nexport default HomePage;\n",
+          "after": "const HomePage = () => (\n  <div className=\"flex flex-row items-center gap-4\">\n    <p className=\"text-sm\">Welcome</p>\n  </div>\n);\n\nexport default HomePage;\n"
+        }
+      ]
+    },
+    {
+      "id": "n08-synthetic-heading-text",
+      "expected": "quick",
+      "expected_line": "light\tquick-eligible",
+      "shape": "a heading font size token changed, the heading text expression untouched",
+      "files": [
+        {
+          "path": "frontend/app/pages/about/page.tsx",
+          "before": "const AboutPage = ({t}: {readonly t: (key: string) => string}) => (\n  <section>\n    <h2 className=\"text-xl\">{t('about.title')}</h2>\n  </section>\n);\n\nexport default AboutPage;\n",
+          "after": "const AboutPage = ({t}: {readonly t: (key: string) => string}) => (\n  <section>\n    <h2 className=\"text-2xl\">{t('about.title')}</h2>\n  </section>\n);\n\nexport default AboutPage;\n"
+        }
+      ]
+    },
+    {
+      "id": "language-wrapped-copy-edit",
+      "expected": "quick",
+      "expected_line": "light\tquick-eligible",
+      "shape": "a prettier-wrapped language value edited on its own continuation line",
+      "files": [
+        {
+          "path": "frontend/app/languages/en/common.ts",
+          "before": "export default {\n  close: 'Close',\n  counters: {\n    clicks_one: '{{count}} click',\n    clicks_other: '{{count}} clicks',\n  },\n  heroTitle: 'Build faster',\n  long:\n    'A value that prettier wrapped onto its own line',\n  month: 'month',\n  nested: '$t(common:close) now',\n  title: 'Hello',\n  welcome: 'Hi {{name}}',\n};\n",
+          "after": "export default {\n  close: 'Close',\n  counters: {\n    clicks_one: '{{count}} click',\n    clicks_other: '{{count}} clicks',\n  },\n  heroTitle: 'Build faster',\n  long:\n    'The same value, edited, on its wrapped line',\n  month: 'month',\n  nested: '$t(common:close) now',\n  title: 'Hello',\n  welcome: 'Hi {{name}}',\n};\n"
+        },
+        {
+          "path": "frontend/app/languages/ja/common.ts",
+          "before": "export default {\n  close: '\u9589\u3058\u308b',\n  counters: {\n    clicks_one: '{{count}} \u30af\u30ea\u30c3\u30af',\n    clicks_other: '{{count}} \u30af\u30ea\u30c3\u30af',\n  },\n  heroTitle: '\u3088\u308a\u901f\u304f\u4f5c\u308b',\n  long:\n    '\u9577\u3044\u5024',\n  month: '\u6708',\n  nested: '$t(common:close) \u4eca',\n  title: '\u3053\u3093\u306b\u3061\u306f',\n  welcome: '\u3088\u3046\u3053\u305d {{name}}',\n};\n",
+          "after": "export default {\n  close: '\u9589\u3058\u308b',\n  counters: {\n    clicks_one: '{{count}} \u30af\u30ea\u30c3\u30af',\n    clicks_other: '{{count}} \u30af\u30ea\u30c3\u30af',\n  },\n  heroTitle: '\u3088\u308a\u901f\u304f\u4f5c\u308b',\n  long:\n    '\u9577\u3044\u5024',\n  month: '\u6708',\n  nested: '$t(common:close) \u4eca',\n  title: '\u3053\u3093\u306b\u3061\u306f',\n  welcome: '\u3088\u3046\u3053\u305d {{name}}',\n};\n"
+        }
+      ]
+    },
+    {
+      "id": "language-single-line-to-wrapped",
+      "expected": "quick",
+      "expected_line": "light\tquick-eligible",
+      "shape": "a single-line language value edited so prettier wraps it onto a continuation line",
+      "files": [
+        {
+          "path": "frontend/app/languages/en/common.ts",
+          "before": "export default {\n  close: 'Close',\n  counters: {\n    clicks_one: '{{count}} click',\n    clicks_other: '{{count}} clicks',\n  },\n  heroTitle: 'Build faster',\n  long:\n    'A value that prettier wrapped onto its own line',\n  month: 'month',\n  nested: '$t(common:close) now',\n  title: 'Hello',\n  welcome: 'Hi {{name}}',\n};\n",
+          "after": "export default {\n  close: 'Close',\n  counters: {\n    clicks_one: '{{count}} click',\n    clicks_other: '{{count}} clicks',\n  },\n  heroTitle: 'Build faster',\n  long:\n    'A value that prettier wrapped onto its own line',\n  month: 'month',\n  nested: '$t(common:close) now',\n  title:\n    'Hello, and a much longer greeting that prettier wraps onto its own line',\n  welcome: 'Hi {{name}}',\n};\n"
+        },
+        {
+          "path": "frontend/app/languages/ja/common.ts",
+          "before": "export default {\n  close: '\u9589\u3058\u308b',\n  counters: {\n    clicks_one: '{{count}} \u30af\u30ea\u30c3\u30af',\n    clicks_other: '{{count}} \u30af\u30ea\u30c3\u30af',\n  },\n  heroTitle: '\u3088\u308a\u901f\u304f\u4f5c\u308b',\n  long:\n    '\u9577\u3044\u5024',\n  month: '\u6708',\n  nested: '$t(common:close) \u4eca',\n  title: '\u3053\u3093\u306b\u3061\u306f',\n  welcome: '\u3088\u3046\u3053\u305d {{name}}',\n};\n",
+          "after": "export default {\n  close: '\u9589\u3058\u308b',\n  counters: {\n    clicks_one: '{{count}} \u30af\u30ea\u30c3\u30af',\n    clicks_other: '{{count}} \u30af\u30ea\u30c3\u30af',\n  },\n  heroTitle: '\u3088\u308a\u901f\u304f\u4f5c\u308b',\n  long:\n    '\u9577\u3044\u5024',\n  month: '\u6708',\n  nested: '$t(common:close) \u4eca',\n  title: '\u3053\u3093\u306b\u3061\u306f',\n  welcome: '\u3088\u3046\u3053\u305d {{name}}',\n};\n"
+        }
+      ]
+    },
+    {
+      "id": "text-edit-at-quick-cap",
+      "expected": "quick",
+      "expected_line": "light\tquick-eligible",
+      "shape": "twenty static text lines replaced by twenty others, exactly forty changed lines",
+      "files": [
+        {
+          "path": "frontend/app/components/cap-box/index.tsx",
+          "before": "const CapBox = () => (\n  <section>\n    <p>\n      line 01 old\n      line 02 old\n      line 03 old\n      line 04 old\n      line 05 old\n      line 06 old\n      line 07 old\n      line 08 old\n      line 09 old\n      line 10 old\n      line 11 old\n      line 12 old\n      line 13 old\n      line 14 old\n      line 15 old\n      line 16 old\n      line 17 old\n      line 18 old\n      line 19 old\n      line 20 old\n    </p>\n  </section>\n);\n\nexport default CapBox;\n",
+          "after": "const CapBox = () => (\n  <section>\n    <p>\n      line 01 new\n      line 02 new\n      line 03 new\n      line 04 new\n      line 05 new\n      line 06 new\n      line 07 new\n      line 08 new\n      line 09 new\n      line 10 new\n      line 11 new\n      line 12 new\n      line 13 new\n      line 14 new\n      line 15 new\n      line 16 new\n      line 17 new\n      line 18 new\n      line 19 new\n      line 20 new\n    </p>\n  </section>\n);\n\nexport default CapBox;\n"
+        }
+      ]
+    },
+    {
+      "id": "text-edit-over-quick-cap",
+      "expected": "deep",
+      "expected_line": "full\tover-cap",
+      "shape": "twenty-one static text lines replaced by twenty others, forty-one changed lines",
+      "files": [
+        {
+          "path": "frontend/app/components/cap-box/index.tsx",
+          "before": "const CapBox = () => (\n  <section>\n    <p>\n      line 01 old\n      line 02 old\n      line 03 old\n      line 04 old\n      line 05 old\n      line 06 old\n      line 07 old\n      line 08 old\n      line 09 old\n      line 10 old\n      line 11 old\n      line 12 old\n      line 13 old\n      line 14 old\n      line 15 old\n      line 16 old\n      line 17 old\n      line 18 old\n      line 19 old\n      line 20 old\n      line 21 old\n    </p>\n  </section>\n);\n\nexport default CapBox;\n",
+          "after": "const CapBox = () => (\n  <section>\n    <p>\n      line 01 new\n      line 02 new\n      line 03 new\n      line 04 new\n      line 05 new\n      line 06 new\n      line 07 new\n      line 08 new\n      line 09 new\n      line 10 new\n      line 11 new\n      line 12 new\n      line 13 new\n      line 14 new\n      line 15 new\n      line 16 new\n      line 17 new\n      line 18 new\n      line 19 new\n      line 20 new\n    </p>\n  </section>\n);\n\nexport default CapBox;\n"
+        }
+      ]
+    },
+    {
+      "id": "r14-story-cannot-fail-description",
+      "expected": "deep",
+      "expected_line": "full\thard-full",
+      "shape": "a weakened assertion in a utility's story whose component class is not a component",
+      "files": [
+        {
+          "path": "frontend/app/utils/tests/notify.stories.tsx",
+          "before": "import {expect} from 'storybook/test';\n\nexport const Description = {\n  play: async ({canvasElement}) => {\n    await expectToast(canvasElement, 'only a description');\n  },\n};\n",
+          "after": "import {expect} from 'storybook/test';\n\nexport const Description = {\n  play: async ({canvasElement}) => {\n    await expectToast(canvasElement, 'only a description');\n    expect(canvasElement.querySelector('[data-slot=\"toast-title\"]')).toHaveTextContent('only a description');\n  },\n};\n"
+        }
+      ]
+    },
+    {
+      "id": "audit-machinery-library-added",
+      "expected": "deep",
+      "expected_line": "full\tmachinery",
+      "shape": "a hook library file added under the audit machinery tree",
+      "files": [
+        {
+          "path": ".claude/hooks/lib/example-added-lib.sh",
+          "before": null,
+          "after": "#!/usr/bin/env bash\nexample_added() {\n  printf 'added\\n'\n}\n"
+        }
+      ]
+    },
+    {
+      "id": "manifest-dependency-edit",
+      "expected": "deep",
+      "expected_line": "full\thard-full",
+      "shape": "a dependency version edit in the app package manifest",
+      "files": [
+        {
+          "path": "frontend/package.json",
+          "before": "{\n  \"name\": \"app\",\n  \"dependencies\": {\n    \"react\": \"19.0.0\"\n  }\n}\n",
+          "after": "{\n  \"name\": \"app\",\n  \"dependencies\": {\n    \"react\": \"19.1.0\"\n  }\n}\n"
+        }
+      ]
+    },
+    {
+      "id": "component-added",
+      "expected": "deep",
+      "expected_line": "full\tquick-file-status",
+      "shape": "a new component file added",
+      "files": [
+        {
+          "path": "frontend/app/components/banner/index.tsx",
+          "before": null,
+          "after": "const Banner = () => (\n  <p className=\"text-sm\">Banner</p>\n);\n\nexport default Banner;\n"
+        }
+      ]
+    },
+    {
+      "id": "component-deleted",
+      "expected": "deep",
+      "expected_line": "full\tquick-file-status",
+      "shape": "an existing component file deleted",
+      "files": [
+        {
+          "path": "frontend/app/components/banner/index.tsx",
+          "before": "const Banner = () => (\n  <p className=\"text-sm\">Banner</p>\n);\n\nexport default Banner;\n",
+          "after": null
+        }
+      ]
+    },
+    {
+      "id": "r02-error-data-cast",
+      "expected": "deep",
+      "expected_line": "full\tquick-path",
+      "shape": "an error boundary prop value rewritten from a cast to a typeof ternary, in the always-deep errors components folder",
+      "files": [
+        {
+          "path": "frontend/app/components/errors/root-error-boundary/index.tsx",
+          "before": "const RootErrorBoundary = ({error}: {readonly error: {data: unknown}}) => (\n  <Stack stack={error.data as string} />\n);\n\nexport default RootErrorBoundary;\n",
+          "after": "const RootErrorBoundary = ({error}: {readonly error: {data: unknown}}) => (\n  <Stack stack={typeof error.data === 'string' ? error.data : undefined} />\n);\n\nexport default RootErrorBoundary;\n"
+        }
+      ]
+    },
+    {
+      "id": "r03-metahydrated-no-return",
+      "expected": "deep",
+      "expected_line": "full\tquick-path",
+      "shape": "a return null statement added to a component in the always-deep document components folder",
+      "files": [
+        {
+          "path": "frontend/app/components/document/meta-hydrated/index.tsx",
+          "before": "const MetaHydrated = ({isHydrated}: {readonly isHydrated: boolean}) => {\n  if (isHydrated) {\n    return <meta content=\"true\" name=\"hydrated\" />;\n  }\n};\n\nexport default MetaHydrated;\n",
+          "after": "const MetaHydrated = ({isHydrated}: {readonly isHydrated: boolean}) => {\n  if (isHydrated) {\n    return <meta content=\"true\" name=\"hydrated\" />;\n  }\n\n  return null;\n};\n\nexport default MetaHydrated;\n"
+        }
+      ]
+    },
+    {
+      "id": "r12-open-redirect-islocalredirect",
+      "expected": "deep",
+      "expected_line": "full\tquick-path",
+      "shape": "a redirect validation import swapped in route modules and a utility, none on the allowlist",
+      "files": [
+        {
+          "path": "frontend/app/routes/actions.set-language.ts",
+          "before": "import {isLocalRedirect} from '~/utils/http';\n\nexport const schema = isLocalRedirect;\n",
+          "after": "import {LocalRedirectSchema} from '~/utils/http';\n\nexport const schema = LocalRedirectSchema;\n"
+        },
+        {
+          "path": "frontend/app/utils/http.ts",
+          "before": "export const isLocalRedirect = (value: string) => value.startsWith('/');\n",
+          "after": "export const LocalRedirectSchema = (value: string) => new URL(value, 'http://x').pathname === value;\n"
+        }
+      ]
+    },
+    {
+      "id": "r13-env-client-schema-omit",
+      "expected": "deep",
+      "expected_line": "full\tquick-path",
+      "shape": "a server environment schema rewritten from a denylist to an allowlist, a server module outside the allowlist",
+      "files": [
+        {
+          "path": "frontend/app/env.server.ts",
+          "before": "export const clientSchema = schema.omit({\n  SESSION_SECRET: true,\n});\n",
+          "after": "export const clientSchema = schema.pick({\n  API_URL: true,\n});\n"
+        }
+      ]
+    },
+    {
+      "id": "r20-theme-route-literal-drift",
+      "expected": "deep",
+      "expected_line": "full\tquick-path",
+      "shape": "a route path literal edited in a component while a hooks-folder module carries the matching literal",
+      "files": [
+        {
+          "path": "frontend/app/components/theme-switch/index.tsx",
+          "before": "const ThemeSwitch = () => (\n  <fetcher.Form action=\"/resources/theme-switch\" method=\"POST\" />\n);\n\nexport default ThemeSwitch;\n",
+          "after": "const ThemeSwitch = () => (\n  <fetcher.Form action=\"/actions/set-theme\" method=\"POST\" />\n);\n\nexport default ThemeSwitch;\n"
+        },
+        {
+          "path": "frontend/app/hooks/use-theme.ts",
+          "before": "export const themeAction = '/resources/theme-switch';\n",
+          "after": "export const themeAction = '/actions/set-theme';\n"
+        }
+      ]
+    },
+    {
+      "id": "s12-interp-unescaped-trans",
+      "expected": "deep",
+      "expected_line": "full\tquick-path",
+      "shape": "markup with an interpolated href added to the language index aggregator, a path outside the language class",
+      "files": [
+        {
+          "path": "frontend/app/languages/en/index.ts",
+          "before": "export default {\n  welcome: 'Hi',\n};\n",
+          "after": "export default {\n  welcome: 'Hi <a href=\"{{url}}\">{{name}}</a>',\n};\n"
+        }
+      ]
+    },
+    {
+      "id": "component-reads-nonce",
+      "expected": "deep",
+      "expected_line": "full\tquick-path",
+      "shape": "a component reading nonce, an always-deep content marker, with an otherwise static className change",
+      "files": [
+        {
+          "path": "frontend/app/components/probe/index.tsx",
+          "before": "const Probe = ({title}: {readonly title: string}) => {\n  const value = nonce;\n\n  return <p className=\"text-sm\">{value}</p>;\n};\n\nexport default Probe;\n",
+          "after": "const Probe = ({title}: {readonly title: string}) => {\n  const value = nonce;\n\n  return <p className=\"text-base\">{value}</p>;\n};\n\nexport default Probe;\n"
+        }
+      ]
+    },
+    {
+      "id": "component-reads-request",
+      "expected": "deep",
+      "expected_line": "full\tquick-path",
+      "shape": "a component reading request, an always-deep content marker, with an otherwise static className change",
+      "files": [
+        {
+          "path": "frontend/app/components/probe/index.tsx",
+          "before": "const Probe = ({title}: {readonly title: string}) => {\n  const value = request;\n\n  return <p className=\"text-sm\">{value}</p>;\n};\n\nexport default Probe;\n",
+          "after": "const Probe = ({title}: {readonly title: string}) => {\n  const value = request;\n\n  return <p className=\"text-base\">{value}</p>;\n};\n\nexport default Probe;\n"
+        }
+      ]
+    },
+    {
+      "id": "component-reads-process-env",
+      "expected": "deep",
+      "expected_line": "full\tquick-path",
+      "shape": "a component reading process.env, an always-deep content marker, with an otherwise static className change",
+      "files": [
+        {
+          "path": "frontend/app/components/probe/index.tsx",
+          "before": "const Probe = ({title}: {readonly title: string}) => {\n  const value = process.env.MODE;\n\n  return <p className=\"text-sm\">{value}</p>;\n};\n\nexport default Probe;\n",
+          "after": "const Probe = ({title}: {readonly title: string}) => {\n  const value = process.env.MODE;\n\n  return <p className=\"text-base\">{value}</p>;\n};\n\nexport default Probe;\n"
+        }
+      ]
+    },
+    {
+      "id": "component-reads-import-meta-env",
+      "expected": "deep",
+      "expected_line": "full\tquick-path",
+      "shape": "a component reading import.meta.env, an always-deep content marker, with an otherwise static className change",
+      "files": [
+        {
+          "path": "frontend/app/components/probe/index.tsx",
+          "before": "const Probe = ({title}: {readonly title: string}) => {\n  const value = import.meta.env.MODE;\n\n  return <p className=\"text-sm\">{value}</p>;\n};\n\nexport default Probe;\n",
+          "after": "const Probe = ({title}: {readonly title: string}) => {\n  const value = import.meta.env.MODE;\n\n  return <p className=\"text-base\">{value}</p>;\n};\n\nexport default Probe;\n"
+        }
+      ]
+    },
+    {
+      "id": "r01-toast-innerhtml",
+      "expected": "deep",
+      "expected_line": "full\tquick-attribute",
+      "shape": "a dangerouslySetInnerHTML attribute added to an existing div's opening tag",
+      "files": [
+        {
+          "path": "frontend/app/components/toast-notification/index.tsx",
+          "before": "const ToastNotification = ({message}: {readonly message: string}) => (\n  <div className=\"flex gap-2\">\n    <div\n      className=\"-mt-0.5 text-pretty font-semibold leading-tight\"\n    />\n  </div>\n);\n\nexport default ToastNotification;\n",
+          "after": "const ToastNotification = ({message}: {readonly message: string}) => (\n  <div className=\"flex gap-2\">\n    <div\n      className=\"-mt-0.5 text-pretty font-semibold leading-tight\"\n      dangerouslySetInnerHTML={{__html: message}}\n    />\n  </div>\n);\n\nexport default ToastNotification;\n"
+        }
+      ]
+    },
+    {
+      "id": "r04-checkbox-required-gated-on-error",
+      "expected": "deep",
+      "expected_line": "full\tquick-conditional",
+      "shape": "a required prop value rewritten from a boolean expression to a bare identifier",
+      "files": [
+        {
+          "path": "frontend/app/components/checkbox/index.tsx",
+          "before": "const Checkbox = ({error, required}: {readonly error?: string; readonly required: boolean}) => (\n  <input\n    className=\"size-4\"\n    required={required && !!error}\n    type=\"checkbox\"\n  />\n);\n\nexport default Checkbox;\n",
+          "after": "const Checkbox = ({error, required}: {readonly error?: string; readonly required: boolean}) => (\n  <input\n    className=\"size-4\"\n    required={required}\n    type=\"checkbox\"\n  />\n);\n\nexport default Checkbox;\n"
+        }
+      ]
+    },
+    {
+      "id": "r05-checkboxes-vacuous-every",
+      "expected": "deep",
+      "expected_line": "full\tquick-conditional",
+      "shape": "a derived disabled flag rewritten with a length guard in a component body",
+      "files": [
+        {
+          "path": "frontend/app/components/checkboxes/index.tsx",
+          "before": "const Checkboxes = ({disabled, options}: {readonly disabled?: boolean; readonly options: {disabled: boolean}[]}) => {\n  const isDisabled = disabled ?? options.every((option) => option.disabled);\n\n  return <fieldset className=\"grid gap-1\" disabled={isDisabled} />;\n};\n\nexport default Checkboxes;\n",
+          "after": "const Checkboxes = ({disabled, options}: {readonly disabled?: boolean; readonly options: {disabled: boolean}[]}) => {\n  const isDisabled =\n    disabled ??\n    (options.length > 0 && options.every((option) => option.disabled));\n\n  return <fieldset className=\"grid gap-1\" disabled={isDisabled} />;\n};\n\nexport default Checkboxes;\n"
+        }
+      ]
+    },
+    {
+      "id": "r06-aria-label-precedence",
+      "expected": "deep",
+      "expected_line": "full\tquick-attribute",
+      "shape": "a label association attribute value rewritten from a name to an id fallback",
+      "files": [
+        {
+          "path": "frontend/app/components/field/index.tsx",
+          "before": "const Field = ({id, name}: {readonly id?: string; readonly name: string}) => (\n  <label\n    className=\"grid gap-1\"\n    htmlFor={name}\n  >\n    {name}\n  </label>\n);\n\nexport default Field;\n",
+          "after": "const Field = ({id, name}: {readonly id?: string; readonly name: string}) => (\n  <label\n    className=\"grid gap-1\"\n    htmlFor={id ?? name}\n  >\n    {name}\n  </label>\n);\n\nexport default Field;\n"
+        }
+      ]
+    },
+    {
+      "id": "r07-nested-live-region",
+      "expected": "deep",
+      "expected_line": "full\tquick-attribute",
+      "shape": "a role attribute removed from a wrapper div",
+      "files": [
+        {
+          "path": "frontend/app/components/field-status/index.tsx",
+          "before": "const FieldStatus = ({children}: {readonly children: unknown}) => (\n  <div className=\"ml-px mt-1\" role=\"status\">\n    {children}\n  </div>\n);\n\nexport default FieldStatus;\n",
+          "after": "const FieldStatus = ({children}: {readonly children: unknown}) => (\n  <div className=\"ml-px mt-1\">\n    {children}\n  </div>\n);\n\nexport default FieldStatus;\n"
+        }
+      ]
+    },
+    {
+      "id": "r08-missing-aria-describedby",
+      "expected": "deep",
+      "expected_line": "full\tquick-attribute",
+      "shape": "a wrapped aria-describedby attribute added to an input's opening tag",
+      "files": [
+        {
+          "path": "frontend/app/components/input-described/index.tsx",
+          "before": "const InputDescribed = ({description, id, name}: {readonly description?: string; readonly id?: string; readonly name: string}) => (\n  <input\n    className=\"rounded border px-2\"\n    name={name}\n    type=\"text\"\n  />\n);\n\nexport default InputDescribed;\n",
+          "after": "const InputDescribed = ({description, id, name}: {readonly description?: string; readonly id?: string; readonly name: string}) => (\n  <input\n    className=\"rounded border px-2\"\n    aria-describedby={\n      description ? `${id ?? name}-description` : undefined\n    }\n    name={name}\n    type=\"text\"\n  />\n);\n\nexport default InputDescribed;\n"
+        }
+      ]
+    },
+    {
+      "id": "r09-dangling-describedby-group",
+      "expected": "deep",
+      "expected_line": "full\tquick-import",
+      "shape": "an import and a generated id hook added to a component",
+      "files": [
+        {
+          "path": "frontend/app/components/checkbox-group/index.tsx",
+          "before": "import type {ReactNode} from 'react';\n\nconst CheckboxGroup = ({description}: {readonly description?: ReactNode}) => (\n  <fieldset className=\"grid gap-1\">\n    {description}\n  </fieldset>\n);\n\nexport default CheckboxGroup;\n",
+          "after": "import type {ReactNode} from 'react';\nimport {useId} from 'react';\n\nconst CheckboxGroup = ({description}: {readonly description?: ReactNode}) => {\n  const groupId = useId();\n\n  return (\n    <fieldset className=\"grid gap-1\" id={groupId}>\n      {description}\n    </fieldset>\n  );\n};\n\nexport default CheckboxGroup;\n"
+        }
+      ]
+    },
+    {
+      "id": "r10-language-select-onchange-submit",
+      "expected": "deep",
+      "expected_line": "full\tquick-unclassified",
+      "shape": "an on-change handler function removed from a component body",
+      "files": [
+        {
+          "path": "frontend/app/components/language-select/index.tsx",
+          "before": "const LanguageSelect = ({fetcher}: {readonly fetcher: {submit: (form: unknown) => void}}) => {\n  const handleChangeLanguageForm: ChangeEventHandler<HTMLFormElement> = async (\n    event\n  ) => {\n    await fetcher.submit(event.currentTarget);\n  };\n\n  return <form className=\"grid\" onChange={handleChangeLanguageForm} />;\n};\n\nexport default LanguageSelect;\n",
+          "after": "const LanguageSelect = ({fetcher}: {readonly fetcher: {submit: (form: unknown) => void}}) => {\n  return <form className=\"grid\" onChange={handleChangeLanguageForm} />;\n};\n\nexport default LanguageSelect;\n"
+        }
+      ]
+    },
+    {
+      "id": "r11-formerror-focus-loss",
+      "expected": "deep",
+      "expected_line": "full\tquick-conditional",
+      "shape": "a dismiss handler rewritten as a typed arrow function that moves focus",
+      "files": [
+        {
+          "path": "frontend/app/components/form-error/index.tsx",
+          "before": "const FormError = ({setDismissed}: {readonly setDismissed: (value: boolean) => void}) => {\n  const handleDismissErrorButton = () => {\n    setDismissed(true);\n  };\n\n  return <button className=\"px-2\" type=\"button\">{String(handleDismissErrorButton)}</button>;\n};\n\nexport default FormError;\n",
+          "after": "const FormError = ({setDismissed}: {readonly setDismissed: (value: boolean) => void}) => {\n  const handleDismissErrorButton = (event: MouseEvent) => {\n    focusFirstControl(event.currentTarget);\n    setDismissed(true);\n  };\n\n  return <button className=\"px-2\" type=\"button\">{String(handleDismissErrorButton)}</button>;\n};\n\nexport default FormError;\n"
+        }
+      ]
+    },
+    {
+      "id": "r17-linkbutton-disabled-navigates",
+      "expected": "deep",
+      "expected_line": "full\tquick-cn-argument",
+      "shape": "a conditional dimming argument added to a cn() call on a link",
+      "files": [
+        {
+          "path": "frontend/app/components/link-button/index.tsx",
+          "before": "import {cn} from 'cn';\n\nconst LinkButton = ({disabled}: {readonly disabled?: boolean}) => (\n  <a\n    className={cn('inline-flex px-2')}\n    href=\"/go\"\n  >\n    Go\n  </a>\n);\n\nexport default LinkButton;\n",
+          "after": "import {cn} from 'cn';\n\nconst LinkButton = ({disabled}: {readonly disabled?: boolean}) => (\n  <a\n    className={cn('inline-flex px-2', disabled && 'opacity-50')}\n    href=\"/go\"\n  >\n    Go\n  </a>\n);\n\nexport default LinkButton;\n"
+        }
+      ]
+    },
+    {
+      "id": "r18-icon-button-no-name",
+      "expected": "deep",
+      "expected_line": "full\tquick-handler",
+      "shape": "an icon-only button's line rewritten to a named button component with an aria-label",
+      "files": [
+        {
+          "path": "frontend/app/components/dismiss-button/index.tsx",
+          "before": "const DismissButton = ({onClose}: {readonly onClose: () => void}) => (\n  <section className=\"flex\">\n    <button className=\"px-2\" onClick={onClose} type=\"button\"><IoClose /></button>\n  </section>\n);\n\nexport default DismissButton;\n",
+          "after": "const DismissButton = ({onClose}: {readonly onClose: () => void}) => (\n  <section className=\"flex\">\n    <Button aria-label={t('dismiss')} onClick={onClose}><X aria-hidden={true} /></Button>\n  </section>\n);\n\nexport default DismissButton;\n"
+        }
+      ]
+    },
+    {
+      "id": "r19-unnamed-radio-group",
+      "expected": "deep",
+      "expected_line": "full\tquick-attribute",
+      "shape": "an aria-labelledby attribute added to a group wrapper",
+      "files": [
+        {
+          "path": "frontend/app/components/radio-group/index.tsx",
+          "before": "const RadioGroup = ({id}: {readonly id: string}) => (\n  <div className=\"grid gap-1\" role=\"group\">\n    {id}\n  </div>\n);\n\nexport default RadioGroup;\n",
+          "after": "const RadioGroup = ({id}: {readonly id: string}) => (\n  <div className=\"grid gap-1\" aria-labelledby=\"group-label\" role=\"group\">\n    {id}\n  </div>\n);\n\nexport default RadioGroup;\n"
+        }
+      ]
+    },
+    {
+      "id": "s01-focus-outline-removed",
+      "expected": "deep",
+      "expected_line": "full\tquick-hiding-token",
+      "shape": "a focus-visible ring token removed from a button, leaving only outline-none",
+      "files": [
+        {
+          "path": "frontend/app/components/ui/button.tsx",
+          "before": "const Button = ({children}: {readonly children: unknown}) => (\n  <button className=\"outline-none focus-visible:ring-2 focus-visible:ring-ring\" type=\"button\">\n    {children}\n  </button>\n);\n\nexport default Button;\n",
+          "after": "const Button = ({children}: {readonly children: unknown}) => (\n  <button className=\"outline-none\" type=\"button\">\n    {children}\n  </button>\n);\n\nexport default Button;\n"
+        }
+      ]
+    },
+    {
+      "id": "s02-sr-only-to-hidden",
+      "expected": "deep",
+      "expected_line": "full\tquick-hiding-token",
+      "shape": "sr-only swapped for hidden on a span holding an icon button's only name",
+      "files": [
+        {
+          "path": "frontend/app/components/header/index.tsx",
+          "before": "const Header = ({t}: {readonly t: (key: string) => string}) => (\n  <header className=\"flex\">\n    <span className=\"sr-only\">{t('menu')}</span>\n  </header>\n);\n\nexport default Header;\n",
+          "after": "const Header = ({t}: {readonly t: (key: string) => string}) => (\n  <header className=\"flex\">\n    <span className=\"hidden\">{t('menu')}</span>\n  </header>\n);\n\nexport default Header;\n"
+        }
+      ]
+    },
+    {
+      "id": "s03-href-javascript",
+      "expected": "deep",
+      "expected_line": "full\tquick-attribute",
+      "shape": "an anchor href rewritten from a literal to an expression fed by a query parameter",
+      "files": [
+        {
+          "path": "frontend/app/pages/home/page.tsx",
+          "before": "const HomePage = ({next}: {readonly next: string}) => (\n  <div className=\"flex flex-col gap-2\">\n    <a href=\"/docs\">Docs</a>\n    <a href=\"https://example.com\">Example</a>\n    <div className=\"card\">Card</div>\n    <img alt={t('hero.alt')} src={heroUrl} />\n  </div>\n);\n\nexport default HomePage;\n",
+          "after": "const HomePage = ({next}: {readonly next: string}) => (\n  <div className=\"flex flex-col gap-2\">\n    <a href={searchParams.get('next') ?? '/docs'}>Docs</a>\n    <a href=\"https://example.com\">Example</a>\n    <div className=\"card\">Card</div>\n    <img alt={t('hero.alt')} src={heroUrl} />\n  </div>\n);\n\nexport default HomePage;\n"
+        }
+      ]
+    },
+    {
+      "id": "s04-target-blank-no-rel",
+      "expected": "deep",
+      "expected_line": "full\tquick-attribute",
+      "shape": "a target attribute added to an external anchor",
+      "files": [
+        {
+          "path": "frontend/app/pages/home/page.tsx",
+          "before": "const HomePage = ({next}: {readonly next: string}) => (\n  <div className=\"flex flex-col gap-2\">\n    <a href=\"/docs\">Docs</a>\n    <a href=\"https://example.com\">Example</a>\n    <div className=\"card\">Card</div>\n    <img alt={t('hero.alt')} src={heroUrl} />\n  </div>\n);\n\nexport default HomePage;\n",
+          "after": "const HomePage = ({next}: {readonly next: string}) => (\n  <div className=\"flex flex-col gap-2\">\n    <a href=\"/docs\">Docs</a>\n    <a href=\"https://example.com\" target=\"_blank\">Example</a>\n    <div className=\"card\">Card</div>\n    <img alt={t('hero.alt')} src={heroUrl} />\n  </div>\n);\n\nexport default HomePage;\n"
+        }
+      ]
+    },
+    {
+      "id": "s10-tabindex-positive",
+      "expected": "deep",
+      "expected_line": "full\tquick-attribute",
+      "shape": "a tabIndex and a click handler added to a non-interactive div",
+      "files": [
+        {
+          "path": "frontend/app/pages/home/page.tsx",
+          "before": "const HomePage = ({next}: {readonly next: string}) => (\n  <div className=\"flex flex-col gap-2\">\n    <a href=\"/docs\">Docs</a>\n    <a href=\"https://example.com\">Example</a>\n    <div className=\"card\">Card</div>\n    <img alt={t('hero.alt')} src={heroUrl} />\n  </div>\n);\n\nexport default HomePage;\n",
+          "after": "const HomePage = ({next}: {readonly next: string}) => (\n  <div className=\"flex flex-col gap-2\">\n    <a href=\"/docs\">Docs</a>\n    <a href=\"https://example.com\">Example</a>\n    <div className=\"card\" onClick={handleOpen} tabIndex={0}>Card</div>\n    <img alt={t('hero.alt')} src={heroUrl} />\n  </div>\n);\n\nexport default HomePage;\n"
+        }
+      ]
+    },
+    {
+      "id": "s11-img-alt-dropped",
+      "expected": "deep",
+      "expected_line": "full\tquick-attribute",
+      "shape": "an alt attribute removed from an image",
+      "files": [
+        {
+          "path": "frontend/app/pages/home/page.tsx",
+          "before": "const HomePage = ({next}: {readonly next: string}) => (\n  <div className=\"flex flex-col gap-2\">\n    <a href=\"/docs\">Docs</a>\n    <a href=\"https://example.com\">Example</a>\n    <div className=\"card\">Card</div>\n    <img alt={t('hero.alt')} src={heroUrl} />\n  </div>\n);\n\nexport default HomePage;\n",
+          "after": "const HomePage = ({next}: {readonly next: string}) => (\n  <div className=\"flex flex-col gap-2\">\n    <a href=\"/docs\">Docs</a>\n    <a href=\"https://example.com\">Example</a>\n    <div className=\"card\">Card</div>\n    <img src={heroUrl} />\n  </div>\n);\n\nexport default HomePage;\n"
+        }
+      ]
+    },
+    {
+      "id": "s05-key-dropped",
+      "expected": "deep",
+      "expected_line": "full\tquick-conditional",
+      "shape": "a key prop removed from a mapped list item",
+      "files": [
+        {
+          "path": "frontend/app/components/list/index.tsx",
+          "before": "const List = ({items}: {readonly items: {id: string; name: string}[]}) => (\n  <ul>\n    {items.map((item) => <li key={item.id}>{item.name}</li>)}\n  </ul>\n);\n\nexport default List;\n",
+          "after": "const List = ({items}: {readonly items: {id: string; name: string}[]}) => (\n  <ul>\n    {items.map((item) => <li>{item.name}</li>)}\n  </ul>\n);\n\nexport default List;\n"
+        }
+      ]
+    },
+    {
+      "id": "s06-aria-label-removed",
+      "expected": "deep",
+      "expected_line": "full\tquick-element",
+      "shape": "an aria-label removed from a capitalized button component's element line",
+      "files": [
+        {
+          "path": "frontend/app/components/theme-switch/index.tsx",
+          "before": "const ThemeSwitch = ({t}: {readonly t: (key: string) => string}) => (\n  <Button aria-label={t('theme.toggle')} size=\"icon\">\n    <Icon />\n  </Button>\n);\n\nexport default ThemeSwitch;\n",
+          "after": "const ThemeSwitch = ({t}: {readonly t: (key: string) => string}) => (\n  <Button size=\"icon\">\n    <Icon />\n  </Button>\n);\n\nexport default ThemeSwitch;\n"
+        }
+      ]
+    },
+    {
+      "id": "s07-locale-key-missing",
+      "expected": "deep",
+      "expected_line": "full\tquick-language-key",
+      "shape": "a language key added to the en common file only, absent from the ja sibling",
+      "files": [
+        {
+          "path": "frontend/app/languages/en/common.ts",
+          "before": "export default {\n  close: 'Close',\n  counters: {\n    clicks_one: '{{count}} click',\n    clicks_other: '{{count}} clicks',\n  },\n  heroTitle: 'Build faster',\n  long:\n    'A value that prettier wrapped onto its own line',\n  month: 'month',\n  nested: '$t(common:close) now',\n  title: 'Hello',\n  welcome: 'Hi {{name}}',\n};\n",
+          "after": "export default {\n  close: 'Close',\n  counters: {\n    clicks_one: '{{count}} click',\n    clicks_other: '{{count}} clicks',\n  },\n  exportData: 'Export data',\n  heroTitle: 'Build faster',\n  long:\n    'A value that prettier wrapped onto its own line',\n  month: 'month',\n  nested: '$t(common:close) now',\n  title: 'Hello',\n  welcome: 'Hi {{name}}',\n};\n"
+        },
+        {
+          "path": "frontend/app/languages/ja/common.ts",
+          "before": "export default {\n  close: '\u9589\u3058\u308b',\n  counters: {\n    clicks_one: '{{count}} \u30af\u30ea\u30c3\u30af',\n    clicks_other: '{{count}} \u30af\u30ea\u30c3\u30af',\n  },\n  heroTitle: '\u3088\u308a\u901f\u304f\u4f5c\u308b',\n  long:\n    '\u9577\u3044\u5024',\n  month: '\u6708',\n  nested: '$t(common:close) \u4eca',\n  title: '\u3053\u3093\u306b\u3061\u306f',\n  welcome: '\u3088\u3046\u3053\u305d {{name}}',\n};\n",
+          "after": "export default {\n  close: '\u9589\u3058\u308b',\n  counters: {\n    clicks_one: '{{count}} \u30af\u30ea\u30c3\u30af',\n    clicks_other: '{{count}} \u30af\u30ea\u30c3\u30af',\n  },\n  heroTitle: '\u3088\u308a\u901f\u304f\u4f5c\u308b',\n  long:\n    '\u9577\u3044\u5024',\n  month: '\u6708',\n  nested: '$t(common:close) \u4eca',\n  title: '\u3053\u3093\u306b\u3061\u306f',\n  welcome: '\u3088\u3046\u3053\u305d {{name}}',\n};\n"
+        }
+      ]
+    },
+    {
+      "id": "s08-dark-contrast-token",
+      "expected": "deep",
+      "expected_line": "full\tquick-palette",
+      "shape": "role color tokens replaced by raw palette tokens with a dark variant equal to the base",
+      "files": [
+        {
+          "path": "frontend/app/components/notice/index.tsx",
+          "before": "const Notice = ({message}: {readonly message: string}) => (\n  <p className=\"text-muted-foreground bg-muted\">{message}</p>\n);\n\nexport default Notice;\n",
+          "after": "const Notice = ({message}: {readonly message: string}) => (\n  <p className=\"text-gray-400 bg-white dark:bg-white\">{message}</p>\n);\n\nexport default Notice;\n"
+        }
+      ]
+    },
+    {
+      "id": "r15-story-raw-palette-root-only",
+      "expected": "deep",
+      "expected_line": "full\tquick-story-play",
+      "shape": "a story assertion line rewritten in a play function, paired with a component className tweak",
+      "files": [
+        {
+          "path": "frontend/app/components/input-text/index.tsx",
+          "before": "type InputTextProps = {\n  readonly label: string;\n};\n\nconst InputText = ({label}: InputTextProps) => (\n  <label className=\"grid gap-1 text-sm\">\n    <span className=\"font-medium\">{label}</span>\n    <input className=\"rounded border px-2\" type=\"text\" />\n  </label>\n);\n\nexport default InputText;\n",
+          "after": "type InputTextProps = {\n  readonly label: string;\n};\n\nconst InputText = ({label}: InputTextProps) => (\n  <label className=\"grid gap-2 text-sm\">\n    <span className=\"font-medium\">{label}</span>\n    <input className=\"rounded border px-2\" type=\"text\" />\n  </label>\n);\n\nexport default InputText;\n"
+        },
+        {
+          "path": "frontend/app/components/input-text/tests/index.stories.tsx",
+          "before": "import type {Meta, StoryObj} from '@storybook/react-vite';\nimport {expect} from 'storybook/test';\nimport InputText from '..';\n\nconst meta: Meta<typeof InputText> = {\n  component: InputText,\n  title: 'Components/InputText',\n};\n\nexport default meta;\n\ntype Story = StoryObj<typeof InputText>;\n\nexport const Default: Story = {\n  args: {\n    label: 'Name',\n  },\n  parameters: {\n    a11y: {\n      test: 'error',\n    },\n  },\n};\n\nexport const Filled: Story = {\n  args: {\n    label: 'Name',\n  },\n  play: async ({canvas, userEvent}) => {\n    await userEvent.type(canvas.getByRole('textbox'), 'Ada');\n    await expect(canvas.getByRole('textbox')).toHaveValue('Ada');\n  },\n};\n",
+          "after": "import type {Meta, StoryObj} from '@storybook/react-vite';\nimport {expect} from 'storybook/test';\nimport InputText from '..';\n\nconst meta: Meta<typeof InputText> = {\n  component: InputText,\n  title: 'Components/InputText',\n};\n\nexport default meta;\n\ntype Story = StoryObj<typeof InputText>;\n\nexport const Default: Story = {\n  args: {\n    label: 'Name',\n  },\n  parameters: {\n    a11y: {\n      test: 'error',\n    },\n  },\n};\n\nexport const Filled: Story = {\n  args: {\n    label: 'Name',\n  },\n  play: async ({canvas, userEvent}) => {\n    await userEvent.type(canvas.getByRole('textbox'), 'Ada');\n    await expect(canvas.getByRole('textbox')).not.toHaveValue('');\n  },\n};\n"
+        }
+      ]
+    },
+    {
+      "id": "r16-story-submit-race",
+      "expected": "deep",
+      "expected_line": "full\tquick-story-play",
+      "shape": "a user interaction line rewritten in a play function, paired with a component className tweak",
+      "files": [
+        {
+          "path": "frontend/app/components/input-text/index.tsx",
+          "before": "type InputTextProps = {\n  readonly label: string;\n};\n\nconst InputText = ({label}: InputTextProps) => (\n  <label className=\"grid gap-1 text-sm\">\n    <span className=\"font-medium\">{label}</span>\n    <input className=\"rounded border px-2\" type=\"text\" />\n  </label>\n);\n\nexport default InputText;\n",
+          "after": "type InputTextProps = {\n  readonly label: string;\n};\n\nconst InputText = ({label}: InputTextProps) => (\n  <label className=\"grid gap-2 text-sm\">\n    <span className=\"font-medium\">{label}</span>\n    <input className=\"rounded border px-2\" type=\"text\" />\n  </label>\n);\n\nexport default InputText;\n"
+        },
+        {
+          "path": "frontend/app/components/input-text/tests/index.stories.tsx",
+          "before": "import type {Meta, StoryObj} from '@storybook/react-vite';\nimport {expect} from 'storybook/test';\nimport InputText from '..';\n\nconst meta: Meta<typeof InputText> = {\n  component: InputText,\n  title: 'Components/InputText',\n};\n\nexport default meta;\n\ntype Story = StoryObj<typeof InputText>;\n\nexport const Default: Story = {\n  args: {\n    label: 'Name',\n  },\n  parameters: {\n    a11y: {\n      test: 'error',\n    },\n  },\n};\n\nexport const Filled: Story = {\n  args: {\n    label: 'Name',\n  },\n  play: async ({canvas, userEvent}) => {\n    await userEvent.type(canvas.getByRole('textbox'), 'Ada');\n    await expect(canvas.getByRole('textbox')).toHaveValue('Ada');\n  },\n};\n",
+          "after": "import type {Meta, StoryObj} from '@storybook/react-vite';\nimport {expect} from 'storybook/test';\nimport InputText from '..';\n\nconst meta: Meta<typeof InputText> = {\n  component: InputText,\n  title: 'Components/InputText',\n};\n\nexport default meta;\n\ntype Story = StoryObj<typeof InputText>;\n\nexport const Default: Story = {\n  args: {\n    label: 'Name',\n  },\n  parameters: {\n    a11y: {\n      test: 'error',\n    },\n  },\n};\n\nexport const Filled: Story = {\n  args: {\n    label: 'Name',\n  },\n  play: async ({canvas, userEvent}) => {\n    await userEvent.type(canvas.getByRole('textbox'), 'Grace');\n    await expect(canvas.getByRole('textbox')).toHaveValue('Ada');\n  },\n};\n"
+        }
+      ]
+    },
+    {
+      "id": "s09-story-args-hide-bug",
+      "expected": "deep",
+      "expected_line": "full\tquick-story-shape",
+      "shape": "a story arg set to undefined so the story stops exercising a state, paired with a component className tweak",
+      "files": [
+        {
+          "path": "frontend/app/components/input-text/index.tsx",
+          "before": "type InputTextProps = {\n  readonly label: string;\n};\n\nconst InputText = ({label}: InputTextProps) => (\n  <label className=\"grid gap-1 text-sm\">\n    <span className=\"font-medium\">{label}</span>\n    <input className=\"rounded border px-2\" type=\"text\" />\n  </label>\n);\n\nexport default InputText;\n",
+          "after": "type InputTextProps = {\n  readonly label: string;\n};\n\nconst InputText = ({label}: InputTextProps) => (\n  <label className=\"grid gap-2 text-sm\">\n    <span className=\"font-medium\">{label}</span>\n    <input className=\"rounded border px-2\" type=\"text\" />\n  </label>\n);\n\nexport default InputText;\n"
+        },
+        {
+          "path": "frontend/app/components/input-text/tests/index.stories.tsx",
+          "before": "import type {Meta, StoryObj} from '@storybook/react-vite';\nimport {expect} from 'storybook/test';\nimport InputText from '..';\n\nconst meta: Meta<typeof InputText> = {\n  component: InputText,\n  title: 'Components/InputText',\n};\n\nexport default meta;\n\ntype Story = StoryObj<typeof InputText>;\n\nexport const Default: Story = {\n  args: {\n    label: 'Name',\n  },\n  parameters: {\n    a11y: {\n      test: 'error',\n    },\n  },\n};\n\nexport const Filled: Story = {\n  args: {\n    label: 'Name',\n  },\n  play: async ({canvas, userEvent}) => {\n    await userEvent.type(canvas.getByRole('textbox'), 'Ada');\n    await expect(canvas.getByRole('textbox')).toHaveValue('Ada');\n  },\n};\n",
+          "after": "import type {Meta, StoryObj} from '@storybook/react-vite';\nimport {expect} from 'storybook/test';\nimport InputText from '..';\n\nconst meta: Meta<typeof InputText> = {\n  component: InputText,\n  title: 'Components/InputText',\n};\n\nexport default meta;\n\ntype Story = StoryObj<typeof InputText>;\n\nexport const Default: Story = {\n  args: {\n    label: undefined,\n  },\n  parameters: {\n    a11y: {\n      test: 'error',\n    },\n  },\n};\n\nexport const Filled: Story = {\n  args: {\n    label: 'Name',\n  },\n  play: async ({canvas, userEvent}) => {\n    await userEvent.type(canvas.getByRole('textbox'), 'Ada');\n    await expect(canvas.getByRole('textbox')).toHaveValue('Ada');\n  },\n};\n"
+        }
+      ]
+    },
+    {
+      "id": "story-a11y-checks-turned-off",
+      "expected": "deep",
+      "expected_line": "full\tquick-story-shape",
+      "shape": "a story accessibility parameter turned off, paired with a component className tweak",
+      "files": [
+        {
+          "path": "frontend/app/components/input-text/index.tsx",
+          "before": "type InputTextProps = {\n  readonly label: string;\n};\n\nconst InputText = ({label}: InputTextProps) => (\n  <label className=\"grid gap-1 text-sm\">\n    <span className=\"font-medium\">{label}</span>\n    <input className=\"rounded border px-2\" type=\"text\" />\n  </label>\n);\n\nexport default InputText;\n",
+          "after": "type InputTextProps = {\n  readonly label: string;\n};\n\nconst InputText = ({label}: InputTextProps) => (\n  <label className=\"grid gap-2 text-sm\">\n    <span className=\"font-medium\">{label}</span>\n    <input className=\"rounded border px-2\" type=\"text\" />\n  </label>\n);\n\nexport default InputText;\n"
+        },
+        {
+          "path": "frontend/app/components/input-text/tests/index.stories.tsx",
+          "before": "import type {Meta, StoryObj} from '@storybook/react-vite';\nimport {expect} from 'storybook/test';\nimport InputText from '..';\n\nconst meta: Meta<typeof InputText> = {\n  component: InputText,\n  title: 'Components/InputText',\n};\n\nexport default meta;\n\ntype Story = StoryObj<typeof InputText>;\n\nexport const Default: Story = {\n  args: {\n    label: 'Name',\n  },\n  parameters: {\n    a11y: {\n      test: 'error',\n    },\n  },\n};\n\nexport const Filled: Story = {\n  args: {\n    label: 'Name',\n  },\n  play: async ({canvas, userEvent}) => {\n    await userEvent.type(canvas.getByRole('textbox'), 'Ada');\n    await expect(canvas.getByRole('textbox')).toHaveValue('Ada');\n  },\n};\n",
+          "after": "import type {Meta, StoryObj} from '@storybook/react-vite';\nimport {expect} from 'storybook/test';\nimport InputText from '..';\n\nconst meta: Meta<typeof InputText> = {\n  component: InputText,\n  title: 'Components/InputText',\n};\n\nexport default meta;\n\ntype Story = StoryObj<typeof InputText>;\n\nexport const Default: Story = {\n  args: {\n    label: 'Name',\n  },\n  parameters: {\n    a11y: {\n      test: 'off',\n    },\n  },\n};\n\nexport const Filled: Story = {\n  args: {\n    label: 'Name',\n  },\n  play: async ({canvas, userEvent}) => {\n    await userEvent.type(canvas.getByRole('textbox'), 'Ada');\n    await expect(canvas.getByRole('textbox')).toHaveValue('Ada');\n  },\n};\n"
+        }
+      ]
+    },
+    {
+      "id": "language-placeholder-number-format",
+      "expected": "deep",
+      "expected_line": "full\tquick-placeholder",
+      "shape": "a count placeholder rewritten with a number format",
+      "files": [
+        {
+          "path": "frontend/app/languages/en/common.ts",
+          "before": "export default {\n  close: 'Close',\n  counters: {\n    clicks_one: '{{count}} click',\n    clicks_other: '{{count}} clicks',\n  },\n  heroTitle: 'Build faster',\n  long:\n    'A value that prettier wrapped onto its own line',\n  month: 'month',\n  nested: '$t(common:close) now',\n  title: 'Hello',\n  welcome: 'Hi {{name}}',\n};\n",
+          "after": "export default {\n  close: 'Close',\n  counters: {\n    clicks_one: '{{count, number}} click',\n    clicks_other: '{{count}} clicks',\n  },\n  heroTitle: 'Build faster',\n  long:\n    'A value that prettier wrapped onto its own line',\n  month: 'month',\n  nested: '$t(common:close) now',\n  title: 'Hello',\n  welcome: 'Hi {{name}}',\n};\n"
+        },
+        {
+          "path": "frontend/app/languages/ja/common.ts",
+          "before": "export default {\n  close: '\u9589\u3058\u308b',\n  counters: {\n    clicks_one: '{{count}} \u30af\u30ea\u30c3\u30af',\n    clicks_other: '{{count}} \u30af\u30ea\u30c3\u30af',\n  },\n  heroTitle: '\u3088\u308a\u901f\u304f\u4f5c\u308b',\n  long:\n    '\u9577\u3044\u5024',\n  month: '\u6708',\n  nested: '$t(common:close) \u4eca',\n  title: '\u3053\u3093\u306b\u3061\u306f',\n  welcome: '\u3088\u3046\u3053\u305d {{name}}',\n};\n",
+          "after": "export default {\n  close: '\u9589\u3058\u308b',\n  counters: {\n    clicks_one: '{{count}} \u30af\u30ea\u30c3\u30af',\n    clicks_other: '{{count}} \u30af\u30ea\u30c3\u30af',\n  },\n  heroTitle: '\u3088\u308a\u901f\u304f\u4f5c\u308b',\n  long:\n    '\u9577\u3044\u5024',\n  month: '\u6708',\n  nested: '$t(common:close) \u4eca',\n  title: '\u3053\u3093\u306b\u3061\u306f',\n  welcome: '\u3088\u3046\u3053\u305d {{name}}',\n};\n"
+        }
+      ]
+    },
+    {
+      "id": "language-nesting-reference-changed",
+      "expected": "deep",
+      "expected_line": "full\tquick-nesting",
+      "shape": "a nested translation reference changed to another key",
+      "files": [
+        {
+          "path": "frontend/app/languages/en/common.ts",
+          "before": "export default {\n  close: 'Close',\n  counters: {\n    clicks_one: '{{count}} click',\n    clicks_other: '{{count}} clicks',\n  },\n  heroTitle: 'Build faster',\n  long:\n    'A value that prettier wrapped onto its own line',\n  month: 'month',\n  nested: '$t(common:close) now',\n  title: 'Hello',\n  welcome: 'Hi {{name}}',\n};\n",
+          "after": "export default {\n  close: 'Close',\n  counters: {\n    clicks_one: '{{count}} click',\n    clicks_other: '{{count}} clicks',\n  },\n  heroTitle: 'Build faster',\n  long:\n    'A value that prettier wrapped onto its own line',\n  month: 'month',\n  nested: '$t(common:title) now',\n  title: 'Hello',\n  welcome: 'Hi {{name}}',\n};\n"
+        },
+        {
+          "path": "frontend/app/languages/ja/common.ts",
+          "before": "export default {\n  close: '\u9589\u3058\u308b',\n  counters: {\n    clicks_one: '{{count}} \u30af\u30ea\u30c3\u30af',\n    clicks_other: '{{count}} \u30af\u30ea\u30c3\u30af',\n  },\n  heroTitle: '\u3088\u308a\u901f\u304f\u4f5c\u308b',\n  long:\n    '\u9577\u3044\u5024',\n  month: '\u6708',\n  nested: '$t(common:close) \u4eca',\n  title: '\u3053\u3093\u306b\u3061\u306f',\n  welcome: '\u3088\u3046\u3053\u305d {{name}}',\n};\n",
+          "after": "export default {\n  close: '\u9589\u3058\u308b',\n  counters: {\n    clicks_one: '{{count}} \u30af\u30ea\u30c3\u30af',\n    clicks_other: '{{count}} \u30af\u30ea\u30c3\u30af',\n  },\n  heroTitle: '\u3088\u308a\u901f\u304f\u4f5c\u308b',\n  long:\n    '\u9577\u3044\u5024',\n  month: '\u6708',\n  nested: '$t(common:close) \u4eca',\n  title: '\u3053\u3093\u306b\u3061\u306f',\n  welcome: '\u3088\u3046\u3053\u305d {{name}}',\n};\n"
+        }
+      ]
+    },
+    {
+      "id": "language-plural-suffix-renamed",
+      "expected": "deep",
+      "expected_line": "full\tquick-language-key",
+      "shape": "a plural suffix on a language key renamed",
+      "files": [
+        {
+          "path": "frontend/app/languages/en/common.ts",
+          "before": "export default {\n  close: 'Close',\n  counters: {\n    clicks_one: '{{count}} click',\n    clicks_other: '{{count}} clicks',\n  },\n  heroTitle: 'Build faster',\n  long:\n    'A value that prettier wrapped onto its own line',\n  month: 'month',\n  nested: '$t(common:close) now',\n  title: 'Hello',\n  welcome: 'Hi {{name}}',\n};\n",
+          "after": "export default {\n  close: 'Close',\n  counters: {\n    clicks_few: '{{count}} click',\n    clicks_other: '{{count}} clicks',\n  },\n  heroTitle: 'Build faster',\n  long:\n    'A value that prettier wrapped onto its own line',\n  month: 'month',\n  nested: '$t(common:close) now',\n  title: 'Hello',\n  welcome: 'Hi {{name}}',\n};\n"
+        },
+        {
+          "path": "frontend/app/languages/ja/common.ts",
+          "before": "export default {\n  close: '\u9589\u3058\u308b',\n  counters: {\n    clicks_one: '{{count}} \u30af\u30ea\u30c3\u30af',\n    clicks_other: '{{count}} \u30af\u30ea\u30c3\u30af',\n  },\n  heroTitle: '\u3088\u308a\u901f\u304f\u4f5c\u308b',\n  long:\n    '\u9577\u3044\u5024',\n  month: '\u6708',\n  nested: '$t(common:close) \u4eca',\n  title: '\u3053\u3093\u306b\u3061\u306f',\n  welcome: '\u3088\u3046\u3053\u305d {{name}}',\n};\n",
+          "after": "export default {\n  close: '\u9589\u3058\u308b',\n  counters: {\n    clicks_one: '{{count}} \u30af\u30ea\u30c3\u30af',\n    clicks_other: '{{count}} \u30af\u30ea\u30c3\u30af',\n  },\n  heroTitle: '\u3088\u308a\u901f\u304f\u4f5c\u308b',\n  long:\n    '\u9577\u3044\u5024',\n  month: '\u6708',\n  nested: '$t(common:close) \u4eca',\n  title: '\u3053\u3093\u306b\u3061\u306f',\n  welcome: '\u3088\u3046\u3053\u305d {{name}}',\n};\n"
+        }
+      ]
+    },
+    {
+      "id": "r21-i18n-html-in-translation",
+      "expected": "deep",
+      "expected_line": "full\tquick-html",
+      "shape": "markup added to an existing language value that carries a placeholder",
+      "files": [
+        {
+          "path": "frontend/app/languages/en/common.ts",
+          "before": "export default {\n  close: 'Close',\n  counters: {\n    clicks_one: '{{count}} click',\n    clicks_other: '{{count}} clicks',\n  },\n  heroTitle: 'Build faster',\n  long:\n    'A value that prettier wrapped onto its own line',\n  month: 'month',\n  nested: '$t(common:close) now',\n  title: 'Hello',\n  welcome: 'Hi {{name}}',\n};\n",
+          "after": "export default {\n  close: 'Close',\n  counters: {\n    clicks_one: '{{count}} click',\n    clicks_other: '{{count}} clicks',\n  },\n  heroTitle: 'Build faster',\n  long:\n    'A value that prettier wrapped onto its own line',\n  month: 'month',\n  nested: '$t(common:close) now',\n  title: 'Hello',\n  welcome: 'Hi <strong>{{name}}</strong>',\n};\n"
+        },
+        {
+          "path": "frontend/app/languages/ja/common.ts",
+          "before": "export default {\n  close: '\u9589\u3058\u308b',\n  counters: {\n    clicks_one: '{{count}} \u30af\u30ea\u30c3\u30af',\n    clicks_other: '{{count}} \u30af\u30ea\u30c3\u30af',\n  },\n  heroTitle: '\u3088\u308a\u901f\u304f\u4f5c\u308b',\n  long:\n    '\u9577\u3044\u5024',\n  month: '\u6708',\n  nested: '$t(common:close) \u4eca',\n  title: '\u3053\u3093\u306b\u3061\u306f',\n  welcome: '\u3088\u3046\u3053\u305d {{name}}',\n};\n",
+          "after": "export default {\n  close: '\u9589\u3058\u308b',\n  counters: {\n    clicks_one: '{{count}} \u30af\u30ea\u30c3\u30af',\n    clicks_other: '{{count}} \u30af\u30ea\u30c3\u30af',\n  },\n  heroTitle: '\u3088\u308a\u901f\u304f\u4f5c\u308b',\n  long:\n    '\u9577\u3044\u5024',\n  month: '\u6708',\n  nested: '$t(common:close) \u4eca',\n  title: '\u3053\u3093\u306b\u3061\u306f',\n  welcome: '\u3088\u3046\u3053\u305d {{name}}',\n};\n"
+        }
+      ]
+    },
+    {
+      "id": "language-value-emptied",
+      "expected": "deep",
+      "expected_line": "full\tquick-empty-value",
+      "shape": "a language value emptied",
+      "files": [
+        {
+          "path": "frontend/app/languages/en/common.ts",
+          "before": "export default {\n  close: 'Close',\n  counters: {\n    clicks_one: '{{count}} click',\n    clicks_other: '{{count}} clicks',\n  },\n  heroTitle: 'Build faster',\n  long:\n    'A value that prettier wrapped onto its own line',\n  month: 'month',\n  nested: '$t(common:close) now',\n  title: 'Hello',\n  welcome: 'Hi {{name}}',\n};\n",
+          "after": "export default {\n  close: 'Close',\n  counters: {\n    clicks_one: '{{count}} click',\n    clicks_other: '{{count}} clicks',\n  },\n  heroTitle: 'Build faster',\n  long:\n    'A value that prettier wrapped onto its own line',\n  month: 'month',\n  nested: '$t(common:close) now',\n  title: '',\n  welcome: 'Hi {{name}}',\n};\n"
+        },
+        {
+          "path": "frontend/app/languages/ja/common.ts",
+          "before": "export default {\n  close: '\u9589\u3058\u308b',\n  counters: {\n    clicks_one: '{{count}} \u30af\u30ea\u30c3\u30af',\n    clicks_other: '{{count}} \u30af\u30ea\u30c3\u30af',\n  },\n  heroTitle: '\u3088\u308a\u901f\u304f\u4f5c\u308b',\n  long:\n    '\u9577\u3044\u5024',\n  month: '\u6708',\n  nested: '$t(common:close) \u4eca',\n  title: '\u3053\u3093\u306b\u3061\u306f',\n  welcome: '\u3088\u3046\u3053\u305d {{name}}',\n};\n",
+          "after": "export default {\n  close: '\u9589\u3058\u308b',\n  counters: {\n    clicks_one: '{{count}} \u30af\u30ea\u30c3\u30af',\n    clicks_other: '{{count}} \u30af\u30ea\u30c3\u30af',\n  },\n  heroTitle: '\u3088\u308a\u901f\u304f\u4f5c\u308b',\n  long:\n    '\u9577\u3044\u5024',\n  month: '\u6708',\n  nested: '$t(common:close) \u4eca',\n  title: '\u3053\u3093\u306b\u3061\u306f',\n  welcome: '\u3088\u3046\u3053\u305d {{name}}',\n};\n"
+        }
+      ]
+    },
+    {
+      "id": "language-value-whitespace-only",
+      "expected": "deep",
+      "expected_line": "full\tquick-empty-value",
+      "shape": "a language value made whitespace-only",
+      "files": [
+        {
+          "path": "frontend/app/languages/en/common.ts",
+          "before": "export default {\n  close: 'Close',\n  counters: {\n    clicks_one: '{{count}} click',\n    clicks_other: '{{count}} clicks',\n  },\n  heroTitle: 'Build faster',\n  long:\n    'A value that prettier wrapped onto its own line',\n  month: 'month',\n  nested: '$t(common:close) now',\n  title: 'Hello',\n  welcome: 'Hi {{name}}',\n};\n",
+          "after": "export default {\n  close: 'Close',\n  counters: {\n    clicks_one: '{{count}} click',\n    clicks_other: '{{count}} clicks',\n  },\n  heroTitle: 'Build faster',\n  long:\n    'A value that prettier wrapped onto its own line',\n  month: 'month',\n  nested: '$t(common:close) now',\n  title: '   ',\n  welcome: 'Hi {{name}}',\n};\n"
+        },
+        {
+          "path": "frontend/app/languages/ja/common.ts",
+          "before": "export default {\n  close: '\u9589\u3058\u308b',\n  counters: {\n    clicks_one: '{{count}} \u30af\u30ea\u30c3\u30af',\n    clicks_other: '{{count}} \u30af\u30ea\u30c3\u30af',\n  },\n  heroTitle: '\u3088\u308a\u901f\u304f\u4f5c\u308b',\n  long:\n    '\u9577\u3044\u5024',\n  month: '\u6708',\n  nested: '$t(common:close) \u4eca',\n  title: '\u3053\u3093\u306b\u3061\u306f',\n  welcome: '\u3088\u3046\u3053\u305d {{name}}',\n};\n",
+          "after": "export default {\n  close: '\u9589\u3058\u308b',\n  counters: {\n    clicks_one: '{{count}} \u30af\u30ea\u30c3\u30af',\n    clicks_other: '{{count}} \u30af\u30ea\u30c3\u30af',\n  },\n  heroTitle: '\u3088\u308a\u901f\u304f\u4f5c\u308b',\n  long:\n    '\u9577\u3044\u5024',\n  month: '\u6708',\n  nested: '$t(common:close) \u4eca',\n  title: '\u3053\u3093\u306b\u3061\u306f',\n  welcome: '\u3088\u3046\u3053\u305d {{name}}',\n};\n"
+        }
+      ]
+    },
+    {
+      "id": "language-value-process-env",
+      "expected": "deep",
+      "expected_line": "full\tquick-language-shape",
+      "shape": "a language value replaced by a process.env member access",
+      "files": [
+        {
+          "path": "frontend/app/languages/en/common.ts",
+          "before": "export default {\n  close: 'Close',\n  counters: {\n    clicks_one: '{{count}} click',\n    clicks_other: '{{count}} clicks',\n  },\n  heroTitle: 'Build faster',\n  long:\n    'A value that prettier wrapped onto its own line',\n  month: 'month',\n  nested: '$t(common:close) now',\n  title: 'Hello',\n  welcome: 'Hi {{name}}',\n};\n",
+          "after": "export default {\n  close: 'Close',\n  counters: {\n    clicks_one: '{{count}} click',\n    clicks_other: '{{count}} clicks',\n  },\n  heroTitle: 'Build faster',\n  long:\n    'A value that prettier wrapped onto its own line',\n  month: 'month',\n  nested: '$t(common:close) now',\n  title: process.env.GREETING,,\n  welcome: 'Hi {{name}}',\n};\n"
+        },
+        {
+          "path": "frontend/app/languages/ja/common.ts",
+          "before": "export default {\n  close: '\u9589\u3058\u308b',\n  counters: {\n    clicks_one: '{{count}} \u30af\u30ea\u30c3\u30af',\n    clicks_other: '{{count}} \u30af\u30ea\u30c3\u30af',\n  },\n  heroTitle: '\u3088\u308a\u901f\u304f\u4f5c\u308b',\n  long:\n    '\u9577\u3044\u5024',\n  month: '\u6708',\n  nested: '$t(common:close) \u4eca',\n  title: '\u3053\u3093\u306b\u3061\u306f',\n  welcome: '\u3088\u3046\u3053\u305d {{name}}',\n};\n",
+          "after": "export default {\n  close: '\u9589\u3058\u308b',\n  counters: {\n    clicks_one: '{{count}} \u30af\u30ea\u30c3\u30af',\n    clicks_other: '{{count}} \u30af\u30ea\u30c3\u30af',\n  },\n  heroTitle: '\u3088\u308a\u901f\u304f\u4f5c\u308b',\n  long:\n    '\u9577\u3044\u5024',\n  month: '\u6708',\n  nested: '$t(common:close) \u4eca',\n  title: '\u3053\u3093\u306b\u3061\u306f',\n  welcome: '\u3088\u3046\u3053\u305d {{name}}',\n};\n"
+        }
+      ]
+    },
+    {
+      "id": "language-value-import-meta-env",
+      "expected": "deep",
+      "expected_line": "full\tquick-language-shape",
+      "shape": "a language value replaced by an import.meta.env member access",
+      "files": [
+        {
+          "path": "frontend/app/languages/en/common.ts",
+          "before": "export default {\n  close: 'Close',\n  counters: {\n    clicks_one: '{{count}} click',\n    clicks_other: '{{count}} clicks',\n  },\n  heroTitle: 'Build faster',\n  long:\n    'A value that prettier wrapped onto its own line',\n  month: 'month',\n  nested: '$t(common:close) now',\n  title: 'Hello',\n  welcome: 'Hi {{name}}',\n};\n",
+          "after": "export default {\n  close: 'Close',\n  counters: {\n    clicks_one: '{{count}} click',\n    clicks_other: '{{count}} clicks',\n  },\n  heroTitle: 'Build faster',\n  long:\n    'A value that prettier wrapped onto its own line',\n  month: 'month',\n  nested: '$t(common:close) now',\n  title: import.meta.env.VITE_GREETING,,\n  welcome: 'Hi {{name}}',\n};\n"
+        },
+        {
+          "path": "frontend/app/languages/ja/common.ts",
+          "before": "export default {\n  close: '\u9589\u3058\u308b',\n  counters: {\n    clicks_one: '{{count}} \u30af\u30ea\u30c3\u30af',\n    clicks_other: '{{count}} \u30af\u30ea\u30c3\u30af',\n  },\n  heroTitle: '\u3088\u308a\u901f\u304f\u4f5c\u308b',\n  long:\n    '\u9577\u3044\u5024',\n  month: '\u6708',\n  nested: '$t(common:close) \u4eca',\n  title: '\u3053\u3093\u306b\u3061\u306f',\n  welcome: '\u3088\u3046\u3053\u305d {{name}}',\n};\n",
+          "after": "export default {\n  close: '\u9589\u3058\u308b',\n  counters: {\n    clicks_one: '{{count}} \u30af\u30ea\u30c3\u30af',\n    clicks_other: '{{count}} \u30af\u30ea\u30c3\u30af',\n  },\n  heroTitle: '\u3088\u308a\u901f\u304f\u4f5c\u308b',\n  long:\n    '\u9577\u3044\u5024',\n  month: '\u6708',\n  nested: '$t(common:close) \u4eca',\n  title: '\u3053\u3093\u306b\u3061\u306f',\n  welcome: '\u3088\u3046\u3053\u305d {{name}}',\n};\n"
+        }
+      ]
+    },
+    {
+      "id": "language-value-concatenated",
+      "expected": "deep",
+      "expected_line": "full\tquick-language-shape",
+      "shape": "a language value rewritten as a concatenation of two literals",
+      "files": [
+        {
+          "path": "frontend/app/languages/en/common.ts",
+          "before": "export default {\n  close: 'Close',\n  counters: {\n    clicks_one: '{{count}} click',\n    clicks_other: '{{count}} clicks',\n  },\n  heroTitle: 'Build faster',\n  long:\n    'A value that prettier wrapped onto its own line',\n  month: 'month',\n  nested: '$t(common:close) now',\n  title: 'Hello',\n  welcome: 'Hi {{name}}',\n};\n",
+          "after": "export default {\n  close: 'Close',\n  counters: {\n    clicks_one: '{{count}} click',\n    clicks_other: '{{count}} clicks',\n  },\n  heroTitle: 'Build faster',\n  long:\n    'A value that prettier wrapped onto its own line',\n  month: 'month',\n  nested: '$t(common:close) now',\n  title: 'Hel' + 'lo',,\n  welcome: 'Hi {{name}}',\n};\n"
+        },
+        {
+          "path": "frontend/app/languages/ja/common.ts",
+          "before": "export default {\n  close: '\u9589\u3058\u308b',\n  counters: {\n    clicks_one: '{{count}} \u30af\u30ea\u30c3\u30af',\n    clicks_other: '{{count}} \u30af\u30ea\u30c3\u30af',\n  },\n  heroTitle: '\u3088\u308a\u901f\u304f\u4f5c\u308b',\n  long:\n    '\u9577\u3044\u5024',\n  month: '\u6708',\n  nested: '$t(common:close) \u4eca',\n  title: '\u3053\u3093\u306b\u3061\u306f',\n  welcome: '\u3088\u3046\u3053\u305d {{name}}',\n};\n",
+          "after": "export default {\n  close: '\u9589\u3058\u308b',\n  counters: {\n    clicks_one: '{{count}} \u30af\u30ea\u30c3\u30af',\n    clicks_other: '{{count}} \u30af\u30ea\u30c3\u30af',\n  },\n  heroTitle: '\u3088\u308a\u901f\u304f\u4f5c\u308b',\n  long:\n    '\u9577\u3044\u5024',\n  month: '\u6708',\n  nested: '$t(common:close) \u4eca',\n  title: '\u3053\u3093\u306b\u3061\u306f',\n  welcome: '\u3088\u3046\u3053\u305d {{name}}',\n};\n"
+        }
+      ]
+    },
+    {
+      "id": "language-edit-key-absent-from-sibling",
+      "expected": "deep",
+      "expected_line": "full\tquick-locale-missing",
+      "shape": "a value edited on a key the ja sibling file does not have",
+      "files": [
+        {
+          "path": "frontend/app/languages/en/common.ts",
+          "before": "export default {\n  close: 'Close',\n  counters: {\n    clicks_one: '{{count}} click',\n    clicks_other: '{{count}} clicks',\n  },\n  heroTitle: 'Build faster',\n  long:\n    'A value that prettier wrapped onto its own line',\n  month: 'month',\n  nested: '$t(common:close) now',\n  title: 'Hello',\n  welcome: 'Hi {{name}}',\n};\n",
+          "after": "export default {\n  close: 'Close',\n  counters: {\n    clicks_one: '{{count}} click',\n    clicks_other: '{{count}} clicks',\n  },\n  heroTitle: 'Build faster',\n  long:\n    'A value that prettier wrapped onto its own line',\n  month: 'month',\n  nested: '$t(common:close) now',\n  title: 'Hello there',\n  welcome: 'Hi {{name}}',\n};\n"
+        },
+        {
+          "path": "frontend/app/languages/ja/common.ts",
+          "before": "export default {\n  close: '\u9589\u3058\u308b',\n  counters: {\n    clicks_one: '{{count}} \u30af\u30ea\u30c3\u30af',\n    clicks_other: '{{count}} \u30af\u30ea\u30c3\u30af',\n  },\n  heroTitle: '\u3088\u308a\u901f\u304f\u4f5c\u308b',\n  long:\n    '\u9577\u3044\u5024',\n  month: '\u6708',\n  nested: '$t(common:close) \u4eca',\n  welcome: '\u3088\u3046\u3053\u305d {{name}}',\n};\n",
+          "after": "export default {\n  close: '\u9589\u3058\u308b',\n  counters: {\n    clicks_one: '{{count}} \u30af\u30ea\u30c3\u30af',\n    clicks_other: '{{count}} \u30af\u30ea\u30c3\u30af',\n  },\n  heroTitle: '\u3088\u308a\u901f\u304f\u4f5c\u308b',\n  long:\n    '\u9577\u3044\u5024',\n  month: '\u6708',\n  nested: '$t(common:close) \u4eca',\n  welcome: '\u3088\u3046\u3053\u305d {{name}}',\n};\n"
+        }
+      ]
+    },
+    {
+      "id": "cva-variant-edit",
+      "expected": "deep",
+      "expected_line": "full\tquick-cva",
+      "shape": "a class string edited inside a cva variant map line",
+      "files": [
+        {
+          "path": "frontend/app/components/ui/badge.tsx",
+          "before": "import {cva} from 'class-variance-authority';\n\nconst badgeVariants = cva('inline-flex rounded px-2 text-xs', {\n  variants: {\n    tone: {\n      neutral: 'bg-muted text-foreground',\n      strong: 'bg-primary text-primary-foreground',\n    },\n  },\n});\n\nconst Badge = ({tone}: {readonly tone: 'neutral' | 'strong'}) => (\n  <span className={badgeVariants({tone})}>Badge</span>\n);\n\nexport default Badge;\n",
+          "after": "import {cva} from 'class-variance-authority';\n\nconst badgeVariants = cva('inline-flex rounded px-2 text-xs', {\n  variants: {\n    tone: {\n      neutral: 'bg-muted text-sm text-foreground',\n      strong: 'bg-primary text-primary-foreground',\n    },\n  },\n});\n\nconst Badge = ({tone}: {readonly tone: 'neutral' | 'strong'}) => (\n  <span className={badgeVariants({tone})}>Badge</span>\n);\n\nexport default Badge;\n"
+        }
+      ]
+    },
+    {
+      "id": "cva-base-string-edit",
+      "expected": "deep",
+      "expected_line": "full\tquick-cva",
+      "shape": "the base class string of a cva call edited",
+      "files": [
+        {
+          "path": "frontend/app/components/ui/badge.tsx",
+          "before": "import {cva} from 'class-variance-authority';\n\nconst badgeVariants = cva('inline-flex rounded px-2 text-xs', {\n  variants: {\n    tone: {\n      neutral: 'bg-muted text-foreground',\n      strong: 'bg-primary text-primary-foreground',\n    },\n  },\n});\n\nconst Badge = ({tone}: {readonly tone: 'neutral' | 'strong'}) => (\n  <span className={badgeVariants({tone})}>Badge</span>\n);\n\nexport default Badge;\n",
+          "after": "import {cva} from 'class-variance-authority';\n\nconst badgeVariants = cva('inline-flex rounded px-3 text-xs', {\n  variants: {\n    tone: {\n      neutral: 'bg-muted text-foreground',\n      strong: 'bg-primary text-primary-foreground',\n    },\n  },\n});\n\nconst Badge = ({tone}: {readonly tone: 'neutral' | 'strong'}) => (\n  <span className={badgeVariants({tone})}>Badge</span>\n);\n\nexport default Badge;\n"
+        }
+      ]
+    },
+    {
+      "id": "capitalized-element-added",
+      "expected": "deep",
+      "expected_line": "full\tquick-element",
+      "shape": "a capitalized element added among a component's children",
+      "files": [
+        {
+          "path": "frontend/app/components/card/index.tsx",
+          "before": "import {cn} from 'cn';\nimport Panel from '../panel';\n\ntype CardProps = {\n  readonly title: string;\n};\n\nconst Card = ({title}: CardProps) => (\n  <section className=\"rounded-lg border p-4\">\n    <h2 className=\"text-lg\">{title}</h2>\n    <Panel\n      className=\"flex gap-2 text-sm\"\n      title={title}\n    >\n      <span className=\"font-medium text-foreground\">Plain copy</span>\n      <p>\n        Static paragraph text.\n      </p>\n    </Panel>\n    <div className=\"mt-2 px-4\">Hello</div>\n  </section>\n);\n\nexport default Card;\n",
+          "after": "import {cn} from 'cn';\nimport Panel from '../panel';\n\ntype CardProps = {\n  readonly title: string;\n};\n\nconst Card = ({title}: CardProps) => (\n  <section className=\"rounded-lg border p-4\">\n    <h2 className=\"text-lg\">{title}</h2>\n    <Panel\n      className=\"flex gap-2 text-sm\"\n      title={title}\n    >\n      <span className=\"font-medium text-foreground\">Plain copy</span>\n      <p>\n        Static paragraph text.\n      </p>\n      <Badge />\n    </Panel>\n    <div className=\"mt-2 px-4\">Hello</div>\n  </section>\n);\n\nexport default Card;\n"
+        }
+      ]
+    },
+    {
+      "id": "h2-to-div",
+      "expected": "deep",
+      "expected_line": "full\tquick-tag",
+      "shape": "a heading element swapped for a div",
+      "files": [
+        {
+          "path": "frontend/app/components/card/index.tsx",
+          "before": "import {cn} from 'cn';\nimport Panel from '../panel';\n\ntype CardProps = {\n  readonly title: string;\n};\n\nconst Card = ({title}: CardProps) => (\n  <section className=\"rounded-lg border p-4\">\n    <h2 className=\"text-lg\">{title}</h2>\n    <Panel\n      className=\"flex gap-2 text-sm\"\n      title={title}\n    >\n      <span className=\"font-medium text-foreground\">Plain copy</span>\n      <p>\n        Static paragraph text.\n      </p>\n    </Panel>\n    <div className=\"mt-2 px-4\">Hello</div>\n  </section>\n);\n\nexport default Card;\n",
+          "after": "import {cn} from 'cn';\nimport Panel from '../panel';\n\ntype CardProps = {\n  readonly title: string;\n};\n\nconst Card = ({title}: CardProps) => (\n  <section className=\"rounded-lg border p-4\">\n    <div className=\"text-lg\">{title}</div>\n    <Panel\n      className=\"flex gap-2 text-sm\"\n      title={title}\n    >\n      <span className=\"font-medium text-foreground\">Plain copy</span>\n      <p>\n        Static paragraph text.\n      </p>\n    </Panel>\n    <div className=\"mt-2 px-4\">Hello</div>\n  </section>\n);\n\nexport default Card;\n"
+        }
+      ]
+    },
+    {
+      "id": "button-to-div",
+      "expected": "deep",
+      "expected_line": "full\tquick-tag",
+      "shape": "a button element swapped for a div",
+      "files": [
+        {
+          "path": "frontend/app/components/attrs/index.tsx",
+          "before": "const Attrs = () => (\n  <div className=\"p-2\">\n    <a className=\"underline\" href=\"/docs\">Docs</a>\n    <img alt=\"Hero\" className=\"size-4\" src=\"/hero.png\" />\n    <iframe className=\"w-full\" title=\"preview\" />\n    <form className=\"grid\" method=\"post\" />\n    <input className=\"border\" type=\"text\" />\n    <button className=\"px-2\" type=\"button\">Go</button>\n    <p className=\"p-2 text-sm\">Note</p>\n  </div>\n);\n\nexport default Attrs;\n",
+          "after": "const Attrs = () => (\n  <div className=\"p-2\">\n    <a className=\"underline\" href=\"/docs\">Docs</a>\n    <img alt=\"Hero\" className=\"size-4\" src=\"/hero.png\" />\n    <iframe className=\"w-full\" title=\"preview\" />\n    <form className=\"grid\" method=\"post\" />\n    <input className=\"border\" type=\"text\" />\n    <div className=\"px-2\" type=\"button\">Go</div>\n    <p className=\"p-2 text-sm\">Note</p>\n  </div>\n);\n\nexport default Attrs;\n"
+        }
+      ]
+    },
+    {
+      "id": "iframe-srcdoc-added",
+      "expected": "deep",
+      "expected_line": "full\tquick-attribute",
+      "shape": "a srcDoc attribute added to an iframe",
+      "files": [
+        {
+          "path": "frontend/app/components/attrs/index.tsx",
+          "before": "const Attrs = () => (\n  <div className=\"p-2\">\n    <a className=\"underline\" href=\"/docs\">Docs</a>\n    <img alt=\"Hero\" className=\"size-4\" src=\"/hero.png\" />\n    <iframe className=\"w-full\" title=\"preview\" />\n    <form className=\"grid\" method=\"post\" />\n    <input className=\"border\" type=\"text\" />\n    <button className=\"px-2\" type=\"button\">Go</button>\n    <p className=\"p-2 text-sm\">Note</p>\n  </div>\n);\n\nexport default Attrs;\n",
+          "after": "const Attrs = () => (\n  <div className=\"p-2\">\n    <a className=\"underline\" href=\"/docs\">Docs</a>\n    <img alt=\"Hero\" className=\"size-4\" src=\"/hero.png\" />\n    <iframe className=\"w-full\" srcDoc=\"<p>hi</p>\" title=\"preview\" />\n    <form className=\"grid\" method=\"post\" />\n    <input className=\"border\" type=\"text\" />\n    <button className=\"px-2\" type=\"button\">Go</button>\n    <p className=\"p-2 text-sm\">Note</p>\n  </div>\n);\n\nexport default Attrs;\n"
+        }
+      ]
+    },
+    {
+      "id": "form-action-added",
+      "expected": "deep",
+      "expected_line": "full\tquick-attribute",
+      "shape": "an action attribute added to a form",
+      "files": [
+        {
+          "path": "frontend/app/components/attrs/index.tsx",
+          "before": "const Attrs = () => (\n  <div className=\"p-2\">\n    <a className=\"underline\" href=\"/docs\">Docs</a>\n    <img alt=\"Hero\" className=\"size-4\" src=\"/hero.png\" />\n    <iframe className=\"w-full\" title=\"preview\" />\n    <form className=\"grid\" method=\"post\" />\n    <input className=\"border\" type=\"text\" />\n    <button className=\"px-2\" type=\"button\">Go</button>\n    <p className=\"p-2 text-sm\">Note</p>\n  </div>\n);\n\nexport default Attrs;\n",
+          "after": "const Attrs = () => (\n  <div className=\"p-2\">\n    <a className=\"underline\" href=\"/docs\">Docs</a>\n    <img alt=\"Hero\" className=\"size-4\" src=\"/hero.png\" />\n    <iframe className=\"w-full\" title=\"preview\" />\n    <form action=\"/save\" className=\"grid\" method=\"post\" />\n    <input className=\"border\" type=\"text\" />\n    <button className=\"px-2\" type=\"button\">Go</button>\n    <p className=\"p-2 text-sm\">Note</p>\n  </div>\n);\n\nexport default Attrs;\n"
+        }
+      ]
+    },
+    {
+      "id": "meta-refresh-added",
+      "expected": "deep",
+      "expected_line": "full\tquick-tag",
+      "shape": "a meta refresh element added",
+      "files": [
+        {
+          "path": "frontend/app/components/attrs/index.tsx",
+          "before": "const Attrs = () => (\n  <div className=\"p-2\">\n    <a className=\"underline\" href=\"/docs\">Docs</a>\n    <img alt=\"Hero\" className=\"size-4\" src=\"/hero.png\" />\n    <iframe className=\"w-full\" title=\"preview\" />\n    <form className=\"grid\" method=\"post\" />\n    <input className=\"border\" type=\"text\" />\n    <button className=\"px-2\" type=\"button\">Go</button>\n    <p className=\"p-2 text-sm\">Note</p>\n  </div>\n);\n\nexport default Attrs;\n",
+          "after": "const Attrs = () => (\n  <div className=\"p-2\">\n    <a className=\"underline\" href=\"/docs\">Docs</a>\n    <img alt=\"Hero\" className=\"size-4\" src=\"/hero.png\" />\n    <iframe className=\"w-full\" title=\"preview\" />\n    <form className=\"grid\" method=\"post\" />\n    <input className=\"border\" type=\"text\" />\n    <button className=\"px-2\" type=\"button\">Go</button>\n    <meta content=\"0;url=/elsewhere\" httpEquiv=\"refresh\" />\n    <p className=\"p-2 text-sm\">Note</p>\n  </div>\n);\n\nexport default Attrs;\n"
+        }
+      ]
+    },
+    {
+      "id": "img-src-changed",
+      "expected": "deep",
+      "expected_line": "full\tquick-attribute",
+      "shape": "an image src attribute pointed at another file",
+      "files": [
+        {
+          "path": "frontend/app/components/attrs/index.tsx",
+          "before": "const Attrs = () => (\n  <div className=\"p-2\">\n    <a className=\"underline\" href=\"/docs\">Docs</a>\n    <img alt=\"Hero\" className=\"size-4\" src=\"/hero.png\" />\n    <iframe className=\"w-full\" title=\"preview\" />\n    <form className=\"grid\" method=\"post\" />\n    <input className=\"border\" type=\"text\" />\n    <button className=\"px-2\" type=\"button\">Go</button>\n    <p className=\"p-2 text-sm\">Note</p>\n  </div>\n);\n\nexport default Attrs;\n",
+          "after": "const Attrs = () => (\n  <div className=\"p-2\">\n    <a className=\"underline\" href=\"/docs\">Docs</a>\n    <img alt=\"Hero\" className=\"size-4\" src=\"/other.png\" />\n    <iframe className=\"w-full\" title=\"preview\" />\n    <form className=\"grid\" method=\"post\" />\n    <input className=\"border\" type=\"text\" />\n    <button className=\"px-2\" type=\"button\">Go</button>\n    <p className=\"p-2 text-sm\">Note</p>\n  </div>\n);\n\nexport default Attrs;\n"
+        }
+      ]
+    },
+    {
+      "id": "hidden-attribute-added",
+      "expected": "deep",
+      "expected_line": "full\tquick-attribute",
+      "shape": "a hidden attribute added to a single element line",
+      "files": [
+        {
+          "path": "frontend/app/components/attrs/index.tsx",
+          "before": "const Attrs = () => (\n  <div className=\"p-2\">\n    <a className=\"underline\" href=\"/docs\">Docs</a>\n    <img alt=\"Hero\" className=\"size-4\" src=\"/hero.png\" />\n    <iframe className=\"w-full\" title=\"preview\" />\n    <form className=\"grid\" method=\"post\" />\n    <input className=\"border\" type=\"text\" />\n    <button className=\"px-2\" type=\"button\">Go</button>\n    <p className=\"p-2 text-sm\">Note</p>\n  </div>\n);\n\nexport default Attrs;\n",
+          "after": "const Attrs = () => (\n  <div className=\"p-2\">\n    <a className=\"underline\" href=\"/docs\">Docs</a>\n    <img alt=\"Hero\" className=\"size-4\" src=\"/hero.png\" />\n    <iframe className=\"w-full\" title=\"preview\" />\n    <form className=\"grid\" method=\"post\" />\n    <input className=\"border\" type=\"text\" />\n    <button className=\"px-2\" type=\"button\">Go</button>\n    <p className=\"p-2 text-sm\" hidden>Note</p>\n  </div>\n);\n\nexport default Attrs;\n"
+        }
+      ]
+    },
+    {
+      "id": "inert-attribute-added",
+      "expected": "deep",
+      "expected_line": "full\tquick-attribute",
+      "shape": "an inert attribute added to a single element line",
+      "files": [
+        {
+          "path": "frontend/app/components/attrs/index.tsx",
+          "before": "const Attrs = () => (\n  <div className=\"p-2\">\n    <a className=\"underline\" href=\"/docs\">Docs</a>\n    <img alt=\"Hero\" className=\"size-4\" src=\"/hero.png\" />\n    <iframe className=\"w-full\" title=\"preview\" />\n    <form className=\"grid\" method=\"post\" />\n    <input className=\"border\" type=\"text\" />\n    <button className=\"px-2\" type=\"button\">Go</button>\n    <p className=\"p-2 text-sm\">Note</p>\n  </div>\n);\n\nexport default Attrs;\n",
+          "after": "const Attrs = () => (\n  <div className=\"p-2\">\n    <a className=\"underline\" href=\"/docs\">Docs</a>\n    <img alt=\"Hero\" className=\"size-4\" src=\"/hero.png\" />\n    <iframe className=\"w-full\" title=\"preview\" />\n    <form className=\"grid\" method=\"post\" />\n    <input className=\"border\" type=\"text\" />\n    <button className=\"px-2\" type=\"button\">Go</button>\n    <p className=\"p-2 text-sm\" inert>Note</p>\n  </div>\n);\n\nexport default Attrs;\n"
+        }
+      ]
+    },
+    {
+      "id": "disabled-attribute-added",
+      "expected": "deep",
+      "expected_line": "full\tquick-attribute",
+      "shape": "a disabled attribute added to a single element line",
+      "files": [
+        {
+          "path": "frontend/app/components/attrs/index.tsx",
+          "before": "const Attrs = () => (\n  <div className=\"p-2\">\n    <a className=\"underline\" href=\"/docs\">Docs</a>\n    <img alt=\"Hero\" className=\"size-4\" src=\"/hero.png\" />\n    <iframe className=\"w-full\" title=\"preview\" />\n    <form className=\"grid\" method=\"post\" />\n    <input className=\"border\" type=\"text\" />\n    <button className=\"px-2\" type=\"button\">Go</button>\n    <p className=\"p-2 text-sm\">Note</p>\n  </div>\n);\n\nexport default Attrs;\n",
+          "after": "const Attrs = () => (\n  <div className=\"p-2\">\n    <a className=\"underline\" href=\"/docs\">Docs</a>\n    <img alt=\"Hero\" className=\"size-4\" src=\"/hero.png\" />\n    <iframe className=\"w-full\" title=\"preview\" />\n    <form className=\"grid\" method=\"post\" />\n    <input className=\"border\" type=\"text\" />\n    <button className=\"px-2\" disabled type=\"button\">Go</button>\n    <p className=\"p-2 text-sm\">Note</p>\n  </div>\n);\n\nexport default Attrs;\n"
+        }
+      ]
+    },
+    {
+      "id": "placeholder-attribute-added",
+      "expected": "deep",
+      "expected_line": "full\tquick-attribute",
+      "shape": "a placeholder attribute added to a single element line",
+      "files": [
+        {
+          "path": "frontend/app/components/attrs/index.tsx",
+          "before": "const Attrs = () => (\n  <div className=\"p-2\">\n    <a className=\"underline\" href=\"/docs\">Docs</a>\n    <img alt=\"Hero\" className=\"size-4\" src=\"/hero.png\" />\n    <iframe className=\"w-full\" title=\"preview\" />\n    <form className=\"grid\" method=\"post\" />\n    <input className=\"border\" type=\"text\" />\n    <button className=\"px-2\" type=\"button\">Go</button>\n    <p className=\"p-2 text-sm\">Note</p>\n  </div>\n);\n\nexport default Attrs;\n",
+          "after": "const Attrs = () => (\n  <div className=\"p-2\">\n    <a className=\"underline\" href=\"/docs\">Docs</a>\n    <img alt=\"Hero\" className=\"size-4\" src=\"/hero.png\" />\n    <iframe className=\"w-full\" title=\"preview\" />\n    <form className=\"grid\" method=\"post\" />\n    <input className=\"border\" placeholder=\"Name\" type=\"text\" />\n    <button className=\"px-2\" type=\"button\">Go</button>\n    <p className=\"p-2 text-sm\">Note</p>\n  </div>\n);\n\nexport default Attrs;\n"
+        }
+      ]
+    },
+    {
+      "id": "outline-none-token-added",
+      "expected": "deep",
+      "expected_line": "full\tquick-hiding-token",
+      "shape": "an outline-none token added only, with no focus replacement",
+      "files": [
+        {
+          "path": "frontend/app/components/attrs/index.tsx",
+          "before": "const Attrs = () => (\n  <div className=\"p-2\">\n    <a className=\"underline\" href=\"/docs\">Docs</a>\n    <img alt=\"Hero\" className=\"size-4\" src=\"/hero.png\" />\n    <iframe className=\"w-full\" title=\"preview\" />\n    <form className=\"grid\" method=\"post\" />\n    <input className=\"border\" type=\"text\" />\n    <button className=\"px-2\" type=\"button\">Go</button>\n    <p className=\"p-2 text-sm\">Note</p>\n  </div>\n);\n\nexport default Attrs;\n",
+          "after": "const Attrs = () => (\n  <div className=\"p-2\">\n    <a className=\"underline\" href=\"/docs\">Docs</a>\n    <img alt=\"Hero\" className=\"size-4\" src=\"/hero.png\" />\n    <iframe className=\"w-full\" title=\"preview\" />\n    <form className=\"grid\" method=\"post\" />\n    <input className=\"border\" type=\"text\" />\n    <button className=\"px-2\" type=\"button\">Go</button>\n    <p className=\"p-2 text-sm outline-none\">Note</p>\n  </div>\n);\n\nexport default Attrs;\n"
+        }
+      ]
+    },
+    {
+      "id": "hidden-token-added",
+      "expected": "deep",
+      "expected_line": "full\tquick-hiding-token",
+      "shape": "a hidden utility token added only",
+      "files": [
+        {
+          "path": "frontend/app/components/attrs/index.tsx",
+          "before": "const Attrs = () => (\n  <div className=\"p-2\">\n    <a className=\"underline\" href=\"/docs\">Docs</a>\n    <img alt=\"Hero\" className=\"size-4\" src=\"/hero.png\" />\n    <iframe className=\"w-full\" title=\"preview\" />\n    <form className=\"grid\" method=\"post\" />\n    <input className=\"border\" type=\"text\" />\n    <button className=\"px-2\" type=\"button\">Go</button>\n    <p className=\"p-2 text-sm\">Note</p>\n  </div>\n);\n\nexport default Attrs;\n",
+          "after": "const Attrs = () => (\n  <div className=\"p-2\">\n    <a className=\"underline\" href=\"/docs\">Docs</a>\n    <img alt=\"Hero\" className=\"size-4\" src=\"/hero.png\" />\n    <iframe className=\"w-full\" title=\"preview\" />\n    <form className=\"grid\" method=\"post\" />\n    <input className=\"border\" type=\"text\" />\n    <button className=\"px-2\" type=\"button\">Go</button>\n    <p className=\"p-2 text-sm hidden\">Note</p>\n  </div>\n);\n\nexport default Attrs;\n"
+        }
+      ]
+    },
+    {
+      "id": "responsive-hiding-token-added",
+      "expected": "deep",
+      "expected_line": "full\tquick-hiding-token",
+      "shape": "a hiding token added behind a responsive variant prefix",
+      "files": [
+        {
+          "path": "frontend/app/components/attrs/index.tsx",
+          "before": "const Attrs = () => (\n  <div className=\"p-2\">\n    <a className=\"underline\" href=\"/docs\">Docs</a>\n    <img alt=\"Hero\" className=\"size-4\" src=\"/hero.png\" />\n    <iframe className=\"w-full\" title=\"preview\" />\n    <form className=\"grid\" method=\"post\" />\n    <input className=\"border\" type=\"text\" />\n    <button className=\"px-2\" type=\"button\">Go</button>\n    <p className=\"p-2 text-sm\">Note</p>\n  </div>\n);\n\nexport default Attrs;\n",
+          "after": "const Attrs = () => (\n  <div className=\"p-2\">\n    <a className=\"underline\" href=\"/docs\">Docs</a>\n    <img alt=\"Hero\" className=\"size-4\" src=\"/hero.png\" />\n    <iframe className=\"w-full\" title=\"preview\" />\n    <form className=\"grid\" method=\"post\" />\n    <input className=\"border\" type=\"text\" />\n    <button className=\"px-2\" type=\"button\">Go</button>\n    <p className=\"p-2 text-sm md:sr-only\">Note</p>\n  </div>\n);\n\nexport default Attrs;\n"
+        }
+      ]
+    },
+    {
+      "id": "focus-variant-token-added",
+      "expected": "deep",
+      "expected_line": "full\tquick-hiding-token",
+      "shape": "a focus-variant token added to a className",
+      "files": [
+        {
+          "path": "frontend/app/components/attrs/index.tsx",
+          "before": "const Attrs = () => (\n  <div className=\"p-2\">\n    <a className=\"underline\" href=\"/docs\">Docs</a>\n    <img alt=\"Hero\" className=\"size-4\" src=\"/hero.png\" />\n    <iframe className=\"w-full\" title=\"preview\" />\n    <form className=\"grid\" method=\"post\" />\n    <input className=\"border\" type=\"text\" />\n    <button className=\"px-2\" type=\"button\">Go</button>\n    <p className=\"p-2 text-sm\">Note</p>\n  </div>\n);\n\nexport default Attrs;\n",
+          "after": "const Attrs = () => (\n  <div className=\"p-2\">\n    <a className=\"underline\" href=\"/docs\">Docs</a>\n    <img alt=\"Hero\" className=\"size-4\" src=\"/hero.png\" />\n    <iframe className=\"w-full\" title=\"preview\" />\n    <form className=\"grid\" method=\"post\" />\n    <input className=\"border\" type=\"text\" />\n    <button className=\"px-2\" type=\"button\">Go</button>\n    <p className=\"p-2 text-sm focus:ring-2\">Note</p>\n  </div>\n);\n\nexport default Attrs;\n"
+        }
+      ]
+    },
+    {
+      "id": "button-text-deleted-no-replacement",
+      "expected": "deep",
+      "expected_line": "full\tquick-text-deleted",
+      "shape": "the static text of a button deleted with no replacement text",
+      "files": [
+        {
+          "path": "frontend/app/components/content/index.tsx",
+          "before": "const Content = ({title}: {readonly title: string}) => (\n  <section className=\"grid gap-2\">\n    <p className=\"text-sm\">Plain copy</p>\n    <button className=\"px-2\" type=\"button\">\n      Save\n    </button>\n    <p className=\"text-sm\">{title}</p>\n  </section>\n);\n\nexport default Content;\n",
+          "after": "const Content = ({title}: {readonly title: string}) => (\n  <section className=\"grid gap-2\">\n    <p className=\"text-sm\">Plain copy</p>\n    <button className=\"px-2\" type=\"button\">\n    </button>\n    <p className=\"text-sm\">{title}</p>\n  </section>\n);\n\nexport default Content;\n"
+        }
+      ]
+    },
+    {
+      "id": "animate-spin-added-without-motion-reduce",
+      "expected": "deep",
+      "expected_line": "full\tquick-motion-order-token",
+      "shape": "an animate-spin token added with no motion-reduce variant",
+      "files": [
+        {
+          "path": "frontend/app/components/attrs/index.tsx",
+          "before": "const Attrs = () => (\n  <div className=\"p-2\">\n    <a className=\"underline\" href=\"/docs\">Docs</a>\n    <img alt=\"Hero\" className=\"size-4\" src=\"/hero.png\" />\n    <iframe className=\"w-full\" title=\"preview\" />\n    <form className=\"grid\" method=\"post\" />\n    <input className=\"border\" type=\"text\" />\n    <button className=\"px-2\" type=\"button\">Go</button>\n    <p className=\"p-2 text-sm\">Note</p>\n  </div>\n);\n\nexport default Attrs;\n",
+          "after": "const Attrs = () => (\n  <div className=\"p-2\">\n    <a className=\"underline\" href=\"/docs\">Docs</a>\n    <img alt=\"Hero\" className=\"size-4\" src=\"/hero.png\" />\n    <iframe className=\"w-full\" title=\"preview\" />\n    <form className=\"grid\" method=\"post\" />\n    <input className=\"border\" type=\"text\" />\n    <button className=\"px-2\" type=\"button\">Go</button>\n    <p className=\"p-2 text-sm animate-spin\">Note</p>\n  </div>\n);\n\nexport default Attrs;\n"
+        }
+      ]
+    },
+    {
+      "id": "order-token-added",
+      "expected": "deep",
+      "expected_line": "full\tquick-motion-order-token",
+      "shape": "an order utility token added",
+      "files": [
+        {
+          "path": "frontend/app/components/attrs/index.tsx",
+          "before": "const Attrs = () => (\n  <div className=\"p-2\">\n    <a className=\"underline\" href=\"/docs\">Docs</a>\n    <img alt=\"Hero\" className=\"size-4\" src=\"/hero.png\" />\n    <iframe className=\"w-full\" title=\"preview\" />\n    <form className=\"grid\" method=\"post\" />\n    <input className=\"border\" type=\"text\" />\n    <button className=\"px-2\" type=\"button\">Go</button>\n    <p className=\"p-2 text-sm\">Note</p>\n  </div>\n);\n\nexport default Attrs;\n",
+          "after": "const Attrs = () => (\n  <div className=\"p-2\">\n    <a className=\"underline\" href=\"/docs\">Docs</a>\n    <img alt=\"Hero\" className=\"size-4\" src=\"/hero.png\" />\n    <iframe className=\"w-full\" title=\"preview\" />\n    <form className=\"grid\" method=\"post\" />\n    <input className=\"border\" type=\"text\" />\n    <button className=\"px-2\" type=\"button\">Go</button>\n    <p className=\"p-2 text-sm order-last\">Note</p>\n  </div>\n);\n\nexport default Attrs;\n"
+        }
+      ]
+    },
+    {
+      "id": "flex-reverse-token-added",
+      "expected": "deep",
+      "expected_line": "full\tquick-motion-order-token",
+      "shape": "a row-reverse token added",
+      "files": [
+        {
+          "path": "frontend/app/components/attrs/index.tsx",
+          "before": "const Attrs = () => (\n  <div className=\"p-2\">\n    <a className=\"underline\" href=\"/docs\">Docs</a>\n    <img alt=\"Hero\" className=\"size-4\" src=\"/hero.png\" />\n    <iframe className=\"w-full\" title=\"preview\" />\n    <form className=\"grid\" method=\"post\" />\n    <input className=\"border\" type=\"text\" />\n    <button className=\"px-2\" type=\"button\">Go</button>\n    <p className=\"p-2 text-sm\">Note</p>\n  </div>\n);\n\nexport default Attrs;\n",
+          "after": "const Attrs = () => (\n  <div className=\"p-2\">\n    <a className=\"underline\" href=\"/docs\">Docs</a>\n    <img alt=\"Hero\" className=\"size-4\" src=\"/hero.png\" />\n    <iframe className=\"w-full\" title=\"preview\" />\n    <form className=\"grid\" method=\"post\" />\n    <input className=\"border\" type=\"text\" />\n    <button className=\"px-2\" type=\"button\">Go</button>\n    <p className=\"p-2 text-sm flex-row-reverse\">Note</p>\n  </div>\n);\n\nexport default Attrs;\n"
+        }
+      ]
+    },
+    {
+      "id": "col-start-token-added",
+      "expected": "deep",
+      "expected_line": "full\tquick-motion-order-token",
+      "shape": "a grid column placement token added",
+      "files": [
+        {
+          "path": "frontend/app/components/attrs/index.tsx",
+          "before": "const Attrs = () => (\n  <div className=\"p-2\">\n    <a className=\"underline\" href=\"/docs\">Docs</a>\n    <img alt=\"Hero\" className=\"size-4\" src=\"/hero.png\" />\n    <iframe className=\"w-full\" title=\"preview\" />\n    <form className=\"grid\" method=\"post\" />\n    <input className=\"border\" type=\"text\" />\n    <button className=\"px-2\" type=\"button\">Go</button>\n    <p className=\"p-2 text-sm\">Note</p>\n  </div>\n);\n\nexport default Attrs;\n",
+          "after": "const Attrs = () => (\n  <div className=\"p-2\">\n    <a className=\"underline\" href=\"/docs\">Docs</a>\n    <img alt=\"Hero\" className=\"size-4\" src=\"/hero.png\" />\n    <iframe className=\"w-full\" title=\"preview\" />\n    <form className=\"grid\" method=\"post\" />\n    <input className=\"border\" type=\"text\" />\n    <button className=\"px-2\" type=\"button\">Go</button>\n    <p className=\"p-2 text-sm col-start-2\">Note</p>\n  </div>\n);\n\nexport default Attrs;\n"
+        }
+      ]
+    },
+    {
+      "id": "row-end-token-added",
+      "expected": "deep",
+      "expected_line": "full\tquick-motion-order-token",
+      "shape": "a grid row placement token added",
+      "files": [
+        {
+          "path": "frontend/app/components/attrs/index.tsx",
+          "before": "const Attrs = () => (\n  <div className=\"p-2\">\n    <a className=\"underline\" href=\"/docs\">Docs</a>\n    <img alt=\"Hero\" className=\"size-4\" src=\"/hero.png\" />\n    <iframe className=\"w-full\" title=\"preview\" />\n    <form className=\"grid\" method=\"post\" />\n    <input className=\"border\" type=\"text\" />\n    <button className=\"px-2\" type=\"button\">Go</button>\n    <p className=\"p-2 text-sm\">Note</p>\n  </div>\n);\n\nexport default Attrs;\n",
+          "after": "const Attrs = () => (\n  <div className=\"p-2\">\n    <a className=\"underline\" href=\"/docs\">Docs</a>\n    <img alt=\"Hero\" className=\"size-4\" src=\"/hero.png\" />\n    <iframe className=\"w-full\" title=\"preview\" />\n    <form className=\"grid\" method=\"post\" />\n    <input className=\"border\" type=\"text\" />\n    <button className=\"px-2\" type=\"button\">Go</button>\n    <p className=\"p-2 text-sm row-end-3\">Note</p>\n  </div>\n);\n\nexport default Attrs;\n"
+        }
+      ]
+    },
+    {
+      "id": "arbitrary-url-token-added",
+      "expected": "deep",
+      "expected_line": "full\tquick-arbitrary-value",
+      "shape": "an arbitrary background url token added",
+      "files": [
+        {
+          "path": "frontend/app/components/attrs/index.tsx",
+          "before": "const Attrs = () => (\n  <div className=\"p-2\">\n    <a className=\"underline\" href=\"/docs\">Docs</a>\n    <img alt=\"Hero\" className=\"size-4\" src=\"/hero.png\" />\n    <iframe className=\"w-full\" title=\"preview\" />\n    <form className=\"grid\" method=\"post\" />\n    <input className=\"border\" type=\"text\" />\n    <button className=\"px-2\" type=\"button\">Go</button>\n    <p className=\"p-2 text-sm\">Note</p>\n  </div>\n);\n\nexport default Attrs;\n",
+          "after": "const Attrs = () => (\n  <div className=\"p-2\">\n    <a className=\"underline\" href=\"/docs\">Docs</a>\n    <img alt=\"Hero\" className=\"size-4\" src=\"/hero.png\" />\n    <iframe className=\"w-full\" title=\"preview\" />\n    <form className=\"grid\" method=\"post\" />\n    <input className=\"border\" type=\"text\" />\n    <button className=\"px-2\" type=\"button\">Go</button>\n    <p className=\"p-2 text-sm bg-[url(/hero.png)]\">Note</p>\n  </div>\n);\n\nexport default Attrs;\n"
+        }
+      ]
+    },
+    {
+      "id": "content-token-added",
+      "expected": "deep",
+      "expected_line": "full\tquick-arbitrary-value",
+      "shape": "a generated-content token added",
+      "files": [
+        {
+          "path": "frontend/app/components/attrs/index.tsx",
+          "before": "const Attrs = () => (\n  <div className=\"p-2\">\n    <a className=\"underline\" href=\"/docs\">Docs</a>\n    <img alt=\"Hero\" className=\"size-4\" src=\"/hero.png\" />\n    <iframe className=\"w-full\" title=\"preview\" />\n    <form className=\"grid\" method=\"post\" />\n    <input className=\"border\" type=\"text\" />\n    <button className=\"px-2\" type=\"button\">Go</button>\n    <p className=\"p-2 text-sm\">Note</p>\n  </div>\n);\n\nexport default Attrs;\n",
+          "after": "const Attrs = () => (\n  <div className=\"p-2\">\n    <a className=\"underline\" href=\"/docs\">Docs</a>\n    <img alt=\"Hero\" className=\"size-4\" src=\"/hero.png\" />\n    <iframe className=\"w-full\" title=\"preview\" />\n    <form className=\"grid\" method=\"post\" />\n    <input className=\"border\" type=\"text\" />\n    <button className=\"px-2\" type=\"button\">Go</button>\n    <p className=\"p-2 text-sm content-['x']\">Note</p>\n  </div>\n);\n\nexport default Attrs;\n"
+        }
+      ]
+    },
+    {
+      "id": "arbitrary-property-token-added",
+      "expected": "deep",
+      "expected_line": "full\tquick-arbitrary-value",
+      "shape": "an arbitrary display property token added",
+      "files": [
+        {
+          "path": "frontend/app/components/attrs/index.tsx",
+          "before": "const Attrs = () => (\n  <div className=\"p-2\">\n    <a className=\"underline\" href=\"/docs\">Docs</a>\n    <img alt=\"Hero\" className=\"size-4\" src=\"/hero.png\" />\n    <iframe className=\"w-full\" title=\"preview\" />\n    <form className=\"grid\" method=\"post\" />\n    <input className=\"border\" type=\"text\" />\n    <button className=\"px-2\" type=\"button\">Go</button>\n    <p className=\"p-2 text-sm\">Note</p>\n  </div>\n);\n\nexport default Attrs;\n",
+          "after": "const Attrs = () => (\n  <div className=\"p-2\">\n    <a className=\"underline\" href=\"/docs\">Docs</a>\n    <img alt=\"Hero\" className=\"size-4\" src=\"/hero.png\" />\n    <iframe className=\"w-full\" title=\"preview\" />\n    <form className=\"grid\" method=\"post\" />\n    <input className=\"border\" type=\"text\" />\n    <button className=\"px-2\" type=\"button\">Go</button>\n    <p className=\"p-2 text-sm [display:none]\">Note</p>\n  </div>\n);\n\nexport default Attrs;\n"
+        }
+      ]
+    },
+    {
+      "id": "arbitrary-color-token-added",
+      "expected": "deep",
+      "expected_line": "full\tquick-arbitrary-value",
+      "shape": "an arbitrary hex color token added",
+      "files": [
+        {
+          "path": "frontend/app/components/attrs/index.tsx",
+          "before": "const Attrs = () => (\n  <div className=\"p-2\">\n    <a className=\"underline\" href=\"/docs\">Docs</a>\n    <img alt=\"Hero\" className=\"size-4\" src=\"/hero.png\" />\n    <iframe className=\"w-full\" title=\"preview\" />\n    <form className=\"grid\" method=\"post\" />\n    <input className=\"border\" type=\"text\" />\n    <button className=\"px-2\" type=\"button\">Go</button>\n    <p className=\"p-2 text-sm\">Note</p>\n  </div>\n);\n\nexport default Attrs;\n",
+          "after": "const Attrs = () => (\n  <div className=\"p-2\">\n    <a className=\"underline\" href=\"/docs\">Docs</a>\n    <img alt=\"Hero\" className=\"size-4\" src=\"/hero.png\" />\n    <iframe className=\"w-full\" title=\"preview\" />\n    <form className=\"grid\" method=\"post\" />\n    <input className=\"border\" type=\"text\" />\n    <button className=\"px-2\" type=\"button\">Go</button>\n    <p className=\"p-2 text-sm bg-[#ff0000]\">Note</p>\n  </div>\n);\n\nexport default Attrs;\n"
+        }
+      ]
+    },
+    {
+      "id": "zero-size-token-added",
+      "expected": "deep",
+      "expected_line": "full\tquick-hiding-token",
+      "shape": "a zero-size token added",
+      "files": [
+        {
+          "path": "frontend/app/components/attrs/index.tsx",
+          "before": "const Attrs = () => (\n  <div className=\"p-2\">\n    <a className=\"underline\" href=\"/docs\">Docs</a>\n    <img alt=\"Hero\" className=\"size-4\" src=\"/hero.png\" />\n    <iframe className=\"w-full\" title=\"preview\" />\n    <form className=\"grid\" method=\"post\" />\n    <input className=\"border\" type=\"text\" />\n    <button className=\"px-2\" type=\"button\">Go</button>\n    <p className=\"p-2 text-sm\">Note</p>\n  </div>\n);\n\nexport default Attrs;\n",
+          "after": "const Attrs = () => (\n  <div className=\"p-2\">\n    <a className=\"underline\" href=\"/docs\">Docs</a>\n    <img alt=\"Hero\" className=\"size-4\" src=\"/hero.png\" />\n    <iframe className=\"w-full\" title=\"preview\" />\n    <form className=\"grid\" method=\"post\" />\n    <input className=\"border\" type=\"text\" />\n    <button className=\"px-2\" type=\"button\">Go</button>\n    <p className=\"p-2 text-sm size-0\">Note</p>\n  </div>\n);\n\nexport default Attrs;\n"
+        }
+      ]
+    },
+    {
+      "id": "block-comment-added",
+      "expected": "deep",
+      "expected_line": "full\tquick-block-comment",
+      "shape": "a JSX block comment added among the children",
+      "files": [
+        {
+          "path": "frontend/app/components/card/index.tsx",
+          "before": "import {cn} from 'cn';\nimport Panel from '../panel';\n\ntype CardProps = {\n  readonly title: string;\n};\n\nconst Card = ({title}: CardProps) => (\n  <section className=\"rounded-lg border p-4\">\n    <h2 className=\"text-lg\">{title}</h2>\n    <Panel\n      className=\"flex gap-2 text-sm\"\n      title={title}\n    >\n      <span className=\"font-medium text-foreground\">Plain copy</span>\n      <p>\n        Static paragraph text.\n      </p>\n    </Panel>\n    <div className=\"mt-2 px-4\">Hello</div>\n  </section>\n);\n\nexport default Card;\n",
+          "after": "import {cn} from 'cn';\nimport Panel from '../panel';\n\ntype CardProps = {\n  readonly title: string;\n};\n\nconst Card = ({title}: CardProps) => (\n  <section className=\"rounded-lg border p-4\">\n    <h2 className=\"text-lg\">{title}</h2>\n    <Panel\n      className=\"flex gap-2 text-sm\"\n      title={title}\n    >\n      <span className=\"font-medium text-foreground\">Plain copy</span>\n      <p>\n        Static paragraph text.\n      </p>\n      {/* note */}\n    </Panel>\n    <div className=\"mt-2 px-4\">Hello</div>\n  </section>\n);\n\nexport default Card;\n"
+        }
+      ]
+    },
+    {
+      "id": "template-literal-class",
+      "expected": "deep",
+      "expected_line": "full\tquick-template-literal",
+      "shape": "a className template literal replaced by a static string",
+      "files": [
+        {
+          "path": "frontend/app/components/card/index.tsx",
+          "before": "import {cn} from 'cn';\nimport Panel from '../panel';\n\ntype CardProps = {\n  readonly title: string;\n};\n\nconst Card = ({title}: CardProps) => (\n  <section className=\"rounded-lg border p-4\">\n    <h2 className=\"text-lg\">{title}</h2>\n    <Panel\n      className=\"flex gap-2 text-sm\"\n      title={title}\n    >\n      <span className=\"font-medium text-foreground\">Plain copy</span>\n      <p>\n        Static paragraph text.\n      </p>\n    </Panel>\n    <div className={`mt-2 ${title}`}>Hello</div>\n  </section>\n);\n\nexport default Card;\n",
+          "after": "import {cn} from 'cn';\nimport Panel from '../panel';\n\ntype CardProps = {\n  readonly title: string;\n};\n\nconst Card = ({title}: CardProps) => (\n  <section className=\"rounded-lg border p-4\">\n    <h2 className=\"text-lg\">{title}</h2>\n    <Panel\n      className=\"flex gap-2 text-sm\"\n      title={title}\n    >\n      <span className=\"font-medium text-foreground\">Plain copy</span>\n      <p>\n        Static paragraph text.\n      </p>\n    </Panel>\n    <div className=\"mt-2 px-4\">Hello</div>\n  </section>\n);\n\nexport default Card;\n"
+        }
+      ]
+    },
+    {
+      "id": "hook-call-added",
+      "expected": "deep",
+      "expected_line": "full\tquick-hook",
+      "shape": "a hook call added among the children",
+      "files": [
+        {
+          "path": "frontend/app/components/card/index.tsx",
+          "before": "import {cn} from 'cn';\nimport Panel from '../panel';\n\ntype CardProps = {\n  readonly title: string;\n};\n\nconst Card = ({title}: CardProps) => (\n  <section className=\"rounded-lg border p-4\">\n    <h2 className=\"text-lg\">{title}</h2>\n    <Panel\n      className=\"flex gap-2 text-sm\"\n      title={title}\n    >\n      <span className=\"font-medium text-foreground\">Plain copy</span>\n      <p>\n        Static paragraph text.\n      </p>\n    </Panel>\n    <div className=\"mt-2 px-4\">Hello</div>\n  </section>\n);\n\nexport default Card;\n",
+          "after": "import {cn} from 'cn';\nimport Panel from '../panel';\n\ntype CardProps = {\n  readonly title: string;\n};\n\nconst Card = ({title}: CardProps) => (\n  <section className=\"rounded-lg border p-4\">\n    <h2 className=\"text-lg\">{title}</h2>\n    <Panel\n      className=\"flex gap-2 text-sm\"\n      title={title}\n    >\n      <span className=\"font-medium text-foreground\">Plain copy</span>\n      <p>\n        Static paragraph text.\n      </p>\n      {useLabel()}\n    </Panel>\n    <div className=\"mt-2 px-4\">Hello</div>\n  </section>\n);\n\nexport default Card;\n"
+        }
+      ]
+    },
+    {
+      "id": "handler-prop-added",
+      "expected": "deep",
+      "expected_line": "full\tquick-handler",
+      "shape": "an on-click handler prop added to a capitalized element's opening tag",
+      "files": [
+        {
+          "path": "frontend/app/components/card/index.tsx",
+          "before": "import {cn} from 'cn';\nimport Panel from '../panel';\n\ntype CardProps = {\n  readonly title: string;\n};\n\nconst Card = ({title}: CardProps) => (\n  <section className=\"rounded-lg border p-4\">\n    <h2 className=\"text-lg\">{title}</h2>\n    <Panel\n      className=\"flex gap-2 text-sm\"\n      title={title}\n    >\n      <span className=\"font-medium text-foreground\">Plain copy</span>\n      <p>\n        Static paragraph text.\n      </p>\n    </Panel>\n    <div className=\"mt-2 px-4\">Hello</div>\n  </section>\n);\n\nexport default Card;\n",
+          "after": "import {cn} from 'cn';\nimport Panel from '../panel';\n\ntype CardProps = {\n  readonly title: string;\n};\n\nconst Card = ({title}: CardProps) => (\n  <section className=\"rounded-lg border p-4\">\n    <h2 className=\"text-lg\">{title}</h2>\n    <Panel\n      className=\"flex gap-2 text-sm\"\n      title={title}\n      onClick={go}\n    >\n      <span className=\"font-medium text-foreground\">Plain copy</span>\n      <p>\n        Static paragraph text.\n      </p>\n    </Panel>\n    <div className=\"mt-2 px-4\">Hello</div>\n  </section>\n);\n\nexport default Card;\n"
+        }
+      ]
+    },
+    {
+      "id": "spread-props-added",
+      "expected": "deep",
+      "expected_line": "full\tquick-spread",
+      "shape": "a props spread added among the children",
+      "files": [
+        {
+          "path": "frontend/app/components/card/index.tsx",
+          "before": "import {cn} from 'cn';\nimport Panel from '../panel';\n\ntype CardProps = {\n  readonly title: string;\n};\n\nconst Card = ({title}: CardProps) => (\n  <section className=\"rounded-lg border p-4\">\n    <h2 className=\"text-lg\">{title}</h2>\n    <Panel\n      className=\"flex gap-2 text-sm\"\n      title={title}\n    >\n      <span className=\"font-medium text-foreground\">Plain copy</span>\n      <p>\n        Static paragraph text.\n      </p>\n    </Panel>\n    <div className=\"mt-2 px-4\">Hello</div>\n  </section>\n);\n\nexport default Card;\n",
+          "after": "import {cn} from 'cn';\nimport Panel from '../panel';\n\ntype CardProps = {\n  readonly title: string;\n};\n\nconst Card = ({title}: CardProps) => (\n  <section className=\"rounded-lg border p-4\">\n    <h2 className=\"text-lg\">{title}</h2>\n    <Panel\n      className=\"flex gap-2 text-sm\"\n      title={title}\n    >\n      <span className=\"font-medium text-foreground\">Plain copy</span>\n      <p>\n        Static paragraph text.\n      </p>\n      {...rest}\n    </Panel>\n    <div className=\"mt-2 px-4\">Hello</div>\n  </section>\n);\n\nexport default Card;\n"
+        }
+      ]
+    },
+    {
+      "id": "iteration-call-added",
+      "expected": "deep",
+      "expected_line": "full\tquick-map",
+      "shape": "an iteration call added among the children",
+      "files": [
+        {
+          "path": "frontend/app/components/card/index.tsx",
+          "before": "import {cn} from 'cn';\nimport Panel from '../panel';\n\ntype CardProps = {\n  readonly title: string;\n};\n\nconst Card = ({title}: CardProps) => (\n  <section className=\"rounded-lg border p-4\">\n    <h2 className=\"text-lg\">{title}</h2>\n    <Panel\n      className=\"flex gap-2 text-sm\"\n      title={title}\n    >\n      <span className=\"font-medium text-foreground\">Plain copy</span>\n      <p>\n        Static paragraph text.\n      </p>\n    </Panel>\n    <div className=\"mt-2 px-4\">Hello</div>\n  </section>\n);\n\nexport default Card;\n",
+          "after": "import {cn} from 'cn';\nimport Panel from '../panel';\n\ntype CardProps = {\n  readonly title: string;\n};\n\nconst Card = ({title}: CardProps) => (\n  <section className=\"rounded-lg border p-4\">\n    <h2 className=\"text-lg\">{title}</h2>\n    <Panel\n      className=\"flex gap-2 text-sm\"\n      title={title}\n    >\n      <span className=\"font-medium text-foreground\">Plain copy</span>\n      <p>\n        Static paragraph text.\n      </p>\n      {items.map(renderItem)}\n    </Panel>\n    <div className=\"mt-2 px-4\">Hello</div>\n  </section>\n);\n\nexport default Card;\n"
+        }
+      ]
+    },
+    {
+      "id": "cn-continuation-argument-changed",
+      "expected": "deep",
+      "expected_line": "full\tquick-cn-argument",
+      "shape": "a variable argument changed on a continuation line of a multi-line cn() call",
+      "files": [
+        {
+          "path": "frontend/app/components/tile/index.tsx",
+          "before": "import {cn} from 'cn';\n\nconst Tile = ({tone}: {readonly tone: string}) => (\n  <div\n    className={cn(\n      'p-4',\n      tone\n    )}\n  />\n);\n\nexport default Tile;\n",
+          "after": "import {cn} from 'cn';\n\nconst Tile = ({tone}: {readonly tone: string}) => (\n  <div\n    className={cn(\n      'p-4',\n      tone.value\n    )}\n  />\n);\n\nexport default Tile;\n"
+        }
+      ]
+    },
+    {
+      "id": "href-continuation-changed",
+      "expected": "deep",
+      "expected_line": "full\tquick-attribute",
+      "shape": "a continuation line of a multi-line href expression changed",
+      "files": [
+        {
+          "path": "frontend/app/components/doc-link/index.tsx",
+          "before": "const DocLink = ({base}: {readonly base: string}) => (\n  <a\n    className=\"underline\"\n    href={\n      base + '/docs'\n    }\n  >\n    Docs\n  </a>\n);\n\nexport default DocLink;\n",
+          "after": "const DocLink = ({base}: {readonly base: string}) => (\n  <a\n    className=\"underline\"\n    href={\n      base + '/guide'\n    }\n  >\n    Docs\n  </a>\n);\n\nexport default DocLink;\n"
+        }
+      ]
+    },
+    {
+      "id": "inline-theme-script-line",
+      "expected": "deep",
+      "expected_line": "full\tquick-unclassified",
+      "shape": "an inline theme script line changed inside a script element",
+      "files": [
+        {
+          "path": "frontend/app/components/theme-script/index.tsx",
+          "before": "const ThemeScript = () => (\n  <script>\n    document.documentElement.dataset.theme = 'light';\n  </script>\n);\n\nexport default ThemeScript;\n",
+          "after": "const ThemeScript = () => (\n  <script>\n    document.documentElement.dataset.theme = 'dark';\n  </script>\n);\n\nexport default ThemeScript;\n"
+        }
+      ]
+    },
+    {
+      "id": "expression-child-added",
+      "expected": "deep",
+      "expected_line": "full\tquick-unclassified",
+      "shape": "a bare expression child added among a component's children",
+      "files": [
+        {
+          "path": "frontend/app/components/card/index.tsx",
+          "before": "import {cn} from 'cn';\nimport Panel from '../panel';\n\ntype CardProps = {\n  readonly title: string;\n};\n\nconst Card = ({title}: CardProps) => (\n  <section className=\"rounded-lg border p-4\">\n    <h2 className=\"text-lg\">{title}</h2>\n    <Panel\n      className=\"flex gap-2 text-sm\"\n      title={title}\n    >\n      <span className=\"font-medium text-foreground\">Plain copy</span>\n      <p>\n        Static paragraph text.\n      </p>\n    </Panel>\n    <div className=\"mt-2 px-4\">Hello</div>\n  </section>\n);\n\nexport default Card;\n",
+          "after": "import {cn} from 'cn';\nimport Panel from '../panel';\n\ntype CardProps = {\n  readonly title: string;\n};\n\nconst Card = ({title}: CardProps) => (\n  <section className=\"rounded-lg border p-4\">\n    <h2 className=\"text-lg\">{title}</h2>\n    <Panel\n      className=\"flex gap-2 text-sm\"\n      title={title}\n    >\n      <span className=\"font-medium text-foreground\">Plain copy</span>\n      <p>\n        Static paragraph text.\n      </p>\n      {label}\n    </Panel>\n    <div className=\"mt-2 px-4\">Hello</div>\n  </section>\n);\n\nexport default Card;\n"
+        }
+      ]
+    },
+    {
+      "id": "intrinsic-tag-added",
+      "expected": "deep",
+      "expected_line": "full\tquick-tag",
+      "shape": "an intrinsic heading element added among the children",
+      "files": [
+        {
+          "path": "frontend/app/components/card/index.tsx",
+          "before": "import {cn} from 'cn';\nimport Panel from '../panel';\n\ntype CardProps = {\n  readonly title: string;\n};\n\nconst Card = ({title}: CardProps) => (\n  <section className=\"rounded-lg border p-4\">\n    <h2 className=\"text-lg\">{title}</h2>\n    <Panel\n      className=\"flex gap-2 text-sm\"\n      title={title}\n    >\n      <span className=\"font-medium text-foreground\">Plain copy</span>\n      <p>\n        Static paragraph text.\n      </p>\n    </Panel>\n    <div className=\"mt-2 px-4\">Hello</div>\n  </section>\n);\n\nexport default Card;\n",
+          "after": "import {cn} from 'cn';\nimport Panel from '../panel';\n\ntype CardProps = {\n  readonly title: string;\n};\n\nconst Card = ({title}: CardProps) => (\n  <section className=\"rounded-lg border p-4\">\n    <h2 className=\"text-lg\">{title}</h2>\n    <Panel\n      className=\"flex gap-2 text-sm\"\n      title={title}\n    >\n      <span className=\"font-medium text-foreground\">Plain copy</span>\n      <p>\n        Static paragraph text.\n      </p>\n      <h3>Heading</h3>\n    </Panel>\n    <div className=\"mt-2 px-4\">Hello</div>\n  </section>\n);\n\nexport default Card;\n"
+        }
+      ]
+    },
+    {
+      "id": "added-return-statement",
+      "expected": "deep",
+      "expected_line": "full\tquick-unclassified",
+      "shape": "a return statement added to a component body",
+      "files": [
+        {
+          "path": "frontend/app/components/guard/index.tsx",
+          "before": "const Guard = ({ready}: {readonly ready: boolean}) => {\n  const value = ready;\n\n  return <p className=\"text-sm\">{String(value)}</p>;\n};\n\nexport default Guard;\n",
+          "after": "const Guard = ({ready}: {readonly ready: boolean}) => {\n  const value = ready;\n  const label = 'x';\n\n  return <p className=\"text-sm\">{String(value)}</p>;\n};\n\nexport default Guard;\n"
+        }
+      ]
+    },
+    {
+      "id": "bidi-codepoint-in-text",
+      "expected": "deep",
+      "expected_line": "full\tquick-codepoint",
+      "shape": "a right-to-left override codepoint inside a static text line",
+      "files": [
+        {
+          "path": "frontend/app/components/content/index.tsx",
+          "before": "const Content = ({title}: {readonly title: string}) => (\n  <section className=\"grid gap-2\">\n    <p className=\"text-sm\">Plain copy</p>\n    <button className=\"px-2\" type=\"button\">\n      Save\n    </button>\n    <p className=\"text-sm\">{title}</p>\n  </section>\n);\n\nexport default Content;\n",
+          "after": "const Content = ({title}: {readonly title: string}) => (\n  <section className=\"grid gap-2\">\n    <p className=\"text-sm\">Plain \u202ecopy</p>\n    <button className=\"px-2\" type=\"button\">\n      Save\n    </button>\n    <p className=\"text-sm\">{title}</p>\n  </section>\n);\n\nexport default Content;\n"
+        }
+      ]
+    },
+    {
+      "id": "zero-width-codepoint-in-text",
+      "expected": "deep",
+      "expected_line": "full\tquick-codepoint",
+      "shape": "a zero-width space inside a static text line",
+      "files": [
+        {
+          "path": "frontend/app/components/content/index.tsx",
+          "before": "const Content = ({title}: {readonly title: string}) => (\n  <section className=\"grid gap-2\">\n    <p className=\"text-sm\">Plain copy</p>\n    <button className=\"px-2\" type=\"button\">\n      Save\n    </button>\n    <p className=\"text-sm\">{title}</p>\n  </section>\n);\n\nexport default Content;\n",
+          "after": "const Content = ({title}: {readonly title: string}) => (\n  <section className=\"grid gap-2\">\n    <p className=\"text-sm\">Plain\u200b copy</p>\n    <button className=\"px-2\" type=\"button\">\n      Save\n    </button>\n    <p className=\"text-sm\">{title}</p>\n  </section>\n);\n\nexport default Content;\n"
+        }
+      ]
+    },
+    {
+      "id": "non-ascii-in-class-value",
+      "expected": "deep",
+      "expected_line": "full\tquick-codepoint",
+      "shape": "a non-ASCII character inside a className value",
+      "files": [
+        {
+          "path": "frontend/app/components/attrs/index.tsx",
+          "before": "const Attrs = () => (\n  <div className=\"p-2\">\n    <a className=\"underline\" href=\"/docs\">Docs</a>\n    <img alt=\"Hero\" className=\"size-4\" src=\"/hero.png\" />\n    <iframe className=\"w-full\" title=\"preview\" />\n    <form className=\"grid\" method=\"post\" />\n    <input className=\"border\" type=\"text\" />\n    <button className=\"px-2\" type=\"button\">Go</button>\n    <p className=\"p-2 text-sm\">Note</p>\n  </div>\n);\n\nexport default Attrs;\n",
+          "after": "const Attrs = () => (\n  <div className=\"p-2\">\n    <a className=\"underline\" href=\"/docs\">Docs</a>\n    <img alt=\"Hero\" className=\"size-4\" src=\"/hero.png\" />\n    <iframe className=\"w-full\" title=\"preview\" />\n    <form className=\"grid\" method=\"post\" />\n    <input className=\"border\" type=\"text\" />\n    <button className=\"px-2\" type=\"button\">Go</button>\n    <p className=\"p-2 text-sm \u00e9\">Note</p>\n  </div>\n);\n\nexport default Attrs;\n"
+        }
+      ]
+    }
+  ],
+  "mutations": [
+    {
+      "reason": "quick-codepoint",
+      "context": "jsx-child",
+      "op": "insert",
+      "text": "      <p>zero\u200bwidth</p>"
+    },
+    {
+      "reason": "quick-block-comment",
+      "context": "jsx-child",
+      "op": "insert",
+      "text": "      {/* note */}"
+    },
+    {
+      "reason": "quick-template-literal",
+      "context": "jsx-child",
+      "op": "insert",
+      "text": "      {`${title}`}"
+    },
+    {
+      "reason": "quick-hook",
+      "context": "jsx-child",
+      "op": "insert",
+      "text": "      {useLabel()}"
+    },
+    {
+      "reason": "quick-spread",
+      "context": "jsx-child",
+      "op": "insert",
+      "text": "      {...rest}"
+    },
+    {
+      "reason": "quick-conditional",
+      "context": "jsx-child",
+      "op": "insert",
+      "text": "      {ready && 'on'}"
+    },
+    {
+      "reason": "quick-map",
+      "context": "jsx-child",
+      "op": "insert",
+      "text": "      {items.map(renderItem)}"
+    },
+    {
+      "reason": "quick-element",
+      "context": "jsx-child",
+      "op": "insert",
+      "text": "      <Badge />"
+    },
+    {
+      "reason": "quick-tag",
+      "context": "jsx-child",
+      "op": "insert",
+      "text": "      <h3>Heading</h3>"
+    },
+    {
+      "reason": "quick-unclassified",
+      "context": "jsx-child",
+      "op": "insert",
+      "text": "      {label}"
+    },
+    {
+      "reason": "quick-attribute",
+      "context": "opening-tag",
+      "op": "insert",
+      "text": "      data-state=\"open\""
+    },
+    {
+      "reason": "quick-handler",
+      "context": "opening-tag",
+      "op": "insert",
+      "text": "      onClick={close}"
+    },
+    {
+      "reason": "quick-placeholder",
+      "context": "language-value",
+      "op": "replace-value",
+      "text": "Hi {{name}}"
+    },
+    {
+      "reason": "quick-nesting",
+      "context": "language-value",
+      "op": "replace-value",
+      "text": "$t(common:close) now"
+    },
+    {
+      "reason": "quick-html",
+      "context": "language-value",
+      "op": "replace-value",
+      "text": "Hi <b>there</b>"
+    },
+    {
+      "reason": "quick-empty-value",
+      "context": "language-value",
+      "op": "replace-value",
+      "text": ""
+    },
+    {
+      "reason": "quick-language-shape",
+      "context": "language-value",
+      "op": "replace-value",
+      "text": "line\\nbreak"
+    }
+  ]
+}

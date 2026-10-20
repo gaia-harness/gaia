@@ -455,7 +455,7 @@ doctor_groupless_shard() {
   [ "$status" -eq 0 ]
 
   read -r total largest < <(discover_independent "$SCRIPTS_TESTS_DIRECTORY_DEFAULT" | weight_profile)
-  run within_load_bound "$SCRIPT" "$total" "$largest" scripts-1 scripts-2 scripts-3
+  run within_load_bound "$SCRIPT" "$total" "$largest" scripts-1 scripts-2 scripts-3 scripts-4
   [ "$status" -eq 0 ]
 }
 
@@ -477,22 +477,22 @@ doctor_unweighted() {
   printf '%s\n' "$destination"
 }
 
-# A seam directory whose round-robin split across three shards is lopsided and
-# whose weighted split is not: two heavy files at alternating positions in the
+# A seam directory whose round-robin split across four shards is lopsided and
+# whose weighted split is not: two heavy files four positions apart in the
 # sorted listing land on the same shard when position decides, and on different
-# shards when weight does. Six files, so each shard still draws
-# two under round-robin and none of them is empty either way.
+# shards when weight does. Six files, so no shard is empty under round-robin
+# either way.
 seed_lopsided_tree() {
   local directory="$1" name
   mkdir -p "$directory"
-  for name in s-a s-d; do
+  for name in s-a s-e; do
     write_trivial_bats "$directory/$name.bats" "HEAVY-$name"
     # Padded to a size the light files cannot approach, as one trailing comment
     # line, so which shard holds the two heavy files is what decides the
     # comparison.
     head -c 1000 /dev/zero | tr '\0' '#' >>"$directory/$name.bats"
   done
-  for name in s-b s-c s-e s-f; do
+  for name in s-b s-c s-d s-f; do
     write_trivial_bats "$directory/$name.bats" "LIGHT-$name"
   done
 }
@@ -505,7 +505,7 @@ seed_lopsided_tree() {
 
   # The healthy arm first, so a bound loose enough to pass anything could not
   # pass this test.
-  SCRIPTS_TESTS_DIRECTORY="$directory" run within_load_bound "$SCRIPT" "$total" "$largest" scripts-1 scripts-2 scripts-3
+  SCRIPTS_TESTS_DIRECTORY="$directory" run within_load_bound "$SCRIPT" "$total" "$largest" scripts-1 scripts-2 scripts-3 scripts-4
   [ "$status" -eq 0 ]
 
   copy="$(doctor_unweighted)"
@@ -513,7 +513,7 @@ seed_lopsided_tree() {
   SCRIPTS_TESTS_DIRECTORY="$directory" run check_no_duplicates "$copy"
   [ "$status" -eq 0 ]
   # ...and is still caught, because the two heavy files landed together.
-  SCRIPTS_TESTS_DIRECTORY="$directory" run within_load_bound "$copy" "$total" "$largest" scripts-1 scripts-2 scripts-3
+  SCRIPTS_TESTS_DIRECTORY="$directory" run within_load_bound "$copy" "$total" "$largest" scripts-1 scripts-2 scripts-3 scripts-4
   [ "$status" -eq 1 ]
 }
 
@@ -534,7 +534,7 @@ seed_lopsided_tree() {
     write_trivial_bats "$directory/$name.bats" "LIGHT-$name"
   done
 
-  for shard in scripts-1 scripts-2 scripts-3; do
+  for shard in scripts-1 scripts-2 scripts-3 scripts-4; do
     # stdout alone: a wc complaint about the directory is not a listed file.
     listing="$(SCRIPTS_TESTS_DIRECTORY="$directory" bash "$SCRIPT" files "$shard" 2>/dev/null)" || return 1
     if grep -qF 'heavy.bats' <<<"$listing"; then
@@ -725,7 +725,7 @@ seed_anchor_tree() {
   directory="$BATS_TEST_TMPDIR/a8-scripts"
   seed_anchor_tree "$directory"
   copy="$(doctor_outliers a8-over.sh \
-    'fill-a.bats fill-b.bats fill-c.bats heavy-x.bats')"
+    'fill-a.bats fill-b.bats fill-c.bats heavy-x.bats heavy-y.bats')"
   SCRIPTS_TESTS_DIRECTORY="$directory" run bash "$copy" files scripts-1
   [ "$status" -eq 2 ]
   # The phrase, not a word inside it: this script prints several exit-2

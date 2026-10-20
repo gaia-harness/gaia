@@ -28,6 +28,30 @@ setup_file() {
       cp "$LSB_TEMPLATE_ROOT/$flavor/slug" "$BATS_TEST_TMPDIR/slug"
     ) || return 1
   done
+  for flavor in plain maintainer; do
+    (
+      BATS_TEST_TMPDIR="$LSB_TEMPLATE_ROOT/prepared-quick-$flavor"
+      mkdir -p "$BATS_TEST_TMPDIR"
+      if [ "$flavor" = maintainer ]; then lsb_init --maintainer; else lsb_init; fi
+      lsb_main_base_begin
+      lsb_commit "$QUICK_ENGLISH" "$(quick_locale_text Hello)"
+      lsb_commit "$QUICK_JAPANESE" "$(quick_locale_text こんにちは)"
+      lsb_main_base_end
+      lsb_commit "$QUICK_ENGLISH" "$(quick_locale_text Welcome)"
+      lsb_commit "$QUICK_JAPANESE" "$(quick_locale_text ようこそ)"
+      routed="$(bash "$LSB_ROOT/.gaia/scripts/audit-light-route.sh" --root "$LSB_ROOT" --member code-audit-frontend)"
+      [ "$routed" = "$(printf 'light\tquick-eligible')" ] || { printf 'quick template router: %s\n' "$routed" >&2; exit 1; }
+      cp "$LSB_TEMPLATE_ROOT/$flavor/slug" "$BATS_TEST_TMPDIR/slug"
+    ) || return 1
+  done
+}
+
+QUICK_ENGLISH="frontend/app/languages/en/common.ts"
+QUICK_JAPANESE="frontend/app/languages/ja/common.ts"
+
+# quick_locale_text <title>: a one-key language file.
+quick_locale_text() {
+  printf 'export default {\n  title: '"'"'%s'"'"',\n};' "$1"
 }
 
 setup() {
@@ -94,6 +118,38 @@ prepare_light() {
   local flavor=plain
   [ "${1:-}" = "--maintainer" ] && flavor=maintainer
   lsb_from_template "prepared-$flavor"
+}
+
+# prepare_quick [--maintainer]: a first-dispatch merge-base sandbox whose
+# two-locale string change routed light quick-eligible, with no full clearance.
+prepare_quick() {
+  local flavor=plain
+  [ "${1:-}" = "--maintainer" ] && flavor=maintainer
+  lsb_from_template "prepared-quick-$flavor"
+}
+
+# assert_quick_refused <reason>: the last mark printed full <reason>, left no
+# marker, and the router would still send the same delta to the reviewer, so
+# the refusal came from the reply and not from a changed route.
+assert_quick_refused() {
+  expect_full "$1" || return 1
+  assert_no_marker || return 1
+  lsb_route "$FRONTEND" --check
+  expect_line "$(printf 'light\tquick-eligible')"
+}
+
+# assert_ledger_timing <duration-or-null>: the last ledger line carries the
+# merge-base anchor, a UTC marked_at no earlier than the record's routed_at,
+# and the reviewer duration.
+assert_ledger_timing() {
+  local line routed_at
+  line="$(tail -n 1 "$(ledger_path)")"
+  routed_at="$(jq -r .routed_at "$(record_path)")"
+  jq -e --arg routed_at "$routed_at" --argjson duration "$1" '
+    .anchor_kind == "merge-base"
+    and (.marked_at | test("^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9:]{8}Z$"))
+    and .marked_at >= $routed_at
+    and .reviewer_duration_ms == $duration' <<<"$line" >/dev/null || { printf 'ledger line: %s\n' "$line" >&2; return 1; }
 }
 
 clear_reply_to_file() {
@@ -723,9 +779,176 @@ line 5')"
   lsb_mark "$FRONTEND" "$REPLY_FILE"
   expect_full escalate
   [ "$(wc -l <"$(ledger_path)" | tr -d ' ')" = "2" ]
-  [ "$(jq -c '[keys[]]' "$(ledger_path)" | sort -u)" = '["at","digest","member","tree","verdict"]' ]
+  [ "$(jq -c '[keys[]]' "$(ledger_path)" | sort -u)" = '["anchor_kind","at","digest","marked_at","member","reviewer_duration_ms","tree","verdict"]' ]
   [ "$(jq -r .verdict "$(ledger_path)" | paste -sd, -)" = "clear,escalate" ]
+  [ "$(jq -c '[.anchor_kind, .reviewer_duration_ms]' "$(ledger_path)" | sort -u)" = '["full",null]' ]
   jq -e '.at | test("^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$")' "$(ledger_path)" >/dev/null
+}
+
+# --- the merge-base (first-dispatch quick) reply contract ------------------------
+
+# bats test_tags=whole-tree
+@test "a clean reply on a merge-base record prints light-cleared with a light marker, the merge-base anchor and an empty light sidecar" {
+  prepare_quick
+  [ "$(jq -r .anchor_kind "$(record_path)")" = "merge-base" ]
+  clear_reply_to_file
+  [ "$(jq -c .resolved "$REPLY_FILE")" = '[]' ]
+  lsb_mark "$FRONTEND" "$REPLY_FILE"
+  expect_line "light-cleared"
+  [ "$(jq -r .review "$(marker_path)")" = "light" ]
+  [ "$(jq -r .anchor_kind "$(record_path)")" = "merge-base" ]
+  [ "$(light_sidecar_files | wc -l | tr -d ' ')" = "1" ]
+  [ "$(jq -c .findings "$(light_sidecar_files)")" = '[]' ]
+  [ "$(find "$(audit_directory)" -maxdepth 1 -name '*.findings.json' | wc -l | tr -d ' ')" = "1" ]
+}
+
+# bats test_tags=whole-tree
+@test "an escalate reply on a merge-base record prints full escalate and writes no marker" {
+  prepare_quick
+  lsb_escalate_reply "$FRONTEND" >"$REPLY_FILE"
+  lsb_mark "$FRONTEND" "$REPLY_FILE"
+  assert_quick_refused escalate
+}
+
+# bats test_tags=whole-tree
+@test "an empty reply on a merge-base record prints full verdict-noop and writes no marker" {
+  prepare_quick
+  lsb_mark "$FRONTEND" ""
+  assert_quick_refused verdict-noop
+}
+
+# bats test_tags=whole-tree
+@test "a missing reply file on a merge-base record prints full verdict-noop and writes no marker" {
+  prepare_quick
+  lsb_mark_file "$FRONTEND" "$BATS_TEST_TMPDIR/no-such-reply.json"
+  assert_quick_refused verdict-noop
+}
+
+# bats test_tags=whole-tree
+@test "a merge-base reply carrying a findings array prints full verdict-malformed and writes no marker" {
+  prepare_quick
+  clear_reply_to_file
+  reply_edit '. + {findings: []}'
+  lsb_mark "$FRONTEND" "$REPLY_FILE"
+  assert_quick_refused verdict-malformed
+}
+
+# bats test_tags=whole-tree
+@test "a merge-base reply carrying any extra key prints full verdict-malformed and writes no marker" {
+  prepare_quick
+  clear_reply_to_file
+  reply_edit '. + {extra: 1}'
+  lsb_mark "$FRONTEND" "$REPLY_FILE"
+  assert_quick_refused verdict-malformed
+}
+
+# bats test_tags=whole-tree
+@test "a merge-base reply missing a required key prints full verdict-malformed and writes no marker" {
+  prepare_quick
+  clear_reply_to_file
+  reply_edit 'del(.reason)'
+  lsb_mark "$FRONTEND" "$REPLY_FILE"
+  assert_quick_refused verdict-malformed
+}
+
+# bats test_tags=whole-tree
+@test "a merge-base reply with a file object carrying an extra key prints full verdict-malformed" {
+  prepare_quick
+  clear_reply_to_file
+  reply_edit '.files[0].extra = 1'
+  lsb_mark "$FRONTEND" "$REPLY_FILE"
+  assert_quick_refused verdict-malformed
+}
+
+# bats test_tags=whole-tree
+@test "a merge-base reply with a non-empty resolved list prints full verdict-malformed" {
+  prepare_quick
+  clear_reply_to_file
+  reply_edit '.resolved = ["x"]'
+  lsb_mark "$FRONTEND" "$REPLY_FILE"
+  assert_quick_refused verdict-malformed
+}
+
+# bats test_tags=whole-tree
+@test "a merge-base reply whose reason names a minor nit prints full verdict-malformed" {
+  prepare_quick
+  clear_reply_to_file
+  reply_edit '.reason = "one minor nit"'
+  lsb_mark "$FRONTEND" "$REPLY_FILE"
+  assert_quick_refused verdict-malformed
+}
+
+# bats test_tags=whole-tree
+@test "a merge-base reply whose file note says Minor prints full verdict-malformed" {
+  prepare_quick
+  clear_reply_to_file
+  reply_edit '.files[0].note = "Minor: spacing"'
+  lsb_mark "$FRONTEND" "$REPLY_FILE"
+  assert_quick_refused verdict-malformed
+}
+
+# bats test_tags=whole-tree
+@test "twin: words that only contain minor or nit as a fragment still clear on a merge-base record" {
+  prepare_quick
+  clear_reply_to_file
+  reply_edit '.reason = "a minority of tokens, nitrogen free" | .files[0].note = "reviewed unit"'
+  lsb_mark "$FRONTEND" "$REPLY_FILE"
+  expect_line "light-cleared"
+}
+
+# bats test_tags=whole-tree
+@test "the stricter reply contract is merge-base only: an extra key still clears a post-clearance record" {
+  prepare_light
+  [ "$(jq -r .anchor_kind "$(record_path)")" = "full" ]
+  clear_reply_to_file
+  reply_edit '. + {extra: 1} | .reason = "one minor nit" | .files[0].extra = 1'
+  lsb_mark "$FRONTEND" "$REPLY_FILE"
+  expect_line "light-cleared"
+  [ "$(jq -r .review "$(marker_path)")" = "light" ]
+}
+
+# bats test_tags=whole-tree
+@test "a mark run on a merge-base record persists marked_at, the reviewer duration and the anchor kind on its ledger line" {
+  prepare_quick
+  clear_reply_to_file
+  run bash -c 'bash "$1" --root "$2" --member "$3" --verdict - --reviewer-duration-ms 6900 <"$4"' _ \
+    "$LSB_ROOT/.gaia/scripts/audit-light-mark.sh" "$LSB_ROOT" "$FRONTEND" "$REPLY_FILE"
+  expect_line "light-cleared"
+  assert_ledger_timing 6900
+}
+
+# bats test_tags=whole-tree
+@test "a refused merge-base mark run persists the same timing fields and a null duration without the flag" {
+  prepare_quick
+  clear_reply_to_file
+  reply_edit '. + {extra: 1}'
+  lsb_mark "$FRONTEND" "$REPLY_FILE"
+  expect_full verdict-malformed
+  assert_ledger_timing null
+  [ "$(jq -r .verdict "$(ledger_path)")" = "failed" ]
+}
+
+# bats test_tags=whole-tree
+@test "the timing assertion is what notices a missing marked_at: a scratch mark script without the field fails it" {
+  prepare_quick
+  clear_reply_to_file
+  local script="$LSB_ROOT/.gaia/scripts/audit-light-mark.sh"
+  grep -qF 'marked_at: $marked_at,' "$script"
+  grep -vF 'marked_at: $marked_at,' "$script" >"$script.mutant"
+  grep -qF 'marked_at: $marked_at,' "$script.mutant" && return 1
+  run bash "$script.mutant" --root "$LSB_ROOT" --member "$FRONTEND" --verdict - --reviewer-duration-ms 6900 <"$REPLY_FILE"
+  expect_line "light-cleared"
+  run assert_ledger_timing 6900
+  [ "$status" -ne 0 ]
+}
+
+# bats test_tags=whole-tree
+@test "in a maintainer sandbox a merge-base clear reaches the telemetry outcome event with its anchor kind" {
+  prepare_quick --maintainer
+  clear_reply_to_file
+  lsb_mark "$FRONTEND" "$REPLY_FILE"
+  expect_line "light-cleared"
+  [ "$(jq -r 'select(.event == "light_outcome") | .anchor_kind' "$(telemetry_log)")" = "merge-base" ]
 }
 
 # --- cwd independence -------------------------------------------------------

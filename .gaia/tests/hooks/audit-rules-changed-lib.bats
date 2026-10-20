@@ -148,11 +148,39 @@ EOF
   for light_path in \
     .gaia/scripts/audit-light-route.sh \
     .claude/hooks/lib/audit-light-route-lib.sh \
+    .claude/hooks/lib/audit-quick-classify-lib.sh \
     .gaia/scripts/audit-light-mark.sh \
     .claude/agents/audit-light-reviewer.md; do
     audit_path_is_global_rule "$light_path" || { echo "not a global rule: $light_path" >&2; return 1; }
     audit_path_is_machinery "$light_path" || { echo "global but not machinery: $light_path" >&2; return 1; }
   done
+}
+
+# The classifier library decides whether a quick clearance is believed, so a
+# change to it resets every member's anchor. The red case runs the same tier
+# check against a scratch copy of the library with that one entry removed, so
+# the assertion is shown able to fail.
+# bats test_tags=whole-tree
+@test "the quick classifier library is a global rule, and the tier check fails on a copy without its entry" {
+  local scratch_library="$BATS_TEST_TMPDIR/audit-rules-changed-scratch.sh" classifier=".claude/hooks/lib/audit-quick-classify-lib.sh"
+  run audit_rules_reset_for "code-audit-frontend" <<<"$classifier"
+  [ "$status" -eq 0 ]
+  [ "$output" = "$(printf 'global\t%s' "$classifier")" ]
+  grep -vxF -- "$classifier" "$RULES_LIBRARY" >"$scratch_library"
+  [ "$(wc -l <"$RULES_LIBRARY" | tr -d ' ')" -eq $(($(wc -l <"$scratch_library" | tr -d ' ') + 1)) ]
+  run bash -c '. "$1"; audit_path_is_global_rule "$2"' _ "$scratch_library" "$classifier"
+  [ "$status" -ne 0 ]
+  run bash -c '. "$1"; audit_path_is_global_rule "$2"' _ "$RULES_LIBRARY" "$classifier"
+  [ "$status" -eq 0 ]
+}
+
+# bats test_tags=whole-tree
+@test "the quick-route corpus is a global rule and is also machinery" {
+  . "$REPO_ROOT/.claude/hooks/lib/audit-machinery.sh"
+  audit_path_is_global_rule ".gaia/scripts/tests/fixtures/audit-quick-corpus.json" || return 1
+  audit_path_is_machinery ".gaia/scripts/tests/fixtures/audit-quick-corpus.json" || return 1
+  run audit_path_is_global_rule ".gaia/scripts/tests/fixtures/audit-quick-corpus.json.bak"
+  [ "$status" -ne 0 ]
 }
 
 @test "audit_rules_reset_for reports the global tier for a light-review file" {
@@ -168,6 +196,8 @@ EOF
   run audit_path_is_global_rule ".gaia/scripts/audit-light-telemetry.sh"
   [ "$status" -ne 0 ]
   run audit_path_is_global_rule ".claude/hooks/lib/audit-light-route-lib.sh.bak"
+  [ "$status" -ne 0 ]
+  run audit_path_is_global_rule ".claude/hooks/lib/audit-quick-classify-lib.sh.bak"
   [ "$status" -ne 0 ]
   run audit_path_is_global_rule ".claude/agents/audit-light-reviewer.md.orig"
   [ "$status" -ne 0 ]

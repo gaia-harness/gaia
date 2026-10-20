@@ -161,7 +161,7 @@ HOOKS_COST_OUTLIERS=(audit-scope-routing-parity.bats audit-loop-bound.bats githo
 # restated, so the id list and the assignment cannot disagree about how many
 # buckets a group has.
 HOOKS_GREEDY_IDS=(hooks-2 hooks-3 hooks-4)
-SCRIPTS_IDS=(scripts-1 scripts-2 scripts-3)
+SCRIPTS_IDS=(scripts-1 scripts-2 scripts-3 scripts-4)
 
 SHARD_IDS=(
   hooks-1

@@ -45,6 +45,13 @@
 # the reviewer was shown. A reply that resolves a finding the delta never
 # touched is refused, whatever the reviewer wrote.
 #
+# A merge-base record (a first-dispatch quick review) takes a stricter reply:
+# blocking or clear, never a findings array, an extra key, a non-empty
+# `resolved`, or a minor or nit note; any of those is verdict-malformed and the
+# member runs in full. The ledger line's `marked_at` is when the unit handed the
+# reply over (taken before the reply is read), so a slow read shows on disk
+# against the record's `routed_at` and the reviewer duration.
+#
 # The persisted reply is the record of what the reviewer said and survives
 # every outcome after step 2. Every outcome after step 3 appends one line to
 # the light-review ledger, `<light>/<branch-slug>.reviews.jsonl`; a ledger or
@@ -72,18 +79,28 @@ _light_mark_degraded() {
 # _light_mark_record_outcome <clear|escalate|failed>: the ledger line and the
 # telemetry event. Neither can alter the decision already made.
 _light_mark_record_outcome() {
-  local outcome="$1" ledger_path
+  local outcome="$1" ledger_path anchor_kind=""
+  if [ -f "$light_directory/$digest.$member.route.json" ]; then
+    anchor_kind="$(jq -r '.anchor_kind // "" | strings' "$light_directory/$digest.$member.route.json" 2>/dev/null)" || anchor_kind=""
+  fi
   if [ -n "$branch_slug" ]; then
     ledger_path="$light_directory/$branch_slug.reviews.jsonl"
     jq -n -c --arg member "$member" --arg digest "$digest" --arg tree "$head_tree" \
       --arg verdict "$outcome" --arg at "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
-      '{member: $member, digest: $digest, tree: $tree, verdict: $verdict, at: $at}' >>"$ledger_path" 2>/dev/null || true
+      --arg anchor_kind "$anchor_kind" --arg marked_at "$marked_at" --arg duration "$reviewer_duration" \
+      '{member: $member, digest: $digest, tree: $tree, verdict: $verdict, at: $at,
+        anchor_kind: (if $anchor_kind == "" then null else $anchor_kind end),
+        marked_at: $marked_at,
+        reviewer_duration_ms: (if $duration == "" then null else ($duration | tonumber) end)}' >>"$ledger_path" 2>/dev/null || true
   fi
   # gaia:maintainer-only:start
   if [ -f "$root/.gaia/scripts/audit-light-telemetry.sh" ]; then
     local -a telemetry_arguments=(outcome --root "$root" --member "$member" --digest "$digest" --tree "$head_tree" --verdict "$outcome")
     [ -z "$reviewer_tokens" ] || telemetry_arguments+=(--tokens "$reviewer_tokens")
     [ -z "$reviewer_duration" ] || telemetry_arguments+=(--duration-ms "$reviewer_duration")
+    case "$anchor_kind" in
+      full | refusal | merge-base) telemetry_arguments+=(--anchor-kind "$anchor_kind") ;;
+    esac
     bash "$root/.gaia/scripts/audit-light-telemetry.sh" ${telemetry_arguments[@]+"${telemetry_arguments[@]}"} >/dev/null 2>&1 || true
   fi
   # gaia:maintainer-only:end
@@ -99,6 +116,7 @@ _light_mark_full() {
 }
 
 light_mark_main() {
+  marked_at="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
   root=""
   member=""
   reviewer_tokens=""
@@ -209,6 +227,12 @@ light_mark_main() {
         elif ($verdict.member != $route.member or $verdict.digest != $route.digest or $verdict.tree != $route.tree) then "mismatch"
         elif (([$verdict.files[].path] | sort) != ([$route.files[].path] | sort)) then "mismatch"
         elif ($verdict.verdict == "escalate" or any($verdict.files[]; .verdict == "escalate")) then "escalate"
+        elif ($route.anchor_kind == "merge-base") and (
+          (($verdict | keys | sort) != ["digest", "files", "member", "reason", "resolved", "schema", "tree", "verdict"])
+          or ($verdict.resolved != [])
+          or ([$verdict.files[] | (keys | sort) == ["note", "path", "verdict"]] | all | not)
+          or ([$verdict.reason, $verdict.files[].note] | map(strings) | any(test("\\b(minor|nit|nits|nitpick)\\b"; "i")))
+        ) then "malformed"
         elif $route.reason != "refusal-anchored" then "ok"
         else
           ([($route.checklist // [])[].key]) as $open

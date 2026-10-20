@@ -47,19 +47,24 @@ A nested Agent call that errors with no `BLOCKED:` anywhere is `failure`. The on
 
 For every member the wave would dispatch that is not already cleared for its current digest, in this order:
 
-1. Run `bash <root>/.gaia/scripts/audit-light-route.sh --root <root> --member <m>`. A non-zero exit, or a first field other than `light`, means dispatch the member exactly as before. The router also routes `light` the delta after a member's recorded refusal (the reason says `refusal-anchored`); the unit acts on the first field only, whichever anchor the router used.
+1. Run `bash <root>/.gaia/scripts/audit-light-route.sh --root <root> --member <m>`. A non-zero exit, or a first field other than `light`, means dispatch the member exactly as before. The router also routes `light` the delta after a member's recorded refusal (the reason says `refusal-anchored`) and a frontend member's first dispatch, anchored on the merge base (the reason says `quick-eligible`); the unit acts on the first field only, whichever anchor the router used.
 2. On `light`, derive the digest with `bash <root>/.gaia/scripts/audit-member-digest.sh --root <root> --member <m> --ref <the HEAD tree captured for this wave>`. The router prints only `<route>`, tab, `<reason>`, and the route record's path is keyed by the digest, so the unit derives it; keying it to the captured tree rather than a live HEAD means a HEAD move cannot point the reviewer at another digest's input. A non-zero exit or empty output means dispatch the member as before. Otherwise dispatch `audit-light-reviewer` instead of the member, in the same parallel wave as the other members, with the brief `Working root: <root>`, `Expected HEAD tree: <tree captured for this wave>`, `Member: <m>`, `Input: <root>/.gaia/local/audit/light/<digest>.<m>.input.md`.
-3. When the reviewer returns, write its reply verbatim with the Write tool to a file in your session scratchpad directory, then run `bash <root>/.gaia/scripts/audit-light-mark.sh --root <root> --member <m> --verdict <that file's absolute path> --reviewer-tokens <n> --reviewer-duration-ms <n>`. A heredoc or pipe carrying the reply is refused under worktree confinement, so the file is the only spelling that runs there. When the reviewer errored or returned nothing, write no file and run the same command with `--verdict -` and `< /dev/null`. Omit the two reviewer flags when the values are unknown. Never edit, summarize, or reformat the reply.
+3. When the reviewer returns, write its reply verbatim with the Write tool to a file in your session scratchpad directory, then run `bash <root>/.gaia/scripts/audit-light-mark.sh --root <root> --member <m> --verdict <that file's absolute path> --reviewer-tokens <n> --reviewer-duration-ms <n>`. A heredoc or pipe carrying the reply is refused under worktree confinement, so the file is the only spelling that runs there. When the reviewer errored or returned nothing, write no file and run the same command with `--verdict -` and `< /dev/null`. The reviewer's completion notification reports its duration and tokens: take `--reviewer-duration-ms` and `--reviewer-tokens` from it. Omit the two reviewer flags when the values are unknown. Never edit, summarize, or reformat the reply.
 4. On `light-cleared` the member is cleared for this digest: do not dispatch it. On any `full` line or a non-zero exit, dispatch the member on the same tree in this round; the bound hook counts that dispatch as a round as usual. A no-op, empty, or malformed reply is not re-dispatched, unlike the single re-dispatch `.claude/rules/subagent-dispatch.md` prescribes for a no-op agent artifact: the full member is strictly more coverage than a second light attempt, so falling back to it is the retry.
 5. The light-marker script is the only light writer. Never write a verdict, route record, or marker by any other route.
 
 Light routing happens only in this unit's member wave.
+
+### Waiting for a dispatch
+
+A nested dispatch returns at once as launched; its completion notification reaches you only at your next tool-result boundary, so wait in short Bash steps and never in one long call. While only light reviewers are outstanding, each step is one Bash call `perl -e 'select(undef,undef,undef,5)'` (5 s). While a member, fixer or other long dispatch is outstanding, each step is at most 30 s. No single wait reaches a minute. After each step, check whether the completion notification has arrived. A reviewer still silent after 24 steps has returned nothing: mark it with `--verdict -` and `< /dev/null`, which routes the member full.
 
 ## Per round
 
 Follow the page in this order: `#### The audit loop unit` for the unit's shape, `#### Dispatching the members` for the member spawn and its prompt template, then `#### The fix round: fixer, verifier, gate`, then `#### When rounds stop: pre-commit a disposition for every branch`, and `#### Cross-remit findings` for any out-of-scope or cross-remit finding. Unit-specific rules on top:
 
 - Dispatch the round's members in parallel, each routed as `## Routing each member` says.
+- A member that light-cleared in a round is never dispatched to a fixer and never the subject of a fix round; findings exist only from dispatched full members.
 <!-- gaia:maintainer-only:start -->
 - After each member's result lands, run `[ -f <root>/.gaia/scripts/audit-light-telemetry.sh ] && bash <root>/.gaia/scripts/audit-light-telemetry.sh member-result --root <root> --member <m> || true`.
 <!-- gaia:maintainer-only:end -->
@@ -83,6 +88,10 @@ Follow the page in this order: `#### The audit loop unit` for the unit's shape, 
 - Then run `bash <root>/.gaia/scripts/audit-dispositions-check.sh check-outcomes --root <root> --run-folder <run> --round <r>`. A non-zero exit stops the unit `dispositions-check-failed`, naming the keys it prints; the round's commit is already pushed, and the stop only prevents the next round and the merge. An `absent` or `transient` outcome never stops the unit and never blocks the merge. Never run `gh issue` yourself and never file by any other route.
 - Count the `diverted` outcome lines into `diverted_count` and their `record` paths into `diverted_records`, and the files left in `<run>/filing-retry/` into `filing_pending`. Then write the residual, waiver and not-filed sections into the PR body from `bash <root>/.gaia/scripts/audit-dispositions-check.sh pr-sections --root <root> --run-folder <run>`; diverts render there as a count only.
 - Never start a background shell except where a step above prescribes one, and never end your turn while waiting on a dispatch or a command: wait on a background run with a Monitor until-loop, not by ending the turn.
+
+### Quick-clear path
+
+When every dispatch in round `<s>`'s wave was a light reviewer and each returned `light-cleared`, no round opened: the state file holds your admitted window and no round. Skip `unit-window` (its window holds no round to act on). Run no baseline, fixer, verifier, gate, round-check, commit, filing, retry pass, outcomes check or residual-section write. Republish the `## Audit rounds` record once (`audit-loop-eval.sh record-values` into `audit-loop-record.sh`) so the PR body shows the quick review, write `unit-<u>.json` with `rounds: [{"round":<s>,"opened":false,"reason":"clean"}]`, `stop_reason: "clean"`, `marker_state` cleared and empty filing fields, and return. The target for this path, unit dispatch to report, is about two minutes.
 
 ## When to stop
 
