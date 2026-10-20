@@ -101,7 +101,7 @@ _gaia_reaper_walk_nested() {
         printf '%s/%s\n' "$row_directory" "$key"
         continue
       fi
-      [ -d "$absolute" ] && [ ! -L "$absolute" ] || continue
+      if [ ! -d "$absolute" ] || [ -L "$absolute" ]; then continue; fi
       descend=0
       while IFS= read -r live_key; do
         case "$live_key" in "$key"/*) descend=1 ;; esac
