@@ -3,7 +3,7 @@ type: concept
 title: GAIA Spec
 status: active
 created: 2026-05-06
-updated: 2026-10-17
+updated: 2026-10-20
 tags: [concept, claude, skill, orchestration]
 ---
 
@@ -20,7 +20,7 @@ For cross-cutting architecture, consider `/effort high` before starting.
 - **No machine-local memory for project decisions.** The skill must never write to `~/.claude/projects/.../memory/`. Project-relevant decisions belong only in the SPEC artifact, the wiki, or `.claude/rules/`.
 - **Write-surface allowlist.** Every write during a session lands in `.notebook/specs/**`, `.gaia/local/cache/**`, `.gaia/local/telemetry/**`, or `.notebook/catalog.json` (through the ledger and notebook libraries). Source files are off-limits. No automated check enforces this allowlist; the session polices it at the instruction level, and the step-10 lint checks only the saved SPEC's immutability.
 - **One question at a time in the clarify loop.** Each answer shapes the next question. Closed-set questions go through `AskUserQuestion` within its four-option cap: recommended FIRST, up to two alternatives, `Discuss this`. The tool supplies `Other`, which also takes a typed save request; `.claude/skills/gaia/references/spec/clarify-loop.md` owns the full option contract, and `.claude/rules/user-questions.md` the general rule behind it. Open-ended questions use plain prompts.
-- **Closed-set decisions are menus.** Both gates ask `Looks right` (Recommended) or `Revise` through `AskUserQuestion`, a typed revision arriving through `Other`. Self-review and audit findings ask apply, keep, or revise, one question per finding, independent findings batched up to four per call.
+- **Closed-set decisions are menus.** Both gates ask `Looks right` (Recommended) or `Revise` through `AskUserQuestion`, a typed revision arriving through `Other`. Self-review and audit findings print as one list, each with its recommendation, and ask once: `Accept all as recommended` (Recommended) or `Revise`, which follows up only on the findings the user names.
 - **Two-gate ceremony.** Gate 1 confirms intent + UATs in plain English before the clarify loop. Gate 2 confirms the rendered artifact before save. No silent advances.
 - **Coach tone, not interrogator.** Mirror back, name trade-offs, propose candidates. Never punt research to the human.
 

@@ -75,15 +75,14 @@ The self-review agent already applied every `minor` `suggested_fix` (6a); main g
   >
   > **Suggested fix:** <suggested_fix>
 
-  Then ask with `AskUserQuestion` (header `Self-review`, single-select), one question per finding. The question text carries the finding's `SR-NNN` id, the issue in one line, and the suggested fix. Its three options:
+  Print every gated finding this way, each block ending with its `SR-NNN` id and its recommendation: apply the suggested fix, or keep the current draft when the finding itself recommends keeping. Then ask one `AskUserQuestion` for the whole list (header `Self-review`, single-select), per `.claude/rules/user-questions.md`'s review-list rule:
 
-  - `Apply the fix (Recommended)`: fold the suggested fix.
-  - `Keep the current draft`: fold nothing.
-  - `Revise`: fold a different change.
+  - `Accept all as recommended (Recommended)`: every finding takes its own recommendation.
+  - `Revise`: change some findings.
 
-  When the finding itself recommends keeping the draft, `Keep the current draft (Recommended)` leads instead. A typed revision arrives through the tool's own `Other` answer; `Revise` with no text asks what to change as a plain follow-up. Batch independent findings, up to 4 questions per `AskUserQuestion` call, in successive calls when there are more, printing each batch's findings above its call; a finding waits for an earlier answer only when its fix depends on that answer. Never mix recommendations in one call: batch the findings that recommend applying apart from those that recommend keeping, in successive calls, so the first option means the same action on every tab of one menu. Record every answer of a batch before continuing.
+  `Revise` asks which findings to change and what to change, a free-text answer, unless a typed answer through the tool's own `Other` already says; follow up only on those findings. Each named finding takes the user's change (apply, keep, or a different fold); every finding not named keeps its recommendation.
 
-  An **approved** gated fix folds through the **delegated fold** (see "Audit cache + delegated fold" in `spec.md`), keyed by its `SR-NNN` id in the decision list; do not emit a main-thread draft `Write` for the fold. On `Revise`, route the user's revision through the same delegated fold. On `Keep the current draft`, fold nothing.
+  Record one decision-list entry per finding, keyed by its `SR-NNN` id: `apply` or `keep` from its recommendation or the user's change, `revise` with the user's text for a different fold. Applied and revised entries fold through the **delegated fold** (see "Audit cache + delegated fold" in `spec.md`); do not emit a main-thread draft `Write` for the fold. A `keep` entry folds nothing.
 
 ## 6c. Pending clarifications block-or-defer
 
