@@ -746,6 +746,7 @@ test("adds two numbers c407", () => {
   MAIN="$(gaia_new_main gaia-c501-main)"
   gaia_copy_real "$MAIN" \
     .gaia/statusline/gaia-statusline.sh \
+    .gaia/statusline/gaia-statusline-right.sh \
     .gaia/scripts/main-root-lib.sh
   gaia_commit_all "$MAIN" "add statusline + resolver"
 

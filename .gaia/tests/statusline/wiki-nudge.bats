@@ -23,6 +23,7 @@ setup() {
   command -v node >/dev/null 2>&1 || skip "node required"
 
   STATUSLINE_SOURCE="$REPO_ROOT/.gaia/statusline/gaia-statusline.sh"
+  STATUSLINE_RIGHT_SOURCE="$REPO_ROOT/.gaia/statusline/gaia-statusline-right.sh"
   CHECK_UPDATES_SOURCE="$REPO_ROOT/.gaia/scripts/check-updates.sh"
   MAIN_ROOT_LIBRARY_SOURCE="$REPO_ROOT/.gaia/scripts/main-root-lib.sh"
   REAL_GAIA="$REPO_ROOT/.gaia/cli/gaia"
@@ -97,6 +98,7 @@ make_statusline_fixture() {
   git -C "$STATUSLINE_FIXTURE" config commit.gpgsign false
   mkdir -p "$STATUSLINE_FIXTURE/.gaia/statusline" "$STATUSLINE_FIXTURE/.gaia/local/cache/shared"
   cp "$STATUSLINE_SOURCE" "$STATUSLINE_FIXTURE/.gaia/statusline/gaia-statusline.sh"
+  cp "$STATUSLINE_RIGHT_SOURCE" "$STATUSLINE_FIXTURE/.gaia/statusline/gaia-statusline-right.sh"
   echo "x" > "$STATUSLINE_FIXTURE/README.md"
   git -C "$STATUSLINE_FIXTURE" add -A
   git -C "$STATUSLINE_FIXTURE" commit --quiet -m "init"
@@ -194,6 +196,7 @@ make_repo() {
   cp "$CHECK_UPDATES_SOURCE" "$REPOSITORY_FIXTURE/.gaia/scripts/check-updates.sh"
   cp "$MAIN_ROOT_LIBRARY_SOURCE" "$REPOSITORY_FIXTURE/.gaia/scripts/main-root-lib.sh"
   cp "$STATUSLINE_SOURCE" "$REPOSITORY_FIXTURE/.gaia/statusline/gaia-statusline.sh"
+  cp "$STATUSLINE_RIGHT_SOURCE" "$REPOSITORY_FIXTURE/.gaia/statusline/gaia-statusline-right.sh"
   printf '#!/usr/bin/env bash\nexit 0\n' > "$REPOSITORY_FIXTURE/.gaia/scripts/resolve-audit-members.sh"
   # Not executable on purpose: the statusline fires its refresher only when
   # `-x`, and a render-spawned background run would race the explicit
@@ -386,13 +389,13 @@ stage_state_advance() {
 
 @test "a statusline with the comparison weakened to -gt fails the 20-commit case" {
   make_statusline_fixture
-  mutant="$STATUSLINE_FIXTURE/.gaia/statusline/gaia-statusline-mutant.sh"
+  mutant="$STATUSLINE_FIXTURE/.gaia/statusline/gaia-statusline-right.sh"
   # shellcheck disable=SC2016  # the pattern names a literal `$`, not an expansion
-  sed 's/-ge "$WIKI_NUDGE_THRESHOLD"/-gt "$WIKI_NUDGE_THRESHOLD"/' "$STATUSLINE_SOURCE" > "$mutant"
-  cmp -s "$STATUSLINE_SOURCE" "$mutant" && return 1
+  sed 's/-ge "$WIKI_NUDGE_THRESHOLD"/-gt "$WIKI_NUDGE_THRESHOLD"/' "$STATUSLINE_RIGHT_SOURCE" > "$mutant"
+  cmp -s "$STATUSLINE_RIGHT_SOURCE" "$mutant" && return 1
 
   printf '%s' '{"wikiDriftCount":20}' > "$STATUSLINE_FIXTURE/.gaia/local/cache/shared/update-check.json"
-  render_statusline "$mutant" "$STATUSLINE_FIXTURE"
+  render_statusline "$STATUSLINE_FIXTURE/.gaia/statusline/gaia-statusline.sh" "$STATUSLINE_FIXTURE"
   [ "$status" -eq 0 ]
   # The real script's 20-commit assertion is `assert_wiki_nudge 20`; the mutant
   # must not satisfy it.

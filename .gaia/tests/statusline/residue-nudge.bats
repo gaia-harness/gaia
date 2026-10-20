@@ -31,6 +31,7 @@ setup() {
   git -C "$MAIN" config commit.gpgsign false
   mkdir -p "$MAIN/.gaia/statusline" "$MAIN/.gaia/local/cache/shared"
   cp "$STATUSLINE_SOURCE/gaia-statusline.sh" "$MAIN/.gaia/statusline/gaia-statusline.sh"
+  cp "$STATUSLINE_SOURCE/gaia-statusline-right.sh" "$MAIN/.gaia/statusline/gaia-statusline-right.sh"
   echo "x" > "$MAIN/README.md"
   git -C "$MAIN" add -A
   git -C "$MAIN" commit --quiet -m "init"
@@ -281,7 +282,7 @@ run_statusline_with_cache() {
 # --- Threshold provenance ---
 
 @test "the count threshold appears exactly once as a named constant" {
-  block=$(grep -A 10 'RESIDUE_NUDGE_THRESHOLD=5' "$STATUSLINE_SOURCE/gaia-statusline.sh")
+  block=$(grep -A 10 'RESIDUE_NUDGE_THRESHOLD=5' "$STATUSLINE_SOURCE/gaia-statusline-right.sh")
   [ -n "$block" ]
   [ "$(grep -c 'RESIDUE_NUDGE_THRESHOLD=5' <<<"$block")" -eq 1 ]
   rest=$(grep -v 'RESIDUE_NUDGE_THRESHOLD=5' <<<"$block")

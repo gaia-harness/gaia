@@ -349,6 +349,7 @@ refresh_fields() {
   local home_directory="$BATS_TEST_TMPDIR/home" payload plain
   mkdir -p "$home_directory" "$SCRATCH_ROOT/.gaia/statusline"
   cp "$SCRIPTS_DIRECTORY/../statusline/gaia-statusline.sh" "$SCRATCH_ROOT/.gaia/statusline/gaia-statusline.sh"
+  cp "$SCRIPTS_DIRECTORY/../statusline/gaia-statusline-right.sh" "$SCRATCH_ROOT/.gaia/statusline/gaia-statusline-right.sh"
   printf '{"completed_at":"2026-01-01T00:00:00Z"}' > "$SCRATCH_ROOT/.gaia/local/setup-state.json"
   payload=$(jq -n --arg directory "$SCRATCH_ROOT" '{workspace: {current_dir: $directory}, cwd: $directory, model: {display_name: "Test"}, context_window: {used_percentage: 10}}')
   run env HOME="$home_directory" COLUMNS=200 bash -c "printf '%s' '$payload' | bash '$SCRATCH_ROOT/.gaia/statusline/gaia-statusline.sh'"

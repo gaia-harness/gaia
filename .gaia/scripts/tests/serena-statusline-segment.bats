@@ -37,6 +37,7 @@ refute_contains() {
 setup() {
   THIS_DIRECTORY="$(cd "$(dirname "$BATS_TEST_FILENAME")" && pwd)"
   STATUSLINE_SOURCE="$THIS_DIRECTORY/../../statusline/gaia-statusline.sh"
+  STATUSLINE_RIGHT_SOURCE="$THIS_DIRECTORY/../../statusline/gaia-statusline-right.sh"
   RESOLVER_SOURCE="$THIS_DIRECTORY/../main-root-lib.sh"
   [ -f "$STATUSLINE_SOURCE" ] || skip "gaia-statusline.sh missing"
   [ -f "$RESOLVER_SOURCE" ] || skip "main-root-lib.sh missing"
@@ -78,6 +79,7 @@ scaffold_root() {
   mkdir -p "$root/.gaia/statusline" "$root/.gaia/scripts" \
            "$root/.gaia/local/cache/shared" "$root/.gaia/local"
   cp "$STATUSLINE_SOURCE" "$root/.gaia/statusline/gaia-statusline.sh"
+  cp "$STATUSLINE_RIGHT_SOURCE" "$root/.gaia/statusline/gaia-statusline-right.sh"
   cp "$RESOLVER_SOURCE" "$root/.gaia/scripts/main-root-lib.sh"
 }
 
