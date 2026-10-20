@@ -51,6 +51,13 @@ AUDIT_MACHINERY_PATHS="$(cat <<'EOF'
 .gaia/scripts/link-worktree.sh
 .github/audit/**
 .claude/agents/code-audit-frontend.md
+# These three decide what a frontend clearance vouches for: the rule specialist
+# and refuter the frontend member dispatches, and the oracle script it runs.
+# The refuter reference needs no entry: the .claude/hooks/lib/** prefix above
+# already covers it.
+.claude/agents/audit-rule-specialist.md
+.claude/agents/audit-refuter.md
+.gaia/scripts/audit-frontend-oracles.sh
 # gaia:maintainer-only:start
 .claude/agents/code-audit-maintainer-shell.md
 .claude/agents/code-audit-maintainer-node.md

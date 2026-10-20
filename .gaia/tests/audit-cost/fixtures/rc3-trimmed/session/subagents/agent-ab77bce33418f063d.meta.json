@@ -1,0 +1,1 @@
+{"agentType":"general-purpose","description":"Round 1 audit fixer","toolUseId":"toolu_01Xuf2oiVgRHuG7yMGPBaxny","parentAgentId":"ab6f904bff8096d2b","spawnDepth":2,"requestShape":"background","requestNonInteractive":true,"model":"sonnet","effort":"medium","finished":true}

@@ -22,9 +22,10 @@
 # making a one-word rule edit the most expensive change in the repository.
 # The two rules that DO decide gate mechanics are named individually below.
 #
-# A member's own agent definition (.claude/agents/<member>.md) is a second,
-# narrower case: it decides only what that one member reviews and how, so it
-# resets only that member's anchor. This is the MEMBER tier.
+# A member's own agent definition (.claude/agents/<member>.md) and its
+# companion files (AUDIT_MEMBER_COMPANION_PATHS below) are a second, narrower
+# case: they decide only what that one member reviews and how, so they reset
+# only that member's anchor. This is the MEMBER tier.
 #
 # Everything else in the machinery set is merely shared: it still rotates
 # digests (a fresh clearance is still required before the merge gate opens),
@@ -82,8 +83,8 @@ AUDIT_GLOBAL_RULES_PATHS="$(cat <<'EOF'
 # gaia:maintainer-only:start
 # The shared member protocol is the report format, gate handshake and sidecar
 # contract of every member, read at the start of every review. It is not the
-# own definition of any one member, so the member tier (which matches only
-# .claude/agents/<member>.md) never reaches it; a change to it moves what every
+# own definition or companion file of any one member, so the member tier (which
+# matches only .claude/agents/<member>.md and the companion rows) never reaches it; a change to it moves what every
 # standing clearance was judged under, so it resets the anchor of every member.
 # No apostrophe may appear in this literal: bash 3.2 mis-parses one inside a
 # command substitution that wraps a heredoc.
@@ -119,13 +120,43 @@ EOF
   return 1
 }
 
+# Member companion files, rows of "<member> <path>" (one space). Companion
+# files decide only what one member reviews and how, so they reset only that
+# member's anchor, like its own definition, instead of joining the global
+# tier. Lines starting with # are skipped. No apostrophe may appear in this
+# literal: bash 3.2 mis-parses one inside a command substitution that wraps a
+# heredoc.
+AUDIT_MEMBER_COMPANION_PATHS="$(cat <<'EOF'
+# The refuter reference, the rule specialist and refuter the frontend member
+# dispatches, and the oracle script it runs.
+code-audit-frontend .claude/hooks/lib/audit-frontend-refuter.md
+code-audit-frontend .claude/agents/audit-rule-specialist.md
+code-audit-frontend .claude/agents/audit-refuter.md
+code-audit-frontend .gaia/scripts/audit-frontend-oracles.sh
+EOF
+)"
+
 # audit_path_is_member_rule <path> <member> -> exit 0 iff <member> is
-# non-empty and <path> is exactly .claude/agents/<member>.md.
+# non-empty and <path> is exactly .claude/agents/<member>.md or a companion
+# row for <member> in AUDIT_MEMBER_COMPANION_PATHS.
 audit_path_is_member_rule() {
-  local path="$1" member="$2"
+  local path="$1" member="$2" row_member row_path
 
   [ -n "$member" ] || return 1
-  [ "$path" = ".claude/agents/${member}.md" ]
+  [ "$path" = ".claude/agents/${member}.md" ] && return 0
+
+  while IFS=' ' read -r row_member row_path; do
+    case "$row_member" in
+      ""|"#"*) continue ;;
+    esac
+    if [ "$row_member" = "$member" ] && [ "$row_path" = "$path" ]; then
+      return 0
+    fi
+  done <<EOF
+$AUDIT_MEMBER_COMPANION_PATHS
+EOF
+
+  return 1
 }
 
 # audit_rules_reset_for <member>: BATCH, newline-delimited paths on stdin.

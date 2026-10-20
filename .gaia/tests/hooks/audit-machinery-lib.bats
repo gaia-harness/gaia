@@ -114,3 +114,45 @@ PATHS
   run audit_path_is_machinery ".claude/agents/audit-light-reviewer.md.orig"
   [ "$status" -ne 0 ]
 }
+
+# The rule specialist, the refuter and the oracle script decide what a
+# frontend clearance vouches for. The refuter reference is covered by the
+# .claude/hooks/lib/** prefix, so it is asserted too: narrowing the prefix reds
+# here.
+
+@test "each frontend clearance companion is machinery and the batch classifier flags it" {
+  local companion_path
+  for companion_path in \
+    .claude/agents/audit-rule-specialist.md \
+    .claude/agents/audit-refuter.md \
+    .gaia/scripts/audit-frontend-oracles.sh \
+    .claude/hooks/lib/audit-frontend-refuter.md; do
+    audit_path_is_machinery "$companion_path" || { echo "not machinery: $companion_path" >&2; return 1; }
+  done
+  run audit_machinery_flags <<'PATHS'
+.claude/agents/audit-rule-specialist.md
+.claude/agents/audit-refuter.md
+.gaia/scripts/audit-frontend-oracles.sh
+.claude/hooks/lib/audit-frontend-refuter.md
+PATHS
+  [ "$status" -eq 0 ]
+  [ "${#lines[@]}" -eq 4 ]
+  for line in "${lines[@]}"; do
+    case "$line" in
+      *$'\t'1) ;;
+      *) echo "not flagged: $line" >&2; return 1 ;;
+    esac
+  done
+}
+
+@test "the frontend clearance companion entries can fail: a copy without them flags the three exact paths 0 and the prefix-covered reference 1" {
+  local scratch_library="$BATS_TEST_TMPDIR/audit-machinery-scratch.sh"
+  grep -vxF -e ".claude/agents/audit-rule-specialist.md" -e ".claude/agents/audit-refuter.md" -e ".gaia/scripts/audit-frontend-oracles.sh" "$MACHINERY_LIBRARY" >"$scratch_library"
+  [ "$(wc -l <"$MACHINERY_LIBRARY" | tr -d ' ')" -eq $(($(wc -l <"$scratch_library" | tr -d ' ') + 3)) ]
+  run bash -c '. "$1"; printf "%s\n" .claude/agents/audit-rule-specialist.md .claude/agents/audit-refuter.md .gaia/scripts/audit-frontend-oracles.sh .claude/hooks/lib/audit-frontend-refuter.md | audit_machinery_flags' _ "$scratch_library"
+  [ "$status" -eq 0 ]
+  [ "${lines[0]}" = "$(printf '.claude/agents/audit-rule-specialist.md\t0')" ]
+  [ "${lines[1]}" = "$(printf '.claude/agents/audit-refuter.md\t0')" ]
+  [ "${lines[2]}" = "$(printf '.gaia/scripts/audit-frontend-oracles.sh\t0')" ]
+  [ "${lines[3]}" = "$(printf '.claude/hooks/lib/audit-frontend-refuter.md\t1')" ]
+}

@@ -34,7 +34,7 @@
 #                        refusal's findings cannot be read at all
 #   rules-reset-global   a global-rules path changed since the anchor (a newline
 #                        in a changed path routes unclassifiable-path first)
-#   rules-reset-member   this member's own agent definition changed
+#   rules-reset-member   this member's own agent definition or a companion file changed
 #   unclassifiable-path  raw and numstat rows disagree, a path holds a newline,
 #                        the classifiers misalign, or the anchor's change cannot
 #                        be replayed onto HEAD's merge base (all before

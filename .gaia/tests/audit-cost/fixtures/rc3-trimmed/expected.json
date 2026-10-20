@@ -1,0 +1,620 @@
+{
+  "schema": 1,
+  "rates": {
+    "path": ".gaia/tests/audit-cost/fixtures/rc3-trimmed/token-rates.json",
+    "git_blob": "f7c02c06c18d46b162cdad276a48b6ecc24e1867"
+  },
+  "claude_code_version": "2.1.303",
+  "excluded_agent_types": [
+    "fitness-judge",
+    "worthiness-evaluator"
+  ],
+  "unit": {
+    "agent_id": "ab6f904bff8096d2b",
+    "cost_usd": 3.413167,
+    "first_call_context": 41304,
+    "calls": 79
+  },
+  "dispatches": [
+    {
+      "agent_id": "a64f34d2187c2e3b8",
+      "agent_type": "code-audit-frontend",
+      "child_kind": null,
+      "role": null,
+      "parent_agent_id": "ab6f904bff8096d2b",
+      "model": "claude-opus-5-5",
+      "round": 1,
+      "first_call": {
+        "context": 54004,
+        "fresh_input": 2,
+        "cache_write": 37224,
+        "cache_read": 16778
+      },
+      "first_call_attachments": {
+        "skill_listing": 26637,
+        "deferred_tools_delta": 1467
+      },
+      "steady_state_context": 86687,
+      "calls": 19,
+      "per_call": [
+        {
+          "cache_write": 37224,
+          "cache_read": 16778
+        },
+        {
+          "cache_write": 3262,
+          "cache_read": 54002
+        },
+        {
+          "cache_write": 16748,
+          "cache_read": 57264
+        },
+        {
+          "cache_write": 928,
+          "cache_read": 74012
+        },
+        {
+          "cache_write": 1586,
+          "cache_read": 74940
+        },
+        {
+          "cache_write": 1177,
+          "cache_read": 76526
+        },
+        {
+          "cache_write": 1231,
+          "cache_read": 77703
+        },
+        {
+          "cache_write": 1894,
+          "cache_read": 78934
+        },
+        {
+          "cache_write": 480,
+          "cache_read": 80828
+        },
+        {
+          "cache_write": 5377,
+          "cache_read": 81308
+        },
+        {
+          "cache_write": 6154,
+          "cache_read": 86685
+        },
+        {
+          "cache_write": 1219,
+          "cache_read": 92839
+        },
+        {
+          "cache_write": 721,
+          "cache_read": 94058
+        },
+        {
+          "cache_write": 7677,
+          "cache_read": 94779
+        },
+        {
+          "cache_write": 296,
+          "cache_read": 102456
+        },
+        {
+          "cache_write": 2097,
+          "cache_read": 102752
+        },
+        {
+          "cache_write": 354,
+          "cache_read": 104849
+        },
+        {
+          "cache_write": 635,
+          "cache_read": 105203
+        },
+        {
+          "cache_write": 207,
+          "cache_read": 105838
+        }
+      ],
+      "cost_usd": 0.998578,
+      "wall_s": 116.743,
+      "tool_s": 23.234,
+      "model_s": 93.509,
+      "prompt_chars": 2626,
+      "extension_rule_files": null,
+      "reads_refuter_reference": false,
+      "children_by_role": {
+        "typescript": 1
+      },
+      "noop_retries": 0,
+      "children_cost_usd": 0.132116,
+      "member_plus_children_cost_usd": 1.130694
+    },
+    {
+      "agent_id": "ade787e906be2321d",
+      "agent_type": "general-purpose",
+      "child_kind": "specialist",
+      "role": "typescript",
+      "parent_agent_id": "a64f34d2187c2e3b8",
+      "model": "claude-sonnet-5-5",
+      "round": 1,
+      "first_call": {
+        "context": 35930,
+        "fresh_input": 2,
+        "cache_write": 35928,
+        "cache_read": 0
+      },
+      "first_call_attachments": {
+        "skill_listing": 26637,
+        "deferred_tools_delta": 1467
+      },
+      "steady_state_context": null,
+      "calls": 2,
+      "per_call": [
+        {
+          "cache_write": 35928,
+          "cache_read": 0
+        },
+        {
+          "cache_write": 14498,
+          "cache_read": 35928
+        }
+      ],
+      "cost_usd": 0.132116,
+      "wall_s": 10.122,
+      "tool_s": 0.358,
+      "model_s": 9.764,
+      "prompt_chars": 3218,
+      "extension_rule_files": null,
+      "reads_refuter_reference": false,
+      "children_by_role": {},
+      "noop_retries": 0,
+      "children_cost_usd": 0,
+      "member_plus_children_cost_usd": 0.132116
+    },
+    {
+      "agent_id": "ae44e7eaa984fc0df",
+      "agent_type": "code-audit-frontend",
+      "child_kind": null,
+      "role": null,
+      "parent_agent_id": "ab6f904bff8096d2b",
+      "model": "claude-opus-5-5",
+      "round": 2,
+      "first_call": {
+        "context": 55340,
+        "fresh_input": 2,
+        "cache_write": 38560,
+        "cache_read": 16778
+      },
+      "first_call_attachments": {
+        "skill_listing": 0,
+        "deferred_tools_delta": 0
+      },
+      "steady_state_context": 92621,
+      "calls": 28,
+      "per_call": [
+        {
+          "cache_write": 38560,
+          "cache_read": 16778
+        },
+        {
+          "cache_write": 3262,
+          "cache_read": 55338
+        },
+        {
+          "cache_write": 16757,
+          "cache_read": 58600
+        },
+        {
+          "cache_write": 1015,
+          "cache_read": 75357
+        },
+        {
+          "cache_write": 1415,
+          "cache_read": 76372
+        },
+        {
+          "cache_write": 2749,
+          "cache_read": 77787
+        },
+        {
+          "cache_write": 2000,
+          "cache_read": 80536
+        },
+        {
+          "cache_write": 2354,
+          "cache_read": 82536
+        },
+        {
+          "cache_write": 1099,
+          "cache_read": 84890
+        },
+        {
+          "cache_write": 847,
+          "cache_read": 85989
+        },
+        {
+          "cache_write": 893,
+          "cache_read": 86836
+        },
+        {
+          "cache_write": 927,
+          "cache_read": 87729
+        },
+        {
+          "cache_write": 750,
+          "cache_read": 88656
+        },
+        {
+          "cache_write": 514,
+          "cache_read": 89406
+        },
+        {
+          "cache_write": 2699,
+          "cache_read": 89920
+        },
+        {
+          "cache_write": 6206,
+          "cache_read": 92619
+        },
+        {
+          "cache_write": 652,
+          "cache_read": 98825
+        },
+        {
+          "cache_write": 318,
+          "cache_read": 99477
+        },
+        {
+          "cache_write": 3029,
+          "cache_read": 99795
+        },
+        {
+          "cache_write": 1090,
+          "cache_read": 102824
+        },
+        {
+          "cache_write": 8333,
+          "cache_read": 103914
+        },
+        {
+          "cache_write": 4082,
+          "cache_read": 112247
+        },
+        {
+          "cache_write": 1337,
+          "cache_read": 116329
+        },
+        {
+          "cache_write": 1658,
+          "cache_read": 117666
+        },
+        {
+          "cache_write": 668,
+          "cache_read": 119324
+        },
+        {
+          "cache_write": 362,
+          "cache_read": 119992
+        },
+        {
+          "cache_write": 440,
+          "cache_read": 120354
+        },
+        {
+          "cache_write": 401,
+          "cache_read": 120794
+        }
+      ],
+      "cost_usd": 1.455087,
+      "wall_s": 202.51,
+      "tool_s": 29.23,
+      "model_s": 173.28,
+      "prompt_chars": 2626,
+      "extension_rule_files": null,
+      "reads_refuter_reference": false,
+      "children_by_role": {
+        "typescript": 1,
+        "translation": 1
+      },
+      "noop_retries": 0,
+      "children_cost_usd": 0.645688,
+      "member_plus_children_cost_usd": 2.100775
+    },
+    {
+      "agent_id": "a2397da8a129face3",
+      "agent_type": "general-purpose",
+      "child_kind": "specialist",
+      "role": "typescript",
+      "parent_agent_id": "ae44e7eaa984fc0df",
+      "model": "claude-opus-5-5",
+      "round": 2,
+      "first_call": {
+        "context": 37599,
+        "fresh_input": 2,
+        "cache_write": 37597,
+        "cache_read": 0
+      },
+      "first_call_attachments": {
+        "skill_listing": 0,
+        "deferred_tools_delta": 0
+      },
+      "steady_state_context": null,
+      "calls": 4,
+      "per_call": [
+        {
+          "cache_write": 37597,
+          "cache_read": 0
+        },
+        {
+          "cache_write": 17300,
+          "cache_read": 37597
+        },
+        {
+          "cache_write": 1060,
+          "cache_read": 54897
+        },
+        {
+          "cache_write": 1435,
+          "cache_read": 55957
+        }
+      ],
+      "cost_usd": 0.348962,
+      "wall_s": 17.216,
+      "tool_s": 1.478,
+      "model_s": 15.738,
+      "prompt_chars": 4041,
+      "extension_rule_files": null,
+      "reads_refuter_reference": false,
+      "children_by_role": {},
+      "noop_retries": 0,
+      "children_cost_usd": 0,
+      "member_plus_children_cost_usd": 0.348962
+    },
+    {
+      "agent_id": "af7ebba760f2842f0",
+      "agent_type": "general-purpose",
+      "child_kind": "specialist",
+      "role": "translation",
+      "parent_agent_id": "ae44e7eaa984fc0df",
+      "model": "claude-opus-5-5",
+      "round": 2,
+      "first_call": {
+        "context": 37323,
+        "fresh_input": 2,
+        "cache_write": 20921,
+        "cache_read": 16400
+      },
+      "first_call_attachments": {
+        "skill_listing": 0,
+        "deferred_tools_delta": 0
+      },
+      "steady_state_context": null,
+      "calls": 4,
+      "per_call": [
+        {
+          "cache_write": 20921,
+          "cache_read": 16400
+        },
+        {
+          "cache_write": 19657,
+          "cache_read": 37321
+        },
+        {
+          "cache_write": 990,
+          "cache_read": 56978
+        },
+        {
+          "cache_write": 1192,
+          "cache_read": 57968
+        }
+      ],
+      "cost_usd": 0.296725,
+      "wall_s": 26.027,
+      "tool_s": 1.386,
+      "model_s": 24.641,
+      "prompt_chars": 3238,
+      "extension_rule_files": null,
+      "reads_refuter_reference": false,
+      "children_by_role": {},
+      "noop_retries": 0,
+      "children_cost_usd": 0,
+      "member_plus_children_cost_usd": 0.296725
+    },
+    {
+      "agent_id": "a7a0ea760b88567e1",
+      "agent_type": "code-audit-frontend",
+      "child_kind": null,
+      "role": null,
+      "parent_agent_id": "ab6f904bff8096d2b",
+      "model": "claude-opus-5-5",
+      "round": 2,
+      "first_call": {
+        "context": 55352,
+        "fresh_input": 2,
+        "cache_write": 20705,
+        "cache_read": 34645
+      },
+      "first_call_attachments": {
+        "skill_listing": 0,
+        "deferred_tools_delta": 0
+      },
+      "steady_state_context": 102681,
+      "calls": 18,
+      "per_call": [
+        {
+          "cache_write": 20705,
+          "cache_read": 34645
+        },
+        {
+          "cache_write": 3263,
+          "cache_read": 55350
+        },
+        {
+          "cache_write": 16751,
+          "cache_read": 58613
+        },
+        {
+          "cache_write": 504,
+          "cache_read": 75364
+        },
+        {
+          "cache_write": 1009,
+          "cache_read": 75868
+        },
+        {
+          "cache_write": 16501,
+          "cache_read": 76877
+        },
+        {
+          "cache_write": 1902,
+          "cache_read": 93378
+        },
+        {
+          "cache_write": 1645,
+          "cache_read": 95280
+        },
+        {
+          "cache_write": 5754,
+          "cache_read": 96925
+        },
+        {
+          "cache_write": 6386,
+          "cache_read": 102679
+        },
+        {
+          "cache_write": 1995,
+          "cache_read": 109065
+        },
+        {
+          "cache_write": 2966,
+          "cache_read": 111060
+        },
+        {
+          "cache_write": 986,
+          "cache_read": 114026
+        },
+        {
+          "cache_write": 608,
+          "cache_read": 115012
+        },
+        {
+          "cache_write": 1133,
+          "cache_read": 115620
+        },
+        {
+          "cache_write": 996,
+          "cache_read": 116753
+        },
+        {
+          "cache_write": 438,
+          "cache_read": 117749
+        },
+        {
+          "cache_write": 399,
+          "cache_read": 118187
+        }
+      ],
+      "cost_usd": 1.057539,
+      "wall_s": 144.252,
+      "tool_s": 22.813,
+      "model_s": 121.439,
+      "prompt_chars": 2626,
+      "extension_rule_files": null,
+      "reads_refuter_reference": false,
+      "children_by_role": {
+        "react-patterns": 1,
+        "typescript": 1
+      },
+      "noop_retries": 0,
+      "children_cost_usd": 0.578625,
+      "member_plus_children_cost_usd": 1.636164
+    },
+    {
+      "agent_id": "a83570cdecae8a0ad",
+      "agent_type": "general-purpose",
+      "child_kind": "specialist",
+      "role": "react-patterns",
+      "parent_agent_id": "a7a0ea760b88567e1",
+      "model": "claude-opus-5-5",
+      "round": 2,
+      "first_call": {
+        "context": 37845,
+        "fresh_input": 2,
+        "cache_write": 37843,
+        "cache_read": 0
+      },
+      "first_call_attachments": {
+        "skill_listing": 0,
+        "deferred_tools_delta": 0
+      },
+      "steady_state_context": null,
+      "calls": 3,
+      "per_call": [
+        {
+          "cache_write": 37843,
+          "cache_read": 0
+        },
+        {
+          "cache_write": 18398,
+          "cache_read": 37843
+        },
+        {
+          "cache_write": 876,
+          "cache_read": 56241
+        }
+      ],
+      "cost_usd": 0.350306,
+      "wall_s": 23.011,
+      "tool_s": 0.463,
+      "model_s": 22.548,
+      "prompt_chars": 4893,
+      "extension_rule_files": null,
+      "reads_refuter_reference": false,
+      "children_by_role": {},
+      "noop_retries": 0,
+      "children_cost_usd": 0,
+      "member_plus_children_cost_usd": 0.350306
+    },
+    {
+      "agent_id": "aabad852a04d8aeac",
+      "agent_type": "general-purpose",
+      "child_kind": "specialist",
+      "role": "typescript",
+      "parent_agent_id": "a7a0ea760b88567e1",
+      "model": "claude-opus-5-5",
+      "round": 2,
+      "first_call": {
+        "context": 37766,
+        "fresh_input": 2,
+        "cache_write": 21364,
+        "cache_read": 16400
+      },
+      "first_call_attachments": {
+        "skill_listing": 0,
+        "deferred_tools_delta": 0
+      },
+      "steady_state_context": null,
+      "calls": 2,
+      "per_call": [
+        {
+          "cache_write": 21364,
+          "cache_read": 16400
+        },
+        {
+          "cache_write": 17978,
+          "cache_read": 37764
+        }
+      ],
+      "cost_usd": 0.228319,
+      "wall_s": 12.452,
+      "tool_s": 0.12,
+      "model_s": 12.332,
+      "prompt_chars": 4761,
+      "extension_rule_files": null,
+      "reads_refuter_reference": false,
+      "children_by_role": {},
+      "noop_retries": 0,
+      "children_cost_usd": 0,
+      "member_plus_children_cost_usd": 0.228319
+    }
+  ]
+}

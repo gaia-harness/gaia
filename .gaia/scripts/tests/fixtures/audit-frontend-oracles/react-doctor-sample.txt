@@ -1,0 +1,18 @@
+Scanning changes: feature-branch -> origin/main
+
+✔ Scanned 93 files in 3.4s
+
+React Doctor — frontend
+Score: 69 / 100 Needs work
+
+6 issues
+Maintainability: 6 warnings
+
+⚠ Non-component export in component file ×6
+  react-doctor/only-export-components
+  app/components/button/index.tsx:8
+  app/components/button/index.tsx:16
+  app/components/button/index.tsx:24
+  app/components/button/index.tsx:32
+  app/components/button/index.tsx:45
+  app/components/toast/index.tsx:31
