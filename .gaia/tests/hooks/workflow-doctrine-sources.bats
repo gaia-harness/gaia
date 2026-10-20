@@ -122,9 +122,12 @@ registry_ok() {
   local file_path="$1"
   [ -f "$file_path" ] || return 1
   jq -e '[.entries[] | select(.path == "runs/" and .scope == "shared"
-      and (.keyed_by | type == "string" and length > 0) and has("reaped_by"))] | length == 1' "$file_path" >/dev/null || return 1
+      and (.keyed_by | type == "string" and length > 0)
+      and .retention.class == "branch-spent" and .retention.key == "normalized-path"
+      and .retention.days == 7 and .retention.session_days == 30)] | length == 1' "$file_path" >/dev/null || return 1
   jq -e '[.entries[] | select(.path == "cache/doctrine-injected.*" and .scope == "main-only"
-      and .keyed_by == null and has("reaped_by"))] | length == 1' "$file_path" >/dev/null || return 1
+      and .keyed_by == null
+      and .retention.class == "age" and .retention.days == 7)] | length == 1' "$file_path" >/dev/null || return 1
   return 0
 }
 
@@ -264,7 +267,7 @@ pad_to() { # pad_to <src> <dst> <total bytes>: src plus filler so dst ends in on
 
 # ------------------------------------------------------------- 13. registry
 
-@test "registry: runs/ (shared) and cache/doctrine-injected.* (main-only) entries carry reaped_by" {
+@test "registry: runs/ (shared) and cache/doctrine-injected.* (main-only) entries carry their retention (runs is branch-spent, the marker ages out)" {
   registry_ok "$REGISTRY"
 }
 
@@ -273,7 +276,7 @@ pad_to() { # pad_to <src> <dst> <total bytes>: src plus filler so dst ends in on
   if registry_ok "$TEMPORARY_DIRECTORY/reg-runs.json"; then return 1; fi
   jq '.entries |= map(select(.path != "cache/doctrine-injected.*"))' "$REGISTRY" >"$TEMPORARY_DIRECTORY/reg-marker.json"
   if registry_ok "$TEMPORARY_DIRECTORY/reg-marker.json"; then return 1; fi
-  jq '.entries |= map(if .path == "runs/" then del(.reaped_by) else . end)' "$REGISTRY" >"$TEMPORARY_DIRECTORY/reg-reaped.json"
+  jq '.entries |= map(if .path == "runs/" then del(.retention) else . end)' "$REGISTRY" >"$TEMPORARY_DIRECTORY/reg-reaped.json"
   if registry_ok "$TEMPORARY_DIRECTORY/reg-reaped.json"; then return 1; fi
 }
 

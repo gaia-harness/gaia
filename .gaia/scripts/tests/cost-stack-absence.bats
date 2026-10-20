@@ -138,6 +138,6 @@ allowed_hit_count() {
 @test "the registry has no audit-window entry and a live price override entry" {
   run jq -r '[(.entries[], .residue[]) | select(.path | test("audit-window"))] | length' "$REGISTRY"
   [ "$output" = "0" ]
-  run jq -r '[.entries[] | select(.path == "telemetry/token-rates.override.json" and .match == "exact" and .kind == "file" and .scope == "shared" and .writer == "hand-authored" and .reaped_by == null)] | length' "$REGISTRY"
+  run jq -r '[.entries[] | select(.path == "telemetry/token-rates.override.json" and .match == "exact" and .kind == "file" and .scope == "shared" and .writer == "hand-authored" and .retention.class == "keep")] | length' "$REGISTRY"
   [ "$output" = "1" ]
 }
