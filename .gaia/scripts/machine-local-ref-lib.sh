@@ -206,19 +206,31 @@ _machine_local_ref_root() {
 # Scan the lines the staged change adds. A merge, cherry-pick or revert being
 # concluded carries lines another commit already wrote, so it is not scanned.
 machine_local_ref_staged() {
-  local root git_directory pending path hits
+  local root git_directory pending path previous_path change_status hits
   root=$(_machine_local_ref_root "$1") || return 2
   git_directory=$(git -C "$root" rev-parse --absolute-git-dir) || return 2
   for pending in MERGE_HEAD CHERRY_PICK_HEAD REVERT_HEAD; do
     [ -e "$git_directory/$pending" ] && return 0
   done
   hits=$(
-    git -C "$root" diff --cached --name-only --diff-filter=ACMR -z |
-      while IFS= read -r -d '' path; do
+    git -C "$root" diff --cached --name-status -z -M --diff-filter=ACMR |
+      while IFS= read -r -d '' change_status; do
+        IFS= read -r -d '' path
+        previous_path=""
+        if [ "${change_status#R}" != "$change_status" ]; then
+          previous_path="$path"
+          IFS= read -r -d '' path
+        fi
         machine_local_ref_style "$path"
         [ "$MACHINE_LOCAL_REF_STYLE" = "skip" ] && continue
         printf '\001%s\t%s\n' "$MACHINE_LOCAL_REF_STYLE" "$path"
-        git -C "$root" diff --cached -U0 --no-color --no-ext-diff --no-textconv -- "$path"
+        # A rename is diffed with both sides named so git pairs them and only
+        # the lines it really changed arrive as additions.
+        if [ -n "$previous_path" ]; then
+          git --literal-pathspecs -C "$root" diff --cached -M -U0 --no-color --no-ext-diff --no-textconv -- "$previous_path" "$path"
+        else
+          git --literal-pathspecs -C "$root" diff --cached -U0 --no-color --no-ext-diff --no-textconv -- "$path"
+        fi
       done | awk -v mode=diff "$_MACHINE_LOCAL_REF_AWK"
   ) || return 2
   [ -z "$hits" ] && return 0

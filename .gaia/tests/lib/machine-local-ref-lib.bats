@@ -231,6 +231,34 @@ make_repo() {
   [[ "$output" == *"wiki/Other Page.md:3: SPEC-130"* ]]
 }
 
+@test "staged: a pure rename of a file already citing an id is clean" {
+  make_repo
+  git -C "$REPO" mv wiki/page.md wiki/renamed.md
+  run bash "$LIB" staged "$REPO"
+  [ "$status" -eq 0 ]
+  [ -z "$output" ]
+}
+
+@test "staged: a rename that appends an id reports only the appended line" {
+  make_repo
+  git -C "$REPO" mv wiki/page.md wiki/renamed.md
+  printf 'Appended line naming PLAN-007.\n' >> "$REPO/wiki/renamed.md"
+  git -C "$REPO" add wiki/renamed.md
+  run bash "$LIB" staged "$REPO"
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"wiki/renamed.md:4: PLAN-007"* ]]
+  [[ "$output" == *"SPEC-001"* ]] && return 1
+  true
+}
+
+@test "staged: a rename to a name with a space stays clean" {
+  make_repo
+  git -C "$REPO" mv wiki/page.md "wiki/Two Words.md"
+  run bash "$LIB" staged "$REPO"
+  [ "$status" -eq 0 ]
+  [ -z "$output" ]
+}
+
 @test "staged: does not scan while a merge is being concluded" {
   make_repo
   printf 'Merged prose naming SPEC-131.\n' >> "$REPO/wiki/page.md"
