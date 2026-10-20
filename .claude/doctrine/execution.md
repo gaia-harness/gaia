@@ -21,6 +21,8 @@ One per normalized branch key, `branch:` prefix dropped, slashes nesting: `branc
 - One JSON artifact per dispatch, named `<role>-<round>-<slug>.json`.
 - `log.md`, append-only. Append only with Bash (`printf '...\n' >> <abs path>/log.md`), never Edit or Write, so appending never loads it.
 
+The reaper removes a run folder once its branch and worktree are gone and it sits idle; a `session-<id>` save expires on a longer window (registry `runs` row).
+
 In a linked worktree, `.gaia/local` resolves into the shared main checkout (the clone's primary working directory, on any branch): the runtime's worktree isolation refuses an Edit or Write there, and refuses a Bash command it cannot verify stays in the worktree (a heredoc, a pipe, a compound command, a redirect after another command). So write each run-folder file with Write into the session's scratchpad directory, then copy it in with one plain command, `cp <scratch file> <main checkout absolute path>/<file>`, and read it back. A plain `cp` and a one-line `printf >>` append pass; a heredoc, even alone, and Write or Edit do not. Append `log.md` with the one-command `printf` above. A command whose output belongs in the run folder redirects to the scratchpad and is copied in the same way.
 
 ## Resume

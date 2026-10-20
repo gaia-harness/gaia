@@ -17,6 +17,7 @@ setup() {
   REPO_ROOT="$(cd "$BATS_TEST_DIRNAME/../../.." && pwd)"
   LIFECYCLE_MD="$REPO_ROOT/.claude/skills/gaia/references/spec/lifecycle.md"
   SPEC_MD="$REPO_ROOT/.claude/skills/gaia/references/spec.md"
+  SAVE_SCRIPT="$REPO_ROOT/.gaia/scripts/spec/spec-save.sh"
 }
 
 # The `## Pre-flight sweep` section of a lifecycle.md, to the end of the file.
@@ -108,8 +109,13 @@ check_save_step_uses_the_library() {
     printf 'spec.md step 9 does not save under .notebook/specs/\n' >&2
     return 1
   fi
-  if ! printf '%s\n' "$step_nine" | grep -qF 'notebook-lib.sh path spec "$SPEC_ID"'; then
-    printf 'spec.md step 9 does not resolve the SPEC folder through the notebook library\n' >&2
+  # Step 9 hands the save to one script, so the library call lives there.
+  if ! printf '%s\n' "$step_nine" | grep -qF 'bash .gaia/scripts/spec/spec-save.sh "$PWD"'; then
+    printf 'spec.md step 9 does not save through spec-save.sh\n' >&2
+    return 1
+  fi
+  if ! grep -qF 'notebook-lib.sh" path spec "$spec_id"' "$SAVE_SCRIPT"; then
+    printf 'spec-save.sh does not resolve the SPEC folder through the notebook library\n' >&2
     return 1
   fi
   true
@@ -121,10 +127,10 @@ check_save_step_uses_the_library() {
 
 @test "red twin: a step 9 that builds its own folder path fails the save check" {
   local mutated="$BATS_TEST_TMPDIR/spec-save-relative.md"
-  # Replace the library call only inside step 9; step 3 carries the same line.
+  # Replace the save call only inside step 9.
   awk '
     index($0, "### 9. Save to") { in_step_nine = 1 }
-    in_step_nine && index($0, "notebook-lib.sh path spec \"$SPEC_ID\"") && !done {
+    in_step_nine && index($0, "bash .gaia/scripts/spec/spec-save.sh \"$PWD\"") && !done {
       print "SPEC_FOLDER=\".notebook/specs/${SPEC_ID}\""
       done = 1
       next

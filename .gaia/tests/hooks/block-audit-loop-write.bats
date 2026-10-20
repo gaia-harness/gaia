@@ -656,6 +656,122 @@ bash $GRANT_RECORDER"
   [ -z "$output" ]
 }
 
+# --- reaper execution ---
+
+# The reaper message is its own class: it names the guard and the pin, and
+# carries neither checkpoint answer channel, since the reason is not a forged
+# answer.
+assert_reaper_denied() {
+  assert_pins_only_class reaper
+  grep -qF -- 'block-audit-loop-write.sh' <<<"$output"
+}
+
+@test "bash running the reaper is denied" {
+  run_bash "bash .gaia/scripts/state-reaper.sh"
+  assert_reaper_denied
+}
+
+@test "the reaper as the command word is denied" {
+  run_bash ".gaia/scripts/state-reaper.sh"
+  assert_reaper_denied
+}
+
+@test "the reaper under an absolute path is denied" {
+  run_bash "$MAIN/.gaia/scripts/state-reaper.sh"
+  assert_reaper_denied
+}
+
+@test "bash running the reaper session start launcher is denied" {
+  run_bash "bash .claude/hooks/state-reaper-session-start.sh"
+  assert_reaper_denied
+}
+
+@test "sourcing the reaper classes is denied" {
+  run_bash "source .gaia/scripts/state-reaper-classes.sh"
+  assert_reaper_denied
+}
+
+@test "dot-sourcing the reaper library is denied" {
+  run_bash ". .gaia/scripts/state-reaper-lib.sh"
+  assert_reaper_denied
+}
+
+@test "bash running the reaper after an env prefix is denied" {
+  run_bash "FOO=1 bash .gaia/scripts/state-reaper.sh"
+  assert_reaper_denied
+}
+
+@test "bash running the reaper after && is denied" {
+  run_bash "true && bash .gaia/scripts/state-reaper.sh"
+  assert_reaper_denied
+}
+
+@test "Monitor running the reaper is denied" {
+  run_monitor "bash .gaia/scripts/state-reaper.sh"
+  assert_reaper_denied
+}
+
+@test "git add naming the reaper is allowed" {
+  run_bash "git add .gaia/scripts/state-reaper.sh"
+  assert_allowed_by_json
+  [ -z "$output" ]
+}
+
+@test "shellcheck of the reaper is allowed" {
+  run_bash "shellcheck .gaia/scripts/state-reaper.sh"
+  assert_allowed_by_json
+  [ -z "$output" ]
+}
+
+@test "bash -n of the reaper is allowed" {
+  run_bash "bash -n .gaia/scripts/state-reaper.sh"
+  assert_allowed_by_json
+  [ -z "$output" ]
+}
+
+@test "cat of the reaper library is allowed" {
+  run_bash "cat .gaia/scripts/state-reaper-lib.sh"
+  assert_allowed_by_json
+  [ -z "$output" ]
+}
+
+@test "running the reaper bats suite is allowed" {
+  run_bash "bash .gaia/scripts/bats5.sh .gaia/scripts/tests/state-reaper.bats < /dev/null"
+  assert_allowed_by_json
+  [ -z "$output" ]
+}
+
+@test "running the post-merge cleanup script is allowed" {
+  run_bash "bash .gaia/scripts/state-cleanup.sh --branch fix/a"
+  assert_allowed_by_json
+  [ -z "$output" ]
+}
+
+@test "an rm under the protected audit-loop folder is still denied as state" {
+  run_bash "rm -rf $MAIN/.gaia/local/protected/audit-loop/feat"
+  assert_pins_only_class state
+}
+
+@test "red twin: without the reaper names in the matcher a reaper run is allowed" {
+  local twin
+  twin=$(scratch_hook '/^    state-reaper\.sh \|/,/^      ;;$/d')
+  invoke_hook "$(command_payload Bash "bash .gaia/scripts/state-reaper.sh" "$MAIN")" "$twin"
+  assert_allowed_by_json
+  # The unmutated hook denies the same payload.
+  run_bash "bash .gaia/scripts/state-reaper.sh"
+  assert_pins_only_class reaper
+}
+
+@test "red twin: without the reaper pre-filter literal a reaper run is allowed" {
+  local twin
+  twin=$(scratch_hook 's/ \*state-reaper\* \|//')
+  invoke_hook "$(command_payload Bash "bash .gaia/scripts/state-reaper.sh" "$MAIN")" "$twin"
+  assert_allowed_by_json
+  # The unmutated hook denies the same payload.
+  run_bash "bash .gaia/scripts/state-reaper.sh"
+  assert_pins_only_class reaper
+}
+
 # --- deny text, every class ---
 
 @test "the deny text of every class carries both answer channels and names the guard" {
@@ -680,7 +796,7 @@ bash $GRANT_RECORDER"
 
 @test "red twin: without the execution rule a piped forgery to the recorder is allowed" {
   local twin
-  twin=$(scratch_hook '/^    runs_recorder "\$command_line" && deny recorder$/d')
+  twin=$(scratch_hook '/^    runs_guarded_script "\$command_line" && deny "\$SCRIPT_KIND"$/d')
   invoke_hook "$(command_payload Bash "printf x | bash $ASK_RECORDER" "$MAIN")" "$twin"
   assert_allowed_by_json
   # The unmutated hook denies the same payload.
@@ -690,7 +806,7 @@ bash $GRANT_RECORDER"
 
 @test "red twin: a rule widened to any command naming the recorder denies git add" {
   local twin
-  twin=$(scratch_hook 's/^    runs_recorder "\$command_line" && deny recorder$/    case "$command_line" in *audit-loop-grant.sh* | *audit-loop-ask-grant.sh*) deny recorder ;; esac/')
+  twin=$(scratch_hook 's/^    runs_guarded_script "\$command_line" && deny "\$SCRIPT_KIND"$/    case "$command_line" in *audit-loop-grant.sh* | *audit-loop-ask-grant.sh*) deny recorder ;; esac/')
   invoke_hook "$(command_payload Bash "git -C $MAIN add -- .claude/hooks/audit-loop-grant.sh" "$MAIN")" "$twin"
   assert_denied_by_json
   # The unmutated hook allows the same payload.
@@ -700,7 +816,7 @@ bash $GRANT_RECORDER"
 
 @test "red twin: without the widened pre-filter a context redirect and an override redirect are allowed" {
   local twin
-  twin=$(scratch_hook 's/^  \*audit-loop\* \| \*local\/protected\* \| \*cache\/shared\/context\*\) ;;$/  *audit-loop*) ;;/')
+  twin=$(scratch_hook 's/^  \*audit-loop\* \| \*state-reaper\* \| \*local\/protected\* \| \*cache\/shared\/context\*\) ;;$/  *audit-loop* | *state-reaper*) ;;/')
   invoke_hook "$(command_payload Bash "printf x > $CONTEXT_FILE" "$MAIN")" "$twin"
   assert_allowed_by_json
   invoke_hook "$(command_payload Bash "echo '{}' > $OVERRIDE" "$MAIN")" "$twin"
@@ -768,11 +884,12 @@ class_pin() {
     folder) printf '%s' 'only hooks or a human write <main>/.gaia/local/protected/' ;;
     context) printf '%s' 'the context readings (<main>/.gaia/local/cache/shared/context/)' ;;
     recorder) printf '%s' 'run only as hooks' ;;
+    reaper) printf '%s' 'the local-state reaper scripts' ;;
   esac
 }
 
 # assert_pins_only_class <class>: the last run is a deny carrying that class's
-# pin and none of the other four classes' pins.
+# pin and none of the other five classes' pins.
 assert_pins_only_class() {
   local expected_class="$1" other_class
   assert_denied_by_json
@@ -780,7 +897,7 @@ assert_pins_only_class() {
     printf 'class %s: its pin is missing from: %s\n' "$expected_class" "$output" >&2
     return 1
   }
-  for other_class in state override folder context recorder; do
+  for other_class in state override folder context recorder reaper; do
     if [ "$other_class" != "$expected_class" ]; then
       if grep -qF -- "$(class_pin "$other_class")" <<<"$output"; then
         printf 'class %s: carries the %s pin: %s\n' "$expected_class" "$other_class" "$output" >&2

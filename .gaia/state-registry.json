@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "description": "The one classification of every .gaia/local entry, transcribed by hand from the frozen state-model classification (never generated from code, which is what is under correction). Consumers read this instead of hand-maintaining their own lists. `path` is relative to .gaia/local/ unless the row carries `root: notebook`, in which case it is relative to <main>/.notebook (the root of specs, plans and research; `root` defaults to `local`, and a lookup matches only the rows of the root it asks for). A `path` may join more than one concrete on-disk shape with '|' when a single logical entry covers several filenames (e.g. a clearance marker's .ok/.refused siblings); each '|'-joined alternative is matched independently under the entry's own `match` rule. A `path` may also carry a '<placeholder>' token for a variable path segment (a spec id, a digest, a worktree name); for `match: glob` a placeholder behaves as a shell '*' wildcard, and for `match: prefix` only the literal text before the first '<' is significant. `residue` lists known dead-feature/legacy paths that are real on some machines but are not live state: never treated as drift and never a live entry. `bash .gaia/scripts/state-registry-lib.sh residue-sweep` lists the ones present and `--apply` deletes them. A residue row may name a `successor`, a .gaia/local-relative path its state moves to once: the sweep leaves that row's paths alone until the successor exists, so state a pending move has yet to carry is never deleted. `report_only` lists the three old notebook roots (specs/, plans/, research/ under .gaia/local): paths under one are recognized (never Unknown), listed by the sweep once per root in a section of their own, and never deleted by `--apply` at any depth, whatever a residue row beneath them says; a human reviews what the one-time move left there.",
+  "description": "The one classification of every .gaia/local entry, transcribed by hand from the frozen state-model classification (never generated from code, which is what is under correction). Each row carries a `retention` object naming its class; the header of .gaia/scripts/state-reaper-lib.sh owns the class vocabulary and semantics, and each row's window is its own `retention.days`. Consumers read this instead of hand-maintaining their own lists. `path` is relative to .gaia/local/ unless the row carries `root: notebook`, in which case it is relative to <main>/.notebook (the root of specs, plans and research; `root` defaults to `local`, and a lookup matches only the rows of the root it asks for). A `path` may join more than one concrete on-disk shape with '|' when a single logical entry covers several filenames (e.g. a clearance marker's .ok/.refused siblings); each '|'-joined alternative is matched independently under the entry's own `match` rule. A `path` may also carry a '<placeholder>' token for a variable path segment (a spec id, a digest, a worktree name); for `match: glob` a placeholder behaves as a shell '*' wildcard, and for `match: prefix` only the literal text before the first '<' is significant. `residue` lists known dead-feature/legacy paths that are real on some machines but are not live state: never treated as drift and never a live entry. `bash .gaia/scripts/state-registry-lib.sh residue-sweep` lists the ones present and `--apply` deletes them. A residue row may name a `successor`, a .gaia/local-relative path its state moves to once: the sweep leaves that row's paths alone until the successor exists, so state a pending move has yet to carry is never deleted. `report_only` lists the three old notebook roots (specs/, plans/, research/ under .gaia/local): paths under one are recognized (never Unknown), listed by the sweep once per root in a section of their own, and never deleted by `--apply` at any depth, whatever a residue row beneath them says; a human reviews what the one-time move left there.",
   "entries": [
     {
       "id": "setup-state",
@@ -11,7 +11,9 @@
       "keyed_by": "singleton per-clone value; correct via idempotent overwrite, no partition key needed",
       "why": "Per-clone /gaia-init and /setup-gaia step-completion record, plus the machine-scope setup decisions (`decisions`) and this clone's cached repo-admin answer (`admin`). A per-tree copy would re-run setup steps per worktree, which is wrong for a fact about the clone, not the tree.",
       "writer": "code",
-      "reaped_by": null
+      "retention": {
+        "class": "keep"
+      }
     },
     {
       "id": "context-readings",
@@ -22,7 +24,34 @@
       "keyed_by": "session id, two files per Claude Code session: the context reading (<session_id>.json) and the effort reading (<session_id>.effort.json)",
       "why": "The statusline writes each session's context reading (<session_id>.json, tmp + mv) for the audit loop's checkpoint to read, and beside it the session's effort reading (<session_id>.effort.json, tmp + mv), which usage.sh record reads for the ledger's close rows. Anchored to the main root so every worktree's render lands in one place the bound hook finds. Must precede cache-shared, whose prefix would otherwise claim these files first.",
       "writer": "code",
-      "reaped_by": "check-updates.sh (sweeps regular files older than 7 days on its TTL-gated pass)"
+      "retention": {
+        "class": "age",
+        "days": 7,
+        "types": [
+          "file"
+        ],
+        "names": [
+          "*.json",
+          "*.json.tmp.*"
+        ]
+      }
+    },
+    {
+      "id": "cache-shared-orphan-temps",
+      "path": "cache/shared/.updates.??????|cache/shared/.advisories.??????|cache/shared/.cli-output.??????|cache/shared/.update-check.??????",
+      "match": "glob",
+      "kind": "file",
+      "scope": "shared",
+      "keyed_by": "one mktemp name per write, never reused",
+      "why": "Orphaned mktemp temps (six random characters) of the update-check, advisory and CLI-output writers, left behind when a writer dies between creation and rename. Inert: nothing reads them. Must precede cache-shared, whose prefix would otherwise claim them.",
+      "writer": "code",
+      "retention": {
+        "class": "age",
+        "days": 7,
+        "types": [
+          "file"
+        ]
+      }
     },
     {
       "id": "cache-shared",
@@ -33,7 +62,24 @@
       "keyed_by": "singleton machine-scoped caches, each overwritten in place; update-gaia/<tag>/ additionally partitions by release tag, and update-gaia/run/ holds the current update run's merge report and candidates and is removed by the next prune",
       "why": "Machine-scoped release/update-check and statusline-guard state (update-check.json, update-gaia/<tag>/, update-gaia/run/, serena-guard/) that is a property of the machine, not of any one tree. Per-session context readings under context/ are the separate context-readings row, which precedes this one.",
       "writer": "code",
-      "reaped_by": null
+      "retention": {
+        "class": "owned",
+        "owner": "writers overwrite in place; update-gaia-preflight.sh prunes update-gaia/<tag>/ and update-gaia/run/"
+      }
+    },
+    {
+      "id": "state-reaper-state",
+      "path": "cache/state-reaper/",
+      "match": "prefix",
+      "kind": "dir",
+      "scope": "main-only",
+      "keyed_by": null,
+      "why": "The backstop reaper's launch stamp, launch lock, run lock and last-run report, anchored to the main root so every tree shares one launch gate.",
+      "writer": "code",
+      "retention": {
+        "class": "owned",
+        "owner": "the reaper's SessionStart launcher (stamp rewritten on each launch, lock reclaimed when stale) and the reaper's own run lock"
+      }
     },
     {
       "id": "checkpoint-override",
@@ -44,7 +90,9 @@
       "keyed_by": "singleton per machine",
       "why": "Machine-local, lower-only override of the audit checkpoint's context line. Lives in the protected folder and is hand-authored by a human; Claude tool writes to it are denied by block-audit-loop-write.sh.",
       "writer": "hand-authored",
-      "reaped_by": null
+      "retention": {
+        "class": "keep"
+      }
     },
     {
       "id": "local-settings",
@@ -55,7 +103,24 @@
       "keyed_by": "singleton per machine",
       "why": "GAIA's per-machine opt-ins (the statusline left-side choice). Written by /setup-gaia and read by the statusline from every tree; not write-guarded, unlike protected/checkpoint-override.json.",
       "writer": "code",
-      "reaped_by": null
+      "retention": {
+        "class": "keep"
+      }
+    },
+    {
+      "id": "audit-light-review-ledger",
+      "path": "audit/light/*.reviews.jsonl",
+      "match": "glob",
+      "kind": "file",
+      "scope": "shared",
+      "keyed_by": "branch slug, in the file name",
+      "why": "The per-branch light-review ledger, one file per branch. Must precede audit-light-review-state, whose prefix would otherwise claim it.",
+      "writer": "code",
+      "retention": {
+        "class": "branch-spent",
+        "days": 7,
+        "key": "slug-glob"
+      }
     },
     {
       "id": "audit-light-review-state",
@@ -66,7 +131,10 @@
       "keyed_by": "branch-own digest and member, in the file name, plus the tree; the per-branch ledger is keyed by branch",
       "why": "The light-review route records, reviewer inputs, verdicts and the per-branch light-review ledger. Written beside the clearance markers in the shared audit store so one gate sees every checkout's light reviews. Must precede the audit-store glob rows, whose patterns could otherwise claim files under this directory first.",
       "writer": "code",
-      "reaped_by": null
+      "retention": {
+        "class": "age",
+        "days": 30
+      }
     },
     {
       "id": "audit-clearance-markers",
@@ -75,9 +143,12 @@
       "kind": "file",
       "scope": "shared",
       "keyed_by": "branch-own digest over the branch's own patch to the files the audited member owns (per member), bound to the branch",
-      "why": "A clearance marker attests a Code Audit Team member reviewed the branch's own change, measured against the PR's base branch, so content the base brought in does not rotate it; the symlinked drop zone lets one gate judge every checkout's markers.",
+      "why": "A clearance marker attests a Code Audit Team member reviewed the branch's own change, measured against the PR's base branch, so content the base brought in does not rotate it; the symlinked drop zone lets one gate judge every checkout's markers. A refusal outlives its same-digest, same-member earned marker while that marker is inside the window, because the gate reads the refusal first and expiring it alone would clear the member.",
       "writer": "code",
-      "reaped_by": null
+      "retention": {
+        "class": "age",
+        "days": 30
+      }
     },
     {
       "id": "audit-findings-rerun-sidecars",
@@ -88,7 +159,11 @@
       "keyed_by": "key base plus branch, computed by gaia_audit_key (.gaia/scripts/audit-key-lib.sh); the key base is the branch's first-parent fork point on non-anchored arms, fixed across catch-up merges, and key base alone collides across worktrees cut from one main tip",
       "why": "Co-written into the symlinked audit store; the branch discriminator is the missing partition that keeps two trees' findings from overwriting each other.",
       "writer": "code",
-      "reaped_by": null
+      "retention": {
+        "class": "branch-spent",
+        "days": 7,
+        "key": "slug-dot-field"
+      }
     },
     {
       "id": "audit-scope-digests",
@@ -99,7 +174,11 @@
       "keyed_by": "key base plus branch, computed by gaia_audit_key (.gaia/scripts/audit-key-lib.sh), plus the member -- the same partition the findings sidecar uses, and for the same reason (key base alone collides across worktrees cut from one main tip); the key base is the branch's first-parent fork point on non-anchored arms, fixed across catch-up merges",
       "why": "The scope-time digest a Code Audit Team member attests to, written where the member resolves its review scope (.gaia/scripts/audit-scope-digest.sh --capture) and read back where it writes its clearance (--read), so the marker cannot attest a branch-own change that moved under the review.",
       "writer": "code",
-      "reaped_by": null
+      "retention": {
+        "class": "branch-spent",
+        "days": 7,
+        "key": "slug-dot-field"
+      }
     },
     {
       "id": "audit-review-diffs",
@@ -110,7 +189,11 @@
       "keyed_by": "base-sha plus branch, computed by gaia_audit_key (.gaia/scripts/audit-key-lib.sh), plus the member -- the same partition the scope digests use",
       "why": "The per-member review input a blend reaches the reviewer as: the branch's changed hunks since the member's anchor plus the remerge-diff of any merge commit that changed a path, so a conflict resolution is read as a diff and never as a whole file.",
       "writer": "code",
-      "reaped_by": null
+      "retention": {
+        "class": "branch-spent",
+        "days": 7,
+        "key": "slug-dot-field"
+      }
     },
     {
       "id": "audit-security-notes",
@@ -121,7 +204,10 @@
       "keyed_by": "HEAD sha",
       "why": "Redacted local security detail, keyed by the commit it describes, in the shared audit store.",
       "writer": "code",
-      "reaped_by": null
+      "retention": {
+        "class": "age",
+        "days": 30
+      }
     },
     {
       "id": "telemetry-rate-override",
@@ -132,7 +218,9 @@
       "keyed_by": "singleton per clone; hand-authored, resolved through the main checkout",
       "why": "The optional machine-local price override that pricing overlays on the distributed rate table. User-written, never reaped, and never replaced by a sync.",
       "writer": "hand-authored",
-      "reaped_by": null
+      "retention": {
+        "class": "keep"
+      }
     },
     {
       "id": "telemetry-usage-ledger",
@@ -143,7 +231,9 @@
       "keyed_by": "singleton store; the shared cost mutex plus self-identifying rows (session_id + key + first_ts; cursor rows by session_id + role + path)",
       "why": "Append-only usage ledger of segment, binding, and cursor rows. Every tree contributes, so correctness comes from the lock and the self-identifying rows, not from partitioning; attribution is resolved at read time.",
       "writer": "code",
-      "reaped_by": null
+      "retention": {
+        "class": "keep"
+      }
     },
     {
       "id": "telemetry-links-ledger",
@@ -154,7 +244,9 @@
       "keyed_by": "singleton store; the shared cost mutex plus self-identifying rows (edge and unlink rows by child + parent + ts; merge rows by pr + key)",
       "why": "Append-only lineage ledger of edge, unlink, and merge rows. Written by any tree under the same mutex as the usage ledger; readers apply tombstones at read time.",
       "writer": "code",
-      "reaped_by": null
+      "retention": {
+        "class": "keep"
+      }
     },
     {
       "id": "telemetry-audit-light-routing",
@@ -165,7 +257,9 @@
       "keyed_by": "singleton store; append-only rows that identify themselves by branch, member and digest",
       "why": "Maintainer-repo-only log of each light-review routing decision, appended by the routing telemetry script and read by its tally. It does not exist on an adopter clone.",
       "writer": "code",
-      "reaped_by": null
+      "retention": {
+        "class": "keep"
+      }
     },
     {
       "id": "telemetry-usage-cursor-cache",
@@ -176,7 +270,9 @@
       "keyed_by": "singleton per clone; temp-file-then-rename under the mutex",
       "why": "Regenerable cache folded from the usage ledger's cursor rows: the latest offset per transcript file. Deleting it re-reads from the ledger, never loses a row.",
       "writer": "code",
-      "reaped_by": null
+      "retention": {
+        "class": "keep"
+      }
     },
     {
       "id": "telemetry-usage-branch-memo",
@@ -187,7 +283,9 @@
       "keyed_by": "singleton per clone; temp-file-then-rename, lock-free, last writer wins",
       "why": "Regenerable cache of branch-name derivations and per-store read offsets for the usage readouts. Deleting it, or any corruption, only makes the next readout derive from scratch; it holds no attribution.",
       "writer": "code",
-      "reaped_by": null
+      "retention": {
+        "class": "keep"
+      }
     },
     {
       "id": "telemetry-usage-sweep-lock",
@@ -198,7 +296,10 @@
       "keyed_by": "singleton per clone; atomic mkdir",
       "why": "Singleton guard for the SessionStart transcript sweep, so two sessions starting together do not both parse the backlog.",
       "writer": "code",
-      "reaped_by": "usage-flush.sh stale reclaim"
+      "retention": {
+        "class": "owned",
+        "owner": "usage-flush.sh stale reclaim"
+      }
     },
     {
       "id": "telemetry-usage-tmp",
@@ -207,9 +308,15 @@
       "kind": "file",
       "scope": "shared",
       "keyed_by": "one mktemp name per write, never reused",
-      "why": "In-flight temp files of the usage writers, present between creation and the rename or append. A process killed mid-write can leave one behind; it is inert (nothing reads it). Only the branch memo's temps have a reaper; every other writer's temps have none.",
+      "why": "In-flight temp files of the usage writers, present between creation and the rename or append. A process killed mid-write can leave one behind; it is inert (nothing reads it). usage.sh readouts reap the branch memo temps older than 60 s; the backstop reaper ages out any other leftover temp.",
       "writer": "code",
-      "reaped_by": "usage.sh readouts reap .usage-branch-memo.tmp.* older than 60 s; other writers' temps have none"
+      "retention": {
+        "class": "age",
+        "days": 7,
+        "types": [
+          "file"
+        ]
+      }
     },
     {
       "id": "debt-count-and-refresh",
@@ -220,7 +327,9 @@
       "keyed_by": "singleton; idempotent overwrite of a cache whose authority is a repo-global GitHub fact",
       "why": "A worktree debt fix must arm main's count cache, not a discarded per-tree copy; the authority is the GitHub tech-debt label, not this file.",
       "writer": "code",
-      "reaped_by": null
+      "retention": {
+        "class": "keep"
+      }
     },
     {
       "id": "red-ledger",
@@ -231,7 +340,9 @@
       "keyed_by": "the tree key (gaia_tree_key, .gaia/scripts/main-root-lib.sh): the first 16 hex characters of a sha256 over this working tree's physically-resolved root. The entry addresses itself at red-ledger/<tree_key>/, so it stays private to its tree once .gaia/local is shared.",
       "why": "A RED observation is a claim about one working tree at one commit; sharing it across trees would be a category error. The identity rule's own reference example of correctly per-tree state.",
       "writer": "code",
-      "reaped_by": null
+      "retention": {
+        "class": "tree-gone"
+      }
     },
     {
       "id": "audit-worthiness-ledger",
@@ -242,7 +353,9 @@
       "keyed_by": "the tree key (gaia_tree_key, .gaia/scripts/main-root-lib.sh): the first 16 hex characters of a sha256 over this working tree's physically-resolved root. The entry addresses itself at worthiness-ledger/<tree_key>/, so it stays private to its tree once .gaia/local is shared.",
       "why": "A worthiness observation is a claim about one working tree's emergent-surface tests at one commit, the same kind of per-tree fact as a RED observation. It lives under worthiness-ledger/, outside the wholesale-symlinked audit/ segment, so it is per-tree by the same mechanism as its RED-ledger sibling: gaia_registry_linkable_paths only symlinks scope:\"shared\" entries, and this one is not.",
       "writer": "code",
-      "reaped_by": null
+      "retention": {
+        "class": "tree-gone"
+      }
     },
     {
       "id": "forensics",
@@ -253,7 +366,9 @@
       "keyed_by": "the tree key (gaia_tree_key, .gaia/scripts/main-root-lib.sh): the first 16 hex characters of a sha256 over this working tree's physically-resolved root. The entry addresses itself at forensics/<tree_key>/, so it stays private to its tree once .gaia/local is shared.",
       "why": "A human-facing local forensics report read in the checkout that produced it; no cross-tree consumer. Named in the write-guard's own non-exempt list.",
       "writer": "code",
-      "reaped_by": null
+      "retention": {
+        "class": "tree-gone"
+      }
     },
     {
       "id": "codify-declines",
@@ -264,7 +379,9 @@
       "keyed_by": "singleton per-clone ledger keyed internally by finding_class; atomic replace without a cross-tree lock, so simultaneous writes can drop one decline and re-offer that candidate",
       "why": "The operator's declines on the machine's codify candidates. The candidate set is the repo's merged-PR window and the nudge it feeds is machine-scoped, so one copy per clone is the only scope at which a decline can suppress what it declined. Shared through the registry-driven symlink, so a decline recorded in a linked worktree lands in the main checkout's copy and survives that worktree's removal.",
       "writer": "code",
-      "reaped_by": null
+      "retention": {
+        "class": "keep"
+      }
     },
     {
       "id": "codify-review-snapshot",
@@ -275,7 +392,9 @@
       "keyed_by": "singleton per-clone snapshot; atomic replace, so a review completed in one tree unconditionally supersedes another's",
       "why": "What a completed /gaia-codify review saw: the audited-PR denominator, the class inventory, and when it ran, plus the start-of-run tally it was built from. The nudge it silences is machine-scoped like the decline ledger, so one copy per clone is the only scope at which a review can discharge what it reviewed. Shared through the registry-driven symlink, so a review completed in a linked worktree lands in the main checkout's copy and survives that worktree's removal.",
       "writer": "code",
-      "reaped_by": null
+      "retention": {
+        "class": "keep"
+      }
     },
     {
       "id": "specs-main",
@@ -287,7 +406,10 @@
       "keyed_by": null,
       "why": "The SPEC-number allocation's authority is the remote immutable spec/NNN tag; the ledger is main's cache and the plan reference contracts the SPEC-NNN folders to the main checkout.",
       "writer": "code",
-      "reaped_by": "spec archive sweep"
+      "retention": {
+        "class": "owned",
+        "owner": "the spec archive sweep"
+      }
     },
     {
       "id": "plans-main",
@@ -299,7 +421,10 @@
       "keyed_by": null,
       "why": "The plan folder stays in the main checkout by contract; worktree-mode orchestrators write PROGRESS.md back to main.",
       "writer": "code",
-      "reaped_by": "pre-flight sweep (plan-archive-merged.sh)"
+      "retention": {
+        "class": "owned",
+        "owner": "the pre-flight sweep (plan-archive-merged.sh)"
+      }
     },
     {
       "id": "research-main",
@@ -311,7 +436,10 @@
       "keyed_by": null,
       "why": "GAIA's documented research location. A research Write under the main checkout's research directory binds the session's default-branch spend at read time, so the directory must resolve to main's copy from every tree.",
       "writer": "hand-authored",
-      "reaped_by": ".gaia/scripts/notebook/research-reaper.sh"
+      "retention": {
+        "class": "owned",
+        "owner": ".gaia/scripts/notebook/research-reaper.sh"
+      }
     },
     {
       "id": "notebook-catalog",
@@ -323,7 +451,9 @@
       "keyed_by": null,
       "why": "The notebook's one index of specs, plans and research. Only the notebook library reads or writes it, under its catalog write lock; every other script goes through the library.",
       "writer": "code",
-      "reaped_by": null
+      "retention": {
+        "class": "keep"
+      }
     },
     {
       "id": "gh-artifact-pr-cache",
@@ -334,7 +464,11 @@
       "keyed_by": null,
       "why": "A PR-capture written under main's cache for the merge flow, main-anchored not per-tree, and partitioned per-branch in the filename (cache/gh-artifact-pr.<branch-slug>.json) so two worktrees opening PRs concurrently no longer share one unkeyed last-writer-wins file. Still main-only rather than shared: worktrees reach this file by resolving main's root, they are never given their own linked copy, so keyed_by stays null per the schema's rule and the key shows up in `path` instead.",
       "writer": "code",
-      "reaped_by": null
+      "retention": {
+        "class": "branch-spent",
+        "days": 7,
+        "key": "slug-glob"
+      }
     },
     {
       "id": "residual-triage-caches",
@@ -345,7 +479,9 @@
       "keyed_by": null,
       "why": "The residue triage command's derived read cache (per-pull-request attribution and resolved cited lines, keyed by pull-request number and head sha) and its resumable per-run cursor. Derived state, never a record: a cold cache reproduces the same candidate list. Main-only rather than shared, so keyed_by stays null per the schema's rule and the two concrete filenames show up in `path` instead. Named `residual`, not `residue`: this registry's own top-level `residue` array names an unrelated concept, orphaned machine-local state with no automatic reaper.",
       "writer": "code",
-      "reaped_by": null
+      "retention": {
+        "class": "keep"
+      }
     },
     {
       "id": "audit-loop-state",
@@ -356,7 +492,11 @@
       "keyed_by": null,
       "why": "Per-branch audit loop history and allowance, resolved to main so every session, sub-agent, fork and linked worktree on the branch reads one record. Lives in the protected folder; written only by the audit loop hooks.",
       "writer": "code",
-      "reaped_by": null
+      "retention": {
+        "class": "branch-spent",
+        "days": 7,
+        "key": "audit-loop"
+      }
     },
     {
       "id": "harness-verify-pass",
@@ -367,7 +507,11 @@
       "keyed_by": null,
       "why": "Per-branch record that the maintainer harness verification passed for a commit, resolved to main so the audit loop hook reads one record from every tree. Written by the verification runner, read by the audit loop bound hook; a project without the maintainer test tree never writes it.",
       "writer": "code",
-      "reaped_by": null
+      "retention": {
+        "class": "branch-spent",
+        "days": 7,
+        "key": "normalized-file"
+      }
     },
     {
       "id": "project-id",
@@ -378,7 +522,9 @@
       "keyed_by": null,
       "why": "One identity per clone, used in ping/telemetry. Forks per worktree path today via a hash of the repo root path, a defect; classified at its main-only target scope with the fix deferred to a later phase.",
       "writer": "code",
-      "reaped_by": null
+      "retention": {
+        "class": "keep"
+      }
     },
     {
       "id": "declined-updates",
@@ -389,18 +535,22 @@
       "keyed_by": null,
       "why": "An update-preference file written only from main in the shipped workflow, because the /update-deps flow refuses to run from a linked worktree before any write happens.",
       "writer": "code",
-      "reaped_by": null
+      "retention": {
+        "class": "keep"
+      }
     },
     {
       "id": "statusline-wrappers",
-      "path": ".patched-statusline.sh|maintainer-statusline.sh|dep-audit-baseline.json",
+      "path": "dep-audit-baseline.json",
       "match": "exact",
       "kind": "file",
       "scope": "main-only",
       "keyed_by": null,
-      "why": "Read-anchored to main (the statusline command resolves to main) or operator-authored per machine; single copies with no per-tree meaning. Hand-authored, not GAIA-generated.",
+      "why": "Operator-authored per machine; a single copy with no per-tree meaning. Hand-authored, not GAIA-generated.",
       "writer": "hand-authored",
-      "reaped_by": null
+      "retention": {
+        "class": "keep"
+      }
     },
     {
       "id": "machine-markers",
@@ -411,7 +561,9 @@
       "keyed_by": null,
       "why": "Per-machine markers (a sandbox-resolution result, a short-lived setup sentinel); one value per clone.",
       "writer": "code",
-      "reaped_by": null
+      "retention": {
+        "class": "keep"
+      }
     },
     {
       "id": "spec-draft-and-gate1-scratch",
@@ -422,7 +574,10 @@
       "keyed_by": null,
       "why": "The live in-flight SPEC draft, its pre-dispatch retry snapshots, and the gate-1 drift-detection snapshot for one authoring session; keyed by spec id, deleted at canonical save or on discard.",
       "writer": "code",
-      "reaped_by": null
+      "retention": {
+        "class": "spec-finalized",
+        "days": 30
+      }
     },
     {
       "id": "spec-session-scratch",
@@ -433,7 +588,10 @@
       "keyed_by": null,
       "why": "Per-tree session shape (start time, Socratic question-ceiling counter) for one SPEC-authoring session; the holder's own working state, keyed by spec id, stays where it is written.",
       "writer": "code",
-      "reaped_by": null
+      "retention": {
+        "class": "spec-finalized",
+        "days": 30
+      }
     },
     {
       "id": "spec-session-lock",
@@ -444,7 +602,10 @@
       "keyed_by": null,
       "why": "The session-host liveness lock for one SPEC-authoring session; deliberately resolved to main so the cross-tree mutex is reachable from both trees, keyed by spec id.",
       "writer": "code",
-      "reaped_by": null
+      "retention": {
+        "class": "spec-finalized",
+        "days": 30
+      }
     },
     {
       "id": "spec-audit-scratch",
@@ -453,9 +614,12 @@
       "kind": "dir",
       "scope": "ephemeral",
       "keyed_by": null,
-      "why": "Self-review and adversarial-audit scratch (per-lens findings, refutation verdicts, coverage log) for one in-progress SPEC-authoring session; keyed by spec id, deleted at canonical save or discard.",
+      "why": "Self-review and adversarial-audit scratch (per-lens findings, refutation verdicts, coverage log) for one in-progress SPEC-authoring session; keyed by spec id, deleted at canonical save or discard, and by the backstop reaper once its SPEC is finalized.",
       "writer": "code",
-      "reaped_by": null
+      "retention": {
+        "class": "spec-finalized",
+        "days": 30
+      }
     },
     {
       "id": "audit-mutation-scratch",
@@ -464,9 +628,12 @@
       "kind": "dir",
       "scope": "ephemeral",
       "keyed_by": null,
-      "why": "One Code Audit Team member's private working copy for the one kind of evidence that needs real bytes on disk: breaking a construct a guard names to establish the guard is not hollow. Each member invocation mints its child with mktemp under a member-name prefix, which keeps co-dispatched members and concurrent audits from other worktrees out of each other's tree, and removes exactly that child when done.",
+      "why": "One Code Audit Team member's private working copy for the one kind of evidence that needs real bytes on disk: breaking a construct a guard names to establish the guard is not hollow. Each member invocation mints its child with mktemp under a member-name prefix, which keeps co-dispatched members and concurrent audits from other worktrees out of each other's tree, and removes exactly that child when done; the backstop reaper ages out any child a killed member left behind.",
       "writer": "code",
-      "reaped_by": null
+      "retention": {
+        "class": "age",
+        "days": 7
+      }
     },
     {
       "id": "react-perf-run-scratch",
@@ -477,7 +644,10 @@
       "keyed_by": null,
       "why": "gaia-react-perf measurement run output, keyed by run id.",
       "writer": "code",
-      "reaped_by": null
+      "retention": {
+        "class": "age",
+        "days": 7
+      }
     },
     {
       "id": "audit-scratch-files",
@@ -488,7 +658,10 @@
       "keyed_by": null,
       "why": "Transient gh-issue-body staging files, keyed by run stamp, self-pruned by their producer in the shared audit directory.",
       "writer": "code",
-      "reaped_by": null
+      "retention": {
+        "class": "age",
+        "days": 7
+      }
     },
     {
       "id": "cleanse-reports",
@@ -499,7 +672,10 @@
       "keyed_by": null,
       "why": "/gaia-cleanse findings reports, the filing outcomes it hands the tech-debt filer, and the filer's retry records beside them, keyed by timestamp/run stamp and self-pruned by their producer. The newest applied report's mtime anchors the statusline cleanse nudge.",
       "writer": "code",
-      "reaped_by": null,
+      "retention": {
+        "class": "owned",
+        "owner": "/gaia-cleanse, which ages its own reports and keeps the newest applied report that anchors the statusline cleanse nudge"
+      },
       "source": "the /gaia-cleanse playbook report store"
     },
     {
@@ -509,9 +685,14 @@
       "kind": "dir",
       "scope": "shared",
       "keyed_by": "the normalized branch key with its branch: prefix dropped (slashes nest), or session-<session id> for a detached HEAD; one folder per key, never shared between keys",
-      "why": "Execution-doctrine run folder (STATE.md checkpoint, findings, log.md) written by Claude through Bash while a branch or worktree session runs. Shared so a worktree's folder lands in the one main-anchored store and a resumed session finds it from any tree. Small; a reaper is a filed follow-up, so reaped_by is null for now.",
+      "why": "Execution-doctrine run folder (STATE.md checkpoint, findings, log.md) written by Claude through Bash while a branch or worktree session runs. Shared so a worktree's folder lands in the one main-anchored store and a resumed session finds it from any tree. The backstop reaper removes a folder once its branch is gone and it has sat idle past its window.",
       "writer": "hand-authored",
-      "reaped_by": null
+      "retention": {
+        "class": "branch-spent",
+        "days": 7,
+        "key": "normalized-path",
+        "session_days": 30
+      }
     },
     {
       "id": "ports-slot-ledger",
@@ -522,7 +703,10 @@
       "keyed_by": "tree root, one line per linked worktree; read-modify-write under a cross-tree mkdir lock, written temp-then-mv",
       "why": "The main-anchored slot ledger: which linked worktree holds which port slot. One ledger for every tree is the point, so two worktrees can never be handed the same ports.",
       "writer": "code",
-      "reaped_by": "slot reclaim in worktree provisioning and in the ports session-start cleanup"
+      "retention": {
+        "class": "owned",
+        "owner": "slot reclaim in worktree provisioning and in the ports session-start cleanup"
+      }
     },
     {
       "id": "kept-worktrees-ledger",
@@ -533,7 +717,10 @@
       "keyed_by": "tree root, one line per linked worktree a post-merge cleanup kept (tree, branch, why); a second stop of the same tree replaces its line, written temp-then-mv",
       "why": "The worktree removal check records each tree it stops removing, so the session-start reminder can list it until it is removed. Main-anchored so every tree reads and writes one ledger.",
       "writer": "code",
-      "reaped_by": "the kept-worktree reminder (kept-worktrees.sh remind) drops the line of a tree git no longer lists as a live worktree"
+      "retention": {
+        "class": "owned",
+        "owner": "the kept-worktree reminder (kept-worktrees.sh remind), which drops the line of a tree git no longer lists as a live worktree"
+      }
     },
     {
       "id": "worktree-occupancy",
@@ -544,7 +731,10 @@
       "keyed_by": "Claude Code session id, one file per session holding the tree root it last provisioned or entered",
       "why": "Lets the kept-worktree reminder leave out a tree a live Claude session is working in. Main-anchored so a session in any tree is seen from every other.",
       "writer": "code",
-      "reaped_by": "the ports dead-session reap (gaia_server_reap_dead_sessions) deletes a session's record with its host record once the host has exited; the kept-worktree reminder also deletes the record of a tree it checks whose host has exited"
+      "retention": {
+        "class": "owned",
+        "owner": "the ports dead-session reap (gaia_server_reap_dead_sessions), which deletes a session's record with its host record once the host has exited; the kept-worktree reminder also deletes the record of a tree it checks whose host has exited"
+      }
     },
     {
       "id": "ports-tombstones",
@@ -555,7 +745,10 @@
       "keyed_by": "one file per retired ledger entry, named <slot>.<epoch>.tsv",
       "why": "A reclaimed slot's leftover servers must still be found and stopped after the ledger line is gone. One file per entry means a reaper deletes it with rm and never rewrites a shared file.",
       "writer": "code",
-      "reaped_by": "the tombstone reap once no listener on the slot's ports qualifies for a removed-tree stop, or after 7 days"
+      "retention": {
+        "class": "owned",
+        "owner": "the tombstone reap, once no listener on the slot's ports qualifies for a removed-tree stop, or after 7 days"
+      }
     },
     {
       "id": "ports-slot-lock",
@@ -566,7 +759,10 @@
       "keyed_by": null,
       "why": "A singleton mkdir lock serializing ledger rewrites across trees, with no partition key. Held only for the read-modify-write, never across a signal or a wait.",
       "writer": "code",
-      "reaped_by": "broken once when older than 60 seconds"
+      "retention": {
+        "class": "owned",
+        "owner": "a stale-lock break, once, when the lock is older than 60 seconds"
+      }
     },
     {
       "id": "ports-launch-records",
@@ -577,7 +773,10 @@
       "keyed_by": "server PID, one file per server a Claude session launched",
       "why": "Records which dev or Storybook server a Claude session started, with its process identity, so a dead session's server can be stopped after the identity is re-verified. A human's launch is never recorded.",
       "writer": "code",
-      "reaped_by": "the dead-session reap (ports session-start cleanup and worktree provisioning); the tombstone reap prunes the records of a reclaimed tree"
+      "retention": {
+        "class": "owned",
+        "owner": "the dead-session reap (ports session-start cleanup and worktree provisioning); the tombstone reap prunes the records of a reclaimed tree"
+      }
     },
     {
       "id": "ports-session-registry",
@@ -588,7 +787,10 @@
       "keyed_by": "Claude Code session id, one file per session",
       "why": "Records each live session's host process so a launch can be attributed to it and a dead host can be told from a live one.",
       "writer": "code",
-      "reaped_by": "the dead-session reap, when the host is dead and no launch record names the session"
+      "retention": {
+        "class": "owned",
+        "owner": "the dead-session reap, when the host is dead and no launch record names the session"
+      }
     },
     {
       "id": "doctrine-injected-marker",
@@ -597,9 +799,12 @@
       "kind": "file",
       "scope": "main-only",
       "keyed_by": null,
-      "why": "Per-session dedupe marker written by workflow-doctrine-inject.sh (tmp + mv, through Bash) holding the last injected key so startup, resume and tool events do not re-inject an unchanged doctrine. Anchored to the main root, never the entered tree. One tiny file per session; a reaper is a filed follow-up, so reaped_by is null for now.",
+      "why": "Per-session dedupe marker written by workflow-doctrine-inject.sh (tmp + mv, through Bash) holding the last injected key so startup, resume and tool events do not re-inject an unchanged doctrine. Anchored to the main root, never the entered tree. One tiny file per session; the backstop reaper ages it out.",
       "writer": "code",
-      "reaped_by": null
+      "retention": {
+        "class": "age",
+        "days": 7
+      }
     },
     {
       "id": "context-checkpoint-markers",
@@ -610,7 +815,17 @@
       "keyed_by": null,
       "why": "Per-session marker written by context-checkpoint-inject.sh (tmp + mv) holding the highest context band the checkpoint has fired for, so each band fires once per session. Anchored to the main root so a session moving between the main checkout and a worktree sees one marker.",
       "writer": "code",
-      "reaped_by": "check-updates.sh (sweeps regular files older than 7 days on its TTL-gated pass)"
+      "retention": {
+        "class": "age",
+        "days": 7,
+        "types": [
+          "file"
+        ],
+        "names": [
+          "[!.]*",
+          ".*.*"
+        ]
+      }
     },
     {
       "id": "context-checkpoint-agent-markers",
@@ -621,7 +836,17 @@
       "keyed_by": null,
       "why": "Per-sub-agent marker written by context-checkpoint-subagent.sh (tmp + mv) holding the sub-agent's handoff opt-in and the highest context band the checkpoint has fired for, so each band fires once per sub-agent. Anchored to the main root so a sub-agent running in a worktree sees one marker.",
       "writer": "code",
-      "reaped_by": "check-updates.sh (sweeps regular files older than 7 days on its TTL-gated pass)"
+      "retention": {
+        "class": "age",
+        "days": 7,
+        "types": [
+          "file"
+        ],
+        "names": [
+          "[!.]*",
+          ".*.*"
+        ]
+      }
     }
   ],
   "residue": [

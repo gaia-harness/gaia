@@ -11,12 +11,19 @@
 # same way, and none of them is fixed by anything that runs at creation time.
 # So this runs on entry instead, is idempotent, and repairs whatever it finds.
 #
-# Two triggers, because one entry path does not cover the other and each was
+# Three triggers, because no entry path covers the others and each was
 # measured rather than assumed:
 #
 #   SessionStart (startup|resume)   a session that STARTS inside a worktree,
 #                                   including `claude --worktree` and any tree
 #                                   opened directly.
+#   SessionStart (clear|compact)    a fresh context in a tree no other trigger
+#                                   provisioned, such as an EnterWorktree call
+#                                   that reports a refusal yet still switches
+#                                   the session, so no PostToolUse fires. These
+#                                   sources repair only a tree whose .gaia/local
+#                                   is not yet the shared link; a provisioned
+#                                   tree costs nothing on them.
 #   PostToolUse  (EnterWorktree)    a RUNNING session that enters one. Entering
 #                                   a worktree continues the session rather than
 #                                   starting a new one, so SessionStart does not
@@ -82,12 +89,14 @@ source "$self_directory/../../.gaia/scripts/main-root-lib.sh" 2>/dev/null || exi
 tree="${1:-}"
 payload=""
 payload_event=""
+session_source=""
 session_id=""
 if [ -z "$tree" ] && [ ! -t 0 ]; then
   payload="$(cat)"
   if [ -n "$payload" ] && command -v jq >/dev/null 2>&1; then
     tree="$(jq -r '.tool_response.worktreePath // .cwd // empty' <<<"$payload" 2>/dev/null)"
     payload_event="$(jq -r '.hook_event_name // empty' <<<"$payload" 2>/dev/null)"
+    session_source="$(jq -r '.source // empty' <<<"$payload" 2>/dev/null)"
     session_id="$(jq -r '.session_id // empty' <<<"$payload" 2>/dev/null)"
   elif [ -n "$payload" ]; then
     # Without jq the flat fields are read with sed, the shape
@@ -95,6 +104,7 @@ if [ -z "$tree" ] && [ ! -t 0 ]; then
     tree="$(printf '%s\n' "$payload" | sed -n 's/.*"worktreePath"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' | sed -n 1p)"
     [ -n "$tree" ] || tree="$(printf '%s\n' "$payload" | sed -n 's/.*"cwd"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' | sed -n 1p)"
     payload_event="$(printf '%s\n' "$payload" | sed -n 's/.*"hook_event_name"[[:space:]]*:[[:space:]]*"\([A-Za-z]*\)".*/\1/p' | sed -n 1p)"
+    session_source="$(printf '%s\n' "$payload" | sed -n 's/.*"source"[[:space:]]*:[[:space:]]*"\([A-Za-z]*\)".*/\1/p' | sed -n 1p)"
     session_id="$(printf '%s\n' "$payload" | sed -n 's/.*"session_id"[[:space:]]*:[[:space:]]*"\([A-Za-z0-9_-]*\)".*/\1/p' | sed -n 1p)"
   fi
 fi
@@ -115,6 +125,17 @@ esac
 # nothing to provision.
 tree="$(gaia_resolve_tree_root "$tree" 2>/dev/null)" || exit 0
 [ -n "$tree" ] || exit 0
+
+# /clear and compaction fire inside a live session, in every tree, so they
+# repair only a linked worktree whose .gaia/local is not yet the shared link.
+# A provisioned tree already got its install, typegen and ports context on
+# entry, and ports-session-start.sh re-emits that context line on these sources.
+case "$session_source" in
+  clear | compact)
+    gaia_is_linked_worktree "$tree" || exit 0
+    [ -L "$tree/.gaia/local" ] && exit 0
+    ;;
+esac
 
 # ---------- carry forward per-tree ledger/report data under the tree key ----------
 # The per-tree .gaia/local segments moved one path segment deeper, keyed by
@@ -297,7 +318,7 @@ gaia_is_linked_worktree "$tree" || exit 0
 
 # ---------- record which session is in this tree ----------
 # The kept-worktree reminder never lists a tree a live session occupies, and
-# both triggers of this hook are exactly where a session comes to be in one.
+# this hook runs exactly where a session comes to be in one.
 kept_worktrees_script="$self_directory/../../.gaia/scripts/kept-worktrees.sh"
 if [ -n "$session_id" ] && [ -f "$kept_worktrees_script" ]; then
   bash "$kept_worktrees_script" occupy --session "$session_id" --tree "$tree" >/dev/null 2>&1 || true

@@ -166,7 +166,7 @@ Pick the variant by who owns the data:
 - Any identity change (logout, login, account switch) calls `queryClient.clear()` or does a full document navigation, so one user's cache never reaches the next.
 - `clientLoader` and Query variants suit unauthenticated or cookie-authenticated APIs; tokens and secrets never enter the root-loader `ENV`.
 
-Worked example and rationale: `wiki/concepts/Data Loading.md`. Scaffolds: the `new-route` and `new-service` skills.
+Worked example and rationale: `wiki/concepts/Data Loading.md`. Scaffolds: the `new-route` and `new-service` skills. Writing `useQuery`, `useMutation`, or a key factory: `references/query-patterns.md`.
 
 ## Route-Page Architecture
 
@@ -199,4 +199,5 @@ A story file carries exactly one `stubs.reactRouter()` decorator, because a nest
 
 - `references/hook-patterns.md`, Read when writing any Effect, or when debugging stale closures, double-firing effects, or infinite re-renders.
 - `references/conform-forms.md`, Read before writing or editing a form: the Conform + Zod wiring for each ui control.
+- `references/query-patterns.md`, Read when Query is installed and you write a query key, `useQuery`, `select`, a dependent or paged query, a mutation's error handling, or an optimistic `useMutation`.
 - `references/translation-patterns.md`, Read when a translation needs `keyPrefix`, a cross-namespace override, a dynamic key, the `Trans` component, or plurals.

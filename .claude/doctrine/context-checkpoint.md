@@ -22,7 +22,7 @@ Act only at a stopping point: no background task, sub-agent or monitor is runnin
    - `.gaia/local/runs/<branch>/STATE.md`
    - on the default branch or a detached HEAD with no run folder, `.gaia/local/runs/session-<session id>/STATE.md`
 
-   The `Save path:` line names the resolved fallback. Never the scratchpad.
+   The `Save path:` line names the resolved fallback. Never the scratchpad. A saved checkpoint can expire: the backstop reaper removes a run folder once its branch and worktree are gone and it has gone untouched past the grace, and a detached-HEAD `session-<session id>` save expires after its own longer window. The registry `runs` row holds the windows.
 3. STATE.md holds the goal, open decisions and re-verify commands under `Facts`; done items in a `Status checklist`; the next step as the one `NEXT:` line. At most 4 KB, rewritten in place.
 4. Then ask (interactive only): one `AskUserQuestion` with exactly two options, `Continue here` and `Clear and resume`, the recommended one first and marked `(Recommended)`, with a one-line reason.
 

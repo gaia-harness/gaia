@@ -487,13 +487,13 @@ read_site_ranges() {
   local spec_md="$1" lifecycle_md="$2" resume_md="$3" sweep_range resume_range session_helper_range
   sweep_range="$(range_between "$lifecycle_md" '**3. Cold consolidation.**' '**4. Reap merged past retention.**')" || return 1
   resume_range="$(range_between "$resume_md" 'Before prompting, gather context' 'Before presenting the resume choice')" || return 1
-  session_helper_range="$(range_between "$spec_md" '4. **Record the run (never blocks):**' '### 10. Immutability lint')" || return 1
+  session_helper_range="$(range_between "$spec_md" 'The confirmed draft is already in the working-draft checkpoint' '### 10. Immutability lint')" || return 1
 
-  # The range is the save step's record call. It must hold the call itself,
+  # The range is the save step's body. It must hold the save call itself,
   # so a prose reflow that moves an anchor cannot leave the range measuring
   # unrelated text and passing for the wrong reason.
-  if ! printf '%s\n' "$session_helper_range" | grep -qF 'usage.sh record spec:${SPEC_ID} --workflow gaia-spec'; then
-    printf 'the save-step range does not hold the usage.sh record call\n' >&2
+  if ! printf '%s\n' "$session_helper_range" | grep -qF 'bash .gaia/scripts/spec/spec-save.sh "$PWD"'; then
+    printf 'the save-step range does not hold the spec-save.sh call\n' >&2
     return 1
   fi
   printf '%s\n%s\n%s\n' "$sweep_range" "$resume_range" "$session_helper_range"
@@ -532,7 +532,7 @@ check_read_sites() {
   plant_line_after "$RESUME_MD" "$mutated_resume" 'Before prompting, gather context' 'cat .notebook/specs/SPEC-001/SPEC.md'
   check_read_sites "$SPEC_MD" "$LIFECYCLE_MD" "$mutated_resume" && return 1
 
-  plant_line_after "$SPEC_MD" "$mutated_spec" '4. **Record the run (never blocks):**' 'cat .notebook/specs/SPEC-001/SPEC.md'
+  plant_line_after "$SPEC_MD" "$mutated_spec" 'The confirmed draft is already in the working-draft checkpoint' 'cat .notebook/specs/SPEC-001/SPEC.md'
   check_read_sites "$mutated_spec" "$LIFECYCLE_MD" "$RESUME_MD" && return 1
   true
 }

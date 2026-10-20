@@ -32,24 +32,26 @@ close_row() {
 # ---------- UAT-023 (full path) ----------
 
 @test "UAT-023: a SPEC filled from the template lints, the verbatim step-9 block records its lineage, and the initiative readout includes the SPEC and its branch with no link command" {
-  local id=SPEC-095 spec fence transcript_path
+  local id=SPEC-095 spec draft fence transcript_path
   spec="$REPO/.notebook/specs/$id/SPEC.md"
-  mkdir -p "${spec%/*}"
+  draft="$REPO/.gaia/local/cache/draft-$id.md"
+  mkdir -p "${draft%/*}"
   sed -e "s/SPEC-NNN/$id/g" -e 's/UAT-NNN/UAT-001/g' \
     -e 's/^lineage: \[\]$/lineage: [research:topic-a-2026-10-01]/' \
-    "$REPO/.claude/skills/gaia/references/spec/spec-template.md" >"$spec"
-  run bash "$REPO/.gaia/scripts/spec/lint.sh" "$spec"
-  [ "$status" -eq 0 ]
-  [ "$output" = '{"ok":true,"findings":[]}' ]
+    "$REPO/.claude/skills/gaia/references/spec/spec-template.md" >"$draft"
 
   fence="$(awk '
     /^```bash$/ { buffer = ""; in_block = 1; next }
-    /^```$/ && in_block { if (buffer ~ /usage\.sh lineage/) printf "%s", buffer; in_block = 0; next }
+    /^```$/ && in_block { if (buffer ~ /spec-save\.sh/) printf "%s", buffer; in_block = 0; next }
     in_block { buffer = buffer $0 "\n" }
   ' "$REPO/.claude/skills/gaia/references/spec.md" | sed "s/SPEC-NNN/$id/g")"
   [ -n "$fence" ]
   run env -u SPEC_PATH bash -c 'cd "$1" && bash -c "$2"' _ "$REPO" "$fence"
   [ "$status" -eq 0 ]
+  [ -f "$spec" ]
+  run bash "$REPO/.gaia/scripts/spec/lint.sh" "$spec"
+  [ "$status" -eq 0 ]
+  [ "$output" = '{"ok":true,"findings":[]}' ]
   [ "$(jq -s '[.[] | select(.kind == "edge" and .child == "spec:SPEC-095" and .parent == "research:topic-a-2026-10-01" and .source == "spec-frontmatter")] | length' "$TELEMETRY_DIRECTORY/links.jsonl")" -eq 1 ]
   rm -rf "${spec%/*}"
 

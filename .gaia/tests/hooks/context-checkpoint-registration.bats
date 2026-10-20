@@ -43,10 +43,11 @@ assert_rooted_with_timeout() {
 }
 
 # assert_registry_entry REGISTRY: exactly one marker-directory entry, main-only,
-# unkeyed, with a reaper.
+# unkeyed, with a 7-day age reaper over regular files.
 assert_registry_entry() {
   run jq -e '[.entries[] | select(.path == "cache/context-checkpoint/")] | length == 1
-      and all(.[]; .scope == "main-only" and .keyed_by == null and .reaped_by != null)' "$1"
+      and all(.[]; .scope == "main-only" and .keyed_by == null
+      and .retention.class == "age" and .retention.days == 7 and .retention.types == ["file"])' "$1"
   [ "$status" -eq 0 ]
 }
 
@@ -124,8 +125,8 @@ mutate_registry() {
   [ "$status" -ne 0 ]
 }
 
-@test "red twin: a null reaper fails the registry check" {
-  mutate_registry '(.entries[] | select(.path == "cache/context-checkpoint/") | .reaped_by) = null'
+@test "red twin: a keep class instead of age fails the registry check" {
+  mutate_registry '(.entries[] | select(.path == "cache/context-checkpoint/") | .retention) = {"class":"keep"}'
   run assert_registry_entry "$MUTANT"
   [ "$status" -ne 0 ]
 }
