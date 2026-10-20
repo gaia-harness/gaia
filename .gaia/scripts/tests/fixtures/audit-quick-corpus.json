@@ -1311,6 +1311,45 @@
       ]
     },
     {
+      "id": "arbitrary-property-token-added",
+      "expected": "deep",
+      "expected_line": "full\tquick-arbitrary-value",
+      "shape": "an arbitrary display property token added",
+      "files": [
+        {
+          "path": "frontend/app/components/attrs/index.tsx",
+          "before": "const Attrs = () => (\n  <div className=\"p-2\">\n    <a className=\"underline\" href=\"/docs\">Docs</a>\n    <img alt=\"Hero\" className=\"size-4\" src=\"/hero.png\" />\n    <iframe className=\"w-full\" title=\"preview\" />\n    <form className=\"grid\" method=\"post\" />\n    <input className=\"border\" type=\"text\" />\n    <button className=\"px-2\" type=\"button\">Go</button>\n    <p className=\"p-2 text-sm\">Note</p>\n  </div>\n);\n\nexport default Attrs;\n",
+          "after": "const Attrs = () => (\n  <div className=\"p-2\">\n    <a className=\"underline\" href=\"/docs\">Docs</a>\n    <img alt=\"Hero\" className=\"size-4\" src=\"/hero.png\" />\n    <iframe className=\"w-full\" title=\"preview\" />\n    <form className=\"grid\" method=\"post\" />\n    <input className=\"border\" type=\"text\" />\n    <button className=\"px-2\" type=\"button\">Go</button>\n    <p className=\"p-2 text-sm [display:none]\">Note</p>\n  </div>\n);\n\nexport default Attrs;\n"
+        }
+      ]
+    },
+    {
+      "id": "arbitrary-color-token-added",
+      "expected": "deep",
+      "expected_line": "full\tquick-arbitrary-value",
+      "shape": "an arbitrary hex color token added",
+      "files": [
+        {
+          "path": "frontend/app/components/attrs/index.tsx",
+          "before": "const Attrs = () => (\n  <div className=\"p-2\">\n    <a className=\"underline\" href=\"/docs\">Docs</a>\n    <img alt=\"Hero\" className=\"size-4\" src=\"/hero.png\" />\n    <iframe className=\"w-full\" title=\"preview\" />\n    <form className=\"grid\" method=\"post\" />\n    <input className=\"border\" type=\"text\" />\n    <button className=\"px-2\" type=\"button\">Go</button>\n    <p className=\"p-2 text-sm\">Note</p>\n  </div>\n);\n\nexport default Attrs;\n",
+          "after": "const Attrs = () => (\n  <div className=\"p-2\">\n    <a className=\"underline\" href=\"/docs\">Docs</a>\n    <img alt=\"Hero\" className=\"size-4\" src=\"/hero.png\" />\n    <iframe className=\"w-full\" title=\"preview\" />\n    <form className=\"grid\" method=\"post\" />\n    <input className=\"border\" type=\"text\" />\n    <button className=\"px-2\" type=\"button\">Go</button>\n    <p className=\"p-2 text-sm bg-[#ff0000]\">Note</p>\n  </div>\n);\n\nexport default Attrs;\n"
+        }
+      ]
+    },
+    {
+      "id": "zero-size-token-added",
+      "expected": "deep",
+      "expected_line": "full\tquick-hiding-token",
+      "shape": "a zero-size token added",
+      "files": [
+        {
+          "path": "frontend/app/components/attrs/index.tsx",
+          "before": "const Attrs = () => (\n  <div className=\"p-2\">\n    <a className=\"underline\" href=\"/docs\">Docs</a>\n    <img alt=\"Hero\" className=\"size-4\" src=\"/hero.png\" />\n    <iframe className=\"w-full\" title=\"preview\" />\n    <form className=\"grid\" method=\"post\" />\n    <input className=\"border\" type=\"text\" />\n    <button className=\"px-2\" type=\"button\">Go</button>\n    <p className=\"p-2 text-sm\">Note</p>\n  </div>\n);\n\nexport default Attrs;\n",
+          "after": "const Attrs = () => (\n  <div className=\"p-2\">\n    <a className=\"underline\" href=\"/docs\">Docs</a>\n    <img alt=\"Hero\" className=\"size-4\" src=\"/hero.png\" />\n    <iframe className=\"w-full\" title=\"preview\" />\n    <form className=\"grid\" method=\"post\" />\n    <input className=\"border\" type=\"text\" />\n    <button className=\"px-2\" type=\"button\">Go</button>\n    <p className=\"p-2 text-sm size-0\">Note</p>\n  </div>\n);\n\nexport default Attrs;\n"
+        }
+      ]
+    },
+    {
       "id": "block-comment-added",
       "expected": "deep",
       "expected_line": "full\tquick-block-comment",

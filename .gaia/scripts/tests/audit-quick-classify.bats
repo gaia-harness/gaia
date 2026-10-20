@@ -634,7 +634,18 @@ qc_component_pair() {
 }
 
 @test "red quick-arbitrary-value: an added url( arbitrary value" {
-  qc_component_pair quick-arbitrary-value replace 7 '  <div className="flex gap-2 bg-[url(x)]">' post:7 '  <div className="flex gap-2 w-[3px]">'
+  qc_component_pair quick-arbitrary-value replace 7 '  <div className="flex gap-2 bg-[url(x)]">' post:7 '  <div className="flex gap-2 w-3">'
+}
+
+@test "red quick-arbitrary-value: an arbitrary property or value spelling of a hiding, motion or palette token" {
+  local token
+  for token in '[display:none]' '[visibility:hidden]' '[outline:none]' '[pointer-events:none]' '[animation:spin_1s]' '[order:-1]' 'bg-[#ff0000]' 'text-[red]' 'opacity-[0]'; do
+    qc_component_pair quick-arbitrary-value replace 7 "  <div className=\"flex gap-2 $token\">" post:7 '  <div className="flex gap-2 rounded">' || { printf 'token %s\n' "$token" >&2; return 1; }
+  done
+}
+
+@test "red quick-hiding-token: an added size-0" {
+  qc_component_pair quick-hiding-token replace 7 '  <div className="flex gap-2 size-0">' post:7 '  <div className="flex gap-2 size-4">'
 }
 
 @test "red quick-text-deleted: control text deleted with no replacement" {

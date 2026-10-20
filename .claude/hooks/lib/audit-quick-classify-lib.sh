@@ -37,7 +37,7 @@
 # Hiding and focus tokens (QUICK_HIDING_TOKENS), deep when added or removed,
 # matched on the token after its variant prefixes (md:, focus-visible:,
 # data-[...]:, group-hover: and the like) and any `!` or `-` are stripped:
-#   sr-only not-sr-only hidden invisible collapse opacity-0 outline-none
+#   sr-only not-sr-only hidden invisible collapse opacity-0 size-0 outline-none
 #   outline-hidden ring-0 pointer-events-none
 # plus any token whose variant prefix chain carries `focus` (focus:,
 # focus-visible:, focus-within:, group-focus: and the rest).
@@ -48,8 +48,10 @@
 # Raw palette tokens (QUICK_PALETTE_UTILITIES, QUICK_PALETTE_COLORS), deep when
 # added: <utility>[-<side>]-<color>[-<shade>][/<alpha>].
 #
-# Arbitrary values, deep when added: a token holding `[` and `url(`, or any
-# token whose stripped form starts with `content-`.
+# Arbitrary values, deep when added or removed: any token whose stripped form
+# holds `[` (an arbitrary property such as [display:none] or an arbitrary value
+# such as bg-[#ff0000], whatever it carries, so no spelling of a deny-listed
+# family escapes by going arbitrary), or starts with `content-`.
 #
 # Reasons. Router-owned rows pre-empt the classifier on a first dispatch; the
 # rest are the classifier's own, in evaluation order (paths stage, then lines
@@ -85,7 +87,7 @@
 #   quick-hiding-token  a hiding or focus token added or removed
 #   quick-motion-order-token  an animate, order, reverse or grid placement token added or removed
 #   quick-palette  a raw palette color token added
-#   quick-arbitrary-value  an arbitrary value carrying url( or a content- token added
+#   quick-arbitrary-value  a token with an arbitrary property or value ([...] in its utility), or a content- token, added or removed
 #   quick-language-shape  a language line that is not a single-quoted literal key value on both sides
 #   quick-language-key  a language key added, removed or renamed, plural or context suffix included
 #   quick-placeholder  the {{...}} token set of a language value differs
@@ -119,7 +121,7 @@
 # generic arrow function written `<T,>(` reads as JSX and fails the image
 # closed. A div wrapper added around text is a tag addition (deep), not a swap.
 
-QUICK_HIDING_TOKENS='sr-only not-sr-only hidden invisible collapse opacity-0 outline-none outline-hidden ring-0 pointer-events-none'
+QUICK_HIDING_TOKENS='sr-only not-sr-only hidden invisible collapse opacity-0 size-0 outline-none outline-hidden ring-0 pointer-events-none'
 QUICK_PALETTE_UTILITIES='bg|text|border|ring|fill|stroke|from|via|to|outline|decoration|shadow|accent|caret|divide|placeholder'
 QUICK_PALETTE_COLORS='slate|gray|zinc|neutral|stone|red|orange|amber|yellow|lime|green|emerald|teal|cyan|sky|blue|indigo|violet|purple|fuchsia|pink|rose|black|white'
 QUICK_CONTENT_MARKERS='(^|[^A-Za-z0-9_$])(nonce|request)([^A-Za-z0-9_$]|$)|process\.env|import\.meta\.env'
@@ -841,7 +843,7 @@ function token_split(tok,   i, ch, d, last) {
 function is_hiding(tok) { token_split(tok); if (tokprefix ~ /focus/) return 1; return index(" " hidingset " ", " " tokbase " ") > 0 }
 function is_motion(tok) { token_split(tok); return tokbase ~ /^animate-/ || tokbase ~ /^order-/ || tokbase ~ /-reverse$/ || tokbase ~ /^(col|row)-(start|end)-/ }
 function is_palette(tok) { token_split(tok); return tokbase ~ PALETTE }
-function is_arbitrary(tok,   lower) { token_split(tok); lower = tolower(tok); return (index(tok, "[") > 0 && index(lower, "url(") > 0) || tokbase ~ /^content-/ }
+function is_arbitrary(tok) { token_split(tok); return index(tokbase, "[") > 0 || tokbase ~ /^content-/ }
 # own: tokens on this side's line that the paired line lacks.
 function token_reason(s, L, cat, j, Lj, o,   mine, theirs, tok) {
   split("", mine); split("", theirs)
@@ -849,10 +851,8 @@ function token_reason(s, L, cat, j, Lj, o,   mine, theirs, tok) {
   if (j) line_tokens(o, Lj, theirs, category(o, Lj))
   for (tok in mine) if (!(tok in theirs) && is_hiding(tok)) return "quick-hiding-token"
   for (tok in mine) if (!(tok in theirs) && is_motion(tok)) return "quick-motion-order-token"
-  if (s == "post") {
-    for (tok in mine) if (!(tok in theirs) && is_palette(tok)) return "quick-palette"
-    for (tok in mine) if (!(tok in theirs) && is_arbitrary(tok)) return "quick-arbitrary-value"
-  }
+  if (s == "post") for (tok in mine) if (!(tok in theirs) && is_palette(tok)) return "quick-palette"
+  for (tok in mine) if (!(tok in theirs) && is_arbitrary(tok)) return "quick-arbitrary-value"
   return ""
 }
 function only_text(s, L,   k) {
