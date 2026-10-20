@@ -185,14 +185,6 @@ transforms:
         pattern: "\\bSPEC-[0-9]{3,}\\b"
         scope:
           - "**"
-        path-allowlist:
-          # The wiki-lint playbook's documentation cites concrete-ID
-          # examples that mirror the audit findings it surfaces.
-          - ".claude/skills/gaia/references/wiki/lint.md"
-        line-allowlist:
-          # Illustrative usage in CLI/SPEC docs: `(e.g. SPEC-<n>)` or
-          # `(e.g. \`SPEC-<n>\`)` (with optional backticks around the ID).
-          - "e\\.g\\.\\s*`?SPEC-[0-9]{3,}"
 
       # ---- Concrete plan ids ----
       - id: plan-concrete-ids
@@ -201,8 +193,6 @@ transforms:
         scope:
           - "**"
         line-allowlist:
-          # Illustrative usage in docs: `(e.g. SPEC-<n> or PLAN-<n>)`.
-          - "e\\.g\\.[^)]*`?PLAN-[0-9]+"
           # Regex targets that match a plan folder's name, e.g. the
           # allocator's sed expression that strips a plan id's leading zeros.
           - "\\^PLAN-0\\*"

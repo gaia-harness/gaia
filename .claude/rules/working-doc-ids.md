@@ -43,7 +43,9 @@ Advisory only, never enforced: directive ids and issue or pull request reference
 - **An upstream third-party tracker** cited beside the platform quirk it documents (a dependency's own issue). It names a public, stable record outside this project.
 - **A pointer to an open tracking issue** in an operator-facing message (a refusal or error) that would otherwise leave the reader with no next step. Open work is not in git history, so the pointer carries information the history cannot; a test that pins the message keeps it.
 - **Issue and pull request references in history ledgers**: `wiki/log.md`, `wiki/meta/`, `CHANGELOG.md`, commit messages, and pull request bodies.
+<!-- gaia:maintainer-only:start -->
 - **`.gaia/tests/`**: release-excluded test infrastructure whose `UAT-`, `SEC-`, and `TST-` prefixes are deliberate SPEC-conformance traceability.
+<!-- gaia:maintainer-only:end -->
 A section heading or inline parenthetical naming a working-doc id (`#### 5b. Discuss-this escape (UAT-…)`) is narrative and is covered.
 
 ## Editing a file that already carries one
