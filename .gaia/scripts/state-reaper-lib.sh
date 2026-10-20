@@ -318,6 +318,11 @@ _gaia_reaper_holds_other_rows() {
       alternative="${alternative%/*}"
       segments="${alternative//[!\/]/}"
       [ "${#segments}" = "${#slashes}" ] || continue
+      # An ancestor whose last segment is a bare wildcard (`cache/*` from
+      # `cache/*/renders.json`) matches every sibling directory, so it would
+      # block every directory row beside it. Such a row owns only its named
+      # descendant, never the directory itself.
+      case "$alternative" in */\*) continue ;; esac
       # shellcheck disable=SC2254
       case "$relative" in $alternative) return 0 ;; esac
     done

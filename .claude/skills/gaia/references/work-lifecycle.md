@@ -114,6 +114,7 @@ Rules every arm shares:
 - When a pull fails (a dirty tree, a diverged default branch), report it and stop.
 - When the main checkout's HEAD is a branch other than the default branch and other than the merged branch, a peer session holds it: skip the checkout and the pull, and say so.
 - Every worktree arm runs the pre-removal check, `bash .gaia/scripts/worktree-removal-check.sh --tree <worktree path>`, before it removes anything. It stops on uncommitted changes (untracked files included), and on commits ahead of the branch's upstream while that ref exists. A non-zero exit ends cleanup with the worktree and branch kept: no `ExitWorktree` removal, no `git worktree remove --force`, no branch delete, no pull, no install.
+- After the branch delete, every arm runs `state-cleanup.sh --branch <branch-name>`, which removes the merged branch's own audit, run and PR-cache state. It refuses while the branch or a worktree holding it still exists, so a cleanup that stopped early leaves that state to the daily backstop reaper, and it never touches the `protected/` folder of `.gaia/local`.
 - A stop is reported, never swallowed. Relay the check's whole output (the paths, the unpushed count, and the next step with the exact removal commands), and the calling run's report names the kept worktree. An unattended run puts it in its final report, so kept worktrees never pile up silently.
 - The worktree arms run `pnpm install --frozen-lockfile` in the main checkout only when the pull ran and `pnpm-lock.yaml` differs between the pre-pull and post-pull HEAD. When the pull fails or is skipped, run no install and print the pull and the install as the next steps. A failed install is reported with its next step and does not undo the removal.
 
@@ -141,6 +142,7 @@ Gate the call on the confirmed `MERGED`. The squash absorbed every commit on the
 if git show-ref --verify --quiet refs/heads/<branch-name>; then
   git branch -D <branch-name>
 fi
+bash .gaia/scripts/state-cleanup.sh --branch <branch-name>
 git fetch --prune origin
 default_branch=$(git symbolic-ref --quiet --short refs/remotes/origin/HEAD 2>/dev/null)
 default_branch=${default_branch#origin/}
@@ -191,6 +193,7 @@ git -C <main checkout path> worktree remove --force <worktree path> || exit 1
 if git -C <main checkout path> show-ref --verify --quiet refs/heads/<branch-name>; then
   git -C <main checkout path> branch -D <branch-name>
 fi
+bash <main checkout path>/.gaia/scripts/state-cleanup.sh --branch <branch-name>
 git -C <main checkout path> fetch --prune origin
 default_branch=$(git -C <main checkout path> symbolic-ref --quiet --short refs/remotes/origin/HEAD 2>/dev/null)
 default_branch=${default_branch#origin/}
@@ -244,6 +247,7 @@ fi
 if git show-ref --verify --quiet refs/heads/<branch-name>; then
   git branch -D <branch-name>
 fi
+bash .gaia/scripts/state-cleanup.sh --branch <branch-name>
 git fetch --prune origin
 ```
 
@@ -264,6 +268,7 @@ PR #<N> squash-merged as <short-sha>. From a shell at
     bash .gaia/scripts/worktree-removal-check.sh --tree <ABSOLUTE-PATH-TO-WORKTREE>   # stop and report its output when it exits non-zero
     git worktree remove --force <ABSOLUTE-PATH-TO-WORKTREE>
     git branch -D <branch-name>   # if it still exists
+    bash <ABSOLUTE-PATH-TO-MAIN-CHECKOUT>/.gaia/scripts/state-cleanup.sh --branch <branch-name>
     git -C <ABSOLUTE-PATH-TO-MAIN-CHECKOUT> fetch --prune origin
     git -C <ABSOLUTE-PATH-TO-MAIN-CHECKOUT> pull --ff-only origin <DEFAULT-BRANCH>   # only when `git rev-parse --abbrev-ref HEAD` there prints <DEFAULT-BRANCH>
     pnpm -C <ABSOLUTE-PATH-TO-MAIN-CHECKOUT> install --frozen-lockfile   # only when that pull ran and changed pnpm-lock.yaml

@@ -30,6 +30,7 @@
       "Bash(bash .gaia/scripts/spec/uat-gate.sh:*)",
       "Bash(bash .gaia/scripts/spec/uat-write.sh:*)",
       "Bash(bash .gaia/scripts/spec/working-doc-id-scan.sh:*)",
+      "Bash(bash .gaia/scripts/state-cleanup.sh:*)",
       "Bash(bash .gaia/scripts/summary-verify.sh:*)",
       "Bash(corepack enable pnpm)",
       "Bash(gh pr checks:*)",

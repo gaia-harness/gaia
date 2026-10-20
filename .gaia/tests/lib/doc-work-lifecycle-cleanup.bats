@@ -39,6 +39,13 @@
 # (via WORK_LIFECYCLE_REFERENCE) and require it to fail with the reason the
 # mutation should cause, so each guard is proven able to fail.
 #
+# Each arm also runs the state-cleanup verb after its branch delete. A fixture
+# main checkout carries a copy of the verb, its libraries and the committed
+# registry, and the rendered fence runs that copy, so the verb prunes only
+# fixture state. The doc-contract cases assert each arm names the verb after
+# its branch-delete line, and the execution cases assert a merged branch's
+# state is gone afterwards while an open branch's state remains.
+#
 # The suite never touches the real repository: every git command targets a
 # directory under BATS_TEST_TMPDIR.
 #
@@ -126,7 +133,9 @@ fence_body() {
 # rendered_body <heading> <index> <branch> <worktree path> <main checkout path>:
 # the fence with its three placeholders replaced by literal substitution, and
 # the repo-relative check script replaced by CHECK_SCRIPT so a fixture runs the
-# real file (or a mutated copy). Fails when the fence is empty or any
+# real file (or a mutated copy), and the repo-relative cleanup verb replaced by
+# the fixture main checkout's copy (the absolute-path spellings already reach
+# it through the main checkout placeholder). Fails when the fence is empty or any
 # angle-bracket placeholder survives, because bash would read a leftover
 # `<token>` as a redirection and `bash -n` would not notice.
 rendered_body() {
@@ -137,6 +146,7 @@ rendered_body() {
   body=${body//"<worktree path>"/$4}
   body=${body//"<main checkout path>"/${5:-/fixture/main}}
   body=${body//".gaia/scripts/worktree-removal-check.sh"/$CHECK_SCRIPT}
+  body=${body//"bash .gaia/scripts/state-cleanup.sh"/"bash ${MAIN:-/fixture/main}/.gaia/scripts/state-cleanup.sh"}
   if printf '%s\n' "$body" | grep -Eq '<[A-Za-z][^>]*>'; then
     echo "FAIL: a placeholder survives substitution under $1"
     return 1
@@ -187,6 +197,49 @@ make_fixture() {
   fi
   git -C "$other" push -q origin "$FIXTURE_DEFAULT" 2>/dev/null || return 1
   git -C "$other" push -q origin --delete "$branch" 2>/dev/null || return 1
+  install_cleanup_verb || return 1
+}
+
+# install_cleanup_verb: copies the cleanup verb, its libraries and the
+# committed registry into the fixture main checkout, where the verb resolves
+# its main root from its own location.
+install_cleanup_verb() {
+  local file
+  mkdir -p "$MAIN/.gaia/scripts" "$MAIN/.gaia/local" || return 1
+  for file in state-cleanup.sh state-reaper-classes.sh state-reaper-lib.sh main-root-lib.sh state-registry-lib.sh branch-name-lib.sh audit-key-lib.sh audit-loop-state-lib.sh; do
+    cp "$REPO_ROOT/.gaia/scripts/$file" "$MAIN/.gaia/scripts/$file" || return 1
+  done
+  cp "$REPO_ROOT/.gaia/state-registry.json" "$MAIN/.gaia/state-registry.json" || return 1
+}
+
+# branch_state_paths <branch>: sets BRANCH_STATE_PATHS to an audit review
+# file, a run folder and a PR-cache file keyed to the branch by the real key
+# functions.
+branch_state_paths() {
+  local slug normalized
+  slug=$(bash -c '. "$1/.gaia/scripts/audit-key-lib.sh"; gaia_key_slug "$2"' _ "$REPO_ROOT" "$1") || return 1
+  normalized=$(bash -c '. "$1/.gaia/scripts/branch-name-lib.sh"; gaia_branch_normalize "$2"' _ "$REPO_ROOT" "$1") || return 1
+  BRANCH_STATE_PATHS="audit/0123abc.$slug.review.diff runs/$normalized/STATE.md cache/gh-artifact-pr.$slug.json"
+}
+
+# plant_branch_state <branch>: creates the branch's three kinds of state.
+plant_branch_state() {
+  local relative
+  branch_state_paths "$1" || return 1
+  for relative in $BRANCH_STATE_PATHS; do
+    mkdir -p "$(dirname "$MAIN/.gaia/local/$relative")" || return 1
+    : >"$MAIN/.gaia/local/$relative" || return 1
+  done
+}
+
+# state_remaining <branch>: prints how many of the branch's planted paths exist.
+state_remaining() {
+  local relative remaining=0
+  branch_state_paths "$1" || return 1
+  for relative in $BRANCH_STATE_PATHS; do
+    [ -e "$MAIN/.gaia/local/$relative" ] && remaining=$((remaining + 1))
+  done
+  printf '%s\n' "$remaining"
 }
 
 # run_body <body>: runs a rendered fence body with cwd = the main checkout.
@@ -569,6 +622,56 @@ check_report_pin() {
   }
 }
 
+# seed_branch_state: leaves the merged branch without a local ref beside an
+# open branch that has one, with state planted for both.
+seed_branch_state() {
+  git -C "$MAIN" branch feat-open "$OLD_SHA" || return 1
+  plant_branch_state feat-merged || return 1
+  plant_branch_state feat-open || return 1
+}
+
+# assert_merged_state_pruned: the arm ran clean, the merged branch's state is
+# gone, and the open branch's state is whole.
+assert_merged_state_pruned() {
+  [ "$STATUS" -eq 0 ] || { echo "FAIL: the arm stopped (exit $STATUS): $OUT"; return 1; }
+  printf '%s\n' "$OUT" | grep -Fq 'command not found' && { echo "FAIL: a command was not found: $OUT"; return 1; }
+  [ "$(state_remaining feat-merged)" = 0 ] || { echo "FAIL: the merged branch keeps its state"; return 1; }
+  [ "$(state_remaining feat-open)" = 3 ] || { echo "FAIL: the open branch lost state"; return 1; }
+  return 0
+}
+
+# check_feature_arm_prunes_state <dir>
+check_feature_arm_prunes_state() {
+  local body
+  make_fixture "$1" feat-merged || return 1
+  seed_branch_state || return 1
+  body=$(rendered_body "$FEATURE_ARM" 1 feat-merged "") || { echo "$body"; return 1; }
+  run_body "$body"
+  assert_merged_state_pruned
+}
+
+# check_worktree_arm_prunes_state <dir> <path|name>
+check_worktree_arm_prunes_state() {
+  prepare_tree "$1" nolock clean || return 1
+  seed_branch_state || return 1
+  run_arm "$2" || return 1
+  assert_merged_state_pruned
+}
+
+# check_arm_names_verb_after_delete <heading>: the arm's section has a
+# state-cleanup line, and it comes after the branch-delete line.
+check_arm_names_verb_after_delete() {
+  local text delete_line verb_line
+  text=$(section "$REFERENCE" "$1")
+  [ -n "$text" ] || { echo "FAIL: no section $1"; return 1; }
+  delete_line=$(printf '%s\n' "$text" | grep -n -F 'branch -D <branch-name>' | head -n 1 | cut -d: -f1)
+  [ -n "$delete_line" ] || { echo "FAIL: no branch delete under $1"; return 1; }
+  verb_line=$(printf '%s\n' "$text" | grep -n -F 'state-cleanup.sh --branch <' | head -n 1 | cut -d: -f1)
+  [ -n "$verb_line" ] || { echo "FAIL: no state-cleanup line under $1"; return 1; }
+  [ "$verb_line" -gt "$delete_line" ] || { echo "FAIL: the state-cleanup line precedes the branch delete under $1"; return 1; }
+  return 0
+}
+
 # ---------------------------------------------------------------------------
 # Helpers for the tests
 
@@ -947,4 +1050,89 @@ assert_check_red() { # expected reason, then function name and arguments
   FIXTURE_DEFAULT=trunk
   FIXTURE_ORIGIN_HEAD=1
   assert_check_red "is not at origin/trunk" check_name_arm_tail "$BATS_TEST_TMPDIR/fixture-name" main
+}
+
+# ---------------------------------------------------------------------------
+# The state-cleanup verb in every arm
+
+@test "each cleanup arm names the state-cleanup verb after its branch delete" {
+  assert_check_green check_arm_names_verb_after_delete "$NAME_ARM"
+  assert_check_green check_arm_names_verb_after_delete "$PATH_ARM"
+  assert_check_green check_arm_names_verb_after_delete "$FEATURE_ARM"
+  assert_check_green check_arm_names_verb_after_delete "$CONTINUATION"
+}
+
+@test "the name arm runs the verb before it prunes the remote" {
+  local body verb_line prune_line
+  body=$(fence_body "$NAME_ARM" 2)
+  verb_line=$(printf '%s\n' "$body" | grep -n -F 'state-cleanup.sh --branch' | head -n 1 | cut -d: -f1)
+  prune_line=$(printf '%s\n' "$body" | grep -n -F 'git fetch --prune origin' | head -n 1 | cut -d: -f1)
+  [ -n "$verb_line" ] || return 1
+  [ -n "$prune_line" ] || return 1
+  [ "$verb_line" -lt "$prune_line" ]
+}
+
+@test "the by-path arm and the continuation prompt spell the verb with the main checkout path" {
+  fence_body "$PATH_ARM" 3 | grep -Fq 'bash <main checkout path>/.gaia/scripts/state-cleanup.sh --branch <branch-name>' || return 1
+  section "$REFERENCE" "$CONTINUATION" | grep -Fq 'bash <ABSOLUTE-PATH-TO-MAIN-CHECKOUT>/.gaia/scripts/state-cleanup.sh --branch <branch-name>'
+}
+
+@test "feature branch: the arm prunes the merged branch's state and keeps an open branch's" {
+  assert_check_green check_feature_arm_prunes_state "$BATS_TEST_TMPDIR/fixture"
+}
+
+@test "worktree by name: the arm prunes the merged branch's state and keeps an open branch's" {
+  assert_check_green check_worktree_arm_prunes_state "$BATS_TEST_TMPDIR/fixture" name
+}
+
+@test "worktree by path: the arm prunes the merged branch's state and keeps an open branch's" {
+  assert_check_green check_worktree_arm_prunes_state "$BATS_TEST_TMPDIR/fixture" path
+}
+
+@test "worktree by path from inside the tree: the verb still prunes the merged branch's state" {
+  prepare_tree "$BATS_TEST_TMPDIR/fixture" nolock clean || return 1
+  seed_branch_state || return 1
+  run_arm path "$TREE" || return 1
+  assert_merged_state_pruned
+}
+
+@test "red twin: a name arm without the verb line fails the doc check" {
+  mutate_reference -e '/^### Worktree entered by name/,/^### Worktree entered by path/{/state-cleanup.sh --branch/d;}' || return 1
+  assert_check_red "no state-cleanup line" check_arm_names_verb_after_delete "$NAME_ARM"
+}
+
+@test "red twin: a by-path arm without the verb line fails the doc check" {
+  mutate_reference -e '/^### Worktree entered by path/,/^### Feature branch/{/state-cleanup.sh --branch/d;}' || return 1
+  assert_check_red "no state-cleanup line" check_arm_names_verb_after_delete "$PATH_ARM"
+}
+
+@test "red twin: a feature arm without the verb line fails the doc check" {
+  mutate_reference -e '/^### Feature branch/,/^### Sub-agent context/{/state-cleanup.sh --branch/d;}' || return 1
+  assert_check_red "no state-cleanup line" check_arm_names_verb_after_delete "$FEATURE_ARM"
+}
+
+@test "red twin: a continuation prompt without the verb line fails the doc check" {
+  mutate_reference -e '/^### Sub-agent context/,/^## Releasing/{/state-cleanup.sh --branch/d;}' || return 1
+  assert_check_red "no state-cleanup line" check_arm_names_verb_after_delete "$CONTINUATION"
+}
+
+@test "red twin: a feature arm that runs the verb ahead of the branch delete fails the doc check" {
+  mutate_reference -e '/^### Feature branch/,/^### Sub-agent context/{/state-cleanup.sh --branch/d;}' -e '/^### Feature branch/,/^### Sub-agent context/s|^if git show-ref --verify --quiet refs/heads/<branch-name>; then$|bash .gaia/scripts/state-cleanup.sh --branch <branch-name>\
+&|' || return 1
+  assert_check_red "precedes the branch delete" check_arm_names_verb_after_delete "$FEATURE_ARM"
+}
+
+@test "red twin: a feature arm without the verb line leaves the merged branch's state behind" {
+  mutate_reference -e '/state-cleanup.sh --branch/d' || return 1
+  assert_check_red "the merged branch keeps its state" check_feature_arm_prunes_state "$BATS_TEST_TMPDIR/fixture"
+}
+
+@test "red twin: a by-path arm without the verb line leaves the merged branch's state behind" {
+  mutate_reference -e '/state-cleanup.sh --branch/d' || return 1
+  assert_check_red "the merged branch keeps its state" check_worktree_arm_prunes_state "$BATS_TEST_TMPDIR/fixture" path
+}
+
+@test "red twin: a name arm without the verb line leaves the merged branch's state behind" {
+  mutate_reference -e '/state-cleanup.sh --branch/d' || return 1
+  assert_check_red "the merged branch keeps its state" check_worktree_arm_prunes_state "$BATS_TEST_TMPDIR/fixture" name
 }
