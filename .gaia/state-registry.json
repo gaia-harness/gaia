@@ -541,12 +541,12 @@
     },
     {
       "id": "statusline-wrappers",
-      "path": ".patched-statusline.sh|maintainer-statusline.sh|dep-audit-baseline.json",
+      "path": "dep-audit-baseline.json",
       "match": "exact",
       "kind": "file",
       "scope": "main-only",
       "keyed_by": null,
-      "why": "Read-anchored to main (the statusline command resolves to main) or operator-authored per machine; single copies with no per-tree meaning. Hand-authored, not GAIA-generated.",
+      "why": "Operator-authored per machine; a single copy with no per-tree meaning. Hand-authored, not GAIA-generated.",
       "writer": "hand-authored",
       "retention": {
         "class": "keep"
