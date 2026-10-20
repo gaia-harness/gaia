@@ -22,10 +22,11 @@
 # non-zero.
 #
 # Honest limits: a pattern match, so prose that only looks like an id is
-# refused too, and the fix is to write the placeholder form. In code it reads
-# full-line comments only, never a trailing comment or a string, so an id in a
-# string literal passes: in code an id is far more often data than citation.
-# In the staged and tracked scans, test files and fixtures are data and are never read.
+# refused too, and the fix is to write the placeholder form. In the staged and
+# tracked scans, code is read in full-line comments only, never a trailing
+# comment or a string, so an id in a string literal passes: in code an id is
+# far more often data than citation. Those scans also never read test files
+# and fixtures, which are data. The strict Playwright scan reads every line.
 
 # The match logic, shared by every verb. Inputs set with -v:
 #   mode     text | message | file | diff
