@@ -108,7 +108,7 @@ full_cycle_rows() {
   local figures total_line want_tokens tokens dollars elapsed line
   full_cycle_rows
   figures="$(run_usage initiative spec:SPEC-402 --line --json)"
-  [ "$(jq -r 'keys | join(",")' <<<"$figures")" = 'dollars,elapsed_seconds,tokens' ]
+  [ "$(jq -r 'keys | join(",")' <<<"$figures")" = 'active_lower_bound,active_seconds,dollars,elapsed_seconds,tokens' ]
   total_line="$(run_usage initiative spec:SPEC-402 | grep '^  total (distinct segments): ')"
   want_tokens="$(sed -E 's/^  total \(distinct segments\): tokens ([0-9,]+) .*/\1/' <<<"$total_line" | tr -d ',')"
   tokens="$(jq -r '.tokens' <<<"$figures")"
