@@ -23,7 +23,7 @@ Keys stay under the service's `all` root, so `invalidateQueries({queryKey: itemK
 
 - Never copy query data into `useState` or sync it with a `useEffect`. The copy goes stale on the next refetch and costs an extra render. Derive during render from the data plus the smallest client state: store `selectedId`, then `data.find(...)`.
 - An edit form over query data keeps only the user's draft and overlays it: `value = draft.name ?? data.name`.
-- Use `select` to subscribe to a slice or a derived value. Pass a module-level function, or a `useCallback` when it closes over props, so it does not rerun on every render. `select` sees only successful data: validate and throw in the request function (the Zod schema already does), never in `select`.
+- Use `select` to subscribe to a slice or a derived value. Pass it inline (the compiler stabilizes it) or as a module-level function. `select` sees only successful data: validate and throw in the request function (the Zod schema already does), never in `select`.
 
 ## Dependent Queries
 
@@ -41,7 +41,7 @@ A query that waits on another value takes `enabled: Boolean(value)`, or `queryFn
 
 - `useQuery` has no `onError`, `onSuccess`, or `onSettled` in v5. A global side effect, such as a toast, goes in the `QueryCache`'s `onError` where the client is built, so it fires once per query, not once per mounted observer.
 - A failed background refetch keeps the data already on screen. Check `data` before `isError`, so stale data is not replaced by a full error state.
-- A `useMutation` handles expected failures (validation, 4xx) next to the control that triggered it. Only unexpected failures reach the route `ErrorBoundary`: `throwOnError: (error) => error instanceof HTTPError && error.response.status >= 500`, with `HTTPError` from `ky`.
+- A `useMutation` handles expected failures (validation, 4xx) next to the control that triggered it. Only unexpected failures reach the route `ErrorBoundary`: `throwOnError: (error) => !(error instanceof HTTPError && error.response.status < 500)`, with `HTTPError` from `ky`; a network, timeout, or schema failure is unexpected too, so only a 4xx stays local.
 
 ## Optimistic Mutations
 
@@ -52,20 +52,21 @@ A query that waits on another value takes `enabled: Boolean(value)`, or `queryFn
 3. `onError` restores the snapshot.
 4. `onSettled` returns the `invalidateQueries` promise, so the mutation stays pending until the refetch lands.
 
-The `setQueryData` updater builds new objects with `map` and spread; it never mutates `old`.
+The `setQueryData` updater builds new objects with `map` and spread; it never mutates `old`. Key the cache calls with the tagged `queryKey` from the service's query builder (`itemsQuery(filters).queryKey`, the `list()` builder extended with `filters` as above): the tag types `previous` and `old` as `Item[] | undefined`, where the bare `itemKeys.list(filters)` tuple leaves them untyped.
 
 ```tsx
 const queryClient = useQueryClient();
+const {queryKey} = itemsQuery(filters);
 
 const {mutate} = useMutation({
   mutationFn: updateItem,
   onError: (_error, _variables, previous) => {
-    queryClient.setQueryData(itemKeys.list(filters), previous);
+    queryClient.setQueryData(queryKey, previous);
   },
   onMutate: async (updated) => {
-    await queryClient.cancelQueries({queryKey: itemKeys.list(filters)});
-    const previous = queryClient.getQueryData(itemKeys.list(filters));
-    queryClient.setQueryData(itemKeys.list(filters), (old) =>
+    await queryClient.cancelQueries({queryKey});
+    const previous = queryClient.getQueryData(queryKey);
+    queryClient.setQueryData(queryKey, (old) =>
       old?.map((item) => (item.id === updated.id ? {...item, ...updated} : item))
     );
     return previous;
