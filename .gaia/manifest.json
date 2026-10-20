@@ -299,6 +299,7 @@
     ".gaia/scripts/spec/spec-archive-merged.sh": "owned",
     ".gaia/scripts/spec/spec-reconcile.sh": "owned",
     ".gaia/scripts/spec/spec-renumber.sh": "owned",
+    ".gaia/scripts/spec/spec-save.sh": "owned",
     ".gaia/scripts/spec/spec-session-lock.sh": "owned",
     ".gaia/scripts/spec/title-normalize.sh": "owned",
     ".gaia/scripts/spec/uat-divergence-check.sh": "owned",
@@ -753,7 +754,7 @@
     "wiki/overview.md": "wiki-owned",
     "wiki/README.md": "wiki-owned"
   },
-  "generated": "2026-10-20T13:25:56.149Z",
+  "generated": "2026-10-20T15:22:48.417Z",
   "regions": [
     {
       "endMarker": "<!-- gaia:audit-remit:end -->",
