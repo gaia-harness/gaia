@@ -44,6 +44,7 @@ AUDIT_MACHINERY_PATHS="$(cat <<'EOF'
 # The light-review router, the light-marker script and the reviewer definition
 # decide whether a clearance is written without the member having run, so a
 # change to any of them changes whether a clearance is believed.
+# The loop unit definition is not machinery: it orchestrates rounds and writes no clearance (the light-marker script is the only light writer).
 .gaia/scripts/audit-light-route.sh
 .gaia/scripts/audit-light-mark.sh
 .claude/agents/audit-light-reviewer.md
@@ -54,6 +55,7 @@ AUDIT_MACHINERY_PATHS="$(cat <<'EOF'
 .claude/agents/code-audit-maintainer-shell.md
 .claude/agents/code-audit-maintainer-node.md
 .claude/maintainers/**
+.gaia/scripts/tests/fixtures/audit-quick-corpus.json
 # gaia:maintainer-only:end
 .claude/agents/code-audit-github-workflows.md
 .claude/rules/**

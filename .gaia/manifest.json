@@ -53,6 +53,7 @@
     ".claude/hooks/lib/audit-light-route-lib.sh": "owned",
     ".claude/hooks/lib/audit-machinery.sh": "owned",
     ".claude/hooks/lib/audit-member-protocol.md": "owned",
+    ".claude/hooks/lib/audit-quick-classify-lib.sh": "owned",
     ".claude/hooks/lib/audit-rules-changed.sh": "owned",
     ".claude/hooks/lib/audit-scope.sh": "owned",
     ".claude/hooks/lib/cross-repo-refusal.sh": "owned",
@@ -301,6 +302,7 @@
     ".gaia/scripts/spec/spec-archive-merged.sh": "owned",
     ".gaia/scripts/spec/spec-reconcile.sh": "owned",
     ".gaia/scripts/spec/spec-renumber.sh": "owned",
+    ".gaia/scripts/spec/spec-save.sh": "owned",
     ".gaia/scripts/spec/spec-session-lock.sh": "owned",
     ".gaia/scripts/spec/title-normalize.sh": "owned",
     ".gaia/scripts/spec/uat-divergence-check.sh": "owned",
@@ -411,6 +413,7 @@
     "frontend/.claude/skills/playwright-cli/SKILL.md": "owned",
     "frontend/.claude/skills/react-code/references/conform-forms.md": "owned",
     "frontend/.claude/skills/react-code/references/hook-patterns.md": "owned",
+    "frontend/.claude/skills/react-code/references/query-patterns.md": "owned",
     "frontend/.claude/skills/react-code/references/translation-patterns.md": "owned",
     "frontend/.claude/skills/react-code/SKILL.md": "owned",
     "frontend/.claude/skills/skeleton-loaders/SKILL.md": "owned",
@@ -755,7 +758,7 @@
     "wiki/overview.md": "wiki-owned",
     "wiki/README.md": "wiki-owned"
   },
-  "generated": "2026-10-20T17:42:42.577Z",
+  "generated": "2026-10-20T18:28:40.072Z",
   "regions": [
     {
       "endMarker": "<!-- gaia:audit-remit:end -->",

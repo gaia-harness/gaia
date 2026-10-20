@@ -24,6 +24,7 @@
       "Bash(bash .gaia/scripts/spec/spec-archive-abandoned.sh:*)",
       "Bash(bash .gaia/scripts/spec/spec-archive-merged.sh:*)",
       "Bash(bash .gaia/scripts/spec/spec-reconcile.sh:*)",
+      "Bash(bash .gaia/scripts/spec/spec-save.sh:*)",
       "Bash(bash .gaia/scripts/spec/spec-session-lock.sh:*)",
       "Bash(bash .gaia/scripts/spec/title-normalize.sh:*)",
       "Bash(bash .gaia/scripts/spec/uat-divergence-check.sh:*)",
@@ -143,6 +144,15 @@
           {
             "type": "command",
             "command": "\"$(git rev-parse --show-toplevel 2>/dev/null || printf %s \"${CLAUDE_PROJECT_DIR:-.}\")/.claude/hooks/state-reaper-session-start.sh\""
+          }
+        ]
+      },
+      {
+        "matcher": "clear|compact",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"$(git rev-parse --show-toplevel 2>/dev/null || printf %s \"${CLAUDE_PROJECT_DIR:-.}\")/.claude/hooks/provision-worktree.sh\""
           }
         ]
       },

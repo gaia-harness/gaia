@@ -333,6 +333,50 @@ values_with_light() {
 }
 
 # ---------------------------------------------------------------------------
+# Quick review clause
+# ---------------------------------------------------------------------------
+
+# values_with_quick <extra-json-object-fields>: values with a fixed total and the given extra keys.
+values_with_quick() {
+  printf '{"total":0,"members":{},"grants":0,%s}\n' "$1" > "$TEMPORARY_DIRECTORY/values.json"
+}
+
+@test "quick: a quick-only input renders the quick clause and no light reviews clause" {
+  values_with_quick '"quick":{"code-audit-frontend":1}'
+  : > "$TEMPORARY_DIRECTORY/in.md"
+  record_offline "$TEMPORARY_DIRECTORY/in.md" "$TEMPORARY_DIRECTORY/out.md"
+  [ "$status" -eq 0 ]
+  grep -qxF 'Total rounds: 0; per member: none; quick review, no full member: code-audit-frontend; human grants: 0.' "$TEMPORARY_DIRECTORY/out.md"
+  grep -qF 'light reviews' "$TEMPORARY_DIRECTORY/out.md" && return 1
+  true
+}
+
+@test "quick: members sort by name and follow the light reviews clause" {
+  values_with_quick '"light":{"code-audit-frontend":2},"quick":{"code-audit-maintainer-shell":1,"code-audit-frontend":1}'
+  : > "$TEMPORARY_DIRECTORY/in.md"
+  record_offline "$TEMPORARY_DIRECTORY/in.md" "$TEMPORARY_DIRECTORY/out.md"
+  [ "$status" -eq 0 ]
+  grep -qxF 'Total rounds: 0; per member: none; light reviews: code-audit-frontend 2; quick review, no full member: code-audit-frontend, code-audit-maintainer-shell; human grants: 0.' "$TEMPORARY_DIRECTORY/out.md"
+}
+
+@test "quick: an empty object and all-zero counts render exactly the line without the key" {
+  values 0 '{}' 0
+  : > "$TEMPORARY_DIRECTORY/in.md"
+  record_offline "$TEMPORARY_DIRECTORY/in.md" "$TEMPORARY_DIRECTORY/without.md"
+  [ "$status" -eq 0 ]
+  values_with_quick '"quick":{}'
+  record_offline "$TEMPORARY_DIRECTORY/in.md" "$TEMPORARY_DIRECTORY/empty.md"
+  [ "$status" -eq 0 ]
+  values_with_quick '"quick":{"code-audit-frontend":0}'
+  record_offline "$TEMPORARY_DIRECTORY/in.md" "$TEMPORARY_DIRECTORY/zeros.md"
+  [ "$status" -eq 0 ]
+  cmp -s "$TEMPORARY_DIRECTORY/without.md" "$TEMPORARY_DIRECTORY/empty.md"
+  cmp -s "$TEMPORARY_DIRECTORY/without.md" "$TEMPORARY_DIRECTORY/zeros.md"
+  grep -qF 'quick review' "$TEMPORARY_DIRECTORY/without.md" && return 1
+  true
+}
+
+# ---------------------------------------------------------------------------
 # Input validation: exit 2
 # ---------------------------------------------------------------------------
 
@@ -385,6 +429,17 @@ assert_usage() {
   assert_usage '{"total":1,"members":{},"grants":0,"light":{"code-audit-a\nrm":1}}'
   assert_usage '{"total":1,"members":{},"grants":0,"light":[1]}'
   assert_usage '{"total":1,"members":{},"grants":0,"light":null}'
+}
+
+@test "invalid: a quick key that is not a code-audit member, a negative count, a non-object, or a non-integer" {
+  assert_usage '{"total":0,"members":{},"grants":0,"quick":{"rm -rf":1}}'
+  assert_usage '{"total":0,"members":{},"grants":0,"quick":{"audit-light-reviewer":1}}'
+  assert_usage '{"total":0,"members":{},"grants":0,"quick":{"code-audit-frontend":-1}}'
+  assert_usage '{"total":0,"members":{},"grants":0,"quick":{"code-audit-frontend":1.5}}'
+  assert_usage '{"total":0,"members":{},"grants":0,"quick":{"code-audit-frontend":"1"}}'
+  assert_usage '{"total":0,"members":{},"grants":0,"quick":{"code-audit-a\nrm":1}}'
+  assert_usage '{"total":0,"members":{},"grants":0,"quick":[1]}'
+  assert_usage '{"total":0,"members":{},"grants":0,"quick":null}'
 }
 
 @test "invalid: not JSON at all" {

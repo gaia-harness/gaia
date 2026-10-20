@@ -11,6 +11,7 @@
 #   audit-light-telemetry.sh outcome       --root <r> --member <m> --digest <d> --tree <t>
 #                                          --verdict clear|escalate|failed
 #                                          [--tokens <n>] [--duration-ms <n>]
+#                                          [--anchor-kind full|refusal|merge-base]
 #   audit-light-telemetry.sh member-result --root <r> --member <m>
 #   audit-light-telemetry.sh tally         [--root <r>] [--baseline-tokens <n>] [--window <n>]
 #
@@ -52,6 +53,22 @@
 # decision rule that reads these figures lives in the Code Audit Team decision
 # page, not here.
 #
+# Anchor kind. A first-dispatch quick review anchors on the merge base and its
+# route records carry `anchor_kind: "merge-base"`; `route` copies the field into
+# its event (null when the record has none) and `outcome` takes it from the
+# optional `--anchor-kind` flag (null when absent; any value other than full,
+# refusal or merge-base is swallowed like every other bad argument). The kill
+# rule measures re-audits only, so `tally` drops merge-base events from every
+# figure the rule and the light-routing health lines read: rotations,
+# light_routes, engagement, escalations, light misses, token figures, the
+# eligible and light-cleared counts (a merge-base route that ends full is not an
+# eligible re-audit either). The window selection, escalation_precision and
+# baseline_tokens are unfiltered. The quick arm is measured on its own two lines
+# after light_cleared_rate: quick_routes (merge-base route events in the window)
+# and quick_cleared (merge-base light_outcome events with verdict clear in the
+# window). An event with no anchor_kind key, or null, is a re-audit, so legacy
+# lines keep counting as they did.
+#
 # Light misses are best-effort: a finding from a full member counts as a miss
 # when an earlier light clear for the same branch and member covered the
 # finding's path, and the finding's line falls inside that route's post-image
@@ -73,7 +90,7 @@ LOG_RELATIVE_PATH=".gaia/local/telemetry/audit-light-routing.jsonl"
 usage() {
   cat >&2 <<'EOF'
 usage: audit-light-telemetry.sh route         --root <r> --record <route-record-path>
-       audit-light-telemetry.sh outcome       --root <r> --member <m> --digest <d> --tree <t> --verdict clear|escalate|failed [--tokens <n>] [--duration-ms <n>]
+       audit-light-telemetry.sh outcome       --root <r> --member <m> --digest <d> --tree <t> --verdict clear|escalate|failed [--tokens <n>] [--duration-ms <n>] [--anchor-kind full|refusal|merge-base]
        audit-light-telemetry.sh member-result --root <r> --member <m>
        audit-light-telemetry.sh tally         [--root <r>] [--baseline-tokens <n>] [--window <n>]
 EOF
@@ -115,6 +132,8 @@ tree=""
 verdict=""
 tokens=""
 duration_milliseconds=""
+anchor_kind=""
+anchor_kind_given=0
 baseline_tokens="$DEFAULT_BASELINE_TOKENS"
 window_prs="$DEFAULT_WINDOW_PRS"
 while [ "$#" -gt 0 ]; do
@@ -149,6 +168,11 @@ while [ "$#" -gt 0 ]; do
       ;;
     --duration-ms)
       duration_milliseconds="${2:-}"
+      shift 2 2>/dev/null || shift
+      ;;
+    --anchor-kind)
+      anchor_kind="${2:-}"
+      anchor_kind_given=1
       shift 2 2>/dev/null || shift
       ;;
     --baseline-tokens)
@@ -231,6 +255,7 @@ run_tally() {
     # A torn or hand-edited line is dropped rather than failing the report.
     counts="$(jq -R -c 'fromjson? // empty' "$log" 2>/dev/null | jq -s -r '
       def excluded_reason: . == "no-full-clearance" or . == "not-opted-in" or . == "no-version" or . == "degraded";
+      def quick_anchor: (.anchor_kind // null) == "merge-base";
       def median: sort | if length == 0 then null
         else ((.[((length - 1) / 2 | floor)] + .[(length / 2 | floor)]) / 2 | round) end;
       def covered_by($routes; $outcome; $location):
@@ -245,8 +270,8 @@ run_tally() {
               and .[0] <= $location.line
               and $location.line <= .[1])));
       . as $events
-      | [$events[] | select(.event == "route")] as $routes
-      | [$events[] | select(.event == "light_outcome")] as $outcomes
+      | [$events[] | select(.event == "route" and (quick_anchor | not))] as $routes
+      | [$events[] | select(.event == "light_outcome" and (quick_anchor | not))] as $outcomes
       | [$events[] | select(.event == "escalation_followup")] as $followups
       | [ range(0; $events | length) as $i
           | $events[$i]
@@ -254,7 +279,7 @@ run_tally() {
           | ($result.locations // [])[] as $location
           | select(
               any(range(0; $i) as $j | $events[$j];
-                .event == "light_outcome" and .verdict == "clear"
+                .event == "light_outcome" and (quick_anchor | not) and .verdict == "clear"
                 and .member == $result.member
                 and (.branch // "") == ($result.branch // "")
                 and covered_by($routes; .; $location)))
@@ -306,6 +331,7 @@ EOF
   if [ -n "$log" ] && [ -f "$log" ]; then
     kill_figures="$(jq -R -c 'fromjson? // empty' "$log" 2>/dev/null | jq -s -r --argjson window "$window_prs" '
       def excluded_reason: . == "no-full-clearance" or . == "not-opted-in" or . == "no-version" or . == "degraded";
+      def quick_anchor: (.anchor_kind // null) == "merge-base";
       . as $events
       | ([range(0; $events | length) as $i | $events[$i]
           | select(.member == "code-audit-frontend" and ((.branch // "") != ""))
@@ -316,11 +342,14 @@ EOF
          | .[-$window:]
          | map(.branch)) as $branches
       | [$events[] | select((.branch // "") as $branch | any($branches[]; . == $branch))] as $windowed
-      | [$windowed[] | select(.event == "route" and ((.reason // "") | excluded_reason | not))] as $eligible
-      | [$windowed[] | select(.event == "light_outcome" and .verdict == "clear")] as $cleared
+      | [$windowed[] | select(quick_anchor | not)] as $reaudits
+      | [$reaudits[] | select(.event == "route" and ((.reason // "") | excluded_reason | not))] as $eligible
+      | [$reaudits[] | select(.event == "light_outcome" and .verdict == "clear")] as $cleared
       | "window_prs: \($branches | length)",
         "eligible_reaudits: \($eligible | length)",
         "light_cleared: \($cleared | length)",
+        "quick_routes: \([$windowed[] | select(.event == "route" and quick_anchor)] | length)",
+        "quick_cleared: \([$windowed[] | select(.event == "light_outcome" and .verdict == "clear" and quick_anchor)] | length)",
         ([($eligible[].member), ($cleared[].member)] | unique[] as $member
          | "eligible_reaudits[\($member)]: \([$eligible[] | select(.member == $member)] | length)",
            "light_cleared[\($member)]: \([$cleared[] | select(.member == $member)] | length)")' 2>/dev/null)" || kill_figures=""
@@ -341,7 +370,7 @@ EOF
       esac
     done
   fi
-  [ -n "$kill_figures" ] || printf 'light_cleared_rate: n/a\n'
+  [ -n "$kill_figures" ] || printf 'light_cleared_rate: n/a\nquick_routes: 0\nquick_cleared: 0\n'
   exit 0
 }
 
@@ -408,6 +437,7 @@ case "$subcommand" in
        hard_full_rule: .hard_full_rule,
        cap: .cap,
        anchor_sha: .anchor_sha,
+       anchor_kind: (.anchor_kind // null),
        ranges: [(.files // [])[] | {path: .path, post_ranges: (.post_ranges // [])}]}' \
       "$record_path" 2>/dev/null)" || line=""
     [ -n "$line" ] || swallow "route record unparseable"
@@ -420,6 +450,13 @@ case "$subcommand" in
       clear | escalate | failed) ;;
       *) swallow "--verdict must be clear, escalate or failed" ;;
     esac
+    anchor_kind_value=""
+    if [ "$anchor_kind_given" -eq 1 ]; then
+      case "$anchor_kind" in
+        full | refusal | merge-base) anchor_kind_value="$anchor_kind" ;;
+        *) swallow "--anchor-kind must be full, refusal or merge-base" ;;
+      esac
+    fi
     tokens_value="null"
     duration_value="null"
     is_non_negative_integer "$tokens" && tokens_value="$tokens"
@@ -435,6 +472,7 @@ case "$subcommand" in
     fi
     line="$(jq -n -c --arg branch "$branch_slug" --arg at "$timestamp" \
       --arg member "$member" --arg digest "$digest" --arg tree "$tree" --arg verdict "$verdict" \
+      --arg anchor_kind "$anchor_kind_value" \
       --argjson tokens "$tokens_value" --argjson duration "$duration_value" \
       --argjson record "$route_record" '
       {event: "light_outcome",
@@ -444,7 +482,8 @@ case "$subcommand" in
        reason: ($record.reason // null),
        lines: ($record.lines // null),
        files: ($record.files // null),
-       verdict: $verdict, tokens: $tokens, duration_ms: $duration}' 2>/dev/null)" || line=""
+       verdict: $verdict, tokens: $tokens, duration_ms: $duration,
+       anchor_kind: (if $anchor_kind == "" then null else $anchor_kind end)}' 2>/dev/null)" || line=""
     append_event "$line"
     ;;
 

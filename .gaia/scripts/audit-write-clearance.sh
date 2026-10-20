@@ -83,7 +83,9 @@
 #                  router's decision record.
 #
 # Behavior (all contract):
-#   - Creates <root>/.gaia/local/audit/ if absent.
+#   - Creates <root>/.gaia/local/audit/ if absent, except in a linked worktree
+#     whose .gaia/local is not a link: that refuses with exit 2 and names
+#     .claude/hooks/provision-worktree.sh as the repair.
 #   - Writes ATOMICALLY: a temp file in the target directory, then `mv`.
 #   - Every write lands unconditionally: it overwrites a stale body at the
 #     same path. There is no create-only guard and no carried family to
@@ -277,6 +279,10 @@ if [ -f "${_write_clearance_script_directory}/audit-key-lib.sh" ]; then
   # shellcheck source=/dev/null
   . "${_write_clearance_script_directory}/audit-key-lib.sh"
 fi
+if [ -f "${_write_clearance_script_directory}/main-root-lib.sh" ]; then
+  # shellcheck source=/dev/null
+  . "${_write_clearance_script_directory}/main-root-lib.sh"
+fi
 
 # The shared base resolver whose line 1 the audit key is derived from, located
 # the same way: .gaia/scripts -> ../../.github/audit. Absent, the key falls
@@ -380,6 +386,18 @@ _root_physical_path="$(cd "$ROOT" 2>/dev/null && pwd -P)" || _root_physical_path
 _toplevel_physical_path="$(cd "$_root_toplevel" 2>/dev/null && pwd -P)" || _toplevel_physical_path=""
 if [ -z "$_root_physical_path" ] || [ "$_root_physical_path" != "$_toplevel_physical_path" ]; then
   error "--root '$ROOT' is not a checkout root (its checkout root is '$_root_toplevel')"
+  exit 2
+fi
+
+# A provisioned linked worktree's .gaia/local is a link into the main checkout,
+# where the merge gate and the round evaluator read the audit store. In an
+# unprovisioned one the mkdir below would create a real directory, and the
+# marker landing there is one nothing reads: the round reads `unknown` and the
+# gate declines with the marker absent. Refuse before writing, naming the
+# repair. The main checkout is never a linked worktree, so it never takes this.
+if command -v gaia_is_linked_worktree >/dev/null 2>&1 \
+  && gaia_is_linked_worktree "$ROOT" && [ ! -L "$ROOT/.gaia/local" ]; then
+  error "--root '$ROOT' is a linked worktree whose .gaia/local is not linked to the main checkout, so a marker written here would never reach the merge gate. Run: bash .claude/hooks/provision-worktree.sh '$ROOT' (idempotent; it also moves any audit artifacts already stranded in the tree), then re-dispatch the member."
   exit 2
 fi
 

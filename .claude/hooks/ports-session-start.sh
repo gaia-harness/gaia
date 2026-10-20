@@ -9,7 +9,7 @@
 # of servers left running from removed worktrees happens at the next real start,
 # in any tree including the main checkout. On clear and compact in a linked
 # worktree the hook re-emits the tree's ports context line, because worktree
-# provisioning does not run on those sources.
+# provisioning skips an already-provisioned tree on those sources.
 #
 # Cleanup order: behind a gate that reads files and `ps` only and never probes
 # a port, the ledger is reclaimed under the lock; the lock is released before

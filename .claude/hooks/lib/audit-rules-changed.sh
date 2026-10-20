@@ -76,6 +76,7 @@ AUDIT_GLOBAL_RULES_PATHS="$(cat <<'EOF'
 # changes.
 .gaia/scripts/audit-light-route.sh
 .claude/hooks/lib/audit-light-route-lib.sh
+.claude/hooks/lib/audit-quick-classify-lib.sh
 .gaia/scripts/audit-light-mark.sh
 .claude/agents/audit-light-reviewer.md
 # gaia:maintainer-only:start
@@ -87,6 +88,7 @@ AUDIT_GLOBAL_RULES_PATHS="$(cat <<'EOF'
 # No apostrophe may appear in this literal: bash 3.2 mis-parses one inside a
 # command substitution that wraps a heredoc.
 .claude/hooks/lib/audit-member-protocol.md
+.gaia/scripts/tests/fixtures/audit-quick-corpus.json
 # gaia:maintainer-only:end
 # The two rules under .claude/rules/ that govern the gate rather than the
 # code. quality-gate.md decides the deterministic checks a clearance

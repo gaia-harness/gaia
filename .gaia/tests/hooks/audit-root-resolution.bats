@@ -21,9 +21,10 @@
 #   WORKTREE       a real linked worktree of MAIN, on its own branch, with every
 #            roster member's file changed to DIFFERENT content, so MAIN and WORKTREE
 #            produce genuinely different per-member content digests. MAIN and
-#            WORKTREE never share a `.gaia/local` (no symlink): the two clearance
-#            stores stay physically separate, matching an unprovisioned
-#            worktree, so a root derivation that quietly collapsed onto the
+#            WORKTREE never share a `.gaia/local`: WORKTREE's is a link to a
+#            third directory of its own, so it reads as provisioned to the
+#            clearance writer while the two clearance stores stay physically
+#            separate, and a root derivation that quietly collapsed onto the
 #            wrong tree is observable rather than papered over.
 #   OUTSIDE  a non-repository temp directory. This is the bats process's OWN
 #            cwd for every test in this file (set once in setup()).
@@ -280,8 +281,7 @@ setup() {
 
   # Diverge every roster member's owned file so MAIN and WORKTREE produce genuinely
   # different per-member content digests (verified by the fixture-sanity test
-  # below). No symlink between the two `.gaia/local` directories: they stay
-  # physically separate stores throughout this file.
+  # below).
   printf 'export const x = 2;\n' > "$WORKTREE/frontend/app/x.ts"
   printf 'name: ci-changed\n' > "$WORKTREE/.github/workflows/ci.yml"
   printf '#!/bin/bash\necho shell-changed\n' > "$WORKTREE/.gaia/scripts/fixture-example.sh"
@@ -289,6 +289,13 @@ setup() {
   printf '# fixture skill changed\n' > "$WORKTREE/.claude/skills/audit-root-fixture/SKILL.md"
   git -C "$WORKTREE" add -A
   git -C "$WORKTREE" commit --quiet -m "worktree change: diverge every roster member's owned file"
+
+  # The clearance writer refuses a linked worktree whose .gaia/local is not a
+  # link, so WORKTREE's links to a store of its own, never to MAIN's. The
+  # ignore pattern keeps the link (a symlink, not a directory) untracked-clean.
+  mkdir -p "${MAIN}-wt-local"
+  ln -s "${MAIN}-wt-local" "$WORKTREE/.gaia/local"
+  printf '.gaia/local\n' >> "$MAIN/.git/info/exclude"
 
   cd "$OUTSIDE" || return 1
 }
@@ -299,7 +306,7 @@ teardown() {
     git -C "$MAIN" worktree remove --force "$WORKTREE" 2>/dev/null || rm -rf "$WORKTREE"
     git -C "$MAIN" worktree prune 2>/dev/null || true
   fi
-  [ -n "${MAIN:-}" ] && rm -rf "$MAIN" "$MAIN.catchup-base" "$MAIN.catchup-origin.git"
+  [ -n "${MAIN:-}" ] && rm -rf "$MAIN" "$MAIN.catchup-base" "$MAIN.catchup-origin.git" "${MAIN}-wt-local"
   [ -n "${OUTSIDE:-}" ] && rm -rf "$OUTSIDE"
   [ -n "${GH_BIN:-}" ] && rm -rf "$GH_BIN"
   return 0
@@ -721,8 +728,10 @@ run_audit_root_block() {
   subdir="$WORKTREE/frontend/app"
   # The mutated writer treats the subdirectory as the root and reads its roster
   # from there, so seed one: without it the mutated run fails on the missing
-  # roster and stays green for the wrong reason.
+  # roster and stays green for the wrong reason. Link a .gaia/local there too,
+  # or the mutated run takes the unprovisioned-worktree refusal instead.
   seed_audit_roster "$subdir"
+  ln -s "${MAIN}-wt-local" "$subdir/.gaia/local"
 
   before_snapshot="$(pool_snapshot "$WORKTREE")"
   run_stdout_only bash "$SCRIPT_WRITE_CLEARANCE" --root "$subdir" --member code-audit-frontend --provenance earned \

@@ -266,3 +266,32 @@ $2
 EOF
   return 1
 }
+
+# light_route_hard_full_rule_except <path> <member-globs> <exempt-globs>: the
+# same walk as light_route_hard_full_rule, except a glob that equals a line of
+# <exempt-globs> (newline-separated, exact string match) is skipped. Only the
+# router's own-story carve-out passes a non-empty list; every other glob, an
+# adopter-added one included, still fires.
+light_route_hard_full_rule_except() {
+  local path="$1" glob status exempt_globs="$3"
+  command -v audit_glob_matches >/dev/null 2>&1 || return 2
+  while IFS= read -r glob; do
+    [ -n "$glob" ] || continue
+    case "
+$exempt_globs
+" in *"
+$glob
+"*) continue ;; esac
+    status=0
+    audit_glob_matches "$glob" "$path" || status=$?
+    case "$status" in
+      0) printf '%s\n' "$glob"; return 0 ;;
+      1) ;;
+      *) return 2 ;;
+    esac
+  done <<EOF
+$LIGHT_ROUTE_FLOOR_GLOBS
+$2
+EOF
+  return 1
+}
