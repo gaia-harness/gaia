@@ -2,9 +2,9 @@
  * `gaia update-deps dismiss-alert --alert <n> --reason <reason> --comment
  * <text> --confirmed` handler.
  *
- * Dismissing a Dependabot alert is ask-first and never runs in CI. Every
- * argument is validated before any spawn, `gh` is argv-spawned (never through a
- * shell), and gh's stderr is never echoed because it can carry a token.
+ * Dismissing a Dependabot alert is ask-first. Every argument is validated
+ * before any spawn, `gh` is argv-spawned (never through a shell), and gh's
+ * stderr is never echoed because it can carry a token.
  */
 import {EXIT_CODES} from '../exit.js';
 import {structuredError} from '../stderr.js';
@@ -20,7 +20,7 @@ import {isPositiveInteger} from './advisory-validate.js';
 
 const HELP_TEXT = `Usage: gaia update-deps dismiss-alert --alert <n> --reason <tolerable_risk|not_used> --comment <text> --confirmed
 
-  Dismiss one Dependabot alert on GitHub. Refused (no request sent) in CI,
+  Dismiss one Dependabot alert on GitHub. Refused (no request sent)
   without --confirmed, for an invalid argument, or without a github.com
   origin. The comment is 1 to 280 characters and is never truncated.
   Prints {"dismissed": true|false, ...} as JSON. Exit 0 dismissed, 1 refused
@@ -38,7 +38,6 @@ const FORBIDDEN_PATTERN = /\bHTTP 403\b/u;
 
 export type DismissAlertOptions = {
   cwd?: string;
-  env?: NodeJS.ProcessEnv;
   ghRunner?: (options: GhOptions) => Promise<GhResult>;
   originReader?: OriginReader;
 };
@@ -49,7 +48,6 @@ type DismissError =
   | 'no-remote'
   | 'non-github-remote'
   | 'not-confirmed'
-  | 'refused-ci'
   | 'request-failed';
 
 type ParsedArgs = {
@@ -72,11 +70,6 @@ const fail = (
 
   return exitCode;
 };
-
-const isCiEnvironment = (env: NodeJS.ProcessEnv): boolean =>
-  [env.CI, env.GITHUB_ACTIONS].some(
-    (value) => value !== undefined && value !== '' && value !== 'false'
-  );
 
 // Counts code points, not UTF-16 units, so an emoji is one character.
 const countCodePoints = (text: string): number => {
@@ -188,10 +181,6 @@ export const run = async (
     });
 
     return fail('invalid-arguments', null, EXIT_CODES.INVALID_ARGUMENTS);
-  }
-
-  if (isCiEnvironment(options.env ?? process.env)) {
-    return fail('refused-ci', args.alert);
   }
 
   if (!args.confirmed) return fail('not-confirmed', args.alert);

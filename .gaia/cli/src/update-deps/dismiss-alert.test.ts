@@ -71,41 +71,25 @@ const dismiss = async (
 ): Promise<number> =>
   run(argv, {
     cwd: '/nonexistent-gaia-dismiss',
-    env: {},
     originReader: () => GITHUB_ORIGIN,
     ...options,
   });
 
 describe('dismiss-alert refusals send no request', () => {
-  test.each([
-    ['CI=true', {CI: 'true'}, validArgs(), 'refused-ci'],
-    [
-      'GITHUB_ACTIONS=true',
-      {GITHUB_ACTIONS: 'true'},
-      validArgs(),
-      'refused-ci',
-    ],
-    [
-      'no --confirmed',
-      {},
-      validArgs().filter((token) => token !== '--confirmed'),
-      'not-confirmed',
-    ],
-  ])('%s exits 1', async (_label, env, argv, token) => {
+  test('no --confirmed exits 1', async () => {
     const {calls, ghRunner} = recordingGh();
-    const exit = await dismiss(argv, {env, ghRunner});
+    const exit = await dismiss(
+      validArgs().filter((token) => token !== '--confirmed'),
+      {ghRunner}
+    );
 
     expect(exit).toBe(1);
-    expect(result()).toStrictEqual({alert: 41, dismissed: false, error: token});
+    expect(result()).toStrictEqual({
+      alert: 41,
+      dismissed: false,
+      error: 'not-confirmed',
+    });
     expect(calls).toHaveLength(0);
-  });
-
-  test('CI=false does not count as CI', async () => {
-    const {calls, ghRunner} = recordingGh();
-    const exit = await dismiss(validArgs(), {env: {CI: 'false'}, ghRunner});
-
-    expect(exit).toBe(EXIT_CODES.OK);
-    expect(calls).toHaveLength(1);
   });
 
   test('a gitlab.com origin is non-github-remote', async () => {

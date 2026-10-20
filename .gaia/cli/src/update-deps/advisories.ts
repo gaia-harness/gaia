@@ -51,7 +51,7 @@ import {fetchVersionTimes, readMinimumReleaseAge} from './run.js';
 import type {PnpmRunner} from './run.js';
 import {readCliWorkspaceMember, readWorkspaceYaml} from './workspace-member.js';
 
-const HELP_TEXT = `Usage: gaia update-deps advisories --emit <path> [--count-only] [--updates <path>] [--no-alerts]
+const HELP_TEXT = `Usage: gaia update-deps advisories --emit <path> [--count-only] [--updates <path>]
 
   Fetch open dependency security advisories (Dependabot alerts and
   \`pnpm audit\`, unioned), keep only validated fields, rank them, and
@@ -63,7 +63,6 @@ const HELP_TEXT = `Usage: gaia update-deps advisories --emit <path> [--count-onl
   --count-only       Count only: no advisory rows and no registry lookups.
   --updates <path>   An \`update-deps run --emit-updates\` payload, used to
                      offer chain-head bumps as candidates.
-  --no-alerts        Skip Dependabot alerts (as in CI) and use \`pnpm audit\`.
 `;
 
 const HELP_TOKENS = new Set(['--help', '-h', 'help']);
@@ -96,7 +95,6 @@ export type AdvisoriesOptions = {
 type ParsedArgs = {
   countOnly: boolean;
   emit: string;
-  noAlerts: boolean;
   updates: null | string;
 };
 
@@ -106,15 +104,12 @@ const parseArgs = (argv: readonly string[]): ParsedArgs | ParseError => {
   let emit: string | undefined;
   let updates: null | string = null;
   let countOnly = false;
-  let noAlerts = false;
 
   for (let index = 0; index < argv.length; index += 1) {
     const token = argv[index];
 
     if (token === '--count-only') {
       countOnly = true;
-    } else if (token === '--no-alerts') {
-      noAlerts = true;
     } else if (token === '--emit' || token === '--updates') {
       const value = argv[index + 1];
 
@@ -132,13 +127,8 @@ const parseArgs = (argv: readonly string[]): ParsedArgs | ParseError => {
 
   if (emit === undefined) return {error: '--emit is required'};
 
-  return {countOnly, emit, noAlerts, updates};
+  return {countOnly, emit, updates};
 };
-
-const isCiEnvironment = (env: NodeJS.ProcessEnv): boolean =>
-  [env.CI, env.GITHUB_ACTIONS].some(
-    (value) => value !== undefined && value !== '' && value !== 'false'
-  );
 
 const resolveFrom = (cwd: string, target: string): string =>
   path.isAbsolute(target) ? target : path.join(cwd, target);
@@ -263,10 +253,6 @@ type RunContext = {
 };
 
 const readAlerts = async (context: RunContext): Promise<AlertsOutcome> => {
-  if (context.args.noAlerts || isCiEnvironment(context.env)) {
-    return {ok: false, reason: 'ci'};
-  }
-
   const repository = resolveGithubRepository(
     context.repoRoot,
     context.options.originReader ?? readOriginUrl

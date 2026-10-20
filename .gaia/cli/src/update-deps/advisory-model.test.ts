@@ -560,7 +560,6 @@ const CONTRACT_REASON_TEXT = {
   'alerts-disabled': 'Dependabot alerts are disabled',
   'alerts-invalid-response': 'alerts response was not valid JSON',
   'alerts-request-failed': 'alerts request failed',
-  ci: 'CI run',
   'cli-failed': 'advisories refresh failed',
   forbidden: 'token lacks permission to read Dependabot alerts',
   'gh-missing': 'gh not installed',

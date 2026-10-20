@@ -6,8 +6,10 @@
 # STEP_ORDER. It also pins the shared-reference shape: the command reads exactly
 # the per-machine reference (it asks no team-setting question), lists it in its
 # references block, and the setup command reads it too (finalize deletes only
-# this command); it finalizes with the plain setup finalize call; and Step 1
-# refreshes the statusline's update-check cache after its /update-deps call.
+# this command); it finalizes with the plain setup finalize call; and it
+# updates no dependencies: no /update-deps run or cache bust before Step 11,
+# Chromium installed in Step 1 and not again in Step 7, and a closing pointer
+# to /update-deps.
 
 # The exact opening sentence of a command's references block.
 REFERENCES_OPENING='This command reads these references, all under `.claude/skills/gaia/references/setup/`. Read one only when a "Read ... now" line sends you there, and then read the whole file:'
@@ -234,73 +236,76 @@ check_plain_finalize() {
   grep -qF 'plain setup finalize call is absent' <<<"$output"
 }
 
-# check_step1_bust <file>: Step 1 runs the deps-mode update-check bust after
-# its /update-deps call and before Step 2. An init-invoked /update-deps cuts no
-# branch, so it never reaches the bust /update-deps runs at branch creation.
-check_step1_bust() {
+# check_no_dependency_update <file>: init leaves the bundle's lockfile as
+# shipped. No step before Step 11 names /update-deps (Step 11's closing message
+# points at it, so it must), nothing busts the update-check cache, and Chromium
+# is installed in Step 1 and not again in Step 7, since with no update Playwright
+# cannot change between the two.
+check_no_dependency_update() {
   awk '
-    /^## Step 1:/ { inside = 1; next }
-    inside && /^## Step 2:/ { exit }
-    inside && /run `\/update-deps`/ { saw_update_deps = 1 }
-    inside && saw_update_deps && /update-check-bust\.sh .*--mode deps/ { busted = 1 }
+    /^## / { section = $0 }
+    /update-check-bust\.sh/ { print "gaia-init.md busts the update-check cache"; failed = 1 }
+    section ~ /^## Step (0|1|2|3|4|5|6|7|8|9|10):/ && /\/update-deps/ {
+      print "a step before Step 11 names /update-deps"; failed = 1
+    }
+    section ~ /^## Step 11:/ && /\/update-deps/ { closing = 1 }
+    /playwright install chromium/ {
+      if (section ~ /^## Step 1:/) step1 = 1
+      if (section ~ /^## Step 7:/) { print "Step 7 installs Chromium again"; failed = 1 }
+    }
     END {
-      if (!saw_update_deps) { print "Step 1 has no /update-deps call"; exit 1 }
-      if (!busted) { print "Step 1 runs no deps-mode bust after /update-deps"; exit 1 }
+      if (!step1) { print "Step 1 installs no Chromium"; failed = 1 }
+      if (!closing) { print "Step 11 does not point at /update-deps"; failed = 1 }
+      exit failed
     }
   ' "$1"
 }
 
-# move_bust_line <file> <anchor ERE> <before|after>: prints the file with the
-# bust command line moved next to the first line matching the anchor.
-move_bust_line() {
-  ANCHOR="$2" PLACEMENT="$3" awk '
-    NR == FNR { if (/update-check-bust\.sh/) bust = $0; next }
-    /update-check-bust\.sh/ { next }
-    !moved && $0 ~ ENVIRON["ANCHOR"] {
-      moved = 1
-      if (ENVIRON["PLACEMENT"] == "before") { print bust; print; next }
-      print; print bust; next
-    }
-    { print }
-  ' "$1" "$1"
+@test "gaia-init.md updates no dependencies and installs Chromium once" {
+  check_no_dependency_update "$INIT_MD"
 }
 
-@test "gaia-init.md Step 1 busts the update-check cache after /update-deps" {
-  check_step1_bust "$INIT_MD"
-}
-
-@test "the Step 1 bust check fails when the bust is removed" {
+@test "the no-update check fails when Step 1 runs /update-deps again" {
   local scratch="$BATS_TEST_TMPDIR/gaia-init.scratch.md"
-  grep -vF -- 'update-check-bust.sh' "$INIT_MD" >"$scratch" || true
+  awk '{ print } /^## Step 1:/ { print "Then run `/update-deps` to bring all packages to their latest compatible versions." }' "$INIT_MD" >"$scratch"
   cmp -s "$INIT_MD" "$scratch" && return 1
-  run check_step1_bust "$scratch"
+  run check_no_dependency_update "$scratch"
   [ "$status" -ne 0 ]
-  grep -qF 'no deps-mode bust after /update-deps' <<<"$output"
+  grep -qF 'a step before Step 11 names /update-deps' <<<"$output"
 }
 
-@test "the Step 1 bust check fails when the bust moves before /update-deps" {
+@test "the no-update check fails when the update-check cache bust returns" {
   local scratch="$BATS_TEST_TMPDIR/gaia-init.scratch.md"
-  move_bust_line "$INIT_MD" 'run `/update-deps`' before >"$scratch"
+  awk '/^## Step 2:/ { print "bash .gaia/scripts/update-check-bust.sh --mode deps" } { print }' "$INIT_MD" >"$scratch"
   cmp -s "$INIT_MD" "$scratch" && return 1
-  run check_step1_bust "$scratch"
+  run check_no_dependency_update "$scratch"
   [ "$status" -ne 0 ]
-  grep -qF 'no deps-mode bust after /update-deps' <<<"$output"
+  grep -qF 'busts the update-check cache' <<<"$output"
 }
 
-@test "the Step 1 bust check fails when the bust leaves Step 1" {
+@test "the no-update check fails when Step 7 installs Chromium again" {
   local scratch="$BATS_TEST_TMPDIR/gaia-init.scratch.md"
-  move_bust_line "$INIT_MD" '^## Step 2:' after >"$scratch"
+  sed 's/^pnpm typecheck && /pnpm -C frontend exec playwright install chromium \&\& pnpm typecheck \&\& /' "$INIT_MD" >"$scratch"
   cmp -s "$INIT_MD" "$scratch" && return 1
-  run check_step1_bust "$scratch"
+  run check_no_dependency_update "$scratch"
   [ "$status" -ne 0 ]
-  grep -qF 'no deps-mode bust after /update-deps' <<<"$output"
+  grep -qF 'Step 7 installs Chromium again' <<<"$output"
 }
 
-@test "the Step 1 bust check fails on a deps bust in the wrong mode" {
+@test "the no-update check fails when Step 1 drops its Chromium install" {
   local scratch="$BATS_TEST_TMPDIR/gaia-init.scratch.md"
-  sed 's/update-check-bust\.sh \(.*\)--mode deps/update-check-bust.sh \1--mode gaia/' "$INIT_MD" >"$scratch"
+  grep -vF -- 'playwright install chromium' "$INIT_MD" >"$scratch" || true
   cmp -s "$INIT_MD" "$scratch" && return 1
-  run check_step1_bust "$scratch"
+  run check_no_dependency_update "$scratch"
   [ "$status" -ne 0 ]
-  grep -qF 'no deps-mode bust after /update-deps' <<<"$output"
+  grep -qF 'Step 1 installs no Chromium' <<<"$output"
+}
+
+@test "the no-update check fails when the closing message drops its /update-deps pointer" {
+  local scratch="$BATS_TEST_TMPDIR/gaia-init.scratch.md"
+  awk '/^## / { inside = ($0 ~ /^## Step 11:/) } inside && /\/update-deps/ { next } { print }' "$INIT_MD" >"$scratch"
+  cmp -s "$INIT_MD" "$scratch" && return 1
+  run check_no_dependency_update "$scratch"
+  [ "$status" -ne 0 ]
+  grep -qF 'Step 11 does not point at /update-deps' <<<"$output"
 }

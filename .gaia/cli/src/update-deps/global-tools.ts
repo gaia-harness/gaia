@@ -21,7 +21,6 @@ const HELP_TOKENS = new Set(['--help', '-h', 'help']);
 const INSTALL_COMMAND = 'npm install -g @playwright/cli@latest';
 
 export type GlobalToolProbes = {
-  isCi: () => boolean;
   /** Returns the bare semver the binary prints, or `null` when it is absent. */
   probeInstalledVersion: () => null | string;
   /** Returns npm's latest version, or `null` when the lookup failed. */
@@ -35,7 +34,6 @@ export type GlobalToolRow = {
   message: string;
   offerInstall: boolean;
   packageName: '@playwright/cli';
-  reportOnly: boolean;
   status: GlobalToolStatus;
   tool: 'playwright-cli';
 };
@@ -44,7 +42,6 @@ export type GlobalToolStatus =
   'current' | 'not-installed' | 'outdated' | 'unknown';
 
 export type PlaywrightCliRowInput = {
-  ci: boolean;
   /** `null` means the binary is absent. */
   installedVersion: null | string;
   /** `null` means the npm lookup failed. */
@@ -59,19 +56,14 @@ const parseStrictSegments = (value: string): null | readonly number[] =>
 export const computePlaywrightCliRow = (
   input: PlaywrightCliRowInput
 ): GlobalToolRow => {
-  const {ci, installedVersion, latestVersion} = input;
-  const row = (
-    status: GlobalToolStatus,
-    message: string,
-    offerInstall = false
-  ): GlobalToolRow => ({
+  const {installedVersion, latestVersion} = input;
+  const row = (status: GlobalToolStatus, message: string): GlobalToolRow => ({
     installCommand: INSTALL_COMMAND,
     installed: installedVersion,
     latest: latestVersion,
     message,
-    offerInstall,
+    offerInstall: status === 'outdated',
     packageName: '@playwright/cli',
-    reportOnly: ci,
     status,
     tool: 'playwright-cli',
   });
@@ -97,10 +89,7 @@ export const computePlaywrightCliRow = (
   if (compareSegments(installed, latest) < 0) {
     return row(
       'outdated',
-      ci ?
-        `installed ${installedVersion}, latest ${latestVersion}; report-only in CI`
-      : `installed ${installedVersion}, latest ${latestVersion}`,
-      !ci
+      `installed ${installedVersion}, latest ${latestVersion}`
     );
   }
 
@@ -119,7 +108,6 @@ const probeCommand = (command: string, args: string[]): null | string => {
 };
 
 const defaultProbes: GlobalToolProbes = {
-  isCi: () => process.env.CI === 'true',
   probeInstalledVersion: () => probeCommand('playwright-cli', ['--version']),
   probeLatestVersion: () =>
     probeCommand('npm', ['view', '@playwright/cli', 'version']),
@@ -141,7 +129,6 @@ export const run = (
 
   const probes = options.probes ?? defaultProbes;
   const row = computePlaywrightCliRow({
-    ci: probes.isCi(),
     installedVersion: probes.probeInstalledVersion(),
     latestVersion: probes.probeLatestVersion(),
   });

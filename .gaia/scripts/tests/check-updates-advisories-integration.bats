@@ -20,10 +20,6 @@ setup() {
   command -v node >/dev/null 2>&1 || skip "node required"
   [ -x "$REAL_BUNDLE" ] || skip "committed CLI bundle missing"
 
-  # A CI runner exports these, which would make the real verb skip alerts in
-  # every test that does not mean to.
-  unset CI GITHUB_ACTIONS
-
   SCRATCH_ROOT="$(mktemp -d "$BATS_TEST_TMPDIR/root.XXXXXX")"
   SCRATCH_ROOT="$(cd "$SCRATCH_ROOT" && pwd -P)"
   STUB_BIN="$BATS_TEST_TMPDIR/bin"
@@ -396,24 +392,6 @@ refresh_fields() {
     "$(alert_record 3 "$GHSA_C" gadgetlib .gaia/cli/pnpm-lock.yaml)"
   run_refresher
   assert_security 2 dependabot ""
-}
-
-@test "a CI run skips alerts without spawning gh" {
-  write_alerts "$STUB_OPEN_ALERTS_FILE" "$(alert_record 1 "$GHSA_A" widgetlib pnpm-lock.yaml)"
-  write_audit "$STUB_PNPM_AUDIT_FILE" "$(audit_advisory 1000001 "$GHSA_A" widgetlib)"
-  local payload="$BATS_TEST_TMPDIR/ci.json"
-  CI=true STUB_PNPM_AUDIT_STATUS=1 run_verb "$payload" --count-only
-  [ "$(jq -r '.reasons[0]' "$payload")" = "ci" ]
-  [ ! -s "$STUB_GH_LOG" ]
-}
-
-@test "the same run outside CI does call gh, so the empty CI log means something" {
-  write_alerts "$STUB_OPEN_ALERTS_FILE" "$(alert_record 1 "$GHSA_A" widgetlib pnpm-lock.yaml)"
-  local payload="$BATS_TEST_TMPDIR/not-ci.json"
-  run_verb "$payload" --count-only
-  [ "$(jq -r '.source' "$payload")" = "dependabot" ]
-  [ -s "$STUB_GH_LOG" ]
-  grep -qF -- "dependabot/alerts?state=open" "$STUB_GH_LOG"
 }
 
 @test "a previously dismissed alert is listed as dismissed and never reported open" {
