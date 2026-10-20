@@ -50,24 +50,13 @@ rm -f .gaia/local/setup-in-progress
 
 ## The setup ping
 
-A fire-and-forget adoption ping, the last substantive step of the run. Run with `SETUP_TYPE` and `REPO_CHOICE` from Phase 6 and the cached `OWED_AT_START`:
+A fire-and-forget adoption ping, the last substantive step of the run. Run with `SETUP_TYPE` and `REPO_CHOICE` from Phase 6 and the cached `OWED_AT_START`, each passed as one quoted argument (an empty value is fine):
 
 ```bash
-DECIDED_NOW=" $(.gaia/cli/gaia setup drift --json 2>/dev/null | jq -r '(.decided // {}) | keys | join(" ")' 2>/dev/null) "
-NEWLY_DECIDED=""
-for id in $OWED_AT_START; do
-  case "$DECIDED_NOW" in *" $id "*) NEWLY_DECIDED="$NEWLY_DECIDED $id" ;; esac
-done
-if [ -z "$SETUP_TYPE" ] && [ -z "$NEWLY_DECIDED" ]; then
-  echo PING_SKIPPED
-else
-  SANDBOX="$(.gaia/cli/gaia sandbox status --json 2>/dev/null | jq -r 'if .outcome == "enabled" then "on" else "off" end' 2>/dev/null)"
-  set --
-  [ -n "$SETUP_TYPE" ] && set -- "$@" --type "$SETUP_TYPE"
-  [ -n "$REPO_CHOICE" ] && set -- "$@" --repo "$REPO_CHOICE"
-  .gaia/cli/gaia ping --event setup --sandbox "${SANDBOX:-off}" "$@" || true
-fi
+bash .gaia/scripts/setup-ping.sh --owed "$OWED_AT_START" --type "$SETUP_TYPE" --repo "$REPO_CHOICE"
 ```
+
+The decision runs in a bash script because Claude's Bash tool may be zsh, which does not split a space-separated id list the way an inline loop needs. It prints `PING_SKIPPED` when no ping is owed.
 
 - `--sandbox` always carries the machine's real sandbox decision: `on` when the marker's outcome is `enabled`, `off` for `declined`, `incapable` or no marker.
 - `--type` rides only when `SETUP_TYPE` is set. With it empty (a plain re-run on a provisioned project), the ping fires only when this run decided an id that was owed at its start; a run that decided nothing sends no ping, so a no-op re-run never inflates setup counts.
