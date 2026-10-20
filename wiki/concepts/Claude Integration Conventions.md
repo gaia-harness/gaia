@@ -3,7 +3,7 @@ type: concept
 title: Claude Integration Conventions
 status: active
 created: 2026-04-21
-updated: 2026-10-15
+updated: 2026-10-21
 tags: [claude, meta, configuration]
 ---
 
@@ -62,7 +62,7 @@ library: package-name
 ---
 ```
 
-At dispatch the agent Globs `*.md` in its extension directory (skipping `README.md`), reads each file, and injects its content into the matching specialist subagent's prompt. To swap a library: delete its extension file, add one for the replacement. The main agent definition stays unchanged.
+At dispatch the agent Globs `*.md` in its extension directory (skipping `README.md`), reads each file's `subagents:` line, and hands the file's path to the matching specialist subagent, which reads it itself. To swap a library: delete its extension file, add one for the replacement. The main agent definition stays unchanged.
 
 Convention applies to **review-type agents only**, currently just `code-audit-frontend`. Cross-link: [[Code Review Audit Agent]].
 

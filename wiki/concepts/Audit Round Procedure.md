@@ -2,7 +2,7 @@
 type: concept
 status: active
 created: 2026-10-09
-updated: 2026-10-13
+updated: 2026-10-21
 tags: [concept, ci, review]
 ---
 
@@ -87,7 +87,7 @@ No member edits a tracked file during review. A member wave that leaves the tree
 
 #### No-op detection and retry for each dispatched member
 
-A dispatched member can silently no-op: zero tool uses, a return that is just a harness-reminder-echo or output-style fragment instead of a real review. Nothing about the marker gate catches this on its own, fail-closed means no marker and no merge, but with no diagnosis of *why* the gate is stuck, just a stuck gate a human has to notice and investigate by hand. This mirrors, one layer up, the same deterministic classifier `code-audit-frontend` already runs on its own internal specialist and refuter fan-outs (`.claude/agents/code-audit-frontend.md`, "No-op detection and retry for each refuter").
+A dispatched member can silently no-op: zero tool uses, a return that is just a harness-reminder-echo or output-style fragment instead of a real review. Nothing about the marker gate catches this on its own, fail-closed means no marker and no merge, but with no diagnosis of *why* the gate is stuck, just a stuck gate a human has to notice and investigate by hand. This mirrors, one layer up, the same deterministic classifier `code-audit-frontend` already runs on its own internal specialist and refuter fan-outs (`.claude/hooks/lib/audit-frontend-refuter.md` and the **Hardened retry prefix** in `.claude/agents/code-audit-frontend.md`).
 
 **Classify from the artifacts, and wait for them rather than for the dispatch to return.** The `Agent` call returns before the member has done anything (see [[#Dispatching the members]]), so classifying at that moment hands the guard an empty hand: it reads a no-op, and the orchestrator spends its one hardened re-dispatch on a member that is still running correctly. Poll the audit directory for the member's marker or its findings sidecar, then classify. A dispatched wave is an open round, not a stopping point: while any member's artifact is still absent, keep polling rather than ending the turn on a status note. The stops this page wants are the ones it names: a surfaced double no-op, a round disposition under [[#When rounds stop: pre-commit a disposition for every branch]], and a checkpoint denial from the bound hook ([[PR Merge Workflow#The branch checkpoint]]). A completion notification may arrive first and is a fine prompt to look, but the artifact is the exit condition: `.claude/rules/subagent-dispatch.md` forbids blocking on a signal that may never arrive, and this page states one procedure with it, not a second one.
 
@@ -123,7 +123,7 @@ Re-stamp before the single hardened re-dispatch below, for the same reason the p
 
 Resolution plus a stamp narrows the residual stale-file risk to two dispatches of the same member sharing one stamp, and re-stamping before the retry is what removes that last case.
 
-On a no-op, re-dispatch that member **exactly one** time with the hardened retry prefix (`.claude/agents/code-audit-frontend.md`, "No-op detection and retry for each refuter"), substituting the concrete target with the member's original changed-file list. A second consecutive no-op does not re-dispatch a third time: stop and surface to the operator which member no-op'd twice, rather than looping or silently proceeding to a merge attempt.
+On a no-op, re-dispatch that member **exactly one** time with the hardened retry prefix (`.claude/hooks/lib/audit-frontend-refuter.md` and the **Hardened retry prefix** in `.claude/agents/code-audit-frontend.md`), substituting the concrete target with the member's original changed-file list. A second consecutive no-op does not re-dispatch a third time: stop and surface to the operator which member no-op'd twice, rather than looping or silently proceeding to a merge attempt.
 
 **This ending departs from the general contract deliberately.** [[Code Review Audit Agent]] owns the terminal action for every no-op guard and states it as inline fallback: the caller does the unit's work itself and applies the result as if the subagent had returned it. This gate does not, because a member's marker is that member's own attestation. An orchestrator that audited the diff itself inline would be writing a clearance nobody earned, which is precisely the substitution the marker gate exists to refuse. Stopping costs nothing here that it would cost elsewhere: the gate stays fail-closed either way, no marker still means no merge, and a surfaced double no-op tells the operator why the gate is stuck instead of leaving them to notice an odd reply on their own.
 
