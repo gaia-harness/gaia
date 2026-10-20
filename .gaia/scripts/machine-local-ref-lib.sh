@@ -3,10 +3,9 @@
 #
 # The one detector for machine-local references: a SPEC, UAT or plan number,
 # or a concrete path under .notebook/ or .gaia/local/ that one machine
-# generated. The commit-msg hook, the pre-commit hook and the UAT gate's
-# Playwright scan call it; the rule it enforces is
-# .claude/rules/working-doc-ids.md. Dual-mode: source it for the functions
-# below, or run it directly.
+# generated. The rule it enforces is .claude/rules/working-doc-ids.md, whose
+# ## Enforced section owns the list of what runs it. Dual-mode: source it for
+# the functions below, or run it directly.
 #
 #   machine-local-ref-lib.sh text <file|->     scan every line
 #   machine-local-ref-lib.sh message <file>    scan a commit message

@@ -29,6 +29,7 @@
     ".claude/hooks/block-fork-pr-checkout.sh": "owned",
     ".claude/hooks/block-handrolled-pr-poll.sh": "owned",
     ".claude/hooks/block-invalid-pr-title.sh": "owned",
+    ".claude/hooks/block-machine-local-ref-gh-text.sh": "owned",
     ".claude/hooks/block-main-destructive-git.sh": "owned",
     ".claude/hooks/block-manifest-write.sh": "owned",
     ".claude/hooks/block-no-verify.sh": "owned",
@@ -752,7 +753,7 @@
     "wiki/overview.md": "wiki-owned",
     "wiki/README.md": "wiki-owned"
   },
-  "generated": "2026-10-20T13:00:19.161Z",
+  "generated": "2026-10-20T13:25:56.149Z",
   "regions": [
     {
       "endMarker": "<!-- gaia:audit-remit:end -->",

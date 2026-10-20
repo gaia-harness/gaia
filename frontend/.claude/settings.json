@@ -272,6 +272,11 @@
           },
           {
             "type": "command",
+            "command": "\"$(git rev-parse --show-toplevel 2>/dev/null || printf %s \"${CLAUDE_PROJECT_DIR:-.}\")/.claude/hooks/block-machine-local-ref-gh-text.sh\"",
+            "statusMessage": "Checking PR and issue text for machine-local references…"
+          },
+          {
+            "type": "command",
             "command": "\"$(git rev-parse --show-toplevel 2>/dev/null || printf %s \"${CLAUDE_PROJECT_DIR:-.}\")/.claude/hooks/block-pr-create-without-draft.sh\"",
             "statusMessage": "Checking PR is a draft…"
           }
