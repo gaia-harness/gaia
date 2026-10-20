@@ -135,31 +135,6 @@ check_ci_pin() {
 }
 
 # ---------------------------------------------------------------------------
-# 2. The /gaia-init check comes first and disables worktree creation
-# ---------------------------------------------------------------------------
-
-INIT_SENTENCE='Set `INVOKED_BY_INIT=true` and `SHOULD_CREATE_WORKTREE=false`, which disables worktree creation for the whole run.'
-DEFAULT_BRANCH_MODE='Set `SHOULD_CREATE_WORKTREE=true` but'
-
-check_init_pin() {
-  must_contain "$SKILL" "$INIT_SENTENCE" "the init arm does not set the flag that disables worktree creation" || return 1
-  must_precede "$SKILL" "$INIT_SENTENCE" "$DEFAULT_BRANCH_MODE" "the init check does not precede the worktree decision" || return 1
-  must_contain "$WORKTREE" "$CREATION_CONDITION" "the creation subsection is not conditioned on the flag"
-}
-
-@test "the init check precedes the worktree decision and disables creation" {
-  check_init_pin
-}
-
-@test "the init pin fails with the init sentence deleted" {
-  local copy
-  copy="$(scratch_copy "$SKILL" "init.md")"
-  remove_fixed "$copy" "$INIT_SENTENCE"
-  SKILL="$copy" run check_init_pin
-  [ "$status" -ne 0 ]
-}
-
-# ---------------------------------------------------------------------------
 # 3. No bare branch cut anywhere in the skill
 # ---------------------------------------------------------------------------
 
@@ -638,7 +613,7 @@ check_cache_bust() {
 # 16. A non-default branch takes the worktree path
 # ---------------------------------------------------------------------------
 
-MAIN_CHECKOUT_MODE='4. **In the main checkout, on `main`, `master` or any other branch.**'
+MAIN_CHECKOUT_MODE='3. **In the main checkout, on `main`, `master` or any other branch.**'
 UNDECLARED_RECONCILE='and so does a package neither of the worktree'"'"'s `package.json` files declares'
 
 check_feature_branch_worktree() {
@@ -648,7 +623,7 @@ check_feature_branch_worktree() {
     echo "SKILL.md still states a push-only mode" >&2
     return 1
   }
-  must_contain "$PUBLISH" '**If running in CI** (mode 2), which creates no worktree and no branch:' "publish's push-only arm is not CI-only"
+  must_contain "$PUBLISH" '**If running in CI** (mode 1), which creates no worktree and no branch:' "publish's push-only arm is not CI-only"
 }
 
 @test "a run on a non-default branch takes the worktree path, and only CI pushes without a PR" {
@@ -672,23 +647,23 @@ check_feature_branch_worktree() {
 }
 
 # ---------------------------------------------------------------------------
-# 17. Mode 3 waits for provisioning before discovery
+# 17. Mode 2 waits for provisioning before discovery
 # ---------------------------------------------------------------------------
 
 PROVISION_CALL='bash .gaia/scripts/provision-wait.sh --tree <worktree path>'
 
-check_mode_three_wait() {
-  must_precede "$SKILL" "$PROVISION_CALL" "$DISCOVERY_CALL" "mode 3 has no provisioning wait before discovery"
+check_mode_two_wait() {
+  must_precede "$SKILL" "$PROVISION_CALL" "$DISCOVERY_CALL" "mode 2 has no provisioning wait before discovery"
 }
 
-@test "mode 3 waits for provisioning before discovery" {
-  check_mode_three_wait
+@test "mode 2 waits for provisioning before discovery" {
+  check_mode_two_wait
 }
 
-@test "the mode-3 wait check fails with the wait call deleted" {
+@test "the mode-2 wait check fails with the wait call deleted" {
   local copy
   copy="$(scratch_copy "$SKILL" "wait.md")"
   remove_fixed "$copy" "$PROVISION_CALL"
-  SKILL="$copy" run check_mode_three_wait
+  SKILL="$copy" run check_mode_two_wait
   [ "$status" -ne 0 ]
 }

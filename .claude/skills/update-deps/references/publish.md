@@ -6,8 +6,6 @@
 A re-vendor diff from the Vendored skill sync step counts as an update: publish it even when no package moved, with the subject `chore(deps): re-vendor playwright-cli skill <version>`. It touches paths beyond the dependency manifests, so it gets the normal audit handshake, not the dep-bump bypass.
 <!-- gaia:maintainer-only:end -->
 
-**If `/gaia-init` invoked the run** (`INVOKED_BY_INIT=true`), skip the rest of this phase: do not commit, push, open a PR, or merge. Leave the changes uncommitted on the current branch, say so in one line, and return to `/gaia-init`, whose init commit carries them into the first push.
-
 **Commit the update.** Stage and commit the applied changes on the current branch. Write the message to a temp file first, then commit from it:
 
 ```bash
@@ -53,7 +51,7 @@ gh pr merge <N> --squash --delete-branch --auto
 - **`MERGED`** (exit 0) → pick the cleanup arm by how this session holds the worktree: `### Worktree entered by name in this session` when this run created and entered it (`CREATED_WORKTREE=true`), `### Worktree entered by path or in an earlier session` on a worktree run in place. Fill `<main checkout path>`, `<worktree path>` and `<branch-name>` in; that arm's fences take `git -C <main checkout path>` forms, so they run from a session launched inside the tree.
 - **`TIMEOUT`** (exit 5) → also print the cleanup to run once the merge lands: a pointer to `.claude/skills/gaia/references/work-lifecycle.md` `### Worktree entered by path or in an earlier session`, with the worktree path and the branch filled in. The session stays as it is too.
 
-**If running in CI** (mode 2), which creates no worktree and no branch:
+**If running in CI** (mode 1), which creates no worktree and no branch:
 
 1. Push the branch:
    ```bash

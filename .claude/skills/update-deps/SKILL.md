@@ -5,7 +5,7 @@ description: Remediates dependencies in place of Dependabot version and security
 
 Contents: Pre-flight: Worktree check; Pre-flight: Branch check; Package layout; Flags and run modes; Companion groups; Phase 1: Discover, preview, decide (orchestrator); Branch creation (after discovery); Override audit + Wave A: Haiku agent; Phase 5: Wave B (per-group major bumps); Phase 5b: Transitive refresh (Haiku agent); Phase 5c: Security resolutions; Phase 6: Post-update override audit; Phase 7: Final report; Phase 8: Publish.
 
-Dependency remediation (outdated packages and security advisories) through one quality gate, in one record. Interactively it previews first, advisories ranked first, so you can snooze what you are not ready for; in CI it runs unattended with no preview. Run from the main checkout, on `main`/`master` or any other branch, it works in its own worktree on its own branch cut from the default branch, opens the PR, merges it once checks are green, then cleans up locally, leaving the branch the main checkout holds as it was. Run by `/gaia-init`, it leaves its changes uncommitted for the init commit.
+Dependency remediation (outdated packages and security advisories) through one quality gate, in one record. Interactively it previews first, advisories ranked first, so you can snooze what you are not ready for; in CI it runs unattended with no preview. Run from the main checkout, on `main`/`master` or any other branch, it works in its own worktree on its own branch cut from the default branch, opens the PR, merges it once checks are green, then cleans up locally, leaving the branch the main checkout holds as it was.
 
 ## Pre-flight: Worktree check
 
@@ -21,16 +21,15 @@ gaia_refuse_if_worktree "/update-deps" gaia_update_deps_state_line "deps/" || ex
 
 ## Pre-flight: Branch check
 
-Decide the run mode in this order. The first matching mode wins, and the `/gaia-init` check comes first so it holds whatever the worktree decision would otherwise be.
+Decide the run mode in this order. The first matching mode wins.
 
-1. **`/gaia-init` invoked the run.** Set `INVOKED_BY_INIT=true` and `SHOULD_CREATE_WORKTREE=false`, which disables worktree creation for the whole run. A fresh project has no remote yet, so a branch's push, PR and merge cannot run; the run applies its changes on the current branch and leaves them uncommitted, and `/gaia-init`'s own init commit carries them. It creates no worktree and no branch.
-2. **`CI=true`**. Set `SHOULD_CREATE_WORKTREE=false`: the run creates no worktree and no branch, because the workflow owns branch management and pre-creates the appropriate branch before this skill runs.
-3. **Inside its own update worktree.** Read the branch with `git branch --show-current`. When it starts `deps/` and `bash .gaia/scripts/main-root-lib.sh --is-worktree` exits 0, this is a worktree run in place. Set `SHOULD_CREATE_WORKTREE=false`. Read `<worktree path>` with `git rev-parse --show-toplevel` and `<main checkout path>` with `bash .gaia/scripts/main-root-lib.sh`, each carried as a literal. Wait for provisioning before discovery, because the session-start hook re-provisions the tree on every entry:
+1. **`CI=true`**. Set `SHOULD_CREATE_WORKTREE=false`: the run creates no worktree and no branch, because the workflow owns branch management and pre-creates the appropriate branch before this skill runs.
+2. **Inside its own update worktree.** Read the branch with `git branch --show-current`. When it starts `deps/` and `bash .gaia/scripts/main-root-lib.sh --is-worktree` exits 0, this is a worktree run in place. Set `SHOULD_CREATE_WORKTREE=false`. Read `<worktree path>` with `git rev-parse --show-toplevel` and `<main checkout path>` with `bash .gaia/scripts/main-root-lib.sh`, each carried as a literal. Wait for provisioning before discovery, because the session-start hook re-provisions the tree on every entry:
    ```bash
    bash .gaia/scripts/provision-wait.sh --tree <worktree path>
    ```
    Handle the result as `references/worktree.md` step 4 does, with one difference: this run did not create the tree, so exit 3 (`INSTALL_FAILED`) is reported and the run continues. Discovery reads this worktree's manifests. The run creates no worktree, publishes as a worktree run (the PR is opened or reused, merged when green, and cleaned up by path), and never takes the push-only arm of Phase 8.
-4. **In the main checkout, on `main`, `master` or any other branch.** The worktree is cut from the default branch on `origin` whichever branch the main checkout holds, so a run started on a feature branch publishes its own `deps/` pull request and leaves that branch, its files and its `node_modules` as they were. Set `SHOULD_CREATE_WORKTREE=true` but **do not create the worktree yet**: creation is deferred until the run has confirmed work, right after the Phase 1 decision when the apply set is non-empty or the security plan has a resolution to apply, before anything is installed, or before Phase 5b on a refresh-only run (see Branch creation). Creating a worktree when there is nothing to update pollutes the branch list. Read the main checkout's root once with `git rev-parse --show-toplevel` and carry it as the literal `<main checkout path>`. Before discovery, check for an update worktree a run left behind:
+3. **In the main checkout, on `main`, `master` or any other branch.** The worktree is cut from the default branch on `origin` whichever branch the main checkout holds, so a run started on a feature branch publishes its own `deps/` pull request and leaves that branch, its files and its `node_modules` as they were. Set `SHOULD_CREATE_WORKTREE=true` but **do not create the worktree yet**: creation is deferred until the run has confirmed work, right after the Phase 1 decision when the apply set is non-empty or the security plan has a resolution to apply, before anything is installed, or before Phase 5b on a refresh-only run (see Branch creation). Creating a worktree when there is nothing to update pollutes the branch list. Read the main checkout's root once with `git rev-parse --show-toplevel` and carry it as the literal `<main checkout path>`. Before discovery, check for an update worktree a run left behind:
    ```bash
    git worktree list --porcelain
    ```
@@ -345,8 +344,7 @@ refresh-only. The branch is cut inside a worktree, never in the main checkout.
 - **Apply set non-empty, or the security plan has at least one resolution to
   apply.** Run this section right after the decision, before the Override audit
   + Wave A agent, so no install, lockfile rewrite, or quality gate runs in
-  the main checkout (a `/gaia-init` run stays where it is, see Pre-flight: Branch
-  check). A security-only run (an empty apply set, or `--security` with no
+  the main checkout. A security-only run (an empty apply set, or `--security` with no
   chain-head bump) then goes on to the security phase even when Phase 5b reports
   `Nothing moved` or `Reverted (<reason>)`.
 - **Refresh-only run.** The refresh installs, rewrites the lockfile and gates,
@@ -388,9 +386,8 @@ Do the following in order:
    earlier in this run (the vendored-skill sync may already have created it).
 3. **Otherwise** (`SHOULD_CREATE_WORKTREE=false`) create nothing and proceed in
    place. Remember whether this run created a worktree (`CREATED_WORKTREE=true`),
-   runs inside its own update worktree (mode 3), or works in place (modes 1
-   and 2, `/gaia-init` and CI); Phase 8
-   branches on it.
+   runs inside its own update worktree (mode 2), or works in place (mode 1,
+   CI); Phase 8 branches on it.
 
 ## Override audit + Wave A: Haiku agent
 
@@ -464,4 +461,4 @@ The orchestrating session builds and prints the report itself, from the agent re
 
 ## Phase 8: Publish
 
-Except on a run `/gaia-init` invoked, which publishes nothing, the orchestrating session commits, pushes, and, on a worktree run (one that created its worktree, or runs inside its own update worktree), opens or reuses the PR, merges it once checks are green, and cleans up the worktree and branch, because the merge-gate hooks fire only in the invoking session: read `.claude/skills/update-deps/references/publish.md` and follow it exactly.
+The orchestrating session commits, pushes, and, on a worktree run (one that created its worktree, or runs inside its own update worktree), opens or reuses the PR, merges it once checks are green, and cleans up the worktree and branch, because the merge-gate hooks fire only in the invoking session: read `.claude/skills/update-deps/references/publish.md` and follow it exactly.

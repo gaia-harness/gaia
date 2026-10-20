@@ -118,7 +118,7 @@ The expected gate count is 1 on a clean batch and at most 6 (one batch gate plus
 
 #### 7. Acceptance
 
-Acceptance runs only in an interactive run the user started directly: never under `CI=true`, never when another skill or command such as `/gaia-init` invoked the run, and never under `--scope`. In those runs an advisory left open stays open with its reason, and no question is asked.
+Acceptance runs only in an interactive run the user started directly: never under `CI=true`, never when another skill or command invoked the run, and never under `--scope`. In those runs an advisory left open stays open with its reason, and no question is asked.
 
 It covers each advisory left open with `no patch`, and any other advisory the user says they want to live with. Ask with `AskUserQuestion`, one advisory per question, up to 4 questions per call, never a single "accept all" question: options `Dismiss the alert` (Recommended) and `Keep it open`. The question names every alert number and manifest path that will be dismissed for that advisory, which is one package (from the payload's `alerts`), the proposed reason (`tolerable_risk` or `not_used`), and the proposed comment: at most 280 characters, built only from structured fields (package, installed version, severity, key, and why it is tolerable), never from advisory text.
 
