@@ -5,11 +5,17 @@
 # shellcheck disable=SC2154,SC2034
 #
 # Private to .gaia/tests/verify-harness.sh: the two bats steps. Sourced by that
-# runner after verify-harness-lib.sh and by nothing else. Defines functions
-# only. Maintainer-only: .gaia/tests is release-excluded wholesale.
+# runner after verify-harness-lib.sh, and by the whole-tree mark guard for the
+# three patterns only. Defines functions and the patterns only. Maintainer-only:
+# .gaia/tests is release-excluded wholesale.
 
-# The whole-tree mark, matched the way every consumer discovers marked suites.
-verify_whole_tree_mark_pattern='^# bats file_tags=([^,]*,)*whole-tree(,|$)'
+# The whole-tree mark, in its two spellings: a file tag marks every test in the
+# suite, a test tag marks the one test below it. These three patterns are the
+# one definition of the marked set: the runner, the mark guard and the
+# authoring rule read them from here and restate none of them.
+verify_whole_tree_file_mark_pattern='^# bats file_tags=([^,]*,)*whole-tree(,|$)'
+verify_whole_tree_test_mark_pattern='^# bats test_tags=([^,]*,)*whole-tree(,|$)'
+verify_whole_tree_mark_pattern='^# bats (file|test)_tags=([^,]*,)*whole-tree(,|$)'
 
 # verify_junit <mode> <suites-file> <report-file>
 #   failures: "<suite path>\t<test name>" per failing testcase
@@ -74,19 +80,23 @@ verify_junit() {
   ' "$suites_file" "$report_file"
 }
 
-# verify_invoke_bats <tree> <suites-file> <report-directory> <output> <error> [<filter>]
+# verify_invoke_bats <tree> <suites-file> <report-directory> <output> <error> [<name-filter>] [<tag-filter>]
 verify_invoke_bats() {
   local tree="$1" suites_file="$2" report_directory="$3" output_file="$4" error_file="$5" filter="${6:-}"
+  local tag_filter="${7:-}"
   local suite_path
-  local -a suite_arguments filter_arguments
+  local -a suite_arguments filter_arguments tag_arguments
   suite_arguments=()
   filter_arguments=()
+  tag_arguments=()
   while IFS= read -r suite_path; do
     [ -n "$suite_path" ] && suite_arguments+=("$suite_path")
   done <"$suites_file"
   [ -n "$filter" ] && filter_arguments=(--filter "$filter")
+  [ -n "$tag_filter" ] && tag_arguments=(--filter-tags "$tag_filter")
   (cd "$tree" && bash "$tree/.gaia/scripts/bats5.sh" --jobs 8 --report-formatter junit \
     --output "$report_directory" ${filter_arguments[@]+"${filter_arguments[@]}"} \
+    ${tag_arguments[@]+"${tag_arguments[@]}"} \
     ${suite_arguments[@]+"${suite_arguments[@]}"}) </dev/null >"$output_file" 2>"$error_file"
 }
 
@@ -144,9 +154,13 @@ verify_print_flaky() {
   done <"$2"
 }
 
-# verify_run_bats_step <label> <tree> <suites-file> <merge-base|"">
+# verify_run_bats_step <label> <tree> <suites-file> <merge-base|""> [<tag-filter>]
+# A tag filter narrows the HEAD run and the load-failure base re-run to the
+# tagged tests; the flaky isolation and the name-filtered base re-run filter by
+# exact failing test name instead and carry none.
 verify_run_bats_step() {
-  local label="$1" tree="$2" suites_file="$3" merge_base="$4"
+  local label="$1" tree="$2" suites_file="$3" merge_base="$4" tag_filter="${5:-}"
+  local reproduce_prefix="bash .gaia/scripts/bats5.sh " base_tag_filter=""
   local report_directory output_file error_file status start_seconds elapsed failures_file
   local head_items base_items base_tree base_suites base_report base_output base_error base_status=""
   local base_elapsed=0 short_base="" suite_path filter="" load_failure=0 reproduce_suites flaky_items
@@ -154,7 +168,7 @@ verify_run_bats_step() {
   output_file="$(mktemp "$run_temporary_directory/output.XXXXXX")"
   error_file="$(mktemp "$run_temporary_directory/error.XXXXXX")"
   start_seconds="$SECONDS"
-  verify_invoke_bats "$tree" "$suites_file" "$report_directory" "$output_file" "$error_file"
+  verify_invoke_bats "$tree" "$suites_file" "$report_directory" "$output_file" "$error_file" "" "$tag_filter"
   status=$?
   elapsed=$((SECONDS - start_seconds))
   # bats5.sh's bash-3.2 and serial-run warnings, relayed as written.
@@ -198,10 +212,14 @@ verify_run_bats_step() {
       awk -F'\t' '{ print $1 }' "$failures_file" | LC_ALL=C sort -u | while IFS= read -r suite_path; do
         [ -f "$base_tree/$suite_path" ] && printf '%s\n' "$suite_path"
       done >"$base_suites"
-      [ "$load_failure" -eq 0 ] && filter="$(verify_name_filter "$failures_file")"
+      if [ "$load_failure" -eq 0 ]; then
+        filter="$(verify_name_filter "$failures_file")"
+      else
+        base_tag_filter="$tag_filter"
+      fi
       if [ -s "$base_suites" ]; then
         start_seconds="$SECONDS"
-        verify_invoke_bats "$base_tree" "$base_suites" "$base_report" "$base_output" "$base_error" "$filter"
+        verify_invoke_bats "$base_tree" "$base_suites" "$base_report" "$base_output" "$base_error" "$filter" "$base_tag_filter"
         base_status=$?
         base_elapsed=$((SECONDS - start_seconds))
         if [ "$load_failure" -eq 0 ]; then
@@ -219,6 +237,7 @@ verify_run_bats_step() {
       verify_no_base_reason="the merge-base worktree could not be created"
     fi
   fi
+  [ -n "$tag_filter" ] && reproduce_prefix="${reproduce_prefix}--filter-tags $tag_filter "
   reproduce_suites="$(awk -F'\t' '{ print $1 }' "$failures_file" | LC_ALL=C sort -u | tr '\n' ' ')"
   if [ "$load_failure" -eq 1 ]; then
     # Load failures print bats' own output as the detail, so the items list
@@ -229,7 +248,7 @@ verify_run_bats_step() {
     cp "$head_items" "$output_file"
   fi
   verify_report_outcome "$label" "$elapsed" "$head_items" "$base_items" "$base_status" "$base_elapsed" \
-    "$short_base" "$output_file" "bash .gaia/scripts/bats5.sh ${reproduce_suites}< /dev/null"
+    "$short_base" "$output_file" "${reproduce_prefix}${reproduce_suites}< /dev/null"
 }
 
 # verify_marked_suites <tree>: every tracked suite carrying the whole-tree mark.

@@ -50,7 +50,7 @@
 # Awk surface, and the only names a guard may call: gaia_scan_reset,
 # gaia_scan_prepass, gaia_scan_prepass_end, gaia_scan_feed, gaia_scan_skip,
 # gaia_scan_suppressed, gaia_scan_pragma_here, gaia_scan_run_only,
-# gaia_scan_end. Every invocation passes `-v file=`, `-v is_bats=` and
+# gaia_scan_in_test, gaia_scan_end. Every invocation passes `-v file=`, `-v is_bats=` and
 # `-v scripts_directory=`.
 #
 # Two passes over a bats file, one over everything else. A fixture constant is
@@ -133,6 +133,11 @@
 # well-formed token as orphaned and fail every honored-pragma test. Resolution is
 # by readability rather than by execute permission, because these guards are not
 # mode-executable and awk cannot stat; the verdict is cached per token.
+# gaia:maintainer-only:start
+# A token that misses there is tried once more against
+# `<scripts_directory>/../tests/<token>.sh`, because a guard may live under
+# `.gaia/tests/`.
+# gaia:maintainer-only:end
 #
 # A following comment line whose first token is NOT the keyword continues the
 # reason. One whose first token IS the keyword stacks a second pragma on the same
@@ -331,6 +336,11 @@ function gaia_scan_run_only() {
   if (G_current_function in G_plain_call) return 0
   return 1
 }
+
+# 1 while the scan sits inside a @test body, 0 elsewhere (setup, helpers, top
+# level). A closing brace at column 1 ends the body, the same bound the run-only
+# accessor uses.
+function gaia_scan_in_test() { return G_in_test }
 
 function gaia_scan_end(file, is_bats, guard, is_owner, want_desync,   i, reported) {
   reported = 0
@@ -758,6 +768,13 @@ function G_resolve(token,   path, read_status, junk) {
   path = scripts_directory "/" token ".sh"
   read_status = (getline junk < path)
   close(path)
+# gaia:maintainer-only:start
+  if (read_status < 0) {
+    path = scripts_directory "/../tests/" token ".sh"
+    read_status = (getline junk < path)
+    close(path)
+  }
+# gaia:maintainer-only:end
   G_resolution[token] = (read_status >= 0) ? 1 : 0
   return G_resolution[token]
 }

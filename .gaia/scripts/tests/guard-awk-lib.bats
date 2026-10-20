@@ -394,6 +394,106 @@ EOF
   true
 }
 
+# The second root exists because a guard may live under .gaia/tests/. Both
+# directions in one test, so deleting the fallback reds it.
+@test "a token resolves through the sibling tests directory and reports malformed once it is gone" {
+  mkdir -p "$TEMPORARY_DIRECTORY/fixture/.gaia/scripts" "$TEMPORARY_DIRECTORY/fixture/.gaia/tests"
+  : > "$TEMPORARY_DIRECTORY/fixture/.gaia/tests/whole-probe.sh"
+  cat > "$TEMPORARY_DIRECTORY/second.bats" <<'EOF2'
+# gaia-lint-ignore whole-probe: resolves through the tests directory
+echo "STUBCLASS on the target line"
+EOF2
+  local fixture_scripts="$TEMPORARY_DIRECTORY/fixture/.gaia/scripts"
+  run awk -v file=second.bats -v is_bats=1 -v scripts_directory="$fixture_scripts" \
+      -v guard=whole-probe -v is_owner=1 -v want_desync=1 \
+      "$GAIA_GUARD_AWK$PROBE_AWK" "$TEMPORARY_DIRECTORY/second.bats" "$TEMPORARY_DIRECTORY/second.bats"
+  grep -qF -- "malformed" <<<"$output" && return 1
+  grep -qF -- "STUBCLASS" <<<"$output" && return 1
+  rm -f "$TEMPORARY_DIRECTORY/fixture/.gaia/tests/whole-probe.sh"
+  run awk -v file=second.bats -v is_bats=1 -v scripts_directory="$fixture_scripts" \
+      -v guard=whole-probe -v is_owner=1 -v want_desync=1 \
+      "$GAIA_GUARD_AWK$PROBE_AWK" "$TEMPORARY_DIRECTORY/second.bats" "$TEMPORARY_DIRECTORY/second.bats"
+  grep -qF -- "malformed gaia-lint-ignore: whole-probe does not resolve to .gaia/scripts/whole-probe.sh" <<<"$output" || return 1
+}
+
+@test "an empty reason on a token that resolves only through the tests directory is reported by the owner" {
+  mkdir -p "$TEMPORARY_DIRECTORY/fixture/.gaia/scripts" "$TEMPORARY_DIRECTORY/fixture/.gaia/tests"
+  : > "$TEMPORARY_DIRECTORY/fixture/.gaia/tests/whole-probe.sh"
+  cat > "$TEMPORARY_DIRECTORY/empty.bats" <<'EOF2'
+# gaia-lint-ignore whole-probe:
+echo "an ordinary line"
+EOF2
+  run awk -v file=empty.bats -v is_bats=1 -v scripts_directory="$TEMPORARY_DIRECTORY/fixture/.gaia/scripts" \
+      -v guard=whole-probe -v is_owner=1 -v want_desync=1 \
+      "$GAIA_GUARD_AWK$PROBE_AWK" "$TEMPORARY_DIRECTORY/empty.bats" "$TEMPORARY_DIRECTORY/empty.bats"
+  grep -qF -- "malformed gaia-lint-ignore for whole-probe: no reason given" <<<"$output" || return 1
+  grep -qF -- "does not resolve" <<<"$output" && return 1
+  true
+}
+
+# The scrub removes the maintainer-only lines; the library must still source and
+# resolve a scripts token afterwards, and the pair must be balanced.
+@test "the library without its maintainer-only lines still sources and resolves a scripts token" {
+  [ "$(grep -c 'gaia:maintainer-only:start' "$LIBRARY")" -eq "$(grep -c 'gaia:maintainer-only:end' "$LIBRARY")" ]
+  sed '/gaia:maintainer-only:start/,/gaia:maintainer-only:end/d' "$LIBRARY" > "$TEMPORARY_DIRECTORY/scrubbed-lib.sh"
+  mkdir -p "$TEMPORARY_DIRECTORY/scripts"
+  : > "$TEMPORARY_DIRECTORY/scripts/lint-scrub-probe.sh"
+  cat > "$TEMPORARY_DIRECTORY/scrub.bats" <<'EOF2'
+# gaia-lint-ignore lint-scrub-probe: resolves in the scripts directory
+echo "STUBCLASS on the target line"
+EOF2
+  # shellcheck source=/dev/null
+  . "$TEMPORARY_DIRECTORY/scrubbed-lib.sh"
+  run awk -v file=scrub.bats -v is_bats=1 -v scripts_directory="$TEMPORARY_DIRECTORY/scripts" \
+      -v guard=lint-scrub-probe -v is_owner=1 -v want_desync=1 \
+      "$GAIA_GUARD_AWK$PROBE_AWK" "$TEMPORARY_DIRECTORY/scrub.bats" "$TEMPORARY_DIRECTORY/scrub.bats"
+  [ "$status" -eq 0 ]
+  grep -qF -- "malformed" <<<"$output" && return 1
+  grep -qF -- "STUBCLASS" <<<"$output" && return 1
+  true
+}
+
+@test "in_test answers 1 inside a test body and 0 in setup, a helper and at top level" {
+  cat > "$TEMPORARY_DIRECTORY/scope.bats" <<'EOF2'
+echo "MARK top"
+
+setup() {
+  echo "MARK setup"
+}
+
+a_helper() {
+  echo "MARK helper"
+}
+
+EOF2
+  # The test header is printed rather than written into the heredoc, because
+  # bats rewrites a column-0 test header anywhere in this file, fixtures included.
+  printf '%s "one" {\n' '@test' >> "$TEMPORARY_DIRECTORY/scope.bats"
+  cat >> "$TEMPORARY_DIRECTORY/scope.bats" <<'EOF2'
+  echo "MARK body"
+}
+
+echo "MARK after"
+EOF2
+  local scope_awk='
+BEGIN { gaia_scan_reset() }
+NR == FNR { gaia_scan_prepass($0); next }
+FNR == 1 { gaia_scan_prepass_end() }
+{
+  gaia_scan_feed($0, 1)
+  if (index($0, "MARK") > 0) printf "%s=%d\n", $3, gaia_scan_in_test()
+}
+END { gaia_scan_end(file, 1, "x", 0, 0) }'
+  run awk -v file=scope.bats -v scripts_directory="$SCRIPTS_DIRECTORY" \
+      "$GAIA_GUARD_AWK$scope_awk" "$TEMPORARY_DIRECTORY/scope.bats" "$TEMPORARY_DIRECTORY/scope.bats"
+  [ "$(grep -c . <<<"$output")" -eq 5 ]
+  grep -qxF -- 'top"=0' <<<"$output" || return 1
+  grep -qxF -- 'setup"=0' <<<"$output" || return 1
+  grep -qxF -- 'helper"=0' <<<"$output" || return 1
+  grep -qxF -- 'body"=1' <<<"$output" || return 1
+  grep -qxF -- 'after"=0' <<<"$output" || return 1
+}
+
 # The off-surface arm: nothing is honored outside a bats suite, and the block is
 # still parsed there so the guard the pragma names can say so.
 @test "with is_bats 0 no pragma is honored and the block is still visible" {
