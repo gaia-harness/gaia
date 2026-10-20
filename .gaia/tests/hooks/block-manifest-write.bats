@@ -58,6 +58,14 @@ run_hook_bash() {
   assert_denied_by_json
 }
 
+# Every gate explains itself: the denial names what a hand edit breaks, not
+# only the rule it breaks.
+@test "the manifest denial states its consequence" {
+  run_hook_edit "Edit" ".gaia/manifest.json"
+  assert_denied_by_json
+  grep -qF -- "/gaia-fitness reads it to tell GAIA's files from yours, so an added entry can mark your own file GAIA-shipped and put it beyond the heal, and /update-gaia replaces the file wholesale from the release, discarding the edit." <<<"$output"
+}
+
 # --- allowed: edit tools ---
 
 @test "Edit on .gaia/manifest.json.tmp is allowed" {

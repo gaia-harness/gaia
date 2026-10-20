@@ -51,7 +51,7 @@ fi
 gaia_hook_payload_read "$payload" || exit 0
 tool_name="$GAIA_HOOK_TOOL_NAME"
 
-DENY_MESSAGE="BLOCKED: .gaia/manifest.json is release-generated and lists only files GAIA ships; feature work never adds to it."
+DENY_MESSAGE="BLOCKED: .gaia/manifest.json is release-generated and lists only files GAIA ships; feature work never adds to it. /gaia-fitness reads it to tell GAIA's files from yours, so an added entry can mark your own file GAIA-shipped and put it beyond the heal, and /update-gaia replaces the file wholesale from the release, discarding the edit."
 
 deny() {
   jq -n --arg reason "$1" '{

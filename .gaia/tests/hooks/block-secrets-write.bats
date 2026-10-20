@@ -784,6 +784,14 @@ run_write_hook_edit() {
   grep -qF -- "BLOCKED: writes to '.env.production' are forbidden. .env files must remain gitignored and edited manually by the developer." <<<"$output"
 }
 
+# Every gate explains itself: the dotenv denial says why the write is blocked,
+# not only that the developer edits the file.
+@test "the dotenv write denial states its reason" {
+  run_hook_write_path '.env' 'PORT=3000'
+  assert_denied_by_json
+  grep -qF -- 'They hold local secrets this session is kept from reading, so a write here would overwrite values it cannot see.' <<<"$output"
+}
+
 @test "the dotenv path message wins over the content scan when both would deny" {
   local aws_id="AKIA""IOSFODNN7EXAMPLE"
   run_hook_write_path '.env.production' "const id = '$aws_id'"

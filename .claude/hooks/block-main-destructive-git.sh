@@ -909,7 +909,7 @@ while IFS= read -r segment; do
   if [ "$git_subcommand" = commit ]; then
     branch=$(current_branch "$branch_directory")
     if [[ "$branch" == "main" || "$branch" == "master" ]]; then
-      deny "Commits to '$branch' are forbidden (wiki/concepts/Git Workflow.md). Create a feature branch first."
+      deny "Commits to '$branch' are forbidden (wiki/concepts/Git Workflow.md). Work reaches '$branch' only through a pull request, where the audit gate reviews it before it merges. Create a feature branch first."
     fi
     if [ "$segment_ambiguous" -eq 1 ]; then
       ambiguous_branch=$(ambiguous_main_branch)
@@ -923,7 +923,7 @@ while IFS= read -r segment; do
   if [ "$git_subcommand" = push ] \
      && [[ "$normalized_segment" =~ (--force|--force-with-lease|[[:space:]]-f([[:space:]]|$)) ]] \
      && [[ "$push_args" =~ (main|master)([[:space:]]|$|:) ]]; then
-    deny "Force-push to main/master is forbidden (wiki/concepts/Git Workflow.md)."
+    deny "Force-push to main/master is forbidden (wiki/concepts/Git Workflow.md). Its history is shared, so rewriting it pulls commits out from under every clone and branch built on it. Fix conflicts with a merge or rebase on the feature branch, then open a PR."
   fi
 
   # 3. Block any `git push` originating from main/master (PR-only flow).
@@ -976,7 +976,7 @@ while IFS= read -r segment; do
     # next attempt. The ambiguity arm is last because it is the one that
     # reports an unanswered question rather than a settled cause.
     if [ "$on_main" -eq 1 ]; then
-      deny "Plain 'git push' from main/master is forbidden (wiki/concepts/Git Workflow.md). Create a feature branch and open a PR."
+      deny "Plain 'git push' from main/master is forbidden (wiki/concepts/Git Workflow.md). It lands local commits on the shared branch without the pull request and audit every change passes through. Create a feature branch and open a PR."
     elif [ "$refspec_main" -eq 1 ]; then
       deny "This push's refspec names main, master or HEAD, which is forbidden from any branch (wiki/concepts/Git Workflow.md). Name the branch you are pushing explicitly and open a PR."
     elif [ "$ambiguous_main" -eq 1 ]; then

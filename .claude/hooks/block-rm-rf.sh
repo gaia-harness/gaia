@@ -453,7 +453,7 @@ main() {
 
   # 1. --no-preserve-root is always denied.
   if grep -Eq -- '--no-preserve-root' <<<"$command"; then
-    deny "BLOCKED: rm with --no-preserve-root is forbidden."
+    deny "BLOCKED: rm with --no-preserve-root is forbidden. It switches off rm's own refusal to remove the filesystem root."
   fi
 
   # 2. Catastrophic targets.
@@ -698,7 +698,7 @@ main() {
       # whitelist check with `..` serving as its non-empty parent segment.
       case "$token" in
         /../*|/..|/*/../*|/*/..)
-          deny "BLOCKED: ${rm_label} of absolute path '$token' is forbidden."
+          deny "BLOCKED: ${rm_label} of absolute path '$token' is forbidden. Its '..' segment makes it resolve somewhere its spelling does not name."
           ;;
       esac
 
@@ -750,7 +750,7 @@ main() {
       case "$token" in
         /|/*)
           repository_root_physical="$(cd "${repository_root:-/}" 2>/dev/null && pwd -P)" || repository_root_physical=''
-          deny "BLOCKED: ${rm_label} of absolute path '$token' is forbidden.$(_rm_whitelist_hint "$rm_whitelist" "$scratchpad_hint")$(_rm_repository_relative_hint "$token" "${repository_root:-}" "$repository_root_physical")"
+          deny "BLOCKED: ${rm_label} of absolute path '$token' is forbidden. An absolute path can reach anywhere on this machine, outside the repository this session works in.$(_rm_whitelist_hint "$rm_whitelist" "$scratchpad_hint")$(_rm_repository_relative_hint "$token" "${repository_root:-}" "$repository_root_physical")"
           ;;
         # The brace form is matched alongside the bare one. `${HOME}` is if anything
         # the more careful spelling of the expansion, and leaving it out reproduced
@@ -768,16 +768,16 @@ main() {
         # literal in bash and removes a directory named `~foo`, so denying it is a
         # false deny, which fails safe.
         '~'*|'$HOME'|'$HOME/'*|'\$HOME'|'\$HOME/'*|'${HOME}'|'${HOME}/'*|'\${HOME}'|'\${HOME}/'*)
-          deny "BLOCKED: ${rm_label} of \$HOME / ~ is forbidden."
+          deny "BLOCKED: ${rm_label} of \$HOME / ~ is forbidden. It removes a home directory, which no git history can restore."
           ;;
         '.'|'./')
-          deny "BLOCKED: ${rm_label} of cwd ('.') is forbidden."
+          deny "BLOCKED: ${rm_label} of cwd ('.') is forbidden. It removes the whole working directory, .git and .claude included."
           ;;
         '*'|'./*')
-          deny "BLOCKED: ${rm_label} of unscoped glob ('*') is forbidden."
+          deny "BLOCKED: ${rm_label} of unscoped glob ('*') is forbidden. It removes every file and folder in the working directory that is not hidden."
           ;;
         .git|./.git|.git/*|./.git/*)
-          deny "BLOCKED: ${rm_label} of .git is forbidden."
+          deny "BLOCKED: ${rm_label} of .git is forbidden. It holds the repository's history and refs, and a commit not yet pushed exists nowhere else."
           ;;
         # `.claude` is `.git`'s peer, not a lesser sibling: it is the whole Claude
         # configuration (hooks, skills, agents, rules, settings.json), it sits in

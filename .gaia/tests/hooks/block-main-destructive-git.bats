@@ -84,6 +84,30 @@ run_hook_from() {
   assert_denied_by_json
 }
 
+# Every gate explains itself: each denial says why the action is blocked, not
+# only that it is, so the reader can weigh the repair it names.
+@test "the commit-on-main denial states its reason" {
+  on_main
+  run_hook 'git commit -m "x"'
+  assert_denied_by_json
+  grep -qF -- "Work reaches 'main' only through a pull request, where the audit gate reviews it before it merges." <<<"$output"
+}
+
+@test "the plain-push denial states its reason" {
+  on_main
+  run_hook 'git push'
+  assert_denied_by_json
+  grep -qF -- 'It lands local commits on the shared branch without the pull request and audit every change passes through.' <<<"$output"
+}
+
+@test "the force-push denial states its reason and its repair" {
+  on_feature
+  run_hook 'git push --force origin main'
+  assert_denied_by_json
+  grep -qF -- 'Its history is shared, so rewriting it pulls commits out from under every clone and branch built on it.' <<<"$output"
+  grep -qF -- 'Fix conflicts with a merge or rebase on the feature branch, then open a PR.' <<<"$output"
+}
+
 @test "home-repo git -C commit on main is denied" {
   on_main
   run_hook "git -C $REPO commit -m \"x\""
