@@ -233,8 +233,9 @@ check_isolation_reference() {
 # ---------------------------------------------------------------------------
 
 # check_isolation_question <file>: the question's options, in order, lead with
-# always-worktree as the one recommended option, and each answer-mapping label
-# matches its option's label.
+# always-worktree as the one recommended option, and each answer maps by the
+# option's position, naming its option's label. The user sees the labels in
+# their own language, so a mapping keyed on the label text alone fails.
 check_isolation_question() {
   local file="$1" options answers
   options="$(grep -oE '^- \*\*[^*]+\*\*:' "$file")"
@@ -245,11 +246,11 @@ check_isolation_question() {
     printf 'the isolation question options are out of order or mislabelled:\n%s\n' "$options" >&2
     return 1
   }
-  answers="$(grep -E '^- `[^`]+` is `[a-z-]+`\.$' "$file")"
+  answers="$(grep -E '^- (The [a-z]+ option, )?`[^`]+`,? is `[a-z-]+`\.$' "$file")"
   [ "$answers" = "$(printf '%s\n' \
-    '- `Always use worktrees (Recommended)` is `always-worktree`.' \
-    '- `Prefer worktrees` is `prefer-worktree`.' \
-    '- `Prefer branches` is `prefer-branch`.')" ] || {
+    '- The first option, `Always use worktrees (Recommended)`, is `always-worktree`.' \
+    '- The second option, `Prefer worktrees`, is `prefer-worktree`.' \
+    '- The third option, `Prefer branches`, is `prefer-branch`.')" ] || {
     printf 'the isolation answer mapping does not match the options:\n%s\n' "$answers" >&2
     return 1
   }
@@ -273,10 +274,87 @@ check_isolation_question() {
 @test "the isolation question check fails when an answer label drifts from its option" {
   local copy
   copy="$(scratch_copy "${REFERENCES_DIRECTORY}/isolation-question.md" "isolation-question-drift.md")"
-  sed 's/^- `Always use worktrees (Recommended)` is/- `Always use worktrees` is/' \
+  sed 's/^- The first option, `Always use worktrees (Recommended)`, is/- The first option, `Always use worktrees`, is/' \
     "${REFERENCES_DIRECTORY}/isolation-question.md" >"$copy"
   cmp -s "${REFERENCES_DIRECTORY}/isolation-question.md" "$copy" && return 1
   run check_isolation_question "$copy"
+  [ "$status" -ne 0 ]
+}
+
+@test "the isolation question check fails when the answer is keyed on label text" {
+  local copy
+  copy="$(scratch_copy "${REFERENCES_DIRECTORY}/isolation-question.md" "isolation-question-label-keyed.md")"
+  sed 's/^- The [a-z]* option, \(`[^`]*`\), is/- \1 is/' \
+    "${REFERENCES_DIRECTORY}/isolation-question.md" >"$copy"
+  cmp -s "${REFERENCES_DIRECTORY}/isolation-question.md" "$copy" && return 1
+  run check_isolation_question "$copy"
+  [ "$status" -ne 0 ]
+}
+
+# ---------------------------------------------------------------------------
+# The --reconfigure team questions speak the user's language
+# ---------------------------------------------------------------------------
+
+# check_question_language <file>: the question is shown in the user's language
+# and nothing in the file holds part of it back in English.
+check_question_language() {
+  local file="$1" pinned
+  pinned="$(grep -n -i -E 'stays (in )?english' "$file" || true)"
+  [ -z "$pinned" ] || {
+    printf '%s keeps part of its question in English:\n%s\n' "$file" "$pinned" >&2
+    return 1
+  }
+  grep -q "in the user's language" "$file" || {
+    printf '%s does not say to ask in the user'"'"'s language\n' "$file" >&2
+    return 1
+  }
+}
+
+@test "the isolation and sandbox-recommendation questions are asked in the user's language" {
+  check_question_language "${REFERENCES_DIRECTORY}/isolation-question.md"
+  check_question_language "${REFERENCES_DIRECTORY}/sandbox-recommendation.md"
+}
+
+@test "the language check fails with the English-only explainer sentence put back" {
+  local copy
+  copy="$(scratch_copy "${REFERENCES_DIRECTORY}/isolation-question.md" "isolation-question-english.md")"
+  printf '\nShow the explainer (this block stays English regardless of UI language):\n' >>"$copy"
+  run check_question_language "$copy"
+  [ "$status" -ne 0 ]
+}
+
+@test "the language check fails with the English-only configuration block put back" {
+  local copy
+  copy="$(scratch_copy "${REFERENCES_DIRECTORY}/sandbox-recommendation.md" "sandbox-recommendation-english.md")"
+  printf '\nUse AskUserQuestion (this configuration block stays in English):\n' >>"$copy"
+  run check_question_language "$copy"
+  [ "$status" -ne 0 ]
+}
+
+# check_sandbox_recommendation_answer <file>: each answer maps by the option's
+# position, naming its option's label.
+check_sandbox_recommendation_answer() {
+  local file="$1" answers
+  answers="$(grep -E '^- (The [a-z]+ option, )?`[^`]+`,? is `(true|false)`\.$' "$file")"
+  [ "$answers" = "$(printf '%s\n' \
+    '- The first option, `No, don'"'"'t recommend (Recommended)`, is `false`.' \
+    '- The second option, `Yes, recommend the sandbox`, is `true`.')" ] || {
+    printf 'the sandbox-recommendation answer is not keyed on option position:\n%s\n' "$answers" >&2
+    return 1
+  }
+}
+
+@test "the sandbox-recommendation answer maps by option position" {
+  check_sandbox_recommendation_answer "${REFERENCES_DIRECTORY}/sandbox-recommendation.md"
+}
+
+@test "the sandbox-recommendation answer check fails when the answer is keyed on label text" {
+  local copy
+  copy="$(scratch_copy "${REFERENCES_DIRECTORY}/sandbox-recommendation.md" "sandbox-recommendation-label-keyed.md")"
+  sed 's/^- The [a-z]* option, \(`[^`]*`\), is/- \1 is/' \
+    "${REFERENCES_DIRECTORY}/sandbox-recommendation.md" >"$copy"
+  cmp -s "${REFERENCES_DIRECTORY}/sandbox-recommendation.md" "$copy" && return 1
+  run check_sandbox_recommendation_answer "$copy"
   [ "$status" -ne 0 ]
 }
 

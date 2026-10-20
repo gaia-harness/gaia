@@ -7,7 +7,7 @@ wiki_promote_default: yes
 chain_trigger: gaia-plan
 lineage: []
 intent: |
-  <Plain-English statement of the feature. One paragraph. Captures the
+  <Plain-language statement of the feature. One paragraph. Captures the
   user-facing change, the user it is for, and the value delivered.
   No implementation detail.>
 success_criteria:
@@ -55,7 +55,7 @@ Names the feature, the surface it lives on, and the user-visible win.>
 
 <Two or three short paragraphs. The problem the feature solves; the
 cost of not building it; the strategic frame that makes this the right
-moment to ship it. Plain English, no jargon, no acronyms without
+moment to ship it. Plain language, no jargon, no acronyms without
 expansion. Treat the reader as an engaged stakeholder, not an implementer.>
 
 ## How it behaves (lifecycle / shape)
