@@ -422,7 +422,10 @@ unowned:
   # also reaches `.gaia/scripts/token-rates.json`, the shipped rate table the
   # cost tooling reads, and exempting it would not merely leave it ownerless but
   # assert it is meant to be. It is granted to the shell member above instead.
-  - ".gaia/scripts/tests/**/*.json"
+  # Scoped further to the fixture subdirectories, which leaves out the
+  # quick-review corpus at the top of `fixtures/`: it is gate machinery the
+  # shell member owns.
+  - ".gaia/scripts/tests/fixtures/*/**/*.json"
   - ".gaia/scripts/**/*.jsonl"
   - ".gaia/scripts/**/*.txt"
   - ".gaia/scripts/**/*.md"
