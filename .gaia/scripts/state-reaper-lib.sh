@@ -101,6 +101,8 @@ set +e
 . "$_gaia_reaper_library_directory/audit-key-lib.sh"
 # shellcheck source=/dev/null
 . "$_gaia_reaper_library_directory/audit-loop-state-lib.sh"
+# shellcheck source=/dev/null
+. "$_gaia_reaper_library_directory/notebook/notebook-lib.sh" 2>/dev/null
 [ "$_gaia_reaper_errexit_was" = 1 ] && set -e
 unset _gaia_reaper_library_directory _gaia_reaper_errexit_was
 
@@ -387,18 +389,22 @@ _gaia_reaper_refresh_git() {
 # gaia_reaper_snapshot <main-root>: reads refs, the worktree list, the
 # notebook catalog and the links ledger once for the run. rc 0 always.
 gaia_reaper_snapshot() {
-  local main_root="${1-}" catalog links
+  local main_root="${1-}" catalog_path spec_rows links
   GAIA_REAPER_SKIPPED="" GAIA_REAPER_CATALOG_OK="" GAIA_REAPER_CATALOG_ROWS="" GAIA_REAPER_MERGED_PRS=""
   _gaia_reaper_refresh_git "$main_root"
-  catalog="$main_root/.notebook/catalog.json"
   if ! command -v jq >/dev/null 2>&1; then
     _gaia_reaper_skip "spec-finalized and the audit-loop merge guard: jq is not available"
     return 0
   fi
-  if [ ! -f "$catalog" ]; then
+  # The notebook library owns the catalog's location and schema. It reads an
+  # absent catalog as an empty one, which would age out every spec's scratch,
+  # so absence is tested here through the library's own path resolver.
+  if ! declare -f gaia_notebook_rows _gaia_notebook_catalog_path >/dev/null 2>&1; then
+    _gaia_reaper_skip "spec-finalized: the notebook library did not load"
+  elif catalog_path="$(_gaia_notebook_catalog_path "$main_root")" && [ ! -f "$catalog_path" ]; then
     _gaia_reaper_skip "spec-finalized: no notebook catalog"
-  elif GAIA_REAPER_CATALOG_ROWS="$(jq -r 'if (.items | type) == "array" then .items[] | select(.kind == "spec")
-      | [(.id | tostring), (.status | tostring)] | join("\t") else error("no items") end' "$catalog" 2>/dev/null)"; then
+  elif spec_rows="$(GAIA_NOTEBOOK_TREE="$main_root" gaia_notebook_rows spec 2>/dev/null)" &&
+    GAIA_REAPER_CATALOG_ROWS="$(printf '%s' "$spec_rows" | jq -r '.[] | [(.id | tostring), (.status | tostring)] | join("\t")' 2>/dev/null)"; then
     GAIA_REAPER_CATALOG_OK=1
   else
     GAIA_REAPER_CATALOG_ROWS=""

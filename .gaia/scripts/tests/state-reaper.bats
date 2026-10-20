@@ -44,6 +44,9 @@ make_fixture() {
   for script_file in $SCRIPT_FILES; do
     cp "$SCRIPTS_UNDER_TEST/$script_file" "$MAIN/.gaia/scripts/$script_file"
   done
+  mkdir -p "$MAIN/.gaia/scripts/notebook" "$MAIN/.gaia/scripts/spec"
+  cp "$SCRIPTS_DIRECTORY"/notebook/*.sh "$MAIN/.gaia/scripts/notebook/"
+  cp "$SCRIPTS_DIRECTORY/spec/with-ledger-lock.sh" "$MAIN/.gaia/scripts/spec/"
   cp "$REAL_REGISTRY" "$MAIN/.gaia/state-registry.json"
   "$REAL_GIT" -C "$MAIN" init -q
   "$REAL_GIT" -C "$MAIN" symbolic-ref HEAD refs/heads/main
@@ -313,7 +316,7 @@ plant_git_failure_fixture() {
 # bats test_tags=whole-tree
 @test "spec scratch of a ready or merged SPEC goes, a draft SPEC's stays" {
   make_fixture
-  make_catalog '{"items":[{"id":"draftone","kind":"spec","status":"draft"},{"id":"readyone","kind":"spec","status":"ready"},{"id":"mergedone","kind":"spec","status":"merged"}]}'
+  make_catalog '{"version":1,"items":[{"id":"draftone","kind":"spec","status":"draft"},{"id":"readyone","kind":"spec","status":"ready"},{"id":"mergedone","kind":"spec","status":"merged"}]}'
   local spec_id age_days
   age_days="$(window spec-draft-and-gate1-scratch)"
   for spec_id in draftone readyone mergedone; do
@@ -339,7 +342,7 @@ plant_git_failure_fixture() {
 # bats test_tags=whole-tree
 @test "spec scratch with no catalog row ages out by the row window, and so does the id-less draft" {
   make_fixture
-  make_catalog '{"items":[{"id":"other","kind":"spec","status":"draft"}]}'
+  make_catalog '{"version":1,"items":[{"id":"other","kind":"spec","status":"draft"}]}'
   local age_days
   age_days="$(window spec-draft-and-gate1-scratch)"
   plant_file cache/gate1-stale.json $((age_days + 1))
@@ -363,7 +366,7 @@ plant_git_failure_fixture() {
 # bats test_tags=whole-tree
 @test "a spec audit scratch directory follows its SPEC's catalog status and otherwise its age" {
   make_fixture
-  make_catalog '{"items":[{"id":"draftone","kind":"spec","status":"draft"},{"id":"readyone","kind":"spec","status":"ready"}]}'
+  make_catalog '{"version":1,"items":[{"id":"draftone","kind":"spec","status":"draft"},{"id":"readyone","kind":"spec","status":"ready"}]}'
   local age_days
   age_days="$(window spec-audit-scratch)"
   plant_dir cache/audit-draftone "$age_days"
@@ -462,7 +465,7 @@ plant_git_failure_fixture() {
 # bats test_tags=whole-tree
 @test "durable and owned state and unregistered entries stay byte-identical at any age" {
   make_fixture
-  make_catalog '{"items":[]}'
+  make_catalog '{"version":1,"items":[]}'
   local entry before after
   local -a untouched=(
     settings.json

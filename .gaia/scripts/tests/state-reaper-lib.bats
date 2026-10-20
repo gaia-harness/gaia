@@ -352,7 +352,7 @@ EOF
 @test "spec scratch follows its catalog row, falls back to age without one, and an unreadable catalog reaps none" {
   make_main
   mkdir -p "$MAIN/.notebook"
-  printf '%s\n' '{"items":[{"kind":"spec","id":"alpha","status":"draft"},{"kind":"spec","id":"beta","status":"ready"},{"kind":"spec","id":"gamma","status":"merged"},{"kind":"plan","id":"delta","status":"ready"}]}' >"$MAIN/.notebook/catalog.json"
+  printf '%s\n' '{"version":1,"items":[{"kind":"spec","id":"alpha","status":"draft"},{"kind":"spec","id":"beta","status":"ready"},{"kind":"spec","id":"gamma","status":"merged"},{"kind":"plan","id":"delta","status":"ready"}]}' >"$MAIN/.notebook/catalog.json"
   put cache/draft-alpha.md 30
   put cache/draft-beta.md 30
   put cache/draft-gamma.md 30
@@ -375,7 +375,7 @@ EOF
   local catalog_state
   for catalog_state in unparseable absent; do
     if [ "$catalog_state" = unparseable ]; then
-      printf '{"items": [\n' >"$MAIN/.notebook/catalog.json"
+      printf '{"version":1,"items": [\n' >"$MAIN/.notebook/catalog.json"
     else
       rm -f "$MAIN/.notebook/catalog.json"
     fi
