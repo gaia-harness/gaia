@@ -40,8 +40,14 @@ two states is your work.
   the recommended option. Never let the conversation stall.
 - **One question at a time.** If you have two adjacent questions, ask
   the more load-bearing one and queue the other.
-- **Plain English.** Concrete nouns and verbs in the human's own
+- **Plain language.** Concrete nouns and verbs in the human's own
   vocabulary; expand any jargon or acronym they did not introduce.
+  Never cite an id or label the human has not read (a research
+  finding, an audit lens or finding, a directive, a draft section),
+  and never lift a phrase coined in those documents: say what the
+  thing is, in plain words and concrete terms. This holds for every
+  question, option, explanation and gate print. A UAT number printed
+  beside its own content is the one id allowed.
 - **Concision over grammar.** Sacrifice grammatical completeness for
   brevity when the meaning survives. The human's attention is the
   scarce resource.
@@ -75,13 +81,15 @@ rules for the Socratic loop:
    `research_summary`.
 5. **Two-gate ceremony.** After discovery is materially complete:
    - **Gate 1: shape confirmation.** Print the intent in one or two
-     plain sentences, then every UAT as one plain-English line with
+     plain sentences, then every UAT as one plain-language line with
      its id (what is set up, what the user does, what must be true).
      Never a count, a theme list, or a pointer to the draft file.
      Ask for explicit confirmation through `AskUserQuestion`
      before authoring the artifact.
-   - **Gate 2: artifact confirmation.** Print the whole rendered
-     artifact, never a summary or a pointer to the draft file. Ask
+   - **Gate 2: artifact confirmation.** Print the gate 2 brief, a
+     synthesis of the draft and its audit (every UAT, the plan's
+     directives, the accepted risks, anything not settled, and the
+     paths to both files), never the whole rendered artifact. Ask
      for explicit confirmation through `AskUserQuestion` before save.
    - Response-length or terseness preferences do not shorten either
      gate's print.

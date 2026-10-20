@@ -38,14 +38,26 @@ SITES=(
 # folded to spaces. A gate that softens back to "Suggested text" drops its
 # required print, so that phrase is forbidden at both gates.
 PRINT_PINS=(
-  "$REFERENCES/spec.md|^### 4\. Gate 1|^### 5\.|every UAT in the draft, one plain-English line each"
+  "$REFERENCES/spec.md|^### 4\. Gate 1|^### 5\.|every UAT in the draft, one plain-language line each"
   "$REFERENCES/spec.md|^### 4\. Gate 1|^### 5\.|never summarize the UATs as a count or a theme list"
   "$REFERENCES/spec.md|^### 4\. Gate 1|^### 5\.|never point the user at the draft file"
   "$REFERENCES/spec.md|^### 4\. Gate 1|^### 5\.|terseness preferences do not shorten gate content"
-  "$REFERENCES/spec.md|^### 8\. Gate 2|^### 9\.|print the whole rendered artifact"
+  "$REFERENCES/spec.md|^### 8\. Gate 2|^### 9\.|a synthesis of the draft and its AUDIT.md"
+  "$REFERENCES/spec.md|^### 8\. Gate 2|^### 9\.|never print the whole rendered artifact"
+  "$REFERENCES/spec.md|^### 8\. Gate 2|^### 9\.|every UAT in the draft, one line each, keeping its number"
+  "$REFERENCES/spec.md|^### 8\. Gate 2|^### 9\.|**Plan will"
+  "$REFERENCES/spec.md|^### 8\. Gate 2|^### 9\.|**You are signing off on:**"
+  "$REFERENCES/spec.md|^### 8\. Gate 2|^### 9\.|**Not settled"
+  "$REFERENCES/spec.md|^### 8\. Gate 2|^### 9\.|the draft path and the AUDIT.md path"
+  "$REFERENCES/spec.md|^### 8\. Gate 2|^### 9\.|at most 50 lines"
+  "$REFERENCES/spec.md|^### 8\. Gate 2|^### 9\.|never drops or merges a UAT, a sign-off item, or a not-settled item"
   "$REFERENCES/spec.md|^### 8\. Gate 2|^### 9\.|terseness preferences do not shorten gate content"
-  "$REFERENCES/spec/system-prompt.md|Gate 1: shape confirmation|Self-review before gate 2|every UAT as one plain-English line"
-  "$REFERENCES/spec/system-prompt.md|Gate 1: shape confirmation|Self-review before gate 2|print the whole rendered artifact"
+  "$REFERENCES/spec/system-prompt.md|Gate 1: shape confirmation|Self-review before gate 2|every UAT as one plain-language line"
+  "$REFERENCES/spec/system-prompt.md|Gate 1: shape confirmation|Self-review before gate 2|print the gate 2 brief"
+  "$REFERENCES/spec/system-prompt.md|Gate 1: shape confirmation|Self-review before gate 2|never the whole rendered artifact"
+  "$REFERENCES/spec/system-prompt.md|^- \*\*Plain language|^- \*\*Concision|never cite an id or label the human has not read"
+  "$REFERENCES/spec/clarify-loop.md|^## 5a\.|^## 5b\.|never cite an id or label from them"
+  "$REFERENCES/spec.md|^### 8\. Gate 2|^### 9\.|no finding, lens, directive or section id"
   "$REFERENCES/spec/self-review-dispatch.md|^## 6b\.|^## 6c\.|never a count, a summary, or a pointer to a findings file"
   "$REFERENCES/spec/audit.md|^\*\*Interactive\.\*\*|^$|never a count, a summary, or a pointer to a findings file"
   "$REFERENCES/plan/decomposition-audit.md|^\*\*Interactive:\*\*|^$|never a count, a summary, or a pointer to a findings file"
@@ -54,6 +66,15 @@ FORBIDDEN_PRINT_PHRASE='Suggested text'
 GATE_SITES=(
   "$REFERENCES/spec.md|^### 4\. Gate 1|^### 5\."
   "$REFERENCES/spec.md|^### 8\. Gate 2|^### 9\."
+)
+
+# Gate 2 approves a brief, not the artifact: a SPEC printed whole is too long to
+# read in a session. Each phrase is a spelling of the whole-artifact print, so
+# none may appear in the gate 2 site. One row per phrase: file|start|end|phrase.
+WHOLE_ARTIFACT_PINS=(
+  "$REFERENCES/spec.md|^### 8\. Gate 2|^### 9\.|<full rendered artifact>"
+  "$REFERENCES/spec.md|^### 8\. Gate 2|^### 9\.|full draft artifact in markdown form"
+  "$REFERENCES/spec.md|^### 8\. Gate 2|^### 9\.|Here is the rendered SPEC"
 )
 
 # The trees the user-questions rule governs, minus the vendored playwright-cli
@@ -154,6 +175,13 @@ prints_ok() {
       failed=1
     fi
   done
+  for row in "${WHOLE_ARTIFACT_PINS[@]}"; do
+    IFS='|' read -r file start end phrase <<<"$row"
+    if site_text "$root/$file" "$start" "$end" | grep -qiF -- "$phrase"; then
+      echo "gate prints the whole artifact: $file /$start/: $phrase" >&2
+      failed=1
+    fi
+  done
   return "$failed"
 }
 
@@ -234,14 +262,14 @@ copy_tree_into_scratch() {
   sites_ok "$REPO_ROOT"
 }
 
-@test "real tree: every gate and review list prints its full content before asking" {
+@test "real tree: every gate and review list prints what it asks to approve before asking" {
   prints_ok "$REPO_ROOT"
 }
 
 @test "red twin: a gate 1 that stops requiring every UAT line fails" {
   copy_print_pin_files_into_scratch
   local file="$SCRATCH_ROOT/$REFERENCES/spec.md"
-  sed 's/every UAT in the draft, one plain-English line each/the UATs in brief/' "$file" >"$file.new"
+  sed 's/every UAT in the draft, one plain-language line each/the UATs in brief/' "$file" >"$file.new"
   mv "$file.new" "$file"
   run prints_ok "$SCRATCH_ROOT"
   [ "$status" -eq 1 ]
@@ -266,6 +294,56 @@ copy_tree_into_scratch() {
   run prints_ok "$SCRATCH_ROOT"
   [ "$status" -eq 1 ]
   [[ "$output" == *"gate print is only suggested"* ]]
+}
+
+@test "red twin: a gate 2 that goes back to printing the whole artifact fails" {
+  copy_print_pin_files_into_scratch
+  local file="$SCRATCH_ROOT/$REFERENCES/spec.md"
+  awk '{ print } /^### 8\. Gate 2/ { print "> <full rendered artifact>" }' "$file" >"$file.new"
+  mv "$file.new" "$file"
+  run prints_ok "$SCRATCH_ROOT"
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"gate prints the whole artifact"*"<full rendered artifact>"* ]]
+}
+
+@test "red twin: a gate 2 brief that drops the sign-off section fails" {
+  copy_print_pin_files_into_scratch
+  local file="$SCRATCH_ROOT/$REFERENCES/spec.md"
+  sed 's/\*\*You are signing off on:\*\*/**Risks:**/' "$file" >"$file.new"
+  mv "$file.new" "$file"
+  run prints_ok "$SCRATCH_ROOT"
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"print pin missing"*"You are signing off on"* ]]
+}
+
+@test "red twin: a gate 2 brief that lets length drop a UAT fails" {
+  copy_print_pin_files_into_scratch
+  local file="$SCRATCH_ROOT/$REFERENCES/spec.md"
+  sed 's/never drops or merges a UAT, a sign-off item, or a not-settled item/may trim UATs when long/' "$file" >"$file.new"
+  mv "$file.new" "$file"
+  run prints_ok "$SCRATCH_ROOT"
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"print pin missing"*"never drops or merges a UAT"* ]]
+}
+
+@test "red twin: a gate 2 brief with no length bound fails" {
+  copy_print_pin_files_into_scratch
+  local file="$SCRATCH_ROOT/$REFERENCES/spec.md"
+  sed 's/at most 50 lines/as long as it needs/' "$file" >"$file.new"
+  mv "$file.new" "$file"
+  run prints_ok "$SCRATCH_ROOT"
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"print pin missing"*"at most 50 lines"* ]]
+}
+
+@test "red twin: a clarify question that may cite a finding id fails" {
+  copy_print_pin_files_into_scratch
+  local file="$SCRATCH_ROOT/$REFERENCES/spec/clarify-loop.md"
+  sed 's/never cite an id or label from them/cite finding ids where helpful/' "$file" >"$file.new"
+  mv "$file.new" "$file"
+  run prints_ok "$SCRATCH_ROOT"
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"print pin missing: $REFERENCES/spec/clarify-loop.md"* ]]
 }
 
 @test "red twin: a review list that may print a count fails" {

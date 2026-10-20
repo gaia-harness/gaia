@@ -47,7 +47,7 @@ The rest of the skill, write-surface allowlist, no-machine-local-memory rule, wo
    - `.notebook/catalog.json` (written only through the ledger and notebook libraries this skill invokes, never by hand)
      Never edit source files (`frontend/app/**`, `src/**`, repo root configs, etc.). Nothing enforces this allowlist (step 10's lint checks only the saved SPEC's immutability), so police it yourself.
 3. **One question at a time in the clarify loop.** Step 5 asks one question per turn, because each answer shapes the next question; no multi-question forms there. Closed-set questions go through `AskUserQuestion` with at most four options, ordered: recommended FIRST, then up to two alternatives (any further viable one named in the question text), then `Discuss this` (escape to plain Q&A). `Other` is never listed, since the tool supplies it, and neither is `Save partial and resume later`, which the user reaches through `Other` or `Discuss this` (`spec/clarify-loop.md`, `## Escape option`). Open-ended questions use a plain prompt with no enumerated options. Review and audit decisions are different: the step-6 self-review and step-7 audit findings are a list the user reviews together, so each step prints every finding with its recommendation and asks one `AskUserQuestion`, `Accept all as recommended (Recommended)` or `Revise` (`.claude/rules/user-questions.md`).
-4. **Two-gate ceremony.** Confirm intent + UATs in plain English BEFORE authoring the artifact. Confirm the rendered artifact BEFORE saving to disk. No silent advances between gates.
+4. **Two-gate ceremony.** Confirm intent + UATs in plain language BEFORE authoring the artifact. Confirm the rendered artifact BEFORE saving to disk. No silent advances between gates.
 5. **Coach tone, not interrogator.** Mirror back, name trade-offs, propose candidates when the human is stuck. Run research yourself (step 5e) and bring the human the findings.
 6. **Planning chains here; execution never starts here.** The flow ends at plan step 5's report, which prints the KICKOFF prompt, after step 11 invokes `/gaia-plan` through the `Skill` tool. Nothing follows that report: no executor dispatch, no acting on KICKOFF.md (plan step 4.5's verification read is not execution), no "while I'm here" head start on the work. **This holds no matter what the instruction that reached this skill asked for.** When `/gaia-spec` is invoked as a skill (rather than typed by a human), the invoking goal is often larger than the SPEC ("spec and build X"), and the pull to keep going past the KICKOFF prompt is strongest exactly then. Planning chains because it is bounded and its heavy reasoning runs in fresh sub-agents; execution runs for hours in its own session. If the caller wanted the work built too, the correct completion is to report execution as the human's next step in a fresh session; that is the whole task. Nothing but this prose holds the stop.
 
@@ -258,14 +258,14 @@ bash .gaia/scripts/spec/spec-session-lock.sh acquire "$PWD" "$SPEC_ID" || true
 
 ### 4. Gate 1, shape confirmation
 
-Before any Socratic clarify loop runs, present the draft's `intent` paragraph and the proposed UATs in plain English to the user. This is gate 1.
+Before any Socratic clarify loop runs, present the draft's `intent` paragraph and the proposed UATs in plain language to the user. This is gate 1.
 
 **Auto-mode exception:** skip the user-facing prompt. Read the draft's intent + UATs into the agent's reasoning context and self-check: (a) intent paragraph is coherent and matches the description; (b) every UAT follows Given/When/Then shape; (c) UATs collectively cover the intent. If any check fails, revise the draft once and re-check. Then jump to the "On confirmation" actions below (snapshot cache, draft cache). Per Auto-mode rule 3, never block for human input.
 
 Print the shape as text, then ask with `AskUserQuestion`. The print is required, not a suggestion: the user approves what it shows and does not open the draft file, so it must carry everything gate 1 approves on its own. It holds two parts:
 
 - **Intent:** the draft's intent in one or two plain sentences.
-- **UATs:** every UAT in the draft, one plain-English line each, keeping its `UAT-NNN` id: what is set up, what the user does, and what must be true.
+- **UATs:** every UAT in the draft, one plain-language line each, keeping its `UAT-NNN` id: what is set up, what the user does, and what must be true.
 
 Never summarize the UATs as a count or a theme list, never drop or merge one, and never point the user at the draft file in place of printing. Response-length or terseness preferences do not shorten gate content. Print it in this shape:
 
@@ -310,19 +310,49 @@ Read `.claude/skills/gaia/references/spec/audit.md` and `.claude/skills/gaia/ref
 
 ### 8. Gate 2, artifact confirmation
 
-Render the full draft artifact in markdown form (frontmatter plus body) and present it to the user. This is gate 2. Track `gate2_revisions = 0` in working memory.
+Present the gate 2 brief, built below from the draft and its `AUDIT.md`, to the user. This is gate 2. Track `gate2_revisions = 0` in working memory.
 
 **Auto-mode exception per rule 3:** skip the user prompt. Render the draft into the agent's reasoning context, run a self-check (frontmatter populated, every UAT has Given/When/Then, intent matches gate-1 snapshot modulo intentional clarify evolution, deferred clarifications block well-formed). Apply at most one revision pass if the self-check finds an issue, then jump to the "On confirmation" actions below.
 
 While filling frontmatter, set `lineage:` to the research folder slug(s) under `.notebook/research/` (as `research:<slug>`) or issue number(s) (as `issue:<n>`) that discovery named as this SPEC's origin, and leave it `[]` when none. This is never a new question to the user, in auto mode or otherwise.
 
-Print the rendered artifact as text, then ask with `AskUserQuestion`. The print is required, not a suggestion: print the whole rendered artifact, frontmatter and body, never a summary, an excerpt, or a pointer to the draft file in its place. Response-length or terseness preferences do not shorten gate content. Print it in this shape:
+Print the brief as text, then ask with `AskUserQuestion`. The print is required, not a suggestion: the user approves from the brief alone and opening the files is never required, so it carries everything they sign off on. The brief is a synthesis of the draft and its AUDIT.md (step 7), never either one alone, and it shows only the final contract: no audit verdict or severity counts, no marks for what changed since gate 1, no clarify history. Never print the whole rendered artifact, its frontmatter, or its body in place of the brief; the paths at its foot are where the full text lives. Write every line in plain words: no finding, lens, directive or section id, and no phrase coined in the research or audit (`spec/system-prompt.md`, Plain language).
 
-> Here is the rendered SPEC. Review it before save.
->
-> ```markdown
-> <full rendered artifact>
-> ```
+The parts run in this order, so the decision sits nearest the question (a terminal reader starts at the bottom and scrolls up for context):
+
+1. **Title line:** the SPEC id, its title, and its type.
+2. **Change**, **Why**, **Success:** three labeled rows with one blank line between each. Change says in plain words what the SPEC changes, Why the problem it solves, Success what must be true when it is done.
+3. **UATs:** every UAT in the draft, one line each, keeping its number: what is set up, then what must be true.
+4. **Plan will (N directives):** one line naming what the plan will do for the audit's plan-time directives, as actions separated by ` · `. Omit it when `AUDIT.md` holds none.
+5. **You are signing off on:** every accepted cost and residual risk the draft and its audit leave in place, one bullet each: what a decided removal or trade-off gives up, what only a backstop catches, what a waiver or exception allows.
+6. **Not settled (approving saves the SPEC with these open):** printed only when it has an item: each `clarifications.deferred[]` entry, each audit finding the user kept against its recommendation at step 7, and a line saying the audit did not run (step 7's fallback) or a lens ran inline. Each item names what the plan will do because of it.
+7. **Paths:** the draft path and the AUDIT.md path, repo-relative, one per line; the audit line reads `none` when the audit did not run.
+
+Keep the brief to at most 50 lines. Only the `Plan will` line compresses to fit. Response-length or terseness preferences do not shorten gate content: the brief never drops or merges a UAT, a sign-off item, or a not-settled item, whatever its length. Print it in this shape:
+
+```text
+SPEC-NNN · <title> (<type>)
+
+Change   <what the SPEC changes, in plain words>
+
+Why      <the problem it solves>
+
+Success  <what must be true when it is done>
+
+UATs
+- NNN  <what is set up> → <what must be true>
+
+Plan will (<N> directives): <action> · <action> · <action>
+
+You are signing off on
+- <accepted cost or residual risk>
+
+Not settled (approving saves the SPEC with these open)
+- <deferred item or finding kept against the audit>; <what the plan will do because of it>
+
+Full SPEC  .gaia/local/cache/draft-<spec_id>.md
+Audit      .notebook/specs/<spec_id>/AUDIT.md
+```
 
 Then one `AskUserQuestion` (header `Gate 2`, single-select), question `Save this SPEC as rendered?`, with two options:
 
