@@ -9,8 +9,6 @@
 # suppressed inside `if`/`||`); tests call them in `if` form so a red twin that
 # stops failing fails the test.
 
-# bats file_tags=whole-tree
-
 bats_require_minimum_version 1.5.0
 
 setup() {
@@ -164,6 +162,7 @@ pad_to() { # pad_to <src> <dst> <total bytes>: src plus filler so dst ends in on
   document_shape_ok "$DOCTRINE_PATH"
 }
 
+# bats test_tags=whole-tree
 @test "execution.md placement: lives under .claude/doctrine, not under .claude/rules" {
   document_placement_ok "$REPO_ROOT"
   mkdir -p "$TEMPORARY_DIRECTORY/bad/.claude/rules" "$TEMPORARY_DIRECTORY/bad/.claude/doctrine"
@@ -285,6 +284,7 @@ pad_to() { # pad_to <src> <dst> <total bytes>: src plus filler so dst ends in on
 # helpers/doctrine-pin-checks.sh; the per-dispatch effort guards and their red
 # twins live in workflow-doctrine-effort-pins.bats.
 
+# bats test_tags=whole-tree
 @test "pin sites: every file that pins a model matches an entry on the doctrine page" {
   local derived frontmatter_pins file_path
   derived="$(pin_site_files "$REPO_ROOT")"
@@ -307,11 +307,13 @@ pad_to() { # pad_to <src> <dst> <total bytes>: src plus filler so dst ends in on
   }
 }
 
+# bats test_tags=whole-tree
 @test "pin sites: every entry on the doctrine page names a tracked file" {
   [ -n "$(pin_site_entries "$WIKI")" ]
   pin_site_entries_live_ok "$REPO_ROOT" "$WIKI"
 }
 
+# bats test_tags=whole-tree
 @test "pin sites red twins: a dropped entry and a stale entry each fail" {
   # shellcheck disable=SC2016 # the backticks are literal markdown
   sed 's|`wiki/concepts/Audit Round Procedure\.md`|the round procedure page|' "$WIKI" >"$TEMPORARY_DIRECTORY/wiki-nopin.md"

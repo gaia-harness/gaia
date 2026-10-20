@@ -8,8 +8,6 @@
 # guard runs once on the real tree (must pass) and once on a mutated scratch
 # copy (must fail).
 
-# bats file_tags=whole-tree
-
 bats_require_minimum_version 1.5.0
 
 REFERENCES=.claude/skills/gaia/references
@@ -286,10 +284,12 @@ copy_tree_into_scratch() {
   sites_ok "$REPO_ROOT"
 }
 
+# bats test_tags=whole-tree
 @test "real tree: every gate and review list prints what it asks to approve before asking" {
   prints_ok "$REPO_ROOT"
 }
 
+# bats test_tags=whole-tree
 @test "red twin: a gate 1 that stops requiring every UAT line fails" {
   copy_print_pin_files_into_scratch
   local file="$SCRATCH_ROOT/$REFERENCES/spec.md"
@@ -300,6 +300,7 @@ copy_tree_into_scratch() {
   [[ "$output" == *"print pin missing"*"every UAT in the draft"* ]]
 }
 
+# bats test_tags=whole-tree
 @test "red twin: a gate 1 that may point at the draft file fails" {
   copy_print_pin_files_into_scratch
   local file="$SCRATCH_ROOT/$REFERENCES/spec.md"
@@ -310,6 +311,7 @@ copy_tree_into_scratch() {
   [[ "$output" == *"print pin missing"*"never point the user at the draft file"* ]]
 }
 
+# bats test_tags=whole-tree
 @test "red twin: a gate whose print goes back to suggested text fails" {
   copy_print_pin_files_into_scratch
   local file="$SCRATCH_ROOT/$REFERENCES/spec.md"
@@ -320,6 +322,7 @@ copy_tree_into_scratch() {
   [[ "$output" == *"gate print is only suggested"* ]]
 }
 
+# bats test_tags=whole-tree
 @test "red twin: a gate 2 that goes back to printing the whole artifact fails" {
   copy_print_pin_files_into_scratch
   local file="$SCRATCH_ROOT/$REFERENCES/spec.md"
@@ -330,6 +333,7 @@ copy_tree_into_scratch() {
   [[ "$output" == *"gate prints the whole artifact"*"<full rendered artifact>"* ]]
 }
 
+# bats test_tags=whole-tree
 @test "red twin: a gate 2 brief that drops the sign-off section fails" {
   copy_print_pin_files_into_scratch
   local file="$SCRATCH_ROOT/$REFERENCES/spec.md"
@@ -340,6 +344,7 @@ copy_tree_into_scratch() {
   [[ "$output" == *"print pin missing"*"You are signing off on"* ]]
 }
 
+# bats test_tags=whole-tree
 @test "red twin: a gate 2 brief that lets length drop a UAT fails" {
   copy_print_pin_files_into_scratch
   local file="$SCRATCH_ROOT/$REFERENCES/spec.md"
@@ -350,6 +355,7 @@ copy_tree_into_scratch() {
   [[ "$output" == *"print pin missing"*"never drops or merges a UAT"* ]]
 }
 
+# bats test_tags=whole-tree
 @test "red twin: a gate 2 brief with no length bound fails" {
   copy_print_pin_files_into_scratch
   local file="$SCRATCH_ROOT/$REFERENCES/spec.md"
@@ -360,6 +366,7 @@ copy_tree_into_scratch() {
   [[ "$output" == *"print pin missing"*"at most 50 lines"* ]]
 }
 
+# bats test_tags=whole-tree
 @test "red twin: a clarify question that may cite a finding id fails" {
   copy_print_pin_files_into_scratch
   local file="$SCRATCH_ROOT/$REFERENCES/spec/clarify-loop.md"
@@ -370,6 +377,7 @@ copy_tree_into_scratch() {
   [[ "$output" == *"print pin missing: $REFERENCES/spec/clarify-loop.md"* ]]
 }
 
+# bats test_tags=whole-tree
 @test "red twin: a review-list template that goes back to a blockquote fails" {
   copy_print_pin_files_into_scratch
   local file="$SCRATCH_ROOT/$REFERENCES/spec/self-review-dispatch.md"
@@ -380,6 +388,7 @@ copy_tree_into_scratch() {
   [[ "$output" == *"print template is a blockquote: $REFERENCES/spec/self-review-dispatch.md"* ]]
 }
 
+# bats test_tags=whole-tree
 @test "red twin: a review-list format that may print finding ids fails" {
   copy_print_pin_files_into_scratch
   local file="$SCRATCH_ROOT/.claude/rules/user-questions.md"
@@ -390,6 +399,7 @@ copy_tree_into_scratch() {
   [[ "$output" == *"print pin missing: .claude/rules/user-questions.md"* ]]
 }
 
+# bats test_tags=whole-tree
 @test "red twin: a review list that may print a count fails" {
   copy_print_pin_files_into_scratch
   local file="$SCRATCH_ROOT/$REFERENCES/plan/decomposition-audit.md"
@@ -446,6 +456,7 @@ copy_tree_into_scratch() {
   [[ "$output" == *"site not found"* ]]
 }
 
+# bats test_tags=whole-tree
 @test "real tree: every plain-prompt paragraph in the swept trees says why it is open-ended" {
   run --separate-stderr unjustified_plain_prompts "$REPO_ROOT"
   [ "$status" -eq 0 ]
@@ -457,6 +468,7 @@ copy_tree_into_scratch() {
   grep -qE -- 'What do you want to spec\?.*use a plain prompt' "$REPO_ROOT/$REFERENCES/spec.md"
 }
 
+# bats test_tags=whole-tree
 @test "red twin: a closed-set confirmation sent to a plain prompt fails" {
   copy_swept_trees_into_scratch
   local file="$SCRATCH_ROOT/.claude/commands/gaia-init.md"
@@ -466,6 +478,7 @@ copy_tree_into_scratch() {
   [[ "$output" == *".claude/commands/gaia-init.md: Then echo the resolved choice back"* ]]
 }
 
+# bats test_tags=whole-tree
 @test "red twin: a plain prompt that names its open-ended answer passes" {
   copy_swept_trees_into_scratch
   local file="$SCRATCH_ROOT/.claude/commands/gaia-init.md"

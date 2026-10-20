@@ -10,8 +10,6 @@
 #
 # Assertion style: .claude/rules/bats-assertions.md.
 
-# bats file_tags=whole-tree
-
 setup() {
   . "$BATS_TEST_DIRNAME/helpers/run-hook.sh"
   . "$(cd "$BATS_TEST_DIRNAME/../../.." && pwd)/.gaia/tests/helpers/audit-roster.sh"
@@ -84,6 +82,7 @@ extract_function() {
 # case-arm literal lives in exactly one tracked file.
 # ---------------------------------------------------------------------------
 
+# bats test_tags=whole-tree
 @test "exactly one classifier: every out-of-scope allowlist arm lives in one tracked file" {
   while IFS= read -r lit; do
     [ -n "$lit" ] || continue
@@ -582,6 +581,7 @@ assert_every_machinery_path_owned() {
             echo "tracked file unowned: $tracked (entry $entry)" >&2
             fail=1
           fi
+        # gaia-lint-ignore whole-tree-mark-guard: the only test that reaches this walk carries the per-test mark
         done < <(git -C "$REPO_ROOT" ls-files -z "$prefix")
         ;;
       *)
@@ -598,6 +598,7 @@ EOF
   [ "$fail" -eq 0 ]
 }
 
+# bats test_tags=whole-tree
 @test "SEC-007: audit_owner_for_path returns a non-empty member for every machinery path" {
   # shellcheck source=/dev/null
   . "$SCOPE_LIBRARY"
@@ -630,6 +631,7 @@ EOF
   [ "$(grep -c 'code-audit' <<<"$output")" -eq 0 ]
 }
 
+# bats test_tags=whole-tree
 @test "the git commit hook is owned by the shell member" {
   # .githooks/pre-commit is the Quality Gate floor for every commit and is POSIX
   # shell, so the shell member (which holds the shellcheck oracle) owns it.
@@ -648,6 +650,7 @@ EOF
   [ "$(audit_owner_for_path '.githooks/pre-commit')" = "code-audit-maintainer-shell" ]
 }
 
+# bats test_tags=whole-tree
 @test "the root workspace policy file stays with the default member" {
   # The default member's own `pnpm-workspace.yaml` glob never crosses a `/`,
   # so it claims the repository-root file, which carries the supply-chain
@@ -659,6 +662,7 @@ EOF
   [ "$(audit_owner_for_path 'pnpm-workspace.yaml')" = "code-audit-frontend" ]
 }
 
+# bats test_tags=whole-tree
 @test "the CLI's own tool config files are owned by the node member" {
   # `.gaia/cli/` carries three tool configs beside src/: vitest.config.ts,
   # eslint.config.mjs, and prettier.config.mjs. The default member's bare
@@ -684,6 +688,7 @@ EOF
   [ "$(audit_owner_for_path 'eslint.config.mjs')" = "code-audit-frontend" ]
 }
 
+# bats test_tags=whole-tree
 @test "UAT-002: skills-md and non-md under skills both stay ownerless" {
   # The prose-legibility member that used to own `.claude/skills/**/*.md`
   # is deleted (harness triage P3-09); nothing replaces its lens, so both

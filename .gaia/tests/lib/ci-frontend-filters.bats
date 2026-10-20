@@ -10,8 +10,6 @@
 # The "base" controls are inline copies of the pre-move filters, so the guard
 # is proven able to fail without reading git history (this PR is squash-merged).
 
-# bats file_tags=whole-tree
-
 setup() {
   REPO_ROOT="$(cd "$BATS_TEST_DIRNAME/../../.." && pwd)"
   TESTS_YML="$REPO_ROOT/.github/workflows/tests.yml"
@@ -56,6 +54,7 @@ chromatic_globs() {
 # glob used here.
 glob_verdict() {
   local globs="$1" candidate="$2" picomatch_path
+  # gaia-lint-ignore whole-tree-mark-guard: the find reads installed node_modules trees, which are not the tracked tree
   picomatch_path="$(find "$REPO_ROOT/node_modules" "$REPO_ROOT/frontend/node_modules" "$REPO_ROOT/.gaia/cli/node_modules" \
     -path '*/picomatch/index.js' -not -path '*/test/*' 2>/dev/null | head -n 1)"
   GLOBS="$globs" CANDIDATE="$candidate" PICOMATCH="$picomatch_path" node -e '

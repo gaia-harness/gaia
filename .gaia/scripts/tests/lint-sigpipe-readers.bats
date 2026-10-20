@@ -33,8 +33,6 @@
 # The gate resolves its scan surface with `git ls-files` relative to cwd, so
 # every fixture is a real git repository with its files added.
 
-# bats file_tags=whole-tree
-
 setup() {
   THIS_DIRECTORY="$( cd "$( dirname "$BATS_TEST_FILENAME" )" && pwd )"
   REPO_ROOT="$( cd "$THIS_DIRECTORY/../../.." && pwd )"
@@ -1125,6 +1123,7 @@ YAML'
 
 # --- the real tree ---------------------------------------------------------
 
+# bats test_tags=whole-tree
 @test "the real scanned tree passes the lint" {
   run bash -c "cd '$REPO_ROOT' && bash '$LINTER'"
   [ "$status" -eq 0 ]
@@ -1132,6 +1131,7 @@ YAML'
 
 # --- no phantom coverage ----------------------------------------------------
 
+# bats test_tags=whole-tree
 @test "the real scan surface holds a workflow and a composite action" {
   surface_has_workflow_and_action "$REPO_ROOT" "$REPO_ROOT/.gaia/scripts/guard-awk-lib.sh"
 }

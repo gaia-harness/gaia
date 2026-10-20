@@ -50,8 +50,6 @@
 #
 # Assertion style: bash-3.2-safe per .claude/rules/bats-assertions.md.
 
-# bats file_tags=whole-tree
-
 setup() {
   THIS_DIRECTORY="$( cd "$( dirname "$BATS_TEST_FILENAME" )" && pwd )"
   REPO_ROOT="$( cd "$THIS_DIRECTORY/../../.." && pwd )"
@@ -61,6 +59,7 @@ setup() {
   [ ! -f "$REPO_ROOT/.gaia/scripts/spec/cost-consolidate.sh" ]
 }
 
+# bats test_tags=whole-tree
 @test "UAT-007: git grep for cost-consolidate is empty across the whole tracked tree" {
   run git -C "$REPO_ROOT" grep -l cost-consolidate -- \
     ':!.gaia/local' ':!.gaia/manifest.json' ':!CHANGELOG.md' \

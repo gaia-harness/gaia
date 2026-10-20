@@ -24,8 +24,6 @@
 #
 # Assertion style: bash-3.2-safe per .claude/rules/bats-assertions.md.
 
-# bats file_tags=whole-tree
-
 setup() {
   THIS_DIRECTORY="$( cd "$( dirname "$BATS_TEST_FILENAME" )" && pwd )"
   REPO_ROOT="$( cd "$THIS_DIRECTORY/../../.." && pwd )"
@@ -238,6 +236,7 @@ YAML
 # UAT-024: the roster this SPEC ships passes. If this fails, either the check
 # or the roster is wrong; do not relax the check to fit the roster.
 
+# bats test_tags=whole-tree
 @test "UAT-024: the shipped roster passes the check" {
   run bash "$SCRIPT"
   [ "$status" -eq 0 ]
@@ -249,6 +248,7 @@ YAML
 # hold over .gaia/audit-ci.yml as it is checked in, whether or not a fixture
 # roster is under test elsewhere in this suite.
 
+# bats test_tags=whole-tree
 @test "every roster member's agent file is registered in AUDIT_MACHINERY_PATHS" {
   local members name agent_relative_path
   members="$(bash "$SCRIPT" --emit-roster | awk -F'\t' '$1 == "MEMBER" { print $2 }' | sort -u)"
@@ -262,6 +262,7 @@ YAML
   done <<<"$members"
 }
 
+# bats test_tags=whole-tree
 @test "every roster member's name carries the code-audit- prefix" {
   local members name
   members="$(bash "$SCRIPT" --emit-roster | awk -F'\t' '$1 == "MEMBER" { print $2 }' | sort -u)"
@@ -468,6 +469,7 @@ YAML
 # its roster entry, verbatim and in order. Read from the roster through
 # --emit-roster, never from a list or a count written down here.
 
+# bats test_tags=whole-tree
 @test "SPEC-056 UAT-009: every committed definition's region equals its roster globs, in order" {
   run bash "$SCRIPT"
   [ "$status" -eq 0 ]
@@ -1137,6 +1139,7 @@ light_root() {
   [ "$status" -eq 0 ]
 }
 
+# bats test_tags=whole-tree
 @test "light keys: the committed roster's opted-in members carry only well-formed, owned hard-Full globs" {
   local opted_members member config_lines hard_full_globs owned_globs glob checked=0
   opted_members=""
@@ -1192,6 +1195,7 @@ roster_with_node_hard_full() {
   true
 }
 
+# bats test_tags=whole-tree
 @test "light keys: both maintainer members opt in with a numeric cap and a hard-Full set the verifier accepts" {
   local member config_lines
   for member in code-audit-maintainer-shell code-audit-maintainer-node; do
@@ -1210,6 +1214,7 @@ roster_with_node_hard_full() {
   assert_contains "roster clean"
 }
 
+# bats test_tags=whole-tree
 @test "light keys: a hard-Full item moved outside the node member's globs is rejected, and a verifier without the inside-globs check accepts it" {
   local moved="$BATS_TEST_TMPDIR/roster-moved.yml" scratch="$BATS_TEST_TMPDIR/no-inside-check"
   roster_with_node_hard_full "$moved" ".claude/hooks/pr-merge-audit-check.sh"

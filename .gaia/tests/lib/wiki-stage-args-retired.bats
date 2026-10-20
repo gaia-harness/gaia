@@ -16,8 +16,6 @@
 # forms below are written as literals on purpose: an allowlist entry for this
 # file must match a hit, so the suite carries the forms it forbids.
 
-# bats file_tags=whole-tree
-
 setup() {
   REPO_ROOT="$(cd "$BATS_TEST_DIRNAME/../../.." && pwd)"
   ALLOWLIST="$REPO_ROOT/.gaia/tests/fixtures/wiki-stage-args-retired.allowlist"
@@ -120,12 +118,14 @@ make_scratch_tree() {
   : >"$SCRATCH_ALLOWLIST"
 }
 
+# bats test_tags=whole-tree
 @test "UAT-007: no tracked file outside the allowlist invokes a retired stage, and no entry is unused" {
   run guard_stage_args "$REPO_ROOT" "$ALLOWLIST"
   echo "$output"
   [ "$status" -eq 0 ]
 }
 
+# bats test_tags=whole-tree
 @test "UAT-015: no tracked file outside the ledgers names the removed sync-land subcommand" {
   run guard_sync_land "$REPO_ROOT"
   echo "$output"

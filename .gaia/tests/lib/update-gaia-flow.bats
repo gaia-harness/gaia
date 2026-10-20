@@ -20,8 +20,6 @@
 #
 # Maintainer-only. `.gaia/tests` is wholesale release-excluded.
 
-# bats file_tags=whole-tree
-
 setup() {
   REPO_ROOT="$(cd "$(dirname "$BATS_TEST_FILENAME")/../../.." && pwd)"
   SKILL="$REPO_ROOT/.claude/skills/update-gaia/SKILL.md"
@@ -1526,6 +1524,7 @@ stray_selector_calls() {
 
 # --- Every tracked note is well-formed -------------------------------------------
 
+# bats test_tags=whole-tree
 @test "every tracked migration note is well-formed and listed by the selector" {
   local root="$BATS_TEST_TMPDIR/tracked" relative tracked_count
   mkdir -p "$root/.gaia/migrations"
@@ -1557,6 +1556,7 @@ migrate_url_token() {
   printf '%s/%s' gaiareact.com migrate
 }
 
+# bats test_tags=whole-tree
 @test "no tracked file names the migrate URL, and a planted one is reported" {
   run git -C "$REPO_ROOT" grep -n -F -- "$(migrate_url_token)"
   [ "$status" -eq 1 ]

@@ -7,8 +7,6 @@
 #
 # Assertion style: bash-3.2-safe per .claude/rules/bats-assertions.md.
 
-# bats file_tags=whole-tree
-
 bats_require_minimum_version 1.5.0
 
 setup_file() {
@@ -132,6 +130,7 @@ light_sidecar_files() {
 
 # --- happy path -------------------------------------------------------------
 
+# bats test_tags=whole-tree
 @test "a clear verdict on the routed delta clears light with a marker, a light sidecar and a merge the gate allows" {
   prepare_light
   preseed_full_sidecar
@@ -153,6 +152,7 @@ light_sidecar_files() {
   true
 }
 
+# bats test_tags=whole-tree
 @test "a reply named by file path clears exactly like the same reply on stdin" {
   prepare_light
   clear_reply_to_file
@@ -163,6 +163,7 @@ light_sidecar_files() {
   cmp -s "$REPLY_FILE" "$(verdict_path)"
 }
 
+# bats test_tags=whole-tree
 @test "a reply file that is not clear is refused by the same checks as stdin" {
   prepare_light
   clear_reply_to_file
@@ -172,6 +173,7 @@ light_sidecar_files() {
   assert_no_marker
 }
 
+# bats test_tags=whole-tree
 @test "a missing reply file prints full verdict-noop and writes no marker" {
   prepare_light
   lsb_mark_file "$FRONTEND" "$BATS_TEST_TMPDIR/no-such-reply.json"
@@ -180,6 +182,7 @@ light_sidecar_files() {
   [ -z "$(find "$(light_directory)" -name '.verdict.*')" ]
 }
 
+# bats test_tags=whole-tree
 @test "a missing reply file never falls back to reading the reply from stdin" {
   prepare_light
   clear_reply_to_file
@@ -192,6 +195,7 @@ light_sidecar_files() {
   expect_line "light-cleared"
 }
 
+# bats test_tags=whole-tree
 @test "an unreadable reply file prints full verdict-noop and writes no marker" {
   prepare_light
   clear_reply_to_file
@@ -213,6 +217,7 @@ light_sidecar_files() {
   expect_line "light-cleared"
 }
 
+# bats test_tags=whole-tree
 @test "the reply is persisted byte for byte to the keyed verdict path" {
   prepare_light
   clear_reply_to_file
@@ -222,6 +227,7 @@ light_sidecar_files() {
   cmp -s "$REPLY_FILE" "$(verdict_path)"
 }
 
+# bats test_tags=whole-tree
 @test "an empty reply then a clear reply: verdict-noop, then light-cleared" {
   prepare_light
   lsb_mark "$FRONTEND" ""
@@ -232,6 +238,7 @@ light_sidecar_files() {
   expect_line "light-cleared"
 }
 
+# bats test_tags=whole-tree
 @test "the same sequence works in a sandbox with every maintainer-only region stripped" {
   lsb_init --maintainer
   lsb_strip_maintainer_only
@@ -250,6 +257,7 @@ light_sidecar_files() {
 
 # --- escalate ---------------------------------------------------------------
 
+# bats test_tags=whole-tree
 @test "an escalate verdict prints full escalate, writes no marker and one escalate ledger line" {
   prepare_light
   lsb_escalate_reply "$FRONTEND" >"$REPLY_FILE"
@@ -260,6 +268,7 @@ light_sidecar_files() {
   [ "$(jq -r .verdict "$(ledger_path)")" = "escalate" ]
 }
 
+# bats test_tags=whole-tree
 @test "one escalated file among clear files escalates the whole review" {
   lsb_init
   lsb_full_clearance "$FRONTEND"
@@ -277,6 +286,7 @@ light_sidecar_files() {
 
 # --- malformed and mismatched replies, each with the clear twin above -----------
 
+# bats test_tags=whole-tree
 @test "non-JSON stdin prints full verdict-noop and writes no marker" {
   prepare_light
   printf 'looks fine to me\n' >"$REPLY_FILE"
@@ -286,6 +296,7 @@ light_sidecar_files() {
   cmp -s "$REPLY_FILE" "$(verdict_path)"
 }
 
+# bats test_tags=whole-tree
 @test "JSON without files prints full verdict-noop" {
   prepare_light
   clear_reply_to_file
@@ -295,6 +306,7 @@ light_sidecar_files() {
   assert_no_marker
 }
 
+# bats test_tags=whole-tree
 @test "an unknown verdict value prints full verdict-malformed" {
   prepare_light
   clear_reply_to_file
@@ -304,6 +316,7 @@ light_sidecar_files() {
   assert_no_marker
 }
 
+# bats test_tags=whole-tree
 @test "an unknown per-file verdict value prints full verdict-malformed" {
   prepare_light
   clear_reply_to_file
@@ -313,6 +326,7 @@ light_sidecar_files() {
   assert_no_marker
 }
 
+# bats test_tags=whole-tree
 @test "a wrong schema number prints full verdict-malformed" {
   prepare_light
   clear_reply_to_file
@@ -322,6 +336,7 @@ light_sidecar_files() {
   assert_no_marker
 }
 
+# bats test_tags=whole-tree
 @test "a reply that is a JSON array prints full verdict-noop" {
   prepare_light
   printf '[{"path":"frontend/app/notes.md","verdict":"clear"}]' >"$REPLY_FILE"
@@ -330,6 +345,7 @@ light_sidecar_files() {
   assert_no_marker
 }
 
+# bats test_tags=whole-tree
 @test "a files array one short prints full verdict-noop (the expected count catches it)" {
   lsb_init
   lsb_full_clearance "$FRONTEND"
@@ -343,6 +359,7 @@ light_sidecar_files() {
   assert_no_marker
 }
 
+# bats test_tags=whole-tree
 @test "a file path the route record does not list prints full verdict-mismatch" {
   prepare_light
   clear_reply_to_file
@@ -352,6 +369,7 @@ light_sidecar_files() {
   assert_no_marker
 }
 
+# bats test_tags=whole-tree
 @test "a duplicated file path in place of a routed one prints full verdict-mismatch" {
   lsb_init
   lsb_full_clearance "$FRONTEND"
@@ -365,6 +383,7 @@ light_sidecar_files() {
   assert_no_marker
 }
 
+# bats test_tags=whole-tree
 @test "a wrong digest in the verdict prints full verdict-mismatch" {
   prepare_light
   clear_reply_to_file
@@ -374,6 +393,7 @@ light_sidecar_files() {
   assert_no_marker
 }
 
+# bats test_tags=whole-tree
 @test "a wrong tree in the verdict prints full verdict-mismatch" {
   prepare_light
   clear_reply_to_file
@@ -383,6 +403,7 @@ light_sidecar_files() {
   assert_no_marker
 }
 
+# bats test_tags=whole-tree
 @test "a wrong member in the verdict prints full verdict-mismatch" {
   prepare_light
   clear_reply_to_file
@@ -392,6 +413,7 @@ light_sidecar_files() {
   assert_no_marker
 }
 
+# bats test_tags=whole-tree
 @test "a failure after the reply was persisted appends one failed ledger line" {
   prepare_light
   clear_reply_to_file
@@ -404,6 +426,7 @@ light_sidecar_files() {
 
 # --- the route record -------------------------------------------------------
 
+# bats test_tags=whole-tree
 @test "an absent route record prints full no-route-record" {
   lsb_init
   lsb_full_clearance "$FRONTEND"
@@ -414,6 +437,7 @@ light_sidecar_files() {
   assert_no_marker
 }
 
+# bats test_tags=whole-tree
 @test "an unparseable route record prints full no-route-record" {
   prepare_light
   clear_reply_to_file
@@ -423,6 +447,7 @@ light_sidecar_files() {
   assert_no_marker
 }
 
+# bats test_tags=whole-tree
 @test "a route record naming another digest prints full route-stale" {
   prepare_light
   clear_reply_to_file
@@ -433,6 +458,7 @@ light_sidecar_files() {
   assert_no_marker
 }
 
+# bats test_tags=whole-tree
 @test "a route record naming another tree prints full route-stale" {
   prepare_light
   clear_reply_to_file
@@ -443,6 +469,7 @@ light_sidecar_files() {
   assert_no_marker
 }
 
+# bats test_tags=whole-tree
 @test "a route record whose route is full prints full route-not-light" {
   prepare_light
   clear_reply_to_file
@@ -453,6 +480,7 @@ light_sidecar_files() {
   assert_no_marker
 }
 
+# bats test_tags=whole-tree
 @test "a record stored light that the fresh router now calls full prints full recheck-full" {
   prepare_light
   clear_reply_to_file
@@ -464,6 +492,7 @@ light_sidecar_files() {
   assert_no_marker
 }
 
+# bats test_tags=whole-tree
 @test "a hard-full edit committed after routing never clears light" {
   prepare_light
   clear_reply_to_file
@@ -477,6 +506,7 @@ light_sidecar_files() {
   assert_no_marker
 }
 
+# bats test_tags=whole-tree
 @test "HEAD moving during the review by an owned change prints full and writes no marker" {
   prepare_light
   clear_reply_to_file
@@ -492,6 +522,7 @@ light_sidecar_files() {
 
 # --- refusal ----------------------------------------------------------------
 
+# bats test_tags=whole-tree
 @test "a same-digest refusal prints full refusal-present and is left untouched" {
   prepare_light
   clear_reply_to_file
@@ -526,6 +557,7 @@ prepare_refusal_anchored() {
   [ "$output" = "$(printf 'light\trefusal-anchored')" ] || { printf 'router: %s\n' "$output" >&2; return 1; }
 }
 
+# bats test_tags=whole-tree
 @test "a reply resolving every open finding over a delta that changes every cited line clears light" {
   prepare_refusal_anchored
   clear_reply_to_file
@@ -535,6 +567,7 @@ prepare_refusal_anchored() {
   [ "$(jq -r '[.provenance, .review, .tree] | join(" ")' "$(marker_path)")" = "earned light $LSB_TREE" ]
 }
 
+# bats test_tags=whole-tree
 @test "a refusal-anchored clear accounts for the open findings in the full sidecar and retires the ledger entries" {
   prepare_refusal_anchored
   clear_reply_to_file
@@ -548,6 +581,7 @@ prepare_refusal_anchored() {
   [ -z "$ledger" ] || { printf 'ledger left behind: %s\n' "$ledger" >&2; return 1; }
 }
 
+# bats test_tags=whole-tree
 @test "a reply whose resolved list omits an open finding prints full verdict-incomplete" {
   prepare_refusal_anchored
   clear_reply_to_file
@@ -557,6 +591,7 @@ prepare_refusal_anchored() {
   assert_no_marker
 }
 
+# bats test_tags=whole-tree
 @test "a reply with no resolved list at all prints full verdict-incomplete" {
   prepare_refusal_anchored
   clear_reply_to_file
@@ -566,6 +601,7 @@ prepare_refusal_anchored() {
   assert_no_marker
 }
 
+# bats test_tags=whole-tree
 @test "a resolved list naming a key the checklist does not hold prints full verdict-mismatch" {
   prepare_refusal_anchored
   clear_reply_to_file
@@ -575,6 +611,7 @@ prepare_refusal_anchored() {
   assert_no_marker
 }
 
+# bats test_tags=whole-tree
 @test "a resolved value that is not a list of strings prints full verdict-malformed" {
   prepare_refusal_anchored
   clear_reply_to_file
@@ -588,6 +625,7 @@ prepare_refusal_anchored() {
   assert_no_marker
 }
 
+# bats test_tags=whole-tree
 @test "an escalating reply on a refusal-anchored route still prints full escalate" {
   prepare_refusal_anchored
   lsb_escalate_reply "$FRONTEND" >"$REPLY_FILE"
@@ -596,6 +634,7 @@ prepare_refusal_anchored() {
   assert_no_marker
 }
 
+# bats test_tags=whole-tree
 @test "a forged all-resolved reply over a cited line the delta never touched prints full checklist-unchanged" {
   prepare_refusal_anchored "$(printf 'line 1\nfixed 2\nline 3\nline 4\nline 5')"
   clear_reply_to_file
@@ -605,6 +644,7 @@ prepare_refusal_anchored() {
   assert_no_marker
 }
 
+# bats test_tags=whole-tree
 @test "the checklist-unchanged refusal is what blocks the forged reply: a scratch mark script without it clears" {
   prepare_refusal_anchored "$(printf 'line 1\nfixed 2\nline 3\nline 4\nline 5')"
   clear_reply_to_file
@@ -619,6 +659,7 @@ prepare_refusal_anchored() {
   [ -f "$(marker_path)" ]
 }
 
+# bats test_tags=whole-tree
 @test "a pure insertion beside each cited line counts as touching it" {
   prepare_refusal_anchored "$(printf 'line 1
 line 2
@@ -632,6 +673,7 @@ line 5')"
   expect_line "light-cleared"
 }
 
+# bats test_tags=whole-tree
 @test "a pure insertion beside only one cited line leaves the other unchanged" {
   prepare_refusal_anchored "$(printf 'line 1
 line 2
@@ -647,6 +689,7 @@ line 5')"
 
 # --- telemetry and ledger ---------------------------------------------------
 
+# bats test_tags=whole-tree
 @test "in a maintainer sandbox a clear run appends a light_outcome with the reviewer tokens" {
   prepare_light --maintainer
   clear_reply_to_file
@@ -657,6 +700,7 @@ line 5')"
   [ "$(grep '"light_outcome"' "$(telemetry_log)" | jq -r '[.verdict, (.tokens | tostring), (.duration_ms | tostring)] | join(" ")')" = "clear 4321 987" ]
 }
 
+# bats test_tags=whole-tree
 @test "a telemetry directory the script cannot write still prints light-cleared" {
   prepare_light --maintainer
   clear_reply_to_file
@@ -666,6 +710,7 @@ line 5')"
   [ "$(jq -r .review "$(marker_path)")" = "light" ]
 }
 
+# bats test_tags=whole-tree
 @test "after one clear and one escalate run the ledger has two lines in the documented shape" {
   prepare_light
   clear_reply_to_file
@@ -685,6 +730,7 @@ line 5')"
 
 # --- cwd independence -------------------------------------------------------
 
+# bats test_tags=whole-tree
 @test "run from an unrelated directory the sidecar still lands under the sandbox root" {
   prepare_light
   clear_reply_to_file
@@ -696,6 +742,7 @@ line 5')"
   [ -z "$(find "$BATS_TEST_TMPDIR/elsewhere" -type f)" ]
 }
 
+# bats test_tags=whole-tree
 @test "a script that drops the subshell cd fails closed from an unrelated directory" {
   prepare_light
   clear_reply_to_file
@@ -716,6 +763,7 @@ line 5')"
 # The resolver's argument-less line is a commit when it names the branch's fork
 # point instead of a ref; the light sidecar must still land under the key the
 # members' own sidecars use.
+# bats test_tags=whole-tree
 @test "the light sidecar shares the member sidecar's key when the resolver prints a commit" {
   local fork_point resolver="$BATS_TEST_TMPDIR/resolver.sh" full_name light_name
   lsb_init
@@ -742,6 +790,7 @@ line 5')"
 
 # --- degraded ---------------------------------------------------------------
 
+# bats test_tags=whole-tree
 @test "an underivable digest prints full degraded and persists nothing" {
   prepare_light --maintainer
   clear_reply_to_file
@@ -758,6 +807,7 @@ line 5')"
 
 # --- usage ------------------------------------------------------------------
 
+# bats test_tags=whole-tree
 @test "usage errors exit 2 and print no decision line" {
   lsb_init
   local script="$LSB_ROOT/.gaia/scripts/audit-light-mark.sh"
@@ -798,6 +848,7 @@ review_light_offenders() {
   return 0
 }
 
+# bats test_tags=whole-tree
 @test "the review-light literal appears in no tracked shell file outside the allowlist" {
   local offenders
   offenders="$(review_light_offenders "$REPO_ROOT")"

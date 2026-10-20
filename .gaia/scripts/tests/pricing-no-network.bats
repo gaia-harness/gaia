@@ -10,8 +10,6 @@
 # Run under bash 5 (.claude/rules/bats-assertions.md):
 #   .gaia/scripts/bats5.sh .gaia/scripts/tests/pricing-no-network.bats
 
-# bats file_tags=whole-tree
-
 bats_require_minimum_version 1.5.0
 
 # Files whose non-comment lines must name no network tool and no retired
@@ -119,6 +117,8 @@ mutant_scripts() {
   MUTANT_SCRIPTS="$TEMPORARY_DIRECTORY/mutant-$1"
   rm -rf "$MUTANT_SCRIPTS"
   mkdir -p "$MUTANT_SCRIPTS"
+  # gaia-lint-ignore whole-tree-mark-guard: the only test that reaches this helper
+  # carries the per-test whole-tree mark, because it copies every file in the scripts directory.
   find "$SCRIPTS" -maxdepth 1 -type f -exec cp {} "$MUTANT_SCRIPTS/" \;
   local lib="$MUTANT_SCRIPTS/token-pricing-lib.sh" anchor='  GAIA_RATES_OVERRIDE_STATUS=none' text
   [ "$(grep -cxF -- "$anchor" "$lib")" -eq 1 ]
@@ -127,6 +127,7 @@ mutant_scripts() {
   [ "$(grep -cF -- 'curl -s https://example.invalid' "$lib")" -eq 1 ]
 }
 
+# bats test_tags=whole-tree
 @test "guard red: a pricing lib whose gaia_rates_load calls curl trips both the behavioral and the static check" {
   mutant_scripts curl
   run run_initiative "$MUTANT_SCRIPTS"

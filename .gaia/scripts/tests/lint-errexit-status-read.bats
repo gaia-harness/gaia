@@ -35,8 +35,6 @@
 # seed only the kinds they need present, since a seed would answer the very
 # question they ask.
 
-# bats file_tags=whole-tree
-
 setup() {
   THIS_DIRECTORY="$( cd "$( dirname "$BATS_TEST_FILENAME" )" && pwd )"
   REPO_ROOT="$( cd "$THIS_DIRECTORY/../../.." && pwd )"
@@ -1875,12 +1873,14 @@ FIXTURE
 
 # --- the real tree ---------------------------------------------------------
 
+# bats test_tags=whole-tree
 @test "the repository's own scanned surface is clean" {
   run bash -c "cd '$REPO_ROOT' && bash '$LINTER' 2>&1"
   [ "$status" -eq 0 ]
   grep -qF -- 'lint-errexit-status-read: clean' <<<"$output"
 }
 
+# bats test_tags=whole-tree
 @test "no tracked file in this repository defeats the tokenizer" {
   # The desync verdict is the gate's honest answer when it could not read a file
   # to the end, and a tree carrying one is a tree this gate cannot certify. The
@@ -1955,6 +1955,7 @@ echo "$i"'
 
 # --- no phantom coverage ----------------------------------------------------
 
+# bats test_tags=whole-tree
 @test "the real scan surface holds a workflow and a composite action" {
   surface_has_workflow_and_action "$REPO_ROOT" "$REPO_ROOT/.gaia/scripts/guard-awk-lib.sh"
 }

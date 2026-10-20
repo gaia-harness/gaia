@@ -14,15 +14,20 @@
 # Checks, in order, each run with the tree under check as its working
 # directory: shell-lint (branch, round), the release-scrub leak check (a bare
 # build-staging into an empty directory), 01-files-present, 03-marker-strip,
-# then the bats suites carrying the whole-tree mark (branch) and the suites the
-# change selector picks (branch, round). Branch mode selects over <merge-base>
-# HEAD and always runs the marked suites. Round mode selects over the round's
-# delta (the uncommitted tracked changes when there are any, else the HEAD
-# commit) and never runs the marked set: branch mode ran it before the first
-# audit dispatch and CI runs every suite on each harness push before the merge,
-# so a round fix that breaks a whole-tree invariant still turns red before
-# merge, and re-running the set every round would cost minutes each round. A
-# marked suite the round's own selection picks still runs, under bats selected.
+# then the bats tests carrying the whole-tree mark (branch) and the suites the
+# change selector picks (branch, round). A mark is per file (every test in the
+# suite) or per test (the one test below it). Branch mode selects over
+# <merge-base> HEAD and always runs the marked tests: the whole-tree step runs
+# the marked suites the selector did not pick, filtered to the whole-tree tag,
+# so an unmarked test in a per-test-marked suite does not run there. A suite the
+# selector picks runs once, in full, under bats selected. Round mode selects
+# over the round's delta (the uncommitted tracked changes when there are any,
+# else the HEAD commit) and never runs the marked set: branch mode ran it
+# before the first audit dispatch and CI runs every suite on each harness push
+# before the merge, so a round fix that breaks a whole-tree invariant still
+# turns red before merge, and re-running the set every round would cost minutes
+# each round. A marked suite the round's own selection picks still runs, under
+# bats selected.
 #
 # A failing check is re-run on the merge base with refs/remotes/origin/main, in
 # a temporary worktree. A failure that reproduces there prints PRE-EXISTING
@@ -316,10 +321,14 @@ else
       selector_status=$?
     fi
     if [ "$run_whole_tree" -eq 1 ] && [ "$selector_status" -eq 0 ]; then
-      # A suite in both sets runs once, under bats whole-tree.
+      # A suite in both sets runs once, in full, under bats selected: the
+      # whole-tree step keeps only the marked suites the selector did not pick,
+      # because it runs just the tagged tests and would drop the rest.
       LC_ALL=C sort -u "$marked_suites" -o "$marked_suites"
-      LC_ALL=C sort -u "$selected_suites" | LC_ALL=C comm -23 - "$marked_suites" >"$selected_suites.only"
-      mv "$selected_suites.only" "$selected_suites"
+      LC_ALL=C sort -u "$selected_suites" -o "$selected_suites"
+      marked_discovered_count=$(wc -l <"$marked_suites")
+      LC_ALL=C comm -23 "$marked_suites" "$selected_suites" >"$marked_suites.only"
+      mv "$marked_suites.only" "$marked_suites"
     fi
 
     if [ "$marked_discovery_failed" -eq 1 ]; then
@@ -331,9 +340,13 @@ else
     elif [ "$run_whole_tree" -eq 0 ]; then
       verify_skip "bats whole-tree" "$whole_tree_skip_reason"
     elif [ ! -s "$marked_suites" ]; then
-      verify_skip "bats whole-tree" "no tracked suite carries the whole-tree mark"
+      if [ "${marked_discovered_count:-0}" -gt 0 ]; then
+        verify_skip "bats whole-tree" "every marked suite runs in full under bats selected"
+      else
+        verify_skip "bats whole-tree" "no tracked suite carries the whole-tree mark"
+      fi
     else
-      verify_run_bats_step "bats whole-tree" "$verified_root" "$marked_suites" "$merge_base"
+      verify_run_bats_step "bats whole-tree" "$verified_root" "$marked_suites" "$merge_base" whole-tree
     fi
 
     if [ -n "$selected_skip_reason" ]; then
@@ -350,7 +363,7 @@ else
       if [ "$mode" = round ]; then
         verify_skip "bats selected" "no suite references the round's delta"
       else
-        verify_skip "bats selected" "no suite outside the whole-tree set references the change"
+        verify_skip "bats selected" "no suite references the change"
       fi
     else
       verify_run_bats_step "bats selected" "$verified_root" "$selected_suites" "$merge_base"

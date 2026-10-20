@@ -35,8 +35,6 @@
 #
 # Assertion style: bash-3.2-safe per .claude/rules/bats-assertions.md.
 
-# bats file_tags=whole-tree
-
 setup() {
   THIS_DIRECTORY="$( cd "$( dirname "$BATS_TEST_FILENAME" )" && pwd )"
   REPO_ROOT="$( cd "$THIS_DIRECTORY/../../.." && pwd )"
@@ -101,6 +99,11 @@ tracked_sh() {
       first="$tracked_path"
     fi
     last="$tracked_path"
+  # gaia-lint-ignore whole-tree-mark-guard: the callers, the first-chunk and
+  # last-chunk fail-closed tests, each carry the per-test whole-tree mark. The
+  # clean-tree run test is left unmarked because branch mode's shell-lint step
+  # runs the same gate over the real tree, and is skipped on a host that
+  # has no shellcheck, where only the full CI run covers it.
   done < <(git -C "$REPO_ROOT" -c core.quotepath=false ls-files -z '*.sh')
   if [ "$which_end" = "first" ]; then
     printf '%s\n' "$first"
@@ -197,6 +200,7 @@ gate_pass_headers() {
 # host both tests still assert the finding fails the gate, just without
 # distinguishing the two workers.
 
+# bats test_tags=whole-tree
 @test "shell-lint fails closed on a finding in the FIRST worker's chunk" {
   first_sh="$(tracked_sh first)"
   [ -n "$first_sh" ]
@@ -210,6 +214,7 @@ gate_pass_headers() {
   grep -qF -- "In $first_sh line 1:" <<<"$output"
 }
 
+# bats test_tags=whole-tree
 @test "shell-lint fails closed on a finding in the LAST worker's chunk" {
   last_sh="$(tracked_sh last)"
   [ -n "$last_sh" ]
@@ -264,6 +269,7 @@ EOF
 
 # The settings drift pass is not a lint-* guard, so the loops above never drive
 # it. This drives it into its failing state through the same override seam.
+# bats test_tags=whole-tree
 @test "a failing settings drift check fails the gate" {
   local stub="$STUB_DIRECTORY/drift-fail.sh"
   cat > "$stub" <<'STUB'
@@ -286,6 +292,7 @@ STUB
 
 # The retired-path pass is not a lint-* guard either, so it gets the same
 # drive-into-failure test through the override seam.
+# bats test_tags=whole-tree
 @test "a failing retired-path check fails the gate" {
   local stub="$STUB_DIRECTORY/retired-fail.sh"
   cat > "$stub" <<'STUB'
@@ -306,6 +313,7 @@ STUB
   grep -qF -- "shell-lint FAILED" <<<"$output"
 }
 
+# bats test_tags=whole-tree
 @test "a failing guard fails the gate and every other guard still runs" {
   local first override_variable_name stub
   first="$(gate_pass_headers | grep '^lint-' | sed -n '1p')"

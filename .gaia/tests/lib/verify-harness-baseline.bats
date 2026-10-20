@@ -156,13 +156,13 @@ source_pass_record_helper() {
   [ "$(jq -c .preexisting "$VHF_RECORD")" = '["bats whole-tree"]' ]
 }
 
-# write_flaky_suite: a whole-tree suite whose one test fails on its first
-# attempt in a run and passes on any later one, the shape of a wall-clock
-# budget test that fails under parallel load and passes alone.
+# write_flaky_suite: a suite whose one test, marked for the whole-tree step,
+# fails on its first attempt in a run and passes on any later one, the shape of
+# a wall-clock budget test that fails under parallel load and passes alone.
 write_flaky_suite() {
   {
     printf '#!/usr/bin/env bats\n'
-    printf '# bats %s\n' 'file_tags=whole-tree'
+    printf '# bats %s\n' 'test_tags=whole-tree'
     printf '@test "flaky budget" {\n'
     printf '  attempts="${VERIFY_FIXTURE_LOG%%/*}/flaky-attempts"\n'
     printf '  if [ ! -e "$attempts" ]; then : >"$attempts"; return 1; fi\n'
@@ -171,9 +171,12 @@ write_flaky_suite() {
 }
 
 @test "a test that fails under load and passes alone is flaky, recorded, and does not fail the run" {
-  fixture
+  fixture --no-branch
   write_flaky_suite
   vhf_commit "a load-sensitive whole-tree suite"
+  vhf_branch
+  printf 'page two\n' >frontend/app/page.txt
+  vhf_commit "an unrelated branch change"
   run_runner branch
   [ "$status" -eq 0 ]
   local pass_line flaky_line
@@ -186,8 +189,10 @@ write_flaky_suite() {
   [ "$(jq -c .flaky "$VHF_RECORD")" = '["suites/flaky.bats: flaky budget"]' ]
   [ "$(jq -r .head "$VHF_RECORD")" = "$(vhf_git rev-parse HEAD)" ]
 
-  # Round mode, where the new suite is the HEAD commit's selection.
+  # Round mode, where the suite is selected by the HEAD commit that edits it.
   rm -f "$BATS_TEST_TMPDIR/flaky-attempts"
+  printf '# edited\n' >>suites/flaky.bats
+  vhf_commit "edit the load-sensitive suite"
   run_runner round
   [ "$status" -eq 0 ]
   has 'FLAKY  bats selected: suites/flaky.bats: flaky budget failed under parallel load and passed when re-run alone'
@@ -205,14 +210,44 @@ write_flaky_suite() {
   vhf_commit "the branch adds a second failing test to the same suite"
   run_runner branch
   [ "$status" -eq 1 ]
-  block_after 'PRE-EXISTING  bats whole-tree' | grep -qxF '  suites/whole.bats: whole one'
-  block_after 'PRE-EXISTING  bats whole-tree' | grep -qF 'whole two' && return 1
+  block_after 'PRE-EXISTING  bats selected' | grep -qxF '  suites/whole.bats: whole one'
+  block_after 'PRE-EXISTING  bats selected' | grep -qF 'whole two' && return 1
   lacks 'FLAKY'
-  has_line '^FAIL  bats whole-tree \([0-9]+s\)$'
-  block_after 'FAIL  bats whole-tree' | grep -qxF '  suites/whole.bats: whole two'
+  has_line '^FAIL  bats selected \([0-9]+s\)$'
+  block_after 'FAIL  bats selected' | grep -qxF '  suites/whole.bats: whole two'
   # The base re-run ran only the failing names, in the base worktree.
   [ "$(vhf_suite_runs_elsewhere suites/whole.bats "$VHF_ROOT")" = "whole one" ]
   [ ! -e "$VHF_RECORD" ]
+}
+
+# write_load_gated_suite: a per-test-marked suite that fails to load while the
+# tracked control file holds text. It reads that file without naming it by
+# basename, so the change selector never picks it.
+write_load_gated_suite() {
+  {
+    printf '#!/usr/bin/env bats\n'
+    printf '# bats %s\n' 'test_tags=whole-tree'
+    printf 'gate_name="load""gate"\n'
+    printf 'if [ -s "$BATS_TEST_DIRNAME/../control/$gate_name" ]; then echo "load gate closed" >&2; exit 1; fi\n'
+    printf '@test "gated" {\n  true\n}\n'
+  } >"$VHF_ROOT/suites/gated.bats"
+}
+
+@test "a load failure's base re-run carries the same tag filter as the HEAD run" {
+  fixture --no-branch
+  vhf_empty_candidates
+  write_load_gated_suite
+  vhf_commit "a per-test-marked suite that loads on main"
+  vhf_branch
+  vhf_control loadgate "closed on the branch"
+  vhf_commit "the branch breaks the suite's load"
+  run_runner branch
+  [ "$status" -eq 1 ]
+  has_line '^FAIL  bats whole-tree \([0-9]+s\)$'
+  has '  reproduce: bash .gaia/scripts/bats5.sh --filter-tags whole-tree suites/gated.bats suites/whole.bats < /dev/null'
+  local base_runs
+  base_runs="$(grep -c '^bats-process|.*--filter-tags whole-tree.*suites/gated.bats' "$VERIFY_FIXTURE_LOG")"
+  [ "$base_runs" -ge 2 ]
 }
 
 @test "a distribution failure only HEAD has is new, and its base re-run happens in a worktree" {

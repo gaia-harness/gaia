@@ -4,8 +4,8 @@
 # one repo-relative path per line, sorted and de-duplicated: the change-selected
 # part of the suite set the verification runner (.gaia/tests/verify-harness.sh)
 # runs through bats5.sh, in the pre-merge "verify your own work" step and in each
-# audit round. The runner unions this output with the suites tagged
-# `whole-tree` in branch mode; round mode runs this output alone.
+# audit round. In branch mode the runner subtracts this output from the
+# whole-tree-marked suites and runs it in full; round mode runs it alone.
 #
 # A suite is selected when it contains a changed file's match text as a fixed
 # string, or when it is itself a changed suite that still exists. The match
