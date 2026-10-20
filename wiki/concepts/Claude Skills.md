@@ -26,19 +26,21 @@ Every GAIA nudge is surfaced by the **statusline**, not by a hook, and the slot 
 
 The right side fits itself to the statusline row, which is the terminal width less the spacing Claude Code draws around it, rather than letting Claude Code cut the line at the edge. Each nudge sizes independently through its own Large, Medium, and Small forms, then an icon, then a trailing `+N`: Large carries the full reason, Medium a short form with just its number (`📦 /update-deps (28)`; `/gaia-cleanse` has none, since its reasons share no unit, and the `/update-gaia` update state has none, since its Large reason is already just the version; the pull and resume states' Medium forms are `pull <version>` and `resume <version>`), and Small the bare command (a teammate's in-progress nudge is the exception, below). Every form leads with the nudge's emoji, so the icon a nudge shrinks to is one its text forms already showed. The lowest-priority nudge still at its current size shrinks first, so a higher-priority nudge is never at a later size step than a lower-priority one (a nudge with no Medium form, such as `/gaia-cleanse`, shows its Small text at that step), and past the icon stage `+N` names how many more are hidden. The `/update-gaia` slot holds exactly one of four states, first match winning: `🚀 /update-gaia (pull <version>)` when origin's default branch carries a higher version than this checkout's own `.gaia/VERSION`, `⌛️ GAIA <version> in progress (@<login>)` when a named teammate's update is open, `🚀 /update-gaia (resume <version>)` when the user's own claim is open, and `🚀 /update-gaia (<version>)` when a release is available. The in-progress nudge has a floor: it shrinks to a Medium form (`GAIA <version> (@<login>)`) and never past it, so it never shows `/update-gaia` or the rocket; while the line shrinks and hides every other nudge, it renders past the available width with the `+N` when nothing else is left to give up. [[Update Workflow]] owns the claim. `/setup-gaia` is the one exception: while setup is incomplete it renders alone, as text, at every width. Once setup is complete, `/setup-gaia` comes back as the first nudge, `⚙️ /setup-gaia (<N> choices pending)`, when `.gaia/setup-features.json` lists a machine-scope setup choice that `decisions` in `.gaia/local/setup-state.json` does not yet record; it renders only from the main checkout, never shrinks before a lower-priority nudge does, and clears as `/setup-gaia` records each choice. Claude Code does not re-run the statusline on a terminal resize, so the shipped `statusLine` block sets `refreshInterval: 15` and the line refits within 15 seconds of a resize with no message sent. The icon legend:
 
-| Icon | Command             | Count shown                      |
-| ---- | ------------------- | -------------------------------- |
-| ⚙️   | `/setup-gaia`       | pending setup choice count       |
-| 🚀   | `/update-gaia`      | none                             |
-| ⌛️   | none (a teammate's update in progress) | none                  |
-| 🔭   | `/gaia-serena-sync` | missing language count           |
-| 📦   | `/update-deps`      | outdated plus security advisory count |
-| 🔎   | `/gaia-cleanse`       | none                             |
-| 💪   | `/gaia-fitness`     | a grade, blended file count, or harness commit count |
-| 🔨   | `/gaia-codify`      | candidate count (none when zero) |
-| 🐛   | `/gaia-debt`        | open issue count                 |
-| 🧹   | `/gaia-residue`     | aged residual count              |
-| 🧠   | `/gaia-wiki`        | commits behind the wiki          |
+| Icon | Command             | Count shown                      | Color (SGR)              |
+| ---- | ------------------- | -------------------------------- | ------------------------ |
+| ⚙️   | `/setup-gaia`       | pending setup choice count       | `01;95` bright magenta   |
+| 🚀   | `/update-gaia`      | none                             | `01;36` cyan             |
+| ⌛️   | none (a teammate's update in progress) | none          | `01;93` bright yellow    |
+| 🔭   | `/gaia-serena-sync` | missing language count           | `01;31` red              |
+| 📦   | `/update-deps`      | outdated plus security advisory count | `01;33` yellow      |
+| 🔎   | `/gaia-cleanse`     | none                             | `01;32` green            |
+| 💪   | `/gaia-fitness`     | a grade, blended file count, or harness commit count | `01;94` bright blue |
+| 🔨   | `/gaia-codify`      | candidate count (none when zero) | `01;35` magenta          |
+| 🐛   | `/gaia-debt`        | open issue count                 | `01;91` bright red       |
+| 🧹   | `/gaia-residue`     | aged residual count              | `01` default foreground  |
+| 🧠   | `/gaia-wiki`        | commits behind the wiki          | `01;96` bright cyan      |
+
+Colors follow one rule, so a new nudge picks its color from it rather than by eye. Every code is bold (`01`), plus one of the 16 named ANSI colors, which the terminal theme recolors so they stay readable on light and dark backgrounds; 256-color and 24-bit codes are out. Black (`30`, `90`) vanishes on dark themes, white (`37`, `97`) on light ones, and plain blue (`34`) is too dim on dark ones, so none of them is used; a nudge that should read as plain white uses bold alone (`01`), which draws in the theme's own foreground. Each nudge gets a color no other nudge uses, and neighboring slots never share a hue family, because a normal and a bright shade of one hue read alike side by side. The `/setup-gaia (Required)` segment that renders alone uses the setup nudge's color. Bright green (`92`) is the one safe color left; past it, a new nudge shares a color with a nudge in a slot that is never its neighbor. Only a nudge's text forms are colored: its icon form and the trailing `+N` render uncolored, so the icon alone identifies a nudge at narrow widths.
 
 The statusline surface is chosen over a `SessionStart` `<system-reminder>` hook because system-reminders are visible only to the model; the user never sees them, so prompts fire and snooze without the user being shown a choice. The statusline is always visible, has no snooze state, and clears itself the moment the underlying cache reports clean.
 

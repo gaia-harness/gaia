@@ -193,7 +193,7 @@ gaia_statusline_right() {
     if [ "$setup_complete" != "true" ]; then
       gaia_statusline_measure_left
       setup_text='/setup-gaia (Required)'
-      right=$'\033[01;35m''⚙️ '"$setup_text"$'\033[00m'
+      right=$'\033[01;95m''⚙️ '"$setup_text"$'\033[00m'
       # The icon is counted as 2 columns, the same as every nudge's icon below.
       right_width=$((3 + ${#setup_text}))
     elif [ "$is_worktree" = "true" ]; then
@@ -224,6 +224,10 @@ gaia_statusline_right() {
       # that still shows it; the loop keeps shrinking and hiding every other
       # nudge, and when the line still does not fit it renders past the
       # available width with the `+N`.
+      #
+      # Each slot's SGR color, and the setup segment's, follows the color table
+      # in wiki/concepts/Claude Skills.md (Statusline update indicators): a new
+      # nudge takes its color by that page's rule, not by eye.
       nudge_color=()
       nudge_small=()
       nudge_large=()
@@ -463,7 +467,7 @@ gaia_statusline_right() {
           residue_suffix="s"
           [ "$residue_count" -eq 1 ] && residue_suffix=""
           printf -v full '/gaia-residue (%d residual%s)' "$residue_count" "$residue_suffix"
-          nudge_set 8 '01;37' '/gaia-residue' "$full" "$residue_count" '🧹'
+          nudge_set 8 '01' '/gaia-residue' "$full" "$residue_count" '🧹'
         fi
         # Wiki nudge: renders once the wiki trails HEAD by at least
         # WIKI_NUDGE_THRESHOLD non-bookkeeping commits. A maintainer constant,
@@ -474,8 +478,6 @@ gaia_statusline_right() {
           ''|*[!0-9]*) wiki_drift_count=0 ;;
         esac
         if [ "$wiki_drift_count" -ge "$WIKI_NUDGE_THRESHOLD" ] 2>/dev/null; then
-          # 01;96 (bright cyan) is the one color no other slot or the setup
-          # segment uses.
           nudge_set 9 '01;96' '/gaia-wiki' "/gaia-wiki ($wiki_drift_count commits)" "$wiki_drift_count" '🧠'
         fi
       fi
@@ -487,7 +489,7 @@ gaia_statusline_right() {
           debt_noun="issues"
           [ "$debt_count" -eq 1 ] && debt_noun="issue"
           printf -v full '/gaia-debt (%d %s)' "$debt_count" "$debt_noun"
-          nudge_set 7 '01;34' '/gaia-debt' "$full" "$debt_count" '🐛'
+          nudge_set 7 '01;91' '/gaia-debt' "$full" "$debt_count" '🐛'
         fi
       fi
 
