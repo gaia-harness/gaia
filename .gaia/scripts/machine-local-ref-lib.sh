@@ -25,7 +25,7 @@
 # refused too, and the fix is to write the placeholder form. In code it reads
 # full-line comments only, never a trailing comment or a string, so an id in a
 # string literal passes: in code an id is far more often data than citation.
-# Test files and fixtures are data and are never read.
+# In the staged and tracked scans, test files and fixtures are data and are never read.
 
 # The match logic, shared by every verb. Inputs set with -v:
 #   mode     text | message | file | diff
