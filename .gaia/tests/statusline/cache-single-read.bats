@@ -21,6 +21,7 @@ setup() {
   git -C "$FIXTURE" config commit.gpgsign false
   mkdir -p "$FIXTURE/.gaia/statusline" "$FIXTURE/.gaia/local/cache/shared"
   cp "$REPO_ROOT/.gaia/statusline/gaia-statusline.sh" "$FIXTURE/.gaia/statusline/gaia-statusline.sh"
+  cp "$REPO_ROOT/.gaia/statusline/gaia-statusline-right.sh" "$FIXTURE/.gaia/statusline/gaia-statusline-right.sh"
   echo "x" > "$FIXTURE/README.md"
   git -C "$FIXTURE" add -A
   git -C "$FIXTURE" commit --quiet -m "init"

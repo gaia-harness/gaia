@@ -29,12 +29,14 @@ setup() {
   git -C "$MAIN" config commit.gpgsign false
   mkdir -p "$MAIN/.gaia/statusline" "$MAIN/.gaia/local/cache/shared" "$MAIN/.gaia/local/debt"
   cp "$REPO_ROOT/.gaia/statusline/gaia-statusline.sh" "$MAIN/.gaia/statusline/gaia-statusline.sh"
+  cp "$REPO_ROOT/.gaia/statusline/gaia-statusline-right.sh" "$MAIN/.gaia/statusline/gaia-statusline-right.sh"
   echo "x" > "$MAIN/README.md"
   git -C "$MAIN" add -A
   git -C "$MAIN" commit --quiet -m "init"
   printf '{"completed_at":"2026-01-01T00:00:00Z"}' > "$MAIN/.gaia/local/setup-state.json"
   CACHE_FILE="$MAIN/.gaia/local/cache/shared/update-check.json"
   SCRIPT="$MAIN/.gaia/statusline/gaia-statusline.sh"
+  RIGHT_SCRIPT="$MAIN/.gaia/statusline/gaia-statusline-right.sh"
 
   TEMPORARY_HOME=$(mktemp -d -t gaia-sl-team-home-XXXXXX)
 }
@@ -120,10 +122,9 @@ render_at() {
 
 @test "without the floor check the same narrow widths shrink the progress nudge, so the table fails" {
   write_busy_cache
-  sed 's/^\( *\)if \[ -z "${dense_floor\[$shrink_target\]}" \].*; then$/\1if true; then/' "$SCRIPT" > "$BATS_TEST_TMPDIR/no-floor.sh"
-  cmp -s "$SCRIPT" "$BATS_TEST_TMPDIR/no-floor.sh" && return 1
-  cp "$BATS_TEST_TMPDIR/no-floor.sh" "$MAIN/.gaia/statusline/no-floor.sh"
-  SCRIPT="$MAIN/.gaia/statusline/no-floor.sh"
+  sed 's/^\( *\)if \[ -z "${dense_floor\[$shrink_target\]}" \].*; then$/\1if true; then/' "$RIGHT_SCRIPT" > "$BATS_TEST_TMPDIR/no-floor.sh"
+  cmp -s "$RIGHT_SCRIPT" "$BATS_TEST_TMPDIR/no-floor.sh" && return 1
+  cp "$BATS_TEST_TMPDIR/no-floor.sh" "$RIGHT_SCRIPT"
   render_at 100
   [ "$status" -eq 0 ]
   [ "$right_side" != "⌛️ GAIA 2.0.4 (@octo-cat) │ 🔭 /gaia-serena-sync │ 📦 28 │ 🔎 │ 🔨 6 │ 🐛 1 │ 🧹 15" ]
@@ -316,10 +317,9 @@ write_pull_cache() {
 }
 
 @test "an inverted version comparison renders pull for a local version ahead of origin, so the pull assertions fail on it" {
-  sed 's/\$origin_core > \$local_core/$origin_core < $local_core/' "$SCRIPT" > "$BATS_TEST_TMPDIR/inverted.sh"
-  cmp -s "$SCRIPT" "$BATS_TEST_TMPDIR/inverted.sh" && return 1
-  cp "$BATS_TEST_TMPDIR/inverted.sh" "$MAIN/.gaia/statusline/inverted.sh"
-  SCRIPT="$MAIN/.gaia/statusline/inverted.sh"
+  sed 's/\$origin_core > \$local_core/$origin_core < $local_core/' "$RIGHT_SCRIPT" > "$BATS_TEST_TMPDIR/inverted.sh"
+  cmp -s "$RIGHT_SCRIPT" "$BATS_TEST_TMPDIR/inverted.sh" && return 1
+  cp "$BATS_TEST_TMPDIR/inverted.sh" "$RIGHT_SCRIPT"
   printf '2.0.4\n' > "$MAIN/.gaia/VERSION"
   printf '%s' '{"gaiaOriginVersion":"2.0.3"}' > "$CACHE_FILE"
   render_at 120

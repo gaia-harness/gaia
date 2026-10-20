@@ -62,7 +62,7 @@ set_line() {
 # when it renders another color, 2 when it renders nothing.
 bar_is_red() {
   local statusline_output escape_character=$'\033'
-  statusline_output="$(bash -c '. "$1/.gaia/scripts/context-checkpoint-lib.sh" && . "$1/.gaia/statusline/left-side.sh" &&
+  statusline_output="$(bash -c '. "$1/.gaia/scripts/context-checkpoint-lib.sh" && . "$1/.gaia/statusline/gaia-statusline-left.sh" &&
     gaia_statusline_left "$2" "" false "" "" "$3" "$4" "$5" && printf "%s" "$_GAIA_STATUSLINE_LEFT"' \
     _ "$SCRATCH" "$ALF_ROOT" "$(($1 * 100 / WINDOW))" "$WINDOW" "$1")" || return 2
   [ -n "$statusline_output" ] || return 2

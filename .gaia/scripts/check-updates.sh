@@ -117,7 +117,7 @@ SERENA_LIBRARY="$GAIA_DIRECTORY/scripts/lib/serena-lang.sh"
 # Today's codify-nudge count text: shared by the no-snapshot composition
 # below and the upgrade-window seed for a cache written before
 # codifyNudgeReason existed, so the two cannot drift out of step with each
-# other. gaia-statusline.sh keeps its own copy of this composition for its
+# other. gaia-statusline-right.sh keeps its own copy of this composition for its
 # legacy-cache fallback; codify-nudge-reason.bats pins both surfaces to the
 # same rendered text.
 codify_count_reason() {

@@ -28,6 +28,7 @@ setup() {
 
   mkdir -p "$MAIN/.gaia/statusline" "$MAIN/.gaia/scripts" "$MAIN/.gaia/local/cache/shared" "$MAIN/.gaia/local/debt"
   cp "$STATUSLINE_SOURCE/gaia-statusline.sh" "$MAIN/.gaia/statusline/gaia-statusline.sh"
+  cp "$STATUSLINE_SOURCE/gaia-statusline-right.sh" "$MAIN/.gaia/statusline/gaia-statusline-right.sh"
   cp "$STATUSLINE_SOURCE/setup-owed.sh" "$MAIN/.gaia/statusline/setup-owed.sh"
   cp "$SCRIPTS_SOURCE/main-root-lib.sh" "$MAIN/.gaia/scripts/main-root-lib.sh"
   echo "x" > "$MAIN/README.md"
@@ -361,22 +362,26 @@ render() {
 # uses: release-excluded, so no adopter has it. Every case above renders an
 # adopter-shaped fixture, which lacks it.
 
-# Write a copy of MAIN's script with every maintainer-only block removed and
-# print its path: what an adopter runs. The same hand-kept model of the shipped
-# parser (`stripMarkerBlocks` in `.gaia/cli/src/release/marker-strip.ts`) that
-# statusline-worktree.bats carries; a change to one belongs in both.
+# Remove every maintainer-only block from MAIN's entrypoint and the right side
+# it sources, in place, and print the entrypoint's path: what an adopter runs.
+# The same hand-kept model of the shipped parser (`stripMarkerBlocks` in
+# `.gaia/cli/src/release/marker-strip.ts`) that statusline-worktree.bats
+# carries; a change to one belongs in both.
 stripped_copy() {
-  local destination="$MAIN/.gaia/statusline/gaia-statusline-stripped.sh"
-  awk -v start_marker='# gaia:maintainer-only:start' -v end_marker='# gaia:maintainer-only:end' '
-    {
-      has_start_marker = index($0, start_marker) > 0
-      has_end_marker = index($0, end_marker) > 0
-      if (!skip && has_start_marker) { if (!has_end_marker) skip = 1; next }
-      if (skip) { if (has_end_marker) skip = 0; next }
-      print
-    }
-  ' "$MAIN/.gaia/statusline/gaia-statusline.sh" > "$destination"
-  printf '%s' "$destination"
+  local script stripped="$BATS_TEST_TMPDIR/stripped.sh"
+  for script in "$MAIN/.gaia/statusline/gaia-statusline.sh" "$MAIN/.gaia/statusline/gaia-statusline-right.sh"; do
+    awk -v start_marker='# gaia:maintainer-only:start' -v end_marker='# gaia:maintainer-only:end' '
+      {
+        has_start_marker = index($0, start_marker) > 0
+        has_end_marker = index($0, end_marker) > 0
+        if (!skip && has_start_marker) { if (!has_end_marker) skip = 1; next }
+        if (skip) { if (has_end_marker) skip = 0; next }
+        print
+      }
+    ' "$script" > "$stripped"
+    cp "$stripped" "$script"
+  done
+  printf '%s' "$MAIN/.gaia/statusline/gaia-statusline.sh"
 }
 
 # Render the stripped copy from MAIN, colors stripped like render.

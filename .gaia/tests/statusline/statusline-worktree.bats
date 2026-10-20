@@ -41,6 +41,7 @@ setup() {
 
   mkdir -p "$MAIN/.gaia/statusline" "$MAIN/.gaia/scripts"
   cp "$STATUSLINE_SOURCE/gaia-statusline.sh" "$MAIN/.gaia/statusline/gaia-statusline.sh"
+  cp "$STATUSLINE_SOURCE/gaia-statusline-right.sh" "$MAIN/.gaia/statusline/gaia-statusline-right.sh"
   cp "$SCRIPTS_SOURCE/main-root-lib.sh" "$MAIN/.gaia/scripts/main-root-lib.sh"
   echo "x" > "$MAIN/README.md"
   git -C "$MAIN" add -A
@@ -86,9 +87,10 @@ run_statusline() {
   run_statusline_from "$MAIN/.gaia/statusline/gaia-statusline.sh" "$1"
 }
 
-# Write a copy of MAIN's script with every maintainer-only block removed, the
-# same text `gaia-maintainer release scrub` produces at bundle time, and print
-# its path. This is what an adopter actually runs.
+# Remove every maintainer-only block from MAIN's entrypoint and the right side
+# it sources, in place, the same text `gaia-maintainer release scrub` produces
+# at bundle time, and print the entrypoint's path. This is what an adopter
+# actually runs.
 #
 # This awk is a hand-kept model of the shipped parser (`stripMarkerBlocks` in
 # `.gaia/cli/src/release/marker-strip.ts`), not held to it by a test. Sibling
@@ -98,21 +100,24 @@ run_statusline() {
 # The `sed` range this replaces was not that text. A range checks its end
 # address only from the line AFTER the start matches, so a line carrying both
 # markers opened a range and swallowed to the next end or to EOF, where the
-# shipped parser drops that one line alone. `gaia-statusline.sh` carries only a
-# plain pair today, so the two agreed; nothing went red if a one-line marker
-# was ever added.
+# shipped parser drops that one line alone. The statusline carries only plain
+# pairs today, so the two agreed; nothing went red if a one-line marker was
+# ever added.
 stripped_copy() {
-  local destination="$MAIN/.gaia/statusline/gaia-statusline-stripped.sh"
-  awk -v start_marker="$MAINTAINER_START" -v end_marker="$MAINTAINER_END" '
-    {
-      has_start_marker = index($0, start_marker) > 0
-      has_end_marker = index($0, end_marker) > 0
-      if (!skip && has_start_marker) { if (!has_end_marker) skip = 1; next }
-      if (skip) { if (has_end_marker) skip = 0; next }
-      print
-    }
-  ' "$MAIN/.gaia/statusline/gaia-statusline.sh" > "$destination"
-  printf '%s' "$destination"
+  local script stripped="$BATS_TEST_TMPDIR/stripped.sh"
+  for script in "$MAIN/.gaia/statusline/gaia-statusline.sh" "$MAIN/.gaia/statusline/gaia-statusline-right.sh"; do
+    awk -v start_marker="$MAINTAINER_START" -v end_marker="$MAINTAINER_END" '
+      {
+        has_start_marker = index($0, start_marker) > 0
+        has_end_marker = index($0, end_marker) > 0
+        if (!skip && has_start_marker) { if (!has_end_marker) skip = 1; next }
+        if (skip) { if (has_end_marker) skip = 0; next }
+        print
+      }
+    ' "$script" > "$stripped"
+    cp "$stripped" "$script"
+  done
+  printf '%s' "$MAIN/.gaia/statusline/gaia-statusline.sh"
 }
 
 # Poll for up to 2 seconds for file $1 to exist. Both refreshers are
@@ -201,6 +206,7 @@ wait_for_file() {
   mkdir -p "$NOGIT/.gaia/statusline" "$NOGIT/.gaia/scripts" \
            "$NOGIT/.gaia/local/cache/shared"
   cp "$STATUSLINE_SOURCE/gaia-statusline.sh" "$NOGIT/.gaia/statusline/gaia-statusline.sh"
+  cp "$STATUSLINE_SOURCE/gaia-statusline-right.sh" "$NOGIT/.gaia/statusline/gaia-statusline-right.sh"
   cp "$SCRIPTS_SOURCE/main-root-lib.sh" "$NOGIT/.gaia/scripts/main-root-lib.sh"
   printf '{"outdatedCount":3}' > "$NOGIT/.gaia/local/cache/shared/update-check.json"
   printf '{"completed_at":"2026-01-01T00:00:00Z"}' > "$NOGIT/.gaia/local/setup-state.json"

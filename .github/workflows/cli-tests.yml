@@ -558,7 +558,7 @@ jobs:
       # The marker-strip scenario runs here as well as inside the harness job
       # above, and this is the copy that gates. Its four assertions read
       # `.claude/hooks/lib/*.sh`, `.gaia/scripts/*.sh`,
-      # `.gaia/statusline/gaia-statusline.sh`, `.gaia/audit-ci.yml`, and
+      # `.gaia/statusline/gaia-statusline-right.sh`, `.gaia/audit-ci.yml`, and
       # `.prettierignore`; every one of those sits OUTSIDE the harness job's
       # `code:` filter, so a pull request adding a `# gaia:maintainer-only:`
       # block to one of them resolved that filter false, skipped the harness,
