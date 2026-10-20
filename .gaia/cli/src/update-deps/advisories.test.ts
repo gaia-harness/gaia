@@ -775,23 +775,12 @@ describe('advisories: fallback and unavailable', () => {
 });
 
 describe('advisories: when alerts are not read', () => {
-  test.each([
-    ['CI', {CI: 'true'}],
-    ['GITHUB_ACTIONS', {GITHUB_ACTIONS: 'true'}],
-  ])('%s set never spawns gh', async (_label, env) => {
-    const gh = ghStub({open: ghOk([alert({number: 1})])});
-
-    await invoke({env, gh, pnpm: pnpmStub(auditOutput(auditAdvisory()))});
-
-    expect(gh.calls).toHaveLength(0);
-    expect(readPayload().reasons[0]).toBe('ci');
-  });
-
   test('a pnpm audit advisory whose only path starts at the member importer is counted', async () => {
     registerCliMember(true);
 
     await invoke({
-      args: ['--no-alerts', '--count-only'],
+      args: ['--count-only'],
+      gh: ghStub({open: ghFail('HTTP 403')}),
       pnpm: pnpmStub(
         auditOutput(
           auditAdvisory({
@@ -802,24 +791,6 @@ describe('advisories: when alerts are not read', () => {
     });
 
     expect(readPayload()).toMatchObject({count: 1, source: 'pnpm-audit'});
-  });
-
-  test('--no-alerts never spawns gh', async () => {
-    const gh = ghStub({});
-
-    await invoke({args: ['--no-alerts'], gh});
-
-    expect(gh.calls).toHaveLength(0);
-    expect(readPayload().reasons).toStrictEqual(['ci']);
-  });
-
-  test('with CI unset or "false" the gh stub is called', async () => {
-    const gh = ghStub({open: ghOk([alert({number: 1})])});
-
-    await invoke({env: {CI: 'false'}, gh});
-
-    expect(gh.calls.length).toBeGreaterThan(0);
-    expect(readPayload().source).toBe('dependabot');
   });
 });
 

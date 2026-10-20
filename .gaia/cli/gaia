@@ -42351,7 +42351,6 @@ var countAdvisories = (alertAdvisories, auditAdvisories) => new Set(
 
 // src/update-deps/advisory-reasons.ts
 var ADVISORY_REASON_TOKENS = [
-  "ci",
   "gh-missing",
   "gh-unauthenticated",
   "no-remote",
@@ -42368,7 +42367,6 @@ var ADVISORY_REASON_TEXT = {
   "alerts-disabled": "Dependabot alerts are disabled",
   "alerts-invalid-response": "alerts response was not valid JSON",
   "alerts-request-failed": "alerts request failed",
-  ci: "CI run",
   "cli-failed": "advisories refresh failed",
   forbidden: "token lacks permission to read Dependabot alerts",
   "gh-missing": "gh not installed",
@@ -43550,7 +43548,7 @@ var run54 = (argv, options = {}) => {
 };
 
 // src/update-deps/advisories.ts
-var HELP_TEXT49 = `Usage: gaia update-deps advisories --emit <path> [--count-only] [--updates <path>] [--no-alerts]
+var HELP_TEXT49 = `Usage: gaia update-deps advisories --emit <path> [--count-only] [--updates <path>]
 
   Fetch open dependency security advisories (Dependabot alerts and
   \`pnpm audit\`, unioned), keep only validated fields, rank them, and
@@ -43562,7 +43560,6 @@ var HELP_TEXT49 = `Usage: gaia update-deps advisories --emit <path> [--count-onl
   --count-only       Count only: no advisory rows and no registry lookups.
   --updates <path>   An \`update-deps run --emit-updates\` payload, used to
                      offer chain-head bumps as candidates.
-  --no-alerts        Skip Dependabot alerts (as in CI) and use \`pnpm audit\`.
 `;
 var HELP_TOKENS47 = /* @__PURE__ */ new Set(["--help", "-h", "help"]);
 var SUBCOMMAND10 = "update-deps advisories";
@@ -43581,13 +43578,10 @@ var parseArgs8 = (argv) => {
   let emit2;
   let updates = null;
   let countOnly = false;
-  let noAlerts = false;
   for (let index = 0; index < argv.length; index += 1) {
     const token = argv[index];
     if (token === "--count-only") {
       countOnly = true;
-    } else if (token === "--no-alerts") {
-      noAlerts = true;
     } else if (token === "--emit" || token === "--updates") {
       const value = argv[index + 1];
       if (value === void 0 || value.length === 0 || value.startsWith("--")) {
@@ -43601,11 +43595,8 @@ var parseArgs8 = (argv) => {
     }
   }
   if (emit2 === void 0) return { error: "--emit is required" };
-  return { countOnly, emit: emit2, noAlerts, updates };
+  return { countOnly, emit: emit2, updates };
 };
-var isCiEnvironment = (env) => [env.CI, env.GITHUB_ACTIONS].some(
-  (value) => value !== void 0 && value !== "" && value !== "false"
-);
 var resolveFrom = (cwd, target) => path62.isAbsolute(target) ? target : path62.join(cwd, target);
 var isRecord5 = (value) => value !== null && typeof value === "object" && !Array.isArray(value);
 var asArray = (value) => Array.isArray(value) ? value : [];
@@ -43665,9 +43656,6 @@ var ownedManifestPredicate = (repoRoot, patterns) => {
   return (manifestPath) => ALWAYS_OWNED_MANIFESTS.has(manifestPath) || manifestPath === memberManifest || patterns.some((pattern2) => pattern2.test(manifestPath));
 };
 var readAlerts = async (context) => {
-  if (context.args.noAlerts || isCiEnvironment(context.env)) {
-    return { ok: false, reason: "ci" };
-  }
   const repository = resolveGithubRepository(
     context.repoRoot,
     context.options.originReader ?? readOriginUrl
@@ -44246,7 +44234,7 @@ var run58 = (argv, options = {}) => {
 // src/update-deps/dismiss-alert.ts
 var HELP_TEXT53 = `Usage: gaia update-deps dismiss-alert --alert <n> --reason <tolerable_risk|not_used> --comment <text> --confirmed
 
-  Dismiss one Dependabot alert on GitHub. Refused (no request sent) in CI,
+  Dismiss one Dependabot alert on GitHub. Refused (no request sent)
   without --confirmed, for an invalid argument, or without a github.com
   origin. The comment is 1 to 280 characters and is never truncated.
   Prints {"dismissed": true|false, ...} as JSON. Exit 0 dismissed, 1 refused
@@ -44266,9 +44254,6 @@ var fail3 = (error62, alert, exitCode = EXIT_CODES.UNKNOWN_SUBCOMMAND) => {
   printResult3({ alert, dismissed: false, error: error62 });
   return exitCode;
 };
-var isCiEnvironment2 = (env) => [env.CI, env.GITHUB_ACTIONS].some(
-  (value) => value !== void 0 && value !== "" && value !== "false"
-);
 var countCodePoints = (text) => {
   let count = 0;
   let index = 0;
@@ -44340,9 +44325,6 @@ var run59 = async (argv, options = {}) => {
     });
     return fail3("invalid-arguments", null, EXIT_CODES.INVALID_ARGUMENTS);
   }
-  if (isCiEnvironment2(options.env ?? process.env)) {
-    return fail3("refused-ci", args.alert);
-  }
   if (!args.confirmed) return fail3("not-confirmed", args.alert);
   const cwd = resolveWorkingRoot(options.cwd ?? process.cwd());
   const repository = resolveGithubRepository(cwd, options.originReader);
@@ -44383,15 +44365,14 @@ var INSTALL_COMMAND = "npm install -g @playwright/cli@latest";
 var STRICT_SEMVER_PATTERN = /^\d+\.\d+\.\d+$/;
 var parseStrictSegments = (value) => STRICT_SEMVER_PATTERN.test(value.trim()) ? parseSegments(value) : null;
 var computePlaywrightCliRow = (input2) => {
-  const { ci, installedVersion, latestVersion } = input2;
-  const row = (status, message, offerInstall = false) => ({
+  const { installedVersion, latestVersion } = input2;
+  const row = (status, message) => ({
     installCommand: INSTALL_COMMAND,
     installed: installedVersion,
     latest: latestVersion,
     message,
-    offerInstall,
+    offerInstall: status === "outdated",
     packageName: "@playwright/cli",
-    reportOnly: ci,
     status,
     tool: "playwright-cli"
   });
@@ -44412,8 +44393,7 @@ var computePlaywrightCliRow = (input2) => {
   if (compareSegments(installed, latest) < 0) {
     return row(
       "outdated",
-      ci ? `installed ${installedVersion}, latest ${latestVersion}; report-only in CI` : `installed ${installedVersion}, latest ${latestVersion}`,
-      !ci
+      `installed ${installedVersion}, latest ${latestVersion}`
     );
   }
   return row("current", `up to date at ${installedVersion}`);
@@ -44425,7 +44405,6 @@ var probeCommand = (command, args) => {
   return output2 === "" ? null : output2;
 };
 var defaultProbes = {
-  isCi: () => process.env.CI === "true",
   probeInstalledVersion: () => probeCommand("playwright-cli", ["--version"]),
   probeLatestVersion: () => probeCommand("npm", ["view", "@playwright/cli", "version"])
 };
@@ -44436,7 +44415,6 @@ var run60 = (argv, options = {}) => {
   }
   const probes = options.probes ?? defaultProbes;
   const row = computePlaywrightCliRow({
-    ci: probes.isCi(),
     installedVersion: probes.probeInstalledVersion(),
     latestVersion: probes.probeLatestVersion()
   });
@@ -44607,7 +44585,7 @@ var HELP_TEXT56 = `Usage: gaia update-deps <subcommand> [args]
                                               (local only). --clear resets.
   global-tools                                Report globally installed tools
                                               (playwright-cli) as JSON rows.
-  advisories --emit <path> [--count-only] [--updates <path>] [--no-alerts]
+  advisories --emit <path> [--count-only] [--updates <path>]
                                               Fetch, validate, and rank open
                                               security advisories (Dependabot
                                               alerts plus pnpm audit) into a
@@ -44617,8 +44595,7 @@ var HELP_TEXT56 = `Usage: gaia update-deps <subcommand> [args]
                                               of <name> is in <range>.
   dismiss-alert --alert <n> --reason <tolerable_risk|not_used> --comment <text> --confirmed
                                               Dismiss one Dependabot alert
-                                              after confirmation (never in
-                                              CI).
+                                              after confirmation.
   write-security-cache --count <n> --source <dependabot|pnpm-audit> [--reason <tokens>]
                                               Rewrite the update-check cache's
                                               security fields.

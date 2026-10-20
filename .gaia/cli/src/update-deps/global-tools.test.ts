@@ -20,7 +20,6 @@ const INSTALL_COMMAND = 'npm install -g @playwright/cli@latest';
 describe('computePlaywrightCliRow', () => {
   test('an older installed binary is outdated and offers the install', () => {
     const row = computePlaywrightCliRow({
-      ci: false,
       installedVersion: '0.1.21',
       latestVersion: '0.1.22',
     });
@@ -29,13 +28,11 @@ describe('computePlaywrightCliRow', () => {
     expect(row.installed).toBe('0.1.21');
     expect(row.latest).toBe('0.1.22');
     expect(row.offerInstall).toBe(true);
-    expect(row.reportOnly).toBe(false);
     expect(row.installCommand).toBe(INSTALL_COMMAND);
   });
 
   test('an absent binary is not-installed and never offers the install', () => {
     const row = computePlaywrightCliRow({
-      ci: false,
       installedVersion: null,
       latestVersion: '0.1.22',
     });
@@ -46,22 +43,8 @@ describe('computePlaywrightCliRow', () => {
     expect(row.offerInstall).toBe(false);
   });
 
-  test('CI reports an outdated binary and never offers the install', () => {
-    const row = computePlaywrightCliRow({
-      ci: true,
-      installedVersion: '0.1.21',
-      latestVersion: '0.1.22',
-    });
-
-    expect(row.status).toBe('outdated');
-    expect(row.reportOnly).toBe(true);
-    expect(row.offerInstall).toBe(false);
-    expect(row.message).toContain('report-only in CI');
-  });
-
   test('a failed npm lookup is unknown', () => {
     const row = computePlaywrightCliRow({
-      ci: false,
       installedVersion: '0.1.21',
       latestVersion: null,
     });
@@ -74,14 +57,12 @@ describe('computePlaywrightCliRow', () => {
   test('a non-semver installed string is unknown without throwing', () => {
     expect(() =>
       computePlaywrightCliRow({
-        ci: false,
         installedVersion: 'not-a-version',
         latestVersion: '0.1.22',
       })
     ).not.toThrow();
 
     const row = computePlaywrightCliRow({
-      ci: false,
       installedVersion: 'not-a-version',
       latestVersion: '0.1.22',
     });
@@ -93,7 +74,6 @@ describe('computePlaywrightCliRow', () => {
   test('an equal or newer installed binary is current', () => {
     for (const installedVersion of ['0.1.22', '0.2.0', '1.0.0']) {
       const row = computePlaywrightCliRow({
-        ci: false,
         installedVersion,
         latestVersion: '0.1.22',
       });
@@ -105,7 +85,6 @@ describe('computePlaywrightCliRow', () => {
 
   test('versions compare numerically, not lexically', () => {
     const row = computePlaywrightCliRow({
-      ci: false,
       installedVersion: '0.1.9',
       latestVersion: '0.1.10',
     });
@@ -135,7 +114,6 @@ describe('update-deps global-tools handler', () => {
 
   test('prints rows and exits 0 when the binary probe reports it absent', () => {
     const probes: GlobalToolProbes = {
-      isCi: () => false,
       probeInstalledVersion: () => null,
       probeLatestVersion: () => '0.1.22',
     };
@@ -147,7 +125,6 @@ describe('update-deps global-tools handler', () => {
 
   test('prints rows and exits 0 when the npm probe fails', () => {
     const probes: GlobalToolProbes = {
-      isCi: () => false,
       probeInstalledVersion: () => '0.1.21',
       probeLatestVersion: () => null,
     };

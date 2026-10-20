@@ -24,7 +24,7 @@ const HELP_TEXT = `Usage: gaia update-deps <subcommand> [args]
                                               (local only). --clear resets.
   global-tools                                Report globally installed tools
                                               (playwright-cli) as JSON rows.
-  advisories --emit <path> [--count-only] [--updates <path>] [--no-alerts]
+  advisories --emit <path> [--count-only] [--updates <path>]
                                               Fetch, validate, and rank open
                                               security advisories (Dependabot
                                               alerts plus pnpm audit) into a
@@ -34,8 +34,7 @@ const HELP_TEXT = `Usage: gaia update-deps <subcommand> [args]
                                               of <name> is in <range>.
   dismiss-alert --alert <n> --reason <tolerable_risk|not_used> --comment <text> --confirmed
                                               Dismiss one Dependabot alert
-                                              after confirmation (never in
-                                              CI).
+                                              after confirmation.
   write-security-cache --count <n> --source <dependabot|pnpm-audit> [--reason <tokens>]
                                               Rewrite the update-check cache's
                                               security fields.

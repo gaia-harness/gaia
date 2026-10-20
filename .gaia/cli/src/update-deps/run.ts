@@ -90,7 +90,7 @@ export type UpdatesPayload = {
   /**
    * Outstanding groups the human snoozed earlier that are still within their
    * snooze window and match the currently-offered targets. The interactive
-   * preview marks these and default-skips them; empty in CI (no local ledger).
+   * preview marks these and default-skips them; empty with no local ledger.
    */
   snoozed: readonly SnoozedGroup[];
   /** Outstanding package count across both waves, pre-snooze. */
@@ -203,8 +203,8 @@ const readPackageJson = (cwd: string): PackageJsonShape => {
  * The committed `gaia.updateDepsHold` map (`name -> version ceiling`) from
  * package.json. A ceiling is a version prefix: `"8.0"` caps the package to the
  * highest `8.0.x`, `"8.0.16"` freezes it exactly. Unlike the local snooze
- * ledger this is committed, so it holds a package in interactive AND CI runs
- * alike, until the maintainer lifts it. Non-string values are dropped;
+ * ledger this is committed, so it holds a package on every machine, until the
+ * maintainer lifts it. Non-string values are dropped;
  * a missing map yields no holds.
  */
 const readUpdateDepsHolds = (
@@ -1332,12 +1332,11 @@ export const computeUpdates = (options: ComputeOptions): UpdatesPayload => {
   waveB.sort((a, b) => compareStrings(a.group, b.group));
 
   // The waves always carry every outstanding package: nothing here gates the
-  // apply set, so CI installs everything and the interactive preview can still
-  // refresh a snoozed group on "update all". Snooze state is surfaced two ways
-  // off the same ledger read: `actionable_count` subtracts snoozed groups for
+  // apply set, so the interactive preview can still refresh a snoozed group on
+  // "update all". Snooze state is surfaced two ways off the same ledger read: `actionable_count` subtracts snoozed groups for
   // the statusline, and `snoozed` names them per-group so the preview can mark
-  // and default-skip them. The ledger is absent in CI, so `actionable_count`
-  // equals `total_count` and `snoozed` is empty there.
+  // and default-skip them. With no ledger, `actionable_count` equals
+  // `total_count` and `snoozed` is empty.
   const countable = {wave_a: waveA, wave_b: waveB};
   const declines = loadDeclines(options.cwd);
 

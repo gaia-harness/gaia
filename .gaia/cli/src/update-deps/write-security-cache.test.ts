@@ -105,11 +105,11 @@ describe('write-security-cache writes', () => {
       '--source',
       'pnpm-audit',
       '--reason',
-      'ci,forbidden',
+      'gh-missing,forbidden',
     ]);
 
     expect(readCache().securityCount).toBe(0);
-    expect(readCache().securityUnavailableReason).toBe('ci,forbidden');
+    expect(readCache().securityUnavailableReason).toBe('gh-missing,forbidden');
   });
 
   test('no cache file is a no-op that creates nothing', () => {

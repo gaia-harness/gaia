@@ -368,7 +368,7 @@ if [ -x "$GAIA_BIN" ] && command -v jq >/dev/null 2>&1; then
   if [ -n "$advisories_temporary_file" ]; then
     if (cd "$PROJECT_ROOT" && "$GAIA_BIN" update-deps advisories --emit "$advisories_temporary_file" --count-only) >/dev/null 2>&1 && [ -s "$advisories_temporary_file" ]; then
       advisories_parsed=$(jq -r '
-        def allowed: ["ci","gh-missing","gh-unauthenticated","no-remote","non-github-remote","alerts-disabled","forbidden","alerts-request-failed","alerts-invalid-response","pnpm-audit-failed","cli-failed","jq-missing"];
+        def allowed: ["gh-missing","gh-unauthenticated","no-remote","non-github-remote","alerts-disabled","forbidden","alerts-request-failed","alerts-invalid-response","pnpm-audit-failed","cli-failed","jq-missing"];
         ((.reasons // []) | if type == "array" then map(select(type == "string" and . as $token | allowed | index($token))) | join(",") else "" end) as $reasons
         | if (.source == "dependabot" or .source == "pnpm-audit") and (.count | type) == "number" and (.count == (.count | floor)) and .count >= 0
           then "\(.source)|\(.count | floor)|\($reasons)"

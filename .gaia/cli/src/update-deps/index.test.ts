@@ -86,7 +86,7 @@ describe('update-deps namespace router', () => {
     const exit = await run([]);
     expect(exit).toBe(0);
     expect(stdio.outputs.join('')).toContain(
-      'advisories --emit <path> [--count-only] [--updates <path>] [--no-alerts]'
+      'advisories --emit <path> [--count-only] [--updates <path>]'
     );
     expect(stdio.outputs.join('')).toContain(
       'advisory-landed --package <name> --vulnerable-range <range>'
