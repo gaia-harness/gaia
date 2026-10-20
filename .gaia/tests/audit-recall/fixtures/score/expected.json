@@ -1,0 +1,22 @@
+{
+  "corpus.json": {
+    "exit": 1,
+    "gating": 8,
+    "failures": [
+      "m-lost",
+      "m-window",
+      "m-class",
+      "s-merged",
+      "r-flip",
+      "s-translation"
+    ]
+  },
+  "corpus-pass.json": {
+    "exit": 0,
+    "gating": 2,
+    "failures": []
+  },
+  "corpus-missing.json": {
+    "exit": 2
+  }
+}

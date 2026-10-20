@@ -3,6 +3,7 @@ name: code-audit-maintainer-shell
 description: 'Maintainer-only audit of framework bash and the bats suites guarding it: quoting/portability correctness and conditional hook-contract and bats-suite lenses. Read-only: reports findings and gates its marker; edits no tracked file. One member of the Code Audit Team gate.'
 model: opus
 effort: medium
+tools: Bash, Monitor, Read, WebFetch
 color: cyan
 ---
 
@@ -149,12 +150,12 @@ Every candidate finding must clear these before it reaches the report at Critica
 
 1. **Cites an exact `file:line`.** No line, no finding.
 2. **Names a concrete failure mode**: the input or state that triggers it and the wrong outcome that follows (e.g. "when `$path` contains a space, the unquoted `for f in $path` word-splits and the loop iterates over the wrong tokens"). A category label ("possible quoting issue") is not a failure mode.
-3. **Confirms you read the callers and any tests.** Grep for where the script is invoked (a hook wired in `.claude/settings.json`, a workflow step, another script), and check whether a `.bats` test already covers the flagged behavior. A defect every caller already guards against, or a test already asserts against, is not a finding.
+3. **Confirms you read the callers and any tests.** Use `git grep` for where the script is invoked (a hook wired in `.claude/settings.json`, a workflow step, another script), and check whether a `.bats` test already covers the flagged behavior. A defect every caller already guards against, or a test already asserts against, is not a finding.
 4. **Assigns a defensible severity.** Critical: breaks the merge gate, bricks a session, or is exploitable with adversary-controlled input. Major: a real bug or portability failure with a narrower blast radius. Minor: style or robustness with no live failure mode.
 
 A candidate that fails a check is dropped or demoted, not silently discarded from consideration, still name it as a Minor if it has any residual value. Zero findings is a valid, clean outcome; it is not valid to reach zero by never looking closely at a file in your remit.
 
-**Evidence that needs real bytes on disk goes in a scratch directory you own.** Establishing that a guard is not hollow means breaking the construct it names and watching its check go red, which cannot happen in the tree you must return byte-identical. Mint your scratch directory under `.gaia/local/cache/mutation-scratch/` as `.claude/hooks/lib/audit-member-protocol.md` states under "Scratch directory", which keeps it apart from every other member and every other audit on the machine, and once your findings sidecar is written, remove exactly the directory you minted. **Populate and mutate it with Bash, never with `Write`/`Edit`.** Dispatched into a linked worktree, that directory resolves into the main checkout, because a worktree's whole `.gaia/local` is one symlink to it, so a `Write` or `Edit` naming a path there is refused for leaving your tree, while `cp`, redirection and an in-place `sed` reach it normally. The refusal is the runtime's own worktree confinement rather than a GAIA guard, so there is nothing to widen and it is not a finding. The same holds for the confinement's refusals of a multi-command block, a `git` call inside a command substitution, and a command name computed at runtime, which the protocol's "Scope resolution" section names: they are why every command in this file is one plain call with literal arguments, and a member meeting one on a command of its own re-spells it that way rather than reporting it.
+**Evidence that needs real bytes on disk goes in a scratch directory you own.** Establishing that a guard is not hollow means breaking the construct it names and watching its check go red, which cannot happen in the tree you must return byte-identical. Mint your scratch directory under `.gaia/local/cache/mutation-scratch/` as `.claude/hooks/lib/audit-member-protocol.md` states under "Scratch directory", which keeps it apart from every other member and every other audit on the machine, and once your findings sidecar is written, remove exactly the directory you minted. Populate and mutate it with Bash; your tools allowlist carries no Write or Edit. Every command is one plain call with literal arguments, as the protocol's "Scope resolution" section states.
 
 ## Triage threshold
 

@@ -1,0 +1,17 @@
+{
+  "schema": 1,
+  "member": "code-audit-frontend",
+  "findings": [
+    {
+      "finding_class": "holistic/unclassified",
+      "severity": "minor",
+      "security": false,
+      "path": "frontend/app/class.ts",
+      "line": 60,
+      "title": "fixture finding",
+      "failure_mode": "fixture",
+      "verified_by": "fixture",
+      "suggested_fix": "fixture"
+    }
+  ]
+}

@@ -1,0 +1,38 @@
+diff --git a/frontend/app/utils/retry.ts b/frontend/app/utils/retry.ts
+new file mode 100644
+--- /dev/null
++++ b/frontend/app/utils/retry.ts
+@@ -0,0 +1,16 @@
++/** Runs `task` until it resolves, giving up after `maxAttempts` failures. */
++export const retry = async <T>(
++  task: () => Promise<T>,
++  maxAttempts: number
++): Promise<T> => {
++  let attempt = 1;
++
++  while (true) {
++    try {
++      return await task();
++    } catch (error) {
++      if (attempt === maxAttempts) throw error;
++      attempt += 1;
++    }
++  }
++};
+diff --git a/frontend/app/utils/selection.ts b/frontend/app/utils/selection.ts
+new file mode 100644
+--- /dev/null
++++ b/frontend/app/utils/selection.ts
+@@ -0,0 +1,12 @@
++type Identified = {
++  id: string;
++};
++
++/** The items the user keeps after deleting the selected ones. */
++export const removeSelected = <T extends Identified>(
++  items: T[],
++  selectedIds: string[]
++): T[] =>
++  items.filter(
++    (item) => selectedIds.length > 0 && !selectedIds.includes(item.id)
++  );

@@ -1,0 +1,39 @@
+{
+  "schema": 1,
+  "seed": 122,
+  "selected_against": "0000000000000000000000000000000000000000",
+  "selection_bundles": {
+    "before": "1111111111111111111111111111111111111111",
+    "after": "2222222222222222222222222222222222222222"
+  },
+  "entries": [
+    {
+      "id": "m-kept",
+      "source": "real",
+      "member": "code-audit-frontend",
+      "scorer": "member",
+      "path": "frontend/app/kept.ts",
+      "line": 30,
+      "class_prefix": "holistic"
+    },
+    {
+      "id": "m-flaky",
+      "source": "real",
+      "member": "code-audit-frontend",
+      "scorer": "member",
+      "path": "frontend/app/flaky.ts",
+      "line": 40,
+      "class_prefix": "holistic"
+    },
+    {
+      "id": "r-stable",
+      "source": "planted",
+      "member": "code-audit-frontend",
+      "scorer": "refuter",
+      "path": "frontend/app/stable.ts",
+      "line": 100,
+      "planted_patch": "planted/holistic-false.patch"
+    }
+  ],
+  "skipped": []
+}

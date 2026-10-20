@@ -1,0 +1,30 @@
+{
+  "schema": 1,
+  "seed": 122,
+  "selected_against": "0000000000000000000000000000000000000000",
+  "selection_bundles": {
+    "before": "1111111111111111111111111111111111111111",
+    "after": "2222222222222222222222222222222222222222"
+  },
+  "entries": [
+    {
+      "id": "m-kept",
+      "source": "real",
+      "member": "code-audit-frontend",
+      "scorer": "member",
+      "path": "frontend/app/kept.ts",
+      "line": 30,
+      "class_prefix": "holistic"
+    },
+    {
+      "id": "m-absent",
+      "source": "real",
+      "member": "code-audit-frontend",
+      "scorer": "member",
+      "path": "frontend/app/absent.ts",
+      "line": 110,
+      "class_prefix": "holistic"
+    }
+  ],
+  "skipped": []
+}

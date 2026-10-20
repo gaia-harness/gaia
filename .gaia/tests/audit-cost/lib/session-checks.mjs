@@ -18,7 +18,7 @@ const lastAssistantStopReason = (transcriptPath) => {
   return last ? (last.message.stop_reason ?? null) : null;
 };
 
-const hasReturned = (agent) => {
+export const hasReturned = (agent) => {
   const stopReason = lastAssistantStopReason(agent.transcriptPath);
   return stopReason !== null && stopReason !== 'tool_use';
 };

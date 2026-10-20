@@ -4,7 +4,7 @@ This directory contains library-specific audit rules for the `code-audit-fronten
 
 ## How it works
 
-At startup the agent Globs `*.md` files in this directory (skipping this README), reads each one, parses its `subagents:` frontmatter field, and injects the file's content into the matching specialist subagent's prompt before dispatching.
+At startup the agent lists the `*.md` files in this directory (skipping this README) and reads each one's `subagents:` line with one command. It does not read the file bodies: each specialist is handed the absolute paths of the files that list its role and Reads them itself.
 
 If this directory is empty or missing, the agent reports an error finding naming it rather than reviewing without the library rules (Extension Loading in `.claude/agents/code-audit-frontend.md`).
 
@@ -17,13 +17,15 @@ library: package-name
 ---
 ```
 
-Valid `subagents` values map to the three specialist subagents:
+Valid `subagents` values map to the three specialist roles of the `audit-rule-specialist` type:
 
-- `react-patterns` → Subagent 1 (`.tsx` files: hooks, components, accessibility)
-- `typescript` → Subagent 2 (`.ts` + `.tsx` files: types, architecture, conventions)
-- `translation` → Subagent 3 (files with `useTranslation` / `t(` calls)
+- `react-patterns`: `.tsx` files (hooks, components, accessibility)
+- `typescript`: `.ts` and `.tsx` files (types, architecture, conventions)
+- `translation`: changed language files and files with an i18n call signal
 
-These values are **rule-injection labels** (metadata selecting which specialist prompt receives this file's rules), NOT skill or command names. The agent dispatches each specialist via the Agent (Task) tool, never via the Skill tool, and there is no `subagent:<name> files:<paths>` argument string.
+These values are **rule-injection labels** (metadata selecting which specialist receives this file's rules), NOT skill or command names. The agent dispatches each specialist with the Agent tool, naming the `audit-rule-specialist` type, never via the Skill tool, and there is no `subagent:<name> files:<paths>` argument string.
+
+The supported shape is a flow list on one line: `subagents: [react-patterns, typescript]`. Any other shape (a block list, or no `subagents:` line) is reported as an error finding naming the file.
 
 `library` is documentation only, it identifies which dependency this file covers.
 
