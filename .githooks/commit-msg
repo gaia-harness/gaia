@@ -12,6 +12,11 @@ ROOT=$(git rev-parse --show-toplevel) || exit 1
 PATH="$ROOT/node_modules/.bin:$PATH"
 export PATH
 
+# Machine-local references (.claude/rules/working-doc-ids.md). The detector is
+# read beside this hook rather than under ROOT, so a hook always runs the
+# detector it shipped with; a missing detector exits non-zero and refuses too.
+bash "$(dirname "$0")/../.gaia/scripts/machine-local-ref-lib.sh" check message "$1" || exit 1
+
 if ! pnpm -C "$ROOT" exec commitlint --version >/dev/null 2>&1; then
   printf "\x1b[31m✖ commitlint is not installed: run pnpm install\x1b[0m\n"
   exit 1

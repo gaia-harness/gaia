@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 # Fails on any working-document id in the frontend's Playwright tree: a SPEC,
-# UAT or PLAN id followed by digits (case-insensitive) in a file path or in a
-# file's content, which covers path segments, test titles and both comment
-# forms. The owning-phase gate (uat-gate.sh) and the generated plan
+# UAT or PLAN id followed by digits (any case, any length), or a machine-local
+# path, in a file path or in a file's content, which covers path segments, test
+# titles and both comment forms. The detector is machine-local-ref-lib.sh in
+# strict mode. The owning-phase gate (uat-gate.sh) and the generated plan
 # orchestrator's render step call it from the resolved isolation root; the rule
 # it enforces is .claude/rules/working-doc-ids.md.
 #
@@ -31,6 +32,8 @@ USAGE
 script_directory="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=.gaia/scripts/spec/uat-lib.sh
 source "$script_directory/uat-lib.sh"
+# shellcheck source=.gaia/scripts/machine-local-ref-lib.sh
+source "$script_directory/../machine-local-ref-lib.sh"
 
 case "${1:-}" in
   -h | --help)
@@ -59,20 +62,21 @@ if [ ! -d "$scan_directory" ]; then
   exit 2
 fi
 
-id_pattern='(SPEC|UAT|PLAN)-[0-9]+'
 hits=0
 while IFS= read -r file; do
   [ -n "$file" ] || continue
-  path_match=$(printf '%s' "${file#"$scan_directory"/}" | grep -ioE "$id_pattern" | head -n 1)
+  path_match=$(printf '%s\n' "${file#"$scan_directory"/}" | machine_local_ref_files 1 - | head -n 1)
   if [ -n "$path_match" ]; then
-    printf '%s:0: %s\n' "$file" "$path_match"
+    printf '%s:0: %s\n' "$file" "${path_match#*: }"
     hits=$((hits + 1))
   fi
+  # grep -I: a binary file (a screenshot baseline) is not read.
+  grep -qI . "$file" 2>/dev/null || continue
   while IFS= read -r hit; do
     [ -n "$hit" ] || continue
-    printf '%s:%s: %s\n' "$file" "${hit%%:*}" "${hit#*:}"
+    printf '%s\n' "$hit"
     hits=$((hits + 1))
-  done < <(grep -nIioE "$id_pattern" "$file" 2>/dev/null)
+  done < <(machine_local_ref_files 1 "$file")
 done < <(find "$scan_directory" -path "$scan_directory/output" -prune -o -type f -print | LC_ALL=C sort)
 
 [ "$hits" -eq 0 ] || exit 1

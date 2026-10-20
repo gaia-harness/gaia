@@ -12,7 +12,7 @@
 #     "proposed_paths": ["path1", "path2"]
 #   }
 #
-# `ambiguous` covers UAT-003 case (b):
+# `ambiguous` covers a classifier response that is not one clean verdict:
 #   - No `GAIA-VERDICT:` line.
 #   - Multiple `GAIA-VERDICT:` lines.
 #   - A `GAIA-VERDICT:` value outside the closed set.

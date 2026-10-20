@@ -176,7 +176,7 @@ transforms:
           # Identifier fragments inside variable names: uat_id, uats_block,
           # seen_uat_files, --uat-id CLI flag form.
           - "uat[-_]id|uats_block|seen_uat_files"
-          # Frontmatter-style fixture: `uat_id: 'UAT-099'` or `uat_id: UAT-099`.
+          # Frontmatter-style fixture: `uat_id: 'UAT-<n>'` or `uat_id: UAT-<n>`.
           - "uat_id\\s*[:=]\\s*['\"]?UAT-"
 
       # ---- Concrete maintainer SPEC IDs ----
@@ -185,14 +185,6 @@ transforms:
         pattern: "\\bSPEC-[0-9]{3,}\\b"
         scope:
           - "**"
-        path-allowlist:
-          # The wiki-lint playbook's documentation cites concrete-ID
-          # examples that mirror the audit findings it surfaces.
-          - ".claude/skills/gaia/references/wiki/lint.md"
-        line-allowlist:
-          # Illustrative usage in CLI/SPEC docs: `(e.g. SPEC-002)` or
-          # `(e.g. \`SPEC-002\`)` (with optional backticks around the ID).
-          - "e\\.g\\.\\s*`?SPEC-[0-9]{3,}"
 
       # ---- Concrete plan ids ----
       - id: plan-concrete-ids
@@ -201,10 +193,8 @@ transforms:
         scope:
           - "**"
         line-allowlist:
-          # Illustrative usage in docs: `(e.g. SPEC-004 or PLAN-004)`.
-          - "e\\.g\\.[^)]*`?PLAN-[0-9]+"
           # Regex targets that match a plan folder's name, e.g. the
-          # allocator's `s|^PLAN-0*([0-9]+)$|...|` sed expression.
+          # allocator's sed expression that strips a plan id's leading zeros.
           - "\\^PLAN-0\\*"
 
       # ---- This project's own issue and pull request references ----

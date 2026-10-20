@@ -15,7 +15,7 @@ Stay on the main thread when the work is small, tightly iterative (edit-run-fix)
 
 ## Run folder
 
-One per normalized branch key, `branch:` prefix dropped, slashes nesting: `branch:feat/9-sample` uses `.gaia/local/runs/feat/9-sample/`; a detached HEAD uses `.gaia/local/runs/session-<session id>/`. `runs/` is registered in `.gaia/state-registry.json`. It holds:
+One per normalized branch key, `branch:` prefix dropped, slashes nesting: `branch:feat/<n>-<slug>` uses `.gaia/local/runs/feat/<n>-<slug>/`; a detached HEAD uses `.gaia/local/runs/session-<session id>/`. `runs/` is registered in `.gaia/state-registry.json`. It holds:
 
 - `STATE.md`: Facts, a Status checklist recording each dispatch's expected artifact count, and one `NEXT:` line. At most 4 KB, rewritten in place.
 - One JSON artifact per dispatch, named `<role>-<round>-<slug>.json`.

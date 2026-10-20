@@ -94,17 +94,17 @@
 #
 # gaia_branch_spec_number <branch>
 #   Prints the SPEC number a `<type>/spec-<nnn>` or legacy `plan/spec-<nnn>`
-#   branch names, leading zeros stripped (`refactor/spec-005-x` prints 5).
+#   branch names, leading zeros stripped (`refactor/spec-0NN-x` prints `NN`).
 #   Prints nothing otherwise. Returns 0.
 #
 # gaia_branch_plan_number <branch>
 #   Prints the plan number a `<type>/plan-<nnn>` or legacy `plan/plan-<nnn>`
 #   branch names (the worktree spelling included), leading zeros stripped
-#   (`feat/plan-031-x` prints 31). Prints nothing otherwise. Returns 0.
+#   (`feat/plan-0NN-x` prints `NN`). Prints nothing otherwise. Returns 0.
 #
 # gaia_branch_plan_type <branch>
 #   Prints the commit type a type-prefixed plan branch carries (`feat` for
-#   `feat/plan-024-x`). Prints nothing for a legacy `plan/` branch and for every
+#   `feat/plan-NNN-x`). Prints nothing for a legacy `plan/` branch and for every
 #   non-plan branch. Returns 0.
 #
 # gaia_branch_list [directory]
@@ -165,11 +165,11 @@
 #   bash .gaia/scripts/branch-name-lib.sh name update v2.0.0
 #   bash .gaia/scripts/branch-name-lib.sh classify worktree-debt+42-fix
 #   bash .gaia/scripts/branch-name-lib.sh members debt/41-42-batch
-#   bash .gaia/scripts/branch-name-lib.sh name plan spec-005 --type feat --slug cards
+#   bash .gaia/scripts/branch-name-lib.sh name plan spec-NNN --type feat --slug cards
 #   bash .gaia/scripts/branch-name-lib.sh name adhoc --type fix --issue 12 --slug "fix the thing"
-#   bash .gaia/scripts/branch-name-lib.sh spec-number feat/spec-005-cards
-#   bash .gaia/scripts/branch-name-lib.sh plan-number feat/plan-024-cards
-#   bash .gaia/scripts/branch-name-lib.sh plan-type feat/plan-024-cards
+#   bash .gaia/scripts/branch-name-lib.sh spec-number feat/spec-NNN-cards
+#   bash .gaia/scripts/branch-name-lib.sh plan-number feat/plan-NNN-cards
+#   bash .gaia/scripts/branch-name-lib.sh plan-type feat/plan-NNN-cards
 #   bash .gaia/scripts/branch-name-lib.sh list [directory]
 #   bash .gaia/scripts/branch-name-lib.sh validate fix/2450-statusline-nudge
 
