@@ -181,13 +181,7 @@ pnpm install --config.confirm-modules-purge=false
 
 If install fails, stop and report the error.
 
-Then provision Chromium. Stories and hook tests run in headless Chromium, and `pnpm install` installs no browsers, so without this `/update-deps`'s quality gate and Step 7's `pnpm test:ci` fail with `Executable doesn't exist`. Tell the user: "Installing Chromium for the browser tests…" then run:
-
-```bash
-pnpm -C frontend exec playwright install chromium
-```
-
-It installs Chromium alone, into the per-user Playwright cache, without the system libraries `pnpm install:browsers` (`--with-deps`) adds, so it never asks for `sudo`. It is a quick no-op when the matching Chromium is already installed. If it fails, stop and report the error with the command to retry it. On Linux, a later browser launch can still fail with `Host system is missing dependencies`; then tell the user to run `pnpm -C frontend exec playwright install-deps chromium` themselves (it asks for their `sudo` password to install the system libraries) and re-run /gaia-init.
+Then tell the user "Installing Chromium for the browser tests…" and run `pnpm -C frontend exec playwright install chromium`. Stories and hook tests run in headless Chromium and `pnpm install` installs no browsers, so without it `/update-deps`'s quality gate and Step 7's `pnpm test:ci` fail with `Executable doesn't exist`. It installs Chromium alone into the per-user Playwright cache, without the system libraries `pnpm install:browsers` (`--with-deps`) adds, so it never asks for `sudo`, and it is a quick no-op when the matching Chromium is already installed. If it fails, stop and report the error with the command to retry it. On Linux, a later browser launch can still fail with `Host system is missing dependencies`; then tell the user to run `pnpm -C frontend exec playwright install-deps chromium` themselves (it asks for their `sudo` password to install the system libraries) and re-run /gaia-init.
 
 Then run `/update-deps` to bring all packages to their latest compatible versions before continuing. Tell it that `/gaia-init` invoked it: that run resolves every security advisory it can, asks no acceptance question (an advisory it cannot resolve is reported still open), reverts a failing resolution on its own, and cuts no branch and commits nothing, since no remote exists yet to push to; Step 11's init commit carries its changes. If `/update-deps` reports anything as **skipped** with a reason, surface it so the user can investigate, but proceed. Note `/update-deps` runs its own quality gate at the end, if it halts on a quality-gate failure or peer-dep error, stop here and surface the report to the user; do not silently continue.
 
