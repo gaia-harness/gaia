@@ -4,13 +4,13 @@
 
 ## The question
 
-Show the explainer (this block stays English regardless of UI language, it's the canonical contract):
+Show this explainer in the user's language:
 
 > GAIA lets you work on several tasks at once (features, fixes, updates), each in its own copy of your project called a git worktree. Tasks run in parallel without touching each other or your own checkout, so you can keep coding while they run.
 >
 > GAIA is built for this, and it's the fastest way to work. The alternative is one task at a time on a branch in your current checkout: slower, but everything happens in one place.
 
-Then use `AskUserQuestion`, header **`Isolation policy`** (in the user's language), question "How do you want to work: tasks in parallel, or one at a time?", with these three options in this exact order:
+Then use `AskUserQuestion`, header **`Isolation policy`**, question "How do you want to work: tasks in parallel, or one at a time?", with these three options in this exact order, the header, question, labels and descriptions all in the user's language:
 
 - **Always use worktrees (Recommended)**: every task uses its own worktree, so they can always run in parallel.
 - **Prefer worktrees**: GAIA suggests a worktree for each task, or you can choose a branch instead.
@@ -18,8 +18,10 @@ Then use `AskUserQuestion`, header **`Isolation policy`** (in the user's languag
 
 ## The answer
 
-- `Always use worktrees (Recommended)` is `always-worktree`.
-- `Prefer worktrees` is `prefer-worktree`.
-- `Prefer branches` is `prefer-branch`.
+Map the answer by the chosen option's position, never by its label text, which the user saw in their own language:
+
+- The first option, `Always use worktrees (Recommended)`, is `always-worktree`.
+- The second option, `Prefer worktrees`, is `prefer-worktree`.
+- The third option, `Prefer branches`, is `prefer-branch`.
 
 "Other" or a dismissal is no answer.

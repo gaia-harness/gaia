@@ -6,7 +6,7 @@ The value is a committed **recommendation** only, never an enablement: each mach
 
 ## The question
 
-Use AskUserQuestion (in the user's language; this configuration block stays in English):
+Use AskUserQuestion with this question and these options, all in the user's language:
 
 > Recommend Claude Code's OS-level Bash sandbox to your team? Each machine still decides at /setup-gaia; this only records the recommendation.
 >
@@ -17,7 +17,9 @@ List the two options in this exact order.
 
 ## The answer
 
-- `No, don't recommend (Recommended)` is `false`.
-- `Yes, recommend the sandbox` is `true`.
+Map the answer by the chosen option's position, never by its label text, which the user saw in their own language:
+
+- The first option, `No, don't recommend (Recommended)`, is `false`.
+- The second option, `Yes, recommend the sandbox`, is `true`.
 
 "Other" or a dismissal is no answer.
