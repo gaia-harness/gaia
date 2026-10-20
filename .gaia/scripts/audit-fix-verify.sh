@@ -153,6 +153,8 @@ ENFORCEMENT_PATHS=(
   '.gaia/statusline/gaia-statusline.sh'       # writes the context reading the gate trusts
   '.gaia/statusline/context-reading.sh'       # the context reading writer
   '.gaia/statusline/gaia-statusline-left.sh'  # statusline left side, same writer chain
+  '.gaia/statusline/gaia-statusline-right.sh' # statusline right side, same writer chain
+  '.gaia/statusline/setup-owed.sh'            # sourced by the right side, same writer chain
 )
 
 # Files the baseline pins into the run folder: this script and every library it
