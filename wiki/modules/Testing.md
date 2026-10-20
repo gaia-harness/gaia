@@ -37,7 +37,7 @@ One config, `frontend/vitest.config.ts`, defines three projects: `node` for pure
 
 ### Setup prerequisite
 
-Run `pnpm install:browsers` once per machine. It installs every Playwright browser with its OS dependencies, which local `pnpm pw` uses too. Vitest's browser projects need Chromium from it; a missing browser fails the run with an install command rather than skipping the tests.
+Vitest's browser projects need Chromium, and `pnpm install` installs no browsers. `/gaia-init` and `/setup-gaia` install Chromium alone (`playwright install chromium`, no OS dependencies, so no `sudo`). `pnpm install:browsers` installs every Playwright browser with its OS dependencies, which local `pnpm pw` uses too; run it once per machine outside those commands. A missing browser fails the run with an install command rather than skipping the tests.
 
 ### Accessibility coverage
 

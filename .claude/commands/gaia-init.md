@@ -181,6 +181,14 @@ pnpm install --config.confirm-modules-purge=false
 
 If install fails, stop and report the error.
 
+Then provision Chromium. Stories and hook tests run in headless Chromium, and `pnpm install` installs no browsers, so without this `/update-deps`'s quality gate and Step 7's `pnpm test:ci` fail with `Executable doesn't exist`. Tell the user: "Installing Chromium for the browser tests…" then run:
+
+```bash
+pnpm -C frontend exec playwright install chromium
+```
+
+It installs Chromium alone, into the per-user Playwright cache, without the system libraries `pnpm install:browsers` (`--with-deps`) adds, so it never asks for `sudo`. It is a quick no-op when the matching Chromium is already installed. If it fails, stop and report the error with the command to retry it. On Linux, a later browser launch can still fail with `Host system is missing dependencies`; then tell the user to run `pnpm -C frontend exec playwright install-deps chromium` themselves (it asks for their `sudo` password to install the system libraries) and re-run /gaia-init.
+
 Then run `/update-deps` to bring all packages to their latest compatible versions before continuing. Tell it that `/gaia-init` invoked it: that run resolves every security advisory it can, asks no acceptance question (an advisory it cannot resolve is reported still open), reverts a failing resolution on its own, and cuts no branch and commits nothing, since no remote exists yet to push to; Step 11's init commit carries its changes. If `/update-deps` reports anything as **skipped** with a reason, surface it so the user can investigate, but proceed. Note `/update-deps` runs its own quality gate at the end, if it halts on a quality-gate failure or peer-dep error, stop here and surface the report to the user; do not silently continue.
 
 After `/update-deps` returns, and before Step 2, refresh the statusline's update-check cache. The init-invoked run cuts no branch, so it never reaches the refresh `/update-deps` runs at branch creation, and the cache would otherwise keep showing the bumps just applied as outdated until its TTL expires:
@@ -370,10 +378,10 @@ If this exits non-zero, surface the structured error verbatim and stop.
 
 ## Step 7: Verify the build
 
-Run sequentially from the repository root, stopping at the first failure (the root scripts proxy to the `frontend` package):
+Run sequentially from the repository root, stopping at the first failure (the root scripts proxy to the `frontend` package). The Chromium install comes first again because `/update-deps` may have bumped Playwright, which needs its own Chromium build; when nothing changed it is a no-op:
 
 ```bash
-pnpm typecheck && pnpm lint && pnpm test:ci && pnpm build
+pnpm -C frontend exec playwright install chromium && pnpm typecheck && pnpm lint && pnpm test:ci && pnpm build
 ```
 
 Fix any issues before moving on.

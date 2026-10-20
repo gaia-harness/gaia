@@ -57,11 +57,19 @@ In a main checkout this is a no-op (prints `not a linked worktree`). In a linked
 
 The script always exits 0, so read its output: if it prints a `failed:` line (e.g. Windows symlink permission failure), HALT and surface that line verbatim. The user must fix the underlying issue (typically: enable Windows Developer Mode) and re-run `/setup-gaia`.
 
-### 0b. Ensure pnpm + node_modules
+### 0b. Ensure pnpm, node_modules and Chromium
 
-Tell the user: "Checking pnpm + node_modules…"
+Tell the user: "Checking pnpm, node_modules and Chromium…"
 
 If `corepack` is available, run `corepack enable pnpm`. Otherwise `npm install -g pnpm`. If `node_modules/` does not exist at the project root, run `pnpm install`. `pnpm install` is fast on a clean clone and fast-no-op when up to date.
+
+Then provision Chromium, on every invocation. Stories and hook tests run in headless Chromium and `pnpm install` installs no browsers, so a fresh clone without this fails its first `pnpm test` and its first commit (the pre-commit hook runs Vitest). Run:
+
+```bash
+pnpm -C frontend exec playwright install chromium
+```
+
+It installs Chromium alone into the per-user Playwright cache, without the system libraries `pnpm install:browsers` (`--with-deps`) adds, so it never asks for `sudo`, and it is a quick no-op when the matching Chromium is already installed. If it fails, HALT and surface the error with the command to retry it. On Linux, a browser launch can still fail with `Host system is missing dependencies`; then tell the user to run `pnpm -C frontend exec playwright install-deps chromium` themselves (it asks for their `sudo` password to install the system libraries).
 
 ### 0c. GitHub CLI prerequisites (advisory)
 

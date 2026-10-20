@@ -148,4 +148,4 @@ pnpm install:browsers  # provision every browser + OS deps (run once locally; Vi
 
 - `@vitest/browser-playwright`: Vitest's browser provider reuses the Playwright browsers `pnpm install:browsers` provisions, so the `browser` and `storybook` Vitest projects run in the same Chromium ([[Stories as Tests]])
 - Playwright lint rules come from `eslint-plugin-playwright`, supplied transitively by the shared `@gaia-react/lint` config (spread as `...lint.playwright` in `frontend/eslint.config.mjs`) rather than declared directly here.
-- `pnpm install:browsers` runs `playwright install --with-deps` to provision browsers; local developers run it on demand and CI runs it in a dedicated workflow step
+- `pnpm install:browsers` runs `playwright install --with-deps` to provision browsers; local developers run it on demand and CI runs it in a dedicated workflow step. `/gaia-init` and `/setup-gaia` install Chromium alone (`playwright install chromium`, no OS dependencies, so no `sudo`), enough for the Vitest browser projects
