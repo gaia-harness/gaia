@@ -107,7 +107,8 @@ rm -f "$draft" "$cache_directory/gate1-$spec_id.json" "$cache_directory/spec-ses
 rm -rf "$cache_directory/audit-$spec_id"
 bash "$script_directory/spec-session-lock.sh" release "$repo_root" "$spec_id" >/dev/null 2>&1 || true
 
-main_root="${spec_folder%/.notebook/specs/"$spec_id"}"
+# shellcheck source=.gaia/scripts/main-root-lib.sh
+main_root="$(. "$scripts_root/main-root-lib.sh" && gaia_resolve_main_root "$repo_root" 2>/dev/null)" || main_root="$repo_root"
 bash "$scripts_root/usage.sh" record "spec:$spec_id" --workflow gaia-spec --quiet --main-root "$main_root" >/dev/null \
   || skipped "usage record" "usage.sh named the cause above"
 bash "$scripts_root/usage.sh" lineage "$spec_path" --main-root "$main_root" >/dev/null \
