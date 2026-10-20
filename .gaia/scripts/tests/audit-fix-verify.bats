@@ -322,7 +322,7 @@ spec093_enforcement_paths() {
     '.claude/agents/audit-loop-unit.md' \
     '.gaia/statusline/gaia-statusline.sh' \
     '.gaia/statusline/context-reading.sh' \
-    '.gaia/statusline/left-side.sh'
+    '.gaia/statusline/gaia-statusline-left.sh'
 }
 
 @test "the enforcement set lists the local settings file" {

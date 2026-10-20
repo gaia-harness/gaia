@@ -2,7 +2,7 @@
 #
 # Default left side of the GAIA statusline, used only when the user has no
 # global `statusLine.command` of their own. Sourced by gaia-statusline.sh as
-# "$GAIA_DIRECTORY/statusline/left-side.sh"; defines one function and runs nothing at
+# "$GAIA_DIRECTORY/statusline/gaia-statusline-left.sh"; defines one function and runs nothing at
 # source time.
 #
 # Shape: project | branch | model (effort) | context bar. The project is the

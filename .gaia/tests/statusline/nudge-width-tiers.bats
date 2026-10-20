@@ -30,6 +30,7 @@ setup() {
   git -C "$MAIN" config commit.gpgsign false
   mkdir -p "$MAIN/.gaia/statusline" "$MAIN/.gaia/local/cache/shared"
   cp "$STATUSLINE_SOURCE/gaia-statusline.sh" "$MAIN/.gaia/statusline/gaia-statusline.sh"
+  cp "$STATUSLINE_SOURCE/gaia-statusline-right.sh" "$MAIN/.gaia/statusline/gaia-statusline-right.sh"
   echo "x" > "$MAIN/README.md"
   git -C "$MAIN" add -A
   git -C "$MAIN" commit --quiet -m "init"
