@@ -2,8 +2,8 @@
 
 # Doc pins for closed-set decision prompts (.claude/rules/user-questions.md):
 # each converted /gaia-spec and /gaia-plan site asks through AskUserQuestion and
-# never says "plain prompt" again, every review or audit finding prompt keeps
-# its batching sentence, and no paragraph anywhere in the swept trees sends a
+# never says "plain prompt" again, every review or audit finding list is one
+# accept-or-revise question rather than one question per finding, and no paragraph anywhere in the swept trees sends a
 # question to a plain prompt without saying why its answer is open-ended. Each
 # guard runs once on the real tree (must pass) and once on a mutated scratch
 # copy (must fail).
@@ -13,24 +13,23 @@
 bats_require_minimum_version 1.5.0
 
 REFERENCES=.claude/skills/gaia/references
-BATCHING_SENTENCE='up to 4 questions per `AskUserQuestion` call'
-UNMIXED_SENTENCE='Never mix recommendations in one call'
+REVIEW_OPTION='Accept all as recommended (Recommended)'
+PER_FINDING_ERE='question per finding|up to 4 questions per `AskUserQuestion` call'
 
-# One site per row: file|start ERE|end ERE|converted|batches|unmixed. A site runs from
+# One site per row: file|start ERE|end ERE|converted|review. A site runs from
 # its start line through the line before the next end match. A converted site
-# asks through AskUserQuestion and never says "plain prompt"; a batching site
-# carries the batching sentence; an unmixed site, a finding menu whose
-# recommended option can differ per finding, never mixes recommendations in
-# one call. Hard constraint 3 batches but is not
-# converted: it still sends open-ended clarify questions to a plain prompt.
+# asks through AskUserQuestion and never says "plain prompt"; a review site, a
+# list of findings each carrying its own recommendation, offers the accept-all
+# option and never asks one question per finding. Hard constraint 3 reviews but
+# is not converted: it still sends open-ended clarify questions to a plain prompt.
 SITES=(
-  "$REFERENCES/spec.md|^### 4\. Gate 1|^### 5\.|yes|no|no"
-  "$REFERENCES/spec.md|^### 8\. Gate 2|^### 9\.|yes|no|no"
-  "$REFERENCES/spec.md|^3\. \*\*One question at a time|^4\. \*\*Two-gate|no|yes|no"
-  "$REFERENCES/spec/self-review-dispatch.md|^## 6b\.|^## 6c\.|yes|yes|yes"
-  "$REFERENCES/spec/audit.md|^\*\*Interactive\.\*\*|^$|yes|yes|yes"
-  "$REFERENCES/plan/decomposition-audit.md|^\*\*Interactive:\*\*|^$|yes|yes|yes"
-  "$REFERENCES/spec/clarify-loop.md|^- \*\*Error|^- \*\*Contradictory|yes|no|no"
+  "$REFERENCES/spec.md|^### 4\. Gate 1|^### 5\.|yes|no"
+  "$REFERENCES/spec.md|^### 8\. Gate 2|^### 9\.|yes|no"
+  "$REFERENCES/spec.md|^3\. \*\*One question at a time|^4\. \*\*Two-gate|no|yes"
+  "$REFERENCES/spec/self-review-dispatch.md|^## 6b\.|^## 6c\.|yes|yes"
+  "$REFERENCES/spec/audit.md|^\*\*Interactive\.\*\*|^$|yes|yes"
+  "$REFERENCES/plan/decomposition-audit.md|^\*\*Interactive:\*\*|^$|yes|yes"
+  "$REFERENCES/spec/clarify-loop.md|^- \*\*Error|^- \*\*Contradictory|yes|no"
 )
 
 # The trees the user-questions rule governs, minus the vendored playwright-cli
@@ -75,9 +74,9 @@ site_text() {
 # sites_ok <root>: checks every site under <root>; prints each failure on
 # stderr and returns 1 when any site fails.
 sites_ok() {
-  local root="$1" row file start end converted batching unmixed text failed=0 checked=0
+  local root="$1" row file start end converted review text failed=0 checked=0
   for row in "${SITES[@]}"; do
-    IFS='|' read -r file start end converted batching unmixed <<<"$row"
+    IFS='|' read -r file start end converted review <<<"$row"
     text="$(site_text "$root/$file" "$start" "$end")"
     if [ -z "$text" ]; then
       echo "site not found: $file /$start/" >&2
@@ -93,12 +92,12 @@ sites_ok() {
       echo "no AskUserQuestion: $file /$start/" >&2
       failed=1
     fi
-    if [ "$batching" = yes ] && ! grep -qF -- "$BATCHING_SENTENCE" <<<"$text"; then
-      echo "lost the batching sentence: $file /$start/" >&2
+    if [ "$review" = yes ] && ! grep -qF -- "$REVIEW_OPTION" <<<"$text"; then
+      echo "lost the accept-all option: $file /$start/" >&2
       failed=1
     fi
-    if [ "$unmixed" = yes ] && ! grep -qF -- "$UNMIXED_SENTENCE" <<<"$text"; then
-      echo "mixes recommendations: $file /$start/" >&2
+    if [ "$review" = yes ] && grep -qE -- "$PER_FINDING_ERE" <<<"$text"; then
+      echo "asks per finding: $file /$start/" >&2
       failed=1
     fi
   done
@@ -172,7 +171,7 @@ copy_tree_into_scratch() {
   done
 }
 
-@test "real tree: every converted site asks through AskUserQuestion, and review prompts batch" {
+@test "real tree: every converted site asks through AskUserQuestion, and review lists ask once" {
   sites_ok "$REPO_ROOT"
 }
 
@@ -192,24 +191,24 @@ copy_tree_into_scratch() {
   [[ "$output" == *"says plain prompt"* ]]
 }
 
-@test "red twin: a finding prompt that loses its batching sentence fails" {
+@test "red twin: a review list that loses its accept-all option fails" {
   copy_tree_into_scratch
   local file="$SCRATCH_ROOT/$REFERENCES/spec/audit.md"
-  sed 's/up to 4 questions per `AskUserQuestion` call/one question per call/' "$file" >"$file.new"
+  sed 's/Accept all as recommended (Recommended)/Apply the fix (Recommended)/' "$file" >"$file.new"
   mv "$file.new" "$file"
   run sites_ok "$SCRATCH_ROOT"
   [ "$status" -eq 1 ]
-  [[ "$output" == *"lost the batching sentence"* ]]
+  [[ "$output" == *"lost the accept-all option"* ]]
 }
 
-@test "red twin: a finding menu that drops the unmixed rule fails" {
+@test "red twin: a review list that goes back to one question per finding fails" {
   copy_tree_into_scratch
   local file="$SCRATCH_ROOT/$REFERENCES/spec/self-review-dispatch.md"
-  sed 's/Never mix recommendations in one call/Mix freely/' "$file" >"$file.new"
+  awk '{ print } /^## 6b\./ { print "Ask one question per finding." }' "$file" >"$file.new"
   mv "$file.new" "$file"
   run sites_ok "$SCRATCH_ROOT"
   [ "$status" -eq 1 ]
-  [[ "$output" == *"mixes recommendations"* ]]
+  [[ "$output" == *"asks per finding"* ]]
 }
 
 @test "red twin: a site whose heading moved fails as not found" {
