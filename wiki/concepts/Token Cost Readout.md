@@ -3,7 +3,7 @@ type: concept
 title: Token Cost Readout
 status: active
 created: 2026-07-04
-updated: 2026-10-09
+updated: 2026-10-21
 tags: [concept, cost, token-accounting]
 ---
 
@@ -60,7 +60,7 @@ An adopter who needs a price the distributed table lacks or gets wrong writes `.
 Cost output has one shape rule. One line item prints as one plain line, built by one formatter so each reads the same:
 
 ```
-Cost: 5.2M tokens, $3.41, 6m39s
+Cost: 0.4M tokens, $0.40, 2h1m0s (2m0s active)
 ```
 
 Two or more line items print as a box, in a fenced `text` code block when a skill relays it (a bare box is reflowed by the Markdown renderer and loses its alignment):
@@ -68,23 +68,36 @@ Two or more line items print as a box, in a fenced `text` code block when a skil
 ```text
 SPEC-NNN Cost
 
-+---------------------------------------+
-|  Spec: 40.9M tokens, $26.15, 31m52s   |
-|  Plan: 46.7M tokens, $23.09, 48m19s   |
-+---------------------------------------+
-| Total: 87.6M tokens, $49.24, 1h20m14s |
-+---------------------------------------+
++---------------------------------------------------------+
+|       Spec: 1.0M tokens, $1.00, 30m0s (10m0s active)    |
+|       Plan: 2.0M tokens, $2.00, 28m0s (10m0s active)    |
+| Other work: 3.0M tokens, $3.00, 1h45m0s (10m0s+ active) |
++---------------------------------------------------------+
+|      Total: 6.0M tokens, $6.00, 2h0m0s (25m0s+ active)  |
++---------------------------------------------------------+
+
+Note: Some of this spend predates active-time tracking, so the active time is a minimum.
 ```
 
-The renderer, never the model, pads the box: one space between each border and its content, labels right-aligned to the colon at the width of the longest label present (`Execute` widens it, `Total` sets it otherwise), and every row ending in one column. The box is plain ASCII, so a byte count is its width on screen. Each row is rounded once to the 0.1M tokens and the cent it shows and the Total row adds those rounded rows, so the column always sums; the elapsed time of each row is its own interval and the Total spans the first to the last spend.
+The renderer, never the model, pads the box: one space between each border and its content, labels right-aligned to the colon at the width of the longest label present (`Execute` widens it, `Total` sets it otherwise), and every row ending in one column. The box is plain ASCII, so a byte count is its width on screen. Each row is rounded once to the 0.1M tokens and the cent it shows and the Total row adds those rounded rows, so the column always sums; the elapsed time of each row is its own interval and the Total spans the first to the last spend. The Total's active figure is the union of the root's active windows clipped to the Total's span, never the sum of the row figures, so work two rows share counts once (the three rows above add to more than 25m0s).
 
-`<tokens>` abbreviates the distinct-segment token count to millions with one decimal. `<price>` renders `$X.XX`, or the literal `cost unavailable` when nothing could be priced. `<time>` renders `<N>h<M>m<S>s` with leading zero units dropped. A figure is never fabricated: an unpriceable dollar amount always says so.
+`<tokens>` abbreviates the distinct-segment token count to millions with one decimal. `<price>` renders `$X.XX`, or the literal `cost unavailable` when nothing could be priced. `<time>` renders `<N>h<M>m<S>s` with leading zero units dropped, and is followed by the active figure `(<dur> active)` in the same format when active time is known, or `(<dur>+ active)` when some of the spend predates active-time tracking and the figure is a minimum. When no spend carries activity facts the figure is omitted and the line reads as a wall-clock-only line. A figure is never fabricated: an unpriceable dollar amount always says so.
 
-A qualifying condition prints as one plain `Note:` sentence under the figures, never as a parenthesised suffix. Each condition has one wording, defined once in the render library: usage still being saved when the figures were read ("Some usage was still being saved, so these figures may be low." plus the command that reads the final numbers), a model with no price (the minimum sentence above), and a recovery record that counts one session only.
+A qualifying condition prints as one plain `Note:` sentence under the figures, never as a parenthesised suffix. Each condition has one wording, defined once in the render library: usage still being saved when the figures were read ("Some usage was still being saved, so these figures may be low." plus the command that reads the final numbers), a model with no price (the minimum sentence above), a recovery record that counts one session only, and an active figure that is a minimum ("Some of this spend predates active-time tracking, so the active time is a minimum.", printed after the other Notes wherever a `+` figure prints). The parenthesised active figure is a figure, not a qualifier: it never replaces a Note, and the `+` is the only mark of a minimum in the line itself. The per-PR block announces the same condition through its `  ! lower bound: some spend predates active-time tracking` marker instead of a Note.
 
 - **`usage.sh record`** prints the plain line for the run it closes, with no breakdown: one run is one stage. Its recorded interval is what it prices ([[Usage Ledger]], "Recording a run"). The maintenance commands relay it verbatim, with its `Note:` lines, at the end of their report. `--quiet` records and prints nothing: `/gaia-spec` and `/gaia-plan` use it so the user sees cost once.
 - **`usage.sh initiative <ref> --box`** prints the cost of a root: one row per workflow run closed under it (`Spec`, `Plan`), an `Execute` row for the branch and pull-request spend under it, an `Other work` row for anything else, and `Total`. `SPEC-NNN` and `PLAN-NNN` work without their `spec:` and `plan:` prefix. Before it reads, it waits (up to `GAIA_USAGE_BOX_FLUSH_CAP_SECONDS`, 45) for the session's flusher, so the figures are complete in the common case. One row prints as the plain line. The end of `/gaia-spec` and `/gaia-plan` and the plan orchestrator's full-cycle readout use it.
 - **`usage.sh initiative <ref> --line`** prints the plain full-cycle line for a root, with no breakdown.
+
+## Active time
+
+The wall-clock time of a row says how long it was open, not how long work ran. The active figure counts the time Claude worked or the maintainer had a turn running:
+
+- **Interactive turns.** A turn runs from the prompt that opened it to the latest work entry before the next prompt, minus the recorded waits on questions and plan approvals (the time the maintainer spent answering). When the transcript carries a turn-length entry for the turn, the shorter of the two caps it; a turn-length entry never extends a turn.
+- **Sub-agent and headless runs.** One window from the first to the last work entry of the run.
+- **Per row.** The windows of every session that spent on the row are attributed the way the spend is, clipped to the row's span, and unioned, so overlapping sessions and parallel sub-agents count once.
+
+Known limits. A turn the maintainer left open without a recorded wait (walking away mid-turn, a long-running tool, machine sleep inside a turn) counts as wall time inside that turn's work span. A question asked outside the question and plan-approval tools is not a recorded wait. Spend captured before activity facts existed has no windows: beside covered spend it makes the figure a minimum, and with no covered spend at all the readout prints no active figure. [[Usage Ledger]] holds the facts and the coverage rule.
 
 ## Per-PR and initiative readouts
 

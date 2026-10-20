@@ -3,7 +3,7 @@ type: concept
 title: Usage Ledger
 status: active
 created: 2026-09-30
-updated: 2026-10-18
+updated: 2026-10-21
 tags: [concept, cost, usage, data-contract]
 ---
 
@@ -19,7 +19,7 @@ Everything lives under `.gaia/local/telemetry/` of the main checkout, resolved t
 
 | File | Holds |
 | --- | --- |
-| `usage.jsonl` | `segment`, `binding` (start, close, research, declare), and `cursor` rows |
+| `usage.jsonl` | `segment`, `binding` (start, close, research, declare), `cursor`, and `activity` rows. Segment and cursor rows carry the optional `act` field (activity facts); readers honor `activity` rows, and no writer ships. |
 | `links.jsonl` | `edge`, `unlink`, and `merge` rows |
 | `usage-cursors.json` | A regenerable cache of the latest cursor per transcript file. Only the flusher writes it. |
 | `token-rates.override.json` | The optional, hand-written price override; see [[Token Cost Readout]]. GAIA never writes it. |
@@ -30,7 +30,13 @@ Row shapes, abridged:
 ```json
 {"schema_version":1,"kind":"segment","key":"branch:fix/foo","session_id":"<sid>","inherit":false,
  "first_ts":"<iso>","last_ts":"<iso>","messages":12,
- "by_model":{"claude-opus-5-5":{"fresh_input":0,"cache_write_5m":0,"cache_write_1h":0,"cache_read":0,"output":0}}}
+ "by_model":{"claude-opus-5-5":{"fresh_input":0,"cache_write_5m":0,"cache_write_1h":0,"cache_read":0,"output":0}},
+ "agent_type":"main","act":{"b":<epoch ms>,"o":[...],"c":[[<start s>,<length s>]]}}
+
+{"schema_version":1,"kind":"cursor","act":{"b":<epoch ms>,"o":[...]},"session_id":"<sid>",...}
+
+{"schema_version":1,"kind":"activity","session_id":"<sid>","agent_id":"<id>","cover":["<iso>","<iso>"],
+ "act":{"b":<epoch ms>,"o":[...]}}
 
 {"schema_version":1,"kind":"binding","type":"research","session_id":"<sid>","ts":"<iso>",
  "ref":"research:<slug>","source":"transcript"}
@@ -44,6 +50,18 @@ Row shapes, abridged:
 ```
 
 A segment's `by_model` is the five-bucket shape the pricing lib reprices (`fresh_input`, `cache_write_5m`, `cache_write_1h`, `cache_read`, `output`). A `segment` carries raw facts only: no attribution is stored on it. A `cursor` row records how far a transcript file has been read and is appended in the same write as the rows it accounts for.
+
+**Activity facts.** The `act` field on a `segment` or `cursor` row holds the raw facts the active-time figure is read from ([[Token Cost Readout]], "Active time"). A main transcript range that holds facts writes them once, on the range's first segment row, or on its cursor row when the range writes no segment; every other segment row of the range, and every sidecar segment, carries `"act":0`. The key's presence, with an object or `0`, marks the segment as covered. A reader builds the busy windows from the facts at read time, attributes them to rows through the same resolve as spend, and clips them to each row's span. Facts are raw and idempotent at read: duplicates across rows collapse by value or id, so a re-read never counts twice. The object's keys, all optional except `b`:
+
+- `b`: the earliest fact timestamp of the range, in epoch milliseconds. Every other time is a whole-second offset from it.
+- `e`: the entrypoint of the first line carrying one (`cli`, `sdk-cli`); `sdk-cli` marks a headless run, and a missing or unknown value reads as interactive.
+- `o`: turn openers (a typed prompt or a dequeued notification), delta-encoded: the first element is the first opener's offset and each later element is the gap from the one before.
+- `c`: work chunks, the span of assistant and tool-result entries between consecutive openers, as `[start, length]`.
+- `w`: completed waits on the maintainer (a question or plan-approval tool call to its result), as `[start, length]`.
+- `q` and `r`: a wait's start (`[tool_use_id, start]`) whose result lies outside the range, and a tool result (`[tool_use_id, end]`) whose call lies outside it; a reader joins them across rows by id.
+- `d`: turn-length entries as `[end, duration]` in whole seconds.
+
+A segment is covered when it carries `act`, or when an `activity` row of the same session and source (the sidecar's `agent_id`, else the main thread) covers its `first_ts` to `last_ts`. Coverage is decided by the data, never by a date. A row holding both covered and uncovered spend prints its active figure as a minimum; a row with no covered spend prints no active figure.
 
 **Agent fields.** Every segment carries `agent_type`: `main` for the main transcript, the `agentType` string of the `agent-<id>.meta.json` beside a sub-agent sidecar, or `unknown` when that file is missing or lacks it. A sidecar's segment also carries `agent_id`, the `<id>` of its `agent-<id>.jsonl` file name. A segment written before these fields existed has no `agent_type` and is read as **unrecorded**: the Code Audit Team sum excludes it and the lower-bound marker counts it. Nothing backfills older segments.
 
@@ -106,7 +124,7 @@ A SPEC's `lineage:` frontmatter is the authoring-time link: `usage.sh lineage <p
 
 `bash .gaia/scripts/usage.sh record <ref> --workflow <w> [--pr <N>] [--issue <N>] [--start <iso>] [--json] [--quiet]` ends a `/gaia-spec`, `/gaia-plan`, or maintenance-command run and prints its Cost line. `<ref>` is `spec:SPEC-NNN` (workflow `gaia-spec` or `gaia-plan`), `plan:PLAN-NNN` (`gaia-plan`), or `command:<workflow>` for a maintenance command, which is written under a unique run ref `command:<workflow>-<UTC stamp>-<4 hex>`. `--pr` and `--issue` are accepted on a command ref only and write an edge from that number to the run ref. The workflow set is `GAIA_USAGE_START_SET` in `.gaia/scripts/usage-lib.sh`, which the flusher's start detection reads too.
 
-`record` flushes the current session (`CLAUDE_CODE_SESSION_ID`) whole under `GAIA_USAGE_BOX_FLUSH_CAP_SECONDS`, the same wait and cap the box readout uses (a workflow close flushes every sidecar the run dispatched, which outlasts the merge hook's shorter cap), then appends the close binding under the ledger lock, deciding the pairing with the lock held so two closes never claim one start. The first stdout line is `Cost: <tokens> tokens, $<dollars>, <elapsed>`, followed by one `Note:` line when the cap cut the flush, when a model is unpriced, or when a recovery record counts one session only (the wording is in [[Token Cost Readout]]); `--json` prints `{"tokens","dollars","elapsed_seconds"}` instead and `--quiet` prints nothing on success. A box readout of the same run is `usage.sh initiative <SPEC-NNN> --box`. Rendering is bounded by `GAIA_USAGE_RENDER_CAP_SECONDS`; past it a `! readout timed out` marker replaces the line, after the close is already written.
+`record` flushes the current session (`CLAUDE_CODE_SESSION_ID`) whole under `GAIA_USAGE_BOX_FLUSH_CAP_SECONDS`, the same wait and cap the box readout uses (a workflow close flushes every sidecar the run dispatched, which outlasts the merge hook's shorter cap), then appends the close binding under the ledger lock, deciding the pairing with the lock held so two closes never claim one start. The first stdout line is `Cost: <tokens> tokens, $<dollars>, <elapsed> (<active> active)`, the parenthesis omitted when no spend is covered by activity facts and `<active>+` when some of it is not, followed by `Note:` lines when the cap cut the flush, when a model is unpriced, when a recovery record counts one session only, or when the active figure is a minimum (the wording is in [[Token Cost Readout]]). The run's active figure is the union of every member session's windows clipped to the run's span, floored once. `active_seconds` is an integer, or `null` when no spend is covered; `active_lower_bound` is `true` when the figure is a minimum; `--json` prints `{"tokens","dollars","elapsed_seconds","active_seconds","active_lower_bound"}` instead and `--quiet` prints nothing on success. A box readout of the same run is `usage.sh initiative <SPEC-NNN> --box`. Rendering is bounded by `GAIA_USAGE_RENDER_CAP_SECONDS`; past it a `! readout timed out` marker replaces the line, after the close is already written.
 
 | Exit | Meaning |
 | --- | --- |
@@ -130,9 +148,9 @@ Every close row `record` writes, the recording session's and each bound session'
 
 ## Readouts and markers
 
-- **Per-PR block.** A `gh pr merge` run as a Bash tool call prints the cost of the merged branch's spend in its merge window, in the shape every cost readout uses ([[Token Cost Readout]], "The Cost line and the cost box"): a box titled `PR #<N> Cost` with an `Execute` row, an `Audit` row, and `Total`, or one plain Cost line when only one of the two spent. Each row's time runs from its first to its last spend. The markers below follow it. The hook reads the pull request once with `gh pr view` to confirm the merge, and records the merge boundary only when GitHub says `MERGED`. `usage.sh pr <N> --json` prints the figures behind the block unrounded: tokens by bucket, sessions, span, the merge window, the coverage start, and the to-date spend of each root the branch sits under.
+- **Per-PR block.** A `gh pr merge` run as a Bash tool call prints the cost of the merged branch's spend in its merge window, in the shape every cost readout uses ([[Token Cost Readout]], "The Cost line and the cost box"): a box titled `PR #<N> Cost` with an `Execute` row, an `Audit` row, and `Total`, or one plain Cost line when only one of the two spent. Each row's time runs from its first to its last spend, and carries the row's active figure beside it. A minimum is announced by the `lower bound: some spend predates active-time tracking` marker below, never by a `Note:` line. The markers below follow it. The hook reads the pull request once with `gh pr view` to confirm the merge, and records the merge boundary only when GitHub says `MERGED`. `usage.sh pr <N> --json` prints the figures behind the block unrounded: tokens by bucket, sessions, span, `active_seconds` and `active_lower_bound` (also on `audit` and `audit.rest`), the merge window, the coverage start, and the to-date spend of each root the branch sits under.
 - **Code Audit Team row.** The `Audit` row sums the branch's in-window segments whose `agent_type` is a roster member, and `Execute` is the rest of the window, so the two add up to the PR. The roster is the `auditors:` list of `.gaia/audit-ci.yml`, read through `audit_roster_member_names`; when it is unreadable there is no split, the PR prints as one Cost line, and `! audit line unavailable: no auditors roster in .gaia/audit-ci.yml` follows it. Segments without `agent_type` land in `Execute` and are counted in `! lower bound: <n> segment(s) predate agent fields`.
-- **Initiative readout.** `usage.sh initiative <ref>` prints the spend of each node under each root of a ref. With `--line` it treats `<ref>` itself as the root and prints one plain full-cycle line, `Cost: <tokens> tokens, $<dollars>, <elapsed>`, with a `Note:` line under it when a model is unpriced; `--json` (with `--line` or `--box`) prints the figures as JSON. With `--box` it prints the cost box of the root: a row per workflow run closed under it, `Execute` for its branch and pull-request spend, and `Total` ([[Token Cost Readout]], "The Cost line and the cost box"). A bare `SPEC-NNN` or `PLAN-NNN` is accepted for `<ref>`. The plan orchestrator prints the box for the SPEC or plan root before it merges.
+- **Initiative readout.** `usage.sh initiative <ref>` prints the spend of each node under each root of a ref. With `--line` it treats `<ref>` itself as the root and prints one plain full-cycle line, `Cost: <tokens> tokens, $<dollars>, <elapsed> (<active> active)`, with `Note:` lines under it when a model is unpriced or the active figure is a minimum; `--json` (with `--line` or `--box`) prints the figures as JSON, and every object carrying `elapsed_seconds` carries `active_seconds` and `active_lower_bound` beside it. The Total's active figure is the union over the root, never the sum of its rows. With `--box` it prints the cost box of the root: a row per workflow run closed under it, `Execute` for its branch and pull-request spend, and `Total` ([[Token Cost Readout]], "The Cost line and the cost box"). A bare `SPEC-NNN` or `PLAN-NNN` is accepted for `<ref>`. The plan orchestrator prints the box for the SPEC or plan root before it merges.
 - **Reconcile.** `usage.sh reconcile` prints attributed against unattributed spend.
 - **Coverage start.** The initiative and reconcile readouts, and a per-PR readout whose branch is unresolved, print the earliest recorded timestamp; `usage.sh pr --json` carries it as `coverage`. Spend before it was never captured.
 - **Dollars** are repriced at read time from the raw buckets through the shared pricing lib (see [[Token Cost Readout]]), so a later rate-table change moves the figure.
@@ -150,6 +168,7 @@ A readout never shows a silently lower figure. Each of these markers appears whe
 | `lower bound: unpriced model(s) <names>` | The rate table had no window for a model |
 | `rate override ignored (unparseable): <path>` | The local price override exists but is not a JSON object with a `models` object; the distributed table prices alone |
 | `lower bound: <n> segment(s) predate agent fields` | The `Audit` row cannot place those segments |
+| `lower bound: some spend predates active-time tracking` | The per-PR block's active figure is a minimum: some of its spend carries no activity facts. The line, box and record readouts print the matching `Note:` instead. |
 | `readout timed out after <n>s; rerun: ...` | The merge-time render hit its cap |
 
 The merge hook bounds itself. `GAIA_USAGE_MERGE_CAP_SECONDS` caps the flush and the `gh` read, and `GAIA_USAGE_RENDER_CAP_SECONDS` caps the render; the defaults and their measurements are in the header of `.gaia/scripts/usage-merge.sh`. When `usage-merge.sh` exits non-zero the hook prints `[PR cost] unavailable: ...` with the rerun command rather than going quiet. `GAIA_USAGE_HOOKS_DISABLE=1` turns the merge hook's usage work off, which the suites that run the real hooks use.
