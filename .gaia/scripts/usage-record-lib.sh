@@ -295,10 +295,14 @@ _record_run_view() {
   while IFS=$'\t' read -r member_session member_start; do
     gaia_usage_interval_view "$member_session" "$member_start" "$interval_end"
   done <"$RECORD_WORK/members" |
-    jq -sc --arg origin_start "$origin_start" --arg interval_end "$interval_end" "$GAIA_USAGE_JQ_DEFS$GAIA_USAGE_RESOLVE_JQ"'
+    jq -sc --arg origin_start "$origin_start" --arg interval_end "$interval_end" "$GAIA_USAGE_JQ_DEFS$GAIA_USAGE_RESOLVE_JQ$GAIA_USAGE_ACTIVE_JQ"'
       if length == 0 or any(.[]; (.tokens | type) != "number") then null
-      else {tokens: (map(.tokens) | add), dollars: (if any(.[]; .dollars == null) then null else (map(.dollars) | add) end),
-            elapsed_seconds: (($interval_end | usage_epoch) - ($origin_start | usage_epoch) | [., 0] | max | floor),
+      else ($origin_start | usage_epoch) as $from | ($interval_end | usage_epoch) as $to
+        | (any(.[]; .active_covered == true)) as $covered
+        | {tokens: (map(.tokens) | add), dollars: (if any(.[]; .dollars == null) then null else (map(.dollars) | add) end),
+            elapsed_seconds: (($to - $from) | [., 0] | max | floor),
+            active_seconds: (if $covered then usage_active_union([.[] | (.active_pieces // [])[]]; $from; $to) | (. * 1000 | round) / 1000 | floor else null end),
+            active_lower_bound: ($covered and any(.[]; .active_uncovered == true)),
             unpriced: any(.[]; .unpriced)} end'
 }
 
@@ -307,7 +311,7 @@ _record_run_view() {
 # cap or a failure prints a marker and the exit stays 0.
 _record_print_cost() {
   local interval_end="$1" view_file="$RECORD_WORK/view" view_pid pids render_cap="${GAIA_USAGE_RENDER_CAP_SECONDS:-10}" started_at wait_ticks
-  local view_json tokens dollars elapsed unpriced
+  local view_json tokens dollars elapsed unpriced active lower_bound
   case "$render_cap" in '' | *[!0-9]* | 0) render_cap=10 ;; esac
   usage_rates_load "$RATE_TABLE" "$MAIN_ROOT"
   (_record_run_view "$interval_end") >"$view_file" 2>/dev/null 3>&- &
@@ -333,18 +337,19 @@ _record_print_cost() {
     return 0
   fi
   if [ "$JSON" = 1 ]; then
-    jq -c '{tokens, dollars, elapsed_seconds}' <<<"$view_json"
+    jq -c '{tokens, dollars, elapsed_seconds, active_seconds, active_lower_bound}' <<<"$view_json"
     return 0
   fi
-  IFS=$'\t' read -r tokens dollars elapsed unpriced < <(jq -r '[.tokens, (.dollars // "null"), .elapsed_seconds, .unpriced] | @tsv' <<<"$view_json")
+  IFS=$'\t' read -r tokens dollars elapsed active lower_bound unpriced < <(jq -r '[.tokens, (.dollars // "null"), .elapsed_seconds, (.active_seconds // "null"), .active_lower_bound, .unpriced] | @tsv' <<<"$view_json")
   _usage_override_marker
-  gaia_usage_cost_line "$tokens" "$dollars" "$elapsed"
+  gaia_usage_cost_line "$tokens" "$dollars" "$elapsed" "$active" "$lower_bound"
   printf '\n'
   if [ "$RECORD_PARTIAL" != 0 ]; then printf 'Note: %s\n' "$(usage_note_flush_incomplete "$(_record_final_command)")"; fi
   if [ "$unpriced" = true ]; then printf 'Note: %s\n' "$(usage_note_lower_bound)"; fi
   # A recovery start bound to no other session may stand in for a run that
   # began elsewhere, so its figure is never offered as the run's total.
   if [ -n "$START_ISO" ] && [ "$(wc -l <"$RECORD_WORK/members" | tr -d ' ')" = 1 ]; then printf 'Note: %s\n' "$(usage_note_session_only)"; fi
+  if [ "$active" != null ] && [ "$lower_bound" = true ]; then printf 'Note: %s\n' "$(usage_note_active_minimum)"; fi
 }
 
 # _record_final_command: the command that reads this run's figures once the
