@@ -1084,3 +1084,66 @@ SH
   grep -qF -- "in the background" <<<"$output" && return 1
   true
 }
+
+# ---------- /clear and compaction repair an unprovisioned tree only ----------
+# A session can reach a worktree without either entry trigger firing (an
+# EnterWorktree call that reports a refusal yet still switches the session),
+# and the next fresh context it gets is a /clear or a compaction. Those sources
+# fire on every /clear in every tree, so they provision only a tree whose
+# .gaia/local is not yet the shared link and leave a provisioned one untouched.
+
+# fresh_context_payload <tree> <source>: the SessionStart payload /clear
+# (source clear) or a compaction (source compact) emits.
+fresh_context_payload() {
+  jq -nc --arg tree_path "$1" --arg session_source "$2" '{hook_event_name: "SessionStart", source: $session_source, cwd: $tree_path}'
+}
+
+@test "a clear payload provisions a worktree that was never provisioned" {
+  make_main
+  WORKTREE_PATH="$(add_worktree feat-clear)"
+  [ -L "$WORKTREE_PATH/.gaia/local" ] && return 1
+
+  invoke_hook "$(fresh_context_payload "$WORKTREE_PATH" clear)" "$HOOK_ABSOLUTE_PATH"
+  [ "$status" -eq 0 ] || return 1
+  [ -L "$WORKTREE_PATH/.gaia/local" ]
+}
+
+@test "a compact payload migrates audit artifacts stranded in a real .gaia/local" {
+  make_main
+  WORKTREE_PATH="$(add_worktree feat-compact)"
+  mkdir -p "$WORKTREE_PATH/.gaia/local/audit"
+  echo marker > "$WORKTREE_PATH/.gaia/local/audit/member.ok"
+
+  invoke_hook "$(fresh_context_payload "$WORKTREE_PATH" compact)" "$HOOK_ABSOLUTE_PATH"
+  [ "$status" -eq 0 ] || return 1
+  [ -L "$WORKTREE_PATH/.gaia/local" ] || return 1
+  [ "$(cat "$MAIN/.gaia/local/audit/member.ok")" = "marker" ]
+}
+
+@test "clear and compact payloads in a provisioned worktree install nothing and print nothing" {
+  make_main
+  add_lockfile
+  stub_pnpm
+  WORKTREE_PATH="$(add_worktree feat-clear-provisioned)"
+  unset GITHUB_ACTIONS
+  run bash "$HOOK_ABSOLUTE_PATH" "$WORKTREE_PATH"
+  [ "$status" -eq 0 ] || return 1
+  [ -L "$WORKTREE_PATH/.gaia/local" ] || return 1
+  : > "$PNPM_LOG"
+
+  for session_source in clear compact; do
+    invoke_hook "$(fresh_context_payload "$WORKTREE_PATH" "$session_source")" "$HOOK_ABSOLUTE_PATH"
+    [ "$status" -eq 0 ] || return 1
+    [ -z "$output" ] || return 1
+  done
+  [ ! -s "$PNPM_LOG" ]
+}
+
+# bats test_tags=whole-tree
+@test "the hook is registered for every SessionStart source a fresh context can start from" {
+  matchers="$(jq -r '.hooks.SessionStart[] | select(any(.hooks[]; .command | contains("provision-worktree.sh"))) | .matcher' "$REPO_ROOT_REAL/.claude/settings.json" | tr '|' '\n')"
+  [ -n "$matchers" ] || return 1
+  for session_source in startup resume clear compact; do
+    grep -qx -- "$session_source" <<<"$matchers" || return 1
+  done
+}
