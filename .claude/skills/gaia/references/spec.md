@@ -184,16 +184,10 @@ Otherwise, ask: **"What do you want to spec?"** and wait for the response before
 
 First, read `.claude/skills/gaia/references/spec/lifecycle.md` and run its `## Pre-flight sweep` now. It first checks notebook readiness (a non-zero result ends this command, surfacing its one stderr line), then reconciles finalized rows whose PR has merged, cold-consolidates any merged folder whose layers were never consolidated, reaps merged and abandoned folders past the retention window, and offers to reap closed research. Its writes into a SPEC folder follow the tool-choice contract in Operational primitives. Run it with the caller label `/gaia-spec`.
 
-Then sweep any never-authored draft older than the guard age to the terminal `abandoned` status, so a ghost allocation (no SPEC.md, no draft cache, no gate-1 snapshot) stops re-surfacing on this very prompt. Both passes below are best-effort and fail-open:
+Then sweep any never-authored draft older than the guard age to the terminal `abandoned` status, so a ghost allocation (no SPEC.md, no draft cache, no gate-1 snapshot) stops re-surfacing on this very prompt. The pass below is best-effort and fail-open. A SPEC's audit cache needs no sweep here: the backstop reaper prunes it once the SPEC leaves draft.
 
 ```bash
 bash .gaia/scripts/spec/spec-abandon-empty.sh "$PWD" 2>/dev/null || true
-# Best-effort sweep of stale audit caches left by "Start new" or abandoned exits.
-# An audit-<id>/ cache is short-lived (created at 6a, deleted at the step-7 fallback, step 9
-# save, or the step-2 discard); one untouched for over a day is orphaned. Fail-open,
-# never blocks; the mtime guard cannot touch a dir an active session just wrote.
-find .gaia/local/cache -maxdepth 1 -type d -name 'audit-*' -mtime +1 \
-  -exec rm -rf {} + 2>/dev/null || true
 ```
 
 Then run `bash .gaia/scripts/spec/spec-allocator.sh in_progress "$PWD"`. If the output is a `SPEC-NNN` id (not `none`), an unfinalized **draft** SPEC already exists, a prior authoring session that never reached the canonical save (step 9). The allocator reports only drafts; a finalized SPEC (`ready`/`merged`) is never surfaced here, because you resume a draft, not a frozen artifact.

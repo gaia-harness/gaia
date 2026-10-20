@@ -30,6 +30,7 @@
       "Bash(bash .gaia/scripts/spec/uat-gate.sh:*)",
       "Bash(bash .gaia/scripts/spec/uat-write.sh:*)",
       "Bash(bash .gaia/scripts/spec/working-doc-id-scan.sh:*)",
+      "Bash(bash .gaia/scripts/state-cleanup.sh:*)",
       "Bash(bash .gaia/scripts/summary-verify.sh:*)",
       "Bash(corepack enable pnpm)",
       "Bash(gh pr checks:*)",
@@ -135,6 +136,10 @@
           {
             "type": "command",
             "command": "\"$(git rev-parse --show-toplevel 2>/dev/null || printf %s \"${CLAUDE_PROJECT_DIR:-.}\")/.claude/hooks/usage-capture.sh\""
+          },
+          {
+            "type": "command",
+            "command": "\"$(git rev-parse --show-toplevel 2>/dev/null || printf %s \"${CLAUDE_PROJECT_DIR:-.}\")/.claude/hooks/state-reaper-session-start.sh\""
           }
         ]
       },

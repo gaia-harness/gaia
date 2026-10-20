@@ -75,6 +75,7 @@
     ".claude/hooks/pr-merge-cost.sh": "owned",
     ".claude/hooks/provision-worktree.sh": "owned",
     ".claude/hooks/red-verify-commit-check.sh": "owned",
+    ".claude/hooks/state-reaper-session-start.sh": "owned",
     ".claude/hooks/usage-capture.sh": "owned",
     ".claude/hooks/wiki-session-start.sh": "owned",
     ".claude/hooks/workflow-doctrine-inject.sh": "owned",
@@ -306,7 +307,12 @@
     ".gaia/scripts/spec/uat-write.sh": "owned",
     ".gaia/scripts/spec/with-ledger-lock.sh": "owned",
     ".gaia/scripts/spec/working-doc-id-scan.sh": "owned",
+    ".gaia/scripts/state-cleanup.sh": "owned",
+    ".gaia/scripts/state-reaper-classes.sh": "owned",
+    ".gaia/scripts/state-reaper-lib.sh": "owned",
+    ".gaia/scripts/state-reaper.sh": "owned",
     ".gaia/scripts/state-registry-lib.sh": "owned",
+    ".gaia/scripts/state-registry-lint.sh": "owned",
     ".gaia/scripts/storybook-launch.sh": "owned",
     ".gaia/scripts/summary-verify.sh": "owned",
     ".gaia/scripts/token-pricing-lib.sh": "owned",
@@ -747,7 +753,7 @@
     "wiki/overview.md": "wiki-owned",
     "wiki/README.md": "wiki-owned"
   },
-  "generated": "2026-10-20T13:04:11.287Z",
+  "generated": "2026-10-20T13:25:56.149Z",
   "regions": [
     {
       "endMarker": "<!-- gaia:audit-remit:end -->",

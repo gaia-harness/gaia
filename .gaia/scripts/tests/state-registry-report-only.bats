@@ -136,7 +136,7 @@ section() {
   registry_edit 'del(.report_only)'
   sweep
   section Unknown | grep -qx 'specs'
-  registry_edit '.residue += [{"id":"twin","path":"specs/","match":"prefix","why":"twin","writer":"none-residue","successor":"codify/"}] | .entries += [{"id":"twin-codify","path":"codify/","match":"prefix","kind":"dir","scope":"shared","keyed_by":"x","why":"x","writer":"code","reaped_by":null}]'
+  registry_edit '.residue += [{"id":"twin","path":"specs/","match":"prefix","why":"twin","writer":"none-residue","successor":"codify/"}] | .entries += [{"id":"twin-codify","path":"codify/","match":"prefix","kind":"dir","scope":"shared","keyed_by":"x","why":"x","writer":"code","retention":{"class":"keep"}}]'
   mkdir -p "$LOCAL_ROOT/codify"
   sweep
   section Residue | grep -q '^specs'
@@ -148,7 +148,7 @@ section() {
   make_main
   mark_moved
   put specs/SPEC-001/SPEC.md
-  registry_edit '.residue += [{"id":"twin","path":"specs/","match":"prefix","why":"twin","writer":"none-residue","successor":"codify/"}] | .entries += [{"id":"twin-codify","path":"codify/","match":"prefix","kind":"dir","scope":"shared","keyed_by":"x","why":"x","writer":"code","reaped_by":null}]'
+  registry_edit '.residue += [{"id":"twin","path":"specs/","match":"prefix","why":"twin","writer":"none-residue","successor":"codify/"}] | .entries += [{"id":"twin-codify","path":"codify/","match":"prefix","kind":"dir","scope":"shared","keyed_by":"x","why":"x","writer":"code","retention":{"class":"keep"}}]'
   mkdir -p "$LOCAL_ROOT/codify"
   sweep --apply
   [ "$status" -eq 0 ]

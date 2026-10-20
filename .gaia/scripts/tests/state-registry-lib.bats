@@ -167,12 +167,12 @@ run_in_registry_repo() {
 # cutover-risk scenarios run against the shipped registry: the concrete proof
 # that a per-tree entry is genuinely not shared.
 
-@test "gaia_registry_linkable_paths: prints exactly the 18 shared paths, each by name" {
+@test "gaia_registry_linkable_paths: prints exactly the 19 shared paths, each by name" {
   run_in_registry_repo gaia_registry_linkable_paths
   [ "$status" -eq 0 ]
-  [ "${#lines[@]}" -eq 18 ]
+  [ "${#lines[@]}" -eq 19 ]
   local expected_path
-  for expected_path in setup-state.json cache/shared/context cache/shared protected \
+  for expected_path in setup-state.json cache/shared/context cache cache/shared protected \
     settings.json audit audit/light telemetry telemetry/usage-sweep.lock.d debt codify runs \
     ports ports/tombstones ports/launches ports/sessions kept-worktrees.tsv worktree-occupancy; do
     grep -qxF -- "$expected_path" <<<"$output" || return 1
@@ -509,7 +509,7 @@ run_in_registry_repo() {
 
 @test "roots: the notebook rows carry the notebook root and the catalog row is the library's" {
   [ "$(jq -r '[.entries[] | select(.id == "specs-main" or .id == "plans-main" or .id == "research-main") | .root] | join(",")' "$REGISTRY")" = "notebook,notebook,notebook" ]
-  [ "$(jq -r '.entries[] | select(.id == "notebook-catalog") | [.root, .path, .match, .kind, .scope, .writer, (.reaped_by | tostring)] | join(",")' "$REGISTRY")" = "notebook,catalog.json,exact,file,main-only,code,null" ]
+  [ "$(jq -r '.entries[] | select(.id == "notebook-catalog") | [.root, .path, .match, .kind, .scope, .writer, .retention.class] | join(",")' "$REGISTRY")" = "notebook,catalog.json,exact,file,main-only,code,keep" ]
 }
 
 @test "integrity snapshot: the verb is gone and the registry block is retired" {
@@ -562,7 +562,7 @@ run_in_registry_repo() {
 
 @test "schema invariant: every entry and residue row carries all required fields" {
   run jq -e '
-    (.entries | all(has("id") and has("path") and has("match") and has("kind") and has("scope") and has("keyed_by") and has("why") and has("writer") and has("reaped_by")))
+    (.entries | all(has("id") and has("path") and has("match") and has("kind") and has("scope") and has("keyed_by") and has("why") and has("writer") and has("retention") and (has("reaped_by") | not)))
     and (.residue | all(has("id") and has("path") and has("match") and has("why") and has("writer")))
   ' "$REGISTRY"
   [ "$status" -eq 0 ]
@@ -627,7 +627,7 @@ retired_cost_state_violations() {
        | (select([.residue[] | select(.path == $path and .writer == "none-residue")] | length != 1) | "not residue: " + $path),
          (select([.entries[] | select(.path == $path)] | length != 0) | "still live: " + $path) ])
     + (if ([.entries[] | select(.path | test("audit-window"))] | length) != 0 then ["audit-window entry present"] else [] end)
-    + (if ([.entries[] | select(.id == "telemetry-rate-override" and .path == "telemetry/token-rates.override.json" and .match == "exact" and .kind == "file" and .scope == "shared" and .writer == "hand-authored" and .reaped_by == null)] | length) == 1 then [] else ["override entry missing or wrong"] end)
+    + (if ([.entries[] | select(.id == "telemetry-rate-override" and .path == "telemetry/token-rates.override.json" and .match == "exact" and .kind == "file" and .scope == "shared" and .writer == "hand-authored" and .retention.class == "keep")] | length) == 1 then [] else ["override entry missing or wrong"] end)
     | .[]
   ' "$1"
 }
@@ -639,13 +639,13 @@ retired_cost_state_violations() {
 
 @test "registry: a scratch registry restoring the audit-window entry is caught" {
   local scratch="$BATS_TEST_TMPDIR/restored-window.json"
-  jq '.entries += [{"id":"audit-window-breadcrumb","path":"cache/audit-window-*.json","match":"glob","kind":"file","scope":"ephemeral","keyed_by":null,"why":"x","writer":"code","reaped_by":null}]' "$REGISTRY" >"$scratch"
+  jq '.entries += [{"id":"audit-window-breadcrumb","path":"cache/audit-window-*.json","match":"glob","kind":"file","scope":"ephemeral","keyed_by":null,"why":"x","writer":"code","retention":{"class":"keep"}}]' "$REGISTRY" >"$scratch"
   retired_cost_state_violations "$scratch" | grep -qF "audit-window entry present"
 }
 
 @test "registry: a scratch registry with the cost ledger live again, or the override missing, is caught" {
   local scratch="$BATS_TEST_TMPDIR/live-ledger.json" ledger_path="telemetry/cost"".jsonl"
-  jq --arg path "$ledger_path" '.entries += [{"id":"x","path":$path,"match":"exact","kind":"file","scope":"shared","keyed_by":"x","why":"x","writer":"code","reaped_by":null}]' "$REGISTRY" >"$scratch"
+  jq --arg path "$ledger_path" '.entries += [{"id":"x","path":$path,"match":"exact","kind":"file","scope":"shared","keyed_by":"x","why":"x","writer":"code","retention":{"class":"keep"}}]' "$REGISTRY" >"$scratch"
   retired_cost_state_violations "$scratch" | grep -qF "still live: $ledger_path"
   jq 'del(.entries[] | select(.id == "telemetry-rate-override"))' "$REGISTRY" >"$scratch"
   retired_cost_state_violations "$scratch" | grep -qF "override entry missing or wrong"
@@ -667,4 +667,202 @@ retired_cost_state_violations() {
   [ "$status" -eq 0 ]
   run_in_registry_repo gaia_registry_classify telemetry/token-rates.override.json
   [ "$output" = "shared" ]
+}
+
+# ------------------------------------------------------------------ retention
+#
+# Every entries[] row names how its state is pruned in a `retention` object.
+# The cases below pin the class table row by row, the first-match order of the
+# rows that overlap, and the field legality of every row.
+
+# expected_retention_table: one row per entries[] id, fields separated by
+# single spaces, "-" for an absent field. Columns: id, class, days, key,
+# session_days, types (comma list), names (comma list).
+expected_retention_table() {
+  cat <<'TABLE'
+setup-state keep - - - - -
+context-readings age 7 - - file *.json,*.json.tmp.*
+cache-shared-orphan-temps age 7 - - file -
+cache-shared owned - - - - -
+state-reaper-state owned - - - - -
+checkpoint-override keep - - - - -
+local-settings keep - - - - -
+audit-light-review-ledger branch-spent 7 slug-glob - - -
+audit-light-review-state age 30 - - - -
+audit-clearance-markers age 30 - - - -
+audit-findings-rerun-sidecars branch-spent 7 slug-dot-field - - -
+audit-scope-digests branch-spent 7 slug-dot-field - - -
+audit-review-diffs branch-spent 7 slug-dot-field - - -
+audit-security-notes age 30 - - - -
+telemetry-rate-override keep - - - - -
+telemetry-usage-ledger keep - - - - -
+telemetry-links-ledger keep - - - - -
+telemetry-audit-light-routing keep - - - - -
+telemetry-usage-cursor-cache keep - - - - -
+telemetry-usage-branch-memo keep - - - - -
+telemetry-usage-sweep-lock owned - - - - -
+telemetry-usage-tmp age 7 - - file -
+debt-count-and-refresh keep - - - - -
+red-ledger tree-gone - - - - -
+audit-worthiness-ledger tree-gone - - - - -
+forensics tree-gone - - - - -
+codify-declines keep - - - - -
+codify-review-snapshot keep - - - - -
+specs-main owned - - - - -
+plans-main owned - - - - -
+research-main owned - - - - -
+notebook-catalog keep - - - - -
+gh-artifact-pr-cache branch-spent 7 slug-glob - - -
+residual-triage-caches keep - - - - -
+audit-loop-state branch-spent 7 audit-loop - - -
+harness-verify-pass branch-spent 7 normalized-file - - -
+project-id keep - - - - -
+declined-updates keep - - - - -
+statusline-wrappers keep - - - - -
+machine-markers keep - - - - -
+spec-draft-and-gate1-scratch spec-finalized 30 - - - -
+spec-session-scratch spec-finalized 30 - - - -
+spec-session-lock spec-finalized 30 - - - -
+spec-audit-scratch spec-finalized 30 - - - -
+audit-mutation-scratch age 7 - - - -
+react-perf-run-scratch age 7 - - - -
+audit-scratch-files age 7 - - - -
+cleanse-reports owned - - - - -
+runs branch-spent 7 normalized-path 30 - -
+ports-slot-ledger owned - - - - -
+kept-worktrees-ledger owned - - - - -
+worktree-occupancy owned - - - - -
+ports-tombstones owned - - - - -
+ports-slot-lock owned - - - - -
+ports-launch-records owned - - - - -
+ports-session-registry owned - - - - -
+doctrine-injected-marker age 7 - - - -
+context-checkpoint-markers age 7 - - file [!.]*,.*.*
+context-checkpoint-agent-markers age 7 - - file [!.]*,.*.*
+TABLE
+}
+
+# retention_table_actual REGISTRY: the registry's own rows in the table's shape.
+retention_table_actual() {
+  jq -r '.entries[] | [.id, .retention.class, (.retention.days // "-"), (.retention.key // "-"),
+    (.retention.session_days // "-"), ((.retention.types // ["-"]) | join(",")),
+    ((.retention.names // ["-"]) | join(","))] | join(" ")' "$1"
+}
+
+# retention_table_violations REGISTRY: empty when the registry's rows are exactly
+# the expected table (same ids, same classes and parameters); otherwise a diff.
+retention_table_violations() {
+  diff <(expected_retention_table | sort) <(retention_table_actual "$1" | sort)
+}
+
+# bats test_tags=whole-tree
+@test "registry: every entries row carries exactly the retention class and parameters the table names" {
+  local expected_count
+  expected_count="$(expected_retention_table | wc -l | tr -d ' ')"
+  [ "$expected_count" -gt 0 ]
+  [ "$(jq '.entries | length' "$REGISTRY")" -eq "$expected_count" ]
+  run retention_table_violations "$REGISTRY"
+  [ "$status" -eq 0 ]
+}
+
+# bats test_tags=whole-tree
+@test "registry: a scratch registry with one row's class flipped fails the retention table" {
+  local scratch="$BATS_TEST_TMPDIR/flipped-class.json"
+  jq '(.entries[] | select(.id == "runs") | .retention.class) = "age"' "$REGISTRY" >"$scratch"
+  run retention_table_violations "$scratch"
+  [ "$status" -ne 0 ]
+  printf '%s\n' "$output" | grep -qF "runs"
+}
+
+# first_match_row REGISTRY PATH KIND: the id of the first entries row (local root,
+# in registry order) that claims PATH. Glob and exact rows match only a path of
+# their own kind; prefix rows match any kind. Prints "none" when no row does.
+first_match_row() {
+  local registry="$1" candidate="$2" candidate_kind="$3" row_id row_match row_kind row_path
+  while IFS=$'\t' read -r row_id row_match row_kind row_path; do
+    if [ "$row_match" != prefix ] && [ "$row_kind" != "$candidate_kind" ]; then
+      continue
+    fi
+    if _gaia_registry_pattern_matches "$candidate" "$row_path" "$row_match"; then
+      printf '%s\n' "$row_id"
+      return 0
+    fi
+  done < <(jq -r '.entries[] | select((.root // "local") == "local") | [.id, .match, .kind, .path] | @tsv' "$registry")
+  printf 'none\n'
+}
+
+# bats test_tags=whole-tree
+@test "registry: the rows that overlap resolve in first-match order" {
+  local digest="aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+  [ "${#digest}" -eq 64 ]
+  [ "$(first_match_row "$REGISTRY" cache/shared/.updates.AbC123 file)" = cache-shared-orphan-temps ]
+  [ "$(first_match_row "$REGISTRY" cache/shared/update-check.json file)" = cache-shared ]
+  [ "$(first_match_row "$REGISTRY" cache/shared/.update-check.lock file)" = cache-shared ]
+  [ "$(first_match_row "$REGISTRY" 'audit/light/fix%2Fy.reviews.jsonl' file)" = audit-light-review-ledger ]
+  [ "$(first_match_row "$REGISTRY" "audit/light/$digest.code-audit-maintainer-shell.route.json" file)" = audit-light-review-state ]
+}
+
+# bats test_tags=whole-tree
+@test "registry: a new row moved after its prefix row loses the first match" {
+  local scratch="$BATS_TEST_TMPDIR/reordered.json"
+  jq '.entries |= (map(select(.id != "cache-shared-orphan-temps" and .id != "audit-light-review-ledger"))
+    + [$ARGS.named.rows[]])' --argjson rows "$(jq -c '[.entries[] | select(.id == "cache-shared-orphan-temps" or .id == "audit-light-review-ledger")]' "$REGISTRY")" "$REGISTRY" >"$scratch"
+  [ "$(first_match_row "$scratch" cache/shared/.updates.AbC123 file)" = cache-shared ]
+  [ "$(first_match_row "$scratch" 'audit/light/fix%2Fy.reviews.jsonl' file)" = audit-light-review-state ]
+}
+
+# retention_legality_violations REGISTRY: one "<row id>: <reasons>" line per
+# entries row whose retention breaks the field table; empty when all conform.
+retention_legality_violations() {
+  jq -r '
+    .entries[] | . as $row | .id as $id | (.retention // null) as $t
+    | (if ($t | type) != "object" then ["retention is not an object"]
+       else
+         $t.class as $c
+         | [ (if (["branch-spent", "tree-gone", "spec-finalized", "age", "owned", "keep"] | index($c)) == null then "unknown class" else empty end),
+             (if (($t | keys) - ["class", "days", "key", "session_days", "types", "names", "owner"] | length) > 0 then "unknown field" else empty end),
+             (if ($c | IN("branch-spent", "spec-finalized", "age"))
+                then (if ($t.days | type == "number" and . > 0 and . == floor) then empty else "days must be a positive integer" end)
+                else (if ($t | has("days")) then "days forbidden" else empty end) end),
+             (if $c == "branch-spent"
+                then (if ($t.key | IN("normalized-path", "normalized-file", "audit-loop", "slug-dot-field", "slug-glob")) then empty else "key missing or unknown" end)
+                else (if ($t | has("key")) then "key forbidden" else empty end) end),
+             (if ($t | has("session_days"))
+                and ($c != "branch-spent" or $t.key != "normalized-path" or ($t.session_days | type != "number" or . <= 0 or . != floor))
+                then "session_days illegal" else empty end),
+             (if ($t | has("types"))
+                and ($c != "age" or ($t.types | type) != "array" or ($t.types | length) == 0 or (($t.types - ["file", "dir"]) | length) > 0)
+                then "types illegal" else empty end),
+             (if ($t | has("names"))
+                and ($c != "age" or ($t.names | type) != "array" or ($t.names | length) == 0 or ([$t.names[] | type == "string" and length > 0] | all | not))
+                then "names illegal" else empty end),
+             (if $c == "owned"
+                then (if ($t.owner | type == "string" and length > 0) then empty else "owner missing" end)
+                else (if ($t | has("owner")) then "owner forbidden" else empty end) end),
+             (if ($row.path | test("^protected/")) and ($c != "keep" and ($c != "branch-spent" or $t.days != 7))
+                then "protected row must be keep or branch-spent with days 7" else empty end)
+           ]
+       end)
+    | select(length > 0) | $id + ": " + join("; ")
+  ' "$1"
+}
+
+# bats test_tags=whole-tree
+@test "registry: every entries row's retention satisfies the field table" {
+  run retention_legality_violations "$REGISTRY"
+  [ "$status" -eq 0 ]
+  [ -z "$output" ]
+  [ "$(jq '[.entries[] | select(.path | test("^protected/"))] | length' "$REGISTRY")" -gt 0 ]
+}
+
+# bats test_tags=whole-tree
+@test "registry: a scratch registry with a forbidden retention field is caught" {
+  local scratch="$BATS_TEST_TMPDIR/forbidden-field.json"
+  jq '(.entries[] | select(.id == "setup-state") | .retention.days) = 7' "$REGISTRY" >"$scratch"
+  run retention_legality_violations "$scratch"
+  [ "$status" -eq 0 ]
+  printf '%s\n' "$output" | grep -qF "setup-state: days forbidden"
+  jq '(.entries[] | select(.id == "audit-loop-state") | .retention.days) = 14' "$REGISTRY" >"$scratch"
+  run retention_legality_violations "$scratch"
+  printf '%s\n' "$output" | grep -qF "audit-loop-state: protected row must be keep or branch-spent with days 7"
 }

@@ -61,10 +61,11 @@ assert_handoff_clear_allowed() {
 }
 
 # assert_registry_entry REGISTRY: exactly one marker-directory entry, main-only,
-# unkeyed, reaped, and explained by the hook that writes it.
+# unkeyed, age-reaped, and explained by the hook that writes it.
 assert_registry_entry() {
   run jq -e '[.entries[] | select(.path == "cache/context-checkpoint-agents/")] | length == 1
-      and all(.[]; .scope == "main-only" and .keyed_by == null and .reaped_by != null
+      and all(.[]; .scope == "main-only" and .keyed_by == null
+        and .retention.class == "age" and .retention.days == 7 and .retention.types == ["file"]
         and (.why | contains("context-checkpoint-subagent.sh")))' "$1"
   [ "$status" -eq 0 ]
 }
