@@ -60,6 +60,7 @@ EOF
   for light_path in \
     .gaia/scripts/audit-light-route.sh \
     .gaia/scripts/audit-light-mark.sh \
+    .claude/hooks/lib/audit-quick-classify-lib.sh \
     .claude/agents/audit-light-reviewer.md; do
     audit_path_is_machinery "$light_path" || { echo "not machinery: $light_path" >&2; return 1; }
   done
@@ -69,16 +70,37 @@ EOF
   run audit_machinery_flags <<'PATHS'
 .gaia/scripts/audit-light-route.sh
 .gaia/scripts/audit-light-mark.sh
+.claude/hooks/lib/audit-quick-classify-lib.sh
 .claude/agents/audit-light-reviewer.md
 PATHS
   [ "$status" -eq 0 ]
-  [ "${#lines[@]}" -eq 3 ]
+  [ "${#lines[@]}" -eq 4 ]
   for line in "${lines[@]}"; do
     case "$line" in
       *$'\t'1) ;;
       *) echo "not flagged: $line" >&2; return 1 ;;
     esac
   done
+}
+
+# The quick-route corpus decides what the classifier is proven against, so a
+# change to it rotates every digest. It is a maintainer-only entry: the region
+# fence around it keeps it out of an adopter bundle.
+# bats test_tags=whole-tree
+@test "the quick-route corpus is machinery and sits inside a maintainer-only region" {
+  audit_path_is_machinery ".gaia/scripts/tests/fixtures/audit-quick-corpus.json" || return 1
+  awk -v marker="gaia:""maintainer-only" '
+    index($0, "# " marker ":start") { inside = 1; next }
+    index($0, "# " marker ":end") { inside = 0; next }
+    index($0, ".gaia/scripts/tests/fixtures/audit-quick-corpus.json") == 1 { seen++; if (!inside) bad++ }
+    END { exit (seen == 1 && bad == 0) ? 0 : 1 }
+  ' "$MACHINERY_LIBRARY"
+}
+
+# bats test_tags=whole-tree
+@test "the loop unit definition is not machinery: it orchestrates rounds and writes no clearance" {
+  run audit_path_is_machinery ".claude/agents/audit-loop-unit.md"
+  [ "$status" -ne 0 ]
 }
 
 @test "a sibling of a light-review file is not machinery" {

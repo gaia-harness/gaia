@@ -433,7 +433,7 @@ quick_classify_lines() {
 # diff on stdin plus its full images and prints `ok`, `<reason><TAB><side>:<N>`
 # for the first deep line, `quick-unclassified<TAB>-` for a binary diff, or
 # `ERROR` when an image cannot be read.
-_QUICK_LINE_PROGRAM="$(cat <<'AWK'
+IFS= read -r -d '' _QUICK_LINE_PROGRAM <<'AWK' || true
 function trim(x) { sub(/^[ \t]+/, "", x); sub(/[ \t]+$/, "", x); return x }
 function load(s, file,   line, n, r) {
   n = 0
@@ -1129,4 +1129,3 @@ END {
   print "ok"
 }
 AWK
-)"

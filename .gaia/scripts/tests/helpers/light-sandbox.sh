@@ -178,6 +178,43 @@ lsb_commit_lines() {
   _lsb_set_head
 }
 
+# lsb_remove <path>: delete the tracked file and commit the deletion on the
+# checked-out branch.
+lsb_remove() {
+  lsb_git rm -q -- "$1" && lsb_git commit -q -m "remove $1" || return 1
+  _lsb_set_head
+}
+
+# lsb_main_base_begin: after lsb_init, check out `main`, so every later
+# lsb_commit, lsb_commit_lines, lsb_remove, lsb_strip_maintainer_only or roster
+# edit lands on the base and not in the branch's own delta. A merge-base first
+# dispatch measures the whole merge-base..HEAD range, so the `branch-start`
+# commit lsb_init makes on the branch would count; this pair replaces it.
+lsb_main_base_begin() {
+  lsb_git checkout -q main || return 1
+  _lsb_set_head
+}
+
+# lsb_main_base_end: publish `main` to the sandbox origin, recreate the feature
+# branch at main's tip with no commit of its own (the `branch-start` commit is
+# gone), restore the branch's audit-base cache, and refresh LSB_HEAD and
+# LSB_TREE. Returns non-zero unless the merge base of origin's main and HEAD
+# is HEAD itself and the branch slug is unchanged. The caller then commits the
+# branch's own changes with lsb_commit, one commit per file if it likes.
+lsb_main_base_end() {
+  local slug_before="$LSB_SLUG" slug_after merge_base
+  lsb_git push -q origin main 2>/dev/null || return 1
+  lsb_git fetch -q origin || return 1
+  lsb_git checkout -q -B "$LSB_BRANCH" main || return 1
+  lsb_git config "branch.$LSB_BRANCH.gaia-audit-base" main || return 1
+  _lsb_set_head || return 1
+  merge_base="$(lsb_git merge-base refs/remotes/origin/main HEAD)" || return 1
+  [ "$merge_base" = "$LSB_HEAD" ] || return 1
+  # shellcheck source=/dev/null
+  slug_after="$(. "$LSB_ROOT/.gaia/scripts/audit-key-lib.sh" && gaia_branch_slug "$LSB_ROOT")" || return 1
+  [ "$slug_after" = "$slug_before" ]
+}
+
 # lsb_catchup_init: retrofit the catch-up fixture onto the sandbox, so the base
 # can gain commits that arrive through `refs/remotes/origin/main` and the branch
 # can merge them. The helpers below keep LSB_HEAD and LSB_TREE current.

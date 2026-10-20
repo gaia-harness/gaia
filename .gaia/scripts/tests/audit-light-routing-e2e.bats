@@ -107,11 +107,16 @@ escalate_through_light() {
 
 # --- routing outcomes ------------------------------------------------------------
 
-@test "without an earned full clearance the router prints full no-full-clearance and writes no reviewer input" {
+@test "without an earned full clearance a delta the classifier rejects routes full quick-path anchored on the merge base and writes no reviewer input" {
   lsb_init
   lsb_commit frontend/app/notes.md "one line"
   lsb_route "$FRONTEND"
-  expect_full no-full-clearance
+  expect_full quick-path
+  local merge_base record
+  merge_base="$(lsb_git merge-base refs/remotes/origin/main HEAD)" || return 1
+  record="$(light_directory)/$(lsb_member_digest "$FRONTEND").$FRONTEND.route.json"
+  [ "$(jq -r '.anchor_kind + " " + .anchor_sha' "$record")" = "merge-base $merge_base" ] \
+    || { jq -c . "$record" >&2; return 1; }
   [ ! -e "$(route_input_path)" ]
   find "$(light_directory)" -name '*.input.md' 2>/dev/null | grep -q . && return 1
   true
