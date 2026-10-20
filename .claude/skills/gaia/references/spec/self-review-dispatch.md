@@ -75,7 +75,7 @@ The self-review agent already applied every `minor` `suggested_fix` (6a); main g
   >
   > **Suggested fix:** <suggested_fix>
 
-  Print every gated finding this way, each block ending with its `SR-NNN` id and its recommendation: apply the suggested fix, or keep the current draft when the finding itself recommends keeping. Then ask one `AskUserQuestion` for the whole list (header `Self-review`, single-select), per `.claude/rules/user-questions.md`'s review-list rule:
+  Print every gated finding this way, each block ending with its `SR-NNN` id and its recommendation: apply the suggested fix, or keep the current draft when the finding itself recommends keeping. List every gated finding, never a count, a summary, or a pointer to a findings file; response-length or terseness preferences do not shorten the list. Then ask one `AskUserQuestion` for the whole list (header `Self-review`, single-select), per `.claude/rules/user-questions.md`'s review-list rule:
 
   - `Accept all as recommended (Recommended)`: every finding takes its own recommendation.
   - `Revise`: change some findings.

@@ -262,16 +262,21 @@ Before any Socratic clarify loop runs, present the draft's `intent` paragraph an
 
 **Auto-mode exception:** skip the user-facing prompt. Read the draft's intent + UATs into the agent's reasoning context and self-check: (a) intent paragraph is coherent and matches the description; (b) every UAT follows Given/When/Then shape; (c) UATs collectively cover the intent. If any check fails, revise the draft once and re-check. Then jump to the "On confirmation" actions below (snapshot cache, draft cache). Per Auto-mode rule 3, never block for human input.
 
-Print the shape as text, then ask with `AskUserQuestion`. The user reads, then confirms or revises. Suggested text:
+Print the shape as text, then ask with `AskUserQuestion`. The print is required, not a suggestion: the user approves what it shows and does not open the draft file, so it must carry everything gate 1 approves on its own. It holds two parts:
+
+- **Intent:** the draft's intent in one or two plain sentences.
+- **UATs:** every UAT in the draft, one plain-English line each, keeping its `UAT-NNN` id: what is set up, what the user does, and what must be true.
+
+Never summarize the UATs as a count or a theme list, never drop or merge one, and never point the user at the draft file in place of printing. Response-length or terseness preferences do not shorten gate content. Print it in this shape:
 
 > Here's the shape I have so far:
 >
-> **Intent:** <intent paragraph>
+> **Intent:** <one or two plain sentences>
 >
 > **UATs:**
 >
-> - UAT-NNN, Given … when … then …
-> - UAT-NNN, Given … when … then …
+> - UAT-NNN: <what is set up>; <what the user does>; <what must be true>
+> - UAT-NNN: <what is set up>; <what the user does>; <what must be true>
 
 Then one `AskUserQuestion` (header `Gate 1`, single-select), question `Does this shape match what you want before we go deeper?`, with two options:
 
@@ -311,7 +316,7 @@ Render the full draft artifact in markdown form (frontmatter plus body) and pres
 
 While filling frontmatter, set `lineage:` to the research folder slug(s) under `.notebook/research/` (as `research:<slug>`) or issue number(s) (as `issue:<n>`) that discovery named as this SPEC's origin, and leave it `[]` when none. This is never a new question to the user, in auto mode or otherwise.
 
-Print the rendered artifact as text, then ask with `AskUserQuestion`. Suggested text:
+Print the rendered artifact as text, then ask with `AskUserQuestion`. The print is required, not a suggestion: print the whole rendered artifact, frontmatter and body, never a summary, an excerpt, or a pointer to the draft file in its place. Response-length or terseness preferences do not shorten gate content. Print it in this shape:
 
 > Here is the rendered SPEC. Review it before save.
 >
