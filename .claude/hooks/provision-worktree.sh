@@ -318,7 +318,7 @@ gaia_is_linked_worktree "$tree" || exit 0
 
 # ---------- record which session is in this tree ----------
 # The kept-worktree reminder never lists a tree a live session occupies, and
-# both triggers of this hook are exactly where a session comes to be in one.
+# this hook runs exactly where a session comes to be in one.
 kept_worktrees_script="$self_directory/../../.gaia/scripts/kept-worktrees.sh"
 if [ -n "$session_id" ] && [ -f "$kept_worktrees_script" ]; then
   bash "$kept_worktrees_script" occupy --session "$session_id" --tree "$tree" >/dev/null 2>&1 || true
