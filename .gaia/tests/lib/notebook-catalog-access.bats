@@ -14,8 +14,6 @@
 #
 # Assertion style: .claude/rules/bats-assertions.md.
 
-# bats file_tags=whole-tree
-
 bats_require_minimum_version 1.5.0
 
 # What a line must not spell outside the library-or-move set.
@@ -108,6 +106,8 @@ _fixture_repository() {
   git -C "$FIXTURE" config user.email test@example.com
   git -C "$FIXTURE" config user.name Test
   git -C "$FIXTURE" config commit.gpgsign false
+  # gaia-lint-ignore whole-tree-mark-guard: every test that builds a fixture from this glob carries the per-test
+  # mark
   for source_path in "$REAL_ROOT"/.gaia/scripts/notebook/*.sh; do
     relative=".gaia/scripts/notebook/$(basename "$source_path")"
     _in_library_set "$relative" || continue
@@ -126,6 +126,7 @@ _plant() {
   printf '%s\n' "$2" > "$FIXTURE/$1"
 }
 
+# bats test_tags=whole-tree
 @test "the real tree passes and scans exactly the tracked scripts and hooks outside the library set" {
   run notebook_catalog_access_check "$REAL_ROOT"
   [ "$status" -eq 0 ]
@@ -137,6 +138,7 @@ _plant() {
   [ "$output" = "scanned $expected files" ]
 }
 
+# bats test_tags=whole-tree
 @test "a library-set file is skipped by path: a planted copy of the catalog name in it does not trip the scan" {
   _fixture_repository
   _plant .gaia/scripts/notebook/notebook-lib-extra.sh 'catalog_file="catalog.json"'
@@ -147,6 +149,7 @@ _plant() {
   true
 }
 
+# bats test_tags=whole-tree
 @test "a script naming the catalog file fails with its file and line" {
   _fixture_repository
   _plant .gaia/scripts/planted.sh 'echo start
@@ -157,6 +160,7 @@ cat "$main/.notebook/catalog.json"'
   grep -qF 'CATALOG-ACCESS .gaia/scripts/planted.sh:2: ' <<<"$output"
 }
 
+# bats test_tags=whole-tree
 @test "a script listing a kind folder fails" {
   _fixture_repository
   _plant .gaia/scripts/planted.sh 'ls "$main/.notebook/research"'
@@ -166,6 +170,7 @@ cat "$main/.notebook/catalog.json"'
   grep -qF 'CATALOG-ACCESS .gaia/scripts/planted.sh:1: ' <<<"$output"
 }
 
+# bats test_tags=whole-tree
 @test "a hook naming a kind folder fails" {
   _fixture_repository
   _plant .claude/hooks/planted.sh 'case "$path" in */.notebook/specs/*) exit 2 ;; esac'
@@ -175,6 +180,7 @@ cat "$main/.notebook/catalog.json"'
   grep -qF 'CATALOG-ACCESS .claude/hooks/planted.sh:1: ' <<<"$output"
 }
 
+# bats test_tags=whole-tree
 @test "a comment naming the catalog file fails: the scan reads every line" {
   _fixture_repository
   _plant .gaia/scripts/planted.sh '# the catalog.json file holds the rows'
@@ -184,6 +190,7 @@ cat "$main/.notebook/catalog.json"'
   grep -qF 'CATALOG-ACCESS .gaia/scripts/planted.sh:1: ' <<<"$output"
 }
 
+# bats test_tags=whole-tree
 @test "a test or fixture directory under the scripts is out of scope" {
   _fixture_repository
   _plant .gaia/scripts/tests/planted.bats 'cat catalog.json'
@@ -193,6 +200,7 @@ cat "$main/.notebook/catalog.json"'
   [ "$status" -eq 0 ]
 }
 
+# bats test_tags=whole-tree
 @test "an empty scan set fails instead of reporting clean" {
   _fixture_repository
   rm "$FIXTURE/.gaia/scripts/innocent.sh"
@@ -202,6 +210,7 @@ cat "$main/.notebook/catalog.json"'
   [ "$output" = "EMPTY-SCAN-SET" ]
 }
 
+# bats test_tags=whole-tree
 @test "a library set none of whose files spells the pattern fails the self-check" {
   _fixture_repository
   for library_file in "$FIXTURE"/.gaia/scripts/notebook/*.sh; do

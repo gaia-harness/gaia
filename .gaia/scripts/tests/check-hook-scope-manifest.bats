@@ -14,8 +14,6 @@
 #
 # Assertion style: bash-3.2-safe per .claude/rules/bats-assertions.md.
 
-# bats file_tags=whole-tree
-
 setup() {
   SCRIPT_DIRECTORY="$(cd "$(dirname "$BATS_TEST_FILENAME")/.." && pwd)"
   CHECK="$SCRIPT_DIRECTORY/check-hook-scope-manifest.sh"
@@ -53,6 +51,7 @@ add_hook() {
   [ "$output" = "OK" ]
 }
 
+# bats test_tags=whole-tree
 @test "real repo: every hook reaches .gaia/local only through a resolved root" {
   run gaia_check_hook_scope_manifest "$REPO_ROOT"
   [ "$status" -eq 0 ]
@@ -61,6 +60,7 @@ add_hook() {
   grep -qF "all $hook_count hooks reach .gaia/local only through a resolved root" <<<"$output" || return 1
 }
 
+# bats test_tags=whole-tree
 @test "real repo: run directly with no argument, it resolves the repo and passes" {
   run bash -c 'cd "$1" && bash "$2"' _ "$REPO_ROOT" "$CHECK"
   [ "$status" -eq 0 ]

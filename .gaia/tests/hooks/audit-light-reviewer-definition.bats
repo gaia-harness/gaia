@@ -10,8 +10,6 @@
 #
 # Assertion style: bash-3.2-safe per .claude/rules/bats-assertions.md.
 
-# bats file_tags=whole-tree
-
 setup() {
   THIS_DIRECTORY="$( cd "$( dirname "$BATS_TEST_FILENAME" )" && pwd )"
   REPO_ROOT="$( cd "$THIS_DIRECTORY/../../.." && pwd )"
@@ -211,6 +209,7 @@ set_frontmatter_line() {
   grep -qF -- 'carries the unit ending sentence' <<<"$output"
 }
 
+# bats test_tags=whole-tree
 @test "the roster check passes with the definition owned by the shell member" {
   local scratch="$BATS_TEST_TMPDIR/roster-scratch" file
   mkdir -p "$scratch/.gaia/scripts" "$scratch/.claude/hooks/lib" "$scratch/.claude/agents"

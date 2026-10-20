@@ -21,8 +21,6 @@
 #
 # Assertion style: bash-3.2-safe per .claude/rules/bats-assertions.md.
 
-# bats file_tags=whole-tree
-
 setup() {
   . "$BATS_TEST_DIRNAME/helpers/run-hook.sh"
   . "$(cd "$BATS_TEST_DIRNAME/../../.." && pwd)/.gaia/tests/helpers/path.sh"
@@ -320,6 +318,7 @@ state_listing() {
   local audit_loop_directory
   audit_loop_directory="$(cd "$BATS_TEST_DIRNAME/../../.." && pwd)/.gaia/local/protected/audit-loop"
   if [ -d "$audit_loop_directory" ]; then
+    # gaia-lint-ignore whole-tree-mark-guard: the operand is the untracked local audit-loop state directory, not the tracked tree
     find "$audit_loop_directory" -print | sort
   fi
   true

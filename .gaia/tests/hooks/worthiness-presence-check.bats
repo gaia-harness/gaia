@@ -27,8 +27,6 @@
 # The hook always exits 0; allow vs deny is carried in stdout: a deny emits
 # `"permissionDecision": "deny"`, an allow emits nothing.
 
-# bats file_tags=whole-tree
-
 # Mirror the repo-relative layout the hook resolves from a tree's own root, in
 # whatever tree a case aims a merge at. Every such tree needs its own copy: the
 # signal helper is invoked by the repo-relative path red_ledger_signal_script
@@ -499,6 +497,7 @@ run_merge_hook_library_absent() {
   denied
 }
 
+# bats test_tags=whole-tree
 @test "library-absent: verb-arming.sh missing denies every Bash tool call, naming the file" {
   run_merge_hook_library_absent "verb-arming.sh" "echo hi"
   [ "$status" -eq 0 ]
@@ -523,6 +522,7 @@ run_merge_hook_staged_root() {
   invoke_hook_in "$REPO" "$json" "$stage/.claude/hooks/worthiness-presence-check.sh"
 }
 
+# bats test_tags=whole-tree
 @test "library-absent: audit-base-provenance.sh missing fails open on a merge the intact stage denies" {
   commit_file "frontend/app/components/Foo/tests/index.test.tsx" "$EMERGENT_TEST"
   run_merge_hook_staged_root ""
@@ -614,9 +614,11 @@ install_stub_classifier_home() {
   FAKE_HOME="$BATS_TEST_TMPDIR/fake-home"
   mkdir -p "$FAKE_HOME/.claude/hooks/lib" "$FAKE_HOME/.gaia/scripts/classifier"
   cp "$HOME_ROOT/.claude/hooks/worthiness-presence-check.sh" "$FAKE_HOME/.claude/hooks/"
+  # gaia-lint-ignore whole-tree-mark-guard: every test that reaches this link farm carries the per-test mark
   for entry in "$HOME_ROOT"/.claude/hooks/lib/*; do
     ln -sfn "$entry" "$FAKE_HOME/.claude/hooks/lib/$(basename "$entry")"
   done
+  # gaia-lint-ignore whole-tree-mark-guard: every test that reaches this link farm carries the per-test mark
   for entry in "$HOME_ROOT"/.gaia/scripts/*; do
     [ "$(basename "$entry")" = classifier ] && continue
     ln -sfn "$entry" "$FAKE_HOME/.gaia/scripts/$(basename "$entry")"
@@ -736,6 +738,7 @@ test("renders a label", () => {
   reason_of_output | grep -qF -- 'gaia-packages: frontend/gaia.package.json is missing'
 }
 
+# bats test_tags=whole-tree
 @test "a classifier that exits 7 denies with its error; exit 3 fails open; an emergent verdict demands the line" {
   commit_file "frontend/app/components/X/tests/X.test.tsx" "$EMERGENT_TEST"
   install_stub_classifier_home 7 '{"error":"gaia-packages: stub descriptor failure. Next step: fix it."}'
@@ -894,6 +897,7 @@ export const UsesImportedPlay: Story = {play: sharedPlay};
 
 # --- the one-jq payload reader ---
 
+# bats test_tags=whole-tree
 @test "lib/hook-payload.sh absent: a payload the hook would deny exits 2 naming the library" {
   local hooks_directory scratch_hooks payload
   hooks_directory=$(cd "$BATS_TEST_DIRNAME/../../../.claude/hooks" && pwd)
@@ -907,6 +911,7 @@ export const UsesImportedPlay: Story = {play: sharedPlay};
   grep -qF 'BLOCKED: worthiness-presence-check.sh cannot load lib/hook-payload.sh' <<<"$output"
 }
 
+# bats test_tags=whole-tree
 @test "a non-arming Bash payload spawns exactly one jq process" {
   local hooks_directory shim_directory spawn_log real_jq payload spawn_count
   hooks_directory=$(cd "$BATS_TEST_DIRNAME/../../../.claude/hooks" && pwd)

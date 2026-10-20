@@ -21,8 +21,6 @@
 # Run under bash 5 (.claude/rules/bats-assertions.md):
 #   .gaia/scripts/bats5.sh .gaia/scripts/tests/token-pricing-override.bats
 
-# bats file_tags=whole-tree
-
 bats_require_minimum_version 1.5.0
 
 setup() {
@@ -150,9 +148,12 @@ mutant_scripts() {
   MUTANT_SCRIPTS="$TEMPORARY_DIRECTORY/mutant-$1"
   rm -rf "$MUTANT_SCRIPTS"
   mkdir -p "$MUTANT_SCRIPTS"
+  # gaia-lint-ignore whole-tree-mark-guard: the only test that reaches this helper
+  # carries the per-test whole-tree mark, because it copies every file in the scripts directory.
   find "$SCRIPTS" -maxdepth 1 -type f -exec cp {} "$MUTANT_SCRIPTS/" \;
 }
 
+# bats test_tags=whole-tree
 @test "override valid, guard red: a pricing lib with the overlay step removed misses the override figure" {
   install_override override-valid.json
   mutant_scripts nooverlay

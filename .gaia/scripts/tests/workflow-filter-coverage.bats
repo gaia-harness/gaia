@@ -84,8 +84,6 @@
 # malformed directive (SC1073) and fails the lint outright.
 # shellcheck disable=SC2030,SC2031
 
-# bats file_tags=whole-tree
-
 # The workflows this guard reads are a precondition on CI, not a maybe: the job
 # that runs this suite checks the repo out whole, so an absent path there means
 # the directory was renamed and this guard silently stopped guarding. So the CI
@@ -483,6 +481,8 @@ PY
 # that test's own tmpdir.
 tracked_list() {
   local output_file="$1"
+  # gaia-lint-ignore whole-tree-mark-guard: the tests that reach this helper and
+  # depend on the listing carry the per-test whole-tree mark.
   git -C "$REPO_ROOT" ls-files -z | tr '\0' '\n' > "$output_file"
 }
 
@@ -564,6 +564,7 @@ workflow_files() {
 #    catch, turned on the file itself. Pin both ends: the live tree does gate
 #    steps on paths-filter outputs, and those steps do resolve literal inputs.
 
+# bats test_tags=whole-tree
 @test "the live tree still has paths-filter-gated steps to check" {
   require_yaml_parser
   local tracked="$BATS_TEST_TMPDIR/tracked" count
@@ -584,6 +585,7 @@ workflow_files() {
   }
 }
 
+# bats test_tags=whole-tree
 @test "gated steps still resolve literal inputs beyond their own workflow file" {
   require_yaml_parser
   local tracked="$BATS_TEST_TMPDIR/tracked" count
@@ -608,6 +610,7 @@ workflow_files() {
 
 # 2. The invariant itself, over the live tree.
 
+# bats test_tags=whole-tree
 @test "every gated step's literal inputs are reachable by the filter gating it" {
   require_yaml_parser
   local tracked="$BATS_TEST_TMPDIR/tracked"
@@ -641,6 +644,7 @@ workflow_files() {
 #    is the property shell-lint.yml and audit-ci-tests.yml both record by hand
 #    today, in comments, with nothing enforcing it.
 
+# bats test_tags=whole-tree
 @test "every gated step's filter reaches its own workflow file" {
   require_yaml_parser
   local tracked="$BATS_TEST_TMPDIR/tracked"
@@ -679,6 +683,7 @@ workflow_files() {
 #    reading "any output this guard cannot parse" would report those too and
 #    bury the one shape that matters.
 
+# bats test_tags=whole-tree
 @test "only the exempt workflows gate a step on a hand-rolled filter output" {
   require_yaml_parser
   local tracked="$BATS_TEST_TMPDIR/tracked"

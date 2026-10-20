@@ -10,8 +10,6 @@
 #
 # Run via: bash .gaia/scripts/bats5.sh .gaia/tests/lib/dependabot-retired-surface.bats < /dev/null
 
-# bats file_tags=whole-tree
-
 setup() {
   REPOSITORY_ROOT="$(cd "$BATS_TEST_DIRNAME/../../.." && pwd)"
   RETIRED_NAMES=(
@@ -70,6 +68,7 @@ shipped_paths() {
     is_exempt_path "$path" && continue
     is_release_excluded "$path" && continue
     printf '%s\n' "$path"
+  # gaia-lint-ignore whole-tree-mark-guard: every test that reaches this listing carries the per-test mark
   done < <(git -C "$REPOSITORY_ROOT" ls-files -z)
 }
 
@@ -77,11 +76,13 @@ check_shipped_files() {
   shipped_paths | check_retired_surface "$REPOSITORY_ROOT"
 }
 
+# bats test_tags=whole-tree
 @test "no shipped file names the retired Dependabot surface" {
   run check_shipped_files
   [ "$status" -eq 0 ] || { echo "$output" >&2; return 1; }
 }
 
+# bats test_tags=whole-tree
 @test "the committed CLI bundle is among the scanned files" {
   run shipped_paths
   [ "$status" -eq 0 ]

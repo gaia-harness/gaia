@@ -10,8 +10,6 @@
 # the helper. These tests exercise both against the fixture test files under
 # fixtures/red-ledger/.
 
-# bats file_tags=whole-tree
-
 setup() {
   REPO_ROOT=$(cd "$BATS_TEST_DIRNAME/../../.." && pwd)
   # The Node helpers this suite drives resolve `typescript` from node_modules.
@@ -498,6 +496,7 @@ run_library() {
 
 # --- signal helper: corpus standing check over the union glob set ---
 
+# bats test_tags=whole-tree
 @test "the helper over the whole union glob set has no duplicate signal per file, and records at least every plain literal-titled test" {
   local corpus="$BATS_TEST_TMPDIR/corpus.ndjson"
   : > "$corpus"

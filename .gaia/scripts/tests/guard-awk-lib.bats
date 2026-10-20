@@ -18,8 +18,6 @@
 # library into a tmpdir and require a NAMED test here to red against it. Nothing
 # outside this suite sets either.
 
-# bats file_tags=whole-tree
-
 setup() {
   THIS_DIRECTORY="$( cd "$( dirname "$BATS_TEST_FILENAME" )" && pwd )"
   REPO_ROOT="$( cd "$THIS_DIRECTORY/../../.." && pwd )"
@@ -392,6 +390,106 @@ EOF
   grep -qF -- "STUBCLASS" <<<"$output" && return 1
   grep -qF -- "malformed" <<<"$output" && return 1
   true
+}
+
+# The second root exists because a guard may live under .gaia/tests/. Both
+# directions in one test, so deleting the fallback reds it.
+@test "a token resolves through the sibling tests directory and reports malformed once it is gone" {
+  mkdir -p "$TEMPORARY_DIRECTORY/fixture/.gaia/scripts" "$TEMPORARY_DIRECTORY/fixture/.gaia/tests"
+  : > "$TEMPORARY_DIRECTORY/fixture/.gaia/tests/whole-probe.sh"
+  cat > "$TEMPORARY_DIRECTORY/second.bats" <<'EOF2'
+# gaia-lint-ignore whole-probe: resolves through the tests directory
+echo "STUBCLASS on the target line"
+EOF2
+  local fixture_scripts="$TEMPORARY_DIRECTORY/fixture/.gaia/scripts"
+  run awk -v file=second.bats -v is_bats=1 -v scripts_directory="$fixture_scripts" \
+      -v guard=whole-probe -v is_owner=1 -v want_desync=1 \
+      "$GAIA_GUARD_AWK$PROBE_AWK" "$TEMPORARY_DIRECTORY/second.bats" "$TEMPORARY_DIRECTORY/second.bats"
+  grep -qF -- "malformed" <<<"$output" && return 1
+  grep -qF -- "STUBCLASS" <<<"$output" && return 1
+  rm -f "$TEMPORARY_DIRECTORY/fixture/.gaia/tests/whole-probe.sh"
+  run awk -v file=second.bats -v is_bats=1 -v scripts_directory="$fixture_scripts" \
+      -v guard=whole-probe -v is_owner=1 -v want_desync=1 \
+      "$GAIA_GUARD_AWK$PROBE_AWK" "$TEMPORARY_DIRECTORY/second.bats" "$TEMPORARY_DIRECTORY/second.bats"
+  grep -qF -- "malformed gaia-lint-ignore: whole-probe does not resolve to .gaia/scripts/whole-probe.sh" <<<"$output" || return 1
+}
+
+@test "an empty reason on a token that resolves only through the tests directory is reported by the owner" {
+  mkdir -p "$TEMPORARY_DIRECTORY/fixture/.gaia/scripts" "$TEMPORARY_DIRECTORY/fixture/.gaia/tests"
+  : > "$TEMPORARY_DIRECTORY/fixture/.gaia/tests/whole-probe.sh"
+  cat > "$TEMPORARY_DIRECTORY/empty.bats" <<'EOF2'
+# gaia-lint-ignore whole-probe:
+echo "an ordinary line"
+EOF2
+  run awk -v file=empty.bats -v is_bats=1 -v scripts_directory="$TEMPORARY_DIRECTORY/fixture/.gaia/scripts" \
+      -v guard=whole-probe -v is_owner=1 -v want_desync=1 \
+      "$GAIA_GUARD_AWK$PROBE_AWK" "$TEMPORARY_DIRECTORY/empty.bats" "$TEMPORARY_DIRECTORY/empty.bats"
+  grep -qF -- "malformed gaia-lint-ignore for whole-probe: no reason given" <<<"$output" || return 1
+  grep -qF -- "does not resolve" <<<"$output" && return 1
+  true
+}
+
+# The scrub removes the maintainer-only lines; the library must still source and
+# resolve a scripts token afterwards, and the pair must be balanced.
+@test "the library without its maintainer-only lines still sources and resolves a scripts token" {
+  [ "$(grep -c 'gaia:maintainer-only:start' "$LIBRARY")" -eq "$(grep -c 'gaia:maintainer-only:end' "$LIBRARY")" ]
+  sed '/gaia:maintainer-only:start/,/gaia:maintainer-only:end/d' "$LIBRARY" > "$TEMPORARY_DIRECTORY/scrubbed-lib.sh"
+  mkdir -p "$TEMPORARY_DIRECTORY/scripts"
+  : > "$TEMPORARY_DIRECTORY/scripts/lint-scrub-probe.sh"
+  cat > "$TEMPORARY_DIRECTORY/scrub.bats" <<'EOF2'
+# gaia-lint-ignore lint-scrub-probe: resolves in the scripts directory
+echo "STUBCLASS on the target line"
+EOF2
+  # shellcheck source=/dev/null
+  . "$TEMPORARY_DIRECTORY/scrubbed-lib.sh"
+  run awk -v file=scrub.bats -v is_bats=1 -v scripts_directory="$TEMPORARY_DIRECTORY/scripts" \
+      -v guard=lint-scrub-probe -v is_owner=1 -v want_desync=1 \
+      "$GAIA_GUARD_AWK$PROBE_AWK" "$TEMPORARY_DIRECTORY/scrub.bats" "$TEMPORARY_DIRECTORY/scrub.bats"
+  [ "$status" -eq 0 ]
+  grep -qF -- "malformed" <<<"$output" && return 1
+  grep -qF -- "STUBCLASS" <<<"$output" && return 1
+  true
+}
+
+@test "in_test answers 1 inside a test body and 0 in setup, a helper and at top level" {
+  cat > "$TEMPORARY_DIRECTORY/scope.bats" <<'EOF2'
+echo "MARK top"
+
+setup() {
+  echo "MARK setup"
+}
+
+a_helper() {
+  echo "MARK helper"
+}
+
+EOF2
+  # The test header is printed rather than written into the heredoc, because
+  # bats rewrites a column-0 test header anywhere in this file, fixtures included.
+  printf '%s "one" {\n' '@test' >> "$TEMPORARY_DIRECTORY/scope.bats"
+  cat >> "$TEMPORARY_DIRECTORY/scope.bats" <<'EOF2'
+  echo "MARK body"
+}
+
+echo "MARK after"
+EOF2
+  local scope_awk='
+BEGIN { gaia_scan_reset() }
+NR == FNR { gaia_scan_prepass($0); next }
+FNR == 1 { gaia_scan_prepass_end() }
+{
+  gaia_scan_feed($0, 1)
+  if (index($0, "MARK") > 0) printf "%s=%d\n", $3, gaia_scan_in_test()
+}
+END { gaia_scan_end(file, 1, "x", 0, 0) }'
+  run awk -v file=scope.bats -v scripts_directory="$SCRIPTS_DIRECTORY" \
+      "$GAIA_GUARD_AWK$scope_awk" "$TEMPORARY_DIRECTORY/scope.bats" "$TEMPORARY_DIRECTORY/scope.bats"
+  [ "$(grep -c . <<<"$output")" -eq 5 ]
+  grep -qxF -- 'top"=0' <<<"$output" || return 1
+  grep -qxF -- 'setup"=0' <<<"$output" || return 1
+  grep -qxF -- 'helper"=0' <<<"$output" || return 1
+  grep -qxF -- 'body"=1' <<<"$output" || return 1
+  grep -qxF -- 'after"=0' <<<"$output" || return 1
 }
 
 # The off-surface arm: nothing is honored outside a bats suite, and the block is
@@ -965,6 +1063,8 @@ library_consumers() {
   # a non-ASCII byte, and the quoted spelling names no file the caller can open.
   while IFS= read -r -d '' consumer_file; do
     printf '%s\n' "$REPO_ROOT/$consumer_file"
+  # gaia-lint-ignore whole-tree-mark-guard: the only test that reaches this helper,
+  # the roster-equality test, carries the per-test whole-tree mark.
   done < <(git -C "$REPO_ROOT" grep -l -z -- '_gaia_guard_library_directory/guard-awk-lib.sh' \
              -- ':(exclude)*.bats')
 }
@@ -973,6 +1073,7 @@ participating_files() {
   printf '%s\n' \
     "$REPO_ROOT/.gaia/scripts/lint-git-path-quoting.sh" \
     "$REPO_ROOT/.gaia/scripts/lint-errexit-status-read.sh" \
+    "$REPO_ROOT/.gaia/tests/whole-tree-mark-guard.sh" \
     "$REPO_ROOT/.gaia/scripts/tests/fixtures/stub-guard.sh"
 }
 
@@ -998,6 +1099,7 @@ assert_consumer_count() {
 # added to it is invisible to any check the roster drives. This is the one
 # assertion that can see it, and it reds both ways -- a roster entry with no awk
 # program, and an awk-carrying consumer with no roster entry.
+# bats test_tags=whole-tree
 @test "the participating roster is exactly the library consumers that concatenate GAIA_GUARD_AWK" {
   local consumer_file derived
   assert_consumer_count || return 1
@@ -1024,17 +1126,23 @@ assert_consumer_count() {
   done < <(participating_files)
 }
 
-# README C1.3 freezes nine entry points. The stub is capped at a 40-line
-# non-boilerplate body (asserted below by "the stub guard non-boilerplate
-# body stays inside its line budget") and its own header states it calls the
-# five common ones above and none of the other four: no prepass (it reports
-# on one surface with no need for a second pass), no gaia_scan_pragma_here
-# (it has no off-surface pragma to name), and no gaia_scan_run_only (it
-# detects a class errexit arming does not reach).
+# The library header's awk surface freezes ten entry points. The stub is
+# capped at a 40-line non-boilerplate body (asserted below by "the stub guard
+# non-boilerplate body stays inside its line budget") and its own header states
+# it calls the five common ones above and none of the prepass, pragma-here or
+# run-only ones: no prepass (it reports on one surface with no need for a
+# second pass), no gaia_scan_pragma_here (it has no off-surface pragma to
+# name), and no gaia_scan_run_only (it detects a class errexit arming does not
+# reach).
+#
+# The whole-tree mark guard is exempt from the gaia_scan_pragma_here half: it
+# scans bats suites only, so it has no off-surface pragma to name, and a call
+# made only to satisfy this check would be dead code.
 @test "each production guard calls gaia_scan_prepass and gaia_scan_pragma_here; only the errexit gate also calls gaia_scan_run_only" {
   local guard_file
   while IFS= read -r guard_file; do
     grep -qF -- "gaia_scan_prepass(" "$guard_file" || { echo "$guard_file: never calls gaia_scan_prepass" >&2; return 1; }
+    [ "$guard_file" = "$REPO_ROOT/.gaia/tests/whole-tree-mark-guard.sh" ] && continue
     grep -qF -- "gaia_scan_pragma_here(" "$guard_file" || { echo "$guard_file: never calls gaia_scan_pragma_here" >&2; return 1; }
   done < <(production_guards)
   grep -qF -- "gaia_scan_run_only(" "$REPO_ROOT/.gaia/scripts/lint-errexit-status-read.sh" || return 1
@@ -1058,13 +1166,13 @@ assert_consumer_count() {
   true
 }
 
-@test "no participating file calls a gaia_scan_* name outside the frozen nine" {
+@test "no participating file calls a gaia_scan_* name outside the frozen entry-point set" {
   local guard_file name
   while IFS= read -r guard_file; do
     while IFS= read -r name; do
       [ -n "$name" ] || continue
       case "$name" in
-        gaia_scan_reset|gaia_scan_prepass|gaia_scan_prepass_end|gaia_scan_feed|gaia_scan_skip|gaia_scan_suppressed|gaia_scan_pragma_here|gaia_scan_run_only|gaia_scan_end) ;;
+        gaia_scan_reset|gaia_scan_prepass|gaia_scan_prepass_end|gaia_scan_feed|gaia_scan_skip|gaia_scan_suppressed|gaia_scan_pragma_here|gaia_scan_run_only|gaia_scan_in_test|gaia_scan_end) ;;
         *) echo "$guard_file: calls unrecognized entry point $name" >&2; return 1 ;;
       esac
     done < <(grep -oE 'gaia_scan_[A-Za-z_]+\(' "$guard_file" | sed 's/(//' | sort -u)
@@ -1106,6 +1214,10 @@ own_awk_functions() {
   # doc.
   actual="$(own_awk_functions "$REPO_ROOT/.gaia/scripts/lint-errexit-status-read.sh")"
   expected="$(printf '%s\n' arm check_desync eat_word feed has_status_read pragma_offsurface report reset_state walk yaml_feed)"
+  [ "$actual" = "$expected" ]
+
+  actual="$(own_awk_functions "$REPO_ROOT/.gaia/tests/whole-tree-mark-guard.sh")"
+  expected="$(printf '%s\n' bats_applies_whole_tree collect_line find_hits finding idiom_priority is_comment names_only read_tag_line refers test_name_of)"
   [ "$actual" = "$expected" ]
 
   actual="$(own_awk_functions "$REPO_ROOT/.gaia/scripts/tests/fixtures/stub-guard.sh")"
@@ -1258,6 +1370,7 @@ mutate_guard_copy() {
 
 # --- no phantom coverage ----------------------------------------------------
 
+# bats test_tags=whole-tree
 @test "the real scan surface holds a workflow and a composite action" {
   surface_has_workflow_and_action "$REPO_ROOT" "$LIBRARY"
 }

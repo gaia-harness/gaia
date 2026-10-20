@@ -15,8 +15,6 @@
 #
 # Assertion style: .claude/rules/bats-assertions.md.
 
-# bats file_tags=whole-tree
-
 bats_require_minimum_version 1.5.0
 
 RETIRED_ROOTS_PATTERN='\.gaia/local/(specs|plans|research)([^[:alnum:]_]|$)'
@@ -141,12 +139,14 @@ _write_allowlist() {
   printf '%s\n' "$@" > "$ALLOWLIST"
 }
 
+# bats test_tags=whole-tree
 @test "the real tree passes with the committed allowlist" {
   run notebook_retired_paths_check "$REAL_ROOT" "$REAL_ALLOWLIST"
   [ "$status" -eq 0 ]
   [ -z "$output" ]
 }
 
+# bats test_tags=whole-tree
 @test "the real scan is armed: an empty allowlist reports hits in the history ledger and the migration prompt" {
   : > "$ALLOWLIST"
   run notebook_retired_paths_check "$REAL_ROOT" "$ALLOWLIST"
@@ -155,6 +155,7 @@ _write_allowlist() {
   grep -qE '^RETIRED \.gaia/migrations/2\.0\.0\.md:[0-9]+: ' <<<"$output"
 }
 
+# bats test_tags=whole-tree
 @test "every allowlist row names a tracked file, and each live-prose row carries a line pattern" {
   row_count=0
   while IFS= read -r line; do

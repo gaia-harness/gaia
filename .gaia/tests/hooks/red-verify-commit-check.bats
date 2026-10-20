@@ -25,8 +25,6 @@
 # helper still resolves `typescript` from the home repo's node_modules via
 # createRequire(import.meta.url), so the signal recompute works.
 
-# bats file_tags=whole-tree
-
 # Mirror the repo-relative layout the hook resolves from a tree's own root, in
 # whatever tree a case aims a commit at. Every such tree needs its own copy:
 # the signal helper is invoked by the repo-relative path
@@ -767,9 +765,11 @@ install_stub_classifier_home() {
   FAKE_HOME="$BATS_TEST_TMPDIR/fake-home"
   mkdir -p "$FAKE_HOME/.claude/hooks/lib" "$FAKE_HOME/.gaia/scripts/classifier"
   cp "$HOME_ROOT/.claude/hooks/red-verify-commit-check.sh" "$FAKE_HOME/.claude/hooks/"
+  # gaia-lint-ignore whole-tree-mark-guard: every test that reaches this link farm carries the per-test mark
   for entry in "$HOME_ROOT"/.claude/hooks/lib/*; do
     ln -sfn "$entry" "$FAKE_HOME/.claude/hooks/lib/$(basename "$entry")"
   done
+  # gaia-lint-ignore whole-tree-mark-guard: every test that reaches this link farm carries the per-test mark
   for entry in "$HOME_ROOT"/.gaia/scripts/*; do
     [ "$(basename "$entry")" = classifier ] && continue
     ln -sfn "$entry" "$FAKE_HOME/.gaia/scripts/$(basename "$entry")"
@@ -845,6 +845,7 @@ reason_of_output() {
   reason_of_output | grep -qF -- 'gaia-packages: frontend/gaia.package.json is missing'
 }
 
+# bats test_tags=whole-tree
 @test "a classifier that exits 7 denies with its error; exit 3 falls back to the RED demand; an emergent verdict allows" {
   stage_file "frontend/app/utils/x.test.ts" "$PASSING_TEST"
   install_stub_classifier_home 7 '{"error":"gaia-packages: stub descriptor failure. Next step: fix it."}'
@@ -879,6 +880,7 @@ reason_of_output() {
 
 # --- the one-jq payload reader ---
 
+# bats test_tags=whole-tree
 @test "lib/hook-payload.sh absent: a commit the intact hook denies is allowed silently" {
   stage_file "frontend/app/utils/x/index.test.ts" "$PASSING_TEST"
   run_commit_hook

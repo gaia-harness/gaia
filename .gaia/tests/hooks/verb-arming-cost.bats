@@ -145,8 +145,6 @@
 # takes its normal not-armed fast exit right after the arming call, so no
 # fixture here needs the audit-clearance/resolver machinery real merges need.
 
-# bats file_tags=whole-tree
-
 bats_require_minimum_version 1.5.0
 
 setup() {
@@ -475,6 +473,7 @@ CEILING_VIEW_16K_MS=100
   [ "$REPLY_MS" -le "$CEILING_VIEW_PAST_BOUND_MS" ]
 }
 
+# bats test_tags=whole-tree
 @test "cost: every adopting hook processes one ordinary 200-byte git-commit tool call within budget" {
   local command_text
   command_text="git commit -m x $(head -c 180 < /dev/zero | tr '\0' 'y')"
@@ -492,6 +491,7 @@ CEILING_VIEW_16K_MS=100
   [ "$total" -le "$CEILING_ALL_HOOKS_ORDINARY_MS" ]
 }
 
+# bats test_tags=whole-tree
 @test "cost: every adopting hook processes one 16KB raw-matching gh-pr-merge tool call within budget" {
   local command_text
   command_text=$(build_armed_payload "gh pr merge 1" 16384)
@@ -520,6 +520,7 @@ CEILING_VIEW_16K_MS=100
 # not red it.
 CEILING_USAGE_MERGE_MS=4000
 
+# bats test_tags=whole-tree
 @test "cost: the merge hook with the usage block live stays inside the cap plus headroom when gh cannot answer" {
   local copied_file
   mkdir -p "$REPO/.claude/hooks/lib" "$REPO/.gaia/scripts" "$REPO/.gaia/scripts/spec"

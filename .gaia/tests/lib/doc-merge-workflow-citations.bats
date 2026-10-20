@@ -30,8 +30,6 @@
 # Assertion style: .claude/rules/bats-assertions.md. `.gaia/tests/` is
 # release-excluded and out of wiki-style.md's scope.
 
-# bats file_tags=whole-tree
-
 setup() {
   ROOT="$(cd "$BATS_TEST_DIRNAME/../../.." && pwd)"
   PAGE_NAMES='PR Merge Workflow|Audit Round Procedure|Audit Gate Reference'
@@ -111,6 +109,7 @@ unresolved_citations() {
 
 # tracked_citing_files: NUL-separated tracked files under the citing trees.
 tracked_citing_files() {
+  # gaia-lint-ignore whole-tree-mark-guard: every test that reaches this listing carries the per-test mark
   git -C "$ROOT" ls-files -z -- "${CITING_PATHSPEC[@]}"
 }
 
@@ -137,6 +136,7 @@ run_check() {
   printf '%s\0' "$@" | extract_citations "$root" | unresolved_citations "$root"
 }
 
+# bats test_tags=whole-tree
 @test "the three pages exist and carry headings" {
   local page
   for page in 'PR Merge Workflow' 'Audit Round Procedure' 'Audit Gate Reference'; do
@@ -147,6 +147,7 @@ run_check() {
   done
 }
 
+# bats test_tags=whole-tree
 @test "the derived citation set is non-empty and matches an independent wikilink count" {
   local derived_total independent_wikilinks path_form
   derived_total="$(tracked_citing_files | extract_citations "$ROOT" | grep -c . || true)"
@@ -166,6 +167,7 @@ run_check() {
   }
 }
 
+# bats test_tags=whole-tree
 @test "every citation of a heading on the three pages resolves to a heading on the named page" {
   local unresolved
   unresolved="$(tracked_citing_files | extract_citations "$ROOT" | unresolved_citations "$ROOT")" || {

@@ -58,11 +58,18 @@ EOF
   chmod +x "$stub_path"
 }
 
-# vhf_write_suite <relative path> <mark: yes|no> <names...>: a suite whose
-# tests each fail while control/<test file stem>-<test slug> is non-empty.
-# The mark line is assembled at run time, so it never sits at column 0 here.
+# vhf_write_suite <relative path> <mark: yes|no|tests:<slug,slug>|tests+:<slug,slug>> <names...>:
+# a suite whose tests each fail while control/<test file stem>-<test slug> is
+# non-empty. `yes` marks the whole file; `tests:` marks only the listed tests
+# with the per-test tag, and `tests+:` does the same with the tag in a comma
+# list (`slow,<tag>`). The mark lines are assembled at run time, so they never
+# sit at column 0 here.
 vhf_write_suite() {
-  local relative_path="$1" suite_path="$VHF_ROOT/$1" marked="$2" stem test_slug
+  local relative_path="$1" suite_path="$VHF_ROOT/$1" marked="$2" stem test_slug marked_tests=""
+  case "$marked" in
+    tests:*) marked_tests=",${marked#tests:}," ;;
+    tests+:*) marked_tests=",${marked#tests+:}," ;;
+  esac
   shift 2
   stem="${suite_path##*/}"
   stem="${stem%.bats}"
@@ -75,6 +82,12 @@ vhf_write_suite() {
     printf '  printf "bats|%%s|%%s|%%s\\n" "%s" "$BATS_TEST_DESCRIPTION" "$fixture_root" >>"${VERIFY_FIXTURE_LOG:?}"\n' "$relative_path"
     printf '}\n'
     for test_slug in "$@"; do
+      if [ -n "$marked_tests" ] && [ "${marked_tests#*",$test_slug,"}" != "$marked_tests" ]; then
+        case "$marked" in
+          tests+:*) printf '# bats %s\n' 'test_tags=slow,whole-tree' ;;
+          *) printf '# bats %s\n' 'test_tags=whole-tree' ;;
+        esac
+      fi
       printf '@test "%s %s" {\n  [ ! -s "$fixture_root/control/%s-%s" ]\n}\n' "$stem" "$test_slug" "$stem" "$test_slug"
     done
   } >"$suite_path"

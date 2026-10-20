@@ -18,8 +18,6 @@
 #
 # Assertion style: bash-3.2-safe per .claude/rules/bats-assertions.md.
 
-# bats file_tags=whole-tree
-
 setup() {
   THIS_DIRECTORY="$( cd "$( dirname "$BATS_TEST_FILENAME" )" && pwd )"
   REPO_ROOT="$( cd "$THIS_DIRECTORY/../../.." && pwd )"
@@ -113,6 +111,8 @@ tracked_sh() {
       first="$tracked_path"
     fi
     last="$tracked_path"
+  # gaia-lint-ignore whole-tree-mark-guard: every test that reaches this helper
+  # carries the per-test whole-tree mark, because the listing is every tracked shell script.
   done < <(git -C "$REPO_ROOT" -c core.quotepath=false ls-files -z '*.sh')
   if [ "$which_end" = "first" ]; then
     printf '%s\n' "$first"
@@ -157,6 +157,7 @@ gate_pass_headers() {
 # lever for this group, which is what this is. Widening one of these back to
 # the bare gate buys no assertion and costs about 68 seconds.
 
+# bats test_tags=whole-tree
 @test "the bash-3.2 parse pass runs and stays green when every script parses" {
   run env PATH="$STUB_DIRECTORY:$PATH" SHELL_LINT_BASH32="$STUB_DIRECTORY/bash32" \
     bash "$GATE" --only bash32-parse
@@ -165,6 +166,7 @@ gate_pass_headers() {
   grep -qF -- "shell-lint passed" <<<"$output"
 }
 
+# bats test_tags=whole-tree
 @test "the bash-3.2 parse pass fails the gate on a script the interpreter cannot parse" {
   first_sh="$(tracked_sh first)"
   [ -n "$first_sh" ]
@@ -177,6 +179,7 @@ gate_pass_headers() {
   grep -qF -- "$first_sh: line 1: syntax error" <<<"$output"
 }
 
+# bats test_tags=whole-tree
 @test "the bash-3.2 parse pass reports EVERY broken script, not only the first" {
   # The sweep's header claims one invocation names every broken script rather
   # than only the first. Rigging a single file cannot check that claim wherever
@@ -198,6 +201,7 @@ gate_pass_headers() {
   grep -qF -- "$last_sh: line 1: syntax error" <<<"$output"
 }
 
+# bats test_tags=whole-tree
 @test "the bash-3.2 parse pass skips LOUDLY when the interpreter is too new" {
   # A file is rigged to fail the sweep at the same time. That is what makes the
   # green below mean "did not sweep" rather than merely "swept and found
@@ -221,6 +225,7 @@ gate_pass_headers() {
   true
 }
 
+# bats test_tags=whole-tree
 @test "the bash-3.2 parse pass fails closed when the interpreter is missing" {
   run env PATH="$STUB_DIRECTORY:$PATH" SHELL_LINT_BASH32="$STUB_DIRECTORY/no-such-bash" \
     bash "$GATE" --only bash32-parse
@@ -229,6 +234,7 @@ gate_pass_headers() {
   grep -qF -- "shell-lint FAILED" <<<"$output"
 }
 
+# bats test_tags=whole-tree
 @test "the bash-3.2 parse pass fails closed when the interpreter reports no version" {
   run env PATH="$STUB_DIRECTORY:$PATH" SHELL_LINT_BASH32="$STUB_DIRECTORY/bash32" \
     BASH32_MAJOR= bash "$GATE" --only bash32-parse
@@ -248,6 +254,7 @@ gate_pass_headers() {
 # for the shellcheck harness -- macOS runner minutes bill at 10x -- so the flag
 # has to reach the parse pass without shellcheck present at all.
 
+# bats test_tags=whole-tree
 @test "--only bash32-parse runs the parse pass and skips every other pass" {
   run env PATH="$STUB_DIRECTORY:$PATH" SHELL_LINT_BASH32="$STUB_DIRECTORY/bash32" \
     bash "$GATE" --only bash32-parse
@@ -279,6 +286,7 @@ gate_pass_headers() {
   [ "$(gate_pass_headers | grep -cxF 'bash-3.2 parse')" -eq 1 ]
 }
 
+# bats test_tags=whole-tree
 @test "--only bash32-parse runs with no shellcheck on PATH at all" {
   # The cost argument the flag exists for: the macOS leg installs no shellcheck,
   # so an unconditional binary precondition would red it on every run. A stub
@@ -296,6 +304,7 @@ gate_pass_headers() {
   grep -qF -- "shell-lint passed" <<<"$output"
 }
 
+# bats test_tags=whole-tree
 @test "--only bash32-parse still fails closed on a script the interpreter cannot parse" {
   # Selecting one pass must not soften it: the flag narrows what runs, never
   # what a run that finds something reports.
