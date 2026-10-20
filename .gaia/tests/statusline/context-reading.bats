@@ -13,7 +13,6 @@
 setup() {
   STATUSLINE_SOURCE=$(cd "$BATS_TEST_DIRNAME/../../statusline" && pwd)
   SCRIPTS_SOURCE=$(cd "$BATS_TEST_DIRNAME/../../scripts" && pwd)
-  GAIA_SOURCE=$(cd "$BATS_TEST_DIRNAME/../.." && pwd)
   SESSION_ID="0a1b2c3d-1111-4222-8333-444455556666"
 
   MAIN=$(mktemp -d -t gaia-ctx-main-XXXXXX)
@@ -174,19 +173,4 @@ assert_context_file() {
   [ "$status" -eq 0 ]
   [ -n "$output" ]
   [ ! -e "$CONTEXT_DIRECTORY" ]
-}
-
-@test "the maintainer wrapper's patched copy still writes the file" {
-  local wrapper="$GAIA_SOURCE/local/maintainer-statusline.sh"
-  if [ ! -f "$wrapper" ]; then
-    skip "gitignored .gaia/local/maintainer-statusline.sh is absent (CI); the maintainer-path case runs only on the maintainer machine"
-  fi
-  # Reproduce the wrapper's own mechanics in the sandbox: it seds the shipped
-  # script into .gaia/local/.patched-statusline.sh and execs it from there.
-  cp "$wrapper" "$MAIN/.gaia/local/maintainer-statusline.sh"
-  git -C "$MAIN" worktree add --quiet "$WORKTREE" -b feature
-  render "$MAIN/.gaia/local/maintainer-statusline.sh" "$(payload "$WORKTREE" "$SESSION_ID" 25 1000000)"
-  [ "$status" -eq 0 ]
-  [ -f "$MAIN/.gaia/local/.patched-statusline.sh" ]
-  assert_context_file
 }

@@ -383,7 +383,6 @@ run_in_registry_repo() {
     "cache/gh-artifact-pr.treeA.json:main-only"
     ".project-id:main-only"
     "declined-updates.json:main-only"
-    ".patched-statusline.sh:main-only"
     "dep-audit-baseline.json:main-only"
     "sandbox.json:main-only"
     "setup-in-progress:main-only"
