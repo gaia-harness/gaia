@@ -1,7 +1,7 @@
 #!/usr/bin/env bats
 
 # Tests for the default left side of .gaia/statusline/gaia-statusline.sh
-# (sourced sibling left-side.sh): project, branch with a linked-worktree
+# (sourced sibling gaia-statusline-left.sh): project, branch with a linked-worktree
 # marker, model and effort, and a 10-cell context bar colored from the shared
 # threshold lib's bands. A user global statusLine.command still wins.
 #
@@ -181,7 +181,7 @@ assert_user_left() {
 }
 
 @test "last resort: when the default left side cannot render, the bare label does" {
-  rm "$MAIN/.gaia/statusline/left-side.sh"
+  rm "$MAIN/.gaia/statusline/gaia-statusline-left.sh"
   render_at "$MAIN" 250000 1000000
   [ "$status" -eq 0 ]
   grep -qF "Claude Code" <<<"$output"

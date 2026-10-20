@@ -193,6 +193,7 @@ assert_security() {
   local home_directory="$BATS_TEST_TMPDIR/home"
   mkdir -p "$home_directory" "$REFRESH_ROOT/.gaia/statusline"
   cp "$SCRIPTS_DIRECTORY/../statusline/gaia-statusline.sh" "$REFRESH_ROOT/.gaia/statusline/gaia-statusline.sh"
+  cp "$SCRIPTS_DIRECTORY/../statusline/gaia-statusline-right.sh" "$REFRESH_ROOT/.gaia/statusline/gaia-statusline-right.sh"
   git -C "$REFRESH_ROOT" init --quiet --initial-branch=main
   git -C "$REFRESH_ROOT" config user.email t@t.t
   git -C "$REFRESH_ROOT" config user.name t

@@ -336,8 +336,9 @@
     ".gaia/setup-features.json": "owned",
     ".gaia/state-registry.json": "owned",
     ".gaia/statusline/context-reading.sh": "owned",
+    ".gaia/statusline/gaia-statusline-left.sh": "owned",
+    ".gaia/statusline/gaia-statusline-right.sh": "owned",
     ".gaia/statusline/gaia-statusline.sh": "owned",
-    ".gaia/statusline/left-side.sh": "owned",
     ".gaia/statusline/setup-owed.sh": "owned",
     ".gaia/templates/README.md": "owned",
     ".gaia/templates/spec/uat-spec.ts.tmpl": "owned",
@@ -745,7 +746,7 @@
     "wiki/overview.md": "wiki-owned",
     "wiki/README.md": "wiki-owned"
   },
-  "generated": "2026-10-20T10:46:06.702Z",
+  "generated": "2026-10-20T12:17:51.529Z",
   "regions": [
     {
       "endMarker": "<!-- gaia:audit-remit:end -->",

@@ -32,6 +32,7 @@ setup() {
   git -C "$MAIN" config commit.gpgsign false
   mkdir -p "$MAIN/.gaia/statusline" "$MAIN/.gaia/local/cache/shared"
   cp "$STATUSLINE_SOURCE/gaia-statusline.sh" "$MAIN/.gaia/statusline/gaia-statusline.sh"
+  cp "$STATUSLINE_SOURCE/gaia-statusline-right.sh" "$MAIN/.gaia/statusline/gaia-statusline-right.sh"
   echo "x" > "$MAIN/README.md"
   git -C "$MAIN" add -A
   git -C "$MAIN" commit --quiet -m "init"
@@ -437,25 +438,25 @@ render_statusline_against_refresher_cache() {
   grep -qF -- "🔨 /gaia-codify (1 new pattern" <<<"$output"
   [ "$(grep -oF -- "🔨 /gaia-codify" <<<"$output" | wc -l | tr -d ' ')" -eq 1 ]
 
-  # Refusal proof: drop the control-byte stripping in a scratch copy that
-  # lives beside the original (gaia-statusline.sh resolves PROJECT_ROOT from
-  # its own dirname when no main-root resolver is present, as here, so a copy
-  # elsewhere reads the wrong cache and proves nothing) and confirm the raw
+  # Refusal proof: drop the control-byte stripping in the fixture's copy of
+  # the right side (gaia-statusline.sh sources it from its own directory, so
+  # a copy elsewhere is never read and proves nothing) and confirm the raw
   # escape byte now reaches the render.
   search='def clean:'
   # shellcheck disable=SC2016 # single-quoted on purpose: this is the literal
   # replacement line to write, not an expression to expand here.
   broken_line='        def clean: tostring;'
-  count=$(grep -cF -- "$search" "$MAIN/.gaia/statusline/gaia-statusline.sh")
+  right_side="$MAIN/.gaia/statusline/gaia-statusline-right.sh"
+  count=$(grep -cF -- "$search" "$right_side")
   [ "$count" -eq 1 ]
-  broken="$MAIN/.gaia/statusline/gaia-statusline-broken.sh"
   awk -v search_text="$search" -v new="$broken_line" \
     '{ if (index($0, search_text) > 0) print new; else print }' \
-    "$MAIN/.gaia/statusline/gaia-statusline.sh" > "$broken"
-  chmod +x "$broken"
+    "$right_side" > "$BATS_TEST_TMPDIR/broken-right.sh"
+  cmp -s "$right_side" "$BATS_TEST_TMPDIR/broken-right.sh" && return 1
+  cp "$BATS_TEST_TMPDIR/broken-right.sh" "$right_side"
 
   json=$(jq -n --arg current_directory "$MAIN" '{workspace: {current_dir: $current_directory}, cwd: $current_directory, model: {display_name: "Test"}, context_window: {used_percentage: 10}}')
-  run env HOME="$TEMPORARY_HOME" bash -c "printf '%s' '$json' | bash '$broken'"
+  run env HOME="$TEMPORARY_HOME" bash -c "printf '%s' '$json' | bash '$MAIN/.gaia/statusline/gaia-statusline.sh'"
   [ "$status" -eq 0 ]
   grep -qF -- "$injected_sequence" <<<"$output"
 }
