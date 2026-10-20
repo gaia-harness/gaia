@@ -81,7 +81,7 @@
 #   quick-map  a .map(, .filter( or other iteration call
 #   quick-cva  a changed line inside a cva( call
 #   quick-cn-argument  a cn() change other than a token change inside an existing static string-literal argument
-#   quick-element  a capitalized element added, removed or renamed, or any change on its element line
+#   quick-element  a capitalized element added, removed or renamed, or a change on its element line other than the admitted one-line className change
 #   quick-tag  an intrinsic tag added or removed, or swapped outside div, span and p
 #   quick-attribute  any attribute other than className added, removed or changed
 #   quick-hiding-token  a hiding or focus token added or removed
@@ -109,9 +109,20 @@
 # token change on an intrinsic element, on the className attribute line of an
 # existing capitalized element whose element line is unchanged, or inside a
 # string-literal argument of an existing cn() call whose arguments are all
-# string literals and keep their count; a language value change keeping key,
+# string literals and keep their count; the same className change on an
+# existing capitalized element nested as the whole value of an attribute
+# expression (render={<Button ... />}, optionally in one pair of parentheses),
+# on its own attribute lines with its tag line unchanged and every enclosing
+# attribute expression on the chain holding just one such element, its
+# attributes read as that element's own; a one-line capitalized element (one
+# opening, beginning and ending on the line, outside every attribute
+# expression) whose two sides differ only in one static className string,
+# added, changed or removed, the lines byte-identical once that attribute is
+# removed; a language value change keeping key,
 # placeholders, $t() references and HTML-free form, present in every sibling
 # locale; a literal value change inside an existing story export's args object.
+# Both className shapes run every check a top-level intrinsic element's
+# className gets (tokens, class value, other attributes, codepoint, cn count).
 #
 # Honest limits. The line grammar is a lexer, not a TypeScript parser: it tracks
 # strings, comments, template literals, regex literals, brackets and JSX
@@ -120,6 +131,15 @@
 # is recognized only after an operator, an opening bracket or `return`, so a
 # generic arrow function written `<T,>(` reads as JSX and fails the image
 # closed. A div wrapper added around text is a tag addition (deep), not a swap.
+# A className added or removed whole on a capitalized element can replace a
+# custom component's default className, and routes quick when its tokens pass.
+# A className line inserted into or deleted from a multi-line capitalized
+# element stays quick-unclassified. The deny lists above are the whole check,
+# so the reveal and soft-hiding spellings they do not carry (display utilities
+# such as block or flex, visible, opacity-* other than opacity-0,
+# pointer-events-auto, h-0, w-0, max-h-0, max-w-0, scale-0, text-transparent,
+# -translate-*-full) route quick on the nested and one-line shapes exactly as on
+# a top-level intrinsic element.
 
 QUICK_HIDING_TOKENS='sr-only not-sr-only hidden invisible collapse opacity-0 size-0 outline-none outline-hidden ring-0 pointer-events-none'
 QUICK_PALETTE_UTILITIES='bg|text|border|ring|fill|stroke|from|via|to|outline|decoration|shadow|accent|caret|divide|placeholder'
@@ -467,7 +487,8 @@ function pushf(type, name,   p) {
   if (p > 0 && ft[p] == "paren" && fname[p] == "cn") fbuf[p] = fbuf[p] "N"
   depth++; frameseq++
   ft[depth] = type; fname[depth] = name; fline[depth] = CL; fid[depth] = frameseq
-  fprop[depth] = ""; fattr[depth] = ""; fbuf[depth] = ""; fstory[depth] = ""
+  fprop[depth] = ""; fattr[depth] = ""; fbuf[depth] = ""; fstory[depth] = ""; fsusp[depth] = 0
+  if (type == "attrexpr") fsig[CS, frameseq] = ""
   if (type == "paren" && name == "cva") { cvadepth++; cvaany[CS, CL] = 1 }
   if (type == "paren" && name == "cn") { cndepth++; cnopen[CS, CL]++ }
   if (type == "brace" && p == 0 && pendstory != "" && prev == "=") { fstory[depth] = "story:" pendstory; pendstory = ""; pendstate = 0 }
@@ -481,7 +502,41 @@ function popf(   b) {
     cnstatic[CS, fid[depth]] = (b ~ /^Q(,Q)*,?$/) ? 1 : 0
     cnargs[CS, fid[depth]] = gsub(/Q/, "Q", b)
   }
+  if (ft[depth] == "attrexpr") admitted[CS, fid[depth]] = (fsig[CS, fid[depth]] ~ /^(<C|\(<C\))$/) ? 1 : 0
   depth--
+}
+# ---- nested-element pass (NEWLEX) -------------------------------------------
+# An attribute expression is admitted when its whole value is one capitalized
+# element, optionally in one pair of parentheses: its signature (fsig) records
+# every token lexed directly in it, `(`, `)`, `<C` for a capitalized opening,
+# and X for anything else, so a ternary, a call, a second element or an
+# identifier leaves it unadmitted. The value is known only when the expression
+# closes, so evaluation, which runs after both images are lexed, reads it.
+function sigframe() {
+  if (depth > 0 && ft[depth] == "attrexpr") return depth
+  if (depth > 1 && ft[depth] == "paren" && ft[depth - 1] == "attrexpr") return depth - 1
+  return 0
+}
+function sigmark(x,   a) { a = sigframe(); if (a) fsig[CS, fid[a]] = fsig[CS, fid[a]] x }
+# The attribute expressions from frame k down: each must be held by an element's
+# opening tag, which may itself be the value of another; any other frame ends
+# the walk, and an attribute expression below that point fails it.
+function chain_walk(k,   chain, n) {
+  chain = ""; n = 0
+  while (k >= 1) {
+    if (ft[k] == "paren" && k > 1 && ft[k - 1] == "attrexpr") k--
+    if (ft[k] != "attrexpr") break
+    chain = chain " " fid[k]; n++; k--
+    if (k < 1 || ft[k] != "jsxtag") return " BAD"
+    k--
+  }
+  if (n == 0) return " BAD"
+  for (; k >= 1; k--) if (ft[k] == "attrexpr") return " BAD"
+  return chain
+}
+function restore_capture() {
+  if (!fsusp[depth]) return
+  capdepth = fsusp[depth]; capkind = fsuspkind[depth]; capname = fsuspname[depth]; capbuf = ""; fsusp[depth] = 0
 }
 function fail_image() { err[CS] = 1 }
 function startcap(kind, name) {
@@ -511,10 +566,25 @@ function scan_regex(line, i,   j, ch, inclass) {
   }
   return 0
 }
-function open_tag(line, i,   j, k, nm) {
+function open_tag(line, i,   j, k, nm, susp, skind, sname) {
   j = i + 1; k = j
   while (k <= linelength && substr(line, k, 1) ~ /[A-Za-z0-9_$.:-]/) k++
   nm = substr(line, j, k - j)
+  for (susp = depth; susp >= 1; susp--) if (ft[susp] == "attrexpr") { openinattr[CS, CL] = 1; break }
+  susp = 0
+  # A capitalized element as an attribute expression's value lexes its own
+  # opening tag as a top-level one would, its attributes landing as the line's
+  # own segments; the enclosing capture resumes at the tag's end.
+  if (NEWLEX && sigframe()) {
+    sigmark(nm ~ /^[A-Z]/ ? "<C" : "<o")
+    if (nm ~ /^[A-Z]/) {
+      candline[CS, CL] = candline[CS, CL] chain_walk(depth)
+      if (capdepth > 0) {
+        if (capbuf != "") addseg(capkind "~", capname, capbuf)
+        susp = capdepth; skind = capkind; sname = capname; capdepth = 0; capbuf = ""
+      }
+    }
+  }
   if (capdepth == 0) { flushK(); flushT(); addseg("O", nm, "") } else emit("<" nm)
   cvadd(" <" nm)
   tagl = tagl " o:" nm
@@ -525,16 +595,22 @@ function open_tag(line, i,   j, k, nm) {
     return k
   }
   pushf("jsxtag", nm)
+  fsusp[depth] = susp; fsuspkind[depth] = skind; fsuspname[depth] = sname
   return k - 1
 }
 function jsx_tag_char(line, i, c,   k, j, nm, q, e, val) {
   if (c == " " || c == "\t") { if (capdepth > 0) emit(c); return i }
   if (c == "/" && substr(line, i + 1, 1) == ">") {
     if (capdepth > 0) emit("/>"); else addseg("S", "", "")
-    popf(); afterjsx(); return i + 1
+    if (fline[depth] == CL) tagends[CS, CL]++
+    restore_capture(); popf(); afterjsx(); return i + 1
   }
-  if (c == ">") { if (capdepth > 0) emit(">"); else addseg("E", "", ""); ft[depth] = "jsxchild"; return i }
-  if (c == "{") { startcap("X", ""); pushf("attrexpr", ""); cvadd(" {"); return i }
+  if (c == ">") {
+    if (capdepth > 0) emit(">"); else addseg("E", "", "")
+    if (fline[depth] == CL) tagends[CS, CL]++
+    restore_capture(); ft[depth] = "jsxchild"; return i
+  }
+  if (c == "{") { startcap("X", ""); pushf("attrexpr", ""); cvadd(" {"); if (NEWLEX) { prev = "{"; prevword = "" } return i }
   if (c ~ /[A-Za-z_$]/) {
     k = i
     while (k + 1 <= linelength && substr(line, k + 1, 1) ~ /[A-Za-z0-9_$:.-]/) k++
@@ -562,6 +638,9 @@ function jsx_tag_char(line, i, c,   k, j, nm, q, e, val) {
     if (q == "{") {
       if (capdepth > 0) emit(" " nm "=")
       startcap("A", nm); pushf("attrexpr", ""); fattr[depth] = nm; cvadd("{")
+      # The base pass keeps whatever prev the tag inherited, which can stop a
+      # `<` at the start of the value from reading as JSX.
+      if (NEWLEX) { prev = "{"; prevword = "" }
       return j
     }
     fail_image(); return linelength
@@ -594,6 +673,7 @@ function jsx_child_char(line, i, c,   k, j, nm) {
 function code_char(line, i, c,   n, j, k, w, callee, t) {
   n = substr(line, i + 1, 1)
   if (c == " " || c == "\t") { emit(c); cvadd(c); return i }
+  if (NEWLEX && c != "}" && !(c == "<" && jsx_allowed(n))) sigmark(c == "(" ? "(" : (c == ")" ? ")" : "X"))
   if (c == "/" && n == "/") { w = substr(line, i); emit(w); cvadd(w); return linelength }
   if (c == "/" && n == "*") { emit("/*"); inblock = 1; return i + 1 }
   if (c == "\"" || c == "'") { emit(c); instr = c; cvadd("\"\""); cnmark("Q"); return i }
@@ -680,7 +760,15 @@ function line_start(s, L,   k) {
   cnd0[s, L] = cndepth
   if (cvadepth > 0) cvaany[s, L] = 1
   for (k = depth; k >= 1; k--) if (ft[k] == "jsxtag") { tagname0[s, L] = fname[k]; tagline0[s, L] = fline[k]; tagin0[s, L] = 1; break }
-  for (k = depth; k >= 1; k--) if (ft[k] == "attrexpr") { attr0[s, L] = fattr[k]; break }
+  for (k = depth; k >= 1; k--) if (ft[k] == "attrexpr") { startinattr[s, L] = 1; break }
+  if (!NEWLEX) { for (k = depth; k >= 1; k--) if (ft[k] == "attrexpr") { attr0[s, L] = fattr[k]; break } }
+  else {
+    # The enclosing attribute is the innermost element's own: the scan stops at
+    # the first opening-tag frame.
+    for (k = depth; k >= 1; k--) { if (ft[k] == "jsxtag") break; if (ft[k] == "attrexpr") { attr0[s, L] = fattr[k]; break } }
+    for (k = depth; k >= 1; k--) if (ft[k] == "jsxtag") break
+    startchain[s, L] = (k >= 1) ? chain_walk(k - 1) : " BAD"
+  }
   for (k = 1; k <= depth; k++) if (fstory[k] ~ /^story:/) { story0[s, L] = substr(fstory[k], 7); if (fprop[k] == "play") playany[s, L] = 1; break }
   argsdirect0[s, L] = (depth > 0 && fstory[depth] == "args") ? 1 : 0
   storytop0[s, L] = (depth > 0 && fstory[depth] ~ /^story:/) ? 1 : 0
@@ -717,7 +805,7 @@ function tokenize(s,   L, line, i, c, t) {
   depth = 0; instr = ""; inblock = 0; inattrstr = ""; prev = ""; prevword = ""
   cvadepth = 0; cndepth = 0; capdepth = 0; capbuf = ""; capname = ""; capkind = ""
   pendstate = 0; pendstory = ""; attrval = ""; attrname = ""
-  CS = s
+  CS = s; NEWLEX = (s ~ /^n/) ? 1 : 0
   for (L = 1; L <= nlines[s]; L++) {
     CL = L
     line = raw[s, L]; linelength = length(line)
@@ -851,7 +939,7 @@ function token_reason(s, L, cat, j, Lj, o,   mine, theirs, tok) {
   if (j) line_tokens(o, Lj, theirs, category(o, Lj))
   for (tok in mine) if (!(tok in theirs) && is_hiding(tok)) return "quick-hiding-token"
   for (tok in mine) if (!(tok in theirs) && is_motion(tok)) return "quick-motion-order-token"
-  if (s == "post") for (tok in mine) if (!(tok in theirs) && is_palette(tok)) return "quick-palette"
+  if (s ~ /post$/) for (tok in mine) if (!(tok in theirs) && is_palette(tok)) return "quick-palette"
   for (tok in mine) if (!(tok in theirs) && is_arbitrary(tok)) return "quick-arbitrary-value"
   return ""
 }
@@ -887,8 +975,64 @@ function lexical_reason(s, L, t) {
   if (index(t, "`") > 0 || ctx0[s, L] == "TMPL") return "quick-template-literal"
   return ""
 }
-function eval_tsx(i,   s, o, L, j, Lj, t, c, cat, r, f, g) {
-  s = chs[i]; L = chl[i]; o = (s == "pre") ? "post" : "pre"; j = pairof[i]; Lj = j ? chl[j] : 0
+# A changed line reads the nested-element pass (side prefix n) only when it lies
+# in an admitted element's own opening tag, or opens one, with every attribute
+# expression on its frame stack admitted; every other line reads the base pass,
+# the lexer without the nested reading, and gets exactly that pass's outcome.
+function chain_ok(chain, s,   n, parts, k) {
+  if (chain == "" || index(chain, "BAD") > 0) return 0
+  n = split(chain, parts, " ")
+  for (k = 1; k <= n; k++) if (parts[k] != "" && !admitted[s, parts[k]]) return 0
+  return 1
+}
+# The base pass can fail an image the nested pass reads cleanly (it lexes a value
+# like `<Button ... />` as code), so only the nested pass's own failure blocks
+# it; every line outside it still reads the base pass and stays deep there.
+function nested_line(i,   s, L) {
+  if (err["npre"] || err["npost"]) return 0
+  s = "n" chs[i]; L = chl[i]
+  return chain_ok(startchain[s, L], s) || chain_ok(candline[s, L], s)
+}
+# One-line capitalized element: exactly one opening on the line, capitalized,
+# beginning and ending there, outside every attribute expression.
+function oneline_name(s, L,   n, parts, k, count, nm) {
+  if (ctx0[s, L] == "JSXTAG" || startinattr[s, L] || openinattr[s, L] || tagends[s, L] != 1) return ""
+  count = 0; n = split(tagnames[s, L], parts, " ")
+  for (k = 1; k <= n; k++) if (substr(parts[k], 1, 2) == "o:") { count++; nm = substr(parts[k], 3) }
+  if (count != 1 || nm !~ /^[A-Z]/) return ""
+  count = 0
+  for (k = 1; k <= segn[s, L]; k++) if (is_classname(s, L, k)) count++
+  return (count <= 1) ? nm : ""
+}
+function oneline_admitted(s, L, o, Lj,   nm) {
+  if (!Lj) return 0
+  nm = oneline_name(s, L)
+  if (nm == "" || nm != oneline_name(o, Lj)) return 0
+  return class_values(s, L) != class_values(o, Lj)
+}
+function class_values(s, L,   k, out) {
+  out = ""
+  for (k = 1; k <= segn[s, L]; k++) if (is_classname(s, L, k)) out = out "\034" sgt[s, L, k] "=" sgv[s, L, k]
+  return out
+}
+# The raw line with its one static className string attribute and the single
+# whitespace before it removed, searched only between the element's `<Name` and
+# the first `>` after it; a className that is not one static string, or one not
+# found there, yields a value no other side can equal.
+function strip_class(s, L, nm,   k, t, p, q, lit, tag) {
+  t = raw[s, L]
+  for (k = 1; k <= segn[s, L]; k++) if (is_classname(s, L, k)) {
+    if (sgt[s, L, k] != "A" || class_kind(sgv[s, L, k]) != "s") return "\001" s
+    p = index(t, "<" nm); if (p == 0) return "\001" s
+    tag = substr(t, p); q = index(tag, ">"); if (q == 0) return "\001" s
+    lit = "className=" sgv[s, L, k]
+    q = index(substr(tag, 1, q), lit); if (q < 2 || substr(tag, q - 1, 1) !~ /[ \t]/) return "\001" s
+    return substr(t, 1, p - 1) substr(tag, 1, q - 2) substr(tag, q + length(lit))
+  }
+  return t
+}
+function eval_tsx(i, P,   s, cs, o, L, j, Lj, t, c, cat, r, f, g, admit) {
+  cs = chs[i]; s = P cs; L = chl[i]; o = P ((cs == "pre") ? "post" : "pre"); j = pairof[P, i]; Lj = j ? chl[j] : 0
   t = raw[s, L]
   cat = category(s, L)
   if (cat == "blank") return ""
@@ -903,26 +1047,28 @@ function eval_tsx(i,   s, o, L, j, Lj, t, c, cat, r, f, g) {
     if (!j) return "quick-cn-argument"
     f = cnframe0[s, L]; g = cnframe0[o, Lj]
     if (!cnstatic[s, f] || !cnstatic[o, g] || cnargs[s, f] != cnargs[o, g]) return "quick-cn-argument"
-    if (tagin0[s, L] && !intrinsic(tagname0[s, L]) && changed[s, tagline0[s, L]]) return "quick-element"
+    if (tagin0[s, L] && !intrinsic(tagname0[s, L]) && changed[cs, tagline0[s, L]]) return "quick-element"
     if (attr0[s, L] != "" && attr0[s, L] != "className") return "quick-attribute"
     return token_reason(s, L, cat, j, Lj, o)
   }
   if (cnd0[s, L] > 0 || cnd1[s, L] > 0 || cnopen[s, L] > static_cn_count(s, L)) return "quick-cn-argument"
   if (textunsafe[s, L]) return "quick-unclassified"
   if (cat == "text") {
-    if (s == "pre" && !hunkaddtext[chh[i]]) return "quick-text-deleted"
+    if (cs == "pre" && !hunkaddtext[P, chh[i]]) return "quick-text-deleted"
     return ""
   }
   if (cat != "struct") return "quick-unclassified"
-  if (has_nonintrinsic(tagnames[s, L]) || (j && has_nonintrinsic(tagnames[o, Lj]))) return "quick-element"
-  if (ctx0[s, L] == "JSXTAG" && tagin0[s, L] && !intrinsic(tagname0[s, L]) && changed[s, tagline0[s, L]]) return "quick-element"
+  admit = oneline_admitted(s, L, o, Lj)
+  if (!admit && (has_nonintrinsic(tagnames[s, L]) || (j && has_nonintrinsic(tagnames[o, Lj])))) return "quick-element"
+  if (ctx0[s, L] == "JSXTAG" && tagin0[s, L] && !intrinsic(tagname0[s, L]) && changed[cs, tagline0[s, L]]) return "quick-element"
   if (!j) { if (tagnames[s, L] != "") return "quick-tag" }
   else if (!tags_compatible(tagnames[s, L], tagnames[o, Lj])) return "quick-tag"
   if (attr0[s, L] != "" && attr0[s, L] != "className") return "quick-attribute"
   if (other_attrs(s, L) != (j ? other_attrs(o, Lj) : "")) return "quick-attribute"
   if (j) { r = class_value_reason(class_sig(s, L), class_sig(o, Lj)); if (r != "") return r }
   r = token_reason(s, L, cat, j, Lj, o); if (r != "") return r
-  if (s == "pre" && hastext[s, L] && !hunkaddtext[chh[i]]) return "quick-text-deleted"
+  if (cs == "pre" && hastext[s, L] && !hunkaddtext[P, chh[i]]) return "quick-text-deleted"
+  if (admit && strip_class(s, L, oneline_name(s, L)) != strip_class(o, Lj, oneline_name(o, Lj))) return "quick-element"
   if (!j) return "quick-unclassified"
   if (skeleton(s, L) != skeleton(o, Lj)) return "quick-unclassified"
   return ""
@@ -1080,6 +1226,12 @@ BEGIN {
     close(siblingfile)
   } else {
     tokenize("pre"); tokenize("post")
+    if (class != "story") {
+      for (L = 1; L <= nlines["pre"]; L++) raw["npre", L] = raw["pre", L]
+      for (L = 1; L <= nlines["post"]; L++) raw["npost", L] = raw["post", L]
+      nlines["npre"] = nlines["pre"]; nlines["npost"] = nlines["post"]
+      tokenize("npre"); tokenize("npost")
+    }
   }
   started = 0; hunks = 0; nchg = 0
 }
@@ -1107,23 +1259,28 @@ END {
     for (i = 1; i <= nchg; i++) { r = eval_lang(i); if (r != "") { print r "\t" chs[i] ":" chl[i]; exit } }
     print "ok"; exit
   }
-  for (i = 1; i <= nchg; i++) {
-    s = chs[i]; L = chl[i]
-    if (hastext[s, L]) { if (s == "pre") hunkdeltext[chh[i]] = 1; else hunkaddtext[chh[i]] = 1 }
-    cat = category(s, L)
-    if (cat != "struct" && cat != "cnlit") continue
-    key = chh[i] SUBSEP cat
-    if (s == "pre") { dn[key]++; position[i] = dn[key]; delq[key, dn[key]] = i }
-    else { an[key]++; position[i] = an[key]; addq[key, an[key]] = i }
+  # Pairing runs once per pass: P is "" for the base pass and "n" for the nested
+  # one, each pairing by its own categories.
+  for (pass = 1; pass <= (class == "story" ? 1 : 2); pass++) {
+    P = (pass == 1) ? "" : "n"
+    for (i = 1; i <= nchg; i++) {
+      s = P chs[i]; L = chl[i]
+      if (hastext[s, L]) { if (chs[i] == "pre") hunkdeltext[P, chh[i]] = 1; else hunkaddtext[P, chh[i]] = 1 }
+      cat = category(s, L)
+      if (cat != "struct" && cat != "cnlit") continue
+      key = P SUBSEP chh[i] SUBSEP cat
+      if (chs[i] == "pre") { dn[key]++; position[P, i] = dn[key]; delq[key, dn[key]] = i }
+      else { an[key]++; position[P, i] = an[key]; addq[key, an[key]] = i }
+    }
+    for (i = 1; i <= nchg; i++) {
+      if (!((P, i) in position)) continue
+      key = P SUBSEP chh[i] SUBSEP category(P chs[i], chl[i])
+      if (chs[i] == "pre" && ((key, position[P, i]) in addq)) pairof[P, i] = addq[key, position[P, i]]
+      if (chs[i] == "post" && ((key, position[P, i]) in delq)) pairof[P, i] = delq[key, position[P, i]]
+    }
   }
   for (i = 1; i <= nchg; i++) {
-    if (!(i in position)) continue
-    key = chh[i] SUBSEP category(chs[i], chl[i])
-    if (chs[i] == "pre" && ((key, position[i]) in addq)) pairof[i] = addq[key, position[i]]
-    if (chs[i] == "post" && ((key, position[i]) in delq)) pairof[i] = delq[key, position[i]]
-  }
-  for (i = 1; i <= nchg; i++) {
-    r = (class == "story") ? eval_story(i) : eval_tsx(i)
+    r = (class == "story") ? eval_story(i) : eval_tsx(i, nested_line(i) ? "n" : "")
     if (r != "") { print r "\t" chs[i] ":" chl[i]; exit }
   }
   print "ok"
