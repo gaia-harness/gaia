@@ -1,5 +1,5 @@
 /**
- * The pure half of `gaia packages sync-settings` (SPEC-092 contract C8): turn
+ * The pure half of `gaia packages sync-settings`: turn
  * the root `.claude/settings.json` plus an optional package overlay into the
  * complete settings file a session launched in the package directory needs.
  *

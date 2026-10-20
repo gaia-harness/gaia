@@ -211,9 +211,9 @@ tags: [meta, log]
 - 2026-09-16 a25d1bd6 WORTHY - self-heal refuses in-band on step abort → wiki/concepts/Code Review Audit CI.md
 - 2026-09-16 f9c94ece WORTHY - self-heal refuses in-band on enumeration failure → wiki/concepts/Code Review Audit CI.md
 - 2026-09-16 8a1289d1 WORTHY - shipped-tree leak assertion extracted + fail-closed → wiki/concepts/Release Workflow.md
-- 2026-09-15 137c3db1 WORTHY - dedup-key path terminator moved (SPEC-082); already self-documented inline (wiki/concepts/PR Merge Workflow.md regex updated)
+- 2026-09-15 137c3db1 WORTHY - dedup-key path terminator moved; already self-documented inline (wiki/concepts/PR Merge Workflow.md regex updated)
 - 2026-09-15 f9491703 WORTHY - new /gaia-residue triage drain over keyed audit residue -> added section to wiki/concepts/Audit Disposition and Debt Fix.md, updated wiki/index.md
-- 2026-09-15 88bdcd45 WORTHY - canonical accepted-residuals destination (SPEC-080 phase 1); already self-documented inline (wiki/concepts/Audit Disposition and Debt Fix.md, wiki/concepts/Claude Hooks.md, wiki/concepts/PR Merge Workflow.md)
+- 2026-09-15 88bdcd45 WORTHY - canonical accepted-residuals destination (phase 1); already self-documented inline (wiki/concepts/Audit Disposition and Debt Fix.md, wiki/concepts/Claude Hooks.md, wiki/concepts/PR Merge Workflow.md)
 - 2026-09-15 c9232a31 WORTHY - capped bare actions/setup-node steps; already self-documented inline (wiki/decisions/Composite Action Step Timeouts.md)
 - 2026-09-15 ddb5277b WORTHY - uniform pnpm provisioning attribution; already self-documented inline (wiki/concepts/Update Workflow.md, wiki/decisions/Composite Action Step Timeouts.md, wiki/decisions/pnpm.md, wiki/index.md)
 - 2026-09-15 a3ce1567 WORTHY - push-deny hook splits its message by cause; added the undocumented refspec-names-main condition to wiki/concepts/Git Workflow.md and wiki/concepts/Claude Hooks.md
@@ -410,7 +410,7 @@ tags: [meta, log]
 - 2026-07-20 2db00315 WORTHY - reap abandoned PLAN folders after the retention window; wiki/concepts/Local Working State.md updated in-commit
 - 2026-07-20 73cce7e3 WORTHY - reap abandoned SPEC folders after the retention window; wiki/concepts/GAIA Spec.md, wiki/concepts/Local Working State.md updated in-commit
 - 2026-07-20 3bd230b2 WORTHY - remove dead spec-pacing.jsonl (write-only, no consumer); wiki/concepts/Forensics.md, wiki/concepts/GAIA Spec.md, wiki/concepts/Local Working State.md, wiki/concepts/Release Workflow.md updated in-commit
-- 2026-07-20 2cdb2aab WORTHY - live-session lock for concurrent /gaia-spec draft authoring (SPEC-052); wiki/concepts/Local Working State.md updated in-commit
+- 2026-07-20 2cdb2aab WORTHY - live-session lock for concurrent /gaia-spec draft authoring; wiki/concepts/Local Working State.md updated in-commit
 - 2026-07-20 26260b84 WORTHY - make recurring audit findings countable in the policy-memory loop; wiki/concepts/PR Merge Workflow.md, wiki/concepts/Policy-Memory Loop.md updated in-commit
 - 2026-07-20 be9f407c WORTHY - widen the empty-array scan to shipped .gaia/scripts; wiki/concepts/Claude Hooks.md updated in-commit
 - 2026-07-20 c5d727df WORTHY - auto-run /gaia-spec and /gaia-plan adversarial audits, drop the prompt; wiki/concepts/GAIA Plan.md, wiki/concepts/GAIA Spec.md updated in-commit
@@ -420,21 +420,21 @@ tags: [meta, log]
 - 2026-07-20 54496c82 WORTHY - adds block-worktree-path-mismatch.sh (PreToolUse worktree-write guard); wiki/concepts/Claude Hooks.md updated this sync
 - 2026-07-20 c797cf3d WORTHY - ships a preset-replace stub redirecting bare /speckit-clarify to /gaia-spec; corrected the stale accepted-consequence claim in wiki/decisions/spec-kit Extension Strategy.md this sync
 - 2026-07-20 2d4bf74b WORTHY - add Registering a Code Audit Team Member how-to; wiki/concepts/Registering a Code Audit Team Member.md, wiki/index.md updated in-commit
-- 2026-07-20 86507761 WORTHY - adds code-audit-maintainer-prose advisory Code Audit Team member (SPEC-048); wiki/decisions/Code Audit Team.md updated this sync
-- 2026-07-20 b2d9b9da WORTHY - adds Handler: spec design-first class to /gaia-debt (SPEC-047); wiki/concepts/Audit Disposition and Debt Fix.md updated this sync
+- 2026-07-20 86507761 WORTHY - adds code-audit-maintainer-prose advisory Code Audit Team member; wiki/decisions/Code Audit Team.md updated this sync
+- 2026-07-20 b2d9b9da WORTHY - adds Handler: spec design-first class to /gaia-debt; wiki/concepts/Audit Disposition and Debt Fix.md updated this sync
 - 2026-07-20 7254c608 WORTHY - promotes qualifying out-of-scope findings to in-flight self-heal repair + seeds filed finding_class; wiki/concepts/Audit Disposition and Debt Fix.md updated this sync
-- 2026-07-20 d6c6dd27 WORTHY - count workflow-security findings, roster CI + name check, binary freshness gate (SPEC-045 follow-ups); wiki/concepts/PR Merge Workflow.md updated in-commit
-- 2026-07-20 88241f95 WORTHY - Code Audit Team v2: local-by-default, one producer, workflows member (SPEC-045); wiki/concepts/Code Review Audit CI.md, wiki/concepts/PR Merge Workflow.md, wiki/decisions/Code Audit Team.md updated in-commit
+- 2026-07-20 d6c6dd27 WORTHY - count workflow-security findings, roster CI + name check, binary freshness gate (follow-ups); wiki/concepts/PR Merge Workflow.md updated in-commit
+- 2026-07-20 88241f95 WORTHY - Code Audit Team v2: local-by-default, one producer, workflows member; wiki/concepts/Code Review Audit CI.md, wiki/concepts/PR Merge Workflow.md, wiki/decisions/Code Audit Team.md updated in-commit
 - 2026-07-20 2cea369b WORTHY - codify deliberately-required merge checks + detect ruleset drift; wiki/concepts/Release Workflow.md updated in-commit
-- 2026-07-20 ba97c8b2 WORTHY - per-member content-digest keying for the Code Audit Team gate (SPEC-044); wiki/concepts/Audit Disposition and Debt Fix.md, Code Review Audit Agent.md, Local Working State.md, PR Merge Workflow.md, wiki/decisions/Code Audit Team.md updated in-commit
+- 2026-07-20 ba97c8b2 WORTHY - per-member content-digest keying for the Code Audit Team gate; wiki/concepts/Audit Disposition and Debt Fix.md, Code Review Audit Agent.md, Local Working State.md, PR Merge Workflow.md, wiki/decisions/Code Audit Team.md updated in-commit
 - 2026-07-20 52daa1df WORTHY - harden the Code Audit Team merge gate (#765, #792, #794, #795, #796); wiki/concepts/PR Merge Workflow.md updated in-commit
 - 2026-07-20 a9a3165e WORTHY - complete section 9's maintainer-only CI workflow list; wiki/concepts/Release Workflow.md updated in-commit
 - 2026-07-20 81d3b249 WORTHY - per-PR distribution gate for unanswered newly-shipping files; wiki/concepts/Release Workflow.md updated in-commit
-- 2026-07-20 857eb077 WORTHY - clearance carry-forward for the Code Audit Team (SPEC-042); wiki/concepts/Audit Disposition and Debt Fix.md, Local Working State.md, PR Merge Workflow.md, wiki/decisions/Code Audit Team.md updated in-commit
+- 2026-07-20 857eb077 WORTHY - clearance carry-forward for the Code Audit Team; wiki/concepts/Audit Disposition and Debt Fix.md, Local Working State.md, PR Merge Workflow.md, wiki/decisions/Code Audit Team.md updated in-commit
 - 2026-07-20 2421fbe7 WORTHY - key the progress-breadcrumb log to the audited tree; wiki/concepts/Audit Disposition and Debt Fix.md, wiki/concepts/Code Review Audit CI.md, wiki/concepts/Local Working State.md updated in-commit
-- 2026-07-20 10ca8709 WORTHY - remove the adaptive mentorship layer and its event pipeline (SPEC-038); deletes wiki/concepts/Telemetry.md, adds wiki/concepts/GAIA CLI.md, 8 other wiki pages + index updated in-commit
+- 2026-07-20 10ca8709 WORTHY - remove the adaptive mentorship layer and its event pipeline; deletes wiki/concepts/Telemetry.md, adds wiki/concepts/GAIA CLI.md, 8 other wiki pages + index updated in-commit
 - 2026-07-20 fd6f85f1 WORTHY - own the .bats suites in the Code Audit Team roster; wiki/concepts/PR Merge Workflow.md, wiki/decisions/Code Audit Team.md updated in-commit
-- 2026-07-20 8a8a9c49 WORTHY - team-level git isolation policy (SPEC-039); wiki/concepts/Audit Disposition and Debt Fix.md, GAIA Init Workflow.md, Task Orchestration.md, Wiki Sync.md, index.md updated in-commit
+- 2026-07-20 8a8a9c49 WORTHY - team-level git isolation policy; wiki/concepts/Audit Disposition and Debt Fix.md, GAIA Init Workflow.md, Task Orchestration.md, Wiki Sync.md, index.md updated in-commit
 - 2026-07-20 855d34c3 WORTHY - record maintenance-command runs in the cost ledger; wiki/concepts/Cost Data Contract.md, wiki/concepts/Token Cost Readout.md updated in-commit
 - 2026-07-20 c12fff07 WORTHY - detect and retry a silently no-op'd top-level Code Audit Team dispatch; wiki/concepts/PR Merge Workflow.md updated in-commit
 - 2026-07-20 fb2aa0e5 WORTHY - sequence the self-healing audit member ahead of its siblings; wiki/concepts/PR Merge Workflow.md updated in-commit
@@ -455,16 +455,16 @@ tags: [meta, log]
 - 2026-07-09 f0a0914a WORTHY - debt:in-progress claim label for concurrent drains; wiki/concepts/Audit Disposition and Debt Drain.md updated in-commit
 - 2026-07-09 332001ba WORTHY - gaia-debt related-issue batching + branch-vs-worktree isolation; wiki/concepts/Audit Disposition and Debt Drain.md + wiki/index.md updated in-commit
 - 2026-07-09 2f7e5d04 WORTHY - terse one-line cost readout for /gaia-spec, /gaia-plan, closeout; corrected stale four-bucket-stdout claim in wiki/concepts/Token Cost Readout.md
-- 2026-07-09 34a66bca WORTHY - Code Audit Team (spec-034): config-driven auditor roster + dispatch resolver + AND-aggregator + two maintainer-only auditors; new wiki/decisions/Code Audit Team.md, pointers from Code Review Audit Agent.md/CI.md, index.md catalogued
+- 2026-07-09 34a66bca WORTHY - Code Audit Team: config-driven auditor roster + dispatch resolver + AND-aggregator + two maintainer-only auditors; new wiki/decisions/Code Audit Team.md, pointers from Code Review Audit Agent.md/CI.md, index.md catalogued
 - 2026-07-09 1cf88d89 WORTHY - extracted tech-debt filing recipe into file-tech-debt skill; wiki/concepts/Audit Disposition and Debt Drain.md updated in-commit
-- 2026-07-08 e9957d7a WORTHY - audit-phase cost tracking, review action + audit.adversarial nesting (SPEC-032); wiki/concepts/Cost Data Contract.md kind/source/review_id/audit fields + Review rows section, wiki/concepts/Claude Hooks.md token-tally-review.sh entry added this sync
-- 2026-07-08 119af6dc WORTHY - unify spec/plan knowledge lifecycles (SPEC-031); six wiki lifecycle pages + index rewritten in-commit
-- 2026-07-08 bf8e40be WORTHY - two-tier sandbox-enablement preference (SPEC-030); new wiki/concepts/OS Sandbox.md + index line added in-commit
+- 2026-07-08 e9957d7a WORTHY - audit-phase cost tracking, review action + audit.adversarial nesting; wiki/concepts/Cost Data Contract.md kind/source/review_id/audit fields + Review rows section, wiki/concepts/Claude Hooks.md token-tally-review.sh entry added this sync
+- 2026-07-08 119af6dc WORTHY - unify spec/plan knowledge lifecycles; six wiki lifecycle pages + index rewritten in-commit
+- 2026-07-08 bf8e40be WORTHY - two-tier sandbox-enablement preference; new wiki/concepts/OS Sandbox.md + index line added in-commit
 - 2026-07-08 313df9b4 WORTHY - share gitignored .env/.env.* into linked worktrees; wiki/concepts/Local Working State.md updated in-commit
-- 2026-07-08 8e27df09 WORTHY - cost.json sidecar + retention reversal (SPEC-029); four cost/plan wiki concept pages + index updated in-commit
+- 2026-07-08 8e27df09 WORTHY - cost.json sidecar + retention reversal; four cost/plan wiki concept pages + index updated in-commit
 - 2026-07-08 cb16d364 WORTHY - activated hook array-guard lint as CI gate; documented bash 3.2 empty-array class + guard pattern in wiki/concepts/Claude Hooks.md
-- 2026-07-08 3ef712f5 WORTHY - read-side .env secret guard (SPEC-028); wiki/concepts/Claude Hooks.md + wiki/modules/Claude Integration.md updated in-commit
-- 2026-07-08 6a1f2e07 WORTHY - git-arbitrated phase-resume for plan orchestrator (SPEC-027); wiki/concepts/Task Orchestration.md updated in-commit
+- 2026-07-08 3ef712f5 WORTHY - read-side .env secret guard; wiki/concepts/Claude Hooks.md + wiki/modules/Claude Integration.md updated in-commit
+- 2026-07-08 6a1f2e07 WORTHY - git-arbitrated phase-resume for plan orchestrator; wiki/concepts/Task Orchestration.md updated in-commit
 - 2026-07-08 34598ec6 WORTHY - /gaia-debt nudge staleness fix; wiki/concepts/Audit Disposition and Debt Drain.md updated in-commit
 - 2026-07-08 de933024 WORTHY - .gaia/cli lint config; wiki/decisions/Quality Gate.md + wiki/dependencies/gaia-lint.md updated in-commit
 - 2026-07-08 fb989b5c WORTHY - gaia-audit publish+tech-debt flow; wiki/concepts/GAIA Audit.md updated in-commit
@@ -477,7 +477,7 @@ tags: [meta, log]
 - 2026-07-06 05e115ef WORTHY - generalizes manifest rule into .gaia/ ownership rule, removes intercept-init hook (already updated 6 wiki concept/module pages in-commit)
 - 2026-07-06 fa6796b4 WORTHY - composeStory args-spread-last override gotcha → wiki/concepts/Component Testing.md
 - 2026-07-06 693d3810 WORTHY - hardens audit fan-out against silent no-op subagents → wiki/concepts/Code Review Audit Agent.md (no-op guard section added)
-- 2026-07-06 c5c9fd6f WORTHY - SPEC-024 cost-contract amendments (session_cwd, source, token-rates read contract), already updated wiki/concepts/Cost Data Contract.md + Token Cost Readout.md in-commit
+- 2026-07-06 c5c9fd6f WORTHY - cost-contract amendments (session_cwd, source, token-rates read contract), already updated wiki/concepts/Cost Data Contract.md + Token Cost Readout.md in-commit
 - 2026-07-06 033d2f50 WORTHY - /gaia-debt happy path runs start to finish, no merge-time confirmation (already updated wiki/concepts/Audit Disposition and Debt Drain.md in-commit)
 - 2026-07-06 eb86ca32 WORTHY - routine chromatic/knip/prettier bump → wiki/dependencies/Chromatic.md, wiki/dependencies/knip.md version bump
 - 2026-07-07 gaia-audit WORTHY - knowledge audit promotes plan-mode-vs-skill pitfall from machine memory → wiki/concepts/GAIA Plan.md
@@ -485,7 +485,7 @@ tags: [meta, log]
 - 2026-07-07 gaia-audit WORTHY - knowledge audit promotes maintainer statusline override chain from machine memory → wiki/modules/Claude Integration.md
 - 2026-07-05 b680034d WORTHY - health-audit remediations add WorktreeRemove to canonical hook list + clarify no-snapshot fitness case → wiki/decisions/Claude Integration Fitness.md (edited in-commit)
 - 2026-07-05 92b7f424 WORTHY - CI runs .gaia/tests/lib bats + token-tally atomic same-fs rename → wiki/concepts/PR Merge Workflow.md (edited in-commit)
-- 2026-07-05 dd2ff78c WORTHY - SPEC-023 consolidates cost artifacts (tokens.md/jsonl → cost.md/jsonl) → wiki/concepts/Cost Data Contract.md (new), GAIA Plan.md, GAIA Spec.md, Task Orchestration.md, Telemetry.md, Token Cost Readout.md (edited in-commit)
+- 2026-07-05 dd2ff78c WORTHY - consolidates cost artifacts (tokens.md/jsonl → cost.md/jsonl) → wiki/concepts/Cost Data Contract.md (new), GAIA Plan.md, GAIA Spec.md, Task Orchestration.md, Telemetry.md, Token Cost Readout.md (edited in-commit)
 - 2026-07-05 bcfccb34 WORTHY - .gaia/cache consolidated onto .gaia/local/cache/shared → wiki/concepts/Claude Hooks.md, Claude Skills.md, Local Working State.md, Release Workflow.md, Serena Integration.md, Telemetry.md, Update Workflow.md, wiki/decisions/Bundle-time Scrub.md, wiki/modules/Claude Integration.md (edited in-commit)
 - 2026-07-05 b58610bd WORTHY - spells out EnterWorktree/WorktreeCreate mechanics + plan-folder-stays-in-main-checkout → wiki/concepts/Task Orchestration.md
 - 2026-07-05 1d1f1fce WORTHY - /gaia-plan worktree reframed as non-experimental + sole isolation mode off-main, concurrent-run scan dropped → wiki/concepts/Task Orchestration.md
@@ -493,20 +493,20 @@ tags: [meta, log]
 - 2026-07-05 e378c093 WORTHY - /gaia-debt drain selection moves to AskUserQuestion (top-3 + Other) → wiki/concepts/Audit Disposition and Debt Drain.md
 - 2026-07-04 1fbb2c12 WORTHY - SC3 residual-risk note on serenaLangDrift preservation across cache-busts → wiki/concepts/Serena Integration.md (edited in-commit)
 - 2026-07-04 bad80946 WORTHY - adds /gaia-serena-sync language-drift sync command + statusline nudge → wiki/concepts/Serena Integration.md, wiki/dependencies/Serena.md (edited in-commit)
-- 2026-07-04 c0d0d1c7 WORTHY - SPEC-022 shared token-pricing-lib + per-section dollar-cost line in tokens.md → wiki/concepts/Token Cost Readout.md (edited in-commit)
+- 2026-07-04 c0d0d1c7 WORTHY - shared token-pricing-lib + per-section dollar-cost line in tokens.md → wiki/concepts/Token Cost Readout.md (edited in-commit)
 - 2026-07-04 93ccd892 WORTHY - repairs worktree plan-execution hooks (create + self-cleaning remove) → wiki/modules/Claude Integration.md (edited in-commit)
 - 2026-07-04 d016d0c3 WORTHY - consolidates .gaia/local audit-data storage under audit/ → wiki/concepts/Local Working State.md, wiki/decisions/Worthiness Audit.md (edited in-commit)
 - 2026-07-04 917722dd5 WORTHY - corrects stale language-switch Playwright spec name across runbooks and wiki → wiki/dependencies/Playwright.md (edited in-commit)
-- 2026-07-04 ab80ee9ee WORTHY - SPEC-018 manifest-write guard hook + rule → wiki/concepts/Claude Hooks.md
+- 2026-07-04 ab80ee9ee WORTHY - manifest-write guard hook + rule → wiki/concepts/Claude Hooks.md
 - 2026-07-04 974ba2e8e WORTHY - documents the token-to-dollar cost readout surface → wiki/concepts/Token Cost Readout.md (new page, edited in-commit)
-- 2026-07-04 9a32f8e8f WORTHY - SPEC-019 per-model token attribution + dollar-cost roll-up → documented in wiki/concepts/Token Cost Readout.md (created by #552)
+- 2026-07-04 9a32f8e8f WORTHY - per-model token attribution + dollar-cost roll-up → documented in wiki/concepts/Token Cost Readout.md (created by #552)
 - 2026-07-04 feb46128c WORTHY - tokens.md splits into independent Planning/Execution sections → documented in wiki/concepts/Token Cost Readout.md
-- 2026-07-04 b8295349 WORTHY - SPEC-021 git-tag SPEC-number allocation with a local per-machine ledger → wiki/concepts/GAIA Spec.md, wiki/concepts/Local Working State.md (edited in-commit)
+- 2026-07-04 b8295349 WORTHY - git-tag SPEC-number allocation with a local per-machine ledger → wiki/concepts/GAIA Spec.md, wiki/concepts/Local Working State.md (edited in-commit)
 - 2026-07-04 a6aeb4689 WORTHY - archive-not-delete plan lifecycle + spec-colocated plan folders → wiki/concepts/Claude Hooks.md, wiki/concepts/GAIA Plan.md, wiki/concepts/Task Orchestration.md (edited in-commit)
-- 2026-07-04 9485383cd WORTHY - SPEC-017 cycle-aware plan-execution cost accounting adds token-rollup.sh + token-tally-git-op.sh/token-rollup-merge.sh hooks → wiki/concepts/Claude Hooks.md
+- 2026-07-04 9485383cd WORTHY - cycle-aware plan-execution cost accounting adds token-rollup.sh + token-tally-git-op.sh/token-rollup-merge.sh hooks → wiki/concepts/Claude Hooks.md
 - 2026-07-04 ca844355b WORTHY - @gaia-react/lint 1.9.0 adds no-zod-enum guardrail → wiki/dependencies/gaia-lint.md
 - 2026-07-04 25c37720b WORTHY - plan-execution task sub-agents default to Sonnet → wiki/concepts/GAIA Plan.md, wiki/concepts/Task Orchestration.md (edited in-commit)
-- 2026-07-04 99faa390f WORTHY - SPEC-013 per-action token + wall-clock cost readout (token-tally.sh, tokens.jsonl ledger) → wiki/concepts/Telemetry.md
+- 2026-07-04 99faa390f WORTHY - per-action token + wall-clock cost readout (token-tally.sh, tokens.jsonl ledger) → wiki/concepts/Telemetry.md
 - 2026-07-04 b87dbd870 WORTHY - CI per-author audit resolver honors local-mode stand-down without the admin-gated confirmation → wiki/concepts/Code Review Audit CI.md (edited in-commit)
 - 2026-07-04 65aeeb51a WORTHY - update-deps merges its own PR to completion on a main-branch run → wiki/concepts/PR Merge Workflow.md
 - 2026-07-04 95fb9b594 WORTHY - code-search routing made language-agnostic while the enforcement guard stays TS-conservative → wiki/concepts/Serena Integration.md, wiki/dependencies/Serena.md (edited in-commit)
@@ -530,7 +530,7 @@ tags: [meta, log]
 - 2026-07-01 3a30099f WORTHY - statusline consumer honors gh_ok so a gh outage keeps the /gaia-harden nudge → wiki/concepts/Policy-Memory Loop.md
 - 2026-07-01 fbcc3d76 WORTHY - harden-tally now emits gh_ok distinguishing a gh outage from all-clear (with marker/ledger internal hardening) → wiki/concepts/Policy-Memory Loop.md
 - 2026-07-01 9b5668d1 WORTHY - new repo-relative-paths.md rule added to harness-discipline rule enumeration → wiki/modules/Claude Integration.md
-- 2026-07-01 88807d56 WORTHY - stale /gaia-spec auto dispatch reference re-tensed to headless/automation-context phrasing after SPEC-012 removed the chain → wiki/concepts/GAIA Plan.md
+- 2026-07-01 88807d56 WORTHY - stale /gaia-spec auto dispatch reference re-tensed to headless/automation-context phrasing after the auto-dispatch chain was removed → wiki/concepts/GAIA Plan.md
 - 2026-06-30 bda3db6 WORTHY - feat(hooks): SessionStart janitor GCs dead .gaia/local residue → wiki/concepts/Local Working State.md created in-commit
 - 2026-06-30 ffff7da WORTHY - feat(audit): re-run carry-forward ledger + terse return → wiki/concepts/Audit Disposition and Debt Drain.md + PR Merge Workflow.md + Code Review Audit Agent.md updated in-commit
 - 2026-06-30 016c2e2 WORTHY - feat(audit): forced disposition + drain loop → wiki/concepts/Audit Disposition and Debt Drain.md created, PR Merge Workflow.md + Code Review Audit Agent.md updated in-commit
@@ -561,7 +561,7 @@ tags: [meta, log]
 - 2026-06-24 9191a32 WORTHY - wiki: stale-claims and gap-fill pass across 83 wiki pages; pages updated directly in this commit
 - 2026-06-23 e27a916 WORTHY - feat(scaffold): comma-bearing prop types in component --props → scaffold CLI improvement, no wiki page
 - 2026-06-23 c25f836 WORTHY - fix(deps): pin nested vite >=7.3.5 (GHSA-fx2h-pf6j-xcff) → CVE override, pnpm-overrides pattern already documented
-- 2026-06-23 7ef235a WORTHY - feat(tdd): SPEC-006 Phase 1-3 → wiki/decisions/{Determinism Classifier,Worthiness Audit,Worthiness Presence Gate}.md created
+- 2026-06-23 7ef235a WORTHY - feat(tdd): determinism classifier, worthiness audit and presence gate → wiki/decisions/{Determinism Classifier,Worthiness Audit,Worthiness Presence Gate}.md created
 - 2026-06-23 f5363ff WORTHY - feat(audit): per-author code-review-audit mode → wiki/concepts/PR Merge Workflow.md updated
 - 2026-06-23 0a99801 WORTHY - docs(react-code): expand skill trigger for dependency-vs-platform decisions → skill files only
 - 2026-06-23 517ce61 WORTHY - docs(skills): harden efficacy lens + react-code platform-first ladder → skill files only

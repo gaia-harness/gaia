@@ -553,7 +553,7 @@ jobs:
               # them -- would report `sandbox=false` and skip the leg whose
               # install is what would have caught it at the digest check.
               - '.gaia/tests/vendor/**'
-              # spec-028-composition.bats asserts the .env deny entries the
+              # The sandbox composition suite asserts the .env deny entries the
               # settings file carries, the hooks that back them, the shared
               # operand grammar those hooks load, and the shared registration
               # assertion it makes them through. Every one of these is

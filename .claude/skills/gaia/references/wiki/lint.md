@@ -154,8 +154,8 @@ grep -rEn "\bSPEC-[0-9]{3,}\b" \
 
 Both scans return raw match lines. Apply the structural-vs-narrative filter from `working-doc-ids.md`:
 
-- **Skip (structural, not findings):** template format examples (`> - UAT-NNN → Given …`), CLI argument values (`--uat-id UAT-007`), JS/Python/YAML literals (`uat_id: 'UAT-099'`), regex targets that match SPEC YAML structure, filename literals (`uat-001.spec.ts`), illustrative `(e.g. SPEC-002)` examples in usage docs, generic placeholders (`SPEC-NNN`, `SPEC-NNN.md`), variable-name fragments (`uat_id`, `uats_block`).
-- **Flag (narrative, findings):** section-header parentheticals (`#### 5b. Discuss-this escape (UAT-004)`), inline narrative parentheticals (`(UAT-022, UAT-027)`), comments naming specific working-doc IDs, pass/fail label prefixes (`pass "UAT-001 …"`), prose using a maintainer SPEC ID as a system-wide constant (`operate under SPEC-001's scope_boundaries`).
+- **Skip (structural, not findings):** template format examples (`> - UAT-NNN → Given …`), CLI argument values (`--uat-id UAT-<n>`), JS/Python/YAML literals (`uat_id: 'UAT-<n>'`), regex targets that match SPEC YAML structure, filename literals (`uat-<n>.spec.ts`), generic placeholders (`SPEC-NNN`, `SPEC-NNN.md`), variable-name fragments (`uat_id`, `uats_block`).
+- **Flag (narrative, findings):** section-header parentheticals (`#### 5b. Discuss-this escape (UAT-<n>)`), inline narrative parentheticals (`(UAT-<n>, UAT-<n>)`), comments naming specific working-doc IDs, pass/fail label prefixes (`pass "UAT-<n> …"`), prose using a maintainer SPEC ID as a system-wide constant (`operate under SPEC-<n>'s scope_boundaries`).
 
 If both scans produce zero narrative findings (all matches are structural):
 
@@ -172,8 +172,8 @@ Otherwise:
 
 ⚠ {N} narrative ref(s) found in instruction files / spec-lifecycle scripts:
 
-- `.claude/skills/foo/SKILL.md:42` → `(UAT-012)` parenthetical in section header
-- `.claude/skills/gaia/references/spec/bar.md:88` → `operate under SPEC-001's scope_boundaries` prose
+- `.claude/skills/foo/SKILL.md:42` → `(UAT-<n>)` parenthetical in section header
+- `.claude/skills/gaia/references/spec/bar.md:88` → `operate under SPEC-<n>'s scope_boundaries` prose
 ```
 
 List every narrative finding (one per line).

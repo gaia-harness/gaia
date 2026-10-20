@@ -2,7 +2,7 @@
 # run-quality-gate.sh: Quality Gate runner for the forensics
 # triage workflow. Executes each gate step in order, halts on the first
 # failure, and writes a JSON summary the workflow YAML feeds into the
-# `handle-needs-human.sh` reason-code `gate-failure` path (UAT-005).
+# `handle-needs-human.sh` reason-code `gate-failure` path.
 #
 # Usage:
 #   run-quality-gate.sh <output-summary-file>
@@ -30,7 +30,7 @@
 # exit code to short-circuit; the JSON summary feeds the issue comment.
 #
 # Each step runs through the root pnpm proxy scripts, which forward to
-# `pnpm -C frontend <script>` (the app lives in frontend/, SPEC-092); install
+# `pnpm -C frontend <script>` (the app lives in frontend/); install
 # stays at the root because the workspace has one lockfile.
 #
 # Knip caveat:

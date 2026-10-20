@@ -127,7 +127,7 @@ json_escape() {
 # zero-indexed offset. Echoes empty string when no control byte is
 # present.
 #
-# UAT-009: JSON requires control bytes be escaped or rejected.
+# JSON requires control bytes be escaped or rejected.
 # check-scope.sh's contract is path-policy enforcement; receiving a path
 # with a control byte signals upstream corruption, so we reject rather
 # than silently escape.
@@ -184,7 +184,7 @@ if [ "$#" -eq 0 ]; then
   exit 0
 fi
 
-# UAT-009: short-circuit on the first control-byte-bearing path. The
+# Short-circuit on the first control-byte-bearing path. The
 # rejection envelope replaces the normal classification result; exit 0
 # is preserved per the consumer-reads-JSON contract.
 for path in "$@"; do
