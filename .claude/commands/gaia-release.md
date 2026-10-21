@@ -173,6 +173,10 @@ bash .gaia/scripts/pr-wait-merge.sh --pr <N> --attempts 20
 
 The merge above is already queued, and this script issues no `gh pr merge` of its own, so nothing here re-merges. Do not run any local cleanup or tagging until it prints `MERGED` (exit 0). On `CONFLICTING` (exit 3), repair per `wiki/concepts/PR Merge Workflow.md`'s `### Conflict found mid-wait` and run the wait again; on `CHECK_FAILED` (exit 4), inspect the failing check; on `TIMEOUT` (exit 5), inspect `gh pr view <N>` for a stuck merge queue; on `CLOSED` (exit 6), the release pull request was closed without merging, so stop and do not tag. Exit 2 is a refusal rather than a verdict and says nothing about the pull request: read the message, which names what could not be read. The script's `--help` is the authority on that set.
 
+### 11b. Context footprint check
+
+Before tagging, ask with AskUserQuestion: "Context footprint measured for this version and the token-efficiency page updated?" Options: **Done**; **Run it now (stop)**, which stops the release so the maintainer runs `.claude/maintainers/context-footprint-prompt.md` against a probe built from this release candidate; **Skip this release**, which asks for the reason and records it in the release PR. Continue only on Done or Skip.
+
 ### 12. Tag the merge commit
 
 **2.0.0 cut only: publish `create-gaia` first.** Releases from 2.0.0 on publish `gaia-bundle-<tag>.tar.gz`, and a `create-gaia` that still downloads `gaia-<tag>.tar.gz` 404s for every `npx create-gaia@latest` the moment the `v2.0.0` release goes live. So before tagging `v2.0.0`, run step 13 in full now, including its 2.0.0 asset-name bullet, through the npm confirmation, then check:
