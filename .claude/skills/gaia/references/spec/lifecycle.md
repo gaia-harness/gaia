@@ -92,7 +92,7 @@ The one consolidation recipe. Two callers run it: the orchestrator, after audit 
 **Shape.** Frontmatter with `wiki_promote_default` and `wiki_promote_targets`, a non-empty H1, a non-empty body, and an optional `## Divergence`.
 
 - `wiki_promote_default` is exactly `yes`, `ask` or `no`. A spec-colocated plan copies the SPEC's value; a spec-less plan stamps `ask`.
-- `wiki_promote_targets` is the SPEC's list, or `[decisions]` for a spec-less plan.
+- `wiki_promote_targets` for a spec-colocated plan is the SPEC's own list when its frontmatter carries a non-empty one; otherwise consolidation derives it from what shipped, picking every subdomain the merged result belongs in from `decisions` (a choice between alternatives and its rationale), `concepts` (a mechanism or behavior that spans files), `modules` (one component's architecture), `flows` (an end-to-end sequence) and `dependencies` (a third-party package's role), at least one. The SPEC template carries no list, so derivation is the normal path. A spec-less plan stamps `[decisions]`.
 
 **Verify.**
 

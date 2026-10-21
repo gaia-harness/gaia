@@ -34,7 +34,7 @@ Branch on `wiki_promote_default`, returning exactly one Choice token per branch,
 | `no` | any | `no` | `none` | `wiki_promote_default is no` |
 | any other value | any | `no` | `none` | names the value: `unrecognized wiki_promote_default '<value>'` |
 
-An empty or absent `wiki_promote_targets` with `yes` is a recorded no-op and never falls back to a default target. Consolidation always stamps a non-empty list, so this arises only for a legacy SUMMARY. `skipped-verify-failed` is a consolidation outcome (the verify failed before promotion ran); this step never returns it.
+An empty or absent `wiki_promote_targets` with `yes` is a recorded no-op and never falls back to a default target. Consolidation always stamps a non-empty list under `yes`, and `summary-verify.sh` fails a `yes` SUMMARY whose list is empty, so this row is reached only by a SUMMARY that skipped the verify. `skipped-verify-failed` is a consolidation outcome (the verify failed before promotion ran); this step never returns it.
 
 ## Step 3 - Resolve the open PR
 

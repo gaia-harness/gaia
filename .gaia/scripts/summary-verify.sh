@@ -15,13 +15,14 @@
 # body), and a non-empty body after it. An optional `## Divergence` section is
 # allowed but not required. The first wiki_promote_default: line must carry
 # yes, ask or no (optionally in matching quotes).
-# The wiki_promote_targets value is not deep-validated here: target routing is
-# validated by the wiki promotion step. This gate checks key presence, the
-# default's vocabulary and shape.
+# Under a yes default, wiki_promote_targets must be non-empty (inline list or
+# block list): the promotion step reads an empty one as nothing to promote, a
+# silent no-op. Its values are not deep-validated here: target routing is
+# validated by the wiki promotion step.
 #
 # Exit 1 otherwise: absent/empty file, missing or unclosed frontmatter,
 # frontmatter missing either key, a wiki_promote_default outside the
-# vocabulary, missing H1, or empty body. Violations
+# vocabulary, a yes default with empty targets, missing H1, or empty body. Violations
 # accumulate and are reported to stderr; no stdout noise.
 #
 # Deterministic and side-effect-free: no writes, no network, no git.
@@ -54,7 +55,17 @@ awk -v single_quote="'" '
       raw_default_value = default_value
       if (default_value ~ /^".*"$/ || (length(default_value) >= 2 && substr(default_value, 1, 1) == single_quote && substr(default_value, length(default_value), 1) == single_quote)) default_value = substr(default_value, 2, length(default_value) - 2)
     }
-    if ($0 ~ /^wiki_promote_targets:/) saw_wiki_promote_targets = 1
+    if ($0 ~ /^wiki_promote_targets:/) {
+      saw_wiki_promote_targets = 1
+      in_targets_block = 1
+      targets_value = $0
+      sub(/^wiki_promote_targets:/, "", targets_value)
+      gsub(/[ \t\r]/, "", targets_value)
+      if (targets_value != "" && targets_value != "[]") targets_nonempty = 1
+      next
+    }
+    if (in_targets_block && $0 ~ /^[ \t]+-[ \t]*[^ \t\r]/) { targets_nonempty = 1; next }
+    in_targets_block = 0
     next
   }
   frontmatter_closed && !seen_h1 {
@@ -90,6 +101,9 @@ awk -v single_quote="'" '
       }
       if (!saw_wiki_promote_targets) {
         print "summary-verify: frontmatter missing wiki_promote_targets:" > "/dev/stderr"
+        ok = 0
+      } else if (default_value == "yes" && !targets_nonempty) {
+        print "summary-verify: wiki_promote_default yes needs a non-empty wiki_promote_targets (it would promote nothing)" > "/dev/stderr"
         ok = 0
       }
       if (!seen_h1) {
