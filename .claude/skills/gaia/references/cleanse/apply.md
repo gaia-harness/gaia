@@ -100,7 +100,7 @@ applied: {n} shrink · {n} delete-entry · {n} promote · {n} delete | skipped: 
 out-of-scope: filed {n} · diverted {n} · deduped {n} (tech-debt issues)
 diff footprint:
 {git status --short}
-handoff: changes are uncommitted in TREE_ROOT; the main conversation runs Publish next (commit → PR → merge on the run's own branch, commit → push in CI). An empty diff footprint means Publish no-ops.
+handoff: changes are uncommitted in TREE_ROOT; the main conversation runs Publish next (commit → PR → merge on the run's own branch). An empty diff footprint means Publish no-ops.
 
 ```
 

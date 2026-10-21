@@ -34405,49 +34405,19 @@ import {
   renameSync as renameSync3,
   writeFileSync as writeFileSync2
 } from "node:fs";
-import { homedir as homedir2 } from "node:os";
 import path36 from "node:path";
-var HELP_TEXT16 = `Usage: gaia init wire-statusline --mode <global|project|skip>
+var HELP_TEXT16 = `Usage: gaia init wire-statusline
 
-  Wire the GAIA statusline into the relevant Claude settings file.
-
-  Required flags:
-    --mode <m>   "global" (~/.claude/settings.json), "project"
-                 (.claude/settings.json), or "skip" (no-op).
+  Wire the GAIA statusline into the project's .claude/settings.json.
 
   Exit codes:
     0  success (no stdout)
-    1  user-correctable error (missing flag, invalid JSON in target)
+    1  user-correctable error (unknown flag, invalid JSON in target)
     2  unexpected (filesystem failure)
 `;
 var HELP_TOKENS15 = /* @__PURE__ */ new Set(["--help", "-h", "help"]);
 var UNEXPECTED_EXIT7 = 2;
 var STEP_NAME7 = "wire-statusline";
-var isMode = (value) => value === "global" || value === "project" || value === "skip";
-var parseFlags6 = (argv) => {
-  let mode;
-  for (let index = 0; index < argv.length; index += 1) {
-    const token = argv[index];
-    if (token === "--mode") {
-      const taken = takeValue(argv, index + 1, "--mode");
-      if (!taken.ok) return taken;
-      if (!isMode(taken.value)) {
-        return {
-          message: "--mode must be one of: global, project, skip",
-          ok: false
-        };
-      }
-      mode = taken.value;
-      index += 1;
-    } else {
-      return { message: `unknown flag: ${token}`, ok: false };
-    }
-  }
-  if (mode === void 0) {
-    return { message: "--mode is required", ok: false };
-  }
-  return { flags: { mode }, ok: true };
-};
 var STATUSLINE_BLOCK = {
   command: 'bash "$(git rev-parse --show-toplevel 2>/dev/null || printf %s "${CLAUDE_PROJECT_DIR:-.}")/.gaia/statusline/gaia-statusline.sh"',
   refreshInterval: 15,
@@ -34503,54 +34473,45 @@ var mergeStatusline = (source) => {
   if (matchesCanonical(source[STATUSLINE_KEY])) return source;
   return insertAlphabetical(source, STATUSLINE_KEY, { ...STATUSLINE_BLOCK });
 };
-var targetPathForMode = (mode, cwd, home) => {
-  if (mode === "project") return path36.join(cwd, ".claude", "settings.json");
-  if (mode === "global") return path36.join(home, ".claude", "settings.json");
-  return null;
-};
 var run21 = (argv, options = {}) => {
   const [first] = argv;
   if (first !== void 0 && HELP_TOKENS15.has(first)) {
     process.stdout.write(HELP_TEXT16);
     return EXIT_CODES.OK;
   }
-  const parsed = parseFlags6(argv);
-  if (!parsed.ok) {
+  if (argv.length > 0) {
     structuredError({
       code: "invalid_arguments",
-      message: parsed.message,
+      message: `unknown flag: ${argv[0]}`,
       subcommand: "init wire-statusline"
     });
     return EXIT_CODES.UNKNOWN_SUBCOMMAND;
   }
   const cwd = options.cwd ?? process.cwd();
-  const home = options.home ?? homedir2();
-  const target = targetPathForMode(parsed.flags.mode, cwd, home);
-  if (target !== null) {
-    try {
-      const current = readSettings(target);
-      const merged = mergeStatusline(current);
-      writeSettings(target, merged);
-    } catch (error62) {
-      const message = error62 instanceof Error ? error62.message : String(error62);
-      if (message.includes("not valid JSON") || message.includes("JSON object")) {
-        structuredError({
-          code: "settings_malformed",
-          message,
-          subcommand: "init wire-statusline"
-        });
-        return EXIT_CODES.UNKNOWN_SUBCOMMAND;
-      }
+  const target = path36.join(cwd, ".claude", "settings.json");
+  try {
+    const current = readSettings(target);
+    const merged = mergeStatusline(current);
+    writeSettings(target, merged);
+  } catch (error62) {
+    const message = error62 instanceof Error ? error62.message : String(error62);
+    if (message.includes("not valid JSON") || message.includes("JSON object")) {
       structuredError({
-        code: "wire_statusline_failed",
+        code: "settings_malformed",
         message,
         subcommand: "init wire-statusline"
       });
-      return UNEXPECTED_EXIT7;
+      return EXIT_CODES.UNKNOWN_SUBCOMMAND;
     }
+    structuredError({
+      code: "wire_statusline_failed",
+      message,
+      subcommand: "init wire-statusline"
+    });
+    return UNEXPECTED_EXIT7;
   }
   try {
-    markStepCompleted(cwd, STEP_NAME7, { mode: parsed.flags.mode });
+    markStepCompleted(cwd, STEP_NAME7);
   } catch (error62) {
     structuredError({
       code: "state_write_failed",
@@ -34915,7 +34876,7 @@ var takeIsolationPolicy = (argv, index, current) => {
   }
   return { ok: true, value: taken.value };
 };
-var parseFlags7 = (argv) => {
+var parseFlags6 = (argv) => {
   let sandboxRecommended;
   let isolationPolicy;
   for (let index = 0; index < argv.length; index += 2) {
@@ -34978,7 +34939,7 @@ var run22 = (argv, options = {}) => {
     process.stdout.write(HELP_TEXT17);
     return EXIT_CODES.OK;
   }
-  const parsed = parseFlags7(argv);
+  const parsed = parseFlags6(argv);
   if (!parsed.ok) {
     structuredError({
       code: "invalid_arguments",
@@ -35034,7 +34995,7 @@ var HELP_TEXT18 = `Usage: gaia init resume [--from-step <N>]
 `;
 var HELP_TOKENS17 = /* @__PURE__ */ new Set(["--help", "-h", "help"]);
 var UNEXPECTED_EXIT9 = 2;
-var parseFlags8 = (argv) => {
+var parseFlags7 = (argv) => {
   let fromStep = 1;
   for (let index = 0; index < argv.length; index += 1) {
     const token = argv[index];
@@ -35112,12 +35073,6 @@ var buildWriteProjectConfigArgv = (saved) => {
   if (typeof isolationPolicy !== "string") return null;
   return [...argv, "--isolation-policy", isolationPolicy];
 };
-var buildWireStatuslineArgv = (saved) => {
-  if (saved === void 0) return null;
-  const { mode } = saved;
-  if (typeof mode !== "string") return null;
-  return ["--mode", mode];
-};
 var STEP_ARGV_BUILDERS = {
   "bootstrap-env": () => [],
   "configure-data-layer": buildConfigureDataLayerArgv,
@@ -35125,7 +35080,7 @@ var STEP_ARGV_BUILDERS = {
   finalize: () => [],
   rename: buildRenameArgv,
   "strip-branding": buildStripBrandingArgv,
-  "wire-statusline": buildWireStatuslineArgv,
+  "wire-statusline": () => [],
   "write-project-config": buildWriteProjectConfigArgv
 };
 var argvFromStepArgs = (step, saved) => STEP_ARGV_BUILDERS[step](saved);
@@ -35155,7 +35110,7 @@ var run23 = async (argv, options = {}) => {
     process.stdout.write(HELP_TEXT18);
     return EXIT_CODES.OK;
   }
-  const parsed = parseFlags8(argv);
+  const parsed = parseFlags7(argv);
   if (!parsed.ok) {
     structuredError({
       code: "invalid_arguments",
@@ -35208,7 +35163,7 @@ var HELP_TEXT19 = `Usage: gaia init <subcommand> [args]
   rename --title <T> --kebab <K>
                             Rename the project across package.json, CLAUDE.md
                             and seeded language files.
-  wire-statusline --mode <global|project|skip>
+  wire-statusline
                             Wire the GAIA statusline into Claude settings.
   bootstrap-env             Copy .env.example to .env if .env is absent.
   write-project-config --sandbox-recommended <bool> [--isolation-policy <policy>]
@@ -38871,7 +38826,7 @@ var applyToken2 = (argv, index, state) => {
   }
   return { message: `unexpected positional argument: ${token}`, ok: false };
 };
-var parseFlags9 = (argv) => {
+var parseFlags8 = (argv) => {
   const state = {
     json: false,
     name: void 0,
@@ -39016,7 +38971,7 @@ var run36 = (argv, options = {}) => {
     process.stdout.write(HELP_TEXT31);
     return EXIT_CODES.OK;
   }
-  const parsed = parseFlags9(argv);
+  const parsed = parseFlags8(argv);
   if (!parsed.ok) {
     structuredError({
       code: "invalid_arguments",
@@ -40098,7 +40053,7 @@ var VALUE_FLAGS2 = {
   "--shape": "shape"
 };
 var isValueFlag = (flag) => Object.hasOwn(VALUE_FLAGS2, flag);
-var parseFlags10 = (rest) => {
+var parseFlags9 = (rest) => {
   const flags = {
     action: false,
     data: null,
@@ -40411,7 +40366,7 @@ var run38 = (rest, options = {}) => {
     return first === void 0 ? EXIT_CODES.UNKNOWN_SUBCOMMAND : EXIT_CODES.OK;
   }
   const name = first;
-  const flags = parseFlags10(rest.slice(1));
+  const flags = parseFlags9(rest.slice(1));
   if (flags === null) {
     return userError2("invalid or unknown flag (see --help)");
   }
@@ -44906,7 +44861,7 @@ var VALUE_FLAGS3 = {
   "--ref": "ref",
   "--root": "root"
 };
-var parseFlags11 = (argv) => {
+var parseFlags10 = (argv) => {
   const parsed = parseValueFlags(argv, VALUE_FLAGS3);
   if (!parsed.ok) return parsed;
   const {
@@ -45025,7 +44980,7 @@ var run63 = (argv) => {
     process.stdout.write(HELP_TEXT57);
     return EXIT_CODES.OK;
   }
-  const parsed = parseFlags11(argv);
+  const parsed = parseFlags10(argv);
   if (!parsed.ok) {
     structuredError({
       code: "invalid_arguments",
@@ -45085,7 +45040,7 @@ var VALUE_FLAGS4 = {
   "--current": "current",
   "--latest": "latest"
 };
-var parseFlags12 = (argv) => {
+var parseFlags11 = (argv) => {
   const split = extractDeferredBaselines(argv);
   if (!split.ok) return split;
   const parsed = parseValueFlags(split.rest, VALUE_FLAGS4);
@@ -45169,7 +45124,7 @@ var run64 = (argv, options = {}) => {
     process.stdout.write(HELP_TEXT58);
     return EXIT_CODES.OK;
   }
-  const parsed = parseFlags12(argv);
+  const parsed = parseFlags11(argv);
   if (!parsed.ok) {
     structuredError({
       code: "invalid_arguments",
@@ -45261,7 +45216,7 @@ var VALUE_FLAGS5 = {
   "--current": "current",
   "--latest": "latest"
 };
-var parseFlags13 = (argv) => {
+var parseFlags12 = (argv) => {
   const split = extractDeferredBaselines(argv);
   if (!split.ok) return split;
   const parsed = parseValueFlags(split.rest, VALUE_FLAGS5);
@@ -45338,7 +45293,7 @@ var run65 = (argv, options = {}) => {
     process.stdout.write(HELP_TEXT59);
     return EXIT_CODES.OK;
   }
-  const parsed = parseFlags13(argv);
+  const parsed = parseFlags12(argv);
   if (!parsed.ok) {
     structuredError({
       code: "invalid_arguments",
@@ -45470,7 +45425,7 @@ var VALUE_FLAGS6 = {
   "--latest": "latest",
   "--start-marker": "startMarker"
 };
-var parseFlags14 = (argv) => {
+var parseFlags13 = (argv) => {
   const parsed = parseValueFlags(argv, VALUE_FLAGS6);
   if (!parsed.ok) return parsed;
   const {
@@ -45572,7 +45527,7 @@ var run66 = (argv, options = {}) => {
     process.stdout.write(HELP_TEXT60);
     return EXIT_CODES.OK;
   }
-  const parsed = parseFlags14(argv);
+  const parsed = parseFlags13(argv);
   if (!parsed.ok) {
     structuredError({
       code: "invalid_arguments",
@@ -45657,7 +45612,7 @@ var VALUE_FLAGS7 = {
   "--current": "current",
   "--latest": "latest"
 };
-var parseFlags15 = (argv) => {
+var parseFlags14 = (argv) => {
   const split = extractDeferredBaselines(argv);
   if (!split.ok) return split;
   const parsed = parseValueFlags(split.rest, VALUE_FLAGS7);
@@ -45739,7 +45694,7 @@ var run67 = (argv, options = {}) => {
     process.stdout.write(HELP_TEXT61);
     return EXIT_CODES.OK;
   }
-  const parsed = parseFlags15(argv);
+  const parsed = parseFlags14(argv);
   if (!parsed.ok) {
     structuredError({
       code: "invalid_arguments",
@@ -45900,7 +45855,7 @@ var applyToken4 = ({
   handler(state, taken.value);
   return { advance: 1, ok: true };
 };
-var parseFlags16 = (argv) => {
+var parseFlags15 = (argv) => {
   const state = {
     absentPaths: [],
     backupDir: void 0,
@@ -46499,7 +46454,7 @@ var run68 = (argv, options = {}) => {
     process.stdout.write(HELP_TEXT62);
     return EXIT_CODES.OK;
   }
-  const parsed = parseFlags16(argv);
+  const parsed = parseFlags15(argv);
   if (!parsed.ok) {
     structuredError({
       code: "invalid_arguments",
@@ -47858,7 +47813,7 @@ var HELP_TEXT67 = `Usage: gaia wiki commit-classify --since <sha> [--json]
   <sha>..HEAD. Without --json, prints a tabular summary.
 `;
 var HELP_TOKENS66 = /* @__PURE__ */ new Set(["--help", "-h", "help"]);
-var parseFlags17 = (argv) => {
+var parseFlags16 = (argv) => {
   let since;
   let json2 = false;
   for (let index = 0; index < argv.length; index += 1) {
@@ -48072,7 +48027,7 @@ var run73 = (argv, options = {}) => {
     process.stdout.write(HELP_TEXT67);
     return first === void 0 ? EXIT_CODES.UNKNOWN_SUBCOMMAND : EXIT_CODES.OK;
   }
-  const parsed = parseFlags17(argv);
+  const parsed = parseFlags16(argv);
   if (!parsed.ok) {
     structuredError({
       code: "invalid_arguments",
@@ -48340,7 +48295,7 @@ var FLAG_BY_TOKEN = {
   "--reason": "reason",
   "--sha": "sha"
 };
-var parseFlags18 = (argv) => {
+var parseFlags17 = (argv) => {
   const values = {};
   for (let index = 0; index < argv.length; index += 1) {
     const token = argv[index];
@@ -48408,7 +48363,7 @@ var run76 = (argv, options = {}) => {
     process.stdout.write(HELP_TEXT70);
     return EXIT_CODES.OK;
   }
-  const parsed = parseFlags18(argv);
+  const parsed = parseFlags17(argv);
   if (!parsed.ok) {
     structuredError({
       code: "invalid_arguments",
@@ -48550,7 +48505,7 @@ var findCollisions = (domainGroups, maxDistance) => {
   });
   return results;
 };
-var parseFlags19 = (argv) => {
+var parseFlags18 = (argv) => {
   let maxDistance = DEFAULT_MAX_DISTANCE;
   for (let index = 0; index < argv.length; index += 1) {
     const token = argv[index];
@@ -48577,7 +48532,7 @@ var run77 = (argv, options = {}) => {
     process.stdout.write(HELP_TEXT71);
     return EXIT_CODES.OK;
   }
-  const parsed = parseFlags19(argv);
+  const parsed = parseFlags18(argv);
   if (!parsed.ok) {
     structuredError({
       code: "invalid_arguments",

@@ -12,6 +12,7 @@ node_modules/
 .idea
 .vscode
 .DS_Store
+wiki/.obsidian/workspace.json
 
 # Logs
 logs

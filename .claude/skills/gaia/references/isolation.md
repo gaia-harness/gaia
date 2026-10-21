@@ -199,8 +199,8 @@ literal because the runtime refuses a `git` command that shares its command line
 
 A rename that fails (the canonical name already exists, typically a stale branch from a crashed run) is surfaced with the colliding
 name and stops, the same way the `always-worktree` creation-failure paragraph treats a collision. Normalization through
-`.gaia/scripts/branch-name-lib.sh` remains for branches that predate the rename (ledgers and pull request heads that still carry the
-`worktree-` spelling), so both the prefix and the `+` separator change only in lockstep with that library.
+`.gaia/scripts/branch-name-lib.sh` still reads the `worktree-` spelling, because hooks fire between creation and the rename and see
+the branch under that name, so both the prefix and the `+` separator change only in lockstep with that library.
 
 Provisioning (the shared-state symlinks and the generated typed routes) runs on entry, not at creation:
 `.claude/hooks/provision-worktree.sh` fires on session start and on entering a worktree and repairs whatever

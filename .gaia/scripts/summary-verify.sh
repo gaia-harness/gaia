@@ -14,9 +14,7 @@
 # wiki_promote_targets: keys, a non-empty H1 (`# <title>`; later H1 lines are
 # body), and a non-empty body after it. An optional `## Divergence` section is
 # allowed but not required. The first wiki_promote_default: line must carry
-# yes, ask, no, true or false (optionally in matching quotes; true and false
-# are accepted aliases of yes and no, normalized by the consolidation and
-# promotion steps).
+# yes, ask or no (optionally in matching quotes).
 # The wiki_promote_targets value is not deep-validated here: target routing is
 # validated by the wiki promotion step. This gate checks key presence, the
 # default's vocabulary and shape.
@@ -86,7 +84,7 @@ awk -v single_quote="'" '
         print "summary-verify: frontmatter missing wiki_promote_default:" > "/dev/stderr"
         ok = 0
       }
-      if (saw_wiki_promote_default && default_value != "yes" && default_value != "ask" && default_value != "no" && default_value != "true" && default_value != "false") {
+      if (saw_wiki_promote_default && default_value != "yes" && default_value != "ask" && default_value != "no") {
         print "summary-verify: wiki_promote_default must be yes, ask or no (got " single_quote raw_default_value single_quote ")" > "/dev/stderr"
         ok = 0
       }
