@@ -10,7 +10,7 @@ export type RequestInfo = {
 type RootLoaderShape = {requestInfo: RequestInfo};
 
 export const useOptionalRequestInfo = (): RequestInfo | undefined => {
-  const data = useRouteLoaderData<RootLoaderShape>('root');
+  const rootLoaderData = useRouteLoaderData<RootLoaderShape>('root');
 
-  return data?.requestInfo;
+  return rootLoaderData?.requestInfo;
 };

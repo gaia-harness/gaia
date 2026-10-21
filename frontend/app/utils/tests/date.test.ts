@@ -5,7 +5,7 @@ import {
   formatAbbreviatedMonthOrdinalDay,
   formatFullDate,
   formatISO8601Date,
-  formatMY,
+  formatMonthYear,
   formatTime,
   formatTime24,
 } from '../date';
@@ -32,8 +32,8 @@ describe('date utilities', () => {
     expect(formatFullDate(TEST_DATE, 'ja')).toBe('2022年3月15日火曜日');
   });
 
-  test('formatMY', () => {
-    expect(formatMY(TEST_DATE)).toBe('03/22');
+  test('formatMonthYear', () => {
+    expect(formatMonthYear(TEST_DATE)).toBe('03/22');
   });
 
   test('formatTime', () => {
