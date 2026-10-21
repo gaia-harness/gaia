@@ -22,7 +22,7 @@ The `/gaia init` namespace provides subcommands for on-boarding a cloned GAIA te
 
 Each language-file key is optional (the shipped `_index.ts` carries neither `heroTitle` nor `title`) and is rewritten wherever it is a quoted string literal; a key present but holding something else (a template literal, a computed value) is left untouched. Each key is matched wherever its own rewrite looks for it, so a value wrapped in one quote may hold the other bare: `siteName: "Steve's Template"` is an ordinary literal and is rewritten, as is a value this command itself wrote when the title carried the non-wrapping quote.
 
-**`wire-statusline`**: Inserts the canonical GAIA `statusLine` block at the top level of the chosen Claude settings file (`--mode project` writes `.claude/settings.json`, `global` writes `~/.claude/settings.json`, `skip` is a no-op). [[Claude Skills]] (Statusline update indicators) lists the statusline nudges.
+**`wire-statusline`**: Inserts the canonical GAIA `statusLine` block at the top level of the project's `.claude/settings.json`. [[Claude Skills]] (Statusline update indicators) lists the statusline nudges.
 
 **`bootstrap-env`**: Copies `frontend/.env.example` to `frontend/.env` when `frontend/.env` does not yet exist, running as a CLI subprocess so it bypasses the project's `Edit(frontend/.env)` deny rule. No-op when `frontend/.env` already exists or `frontend/.env.example` is absent.
 

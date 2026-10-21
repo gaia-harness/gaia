@@ -5,8 +5,7 @@
 # cold-startable orchestrator. On a cold restart (crash, context compaction,
 # deliberate HALT) the orchestrator needs to know which phases are genuinely
 # committed rather than re-running everything from Phase 1. This helper reads
-# the plan's append-only PROGRESS.md ledger (falling back to a legacy live
-# SUMMARY.md when PROGRESS.md is absent) and, for each phase, proves
+# the plan's append-only PROGRESS.md ledger and, for each phase, proves
 # whether that phase's recorded commit is a genuine ancestor of the
 # reconnected branch's HEAD. Git is the arbiter -- a ledger block is only a
 # hint. On any ambiguity (missing block, unparseable SHA, non-existent SHA,
@@ -19,9 +18,8 @@
 #   plan-resume-point.sh --plan-dir <path> [--phases <M>] [--branch <ref>] \
 #     [--git-dir <path>]
 #
-#   --plan-dir <path>  Directory holding PROGRESS.md (or a legacy live
-#                       SUMMARY.md). Locates the ledger only; it is NOT the
-#                       git context.
+#   --plan-dir <path>  Directory holding PROGRESS.md. Locates the ledger
+#                       only; it is NOT the git context.
 #   --phases <M>       Optional positive integer, the plan's total phase
 #                       count. Present: the helper may echo M+1 to signal
 #                       all-complete. Omitted (or not a positive integer):
@@ -136,16 +134,10 @@ _commit_anchor() {
 }
 
 # ---------- locate the ledger ----------
-# PROGRESS.md is the live ledger. A legacy live SUMMARY.md (pre-rename
-# format) is a fallback ONLY for a plan running across the rename boundary;
-# once PROGRESS.md exists it always wins.
+# A SUMMARY.md beside it is consolidation output, never a ledger.
 ledger=""
-if [ -n "$PLAN_DIRECTORY" ]; then
-  if [ -s "$PLAN_DIRECTORY/PROGRESS.md" ]; then
-    ledger="$PLAN_DIRECTORY/PROGRESS.md"
-  elif [ -s "$PLAN_DIRECTORY/SUMMARY.md" ]; then
-    ledger="$PLAN_DIRECTORY/SUMMARY.md"
-  fi
+if [ -n "$PLAN_DIRECTORY" ] && [ -s "$PLAN_DIRECTORY/PROGRESS.md" ]; then
+  ledger="$PLAN_DIRECTORY/PROGRESS.md"
 fi
 
 if [ -z "$ledger" ] || [ ! -s "$ledger" ]; then

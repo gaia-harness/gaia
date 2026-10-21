@@ -23,7 +23,7 @@ If `SUMMARY.md` does not exist, return Choice `no`, `Pages: none`, `Reason: no c
 
 This step is the one place that states the promotion gate semantics. The orchestrator's wiki-promotion block and `lifecycle.md` point here and do not restate them.
 
-First normalize `wiki_promote_default`: a legacy `true` is `yes` and a legacy `false` is `no` (an old-template consolidation may have copied a boolean, and `summary-verify.sh` accepts both as aliases). Then branch, returning exactly one Choice token per branch, with the `Reason:` line the orchestrator records:
+Branch on `wiki_promote_default`, returning exactly one Choice token per branch, with the `Reason:` line the orchestrator records:
 
 | `wiki_promote_default` | Condition | Choice | Pages | `Reason:` |
 |---|---|---|---|---|

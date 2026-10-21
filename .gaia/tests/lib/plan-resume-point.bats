@@ -114,7 +114,7 @@ EOF
 
 # --- 009: missing / empty / malformed ledger ---------------------------------
 
-@test "009a: neither PROGRESS.md nor SUMMARY.md -> resume 1, no COMPLETE lines" {
+@test "009a: no PROGRESS.md -> resume 1, no COMPLETE lines" {
   _commit p1 >/dev/null
   _run_helper --phases 3
   [ "$status" -eq 0 ]
@@ -144,11 +144,10 @@ EOF
   [ "${#lines[@]}" -eq 1 ]
 }
 
-# A plan folder crossing the rename boundary mid-run has only the legacy
-# live ledger; the helper falls back to it and resumes at the same integer
-# it would from an equivalent PROGRESS.md fixture (test 013).
+# SUMMARY.md is the consolidation output a reduced plan folder keeps, never
+# a ledger, so even one shaped like a ledger block is not read.
 
-@test "009d: legacy-only SUMMARY.md (no PROGRESS.md), P1 ancestor -> resume 2, COMPLETE 1" {
+@test "009d: SUMMARY.md without PROGRESS.md is not a ledger -> resume 1" {
   sha1=$(_commit p1)
   cat > "$PLAN/SUMMARY.md" <<EOF
 ## Phase 1, First
@@ -158,9 +157,8 @@ _No notes._
 EOF
   _run_helper --phases 1
   [ "$status" -eq 0 ]
-  [ "${lines[0]}" = "2" ]
-  [ "${lines[1]}" = "COMPLETE 1 $sha1" ]
-  [ "${#lines[@]}" -eq 2 ]
+  [ "${lines[0]}" = "1" ]
+  [ "${#lines[@]}" -eq 1 ]
 }
 
 # --- 010: all phases ancestors ------------------------------------------------

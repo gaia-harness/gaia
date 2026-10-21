@@ -152,8 +152,8 @@ _write_with_default() {
   printf -- '---\nwiki_promote_default: %s\nwiki_promote_targets: [decisions]\n---\n# A title\n\nSome body text.\n' "$1" > "$FIXTURE"
 }
 
-@test "wiki_promote_default accepts yes, ask, no, quoted values and the true/false aliases" {
-  for value in yes ask no '"yes"' "'ask'" true false "'false'" '"no"'; do
+@test "wiki_promote_default accepts yes, ask, no and their quoted forms" {
+  for value in yes ask no '"yes"' "'ask'" '"no"'; do
     _write_with_default "$value"
     run bash "$SCRIPT" "$FIXTURE"
     [ "$status" -eq 0 ] || { echo "rejected: $value: $output"; return 1; }
@@ -161,7 +161,7 @@ _write_with_default() {
 }
 
 @test "wiki_promote_default outside the vocabulary exits 1 naming the value" {
-  for value in maybe True 1 YES '"yes' "yes'"; do
+  for value in maybe True 1 YES true false "'false'" '"yes' "yes'"; do
     _write_with_default "$value"
     run bash "$SCRIPT" "$FIXTURE"
     [ "$status" -eq 1 ] || { echo "accepted: $value"; return 1; }

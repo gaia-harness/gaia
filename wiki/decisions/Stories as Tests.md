@@ -23,7 +23,7 @@ A component or page is tested by a Storybook story with a `play` function, run b
 `frontend/vitest.config.ts` defines three projects; read it for the exact membership instead of a copy here.
 
 - `node`: pure and server code (`*.test.ts` outside hook folders), no DOM, with the MSW node server and the test-data reset in `test/setup.ts`.
-- `browser`: hooks (`vitest-browser-react`) and any `*.test.tsx`, in Chromium, with `test/setup.browser.ts`.
+- `browser`: hooks (`vitest-browser-react`) and any `*.test.tsx`, in Chromium, with `test/setup.browser.ts`. GAIA supplies no React Testing Library setup, so a test file that imports it brings its own render wrapper and dependencies; converting it to a story is the supported path.
 - `storybook`: every story, through `storybookTest` from `@storybook/addon-vitest`. The preview annotations, addon presets included, apply automatically; no setup file in `.storybook/` calls `setProjectAnnotations`, because a file that does switches that automatic provisioning off.
 
 All browser projects need Chromium. See [[Testing]] for the `pnpm install:browsers` prerequisite.

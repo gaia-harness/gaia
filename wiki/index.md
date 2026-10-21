@@ -75,7 +75,6 @@ Master catalog of every page in the wiki. Newly created pages must be added here
 - [[pnpm-audit]]: dependency-CVE advisory oracle (`pnpm audit --json`); read-only, advisory, baseline-scoped.
 - [[pnpm-overrides]]: applying `overrides`/security-floor changes needs `pnpm dedupe`; `pnpm install` short-circuits "Already up to date".
 - [[Vitest]]
-- [[React Testing Library]]: superseded; GAIA ships no React Testing Library, see [[Stories as Tests]].
 - [[Playwright]]
 - [[playwright-cli]]: global `@playwright/cli` install, the scoped `npx` fallback, the deprecated unscoped package trap, and which invocation wins over the vendored skill's own advice.
 - [[Chromatic]]
@@ -92,7 +91,6 @@ Master catalog of every page in the wiki. Newly created pages must be added here
 - [[TypeScript 7 Readiness]]: tsconfig pre-adopts the TS7 strict baseline; the 7.1 upgrade is a dep swap gated on typescript-eslint's programmatic API.
 - [[Thin Routes]]
 - [[Co-located Tests Folder]]
-- [[composeStory Pattern]]: superseded by [[Stories as Tests]]; keeps the stub-over-mock reasoning.
 - [[Stories as Tests]]: a story with a `play` is the component test, run by Vitest in headless Chromium; the three Vitest projects, what counts as a test to the harness, the CSF shapes and the exit-7 refusal, and the `languages` prop and router stub conventions.
 - [[Dark Mode Modernization]]
 - [[Content Security Policy]]: per-request nonce CSP, enforced; documents the `unsafe-inline` and no-`report-uri` trade-offs.
