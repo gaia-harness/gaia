@@ -635,7 +635,7 @@ gaia_branch_name() {
 # only when they pass, and an unreadable JSON returns 2, never 0.
 gaia_branch_validate() {
   local LC_ALL=C
-  local branch="${1-}" normalized prefix remainder types="" plan_id plan_lead
+  local branch="${1-}" normalized prefix remainder types=""
 
   case "$branch" in
     dependabot/*) return 0 ;;
