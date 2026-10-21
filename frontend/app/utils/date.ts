@@ -40,15 +40,6 @@ export const formatFullDate = (date: Date, language: string): string =>
 // locale-insensitive by design: MM/yy is a universal card-expiry format
 export const formatMY = (date = new Date()): string => format(date, 'MM/yy');
 
-export const formatFullYear = (date: Date, language: string): string =>
-  language === 'en' ? format(date, 'yyyy') : `${format(date, 'yyyy')}年`;
-
-export const formatAbbreviatedMonth = (date: Date, language: string): string =>
-  format(date, 'MMM', getLocaleOptions(language));
-
-export const formatOrdinalDay = (date: Date, language: string): string =>
-  format(date, 'do', getLocaleOptions(language));
-
 export const formatTime = (date: Date, language: string): string =>
   format(date, 'p', getLocaleOptions(language));
 

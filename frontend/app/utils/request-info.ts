@@ -9,16 +9,6 @@ export type RequestInfo = {
 
 type RootLoaderShape = {requestInfo: RequestInfo};
 
-export const useRequestInfo = (): RequestInfo => {
-  const data = useRouteLoaderData<RootLoaderShape>('root');
-
-  if (!data?.requestInfo) {
-    throw new Error('useRequestInfo: root loader data missing requestInfo');
-  }
-
-  return data.requestInfo;
-};
-
 export const useOptionalRequestInfo = (): RequestInfo | undefined => {
   const data = useRouteLoaderData<RootLoaderShape>('root');
 

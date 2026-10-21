@@ -46,9 +46,6 @@ export default defineConfig({
     conditions: ['module-sync'],
     tsconfigPaths: true,
   },
-  ssr: {
-    noExternal: ['lodash', '@fortawesome/react-fontawesome'],
-  },
   test: {
     coverage: {
       exclude: [
@@ -58,12 +55,11 @@ export default defineConfig({
         '**/{playwright,react-router,vite,vitest}.config.*',
         '.{playwright,storybook}/**/*',
         'app/{languages,routes,sessions.server,state,types}/**/*',
-        'app/{entry.client,entry.server,env.server,i18n,i18next.server,root}.*',
-        'app/services/api/{index,uris}.ts',
+        'app/{entry.client,entry.server,env.server,i18n,root}.*',
+        'app/services/api/index.ts',
         'app/services/**/{parsers,queries,requests,state,types,urls}.*',
         'app/utils/http.server.ts',
         'app/**/{state,tests}/*',
-        'docs/**',
         'test/**/*',
       ],
       provider: 'v8',

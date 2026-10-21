@@ -219,6 +219,7 @@ A 1.6.1 project moves to 2.0.0 through the migration note bundled in the v2.0.0 
 - GAIA no longer ships its own GitHub issue templates or `FUNDING.yml`; existing copies stay yours, and deleting `.github/ISSUE_TEMPLATE/` restores GitHub's defaults. (#2398, #2565)
 - `/gaia-spec` no longer mirrors SPECs to GitHub issues (#484)
 - Modes and leftovers nothing reached any more are gone: `gaia init wire-statusline` takes no `--mode` flag and always wires the project's `.claude/settings.json`, `/gaia-cleanse` drops its unused CI publish path, `wiki_promote_default` accepts only `yes`, `ask` or `no`, and the superseded React Testing Library and composeStory wiki pages fold into the Stories as Tests and Testing pages (#2926)
+- The frontend template no longer ships starter code, config entries, dependencies and i18n keys that nothing uses (`FormError`, `MaxLength`, `environment.ts`, the empty service `urls.ts`, `useRequestInfo`, three date helpers, `@epic-web/invariant`, `lru-cache`, `@storybook/addon-docs`, the `lint-all` script, stale knip, coverage and ignore entries, and the seeded auth and dialog strings), so an adopter starts with no code that has no caller. `Document` now links the icon set and web manifest already in `frontend/public/`. The 2.0.0 migration removes each only when your code does not use it. (#2929)
 
 ### Fixed
 

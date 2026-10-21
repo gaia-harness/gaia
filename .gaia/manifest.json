@@ -466,10 +466,6 @@
     "frontend/app/components/errors/error-stack/tests/index.stories.tsx": "owned",
     "frontend/app/components/errors/root-error-boundary/index.tsx": "owned",
     "frontend/app/components/errors/root-error-boundary/tests/index.stories.tsx": "owned",
-    "frontend/app/components/form/form-error/index.tsx": "owned",
-    "frontend/app/components/form/form-error/tests/index.stories.tsx": "owned",
-    "frontend/app/components/form/max-length/index.tsx": "owned",
-    "frontend/app/components/form/max-length/tests/index.stories.tsx": "owned",
     "frontend/app/components/form/tests/composed-form.stories.tsx": "owned",
     "frontend/app/components/form/tests/composed-form.tsx": "owned",
     "frontend/app/components/language-select/index.tsx": "owned",
@@ -540,7 +536,6 @@
     "frontend/app/services/api/tests/utils.test.ts": "owned",
     "frontend/app/services/api/utils.ts": "owned",
     "frontend/app/services/gaia/api.ts": "owned",
-    "frontend/app/services/gaia/urls.ts": "owned",
     "frontend/app/sessions.server/language.ts": "owned",
     "frontend/app/state/index.tsx": "owned",
     "frontend/app/styles/tailwind.css": "owned",
@@ -551,7 +546,6 @@
     "frontend/app/utils/array.ts": "owned",
     "frontend/app/utils/date.ts": "owned",
     "frontend/app/utils/dom.ts": "owned",
-    "frontend/app/utils/environment.ts": "owned",
     "frontend/app/utils/function.ts": "owned",
     "frontend/app/utils/http.server.ts": "owned",
     "frontend/app/utils/http.ts": "owned",
@@ -761,7 +755,7 @@
     "wiki/overview.md": "wiki-owned",
     "wiki/README.md": "wiki-owned"
   },
-  "generated": "2026-10-21T12:24:45.337Z",
+  "generated": "2026-10-21T15:26:09.793Z",
   "regions": [
     {
       "endMarker": "<!-- gaia:audit-remit:end -->",

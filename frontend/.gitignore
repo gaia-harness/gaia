@@ -2,13 +2,10 @@
 # from the frontend/ working directory, and git applies it to this subtree.
 
 # react-router
-/.cache
 /build
-/public/build
 .react-router/
 
 # Testing
-/playwright
 .playwright/.cache/
 .playwright/output/
 coverage
@@ -21,6 +18,3 @@ coverage
 
 # Vitest browser mode failure attachments
 /.vitest/
-
-# Optional eslint cache
-.eslintcache

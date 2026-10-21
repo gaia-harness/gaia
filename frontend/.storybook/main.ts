@@ -16,8 +16,6 @@ const config: StorybookConfig = {
     'msw-storybook-addon',
   ],
 
-  docs: {},
-
   features: {
     backgrounds: false,
     measure: false,
