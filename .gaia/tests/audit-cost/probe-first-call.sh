@@ -78,6 +78,33 @@ fi
 mkdir -p "$output_directory"
 root="$(cd "$root" && pwd -P)"
 
+# owner/name of the GitHub repository behind a checkout, following a local
+# clone's origin (a scratch clone's origin is the checkout it was cloned from).
+# The audit-loop hook's fork check asks gh about the probe's branch; without a
+# GitHub remote gh exits non-zero and the hook refuses every member dispatch.
+github_repository_of() {
+  local checkout="$1" url depth=0
+  while [ "$depth" -lt 4 ]; do
+    url="$(git -C "$checkout" remote get-url origin 2>/dev/null)" || return 1
+    case "$url" in
+      *github.com[:/]*)
+        url="${url#*github.com[:/]}"
+        printf '%s\n' "${url%.git}"
+        return 0
+        ;;
+      /* | file://*)
+        checkout="${url#file://}"
+        depth=$((depth + 1))
+        ;;
+      *) return 1 ;;
+    esac
+  done
+  return 1
+}
+if [ -z "${GH_REPO:-}" ] && GH_REPO="$(github_repository_of "$root")"; then
+  export GH_REPO
+fi
+
 spent_usd=0
 completed_labels=""
 
@@ -104,7 +131,8 @@ copy_session() {
 }
 
 # One claude session; sets session_transcript to the copied transcript path
-# (empty when none could be found). Stops the run when the cap is reached.
+# (empty when none could be found). Refuses to start once the cap is reached;
+# the session that crosses it still gets its measure or callability row.
 run_session() {
   local label="$1" prompt="$2" remaining stream cost session_id
   remaining="$(awk -v cap="$maximum_usd" -v spent="$spent_usd" 'BEGIN { printf "%.4f", cap - spent }')"
@@ -115,11 +143,14 @@ run_session() {
   fi
   mkdir -p "$output_directory/$label"
   stream="$output_directory/$label/stream.jsonl"
+  # bypassPermissions: a scratch tree is an untrusted workspace, so headless
+  # claude ignores the project's allow list, and a background sub-agent's
+  # WebFetch is denied with no one to answer the prompt.
   (
     cd "$root"
     exec env -u CLAUDE_PROJECT_DIR -u CLAUDECODE -u CLAUDE_CODE_ENTRYPOINT -u CLAUDE_CODE_SSE_PORT \
       claude -p "$prompt" --output-format stream-json --verbose --model "$model" \
-      --permission-mode acceptEdits --allowedTools "Agent,SendMessage,Monitor,WebFetch,Bash" --max-budget-usd "$remaining"
+      --permission-mode bypassPermissions --max-budget-usd "$remaining"
   ) >"$stream" 2>"$output_directory/$label/stderr.log" </dev/null || true
   session_transcript=""
   session_id="$(jq -rs '[.[] | select(.type == "system" and .subtype == "init") | .session_id][0] // empty' "$stream" 2>/dev/null || true)"
@@ -134,11 +165,6 @@ run_session() {
   fi
   spent_usd="$(awk -v spent="$spent_usd" -v cost="$cost" 'BEGIN { printf "%.6f", spent + cost }')"
   completed_labels="$completed_labels $label"
-  if awk -v spent="$spent_usd" -v cap="$maximum_usd" 'BEGIN { exit !(spent >= cap) }'; then
-    write_summary false ""
-    echo "ERROR: cost cap reached: spent \$$spent_usd of --max-usd \$$maximum_usd" >&2
-    exit 3
-  fi
 }
 
 measure_session() {
@@ -184,4 +210,9 @@ if [ "$with_callability" -eq 1 ]; then
   jq -s 'add // []' "$entries_file" >"$output_directory/callability.json"
 fi
 
+if awk -v spent="$spent_usd" -v cap="$maximum_usd" 'BEGIN { exit !(spent >= cap) }'; then
+  write_summary false ""
+  echo "ERROR: cost cap reached: spent \$$spent_usd of --max-usd \$$maximum_usd" >&2
+  exit 3
+fi
 write_summary true ""

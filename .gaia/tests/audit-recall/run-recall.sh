@@ -263,10 +263,13 @@ dispatch_member() {
   : >"$start_marker"
   remaining="$(jq -n --argjson maximum "$maximum_usd" --argjson spent "$total_usd" '$maximum - $spent')"
   prompt="$(printf 'This session measures one Code Audit Team member. Make exactly one tool call: an Agent call with subagent_type "%s", description "Recall replay review", and as its prompt exactly the text between the two marker lines below. Run no other tool, review nothing yourself and dispatch nothing else. When the member has returned, reply DONE.\n-----BEGIN MEMBER PROMPT-----\n%s\n-----END MEMBER PROMPT-----\n' "$member" "$(member_brief "$root" "$member")")"
+  # bypassPermissions: a replay tree is an untrusted workspace, so headless
+  # claude ignores the project's allow list and the member's gh and git calls
+  # wait on a prompt nobody can answer. Hooks still run.
   (
     cd "$root"
     exec env -u CLAUDE_PROJECT_DIR -u CLAUDECODE -u CLAUDE_CODE_ENTRYPOINT -u CLAUDE_CODE_SSE_PORT \
-      claude -p "$prompt" --output-format stream-json --verbose --permission-mode acceptEdits --max-budget-usd "$remaining"
+      claude -p "$prompt" --output-format stream-json --verbose --permission-mode bypassPermissions --max-budget-usd "$remaining"
   ) >"$stream" 2>"$result_directory/stderr.log" </dev/null &
   claude_pid=$!
   while kill -0 "$claude_pid" 2>/dev/null && [ "$elapsed" -lt "$SESSION_TIMEOUT_SECONDS" ]; do

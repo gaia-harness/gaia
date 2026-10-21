@@ -131,10 +131,14 @@ start_time="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 claude_version="$(claude --version 2>/dev/null | head -n 1 || true)"
 stream="$output_directory/stream.jsonl"
 prompt="Run the pre-merge Code Audit Team audit for pull request $pull_request_number per wiki/concepts/PR Merge Workflow.md. Stop after the audit loop unit's report: do not merge, and do not fix anything yourself."
+# bypassPermissions: a throwaway is an untrusted workspace, so headless claude
+# ignores the project's allow list and the workflow's first gh call waits on a
+# prompt nobody can answer. Hooks still run; the sentinel check keeps this to
+# throwaways.
 (
   cd "$scaffold"
   exec env -u CLAUDE_PROJECT_DIR -u CLAUDECODE -u CLAUDE_CODE_ENTRYPOINT -u CLAUDE_CODE_SSE_PORT \
-    claude -p "$prompt" --output-format stream-json --verbose --permission-mode acceptEdits --max-budget-usd "$maximum_usd"
+    claude -p "$prompt" --output-format stream-json --verbose --permission-mode bypassPermissions --max-budget-usd "$maximum_usd"
 ) >"$stream" 2>"$output_directory/stderr.log" </dev/null &
 claude_pid=$!
 
