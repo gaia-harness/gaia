@@ -89,7 +89,7 @@ describe('labels/registry readRegistry', () => {
   });
 });
 
-describe('labels/registry creatableEntries', () => {
+describe('labels/registry creatable entries', () => {
   test('every feature on yields the adopter-role entries', () => {
     expect(names('adopter', ['tech-debt', 'dependabot', 'forensics'])).toEqual([
       'bug',
