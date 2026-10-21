@@ -16,7 +16,19 @@
 #   bash .gaia/tests/bats-shards.sh files <shard-id>     # that shard's .bats paths
 #   bash .gaia/tests/bats-shards.sh group <shard-id>     # its exchange group's ids
 #   bash .gaia/tests/bats-shards.sh run <shard-id>       # bats those paths, one invocation
+#   bash .gaia/tests/bats-shards.sh run-for-change <shard-id> <git-diff-arg>...
+#   bash .gaia/tests/bats-shards.sh files-for-change <shard-id> <git-diff-arg>...
 #   bash .gaia/tests/bats-shards.sh -h | --help
+#
+# The two change-scoped commands are what a leg runs when the change is one
+# the workflow's `scoped` filter output names and its `code` output does not.
+# They run the shard's share of what .gaia/tests/verify-harness.sh runs in
+# branch mode: every suite of the shard the change selector
+# (.gaia/scripts/bats-suites-for-change.sh, handed the diff arguments verbatim)
+# picks, in full, and every other whole-tree-marked suite of the shard under
+# the whole-tree tag. `files-for-change` prints the suites that run hands bats.
+# A selector that cannot read the change runs the whole shard: the fallback
+# widens rather than narrows, so a broken diff never greens a leg on nothing.
 #
 # Exit codes:
 #   0  success (shards/files listed, or run's bats invocation passed)
@@ -174,11 +186,21 @@ TAB="$(printf '\t')"
 
 REPO_ROOT="$(git -C "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)" rev-parse --show-toplevel)"
 
+# A seam like the directory ones above, so the guard suite drives the
+# change-scoped commands with a stub selector instead of a live diff.
+SUITES_FOR_CHANGE_SCRIPT="${SUITES_FOR_CHANGE_SCRIPT:-$REPO_ROOT/.gaia/scripts/bats-suites-for-change.sh}"
+
+# The whole-tree mark patterns, defined once there and restated nowhere.
+# shellcheck source=.gaia/tests/helpers/verify-harness-bats-lib.sh
+. "$REPO_ROOT/.gaia/tests/helpers/verify-harness-bats-lib.sh"
+
 usage() {
   printf 'Usage: bash .gaia/tests/bats-shards.sh shards\n'
   printf '       bash .gaia/tests/bats-shards.sh files <shard-id>\n'
   printf '       bash .gaia/tests/bats-shards.sh group <shard-id>\n'
   printf '       bash .gaia/tests/bats-shards.sh run <shard-id>\n'
+  printf '       bash .gaia/tests/bats-shards.sh run-for-change <shard-id> <git-diff-arg>...\n'
+  printf '       bash .gaia/tests/bats-shards.sh files-for-change <shard-id> <git-diff-arg>...\n'
   printf '       bash .gaia/tests/bats-shards.sh -h | --help\n'
 }
 
@@ -569,6 +591,94 @@ subcommand_run() {
   done <<EOF
 $shard_files
 EOF
+  run_bats_gated ${argv[@]+"${argv[@]}"}
+}
+
+# plan_for_change <shard-id> <git-diff-arg>...: one `full<TAB><path>` or
+# `whole-tree<TAB><path>` line per suite of the shard the change owes, paths
+# absolute. Returns 3 when the selector could not read the change, and the
+# status of `files` when that refused the shard.
+plan_for_change() {
+  local id="$1" shard_files selected status suite_path
+  shift
+  status=0
+  shard_files="$(subcommand_files "$id")" || return $?
+  selected="$(bash "$SUITES_FOR_CHANGE_SCRIPT" --dir "$REPO_ROOT" "$@")" || status=$?
+  if [ "$status" -ne 0 ]; then
+    return 3
+  fi
+  # The selector prints repo-relative paths and an absolute seam prints
+  # absolute ones, so both sides compare in absolute form.
+  selected="$(
+    while IFS= read -r suite_path; do
+      [ -n "$suite_path" ] && resolve_directory "$suite_path"
+    done <<EOF
+$selected
+EOF
+  )"
+  while IFS= read -r suite_path; do
+    [ -n "$suite_path" ] || continue
+    suite_path="$(resolve_directory "$suite_path")"
+    # shellcheck disable=SC2154 # assigned by the sourced verify-harness-bats-lib.sh
+    if grep -qxF -- "$suite_path" <<<"$selected"; then
+      printf 'full%s%s\n' "$TAB" "$suite_path"
+    elif grep -qE "$verify_whole_tree_mark_pattern" "$suite_path"; then
+      printf 'whole-tree%s%s\n' "$TAB" "$suite_path"
+    fi
+  done <<EOF
+$shard_files
+EOF
+}
+
+subcommand_files_for_change() {
+  local id="$1" plan status
+  status=0
+  plan="$(plan_for_change "$@")" || status=$?
+  if [ "$status" -eq 3 ]; then
+    subcommand_files "$id"
+    return
+  fi
+  [ "$status" -eq 0 ] || exit "$status"
+  [ -z "$plan" ] || printf '%s\n' "$plan" | cut -f2
+}
+
+subcommand_run_for_change() {
+  local id="$1" plan status kind suite_path exit_status
+  local -a full_suites whole_tree_suites
+  status=0
+  plan="$(plan_for_change "$@")" || status=$?
+  if [ "$status" -eq 3 ]; then
+    printf 'bats-shards: the change selector could not read the change; running all of %s\n' "$id" >&2
+    subcommand_run "$id" # selector fallback
+    return
+  fi
+  [ "$status" -eq 0 ] || exit "$status"
+  full_suites=()
+  whole_tree_suites=()
+  while IFS="$TAB" read -r kind suite_path; do
+    case "$kind" in
+      full) full_suites+=("$suite_path") ;;
+      whole-tree) whole_tree_suites+=("$suite_path") ;;
+    esac
+  done <<EOF
+$plan
+EOF
+  if [ ${#full_suites[@]} -eq 0 ] && [ ${#whole_tree_suites[@]} -eq 0 ]; then
+    printf 'bats-shards: %s holds no suite this change owes\n' "$id"
+    return 0
+  fi
+  exit_status=0
+  if [ ${#full_suites[@]} -gt 0 ]; then
+    run_bats_gated ${full_suites[@]+"${full_suites[@]}"} || exit_status=1
+  fi
+  if [ ${#whole_tree_suites[@]} -gt 0 ]; then
+    run_bats_gated --filter-tags whole-tree ${whole_tree_suites[@]+"${whole_tree_suites[@]}"} || exit_status=1
+  fi
+  return "$exit_status"
+}
+
+# run_bats_gated <bats-arg>...: bats with git's background maintenance gated.
+run_bats_gated() {
   # Gate git's background auto-maintenance for every git process the suites
   # spawn. Left ungated, every `git commit` into a fixture repository spawns a
   # detached `git maintenance run --auto` that can outlive its test and race the
@@ -589,7 +699,7 @@ EOF
       config_entry_count=$((config_entry_count + 1))
     done
     export GIT_CONFIG_COUNT="$config_entry_count"
-    bats ${argv[@]+"${argv[@]}"}
+    bats "$@"
   )
 }
 
@@ -614,6 +724,18 @@ main() {
     run)
       [ $# -ge 2 ] || die_usage 'run needs a shard id'
       subcommand_run "$2"
+      ;;
+    run-for-change | files-for-change)
+      # At least one diff argument: with none the selector falls back to the
+      # ambient merge base and working tree, which on a CI checkout is not the
+      # change the leg runs for.
+      [ $# -ge 3 ] || die_usage "$subcommand needs a shard id and at least one git diff argument"
+      shift
+      if [ "$subcommand" = run-for-change ]; then
+        subcommand_run_for_change "$@"
+      else
+        subcommand_files_for_change "$@"
+      fi
       ;;
     '')
       die_usage 'missing command'
