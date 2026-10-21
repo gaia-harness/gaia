@@ -8,6 +8,7 @@
 #   audit-light-mark.sh --root <abs-checkout-root> --member <name>
 #                       --verdict <- | path-to-reply-file>
 #                       [--reviewer-tokens <int>] [--reviewer-duration-ms <int>]
+#                       [--reviewer-dispatched-at <UTC timestamp>]
 #
 # `--verdict -` reads the reviewer's reply, verbatim, from stdin. `--verdict
 # <path>` reads it byte for byte from that file: an unattended unit in a
@@ -49,8 +50,12 @@
 # blocking or clear, never a findings array, an extra key, a non-empty
 # `resolved`, or a minor or nit note; any of those is verdict-malformed and the
 # member runs in full. The ledger line's `marked_at` is when the unit handed the
-# reply over (taken before the reply is read), so a slow read shows on disk
-# against the record's `routed_at` and the reviewer duration.
+# reply over (taken before the reply is read). `--reviewer-dispatched-at` lands
+# as `reviewer_dispatched_at`: the time of the unit's first wait step after it
+# dispatched the reviewer (null when the reply arrived before any wait step, and
+# the read latency is then unmeasured). A slow read shows on disk as
+# `marked_at - reviewer_dispatched_at - reviewer_duration_ms`. The order
+# against `marked_at` is recorded, never enforced.
 #
 # The persisted reply is the record of what the reviewer said and survives
 # every outcome after step 2. Every outcome after step 3 appends one line to
@@ -68,7 +73,7 @@
 set -uo pipefail
 
 _light_mark_usage() {
-  printf 'usage: audit-light-mark.sh --root <abs-checkout-root> --member <name> --verdict <- | path> [--reviewer-tokens <int>] [--reviewer-duration-ms <int>]\n' >&2
+  printf 'usage: audit-light-mark.sh --root <abs-checkout-root> --member <name> --verdict <- | path> [--reviewer-tokens <int>] [--reviewer-duration-ms <int>] [--reviewer-dispatched-at <UTC timestamp>]\n' >&2
 }
 
 _light_mark_degraded() {
@@ -88,9 +93,11 @@ _light_mark_record_outcome() {
     jq -n -c --arg member "$member" --arg digest "$digest" --arg tree "$head_tree" \
       --arg verdict "$outcome" --arg at "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
       --arg anchor_kind "$anchor_kind" --arg marked_at "$marked_at" --arg duration "$reviewer_duration" \
+      --arg reviewer_dispatched_at "$reviewer_dispatched_at" \
       '{member: $member, digest: $digest, tree: $tree, verdict: $verdict, at: $at,
         anchor_kind: (if $anchor_kind == "" then null else $anchor_kind end),
         marked_at: $marked_at,
+        reviewer_dispatched_at: (if $reviewer_dispatched_at == "" then null else $reviewer_dispatched_at end),
         reviewer_duration_ms: (if $duration == "" then null else ($duration | tonumber) end)}' >>"$ledger_path" 2>/dev/null || true
   fi
   # gaia:maintainer-only:start
@@ -121,11 +128,12 @@ light_mark_main() {
   member=""
   reviewer_tokens=""
   reviewer_duration=""
+  reviewer_dispatched_at=""
   local verdict_flag="" argument_name
   while [ "$#" -gt 0 ]; do
     argument_name="$1"
     case "$argument_name" in
-      --root | --member | --verdict | --reviewer-tokens | --reviewer-duration-ms)
+      --root | --member | --verdict | --reviewer-tokens | --reviewer-duration-ms | --reviewer-dispatched-at)
         [ "$#" -ge 2 ] && [ -n "$2" ] || { printf 'audit-light-mark: %s requires a value\n' "$argument_name" >&2; _light_mark_usage; exit 2; }
         case "$argument_name" in
           --root) root="$2" ;;
@@ -133,6 +141,7 @@ light_mark_main() {
           --verdict) verdict_flag="$2" ;;
           --reviewer-tokens) reviewer_tokens="$2" ;;
           --reviewer-duration-ms) reviewer_duration="$2" ;;
+          --reviewer-dispatched-at) reviewer_dispatched_at="$2" ;;
         esac
         shift 2
         ;;
@@ -145,6 +154,9 @@ light_mark_main() {
   case "$member" in */* | *..* | -*) printf 'audit-light-mark: --member is not a plain name\n' >&2; exit 2 ;; esac
   case "$reviewer_tokens" in *[!0-9]*) printf 'audit-light-mark: --reviewer-tokens must be an integer\n' >&2; exit 2 ;; esac
   case "$reviewer_duration" in *[!0-9]*) printf 'audit-light-mark: --reviewer-duration-ms must be an integer\n' >&2; exit 2 ;; esac
+  if [ -n "$reviewer_dispatched_at" ] && ! [[ "$reviewer_dispatched_at" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$ ]]; then
+    printf 'audit-light-mark: --reviewer-dispatched-at must be a UTC timestamp like 2026-01-01T00:00:00Z\n' >&2; _light_mark_usage; exit 2
+  fi
   [ -d "$root" ] || { printf 'audit-light-mark: --root is not a directory\n' >&2; exit 2; }
 
   command -v jq >/dev/null 2>&1 || _light_mark_degraded

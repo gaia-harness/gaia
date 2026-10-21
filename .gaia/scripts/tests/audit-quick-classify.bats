@@ -144,6 +144,132 @@ export default {
 };
 EOF
 )"
+  # The render-prop shapes in the adopter scaffold's lint-and-prettier form. The
+  # `{trigger}` and `{title}` expressions ahead of the close button leave the
+  # lexer's last token an identifier, the state in which the classifier must
+  # still read `render={` followed by `<Button` as JSX.
+  RENDER_BASE="$(cat <<'EOF'
+import {Button} from '~/components/ui/button';
+
+const ConfirmDialog = ({title, trigger}: Props) => (
+  <Dialog>
+    <DialogTrigger render={trigger} />
+    <DialogContent showCloseButton={false}>
+      <DialogHeader>
+        <DialogTitle>{title}</DialogTitle>
+      </DialogHeader>
+      <DialogClose
+        render={
+          <Button
+            aria-label={t('close')}
+            className="absolute top-2 right-2"
+            size="icon-sm"
+            variant="ghost"
+          />
+        }
+      >
+        <XIcon />
+      </DialogClose>
+      <Toggle
+        icon={
+          <Icon
+            className="size-4 shrink-0"
+          />
+        }
+      />
+      <Pop
+        render={
+          <Button className="mx-1">
+            Close
+          </Button>
+        }
+      />
+      <Pop
+        render={
+          <Button className="mx-2">
+            {label}
+          </Button>
+        }
+      />
+      <Pop
+        render={
+          <Button
+            className="mx-3"
+          />}
+      />
+    </DialogContent>
+  </Dialog>
+);
+
+export default ConfirmDialog;
+EOF
+)"
+  NESTED_BASE="$(cat <<'EOF'
+const Menu = ({label}: Props) => (
+  <Nav aria-label={label}>
+    <Item
+      render={
+        <Button
+          render={
+            <Link
+              className="block px-2"
+              to="/home"
+            />
+          }
+        />
+      }
+    />
+    <Tip
+      render={
+        <Button
+          className={cn(
+            'rounded-md',
+            'top-2'
+          )}
+        />
+      }
+    />
+  </Nav>
+);
+
+export default Menu;
+EOF
+)"
+  # One-line capitalized elements, props in the order perfectionist/sort-jsx-props
+  # leaves them.
+  ONELINE_BASE="$(cat <<'EOF'
+const Confirm = ({title}: Props) => (
+  <Dialog>
+    <DialogClose
+      render={<Button className="top-2" />}
+    />
+    <DialogContent className="sm:max-w-md">
+      <DialogHeader>
+        <DialogTitle className="text-lg">Delete</DialogTitle>
+        <DialogTitle className="text-lg">{title}</DialogTitle>
+        <DialogTitle className="text-lg">削除</DialogTitle>
+      </DialogHeader>
+      <Separator className="my-2" />
+    </DialogContent>
+    <DialogContent className="gap-4" showCloseButton={false}>
+      <p>Body</p>
+    </DialogContent>
+    <DialogContent showCloseButton={false}>
+      <p>Body</p>
+    </DialogContent>
+    <DialogFooter
+      className="mt-4"
+      variant="plain"
+    />
+    <DialogDescription
+      id="desc"
+    />
+  </Dialog>
+);
+
+export default Confirm;
+EOF
+)"
 }
 
 qc_git() {
@@ -245,6 +371,45 @@ qc_component_pair() {
   qc_edit "$COMPONENT" "$op" "$line" "$green"
   qc_lines "$COMPONENT"
   qc_expect_quick
+}
+
+# qc_fixture <base> [<line> <text>]...: commit <base> as the component, with
+# each listed line replaced first (a variant base).
+qc_fixture() {
+  local base="$1"
+  shift
+  qc_start
+  qc_put "$COMPONENT" "$base"
+  while [ "$#" -ge 2 ]; do
+    qc_edit "$COMPONENT" replace "$1" "$2"
+    shift 2
+  done
+  qc_base
+}
+
+# qc_route <expected> [<op> <line> <text>]...: apply the edits to the committed
+# fixture and assert the decision; <expected> is `quick` or `<reason> <location>`.
+qc_route() {
+  local expected="$1"
+  shift
+  while [ "$#" -ge 3 ]; do
+    qc_edit "$COMPONENT" "$1" "$2" "$3"
+    shift 3
+  done
+  qc_lines "$COMPONENT"
+  if [ "$expected" = "quick" ]; then
+    qc_expect_quick
+  else
+    qc_expect_deep "${expected% *}" "$COMPONENT" "${expected#* }"
+  fi
+}
+
+# render_wrapped <block>: the render-prop base with the close button's render
+# expression (its lines 11 to 18) replaced by <block>, which starts at line 11.
+render_wrapped() {
+  printf '%s\n' "$RENDER_BASE" | sed -n '1,10p'
+  printf '%s\n' "$1"
+  printf '%s\n' "$RENDER_BASE" | sed -n '19,$p'
 }
 
 # --- header and library hygiene ---------------------------------------------
@@ -788,6 +953,302 @@ qc_component_pair() {
   qc_edit "$STORY" replace 21 "  args: {label: 'Run'},"
   qc_lines "$COMPONENT" "$STORY"
   qc_expect_quick
+}
+
+# --- line stage: an element nested as an attribute expression's value ----------
+
+@test "must-quick: a className token change on a render-prop element, an icon prop element, the innermost of two nestings and a nested cn() literal" {
+  qc_fixture "$RENDER_BASE"
+  qc_route quick replace 14 '            className="absolute top-1 right-1"' || return 1
+  qc_fixture "$RENDER_BASE"
+  qc_route quick replace 25 '            className="size-5 shrink-0"' || return 1
+  qc_fixture "$NESTED_BASE"
+  qc_route quick replace 8 '              className="block px-3"' || return 1
+  qc_fixture "$NESTED_BASE"
+  qc_route quick replace 20 "            'top-1'" || return 1
+  # The same cn() literal change at top level routes the same way.
+  qc_component
+  qc_route quick replace 15 "        'rounded-lg',"
+}
+
+@test "must-quick: a nested className change with the element closing on the brace's line, in parentheses, and under a one-line render={<Button" {
+  qc_fixture "$RENDER_BASE"
+  qc_route quick replace 46 '            className="mx-4"' || return 1
+  qc_fixture "$(render_wrapped "$(printf '        render={(\n          <Button\n            className="absolute top-2 right-2"\n          />\n        )}')")"
+  qc_route quick replace 13 '            className="absolute top-1 right-1"' || return 1
+  qc_fixture "$(render_wrapped "$(printf '        render={<Button\n          className="absolute top-2 right-2"\n        />}')")"
+  qc_route quick replace 12 '          className="absolute top-1 right-1"'
+}
+
+@test "red quick-hiding-token: a hiding or focus token added to or removed from a nested className, each with its green twin" {
+  local token carried='            className="absolute top-2 right-2 sr-only focus:ring-2 animate-spin order-2 top-[3px]"'
+  for token in sr-only focus:ring-2; do
+    qc_fixture "$RENDER_BASE"
+    qc_route "quick-hiding-token post:14" replace 14 "            className=\"absolute top-2 right-2 $token\"" || { printf 'added %s\n' "$token" >&2; return 1; }
+    qc_fixture "$RENDER_BASE" 14 "$carried"
+    qc_route "quick-hiding-token pre:14" replace 14 "$(printf '%s\n' "$carried" | sed "s/ $token//")" || { printf 'removed %s\n' "$token" >&2; return 1; }
+  done
+  qc_fixture "$NESTED_BASE"
+  qc_route "quick-hiding-token post:8" replace 8 '              className="block px-2 sr-only"' || return 1
+  qc_fixture "$RENDER_BASE" 14 "$carried"
+  qc_route quick replace 14 "$(printf '%s\n' "$carried" | sed 's/ right-2//')" || return 1
+  qc_fixture "$RENDER_BASE"
+  qc_route quick replace 14 '            className="absolute top-2 right-3"'
+}
+
+@test "red quick-motion-order-token: an animate or order token added to or removed from a nested className" {
+  local token carried='            className="absolute top-2 right-2 sr-only focus:ring-2 animate-spin order-2 top-[3px]"'
+  for token in animate-spin order-2; do
+    qc_fixture "$RENDER_BASE"
+    qc_route "quick-motion-order-token post:14" replace 14 "            className=\"absolute top-2 right-2 $token\"" || { printf 'added %s\n' "$token" >&2; return 1; }
+    qc_fixture "$RENDER_BASE" 14 "$carried"
+    qc_route "quick-motion-order-token pre:14" replace 14 "$(printf '%s\n' "$carried" | sed "s/ $token//")" || { printf 'removed %s\n' "$token" >&2; return 1; }
+  done
+}
+
+@test "red quick-palette: a raw palette token added to a nested className" {
+  qc_fixture "$RENDER_BASE"
+  qc_route "quick-palette post:14" replace 14 '            className="absolute top-2 right-2 bg-red-500"' || return 1
+  qc_fixture "$RENDER_BASE"
+  qc_route quick replace 14 '            className="absolute top-2 right-2 bg-primary"'
+}
+
+@test "red quick-arbitrary-value: an arbitrary value added to or removed from a nested className" {
+  local carried='            className="absolute top-2 right-2 sr-only focus:ring-2 animate-spin order-2 top-[3px]"'
+  qc_fixture "$RENDER_BASE"
+  qc_route "quick-arbitrary-value post:14" replace 14 '            className="absolute top-[3px] right-2"' || return 1
+  qc_fixture "$RENDER_BASE" 14 "$carried"
+  qc_route "quick-arbitrary-value pre:14" replace 14 '            className="absolute top-2 right-2 sr-only focus:ring-2 animate-spin order-2"'
+}
+
+@test "red quick-codepoint: a non-ASCII byte in a nested className" {
+  qc_fixture "$RENDER_BASE"
+  qc_route "quick-codepoint post:14" replace 14 "$(printf '            className="absolute top-\303\251 right-2"')"
+}
+
+@test "red quick-attribute: a nested element's other attribute changed, added or deleted, and the outer render line changed" {
+  qc_fixture "$RENDER_BASE"
+  qc_route "quick-attribute pre:15" replace 15 '            size="icon-lg"' || return 1
+  qc_fixture "$RENDER_BASE"
+  qc_route "quick-attribute pre:13" replace 13 "            aria-label={t('dismiss')}" || return 1
+  qc_fixture "$RENDER_BASE"
+  qc_route "quick-attribute post:14" insert 13 '            data-state="open"' || return 1
+  qc_fixture "$RENDER_BASE"
+  qc_route "quick-attribute pre:16" delete 16 '' || return 1
+  qc_fixture "$RENDER_BASE"
+  qc_route "quick-attribute pre:11" replace 11 '        renderAs={'
+}
+
+@test "red quick-element: a nested element's tag line changed, and a one-line render={<Button line changed" {
+  qc_fixture "$RENDER_BASE"
+  qc_route "quick-element pre:12" replace 12 '          <Button type="button"' || return 1
+  qc_fixture "$NESTED_BASE"
+  qc_route "quick-element pre:7" replace 7 '            <Link data-x' || return 1
+  qc_fixture "$(render_wrapped "$(printf '        render={<Button\n          className="absolute top-2 right-2"\n        />}')")"
+  qc_route "quick-element pre:11" replace 11 '        render={<Button data-x' || return 1
+  qc_fixture "$(render_wrapped '        render={<Button className="top-2" />}')"
+  qc_route "quick-element pre:11" replace 11 '        render={<Button className="top-3" />}'
+}
+
+@test "red quick-attribute: a one-line intrinsic element in a render expression keeps its attribute reason" {
+  qc_fixture "$(render_wrapped '        render={<a className="top-2" />}')"
+  qc_route "quick-attribute pre:11" replace 11 '        render={<a className="top-3" />}' || return 1
+  qc_fixture "$(render_wrapped '        render={<div />}')"
+  qc_route "quick-attribute pre:11" replace 11 '        render={<span />}' || return 1
+  qc_fixture "$(render_wrapped "$(printf '        render={\n          <a\n            className="absolute top-2 right-2"\n          />\n        }')")"
+  qc_route "quick-attribute pre:13" replace 13 '            className="absolute top-1 right-1"'
+}
+
+@test "red quick-attribute: a className change inside a render expression that is not one element keeps its attribute reason" {
+  local name block line
+  local -a cases=(
+    "ternary|14|$(printf '        render={\n          open ? (\n            <Button\n              className="absolute top-2 right-2"\n            />\n          ) : undefined\n        }')"
+    "and|14|$(printf '        render={\n          open && (\n            <Button\n              className="absolute top-2 right-2"\n            />\n          )\n        }')"
+    "map|13|$(printf '        render={items.map((item) => (\n          <Button\n            className="absolute top-2 right-2"\n          />\n        ))}')"
+    "callback|13|$(printf '        render={() => (\n          <Button\n            className="absolute top-2 right-2"\n          />\n        )}')"
+    "function|14|$(printf '        render={function renderClose() {\n          return (\n            <Button\n              className="absolute top-2 right-2"\n            />\n          );\n        }}')"
+    "object|14|$(printf '        render={{\n          close: (\n            <Button\n              className="absolute top-2 right-2"\n            />\n          ),\n        }}')"
+    "call|13|$(printf '        render={wrap(\n          <Button\n            className="absolute top-2 right-2"\n          />\n        )}')"
+    "second element|13|$(printf '        render={[\n          <Button\n            className="absolute top-2 right-2"\n          />,\n          <Icon key="x" />,\n        ]}')"
+    "fragment|14|$(printf '        render={\n          <>\n            <Button\n              className="absolute top-2 right-2"\n            />\n          </>\n        }')"
+    "child of the value|14|$(printf '        render={\n          <Button>\n            <Icon\n              className="absolute top-2 right-2"\n            />\n          </Button>\n        }')"
+  )
+  [ "${#cases[@]}" -eq 10 ]
+  for block in "${cases[@]}"; do
+    name="${block%%|*}"
+    block="${block#*|}"
+    line="${block%%|*}"
+    block="${block#*|}"
+    qc_fixture "$(render_wrapped "$block")"
+    qc_route "quick-attribute pre:$line" replace "$line" "$(sed -n "${line}p" "$QC_ROOT/$COMPONENT" | sed 's/top-2 right-2/top-1 right-1/')" || { printf 'wrapper %s\n' "$name" >&2; return 1; }
+  done
+}
+
+@test "red quick-attribute: text and a child expression inside a render-prop element keep their attribute reason" {
+  qc_fixture "$RENDER_BASE"
+  qc_route "quick-attribute pre:32" replace 32 '            Dismiss' || return 1
+  qc_fixture "$RENDER_BASE"
+  qc_route "quick-attribute pre:39" replace 39 '            {title}'
+}
+
+@test "red quick-unclassified: a multi-line className string on a nested element" {
+  qc_fixture "$(render_wrapped "$(printf '        render={\n          <Button\n            className="absolute\n              top-2 right-2"\n          />\n        }')")"
+  qc_route "quick-unclassified pre:14" replace 14 '              top-1 right-1"'
+}
+
+# --- line stage: a one-line capitalized element -------------------------------
+
+@test "must-quick: a static className added, changed or removed on a one-line capitalized element" {
+  local edit count=0
+  local -a edits=(
+    '6|    <DialogContent className="sm:max-w-lg">'
+    '14|    <DialogContent className="gap-6" showCloseButton={false}>'
+    '17|    <DialogContent className="gap-4" showCloseButton={false}>'
+    '12|      <Separator className="my-3" />'
+    '8|        <DialogTitle className="text-xl">Delete</DialogTitle>'
+    '9|        <DialogTitle className="text-xl">{title}</DialogTitle>'
+    '7|      <DialogHeader className="mr-8">'
+    '14|    <DialogContent showCloseButton={false}>'
+    '10|        <DialogTitle className="text-xl">削除</DialogTitle>'
+  )
+  for edit in "${edits[@]}"; do
+    qc_fixture "$ONELINE_BASE"
+    qc_route quick replace "${edit%%|*}" "${edit#*|}" || { printf 'edit %s\n' "$edit" >&2; return 1; }
+    count=$((count + 1))
+  done
+  [ "$count" -eq 9 ]
+}
+
+@test "red quick-hiding-token: a hiding or focus token on a one-line capitalized element, inside a className or with it whole" {
+  local token carried='    <DialogContent className="sm:max-w-md hidden invisible sr-only size-0 opacity-0 focus:ring-2 animate-spin order-2 max-w-[30rem]">'
+  for token in hidden invisible sr-only size-0 opacity-0 focus:ring-2; do
+    qc_fixture "$ONELINE_BASE"
+    qc_route "quick-hiding-token post:6" replace 6 "    <DialogContent className=\"sm:max-w-md $token\">" || { printf 'added %s\n' "$token" >&2; return 1; }
+    qc_fixture "$ONELINE_BASE" 6 "$carried"
+    qc_route "quick-hiding-token pre:6" replace 6 "$(printf '%s\n' "$carried" | sed "s/ $token//")" || { printf 'removed %s\n' "$token" >&2; return 1; }
+  done
+  for token in hidden sr-only; do
+    qc_fixture "$ONELINE_BASE"
+    qc_route "quick-hiding-token post:7" replace 7 "      <DialogHeader className=\"$token\">" || { printf 'whole added %s\n' "$token" >&2; return 1; }
+  done
+  for token in hidden sr-only focus:ring-2; do
+    qc_fixture "$ONELINE_BASE" 7 "      <DialogHeader className=\"$token\">"
+    qc_route "quick-hiding-token pre:7" replace 7 '      <DialogHeader>' || { printf 'whole removed %s\n' "$token" >&2; return 1; }
+  done
+  qc_fixture "$ONELINE_BASE"
+  qc_route "quick-hiding-token post:9" replace 9 '        <DialogTitle className="text-lg sr-only">{title}</DialogTitle>' || return 1
+  qc_fixture "$ONELINE_BASE" 6 "$carried"
+  qc_route quick replace 6 "$(printf '%s\n' "$carried" | sed 's/sm:max-w-md /sm:max-w-lg /')" || return 1
+  qc_fixture "$ONELINE_BASE" 7 '      <DialogHeader className="mr-8">'
+  qc_route quick replace 7 '      <DialogHeader>'
+}
+
+@test "red quick-motion-order-token: an animate or order token on a one-line capitalized element" {
+  local token carried='    <DialogContent className="sm:max-w-md hidden invisible sr-only size-0 opacity-0 focus:ring-2 animate-spin order-2 max-w-[30rem]">'
+  for token in animate-spin order-2; do
+    qc_fixture "$ONELINE_BASE"
+    qc_route "quick-motion-order-token post:6" replace 6 "    <DialogContent className=\"sm:max-w-md $token\">" || { printf 'added %s\n' "$token" >&2; return 1; }
+    qc_fixture "$ONELINE_BASE" 6 "$carried"
+    qc_route "quick-motion-order-token pre:6" replace 6 "$(printf '%s\n' "$carried" | sed "s/ $token//")" || { printf 'removed %s\n' "$token" >&2; return 1; }
+  done
+  qc_fixture "$ONELINE_BASE"
+  qc_route "quick-motion-order-token post:7" replace 7 '      <DialogHeader className="animate-spin">'
+}
+
+@test "red quick-arbitrary-value: an arbitrary value on a one-line capitalized element" {
+  local carried='    <DialogContent className="sm:max-w-md hidden invisible sr-only size-0 opacity-0 focus:ring-2 animate-spin order-2 max-w-[30rem]">'
+  qc_fixture "$ONELINE_BASE"
+  qc_route "quick-arbitrary-value post:6" replace 6 '    <DialogContent className="sm:max-w-md max-w-[30rem]">' || return 1
+  qc_fixture "$ONELINE_BASE" 6 "$carried"
+  qc_route "quick-arbitrary-value pre:6" replace 6 "$(printf '%s\n' "$carried" | sed 's/ max-w-\[30rem\]//')" || return 1
+  qc_fixture "$ONELINE_BASE"
+  qc_route "quick-arbitrary-value post:7" replace 7 '      <DialogHeader className="top-[3px]">' || return 1
+  qc_fixture "$ONELINE_BASE" 7 '      <DialogHeader className="max-w-[30rem]">'
+  qc_route "quick-arbitrary-value pre:7" replace 7 '      <DialogHeader>' || return 1
+  qc_fixture "$ONELINE_BASE"
+  qc_route "quick-arbitrary-value post:9" replace 9 '        <DialogTitle className="text-lg max-w-[30rem]">{title}</DialogTitle>'
+}
+
+@test "red quick-palette: a raw palette token on a one-line capitalized element, inside a className or with it whole" {
+  qc_fixture "$ONELINE_BASE"
+  qc_route "quick-palette post:6" replace 6 '    <DialogContent className="sm:max-w-md bg-red-500">' || return 1
+  qc_fixture "$ONELINE_BASE"
+  qc_route "quick-palette post:7" replace 7 '      <DialogHeader className="bg-red-500">' || return 1
+  qc_fixture "$ONELINE_BASE"
+  qc_route quick replace 7 '      <DialogHeader className="bg-primary">'
+}
+
+@test "red quick-codepoint: a non-ASCII byte in a one-line capitalized element's className" {
+  qc_fixture "$ONELINE_BASE"
+  qc_route "quick-codepoint post:6" replace 6 "$(printf '    <DialogContent className="sm:max-w-l\303\251">')"
+}
+
+@test "red quick-cn-argument: a one-line capitalized element's className turned into cn()" {
+  qc_fixture "$ONELINE_BASE"
+  qc_route "quick-cn-argument pre:6" replace 6 "    <DialogContent className={cn('sm:max-w-lg')}>"
+}
+
+@test "red quick-unclassified: a one-line capitalized element's className turned into an identifier" {
+  qc_fixture "$ONELINE_BASE"
+  qc_route "quick-unclassified pre:6" replace 6 '    <DialogContent className={size}>'
+}
+
+@test "red quick-attribute: another attribute changed beside a one-line className change" {
+  qc_fixture "$ONELINE_BASE"
+  qc_route "quick-attribute pre:14" replace 14 '    <DialogContent className="gap-6" showCloseButton>'
+}
+
+@test "red quick-element: a one-line capitalized element whose line changes outside its className" {
+  local edit
+  local -a edits=(
+    '8|        <DialogTitle className="text-xl">Remove</DialogTitle>|pre:8'
+    '9|        <DialogTitle className="text-xl">{subtitle}</DialogTitle>|pre:9'
+    '9|        <DialogTitle className="text-lg">{subtitle}</DialogTitle>|pre:9'
+    '8|        <DialogTitle className="text-xl">Delete <Foo /></DialogTitle>|pre:8'
+    '8|        <DialogTitle className="text-xl">Delete <span className="sr-only">x</span></DialogTitle>|pre:8'
+    '12|      <Divider className="my-3" />|pre:12'
+    '4|      render={<Button className="top-3" />}|pre:4'
+    '8|        <DialogTitle className="text-xl" >Delete</DialogTitle>|pre:8'
+  )
+  for edit in "${edits[@]}"; do
+    qc_fixture "$ONELINE_BASE"
+    qc_route "quick-element ${edit##*|}" replace "${edit%%|*}" "$(printf '%s' "${edit#*|}" | sed 's/|[^|]*$//')" || { printf 'edit %s\n' "$edit" >&2; return 1; }
+  done
+  qc_fixture "$ONELINE_BASE"
+  qc_route "quick-element post:13" insert 12 '      <Separator className="my-2" />' || return 1
+  # An opening tag whose attributes continue onto the next line is not one-line.
+  qc_fixture "$ONELINE_BASE" 14 "$(printf '    <DialogContent className="gap-4"\n      showCloseButton={false}>')"
+  qc_route "quick-element pre:14" replace 14 '    <DialogContent className="gap-6"'
+}
+
+@test "red quick-spread: an unchanged spread beside a one-line className change" {
+  qc_fixture "$ONELINE_BASE" 6 '    <DialogContent className="sm:max-w-md" {...props}>'
+  qc_route "quick-spread pre:6" replace 6 '    <DialogContent className="sm:max-w-lg" {...props}>'
+}
+
+@test "red quick-block-comment: a comment child beside a one-line className change" {
+  qc_fixture "$ONELINE_BASE" 8 '        <DialogTitle className="text-lg">{/* note */}Delete</DialogTitle>'
+  qc_route "quick-block-comment pre:8" replace 8 '        <DialogTitle className="text-xl">{/* note */}Delete</DialogTitle>'
+}
+
+@test "red quick-conditional: a conditional wrapper beside a one-line className change" {
+  qc_fixture "$ONELINE_BASE" 6 '    {open && <DialogContent className="sm:max-w-md">' 13 '    </DialogContent>}'
+  qc_route "quick-conditional pre:6" replace 6 '    {open && <DialogContent className="sm:max-w-lg">'
+}
+
+@test "red quick-unclassified: a className line inserted into or deleted from a multi-line capitalized element" {
+  qc_fixture "$ONELINE_BASE"
+  qc_route "quick-unclassified pre:21" delete 21 '' || return 1
+  qc_fixture "$ONELINE_BASE"
+  qc_route "quick-unclassified post:25" insert 24 '      className="mt-2"' || return 1
+  qc_fixture "$ONELINE_BASE"
+  qc_route quick replace 21 '      className="mt-6"'
+}
+
+# bats test_tags=whole-tree
+@test "the classifier header no longer reads any element-line change as an element change" {
+  grep -nF 'or any change on its element line' "$LIBRARY" && return 1
+  true
 }
 
 # --- determinism and failure direction ----------------------------------------

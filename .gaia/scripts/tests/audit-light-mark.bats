@@ -138,18 +138,21 @@ assert_quick_refused() {
   expect_line "$(printf 'light\tquick-eligible')"
 }
 
-# assert_ledger_timing <duration-or-null>: the last ledger line carries the
-# merge-base anchor, a UTC marked_at no earlier than the record's routed_at,
-# and the reviewer duration.
+# assert_ledger_timing <duration-or-null> [dispatched-at]: the last ledger line
+# carries the merge-base anchor, a UTC marked_at no earlier than the record's
+# routed_at, the reviewer duration, and the reviewer dispatch time (null when
+# none is named).
 assert_ledger_timing() {
-  local line routed_at
+  local line routed_at dispatched_at="${2:-null}"
+  [ "$dispatched_at" = null ] || dispatched_at="\"$dispatched_at\""
   line="$(tail -n 1 "$(ledger_path)")"
   routed_at="$(jq -r .routed_at "$(record_path)")"
-  jq -e --arg routed_at "$routed_at" --argjson duration "$1" '
+  jq -e --arg routed_at "$routed_at" --argjson duration "$1" --argjson dispatched_at "$dispatched_at" '
     .anchor_kind == "merge-base"
     and (.marked_at | test("^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9:]{8}Z$"))
     and .marked_at >= $routed_at
-    and .reviewer_duration_ms == $duration' <<<"$line" >/dev/null || { printf 'ledger line: %s\n' "$line" >&2; return 1; }
+    and .reviewer_duration_ms == $duration
+    and .reviewer_dispatched_at == $dispatched_at' <<<"$line" >/dev/null || { printf 'ledger line: %s\n' "$line" >&2; return 1; }
 }
 
 clear_reply_to_file() {
@@ -779,7 +782,7 @@ line 5')"
   lsb_mark "$FRONTEND" "$REPLY_FILE"
   expect_full escalate
   [ "$(wc -l <"$(ledger_path)" | tr -d ' ')" = "2" ]
-  [ "$(jq -c '[keys[]]' "$(ledger_path)" | sort -u)" = '["anchor_kind","at","digest","marked_at","member","reviewer_duration_ms","tree","verdict"]' ]
+  [ "$(jq -c '[keys[]]' "$(ledger_path)" | sort -u)" = '["anchor_kind","at","digest","marked_at","member","reviewer_dispatched_at","reviewer_duration_ms","tree","verdict"]' ]
   [ "$(jq -r .verdict "$(ledger_path)" | paste -sd, -)" = "clear,escalate" ]
   [ "$(jq -c '[.anchor_kind, .reviewer_duration_ms]' "$(ledger_path)" | sort -u)" = '["full",null]' ]
   jq -e '.at | test("^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$")' "$(ledger_path)" >/dev/null
@@ -908,13 +911,13 @@ line 5')"
 }
 
 # bats test_tags=whole-tree
-@test "a mark run on a merge-base record persists marked_at, the reviewer duration and the anchor kind on its ledger line" {
+@test "a mark run on a merge-base record persists marked_at, the reviewer dispatch time, the reviewer duration and the anchor kind on its ledger line" {
   prepare_quick
   clear_reply_to_file
-  run bash -c 'bash "$1" --root "$2" --member "$3" --verdict - --reviewer-duration-ms 6900 <"$4"' _ \
+  run bash -c 'bash "$1" --root "$2" --member "$3" --verdict - --reviewer-duration-ms 6900 --reviewer-dispatched-at 2020-01-01T00:00:00Z <"$4"' _ \
     "$LSB_ROOT/.gaia/scripts/audit-light-mark.sh" "$LSB_ROOT" "$FRONTEND" "$REPLY_FILE"
   expect_line "light-cleared"
-  assert_ledger_timing 6900
+  assert_ledger_timing 6900 2020-01-01T00:00:00Z
 }
 
 # bats test_tags=whole-tree
@@ -926,6 +929,90 @@ line 5')"
   expect_full verdict-malformed
   assert_ledger_timing null
   [ "$(jq -r .verdict "$(ledger_path)")" = "failed" ]
+}
+
+# bats test_tags=whole-tree
+@test "a merge-base mark run with a reviewer dispatch time records it beside marked_at and the duration, under no bare dispatched_at key" {
+  prepare_quick
+  clear_reply_to_file
+  run bash -c 'bash "$1" --root "$2" --member "$3" --verdict - --reviewer-duration-ms 6900 --reviewer-dispatched-at 2020-01-01T00:00:00Z <"$4"' _ \
+    "$LSB_ROOT/.gaia/scripts/audit-light-mark.sh" "$LSB_ROOT" "$FRONTEND" "$REPLY_FILE"
+  expect_line "light-cleared"
+  local line
+  line="$(tail -n 1 "$(ledger_path)")"
+  jq -e '.reviewer_dispatched_at == "2020-01-01T00:00:00Z"
+    and (.reviewer_dispatched_at | test("^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$"))
+    and .reviewer_dispatched_at != .marked_at
+    and .marked_at >= .reviewer_dispatched_at
+    and (keys | index("reviewer_dispatched_at") != null and index("marked_at") != null and index("reviewer_duration_ms") != null)
+    and (has("dispatched_at") | not)' <<<"$line" >/dev/null
+}
+
+# bats test_tags=whole-tree
+@test "a merge-base mark run without the reviewer dispatch flag clears and records a null dispatch time" {
+  prepare_quick
+  clear_reply_to_file
+  lsb_mark "$FRONTEND" "$REPLY_FILE"
+  expect_line "light-cleared"
+  [ -f "$(marker_path)" ]
+  [ "$(jq -c .reviewer_dispatched_at "$(ledger_path)")" = "null" ]
+}
+
+# bats test_tags=whole-tree
+@test "a malformed reviewer dispatch time exits 2 before anything is persisted" {
+  prepare_quick
+  clear_reply_to_file
+  local script="$LSB_ROOT/.gaia/scripts/audit-light-mark.sh" value
+  for value in "2026-10-21 05:00:00" "2026-10-21T05:00:00.123Z" "2026-10-21T05:00:00+09:00" "now" ""; do
+    run bash "$script" --root "$LSB_ROOT" --member "$FRONTEND" --verdict "$REPLY_FILE" --reviewer-dispatched-at "$value" </dev/null
+    [ "$status" -eq 2 ]
+    grep -qE 'light-cleared|^full' <<<"$output" && return 1
+    [ ! -e "$(ledger_path)" ]
+    assert_no_marker
+    [ -z "$(find "$(light_directory)" -name '*.verdict.json')" ]
+  done
+  run bash "$script" --root "$LSB_ROOT" --member "$FRONTEND" --verdict "$REPLY_FILE" --reviewer-dispatched-at </dev/null
+  [ "$status" -eq 2 ]
+  grep -qE 'light-cleared|^full' <<<"$output" && return 1
+  [ ! -e "$(ledger_path)" ]
+  assert_no_marker
+  true
+}
+
+# bats test_tags=whole-tree
+@test "the dispatch time validation is what rejects a malformed value: a scratch mark script without it accepts now" {
+  prepare_quick
+  clear_reply_to_file
+  local script="$LSB_ROOT/.gaia/scripts/audit-light-mark.sh"
+  grep -qF '=~ ^[0-9]{4}' "$script"
+  sed 's/^  if .*=~ \^\[0-9\].*; then$/  if false; then/' "$script" >"$script.mutant"
+  grep -qF '=~ ^[0-9]{4}' "$script.mutant" && return 1
+  run bash "$script.mutant" --root "$LSB_ROOT" --member "$FRONTEND" --verdict "$REPLY_FILE" --reviewer-dispatched-at now </dev/null
+  [ "$status" -eq 0 ]
+  [ "$(jq -r .reviewer_dispatched_at "$(ledger_path)")" = "now" ]
+}
+
+# bats test_tags=whole-tree
+@test "the key set pin is what notices a missing reviewer_dispatched_at: a scratch mark script without the field writes a different key set" {
+  prepare_quick
+  clear_reply_to_file
+  local script="$LSB_ROOT/.gaia/scripts/audit-light-mark.sh"
+  grep -qF 'reviewer_dispatched_at: (if' "$script"
+  grep -vF 'reviewer_dispatched_at: (if' "$script" >"$script.mutant"
+  run bash "$script.mutant" --root "$LSB_ROOT" --member "$FRONTEND" --verdict - <"$REPLY_FILE"
+  expect_line "light-cleared"
+  [ "$(jq -c 'has("reviewer_dispatched_at")' "$(ledger_path)")" = "false" ]
+}
+
+@test "the mark script header names the reviewer dispatch flag, field and latency formula, and no bare dispatched_at" {
+  local script="$BATS_TEST_DIRNAME/../audit-light-mark.sh" header
+  header="$(sed -n '1,/^set -uo pipefail/p' "$script")"
+  grep -qF -- '--reviewer-dispatched-at' <<<"$header"
+  grep -qF 'reviewer_dispatched_at' <<<"$header"
+  grep -qF 'marked_at - reviewer_dispatched_at - reviewer_duration_ms' <<<"$header"
+  grep -qF -- '--dispatched-at' <<<"$header" && return 1
+  grep -qE '(^|[^A-Za-z_])dispatched_at' <<<"$header" && return 1
+  true
 }
 
 # bats test_tags=whole-tree
@@ -1041,6 +1128,8 @@ line 5')"
   run bash "$script" --root "$LSB_ROOT" --member "$FRONTEND" --verdict - --reviewer-tokens many </dev/null
   [ "$status" -eq 2 ]
   run bash "$script" --root "$LSB_ROOT" --member "$FRONTEND" --verdict - --reviewer-duration-ms 1.5 </dev/null
+  [ "$status" -eq 2 ]
+  run bash "$script" --root "$LSB_ROOT" --member "$FRONTEND" --verdict - --dispatched-at 2020-01-01T00:00:00Z </dev/null
   [ "$status" -eq 2 ]
   run bash "$script" --root relative/path --member "$FRONTEND" --verdict - </dev/null
   [ "$status" -eq 2 ]

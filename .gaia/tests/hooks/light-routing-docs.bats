@@ -170,6 +170,50 @@ long_waits() {
   [ "$out" = "long wait: 90" ]
 }
 
+# first_wait_step_prints_time_first <file>: rc 0 when, inside "Waiting for a
+# dispatch", exactly one line holds both the date capture and the 5 s sleep and
+# the date capture comes first on it (a capture after the sleep would understate
+# the reviewer's latency by the sleep).
+first_wait_step_prints_time_first() {
+  local date_command='date -u +%Y-%m-%dT%H:%M:%SZ'
+  local sleep_command="perl -e 'select(undef,undef,undef,5)'"
+  local matching_lines line prefix
+  matching_lines="$(awk '/^### Waiting for a dispatch$/ {inside_wait_section=1; next} /^##+ / {inside_wait_section=0} inside_wait_section' "$1" \
+    | grep -F -- "$date_command" | grep -F -- "$sleep_command" || true)"
+  [ -n "$matching_lines" ] || return 1
+  [ "$(printf '%s\n' "$matching_lines" | wc -l | tr -d ' ')" = 1 ] || return 1
+  line="$matching_lines"
+  prefix="${line%%"$date_command"*}"
+  case "$prefix" in
+    *"$sleep_command"*) return 1 ;;
+  esac
+  true
+}
+
+@test "first wait step prints the time before it sleeps, on one line" {
+  first_wait_step_prints_time_first "$UNIT"
+}
+
+@test "capture-order guard fails when the date and sleep commands are swapped" {
+  awk '/^### Waiting for a dispatch$/ {inside_wait_section=1} /^##+ / && !/^### Waiting for a dispatch$/ {inside_wait_section=0}
+    inside_wait_section && index($0, "date -u +%Y-%m-%dT%H:%M:%SZ; perl -e '"'"'select(undef,undef,undef,5)'"'"'") {
+      sub(/date -u \+%Y-%m-%dT%H:%M:%SZ; perl -e '"'"'select\(undef,undef,undef,5\)'"'"'/, "perl -e '"'"'select(undef,undef,undef,5)'"'"'; date -u +%Y-%m-%dT%H:%M:%SZ")
+    } {print}' "$UNIT" >"$BATS_TEST_TMPDIR/swapped.md"
+  cmp -s "$UNIT" "$BATS_TEST_TMPDIR/swapped.md" && return 1
+  first_wait_step_prints_time_first "$BATS_TEST_TMPDIR/swapped.md" && return 1
+  true
+}
+
+@test "capture-order guard fails when the date command sits on its own line" {
+  awk '/^### Waiting for a dispatch$/ {inside_wait_section=1} /^##+ / && !/^### Waiting for a dispatch$/ {inside_wait_section=0}
+    inside_wait_section && index($0, "date -u +%Y-%m-%dT%H:%M:%SZ; perl") {
+      sub(/date -u \+%Y-%m-%dT%H:%M:%SZ; /, "date -u +%Y-%m-%dT%H:%M:%SZ\n")
+    } {print}' "$UNIT" >"$BATS_TEST_TMPDIR/split.md"
+  cmp -s "$UNIT" "$BATS_TEST_TMPDIR/split.md" && return 1
+  first_wait_step_prints_time_first "$BATS_TEST_TMPDIR/split.md" && return 1
+  true
+}
+
 # light_routing_section <file>: prints the "#### Light routing" section of the
 # page (heading line to the next heading), nothing when the heading is absent.
 light_routing_section() {
