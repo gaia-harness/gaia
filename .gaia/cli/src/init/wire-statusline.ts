@@ -1,12 +1,8 @@
 /**
- * `gaia init wire-statusline --mode <global|project|skip>` handler.
+ * `gaia init wire-statusline` handler.
  *
  * Replaces the model-authored JSON-merge in Step 3 of `/gaia-init` with
- * a deterministic CLI write. Edits one of the two Claude settings files:
- *
- *   project   → `<cwd>/.claude/settings.json`
- *   global    → `<HOME>/.claude/settings.json`
- *   skip      → no-op (still records completion in init state)
+ * a deterministic CLI write to the project's `<cwd>/.claude/settings.json`.
  *
  * The merge inserts the canonical GAIA `statusLine` block at the top
  * level, preserving every existing key. If a `statusLine` is already
@@ -23,82 +19,24 @@ import {
   renameSync,
   writeFileSync,
 } from 'node:fs';
-import {homedir} from 'node:os';
 import path from 'node:path';
 import {EXIT_CODES} from '../exit.js';
 import {structuredError} from '../stderr.js';
-import {takeValue} from '../util/argv.js';
 import {markStepCompleted} from './util/state.js';
 
-const HELP_TEXT = `Usage: gaia init wire-statusline --mode <global|project|skip>
+const HELP_TEXT = `Usage: gaia init wire-statusline
 
-  Wire the GAIA statusline into the relevant Claude settings file.
-
-  Required flags:
-    --mode <m>   "global" (~/.claude/settings.json), "project"
-                 (.claude/settings.json), or "skip" (no-op).
+  Wire the GAIA statusline into the project's .claude/settings.json.
 
   Exit codes:
     0  success (no stdout)
-    1  user-correctable error (missing flag, invalid JSON in target)
+    1  user-correctable error (unknown flag, invalid JSON in target)
     2  unexpected (filesystem failure)
 `;
 
 const HELP_TOKENS = new Set(['--help', '-h', 'help']);
 const UNEXPECTED_EXIT = 2;
 const STEP_NAME = 'wire-statusline';
-
-type Mode = 'global' | 'project' | 'skip';
-
-const isMode = (value: string): value is Mode =>
-  value === 'global' || value === 'project' || value === 'skip';
-
-type FlagParseFailure = {
-  message: string;
-  ok: false;
-};
-
-type FlagParseResult = FlagParseFailure | FlagParseSuccess;
-
-type FlagParseSuccess = {
-  flags: Flags;
-  ok: true;
-};
-
-type Flags = {
-  mode: Mode;
-};
-
-const parseFlags = (argv: readonly string[]): FlagParseResult => {
-  let mode: Mode | undefined;
-
-  for (let index = 0; index < argv.length; index += 1) {
-    const token = argv[index];
-
-    if (token === '--mode') {
-      const taken = takeValue(argv, index + 1, '--mode');
-
-      if (!taken.ok) return taken;
-
-      if (!isMode(taken.value)) {
-        return {
-          message: '--mode must be one of: global, project, skip',
-          ok: false,
-        };
-      }
-      mode = taken.value;
-      index += 1;
-    } else {
-      return {message: `unknown flag: ${token}`, ok: false};
-    }
-  }
-
-  if (mode === undefined) {
-    return {message: '--mode is required', ok: false};
-  }
-
-  return {flags: {mode}, ok: true};
-};
 
 /**
  * Canonical GAIA statusline block. The command is rooted at the repository
@@ -107,11 +45,9 @@ const parseFlags = (argv: readonly string[]): FlagParseResult => {
  * how `.gaia/scripts/check-hook-command-rooting.sh` requires them to be
  * spelled.
  *
- * A project-relative `bash .gaia/statusline/...` is wrong in both scopes,
- * not merely untidy. The working directory persists across a session, so a
- * single `cd` leaves it unresolvable in the project scope; and in the global
- * scope it is written into `~/.claude/settings.json`, where it is wrong from
- * any directory but one project's root. `$CLAUDE_PROJECT_DIR` alone is not
+ * A project-relative `bash .gaia/statusline/...` is wrong, not merely
+ * untidy: the working directory persists across a session, so a single `cd`
+ * leaves it unresolvable. `$CLAUDE_PROJECT_DIR` alone is not
  * the root either: it does not follow entry into a linked worktree, so it
  * serves only as the fallback for a working directory outside any
  * repository.
@@ -224,20 +160,6 @@ export const mergeStatusline = (
 
 type RunOptions = {
   cwd?: string;
-  /** Override `$HOME` for the global path. Test seam. */
-  home?: string;
-};
-
-const targetPathForMode = (
-  mode: Mode,
-  cwd: string,
-  home: string
-): null | string => {
-  if (mode === 'project') return path.join(cwd, '.claude', 'settings.json');
-
-  if (mode === 'global') return path.join(home, '.claude', 'settings.json');
-
-  return null;
 };
 
 export const run = (
@@ -252,12 +174,10 @@ export const run = (
     return EXIT_CODES.OK;
   }
 
-  const parsed = parseFlags(argv);
-
-  if (!parsed.ok) {
+  if (argv.length > 0) {
     structuredError({
       code: 'invalid_arguments',
-      message: parsed.message,
+      message: `unknown flag: ${argv[0]}`,
       subcommand: 'init wire-statusline',
     });
 
@@ -265,41 +185,35 @@ export const run = (
   }
 
   const cwd = options.cwd ?? process.cwd();
-  const home = options.home ?? homedir();
-  const target = targetPathForMode(parsed.flags.mode, cwd, home);
+  const target = path.join(cwd, '.claude', 'settings.json');
 
-  if (target !== null) {
-    try {
-      const current = readSettings(target);
-      const merged = mergeStatusline(current);
-      writeSettings(target, merged);
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
+  try {
+    const current = readSettings(target);
+    const merged = mergeStatusline(current);
+    writeSettings(target, merged);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
 
-      if (
-        message.includes('not valid JSON') ||
-        message.includes('JSON object')
-      ) {
-        structuredError({
-          code: 'settings_malformed',
-          message,
-          subcommand: 'init wire-statusline',
-        });
-
-        return EXIT_CODES.UNKNOWN_SUBCOMMAND;
-      }
+    if (message.includes('not valid JSON') || message.includes('JSON object')) {
       structuredError({
-        code: 'wire_statusline_failed',
+        code: 'settings_malformed',
         message,
         subcommand: 'init wire-statusline',
       });
 
-      return UNEXPECTED_EXIT;
+      return EXIT_CODES.UNKNOWN_SUBCOMMAND;
     }
+    structuredError({
+      code: 'wire_statusline_failed',
+      message,
+      subcommand: 'init wire-statusline',
+    });
+
+    return UNEXPECTED_EXIT;
   }
 
   try {
-    markStepCompleted(cwd, STEP_NAME, {mode: parsed.flags.mode});
+    markStepCompleted(cwd, STEP_NAME);
   } catch (error) {
     structuredError({
       code: 'state_write_failed',

@@ -2,7 +2,7 @@
 
 Runs in the **main conversation** after Stage 2 returns, on any finalizing path (gated Apply, 0-action auto-apply, `--apply`). It never runs on Decline.
 
-Contents: Empty diff footprint; Isolated run (not in CI); In CI; Failure handling.
+Contents: Empty diff footprint; Isolated run; Failure handling.
 
 Every "Run ends here" below means the run ends after the cost record in the entry file's `## Cost record (run end)`.
 
@@ -12,7 +12,7 @@ Every "Run ends here" below means the run ends after the cost record in the entr
 
 Otherwise `RESOLVED_ROOT` carries the applied `wiki/` / `.claude/` / `CLAUDE.md` edits on `<CLEANSE_BRANCH>`.
 
-## Isolated run (not in CI)
+## Isolated run
 
 Every command below runs from `RESOLVED_ROOT`, on `<CLEANSE_BRANCH>`, whichever branch the main checkout holds; the branch already exists, so cut none.
 
@@ -38,18 +38,6 @@ Every command below runs from `RESOLVED_ROOT`, on `<CLEANSE_BRANCH>`, whichever 
    ```
 
    `--auto` queues the merge behind required checks (the oracle check before `gh pr create` already confirmed whether a marker is owed). Then run `bash .gaia/scripts/pr-wait-merge.sh --pr <N> --attempts 20` and follow the verdict arms in `wiki/concepts/PR Merge Workflow.md` `## Post-merge verification before cleanup`, with `<branch-name>` = `<CLEANSE_BRANCH>`. Every arm but `CONFLICTING` ends the run. (Run ends here.)
-
-## In CI
-
-The CI workflow owns the branch, so the run did not isolate:
-
-```bash
-git add -A
-git commit -F <commit-message-file>
-git push
-```
-
-Do not open a PR and do not merge; the CI workflow drives it from here. (Run ends here.)
 
 ## Failure handling
 

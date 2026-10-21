@@ -91,7 +91,7 @@ The one consolidation recipe. Two callers run it: the orchestrator, after audit 
 
 **Shape.** Frontmatter with `wiki_promote_default` and `wiki_promote_targets`, a non-empty H1, a non-empty body, and an optional `## Divergence`.
 
-- `wiki_promote_default` is exactly `yes`, `ask` or `no`. A spec-colocated plan copies the SPEC's value, normalizing a legacy `true` to `yes` and `false` to `no`; a spec-less plan stamps `ask`.
+- `wiki_promote_default` is exactly `yes`, `ask` or `no`. A spec-colocated plan copies the SPEC's value; a spec-less plan stamps `ask`.
 - `wiki_promote_targets` is the SPEC's list, or `[decisions]` for a spec-less plan.
 
 **Verify.**

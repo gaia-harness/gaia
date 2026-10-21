@@ -690,7 +690,6 @@
     "wiki/decisions/Claude Integration Fitness.md": "wiki-owned",
     "wiki/decisions/Co-located Tests Folder.md": "wiki-owned",
     "wiki/decisions/Code Audit Team.md": "wiki-owned",
-    "wiki/decisions/composeStory Pattern.md": "wiki-owned",
     "wiki/decisions/Composite Action Step Timeouts.md": "wiki-owned",
     "wiki/decisions/Content Security Policy.md": "wiki-owned",
     "wiki/decisions/Dark Mode Modernization.md": "wiki-owned",
@@ -727,7 +726,6 @@
     "wiki/dependencies/pnpm-audit.md": "wiki-owned",
     "wiki/dependencies/pnpm-overrides.md": "wiki-owned",
     "wiki/dependencies/React Router.md": "wiki-owned",
-    "wiki/dependencies/React Testing Library.md": "wiki-owned",
     "wiki/dependencies/react-doctor.md": "wiki-owned",
     "wiki/dependencies/remix-i18next.md": "wiki-owned",
     "wiki/dependencies/remix-toast.md": "wiki-owned",
@@ -763,7 +761,7 @@
     "wiki/overview.md": "wiki-owned",
     "wiki/README.md": "wiki-owned"
   },
-  "generated": "2026-10-20T20:50:06.416Z",
+  "generated": "2026-10-21T12:24:45.337Z",
   "regions": [
     {
       "endMarker": "<!-- gaia:audit-remit:end -->",

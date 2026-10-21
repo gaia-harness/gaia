@@ -201,15 +201,6 @@ const buildWriteProjectConfigArgv: StepArgvBuilder = (saved) => {
   return [...argv, '--isolation-policy', isolationPolicy];
 };
 
-const buildWireStatuslineArgv: StepArgvBuilder = (saved) => {
-  if (saved === undefined) return null;
-  const {mode} = saved;
-
-  if (typeof mode !== 'string') return null;
-
-  return ['--mode', mode];
-};
-
 const STEP_ARGV_BUILDERS: Readonly<Record<StepName, StepArgvBuilder>> = {
   'bootstrap-env': () => [],
   'configure-data-layer': buildConfigureDataLayerArgv,
@@ -217,7 +208,7 @@ const STEP_ARGV_BUILDERS: Readonly<Record<StepName, StepArgvBuilder>> = {
   finalize: () => [],
   rename: buildRenameArgv,
   'strip-branding': buildStripBrandingArgv,
-  'wire-statusline': buildWireStatuslineArgv,
+  'wire-statusline': () => [],
   'write-project-config': buildWriteProjectConfigArgv,
 };
 

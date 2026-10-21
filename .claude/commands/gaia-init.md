@@ -316,7 +316,7 @@ Run sequentially, stopping at the first non-zero exit:
 .gaia/cli/gaia init configure-i18n --locales "<comma-separated locale list>" --strip <STRIP_I18N>
 .gaia/cli/gaia init configure-data-layer --casing <CASING> --query <QUERY>
 .gaia/cli/gaia init rename --title "<Project Title>" --kebab "<kebab-slug>"
-.gaia/cli/gaia init wire-statusline --mode project
+.gaia/cli/gaia init wire-statusline
 ```
 
 `configure-data-layer` prints one JSON line on stdout, `{"changed": [...], "next": [...]}`. Run every command the `next` list names (with Query on that is `pnpm install`) before continuing.

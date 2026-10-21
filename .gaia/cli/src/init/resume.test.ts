@@ -109,10 +109,7 @@ describe('argvFromStepArgs', () => {
   });
 
   test('reconstructs wire-statusline argv', () => {
-    expect(argvFromStepArgs('wire-statusline', {mode: 'project'})).toEqual([
-      '--mode',
-      'project',
-    ]);
+    expect(argvFromStepArgs('wire-statusline', {})).toEqual([]);
   });
 
   test('reconstructs write-project-config argv', () => {
@@ -193,7 +190,7 @@ describe('init resume', () => {
         'configure-i18n': {locales: ['en'], strip: false},
         rename: {kebab: 'hello', title: 'Hello'},
         'strip-branding': {title: 'Hello'},
-        'wire-statusline': {mode: 'skip'},
+        'wire-statusline': {},
         'write-project-config': {sandbox_recommended: true},
       },
     });
@@ -240,7 +237,7 @@ describe('init resume', () => {
         'configure-i18n': {locales: ['en'], strip: true},
         rename: {kebab: 'x', title: 'X'},
         'strip-branding': {title: 'X'},
-        'wire-statusline': {mode: 'skip'},
+        'wire-statusline': {},
         'write-project-config': {sandbox_recommended: false},
       },
     });
@@ -359,7 +356,7 @@ describe('init resume', () => {
       step_args: {
         'configure-data-layer': {casing: 'camel', layer: null, query: true},
         rename: {kebab: 'x', title: 'X'},
-        'wire-statusline': {mode: 'skip'},
+        'wire-statusline': {},
         'write-project-config': {sandbox_recommended: false},
       },
     });

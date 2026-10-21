@@ -9,7 +9,7 @@ Maintainer-only validation of the post-scrub GAIA tarball. Excluded from the rel
   - `.gaia/release-scrub.yml`
   - `.gaia/release-exclude`
   - `.github/workflows/release.yml`
-  - `.gaia/manifest.ts`
+  - `.gaia/manifest.json`
 - Automatically: the pre-push hook runs `01-files-present`, the build-staging leak check and `03-marker-strip` on every branch push, and the verification runner's branch and round modes (`bash .gaia/tests/verify-harness.sh`) run them too.
 
 ## Layout
@@ -56,7 +56,7 @@ Layers 0+1 prove the release tree stages and bootstraps cleanly, but do NOT prov
 
 `07-gaia-init-strip-branding.sh` runs `gaia init strip-branding --title "Test Project"` and asserts two post-conditions: `README.md` is regenerated from `.gaia/templates/README.md` with the title substituted, and the subcommand exits 0 with no stdout per its contract. Catches the failure mode where `release-exclude` accidentally strips a file the subcommand needs (template source); Layers 0+1 stay green; only this scenario fails.
 
-`08-gaia-init-cli-sequence.sh` runs the full deterministic sequence behind `/gaia-init` Step 3; `strip-branding` → `configure-i18n --strip false` → `rename` → `wire-statusline --mode project` → `finalize`; and asserts each step's post-conditions on the staged tree. Catches release-exclude drift on every CLI surface the slash command dispatches to: the `existsSync` guards in `configure-i18n`/`rename`/`finalize` mean a missing target file silently no-ops rather than erroring, so this scenario is the gate that turns a no-op into a failure. `--mode project` for `wire-statusline` keeps the merge inside the scaffold's `.claude/settings.json` and never writes to the host's `~/.claude`. The `configure-i18n --strip true` path (full i18n removal via the prose `remove-i18n.md` instruction) is out of scope here; that path is orchestrated by the slash command, not the CLI alone.
+`08-gaia-init-cli-sequence.sh` runs the full deterministic sequence behind `/gaia-init` Step 3; `strip-branding` → `configure-i18n --strip false` → `rename` → `wire-statusline` → `finalize`; and asserts each step's post-conditions on the staged tree. Catches release-exclude drift on every CLI surface the slash command dispatches to: the `existsSync` guards in `configure-i18n`/`rename`/`finalize` mean a missing target file silently no-ops rather than erroring, so this scenario is the gate that turns a no-op into a failure. The `configure-i18n --strip true` path (full i18n removal via the prose `remove-i18n.md` instruction) is out of scope here; that path is orchestrated by the slash command, not the CLI alone.
 
 #### CI
 

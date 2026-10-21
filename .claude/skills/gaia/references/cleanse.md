@@ -74,7 +74,7 @@ Use this to re-apply an existing report after fixing drift, or to retry without 
 
 ### Isolate before Stage 2
 
-Stage 2 writes the report's in-repo edits, so a Stage 2 spawned on a report holding at least one action isolates first, so those edits land on this run's own branch and never on whatever branch the checkout holds. A 0-action Stage 2 writes no in-repo file and does not isolate. Under `CI=true` the CI workflow owns the branch, so nothing isolates.
+Stage 2 writes the report's in-repo edits, so a Stage 2 spawned on a report holding at least one action isolates first, so those edits land on this run's own branch and never on whatever branch the checkout holds. A 0-action Stage 2 writes no in-repo file and does not isolate.
 
 Mint the name and carry it as a literal, `<CLEANSE_BRANCH>`, into every later call:
 
@@ -150,8 +150,7 @@ Every path that ends a `/gaia-cleanse` run appends exactly one cost record, the 
 - Stage 1 failure (no report path).
 - The decision gate's Decline.
 - Publish's empty-diff-footprint no-op.
-- Publish's merge outcomes on an isolated run: `MERGED`, still-queued, a failed required check, a pull request closed without merging, or a merge wait that refused because it read nothing.
-- Publish's no-PR path in CI.
+- Publish's merge outcomes: `MERGED`, still-queued, a failed required check, a pull request closed without merging, or a merge wait that refused because it read nothing.
 - Publish's non-zero-exit STOP on `git push` / `gh pr create` / `gh pr merge`.
 
 Apply the shared record recipe in `.claude/skills/gaia/references/cost-record.md` with `{{COMMAND}}` = `gaia-cleanse`.

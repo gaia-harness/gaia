@@ -125,7 +125,6 @@
 # describes the GAIA project itself rather than reusable patterns.
 wiki/entities
 wiki/meta
-wiki/.obsidian/workspace.json
 wiki/concepts/Release Workflow.md
 wiki/concepts/Release-Notes.md
 wiki/decisions/Bundle-time Scrub.md
@@ -246,14 +245,13 @@ frontend/.playwright/e2e/react-perf-smoke.spec.ts
 .serena
 
 # --- 7. Scratch + transient ---
-# Local working directories: scratchpad ingestion, per-machine state
+# Local working directories: per-machine state
 # (including the shared update-tarball cache at `.gaia/local/cache/shared/`),
 # update-merge stage area, init backup. Per-machine SPEC, plan and research
 # state lives under the gitignored `.notebook/` (and GAIA's internal state
 # under `.gaia/local/`, excluded by the line below); a fresh adopter starts
 # SPEC numbering from an empty catalog and an unseeded remote `spec/*` tag
 # namespace.
-.raw
 .gaia/local
 .gaia-backup
 

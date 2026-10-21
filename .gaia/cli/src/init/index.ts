@@ -36,7 +36,7 @@ const HELP_TEXT = `Usage: gaia init <subcommand> [args]
   rename --title <T> --kebab <K>
                             Rename the project across package.json, CLAUDE.md
                             and seeded language files.
-  wire-statusline --mode <global|project|skip>
+  wire-statusline
                             Wire the GAIA statusline into Claude settings.
   bootstrap-env             Copy .env.example to .env if .env is absent.
   write-project-config --sandbox-recommended <bool> [--isolation-policy <policy>]

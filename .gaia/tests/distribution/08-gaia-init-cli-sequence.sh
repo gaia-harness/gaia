@@ -10,7 +10,7 @@
 #   gaia init configure-i18n   --locales "en,es" --strip false
 #   gaia init configure-data-layer --casing camel --query false
 #   gaia init rename           --title "Test Project" --kebab "test-project"
-#   gaia init wire-statusline  --mode project
+#   gaia init wire-statusline
 #   gaia init finalize
 #
 # Why it exists: 07 catches release-exclude drift on strip-branding's
@@ -44,8 +44,7 @@
 #                   title: '$t(common:meta.siteName)'.
 #
 #   wire-statusline .claude/settings.json contains the canonical GAIA
-#                   statusline command. --mode project so the test never
-#                   touches the host's ~/.claude/settings.json.
+#                   statusline command.
 #
 #   finalize        .claude/commands/gaia-init.md removed. Runs with
 #                   GAIA_TELEMETRY_PING_DISABLE=1 so this regression
@@ -249,10 +248,9 @@ grep -qE "siteName:\s*['\"]Test Project['\"]" "$SCAFFOLD/frontend/app/languages/
 grep -qF "title: '\$t(common:meta.siteName)'" "$SCAFFOLD/frontend/app/languages/en/pages/_index.ts" \
   || { fail "rename altered the \$t(common:meta.siteName) title reference in en/pages/_index.ts"; exit 1; }
 
-# Step 5; wire-statusline. --mode project so the merge writes to the
-# scaffold's .claude/settings.json; never the host's ~/.claude.
+# Step 5; wire-statusline merges into the scaffold's .claude/settings.json.
 run_step "wire-statusline" \
-  init wire-statusline --mode project
+  init wire-statusline
 
 SETTINGS="$SCAFFOLD/.claude/settings.json"
 [ -f "$SETTINGS" ] \
