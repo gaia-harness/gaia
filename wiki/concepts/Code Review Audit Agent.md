@@ -24,6 +24,17 @@ A deterministic `gaia update-deps advisories` run is the oracle for known-vulner
 
 Each audit agent carries a `tools:` allowlist in its definition frontmatter and names any check it skipped for want of a tool. On Claude Code 2.1.304 the allowlist also drops the skill listing and the deferred-tool list from the agent's first call; Claude Code 2.1.292 or later runs every definition, and an older client simply keeps the larger prefix. The definitions in `.claude/agents/` hold the lists.
 
+### Measured dispatch cost
+
+Round-1 frontend audits on a fresh adopter project, Claude Code 2.1.305, median of five replays per change. "Before" is the same project with untrimmed definitions and general-purpose specialists that get rules pasted into their prompts; "after" is the allowlisted definitions with `audit-rule-specialist` children:
+
+| Change audited | Member first call, tokens | Member plus specialists, cost | Member wall time |
+| --- | --- | --- | --- |
+| Language-file edit | 48.5K → 26.7K | $1.42 → $0.85 (−40%) | unchanged |
+| Component change (`.tsx`) | 48.5K → 26.7K | $2.20 → $1.05 (−52%) | +7% |
+
+A specialist's first call is about 5.9K tokens, against about 30K for a general-purpose child, and it then reads every rule file it is handed rather than an excerpt. The audit loop unit's first call falls from 35.1K to 22.7K tokens. A differential recall corpus of historical findings plus planted defects, run twice on each side, shows no finding lost, at 42% lower cost. Costs are API-equivalent, priced per call from token usage at list rates; a subscription session spends usage limits instead of dollars.
+
 <!-- gaia:maintainer-only:start -->
 The measurement toolkit and recall corpus for audit dispatch cost live under `.gaia/tests/`, which is release-excluded.
 <!-- gaia:maintainer-only:end -->
