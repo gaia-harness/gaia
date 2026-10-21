@@ -11,6 +11,28 @@ tags: [meta, log]
 
 ## [Unreleased]
 
+- 2026-10-21 9b4038c WORTHY - clearance writer refuses an unprovisioned worktree → wiki/concepts/Audit Round Procedure.md
+- 2026-10-21 082bce3 WORTHY - Serena 2.1.0 registration; landed with the commit → wiki/concepts/Serena Integration.md, wiki/dependencies/Serena.md
+- 2026-10-21 f4b15e6 WORTHY - bats shard rationale; landed with the commit → wiki/decisions/Sharded CI Test Matrix.md
+- 2026-10-21 c64003b WORTHY - active time in cost readouts; landed with the commit → wiki/concepts/Token Cost Readout.md
+- 2026-10-21 c36339e WORTHY - fitness nudge; landed with the commit → wiki/concepts/Claude Skills.md
+- 2026-10-21 36065df WORTHY - built-in review rationale; landed with the commit → wiki/decisions/Code Audit Team.md
+- 2026-10-21 87d71b6 WORTHY - quick-vs-deep audit rubric; landed with the commit → wiki/concepts/Audit Gate Reference.md
+- 2026-10-21 8621559 WORTHY - single-command SPEC save; landed with the commit → wiki/concepts/GAIA Spec.md
+- 2026-10-21 54ffa7d WORTHY - worktree provisioning on clear/compaction; landed with the commit → wiki/concepts/Claude Hooks.md
+- 2026-10-21 c9e2d60 WORTHY - local-state reaper; landed with the commit → wiki/concepts/Local Working State.md
+- 2026-10-21 6c7acd2 WORTHY - machine-local ref refusal in gh text; landed with the commit → wiki/concepts/Claude Hooks.md
+- 2026-10-21 80a0fb9 WORTHY - statusline split; landed with the commit → wiki/modules/Claude Integration.md
+- 2026-10-21 8f28159 WORTHY - machine-local ref refusal in commits; landed with the commit → wiki/concepts/Pre-commit Hooks.md
+- 2026-10-21 90f0aeec WORTHY - whole-tree-tagged bats in branch verification; landed with the commit → wiki/concepts/PR Merge Workflow.md, wiki/decisions/Local Test Runtime.md
+- 2026-10-21 b5517cb WORTHY - spec gate 2 brief; landed with the commit → wiki/concepts/GAIA Spec.md
+- 2026-10-21 1515c48 WORTHY - spec gates print full content; landed with the commit → wiki/concepts/GAIA Spec.md
+- 2026-10-21 b23e19a WORTHY - init no longer runs update-deps; landed with the commit → wiki/concepts/GAIA Init Workflow.md
+- 2026-10-21 1ad71e5 WORTHY - Chromium install in init/setup landed with the commit → wiki/dependencies/Playwright.md, wiki/modules/Testing.md
+- 2026-10-21 ed822d8 WORTHY - accept-or-revise review list landed with the commit → wiki/concepts/GAIA Spec.md
+- 2026-10-21 e2f4f53 WORTHY - Serena launch recommendation dropped → wiki/dependencies/Serena.md
+- 2026-10-21 d540ccf WORTHY - hook refusal reasons landed with the commit → wiki/concepts/Git Workflow.md
+- 2026-10-21 b27d86a WORTHY - doc statement fixes landed with the commit → wiki/concepts/Audit Gate Reference.md, wiki/concepts/Update Workflow.md
 - 2026-10-19 396f902 WORTHY - box flush cap waits; covered in wiki/concepts/Usage Ledger.md by the commit
 - 2026-10-19 f471fc1 WORTHY - worktree main-checkout writes via scratchpad and cp; covered in Audit Round Procedure and PR Merge Workflow by the commit
 - 2026-10-19 0418de0 WORTHY - project title kept in one place via nested siteName; updated wiki/concepts/GAIA Init Workflow.md
