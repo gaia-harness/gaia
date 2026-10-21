@@ -2,29 +2,48 @@
 type: concept
 status: active
 created: 2026-04-20
-updated: 2026-10-13
+updated: 2026-10-21
 tags: [concept, claude, agent, review]
 ---
 
 # Code Review Audit Agent
 
-Defined in `.claude/agents/code-audit-frontend.md`. Opus-class holistic reviewer for comprehensive code review beyond what ESLint and TypeScript catch; it dispatches cheaper Sonnet specialist subagents for line-level rule compliance.
+Defined in `.claude/agents/code-audit-frontend.md`. Opus-class holistic reviewer for comprehensive code review beyond what ESLint and TypeScript catch; it dispatches cheaper dedicated read-only specialist agents for line-level rule compliance.
 
 `code-audit-frontend` is the default, adopter-facing member of the [[Code Audit Team]] roster: the config-driven `auditors:` block that maps file globs to auditor members, with a dispatch resolver and an AND-aggregator requiring every dispatched member's clearance before a merge unblocks. This page covers `code-audit-frontend`'s own review dimensions; it only reports, and the audit loop unit disposes and files its findings. See [[Code Audit Team]] for the roster mechanism and the maintainer-only members layered on top of it.
 
 Full spec: `.claude/agents/code-audit-frontend.md`.
 
-Reviews security, performance, code smells, architecture, robustness, and maintainability. Output is tiered: Critical (must fix) → Major (fix or acknowledge) → Minor (fix by default) → What's done well. After its own pass, spawns three specialist subagents in parallel (React Patterns & Accessibility, TypeScript & Architecture, Translation) plus `react-doctor`, `pnpm knip --reporter json`, and `gaia update-deps advisories` in a single tool call. The specialist subagents are each gated on scope so none spawns with nothing to review (the gates live in `.claude/agents/code-audit-frontend.md`, step 2 under "How to run"); the three oracles scan the whole repo or the whole dependency tree by design and run on every dispatched review.
+Reviews security, performance, code smells, architecture, robustness, and maintainability. Output is tiered: Critical (must fix) → Major (fix or acknowledge) → Minor (fix by default) → What's done well. After its own pass, it dispatches the rule specialists the scope resolver names and runs the deterministic oracles (`react-doctor`, `knip`, and `gaia update-deps advisories`) from one script, all in a single tool-call message so they run alongside its own review. Each specialist is the `audit-rule-specialist` type (`.claude/agents/audit-rule-specialist.md`), a read-only agent that reads the extension rule files it is handed by path. The resolver's `--specialists` mode prints one `SPECIALIST=` line per specialist that has files to review, so none runs with nothing to look at; the translation specialist runs on a changed language file or an i18n call signal, never on a bare `t(` substring. The oracle script (`.gaia/scripts/audit-frontend-oracles.sh`) runs the oracles concurrently and gates each on the scope. The dispatch steps live in `.claude/agents/code-audit-frontend.md`, under "How to run".
 
 Knip runs pre-merge here (post-task by design) and its findings are bucketed advisory: real dead code, intentional library export (update `entry` globs), or implicit dependency (update `ignoreDependencies`). See [[knip]].
 
 A deterministic `gaia update-deps advisories` run is the oracle for known-vulnerable dependencies; the Security dimension does not LLM-judge current CVEs. Its high/critical advisories surface in an advisory bucket (read-only; never blocking the marker), scoped by a severity threshold and a machine-local baseline allowlist at `.gaia/local/dep-audit-baseline.json`. See the "Dependency-CVE advisory" section of `.claude/agents/code-audit-frontend.md`.
 
+## Tools allowlist
+
+Each audit agent carries a `tools:` allowlist in its definition frontmatter and names any check it skipped for want of a tool. On Claude Code 2.1.304 the allowlist also drops the skill listing and the deferred-tool list from the agent's first call; Claude Code 2.1.292 or later runs every definition, and an older client simply keeps the larger prefix. The definitions in `.claude/agents/` hold the lists.
+
+### Measured dispatch cost
+
+Round-1 frontend audits on a fresh adopter project, Claude Code 2.1.305, median of five replays per change. "Before" is the same project with untrimmed definitions and general-purpose specialists that get rules pasted into their prompts; "after" is the allowlisted definitions with `audit-rule-specialist` children:
+
+| Change audited | Member first call, tokens | Member plus specialists, cost | Member wall time |
+| --- | --- | --- | --- |
+| Language-file edit | 48.5K → 26.7K | $1.42 → $0.85 (−40%) | unchanged |
+| Component change (`.tsx`) | 48.5K → 26.7K | $2.20 → $1.05 (−52%) | +7% |
+
+A specialist's first call is about 5.9K tokens, against about 30K for a general-purpose child, and it then reads every rule file it is handed rather than an excerpt. The audit loop unit's first call falls from 35.1K to 22.7K tokens. A differential recall corpus of historical findings plus planted defects, run twice on each side, shows no finding lost, at 42% lower cost. Costs are API-equivalent, priced per call from token usage at list rates; a subscription session spends usage limits instead of dollars.
+
+<!-- gaia:maintainer-only:start -->
+The measurement toolkit and recall corpus for audit dispatch cost live under `.gaia/tests/`, which is release-excluded.
+<!-- gaia:maintainer-only:end -->
+
 ## Finding proof gate and adversarial verification
 
 Every holistic-reviewer finding must clear a four-check proof gate before it is reported: the finding must cite an exact `file:line`, name a concrete failure mode (input + state + bad outcome), confirm that callers and tests were read, and assign a defensible severity. Any check that fails drops or demotes the finding.
 
-Critical and Major holistic findings that survive the proof gate go to a selective adversarial pass: a fresh-context refuter subagent that did not produce the finding reads the cited evidence and attempts to rebut. A refuter overturns a finding only with concrete counter-evidence (a guard at `file:line`, a covering test, or an unreachable path). Without that, the verdict defaults to STANDS. Outcome options: drop on "cannot occur," demote on "smaller blast radius," keep otherwise. The resulting disposition flows into the marker-decision interlock so a dropped Critical does not block the merge gate.
+Critical and Major holistic findings that survive the proof gate go to a selective adversarial pass: a fresh-context refuter, the read-only `audit-refuter` type, that did not produce the finding reads the cited evidence and attempts to rebut. The refuter machinery lives in `.claude/hooks/lib/audit-frontend-refuter.md`, which the member reads only when a candidate needs refutation. A refuter overturns a finding only with concrete counter-evidence (a guard at `file:line`, a covering test, or an unreachable path). Without that, the verdict defaults to STANDS. Outcome options: drop on "cannot occur," demote on "smaller blast radius," keep otherwise. The resulting disposition flows into the marker-decision interlock so a dropped Critical does not block the merge gate.
 
 Deterministic oracles (`react-doctor`, `knip`) are exempt from the proof gate and adversarial pass; they are not probabilistic judgments.
 
@@ -44,7 +63,7 @@ A surface named in neither place takes the inline ending above.
 
 ### Ad-hoc dispatches: `--shape agent-report-file`
 
-`audit-noop-detect.sh` also exposes a general-purpose `--shape agent-report-file` mode for any other ad-hoc subagent dispatch: the dispatcher pre-clears an output path (`rm -f`), has the agent write its result there instead of returning it inline, then classifies the file the same way, real vs. no-op. The shape is real when the file exists, parses, and its report array resolves, the top-level value, or the value of `--report-key <key>` when the caller passes one. A caller that knows its own denominator asserts it with `--expect-count <n>` or `--min-count <n>` (mutually exclusive), because a truncated write parses fine and otherwise reads as a real result. An empty array with no count assertion is real: "the agent wrote an empty answer" is a result, "the agent wrote nothing" is not. Its ending is the general one above, one hardened re-dispatch against the re-cleared path, then inline fallback; the retry prefix itself is written out verbatim in `.claude/agents/code-audit-frontend.md` ("No-op detection and retry for each refuter"). `.claude/rules/subagent-dispatch.md` codifies when a dispatching agent should use this pattern rather than asking for a result in the reply.
+`audit-noop-detect.sh` also exposes a general-purpose `--shape agent-report-file` mode for any other ad-hoc subagent dispatch: the dispatcher pre-clears an output path (`rm -f`), has the agent write its result there instead of returning it inline, then classifies the file the same way, real vs. no-op. The shape is real when the file exists, parses, and its report array resolves, the top-level value, or the value of `--report-key <key>` when the caller passes one. A caller that knows its own denominator asserts it with `--expect-count <n>` or `--min-count <n>` (mutually exclusive), because a truncated write parses fine and otherwise reads as a real result. An empty array with no count assertion is real: "the agent wrote an empty answer" is a result, "the agent wrote nothing" is not. Its ending is the general one above, one hardened re-dispatch against the re-cleared path, then inline fallback; the retry prefix itself is written out verbatim in `.claude/agents/code-audit-frontend.md` (**Hardened retry prefix**), and the refuter's own no-op handling is in `.claude/hooks/lib/audit-frontend-refuter.md`. `.claude/rules/subagent-dispatch.md` codifies when a dispatching agent should use this pattern rather than asking for a result in the reply.
 
 ## Scope classification and disposition
 
@@ -60,7 +79,7 @@ The clearance store the per-member arm reads is local, gitignored, and swept on 
 
 **Only a full review anchors.** A clearance body carries `review: full` or `review: light`, and only `review: full` is ever an anchor. Light clearances and legacy clearances with no `review` field never anchor, and a light or legacy earned clearance of any member in range also disables the whole-team-signal arm for the resolution. That arm anchors only when no in-range candidate tree carries a non-full earned marker of any member and at least one member holds a `review: full` marker recording the signal commit's tree, so an empty or unverifiable store resolves to the full-branch base rather than the signal. The first check sees only non-full markers whose recorded tree is an in-range candidate, so a non-full marker whose tree left the range (a content amend or a rebase) is not found, and the second check does not require a full clearance from every member. A pull request in flight when this rule landed therefore gets one full-scope review per member until a fresh full clearance exists. How a light clearance is earned is in [[Audit Round Procedure#Light routing]].
 
-**The reset is two-tier.** A change to a global-rules path, the files deciding what a member owns, what counts as machinery, how a digest is computed, whether a clearance is believed, which members are dispatched, where the store lives, or under which version any of that was decided, resets every member back to full scope. A change to a member's own agent definition resets only that member. Machinery that is merely shared resets nobody's review base: a branch change to it still rotates every member's branch-own digest, so a fresh clearance is still required before the merge gate opens, but the review that earns it stays incremental. A change that arrives only through the base rotates nobody's digest and resets nobody's review base.
+**The reset is two-tier.** A change to a global-rules path, the files deciding what a member owns, what counts as machinery, how a digest is computed, whether a clearance is believed, which members are dispatched, where the store lives, or under which version any of that was decided, resets every member back to full scope. A change to a member's own agent definition, or to one of its companion files (`AUDIT_MEMBER_COMPANION_PATHS` in `.claude/hooks/lib/audit-rules-changed.sh`), resets only that member and re-audits it at full scope. Machinery that is merely shared resets nobody's review base: a branch change to it still rotates every member's branch-own digest, so a fresh clearance is still required before the merge gate opens, but the review that earns it stays incremental. A change that arrives only through the base rotates nobody's digest and resets nobody's review base.
 
 **Keys stay shared and are deliberately never per member.** The value keying a member's findings sidecar and the shared re-run ledger is one pull-request-wide base every dispatched member reaches through the resolver's argument-less form. `gaia_audit_key` (`.gaia/scripts/audit-key-lib.sh`) combines that one shared base with the branch. A member keyed to a different base for this purpose reads and writes a different shared re-run ledger from its co-dispatched siblings, with no error raised anywhere; a member's own per-member review base never keys anything.
 
@@ -110,15 +129,15 @@ The terse Task return is the contract the local re-run orchestrator reads; it do
 
 ## Durable knowledge
 
-The wiki (`wiki/`) is the source of truth for patterns, decisions, and conventions worth preserving across reviews. The agent surfaces recurring anti-patterns or architectural concerns in its report so they can be filed into the wiki.
+The wiki (`wiki/`) is the source of truth for patterns, decisions, and conventions worth preserving across reviews. The agent reports findings only; it does not propose wiki content.
 
 `.claude/agent-memory/` is **not** treated as canonical: GAIA's shipped `.gitignore` keeps it machine-local, so anything written there is invisible to other developers and to fresh checkouts. Use the wiki for durable knowledge; let agent-memory accumulate only ephemeral, machine-local notes if at all.
 
 ## Extension mechanism
 
-Library-specific audit rules live in `.claude/agents/code-audit-frontend/*.md` under the repo root or under a registered package (GAIA's own live in `frontend/.claude/agents/code-audit-frontend/`); the agent's `## Extension Loading` section owns the globs. Each file targets one or more specialist subagents via YAML frontmatter (`subagents: [react-patterns, typescript, translation]`). The agent reads all extension files at startup and injects their rules into the relevant subagent prompts.
+Library-specific audit rules live in `.claude/agents/code-audit-frontend/*.md` under the repo root or under a registered package (GAIA's own live in `frontend/.claude/agents/code-audit-frontend/`); the agent's `## Extension Loading` section owns the globs. Each file targets one or more specialist subagents via YAML frontmatter (`subagents: [react-patterns, typescript, translation]`). The agent lists the extension files at startup and hands each specialist the paths of the files that list its role; the specialist reads them itself.
 
-The `subagents:` values (`react-patterns`, `typescript`, `translation`) are **rule-injection labels** - metadata that selects which specialist prompt receives this file's rules. They are not skill or command names. The agent dispatches each specialist via the **Agent (Task) tool** with an explicit `subagent_type`. Routing a specialist through the Skill tool misroutes it to a fuzzy-matched command (e.g. `/gaia-cleanse`), which rejects the args and aborts the audit before its marker is written.
+The `subagents:` values (`react-patterns`, `typescript`, `translation`) are **rule-injection labels** - metadata that selects which specialist is handed this file's path. They are not skill or command names. The agent dispatches each specialist via the **Agent (Task) tool** with `subagent_type: "audit-rule-specialist"`. Routing a specialist through the Skill tool misroutes it to a fuzzy-matched command (e.g. `/gaia-cleanse`), which rejects the args and aborts the audit before its marker is written.
 
 To swap a library: remove its extension file, add one for the replacement. The main agent definition stays unchanged. See the `README.md` in that directory for the full format.
 

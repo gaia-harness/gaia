@@ -1,0 +1,101 @@
+diff --git a/frontend/app/languages/en/common.ts b/frontend/app/languages/en/common.ts
+index 78ce321..b2b0758 100644
+--- a/frontend/app/languages/en/common.ts
++++ b/frontend/app/languages/en/common.ts
+@@ -1,5 +1,37 @@
+ export default {
+-  close: 'Close',
++  close: 'Close dialog',
++  confirmations: {
++    activated: 'The item was activated successfully',
++    approved: 'The item was approved successfully',
++    archived: 'The item was archived successfully',
++    assigned: 'The item was assigned successfully',
++    cancelled: 'The item was cancelled successfully',
++    completed: 'The item was completed successfully',
++    copied: 'The item was copied successfully',
++    created: 'The item was created successfully',
++    deleted: 'The item was deleted successfully',
++    disabled: 'The item was disabled successfully',
++    duplicated: 'The item was duplicated successfully',
++    enabled: 'The item was enabled successfully',
++    exported: 'The item was exported successfully',
++    imported: 'The item was imported successfully',
++    invited: 'The item was invited successfully',
++    merged: 'The item was merged successfully',
++    moved: 'The item was moved successfully',
++    pinned: 'The item was pinned successfully',
++    published: 'The item was published successfully',
++    renamed: 'The item was renamed successfully',
++    restored: 'The item was restored successfully',
++    saved: 'The item was saved successfully',
++    scheduled: 'The item was scheduled successfully',
++    shared: 'The item was shared successfully',
++    submitted: 'The item was submitted successfully',
++    synced: 'The item was synced successfully',
++    tagged: 'The item was tagged successfully',
++    updated: 'The item was updated successfully',
++    uploaded: 'The item was uploaded successfully',
++    verified: 'The item was verified successfully',
++  },
+   copyToClipboard: 'Copy to clipboard',
+   counters: {
+     clicks_one: '{{count}} click',
+diff --git a/frontend/app/languages/en/errors.ts b/frontend/app/languages/en/errors.ts
+index a74bb48..4654f0c 100644
+--- a/frontend/app/languages/en/errors.ts
++++ b/frontend/app/languages/en/errors.ts
+@@ -1,9 +1,25 @@
+ export default {
+   '404': 'Page not found',
+-  errorBoundary: 'An error occurred',
++  errorBoundary: 'Something went wrong',
+   invalidCredentials: 'Invalid email or password',
+   invalidEmail: 'Email is invalid',
+   invalidPassword: 'Password must be at least 6 characters long',
++  network: {
++    badGateway: 'The network request failed (badGateway)',
++    certificateExpired: 'The network request failed (certificateExpired)',
++    connectionLost: 'The network request failed (connectionLost)',
++    dnsFailure: 'The network request failed (dnsFailure)',
++    gatewayTimeout: 'The network request failed (gatewayTimeout)',
++    hostUnknown: 'The network request failed (hostUnknown)',
++    offline: 'The network request failed (offline)',
++    portClosed: 'The network request failed (portClosed)',
++    proxyRefused: 'The network request failed (proxyRefused)',
++    rateLimited: 'The network request failed (rateLimited)',
++    requestAborted: 'The network request failed (requestAborted)',
++    serverUnavailable: 'The network request failed (serverUnavailable)',
++    tlsHandshake: 'The network request failed (tlsHandshake)',
++    unreachable: 'The network request failed (unreachable)',
++  },
+   unexpectedError: 'An unexpected error occurred',
+   unexpectedStatusError: 'An unexpected error occurred ({{status}})',
+ };
+diff --git a/frontend/app/routes/_public.tsx b/frontend/app/routes/_public.tsx
+index 6dc0fb4..fe079ba 100644
+--- a/frontend/app/routes/_public.tsx
++++ b/frontend/app/routes/_public.tsx
+@@ -1,11 +1,17 @@
++import {useTranslation} from 'react-i18next';
+ import {Outlet} from 'react-router';
+ import Layout from '~/components/layout';
+ 
+ // This is where routes that are publicly available go
+-const PublicRoute = () => (
+-  <Layout>
+-    <Outlet />
+-  </Layout>
+-);
++const PublicRoute = () => {
++  const {t} = useTranslation('common');
++
++  return (
++    <Layout>
++      <header>{t('meta.siteName')}</header>
++      <Outlet />
++    </Layout>
++  );
++};
+ 
+ export default PublicRoute;

@@ -1,0 +1,1 @@
+{"type":"assistant","timestamp":"2026-10-01T00:02:00Z","message":{"id":"msg_55","model":"claude-opus-5-5","role":"assistant","content":[{"type":"text","text":"DOWNGRADE (occurs but smaller): Minor"}],"stop_reason":"end_turn","usage":{"input_tokens":10,"cache_creation_input_tokens":0,"cache_read_input_tokens":0,"output_tokens":5}}}

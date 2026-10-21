@@ -396,9 +396,7 @@ pnpm install
 
 ### F1. `.claude/agents/code-audit-frontend.md` and `frontend/.claude/agents/code-audit-frontend/react-buckets.md`
 
-In `.claude/agents/code-audit-frontend.md`, delete the entire `### Subagent 3: Translation Audit` section (and its body up to the next `###` or `##` heading).
-
-In the same file's Extension Loading section (the step that parses each file's `subagents:` frontmatter field), drop `translation` from the list of legal values.
+The translation specialist runs only when the scope resolver prints a `translation` line (a changed language file or an i18n call signal), which an app with i18n removed never produces, so `.claude/agents/code-audit-frontend.md` needs no edit.
 
 In `frontend/.claude/agents/code-audit-frontend/react-buckets.md`, delete the `## Translation (translation)` section and drop `translation` from the `subagents:` frontmatter list.
 

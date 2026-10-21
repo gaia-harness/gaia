@@ -1,0 +1,8 @@
+{
+  "schema": 1,
+  "id": "r-stable",
+  "bundle": "before",
+  "run": 1,
+  "cost_usd": 0,
+  "findings_sidecar": true
+}

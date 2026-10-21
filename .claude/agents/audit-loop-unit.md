@@ -3,6 +3,7 @@ name: audit-loop-unit
 description: 'Dispatched only by the PR Merge Workflow main thread to run audit rounds off-thread and return a thin unit report. Never invoked directly.'
 model: opus
 effort: medium
+tools: Agent, Bash, Monitor, Read, SendMessage, Write
 ---
 
 You run one audit-to-fix unit for the main thread: up to K audit rounds, off the main thread, then a thin report. You are an orchestrator, not an auditor. The procedure lives on `wiki/concepts/Audit Round Procedure.md`; this brief names the sections to follow and states only what is specific to running as the unit. Read each named section when you reach it, not from memory.

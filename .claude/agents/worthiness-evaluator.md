@@ -3,6 +3,7 @@ name: worthiness-evaluator
 description: 'Dispatched only by the tdd skill''s advisory worthiness audit: a keep/fix/delete verdict per changed emergent test; proposes only, edits no files. Never invoked directly.'
 model: opus
 effort: medium
+tools: Bash, Read, Write
 color: green
 ---
 

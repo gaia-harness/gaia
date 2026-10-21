@@ -57,6 +57,17 @@ frontmatter_names_agent() {
   return 0
 }
 
+# frontmatter_tools_are_allowlist <file>: rc 0 when the frontmatter carries the
+# exact tools line the unit runs under (a missing line would grant every tool
+# and re-load every deferred schema into the unit's first call).
+frontmatter_tools_are_allowlist() {
+  local close frontmatter_file="$BATS_TEST_TMPDIR/tools-check.txt"
+  close="$(awk 'NR>1 && /^---$/ {print NR; exit}' "$1")"
+  [ -n "$close" ] || return 1
+  sed -n "2,$((close - 1))p" "$1" >"$frontmatter_file"
+  grep -qx 'tools: Agent, Bash, Monitor, Read, SendMessage, Write' "$frontmatter_file"
+}
+
 @test "agent frontmatter: name equals the filename stem and model is opus" {
   [ "$(sed -n '1p' "$AGENT")" = '---' ]
   local close
@@ -65,8 +76,7 @@ frontmatter_names_agent() {
   sed -n "2,$((close - 1))p" "$AGENT" >"$BATS_TEST_TMPDIR/fm.txt"
   frontmatter_names_agent "$AGENT"
   grep -q '^description: ' "$BATS_TEST_TMPDIR/fm.txt"
-  # No tools line, matching the other agent definitions.
-  grep -q '^tools:' "$BATS_TEST_TMPDIR/fm.txt" && return 1
+  frontmatter_tools_are_allowlist "$AGENT"
   [ "$(basename "$AGENT" .md)" = "audit-loop-unit" ]
   # The body after the frontmatter is non-empty.
   [ "$(sed -n "$((close + 1)),\$p" "$AGENT" | grep -c '[^[:space:]]')" -gt 0 ]
@@ -79,6 +89,19 @@ frontmatter_names_agent() {
   sed 's/^model: opus$/model: sonnet/' "$AGENT" >"$BATS_TEST_TMPDIR/bad-model.md"
   cmp -s "$AGENT" "$BATS_TEST_TMPDIR/bad-model.md" && return 1
   frontmatter_names_agent "$BATS_TEST_TMPDIR/bad-model.md" && return 1
+  true
+}
+
+@test "tools red twin: no tools line, a dropped Write, or a dropped SendMessage fails the allowlist check" {
+  grep -v '^tools:' "$AGENT" >"$BATS_TEST_TMPDIR/no-tools.md"
+  cmp -s "$AGENT" "$BATS_TEST_TMPDIR/no-tools.md" && return 1
+  frontmatter_tools_are_allowlist "$BATS_TEST_TMPDIR/no-tools.md" && return 1
+  sed 's/^tools: Agent, Bash, Monitor, Read, SendMessage, Write$/tools: Agent, Bash, Monitor, Read, SendMessage/' "$AGENT" >"$BATS_TEST_TMPDIR/no-write.md"
+  cmp -s "$AGENT" "$BATS_TEST_TMPDIR/no-write.md" && return 1
+  frontmatter_tools_are_allowlist "$BATS_TEST_TMPDIR/no-write.md" && return 1
+  sed 's/^tools: Agent, Bash, Monitor, Read, SendMessage, Write$/tools: Agent, Bash, Monitor, Read, Write/' "$AGENT" >"$BATS_TEST_TMPDIR/no-sendmessage.md"
+  cmp -s "$AGENT" "$BATS_TEST_TMPDIR/no-sendmessage.md" && return 1
+  frontmatter_tools_are_allowlist "$BATS_TEST_TMPDIR/no-sendmessage.md" && return 1
   true
 }
 

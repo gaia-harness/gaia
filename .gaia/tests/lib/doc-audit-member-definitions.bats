@@ -169,3 +169,228 @@ conditional_reread_line() {
   grep -qE -- 'jq .*dep-audit-baseline|dep-audit-baseline.*jq' "$FRONTEND" && { echo "a baseline jq recipe survives" >&2; return 1; }
   true
 }
+
+# --- the frontend member's tool allowlist and specialist wiring ---------------
+#
+# Each check below is a function over a definition file, so a green test runs it
+# on the real definition and its red twin runs it on a scratch copy altered in
+# the one place the check reads, which it must reject.
+
+# insert_after <file> <awk regex> <text>: prints the file with <text> on a new
+# line after every line matching the regex.
+insert_after() {
+  awk -v pattern="$2" -v text="$3" '{ print } $0 ~ pattern { print text }' "$1"
+}
+
+# frontmatter_tools_line <file>: prints the `tools:` line of the frontmatter.
+frontmatter_tools_line() {
+  awk '
+    NR == 1 && $0 == "---" { inside = 1; next }
+    inside && $0 == "---" { exit }
+    inside && /^tools:/ { print }
+  ' "$1"
+}
+
+check_tools_allowlist() {
+  [ "$(frontmatter_tools_line "$1")" = 'tools: Agent, Bash, Read, Write' ]
+}
+
+check_specialist_dispatch_site() {
+  local how_to_run
+  how_to_run="$(section_text "$1" '### How to run')"
+  grep -qF -- 'subagent_type: "audit-rule-specialist"' <<<"$how_to_run" || return 1
+  grep -qE -- '(^|[^a-z])(model|effort):' <<<"$how_to_run" && return 1
+  grep -qF -- 'general-purpose' <<<"$how_to_run" && return 1
+  return 0
+}
+
+check_specialists_flag_and_gate() {
+  local how_to_run resolver_line
+  resolver_line="$(grep -E -- '^<root>/\.gaia/scripts/audit-resolve-scope\.sh --member ' "$1")"
+  [ -n "$resolver_line" ] || return 1
+  case "$resolver_line" in *' --specialists') ;; *) return 1 ;; esac
+  how_to_run="$(section_text "$1" '### How to run')"
+  grep -qF -- 'on the `SPECIALIST=` lines' <<<"$how_to_run" || return 1
+  grep -qF -- '`t(`' <<<"$how_to_run" && return 1
+  return 0
+}
+
+check_oracle_script_call() {
+  local how_to_run
+  how_to_run="$(section_text "$1" '### How to run')"
+  grep -qF -- "audit-frontend-oracles.sh' --root '<root>' --base '<BASE_SHA>'" <<<"$how_to_run" || return 1
+  grep -qF -- '--base <BASE_SHA>' "$1" && return 1
+  grep -qF -- 'npx -y react-doctor' "$1" && return 1
+  grep -qF -- 'pnpm knip --reporter json' "$1" && return 1
+  return 0
+}
+
+check_refuter_is_a_conditional_read() {
+  local gate
+  gate="$(section_text "$1" '## Finding Proof Gate (holistic reviewer)')"
+  grep -qF -- '.claude/hooks/lib/audit-frontend-refuter.md' <<<"$gate" || return 1
+  grep -qF -- 'when none survives, do not Read it' <<<"$gate" || return 1
+  grep -qF -- '**Hardened retry prefix**' <<<"$gate" || return 1
+  grep -qF -- 'You are an adversarial reviewer' "$1" && return 1
+  return 0
+}
+
+check_moved_prose_is_gone() {
+  local deleted extension_loading
+  for deleted in '## Durable knowledge' 'Candidate wiki updates' 'Durable knowledge' '### Subagent instructions template' '### Subagent 2: TypeScript' 'wrong, or will produce broken work'; do
+    grep -qF -- "$deleted" "$1" && return 1
+  done
+  extension_loading="$(section_text "$1" '## Extension Loading')"
+  grep -qw -- 'Glob' <<<"$extension_loading" && return 1
+  return 0
+}
+
+check_unknown_agent_type_fallback() {
+  local how_to_run
+  how_to_run="$(section_text "$1" '### How to run')"
+  grep -qF -- 'Unknown agent type' <<<"$how_to_run" || return 1
+  grep -qF -- 'relaunch Claude Code to load the new agent types' <<<"$how_to_run"
+}
+
+check_flow_list_is_required() {
+  local extension_loading
+  extension_loading="$(section_text "$1" '## Extension Loading')"
+  grep -qF -- 'carries no inline list' <<<"$extension_loading" || return 1
+  grep -qF -- 'error finding' <<<"$extension_loading"
+}
+
+# check_prose_cut <file> <line prefix>: the line starting with <prefix> is a
+# fence-free rule of at most 300 characters naming no test path, and the next
+# non-blank lines are a maintainer-only block naming one bats path and a test
+# name substring in double quotes.
+check_prose_cut() {
+  local rule_line_number rule_line following
+  rule_line_number="$(grep -nF -- "$2" "$1" | head -n 1 | cut -d: -f1)"
+  [ -n "$rule_line_number" ] || return 1
+  rule_line="$(sed -n "${rule_line_number}p" "$1")"
+  [ "${#rule_line}" -le 300 ] || return 1
+  case "$rule_line" in *.bats*) return 1 ;; esac
+  following="$(sed -n "$((rule_line_number + 1)),$((rule_line_number + 5))p" "$1" | grep -v '^$')"
+  [ "$(sed -n 1p <<<"$following")" = '<!-- gaia:maintainer-only:start -->' ] || return 1
+  grep -qE -- '`[^`]+\.bats`.*"[^"]+"' <<<"$(sed -n 2p <<<"$following")" || return 1
+  [ "$(sed -n 3p <<<"$following")" = '<!-- gaia:maintainer-only:end -->' ]
+}
+
+INCREMENTAL_SCOPE_PREFIX='**Incremental scope.**'
+OWN_PATCH_PREFIX="**The branch's own patch, at HEAD, is the whole point.**"
+
+# bats test_tags=whole-tree
+@test "the frontend definition's tool allowlist is exactly Agent, Bash, Read and Write" {
+  check_tools_allowlist "$FRONTEND"
+}
+
+@test "red twin: a widened tool allowlist is rejected" {
+  sed 's/^tools: Agent, Bash, Read, Write$/tools: Agent, Bash, Read, Write, Edit/' "$FRONTEND" >"$BATS_TEST_TMPDIR/frontend.md"
+  run check_tools_allowlist "$BATS_TEST_TMPDIR/frontend.md"
+  [ "$status" -ne 0 ]
+}
+
+# bats test_tags=whole-tree
+@test "the specialist dispatch names the audit-rule-specialist type and passes no model, no effort and no general-purpose type" {
+  check_specialist_dispatch_site "$FRONTEND"
+}
+
+@test "red twin: a dispatch that passes an effort parameter is rejected" {
+  insert_after "$FRONTEND" '^   - 1 × `Agent` call per `SPECIALIST=` line' '     effort: low' >"$BATS_TEST_TMPDIR/frontend.md"
+  run check_specialist_dispatch_site "$BATS_TEST_TMPDIR/frontend.md"
+  [ "$status" -ne 0 ]
+}
+
+# bats test_tags=whole-tree
+@test "the resolver command carries --specialists and the dispatch gate reads the SPECIALIST lines" {
+  check_specialists_flag_and_gate "$FRONTEND"
+}
+
+@test "red twin: the hand gate on t( references is rejected" {
+  insert_after "$FRONTEND" '^2[.] [*][*]Gate each dispatch' '   - No files with `useTranslation` or `t(` references: skip the translation specialist' >"$BATS_TEST_TMPDIR/frontend.md"
+  run check_specialists_flag_and_gate "$BATS_TEST_TMPDIR/frontend.md"
+  [ "$status" -ne 0 ]
+}
+
+# bats test_tags=whole-tree
+@test "the three oracles run as one quoted script call and no oracle command line survives in the definition" {
+  check_oracle_script_call "$FRONTEND"
+}
+
+@test "red twin: an unquoted base in the oracle call is rejected" {
+  sed "s/--base '<BASE_SHA>'/--base <BASE_SHA>/" "$FRONTEND" >"$BATS_TEST_TMPDIR/frontend.md"
+  run check_oracle_script_call "$BATS_TEST_TMPDIR/frontend.md"
+  [ "$status" -ne 0 ]
+}
+
+# bats test_tags=whole-tree
+@test "the proof gate reads the refuter reference conditionally and carries no refuter prompt" {
+  check_refuter_is_a_conditional_read "$FRONTEND"
+}
+
+@test "red twin: a refuter prompt left in the definition is rejected" {
+  insert_after "$FRONTEND" '^[*][*]Adversarially verify every Critical and Major survivor' 'You are an adversarial reviewer. Your job is to REFUTE the finding below.' >"$BATS_TEST_TMPDIR/frontend.md"
+  run check_refuter_is_a_conditional_read "$BATS_TEST_TMPDIR/frontend.md"
+  [ "$status" -ne 0 ]
+}
+
+# bats test_tags=whole-tree
+@test "moved and deleted prose is absent from the frontend definition" {
+  check_moved_prose_is_gone "$FRONTEND"
+}
+
+@test "red twin: a restored durable knowledge section is rejected" {
+  { cat "$FRONTEND"; printf '\n## Durable knowledge\n'; } >"$BATS_TEST_TMPDIR/frontend.md"
+  run check_moved_prose_is_gone "$BATS_TEST_TMPDIR/frontend.md"
+  [ "$status" -ne 0 ]
+}
+
+# bats test_tags=whole-tree
+@test "the specialist dispatch step carries the unknown agent type fallback" {
+  check_unknown_agent_type_fallback "$FRONTEND"
+}
+
+@test "red twin: a dispatch step without the relaunch note is rejected" {
+  sed 's/relaunch Claude Code to load the new agent types/relaunch/' "$FRONTEND" >"$BATS_TEST_TMPDIR/frontend.md"
+  run check_unknown_agent_type_fallback "$BATS_TEST_TMPDIR/frontend.md"
+  [ "$status" -ne 0 ]
+}
+
+# bats test_tags=whole-tree
+@test "Extension Loading makes a subagents line without an inline list an error finding" {
+  check_flow_list_is_required "$FRONTEND"
+}
+
+@test "red twin: Extension Loading without the inline list sentence is rejected" {
+  sed 's/carries no inline list/carries a list/' "$FRONTEND" >"$BATS_TEST_TMPDIR/frontend.md"
+  run check_flow_list_is_required "$BATS_TEST_TMPDIR/frontend.md"
+  [ "$status" -ne 0 ]
+}
+
+# bats test_tags=whole-tree
+@test "each frontend prose cut is a short fence-free rule followed by a maintainer-only enforcer pointer" {
+  check_prose_cut "$FRONTEND" "$INCREMENTAL_SCOPE_PREFIX"
+  check_prose_cut "$FRONTEND" "$OWN_PATCH_PREFIX"
+}
+
+# bats test_tags=whole-tree
+@test "each frontend enforcer pointer names a bats file in which exactly one test name carries the quoted substring" {
+  local rule_prefix pointer enforcer_path substring matches
+  for rule_prefix in "$INCREMENTAL_SCOPE_PREFIX" "$OWN_PATCH_PREFIX"; do
+    pointer="$(grep -F -A 3 -- "$rule_prefix" "$FRONTEND" | grep -F -- 'Enforced by ')"
+    enforcer_path="$(sed -E 's/^Enforced by `([^`]+)`.*/\1/' <<<"$pointer")"
+    substring="$(sed -E 's/^[^"]*"([^"]+)".*/\1/' <<<"$pointer")"
+    [ -f "$REPO_ROOT/$enforcer_path" ] || { echo "enforcer $enforcer_path does not exist" >&2; return 1; }
+    matches="$(grep -E -- '^@test ' "$REPO_ROOT/$enforcer_path" | grep -cF -- "$substring" || true)"
+    [ "$matches" -eq 1 ] || { echo "$enforcer_path: $matches @test lines carry: $substring" >&2; return 1; }
+  done
+}
+
+@test "red twin: an enforcer path on the fence-free rule line is rejected, here and by the adopter-visible path guard" {
+  sed 's#^\*\*Incremental scope\.\*\* #&See .gaia/tests/lib/enforcer.bats. #' "$FRONTEND" >"$BATS_TEST_TMPDIR/frontend.md"
+  run check_prose_cut "$BATS_TEST_TMPDIR/frontend.md" "$INCREMENTAL_SCOPE_PREFIX"
+  [ "$status" -ne 0 ]
+  strip_maintainer_blocks "$BATS_TEST_TMPDIR/frontend.md" >"$BATS_TEST_TMPDIR/stripped.md"
+  run grep -nE -- '\.gaia/tests/' "$BATS_TEST_TMPDIR/stripped.md"
+  [ "$status" -eq 0 ]
+}

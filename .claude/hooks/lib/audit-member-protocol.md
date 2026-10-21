@@ -62,7 +62,7 @@ rm -rf <scratch>
 
 ### Summary
 
-What was reviewed (file list) and the overall verdict. Name any specialist or refuter that no-op'd twice and fell back to inline review, so a reader can tell a clean dispatch from a degraded one.
+What was reviewed (file list) and the overall verdict. Name any specialist or refuter that no-op'd twice and fell back to inline review, so a reader can tell a clean dispatch from a degraded one. Name any check you skipped because a tool it needed is not in your tools allowlist, so a reader can tell a complete review from a narrowed one.
 
 ### Critical Issues (Must Fix)
 
@@ -129,7 +129,10 @@ bash <root>/.gaia/scripts/audit-write-clearance.sh \
   --scope-digest '<SCOPE_DIGEST>'
 ```
 
-The marker is keyed to your own branch-own digest, a sha256 over the branch's own patch restricted to exactly the files you own, the shared gate machinery, and (for the default member) every in-scope path no member owns, computed by `.claude/hooks/lib/audit-digest.sh` from the recipe in `.claude/hooks/lib/audit-branch-patch.sh`. It attests that you reviewed this branch's own change to the paths your digest covers, measured against the PR's base branch as GitHub reports it, so content the base brought in is trusted as already audited, and any change to the branch's own patch on those paths, including one made inside a merge commit or a line moved without change, rotates your digest and you must re-audit. A change touching none of those paths rotates nothing, and neither does a clean catch-up merge of the base (barring a base edit within three lines of a branch hunk on a path you own), so your marker keeps validating with zero re-review, which is what lets members run in any order. The writer derives the digest from `--root`, writes atomically, replaces any marker already on disk for this digest (provenance is `earned` or `refused`, nothing else), and prints the marker path. Never write a marker for content other than current HEAD, and never write another member's marker.
+The marker is keyed to your branch-own digest: a clean catch-up merge of the base rotates nothing, any change to the branch's own patch on your paths does, and you must re-audit. Never write a marker for content other than current HEAD, and never write another member's marker.
+<!-- gaia:maintainer-only:start -->
+Enforced by `.gaia/scripts/tests/audit-catchup-merge.bats`, test "a clean catch-up leaves every digest, every marker and the loop state alone".
+<!-- gaia:maintainer-only:end -->
 
 A `review scope superseded` refusal here means your scope digest no longer matched your branch-own digest at write time: no artifact was written and the round is forfeited. That refusal releases your stale capture as it exits, so the re-dispatch on the new HEAD clears normally. Do not re-run the resolver yourself after it: it would hand you a capture for content you did not review.
 
@@ -143,7 +146,10 @@ bash <root>/.gaia/scripts/audit-write-clearance.sh \
   --base '<KEY_BASE>'
 ```
 
-The merge gate checks the refusal family before the earned family, so a live refusal for the current digest denies the merge regardless of any same-digest earned marker, and a refusal survives a catch-up merge of the base because that merge ordinarily rotates no digest (a base edit within three lines of a branch hunk on a covered path is the exception, and it retires the refusal), and the writer posts the `GAIA-Audit` `failure` status itself. `--base` makes the refusal self-describing: the writer rebuilds your ledger entries from the sidecar you wrote in step 0 (see "Re-run carry-forward ledger"), so an operator can learn what you refused and why.
+The merge gate checks refusals before earned markers, so a live refusal for the current digest denies the merge even beside a same-digest earned marker. The writer posts the `GAIA-Audit` `failure` status itself; `--base` rebuilds your ledger entries from the sidecar.
+<!-- gaia:maintainer-only:start -->
+Enforced by `.gaia/tests/hooks/pr-merge-audit-check.bats`, test "a live refusal for the SAME digest denies even with a valid earned marker present".
+<!-- gaia:maintainer-only:end -->
 
 **Withhold without a refusal** in two cases. On a `DIRTY=` line that survives your remit filter (or the `dirty-scope check failed` sentinel), write the sidecar naming each dirty path and no clearance artifact at all: a refusal is keyed to your branch-own digest, an uncommitted edit does not rotate it, and a revert would leave a live refusal blocking the marker your next clean pass earns. Report that you must be re-dispatched once the operator commits or reverts them. And on a `review scope superseded` refusal, as above.
 
@@ -185,7 +191,10 @@ bash <root>/.gaia/scripts/audit-write-findings.sh \
 
 Pass the same `KEY_BASE` your resolver call printed, never a second derivation. `--review-base`, `--base-reason` and `--anchor-tree` carry the per-member decision record into the sidecar's `review_base` object.
 
-**Stage the array in your own scratch directory, as a file written fresh with `printf` in the call immediately before the writer.** Members dispatched in one wave share a session scratchpad, so a fixed staging filename there is one every member picks, and one member's array reaches another member's published sidecar under that member's name; a directory minted for this invocation alone prevents it. Write it fresh every time: the audit key can survive a re-dispatch, and a file an earlier call left republishes a stale report as a fresh one. Neither failure is visible downstream. Keep the payload in single quotes, which hold a `$` or a backtick in finding text literal (an apostrophe is written `'\''`). The stage is a Bash redirect because worktree isolation refuses the alternatives: a pipe into the writer is refused whenever the payload carries the token `git`, which any finding path under `.github/` does; `Write` into this directory is refused because it resolves into the main checkout through the `.gaia/local` symlink; and a heredoc is refused outright.
+Stage the array as a fresh `printf` redirect into a directory minted for this invocation, in the call immediately before the writer; never a pipe, a heredoc or `Write`. Keep the payload in single quotes (an apostrophe is written `'\''`).
+<!-- gaia:maintainer-only:start -->
+Enforced by `.gaia/tests/lib/doc-audit-findings-staging.bats`, test "no spec pipes the payload into the writer".
+<!-- gaia:maintainer-only:end -->
 
 Shape (one entry per finding; the writer rejects the write and names the offending index if a required field is missing):
 
