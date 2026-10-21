@@ -27,8 +27,8 @@ setup() {
   # below is pointed at.
   MAINTAINER_START='# gaia:maintainer-only:start'
   MAINTAINER_END='# gaia:maintainer-only:end'
-  [ -x "$WRITER" ] || skip "audit-write-clearance.sh not executable"
-  [ -f "$DIGEST_LIBRARY" ] || skip "audit-digest.sh not present"
+  [ -x "$WRITER" ]
+  [ -f "$DIGEST_LIBRARY" ]
   command -v jq >/dev/null 2>&1 || skip "jq not available"
 
   ROOT="$BATS_TEST_TMPDIR/root"
@@ -866,7 +866,7 @@ finding_json() {
 write_findings_sidecar() {
   local member="$1" findings="$2" resolutions="${3:-}"
   local writer="$THIS_DIRECTORY/../audit-write-findings.sh"
-  [ -x "$writer" ] || skip "audit-write-findings.sh not executable"
+  [ -x "$writer" ]
   if [ -n "$resolutions" ]; then
     printf '%s' "$resolutions" > "$BATS_TEST_TMPDIR/resolutions.json"
     printf '%s' "$findings" | bash "$writer" --root "$ROOT" --member "$member" --base "$LEDGER_BASE_SHA" \

@@ -8,7 +8,7 @@ setup() {
   THIS_DIRECTORY="$( cd "$( dirname "$BATS_TEST_FILENAME" )" && pwd )"
   REPO_ROOT="$( cd "$THIS_DIRECTORY/../../.." && pwd )"
   MACHINERY_LIBRARY="$REPO_ROOT/.claude/hooks/lib/audit-machinery.sh"
-  [ -f "$MACHINERY_LIBRARY" ] || skip "audit-machinery.sh not present"
+  [ -f "$MACHINERY_LIBRARY" ]
   # shellcheck source=/dev/null
   . "$MACHINERY_LIBRARY"
 }

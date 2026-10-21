@@ -40,11 +40,11 @@ path_is_allowlisted() {
   return 1
 }
 
-# Tracked files under root $1 matching the stage pattern. The log and hot pages
-# are scan exclusions: they are rewritten each sync and can be hit-free, so the
-# still-matches check must never apply to them.
+# Tracked files under root $1 matching the stage pattern. The log page is a scan
+# exclusion: it changes each sync and can be hit-free, so the still-matches check
+# must never apply to it.
 stage_hit_files() {
-  git -C "$1" grep -l -E "$STAGE_PATTERN" -- . ':!wiki/log.md' ':!wiki/hot.md' || true
+  git -C "$1" grep -l -E "$STAGE_PATTERN" -- . ':!wiki/log.md' || true
 }
 
 # Print each stage hit under root $1 as path:line:text, for files matching no
@@ -95,7 +95,7 @@ guard_stage_args() {
 guard_sync_land() {
   local root="$1" hits
   hits="$(git -C "$root" grep -n -E "$LAND_PATTERN" -- . \
-    ':!CHANGELOG.md' ':!wiki/log.md' ':!wiki/hot.md' ':!wiki/meta/**' \
+    ':!CHANGELOG.md' ':!wiki/log.md' ':!wiki/meta/**' \
     ':!.gaia/tests/hooks/fixtures/audit-routing-before.tsv' \
     ':!.gaia/tests/lib/wiki-stage-args-retired.bats' \
     ':!.gaia/tests/fixtures/wiki-stage-args-retired.allowlist' || true)"

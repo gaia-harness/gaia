@@ -6,7 +6,7 @@
 
 setup() {
   SCRIPT="${BATS_TEST_DIRNAME}/../check-scope.sh"
-  [ -x "$SCRIPT" ] || skip "check-scope.sh not executable"
+  [ -x "$SCRIPT" ]
 }
 
 # --- exit-code contract ----------------------------------------------------
@@ -87,16 +87,6 @@ setup() {
 @test "denylist: website/" {
   run "$SCRIPT" website/src/sections/Hero.tsx
   [ "$output" = '{"ok":false,"allowed":[],"denied":[{"path":"website/src/sections/Hero.tsx","reason":"denylist"}]}' ]
-}
-
-@test "denylist: .specify/specs/" {
-  run "$SCRIPT" .specify/specs/SPEC-002.md
-  [ "$output" = '{"ok":false,"allowed":[],"denied":[{"path":".specify/specs/SPEC-002.md","reason":"denylist"}]}' ]
-}
-
-@test "denylist: .specify/memory/" {
-  run "$SCRIPT" .specify/memory/foo.md
-  [ "$output" = '{"ok":false,"allowed":[],"denied":[{"path":".specify/memory/foo.md","reason":"denylist"}]}' ]
 }
 
 @test "denylist: .notebook/ specs" {

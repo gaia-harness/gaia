@@ -15,7 +15,7 @@
 setup() {
   THIS_DIRECTORY="$( cd "$( dirname "$BATS_TEST_FILENAME" )" && pwd )"
   SCRIPT="$THIS_DIRECTORY/../summary-verify.sh"
-  [ -x "$SCRIPT" ] || skip "summary-verify.sh not executable"
+  [ -x "$SCRIPT" ]
   FIXTURE="$BATS_TEST_TMPDIR/SUMMARY.md"
 }
 

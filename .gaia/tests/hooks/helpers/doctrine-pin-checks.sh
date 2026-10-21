@@ -43,21 +43,21 @@ SESSION_EFFORT_MARK_RE='runs at the session effort'
 # dispatch effort.
 pin_site_files() {
   git -C "$1" grep -l -i -E -e "$PIN_RE" -e "$EFFORT_PIN_RE" -- .claude frontend/.claude wiki .gaia/cli/health \
-    ':!wiki/log.md' ':!wiki/hot.md' ':!wiki/meta' ':!wiki/concepts/Workflow Doctrine.md'
+    ':!wiki/log.md' ':!wiki/meta' ':!wiki/concepts/Workflow Doctrine.md'
 }
 
 # Prints every tracked file in the same scan roots, same exclusions, that
 # carries the session-effort mark.
 session_effort_mark_files() {
   git -C "$1" grep -l -i -E -e "$SESSION_EFFORT_MARK_RE" -- .claude frontend/.claude wiki .gaia/cli/health \
-    ':!wiki/log.md' ':!wiki/hot.md' ':!wiki/meta' ':!wiki/concepts/Workflow Doctrine.md'
+    ':!wiki/log.md' ':!wiki/meta' ':!wiki/concepts/Workflow Doctrine.md'
   return 0
 }
 
 # Prints every tracked markdown file in the same scan roots, same exclusions.
 scan_root_markdown_files() {
   git -C "$1" ls-files -z -- .claude frontend/.claude wiki .gaia/cli/health \
-    ':!wiki/log.md' ':!wiki/hot.md' ':!wiki/meta' ':!wiki/concepts/Workflow Doctrine.md' | tr '\0' '\n' | grep -E '\.md$'
+    ':!wiki/log.md' ':!wiki/meta' ':!wiki/concepts/Workflow Doctrine.md' | tr '\0' '\n' | grep -E '\.md$'
   return 0
 }
 

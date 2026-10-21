@@ -30,8 +30,8 @@ setup() {
   MACHINERY_LIBRARY="$THIS_DIRECTORY/../../../.claude/hooks/lib/audit-machinery.sh"
   BRANCH_PATCH_LIBRARY="$THIS_DIRECTORY/../../../.claude/hooks/lib/audit-branch-patch.sh"
   PROVENANCE_LIBRARY="$THIS_DIRECTORY/../../../.claude/hooks/lib/audit-base-provenance.sh"
-  [ -x "$SCRIPT" ] || skip "audit-scope-digest.sh not executable"
-  [ -f "$KEY_LIBRARY" ] || skip "audit-key-lib.sh not present"
+  [ -x "$SCRIPT" ]
+  [ -f "$KEY_LIBRARY" ]
   command -v jq >/dev/null 2>&1 || skip "jq not available"
 
   ROOT="$BATS_TEST_TMPDIR/root"
@@ -391,7 +391,7 @@ stored_head_for() {
   # "which member gets no infix" must equal audit-write-clearance.sh's. A drift
   # here makes the lookup miss every conclusion for one member, silently.
   writer="$THIS_DIRECTORY/../audit-write-clearance.sh"
-  [ -f "$writer" ] || skip "audit-write-clearance.sh not present"
+  [ -f "$writer" ]
 
   scope_default="$(grep -oE '^SCOPE_DEFAULT_MEMBER="[^"]+"' "$SCRIPT" | head -1 | sed 's/.*="//;s/"$//')"
   writer_default="$(grep -oE '^DEFAULT_MEMBER="[^"]+"' "$writer" | head -1 | sed 's/.*="//;s/"$//')"
@@ -478,7 +478,7 @@ stored_head_for() {
 
 @test "END TO END: a rotation between capture and write makes the earned write refuse" {
   writer="$THIS_DIRECTORY/../audit-write-clearance.sh"
-  [ -x "$writer" ] || skip "audit-write-clearance.sh not executable"
+  [ -x "$writer" ]
 
   captured="$("$SCRIPT" --capture --root "$ROOT" --member "$MEMBER" --base "$BASE")"
   [ "${#captured}" -eq 64 ]
@@ -500,7 +500,7 @@ stored_head_for() {
 
 @test "END TO END control: with no rotation the same earned write succeeds" {
   writer="$THIS_DIRECTORY/../audit-write-clearance.sh"
-  [ -x "$writer" ] || skip "audit-write-clearance.sh not executable"
+  [ -x "$writer" ]
 
   captured="$("$SCRIPT" --capture --root "$ROOT" --member "$MEMBER" --base "$BASE")"
   carried="$("$SCRIPT" --read --root "$ROOT" --member "$MEMBER" --base "$BASE")"
@@ -519,7 +519,7 @@ stored_head_for() {
   # unit tests above cover the spent lookup; this proves the whole loop, through
   # the real writer, ends in a marker instead of a permanent refusal.
   writer="$THIS_DIRECTORY/../audit-write-clearance.sh"
-  [ -x "$writer" ] || skip "audit-write-clearance.sh not executable"
+  [ -x "$writer" ]
 
   # --- round N: capture, find something, refuse ---
   captured="$("$SCRIPT" --capture --root "$ROOT" --member "$MEMBER" --base "$BASE")"
@@ -565,7 +565,7 @@ rotate_machinery() {
 
 @test "END TO END: a round that publishes NOTHING does not strand the round after it" {
   writer="$THIS_DIRECTORY/../audit-write-clearance.sh"
-  [ -x "$writer" ] || skip "audit-write-clearance.sh not executable"
+  [ -x "$writer" ]
 
   # --- round A: captures, then ends having published nothing ---
   captured="$("$SCRIPT" --capture --root "$ROOT" --member "$MEMBER" --base "$BASE")"
@@ -597,7 +597,7 @@ rotate_machinery() {
 
 @test "END TO END: the same recovery holds for a SPECIALIST member" {
   writer="$THIS_DIRECTORY/../audit-write-clearance.sh"
-  [ -x "$writer" ] || skip "audit-write-clearance.sh not executable"
+  [ -x "$writer" ]
   local member_name="code-audit-maintainer-shell"
 
   captured="$("$SCRIPT" --capture --root "$ROOT" --member "$member_name" --base "$BASE")"
@@ -639,7 +639,7 @@ rotate_machinery() {
   # so discarding its capture there would throw away a running review's fence
   # value on a caller error.
   writer="$THIS_DIRECTORY/../audit-write-clearance.sh"
-  [ -x "$writer" ] || skip "audit-write-clearance.sh not executable"
+  [ -x "$writer" ]
 
   "$SCRIPT" --capture --root "$ROOT" --member "$MEMBER" --base "$BASE" >/dev/null
   rotate_in_scope
@@ -654,7 +654,7 @@ rotate_machinery() {
   # never spends the captured one, so releasing here would discard the capture
   # of a member that is still mid-round.
   writer="$THIS_DIRECTORY/../audit-write-clearance.sh"
-  [ -x "$writer" ] || skip "audit-write-clearance.sh not executable"
+  [ -x "$writer" ]
 
   captured="$("$SCRIPT" --capture --root "$ROOT" --member "$MEMBER" --base "$BASE")"
   rotate_in_scope
@@ -669,7 +669,7 @@ rotate_machinery() {
   # actions, so one message asserting a release for all three sends the
   # operator away from a live deadlock.
   writer="$THIS_DIRECTORY/../audit-write-clearance.sh"
-  [ -x "$writer" ] || skip "audit-write-clearance.sh not executable"
+  [ -x "$writer" ]
 
   # (a) a capture really is released
   captured="$("$SCRIPT" --capture --root "$ROOT" --member "$MEMBER" --base "$BASE")"
@@ -745,7 +745,7 @@ rotate_machinery() {
 
 @test "END TO END: a round that publishes nothing and releases lets the next round clear on its first try" {
   writer="$THIS_DIRECTORY/../audit-write-clearance.sh"
-  [ -x "$writer" ] || skip "audit-write-clearance.sh not executable"
+  [ -x "$writer" ]
 
   # --- round 1: captures, publishes nothing, releases ---
   captured="$("$SCRIPT" --capture --root "$ROOT" --member "$MEMBER" --base "$BASE")"

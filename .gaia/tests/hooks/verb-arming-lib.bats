@@ -17,8 +17,8 @@ setup() {
   REPO_ROOT="$( cd "$THIS_DIRECTORY/../../.." && pwd )"
   LIBRARY_FILE="$REPO_ROOT/.claude/hooks/lib/verb-arming.sh"
   WALK="$REPO_ROOT/.claude/hooks/lib/verb-arming-walk.sh"
-  [ -f "$LIBRARY_FILE" ] || skip "verb-arming.sh not present"
-  [ -f "$WALK" ] || skip "verb-arming-walk.sh not present"
+  [ -f "$LIBRARY_FILE" ]
+  [ -f "$WALK" ]
 
   NEWLINE=$'\n'
   TAB=$'\t'

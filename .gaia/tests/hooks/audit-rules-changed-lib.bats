@@ -16,7 +16,7 @@ setup() {
   THIS_DIRECTORY="$( cd "$( dirname "$BATS_TEST_FILENAME" )" && pwd )"
   REPO_ROOT="$( cd "$THIS_DIRECTORY/../../.." && pwd )"
   RULES_LIBRARY="$REPO_ROOT/.claude/hooks/lib/audit-rules-changed.sh"
-  [ -f "$RULES_LIBRARY" ] || skip "audit-rules-changed.sh not present"
+  [ -f "$RULES_LIBRARY" ]
   # shellcheck source=/dev/null
   . "$RULES_LIBRARY"
 }

@@ -15,7 +15,7 @@ setup() {
   . "$(cd "$BATS_TEST_DIRNAME/../../.." && pwd)/.gaia/tests/helpers/audit-roster.sh"
   THIS_DIRECTORY="$( cd "$( dirname "$BATS_TEST_FILENAME" )" && pwd )"
   SCRIPT="$THIS_DIRECTORY/../resolve-audit-members.sh"
-  [ -x "$SCRIPT" ] || skip "resolve-audit-members.sh not executable"
+  [ -x "$SCRIPT" ]
 
   SANDBOX="$BATS_TEST_TMPDIR/sandbox"
   mkdir -p "$SANDBOX/.gaia"

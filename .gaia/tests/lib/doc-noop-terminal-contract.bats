@@ -35,7 +35,7 @@
 # Deliberately not members, each considered rather than missed:
 #   - `.gaia/tests/`, `.gaia/local/`: this suite's own tree and untracked local
 #     state, neither of which is a prose surface a reader consults.
-#   - `wiki/log.md`, `wiki/hot.md`, `CHANGELOG.md`: historical records, exempt
+#   - `wiki/log.md`, `CHANGELOG.md`: historical records, exempt
 #     from the present-tense prose rules generally, and a past ending recorded
 #     there is not a claim about current behaviour.
 #
@@ -111,7 +111,7 @@ derive_surfaces() {
   # gaia-lint-ignore whole-tree-mark-guard: every test that reaches this search carries the per-test mark
   raw="$(set -o pipefail; git -C "$ROOT" grep -lEI -z -- "$TERMINAL_REGEX" -- \
     ':!.gaia/tests/*' ':!.gaia/local/*' \
-    ':!wiki/log.md' ':!wiki/hot.md' ':!CHANGELOG.md' | tr '\0' '\n')" || exit_status=$?
+    ':!wiki/log.md' ':!CHANGELOG.md' | tr '\0' '\n')" || exit_status=$?
   if [ "$exit_status" -gt 1 ]; then
     return 2
   fi

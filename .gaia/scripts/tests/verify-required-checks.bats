@@ -20,7 +20,7 @@ setup() {
   WORKFLOWS_DIRECTORY="$THIS_DIRECTORY/../../../.github/workflows"
   # Built at runtime so this file never names the deleted workflow literally.
   DELETED_WORKFLOW="code-review-audit"".yml"
-  [ -x "$SCRIPT" ] || skip "verify-required-checks.sh not executable"
+  [ -x "$SCRIPT" ]
   FULL_RULESET="GAIA-Audit
 Audit CI Tests
 Run Chromatic

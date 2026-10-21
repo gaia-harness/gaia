@@ -27,7 +27,7 @@ setup() {
   THIS_DIRECTORY="$( cd "$( dirname "$BATS_TEST_FILENAME" )" && pwd )"
   REPO_ROOT="$( cd "$THIS_DIRECTORY/../../.." && pwd )"
   ARCHIVE_SOURCE="$REPO_ROOT/.gaia/scripts/spec/plan-archive-merged.sh"
-  [ -x "$ARCHIVE_SOURCE" ] || skip "plan-archive-merged.sh not executable"
+  [ -x "$ARCHIVE_SOURCE" ]
   . "$REPO_ROOT/.gaia/tests/helpers/files.sh"
   # shellcheck source=helpers/usage-gate.sh
   . "$THIS_DIRECTORY/helpers/usage-gate.sh"
@@ -425,7 +425,7 @@ _days_ago() {
 # --- 22: real delegation to summary-verify.sh, not just the fallback -------
 
 @test "22: prefers summary-verify.sh when present; a malformed but non-empty SUMMARY.md is kept" {
-  [ -f "$REPO_ROOT/.gaia/scripts/summary-verify.sh" ] || skip "summary-verify.sh not present yet"
+  [ -f "$REPO_ROOT/.gaia/scripts/summary-verify.sh" ]
   cp "$REPO_ROOT/.gaia/scripts/summary-verify.sh" "$SANDBOX/.gaia/scripts/summary-verify.sh"
 
   _seed_merged_plan PLAN-001

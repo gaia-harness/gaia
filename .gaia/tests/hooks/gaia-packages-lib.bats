@@ -20,7 +20,7 @@ setup() {
   CORPUS="$REPO_ROOT/.gaia/tests/fixtures/gaia-packages"
   # shellcheck source=/dev/null
   . "$REPO_ROOT/.gaia/tests/helpers/path.sh"
-  [ -f "$LIBRARY" ] || skip "gaia-packages.sh not present"
+  [ -f "$LIBRARY" ]
   command -v jq >/dev/null 2>&1 || skip "jq required"
 }
 
