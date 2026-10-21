@@ -2,7 +2,7 @@
 type: concept
 status: active
 created: 2026-05-04
-updated: 2026-10-04
+updated: 2026-10-21
 tags: [concept, claude, code-search, mcp]
 ---
 
@@ -34,7 +34,7 @@ tags: [concept, claude, code-search, mcp]
 
 See `.claude/rules/code-search.md` for the routing rule.
 
-Serena's symbol tools return canonical, type-resolved answers where the built-in Read and Grep return string matches. Opus defaults to its own built-in tools even when a symbol tool fits better, which is why `.claude/rules/serena-cc-override.md` loads at session start as an always-on nudge to prefer Serena's symbol tools for symbol-level code work, rather than relying on the routing rule alone (that rule activates only on code files, so it is absent from context during pure exploration).
+Serena's symbol tools return canonical, type-resolved answers where the built-in Read and Grep return string matches. Opus defaults to its own built-in tools even when a symbol tool fits better, which is why `.claude/rules/serena-cc-override.md` loads at session start as an always-on nudge to prefer Serena's symbol tools for symbol-level code work, rather than relying on the routing rule alone (that rule activates only on code files, so it is absent from context during pure exploration). Both name Serena's per-operation tools, which exist only under its tools interface; the registration pins that interface because a fresh Serena install defaults to a single REPL tool instead (see [[Serena]]).
 
 ## Language drift
 
