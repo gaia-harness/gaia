@@ -27,10 +27,12 @@ Three external tools need per-machine setup. Probes: React Doctor, Playwright CL
   Verify with `uv --version`, sourcing the shell rc the installer modified (or adding `~/.local/bin` to `PATH` for this session) if needed. On failure, halt with: `uv is required for GAIA. Install with: curl -LsSf https://astral.sh/uv/install.sh | sh`. Then register Serena globally:
 
   ```bash
-  claude mcp add serena -s user -- uvx --from git+https://github.com/oraios/serena@v1.7.0 serena start-mcp-server --context claude-code --project-from-cwd --open-web-dashboard false
+  claude mcp add serena -s user -- uvx --from git+https://github.com/oraios/serena@v2.1.0 serena start-mcp-server --context claude-code --project-from-cwd --open-web-dashboard false --agent-interface tools
   ```
 
-  `claude mcp add` exiting non-zero with a "name already exists" error is success. A stale pin on an existing registration needs `claude mcp remove serena -s user`, then the add above.
+  `--agent-interface tools` keeps Serena's one-tool-per-operation interface, the symbol tools `.claude/rules/code-search.md` routes to. A fresh machine's Serena config otherwise defaults to its REPL interface, which replaces them with a single `serena_repl` tool. An `agent_interface:` value in `.serena/project.yml` overrides the flag, so that key stays empty.
+
+  `claude mcp add` exiting non-zero with a "name already exists" error is success. An existing registration with an older pin, or without `--agent-interface tools`, is stale: run `claude mcp remove serena -s user`, then the add above, and restart Claude Code.
 
   Serena picks one language at first startup and freezes it into `.serena/project.yml`. When the project grows another language, update the `language_servers:` list (`languages:` before Serena 1.7) in that file and restart Serena; `/gaia-serena-sync` automates the same edit on explicit consent.
 
