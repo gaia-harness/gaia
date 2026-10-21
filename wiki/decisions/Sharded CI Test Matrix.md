@@ -46,6 +46,14 @@ A useful reconciliation is the sum of per-shard TAP plans against the pre-existi
 
 `.gaia/tests/bats-shards.sh` is the one entry point: it derives the shard list and, per shard, the `.bats` files that belong to it, and the workflow's own `shards` matrix is pinned to that shard list by `audit-ci-shards.bats` W6. A hand run drives the same script (`bash .gaia/tests/bats-shards.sh run <shard-id>`, once per shard) rather than a separate runner carrying its own copy of the partition, so there is nothing for a second entry point to drift out of step with.
 
+## Change-scoped legs
+
+The workflow's paths filter has two outputs that arm the bats legs. `code` runs every leg whole. `scoped` names files whose readers the change selector (`.gaia/scripts/bats-suites-for-change.sh`) can find: each suite that reads one names it, or carries the whole-tree mark. A pull request matching `scoped` and nothing in `code` runs each leg through `bats-shards.sh run-for-change`, which hands bats the leg's suites the selector picks, in full, and the leg's other whole-tree-marked suites filtered to the whole-tree tag. That is the set `verify-harness.sh` runs in branch mode, split across the same legs the full run uses, so the weighted partition still balances it. The install steps and the concurrency meter run as they do for `code`. The filter's own comments say which files belong in `scoped` and why.
+
+Keeping the fan-out is the point. The whole-tree tests alone take minutes on one runner, so a single "changed suites" leg would trade the full matrix's critical path for one nearly as long. Split across the legs, a wiki sync or a frontend dependency bump owes each leg a fraction of its suites.
+
+A selector that cannot read the change makes the leg run its whole shard, the direction that costs time rather than coverage. The limit is the mark itself: a whole-tree test the mark guard cannot see, one that reaches the tracked tree through a script it calls, runs on a scoped change only if its author marked it by hand. Left unmarked, it next runs on a pull request that arms `code`, and its red lands there.
+
 ## Where the time goes
 
 Measured per leg on a clean CI run: the aggregator takes about 3 seconds, and fixed per-leg overhead (runner provisioning, checkout, install) is on the order of 10 seconds. The install step spans roughly 10 to 20 seconds; the sandbox leg, which runs no apt, finishes it first. The concurrency leg runs 66 to 69 seconds against its 13-minute cap, so the declared cap, not any real runtime, is what sizes the leg.
