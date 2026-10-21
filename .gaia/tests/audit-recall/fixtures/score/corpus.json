@@ -1,0 +1,95 @@
+{
+  "schema": 1,
+  "seed": 122,
+  "selected_against": "0000000000000000000000000000000000000000",
+  "selection_bundles": {
+    "before": "1111111111111111111111111111111111111111",
+    "after": "2222222222222222222222222222222222222222"
+  },
+  "entries": [
+    {
+      "id": "m-lost",
+      "source": "real",
+      "member": "code-audit-frontend",
+      "scorer": "member",
+      "path": "frontend/app/lost.ts",
+      "line": 20,
+      "class_prefix": "holistic"
+    },
+    {
+      "id": "m-kept",
+      "source": "real",
+      "member": "code-audit-frontend",
+      "scorer": "member",
+      "path": "frontend/app/kept.ts",
+      "line": 30,
+      "class_prefix": "holistic"
+    },
+    {
+      "id": "m-flaky",
+      "source": "real",
+      "member": "code-audit-frontend",
+      "scorer": "member",
+      "path": "frontend/app/flaky.ts",
+      "line": 40,
+      "class_prefix": "holistic"
+    },
+    {
+      "id": "m-window",
+      "source": "real",
+      "member": "code-audit-frontend",
+      "scorer": "member",
+      "path": "frontend/app/window.ts",
+      "line": 50,
+      "class_prefix": "holistic"
+    },
+    {
+      "id": "m-class",
+      "source": "real",
+      "member": "code-audit-frontend",
+      "scorer": "member",
+      "path": "frontend/app/class.ts",
+      "line": 60,
+      "class_prefix": "holistic"
+    },
+    {
+      "id": "s-merged",
+      "source": "planted",
+      "member": "code-audit-frontend",
+      "scorer": "specialist",
+      "role": "typescript",
+      "path": "frontend/app/merged.ts",
+      "line": 70,
+      "planted_patch": "planted/rule-violations.patch"
+    },
+    {
+      "id": "r-flip",
+      "source": "planted",
+      "member": "code-audit-frontend",
+      "scorer": "refuter",
+      "path": "frontend/app/flip.ts",
+      "line": 80,
+      "planted_patch": "planted/holistic-true.patch"
+    },
+    {
+      "id": "s-translation",
+      "source": "planted",
+      "member": "code-audit-frontend",
+      "scorer": "specialist",
+      "role": "translation",
+      "path": "frontend/app/greeting.tsx",
+      "line": 90,
+      "planted_patch": "planted/rule-violations.patch"
+    },
+    {
+      "id": "r-stable",
+      "source": "planted",
+      "member": "code-audit-frontend",
+      "scorer": "refuter",
+      "path": "frontend/app/stable.ts",
+      "line": 100,
+      "planted_patch": "planted/holistic-false.patch"
+    }
+  ],
+  "skipped": []
+}

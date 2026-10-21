@@ -1,0 +1,12 @@
+{
+  "schema": 1,
+  "bundle": "after",
+  "run": 2,
+  "total_cost_usd": 0,
+  "partial": false,
+  "stopped_at": null,
+  "noop": {
+    "specialists": 2,
+    "noops": 1
+  }
+}

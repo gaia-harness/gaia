@@ -165,6 +165,14 @@ run_statusline_with_cache() {
   grep -qF -- "🧹 /gaia-residue (8 residuals)" <<<"$output"
 }
 
+# A fixed white (37 or 97) vanishes on a light terminal theme; bold with no
+# color code draws in the theme's own foreground, readable on both.
+@test "the residue segment renders bold in the terminal's default foreground" {
+  run_statusline_with_cache '{"residueCandidateCount":8}'
+  [ "$status" -eq 0 ]
+  grep -qF -- $'\033[01m🧹 /gaia-residue (8 residuals)\033[00m' <<<"$output"
+}
+
 @test "the count threshold boundary: 4 renders nothing, 5 renders the segment" {
   run_statusline_with_cache '{"residueCandidateCount":4}'
   [ "$status" -eq 0 ]

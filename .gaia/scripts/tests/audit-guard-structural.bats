@@ -18,6 +18,7 @@ setup() {
   THIS_DIRECTORY="$( cd "$( dirname "$BATS_TEST_FILENAME" )" && pwd )"
   REPO_ROOT="$( cd "$THIS_DIRECTORY/../../.." && pwd )"
   FRONTEND_MD="$REPO_ROOT/.claude/agents/code-audit-frontend.md"
+  REFUTER_REFERENCE="$REPO_ROOT/.claude/hooks/lib/audit-frontend-refuter.md"
 
   # SPEC-042 clearance-writer surfaces (UAT-020 structural half + PLAN-001).
   SHELL_MD="$REPO_ROOT/.claude/agents/code-audit-maintainer-shell.md"
@@ -78,12 +79,25 @@ assert_predicate_retry_fallback() {
   assert_predicate_retry_fallback "$content"
 }
 
+# bats test_tags=whole-tree
 @test "wiring: code-audit-frontend.md adversarial-refuter dispatch site" {
-  # Bounded by the next H2, whatever it is named, so the site's own anchors
-  # must sit inside the gate section rather than anywhere later in the file.
+  # The gate section points at the refuter reference and keeps the hardened
+  # retry prefix; the dispatch, no-op retry and inline fallback live in the
+  # reference, so its anchors are asserted there.
   content="$(section_between "$FRONTEND_MD" '^## Finding Proof Gate' '^## ')"
   assert_section_nonempty "code-audit-frontend.md Finding Proof Gate" "$content"
-  assert_predicate_retry_fallback "$content"
+  grep -qF -- 'audit-frontend-refuter.md' <<<"$content"
+  grep -qF -- '**Hardened retry prefix**' <<<"$content"
+  reference="$(cat "$REFUTER_REFERENCE")"
+  assert_section_nonempty "audit-frontend-refuter.md" "$reference"
+  assert_predicate_retry_fallback "$reference"
+}
+
+@test "wiring red twin: a refuter reference without the inline fallback is rejected" {
+  sed 's/inline fallback/inline step/g' "$REFUTER_REFERENCE" >"$BATS_TEST_TMPDIR/refuter.md"
+  reference="$(cat "$BATS_TEST_TMPDIR/refuter.md")"
+  run assert_predicate_retry_fallback "$reference"
+  [ "$status" -ne 0 ]
 }
 
 # 6. Shared clearance writer: the one handshake surface, the shared member

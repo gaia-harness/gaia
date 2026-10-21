@@ -1,0 +1,98 @@
+[
+  {
+    "id": "planted-interface-declaration",
+    "source": "planted",
+    "member": "code-audit-frontend",
+    "scorer": "specialist",
+    "role": "typescript",
+    "path": "frontend/app/types/status-record.ts",
+    "line": 1,
+    "planted_patch": "planted/rule-violations.patch"
+  },
+  {
+    "id": "planted-typescript-enum",
+    "source": "planted",
+    "member": "code-audit-frontend",
+    "scorer": "specialist",
+    "role": "typescript",
+    "path": "frontend/app/utils/status-kind.ts",
+    "line": 1,
+    "planted_patch": "planted/rule-violations.patch"
+  },
+  {
+    "id": "planted-z-enum",
+    "source": "planted",
+    "member": "code-audit-frontend",
+    "scorer": "specialist",
+    "role": "typescript",
+    "path": "frontend/app/utils/status-schema.ts",
+    "line": 3,
+    "planted_patch": "planted/rule-violations.patch"
+  },
+  {
+    "id": "planted-missing-return-type",
+    "source": "planted",
+    "member": "code-audit-frontend",
+    "scorer": "specialist",
+    "role": "typescript",
+    "path": "frontend/app/utils/describe-status.ts",
+    "line": 3,
+    "planted_patch": "planted/rule-violations.patch"
+  },
+  {
+    "id": "planted-hardcoded-string-without-i18n",
+    "source": "planted",
+    "member": "code-audit-frontend",
+    "scorer": "member",
+    "path": "frontend/app/components/archive-banner/index.tsx",
+    "line": 9,
+    "class_prefix": "holistic",
+    "planted_patch": "planted/rule-violations.patch"
+  },
+  {
+    "id": "planted-missing-translation-call",
+    "source": "planted",
+    "member": "code-audit-frontend",
+    "scorer": "specialist",
+    "role": "translation",
+    "path": "frontend/app/components/welcome-panel/index.tsx",
+    "line": 14,
+    "planted_patch": "planted/rule-violations.patch"
+  },
+  {
+    "id": "planted-holistic-true-empty-selection-deletes-all",
+    "source": "planted",
+    "member": "code-audit-frontend",
+    "scorer": "refuter",
+    "path": "frontend/app/utils/selection.ts",
+    "line": 11,
+    "planted_patch": "planted/holistic-true.patch"
+  },
+  {
+    "id": "planted-holistic-true-unbounded-retry",
+    "source": "planted",
+    "member": "code-audit-frontend",
+    "scorer": "refuter",
+    "path": "frontend/app/utils/retry.ts",
+    "line": 12,
+    "planted_patch": "planted/holistic-true.patch"
+  },
+  {
+    "id": "planted-holistic-false-guarded-division",
+    "source": "planted",
+    "member": "code-audit-frontend",
+    "scorer": "refuter",
+    "path": "frontend/app/utils/average.ts",
+    "line": 2,
+    "planted_patch": "planted/holistic-false.patch"
+  },
+  {
+    "id": "planted-holistic-false-validated-page-offset",
+    "source": "planted",
+    "member": "code-audit-frontend",
+    "scorer": "refuter",
+    "path": "frontend/app/utils/page.ts",
+    "line": 14,
+    "planted_patch": "planted/holistic-false.patch"
+  }
+]

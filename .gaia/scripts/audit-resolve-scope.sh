@@ -17,7 +17,7 @@
 # Usage:
 #   <root>/.gaia/scripts/audit-resolve-scope.sh --member <name> --root <root>
 #       [--review-path <pathspec>]... [--skip-full-base] [--base-override <ref>]
-#       [--eligibility]
+#       [--eligibility] [--specialists]
 #
 #   --member          The member resolving its scope. Passed to
 #                     resolve-audit-base.sh --member and to the capture.
@@ -45,6 +45,23 @@
 #                     GITHUB_REPOSITORY are both set, which is what the
 #                     suite's "gh is never called" probe depends on being
 #                     unset.
+#   --specialists     Also print which rule specialists the frontend member
+#                     dispatches, one SPECIALIST line each (see Output). The
+#                     frontend member passes it; without it the output is
+#                     unchanged. The set is computed over the final CHANGED
+#                     list, keeping only paths present at HEAD and reading
+#                     content from HEAD, never the working tree. react-patterns
+#                     runs on any *.tsx. typescript runs on any *.ts or *.tsx
+#                     (language files included). translation runs on a language
+#                     file (frontend/app/languages/<locale>/<file>.ts) or on any
+#                     other path whose HEAD content has a translation signal:
+#                     useTranslation, <Trans, i18n.t( or a bare t( call. A bare
+#                     t( is one not preceded by an identifier character, `$` or
+#                     `.`: `$` excludes i18next's `$t(` nesting and `.` excludes
+#                     member calls such as `x.split(` or `a.t(`. A HEAD blob
+#                     that cannot be read fails toward running: the path counts
+#                     for every specialist its extension qualifies for, and
+#                     for translation, with a stderr line naming it.
 #
 # Output (stdout), one KEY=value per line, in this order:
 #   AUDIT_ROOT FULL_BASE BASE_REF BASE_REASON KEY_REF ANCHOR_TREE BASE_SHA
@@ -55,7 +72,12 @@
 #   brought in through a catch-up merge never lists), one
 #   ELIG_CHANGED=<path> per eligibility path, one
 #   DIRTY=<status line> per dirty in-scope entry, its path raw rather than
-#   quoted. REVIEW_DIFF names the member's review input, a diff file under
+#   quoted, then (under --specialists only) one
+#   SPECIALIST=<name> <trigger>:<path>[ <trigger>:<path>]... line per
+#   specialist that runs, in the order react-patterns, typescript,
+#   translation, with the tokens in CHANGED order; SPECIALIST lines print last,
+#   after DIRTY, and a specialist with no qualifying path prints no line.
+#   <trigger> is tsx, ts, language-file or i18n-signal. REVIEW_DIFF names the member's review input, a diff file under
 #   <root>/.gaia/local/audit/ holding the branch's changed hunks on the CHANGED
 #   paths since the anchor plus the remerge-diff of any merge commit that
 #   changed one, so a conflict resolution reaches the reviewer as a diff and
@@ -98,7 +120,7 @@
 # of the right tree passes.
 
 _ars_usage() {
-  printf 'usage: audit-resolve-scope.sh --member <name> --root <root> [--review-path <pathspec>]... [--skip-full-base] [--base-override <ref>] [--eligibility]\n' >&2
+  printf 'usage: audit-resolve-scope.sh --member <name> --root <root> [--review-path <pathspec>]... [--skip-full-base] [--base-override <ref>] [--eligibility] [--specialists]\n' >&2
 }
 
 member=""
@@ -107,6 +129,7 @@ root_given=0
 skip_full_base=0
 base_override=""
 eligibility=0
+specialists=0
 review_paths=()
 while [ "$#" -gt 0 ]; do
   case "$1" in
@@ -126,6 +149,8 @@ while [ "$#" -gt 0 ]; do
       base_override="$2"; shift 2 ;;
     --eligibility)
       eligibility=1; shift ;;
+    --specialists)
+      specialists=1; shift ;;
     -h|--help)
       _ars_usage; exit 0 ;;
     *)
@@ -478,5 +503,36 @@ if [ "${#dirty[@]}" -gt 0 ]; then
   for line in "${dirty[@]}"; do
     printf 'DIRTY=%s\n' "$line"
   done
+fi
+
+if [ "$specialists" -eq 1 ]; then
+  react_patterns_tokens=""
+  typescript_tokens=""
+  translation_tokens=""
+  language_file_pattern='^frontend/app/languages/[^/]+/.+\.ts$'
+  # `$` and `.` are excluded before a bare t( so `$t(` nesting and member calls
+  # such as `x.split(` never read as a translation call.
+  translation_signal_pattern='useTranslation|<Trans([[:space:]/>]|$)|i18n\.t\(|(^|[^[:alnum:]_$.])t\('
+  for path in ${changed[@]+"${changed[@]}"}; do
+    git -C "$root" cat-file -e "HEAD:$path" 2>/dev/null || continue
+    case "$path" in
+      *.tsx)
+        react_patterns_tokens="$react_patterns_tokens tsx:$path"
+        typescript_tokens="$typescript_tokens tsx:$path" ;;
+      *.ts)
+        typescript_tokens="$typescript_tokens ts:$path" ;;
+    esac
+    if [[ "$path" =~ $language_file_pattern ]]; then
+      translation_tokens="$translation_tokens language-file:$path"
+    elif ! git -C "$root" show "HEAD:$path" > "$ars_temporary_directory/blob" 2>/dev/null; then
+      printf 'could not read HEAD:%s; running every specialist it qualifies for\n' "$path" >&2
+      translation_tokens="$translation_tokens i18n-signal:$path"
+    elif grep -E -q "$translation_signal_pattern" "$ars_temporary_directory/blob"; then
+      translation_tokens="$translation_tokens i18n-signal:$path"
+    fi
+  done
+  [ -z "$react_patterns_tokens" ] || printf 'SPECIALIST=react-patterns%s\n' "$react_patterns_tokens"
+  [ -z "$typescript_tokens" ] || printf 'SPECIALIST=typescript%s\n' "$typescript_tokens"
+  [ -z "$translation_tokens" ] || printf 'SPECIALIST=translation%s\n' "$translation_tokens"
 fi
 exit 0

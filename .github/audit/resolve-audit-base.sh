@@ -103,7 +103,7 @@
 #     team-signal        anchored on the whole-team status floor
 #     no-anchor           no usable anchor in range; full scope
 #     rules-reset-global  a global-rules path changed between anchor and HEAD
-#     rules-reset-member  this member's own agent definition changed
+#     rules-reset-member  this member's own agent definition or a companion file changed
 #     machinery-reset     the argument-less flat machinery reset fired
 #     degraded            classifier, machinery, rules, or version lib not
 #                         sourceable
@@ -160,7 +160,8 @@
 #                  machinery, how a digest is computed, whether a clearance
 #                  is believed, which members are dispatched, or under which
 #                  version any of that was decided. Resets EVERY member.
-#     member tier  a member's own agent definition. Resets only that member.
+#     member tier  a member's own agent definition or one of its companion files
+#                  (AUDIT_MEMBER_COMPANION_PATHS in audit-rules-changed.sh). Resets only that member.
 #   Machinery that is merely shared resets nobody. It still rotates digests,
 #   so a fresh clearance is still required before the merge gate opens, but
 #   the review earning it stays incremental. The tier predicate is a
@@ -1062,7 +1063,7 @@ if [ -n "$reset_hit" ]; then
   reset_path=""
   IFS="$TAB" read -r reset_tier reset_path <<<"$reset_hit"
   if [ "$reset_tier" = "member" ]; then
-    echo "resolve-audit-base: ${member}'s own agent definition changed on this branch between ${winner} and HEAD (${reset_path}); resetting to full scope (${main_reference})." >&2
+    echo "resolve-audit-base: ${member}'s own agent definition or a companion file changed on this branch between ${winner} and HEAD (${reset_path}); resetting to full scope (${main_reference})." >&2
     emit "$main_reference" rules-reset-member ""
   fi
   echo "resolve-audit-base: a global rules path changed on this branch between ${winner} and HEAD (${reset_path}); resetting to full scope (${main_reference})." >&2

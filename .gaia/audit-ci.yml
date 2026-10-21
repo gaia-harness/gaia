@@ -230,6 +230,15 @@ auditors:
       # clearance: a change to it changes what a light review is trusted to
       # vouch for.
       - ".claude/agents/audit-light-reviewer.md"
+      # The rule specialist the frontend member dispatches: a change to it
+      # changes what a frontend clearance vouches for.
+      - ".claude/agents/audit-rule-specialist.md"
+      # The refuter the frontend member dispatches: a change to it changes what
+      # a frontend clearance vouches for.
+      - ".claude/agents/audit-refuter.md"
+      # The refuter branch-point reference: a .md under the machinery prefix
+      # needs an owner and no *.sh glob reaches it.
+      - ".claude/hooks/lib/audit-frontend-refuter.md"
       # The read-only judge /gaia-fitness dispatches: its reply is written to
       # disk and classified, so a change to it changes what that pass reports.
       - ".claude/agents/fitness-judge.md"
@@ -437,6 +446,11 @@ unowned:
   - ".gaia/tests/**/*.json"
   - ".gaia/tests/**/*.tsv"
   - ".gaia/tests/**/*.yml"
+  # Replay and planted-violation patches: input data executed by nothing.
+  - ".gaia/tests/**/*.patch"
+  # Trimmed Claude Code transcript fixtures the measurement and recall suites
+  # read: input data executed by nothing.
+  - ".gaia/tests/**/*.jsonl"
   # Merge-report fixture corpus: baseline, latest and adopter trees plus the
   # candidate files the report suite reads as input data; executed by nothing.
   - ".gaia/tests/lib/fixtures/update-gaia-report/**"

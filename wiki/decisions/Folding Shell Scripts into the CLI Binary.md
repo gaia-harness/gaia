@@ -4,7 +4,7 @@ status: active
 priority: 2
 date: 2026-07-20
 created: 2026-07-20
-updated: 2026-10-15
+updated: 2026-10-21
 tags: [decision, distribution, maintainer, cli, shell]
 ---
 
@@ -34,7 +34,7 @@ Can the roughly 109 shipped `.sh` files (hooks, `.gaia/scripts`, spec-lifecycle 
 - **Cross-directory ledger mutex.** `with-ledger-lock.sh` is sourced by both the spec-lifecycle lib scripts and `.gaia/scripts` (the notebook library and the usage libraries), all contending on the locks that guard the notebook catalog and the Usage Ledger (see [[Notebook]]). A partial fold races a Node process against a bash process on the same lock across the macOS-mkdir and Linux-flock split. A blanket move is blocked unless the whole consumer group co-moves.
 - **Statusline latency budget.** `gaia-statusline.sh` renders on a tight budget that Node cold-start blows.
 - **Shared-class call sites.** `.claude/settings.json` and `.github/workflows/tests.yml` are both manifest class `shared`. Rewriting either to call the binary raises a conflict question for every customizing adopter, the exact per-adopter merge cost the premise wants to remove.
-- **Binary-to-`.sh` reverse edges.** The binary already spawns `usage.sh` (via `gaia wiki chain`) and writes a `gaia-statusline.sh` invocation into settings during init, so no `.sh` reachable from `.gaia/cli/src` is a fold candidate regardless of its class.
+- **Binary-to-`.sh` reverse edges.** The binary already spawns `resolve-audit-members.sh` (via `gaia wiki chain`) and writes a `gaia-statusline.sh` invocation into settings during init, so no `.sh` reachable from `.gaia/cli/src` is a fold candidate regardless of its class.
 - **Adopter customizability.** Editable hook files are a template value proposition; a compiled binary forecloses adopter guard tuning.
 
 ## Options considered

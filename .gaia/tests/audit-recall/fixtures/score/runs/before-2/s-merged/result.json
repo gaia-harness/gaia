@@ -1,0 +1,8 @@
+{
+  "schema": 1,
+  "id": "s-merged",
+  "bundle": "before",
+  "run": 2,
+  "cost_usd": 0,
+  "findings_sidecar": true
+}

@@ -440,7 +440,7 @@ JSON
 @test "text forms keep their color, icons and +N render uncolored; setup-gaia renders alone" {
   render_at 175
   [ "$status" -eq 0 ]
-  grep -qF -- $'\033[01;34m🐛 /gaia-debt (1)\033[00m' <<<"$output"
+  grep -qF -- $'\033[01;91m🐛 /gaia-debt (1)\033[00m' <<<"$output"
   grep -qF -- $'\033[01;36m🚀 /update-gaia (9.9.9)\033[00m' <<<"$output"
 
   render_at 61

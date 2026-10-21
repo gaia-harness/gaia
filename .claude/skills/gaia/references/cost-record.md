@@ -8,13 +8,13 @@ Standalone final step, one call:
 bash .gaia/scripts/usage.sh record command:{{COMMAND}} --workflow {{COMMAND}}
 ```
 
-**Artifact pass-through.** When this run opened a pull request and the URL `gh pr create` printed appeared in this run's own Bash tool result, and the pull request is on the current repo, append:
+**Artifact pass-through.** When this run opened or reused a pull request on the current repo, and its number appeared in this run's own Bash tool result (the URL `gh pr create` printed, or the number the command that found or opened it printed, such as `gh pr list` for a reused pull request), append:
 
 ```bash
   --pr <N>
 ```
 
-Take `<N>` only from that printed URL (a ref carries no repo, hence the current-repo condition). Without one, pass no `--pr`: the record correctly carries no artifact, and that is not an error.
+Take `<N>` only from that printed output, never from memory or a guess (a ref carries no repo, hence the current-repo condition). Without one, pass no `--pr`: the record correctly carries no artifact, and that is not an error.
 
 **A run continued from another session.** Its continuation prompt carries a `usage.sh join` line. If this session has not run it yet, run it before the record call, so the Cost line covers every session of the run.
 

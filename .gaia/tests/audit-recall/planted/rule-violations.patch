@@ -1,0 +1,73 @@
+diff --git a/frontend/app/components/archive-banner/index.tsx b/frontend/app/components/archive-banner/index.tsx
+new file mode 100644
+--- /dev/null
++++ b/frontend/app/components/archive-banner/index.tsx
+@@ -0,0 +1,11 @@
++import type {FC} from 'react';
++
++export type ArchiveBannerProps = {
++  count: number;
++};
++
++export const ArchiveBanner: FC<ArchiveBannerProps> = ({count}) => (
++  <p className="text-muted-foreground text-sm">
++    You have {count} archived items
++  </p>
++);
+diff --git a/frontend/app/components/welcome-panel/index.tsx b/frontend/app/components/welcome-panel/index.tsx
+new file mode 100644
+--- /dev/null
++++ b/frontend/app/components/welcome-panel/index.tsx
+@@ -0,0 +1,17 @@
++import type {FC} from 'react';
++import {useTranslation} from 'react-i18next';
++
++export type WelcomePanelProps = {
++  name: string;
++};
++
++export const WelcomePanel: FC<WelcomePanelProps> = ({name}) => {
++  const {t} = useTranslation('common');
++
++  return (
++    <section>
++      <h2>{t('close')}</h2>
++      <p>Welcome back, {name}</p>
++    </section>
++  );
++};
+diff --git a/frontend/app/types/status-record.ts b/frontend/app/types/status-record.ts
+new file mode 100644
+--- /dev/null
++++ b/frontend/app/types/status-record.ts
+@@ -0,0 +1,4 @@
++export interface StatusRecord {
++  id: string;
++  label: string;
++}
+diff --git a/frontend/app/utils/describe-status.ts b/frontend/app/utils/describe-status.ts
+new file mode 100644
+--- /dev/null
++++ b/frontend/app/utils/describe-status.ts
+@@ -0,0 +1,4 @@
++import type {StatusRecord} from '~/types/status-record';
++
++export const describeStatus = (record: StatusRecord) =>
++  `${record.id}: ${record.label}`;
+diff --git a/frontend/app/utils/status-kind.ts b/frontend/app/utils/status-kind.ts
+new file mode 100644
+--- /dev/null
++++ b/frontend/app/utils/status-kind.ts
+@@ -0,0 +1,4 @@
++export enum StatusKind {
++  Active = 'active',
++  Archived = 'archived',
++}
+diff --git a/frontend/app/utils/status-schema.ts b/frontend/app/utils/status-schema.ts
+new file mode 100644
+--- /dev/null
++++ b/frontend/app/utils/status-schema.ts
+@@ -0,0 +1,3 @@
++import {z} from 'zod';
++
++export const statusKindSchema = z.enum(['active', 'archived']);
