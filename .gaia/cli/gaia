@@ -47379,7 +47379,6 @@ var branchTimestamp = (branch) => {
   return { date: date5, hours, minutes };
 };
 var wikiLandingSubject = ({ date: date5, hours, minutes }) => `wiki: ${date5} ${hours}:${minutes} UTC`;
-var USAGE_SCRIPT = ".gaia/scripts/usage.sh";
 var passthroughFailure2 = (result, command, args) => passthroughFailure({ args, command, prefix: "chain", result });
 var stepOk = commandSucceeded;
 var safeOutput3 = (value) => value ?? "";
@@ -47417,13 +47416,6 @@ var resolveRoot6 = (cwdOption, action) => {
       message: "gaia wiki chain must run inside a git repository",
       subcommand: `wiki chain ${action}`
     });
-    return null;
-  }
-};
-var resolveRepoRootOrNull = (cwd) => {
-  try {
-    return resolveRepoRoot(cwd);
-  } catch {
     return null;
   }
 };
@@ -47575,34 +47567,6 @@ var parsePrUrl = (text) => {
   if (!Number.isSafeInteger(number4) || number4 <= 0) return void 0;
   return { number: number4, repo };
 };
-var costReadout = (value) => {
-  const lines = safeOutput3(value).split("\n").map((line) => line.trim()).filter((line) => line !== "");
-  const costIndex = lines.findIndex((line) => line.startsWith("Cost:"));
-  return costIndex === -1 ? lines.at(-1) ?? "" : lines.slice(costIndex).join("\n");
-};
-var recordWikiCost = (options, artifact) => {
-  try {
-    const cwd = options.cwd ?? process.cwd();
-    const runner = options.runner ?? defaultRunner;
-    const repoRoot = resolveRepoRootOrNull(cwd);
-    if (repoRoot === null) return;
-    const args = [
-      USAGE_SCRIPT,
-      "record",
-      "command:gaia-wiki",
-      "--workflow",
-      "gaia-wiki",
-      ...artifact === void 0 ? [] : ["--pr", String(artifact.number)]
-    ];
-    const result = runner("bash", args, { cwd: repoRoot });
-    const line = costReadout(
-      result.status === 0 ? result.stdout : result.stderr
-    );
-    if (line !== "") process.stdout.write(`${line}
-`);
-  } catch {
-  }
-};
 var DRAFT_UNSUPPORTED = /draft.*(?:not supported|unsupported)|(?:not supported|unsupported).*draft/i;
 var openPullRequest = (options) => {
   const { prBody, prTitle, repoRoot, runner } = options;
@@ -47655,7 +47619,7 @@ var queueAutoMerge = (options) => {
           `chain finish: ${branch} stays an open draft PR and auto-merge is not queued
 `
         );
-        return { artifact, failureCode: EXIT_CODES.UNKNOWN_SUBCOMMAND };
+        return { failureCode: EXIT_CODES.UNKNOWN_SUBCOMMAND };
       }
     }
     const outcome = step === createStep ? openPullRequest({ prBody, prTitle, repoRoot, runner }) : {
@@ -47664,7 +47628,6 @@ var queueAutoMerge = (options) => {
     };
     if (!stepOk(outcome.result)) {
       return {
-        artifact,
         failureCode: passthroughFailure2(
           outcome.result,
           step.command,
@@ -47678,7 +47641,7 @@ var queueAutoMerge = (options) => {
   }
   return { artifact };
 };
-var runFinish = (argv, options) => {
+var finish = (argv, options) => {
   const refusal = unknownFlag(argv);
   if (refusal !== void 0) {
     structuredError({
@@ -47686,12 +47649,12 @@ var runFinish = (argv, options) => {
       message: refusal,
       subcommand: "wiki chain finish"
     });
-    return { code: EXIT_CODES.UNKNOWN_SUBCOMMAND };
+    return EXIT_CODES.UNKNOWN_SUBCOMMAND;
   }
   const cwd = options.cwd ?? process.cwd();
   const runner = options.runner ?? defaultRunner;
   const repoRoot = resolveRoot6(cwd, "finish");
-  if (repoRoot === null) return { code: EXIT_CODES.UNKNOWN_SUBCOMMAND };
+  if (repoRoot === null) return EXIT_CODES.UNKNOWN_SUBCOMMAND;
   let branch;
   try {
     branch = currentBranch(repoRoot, runner);
@@ -47700,7 +47663,7 @@ var runFinish = (argv, options) => {
       `chain: ${error62 instanceof Error ? error62.message : String(error62)}
 `
     );
-    return { code: UNEXPECTED_EXIT10 };
+    return UNEXPECTED_EXIT10;
   }
   const timestamp = branchTimestamp(branch);
   if (timestamp === null) {
@@ -47708,7 +47671,7 @@ var runFinish = (argv, options) => {
       `chain finish: in-place commits remain on ${branch}; no PR opened
 `
     );
-    return { code: EXIT_CODES.OK };
+    return EXIT_CODES.OK;
   }
   const base = defaultBranch(repoRoot, runner);
   const remoteBase = `origin/${base}`;
@@ -47728,10 +47691,10 @@ var runFinish = (argv, options) => {
   ];
   const countResult = runner("git", countArgs, { cwd: repoRoot });
   if (!stepOk(countResult))
-    return { code: passthroughFailure2(countResult, "git", countArgs) };
+    return passthroughFailure2(countResult, "git", countArgs);
   const ahead = Number.parseInt(safeOutput3(countResult.stdout).trim(), 10);
   if (!Number.isNaN(ahead) && ahead === 0) {
-    return { code: finishEmptyBranch({ base, branch, repoRoot, runner }) };
+    return finishEmptyBranch({ base, branch, repoRoot, runner });
   }
   const prTitle = wikiLandingSubject(timestamp);
   const prBody = "Automated /gaia-wiki landing (sync + consolidate + lint) via `gaia wiki chain finish`.";
@@ -47743,7 +47706,7 @@ var runFinish = (argv, options) => {
     runner
   });
   if (queued.failureCode !== void 0) {
-    return { artifact: queued.artifact, code: queued.failureCode };
+    return queued.failureCode;
   }
   const { artifact } = queued;
   const prLabel = artifact === void 0 ? "PR" : `PR #${artifact.number}`;
@@ -47751,12 +47714,7 @@ var runFinish = (argv, options) => {
     `chain finish: opened ${prLabel} for ${branch}; auto-merge queued, merge not yet confirmed
 `
   );
-  return { artifact, code: EXIT_CODES.OK };
-};
-var finish = (argv, options) => {
-  const outcome = runFinish(argv, options);
-  recordWikiCost(options, outcome.artifact);
-  return outcome.code;
+  return EXIT_CODES.OK;
 };
 var refreshNudge = (argv, options) => {
   if (argv.length > 0) {

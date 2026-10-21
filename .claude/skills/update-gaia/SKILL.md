@@ -3,7 +3,7 @@ name: update-gaia
 description: Pulls the latest GAIA release into this project without clobbering customizations, with a three-way merge per file using .gaia/manifest.json classes. Trigger when the user clicks the statusline `🚀 /update-gaia` indicator or asks "update GAIA", "pull the latest GAIA", "apply the new GAIA release".
 ---
 
-Contents: Pre-flight: Worktree check; Pre-flight: Branch check (run modes); Step 1: Read baseline version; Step 2: Resolve latest release; Step 3: Compare versions (main checkout, worktree run in place); Pre-flight: Pull check (reads `references/pull-mode.md`); Pre-flight: Decision log check; Pre-flight: Claim check (reads `references/claim-flow.md`); Step 3b: Refuse a 1.x baseline; Step 3c: Download and verify the bundles; Step 3d: Select migration notes; Step 4: Show the release notes and confirm (on Proceed: the update worktree, the worktree notice, the stop rule, the claim); Step 4b: Prune prior-run artifacts; Conflict flow (reads `references/conflict-flow.md`: dispatch, questions, decisions, follow-ups); Step 9b: Follow the after-merge notes; Step 9c: Carry new setup features; Step 9d: Record the update; Quality gate; Review point; Step 11 (orchestrator, after the review-point commit); Step 12: Offer the residue sweep.
+Contents: Pre-flight: Worktree check; Pre-flight: Branch check (run modes); Step 1: Read baseline version; Step 2: Resolve latest release; Step 3: Compare versions (main checkout, worktree run in place); Pre-flight: Pull check (reads `references/pull-mode.md`); Pre-flight: Decision log check; Pre-flight: Claim check (reads `references/claim-flow.md`); Step 3b: Refuse a 1.x baseline; Step 3c: Download and verify the bundles; Step 3d: Select migration notes; Step 4: Show the release notes and confirm (on Proceed: the update worktree, the worktree notice, the stop rule, the claim); Step 4b: Prune prior-run artifacts; Conflict flow (reads `references/conflict-flow.md`: dispatch, questions, decisions, follow-ups); Step 9b: Follow the after-merge notes; Step 9c: Carry new setup features; Step 9d: Record the update; Quality gate; Review point; Step 11 (orchestrator, after the review-point commit); Step 12: Offer the residue sweep; Cost record (run end).
 
 Pull the latest GAIA release into this project without clobbering customizations. Does a three-way comparison per file (adopter / baseline / latest) and respects explicit classes in `.gaia/manifest.json`:
 
@@ -429,3 +429,18 @@ rm -rf <main checkout path>/.gaia/local/cache/shared/update-gaia/run
 The merged `.gaia/state-registry.json` names the `.gaia/local` state that retired features left behind.
 
 Run no residue sweep here: it refuses whenever `.gaia/local` is a symlink, as it always is in a provisioned worktree, and it resolves the registry at the main checkout, which holds the old release's registry until the PR merges. Print as the next step, once the PR merges and cleanup pulls the main checkout: run `bash .gaia/scripts/state-registry-lib.sh residue-sweep --apply` from the main checkout.
+
+## Cost record (run end)
+
+Every path that ends the run appends exactly one cost record immediately before its final printed line. Every run-ending path records here:
+
+- Step 1, a missing `.gaia/VERSION`; Step 2, no resolvable release.
+- Step 3: up to date, an uncommitted bump, a baseline ahead of the latest release, an `APPLIED_UNCOMMITTED` or `COMMITTED` report, and a mode 1 worktree on an older release.
+- `## Pre-flight: Pull check`, pull mode's end, recorded before its continue offer invokes this skill again.
+- `## Pre-flight: Decision log check`, an invalid log; `## Pre-flight: Claim check`, a teammate's claim.
+- Steps 3b to 3d: a refused baseline, a failed download or verification, `NOTES_FAILED`, and a blocking note, after the note is followed or declined.
+- Step 4, `Abort`.
+- Every stop under Step 4's stop rule, a lost claim race, and every other stop from Step 4b on.
+- Step 12, the end of a completed run: pass-through.
+
+Apply the shared record recipe in `.claude/skills/gaia/references/cost-record.md` with `{{COMMAND}}` = `update-gaia`.

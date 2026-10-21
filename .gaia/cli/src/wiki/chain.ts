@@ -90,8 +90,6 @@ const branchTimestamp = (branch: string): null | Timestamp => {
 const wikiLandingSubject = ({date, hours, minutes}: Timestamp): string =>
   `wiki: ${date} ${hours}:${minutes} UTC`;
 
-const USAGE_SCRIPT = '.gaia/scripts/usage.sh';
-
 const passthroughFailure = (
   result: PassthroughFailureOptions['result'],
   command: string,
@@ -133,13 +131,7 @@ const HELP_TEXT = `Usage: gaia wiki chain <begin|commit|finish|refresh-nudge> [a
     2  unexpected (git/gh failure)
 `;
 
-/** `runFinish`'s result: the exit code plus whatever artifact it observed. */
-type FinishOutcome = {
-  artifact?: GhArtifact;
-  code: number;
-};
-
-/** The GitHub artifact `finish` passed through to the cost record. */
+/** A pull request `gh pr create` printed, parsed from its URL. */
 type GhArtifact = {number: number; repo: string};
 
 type RunOptions = {
@@ -159,17 +151,6 @@ const resolveRoot = (cwdOption: string, action: string): null | string => {
       subcommand: `wiki chain ${action}`,
     });
 
-    return null;
-  }
-};
-
-// Telemetry-only variant of `resolveRoot`: `recordWikiCost` must never surface
-// an error of its own, so a repo-root failure degrades to "skip the record"
-// rather than a structured stderr message.
-const resolveRepoRootOrNull = (cwd: string): null | string => {
-  try {
-    return resolveRepoRoot(cwd);
-  } catch {
     return null;
   }
 };
@@ -401,58 +382,6 @@ const parsePrUrl = (text: string): GhArtifact | undefined => {
   return {number, repo};
 };
 
-// The `Cost:` line and the `Note:` lines `record` prints under it. With no
-// `Cost:` line (a `!` readout notice, a stderr line) the last line stands alone.
-const costReadout = (value: null | string | undefined): string => {
-  const lines = safeOutput(value)
-    .split('\n')
-    .map((line) => line.trim())
-    .filter((line) => line !== '');
-  const costIndex = lines.findIndex((line) => line.startsWith('Cost:'));
-
-  return costIndex === -1 ?
-      (lines.at(-1) ?? '')
-    : lines.slice(costIndex).join('\n');
-};
-
-/**
- * Close this run's usage-ledger record and write the `Cost:` line, with any
- * `Note:` lines under it, through to stdout. `defaultRunner` captures a spawned child's stdout instead of
- * inheriting it, so without this explicit write the line is silently
- * swallowed and `/gaia-wiki` prints no cost at all.
- *
- * Never throws and never influences `finish`'s exit code: empty output
- * is silently fine, and a non-zero exit (a missing script included) relays its
- * one stderr line in place of the Cost line.
- */
-const recordWikiCost = (options: RunOptions, artifact?: GhArtifact): void => {
-  try {
-    const cwd = options.cwd ?? process.cwd();
-    const runner = options.runner ?? defaultRunner;
-    const repoRoot = resolveRepoRootOrNull(cwd);
-
-    if (repoRoot === null) return;
-
-    const args = [
-      USAGE_SCRIPT,
-      'record',
-      'command:gaia-wiki',
-      '--workflow',
-      'gaia-wiki',
-      ...(artifact === undefined ? [] : ['--pr', String(artifact.number)]),
-    ];
-
-    const result = runner('bash', args, {cwd: repoRoot});
-    const line = costReadout(
-      result.status === 0 ? result.stdout : result.stderr
-    );
-
-    if (line !== '') process.stdout.write(`${line}\n`);
-  } catch {
-    // Telemetry is best-effort; a thrown error here must not surface.
-  }
-};
-
 const DRAFT_UNSUPPORTED =
   /draft.*(?:not supported|unsupported)|(?:not supported|unsupported).*draft/i;
 
@@ -561,7 +490,7 @@ const queueAutoMerge = (
           `chain finish: ${branch} stays an open draft PR and auto-merge is not queued\n`
         );
 
-        return {artifact, failureCode: EXIT_CODES.UNKNOWN_SUBCOMMAND};
+        return {failureCode: EXIT_CODES.UNKNOWN_SUBCOMMAND};
       }
     }
 
@@ -575,7 +504,6 @@ const queueAutoMerge = (
 
     if (!stepOk(outcome.result)) {
       return {
-        artifact,
         failureCode: passthroughFailure(
           outcome.result,
           step.command,
@@ -592,10 +520,7 @@ const queueAutoMerge = (
   return {artifact};
 };
 
-const runFinish = (
-  argv: readonly string[],
-  options: RunOptions
-): FinishOutcome => {
+const finish = (argv: readonly string[], options: RunOptions): number => {
   const refusal = unknownFlag(argv);
 
   if (refusal !== undefined) {
@@ -605,14 +530,14 @@ const runFinish = (
       subcommand: 'wiki chain finish',
     });
 
-    return {code: EXIT_CODES.UNKNOWN_SUBCOMMAND};
+    return EXIT_CODES.UNKNOWN_SUBCOMMAND;
   }
 
   const cwd = options.cwd ?? process.cwd();
   const runner = options.runner ?? defaultRunner;
   const repoRoot = resolveRoot(cwd, 'finish');
 
-  if (repoRoot === null) return {code: EXIT_CODES.UNKNOWN_SUBCOMMAND};
+  if (repoRoot === null) return EXIT_CODES.UNKNOWN_SUBCOMMAND;
 
   let branch: string;
 
@@ -623,7 +548,7 @@ const runFinish = (
       `chain: ${error instanceof Error ? error.message : String(error)}\n`
     );
 
-    return {code: UNEXPECTED_EXIT};
+    return UNEXPECTED_EXIT;
   }
 
   const timestamp = branchTimestamp(branch);
@@ -635,7 +560,7 @@ const runFinish = (
       `chain finish: in-place commits remain on ${branch}; no PR opened\n`
     );
 
-    return {code: EXIT_CODES.OK};
+    return EXIT_CODES.OK;
   }
 
   const base = defaultBranch(repoRoot, runner);
@@ -660,12 +585,12 @@ const runFinish = (
   const countResult = runner('git', countArgs, {cwd: repoRoot});
 
   if (!stepOk(countResult))
-    return {code: passthroughFailure(countResult, 'git', countArgs)};
+    return passthroughFailure(countResult, 'git', countArgs);
 
   const ahead = Number.parseInt(safeOutput(countResult.stdout).trim(), 10);
 
   if (!Number.isNaN(ahead) && ahead === 0) {
-    return {code: finishEmptyBranch({base, branch, repoRoot, runner})};
+    return finishEmptyBranch({base, branch, repoRoot, runner});
   }
 
   const prTitle = wikiLandingSubject(timestamp);
@@ -681,7 +606,7 @@ const runFinish = (
   });
 
   if (queued.failureCode !== undefined) {
-    return {artifact: queued.artifact, code: queued.failureCode};
+    return queued.failureCode;
   }
 
   const {artifact} = queued;
@@ -694,15 +619,7 @@ const runFinish = (
     `chain finish: opened ${prLabel} for ${branch}; auto-merge queued, merge not yet confirmed\n`
   );
 
-  return {artifact, code: EXIT_CODES.OK};
-};
-
-const finish = (argv: readonly string[], options: RunOptions): number => {
-  const outcome = runFinish(argv, options);
-
-  recordWikiCost(options, outcome.artifact);
-
-  return outcome.code;
+  return EXIT_CODES.OK;
 };
 
 const refreshNudge = (argv: readonly string[], options: RunOptions): number => {

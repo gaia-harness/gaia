@@ -3,7 +3,7 @@ type: concept
 title: GAIA CLI
 status: active
 created: 2026-07-14
-updated: 2026-10-09
+updated: 2026-10-21
 tags: [concept, cli]
 ---
 
@@ -29,12 +29,6 @@ The adoption ping exists to steer GAIA's roadmap: knowing which setup options an
 
 The session-start janitor ([[Local Working State]]) makes one bounded `git fetch --prune` of the repository's own configured `origin`. It contacts no GAIA service and sends nothing about the machine or its contents; it is a plain git fetch of the remote the adopter already pushes to. It is gated on a local wiki landing branch (`wiki/<YYYY-MM-DD-HHMM>`, or the legacy `wiki/sync-*` and `wiki-sync/*` shapes) being present, so a session with no outstanding wiki landing makes no call at all, and it is bounded at 5 seconds by default and rate-limited between sessions. `GAIA_WIKI_FETCH_TIMEOUT_SECONDS=0` disables it outright.
 
-## The wiki chain's cost line
-
-`gaia wiki chain finish` ends a `/gaia-wiki` run with `bash .gaia/scripts/usage.sh record command:gaia-wiki --workflow gaia-wiki`, passing `--pr` when it opened a pull request, and writes the resulting `Cost:` line through to stdout. The call is best-effort: a missing script or a non-zero exit relays its one stderr line and never changes `finish`'s exit code. See [[Usage Ledger]].
-
 ## Pairs with
 
-- [[Usage Ledger]]: the cost store `usage.sh record` closes runs into.
-- [[Token Cost Readout]]: the pricing surfaces built on top of the ledger.
 - [[Claude Hooks]]: the hook surface that invokes the CLI binary.
