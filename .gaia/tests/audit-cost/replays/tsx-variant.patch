@@ -1,11 +1,10 @@
 diff --git a/frontend/app/languages/en/common.ts b/frontend/app/languages/en/common.ts
-index 78ce321..b2b0758 100644
+index d91e114..fb622b8 100644
 --- a/frontend/app/languages/en/common.ts
 +++ b/frontend/app/languages/en/common.ts
 @@ -1,5 +1,37 @@
  export default {
--  close: 'Close',
-+  close: 'Close dialog',
+-  copyToClipboard: 'Copy to clipboard',
 +  confirmations: {
 +    activated: 'The item was activated successfully',
 +    approved: 'The item was approved successfully',
@@ -38,21 +37,17 @@ index 78ce321..b2b0758 100644
 +    uploaded: 'The item was uploaded successfully',
 +    verified: 'The item was verified successfully',
 +  },
-   copyToClipboard: 'Copy to clipboard',
-   counters: {
-     clicks_one: '{{count}} click',
++  copyToClipboard: 'Copy text to clipboard',
+   description: 'Description',
+   email: 'Email',
+   emailPlaceholder: 'user@domain.com',
 diff --git a/frontend/app/languages/en/errors.ts b/frontend/app/languages/en/errors.ts
-index a74bb48..4654f0c 100644
+index 82109c5..56de21b 100644
 --- a/frontend/app/languages/en/errors.ts
 +++ b/frontend/app/languages/en/errors.ts
-@@ -1,9 +1,25 @@
+@@ -1,4 +1,20 @@
  export default {
-   '404': 'Page not found',
--  errorBoundary: 'An error occurred',
-+  errorBoundary: 'Something went wrong',
-   invalidCredentials: 'Invalid email or password',
    invalidEmail: 'Email is invalid',
-   invalidPassword: 'Password must be at least 6 characters long',
 +  network: {
 +    badGateway: 'The network request failed (badGateway)',
 +    certificateExpired: 'The network request failed (certificateExpired)',
@@ -69,8 +64,8 @@ index a74bb48..4654f0c 100644
 +    tlsHandshake: 'The network request failed (tlsHandshake)',
 +    unreachable: 'The network request failed (unreachable)',
 +  },
-   unexpectedError: 'An unexpected error occurred',
-   unexpectedStatusError: 'An unexpected error occurred ({{status}})',
+-  unexpectedError: 'An unexpected error occurred',
++  unexpectedError: 'Something went wrong',
  };
 diff --git a/frontend/app/routes/_public.tsx b/frontend/app/routes/_public.tsx
 index 6dc0fb4..fe079ba 100644
