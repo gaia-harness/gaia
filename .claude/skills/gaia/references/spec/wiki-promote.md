@@ -34,7 +34,7 @@ Branch on `wiki_promote_default`, returning exactly one Choice token per branch,
 | `no` | any | `no` | `none` | `wiki_promote_default is no` |
 | any other value | any | `no` | `none` | names the value: `unrecognized wiki_promote_default '<value>'` |
 
-An empty or absent `wiki_promote_targets` with `yes` is a recorded no-op and never falls back to a default target. Consolidation always stamps a non-empty list, so this arises only for a legacy SUMMARY. `skipped-verify-failed` is a consolidation outcome (the verify failed before promotion ran); this step never returns it.
+An empty or absent `wiki_promote_targets` with `yes` is a recorded no-op and never falls back to a default target. Consolidation always stamps a non-empty list under `yes`, and `summary-verify.sh` fails a `yes` SUMMARY whose list is empty, so this row is reached only by a SUMMARY that skipped the verify. `skipped-verify-failed` is a consolidation outcome (the verify failed before promotion ran); this step never returns it.
 
 ## Step 3 - Resolve the open PR
 
@@ -61,12 +61,12 @@ Validate the list:
 - Any value not in the allowed set → emit warning `wiki-promote: unrecognized target '<value>' in wiki_promote_targets; skipped.` and drop that value.
 - All values invalid after filtering → write nothing and return Choice `no`, `Pages: none`, `Reason: no valid wiki_promote_targets after filtering`.
 
-Compute the base `<slug>` once for this run, then each target's own slug from it:
+The `<slug>` is the page's filename without `.md`. Wiki page filenames are Title Case with spaces (`.claude/rules/coding-guidelines.md`), so a promoted page meets the hand-maintained page on the same subject at the same path, where the collision check below sees it. Compute the base `<slug>` once for this run, then each target's own slug from it:
 
 1. Read the resolved source's H1 heading (the first `# ` line in the body).
-2. Lowercase it, strip non-ASCII, replace any run of non-alphanumeric characters with a single hyphen, trim leading/trailing hyphens.
+2. Strip non-ASCII, replace each character outside letters, digits, spaces, hyphens and parentheses (a `/` included) with a space, collapse runs of spaces to one, trim, and capitalize the first letter of each word, leaving the rest of each word as written. `Read/Write split for SSR` becomes `Read Write Split For SSR`.
 3. If no H1 is found or the slug ends up empty, write nothing and return Choice `no`, `Pages: none`, `Reason: the source has no H1 to name the page`. The id is never a fallback: it would land in the filename and in every link to the page, and those ship.
-4. When more than one valid target remains after the filtering above, append each target's `type` (the Step 5 table) to its slug: `<slug>-<type>`, e.g. `-decision` and `-concept`. Every page then has a filename of its own, so a slug link names exactly one page even though the pages share an H1.
+4. When more than one valid target remains after the filtering above, append each target's `type` (the Step 5 table), capitalized, in parentheses: `<slug> (<Type>)`, e.g. ` (Decision)` and ` (Concept)`. Every page then has a filename of its own, so a slug link names exactly one page even though the pages share an H1.
 
 **Notebook material.** When the source describes the notebook's layout, lifecycle or keep rules (its catalog, the reapers, the research folders), the target is the existing `wiki/concepts/Notebook.md`: merge the material into that page per Step 5's status classification rather than creating a new page.
 

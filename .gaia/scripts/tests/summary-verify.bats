@@ -181,3 +181,35 @@ _write_with_default() {
   run bash "$SCRIPT" "$FIXTURE"
   [ "$status" -eq 0 ]
 }
+
+# --- 11. a yes default needs a target to promote to ----------------------------
+
+_write_with_targets() {
+  printf -- '---\nwiki_promote_default: %s\nwiki_promote_targets:%s\n---\n# A title\n\nSome body text.\n' "$1" "$2" > "$FIXTURE"
+}
+
+@test "yes with an empty wiki_promote_targets exits 1" {
+  for targets in ' []' ' [ ]' '' ' '; do
+    _write_with_targets yes "$targets"
+    run bash "$SCRIPT" "$FIXTURE"
+    [ "$status" -eq 1 ] || { echo "accepted targets: '$targets'"; return 1; }
+    grep -qF -- "wiki_promote_default yes needs a non-empty wiki_promote_targets" <<<"$output" || { echo "message: $output"; return 1; }
+  done
+}
+
+@test "yes with a non-empty wiki_promote_targets exits 0, inline or block form" {
+  _write_with_targets yes ' [concepts]'
+  run bash "$SCRIPT" "$FIXTURE"
+  [ "$status" -eq 0 ] || { echo "inline: $output"; return 1; }
+  _write_with_targets yes $'\n  - concepts\n  - modules'
+  run bash "$SCRIPT" "$FIXTURE"
+  [ "$status" -eq 0 ]
+}
+
+@test "ask and no tolerate an empty wiki_promote_targets" {
+  for default_value in ask no; do
+    _write_with_targets "$default_value" ' []'
+    run bash "$SCRIPT" "$FIXTURE"
+    [ "$status" -eq 0 ] || { echo "rejected: $default_value: $output"; return 1; }
+  done
+}
