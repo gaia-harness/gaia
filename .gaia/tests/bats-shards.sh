@@ -136,11 +136,13 @@ PINNED_HOOKS=(local-janitor.bats)
 
 # The scripts group's anchors: suites given a bucket of their own before the
 # byte walk fills the rest, because where the walk would put them decides the
-# slowest leg. The list is empty, and the plain byte walk places every suite.
-# Replayed against one CI run's per-file timings, no suite in the group is
-# heavy enough for an anchor to balance it, and every anchor list that does
-# better than the plain walk wins only by perturbing the packing around it, a
-# win the next size change anywhere in the group takes back.
+# slowest leg. audit-light-route.bats runs the light-route script against a
+# fixture repository in every test, about three minutes on CI, the heaviest
+# suite in the group by far. Left to the byte walk it can share a leg with
+# audit-light-mark.bats, the next heaviest, and that leg runs past the
+# per-shard cap. Replayed against two CI runs' per-file timings of one tree,
+# anchoring it alone takes the slowest leg from about 720 seconds to about 565,
+# and no longer list does better on either run.
 #
 # What a bad draw breaks is the partition, not the estimate: a leg that stacks
 # the heavy suites gates the whole workflow, and past
@@ -157,7 +159,7 @@ PINNED_HOOKS=(local-janitor.bats)
 # bytes; the ordering below decides which bucket each named suite anchors, so
 # keep the list shorter than SCRIPTS_IDS and leave the walk a free bucket.
 # `wiki/decisions/Sharded CI Test Matrix.md` carries the measurements.
-SCRIPTS_COST_OUTLIERS=()
+SCRIPTS_COST_OUTLIERS=(audit-light-route.bats)
 
 # The hooks group's cost outliers, under the same membership rule: one
 # classifies every tracked path in a single test, one builds a fixture
