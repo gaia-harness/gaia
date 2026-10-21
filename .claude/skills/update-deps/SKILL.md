@@ -3,7 +3,7 @@ name: update-deps
 description: Remediates dependencies in place of Dependabot version and security updates. Discovers outdated packages and open security advisories, resolves advisories (in-range refresh, chain-head bump, security-floor override, or alert dismissal), audits overrides, applies migrations for major bumps, and runs the quality gate. Trigger when the user clicks the statusline `📦 /update-deps` indicator or asks "update dependencies", "bump deps", "run dependabot", "fix Dependabot alerts", "fix security advisories".
 ---
 
-Contents: Pre-flight: Worktree check; Pre-flight: Branch check; Package layout; Flags and run modes; Companion groups; Phase 1: Discover, preview, decide (orchestrator); Branch creation (after discovery); Override audit + Wave A: Haiku agent; Phase 5: Wave B (per-group major bumps); Phase 5b: Transitive refresh (Haiku agent); Phase 5c: Security resolutions; Phase 6: Post-update override audit; Phase 7: Final report; Phase 8: Publish.
+Contents: Pre-flight: Worktree check; Pre-flight: Branch check; Package layout; Flags and run modes; Companion groups; Phase 1: Discover, preview, decide (orchestrator); Branch creation (after discovery); Override audit + Wave A: Haiku agent; Phase 5: Wave B (per-group major bumps); Phase 5b: Transitive refresh (Haiku agent); Phase 5c: Security resolutions; Phase 6: Post-update override audit; Phase 7: Final report; Phase 8: Publish; Cost record (run end).
 
 Dependency remediation (outdated packages and security advisories) through one quality gate, in one record. Interactively it previews first, advisories ranked first, so you can snooze what you are not ready for. Run from the main checkout, on `main`/`master` or any other branch, it works in its own worktree on its own branch cut from the default branch, opens the PR, merges it once checks are green, then cleans up locally, leaving the branch the main checkout holds as it was.
 
@@ -454,3 +454,16 @@ The orchestrating session builds and prints the report itself, from the agent re
 ## Phase 8: Publish
 
 The orchestrating session commits, pushes, and, on a worktree run (one that created its worktree, or runs inside its own update worktree), opens or reuses the PR, merges it once checks are green, and cleans up the worktree and branch, because the merge-gate hooks fire only in the invoking session: read `.claude/skills/update-deps/references/publish.md` and follow it exactly.
+
+## Cost record (run end)
+
+Every path that ends the run appends exactly one cost record immediately before its final printed line. Every run-ending path records here:
+
+- `## Flags and run modes`, the `--security` and `--scope` refusal.
+- `## Pre-flight: Branch check`, the stop on an update worktree a run left behind, and a pull gate that ends the run.
+- Phase 1: `All packages are up to date.` under `--scope`, **Skip** at the sub-dependency prompt, **Cancel**, and an empty apply set with the transitive refresh also skipped.
+- Phase 7, a run with nothing to publish (Phase 8's nothing-updated rule).
+- Phase 8, a STOP on a failed push, pull request creation or merge: pass-through only if the PR was already opened or reused.
+- Phase 8, the merge wait's verdict (`MERGED` after cleanup, `TIMEOUT`, `CHECK_FAILED`, `CLOSED`) or its exit-2 refusal: pass-through.
+
+Apply the shared record recipe in `.claude/skills/gaia/references/cost-record.md` with `{{COMMAND}}` = `update-deps`.

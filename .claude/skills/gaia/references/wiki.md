@@ -2,7 +2,7 @@
 
 Wiki-maintenance router. It runs sync, consolidate, and lint with fixes, and lands them as one commit on one branch and one PR.
 
-Contents: Arguments; The run; Sync; Consolidate; Lint.
+Contents: Arguments; The run; Cost record (run end); Sync; Consolidate; Lint.
 
 ## Arguments
 
@@ -43,15 +43,26 @@ The run lands as **one commit on one branch and one PR**. The stages commit noth
 
 6. **Commit.** Run `.gaia/cli/gaia wiki chain commit`. It commits every stage's `wiki/` edits as one commit with the subject `wiki: <YYYY-MM-DD> <HH:MM> UTC`, which the CLI mints from the branch's timestamp (from the clock on an in-place run); pass no label. It is a no-op when no stage changed anything. Lint's fixes land in this commit, before `finish`, rather than on the PR `finish` opens, so the PR's head stays on the sha `finish` stamps: a push after `finish` moves the head off that stamp, and a queued auto-merge then waits on a `GAIA-Audit` status that never arrives.
 
-7. **Finish.** Run `.gaia/cli/gaia wiki chain finish`. On the wiki branch it pushes, opens ONE PR titled with the commit's subject, posts the out-of-scope `GAIA-Audit` stamp, and queues auto-merge, then stays on the branch and prints `chain finish: opened PR #<N> for <branch>; auto-merge queued, merge not yet confirmed`. That line means the PR is open, not merged: the run is not done, so go on to step 8. If the run produced no commit, it leaves a dirty tree in place (step 3), or, on a clean tree, drops the empty branch and returns to base under `feature-branch`, or under `worktree` reports `nothing to land` and leaves the tree to you: release it per isolation.md's `## Releasing an isolation that holds nothing`. In those cases no PR was opened, so the run ends here: relay the summary, naming a kept dirty tree's path and branch. A non-zero exit also ends the run: relay its stderr, which names the next step.
+7. **Finish.** Run `.gaia/cli/gaia wiki chain finish`. On the wiki branch it pushes, opens ONE PR titled with the commit's subject, posts the out-of-scope `GAIA-Audit` stamp, and queues auto-merge, then stays on the branch and prints `chain finish: opened PR #<N> for <branch>; auto-merge queued, merge not yet confirmed`. That line means the PR is open, not merged: the run is not done, so go on to step 8. If the run produced no commit, it leaves a dirty tree in place (step 3), or, on a clean tree, drops the empty branch and returns to base under `feature-branch`, or under `worktree` reports `nothing to land` and leaves the tree to you: release it per isolation.md's `## Releasing an isolation that holds nothing`. In those cases no PR was opened, so the run ends here: relay the summary, naming a kept dirty tree's path and branch. A non-zero exit also ends the run: relay its stderr, which names the next step. (Run ends here; see `## Cost record (run end)`.)
 
 8. **Merge and clean up.** The wiki PR lands like every other GAIA PR, through `.claude/skills/gaia/references/work-lifecycle.md`. The stamp in step 7 is this skill's audit, so the lifecycle's `## 6. Audit` does not run, and the merge is already queued, so nothing here re-merges. Run the merge wait from `## 7. Merge (when asked)` on the PR number `finish` printed (when it printed no number, read it with `gh pr view <branch> --json number --jq .number`), passing `--attempts 30`. Run it as a background Bash command and act on its verdict when it exits. A full CI run on the merge outlasts the default bound, and the wait returns the moment it reads `MERGED`, so a high ceiling costs nothing on a fast repository. Act on the verdict:
-   - **`MERGED`**: clean up per `## 8. Cleanup`, with `<branch-name>` = `<WIKI_BRANCH>`: `### Worktree entered by name in this session` under `RESOLVED_MODE=worktree`, `### Feature branch` under `feature-branch`. Then, from the main checkout (the clone's primary working directory, on any branch), run `.gaia/cli/gaia wiki chain refresh-nudge`, which writes the main checkout's new drift into the statusline cache so the `/gaia-wiki` nudge clears now rather than on a later background refresh. Report the merged PR URL and that the nudge was refreshed. The run is complete.
-   - **Any other verdict, or the exit-2 refusal**: the run is **not** complete. Report the PR URL and the verdict, follow `wiki/concepts/PR Merge Workflow.md`'s arm for it, and leave the branch in place. Never report the wiki as landed. Under `feature-branch`, tell the user to check out the base branch once they are done with the queued PR: the session-start janitor reaps the wiki branch and fast-forwards base only when HEAD is off the wiki branch. Under `worktree`, name the worktree's path and branch, and the `## 8. Cleanup` arm that removes it once the PR merges.
+   - **`MERGED`**: clean up per `## 8. Cleanup`, with `<branch-name>` = `<WIKI_BRANCH>`: `### Worktree entered by name in this session` under `RESOLVED_MODE=worktree`, `### Feature branch` under `feature-branch`. Then, from the main checkout (the clone's primary working directory, on any branch), run `.gaia/cli/gaia wiki chain refresh-nudge`, which writes the main checkout's new drift into the statusline cache so the `/gaia-wiki` nudge clears now rather than on a later background refresh. Report the merged PR URL and that the nudge was refreshed. The run is complete. (Run ends here; see `## Cost record (run end)`.)
+   - **Any other verdict, or the exit-2 refusal**: the run is **not** complete. Report the PR URL and the verdict, follow `wiki/concepts/PR Merge Workflow.md`'s arm for it, and leave the branch in place. Never report the wiki as landed. Under `feature-branch`, tell the user to check out the base branch once they are done with the queued PR: the session-start janitor reaps the wiki branch and fast-forwards base only when HEAD is off the wiki branch. Under `worktree`, name the worktree's path and branch, and the `## 8. Cleanup` arm that removes it once the PR merges. (Run ends here; see `## Cost record (run end)`.)
 
 A `chain commit` that exits non-zero stops the run before `finish`: surface its message. For the non-wiki-changes refusal, tell the user to commit or stash the non-wiki changes, then rerun `/gaia-wiki`. For the protected-branch refusal, the run's isolation did not take: relay the CLI's own next step.
 
 Sync, consolidate detection, and lint detection run only in their dispatched subagents; the parent runs only consolidate's apply loop and lint's fix loop.
+
+## Cost record (run end)
+
+`chain finish` records nothing, so the run's cost is recorded here, once the run has ended, and the record covers the step 8 merge wait. Every path that ends the run appends exactly one cost record immediately before its final printed line:
+
+- Step 1, a `chain begin` that exits non-zero.
+- Step 6, a `chain commit` that exits non-zero.
+- Step 7, a run that opened no PR (a kept dirty tree, a dropped empty branch, a worktree with nothing to land, in-place commits on a branch the run did not isolate), or a `chain finish` that exits non-zero.
+- Step 8, `MERGED` after `refresh-nudge`, any other verdict, or the merge wait's exit-2 refusal: pass-through.
+
+Apply the shared record recipe in `.claude/skills/gaia/references/cost-record.md` with `{{COMMAND}}` = `gaia-wiki`; the PR for `--pr` is the one step 8 waited on.
 
 ## Sync
 

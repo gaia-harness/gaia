@@ -276,7 +276,7 @@ gaia_usage_in_ci() { [ -n "${GITHUB_ACTIONS:-}" ]; }
 # `usage.sh record` closes, as a JSON array string. The flusher's start
 # detection and record's workflow validation both read it.
 # shellcheck disable=SC2034  # consumed by sourcing scripts
-GAIA_USAGE_START_SET='["gaia-spec","gaia-plan","gaia-cleanse","gaia-debt","gaia-fitness","gaia-forensics","gaia-codify","gaia-residue","gaia-wiki"]'
+GAIA_USAGE_START_SET='["gaia-spec","gaia-plan","gaia-cleanse","gaia-debt","gaia-fitness","gaia-forensics","gaia-codify","gaia-residue","gaia-wiki","update-deps","update-gaia"]'
 
 # \A and \z, not ^ and $: Oniguruma's $ also matches before a trailing newline,
 # which would let `research:x\n` through the grammar.
