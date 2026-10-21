@@ -4,12 +4,12 @@ import {ja} from 'date-fns/locale';
 
 // date-fns falls back to en-US when no `locale` option is supplied; `en` and
 // any language without a registered date-fns locale share that default.
-const LOCALE_FORMATS: Partial<Record<string, Locale>> = {
+const DATE_FNS_LOCALES: Partial<Record<string, Locale>> = {
   ja,
 };
 
 const getLocaleOptions = (language: string): undefined | {locale: Locale} => {
-  const locale = LOCALE_FORMATS[language];
+  const locale = DATE_FNS_LOCALES[language];
 
   return locale ? {locale} : undefined;
 };
