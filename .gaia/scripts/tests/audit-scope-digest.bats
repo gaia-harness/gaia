@@ -460,20 +460,12 @@ stored_head_for() {
   [ "$(cat "$scope_file")" = "$before" ]
 }
 
-@test "a detached HEAD resolves no key, and GAIA_AUDIT_KEY_BRANCH supplies the missing half" {
+@test "a detached HEAD resolves no key" {
   git -C "$ROOT" checkout --quiet --detach HEAD
 
-  run env -u GAIA_AUDIT_KEY_BRANCH "$SCRIPT" --capture --root "$ROOT" --member "$MEMBER" --base "$BASE"
+  run "$SCRIPT" --capture --root "$ROOT" --member "$MEMBER" --base "$BASE"
   [ "$status" -eq 1 ]
   printf '%s\n' "$output" | grep -qF "cannot resolve the audit key"
-
-  run env GAIA_AUDIT_KEY_BRANCH=gaia-audit-ci "$SCRIPT" --capture --root "$ROOT" --member "$MEMBER" --base "$BASE"
-  [ "$status" -eq 0 ]
-  [ "${#output}" -eq 64 ]
-
-  run env GAIA_AUDIT_KEY_BRANCH=gaia-audit-ci "$SCRIPT" --read --root "$ROOT" --member "$MEMBER" --base "$BASE"
-  [ "$status" -eq 0 ]
-  [ "${#output}" -eq 64 ]
 }
 
 @test "END TO END: a rotation between capture and write makes the earned write refuse" {

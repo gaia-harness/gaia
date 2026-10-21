@@ -27,7 +27,7 @@ The adoption ping exists to steer GAIA's roadmap: knowing which setup options an
 
 ## The unattended git fetch
 
-The session-start janitor ([[Local Working State]]) makes one bounded `git fetch --prune` of the repository's own configured `origin`. It contacts no GAIA service and sends nothing about the machine or its contents; it is a plain git fetch of the remote the adopter already pushes to. It is gated on a local wiki landing branch (`wiki/<YYYY-MM-DD-HHMM>`, or the legacy `wiki/sync-*` and `wiki-sync/*` shapes) being present, so a session with no outstanding wiki landing makes no call at all, and it is bounded at 5 seconds by default and rate-limited between sessions. `GAIA_WIKI_FETCH_TIMEOUT_SECONDS=0` disables it outright.
+The session-start janitor ([[Local Working State]]) makes one bounded `git fetch --prune` of the repository's own configured `origin`. It contacts no GAIA service and sends nothing about the machine or its contents; it is a plain git fetch of the remote the adopter already pushes to. It is gated on a local wiki landing branch (`wiki/<YYYY-MM-DD-HHMM>`) being present, so a session with no outstanding wiki landing makes no call at all, and it is bounded at 5 seconds by default and rate-limited between sessions. `GAIA_WIKI_FETCH_TIMEOUT_SECONDS=0` disables it outright.
 
 ## Pairs with
 

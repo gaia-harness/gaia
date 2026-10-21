@@ -256,22 +256,3 @@ net_clean() {
   run net_clean
   [ "$status" -ne 0 ]
 }
-
-# ---------- UAT-028 ----------
-
-@test "UAT-028: GITHUB_ACTIONS set, Stop and SessionStart exit 0 and create no telemetry directory; the unset control does" {
-  local transcript_path
-  transcript_path="$(transcript_path_for_session s-ci)"
-  write_assistant_message "$transcript_path" s-ci "$REPO" fix/ci c1 2026-10-01T09:00:01.000Z 1 1
-  GITHUB_ACTIONS=true fire usage-capture.sh "$(hook_payload Stop s-ci "$transcript_path")"
-  [ "$status" -eq 0 ]
-  [ -z "$output" ]
-  GITHUB_ACTIONS=true fire usage-capture.sh "$(hook_payload SessionStart s-ci "$transcript_path")"
-  [ "$status" -eq 0 ]
-  [ -z "$output" ]
-  sleep 1
-  [ ! -e "$REPO/.gaia/local/telemetry" ]
-  fire usage-capture.sh "$(hook_payload Stop s-ci "$transcript_path")"
-  quiesce 1
-  [ -s "$TELEMETRY_DIRECTORY/usage.jsonl" ]
-}

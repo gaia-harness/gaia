@@ -28,7 +28,7 @@ bats_require_minimum_version 1.5.0
 setup() {
   REPO_ROOT="$(cd "$BATS_TEST_DIRNAME/../../.." && pwd)"
   TEMPORARY_DIRECTORY="$(cd "$BATS_TEST_TMPDIR" && pwd -P)"
-  unset GITHUB_ACTIONS CLAUDE_CODE_SESSION_ID GAIA_TALLY_PROJECTS_ROOT GAIA_USAGE_TEST_BARRIER
+  unset CLAUDE_CODE_SESSION_ID GAIA_TALLY_PROJECTS_ROOT GAIA_USAGE_TEST_BARRIER
   REPO="$TEMPORARY_DIRECTORY/repo"
   PROJECTS_DIRECTORY="$TEMPORARY_DIRECTORY/projects"
   STUB_LOG="$TEMPORARY_DIRECTORY/stub.log"
@@ -192,33 +192,6 @@ mutated_hook() {
   ended_at_milliseconds="$(now_ms)"
   [ "$status" -eq 0 ]
   [ $((ended_at_milliseconds - started_at_milliseconds)) -ge 4000 ]
-}
-
-# ---------- UAT-028 ----------
-
-@test "UAT-028: GITHUB_ACTIONS set launches nothing; unset control launches" {
-  stub_repo
-  GITHUB_ACTIONS=true fire "$(payload Stop S7 "$PROJECT_DIRECTORY/S7.jsonl")"
-  [ "$status" -eq 0 ]
-  [ -z "$output" ]
-  sleep 1
-  [ ! -e "$STUB_LOG" ]
-  [ ! -e "$REPO/.gaia/local/telemetry" ]
-  fire "$(payload Stop S7 "$PROJECT_DIRECTORY/S7.jsonl")"
-  [ "$status" -eq 0 ]
-  wait_for "$STUB_LOG" 50
-}
-
-@test "UAT-028: the real flusher records nothing under GITHUB_ACTIONS" {
-  real_repo
-  write_session S8 "$PROJECT_DIRECTORY/S8.jsonl" 1
-  GITHUB_ACTIONS=true fire "$(payload Stop S8 "$PROJECT_DIRECTORY/S8.jsonl")"
-  [ "$status" -eq 0 ]
-  sleep 2
-  [ ! -e "$REPO/.gaia/local/telemetry" ]
-  fire "$(payload Stop S8 "$PROJECT_DIRECTORY/S8.jsonl")"
-  [ "$status" -eq 0 ]
-  wait_cursor "$PROJECT_DIRECTORY/S8.jsonl"
 }
 
 # ---------- UAT-013 (hook side) ----------

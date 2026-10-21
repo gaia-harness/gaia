@@ -110,6 +110,9 @@ print_backstop_alone() {
 }
 trap print_backstop_alone EXIT
 
+# A GitHub Actions claude-code-action run (the forensics triage workflow) loads
+# project SessionStart hooks and must not receive the interactive execution
+# doctrine.
 [ -n "${GITHUB_ACTIONS:-}" ] && exit 0
 
 here="${BASH_SOURCE[0]}"

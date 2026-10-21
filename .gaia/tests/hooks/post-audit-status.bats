@@ -437,28 +437,6 @@ assert_no_post() {
   grep -qF -- "repos/gaia-react/gaia/statuses/$(git -C "$REPO" rev-parse HEAD)" "$API_CALLS" || return 1
 }
 
-@test "detached HEAD at the PR head sha (CI checkout shape): posts" {
-  # CI checks the PR head sha out directly, landing on a detached HEAD whose
-  # sha IS headRefOid. The sha guard must not fire there.
-  push_head_to_upstream
-  pushed_sha=$(git -C "$REPO" rev-parse HEAD)
-  install_gh_stub "$pushed_sha"
-
-  marker=$(write_marker code-audit-frontend)
-  git -C "$REPO" checkout --quiet --detach HEAD
-  short=$(git -C "$REPO" rev-parse --short "$pushed_sha")
-
-  # A detached checkout has no branch to key the digest on, so CI names it.
-  export GAIA_AUDIT_KEY_BRANCH=main
-
-  cd "$REPO"
-  run "$HOOK_ABSOLUTE_PATH" "$marker"
-
-  [ "$status" -eq 0 ]
-  [ "$output" = "status: posted GAIA-Audit success ${short}" ]
-  grep -qF -- "repos/gaia-react/gaia/statuses/${pushed_sha}" "$API_CALLS" || return 1
-}
-
 # -----------------------------------------------------------------------------
 # Refusal arm: the compensating failure status
 # -----------------------------------------------------------------------------

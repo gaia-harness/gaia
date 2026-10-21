@@ -26,7 +26,7 @@ setup() {
   SCRATCH="$(cd "$BATS_TEST_TMPDIR" && pwd -P)"
   STARTED_PIDS=()
   TAB=$'\t'
-  unset CLAUDE_CODE_SESSION_ID GAIA_PORTS_HOST_PID GAIA_PORTS_STATE_DIRECTORY GITHUB_ACTIONS SITE_URL
+  unset CLAUDE_CODE_SESSION_ID GAIA_PORTS_HOST_PID GAIA_PORTS_STATE_DIRECTORY SITE_URL
   export GAIA_PORTS_PROCESS_PROBE="${GAIA_PORTS_PROCESS_PROBE:-auto}"
   DEV_BASE=$((20000 + (RANDOM % 7000)))
   STORYBOOK_BASE=$((DEV_BASE + 300))
@@ -527,14 +527,6 @@ expected_context_line() {
 }
 
 # ---------- refusals ----------
-
-@test "CI: with GITHUB_ACTIONS set the hook writes no session file and prints nothing" {
-  payload="$(printf '{"hook_event_name":"SessionStart","session_id":"session-ci","source":"clear","cwd":"%s"}' "$MAIN")"
-  run --separate-stderr env GITHUB_ACTIONS=true GAIA_PORTS_HOST_PID="$LIVE_HOST_PID" bash "$HOOK" <<<"$payload"
-  [ "$status" -eq 0 ]
-  [ -z "$output" ]
-  [ ! -e "$STATE/sessions/session-ci.tsv" ]
-}
 
 @test "payload: an empty payload exits 0 quietly and writes nothing" {
   run --separate-stderr env GAIA_PORTS_HOST_PID="$LIVE_HOST_PID" bash "$HOOK" <<<""

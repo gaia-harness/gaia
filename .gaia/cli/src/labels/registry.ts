@@ -14,11 +14,10 @@ import {existsSync, readFileSync} from 'node:fs';
 import path from 'node:path';
 import type {
   LabelAudience,
-  LabelEntry,
   LabelFeature,
   LabelRegistry,
 } from '../schemas/labels.js';
-import {isCreatable, LabelRegistrySchema} from '../schemas/labels.js';
+import {LabelRegistrySchema} from '../schemas/labels.js';
 import {summarizeZodError} from '../schemas/zod-error.js';
 
 /** Repo-relative registry path, joined onto an explicit `repoRoot`. */
@@ -64,21 +63,6 @@ export const readRegistry = (repoRoot: string): LabelRegistry => {
 
   return result.data;
 };
-
-/** Entries sync creates on a repo of `audience` with `enabledFeatures` on. */
-export const creatableEntries = (
-  registry: LabelRegistry,
-  audience: LabelAudience,
-  enabledFeatures: readonly LabelFeature[]
-): readonly LabelEntry[] =>
-  registry.labels.filter((entry) =>
-    isCreatable(entry, audience, enabledFeatures)
-  );
-
-/** Entries the registry marks `blocked`. */
-export const blockedEntries = (
-  registry: LabelRegistry
-): readonly LabelEntry[] => registry.labels.filter((entry) => entry.blocked);
 
 /** GAIA namespace prefixes an unknown live label may be recognized by. */
 export const NAMESPACE_PREFIXES: readonly string[] = [

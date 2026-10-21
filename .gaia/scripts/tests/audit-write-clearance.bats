@@ -1203,7 +1203,7 @@ resolve_all_open() {
   member="code-audit-maintainer-shell"
   write_sidecar_for "$member" 113
   git -C "$ROOT" checkout --quiet --detach HEAD
-  run env -u GAIA_AUDIT_KEY_BRANCH bash "$WRITER" --root "$ROOT" --member "$member" --provenance refused --base "$LEDGER_BASE_SHA"
+  run bash "$WRITER" --root "$ROOT" --member "$member" --provenance refused --base "$LEDGER_BASE_SHA"
   [ "$status" -eq 2 ]
   grep -qF "cannot derive a branch-own digest" <<<"$output" || return 1
   [ -z "$(find "$AUDIT_DIRECTORY" -name '*.refused' 2>/dev/null)" ] || return 1

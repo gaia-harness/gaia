@@ -52,7 +52,6 @@ _uf_log() { printf 'usage-flush: %s\n' "$*" >&2; }
 command -v jq >/dev/null 2>&1 || exit 0
 # shellcheck source=usage-lib.sh
 . "$UF_SCRIPT_DIRECTORY/usage-lib.sh" 2>/dev/null || { _uf_log "cannot load $UF_SCRIPT_DIRECTORY/usage-lib.sh"; exit 1; }
-gaia_usage_in_ci && exit 0
 # shellcheck source=usage-parse-lib.sh
 . "$UF_SCRIPT_DIRECTORY/usage-parse-lib.sh" 2>/dev/null || { _uf_log "cannot load $UF_SCRIPT_DIRECTORY/usage-parse-lib.sh"; exit 1; }
 

@@ -2,10 +2,9 @@ import {afterEach, beforeEach, describe, expect, test} from 'vitest';
 import {mkdirSync, mkdtempSync, rmSync, writeFileSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import path from 'node:path';
+import {isCreatable} from '../../schemas/labels.js';
 import {resolveRepoRootFromImportMeta} from '../../util/repo-root-fixture.js';
 import {
-  blockedEntries,
-  creatableEntries,
   labelsRegistryPath,
   NAMESPACE_PREFIXES,
   readRegistry,
@@ -24,7 +23,8 @@ const names = (
   audience: 'adopter' | 'maintainer',
   features: ('dependabot' | 'forensics' | 'tech-debt')[]
 ): string[] =>
-  creatableEntries(registry, audience, features)
+  registry.labels
+    .filter((entry) => isCreatable(entry, audience, features))
     .map((entry) => entry.name)
     .toSorted((a, b) => a.localeCompare(b));
 
@@ -89,7 +89,7 @@ describe('labels/registry readRegistry', () => {
   });
 });
 
-describe('labels/registry creatableEntries', () => {
+describe('labels/registry creatable entries', () => {
   test('every feature on yields the adopter-role entries', () => {
     expect(names('adopter', ['tech-debt', 'dependabot', 'forensics'])).toEqual([
       'bug',
@@ -198,12 +198,13 @@ describe('labels/registry creatableEntries', () => {
   });
 });
 
-describe('labels/registry blockedEntries and suggestedColorFor', () => {
-  test('blockedEntries returns the two GitHub defaults GAIA refuses', () => {
-    expect(blockedEntries(registry).map((entry) => entry.name)).toEqual([
-      'good first issue',
-      'help wanted',
-    ]);
+describe('labels/registry blocked entries and suggestedColorFor', () => {
+  test('the registry blocks the two GitHub defaults GAIA refuses', () => {
+    expect(
+      registry.labels
+        .filter((entry) => entry.blocked)
+        .map((entry) => entry.name)
+    ).toEqual(['good first issue', 'help wanted']);
   });
 
   test('an unknown name in a known namespace takes the family color', () => {

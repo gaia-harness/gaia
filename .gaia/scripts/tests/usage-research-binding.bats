@@ -33,7 +33,7 @@ setup() {
   WORKTREE="$TEMPORARY_DIRECTORY/wt"
   PROJECTS_DIRECTORY="$TEMPORARY_DIRECTORY/projects"
   TEL="$MAIN/.gaia/local/telemetry"
-  unset CLAUDE_CODE_SESSION_ID GAIA_TALLY_PROJECTS_ROOT GITHUB_ACTIONS
+  unset CLAUDE_CODE_SESSION_ID GAIA_TALLY_PROJECTS_ROOT
   mkdir -p "$MAIN" "$MAIN/.notebook/research" "$PROJECTS_DIRECTORY/$(encode_project_path "$MAIN")"
   git -C "$MAIN" init -q -b main
   git -C "$MAIN" -c user.email=t@example.com -c user.name=T -c commit.gpgsign=false \

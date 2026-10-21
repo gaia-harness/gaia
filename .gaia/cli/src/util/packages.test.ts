@@ -26,17 +26,12 @@ import {
   retiredGlobsKey,
 } from './gaia-packages-corpus-fixture.js';
 import type {CorpusReader} from './gaia-packages-corpus-fixture.js';
-import {
-  writeBuiltinDescriptor,
-  writeFrontendRegistry,
-} from './package-fixture.js';
+import {writeBuiltinDescriptor} from './package-fixture.js';
 import {
   BUILTIN_REGISTRY,
   globToRegExp,
   joinGlob,
   loadPackages,
-  packageForPath,
-  packageRoot,
   repoRegExps,
 } from './packages.js';
 import type {GlobKey} from './packages.js';
@@ -50,7 +45,6 @@ afterAll(() => {
 });
 
 const READER: CorpusReader = {
-  forPath: (packages, candidate) => packageForPath(packages, candidate),
   load: (root) => loadPackages(root),
   regExps: (packages, key) => repoRegExps(packages, key as GlobKey),
 };
@@ -93,13 +87,6 @@ describe('corpus conformance', () => {
         READER
       )
     ).toEqual(['tddUnitTests: want NO match for [frontend/app/x.test.ts]']);
-    expect(
-      corpusDisagreements(
-        {...expected, forPath: {'frontend/app/x.ts': 'ios'}},
-        root,
-        READER
-      )
-    ).toEqual(['for_path [frontend/app/x.ts]: want [ios], got [frontend]']);
   });
 });
 
@@ -207,34 +194,7 @@ describe('glob helpers', () => {
   });
 });
 
-describe('packageRoot', () => {
-  test('resolves against the repo root, not the working directory', () => {
-    const root = path.join(SCRATCH, 'root-not-cwd');
-
-    writeFrontendRegistry(root, 'frontend');
-
-    expect(process.cwd()).not.toBe(root);
-    expect(packageRoot(root)).toBe(path.join(root, 'frontend'));
-  });
-
-  test('resolves a registered package at a nested path', () => {
-    expect(packageRoot(rootFor('path-nested'), 'web')).toBe(
-      path.join(SCRATCH, 'path-nested', 'apps/web')
-    );
-  });
-
-  test('throws on an unknown package name', () => {
-    expect(() => packageRoot(rootFor('path-frontend'), 'ios')).toThrow(
-      /no package named "ios"/
-    );
-  });
-
-  test('throws the load error when the registry is malformed', () => {
-    expect(() => packageRoot(rootFor('registry-malformed-json'))).toThrow(
-      /\.gaia\/packages\.json is malformed/
-    );
-  });
-
+describe('corpus directory', () => {
   test('corpus directory exists', () => {
     expect(existsSync(CORPUS_DIRECTORY)).toBe(true);
   });

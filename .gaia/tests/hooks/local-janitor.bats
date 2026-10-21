@@ -7,9 +7,7 @@ bats_require_minimum_version 1.5.0
 #
 # Sweep #1 of local-janitor.sh: the wiki landing's local catch-up.
 #
-# The wiki landing CLI cuts a throwaway `wiki/<YYYY-MM-DD-HHMM>` branch (the
-# sweep also reaps the legacy `wiki/sync-<date>-<sha>` and
-# `wiki-sync/<date>-<sha>` shapes) and lands it with `gh pr merge --auto`,
+# The wiki landing CLI cuts a throwaway `wiki/<YYYY-MM-DD-HHMM>` branch and lands it with `gh pr merge --auto`,
 # which returns before the merge completes.
 # /gaia-wiki waits for the merge and cleans up through the work lifecycle; a
 # session that ends first leaves the local branch undeleted and the local base
@@ -142,35 +140,7 @@ branch_exists() {
   git -C "$REPO" rev-parse --verify --quiet "refs/heads/$1" >/dev/null 2>&1
 }
 
-@test "deletes a merged-and-gone wiki-sync branch" {
-  make_repo
-  make_gone_branch "wiki-sync/2026-01-01-aaaaaaa"
-  cd "$REPO"
-  run bash "$HOOK_ABSOLUTE_PATH"
-  [ "$status" -eq 0 ]
-  ! branch_exists "wiki-sync/2026-01-01-aaaaaaa"
-}
-
-@test "keeps a wiki-sync branch whose upstream is still live" {
-  make_repo
-  make_live_branch "wiki-sync/2026-02-02-bbbbbbb"
-  cd "$REPO"
-  run bash "$HOOK_ABSOLUTE_PATH"
-  [ "$status" -eq 0 ]
-  branch_exists "wiki-sync/2026-02-02-bbbbbbb"
-}
-
-@test "never deletes the current branch, even when gone" {
-  make_repo
-  make_gone_branch "wiki-sync/2026-03-03-ccccccc"
-  git -C "$REPO" checkout -q "wiki-sync/2026-03-03-ccccccc"
-  cd "$REPO"
-  run bash "$HOOK_ABSOLUTE_PATH"
-  [ "$status" -eq 0 ]
-  branch_exists "wiki-sync/2026-03-03-ccccccc"
-}
-
-@test "keeps a gone branch outside the wiki-sync/* class" {
+@test "keeps a gone branch outside the wiki landing class" {
   make_repo
   make_gone_branch "feature/some-work"
   cd "$REPO"
@@ -179,64 +149,27 @@ branch_exists() {
   branch_exists "feature/some-work"
 }
 
-@test "deletes gone wiki-sync while keeping live wiki-sync and gone non-wiki" {
+@test "deletes a gone wiki landing branch while keeping a live one and gone non-wiki" {
   make_repo
-  make_gone_branch "wiki-sync/2026-04-04-ddddddd"
-  make_live_branch "wiki-sync/2026-05-05-eeeeeee"
+  make_gone_branch "wiki/2026-04-04-1004"
+  make_live_branch "wiki/2026-05-05-1005"
   make_gone_branch "feature/keepme"
   cd "$REPO"
   run bash "$HOOK_ABSOLUTE_PATH"
   [ "$status" -eq 0 ]
-  branch_exists "wiki-sync/2026-04-04-ddddddd" && return 1
-  branch_exists "wiki-sync/2026-05-05-eeeeeee"
+  branch_exists "wiki/2026-04-04-1004" && return 1
+  branch_exists "wiki/2026-05-05-1005"
   branch_exists "feature/keepme"
 }
 
-@test "deletes a merged-and-gone wiki/sync- branch" {
+@test "keeps a gone wiki/notes branch while a live wiki landing branch opens the gate" {
   make_repo
-  make_gone_branch "wiki/sync-2026-01-01-aaaaaaa"
-  cd "$REPO"
-  run bash "$HOOK_ABSOLUTE_PATH"
-  [ "$status" -eq 0 ]
-  ! branch_exists "wiki/sync-2026-01-01-aaaaaaa"
-}
-
-@test "keeps a wiki/sync- branch whose upstream is still live" {
-  make_repo
-  make_live_branch "wiki/sync-2026-02-02-bbbbbbb"
-  cd "$REPO"
-  run bash "$HOOK_ABSOLUTE_PATH"
-  [ "$status" -eq 0 ]
-  branch_exists "wiki/sync-2026-02-02-bbbbbbb"
-}
-
-@test "never deletes the checked-out wiki/sync- branch, even when gone" {
-  make_repo
-  make_gone_branch "wiki/sync-2026-03-03-ccccccc"
-  git -C "$REPO" checkout -q "wiki/sync-2026-03-03-ccccccc"
-  cd "$REPO"
-  run bash "$HOOK_ABSOLUTE_PATH"
-  [ "$status" -eq 0 ]
-  branch_exists "wiki/sync-2026-03-03-ccccccc"
-}
-
-@test "keeps a gone wiki/notes branch while a live wiki/sync- branch opens the gate" {
-  make_repo
-  make_live_branch "wiki/sync-2026-02-03-ccccccd"
+  make_live_branch "wiki/2026-02-03-0930"
   make_gone_branch "wiki/notes"
   cd "$REPO"
   run bash "$HOOK_ABSOLUTE_PATH"
   [ "$status" -eq 0 ]
   branch_exists "wiki/notes"
-}
-
-@test "keeps a gone wiki/sync-notes branch outside the date-sha shape" {
-  make_repo
-  make_gone_branch "wiki/sync-notes"
-  cd "$REPO"
-  run bash "$HOOK_ABSOLUTE_PATH"
-  [ "$status" -eq 0 ]
-  branch_exists "wiki/sync-notes"
 }
 
 @test "deletes a merged-and-gone wiki/<YYYY-MM-DD-HHMM> branch" {
@@ -302,9 +235,9 @@ branch_exists() {
   [ "$(grep -c 'fetch' "$witness")" -ge 1 ]
 }
 
-@test "keeps a gone feat/x branch while a live wiki/sync- branch opens the gate" {
+@test "keeps a gone feat/x branch while a live wiki landing branch opens the gate" {
   make_repo
-  make_live_branch "wiki/sync-2026-02-04-ccccccf"
+  make_live_branch "wiki/2026-02-04-0931"
   make_gone_branch "feat/x"
   cd "$REPO"
   run bash "$HOOK_ABSOLUTE_PATH"
@@ -314,15 +247,15 @@ branch_exists() {
 
 @test "runs the branch sweep even when .gaia/local is absent" {
   make_repo
-  make_gone_branch "wiki-sync/2026-06-06-fffffff"
+  make_gone_branch "wiki/2026-06-06-1006"
   rm -rf "$REPO/.gaia/local"
   cd "$REPO"
   run bash "$HOOK_ABSOLUTE_PATH"
   [ "$status" -eq 0 ]
-  ! branch_exists "wiki-sync/2026-06-06-fffffff"
+  ! branch_exists "wiki/2026-06-06-1006"
 }
 
-@test "no wiki-sync branches: silent no-op, exit 0" {
+@test "no wiki landing branches: silent no-op, exit 0" {
   make_repo
   cd "$REPO"
   run bash "$HOOK_ABSOLUTE_PATH"
@@ -412,7 +345,7 @@ SHIM
   chmod +x "$SHIM_DIRECTORY/git"
 }
 
-@test "sweep 1: no wiki-sync branch makes ZERO fetch calls (positive argv witness)" {
+@test "sweep 1: no wiki landing branch makes ZERO fetch calls (positive argv witness)" {
   make_repo
   make_argv_witness_shim
   cd "$REPO"
@@ -424,7 +357,7 @@ SHIM
 
 @test "sweep 1: a hanging origin is bounded by the ceiling" {
   make_repo
-  make_live_branch "wiki-sync/2026-07-07-1111111"
+  make_live_branch "wiki/2026-07-07-1007"
   make_hanging_fetch_shim 60
   cd "$REPO"
   export GAIA_WIKI_FETCH_TIMEOUT_SECONDS=2
@@ -437,7 +370,7 @@ SHIM
 
 @test "sweep 1: GAIA_WIKI_FETCH_TIMEOUT_SECONDS=0 disables the fetch" {
   make_repo
-  make_live_branch "wiki-sync/2026-07-08-2222222"
+  make_live_branch "wiki/2026-07-08-1008"
   make_argv_witness_shim
   cd "$REPO"
   export GAIA_WIKI_FETCH_TIMEOUT_SECONDS=0
@@ -448,7 +381,7 @@ SHIM
 
 @test "sweep 1: a mistyped ceiling clamps rather than blowing the budget" {
   make_repo
-  make_live_branch "wiki-sync/2026-07-09-3333333"
+  make_live_branch "wiki/2026-07-09-1009"
   make_hanging_fetch_shim 3600
   cd "$REPO"
   # Neutralize the min-interval knob for both sub-cases below: this test's
@@ -477,7 +410,7 @@ SHIM
 
 @test "sweep 1: a zero-padded min-interval still rate-limits the fetch" {
   make_repo
-  make_live_branch "wiki-sync/2026-07-11-5555555"
+  make_live_branch "wiki/2026-07-11-1010"
   make_argv_witness_shim
   cd "$REPO"
   # 08 and 09 are the only values the digits-only guard admits and bare
@@ -499,7 +432,7 @@ SHIM
 
 @test "sweep 1: no origin remote skips the fetch outright" {
   make_repo
-  make_live_branch "wiki-sync/2026-07-10-4444444"
+  make_live_branch "wiki/2026-07-10-1011"
   git -C "$REPO" remote remove origin
   make_argv_witness_shim
   cd "$REPO"
@@ -513,7 +446,7 @@ SHIM
 
 @test "sweep 1: the kill path leaves no descendant and no stale git lock" {
   make_repo
-  make_gone_branch_unpruned "wiki-sync/2026-07-11-5555555"
+  make_gone_branch_unpruned "wiki/2026-07-11-1010"
   make_hanging_fetch_pid_witness_shim
   cd "$REPO"
   export GAIA_WIKI_FETCH_TIMEOUT_SECONDS=2
@@ -525,12 +458,12 @@ SHIM
   kill -0 "$child_pid" 2>/dev/null && return 1
   [ ! -e "$REPO/.git/FETCH_HEAD.lock" ]
   [ ! -e "$REPO/.git/shallow.lock" ]
-  branch_exists "wiki-sync/2026-07-11-5555555"
+  branch_exists "wiki/2026-07-11-1010"
 }
 
 @test "sweep 1: prompt suppression is per-invocation and never leaks" {
   make_repo
-  make_live_branch "wiki-sync/2026-07-12-6666666"
+  make_live_branch "wiki/2026-07-12-1012"
   git -C "$REPO" config core.askPass /custom/adopter-askpass
   make_env_witness_shim
   cd "$REPO"
@@ -564,19 +497,19 @@ SHIM
 
 @test "sweep 1: an unpruned merged-and-gone branch is reaped after the sweep's own fetch" {
   make_repo
-  make_gone_branch_unpruned "wiki-sync/2026-07-13-7777777"
+  make_gone_branch_unpruned "wiki/2026-07-13-1013"
   make_argv_witness_shim
   cd "$REPO"
   PATH="$SHIM_DIRECTORY:$PATH" run bash "$HOOK_ABSOLUTE_PATH"
   [ "$status" -eq 0 ]
-  branch_exists "wiki-sync/2026-07-13-7777777" && return 1
+  branch_exists "wiki/2026-07-13-1013" && return 1
   [ "$(grep -c 'fetch' "$witness")" -eq 1 ]
 }
 
 @test "sweep 1: the reap REFUSES a gone branch carrying commits the remote never had" {
   make_repo
-  make_gone_branch_unpruned "wiki-sync/2026-07-14-8888888"
-  git -C "$REPO" checkout -q "wiki-sync/2026-07-14-8888888"
+  make_gone_branch_unpruned "wiki/2026-07-14-1014"
+  git -C "$REPO" checkout -q "wiki/2026-07-14-1014"
   echo more >> "$REPO/f"
   git -C "$REPO" add f
   git -C "$REPO" commit -q -m more
@@ -584,12 +517,12 @@ SHIM
   cd "$REPO"
   run bash "$HOOK_ABSOLUTE_PATH"
   [ "$status" -eq 0 ]
-  branch_exists "wiki-sync/2026-07-14-8888888"
+  branch_exists "wiki/2026-07-14-1014"
 }
 
 @test "sweep 1: repeat fetch attempts are bounded by a minimum interval" {
   make_repo
-  make_live_branch "wiki-sync/2026-07-15-9999999"
+  make_live_branch "wiki/2026-07-15-1015"
   make_argv_witness_shim
   cd "$REPO"
   PATH="$SHIM_DIRECTORY:$PATH" run bash "$HOOK_ABSOLUTE_PATH"
@@ -606,7 +539,7 @@ SHIM
 
 @test "sweep 1: the WHOLE hook stays inside the SessionStart budget on a hanging remote" {
   make_repo
-  make_live_branch "wiki-sync/2026-07-16-aaaaaaa"
+  make_live_branch "wiki/2026-07-16-1016"
   make_hanging_fetch_shim 60
   cd "$REPO"
   start=$(date +%s)
@@ -619,7 +552,7 @@ SHIM
 
 @test "sweep 1: a checkout with no .gaia/local is not recreated by the breadcrumb write" {
   make_repo
-  make_gone_branch_unpruned "wiki-sync/2026-07-17-bbbbbbb"
+  make_gone_branch_unpruned "wiki/2026-07-17-1017"
   rm -rf "$REPO/.gaia/local"
   cd "$REPO"
   run bash "$HOOK_ABSOLUTE_PATH"
@@ -712,7 +645,7 @@ SHIM
 
 @test "sweep 1: fast-forwards base with a checkout-aware --ff-only" {
   make_repo
-  make_gone_branch "wiki-sync/2026-08-11-4444441"
+  make_gone_branch "wiki/2026-08-11-1018"
   make_argv_witness_shim
   advance_origin_main main
   cd "$REPO"
@@ -723,13 +656,13 @@ SHIM
   [ "$(cat "$REPO/wiki/.state.json" 2>/dev/null)" = '{"advanced":true}' ] || return 1
   [ "$(grep -c 'fetch' "$witness")" -eq 1 ] || return 1
   grep -qF -- 'pull' "$witness" && return 1
-  branch_exists "wiki-sync/2026-08-11-4444441" && return 1
+  branch_exists "wiki/2026-08-11-1018" && return 1
   return 0
 }
 
 @test "sweep 1: base resolution honors a non-main default branch" {
   make_repo_default_branch trunk
-  make_gone_branch "wiki-sync/2026-08-07-ffff007"
+  make_gone_branch "wiki/2026-08-07-1019"
   advance_origin_main trunk
   cd "$REPO"
   run bash "$HOOK_ABSOLUTE_PATH"
@@ -740,7 +673,7 @@ SHIM
 @test "sweep 1: base resolution falls back when origin/HEAD is unset" {
   make_repo
   git -C "$REPO" remote set-head origin --delete
-  make_gone_branch "wiki-sync/2026-08-08-00000a8"
+  make_gone_branch "wiki/2026-08-08-1020"
   advance_origin_main main
   cd "$REPO"
   run bash "$HOOK_ABSOLUTE_PATH"
@@ -756,14 +689,14 @@ SHIM
 # zero-unpushed-commits answer. An unanswerable question must keep the
 # branch, per the reap's own comment, not read the failure as "fully
 # represented upstream" and delete it.
-@test "sweep 1: an unresolvable base keeps a gone wiki-sync branch and its unmerged commit" {
+@test "sweep 1: an unresolvable base keeps a gone wiki landing branch and its unmerged commit" {
   make_repo_default_branch trunk
   git -C "$REPO" remote set-head origin --delete
-  local branch_name="wiki-sync/2026-08-08-b00b00b"
+  local branch_name="wiki/2026-08-08-1021"
   git -C "$REPO" checkout -qb "$branch_name"
   echo "unmerged wiki work" >> "$REPO/f"
   git -C "$REPO" add f
-  git -C "$REPO" commit -q -m "unmerged wiki-sync work"
+  git -C "$REPO" commit -q -m "unmerged wiki landing work"
   local tip; tip=$(git -C "$REPO" rev-parse "$branch_name")
   git -C "$REPO" push -q -u origin "$branch_name"
   git -C "$REPO" checkout -q trunk
@@ -783,21 +716,21 @@ SHIM
   return 0
 }
 
-@test "sweep 1: an unmerged wiki-sync branch leaves base byte-identical" {
+@test "sweep 1: an unmerged wiki landing branch leaves base byte-identical" {
   make_repo
-  make_live_branch "wiki-sync/2026-08-01-aaaa001"
+  make_live_branch "wiki/2026-08-01-1022"
   advance_origin_main main
   local before; before=$(git -C "$REPO" rev-parse main)
   cd "$REPO"
   run bash "$HOOK_ABSOLUTE_PATH"
   [ "$status" -eq 0 ]
   [ "$(git -C "$REPO" rev-parse main)" = "$before" ] || return 1
-  branch_exists "wiki-sync/2026-08-01-aaaa001"
+  branch_exists "wiki/2026-08-01-1022"
 }
 
 @test "sweep 1: dirty tree skips the fast-forward silently" {
   make_repo
-  make_gone_branch "wiki-sync/2026-08-02-cccc002"
+  make_gone_branch "wiki/2026-08-02-1023"
   advance_origin_main main
   local before; before=$(git -C "$REPO" rev-parse main)
   echo dirty > "$REPO/dirty.txt"
@@ -806,13 +739,13 @@ SHIM
   [ "$status" -eq 0 ]
   [ "$(git -C "$REPO" rev-parse main)" = "$before" ] || return 1
   [ -f "$(catchup_report_file)" ] && return 1
-  branch_exists "wiki-sync/2026-08-02-cccc002" && return 1
+  branch_exists "wiki/2026-08-02-1023" && return 1
   return 0
 }
 
 @test "sweep 1: HEAD off base skips" {
   make_repo
-  make_gone_branch "wiki-sync/2026-08-03-cccc003"
+  make_gone_branch "wiki/2026-08-03-1024"
   advance_origin_main main
   local before; before=$(git -C "$REPO" rev-parse main)
   git -C "$REPO" checkout -qb feature/off-base
@@ -831,7 +764,7 @@ SHIM
 
 @test "sweep 1: detached HEAD skips" {
   make_repo
-  make_gone_branch "wiki-sync/2026-08-04-cccc004"
+  make_gone_branch "wiki/2026-08-04-1025"
   advance_origin_main main
   local before; before=$(git -C "$REPO" rev-parse main)
   git -C "$REPO" checkout -q --detach main
@@ -850,7 +783,7 @@ SHIM
 
 @test "sweep 1: a timed-out fetch does not fast-forward on a stale tracking ref" {
   make_repo
-  make_live_branch "wiki-sync/2026-08-06-dddd006"
+  make_live_branch "wiki/2026-08-06-1026"
   advance_origin_main main
   # A PRIOR fetch succeeded, so origin/main is genuinely ahead of main. That is
   # what keeps the drain's is-ancestor read from discharging the obligation
@@ -874,7 +807,7 @@ SHIM
 
 @test "sweep 1: base with no upstream skips" {
   make_repo
-  make_gone_branch "wiki-sync/2026-08-05-cccc005"
+  make_gone_branch "wiki/2026-08-05-1027"
   advance_origin_main main
   local before; before=$(git -C "$REPO" rev-parse main)
   git -C "$REPO" branch --unset-upstream main
@@ -888,7 +821,7 @@ SHIM
 
 @test "sweep 1: the obligation survives a session that cannot discharge it" {
   make_repo
-  make_gone_branch "wiki-sync/2026-08-06-dddd006"
+  make_gone_branch "wiki/2026-08-06-1026"
   advance_origin_main main
   cd "$REPO"
   echo dirty > "$REPO/dirty.txt"
@@ -911,7 +844,7 @@ SHIM
   echo dirty > "$REPO/dirty.txt"
   cd "$REPO"
   for round_number in 1 2 3 4 5; do
-    make_gone_branch "wiki-sync/2026-08-2$round_number-eeee00$round_number"
+    make_gone_branch "wiki/2026-08-2$round_number-000$round_number"
     run bash "$HOOK_ABSOLUTE_PATH"
     [ "$status" -eq 0 ]
   done
@@ -962,7 +895,7 @@ SHIM
 
 @test "sweep 1: a divergent base is REPORTED, exactly one line, and never blocks" {
   make_repo
-  make_gone_branch "wiki-sync/2026-08-12-5555552"
+  make_gone_branch "wiki/2026-08-12-1028"
   diverge_base_and_origin main
   local before; before=$(git -C "$REPO" rev-parse main)
   cd "$REPO"
@@ -973,13 +906,13 @@ SHIM
   [ -f "$report" ] || return 1
   [ "$(wc -l < "$report" | tr -d ' ')" -eq 1 ] || return 1
   grep -qE '^\[wiki base\] fast-forward of main to origin/main refused' "$report" || return 1
-  branch_exists "wiki-sync/2026-08-12-5555552" && return 1
+  branch_exists "wiki/2026-08-12-1028" && return 1
   return 0
 }
 
 @test "sweep 1: a non-divergence failure is reported by the same rule" {
   make_repo
-  make_gone_branch "wiki-sync/2026-08-13-6666663"
+  make_gone_branch "wiki/2026-08-13-1029"
   advance_origin_main main
   mkdir -p "$REPO/wiki"
   echo "collision" > "$REPO/wiki/.state.json"
@@ -998,7 +931,7 @@ SHIM
 @test "sweep 1: a shallow clone degrades without error" {
   make_repo
   local shallow before after branch_name
-  branch_name="wiki-sync/2026-08-09-77777a9"
+  branch_name="wiki/2026-08-09-1030"
   shallow=$(mktemp -d -t gaia-janitor-shallow-XXXXXX)
   # file://: a bare path clone makes git silently ignore --depth ("--depth is
   # ignored in local clones; use file:// instead"), which would leave this
@@ -1023,7 +956,7 @@ SHIM
   after=$(git -C "$shallow" rev-parse main)
   [ "$after" = "$before" ] || return 1
   # --depth 1 implies --single-branch: remote.origin.fetch covers only main,
-  # so wiki-sync/*'s upstream is never mapped to a local tracking ref at all
+  # so the landing branch's upstream is never mapped to a local tracking ref at all
   # -- %(upstream:track) reads empty, not "[gone]", for a ref outside that
   # refspec. The reap loop's own `[ "$track" = "[gone]" ] || continue` gate
   # (.claude/hooks/local-janitor.sh) then never treats it as a reap
@@ -1035,7 +968,7 @@ SHIM
 
 @test "sweep 1: two concurrent runs degrade safely" {
   make_repo
-  make_gone_branch "wiki-sync/2026-08-10-8888884"
+  make_gone_branch "wiki/2026-08-10-1031"
   advance_origin_main main
   local old_main
   old_main=$(git -C "$REPO" rev-parse main)

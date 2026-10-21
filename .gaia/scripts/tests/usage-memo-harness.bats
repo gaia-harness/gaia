@@ -250,11 +250,10 @@ probe_index() { jq -r --arg category "$1" '[.probes[].category] | index($categor
   jq -e '[.hooks.Stop[].hooks[].command, .hooks.SessionStart[].hooks[].command]
     | all(contains("/.claude/hooks/usage-capture.sh"))' "$UM_MAIN/.claude/settings.json" >/dev/null
   # A second setup clears what a polluted environment carries in.
-  export CLAUDE_CODE_SESSION_ID=x GAIA_TALLY_PROJECTS_ROOT=/x GITHUB_ACTIONS=true GAIA_USAGE_MEMO_TRACE_FILE=/x GAIA_USAGE_MEMO_SEAM=/x
+  export CLAUDE_CODE_SESSION_ID=x GAIA_TALLY_PROJECTS_ROOT=/x GAIA_USAGE_MEMO_TRACE_FILE=/x GAIA_USAGE_MEMO_SEAM=/x
   umemo_setup
   [ -z "${CLAUDE_CODE_SESSION_ID+x}" ]
   [ -z "${GAIA_TALLY_PROJECTS_ROOT+x}" ]
-  [ -z "${GITHUB_ACTIONS+x}" ]
   [ -z "${GAIA_USAGE_MEMO_TRACE_FILE+x}" ]
   [ -z "${GAIA_USAGE_MEMO_SEAM+x}" ]
   [ -z "$(ls -A "$UM_PROJECTS_DIRECTORY")" ]

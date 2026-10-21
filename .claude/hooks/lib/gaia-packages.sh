@@ -52,7 +52,6 @@ GAIA_PACKAGES_SH=1
 
 # shellcheck disable=SC2034 # GAIA_PACKAGES_ERROR is read by the sourcing caller
 GAIA_PACKAGES_ERROR=''
-_GAIA_PKG_SOURCE=''
 _GAIA_PKG_GLOBS=''
 _GAIA_PKG_LIST=''
 _GAIA_PKG_ERE_tddUnitTests=''
@@ -155,7 +154,6 @@ _GAIA_PKG_COMPILE_PROGRAM='
 
 _gaia_packages_reset() {
   GAIA_PACKAGES_ERROR=''
-  _GAIA_PKG_SOURCE=''
   _GAIA_PKG_GLOBS=''
   _GAIA_PKG_LIST=''
   _GAIA_PKG_ERE_tddUnitTests=''
@@ -325,13 +323,7 @@ gaia_packages_load() {
     fi
   done <<<"$entries"
 
-  _GAIA_PKG_SOURCE="$registry_source"
   return 0
-}
-
-# gaia_packages_source ->`registry` or `builtin` (empty before a successful load)
-gaia_packages_source() {
-  printf '%s\n' "$_GAIA_PKG_SOURCE"
 }
 
 # gaia_packages_list -> `name<TAB>path` per line, registry order

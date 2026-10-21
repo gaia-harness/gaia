@@ -247,7 +247,7 @@ EOF
   [ "$status" -ne 0 ]
 }
 
-@test "validators: oid, uint and safe relpath" {
+@test "validators: oid and uint" {
   gaia_loop_is_oid "$(printf 'a%.0s' $(seq 1 40))"
   gaia_loop_is_oid "$(printf 'b%.0s' $(seq 1 64))"
   gaia_loop_is_oid "$(printf 'A%.0s' $(seq 1 40))" && return 1
@@ -257,14 +257,6 @@ EOF
   gaia_loop_is_uint 01 && return 1
   gaia_loop_is_uint -1 && return 1
   gaia_loop_is_uint 1234567890 && return 1
-  gaia_loop_is_safe_relative_path a/b.txt
-  gaia_loop_is_safe_relative_path 'a b/c..d'
-  gaia_loop_is_safe_relative_path -rf && return 1
-  gaia_loop_is_safe_relative_path /etc/x && return 1
-  gaia_loop_is_safe_relative_path a/../b && return 1
-  gaia_loop_is_safe_relative_path .. && return 1
-  gaia_loop_is_safe_relative_path "$(printf 'a\nb')" && return 1
-  gaia_loop_is_safe_relative_path '' && return 1
   true
 }
 

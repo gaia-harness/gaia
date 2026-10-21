@@ -11,7 +11,7 @@ import {tmpdir} from 'node:os';
 import path from 'node:path';
 import {runInNewContext} from 'node:vm';
 import {writeFrontendRegistry} from '../util/package-fixture.js';
-import {packageRoot} from '../util/packages.js';
+import {loadPackages} from '../util/packages.js';
 import {resolveRepoRootFromImportMeta} from '../util/repo-root-fixture.js';
 import {claudeMdHasH1, run} from './rename.js';
 import {readState} from './util/state.js';
@@ -623,7 +623,12 @@ describe('language template invariant', () => {
   test('the shipped language files come back carrying the new title', () => {
     const repoRoot = resolveRepoRootFromImportMeta(import.meta.url);
     // The shipped files live in the frontend package wherever it is registered.
-    const shippedPackage = packageRoot(repoRoot);
+    const loaded = loadPackages(repoRoot);
+    const frontendEntry = (loaded.ok ? loaded.packages : []).find(
+      (entry) => entry.name === 'frontend'
+    );
+    expect(frontendEntry).toBeDefined();
+    const shippedPackage = path.resolve(repoRoot, frontendEntry?.path ?? '');
     const root = mkdtempSync(path.join(tmpdir(), 'gaia-init-rename-shipped-'));
     writeFrontendRegistry(root);
 

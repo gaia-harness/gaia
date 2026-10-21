@@ -21,7 +21,7 @@ setup() {
   TAB=$'\t'
   STARTED_PIDS=()
 
-  unset GITHUB_ACTIONS CLAUDE_CODE_SESSION_ID GAIA_PORTS_HOST_PID GAIA_PORTS_STATE_DIRECTORY
+  unset CLAUDE_CODE_SESSION_ID GAIA_PORTS_HOST_PID GAIA_PORTS_STATE_DIRECTORY
   unset GAIA_PORTS_LOCK_DEADLINE_SECONDS SITE_URL
   DEV_BASE=$((20000 + RANDOM % 8000))
   STORYBOOK_BASE=$((DEV_BASE + 1000))
@@ -187,16 +187,6 @@ start_host_process() {
   [ "$PROVISION_STATUS" -eq 0 ]
   [ ! -e "$MAIN/frontend/.gaia-ports" ]
   [ ! -e "$MAIN/.gaia/local/ports" ]
-  [ ! -s "$PROVISION_STDOUT" ]
-}
-
-@test "under GitHub Actions the ports stage does nothing" {
-  make_main
-  local tree
-  tree="$(add_worktree a)"
-  GITHUB_ACTIONS=true provision "$tree"
-  [ "$PROVISION_STATUS" -eq 0 ]
-  [ ! -e "$(port_file "$tree")" ]
   [ ! -s "$PROVISION_STDOUT" ]
 }
 

@@ -780,15 +780,16 @@ v2_base_edit_run() {
 # Fail closed: nothing on stdout and a non-zero status, atomically.
 # ---------------------------------------------------------------------------
 
-@test "branch-own: an undeterminable branch key emits nothing and fails; a supplied key succeeds" {
+@test "branch-own: an undeterminable branch key emits nothing and fails; the reattached branch succeeds" {
   v2_seed "$BATS_TEST_TMPDIR/detached" || return 1
   v2_branch_work || return 1
   merge_base="$(catchup_git merge-base refs/remotes/origin/main HEAD)"
   catchup_git checkout -q --detach || return 1
-  run env -u GAIA_AUDIT_KEY_BRANCH bash -c '. "$1/.claude/hooks/lib/audit-digest.sh"; audit_branch_digests_all "$1" "$2"' _ "$CATCHUP_ROOT" "$merge_base"
+  run bash -c '. "$1/.claude/hooks/lib/audit-digest.sh"; audit_branch_digests_all "$1" "$2"' _ "$CATCHUP_ROOT" "$merge_base"
   [ "$status" -ne 0 ]
   [ -z "$output" ]
-  run env GAIA_AUDIT_KEY_BRANCH=ci bash -c '. "$1/.claude/hooks/lib/audit-digest.sh"; audit_branch_digests_all "$1" "$2"' _ "$CATCHUP_ROOT" "$merge_base"
+  catchup_git checkout -q - || return 1
+  run bash -c '. "$1/.claude/hooks/lib/audit-digest.sh"; audit_branch_digests_all "$1" "$2"' _ "$CATCHUP_ROOT" "$merge_base"
   [ "$status" -eq 0 ]
   [ -n "$output" ]
 }

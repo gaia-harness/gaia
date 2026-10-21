@@ -67,16 +67,6 @@ export const writeState = (cwd: string, state: InitState): void => {
   atomicWriteFileSync(target, serialized);
 };
 
-export const isStepCompleted = (cwd: string, step: string): boolean => {
-  try {
-    const state = readState(cwd);
-
-    return state.completed_steps.includes(step);
-  } catch {
-    return false;
-  }
-};
-
 export const markStepCompleted = (
   cwd: string,
   step: string,
