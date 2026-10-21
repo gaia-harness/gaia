@@ -266,10 +266,13 @@ dispatch_member() {
   # bypassPermissions: a replay tree is an untrusted workspace, so headless
   # claude ignores the project's allow list and the member's gh and git calls
   # wait on a prompt nobody can answer. Hooks still run.
+  # --strict-mcp-config with no --mcp-config loads no MCP server: Serena
+  # rewrites an older tracked .serena/project.yml on start, and the dirty tree
+  # makes the audit hook refuse the member dispatch.
   (
     cd "$root"
     exec env -u CLAUDE_PROJECT_DIR -u CLAUDECODE -u CLAUDE_CODE_ENTRYPOINT -u CLAUDE_CODE_SSE_PORT \
-      claude -p "$prompt" --output-format stream-json --verbose --permission-mode bypassPermissions --max-budget-usd "$remaining"
+      claude -p "$prompt" --output-format stream-json --verbose --permission-mode bypassPermissions --strict-mcp-config --max-budget-usd "$remaining"
   ) >"$stream" 2>"$result_directory/stderr.log" </dev/null &
   claude_pid=$!
   while kill -0 "$claude_pid" 2>/dev/null && [ "$elapsed" -lt "$SESSION_TIMEOUT_SECONDS" ]; do
