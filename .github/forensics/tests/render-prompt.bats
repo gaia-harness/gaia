@@ -13,7 +13,7 @@ setup() {
   THIS_DIRECTORY="$( cd "$( dirname "$BATS_TEST_FILENAME" )" && pwd )"
   SCRIPT="$THIS_DIRECTORY/../render-prompt.sh"
   FIXTURES="$THIS_DIRECTORY/fixtures"
-  [ -x "$SCRIPT" ] || skip "render-prompt.sh not executable"
+  [ -x "$SCRIPT" ]
 }
 
 # --- 1. Basic substitution -------------------------------------------------

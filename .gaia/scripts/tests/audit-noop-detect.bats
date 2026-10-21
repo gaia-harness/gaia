@@ -19,7 +19,7 @@ setup() {
   # shellcheck source=.gaia/tests/helpers/path.sh
   . "$( cd "$THIS_DIRECTORY/../../.." && pwd )/.gaia/tests/helpers/path.sh"
   SCRIPT="$THIS_DIRECTORY/../audit-noop-detect.sh"
-  [ -x "$SCRIPT" ] || skip "audit-noop-detect.sh not executable"
+  [ -x "$SCRIPT" ]
   FIXTURES_DIRECTORY="$THIS_DIRECTORY/fixtures/audit-noop"
 }
 

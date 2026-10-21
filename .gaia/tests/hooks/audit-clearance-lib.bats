@@ -17,7 +17,7 @@ setup() {
   THIS_DIRECTORY="$( cd "$( dirname "$BATS_TEST_FILENAME" )" && pwd )"
   REPO_ROOT="$( cd "$THIS_DIRECTORY/../../.." && pwd )"
   CLEARANCE_LIBRARY="$REPO_ROOT/.claude/hooks/lib/audit-clearance.sh"
-  [ -f "$CLEARANCE_LIBRARY" ] || skip "audit-clearance.sh not present"
+  [ -f "$CLEARANCE_LIBRARY" ]
   command -v jq >/dev/null 2>&1 || skip "jq required"
 }
 

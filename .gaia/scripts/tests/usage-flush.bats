@@ -337,14 +337,14 @@ member_run() {
 
 # ---------- start evidence ----------
 
-@test "start evidence: a Skill and a <command-name> line in the closed set bind a start; simplify, gaia-handoff, gaia-pickup do not" {
+@test "start evidence: a Skill and a <command-name> line in the closed set bind a start; simplify, tdd, gaia-release do not" {
   install start
   run flush --session s-start --finished-main
   [ "$status" -eq 0 ]
   jq -e -s '[.[] | select(.kind == "binding" and .type == "start") | [.workflow, .ts, .source]]
     == [["gaia-spec", "2026-10-01T00:00:01.000Z", "transcript"], ["gaia-debt", "2026-10-01T00:00:02.000Z", "transcript"],
         ["gaia-plan", "2026-10-01T00:00:06.000Z", "transcript"]]' "$TEL/usage.jsonl"
-  grep -F -e 'gaia-handoff' -e 'gaia-pickup' -e 'simplify' "$TEL/usage.jsonl" && return 1
+  grep -F -e '"tdd"' -e 'gaia-release' -e 'simplify' "$TEL/usage.jsonl" && return 1
   true
 }
 

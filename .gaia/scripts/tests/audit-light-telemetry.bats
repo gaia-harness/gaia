@@ -12,7 +12,7 @@ setup() {
   SCRIPT="$REPO_ROOT/.gaia/scripts/audit-light-telemetry.sh"
   WRITER="$REPO_ROOT/.gaia/scripts/audit-write-clearance.sh"
   DIGEST_SCRIPT="$REPO_ROOT/.gaia/scripts/audit-member-digest.sh"
-  [ -f "$SCRIPT" ] || skip "audit-light-telemetry.sh not present"
+  [ -f "$SCRIPT" ]
   command -v jq >/dev/null 2>&1 || skip "jq not available"
 
   MEMBER="code-audit-frontend"

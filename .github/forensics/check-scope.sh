@@ -41,8 +41,6 @@ dir|deny|frontend/app/
 dir|deny|wiki/
 dir|deny|studio/
 dir|deny|website/
-dir|deny|.specify/specs/
-dir|deny|.specify/memory/
 dir|deny|.notebook/
 dir|deny|.gaia/templates/spec/
 file|deny|.claude/skills/gaia/references/spec/clarify-prompts.md

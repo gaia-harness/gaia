@@ -21,7 +21,7 @@
 setup() {
   THIS_DIRECTORY="$( cd "$( dirname "$BATS_TEST_FILENAME" )" && pwd )"
   SCRIPT="$THIS_DIRECTORY/../resolve-check-base.sh"
-  [ -x "$SCRIPT" ] || skip "resolve-check-base.sh not executable"
+  [ -x "$SCRIPT" ]
 
   CHECK="Vitest and Playwright"
 

@@ -194,7 +194,6 @@ jobs:
 
           # shellcheck disable=SC2016
           denylist='- `frontend/app/`, `wiki/`, `studio/`, `website/`
-          - `.specify/specs/`, `.specify/memory/`
           - `.notebook/`
           - `.gaia/templates/spec/`
           - `.claude/skills/gaia/references/spec/clarify-prompts.md`, `.claude/skills/gaia/references/spec/system-prompt.md`, `.claude/skills/gaia/references/spec/spec-template.md`
