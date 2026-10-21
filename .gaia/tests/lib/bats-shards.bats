@@ -1190,3 +1190,122 @@ EOF
   SCRIPTS_TESTS_DIRECTORY="$directory" run check_no_empty_shard "$copy"
   [ "$status" -eq 1 ]
 }
+
+# The change-scoped subcommands. A leg running for a narrow change hands bats
+# the shard's suites the change selector picks, in full, and the shard's other
+# whole-tree-marked suites under the whole-tree tag. The fixture shard holds
+# one suite of each kind plus one the change owes nothing, and a stub stands in
+# for the selector so the selection is the fixture's, not the live diff's. The
+# tag line is assembled at run time, for the reason the authoring rule gives:
+# a column-0 tag line in this file would mark this suite's own next test.
+write_change_fixture() {
+  local directory="$1" at_test='@test'
+  mkdir -p "$directory/lib"
+  {
+    printf '#!/usr/bin/env bats\n'
+    printf '%s "picked one" {\n  true\n}\n' "$at_test"
+    printf '%s "picked two" {\n  true\n}\n' "$at_test"
+  } >"$directory/lib/picked.bats"
+  {
+    printf '#!/usr/bin/env bats\n'
+    printf '# bats %s\n' 'test_tags=whole-tree'
+    printf '%s "marked whole-tree" {\n  true\n}\n' "$at_test"
+    printf '%s "marked plain" {\n  true\n}\n' "$at_test"
+  } >"$directory/lib/marked.bats"
+  {
+    printf '#!/usr/bin/env bats\n'
+    printf '%s "unrelated" {\n  true\n}\n' "$at_test"
+  } >"$directory/lib/unrelated.bats"
+  # The stub records its argv one per line and picks one suite, or exits 3,
+  # the selector's "the change could not be read", when told to.
+  cat >"$directory/selector.sh" <<'STUB'
+#!/usr/bin/env bash
+printf '%s\n' "$@" >"$STUB_DIRECTORY/selector-argv"
+[ -n "${STUB_SELECTOR_FAILS:-}" ] && exit 3
+printf '%s\n' "$STUB_DIRECTORY/lib/picked.bats"
+STUB
+}
+
+# run_for_change_fixture <sharder> <fixture-directory> <subcommand>: the
+# change-scoped subcommand against the fixture shard and its stub selector.
+run_for_change_fixture() {
+  STUB_DIRECTORY="$2" LIBRARY_DIRECTORY="$2/lib" SUITES_FOR_CHANGE_SCRIPT="$2/selector.sh" \
+    bash "$1" "$3" lib base-ref head-ref
+}
+
+@test "S19: files-for-change lists the picked and the whole-tree-marked suites of the shard, and no other" {
+  local directory="$BATS_TEST_TMPDIR/s19"
+  write_change_fixture "$directory"
+
+  run run_for_change_fixture "$SCRIPT" "$directory" files-for-change
+  [ "$status" -eq 0 ]
+  [ "$(printf '%s\n' "$output" | LC_ALL=C sort)" = "$(printf '%s\n%s' "$directory/lib/marked.bats" "$directory/lib/picked.bats")" ]
+  # The diff arguments reach the selector verbatim, after the repository root.
+  [ "$(sed -n '1p' "$directory/selector-argv")" = "--dir" ]
+  [ "$(sed -n '3,4p' "$directory/selector-argv" | tr '\n' ' ')" = "base-ref head-ref " ]
+}
+
+@test "S20: run-for-change runs a picked suite in full and only the whole-tree tests of a marked one" {
+  local directory="$BATS_TEST_TMPDIR/s20"
+  write_change_fixture "$directory"
+
+  run run_for_change_fixture "$SCRIPT" "$directory" run-for-change
+  [ "$status" -eq 0 ]
+  grep -qE '^ok [0-9]+ picked one$' <<<"$output"
+  grep -qE '^ok [0-9]+ picked two$' <<<"$output"
+  grep -qE '^ok [0-9]+ marked whole-tree$' <<<"$output"
+  grep -qE 'marked plain$' <<<"$output" && return 1
+  grep -qE 'unrelated$' <<<"$output" && return 1
+  true
+}
+
+@test "S21: a selector that cannot read the change runs the whole shard, never nothing" {
+  local directory="$BATS_TEST_TMPDIR/s21"
+  write_change_fixture "$directory"
+
+  STUB_SELECTOR_FAILS=1 run run_for_change_fixture "$SCRIPT" "$directory" run-for-change
+  [ "$status" -eq 0 ]
+  grep -qE '^ok [0-9]+ unrelated$' <<<"$output"
+  grep -qE '^ok [0-9]+ marked plain$' <<<"$output"
+  grep -qE '^ok [0-9]+ picked one$' <<<"$output"
+
+  STUB_SELECTOR_FAILS=1 run run_for_change_fixture "$SCRIPT" "$directory" files-for-change
+  [ "$status" -eq 0 ]
+  [ "$(printf '%s\n' "$output" | grep -c '\.bats$')" -eq 3 ]
+}
+
+@test "S22: the change-scoped subcommands refuse a call that names no change or no known shard" {
+  run bash "$SCRIPT" run-for-change lib
+  [ "$status" -eq 2 ]
+  run bash "$SCRIPT" files-for-change lib
+  [ "$status" -eq 2 ]
+  run bash "$SCRIPT" run-for-change no-such-shard base-ref head-ref
+  [ "$status" -eq 2 ]
+}
+
+@test "A11: a plan blind to the whole-tree mark reds S20's marked arm" {
+  local copy directory="$BATS_TEST_TMPDIR/a11"
+  copy="$(copy_sharder)"
+  grep -qF '"$verify_whole_tree_mark_pattern"' "$copy" || return 1
+  sed 's/"\$verify_whole_tree_mark_pattern"/"^never-matches$"/' "$copy" >"$copy.new"
+  mv "$copy.new" "$copy"
+  write_change_fixture "$directory"
+
+  run run_for_change_fixture "$copy" "$directory" run-for-change
+  grep -qE '^ok [0-9]+ marked whole-tree$' <<<"$output" && return 1
+  true
+}
+
+@test "A12: a fallback that runs nothing reds S21" {
+  local copy directory="$BATS_TEST_TMPDIR/a12"
+  copy="$(copy_sharder)"
+  grep -qF 'subcommand_run "$id"' "$copy" || return 1
+  sed 's/^\( *\)subcommand_run "\$id" # selector fallback$/\1exit 0/' "$copy" >"$copy.new"
+  mv "$copy.new" "$copy"
+  grep -qF '# selector fallback' "$copy" && return 1
+  write_change_fixture "$directory"
+
+  STUB_SELECTOR_FAILS=1 run run_for_change_fixture "$copy" "$directory" run-for-change
+  grep -qE '^ok [0-9]+ unrelated$' <<<"$output" && return 1
+  true
+}
