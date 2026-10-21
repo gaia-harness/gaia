@@ -4,13 +4,15 @@ import {isRouteErrorResponse} from 'react-router';
 import Document from '~/components/document';
 import ErrorStack from '~/components/errors/error-stack';
 import {DEFAULT_LOCALE} from '~/i18n';
+import errors from '~/languages/en/errors';
 import {canUseDOM} from '~/utils/dom';
 import type {Route} from '../../../../.react-router/types/app/+types/root';
 
 // This boundary intentionally does NOT use useTranslation: it renders when
 // the app (potentially including i18n) has already failed, so its visible
-// strings stay as English literals to avoid a cascade failure. lang is
-// derived from DEFAULT_LOCALE rather than hardcoded.
+// strings stay English, read straight from the English resource module or
+// written as literals, to avoid a cascade failure. lang is derived from
+// DEFAULT_LOCALE rather than hardcoded.
 const RootErrorBoundary = ({error}: Route.ErrorBoundaryProps) => {
   if (!canUseDOM) {
     // Server-Side log of error
@@ -60,7 +62,7 @@ const RootErrorBoundary = ({error}: Route.ErrorBoundaryProps) => {
   return (
     <Document lang={DEFAULT_LOCALE} noIndex={true} title="Unexpected error">
       <main className="p-4">
-        <h1 className="text-2xl">An unexpected error occurred</h1>
+        <h1 className="text-2xl">{errors.unexpectedError}</h1>
       </main>
     </Document>
   );

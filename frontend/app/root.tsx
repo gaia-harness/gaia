@@ -39,7 +39,7 @@ export const loader = async ({context, request, url}: Route.LoaderArgs) => {
       requestInfo: {
         origin: url.origin,
         path: url.pathname,
-        userPrefs: {theme: getTheme(request)},
+        userPreferences: {theme: getTheme(request)},
       },
       toast,
     },

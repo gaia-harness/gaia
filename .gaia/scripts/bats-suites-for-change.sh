@@ -19,7 +19,7 @@
 #   - A JS/TS source whose basename another tracked file shares (`index.tsx`,
 #     `common.ts`), under a top-level directory holding no bats suite, matches
 #     on its shortest trailing path no other tracked file ends with
-#     (`form-error/tests/index.test.tsx`). No suite sits beside it to name it
+#     (`error-stack/tests/index.stories.tsx`). No suite sits beside it to name it
 #     through a directory variable. A source under a tree holding suites keeps
 #     the basename: a suite there imports it as `"$storage_directory/index.ts"`.
 #   - Any other file whose basename occurs inside a tracked directory path

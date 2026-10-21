@@ -5,13 +5,13 @@ status: active
 language: typescript
 purpose: Global custom React hooks
 created: 2026-04-20
-updated: 2026-10-05
+updated: 2026-10-21
 tags: [module, hooks]
 ---
 
 # Hooks
 
-Global custom hooks live in `frontend/app/hooks/`. Component-specific hooks live in each component or page folder's own `hooks/` folder. A few context-bound hooks co-locate with their provider under `frontend/app/utils/` instead (`useNonce` in `nonce.ts`, `useRequestInfo`/`useOptionalRequestInfo` in `request-info.ts`).
+Global custom hooks live in `frontend/app/hooks/`. Component-specific hooks live in each component or page folder's own `hooks/` folder. A few context-bound hooks co-locate with their provider under `frontend/app/utils/` instead (`useNonce` in `nonce.ts`, `useOptionalRequestInfo` in `request-info.ts`).
 
 ## Lift rule
 

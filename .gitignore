@@ -28,9 +28,6 @@ coverage
 # Optional npm cache directory
 .npm
 
-# Optional eslint cache
-.eslintcache
-
 # Claude files
 **/.claude/agent-memory/
 **/.claude/worktrees/

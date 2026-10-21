@@ -7,10 +7,4 @@ export default defineConfig({
   resolve: {
     tsconfigPaths: true,
   },
-  ssr: {
-    noExternal: ['lodash'],
-    optimizeDeps: {
-      include: ['lodash'],
-    },
-  },
 });

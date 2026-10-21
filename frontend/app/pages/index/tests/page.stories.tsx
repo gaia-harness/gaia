@@ -39,8 +39,11 @@ Default.play = async ({canvasElement}) => {
   // The language select renders only once a second locale is configured, so
   // the expectation follows the configured language count.
   const languageSelect = canvas.queryByRole('combobox', {name: /language/i});
+  // Annotated as number so lint does not read the literal length of an
+  // `as const` LANGUAGES tuple and flag this branch as always one way.
+  const languageCount: number = LANGUAGES.length;
 
-  if (LANGUAGES.length <= 1) {
+  if (languageCount <= 1) {
     await expect(languageSelect).not.toBeInTheDocument();
   } else {
     await expect(languageSelect).toBeInTheDocument();

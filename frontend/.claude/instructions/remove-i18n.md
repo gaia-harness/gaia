@@ -205,9 +205,10 @@ Delete these lines:
 ```ts
 /* eslint-disable i18next/no-literal-string -- renders when i18n may have failed, so its strings stay English */
 import {DEFAULT_LOCALE} from '~/i18n';
+import errors from '~/languages/en/errors';
 ```
 
-Replace each `lang={DEFAULT_LOCALE}` with `lang="en"`, and delete the comment block above `const RootErrorBoundary`, which describes the i18n fallback.
+Replace each `lang={DEFAULT_LOCALE}` with `lang="en"`, replace the `{errors.unexpectedError}` reference with the literal `An unexpected error occurred`, and delete the comment block above `const RootErrorBoundary`, which describes the i18n fallback.
 
 ### B5. `frontend/eslint.config.mjs`
 
@@ -294,13 +295,21 @@ Remove the import of the deleted `languages` module:
 import {LANGUAGES} from './app/languages';
 ```
 
+Remove the `languageCount` constant with its comment:
+
+```ts
+// Annotated as number so lint does not read the literal length of an `as const`
+// LANGUAGES tuple and flag the testIgnore condition as always true or false.
+const languageCount: number = LANGUAGES.length;
+```
+
 Remove the `testIgnore` property with its comment:
 
 ```ts
 // The language switcher renders only with two or more languages, so its spec
 // is excluded until a second language is added to LANGUAGES.
 testIgnore:
-  LANGUAGES.length < 2 ? ['**/language-switch-a11y.spec.ts'] : undefined,
+  languageCount < 2 ? ['**/language-switch-a11y.spec.ts'] : undefined,
 ```
 
 The spec the property gated is deleted in Section C.
@@ -328,17 +337,9 @@ Each file below still references a package Section E removes or a path Section C
 `frontend/vitest.config.ts`:
 
 - Remove `'i18next',` from the storybook project's `optimizeDeps.include`.
-- In `test.coverage.exclude`, change `'app/{languages,routes,sessions.server,state,types}/**/*'` to `'app/{routes,sessions.server,state,types}/**/*'`, and change `'app/{entry.client,entry.server,env.server,i18n,i18next.server,root}.*'` to `'app/{entry.client,entry.server,env.server,root}.*'`.
+- In `test.coverage.exclude`, change `'app/{languages,routes,sessions.server,state,types}/**/*'` to `'app/{routes,sessions.server,state,types}/**/*'`, and change `'app/{entry.client,entry.server,env.server,i18n,root}.*'` to `'app/{entry.client,entry.server,env.server,root}.*'`.
 
-`frontend/knip.config.ts`: remove the `'app/languages/index.ts',` entry from `entry`, and remove this comment and these entries from `ignoreDependencies`:
-
-```ts
-// remix-i18next's Accept-Language SSR fallback pulls accept-language-parser
-// transitively; it's pre-bundled in vite optimizeDeps and has no direct
-// import, so knip can't see the usage (and its @types pairs with it).
-'@types/accept-language-parser',
-'accept-language-parser',
-```
+`frontend/knip.config.ts`: remove the `'app/languages/index.ts',` entry from `entry`.
 
 `frontend/.playwright/e2e/storybook-a11y.spec.ts`: the language select story is the only member of `RENDERS_NOTHING_BY_DESIGN`. Delete the comment and the set, and drop the set from `isExempt`. An emptied set would fail `pnpm lint` (`sonarjs/no-empty-collection` has no autofix):
 

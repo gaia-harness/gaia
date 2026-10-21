@@ -30,7 +30,7 @@ const Document = ({
   const nonce = useNonce();
   const theme = useOptionalTheme();
   const requestInfo = useOptionalRequestInfo();
-  const hasExplicitTheme = !!requestInfo?.userPrefs.theme;
+  const hasExplicitTheme = !!requestInfo?.userPreferences.theme;
 
   return (
     <html
@@ -56,6 +56,21 @@ const Document = ({
         )}
         <meta charSet="utf-8" />
         <meta content="width=device-width,initial-scale=1" name="viewport" />
+        <link href="/favicon.svg" rel="icon" type="image/svg+xml" />
+        <link
+          href="/favicon-32x32.png"
+          rel="icon"
+          sizes="32x32"
+          type="image/png"
+        />
+        <link
+          href="/favicon-16x16.png"
+          rel="icon"
+          sizes="16x16"
+          type="image/png"
+        />
+        <link href="/apple-touch-icon.png" rel="apple-touch-icon" />
+        <link href="/site.webmanifest" rel="manifest" />
         <MetaHydrated />
         {/* <Links> does not suppress the nonce diff, so it gets an empty nonce
             on both sides. Stylesheets need none (style-src carries no nonce in

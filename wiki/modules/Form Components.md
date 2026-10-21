@@ -8,7 +8,7 @@ depends_on:
   - '[[Conform]]'
   - '[[Zod]]'
 created: 2026-04-20
-updated: 2026-10-05
+updated: 2026-10-21
 tags: [module, components, forms]
 ---
 
@@ -23,9 +23,6 @@ For each field: a ui `Field` (with `data-invalid` when the field has errors) hol
 The step-by-step pattern, the Zod schema and action wiring, and error-message translation are in `frontend/.claude/skills/react-code/references/conform-forms.md`. The runnable reference is `frontend/app/components/form/tests/composed-form.tsx` and its story, whose play functions are the tests.
 
 ## App-logic form components
-
-- `FormError`: top-of-form error summary built on ui `Alert`.
-- `MaxLength`: character counter for length-limited fields.
 
 For the current inventory, query Serena (`.claude/rules/code-search.md`).
 

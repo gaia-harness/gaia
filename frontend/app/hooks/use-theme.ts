@@ -49,5 +49,5 @@ export const useOptionalTheme = (): Theme | undefined => {
     return optimisticMode === 'system' ? systemTheme : optimisticMode;
   }
 
-  return requestInfo?.userPrefs.theme ?? systemTheme;
+  return requestInfo?.userPreferences.theme ?? systemTheme;
 };

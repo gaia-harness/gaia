@@ -32,12 +32,6 @@ export default defineConfig({
     emptyOutDir: true,
     sourcemap: true,
   },
-  define: {
-    'process.env.COMMIT_SHA': JSON.stringify(process.env.COMMIT_SHA ?? ''),
-    'process.env.npm_package_version': JSON.stringify(
-      process.env.npm_package_version ?? ''
-    ),
-  },
   optimizeDeps: {
     include: [
       '@msw/data',

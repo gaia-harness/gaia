@@ -42,7 +42,6 @@
     "start": "pnpm -C frontend start",
     "lint": "pnpm -C frontend lint",
     "lint-dry": "pnpm -C frontend lint-dry",
-    "lint-all": "pnpm -C frontend lint-all",
     "format": "prettier --write \"**/*.{ts,tsx,html,md,mdx,css,json}\" && pnpm -C frontend format",
     "knip": "pnpm -C frontend knip",
     "stylelint": "pnpm -C frontend stylelint",

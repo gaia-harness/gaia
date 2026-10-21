@@ -2,7 +2,7 @@
 type: concept
 status: active
 created: 2026-04-20
-updated: 2026-10-06
+updated: 2026-10-21
 tags: [concept, services, api]
 ---
 
@@ -25,7 +25,7 @@ Each domain lives under `frontend/app/services/gaia/{domain}/`:
 | `state.tsx`          | Read-only React Context + hook (optional, add when a route needs to pass fetched data to deeply nested components) |
 | `index.ts`           | Barrel re-exporting parsers, types, and urls                                                                       |
 
-Each domain is self-contained: its own `urls.ts` and `index.ts`. Services are isomorphic: there is no `.server` barrel, and the same request functions run in a server loader, a `clientLoader`, and a query. The scaffold does not touch the root `frontend/app/services/gaia/urls.ts`.
+Each domain is self-contained: its own `urls.ts` and `index.ts`. Services are isomorphic: there is no `.server` barrel, and the same request functions run in a server loader, a `clientLoader`, and a query.
 
 ## Scaffold output
 

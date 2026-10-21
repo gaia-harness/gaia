@@ -17,7 +17,6 @@
 wiki
 
 # react-router
-**/.cache
 **/build
 **/.react-router
 
@@ -31,10 +30,8 @@ wiki
 **/*.log
 **/npm-debug.log*
 **/.npm
-**/.eslintcache
 
 # Testing and Storybook output
-**/playwright
 **/.playwright/.cache
 **/.playwright/output
 **/.playwright-cli

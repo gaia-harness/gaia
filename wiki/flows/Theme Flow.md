@@ -2,7 +2,7 @@
 type: flow
 status: active
 created: 2026-04-20
-updated: 2026-10-04
+updated: 2026-10-22
 tags: [flow, theme, dark-mode]
 ---
 
@@ -14,7 +14,7 @@ Dark mode is wired through cookie + OS `matchMedia`. The cookie is the source of
 
 1. **Cookie**: `frontend/app/utils/theme.server.ts` reads/writes the `__theme` cookie (httpOnly) via the plain `cookie` package. Values: `'light'`, `'dark'`, or absent (= follow OS). An explicit theme sets the cookie with a one-year `maxAge` (`31_536_000`); selecting `'system'` clears it (`maxAge: -1`, same `httpOnly`/`sameSite: 'lax'`/`secure` attributes), so following the OS is represented by the cookie's absence.
 2. **Pre-paint script**: `frontend/app/components/document/index.tsx` renders a synchronous inline `<script>` in `<head>` when no explicit cookie preference exists. The script calls `window.matchMedia('(prefers-color-scheme: dark)')` and adds the `dark` class to `<html>` before first paint; no reload, no flash.
-3. **Loader**: `frontend/app/root.tsx` returns `requestInfo: {origin, path, userPrefs: {theme}}`.
+3. **Loader**: `frontend/app/root.tsx` returns `requestInfo: {origin, path, userPreferences: {theme}}`.
 4. **Document**: `frontend/app/components/document/index.tsx` calls `useOptionalTheme()` and renders `<html className={theme === 'dark' && 'dark'}>` with `suppressHydrationWarning`. The pre-paint script owns the `dark` class during hydration; React takes over post-hydration without a flash.
 5. **System theme hook**: `frontend/app/hooks/use-theme.ts` exports `useSystemTheme()` via `useSyncExternalStore`. Returns `undefined` on the server/first-hydration render (matching SSR) then resolves to the live `matchMedia` value on the client. Tracks OS changes reactively.
 6. **Switcher**: `frontend/app/components/theme-switch/index.tsx` is the switcher component. `frontend/app/hooks/use-theme.ts` exports `useOptionalTheme`, `useSystemTheme`, and `useOptimisticThemeMode`. `frontend/app/routes/resources.theme-switch.tsx` exports `ThemeFormSchema` and the `action` that writes the cookie.

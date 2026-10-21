@@ -10,7 +10,7 @@ const IndexPage = () => {
   return (
     <div className="flex h-full flex-col items-center justify-center gap-4">
       <h1>{t('meta.siteName')}</h1>
-      <ThemeSwitch userPreference={requestInfo?.userPrefs.theme} />
+      <ThemeSwitch userPreference={requestInfo?.userPreferences.theme} />
       <LanguageSelect />
     </div>
   );
