@@ -18,7 +18,10 @@ const lastAssistantStopReason = (transcriptPath) => {
   return last ? (last.message.stop_reason ?? null) : null;
 };
 
+// The meta's finished flag is authoritative: an agent's final text record can
+// land with a null stop reason, which alone reads as still streaming.
 export const hasReturned = (agent) => {
+  if (agent.finished) return true;
   const stopReason = lastAssistantStopReason(agent.transcriptPath);
   return stopReason !== null && stopReason !== 'tool_use';
 };

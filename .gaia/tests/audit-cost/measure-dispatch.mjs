@@ -95,7 +95,8 @@ const extensionRuleFilesOf = (prompt) => {
       if (paths.length > 0) break;
       continue;
     }
-    const match = /^\s*[-*]\s+`?([^`\s]+)`?\s*$/.exec(line);
+    // The frontend definition writes one bare path per line; a bulleted list parses the same.
+    const match = /^\s*(?:[-*]\s+)?`?([^`\s]+)`?\s*$/.exec(line);
     if (!match) break;
     paths.push(match[1]);
   }

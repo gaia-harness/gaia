@@ -182,6 +182,7 @@ export const listAgents = (sessionRoot) => {
       agentType: meta.agentType ?? null,
       parentAgentId,
       transcriptPath,
+      finished: meta.finished === true,
       dispatch: {
         toolUseId: meta.toolUseId ?? null,
         subagentType: sent?.input.subagent_type ?? meta.agentType ?? null,

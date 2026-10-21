@@ -108,6 +108,10 @@ cleanup() {
   if [ "$branch_pushed" -eq 1 ]; then
     git -C "$scaffold" push --no-verify origin --delete "$branch" >/dev/null 2>&1 || true
   fi
+  # A session killed mid-fix leaves edits that block the checkout and would leak into the next
+  # replay; the scaffold is a sentinel-guarded throwaway, so they are discarded.
+  git -C "$scaffold" reset --quiet --hard >/dev/null 2>&1 || true
+  git -C "$scaffold" clean --quiet -fd >/dev/null 2>&1 || true
   git -C "$scaffold" checkout --quiet main >/dev/null 2>&1 || true
   git -C "$scaffold" branch -D "$branch" >/dev/null 2>&1 || true
   exit "$status"

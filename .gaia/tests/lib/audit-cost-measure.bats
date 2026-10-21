@@ -229,6 +229,15 @@ classify_json() {
   measure_to_files "$SYNTHETIC/after-extension/session.jsonl" "$RC3/token-rates.json"
   [ "$(jq -c '.dispatches[] | select(.agent_type == "audit-rule-specialist") | .extension_rule_files' "$MEASURE_OUT")" = '[".claude/rules/extensions/translation-extra.md",".claude/rules/extensions/second-extra.md"]' ]
   [ "$(jq '[.dispatches[] | select(.agent_type != "audit-rule-specialist") | .extension_rule_files] | all(. == null)' "$MEASURE_OUT")" = "true" ]
+
+  # The frontend definition prescribes one bare path per line, no bullet; that form parses to the same list.
+  local bare="$BATS_TEST_TMPDIR/bare-extension"
+  cp -R "$SYNTHETIC/after-extension" "$bare"
+  sed -i.bak 's/\\n- \.claude\/rules/\\n.claude\/rules/g' "$bare/session/subagents/agent-member1.jsonl" "$bare/session/subagents/agent-spec1.jsonl"
+  rm -f "$bare"/session/subagents/*.bak
+  grep -qF -- '\n- .claude/rules' "$bare/session/subagents/agent-member1.jsonl" && return 1
+  measure_to_files "$bare/session.jsonl" "$RC3/token-rates.json"
+  [ "$(jq -c '.dispatches[] | select(.agent_type == "audit-rule-specialist") | .extension_rule_files' "$MEASURE_OUT")" = '[".claude/rules/extensions/translation-extra.md",".claude/rules/extensions/second-extra.md"]' ]
 }
 
 # bats test_tags=whole-tree
@@ -268,6 +277,29 @@ classify_json() {
   run node "$TOOLKIT/lib/session-checks.mjs" callability "$SYNTHETIC/after-extension/session.jsonl" code-audit-frontend Bash,Monitor
   [ "$status" -eq 0 ]
   [ "$(jq -c '[.[] | {tool, called, toolsearch_used, error}]' <<<"$output")" = '[{"tool":"Bash","called":true,"toolsearch_used":false,"error":false},{"tool":"Monitor","called":false,"toolsearch_used":false,"error":false}]' ]
+}
+
+# bats test_tags=whole-tree
+@test "session-checks counts an agent its metadata marks finished as returned, whatever its last stop reason" {
+  # A live replay's specialist ended on a final text record carrying no stop reason; only its meta said finished.
+  local session="$BATS_TEST_TMPDIR/rc3"
+  cp -R "$RC3/." "$session"
+  local child="$session/session/subagents/agent-ade787e906be2321d"
+  TRANSCRIPT="$child.jsonl" node --input-type=module -e '
+    import { readFileSync, writeFileSync } from "node:fs";
+    const lines = readFileSync(process.env.TRANSCRIPT, "utf8").split("\n");
+    const last = lines.findLastIndex((line) => line.includes("\"type\":\"assistant\""));
+    const record = JSON.parse(lines[last]);
+    record.message.stop_reason = null;
+    lines[last] = JSON.stringify(record);
+    writeFileSync(process.env.TRANSCRIPT, lines.join("\n"));
+  '
+  jq -c 'del(.finished)' "$child.meta.json" >"$child.meta.tmp" && mv "$child.meta.tmp" "$child.meta.json"
+  run node "$TOOLKIT/lib/session-checks.mjs" wave-done "$session/session.jsonl"
+  [ "$status" -eq 1 ]
+  jq -c '.finished = true' "$child.meta.json" >"$child.meta.tmp" && mv "$child.meta.tmp" "$child.meta.json"
+  run node "$TOOLKIT/lib/session-checks.mjs" wave-done "$session/session.jsonl"
+  [ "$status" -eq 0 ]
 }
 
 # bats test_tags=whole-tree
