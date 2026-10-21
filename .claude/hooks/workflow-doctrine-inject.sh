@@ -33,7 +33,7 @@
 # backstop sits on top of it, bounded by the path and branch lengths.
 #
 # Cost order, because it runs after every `git *` and `gh pr checkout *`
-# Bash call: jq gate, one payload parse, the arming check before any git process, then one git call. Branch,
+# Bash call: CI and jq gates, one payload parse, the arming check before any git process, then one git call. Branch,
 # worktree kind, and origin/HEAD are read from the git directory's files after
 # that call, falling back to git where the layout is not the plain files
 # format. The marker's main root, the doctrine, and the libraries are only
@@ -109,6 +109,11 @@ print_backstop_alone() {
   [ -z "$alone_output" ] || printf '%s\n' "$alone_output"
 }
 trap print_backstop_alone EXIT
+
+# A GitHub Actions claude-code-action run (the forensics triage workflow) loads
+# project SessionStart hooks and must not receive the interactive execution
+# doctrine.
+[ -n "${GITHUB_ACTIONS:-}" ] && exit 0
 
 here="${BASH_SOURCE[0]}"
 case "$here" in */*) here="${here%/*}" ;; *) here=. ;; esac
