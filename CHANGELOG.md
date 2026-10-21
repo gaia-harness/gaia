@@ -90,7 +90,7 @@ A 1.6.1 project moves to 2.0.0 through the migration note bundled in the v2.0.0 
      | `ToastNotification` | `ui/toast` (step 7) |
      | `YearMonthDay` | removed with no replacement |
 
-     The kept form pieces are `FormError` and `MaxLength` (now at `~/components/form/max-length`). Delete `~/components/form/year-month-day` and the `date.day`, `date.month` and `date.year` i18n keys with it.
+     Delete `~/components/form/year-month-day` and the `date.day`, `date.month` and `date.year` i18n keys with it.
   4. GAIA's `Button` is replaced by `ui/button`, which takes shadcn's `variant` and `size` props. The exports `SIZES`, `VARIANTS`, `ICON_SIZES`, `ICON_ONLY_SIZES`, `ICON_POSITION`, the `Variant` and `IconUnion` types and the `isLoading` prop are gone, and no GAIA-to-shadcn name map is provided: `pnpm typecheck` reports each call site. For loading, compose `ui/spinner` inside a disabled button.
   5. Compose forms from `ui/field` parts and `ui` controls, wired with Conform's `getInputProps`, `getCollectionProps` and field ids, as shown in `frontend/.claude/skills/react-code/references/conform-forms.md`. A checkbox group posts one name repeated, once per checked option, so read it as an array in the schema.
   6. Replace `LinkButton` with `<Button nativeButton={false} render={<Link to="/path" role="link" />}>`, and the same for `NavLink` and for an external `<a href>`. Keep the explicit `role="link"`: Base UI gives a non-native `render` target `role="button"`, which would announce a link as a button. A disabled action is a disabled `Button`, never a disabled link.
