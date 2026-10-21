@@ -57,7 +57,7 @@ workflow_records_its_run() {
 # bats test_tags=whole-tree
 @test "every command workflow in the start set records its run" {
   local workflow playbooks missing=""
-  playbooks="$(git -C "$REPO_ROOT" ls-files -- '.claude/*.md' | sed "s|^|${REPO_ROOT}/|")"
+  playbooks="$(git -C "$REPO_ROOT" ls-files -z -- '.claude/*.md' | tr '\0' '\n' | sed "s|^|${REPO_ROOT}/|")"
   [ -n "$playbooks" ]
   while IFS= read -r workflow; do
     workflow_records_its_run "$workflow" <<<"$playbooks" || missing="${missing} ${workflow}"
