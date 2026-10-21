@@ -993,15 +993,13 @@ SH
 # The install and typegen are the hook's cost on a fresh tree, so a hook
 # trigger hands them to a detached job instead of holding the session on them.
 # The blocking stub is what makes "returned before the install finished"
-# observable rather than a timing guess. CI sets GITHUB_ACTIONS, under which
-# the hook stays in line, so each background case clears it.
+# observable rather than a timing guess.
 @test "an entry payload on a tree with a lockfile returns while the install is still running" {
   make_main
   add_lockfile
   stub_typegen
   stub_blocking_pnpm
   WORKTREE_PATH="$(add_worktree feat-background)"
-  unset GITHUB_ACTIONS
 
   invoke_hook "$(enter_payload "$WORKTREE_PATH")" "$HOOK_ABSOLUTE_PATH"
   [ "$status" -eq 0 ] || return 1
@@ -1024,7 +1022,6 @@ SH
   add_lockfile
   stub_blocking_pnpm
   WORKTREE_PATH="$(add_worktree feat-background-twice)"
-  unset GITHUB_ACTIONS
 
   invoke_hook "$(enter_payload "$WORKTREE_PATH")" "$HOOK_ABSOLUTE_PATH"
   [ "$status" -eq 0 ] || return 1
@@ -1044,7 +1041,6 @@ SH
   add_lockfile
   stub_pnpm
   WORKTREE_PATH="$(add_worktree feat-background-again)"
-  unset GITHUB_ACTIONS
 
   invoke_hook "$(enter_payload "$WORKTREE_PATH")" "$HOOK_ABSOLUTE_PATH"
   [ "$status" -eq 0 ] || return 1
@@ -1062,7 +1058,6 @@ SH
   add_lockfile
   stub_pnpm
   WORKTREE_PATH="$(add_worktree feat-background-context)"
-  unset GITHUB_ACTIONS
   payload="$(jq -nc --arg tree_path "$WORKTREE_PATH" '{hook_event_name: "PostToolUse", tool_name: "EnterWorktree", cwd: $tree_path, tool_response: {worktreePath: $tree_path}}')"
 
   run bash -c 'printf %s "$1" | bash "$2" 2>/dev/null' _ "$payload" "$HOOK_ABSOLUTE_PATH"
@@ -1070,19 +1065,6 @@ SH
   context="$(jq -r '.hookSpecificOutput.additionalContext' <<<"$output")"
   grep -qF -- "$(background_provisioning_log "$WORKTREE_PATH")" <<<"$context" || return 1
   wait_for_background_provisioning "$WORKTREE_PATH"
-}
-
-@test "under GitHub Actions an entry payload installs before returning" {
-  make_main
-  add_lockfile
-  stub_pnpm
-  WORKTREE_PATH="$(add_worktree feat-background-ci)"
-
-  GITHUB_ACTIONS=true invoke_hook "$(enter_payload "$WORKTREE_PATH")" "$HOOK_ABSOLUTE_PATH"
-  [ "$status" -eq 0 ] || return 1
-  [ "$(cat "$PNPM_LOG")" = "$WORKTREE_PATH" ] || return 1
-  grep -qF -- "in the background" <<<"$output" && return 1
-  true
 }
 
 # ---------- /clear and compaction repair an unprovisioned tree only ----------
@@ -1125,7 +1107,6 @@ fresh_context_payload() {
   add_lockfile
   stub_pnpm
   WORKTREE_PATH="$(add_worktree feat-clear-provisioned)"
-  unset GITHUB_ACTIONS
   run bash "$HOOK_ABSOLUTE_PATH" "$WORKTREE_PATH"
   [ "$status" -eq 0 ] || return 1
   [ -L "$WORKTREE_PATH/.gaia/local" ] || return 1

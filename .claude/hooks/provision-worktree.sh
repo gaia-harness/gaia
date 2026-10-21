@@ -48,11 +48,11 @@
 # allocate this tree's slot and rewrite its port file from the ledger (under
 # the lock again). The lock guards only the ledger, is never held across a
 # signal or a wait, and a lock timeout keeps any existing port file and never
-# blocks. Inert under GitHub Actions.
+# blocks.
 #
 # The dependency install and typegen are most of the hook's cost on a fresh
 # tree, seconds that a hook trigger would otherwise block the session for. So a
-# hook-triggered run (a payload on stdin, outside GitHub Actions) on a tree
+# hook-triggered run (a payload on stdin) on a tree
 # with an install to run does the cheap steps in line and hands those two to a
 # detached background job, whose log lives in the worktree's own git directory
 # and ends with a finished line.
@@ -428,13 +428,11 @@ source_ports_libraries() {
   source "$self_directory/../../.gaia/scripts/worktree-ports-lib.sh" 2>/dev/null || return 1
 }
 
-if [ -z "${GITHUB_ACTIONS:-}" ]; then
-  if source_ports_libraries; then
-    provision_ports
-    build_ports_context_line
-  else
-    log "PORTS SKIPPED (non-fatal): .gaia/scripts/server-process-lib.sh or worktree-ports-lib.sh is missing, so $tree gets no port slot"
-  fi
+if source_ports_libraries; then
+  provision_ports
+  build_ports_context_line
+else
+  log "PORTS SKIPPED (non-fatal): .gaia/scripts/server-process-lib.sh or worktree-ports-lib.sh is missing, so $tree gets no port slot"
 fi
 
 # ---------- install the tree's own dependencies ----------
@@ -579,8 +577,7 @@ start_background_provisioning() {
 
 # Only a tree with an install to run goes to the background: without one, the
 # typegen left over takes about a second and is not worth a job to wait on.
-if [ -n "$payload" ] && [ -z "${GITHUB_ACTIONS:-}" ] \
-  && [ -f "$tree/pnpm-lock.yaml" ] && command -v pnpm >/dev/null 2>&1; then
+if [ -n "$payload" ] && [ -f "$tree/pnpm-lock.yaml" ] && command -v pnpm >/dev/null 2>&1; then
   start_background_provisioning
 else
   install_and_generate

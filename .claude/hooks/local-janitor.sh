@@ -6,8 +6,7 @@
 # merge wait and cleanup ran (/gaia-wiki cuts the throwaway landing branch
 # through isolation.md before `gaia wiki chain begin`, and `gaia wiki chain finish` pushes it and enables auto-merge with `gh pr merge --auto`, a call that
 # returns BEFORE the merge lands) leaves both a local wiki/<YYYY-MM-DD-HHMM>
-# branch (or a legacy wiki/sync-<date>-<sha> or wiki-sync/<date>-<sha> one)
-# and a stale local base branch behind. This hook
+# branch and a stale local base branch behind. This hook
 # reconciles both, in order, once HEAD is off the landing branch (the reap
 # skips the current branch and the fast-forward runs only with HEAD on base,
 # so a session left on the landing branch is reconciled from the first
@@ -165,11 +164,9 @@ wiki_catchup_state_unset() {
 }
 
 # --- Half A: merged-and-gone wiki sync branches ---------------------------
-# Three shapes name a wiki landing branch: `wiki/<YYYY-MM-DD-HHMM>` (what the
-# CLI cuts), and the legacy `wiki/sync-<date>-<sha>` and `wiki-sync/<date>-<sha>`
-# (nothing cuts them; they are reaped so a leftover does not linger). Every
-# shape is matched with its full timestamp, so a hand-named `wiki/<slug>`
-# branch is never a candidate.
+# A wiki landing branch is `wiki/<YYYY-MM-DD-HHMM>` (what the CLI cuts),
+# matched with its full timestamp, so a hand-named `wiki/<slug>` branch is
+# never a candidate.
 # Git-scoped: independent of .gaia/local, so a fresh clone carrying an
 # orphaned wiki sync branch is still swept before any .gaia/local exists.
 # List every local branch with its upstream-track state. `[gone]` only
@@ -222,7 +219,7 @@ if [ -n "$branch_tracks" ]; then
     [ -n "$line" ] || continue
     branch_name=${line%% *}
     case "$branch_name" in
-      wiki/[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]-[0-9][0-9][0-9][0-9] | wiki/sync-* | wiki-sync/*)
+      wiki/[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]-[0-9][0-9][0-9][0-9])
         wiki_sync_present=1
         break
         ;;
@@ -375,16 +372,9 @@ if [ "$wiki_sync_present" -eq 1 ]; then
         [ -n "$line" ] || continue
         branch_name=${line%% *}                        # branch name (no spaces in a ref)
         track=${line#"$branch_name"}; track=${track# }  # remainder: [gone]/[ahead N]/... token
-        # The current shape is matched exactly. Both legacy shapes carry
-        # `<date>-<hex>` after the prefix, and their glob is deliberately
-        # loose: it requires only ONE hex character where the landing's short
-        # sha has 7-40. That is safe because the cherry check and the `[gone]`
-        # track state below are what actually gate the delete, not this glob
-        # alone. Validated before any destructive step.
+        # Validated before any destructive step.
         case "$branch_name" in
           wiki/[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]-[0-9][0-9][0-9][0-9]) ;;
-          wiki/sync-[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]-[0-9a-f]*) ;;
-          wiki-sync/[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]-[0-9a-f]*) ;;
           *) continue ;;
         esac
         [ "$branch_name" = "$current" ] && continue
@@ -399,7 +389,7 @@ if [ "$wiki_sync_present" -eq 1 ]; then
         # patch is upstream nowhere) -- an ancestry test cannot, a squash
         # merge leaves the branch tip unreachable from origin/$base exactly
         # like an abandoned branch. Fail-safe: an unanswerable question keeps
-        # the branch. Known limitation: a legacy branch carrying several
+        # the branch. Known limitation: a branch carrying several
         # commits whose squash does not patch-match any single commit reads
         # as `+` and lingers rather than being reaped; lingering is the safe
         # direction, bounded by the minimum-interval knob, and the durable

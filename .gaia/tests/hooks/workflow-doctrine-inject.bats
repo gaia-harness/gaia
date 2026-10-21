@@ -23,7 +23,7 @@ bats_require_minimum_version 1.5.0
 setup() {
   REPO_ROOT="$(cd "$BATS_TEST_DIRNAME/../../.." && pwd)"
   TEMPORARY_DIRECTORY="$(cd "$BATS_TEST_TMPDIR" && pwd -P)"
-  unset GITHUB_ACTIONS CLAUDE_CODE_SESSION_ID
+  unset CLAUDE_CODE_SESSION_ID
   export GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_NOSYSTEM=1
   export GIT_AUTHOR_NAME=T GIT_AUTHOR_EMAIL=t@example.com
   export GIT_COMMITTER_NAME=T GIT_COMMITTER_EMAIL=t@example.com
@@ -333,14 +333,6 @@ assert_silent() {
   assert_silent
   [ -e "$(marker d3)" ] && return 1
   true
-}
-
-@test "UAT-009: CI is silent, with a control that injects" {
-  git -C "$REPO" checkout -q -b feat/123-example
-  run --separate-stderr env GITHUB_ACTIONS=true /bin/bash "$HOOK" <<<"$(session_start_payload c1 startup "$REPO")"
-  assert_silent
-  run_hook "$(session_start_payload c1 startup "$REPO")"
-  assert_injects_keyed SessionStart "Branch key: branch:feat/123-example. "
 }
 
 @test "UAT-009: a cwd outside any repository is silent, with a control that injects" {

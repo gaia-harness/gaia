@@ -32,11 +32,6 @@
 #   release     release/v<version>                      maintenance  <rest>
 #   wiki        wiki/<YYYY-MM-DD-HHMM>                  maintenance  <rest>
 #   forensics   forensics/<issue>-<class-slug>          maintenance  <rest>
-#   chore       chore/<task>-<YYYY-MM-DD-HHMM>          maintenance  <rest>  (legacy)
-#   wiki sync   wiki/sync-<YYYY-MM-DD>-<short-sha>      maintenance  <rest>  (legacy)
-#   wiki-sync   wiki-sync/<YYYY-MM-DD>-<short-sha>      maintenance  <rest>  (legacy)
-#   plan        plan/spec-<nnn>[-<slug>]                plan         SPEC-<nnn>  (legacy)
-#   plan        plan/plan-<nnn>[-<slug>]                plan         plan-<nnn>  (legacy)
 #   adhoc       <type>/[<issue>-]<slug>                 adhoc        unknown  (minted; classified by fallthrough)
 #   (any other branch, including main, a `chore/` or `wiki/` branch outside
 #   the rows above, and hand-named `<type>/[<issue>-]<slug>` branches)
@@ -52,10 +47,7 @@
 # and by gaia_branch_name, which read the JSON. A hand-named
 # `<type>/planning-notes` has no digits after `plan-`, so it stays adhoc.
 #
-# Legacy spellings (`chore/<task>-<ts>`, `wiki/sync-`, `wiki-sync/`, `plan/`,
-# and the `worktree-*` spelling below) are read so existing branches, PR heads,
-# and ledgers keep classifying; none is minted. The `chore/` and `wiki/` rows
-# require the timestamp suffix, so a hand-named `chore/fix-typo` or `wiki/docs`
+# The `wiki/` row requires the timestamp suffix, so a hand-named `wiki/docs`
 # stays adhoc.
 #
 # One kind is minted outside bash and is therefore not an arm of
@@ -93,19 +85,18 @@
 #   branch. Returns 0.
 #
 # gaia_branch_spec_number <branch>
-#   Prints the SPEC number a `<type>/spec-<nnn>` or legacy `plan/spec-<nnn>`
-#   branch names, leading zeros stripped (`refactor/spec-0NN-x` prints `NN`).
+#   Prints the SPEC number a `<type>/spec-<nnn>` branch names, leading zeros
+#   stripped (`refactor/spec-0NN-x` prints `NN`).
 #   Prints nothing otherwise. Returns 0.
 #
 # gaia_branch_plan_number <branch>
-#   Prints the plan number a `<type>/plan-<nnn>` or legacy `plan/plan-<nnn>`
-#   branch names (the worktree spelling included), leading zeros stripped
-#   (`feat/plan-0NN-x` prints `NN`). Prints nothing otherwise. Returns 0.
+#   Prints the plan number a `<type>/plan-<nnn>` branch names (the worktree
+#   spelling included), leading zeros stripped (`feat/plan-0NN-x` prints
+#   `NN`). Prints nothing otherwise. Returns 0.
 #
 # gaia_branch_plan_type <branch>
 #   Prints the commit type a type-prefixed plan branch carries (`feat` for
-#   `feat/plan-NNN-x`). Prints nothing for a legacy `plan/` branch and for every
-#   non-plan branch. Returns 0.
+#   `feat/plan-NNN-x`). Prints nothing for every non-plan branch. Returns 0.
 #
 # gaia_branch_list [directory]
 #   Prints every local branch and every remote-tracking branch of the
@@ -151,9 +142,7 @@
 #   `release/` or `update/` version may keep its case), exactly one `/`, a
 #   remainder that is non-empty with no leading or trailing `-`, a valid ref
 #   name, and a prefix that is a workflow kind in the table or a `types`
-#   entry of the JSON. Legacy `wiki-sync/` is invalid; legacy
-#   `chore/<task>-<ts>` passes as a hand-named `chore/<slug>`. A `plan/` branch
-#   is valid only as `plan/plan-<nnn>[-<slug>]` or `plan/spec-<nnn>[-<slug>]`.
+#   entry of the JSON.
 #
 # Usage (sourced):
 #   . .gaia/scripts/branch-name-lib.sh
@@ -273,28 +262,8 @@ _gaia_branch_set_class() {
         unit="$_gaia_branch_digits"
       fi
       ;;
-    plan/*)
-      mode="plan"
-      rest="${normalized_name#plan/}"
-      case "$rest" in
-        spec-* | plan-*)
-          id="${rest%%-*}"
-          lead="${rest#*-}"
-          lead="${lead%%-*}"
-          if _gaia_branch_is_digits "$lead"; then
-            if [ "$id" = "spec" ]; then
-              unit="SPEC-${lead}"
-            else
-              unit="plan-${lead}"
-            fi
-          fi
-          ;;
-      esac
-      ;;
     cleanse/* | codify/* | fitness/* | residue/* | deps/* | update/* | release/* | forensics/* \
-      | wiki/[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]-[0-9][0-9][0-9][0-9] \
-      | wiki/sync-* | wiki-sync/* \
-      | chore/*-[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]-[0-9][0-9][0-9][0-9])
+      | wiki/[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]-[0-9][0-9][0-9][0-9])
       mode="maintenance"
       unit="${normalized_name#*/}"
       ;;
@@ -377,7 +346,6 @@ gaia_branch_plan_type() {
   _gaia_branch_set_class "${1-}"
   [ "$_gaia_branch_mode" = "plan" ] || return 0
   [ "$_gaia_branch_unit" != "unknown" ] || return 0
-  [ "${_gaia_branch_normalized_name%%/*}" != "plan" ] || return 0
   printf '%s\n' "${_gaia_branch_normalized_name%%/*}"
   return 0
 }
@@ -739,19 +707,6 @@ gaia_branch_validate() {
       ;;
   esac
 
-  if [ "$prefix" = "plan" ]; then
-    plan_id="${remainder%%-*}"
-    plan_lead="${remainder#*-}"
-    plan_lead="${plan_lead%%-*}"
-    case "$plan_id" in
-      spec | plan) _gaia_branch_is_digits "$plan_lead" ;;
-      *) false ;;
-    esac || {
-      printf 'gaia_branch_validate: %s uses the legacy plan/ prefix, which only plan-<nnn> and spec-<nnn> names may keep; name it <type>/plan-<nnn>-<slug>, for example feat/plan-024-slug\n' "$branch" >&2
-      return 1
-    }
-  fi
-
   command -v jq >/dev/null 2>&1 || {
     echo "gaia_branch_validate: cannot decide: jq is not on PATH; install jq" >&2
     return 2
@@ -766,7 +721,7 @@ gaia_branch_validate() {
   }
   types="$_gaia_branch_types"
 
-  case " debt plan cleanse codify fitness residue deps update release forensics ${types} " in
+  case " debt cleanse codify fitness residue deps update release forensics ${types} " in
     *" ${prefix} "*) ;;
     *)
       printf 'gaia_branch_validate: %s has the prefix %s, which is neither a GAIA workflow nor a commit type; use one of: %s\n' "$branch" "$prefix" "$types" >&2

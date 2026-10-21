@@ -119,16 +119,6 @@ assert_every_writer_landed() {
   done
 }
 
-@test "main and worktree resolve the same catalog lock directory" {
-  local worktree from_main from_worktree
-  worktree="$(make_worktree)"
-  from_main="$(cd "$REPO" && bash -c 'source "$1"; _gaia_notebook_lock_path catalog' _ "$LIBRARY")"
-  from_worktree="$(cd "$worktree" && bash -c 'source "$1"; _gaia_notebook_lock_path catalog' _ "$worktree/.gaia/scripts/notebook/notebook-lib.sh")"
-  [ -n "$from_main" ]
-  [ "$from_main" = "$from_worktree" ]
-  [ "$from_main" = "$REPO/.gaia/local/cache/shared/notebook-locks/catalog" ]
-}
-
 @test "concurrent writers from main and a worktree all land under the mkdir lock" {
   local worktree
   worktree="$(make_worktree)"

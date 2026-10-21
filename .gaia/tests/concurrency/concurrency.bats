@@ -1103,10 +1103,7 @@ SH
   entry_payload="$(jq -nc --arg worktree_path "$WORKTREE_B" \
     '{tool_name: "EnterWorktree", cwd: $worktree_path, tool_response: {worktreePath: $worktree_path}}')"
   # A hook-triggered entry on a tree with a lockfile installs in a background
-  # job, except under GitHub Actions, so CI's GITHUB_ACTIONS is cleared to
-  # measure the path a local session takes, and the property is read once that
-  # job has finished.
-  unset GITHUB_ACTIONS
+  # job, so the property is read once that job has finished.
   run_in "$WORKTREE_B" -- run_with PATH="$stub_directory:$PATH" -- \
     gaia_deliver_hook "$entry_payload" "$WORKTREE_B/.claude/hooks/provision-worktree.sh" >/dev/null 2>&1
 

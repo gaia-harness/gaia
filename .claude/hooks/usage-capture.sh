@@ -7,7 +7,6 @@
 set -uo pipefail
 trap 'exit 0' ERR
 
-[ -n "${GITHUB_ACTIONS:-}" ] && exit 0
 command -v jq >/dev/null 2>&1 || exit 0
 
 payload=$(cat)

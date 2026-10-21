@@ -19,7 +19,7 @@ setup() {
   FLUSH="$SCRIPTS/usage-flush.sh"
   FIXTURES_DIRECTORY="$BATS_TEST_DIRNAME/fixtures/usage/flush"
   TEMPORARY_DIRECTORY="$(cd "$BATS_TEST_TMPDIR" && pwd -P)"
-  unset GITHUB_ACTIONS GAIA_USAGE_TEST_BARRIER GAIA_USAGE_DEBUG_HOLD GAIA_TALLY_PROJECTS_ROOT
+  unset GAIA_USAGE_TEST_BARRIER GAIA_USAGE_DEBUG_HOLD GAIA_TALLY_PROJECTS_ROOT
   unset GAIA_LEDGER_LOCK_FORCE_FALLBACK GAIA_LEDGER_LOCK_TIMEOUT_SECONDS
   use_repo "$TEMPORARY_DIRECTORY/repo"
 }
@@ -322,17 +322,6 @@ member_run() {
   [ "$status" -eq 0 ]
   [ -e "$ROOT/.gaia/local/telemetry" ] && return 1
   true
-}
-
-@test "UAT-028: under GITHUB_ACTIONS the flusher exits 0 and creates no telemetry dir; unset, it records" {
-  install branch
-  GITHUB_ACTIONS=true run flush --session s-branch --finished-main
-  [ "$status" -eq 0 ]
-  [ -e "$ROOT/.gaia/local/telemetry" ] && return 1
-  run flush --session s-branch --finished-main
-  [ "$status" -eq 0 ]
-  [ -d "$TEL" ]
-  assert_golden branch
 }
 
 # ---------- start evidence ----------

@@ -46,9 +46,8 @@ key_json() {
     gaia_usage_default_branch gaia_usage_tree_roots gaia_usage_projects_root \
     gaia_usage_encode_path gaia_usage_candidate_directories gaia_usage_due_files \
     gaia_usage_valid_reference gaia_usage_branch_key gaia_usage_branch_map \
-    gaia_usage_append gaia_usage_inactive_reason gaia_usage_hooks_registered \
-    gaia_usage_in_ci | sort)"
-  [ "$(printf '%s\n' "$defined" | wc -l | tr -d ' ')" -eq 15 ]
+    gaia_usage_append gaia_usage_inactive_reason gaia_usage_hooks_registered | sort)"
+  [ "$(printf '%s\n' "$defined" | wc -l | tr -d ' ')" -eq 14 ]
   [ "$defined" = "$expected" ]
 }
 
@@ -410,14 +409,6 @@ write_settings() {
   run gaia_usage_inactive_reason
   [ "$status" -eq 0 ]
   [ -z "$output" ]
-}
-
-@test "in ci: true only when GITHUB_ACTIONS is non-empty" {
-  GITHUB_ACTIONS=true gaia_usage_in_ci
-  GITHUB_ACTIONS='' run gaia_usage_in_ci
-  [ "$status" -ne 0 ]
-  run env -u GITHUB_ACTIONS "$BASH" -c 'source "$1"; gaia_usage_in_ci' _ "$USAGE_LIBRARY"
-  [ "$status" -ne 0 ]
 }
 
 # ---------- 11. state registry ----------

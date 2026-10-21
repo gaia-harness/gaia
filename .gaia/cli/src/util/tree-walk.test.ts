@@ -6,8 +6,9 @@ import {
   collectTreeFiles,
   EVERY_EXTENSION,
   normalizeEntry,
-  TS_SOURCE_EXTENSIONS,
 } from './tree-walk.js';
+
+const TS_SOURCE_EXTENSIONS: ReadonlySet<string> = new Set(['.ts']);
 
 const seed = (root: string, relative: string): void => {
   const abs = path.join(root, relative);

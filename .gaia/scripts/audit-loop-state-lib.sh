@@ -59,20 +59,6 @@ gaia_loop_is_uint() {
   [[ "${1-}" =~ ^(0|[1-9][0-9]{0,8})$ ]]
 }
 
-# gaia_loop_is_safe_relative_path <s>: relative, no leading `-` (never read as an
-# option), no `..` segment, no newline. bash strings cannot hold NUL.
-gaia_loop_is_safe_relative_path() {
-  local relative_path="${1-}" newline=$'\n'
-  [ -n "$relative_path" ] || return 1
-  case "$relative_path" in
-    /* | -* | *"$newline"*) return 1 ;;
-  esac
-  case "/$relative_path/" in
-    */../*) return 1 ;;
-  esac
-  return 0
-}
-
 # The normalized-key rule: what may name a state file. A `..`, an
 # empty segment or an edge slash would let a branch name climb out of, or
 # alias a sibling inside, the audit-loop directory.

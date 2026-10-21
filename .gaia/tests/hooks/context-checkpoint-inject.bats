@@ -29,7 +29,7 @@ bats_require_minimum_version 1.5.0
 setup() {
   REPO_ROOT="$(cd "$BATS_TEST_DIRNAME/../../.." && pwd)"
   TEMPORARY_DIRECTORY="$(cd "$BATS_TEST_TMPDIR" && pwd -P)"
-  unset GIT_DIR GIT_WORK_TREE GIT_COMMON_DIR GITHUB_ACTIONS
+  unset GIT_DIR GIT_WORK_TREE GIT_COMMON_DIR
   export GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_NOSYSTEM=1
   export GIT_AUTHOR_NAME=T GIT_AUTHOR_EMAIL=t@example.com
   export GIT_COMMITTER_NAME=T GIT_COMMITTER_EMAIL=t@example.com

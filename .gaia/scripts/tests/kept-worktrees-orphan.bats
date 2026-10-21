@@ -293,7 +293,7 @@ listed() { printf '%s\n' "$output" | grep -Fq -- "- $TREE "; }
 provision_enter() {
   local payload
   payload=$(printf '{"hook_event_name":"PostToolUse","tool_name":"EnterWorktree","session_id":"22222222-aaaa-bbbb-cccc-000000000001","cwd":"%s","tool_response":{"worktreePath":"%s"}}' "$TREE" "$TREE")
-  GITHUB_ACTIONS=1 run bash "$1" <<<"$payload"
+  run bash "$1" <<<"$payload"
   OCCUPANCY=$(cat "$MAIN/.gaia/local/worktree-occupancy/22222222-aaaa-bbbb-cccc-000000000001.tsv" 2>/dev/null) || OCCUPANCY=""
 }
 

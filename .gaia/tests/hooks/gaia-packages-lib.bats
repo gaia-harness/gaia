@@ -64,11 +64,6 @@ check_case() {
     return
   fi
 
-  got=$(gaia_packages_source)
-  if [ "$got" != "$(jq -r '.source' "$expected")" ]; then
-    echo "source: got $got"
-    failures=1
-  fi
   got=$(gaia_packages_list)
   if [ "$got" != "$(jq -r '.list | map(join("\t")) | .[]' "$expected")" ]; then
     echo "list: got [$got]"
@@ -216,7 +211,6 @@ check_case() {
   [ "$status" -eq 2 ]
   [ -z "$(gaia_package_globs_ere tddUnitTests)" ]
   [ -z "$(gaia_packages_list)" ]
-  [ -z "$(gaia_packages_source)" ]
 }
 
 @test "jq unavailable: load returns 4 naming jq, never 0" {
@@ -242,12 +236,11 @@ check_case() {
   [ -z "${lines[1]:-}" ]
 }
 
-@test "registry absent: source is builtin, the committed descriptor drives it, frontend/app matches and root app does not" {
+@test "registry absent: the committed descriptor drives the built-in default, frontend/app matches and root app does not" {
   . "$LIBRARY"
   mkdir -p "$BATS_TEST_TMPDIR/absent/frontend"
   cp "$REPO_ROOT/frontend/gaia.package.json" "$BATS_TEST_TMPDIR/absent/frontend/"
   gaia_packages_load "$BATS_TEST_TMPDIR/absent"
-  [ "$(gaia_packages_source)" = builtin ]
   local ere
   ere="$(gaia_package_globs_ere tddUnitTests)"
   [[ "frontend/app/utils/x.test.ts" =~ $ere ]]
@@ -281,7 +274,6 @@ check_case() {
   local status=0
   gaia_packages_load "$REPO_ROOT" || status=$?
   [ "$status" -eq 0 ]
-  [ "$(gaia_packages_source)" = registry ]
 }
 
 @test "hostile registry path is malformed (2) and runs nothing" {

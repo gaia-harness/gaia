@@ -11,7 +11,7 @@
 # BASH_SOURCE[0]. A dependent function returns 1 when its sibling is missing.
 # Under zsh BASH_SOURCE is empty, so a zsh caller can source this file and call
 # the pure functions (gaia_usage_valid_reference, gaia_usage_encode_path,
-# gaia_usage_inactive_reason, gaia_usage_in_ci), while
+# gaia_usage_inactive_reason), while
 # every function that needs a sibling returns 1. A relative source path must
 # stay valid from the caller's working directory at call time.
 #
@@ -269,8 +269,6 @@ gaia_usage_hooks_registered() {
         | select(contains("/.claude/hooks/usage-capture.sh"))] | length > 0;
       reg("Stop") and reg("SessionStart")' "$settings" >/dev/null 2>&1
 }
-
-gaia_usage_in_ci() { [ -n "${GITHUB_ACTIONS:-}" ]; }
 
 # The workflows whose start opens an attribution interval and whose run
 # `usage.sh record` closes, as a JSON array string. The flusher's start

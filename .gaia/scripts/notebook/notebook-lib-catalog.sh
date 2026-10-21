@@ -67,14 +67,6 @@ _gaia_notebook_lock_directory_for() {
   printf '%s\n' "$1/.gaia/local/cache/shared/notebook-locks/$2"
 }
 
-# _gaia_notebook_lock_path <catalog|mint-spec|mint-plan>: the lock directory
-# the current tree selector resolves, without creating it.
-_gaia_notebook_lock_path() {
-  local main
-  main="$(_gaia_notebook_main)" || return 1
-  _gaia_notebook_lock_directory_for "$main" "$1"
-}
-
 # Gitignore check, then create the notebook folder. Runs before every write.
 _gaia_notebook_prepare_write() {
   local main="$1"

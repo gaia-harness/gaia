@@ -75,7 +75,7 @@ A segment is covered when it carries `act`, or when an `activity` row of the sam
 
 The flusher parses outside the ledger lock, then takes the lock for a short commit that re-checks the cursor before appending (compare-and-swap), so two flushers racing over one file count each message once. A close binding that lands after the flusher prepared is a conflict too: the flusher re-prepares, so no committed segment straddles a close. On a lock timeout it appends nothing and leaves the file due for the next run; there is no unlocked fallback. The trailing, possibly still-growing group of a live transcript is held back until it is quiet, and a finished session is flushed whole.
 
-The merge hook and `usage.sh record` each add a capped synchronous flush of their own session (see Recording a run and Readouts). Nothing runs in CI (`GITHUB_ACTIONS` set), and nothing runs without `jq`.
+The merge hook and `usage.sh record` each add a capped synchronous flush of their own session (see Recording a run and Readouts). Nothing runs without `jq`.
 
 ## Keys and attribution
 
@@ -101,7 +101,7 @@ Resolution happens at read time: the latest research or declare binding at or be
 
 An initiative is a tree of refs (the ref grammar is `gaia_usage_valid_reference` in `.gaia/scripts/usage-lib.sh`) joined by lineage edges. Edges come from two places:
 
-- **Derived** at read time from naming conventions alone (a debt branch to its issue, `<type>/spec-<n>` to its SPEC, legacy `plan/spec-<n>` too, a branch named for an issue).
+- **Derived** at read time from naming conventions alone (a debt branch to its issue, `<type>/spec-<n>` to its SPEC, a branch named for an issue).
 - **Explicit**, recorded by `usage.sh link`, by `usage.sh lineage` from a SPEC's `lineage:` frontmatter, by the PR-create hook (a `pr:` to its branch), by `usage.sh record --pr` or `--issue` (a `pr:` or `issue:` to a command run), and by the orchestrator when it links a plan's branch to its SPEC.
 
 `usage.sh unlink` writes a tombstone that suppresses a pair, derived or explicit, from then on. `link` refuses a link that would close a cycle.

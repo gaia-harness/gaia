@@ -47,7 +47,7 @@ setup() {
     printf '#!/bin/sh\nprintf "%s\\n" "$0" >> "%s"\nexit 1\n' "$tool" "$NETWORK_MARKER" >"$STUB_BIN/$tool"
     chmod +x "$STUB_BIN/$tool"
   done
-  unset GITHUB_ACTIONS GIT_DIR GIT_WORK_TREE GIT_COMMON_DIR
+  unset GIT_DIR GIT_WORK_TREE GIT_COMMON_DIR
 }
 
 teardown() {

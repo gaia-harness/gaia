@@ -23,8 +23,6 @@
 set -uo pipefail
 trap 'exit 0' ERR
 
-[ -n "${GITHUB_ACTIONS:-}" ] && exit 0
-
 here="${BASH_SOURCE[0]}"
 case "$here" in */*) here="${here%/*}" ;; *) here=. ;; esac
 scripts="$here/../../.gaia/scripts"

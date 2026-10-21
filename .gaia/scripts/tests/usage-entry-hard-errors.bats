@@ -88,7 +88,7 @@ run_command() {
   shift
   (
     cd "$MAIN" || exit 99
-    env -u GITHUB_ACTIONS -u CI -u GAIA_USAGE_HOOKS_DISABLE -u CLAUDE_PROJECT_DIR \
+    env -u CI -u GAIA_USAGE_HOOKS_DISABLE -u CLAUDE_PROJECT_DIR \
       PATH="$SCRATCH/bin:$PATH" CLAUDE_CODE_SESSION_ID=sess-1 "$@" <<<"$stdin_text"
   )
 }

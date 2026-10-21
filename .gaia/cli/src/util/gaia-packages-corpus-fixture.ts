@@ -35,10 +35,6 @@ export type CorpusExpected = {
 
 /** The slice of a reader the driver needs, so both vitest suites adapt to it. */
 export type CorpusReader = {
-  forPath: (
-    packages: never[],
-    repoRelativePath: string
-  ) => null | ReaderPackage;
   load: (
     repoRoot: string
   ) =>
@@ -138,21 +134,10 @@ const globDisagreements = (
     ];
   });
 
-const ownershipDisagreements = (
+const directoryDisagreements = (
   expected: CorpusExpected,
-  loaded: Loaded,
-  reader: CorpusReader
+  loaded: Loaded
 ): string[] => {
-  const owners = Object.entries(expected.forPath ?? {}).flatMap(
-    ([candidate, owner]) => {
-      const got =
-        reader.forPath(loaded.packages as never[], candidate)?.name ?? '';
-
-      return got === owner ?
-          []
-        : [`for_path [${candidate}]: want [${owner}], got [${got}]`];
-    }
-  );
   const directories = Object.entries(expected.dir ?? {}).flatMap(
     ([name, directory]) => {
       const got = loaded.packages.find((p) => p.name === name)?.path ?? null;
@@ -163,7 +148,7 @@ const ownershipDisagreements = (
     }
   );
 
-  return [...owners, ...directories];
+  return directories;
 };
 
 /** One line per way the reader disagrees with the oracle; empty when it agrees. */
@@ -194,6 +179,6 @@ export const corpusDisagreements = (
     : [`source: got ${result.source}`]),
     ...(list === JSON.stringify(expected.list) ? [] : [`list: got ${list}`]),
     ...globDisagreements(expected, result, reader),
-    ...ownershipDisagreements(expected, result, reader),
+    ...directoryDisagreements(expected, result),
   ];
 };

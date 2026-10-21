@@ -10,9 +10,6 @@
 import {readdirSync} from 'node:fs';
 import path from 'node:path';
 
-/** The extension set the TypeScript-only guard suites scan with. */
-export const TS_SOURCE_EXTENSIONS: ReadonlySet<string> = new Set(['.ts']);
-
 /**
  * The extension argument that keeps every regular file, an extensionless one
  * and a dotfile included, which no extension set can name.

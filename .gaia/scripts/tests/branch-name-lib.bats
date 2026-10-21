@@ -80,10 +80,6 @@ worktree_spelling() {
     "debt/2159|drain 2159" \
     "debt/no-number|drain unknown" \
     "debt/12-foo-batch|drain 12" \
-    "plan/spec-005-cards-layout|plan SPEC-005" \
-    "plan/spec-005|plan SPEC-005" \
-    "plan/plan-012-execution|plan plan-012" \
-    "plan/cards-layout|plan unknown" \
     "feat/plan-024-x|plan plan-024" \
     "feat/plan-024|plan plan-024" \
     "fix/spec-012|plan SPEC-012" \
@@ -104,10 +100,7 @@ worktree_spelling() {
     "update/v2.0.0-2026-10-03-1200|maintenance v2.0.0-2026-10-03-1200" \
     "release/v1.4.0|maintenance v1.4.0" \
     "wiki/2026-10-15-0532|maintenance 2026-10-15-0532" \
-    "wiki/sync-2026-09-20-abc1234|maintenance sync-2026-09-20-abc1234" \
     "forensics/123-some-class|maintenance 123-some-class" \
-    "chore/update-deps-2026-09-20-1200|maintenance update-deps-2026-09-20-1200" \
-    "wiki-sync/2026-09-20-abc1234|maintenance 2026-09-20-abc1234" \
     "chore/fix-typo|adhoc unknown" \
     "wiki/notes|adhoc unknown" \
     "wiki/2026-10-03-14-30|adhoc unknown" \
@@ -121,17 +114,6 @@ worktree_spelling() {
     want="${row#*|}"
     expect_classify "$branch" "$want"
     expect_classify "$(worktree_spelling "$branch")" "$want"
-  done
-}
-
-@test "table: a type-prefixed plan branch classifies exactly as the legacy plan/ spelling of the same unit" {
-  local pair
-  for pair in "feat/plan-024-x plan/plan-024-x" "fix/spec-012 plan/spec-012" "docs/spec-007-cards plan/spec-007-cards" \
-    "refactor/plan-5 plan/plan-5"; do
-    [ "$(gaia_branch_classify "${pair%% *}")" = "$(gaia_branch_classify "${pair#* }")" ] || {
-      echo "pair '$pair' classifies differently" >&2
-      return 1
-    }
   done
 }
 
@@ -176,17 +158,16 @@ worktree_spelling() {
   [ "$(gaia_branch_members "debt/41-42-47-batch" | tr '\n' ' ')" = "41 42 47 " ]
   [ "$(gaia_branch_members "worktree-debt+41-42-batch" | tr '\n' ' ')" = "41 42 " ]
   [ -z "$(gaia_branch_members "debt/no-number")" ]
-  [ -z "$(gaia_branch_members "plan/spec-005-x")" ]
   [ -z "$(gaia_branch_members "feat/plan-024-x")" ]
   [ -z "$(gaia_branch_members "worktree-fix+spec-012-x")" ]
   [ -z "$(gaia_branch_members "main")" ]
 }
 
 @test "spec-number: a SPEC plan branch prints its number without padding, anything else prints nothing" {
-  [ "$(gaia_branch_spec_number "plan/spec-005-x")" = "5" ]
-  [ "$(gaia_branch_spec_number "worktree-plan+spec-120")" = "120" ]
-  [ "$(gaia_branch_spec_number "plan/spec-000")" = "0" ]
-  [ -z "$(gaia_branch_spec_number "plan/plan-012-x")" ]
+  [ "$(gaia_branch_spec_number "feat/spec-005-x")" = "5" ]
+  [ "$(gaia_branch_spec_number "worktree-feat+spec-120")" = "120" ]
+  [ "$(gaia_branch_spec_number "feat/spec-000")" = "0" ]
+  [ -z "$(gaia_branch_spec_number "feat/plan-012-x")" ]
   [ -z "$(gaia_branch_spec_number "spec-005-x")" ]
 }
 
@@ -194,19 +175,16 @@ worktree_spelling() {
   [ "$(gaia_branch_spec_number "refactor/spec-005-x")" = "5" ]
   [ "$(gaia_branch_spec_number "docs/spec-007-cards")" = "7" ]
   [ "$(gaia_branch_spec_number "worktree-fix+spec-012-x")" = "12" ]
-  [ "$(gaia_branch_spec_number "plan/spec-005-x")" = "5" ]
   [ -z "$(gaia_branch_spec_number "feat/plan-024-x")" ]
   [ -z "$(gaia_branch_spec_number "feat/spec-notes")" ]
 }
 
 @test "plan-number: every plan spelling prints its number without padding, anything else prints nothing" {
   [ "$(gaia_branch_plan_number "feat/plan-031-x")" = "31" ]
-  [ "$(gaia_branch_plan_number "plan/plan-012-x")" = "12" ]
   [ "$(gaia_branch_plan_number "worktree-feat+plan-007-x")" = "7" ]
-  [ "$(gaia_branch_plan_number "plan/plan-000")" = "0" ]
+  [ "$(gaia_branch_plan_number "feat/plan-000")" = "0" ]
   [ "$(gaia_branch_plan_number "fix/plan-0100-cards")" = "100" ]
   [ -z "$(gaia_branch_plan_number "feat/spec-005-x")" ]
-  [ -z "$(gaia_branch_plan_number "plan/spec-005-x")" ]
   [ -z "$(gaia_branch_plan_number "feat/plan-notes")" ]
   [ -z "$(gaia_branch_plan_number "main")" ]
   [ "$(bash "$LIBRARY" plan-number feat/plan-031-x)" = "31" ]
@@ -225,9 +203,9 @@ plan_type_in() {
   [ "$(bash "$LIBRARY" plan-type feat/plan-024-x)" = "feat" ]
 }
 
-@test "plan-type: legacy plan/ branches, hand-named branches, workflow branches and non-plan names print nothing" {
+@test "plan-type: hand-named branches, workflow branches and non-plan names print nothing" {
   local branch
-  for branch in plan/plan-023-conventional-commits-naming plan/spec-005-x worktree-plan+spec-005 feat/planning-notes \
+  for branch in feat/planning-notes \
     feat/new-thing debt/12-spec-1 cleanse/plan-1 release/v1.0.0 main ""; do
     run gaia_branch_plan_type "$branch"
     [ "$status" -eq 0 ] || { echo "branch '$branch': status $status" >&2; return 1; }
@@ -242,16 +220,6 @@ plan_type_in() {
   plan_type_in "$scratch_library" feat/plan-024-x
   [ "$status" -eq 0 ]
   [ "$output" != "feat" ]
-}
-
-@test "the plan-type legacy exclusion can fail: a lib that drops it prints plan for plan/spec-005-x" {
-  local scratch_library="$BATS_TEST_TMPDIR/branch-name-lib-legacy-type.sh"
-  plan_type_in "$LIBRARY" plan/spec-005-x
-  [ -z "$output" ]
-  sed 's#^  \[ "\${_gaia_branch_normalized_name%%/\*}" != "plan" \] || return 0$#  :#' "$LIBRARY" >"$scratch_library"
-  cmp -s "$LIBRARY" "$scratch_library" && return 1
-  plan_type_in "$scratch_library" plan/spec-005-x
-  [ "$output" = "plan" ]
 }
 
 # ========== 6. minting ==========
@@ -534,10 +502,6 @@ expect_adhoc_refused() {
   grep -qF 'pick another slug' <<<"$stderr"
   grep -qF 'plan' <<<"$stderr"
   expect_adhoc_refused --type fix --slug "spec-12"
-  expect_adhoc_refused --type wiki --slug "sync x"
-  expect_adhoc_refused --type chore --slug "task 2026-10-13-1200"
-  # The chore timestamp tail reads as maintenance with or without an issue.
-  expect_adhoc_refused --type chore --issue 7 --slug "task 2026-10-13-1200"
 
   [ "$(gaia_branch_name adhoc --type feat --issue 7 --slug "plan 3 x")" = "feat/7-plan-3-x" ]
   [ "$(gaia_branch_name adhoc --type fix --issue 7 --slug "spec-12")" = "fix/7-spec-12" ]
@@ -759,7 +723,7 @@ prefix_conforms() {
   local prefix scratch_library
   prefix="$(printf 'gaia%sci' -)"
   scratch_library="$BATS_TEST_TMPDIR/branch-name-lib-old-arm.sh"
-  sed 's#wiki-sync/\* \\$#wiki-sync/* | PREFIX/* \\#' "$LIBRARY" | sed "s#PREFIX#$prefix#" > "$scratch_library"
+  sed 's#forensics/\* \\$#forensics/* | PREFIX/* \\#' "$LIBRARY" | sed "s#PREFIX#$prefix#" > "$scratch_library"
   grep -qF -- "| $prefix/* " "$scratch_library"
   run bash -c ". '$scratch_library' && gaia_branch_classify '$prefix/t/x'"
   [ "$status" -eq 0 ]
@@ -849,10 +813,10 @@ expect_invalid() {
 
 @test "validate accepts one canonical example per workflow kind" {
   local branch
-  for branch in debt/42-fix-it debt/41-42-47-batch plan/spec-005-cards plan/plan-023-naming \
+  for branch in debt/42-fix-it debt/41-42-47-batch fix/spec-005-cards feat/plan-023-naming \
     cleanse/2026-10-03-1200 codify/2026-10-03-1200 fitness/2026-10-03-1200 residue/2026-10-03-1200 \
     deps/2026-10-03-1200 update/v2.0.0-2026-10-03-1200 release/v2.0.0 \
-    wiki/2026-10-15-0532 wiki/sync-2026-09-20-abc1234 forensics/123-some-class; do
+    wiki/2026-10-15-0532 forensics/123-some-class; do
     expect_valid "$branch"
   done
 }
@@ -891,38 +855,11 @@ expect_invalid() {
   [ "$checked" -eq "$expected" ]
 }
 
-@test "validate keeps legacy plan/plan-<nnn> and plan/spec-<nnn> valid" {
-  expect_valid plan/plan-023-conventional-commits-naming
-  expect_valid plan/spec-005-cards
-  expect_valid plan/spec-005
-  expect_valid plan/plan-1
-}
-
-@test "validate refuses any other plan/ name, naming the type-prefixed fix" {
-  local branch
-  for branch in plan/whatever plan/cards-layout plan/spec plan/plan plan/spec-x plan/planning-notes; do
-    expect_invalid "$branch"
-    grep -qF '<type>/plan-<nnn>-<slug>' <<<"$stderr" || { echo "branch '$branch': fix not named: $stderr" >&2; return 1; }
-  done
-}
-
-@test "the plan/ refusal can fail: a lib copy without the rule accepts plan/whatever" {
-  local directory="$BATS_TEST_TMPDIR/no-plan-rule"
-  scratch_library "$directory"
-  validate_in "$directory" plan/whatever
-  [ "$status" -eq 1 ]
-  sed 's#^  if \[ "\$prefix" = "plan" \]; then$#  if false; then#' "$LIBRARY" >"$directory/.gaia/scripts/branch-name-lib.sh"
-  cmp -s "$LIBRARY" "$directory/.gaia/scripts/branch-name-lib.sh" && return 1
-  validate_in "$directory" plan/whatever
-  [ "$status" -eq 0 ]
-}
-
-@test "validate accepts a mixed-case release version, a dependabot branch, and a legacy-style chore slug" {
+@test "validate accepts a mixed-case release version, a dependabot branch, and a chore slug" {
   expect_valid release/v2.0.0-RC.1
   expect_valid update/v2.0.0-RC.1-2026-10-03-1200
   expect_valid dependabot/npm_and_yarn/Foo-1.2.3
   expect_valid chore/fix-typo
-  expect_valid chore/update-deps-2026-09-20-1200
 }
 
 @test "validate refuses every malformed name with one stderr line and exit 1" {
@@ -943,9 +880,9 @@ expect_invalid() {
 }
 
 @test "validate names the canonical name and the rename for a worktree spelling" {
-  run --separate-stderr gaia_branch_validate worktree-plan+plan-023-x
+  run --separate-stderr gaia_branch_validate worktree-feat+plan-023-x
   [ "$status" -eq 1 ]
-  grep -qF 'plan/plan-023-x' <<<"$stderr"
+  grep -qF 'feat/plan-023-x' <<<"$stderr"
   grep -qF 'branch -m' <<<"$stderr"
 }
 
@@ -1098,7 +1035,7 @@ unmintable_kinds() {
 
 @test "portability: the readers agree under zsh, where zsh exists" {
   command -v zsh >/dev/null 2>&1 || skip "zsh not available"
-  run zsh -c "source '$LIBRARY'; gaia_branch_classify worktree-debt+41-42-batch; gaia_branch_members worktree-debt+41-42-batch; gaia_branch_spec_number plan/spec-007-x; gaia_branch_classify feat/plan-024-x; gaia_branch_spec_number docs/spec-007-x; gaia_branch_plan_type worktree-fix+spec-012-x"
+  run zsh -c "source '$LIBRARY'; gaia_branch_classify worktree-debt+41-42-batch; gaia_branch_members worktree-debt+41-42-batch; gaia_branch_spec_number fix/spec-007-x; gaia_branch_classify feat/plan-024-x; gaia_branch_spec_number docs/spec-007-x; gaia_branch_plan_type worktree-fix+spec-012-x"
   [ "$status" -eq 0 ]
   [ "$(printf '%s\n' "$output" | tr '\n' ' ')" = "drain 41-42 41 42 7 plan plan-024 7 fix " ]
 }
