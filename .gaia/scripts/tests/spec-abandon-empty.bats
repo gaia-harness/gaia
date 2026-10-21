@@ -13,7 +13,7 @@ setup() {
   REPO_SCRIPTS="$(cd "$(dirname "$BATS_TEST_FILENAME")/../../../.gaia/scripts" && pwd)"
   SCRIPT="$LIBRARY_DIRECTORY/spec-abandon-empty.sh"
   LEDGER_UPDATE="$LIBRARY_DIRECTORY/ledger-update.sh"
-  [ -x "$SCRIPT" ] || skip "spec-abandon-empty.sh not executable"
+  [ -x "$SCRIPT" ]
 
   SANDBOX="$(mktemp -d "${BATS_TEST_TMPDIR}/sandbox.XXXXXX")"
   mkdir -p "$SANDBOX/.notebook/specs" "$SANDBOX/.gaia/local/cache" "$SANDBOX/.gaia/scripts/notebook"

@@ -76,7 +76,7 @@ setup() {
   . "$(cd "$BATS_TEST_DIRNAME/../../.." && pwd)/.gaia/tests/helpers/audit-roster.sh"
   THIS_DIRECTORY="$( cd "$( dirname "$BATS_TEST_FILENAME" )" && pwd )"
   SCRIPT="$THIS_DIRECTORY/../../../.claude/hooks/post-audit-status.sh"
-  [ -x "$SCRIPT" ] || skip "post-audit-status.sh not executable"
+  [ -x "$SCRIPT" ]
   DIGEST_LIBRARY="$THIS_DIRECTORY/../../../.claude/hooks/lib/audit-digest.sh"
   . "$THIS_DIRECTORY/../../../.gaia/tests/helpers/gh-base-stub.sh"
   . "$THIS_DIRECTORY/../../../.gaia/tests/helpers/catchup-fixture.sh"

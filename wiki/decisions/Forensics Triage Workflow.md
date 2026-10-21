@@ -61,8 +61,6 @@ Default-deny. Any path in neither list below is denylisted by default; allowlist
 | `wiki/`                               | Knowledge base; human-curated.                                          |
 | `studio/`                             | Private strategy vault; human-curated.                                  |
 | `website/`                            | Marketing/docs site; human-curated.                                     |
-| `.specify/specs/`                     | Denied defensively: a project migrated from an older GAIA may still hold a leftover spec-kit specs tree. |
-| `.specify/memory/`                    | Denied defensively: a project migrated from an older GAIA may still hold a leftover spec-kit memory tree. |
 | `.notebook/`                          | GAIA spec, plan and research artifacts ([[Notebook]]).                  |
 | `.gaia/templates/spec/`               | Template literals; mutating these affects every adopter.                |
 | `.claude/skills/gaia/references/spec/clarify-prompts.md`, `.claude/skills/gaia/references/spec/system-prompt.md`, `.claude/skills/gaia/references/spec/spec-template.md` | Prose template literals, denied by file so the sibling runbooks under the allowed skills root stay allowed; mutating these affects every adopter. |

@@ -26,7 +26,7 @@ setup() {
   # snapshot_file + assert_files_identical: byte identity without `$(cat …)`.
   . "$REPO_ROOT/.gaia/tests/helpers/files.sh"
   SOURCE_LIBRARY_DIRECTORY="$REPO_ROOT/.gaia/scripts/spec"
-  [ -x "$SOURCE_LIBRARY_DIRECTORY/plan-reconcile.sh" ] || skip "plan-reconcile.sh not executable"
+  [ -x "$SOURCE_LIBRARY_DIRECTORY/plan-reconcile.sh" ]
 
   SANDBOX="$(_fixture_repository \
     --seed-row '{"kind":"plan","id":"PLAN-005","path":"plans/PLAN-005","status":"ready","subject":"x","source":"allocated","created_at":"2026-01-01T00:00:00Z","status_changed_at":"2026-01-01T00:00:00Z"}')"

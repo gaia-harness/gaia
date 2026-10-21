@@ -35,10 +35,10 @@ setup() {
   CLEARANCE_WRITER="$THIS_DIRECTORY/../audit-write-clearance.sh"
   CLASSIFIER="$THIS_DIRECTORY/../audit-noop-detect.sh"
   DIGEST_LIBRARY="$THIS_DIRECTORY/../../../.claude/hooks/lib/audit-digest.sh"
-  [ -x "$FINDINGS_WRITER" ] || skip "audit-write-findings.sh not executable"
-  [ -x "$CLEARANCE_WRITER" ] || skip "audit-write-clearance.sh not executable"
-  [ -x "$CLASSIFIER" ] || skip "audit-noop-detect.sh not executable"
-  [ -f "$DIGEST_LIBRARY" ] || skip "audit-digest.sh not present"
+  [ -x "$FINDINGS_WRITER" ]
+  [ -x "$CLEARANCE_WRITER" ]
+  [ -x "$CLASSIFIER" ]
+  [ -f "$DIGEST_LIBRARY" ]
   command -v jq >/dev/null 2>&1 || skip "jq required"
   # The writer's open-finding accounting is skipped when GITHUB_ACTIONS is
   # true; unset it so a runner exercises the same path a local run does.

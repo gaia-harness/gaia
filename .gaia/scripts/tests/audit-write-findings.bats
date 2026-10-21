@@ -14,7 +14,7 @@
 setup() {
   THIS_DIRECTORY="$( cd "$( dirname "$BATS_TEST_FILENAME" )" && pwd )"
   WRITER="$THIS_DIRECTORY/../audit-write-findings.sh"
-  [ -x "$WRITER" ] || skip "audit-write-findings.sh not executable"
+  [ -x "$WRITER" ]
   command -v jq >/dev/null 2>&1 || skip "jq required"
 
   ROOT="$BATS_TEST_TMPDIR/root"

@@ -145,12 +145,10 @@ git commit --no-verify -m y"
   assert_denied_by_json
 }
 
-@test "the deny message names .githooks/pre-commit, not Husky" {
+@test "the deny message names .githooks/pre-commit" {
   run_hook 'git commit --no-verify -m x'
   assert_denied_by_json
   grep -qF -- '.githooks/pre-commit' <<<"$output" || return 1
-  grep -qF -- 'Husky' <<<"$output" && return 1
-  true
 }
 
 # --- allowed ---
@@ -172,13 +170,6 @@ git commit --no-verify -m y"
 
 @test "plain git push on a feature branch is allowed" {
   run_hook 'git push origin feature'
-  assert_allowed_by_json
-}
-
-@test "a HUSKY= prefix is no longer read: commit and push stay allowed" {
-  run_hook 'HUSKY=0 git commit -m x'
-  assert_allowed_by_json
-  run_hook 'HUSKY=0 git push origin feature'
   assert_allowed_by_json
 }
 

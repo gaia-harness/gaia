@@ -29,7 +29,7 @@ setup() {
   REPO_ROOT="$( cd "$THIS_DIRECTORY/../../.." && pwd )"
   DIGEST_LIBRARY="$REPO_ROOT/.claude/hooks/lib/audit-digest.sh"
   CLI="$REPO_ROOT/.gaia/scripts/audit-member-digest.sh"
-  [ -f "$DIGEST_LIBRARY" ] || skip "audit-digest.sh not present"
+  [ -f "$DIGEST_LIBRARY" ]
   # The digest needs a sha256 tool + git; it does NOT need jq.
   if ! command -v sha256sum >/dev/null 2>&1 && ! command -v shasum >/dev/null 2>&1; then
     skip "no sha256 tool"

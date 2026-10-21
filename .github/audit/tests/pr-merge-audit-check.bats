@@ -45,7 +45,7 @@ setup() {
   THIS_DIRECTORY="$( cd "$( dirname "$BATS_TEST_FILENAME" )" && pwd )"
   SCRIPT="$THIS_DIRECTORY/../../../.claude/hooks/pr-merge-audit-check.sh"
   LIBRARY_DIRECTORY="$( cd "$THIS_DIRECTORY/../../../.claude/hooks/lib" && pwd )"
-  [ -x "$SCRIPT" ] || skip "pr-merge-audit-check.sh not executable"
+  [ -x "$SCRIPT" ]
   command -v jq >/dev/null 2>&1 || skip "jq not available"
 
   SANDBOX="$BATS_TEST_TMPDIR/sandbox"

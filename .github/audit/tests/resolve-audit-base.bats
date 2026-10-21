@@ -51,7 +51,7 @@ setup() {
   THIS_DIRECTORY="$( cd "$( dirname "$BATS_TEST_FILENAME" )" && pwd )"
   REPO_ROOT="$( cd "$THIS_DIRECTORY/../../.." && pwd )"
   SCRIPT="$THIS_DIRECTORY/../resolve-audit-base.sh"
-  [ -x "$SCRIPT" ] || skip "resolve-audit-base.sh not executable"
+  [ -x "$SCRIPT" ]
 
   SANDBOX="$BATS_TEST_TMPDIR/sandbox"
   mkdir -p "$SANDBOX/.gaia"

@@ -23,7 +23,7 @@ setup() {
   THIS_DIRECTORY="$( cd "$( dirname "$BATS_TEST_FILENAME" )" && pwd )"
   REPO_ROOT="$( cd "$THIS_DIRECTORY/../../.." && pwd )"
   VERSION_LIBRARY="$REPO_ROOT/.claude/hooks/lib/gaia-version.sh"
-  [ -f "$VERSION_LIBRARY" ] || skip "gaia-version.sh not present"
+  [ -f "$VERSION_LIBRARY" ]
   # shellcheck source=/dev/null
   . "$VERSION_LIBRARY"
 

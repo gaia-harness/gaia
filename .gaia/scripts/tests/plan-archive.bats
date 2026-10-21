@@ -25,7 +25,7 @@ _fixture_repository() {
 setup() {
   THIS_DIRECTORY="$( cd "$( dirname "$BATS_TEST_FILENAME" )" && pwd )"
   SCRIPT="$THIS_DIRECTORY/../plan-archive.sh"
-  [ -x "$SCRIPT" ] || skip "plan-archive.sh not executable"
+  [ -x "$SCRIPT" ]
   REPO_ROOT="$( cd "$THIS_DIRECTORY/../../.." && pwd )"
   # snapshot_file + assert_files_identical: byte identity without `$(cat …)`.
   . "$REPO_ROOT/.gaia/tests/helpers/files.sh"

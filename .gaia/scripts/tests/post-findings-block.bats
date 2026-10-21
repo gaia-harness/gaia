@@ -22,7 +22,7 @@ setup() {
   # shellcheck source=.gaia/tests/helpers/path.sh
   . "$( cd "$THIS_DIRECTORY/../../.." && pwd )/.gaia/tests/helpers/path.sh"
   SCRIPT="$THIS_DIRECTORY/../post-findings-block.sh"
-  [ -x "$SCRIPT" ] || skip "post-findings-block.sh not executable"
+  [ -x "$SCRIPT" ]
   command -v jq >/dev/null 2>&1 || skip "jq required"
 
   SANDBOX="$BATS_TEST_TMPDIR/sandbox"

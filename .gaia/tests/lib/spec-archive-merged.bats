@@ -458,7 +458,7 @@ _clear_merged_at() {
 @test "26: prefers summary-verify.sh when present; a malformed but non-empty SUMMARY.md is kept" {
   real_root="$(cd "$BATS_TEST_DIRNAME" && git rev-parse --show-toplevel)"
   verify_source="$real_root/.gaia/scripts/summary-verify.sh"
-  [ -f "$verify_source" ] || skip "summary-verify.sh not present yet"
+  [ -f "$verify_source" ]
 
   REPO="$("$HELPERS/tmp-notebook-repo.sh" --seed-spec-merged-folder SPEC-001)"
   cp "$verify_source" "$REPO/.gaia/scripts/summary-verify.sh"
