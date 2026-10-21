@@ -157,9 +157,9 @@ run_type() {
   [[ "$output" == *"branch -m"* ]]
 }
 
-@test "branch step: REFUSES an unknown prefix and a wrong-case prefix" {
+@test "branch step: REFUSES an unknown prefix, a wrong-case prefix and the retired plan prefix" {
   local head_ref
-  for head_ref in 'feature/x' 'Fix/x'; do
+  for head_ref in 'feature/x' 'Fix/x' 'plan/plan-023-conventional-commits-naming'; do
     run_branch "$head_ref"
     if [ "$status" -ne 1 ]; then
       printf 'expected refusal of %s, got status %s\n' "$head_ref" "$status" >&3
@@ -171,7 +171,6 @@ run_type() {
 @test "branch step: ACCEPTS every canonical shape" {
   local head_ref checked=0
   for head_ref in \
-    'plan/plan-023-conventional-commits-naming' \
     'fix/2450-statusline-nudge' \
     'dependabot/npm_and_yarn/foo-1.2.3' \
     'wiki/2026-10-03-1432' \
@@ -183,7 +182,7 @@ run_type() {
     fi
     checked=$((checked + 1))
   done
-  [ "$checked" -eq 5 ]
+  [ "$checked" -eq 4 ]
 }
 
 # --- canary step -----------------------------------------------------------
@@ -318,12 +317,6 @@ STUB
   [[ "$output" == *"declares type feat"* ]]
   [[ "$output" == *"title has type fix"* ]]
   [[ "$output" == *"retitle"* ]]
-}
-
-@test "type step: passes a legacy plan branch with any title" {
-  run_type 'plan/plan-023-conventional-commits-naming' 'fix: y' stevensacks
-  [ "$status" -eq 0 ]
-  [[ "$output" == *"declares no change type"* ]]
 }
 
 @test "type step: passes a non-plan branch with any title" {
