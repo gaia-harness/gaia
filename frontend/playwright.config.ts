@@ -11,6 +11,10 @@ const exportedSiteUrl = process.env.SITE_URL;
 
 config();
 
+// Annotated as number so lint does not read the literal length of an `as const`
+// LANGUAGES tuple and flag the testIgnore condition as always true or false.
+const languageCount: number = LANGUAGES.length;
+
 const packageDirectory = fileURLToPath(new URL('.', import.meta.url));
 // Throws in a linked worktree with no port file, so no spec runs on main's ports.
 const ports = requireDevPorts(packageDirectory);
@@ -88,7 +92,7 @@ export default defineConfig({
   // The language switcher renders only with two or more languages, so its spec
   // is excluded until a second language is added to LANGUAGES.
   testIgnore:
-    LANGUAGES.length < 2 ? ['**/language-switch-a11y.spec.ts'] : undefined,
+    languageCount < 2 ? ['**/language-switch-a11y.spec.ts'] : undefined,
   testMatch: '**/*.spec.ts',
 
   use: {

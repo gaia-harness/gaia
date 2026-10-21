@@ -30,7 +30,7 @@ const Document = ({
   const nonce = useNonce();
   const theme = useOptionalTheme();
   const requestInfo = useOptionalRequestInfo();
-  const hasExplicitTheme = !!requestInfo?.userPrefs.theme;
+  const hasExplicitTheme = !!requestInfo?.userPreferences.theme;
 
   return (
     <html

@@ -295,13 +295,21 @@ Remove the import of the deleted `languages` module:
 import {LANGUAGES} from './app/languages';
 ```
 
+Remove the `languageCount` constant with its comment:
+
+```ts
+// Annotated as number so lint does not read the literal length of an `as const`
+// LANGUAGES tuple and flag the testIgnore condition as always true or false.
+const languageCount: number = LANGUAGES.length;
+```
+
 Remove the `testIgnore` property with its comment:
 
 ```ts
 // The language switcher renders only with two or more languages, so its spec
 // is excluded until a second language is added to LANGUAGES.
 testIgnore:
-  LANGUAGES.length < 2 ? ['**/language-switch-a11y.spec.ts'] : undefined,
+  languageCount < 2 ? ['**/language-switch-a11y.spec.ts'] : undefined,
 ```
 
 The spec the property gated is deleted in Section C.
