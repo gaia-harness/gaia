@@ -385,10 +385,16 @@ jobs:
               #     greps the wiki and release command surfaces.
               #   .claude/commands/gaia-release.md  the other surface C5-03
               #     greps for a resolver consult.
-              # The install inputs the meter also depends on (the root
-              # lockfile, workspace file, manifest, .node-version and .npmrc)
-              # are armed by the `scoped` output below, which runs the meter
-              # too.
+              # The install inputs (the root lockfile, workspace file,
+              # manifest, .node-version and .npmrc, and frontend/package.json)
+              # are below: a dependency bump touches only them, and it must
+              # run every suite against the new install, not a selected few.
+              - 'pnpm-lock.yaml'
+              - 'pnpm-workspace.yaml'
+              - 'package.json'
+              - '.node-version'
+              - '.npmrc'
+              - 'frontend/package.json'
               - '.gaia/tests/concurrency/**'
               - '.gaia/state-registry.json'
               - '.gaia/cli/src/**'
@@ -433,16 +439,16 @@ jobs:
               # pre-commit arm matched by an ESLint glob) and the package
               # descriptor's preCommitSource globs; settings-drift.bats reads
               # the generated settings and the overlay it is built from;
-              # dockerfile-contract.bats reads the Dockerfile pair and the
-              # package manifest and pins every dotenv file out of the image
-              # context. Each suite names the file it reads.
+              # dockerfile-contract.bats reads the Dockerfile pair (and the
+              # package manifest, which `code` arms) and pins every dotenv
+              # file out of the image context. Each suite names the file it
+              # reads.
               - 'frontend/.lintstagedrc.json'
               - 'frontend/gaia.package.json'
               - 'frontend/.claude/settings.json'
               - 'frontend/.claude/settings.overlay.json'
               - 'frontend/Dockerfile'
               - 'frontend/Dockerfile.dockerignore'
-              - 'frontend/package.json'
               # frontend-rule-globs.bats reads every frontend rule (whole-tree
               # marked), main-only-lib.bats names the perf skill it renders,
               # and doc-noop-terminal-contract.bats searches the whole tree for
@@ -450,18 +456,6 @@ jobs:
               # the frontend rules router name it.
               - 'frontend/.claude/**'
               - 'frontend/CLAUDE.md'
-              # The root install inputs. Every install step runs for this
-              # output, so a dependency bump or a workspace edit that breaks
-              # the frozen install (a missing allowBuilds entry, say) reds the
-              # install itself, and the meter, which resolves `typescript` and
-              # `tsx` from that install, runs whole. package.json pins
-              # packageManager for pnpm/action-setup, and .node-version is what
-              # node-version-file reads.
-              - 'pnpm-lock.yaml'
-              - 'pnpm-workspace.yaml'
-              - 'package.json'
-              - '.node-version'
-              - '.npmrc'
               # Every wiki page, the executed ones (PR Merge Workflow, the
               # audit round and gate pages, the disposition, policy-memory and
               # audit-agent pages, the Code Audit Team pages, the fitness page)
