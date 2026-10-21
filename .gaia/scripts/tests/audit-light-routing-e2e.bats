@@ -224,7 +224,7 @@ record_for_frontend() {
   assert_gate_allows
 }
 
-@test "the slight modal redesign with its own story routes light quick-eligible, clears on a clean reply and the story did not trip the test floor" {
+@test "a dialog-wrapper change with its own story routes light quick-eligible, clears on a clean reply and the story did not trip the test floor" {
   lsb_init
   lsb_main_base_begin
   lsb_commit "$QUICK_DIALOG" "$(quick_dialog_text)"
@@ -243,6 +243,43 @@ record_for_frontend() {
   expect_line "light-cleared"
   [ "$(jq -r '[.provenance, .review] | join(" ")' "$(marker_path)")" = "earned light" ]
   [ "$(find "$(audit_directory)" -maxdepth 1 -name '*.ok' | wc -l | tr -d ' ')" = "1" ]
+  assert_gate_allows
+}
+
+# bats test_tags=whole-tree
+@test "the corpus dialog layout and copy change routes light quick-eligible and a clean reply marked with the reviewer dispatch time clears it" {
+  local corpus="$REPO_ROOT/.gaia/scripts/tests/fixtures/audit-quick-corpus.json" file_path index file_count
+  file_count="$(jq '[.entries[] | select(.id == "dialog-layout-and-copy")][0].files | length' "$corpus")"
+  [ "$file_count" -gt 0 ]
+  lsb_init
+  lsb_main_base_begin
+  index=0
+  while [ "$index" -lt "$file_count" ]; do
+    file_path="$(jq -r --argjson index "$index" '[.entries[] | select(.id == "dialog-layout-and-copy")][0].files[$index].path' "$corpus")"
+    lsb_commit "$file_path" "$(jq -r --argjson index "$index" '[.entries[] | select(.id == "dialog-layout-and-copy")][0].files[$index].before' "$corpus")"
+    index=$((index + 1))
+  done
+  lsb_main_base_end
+  index=0
+  while [ "$index" -lt "$file_count" ]; do
+    file_path="$(jq -r --argjson index "$index" '[.entries[] | select(.id == "dialog-layout-and-copy")][0].files[$index].path' "$corpus")"
+    lsb_commit "$file_path" "$(jq -r --argjson index "$index" '[.entries[] | select(.id == "dialog-layout-and-copy")][0].files[$index].after' "$corpus")"
+    index=$((index + 1))
+  done
+  assert_gate_denies
+  lsb_route "$FRONTEND"
+  expect_line "$(printf 'light\tquick-eligible')"
+  [ "$(jq -r .anchor_kind "$(record_for_frontend)")" = "merge-base" ]
+  lsb_clear_reply "$FRONTEND" >"$REPLY_FILE"
+  run bash "$LSB_ROOT/.gaia/scripts/audit-light-mark.sh" --root "$LSB_ROOT" --member "$FRONTEND" --verdict "$REPLY_FILE" \
+    --reviewer-dispatched-at 2020-01-01T00:00:00Z </dev/null
+  expect_line "light-cleared"
+  [ "$(jq -r '[.provenance, .review] | join(" ")' "$(marker_path)")" = "earned light" ]
+  local ledger_line
+  ledger_line="$(tail -n 1 "$(light_directory)/$LSB_SLUG.reviews.jsonl")"
+  jq -e '.reviewer_dispatched_at == "2020-01-01T00:00:00Z"
+    and (.marked_at | test("^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$"))
+    and .anchor_kind == "merge-base"' <<<"$ledger_line" >/dev/null
   assert_gate_allows
 }
 

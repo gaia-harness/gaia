@@ -217,6 +217,42 @@ frontmatter_tools_are_allowlist() {
   done
 }
 
+@test "the light mark carries the reviewer dispatch time and the latency formula" {
+  assert_pinned '--reviewer-dispatched-at <the time the first wait step printed>'
+  assert_pinned '`reviewer_dispatched_at`'
+  assert_pinned '`marked_at - reviewer_dispatched_at - reviewer_duration_ms`'
+  assert_pinned 'A reply that arrives before any wait step marks without the flag'
+}
+
+@test "the digest call and its fail-closed sentence are unchanged" {
+  assert_pinned 'bash <root>/.gaia/scripts/audit-member-digest.sh --root <root> --member <m> --ref <the HEAD tree captured for this wave>'
+  assert_pinned 'A non-zero exit or empty output means dispatch the member as before.'
+}
+
+# dispatch_time_names_are_scoped <file>: rc 0 when the file spells no
+# --dispatched-at flag and every bare dispatched_at word is the rounds[] shape
+# sentence (the one line that also names record_published).
+dispatch_time_names_are_scoped() {
+  grep -qF -- '--dispatched-at' "$1" && return 1
+  local bare_lines
+  bare_lines="$(grep -E '(^|[^A-Za-z_])dispatched_at' "$1" || true)"
+  [ -n "$bare_lines" ] || return 1
+  [ "$(printf '%s\n' "$bare_lines" | wc -l | tr -d ' ')" = 1 ] || return 1
+  grep -qF -- 'record_published' <<<"$bare_lines"
+}
+
+@test "the unit names no --dispatched-at flag and no bare dispatched_at outside the rounds shape sentence" {
+  dispatch_time_names_are_scoped "$AGENT"
+}
+
+@test "dispatch-name guard fails on an appended --dispatched-at or a bare dispatched_at" {
+  { cat "$AGENT"; printf 'pass --dispatched-at <time>\n'; } >"$BATS_TEST_TMPDIR/flag.md"
+  dispatch_time_names_are_scoped "$BATS_TEST_TMPDIR/flag.md" && return 1
+  { cat "$AGENT"; printf 'record the dispatched_at of the reviewer\n'; } >"$BATS_TEST_TMPDIR/bare.md"
+  dispatch_time_names_are_scoped "$BATS_TEST_TMPDIR/bare.md" && return 1
+  true
+}
+
 @test "roster: a change to the agent file routes to the shell member only" {
   local sandbox_repository="$BATS_TEST_TMPDIR/sb"
   mkdir -p "$sandbox_repository/.gaia" "$sandbox_repository/.claude/agents"
