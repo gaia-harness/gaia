@@ -133,8 +133,8 @@ render_link() {
 build_wiki() {
   local root="$1" link
   mkdir -p "$root/wiki/concepts"
-  printf -- '---\ntype: concept\nstatus: active\n---\n\n# Read/Write Split\n\nBody.\n' > "$root/wiki/concepts/read-write-split.md"
-  link="$(render_link "$2" 'read-write-split' 'Read/Write Split')"
+  printf -- '---\ntype: concept\nstatus: active\n---\n\n# Read/Write Split\n\nBody.\n' > "$root/wiki/concepts/Read Write Split.md"
+  link="$(render_link "$2" 'Read Write Split' 'Read/Write Split')"
   printf -- '---\ntype: index\n---\n\n# Index\n\n## Concepts\n\n%s\n' "$link" > "$root/wiki/index.md"
 }
 
