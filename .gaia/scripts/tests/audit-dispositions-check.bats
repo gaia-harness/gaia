@@ -721,6 +721,13 @@ run_sections() {
   [ "$status" -eq 3 ] || { echo "status $status: $output"; return 1; }
 }
 
+@test "check-outcomes passes a matched outcome, a dedup hit on an existing issue" {
+  write_dispositions 1 "$(fill "$FINDINGS_JSON" "[$(disposition_entry base.txt 6 c/oosimp file upstream)]")"
+  outcome_line c/oosimp base.txt 6 file matched >"$RUN_FOLDER/filing-outcomes-1.jsonl"
+  run_outcomes 1
+  green
+}
+
 @test "UAT-037: check-all reconciles a live round's outcomes" {
   write_dispositions 1 "$(fill "$FINDINGS_JSON" "[$(disposition_entry base.txt 6 c/oosimp file upstream)]")"
   run_check_all

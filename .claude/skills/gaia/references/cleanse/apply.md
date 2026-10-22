@@ -67,7 +67,7 @@ Map the block's fields onto the finding JSON as follows; the mapping is the whol
 
 - `member` is the literal `gaia-cleanse`; `finding_class` (or `holistic/unclassified`), `path`, `line`, `title`, `failure_mode`, `suggested_fix`, `footprint` and `audience` carry over by name; `difficulty` becomes `grade`; `severity` (`critical | major | minor`) becomes `issue_severity` (`Critical | Major | Minor`); `security_sensitive` becomes `security`, set from the block's flag alone, since `holistic/unclassified` is the expected class for a doc finding and never a trigger.
 
-Record the filed, diverted and deduped counts (the script's stdout words: `filed <n>`, `diverted <count> <record-path>`, `absent`, `transient`, `failed <reason>`) for the final summary. `absent` and `transient` are never fatal: file what you can, note the rest, and let the main conversation publish regardless. A diverted finding is reported as a count and a record path only.
+Record the filed, diverted and deduped counts (the script's stdout words: `filed <n>`, `matched <n>`, `diverted <count> <record-path>`, `absent`, `transient`, `failed <reason>`) for the final summary. `matched <n>` is the deduped count: issue `<n>` already carries the finding and nothing was filed, so it never counts as filed. `absent` and `transient` are never fatal: file what you can, note the rest, and let the main conversation publish regardless. A diverted finding is reported as a count and a record path only.
 
 ### Post-flight
 
