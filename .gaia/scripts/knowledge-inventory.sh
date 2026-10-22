@@ -29,7 +29,9 @@
 # verify    exit 0 and `verified: <counts>` when the report may auto-apply:
 #           full scope, no scope hint, no action block, a Summary reading
 #           `Actions proposed: 0`, an `## Out-of-scope findings` section (a
-#           report cut short lacks its last section), and every store count
+#           report cut short lacks its last section), a `## Step 2 coverage`
+#           section with a `` - `<path>`: <classification> `` line for every
+#           memory and rules file the recount lists, and every store count
 #           equal to a fresh recount. The recount is the CLI's
 #           (`<script dir>/../cli/gaia fitness inventory --json`, each store's
 #           `count`). Otherwise exit 1 with one `refuse: <reason>` line per
@@ -148,12 +150,11 @@ classify_paths() {
   done
 }
 
-# recount_stores: `<store>=<count>` per store in the CLI inventory's order,
-# space separated, on stdout. Returns 3 when jq or the CLI is missing, the
-# CLI exits non-zero, or its output is not a store map, so verify never
-# compares a report against a recount that did not happen.
-recount_stores() {
-  local cli inventory counts
+# read_inventory: the CLI inventory JSON on stdout. Returns 3 when jq or the
+# CLI is missing or the CLI exits non-zero, so verify never compares a report
+# against a recount that did not happen.
+read_inventory() {
+  local cli
   cli="$(dirname "$0")/../cli/gaia"
   command -v jq >/dev/null 2>&1 || {
     printf 'knowledge-inventory: jq is required for the store recount\n' >&2
@@ -163,16 +164,38 @@ recount_stores() {
     printf 'knowledge-inventory: cannot run %s\n' "$cli" >&2
     return 3
   }
-  inventory="$("$cli" fitness inventory --json --root "$root")" || {
+  "$cli" fitness inventory --json --root "$root" || {
     printf 'knowledge-inventory: the CLI store recount failed\n' >&2
     return 3
   }
-  counts="$(jq -r '[.stores | to_entries[] | "\(.key)=\(.value.count)"] | join(" ")' <<<"$inventory" 2>/dev/null)" || counts=""
-  [ -n "$counts" ] || {
-    printf 'knowledge-inventory: the CLI store recount did not print a store map\n' >&2
-    return 3
-  }
-  printf '%s\n' "$counts"
+}
+
+# step_two_refusal <report> <inventory>: one refusal line on stdout when the
+# report's `## Step 2 coverage` section is absent or does not name every
+# memory and rules file the inventory lists, nothing otherwise. Step 2 is the
+# only step whose clean outcome is the absence of findings, so without this a
+# Stage 1 that skipped it reads exactly like one that ran and found nothing.
+# It checks that each file is listed, not that its classification is right:
+# the verification round and the human gate own that.
+step_two_refusal() {
+  local report="$1" inventory="$2" coverage expected path total=0 listed=0 missing="" next_step
+  next_step="re-run /gaia-cleanse so Stage 1 runs Step 2 (cross-store duplication) over every memory and rules file"
+  if ! grep -qx '## Step 2 coverage' "$report"; then
+    printf 'report has no ## Step 2 coverage section; %s\n' "$next_step"
+    return 0
+  fi
+  coverage=$'\n'"$(awk '$0 == "## Step 2 coverage" { inside = 1; next } inside && /^## / { exit } inside' "$report")"
+  expected="$(jq -r '(.stores.memory.files // [])[].path, (.stores.rules.files // [])[].path' <<<"$inventory" 2>/dev/null)"
+  while IFS= read -r path; do
+    [ -n "$path" ] || continue
+    total=$((total + 1))
+    case "$coverage" in
+      *$'\n'"- \`$path\`: "*) listed=$((listed + 1)) ;;
+      *) missing="${missing:+$missing, }$path" ;;
+    esac
+  done <<<"$expected"
+  [ -z "$missing" ] ||
+    printf 'Step 2 coverage lists %s of %s memory and rules files (missing %s); %s\n' "$listed" "$total" "$missing" "$next_step"
 }
 
 # frontmatter_value <report> <key>: the value of <key> in the report's
@@ -190,8 +213,10 @@ verify_report() {
   local report="${arguments[0]}"
   [ -f "$report" ] && [ -r "$report" ] || fail_input "cannot read report $report"
 
-  local refusals=() scope action_blocks recorded recomputed stores store report_count recomputed_count
-  recomputed="$(recount_stores)" || exit "$?"
+  local refusals=() scope action_blocks recorded inventory recomputed stores store report_count recomputed_count step_two
+  inventory="$(read_inventory)" || exit "$?"
+  recomputed="$(jq -r '[.stores | to_entries[] | "\(.key)=\(.value.count)"] | join(" ")' <<<"$inventory" 2>/dev/null)" || recomputed=""
+  [ -n "$recomputed" ] || fail_input "the CLI store recount did not print a store map"
   stores="$(tr ' ' '\n' <<<"$recomputed" | sed 's/=.*//')"
 
   [ -z "$scope_hint" ] || refusals+=("scope hint given ($scope_hint); a scoped run never auto-applies")
@@ -201,6 +226,8 @@ verify_report() {
   [ "$action_blocks" -eq 0 ] || refusals+=("report carries $action_blocks action block(s)")
   grep -qxE -- '- Actions proposed: 0' "$report" || refusals+=("Summary does not read Actions proposed: 0")
   grep -qx '## Out-of-scope findings' "$report" || refusals+=("report has no ## Out-of-scope findings section")
+  step_two="$(step_two_refusal "$report" "$inventory")"
+  [ -z "$step_two" ] || refusals+=("$step_two")
 
   recorded=" $(frontmatter_value "$report" store_counts) "
   for store in $stores; do

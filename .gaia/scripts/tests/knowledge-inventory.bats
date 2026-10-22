@@ -53,7 +53,8 @@ inventory() {
 }
 
 # write_report <store-counts> [scope]: a clean 0-action report whose
-# frontmatter records <store-counts> and <scope> (default full).
+# frontmatter records <store-counts> and <scope> (default full), with a Step 2
+# coverage line for every memory and rules file the fixture holds.
 write_report() {
   REPORT="$BATS_TEST_TMPDIR/KNOWLEDGE-2026-10-08-1200.md"
   cat >"$REPORT" <<EOF
@@ -70,7 +71,16 @@ project_root: $PROJECT
 ## Summary
 
 - Actions proposed: 0
+- Cross-store duplicates: 0
+- Conflicts: 0
 - Applied scope: ${2:-full}
+
+## Step 2 coverage
+
+- \`<memory>/MEMORY.md\`: KEEP-LOCAL
+- \`<memory>/fact.md\`: KEEP-LOCAL
+- \`.claude/rules/house.md\`: NO-MATCH
+- \`.claude/rules/quality-gate.md\`: NO-MATCH
 
 ## Actions
 
@@ -219,12 +229,48 @@ class_of() {
   [[ "$stderr" == *"refuse: report has no ## Out-of-scope findings section"* ]]
 }
 
+@test "verify red twin: a report claiming zero duplicates and conflicts with no Step 2 coverage refuses" {
+  write_report "$EXPECTED_COUNTS"
+  sed '/^## Step 2 coverage$/,/^## Actions$/{/^## Actions$/!d;}' "$REPORT" >"$REPORT.tmp" && mv "$REPORT.tmp" "$REPORT"
+  grep -qx -- '- Conflicts: 0' "$REPORT"
+  inventory verify "$REPORT"
+  [ "$status" -eq 1 ]
+  [[ "$stderr" == *"refuse: report has no ## Step 2 coverage section"* ]]
+  [[ "$stderr" == *"re-run /gaia-cleanse"* ]]
+}
+
+@test "verify red twin: Step 2 coverage that misses an inventory file refuses and names it" {
+  write_report "$EXPECTED_COUNTS"
+  sed '/^- `\.claude\/rules\/house\.md`: /d' "$REPORT" >"$REPORT.tmp" && mv "$REPORT.tmp" "$REPORT"
+  inventory verify "$REPORT"
+  [ "$status" -eq 1 ]
+  [[ "$stderr" == *"refuse: Step 2 coverage lists 3 of 4 memory and rules files (missing .claude/rules/house.md)"* ]]
+  [[ "$stderr" == *"re-run /gaia-cleanse"* ]]
+}
+
+@test "verify red twin: a coverage line outside the Step 2 coverage section does not count" {
+  write_report "$EXPECTED_COUNTS"
+  sed '/^- `\.claude\/rules\/house\.md`: /d' "$REPORT" >"$REPORT.tmp" && mv "$REPORT.tmp" "$REPORT"
+  printf -- '- `.claude/rules/house.md`: NO-MATCH\n' >>"$REPORT"
+  inventory verify "$REPORT"
+  [ "$status" -eq 1 ]
+  [[ "$stderr" == *"missing .claude/rules/house.md"* ]]
+}
+
+@test "verify red twin: a memory file added since the research run refuses as uncovered" {
+  write_report "memory=3 user_agent_memory=1 project_agent_memory=1 rules=2 wiki=2 claude_md=2"
+  printf 'later\n' >"$MEMORY/later.md"
+  inventory verify "$REPORT"
+  [ "$status" -eq 1 ]
+  [[ "$stderr" == *"missing <memory>/later.md"* ]]
+}
+
 @test "verify: every refusal is named, not only the first" {
   write_report "$EXPECTED_COUNTS" "wiki/"
   printf 'new\n' >"$MEMORY/new.md"
   inventory verify "$REPORT" --scope-hint "wiki/"
   [ "$status" -eq 1 ]
-  [ "$(grep -c '^refuse: ' <<<"$stderr")" -eq 3 ]
+  [ "$(grep -c '^refuse: ' <<<"$stderr")" -eq 4 ]
 }
 
 @test "verify: a missing report exits 3" {

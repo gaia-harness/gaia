@@ -79,6 +79,8 @@ For every memory entry and every rules file, check whether the same fact lives i
 
 Rules-vs-wiki: a `.claude/rules/*.md` file is allowed to duplicate wiki content **only** if it exists to enforce auto-loading for a specific `paths:` glob. Otherwise it should link to the wiki page.
 
+**Record coverage.** Step 2 is not optional, a recent cleanse included: zero duplicates and zero conflicts is a finding only when every entry was compared. Write the report's `## Step 2 coverage` section with one line per file in the inventory's `memory` and `rules` stores, the path exactly as the inventory prints it: `` - `<path>`: <classification> ``, the classification one of the classes above, or `NO-MATCH` when no phrase hit the wiki. `knowledge-inventory.sh verify` refuses to auto-apply a 0-action report whose section is missing or leaves out a file the recount lists.
+
 ### Provenance-marked rules (`gaia-harden:`)
 
 A `.claude/rules/*.md` rule that carries a line starting with the provenance marker prefix `<!-- gaia-harden: promoted from recurring finding_class`, whichever tail follows (`pruned by /gaia-cleanse ...`, or the 1.x `pruned by /gaia-audit ...`), is recognized by that prefix alone. The current form:
@@ -159,6 +161,10 @@ Resolved paths (Stage 2 must match these):
 - Out-of-scope findings: {count} (filed as tech-debt issues by Stage 2)
 - Applied scope: {scope hint, or "full"}
 - Report-only: {None., or one sub-bullet per finding the Ownership step allows no action on: class, file, problem, remediation}
+
+## Step 2 coverage
+
+- `{memory or rules path, verbatim from the inventory}`: {DUPLICATE | PROMOTE | KEEP-LOCAL | STALE | CONFLICT | NO-MATCH}
 
 ## Actions
 
