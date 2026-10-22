@@ -369,7 +369,8 @@ Do the following in order:
    not exist) and exits 0, or prints `BUST_FAILED <reason>` and exits 3 with the
    file left as it was. A non-zero exit is reported and never stops the run. Then
    read the file back (the `Read` tool, at that main-checkout path) and confirm
-   `outdatedCount` is `0`. Where this step runs depends on the path:
+   `outdatedCount` is `0`. Phase 8 busts once more after a `MERGED` verdict,
+   because this bust precedes the merge. Where this step runs depends on the path:
    - Post-decision path: before step 2, in the main checkout.
    - Refresh-only path: after Phase 5b reports `landed`, in the worktree.
    - After a vendored-sync worktree: at the decision, in the worktree.
