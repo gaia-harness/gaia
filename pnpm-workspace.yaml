@@ -57,6 +57,11 @@ trustPolicyExclude:
   - 'semver@6.3.1'
   - 'eslint-import-resolver-typescript@3.10.1'
   - 'chokidar@4.0.3'
+  # Unlike the entries above, a same-line gap: 5.1.0 and 5.2.0 carry provenance,
+  # 5.1.1 does not, and recharts@3.8.0 (shadcn's `chart` item) pins it exactly,
+  # so `pnpm shadcn add chart` fails without this. Remove it once the chart
+  # item's recharts depends on reselect 5.2.0 or later (recharts 3.10 does).
+  - 'reselect@5.1.1'
 
 # Exempt first-party packages from the release-age delay. The 3-day window
 # defends against malicious THIRD-party updates; @gaia-react/lint is authored,
