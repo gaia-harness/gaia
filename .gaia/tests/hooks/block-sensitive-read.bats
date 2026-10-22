@@ -7,7 +7,7 @@
 # variant (.env.local, .env.*, not .env.example), sourcing, redirection, and
 # bare environment dumps (env/printenv). The secret-path class covers the paths
 # four Read() deny globs used to hold: *.key, *.pem, any name containing
-# "credential" except a TypeScript or Markdown file, and anything under a
+# "credential" except a TypeScript file, and anything under a
 # secrets/ directory. When an input matches
 # both classes the dotenv reason is the one emitted.
 #
@@ -556,7 +556,7 @@ run_hook_monitor() {
   for credential_path in credentials credentials.json .aws/credentials \
     config/aws-credentials.json db.credentials CREDENTIALS credential.yml \
     gcloud/application_default_credentials.json google-credentials.txt \
-    credentials.ini credentials.js; do
+    credentials.ini credentials.js docs/credentials.md docs/Credentials.MDX; do
     run_hook_read "$credential_path"
     assert_denied_by_json || { echo "Read allowed: $credential_path"; return 1; }
     run_hook_bash "cat $credential_path"
@@ -569,11 +569,10 @@ run_hook_monitor() {
   assert_allowed_by_json
 }
 
-@test "TypeScript and Markdown files whose names only mention credentials are readable, through Read and through cat" {
+@test "TypeScript files whose names only mention credentials are readable, through Read and through cat" {
   local source_path
   for source_path in app/auth/credentials.test.ts app/auth/credential-form.tsx \
-    app/auth/credentials.ts app/auth/credentials.mts docs/credentials.md \
-    docs/Credentials.MDX; do
+    app/auth/credentials.ts app/auth/credentials.mts; do
     run_hook_read "$source_path"
     assert_allowed_by_json || { echo "Read denied: $source_path"; return 1; }
     run_hook_bash "cat $source_path"

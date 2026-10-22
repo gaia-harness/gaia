@@ -29,8 +29,8 @@
 #   - the Read tool against .env and any variant (.env.local, .env.production,
 #     .env.<anything>), excluding the committed .env.example placeholder, and
 #     against secret paths: a basename ending .key or .pem, a basename
-#     containing "credential" (case-insensitive) unless it is a TypeScript or
-#     Markdown file, and any path under a directory named secrets;
+#     containing "credential" (case-insensitive) unless it is a TypeScript
+#     file, and any path under a directory named secrets;
 #   - the Grep tool's `path` and `glob`, which in content mode return file
 #     contents and so read a path exactly as Read does;
 #   - Bash and Monitor readers against the same sets: cat, head, tail, sed, xxd, od,
@@ -46,10 +46,10 @@
 # in three ways. Two widen it: the credential match is case-insensitive where
 # the glob was case-sensitive, and any path under a secrets directory matches
 # where the glob reached only a file directly inside it. One narrows it: a
-# TypeScript or Markdown file whose name mentions credentials is readable,
-# because the bare substring denied ordinary source, tests and docs (a rendered
-# login UAT spec named for invalid credentials) while no credential store uses
-# those extensions.
+# TypeScript file whose name mentions credentials is readable, because the bare
+# substring denied ordinary source and tests (a rendered login UAT spec named
+# for invalid credentials) while no credential store uses that extension. A
+# Markdown file stays denied: a hand-written credentials note is plausible.
 #
 # The grep family needs argument grammar rather than a token sweep, because
 # `grep PATTERN FILE` puts a non-path in first position and `grep '.env'
@@ -189,8 +189,8 @@ tool_name="$GAIA_HOOK_TOOL_NAME"
 DENY_DOTENV_TOOL="BLOCKED: reading '.env' / '.env.*' files is denied to protect local secrets. Only '.env.example' is readable. This guard is heuristic defense-in-depth, not a sandbox."
 DENY_DUMP="BLOCKED: a bare environment dump (env/printenv) is denied so exported secrets cannot be printed into the transcript. Use 'env NAME=value <cmd>' to set a variable for a command. Heuristic defense-in-depth, not a sandbox."
 DENY_DOTENV_READER="BLOCKED: reading a .env / .env.* file (a reader, sourcing, or redirection) is denied to protect local secrets. '.env.example' is exempt. Heuristic defense-in-depth, not a sandbox."
-DENY_SECRET_TOOL="BLOCKED: reading key, certificate, and credential files is denied to protect local secrets. This covers '*.key', '*.pem', any name containing 'credential' except a .ts, .tsx, .mts, .cts, .md or .mdx file, and anything under a 'secrets/' directory. Next step: if this file holds no secret, ask the user to read it or rename it; never copy, move or re-encode it to get around this guard. Heuristic defense-in-depth, not a sandbox."
-DENY_SECRET_READER="BLOCKED: a command here reads a key, certificate, or credential path ('*.key', '*.pem', a name containing 'credential' other than a .ts, .tsx, .mts, .cts, .md or .mdx file, or anything under a 'secrets/' directory). Denied to protect local secrets. Next step: if this file holds no secret, ask the user to read it or rename it; never copy, move or re-encode it to get around this guard. Heuristic defense-in-depth, not a sandbox."
+DENY_SECRET_TOOL="BLOCKED: reading key, certificate, and credential files is denied to protect local secrets. This covers '*.key', '*.pem', any name containing 'credential' except a .ts, .tsx, .mts or .cts file, and anything under a 'secrets/' directory. Next step: if this file holds no secret, ask the user to read it or rename it; never copy, move or re-encode it to get around this guard. Heuristic defense-in-depth, not a sandbox."
+DENY_SECRET_READER="BLOCKED: a command here reads a key, certificate, or credential path ('*.key', '*.pem', a name containing 'credential' other than a .ts, .tsx, .mts or .cts file, or anything under a 'secrets/' directory). Denied to protect local secrets. Next step: if this file holds no secret, ask the user to read it or rename it; never copy, move or re-encode it to get around this guard. Heuristic defense-in-depth, not a sandbox."
 
 deny() {
   jq -n --arg reason "$1" '{
@@ -237,13 +237,14 @@ is_secret_path() {
     *.key | *.pem) return 0 ;;
   esac
 
-  # A TypeScript or Markdown file whose name mentions credentials is source,
-  # tests or docs about them (a login UAT named for invalid credentials), not a
-  # credential store; no tool writes a secret store under those extensions.
+  # A TypeScript file whose name mentions credentials is source or tests about
+  # them (a login UAT named for invalid credentials), not a credential store;
+  # no tool writes a secret store under those extensions. Markdown is not
+  # excepted: a hand-written credentials note would be one.
   # A secrets/ directory below still denies one.
   lower=$(printf '%s' "$base" | tr '[:upper:]' '[:lower:]')
   case "$lower" in
-    *.ts | *.tsx | *.mts | *.cts | *.md | *.mdx) ;;
+    *.ts | *.tsx | *.mts | *.cts) ;;
     *credential*) return 0 ;;
   esac
 
