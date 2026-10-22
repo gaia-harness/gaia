@@ -235,7 +235,7 @@ When `record` exited non-zero in step 4.7, relay its one stderr line in place of
 
 The prompt is a single line, exactly:
 
-```text
+```
 Read <absolute-path-to-PLAN_DIR>/KICKOFF.md and execute it.
 ```
 

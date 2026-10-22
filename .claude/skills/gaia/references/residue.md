@@ -181,7 +181,7 @@ At that point, save before asking, as the checkpoint says, to this run's own sta
 
 Then ask the checkpoint's question. On `Continue here`, start the next batch. On `Clear and resume`, run `bash .gaia/scripts/usage.sh handoff` as the checkpoint says, and print the continuation prompt in a bare fenced block, filling in the state file's absolute path and, when the handoff printed one, its line as the first step:
 
-```text
+```
 <the usage.sh handoff line, when it printed one: run it first, verbatim>
 Resume an interrupted /gaia-residue sweep. The sweep triages the keyed audit residue recorded in merged pull-request bodies, batch after batch, until no aged residual is left, then offers newer ones one batch per yes. Every disposition confirmed so far is in the dismissal store and the cursor has moved past it; one end-of-run publish lands the whole sweep in a single pull request. Read .claude/skills/gaia/references/residue.md and follow its `## Resume after /clear`, with the state file <absolute path to STATE.md>. Do not run /gaia-residue: the resume enters residue.md directly.
 ```

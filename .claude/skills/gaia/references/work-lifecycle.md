@@ -262,7 +262,7 @@ The runtime refuses `ExitWorktree` from an agent dispatched with `isolation: "wo
 
 When detected, print this continuation prompt inside a bare fenced block and stop:
 
-```text
+```
 The worktree at <ABSOLUTE-PATH-TO-WORKTREE> is ready to discard.
 PR #<N> squash-merged as <short-sha>. From a shell at
 <ABSOLUTE-PATH-TO-MAIN-CHECKOUT>, run:
