@@ -604,6 +604,31 @@ check_cache_bust() {
   [ "$status" -ne 0 ]
 }
 
+# The decision-time bust lands before the bump reaches the main checkout, so
+# any writer that marks the cache stale before the merge lets a refresh
+# recount against the pre-merge tree. Only a bust after MERGED, once cleanup
+# has pulled the main checkout, leaves the cache true.
+check_post_merge_bust() {
+  local arm
+  arm="$(grep -F -- '**`MERGED`**' "$PUBLISH")"
+  grep -qF -- "$BUST_CALL" <<<"$arm" || {
+    echo "the MERGED arm does not bust the cache after cleanup" >&2
+    return 1
+  }
+}
+
+@test "publish's MERGED arm busts the cache again after cleanup" {
+  check_post_merge_bust
+}
+
+@test "the post-merge bust check fails with the MERGED arm's bust deleted" {
+  local copy
+  copy="$(scratch_copy "$PUBLISH" "post-merge-bust.md")"
+  remove_fixed "$copy" "$BUST_CALL"
+  PUBLISH="$copy" run check_post_merge_bust
+  [ "$status" -ne 0 ]
+}
+
 # ---------------------------------------------------------------------------
 # 16. A non-default branch takes the worktree path
 # ---------------------------------------------------------------------------
