@@ -239,9 +239,10 @@ test("adds two numbers", () => {
 
   local reason recovery payload
   reason=$(jq -r '.hookSpecificOutput.permissionDecisionReason' <<<"$output")
-  recovery=$(grep -o 'pnpm test --run <test-file>' <<<"$reason" | head -1)
+  recovery=$(grep -o 'pnpm -C <package dir> test --run <test-file>' <<<"$reason" | head -1)
   [ -n "$recovery" ]
-  recovery="${recovery//<test-file>/frontend/app/utils/x/index.test.ts}"
+  recovery="${recovery//<package dir>/frontend}"
+  recovery="${recovery//<test-file>/app/utils/x/index.test.ts}"
 
   json="$REPO/canned.json"
   canned_fail_json "$json" "frontend/app/utils/x/index.test.ts" "adds two numbers"

@@ -482,7 +482,7 @@ $offender_list
 These tests are new at HEAD and pass now, but no matching RED was recorded for the current test body. A passing test that was never seen failing first does not prove the test can fail; that is the gap this gate closes.
 
 To unblock:
-  1. Run \`pnpm test --run <test-file>\`, naming the test's file, and confirm the test FAILS (RED) before the change that makes it pass. A run with no test path records no RED.
+  1. Run \`pnpm -C <package dir> test --run <test-file>\`, naming the test's file relative to the package directory that owns it (for example \`pnpm -C frontend test --run app/utils/x.test.ts\`), as a Bash call of its own, and confirm the test FAILS (RED) before the change that makes it pass. A run with no test path records no RED, and neither does one that restores the implementation in the same call, because the RED is recorded from a re-run after the call ends.
   2. Then make the change that turns it green and commit.
 
 A test arriving unchanged from a GAIA release (an /update-gaia or migration commit) needs no RED: it is exempt while its verified release bundle is extracted in the update cache. If this commit is one and the test is still denied, either the test differs from the shipped copy (restore it byte-for-byte, or observe a RED for your edit) or the release's tree is missing from the update cache (restore it with the verified download step /update-gaia or the migration note runs). Never fabricate a failing run by editing shipped source.

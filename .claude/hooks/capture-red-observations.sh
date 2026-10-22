@@ -39,6 +39,12 @@
 # (`frontend/app/x.test.ts`), the key red-verify-commit-check.sh computes for
 # the staged path.
 #
+# The root proxy form is recognized but never prescribed: the proxy script
+# delegates with `-C <package dir>`, which hands the repo-relative path to
+# vitest inside the package unchanged, so the agent's own run finds no test
+# files and shows no failure while this re-run still records it. Every
+# recovery message therefore names the `-C` form.
+#
 # Valid RED = a per-test `assertionResults[].status == "failed"`. A file-level
 # collection/compile error (file status "failed", empty assertionResults,
 # non-empty message, no test body ran) is NOT a valid RED and is skipped.
@@ -81,7 +87,7 @@ command=$GAIA_HOOK_COMMAND
 # `-F <name>` option), requiring the POSITIVE `--run` case scoped to that same
 # segment (a bare run without `--run` is simply not captured here, and a
 # `--run` naming no test path is skipped below with a diagnostic;
-# red-verify-commit-check.sh names `pnpm test --run <test-file>` as the
+# red-verify-commit-check.sh names `pnpm -C <package dir> test --run <test-file>` as the
 # recovery when its gate denies for a missing RED observation). Command TEXT
 # that merely mentions the phrase (a commit message, a `--body` string) is
 # not an invocation, so a
@@ -193,7 +199,7 @@ if [ -n "$option_directory" ]; then
 elif [ -n "$option_filter" ]; then
   filter_path=$(gaia_package_dir "$option_filter") || filter_path=''
   if [ -z "$filter_path" ]; then
-    emit_context "RED capture skipped: the --filter name '$option_filter' is not a registered package in .gaia/packages.json, so no RED was recorded. Run the test with pnpm -C <package dir> test --run <test-file>, or pnpm test --run <repo-relative test-file> from the repo root."
+    emit_context "RED capture skipped: the --filter name '$option_filter' is not a registered package in .gaia/packages.json, so no RED was recorded. Run the test with pnpm -C <package dir> test --run <test-file>, the path relative to that package directory."
     exit 0
   fi
   if [ "$filter_path" = . ]; then
@@ -265,7 +271,7 @@ else
   # plain stdout and stderr to its debug log only, so a printed line would be as
   # silent as the bare exit.
   if [ -z "$(printf '%s' "$scope" | tr -d '[:space:]')" ]; then
-    emit_context "RED capture skipped: this test run named no test file, so no failing (RED) result was recorded for the RED-verification commit gate. An unscoped run is not captured, because re-running the whole suite on every run is an unbounded cost. If a new test failed here and you need its RED on record, re-run it with a test path: pnpm test --run <test-file>"
+    emit_context "RED capture skipped: this test run named no test file, so no failing (RED) result was recorded for the RED-verification commit gate. An unscoped run is not captured, because re-running the whole suite on every run is an unbounded cost. If a new test failed here and you need its RED on record, re-run it with a test path relative to its package: pnpm -C <package dir> test --run <test-file>"
     exit 0
   fi
 
