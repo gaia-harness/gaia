@@ -295,7 +295,7 @@ assert_spaced_redirect_target_absent() {
   [ "$status" -eq 0 ]
   [ "$(ledger_lines)" -eq 0 ]
   jq -e '.hookSpecificOutput.hookEventName == "PostToolUse"' <<<"$output"
-  jq -r '.hookSpecificOutput.additionalContext' <<<"$output" | grep -qF -- 'pnpm test --run <test-file>'
+  jq -r '.hookSpecificOutput.additionalContext' <<<"$output" | grep -qF -- 'pnpm -C <package dir> test --run <test-file>'
   # No temp vitest json was produced (the skip happens before the mktemp).
   local ledger_directory
   ledger_directory=$(dirname "$LEDGER_ABSOLUTE_PATH")
@@ -309,7 +309,7 @@ assert_spaced_redirect_target_absent() {
   [ "$status" -eq 0 ]
   [ "$(ledger_lines)" -eq 0 ]
   [ ! -s "$STUB_PNPM_ARGS_FILE" ]
-  jq -r '.hookSpecificOutput.additionalContext' <<<"$output" | grep -qF -- 'pnpm test --run <test-file>'
+  jq -r '.hookSpecificOutput.additionalContext' <<<"$output" | grep -qF -- 'pnpm -C <package dir> test --run <test-file>'
 }
 
 @test "commands that never reach the scope check emit no diagnostic" {
@@ -726,7 +726,7 @@ failure_payload() {
   [ "$status" -eq 0 ]
   [ "$(ledger_lines)" -eq 0 ]
   jq -e '.hookSpecificOutput.hookEventName == "PostToolUseFailure"' <<<"$output"
-  jq -r '.hookSpecificOutput.additionalContext' <<<"$output" | grep -qF -- 'pnpm test --run <test-file>'
+  jq -r '.hookSpecificOutput.additionalContext' <<<"$output" | grep -qF -- 'pnpm -C <package dir> test --run <test-file>'
 }
 
 @test "failure event: an unusable registry says why as context, not as an unsupported block" {

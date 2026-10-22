@@ -659,7 +659,7 @@ test("uses wall-clock time", () => {
   stage_file "frontend/app/utils/x/index.test.ts" "$PASSING_TEST"
   run_commit_hook
   [ "$status" -eq 0 ]
-  grep -qF -- 'pnpm test --run <test-file>' <<<"$output"
+  grep -qF -- 'pnpm -C <package dir> test --run <test-file>' <<<"$output"
   grep -qF -- 'Run `pnpm test --run` and' <<<"$output" && return 1
   denied
 }
