@@ -29,6 +29,6 @@ On "Pull now", follow `pull-mode.md` with caller `gate`, the command and the arg
 Pull mode returns here after a successful pull. Restart the command by its kind:
 
 - **A Skill-invocable command**: invoke it again through the Skill tool with the arguments forwarded verbatim.
-- **A command marked `disable-model-invocation`** (`/gaia-codify`, `/gaia-fitness`, `/gaia-residue`): the Skill tool cannot start it, so print its re-run command, arguments included, in a fenced code block with the info string `text`, for the user to paste.
-- **The generated plan orchestrator**: print, in a fenced code block with the info string `text`, `Read <absolute KICKOFF.md path> and execute it.`
+- **A command marked `disable-model-invocation`** (`/gaia-codify`, `/gaia-fitness`, `/gaia-residue`): the Skill tool cannot start it, so print its re-run command, arguments included, in a bare fenced block, for the user to paste.
+- **The generated plan orchestrator**: print, in a bare fenced block, `Read <absolute KICKOFF.md path> and execute it.`
 - **Ad-hoc work** under `.claude/skills/gaia/references/work-lifecycle.md`: continue the lifecycle at its step 1, now on the pulled checkout.

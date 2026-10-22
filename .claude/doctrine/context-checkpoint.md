@@ -45,4 +45,4 @@ Before printing any continuation prompt, run `bash .gaia/scripts/usage.sh handof
 
 ## Unattended
 
-With no human in the session, never ask. At red and fire, save and continue. At skull, save, print the continuation prompt in a `text` fence, report, and stop; the next `/loop` iteration resumes from the saved state, as a fresh session would. Headless and scheduled runs render no statusline, so they have no reading and never fire.
+With no human in the session, never ask. At red and fire, save and continue. At skull, save, print the continuation prompt in a bare fenced block, report, and stop; the next `/loop` iteration resumes from the saved state, as a fresh session would. Headless and scheduled runs render no statusline, so they have no reading and never fire.
