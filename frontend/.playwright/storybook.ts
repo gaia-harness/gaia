@@ -100,13 +100,19 @@ export const listStoryIdentitiesInSource = (): Set<string> =>
 export const getStoryIdentity = (story: StoryEntry): string =>
   `${story.importPath}#${story.exportName}`;
 
-/** The story entries of the built Storybook; throws, never skips, when it is not built. */
-export const readStoryIndex = (): StoryEntry[] => {
+// The story server starts even with no build, so a story load against it
+// times out naming nothing; every story entry point checks the build first.
+const requireStorybookBuild = (): void => {
   if (!fs.existsSync(indexPath)) {
     throw new Error(
-      'storybook-static/index.json is missing: run `pnpm build-storybook` before `pnpm pw` so the story a11y scan has stories to scan'
+      'storybook-static/index.json is missing: run `pnpm build-storybook` before `pnpm pw` so the Storybook specs have stories to load'
     );
   }
+};
+
+/** The story entries of the built Storybook; throws, never skips, when it is not built. */
+export const readStoryIndex = (): StoryEntry[] => {
+  requireStorybookBuild();
   const {entries} = JSON.parse(fs.readFileSync(indexPath, 'utf8')) as {
     entries: Record<string, StoryEntry>;
   };
@@ -122,6 +128,7 @@ export const loadStory = async (
   id: string,
   theme: Theme
 ): Promise<void> => {
+  requireStorybookBuild();
   if (theme === 'dark') await forceDarkBeforeLoad(page);
   // React Router's route stub (stories that render a Document) asks for a
   // module path that exists only inside the stub; answer it empty so the
