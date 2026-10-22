@@ -117,7 +117,8 @@ export const KeyboardActivation: Story = {
 };
 
 // i18next's built-in `cimode` locale renders each translation key, so the
-// play reads the key until i18next has switched to the story's locale global.
+// play finds the key only once i18next has switched to the story's locale
+// global before render.
 export const LocaleGlobal: Story = {
   globals: {locale: 'cimode'},
   play: async ({canvasElement}) => {

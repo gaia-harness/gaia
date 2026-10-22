@@ -1,6 +1,7 @@
 import type {Preview} from '@storybook/react-vite';
 import {mswLoader} from 'msw-storybook-addon/csf3';
 import {themes} from 'storybook/theming';
+import {DEFAULT_LOCALE} from '~/i18n';
 import a11y from './a11y';
 import {decorators} from './chromatic';
 import i18n from './i18next';
@@ -32,7 +33,8 @@ const preview: Preview = {
   loaders: [
     mswLoader(),
     async ({globals}) => {
-      const locale = typeof globals.locale === 'string' ? globals.locale : 'en';
+      const locale =
+        typeof globals.locale === 'string' ? globals.locale : DEFAULT_LOCALE;
 
       if (i18n.language !== locale) await i18n.changeLanguage(locale);
     },
