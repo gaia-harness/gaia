@@ -44,7 +44,7 @@ Not strict, but a strong default. Refactoring is easier when the folder hierarch
 
 ## Where to look up the inventory
 
-The current set of bundled components changes over time. Use Serena (`.claude/rules/code-search.md`) to list `frontend/app/components/` rather than maintaining a roster here. Notable exceptions:
+The current set of bundled components changes over time. List `frontend/app/components/` rather than maintaining a roster here. Notable exceptions:
 
 - `ui/`: vendored shadcn components, refreshed with `pnpm shadcn add`, never hand-edited ([[shadcn Component Layer]])
 - `form/`: the composed form fixture ([[Form Components]])

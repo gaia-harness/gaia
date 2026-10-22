@@ -31,7 +31,6 @@ The right side fits itself to the statusline row, which is the terminal width le
 | ⚙️   | `/setup-gaia`       | pending setup choice count       | `01;95` bright magenta   |
 | 🚀   | `/update-gaia`      | none                             | `01;36` cyan             |
 | ⌛️   | none (a teammate's update in progress) | none          | `01;93` bright yellow    |
-| 🔭   | `/gaia-serena-sync` | missing language count           | `01;31` red              |
 | 📦   | `/update-deps`      | outdated plus security advisory count | `01;33` yellow      |
 | 🔎   | `/gaia-cleanse`     | none                             | `01;32` green            |
 | 💪   | `/gaia-fitness`     | a grade, blended file count, or harness commit count | `01;94` bright blue |
@@ -40,7 +39,7 @@ The right side fits itself to the statusline row, which is the terminal width le
 | 🧹   | `/gaia-residue`     | aged residual count              | `01` default foreground  |
 | 🧠   | `/gaia-wiki`        | commits behind the wiki          | `01;96` bright cyan      |
 
-Colors follow one rule, so a new nudge picks its color from it rather than by eye. Every code is bold (`01`), plus one of the 16 named ANSI colors, which the terminal theme recolors so they stay readable on light and dark backgrounds; 256-color and 24-bit codes are out. Black (`30`, `90`) vanishes on dark themes, white (`37`, `97`) on light ones, and plain blue (`34`) is too dim on dark ones, so none of them is used; a nudge that should read as plain white uses bold alone (`01`), which draws in the theme's own foreground. Each nudge gets a color no other nudge uses, and adjacent slot numbers never share a hue family, because a normal and a bright shade of one hue read alike side by side (the renderer packs only the present nudges, so two nudges whose slots are separated by empty ones can still render side by side). The `/setup-gaia (Required)` segment that renders alone uses the setup nudge's color. Bright green (`92`) is the one safe color left; past it, a new nudge shares a color with a nudge in a slot that is not adjacent to its own. Only a nudge's text forms are colored: its icon form and the trailing `+N` render uncolored, so the icon alone identifies a nudge at narrow widths.
+Colors follow one rule, so a new nudge picks its color from it rather than by eye. Every code is bold (`01`), plus one of the 16 named ANSI colors, which the terminal theme recolors so they stay readable on light and dark backgrounds; 256-color and 24-bit codes are out. Black (`30`, `90`) vanishes on dark themes, white (`37`, `97`) on light ones, and plain blue (`34`) is too dim on dark ones, so none of them is used; a nudge that should read as plain white uses bold alone (`01`), which draws in the theme's own foreground. Each nudge gets a color no other nudge uses, and adjacent slot numbers never share a hue family, because a normal and a bright shade of one hue read alike side by side (the renderer packs only the present nudges, so two nudges whose slots are separated by empty ones can still render side by side). The `/setup-gaia (Required)` segment that renders alone uses the setup nudge's color. Bright green (`92`) and red (`31`) are the safe colors left; past them, a new nudge shares a color with a nudge in a slot that is not adjacent to its own. Only a nudge's text forms are colored: its icon form and the trailing `+N` render uncolored, so the icon alone identifies a nudge at narrow widths.
 
 The statusline surface is chosen over a `SessionStart` `<system-reminder>` hook because system-reminders are visible only to the model; the user never sees them, so prompts fire and snooze without the user being shown a choice. The statusline is always visible, has no snooze state, and clears itself the moment the underlying cache reports clean.
 
@@ -96,4 +95,4 @@ GAIA uses the `playwright-cli` skill (Bash-invoked CLI) rather than the Playwrig
 
 **How to apply:** Do not recommend the Playwright MCP server for GAIA. When browser automation is needed, point at the existing `playwright-cli` skill.
 
-**Scope:** This is a Playwright-specific decision, not a blanket "CLI over MCP" policy. Other MCPs (Serena, context7) are evaluated on their own merits. Each MCP candidate is assessed individually.
+**Scope:** This is a Playwright-specific decision, not a blanket "CLI over MCP" policy. Other MCPs (context7) are evaluated on their own merits. Each MCP candidate is assessed individually.

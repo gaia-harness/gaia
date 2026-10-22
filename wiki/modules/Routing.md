@@ -60,4 +60,4 @@ Route modules export `loader`, `clientLoader`, `action`, `clientAction`, and `Hy
 
 ## Where to look up the inventory
 
-For the current set of routes and bundled `actions.*` endpoints, query Serena (`.claude/rules/code-search.md`).
+For the current set of routes and bundled `actions.*` endpoints, list `frontend/app/routes/`.

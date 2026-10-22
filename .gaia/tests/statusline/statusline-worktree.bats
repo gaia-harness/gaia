@@ -286,7 +286,7 @@ wait_for_file() {
   [ -f "$debt_marker" ]
 }
 
-@test "the seven suppressed nudges render from main, none from a worktree" {
+@test "the suppressed nudges render from main, none from a worktree" {
   cat > "$MAIN/.gaia/local/cache/shared/update-check.json" <<'JSON'
 {
   "gaiaHasUpdate": true,
@@ -295,8 +295,7 @@ wait_for_file() {
   "codifyCandidateCount": 2,
   "codifyUnclassifiedCount": 1,
   "cleanseNudge": true,
-  "cleanseNudgeReason": "stale",
-  "serenaLangDrift": ["go"]
+  "cleanseNudgeReason": "stale"
 }
 JSON
 
@@ -309,7 +308,6 @@ JSON
   grep -qF -- "update-deps" <<<"$output"
   grep -qF -- "gaia-codify" <<<"$output"
   grep -qF -- "gaia-cleanse" <<<"$output"
-  grep -qF -- "gaia-serena-sync" <<<"$output"
   grep -qF -- "gaia-debt" <<<"$output"
 
   run_statusline "$WORKTREE"
@@ -318,7 +316,6 @@ JSON
   grep -qF -- "update-deps" <<<"$output" && return 1
   grep -qF -- "gaia-codify" <<<"$output" && return 1
   grep -qF -- "gaia-cleanse" <<<"$output" && return 1
-  grep -qF -- "gaia-serena-sync" <<<"$output" && return 1
   grep -qF -- "gaia-debt" <<<"$output" && return 1
   return 0
 }

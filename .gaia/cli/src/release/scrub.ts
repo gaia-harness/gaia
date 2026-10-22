@@ -1207,7 +1207,7 @@ const isExecutableIn =
  * The exclude list and the tracked set both come from `cwd`, the source repo,
  * for the reason `buildExcludedSlugSet` gives: the staging tree holds neither.
  * Tracked rather than present on disk, so a maintainer's local-state directory
- * (`.serena`) derives the same set as a clean CI checkout.
+ * (`.gaia/local`) derives the same set as a clean CI checkout.
  */
 const runDerivedRefsCheck = ({
   allowlist,

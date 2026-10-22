@@ -17,4 +17,4 @@ tags: [module, utils]
 
 `.server.ts` suffix excludes a helper from the client bundle when it touches Node-only APIs; the server-only helpers are `http.server.ts` and `theme.server.ts` (the latter reads `cookie` and `~/env.server`). Trivial wrappers around native APIs may not warrant a test; use judgment.
 
-For the current helper inventory and signatures, query Serena (`.claude/rules/code-search.md`).
+For the current helper inventory and signatures, list `frontend/app/utils/`.

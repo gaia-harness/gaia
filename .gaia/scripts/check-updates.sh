@@ -33,8 +33,6 @@
 #   - securitySource (dependabot, pnpm-audit, or unavailable)
 #   - securityUnavailableReason (comma-joined closed-set reason tokens; empty
 #                     for dependabot)
-#   - serenaLangDrift (git-tracked manifests whose language Serena is not
-#                     configured for; [] when none or Serena is unregistered)
 #   - gaiaOriginVersion (origin's default-branch .gaia/VERSION, from
 #                     update-claim.sh; the previous value when the read fails)
 #   - gaiaUpdateClaims (live update claims, open same-repo update/v* pull
@@ -87,8 +85,8 @@ PROJECT_ROOT="$(cd "$GAIA_DIRECTORY/.." && pwd)"
 #
 # STATE_ROOT anchors machine-local STATE, and the one fitness check that
 # serves both the cleanse and the fitness nudges. Everything else this script
-# measures out of the checkout itself -- the Serena language drift and the
-# other CLI invocations below that name PROJECT_ROOT -- stays on PROJECT_ROOT,
+# measures out of the checkout itself -- the CLI invocations below that name
+# PROJECT_ROOT -- stays on PROJECT_ROOT,
 # because those are tracked files that legitimately differ per branch.
 # Repointing them wholesale would make this refresher report a fact about a
 # tree nobody is in. The fitness check runs against STATE_ROOT because the
@@ -124,14 +122,9 @@ codify_snapshot_token() {
   jq -r '.reviewed_at // empty' "$snapshot_file" 2>/dev/null
 }
 
-# Source the Serena language-drift library (Phase 1). Guarded so a missing
-# library never breaks the refresher.
-SERENA_LIBRARY="$GAIA_DIRECTORY/scripts/lib/serena-lang.sh"
-# shellcheck source=.gaia/scripts/lib/serena-lang.sh
-[ -f "$SERENA_LIBRARY" ] && . "$SERENA_LIBRARY"
-
-# Source the fitness-nudge signal library. Guarded the same way: without it
-# every fitness field carries its previous cached value.
+# Source the fitness-nudge signal library. Guarded so a missing library never
+# breaks the refresher: without it every fitness field carries its previous
+# cached value.
 FITNESS_NUDGE_LIBRARY="$GAIA_DIRECTORY/scripts/fitness-nudge-lib.sh"
 # shellcheck source=.gaia/scripts/fitness-nudge-lib.sh
 [ -f "$FITNESS_NUDGE_LIBRARY" ] && . "$FITNESS_NUDGE_LIBRARY"
@@ -793,20 +786,6 @@ case "$fitness_threshold" in
   ''|*[!0-9]*|0) fitness_threshold=15 ;;
 esac
 
-# ---------- serenaLangDrift ----------
-# Serena language-drift tokens: git-tracked high-signal manifests present but
-# absent from Serena's effective configured languages. Computed by the shared
-# lib (bash + jq + POSIX text tools; no yq). Empty array when Serena is not
-# registered, .serena/project.yml is absent, or there is no drift. The no-jq
-# write branch below hardcodes [] since the lib requires jq.
-serena_language_drift_json="[]"
-if command -v jq >/dev/null 2>&1 && command -v serena_language_drift >/dev/null 2>&1; then
-  computed="$(serena_language_drift "$PROJECT_ROOT" 2>/dev/null)"
-  case "$computed" in
-    '['*']') serena_language_drift_json="$computed" ;;
-  esac
-fi
-
 # ---------- gaiaCurrent ----------
 gaia_current=""
 if [ -f "$VERSION_FILE" ]; then
@@ -938,7 +917,6 @@ if command -v jq >/dev/null 2>&1; then
     --argjson cleanseLastAppliedAt "$cleanse_last_applied_at" \
     --argjson cleanseMemoryCount "$cleanse_memory_count" \
     --argjson cleanseMemoryBaseline "$cleanse_memory_baseline" \
-    --argjson serenaLangDrift "$serena_language_drift_json" \
     --argjson securityCount "$security_count" \
     --arg securitySource "$security_source" \
     --arg securityUnavailableReason "$security_reason" \
@@ -949,16 +927,15 @@ if command -v jq >/dev/null 2>&1; then
     --argjson fitnessBlendLandedAt "$fitness_blend_landed" \
     --arg fitnessBasisVersion "$fitness_basis_version" \
     --argjson fitnessBasisCloseAt "$fitness_basis_close_at" \
-    '{checkedAt: $checkedAt, outdatedCount: $outdatedCount, gaiaCurrent: $gaiaCurrent, gaiaLatest: $gaiaLatest, gaiaHasUpdate: $gaiaHasUpdate, gaiaOriginVersion: $gaiaOriginVersion, gaiaUpdateClaims: $gaiaUpdateClaims, ghLogin: $ghLogin, codifyCandidateCount: $codifyCandidateCount, codifyUnclassifiedCount: $codifyUnclassifiedCount, codifyNudgeReason: $codifyNudgeReason, residueCandidateCount: $residueCandidateCount, wikiDriftCount: $wikiDriftCount, wikiStateSha: $wikiStateSha, cleanseNudge: $cleanseNudge, cleanseNudgeReason: $cleanseNudgeReason, cleanseLastAppliedAt: $cleanseLastAppliedAt, cleanseMemoryCount: $cleanseMemoryCount, cleanseMemoryBaseline: $cleanseMemoryBaseline, serenaLangDrift: $serenaLangDrift, securityCount: $securityCount, securitySource: $securitySource, securityUnavailableReason: $securityUnavailableReason, fitnessGrade: $fitnessGrade, fitnessBlendCount: $fitnessBlendCount, fitnessCommitCount: $fitnessCommitCount, fitnessCommitThreshold: $fitnessCommitThreshold, fitnessBlendLandedAt: $fitnessBlendLandedAt, fitnessBasisVersion: $fitnessBasisVersion, fitnessBasisCloseAt: $fitnessBasisCloseAt}' \
+    '{checkedAt: $checkedAt, outdatedCount: $outdatedCount, gaiaCurrent: $gaiaCurrent, gaiaLatest: $gaiaLatest, gaiaHasUpdate: $gaiaHasUpdate, gaiaOriginVersion: $gaiaOriginVersion, gaiaUpdateClaims: $gaiaUpdateClaims, ghLogin: $ghLogin, codifyCandidateCount: $codifyCandidateCount, codifyUnclassifiedCount: $codifyUnclassifiedCount, codifyNudgeReason: $codifyNudgeReason, residueCandidateCount: $residueCandidateCount, wikiDriftCount: $wikiDriftCount, wikiStateSha: $wikiStateSha, cleanseNudge: $cleanseNudge, cleanseNudgeReason: $cleanseNudgeReason, cleanseLastAppliedAt: $cleanseLastAppliedAt, cleanseMemoryCount: $cleanseMemoryCount, cleanseMemoryBaseline: $cleanseMemoryBaseline, securityCount: $securityCount, securitySource: $securitySource, securityUnavailableReason: $securityUnavailableReason, fitnessGrade: $fitnessGrade, fitnessBlendCount: $fitnessBlendCount, fitnessCommitCount: $fitnessCommitCount, fitnessCommitThreshold: $fitnessCommitThreshold, fitnessBlendLandedAt: $fitnessBlendLandedAt, fitnessBasisVersion: $fitnessBasisVersion, fitnessBasisCloseAt: $fitnessBasisCloseAt}' \
     > "$temporary_file" 2>/dev/null
 else
-  # jq not available; emit valid JSON via printf. serenaLangDrift is empty:
-  # deriving it requires jq.
+  # jq not available; emit valid JSON via printf.
   # codify_reason is always the empty string on this path: both places that
   # compute it (the tally-driven composition above and the cache seed at
   # startup) require jq themselves, so neither branch ever runs without it.
   # Nothing here needs escaping.
-  printf '{"checkedAt":%s,"outdatedCount":%s,"gaiaCurrent":"%s","gaiaLatest":"%s","gaiaHasUpdate":%s,"gaiaOriginVersion":null,"gaiaUpdateClaims":[],"ghLogin":"","codifyCandidateCount":%s,"codifyUnclassifiedCount":%s,"codifyNudgeReason":"%s","residueCandidateCount":%s,"wikiDriftCount":%s,"cleanseNudge":%s,"cleanseNudgeReason":"%s","cleanseLastAppliedAt":%s,"cleanseMemoryCount":%s,"cleanseMemoryBaseline":%s,"serenaLangDrift":[],"securityCount":null,"securitySource":"unavailable","securityUnavailableReason":"jq-missing"}\n' \
+  printf '{"checkedAt":%s,"outdatedCount":%s,"gaiaCurrent":"%s","gaiaLatest":"%s","gaiaHasUpdate":%s,"gaiaOriginVersion":null,"gaiaUpdateClaims":[],"ghLogin":"","codifyCandidateCount":%s,"codifyUnclassifiedCount":%s,"codifyNudgeReason":"%s","residueCandidateCount":%s,"wikiDriftCount":%s,"cleanseNudge":%s,"cleanseNudgeReason":"%s","cleanseLastAppliedAt":%s,"cleanseMemoryCount":%s,"cleanseMemoryBaseline":%s,"securityCount":null,"securitySource":"unavailable","securityUnavailableReason":"jq-missing"}\n' \
     "$checked_at_to_write" "$outdated_count" "$gaia_current" "$gaia_latest" "$gaia_has_update" "$codify_count" "$unclassified_count" "$codify_reason" "$residue_count" "$wiki_drift_count" "$cleanse_nudge" "$cleanse_nudge_reason" "$cleanse_last_applied_at" "$cleanse_memory_count" "$cleanse_memory_baseline" \
     > "$temporary_file" 2>/dev/null
 fi

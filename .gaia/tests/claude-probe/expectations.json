@@ -613,19 +613,6 @@
       "cited_run": null
     },
     {
-      "id": "root-tsx-code-search",
-      "launch": "root",
-      "kind": "rule",
-      "subject": ".claude/rules/code-search.md",
-      "expand": null,
-      "trigger": "after_read:frontend/app/components/button/index.tsx",
-      "expect": "loaded",
-      "signal": "instructions_loaded",
-      "floor": false,
-      "source": "COV-006; plan C7 (rule paths: rewritten in Phase 7 so these load from both launch dirs; the spike tree still carries pre-rewrite globs)",
-      "cited_run": null
-    },
-    {
       "id": "root-tsx-guards-must-fail",
       "launch": "root",
       "kind": "rule",
@@ -743,19 +730,6 @@
       "cited_run": null
     },
     {
-      "id": "root-pw-code-search",
-      "launch": "root",
-      "kind": "rule",
-      "subject": ".claude/rules/code-search.md",
-      "expand": null,
-      "trigger": "after_read:frontend/.playwright/e2e/hydration.spec.ts",
-      "expect": "loaded",
-      "signal": "instructions_loaded",
-      "floor": false,
-      "source": "COV-006; plan C7 (rule paths: rewritten in Phase 7 so these load from both launch dirs; the spike tree still carries pre-rewrite globs)",
-      "cited_run": null
-    },
-    {
       "id": "root-pw-wiki-style",
       "launch": "root",
       "kind": "rule",
@@ -825,19 +799,6 @@
       "launch": "frontend",
       "kind": "rule",
       "subject": ".claude/rules/no-abbreviations.md",
-      "expand": null,
-      "trigger": "after_read:frontend/app/components/button/index.tsx",
-      "expect": "loaded",
-      "signal": "instructions_loaded",
-      "floor": false,
-      "source": "COV-006; plan C7 (rule paths: rewritten in Phase 7 so these load from both launch dirs; the spike tree still carries pre-rewrite globs)",
-      "cited_run": null
-    },
-    {
-      "id": "frontend-tsx-code-search",
-      "launch": "frontend",
-      "kind": "rule",
-      "subject": ".claude/rules/code-search.md",
       "expand": null,
       "trigger": "after_read:frontend/app/components/button/index.tsx",
       "expect": "loaded",
@@ -955,19 +916,6 @@
       "launch": "frontend",
       "kind": "rule",
       "subject": ".claude/rules/no-abbreviations.md",
-      "expand": null,
-      "trigger": "after_read:frontend/.playwright/e2e/hydration.spec.ts",
-      "expect": "loaded",
-      "signal": "instructions_loaded",
-      "floor": false,
-      "source": "COV-006; plan C7 (rule paths: rewritten in Phase 7 so these load from both launch dirs; the spike tree still carries pre-rewrite globs)",
-      "cited_run": null
-    },
-    {
-      "id": "frontend-pw-code-search",
-      "launch": "frontend",
-      "kind": "rule",
-      "subject": ".claude/rules/code-search.md",
       "expand": null,
       "trigger": "after_read:frontend/.playwright/e2e/hydration.spec.ts",
       "expect": "loaded",

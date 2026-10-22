@@ -70,9 +70,9 @@ gaia_statusline_right() {
   local SETUP_STATE_FILE SETUP_FEATURES_FILE SETUP_PROJECT_FILE GAIA_SETUP_OWED_JQ
   local nudge_color nudge_small nudge_large nudge_mid nudge_icon nudge_floor setup_noun full
   local local_version cache_fields outdated_count security_count update_state update_version update_login
-  local codify_count has_codify_reason codify_reason cleanse_nudge cleanse_reason serena_drift
+  local codify_count has_codify_reason codify_reason cleanse_nudge cleanse_reason
   local codify_unclassified residue_count wiki_drift_count codify_mid deps_outdated deps_security
-  local fallback_reason codify_noun serena_commas serena_language_count
+  local fallback_reason codify_noun
   local fitness_grade fitness_blend_count fitness_commit_count fitness_commit_threshold fitness_large fitness_mid
   local RESIDUE_NUDGE_THRESHOLD residue_suffix WIKI_NUDGE_THRESHOLD debt_count debt_noun
   local dense_color dense_small dense_large dense_mid dense_icon dense_floor dense_iconcount slot nudge_count
@@ -202,9 +202,9 @@ gaia_statusline_right() {
         # left side alone.
     else
       # Nudge slots, indexed by render priority rather than by where each one
-      # is armed below: setup-gaia 0, update-gaia 1, gaia-serena-sync 2,
-      # update-deps 3, gaia-cleanse 4, gaia-fitness 5, gaia-codify 6, gaia-debt 7,
-      # gaia-residue 8, gaia-wiki 9. The update-check-derived nudges stay gated on $cache_file;
+      # is armed below: setup-gaia 0, update-gaia 1, update-deps 3, gaia-cleanse 4,
+      # gaia-fitness 5, gaia-codify 6, gaia-debt 7, gaia-residue 8, gaia-wiki 9;
+      # slot 2 is free. The update-check-derived nudges stay gated on $cache_file;
       # the setup nudge and the debt nudge are gated independently (on the setup
       # read above and on $debt_cache) so they still render when update-check.json
       # is absent, which is why debt (7) is armed after residue (8) in source
@@ -310,7 +310,6 @@ gaia_statusline_right() {
             ((.codifyNudgeReason // "") | clean),
             (.cleanseNudge // false | clean),
             (.cleanseNudgeReason // "" | clean),
-            ((.serenaLangDrift // []) | join(", ") | clean),
             (.codifyUnclassifiedCount // 0 | clean),
             (.residueCandidateCount // 0 | clean),
             (.wikiDriftCount // 0 | clean),
@@ -321,7 +320,7 @@ gaia_statusline_right() {
           | join("\u001f")' "$cache_file" 2>/dev/null) || cache_fields=""
         IFS=$'\037' read -r outdated_count security_count update_state update_version update_login \
           codify_count has_codify_reason codify_reason cleanse_nudge cleanse_reason \
-          serena_drift codify_unclassified residue_count wiki_drift_count \
+          codify_unclassified residue_count wiki_drift_count \
           fitness_grade fitness_blend_count fitness_commit_count fitness_commit_threshold <<<"$cache_fields"
         case "$security_count" in
           ''|*[!0-9]*) security_count="" ;;
@@ -445,13 +444,6 @@ gaia_statusline_right() {
         fi
         if [ -n "$fitness_large" ]; then
           nudge_set 5 '01;94' '/gaia-fitness' "$fitness_large" "$fitness_mid" '💪'
-        fi
-        if [ -n "$serena_drift" ]; then
-          printf -v full '/gaia-serena-sync (missing: %s)' "$serena_drift"
-          # Language count from the already-joined string: commas plus one.
-          serena_commas="${serena_drift//[!,]/}"
-          serena_language_count=$(( ${#serena_commas} + 1 ))
-          nudge_set 2 '01;31' '/gaia-serena-sync' "$full" "$serena_language_count" '🔭'
         fi
         # Residue nudge: renders once at least RESIDUE_NUDGE_THRESHOLD keyed
         # candidates have aged past 30 days (the age dial lives in the tally,

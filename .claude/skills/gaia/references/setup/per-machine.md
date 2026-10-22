@@ -12,29 +12,10 @@ A failed command, or a probe that still fails after the install: print one `[ok]
 
 ## Step 1: install-tools
 
-Three external tools need per-machine setup. Probes: React Doctor, Playwright CLI, Serena.
+Two external tools need per-machine setup. Probes: React Doctor, Playwright CLI.
 
 - [React Doctor](https://github.com/millionco/react-doctor): Run `bash .gaia/scripts/install-react-doctor.sh`. It installs the Claude Code skill under `frontend/.claude/skills/`, strips the installer's extras, and leaves `package.json`, `pnpm-lock.yaml` and `.githooks/pre-commit` unchanged; `wiki/dependencies/react-doctor.md` holds the verification record.
 - [Playwright CLI](https://github.com/microsoft/playwright-cli): `npm install -g @playwright/cli@latest`. The bundled skill shells out to the global binary; `/update-deps` keeps it current; `wiki/dependencies/playwright-cli.md` covers the fallback.
-- [Serena](https://github.com/oraios/serena) MCP server: semantic code search and editing backed by language servers. It needs `uv` first:
-
-  ```bash
-  if ! command -v uv &>/dev/null; then
-    curl -LsSf https://astral.sh/uv/install.sh | sh
-  fi
-  ```
-
-  Verify with `uv --version`, sourcing the shell rc the installer modified (or adding `~/.local/bin` to `PATH` for this session) if needed. On failure, halt with: `uv is required for GAIA. Install with: curl -LsSf https://astral.sh/uv/install.sh | sh`. Then register Serena globally:
-
-  ```bash
-  claude mcp add serena -s user -- uvx --from git+https://github.com/oraios/serena@v2.1.0 serena start-mcp-server --context claude-code --project-from-cwd --open-web-dashboard false --agent-interface tools
-  ```
-
-  `--agent-interface tools` keeps Serena's one-tool-per-operation interface, the symbol tools `.claude/rules/code-search.md` routes to. A fresh machine's Serena config otherwise defaults to its REPL interface, which replaces them with a single `serena_repl` tool. An `agent_interface:` value in `.serena/project.yml` overrides the flag, so that key stays empty.
-
-  `claude mcp add` exiting non-zero with a "name already exists" error is success. An existing registration with an older pin, or without `--agent-interface tools`, is stale: run `claude mcp remove serena -s user`, then the add above, and restart Claude Code.
-
-  Serena picks one language at first startup and freezes it into `.serena/project.yml`. When the project grows another language, update the `language_servers:` list (`languages:` before Serena 1.7) in that file and restart Serena; `/gaia-serena-sync` automates the same edit on explicit consent.
 
 Record line: `.gaia/cli/gaia setup record install-tools applied`.
 
@@ -78,5 +59,4 @@ After a step's commands, run each of its probes and emit one line per component:
 | -------------- | ---------------------------------------------------------------------------- |
 | React Doctor   | `[ -d frontend/.claude/skills/react-doctor ]` (gitignored, kept per-machine) |
 | Playwright CLI | `command -v playwright-cli && playwright-cli --version >/dev/null 2>&1`      |
-| Serena         | `claude mcp list 2>/dev/null \| grep -q '^serena:'`                          |
 | typescript-lsp | `claude plugin list 2>/dev/null \| grep -q 'typescript-lsp'`                 |

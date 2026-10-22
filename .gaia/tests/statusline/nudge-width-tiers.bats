@@ -9,7 +9,7 @@
 # lower-priority one (a nudge with no Medium form, such as /gaia-cleanse,
 # shows its Small text at that step). This suite pins the exact boundaries
 # and the priority order
-# (update-gaia, serena-sync, update-deps, cleanse, fitness, codify, debt, residue, wiki)
+# (update-gaia, update-deps, cleanse, fitness, codify, debt, residue, wiki)
 # against exact widths, so a regression in the arithmetic reds here rather
 # than silently shifting a boundary.
 #
@@ -18,7 +18,7 @@
 # "Claude Code" fallback, 11 columns), and a cache that arms every right-side
 # nudge except /gaia-fitness at once (its order and shrink coverage live in
 # fitness-nudge-render.bats), at the widths the issue table names: update-gaia 9.9.9,
-# serena missing go+rust (2 languages), 28 outdated deps, a cleanse reason,
+# 28 outdated deps, a cleanse reason,
 # a codify reason with 6 candidates, 1 open debt issue, 15 residuals.
 
 setup() {
@@ -47,8 +47,7 @@ setup() {
   "codifyUnclassifiedCount": 1,
   "residueCandidateCount": 15,
   "cleanseNudge": true,
-  "cleanseNudgeReason": "34 days since review",
-  "serenaLangDrift": ["go", "rust"]
+  "cleanseNudgeReason": "34 days since review"
 }
 JSON
   mkdir -p "$MAIN/.gaia/local/debt"
@@ -81,12 +80,12 @@ visual_width() {
 }
 
 @test "every nudge renders Large, in priority order, when the line fits" {
-  render_at 278
+  render_at 235
   [ "$status" -eq 0 ]
-  expected="Claude Code  🚀 /update-gaia (9.9.9) │ 🔭 /gaia-serena-sync (missing: go, rust) │ 📦 /update-deps (28 outdated) │ 🔎 /gaia-cleanse (34 days since review) │ 🔨 /gaia-codify (1 new pattern, dangling-reference rising) │ 🐛 /gaia-debt (1 issue) │ 🧹 /gaia-residue (15 residuals)"
+  expected="Claude Code  🚀 /update-gaia (9.9.9) │ 📦 /update-deps (28 outdated) │ 🔎 /gaia-cleanse (34 days since review) │ 🔨 /gaia-codify (1 new pattern, dangling-reference rising) │ 🐛 /gaia-debt (1 issue) │ 🧹 /gaia-residue (15 residuals)"
   [ "$plain" = "$expected" ]
 
-  render_at 277
+  render_at 234
   [ "$status" -eq 0 ]
   case "$plain" in
     *"🐛 /gaia-debt (1 issue) │ 🧹 /gaia-residue (15)") ;;
@@ -98,7 +97,6 @@ visual_width() {
   order=$(grep -oE '/(update|gaia)-[a-z0-9-]*' <<<"$plain")
   expected_order=$(printf '%s\n' \
     "/update-gaia" \
-    "/gaia-serena-sync" \
     "/update-deps" \
     "/gaia-cleanse" \
     "/gaia-codify" \
@@ -108,40 +106,40 @@ visual_width() {
 }
 
 @test "the line stops 4 columns short of COLUMNS, where Claude Code's statusline row ends" {
-  render_at 278
+  render_at 235
   [ "$status" -eq 0 ]
-  expected="Claude Code  🚀 /update-gaia (9.9.9) │ 🔭 /gaia-serena-sync (missing: go, rust) │ 📦 /update-deps (28 outdated) │ 🔎 /gaia-cleanse (34 days since review) │ 🔨 /gaia-codify (1 new pattern, dangling-reference rising) │ 🐛 /gaia-debt (1 issue) │ 🧹 /gaia-residue (15 residuals)"
+  expected="Claude Code  🚀 /update-gaia (9.9.9) │ 📦 /update-deps (28 outdated) │ 🔎 /gaia-cleanse (34 days since review) │ 🔨 /gaia-codify (1 new pattern, dangling-reference rising) │ 🐛 /gaia-debt (1 issue) │ 🧹 /gaia-residue (15 residuals)"
   [ "$plain" = "$expected" ]
-  [ "$(visual_width "$plain")" -eq 274 ]
+  [ "$(visual_width "$plain")" -eq 231 ]
 
-  render_at 277
+  render_at 234
   [ "$status" -eq 0 ]
   case "$plain" in
     *"🐛 /gaia-debt (1 issue) │ 🧹 /gaia-residue (15)") ;;
     *) return 1 ;;
   esac
-  [ "$(visual_width "$plain")" -le 273 ]
+  [ "$(visual_width "$plain")" -le 230 ]
 }
 
 @test "Large shrinks to Medium bottom-up, leaving mixed sizes at one width" {
-  render_at 223
+  render_at 180
   [ "$status" -eq 0 ]
-  expected="Claude Code  🚀 /update-gaia (9.9.9) │ 🔭 /gaia-serena-sync (missing: go, rust) │ 📦 /update-deps (28 outdated) │ 🔎 /gaia-cleanse (34 days since review) │ 🔨 /gaia-codify (6) │ 🐛 /gaia-debt (1) │ 🧹 /gaia-residue (15)"
+  expected="Claude Code  🚀 /update-gaia (9.9.9) │ 📦 /update-deps (28 outdated) │ 🔎 /gaia-cleanse (34 days since review) │ 🔨 /gaia-codify (6) │ 🐛 /gaia-debt (1) │ 🧹 /gaia-residue (15)"
   [ "$plain" = "$expected" ]
 
-  render_at 222
+  render_at 179
   [ "$status" -eq 0 ]
   grep -qF -- "📦 /update-deps (28 outdated)" <<<"$plain"
   grep -qF -- "🔎 /gaia-cleanse │ 🔨 /gaia-codify (6)" <<<"$plain"
 
-  render_at 268
+  render_at 225
   [ "$status" -eq 0 ]
   case "$plain" in
     *"🐛 /gaia-debt (1 issue) │ 🧹 /gaia-residue (15)") ;;
     *) return 1 ;;
   esac
 
-  render_at 267
+  render_at 224
   [ "$status" -eq 0 ]
   case "$plain" in
     *"🐛 /gaia-debt (1) │ 🧹 /gaia-residue (15)") ;;
@@ -150,111 +148,107 @@ visual_width() {
 }
 
 @test "cleanse has no Medium: it goes straight to its bare command" {
-  render_at 200
+  render_at 180
   [ "$status" -eq 0 ]
-  expected="Claude Code  🚀 /update-gaia (9.9.9) │ 🔭 /gaia-serena-sync (missing: go, rust) │ 📦 /update-deps (28 outdated) │ 🔎 /gaia-cleanse │ 🔨 /gaia-codify (6) │ 🐛 /gaia-debt (1) │ 🧹 /gaia-residue (15)"
+  grep -qF -- "🔎 /gaia-cleanse (34 days since review)" <<<"$plain"
+
+  render_at 179
+  [ "$status" -eq 0 ]
+  expected="Claude Code                        🚀 /update-gaia (9.9.9) │ 📦 /update-deps (28 outdated) │ 🔎 /gaia-cleanse │ 🔨 /gaia-codify (6) │ 🐛 /gaia-debt (1) │ 🧹 /gaia-residue (15)"
   [ "$plain" = "$expected" ]
   grep -qF -- "🔎 /gaia-cleanse (" <<<"$plain" && return 1
 
-  render_at 175
+  render_at 148
   [ "$status" -eq 0 ]
   grep -qF -- "🔎 /gaia-cleanse (" <<<"$plain" && return 1
   true
 }
 
-@test "Medium forms carry the number: serena its language count; update-gaia has none, its Large is already the version" {
-  render_at 191
+@test "update-gaia has no Medium: its Large is already the version, so it goes straight to Small" {
+  render_at 147
   [ "$status" -eq 0 ]
-  grep -qF -- "🔭 /gaia-serena-sync (missing: go, rust)" <<<"$plain"
+  grep -qF -- "🚀 /update-gaia │ 📦 /update-deps (28)" <<<"$plain"
 
-  render_at 190
+  render_at 148
   [ "$status" -eq 0 ]
-  grep -qF -- "🔭 /gaia-serena-sync (2)" <<<"$plain"
-
-  render_at 174
-  [ "$status" -eq 0 ]
-  grep -qF -- "🚀 /update-gaia │ 🔭 /gaia-serena-sync (2)" <<<"$plain"
-
-  render_at 175
-  [ "$status" -eq 0 ]
-  expected="Claude Code  🚀 /update-gaia (9.9.9) │ 🔭 /gaia-serena-sync (2) │ 📦 /update-deps (28) │ 🔎 /gaia-cleanse │ 🔨 /gaia-codify (6) │ 🐛 /gaia-debt (1) │ 🧹 /gaia-residue (15)"
+  expected="Claude Code  🚀 /update-gaia (9.9.9) │ 📦 /update-deps (28) │ 🔎 /gaia-cleanse │ 🔨 /gaia-codify (6) │ 🐛 /gaia-debt (1) │ 🧹 /gaia-residue (15)"
   [ "$plain" = "$expected" ]
 }
 
 @test "Medium shrinks to Small bottom-up after every nudge reached Medium" {
-  render_at 166
+  render_at 139
   [ "$status" -eq 0 ]
   case "$plain" in
     *"🐛 /gaia-debt (1) │ 🧹 /gaia-residue") ;;
     *) return 1 ;;
   esac
 
-  render_at 149
+  render_at 127
   [ "$status" -eq 0 ]
-  expected="Claude Code  🚀 /update-gaia │ 🔭 /gaia-serena-sync (2) │ 📦 /update-deps │ 🔎 /gaia-cleanse │ 🔨 /gaia-codify │ 🐛 /gaia-debt │ 🧹 /gaia-residue"
+  expected="Claude Code  🚀 /update-gaia │ 📦 /update-deps (28) │ 🔎 /gaia-cleanse │ 🔨 /gaia-codify │ 🐛 /gaia-debt │ 🧹 /gaia-residue"
   [ "$plain" = "$expected" ]
 
-  render_at 148
+  render_at 126
   [ "$status" -eq 0 ]
-  expected="Claude Code     🚀 /update-gaia │ 🔭 /gaia-serena-sync │ 📦 /update-deps │ 🔎 /gaia-cleanse │ 🔨 /gaia-codify │ 🐛 /gaia-debt │ 🧹 /gaia-residue"
+  expected="Claude Code      🚀 /update-gaia │ 📦 /update-deps │ 🔎 /gaia-cleanse │ 🔨 /gaia-codify │ 🐛 /gaia-debt │ 🧹 /gaia-residue"
   [ "$plain" = "$expected" ]
 
-  render_at 145
+  render_at 122
   [ "$status" -eq 0 ]
-  expected="Claude Code  🚀 /update-gaia │ 🔭 /gaia-serena-sync │ 📦 /update-deps │ 🔎 /gaia-cleanse │ 🔨 /gaia-codify │ 🐛 /gaia-debt │ 🧹 /gaia-residue"
+  expected="Claude Code  🚀 /update-gaia │ 📦 /update-deps │ 🔎 /gaia-cleanse │ 🔨 /gaia-codify │ 🐛 /gaia-debt │ 🧹 /gaia-residue"
   [ "$plain" = "$expected" ]
 
-  render_at 144
+  render_at 121
   [ "$status" -eq 0 ]
   grep -qF -- "🧹 15" <<<"$plain"
   grep -qF -- "🧹 /gaia-residue" <<<"$plain" && return 1
   true
 }
 
-@test "icons carry their Medium number: codify and serena gain counts, update-gaia and cleanse stay bare" {
-  render_at 90
+@test "icons carry their Medium number: deps and codify gain counts, update-gaia and cleanse stay bare" {
+  render_at 77
   [ "$status" -eq 0 ]
-  expected="Claude Code  🚀 /update-gaia │ 🔭 /gaia-serena-sync │ 📦 28 │ 🔎 │ 🔨 6 │ 🐛 1 │ 🧹 15"
+  expected="Claude Code  🚀 /update-gaia │ 📦 /update-deps │ 🔎 │ 🔨 6 │ 🐛 1 │ 🧹 15"
   [ "$plain" = "$expected" ]
 
-  render_at 74
+  render_at 67
   [ "$status" -eq 0 ]
-  expected="Claude Code  🚀 /update-gaia │ 🔭 2 │ 📦 28 │ 🔎 │ 🔨 6 │ 🐛 1 │ 🧹 15"
+  expected="Claude Code  🚀 /update-gaia │ 📦 28 │ 🔎 │ 🔨 6 │ 🐛 1 │ 🧹 15"
   [ "$plain" = "$expected" ]
 
-  render_at 73
+  render_at 66
   [ "$status" -eq 0 ]
-  expected="Claude Code              🚀 │ 🔭 2 │ 📦 28 │ 🔎 │ 🔨 6 │ 🐛 1 │ 🧹 15"
+  expected="Claude Code              🚀 │ 📦 28 │ 🔎 │ 🔨 6 │ 🐛 1 │ 🧹 15"
   [ "$plain" = "$expected" ]
 
-  render_at 61
+  render_at 54
   [ "$status" -eq 0 ]
-  expected="Claude Code  🚀 │ 🔭 2 │ 📦 28 │ 🔎 │ 🔨 6 │ 🐛 1 │ 🧹 15"
+  expected="Claude Code  🚀 │ 📦 28 │ 🔎 │ 🔨 6 │ 🐛 1 │ 🧹 15"
   [ "$plain" = "$expected" ]
 
-  render_at 65
+  render_at 58
   [ "$status" -eq 0 ]
-  expected="Claude Code      🚀 │ 🔭 2 │ 📦 28 │ 🔎 │ 🔨 6 │ 🐛 1 │ 🧹 15"
+  expected="Claude Code      🚀 │ 📦 28 │ 🔎 │ 🔨 6 │ 🐛 1 │ 🧹 15"
   [ "$plain" = "$expected" ]
 }
 
 @test "+N names how many icons were dropped and never vanishes" {
-  render_at 60
+  render_at 53
   [ "$status" -eq 0 ]
-  expected="Claude Code      🚀 │ 🔭 2 │ 📦 28 │ 🔎 │ 🔨 6 │ 🐛 1 +1"
+  expected="Claude Code      🚀 │ 📦 28 │ 🔎 │ 🔨 6 │ 🐛 1 +1"
   [ "$plain" = "$expected" ]
 
   render_at 22
   [ "$status" -eq 0 ]
   case "$plain" in
-    *"🚀 +6") ;;
+    *"🚀 +5") ;;
     *) return 1 ;;
   esac
 
   render_at 21
   [ "$status" -eq 0 ]
   case "$plain" in
-    *"+7") ;;
+    *"+6") ;;
     *) return 1 ;;
   esac
 
@@ -262,7 +256,7 @@ visual_width() {
   [ "$status" -eq 0 ]
   [ -n "$plain" ]
   case "$plain" in
-    *"+7") ;;
+    *"+6") ;;
     *) return 1 ;;
   esac
   grep -qF -- "gaia-status" <<<"$plain" && return 1
@@ -277,13 +271,13 @@ JSON
   local json
   json=$(jq -n --arg current_directory "$MAIN" '{workspace: {current_dir: $current_directory}, cwd: $current_directory, model: {display_name: "Test"}, context_window: {used_percentage: 10}}')
 
-  run env HOME="$TEMPORARY_HOME" LC_ALL=C.UTF-8 COLUMNS=277 bash -c "printf '%s' '$json' | bash '$MAIN/.gaia/statusline/gaia-statusline.sh'"
+  run env HOME="$TEMPORARY_HOME" LC_ALL=C.UTF-8 COLUMNS=234 bash -c "printf '%s' '$json' | bash '$MAIN/.gaia/statusline/gaia-statusline.sh'"
   [ "$status" -eq 0 ]
   plain=$(printf '%s' "$output" | sed 's/\x1b\[[0-9;]*m//g')
-  expected="▓▓░░░░░░░░  🚀 /update-gaia (9.9.9) │ 🔭 /gaia-serena-sync (missing: go, rust) │ 📦 /update-deps (28 outdated) │ 🔎 /gaia-cleanse (34 days since review) │ 🔨 /gaia-codify (1 new pattern, dangling-reference rising) │ 🐛 /gaia-debt (1 issue) │ 🧹 /gaia-residue (15 residuals)"
+  expected="▓▓░░░░░░░░  🚀 /update-gaia (9.9.9) │ 📦 /update-deps (28 outdated) │ 🔎 /gaia-cleanse (34 days since review) │ 🔨 /gaia-codify (1 new pattern, dangling-reference rising) │ 🐛 /gaia-debt (1 issue) │ 🧹 /gaia-residue (15 residuals)"
   [ "$plain" = "$expected" ]
 
-  run env HOME="$TEMPORARY_HOME" LC_ALL=C.UTF-8 COLUMNS=276 bash -c "printf '%s' '$json' | bash '$MAIN/.gaia/statusline/gaia-statusline.sh'"
+  run env HOME="$TEMPORARY_HOME" LC_ALL=C.UTF-8 COLUMNS=233 bash -c "printf '%s' '$json' | bash '$MAIN/.gaia/statusline/gaia-statusline.sh'"
   [ "$status" -eq 0 ]
   plain=$(printf '%s' "$output" | sed 's/\x1b\[[0-9;]*m//g')
   case "$plain" in
@@ -300,13 +294,13 @@ JSON
   local json
   json=$(jq -n --arg current_directory "$MAIN" '{workspace: {current_dir: $current_directory}, cwd: $current_directory, model: {display_name: "Test"}, context_window: {used_percentage: 10}}')
 
-  run env HOME="$TEMPORARY_HOME" LC_ALL=C.UTF-8 COLUMNS=269 bash -c "printf '%s' '$json' | bash '$MAIN/.gaia/statusline/gaia-statusline.sh'"
+  run env HOME="$TEMPORARY_HOME" LC_ALL=C.UTF-8 COLUMNS=226 bash -c "printf '%s' '$json' | bash '$MAIN/.gaia/statusline/gaia-statusline.sh'"
   [ "$status" -eq 0 ]
   plain=$(printf '%s' "$output" | sed 's/\x1b\[[0-9;]*m//g')
-  expected="🚀  🚀 /update-gaia (9.9.9) │ 🔭 /gaia-serena-sync (missing: go, rust) │ 📦 /update-deps (28 outdated) │ 🔎 /gaia-cleanse (34 days since review) │ 🔨 /gaia-codify (1 new pattern, dangling-reference rising) │ 🐛 /gaia-debt (1 issue) │ 🧹 /gaia-residue (15 residuals)"
+  expected="🚀  🚀 /update-gaia (9.9.9) │ 📦 /update-deps (28 outdated) │ 🔎 /gaia-cleanse (34 days since review) │ 🔨 /gaia-codify (1 new pattern, dangling-reference rising) │ 🐛 /gaia-debt (1 issue) │ 🧹 /gaia-residue (15 residuals)"
   [ "$plain" = "$expected" ]
 
-  run env HOME="$TEMPORARY_HOME" LC_ALL=C.UTF-8 COLUMNS=268 bash -c "printf '%s' '$json' | bash '$MAIN/.gaia/statusline/gaia-statusline.sh'"
+  run env HOME="$TEMPORARY_HOME" LC_ALL=C.UTF-8 COLUMNS=225 bash -c "printf '%s' '$json' | bash '$MAIN/.gaia/statusline/gaia-statusline.sh'"
   [ "$status" -eq 0 ]
   plain=$(printf '%s' "$output" | sed 's/\x1b\[[0-9;]*m//g')
   case "$plain" in
@@ -324,14 +318,14 @@ JSON
   last_line_x=$(printf '%052d' 0 | tr 0 x)
   json=$(jq -n --arg current_directory "$MAIN" '{workspace: {current_dir: $current_directory}, cwd: $current_directory, model: {display_name: "Test"}, context_window: {used_percentage: 10}}')
 
-  run env HOME="$TEMPORARY_HOME" COLUMNS=319 bash -c "printf '%s' '$json' | bash '$MAIN/.gaia/statusline/gaia-statusline.sh'"
+  run env HOME="$TEMPORARY_HOME" COLUMNS=276 bash -c "printf '%s' '$json' | bash '$MAIN/.gaia/statusline/gaia-statusline.sh'"
   [ "$status" -eq 0 ]
   plain=$(printf '%s' "$output" | sed 's/\x1b\[[0-9;]*m//g')
   last_line="${plain##*$'\n'}"
-  expected_right="🚀 /update-gaia (9.9.9) │ 🔭 /gaia-serena-sync (missing: go, rust) │ 📦 /update-deps (28 outdated) │ 🔎 /gaia-cleanse (34 days since review) │ 🔨 /gaia-codify (1 new pattern, dangling-reference rising) │ 🐛 /gaia-debt (1 issue) │ 🧹 /gaia-residue (15 residuals)"
+  expected_right="🚀 /update-gaia (9.9.9) │ 📦 /update-deps (28 outdated) │ 🔎 /gaia-cleanse (34 days since review) │ 🔨 /gaia-codify (1 new pattern, dangling-reference rising) │ 🐛 /gaia-debt (1 issue) │ 🧹 /gaia-residue (15 residuals)"
   [ "$last_line" = "${last_line_x}  ${expected_right}" ]
 
-  run env HOME="$TEMPORARY_HOME" COLUMNS=318 bash -c "printf '%s' '$json' | bash '$MAIN/.gaia/statusline/gaia-statusline.sh'"
+  run env HOME="$TEMPORARY_HOME" COLUMNS=275 bash -c "printf '%s' '$json' | bash '$MAIN/.gaia/statusline/gaia-statusline.sh'"
   [ "$status" -eq 0 ]
   plain=$(printf '%s' "$output" | sed 's/\x1b\[[0-9;]*m//g')
   last_line="${plain##*$'\n'}"
@@ -352,12 +346,11 @@ JSON
   "codifyUnclassifiedCount": 1,
   "residueCandidateCount": 15,
   "cleanseNudge": true,
-  "cleanseNudgeReason": "34 days since review",
-  "serenaLangDrift": ["go", "rust"]
+  "cleanseNudgeReason": "34 days since review"
 }
 JSON
 
-  render_at 240
+  render_at 197
   [ "$status" -eq 0 ]
   grep -qF -- "🔨 /gaia-codify" <<<"$plain"
   grep -qF -- "🔨 /gaia-codify (" <<<"$plain" && return 1
@@ -438,7 +431,7 @@ JSON
 }
 
 @test "text forms keep their color, icons and +N render uncolored; setup-gaia renders alone" {
-  render_at 175
+  render_at 148
   [ "$status" -eq 0 ]
   grep -qF -- $'\033[01;91m🐛 /gaia-debt (1)\033[00m' <<<"$output"
   grep -qF -- $'\033[01;36m🚀 /update-gaia (9.9.9)\033[00m' <<<"$output"
@@ -461,7 +454,6 @@ JSON
     *) return 1 ;;
   esac
   grep -qF -- "🚀" <<<"$plain" && return 1
-  grep -qF -- "🔭" <<<"$plain" && return 1
   grep -qF -- "+" <<<"$plain" && return 1
   true
 }
@@ -477,14 +469,14 @@ arm_wiki_nudge() {
 @test "wiki renders last at Large and is the first nudge to shrink" {
   arm_wiki_nudge 20
 
-  render_at 307
+  render_at 264
   [ "$status" -eq 0 ]
   case "$plain" in
     *"🧹 /gaia-residue (15 residuals) │ 🧠 /gaia-wiki (20 commits)") ;;
     *) return 1 ;;
   esac
 
-  render_at 306
+  render_at 263
   [ "$status" -eq 0 ]
   case "$plain" in
     *"🧹 /gaia-residue (15 residuals) │ 🧠 /gaia-wiki (20)") ;;

@@ -29,4 +29,4 @@ A page that reads route data calls its hook itself (`useLoaderData<LoaderData>()
 
 A page may also accept loader-derived data as props and own its document head: it takes a `{title, description}` props type and renders `<title>` and `<meta name="description">` itself; the thin route resolves those strings in its loader and passes them down.
 
-For the current page inventory, query Serena (`.claude/rules/code-search.md`).
+For the current page inventory, list `frontend/app/pages/`.

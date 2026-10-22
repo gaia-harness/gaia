@@ -31,7 +31,7 @@ Items 4 and 6 need audit data. Before starting, confirm the probe has at least o
 
 Count: root `CLAUDE.md`, root `.claude/rules/*` (the ones with no `paths:` frontmatter load at startup), the SessionStart hook's additional context, the list entries for GAIA's skills, commands and agents, and on demand: path-scoped rules, `frontend/CLAUDE.md`, frontend rules, frontend skill entries, skill bodies.
 
-Exclude: the user's global `~/.claude/CLAUDE.md`, the gaia-react monorepo's own `CLAUDE.md` (a downstream adopter has neither), user-level MCP servers (Serena, context7), claude.ai connectors, and PostToolUse hook stdout that is only a terminal notification (Warp `terminalSequence`; it never reaches the model).
+Exclude: the user's global `~/.claude/CLAUDE.md`, the gaia-react monorepo's own `CLAUDE.md` (a downstream adopter has neither), user-level MCP servers (context7), claude.ai connectors, and PostToolUse hook stdout that is only a terminal notification (Warp `terminalSequence`; it never reaches the model).
 
 ## Lessons from the first run (read before measuring)
 

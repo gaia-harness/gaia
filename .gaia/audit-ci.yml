@@ -463,5 +463,4 @@ unowned:
   # accident of which directory level it sits at.
   - ".github/forensics/README.md"
   - ".github/forensics/tests/**/*.md"
-  - ".serena/**"
   # gaia:maintainer-only:end

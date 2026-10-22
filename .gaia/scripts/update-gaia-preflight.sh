@@ -273,8 +273,8 @@ prune() {
   # baseline the merge reads), and delete every other entry. That includes
   # run/, the previous update run's merge report and candidates, which is how a
   # stopped run's leftovers are cleaned up. The glob is the update-gaia/
-  # directory only: update-check.json and serena-guard/ live one level up at
-  # shared/, structurally outside it.
+  # directory only: update-check.json lives one level up at shared/,
+  # structurally outside it.
   if [ -d .gaia/local/cache/shared/update-gaia ]; then
     for d in .gaia/local/cache/shared/update-gaia/*/; do
       [ -d "$d" ] || continue

@@ -61,7 +61,6 @@ Master catalog of every page in the wiki. Newly created pages must be added here
 - [[remix-i18next]]
 - [[remix-toast]]
 - [[remix-utils]]: per-helper adopt-vs-hand-roll decision map.
-- [[Serena]]
 - [[Conform]]
 - [[Zod]]
 - [[Ky]]
@@ -174,5 +173,4 @@ Master catalog of every page in the wiki. Newly created pages must be added here
 - [[GAIA CLI]]: the `.gaia/cli/` workspace, the `.gaia/cli/gaia` bundled binary, and the adoption ping (`gaia ping`) sent on `/gaia-init`, `/setup-gaia`, and `/update-gaia` completion.
 - [[Token Cost Readout]]: read-time token-to-dollar pricing off one shared pricing lib; the distributed rate table, the optional local price override, the unpriced and unparseable-override markers, and the pinned `Cost:` line.
 - [[Usage Ledger]]: the only cost store, an append-only per-message usage ledger under `.gaia/local/telemetry/`; start and close bindings with latest-start-wins pairing, agent fields on segments, `usage.sh record` and `represented`, read-time attribution through a lineage graph, the per-PR block with its Code Audit Team line, and initiative readouts.
-- [[Serena Integration]]: Serena handles live code; the wiki handles institutional memory.
 - [[React Perf Diagnostic]]: `/gaia-react-perf`: measure-only runtime render-performance diagnostic built on bippy; capture -> reduce CLI -> ranked `memoDefeated` findings with a structural-fix cross-reference.

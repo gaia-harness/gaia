@@ -104,4 +104,4 @@ Stories and browser-project tests run neither the MSW node server nor this reset
 - **Runtime override persists across tests** → `server.use()` was called outside a test body. Don't.
 - **Playwright ignores mocks** → `MSW_ENABLED` is not `true` in the environment that launches the `pnpm dev` web server.
 
-For the current folder structure and file inventory, query Serena (`.claude/rules/code-search.md`).
+For the current folder structure and file inventory, list `frontend/test/mocks/`.

@@ -32,7 +32,7 @@ One command. GAIA handles the rest, then `/gaia-init` finishes the last-mile set
 > [!NOTE]
 > Start projects with `npx create-gaia@latest my-app` rather than cloning or forking. The CLI sets up your project for you, strips the GAIA branding and release tooling, etc. A clone leaves all of that in place and pointed at the wrong repo.
 
-**Requirements:** [Node.js](https://nodejs.org/) >= 22.22.0 ([nvm](https://github.com/nvm-sh/nvm) recommended). macOS or Linux; on Windows, run inside [WSL2](https://learn.microsoft.com/en-us/windows/wsl/install) (the hooks and CLI need bash and POSIX file paths, and native Windows isn't exercised in CI). [uv](https://astral.sh/uv) is required for the Serena MCP server; GAIA installs it during setup if you don't already have it.
+**Requirements:** [Node.js](https://nodejs.org/) >= 22.22.0 ([nvm](https://github.com/nvm-sh/nvm) recommended). macOS or Linux; on Windows, run inside [WSL2](https://learn.microsoft.com/en-us/windows/wsl/install) (the hooks and CLI need bash and POSIX file paths, and native Windows isn't exercised in CI).
 
 [Learn more about GAIA →](https://gaiareact.com/)
 
@@ -43,7 +43,7 @@ GAIA ships clean. `/gaia-init` does the last-mile setup:
 - **Configures the project.** Title, package name, docs title, CODEOWNERS, localized site titles.
 - **Installs dependencies.** Bootstraps pnpm via `corepack`, runs `pnpm install`.
 - **Configures i18n.** Prompts for your language set, scaffolds the matching language files, updates the component and Storybook wiring.
-- **Installs Claude skills, plugins, and MCP servers.** [React Doctor](https://github.com/millionco/react-doctor), [Playwright CLI](https://github.com/microsoft/playwright-cli), `typescript-lsp`, and [Serena](https://github.com/oraios/serena) (LSP-backed symbol search and editing).
+- **Installs Claude skills and plugins.** [React Doctor](https://github.com/millionco/react-doctor), [Playwright CLI](https://github.com/microsoft/playwright-cli), and `typescript-lsp`.
 
 You end up with a clean app shell and a fully-configured Claude workflow.
 
@@ -81,7 +81,6 @@ Most setups treat Claude as a tool you hold: bolt a `CLAUDE.md` onto the root an
   - **User memory** (global): your preferences, style, and defaults, carried across projects.
 - **Periodic knowledge cleanse.** `/gaia-cleanse` sweeps memory, wiki, and autoloaded files for duplication, conflicting instructions, and stale content before they start costing tokens.
 - **Task orchestration in clean subagent contexts.** `/gaia-plan` spawns each phase as a focused subagent with only the context it needs. No accumulated history, no stale assumptions. Spec discovery (`/gaia-spec`) runs in its own context too, separate from implementation; the immutable SPEC artifact is the handoff, not accumulated context.
-- **Symbol-aware code intelligence over grep.** [Serena MCP](https://github.com/oraios/serena) gives Claude LSP-backed symbol search, references, and types. A symbol query returns the one definition, not every line that mentions the name.
 
 ## How GAIA Keeps Tech Debt From Compounding
 
@@ -137,7 +136,6 @@ GAIA ships a complete, opinionated Claude Code workflow. Everything is wired in 
 - **Path-scoped rules** cover TypeScript, React, Tailwind, testing, i18n, accessibility, and state management. They live in `frontend/.claude/rules/` (harness rules are in `.claude/rules/`); ask Claude about any of them.
 - **Hooks** guard the quality gate and keep the wiki fresh. They live in `.claude/hooks/`.
 - **Bundled skills** (`typescript`, `react-code`, `tailwind`, `tdd`, `playwright-cli`, `skeleton-loaders`, `eslint-fixes`, `a11y-fixes`) autoload for matching tasks. Scaffolding skills (`new-component`, `new-hook`, `new-route`, `new-service`) fire on natural-language asks.
-- **MCP servers.** [Serena](https://github.com/oraios/serena) gives Claude LSP-backed code intelligence: symbol lookups, references, and types instead of grepping the codebase.
 
 ## Working in a GAIA Project
 

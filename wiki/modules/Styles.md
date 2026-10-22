@@ -27,7 +27,7 @@ See the `tailwind` skill (`frontend/.claude/skills/tailwind/`, which owns class 
 > [!key-insight] Cookie + inline pre-paint script, not React state
 > Dark mode is wired through a cookie read server-side and a synchronous inline script that sets `<html class="dark">` before first paint. `frontend/app/hooks/use-theme.ts` tracks OS changes post-hydration via `useSyncExternalStore`. No React state, no flash of incorrect theme on hydration. See [[Theme Flow]].
 
-The pipeline (query Serena for current paths):
+The pipeline:
 
 - `frontend/app/utils/theme.ts`: owns the one `THEME_PREFERENCES` list; the `ThemePreference` type, the `isThemePreference` guard, the action schema, and the `ThemeSwitch` maps all derive from it
 - `frontend/app/utils/theme.server.ts`: reads/writes the `__theme` cookie
@@ -37,4 +37,4 @@ The pipeline (query Serena for current paths):
 - The `.dark` token block in `theme.css`, selected through `@custom-variant dark` in `tailwind.css`
 - Storybook's `@vueless/storybook-dark-mode` addon (unchanged)
 
-For the current Tailwind plugin inventory, query Serena or `package.json`.
+For the current Tailwind plugin inventory, read `frontend/package.json`.
