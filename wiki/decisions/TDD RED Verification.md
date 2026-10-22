@@ -24,7 +24,9 @@ A RED-observation ledger at `.gaia/local/red-ledger/` (machine-local, gitignored
 
 - **`red-verify-commit-check.sh`** (PreToolUse, Bash deny): before `git commit`, walks every staged test file that matches the unit-test globs. For each new test, the hook computes the current content signal and looks it up in the ledger. A missing entry or a signal mismatch (the test's comment-free content changed since the RED was observed, which a comment reword does not trigger) denies the commit, naming the offending test. Fail-open on missing tooling or unparseable test files; fail-closed for the clean case and for an unusable package registry or descriptor.
 
-An unscoped run (`pnpm test --run` with no path or glob argument) records nothing: when no scope token parses from the command, the hook skips the re-run rather than paying full-suite wall-clock cost on every invocation. The skip is announced, not silent: the hook adds a note to Claude's context saying no RED was recorded and to re-run with a test path (`pnpm test --run <test-file>`), and the commit check's denial names the same scoped command as its recovery.
+An unscoped run (`pnpm test --run` with no path or glob argument) records nothing: when no scope token parses from the command, the hook skips the re-run rather than paying full-suite wall-clock cost on every invocation. The skip is announced, not silent: the hook adds a note to Claude's context saying no RED was recorded and to re-run with a test path (`pnpm -C <package dir> test --run <test-file>`), and the commit check's denial names the same scoped command as its recovery. The hook also recognizes the root proxy form (`pnpm test --run frontend/app/x.test.ts`), but that form is never prescribed: the proxy hands the repo-relative path to vitest inside the package unchanged, so the agent's own run finds no test files even though the hook's re-run records the result.
+
+The RED is recorded from a re-run after the Bash call ends, so it reflects the tree at that moment: one call that sets the implementation aside, runs the test, and restores it records nothing. The failing run is its own call, made before the implementation lands.
 
 The content signal is a normalized hash of the test's comment-free content, so that a cosmetic rename does not reuse a stale RED entry from a substantively different test. Rewording a comment is likewise not a substantive change and does not expire the RED.
 
@@ -89,7 +91,7 @@ The commit check exempts a staged test file whose blob equals the file at the sa
 
 ## Consequences
 
-A new test on the deterministic surface always requires a one-shot vitest run scoped to the test's file (`pnpm test --run <test-file>`) that observes the test failing before the commit is allowed. This is a one-time step per new test; a green-only test that was never run red will be denied at commit time with a clear message naming the test. An emergent-subject test carries no such requirement.
+A new test on the deterministic surface always requires a one-shot vitest run scoped to the test's file (`pnpm -C <package dir> test --run <test-file>`) that observes the test failing before the commit is allowed. This is a one-time step per new test; a green-only test that was never run red will be denied at commit time with a clear message naming the test. An emergent-subject test carries no such requirement.
 
 A hook test (`*.test.ts` under a `hooks/` folder, run by the `browser` Vitest project) is not a story and keeps the normal classification, so a deterministic hook still demands its RED.
 
