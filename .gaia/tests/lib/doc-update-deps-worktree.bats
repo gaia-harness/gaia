@@ -572,6 +572,7 @@ check_existing_worktree_stop() {
 # ---------------------------------------------------------------------------
 
 BUST_CALL='bash .gaia/scripts/update-check-bust.sh --cache <main checkout path>/.gaia/local/cache/shared/update-check.json --mode deps'
+POST_MERGE_BUST_CALL='bash <main checkout path>/.gaia/scripts/update-check-bust.sh --cache <main checkout path>/.gaia/local/cache/shared/update-check.json --mode deps'
 READ_BACK='read the file back'
 
 check_cache_bust() {
@@ -611,7 +612,7 @@ check_cache_bust() {
 check_post_merge_bust() {
   local arm
   arm="$(grep -F -- '**`MERGED`**' "$PUBLISH")"
-  grep -qF -- "$BUST_CALL" <<<"$arm" || {
+  grep -qF -- "$POST_MERGE_BUST_CALL" <<<"$arm" || {
     echo "the MERGED arm does not bust the cache after cleanup" >&2
     return 1
   }
@@ -624,7 +625,7 @@ check_post_merge_bust() {
 @test "the post-merge bust check fails with the MERGED arm's bust deleted" {
   local copy
   copy="$(scratch_copy "$PUBLISH" "post-merge-bust.md")"
-  remove_fixed "$copy" "$BUST_CALL"
+  remove_fixed "$copy" "$POST_MERGE_BUST_CALL"
   PUBLISH="$copy" run check_post_merge_bust
   [ "$status" -ne 0 ]
 }
