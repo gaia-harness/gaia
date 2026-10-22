@@ -44,12 +44,10 @@ setup() {
   UNGATED=(
     # Exempt commands: updating, setup, tooling and release flows.
     ".claude/commands/setup-gaia.md"
-    ".claude/commands/gaia-serena-sync.md"
     ".claude/commands/gaia-forensics.md"
     ".claude/commands/gaia-release.md"
     ".claude/skills/update-gaia/SKILL.md"
     ".claude/skills/release-notes/SKILL.md"
-    "$REFERENCES/serena-sync.md"
     "$REFERENCES/forensics.md"
     "frontend/.claude/skills/gaia-react-perf/SKILL.md"
     "wiki/concepts/PR Merge Workflow.md"

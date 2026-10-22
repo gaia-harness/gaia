@@ -30,7 +30,7 @@ export type ClassifyPaths = {
   /** Paths whose change alters a flow (routing, middleware, sessions, i18n). */
   flowPaths: readonly string[];
   /**
-   * Paths whose contents are mechanically discoverable (Serena indexes them),
+   * Paths whose contents are mechanically discoverable (reading the tree finds them),
    * so a commit touching only these needs no wiki narration.
    *
    * GAIA's own clone deliberately leaves this at the default while overriding

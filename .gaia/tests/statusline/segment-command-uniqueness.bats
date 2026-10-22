@@ -64,8 +64,7 @@ run_saturated_statusline() {
   "wikiDriftCount": 20,
   "cleanseNudge": true,
   "cleanseNudgeReason": "stale",
-  "fitnessCommitCount": 20,
-  "serenaLangDrift": ["go"]
+  "fitnessCommitCount": 20
 }
 JSON
   mkdir -p "$MAIN/.gaia/local/debt"
@@ -96,7 +95,6 @@ rendered_commands() {
     "/gaia-debt" \
     "/gaia-fitness" \
     "/gaia-residue" \
-    "/gaia-serena-sync" \
     "/gaia-wiki" \
     "/update-deps" \
     "/update-gaia")
@@ -123,8 +121,7 @@ rendered_commands() {
   "codifyNudgeReason": "1 new pattern, drifting-duplicate rising",
   "residueCandidateCount": 5,
   "cleanseNudge": true,
-  "cleanseNudgeReason": "stale",
-  "serenaLangDrift": ["go"]
+  "cleanseNudgeReason": "stale"
 }
 JSON
   mkdir -p "$MAIN/.gaia/local/debt"

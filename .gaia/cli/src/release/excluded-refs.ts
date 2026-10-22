@@ -51,7 +51,7 @@ const NAME_LEFT_BOUNDARY = String.raw`(?<![\w/.-])`;
 const isUnder = (file: string, entry: string): boolean =>
   file === entry || file.startsWith(`${entry}/`);
 
-// Local state (`.serena`, `.gaia/local`) and root governance files
+// Local state (`.gaia/local`) and root governance files
 // (`README.md`) are excluded too, but adopters have their own, so naming them
 // is not a pointer to something missing.
 const isReferenceableEntry = (

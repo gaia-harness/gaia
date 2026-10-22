@@ -55,7 +55,7 @@ Stateful custom form components MUST use `useInputControl` to stay in sync with 
 
 `frontend/app/components/form/tests/composed-form.tsx`: a Conform form composed from ui `Field` parts, with its stories, whose play functions are the integration tests.
 
-For the current file pattern (where stories and hook tests go), Serena and the scaffolders (`/new-component`, `/new-route`) handle it; query Serena rather than maintaining the layout here.
+For the current file pattern (where stories and hook tests go), the scaffolders (`/new-component`, `/new-route`) handle it; read an existing component's folder rather than maintaining the layout here.
 
 ## Accessibility assertions
 

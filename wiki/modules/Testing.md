@@ -73,4 +73,4 @@ Test files are linted by the `testing` preset of [[gaia-lint]] and stories by it
 
 The pre-commit hook runs `pnpm typecheck`, `pnpm exec lint-staged` (eslint, prettier, stylelint), then `pnpm test:lint-staged` (`vitest --run --changed --passWithNoTests --bail 1`) as a separate step, so only tests affected by the staged changes run (browser projects included, so Chromium must be installed). See [[Quality Gate]].
 
-For the current `frontend/test/` folder inventory and helper signatures, query Serena (`.claude/rules/code-search.md`).
+For the current folder inventory and helper signatures, list `frontend/test/`.

@@ -22,10 +22,6 @@ For each field: a ui `Field` (with `data-invalid` when the field has errors) hol
 
 The step-by-step pattern, the Zod schema and action wiring, and error-message translation are in `frontend/.claude/skills/react-code/references/conform-forms.md`. The runnable reference is `frontend/app/components/form/tests/composed-form.tsx` and its story, whose play functions are the tests.
 
-## App-logic form components
-
-For the current inventory, query Serena (`.claude/rules/code-search.md`).
-
 ## Conform + custom components
 
 > [!warning] useInputControl is mandatory for stateful custom components

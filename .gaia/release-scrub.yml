@@ -262,7 +262,7 @@ transforms:
       # covered with no edit here, which a hand-kept alternation cannot match:
       # it misses each newly excluded file and keeps naming paths that are gone.
       #
-      # Derived, so skipped: untracked local state (`.serena`, `.gaia/local`),
+      # Derived, so skipped: untracked local state (`.gaia/local`),
       # root governance files adopters have their own of (`README.md`), and
       # `.github/workflows/*`, which `excluded-workflow-ref` below owns because
       # `.github/workflows/` is partly shipped.

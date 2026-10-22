@@ -526,11 +526,11 @@ make_prune_fixture() {
 @test "prune: files one level above the tag directories survive" {
   make_prune_fixture
   printf '{}\n' > "$PROJECT/.gaia/local/cache/shared/update-check.json"
-  mkdir -p "$PROJECT/.gaia/local/cache/shared/serena-guard"
+  mkdir -p "$PROJECT/.gaia/local/cache/shared/migrate-2"
   run_preflight prune --baseline 2.0.0 --latest-tag v2.1.0
   [ "$status" -eq 0 ]
   [ -f "$PROJECT/.gaia/local/cache/shared/update-check.json" ]
-  [ -d "$PROJECT/.gaia/local/cache/shared/serena-guard" ]
+  [ -d "$PROJECT/.gaia/local/cache/shared/migrate-2" ]
 }
 
 # --- refuse-1x and usage ---------------------------------------------------------

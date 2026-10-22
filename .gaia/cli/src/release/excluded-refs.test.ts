@@ -35,7 +35,6 @@ const baseInputs = (
     '.github/CODEOWNERS',
     '.github/workflows/release.yml',
     '.gaia/local',
-    '.serena',
     'README.md',
   ],
   isExecutable: (relativePath) => relativePath === '.gaia/cli/gaia-maintainer',
@@ -59,7 +58,6 @@ describe('deriveExcludedRefTokens', () => {
     // Untracked local state, a root governance file, and a workflow the
     // excluded-workflow-ref check owns.
     expect(paths).not.toContain('.gaia/local');
-    expect(paths).not.toContain('.serena');
     expect(paths).not.toContain('README.md');
     expect(paths).not.toContain('.github/workflows/release.yml');
   });
