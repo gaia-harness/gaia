@@ -23,6 +23,8 @@
 #   - status in {in-progress, reopened, closed}
 #   - spec_id matches SPEC-NNN
 #   - every UAT has a frozen uat_id matching UAT-NNN
+#   - no UAT given/when/then carries a working-document id (finding code
+#     working_document_id)
 #   - optional lineage: list; every entry is a research:/issue:/init:/spec:/plan: ref
 #     (finding code invalid_lineage)
 #   - no placeholder text ([PLACEHOLDER], <TODO>, TBD, FIXME, <TBD>)
@@ -37,6 +39,10 @@ if [ "$#" -ne 1 ]; then
 fi
 
 spec_file="$1"
+
+script_directory="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=.gaia/scripts/spec/uat-lib.sh
+source "$script_directory/uat-lib.sh"
 
 if [ ! -f "$spec_file" ]; then
   echo "lint.sh: file not found: $spec_file" >&2
@@ -198,8 +204,8 @@ fi
 
 # --- Lineage check (optional key): every entry must be a parent ref ---
 # Regexes are a copy of the research/init, issue, spec, and plan rows of the ref
-# grammar defined in .gaia/scripts/usage-lib.sh; keep them matching that file.
-# This file stays self-contained, so it does not source the lib.
+# grammar defined in .gaia/scripts/usage-lib.sh; keep them matching that file,
+# which this one does not source.
 # A SPEC's parent is never a branch, PR, session, or command, so only these kinds.
 if has_frontmatter_key lineage; then
   lineage_regex_slug='^(research|init):[A-Za-z0-9][A-Za-z0-9._-]{0,127}$'
@@ -234,6 +240,27 @@ if has_frontmatter_key lineage; then
       add_finding "invalid_lineage" "lineage entry is not a valid parent ref: '$lineage_entry'" "frontmatter.lineage"
     fi
   done <<<"$lineage_entries"
+fi
+
+# --- UAT text check: no working-document id in a given, when or then ---
+# The e2e render refuses such a UAT, and a saved SPEC changes only through the
+# reopen ceremony, so failing here lets the wording be fixed before that. Every
+# UAT is checked because the routing that picks the e2e ones does not exist yet.
+# A uats: block uat-lib cannot parse is skipped: the uat_id checks above report
+# a malformed id, and the render refuses anything else unparseable by name.
+if uat_rows=$(uat_lib_parse_spec "$spec_file" 2>/dev/null); then
+  while IFS=$'\t' read -r uat_id given_text when_text then_text; do
+    for uat_field in given when 'then'; do
+      case "$uat_field" in
+        given) uat_field_text="$given_text" ;;
+        when) uat_field_text="$when_text" ;;
+        then) uat_field_text="$then_text" ;;
+      esac
+      if uat_lib_carries_working_document_id "$uat_field_text"; then
+        add_finding "working_document_id" "$uat_id $uat_field carries a working-document id (a SPEC, UAT or plan id); describe the behavior without it" "frontmatter.uats.$uat_id.$uat_field"
+      fi
+    done
+  done <<<"$uat_rows"
 fi
 
 # --- Placeholder text scan over the whole file ---
