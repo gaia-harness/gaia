@@ -24,7 +24,8 @@
 #   1  gate failure; one stderr line per failing file: `uat-gate: <file>: <reason>`
 #      with reason one or more of missing, annotation, floor, divergence,
 #      working-doc-id, expected-failure, skipped, fixme, failed, no-tests
-#      (a line 1 that is not a contract marker reports missing)
+#      (a line 1 that is not a contract marker reports missing), then one
+#      `uat-gate: next step for floor: ...` line when any file failed the floor
 #   2  invalid input (usage, malformed SPEC, invalid routing table, unreadable
 #      --report)
 #   4  Playwright could not run (jq, pnpm or a browser is missing, the dev or
@@ -249,6 +250,11 @@ report_failures() {
     }
     END { for (item = 1; item <= count; item++) printf "uat-gate: %s: %s\n", order[item], reasons[order[item]] > "/dev/stderr" }
   '
+  # The judge and this floor read only the spec file, so an assert moved into
+  # a shared helper reads as absent even when the behavior works.
+  if grep -q $'\tfloor$' <<<"$failures"; then
+    printf 'uat-gate: next step for floor: the spec file itself must call page.<method>( and hold an expect( on a real value. When the behavior works and a shared helper holds the Then-clause asserts, move them back into the test body and re-run; a floor failure never calls for reopening the SPEC.\n' >&2
+  fi
   return 0
 }
 
