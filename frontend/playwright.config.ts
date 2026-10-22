@@ -29,7 +29,7 @@ const devUrl = `http://localhost:${ports.devPort}`;
 // A ceiling, not a delay: a server that answers sooner ends the wait sooner.
 // A fresh linked worktree has no Vite dependency cache yet, and its first
 // `pnpm dev` answered after 10 to 23 seconds on a machine running several
-// sessions, so a 15-second ceiling fails `pnpm pw` before any spec runs. Twice the slowest start leaves headroom.
+// sessions, so a 15-second ceiling fails `pnpm pw` before any spec runs. About twice the slowest start leaves headroom.
 // Playwright's timeout error does not name the server that missed it, so the
 // Storybook server, a cold `tsx` launch under the same load, shares the budget.
 const WEB_SERVER_START_TIMEOUT_MILLISECONDS = 45_000;
