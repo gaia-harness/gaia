@@ -1,6 +1,5 @@
 ---
 paths:
-  - 'app/**'
   - 'test/**'
   - '.playwright/**'
   - '.storybook/**'
