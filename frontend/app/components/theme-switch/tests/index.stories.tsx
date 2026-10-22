@@ -115,3 +115,16 @@ export const KeyboardActivation: Story = {
     await expect(args.onSubmit).toHaveBeenCalledWith('light');
   },
 };
+
+// i18next's built-in `cimode` locale renders each translation key, so the
+// play reads the key until i18next has switched to the story's locale global.
+export const LocaleGlobal: Story = {
+  globals: {locale: 'cimode'},
+  play: async ({canvasElement}) => {
+    await expect(
+      within(canvasElement).getByRole('button', {
+        name: 'theme.enableLightMode',
+      })
+    ).toBeInTheDocument();
+  },
+};

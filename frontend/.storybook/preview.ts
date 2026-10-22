@@ -26,7 +26,17 @@ const preview: Preview = {
     // the dark mode into a second light snapshot.
     theme: 'light',
   },
-  loaders: [mswLoader()],
+  // The i18n addon switches language in an effect after the first render, so a
+  // play function that queries at once can race it and read English. Loaders
+  // finish before render and play, which makes a story's locale deterministic.
+  loaders: [
+    mswLoader(),
+    async ({globals}) => {
+      const locale = typeof globals.locale === 'string' ? globals.locale : 'en';
+
+      if (i18n.language !== locale) await i18n.changeLanguage(locale);
+    },
+  ],
   parameters: {
     a11y,
     chromatic: {modes: allModes},
