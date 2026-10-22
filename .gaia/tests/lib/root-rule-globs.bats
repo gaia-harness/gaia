@@ -112,10 +112,14 @@ copy_rules_to_scratch() {
   rule_matches_path "$RULES_DIRECTORY/code-comments.md" "frontend/.playwright/e2e/hydration.spec.ts"
 }
 
-@test "wiki-style.md matches the frontend app file and not the frontend playwright spec" {
-  rule_matches_path "$RULES_DIRECTORY/wiki-style.md" "frontend/app/components/button/index.tsx"
-  run rule_matches_path "$RULES_DIRECTORY/wiki-style.md" "frontend/.playwright/e2e/hydration.spec.ts"
-  [ "$status" -eq 1 ]
+@test "wiki-style.md matches a wiki page and no code file" {
+  local code_path
+  rule_matches_path "$RULES_DIRECTORY/wiki-style.md" "wiki/concepts/Notebook.md"
+  for code_path in frontend/app/components/button/index.tsx frontend/.playwright/e2e/hydration.spec.ts \
+    .claude/hooks/ports-session-start.sh .gaia/scripts/spec/ledger-lib.sh; do
+    run rule_matches_path "$RULES_DIRECTORY/wiki-style.md" "$code_path"
+    [ "$status" -eq 1 ] || { echo "wiki-style.md matched $code_path" >&2; return 1; }
+  done
 }
 
 @test "guards-must-fail.md matches the frontend playwright spec and not the frontend app file" {

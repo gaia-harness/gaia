@@ -1,15 +1,12 @@
 ---
 paths:
   - 'wiki/**/*.md'
-  - 'frontend/app/**/*.{ts,tsx,js,jsx,css}'
   - 'frontend/.claude/**/*.md'
   - '.claude/skills/**/*.md'
   - '.claude/commands/**/*.md'
   - '.claude/agents/**/*.md'
   - '.claude/rules/**/*.md'
   - '.claude/doctrine/**/*.md'
-  - '.claude/hooks/**/*.sh'
-  - '.gaia/scripts/spec/**/*.sh'
 ---
 
 # Wiki & Comment Prose Style
