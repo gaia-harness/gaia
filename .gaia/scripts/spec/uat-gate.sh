@@ -252,7 +252,7 @@ report_failures() {
   '
   # The judge and this floor read only the spec file, so an assert moved into
   # a shared helper reads as absent even when the behavior works.
-  if printf '%s' "$failures" | grep -q $'\tfloor$'; then
+  if grep -q $'\tfloor$' <<<"$failures"; then
     printf 'uat-gate: next step for floor: the spec file itself must call page.<method>( and hold an expect( on a real value. When the behavior works and a shared helper holds the Then-clause asserts, move them back into the test body and re-run; a floor failure never calls for reopening the SPEC.\n' >&2
   fi
   return 0
