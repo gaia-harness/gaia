@@ -4,13 +4,13 @@ status: active
 priority: 3
 date: 2026-09-07
 created: 2026-09-07
-updated: 2026-09-15
+updated: 2026-10-22
 tags: [decision, ci, github-actions]
 ---
 
 # Decision: Composite Action Step Timeouts
 
-Most workflows that provision Node route through the shared composite action `.github/actions/gaia-setup-node`; the action's own docblock names the callers deliberately left out and why. The composite's own inner steps carry no cap and cannot, because a composite action's steps take no `timeout-minutes` at all, so whatever bounds a stalled pnpm registry fetch or Node tarball download has to sit on the caller.
+Most workflows that provision Node route through the shared composite action `.github/actions/gaia-setup-node`; the action's own docblock names the callers deliberately left out and why. The composite's own inner steps carry no cap and cannot, because a composite action's steps take no `timeout-minutes` at all, so a step-level time cap on a stalled Node tarball download has to sit on the caller. The one bound the composite does carry is not a time cap: its `pnpm/action-setup` step sets `npm_config_fetch_timeout` to `60000` in step env, which bounds each registry request of the pnpm bootstrap, and `forensics-triage.yml` sets the same value on its own `pnpm/action-setup` step.
 
 ## Rule
 
@@ -22,7 +22,9 @@ A workflow may still give a provisioning step its own cap, set strictly under it
 
 ## Provisioning attribution vs. recovery
 
-GAIA declines to replace `pnpm/action-setup` with hand-rolled provisioning, which a per-attempt timeout could otherwise bound below the caller's cap. The one recorded stall degraded at least six provisioning legs across two concurrent runs over roughly seven and a half minutes, a sustained condition that a second attempt starting fifteen to sixty seconds later re-enters rather than escapes. Two of the degraded legs cleared at exactly sixty-one seconds, so a bound sized near sixty seconds would have aborted those attempts rather than rescued them. A bounded retry therefore buys **attribution**, which step is named when the lane reds, not **recovery**: a stall still consumes the caller's whole budget at every surface GAIA provisions pnpm.
+GAIA declines to replace `pnpm/action-setup` with hand-rolled provisioning, which a per-attempt timeout could otherwise bound below the caller's cap. The one recorded stall degraded at least six provisioning legs across two concurrent runs over roughly seven and a half minutes, a sustained condition that a second attempt starting fifteen to sixty seconds later re-enters rather than escapes. Two of the degraded legs cleared at exactly sixty-one seconds, so a bound sized near sixty seconds would have aborted those attempts rather than rescued them. A bounded retry therefore buys **attribution**, which step is named when the lane reds, not **recovery**: a sustained stall still consumes the caller's whole budget at every surface GAIA provisions pnpm.
+
+The per-fetch bound is a different instrument. npm waits 300000 ms for a registry response by default, so one hung tarball fetch in the bootstrap's `npm ci` costs five minutes before npm's own retry runs; `60000` ms, pnpm's own default, hands a hung fetch to that retry in one minute. It bounds one request's wait for a response and any idle gap mid-download, not a provisioning leg, so it neither retries a failed install nor cuts off a download that is slow but still receiving bytes. A download that goes idle mid-body fails with `EIDLETIMEOUT` rather than retrying, so that mode reds in one minute instead of five. In `forensics-triage.yml` the bound also keeps npm's default from equalling that step's five-minute cap, which would red the step before npm retried.
 
 Wherever provisioning newly routes through the composite, that routing reaches an already-installed adopter's own CI through `/update-gaia` as a `shared` file merge (a drifted copy gets a sidecar patch).
 
