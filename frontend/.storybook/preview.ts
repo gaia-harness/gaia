@@ -1,6 +1,7 @@
 import type {Preview} from '@storybook/react-vite';
 import {mswLoader} from 'msw-storybook-addon/csf3';
 import {themes} from 'storybook/theming';
+import {DEFAULT_LOCALE} from '~/i18n';
 import a11y from './a11y';
 import {decorators} from './chromatic';
 import i18n from './i18next';
@@ -26,7 +27,18 @@ const preview: Preview = {
     // the dark mode into a second light snapshot.
     theme: 'light',
   },
-  loaders: [mswLoader()],
+  // The i18n addon switches language in an effect after the first render, so a
+  // play function that queries at once can race it and read English. Loaders
+  // finish before render and play, which makes a story's locale deterministic.
+  loaders: [
+    mswLoader(),
+    async ({globals}) => {
+      const locale =
+        typeof globals.locale === 'string' ? globals.locale : DEFAULT_LOCALE;
+
+      if (i18n.language !== locale) await i18n.changeLanguage(locale);
+    },
+  ],
   parameters: {
     a11y,
     chromatic: {modes: allModes},
