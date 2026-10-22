@@ -422,6 +422,40 @@ exit 1"
   assert_stderr_names "Port $held_port is held by process $listener_pid running from $other_tree, which is not this tree: ask the user before stopping it."
 }
 
+# gate_with_listener_owner <answer>: run the gate from a copy of the spec scripts
+# whose sibling ports.sh and server-process-lib.sh are stubs, so the holder
+# answer is chosen by the test.
+gate_with_listener_owner() {
+  local fake_root="$BATS_TEST_TMPDIR/fake-root"
+  local fake_scripts="$fake_root/.gaia/scripts"
+  mkdir -p "$fake_scripts"
+  ln -s "$REPO_ROOT_REAL/.claude" "$fake_root/.claude"
+  cp -R "$SCRIPTS" "$fake_scripts/spec"
+  printf '#!/usr/bin/env bash\necho 4321\n' >"$fake_scripts/ports.sh"
+  printf '#!/usr/bin/env bash\necho "%s"\n' "$1" >"$fake_scripts/server-process-lib.sh"
+  run bash -c "cd '$WORK' && PATH='$BATS_TEST_TMPDIR/bin':\"\$PATH\" bash '$fake_scripts/spec/uat-gate.sh' '$SPEC' --routing '$ROUTING' --phase 2 2>'$STDERR_FILE'"
+}
+
+@test "gate does not claim a directory when the holder's directory could not be read" {
+  prepare_green
+  stub_pnpm "printf '{\"errors\":[{\"message\":\"already used\"}],\"suites\":[]}' >\"\$PLAYWRIGHT_JSON_OUTPUT_NAME\"
+exit 1"
+  gate_with_listener_owner "foreign 777 unknown"
+  [ "$status" -eq 4 ]
+  assert_stderr_names "Port 4321 is held by process 777, whose directory GAIA could not read: ask the user before stopping it."
+  ! grep -qF "running from" "$STDERR_FILE"
+}
+
+@test "gate does not claim a process when no holder could be identified" {
+  prepare_green
+  stub_pnpm "printf '{\"errors\":[{\"message\":\"already used\"}],\"suites\":[]}' >\"\$PLAYWRIGHT_JSON_OUTPUT_NAME\"
+exit 1"
+  gate_with_listener_owner "foreign 0 unknown"
+  [ "$status" -eq 4 ]
+  assert_stderr_names "Port 4321 is held by a process GAIA could not identify: ask the user before stopping it."
+  ! grep -qF "process 0" "$STDERR_FILE"
+}
+
 @test "gate runs Playwright over only the owned file with the JSON reporter and reads its report" {
   prepare_green
   stub_pnpm "printf '%s\n' \"\$@\" >'$BATS_TEST_TMPDIR/pnpm-args'

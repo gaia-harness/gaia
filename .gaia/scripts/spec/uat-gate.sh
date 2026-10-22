@@ -275,7 +275,13 @@ port_holders() {
         rest="${answer#foreign }"
         holder_pid="${rest%% *}"
         holder_directory="${rest#* }"
-        sentences="$sentences Port $port is held by process $holder_pid running from $holder_directory, which is not this tree: ask the user before stopping it."
+        if [ "$holder_pid" = 0 ]; then
+          sentences="$sentences Port $port is held by a process GAIA could not identify: ask the user before stopping it."
+        elif [ "$holder_directory" = unknown ]; then
+          sentences="$sentences Port $port is held by process $holder_pid, whose directory GAIA could not read: ask the user before stopping it."
+        else
+          sentences="$sentences Port $port is held by process $holder_pid running from $holder_directory, which is not this tree: ask the user before stopping it."
+        fi
         ;;
     esac
   done
