@@ -18,7 +18,7 @@ const BRAND = {
 const preview: Preview = {
   decorators,
   initialGlobals: {
-    locale: 'en',
+    locale: DEFAULT_LOCALE,
     locales: {
       en: {left: '🇺🇸', right: 'en', title: 'English'},
     },
