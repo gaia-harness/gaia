@@ -8,7 +8,7 @@ depends_on:
   - '[[Storybook]]'
   - '[[MSW]]'
 created: 2026-04-20
-updated: 2026-10-05
+updated: 2026-10-23
 tags: [module, storybook, testing]
 ---
 
@@ -42,7 +42,7 @@ Chromatic loads only the preview iframe, so the toolbar toggle never fires there
 
 ## i18n in stories
 
-`storybook-react-i18next` is wired to the project's own `~/i18n` config. Toolbar exposes the configured locales. Inside story functions, call `useTranslation()` normally; no extra setup. Per-locale content variation (e.g. stress-testing long CJK strings) is handled inside the story by reading `i18n.language`.
+`storybook-react-i18next` is wired to the project's own `~/i18n` config. Toolbar exposes the configured locales. Inside story functions, call `useTranslation()` normally; no extra setup. Per-locale content variation (e.g. stress-testing long CJK strings) is handled inside the story by reading `i18n.language`. A preview loader awaits `changeLanguage` to the story's locale before render, so a built Storybook shows the selected locale during `play`. The initial locale and the Storybook i18next init both read `DEFAULT_LOCALE`.
 
 ## Test data: MSW
 
