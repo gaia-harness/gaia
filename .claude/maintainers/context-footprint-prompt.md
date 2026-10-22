@@ -25,7 +25,7 @@ Measure these, nothing else:
 
 Out of scope: resume compression, and light vs full on one identical diff. The maintainer dropped both.
 
-Items 4 and 6 need audit data. Before starting, confirm the probe has at least one PR audit with **two full rounds by the same member** in its transcripts. If it doesn't, stop and say so; don't fake a run.
+Items 4 and 6 need audit data. Before starting, confirm the probe has at least one PR audit with **two full rounds by the same member** in its transcripts. If it doesn't, mark items 4 and 6 NO DATA, say so, and measure the rest; don't fake numbers.
 
 ## What GAIA counts as, and what it doesn't
 
@@ -157,7 +157,7 @@ Counting baseline with the wrapper: 24,363 tokens.
 | react-doctor | 112 | 1,766 | 1,750 (1) | 3,516 |
 | tdd | 75 | 4,282 | 416 (3) | 4,698 |
 
-**3. Frontend launch startup: ~10.4k (1.04%)**: root startup + `frontend/CLAUDE.md` 915 + frontend entries 1,788, minus the root name-only entries (~60).
+**3. Frontend launch startup: ~10,315 (1.03%)**: root startup 7,672 + `frontend/CLAUDE.md` 915 + frontend entries 1,788, minus the root name-only entries (~60).
 
 **4. Audit footprint**
 
