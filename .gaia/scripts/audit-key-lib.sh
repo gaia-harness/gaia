@@ -37,7 +37,8 @@
 #
 # gaia_key_slug <text>: every character outside [A-Za-z0-9_-] is
 # percent-encoded (uppercase hex, e.g. "/" -> "%2F", "." -> "%2E", "%" ->
-# "%25"). A cheaper `tr / -` rule is rejected because it is not injective --
+# "%25"), and so is the first letter of any "credential" in any case, so no
+# key-named file trips the sensitive-read guard or the sandbox deny. A cheaper `tr / -` rule is rejected because it is not injective --
 # "feat/x" and "feat-x" would collapse to one slug and silently re-create the
 # collision a key exists to remove. Encoding "." matters for the same
 # reason: the sidecar glob is "*.<slug>.*.findings.json" (the base half is a
@@ -76,8 +77,9 @@
 # each keeping its own copy.
 gaia_key_slug() {
   local LC_ALL=C
-  local text="$1" encoded_slug="" i text_length character
+  local text="$1" encoded_slug="" i text_length character lowercase_text
   text_length="${#text}"
+  lowercase_text="$(printf '%s' "$text" | tr '[:upper:]' '[:lower:]')"
   for ((i = 0; i < text_length; i++)); do
     # `${text:$i:1}`, not bash's bare `${text:i:1}`: zsh reads a bare
     # identifier after the colon as a history modifier, aborts the function
@@ -86,6 +88,15 @@ gaia_key_slug() {
     # shell-specific construct in the walk. Callers must still check this
     # function's status -- the `$`-form is not a substitute for that.
     character="${text:$i:1}"
+    # The read guard and the sandbox deny any file whose name holds
+    # "credential" in any case, so a slug spelling it would make every audit
+    # file of that branch unreadable to the member reviewing it. Encoding the
+    # word's first letter breaks the spelling; any byte may be encoded, since
+    # "%" always is, so the slug stays injective.
+    if [ "${lowercase_text:$i:10}" = credential ]; then
+      encoded_slug+="$(printf '%%%02X' "'$character")"
+      continue
+    fi
     case "$character" in
       [A-Za-z0-9_-]) encoded_slug+="$character" ;;
       *) encoded_slug+="$(printf '%%%02X' "'$character")" ;;

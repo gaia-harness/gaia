@@ -169,6 +169,27 @@ make_repo() {
   [ "$output" = "has%25percent" ]
 }
 
+# The read guard and the sandbox deny any file whose name holds "credential" in
+# any case, so an audit file keyed by such a branch would be unreadable to the
+# member reviewing it. The slug must never spell the word, and must still
+# decode back to the branch, which is what keeps it injective.
+@test "gaia_key_slug: a branch spelling credential in any case yields a slug that does not, and still decodes back" {
+  local branch slug lower
+  for branch in "debt/2971-sandbox-credential-ts" "fix/Credentials" "CREDENTIAL" \
+    "credentialcredential" "a.credential/b"; do
+    slug="$(gaia_key_slug "$branch")"
+    lower="$(printf '%s' "$slug" | tr '[:upper:]' '[:lower:]')"
+    case "$lower" in *credential*) echo "slug spells it: $branch -> $slug"; return 1 ;; esac
+    [ "$(printf '%b' "${slug//%/\\x}")" = "$branch" ] || { echo "does not decode: $branch -> $slug"; return 1; }
+  done
+}
+
+@test "gaia_key_slug: a branch merely near the word passes through unchanged" {
+  run gaia_key_slug "credentia-l_cred"
+  [ "$status" -eq 0 ]
+  [ "$output" = "credentia-l_cred" ]
+}
+
 @test "gaia_key_slug: empty input yields empty output" {
   run gaia_key_slug ""
   [ "$status" -eq 0 ]
@@ -303,7 +324,7 @@ make_repo() {
 # block invites, gets the same slug rather than a quietly different one.
 @test "portability: the slug is byte-identical under zsh, where zsh exists" {
   command -v zsh >/dev/null 2>&1 || skip "zsh not available"
-  local branch='feat/a.b%c' from_bash from_zsh
+  local branch='feat/a.b%c-Credential' from_bash from_zsh
   from_bash="$(gaia_key_slug "$branch")"
   from_zsh="$(zsh -c "source '$LIBRARY'; gaia_key_slug '$branch'")"
   [ -n "$from_bash" ]

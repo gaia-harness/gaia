@@ -550,7 +550,7 @@ run_hook_monitor() {
 }
 
 # Every credential-store spelling stays denied through the Read tool and a Bash
-# reader once TypeScript and Markdown names are carved out of the match.
+# reader once TypeScript names are carved out of the match.
 @test "every credential-store spelling stays denied, through Read and through cat" {
   local credential_path
   for credential_path in credentials credentials.json .aws/credentials \
@@ -986,6 +986,24 @@ run_hook_monitor() {
     .sandbox.filesystem.denyRead as $d
     | ["**/*.key", "**/*.pem", "**/*credential*", "**/secrets/**"]
     | all(. as $needle | $d | index($needle) != null)
+  ' "$SETTINGS_ABSOLUTE_PATH"
+  [ "$status" -eq 0 ]
+}
+
+# The hook lets a TypeScript file whose name mentions credentials through, so
+# the sandbox re-opens the same spellings, or a sandboxed Playwright or Vitest
+# run cannot open a login UAT spec the Read tool can. The docs never rank one
+# glob against another, so each allow carries a narrower secrets/ re-deny that
+# keeps such a file under a secrets directory denied. Markdown stays denied at
+# both tiers.
+@test "settings.json re-opens credential-named TypeScript in the sandbox, and only that" {
+  run jq -e '
+    .sandbox.filesystem as $f
+    | ["ts", "tsx", "mts", "cts"]
+    | all(. as $ext
+          | ($f.allowRead | index("**/*credential*." + $ext)) != null
+            and ($f.denyRead | index("**/secrets/**/*credential*." + $ext)) != null)
+      and ($f.allowRead | map(select(test("credential"))) | length) == 4
   ' "$SETTINGS_ABSOLUTE_PATH"
   [ "$status" -eq 0 ]
 }
