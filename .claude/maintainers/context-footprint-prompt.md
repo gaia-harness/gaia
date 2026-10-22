@@ -124,47 +124,52 @@ Dispatch one sub-agent (JSON array file, 2 objects; classify it with `audit-noop
 2. Reply with a table per item and, for each number, the delta vs the baseline below. Call out anything that moved more than 10%.
 3. Include the new baseline (numbers, date, probe) in the JSON output; this session is rooted in the probe, so it does not edit this file. The maintainer, or a session at the GAIA root, lands the baseline update in this file through a small PR, so the next run diffs against it, and updates the docs token-efficiency page (and any README data point) with the new numbers.
 
-## Baseline (2026-10-21, `dogfood/spec130-probe`, Opus 5.5)
+## Baseline (2026-10-23, `sandbox/footprint-rc5`, Opus 5.5)
 
-Counting baseline with the wrapper: 24,363 tokens.
+A fresh install from the 2.0.0-rc.5 bundle of `main` at `e6ef246e`, measured on a scratch copy. Sub-agents inherit the session's effort.
 
-**S. Startup: 7,672 (0.77%)**
+Counting baseline with the wrapper: 24,788 tokens (stable on both runs).
+
+**S. Startup: 8,207 (0.82%)**
 
 | Block | Tokens |
 |---|---|
-| Root rules with no `paths:` (8) | 3,877 |
-| SessionStart hook context | 1,409 |
-| Root `CLAUDE.md` | 1,041 |
-| Skill and command entries (10, 5 name-only) | 804 |
-| Agent entries (7) | 541 |
+| Root rules with no `paths:` (7) | 4,151 |
+| SessionStart hook context | 1,403 |
+| Root `CLAUDE.md` | 1,108 |
+| Skill and command entries (10, 5 name-only) | 806 |
+| Agent entries (9) | 739 |
 
-**1. Typical task (1 component + 1 route): adds 14,526 (1.45%); startup + task 22.2k (2.2%)**
+**1. Typical task (1 component + 1 route), post-#2991: adds 11,855 (1.19%); startup + task 20,062 (2.01%)**
+
+The rc.5 task measured 14,450. Post-#2991, `wiki-style` (1,995) and `ports` (580) no longer load on this task, and `design-baseline` is recounted on `main` with the wrapper (1,141 to 1,121).
 
 | Layer | Tokens |
 |---|---|
-| Root path-scoped, 5 of 9: code-comments 1,549, wiki-style 1,978, working-doc-ids 1,604, code-search 495, no-abbreviations 451 | 6,077 |
-| Frontend, 8 of 13: design-baseline 1,124, coding-guidelines-react 1,068, i18n 886, tailwind 853, accessibility 618, ports 563, react-router-docs 357, routes 277 | 5,746 |
-| Frontend skill entries (14) | 1,788 |
-| `frontend/CLAUDE.md` | 915 |
+| Root path-scoped, 3 of 8: code-comments 1,566, working-doc-ids 1,621, no-abbreviations 468 | 3,655 |
+| Frontend, 7 of 13: design-baseline 1,121, coding-guidelines-react 1,085, i18n 903, tailwind 870, accessibility 635, react-router-docs 374, routes 294 | 5,282 |
+| Frontend skill entries (13, root-session scope suffix) | 2,001 |
+| `frontend/CLAUDE.md` | 917 |
 
 **2. Skills**
 
 | Skill | Entry | SKILL.md | Other files | Max when used |
 |---|---|---|---|---|
-| new-component | 142 | 1,434 | none | 1,434 |
-| react-code | 182 | 5,880 | 9,061 (4) | 14,941 |
-| tdd-react | 148 | 303 | 7,491 (1) | 7,794 |
-| react-doctor | 112 | 1,766 | 1,750 (1) | 3,516 |
+| new-component | 167 | 1,434 | none | 1,434 |
+| react-code | 207 | 5,880 | 9,061 (4) | 14,941 |
+| tdd-react | 173 | 303 | 7,491 (1) | 7,794 |
 | tdd | 75 | 4,282 | 416 (3) | 4,698 |
 
-**3. Frontend launch startup: ~10,315 (1.03%)**: root startup 7,672 + `frontend/CLAUDE.md` 915 + frontend entries 1,788, minus the root name-only entries (~60).
+`react-doctor` is not a GAIA skill and is not counted.
+
+**3. Frontend launch startup: 10,927 (1.09%)**: root startup 8,207 + `frontend/CLAUDE.md` ~1,044 + frontend entries 1,676 (no scope suffix in a frontend launch). No root entries drop out: the name-only entries still list by name.
 
 **4. Audit footprint**
 
 | Audit | Main receives | Unit peak context | Tree input billed |
 |---|---|---|---|
-| Light only (2 agents) | ~450 | 80k | 0.93M |
-| 1 full round + fixer + light re-check (7 agents) | ~690 | 141k | 9.6M |
-| 2 full rounds + fixer (11 agents) | ~840 | 167k | 23.7M |
+| 3 full rounds + 2 fixers + 2 light reviewers (17 agents) | 686 (chars/3.6), 1,242 (context jump) | 181k | 20.4M |
 
-**6. Re-review**: full round 2 = 45% of round 1 (2.87M vs 6.39M billed; member peak 136k vs 180k). Caveat: that fix was a large rewrite (the ja locale), so it overstates a small-fix re-review. The only small-fix re-dispatch went light (15k vs 2.19M), so it isn't a re-review data point. If 2.0's probe has a small-fix full re-dispatch, prefer it.
+The unit alone is 72% of the tree's input. A light reviewer costs ~17k input, 12k peak.
+
+**6. Re-review**: full round 2 = 105% of round 1 (1.64M vs 1.57M billed; member peak 89k vs 90k). Round 2 is a natural small-fix full re-review: a 24-line fix (2 files, +14 -10) after the first review of a 706-line feature. Full-review cost is the member's fixed load, not the size of the change. Round 3 is excluded: it was a forced full round, because a malformed light reply (no per-file `verdict` key) fell back to full.
