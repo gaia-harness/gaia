@@ -45,7 +45,7 @@ For a spec-derived plan, after the last phase commits and before the final summa
 bash .gaia/scripts/spec/uat-gate.sh <SPEC_PATH> --routing <PLAN_DIR>/README.md --all
 ```
 
-`--all` runs the same checks over every `e2e` row, which includes the divergence check and the working-doc id scan across every rendered spec. A non-zero exit is a HALT: stop and surface stderr. It is never an audit finding to fix inside a fix round.
+`--all` runs the same checks over every `e2e` row, which includes the divergence check and the working-doc id scan across every rendered spec. A non-zero exit is a HALT: stop and surface stderr, including any next-step line the gate prints. It is never an audit finding to fix inside a fix round.
 
 Then confirm the render landed before the first phase. When `<PLAN_DIR>/PROGRESS.md`'s first `## UAT render` block carries a `Commit: <short-sha>` (not `none`, not `Skipped:`), take the Phase 1 SHA from the last `## Phase 1` block carrying a `Commit:` line and run:
 
@@ -79,7 +79,7 @@ Then judge the test bodies. The gate proves each spec still carries its contract
    jq -e 'all(.[]; .verdict == "asserts")' <VERDICT_FILE>
    ```
 
-   A non-zero exit is a HALT: surface each `diverges` entry's file and reason. The fix is implementing the behavior or reopening the SPEC (`.claude/skills/gaia/references/spec/uat-divergence.md` `## Reopen`), never an edit to the contract comment and never re-adding `test.fail()`. Like the gate, it is never an audit finding to fix inside a fix round.
+   A non-zero exit is a HALT: surface each `diverges` entry's file and reason. When the reason says the Then-clause is asserted only in a helper the body calls, the fix is moving that assertion into the test body and running this step again. Otherwise the fix is implementing the behavior or reopening the SPEC (`.claude/skills/gaia/references/spec/uat-divergence.md` `## Reopen`). Never an edit to the contract comment and never re-adding `test.fail()`. Like the gate, it is never an audit finding to fix inside a fix round.
 
 ## Consolidation
 
