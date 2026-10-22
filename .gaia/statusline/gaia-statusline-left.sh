@@ -1,7 +1,7 @@
 # shellcheck shell=bash
 #
-# Default left side of the GAIA statusline, used only when the user has no
-# global `statusLine.command` of their own. Sourced by gaia-statusline.sh as
+# Default left side of the GAIA statusline; gaia-statusline.sh's left-side
+# resolution decides when it renders. Sourced by gaia-statusline.sh as
 # "$GAIA_DIRECTORY/statusline/gaia-statusline-left.sh"; defines one function and runs nothing at
 # source time.
 #
