@@ -48,10 +48,10 @@ const fullCache = (): Record<string, unknown> => ({
   codifyNudgeReason: 'recurring',
   gaiaCurrent: '1.6.1',
   outdatedCount: 4,
+  residueCandidateCount: 6,
   securityCount: 2,
   securitySource: 'pnpm-audit',
   securityUnavailableReason: 'forbidden',
-  serenaLangDrift: ['python'],
   unknownFutureKey: {nested: [1, 2]},
 });
 

@@ -29,7 +29,7 @@
  *   6. `feat:` / `fix:` / `perf:` / `refactor:` / `debt:` / `revert:` touching
  *      a configured source-bearing non-test path: WORTHY.
  *   7. Those same types touching only test files OR only configured inventory
- *      paths without body decision keywords: SKIP (Serena handles inventory).
+ *      paths without body decision keywords: SKIP (the tree is the inventory).
  *   8. `chore:`, `docs:`, `test:` (without earlier override): SKIP, except a
  *      `chore:` whose body mentions `architecture` is WORTHY.
  *   9. Anything else: WORTHY (false positive better than false negative).
@@ -385,7 +385,7 @@ const classifyFeatureCommit = (
   if (onlyInventory && !ARCH_BODY_PATTERN.test(body)) {
     return {
       reason:
-        'feat/fix/perf/refactor/debt: only inventory paths (Serena handles inventory)',
+        'feat/fix/perf/refactor/debt: only inventory paths (the tree is the inventory)',
       suggestion: 'SKIP',
     };
   }

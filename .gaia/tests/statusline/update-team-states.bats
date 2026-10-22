@@ -50,7 +50,7 @@ teardown() {
 # Teammate claim `octo-cat` on 2.0.4, reader `me`, update 2.0.5 available, and
 # every other right-side nudge armed.
 write_busy_cache() {
-  printf '%s' '{"gaiaHasUpdate":true,"gaiaLatest":"2.0.5","outdatedCount":28,"codifyNudgeReason":"1 new pattern","codifyCandidateCount":6,"residueCandidateCount":15,"cleanseNudge":true,"cleanseNudgeReason":"34 days since review","serenaLangDrift":["go","rust"],"ghLogin":"me","gaiaUpdateClaims":[{"number":7,"headRefName":"update/v2.0.4-x","tag":"v2.0.4","authorLogin":"octo-cat","createdAt":"2026-10-18T00:00:00Z"}]}' > "$CACHE_FILE"
+  printf '%s' '{"gaiaHasUpdate":true,"gaiaLatest":"2.0.5","outdatedCount":28,"codifyNudgeReason":"1 new pattern","codifyCandidateCount":6,"residueCandidateCount":15,"cleanseNudge":true,"cleanseNudgeReason":"34 days since review","ghLogin":"me","gaiaUpdateClaims":[{"number":7,"headRefName":"update/v2.0.4-x","tag":"v2.0.4","authorLogin":"octo-cat","createdAt":"2026-10-18T00:00:00Z"}]}' > "$CACHE_FILE"
   printf '{"openCount":1}' > "$MAIN/.gaia/local/debt/count.json"
 }
 
@@ -66,20 +66,19 @@ render_at() {
 
 @test "in-progress nudge keeps its Medium form while every other nudge shrinks then hides" {
   write_busy_cache
-  declare -a widths=(300 260 240 200 150 120 100 90 80 70 60 50)
+  declare -a widths=(260 215 200 165 125 90 80 74 60 55 50)
   declare -a expected=(
-    "⌛️ GAIA 2.0.4 in progress (@octo-cat) │ 🔭 /gaia-serena-sync (missing: go, rust) │ 📦 /update-deps (28 outdated) │ 🔎 /gaia-cleanse (34 days since review) │ 🔨 /gaia-codify (1 new pattern) │ 🐛 /gaia-debt (1 issue) │ 🧹 /gaia-residue (15 residuals)"
-    "⌛️ GAIA 2.0.4 in progress (@octo-cat) │ 🔭 /gaia-serena-sync (missing: go, rust) │ 📦 /update-deps (28 outdated) │ 🔎 /gaia-cleanse (34 days since review) │ 🔨 /gaia-codify (1 new pattern) │ 🐛 /gaia-debt (1 issue) │ 🧹 /gaia-residue (15)"
-    "⌛️ GAIA 2.0.4 in progress (@octo-cat) │ 🔭 /gaia-serena-sync (missing: go, rust) │ 📦 /update-deps (28 outdated) │ 🔎 /gaia-cleanse (34 days since review) │ 🔨 /gaia-codify (6) │ 🐛 /gaia-debt (1) │ 🧹 /gaia-residue (15)"
-    "⌛️ GAIA 2.0.4 in progress (@octo-cat) │ 🔭 /gaia-serena-sync (2) │ 📦 /update-deps (28) │ 🔎 /gaia-cleanse │ 🔨 /gaia-codify (6) │ 🐛 /gaia-debt (1) │ 🧹 /gaia-residue (15)"
-    "⌛️ GAIA 2.0.4 (@octo-cat) │ 🔭 /gaia-serena-sync │ 📦 /update-deps │ 🔎 /gaia-cleanse │ 🔨 /gaia-codify │ 🐛 /gaia-debt │ 🧹 15"
-    "⌛️ GAIA 2.0.4 (@octo-cat) │ 🔭 /gaia-serena-sync │ 📦 /update-deps │ 🔎 │ 🔨 6 │ 🐛 1 │ 🧹 15"
-    "⌛️ GAIA 2.0.4 (@octo-cat) │ 🔭 /gaia-serena-sync │ 📦 28 │ 🔎 │ 🔨 6 │ 🐛 1 │ 🧹 15"
-    "⌛️ GAIA 2.0.4 (@octo-cat) │ 🔭 2 │ 📦 28 │ 🔎 │ 🔨 6 │ 🐛 1 │ 🧹 15"
-    "⌛️ GAIA 2.0.4 (@octo-cat) │ 🔭 2 │ 📦 28 │ 🔎 │ 🔨 6 │ 🐛 1 +1"
-    "⌛️ GAIA 2.0.4 (@octo-cat) │ 🔭 2 │ 📦 28 │ 🔎 +3"
-    "⌛️ GAIA 2.0.4 (@octo-cat) │ 🔭 2 │ 📦 28 +4"
-    "⌛️ GAIA 2.0.4 (@octo-cat) +6"
+    "⌛️ GAIA 2.0.4 in progress (@octo-cat) │ 📦 /update-deps (28 outdated) │ 🔎 /gaia-cleanse (34 days since review) │ 🔨 /gaia-codify (1 new pattern) │ 🐛 /gaia-debt (1 issue) │ 🧹 /gaia-residue (15 residuals)"
+    "⌛️ GAIA 2.0.4 in progress (@octo-cat) │ 📦 /update-deps (28 outdated) │ 🔎 /gaia-cleanse (34 days since review) │ 🔨 /gaia-codify (1 new pattern) │ 🐛 /gaia-debt (1 issue) │ 🧹 /gaia-residue (15)"
+    "⌛️ GAIA 2.0.4 in progress (@octo-cat) │ 📦 /update-deps (28 outdated) │ 🔎 /gaia-cleanse (34 days since review) │ 🔨 /gaia-codify (6) │ 🐛 /gaia-debt (1) │ 🧹 /gaia-residue (15)"
+    "⌛️ GAIA 2.0.4 in progress (@octo-cat) │ 📦 /update-deps (28) │ 🔎 /gaia-cleanse │ 🔨 /gaia-codify (6) │ 🐛 /gaia-debt (1) │ 🧹 /gaia-residue (15)"
+    "⌛️ GAIA 2.0.4 (@octo-cat) │ 📦 /update-deps │ 🔎 /gaia-cleanse │ 🔨 /gaia-codify │ 🐛 /gaia-debt │ 🧹 15"
+    "⌛️ GAIA 2.0.4 (@octo-cat) │ 📦 /update-deps │ 🔎 │ 🔨 6 │ 🐛 1 │ 🧹 15"
+    "⌛️ GAIA 2.0.4 (@octo-cat) │ 📦 28 │ 🔎 │ 🔨 6 │ 🐛 1 │ 🧹 15"
+    "⌛️ GAIA 2.0.4 (@octo-cat) │ 📦 28 │ 🔎 │ 🔨 6 │ 🐛 1 +1"
+    "⌛️ GAIA 2.0.4 (@octo-cat) │ 📦 28 │ 🔎 +3"
+    "⌛️ GAIA 2.0.4 (@octo-cat) │ 📦 28 +4"
+    "⌛️ GAIA 2.0.4 (@octo-cat) +5"
   )
   local row
   for row in "${!widths[@]}"; do
@@ -102,7 +101,7 @@ render_at() {
     [ "$status" -eq 0 ]
     case "$right_side" in *"⌛️ GAIA 2.0.4 (@octo-cat)"*|*"⌛️ GAIA 2.0.4 in progress (@octo-cat)"*) ;; *) return 1 ;; esac
     case "$right_side" in *"⌛️ │"*|*"⌛️ +"*|*"⌛️") return 1 ;; esac
-    case "$right_side" in *"+7"*) return 1 ;; esac
+    case "$right_side" in *"+6"*) return 1 ;; esac
   done
 }
 
@@ -110,7 +109,7 @@ render_at() {
   write_busy_cache
   render_at 20
   [ "$status" -eq 0 ]
-  [ "$right_side" = "⌛️ GAIA 2.0.4 (@octo-cat) +6" ]
+  [ "$right_side" = "⌛️ GAIA 2.0.4 (@octo-cat) +5" ]
 }
 
 @test "a floor of one nudge alone renders its Medium form past the width with no +N" {
@@ -127,9 +126,9 @@ render_at() {
   cp "$BATS_TEST_TMPDIR/no-floor.sh" "$RIGHT_SCRIPT"
   render_at 100
   [ "$status" -eq 0 ]
-  [ "$right_side" != "⌛️ GAIA 2.0.4 (@octo-cat) │ 🔭 /gaia-serena-sync │ 📦 28 │ 🔎 │ 🔨 6 │ 🐛 1 │ 🧹 15" ]
+  [ "$right_side" != "⌛️ GAIA 2.0.4 (@octo-cat) │ 📦 /update-deps │ 🔎 │ 🔨 6 │ 🐛 1 │ 🧹 15" ]
   render_at 20
-  [ "$right_side" != "⌛️ GAIA 2.0.4 (@octo-cat) +6" ]
+  [ "$right_side" != "⌛️ GAIA 2.0.4 (@octo-cat) +5" ]
 }
 
 @test "the reader's own claim renders resume at full width and the bare command at Small" {

@@ -21,6 +21,6 @@ A hook starts in the component that needs it. When a second component needs the 
 
 Named export, `use` prefix, one hook per file, tests in `frontend/app/hooks/tests/`. Use `/new-hook` to scaffold. File names and the layout are owned by `frontend/.claude/rules/coding-guidelines-react.md`; see [[Coding Guidelines]] for the general naming rules.
 
-For the current bundled inventory and signatures, query Serena (`.claude/rules/code-search.md`).
+For the current bundled inventory and signatures, list `frontend/app/hooks/`.
 
 See the `react-code` skill (`frontend/.claude/skills/react-code/SKILL.md`) for `useEffect` and `useState` rules, and its `## Memoization: compiler-first` section for memoization.

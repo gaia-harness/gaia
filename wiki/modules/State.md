@@ -56,7 +56,7 @@ XProvider.displayName = 'XProvider';
 
 ## Initial state from the loader
 
-Providers receive SSR-safe initial state from `root.tsx` loader data, preventing hydration mismatches. Query Serena to read the live `AppWithState` implementation in `frontend/app/root.tsx`.
+Providers receive SSR-safe initial state from `root.tsx` loader data, preventing hydration mismatches. Read the live `AppWithState` implementation in `frontend/app/root.tsx`.
 
 ## See also
 

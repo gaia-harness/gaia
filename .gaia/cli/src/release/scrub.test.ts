@@ -2045,7 +2045,7 @@ const REFS_EXCLUDE_FIXTURE = [
   '.gaia/scripts/lint-hook-jq-availability.sh',
   '.github/CODEOWNERS',
   '.gaia/local',
-  '.serena',
+  '.tool-state',
 ].join('\n');
 
 const seedRefsSource = (sandbox: Sandbox): void => {
@@ -2058,7 +2058,7 @@ const seedRefsSource = (sandbox: Sandbox): void => {
   );
   sandbox.writeSource('.github/CODEOWNERS', '* @maintainer\n');
   // Present on disk but untracked, the way a maintainer's local state is.
-  sandbox.writeSource('.serena/project.yml', 'languages: []\n');
+  sandbox.writeSource('.tool-state/config.yml', 'languages: []\n');
   sandbox.writeSource('.gaia/local/plans/notes.md', '# notes\n');
   execFileSync('git', ['init', '-q'], {cwd: sandbox.rootDir});
   execFileSync(
@@ -2130,7 +2130,7 @@ describe('excluded-refs derived check', () => {
     [
       'an untracked excluded entry',
       'wiki/concepts/A.md',
-      'Serena reads `.serena/project.yml`.\n',
+      'The tool reads `.tool-state/config.yml`.\n',
     ],
     [
       'a nested untracked excluded entry',

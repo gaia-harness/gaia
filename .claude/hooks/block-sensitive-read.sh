@@ -55,8 +55,8 @@
 #
 # HONEST LIMITS. This is heuristic defense-in-depth, not a sandbox: it
 # pattern-matches command text and can be evaded by determined obfuscation. It
-# does not reach MCP-mediated shell execution (e.g. Serena's
-# execute_shell_command), a subprocess that opens the file itself (a Node or
+# does not reach MCP-mediated shell execution (an MCP server's own shell
+# tool), a subprocess that opens the file itself (a Node or
 # Python script reading it directly), or a deliberately obfuscated reader.
 #
 # ONE MORE SPELLING IS OPEN AND IS NONE OF THOSE. The operand walk splits a

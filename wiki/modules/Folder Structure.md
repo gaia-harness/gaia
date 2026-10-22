@@ -34,4 +34,4 @@ The repo is a monorepo. The harness (`.claude/`, `.gaia/`, `.githooks/`, `.githu
 
 - The `pages/` vs `components/` split is load-bearing; see [[Thin Routes]] and [[Pages]] for the rationale
 - `.server/` suffix excludes a folder from the client bundle (used by `sessions.server/`)
-- Top-level files: `entry.client.tsx`, `entry.server.tsx`, `root.tsx` and `routes.ts` use React Router's required names; `i18n.ts`, `env.server.ts` and `action-paths.ts` are app-level modules; query Serena to read them rather than mirroring their contents here.
+- Top-level files: `entry.client.tsx`, `entry.server.tsx`, `root.tsx` and `routes.ts` use React Router's required names; `i18n.ts`, `env.server.ts` and `action-paths.ts` are app-level modules; read them directly rather than mirroring their contents here.

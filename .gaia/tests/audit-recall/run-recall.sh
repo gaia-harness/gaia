@@ -266,9 +266,9 @@ dispatch_member() {
   # bypassPermissions: a replay tree is an untrusted workspace, so headless
   # claude ignores the project's allow list and the member's gh and git calls
   # wait on a prompt nobody can answer. Hooks still run.
-  # --strict-mcp-config with no --mcp-config loads no MCP server: Serena
-  # rewrites an older tracked .serena/project.yml on start, and the dirty tree
-  # makes the audit hook refuse the member dispatch.
+  # --strict-mcp-config with no --mcp-config loads no MCP server: a user-level
+  # server can rewrite a config file an older replay tree tracks when it starts,
+  # and the dirty tree makes the audit hook refuse the member dispatch.
   (
     cd "$root"
     exec env -u CLAUDE_PROJECT_DIR -u CLAUDECODE -u CLAUDE_CODE_ENTRYPOINT -u CLAUDE_CODE_SSE_PORT \

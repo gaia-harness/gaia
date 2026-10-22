@@ -17,4 +17,4 @@ tags: [module, middleware]
 
 Middleware is the right home for per-request setup that loaders shouldn't have to repeat; i18n is the canonical example. Add new middleware here when a concern needs to run on every request before any loader executes.
 
-The current i18next middleware exposes `i18nextMiddleware` (registered in `root.tsx`), `getLanguage(context)`, and `getInstance(context)` for server-side `t()` calls in loaders. See [[i18n]] for usage. For the current file inventory and signatures, query Serena (`.claude/rules/code-search.md`).
+The current i18next middleware exposes `i18nextMiddleware` (registered in `root.tsx`), `getLanguage(context)`, and `getInstance(context)` for server-side `t()` calls in loaders. See [[i18n]] for usage. For the current file inventory and signatures, read `frontend/app/middleware/`.

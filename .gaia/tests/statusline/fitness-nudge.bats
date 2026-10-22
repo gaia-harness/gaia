@@ -689,7 +689,6 @@ SPY
     "chore: merge the GAIA 2.0.0 harness and split the workspace"
     "chore: point references at frontend/"
     "chore: upgrade to GAIA 2.0.0"
-    "chore: upgrade the Serena project config"
   )
   for subject in "${migration_subjects[@]}"; do
     index=$((index + 1))

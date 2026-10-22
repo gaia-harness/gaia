@@ -23,7 +23,7 @@ The `__theme` cookie is read/written as a plain cookie via `frontend/app/utils/t
 
 `_session` is the designated hook point for consumer auth. Add your own `createCookieSessionStorage` (or use Clerk, Supabase, Auth0 SDKs) in `frontend/app/sessions.server/` and wire a loader into a `_session.tsx` layout route you add under `frontend/app/routes/`. See [[Routing]] for the route group overview.
 
-For the current bundled session files, query Serena (`.claude/rules/code-search.md`).
+For the current bundled session files, list `frontend/app/sessions.server/`.
 
 ## See also
 

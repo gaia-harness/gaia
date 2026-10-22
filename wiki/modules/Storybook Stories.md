@@ -50,4 +50,4 @@ Chromatic loads only the preview iframe, so the toolbar toggle never fires there
 
 When TanStack Query is on, a Storybook decorator (`.storybook/decorators/query-client-decorator.tsx`) gives each story a fresh QueryClient. See [[Data Loading]].
 
-For the current `frontend/.storybook/` file inventory, query Serena (`.claude/rules/code-search.md`).
+For the current file inventory, list `frontend/.storybook/`.

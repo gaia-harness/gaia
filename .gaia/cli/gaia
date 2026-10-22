@@ -47937,7 +47937,7 @@ var classifyFeatureCommit = (commit2, header, paths) => {
   );
   if (onlyInventory && !ARCH_BODY_PATTERN.test(body)) {
     return {
-      reason: "feat/fix/perf/refactor/debt: only inventory paths (Serena handles inventory)",
+      reason: "feat/fix/perf/refactor/debt: only inventory paths (the tree is the inventory)",
       suggestion: "SKIP"
     };
   }

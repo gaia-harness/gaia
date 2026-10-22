@@ -47,5 +47,3 @@ wiki
 **/.gaia-backup
 **/.gaia-ports
 **/.bats-shards-scratch.*
-.serena/cache
-.serena/project.local.yml
