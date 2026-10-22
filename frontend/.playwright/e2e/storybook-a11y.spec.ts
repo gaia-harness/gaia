@@ -100,9 +100,10 @@ const expectStoryHasContent = async (page: Page, storyId: string) => {
           ) !== null
       ));
 
-  expect(hasContent, 'story rendered no content into #storybook-root').toBe(
-    true
-  );
+  expect(
+    hasContent,
+    `story ${storyId} rendered no content into #storybook-root. If it renders nothing by design, add '${storyId}' to RENDERS_NOTHING_BY_DESIGN in .playwright/e2e/storybook-a11y.spec.ts`
+  ).toBe(true);
 
   if (TOAST_STORY_IDS.has(storyId)) {
     await expect(page.locator('[data-slot="toast"]').first()).toBeVisible();
