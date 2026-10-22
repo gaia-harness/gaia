@@ -228,6 +228,7 @@ rm -rf \
   frontend/app/routes/actions.set-language.ts \
   frontend/app/components/language-select \
   frontend/.storybook/i18next.ts \
+  frontend/test/storybook-default-locale.test.tsx \
   frontend/.playwright/e2e/language-switch-a11y.spec.ts \
   frontend/.claude/rules/i18n.md \
   frontend/.claude/agents/code-audit-frontend/react-i18next.md \
@@ -248,18 +249,19 @@ Remove:
 
 ```ts
 import i18n from './i18next';
+import {DEFAULT_LOCALE} from '~/i18n';
 ```
 
 Remove the `locale` and `locales` entries from `initialGlobals`, keeping `theme: 'light'` with its comment:
 
 ```ts
-locale: 'en',
+locale: DEFAULT_LOCALE,
 locales: {
   en: {left: '🇺🇸', right: 'en', title: 'English'},
 },
 ```
 
-Remove the `i18n` key from `parameters`:
+Remove the locale-sync loader (the async function that reads `globals.locale` and calls `i18n.changeLanguage`) and its comment from `loaders`, keeping `mswLoader()`. Remove the `i18n` key from `parameters`:
 
 ```ts
 i18n,
