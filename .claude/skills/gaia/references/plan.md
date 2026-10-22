@@ -228,7 +228,7 @@ Output a short summary of what's in `$PLAN_DIR/`, then report the cost, then emi
 
 Cost: never compute or restate a figure yourself.
 
-- **Spec-derived:** run `bash .gaia/scripts/usage.sh initiative <SPEC-NNN> --box` with the same `<SPEC-NNN>` and relay its output verbatim, inside a bare fenced block when it is a box (a bare box is reflowed by the Markdown renderer and loses its alignment). The box lists the spec's own run and this plan with a total. When the output is one plain `Cost:` line (the spec's run was never recorded), relay that line unfenced. The command waits briefly for usage still being saved, so the figures are complete in the common case; a `Note:` line under the figures says when they are not.
+- **Spec-derived:** run `bash .gaia/scripts/usage.sh initiative <SPEC-NNN> --box` with the same `<SPEC-NNN>` and relay its output verbatim, inside a bare fenced block when it is a box (an unfenced box is reflowed by the Markdown renderer and loses its alignment). The box lists the spec's own run and this plan with a total. When the output is one plain `Cost:` line (the spec's run was never recorded), relay that line unfenced. The command waits briefly for usage still being saved, so the figures are complete in the common case; a `Note:` line under the figures says when they are not.
 - **Spec-less:** relay the Cost line `record` printed in step 4.7, with any `Note:` lines under it, verbatim and unfenced. It is one line item, so there is no box.
 
 When `record` exited non-zero in step 4.7, relay its one stderr line in place of the cost.
