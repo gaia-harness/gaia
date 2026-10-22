@@ -49,3 +49,5 @@
 .gaia/cli/src/scaffold/route.ts	app/services/	Help text naming package-relative paths resolved against the package directory from the registry.
 .gaia/cli/src/scaffold/route.ts	app/routes/	Help text naming package-relative paths resolved against the package directory from the registry.
 .gaia/scripts/spec/uat-lib.sh	.playwright/e2e	Package-relative e2e directory name joined to the package path from the registry, not a root path.
+.claude/hooks/red-verify-commit-check.sh	pnpm -C frontend test --run app/utils/x.test.ts	Example test path relative to the package directory the -C option names, not a root path.
+.claude/skills/gaia/references/plan/planner.md	pnpm -C frontend test --run app/utils/x.test.ts	Example test path relative to the package directory the -C option names, not a root path.
