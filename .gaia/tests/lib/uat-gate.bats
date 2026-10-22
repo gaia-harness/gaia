@@ -395,6 +395,33 @@ exit 1"
   assert_stderr_names Prerequisites
 }
 
+@test "gate exits 4 naming the other tree whose process holds this tree's dev port" {
+  command -v node >/dev/null 2>&1 || skip "node is needed for the listener fixture"
+  prepare_green
+  git init -q -b main "$WORK"
+  mkdir -p "$WORK/frontend"
+  : >"$WORK/frontend/react-router.config.ts"
+  other_tree="$BATS_TEST_TMPDIR/other-tree"
+  git init -q -b main "$other_tree"
+  other_tree="$(cd "$other_tree" && pwd -P)"
+  held_port=$((28000 + (RANDOM % 2000)))
+  listener_log="$BATS_TEST_TMPDIR/listener.log"
+  (cd "$other_tree" && nohup node "$REPO_ROOT_REAL/.gaia/tests/fixtures/ports/listen.mjs" "$held_port" 127.0.0.1 >"$listener_log" 2>&1 </dev/null 3>&- &)
+  attempt=0
+  until grep -q '^listening ' "$listener_log" 2>/dev/null; do
+    attempt=$((attempt + 1))
+    [ "$attempt" -lt 100 ] || return 1
+    sleep 0.1
+  done
+  listener_pid="$(sed -n 's/^listening \([0-9][0-9]*\)$/\1/p' "$listener_log")"
+  stub_pnpm "printf '{\"errors\":[{\"message\":\"http://localhost:$held_port is already used\"}],\"suites\":[]}' >\"\$PLAYWRIGHT_JSON_OUTPUT_NAME\"
+exit 1"
+  GAIA_PORTS_DEV_BASE_PORT="$held_port" gate_with_stub
+  kill "$listener_pid" 2>/dev/null || true
+  [ "$status" -eq 4 ]
+  assert_stderr_names "Port $held_port is held by process $listener_pid running from $other_tree, which is not this tree: ask the user before stopping it."
+}
+
 @test "gate runs Playwright over only the owned file with the JSON reporter and reads its report" {
   prepare_green
   stub_pnpm "printf '%s\n' \"\$@\" >'$BATS_TEST_TMPDIR/pnpm-args'

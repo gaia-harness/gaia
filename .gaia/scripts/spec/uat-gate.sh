@@ -29,7 +29,7 @@
 #      --report)
 #   4  Playwright could not run (jq, pnpm or a browser is missing, the dev or
 #      Storybook port is held, a server failed to boot); stderr names the
-#      prerequisite
+#      prerequisite, and the other tree when a process of one holds a port
 #
 # Honest limit: the gate proves a spec turned green and still carries its
 # contract. Whether the test body truly exercises the UAT is judged by the
@@ -262,6 +262,26 @@ if ! command -v jq >/dev/null 2>&1; then
   exit 4
 fi
 
+# port_holders: one sentence per dev or Storybook port of this tree that a
+# process from another tree holds, naming that tree. Stopping it is the user's
+# call, so the gate names the holder instead of leaving a held port anonymous.
+port_holders() {
+  local field port answer rest holder_pid holder_directory sentences=''
+  for field in dev storybook; do
+    port="$(bash "$script_directory/../ports.sh" --tree "$repo_root" --field "$field" 2>/dev/null)" || continue
+    answer="$(bash "$script_directory/../server-process-lib.sh" --listener-owner "$port" "$repo_root" 2>/dev/null)"
+    case "$answer" in
+      'foreign '*)
+        rest="${answer#foreign }"
+        holder_pid="${rest%% *}"
+        holder_directory="${rest#* }"
+        sentences="$sentences Port $port is held by process $holder_pid running from $holder_directory, which is not this tree: ask the user before stopping it."
+        ;;
+    esac
+  done
+  printf '%s' "$sentences"
+}
+
 package_directory="${e2e_directory%/.playwright/e2e}"
 [ "$package_directory" != "$e2e_directory" ] || package_directory='.'
 if [ "$package_directory" = "." ]; then package_prefix=''; else package_prefix="$package_directory/"; fi
@@ -281,7 +301,7 @@ if [ -z "$report_path" ]; then
   done <<<"$selected_files"
   PLAYWRIGHT_JSON_OUTPUT_NAME="$report_path" pnpm -C "$package_directory" exec playwright test ${playwright_arguments[@]+"${playwright_arguments[@]}"} --reporter=json >/dev/null 2>"$gate_temporary/playwright.stderr"
   if ! jq -e . "$report_path" >/dev/null 2>&1; then
-    printf 'uat-gate.sh: Playwright produced no report. Prerequisites: Chromium installed (pnpm exec playwright install chromium), the frontend dependencies installed, and the dev and Storybook ports free (stop pnpm storybook). Playwright said: %s\n' "$(head -c 400 "$gate_temporary/playwright.stderr" | LC_ALL=C tr '\r\n\t' '   ')" >&2
+    printf 'uat-gate.sh: Playwright produced no report. Prerequisites: Chromium installed (pnpm exec playwright install chromium), the frontend dependencies installed, and the dev and Storybook ports free (stop pnpm storybook).%s Playwright said: %s\n' "$(port_holders)" "$(head -c 400 "$gate_temporary/playwright.stderr" | LC_ALL=C tr '\r\n\t' '   ')" >&2
     exit 4
   fi
 else
@@ -294,7 +314,7 @@ fi
 # A browser that is not installed, or a server that did not boot, shows up as
 # top-level errors or as launch errors on every test, not as a test verdict.
 if jq -e '((.errors // []) | length) > 0 or ([.. | objects | select(has("results")) | .results[]?.error.message // empty | select(test("Executable doesn.t exist|playwright install|browserType\\.launch|already used|webServer"))] | length) > 0' "$report_path" >/dev/null 2>&1; then
-  printf 'uat-gate.sh: Playwright could not run the owned specs. Prerequisites: Chromium installed (pnpm exec playwright install chromium), the dev and Storybook ports free (stop pnpm storybook), the servers able to boot. Playwright said: %s\n' "$(jq -r '[(.errors // [])[]?.message // empty] | first // "see the report"' "$report_path" | head -c 400 | LC_ALL=C tr '\r\n\t' '   ')" >&2
+  printf 'uat-gate.sh: Playwright could not run the owned specs. Prerequisites: Chromium installed (pnpm exec playwright install chromium), the dev and Storybook ports free (stop pnpm storybook), the servers able to boot.%s Playwright said: %s\n' "$(port_holders)" "$(jq -r '[(.errors // [])[]?.message // empty] | first // "see the report"' "$report_path" | head -c 400 | LC_ALL=C tr '\r\n\t' '   ')" >&2
   exit 4
 fi
 

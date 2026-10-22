@@ -167,6 +167,106 @@ ledger_line_count_for_slot() {
   [ "$output" = "4" ]
 }
 
+# add_other_project_tree <name>: a linked worktree of a second GAIA project
+# with its own ledger; prints its physical path.
+add_other_project_tree() {
+  local other_main="$BATS_TEST_TMPDIR/other-main"
+  if [ ! -d "$other_main/.git" ]; then
+    git init -q -b main "$other_main"
+    git -C "$other_main" -c user.email=gaia-test@example.com -c user.name="GAIA Test" -c commit.gpgsign=false commit -q --allow-empty -m base
+  fi
+  git -C "$other_main" worktree add -q -b "$1" "$BATS_TEST_TMPDIR/other-trees/$1" >/dev/null 2>&1 || return 1
+  ( cd "$BATS_TEST_TMPDIR/other-trees/$1" && pwd -P )
+}
+
+@test "machine claim: a slot another project's live tree holds is skipped for a new tree" {
+  export GAIA_PORTS_MACHINE_DIRECTORY="$BATS_TEST_TMPDIR/machine"
+  other_tree="$(add_other_project_tree elsewhere)"
+  run gaia_ports_assign_slot "$BATS_TEST_TMPDIR/other-state" "$other_tree"
+  [ "$status" -eq 0 ]
+  [ "$output" = "1" ]
+
+  tree_one="$(add_worktree one)"
+  run gaia_ports_assign_slot "$STATE" "$tree_one"
+  [ "$status" -eq 0 ]
+  [ "$output" = "2" ]
+  [ "$(cut -f1 "$GAIA_PORTS_MACHINE_DIRECTORY/slot-1")" = "$other_tree" ]
+  [ "$(cut -f1 "$GAIA_PORTS_MACHINE_DIRECTORY/slot-2")" = "$tree_one" ]
+}
+
+@test "machine claim: an existing entry whose slot another project claims moves to the next free slot" {
+  export GAIA_PORTS_MACHINE_DIRECTORY="$BATS_TEST_TMPDIR/machine"
+  tree_one="$(add_worktree one)"
+  gaia_ports_assign_slot "$STATE" "$tree_one" >/dev/null
+  # A collision written before machine claims existed: the other project's
+  # tree took slot 1 without a claim from this one on record.
+  rm -f "$GAIA_PORTS_MACHINE_DIRECTORY/slot-1"
+  other_tree="$(add_other_project_tree elsewhere)"
+  [ "$(gaia_ports_assign_slot "$BATS_TEST_TMPDIR/other-state" "$other_tree")" = "1" ]
+
+  run gaia_ports_assign_slot "$STATE" "$tree_one"
+  [ "$status" -eq 0 ]
+  [ "$output" = "2" ]
+  [ "$(grep -c -- "$tree_one" "$STATE/slots.tsv")" -eq 1 ]
+  [ "$(ledger_line_count_for_slot 2)" -eq 1 ]
+  [ "$(cut -f1 "$GAIA_PORTS_MACHINE_DIRECTORY/slot-1")" = "$other_tree" ]
+
+  # The holder of the claim keeps its slot on re-entry.
+  run gaia_ports_assign_slot "$BATS_TEST_TMPDIR/other-state" "$other_tree"
+  [ "$output" = "1" ]
+}
+
+@test "machine claim: an existing entry with no claim on record takes one and keeps its slot" {
+  export GAIA_PORTS_MACHINE_DIRECTORY="$BATS_TEST_TMPDIR/machine"
+  tree_one="$(add_worktree one)"
+  gaia_ports_assign_slot "$STATE" "$tree_one" >/dev/null
+  rm -rf "$GAIA_PORTS_MACHINE_DIRECTORY"
+  run gaia_ports_assign_slot "$STATE" "$tree_one"
+  [ "$output" = "1" ]
+  [ "$(cut -f1 "$GAIA_PORTS_MACHINE_DIRECTORY/slot-1")" = "$tree_one" ]
+}
+
+@test "machine claim: a claim naming a removed tree is stale and the slot is reused" {
+  export GAIA_PORTS_MACHINE_DIRECTORY="$BATS_TEST_TMPDIR/machine"
+  mkdir -p "$GAIA_PORTS_MACHINE_DIRECTORY"
+  printf '%s\tmarker\n' "$BATS_TEST_TMPDIR/removed-tree" >"$GAIA_PORTS_MACHINE_DIRECTORY/slot-1"
+  tree_one="$(add_worktree one)"
+  run gaia_ports_assign_slot "$STATE" "$tree_one"
+  [ "$output" = "1" ]
+  [ "$(cut -f1 "$GAIA_PORTS_MACHINE_DIRECTORY/slot-1")" = "$tree_one" ]
+}
+
+@test "machine claim: reclaim and stale-marker retirement release the tree's claim" {
+  export GAIA_PORTS_MACHINE_DIRECTORY="$BATS_TEST_TMPDIR/machine"
+  tree_one="$(add_worktree one)"
+  tree_two="$(add_worktree two)"
+  gaia_ports_assign_slot "$STATE" "$tree_one" >/dev/null
+  gaia_ports_assign_slot "$STATE" "$tree_two" >/dev/null
+  [ -f "$GAIA_PORTS_MACHINE_DIRECTORY/slot-1" ]
+  [ -f "$GAIA_PORTS_MACHINE_DIRECTORY/slot-2" ]
+
+  rm -rf "$tree_one"
+  gaia_ports_reclaim "$STATE" "$FIXTURE_MAIN" >/dev/null
+  [ -e "$GAIA_PORTS_MACHINE_DIRECTORY/slot-1" ] && return 1
+
+  fixture_git worktree remove --force "$tree_two"
+  sleep 1.1
+  fixture_git worktree add -q -b recreated "$tree_two" >/dev/null 2>&1
+  gaia_ports_retire_stale_entry "$STATE" "$tree_two"
+  [ -e "$GAIA_PORTS_MACHINE_DIRECTORY/slot-2" ] && return 1
+  true
+}
+
+@test "machine directory: the seam wins, then the state seam, then XDG_STATE_HOME, then HOME" {
+  export GAIA_PORTS_MACHINE_DIRECTORY=/machine-seam
+  [ "$(gaia_ports_machine_directory)" = "/machine-seam" ]
+  unset GAIA_PORTS_MACHINE_DIRECTORY
+  [ "$(gaia_ports_machine_directory)" = "$STATE/machine" ]
+  unset GAIA_PORTS_STATE_DIRECTORY
+  [ "$(XDG_STATE_HOME=/xdg gaia_ports_machine_directory)" = "/xdg/gaia/ports" ]
+  [ "$(XDG_STATE_HOME='' HOME=/home-directory gaia_ports_machine_directory)" = "/home-directory/.local/state/gaia/ports" ]
+}
+
 @test "stale marker: a recreated worktree is retired by its marker and assigned afresh" {
   tree_one="$(add_worktree one)"
   gaia_ports_assign_slot "$STATE" "$tree_one" >/dev/null

@@ -12,6 +12,7 @@
 # `return 1`, never `!`-negation; POSIX `[ ]` throughout.
 
 setup() {
+  export GAIA_PORTS_MACHINE_DIRECTORY="$BATS_TEST_TMPDIR/machine-ports"
   # shellcheck disable=SC1091
   source "$BATS_TEST_DIRNAME/lib/concurrency-harness.sh"
 }
