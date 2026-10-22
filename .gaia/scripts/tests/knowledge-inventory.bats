@@ -248,6 +248,15 @@ class_of() {
   [[ "$stderr" == *"re-run /gaia-cleanse"* ]]
 }
 
+@test "verify red twin: a coverage line outside the Step 2 coverage section does not count" {
+  write_report "$EXPECTED_COUNTS"
+  sed '/^- `\.claude\/rules\/house\.md`: /d' "$REPORT" >"$REPORT.tmp" && mv "$REPORT.tmp" "$REPORT"
+  printf -- '- `.claude/rules/house.md`: NO-MATCH\n' >>"$REPORT"
+  inventory verify "$REPORT"
+  [ "$status" -eq 1 ]
+  [[ "$stderr" == *"missing .claude/rules/house.md"* ]]
+}
+
 @test "verify red twin: a memory file added since the research run refuses as uncovered" {
   write_report "memory=3 user_agent_memory=1 project_agent_memory=1 rules=2 wiki=2 claude_md=2"
   printf 'later\n' >"$MEMORY/later.md"
