@@ -179,7 +179,7 @@ At that point, save before asking, as the checkpoint says, to this run's own sta
 - `Held: <the held cursor tokens, space-separated>`, or `Held: none`
 - `NEXT: re-run residue-tally and start the next batch`
 
-Then ask the checkpoint's question. On `Continue here`, start the next batch. On `Clear and resume`, run `bash .gaia/scripts/usage.sh handoff` as the checkpoint says, and print the continuation prompt in a bare fenced block (`.claude/rules/fenced-copy-paste-blocks.md`), filling in the state file's absolute path and, when the handoff printed one, its line as the first step:
+Then ask the checkpoint's question. On `Continue here`, start the next batch. On `Clear and resume`, run `bash .gaia/scripts/usage.sh handoff` as the checkpoint says, and print the continuation prompt in a bare fenced block, filling in the state file's absolute path and, when the handoff printed one, its line as the first step:
 
 ```text
 <the usage.sh handoff line, when it printed one: run it first, verbatim>

@@ -241,6 +241,6 @@ Read <absolute-path-to-PLAN_DIR>/KICKOFF.md and execute it.
 
 For example `.../.notebook/specs/SPEC-NNN/plan/KICKOFF.md` for a spec-derived plan, or `.../.notebook/plans/PLAN-NNN/KICKOFF.md` for a spec-less plan. Use `$PLAN_DIR/KICKOFF.md` (the absolute path resolved in step 3). The path MUST be absolute so the cold Claude session has no working-directory ambiguity.
 
-**Print the prompt inside a bare fenced block** (`.claude/rules/fenced-copy-paste-blocks.md`) so the user can select and copy it manually.
+**Print the prompt inside a bare fenced block** so the user can select and copy it manually.
 
 Then print one trailing line: `Type /clear and paste the prompt above.`
