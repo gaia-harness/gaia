@@ -454,7 +454,6 @@ CALL_SITE_FILES=(
   ".claude/commands/gaia-release.md"
   ".claude/commands/setup-gaia.md"
   ".claude/skills/gaia-wiki/SKILL.md"
-  "frontend/.claude/skills/gaia-react-perf/SKILL.md"
   ".claude/skills/release-notes/SKILL.md"
   ".claude/skills/update-deps/SKILL.md"
   ".claude/skills/update-gaia/SKILL.md"
@@ -468,7 +467,6 @@ CALL_SITE_FLOW_NAMES=(
   "/gaia-release"
   "/setup-gaia"
   "/gaia-wiki"
-  "/gaia-react-perf"
   "/release-notes"
   "/update-deps"
   "/update-gaia"
@@ -496,12 +494,19 @@ CALL_SITE_FLOW_NAMES=(
 # VERSION/lockfile/cache-state write AND opening or driving a PR, and
 # /distribution-vet satisfies neither half. CALL_SITE_FILES is the roster,
 # and the `call-site roster:` census tests are what enforce it.
+#
+# gaia-react-perf joins them on the same footing. Its dev server and Playwright
+# run bind the tree's own ports from the worktree's port file, and its run
+# output is ephemeral scratch keyed by a fresh run id, so a worktree run
+# collides with no other tree. A plan phase whose deliverable is a perf pass
+# runs it from the plan's own worktree, so a refusal would halt that phase.
 NO_CALL_SITE_FILES=(
   ".claude/commands/distribution-vet.md"
   ".claude/commands/gaia-plan.md"
   ".claude/commands/gaia-spec.md"
   ".claude/commands/gaia-forensics.md"
   ".claude/skills/file-tech-debt/SKILL.md"
+  "frontend/.claude/skills/gaia-react-perf/SKILL.md"
 )
 
 # Part of the call-site roster are thin dispatchers: a "Read `.claude/..." (or "Read `frontend/.claude/...") line
@@ -517,7 +522,6 @@ EXPECTED_DISPATCHER_FILES=(
   ".claude/commands/gaia-codify.md"
   ".claude/commands/setup-gaia.md"
   ".claude/skills/gaia-wiki/SKILL.md"
-  "frontend/.claude/skills/gaia-react-perf/SKILL.md"
   ".claude/commands/gaia-residue.md"
 )
 
