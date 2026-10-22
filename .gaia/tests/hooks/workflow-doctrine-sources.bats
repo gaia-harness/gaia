@@ -283,9 +283,7 @@ pad_to() { # pad_to <src> <dst> <total bytes>: src plus filler so dst ends in on
 
 # ------------------------------------------------------------ 15. pin sites
 
-# The helpers and the model and effort regexes live in
-# helpers/doctrine-pin-checks.sh; the per-dispatch effort guards and their red
-# twins live in workflow-doctrine-effort-pins.bats.
+# The helpers and the model pin regex live in helpers/doctrine-pin-checks.sh.
 
 # bats test_tags=whole-tree
 @test "pin sites: every file that pins a model matches an entry on the doctrine page" {
@@ -294,12 +292,6 @@ pad_to() { # pad_to <src> <dst> <total bytes>: src plus filler so dst ends in on
   [ -n "$derived" ]
   # An independent source: every frontmatter pin must be in the derived set.
   frontmatter_pins="$(git -C "$REPO_ROOT" grep -l -E '^model:' -- .claude frontend/.claude)"
-  [ -n "$frontmatter_pins" ]
-  while IFS= read -r file_path; do
-    grep -qxF -- "$file_path" <<<"$derived" || return 1
-  done <<<"$frontmatter_pins"
-  # A second independent source: every agent frontmatter effort line too.
-  frontmatter_pins="$(git -C "$REPO_ROOT" grep -l -E '^effort:' -- .claude/agents)"
   [ -n "$frontmatter_pins" ]
   while IFS= read -r file_path; do
     grep -qxF -- "$file_path" <<<"$derived" || return 1

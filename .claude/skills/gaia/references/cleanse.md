@@ -88,7 +88,6 @@ Then read `.claude/skills/gaia/references/isolation.md` and apply it now, with `
 
 - `subagent_type`: `"general-purpose"`
 - `model`: `"sonnet"`
-- `effort`: `"medium"`
 - `description`: `"Knowledge audit (research)"`
 - `prompt`: the string below (literal, no paraphrasing):
 
@@ -114,7 +113,6 @@ Then read `.claude/skills/gaia/references/isolation.md` and apply it now, with `
 
 - `subagent_type`: `"general-purpose"`
 - `model`: `"sonnet"`
-- `effort`: `"medium"`
 - `description`: `"Knowledge audit (apply)"`
 - `prompt`: the string below (literal):
 

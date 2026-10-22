@@ -2,7 +2,6 @@
 name: audit-refuter
 description: 'Dispatched only by the code-audit-frontend member: a read-only adversarial check that tries to refute one holistic Critical or Major finding with concrete counter-evidence. Never invoked directly.'
 model: sonnet
-effort: medium
 tools: Bash, Read
 ---
 

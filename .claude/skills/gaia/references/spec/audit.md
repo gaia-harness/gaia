@@ -6,7 +6,7 @@ Contents: Gauge; 7a. Dispatch the lens auditors; 7b. Refutation pass (7b-i. Refu
 
 ## Gauge
 
-This phase complements, never replaces, step 6: the single-agent self-review is the always-on baseline; the audit is the heavyweight, ground-truth pass that runs on every spec. It dispatches the skill's own parallel `general-purpose` Agent fan-out, each call passing `effort: "medium"` (the same dispatch primitive step 6a uses), not the Workflow tool, so it is available in every context including headless and auto-mode runs.
+This phase complements, never replaces, step 6: the single-agent self-review is the always-on baseline; the audit is the heavyweight, ground-truth pass that runs on every spec. It dispatches the skill's own parallel `general-purpose` Agent fan-out (the same dispatch primitive step 6a uses), not the Workflow tool, so it is available in every context including headless and auto-mode runs.
 
 **The audit always runs; the gauge sets its intensity.** After step 6 completes, gauge the draft (below) and run the audit at the gauged tier with no prompt and no skip option, interactive or auto. The one exception is the fan-out-unavailable Fallback below, a capability limit rather than a choice.
 
@@ -27,7 +27,7 @@ Announce once, verbatim, naming each lens in full with its id code in parenthese
 
 > Dispatching adversarial SPEC-audit (<audit_intensity>): lenses <selected lens names, each with its id in parentheses>, then refutation (typically a dozen-plus agents, several minutes).
 
-Spawn **one `general-purpose` Agent per selected lens, all in parallel** (one message, one Agent tool call per lens, each passing `effort: "medium"` beside `subagent_type`): the four core lenses always, plus each specialist the gauge selected. Each agent audits the working-draft cache (`.gaia/local/cache/draft-<spec_id>.md`, the post-self-review working draft) and is dispatched per `spec/lens-dispatch.md` with the spec column of its caller slots (`<DRAFT_PATH>` = the working-draft cache, `<spec_id>`, `<repo_root>` = `$PWD`, `<LENS>` = the lens id prefix): the shared preamble, then a `LENS: <name> (id prefix <ID>)` line and the lens's focus text below. It **writes its findings to `.gaia/local/cache/audit-<spec_id>/findings/<LENS>.json`** under the findings file schema in `spec/lens-dispatch.md` (writing the file even when its findings array is empty), then returns only the contract's short summary, no finding bodies.
+Spawn **one `general-purpose` Agent per selected lens, all in parallel** (one message, one Agent tool call per lens): the four core lenses always, plus each specialist the gauge selected. Each agent audits the working-draft cache (`.gaia/local/cache/draft-<spec_id>.md`, the post-self-review working draft) and is dispatched per `spec/lens-dispatch.md` with the spec column of its caller slots (`<DRAFT_PATH>` = the working-draft cache, `<spec_id>`, `<repo_root>` = `$PWD`, `<LENS>` = the lens id prefix): the shared preamble, then a `LENS: <name> (id prefix <ID>)` line and the lens's focus text below. It **writes its findings to `.gaia/local/cache/audit-<spec_id>/findings/<LENS>.json`** under the findings file schema in `spec/lens-dispatch.md` (writing the file even when its findings array is empty), then returns only the contract's short summary, no finding bodies.
 
 The four core lenses (always dispatched; the set is chosen for low overlap, each reliably finds defects the others miss):
 
@@ -46,7 +46,7 @@ The four core lenses (always dispatched; the set is chosen for low overlap, each
 | `DOC` | wiki or docs deliverables, "points to X" pointer UATs, README or section-title citations | duplication of an authoritative source, rot-resistance, dead cross-references, pointer UATs satisfiable by a bare path drop |
 | `PERF` | data volume, loops over collections, network fan-out, caching, render or hydration paths | speculative-versus-real cost, N+1, unbounded growth, flaky warm/cold performance gates |
 
-Before dispatching the fan-out, pre-clear each `findings/<LENS>.json` (`rm -f`) for every lens about to be dispatched. After each lens finishes, never at the moment its dispatch call returns, classify its file per `## Pre-clear, classify, re-dispatch` in `spec/lens-dispatch.md`: a no-op lens is re-cleared and re-dispatched once with the same `effort: "medium"`, and a second consecutive no-op runs that lens inline on the main thread. A specialist lens the gauge did not select for this dispatch is never issued and is recorded `not_applicable`. Append one `coverage.jsonl` record (`phase: "lens"`, `lens: "<LENS>"`, `disposition: "first_pass"|"not_applicable"`) per in-scope lens.
+Before dispatching the fan-out, pre-clear each `findings/<LENS>.json` (`rm -f`) for every lens about to be dispatched. After each lens finishes, never at the moment its dispatch call returns, classify its file per `## Pre-clear, classify, re-dispatch` in `spec/lens-dispatch.md`: a no-op lens is re-cleared and re-dispatched once, and a second consecutive no-op runs that lens inline on the main thread. A specialist lens the gauge did not select for this dispatch is never issued and is recorded `not_applicable`. Append one `coverage.jsonl` record (`phase: "lens"`, `lens: "<LENS>"`, `disposition: "first_pass"|"not_applicable"`) per in-scope lens.
 
 **The inline-lens exception.** A lens that hit a second no-op ran inline, so it produced its finding bodies on the main thread, auto mode included. It is the one place a finding body reaches main outside the two interactive carve-outs (6b, 7c); write that lens's file and carry on with only its ids, severities, and titles, exactly as for a dispatched lens.
 
@@ -64,7 +64,7 @@ From the 7a short summaries, main selects every **material** finding id (severit
 
 The cap bounds the dispatch count by the lens count however many findings the lenses raise; high volume is also where per-finding refutation buys least, since a defect several lenses raised independently is already cross-checked.
 
-Main dispatches each refuter as a `general-purpose` Agent with `effort: "medium"` on the call, keyed by `{ finding_id, findings_file, refuter_lens? }`, **no finding fields interpolated**, where `findings_file` is the lens's `.gaia/local/cache/audit-<spec_id>/findings/<LENS>.json` and `verdict_file` is the refuter's output path (`verdicts/<finding-id>.json` for Standard, `verdicts/<finding-id>-<slug-lens>.json` for Deep, slug per the frozen mapping). The refuter reads the finding body from the file itself. Before dispatch, pre-clear `<verdict_file>` (`rm -f`) so its presence is a fresh-write signal.
+Main dispatches each refuter as a `general-purpose` Agent, keyed by `{ finding_id, findings_file, refuter_lens? }`, **no finding fields interpolated**, where `findings_file` is the lens's `.gaia/local/cache/audit-<spec_id>/findings/<LENS>.json` and `verdict_file` is the refuter's output path (`verdicts/<finding-id>.json` for Standard, `verdicts/<finding-id>-<slug-lens>.json` for Deep, slug per the frozen mapping). The refuter reads the finding body from the file itself. Before dispatch, pre-clear `<verdict_file>` (`rm -f`) so its presence is a fresh-write signal.
 
 Refuter prompt (interpolate `<finding_id>`, `<findings_file>`, `<verdict_file>`, `<DRAFT_PATH>`, `<repo_root>`; no finding fields inline):
 
@@ -76,7 +76,7 @@ Refuter prompt (interpolate `<finding_id>`, `<findings_file>`, `<verdict_file>`,
 >
 > **Write** your verdict to `<verdict_file>` under the verdict schema below, then **return** only the thin verdict line `{ "id": "<finding_id>", "verdict": "confirmed"|"partial"|"refuted", "corrected_severity": "...", "disposition": "plan_directive"|"spec_defect" }`.
 
-A batched refuter is keyed by `{ finding_ids, findings_file }`, is dispatched the same way (a `general-purpose` Agent with `effort: "medium"`), and uses the same prompt with three substitutions: it verifies every id in `<finding_ids>` rather than one, it writes one verdict file per id to `verdicts/<finding-id>.json` (the Standard naming, on either tier), and it returns a JSON array of thin verdict lines, one per id. Pre-clear every one of those verdict files before dispatch. Main counts the returned lines against the batch's ids, re-dispatches the batch once for any id missing a line, and carries an id still missing one forward unrefuted at its auditor severity.
+A batched refuter is keyed by `{ finding_ids, findings_file }`, is dispatched the same way (a `general-purpose` Agent), and uses the same prompt with three substitutions: it verifies every id in `<finding_ids>` rather than one, it writes one verdict file per id to `verdicts/<finding-id>.json` (the Standard naming, on either tier), and it returns a JSON array of thin verdict lines, one per id. Pre-clear every one of those verdict files before dispatch. Main counts the returned lines against the batch's ids, re-dispatches the batch once for any id missing a line, and carries an id still missing one forward unrefuted at its auditor severity.
 
 Verdict schema: the **file** the refuter writes to `verdicts/<finding-id>.json` (Standard) or `verdicts/<finding-id>-<slug-lens>.json` (Deep). `disposition` is consulted only for surviving findings:
 
@@ -94,7 +94,7 @@ Append one `coverage.jsonl` record (`phase: "refuter"`, `disposition: "first_pas
 
 ### 7b-ii. Completeness critic
 
-**Deep only, and skipped when 7b-i ran batched.** The cap fires on finding volume, and that much volume across low-overlap lenses already supplies the gap-hunting the critic adds; when skipped, append its coverage record with `disposition: "not_applicable"` and do not run 7b-iii. Otherwise, after the refutation pass, dispatch one more `general-purpose` Agent, with `effort: "medium"` on the call, over the draft plus the surviving findings, and ask what the lenses missed: an unverified load-bearing claim, an untested UAT, a `success_criteria` with no covering UAT, a consumer or blast-radius site the SPEC overlooked. Before dispatch, pre-clear `.gaia/local/cache/audit-<spec_id>/findings/completeness.json`.
+**Deep only, and skipped when 7b-i ran batched.** The cap fires on finding volume, and that much volume across low-overlap lenses already supplies the gap-hunting the critic adds; when skipped, append its coverage record with `disposition: "not_applicable"` and do not run 7b-iii. Otherwise, after the refutation pass, dispatch one more `general-purpose` Agent over the draft plus the surviving findings, and ask what the lenses missed: an unverified load-bearing claim, an untested UAT, a `success_criteria` with no covering UAT, a consumer or blast-radius site the SPEC overlooked. Before dispatch, pre-clear `.gaia/local/cache/audit-<spec_id>/findings/completeness.json`.
 
 Dispatch prompt (interpolate `<DRAFT_PATH>`, `<spec_id>`, `<surviving_findings>` = the 7b-i survivor ids/severities/titles, no bodies):
 
@@ -106,13 +106,13 @@ Dispatch prompt (interpolate `<DRAFT_PATH>`, `<spec_id>`, `<surviving_findings>`
 >
 > **Return** only the short summary, no finding bodies: `{ "dimension": "completeness", "counts": { "critical": <int>, "major": <int>, "minor": <int> }, "findings": [ { "id": "CPL-NNN", "severity": "...", "title": "..." } ] }`.
 
-It **writes its fresh findings to `.gaia/local/cache/audit-<spec_id>/findings/completeness.json`** (the findings file schema in `spec/lens-dispatch.md`) and returns the short summary above; its bodies never flow into main. After it finishes, classify `findings/completeness.json` the same way as a lens file (`## Pre-clear, classify, re-dispatch` in `spec/lens-dispatch.md`): re-dispatch once on a no-op (same `effort: "medium"`), and run the critic inline on a second.
+It **writes its fresh findings to `.gaia/local/cache/audit-<spec_id>/findings/completeness.json`** (the findings file schema in `spec/lens-dispatch.md`) and returns the short summary above; its bodies never flow into main. After it finishes, classify `findings/completeness.json` the same way as a lens file (`## Pre-clear, classify, re-dispatch` in `spec/lens-dispatch.md`): re-dispatch once on a no-op, and run the critic inline on a second.
 
 Append one `coverage.jsonl` record (`phase: "completeness"`, `disposition: "first_pass"|"not_applicable"`).
 
 ### 7b-iii. Completeness-critic refuter
 
-Any fresh findings from 7b-ii run through a single-refuter round, dispatching each refuter as a `general-purpose` Agent with `effort: "medium"`, under the **same** refuter prompt, verdict schema, and naming contracts as 7b-i (its verdicts write to `verdicts/<finding-id>.json`); merge the survivors. Like 7b-i, pre-clear `verdicts/<finding-id>.json` before dispatch.
+Any fresh findings from 7b-ii run through a single-refuter round, dispatching each refuter as a `general-purpose` Agent, under the **same** refuter prompt, verdict schema, and naming contracts as 7b-i (its verdicts write to `verdicts/<finding-id>.json`); merge the survivors. Like 7b-i, pre-clear `verdicts/<finding-id>.json` before dispatch.
 
 Append one `coverage.jsonl` record (`phase: "refuter"`, `disposition: "first_pass"|"not_applicable"`).
 
@@ -141,7 +141,7 @@ Route each surviving finding by its `disposition`, read from the **thin verdict 
 
 **Auto-mode per rule 12.** No reads; **no finding body reaches main**. The transcript carries ids, severities, titles, verdicts, and dispositions only. Unambiguous spec-defect ids apply (added to the decision list as `apply`); a defect with more than one defensible repair becomes a deferred-clarification note in `clarifications.deferred[]` with rationale `"Auto-mode audit, defer for human review."` and is not applied. Never revert intentional clarify-loop evolution.
 
-**Fold through the delegated applier.** Dispatch the applier, a `general-purpose` Agent with `effort: "medium"` on the call (see "Audit cache + delegated fold" in `spec.md`) with the inputs that primitive enumerates, taking `${SPEC_DIR}` from 7c above. It reads the draft plus every findings and verdict file plus the decision list, folds every spec-defect fix in **one Write**, and **writes `AUDIT.md` itself** (7d) at the folder path it was handed, from the on-disk findings and verdicts; main never loads a finding body to produce `AUDIT.md`. **Fallback:** if subagent dispatch is unavailable, main folds inline itself, writing `AUDIT.md` at that same resolved path.
+**Fold through the delegated applier.** Dispatch the applier, a `general-purpose` Agent (see "Audit cache + delegated fold" in `spec.md`) with the inputs that primitive enumerates, taking `${SPEC_DIR}` from 7c above. It reads the draft plus every findings and verdict file plus the decision list, folds every spec-defect fix in **one Write**, and **writes `AUDIT.md` itself** (7d) at the folder path it was handed, from the on-disk findings and verdicts; main never loads a finding body to produce `AUDIT.md`. **Fallback:** if subagent dispatch is unavailable, main folds inline itself, writing `AUDIT.md` at that same resolved path.
 
 Before dispatching, finalize `.gaia/local/cache/audit-<spec_id>/coverage.jsonl`, one thin JSON-Lines record per in-scope dispatch resolved so far, `{ "phase": ..., "lens": ..., "disposition": "first_pass"|"not_applicable" }`, carrying no finding body (this is the applier's data source for `## Coverage` in 7d; the findings/verdict files cannot encode a disposition).
 

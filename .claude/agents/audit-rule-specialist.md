@@ -2,7 +2,6 @@
 name: audit-rule-specialist
 description: 'Dispatched only by the code-audit-frontend member: a read-only line-level rule check of one role over the files it is handed. Never invoked directly.'
 model: haiku
-effort: medium
 tools: Bash, Read
 omitClaudeMd: true
 ---

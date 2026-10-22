@@ -2,7 +2,6 @@
 name: audit-loop-unit
 description: 'Dispatched only by the PR Merge Workflow main thread to run audit rounds off-thread and return a thin unit report. Never invoked directly.'
 model: opus
-effort: medium
 tools: Agent, Bash, Monitor, Read, SendMessage, Write
 ---
 
@@ -18,7 +17,7 @@ Pass `Working root: <abs>` verbatim into every member dispatch, with the expecte
 
 ## First actions
 
-1. Confirm the Agent tool is available to you before round 1. Absent: write the unit file with `stop_reason: "needs-human"` and a `stop_detail` that names the missing Agent tool, Claude Code 2.1.292 or later, and the upgrade step (`claude update`, then relaunch the session), and return.
+1. Confirm the Agent tool is available to you before round 1. Absent: write the unit file with `stop_reason: "needs-human"` and a `stop_detail` that names the missing Agent tool, Claude Code 2.1.287 or later, and the upgrade step (`claude update`, then relaunch the session), and return.
 2. Read K from `.gaia/scripts/context-checkpoint-lib.sh` (`GAIA_CONTEXT_UNIT_ROUNDS`). Never hard-code it.
 3. Recovery checks before opening a round: a dirty tree, an unpushed commit, and a `baseline-<r>.json` in `<run>` with no `fixer-<r>-audit.json`. For the last, run the pinned verifier's `drift` from `<run>/verifier-bin-<r>/` and stop `needs-human` when it exits 1; otherwise follow the page's resume rule.
 4. Republish the `## Audit rounds` record (`audit-loop-eval.sh record-values` into `audit-loop-record.sh`) before round 1.
@@ -42,7 +41,7 @@ A member dispatch is denied with text that carries a `BLOCKED:` marker after a h
 | `BLOCKED: audit dispositions` | `dispositions-check-failed` (no commit for the round) |
 | any other `BLOCKED:` | `failure` |
 
-A nested Agent call that errors with no `BLOCKED:` anywhere is `failure`. The one exception is the fixer dispatch: when it is rejected with an error that names `effort` or an unknown or unrecognized parameter, stop `needs-human` with a `stop_detail` that names Claude Code 2.1.292 or later and the upgrade step (`claude update`, then relaunch the session), and never retry the fixer without `effort`. The round's member wave has already run, so the bound hook has counted that round; after the upgrade, the resumed unit's recovery check (a baseline with no fixer artifact) re-dispatches the fixer with `effort`.
+A nested Agent call that errors with no `BLOCKED:` anywhere is `failure`.
 
 ## Routing each member
 
@@ -113,6 +112,6 @@ Write `<run>/unit-<u>.json` the way "Writing into `<run>`" above says, and read 
 
 ## Requirements
 
-Claude Code 2.1.292 or later: subagent nesting arrived in 2.1.287, and the fixer dispatch's per-call `effort` parameter needs 2.1.292. Members' own specialists and refuters run one level deeper than you; no spawn-depth variable is set.
+Claude Code 2.1.287 or later: subagent nesting arrived in 2.1.287. Members' own specialists and refuters run one level deeper than you; no spawn-depth variable is set.
 
 How your run ends: a reply with no tool call ends it, and the orchestrator reads whatever you returned as your finished result. Do not end on a summary that announces a next step, an offer to continue, a list of questions none of which blocks the work, or a progress report because a milestone is done; take the next step instead. Stop only when the task is complete, or when something you cannot resolve blocks it, and then say which.

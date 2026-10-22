@@ -33,13 +33,11 @@ frontmatter_matches() {
 
 SPECIALIST_FRONTMATTER='name: audit-rule-specialist
 model: haiku
-effort: medium
 tools: Bash, Read
 omitClaudeMd: true'
 
 REFUTER_FRONTMATTER='name: audit-refuter
 model: sonnet
-effort: medium
 tools: Bash, Read'
 
 # bats test_tags=whole-tree

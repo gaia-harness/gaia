@@ -72,7 +72,6 @@ Spawn:
 
 - `subagent_type`: `"general-purpose"`
 - `model`: `"sonnet"`
-- `effort`: `"medium"`
 - `description`: `"Wiki sync"`
 - `prompt`: the string below (literal, no paraphrasing):
 
@@ -90,7 +89,6 @@ Spawn:
 
 - `subagent_type`: `"general-purpose"`
 - `model`: `"sonnet"`
-- `effort`: `"medium"`
 - `description`: `"Wiki consolidate (detection)"`
 - `prompt`: the string below (literal):
 
@@ -136,7 +134,6 @@ Spawn:
 
 - `subagent_type`: `"general-purpose"`
 - `model`: `"haiku"`
-- `effort`: `"medium"`
 - `description`: `"Wiki lint"`
 - `prompt`: the string below (literal):
 

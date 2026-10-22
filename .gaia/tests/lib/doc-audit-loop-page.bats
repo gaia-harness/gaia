@@ -197,7 +197,7 @@ anchors_resolve() {
   grep -qF -- 'one blocking Monitor until-loop on `<RUN_FOLDER>/unit-<u>.json`' <<<"$section_text" || return 1
   grep -qF -- 'audit-noop-detect.sh --shape agent-report-file --path <RUN_FOLDER>/unit-<u>.json --report-key rounds --min-count 1' <<<"$section_text" || return 1
   grep -qF -- 'subagent_type: "audit-loop-unit"' <<<"$section_text" || return 1
-  grep -qF -- 'Claude Code 2.1.292 or later' <<<"$section_text" || return 1
+  grep -qF -- 'Claude Code 2.1.287 or later' <<<"$section_text" || return 1
 }
 
 @test "the unit section maps every stop_reason and every deny class the agent classifies" {
@@ -209,7 +209,7 @@ anchors_resolve() {
   grep -qF -- 'PreToolUse:Agent hook error: BLOCKED: ...' <<<"$section_text" || return 1
   grep -qF -- '`BLOCKED: audit checkpoint` maps to `checkpoint-deny`, `BLOCKED: audit window` to `window-end`, `BLOCKED: audit dispositions` to `dispositions-check-failed`, and any other `BLOCKED:` to `failure`' <<<"$section_text" || return 1
   grep -qF -- "audit-loop-bound.sh\`'s header owns the deny text" <<<"$section_text" || return 1
-  grep -qF -- 'A unit that finds the Agent tool absent stops `needs-human` and its `stop_detail` names Claude Code 2.1.292 or later and the upgrade step (`claude update`, then relaunch the session).' <<<"$section_text" || return 1
+  grep -qF -- 'A unit that finds the Agent tool absent stops `needs-human` and its `stop_detail` names Claude Code 2.1.287 or later and the upgrade step (`claude update`, then relaunch the session).' <<<"$section_text" || return 1
   ! grep -qF -- 'nesting-''unavailable' <<<"$section_text" || return 1
   grep -qF -- 'audit-dispositions-check.sh check-all --root <RESOLVED_ROOT> --run-folder <RUN_FOLDER>' <<<"$section_text" || return 1
 }

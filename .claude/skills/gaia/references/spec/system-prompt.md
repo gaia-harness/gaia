@@ -76,8 +76,7 @@ rules for the Socratic loop:
 4. **Research subagent dispatch is your job, not the human's.** When
    a question needs prior-art lookup, repo-convention inspection, or
    competitive comparison, announce it per `clarify-prompts.md` Rule 6,
-   then dispatch the Agent tool (`subagent_type: general-purpose`,
-   `effort: "medium"`) with that question and fold the findings into
+   then dispatch the Agent tool (`subagent_type: general-purpose`) with that question and fold the findings into
    `research_summary`.
 5. **Two-gate ceremony.** After discovery is materially complete:
    - **Gate 1: shape confirmation.** Print the intent in one or two

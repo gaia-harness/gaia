@@ -18,7 +18,7 @@ Choose the model for the execution agent:
 - Compare `LATEST` major vs `BASELINE` major (leading integer).
 - **Major bump** → spawn an **Opus agent** (`model: "opus"`).
 - **Minor or patch bump** → spawn a **Sonnet agent** (`model: "sonnet"`).
-- Either way, pass `effort: "medium"` on the Agent call. Every judgment-only agent below takes the same model and effort.
+- Either way, pass no `effort` parameter: the agent runs at the session effort. Every judgment-only agent below takes the same model.
 
 ### Prepare the run directory
 
@@ -94,7 +94,7 @@ Only when `<k>` is 2 or more. For each later chunk `<c>` (2 to `<k>`), clear its
 rm -f <run dir>/judgment-<c>.json
 ```
 
-Then dispatch a judgment-only agent, same model and effort, the chunk agents in parallel with each other. Its prompt passes the execution agent's inputs plus `<run dir>/chunk-<c>.txt` as the only paths it judges, and tells it: read the three snapshot files in full and follow the snapshot `merge-execution.md`'s judgment-only agent section; write `<run dir>/judgment-<c>.json` with Bash as a top-level JSON array holding one entry per path in its chunk; write each clean merge to its `candidates/<path>.auto` file; never write the acting tree; ask nothing; return only a thin digest. Classify it once it has finished, with `<m>` the line count `wc -l <run dir>/chunk-<c>.txt` prints and no `--report-key`, since the file is a top-level array:
+Then dispatch a judgment-only agent, same model, the chunk agents in parallel with each other. Its prompt passes the execution agent's inputs plus `<run dir>/chunk-<c>.txt` as the only paths it judges, and tells it: read the three snapshot files in full and follow the snapshot `merge-execution.md`'s judgment-only agent section; write `<run dir>/judgment-<c>.json` with Bash as a top-level JSON array holding one entry per path in its chunk; write each clean merge to its `candidates/<path>.auto` file; never write the acting tree; ask nothing; return only a thin digest. Classify it once it has finished, with `<m>` the line count `wc -l <run dir>/chunk-<c>.txt` prints and no `--report-key`, since the file is a top-level array:
 
 ```bash
 bash <main checkout path>/.gaia/scripts/audit-noop-detect.sh --shape agent-report-file --path <run dir>/judgment-<c>.json --expect-count <m>

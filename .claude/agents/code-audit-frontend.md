@@ -2,7 +2,6 @@
 name: code-audit-frontend
 description: 'Dispatched only by the audit loop as the frontend member of the Code Audit Team: reviews code for security, performance, architecture and defects beyond lint and types. Never invoked directly.'
 model: opus
-effort: medium
 tools: Agent, Bash, Read, Write
 color: orange
 ---
