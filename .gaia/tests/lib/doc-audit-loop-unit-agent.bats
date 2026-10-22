@@ -139,12 +139,7 @@ frontmatter_tools_are_allowlist() {
 }
 
 @test "agent stops needs-human naming the Agent tool, the version floor and the upgrade step when the Agent tool is absent" {
-  assert_pinned 'Absent: write the unit file with `stop_reason: "needs-human"` and a `stop_detail` that names the missing Agent tool, Claude Code 2.1.292 or later, and the upgrade step (`claude update`, then relaunch the session), and return.'
-}
-
-@test "agent stops needs-human on a fixer dispatch rejected over effort and never retries it without effort" {
-  assert_pinned 'The one exception is the fixer dispatch: when it is rejected with an error that names `effort` or an unknown or unrecognized parameter, stop `needs-human` with a `stop_detail` that names Claude Code 2.1.292 or later and the upgrade step (`claude update`, then relaunch the session)'
-  assert_pinned 'and never retry the fixer without `effort`.'
+  assert_pinned 'Absent: write the unit file with `stop_reason: "needs-human"` and a `stop_detail` that names the missing Agent tool, Claude Code 2.1.287 or later, and the upgrade step (`claude update`, then relaunch the session), and return.'
 }
 
 @test "agent reads the closing field and runs the closing round with no fixer" {

@@ -2,7 +2,6 @@
 name: code-audit-github-workflows
 description: 'Dispatched only by the audit loop as the workflow-YAML member of the Code Audit Team: read-only audit for supply-chain, injection, permission and secret defects. Never invoked directly.'
 model: opus
-effort: medium
 tools: Bash, Read
 color: purple
 ---

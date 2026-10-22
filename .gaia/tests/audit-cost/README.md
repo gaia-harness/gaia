@@ -2,7 +2,7 @@
 
 Maintainer-only (all of `.gaia/tests` is release-excluded). It measures what a Code Audit Team dispatch costs before and after a change to the team's definitions: first-call context, per-dispatch cost and wall time, round 1 only. It mines Claude Code transcripts, prepares isolated scratch trees, and drives the replays and first-call probes. The probe and replay drivers spend tokens and need Claude auth, so a maintainer runs them by hand under a spend cap; nothing runs them in CI. The bats suite (`.gaia/tests/lib/audit-cost-measure.bats`) exercises everything else against committed fixtures and stubs.
 
-Savings were probed on Claude Code 2.1.304. A client at 2.1.292 or later still runs every definition correctly without the saving.
+Savings were probed on Claude Code 2.1.304. A client at 2.1.287 or later still runs every definition correctly without the saving.
 
 ## Files
 

@@ -2,7 +2,6 @@
 name: fitness-judge
 description: 'Dispatched only by /gaia-fitness: makes advisory judgments over one input file and replies with one JSON array. Never invoked directly.'
 model: sonnet
-effort: medium
 tools: Read
 omitClaudeMd: true
 ---

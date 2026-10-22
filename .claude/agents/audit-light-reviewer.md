@@ -2,7 +2,6 @@
 name: audit-light-reviewer
 description: 'Dispatched only by the audit-loop unit on a Light route. Never invoked directly.'
 model: sonnet
-effort: medium
 tools: Read
 omitClaudeMd: true
 ---

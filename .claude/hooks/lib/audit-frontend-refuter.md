@@ -10,7 +10,7 @@ A refuter overturns a finding only with **concrete counter-evidence**, the mirro
 
 ## Dispatch
 
-One `Agent` call per surviving finding, in parallel from one message, with `subagent_type: "audit-refuter"` and `description: "refute <path>:<line>"`. Pass no `model` and no `effort` parameter: the type definition owns both. The prompt:
+One `Agent` call per surviving finding, in parallel from one message, with `subagent_type: "audit-refuter"` and `description: "refute <path>:<line>"`. Pass no `model` and no `effort` parameter: the type definition owns the model, and the refuter runs at the session effort. The prompt:
 
 ```
 Finding:

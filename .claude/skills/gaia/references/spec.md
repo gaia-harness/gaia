@@ -27,7 +27,7 @@ Hard rules in auto mode:
 4. **Closed-set Socratic questions pick the Recommended option.** For every step-5 `AskUserQuestion` that would normally fire, the agent selects the option that step 5a's spec marks "Recommended FIRST", the PO's best-judgment candidate. No `AskUserQuestion` tool call is made. The selected answer is folded into `clarifications.answered[]` exactly as if the user had picked it.
 5. **Open-ended Socratic questions are answered by the agent.** Apply the same coach-tone judgment the human would receive, then commit the answer. Fold into `clarifications.answered[]`.
 6. **Per-topic exhaustion + revisit checkpoints auto-advance.** Step 5d always picks "Move to <next topic>". The per-topic revisit counter still increments but the 3-revisit prompt auto-picks "Settle on the recommended option".
-7. **Research subagents still dispatch.** Auto mode does not skip research, it skips human prompting. When step 5e would dispatch a `general-purpose` Agent, dispatch it normally, with `effort: "medium"` on the Agent call. On `inconclusive`/`error`/`contradictory` outcomes that would normally re-prompt the user, the agent picks the most plausible candidate and folds it with a note in `research_summary` flagging the uncertainty.
+7. **Research subagents still dispatch.** Auto mode does not skip research, it skips human prompting. When step 5e would dispatch a `general-purpose` Agent, dispatch it normally. On `inconclusive`/`error`/`contradictory` outcomes that would normally re-prompt the user, the agent picks the most plausible candidate and folds it with a note in `research_summary` flagging the uncertainty.
 8. **Self-review critical and major findings auto-apply.** Step 6b's gated branch (critical and major) normally surfaces the findings to the user as one review list; in auto mode, apply the `suggested_fix` and append a note to `clarifications.deferred[]` summarizing the finding so a reviewer can audit later. If the finding is `kind: "drift"` or `"scope_change"` and the change came from a clarify answer the agent itself just made, keep the clarify answer rather than reverting to the gate-1 shape.
 9. **Pending clarifications auto-defer.** Step 6c's per-item prompt always picks "Defer with rationale". The rationale is: `"Auto-mode session, defer for human review."` This unblocks save without forcing the agent to fabricate answers it does not have evidence for.
 10. **Lint thrash escalates to defer, not step-back.** Step 10's cycle-3 prompt auto-picks "Defer remaining findings" so the SPEC saves with the deferred-clarifications block populated. Step-back-to-gate-2 in auto mode would loop indefinitely.
@@ -60,8 +60,6 @@ Every ledger and lock library this skill invokes takes the current tree as its `
 `bash .gaia/scripts/notebook/notebook-lib.sh path spec <SPEC_ID>` is the resolver every one of those sites calls, and it fails closed: it prints nothing and exits non-zero when it cannot resolve a main checkout or the notebook is not ready (the one-time move is pending). **This contract governs every SPEC-folder site below.** At each, an empty result stops the step and is surfaced, never replaced by a relative path: from a linked worktree a relative path names a tree with no SPECs, and an empty `${SPEC_FOLDER}` expands to a path at the filesystem root.
 
 **Tool-choice contract (governs every write site below).** From the main checkout the ordinary `Edit`/`Write` tools write a main-anchored path. From a linked worktree they cannot: the harness refuses a `file_path` resolving to the shared checkout, and the worktree's one `.notebook` symlink to the main checkout makes both spellings land on that refused target. Write every file this skill directs into the resolved SPEC folder (`AUDIT.md`, `SUMMARY.md`, and any sibling; step 9's script writes `SPEC.md` itself) at its main-checkout absolute path by writing it into the session scratchpad and copying it in with one plain `cp` (a heredoc is refused there too; `.claude/doctrine/execution.md`, `## Run folder`), then read it back and confirm both its content and its location before continuing; the read-back is what catches a write that landed in the wrong tree. Keep that fallback to these main-anchored paths: a `Bash` redirect is never the way to write into another checkout where the edit tools already work, so use the edit tools there. `.claude/skills/gaia/references/plan/planner.md` states the same rule for the plan ledger.
-
-A dispatch rejected with an error that names `effort` or an unknown or unrecognized parameter means Claude Code is older than 2.1.292: stop, tell the user to run `claude update` and relaunch, and never re-dispatch without `effort`.
 
 ### Session-shape cache (`spec-session-<spec_id>.json`)
 
@@ -118,7 +116,7 @@ The self-review (step 6) and adversarial audit (step 7) route their finding, ver
 
 
 
-**Delegated fold.** At a delegated fold checkpoint the fold is performed by a single-writer subagent, not by main; it replaces an in-main fold at that checkpoint. Main dispatches a `general-purpose` Agent (the **applier**), passing `effort: "medium"` on the Agent call, with five inputs: the draft path (`.gaia/local/cache/draft-<spec_id>.md`), the audit-cache directory (`.gaia/local/cache/audit-<spec_id>/`), the main-anchored SPEC folder `${SPEC_DIR}` that main resolved for it (7c), the tool-choice contract from Operational primitives, which governs the applier's own write into that handed folder, and the thin **decision list**:
+**Delegated fold.** At a delegated fold checkpoint the fold is performed by a single-writer subagent, not by main; it replaces an in-main fold at that checkpoint. Main dispatches a `general-purpose` Agent (the **applier**) with five inputs: the draft path (`.gaia/local/cache/draft-<spec_id>.md`), the audit-cache directory (`.gaia/local/cache/audit-<spec_id>/`), the main-anchored SPEC folder `${SPEC_DIR}` that main resolved for it (7c), the tool-choice contract from Operational primitives, which governs the applier's own write into that handed folder, and the thin **decision list**:
 
     [ { "id": "<finding-id>", "action": "apply"|"keep"|"revise", "revision": "<free text, optional>" } ]
 
@@ -296,7 +294,7 @@ The coverage scan stops the loop; the question ceiling bounds it at 10 substanti
 
 ### 6. Self-review
 
-After the Socratic loop settles, dispatch the GAIA self-review as a `general-purpose` Agent with `effort: "medium"` on the call, so the heavy reads stay in fresh context and only structured findings flow back. Read `.claude/skills/gaia/references/spec/self-review-dispatch.md` now, whole, and run 6a to 6c; it returns here at step 7.
+After the Socratic loop settles, dispatch the GAIA self-review as a `general-purpose` Agent, so the heavy reads stay in fresh context and only structured findings flow back. Read `.claude/skills/gaia/references/spec/self-review-dispatch.md` now, whole, and run 6a to 6c; it returns here at step 7.
 
 ### 7. Adversarial SPEC-audit
 

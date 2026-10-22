@@ -22,7 +22,7 @@ A deterministic `gaia update-deps advisories` run is the oracle for known-vulner
 
 ## Tools allowlist
 
-Each audit agent carries a `tools:` allowlist in its definition frontmatter and names any check it skipped for want of a tool. On Claude Code 2.1.304 the allowlist also drops the skill listing and the deferred-tool list from the agent's first call; Claude Code 2.1.292 or later runs every definition, and an older client simply keeps the larger prefix. The definitions in `.claude/agents/` hold the lists.
+Each audit agent carries a `tools:` allowlist in its definition frontmatter and names any check it skipped for want of a tool. On Claude Code 2.1.304 the allowlist also drops the skill listing and the deferred-tool list from the agent's first call; Claude Code 2.1.287 or later runs every definition, and an older client simply keeps the larger prefix. The definitions in `.claude/agents/` hold the lists.
 
 ### Measured dispatch cost
 
