@@ -82,6 +82,14 @@ uat_lib_canonical_text() {
   ' | uat_lib_whitespace_text
 }
 
+# Status 0 when the text carries a working-document id, which a rendered spec
+# may not hold. The renderer refuses on it and the SPEC lint fails on it, so a
+# UAT is reworded while /gaia-spec runs rather than forcing a reopen at render
+# time.
+uat_lib_carries_working_document_id() {
+  grep -qiE '(SPEC|UAT|PLAN)-[0-9]+' <<<"${1:-}"
+}
+
 # Prints the frontmatter between the first two `---` lines; status 2 when the
 # block never closes.
 _uat_lib_frontmatter() {

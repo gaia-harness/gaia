@@ -92,7 +92,7 @@ routing_rows=$(uat_lib_parse_routing "$routing_path") || exit 2
 e2e_rows=''
 id_refusals=0
 refuse_working_document_id() {
-  if grep -qiE '(SPEC|UAT|PLAN)-[0-9]+' <<<"$3"; then
+  if uat_lib_carries_working_document_id "$3"; then
     printf 'uat-write.sh: %s %s carries a working-document id, which a rendered spec may not hold. Next step: reopen the SPEC and describe the behavior without the id.\n' "$1" "$2" >&2
     id_refusals=$((id_refusals + 1))
   fi
