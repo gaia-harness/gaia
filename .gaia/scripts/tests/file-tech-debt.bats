@@ -454,10 +454,23 @@ CASES
   jq -e '.[0].body | contains("<!-- gaia-debt-key: v1 class=holistic/swallowed-error path=app/a.ts line=10 -->")' "$STUB/open.json" >/dev/null
 }
 
-@test "an open issue carrying the key is recorded as filed with its number and nothing is created" {
+@test "filing the same key twice records the second call as matched, never as a new filing" {
+  run_file
+  [ "$status" -eq 0 ]
+  [ "$output" = "filed 101" ]
+  run_file
+  [ "$status" -eq 0 ]
+  [ "$output" = "matched 101" ]
+  [ "$(grep -c '^issue create' "$STUB/log")" -eq 1 ]
+  [ "$(jq -r '.outcome' "$OUTCOMES" | paste -sd, -)" = "filed,matched" ]
+  [ "$(jq -r '.issue' "$OUTCOMES" | paste -sd, -)" = "101,101" ]
+}
+
+@test "an open issue carrying the key is recorded as matched with its number and nothing is created" {
   printf '[{"number":7,"body":"<!-- gaia-debt-key: v1 class=holistic/other path=app/a.ts line=10 -->"}]\n' >"$STUB/open.json"
   run_file
-  [ "$output" = "filed 7" ]
+  [ "$output" = "matched 7" ]
+  [ "$(jq -r .outcome "$OUTCOMES")" = matched ]
   grep -q '^issue create' "$STUB/log" && return 1
   true
 }
@@ -465,7 +478,7 @@ CASES
 @test "a declined-closed match is not filed again and records the matched number" {
   printf '[{"number":9,"body":"<!-- gaia-debt-key: v1 class=holistic/swallowed-error path=app/a.ts line=10 -->","labels":[{"name":"wontfix"}],"stateReason":"NOT_PLANNED"}]\n' >"$STUB/closed.json"
   run_file
-  [ "$output" = "filed 9" ]
+  [ "$output" = "matched 9" ]
   grep -q '^issue create' "$STUB/log" && return 1
   true
 }
