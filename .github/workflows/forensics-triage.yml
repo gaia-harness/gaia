@@ -734,6 +734,11 @@ jobs:
         # broader pnpm-provisioning reasoning.
         timeout-minutes: 5
         uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+        # npm's own 300000 ms fetch timeout equals this step's cap, so a hung
+        # fetch would red the step before npm retries it; the shared setup
+        # action carries the same bound and states why.
+        env:
+          npm_config_fetch_timeout: '60000'
 
       - name: Setup Node
         if: |
