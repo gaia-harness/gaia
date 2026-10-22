@@ -420,7 +420,7 @@ _check_outcomes() {
     | [.member, .finding_class, .path, .line] as $key | ({member, finding_class, path, line} | tojson) as $key_json
     | ([$outcomes[] | select(.key == $key)] | last) as $outcome
     | if $outcome == null then "violation: outcome-missing \($key_json)"
-      elif ($outcome.outcome | IN("filed", "diverted", "absent", "transient")) then empty
+      elif ($outcome.outcome | IN("filed", "matched", "diverted", "absent", "transient")) then empty
       else "violation: outcome-failed \($key_json)" end' "$dispositions_file" 2>/dev/null)" \
     || { _error "unparseable $dispositions_file or $outcome_file"; return 3; }
   [ -z "$violations" ] && return 0

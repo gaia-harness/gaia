@@ -30,14 +30,16 @@
 #   PEM private-key header), 0 with `clear` otherwise.
 # file: appends exactly one JSON line to --outcome-file:
 #   {"key":{"member","finding_class","path","line"},"disposition":"file|divert",
-#    "outcome":"filed|diverted|absent|transient|failed","issue":<int|null>,
+#    "outcome":"filed|matched|diverted|absent|transient|failed","issue":<int|null>,
 #    "record":"<path|null>"}
-#   and prints one stdout line: `filed <n>`, `diverted <count> <record-path>`,
-#   `absent`, `transient` or `failed <reason>`. A `verify-after-file-*` reason
-#   means the create itself succeeded and the issue may exist; the caller
-#   reconciles by dedup before any retry. Exit 0 for filed, diverted,
-#   absent and transient; 1 for failed; 2 usage; 3 unreadable input or a
-#   missing tool (jq, a sha256 tool).
+#   and prints one stdout line: `filed <n>`, `matched <n>`,
+#   `diverted <count> <record-path>`, `absent`, `transient` or
+#   `failed <reason>`. `matched <n>` means dedup found issue <n> already
+#   carrying the key and nothing was created; it is never a new filing. A
+#   `verify-after-file-*` reason means the create itself succeeded and the
+#   issue may exist; the caller reconciles by dedup before any retry. Exit 0
+#   for filed, matched, diverted, absent and transient; 1 for failed; 2 usage;
+#   3 unreadable input or a missing tool (jq, a sha256 tool).
 #   The outcome line keeps the key fields so the caller can reconcile it with
 #   its dispositions; it never carries a title, failure mode, fix or trigger.
 #   The outcome file lives under .gaia/local on the one machine.
@@ -87,16 +89,16 @@
 #
 # Transient retention: a non-security finding whose outcome is `transient` is
 # copied byte for byte to <dirname of --outcome-file>/filing-retry/<sha256 of
-# the wrapped key>.json. A later run for the same key that ends filed, absent
-# or failed removes it; another transient leaves it. Security-class findings
+# the wrapped key>.json. A later run for the same key that ends filed, matched,
+# absent or failed removes it; another transient leaves it. Security-class findings
 # never reach that directory.
 #
 # Dedup choices. The lists are fetched here, with --repo, and handed to
 # debt-dedup.sh through its test seams, which owns the matching rules. An open
 # match (keyed or keyless) is not filed again and is recorded as outcome
-# `filed` with the matched issue's number. A declined-closed match follows the
-# skill's idempotency step the same way: no second filing, outcome `filed` with
-# the matched number. A list that cannot be fetched is transient (non-security)
+# `matched` with the matched issue's number. A declined-closed match follows the
+# skill's idempotency step the same way: no second filing, outcome `matched`
+# with the matched number. A list that cannot be fetched is transient (non-security)
 # or a divert (security-class); a list that fills its limit is `failed`.
 #
 # Honest limits. An issue filed while the repository is PRIVATE becomes public
@@ -397,6 +399,13 @@ finish_filed() {
   exit 0
 }
 
+finish_matched() {
+  append_outcome matched "$1" ""
+  drop_retry_file
+  printf 'matched %s\n' "$1"
+  exit 0
+}
+
 finish_failed() {
   append_outcome failed null ""
   drop_retry_file
@@ -585,7 +594,7 @@ cmd_file() {
     0) ;;
     1)
       matched_number="$(printf '%s' "$dedup_json" | jq -r '.number')"
-      finish_filed "$matched_number"
+      finish_matched "$matched_number"
       ;;
     *)
       [ "$sensitive" -eq 1 ] && finish_diverted "$security_trigger"

@@ -113,7 +113,8 @@ The disposition gate is a **further marker precondition**, alongside the existin
 
 The unit decides a disposition for each finding in the round's `dispositions-<r>.json`; filed `tech-debt` issues and the PR-body headings carry the durable record. The dispositions are `fix`, `accept-residual`, `waive-out-of-scope`, `file` and `divert`. The filing script records one outcome per `file` or `divert` entry:
 
-- `filed`: an open `tech-debt` issue carries the key, verified by a re-query after creation, or a dedup match resolved to an existing issue.
+- `filed`: a new `tech-debt` issue was created and carries the key, verified by a re-query after creation.
+- `matched`: a dedup match resolved to an existing issue (open, or declined-closed); nothing was created, and it never counts as a new filing.
 - `diverted`: security-class diverted; no public issue, a local record only.
 - `absent`: the backend is definitively absent; the finding is listed under `## Not filed (no issue backend)`.
 - `transient`: a transient `gh` failure; the finding is retained under the run folder's `filing-retry/` and filed again every later round, and the PR body carries a pending count.

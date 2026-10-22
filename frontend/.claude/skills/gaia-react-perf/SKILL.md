@@ -5,13 +5,6 @@ description: Diagnoses React render performance by driving a micro-interaction, 
 
 Run the GAIA **react-perf** measure-only diagnostic with these arguments: `$ARGUMENTS`
 
-## Pre-flight: Worktree check
-
-This skill drives the app's dev server and profiles the clone's build, so it refuses from a linked worktree. Run this first, before anything else:
-
-```bash
-. .gaia/scripts/main-only-lib.sh
-gaia_refuse_if_worktree "/gaia-react-perf" || exit 1
-```
+Run it in whichever tree holds the branch, the main checkout or a linked worktree: the dev server and Playwright bind that tree's own ports (`bash .gaia/scripts/ports.sh` prints them).
 
 Read `frontend/.claude/skills/gaia-react-perf/references/measure-only.md` from the project root and follow it exactly. Treat the arguments above as an optional inline target (the page plus the micro-interaction to profile); if empty, ask the user to name a concrete micro-interaction before proceeding, per the reference.
