@@ -227,7 +227,7 @@ Then write the following files directly to `{PLAN_DIR}/`:
       **For a spec-derived plan, the prompt template MUST also carry this block verbatim**, because a rendered UAT spec is the SPEC's contract and an executor that rewrites its logic to make it pass silently changes what was agreed:
 
       ```
-      A rendered UAT spec under `<frontend package>/.playwright/e2e/` carries its contract in the comment at its top. Selectors, labels, copy and layout in the test are yours to edit. A needed change to the UAT's flow, success criteria, error-handling branch, asserted side effect, precondition or post-state (`.claude/skills/gaia/references/spec/uat-divergence.md`) is never made in the test: report it inside `## Notes for orchestrator` under this heading, exactly, and leave the test's logic as rendered:
+      A rendered UAT spec under `<frontend package>/.playwright/e2e/` carries its contract in the comment at its top. Selectors, labels, copy and layout in the test are yours to edit. Keep every assertion of the Then-clause in the test body: a shared helper may drive steps, but an `expect(` moved into one is invisible to the UAT gate and the fidelity judge, which read only this file. A needed change to the UAT's flow, success criteria, error-handling branch, asserted side effect, precondition or post-state (`.claude/skills/gaia/references/spec/uat-divergence.md`) is never made in the test: report it inside `## Notes for orchestrator` under this heading, exactly, and leave the test's logic as rendered:
 
       ### Logical UAT divergence
       UAT: <uat_id>

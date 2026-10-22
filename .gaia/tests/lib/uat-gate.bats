@@ -254,6 +254,25 @@ $GREEN_TEST_LINES
 });"
 }
 
+@test "gate refuses a spec whose Then-clause assert lives in a shared helper, naming the inline fix and no SPEC reopen" {
+  static_case floor "import { expectConfirmation } from '../../utils';
+
+test('the confirmation page shows the order number', async ({page}) => {
+  await page.goto('/checkout');
+  await expectConfirmation(page);
+});"
+  assert_stderr_names "uat-gate: next step for floor:" "test body" "never calls for reopening the SPEC"
+}
+
+@test "gate prints no floor next step when no file fails the floor" {
+  static_case annotation "test('t', async ({page}) => {
+  test.fail();
+$GREEN_TEST_LINES
+});"
+  grep -qF -- "next step for floor" "$STDERR_FILE" && return 1
+  true
+}
+
 @test "gate accepts a literal expect beside a real non-literal one" {
   prepare_green
   green_body "$FILE_PHASE_TWO" "test('t', async ({page}) => {

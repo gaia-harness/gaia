@@ -44,6 +44,8 @@ Write the verdict file with the Write tool, once, as a JSON array with exactly o
 ]
 ```
 
-For a `diverges` entry, `reason` names the logical change and its category from the list above, and the fix it calls for: implement the behavior, or reopen the SPEC (`uat-divergence.md` `## Reopen`). Never propose editing the contract comment or re-adding `test.fail()`.
+A body that asserts the Then-clause only through a call to a helper you were not given diverges: you cannot see the assertion, and the gate cannot either. Its `reason` says the Then-clause is asserted only in a helper the body calls, names the helper, and calls for moving that assertion into the test body; it never calls for implementing the behavior or reopening the SPEC.
+
+For any other `diverges` entry, `reason` names the logical change and its category from the list above, and the fix it calls for: implement the behavior, or reopen the SPEC (`uat-divergence.md` `## Reopen`). Never propose editing the contract comment or re-adding `test.fail()`.
 
 Write nothing else anywhere. Your reply is one line: the count of `asserts` and `diverges` verdicts.

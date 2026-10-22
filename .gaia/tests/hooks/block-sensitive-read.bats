@@ -7,7 +7,8 @@
 # variant (.env.local, .env.*, not .env.example), sourcing, redirection, and
 # bare environment dumps (env/printenv). The secret-path class covers the paths
 # four Read() deny globs used to hold: *.key, *.pem, any name containing
-# "credential", and anything under a secrets/ directory. When an input matches
+# "credential" except a TypeScript or Markdown file, and anything under a
+# secrets/ directory. When an input matches
 # both classes the dotenv reason is the one emitted.
 #
 # The guard is heuristic defense-in-depth, not a sandbox: it always exits 0,
@@ -546,6 +547,52 @@ run_hook_monitor() {
   # The replaced glob was case-sensitive. This is the second deliberate widening.
   run_hook_read "config/AWS_Credentials.json"
   assert_denied_by_json
+}
+
+# Every credential-store spelling stays denied through the Read tool and a Bash
+# reader once TypeScript and Markdown names are carved out of the match.
+@test "every credential-store spelling stays denied, through Read and through cat" {
+  local credential_path
+  for credential_path in credentials credentials.json .aws/credentials \
+    config/aws-credentials.json db.credentials CREDENTIALS credential.yml \
+    gcloud/application_default_credentials.json google-credentials.txt \
+    credentials.ini credentials.js; do
+    run_hook_read "$credential_path"
+    assert_denied_by_json || { echo "Read allowed: $credential_path"; return 1; }
+    run_hook_bash "cat $credential_path"
+    assert_denied_by_json || { echo "cat allowed: $credential_path"; return 1; }
+  done
+}
+
+@test "a rendered UAT spec whose name only mentions credentials is readable" {
+  run_hook_read "frontend/.playwright/e2e/auth/login-rejects-invalid-credentials.spec.ts"
+  assert_allowed_by_json
+}
+
+@test "TypeScript and Markdown files whose names only mention credentials are readable, through Read and through cat" {
+  local source_path
+  for source_path in app/auth/credentials.test.ts app/auth/credential-form.tsx \
+    app/auth/credentials.ts app/auth/credentials.mts docs/credentials.md \
+    docs/Credentials.MDX; do
+    run_hook_read "$source_path"
+    assert_allowed_by_json || { echo "Read denied: $source_path"; return 1; }
+    run_hook_bash "cat $source_path"
+    assert_allowed_by_json || { echo "cat denied: $source_path"; return 1; }
+  done
+}
+
+@test "a TypeScript file under a secrets/ directory stays denied" {
+  run_hook_read "deploy/secrets/credentials.ts"
+  assert_denied_by_json
+}
+
+@test "the secret-path deny names the readable spelling and the next step" {
+  run_hook_read "credentials.json"
+  assert_denied_by_json
+  grep -qF -- "Next step:" <<<"$output"
+  run_hook_bash "cat credentials.json"
+  assert_denied_by_json
+  grep -qF -- "Next step:" <<<"$output"
 }
 
 # --- Read-tool allows: the near-misses a substring match would get wrong ---
