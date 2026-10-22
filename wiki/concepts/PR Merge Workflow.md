@@ -139,7 +139,7 @@ Write the `Working root:` value as the bare absolute path with nothing after it:
 
 | `stop_reason` | The main thread |
 | --- | --- |
-| `clean` | Runs `bash .gaia/scripts/audit-dispositions-check.sh check-all --root <RESOLVED_ROOT> --run-folder <RUN_FOLDER>` once more as a last guard (read-only: with no `--snapshot-dir` it re-grades each round from the branch's frozen snapshots, and from live findings only for a round with none, and it writes nothing), then the CHANGELOG gate, the `GAIA-Audit` status ([[#Posting the status last]], which surfaces a non-zero `diverted_count` first), and the merge. |
+| `clean` | Runs `bash .gaia/scripts/audit-dispositions-check.sh check-all --root <RESOLVED_ROOT> --run-folder <RUN_FOLDER>` once more as a last guard (read-only: with no `--snapshot-dir` it re-grades each round from the branch's frozen snapshots, and from live findings only for a round with none, and it writes nothing), then the `GAIA-Audit` status ([[#Posting the status last]], which surfaces a non-zero `diverted_count` first), and the merge. |
 | `window-end` | Starts the next unit at step 1; the bound hook decides whether it is admitted. |
 | `checkpoint-deny` | Asks the pinned question ([[#The branch checkpoint]]). |
 | `dispositions-check-failed`, `needs-human`, `failure` | Asks the human what to do through `AskUserQuestion`, naming `stop_detail`; an unattended run stops and reports. A unit that finds the Agent tool absent stops `needs-human` and its `stop_detail` names Claude Code 2.1.292 or later and the upgrade step (`claude update`, then relaunch the session). A unit whose fixer dispatch is rejected over `effort` stops the same way, and the fixer is never retried without it. |
