@@ -4,7 +4,7 @@
 # the last fitness run, and the blended-file record an update leaves behind.
 #
 # Sourced by the background refresher and the blend-record writer. Defines
-# functions and two constants only; nothing runs at source time. bash 3.2
+# functions and constants only; nothing runs at source time. bash 3.2
 # compatible. Requires jq and git. Every function returns a status and never
 # exits, so a caller under `set -e` decides what a refusal means.
 #

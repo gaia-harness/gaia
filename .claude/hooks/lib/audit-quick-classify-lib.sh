@@ -53,7 +53,8 @@
 # such as bg-[#ff0000], whatever it carries, so no spelling of a deny-listed
 # family escapes by going arbitrary), or starts with `content-`.
 #
-# Reasons. Router-owned rows pre-empt the classifier on a first dispatch; the
+# Reasons. Router-owned rows pre-empt the classifier on a first dispatch, except
+# over-cap (after its paths stage) and fence-collision (after its lines stage); the
 # rest are the classifier's own, in evaluation order (paths stage, then lines
 # stage; within a line the first matching row wins).
 #

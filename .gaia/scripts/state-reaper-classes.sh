@@ -112,7 +112,8 @@ _gaia_reaper_walk_nested() {
 }
 
 # _gaia_reaper_walk_files <local-root> <row-directory>: normalized-file rows
-# yield every non-directory; audit-loop rows yield `.json` files plus the
+# yield every non-directory; audit-loop rows yield every non-directory file
+# outside `.closed/`, plus the
 # `.d/` and `.json.lock/` directories whole, and each top-level `.closed/`
 # entry.
 _gaia_reaper_walk_files() {

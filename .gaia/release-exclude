@@ -155,8 +155,8 @@ wiki/decisions/Dependabot as a Data Source.md
 .gaia/tests
 .gaia/scripts/tests
 .claude/rules/maintainers
-# Maintainer-only instruction bodies read on demand, never auto-loaded: an
-# always-loaded pointer under .claude/rules/maintainers/ names when to Read each.
+# Maintainer-only instruction bodies read on demand, never auto-loaded: the
+# rule or command step that points at each names when to Read it.
 .claude/maintainers
 .github/audit/tests
 # react-perf-smoke.spec.ts is the bippy version-bump canary: it asserts GAIA's

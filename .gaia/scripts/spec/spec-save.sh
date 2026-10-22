@@ -23,8 +23,9 @@
 #   6. releases the session lock;
 #   7. records the usage run and materializes the lineage edges.
 # Steps 1 and 2 refuse (exit 1) and leave every cache in place, so the draft
-# survives for a retry. Steps 3 to 7 are best-effort: each failure prints one
-# `spec-save: <step> skipped (<reason>)` line on stderr and the save still exits 0.
+# survives for a retry. Steps 3 to 7 are best-effort and the save still exits 0:
+# a failure in step 3, 4 or 7 prints one `spec-save: <step> skipped (<reason>)`
+# line on stderr; steps 5 and 6 print no such line.
 #
 # Stdout: the saved SPEC.md path on the first line, for the caller's lint.
 # Exit codes: 0 saved; 1 refused, reason on stderr; 2 usage error.
