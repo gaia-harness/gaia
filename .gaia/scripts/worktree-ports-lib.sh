@@ -50,6 +50,70 @@ gaia_ports_state_directory() {
   printf '%s\n' "$main_root/.gaia/local/ports"
 }
 
+# The ledger above is per project, so it cannot see another GAIA project's
+# worktrees on the same machine. The machine directory holds one claim file per
+# slot, shared by every project, so two projects never hand out one slot.
+# Overriding the state directory (every bats suite does) moves the machine
+# directory inside it, so an isolated run neither reads nor writes the real one.
+gaia_ports_machine_directory() {
+  if [ -n "${GAIA_PORTS_MACHINE_DIRECTORY:-}" ]; then
+    printf '%s\n' "$GAIA_PORTS_MACHINE_DIRECTORY"
+  elif [ -n "${GAIA_PORTS_STATE_DIRECTORY:-}" ]; then
+    printf '%s\n' "$GAIA_PORTS_STATE_DIRECTORY/machine"
+  elif [ -n "${XDG_STATE_HOME:-}" ]; then
+    printf '%s\n' "$XDG_STATE_HOME/gaia/ports"
+  elif [ -n "${HOME:-}" ]; then
+    printf '%s\n' "$HOME/.local/state/gaia/ports"
+  else
+    return 1
+  fi
+}
+
+_gaia_ports_claim_path() {
+  local machine_directory
+  machine_directory="$(gaia_ports_machine_directory)" || return 1
+  printf '%s\n' "$machine_directory/slot-$1"
+}
+
+# rc 0 when the slot's machine claim names a tree other than <tree-root> that
+# still exists with the .git marker recorded at claim time. A claim naming a
+# removed or recreated tree is stale and holds nothing.
+_gaia_ports_slot_claimed_elsewhere() {
+  local slot="$1" tree_root="$2" claim claimed_root claimed_marker
+  claim="$(_gaia_ports_claim_path "$slot")" || return 1
+  [ -f "$claim" ] || return 1
+  IFS=$'\t' read -r claimed_root claimed_marker <"$claim" || [ -n "$claimed_root" ] || return 1
+  [ -n "$claimed_root" ] && [ "$claimed_root" != "$tree_root" ] || return 1
+  [ "$(gaia_ports_tree_marker "$claimed_root" 2>/dev/null)" = "$claimed_marker" ]
+}
+
+# rc 0 once the slot's claim names <tree-root>. A claim held elsewhere is
+# refused; a stale one is replaced. The create is noclobber, so of two projects
+# racing for one slot only one wins it. An unusable machine directory claims
+# nothing and answers 0, leaving the per-project ledger as the only guard.
+_gaia_ports_claim_slot() {
+  local slot="$1" tree_root="$2" marker="$3" claim
+  claim="$(_gaia_ports_claim_path "$slot")" || return 0
+  mkdir -p "${claim%/*}" 2>/dev/null || return 0
+  _gaia_ports_slot_claimed_elsewhere "$slot" "$tree_root" && return 1
+  if [ -f "$claim" ]; then
+    rm -f "$claim" 2>/dev/null || return 0
+  fi
+  ( set -C; printf '%s\t%s\n' "$tree_root" "$marker" >"$claim" ) 2>/dev/null && return 0
+  [ -w "${claim%/*}" ] || return 0
+  _gaia_ports_slot_claimed_elsewhere "$slot" "$tree_root" && return 1
+  return 0
+}
+
+_gaia_ports_release_claim() {
+  local slot="$1" tree_root="$2" claim claimed_root
+  claim="$(_gaia_ports_claim_path "$slot")" || return 0
+  [ -f "$claim" ] || return 0
+  IFS=$'\t' read -r claimed_root _ <"$claim" || true
+  [ "$claimed_root" = "$tree_root" ] && rm -f "$claim" 2>/dev/null
+  return 0
+}
+
 _gaia_ports_has_router_config() {
   local candidate
   for candidate in "$1"/react-router.config.*; do
@@ -193,6 +257,7 @@ gaia_ports_reclaim() {
       esac
     fi
     if _gaia_ports_write_tombstone "$state_directory" "$slot" "$tree_root"; then
+      _gaia_ports_release_claim "$slot" "$tree_root"
       removed="${removed}${slot}"$'\t'"${tree_root}"$'\n'
     else
       kept="${kept}${slot}"$'\t'"${tree_root}"$'\t'"${marker}"$'\n'
@@ -226,6 +291,7 @@ gaia_ports_retire_stale_entry() {
   [ "$recorded_marker" != "$current_marker" ] || return 1
 
   _gaia_ports_write_tombstone "$state_directory" "$slot" "$tree_root" || return 1
+  _gaia_ports_release_claim "$slot" "$tree_root"
   while IFS=$'\t' read -r slot recorded_root recorded_marker; do
     [ -n "$slot" ] || continue
     [ "$recorded_root" = "$tree_root" ] && continue
@@ -262,10 +328,23 @@ gaia_ports_assign_slot() {
   # and would otherwise leave two entries naming one tree.
   gaia_ports_retire_stale_entry "$state_directory" "$tree_root" >/dev/null || true
 
+  # A tree keeps its slot unless another project's live tree claims it, the
+  # collision a ledger written before machine claims existed can hold. Then the
+  # tree gives the slot up here and takes the next free one below, and the
+  # caller rewrites its port file.
   if entry="$(_gaia_ports_entry_for_tree "$ledger" "$tree_root")"; then
     IFS=$'\t' read -r slot recorded_root recorded_marker <<<"$entry"
-    printf '%s\n' "$slot"
-    return 0
+    if _gaia_ports_claim_slot "$slot" "$tree_root" "$current_marker"; then
+      printf '%s\n' "$slot"
+      return 0
+    fi
+    content=''
+    while IFS=$'\t' read -r slot recorded_root recorded_marker; do
+      [ -n "$slot" ] || continue
+      [ "$recorded_root" = "$tree_root" ] && continue
+      content="${content}${slot}"$'\t'"${recorded_root}"$'\t'"${recorded_marker}"$'\n'
+    done <"$ledger"
+    _gaia_ports_write_atomic "$ledger" "$content" || return 1
   fi
 
   if [ -f "$ledger" ]; then
@@ -279,7 +358,9 @@ gaia_ports_assign_slot() {
     case "$used" in
       *" $candidate "*) ;;
       *)
-        if _gaia_ports_slot_is_free "$candidate" "$tree_root"; then
+        if ! _gaia_ports_slot_claimed_elsewhere "$candidate" "$tree_root" \
+          && _gaia_ports_slot_is_free "$candidate" "$tree_root" \
+          && _gaia_ports_claim_slot "$candidate" "$tree_root" "$current_marker"; then
           content=''
           [ -f "$ledger" ] && content="$(cat "$ledger")"$'\n'
           [ "$content" = $'\n' ] && content=''

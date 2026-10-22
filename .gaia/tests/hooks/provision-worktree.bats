@@ -24,6 +24,7 @@
 # `return 1`.
 
 setup() {
+  export GAIA_PORTS_MACHINE_DIRECTORY="$BATS_TEST_TMPDIR/machine-ports"
   . "$BATS_TEST_DIRNAME/helpers/run-hook.sh"
   . "$BATS_TEST_DIRNAME/helpers/package-fixture.sh"
   HOOK_ABSOLUTE_PATH="$(cd "$BATS_TEST_DIRNAME/../../../.claude/hooks" && pwd)/provision-worktree.sh"
