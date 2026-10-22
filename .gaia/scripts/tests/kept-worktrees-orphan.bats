@@ -13,6 +13,7 @@
 # Assertion style: .claude/rules/bats-assertions.md.
 
 setup() {
+  export GAIA_PORTS_MACHINE_DIRECTORY="$BATS_TEST_TMPDIR/machine-ports"
   # shellcheck source=.gaia/scripts/tests/helpers/kept-worktrees-fixture.sh
   . "$BATS_TEST_DIRNAME/helpers/kept-worktrees-fixture.sh"
   kept_worktrees_setup
