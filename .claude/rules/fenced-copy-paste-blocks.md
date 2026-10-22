@@ -6,3 +6,5 @@ Anything the user is meant to copy and paste (a prompt, a handoff, a command, a 
 - Never prose or a blockquote, and never split one paste between a block and prose: nothing the user must paste sits outside the block.
 - One block per pasteable item, including copyable lines written into `.md` files (launch commands, `Read <path>` lines, prompts in `STATE.md` or run-folder notes).
 - A handoff carries its own context, never a pointer to this session's scrollback.
+
+Why: a three-backtick fence renders as a code block the user can copy in one action; a four-backtick fence may render as plain text and lose that.
