@@ -117,8 +117,17 @@ parity() {
 
 @test "guards-must-fail (grammar parity): a lint.sh copy that loosens the SPEC digits is reported with the offending ref" {
   local mutant_script="$TEMPORARY_DIRECTORY/lint-mutant.sh"
+  # lint.sh sources uat-lib.sh from its own directory.
+  cp "$REPO/.gaia/scripts/spec/uat-lib.sh" "$TEMPORARY_DIRECTORY/"
   sed 's/\^spec:SPEC-\[0-9\]{3,}\$/^spec:SPEC-[0-9]{2,}$/' "$REPO/.gaia/scripts/spec/lint.sh" >"$mutant_script"
   if cmp -s "$mutant_script" "$REPO/.gaia/scripts/spec/lint.sh"; then echo "mutation did not apply" >&2; return 1; fi
+  # A mutant that crashes prints nothing, which parity reads as accepting every
+  # ref, so the expected mismatch appears without the lint having run. Require
+  # real lint output from it first.
+  sed -e 's/SPEC-NNN/SPEC-001/g' -e 's/UAT-NNN/UAT-001/g' \
+    "$REPO/.claude/skills/gaia/references/spec/spec-template.md" >"$TEMPORARY_DIRECTORY/mutant-probe-spec.md"
+  run bash "$mutant_script" "$TEMPORARY_DIRECTORY/mutant-probe-spec.md"
+  jq -e 'has("ok") and has("findings")' <<<"$output" >/dev/null
   run parity "$mutant_script"
   [ "$status" -eq 1 ]
   grep -qF 'MISMATCH spec:SPEC-01 lint-accepts=yes lib-accepts=no' <<<"$output"
