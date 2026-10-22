@@ -9,7 +9,7 @@ import {allModes} from './modes';
 import viewport from './viewport';
 import '~/styles/tailwind.css';
 
-const BRAND = {
+const storybookBrandOptions = {
   brandTarget: '_blank',
   brandTitle: 'GAIA',
   brandUrl: 'https://gaiareact.com/docs/',
@@ -18,7 +18,7 @@ const BRAND = {
 const preview: Preview = {
   decorators,
   initialGlobals: {
-    locale: 'en',
+    locale: DEFAULT_LOCALE,
     locales: {
       en: {left: '🇺🇸', right: 'en', title: 'English'},
     },
@@ -53,12 +53,12 @@ const preview: Preview = {
     darkMode: {
       dark: {
         ...themes.dark,
-        ...BRAND,
+        ...storybookBrandOptions,
       },
       darkClass: ['dark', 'bg-background', 'text-foreground'],
       light: {
         ...themes.light,
-        ...BRAND,
+        ...storybookBrandOptions,
       },
       lightClass: ['light', 'bg-background', 'text-foreground'],
       stylePreview: true,
