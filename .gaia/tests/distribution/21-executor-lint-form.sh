@@ -34,6 +34,7 @@ PLANNER_DOC="$SCAFFOLD/.claude/skills/gaia/references/plan/planner.md"
 
 # --- 1. The command, sourced from the shipped planner reference -------------
 
+# shellcheck disable=SC2016 # the backticks are the doc's literal code span
 LINT_TEMPLATE="$(grep -oE '`pnpm -C <package dir> exec eslint <its own files>`' "$PLANNER_DOC" | head -n 1 | tr -d '`')" || true
 [ -n "$LINT_TEMPLATE" ] \
   || { fail "planner.md names no \`pnpm -C <package dir> exec eslint <its own files>\` command for task sub-agents"; exit 1; }
@@ -59,7 +60,8 @@ planner_lint() {
   command_line="${command_line//<its own files>/$1}"
   local -a words
   read -ra words <<< "$command_line"
-  "${words[@]}" 2>&1
+  [ "${#words[@]}" -gt 0 ] || return 2
+  ${words[@]+"${words[@]}"} 2>&1
 }
 
 root_lint() {
