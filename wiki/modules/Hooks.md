@@ -11,7 +11,7 @@ tags: [module, hooks]
 
 # Hooks
 
-Global custom hooks live in `frontend/app/hooks/`. Component-specific hooks live in each component or page folder's own `hooks/` folder. A few context-bound hooks co-locate with their provider under `frontend/app/utils/` instead (`useNonce` in `nonce.ts`, `useOptionalRequestInfo` in `request-info.ts`).
+Global custom hooks live in `frontend/app/hooks/`. Component-specific hooks live in each component or page folder's own `hooks/` folder. A few context-bound hooks live under `frontend/app/utils/` instead (`useNonce` in `nonce.ts`, `useOptionalRequestInfo` in `request-info.ts`).
 
 ## Lift rule
 
