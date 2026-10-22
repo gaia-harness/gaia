@@ -85,6 +85,11 @@ export default defineConfig({
           include: ['app/**/*.test.ts', 'test/**/*.test.ts'],
           name: 'node',
           setupFiles: ['./test/setup.ts'],
+          // A file's first test pays its cold import (transform and module
+          // graph), well under a second on an idle machine but past the 5s
+          // default when a pre-commit run shares the CPU. The cost is fixed,
+          // so headroom fits; a hung test still fails within this bound.
+          testTimeout: 30_000,
         },
       },
       {
