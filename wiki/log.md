@@ -11,6 +11,34 @@ tags: [meta, log]
 
 ## [Unreleased]
 
+- 2026-10-22 4551e56 WORTHY - wiki: 2026-10-21 08:36 UTC: relevant wiki pages updated in the same commit or no page owns the detail
+- 2026-10-22 cfe0580 WORTHY - ci(audit): run change-scoped bats legs for frontend and wiki changes: relevant wiki pages updated in the same commit or no page owns the detail
+- 2026-10-22 37515c3 WORTHY - fix(usage): end /gaia-wiki, /update-deps and /update-gaia with the run's Cost line: relevant wiki pages updated in the same commit or no page owns the detail
+- 2026-10-22 02d569e WORTHY - perf(audit): trim fixed per-dispatch Code Audit Team overhead: relevant wiki pages updated in the same commit or no page owns the detail
+- 2026-10-22 a9d9b92 WORTHY - fix(audit): reach shadcn dialog className changes in the quick review: relevant wiki pages updated in the same commit or no page owns the detail
+- 2026-10-22 cf8e10c WORTHY - refactor: remove unreachable modes, aliases and wiki vestiges before 2.0.0: relevant wiki pages updated in the same commit or no page owns the detail
+- 2026-10-22 896ed51 WORTHY - test: remove test and fixture cruft before 2.0.0: relevant wiki pages updated in the same commit or no page owns the detail
+- 2026-10-22 5b0da8d WORTHY - fix(spec): make SPEC wiki promotion fire: relevant wiki pages updated in the same commit or no page owns the detail
+- 2026-10-22 8bc12df WORTHY - refactor(frontend): remove unused template code and link the icon set: relevant wiki pages updated in the same commit or no page owns the detail
+- 2026-10-22 7c68978 WORTHY - refactor(harness): remove unreachable CI guards, legacy branch shapes and test-only helpers: relevant wiki pages updated in the same commit or no page owns the detail
+- 2026-10-22 6d94606 WORTHY - docs(release): track the context-footprint prompt and gate the tag on it: relevant wiki pages updated in the same commit or no page owns the detail
+- 2026-10-22 9120774 WORTHY - docs: correct six false statements in wiki, CHANGELOG and the footprint prompt: relevant wiki pages updated in the same commit or no page owns the detail
+- 2026-10-22 bf2fcd0 WORTHY - fix(spec): fail the SPEC lint on a working-document id in UAT text: relevant wiki pages updated in the same commit or no page owns the detail
+- 2026-10-22 9bb4f1b WORTHY - fix(harness): name the RED-recording command plan executors must run: relevant wiki pages updated in the same commit or no page owns the detail
+- 2026-10-22 2c57cf3 WORTHY - fix(ports): claim worktree port slots machine-wide across GAIA projects: relevant wiki pages updated in the same commit or no page owns the detail
+- 2026-10-22 fb964b9 WORTHY - fix(ci): bound the pnpm bootstrap's registry fetch at 60 seconds: relevant wiki pages updated in the same commit or no page owns the detail
+- 2026-10-22 31f93cc WORTHY - fix(harness): name the lint command plan executors run on their own files: relevant wiki pages updated in the same commit or no page owns the detail
+- 2026-10-22 9ce10af WORTHY - refactor: remove Serena from GAIA: relevant wiki pages updated in the same commit or no page owns the detail
+- 2026-10-22 2a56a78 WORTHY - fix(shadcn): lint and install every registry item out of the box: relevant wiki pages updated in the same commit or no page owns the detail
+- 2026-10-22 61b8186 WORTHY - fix(harness): report a tech-debt dedup match as matched, not filed: relevant wiki pages updated in the same commit or no page owns the detail
+- 2026-10-22 4ede278 WORTHY - fix(frontend): unblock worktree perf runs, empty-story and server-start gates: relevant wiki pages updated in the same commit or no page owns the detail
+- 2026-10-22 7abca21 WORTHY - fix(harness): keep UAT asserts in the spec body; allow credential-named source reads: relevant wiki pages updated in the same commit or no page owns the detail
+- 2026-10-22 61fae0c WORTHY - fix(frontend): sync Storybook locale before play; fix pre-commit timeouts: relevant wiki pages updated in the same commit or no page owns the detail
+- 2026-10-22 7494805 WORTHY - fix(frontend): seed the Storybook locale from DEFAULT_LOCALE: relevant wiki pages updated in the same commit or no page owns the detail
+- 2026-10-22 d497c3d WORTHY - fix(harness): sandbox reads credential-named TS; audit keys never spell credential: relevant wiki pages updated in the same commit or no page owns the detail
+- 2026-10-22 9afacb6 WORTHY - fix(harness): let subagents inherit the session effort level: relevant wiki pages updated in the same commit or no page owns the detail
+- 2026-10-22 31ca888 WORTHY - fix(frontend): fail every Storybook spec fast when the build is missing: relevant wiki pages updated in the same commit or no page owns the detail
+- 2026-10-22 56e8905 WORTHY - fix(harness): cleanse verify refuses a clean report with no Step 2 coverage: relevant wiki pages updated in the same commit or no page owns the detail
 - 2026-10-21 9b4038c WORTHY - clearance writer refuses an unprovisioned worktree → wiki/concepts/Audit Round Procedure.md
 - 2026-10-21 082bce3 WORTHY - Serena 2.1.0 registration; landed with the commit → wiki/concepts/Serena Integration.md, wiki/dependencies/Serena.md
 - 2026-10-21 f4b15e6 WORTHY - bats shard rationale; landed with the commit → wiki/decisions/Sharded CI Test Matrix.md
