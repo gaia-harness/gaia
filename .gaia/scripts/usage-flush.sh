@@ -115,7 +115,7 @@ UF_RESEARCH_ROOTS_JSON=''
 UF_WORK="$(mktemp -d 2>/dev/null)" || exit 0
 UF_SWEEP_LOCK="$UF_TELEMETRY_DIRECTORY/usage-sweep.lock.d"
 UF_SWEEP_OWNED=0
-UF_PRUNE=1
+UF_COMMITTED=0
 # shellcheck disable=SC2329  # invoked by the EXIT trap
 _uf_cleanup() {
   rm -rf "$UF_WORK" 2>/dev/null
@@ -139,9 +139,11 @@ _uf_file_size() {
 _uf_now() {
   if [ -n "${EPOCHREALTIME:-}" ]; then printf '%s' "${EPOCHREALTIME/,/.}"; else date +%s; fi
 }
-# Bytes [start, end) of a file.
+# Bytes [start, end) of a file. BSD tail streams `-c +1` far slower than head
+# reads the same bytes, so a range from the start skips tail.
 _uf_range() {
   [ "$3" -gt "$2" ] || return 0
+  if [ "$2" -eq 0 ]; then head -c "$3" "$1" 2>/dev/null; return 0; fi
   tail -c +"$(($2 + 1))" "$1" 2>/dev/null | head -c "$(($3 - $2))"
 }
 # Byte length of a file's complete lines: a trailing line with no newline is
@@ -155,6 +157,7 @@ _uf_complete_bytes() {
 }
 # The ledger_bytes the cache was folded to, read from its fixed-order prefix,
 # or rc 1 when the cache is absent or not in that shape (the caller rebuilds).
+# shellcheck disable=SC2329  # reached through _uf_write_cache
 _uf_cache_ledger_bytes() {
   local cache_prefix ledger_bytes
   [ -f "$UF_CACHE" ] || return 1
@@ -166,30 +169,46 @@ _uf_cache_ledger_bytes() {
   printf '%s' "$ledger_bytes"
 }
 
+# The session's ledger rows, kept in UF_WORK/session_rows through byte
+# UF_SESSION_ROWS_BYTES (a line boundary). The whole ledger is read once per
+# session per run; after that only the bytes appended since are read, which
+# sees every row a full scan would because the ledger is only ever appended
+# to. Scanning the whole ledger per file would make a flush's cost grow with
+# every other session's rows. A ledger shorter than the recorded offset was replaced, so it is read
+# again from the start.
+UF_SESSION_ROWS_ID="" UF_SESSION_ROWS_BYTES=0
+_uf_refresh_session_rows() {
+  local session_id="$1" size complete
+  size="$(_uf_file_size "$UF_LEDGER")"
+  if [ "$session_id" != "$UF_SESSION_ROWS_ID" ] || [ "$size" -lt "$UF_SESSION_ROWS_BYTES" ]; then
+    UF_SESSION_ROWS_ID="$session_id" UF_SESSION_ROWS_BYTES=0
+    : >"$UF_WORK/session_rows"
+  fi
+  # A row another writer is appending right now has no newline yet; it is
+  # left out here and read whole on the next refresh.
+  _uf_range "$UF_LEDGER" "$UF_SESSION_ROWS_BYTES" "$size" >"$UF_WORK/tail"
+  complete="$(_uf_complete_bytes "$UF_WORK/tail")"
+  # BSD head rejects a byte count of 0.
+  [ "$complete" -gt 0 ] || return 0
+  head -c "$complete" "$UF_WORK/tail" | grep -F -- "$session_id" >>"$UF_WORK/session_rows"
+  UF_SESSION_ROWS_BYTES=$((UF_SESSION_ROWS_BYTES + complete))
+}
+
 # Sets UF_LEDGER_BYTES_READ (ledger bytes read, at a line boundary), UF_CURSOR_OFFSET (this path's
 # cursor offset, -1 for none), and UF_HIGH_WATER_MARK (the pair's high-water mark JSON).
+# The fold reads the session's own cursor rows, not the cursor cache: every
+# cursor row for this path and this (session, role) carries the session id, so
+# folding those rows alone gives the same answer as folding the whole ledger,
+# and the cache's size grows with every file any session ever flushed.
 _uf_load_state() {
-  local path="$1" key="$2|$3" ledger_bytes size cache fold_output try=0
-  while [ "$try" -lt 2 ]; do
-    try=$((try + 1))
-    size="$(_uf_file_size "$UF_LEDGER")"
-    cache="$UF_CACHE"
-    ledger_bytes="$(_uf_cache_ledger_bytes)" || ledger_bytes=""
-    if [ "$try" = 2 ] || [ -z "$ledger_bytes" ] || [ "$ledger_bytes" -gt "$size" ]; then ledger_bytes=0 cache=/dev/null; fi
-    _uf_range "$UF_LEDGER" "$ledger_bytes" "$size" >"$UF_WORK/tail"
-    UF_LEDGER_BYTES_READ=$((ledger_bytes + $(_uf_complete_bytes "$UF_WORK/tail")))
-    fold_output="$(grep -F '"kind":"cursor"' "$UF_WORK/tail" | jq -nrR --rawfile cache_text "$cache" --arg transcript_path "$path" --arg pair_key "$key" \
-      "$GAIA_USAGE_FOLD_JQ"'
-      (if $cache_text == "" then {files: {}, pairs: {}} else base end) as $cache_base
-      | if $cache_base == null then "rebuild"
-        else fold($cache_base)
-          | "\(.files[$transcript_path].offset | if type == "number" then . else -1 end)\t\(.pairs[$pair_key] // {hw_ts: null, hw_ids: []} | tojson)"
-        end' 2>/dev/null)" || fold_output=""
-    case "$fold_output" in "" | rebuild) continue ;; esac
-    IFS=$'\t' read -r UF_CURSOR_OFFSET UF_HIGH_WATER_MARK <<<"$fold_output"
-    return 0
-  done
-  return 1
+  local path="$1" key="$2|$3" fold_output
+  UF_LEDGER_BYTES_READ="$UF_SESSION_ROWS_BYTES"
+  fold_output="$(grep -F '"kind":"cursor"' "$UF_WORK/session_rows" | jq -nrR --arg cache_text "" --arg transcript_path "$path" --arg pair_key "$key" \
+    "$GAIA_USAGE_FOLD_JQ"'
+    fold({files: {}, pairs: {}})
+      | "\(.files[$transcript_path].offset | if type == "number" then . else -1 end)\t\(.pairs[$pair_key] // {hw_ts: null, hw_ids: []} | tojson)"' 2>/dev/null)" || return 1
+  [ -n "$fold_output" ] || return 1
+  IFS=$'\t' read -r UF_CURSOR_OFFSET UF_HIGH_WATER_MARK <<<"$fold_output"
 }
 
 # Rc 0 when a cursor row for (session, role) landed in the ledger after byte ledger_bytes_read.
@@ -205,21 +224,16 @@ _uf_cas_conflict() {
       >/dev/null 2>&1
 }
 
-# The session's close binding rows currently in the ledger, sorted.
-# shellcheck disable=SC2329  # reached through _uf_closes_changed
-_uf_session_closes() {
-  grep -F -- "$1" "$UF_LEDGER" 2>/dev/null | grep -F '"type":"close"' | sort
-}
-
-# Rc 0 when the session's close rows differ from the set prepare used.
+# Rc 0 when a close binding row for the session landed in the ledger after
+# byte ledger_bytes_read, so the set prepare split on has changed.
 # shellcheck disable=SC2329  # reached through _uf_commit_locked
 _uf_closes_changed() {
-  ! _uf_session_closes "$1" | cmp -s - "$UF_WORK/closes"
+  _uf_range "$UF_LEDGER" "$2" "$3" | grep -F -- "$1" | grep -qF '"type":"close"'
 }
 
 # Rewrites the cursor cache from the ledger (temp file then rename). Called
 # only under the ledger lock, the cache's single writer.
-# shellcheck disable=SC2329  # reached through _uf_commit_locked
+# shellcheck disable=SC2329  # reached through _uf_cache_locked
 _uf_write_cache() {
   local size="$1" prune="$2" ledger_bytes cache="$UF_CACHE" temporary_cache_file="$UF_TELEMETRY_DIRECTORY/.usage-cursors.tmp.$$" gone="$UF_WORK/gone" cached_path try=0
   : >"$gone"
@@ -245,24 +259,37 @@ _uf_write_cache() {
   mv -f "$temporary_cache_file" "$UF_CACHE"
 }
 
-# Runs under with_ledger_lock. Holds the lock for one tail read, one append,
-# and one cache rewrite; no transcript byte is read here. Stated bound: at most
-# 2 s per commit, far under the lock's 30 s stale reclaim and the 10 s other
-# writers wait by default. Never returns 75, so a 75 is always a lock timeout.
+# Runs under with_ledger_lock. Holds the lock for one tail read and one
+# append; no transcript byte is read here. Stated bound: at most 2 s per
+# commit, far under the lock's 30 s stale reclaim and the 10 s other writers
+# wait by default. Never returns 75, so a 75 is always a lock timeout.
 # shellcheck disable=SC2329  # invoked by with_ledger_lock
 _uf_commit_locked() {
-  local batch="$1" session_id="$2" role="$3" ledger_bytes_read="$4" prune="$5" commit_started_at size newsize
+  local batch="$1" session_id="$2" role="$3" ledger_bytes_read="$4" commit_started_at size
   commit_started_at="$(_uf_now)"
   size="$(_uf_file_size "$UF_LEDGER")"
   if [ "$size" -gt "$ledger_bytes_read" ]; then
     if _uf_cas_conflict "$session_id" "$role" "$ledger_bytes_read" "$size"; then return 3; fi
-    if _uf_closes_changed "$session_id"; then return 3; fi
+    if _uf_closes_changed "$session_id" "$ledger_bytes_read" "$size"; then return 3; fi
   fi
   cat "$batch" >>"$UF_LEDGER" || return 1
-  newsize="$(_uf_file_size "$UF_LEDGER")"
-  _uf_write_cache "$newsize" "$prune" || _uf_log "cursor cache not rewritten; the next run rebuilds it"
   if [ "${GAIA_USAGE_DEBUG_HOLD:-}" = 1 ]; then
     _uf_log "hold $(awk -v started_at="$commit_started_at" -v ended_at="$(_uf_now)" 'BEGIN { printf "%.3f", ended_at - started_at }')s"
+  fi
+  return 0
+}
+
+# Runs under with_ledger_lock, once per run after its last commit. The cache
+# is a hint for which files have nothing to parse; no commit decision reads
+# it, so a run killed before this point leaves it behind the ledger and only
+# costs the next run a parse that commits nothing.
+# shellcheck disable=SC2329  # invoked by with_ledger_lock
+_uf_cache_locked() {
+  local cache_started_at
+  cache_started_at="$(_uf_now)"
+  _uf_write_cache "$(_uf_file_size "$UF_LEDGER")" 1 || _uf_log "cursor cache not rewritten; the next run rebuilds it"
+  if [ "${GAIA_USAGE_DEBUG_HOLD:-}" = 1 ]; then
+    _uf_log "cache hold $(awk -v started_at="$cache_started_at" -v ended_at="$(_uf_now)" 'BEGIN { printf "%.3f", ended_at - started_at }')s"
   fi
   return 0
 }
@@ -358,8 +385,7 @@ _uf_prepare() {
   # The split points are read first so nothing slow runs between a record run's
   # flush starting and this snapshot: a close landing after it is caught at
   # commit, one landing before it is split on.
-  grep -F -- "$session_id" "$UF_LEDGER" >"$UF_WORK/session_rows" 2>/dev/null
-  grep -F '"type":"close"' "$UF_WORK/session_rows" 2>/dev/null | sort >"$UF_WORK/closes"
+  _uf_refresh_session_rows "$session_id"
   _uf_load_state "$transcript_file" "$session_id" "$role" || return 1
   offset="$UF_CURSOR_OFFSET"
   [ "$offset" -ge 0 ] || offset=0
@@ -409,9 +435,9 @@ _uf_flush_file() {
     _uf_prepare "$transcript_file" "$session_id" "$role" "$size" "$finished" || return 0
     _uf_barrier
     exit_status=0
-    with_ledger_lock "$UF_TELEMETRY_DIRECTORY" _uf_commit_locked "$UF_BATCH" "$session_id" "$role" "$UF_LEDGER_BYTES_READ" "$UF_PRUNE" || exit_status=$?
+    with_ledger_lock "$UF_TELEMETRY_DIRECTORY" _uf_commit_locked "$UF_BATCH" "$session_id" "$role" "$UF_LEDGER_BYTES_READ" || exit_status=$?
     case "$exit_status" in
-      0) UF_PRUNE=0; return 0 ;;
+      0) UF_COMMITTED=1; return 0 ;;
       3) _uf_log "another flusher committed ${role//[^A-Za-z0-9._-]/?} of ${session_id//[^A-Za-z0-9._-]/?} first; reparsing" ;;
       75) _uf_log "ledger lock timed out; ${transcript_file//[^A-Za-z0-9._\/ -]/?} is left for the next trigger"; return 0 ;;
       *) _uf_log "commit failed for ${transcript_file//[^A-Za-z0-9._\/ -]/?}"; return 0 ;;
@@ -459,7 +485,7 @@ _uf_session() {
     for transcript_file in "$candidate_directory/$UF_SESSION"/subagents/workflows/*/agent-*.jsonl; do _uf_add "$transcript_file"; done
   done
   # A file the cursor cache already holds at its current size has nothing to
-  # parse, and _uf_prepare pays two ledger scans and a cache fold to learn that.
+  # parse, and _uf_prepare pays a ledger read and a cursor fold to learn that.
   # A session with dozens of finished sidecars spent most of a capped flush on
   # them. A stale or unreadable cache lists fewer files, never one at the wrong
   # size, so a miss only falls through to the full check.
@@ -528,4 +554,7 @@ _uf_sweep() {
 }
 
 if [ "$UF_SWEEP" = 1 ]; then _uf_sweep; else _uf_session; fi
+if [ "$UF_COMMITTED" = 1 ]; then
+  with_ledger_lock "$UF_TELEMETRY_DIRECTORY" _uf_cache_locked || _uf_log "ledger lock timed out; cursor cache not rewritten"
+fi
 exit 0

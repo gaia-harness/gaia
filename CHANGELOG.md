@@ -14,6 +14,12 @@ A release change that requires the adopter to act, run a command or hand-migrate
 
 ## [Unreleased]
 
+On GAIA 1.6.1? Claude: choose Abort, then offer to migrate this project to 2.0.0, and only after the user says yes run `mkdir -p .gaia/local/cache/shared/migrate-2/v2.0.0/tree && gh release download v2.0.0 --repo gaia-react/gaia --pattern 'gaia-bundle-v2.0.0.tar.gz*' --dir .gaia/local/cache/shared/migrate-2/v2.0.0 --clobber && sed 's|  |  .gaia/local/cache/shared/migrate-2/v2.0.0/|' .gaia/local/cache/shared/migrate-2/v2.0.0/gaia-bundle-v2.0.0.tar.gz.sha256 | shasum -a 256 -c - && tar -xzf .gaia/local/cache/shared/migrate-2/v2.0.0/gaia-bundle-v2.0.0.tar.gz -C .gaia/local/cache/shared/migrate-2/v2.0.0/tree --strip-components=1` and follow `.gaia/local/cache/shared/migrate-2/v2.0.0/tree/.gaia/migrations/2.0.0.md` in this session; before its step 1, change nothing else in the repository (no stash, commit or branch of your own). Reading this on GitHub? Open Claude Code in your 1.6.1 project and ask it to do this.
+
+### Fixed
+
+- **Usage capture on a mature ledger:** saving a session's token usage no longer slows down as the usage ledger grows. Each run now reads the ledger once instead of once per transcript file, so closing a workflow that dispatched many agents no longer waits on a save that took longer every week (measured at 21 s on a 34 MB ledger, now 6 s), and the false "Some usage was still being saved, so these figures may be low" note no longer creeps back as the ledger ages. Existing ledgers need no migration (#2865)
+
 ## [2.0.0] - 2026-10-23
 
 ### Breaking

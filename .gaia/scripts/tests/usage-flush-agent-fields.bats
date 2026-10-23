@@ -110,6 +110,25 @@ race_a_close() {
   wait "$pid"
 }
 
+# race_a_torn_close: as race_a_close, but the close row is half written when
+# the flush first reads the ledger, the shape of a writer caught mid-append,
+# and finished while the flush is parked. The cut falls before the row's
+# session id and type, so its second half alone still names both. Another
+# session's whole row comes first, as in any ledger past its first write.
+race_a_torn_close() {
+  local pid row
+  row="$(close_row 2026-10-01T00:15:00Z)"
+  mkdir -p "$TEL"
+  close_row 2026-10-01T00:05:00Z | sed 's/"s-af"/"s-other"/' >"$TEL/usage.jsonl"
+  printf '%s' "${row:0:20}" >>"$TEL/usage.jsonl"
+  GAIA_USAGE_TEST_BARRIER="$TEMPORARY_DIRECTORY/bar" flush_session 3>&- &
+  pid=$!
+  wait_for "$TEMPORARY_DIRECTORY/bar.parsed"
+  printf '%s\n' "${row:20}" >>"$TEL/usage.jsonl"
+  : >"$TEMPORARY_DIRECTORY/bar"
+  wait "$pid"
+}
+
 # ---------- agent fields ----------
 
 @test "agent fields: main, roster, general-purpose, no-meta and workflow sidecars each carry their type and id" {
@@ -225,8 +244,23 @@ race_a_close() {
 
 @test "close race guard: a flusher without the commit-time close re-check commits a straddling segment" {
   install
-  scratch_flusher '/if _uf_closes_changed "\$session_id"; then return 3; fi/d' usage-flush.sh
+  scratch_flusher '/if _uf_closes_changed "\$session_id" /d' usage-flush.sh
   race_a_close
+  [ "$(straddling_count 2026-10-01T00:15:00Z)" -eq 1 ]
+}
+
+@test "torn close: a close row half written at the first ledger read is read whole once finished, so no segment straddles it" {
+  install
+  race_a_torn_close
+  [ "$(straddling_count 2026-10-01T00:15:00Z)" -eq 0 ]
+  [ "$(segments | jq '[.[] | select(.agent_type == "main")] | length')" -eq 2 ]
+  [ "$(segments | jq '[.[] | select(.agent_id)] | length')" -eq 6 ]
+}
+
+@test "torn close guard: a flusher that counts a half-written row as read keeps only its second half, and a segment straddles the close" {
+  install
+  scratch_flusher 's|UF_SESSION_ROWS_BYTES=\$((UF_SESSION_ROWS_BYTES + complete))|UF_SESSION_ROWS_BYTES=$((UF_SESSION_ROWS_BYTES + $(wc -c <"$UF_WORK/tail")))|' usage-flush.sh
+  race_a_torn_close
   [ "$(straddling_count 2026-10-01T00:15:00Z)" -eq 1 ]
 }
 
