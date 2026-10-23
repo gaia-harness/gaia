@@ -1,6 +1,6 @@
 # /gaia-cleanse
 
-Cleanse memory and the wiki: duplication across stores, promotable memory, stale entries, and auto-load bloat. The store listing, counts, budgets and dead-path signals come from the `gaia fitness` CLI; the model judges only what a script cannot. Conflicts between two committed instruction files are not judged here: `/doctor prompt-audit` owns them.
+Cleanse memory and auto-loaded files (CLAUDE.md, rules): duplication across stores and with the wiki, contradictions with the wiki, promotable memory, stale entries, and auto-load bloat. The store listing, counts, budgets and dead-path signals come from the `gaia fitness` CLI; the model judges only what a script cannot. Conflicts between two committed instruction files are not judged here: `/doctor prompt-audit` owns them.
 
 Contents: Execution model; Sub-references; Path resolution; Branch on `$ARGUMENTS`; Isolate before Stage 2; Stage 1 subagent; Stage 2 subagent; After the subagents return; Cost record.
 
