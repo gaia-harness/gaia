@@ -33,7 +33,7 @@ Master catalog of every page in the wiki. Newly created pages must be added here
 - [[Hooks]]
 - [[Utils]]
 - [[Styles]]
-- [[i18n]]
+- [[i18n]]: translations and language files, and how to add or remove a language (its "Adding or removing a language" section)
 - [[Testing]]
 - [[Storybook Stories]]
 - [[MSW Handlers]]
