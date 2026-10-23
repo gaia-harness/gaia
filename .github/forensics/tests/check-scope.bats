@@ -422,3 +422,24 @@ setup() {
     *) printf 'unexpected output: %s\n' "$output" >&2; return 1 ;;
   esac
 }
+
+# --- rename-aware scope re-checks -------------------------------------------
+
+@test "workflow: every changed-path-listing diff carries --no-renames" {
+  workflow="${BATS_TEST_DIRNAME}/../../workflows/forensics-triage.yml"
+  [ -f "$workflow" ]
+  # Assembled at run time so this file never spells the listing flag itself.
+  listing_flag='--name-'"only"
+  total=0
+  bare=0
+  while IFS= read -r line; do
+    total=$((total + 1))
+    case "$line" in
+      *--no-renames*) ;;
+      *) bare=$((bare + 1)) ;;
+    esac
+  done < <(grep -E "git diff .*${listing_flag}" "$workflow")
+  # Both scope re-checks (triage verify-diff, quality-gate) must be present.
+  [ "$total" -ge 2 ]
+  [ "$bare" -eq 0 ]
+}
