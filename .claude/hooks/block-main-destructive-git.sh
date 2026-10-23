@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # PreToolUse Bash hook: block commits on main/master, force-push naming main/master,
 # any push from main/master or with a main/master/HEAD refspec source,
+# a `git reset --hard` that moves HEAD to another commit on any branch,
 # and block a peer session moving the main checkout's HEAD off a branch another
 # session holds there with an open pull request.
 #
@@ -465,6 +466,46 @@ push_refspec_names_main() {
   return 1
 }
 
+# reset_hard_moves_head <directory> <ambiguous>: 0 when the segment
+# parse_git_globals just read is a `git reset --hard` whose target is a commit
+# other than the one HEAD holds in <directory>. The target is resolved rather
+# than matched as text, because every spelling of an earlier commit (`HEAD~1`,
+# `HEAD^`, `@~1`, a SHA, a branch) drops the same commits, and a text match
+# denies one spelling and passes the rest.
+#
+# No target, or a literal `HEAD` or `@`, discards only uncommitted changes and
+# passes. A target that resolves nowhere denies: git would refuse it anyway, so
+# that is the safe direction. With <ambiguous> set the checkout the reset runs
+# in is unknown, so no comparison with its HEAD can be trusted and only the
+# literal spellings pass.
+#
+# Honest limits: `--keep`, `--merge`, `--soft` and the default `--mixed` also
+# move HEAD, but they keep uncommitted work and are not read here; neither is a
+# target produced by an expansion, which reaches this function as text naming
+# no commit and therefore denies.
+reset_hard_moves_head() {
+  local directory="$1" ambiguous="$2" argument hard=0 target="" skip_next=0 target_commit head_commit
+  local -a in_directory=()
+  [ -n "$directory" ] && in_directory=(-C "$directory")
+  for argument in ${git_args[@]+"${git_args[@]}"}; do
+    if [ "$skip_next" -eq 1 ]; then skip_next=0; continue; fi
+    case "$argument" in
+      --hard) hard=1; continue ;;
+      --) break ;;
+      *'>' | *'<') skip_next=1; continue ;;
+      *[\<\>]*) continue ;;
+      -*) continue ;;
+    esac
+    [ -n "$target" ] || target="$argument"
+  done
+  [ "$hard" -eq 1 ] || return 1
+  case "$target" in '' | HEAD | @) return 1 ;; esac
+  [ "$ambiguous" -eq 1 ] && return 0
+  target_commit=$(git ${in_directory[@]+"${in_directory[@]}"} rev-parse --verify -q "${target}^{commit}" 2>/dev/null) || return 0
+  head_commit=$(git ${in_directory[@]+"${in_directory[@]}"} rev-parse --verify -q HEAD 2>/dev/null) || return 0
+  [ "$target_commit" != "$head_commit" ]
+}
+
 # --- main-checkout hop guard -------------------------------------------------
 #
 # Several sessions share one main checkout: one can hold it on its own branch
@@ -812,12 +853,12 @@ while IFS= read -r segment; do
   esac
   [ "$foreign_repo" -eq 1 ] && continue
 
-  # Only commit and push have rules past this point. Every other subcommand
-  # would pay the checkout resolution below, two `git rev-parse` spawns per
-  # `-C` segment, for a verdict nothing reads. Nothing carried to the next
-  # segment is set below: `lead_cd` and `cd_ambiguous` belong to the `cd` arm.
+  # Only commit, push and reset have rules past this point. Every other
+  # subcommand would pay the checkout resolution below, two `git rev-parse`
+  # spawns per `-C` segment, for a verdict nothing reads. Nothing carried to the
+  # next segment is set below: `lead_cd` and `cd_ambiguous` belong to the `cd` arm.
   case "$git_subcommand" in
-    commit | push) ;;
+    commit | push | reset) ;;
     *) continue ;;
   esac
 
@@ -919,6 +960,12 @@ while IFS= read -r segment; do
     fi
   fi
 
+  # 1b. Block a hard reset that moves HEAD to another commit, on any branch.
+  #     Dropping commits is the user's call, so the repair is theirs to run.
+  if [ "$git_subcommand" = reset ] && reset_hard_moves_head "$branch_directory" "$segment_ambiguous"; then
+    deny "A hard reset to another commit is the user's decision, not Claude's: 'git reset --hard <target>' moves this branch to that commit, so any commit the branch holds after it is dropped and uncommitted work is discarded. Ask the user to run it themselves (in a terminal, or with the ! prefix) if they want it. Allowed instead: 'git reset --hard' with no target, or HEAD, discards only uncommitted changes; 'git revert <commit>' undoes a commit while keeping history."
+  fi
+
   # 2. Block force-push when target mentions main or master.
   if [ "$git_subcommand" = push ] \
      && [[ "$normalized_segment" =~ (--force|--force-with-lease|[[:space:]]-f([[:space:]]|$)) ]] \
@@ -978,7 +1025,7 @@ while IFS= read -r segment; do
     if [ "$on_main" -eq 1 ]; then
       deny "Plain 'git push' from main/master is forbidden (wiki/concepts/Git Workflow.md). It lands local commits on the shared branch without the pull request and audit every change passes through. Create a feature branch and open a PR."
     elif [ "$refspec_main" -eq 1 ]; then
-      deny "This push's refspec names main, master or HEAD, which is forbidden from any branch (wiki/concepts/Git Workflow.md). Name the branch you are pushing explicitly and open a PR."
+      deny "This push's refspec names main, master or HEAD, which is forbidden from any branch (wiki/concepts/Git Workflow.md). A main or master source lands that branch's commits on the remote without the pull request and audit every change passes through, and a bare HEAD source is whatever happens to be checked out, which this guard cannot vouch for. Push the feature branch by its own name, 'git push -u origin <branch-name>', and open a PR."
     elif [ "$ambiguous_main" -eq 1 ]; then
       deny "This command names a directory this guard cannot read, so which checkout the push runs from is unknown, and one it could reach is on '$ambiguous_branch'. Plain 'git push' from main/master is forbidden (wiki/concepts/Git Workflow.md). Spell the directory literally so the guard can read it, or create a feature branch and open a PR. If this text only QUOTES a command rather than running one, the guard cannot tell the two apart: pass it through a file (--body-file, git commit -F) instead of an inline argument."
     fi
