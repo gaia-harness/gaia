@@ -22,6 +22,10 @@ setup_file() {
   git -C "$BASE_SANDBOX" config user.name test
   git -C "$BASE_SANDBOX" add -A
   git -C "$BASE_SANDBOX" -c core.hooksPath=/dev/null commit -qm "chore: base"
+  # The commit-msg hook fails closed when commitlint cannot run, and the sandbox
+  # has no node_modules, so a runner without a global commitlint would refuse
+  # every commit before the arm under test is reached.
+  rm -f "$BASE_SANDBOX/.githooks/commit-msg"
 }
 
 setup() {
