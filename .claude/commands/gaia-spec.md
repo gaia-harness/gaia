@@ -1,10 +1,12 @@
 ---
 name: gaia-spec
-description: Authors an immutable SPEC artifact through Socratic discovery, then plans it in the same session and stops at the plan's KICKOFF prompt; execution starts in a fresh session. Pass `auto` before the description for a non-interactive mode that answers its own questions. Use when the user asks to write a spec, specify a feature, or pin down requirements before planning.
-argument-hint: "[auto] [description]"
+description: Authors an immutable SPEC artifact through Socratic discovery, then plans it in the same session and stops at the plan's KICKOFF prompt; execution starts in a fresh session. Pass `auto` before the description for a non-interactive mode that answers its own questions. Use when the user asks to write a spec, specify a feature, or pin down requirements before planning. Pass `reopen SPEC-NNN` to reopen a saved SPEC whose UAT cannot hold.
+argument-hint: "[auto] [description] | reopen SPEC-NNN"
 ---
 
 Run the GAIA **spec** workflow with these arguments: `$ARGUMENTS`
+
+When the first word of the arguments is `reopen`, skip `spec.md`: read `.claude/skills/gaia/references/spec/uat-divergence.md` and follow its `## Reopen` for the SPEC id the next word names.
 
 Read `.claude/skills/gaia/references/spec.md` from the project root and follow it exactly. Treat the arguments above as the reference's `$ARGUMENTS`.
 

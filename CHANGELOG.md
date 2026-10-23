@@ -14,6 +14,20 @@ A release change that requires the adopter to act, run a command or hand-migrate
 
 ## [Unreleased]
 
+### Added
+
+- **`/setup-gaia` catches a machine up to 2.0.0.** On a clone that was on GAIA 1.x, `/setup-gaia` now finds the 1.x leftovers the migration only cleared on the machine that ran it (old local files, the notebook move, the root React Doctor copy, Serena, old spec branch names, renamed variables, leftover files) and fixes each, asking before anything is deleted or pushed; a project that was never on 1.x records it as not applicable. Every run also checks that git hooks are active (`core.hooksPath` is `.githooks`) and offers to turn them on, so a clone no longer commits without the pre-commit and commit-msg checks unnoticed (#3014)
+- **`/gaia-spec reopen SPEC-NNN`** reopens a saved SPEC whose UAT cannot hold: Claude asks for the reason, records it with the UAT diff, updates the plan routing it affects, and hands back the plan's resume prompt (#3019)
+- **Adding a language after setup.** Ask Claude to add a language at any time and it follows the same runbook `/gaia-init` uses, which now stays in the project; removing i18n entirely deletes both runbooks, since neither applies afterwards (#3015)
+
+### Changed
+
+- **Claude takes the steps it used to hand you.** A failed `/gaia-init` step resumes once you confirm the cause is fixed; `/setup-gaia` offers your GitHub handle for a placeholder `CODEOWNERS` owner before its first push; an `in-progress` claim is released when Claude closes the pull request unmerged or you drop the work; and after an `/update-gaia` pull request merges, Claude lists the leftover files the update retired and deletes them on your yes, instead of printing a command to run (#3013, #3019)
+
+### Fixed
+
+- **`/gaia-init` with two or more added languages.** Choosing more than one language beyond the primary stopped at the first one's verification, because every chosen language is registered before any of their translation files exist. Init now creates every language's files first and verifies once (#3015)
+
 ## [2.0.1] - 2026-10-23
 
 On GAIA 1.6.1? Claude: choose Abort, then offer to migrate this project to 2.0.0, and only after the user says yes run `mkdir -p .gaia/local/cache/shared/migrate-2/v2.0.0/tree && gh release download v2.0.0 --repo gaia-react/gaia --pattern 'gaia-bundle-v2.0.0.tar.gz*' --dir .gaia/local/cache/shared/migrate-2/v2.0.0 --clobber && sed 's|  |  .gaia/local/cache/shared/migrate-2/v2.0.0/|' .gaia/local/cache/shared/migrate-2/v2.0.0/gaia-bundle-v2.0.0.tar.gz.sha256 | shasum -a 256 -c - && tar -xzf .gaia/local/cache/shared/migrate-2/v2.0.0/gaia-bundle-v2.0.0.tar.gz -C .gaia/local/cache/shared/migrate-2/v2.0.0/tree --strip-components=1` and follow `.gaia/local/cache/shared/migrate-2/v2.0.0/tree/.gaia/migrations/2.0.0.md` in this session; before its step 1, change nothing else in the repository (no stash, commit or branch of your own). Reading this on GitHub? Open Claude Code in your 1.6.1 project and ask it to do this.

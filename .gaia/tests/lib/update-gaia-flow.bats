@@ -7,7 +7,7 @@
 # validate order around the merge report, the questions, answers and decision
 # records, the follow-ups, the version written last (Step 9d), the quality
 # gate, the single commit confirm at the review point, the draft PR (Step 11)
-# and the deferred residue sweep (Step 12). The pre-merge blocks live in
+# and the leftover-file cleanup deferred to the post-merge cleanup (Step 12). The pre-merge blocks live in
 # .gaia/scripts/update-gaia-preflight.sh and the drift block in
 # update-gaia-drift.sh; their behavior is driven by update-gaia-preflight.bats
 # and update-gaia-drift.bats, so this suite pins the skill's calls and prose.
@@ -26,6 +26,7 @@ setup() {
   CONFLICT_FLOW="$REPO_ROOT/.claude/skills/update-gaia/references/conflict-flow.md"
   CLAIM_REF="$REPO_ROOT/.claude/skills/update-gaia/references/claim-flow.md"
   PULL_REF="$REPO_ROOT/.claude/skills/update-gaia/references/pull-mode.md"
+  LIFECYCLE="$REPO_ROOT/.claude/skills/gaia/references/work-lifecycle.md"
   GATE_REF="$REPO_ROOT/.claude/skills/update-gaia/references/pull-gate.md"
   PREFLIGHT="$REPO_ROOT/.gaia/scripts/update-gaia-preflight.sh"
   SELECTOR="$REPO_ROOT/.gaia/scripts/select-migration-notes.sh"
@@ -42,7 +43,8 @@ STEP_9D='## Step 9d: Record the update'
 STEP_CONFLICT_FLOW='## Conflict flow: dispatch, questions, decisions, follow-ups'
 STEP_REVIEW='## Review point'
 STEP_11='### Step 11: Open a pull request'
-STEP_12='### Step 12: Offer the residue sweep'
+STEP_12='### Step 12: The leftover-file cleanup'
+LIFECYCLE_LEFTOVERS='### Leftover-file cleanup after an update merge'
 
 CREATE_CALL='EnterWorktree({name: "<branch-name>"})'
 WAIT_CALL='bash <main checkout path>/.gaia/scripts/provision-wait.sh --tree <worktree path>'
@@ -1086,30 +1088,62 @@ MANIFEST_STOP='A non-zero exit from the `cp` command is the `MANIFEST_COPY_FAILE
   true
 }
 
-# --- Step 12: the residue sweep ---------------------------------------------------
+# --- Step 12: the leftover-file cleanup ---------------------------------------
 
-# 0 when SKILL.md copy `$1` runs no sweep, printing the post-merge --apply
-# step, and keeps no in-place ask.
+# 0 when SKILL.md copy `$1` runs no sweep and no in-place ask in Step 12, and
+# hands the cleanup to the work-lifecycle section that runs it after the merge.
 step_12_holds() {
-  local section worktree_arm sweeps applies
+  local section
   section="$(section_of "$1" "$STEP_12")"
-  worktree_arm="$(printf '%s\n' "$section" | grep -F 'Run no residue sweep')"
-  printf '%s\n' "$worktree_arm" | grep -qF 'Run no residue sweep' || return 1
-  printf '%s\n' "$worktree_arm" | grep -qF '`bash .gaia/scripts/state-registry-lib.sh residue-sweep --apply` from the main checkout' || return 1
-  sweeps="$(printf '%s\n' "$worktree_arm" | grep -oF 'residue-sweep' | wc -l | tr -d ' ')"
-  applies="$(printf '%s\n' "$worktree_arm" | grep -oF 'residue-sweep --apply' | wc -l | tr -d ' ')"
-  [ "$sweeps" -eq "$applies" ] || return 1
+  [ -n "$section" ] || return 1
+  printf '%s\n' "$section" | grep -qF 'Run no cleanup here' || return 1
+  printf '%s\n' "$section" | grep -qF "work-lifecycle.md\`, \`$LIFECYCLE_LEFTOVERS\`" || return 1
+  printf '%s\n' "$section" | grep -qF 'residue-sweep' && return 1
   printf '%s\n' "$section" | grep -qF 'AskUserQuestion' && return 1
   return 0
 }
 
-@test "Step 12: the run runs no sweep and prints the post-merge --apply step" {
+@test "Step 12: the run runs no sweep and hands the cleanup to the post-merge cleanup" {
   step_12_holds "$SKILL"
-  sed 's|Run no residue sweep here: it refuses|Run `bash .gaia/scripts/state-registry-lib.sh residue-sweep`: it refuses|' "$SKILL" > "$COPY"
+  # Failing state: the user handed the command to run by hand.
+  insert_after "$SKILL" "$STEP_12" 'Print as the next step: run `bash .gaia/scripts/state-registry-lib.sh residue-sweep --apply` from the main checkout.'
   step_12_holds "$COPY" && return 1
   # Failing state: an in-place ask restored.
-  insert_after "$SKILL" "$STEP_12" '**Mode 3.** Ask once with `AskUserQuestion` whether to delete the residue paths.'
+  insert_after "$SKILL" "$STEP_12" '**Mode 3.** Ask once with `AskUserQuestion` whether to delete the leftover files.'
   step_12_holds "$COPY" && return 1
+  # Failing state: the pointer to the lifecycle section dropped.
+  grep -vF "$LIFECYCLE_LEFTOVERS" "$SKILL" > "$COPY"
+  step_12_holds "$COPY" && return 1
+  true
+}
+
+LIFECYCLE_SWEEP_CALL='bash <main checkout path>/.gaia/scripts/state-registry-lib.sh residue-sweep'
+
+# 0 when work-lifecycle.md copy `$1` runs the listing in the main checkout for
+# an update branch, asks once, and applies only on the yes.
+lifecycle_leftovers_hold() {
+  local section
+  section="$(section_of "$1" "$LIFECYCLE_LEFTOVERS")"
+  [ -n "$section" ] || return 1
+  printf '%s\n' "$section" | grep -qF 'starts with `update/`' || return 1
+  printf '%s\n' "$section" | grep -qxF -- "$LIFECYCLE_SWEEP_CALL" || return 1
+  printf '%s\n' "$section" | grep -qF 'ask once with `AskUserQuestion`' || return 1
+  printf '%s\n' "$section" | grep -qF 'on `Delete them` run the same command with `--apply`' || return 1
+  printf '%s\n' "$section" | grep -qxF -- "$LIFECYCLE_SWEEP_CALL --apply" && return 1
+  return 0
+}
+
+@test "work-lifecycle cleanup: an update merge lists the leftover files, asks, and applies only on yes" {
+  lifecycle_leftovers_hold "$LIFECYCLE"
+  # Failing state: the listing call dropped.
+  grep -vxF -- "$LIFECYCLE_SWEEP_CALL" "$LIFECYCLE" > "$COPY"
+  lifecycle_leftovers_hold "$COPY" && return 1
+  # Failing state: an unconditional --apply.
+  insert_after "$LIFECYCLE" "$LIFECYCLE_LEFTOVERS" "$LIFECYCLE_SWEEP_CALL --apply"
+  lifecycle_leftovers_hold "$COPY" && return 1
+  # Failing state: the ask dropped.
+  sed 's/ask once with `AskUserQuestion`/delete them/' "$LIFECYCLE" > "$COPY"
+  lifecycle_leftovers_hold "$COPY" && return 1
   true
 }
 

@@ -34,11 +34,13 @@ Needed change: <one or two sentences>
 
 ## Reopen
 
-A logical divergence is resolved by a SPEC reopen. `/gaia-spec` has no reopen entry, so the steps are manual edits, which the halted phase's `PROGRESS.md` block points here for:
+A logical divergence is resolved by a SPEC reopen. `/gaia-spec reopen SPEC-NNN` runs the steps below, and the halted phase's `PROGRESS.md` block points here too. Claude runs every step from the main thread, where it can ask the user; the orchestrator that halted never reopens its own SPEC.
 
-1. Edit `SPEC.md` at its absolute, main-anchored path (stored in the main checkout: the clone's primary working directory, on any branch): set `status: reopened` and today's `updated:`, add a `## Reopen rationale` section (why the UAT cannot hold) and a `## UAT diff` section holding the pre-change UAT text verbatim, then change the UAT.
-2. Run `bash .gaia/scripts/spec/lint.sh <SPEC.md path>` until it prints `{"ok":true,...}`. Its reopen check fails a `reopened` SPEC that lacks either section.
-3. The human (not the orchestrator) updates the plan README's routing row when the change re-routes the UAT or moves its owning phase, and the owning task doc's acceptance criteria when they quoted the old text. The render step's routing validation fails loudly on a forgotten row.
-4. Stash or discard the halted phase's uncommitted edits (resume refuses a dirty tree), then resume with the plan's `KICKOFF.md`. The render step re-renders the changed UAT; an edited spec comes back as a conflict.
+1. Find the SPEC at `.notebook/specs/<SPEC-ID>/SPEC.md` in the main checkout (the clone's primary working directory, on any branch), by its absolute path. Read the halted phase's `### Logical UAT divergence` block when one exists, and ask the user why the UAT cannot hold, as a plain chat message, since the reason is free text; offer the block's `Needed change` as the starting point. Then propose the changed UAT text, with any step 4 edits it implies, and confirm them together with `AskUserQuestion` (`Use these changes (Recommended)` / `Revise them`).
+2. Edit `SPEC.md`: set `status: reopened` and today's `updated:`, add a `## Reopen rationale` section holding the reason and a `## UAT diff` section holding the pre-change UAT text verbatim, then change the UAT.
+3. Run `bash .gaia/scripts/spec/lint.sh <SPEC.md path>` and fix what it reports until it prints `{"ok":true,...}`. Its reopen check fails a `reopened` SPEC that lacks either section.
+4. When the change re-routes the UAT or moves its owning phase, update the plan README's routing row; when the owning task doc's acceptance criteria quoted the old text, update them too. Step 1's confirm covers these edits. The render step's routing validation fails loudly on a forgotten row.
+5. When the halted phase left uncommitted edits (resume refuses a dirty tree), list them and ask with `AskUserQuestion` whether to discard them (`Discard them (Recommended)` / `Keep them`); on `Discard them`, discard exactly the listed paths and nothing else. On `Keep them`, say resume waits on a clean tree.
+6. Print the plan's `KICKOFF.md` prompt for the user to paste into a fresh session, which resumes the plan. The render step re-renders the changed UAT; an edited spec comes back as a conflict.
 
 The spec's catalog row needs no change: its vocabulary has no reopened state, and the SPEC's frontmatter `status` carries it.

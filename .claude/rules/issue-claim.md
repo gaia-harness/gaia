@@ -20,7 +20,7 @@ Outside a GAIA skill, before the first edit this session will commit, read and f
 
 ## Release
 
-`.claude/hooks/issue-claim-release.sh` releases the claim when a `gh pr merge <n>`, run as its own command in this session, lands a pull request whose body closes the issue by keyword (`Closes #<n>`); its comments name the spellings it declines to read. Any other ending leaves the claim set, so strip it by hand: `gh issue edit <n> --remove-label in-progress`.
+`.claude/hooks/issue-claim-release.sh` releases the claim when a `gh pr merge <n>`, run as its own command in this session, lands a pull request whose body closes the issue by keyword (`Closes #<n>`); its comments name the spellings it declines to read. No hook sees any other ending, so Claude releases the claim itself when it closes such a pull request unmerged or the user says the work is dropped, by the work lifecycle's `## Releasing the claim on an unmerged ending`.
 
 ## Scope
 

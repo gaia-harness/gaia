@@ -1,6 +1,6 @@
 # Per-machine setup
 
-The four per-machine steps `/gaia-init` (Step 8) and `/setup-gaia` (Phase 2) share: external tools, Claude plugins, the statusline executable bit, and the app `.env`. Run from the repository root. The calling command says what a halt means for it and how to resume.
+The four per-machine steps `/gaia-init` (Step 8) and `/setup-gaia` (Phase 2) share: external tools, Claude plugins, the statusline executable bit, and the app `.env`, plus the git hooks check (`## Git hooks`), which runs first on every read. Run from the repository root. The calling command says what a halt means for it and how to resume.
 
 For each step below, read `completed_steps` from `.gaia/cli/gaia setup status --json`, then:
 
@@ -60,3 +60,14 @@ After a step's commands, run each of its probes and emit one line per component:
 | React Doctor   | `[ -d frontend/.claude/skills/react-doctor ]` (gitignored, kept per-machine) |
 | Playwright CLI | `command -v playwright-cli && playwright-cli --version >/dev/null 2>&1`      |
 | typescript-lsp | `claude plugin list 2>/dev/null \| grep -q 'typescript-lsp'`                 |
+
+## Git hooks
+
+The pre-commit and commit-msg checks run only when `core.hooksPath` points at `.githooks`. The root `prepare` script sets it on `pnpm install`, but it skips when `CI` is set, and an install that never ran leaves it unset, with nothing to report the gap. Check it on every read of this file, before the steps above; it records no step and no decision:
+
+```bash
+hooks_path="$(git config --get core.hooksPath)"
+[ "$hooks_path" = .githooks ] && echo HOOKS_ACTIVE || echo "HOOKS_INACTIVE ${hooks_path:-unset}"
+```
+
+On `HOOKS_INACTIVE`, ask with `AskUserQuestion` (`Git hooks are not active on this clone (core.hooksPath is <value>), so commits skip GAIA's pre-commit and commit-msg checks. Turn them on?`, header `Git hooks`, options `Turn them on (Recommended)` and `Leave them off`). On `Turn them on`, run `git config core.hooksPath .githooks` and confirm the check above prints `HOOKS_ACTIVE`. On `Leave them off`, say the clone commits without those checks until it is set. A caller running in an automatic mode turns them on without asking.
