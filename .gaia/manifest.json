@@ -751,7 +751,7 @@
     "wiki/overview.md": "wiki-owned",
     "wiki/README.md": "wiki-owned"
   },
-  "generated": "2026-10-23T06:19:04.038Z",
+  "generated": "2026-10-23T06:56:33.485Z",
   "regions": [
     {
       "endMarker": "<!-- gaia:audit-remit:end -->",
@@ -768,5 +768,5 @@
       "startMarker": "<!-- gaia:audit-remit:start -->"
     }
   ],
-  "version": "1.6.1"
+  "version": "2.0.0"
 }
