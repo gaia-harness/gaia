@@ -89,6 +89,7 @@
     ".claude/rules/context-discipline.md": "owned",
     ".claude/rules/fenced-copy-paste-blocks.md": "owned",
     ".claude/rules/file-placement.md": "owned",
+    ".claude/rules/generated-files.md": "owned",
     ".claude/rules/guards-must-fail.md": "owned",
     ".claude/rules/issue-claim.md": "owned",
     ".claude/rules/no-abbreviations.md": "owned",
@@ -751,7 +752,7 @@
     "wiki/overview.md": "wiki-owned",
     "wiki/README.md": "wiki-owned"
   },
-  "generated": "2026-10-23T09:24:47.144Z",
+  "generated": "2026-10-23T11:50:53.511Z",
   "regions": [
     {
       "endMarker": "<!-- gaia:audit-remit:end -->",

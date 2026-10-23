@@ -14,9 +14,16 @@ A release change that requires the adopter to act, run a command or hand-migrate
 
 ## [Unreleased]
 
+### Added
+
+- **Generated-files rule:** a new rule loads when Claude reads `frontend/.claude/settings.json` or `pnpm-lock.yaml` and names the source to change instead: the root settings or the frontend overlay followed by `gaia packages sync-settings`, or pnpm for dependencies. Until now the only signal was a permission deny with no reason (#3023)
+
 ### Fixed
 
-- **`/gaia-codify` no longer counts findings the audit chose not to fix.** The recurrence tally now skips findings a merged pull request lists as waived below the triage threshold or as accepted residuals, so a class that was only ever waived stops firing a rising-class nudge whose only correct answer was to decline. The tally's counting version moves to 4, so after updating you get one "tally changed" review nudge, and classes you declined earlier come back once for a fresh decision.
+- **Hard-reset guard:** `git reset --hard` to any other commit is now denied whatever the spelling (`HEAD^`, `@~1`, a SHA, a branch name), not only `HEAD~<n>`, and the denial says why and that the reset is the user's to run. A reset with no target, or to `HEAD`, still discards uncommitted changes as before (#3022)
+- **Worthiness gate refusal:** the merge refusal for an emergent test with no worthiness verdict now names one path, running the worthiness evaluator, and no longer offers a direct ledger write that recorded a verdict without the review (#3021)
+- **Refusals with a next step:** several guard refusals now say what Claude can do next or that the step is the user's: the pre-commit registry failure, `rm -rf node_modules` (repair with `pnpm install`), `.env` reads, fork pull requests, a push whose refspec names main or HEAD, and main-checkout-only commands run from a worktree (#3023)
+- **`/gaia-codify` no longer counts findings the audit chose not to fix.** The recurrence tally now skips findings a merged pull request lists as waived below the triage threshold or as accepted residuals, so a class that was only ever waived stops firing a rising-class nudge whose only correct answer was to decline. The tally's counting version moves to 4, so after updating you get one "tally changed" review nudge, and classes you declined earlier come back once for a fresh decision (#3028)
 
 ## [2.0.1] - 2026-10-23
 

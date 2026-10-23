@@ -99,6 +99,17 @@ assert_denied_because() {
   assert_denied_by_json
 }
 
+# `pnpm store prune` cleans pnpm's global store, not a project's node_modules,
+# so naming it sent Claude after a repair that repairs nothing here.
+@test "the node_modules denial names the repair Claude may run and hands removal to the user" {
+  run_hook_bash 'rm -rf node_modules'
+  assert_denied_by_json
+  grep -qF -- "run 'pnpm install'" <<<"$output"
+  grep -qF -- 'ask the user to run it themselves' <<<"$output"
+  grep -qF -- 'store prune' <<<"$output" && return 1
+  true
+}
+
 @test "rm -fr / (reversed flags) is denied" {
   run_hook_bash 'rm -fr /'
   assert_denied_by_json
