@@ -250,7 +250,7 @@ describe('computeTally', () => {
     expect(result.candidate_count).toBe(0);
   });
 
-  test('UAT-002: an unseeded holistic slug is dropped, not a candidate nor unclassified', () => {
+  test('an unseeded holistic slug counts as unclassified, not a candidate', () => {
     expect(isValidFindingClass('holistic/arbitrary-slug')).toBe(false);
 
     const result = computeTally({
@@ -269,7 +269,80 @@ describe('computeTally', () => {
     });
 
     expect(result.candidate_count).toBe(0);
+    expect(result.class_inventory).toEqual([]);
+    expect(result.unclassified).toMatchObject({
+      distinct_pr_count: 3,
+      severity_max: 'critical',
+    });
+  });
+
+  test('an unknown class and the fallback in one PR collapse to one unclassified increment', () => {
+    const result = computeTally({
+      coveredClass: noCover,
+      prs: [
+        pr(1, [
+          {
+            area_tags: [],
+            finding_class: 'billing/double-charge',
+            severity: 'minor',
+          },
+          {
+            area_tags: [],
+            finding_class: 'holistic/unclassified',
+            severity: 'major',
+          },
+        ]),
+      ],
+      suppressedClass: noSuppress,
+      windowDays: 90,
+    });
+
+    expect(result.unclassified_window_count).toBe(1);
+  });
+
+  test('a project vocabulary class recurs as a candidate', () => {
+    const vocabulary = {
+      classes: ['billing/double-charge'],
+      oracle_prefixes: ['semgrep'],
+    };
+    const prs = [3, 2, 1].map((n) =>
+      pr(n, [
+        {
+          area_tags: [],
+          finding_class: 'billing/double-charge',
+          severity: 'major',
+        },
+        {
+          area_tags: [],
+          finding_class: 'semgrep/python.lang.eval',
+          severity: 'minor',
+        },
+      ])
+    );
+
+    const result = computeTally({
+      coveredClass: noCover,
+      prs,
+      suppressedClass: noSuppress,
+      vocabulary,
+      windowDays: 90,
+    });
+
     expect(result.unclassified).toBeNull();
+    expect(
+      result.candidates.map(({finding_class, is_oracle}) => ({
+        finding_class,
+        is_oracle,
+      }))
+    ).toEqual([
+      {finding_class: 'billing/double-charge', is_oracle: false},
+      {finding_class: 'semgrep/python.lang.eval', is_oracle: true},
+    ]);
+    expect(windowClasses(prs, vocabulary)).toEqual([
+      'billing/double-charge',
+      'semgrep/python.lang.eval',
+    ]);
+    expect(windowClasses(prs)).toEqual(['holistic/unclassified']);
   });
 
   test('UAT-003: a classless recurring finding surfaces as the distinct unclassified signal, not a candidate', () => {
