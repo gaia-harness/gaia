@@ -85,6 +85,21 @@ if [ -n "$RETIRED_ADDS" ]; then
   exit 1
 fi
 
+# Code Audit Team roster: a staged change to the roster, a member definition or
+# the machinery list runs the roster check, whose findings each print their
+# repair. It reads the working tree, not the index, so a staged break that an
+# unstaged edit happens to repair passes here.
+# `|| true` because grep exits 1 on no match, which `set -e` would otherwise
+# turn into a refused commit.
+ROSTER_STAGED=$(git diff --cached --name-only -z | tr '\0' '\n' |
+  grep -E '^(\.gaia/audit-ci\.yml|\.claude/agents/code-audit-[^/]*\.md|\.claude/hooks/lib/audit-machinery\.sh)$' || true)
+if [ -n "$ROSTER_STAGED" ]; then
+  bash "$ROOT/.gaia/scripts/verify-audit-roster.sh" --root "$ROOT" || {
+    printf "\x1b[31m✖ The Code Audit Team roster check failed: apply each finding's repair above, then commit again\x1b[0m\n"
+    exit 1
+  }
+fi
+
 # Guard: exactly one react-doctor config may exist per package. react-doctor
 # resolves the highest-precedence file and silently ignores the rest, so a stray
 # duplicate (e.g. doctor.config.json beside doctor.config.ts) shadows the

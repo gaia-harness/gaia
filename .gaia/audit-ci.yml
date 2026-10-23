@@ -353,13 +353,12 @@ auditors:
 # Adding a path here is a claim that nothing about it is worth a specialist's
 # review. Prefer granting it to a member.
 #
-# NOTE FOR ADOPTER CLONES. The maintainer-only entries below are stripped at
-# release, and so are the roster's maintainer-only members -- which means the
-# machinery those members own (.gaia/**, .claude/rules/**, and the rest) has no
-# owner on an adopter clone and the coverage invariant reports it. That is
-# accurate rather than a defect: on your clone GAIA's own machinery is not
-# yours to audit. Declare it with entries of your own (`.gaia/**`,
-# `.claude/**`) alongside whatever else your tree legitimately leaves unowned.
+# The harness trees (`.claude/`, `.gaia/`, `.githooks/`, `.github/audit/`)
+# need no entry here: the check treats every unclaimed path under them as not
+# ownerless, whoever wrote it. A file you add there (your own hook, agent or
+# rule) is exempt too, and the roster check names no reviewer for it. Grant such
+# files to a member of your own if you want them reviewed; a member's claim
+# wins. Everything else your tree leaves unowned belongs in this list.
 unowned:
   # Prose, assets and bookkeeping that no member claims. Root `*.md` never
   # crosses a `/`, so it reaches the repository-root documents only.
@@ -381,14 +380,17 @@ unowned:
   - "wiki/**"
   - "docs/**"
   - "frontend/public/**"
+  # gaia:maintainer-only:start
+  # GAIA's own funding file and issue and pull request templates, which the
+  # release withholds. An adopter who adds their own declares them here.
   - ".github/FUNDING.yml"
   - ".github/ISSUE_TEMPLATE/**"
   - ".github/pull_request_template.md"
   # The `/gaia-residue` dismissal store: append-only JSON Lines written only
   # through `gaia residue-record`, read as data by the residue tally, and
-  # executed by nothing.
+  # executed by nothing. On an adopter clone it sits under GAIA's own `.gaia/`
+  # tree, which needs no entry, so this one ships nowhere.
   - ".gaia/audit-residual-dismissals.jsonl"
-  # gaia:maintainer-only:start
   # GAIA's fixtures, generated bundles, test data and inert documentation.
   # Several are extension-qualified rather than whole-subtree because a member
   # already owns a sibling inside the same tree (`.gaia/**/*.sh`,

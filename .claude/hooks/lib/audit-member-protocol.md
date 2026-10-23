@@ -212,7 +212,7 @@ Shape (one entry per finding; the writer rejects the write and names the offendi
 Field contract:
 
 - `severity` is the tier name in lower case: `critical`, `major` or `minor`.
-- `finding_class` comes from the closed vocabulary ("Holistic class assignment" below, plus any member-specific vocabulary your definition owns) and counts at any severity; a finding that maps to no seeded class is stamped `holistic/unclassified` and included, never omitted, surfacing as the distinct unclassified recurrence signal.
+- `finding_class` comes from the closed vocabulary ("Holistic class assignment" below, plus any member-specific vocabulary your definition owns, plus the project's own classes and oracle prefixes in `.gaia/finding-classes.json`) and counts at any severity; a finding that maps to no seeded class is stamped `holistic/unclassified` and included, never omitted, surfacing as the distinct unclassified recurrence signal.
 - `path` and `line` locate the defect. `failure_mode` is input, state and wrong outcome. `verified_by` is the executed evidence your Finding Proof Gate demands, not the reasoning that suggested looking. `suggested_fix` is the repair, concrete enough to act on. `area_tags` is optional and defaults to the path's directory.
 - `security` is a boolean on every entry. It is `true` when any of these holds, judged on the finding's content and severity and never on its `finding_class`: it came from a security review dimension; its content describes an exploitable weakness (missing authentication or authorization, injection, secret exposure, request forgery, path traversal, unsafe deserialization, cryptographic misuse, and the like); its severity is Critical; it is secret-shaped. It is `false` only when you are sure none holds; when unsure, `true`. A missing or non-boolean value is read as `true`. `holistic/unclassified` carries no security signal on its own.
 - `cross_remit` is optional and `true` only for a defect in a file outside your declared domain.
@@ -252,7 +252,7 @@ The ledger carries the audit loop's state across rounds in one gitignored file p
 
 ## Holistic class assignment
 
-The holistic classes name language-neutral root causes, and each is assigned from the finding alone. When a finding matches none of them unambiguously, `holistic/unclassified` is the correct record and a nearby class is not; a finding matching two of them with no tie-break below separating that pair takes the same record. Free-text or invented classes are never assigned: the tally skips them. Your definition supplies the domain examples for your own surface.
+The holistic classes name language-neutral root causes, and each is assigned from the finding alone. When a finding matches none of them unambiguously, `holistic/unclassified` is the correct record and a nearby class is not; a finding matching two of them with no tie-break below separating that pair takes the same record. Free-text or invented classes are never assigned: the tally counts them as `holistic/unclassified`, so the class is lost. A project class goes in `.gaia/finding-classes.json` before a member assigns it. Your definition supplies the domain examples for your own surface.
 
 <!-- gaia:maintainer-only:start -->
 The machine-checked vocabulary is `HOLISTIC_FINDING_CLASSES` in `.gaia/cli/src/schemas/finding-class.ts`; a parity test holds the list below to it, as sets.
