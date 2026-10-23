@@ -46,6 +46,14 @@ inputs:
       action's own default.
     required: false
     default: ''
+  ignore-scripts:
+    description: >-
+      'true' runs the install with --ignore-scripts, so no package lifecycle
+      script runs. For a caller whose job holds a write token and whose steps
+      need no install-time build. Default 'false' leaves every other caller's
+      install unchanged.
+    required: false
+    default: 'false'
 runs:
   using: 'composite'
   steps:
@@ -69,8 +77,12 @@ runs:
     - name: Install root dependencies
       if: inputs.install == 'root'
       shell: bash
-      run: pnpm install --frozen-lockfile
+      run: pnpm install --frozen-lockfile $PNPM_IGNORE_SCRIPTS_FLAG
+      env:
+        PNPM_IGNORE_SCRIPTS_FLAG: ${{ inputs.ignore-scripts == 'true' && '--ignore-scripts' || '' }}
     - name: Install CLI dependencies
       if: inputs.install == 'cli'
       shell: bash
-      run: pnpm install --frozen-lockfile --filter "@gaia-react/cli..."
+      run: pnpm install --frozen-lockfile --filter "@gaia-react/cli..." $PNPM_IGNORE_SCRIPTS_FLAG
+      env:
+        PNPM_IGNORE_SCRIPTS_FLAG: ${{ inputs.ignore-scripts == 'true' && '--ignore-scripts' || '' }}
