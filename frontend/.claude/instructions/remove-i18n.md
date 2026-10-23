@@ -7,7 +7,7 @@ description: Deterministic runbook that strips the entire i18next stack from a G
 
 All paths in this file are repo-relative. The executing agent runs from the project root.
 
-Execute every section in order, top to bottom. No skipping, no reordering. After Section I passes, Section J self-deletes this file.
+Execute every section in order, top to bottom. No skipping, no reordering. After Section I passes, Section J deletes this file and `add-locale.md`, which no longer apply once i18n is gone.
 
 This runbook takes no variables, i18n removal is identical for every project.
 
@@ -493,7 +493,7 @@ Discovery sweep:
 grep -rln "i18n\|useTranslation\|languages/\|i18next" wiki .claude frontend/.claude
 ```
 
-Review every match. Edit or delete each, the only acceptable surviving matches are inside this very file (`remove-i18n.md`) and inside the `add-locale.md` template. Both will be self-deleted after they run.
+Review every match. Edit or delete each, the only acceptable surviving matches are inside this very file (`remove-i18n.md`) and inside the `add-locale.md` template. Section J deletes both.
 
 ---
 
@@ -512,7 +512,7 @@ If any step fails, **stop** and report the failing command + output verbatim. Do
 On full verification success:
 
 ```bash
-rm frontend/.claude/instructions/remove-i18n.md
+rm -f frontend/.claude/instructions/add-locale.md frontend/.claude/instructions/remove-i18n.md
 ```
 
 Print: `remove-i18n, done`.

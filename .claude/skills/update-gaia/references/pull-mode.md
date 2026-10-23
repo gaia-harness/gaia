@@ -1,6 +1,6 @@
 # Pull mode
 
-SKILL.md reads this file at its pull check. Pull mode brings a main checkout that lags origin's GAIA version up to it, without a full update: it fast-forwards the default branch, installs the lockfile when it changed, applies the machine-scope setup the pulled release lists, and offers the residue sweep. It never stashes, never forces and never switches branches, and it never runs from a linked worktree. It never reads `.gaia/update-decisions.json`, so a pull can repair a decision log that origin already fixed. It does not absorb Step 12: the updater's own main checkout is pulled by the work-lifecycle cleanup after the merge.
+SKILL.md reads this file at its pull check. Pull mode brings a main checkout that lags origin's GAIA version up to it, without a full update: it fast-forwards the default branch, installs the lockfile when it changed, applies the machine-scope setup the pulled release lists, and offers the leftover-file cleanup. It never stashes, never forces and never switches branches, and it never runs from a linked worktree. It never reads `.gaia/update-decisions.json`, so a pull can repair a decision log that origin already fixed. It does not absorb Step 12: the updater's own main checkout is pulled by the work-lifecycle cleanup after the merge.
 
 ## Inputs
 
@@ -46,7 +46,7 @@ bash <main checkout path>/.gaia/scripts/update-gaia-drift.sh --features <main ch
 
 Handle `APPLY`, `ASK`, `SETUP` and `DRIFT_FAILED` exactly as SKILL.md Step 9c does, reading each feature's reference from the main checkout. The records land in `.gaia/local/setup-state.json`. Project-scope features are not touched here; the full update carries them.
 
-## Step 5: Offer the residue sweep
+## Step 5: Offer the leftover-file cleanup
 
 Offer it in the main checkout:
 
@@ -54,7 +54,7 @@ Offer it in the main checkout:
 bash <main checkout path>/.gaia/scripts/state-registry-lib.sh residue-sweep
 ```
 
-Show its output. When its Residue section lists paths, ask once with `AskUserQuestion` (question `Delete the residue paths listed above?`, header `Residue`, options `Delete them` (Recommended) and `Keep them`), and on `Delete them` run the same command with `--apply`. Unknown paths are listed, never deleted. A non-zero exit names its cause on stderr: relay it and continue.
+Show its output. When its Residue section lists paths, ask once with `AskUserQuestion` (question `Delete the leftover files listed above?`, header `Leftovers`, options `Delete them` (Recommended) and `Keep them`), and on `Delete them` run the same command with `--apply`. Unknown paths are listed, never deleted. A non-zero exit names its cause on stderr: relay it and continue.
 
 ## Step 6: Refresh the update-check cache
 

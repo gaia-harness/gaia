@@ -58,11 +58,11 @@ const committed = SetupFeaturesSchema.parse(
   )
 );
 
+const frozen = committed.features.slice(0, FROZEN_IDS.length);
+
 describe('committed .gaia/setup-features.json', () => {
-  test('holds the frozen ids in order', () => {
-    expect(committed.features.map((feature) => feature.id)).toEqual([
-      ...FROZEN_IDS,
-    ]);
+  test('holds the frozen ids first, in order', () => {
+    expect(frozen.map((feature) => feature.id)).toEqual([...FROZEN_IDS]);
   });
 
   test.each(
@@ -77,9 +77,7 @@ describe('committed .gaia/setup-features.json', () => {
   });
 
   test('the frozen ids are all non-standalone', () => {
-    expect(committed.features.every((feature) => !feature.standalone)).toBe(
-      true
-    );
+    expect(frozen.every((feature) => !feature.standalone)).toBe(true);
   });
 });
 

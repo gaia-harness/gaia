@@ -14,7 +14,7 @@
 # Each reference basename is named literally in this list: the change selector
 # picks a suite only when it contains a changed file's basename. The
 # reference-index check keeps the list and the directory in step.
-EXPECTED_SETUP_REFERENCES="per-machine.md sandbox.md github-repo.md isolation-question.md squash-only.md statusline-left.md setup-decisions.md standalone-features.md land-decisions.md sandbox-recommendation.md"
+EXPECTED_SETUP_REFERENCES="per-machine.md sandbox.md github-repo.md isolation-question.md squash-only.md statusline-left.md setup-decisions.md standalone-features.md migrate-2-machine.md land-decisions.md sandbox-recommendation.md"
 
 # The exact opening sentence of a command's references block.
 REFERENCES_OPENING='This command reads these references, all under `.claude/skills/gaia/references/setup/`. Read one only when a "Read ... now" line sends you there, and then read the whole file:'

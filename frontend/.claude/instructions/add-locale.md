@@ -1,13 +1,20 @@
 ---
 name: add-locale
-description: Add a single locale to the project's i18n setup. Parameterized, substitute LOCALE_CODE / LANGUAGE_NAME_EN / LANGUAGE_NAME_NATIVE / IS_RTL before executing.
+description: Add a locale to the project's i18n setup, at /gaia-init or any time after. Parameterized, substitute LOCALE_CODE / LANGUAGE_NAME_EN / LANGUAGE_NAME_NATIVE / IS_RTL before executing.
 ---
 
 # add-locale instruction
 
 All paths in this file are repo-relative. The executing agent runs from the project root.
 
-Contents: Variable substitution; Step 1, Mirror the English language tree; Step 2, Register the locale; Step 3, LanguageSelect; Step 4, Storybook preview; Step 5, RTL handling (only if `{{IS_RTL}}` is `true`); Step 6, Playwright spec; Step 7, Manifest (no change needed); Step 8, Verify; Step 9, Self-delete.
+Contents: When this runs; Variable substitution; Step 1, Mirror the English language tree; Step 2, Register the locale; Step 3, LanguageSelect; Step 4, Storybook preview; Step 5, RTL handling (only if `{{IS_RTL}}` is `true`); Step 6, Playwright spec; Step 7, Manifest (no change needed); Step 8, Verify; Step 9, Summary.
+
+## When this runs
+
+`/gaia-init` runs it for each language picked at setup, and a request to add a language later ("add French") runs it the same way. The file stays in place after a run, so it serves every later language too.
+
+- **i18n removed.** When `frontend/app/languages/` does not exist, the project removed i18n: stop and say that adding a language first needs the i18n scaffolding rebuilt.
+- **Several locales in one run.** Run Steps 1 to 7 for every locale first, each with its own substitution, then Step 8 once and Step 9 once per locale. A per-locale verify fails while a later locale is registered but its language tree does not exist yet.
 
 ## Variable substitution
 
@@ -44,7 +51,7 @@ Translation rules:
 
 ## Step 2, Register the locale
 
-Edit `frontend/app/languages/index.ts`:
+Edit `frontend/app/languages/index.ts`. `/gaia-init`'s `configure-i18n` already registers every locale picked at setup, so skip any of the four entries below that is already present:
 
 1. Add `import {{LOCALE_CODE}} from './{{LOCALE_CODE}}';` in alphabetical order among existing locale imports.
 2. Append `'{{LOCALE_CODE}}'` to the `LANGUAGES` array, keeping the array alphabetically sorted.
@@ -152,21 +159,15 @@ If either command fails:
 
 - **STOP immediately.**
 - Report the exact error output.
-- **Do not proceed to Step 9 (self-delete).**
+- **Do not print the Step 9 summary.**
 
 Only proceed to Step 9 if both commands exit with code 0.
 
 ---
 
-## Step 9, Self-delete
+## Step 9, Summary
 
-On success (both `pnpm typecheck` and `pnpm lint` pass):
-
-```
-rm frontend/.claude/instructions/add-locale.md
-```
-
-Print a one-line summary:
+On success (both `pnpm typecheck` and `pnpm lint` pass), leave this file in place and print a one-line summary:
 
 ```
 add-locale {{LOCALE_CODE}} ({{LANGUAGE_NAME_EN}}), done
