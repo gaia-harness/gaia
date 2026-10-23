@@ -629,7 +629,7 @@ jobs:
           # check-scope.sh would then be handed `"forensics/caf\303\251.md"`,
           # a literal that matches no scope pattern, so the re-check aborts a
           # legitimate fix instead of clearing it.
-          git diff --staged --name-only -z > "$touched_file"
+          git diff --staged --name-only --no-renames -z > "$touched_file"
           set_outputs "touched_file=$touched_file"
 
           if [ ! -s "$touched_file" ]; then
@@ -846,7 +846,7 @@ jobs:
           # NUL-delimited for the reason the triage job's verify-diff step
           # gives: git would otherwise C-quote a non-ASCII path.
           touched_file="${RUNNER_TEMP}/fix-touched-paths.nul"
-          git diff --name-only -z "$base_sha" "$fix_sha" > "$touched_file"
+          git diff --name-only --no-renames -z "$base_sha" "$fix_sha" > "$touched_file"
           if [ ! -s "$touched_file" ]; then
             reject "the fix bundle changes no path"
           fi
