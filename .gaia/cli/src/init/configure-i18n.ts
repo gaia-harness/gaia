@@ -3,11 +3,14 @@
  *
  * Codifies Step 3 of `/gaia-init`. Two paths:
  *
- *   --strip false   Keep the i18n scaffolding wired up. Edits
- *                   `app/languages/index.ts` so `LANGUAGES` and the
- *                   `Language` union match the requested locale list, and
- *                   updates `app/i18n.ts`'s `fallbackLng` to the first
- *                   locale.
+ *   --strip false   Keep the i18n scaffolding wired up. Drops every
+ *                   locale registered in `app/languages/index.ts` that the
+ *                   requested list does not name, and updates
+ *                   `app/i18n.ts`'s `fallbackLng` to the first locale. It
+ *                   never registers a locale: the add-locale instruction's
+ *                   Step 2 does that right after it creates the locale's
+ *                   language tree, so the index never imports a tree that
+ *                   does not exist yet.
  *
  *   --strip true    Removes everything i18n-related: deletes
  *                   `app/languages/`, `app/i18n.ts`, the locale-specific
@@ -195,18 +198,34 @@ export default {${exports}} as const;
 `;
 };
 
-const updateLanguagesIndex = (
-  cwd: string,
-  locales: readonly string[]
-): void => {
+const REGISTERED_LANGUAGES = /^export const LANGUAGES = \[([^\]]*)\];$/mu;
+
+const readRegisteredLocales = (source: string): string[] => {
+  const match = REGISTERED_LANGUAGES.exec(source);
+
+  if (match === null) {
+    throw new Error(`${LANGUAGES_INDEX} has no LANGUAGES array to update`);
+  }
+
+  return [...(match[1] ?? '').matchAll(/'([^']+)'/gu)].map(
+    ([, code]) => code ?? ''
+  );
+};
+
+const pruneLanguagesIndex = (cwd: string, locales: readonly string[]): void => {
   const target = path.join(cwd, LANGUAGES_INDEX);
 
   if (!existsSync(target)) return;
-  const next = renderLanguagesIndex(locales);
   const current = readFileSync(target, 'utf8');
+  const registered = readRegisteredLocales(current);
+  const kept = registered.filter((code) => locales.includes(code));
 
-  if (current === next) return;
-  atomicWriteFileSync(target, next);
+  // When no picked locale is registered yet (a primary locale other than the
+  // template's), pruning would leave an index with no language at all; the
+  // template locale stays until add-locale registers a picked one and
+  // /gaia-init re-runs this step.
+  if (kept.length === 0 || kept.length === registered.length) return;
+  atomicWriteFileSync(target, renderLanguagesIndex(kept));
 };
 
 const updateI18nFallback = (cwd: string, fallback: string): void => {
@@ -277,7 +296,7 @@ export const run = (
     }
 
     try {
-      updateLanguagesIndex(target.packageDir, parsed.flags.locales);
+      pruneLanguagesIndex(target.packageDir, parsed.flags.locales);
       const [fallbackLocale] = parsed.flags.locales;
       updateI18nFallback(target.packageDir, fallbackLocale);
     } catch (error) {

@@ -60,7 +60,11 @@ describe('gaia init commands resolve the frontend package root', () => {
       'frontend/app/i18n.ts',
       "const i18n = {\n  fallbackLng: 'en',\n};\n"
     );
-    write(root, 'frontend/app/languages/index.ts', 'export {};\n');
+    write(
+      root,
+      'frontend/app/languages/index.ts',
+      "export const LANGUAGES = ['de', 'en'];\n"
+    );
 
     expect(
       runConfigureI18n(['--locales', 'fr,en', '--strip', 'false'], {cwd: root})
@@ -68,7 +72,7 @@ describe('gaia init commands resolve the frontend package root', () => {
 
     expect(read(root, 'frontend/app/i18n.ts')).toContain("fallbackLng: 'fr'");
     expect(read(root, 'frontend/app/languages/index.ts')).toContain(
-      "LANGUAGES = ['fr', 'en']"
+      "LANGUAGES = ['en']"
     );
     expect(existsSync(path.join(root, 'app'))).toBe(false);
   });

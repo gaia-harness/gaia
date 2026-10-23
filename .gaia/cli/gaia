@@ -34157,13 +34157,24 @@ export type Language = ${union2};
 export default {${exports}} as const;
 `;
 };
-var updateLanguagesIndex = (cwd, locales) => {
+var REGISTERED_LANGUAGES = /^export const LANGUAGES = \[([^\]]*)\];$/mu;
+var readRegisteredLocales = (source) => {
+  const match = REGISTERED_LANGUAGES.exec(source);
+  if (match === null) {
+    throw new Error(`${LANGUAGES_INDEX} has no LANGUAGES array to update`);
+  }
+  return [...(match[1] ?? "").matchAll(/'([^']+)'/gu)].map(
+    ([, code]) => code ?? ""
+  );
+};
+var pruneLanguagesIndex = (cwd, locales) => {
   const target = path33.join(cwd, LANGUAGES_INDEX);
   if (!existsSync15(target)) return;
-  const next = renderLanguagesIndex(locales);
   const current = readFileSync21(target, "utf8");
-  if (current === next) return;
-  atomicWriteFileSync(target, next);
+  const registered = readRegisteredLocales(current);
+  const kept = registered.filter((code) => locales.includes(code));
+  if (kept.length === 0 || kept.length === registered.length) return;
+  atomicWriteFileSync(target, renderLanguagesIndex(kept));
 };
 var updateI18nFallback = (cwd, fallback) => {
   const target = path33.join(cwd, I18N_FILE);
@@ -34208,7 +34219,7 @@ var run17 = (argv, options = {}) => {
       return EXIT_CODES.CONFIG_INVALID;
     }
     try {
-      updateLanguagesIndex(target.packageDir, parsed.flags.locales);
+      pruneLanguagesIndex(target.packageDir, parsed.flags.locales);
       const [fallbackLocale] = parsed.flags.locales;
       updateI18nFallback(target.packageDir, fallbackLocale);
     } catch (error62) {

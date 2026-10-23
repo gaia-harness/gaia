@@ -328,7 +328,8 @@ If any of these exit non-zero, surface the structured error verbatim (the CLI pr
 If `STRIP_I18N == false` and `LOCALES` holds any locale other than `en`, read `frontend/.claude/instructions/add-locale.md` once, then:
 
 1. For each locale in `LOCALES` that is not `en`: resolve its English display name (e.g. `Polish`), native display name (e.g. `Polski`), and RTL flag (`true` for `ar`/`he`/`fa`/`ur`, otherwise `false`); substitute the four template variables, `{{LOCALE_CODE}}`, `{{LANGUAGE_NAME_EN}}`, `{{LANGUAGE_NAME_NATIVE}}`, `{{IS_RTL}}`; and execute Steps 1 to 7.
-2. After the last locale, run Step 8 (verify) once, then print Step 9's summary line for each locale.
+2. After the last locale, re-run Step 3's `configure-i18n` line with the same arguments. Every picked locale is registered by now, so it drops any template locale the user did not pick (`en`, when `LOCALES` leaves it out).
+3. Run Step 8 (verify) once, then print Step 9's summary line for each locale.
 
 Stop on any failure. `add-locale.md` (`## When this runs`) says why verify runs once.
 
