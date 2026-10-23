@@ -1,4 +1,4 @@
-# Contributing to GAIA React
+# Contributing to GAIA
 
 GAIA is opinionated. The conventions, rules, and hooks aren't suggestions. They're the product. Pull requests that fight the opinions will be redirected, not merged. Pull requests that sharpen them are welcome.
 

@@ -1,15 +1,15 @@
 ---
 type: overview
-title: GAIA React Overview
+title: GAIA Overview
 status: mature
 created: 2026-04-20
-updated: 2026-10-13
+updated: 2026-10-24
 tags: [overview, gaia]
 ---
 
-# GAIA React
+# GAIA
 
-GAIA React eliminates the multi-day setup tax on new projects: linting, testing, i18n, CI, pre-commit hooks, dark mode, Storybook, MSW, and Claude Code integration are all wired together and working, not just installed.
+GAIA, a harness for Claude Code, eliminates the multi-day setup tax on new projects: linting, testing, i18n, CI, pre-commit hooks, dark mode, Storybook, MSW, and Claude Code integration are all wired together and working, not just installed.
 
 ## Philosophy
 

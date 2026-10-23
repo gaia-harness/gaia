@@ -2,13 +2,13 @@
 type: meta
 status: active
 created: 2026-04-20
-updated: 2026-10-15
+updated: 2026-10-24
 tags: [meta, schema]
 ---
 
-# GAIA React: LLM Wiki
+# GAIA: LLM Wiki
 
-Purpose: Persistent knowledge base for the GAIA React workflow: architecture, conventions, decisions, Claude integration.
+Purpose: Persistent knowledge base for the GAIA harness: architecture, conventions, decisions, Claude integration.
 <!-- gaia:maintainer-only:start -->
 Owner: Steven Sacks
 <!-- gaia:maintainer-only:end -->

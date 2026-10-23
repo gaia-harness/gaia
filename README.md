@@ -1,4 +1,4 @@
-# GAIA React
+# GAIA
 
 <img src="./docs/assets/gaia-logo.svg" height="100" alt="GAIA"/>
 
@@ -170,4 +170,4 @@ Questions, ideas, and reports of what worked and what didn't go to the [Feedback
 
 The GAIA Flash Framework was Flash's most popular framework. **Its killer feature was automation.** It collapsed repetitive Flash plumbing into a few declarative patterns so engineers could focus on the product, and was used on over 100,000 sites at every major digital agency worldwide.
 
-GAIA React carries that automation philosophy into the AI-native era. Where the original automated Flash boilerplate, GAIA automates the Claude workflow (conventions, rules, hooks, gates, wiki) so you can ship features end-to-end without wiring the scaffolding every time.
+GAIA carries that automation philosophy into the AI-native era. Where the original automated Flash boilerplate, the GAIA harness automates the Claude workflow (conventions, rules, hooks, gates, wiki) so you can ship features end-to-end without wiring the scaffolding every time.
