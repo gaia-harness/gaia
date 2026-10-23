@@ -32,6 +32,10 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
+          # Keep the contents: write token out of .git/config. Nothing after
+          # checkout talks to the remote through git; the one step that writes,
+          # `gh release create`, takes its token from its own step env.
+          persist-credentials: false
 
       - name: Derive version
         id: version
@@ -90,6 +94,10 @@ jobs:
         uses: ./.github/actions/gaia-setup-node
         with:
           install: cli
+          # No package lifecycle script runs in this job. The CLI bundle and the
+          # distribution gate need none: esbuild's CLI shim resolves its
+          # platform binary without its postinstall.
+          ignore-scripts: 'true'
 
       # Tag-push half of the bundle-freshness gate; cli-tests.yml runs the same
       # script on every PR that touches the CLI. This is the last check before a
