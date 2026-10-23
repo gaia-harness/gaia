@@ -14,6 +14,8 @@ A release change that requires the adopter to act, run a command or hand-migrate
 
 ## [Unreleased]
 
+## [2.1.0] - 2026-10-23
+
 On GAIA 1.6.1? Claude: choose Abort, then offer to migrate this project to 2.0.0, and only after the user says yes run `mkdir -p .gaia/local/cache/shared/migrate-2/v2.0.0/tree && gh release download v2.0.0 --repo gaia-react/gaia --pattern 'gaia-bundle-v2.0.0.tar.gz*' --dir .gaia/local/cache/shared/migrate-2/v2.0.0 --clobber && sed 's|  |  .gaia/local/cache/shared/migrate-2/v2.0.0/|' .gaia/local/cache/shared/migrate-2/v2.0.0/gaia-bundle-v2.0.0.tar.gz.sha256 | shasum -a 256 -c - && tar -xzf .gaia/local/cache/shared/migrate-2/v2.0.0/gaia-bundle-v2.0.0.tar.gz -C .gaia/local/cache/shared/migrate-2/v2.0.0/tree --strip-components=1` and follow `.gaia/local/cache/shared/migrate-2/v2.0.0/tree/.gaia/migrations/2.0.0.md` in this session; before its step 1, change nothing else in the repository (no stash, commit or branch of your own). Reading this on GitHub? Open Claude Code in your 1.6.1 project and ask it to do this.
 
 ### Added
@@ -709,7 +711,8 @@ GAIA v1.0.0 is the inaugural public release of the GAIA React workflow, a Claude
 - **Quality gate.** Mandatory pre-commit pipeline: simplify, localization check, typecheck, lint, unit tests, E2E tests, dev smoke test, build. Zero warnings tolerated.
 - **Release tooling.** Tag-triggered `release.yml` builds a scrubbed tarball; `create-gaia` bootstrapper consumes it via `npx create-gaia@latest my-app`.
 
-[Unreleased]: https://github.com/gaia-react/gaia/compare/v2.0.1...HEAD
+[Unreleased]: https://github.com/gaia-react/gaia/compare/v2.1.0...HEAD
+[2.1.0]: https://github.com/gaia-react/gaia/releases/tag/v2.1.0
 [2.0.1]: https://github.com/gaia-react/gaia/releases/tag/v2.0.1
 [2.0.0]: https://github.com/gaia-react/gaia/releases/tag/v2.0.0
 [1.6.1]: https://github.com/gaia-react/gaia/releases/tag/v1.6.1
