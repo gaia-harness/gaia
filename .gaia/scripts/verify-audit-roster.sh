@@ -41,8 +41,8 @@
 #      overbroad, which is what stops the list being a free opt-out. The
 #      section's own docblock below carries the reasoning, including why the
 #      universe is the tracked files of the repository ROOTED AT --root and
-#      nothing wider. On an adopter clone, an unclaimed path under GAIA's own
-#      harness trees is GAIA's rather than ownerless (see `harness_prefixes`).
+#      nothing wider. On an adopter clone, an unclaimed path under the
+#      harness trees is not counted as ownerless (see `harness_prefixes`).
 #   3. Roster-reader drift: this check's raw-glob scrape and the classifier's
 #      compiled globs must agree per member on the count. On drift the
 #      remit-parity, unowned-dialect and light_hard_full dialect-and-coverage
@@ -939,10 +939,12 @@ done < <(printf '%s\n' "$light_records")
 # either character misaligns its fields. The roster's own dialect rejects
 # whitespace in a glob for the same reason, and no such path exists here.
 
-# GAIA's own harness trees, on an adopter clone. The release strips the
-# maintainer members that own them, so they arrive with no reviewer, and they
-# are GAIA's to audit rather than the adopter's: a path under one of these
-# prefixes that no member claims is not ownerless. A member that does claim
+# The harness trees, on an adopter clone. The release strips the maintainer
+# members that own them, so they arrive with no reviewer. A path under one of
+# these prefixes that no member claims is not counted as ownerless, whoever
+# wrote it: a file the adopter adds there (its own hook, agent or rule) is
+# exempt too and gets no reviewer from this check. Granting such files to a
+# member of the adopter's own is how they get reviewed. A member that does claim
 # one wins as usual, so an adopter granting part of a tree (a member's own
 # definition, say) never meets an overbroad finding. These are prefixes, not
 # `unowned:` entries, for that reason: an entry reaching a claimed path fails.

@@ -832,7 +832,7 @@ YAML
 
 # The adopter copy of the check: the release strips the maintainer-only block
 # that empties `harness_prefixes`, so on an adopter clone an unclaimed path
-# under GAIA's own harness trees is GAIA's, not ownerless. The source copy keeps
+# under the harness trees is not counted as ownerless. The source copy keeps
 # the list empty, which is what the paired test below pins.
 stripped_check() {
   local sandbox="$BATS_TEST_TMPDIR/adopter-check"
