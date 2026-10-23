@@ -47,6 +47,8 @@ Layer-selection heuristics:
 - **Skill** when the guidance is intent-triggered, not file-path-triggered, and benefits from references that load on demand (e.g. `eslint-fixes` only matters when fixing lint, not on every edit).
 - **Rule** when the guidance must auto-apply whenever an in-scope file is touched, regardless of intent (`i18n.md`, `accessibility.md`, `coding-guidelines.md`, `quality-gate.md`).
 
+After adding a rule, skill, agent or command, Claude runs `.gaia/cli/gaia fitness check --json` and fixes any finding it reports against the new file before calling the work done.
+
 Cross-link: [[Claude Skills]] § Rules vs. Skills: decision criteria.
 
 ## 3. Agent extensions (review-type agents only)
@@ -86,6 +88,8 @@ paths:
 
 Examples of path-scoped rules: `i18n.md` (pages + components + languages), `routes.md` (routes + pages), `state-pattern.md` (state directory). Always-load rules: `quality-gate.md`, `coding-guidelines.md`.
 
+A new or re-scoped rule closes with `.gaia/cli/gaia fitness check --json`, which reports a `paths:` entry that does not compile and a path the rule names that does not exist.
+
 ## 6. Monorepo retrofit playbook
 
 GAIA ships its React app as the `frontend/` package of a pnpm workspace whose root holds the shared harness. This playbook adds a further package beside it, such as a backend. The package's folder is a project decision; `{PKG}` stands for its path below. `frontend/` is the worked example for every step: copy its shape, not its contents.
@@ -96,8 +100,22 @@ GAIA ships its React app as the `frontend/` package of a pnpm workspace whose ro
 4. **Generate its settings.** `{PKG}/.claude/settings.json` is generated from the root `.claude/settings.json`, never hand-edited: package-only settings go in `{PKG}/.claude/settings.overlay.json`, then run `./.gaia/cli/gaia packages sync-settings`. The pre-commit hook refuses a commit that leaves any generated settings file missing or stale.
 5. **Meet the pre-commit floor.** For each package with a staged path matching its pre-commit globs, the hook runs the package's typecheck, lint-staged and test scripts; `.githooks/pre-commit` names the scripts `{PKG}/package.json` must define. See [[Pre-commit Hooks]].
 6. **Add a stack-specific quality gate**, as §8 describes. The shared gate's executable steps check only `frontend/`, and its skip check matches JavaScript, TypeScript and CSS sources, so a package in another language gets no gate until its own names its checks.
-7. **Give it an auditor.** The Code Audit Team assigns each changed file to the member whose globs in `.gaia/audit-ci.yml` match it. A file no member claims still owes `code-audit-frontend`, the default member, so the merge gate holds the branch to an audit, but by a React lens with no remit for the package's stack. Register a member for the package, as [[Registering a Code Audit Team Member]] describes, or grant its globs to an existing member whose lens fits. Run `bash .gaia/scripts/verify-audit-roster.sh` after the roster change: it reports every tracked path no member owns and no `unowned:` entry declares, and the pre-commit hook runs it on any commit that stages the roster. An `unowned:` entry only quiets that report and suppresses no review.
-8. **Leave the wiki hooks alone.** `wiki-session-start.sh` is git-level and names no package path.
+7. **Give it CI.** `.github/workflows/tests.yml` runs only the frontend suite, and its incremental-skip pattern (the `pattern=` line of its `Detect test-relevant changes` step) arms only on `frontend/` and root config, so a change under `{PKG}` alone runs no tests in CI. Add a workflow of its own, `{PKG}-tests.yml` or the stack's equivalent, named per [[Workflow Naming Convention]], copying the shape of `tests.yml`: default-deny `permissions: {}` with per-job grants, the same `concurrency` group, and the package's own typecheck, lint and test scripts. A job that becomes a required check gates its steps inside the job, as `tests.yml` does, rather than with a workflow `paths:` filter, because a check that never reports leaves the pull request waiting ([[Incremental CI Skipping]]). Add `{PKG}` to the `tests.yml` pattern only when the frontend suite depends on the package, such as a shared types package the app imports.
+8. **Give it an auditor.** The Code Audit Team assigns each changed file to the member whose globs in `.gaia/audit-ci.yml` match it. A file no member claims still owes `code-audit-frontend`, the default member, so the merge gate holds the branch to an audit, but by a React lens with no remit for the package's stack. Register a member for the package, as [[Registering a Code Audit Team Member]] describes, or grant its globs to an existing member whose lens fits. Run `bash .gaia/scripts/verify-audit-roster.sh` after the roster change: it reports every tracked path no member owns and no `unowned:` entry declares, and the pre-commit hook runs it on any commit that stages the roster. An `unowned:` entry only quiets that report and suppresses no review.
+9. **Leave the wiki hooks alone.** `wiki-session-start.sh` is git-level and names no package path.
+
+### Verify the package
+
+Claude runs these before reporting the package added, and fixes what any of them reports:
+
+```
+pnpm -C {PKG} typecheck
+./.gaia/cli/gaia packages sync-settings --check
+bash .gaia/scripts/verify-audit-roster.sh
+.gaia/cli/gaia fitness check --json
+```
+
+The first proves the package meets the pre-commit floor, the second that its generated settings are current, the third that the roster claims its files, and the fourth that the new rules and skills are well formed. Then the first push runs the new workflow; a green run on a change under `{PKG}` closes the job.
 
 ### A backend and worktrees
 
@@ -123,7 +141,29 @@ Multiple gates coexist via path scoping:
 - `.claude/rules/quality-gate.md`: shared/default gate (always loaded; not stack-neutral, since its gate's package steps check only `frontend/`)
 - `.claude/rules/quality-gate-{stack}.md`: stack-specific gate with `paths:` frontmatter
 
-Each gate defines its own runner commands. Cross-link: [[Quality Gate]].
+**How the two coexist.** The stack gate adds to the shared gate and replaces none of it. It loads when a `{PKG}` file is in scope and owns that package's checks; the shared gate stays loaded and keeps its own skip check, which reads file extensions rather than packages, so a commit staging TypeScript under `{PKG}` selects both and runs both. The stack gate never restates the shared steps (simplify, localization, the stop-and-report step); it points at them. A stack gate is new and adopter-owned, so `/update-gaia` never touches it, while the shared gate is `owned`: change it only by adding a stack gate.
+
+**The contract.** A stack gate names its trigger (the staged paths that select it), its checks in order with the exact commands, the pass condition (zero errors and zero warnings), and where it hands back to the shared gate. Skeleton, with `{PKG}` and `{stack}` filled in:
+
+```
+---
+paths:
+  - '{PKG}/**'
+---
+
+# Quality Gate ({stack})
+
+Before any `git commit` that stages a file under `{PKG}/`, run these in order. Fix every error and warning before reporting.
+
+1. `pnpm -C {PKG} typecheck`
+2. `pnpm -C {PKG} lint`
+3. `pnpm -C {PKG} test`
+4. The package's build or smoke command.
+
+This gate adds to `.claude/rules/quality-gate.md`. Run its simplify and stop-and-report steps (`wiki/decisions/Quality Gate.md`) once for the whole commit, not once per gate.
+```
+
+Steps 1 and 3 are scripts the pre-commit floor already requires of `{PKG}/package.json` (§6 step 5), so the gate and the hook run the same checks. Cross-link: [[Quality Gate]].
 
 ## 9. API service layer swap
 

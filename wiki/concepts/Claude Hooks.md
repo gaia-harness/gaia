@@ -210,10 +210,28 @@ That compounds with the ordinary cost of a `cd`: the working directory it sets p
 
 ## Adding hooks
 
-Ask Claude to add a hook; Claude will drop the script into `.claude/hooks/` and register it in `.claude/settings.json` via the `update-config` skill. **A registered hook owes an entry above.** The inventory in `## Bundled hooks` is what every reader treats as the complete hook layer, and it is hand-kept. Copy the shape of an existing hook such as `block-no-verify.sh`; the header of `audit-loop-bound.sh` describes the decision-hook variant.
+When the user asks for a hook, Claude takes these steps in order:
+
+1. **Write the script** in `.claude/hooks/`, copying the shape of an existing hook such as `block-no-verify.sh`: read the payload JSON from stdin, and refuse with exit 2 (or a structured deny) rather than any other non-zero exit, which does not block. The header of `audit-loop-bound.sh` describes the decision-hook variant. Write for stock macOS `/bin/bash` 3.2, which runs the hooks on a Mac (see the pitfall below).
+2. **Register it** in the root `.claude/settings.json` through the `update-config` skill, copying an existing entry's command form, which roots the script path at the repository so a `cd` cannot unregister it. `bash .gaia/scripts/check-hook-command-rooting.sh` confirms the form.
+3. **Regenerate the package settings** with `./.gaia/cli/gaia packages sync-settings`. Each `<package>/.claude/settings.json` (`frontend/.claude/settings.json`) is generated from the root file, so a session launched in the package runs the new hook only after this step. Claude runs it after any edit to the root `.claude/settings.json` or a `<package>/.claude/settings.overlay.json`, because nothing runs it on its own: the pre-commit hook refuses a commit that leaves the generated file stale, and `/update-gaia` re-runs it after its merge.
+4. **Add the inventory entry** under `## Bundled hooks` above. **A registered hook owes an entry there:** the inventory is what every reader treats as the complete hook layer, and it is hand-kept.
+5. **Test it with a sample payload** and confirm both outcomes, the call it refuses and one it allows, per `.claude/rules/guards-must-fail.md`:
+
+```
+printf '%s' '{"tool_name":"Bash","tool_input":{"command":"<command to test>"}}' | bash .claude/hooks/<hook>.sh; echo "exit=$?"
+```
+
+Then run `./.gaia/cli/gaia packages sync-settings --check`, which exits 0 when every generated file is current.
+
+A hook runs on every call its matcher selects, so its cost is per call: [[per-call-bash-hook-cost-cut|Per-call Bash hook cost cut]] measures it. A hook that keeps state across calls or worktrees follows [[Worktrees#Adding state or a hook correctly (the checklist)]].
+
+### The bash 3.2 empty-array pitfall
+
+On stock macOS `/bin/bash` (3.2.57) a bare `"${arr[@]}"` or `"${arr[*]}"` expansion of an empty array in a `set -u` body aborts with `unbound variable` before any trailing `|| true` can catch it, a failure a bash 5 test run cannot see. Guard the expansion (`"${arr[@]+"${arr[@]}"}"`) or check the array is non-empty first.
 
 <!-- gaia:maintainer-only:start -->
-`.gaia/scripts/lint-hook-array-guard.sh`, run over `.claude/hooks/` and `.gaia/scripts/`, flags a bare `"${arr[@]}"` / `"${arr[*]}"` expansion in a `set -u` body: on stock macOS `/bin/bash` (3.2.57) that expansion aborts with `unbound variable` over an empty array before any trailing `|| true` can catch it, a failure class a bash-5 test run cannot see. Guard the expansion (`"${arr[@]+"${arr[@]}"}"`) or check the array is non-empty first.
+`.gaia/scripts/lint-hook-array-guard.sh`, run over `.claude/hooks/` and `.gaia/scripts/`, flags that bare expansion.
 <!-- gaia:maintainer-only:end -->
 
 <!-- gaia:maintainer-only:start -->
@@ -223,5 +241,16 @@ GAIA's CI runs the lint on every push.
 <!-- gaia:maintainer-only:start -->
 In the GAIA maintainer repo the gate also scans `.gaia/tests/`, which a maintainer runs on that same stock `/bin/bash` and which therefore carries the identical class. It reaches that tree through two gates: the `GAIA: Shell Lint` workflow, which arms on any tracked `*.sh` and folds the scan into `.gaia/tests/shell-lint.sh`, and the gate's own bats suite in the `Audit CI Tests` scripts shard. That same harness also parses every tracked `*.sh` with bash 3.2 itself, which catches the syntax errors the empty-array class sits beside: a construct valid on bash 5 and a parse error on 3.2 clears shellcheck, and an unparseable library aborts the shell that sources it rather than returning an error.
 <!-- gaia:maintainer-only:end -->
+
+## Disabling or overriding a hook
+
+A bundled hook is a guard the rest of the harness assumes is live, so Claude confirms with the user which call they want to stop refusing before removing one, and names what the hook protects (its inventory entry above says).
+
+1. **Disable** by deleting its entry from the root `.claude/settings.json`, which is `shared`: `/update-gaia` three-way merges the removal and asks only when a release changes that same entry. Leave the script in `.claude/hooks/`; it is `owned`, and deleting it only makes the next update restore it. Claude Code runs the hooks of every settings file together, so `.claude/settings.local.json` can add a hook but cannot remove a committed one, and a package's `settings.overlay.json` is union-only and cannot touch hooks. `disableAllHooks` turns off the whole layer, every guard and the GAIA statusline at once, and is never the way to drop one hook.
+2. **Override** by registering a hook of your own in its place (`## Adding hooks`), never by editing the bundled script, which an update merges against GAIA's next copy.
+3. **Regenerate** with `./.gaia/cli/gaia packages sync-settings` and remove the inventory entry, or reword it to the replacement.
+4. **Prove the change** with the step 5 payload above: the call the hook refused now passes, and a replacement still refuses what it should. A guard that can no longer fail is the outcome to rule out, per `.claude/rules/guards-must-fail.md`.
+
+See [[Customizing GAIA]] for where every other customization goes.
 
 See [[Quality Gate]], [[Pre-commit Hooks]], [[Git Workflow]], [[Claude Integration Conventions]], [[TDD RED Verification]].
