@@ -1,14 +1,22 @@
-import {describe, expect, test} from 'vitest';
+import {afterEach, beforeEach, describe, expect, test, vi} from 'vitest';
+import {mkdirSync, mkdtempSync, rmSync, writeFileSync} from 'node:fs';
+import {tmpdir} from 'node:os';
+import path from 'node:path';
 import {
+  EMPTY_FINDING_CLASS_VOCABULARY,
   FindingClassSchema,
   HOLISTIC_FINDING_CLASSES,
   isOracleFindingClass,
   isValidFindingClass,
   OUT_OF_SCOPE_FALLBACK_FINDING_CLASS,
+  readProjectFindingClasses,
   RULE_FINDING_CLASSES,
   WORKFLOW_FINDING_CLASSES,
 } from '../finding-class.js';
-import type {HolisticFindingClass} from '../finding-class.js';
+import type {
+  FindingClassVocabulary,
+  HolisticFindingClass,
+} from '../finding-class.js';
 
 /**
  * Near-miss spellings per maintainer-surface member, the shapes a writer
@@ -223,5 +231,137 @@ describe('schemas/finding-class', () => {
           .success
       ).toBe(false);
     });
+  });
+
+  describe('project vocabulary (.gaia/finding-classes.json)', () => {
+    const vocabulary: FindingClassVocabulary = {
+      classes: ['holistic/missing-tenant-scope', 'billing/double-charge'],
+      oracle_prefixes: ['semgrep'],
+    };
+
+    test.each(['holistic/missing-tenant-scope', 'billing/double-charge'])(
+      'accepts a project class only with the vocabulary: %s',
+      (value) => {
+        expect(isValidFindingClass(value)).toBe(false);
+        expect(isValidFindingClass(value, vocabulary)).toBe(true);
+      }
+    );
+
+    test('accepts any safe id after a project oracle prefix and reads it as oracle', () => {
+      expect(isValidFindingClass('semgrep/python.lang.eval', vocabulary)).toBe(
+        true
+      );
+      expect(isOracleFindingClass('semgrep/python.lang.eval', vocabulary)).toBe(
+        true
+      );
+      expect(isOracleFindingClass('semgrep/python.lang.eval')).toBe(false);
+      expect(isValidFindingClass('semgrep/has space', vocabulary)).toBe(false);
+    });
+
+    test('still rejects the fallback and unlisted classes', () => {
+      expect(
+        isValidFindingClass(OUT_OF_SCOPE_FALLBACK_FINDING_CLASS, vocabulary)
+      ).toBe(false);
+      expect(isValidFindingClass('billing/refund-race', vocabulary)).toBe(
+        false
+      );
+    });
+  });
+
+  describe('readProjectFindingClasses', () => {
+    let root: string;
+    let errors: string[];
+
+    const writeVocabulary = (content: string): void => {
+      mkdirSync(path.join(root, '.gaia'), {recursive: true});
+      writeFileSync(
+        path.join(root, '.gaia', 'finding-classes.json'),
+        content,
+        'utf8'
+      );
+    };
+
+    beforeEach(() => {
+      root = mkdtempSync(path.join(tmpdir(), 'gaia-finding-classes-'));
+      errors = [];
+      vi.spyOn(process.stderr, 'write').mockImplementation((chunk: unknown) => {
+        errors.push(typeof chunk === 'string' ? chunk : String(chunk));
+
+        return true;
+      });
+    });
+
+    afterEach(() => {
+      vi.restoreAllMocks();
+      rmSync(root, {force: true, recursive: true});
+    });
+
+    test('a missing file is the empty vocabulary, silently', () => {
+      expect(readProjectFindingClasses(root)).toEqual(
+        EMPTY_FINDING_CLASS_VOCABULARY
+      );
+      expect(errors).toEqual([]);
+    });
+
+    test('reads classes and oracle prefixes, ignoring $comment', () => {
+      writeVocabulary(
+        JSON.stringify({
+          $comment: 'project classes',
+          classes: ['billing/double-charge'],
+          oracle_prefixes: ['semgrep'],
+        })
+      );
+
+      expect(readProjectFindingClasses(root)).toEqual({
+        classes: ['billing/double-charge'],
+        oracle_prefixes: ['semgrep'],
+      });
+      expect(errors).toEqual([]);
+    });
+
+    test.each([
+      ['invalid JSON', '{'],
+      [
+        'a non-kebab class',
+        JSON.stringify({classes: ['Billing/Double'], oracle_prefixes: []}),
+      ],
+      [
+        'a class with no prefix',
+        JSON.stringify({classes: ['double-charge'], oracle_prefixes: []}),
+      ],
+      [
+        'the fallback class',
+        JSON.stringify({
+          classes: ['holistic/unclassified'],
+          oracle_prefixes: [],
+        }),
+      ],
+      [
+        'a class under a built-in oracle prefix',
+        JSON.stringify({classes: ['axe/custom'], oracle_prefixes: []}),
+      ],
+      [
+        'a built-in prefix as an oracle prefix',
+        JSON.stringify({classes: [], oracle_prefixes: ['holistic']}),
+      ],
+      [
+        'a non-kebab oracle prefix',
+        JSON.stringify({classes: [], oracle_prefixes: ['Semgrep']}),
+      ],
+      ['a missing key', JSON.stringify({classes: []})],
+    ])(
+      'reports %s as a structured error and falls back to empty',
+      (_label, content) => {
+        writeVocabulary(content);
+
+        expect(readProjectFindingClasses(root)).toEqual(
+          EMPTY_FINDING_CLASS_VOCABULARY
+        );
+        expect(errors).toHaveLength(1);
+        expect(JSON.parse(errors[0] ?? '')).toMatchObject({
+          code: 'malformed_finding_classes',
+        });
+      }
+    );
   });
 });

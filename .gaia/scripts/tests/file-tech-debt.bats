@@ -208,6 +208,32 @@ CASES
   [ "$output" = clear ]
 }
 
+@test "screen is clear for a class or oracle prefix the project vocabulary registers, and only then" {
+  local value
+  for value in billing/double-charge semgrep/python.lang.eval; do
+    make_finding ".finding_class = \"$value\""
+    run bash "$SCRIPT" screen --finding "$FINDING"
+    [ "$output" = "security class-malformed" ] || { echo "accepted unregistered $value ($output)"; return 1; }
+  done
+  mkdir -p "$WORK_REPO/.gaia"
+  printf '{"classes":["billing/double-charge"],"oracle_prefixes":["semgrep"]}\n' >"$WORK_REPO/.gaia/finding-classes.json"
+  for value in billing/double-charge semgrep/python.lang.eval; do
+    make_finding ".finding_class = \"$value\""
+    run bash "$SCRIPT" screen --finding "$FINDING"
+    [ "$status" -eq 0 ] || { echo "diverted registered $value ($output)"; return 1; }
+    [ "$output" = clear ]
+  done
+  for value in billing/refund-race "semgrep/has space"; do
+    make_finding ".finding_class = \"$value\""
+    run bash "$SCRIPT" screen --finding "$FINDING"
+    [ "$output" = "security class-malformed" ] || { echo "accepted $value ($output)"; return 1; }
+  done
+  printf '{' >"$WORK_REPO/.gaia/finding-classes.json"
+  make_finding '.finding_class = "billing/double-charge"'
+  run bash "$SCRIPT" screen --finding "$FINDING"
+  [ "$output" = "security class-malformed" ]
+}
+
 @test "screen-text exits 1 on each secret fixture and 0 on clean text" {
   local fixture
   for fixture in "$SHAPED_TOKEN" "$SHAPED_PAT" "$SHAPED_ACCESS" "$SHAPED_PEM"; do

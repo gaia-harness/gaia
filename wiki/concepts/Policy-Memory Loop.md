@@ -3,7 +3,7 @@ type: concept
 title: Policy-Memory Loop
 status: active
 created: 2026-06-05
-updated: 2026-10-13
+updated: 2026-10-23
 tags: [concept, claude, audit, self-improvement, governance]
 ---
 
@@ -13,7 +13,7 @@ The Policy-Memory Loop turns a recurring code-review finding into a durable, hum
 
 ## The loop end to end
 
-1. **Emission contract.** [[Code Review Audit Agent]] tags every eligible finding with a stable `finding_class` and a `severity`. Oracle buckets use tool ids verbatim (`react-doctor/...`, `axe/...`, `knip/...`, `cve/...`); holistic and rule-subagent buckets draw from a constrained vocabulary. A finding carrying a valid `finding_class` is countable at any severity, `severity` is a ranking signal, never an eligibility gate. A finding that maps to no seeded class is stamped `holistic/unclassified` and surfaces as a distinct seed-a-class-or-investigate signal, never a draftable candidate; the schema still rejects free-text drift outright.
+1. **Emission contract.** [[Code Review Audit Agent]] tags every eligible finding with a stable `finding_class` and a `severity`. Oracle buckets use tool ids verbatim (`react-doctor/...`, `axe/...`, `knip/...`, `cve/...`, plus any oracle prefix the project registers in `.gaia/finding-classes.json`); holistic and rule-subagent buckets draw from a constrained vocabulary that the same file's `classes` extends. A finding carrying a valid `finding_class` is countable at any severity, `severity` is a ranking signal, never an eligibility gate. A finding that maps to no seeded class is stamped `holistic/unclassified` and surfaces as a distinct seed-a-class-or-investigate signal, never a draftable candidate; the schema still rejects free-text drift outright, and the tally counts a finding carrying it as `holistic/unclassified` rather than dropping it.
 2. **PR substrate.** The pull request is the durable record, not a committed sidecar. The merge flow posts a machine-readable finding block as a PR comment deterministically, wired into the merge itself, so every merge path feeds the tally. The cross-machine signal lives on GitHub, read back via `gh`.
 3. **TTL tally and review snapshot.** A background refresher recomputes, each TTL, how many distinct PRs carry each valid `finding_class` across a rolling 90-day window, at any severity, alongside the window's audited-PR denominator (every PR in the window carrying at least one parseable findings block) and the full class inventory (every counted class, below-threshold included). It drops classes already promoted (a rule exists) or locally declined without fresh evidence. It separately reports the `holistic/unclassified` recurrence in a named `unclassified` field, tracked by the same distinct-PR/90-day window; it is never promoted into a candidate, and it is subject to a machine-local suppression keyed on the classless fallback. Only findings blocks posted by repository owners, members, or collaborators count; a commenter with a missing or unknown association is ignored, so an outside commenter cannot move the tally. The tally is an ephemeral projection: nothing is staged, an un-acted pattern decays by ageing out of the window.
 

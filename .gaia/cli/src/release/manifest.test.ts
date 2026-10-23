@@ -69,6 +69,7 @@ describe('classifyPath', () => {
     expect(classifyPath('.gaia/VERSION')).toBeNull();
     expect(classifyPath('.gaia/manifest.json')).toBeNull();
     expect(classifyPath('.gaia/packages.json')).toBeNull();
+    expect(classifyPath('.gaia/finding-classes.json')).toBeNull();
   });
 
   test('wiki/hot.md is not an adopter-owned sentinel', () => {

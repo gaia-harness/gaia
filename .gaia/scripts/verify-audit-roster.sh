@@ -15,11 +15,6 @@
 #     It resolves an empty dispatched set, which the merge gate reads as
 #     nothing owed, so the diff merges reviewed by no one.
 #
-# Per-member registration in AUDIT_MACHINERY_PATHS and the `code-audit-` name
-# convention are real-tree assertions in this script's own bats suite rather
-# than a runtime check here, because both hold over the committed roster
-# whether or not a fixture roster is under test.
-#
 # Reads live state, never writes: no API write, no file write, no git mutation.
 # One finding block per violation on stdout; exit 1 if any fired. `--emit-roster`
 # is a read-only output mode the remit writer (write-audit-remits.sh) consumes
@@ -46,7 +41,8 @@
 #      overbroad, which is what stops the list being a free opt-out. The
 #      section's own docblock below carries the reasoning, including why the
 #      universe is the tracked files of the repository ROOTED AT --root and
-#      nothing wider.
+#      nothing wider. On an adopter clone, an unclaimed path under the
+#      harness trees is not counted as ownerless (see `harness_prefixes`).
 #   3. Roster-reader drift: this check's raw-glob scrape and the classifier's
 #      compiled globs must agree per member on the count. On drift the
 #      remit-parity, unowned-dialect and light_hard_full dialect-and-coverage
@@ -63,7 +59,12 @@
 #      `<prefix>/**`, or a wildcard-free path the classifier's own matcher
 #      (audit_glob_matches) places inside an owned glob. Any other shape is
 #      reported as undecidable, never passed.
-#   5. Zero-match globs. Every remit glob and every `unowned:` glob matches at
+#   5. Member registration. Every member's name starts with `code-audit-`,
+#      the prefix the audit loop's hook reads to tell a member from any other
+#      agent, and every member's agent definition is in AUDIT_MACHINERY_PATHS,
+#      so an edit to a member's own instructions rotates every member's digest
+#      instead of merging unreviewed by the member it rewrites.
+#   6. Zero-match globs. Every remit glob and every `unowned:` glob matches at
 #      least one tracked file, unless it sits on the allowlist inside this
 #      script. A roster comment never exempts a glob. Runs with the coverage
 #      invariant and is skipped with it.
@@ -358,10 +359,7 @@ light_records="$(_audit_scope_parse_light < "$config")"
 #
 # Read the list as TEXT under --root: that is what makes the invariant
 # testable at all, since a fixture can then inject a missing or empty list
-# without mutating the repo's real one. Per-member registration in this list
-# (and the member-name convention) is a real-tree assertion in this script's
-# own bats suite rather than a runtime check here, because both hold over the
-# committed roster whether or not a fixture roster is under test.
+# without mutating the repo's real one.
 
 machinery_library="${root}/.claude/hooks/lib/audit-machinery.sh"
 
@@ -389,6 +387,58 @@ _report_unreadable_list() {
 }
 
 [ -n "$machinery_list" ] || _report_unreadable_list "$machinery_library" AUDIT_MACHINERY_PATHS
+
+# --- Invariant: every member is registered -----------------------------------
+#
+# Membership in the list is decided by the matcher the digest itself uses
+# (audit_path_is_machinery, from this script's own library copy), fed the list
+# read under --root, so this check and the digest cannot disagree about what a
+# list entry reaches. An unreadable list is already a finding above, so it
+# reports no member a second time.
+
+_self_machinery_library="${_self_library_directory:-}/audit-machinery.sh"
+if [ -n "$machinery_list" ] && [ -f "$_self_machinery_library" ]; then
+  # shellcheck source=/dev/null
+  . "$_self_machinery_library"
+  # shellcheck disable=SC2034 # read by audit_path_is_machinery, from the library
+  AUDIT_MACHINERY_PATHS="$machinery_list"
+fi
+if [ -n "$machinery_list" ] && ! command -v audit_path_is_machinery >/dev/null 2>&1; then
+  printf 'verify-audit-roster: machinery matcher unavailable in the roster-parsing library\n' >&2
+  exit 1
+fi
+
+while IFS=$'\t' read -r kind name; do
+  [ "$kind" = "MEMBER" ] || continue
+  case "$name" in
+    code-audit-*) ;;
+    *)
+      findings=$((findings + 1))
+      printf 'verify-audit-roster: FAIL member-name-prefix\n'
+      printf '  member: %s\n' "$name"
+      printf '  roster: %s\n' "$config"
+      printf '  A member name starts with `code-audit-`. The audit loop reads that\n'
+      printf '  prefix to tell a Code Audit Team member from any other agent, so a\n'
+      printf '  member without it is not held to the member contract. Rename the\n'
+      printf '  member and its agent definition together.\n'
+      printf '\n'
+      continue
+      ;;
+  esac
+  [ -n "$machinery_list" ] || continue
+  if ! audit_path_is_machinery ".claude/agents/${name}.md"; then
+    findings=$((findings + 1))
+    printf 'verify-audit-roster: FAIL unregistered-member-definition\n'
+    printf '  member:     %s\n' "$name"
+    printf '  agent file: .claude/agents/%s.md\n' "$name"
+    printf '  list:       %s\n' "$machinery_library"
+    printf '  No AUDIT_MACHINERY_PATHS entry reaches this definition, so an edit\n'
+    printf '  to the member'"'"'s own instructions rotates no digest and can merge\n'
+    printf '  without that member reviewing it. Restore the list entry that\n'
+    printf '  covers every member definition, `.claude/agents/code-audit-*.md`.\n'
+    printf '\n'
+  fi
+done < <(printf '%s\n' "$raw_records" | awk -F'\t' '$1 == "MEMBER" && !seen[$2]++')
 
 # --- Invariant: the remit region's SHAPE -------------------------------------
 #
@@ -889,6 +939,22 @@ done < <(printf '%s\n' "$light_records")
 # either character misaligns its fields. The roster's own dialect rejects
 # whitespace in a glob for the same reason, and no such path exists here.
 
+# The harness trees, on an adopter clone. The release strips the maintainer
+# members that own them, so they arrive with no reviewer. A path under one of
+# these prefixes that no member claims is not counted as ownerless, whoever
+# wrote it: a file the adopter adds there (its own hook, agent or rule) is
+# exempt too and gets no reviewer from this check. Granting such files to a
+# member of the adopter's own is how they get reviewed. A member that does claim
+# one wins as usual, so an adopter granting part of a tree (a member's own
+# definition, say) never meets an overbroad finding. These are prefixes, not
+# `unowned:` entries, for that reason: an entry reaching a claimed path fails.
+# In GAIA's own repository the list is empty, because there every harness path
+# has a member and an ownerless one is a real gap.
+harness_prefixes='.claude/ .gaia/ .githooks/ .github/audit/'
+# gaia:maintainer-only:start
+harness_prefixes=''
+# gaia:maintainer-only:end
+
 coverage_universe=""
 coverage_top="$(git -C "$root" rev-parse --show-toplevel 2>/dev/null || true)"
 if [ -n "$coverage_top" ] && [ "$(cd "$coverage_top" 2>/dev/null && pwd -P)" = "$(cd "$root" 2>/dev/null && pwd -P)" ]; then
@@ -961,7 +1027,8 @@ if [ -n "$coverage_universe" ]; then
       printf '%s\n' "$unowned_records"
       printf '%s\n' "$coverage_universe" | audit_owners_for_paths |
         awk -F'\t' '{ printf "P\t%s\t%s\n", $1, $2 }'
-    } | awk -F'\t' -v cap=25 '
+    } | awk -F'\t' -v cap=25 -v harness_prefixes="$harness_prefixes" '
+      BEGIN { harness_count = split(harness_prefixes, HARNESS_PREFIX, " ") }
       $1 == "UNOWNED" {
         unowned_entry_count++; UNOWNED_GLOB[unowned_entry_count] = $2; UNOWNED_REGEX[unowned_entry_count] = $3
         OWNED_HIT_COUNT[unowned_entry_count] = 0
@@ -980,7 +1047,10 @@ if [ -n "$coverage_universe" ]; then
             } else { ownerless_match_count++ }
           }
         }
-        if (owner == "-" && ownerless_match_count == 0) { orphans++; if (orphans <= cap) ORPHAN_PATH[orphans] = path }
+        if (owner == "-" && ownerless_match_count == 0) {
+          for (h = 1; h <= harness_count; h++) if (index(path, HARNESS_PREFIX[h]) == 1) next
+          orphans++; if (orphans <= cap) ORPHAN_PATH[orphans] = path
+        }
         next
       }
       END {
@@ -1043,11 +1113,13 @@ if [ -n "$coverage_universe" ]; then
   # longer exists (dead text that reads as coverage) or is a typo that never
   # reaches the path it was written for. The exceptions are the allowlist
   # below and nothing else: a roster comment exempts nothing, because the
-  # roster is the file being checked. Each allowlist entry is a deliberate
+  # roster is the file being checked. Each allowlist entry matches no file
+  # today and must keep matching one the day it appears: a deliberate
   # extension-family spelling (one glob per JS/TS config extension, the YAML
-  # `.yaml` twin of `.yml`) that matches no file today and must keep matching
-  # one the day it appears. Matching reuses the classifier's own glob compiler
-  # so this check never holds a second opinion about what a glob reaches.
+  # `.yaml` twin of `.yml`), or a shipped `unowned:` entry for a file the
+  # release withholds and an adopter commonly adds (a licence, a docs tree).
+  # Matching reuses the classifier's own glob compiler so this check never
+  # holds a second opinion about what a glob reaches.
   #
   # The marker pair below stays at column 0, like the pair above: the
   # allowlist reader strips comment lines, and the scrub removes the block.
@@ -1061,6 +1133,8 @@ frontend/*.config.js
 *.config.js
 .github/workflows/*.yaml
 .github/actions/**/*.yaml
+LICENSE
+docs/**
 # gaia:maintainer-only:start
 .gaia/cli/src/**/*.snap
 .gaia/cli/*.config.mts

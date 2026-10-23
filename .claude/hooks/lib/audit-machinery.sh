@@ -10,8 +10,9 @@
 # and for review, never as a security boundary on its own.
 #
 # One literal list, no second copy anywhere. Entries ending in `/**` are
-# directory prefixes (every tracked file under them is machinery); every
-# other entry is an exact path.
+# directory prefixes (every tracked file under them is machinery); an entry
+# carrying any other `*` is a pattern whose `*` stays inside one path segment;
+# every other entry is an exact path.
 #
 # Bash 3.2 compatible (macOS default). Never `cd`.
 
@@ -50,7 +51,10 @@ AUDIT_MACHINERY_PATHS="$(cat <<'EOF'
 .claude/agents/audit-light-reviewer.md
 .gaia/scripts/link-worktree.sh
 .github/audit/**
-.claude/agents/code-audit-frontend.md
+# The own definition of every Code Audit Team member, whoever registers it: the
+# roster check refuses a member whose name lacks the `code-audit-` prefix, so
+# this one pattern covers each member without a per-member line here.
+.claude/agents/code-audit-*.md
 # These three decide what a frontend clearance vouches for: the rule specialist
 # and refuter the frontend member dispatches, and the oracle script it runs.
 # The refuter reference needs no entry: the .claude/hooks/lib/** prefix above
@@ -59,16 +63,28 @@ AUDIT_MACHINERY_PATHS="$(cat <<'EOF'
 .claude/agents/audit-refuter.md
 .gaia/scripts/audit-frontend-oracles.sh
 # gaia:maintainer-only:start
-.claude/agents/code-audit-maintainer-shell.md
-.claude/agents/code-audit-maintainer-node.md
 .claude/maintainers/**
 .gaia/scripts/tests/fixtures/audit-quick-corpus.json
 # gaia:maintainer-only:end
-.claude/agents/code-audit-github-workflows.md
 .claude/rules/**
 .gaia/VERSION
 EOF
 )"
+
+# _audit_machinery_pattern_matches <pattern> <path>: a `case` pattern's `*`
+# also matches `/`, so equal slash counts are what keep each `*` inside one
+# segment (`.claude/agents/code-audit-*.md` must not reach a file one directory
+# down). A `#` comment line never matches: no tracked path starts with `#`.
+_audit_machinery_pattern_matches() {
+  local pattern="$1" path="$2" pattern_slashes path_slashes
+  pattern_slashes="${pattern//[!\/]/}"
+  path_slashes="${path//[!\/]/}"
+  # shellcheck disable=SC2254 # the unquoted pattern is the point: it globs.
+  case "$path" in
+    $pattern) [ "$path_slashes" = "$pattern_slashes" ] ;;
+    *) return 1 ;;
+  esac
+}
 
 # audit_path_is_machinery <path> -> exit 0 iff the path is in the set above.
 audit_path_is_machinery() {
@@ -82,6 +98,9 @@ audit_path_is_machinery() {
         case "$path" in
           "$prefix"*) return 0 ;;
         esac
+        ;;
+      *"*"*)
+        _audit_machinery_pattern_matches "$entry" "$path" && return 0
         ;;
       *)
         [ "$path" = "$entry" ] && return 0
@@ -116,18 +135,20 @@ audit_delta_has_machinery() {
 # shell arrays ONCE, then tests each path against those arrays, so a caller
 # classifying every tracked file does not re-read the heredoc once per path the
 # way audit_path_is_machinery does. The membership semantics are byte-identical
-# to audit_path_is_machinery (exact match, or a `/**` directory-prefix match);
+# to audit_path_is_machinery (exact match, a `/**` directory-prefix match, or a
+# one-segment `*` pattern);
 # empty input lines are skipped, symmetric with audit_owners_for_paths, so the
 # digest walk can align this output line-for-line with that classifier's.
 audit_machinery_flags() {
   local entry path prefix hit i ne np
-  local exact=() prefixes=()
+  local exact=() prefixes=() patterns=() npat
 
   # Parse the heredoc ONCE into exact-path and directory-prefix arrays.
   while IFS= read -r entry; do
     [ -n "$entry" ] || continue
     case "$entry" in
       *"/**") prefixes[${#prefixes[@]}]="${entry%\*\*}" ;;
+      *"*"*)  patterns[${#patterns[@]}]="$entry" ;;
       *)      exact[${#exact[@]}]="$entry" ;;
     esac
   done <<EOF
@@ -136,6 +157,7 @@ EOF
 
   ne=${#exact[@]}
   np=${#prefixes[@]}
+  npat=${#patterns[@]}
 
   while IFS= read -r path; do
     [ -n "$path" ] || continue
@@ -152,6 +174,13 @@ EOF
         case "$path" in
           "$prefix"*) hit=1; break ;;
         esac
+        i=$((i + 1))
+      done
+    fi
+    if [ "$hit" -eq 0 ]; then
+      i=0
+      while [ "$i" -lt "$npat" ]; do
+        if _audit_machinery_pattern_matches "${patterns[$i]}" "$path"; then hit=1; break; fi
         i=$((i + 1))
       done
     fi

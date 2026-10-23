@@ -11,12 +11,12 @@
  * `RECURRENCE_THRESHOLD` DISTINCT PRs, at any severity, is not already covered
  * by a promoted rule, and is not currently suppressed by the decline ledger.
  * `severity_max` is a running max across the recurrence, not an eligibility
- * gate. A classless finding (the `holistic/unclassified` fallback) recurs the
- * same way but routes to the separate `unclassified` signal instead: it is
- * never a candidate and never covered, but it is subject to the decline
- * ledger's suppression, so a maintainer who seeds the vocabulary a cluster
- * was missing can discharge the signal rather than see it re-surface every
- * tally. Findings repeated within a single PR still collapse to one
+ * gate. A classless finding (the `holistic/unclassified` fallback, or any
+ * class outside the built-in and project vocabulary) recurs the same way but
+ * routes to the separate `unclassified` signal instead: it is never a
+ * candidate and never covered, but it is subject to the decline ledger's
+ * suppression, so a maintainer who seeds the vocabulary a cluster was missing
+ * can discharge the signal rather than see it re-surface every tally. Findings repeated within a single PR still collapse to one
  * distinct-PR increment either way.
  *
  * `class_inventory` carries every non-fallback, uncovered, unsuppressed class
@@ -28,10 +28,12 @@
  * instead of raw counts.
  */
 import {
+  EMPTY_FINDING_CLASS_VOCABULARY,
   isOracleFindingClass,
   isValidFindingClass,
   OUT_OF_SCOPE_FALLBACK_FINDING_CLASS,
 } from '../schemas/finding-class.js';
+import type {FindingClassVocabulary} from '../schemas/finding-class.js';
 
 export const RECURRENCE_THRESHOLD = 3;
 
@@ -54,6 +56,8 @@ export type ComputeTallyArgs = {
     currentPrCount: number,
     currentAuditedPrCount: number
   ) => boolean;
+  /** The project's own classes and oracle prefixes; built-ins only when absent. */
+  vocabulary?: FindingClassVocabulary;
   windowDays: number;
 };
 
@@ -126,22 +130,21 @@ type PerPrCollapse = {
 // severity max (running max across critical > major > minor) and the
 // union of area tags seen for it. A key is either a valid finding_class or
 // the `OUT_OF_SCOPE_FALLBACK_FINDING_CLASS` constant, standing in for the
-// classless "unclassified" bucket. Free-text / unseeded finding_class values
-// are skipped.
-const collapsePr = (pr: TallyPrRecord): PerPrCollapse => {
+// classless "unclassified" bucket. A free-text or unseeded finding_class
+// counts under that bucket too: the finding happened, only its class is
+// unknown, so it must not vanish from the tally.
+const collapsePr = (
+  pr: TallyPrRecord,
+  vocabulary: FindingClassVocabulary
+): PerPrCollapse => {
   const severity = new Map<string, Severity>();
   const areaTags = new Map<string, Set<string>>();
 
-  // Free-text / unseeded finding_class values are skipped; only the classless
-  // bucket key and valid seeded/oracle classes are aggregated.
-  const aggregated = pr.findings.filter(
-    (finding) =>
-      finding.finding_class === OUT_OF_SCOPE_FALLBACK_FINDING_CLASS ||
-      isValidFindingClass(finding.finding_class)
-  );
-
-  for (const finding of aggregated) {
-    const key = finding.finding_class;
+  for (const finding of pr.findings) {
+    const key =
+      isValidFindingClass(finding.finding_class, vocabulary) ?
+        finding.finding_class
+      : OUT_OF_SCOPE_FALLBACK_FINDING_CLASS;
     const existing = severity.get(key);
 
     severity.set(
@@ -209,15 +212,16 @@ const mergeAggregate = ({
  * standing in for the classless "unclassified" bucket. A key is counted at
  * most once per PR (same-key collapse): repeated findings under one key
  * inside a single PR contribute a single distinct-PR increment. Free-text /
- * unseeded finding_class values are skipped.
+ * unseeded finding_class values fold into the classless bucket.
  */
 const aggregateByClass = (
-  prs: readonly TallyPrRecord[]
+  prs: readonly TallyPrRecord[],
+  vocabulary: FindingClassVocabulary
 ): Map<string, ClassAggregate> => {
   const byClass = new Map<string, ClassAggregate>();
 
   for (const pr of prs) {
-    const {areaTags, severity} = collapsePr(pr);
+    const {areaTags, severity} = collapsePr(pr, vocabulary);
 
     for (const [findingClass, findingSeverity] of severity) {
       mergeAggregate({
@@ -278,6 +282,7 @@ type SeededEntryArgs = {
   covered: boolean;
   distinctPrCount: number;
   findingClass: string;
+  isOracle: boolean;
   suppressed: boolean;
 };
 
@@ -287,6 +292,7 @@ const seededEntry = ({
   covered,
   distinctPrCount,
   findingClass,
+  isOracle,
   suppressed,
 }: SeededEntryArgs): SeededEntry => {
   const eligible = !covered && !suppressed;
@@ -298,7 +304,7 @@ const seededEntry = ({
           area_tags: aggregate.areaTags,
           distinct_pr_count: distinctPrCount,
           finding_class: findingClass,
-          is_oracle: isOracleFindingClass(findingClass),
+          is_oracle: isOracle,
           pr_numbers: aggregate.prNumbers,
           severity_max: aggregate.severityMax,
         }
@@ -318,6 +324,7 @@ type ClassOutcomeArgs = {
   coveredClass: ComputeTallyArgs['coveredClass'];
   findingClass: string;
   suppressedClass: ComputeTallyArgs['suppressedClass'];
+  vocabulary: FindingClassVocabulary;
 };
 
 // One class's full disposition (candidate, inventory entry, and/or the
@@ -329,6 +336,7 @@ const classOutcome = ({
   coveredClass,
   findingClass,
   suppressedClass,
+  vocabulary,
 }: ClassOutcomeArgs): ClassOutcome => {
   const distinctPrCount = aggregate.prNumbers.length;
   const atThreshold = distinctPrCount >= RECURRENCE_THRESHOLD;
@@ -356,6 +364,7 @@ const classOutcome = ({
       covered: coveredClass(findingClass),
       distinctPrCount,
       findingClass,
+      isOracle: isOracleFindingClass(findingClass, vocabulary),
       suppressed,
     }),
     unclassified: null,
@@ -367,9 +376,10 @@ export const computeTally = ({
   coveredClass,
   prs,
   suppressedClass,
+  vocabulary = EMPTY_FINDING_CLASS_VOCABULARY,
   windowDays,
 }: ComputeTallyArgs): TallyResult => {
-  const byClass = aggregateByClass(prs);
+  const byClass = aggregateByClass(prs, vocabulary);
   const auditedPrCount = prs.length;
 
   const candidates: TallyCandidate[] = [];
@@ -384,6 +394,7 @@ export const computeTally = ({
       coveredClass,
       findingClass,
       suppressedClass,
+      vocabulary,
     });
 
     if (outcome.candidate !== null) candidates.push(outcome.candidate);
@@ -424,8 +435,11 @@ export const computeTally = ({
  * gate in `tally.ts`), so an empty list here means evidence of absence rather
  * than absence of evidence.
  */
-export const windowClasses = (prs: readonly TallyPrRecord[]): string[] => {
-  const byClass = aggregateByClass(prs);
+export const windowClasses = (
+  prs: readonly TallyPrRecord[],
+  vocabulary: FindingClassVocabulary = EMPTY_FINDING_CLASS_VOCABULARY
+): string[] => {
+  const byClass = aggregateByClass(prs, vocabulary);
   const classes: string[] = [];
 
   for (const [findingClass, aggregate] of byClass) {

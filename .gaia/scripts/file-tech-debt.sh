@@ -165,14 +165,31 @@ finding_text() {
   jq -r '[.. | strings] | join("\n")' "$1" 2>/dev/null
 }
 
-# class_is_well_formed <class>: the shape convention of the class vocabulary.
+# class_is_well_formed <class>: the shape convention of the class vocabulary,
+# widened by the project's .gaia/finding-classes.json in the caller's checkout.
 class_is_well_formed() {
   case "$1" in
     holistic/unclassified) return 0 ;;
   esac
   printf '%s' "$1" | grep -Eq '^(holistic|rule|workflow)/[a-z0-9][a-z0-9-]*$' && return 0
   [ "${#1}" -le 140 ] || return 1
-  printf '%s' "$1" | grep -Eq '^(react-doctor|axe|knip|cve)/[A-Za-z0-9][A-Za-z0-9_.-]*(/[A-Za-z0-9][A-Za-z0-9_.-]*)*$'
+  printf '%s' "$1" | grep -Eq '^(react-doctor|axe|knip|cve)/[A-Za-z0-9][A-Za-z0-9_.-]*(/[A-Za-z0-9][A-Za-z0-9_.-]*)*$' && return 0
+  class_is_project_registered "$1"
+}
+
+# class_is_project_registered <class>: a listed project class, or a safe id
+# after a listed project oracle prefix. An absent or unparseable file
+# registers nothing, so the class stays malformed and the finding diverts.
+class_is_project_registered() {
+  local top vocabulary
+  top="$(git rev-parse --show-toplevel 2>/dev/null)" || return 1
+  vocabulary="$top/.gaia/finding-classes.json"
+  [ -f "$vocabulary" ] || return 1
+  if printf '%s' "$1" | grep -Eq '^[a-z0-9]+(-[a-z0-9]+)*/[a-z0-9]+(-[a-z0-9]+)*$'; then
+    jq -e --arg class "$1" '.classes | index($class) != null' "$vocabulary" >/dev/null 2>&1 && return 0
+  fi
+  printf '%s' "$1" | grep -Eq '^[a-z0-9]+(-[a-z0-9]+)*/[A-Za-z0-9][A-Za-z0-9_.-]*(/[A-Za-z0-9][A-Za-z0-9_.-]*)*$' || return 1
+  jq -e --arg prefix "${1%%/*}" '.oracle_prefixes | index($prefix) != null' "$vocabulary" >/dev/null 2>&1
 }
 
 # screen_trigger <json-file>: prints the trigger, or nothing when clear.

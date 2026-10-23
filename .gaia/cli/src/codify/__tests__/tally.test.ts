@@ -275,6 +275,25 @@ const makeFakeLedger = (): FakeLedger => {
   };
 };
 
+const projectWindow = (): void => {
+  vi.spyOn(runProcess, 'runGh').mockReturnValue(
+    stubGh(
+      [3, 2, 1].map((n) =>
+        ghPr(n, [
+          findingsComment(n, 'ci', [
+            {area_tags: [], finding_class: 'acme/rule', severity: 'major'},
+          ]),
+        ])
+      )
+    )
+  );
+};
+
+const writeVocabulary = (root: string, text: string): void => {
+  mkdirSync(path.join(root, '.gaia'), {recursive: true});
+  writeFileSync(path.join(root, '.gaia', 'finding-classes.json'), text);
+};
+
 describe('codify-tally run', () => {
   let sandbox: Sandbox;
   let stdout: ReturnType<typeof captureStdout>;
@@ -976,6 +995,34 @@ describe('codify-tally run', () => {
     expect(stderr).not.toHaveBeenCalled();
   });
 
+  describe('project vocabulary and the prune', () => {
+    test('keeps a project-class decline when the vocabulary file is malformed', () => {
+      projectWindow();
+      writeVocabulary(sandbox.root, '{"classes": ["acme/rule",],}');
+      vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+
+      const fake = makeFakeLedger();
+      fake.record('acme/rule', 3, 3);
+
+      run([], {cwd: sandbox.root, ledger: fake.ledger});
+
+      expect(fake.calls.prune).toEqual([]);
+      expect(fake.has('acme/rule')).toBe(true);
+    });
+
+    test('still prunes when the vocabulary file is absent', () => {
+      projectWindow();
+
+      const fake = makeFakeLedger();
+      fake.record('acme/rule', 3, 3);
+
+      run([], {cwd: sandbox.root, ledger: fake.ledger});
+
+      expect(fake.calls.prune).toHaveLength(1);
+      expect(fake.has('acme/rule')).toBe(false);
+    });
+  });
+
   test('leaves the ledger unpruned when the window read failed', () => {
     vi.spyOn(runProcess, 'runGh').mockReturnValue({
       exitCode: 4,
@@ -1505,6 +1552,45 @@ describe('codify-tally run: findings the PR body disposes of', () => {
 
     expect(printed.candidate_count).toBe(0);
     expect(inventoryClasses(printed)).toEqual([]);
+    expect(printed.audited_pr_count).toBe(3);
+  });
+
+  test('a waived class in no vocabulary is subtracted before it folds into unclassified', () => {
+    const unknownClass = 'billing/double-charge';
+    const waivedLine = `- .gaia/tests/hooks/billing.bats:9 ${unknownClass}: workable, meets no criterion`;
+    const prWith = (prNumber: number, body: string) =>
+      ghPrWithBody(prNumber, body, [
+        findingsComment(prNumber, 'local', [hooksFinding(unknownClass)]),
+      ]);
+
+    vi.spyOn(runProcess, 'runGh').mockReturnValue(
+      stubGh(
+        WAIVED_PR_NUMBERS.map((prNumber) =>
+          prWith(prNumber, '## Summary\n\n- Nothing waived.')
+        )
+      )
+    );
+    run([], {cwd: sandbox.root, ledger: noDeclines});
+
+    expect(parseStdout(stdout.out).unclassified_window_count).toBe(3);
+
+    stdout.out.length = 0;
+    vi.spyOn(runProcess, 'runGh').mockReturnValue(
+      stubGh(
+        WAIVED_PR_NUMBERS.map((prNumber) =>
+          prWith(
+            prNumber,
+            `## Waived below triage threshold (not filed)\n\n${waivedLine}\n`
+          )
+        )
+      )
+    );
+    run([], {cwd: sandbox.root, ledger: noDeclines});
+
+    const printed = parseStdout(stdout.out);
+
+    expect(printed.unclassified).toBeNull();
+    expect(printed.unclassified_window_count).toBeNull();
     expect(printed.audited_pr_count).toBe(3);
   });
 
