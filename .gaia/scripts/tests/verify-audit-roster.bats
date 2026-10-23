@@ -243,39 +243,81 @@ YAML
   assert_contains "roster clean"
 }
 
-# Machinery registration and the member-name convention are asserted against
-# the REAL committed roster here rather than through a --root fixture: both
-# hold over .gaia/audit-ci.yml as it is checked in, whether or not a fixture
-# roster is under test elsewhere in this suite.
+# Member registration: the name prefix and the machinery entry are runtime
+# invariants of the check, exercised through fixtures like every other one.
 
-# bats test_tags=whole-tree
-@test "every roster member's agent file is registered in AUDIT_MACHINERY_PATHS" {
-  local members name agent_relative_path
-  members="$(bash "$SCRIPT" --emit-roster | awk -F'\t' '$1 == "MEMBER" { print $2 }' | sort -u)"
-  [ -n "$members" ]
-  while IFS= read -r name; do
-    agent_relative_path=".claude/agents/${name}.md"
-    grep -qxF -- "$agent_relative_path" "$REPO_ROOT/.claude/hooks/lib/audit-machinery.sh" || {
-      printf '%s is not registered in AUDIT_MACHINERY_PATHS\n' "$agent_relative_path" >&2
-      return 1
-    }
-  done <<<"$members"
+@test "registration: a member name without the code-audit- prefix fails, naming the member" {
+  local fixture_directory="$BATS_TEST_TMPDIR/bad-prefix"
+  scaffold_root "$fixture_directory" <<'YAML'
+auditors:
+  - name: code-audit-default
+    globs:
+      - "app/**"
+    default: true
+  - name: python-reviewer
+    globs:
+      - "py/**"
+YAML
+  run_root "$fixture_directory"
+  [ "$status" -eq 1 ]
+  assert_contains "member-name-prefix"
+  assert_contains "python-reviewer"
 }
 
-# bats test_tags=whole-tree
-@test "every roster member's name carries the code-audit- prefix" {
-  local members name
-  members="$(bash "$SCRIPT" --emit-roster | awk -F'\t' '$1 == "MEMBER" { print $2 }' | sort -u)"
-  [ -n "$members" ]
-  while IFS= read -r name; do
-    case "$name" in
-      code-audit-*) ;;
-      *)
-        printf '%s does not carry the code-audit- prefix\n' "$name" >&2
-        return 1
-        ;;
-    esac
-  done <<<"$members"
+@test "registration: a prefixed, registered member raises no registration finding" {
+  local fixture_directory="$BATS_TEST_TMPDIR/good-prefix"
+  scaffold_root "$fixture_directory" <<'YAML'
+auditors:
+  - name: code-audit-default
+    globs:
+      - "app/**"
+    default: true
+YAML
+  run_root "$fixture_directory"
+  [ "$status" -eq 0 ]
+  assert_contains "roster clean"
+}
+
+@test "registration: a member whose definition no machinery entry reaches fails, naming it" {
+  local fixture_directory="$BATS_TEST_TMPDIR/unregistered"
+  scaffold_root "$fixture_directory" <<'YAML'
+auditors:
+  - name: code-audit-default
+    globs:
+      - "app/**"
+    default: true
+  - name: code-audit-python
+    globs:
+      - "py/**"
+YAML
+  grep -vxF '.claude/agents/code-audit-python.md' "$fixture_directory/.claude/hooks/lib/audit-machinery.sh" \
+    > "$fixture_directory/machinery.tmp"
+  mv "$fixture_directory/machinery.tmp" "$fixture_directory/.claude/hooks/lib/audit-machinery.sh"
+  run_root "$fixture_directory"
+  [ "$status" -eq 1 ]
+  assert_contains "unregistered-member-definition"
+  assert_contains ".claude/agents/code-audit-python.md"
+  grep -qF ".claude/agents/code-audit-default.md" <<<"$output" && return 1
+  true
+}
+
+@test "registration: one code-audit-*.md pattern entry registers every member" {
+  local fixture_directory="$BATS_TEST_TMPDIR/pattern-registered"
+  scaffold_root "$fixture_directory" <<'YAML'
+auditors:
+  - name: code-audit-default
+    globs:
+      - "app/**"
+    default: true
+  - name: code-audit-python
+    globs:
+      - "py/**"
+YAML
+  printf 'AUDIT_MACHINERY_PATHS="$(cat <<%s\n.claude/agents/code-audit-*.md\nEOF\n)"\n' "'EOF'" \
+    > "$fixture_directory/.claude/hooks/lib/audit-machinery.sh"
+  run_root "$fixture_directory"
+  [ "$status" -eq 0 ]
+  assert_contains "roster clean"
 }
 
 @test "an unreadable machinery list fails rather than passing every member" {
@@ -508,6 +550,7 @@ drifted_reader_sandbox() {
   sed 's|if (glob != "") print "RAW", member, glob|if (glob != "" \&\& glob != "a/**") print "RAW", member, glob|' \
     "$SCRIPT" > "$sandbox/.gaia/scripts/verify-audit-roster.sh"
   cp "$REPO_ROOT/.claude/hooks/lib/audit-scope.sh" "$sandbox/.claude/hooks/lib/audit-scope.sh"
+  cp "$REPO_ROOT/.claude/hooks/lib/audit-machinery.sh" "$sandbox/.claude/hooks/lib/audit-machinery.sh"
   # The writer resolves the check beside itself, so a copy here observes the
   # perturbation rather than the repo's real scrape. That is what makes the
   # writer's half of "one scrape, shared" testable at all.
@@ -651,6 +694,7 @@ YAML
   mkdir -p "$sandbox/.gaia/scripts" "$sandbox/.claude/hooks/lib"
   strip_maintainer_only "$SCRIPT" > "$sandbox/.gaia/scripts/verify-audit-roster.sh"
   cp "$REPO_ROOT/.claude/hooks/lib/audit-scope.sh" "$sandbox/.claude/hooks/lib/audit-scope.sh"
+  cp "$REPO_ROOT/.claude/hooks/lib/audit-machinery.sh" "$sandbox/.claude/hooks/lib/audit-machinery.sh"
 
   local fixture_directory="$BATS_TEST_TMPDIR/stripped-fixture"
   scaffold_root "$fixture_directory" <<'YAML'
@@ -784,6 +828,58 @@ YAML
   run_root "$fixture_directory"
   [ "$status" -eq 0 ]
   assert_contains "roster clean"
+}
+
+# The adopter copy of the check: the release strips the maintainer-only block
+# that empties `harness_prefixes`, so on an adopter clone an unclaimed path
+# under the harness trees is not counted as ownerless. The source copy keeps
+# the list empty, which is what the paired test below pins.
+stripped_check() {
+  local sandbox="$BATS_TEST_TMPDIR/adopter-check"
+  mkdir -p "$sandbox/.gaia/scripts" "$sandbox/.claude/hooks/lib"
+  strip_maintainer_only "$SCRIPT" > "$sandbox/.gaia/scripts/verify-audit-roster.sh"
+  cp "$REPO_ROOT/.claude/hooks/lib/audit-scope.sh" "$sandbox/.claude/hooks/lib/audit-scope.sh"
+  cp "$REPO_ROOT/.claude/hooks/lib/audit-machinery.sh" "$sandbox/.claude/hooks/lib/audit-machinery.sh"
+  printf '%s\n' "$sandbox/.gaia/scripts/verify-audit-roster.sh"
+}
+
+harness_fixture() {
+  tracked_roster 'docs/**' | scaffold_tracked_root "$1" \
+    app/a.ts lib/b.ts docs/a.md .gaia/scripts/tool.sh .githooks/pre-commit .github/audit/resolve.sh
+}
+
+@test "coverage: the adopter copy reads an unclaimed harness path as GAIA's, not ownerless" {
+  local fixture_directory="$BATS_TEST_TMPDIR/cov-harness-adopter" adopter_script
+  harness_fixture "$fixture_directory"
+  adopter_script="$(stripped_check)"
+  run bash "$adopter_script" --root "$fixture_directory" --config "$fixture_directory/.gaia/audit-ci.yml"
+  [ "$status" -eq 0 ]
+  assert_contains "roster clean"
+}
+
+@test "coverage: the adopter copy still reports an unclaimed path outside the harness trees" {
+  local fixture_directory="$BATS_TEST_TMPDIR/cov-harness-adopter-orphan" adopter_script
+  harness_fixture "$fixture_directory"
+  : > "$fixture_directory/orphan.txt"
+  git -C "$fixture_directory" add orphan.txt
+  adopter_script="$(stripped_check)"
+  run bash "$adopter_script" --root "$fixture_directory" --config "$fixture_directory/.gaia/audit-ci.yml"
+  [ "$status" -eq 1 ]
+  assert_contains "ownerless-path"
+  assert_contains "orphan.txt"
+  grep -qF ".gaia/scripts/tool.sh" <<<"$output" && return 1
+  true
+}
+
+@test "coverage: the source copy reports the same unclaimed harness paths as ownerless" {
+  local fixture_directory="$BATS_TEST_TMPDIR/cov-harness-source"
+  harness_fixture "$fixture_directory"
+  run_root "$fixture_directory"
+  [ "$status" -eq 1 ]
+  assert_contains "ownerless-path"
+  assert_contains ".gaia/scripts/tool.sh"
+  assert_contains ".githooks/pre-commit"
+  assert_contains ".github/audit/resolve.sh"
 }
 
 @test "coverage: an unowned: glob reaching an OWNED path fails as overbroad" {
@@ -1127,6 +1223,7 @@ light_root() {
   mkdir -p "$scratch/.gaia/scripts" "$scratch/.claude/hooks/lib"
   cp "$SCRIPT" "$scratch/.gaia/scripts/verify-audit-roster.sh"
   cp "$REPO_ROOT/.claude/hooks/lib/audit-scope.sh" "$scratch/.claude/hooks/lib/audit-scope.sh"
+  cp "$REPO_ROOT/.claude/hooks/lib/audit-machinery.sh" "$scratch/.claude/hooks/lib/audit-machinery.sh"
   printf '\naudit_glob_matches() { return 2; }\n' >> "$scratch/.claude/hooks/lib/audit-scope.sh"
   light_root "$BATS_TEST_TMPDIR/light-matcher-failure" true 50 'cfg/exact.ts'
   run bash "$scratch/.gaia/scripts/verify-audit-roster.sh" --root "$BATS_TEST_TMPDIR/light-matcher-failure" --config "$BATS_TEST_TMPDIR/light-matcher-failure/.gaia/audit-ci.yml"
@@ -1233,6 +1330,7 @@ roster_with_node_hard_full() {
   sed 's/light_literal_covered=0$/light_literal_covered=1/' "$SCRIPT" >"$scratch/.gaia/scripts/verify-audit-roster.sh"
   cmp -s "$SCRIPT" "$scratch/.gaia/scripts/verify-audit-roster.sh" && return 1
   cp "$REPO_ROOT/.claude/hooks/lib/audit-scope.sh" "$scratch/.claude/hooks/lib/audit-scope.sh"
+  cp "$REPO_ROOT/.claude/hooks/lib/audit-machinery.sh" "$scratch/.claude/hooks/lib/audit-machinery.sh"
   run bash "$scratch/.gaia/scripts/verify-audit-roster.sh" --root "$REPO_ROOT" --config "$moved"
   [ "$status" -eq 0 ] || { printf '%s\n' "$output" >&2; return 1; }
   assert_contains "roster clean"

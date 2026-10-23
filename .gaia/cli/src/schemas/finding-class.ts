@@ -13,8 +13,15 @@
  *   vocabulary (the `as const` unions below). A holistic, rule, or workflow
  *   finding only becomes a countable class once it has a seeded member; an
  *   unseeded member is rejected so free-text drift never reaches the tally.
+ * - A project extends both through `.gaia/finding-classes.json`: extra closed
+ *   classes and extra open oracle prefixes, read by
+ *   `readProjectFindingClasses` and passed as an optional vocabulary.
  */
 import {z} from 'zod';
+import {existsSync, readFileSync} from 'node:fs';
+import path from 'node:path';
+import {structuredError} from '../stderr.js';
+import {summarizeZodError} from './zod-error.js';
 
 export const FINDING_CLASS_PREFIXES = [
   'react-doctor',
@@ -157,40 +164,153 @@ const splitPrefix = (
   };
 };
 
-const isOraclePrefix = (prefix: string): prefix is FindingClassPrefix =>
-  (ORACLE_PREFIXES as readonly string[]).includes(prefix);
+/**
+ * A project's own additions to the vocabulary, read from
+ * `.gaia/finding-classes.json`: closed classes (`<prefix>/<slug>`, kebab) and
+ * open oracle prefixes for the project's own deterministic tools.
+ */
+export type FindingClassVocabulary = {
+  classes: readonly string[];
+  oracle_prefixes: readonly string[];
+};
+
+export const EMPTY_FINDING_CLASS_VOCABULARY: FindingClassVocabulary = {
+  classes: [],
+  oracle_prefixes: [],
+};
+
+const isOraclePrefix = (
+  prefix: string,
+  vocabulary: FindingClassVocabulary
+): boolean =>
+  (ORACLE_PREFIXES as readonly string[]).includes(prefix) ||
+  vocabulary.oracle_prefixes.includes(prefix);
 
 /**
  * True when `findingClass` carries a known oracle prefix (`react-doctor/`,
- * `axe/`, `knip/`, `cve/`), the deterministic-tool buckets. Reuses the same
- * `ORACLE_PREFIXES` membership check as `isValidFindingClass` so callers never
- * need to re-list the prefixes; `codify-tally` uses this to emit `is_oracle`
- * per candidate.
+ * `axe/`, `knip/`, `cve/`, or one the project vocabulary adds), the
+ * deterministic-tool buckets. Reuses the same membership check as
+ * `isValidFindingClass` so callers never need to re-list the prefixes;
+ * `codify-tally` uses this to emit `is_oracle` per candidate.
  */
-export const isOracleFindingClass = (findingClass: string): boolean => {
+export const isOracleFindingClass = (
+  findingClass: string,
+  vocabulary: FindingClassVocabulary = EMPTY_FINDING_CLASS_VOCABULARY
+): boolean => {
   const parts = splitPrefix(findingClass);
 
-  return parts !== undefined && isOraclePrefix(parts.prefix);
+  return parts !== undefined && isOraclePrefix(parts.prefix, vocabulary);
 };
 
 /**
  * True when `value` matches the per-bucket convention: a well-formed oracle id
  * (open id space after a known oracle prefix, bounded to the safe id shape) or
- * a seeded closed-vocabulary member (holistic, rule, or workflow). Everything
- * else (free text, unknown prefix, empty or malformed slug, unseeded
+ * a seeded closed-vocabulary member (holistic, rule, or workflow), each
+ * widened by the project `vocabulary` when one is passed. Everything else
+ * (free text, unknown prefix, empty or malformed slug, unseeded
  * closed-vocabulary member) is invalid.
  */
-export const isValidFindingClass = (value: string): boolean => {
+export const isValidFindingClass = (
+  value: string,
+  vocabulary: FindingClassVocabulary = EMPTY_FINDING_CLASS_VOCABULARY
+): boolean => {
   const parts = splitPrefix(value);
 
   if (parts === undefined) return false;
 
-  if (isOraclePrefix(parts.prefix)) return isOracleSlug(parts.slug);
+  if (isOraclePrefix(parts.prefix, vocabulary)) {
+    return isOracleSlug(parts.slug);
+  }
 
-  return CLOSED_VOCABULARY.has(value);
+  return CLOSED_VOCABULARY.has(value) || vocabulary.classes.includes(value);
 };
 
 export const FindingClassSchema = z.string().refine(isValidFindingClass, {
   message:
     'finding_class must match the per-bucket convention (oracle id or controlled vocabulary)',
 });
+
+const KEBAB_SEGMENT = '[a-z0-9]+(?:-[a-z0-9]+)*';
+const PROJECT_PREFIX_PATTERN = new RegExp(`^${KEBAB_SEGMENT}$`);
+const PROJECT_CLASS_PATTERN = new RegExp(`^${KEBAB_SEGMENT}/${KEBAB_SEGMENT}$`);
+
+const ProjectClassSchema = z
+  .string()
+  .regex(PROJECT_CLASS_PATTERN, 'class must be <prefix>/<slug>, kebab-case')
+  .refine((value) => value !== OUT_OF_SCOPE_FALLBACK_FINDING_CLASS, {
+    message: `${OUT_OF_SCOPE_FALLBACK_FINDING_CLASS} is the classless fallback, never a class`,
+  })
+  .refine((value) => !isOracleFindingClass(value), {
+    message: 'a built-in oracle prefix already accepts any id',
+  });
+
+const ProjectOraclePrefixSchema = z
+  .string()
+  .regex(PROJECT_PREFIX_PATTERN, 'oracle prefix must be kebab-case')
+  .refine(
+    (value) => !(FINDING_CLASS_PREFIXES as readonly string[]).includes(value),
+    {message: 'oracle prefix must not be a built-in prefix'}
+  );
+
+// Unknown keys such as `$comment` are stripped, so the parsed data is the
+// vocabulary itself.
+const ProjectFindingClassesSchema = z.object({
+  classes: z.array(ProjectClassSchema),
+  oracle_prefixes: z.array(ProjectOraclePrefixSchema),
+});
+
+export type ProjectFindingClassesRead = {
+  /** True when the file exists but could not be read as a vocabulary. */
+  malformed: boolean;
+  vocabulary: FindingClassVocabulary;
+};
+
+const reportMalformed = (message: string): ProjectFindingClassesRead => {
+  structuredError({code: 'malformed_finding_classes', message});
+
+  return {malformed: true, vocabulary: EMPTY_FINDING_CLASS_VOCABULARY};
+};
+
+/**
+ * Reads the project vocabulary and says whether it was usable. A missing file
+ * is the empty vocabulary; an unreadable or malformed one is reported as one
+ * structured stderr line, read as empty, and flagged `malformed` so a caller
+ * that acts on the vocabulary can fail closed.
+ */
+export const readProjectFindingClassesChecked = (
+  repoRoot: string
+): ProjectFindingClassesRead => {
+  const filePath = path.join(repoRoot, '.gaia', 'finding-classes.json');
+
+  if (!existsSync(filePath)) {
+    return {malformed: false, vocabulary: EMPTY_FINDING_CLASS_VOCABULARY};
+  }
+
+  let parsed: unknown;
+
+  try {
+    parsed = JSON.parse(readFileSync(filePath, 'utf8'));
+  } catch (error) {
+    return reportMalformed(
+      `${filePath}: ${error instanceof Error ? error.message : String(error)}`
+    );
+  }
+
+  const result = ProjectFindingClassesSchema.safeParse(parsed);
+
+  if (!result.success) {
+    return reportMalformed(summarizeZodError(filePath, result.error));
+  }
+
+  return {malformed: false, vocabulary: result.data};
+};
+
+/**
+ * Reads the project vocabulary. A missing, unreadable or malformed file reads
+ * as the empty vocabulary, so a bad edit narrows the tally to the built-in
+ * vocabulary instead of failing it.
+ */
+export const readProjectFindingClasses = (
+  repoRoot: string
+): FindingClassVocabulary =>
+  readProjectFindingClassesChecked(repoRoot).vocabulary;

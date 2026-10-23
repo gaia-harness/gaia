@@ -156,3 +156,31 @@ PATHS
   [ "${lines[2]}" = "$(printf '.gaia/scripts/audit-frontend-oracles.sh\t0')" ]
   [ "${lines[3]}" = "$(printf '.claude/hooks/lib/audit-frontend-refuter.md\t1')" ]
 }
+
+# The member-definition pattern: one entry registers every member, its `*`
+# stays inside the last segment, and the two matchers agree on it.
+@test "the code-audit-*.md pattern reaches any member definition and nothing one directory down" {
+  audit_path_is_machinery ".claude/agents/code-audit-frontend.md" || return 1
+  audit_path_is_machinery ".claude/agents/code-audit-python.md" || return 1
+  audit_path_is_machinery ".claude/agents/code-audit-python/notes.md" && return 1
+  audit_path_is_machinery "frontend/.claude/agents/code-audit-frontend/README.md" && return 1
+  audit_path_is_machinery ".claude/agents/fitness-judge.md" && return 1
+  run audit_machinery_flags <<'PATHS'
+.claude/agents/code-audit-python.md
+.claude/agents/code-audit-python/notes.md
+.claude/agents/fitness-judge.md
+PATHS
+  [ "$status" -eq 0 ]
+  [ "${lines[0]}" = "$(printf '.claude/agents/code-audit-python.md\t1')" ]
+  [ "${lines[1]}" = "$(printf '.claude/agents/code-audit-python/notes.md\t0')" ]
+  [ "${lines[2]}" = "$(printf '.claude/agents/fitness-judge.md\t0')" ]
+}
+
+@test "the code-audit-*.md pattern can fail: a copy without it flags a member definition 0" {
+  local scratch_library="$BATS_TEST_TMPDIR/audit-machinery-no-pattern.sh"
+  grep -vxF ".claude/agents/code-audit-*.md" "$MACHINERY_LIBRARY" >"$scratch_library"
+  [ "$(wc -l <"$MACHINERY_LIBRARY" | tr -d ' ')" -eq $(($(wc -l <"$scratch_library" | tr -d ' ') + 1)) ]
+  run bash -c '. "$1"; printf "%s\n" .claude/agents/code-audit-python.md | audit_machinery_flags' _ "$scratch_library"
+  [ "$status" -eq 0 ]
+  [ "${lines[0]}" = "$(printf '.claude/agents/code-audit-python.md\t0')" ]
+}

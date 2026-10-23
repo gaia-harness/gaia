@@ -24,6 +24,8 @@
  */
 import path from 'node:path';
 import {EXIT_CODES} from '../exit.js';
+import {KEY_PATTERN, parseKey} from '../residue/key.js';
+import {readProjectFindingClassesChecked} from '../schemas/finding-class.js';
 import {readReviewSnapshot} from '../schemas/review-snapshot.js';
 import {structuredError} from '../stderr.js';
 import {
@@ -136,8 +138,12 @@ const windowStartDate = (now: Date): string => {
   return start.toISOString().slice(0, 10);
 };
 
+/** A finding the PR body records as not needing a fix. */
+type DisposedFinding = {areaTag: string; findingClass: string};
+
 type GhPr = {
   comments: {body: string}[];
+  disposed: DisposedFinding[];
   number: number;
 };
 
@@ -155,6 +161,79 @@ const TRUSTED_AUTHOR_ASSOCIATIONS: ReadonlySet<string> = new Set([
 ]);
 
 // tally-semantics:start
+// Findings the audit chose not to fix are not recurrence evidence, so the
+// tally skips the two PR-body sections `audit-dispositions-check.sh
+// pr-sections` renders for them (its bats suite pins both line shapes). A
+// waive for another member's remit and a filed finding still count.
+//
+// Honest limit: the body is the PR author's text, not a trusted comment, so an
+// author can hand-write a section that hides findings on their own PR. It
+// reaches only that PR's record, never another PR's.
+const WAIVED_HEADING = '## Waived below triage threshold (not filed)';
+const ACCEPTED_HEADING = '## Accepted residuals (recorded, not fixed)';
+const WAIVED_LINE_PATTERN = /^- (?<path>.+?):\d+ (?<findingClass>[\w./-]+): /u;
+
+// The block's default area tag is the finding path's directory
+// (`audit-write-findings.sh`), so that is what a body entry is matched on.
+const directoryOf = (filePath: string): string => {
+  const slash = filePath.lastIndexOf('/');
+
+  return slash === -1 ? '.' : filePath.slice(0, slash);
+};
+
+const disposedEntry = (
+  heading: string,
+  line: string
+): DisposedFinding | null => {
+  if (heading === WAIVED_HEADING) {
+    const groups = WAIVED_LINE_PATTERN.exec(line)?.groups;
+
+    if (groups?.path === undefined || groups.findingClass === undefined) {
+      return null;
+    }
+
+    return {
+      areaTag: directoryOf(groups.path),
+      findingClass: groups.findingClass,
+    };
+  }
+
+  const innerKey = KEY_PATTERN.exec(line)?.[1];
+  const key = innerKey === undefined ? null : parseKey(innerKey, 'gate');
+
+  if (!key?.ok) return null;
+
+  return {areaTag: directoryOf(key.value.path), findingClass: key.value.class};
+};
+
+// Each section is its heading's contiguous run of `- ` entries.
+const disposedFindings = (body: string): DisposedFinding[] => {
+  const disposed: DisposedFinding[] = [];
+  let heading: null | string = null;
+  let listStarted = false;
+
+  for (const line of body.split('\n')) {
+    const trimmed = line.trimEnd();
+
+    if (line.startsWith('#')) {
+      heading =
+        trimmed === WAIVED_HEADING || trimmed === ACCEPTED_HEADING ?
+          trimmed
+        : null;
+      listStarted = false;
+    } else if (heading !== null && line.startsWith('- ')) {
+      listStarted = true;
+      const entry = disposedEntry(heading, line);
+
+      if (entry !== null) disposed.push(entry);
+    } else if (listStarted && trimmed !== '') {
+      heading = null;
+    }
+  }
+
+  return disposed;
+};
+
 const parseGhPr = (value: unknown): GhPr | null => {
   if (typeof value !== 'object' || value === null) return null;
   const v = value as Record<string, unknown>;
@@ -179,7 +258,35 @@ const parseGhPr = (value: unknown): GhPr | null => {
     }
   }
 
-  return {comments, number: v.number};
+  return {
+    comments,
+    // Only the entries are kept: the whole window's bodies are several times
+    // the size of its comments, and nothing else reads them.
+    disposed: typeof v.body === 'string' ? disposedFindings(v.body) : [],
+    number: v.number,
+  };
+};
+
+// Drops one finding per disposed entry from one auditor's findings. Each
+// auditor's block is cancelled on its own, because two auditors reporting the
+// same waived finding each carry their own copy of it.
+const withoutDisposed = (
+  findings: TallyPrRecord['findings'],
+  disposed: readonly DisposedFinding[]
+): TallyPrRecord['findings'] => {
+  const remaining = [...findings];
+
+  for (const {areaTag, findingClass} of disposed) {
+    const index = remaining.findIndex(
+      (finding) =>
+        finding.finding_class === findingClass &&
+        finding.area_tags.includes(areaTag)
+    );
+
+    if (index !== -1) remaining.splice(index, 1);
+  }
+
+  return remaining;
 };
 
 // Builds a tally record from a parsed gh PR, merging findings PER AUDITOR: for
@@ -188,9 +295,10 @@ const parseGhPr = (value: unknown): GhPr | null => {
 // block from the SAME auditor supersedes its own earlier one (a re-run audit
 // supersedes an earlier run), while blocks from DIFFERENT auditors on the
 // same PR both survive. The merged record flattens every auditor's surviving
-// findings in Map insertion order (gh's chronological comment order). A PR
-// with at least one parseable block (even one with an empty findings array)
-// is "audited": this is the predicate `audited_pr_count` counts. Returns null
+// findings in Map insertion order (gh's chronological comment order), less
+// the findings the PR body disposes of. A PR with at least one parseable block
+// (even one with an empty findings array, or one the body empties) is
+// "audited": this is the predicate `audited_pr_count` counts. Returns null
 // when no comment carries a parseable block.
 const recordFromGhPr = (pr: GhPr): null | TallyPrRecord => {
   const byAuditor = new Map<string, TallyPrRecord['findings']>();
@@ -203,7 +311,12 @@ const recordFromGhPr = (pr: GhPr): null | TallyPrRecord => {
 
   if (byAuditor.size === 0) return null;
 
-  return {findings: [...byAuditor.values()].flat(), pr_number: pr.number};
+  return {
+    findings: [...byAuditor.values()].flatMap((findings) =>
+      withoutDisposed(findings, pr.disposed)
+    ),
+    pr_number: pr.number,
+  };
 };
 
 /**
@@ -219,7 +332,7 @@ const recordFromGhPr = (pr: GhPr): null | TallyPrRecord => {
 const fetchWindowPrs = (cwd: string, now: Date): WindowPrs => {
   const window = readMergedPrWindow<{createdAt: string; number: number}>({
     cwd,
-    fields: ['comments'],
+    fields: ['body', 'comments'],
     sinceIso: windowStartDate(now),
   });
 
@@ -277,6 +390,8 @@ export const run = (
 
   const {ghOk, prs} = fetchWindowPrs(cwd, now);
   const covered = coveredClassesFromRules(path.join(cwd, '.claude', 'rules'));
+  const {malformed: vocabularyMalformed, vocabulary} =
+    readProjectFindingClassesChecked(cwd);
 
   const tallyResult = computeTally({
     coveredClass: (findingClass) => covered.has(findingClass),
@@ -291,6 +406,7 @@ export const run = (
           .status !== 'resurface'
       );
     },
+    vocabulary,
     windowDays: WINDOW_DAYS,
   });
 
@@ -298,8 +414,12 @@ export const run = (
   // `ghOk` because a failed window read also yields an empty `prs`, which the
   // prune would read as authoritative evidence that every declined class
   // stopped recurring and wipe the ledger. An unread window is not evidence, so
-  // this fails closed, matching the suppression predicate.
-  if (ghOk && ledger !== null) ledger.prune(windowClasses(prs));
+  // this fails closed, matching the suppression predicate. A malformed project
+  // vocabulary is an unread input too: it reads empty, every project class then
+  // counts as unclassified, and the prune would drop their declines.
+  if (ghOk && !vocabularyMalformed && ledger !== null) {
+    ledger.prune(windowClasses(prs, vocabulary));
+  }
 
   // Read the review snapshot unconditionally (not gated on `ghOk`), so a
   // malformed snapshot is always reported. A malformed snapshot reads as

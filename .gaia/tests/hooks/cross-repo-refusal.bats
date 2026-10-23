@@ -124,6 +124,15 @@ ask_with_stub() {
   grep -qF -- 'run the PR Merge Workflow on that.' <<<"$output"
 }
 
+# The same guards deny Claude the fetch the manual path starts with, so a
+# refusal that reads as Claude's own instruction leaves it no step it can take.
+@test "library: the refusal message hands the manual path to the user" {
+  run bash -c '. "$1"; printf "%s" "$GAIA_CROSS_REPO_REFUSAL_MESSAGE"' _ "$LIBRARY_FILE"
+  [ "$status" -eq 0 ]
+  grep -qF -- "The manual path is the user's to run, not Claude's: ask the user to" <<<"$output"
+  grep -qF -- 'fetch the fork branch without checking it out' <<<"$output"
+}
+
 @test "library: sourcing does no work (no gh call)" {
   library_stub 'true' '' 0
   PATH="$LIBRARY_STUB_BIN:$PATH" bash -c '. "$1"' _ "$LIBRARY_FILE"

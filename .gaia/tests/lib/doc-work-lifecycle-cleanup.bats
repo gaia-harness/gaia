@@ -64,6 +64,7 @@ setup() {
   NAME_ARM="### Worktree entered by name in this session"
   PATH_ARM="### Worktree entered by path or in an earlier session"
   FEATURE_ARM="### Feature branch"
+  LEFTOVERS_ARM="### Leftover-file cleanup after an update merge"
   CONTINUATION="### Sub-agent context: continuation prompt"
   CHECK_SCRIPT="$REPO_ROOT/.gaia/scripts/worktree-removal-check.sh"
   DEBT_REFERENCE="$REPO_ROOT/.claude/skills/gaia/references/debt.md"
@@ -718,13 +719,16 @@ assert_check_red() { # expected reason, then function name and arguments
   [ "$(section "$REFERENCE" "$NAME_ARM" | bash_fence_count)" -eq 2 ] || return 1
   [ "$(section "$REFERENCE" "$PATH_ARM" | bash_fence_count)" -eq 3 ] || return 1
   [ "$(section "$REFERENCE" "$FEATURE_ARM" | bash_fence_count)" -eq 1 ] || return 1
-  [ "$(section "$REFERENCE" "$CLEANUP_HEADING" | bash_fence_count)" -eq 6 ] || {
+  [ "$(section "$REFERENCE" "$LEFTOVERS_ARM" | bash_fence_count)" -eq 2 ] || return 1
+  [ "$(section "$REFERENCE" "$CLEANUP_HEADING" | bash_fence_count)" -eq 8 ] || {
     echo "the cleanup section holds a bash fence no arm accounts for"
     return 1
   }
   [ "$(fence_body "$NAME_ARM" 1)" = "bash .gaia/scripts/worktree-removal-check.sh --tree <worktree path>" ] || return 1
   [ "$(fence_body "$PATH_ARM" 1)" = "git -C <main checkout path> worktree list --porcelain" ] || return 1
   [ "$(fence_body "$PATH_ARM" 2)" = "bash .gaia/scripts/worktree-removal-check.sh --tree <worktree path>" ] || return 1
+  [ "$(fence_body "$LEFTOVERS_ARM" 1)" = "bash <main checkout path>/.gaia/scripts/state-registry-lib.sh residue-sweep" ] || return 1
+  [ "$(fence_body "$LEFTOVERS_ARM" 2)" = "bash <main checkout path>/.gaia/scripts/update-gaia-drift.sh --features <main checkout path>/.gaia/setup-features.json --scope machine" ] || return 1
   fence_body "$PATH_ARM" 3 | head -n 1 | grep -Fq 'git -C <main checkout path> worktree remove --force <worktree path>' || return 1
 }
 

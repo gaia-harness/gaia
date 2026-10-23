@@ -3,7 +3,7 @@ type: concept
 title: Claude Integration Conventions
 status: active
 created: 2026-04-21
-updated: 2026-10-21
+updated: 2026-10-23
 tags: [claude, meta, configuration]
 ---
 
@@ -101,7 +101,7 @@ GAIA ships its React app as the `frontend/` package of a pnpm workspace whose ro
 5. **Meet the pre-commit floor.** For each package with a staged path matching its pre-commit globs, the hook runs the package's typecheck, lint-staged and test scripts; `.githooks/pre-commit` names the scripts `{PKG}/package.json` must define. See [[Pre-commit Hooks]].
 6. **Add a stack-specific quality gate**, as §8 describes. The shared gate's executable steps check only `frontend/`, and its skip check matches JavaScript, TypeScript and CSS sources, so a package in another language gets no gate until its own names its checks.
 7. **Give it CI.** `.github/workflows/tests.yml` runs only the frontend suite, and its incremental-skip pattern (the `pattern=` line of its `Detect test-relevant changes` step) arms only on `frontend/` and root config, so a change under `{PKG}` alone runs no tests in CI. Add a workflow of its own, `{PKG}-tests.yml` or the stack's equivalent, named per [[Workflow Naming Convention]], copying the shape of `tests.yml`: default-deny `permissions: {}` with per-job grants, the same `concurrency` group, and the package's own typecheck, lint and test scripts. A job that becomes a required check gates its steps inside the job, as `tests.yml` does, rather than with a workflow `paths:` filter, because a check that never reports leaves the pull request waiting ([[Incremental CI Skipping]]). Add `{PKG}` to the `tests.yml` pattern only when the frontend suite depends on the package, such as a shared types package the app imports.
-8. **Give it an auditor.** The Code Audit Team assigns each changed file to the member whose globs in `.gaia/audit-ci.yml` match it. A file no member claims still owes `code-audit-frontend`, the default member, so the merge gate holds the branch to an audit, but by a React lens with no remit for the package's stack. Register a member for the package, as [[Registering a Code Audit Team Member]] describes, or grant its globs to an existing member whose lens fits. `bash .gaia/scripts/verify-audit-roster.sh` reports every tracked path no member owns and no `unowned:` entry declares; no hook or shipped workflow runs it, so the verify block below runs it. An `unowned:` entry only quiets that report and suppresses no review.
+8. **Give it an auditor.** The Code Audit Team assigns each changed file to the member whose globs in `.gaia/audit-ci.yml` match it. A file no member claims still owes `code-audit-frontend`, the default member, so the merge gate holds the branch to an audit, but by a React lens with no remit for the package's stack. Register a member for the package, as [[Registering a Code Audit Team Member]] describes, or grant its globs to an existing member whose lens fits. Run `bash .gaia/scripts/verify-audit-roster.sh` after the roster change: it reports every tracked path no member owns and no `unowned:` entry declares, and the pre-commit hook runs it on any commit that stages the roster. An `unowned:` entry only quiets that report and suppresses no review.
 9. **Leave the wiki hooks alone.** `wiki-session-start.sh` is git-level and names no package path.
 
 ### Verify the package

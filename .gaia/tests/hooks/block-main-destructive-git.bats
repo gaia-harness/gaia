@@ -290,6 +290,14 @@ run_hook_from() {
   true
 }
 
+@test "the refspec push denial states its reason and the spelling that passes" {
+  on_feature
+  run_hook 'git push origin HEAD'
+  assert_denied_by_json
+  grep -qF -- 'without the pull request and audit every change passes through' <<<"$output"
+  grep -qF -- 'git push -u origin <branch-name>' <<<"$output"
+}
+
 # The on-main cause keeps its own repair, and it answers first where both
 # conditions hold: leaving main settles the refspec too, so the operator reads
 # the repair that clears the push rather than the narrower one.
@@ -1000,6 +1008,96 @@ run_staged() {
   git -C "$STAGED_ROOT" checkout --quiet -B feature
   write_conflicted_library "$STAGED_ROOT/.gaia/scripts/main-root-lib.sh"
   run_staged 'git status' /bin/bash
+  assert_allowed_by_json
+}
+
+# --- a hard reset that moves HEAD drops commits, whatever the spelling ---
+#
+# The rule reads the target as a commit rather than as text, so every spelling
+# of an earlier commit denies and every spelling of HEAD's own commit passes.
+# The feature branch carries a second commit, so each earlier target names a
+# commit HEAD would leave behind.
+
+on_feature_with_second_commit() {
+  on_feature
+  echo "second" > "$REPO/second.txt"
+  git -C "$REPO" add second.txt
+  git -C "$REPO" commit --quiet -m "second"
+  FIRST_SHA=$(git -C "$REPO" rev-parse HEAD~1)
+  HEAD_SHA=$(git -C "$REPO" rev-parse HEAD)
+}
+
+@test "git reset --hard to an earlier commit is denied in every spelling" {
+  local target
+  on_feature_with_second_commit
+  git -C "$REPO" branch older "$FIRST_SHA"
+  for target in 'HEAD~1' 'HEAD~' 'HEAD^' '@~1' '@^' "$FIRST_SHA" "${FIRST_SHA:0:8}" older main; do
+    run_hook "git reset --hard $target"
+    assert_denied_by_json || { echo "allowed: git reset --hard $target"; return 1; }
+  done
+}
+
+@test "git reset --hard with options around the target is denied" {
+  on_feature_with_second_commit
+  run_hook 'git reset -q --hard HEAD~1'
+  assert_denied_by_json
+  run_hook 'git reset --hard --quiet HEAD^'
+  assert_denied_by_json
+  run_hook "git -C $REPO reset --hard HEAD~1"
+  assert_denied_by_json
+}
+
+@test "git reset --hard to a target that resolves nowhere is denied" {
+  on_feature_with_second_commit
+  run_hook 'git reset --hard no-such-ref'
+  assert_denied_by_json
+}
+
+@test "git reset --hard on main is denied too" {
+  on_feature_with_second_commit
+  on_main
+  run_hook "git reset --hard $HEAD_SHA"
+  assert_denied_by_json
+}
+
+@test "the hard-reset denial states its reason and hands the step to the user" {
+  on_feature_with_second_commit
+  run_hook 'git reset --hard HEAD~1'
+  assert_denied_by_json
+  grep -qF -- 'any commit the branch holds after it is dropped' <<<"$output"
+  grep -qF -- 'Ask the user to run it themselves' <<<"$output"
+}
+
+@test "git reset --hard that keeps HEAD where it is is allowed" {
+  local target
+  on_feature_with_second_commit
+  for target in '' ' HEAD' ' @' " $HEAD_SHA" ' feature'; do
+    run_hook "git reset --hard$target"
+    assert_allowed_by_json || { echo "denied: git reset --hard$target"; return 1; }
+  done
+}
+
+@test "a reset without --hard is not this rule's" {
+  on_feature_with_second_commit
+  run_hook 'git reset HEAD~1'
+  assert_allowed_by_json
+  run_hook 'git reset --soft HEAD~1'
+  assert_allowed_by_json
+}
+
+@test "command text that only quotes a hard reset is allowed" {
+  on_feature_with_second_commit
+  run_hook 'echo "git reset --hard HEAD~1"'
+  assert_allowed_by_json
+}
+
+# An unreadable directory leaves the checkout unknown, so the target cannot be
+# compared with that checkout's HEAD: only a literal HEAD still passes.
+@test "a hard reset after an unreadable cd passes only for a literal HEAD" {
+  on_feature_with_second_commit
+  run_hook "cd \"\$SOMEWHERE\" && git reset --hard $HEAD_SHA"
+  assert_denied_by_json
+  run_hook 'cd "$SOMEWHERE" && git reset --hard HEAD'
   assert_allowed_by_json
 }
 

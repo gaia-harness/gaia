@@ -798,7 +798,7 @@ main() {
           deny "BLOCKED: rm or git rm with -r or -f under .claude/ is forbidden, it can remove hooks, skills, agents, or settings. Remove one exact file with a flagless 'rm <file>', or 'git rm -q -- <file>' when it is tracked."
           ;;
         node_modules|./node_modules|*/node_modules|node_modules/*)
-          deny "BLOCKED: ${rm_label} of node_modules is forbidden, use 'pnpm store prune' or remove deliberately."
+          deny "BLOCKED: ${rm_label} of node_modules is forbidden, it deletes every installed dependency at once. To repair a broken or stale install, run 'pnpm install', which fixes node_modules in place. A full removal is the user's call: ask the user to run it themselves."
           ;;
         *)
           : # unknown-or-whitelisted relative path: allowed, as before (the relative whitelist folds in here).

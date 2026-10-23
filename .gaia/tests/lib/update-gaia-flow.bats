@@ -7,7 +7,7 @@
 # validate order around the merge report, the questions, answers and decision
 # records, the follow-ups, the version written last (Step 9d), the quality
 # gate, the single commit confirm at the review point, the draft PR (Step 11)
-# and the deferred residue sweep (Step 12). The pre-merge blocks live in
+# and the leftover-file cleanup deferred to the post-merge cleanup (Step 12). The pre-merge blocks live in
 # .gaia/scripts/update-gaia-preflight.sh and the drift block in
 # update-gaia-drift.sh; their behavior is driven by update-gaia-preflight.bats
 # and update-gaia-drift.bats, so this suite pins the skill's calls and prose.
@@ -26,6 +26,7 @@ setup() {
   CONFLICT_FLOW="$REPO_ROOT/.claude/skills/update-gaia/references/conflict-flow.md"
   CLAIM_REF="$REPO_ROOT/.claude/skills/update-gaia/references/claim-flow.md"
   PULL_REF="$REPO_ROOT/.claude/skills/update-gaia/references/pull-mode.md"
+  LIFECYCLE="$REPO_ROOT/.claude/skills/gaia/references/work-lifecycle.md"
   GATE_REF="$REPO_ROOT/.claude/skills/update-gaia/references/pull-gate.md"
   PREFLIGHT="$REPO_ROOT/.gaia/scripts/update-gaia-preflight.sh"
   SELECTOR="$REPO_ROOT/.gaia/scripts/select-migration-notes.sh"
@@ -42,7 +43,8 @@ STEP_9D='## Step 9d: Record the update'
 STEP_CONFLICT_FLOW='## Conflict flow: dispatch, questions, decisions, follow-ups'
 STEP_REVIEW='## Review point'
 STEP_11='### Step 11: Open a pull request'
-STEP_12='### Step 12: Offer the residue sweep'
+STEP_12='### Step 12: The leftover-file cleanup'
+LIFECYCLE_LEFTOVERS='### Leftover-file cleanup after an update merge'
 
 CREATE_CALL='EnterWorktree({name: "<branch-name>"})'
 WAIT_CALL='bash <main checkout path>/.gaia/scripts/provision-wait.sh --tree <worktree path>'
@@ -1086,30 +1088,93 @@ MANIFEST_STOP='A non-zero exit from the `cp` command is the `MANIFEST_COPY_FAILE
   true
 }
 
-# --- Step 12: the residue sweep ---------------------------------------------------
+# --- Step 12: the leftover-file cleanup ---------------------------------------
 
-# 0 when SKILL.md copy `$1` runs no sweep, printing the post-merge --apply
-# step, and keeps no in-place ask.
+# 0 when SKILL.md copy `$1` runs no sweep and no in-place ask in Step 12, and
+# hands the cleanup to the work-lifecycle section that runs it after the merge.
 step_12_holds() {
-  local section worktree_arm sweeps applies
+  local section
   section="$(section_of "$1" "$STEP_12")"
-  worktree_arm="$(printf '%s\n' "$section" | grep -F 'Run no residue sweep')"
-  printf '%s\n' "$worktree_arm" | grep -qF 'Run no residue sweep' || return 1
-  printf '%s\n' "$worktree_arm" | grep -qF '`bash .gaia/scripts/state-registry-lib.sh residue-sweep --apply` from the main checkout' || return 1
-  sweeps="$(printf '%s\n' "$worktree_arm" | grep -oF 'residue-sweep' | wc -l | tr -d ' ')"
-  applies="$(printf '%s\n' "$worktree_arm" | grep -oF 'residue-sweep --apply' | wc -l | tr -d ' ')"
-  [ "$sweeps" -eq "$applies" ] || return 1
+  [ -n "$section" ] || return 1
+  printf '%s\n' "$section" | grep -qF 'Run no cleanup here' || return 1
+  printf '%s\n' "$section" | grep -qF "work-lifecycle.md\`, \`$LIFECYCLE_LEFTOVERS\`" || return 1
+  printf '%s\n' "$section" | grep -qF 'residue-sweep' && return 1
   printf '%s\n' "$section" | grep -qF 'AskUserQuestion' && return 1
   return 0
 }
 
-@test "Step 12: the run runs no sweep and prints the post-merge --apply step" {
+@test "Step 12: the run runs no sweep and hands the cleanup to the post-merge cleanup" {
   step_12_holds "$SKILL"
-  sed 's|Run no residue sweep here: it refuses|Run `bash .gaia/scripts/state-registry-lib.sh residue-sweep`: it refuses|' "$SKILL" > "$COPY"
+  # Failing state: the user handed the command to run by hand.
+  insert_after "$SKILL" "$STEP_12" 'Print as the next step: run `bash .gaia/scripts/state-registry-lib.sh residue-sweep --apply` from the main checkout.'
   step_12_holds "$COPY" && return 1
   # Failing state: an in-place ask restored.
-  insert_after "$SKILL" "$STEP_12" '**Mode 3.** Ask once with `AskUserQuestion` whether to delete the residue paths.'
+  insert_after "$SKILL" "$STEP_12" '**Mode 3.** Ask once with `AskUserQuestion` whether to delete the leftover files.'
   step_12_holds "$COPY" && return 1
+  # Failing state: the pointer to the lifecycle section dropped.
+  grep -vF "$LIFECYCLE_LEFTOVERS" "$SKILL" > "$COPY"
+  step_12_holds "$COPY" && return 1
+  true
+}
+
+LIFECYCLE_SWEEP_CALL='bash <main checkout path>/.gaia/scripts/state-registry-lib.sh residue-sweep'
+
+# 0 when work-lifecycle.md copy `$1` runs the listing in the main checkout for
+# an update branch, asks once, and applies only on the yes.
+lifecycle_leftovers_hold() {
+  local section
+  section="$(section_of "$1" "$LIFECYCLE_LEFTOVERS")"
+  [ -n "$section" ] || return 1
+  printf '%s\n' "$section" | grep -qF 'starts with `update/`' || return 1
+  printf '%s\n' "$section" | grep -qxF -- "$LIFECYCLE_SWEEP_CALL" || return 1
+  printf '%s\n' "$section" | grep -qF 'ask once with `AskUserQuestion`' || return 1
+  printf '%s\n' "$section" | grep -qF 'on `Delete them` run the same command with `--apply`' || return 1
+  printf '%s\n' "$section" | grep -qxF -- "$LIFECYCLE_SWEEP_CALL --apply" && return 1
+  return 0
+}
+
+@test "work-lifecycle cleanup: an update merge lists the leftover files, asks, and applies only on yes" {
+  lifecycle_leftovers_hold "$LIFECYCLE"
+  # Failing state: the listing call dropped.
+  grep -vxF -- "$LIFECYCLE_SWEEP_CALL" "$LIFECYCLE" > "$COPY"
+  lifecycle_leftovers_hold "$COPY" && return 1
+  # Failing state: an unconditional --apply.
+  insert_after "$LIFECYCLE" "$LIFECYCLE_LEFTOVERS" "$LIFECYCLE_SWEEP_CALL --apply"
+  lifecycle_leftovers_hold "$COPY" && return 1
+  # Failing state: the ask dropped.
+  sed 's/ask once with `AskUserQuestion`/delete them/' "$LIFECYCLE" > "$COPY"
+  lifecycle_leftovers_hold "$COPY" && return 1
+  true
+}
+
+LIFECYCLE_MACHINE_DRIFT_CALL='bash <main checkout path>/.gaia/scripts/update-gaia-drift.sh --features <main checkout path>/.gaia/setup-features.json --scope machine'
+
+# 0 when work-lifecycle.md copy `$1` runs the machine-scope drift in the pulled
+# main checkout after the sweep, records a feature only once it ran there, and
+# names `/setup-gaia` where nobody can run it.
+lifecycle_machine_drift_holds() {
+  local section_path
+  section_path="$(section_file "$1" "$LIFECYCLE_LEFTOVERS")" || return 1
+  grep -qxF -- "$LIFECYCLE_MACHINE_DRIFT_CALL" "$section_path" || return 1
+  in_order "$section_path" "$LIFECYCLE_SWEEP_CALL" "$LIFECYCLE_MACHINE_DRIFT_CALL" || return 1
+  grep -qF 'records it only after it ran here' "$section_path" || return 1
+  grep -qF 'run /setup-gaia from the main checkout to carry the machine-scope setup features this update deferred' "$section_path" || return 1
+  return 0
+}
+
+@test "work-lifecycle cleanup: an update merge runs the deferred machine-scope features in the main checkout" {
+  lifecycle_machine_drift_holds "$LIFECYCLE"
+  # Failing state: the drift call dropped.
+  grep -vxF -- "$LIFECYCLE_MACHINE_DRIFT_CALL" "$LIFECYCLE" > "$COPY"
+  lifecycle_machine_drift_holds "$COPY" && return 1
+  # Failing state: the drift widened to every scope.
+  sed 's| --scope machine$||' "$LIFECYCLE" > "$COPY"
+  lifecycle_machine_drift_holds "$COPY" && return 1
+  local pin
+  for pin in 'records it only after it ran here' 'run /setup-gaia from the main checkout'; do
+    grep -vF -- "$pin" "$LIFECYCLE" > "$COPY"
+    lifecycle_machine_drift_holds "$COPY" && { echo "pin not enforced: $pin" >&2; return 1; }
+  done
   true
 }
 
@@ -1157,6 +1222,53 @@ drift_prose_holds() {
     grep -vF -- "$pin" "$SKILL" > "$copy"
     drift_prose_holds "$copy" && { echo "pin not enforced: $pin" >&2; return 1; }
   done
+  true
+}
+
+MACHINE_IDS_CALL="jq -r '.features[] | select(.scope == \"machine\") | .id' <LATEST_DIR>/.gaia/setup-features.json"
+
+# 0 when SKILL.md copy `$1` keeps every machine-scope feature out of the update
+# worktree: Step 9c lists the machine-scope ids, never applies, asks or records
+# one there, and hands them to the post-merge cleanup; Step 9d's addendum and
+# Step 12 name the hand-off.
+machine_scope_rule_holds() {
+  local section
+  section="$(section_of "$1" "$STEP_9C")"
+  [ -n "$section" ] || return 1
+  printf '%s\n' "$section" | grep -qxF -- "$MACHINE_IDS_CALL" || return 1
+  printf '%s\n' "$section" | grep -qF 'is never applied, asked or recorded inside the update worktree' || return 1
+  printf '%s\n' "$section" | grep -qF "work-lifecycle.md\`, \`$LIFECYCLE_LEFTOVERS\`" || return 1
+  section_of "$1" "$STEP_9D" | grep -qF 'the machine-scope features deferred to the main checkout, each by id' || return 1
+  section_of "$1" "$STEP_12" | grep -qF 'the machine-scope setup features Step 9c deferred' || return 1
+  return 0
+}
+
+@test "Step 9c: a machine-scope feature is deferred to the main checkout, never run in the update worktree" {
+  machine_scope_rule_holds "$SKILL"
+  local pin
+  for pin in "$MACHINE_IDS_CALL" 'is never applied, asked or recorded inside the update worktree' \
+    'the machine-scope features deferred to the main checkout' 'the machine-scope setup features Step 9c deferred'; do
+    grep -vF -- "$pin" "$SKILL" > "$COPY"
+    machine_scope_rule_holds "$COPY" && { echo "pin not enforced: $pin" >&2; return 1; }
+  done
+  # Failing state: the hand-off pointer dropped from Step 9c alone.
+  awk -v heading="$STEP_9C" -v pointer="$LIFECYCLE_LEFTOVERS" '
+    index($0, heading) == 1 { inside = 1 } inside && /^## Step 9d/ { inside = 0 }
+    !(inside && index($0, pointer)) { print }' "$SKILL" > "$COPY"
+  machine_scope_rule_holds "$COPY" && return 1
+  true
+}
+
+@test "Step 9c: the machine-scope id list names migrate-2-machine and no project-scope feature" {
+  local call output_ids
+  call="$(section_of "$SKILL" "$STEP_9C" | grep -xF -- "$MACHINE_IDS_CALL")"
+  [ -n "$call" ] || { echo "the call is not in Step 9c" >&2; return 1; }
+  output_ids="$(bash -c "${call//<LATEST_DIR>/$REPO_ROOT}")"
+  printf '%s\n' "$output_ids" | grep -qxF 'migrate-2-machine' || return 1
+  local project_ids
+  project_ids="$(jq -r '.features[] | select(.scope == "project") | .id' "$REPO_ROOT/.gaia/setup-features.json")"
+  [ -n "$project_ids" ] || { echo "no project-scope ids to check against" >&2; return 1; }
+  printf '%s\n' "$output_ids" | grep -qxF -f <(printf '%s\n' "$project_ids") && return 1
   true
 }
 

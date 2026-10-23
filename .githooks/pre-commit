@@ -24,6 +24,7 @@ bash "$(dirname "$0")/../.gaia/scripts/machine-local-ref-lib.sh" check staged "$
 
 PLAN=$(bash "$ROOT/.gaia/scripts/precommit-packages.sh" "$ROOT") || {
   printf "\x1b[31m✖ Pre-commit could not read the package registry\x1b[0m\n"
+  printf "The reason and its next step are printed above. The registry is .gaia/packages.json plus the gaia.package.json descriptor each entry names; fix the one the reason names, then retry the commit. To print the reason again: bash .gaia/scripts/precommit-packages.sh %s\n" "$ROOT"
   exit 1
 }
 
@@ -45,6 +46,16 @@ fi
 # manifest or its lockfile is staged; the script refuses on unstaged CLI source.
 if [ -f "$ROOT/.gaia/scripts/cli-autobundle.sh" ]; then
   bash "$ROOT/.gaia/scripts/cli-autobundle.sh" "$ROOT" || exit 1
+fi
+# gaia:maintainer-only:end
+
+# gaia:maintainer-only:start
+# The labels page's generated span must match the registry whenever either is
+# staged. It runs after the autobundle arm so the check is the freshly built
+# one. It reads the working tree, so a page staged stale while a regenerated
+# copy sits unstaged passes; CI's run of the same check catches that commit.
+if ! git diff --cached --quiet -- .gaia/labels.json 'wiki/concepts/GitHub Labels.md'; then
+  "$ROOT/.gaia/cli/gaia-maintainer" labels docs --check --repo-root "$ROOT" || exit 1
 fi
 # gaia:maintainer-only:end
 
@@ -72,6 +83,21 @@ if [ -n "$RETIRED_ADDS" ]; then
   printf "\x1b[31m✖ The React app lives in frontend/ now; move these new files there:\x1b[0m\n"
   printf '%s\n' "$RETIRED_ADDS"
   exit 1
+fi
+
+# Code Audit Team roster: a staged change to the roster, a member definition or
+# the machinery list runs the roster check, whose findings each print their
+# repair. It reads the working tree, not the index, so a staged break that an
+# unstaged edit happens to repair passes here.
+# `|| true` because grep exits 1 on no match, which `set -e` would otherwise
+# turn into a refused commit.
+ROSTER_STAGED=$(git diff --cached --name-only -z | tr '\0' '\n' |
+  grep -E '^(\.gaia/audit-ci\.yml|\.claude/agents/code-audit-[^/]*\.md|\.claude/hooks/lib/audit-machinery\.sh)$' || true)
+if [ -n "$ROSTER_STAGED" ]; then
+  bash "$ROOT/.gaia/scripts/verify-audit-roster.sh" --root "$ROOT" || {
+    printf "\x1b[31m✖ The Code Audit Team roster check failed: apply each finding's repair above, then commit again\x1b[0m\n"
+    exit 1
+  }
 fi
 
 # Guard: exactly one react-doctor config may exist per package. react-doctor

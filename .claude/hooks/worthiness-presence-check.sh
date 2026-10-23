@@ -454,8 +454,7 @@ fi
 reason="${reason}
 
 To unblock:
-  1. Run the worthiness evaluator on the changed emergent tests (the tdd skill dispatches it), or invoke the ledger writer per judged test:
-       node .gaia/scripts/audit-ledger/append-worthiness.mjs <file> <fullName> <verdict> [artifact]
+  1. Run the worthiness evaluator on the tests listed above, the way the tdd skill's Worthiness Audit step dispatches it, and record each verdict it returns as that step says.
   2. Retry gh pr merge.
 
 See wiki/decisions/Worthiness Presence Gate.md for the full contract."

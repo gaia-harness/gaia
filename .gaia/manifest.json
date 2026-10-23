@@ -89,6 +89,7 @@
     ".claude/rules/context-discipline.md": "owned",
     ".claude/rules/fenced-copy-paste-blocks.md": "owned",
     ".claude/rules/file-placement.md": "owned",
+    ".claude/rules/generated-files.md": "owned",
     ".claude/rules/guards-must-fail.md": "owned",
     ".claude/rules/issue-claim.md": "owned",
     ".claude/rules/no-abbreviations.md": "owned",
@@ -126,6 +127,7 @@
     ".claude/skills/gaia/references/setup/github-repo.md": "owned",
     ".claude/skills/gaia/references/setup/isolation-question.md": "owned",
     ".claude/skills/gaia/references/setup/land-decisions.md": "owned",
+    ".claude/skills/gaia/references/setup/migrate-2-machine.md": "owned",
     ".claude/skills/gaia/references/setup/per-machine.md": "owned",
     ".claude/skills/gaia/references/setup/sandbox-recommendation.md": "owned",
     ".claude/skills/gaia/references/setup/sandbox.md": "owned",
@@ -752,7 +754,7 @@
     "wiki/overview.md": "wiki-owned",
     "wiki/README.md": "wiki-owned"
   },
-  "generated": "2026-10-23T11:38:47.436Z",
+  "generated": "2026-10-23T14:58:51.984Z",
   "regions": [
     {
       "endMarker": "<!-- gaia:audit-remit:end -->",

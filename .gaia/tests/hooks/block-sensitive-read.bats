@@ -585,6 +585,17 @@ run_hook_monitor() {
   assert_denied_by_json
 }
 
+@test "both dotenv denies name what Claude can do without the value" {
+  run_hook_read ".env.local"
+  assert_denied_by_json
+  grep -qF -- "Next step: refer to the variable by its name" <<<"$output"
+  grep -qF -- "read '.env.example' for the list of keys" <<<"$output"
+  run_hook_bash "cat .env.local"
+  assert_denied_by_json
+  grep -qF -- "Next step: refer to the variable by its name" <<<"$output"
+  grep -qF -- "read '.env.example' for the list of keys" <<<"$output"
+}
+
 @test "the secret-path deny names the readable spelling and the next step" {
   run_hook_read "credentials.json"
   assert_denied_by_json

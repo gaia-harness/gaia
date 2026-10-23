@@ -637,6 +637,19 @@ OLD_HOOK
   [ ! -s "$PNPM_LOG" ]
 }
 
+# The registry reader prints its own reason and next step; the hook's closing
+# line points at them and names the file, so the refusal is not a dead end.
+@test "an unreadable package registry is refused with a pointer to the reason and the file" {
+  mkdir -p "$REPO/.gaia"
+  printf 'not json\n' > "$REPO/.gaia/packages.json"
+  stage_and_run "app/x.tsx"
+  [ "$status" -ne 0 ]
+  grep -qF -- ".gaia/packages.json is malformed" <<<"$output"
+  grep -qF -- "The reason and its next step are printed above" <<<"$output"
+  grep -qF -- "bash .gaia/scripts/precommit-packages.sh" <<<"$output"
+  [ ! -s "$PNPM_LOG" ]
+}
+
 @test "a harness-only staged set skips the gate" {
   use_frontend_package
   mkdir -p "$REPO/wiki" "$REPO/.claude/rules"

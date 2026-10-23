@@ -97,7 +97,7 @@ When the user chose Automatic, first detect the project folder name (`basename "
 > | Additional languages      | None, i18n scaffolding kept                                                             | Yes, fully                                                 |
 > | Project title             | {title-cased folder name}                                                               | Yes, re-run rename                                         |
 > | Slug                      | {folder name}                                                                           | Yes, re-run rename                                         |
-> | CODEOWNERS handle         | {gh-detected handle when available, else `REPLACE-WITH-YOUR-GITHUB-HANDLE` placeholder} | Placeholder: one-line edit required. Detected handle: none |
+> | CODEOWNERS handle         | {gh-detected handle when available, else `REPLACE-WITH-YOUR-GITHUB-HANDLE` placeholder} | Placeholder: `/setup-gaia` sets it before the first push. Detected handle: none |
 > | Backend casing            | camelCase                                                                               | Yes, rerun `gaia init configure-data-layer --casing`       |
 > | TanStack Query            | No                                                                                      | Yes, rerun `gaia init configure-data-layer --query true`   |
 > | Sandbox recommendation    | Not recommended (GAIA's default, never asked)                                           | Yes, `/setup-gaia --reconfigure`                           |
@@ -321,18 +321,16 @@ Run sequentially, stopping at the first non-zero exit:
 
 `configure-data-layer` prints one JSON line on stdout, `{"changed": [...], "next": [...]}`. Run every command the `next` list names (with Query on that is `pnpm install`) before continuing.
 
-If any of these exit non-zero, surface the structured error verbatim (the CLI prints a JSON line to stderr) and stop. The user can re-run the failing command manually after addressing the cause, then resume with `.gaia/cli/gaia init resume`, completed steps are skipped automatically.
+If any of these exit non-zero, surface the structured error verbatim (the CLI prints a JSON line to stderr), then follow "On failure: resume" below.
 
 ## Step 4: Locale-specific scaffolding (when not stripping i18n)
 
-If `STRIP_I18N == false`, also run the prose locale instructions for every non-`en` locale in `LOCALES`:
+If `STRIP_I18N == false` and `LOCALES` holds any locale other than `en`, read `frontend/.claude/instructions/add-locale.md` once, then:
 
-For each locale in `LOCALES` where the locale is NOT `en`:
+1. For each locale in `LOCALES` that is not `en`: resolve its English display name (e.g. `Polish`), native display name (e.g. `Polski`), and RTL flag (`true` for `ar`/`he`/`fa`/`ur`, otherwise `false`); substitute the four template variables, `{{LOCALE_CODE}}`, `{{LANGUAGE_NAME_EN}}`, `{{LANGUAGE_NAME_NATIVE}}`, `{{IS_RTL}}`; and execute Steps 1 to 7.
+2. After the last locale, run Step 8 (verify) once, then print Step 9's summary line for each locale.
 
-1. Resolve the locale's English display name (e.g. `Polish`), native display name (e.g. `Polski`), and RTL flag (`true` for `ar`/`he`/`fa`/`ur`, otherwise `false`).
-2. Read `frontend/.claude/instructions/add-locale.md`.
-3. Substitute the four template variables: `{{LOCALE_CODE}}`, `{{LANGUAGE_NAME_EN}}`, `{{LANGUAGE_NAME_NATIVE}}`, `{{IS_RTL}}`.
-4. Execute every step in the substituted instruction. Stop on any failure.
+Stop on any failure. `add-locale.md` (`## When this runs`) says why verify runs once.
 
 If `STRIP_I18N == true`, read `frontend/.claude/instructions/remove-i18n.md` and execute every step. Stop on any failure.
 
@@ -348,7 +346,7 @@ printf '* @%s\n' "<github-username>" > .github/CODEOWNERS
 
 `<github-username>` is the handle Q3 resolved: the user's typed handle, or the gh-detected login when the user accepted (or automatic mode used) that default. Any of these is a real handle, write `* @<handle>` and emit **no** Step 11 follow-up warning.
 
-Only when Q3 obtained no real handle (the user picked `Set it later`, or automatic mode where gh detection also failed) is `<github-username>` the placeholder `REPLACE-WITH-YOUR-GITHUB-HANDLE`. Write it anyway, GitHub flags the unknown owner in its CODEOWNERS validation, so the gap is visible. Add a required follow-up to the Step 11 summary: "Edit `.github/CODEOWNERS`, it holds a placeholder owner, set your real GitHub handle."
+Only when Q3 obtained no real handle (the user picked `Set it later`, or automatic mode where gh detection also failed) is `<github-username>` the placeholder `REPLACE-WITH-YOUR-GITHUB-HANDLE`. Write it anyway, GitHub flags the unknown owner in its CODEOWNERS validation, so the gap is visible. Add a follow-up to the Step 11 summary: "`.github/CODEOWNERS` holds a placeholder owner; `/setup-gaia` offers to set your GitHub handle before its first push."
 
 ## Step 6: Check `.env`
 
@@ -374,7 +372,7 @@ Fix any issues before moving on.
 
 Read `.claude/skills/gaia/references/setup/per-machine.md` now, the whole file, and run its steps in order.
 
-On a halt, print the probe lines and stop with: "One or more components failed verification. Retry the failed install commands above, then resume with `.gaia/cli/gaia init resume`."
+On a halt, print the probe lines, say which components failed verification, then follow "On failure: resume" below with the failed install commands as the commands to re-run.
 
 When every step is recorded, continue to Step 9. `/setup-gaia` runs the same reference, so a machine set up here owes it nothing per-machine.
 
@@ -390,7 +388,7 @@ Run, always, including on a resumed run:
   .gaia/cli/gaia setup record isolation-policy applied
 ```
 
-If it exits non-zero, surface the structured-error JSON verbatim and stop. The user can re-run the failing command manually after addressing the cause, then resume `/gaia-init` with `.gaia/cli/gaia init resume`.
+If it exits non-zero, surface the structured-error JSON verbatim, then follow "On failure: resume" below.
 
 The two records mean `/setup-gaia` owes neither decision.
 
@@ -470,7 +468,7 @@ Derive the two values from state this run already holds, never from a state file
 
 Then output the message below verbatim. Output the `cd` line exactly as written, even though Claude is running inside the project folder: when the user exits Claude, their shell returns to the directory they launched from (the parent), not the project folder.
 
-**If `.github/CODEOWNERS` holds the `REPLACE-WITH-YOUR-GITHUB-HANDLE` placeholder** (automatic mode where gh detection also failed, or any run where a real handle was never obtained), prepend this required follow-up to the message: "⚠ Required: `.github/CODEOWNERS` has a placeholder owner. Edit it to set your real GitHub handle before you push." A gh-detected or user-typed handle writes a real owner, so this warning does not appear.
+**If `.github/CODEOWNERS` holds the `REPLACE-WITH-YOUR-GITHUB-HANDLE` placeholder** (automatic mode where gh detection also failed, or any run where a real handle was never obtained), prepend this follow-up to the message: "⚠ `.github/CODEOWNERS` has a placeholder owner. `/setup-gaia` offers to set your GitHub handle before its first push." A gh-detected or user-typed handle writes a real owner, so this warning does not appear.
 
 > <Project Title> is ready for development. Exit Claude, then from your terminal:
 >
@@ -484,10 +482,16 @@ Then output the message below verbatim. Output the `cd` line exactly as written,
 
 ## On failure: resume
 
-If any `gaia init <step>` invocation exits non-zero, the structured-error JSON on stderr explains the cause. After fixing the cause, re-run with:
+If any `gaia init <step>` invocation exits non-zero, the structured-error JSON on stderr explains the cause. Claude recovers the run itself; the user only fixes a cause Claude cannot (a credential, a system package, a disk or network problem):
+
+1. Name the cause from the error. When Claude can fix it within the project, fix it and go to item 3.
+2. Otherwise say what the user needs to change, and ask with `AskUserQuestion` whether it is fixed: `Fixed, resume (Recommended)` and `Stop here`. On `Stop here`, end the run and say that asking Claude to resume `/gaia-init` later continues from the failed step.
+3. Resume. A failed Step 8 install is re-run first, since it is not a `gaia init` step; a failed `gaia init <step>` is replayed by the resume itself:
 
 ```bash
 .gaia/cli/gaia init resume
 ```
+
+When it fails again, return to item 1 with its new error.
 
 Resume reads `.gaia/init-state.json`, skips already-complete steps, and replays remaining steps using the saved arguments. Use `--from-step <N>` to force restart from a specific step (1-indexed: 1=strip-branding, 2=configure-i18n, 3=configure-data-layer, 4=rename, 5=wire-statusline, 6=bootstrap-env, 7=write-project-config, 8=finalize).

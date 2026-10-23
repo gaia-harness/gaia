@@ -20014,13 +20014,18 @@ var readRegistry = (repoRoot) => {
 };
 
 // src/labels/docs.ts
-var HELP_TEXT = `Usage: gaia-maintainer labels docs [--repo-root <path>]
+var HELP_TEXT = `Usage: gaia-maintainer labels docs [--check] [--repo-root <path>]
 
   Rewrites the generated span of wiki/concepts/GitHub Labels.md from
   .gaia/labels.json. Deterministic and offline. Exits 2 on a usage or
   environment error.
+
+  --check   Write nothing. Exit 0 when the span is current, 1 when it
+            differs from a fresh render.
 `;
 var HELP_TOKENS2 = /* @__PURE__ */ new Set(["--help", "-h", "help"]);
+var EXIT_DRIFT = 1;
+var REGENERATE_COMMAND = "./.gaia/cli/gaia-maintainer labels docs";
 var GENERATED_START_MARKER = "<!-- gaia:labels:generated-start -->";
 var GENERATED_END_MARKER = "<!-- gaia:labels:generated-end -->";
 var maintainerMarker = (edge) => `<!-- gaia:maintainer-only:${edge} -->`;
@@ -20127,10 +20132,13 @@ var spliceGeneratedSpan = (pageText, span) => {
   ].join("\n");
 };
 var parseArgs = (argv) => {
+  let check2 = false;
   let repoRoot;
   for (let index = 0; index < argv.length; index += 1) {
     const token = argv[index];
-    if (token === "--repo-root") {
+    if (token === "--check") {
+      check2 = true;
+    } else if (token === "--repo-root") {
       const value = takeNonFlagValue(argv, index + 1, "--repo-root");
       if (!value.ok) {
         structuredError({
@@ -20151,7 +20159,7 @@ var parseArgs = (argv) => {
       return { code: EXIT_CODES.INVALID_ARGUMENTS };
     }
   }
-  return { repoRoot };
+  return { check: check2, repoRoot };
 };
 var PAGE_RELATIVE_PATH = "wiki/concepts/GitHub Labels.md";
 var run = (argv) => {
@@ -20181,6 +20189,20 @@ var run = (argv) => {
     return EXIT_CODES.INVALID_ARGUMENTS;
   }
   const rewritten = next !== committed;
+  if (parsed.check) {
+    if (!rewritten) {
+      process.stdout.write(`labels-docs: ${PAGE_RELATIVE_PATH} current
+`);
+      return EXIT_CODES.OK;
+    }
+    structuredError({
+      code: "labels_docs_drift",
+      message: `the generated span of ${PAGE_RELATIVE_PATH} does not match .gaia/labels.json. Next step: run ${REGENERATE_COMMAND} and stage the page.`,
+      page: PAGE_RELATIVE_PATH,
+      subcommand: "labels docs"
+    });
+    return EXIT_DRIFT;
+  }
   if (rewritten) atomicWriteFileSync(pagePath, next);
   const outcome = rewritten ? "rewritten" : "already current";
   process.stdout.write(`labels-docs: ${PAGE_RELATIVE_PATH} ${outcome}
@@ -20191,8 +20213,9 @@ var run = (argv) => {
 // src/labels/maintainer.ts
 var HELP_TEXT2 = `Usage: gaia-maintainer labels <subcommand> [args]
 
-  docs [--repo-root <path>]
-                             Regenerate the generated span of the wiki page.
+  docs [--check] [--repo-root <path>]
+                             Regenerate the generated span of the wiki page,
+                             or with --check report whether it is current.
 `;
 var SUBCOMMAND_HANDLERS = {
   docs: run
@@ -23894,6 +23917,9 @@ var scanRegionDeclarations = (repoRoot, shippedFiles, registry2 = REGION_REGISTR
 
 // src/release/manifest.ts
 var ADOPTER_OWNED_SENTINELS = /* @__PURE__ */ new Set([
+  // The project finding-class vocabulary ships empty and is the adopter's to
+  // fill, so /update-gaia must never merge or overwrite it.
+  ".gaia/finding-classes.json",
   ".gaia/manifest.json",
   // The package registry is adopter-owned from first install: an adopter adds
   // a package by editing it, so /update-gaia must never merge or overwrite it.
