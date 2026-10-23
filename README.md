@@ -12,7 +12,7 @@
 
 The foundation that keeps Claude-shipped code production-grade as your team scales. The React frontend is handled. You build the rest of your app on top. Every convention enforced in code. Every shortcut blocked at the source. Every merge audited before it lands.
 
-**[Quick Start](#quick-start) · [What Breaks Claude](#what-breaks-claude-on-real-projects) · [Trust](#how-gaia-makes-claude-trustworthy) · [Token Economics](#how-gaia-keeps-claude-token-efficient) · [Tech Debt](#how-gaia-keeps-tech-debt-from-compounding) · [Tech Stack](#tech-stack) · [Claude Workflow](#claude-workflow) · [History](#history)**
+**[Quick Start](#quick-start) · [What Breaks Claude](#what-breaks-claude-on-real-projects) · [Trust](#how-gaia-makes-claude-trustworthy) · [Token Economics](#how-gaia-keeps-claude-token-efficient) · [Tech Debt](#how-gaia-keeps-tech-debt-from-compounding) · [Tech Stack](#tech-stack) · [Claude Workflow](#claude-workflow) · [Feedback](#feedback) · [History](#history)**
 
 ## Who It's For
 
@@ -45,6 +45,8 @@ GAIA ships clean. `/gaia-init` does the last-mile setup:
 - **Configures i18n.** Prompts for your language set, scaffolds the matching language files, updates the component and Storybook wiring.
 - **Installs Claude skills and plugins.** [React Doctor](https://github.com/millionco/react-doctor), [Playwright CLI](https://github.com/microsoft/playwright-cli), and `typescript-lsp`.
 
+Then `/setup-gaia` runs the rest of the onboarding: GitHub repository provisioning (for a repo admin, branch protection with the `GAIA-Audit` required check and squash-only merges) and the per-machine sandbox and statusline choices. It runs only the steps a clone still owes, so any developer can re-run it safely.
+
 You end up with a clean app shell and a fully-configured Claude workflow.
 
 ### Repository layout
@@ -68,18 +70,18 @@ Most setups treat Claude as a tool you hold: bolt a `CLAUDE.md` onto the root an
 - **Consistently clean code.** Over 1,200 lint rules, strict TypeScript, Prettier, and Knip enforce style, correctness, and dead-code detection on every file Claude touches, and every commit message follows Conventional Commits. No negotiation, no drift.
 - **Bundled skills wired in for write-time quality.** `typescript`, `react-code`, `tailwind`, `tdd`, `playwright-cli`, `skeleton-loaders`, `eslint-fixes`, and `a11y-fixes` load on demand when Claude edits matching files or a tool reports a fixable violation. The `tdd` skill drives a red-green-refactor loop tailored for Vitest, Storybook play functions, and MSW.
 - **Specs that turn into tests.** `/gaia-spec` authors an immutable SPEC artifact through Socratic discovery. The SPEC's UATs are written before any source code, and `/gaia-plan`'s orchestrator renders them as red-state Playwright e2e specs automatically before the first implementation phase; the owning phase turns each one green. The implementer's first job is turning red green. The PO writes acceptance criteria in plain language, and the test harness is generated from them.
-- **Code-review audit before every merge.** A manager agent scans the branch diff for security (XSS, SSRF, IDOR, secret exposure, timing attacks, dependency vulns), performance, architecture, code smells, and antipatterns. Three specialists (React Patterns & Accessibility, TypeScript & Architecture, Translation) run in parallel alongside `react-doctor` and `knip` (whose output is advisory and never blocks), with extension files in `frontend/.claude/agents/code-audit-frontend/` injecting library-specific rules at runtime. Findings are tiered **Critical**, **Major**, and **Minor**. The merge blocks until no Critical or Major issues remain. Runs locally.
-- **Quality gate before commit.** Typecheck, lint, tests, and build must all pass. Not "mostly clean." Actually clean.
-- **Guardrails against destructive moves.** A filesystem deny list blocks reads of `.env`, `**/secrets/*`, `**/*credential*`, `**/*.pem`, and `**/*.key`. A tool allow list scopes Bash and Edit surfaces. Pre-tool-use hooks reject dangerous commands at the source: destructive git on `main`, `eslint.config` edits, `rm -rf`, and writes to env/secret files. All in `.claude/hooks/`, wired through `.claude/settings.json`, whose permissions deny list also blocks edits to `pnpm-lock.yaml`.
+- **Code Audit Team before every merge.** Each member of the Code Audit Team owns the files its roster entry claims, and a diff dispatches only the members whose files it touches. The frontend member reviews for security (XSS, SSRF, IDOR, secret exposure, timing attacks, vulnerable dependencies), performance, architecture, and defects that lint and types miss, with line-level rule specialists, `react-doctor`, and `knip` running alongside it and extension files in `frontend/.claude/agents/code-audit-frontend/` injecting library-specific rules at runtime. A proven-small change since a member's last full review can route to a cheaper light review. Findings are tiered **Critical**, **Major**, and **Minor**, and the self-running audit loop fixes them round by round in a subagent, so your session holds only a short report. The merge blocks until every dispatched member clears. Runs locally.
+- **Quality gate before commit.** Typecheck, lint, unit and Storybook tests, Playwright E2E, a dev-server smoke test, and the production build must all pass. Not "mostly clean." Actually clean.
+- **Guardrails against destructive moves.** A read guard hook and the sandbox's filesystem deny list block reads of `.env` files, key and certificate files, credential-named files (TypeScript source excepted), and anything under a `secrets/` directory. A tool allow list scopes Bash and Edit surfaces. Pre-tool-use hooks reject dangerous commands at the source: destructive git on `main`, `eslint.config` edits, `rm -rf`, and writes to env/secret files. All in `.claude/hooks/`, wired through `.claude/settings.json`, whose permissions deny list also blocks edits to `pnpm-lock.yaml`.
 
 ## How GAIA Keeps Claude Token-Efficient
 
 - **Rules scoped to activate only when needed.** Claude loads the ones that match what it's editing. Nothing else.
 - **Tiers of memory, each scoped and self-maintaining.** Claude stops relearning the codebase every session:
-  - **Wiki** (repo): architecture, modules, decisions, flows, concepts as focused, linked Markdown committed to git and shared across the team. Claude opens the one page it needs (_"How does dark mode wire through?"_) instead of preloading the whole manual. A statusline nudge flags when the wiki drifts from HEAD; SPEC outcomes drain in at PR merge; a redundancy and staleness pass runs whenever it grows. `/gaia-wiki` runs sync, consolidate, and lint on demand, each step in a fresh subagent context, and lands them as one commit. Open `wiki/` in [Obsidian](https://obsidian.md) for graph view, backlinks, and search. GAIA owns `log.md` and `index.md`: `gaia wiki log-prepend` writes `log.md` and `/gaia-wiki` maintains `index.md`.
-  - **Agent memory** (per-agent): each subagent's scratchpad, persisted between runs.
+  - **Wiki** (repo): architecture, modules, decisions, flows, concepts as focused, linked Markdown committed to git and shared across the team. Claude opens the one page it needs (_"How does dark mode wire through?"_) instead of preloading the whole manual. A statusline nudge flags when the wiki trails HEAD; a SPEC's outcomes promote into wiki pages before its PR merges; a consolidate pass catches redundancy and contradiction as SPECs accumulate. `/gaia-wiki` runs sync, consolidate, and lint on demand, each step's heavy reading in a fresh subagent context, and lands them as one commit. Open `wiki/` in [Obsidian](https://obsidian.md) for graph view, backlinks, and search. GAIA owns `log.md` and `index.md`: `gaia wiki log-prepend` writes `log.md` and `/gaia-wiki` maintains `index.md`.
+  - **Agent memory** (per-agent): what a subagent you give persistent memory keeps between runs, inventoried by `/gaia-cleanse` with the rest.
   - **User memory** (global): your preferences, style, and defaults, carried across projects.
-- **Periodic knowledge cleanse.** `/gaia-cleanse` sweeps memory, wiki, and autoloaded files for duplication, conflicting instructions, and stale content before they start costing tokens.
+- **Periodic knowledge cleanse.** `/gaia-cleanse` sweeps memory and autoloaded files (`CLAUDE.md`, rules) for duplication with the wiki, contradictions with it, and stale content before they start costing tokens.
 - **Task orchestration in clean subagent contexts.** `/gaia-plan` spawns each phase as a focused subagent with only the context it needs. No accumulated history, no stale assumptions. Spec discovery (`/gaia-spec`) runs in its own context too, separate from implementation; the immutable SPEC artifact is the handoff, not accumulated context.
 
 ## How GAIA Keeps Tech Debt From Compounding
@@ -103,7 +105,7 @@ Every piece of GAIA's [tech stack](https://gaiareact.com/#stack) is pre-configur
 - **Forms with validation** composed from those components using [Conform](https://conform.guide/) + [Zod](https://zod.dev/).
 - **Dark mode end-to-end.** Cookie, CSS, and Storybook all in sync.
 - **API mocking** with [Mock Service Worker](https://mswjs.io/) and [msw/data](https://github.com/mswjs/data): working handlers for tests and Storybook.
-- **Toast notifications** with [remix-toast](https://remix.run/resources/remix-toast) and shadcn's [toast](https://ui.shadcn.com/docs/components/toast).
+- **Toast notifications** with [remix-toast](https://remix.run/resources/remix-toast) and a shadcn/ui toast built on [Base UI](https://base-ui.com/).
 - Built with [React Router 8](https://reactrouter.com/), [Tailwind](https://tailwindcss.com/), [shadcn/ui](https://ui.shadcn.com/) components, and [lucide-react](https://lucide.dev/) icons.
 
 GAIA also wires agentic-design patterns into the project structure rather than the prompt, so they run the same way every session and every model variant: stop hooks, a blocking pre-merge audit, multi-agent review, spec-driven development, a committed knowledge base, a filesystem deny list, and more. The [features page](https://gaiareact.com/features/#agentic-design) walks through all twelve, grouped as workflow control, context engineering, and tooling and safety.
@@ -119,13 +121,14 @@ GAIA ships a complete, opinionated Claude Code workflow. Everything is wired in 
 <tbody>
 <tr><td><code>/gaia-spec</code></td><td>Author an immutable SPEC through Socratic discovery: two-gate ceremony, self-review pass, UATs written into the SPEC before implementation begins, rendered to red-state Playwright specs automatically when the plan's orchestrator runs. Then plans it with <code>/gaia-plan</code> in the same session</td></tr>
 <tr><td><code>/gaia-plan</code></td><td>Plan a complex feature. Claude structures the work, you approve, then an orchestrator drives focused subagents through execution</td></tr>
-<tr><td><code>/gaia-cleanse</code></td><td>Cleanse memory, wiki, and autoloaded files for duplication, conflicting instructions, and bloat</td></tr>
+<tr><td><code>/gaia-cleanse</code></td><td>Cleanse memory and autoloaded files (<code>CLAUDE.md</code>, rules) of duplication with the wiki, contradictions with it, and stale content</td></tr>
 <tr><td><code>/gaia-wiki</code></td><td>Run wiki maintenance as one commit and PR: sync new commits into wiki pages, consolidate redundant or superseded content, then lint for orphans, dead links, and drift and fix what it finds</td></tr>
 <tr><td><code>/gaia-forensics</code></td><td>When a GAIA workflow misfires, capture a redacted, classified, filing-ready report in one run. Self-diagnoses user-config issues inline; probable bugs file to GAIA's GitHub with one prompt</td></tr>
 <tr><td><code>/gaia-fitness</code></td><td>Grade the project's Claude integration with a deterministic linter (F to A+), then heal the files it owns, one file at a time on a yes</td></tr>
 <tr><td><code>/gaia-react-perf</code></td><td>Diagnose React render performance. Drives a micro-interaction, captures real renders, and surfaces memo-defeating reference instability, then recommends a structural fix. Measure-only: it reports a ranked diagnosis, it never auto-fixes</td></tr>
 <tr><td><code>/gaia-codify</code></td><td>Turn a recurring audit finding into the lowest-cost enforcement: a deterministic check, a skill, or a path-scoped rule. Human-gated, drafted into the working tree only on approval.</td></tr>
 <tr><td><code>/gaia-debt</code></td><td>Work through the tech-debt backlog one item at a time, most important first. Tech-debt discovered by the pre-merge audit outside the scope of the change is tracked here rather than lost. Pass one or more issue numbers (optionally <code>#</code>-prefixed) to fix those specific issues instead of the interactive top-of-backlog flow; pass several to choose your own batch</td></tr>
+<tr><td><code>/gaia-residue</code></td><td>Triage the audit residue recorded in merged pull-request bodies: promote each entry to a tech-debt issue, dismiss it, or keep it. Never fixes anything</td></tr>
 <tr><td><code>/update-deps</code></td><td>Dependency remediation: discover every outdated package and open security advisory, resolve advisories, audit version overrides, apply codemods and breaking-change migrations for major bumps, resolve conflicts between simultaneous upgrades, then run the quality gate</td></tr>
 <tr><td><code>/update-gaia</code></td><td>Pull the latest GAIA release into the project without clobbering your work. Three-way merge per file (your version / release baseline / new release) governed by ownership classes in <code>.gaia/manifest.json</code>; prompts only where your changes and GAIA's collide</td></tr>
 </tbody>
@@ -158,6 +161,10 @@ GAIA is driven through Claude. Ask for what you need.
 **Deploy:** GAIA isn't prescriptive about hosting. Ask Claude to set up deployment for your target (Vercel, Cloudflare, Fly, AWS, a bare Node host, a Docker container, anywhere React Router runs). Claude wires up the build, environment variables, and any CI/CD you need.
 
 **Extend:** Rules, hooks, skills, and commands live in `.claude/`. Ask Claude to add, modify, or explain any of them.
+
+## Feedback
+
+Questions, ideas, and reports of what worked and what didn't go to the [Feedback discussions](https://github.com/gaia-react/gaia/discussions/categories/feedback). It is GAIA's one community channel. When a GAIA workflow misfires, `/gaia-forensics` turns it into a filing-ready bug report.
 
 ## History
 
