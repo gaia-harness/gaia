@@ -4,7 +4,7 @@ status: active
 priority: 1
 date: 2026-07-09
 created: 2026-07-09
-updated: 2026-10-21
+updated: 2026-10-23
 tags: [decision, claude, audit]
 ---
 
@@ -184,13 +184,13 @@ Members opt in to light routing one by one through `light_review` in `.gaia/audi
 
 `.gaia/scripts/verify-audit-roster.sh` asserts a named set of invariants over the roster and ships to every clone (manifest class `owned`: a roster change reaches adopters through `/update-gaia`, so they need the check as much as the maintainer does). Its repair, `.gaia/scripts/write-audit-remits.sh`, ships alongside it in the same class, so an adopter who tunes the default member's globs is one command from green rather than hand-transcribing a region. The script's own header is the source of truth for the invariant list and the bounded, decidable glob dialect it classifies against; this page does not restate either.
 
-Two per-member properties -- every roster member's agent file registered in `AUDIT_MACHINERY_PATHS` (`.claude/hooks/lib/audit-machinery.sh`), and every member's `name` carrying the `code-audit-` prefix the branch checkpoint's bound hook (`.claude/hooks/audit-loop-bound.sh`) binds a dispatched member to -- are not runtime invariants of the script: both hold over the committed roster whether or not a fixture roster is under test, so GAIA asserts them against its own tree rather than in the check.
+Two per-member properties are invariants of the script too: every member's `name` carries the `code-audit-` prefix the branch checkpoint's bound hook (`.claude/hooks/audit-loop-bound.sh`) binds a dispatched member to, and every member definition is reached by `AUDIT_MACHINERY_PATHS` (`.claude/hooks/lib/audit-machinery.sh`), whose one `.claude/agents/code-audit-*.md` pattern registers every member named that way.
 
 Named limits, not defects: the check verifies coverage over *paths*, never over *globs*, so a claimant glob narrow enough to reach no file is invisible to it as a glob, and surfaces only through whatever tracked paths it leaves ownerless; it verifies *region parity*, never the truthfulness of the prose around a region. Repairing rotates every member's clearance, because the agent definitions the writer edits are audit-machinery paths, so running the repair invalidates every marker on a pull request and forces a full re-dispatch, which is why the repair is the orchestrator's to run before dispatch or between rounds, never mid-audit and never by a dispatched member.
 
 Two limits are new with this change: a hand-edited **sentence** inside a region passes the check, since the glob bullets are policed and the sentence that consumes them is not, and re-running the writer is what restores it; and moving `default: true` between roster members changes which sentence each affected member owes while changing no glob, so the check stays green on two now-wrong regions until the writer runs again. Both are named limits in the same voice as "verifies region parity, never the prose around a region", not defects to close here: carrying the sentence templates inside the check would mint the second hand-synced copy this change exists to delete.
 
-Run both by hand after a roster change (`bash .gaia/scripts/verify-audit-roster.sh`, then `bash .gaia/scripts/write-audit-remits.sh` to repair).
+Run the check after a roster change, `bash .gaia/scripts/verify-audit-roster.sh`, and repair a remit finding with `bash .gaia/scripts/write-audit-remits.sh`. The pre-commit hook runs the check too whenever a commit stages the roster, a member definition or the machinery list.
 
 ## Status producers and accepted limits
 
