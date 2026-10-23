@@ -2,7 +2,7 @@
 type: concept
 status: active
 created: 2026-04-20
-updated: 2026-10-05
+updated: 2026-10-24
 tags: [concept, philosophy]
 ---
 
@@ -27,6 +27,6 @@ GAIA ships a component layer you own: shadcn components vendored into your proje
 
 ## Positioning & Naming
 
-GAIA is **not just a React template**; it is a complete workflow for building React sites with Claude. Calling it a "template" undersells the scope. Lead with "workflow" / "system" / "Claude-first" framing.
+GAIA is **a harness for Claude Code, not a template**: the harness governs the whole monorepo, and React is the frontend it ships with. Calling it a "template" undersells the scope. Lead with "harness"; "workflow", "system" and "Claude-first" stay fine as secondary framing.
 
-GAIA is React-specific, built on [[React Router]]. There is no multi-framework roadmap.
+The frontend GAIA ships is React, built on [[React Router]], with React-specific tooling for that frontend. There is no multi-framework roadmap: React is the only frontend GAIA ships and supports.

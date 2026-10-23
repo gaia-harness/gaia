@@ -1,10 +1,10 @@
 ---
 name: gaia-init
-description: Initializes a new project from the GAIA React template. Renames, strips GAIA branding, configures i18n, and installs Claude skills and plugins.
+description: Initializes a new project from the GAIA harness. Renames, strips GAIA branding, configures i18n, and installs Claude skills and plugins.
 disable-model-invocation: true
 ---
 
-Initialize a new project from the GAIA React template. The template already ships clean (no example code, no docs site, no auth). This command renames, strips GAIA-specific branding, configures i18n, installs Claude skills/plugins, and hands you a ready-to-build project.
+Initialize a new project from the GAIA harness. It already ships clean (no example code, no docs site, no auth). This command renames, strips GAIA-specific branding, configures i18n, installs Claude skills/plugins, and hands you a ready-to-build project.
 
 **Language meta-instruction:** Conduct this entire conversation in the language the user has been typing in. Detect it from prior context, no explicit detection step needed. Do not translate source files, rules, skills, or wiki entries, those stay English regardless. Only translate the prompts you show the user.
 

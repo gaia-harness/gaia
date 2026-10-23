@@ -3,7 +3,7 @@ type: entity
 entity_type: project
 status: active
 created: 2026-04-20
-updated: 2026-06-24
+updated: 2026-10-24
 tags: [entity, project]
 ---
 
@@ -11,7 +11,7 @@ tags: [entity, project]
 
 ## What it is
 
-GAIA React is a React workflow for Claude. The current iteration (`gaia`, version `1.6.1`) is a spiritual successor to the original GAIA Flash Framework.
+GAIA is a harness for Claude Code, shipped as a monorepo with a React frontend. The current iteration (`gaia`) is a spiritual successor to the original GAIA Flash Framework.
 
 ## Authors / maintainers
 
@@ -28,6 +28,6 @@ The original GAIA was a Flash framework, used to build 100K+ Flash sites and wid
 
 ## Naming convention
 
-The package name in `package.json` is `gaia`. Code/wiki refer to it as **GAIA** (the brand) or **GAIA React** (the React iteration).
+The package name in `package.json` is `gaia`. Code and wiki refer to it as **GAIA**.
 
 See [[GAIA Philosophy]].
