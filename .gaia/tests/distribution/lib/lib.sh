@@ -115,13 +115,11 @@ fail_with_stderr() {
   exit 1
 }
 
-# The tree's own Playwright, so the browser always matches the lockfile. CI
-# runners also need the OS libraries (`--with-deps`); a local run skips them
-# to avoid a sudo prompt.
+# The tree's own Playwright, so the browser always matches the lockfile. No
+# `--with-deps`, on CI either: the ubuntu-latest image already carries every
+# shared library headless Chromium loads, so that flag only upgrades a few of
+# them and adds fonts, through an apt mirror that can stall for minutes and
+# take the job past its timeout with every scenario green.
 install_chromium() {
-  if [ -n "${CI:-}" ]; then
-    pnpm -C "$1/frontend" exec playwright install --with-deps chromium
-  else
-    pnpm -C "$1/frontend" exec playwright install chromium
-  fi
+  pnpm -C "$1/frontend" exec playwright install chromium
 }
