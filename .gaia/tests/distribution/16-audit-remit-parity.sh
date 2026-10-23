@@ -11,7 +11,8 @@
 #   1. The bundle carries the writer (.gaia/scripts/write-audit-remits.sh).
 #   2. The writer is not release-excluded (source .gaia/release-exclude).
 #   3. The writer's manifest class equals the check's (staged manifest).
-#   4. The check exits 0 on the scrubbed, marker-stripped tree.
+#   4. The check exits 0 on the scrubbed, marker-stripped tree once it is
+#      indexed, with no invariant skipped.
 #   5. The staged roster is the adopter shape: exactly two members, neither
 #      maintainer-only, and no code-audit-maintainer-*.md ships.
 #   6. No shipped region names a glob belonging to a stripped member
@@ -85,9 +86,16 @@ fi
 # --- Assertion 4: the check exits 0 on the scrubbed tree ---------------
 # The staged copy is marker-stripped (the maintainer-only fallback-lockstep
 # block is gone) and resolves .claude/hooks/lib/audit-scope.sh from the
-# staged tree, the real path verify-audit-roster.sh:151 computes. If that
-# classifier library is absent from the bundle, this is a real distribution
-# finding, not a harness bug.
+# staged tree. If that classifier library is absent from the bundle, this is
+# a real distribution finding, not a harness bug.
+#
+# The staged tree is indexed first, the state an adopter's first commit
+# leaves it in: the coverage and zero-match invariants read `git ls-files`
+# and skip on a tree that is not a repository root, so without the index this
+# assertion would pass with both of them never run. An index is enough; no
+# commit is needed for `ls-files` to see the tree.
+git -C "$STAGING" init -q || { fail "git init of the staged tree failed"; exit 1; }
+git -C "$STAGING" add -A || { fail "git add of the staged tree failed"; exit 1; }
 CHECK_OUTPUT=""
 CHECK_EXIT_STATUS=0
 CHECK_OUTPUT="$(bash "$CHECK" --root "$STAGING" --config "$ROSTER" 2>&1)" || CHECK_EXIT_STATUS=$?
@@ -95,6 +103,12 @@ if [ "$CHECK_EXIT_STATUS" -ne 0 ]; then
   log "verify-audit-roster.sh failed on scrubbed tree, full output:"
   printf '%s\n' "$CHECK_OUTPUT" >&2
   fail "roster check exited $CHECK_EXIT_STATUS on scrubbed adopter tree, expected 0"
+  exit 1
+fi
+if grep -qF "SKIPPED" <<<"$CHECK_OUTPUT"; then
+  log "verify-audit-roster.sh output on scrubbed tree:"
+  printf '%s\n' "$CHECK_OUTPUT" >&2
+  fail "roster check skipped an invariant on the indexed staged tree, so its exit 0 proves nothing"
   exit 1
 fi
 
