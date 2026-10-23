@@ -2,7 +2,7 @@
 
 The one statement of how committed work moves from its first edit to a cleaned-up checkout: claim, name, isolate, enter the worktree, commit and open the draft PR, audit, merge, clean up. A session working outside any GAIA skill follows it in full, and every skill that drives its own PR points here for the steps it shares.
 
-Contents: When this applies; 1. Claim; 2. Name; 3. Isolate; 4. Enter the worktree; 5. Commit and open the draft PR; 6. Audit; 7. Merge (when asked); 8. Cleanup (worktree entered by name in this session, worktree entered by path or in an earlier session, feature branch, sub-agent context); Releasing an empty worktree; The git worktree add backstop.
+Contents: When this applies; 1. Claim; 2. Name; 3. Isolate; 4. Enter the worktree; 5. Commit and open the draft PR; 6. Audit; 7. Merge (when asked); 8. Cleanup (worktree entered by name in this session, worktree entered by path or in an earlier session, feature branch, sub-agent context, leftover-file cleanup after an update merge); Releasing the claim on an unmerged ending; Releasing an empty worktree; The git worktree add backstop.
 
 ## When this applies
 
@@ -279,6 +279,26 @@ PR #<N> squash-merged as <short-sha>. From a shell at
 `<DEFAULT-BRANCH>` is the default branch, resolved the way the arms above resolve it. A caller with steps of its own appends its lines to the end of that command list; the plan orchestrator appends its two post-merge close lines.
 
 The prompt carries no `ExitWorktree({...})` call because it runs from another context, a shell or a fresh session in the main checkout, not from the session that entered the tree; the tool's schema also rejects a `worktree` parameter. The plain `git worktree remove --force` is the cleanup that works from any context.
+
+### Leftover-file cleanup after an update merge
+
+Runs after any arm above when the merged branch is a `/update-gaia` branch (its name starts with `update/`) and the arm's pull ran and succeeded. The merged `.gaia/state-registry.json` names the `.gaia/local` state that retired features left behind, and only the pulled main checkout holds that registry with a real `.gaia/local` directory, so the cleanup runs there. From the main checkout:
+
+```bash
+bash <main checkout path>/.gaia/scripts/state-registry-lib.sh residue-sweep
+```
+
+Show its output. When its Residue section lists paths, ask once with `AskUserQuestion` (question `Delete the leftover files listed above?`, header `Leftovers`, options `Delete them` (Recommended) and `Keep them`), and on `Delete them` run the same command with `--apply`. Unknown paths are listed, never deleted. A non-zero exit names its cause on stderr: relay it and finish cleanup. When the pull was skipped or failed, run nothing and add `ask Claude to run the leftover-file cleanup once the main checkout is pulled` to the printed next steps. The sub-agent continuation prompt has no one to ask, so on an update branch it appends the listing command above with the note `review the list, then re-run it with --apply to delete the leftover files`.
+
+## Releasing the claim on an unmerged ending
+
+`.claude/hooks/issue-claim-release.sh` releases an `in-progress` claim only on a `gh pr merge`. Claude releases it on every other ending of work that claimed an issue (`.claude/rules/issue-claim.md`): when it closes the pull request unmerged (`gh pr close`), and when the user says the work is dropped, with or without a pull request. For each issue the work claimed, the issues its PR body closes by keyword:
+
+```bash
+gh issue edit <n> --remove-label in-progress
+```
+
+Say which issues were released. A `tech-debt` issue is left alone: `/gaia-debt` owns its claim and releases a stale one in its reconcile. A pull request closed so that a replacement takes over the same issue keeps the claim: the replacement still holds it.
 
 ## Releasing an empty worktree
 

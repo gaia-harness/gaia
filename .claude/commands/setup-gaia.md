@@ -17,13 +17,14 @@ Contents: Pre-flight: Worktree check; Argument parse; Phase 0: Prerequisites; Ph
 This command reads these references, all under `.claude/skills/gaia/references/setup/`. Read one only when a "Read ... now" line sends you there, and then read the whole file:
 - `setup-decisions.md`: Phase 1, every run, for the owed check and who may record project decisions.
 - `sandbox.md`: Phase 2, when the sandbox gate says the decision is owed, or to record a settled decision.
-- `per-machine.md`: Phase 2, when `completed_at` is null or a per-machine id is owed.
+- `per-machine.md`: Phase 0d, every run, for its `## Git hooks` check; Phase 2, when `completed_at` is null or a per-machine id is owed.
 - `github-repo.md`: Phase 3, when no repo exists yet or its default branch is not pushed; Phase 3.5, for owed GitHub settings.
 - `isolation-question.md`: Phase 3.5, on `--reconfigure` once both gates pass.
 - `sandbox-recommendation.md`: Phase 3.5, on `--reconfigure` when Phase 2's sandbox answer did not set the recommendation.
 - `squash-only.md`: Phase 3.7, once both gates say the question is owed.
 - `statusline-left.md`: Phase 4.6, every invocation for the routing warning, and when a choice or record is owed.
 - `standalone-features.md`: Phase 5, every run.
+- `migrate-2-machine.md`: Phase 5, when `standalone-features.md` names it as owed.
 - `land-decisions.md`: Phase 5.5, to land project decisions, and Phase 6, for the setup ping and the closing message.
 
 ## Pre-flight: Worktree check
@@ -86,6 +87,10 @@ fi
 ```
 
 Surface every warning and the sync report verbatim, then continue. `gaia labels sync` reconciles this repo's labels against the registry for whichever audience and feature set it resolves to. `gaia-forensics` is a maintainer-audience entry, so an adopter's sync never creates it; an adopter files forensics reports upstream, never locally, regardless of what this step finds.
+
+### 0d. Git hooks
+
+Read `.claude/skills/gaia/references/setup/per-machine.md` now, the whole file, and run its `## Git hooks` check, on every invocation: a clone whose install never ran the root `prepare` script commits with no pre-commit or commit-msg check, and nothing else reports it.
 
 ## Phase 1: Detect situation
 
@@ -437,7 +442,7 @@ Fall through to Phase 5.
 
 ## Phase 5: Owed setup features (always evaluated)
 
-Read `.claude/skills/gaia/references/setup/standalone-features.md` now, the whole file, and run it. Fall through to Phase 5.5.
+Read `.claude/skills/gaia/references/setup/standalone-features.md` now, the whole file, and run it. When it prints `OWED_FEATURE migrate-2-machine`, Read `.claude/skills/gaia/references/setup/migrate-2-machine.md` now, the whole file, as the reference that line names. Fall through to Phase 5.5.
 
 ## Phase 5.5: Land setup decisions (when project decisions may be recorded)
 

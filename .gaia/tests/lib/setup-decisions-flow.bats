@@ -324,6 +324,18 @@ record_settled_state() {
   run_block "$repo" "$line" MAY_RECORD_PROJECT="$may" || return 1
 }
 
+# record_standalone_not_applicable <repo>: records every shipped standalone
+# feature as not-applicable, the record Phase 5 makes on a project that never
+# needed it. Phase 5 has its own cases below; the probe cases only need those
+# ids decided.
+record_standalone_not_applicable() {
+  local id ids
+  ids="$(jq -r '.features[] | select(.standalone) | .id' "$FEATURE_LIST")" || return 1
+  for id in $ids; do
+    in_repo "$1" .gaia/cli/gaia setup record "$id" not-applicable >/dev/null || return 1
+  done
+}
+
 @test "the probe blocks record every settled feature without a question, and drift then reports nothing" {
   local repo id
   repo="$(make_provisioned probes)"
@@ -345,6 +357,7 @@ record_settled_state() {
   in_repo "$repo" .gaia/cli/gaia setup record isolation-policy applied >/dev/null
   in_repo "$repo" .gaia/cli/gaia setup write-sandbox-recommendation false >/dev/null
   in_repo "$repo" .gaia/cli/gaia setup record sandbox-recommendation declined >/dev/null
+  record_standalone_not_applicable "$repo"
   [ -z "$(undecided_ids "$repo")" ]
   [ "$(jq -c 'keys' "${repo}/.gaia/project.json")" = '["isolation_policy","sandbox_recommended","setup_decisions","version"]' ]
 }
@@ -358,6 +371,7 @@ record_settled_state() {
   record_settled_state "$repo" admin >/dev/null
   in_repo "$repo" .gaia/cli/gaia setup record isolation-policy applied >/dev/null
   in_repo "$repo" .gaia/cli/gaia setup record sandbox-recommendation applied >/dev/null
+  record_standalone_not_applicable "$repo"
   [ -z "$(undecided_ids "$repo")" ]
   [ "$(jq -S -c 'del(.setup_decisions)' "${repo}/.gaia/project.json")" = "$before" ]
 }
@@ -636,7 +650,7 @@ label_sync_block() {
   done
   [ "$(decision "$repo" squash-only)" = declined ]
   [ "$(jq -r '.setup_decisions | keys | length' "${repo}/.gaia/project.json")" -eq 8 ]
-  [ "$(undecided_ids "$repo")" = 'install-tools install-plugins chmod-statusline bootstrap-env sandbox statusline-left isolation-policy sandbox-recommendation' ]
+  [ "$(undecided_ids "$repo")" = 'install-tools install-plugins chmod-statusline bootstrap-env sandbox statusline-left isolation-policy sandbox-recommendation migrate-2-machine' ]
   [ ! -s "$GH_LOG" ]
 }
 
@@ -650,7 +664,7 @@ standalone_block() {
 
 @test "Phase 5 hands an admin each undecided standalone feature, and a non-admin only the machine one" {
   local list="${BATS_TEST_TMPDIR}/standalone-list.json" repo output_text
-  jq '.features += [
+  jq '.features |= map(select(.standalone | not)) | .features += [
     {"id": "later-machine", "scope": "machine", "required": true, "admin": false, "standalone": true, "reference": "docs/later-machine.md"},
     {"id": "later-project", "scope": "project", "required": false, "admin": true, "standalone": true, "reference": "docs/later-project.md"}
   ]' "$FEATURE_LIST" >"$list"
@@ -661,12 +675,14 @@ standalone_block() {
   [ "$output_text" = "$(printf '%s\n' 'OWED_FEATURE later-machine apply docs/later-machine.md' 'SKIP_PROJECT later-project')" ]
 }
 
-@test "Phase 5 prints nothing for the shipped list" {
-  local repo output_text
+@test "Phase 5 hands over exactly the shipped standalone features" {
+  local repo output_text expected
   repo="$(make_repo standalone-real)"
-  [ "$(undecided_ids "$repo" | wc -w | tr -d ' ')" -gt 0 ]
+  expected="$(jq -r '.features[] | select(.standalone)
+    | "OWED_FEATURE \(.id) \(if .required then "apply" else "ask" end) \(.reference)"' "$FEATURE_LIST")"
+  [ -n "$expected" ]
   output_text="$(run_block "$repo" "$(standalone_block)" MAY_RECORD_PROJECT=admin)"
-  [ -z "$output_text" ]
+  [ "$output_text" = "$expected" ]
 }
 
 # ---------------------------------------------------------------------------

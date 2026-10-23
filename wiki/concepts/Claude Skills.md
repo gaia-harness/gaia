@@ -52,7 +52,7 @@ GAIA's `.claude/` surface places each kind of guidance in the layer that loads i
 | Hook (`.claude/hooks/`)               | Tool call matches a registered event                   | Mechanical enforcement (block / advise) on a specific tool shape, no judgment      |
 | Rule (`.claude/rules/`)               | Matching `paths:` glob in scope (or always when empty) | File-path-bound conventions: project-wide style, route layout, accessibility, i18n |
 | Skill (`.claude/skills/`)             | `description:` matches user intent / context           | Cross-file reasoning patterns: refactor playbooks, error-fix recipes, TDD loop     |
-| Instruction (`frontend/.claude/instructions/`) | Dispatched by a command/skill at runtime               | Parameterized one-shot runbooks (add a locale, strip i18n, etc.); self-deleting    |
+| Instruction (`frontend/.claude/instructions/`) | Dispatched by a command/skill at runtime               | Parameterized runbooks (add a locale, strip i18n, etc.); kept for reuse          |
 
 Heuristic when migrating:
 

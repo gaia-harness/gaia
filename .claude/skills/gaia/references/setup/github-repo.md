@@ -4,7 +4,7 @@
 
 Every project-scope record line below is gated on `MAY_RECORD_PROJECT` (`setup-decisions.md`), and the owed and declined checks are the lines that file defines. In each block, declare `OWNER`, `REPO`, `DEFAULT_BRANCH` and `MAY_RECORD_PROJECT` with the cached values.
 
-Contents: Connect the repository; Push protection; Remaining defaults; Owed and recorded settings.
+Contents: Connect the repository; CODEOWNERS placeholder; Push protection; Remaining defaults; Owed and recorded settings.
 
 ## Connect the repository
 
@@ -16,7 +16,7 @@ Ask (AskUserQuestion) with these three options:
 > - **Adopt an existing repo**: you already have a github `origin`; I'll skip creation and apply the recommended defaults.
 > - **Set one up manually**: I'll print guidance and leave GitHub untouched.
 
-Cache the answer as `REPO_CHOICE`: `create`, `adopt` or `manual`, in option order. The merge-setting defaults read it (`delete_branch_on_merge` below and the squash-only question in Phase 3.7 apply silently on `create`), and so does the setup ping in Phase 6.
+Cache the answer as `REPO_CHOICE`: `create`, `adopt` or `manual`, in option order. On `create` or `adopt`, run `## CODEOWNERS placeholder` below first, before any other check or push in that option. The merge-setting defaults read it (`delete_branch_on_merge` below and the squash-only question in Phase 3.7 apply silently on `create`), and so does the setup ping in Phase 6.
 
 ### Option 1: Create the repo on GitHub
 
@@ -125,6 +125,45 @@ When it's pushed, re-run /setup-gaia to apply the recommended defaults (branch p
 ```
 
 Exit the repo phase without mutating GitHub: skip the rest of Phase 3 and continue at Phase 3.5 in `setup-gaia.md`. This option records nothing.
+
+## CODEOWNERS placeholder
+
+`/gaia-init` writes the placeholder owner `REPLACE-WITH-YOUR-GITHUB-HANDLE` to `.github/CODEOWNERS` when it got no real handle. Pushed, it names an unknown owner for every path, so it is replaced here, before the first push:
+
+```bash
+grep -qF REPLACE-WITH-YOUR-GITHUB-HANDLE .github/CODEOWNERS 2>/dev/null && echo PLACEHOLDER || echo CLEAR
+```
+
+On `CLEAR`, return to the option. On `PLACEHOLDER`, read the authenticated login:
+
+```bash
+gh api user --jq .login 2>/dev/null
+```
+
+Then ask (AskUserQuestion) `.github/CODEOWNERS still has the placeholder owner. Who owns this repository?`, header `CODEOWNERS`. When it printed a login, offer `@<login> (Recommended)`, described as `your authenticated GitHub login`, and `Keep the placeholder`; a different handle arrives through the tool's Other. When it printed nothing, ask for the handle as a plain chat message instead, since a handle is free text, and a reply of `keep` keeps the placeholder. Never guess a handle.
+
+On `Keep the placeholder`, print `.github/CODEOWNERS keeps its placeholder owner; set it before teammates rely on code-owner reviews.` and return to the option. On a handle, write and commit it in three separate Bash calls, the same main-branch hook standdown `land-decisions.md` uses. First:
+
+```bash
+mkdir -p .gaia/local
+touch .gaia/local/setup-in-progress
+```
+
+Then, with `<handle>` the bare handle (no leading `@`):
+
+```bash
+printf '* @%s\n' "<handle>" > .github/CODEOWNERS
+git add .github/CODEOWNERS
+git commit -m "chore: set the CODEOWNERS owner" || echo "Could not commit .github/CODEOWNERS; the clean-tree check lists it."
+```
+
+Then, unconditionally (a lingering sentinel keeps main-branch protection suspended on this machine):
+
+```bash
+rm -f .gaia/local/setup-in-progress
+```
+
+Return to the option.
 
 ## Push protection
 

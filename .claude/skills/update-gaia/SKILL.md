@@ -3,7 +3,7 @@ name: update-gaia
 description: Pulls the latest GAIA release into this project without clobbering customizations, with a three-way merge per file using .gaia/manifest.json classes. Trigger when the user clicks the statusline `🚀 /update-gaia` indicator or asks "update GAIA", "pull the latest GAIA", "apply the new GAIA release".
 ---
 
-Contents: Pre-flight: Worktree check; Pre-flight: Branch check (run modes); Step 1: Read baseline version; Step 2: Resolve latest release; Step 3: Compare versions (main checkout, worktree run in place); Pre-flight: Pull check (reads `references/pull-mode.md`); Pre-flight: Decision log check; Pre-flight: Claim check (reads `references/claim-flow.md`); Step 3b: Refuse a 1.x baseline; Step 3c: Download and verify the bundles; Step 3d: Select migration notes; Step 4: Show the release notes and confirm (on Proceed: the update worktree, the worktree notice, the stop rule, the claim); Step 4b: Prune prior-run artifacts; Conflict flow (reads `references/conflict-flow.md`: dispatch, questions, decisions, follow-ups); Step 9b: Follow the after-merge notes; Step 9c: Carry new setup features; Step 9d: Record the update; Quality gate; Review point; Step 11 (orchestrator, after the review-point commit); Step 12: Offer the residue sweep; Cost record (run end).
+Contents: Pre-flight: Worktree check; Pre-flight: Branch check (run modes); Step 1: Read baseline version; Step 2: Resolve latest release; Step 3: Compare versions (main checkout, worktree run in place); Pre-flight: Pull check (reads `references/pull-mode.md`); Pre-flight: Decision log check; Pre-flight: Claim check (reads `references/claim-flow.md`); Step 3b: Refuse a 1.x baseline; Step 3c: Download and verify the bundles; Step 3d: Select migration notes; Step 4: Show the release notes and confirm (on Proceed: the update worktree, the worktree notice, the stop rule, the claim); Step 4b: Prune prior-run artifacts; Conflict flow (reads `references/conflict-flow.md`: dispatch, questions, decisions, follow-ups); Step 9b: Follow the after-merge notes; Step 9c: Carry new setup features; Step 9d: Record the update; Quality gate; Review point; Step 11 (orchestrator, after the review-point commit); Step 12: The leftover-file cleanup; Cost record (run end).
 
 Pull the latest GAIA release into this project without clobbering customizations. Does a three-way comparison per file (adopter / baseline / latest) and respects explicit classes in `.gaia/manifest.json`:
 
@@ -424,11 +424,11 @@ Then remove the run directory; a run that stopped earlier leaves it for the next
 rm -rf <main checkout path>/.gaia/local/cache/shared/update-gaia/run
 ```
 
-### Step 12: Offer the residue sweep
+### Step 12: The leftover-file cleanup
 
 The merged `.gaia/state-registry.json` names the `.gaia/local` state that retired features left behind.
 
-Run no residue sweep here: it refuses whenever `.gaia/local` is a symlink, as it always is in a provisioned worktree, and it resolves the registry at the main checkout, which holds the old release's registry until the PR merges. Print as the next step, once the PR merges and cleanup pulls the main checkout: run `bash .gaia/scripts/state-registry-lib.sh residue-sweep --apply` from the main checkout.
+Run no cleanup here: its sweep refuses whenever `.gaia/local` is a symlink, as it always is in a provisioned worktree, and it resolves the registry at the main checkout, which holds the old release's registry until the PR merges. Claude runs it after the merge, from the cleanup that pulls the main checkout (`.claude/skills/gaia/references/work-lifecycle.md`, `### Leftover-file cleanup after an update merge`). Tell the user that merging the PR through Claude offers it.
 
 ## Cost record (run end)
 

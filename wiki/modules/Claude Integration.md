@@ -22,7 +22,7 @@ GAIA ships with [Claude Code](https://claude.ai/) support out of the box. Everyt
 - `agents/`: sub-agent definitions
 - `commands/`: slash commands
 - `hooks/`: bash hooks invoked by `settings.json`
-- `frontend/.claude/instructions/`: parameterized one-shot runbooks dispatched by commands like `/gaia-init`; self-deleting after use
+- `frontend/.claude/instructions/`: parameterized runbooks dispatched by commands like `/gaia-init` or by a plain request, kept for reuse
 - `rules/`: auto-attached guidance, file-path scoped
 - `skills/`: user-invokable workflows, scaffolders, context-triggered guidance
 
