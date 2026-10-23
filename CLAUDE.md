@@ -1,4 +1,4 @@
-# GAIA React
+# GAIA
 
 ## Response style
 
