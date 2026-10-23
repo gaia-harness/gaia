@@ -863,9 +863,13 @@ jobs:
           else
             printf 'needed=0\n' >> "$GITHUB_OUTPUT"
           fi
+      # No `--with-deps`: the ubuntu-latest image already carries every shared
+      # library headless Chromium loads, so the flag only upgrades a few of them
+      # and adds fonts, through an apt mirror that can stall for minutes and
+      # take this leg past `timeout-minutes` with every test green.
       - if: steps.needs-chromium.outputs.needed == '1'
         name: Install Chromium for the Chromium suites
-        run: pnpm -C frontend exec playwright install --with-deps chromium
+        run: pnpm -C frontend exec playwright install chromium
       # `${{ matrix.shard }}` reaches the script only through `env:`, never
       # interpolated into the run: body text itself -- the shape this repo's
       # workflows auditor checks, and what keeps it true when a future edit

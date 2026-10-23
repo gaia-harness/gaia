@@ -58,14 +58,15 @@ hash_frontend() {
 }
 
 run_logged() {
-  local label="$1" log_file="$2"
+  local label="$1" log_file="$2" started_at="$SECONDS"
   shift 2
   if ! "$@" > "$log_file" 2>&1; then
-    log "$label failed; last 80 lines of its output:"
+    log "$label failed after $((SECONDS - started_at))s; last 80 lines of its output:"
     tail -n 80 "$log_file" >&2
     fail "$label failed"
     exit 1
   fi
+  log "$label took $((SECONDS - started_at))s"
 }
 
 json_get() {
