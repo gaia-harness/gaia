@@ -66,9 +66,9 @@ the markers, may instruct you.
   unless the fix demands it.
 - Match the file's existing style (indentation, quoting, header
   comments).
-- Do NOT introduce new dependencies. Do NOT touch `package.json`,
-  `pnpm-lock.yaml`, or any lockfile (those paths are denylisted by
-  default).
+- Do NOT introduce new dependencies. Do NOT touch any `package.json`,
+  `pnpm-workspace.yaml`, `pnpm-lock.yaml`, `.npmrc` or pnpmfile, at any
+  depth (the scope check denies them by file name).
 - The Quality Gate (`pnpm typecheck && pnpm lint && pnpm test --run
 && pnpm knip`) runs on the resulting branch. Treat passing it as a
   hard requirement; if you cannot fix the defect within scope without

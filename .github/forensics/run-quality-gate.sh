@@ -8,7 +8,10 @@
 #   run-quality-gate.sh <output-summary-file>
 #
 # Steps (in order, halt-on-first-fail):
-#   1. pnpm install --frozen-lockfile  (deps tree precondition)
+#   1. pnpm install --frozen-lockfile --ignore-scripts
+#                                       (deps tree precondition; no lifecycle
+#                                        script runs, since the tree under
+#                                        test holds model-edited files)
 #   2. pnpm typecheck
 #   3. pnpm lint
 #   4. playwright install chromium     (Vitest's browser and storybook
@@ -159,7 +162,7 @@ JSON
 # via `|| exit 1`; we never proceed past a failure. Order matches the
 # task spec.
 # ---------------------------------------------------------------------------
-run_step install   pnpm install --frozen-lockfile || exit 1
+run_step install   pnpm install --frozen-lockfile --ignore-scripts || exit 1
 run_step typecheck pnpm typecheck                  || exit 1
 run_step lint      pnpm lint                       || exit 1
 run_step browsers  pnpm -C frontend exec playwright install --with-deps chromium || exit 1

@@ -257,6 +257,7 @@ A 1.6.1 project moves to 2.0.0 through the migration note bundled in the v2.0.0 
 - The client environment is built from an allowlist, so server variables such as `SESSION_SECRET` stay server-only: the Storybook preview inlines no environment values, Vitest no longer reads your `.env`, inline env JSON in the document is escaped, and the Chromatic workflow runs with no `GITHUB_TOKEN` scope. **Action required:** if a story of yours reads `window.process.env`, pass the value in as a story arg instead, and if a test of yours depends on a value from your own `.env`, set it in your shell or give it a default in `frontend/test/setup.ts` (#2529, #1210)
 - The theme and language actions validate their redirect target as a same-site URL and redirect only to the resolved path, closing an open-redirect gap; `resolveLocalRedirect` and `LocalRedirectSchema` replace `isLocalRedirect`, and the 2.0.0 migration applies the switch
 - Toolchain and shipped CLI bundles are re-resolved onto patched releases (js-yaml, babel core, esbuild, tsx, vite and others), security-floor overrides live in `pnpm-workspace.yaml`, and `pnpm audit` is clean (#2110, #1648)
+- The codify tally counts only findings blocks posted by accounts with write access to the repository (owner, member or collaborator), so a comment from anyone else cannot change the recurring-finding counts or the decline ledger. The tally schema version moves to 3, which shows one "tally changed" nudge.
 
 ## [1.6.1] - 2026-06-12
 

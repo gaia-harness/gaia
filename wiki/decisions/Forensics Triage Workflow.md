@@ -4,7 +4,7 @@ status: active
 priority: 1
 date: 2026-05-08
 created: 2026-05-08
-updated: 2026-10-16
+updated: 2026-10-23
 tags: [decision, ci, automation, security]
 ---
 
@@ -18,6 +18,14 @@ The workflow is autonomous by design. The maintainer's irreducible attention sur
 
 Trigger: `issues.opened` and `issues.labeled` events. The job-level `if` filter exits unless the issue carries the `gaia-forensics` label, so unrelated issue traffic is free.
 
+The run splits across three jobs so that no job holding a write token runs the model or executes a model-edited file:
+
+- `triage` (read-only token) runs the parser, both model steps and the scope checks. It writes nothing to GitHub: each outcome records a route, and the files the later jobs need, the fix commit among them as a git bundle, travel as the `forensics-handoff` artifact.
+- `quality-gate` (read-only token, no secrets) runs only for a fix. It re-checks the fix commit's paths with its own checkout's `check-scope.sh` before checking the fix out, then runs the gate.
+- `publish` is the only job with write permissions, and its token is set on the steps that call GitHub, never job-wide. It runs the handler for the route and, on a gate pass, pushes the fix branch straight from the bundle. It never checks out the fix.
+
+Every checkout sets `persist-credentials: false`.
+
 Lifecycle:
 
 1. **Idempotency check.** If the issue already carries `gaia-triaged`, the workflow exits with no work. The fail-forward final step also suppresses re-application of the label.
@@ -28,10 +36,10 @@ Lifecycle:
    - `needs-human`: label `needs-human`, comment with the reasoning, mention the maintainer. Issue stays open.
    - `auto-fixable`: proceed to the fix-attempt path.
 5. **Scope check (pre-fix).** `check-scope.sh` runs over the classifier's `Proposed paths` block. Any path outside the allowlist (or on the explicit denylist) demotes the issue to `needs-human` with a comment naming the rejected paths. No branch is created.
-6. **Apply fix.** A second `claude-code-action` invocation runs the fix-application prompt with `--allowedTools Edit,Write,Read` and `--disallowedTools Bash,WebFetch,WebSearch`; no shell, no git, no network. The branch `forensics/<issue-num>-<class-slug>` is created locally from `origin/main`.
+6. **Apply fix.** A second `claude-code-action` invocation runs the fix-application prompt with `--allowedTools Edit,Write,Read` and `--disallowedTools Bash,WebFetch,WebSearch`; no shell, no git, no network. Both model steps pass the job's read-only token as `github_token` (without it the action exchanges an OIDC token for an app token with write access and hands that to the model's process) and `disableAllHooks`, so no project hook runs inside the model's session. The branch `forensics/<issue-num>-<class-slug>` is created locally from `origin/main`.
 7. **Post-fix scope check.** Even within the allowlist, the diff must be a subset of the classifier's proposed paths. Any deviation aborts before commit and demotes to `needs-human`.
-8. **Quality Gate.** `.github/forensics/run-quality-gate.sh` runs `pnpm install --frozen-lockfile`, `pnpm typecheck`, `pnpm lint`, a Chromium install (Vitest's browser and story projects launch headless Chromium), `pnpm test --run`, and `pnpm knip` in order, halt-on-first-fail. Gate failure abandons the branch (it was never pushed) and demotes the issue to `needs-human` with a comment naming the failed step and a log excerpt.
-9. **Open draft PR.** Gate pass pushes the branch and opens a draft PR. PR body cites the `## Capture` section verbatim. Label `auto-fixable` attaches to the issue.
+8. **Quality Gate.** In the `quality-gate` job, after the scope re-check, `.github/forensics/run-quality-gate.sh` runs `pnpm install --frozen-lockfile --ignore-scripts` (no lifecycle script runs over a model-edited tree), `pnpm typecheck`, `pnpm lint`, a Chromium install (Vitest's browser and story projects launch headless Chromium), `pnpm test --run`, and `pnpm knip` in order, halt-on-first-fail. Gate failure abandons the branch (it was never pushed) and demotes the issue to `needs-human` with a comment naming the failed step and a log excerpt.
+9. **Open draft PR.** Gate pass pushes the branch from the bundle and opens a draft PR. PR body cites the `## Capture` section verbatim. Label `auto-fixable` attaches to the issue.
 10. **Idempotency key.** Every triaged issue receives the `gaia-triaged` label as the final, always-run step.
 
 The workflow file at `.github/workflows/forensics-triage.yml` is on the canonical denylist below: triage runs cannot self-modify, and `check-scope.sh` rejects any attempt to edit a path under `.github/workflows/`.
@@ -44,12 +52,10 @@ Default-deny. Any path in neither list below is denylisted by default; allowlist
 
 | Path                        | Notes                                            |
 | --------------------------- | ------------------------------------------------ |
-| `.gaia/cli/`                | GAIA CLI source.                                 |
-| `.claude/hooks/`            | Shell hooks.                                     |
+| `.gaia/cli/`                | GAIA CLI source, minus the bundles and manifests in the denylist. |
 | `.claude/skills/`           | Skill markdown.                                  |
 | `.claude/commands/`         | Slash command definitions.                       |
 | `.claude/agents/`           | Sub-agent definitions.                           |
-| `.gaia/statusline/`         | Statusline scripts.                              |
 | `.gaia/scripts/spec/`       | GAIA's spec-lifecycle scripts. The runbooks under `.claude/skills/` are allowed with the skills root, minus the prose templates listed in the denylist. |
 | `.gaia/manifest.json`       | Distribution manifest.                           |
 
@@ -65,6 +71,8 @@ Default-deny. Any path in neither list below is denylisted by default; allowlist
 | `.gaia/templates/spec/`               | Template literals; mutating these affects every adopter.                |
 | `.claude/skills/gaia/references/spec/clarify-prompts.md`, `.claude/skills/gaia/references/spec/system-prompt.md`, `.claude/skills/gaia/references/spec/spec-template.md` | Prose template literals, denied by file so the sibling runbooks under the allowed skills root stay allowed; mutating these affects every adopter. |
 | `.github/workflows/`                  | Workflow files; covers self-modification of the triage workflow itself. |
+| `.claude/hooks/`, `.gaia/statusline/`, `.githooks/`, `.claude/settings.json`, `.claude/settings.local.json`, `.gaia/cli/gaia`, `.gaia/cli/gaia-maintainer` | Run on their own once a branch is checked out locally (Claude Code hooks and the settings that register them, the statusline, git hooks, and the CLI bundles they call). The workflow pushes a fix branch before anyone reads it, so it never edits them. |
+| `package.json`, `pnpm-workspace.yaml`, `pnpm-lock.yaml`, `.npmrc`, `.pnpmfile.cjs`, `.pnpmfile.mjs` | Matched by file name at any depth, even under an allowlisted directory: pnpm runs lifecycle scripts from every workspace member's manifest and reads hooks and settings from the rest. |
 
 Everything else, including `.github/forensics/` (the triage harness itself) and the rest of `.github/`, is denied by the path policy's own default: a candidate matching neither list resolves to `default-deny-unenumerated` rather than needing its own explicit denylist row.
 
@@ -86,7 +94,7 @@ The labels in the vocabulary come from `.gaia/labels.json`, the four in the tabl
 The workflow handles two secrets:
 
 - `CLAUDE_CODE_OAUTH_TOKEN`: consumed only by `anthropics/claude-code-action`. Never echoed.
-- `GITHUB_TOKEN`: workflow-default token, scoped to the minimum permissions: `issues: write`, `contents: write`, `pull-requests: write`, `actions: read`, `id-token: write`.
+- `GITHUB_TOKEN`: workflow-default token, scoped per job. `triage` holds `contents: read` and `issues: read`; `quality-gate` holds `contents: read`; `publish` holds `contents: write`, `issues: write` and `pull-requests: write`, passed as `GH_TOKEN` only to the steps that call GitHub. The workflow requests no `id-token`.
 
 Secret-shape masking: before rendering either prompt, the workflow scans the parsed issue sections for byte patterns that look like leaked tokens (`sk-ant-…`, `ghp_…`, `github_pat_…`) and emits `::add-mask::` for each match. Phase 1 redacts the body before the issue ever opens; this is defense-in-depth against an unredacted leak slipping through.
 
@@ -108,7 +116,7 @@ Branch protection and the draft-PR contract are the autonomous-mode safety rails
 | **Apply-fix model goes off-script** (touches paths it didn't propose, or emits the `GAIA-FIX-ABORT:` escape line).                                                      | Pre-commit verification catches the deviation. Local edits are discarded; branch is never pushed; issue demoted to `needs-human`.                                                                                                                             |
 | **Quality Gate fails.**                                                                                                                                                 | Branch is never pushed (no `forensics/<issue-num>-*` ref ever exists on origin). `auto-fixable` label is NOT applied. Issue is demoted to `needs-human` with a comment naming the failed step, an excerpt of the failure log, and a link to the workflow run. |
 | **Two events for the same issue fire in rapid succession.**                                                                                                             | A `concurrency` block keyed on the issue number with `cancel-in-progress: false` queues the second run. The first run applies `gaia-triaged`; the queued run hits the early-exit and does no work. No duplicate label, comment, branch, or PR.                |
-| **Job exceeds 30 minutes.**                                                                                                                                             | The job-level timeout aborts cleanly. The workflow is fail-forward: any labels applied before the timeout stay (no rollback).                                                                                                                                 |
+| **A job exceeds its timeout.**                                                                                                                                          | The job-level timeout aborts cleanly. The workflow is fail-forward: any labels applied before the timeout stay (no rollback).                                                                                                                                 |
 
 There is no retry loop. One fix attempt per issue; failure is terminal in autonomous mode. A maintainer can manually unstick by removing `gaia-triaged` and re-firing; that is a manual operation, outside the workflow's contract.
 
@@ -172,12 +180,12 @@ GitHub Actions logs apply `::add-mask::` automatically: any masked value renders
 
 1. From the Actions tab, open the run.
 2. Each `::group::` block (e.g. `quality-gate: lint`) collapses verbose output. Expand only what is relevant to the question.
-3. The `Run Quality Gate` step's `summary_file` JSON is the canonical failure record; it contains the failed step, exit code, and a trimmed log excerpt. The full per-step log lives in the runner's temp dir and only surfaces in the action log; it is never posted to comments or PR bodies.
+3. The gate summary JSON (the `forensics-gate-summary` artifact of the `quality-gate` job) is the canonical failure record; it contains the failed step, exit code, and a trimmed log excerpt. The full per-step log lives in the runner's temp dir and only surfaces in the action log; it is never posted to comments or PR bodies.
 4. If a comment or PR body looks like it might contain a secret, treat it as a leak and rotate the secret. The workflow never intentionally writes secret-shaped values to derived artifacts; an unmasked secret in a comment is a regression.
 
 ### Inspect a fix attempt without merging
 
-Draft PRs the workflow opens are normal PRs in every other respect. Check out the branch (`gh pr checkout <pr-num>`), run the [[Quality Gate]] locally, review the diff. Branch protection blocks merge until human approval; nothing the workflow does forecloses on rejecting the fix and closing the PR.
+Draft PRs the workflow opens are normal PRs in every other respect. Review the diff on GitHub first, then check out the branch (`gh pr checkout <pr-num>`) and run the [[Quality Gate]] locally: a local checkout runs the branch's hooks and statusline in your session, and reading first keeps the path policy from being the only guard on them. Branch protection blocks merge until human approval; nothing the workflow does forecloses on rejecting the fix and closing the PR.
 
 ## See also
 

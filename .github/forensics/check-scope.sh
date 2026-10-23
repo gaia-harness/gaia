@@ -8,7 +8,11 @@
 # Writes a JSON report to stdout. Exit code is always 0; the consumer reads
 # the `ok` field in the JSON.
 #
-# Precedence (longest-prefix wins):
+# Precedence:
+#   0. File-name deny, at any depth and under any prefix (`name` rules): the
+#      install-time manifests pnpm reads and runs scripts from. It overrides
+#      every allow, so a manifest under an allowlisted directory still denies.
+# Then longest-prefix wins:
 #   1. Exact-file match, allow or deny (e.g. `.gaia/manifest.json`).
 #   2. Longest matching directory prefix wins. Because the file-level denylist
 #      entry `.claude/skills/gaia/references/spec/spec-template.md` is longer
@@ -21,22 +25,43 @@
 set -uo pipefail
 
 # Rules are encoded as pipe-separated triples: "kind|type|pattern" where:
-#   kind = dir | file
-#   type = allow | deny
-#   pattern = directory prefix (with trailing slash) or exact file path
+#   kind = dir | file | name
+#   type = allow | deny (`name` rules are deny only)
+#   pattern = directory prefix (with trailing slash), exact file path, or a
+#             file name matched against the path's last segment
 #
 # Directory prefixes are intentionally written WITH the trailing slash so
 # that prefix matching cannot bleed across siblings (`.gaia/cli/` won't
 # match `.gaia/cliques/foo`).
+#
+# Two deny groups guard the maintainer's machine rather than the product:
+#   - Paths that run on their own once a branch is checked out locally:
+#     Claude Code hooks and the settings that register them, the statusline
+#     scripts, the git hooks, and the CLI bundles those call. A fix branch is
+#     pushed before anyone reads it, so it must never carry an edit to them.
+#   - The install-time manifests (`name` rules): pnpm runs lifecycle scripts
+#     from every workspace member's package.json and reads hooks and settings
+#     from the workspace file, the pnpmfile and .npmrc.
 RULES="
 dir|allow|.gaia/cli/
-dir|allow|.claude/hooks/
 dir|allow|.claude/skills/
 dir|allow|.claude/commands/
 dir|allow|.claude/agents/
-dir|allow|.gaia/statusline/
 dir|allow|.gaia/scripts/spec/
 file|allow|.gaia/manifest.json
+dir|deny|.claude/hooks/
+dir|deny|.gaia/statusline/
+dir|deny|.githooks/
+file|deny|.claude/settings.json
+file|deny|.claude/settings.local.json
+file|deny|.gaia/cli/gaia
+file|deny|.gaia/cli/gaia-maintainer
+name|deny|package.json
+name|deny|pnpm-workspace.yaml
+name|deny|pnpm-lock.yaml
+name|deny|.npmrc
+name|deny|.pnpmfile.cjs
+name|deny|.pnpmfile.mjs
 dir|deny|frontend/app/
 dir|deny|wiki/
 dir|deny|studio/
@@ -68,6 +93,15 @@ classify_path() {
     rest=${rule#*|}
     type=${rest%%|*}
     pattern=${rest#*|}
+
+    if [ "$kind" = "name" ]; then
+      if [ "${candidate##*/}" = "$pattern" ]; then
+        unset IFS
+        printf 'deny|denylist'
+        return 0
+      fi
+      continue
+    fi
 
     matched=0
     if [ "$kind" = "file" ]; then

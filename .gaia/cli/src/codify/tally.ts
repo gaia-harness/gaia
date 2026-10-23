@@ -141,6 +141,19 @@ type GhPr = {
   number: number;
 };
 
+// GitHub's author associations for an account with write access to the
+// repository. Findings blocks are posted by the merge workflow under the
+// merging maintainer's own gh login, so these cover every real producer.
+// On a public repository anyone can comment, and the block's in-band
+// `auditor` field is self-declared, so a comment from any other association,
+// or with none, never reaches the tally: it could otherwise supersede a real
+// block, fabricate a recurring class, or prune a decline from the ledger.
+const TRUSTED_AUTHOR_ASSOCIATIONS: ReadonlySet<string> = new Set([
+  'COLLABORATOR',
+  'MEMBER',
+  'OWNER',
+]);
+
 // tally-semantics:start
 const parseGhPr = (value: unknown): GhPr | null => {
   if (typeof value !== 'object' || value === null) return null;
@@ -152,14 +165,17 @@ const parseGhPr = (value: unknown): GhPr | null => {
   const comments: {body: string}[] = [];
 
   for (const comment of v.comments) {
-    if (
-      typeof comment === 'object' &&
-      comment !== null &&
-      typeof (comment as Record<string, unknown>).body === 'string'
-    ) {
-      comments.push({
-        body: (comment as Record<string, unknown>).body as string,
-      });
+    if (typeof comment === 'object' && comment !== null) {
+      const {authorAssociation, body} = comment as Record<string, unknown>;
+
+      // Fails closed: a missing or unrecognized association is untrusted.
+      if (
+        typeof body === 'string' &&
+        typeof authorAssociation === 'string' &&
+        TRUSTED_AUTHOR_ASSOCIATIONS.has(authorAssociation)
+      ) {
+        comments.push({body});
+      }
     }
   }
 

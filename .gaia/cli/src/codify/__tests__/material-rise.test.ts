@@ -159,6 +159,6 @@ describe('isMaterialRise', () => {
     expect(RISE_RATIO_DEN).toBe(4);
     expect(RISE_MIN_PR_DELTA).toBe(3);
     expect(MIN_TRUSTED_AUDITED_PRS).toBe(20);
-    expect(TALLY_SCHEMA_VERSION).toBe(2);
+    expect(TALLY_SCHEMA_VERSION).toBe(3);
   });
 });

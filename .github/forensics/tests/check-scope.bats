@@ -27,11 +27,6 @@ setup() {
   [ "$output" = '{"ok":true,"allowed":[".gaia/cli/foo.sh"],"denied":[]}' ]
 }
 
-@test "allowlist: .claude/hooks/" {
-  run "$SCRIPT" .claude/hooks/post-commit.sh
-  [ "$output" = '{"ok":true,"allowed":[".claude/hooks/post-commit.sh"],"denied":[]}' ]
-}
-
 @test "allowlist: .claude/skills/" {
   run "$SCRIPT" .claude/skills/foo/SKILL.md
   [ "$output" = '{"ok":true,"allowed":[".claude/skills/foo/SKILL.md"],"denied":[]}' ]
@@ -45,11 +40,6 @@ setup() {
 @test "allowlist: .claude/agents/" {
   run "$SCRIPT" .claude/agents/code-review-audit.md
   [ "$output" = '{"ok":true,"allowed":[".claude/agents/code-review-audit.md"],"denied":[]}' ]
-}
-
-@test "allowlist: .gaia/statusline/" {
-  run "$SCRIPT" .gaia/statusline/render.sh
-  [ "$output" = '{"ok":true,"allowed":[".gaia/statusline/render.sh"],"denied":[]}' ]
 }
 
 @test "allowlist: .gaia/scripts/spec/" {
@@ -104,6 +94,101 @@ setup() {
   [ "$output" = '{"ok":false,"allowed":[],"denied":[{"path":".github/workflows/forensics-triage.yml","reason":"denylist"}]}' ]
 }
 
+# --- auto-executing harness paths ------------------------------------------
+# Claude Code hooks, the statusline, git hooks and the CLI bundles they call
+# run on their own once a branch is checked out locally, so a bot-authored
+# branch must never carry an edit to them.
+
+@test "denylist: .claude/hooks/ (Claude Code runs these on every tool call)" {
+  run "$SCRIPT" .claude/hooks/post-commit.sh
+  [ "$output" = '{"ok":false,"allowed":[],"denied":[{"path":".claude/hooks/post-commit.sh","reason":"denylist"}]}' ]
+}
+
+@test "denylist: .claude/hooks/lib/ (sourced by the hooks)" {
+  run "$SCRIPT" .claude/hooks/lib/cross-repo-refusal.sh
+  [ "$output" = '{"ok":false,"allowed":[],"denied":[{"path":".claude/hooks/lib/cross-repo-refusal.sh","reason":"denylist"}]}' ]
+}
+
+@test "denylist: .gaia/statusline/ (refreshed by the statusline on a timer)" {
+  run "$SCRIPT" .gaia/statusline/gaia-statusline.sh
+  [ "$output" = '{"ok":false,"allowed":[],"denied":[{"path":".gaia/statusline/gaia-statusline.sh","reason":"denylist"}]}' ]
+}
+
+@test "denylist: .githooks/ (git runs these on commit and push)" {
+  run "$SCRIPT" .githooks/pre-commit
+  [ "$output" = '{"ok":false,"allowed":[],"denied":[{"path":".githooks/pre-commit","reason":"denylist"}]}' ]
+}
+
+@test "denylist: .claude/settings.json (registers the hooks and statusline)" {
+  run "$SCRIPT" .claude/settings.json
+  [ "$output" = '{"ok":false,"allowed":[],"denied":[{"path":".claude/settings.json","reason":"denylist"}]}' ]
+}
+
+@test "denylist: .claude/settings.local.json" {
+  run "$SCRIPT" .claude/settings.local.json
+  [ "$output" = '{"ok":false,"allowed":[],"denied":[{"path":".claude/settings.local.json","reason":"denylist"}]}' ]
+}
+
+@test "denylist: .gaia/cli/gaia bundle overrides the .gaia/cli/ allowlist" {
+  run "$SCRIPT" .gaia/cli/gaia
+  [ "$output" = '{"ok":false,"allowed":[],"denied":[{"path":".gaia/cli/gaia","reason":"denylist"}]}' ]
+}
+
+@test "denylist: .gaia/cli/gaia-maintainer bundle overrides the .gaia/cli/ allowlist" {
+  run "$SCRIPT" .gaia/cli/gaia-maintainer
+  [ "$output" = '{"ok":false,"allowed":[],"denied":[{"path":".gaia/cli/gaia-maintainer","reason":"denylist"}]}' ]
+}
+
+@test "allowlist: .gaia/cli/src/ stays editable beside the denied bundles" {
+  run "$SCRIPT" .gaia/cli/src/index.ts
+  [ "$output" = '{"ok":true,"allowed":[".gaia/cli/src/index.ts"],"denied":[]}' ]
+}
+
+# --- install-time manifests -------------------------------------------------
+# pnpm runs lifecycle scripts from every workspace member's manifest, and
+# reads hooks and settings from the workspace and pnpmfile, so these deny by
+# file name at any depth, under any allowlisted prefix.
+
+@test "manifest: .gaia/cli/package.json is denied under the .gaia/cli/ allowlist" {
+  run "$SCRIPT" .gaia/cli/package.json
+  [ "$output" = '{"ok":false,"allowed":[],"denied":[{"path":".gaia/cli/package.json","reason":"denylist"}]}' ]
+}
+
+@test "manifest: every pnpm workspace member's package.json is denied" {
+  # Derived from pnpm-workspace.yaml, so a new member is covered without an
+  # edit here; the root manifest is listed beside them.
+  workspace_file="${BATS_TEST_DIRNAME}/../../../pnpm-workspace.yaml"
+  members=()
+  while IFS= read -r member; do
+    members+=("$member/package.json")
+  done < <(awk '/^packages:/{in_list=1; next} in_list && /^[[:space:]]*-/{sub(/^[[:space:]]*-[[:space:]]*/, ""); gsub(/["'\'']/, ""); print; next} in_list && !/^[[:space:]]*$/{in_list=0}' "$workspace_file")
+  [ "${#members[@]}" -ge 2 ]
+  for manifest in package.json "${members[@]}"; do
+    run "$SCRIPT" "$manifest"
+    [ "$(printf '%s' "$output" | jq -r '.ok')" = "false" ]
+    [ "$(printf '%s' "$output" | jq -r '.denied[0].reason')" = "denylist" ]
+  done
+}
+
+@test "manifest: a package.json nested under an allowlisted prefix is denied" {
+  run "$SCRIPT" .claude/skills/foo/package.json
+  [ "$output" = '{"ok":false,"allowed":[],"denied":[{"path":".claude/skills/foo/package.json","reason":"denylist"}]}' ]
+}
+
+@test "manifest: pnpm workspace, lockfile, npmrc and pnpmfile names are denied at any depth" {
+  for name in pnpm-workspace.yaml pnpm-lock.yaml .npmrc .pnpmfile.cjs .pnpmfile.mjs; do
+    run "$SCRIPT" "$name"
+    [ "$output" = "{\"ok\":false,\"allowed\":[],\"denied\":[{\"path\":\"$name\",\"reason\":\"denylist\"}]}" ]
+    run "$SCRIPT" ".gaia/cli/$name"
+    [ "$output" = "{\"ok\":false,\"allowed\":[],\"denied\":[{\"path\":\".gaia/cli/$name\",\"reason\":\"denylist\"}]}" ]
+  done
+}
+
+@test "manifest: a file name that only ends in package.json stays allowed" {
+  run "$SCRIPT" .gaia/cli/src/not-package.json
+  [ "$output" = '{"ok":true,"allowed":[".gaia/cli/src/not-package.json"],"denied":[]}' ]
+}
+
 # --- allowlist subtraction (UAT-007 edge case) -----------------------------
 
 @test "subtraction: a file-level deny under .claude/skills/ overrides the parent allowlist" {
@@ -113,9 +198,9 @@ setup() {
 
 # --- default-deny (UAT-014) ------------------------------------------------
 
-@test "default-deny: package.json" {
+@test "manifest: root package.json is denylisted" {
   run "$SCRIPT" package.json
-  [ "$output" = '{"ok":false,"allowed":[],"denied":[{"path":"package.json","reason":"default-deny-unenumerated"}]}' ]
+  [ "$output" = '{"ok":false,"allowed":[],"denied":[{"path":"package.json","reason":"denylist"}]}' ]
 }
 
 @test "default-deny: eslint.config.ts" {
@@ -140,13 +225,13 @@ setup() {
 # --- multi-path partitioning -----------------------------------------------
 
 @test "multi: all-allow → ok:true" {
-  run "$SCRIPT" .gaia/cli/foo.sh .claude/hooks/bar.sh .gaia/manifest.json
-  [ "$output" = '{"ok":true,"allowed":[".gaia/cli/foo.sh",".claude/hooks/bar.sh",".gaia/manifest.json"],"denied":[]}' ]
+  run "$SCRIPT" .gaia/cli/foo.sh .claude/skills/bar/SKILL.md .gaia/manifest.json
+  [ "$output" = '{"ok":true,"allowed":[".gaia/cli/foo.sh",".claude/skills/bar/SKILL.md",".gaia/manifest.json"],"denied":[]}' ]
 }
 
 @test "multi: any-deny flips ok:false; allowed/denied partition the input" {
-  run "$SCRIPT" .gaia/cli/foo.sh frontend/app/bar.ts package.json
-  [ "$output" = '{"ok":false,"allowed":[".gaia/cli/foo.sh"],"denied":[{"path":"frontend/app/bar.ts","reason":"denylist"},{"path":"package.json","reason":"default-deny-unenumerated"}]}' ]
+  run "$SCRIPT" .gaia/cli/foo.sh frontend/app/bar.ts eslint.config.ts
+  [ "$output" = '{"ok":false,"allowed":[".gaia/cli/foo.sh"],"denied":[{"path":"frontend/app/bar.ts","reason":"denylist"},{"path":"eslint.config.ts","reason":"default-deny-unenumerated"}]}' ]
 }
 
 @test "multi: deny reasons are recorded per-path (mixed denylist + default-deny)" {

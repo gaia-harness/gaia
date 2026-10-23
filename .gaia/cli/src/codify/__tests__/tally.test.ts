@@ -59,11 +59,18 @@ type BlockFinding = {
   severity: string;
 };
 
+// A comment as `gh pr list --json comments` returns it, narrowed to the
+// fields the tally reads. Every real findings block is posted by an account
+// with write access, so the helpers default to `MEMBER`.
+type TallyComment = {authorAssociation?: string; body: string};
+
 const findingsComment = (
   prNumber: number,
   auditor: string,
-  findings: BlockFinding[]
-): {body: string} => ({
+  findings: BlockFinding[],
+  authorAssociation = 'MEMBER'
+): TallyComment => ({
+  authorAssociation,
   body: [
     'Audit summary.',
     '<!-- gaia-codify:findings:start -->',
@@ -79,7 +86,8 @@ const findingsComment = (
 const anonymousFindingsComment = (
   prNumber: number,
   findings: BlockFinding[]
-): {body: string} => ({
+): TallyComment => ({
+  authorAssociation: 'MEMBER',
   body: [
     'Audit summary.',
     '<!-- gaia-codify:findings:start -->',
@@ -90,7 +98,7 @@ const anonymousFindingsComment = (
   ].join('\n'),
 });
 
-const ghPr = (prNumber: number, comments: {body: string}[]) => ({
+const ghPr = (prNumber: number, comments: TallyComment[]) => ({
   comments,
   number: prNumber,
 });
@@ -171,7 +179,7 @@ const stubClasslessWindow = (prNumbers: readonly number[]): void => {
 // window walk has an oldest `createdAt` to narrow its next query on.
 const fullSearchPage = (topNumber: number) =>
   Array.from({length: MERGED_PR_PAGE_CEILING}, (_, index) => ({
-    comments: [] as {body: string}[],
+    comments: [] as TallyComment[],
     createdAt: new Date(Date.UTC(2026, 8, 2) - index * 60_000).toISOString(),
     number: topNumber - index,
   }));
@@ -510,6 +518,106 @@ describe('codify-tally run', () => {
     expect(candidates[0]?.pr_numbers).toEqual(
       expect.arrayContaining([1, 4, 5])
     );
+  });
+
+  const colorContrastFinding = {
+    area_tags: [],
+    finding_class: 'axe/color-contrast',
+    severity: 'major',
+  };
+
+  test('ignores findings blocks from commenters without repository access, so they neither supersede nor add', () => {
+    const forgedFinding = {
+      area_tags: ['forged'],
+      finding_class: 'rule/switch-statement',
+      severity: 'major',
+    };
+    vi.spyOn(runProcess, 'runGh').mockReturnValue(
+      stubGh([
+        // The forged empty block reuses the maintainer's auditor key; it
+        // must not erase PR 1's findings.
+        ghPr(1, [
+          findingsComment(1, 'local', [colorContrastFinding]),
+          findingsComment(1, 'local', [], 'NONE'),
+        ]),
+        ghPr(2, [findingsComment(2, 'local', [colorContrastFinding])]),
+        ghPr(3, [findingsComment(3, 'local', [colorContrastFinding])]),
+        ghPr(4, [findingsComment(4, 'local', [forgedFinding], 'CONTRIBUTOR')]),
+        ghPr(5, [findingsComment(5, 'local', [forgedFinding], 'NONE')]),
+        ghPr(6, [
+          findingsComment(
+            6,
+            'local',
+            [forgedFinding],
+            'FIRST_TIME_CONTRIBUTOR'
+          ),
+        ]),
+      ])
+    );
+
+    const fake = makeFakeLedger();
+    run([], {cwd: sandbox.root, ledger: fake.ledger});
+
+    const printed = parseStdout(stdout.out);
+    expect(printed.audited_pr_count).toBe(3);
+    expect(printed.candidate_count).toBe(1);
+    const candidates = printed.candidates as Record<string, unknown>[];
+    expect(candidates[0]?.finding_class).toBe('axe/color-contrast');
+    expect(candidates[0]?.pr_numbers).toEqual(
+      expect.arrayContaining([1, 2, 3])
+    );
+    expect(fake.calls.prune).toEqual([['axe/color-contrast']]);
+  });
+
+  test('fails closed on a comment whose authorAssociation is missing or unrecognized', () => {
+    vi.spyOn(runProcess, 'runGh').mockReturnValue(
+      stubGh([
+        ghPr(1, [
+          {body: findingsComment(1, 'local', [colorContrastFinding]).body},
+        ]),
+        ghPr(2, [
+          findingsComment(2, 'local', [colorContrastFinding], 'MANNEQUIN'),
+        ]),
+        ghPr(3, [
+          findingsComment(3, 'local', [colorContrastFinding], 'member'),
+        ]),
+        {
+          comments: [
+            {
+              authorAssociation: 7,
+              body: findingsComment(4, 'local', [colorContrastFinding]).body,
+            },
+          ],
+          number: 4,
+        },
+      ])
+    );
+
+    run([], {cwd: sandbox.root, ledger: noDeclines});
+
+    const printed = parseStdout(stdout.out);
+    expect(printed.audited_pr_count).toBe(0);
+    expect(printed.candidate_count).toBe(0);
+  });
+
+  test('counts findings blocks from OWNER, MEMBER and COLLABORATOR commenters', () => {
+    vi.spyOn(runProcess, 'runGh').mockReturnValue(
+      stubGh([
+        ghPr(1, [findingsComment(1, 'local', [colorContrastFinding], 'OWNER')]),
+        ghPr(2, [
+          findingsComment(2, 'local', [colorContrastFinding], 'MEMBER'),
+        ]),
+        ghPr(3, [
+          findingsComment(3, 'local', [colorContrastFinding], 'COLLABORATOR'),
+        ]),
+      ])
+    );
+
+    run([], {cwd: sandbox.root, ledger: noDeclines});
+
+    const printed = parseStdout(stdout.out);
+    expect(printed.audited_pr_count).toBe(3);
+    expect(printed.candidate_count).toBe(1);
   });
 
   test('two anonymous (missing-auditor) blocks on the same PR collapse, latest wins', () => {

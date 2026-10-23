@@ -12,11 +12,30 @@ name: 'GAIA: Forensics Triage'
 # `GAIA-Audit` success status (post-audit-status.sh, the bypass stamp, the wiki
 # CLI land step run locally); a human marks one ready after reading it.
 #
+# Least privilege across three jobs. Each job holds only what its own steps
+# need, and no step that runs the model or executes model-edited files holds
+# a write token:
+#   triage        read-only. Runs both model steps, then records the outcome
+#                 (a route) and hands the files the later jobs need, the fix
+#                 commit among them as a git bundle, over as an artifact. It
+#                 writes nothing to GitHub.
+#   quality-gate  read-only, no secrets. Re-checks the fix commit's paths
+#                 against this checkout's check-scope.sh before checking it
+#                 out, then runs the gate over it.
+#   publish       the only job with write permissions, each token scoped to
+#                 the step that uses it. Runs the handlers and pushes the fix
+#                 branch from the bundle; it never checks out or executes the
+#                 model-edited tree.
+# Every checkout sets persist-credentials: false, so no token is left in
+# .git/config for a later step to read.
+#
 # Pinned action SHAs:
 #   anthropics/claude-code-action @ 63322d7b2bc79e7b621b89f41b53ceb8e5a5d314 (v1.0)
 #   actions/checkout              @ 3d3c42e5aac5ba805825da76410c181273ba90b1 (v7.0.1)
 #   actions/setup-node            @ 820762786026740c76f36085b0efc47a31fe5020 (v7.0.0)
 #   pnpm/action-setup             @ ea17c68df8912ef543352723c149a84f56e3d413 (v6.1.0)
+#   actions/upload-artifact       @ 043fb46d1a93c77aae656e7c1c64a875d1fc6a0a (v7.0.1)
+#   actions/download-artifact     @ 3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c (v8.0.1)
 
 on:
   issues:
@@ -24,23 +43,28 @@ on:
 
 permissions: {}
 
+concurrency:
+  group: forensics-${{ github.event.issue.number }}
+  cancel-in-progress: false
+
 jobs:
-  forensics-triage:
+  triage:
     name: Triage gaia-forensics issue
     if: contains(github.event.issue.labels.*.name, 'gaia-forensics')
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    # Read-only. claude-code-action hands the job token to the model's
+    # process and writes it into the git remote, so the model steps run in a
+    # job whose token can write nothing.
     permissions:
-      issues: write
-      contents: write
-      pull-requests: write
-      actions: read
-      id-token: write
-    concurrency:
-      group: forensics-${{ github.event.issue.number }}
-      cancel-in-progress: false
+      contents: read
+      issues: read
+    outputs:
+      route: ${{ steps.route.outputs.route }}
+      reason_code: ${{ steps.route.outputs.reason_code }}
+      fix_branch: ${{ steps.branch.outputs.name }}
+      class_slug: ${{ steps.branch.outputs.class_slug }}
     env:
-      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       ISSUE_NUMBER: ${{ github.event.issue.number }}
       FORENSICS_DIR: .github/forensics
     steps:
@@ -48,35 +72,32 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
-
-      # Setup pnpm + Setup Node are gated to the apply-fix path (see
-      # before `Run Quality Gate` further down). Running them
-      # unconditionally at the top of the job triggers a `Post Setup
-      # Node` cache-cleanup post-step at end-of-job for every non-
-      # apply-fix path; even with `cache:` unset, setup-node@v5's
-      # post-step still validates the lockfile path and emits
-      # `Path Validation Error`, which flips the job conclusion to
-      # `failure` and notifies the maintainer for benign runs (non-
-      # issue, ambiguous, classifier-only, idempotency early-exit).
-      # The `claude-code-action` invocations provision their own Node
-      # runtimes, so the only consumer of this repo's Node + pnpm is
-      # `run-quality-gate.sh` on the apply-fix path.
+          persist-credentials: false
 
       # ----------------------------------------------------------------
-      # Idempotency early-exit. If `gaia-triaged` is already on
-      # the issue, run `handle-already-triaged.sh` and skip the rest. The
-      # always-run final step (gaia-triaged-fallback) detects this via
-      # `already_triaged == 'true'` and skips its own application too.
+      # Routing. This job never calls a handler: each outcome step writes
+      # its route (and a reason code where the handler takes one) to
+      # route.env in the handoff folder, plus any file the handler reads,
+      # and the publish job runs the handler. The handoff folder is the
+      # only thing uploaded, so nothing else in RUNNER_TEMP leaves the job.
+      #
+      # Idempotency early-exit. If `gaia-triaged` is already on the
+      # issue, the route is `already-triaged` and the rest is skipped;
+      # the publish job runs `handle-already-triaged.sh` and skips its
+      # own fail-forward label.
       # ----------------------------------------------------------------
       - name: Idempotency check
         id: idempotency
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           set -eu
+          mkdir -p "${RUNNER_TEMP}/forensics-handoff"
           labels="$(gh issue view "$ISSUE_NUMBER" --json labels --jq '[.labels[].name] | join(",")')"
           echo "labels=$labels"
           if printf '%s' ",$labels," | grep -q ',gaia-triaged,'; then
             echo "already_triaged=true" >> "$GITHUB_OUTPUT"
-            "$FORENSICS_DIR/handlers/handle-already-triaged.sh" "$ISSUE_NUMBER"
+            printf 'route=already-triaged\n' > "${RUNNER_TEMP}/forensics-handoff/route.env"
           else
             echo "already_triaged=false" >> "$GITHUB_OUTPUT"
           fi
@@ -106,6 +127,7 @@ jobs:
           set -eu
           parsed_file="${RUNNER_TEMP}/forensics/parsed.json"
           "$FORENSICS_DIR/parse-issue-body.sh" "${RUNNER_TEMP}/forensics/issue-body.md" > "$parsed_file"
+          cp "$parsed_file" "${RUNNER_TEMP}/forensics-handoff/parsed.json"
 
           # parse-issue-body.sh emits an internal-error
           # JSON envelope when one of its awk pipelines fails. Distinct
@@ -115,8 +137,8 @@ jobs:
           if [ "$(jq -r '.internal_error // false' "$parsed_file")" = "true" ]; then
             reason_file="${RUNNER_TEMP}/forensics/internal-error-reason.md"
             jq -r '"forensics primitive `parse-issue-body.sh` failed at stage `\(.stage)` (exit \(.exit_code))"' "$parsed_file" > "$reason_file"
-            "$FORENSICS_DIR/handlers/handle-needs-human.sh" \
-              "$ISSUE_NUMBER" "$reason_file" "internal-error"
+            cp "$reason_file" "${RUNNER_TEMP}/forensics-handoff/reason.md"
+            printf 'route=needs-human\nreason_code=internal-error\n' > "${RUNNER_TEMP}/forensics-handoff/route.env"
             exit 0
           fi
 
@@ -124,17 +146,14 @@ jobs:
           echo "parsed_file=$parsed_file" >> "$GITHUB_OUTPUT"
           echo "valid=$valid" >> "$GITHUB_OUTPUT"
 
-      - name: Handle malformed body
+      - name: Route malformed body
         if: |
           steps.idempotency.outputs.already_triaged != 'true' &&
           steps.parse.outputs.valid == 'false'
-        env:
-          PARSED_FILE: ${{ steps.parse.outputs.parsed_file }}
         run: |
           set -eu
-          "$FORENSICS_DIR/handlers/handle-malformed-body.sh" \
-            "$ISSUE_NUMBER" \
-            "$PARSED_FILE"
+          # The handler reads parsed.json, already in the handoff folder.
+          printf 'route=malformed\n' > "${RUNNER_TEMP}/forensics-handoff/route.env"
 
       # ----------------------------------------------------------------
       # Classifier prompt. The LLM is invoked at
@@ -183,12 +202,10 @@ jobs:
           # canonical scope path lists rendered into the classifier
           # prompt verbatim. Disable SC2016 for this block.
           # shellcheck disable=SC2016
-          allowlist='- `.gaia/cli/`
-          - `.claude/hooks/`
+          allowlist='- `.gaia/cli/` (except the `gaia` and `gaia-maintainer` bundles)
           - `.claude/skills/`
           - `.claude/commands/`
           - `.claude/agents/`
-          - `.gaia/statusline/`
           - `.gaia/scripts/spec/`
           - `.gaia/manifest.json`'
 
@@ -197,7 +214,9 @@ jobs:
           - `.notebook/`
           - `.gaia/templates/spec/`
           - `.claude/skills/gaia/references/spec/clarify-prompts.md`, `.claude/skills/gaia/references/spec/system-prompt.md`, `.claude/skills/gaia/references/spec/spec-template.md`
-          - `.github/workflows/`, `.github/forensics/`, `.github/`'
+          - `.github/workflows/`, `.github/forensics/`, `.github/`
+          - `.claude/hooks/`, `.gaia/statusline/`, `.githooks/`, `.claude/settings.json`, `.claude/settings.local.json` (they run on their own in a local session)
+          - any `package.json`, `pnpm-workspace.yaml`, `pnpm-lock.yaml`, `.npmrc`, `.pnpmfile.cjs` or `.pnpmfile.mjs`, at any depth'
 
           rendered_file="${RUNNER_TEMP}/forensics/classifier-prompt.md"
 
@@ -261,6 +280,12 @@ jobs:
         uses: anthropics/claude-code-action@63322d7b2bc79e7b621b89f41b53ceb8e5a5d314 # v1.0
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          # The job's read-only token. Without it the action trades an OIDC
+          # token for an app token with write access and hands that to the
+          # model's process.
+          github_token: ${{ github.token }}
+          # No project hook runs inside the model's session.
+          settings: '{"disableAllHooks": true}'
           prompt: ${{ steps.render-classifier.outputs.body }}
           # No tool access, judgment-only. The classifier MUST NOT
           # touch the working tree. `--tools=` (with the equals sign)
@@ -308,8 +333,8 @@ jobs:
           if [ "$(jq -r '.internal_error // false' "$parsed")" = "true" ]; then
             reason_file="${RUNNER_TEMP}/forensics/internal-error-reason.md"
             jq -r '"forensics primitive `parse-verdict.sh` failed at stage `\(.stage)` (exit \(.exit_code))"' "$parsed" > "$reason_file"
-            "$FORENSICS_DIR/handlers/handle-needs-human.sh" \
-              "$ISSUE_NUMBER" "$reason_file" "internal-error"
+            cp "$reason_file" "${RUNNER_TEMP}/forensics-handoff/reason.md"
+            printf 'route=needs-human\nreason_code=internal-error\n' > "${RUNNER_TEMP}/forensics-handoff/route.env"
             exit 0
           fi
 
@@ -319,6 +344,7 @@ jobs:
           # Reasoning becomes the comment body for non-issue / needs-human.
           reasoning="${RUNNER_TEMP}/forensics/reasoning.md"
           jq -r '.reasoning' "$parsed" > "$reasoning"
+          cp "$reasoning" "${RUNNER_TEMP}/forensics-handoff/reasoning.md"
 
           {
             echo "verdict=$verdict"
@@ -331,7 +357,7 @@ jobs:
       # Ambiguous verdict → needs-human, reason-code
       # `ambiguous-verdict`.
       # ----------------------------------------------------------------
-      - name: Handle ambiguous verdict
+      - name: Route ambiguous verdict
         if: |
           steps.idempotency.outputs.already_triaged != 'true' &&
           steps.parse.outputs.valid == 'true' &&
@@ -340,31 +366,26 @@ jobs:
           REASONING_FILE: ${{ steps.verdict.outputs.reasoning_file }}
         run: |
           set -eu
-          "$FORENSICS_DIR/handlers/handle-needs-human.sh" \
-            "$ISSUE_NUMBER" \
-            "$REASONING_FILE" \
-            "ambiguous-verdict"
+          cp "$REASONING_FILE" "${RUNNER_TEMP}/forensics-handoff/reason.md"
+          printf 'route=needs-human\nreason_code=ambiguous-verdict\n' > "${RUNNER_TEMP}/forensics-handoff/route.env"
 
       # ----------------------------------------------------------------
       # Non-issue → close + comment + label.
       # ----------------------------------------------------------------
-      - name: Handle non-issue
+      - name: Route non-issue
         if: |
           steps.idempotency.outputs.already_triaged != 'true' &&
           steps.parse.outputs.valid == 'true' &&
           steps.verdict.outputs.verdict == 'non-issue'
-        env:
-          REASONING_FILE: ${{ steps.verdict.outputs.reasoning_file }}
         run: |
           set -eu
-          "$FORENSICS_DIR/handlers/handle-non-issue.sh" \
-            "$ISSUE_NUMBER" \
-            "$REASONING_FILE"
+          # The handler reads reasoning.md, already in the handoff folder.
+          printf 'route=non-issue\n' > "${RUNNER_TEMP}/forensics-handoff/route.env"
 
       # ----------------------------------------------------------------
       # Needs-human verdict from the classifier.
       # ----------------------------------------------------------------
-      - name: Handle needs-human (classifier verdict)
+      - name: Route needs-human (classifier verdict)
         if: |
           steps.idempotency.outputs.already_triaged != 'true' &&
           steps.parse.outputs.valid == 'true' &&
@@ -373,10 +394,8 @@ jobs:
           REASONING_FILE: ${{ steps.verdict.outputs.reasoning_file }}
         run: |
           set -eu
-          "$FORENSICS_DIR/handlers/handle-needs-human.sh" \
-            "$ISSUE_NUMBER" \
-            "$REASONING_FILE" \
-            "out-of-scope"
+          cp "$REASONING_FILE" "${RUNNER_TEMP}/forensics-handoff/reason.md"
+          printf 'route=needs-human\nreason_code=out-of-scope\n' > "${RUNNER_TEMP}/forensics-handoff/route.env"
 
       # ----------------------------------------------------------------
       # auto-fixable path. The scope check is the FIRST
@@ -410,7 +429,7 @@ jobs:
             echo "paths_file=$paths_file"
           } >> "$GITHUB_OUTPUT"
 
-      - name: Handle out-of-scope auto-fix
+      - name: Route out-of-scope auto-fix
         if: |
           steps.idempotency.outputs.already_triaged != 'true' &&
           steps.parse.outputs.valid == 'true' &&
@@ -430,14 +449,13 @@ jobs:
             printf '\n\n---\n\nProposed paths rejected by `check-scope.sh`:\n\n'
             jq -r '.denied[] | "- `\(.path)`, \(.reason)"' "$SCOPE_FILE"
           } > "$reason_file"
-          "$FORENSICS_DIR/handlers/handle-needs-human.sh" \
-            "$ISSUE_NUMBER" \
-            "$reason_file" \
-            "out-of-scope"
+          cp "$reason_file" "${RUNNER_TEMP}/forensics-handoff/reason.md"
+          printf 'route=needs-human\nreason_code=out-of-scope\n' > "${RUNNER_TEMP}/forensics-handoff/route.env"
 
       # ----------------------------------------------------------------
-      # Branch creation + fix application + Quality Gate. Only fires when
-      # the verdict is `auto-fixable` AND every proposed path is in scope.
+      # Branch creation + fix application. Only fires when the verdict is
+      # `auto-fixable` AND every proposed path is in scope. The Quality
+      # Gate runs in its own job.
       # ----------------------------------------------------------------
       - name: Compute branch name
         id: branch
@@ -541,6 +559,9 @@ jobs:
         uses: anthropics/claude-code-action@63322d7b2bc79e7b621b89f41b53ceb8e5a5d314 # v1.0
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          # Read-only job token and no project hooks; see the classifier.
+          github_token: ${{ github.token }}
+          settings: '{"disableAllHooks": true}'
           prompt: ${{ steps.render-apply.outputs.body }}
           # File-edit tools only. NO Bash, NO git, NO push tools, NO web.
           # Post-step verification asserts diffs touch only `proposed_paths`.
@@ -654,7 +675,7 @@ jobs:
 
           set_outputs "diff_ok=true"
 
-      - name: Handle apply-fix abort
+      - name: Route apply-fix abort
         if: |
           steps.idempotency.outputs.already_triaged != 'true' &&
           steps.parse.outputs.valid == 'true' &&
@@ -692,17 +713,15 @@ jobs:
           else
             reason_code="out-of-scope"
           fi
-          "$FORENSICS_DIR/handlers/handle-needs-human.sh" \
-            "$ISSUE_NUMBER" \
-            "$reason_file" \
-            "$reason_code"
+          cp "$reason_file" "${RUNNER_TEMP}/forensics-handoff/reason.md"
+          printf 'route=needs-human\nreason_code=%s\n' "$reason_code" > "${RUNNER_TEMP}/forensics-handoff/route.env"
 
       # ----------------------------------------------------------------
-      # Quality Gate. Branch is local-only; we push only when
-      # the gate passes. `run-quality-gate.sh` is owned by the parallel
-      # task-quality-gate-runner sub-agent. CLI: `<output-summary-file>`.
+      # Commit the fix on the local branch and bundle it for the later
+      # jobs. Nothing is pushed from this job: the quality-gate job runs
+      # the gate and the publish job pushes only on a pass.
       # ----------------------------------------------------------------
-      - name: Commit fix
+      - name: Commit and bundle fix
         id: commit-fix
         if: |
           steps.idempotency.outputs.already_triaged != 'true' &&
@@ -710,23 +729,104 @@ jobs:
           steps.verdict.outputs.verdict == 'auto-fixable' &&
           steps.scope.outputs.ok == 'true' &&
           steps.verify-diff.outputs.diff_ok == 'true'
+        env:
+          FIX_BRANCH: ${{ steps.branch.outputs.name }}
         run: |
           set -eu
-          # Already `git add -A`'d in verify-diff; commit on the local
-          # branch. No push yet, gate must pass first.
+          # Already `git add -A`'d in verify-diff.
           git commit -m "fix(forensics): auto-fix attempt for #${ISSUE_NUMBER}"
+          handoff_dir="${RUNNER_TEMP}/forensics-handoff"
+          # The base commit is the bundle's prerequisite and the left side
+          # of the quality-gate job's scope re-check.
+          git rev-parse refs/remotes/origin/main > "$handoff_dir/base-sha"
+          git bundle create "$handoff_dir/fix.bundle" \
+            "refs/heads/$FIX_BRANCH" ^refs/remotes/origin/main
+          printf 'route=fix-ready\n' > "$handoff_dir/route.env"
 
-      # Apply-fix-only Node + pnpm provisioning. Gated to the same
-      # condition set as `Run Quality Gate` so non-apply-fix paths
-      # never trigger setup-node@v5's `Post Setup Node` cleanup
-      # post-step at end-of-job.
+      - name: Record route
+        id: route
+        if: always()
+        run: |
+          set -eu
+          route_file="${RUNNER_TEMP}/forensics-handoff/route.env"
+          # No route file means the job failed before reaching an outcome;
+          # the publish job then applies only the fail-forward label.
+          [ -f "$route_file" ] || exit 0
+          route="$(sed -n 's/^route=//p' "$route_file")"
+          reason_code="$(sed -n 's/^reason_code=//p' "$route_file")"
+          {
+            echo "route=$route"
+            echo "reason_code=$reason_code"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Upload handoff
+        if: always() && steps.route.outputs.route != ''
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: forensics-handoff
+          path: ${{ runner.temp }}/forensics-handoff
+          retention-days: 5
+
+  # ------------------------------------------------------------------
+  # Quality Gate over the fix. Read-only token and no secrets: this is
+  # the job that executes model-edited files, so it holds nothing worth
+  # taking. The fix commit's paths are re-checked against this
+  # checkout's own check-scope.sh before the fix is checked out, so no
+  # model-edited file runs unless it is in scope.
+  # ------------------------------------------------------------------
+  quality-gate:
+    name: Quality Gate on the fix
+    needs: triage
+    if: needs.triage.outputs.route == 'fix-ready'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    outputs:
+      outcome: ${{ steps.quality-gate.outcome }}
+    env:
+      FORENSICS_DIR: .github/forensics
+      FIX_BRANCH: ${{ needs.triage.outputs.fix_branch }}
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Download handoff
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: forensics-handoff
+          path: ${{ runner.temp }}/forensics-handoff
+
+      - name: Re-check scope, then check out the fix
+        run: |
+          set -eu
+          handoff_dir="${RUNNER_TEMP}/forensics-handoff"
+          base_sha="$(cat "$handoff_dir/base-sha")"
+          git fetch "$handoff_dir/fix.bundle" "refs/heads/$FIX_BRANCH:refs/heads/$FIX_BRANCH"
+          # NUL-delimited for the reason the triage job's verify-diff step
+          # gives: git would otherwise C-quote a non-ASCII path.
+          touched_file="${RUNNER_TEMP}/fix-touched-paths.nul"
+          git diff --name-only -z "$base_sha" "refs/heads/$FIX_BRANCH" > "$touched_file"
+          if [ ! -s "$touched_file" ]; then
+            echo "::error::the fix bundle changes no path"
+            exit 1
+          fi
+          mapfile -d '' -t touched < "$touched_file"
+          # check-scope.sh runs from this job's checkout of main, not from
+          # the fix: the model's edits cannot reach the copy that judges them.
+          scope_json="$("$FORENSICS_DIR/check-scope.sh" "${touched[@]}")"
+          if [ "$(printf '%s' "$scope_json" | jq -r '.ok')" != "true" ]; then
+            echo "::error::the fix touches paths outside the forensics scope: $scope_json"
+            exit 1
+          fi
+          git checkout "$FIX_BRANCH"
+
+      # Node + pnpm are provisioned only in this job, the one consumer of
+      # them.
       - name: Setup pnpm
-        if: |
-          steps.idempotency.outputs.already_triaged != 'true' &&
-          steps.parse.outputs.valid == 'true' &&
-          steps.verdict.outputs.verdict == 'auto-fixable' &&
-          steps.scope.outputs.ok == 'true' &&
-          steps.verify-diff.outputs.diff_ok == 'true'
         # Bounds a stalled fetch, not a budget for the work: strictly under
         # the job's own 30-minute cap so this step fires first and the job
         # reds with a step name attached rather than a generic job timeout.
@@ -741,12 +841,6 @@ jobs:
           npm_config_fetch_timeout: '60000'
 
       - name: Setup Node
-        if: |
-          steps.idempotency.outputs.already_triaged != 'true' &&
-          steps.parse.outputs.valid == 'true' &&
-          steps.verdict.outputs.verdict == 'auto-fixable' &&
-          steps.scope.outputs.ok == 'true' &&
-          steps.verify-diff.outputs.diff_ok == 'true'
         # Bounds a stalled Node tarball fetch, not a budget for the work:
         # strictly under the job's own 30-minute cap so this step fires first
         # and the job reds with a step name attached rather than a generic job
@@ -758,45 +852,129 @@ jobs:
 
       - name: Run Quality Gate
         id: quality-gate
-        if: |
-          steps.idempotency.outputs.already_triaged != 'true' &&
-          steps.parse.outputs.valid == 'true' &&
-          steps.verdict.outputs.verdict == 'auto-fixable' &&
-          steps.scope.outputs.ok == 'true' &&
-          steps.verify-diff.outputs.diff_ok == 'true'
         continue-on-error: true
         run: |
           set -eu
-          summary="${RUNNER_TEMP}/forensics/gate-summary.json"
-          echo "summary_file=$summary" >> "$GITHUB_OUTPUT"
-          "$FORENSICS_DIR/run-quality-gate.sh" "$summary"
+          mkdir -p "${RUNNER_TEMP}/forensics-gate"
+          "$FORENSICS_DIR/run-quality-gate.sh" "${RUNNER_TEMP}/forensics-gate/gate-summary.json"
 
-      - name: Handle Quality Gate failure
-        if: |
-          steps.idempotency.outputs.already_triaged != 'true' &&
-          steps.parse.outputs.valid == 'true' &&
-          steps.verdict.outputs.verdict == 'auto-fixable' &&
-          steps.scope.outputs.ok == 'true' &&
-          steps.verify-diff.outputs.diff_ok == 'true' &&
-          steps.quality-gate.outcome == 'failure'
+      - name: Upload gate summary
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: forensics-gate-summary
+          path: ${{ runner.temp }}/forensics-gate
+          retention-days: 5
+          if-no-files-found: ignore
+
+  # ------------------------------------------------------------------
+  # Publish. The only job with write permissions; GH_TOKEN is set on
+  # the steps that call GitHub, never job-wide. It reads the handoff,
+  # runs the handler for the route, and on a gate pass pushes the fix
+  # branch straight from the bundle. It never checks out the fix, so
+  # no model-edited file runs here.
+  # ------------------------------------------------------------------
+  publish:
+    name: Report triage outcome
+    needs: [triage, quality-gate]
+    if: always() && needs.triage.result != 'skipped'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+      issues: write
+      pull-requests: write
+    env:
+      ISSUE_NUMBER: ${{ github.event.issue.number }}
+      FORENSICS_DIR: .github/forensics
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # The bundle's prerequisite is a main commit, so the full history
+          # is needed to fetch from it.
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Download handoff
+        if: needs.triage.outputs.route != ''
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: forensics-handoff
+          path: ${{ runner.temp }}/forensics-handoff
+
+      - name: Handle already-triaged
+        if: needs.triage.outputs.route == 'already-triaged'
         env:
-          GATE_SUMMARY_FILE: ${{ steps.quality-gate.outputs.summary_file }}
-          REASONING_FILE: ${{ steps.verdict.outputs.reasoning_file }}
+          GH_TOKEN: ${{ github.token }}
         run: |
           set -eu
-          # The branch is never pushed. We're on a local-only branch;
-          # nothing to clean up on origin. Compose the comment, demote.
-          reason_file="${RUNNER_TEMP}/forensics/gate-failure-reason.md"
+          "$FORENSICS_DIR/handlers/handle-already-triaged.sh" "$ISSUE_NUMBER"
+
+      - name: Handle malformed body
+        if: needs.triage.outputs.route == 'malformed'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -eu
+          "$FORENSICS_DIR/handlers/handle-malformed-body.sh" \
+            "$ISSUE_NUMBER" \
+            "${RUNNER_TEMP}/forensics-handoff/parsed.json"
+
+      - name: Handle non-issue
+        if: needs.triage.outputs.route == 'non-issue'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -eu
+          "$FORENSICS_DIR/handlers/handle-non-issue.sh" \
+            "$ISSUE_NUMBER" \
+            "${RUNNER_TEMP}/forensics-handoff/reasoning.md"
+
+      - name: Handle needs-human
+        if: needs.triage.outputs.route == 'needs-human'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REASON_CODE: ${{ needs.triage.outputs.reason_code }}
+        run: |
+          set -eu
+          "$FORENSICS_DIR/handlers/handle-needs-human.sh" \
+            "$ISSUE_NUMBER" \
+            "${RUNNER_TEMP}/forensics-handoff/reason.md" \
+            "$REASON_CODE"
+
+      - name: Download gate summary
+        if: needs.triage.outputs.route == 'fix-ready' && needs.quality-gate.outputs.outcome != 'success'
+        # Absent when the gate job failed before the gate ran; the failure
+        # comment says so instead of stranding the issue.
+        continue-on-error: true
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: forensics-gate-summary
+          path: ${{ runner.temp }}/forensics-gate
+
+      # A gate job that failed before the gate step ran reports no outcome,
+      # which reads as a failure here, never as a pass.
+      - name: Handle Quality Gate failure
+        if: needs.triage.outputs.route == 'fix-ready' && needs.quality-gate.outputs.outcome != 'success'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -eu
+          # The branch is never pushed, so there is nothing to clean up on
+          # origin. Compose the comment, demote.
+          gate_summary_file="${RUNNER_TEMP}/forensics-gate/gate-summary.json"
+          reason_file="${RUNNER_TEMP}/gate-failure-reason.md"
           # shellcheck disable=SC2016 # jq filters are intentionally single-quoted
           {
-            cat "$REASONING_FILE"
+            cat "${RUNNER_TEMP}/forensics-handoff/reasoning.md"
             printf '\n\n---\n\nQuality Gate failure summary:\n\n'
-            if [ -f "$GATE_SUMMARY_FILE" ]; then
-              failed_step="$(jq -r '.failed_step // "unknown"' "$GATE_SUMMARY_FILE")"
-              exit_code="$(jq -r '.exit_code // "unknown"' "$GATE_SUMMARY_FILE")"
+            if [ -f "$gate_summary_file" ]; then
+              failed_step="$(jq -r '.failed_step // "unknown"' "$gate_summary_file")"
+              exit_code="$(jq -r '.exit_code // "unknown"' "$gate_summary_file")"
               printf 'failed step: `%s` (exit %s)\n\n' "$failed_step" "$exit_code"
               printf 'log excerpt:\n\n```\n'
-              jq -r '.log_excerpt // ""' "$GATE_SUMMARY_FILE"
+              jq -r '.log_excerpt // ""' "$gate_summary_file"
               printf '\n```\n\n'
             else
               printf '_(gate summary file missing, see workflow run logs)_\n\n'
@@ -810,36 +988,30 @@ jobs:
             "gate-failure"
 
       # ----------------------------------------------------------------
-      # Gate passed → push branch and open draft PR. The push
-      # step is gated on quality-gate succeeding (step's `outcome` is
-      # `success`), so a failing gate never pushes, by construction.
+      # Gate passed → push branch and open draft PR. Gated on the gate
+      # job's outcome being `success`, so a failing gate never pushes,
+      # by construction.
       # ----------------------------------------------------------------
       - name: Push fix branch
-        if: |
-          steps.idempotency.outputs.already_triaged != 'true' &&
-          steps.parse.outputs.valid == 'true' &&
-          steps.verdict.outputs.verdict == 'auto-fixable' &&
-          steps.scope.outputs.ok == 'true' &&
-          steps.verify-diff.outputs.diff_ok == 'true' &&
-          steps.quality-gate.outcome == 'success'
+        if: needs.triage.outputs.route == 'fix-ready' && needs.quality-gate.outputs.outcome == 'success'
         env:
-          FIX_BRANCH: ${{ steps.branch.outputs.name }}
+          GH_TOKEN: ${{ github.token }}
+          FIX_BRANCH: ${{ needs.triage.outputs.fix_branch }}
         run: |
           set -eu
-          git push origin "$FIX_BRANCH"
+          git fetch "${RUNNER_TEMP}/forensics-handoff/fix.bundle" \
+            "refs/heads/$FIX_BRANCH:refs/heads/$FIX_BRANCH"
+          # The credential rides on this one command, the same header
+          # actions/checkout would have persisted; nothing is written to
+          # .git/config.
+          auth_header="AUTHORIZATION: basic $(printf 'x-access-token:%s' "$GH_TOKEN" | base64 -w0)"
+          echo "::add-mask::$auth_header"
+          git -c "http.https://github.com/.extraheader=$auth_header" \
+            push origin "refs/heads/$FIX_BRANCH:refs/heads/$FIX_BRANCH"
 
       - name: Compose PR body
         id: pr-body
-        if: |
-          steps.idempotency.outputs.already_triaged != 'true' &&
-          steps.parse.outputs.valid == 'true' &&
-          steps.verdict.outputs.verdict == 'auto-fixable' &&
-          steps.scope.outputs.ok == 'true' &&
-          steps.verify-diff.outputs.diff_ok == 'true' &&
-          steps.quality-gate.outcome == 'success'
-        env:
-          PARSED_FILE: ${{ steps.parse.outputs.parsed_file }}
-          REASONING_FILE: ${{ steps.verdict.outputs.reasoning_file }}
+        if: needs.triage.outputs.route == 'fix-ready' && needs.quality-gate.outputs.outcome == 'success'
         run: |
           set -eu
           # `## Capture` is passed through verbatim. No
@@ -848,33 +1020,29 @@ jobs:
           # the body parser pulled from the issue (modulo the at-most-one
           # leading/trailing blank line trim documented in
           # parse-issue-body.sh).
-          body_file="${RUNNER_TEMP}/forensics/pr-body.md"
+          handoff_dir="${RUNNER_TEMP}/forensics-handoff"
+          body_file="${RUNNER_TEMP}/pr-body.md"
           # shellcheck disable=SC2016 # markdown literals contain backticks; jq filter is single-quoted
           {
             printf 'Auto-fix attempt for issue #%s.\n\n' "$ISSUE_NUMBER"
             printf 'Closes #%s\n\n' "$ISSUE_NUMBER"
             printf -- '---\n\n'
             printf '## Capture (verbatim from issue)\n\n'
-            jq -r '.sections.capture' "$PARSED_FILE"
+            jq -r '.sections.capture' "$handoff_dir/parsed.json"
             printf '\n\n---\n\n'
             printf '## Classifier reasoning\n\n'
-            cat "$REASONING_FILE"
+            cat "$handoff_dir/reasoning.md"
             printf '\n\n---\n\n'
             printf '_Draft PR. Branch protection on `main` requires human review before merge._\n'
           } > "$body_file"
           echo "file=$body_file" >> "$GITHUB_OUTPUT"
 
       - name: Open draft PR + finalize labels
-        if: |
-          steps.idempotency.outputs.already_triaged != 'true' &&
-          steps.parse.outputs.valid == 'true' &&
-          steps.verdict.outputs.verdict == 'auto-fixable' &&
-          steps.scope.outputs.ok == 'true' &&
-          steps.verify-diff.outputs.diff_ok == 'true' &&
-          steps.quality-gate.outcome == 'success'
+        if: needs.triage.outputs.route == 'fix-ready' && needs.quality-gate.outputs.outcome == 'success'
         env:
-          FIX_BRANCH: ${{ steps.branch.outputs.name }}
-          FIX_CLASS_SLUG: ${{ steps.branch.outputs.class_slug }}
+          GH_TOKEN: ${{ github.token }}
+          FIX_BRANCH: ${{ needs.triage.outputs.fix_branch }}
+          FIX_CLASS_SLUG: ${{ needs.triage.outputs.class_slug }}
           PR_BODY_FILE: ${{ steps.pr-body.outputs.file }}
         run: |
           set -eu
@@ -887,12 +1055,14 @@ jobs:
       # ----------------------------------------------------------------
       # Fail-forward: if the workflow did meaningful work but
       # bombed before any handler attached `gaia-triaged`, this final
-      # always-run step ensures the idempotency key sticks. The early-
-      # exit path (step 3) already applied the label via its handler;
-      # we suppress the fallback in that case via `already_triaged`.
+      # always-run step ensures the idempotency key sticks. The
+      # already-triaged route's handler applies the label itself, so the
+      # fallback skips it.
       # ----------------------------------------------------------------
       - name: Ensure gaia-triaged is applied (fail-forward)
-        if: always() && steps.idempotency.outputs.already_triaged != 'true'
+        if: always() && needs.triage.outputs.route != 'already-triaged'
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           set -eu
           gh issue edit "$ISSUE_NUMBER" --add-label gaia-triaged || true

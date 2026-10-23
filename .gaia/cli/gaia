@@ -23644,7 +23644,7 @@ var RISE_RATIO_NUM = 5;
 var RISE_RATIO_DEN = 4;
 var RISE_MIN_PR_DELTA = 3;
 var MIN_TRUSTED_AUDITED_PRS = 20;
-var TALLY_SCHEMA_VERSION = 2;
+var TALLY_SCHEMA_VERSION = 3;
 var isMaterialRise = ({
   baseAuditedPrCount,
   baseCount,
@@ -24871,6 +24871,11 @@ var windowStartDate = (now) => {
   const start = new Date(now.getTime() - WINDOW_DAYS * 24 * 60 * 60 * 1e3);
   return start.toISOString().slice(0, 10);
 };
+var TRUSTED_AUTHOR_ASSOCIATIONS = /* @__PURE__ */ new Set([
+  "COLLABORATOR",
+  "MEMBER",
+  "OWNER"
+]);
 var parseGhPr = (value) => {
   if (typeof value !== "object" || value === null) return null;
   const v = value;
@@ -24878,10 +24883,11 @@ var parseGhPr = (value) => {
   if (!Array.isArray(v.comments)) return null;
   const comments = [];
   for (const comment of v.comments) {
-    if (typeof comment === "object" && comment !== null && typeof comment.body === "string") {
-      comments.push({
-        body: comment.body
-      });
+    if (typeof comment === "object" && comment !== null) {
+      const { authorAssociation, body } = comment;
+      if (typeof body === "string" && typeof authorAssociation === "string" && TRUSTED_AUTHOR_ASSOCIATIONS.has(authorAssociation)) {
+        comments.push({ body });
+      }
     }
   }
   return { comments, number: v.number };
