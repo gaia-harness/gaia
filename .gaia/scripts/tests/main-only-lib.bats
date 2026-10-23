@@ -86,7 +86,7 @@ run_in() {
   grep -qF -- "/gaia-release must run from the main checkout, not a worktree." <<<"$output" || return 1
   grep -qF -- "Worktree:       $WORKTREE" <<<"$output" || return 1
   grep -qF -- "Main checkout:  $REPO" <<<"$output" || return 1
-  grep -qF -- "Run \`cd $REPO\` then re-invoke /gaia-release." <<<"$output" || return 1
+  grep -qF -- "This session cannot move into it: ask the user to start Claude Code in $REPO and run /gaia-release there." <<<"$output" || return 1
 }
 
 @test "linked worktree, no state_line_function supplied: no state paragraph at all" {
@@ -95,7 +95,7 @@ run_in() {
   run run_in "$WORKTREE" -- bash -c '. "$1"; gaia_refuse_if_worktree "/gaia-release" 2>/dev/null' _ "$LIBRARY_SCRIPT"
   [ "$status" -eq 1 ]
   # Byte-exact: no state paragraph, and exactly one blank line separates the
-  # roots block from the "Run \`cd\`" line -- not $lines-based, bats' $lines
+  # roots block from the "ask the user" line -- not $lines-based, bats' $lines
   # splitting silently drops blank-line entries so it can't prove this.
   local expected
   expected="/gaia-release must run from the main checkout, not a worktree.
@@ -103,7 +103,7 @@ run_in() {
 Worktree:       $WORKTREE
 Main checkout:  $REPO
 
-Run \`cd $REPO\` then re-invoke /gaia-release."
+This session cannot move into it: ask the user to start Claude Code in $REPO and run /gaia-release there."
   [ "$output" = "$expected" ]
 }
 
@@ -601,7 +601,7 @@ extract_block() {
     [ "$status" -eq 1 ] || { echo "$call_site_file (bash): expected exit 1, got $status; output: $output" >&2; return 1; }
     grep -qF -- "$flow must run from the main checkout, not a worktree." <<<"$output" || { echo "$call_site_file (bash): missing refusal line" >&2; return 1; }
     grep -qF -- "Main checkout:  $REPO" <<<"$output" || { echo "$call_site_file (bash): missing main checkout line" >&2; return 1; }
-    grep -qF -- "Run \`cd $REPO\` then re-invoke $flow." <<<"$output" || { echo "$call_site_file (bash): missing re-invoke line" >&2; return 1; }
+    grep -qF -- "This session cannot move into it: ask the user to start Claude Code in $REPO and run $flow there." <<<"$output" || { echo "$call_site_file (bash): missing re-invoke line" >&2; return 1; }
     # The Milestone 5 failure was near-silent: no refusal, and a stray shell
     # error in its place.
     grep -qF -- "command not found" <<<"$output" && { echo "$call_site_file (bash): stray shell error in output" >&2; return 1; }
@@ -628,7 +628,7 @@ extract_block() {
     [ "$status" -eq 1 ] || { echo "$call_site_file (zsh): expected exit 1, got $status; output: $output" >&2; return 1; }
     grep -qF -- "$flow must run from the main checkout, not a worktree." <<<"$output" || { echo "$call_site_file (zsh): missing refusal line" >&2; return 1; }
     grep -qF -- "Main checkout:  $REPO" <<<"$output" || { echo "$call_site_file (zsh): missing main checkout line" >&2; return 1; }
-    grep -qF -- "Run \`cd $REPO\` then re-invoke $flow." <<<"$output" || { echo "$call_site_file (zsh): missing re-invoke line" >&2; return 1; }
+    grep -qF -- "This session cannot move into it: ask the user to start Claude Code in $REPO and run $flow there." <<<"$output" || { echo "$call_site_file (zsh): missing re-invoke line" >&2; return 1; }
     # Under zsh, BASH_SOURCE is unset and `declare -F` declares a float and
     # succeeds instead of answering whether a function exists; that hazard
     # is exactly what a "command not found" in the output would reveal.
@@ -671,7 +671,7 @@ extract_block() {
   block="$(extract_block "$REPO_ROOT/.claude/commands/setup-gaia.md")"
   run run_in "$WORKTREE" -- bash -c "$block"
   [ "$status" -eq 1 ]
-  grep -qF -- "Run \`cd $REPO\` then re-invoke /setup-gaia." <<<"$output"
+  grep -qF -- "This session cannot move into it: ask the user to start Claude Code in $REPO and run /setup-gaia there." <<<"$output"
 }
 
 # ---------- the update skills' own-branch-prefix call sites ----------

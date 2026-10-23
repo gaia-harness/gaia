@@ -16,10 +16,15 @@ A release change that requires the adopter to act, run a command or hand-migrate
 
 ### Added
 
+- **Generated-files rule:** a new rule loads when Claude reads `frontend/.claude/settings.json` or `pnpm-lock.yaml` and names the source to change instead: the root settings or the frontend overlay followed by `gaia packages sync-settings`, or pnpm for dependencies. Until now the only signal was a permission deny with no reason (#3023)
 - **Your own audit finding classes:** register the finding classes and tool prefixes your own Code Audit Team members report in `.gaia/finding-classes.json`, and `/gaia-codify` counts their recurrence like GAIA's built-in classes and `file-tech-debt` files them instead of diverting them as malformed. A finding whose class is in no vocabulary now counts toward the unclassified signal instead of disappearing from the tally. The file ships empty and `/update-gaia` never overwrites it (#3012)
 
 ### Fixed
 
+- **Hard-reset guard:** `git reset --hard` to any other commit is now denied whatever the spelling (`HEAD^`, `@~1`, a SHA, a branch name), not only `HEAD~<n>`, and the denial says why and that the reset is the user's to run. A reset with no target, or to `HEAD`, still discards uncommitted changes as before (#3022)
+- **Worthiness gate refusal:** the merge refusal for an emergent test with no worthiness verdict now names one path, running the worthiness evaluator, and no longer offers a direct ledger write that recorded a verdict without the review (#3021)
+- **Refusals with a next step:** several guard refusals now say what Claude can do next or that the step is the user's: the pre-commit registry failure, `rm -rf node_modules` (repair with `pnpm install`), `.env` reads, fork pull requests, a push whose refspec names main or HEAD, and main-checkout-only commands run from a worktree (#3023)
+- **`/gaia-codify` no longer counts findings the audit chose not to fix.** The recurrence tally now skips findings a merged pull request lists as waived below the triage threshold or as accepted residuals, so a class that was only ever waived stops firing a rising-class nudge whose only correct answer was to decline. The tally's counting version moves to 4, so after updating you get one "tally changed" review nudge, and classes you declined earlier come back once for a fresh decision (#3028)
 - **Registering an audit member on your own project:** `bash .gaia/scripts/verify-audit-roster.sh` now passes on a fresh project instead of reporting GAIA's own files as ownerless, and it checks the member name prefix and machinery registration itself. The pre-commit hook runs it whenever a commit stages the roster or a member definition, and a member named `code-audit-<name>` needs no edit to GAIA's machinery list. The registration page now walks an adopter through the whole flow, starting from a copy of the workflows member (#3010, #3011)
 
 ## [2.0.1] - 2026-10-23

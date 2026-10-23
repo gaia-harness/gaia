@@ -65,7 +65,12 @@
 #
 #     <state line -- only when state_line_function was supplied>
 #
-#     Run `cd <main root>` then re-invoke <flow-name>.
+#     This session cannot move into it: ask the user to start Claude Code in
+#     <main root> and run <flow-name> there.
+#
+#   The last line hands the step to the user because a session cannot leave
+#   the worktree it lives in, and a `cd` in its shell is banned
+#   (.claude/rules/shell-cwd.md).
 #
 #   When state_line_function is supplied but prints nothing (cache file missing,
 #   jq absent, fields empty), the state line falls back to:
@@ -181,7 +186,7 @@ $state_line"
 
   message="$message
 
-Run \`cd $main_root\` then re-invoke $flow_name."
+This session cannot move into it: ask the user to start Claude Code in $main_root and run $flow_name there."
 
   printf '%s\n' "$message"
   return 1

@@ -23644,7 +23644,7 @@ var RISE_RATIO_NUM = 5;
 var RISE_RATIO_DEN = 4;
 var RISE_MIN_PR_DELTA = 3;
 var MIN_TRUSTED_AUDITED_PRS = 20;
-var TALLY_SCHEMA_VERSION = 3;
+var TALLY_SCHEMA_VERSION = 4;
 var isMaterialRise = ({
   baseAuditedPrCount,
   baseCount,
@@ -24274,6 +24274,137 @@ var run = (argv, options = {}) => {
 
 // src/codify/tally.ts
 import path8 from "node:path";
+
+// src/residue/key.ts
+var KEY_PATTERN = /<!-- gaia-debt-key: (v1 class=[^ ]+ path=[^>]+ line=\d+) -->/;
+var LENIENT_KEY_PATTERN = /<!-- gaia-debt-key:[^>]*?path=([^>\n]+) line=/;
+var MAX_LINE = 1e7;
+var CONTROL_CHARACTERS = [
+  ["\0", "NUL"],
+  ["\n", "newline"],
+  ["\r", "carriage return"]
+];
+var normalizeRepoRelativePath = (raw) => {
+  if (raw === "") {
+    return { ok: false, reason: "path is empty" };
+  }
+  const control = CONTROL_CHARACTERS.find(
+    ([character]) => raw.includes(character)
+  );
+  if (control !== void 0) {
+    return {
+      ok: false,
+      reason: `path contains an embedded ${control[1]} character`
+    };
+  }
+  if (raw.startsWith("/") || raw.startsWith("\\\\") || /^[A-Z]:[\\/]/i.test(raw)) {
+    return {
+      ok: false,
+      reason: "path has an absolute prefix; a residual key cites a repo-relative path"
+    };
+  }
+  if (raw.startsWith("-")) {
+    return {
+      ok: false,
+      reason: "path has a leading dash, which reads as an option flag in argv"
+    };
+  }
+  const segments = raw.split("/").filter((segment) => segment !== "" && segment !== ".");
+  if (segments.includes("..")) {
+    return {
+      ok: false,
+      reason: "path contains a .. traversal segment"
+    };
+  }
+  const normalized = segments.join("/");
+  if (normalized === "") {
+    return { ok: false, reason: "path normalizes to empty" };
+  }
+  return { ok: true, value: normalized };
+};
+var parseKeyLine = (raw) => {
+  if (raw === "") {
+    return { ok: false, reason: "line is empty" };
+  }
+  if (raw.startsWith("+") || raw.startsWith("-")) {
+    return {
+      ok: false,
+      reason: "line carries a sign; the grammar takes a bare digit run"
+    };
+  }
+  if (!/^\d+$/.test(raw)) {
+    return {
+      ok: false,
+      reason: "line is not a bare digit run (no exponent, decimal point, separator, or whitespace)"
+    };
+  }
+  if (raw.length > 1 && raw.startsWith("0")) {
+    return { ok: false, reason: "line has a leading zero" };
+  }
+  const value = Number(raw);
+  if (value < 1) {
+    return {
+      ok: false,
+      reason: "line is below 1; the first line of a file is 1"
+    };
+  }
+  if (value > MAX_LINE) {
+    return { ok: false, reason: `line exceeds the maximum of ${MAX_LINE}` };
+  }
+  return { ok: true, value };
+};
+var KEY_FIELD_PATTERNS = {
+  gate: /^v1 class=([^ ]+) path=([^>]+) line=(\d+)$/
+};
+var parseKey = (innerKey, grammar) => {
+  const fields = KEY_FIELD_PATTERNS[grammar].exec(innerKey);
+  if (fields === null) {
+    if (!innerKey.startsWith("v1 ")) {
+      return {
+        ok: false,
+        reason: "key is missing the mandatory v1 version token"
+      };
+    }
+    return {
+      ok: false,
+      reason: "key does not match the gate grammar `v1 class=<class> path=<path> line=<line>`; a missing or malformed field is the usual cause"
+    };
+  }
+  const [, rawClass = "", rawPath = "", rawLine = ""] = fields;
+  const path83 = normalizeRepoRelativePath(rawPath);
+  if (!path83.ok) {
+    return path83;
+  }
+  const line = parseKeyLine(rawLine);
+  if (!line.ok) {
+    return line;
+  }
+  return {
+    ok: true,
+    value: { class: rawClass, line: line.value, path: path83.value, version: "v1" }
+  };
+};
+var parseWrappedKeys = (text) => {
+  const scanner = new RegExp(LENIENT_KEY_PATTERN.source, "g");
+  const found = [];
+  for (const match of text.matchAll(scanner)) {
+    const rawPath = match[1];
+    const digits = /^\d+/.exec(text.slice(match.index + match[0].length));
+    if (rawPath !== void 0 && digits !== null) {
+      const path83 = normalizeRepoRelativePath(rawPath);
+      const line = parseKeyLine(digits[0]);
+      if (path83.ok && line.ok) {
+        found.push({ line: line.value, path: path83.value });
+      }
+    }
+  }
+  return found;
+};
+var sameCoordinate = (a, b) => {
+  const left = normalizeRepoRelativePath(a.path);
+  const right = normalizeRepoRelativePath(b.path);
+  return left.ok && right.ok && left.value === right.value && a.line === b.line;
+};
 
 // src/schemas/finding-class.ts
 import { existsSync as existsSync4, readFileSync as readFileSync5 } from "node:fs";
@@ -24932,6 +25063,48 @@ var TRUSTED_AUTHOR_ASSOCIATIONS = /* @__PURE__ */ new Set([
   "MEMBER",
   "OWNER"
 ]);
+var WAIVED_HEADING = "## Waived below triage threshold (not filed)";
+var ACCEPTED_HEADING = "## Accepted residuals (recorded, not fixed)";
+var WAIVED_LINE_PATTERN = /^- (?<path>.+?):\d+ (?<findingClass>[\w./-]+): /u;
+var directoryOf = (filePath) => {
+  const slash = filePath.lastIndexOf("/");
+  return slash === -1 ? "." : filePath.slice(0, slash);
+};
+var disposedEntry = (heading, line) => {
+  if (heading === WAIVED_HEADING) {
+    const groups = WAIVED_LINE_PATTERN.exec(line)?.groups;
+    if (groups?.path === void 0 || groups.findingClass === void 0) {
+      return null;
+    }
+    return {
+      areaTag: directoryOf(groups.path),
+      findingClass: groups.findingClass
+    };
+  }
+  const innerKey = KEY_PATTERN.exec(line)?.[1];
+  const key = innerKey === void 0 ? null : parseKey(innerKey, "gate");
+  if (!key?.ok) return null;
+  return { areaTag: directoryOf(key.value.path), findingClass: key.value.class };
+};
+var disposedFindings = (body) => {
+  const disposed = [];
+  let heading = null;
+  let listStarted = false;
+  for (const line of body.split("\n")) {
+    const trimmed = line.trimEnd();
+    if (line.startsWith("#")) {
+      heading = trimmed === WAIVED_HEADING || trimmed === ACCEPTED_HEADING ? trimmed : null;
+      listStarted = false;
+    } else if (heading !== null && line.startsWith("- ")) {
+      listStarted = true;
+      const entry = disposedEntry(heading, line);
+      if (entry !== null) disposed.push(entry);
+    } else if (listStarted && trimmed !== "") {
+      heading = null;
+    }
+  }
+  return disposed;
+};
 var parseGhPr = (value) => {
   if (typeof value !== "object" || value === null) return null;
   const v = value;
@@ -24946,7 +25119,23 @@ var parseGhPr = (value) => {
       }
     }
   }
-  return { comments, number: v.number };
+  return {
+    comments,
+    // Only the entries are kept: the whole window's bodies are several times
+    // the size of its comments, and nothing else reads them.
+    disposed: typeof v.body === "string" ? disposedFindings(v.body) : [],
+    number: v.number
+  };
+};
+var withoutDisposed = (findings, disposed) => {
+  const remaining = [...findings];
+  for (const { areaTag, findingClass } of disposed) {
+    const index = remaining.findIndex(
+      (finding) => finding.finding_class === findingClass && finding.area_tags.includes(areaTag)
+    );
+    if (index !== -1) remaining.splice(index, 1);
+  }
+  return remaining;
 };
 var recordFromGhPr = (pr) => {
   const byAuditor = /* @__PURE__ */ new Map();
@@ -24955,12 +25144,17 @@ var recordFromGhPr = (pr) => {
     if (block2 !== null) byAuditor.set(block2.auditor, block2.findings);
   }
   if (byAuditor.size === 0) return null;
-  return { findings: [...byAuditor.values()].flat(), pr_number: pr.number };
+  return {
+    findings: [...byAuditor.values()].flatMap(
+      (findings) => withoutDisposed(findings, pr.disposed)
+    ),
+    pr_number: pr.number
+  };
 };
 var fetchWindowPrs = (cwd, now) => {
   const window = readMergedPrWindow({
     cwd,
-    fields: ["comments"],
+    fields: ["body", "comments"],
     sinceIso: windowStartDate(now)
   });
   if (!window.ok) return { ghOk: false, prs: [] };
@@ -36956,137 +37150,6 @@ var clearCursor = (repoRoot) => {
     unlinkSync2(filePath);
   } catch {
   }
-};
-
-// src/residue/key.ts
-var KEY_PATTERN = /<!-- gaia-debt-key: (v1 class=[^ ]+ path=[^>]+ line=\d+) -->/;
-var LENIENT_KEY_PATTERN = /<!-- gaia-debt-key:[^>]*?path=([^>\n]+) line=/;
-var MAX_LINE = 1e7;
-var CONTROL_CHARACTERS = [
-  ["\0", "NUL"],
-  ["\n", "newline"],
-  ["\r", "carriage return"]
-];
-var normalizeRepoRelativePath = (raw) => {
-  if (raw === "") {
-    return { ok: false, reason: "path is empty" };
-  }
-  const control = CONTROL_CHARACTERS.find(
-    ([character]) => raw.includes(character)
-  );
-  if (control !== void 0) {
-    return {
-      ok: false,
-      reason: `path contains an embedded ${control[1]} character`
-    };
-  }
-  if (raw.startsWith("/") || raw.startsWith("\\\\") || /^[A-Z]:[\\/]/i.test(raw)) {
-    return {
-      ok: false,
-      reason: "path has an absolute prefix; a residual key cites a repo-relative path"
-    };
-  }
-  if (raw.startsWith("-")) {
-    return {
-      ok: false,
-      reason: "path has a leading dash, which reads as an option flag in argv"
-    };
-  }
-  const segments = raw.split("/").filter((segment) => segment !== "" && segment !== ".");
-  if (segments.includes("..")) {
-    return {
-      ok: false,
-      reason: "path contains a .. traversal segment"
-    };
-  }
-  const normalized = segments.join("/");
-  if (normalized === "") {
-    return { ok: false, reason: "path normalizes to empty" };
-  }
-  return { ok: true, value: normalized };
-};
-var parseKeyLine = (raw) => {
-  if (raw === "") {
-    return { ok: false, reason: "line is empty" };
-  }
-  if (raw.startsWith("+") || raw.startsWith("-")) {
-    return {
-      ok: false,
-      reason: "line carries a sign; the grammar takes a bare digit run"
-    };
-  }
-  if (!/^\d+$/.test(raw)) {
-    return {
-      ok: false,
-      reason: "line is not a bare digit run (no exponent, decimal point, separator, or whitespace)"
-    };
-  }
-  if (raw.length > 1 && raw.startsWith("0")) {
-    return { ok: false, reason: "line has a leading zero" };
-  }
-  const value = Number(raw);
-  if (value < 1) {
-    return {
-      ok: false,
-      reason: "line is below 1; the first line of a file is 1"
-    };
-  }
-  if (value > MAX_LINE) {
-    return { ok: false, reason: `line exceeds the maximum of ${MAX_LINE}` };
-  }
-  return { ok: true, value };
-};
-var KEY_FIELD_PATTERNS = {
-  gate: /^v1 class=([^ ]+) path=([^>]+) line=(\d+)$/
-};
-var parseKey = (innerKey, grammar) => {
-  const fields = KEY_FIELD_PATTERNS[grammar].exec(innerKey);
-  if (fields === null) {
-    if (!innerKey.startsWith("v1 ")) {
-      return {
-        ok: false,
-        reason: "key is missing the mandatory v1 version token"
-      };
-    }
-    return {
-      ok: false,
-      reason: "key does not match the gate grammar `v1 class=<class> path=<path> line=<line>`; a missing or malformed field is the usual cause"
-    };
-  }
-  const [, rawClass = "", rawPath = "", rawLine = ""] = fields;
-  const path83 = normalizeRepoRelativePath(rawPath);
-  if (!path83.ok) {
-    return path83;
-  }
-  const line = parseKeyLine(rawLine);
-  if (!line.ok) {
-    return line;
-  }
-  return {
-    ok: true,
-    value: { class: rawClass, line: line.value, path: path83.value, version: "v1" }
-  };
-};
-var parseWrappedKeys = (text) => {
-  const scanner = new RegExp(LENIENT_KEY_PATTERN.source, "g");
-  const found = [];
-  for (const match of text.matchAll(scanner)) {
-    const rawPath = match[1];
-    const digits = /^\d+/.exec(text.slice(match.index + match[0].length));
-    if (rawPath !== void 0 && digits !== null) {
-      const path83 = normalizeRepoRelativePath(rawPath);
-      const line = parseKeyLine(digits[0]);
-      if (path83.ok && line.ok) {
-        found.push({ line: line.value, path: path83.value });
-      }
-    }
-  }
-  return found;
-};
-var sameCoordinate = (a, b) => {
-  const left = normalizeRepoRelativePath(a.path);
-  const right = normalizeRepoRelativePath(b.path);
-  return left.ok && right.ok && left.value === right.value && a.line === b.line;
 };
 
 // src/residue/token.ts
