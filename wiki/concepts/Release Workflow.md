@@ -94,7 +94,7 @@ The classifier is in `.gaia/cli/src/release/manifest.ts`, `ADOPTER_OWNED_SENTINE
 Separate repo, separate npm package (`create-gaia`). Zero runtime deps. When an adopter runs `npx create-gaia@latest my-app`:
 
 1. Resolves the target version (flag, or latest GitHub release).
-2. Downloads the release tarball from `github.com/gaia-react/gaia/releases/download/vX.Y.Z/gaia-vX.Y.Z.tar.gz`. Releases from 2.0.0 on publish `gaia-bundle-vX.Y.Z.tar.gz` instead, so create-gaia has to switch to the new asset name before the 2.0.0 tag.
+2. Downloads the release tarball from `github.com/gaia-react/gaia/releases/download/vX.Y.Z/`: `gaia-bundle-vX.Y.Z.tar.gz` for 2.x and later, `gaia-vX.Y.Z.tar.gz` for a 1.x version.
 3. Extracts into `my-app/`.
 4. `git init` + initial commit (unless `--no-git`).
 5. `pnpm install` (after `corepack enable pnpm`), unless `--no-install`. The scaffolded project pins pnpm via `packageManager` in `package.json`; corepack provisions the matching version transparently.

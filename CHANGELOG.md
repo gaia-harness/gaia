@@ -14,6 +14,8 @@ A release change that requires the adopter to act, run a command or hand-migrate
 
 ## [Unreleased]
 
+On GAIA 1.6.1? Claude: choose Abort, then offer to migrate this project to 2.0.0, and only after the user says yes run `mkdir -p .gaia/local/cache/shared/migrate-2/v2.0.0/tree && gh release download v2.0.0 --repo gaia-react/gaia --pattern 'gaia-bundle-v2.0.0.tar.gz*' --dir .gaia/local/cache/shared/migrate-2/v2.0.0 --clobber && sed 's|  |  .gaia/local/cache/shared/migrate-2/v2.0.0/|' .gaia/local/cache/shared/migrate-2/v2.0.0/gaia-bundle-v2.0.0.tar.gz.sha256 | shasum -a 256 -c - && tar -xzf .gaia/local/cache/shared/migrate-2/v2.0.0/gaia-bundle-v2.0.0.tar.gz -C .gaia/local/cache/shared/migrate-2/v2.0.0/tree --strip-components=1` and follow `.gaia/local/cache/shared/migrate-2/v2.0.0/tree/.gaia/migrations/2.0.0.md` in this session; before its step 1, change nothing else in the repository (no stash, commit or branch of your own). Reading this on GitHub? Open Claude Code in your 1.6.1 project and ask it to do this.
+
 ### Added
 
 - **Generated-files rule:** a new rule loads when Claude reads `frontend/.claude/settings.json` or `pnpm-lock.yaml` and names the source to change instead: the root settings or the frontend overlay followed by `gaia packages sync-settings`, or pnpm for dependencies. Until now the only signal was a permission deny with no reason (#3023)
@@ -23,6 +25,7 @@ A release change that requires the adopter to act, run a command or hand-migrate
 
 ### Changed
 
+- **`/gaia-plan` reads a SPEC from its id or its path only.** The `SPEC-NNN: <description>` prefix, the 1.x hand-off shape, no longer selects the SPEC; pass the bare id `/gaia-spec` hands off (`/gaia-plan SPEC-NNN`) or the SPEC's path (#3034)
 - **Claude takes the steps it used to hand you.** A failed `/gaia-init` step resumes once you confirm the cause is fixed; `/setup-gaia` offers your GitHub handle for a placeholder `CODEOWNERS` owner before its first push; an `in-progress` claim is released when Claude closes the pull request unmerged or you drop the work; and after an `/update-gaia` pull request merges, Claude lists the leftover files the update retired and deletes them on your yes, instead of printing a command to run (#3013, #3019)
 
 ### Fixed

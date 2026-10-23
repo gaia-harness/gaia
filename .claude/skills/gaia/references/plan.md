@@ -40,13 +40,12 @@ Otherwise, ask: **"What do you want me to orchestrate?"** and wait for the respo
 
 #### 1a. Detect SPEC reference
 
-Check the description for a SPEC reference. Three forms are recognized:
+Check the description for a SPEC reference. Two forms are recognized:
 
 1. **Bare id** (the canonical form `/gaia-spec` hands off): `$ARGUMENTS`, trimmed, is exactly `SPEC-\d+` and nothing else.
 2. **Path form**: a path matching `.notebook/specs/SPEC-\d+/SPEC\.md` appears anywhere in the description.
-3. **Prefix form** (the older, verbose handoff shape, still accepted for pasted history): a `SPEC-\d+:` prefix at the start of the description.
 
-If any form matched, extract the `SPEC-\d+` id from wherever it appeared (the bare token, the path segment, or the text before the colon), then resolve it against the actual filesystem, self-healing a zero-padding mismatch (an unpadded id also resolves to its three-digit zero-padded folder):
+If either form matched, extract the `SPEC-\d+` id from wherever it appeared (the bare token or the path segment), then resolve it against the actual filesystem, self-healing a zero-padding mismatch (an unpadded id also resolves to its three-digit zero-padded folder):
 
 ```bash
 # SPEC folders are main-anchored state (stored in the main checkout: the
