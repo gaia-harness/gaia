@@ -21,7 +21,7 @@ Everything lives under `.gaia/local/telemetry/` of the main checkout, resolved t
 | --- | --- |
 | `usage.jsonl` | `segment`, `binding` (start, close, research, declare), `cursor`, and `activity` rows. Segment and cursor rows carry the optional `act` field (activity facts); readers honor `activity` rows, and no writer ships. |
 | `links.jsonl` | `edge`, `unlink`, and `merge` rows |
-| `usage-cursors.json` | A regenerable cache of the latest cursor per transcript file. Only the flusher writes it. |
+| `usage-cursors.json` | A regenerable cache of the latest cursor per transcript file. Only the flusher writes it, once per run. It is a hint for which files have nothing to parse; offsets and high-water marks come from the session's own cursor rows. |
 | `token-rates.override.json` | The optional, hand-written price override; see [[Token Cost Readout]]. GAIA never writes it. |
 | `usage-branch-memo.json` | A regenerable cache of branch-name derivations, the segment model list, and per-store read offsets. The readouts write it without the ledger lock (temp file then rename). Deleting it only costs the next readout time; it never holds an attribution decision. |
 
@@ -73,7 +73,7 @@ A segment is covered when it carries `act`, or when an `activity` row of the sam
 
 `.claude/hooks/usage-capture.sh` runs on `Stop` and on `SessionStart` (`startup|resume`). It does a cheap gate, launches the flusher detached, and returns; it reads no transcript itself. A Stop flushes that session; a SessionStart runs a bounded sweep over every candidate transcript whose size has grown past its cursor, which also backfills transcripts from before the hooks existed.
 
-The flusher parses outside the ledger lock, then takes the lock for a short commit that re-checks the cursor before appending (compare-and-swap), so two flushers racing over one file count each message once. A close binding that lands after the flusher prepared is a conflict too: the flusher re-prepares, so no committed segment straddles a close. On a lock timeout it appends nothing and leaves the file due for the next run; there is no unlocked fallback. The trailing, possibly still-growing group of a live transcript is held back until it is quiet, and a finished session is flushed whole.
+The flusher reads the session's ledger rows once per run and extends them with a tail read from a recorded line boundary, leaving a half-written row for the next read, so its cost does not grow with other sessions' rows. It parses outside the ledger lock, then takes the lock for a short commit that re-checks the cursor before appending (compare-and-swap), so two flushers racing over one file count each message once. A close binding that lands after the flusher prepared is a conflict too: the flusher re-prepares, so no committed segment straddles a close. On a lock timeout it appends nothing and leaves the file due for the next run; there is no unlocked fallback. The trailing, possibly still-growing group of a live transcript is held back until it is quiet, and a finished session is flushed whole.
 
 The merge hook and `usage.sh record` each add a capped synchronous flush of their own session (see Recording a run and Readouts). Nothing runs without `jq`.
 

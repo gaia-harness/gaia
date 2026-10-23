@@ -11,7 +11,7 @@ status: developing
 
 ## #11: Wiki drift check
 
-✓ Wiki in sync with HEAD (78fbf74).
+✓ Wiki in sync with HEAD (a6c4d28).
 
 ## #12: Dead repo-relative paths
 
