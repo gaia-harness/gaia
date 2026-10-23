@@ -288,7 +288,17 @@ Runs after any arm above when the merged branch is a `/update-gaia` branch (its 
 bash <main checkout path>/.gaia/scripts/state-registry-lib.sh residue-sweep
 ```
 
-Show its output. When its Residue section lists paths, ask once with `AskUserQuestion` (question `Delete the leftover files listed above?`, header `Leftovers`, options `Delete them` (Recommended) and `Keep them`), and on `Delete them` run the same command with `--apply`. Unknown paths are listed, never deleted. A non-zero exit names its cause on stderr: relay it and finish cleanup. When the pull was skipped or failed, run nothing and add `ask Claude to run the leftover-file cleanup once the main checkout is pulled` to the printed next steps. The sub-agent continuation prompt has no one to ask, so on an update branch it appends the listing command above with the note `review the list, then re-run it with --apply to delete the leftover files`.
+Show its output. When its Residue section lists paths, ask once with `AskUserQuestion` (question `Delete the leftover files listed above?`, header `Leftovers`, options `Delete them` (Recommended) and `Keep them`), and on `Delete them` run the same command with `--apply`. Unknown paths are listed, never deleted. A non-zero exit names its cause on stderr: relay it and go on to the setup features below.
+
+Then carry the machine-scope setup features `/update-gaia` Step 9c deferred, with the working directory at the main checkout so the call uses the pulled `.gaia/cli/gaia` and setup list:
+
+```bash
+bash <main checkout path>/.gaia/scripts/update-gaia-drift.sh --features <main checkout path>/.gaia/setup-features.json --scope machine
+```
+
+Take its `APPLY` and `ASK` tokens by the token rules in `.claude/skills/update-gaia/SKILL.md` (`## Step 9c: Carry new setup features`), reading each reference from the main checkout: this is the main checkout that rule waits for, so each feature detects, catches up and records it only after it ran here. A reference step that runs this leftover-file cleanup is already done above: skip it. Name each `SETUP` id as "run /setup-gaia"; on `DRIFT_FAILED <reason>`, relay the reason and finish cleanup.
+
+When the pull was skipped or failed, run nothing and add `ask Claude to run the leftover-file cleanup once the main checkout is pulled` to the printed next steps. The sub-agent continuation prompt has no one to ask, so on an update branch it appends the listing command above with the note `review the list, then re-run it with --apply to delete the leftover files`, and the line `run /setup-gaia from the main checkout to carry the machine-scope setup features this update deferred`.
 
 ## Releasing the claim on an unmerged ending
 
