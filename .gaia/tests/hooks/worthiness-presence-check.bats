@@ -380,13 +380,24 @@ test("oops" => { syntax(((;'
   [[ "$output" == *"Worthiness presence gate"* ]]
 }
 
-@test "deny reason includes the unblock steps and the ledger-writer invocation" {
+@test "deny reason names the evaluator as the one unblock path" {
   commit_file "frontend/app/components/Foo/tests/index.test.tsx" "$EMERGENT_TEST"
   run_merge_hook
   [ "$status" -eq 0 ]
   grep -qF -- "To unblock:" <<<"$output"
-  grep -qF -- "node .gaia/scripts/audit-ledger/append-worthiness.mjs" <<<"$output"
+  grep -qF -- "worthiness evaluator" <<<"$output"
   denied
+}
+
+# The refusal reaches Claude, so naming the ledger writer in it offers a way to
+# record a verdict without the review the gate exists to require.
+@test "deny reason never offers a direct ledger write" {
+  commit_file "frontend/app/components/Foo/tests/index.test.tsx" "$EMERGENT_TEST"
+  run_merge_hook
+  [ "$status" -eq 0 ]
+  denied
+  grep -qF -- "append-worthiness" <<<"$output" && return 1
+  true
 }
 
 # --- comment-only edit vs. an assertion absorbed into a comment (UAT-005, UAT-014, UAT-008) ---
