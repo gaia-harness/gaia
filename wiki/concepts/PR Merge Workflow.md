@@ -306,7 +306,7 @@ It prints one verdict token on stdout and exits on it: `MERGED` (0), `CONFLICTIN
 
 **Exit 2 is a refusal rather than a verdict, and a caller must not read it as "still pending".** It covers a usage error, a `gh` that is not on PATH, and a `gh` that is present but never answered across the whole bound: expired auth, a rate limit, a network outage, or a pull-request number that does not exist. That last case is the one worth naming, because a `gh` that cannot answer returns the same blank state a live pending merge does; without the distinction the wait would report `TIMEOUT` and assert the pull request is still open, having established neither that pull request nor any state of it. A refusal prints no verdict token at all, so nothing on stdout reads as an answer. One transient failure still keeps waiting; the refusal needs every read in the bound to have failed.
 
-The script issues no `gh pr merge` of its own, which is what lets the same invocation serve a caller that queued its merge with `--squash`, one that queued it with `--merge --auto`, and one resuming the wait after a conflict repair, where re-merging would be wrong.
+The script issues no `gh pr merge` of its own, which is what lets the same invocation serve a caller that queued its merge with `--squash`, one that queued it with `--squash --auto`, and one resuming the wait after a conflict repair, where re-merging would be wrong.
 
 That wait is the whole verification. A local error printed by `gh pr merge` after the state reads `MERGED` does not revise the answer; see [[#Local-sync failure mode]] below.
 

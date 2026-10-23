@@ -61,7 +61,7 @@
 #
 # NO `gh pr merge` OF ITS OWN, deliberately. The merge and the wait are
 # separate acts with separate callers: one queues its merge with
-# `--merge --auto` and `/gaia-debt` with `--squash`, and a caller resuming a
+# `--squash --auto` and `/gaia-debt` with `--squash`, and a caller resuming a
 # wait after a conflict repair must not re-merge at all. Folding a merge in
 # here would make the wait unusable for the third case and would hide which
 # spelling the second ran.
