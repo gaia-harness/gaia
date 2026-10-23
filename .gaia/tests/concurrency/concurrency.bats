@@ -842,7 +842,7 @@ test("adds two numbers c407", () => {
   grep -qxF -- "/gaia-release must run from the main checkout, not a worktree." <<<"$output"
   grep -qxF -- "Worktree:       $WORKTREE_B" <<<"$output"
   grep -qxF -- "Main checkout:  $MAIN" <<<"$output"
-  grep -qxF -- "Run \`cd $MAIN\` then re-invoke /gaia-release." <<<"$output"
+  grep -qxF -- "This session cannot move into it: ask the user to start Claude Code in $MAIN and run /gaia-release there." <<<"$output"
 
   # Target, part 2 -- a main-only entry point actually CALLS it, so part 1's
   # refusal is reachable rather than orphaned. Anchored to the start of a line:

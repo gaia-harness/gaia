@@ -24,6 +24,7 @@ bash "$(dirname "$0")/../.gaia/scripts/machine-local-ref-lib.sh" check staged "$
 
 PLAN=$(bash "$ROOT/.gaia/scripts/precommit-packages.sh" "$ROOT") || {
   printf "\x1b[31m✖ Pre-commit could not read the package registry\x1b[0m\n"
+  printf "The reason and its next step are printed above. The registry is .gaia/packages.json plus the gaia.package.json descriptor each entry names; fix the one the reason names, then retry the commit. To print the reason again: bash .gaia/scripts/precommit-packages.sh %s\n" "$ROOT"
   exit 1
 }
 
