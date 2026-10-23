@@ -34,7 +34,7 @@ The manifest assigns each shipped file exactly one class. Anything **not** in th
 
 **Drift handling is identical across all three classes**: a drifted file the release also changed is three-way merged, and any part the merge cannot settle becomes a question asked during the run. The class decides two other things: which summary bucket a clean overwrite reports under (`owned` → overwritten, `shared` / `wiki-owned` → merged), and what happens when the release newly owns a path the adopter already has, where `owned` backs the file up and overwrites it while the other two fall through to the ordinary rows.
 
-Sentinel paths (always adopter-owned regardless of what GAIA ships): `wiki/log.md`, `CHANGELOG.md`, `.gaia/VERSION`, `.gaia/manifest.json`, `.gaia/packages.json`.
+Sentinel paths (always adopter-owned regardless of what GAIA ships): `wiki/log.md`, `CHANGELOG.md`, `.gaia/VERSION`, `.gaia/manifest.json`, `.gaia/packages.json`, `.gaia/finding-classes.json`.
 
 A package's generated `<path>/.claude/settings.json` (`frontend/.claude/settings.json`) ships in the tarball but has no manifest class: it is regenerated from the root settings and the package's `settings.overlay.json` after the merge, never three-way merged. The overlay, `frontend/gaia.package.json`, `frontend/package.json`, and `frontend/CLAUDE.md` are `shared`.
 

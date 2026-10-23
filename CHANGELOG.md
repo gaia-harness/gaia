@@ -14,6 +14,14 @@ A release change that requires the adopter to act, run a command or hand-migrate
 
 ## [Unreleased]
 
+### Added
+
+- **Your own audit finding classes:** register the finding classes and tool prefixes your own Code Audit Team members report in `.gaia/finding-classes.json`, and `/gaia-codify` counts their recurrence like GAIA's built-in classes and `file-tech-debt` files them instead of diverting them as malformed. A finding whose class is in no vocabulary now counts toward the unclassified signal instead of disappearing from the tally. The file ships empty and `/update-gaia` never overwrites it (#3012)
+
+### Fixed
+
+- **Registering an audit member on your own project:** `bash .gaia/scripts/verify-audit-roster.sh` now passes on a fresh project instead of reporting GAIA's own files as ownerless, and it checks the member name prefix and machinery registration itself. The pre-commit hook runs it whenever a commit stages the roster or a member definition, and a member named `code-audit-<name>` needs no edit to GAIA's machinery list. The registration page now walks an adopter through the whole flow, starting from a copy of the workflows member (#3010, #3011)
+
 ## [2.0.1] - 2026-10-23
 
 On GAIA 1.6.1? Claude: choose Abort, then offer to migrate this project to 2.0.0, and only after the user says yes run `mkdir -p .gaia/local/cache/shared/migrate-2/v2.0.0/tree && gh release download v2.0.0 --repo gaia-react/gaia --pattern 'gaia-bundle-v2.0.0.tar.gz*' --dir .gaia/local/cache/shared/migrate-2/v2.0.0 --clobber && sed 's|  |  .gaia/local/cache/shared/migrate-2/v2.0.0/|' .gaia/local/cache/shared/migrate-2/v2.0.0/gaia-bundle-v2.0.0.tar.gz.sha256 | shasum -a 256 -c - && tar -xzf .gaia/local/cache/shared/migrate-2/v2.0.0/gaia-bundle-v2.0.0.tar.gz -C .gaia/local/cache/shared/migrate-2/v2.0.0/tree --strip-components=1` and follow `.gaia/local/cache/shared/migrate-2/v2.0.0/tree/.gaia/migrations/2.0.0.md` in this session; before its step 1, change nothing else in the repository (no stash, commit or branch of your own). Reading this on GitHub? Open Claude Code in your 1.6.1 project and ask it to do this.

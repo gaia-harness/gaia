@@ -23894,6 +23894,9 @@ var scanRegionDeclarations = (repoRoot, shippedFiles, registry2 = REGION_REGISTR
 
 // src/release/manifest.ts
 var ADOPTER_OWNED_SENTINELS = /* @__PURE__ */ new Set([
+  // The project finding-class vocabulary ships empty and is the adopter's to
+  // fill, so /update-gaia must never merge or overwrite it.
+  ".gaia/finding-classes.json",
   ".gaia/manifest.json",
   // The package registry is adopter-owned from first install: an adopter adds
   // a package by editing it, so /update-gaia must never merge or overwrite it.

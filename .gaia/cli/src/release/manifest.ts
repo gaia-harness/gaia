@@ -32,6 +32,9 @@ import type {RegionDeclaration} from './region-scan.js';
 // so they can't appear here). Keeping one shared base prevents the two
 // allowlists silently drifting apart.
 export const ADOPTER_OWNED_SENTINELS: ReadonlySet<string> = new Set([
+  // The project finding-class vocabulary ships empty and is the adopter's to
+  // fill, so /update-gaia must never merge or overwrite it.
+  '.gaia/finding-classes.json',
   '.gaia/manifest.json',
   // The package registry is adopter-owned from first install: an adopter adds
   // a package by editing it, so /update-gaia must never merge or overwrite it.
