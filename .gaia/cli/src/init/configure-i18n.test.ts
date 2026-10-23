@@ -1,5 +1,6 @@
 import {afterEach, beforeEach, describe, expect, test, vi} from 'vitest';
 import {
+  existsSync,
   mkdirSync,
   mkdtempSync,
   readFileSync,
@@ -39,10 +40,25 @@ const i18n = {
 export default i18n;
 `;
 
+const writeLanguageTree = (root: string, code: string): void => {
+  const tree = path.join(root, 'app', 'languages', code);
+  mkdirSync(tree, {recursive: true});
+  writeFileSync(path.join(tree, 'index.ts'), 'export default {};\n', 'utf8');
+};
+
+const readLanguagesIndex = (root: string): string =>
+  readFileSync(path.join(root, 'app', 'languages', 'index.ts'), 'utf8');
+
+// The locale codes languages/index.ts imports whose tree is missing on disk.
+const importsWithoutTree = (root: string): string[] =>
+  [...readLanguagesIndex(root).matchAll(/^import \w+ from '\.\/([\w-]+)';$/gmu)]
+    .map((match) => match[1] ?? '')
+    .filter((code) => !existsSync(path.join(root, 'app', 'languages', code)));
+
 const setupSandbox = (): Sandbox => {
   const root = mkdtempSync(path.join(tmpdir(), 'gaia-init-configure-i18n-'));
   writeFrontendRegistry(root);
-  mkdirSync(path.join(root, 'app', 'languages'), {recursive: true});
+  writeLanguageTree(root, 'en');
   writeFileSync(
     path.join(root, 'app', 'languages', 'index.ts'),
     LANGUAGES_INDEX_TEMPLATE,
@@ -104,39 +120,79 @@ describe('init configure-i18n', () => {
     vi.restoreAllMocks();
   });
 
-  test('--strip false expands LANGUAGES + Language union, updates fallback', () => {
-    sandbox = setupSandbox();
+  test.each([
+    ['the default locale only', 'en'],
+    ['one added locale', 'en,es'],
+    ['two added locales', 'en,es,ja'],
+  ])(
+    '--strip false with %s imports only language trees that exist',
+    (_label, locales) => {
+      sandbox = setupSandbox();
 
-    const exit = run(['--locales', 'en,es,ja', '--strip', 'false'], {
+      const exit = run(['--locales', locales, '--strip', 'false'], {
+        cwd: sandbox.root,
+      });
+      expect(exit).toBe(0);
+
+      expect(importsWithoutTree(sandbox.root)).toEqual([]);
+      expect(readLanguagesIndex(sandbox.root)).toContain(
+        "export const LANGUAGES = ['en'];"
+      );
+
+      const state = readState(sandbox.root);
+      expect(state.completed_steps).toContain('configure-i18n');
+      expect(state.step_args['configure-i18n']).toEqual({
+        locales: locales.split(','),
+        strip: false,
+      });
+    }
+  );
+
+  test('a primary locale with no tree yet keeps the index valid and sets the fallback', () => {
+    sandbox = setupSandbox();
+    const before = readLanguagesIndex(sandbox.root);
+
+    const exit = run(['--locales', 'fr', '--strip', 'false'], {
       cwd: sandbox.root,
     });
     expect(exit).toBe(0);
 
-    const indexAfter = readFileSync(
+    expect(readLanguagesIndex(sandbox.root)).toBe(before);
+    expect(
+      readFileSync(path.join(sandbox.root, 'app', 'i18n.ts'), 'utf8')
+    ).toContain("fallbackLng: 'fr'");
+  });
+
+  test('drops a registered locale that was not picked once a picked one is registered', () => {
+    sandbox = setupSandbox();
+    writeLanguageTree(sandbox.root, 'fr');
+    writeFileSync(
       path.join(sandbox.root, 'app', 'languages', 'index.ts'),
+      `import en from './en';
+import fr from './fr';
+
+export const LANGUAGES = ['en', 'fr'];
+
+export type Language = 'en' | 'fr';
+
+export default {en, fr} as const;
+`,
       'utf8'
     );
-    expect(indexAfter).toContain("import en from './en';");
-    expect(indexAfter).toContain("import es from './es';");
-    expect(indexAfter).toContain("import ja from './ja';");
-    expect(indexAfter).toContain(
-      "export const LANGUAGES = ['en', 'es', 'ja'];"
-    );
-    expect(indexAfter).toContain("export type Language = 'en' | 'es' | 'ja';");
-    expect(indexAfter).toContain('export default {en, es, ja}');
 
-    const i18nAfter = readFileSync(
-      path.join(sandbox.root, 'app', 'i18n.ts'),
-      'utf8'
-    );
-    expect(i18nAfter).toContain("fallbackLng: 'en'");
-
-    const state = readState(sandbox.root);
-    expect(state.completed_steps).toContain('configure-i18n');
-    expect(state.step_args['configure-i18n']).toEqual({
-      locales: ['en', 'es', 'ja'],
-      strip: false,
+    const exit = run(['--locales', 'fr', '--strip', 'false'], {
+      cwd: sandbox.root,
     });
+    expect(exit).toBe(0);
+
+    expect(readLanguagesIndex(sandbox.root)).toBe(`import fr from './fr';
+
+export const LANGUAGES = ['fr'];
+
+export type Language = 'fr';
+
+export default {fr} as const;
+`);
   });
 
   test('--strip true skips edits but records state', () => {

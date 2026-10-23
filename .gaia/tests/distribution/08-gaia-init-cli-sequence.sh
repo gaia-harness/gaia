@@ -26,9 +26,9 @@
 #                   the tree up for the remaining steps. Same surface as
 #                   07; no new assertions added here.
 #
-#   configure-i18n  frontend/app/languages/index.ts contains both 'en' and 'es'
-#                   imports + a LANGUAGES list with both codes;
-#                   frontend/app/i18n.ts has fallbackLng: 'en'.
+#   configure-i18n  frontend/app/languages/index.ts keeps the 'en' import
+#                   and does not import 'es', whose language tree add-locale
+#                   creates later; frontend/app/i18n.ts has fallbackLng: 'en'.
 #
 #   configure-data-layer
 #                   Prints one JSON line on stdout (the one step exempt from
@@ -190,19 +190,17 @@ run_step_json() {
 run_step "strip-branding" \
   init strip-branding --title "$TITLE"
 
-# Step 2; configure-i18n. --strip false keeps the i18n surface and
-# rewrites the locale list; --strip true would delete the surface
-# entirely (covered by a separate scenario in a follow-up PR).
+# Step 2; configure-i18n. --strip false keeps the i18n surface and drops
+# unpicked locales without registering any; --strip true would delete the
+# surface entirely (covered by a separate scenario in a follow-up PR).
 run_step "configure-i18n" \
   init configure-i18n --locales "en,es" --strip false
 
 LANGUAGES_INDEX="$SCAFFOLD/frontend/app/languages/index.ts"
 grep -q "^import en from './en';" "$LANGUAGES_INDEX" \
-  || { fail "configure-i18n did not write 'en' import to frontend/app/languages/index.ts"; exit 1; }
+  || { fail "configure-i18n dropped the 'en' import from frontend/app/languages/index.ts"; exit 1; }
 grep -q "^import es from './es';" "$LANGUAGES_INDEX" \
-  || { fail "configure-i18n did not write 'es' import to frontend/app/languages/index.ts"; exit 1; }
-grep -q "LANGUAGES = \['en', 'es'\]" "$LANGUAGES_INDEX" \
-  || { fail "configure-i18n did not set LANGUAGES = ['en', 'es']"; exit 1; }
+  && { fail "configure-i18n imported 'es' before its language tree exists"; exit 1; }
 grep -q "fallbackLng: 'en'" "$SCAFFOLD/frontend/app/i18n.ts" \
   || { fail "configure-i18n did not set fallbackLng: 'en' in frontend/app/i18n.ts"; exit 1; }
 

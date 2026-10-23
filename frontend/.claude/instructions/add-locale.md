@@ -14,7 +14,7 @@ Contents: When this runs; Variable substitution; Step 1, Mirror the English lang
 `/gaia-init` runs it for each language picked at setup, and a request to add a language later ("add French") runs it the same way. The file stays in place after a run, so it serves every later language too.
 
 - **i18n removed.** When `frontend/app/languages/` does not exist, the project removed i18n: stop and say that adding a language first needs the i18n scaffolding rebuilt.
-- **Several locales in one run.** Run Steps 1 to 7 for every locale first, each with its own substitution, then Step 8 once and Step 9 once per locale. A per-locale verify fails while a later locale is registered but its language tree does not exist yet.
+- **Several locales in one run.** Run Steps 1 to 7 for every locale first, each with its own substitution, then Step 8 once and Step 9 once per locale. Each locale is registered only once its own tree exists, so a verify would pass after any locale; one verify after the last spares a typecheck and lint run per extra locale.
 
 ## Variable substitution
 
@@ -51,7 +51,7 @@ Translation rules:
 
 ## Step 2, Register the locale
 
-Edit `frontend/app/languages/index.ts`. `/gaia-init`'s `configure-i18n` already registers every locale picked at setup, so skip any of the four entries below that is already present:
+Edit `frontend/app/languages/index.ts`. This step is the one place a locale is registered: `/gaia-init`'s `configure-i18n` registers none, so the index never imports a language tree that does not exist yet. Skip any of the four entries below that is already present, so a re-run changes nothing:
 
 1. Add `import {{LOCALE_CODE}} from './{{LOCALE_CODE}}';` in alphabetical order among existing locale imports.
 2. Append `'{{LOCALE_CODE}}'` to the `LANGUAGES` array, keeping the array alphabetically sorted.
