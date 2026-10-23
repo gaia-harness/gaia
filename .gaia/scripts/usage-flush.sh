@@ -170,12 +170,14 @@ _uf_cache_ledger_bytes() {
 }
 
 # The session's ledger rows, kept in UF_WORK/session_rows through byte
-# UF_SESSION_ROWS_BYTES (a line boundary). The whole ledger is read once per
-# session per run; after that only the bytes appended since are read, which
-# sees every row a full scan would because the ledger is only ever appended
-# to. Scanning the whole ledger per file would make a flush's cost grow with
-# every other session's rows. A ledger shorter than the recorded offset was replaced, so it is read
-# again from the start.
+# UF_SESSION_ROWS_BYTES (a line boundary). The whole ledger is read whenever
+# the session changes from the previous file's: once per run for a session
+# flush, and once per change of session for a sweep, whose files interleave
+# sessions. Between changes only the bytes appended since are read, which sees
+# every row a full scan would because the ledger is only ever appended to.
+# Scanning the whole ledger per file would make a session flush's cost grow
+# with every other session's rows. A ledger shorter than the recorded offset
+# was replaced, so it is read again from the start.
 UF_SESSION_ROWS_ID="" UF_SESSION_ROWS_BYTES=0
 _uf_refresh_session_rows() {
   local session_id="$1" size complete
