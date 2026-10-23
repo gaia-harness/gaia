@@ -22,7 +22,7 @@ GAIA is a foundation: a project's `.claude/` mixes files GAIA ships, files the p
 
 ## Grading
 
-The grade is a pure function of the finding set. The CLI owns the bands and the overall rule, and the report's `categories`, `overall` and `findings` keys carry the result. Optional `.claude/gaia-fitness.json` suppresses a finding by rule id and path with a stated reason. This page restates neither the bands nor the rules.
+The grade is a pure function of the finding set. The CLI owns the bands and the overall rule, and the report's `categories`, `overall` and `findings` keys carry the result. Optional `.claude/gaia-fitness.json` suppresses a finding by rule id and path with a stated reason; [[Customizing GAIA#Silencing a fitness finding]] shows its shape. This page restates neither the bands nor the rules.
 
 ## Heal protocol
 

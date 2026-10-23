@@ -173,6 +173,8 @@ Nothing catches that omission, which is why it is called out. No test couples th
 
 This section is where a project documents the labels it adds for itself. The generator never rewrites it.
 
+Create a project label on GitHub with `gh label create`, and add a row below. Do not add it to `.gaia/labels.json`: that registry is GAIA's (`owned`), so `/update-gaia` merges against it, and `labels sync` already leaves a label it does not recognize in place.
+
 A project label that falls into one of the GAIA axes above can take that family's color, so the palette stays readable across both sets. `gaia labels sync` reports a label it does not recognize and suggests the family color when the name carries a known namespace prefix, but it never recolors one without `--adopt-palette`.
 
 | Label | Color | Description |

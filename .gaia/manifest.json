@@ -643,6 +643,7 @@
     "wiki/concepts/Code Review Audit Agent.md": "wiki-owned",
     "wiki/concepts/Coding Guidelines.md": "wiki-owned",
     "wiki/concepts/Component Testing.md": "wiki-owned",
+    "wiki/concepts/Customizing GAIA.md": "wiki-owned",
     "wiki/concepts/Data Loading.md": "wiki-owned",
     "wiki/concepts/Design System.md": "wiki-owned",
     "wiki/concepts/ESLint Fixes.md": "wiki-owned",
@@ -751,7 +752,7 @@
     "wiki/overview.md": "wiki-owned",
     "wiki/README.md": "wiki-owned"
   },
-  "generated": "2026-10-23T09:24:47.144Z",
+  "generated": "2026-10-23T11:38:47.436Z",
   "regions": [
     {
       "endMarker": "<!-- gaia:audit-remit:end -->",
