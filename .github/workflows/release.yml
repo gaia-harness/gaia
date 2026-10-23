@@ -94,9 +94,10 @@ jobs:
         uses: ./.github/actions/gaia-setup-node
         with:
           install: cli
-          # No package lifecycle script runs in this job. The CLI bundle and the
-          # distribution gate need none: esbuild's CLI shim resolves its
-          # platform binary without its postinstall.
+          # This CLI install step runs no package lifecycle script. The CLI
+          # bundle needs none: esbuild's CLI shim resolves its platform binary
+          # without its postinstall. The distribution gate step below runs its
+          # own scenario installs with the allowBuilds build scripts enabled.
           ignore-scripts: 'true'
 
       # Tag-push half of the bundle-freshness gate; cli-tests.yml runs the same
