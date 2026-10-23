@@ -1,5 +1,5 @@
 {
-  "$comment": "Project finding classes for the Code Audit Team tally, added to the built-in vocabulary in .gaia/cli/src/schemas/finding-class.ts. classes: closed <prefix>/<slug> kebab-case ids your members may assign. oracle_prefixes: kebab-case prefixes of your own deterministic tools, whose ids are accepted verbatim after the prefix. A class outside both counts as holistic/unclassified.",
+  "$comment": "Project finding classes for the Code Audit Team tally, added to GAIA's built-in vocabulary. classes: closed <prefix>/<slug> kebab-case ids your members may assign. oracle_prefixes: kebab-case prefixes of your own deterministic tools, whose ids are accepted verbatim after the prefix. A class outside both counts as holistic/unclassified.",
   "classes": [],
   "oracle_prefixes": []
 }
