@@ -14,6 +14,8 @@ A release change that requires the adopter to act, run a command or hand-migrate
 
 ## [Unreleased]
 
+## [2.0.0] - 2026-10-23
+
 ### Breaking
 
 On GAIA 1.6.1? Claude: choose Abort, then offer to migrate this project to 2.0.0, and only after the user says yes run `mkdir -p .gaia/local/cache/shared/migrate-2/v2.0.0/tree && gh release download v2.0.0 --repo gaia-react/gaia --pattern 'gaia-bundle-v2.0.0.tar.gz*' --dir .gaia/local/cache/shared/migrate-2/v2.0.0 --clobber && sed 's|  |  .gaia/local/cache/shared/migrate-2/v2.0.0/|' .gaia/local/cache/shared/migrate-2/v2.0.0/gaia-bundle-v2.0.0.tar.gz.sha256 | shasum -a 256 -c - && tar -xzf .gaia/local/cache/shared/migrate-2/v2.0.0/gaia-bundle-v2.0.0.tar.gz -C .gaia/local/cache/shared/migrate-2/v2.0.0/tree --strip-components=1` and follow `.gaia/local/cache/shared/migrate-2/v2.0.0/tree/.gaia/migrations/2.0.0.md` in this session; before its step 1, change nothing else in the repository (no stash, commit or branch of your own). Reading this on GitHub? Open Claude Code in your 1.6.1 project and ask it to do this.
@@ -249,6 +251,8 @@ A 1.6.1 project moves to 2.0.0 through the migration note bundled in the v2.0.0 
 - **`/update-deps` nudge after merge:** the statusline no longer keeps showing `/update-deps (N outdated)` for hours after an update merged. Another command refreshing the statusline cache before the merge could restore the old count; `/update-deps` now clears it again once the merge lands (#2989)
 - **Rules that loaded on unrelated edits:** the wiki style rule no longer loads when you edit app code, hooks or spec scripts, the ports rule no longer loads on every app edit, and the design baseline rule no longer loads on route-only edits, saving up to about 3,700 tokens of context per edit. The no-history-in-comments guidance still reaches code through the code comments rule, and the never-stop-another-tree's-server warning still prints whenever a dev or Storybook port is taken (#2991)
 - **shadcn registry out of the box:** every component in the shadcn registry now lints clean as `pnpm shadcn add` writes it, so adding one such as `pagination` no longer fails `pnpm lint` on a file you are told never to edit. `@gaia-react/lint` 3.0.2 builds its vendored-file exemptions from the whole registry. The `chart` component now installs: `trustPolicy: no-downgrade` stays on, with a single exact-version exception for the `reselect` release its `recharts` pins. The components that ship a code highlighter now import it from the folder they write it to (#2951, #2957, #2958)
+- **Dev server browser launch:** `pnpm dev` opens a browser tab only in an interactive terminal, so a Claude-driven, CI or worktree dev server no longer pops a window (#2399)
+- **Removing i18n:** the remove-i18n runbook also strips the i18n tooling config it used to leave behind, so a project without i18n lints and builds clean (#2732)
 
 ### Security
 
@@ -669,7 +673,8 @@ GAIA v1.0.0 is the inaugural public release of the GAIA React workflow, a Claude
 - **Quality gate.** Mandatory pre-commit pipeline: simplify, localization check, typecheck, lint, unit tests, E2E tests, dev smoke test, build. Zero warnings tolerated.
 - **Release tooling.** Tag-triggered `release.yml` builds a scrubbed tarball; `create-gaia` bootstrapper consumes it via `npx create-gaia@latest my-app`.
 
-[Unreleased]: https://github.com/gaia-react/gaia/compare/v1.6.1...HEAD
+[Unreleased]: https://github.com/gaia-react/gaia/compare/v2.0.0...HEAD
+[2.0.0]: https://github.com/gaia-react/gaia/releases/tag/v2.0.0
 [1.6.1]: https://github.com/gaia-react/gaia/releases/tag/v1.6.1
 [1.6.0]: https://github.com/gaia-react/gaia/releases/tag/v1.6.0
 [1.5.0]: https://github.com/gaia-react/gaia/releases/tag/v1.5.0
