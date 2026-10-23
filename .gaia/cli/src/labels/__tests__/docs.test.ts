@@ -1,11 +1,19 @@
 import {afterEach, describe, expect, test, vi} from 'vitest';
-import {readFileSync} from 'node:fs';
+import {
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs';
+import {tmpdir} from 'node:os';
 import path from 'node:path';
 import type {LabelRegistry} from '../../schemas/labels.js';
 import {resolveRepoRootFromImportMeta} from '../../util/repo-root-fixture.js';
 import {
   GENERATED_END_MARKER,
   GENERATED_START_MARKER,
+  PAGE_RELATIVE_PATH,
   renderGeneratedSpan,
   run,
   spliceGeneratedSpan,
@@ -277,22 +285,88 @@ describe('labels/docs spliceGeneratedSpan', () => {
   });
 });
 
-describe('labels/docs run', () => {
-  afterEach(() => {
-    vi.restoreAllMocks();
+const captureStream = (stream: NodeJS.WriteStream): string[] => {
+  const chunks: string[] = [];
+
+  vi.spyOn(stream, 'write').mockImplementation((chunk: unknown) => {
+    chunks.push(String(chunk));
+
+    return true;
   });
 
-  test('--check is refused as an unknown argument', () => {
-    const errors: string[] = [];
+  return chunks;
+};
 
-    vi.spyOn(process.stderr, 'write').mockImplementation((chunk: unknown) => {
-      errors.push(String(chunk));
+describe('labels/docs run --check', () => {
+  const scratchRoots: string[] = [];
 
-      return true;
-    });
+  /** A scratch tree holding the live registry and a page built from `span`. */
+  const scratchTree = (span: string): {pagePath: string; root: string} => {
+    const root = mkdtempSync(path.join(tmpdir(), 'gaia-labels-docs-'));
+    const pagePath = path.join(root, PAGE_RELATIVE_PATH);
 
-    expect(run(['--repo-root', repoRoot, '--check'])).toBe(2);
+    scratchRoots.push(root);
+    mkdirSync(path.join(root, '.gaia'), {recursive: true});
+    mkdirSync(path.dirname(pagePath), {recursive: true});
+    writeFileSync(
+      path.join(root, '.gaia', 'labels.json'),
+      readFileSync(path.join(repoRoot, '.gaia', 'labels.json'), 'utf8')
+    );
+    writeFileSync(pagePath, buildPage(span));
+
+    return {pagePath, root};
+  };
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+
+    for (const root of scratchRoots.splice(0)) {
+      rmSync(root, {force: true, recursive: true});
+    }
+  });
+
+  test('the committed page is current', () => {
+    captureStream(process.stdout);
+
+    expect(run(['--check', '--repo-root', repoRoot])).toBe(0);
+  });
+
+  test('a current page exits 0 and is left byte-identical', () => {
+    const {pagePath, root} = scratchTree(renderGeneratedSpan(registry));
+    const before = readFileSync(pagePath, 'utf8');
+    const output = captureStream(process.stdout);
+
+    expect(run(['--check', '--repo-root', root])).toBe(0);
+    expect(output.join('')).toContain('current');
+    expect(readFileSync(pagePath, 'utf8')).toBe(before);
+  });
+
+  test('a stale span exits 1, names the regenerate command, and writes nothing', () => {
+    const {pagePath, root} = scratchTree('\nstale body\n');
+    const before = readFileSync(pagePath, 'utf8');
+    const errors = captureStream(process.stderr);
+
+    expect(run(['--repo-root', root, '--check'])).toBe(1);
+    expect(errors.join('')).toContain('labels_docs_drift');
+    expect(errors.join('')).toContain('gaia-maintainer labels docs');
+    expect(readFileSync(pagePath, 'utf8')).toBe(before);
+  });
+
+  test('without --check the same stale span is rewritten', () => {
+    const {pagePath, root} = scratchTree('\nstale body\n');
+
+    captureStream(process.stdout);
+
+    expect(run(['--repo-root', root])).toBe(0);
+    expect(readFileSync(pagePath, 'utf8')).toBe(
+      buildPage(renderGeneratedSpan(registry))
+    );
+  });
+
+  test('an unknown argument is still refused', () => {
+    const errors = captureStream(process.stderr);
+
+    expect(run(['--repo-root', repoRoot, '--checks'])).toBe(2);
     expect(errors.join('')).toContain('invalid_arguments');
-    expect(errors.join('')).toContain('--check');
   });
 });

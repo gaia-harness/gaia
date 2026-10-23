@@ -8,8 +8,9 @@ import {run as runDocumentation} from './docs.js';
 
 const HELP_TEXT = `Usage: gaia-maintainer labels <subcommand> [args]
 
-  docs [--repo-root <path>]
-                             Regenerate the generated span of the wiki page.
+  docs [--check] [--repo-root <path>]
+                             Regenerate the generated span of the wiki page,
+                             or with --check report whether it is current.
 `;
 
 const SUBCOMMAND_HANDLERS: Readonly<

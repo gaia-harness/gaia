@@ -1,8 +1,11 @@
 /**
- * `gaia-maintainer labels docs [--repo-root <path>]`
+ * `gaia-maintainer labels docs [--check] [--repo-root <path>]`
  *
  * Rewrites the generated span of `wiki/concepts/GitHub Labels.md` from
- * `.gaia/labels.json`. `renderGeneratedSpan` and `spliceGeneratedSpan` are
+ * `.gaia/labels.json`, or with `--check` writes nothing and exits 1 when the
+ * committed span differs from a fresh render.
+ *
+ * `renderGeneratedSpan` and `spliceGeneratedSpan` are
  * pure, and the module reaches no network and no `gh`: it imports the shared
  * process runner nowhere, which its own suite pins. `run` shells out exactly
  * once, to `resolveRepoRoot` for the default tree root, which `--repo-root`
@@ -32,14 +35,19 @@ import {atomicWriteFileSync} from '../util/atomic-write.js';
 import {resolveRepoRoot} from '../util/repo-root.js';
 import {readRegistry} from './registry.js';
 
-const HELP_TEXT = `Usage: gaia-maintainer labels docs [--repo-root <path>]
+const HELP_TEXT = `Usage: gaia-maintainer labels docs [--check] [--repo-root <path>]
 
   Rewrites the generated span of wiki/concepts/GitHub Labels.md from
   .gaia/labels.json. Deterministic and offline. Exits 2 on a usage or
   environment error.
+
+  --check   Write nothing. Exit 0 when the span is current, 1 when it
+            differs from a fresh render.
 `;
 
 const HELP_TOKENS = new Set(['--help', '-h', 'help']);
+const EXIT_DRIFT = 1;
+const REGENERATE_COMMAND = './.gaia/cli/gaia-maintainer labels docs';
 
 /** The two literal marker lines delimiting the generated span. */
 export const GENERATED_START_MARKER = '<!-- gaia:labels:generated-start -->';
@@ -201,15 +209,18 @@ export const spliceGeneratedSpan = (pageText: string, span: string): string => {
   ].join('\n');
 };
 
-type ParsedArgs = {repoRoot: string | undefined};
+type ParsedArgs = {check: boolean; repoRoot: string | undefined};
 
 const parseArgs = (argv: readonly string[]): ParsedArgs | {code: number} => {
+  let check = false;
   let repoRoot: string | undefined;
 
   for (let index = 0; index < argv.length; index += 1) {
     const token = argv[index];
 
-    if (token === '--repo-root') {
+    if (token === '--check') {
+      check = true;
+    } else if (token === '--repo-root') {
       const value = takeNonFlagValue(argv, index + 1, '--repo-root');
 
       if (!value.ok) {
@@ -234,7 +245,7 @@ const parseArgs = (argv: readonly string[]): ParsedArgs | {code: number} => {
     }
   }
 
-  return {repoRoot};
+  return {check, repoRoot};
 };
 
 /** The page this command owns, relative to the repository root. */
@@ -281,6 +292,22 @@ export const run = (argv: readonly string[]): number => {
   }
 
   const rewritten = next !== committed;
+
+  if (parsed.check) {
+    if (!rewritten) {
+      process.stdout.write(`labels-docs: ${PAGE_RELATIVE_PATH} current\n`);
+
+      return EXIT_CODES.OK;
+    }
+    structuredError({
+      code: 'labels_docs_drift',
+      message: `the generated span of ${PAGE_RELATIVE_PATH} does not match .gaia/labels.json. Next step: run ${REGENERATE_COMMAND} and stage the page.`,
+      page: PAGE_RELATIVE_PATH,
+      subcommand: 'labels docs',
+    });
+
+    return EXIT_DRIFT;
+  }
 
   if (rewritten) atomicWriteFileSync(pagePath, next);
 
