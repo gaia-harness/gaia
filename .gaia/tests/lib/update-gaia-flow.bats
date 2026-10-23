@@ -1147,6 +1147,37 @@ lifecycle_leftovers_hold() {
   true
 }
 
+LIFECYCLE_MACHINE_DRIFT_CALL='bash <main checkout path>/.gaia/scripts/update-gaia-drift.sh --features <main checkout path>/.gaia/setup-features.json --scope machine'
+
+# 0 when work-lifecycle.md copy `$1` runs the machine-scope drift in the pulled
+# main checkout after the sweep, records a feature only once it ran there, and
+# names `/setup-gaia` where nobody can run it.
+lifecycle_machine_drift_holds() {
+  local section_path
+  section_path="$(section_file "$1" "$LIFECYCLE_LEFTOVERS")" || return 1
+  grep -qxF -- "$LIFECYCLE_MACHINE_DRIFT_CALL" "$section_path" || return 1
+  in_order "$section_path" "$LIFECYCLE_SWEEP_CALL" "$LIFECYCLE_MACHINE_DRIFT_CALL" || return 1
+  grep -qF 'records it only after it ran here' "$section_path" || return 1
+  grep -qF 'run /setup-gaia from the main checkout to carry the machine-scope setup features this update deferred' "$section_path" || return 1
+  return 0
+}
+
+@test "work-lifecycle cleanup: an update merge runs the deferred machine-scope features in the main checkout" {
+  lifecycle_machine_drift_holds "$LIFECYCLE"
+  # Failing state: the drift call dropped.
+  grep -vxF -- "$LIFECYCLE_MACHINE_DRIFT_CALL" "$LIFECYCLE" > "$COPY"
+  lifecycle_machine_drift_holds "$COPY" && return 1
+  # Failing state: the drift widened to every scope.
+  sed 's| --scope machine$||' "$LIFECYCLE" > "$COPY"
+  lifecycle_machine_drift_holds "$COPY" && return 1
+  local pin
+  for pin in 'records it only after it ran here' 'run /setup-gaia from the main checkout'; do
+    grep -vF -- "$pin" "$LIFECYCLE" > "$COPY"
+    lifecycle_machine_drift_holds "$COPY" && { echo "pin not enforced: $pin" >&2; return 1; }
+  done
+  true
+}
+
 # --- Step 3d and Step 4 prose ---------------------------------------------------
 
 # 0 when the SKILL.md copy `$1` carries the blocking-note and Proceed pins.
@@ -1191,6 +1222,53 @@ drift_prose_holds() {
     grep -vF -- "$pin" "$SKILL" > "$copy"
     drift_prose_holds "$copy" && { echo "pin not enforced: $pin" >&2; return 1; }
   done
+  true
+}
+
+MACHINE_IDS_CALL="jq -r '.features[] | select(.scope == \"machine\") | .id' <LATEST_DIR>/.gaia/setup-features.json"
+
+# 0 when SKILL.md copy `$1` keeps every machine-scope feature out of the update
+# worktree: Step 9c lists the machine-scope ids, never applies, asks or records
+# one there, and hands them to the post-merge cleanup; Step 9d's addendum and
+# Step 12 name the hand-off.
+machine_scope_rule_holds() {
+  local section
+  section="$(section_of "$1" "$STEP_9C")"
+  [ -n "$section" ] || return 1
+  printf '%s\n' "$section" | grep -qxF -- "$MACHINE_IDS_CALL" || return 1
+  printf '%s\n' "$section" | grep -qF 'is never applied, asked or recorded inside the update worktree' || return 1
+  printf '%s\n' "$section" | grep -qF "work-lifecycle.md\`, \`$LIFECYCLE_LEFTOVERS\`" || return 1
+  section_of "$1" "$STEP_9D" | grep -qF 'the machine-scope features deferred to the main checkout, each by id' || return 1
+  section_of "$1" "$STEP_12" | grep -qF 'the machine-scope setup features Step 9c deferred' || return 1
+  return 0
+}
+
+@test "Step 9c: a machine-scope feature is deferred to the main checkout, never run in the update worktree" {
+  machine_scope_rule_holds "$SKILL"
+  local pin
+  for pin in "$MACHINE_IDS_CALL" 'is never applied, asked or recorded inside the update worktree' \
+    'the machine-scope features deferred to the main checkout' 'the machine-scope setup features Step 9c deferred'; do
+    grep -vF -- "$pin" "$SKILL" > "$COPY"
+    machine_scope_rule_holds "$COPY" && { echo "pin not enforced: $pin" >&2; return 1; }
+  done
+  # Failing state: the hand-off pointer dropped from Step 9c alone.
+  awk -v heading="$STEP_9C" -v pointer="$LIFECYCLE_LEFTOVERS" '
+    index($0, heading) == 1 { inside = 1 } inside && /^## Step 9d/ { inside = 0 }
+    !(inside && index($0, pointer)) { print }' "$SKILL" > "$COPY"
+  machine_scope_rule_holds "$COPY" && return 1
+  true
+}
+
+@test "Step 9c: the machine-scope id list names migrate-2-machine and no project-scope feature" {
+  local call output_ids
+  call="$(section_of "$SKILL" "$STEP_9C" | grep -xF -- "$MACHINE_IDS_CALL")"
+  [ -n "$call" ] || { echo "the call is not in Step 9c" >&2; return 1; }
+  output_ids="$(bash -c "${call//<LATEST_DIR>/$REPO_ROOT}")"
+  printf '%s\n' "$output_ids" | grep -qxF 'migrate-2-machine' || return 1
+  local project_ids
+  project_ids="$(jq -r '.features[] | select(.scope == "project") | .id' "$REPO_ROOT/.gaia/setup-features.json")"
+  [ -n "$project_ids" ] || { echo "no project-scope ids to check against" >&2; return 1; }
+  printf '%s\n' "$output_ids" | grep -qxF -f <(printf '%s\n' "$project_ids") && return 1
   true
 }
 
