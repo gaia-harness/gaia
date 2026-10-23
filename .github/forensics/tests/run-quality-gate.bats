@@ -150,6 +150,14 @@ pnpm_log_count() {
   grep -qE '^pnpm install --frozen-lockfile' "$PNPM_LOG"
 }
 
+@test "all-green: install runs no lifecycle scripts (--ignore-scripts)" {
+  # The gate installs over model-edited files; a lifecycle script in any
+  # workspace manifest must not run.
+  run "$RUNNER" "$SUMMARY"
+  [ "$status" -eq 0 ]
+  grep -qE '^pnpm install( .*)? --ignore-scripts( |$)' "$PNPM_LOG"
+}
+
 @test "all-green: test step uses --run (vitest non-watch)" {
   run "$RUNNER" "$SUMMARY"
   [ "$status" -eq 0 ]

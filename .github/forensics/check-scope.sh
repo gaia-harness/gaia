@@ -8,35 +8,63 @@
 # Writes a JSON report to stdout. Exit code is always 0; the consumer reads
 # the `ok` field in the JSON.
 #
-# Precedence (longest-prefix wins):
+# Precedence:
+#   0. File-name deny, at any depth and under any prefix (`name` rules): the
+#      install-time manifests pnpm reads and runs scripts from. It overrides
+#      every allow, so a manifest under an allowlisted directory still denies.
+# Then longest-prefix wins:
 #   1. Exact-file match, allow or deny (e.g. `.gaia/manifest.json`).
 #   2. Longest matching directory prefix wins. Because the file-level denylist
 #      entry `.claude/skills/gaia/references/spec/spec-template.md` is longer
 #      than the `.claude/skills/` allowlist prefix, that one file correctly
 #      resolves to denylist while its siblings stay allowed.
 #   3. No match → `default-deny-unenumerated`.
+# Before any of that, a path with a `..` segment, a control byte or a
+# non-ASCII byte denies the whole invocation (`path-traversal`,
+# `control-byte`, `non-ascii-path`).
 #
 # POSIX bash only. No jq, no yq, no python.
 
 set -uo pipefail
 
 # Rules are encoded as pipe-separated triples: "kind|type|pattern" where:
-#   kind = dir | file
-#   type = allow | deny
-#   pattern = directory prefix (with trailing slash) or exact file path
+#   kind = dir | file | name
+#   type = allow | deny (`name` rules are deny only)
+#   pattern = directory prefix (with trailing slash), exact file path, or a
+#             file name matched against the path's last segment
 #
 # Directory prefixes are intentionally written WITH the trailing slash so
 # that prefix matching cannot bleed across siblings (`.gaia/cli/` won't
 # match `.gaia/cliques/foo`).
+#
+# Two deny groups guard the maintainer's machine rather than the product:
+#   - Paths that run on their own once a branch is checked out locally:
+#     Claude Code hooks and the settings that register them, the statusline
+#     scripts, the git hooks, and the CLI bundles those call. A fix branch is
+#     pushed before anyone reads it, so it must never carry an edit to them.
+#   - The install-time manifests (`name` rules): pnpm runs lifecycle scripts
+#     from every workspace member's package.json and reads hooks and settings
+#     from the workspace file, the pnpmfile and .npmrc.
 RULES="
 dir|allow|.gaia/cli/
-dir|allow|.claude/hooks/
 dir|allow|.claude/skills/
 dir|allow|.claude/commands/
 dir|allow|.claude/agents/
-dir|allow|.gaia/statusline/
 dir|allow|.gaia/scripts/spec/
 file|allow|.gaia/manifest.json
+dir|deny|.claude/hooks/
+dir|deny|.gaia/statusline/
+dir|deny|.githooks/
+file|deny|.claude/settings.json
+file|deny|.claude/settings.local.json
+file|deny|.gaia/cli/gaia
+file|deny|.gaia/cli/gaia-maintainer
+name|deny|package.json
+name|deny|pnpm-workspace.yaml
+name|deny|pnpm-lock.yaml
+name|deny|.npmrc
+name|deny|.pnpmfile.cjs
+name|deny|.pnpmfile.mjs
 dir|deny|frontend/app/
 dir|deny|wiki/
 dir|deny|studio/
@@ -48,6 +76,12 @@ file|deny|.claude/skills/gaia/references/spec/system-prompt.md
 file|deny|.claude/skills/gaia/references/spec/spec-template.md
 dir|deny|.github/workflows/
 "
+
+# lowercase <string>
+# Echoes the string lowercased. tr, not ${var,,}, so it runs on macOS bash 3.2.
+lowercase() {
+  printf '%s' "$1" | tr '[:upper:]' '[:lower:]'
+}
 
 # classify_path <path>
 # Echoes "<type>|<reason>" where:
@@ -69,9 +103,24 @@ classify_path() {
     type=${rest%%|*}
     pattern=${rest#*|}
 
+    if [ "$kind" = "name" ]; then
+      if [ "$(lowercase "${candidate##*/}")" = "$(lowercase "$pattern")" ]; then
+        unset IFS
+        printf 'deny|denylist'
+        return 0
+      fi
+      continue
+    fi
+
     matched=0
     if [ "$kind" = "file" ]; then
       if [ "$candidate" = "$pattern" ]; then
+        matched=1
+      elif [ "$type" = "deny" ] &&
+        [ "$(lowercase "$candidate")" = "$(lowercase "$pattern")" ]; then
+        # A case variant of a denied file overwrites it on a case-insensitive
+        # checkout (macOS APFS), so deny decisions compare case-folded. Allow
+        # rules stay exact: a variant must not inherit an allow.
         matched=1
       fi
     else
@@ -206,6 +255,23 @@ for path in "$@"; do
   if has_dotdot_segment "$path"; then
     escaped_path=$(json_escape "$path")
     printf '{"ok":false,"allowed":[],"denied":[{"path":"%s","reason":"path-traversal:contains-..-segment"}]}\n' \
+      "$escaped_path"
+    exit 0
+  fi
+done
+
+# Non-ASCII short-circuit. GNU tr folds case by byte, so a Unicode case
+# lookalike of a denied name (U+212A KELVIN SIGN for k) survives lowercase()
+# on Linux yet resolves to the denied file on a case-insensitive checkout
+# (macOS APFS). Rather than chase Unicode folding, deny any path carrying a
+# byte above 0x7f. LC_ALL=C on tr makes the test byte-wise in any locale.
+# Runs after the control-byte loop, so the path is JSON-safe once non-ASCII
+# bytes are scrubbed for display.
+for path in "$@"; do
+  if [ -n "$(printf '%s' "$path" | LC_ALL=C tr -d '\000-\177')" ]; then
+    printable_path=$(printf '%s' "$path" | LC_ALL=C tr -c '\040-\176' '?')
+    escaped_path=$(json_escape "$printable_path")
+    printf '{"ok":false,"allowed":[],"denied":[{"path":"%s","reason":"non-ascii-path"}]}\n' \
       "$escaped_path"
     exit 0
   fi

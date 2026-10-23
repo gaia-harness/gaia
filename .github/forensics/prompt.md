@@ -96,7 +96,7 @@ listing the proposed paths (paths only, no diffs, no patches):
 
 ```
 .gaia/cli/path/to/file.ts
-.claude/hooks/another.sh
+.claude/skills/another/SKILL.md
 ```
 ````
 

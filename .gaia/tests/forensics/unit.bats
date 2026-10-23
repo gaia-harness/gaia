@@ -128,17 +128,17 @@ setup() {
 }
 
 @test "UAT-007: mixed allow + deny path proposal denies the whole attempt" {
-  # The fixture's reproduction-context names two paths: one in the allowlist
-  # (`.claude/hooks/`), one on the canonical denylist (`frontend/app/`). Per UAT-007
-  # the WHOLE attempt is denied; `ok:false`; not just the denylisted path.
-  run "$SCOPE" .claude/hooks/wiki-session-stop.sh frontend/app/routes/_index.tsx
+  # Two paths: one in the allowlist (`.claude/skills/`), one on the canonical
+  # denylist (`frontend/app/`). Per UAT-007 the WHOLE attempt is denied;
+  # `ok:false`; not just the denylisted path.
+  run "$SCOPE" .claude/skills/gaia/SKILL.md frontend/app/routes/_index.tsx
   [ "$status" -eq 0 ]
   [[ "$output" == *'"ok":false'* ]]
   [[ "$output" == *'frontend/app/routes/_index.tsx'* ]]
   [[ "$output" == *'"reason":"denylist"'* ]]
   # The allowed leg still appears in `allowed[]`; the partition is informational
   # but `ok` is false, which is what the workflow gates on.
-  [[ "$output" == *'.claude/hooks/wiki-session-stop.sh'* ]]
+  [[ "$output" == *'"allowed":[".claude/skills/gaia/SKILL.md"]'* ]]
 }
 
 @test "fixture unenumerated-attempt parses cleanly (boundary tested via check-scope)" {
@@ -147,8 +147,8 @@ setup() {
   [[ "$output" == *'"valid":true'* ]]
 }
 
-@test "UAT-014: unenumerated path (package.json) denied as default-deny-unenumerated" {
-  run "$SCOPE" package.json
+@test "UAT-014: unenumerated path (tsconfig.json) denied as default-deny-unenumerated" {
+  run "$SCOPE" tsconfig.json
   [ "$status" -eq 0 ]
   [[ "$output" == *'"ok":false'* ]]
   [[ "$output" == *'"reason":"default-deny-unenumerated"'* ]]

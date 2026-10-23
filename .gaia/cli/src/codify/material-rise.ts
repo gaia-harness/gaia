@@ -6,7 +6,8 @@
  *
  * `TALLY_SCHEMA_VERSION` is bumped whenever the tally's counting semantics
  * change: the window, the recurrence threshold, the audited-PR predicate,
- * the per-auditor merge, or which findings blocks count as parseable.
+ * the per-auditor merge, or which findings blocks count as parseable or
+ * trusted.
  */
 export const RISE_RATIO_NUM = 5;
 
@@ -16,7 +17,7 @@ export const RISE_MIN_PR_DELTA = 3;
 
 export const MIN_TRUSTED_AUDITED_PRS = 20;
 
-export const TALLY_SCHEMA_VERSION = 2;
+export const TALLY_SCHEMA_VERSION = 3;
 
 export type MaterialRiseArgs = {
   baseAuditedPrCount: number;
