@@ -611,6 +611,8 @@
     "frontend/test/setup.browser.ts": "owned",
     "frontend/test/setup.ts": "owned",
     "frontend/test/story-a11y-opt-out.test.tsx": "owned",
+    "frontend/test/storybook-build-guard.test.ts": "owned",
+    "frontend/test/storybook-default-locale.test.tsx": "owned",
     "frontend/test/stubs/index.ts": "owned",
     "frontend/test/stubs/react-router-stub.tsx": "owned",
     "frontend/test/stubs/state-stub.tsx": "owned",
@@ -749,7 +751,7 @@
     "wiki/overview.md": "wiki-owned",
     "wiki/README.md": "wiki-owned"
   },
-  "generated": "2026-10-22T08:34:40.286Z",
+  "generated": "2026-10-23T06:19:04.038Z",
   "regions": [
     {
       "endMarker": "<!-- gaia:audit-remit:end -->",
