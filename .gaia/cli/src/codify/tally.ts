@@ -25,7 +25,7 @@
 import path from 'node:path';
 import {EXIT_CODES} from '../exit.js';
 import {KEY_PATTERN, parseKey} from '../residue/key.js';
-import {readProjectFindingClasses} from '../schemas/finding-class.js';
+import {readProjectFindingClassesChecked} from '../schemas/finding-class.js';
 import {readReviewSnapshot} from '../schemas/review-snapshot.js';
 import {structuredError} from '../stderr.js';
 import {
@@ -390,7 +390,8 @@ export const run = (
 
   const {ghOk, prs} = fetchWindowPrs(cwd, now);
   const covered = coveredClassesFromRules(path.join(cwd, '.claude', 'rules'));
-  const vocabulary = readProjectFindingClasses(cwd);
+  const {malformed: vocabularyMalformed, vocabulary} =
+    readProjectFindingClassesChecked(cwd);
 
   const tallyResult = computeTally({
     coveredClass: (findingClass) => covered.has(findingClass),
@@ -413,8 +414,12 @@ export const run = (
   // `ghOk` because a failed window read also yields an empty `prs`, which the
   // prune would read as authoritative evidence that every declined class
   // stopped recurring and wipe the ledger. An unread window is not evidence, so
-  // this fails closed, matching the suppression predicate.
-  if (ghOk && ledger !== null) ledger.prune(windowClasses(prs, vocabulary));
+  // this fails closed, matching the suppression predicate. A malformed project
+  // vocabulary is an unread input too: it reads empty, every project class then
+  // counts as unclassified, and the prune would drop their declines.
+  if (ghOk && !vocabularyMalformed && ledger !== null) {
+    ledger.prune(windowClasses(prs, vocabulary));
+  }
 
   // Read the review snapshot unconditionally (not gated on `ghOk`), so a
   // malformed snapshot is always reported. A malformed snapshot reads as

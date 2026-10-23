@@ -282,7 +282,7 @@ When `unclassified` is non-null, present it to the engineer as a distinct signal
 
 - It is NEVER placed in the draftable candidate set. `/gaia-codify` NEVER drafts a path-scoped rule, a deterministic-check sketch, a skill scaffold, or any other artifact for it.
 - It carries no approve / decline / defer / redirect action; there is nothing to ask the engineer to disposition here.
-- A class is seeded in `.gaia/finding-classes.json`: a closed `<prefix>/<slug>` class under `classes`, or the prefix of a project tool whose ids it accepts verbatim under `oracle_prefixes`. A malformed file is reported on `codify-tally`'s stderr as `malformed_finding_classes` and read as empty.
+- A class is seeded in `.gaia/finding-classes.json`: a closed `<prefix>/<slug>` class under `classes`, or the prefix of a project tool whose ids it accepts verbatim under `oracle_prefixes`. A malformed file is reported on `codify-tally`'s stderr as `malformed_finding_classes` and read as empty; while it is malformed the tally leaves the decline ledger unpruned, so a mid-edit save never drops a project class's declines.
 <!-- gaia:maintainer-only:start -->
 - In the GAIA repo a class every adopter should get is seeded in the built-in vocabulary, `.gaia/cli/src/schemas/finding-class.ts`, with its parity list, instead of `.gaia/finding-classes.json`.
 <!-- gaia:maintainer-only:end -->

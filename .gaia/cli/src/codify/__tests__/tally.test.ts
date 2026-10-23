@@ -275,6 +275,25 @@ const makeFakeLedger = (): FakeLedger => {
   };
 };
 
+const projectWindow = (): void => {
+  vi.spyOn(runProcess, 'runGh').mockReturnValue(
+    stubGh(
+      [3, 2, 1].map((n) =>
+        ghPr(n, [
+          findingsComment(n, 'ci', [
+            {area_tags: [], finding_class: 'acme/rule', severity: 'major'},
+          ]),
+        ])
+      )
+    )
+  );
+};
+
+const writeVocabulary = (root: string, text: string): void => {
+  mkdirSync(path.join(root, '.gaia'), {recursive: true});
+  writeFileSync(path.join(root, '.gaia', 'finding-classes.json'), text);
+};
+
 describe('codify-tally run', () => {
   let sandbox: Sandbox;
   let stdout: ReturnType<typeof captureStdout>;
@@ -974,6 +993,34 @@ describe('codify-tally run', () => {
 
     expect(parseStdout(stdout.out).candidate_count).toBe(1);
     expect(stderr).not.toHaveBeenCalled();
+  });
+
+  describe('project vocabulary and the prune', () => {
+    test('keeps a project-class decline when the vocabulary file is malformed', () => {
+      projectWindow();
+      writeVocabulary(sandbox.root, '{"classes": ["acme/rule",],}');
+      vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+
+      const fake = makeFakeLedger();
+      fake.record('acme/rule', 3, 3);
+
+      run([], {cwd: sandbox.root, ledger: fake.ledger});
+
+      expect(fake.calls.prune).toEqual([]);
+      expect(fake.has('acme/rule')).toBe(true);
+    });
+
+    test('still prunes when the vocabulary file is absent', () => {
+      projectWindow();
+
+      const fake = makeFakeLedger();
+      fake.record('acme/rule', 3, 3);
+
+      run([], {cwd: sandbox.root, ledger: fake.ledger});
+
+      expect(fake.calls.prune).toHaveLength(1);
+      expect(fake.has('acme/rule')).toBe(false);
+    });
   });
 
   test('leaves the ledger unpruned when the window read failed', () => {

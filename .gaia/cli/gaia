@@ -24523,11 +24523,13 @@ var ProjectFindingClassesSchema = external_exports.object({
 });
 var reportMalformed = (message) => {
   structuredError({ code: "malformed_finding_classes", message });
-  return EMPTY_FINDING_CLASS_VOCABULARY;
+  return { malformed: true, vocabulary: EMPTY_FINDING_CLASS_VOCABULARY };
 };
-var readProjectFindingClasses = (repoRoot) => {
+var readProjectFindingClassesChecked = (repoRoot) => {
   const filePath = path6.join(repoRoot, ".gaia", "finding-classes.json");
-  if (!existsSync4(filePath)) return EMPTY_FINDING_CLASS_VOCABULARY;
+  if (!existsSync4(filePath)) {
+    return { malformed: false, vocabulary: EMPTY_FINDING_CLASS_VOCABULARY };
+  }
   let parsed;
   try {
     parsed = JSON.parse(readFileSync5(filePath, "utf8"));
@@ -24540,7 +24542,7 @@ var readProjectFindingClasses = (repoRoot) => {
   if (!result.success) {
     return reportMalformed(summarizeZodError(filePath, result.error));
   }
-  return result.data;
+  return { malformed: false, vocabulary: result.data };
 };
 
 // src/util/run-process.ts
@@ -25189,7 +25191,7 @@ var run3 = (argv, options = {}) => {
   const now = /* @__PURE__ */ new Date();
   const { ghOk, prs } = fetchWindowPrs(cwd, now);
   const covered = coveredClassesFromRules(path8.join(cwd, ".claude", "rules"));
-  const vocabulary = readProjectFindingClasses(cwd);
+  const { malformed: vocabularyMalformed, vocabulary } = readProjectFindingClassesChecked(cwd);
   const tallyResult = computeTally({
     coveredClass: (findingClass) => covered.has(findingClass),
     prs,
@@ -25202,7 +25204,9 @@ var run3 = (argv, options = {}) => {
     vocabulary,
     windowDays: WINDOW_DAYS
   });
-  if (ghOk && ledger !== null) ledger.prune(windowClasses(prs, vocabulary));
+  if (ghOk && !vocabularyMalformed && ledger !== null) {
+    ledger.prune(windowClasses(prs, vocabulary));
+  }
   const snapshotResult = readReviewSnapshot(cwd);
   if (snapshotResult.status === "malformed") {
     structuredError({

@@ -259,24 +259,32 @@ const ProjectFindingClassesSchema = z.object({
   oracle_prefixes: z.array(ProjectOraclePrefixSchema),
 });
 
-const reportMalformed = (message: string): FindingClassVocabulary => {
+export type ProjectFindingClassesRead = {
+  /** True when the file exists but could not be read as a vocabulary. */
+  malformed: boolean;
+  vocabulary: FindingClassVocabulary;
+};
+
+const reportMalformed = (message: string): ProjectFindingClassesRead => {
   structuredError({code: 'malformed_finding_classes', message});
 
-  return EMPTY_FINDING_CLASS_VOCABULARY;
+  return {malformed: true, vocabulary: EMPTY_FINDING_CLASS_VOCABULARY};
 };
 
 /**
- * Reads the project vocabulary. A missing file is the empty vocabulary; an
- * unreadable or malformed one is reported as one structured stderr line and
- * also read as empty, so a bad edit narrows the tally to the built-in
- * vocabulary instead of failing it.
+ * Reads the project vocabulary and says whether it was usable. A missing file
+ * is the empty vocabulary; an unreadable or malformed one is reported as one
+ * structured stderr line, read as empty, and flagged `malformed` so a caller
+ * that acts on the vocabulary can fail closed.
  */
-export const readProjectFindingClasses = (
+export const readProjectFindingClassesChecked = (
   repoRoot: string
-): FindingClassVocabulary => {
+): ProjectFindingClassesRead => {
   const filePath = path.join(repoRoot, '.gaia', 'finding-classes.json');
 
-  if (!existsSync(filePath)) return EMPTY_FINDING_CLASS_VOCABULARY;
+  if (!existsSync(filePath)) {
+    return {malformed: false, vocabulary: EMPTY_FINDING_CLASS_VOCABULARY};
+  }
 
   let parsed: unknown;
 
@@ -294,5 +302,15 @@ export const readProjectFindingClasses = (
     return reportMalformed(summarizeZodError(filePath, result.error));
   }
 
-  return result.data;
+  return {malformed: false, vocabulary: result.data};
 };
+
+/**
+ * Reads the project vocabulary. A missing, unreadable or malformed file reads
+ * as the empty vocabulary, so a bad edit narrows the tally to the built-in
+ * vocabulary instead of failing it.
+ */
+export const readProjectFindingClasses = (
+  repoRoot: string
+): FindingClassVocabulary =>
+  readProjectFindingClassesChecked(repoRoot).vocabulary;
