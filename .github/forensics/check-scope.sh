@@ -19,6 +19,9 @@
 #      than the `.claude/skills/` allowlist prefix, that one file correctly
 #      resolves to denylist while its siblings stay allowed.
 #   3. No match → `default-deny-unenumerated`.
+# Before any of that, a path with a `..` segment, a control byte or a
+# non-ASCII byte denies the whole invocation (`path-traversal`,
+# `control-byte`, `non-ascii-path`).
 #
 # POSIX bash only. No jq, no yq, no python.
 
@@ -252,6 +255,23 @@ for path in "$@"; do
   if has_dotdot_segment "$path"; then
     escaped_path=$(json_escape "$path")
     printf '{"ok":false,"allowed":[],"denied":[{"path":"%s","reason":"path-traversal:contains-..-segment"}]}\n' \
+      "$escaped_path"
+    exit 0
+  fi
+done
+
+# Non-ASCII short-circuit. GNU tr folds case by byte, so a Unicode case
+# lookalike of a denied name (U+212A KELVIN SIGN for k) survives lowercase()
+# on Linux yet resolves to the denied file on a case-insensitive checkout
+# (macOS APFS). Rather than chase Unicode folding, deny any path carrying a
+# byte above 0x7f. LC_ALL=C on tr makes the test byte-wise in any locale.
+# Runs after the control-byte loop, so the path is JSON-safe once non-ASCII
+# bytes are scrubbed for display.
+for path in "$@"; do
+  if [ -n "$(printf '%s' "$path" | LC_ALL=C tr -d '\000-\177')" ]; then
+    printable_path=$(printf '%s' "$path" | LC_ALL=C tr -c '\040-\176' '?')
+    escaped_path=$(json_escape "$printable_path")
+    printf '{"ok":false,"allowed":[],"denied":[{"path":"%s","reason":"non-ascii-path"}]}\n' \
       "$escaped_path"
     exit 0
   fi

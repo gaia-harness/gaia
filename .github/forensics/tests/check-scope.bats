@@ -400,3 +400,25 @@ setup() {
   run "$SCRIPT" .gaia/cli/Package.json
   [ "$output" = '{"ok":false,"allowed":[],"denied":[{"path":".gaia/cli/Package.json","reason":"denylist"}]}' ]
 }
+
+# --- non-ASCII lookalikes ---------------------------------------------------
+
+@test "non-ascii: a Kelvin-sign lookalike of a denied name is denied under LC_ALL=C" {
+  path=$(printf '.gaia/cli/pac\xe2\x84\xaage.json')
+  LC_ALL=C run "$SCRIPT" "$path"
+  [ "$status" -eq 0 ]
+  case $output in
+    *'"ok":false'*'"reason":"non-ascii-path"'*) ;;
+    *) printf 'unexpected output: %s\n' "$output" >&2; return 1 ;;
+  esac
+}
+
+@test "non-ascii: an otherwise allowed path with a non-ASCII byte is denied" {
+  path=$(printf '.claude/skills/caf\xc3\xa9.md')
+  run "$SCRIPT" "$path"
+  [ "$status" -eq 0 ]
+  case $output in
+    *'"ok":false'*'"reason":"non-ascii-path"'*) ;;
+    *) printf 'unexpected output: %s\n' "$output" >&2; return 1 ;;
+  esac
+}

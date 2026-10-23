@@ -771,8 +771,9 @@ jobs:
   # ------------------------------------------------------------------
   # Quality Gate over the fix. Read-only token and no secrets: this is
   # the job that executes model-edited files, so it holds nothing worth
-  # taking. The fix's base is derived from this checkout's own main, not
-  # read from the artifact, and the fix must be exactly one commit on it.
+  # taking. The fix's base is the fix commit's own parent, which must be
+  # on this checkout's origin/main (never read from the artifact), and the
+  # fix must be exactly one non-merge commit.
   # That commit's paths are re-checked against this checkout's own
   # check-scope.sh before the fix is checked out, so no model-edited file
   # runs unless it is in scope.
@@ -825,15 +826,22 @@ jobs:
           }
           git fetch "$handoff_dir/fix.bundle" "refs/heads/$FIX_BRANCH:refs/heads/$FIX_BRANCH"
           fix_sha="$(git rev-parse "refs/heads/$FIX_BRANCH")"
-          # The base comes from this checkout, never from the artifact: the
-          # triage job runs model-edited files and could name any base.
-          base_sha="$(git merge-base refs/remotes/origin/main "$fix_sha")"
-          if ! git merge-base --is-ancestor refs/remotes/origin/main "$fix_sha"; then
-            reject "the fix does not descend from origin/main (merge base $base_sha)"
+          # The base is the fix commit's own parent, never read from the
+          # artifact and never compared with the current origin/main tip: main
+          # can advance between the triage fetch and this checkout, and a
+          # valid fix would then be rejected. The parent must still be a
+          # commit on origin/main (so a forged multi-commit chain, whose
+          # intermediate commit is not on main, fails) and the fix must not be
+          # a merge. Every substitution is guarded so a failure reaches
+          # reject() instead of aborting the step under set -e.
+          if git rev-parse -q --verify "$fix_sha^2" > /dev/null 2>&1; then
+            reject "the fix must be a single non-merge commit, but $fix_sha is a merge commit"
           fi
-          commit_count="$(git rev-list --count "$base_sha..$fix_sha")"
-          if [ "$commit_count" != "1" ] || [ "$(git rev-parse "$fix_sha^")" != "$base_sha" ]; then
-            reject "the fix must be exactly one commit directly on origin/main, found $commit_count commits above $base_sha"
+          if ! base_sha="$(git rev-parse -q --verify "$fix_sha^" 2> /dev/null)"; then
+            reject "the fix has no parent commit"
+          fi
+          if ! git merge-base --is-ancestor "$base_sha" refs/remotes/origin/main; then
+            reject "the fix must be exactly one commit directly on a commit of origin/main, but its parent $base_sha is not on origin/main"
           fi
           # NUL-delimited for the reason the triage job's verify-diff step
           # gives: git would otherwise C-quote a non-ASCII path.
