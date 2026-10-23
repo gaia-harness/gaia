@@ -87,6 +87,7 @@
     ".claude/rules/code-comments.md": "owned",
     ".claude/rules/coding-guidelines.md": "owned",
     ".claude/rules/context-discipline.md": "owned",
+    ".claude/rules/fenced-copy-paste-blocks.md": "owned",
     ".claude/rules/file-placement.md": "owned",
     ".claude/rules/guards-must-fail.md": "owned",
     ".claude/rules/issue-claim.md": "owned",

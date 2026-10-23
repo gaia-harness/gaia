@@ -228,19 +228,19 @@ Output a short summary of what's in `$PLAN_DIR/`, then report the cost, then emi
 
 Cost: never compute or restate a figure yourself.
 
-- **Spec-derived:** run `bash .gaia/scripts/usage.sh initiative <SPEC-NNN> --box` with the same `<SPEC-NNN>` and relay its output verbatim, inside a fenced `text` code block when it is a box (a bare box is reflowed by the Markdown renderer and loses its alignment). The box lists the spec's own run and this plan with a total. When the output is one plain `Cost:` line (the spec's run was never recorded), relay that line unfenced. The command waits briefly for usage still being saved, so the figures are complete in the common case; a `Note:` line under the figures says when they are not.
+- **Spec-derived:** run `bash .gaia/scripts/usage.sh initiative <SPEC-NNN> --box` with the same `<SPEC-NNN>` and relay its output verbatim, inside a bare fenced block when it is a box (an unfenced box is reflowed by the Markdown renderer and loses its alignment). The box lists the spec's own run and this plan with a total. When the output is one plain `Cost:` line (the spec's run was never recorded), relay that line unfenced. The command waits briefly for usage still being saved, so the figures are complete in the common case; a `Note:` line under the figures says when they are not.
 - **Spec-less:** relay the Cost line `record` printed in step 4.7, with any `Note:` lines under it, verbatim and unfenced. It is one line item, so there is no box.
 
 When `record` exited non-zero in step 4.7, relay its one stderr line in place of the cost.
 
 The prompt is a single line, exactly:
 
-```text
+```
 Read <absolute-path-to-PLAN_DIR>/KICKOFF.md and execute it.
 ```
 
 For example `.../.notebook/specs/SPEC-NNN/plan/KICKOFF.md` for a spec-derived plan, or `.../.notebook/plans/PLAN-NNN/KICKOFF.md` for a spec-less plan. Use `$PLAN_DIR/KICKOFF.md` (the absolute path resolved in step 3). The path MUST be absolute so the cold Claude session has no working-directory ambiguity.
 
-**Print the prompt inside a `text` fenced code block** so the user can select and copy it manually.
+**Print the prompt inside a bare fenced block** so the user can select and copy it manually.
 
 Then print one trailing line: `Type /clear and paste the prompt above.`

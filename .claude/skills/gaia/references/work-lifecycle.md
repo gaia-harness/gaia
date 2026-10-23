@@ -260,9 +260,9 @@ The runtime refuses `ExitWorktree` from an agent dispatched with `isolation: "wo
 - **Primary signal:** the session was dispatched through `Agent(...)` with `isolation: "worktree"` or a `cwd` override: it runs as a sub-agent task and its cwd is a worktree path under `.claude/worktrees/`.
 - **Fallback:** when uncertain, attempt the arm's `ExitWorktree` call. When the response contains `cannot be called from a subagent`, treat the call as never issued (a refusal, not a destructive action) and take the continuation-prompt path.
 
-When detected, print this continuation prompt inside a `text` fence and stop:
+When detected, print this continuation prompt inside a bare fenced block and stop:
 
-```text
+```
 The worktree at <ABSOLUTE-PATH-TO-WORKTREE> is ready to discard.
 PR #<N> squash-merged as <short-sha>. From a shell at
 <ABSOLUTE-PATH-TO-MAIN-CHECKOUT>, run:

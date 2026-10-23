@@ -63,7 +63,7 @@ Cost output has one shape rule. One line item prints as one plain line, built by
 Cost: 0.4M tokens, $0.40, 2h1m0s (2m0s active)
 ```
 
-Two or more line items print as a box, in a fenced `text` code block when a skill relays it (a bare box is reflowed by the Markdown renderer and loses its alignment):
+Two or more line items print as a box, in a bare fenced block when a skill relays it (an unfenced box is reflowed by the Markdown renderer and loses its alignment):
 
 ```text
 SPEC-NNN Cost

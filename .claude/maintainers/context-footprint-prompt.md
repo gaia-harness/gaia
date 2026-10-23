@@ -130,17 +130,19 @@ A fresh install from the 2.0.0-rc.5 bundle of `main` at `e6ef246e`, measured on 
 
 Counting baseline with the wrapper: 24,788 tokens (stable on both runs).
 
-**S. Startup: 8,207 (0.82%)**
+**S. Startup: 8,365 (0.84%)**
+
+Startup includes fenced-copy-paste-blocks.md (#2994), counted with the same method.
 
 | Block | Tokens |
 |---|---|
-| Root rules with no `paths:` (7) | 4,151 |
+| Root rules with no `paths:` (8) | 4,309 |
 | SessionStart hook context | 1,403 |
 | Root `CLAUDE.md` | 1,108 |
 | Skill and command entries (10, 5 name-only) | 806 |
 | Agent entries (9) | 739 |
 
-**1. Typical task (1 component + 1 route), post-#2991: adds 11,855 (1.19%); startup + task 20,062 (2.01%)**
+**1. Typical task (1 component + 1 route), post-#2991: adds 11,855 (1.19%); startup + task 20,220 (2.02%)**
 
 The rc.5 task measured 14,450. Post-#2991, `wiki-style` (1,995) and `ports` (580) no longer load on this task, and `design-baseline` is recounted on `main` with the wrapper (1,141 to 1,121).
 
@@ -162,7 +164,7 @@ The rc.5 task measured 14,450. Post-#2991, `wiki-style` (1,995) and `ports` (580
 
 `react-doctor` is not a GAIA skill and is not counted.
 
-**3. Frontend launch startup: 10,927 (1.09%)**: root startup 8,207 + `frontend/CLAUDE.md` ~1,044 + frontend entries 1,676 (no scope suffix in a frontend launch). No root entries drop out: the name-only entries still list by name.
+**3. Frontend launch startup: 11,085 (1.11%)**: root startup 8,365 + `frontend/CLAUDE.md` ~1,044 + frontend entries 1,676 (no scope suffix in a frontend launch). No root entries drop out: the name-only entries still list by name.
 
 **4. Audit footprint**
 

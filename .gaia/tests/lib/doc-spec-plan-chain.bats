@@ -177,12 +177,12 @@ check_s4() {
   verdict="$(printf '%s\n' "$text" | awk '
     index($0, "**If the plan run stops before its report.**") == 1 { label = 1 }
     /^```/ {
-      if (infence) { infence = 0 } else { infence = 1; valid = (label && $0 == "```text") }
+      if (infence) { infence = 0 } else { infence = 1; valid = (label && $0 == "```") }
       next
     }
     index($0, "/gaia-plan SPEC-NNN") { print (infence && valid) ? "ok" : "bad" }
   ')"
-  [ "$verdict" = ok ] || { printf 'recovery line is not in a text fence after the recovery label\n' >&2; return 1; }
+  [ "$verdict" = ok ] || { printf 'recovery line is not in a bare fence after the recovery label\n' >&2; return 1; }
 }
 
 check_s5() {
@@ -365,7 +365,7 @@ check_w_plan() {
 
 @test "red twin: a second fenced recovery command fails the single-handoff check" {
   copy="$(scratch_copy)"
-  printf '\n```text\n/gaia-plan SPEC-NNN\n```\n' >>"$copy/$SPEC_MD"
+  printf '\n```\n/gaia-plan SPEC-NNN\n```\n' >>"$copy/$SPEC_MD"
   run check_s4 "$copy"
   [ "$status" -ne 0 ]
 }
@@ -376,7 +376,7 @@ check_w_plan() {
     { line[NR] = $0 }
     END {
       for (i = 1; i <= NR; i++) if (index(line[i], "**If the plan run stops before its report.**") == 1) { label = i; break }
-      for (i = label; i <= NR; i++) if (line[i] == "```text") { fence = i; break }
+      for (i = label; i <= NR; i++) if (line[i] == "```") { fence = i; break }
       for (i = 1; i <= NR; i++) {
         if (i == label) { print line[fence]; print line[fence + 1]; print line[fence + 2]; print "" }
         if (i >= fence && i <= fence + 2) continue

@@ -163,9 +163,9 @@ SPEC synthesis, both gates and the clarify loop run on the **main thread** at yo
     - `{ label: "Switch to Opus (Recommended)", description: "Highest-quality specs. Stops here so you can switch, then re-run /gaia-spec." }`
     - `{ label: "Switch to Fable", description: "Also a top-tier planning model. Stops here so you can switch, then re-run /gaia-spec." }`
     - `{ label: "Stay on [model name]", description: "Author the SPEC on the current model without switching." }`
-  - If the user picks Opus or Fable: do **not** start the workflow. Print exactly one instruction line, `Switch with /model (pick <chosen model>), then re-run:`, then the re-run command alone inside a `text` fenced code block, and STOP:
+  - If the user picks Opus or Fable: do **not** start the workflow. Print exactly one instruction line, `Switch with /model (pick <chosen model>), then re-run:`, then the re-run command alone inside a bare fenced block, and STOP:
 
-    ```text
+    ```
     /gaia-spec <description>
     ```
 
@@ -418,9 +418,9 @@ This step runs once, after the final step-10 outcome (lint passed, or remaining 
 
 Rationale: `wiki/concepts/GAIA Spec.md` (step 11).
 
-**If the plan run stops before its report.** When the plan run stops before plan step 5 (its pre-flight notebook-readiness pass blocks, its SPEC resolution finds no SPEC, its output verification or plan check fails, the planner reaches its yield limit or leaves a missing handoff) or the `gaia-plan` Skill cannot be invoked, the session's last output is the stop reason, then the cost so far, then this recovery, and nothing further is dispatched. Print the cost so far with `bash .gaia/scripts/usage.sh initiative SPEC-NNN --box` (the real id), relayed verbatim: fenced as a `text` code block when it is a box, unfenced when it is one plain `Cost:` line, which is what the saved spec alone shows. The SPEC is saved and frozen, so the re-plan resolves it; a partial plan folder stays in place and the re-plan writes the next free `plan-N`.
+**If the plan run stops before its report.** When the plan run stops before plan step 5 (its pre-flight notebook-readiness pass blocks, its SPEC resolution finds no SPEC, its output verification or plan check fails, the planner reaches its yield limit or leaves a missing handoff) or the `gaia-plan` Skill cannot be invoked, the session's last output is the stop reason, then the cost so far, then this recovery, and nothing further is dispatched. Print the cost so far with `bash .gaia/scripts/usage.sh initiative SPEC-NNN --box` (the real id), relayed verbatim: fenced as a bare code block when it is a box, unfenced when it is one plain `Cost:` line, which is what the saved spec alone shows. The SPEC is saved and frozen, so the re-plan resolves it; a partial plan folder stays in place and the re-plan writes the next free `plan-N`.
 
-```text
+```
 /gaia-plan SPEC-NNN
 ```
 
