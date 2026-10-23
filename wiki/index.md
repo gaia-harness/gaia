@@ -33,11 +33,11 @@ Master catalog of every page in the wiki. Newly created pages must be added here
 - [[Hooks]]
 - [[Utils]]
 - [[Styles]]
-- [[i18n]]
+- [[i18n]]: translations and language files, and how to add or remove a language (its "Adding or removing a language" section)
 - [[Testing]]
 - [[Storybook Stories]]
 - [[MSW Handlers]]
-- [[Claude Integration]]
+- [[Claude Integration]]: the inventory of commands, rules, hooks and skills, and the statusline and how to change its left side
 - [[CLI Scaffolding]]: component/hook/route/service generators
 
 ## Flows
@@ -83,7 +83,7 @@ Master catalog of every page in the wiki. Newly created pages must be added here
 
 ## Decisions (ADRs)
 
-- [[Per-call Bash hook cost cut]]
+- [[per-call-bash-hook-cost-cut|Per-call Bash hook cost cut]]: what each registered hook costs every matched tool call
 - [[shadcn Component Layer]]: GAIA's component layer, the vendored-ui policy.
 - [[React Compiler]]: React Compiler runs by default in build, dev, Vitest and Storybook from one shared module; thresholds, adopter steps and rollback.
 - [[TypeScript Language Files]]
@@ -95,6 +95,7 @@ Master catalog of every page in the wiki. Newly created pages must be added here
 - [[Content Security Policy]]: per-request nonce CSP, enforced; documents the `unsafe-inline` and no-`report-uri` trade-offs.
 <!-- gaia:maintainer-only:start -->
 <!-- gaia:maintainer-only:end -->
+- [[Workflow Naming Convention]]: how to name a workflow file, its `name:` and its jobs, including any workflow you add: Title Case workflow names, sentence-case `Tool (scope)` job names, `(advisory)` on non-blocking pull request jobs.
 - [[Composite Action Step Timeouts]]: Node-provisioning steps are bounded by their owning job's `timeout-minutes`; a step-level cap is a per-workflow choice, not a rule.
 - [[Code Audit Team]]: config-driven auditor roster + dispatch resolver; AND-aggregation across dispatched members at the merge gate.
 - [[Deliberate Configuration Asymmetries]]: config that differs from its siblings on purpose; the `.claude/hooks/` Edit carve-out, the skill `model:` pinning criterion, the non-opt-outable update check, and why the agent-teams flag is not enabled.
@@ -105,7 +106,6 @@ Master catalog of every page in the wiki. Newly created pages must be added here
 - [[Sharded CI Test Matrix]]: the `GAIA: Audit CI Tests` workflow as a matrix fan-out plus a thin aggregator; the job caps, how to measure this workflow without the two traps, and the levers already weighed.
 - [[Shell Guard Fixture Discrimination]]: fixture-region discrimination plus a suppression pragma so the shell guards can read `*.bats` without flagging their own suites' deliberately broken fixtures.
 - [[Local Test Runtime]]: `shell-lint.sh`'s own concurrency budget; the full bats corpus as a decided non-goal; the awk interpreter resolver's stated non-claim.
-- [[Workflow Naming Convention]]: GAIA: prefix for maintainer-only workflows, sentence-case Tool (scope) job names, (advisory) on non-blocking PR jobs; the prefix is tied to the release-exclude derive by a test.
 <!-- gaia:maintainer-only:end -->
 - [[Quality Gate]]
 - [[Naming Conventions]]: Conventional Commits for commits and PR titles, canonical branch names, and the worktree branch rename; where the convention is read and what enforces it.
@@ -143,7 +143,7 @@ Master catalog of every page in the wiki. Newly created pages must be added here
 - [[Code Review Audit Agent]]
 - [[Registering a Code Audit Team Member]]: how-to for adding a new roster member: agent def, roster entry, machinery wiring, finding_class bucket, recurrence-tally integration, and the local-gate checklist.
 - [[Audit Disposition and Debt Fix]]: forced disposition of out-of-scope audit findings as deduped tech-debt issues; security-class divert; the /gaia-debt fix loop (single issue, recommended related batch, or operator-named batch, isolated per the team's git isolation policy) and statusline nudge; /gaia-residue drains the accepted-residual record the same audit leaves unfiled.
-- [[GitHub Labels]]: the label registry at `.gaia/labels.json`, the palette rule, the generated page, and `gaia labels sync` / `docs`.
+- [[GitHub Labels]]: the label registry at `.gaia/labels.json`, the palette rule, the generated page, and `gaia labels sync`, and where project labels go.
 - [[Policy-Memory Loop]]: prune-first self-improvement; recurring finding_class -> statusline nudge -> `/gaia-codify` -> path-scoped rule -> `/gaia-cleanse` prunes only on obsolescence/redundancy/supersession/duplication.
 - [[Incremental CI Skipping]]: required checks skip when the delta since they last passed green has no relevant files; `resolve-check-base.sh` / `resolve-audit-base.sh`.
 - [[Claude Hooks]]
@@ -153,6 +153,7 @@ Master catalog of every page in the wiki. Newly created pages must be added here
 - [[Migration Notes]]: the authoring guide for `.gaia/migrations/`: the note format, how `/update-gaia` selects notes from the verified bundle, and what the blocking and after-merge modes oblige an author to do.
 - [[Setup Features]]: the shipped setup feature list `.gaia/setup-features.json`, the project and machine decision records, and how `/gaia-init`, `/setup-gaia`, `/update-gaia` and the statusline use them.
 - [[Package Descriptor]]: the package registry `.gaia/packages.json` and per-package `gaia.package.json`; who reads them, the fail-closed rule, and the frontend launch scope.
+- [[Customizing GAIA]]: where each adopter customization lives, which files are safe to edit, and the check to run after; start here to customize, extend, turn off or change GAIA.
 - [[Claude Integration Conventions]]: Conventions for Claude's config surface: extension points, monorepo retrofit, service swaps, domain isolation.
 - [[Local Working State]]: the gitignored `.gaia/local/` working-state folder and its pointer to the state registry; the SessionStart janitor's wiki-landing catch-up.
 - [[Notebook]]: the gitignored, main-anchored `.notebook/` that holds specs, plans and research, its catalog, lifecycle and one-time move.
