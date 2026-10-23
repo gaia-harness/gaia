@@ -12,7 +12,7 @@ Cut a new GAIA release. Thin orchestrator over the `.gaia/cli/gaia-maintainer re
 This command is **maintainer-only**: it and the `gaia-maintainer` binary are release-excluded.
 
 > [!important] `main` is protected
-> Direct pushes to `main` are blocked. The release commit lands on a release branch, goes through a PR, and the tag is created on the merge commit _after_ it lands on `main`. The release PR is subject to the same CI gate and the same Code Audit Team merge handshake as any other PR. Expect `Vitest and Playwright`, `Run Chromatic`, and `Vitest (.gaia/cli)`: a release PR bumps root `package.json`, which that job's paths filter lists, so it always runs the job's full typecheck, lint, vitest, and bundle-freshness path rather than its filter-miss fast pass (it touches `.gaia/cli/**` only when Step 7b rebuilt the bundles). `gh pr merge --merge --auto` is the normal path: base-branch protection rejects a plain `--merge`, so `--auto` is required to queue the merge until checks pass. See `wiki/concepts/PR Merge Workflow.md`.
+> Direct pushes to `main` are blocked. The release commit lands on a release branch, goes through a PR, and the tag is created on the squash commit _after_ it lands on `main`. The release PR is subject to the same CI gate and the same Code Audit Team merge handshake as any other PR. Expect `Vitest and Playwright`, `Run Chromatic`, and `Vitest (.gaia/cli)`: a release PR bumps root `package.json`, which that job's paths filter lists, so it always runs the job's full typecheck, lint, vitest, and bundle-freshness path rather than its filter-miss fast pass (it touches `.gaia/cli/**` only when Step 7b rebuilt the bundles). `gh pr merge --squash --auto` is the normal path: the repository allows squash merges only, and base-branch protection rejects a merge without `--auto`, so `--auto` is required to queue the merge until checks pass. See `wiki/concepts/PR Merge Workflow.md`.
 
 ## Required argument
 
@@ -159,10 +159,11 @@ Members write their markers only; they do not post the `GAIA-Audit` success stat
 ### 11. Merge the PR
 
 ```bash
-gh pr merge <N> --merge --auto --delete-branch
-# --auto is mandatory: base-branch protection rejects a plain --merge, and the
-# Vitest/Playwright + Chromatic checks take a few minutes. --auto queues the
-# merge; GitHub completes it once checks pass.
+gh pr merge <N> --squash --auto --delete-branch
+# --squash: the repository allows squash merges only. --auto is mandatory:
+# base-branch protection rejects a merge without it, and the Vitest/Playwright
+# + Chromatic checks take a few minutes. --auto queues the merge; GitHub
+# completes it once checks pass.
 ```
 
 Then run the merge wait, with a 20-attempt bound in place of its default 5, since the release checks run longer:
@@ -177,7 +178,7 @@ The merge above is already queued, and this script issues no `gh pr merge` of it
 
 Before tagging, ask with AskUserQuestion: "Context footprint measured for this version and the token-efficiency page updated?" Options: **Done**; **Run it now (stop)**, which stops the release so the maintainer runs `.claude/maintainers/context-footprint-prompt.md` against a probe built from this release candidate; **Skip this release**, which asks for the reason and records it in the release PR. Continue only on Done or Skip.
 
-### 12. Tag the merge commit
+### 12. Tag the squash commit
 
 **2.0.0 cut only: publish `create-gaia` first.** Releases from 2.0.0 on publish `gaia-bundle-<tag>.tar.gz`, and a `create-gaia` that still downloads `gaia-<tag>.tar.gz` 404s for every `npx create-gaia@latest` the moment the `v2.0.0` release goes live. So before tagging `v2.0.0`, run step 13 in full now, including its 2.0.0 asset-name bullet, through the npm confirmation, then check:
 
@@ -190,7 +191,7 @@ Publishing `create-gaia` ahead of the tag is safe: it resolves the latest GAIA r
 ```bash
 git checkout main
 git pull --ff-only origin main
-git log -1 --oneline    # verify this is the merge commit
+git log -1 --oneline    # verify this is the release PR's squash commit
 .gaia/cli/gaia-maintainer release commit-and-tag --tag
 ```
 
@@ -270,7 +271,7 @@ npm view create-gaia@<NEW_VERSION> version    # registry CDN may lag a minute
 
 ### 14. Lockstep website
 
-The marketing/docs site (`../website` relative to this repo) embeds three version references plus a public changelog entry that must match the release just cut. Update all of them before considering the release complete.
+The marketing/docs site (`../website` relative to this repo) embeds two version references plus a public changelog entry that must match the release just cut. Update all of them before considering the release complete.
 
 ```bash
 WEB="$(git rev-parse --show-toplevel)/../website"
@@ -283,34 +284,22 @@ echo "website resolved to: $WEB"                   # ← note this literal path;
 
 - `$WEB/src/pages/get-started/sections/GetStarted.tsx` → `const GAIA_VERSION = '<NEW_VERSION>';`
 
-**Fitness page**, one string contains two version slots: `"GAIA v<installed> installed; v<available> available. Run /update-gaia to upgrade."`:
-
-- **available**: always set to `<NEW_VERSION>`.
-- **installed**: represents the `<major>.<minor>.0` baseline for the current minor series, but only advances to a new minor once that minor has at least one patch release:
-  - If `patch(<NEW_VERSION>) > 0`: set installed to `<major>.<minor>.0` of `<NEW_VERSION>`.
-  - If `patch(<NEW_VERSION>) === 0`: leave installed unchanged, the new minor has no patches yet; the previous minor's `.0` stays displayed.
-
-Example: current is `installed=1.2.0, available=1.2.2`. On `1.3.0` → `installed=1.2.0, available=1.3.0`. On `1.3.1` → `installed=1.3.0, available=1.3.1`.
-
-- `$WEB/src/pages/features/sections/Fitness.tsx` → `remediation: 'GAIA v<installed> installed; v<NEW_VERSION> available. Run /update-gaia to upgrade.'`
-
 **Structured data (JSON-LD)**, the `SoftwareApplication` schema in the site's root `index.html` carries a `softwareVersion` field. Always set it to `<NEW_VERSION>` (the latest released version; no `v` prefix, matching the existing string form):
 
 - `$WEB/index.html` → `"softwareVersion": "<NEW_VERSION>",`
 
-**Public changelog page (release notes).** The three edits above are version strings; the human-readable "what's new" entry on the site's changelog page is a separate artifact owned by the `release-notes` skill. Generate it for the version just cut:
+**Public changelog page (release notes).** The two edits above are version strings; the human-readable "what's new" entry on the site's changelog page is a separate artifact owned by the `release-notes` skill. Generate it for the version just cut:
 
 - Invoke the `release-notes` skill with `<NEW_VERSION>` (no leading `v`). It reads the graduated `## [<NEW_VERSION>]` block from `CHANGELOG.md`, translates it to adopter-facing notes, writes `$WEB/src/pages/changelog/releases/<NEW_VERSION>.ts` (the page auto-discovers the file via `import.meta.glob`; there is no index to update), and prints an editorial-decisions report.
 - The report is a human gate: review the **Dropped** and **Consolidated** lists and resolve every **Needs a human ruling** item before accepting, then adjust the file per the maintainer's rulings. Ask each ruling through `AskUserQuestion`, up to 4 questions per call, the skill's suggested reading first and marked `(Recommended)`; then ask `Accept the notes (Recommended)` or `Adjust`.
 - The skill only reads `CHANGELOG.md`; never edit the changelog here.
 
-Stage the generated `<NEW_VERSION>.ts` alongside the three version edits so all four land in one website commit.
+Stage the generated `<NEW_VERSION>.ts` alongside the two version edits so all three land in one website commit.
 
 Commit and push directly to `main` in the website repo (no branch protection on `website`). The push follows Step 13's sibling-repo push protocol.
 
 ```bash
 git -C "$WEB" add src/pages/get-started/sections/GetStarted.tsx \
-               src/pages/features/sections/Fitness.tsx \
                index.html \
                src/pages/changelog/releases/<NEW_VERSION>.ts
 git -C "$WEB" commit -m "chore: lockstep GAIA v<NEW_VERSION>"
@@ -331,7 +320,7 @@ gh release edit "v<NEW_VERSION>" -R gaia-react/gaia --notes-file "/tmp/gh-notes-
 
 `gh release edit` is neither a push nor a `gh pr merge`, so the repo-scope and audit hooks do not apply; no literal-path treatment is needed here.
 
-**2.x routing line check.** While 1.x adopters can still reach a 2.x release (the 2.0.0 cut), the release data `<NEW_VERSION>.ts` carries a `preamble` (the routing line, the Proceed side-effects line, the sha256 line) that the renderer emits verbatim before the headline. After the edit, verify the body still leads with the routing line, and re-render if not:
+**2.x routing line check.** A 1.x `/update-gaia` resolves the newest-created release, so a 1.6.1 project meets whichever 2.x release is newest, not only 2.0.0. The routing line reaches the release body only when this release's `## [<NEW_VERSION>]` CHANGELOG entry carries it: `compose-release-body.sh` then hoists it to the first line, and it refuses to compose without it only for `v2.0.0`. When the entry carries it, the release data `<NEW_VERSION>.ts` must carry a matching `preamble` (the routing line, the Proceed side-effects line, the sha256 line) that the renderer emits verbatim before the headline. After the edit, verify the body still leads with the routing line, and re-render if not:
 
 ```bash
 gh release view "v<NEW_VERSION>" -R gaia-react/gaia --json body --jq .body | head -1
@@ -370,7 +359,7 @@ git -C /abs/path/to/docs push origin main
 ```bash
 git tag -d "v<NEW_VERSION>"           # delete locally
 git push origin :"v<NEW_VERSION>"     # only if already pushed
-.gaia/cli/gaia-maintainer release commit-and-tag --tag      # re-tag from the actual merge commit
+.gaia/cli/gaia-maintainer release commit-and-tag --tag      # re-tag from the actual squash commit
 ```
 
 Re-tagging after deleting a wrong tag passes the same major guard, since the deleted tag no longer counts.
