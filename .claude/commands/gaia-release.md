@@ -211,7 +211,7 @@ It lives in a sibling checkout (`../create-gaia` relative to the GAIA repo root)
 CG="$(git rev-parse --show-toplevel)/../create-gaia"
 [ -d "$CG/.git" ] || { echo "create-gaia checkout not found at $CG, lockstep cannot complete here"; exit 1; }
 CG="$(git -C "$CG" rev-parse --show-toplevel)"   # canonical absolute path
-echo "create-gaia resolved to: $CG"              # ← note this literal path; inline it (NOT $CG) into the push commands below
+echo "create-gaia resolved to: $CG"              # ← note this literal path; inline it (NOT $CG) into the commit and push commands below
 git -C "$CG" fetch origin --quiet && git -C "$CG" checkout main --quiet && git -C "$CG" pull --ff-only origin main --quiet
 ```
 
@@ -221,25 +221,30 @@ Set both version sites to `<NEW_VERSION>` (no `v` in `package.json`, `v`-prefixe
 - `$CG/bin/index.js` → `const FALLBACK_VERSION = 'v<NEW_VERSION>';`
 - For the 2.0.0 cut only: releases from 2.0.0 on publish `gaia-bundle-${version}.tar.gz` (`wiki/concepts/Release Workflow.md`). Make sure `$CG/bin/index.js` downloads `gaia-bundle-${version}.tar.gz` for versions at or above `v2.0.0` and keeps `gaia-${version}.tar.gz` below it; step 12's gate requires this `create-gaia` published before the `v2.0.0` tag.
 
-Commit on a branch, open + merge a PR, then tag. The PR-merge and main-push guards are repo-scoped (`.claude/hooks/lib/repo-scope.sh`), but the two surfaces resolve the sibling differently. `gh pr merge -R gaia-react/create-gaia` is recognized as foreign by repo-**name** (basename) comparison, so this repo's audit gate does **not** fire, no manual-UI detour needed. Raw-git pushes follow the sibling-repo push protocol below. `create-gaia` has no audit infrastructure or branch protection of its own; a plain `--merge` (not `--auto`) is correct there.
+Commit on a branch, open + merge a PR, then tag. The PR-merge and main-push guards are repo-scoped (`.claude/hooks/lib/repo-scope.sh`), but the two surfaces resolve the sibling differently. `gh pr merge -R gaia-react/create-gaia` is recognized as foreign by repo-**name** (basename) comparison, so this repo's audit gate does **not** fire, no manual-UI detour needed. Raw-git commits and pushes follow the sibling-repo commit and push protocol below. `create-gaia` has no audit infrastructure or branch protection of its own; a plain `--merge` (not `--auto`) is correct there.
 
-> [!important] Sibling-repo push protocol
-> `repo-scope.sh` classifies a raw-git command as foreign only when it can resolve a concrete target path from the **raw command string**. Two things defeat that, and both make the guard fail closed and deny a legitimate sibling push:
+> [!important] Sibling-repo commit and push protocol
+> The main-branch commit and push guard (`.claude/hooks/block-main-destructive-git.sh`, with `.claude/hooks/lib/repo-scope.sh`) reads the raw command string and never expands it. It stands down for a sibling only when every git command in the Bash call resolves to the sibling; otherwise it reads the call as this repository and judges each `git commit` and `git push` in it against the branch of the checkout it names, which for this checkout, and for website and docs, is `main`. So a Bash call that commits or pushes in a sibling:
 >
-> 1. **Variables don't expand.** The hook reads `tool_input.command` verbatim. `git -C "$CG" push …` resolves the target to the literal string `$CG`, the path lookup fails, and the guard enforces home-repo policy. **Inline the literal absolute path** the discovery step printed (e.g. `git -C /abs/path/to/create-gaia push …`), never `$CG`.
-> 2. **One `-C` per push invocation.** The guard uses a single-capture regex and fails closed when it sees more than one `-C` in a single command string (git's last-wins semantics defeat a single capture). Each push (branch push **and** tag push) runs in **its own Bash tool invocation**, one `-C`, literal path.
+> 1. **Names the sibling by its literal absolute path on every git command**, the path the discovery step printed (e.g. `git -C /abs/path/to/create-gaia commit …`), never `$CG`, `$WEB` or `$DOCS`. An unexpanded variable resolves nowhere and is read as this checkout.
+> 2. **Holds no other git command**: none with a variable path, and none on this repository (a bare `git …`, or `git rev-parse --show-toplevel`). Either one turns the whole call home.
+> 3. **Gives each git command one `-C`.** Several literal-path git commands may chain in one call; a second `-C` on one command is read as ambiguous and refused.
 >
-> Non-push `-C` chains (add, commit, fetch, checkout, pull, tag without push) keep the `$CG`/`$WEB` variable and combine freely, only pushes (and force-pushes) need the literal-path, one-`-C` treatment.
+> A Bash call that neither commits nor pushes (add, fetch, checkout, pull, tag) may keep the variable and combine freely. A `git -C "$CG" checkout -b …` is allowed on its own; chained with a `git -C "$CG" commit` in one call, the commit is refused.
 
 ```bash
 git -C "$CG" checkout -b "<RELEASE_BRANCH>"
 # (edit package.json + bin/index.js as above)
 node --check "$CG/bin/index.js"   # smoke: no syntax error
-git -C "$CG" add package.json bin/index.js
-git -C "$CG" commit -m "chore: release v<NEW_VERSION>"
 ```
 
-Branch push, per the push protocol:
+Commit, per the commit and push protocol:
+
+```bash
+git -C /abs/path/to/create-gaia add package.json bin/index.js && git -C /abs/path/to/create-gaia commit -m "chore: release v<NEW_VERSION>"
+```
+
+Branch push, per the commit and push protocol:
 
 ```bash
 git -C /abs/path/to/create-gaia push -u origin "<RELEASE_BRANCH>"
@@ -256,7 +261,7 @@ git -C "$CG" fetch origin --quiet && git -C "$CG" checkout main --quiet && git -
 git -C "$CG" tag "v<NEW_VERSION>"
 ```
 
-Tag push, per the push protocol:
+Tag push, per the commit and push protocol:
 
 ```bash
 git -C /abs/path/to/create-gaia push origin "v<NEW_VERSION>"
@@ -277,7 +282,7 @@ The marketing/docs site (`../website` relative to this repo) embeds two version 
 WEB="$(git rev-parse --show-toplevel)/../website"
 [ -d "$WEB" ] || { echo "website checkout not found at $WEB, lockstep cannot complete here"; exit 1; }
 WEB="$(git -C "$WEB" rev-parse --show-toplevel)"   # canonical absolute path
-echo "website resolved to: $WEB"                   # ← note this literal path; inline it (NOT $WEB) into the push below
+echo "website resolved to: $WEB"                   # ← note this literal path; inline it (NOT $WEB) into the commit and push below
 ```
 
 **GetStarted page**, update the `GAIA_VERSION` constant:
@@ -296,16 +301,13 @@ echo "website resolved to: $WEB"                   # ← note this literal path;
 
 Stage the generated `<NEW_VERSION>.ts` alongside the two version edits so all three land in one website commit.
 
-Commit and push directly to `main` in the website repo (no branch protection on `website`). The push follows Step 13's sibling-repo push protocol.
+Commit and push directly to `main` in the website repo (no branch protection on `website`). Both follow Step 13's sibling-repo commit and push protocol.
 
 ```bash
-git -C "$WEB" add src/pages/get-started/sections/GetStarted.tsx \
-               index.html \
-               src/pages/changelog/releases/<NEW_VERSION>.ts
-git -C "$WEB" commit -m "chore: lockstep GAIA v<NEW_VERSION>"
+git -C /abs/path/to/website add src/pages/get-started/sections/GetStarted.tsx index.html src/pages/changelog/releases/<NEW_VERSION>.ts && git -C /abs/path/to/website commit -m "chore: lockstep GAIA v<NEW_VERSION>"
 ```
 
-Push, per the push protocol:
+Push, per the commit and push protocol:
 
 ```bash
 git -C /abs/path/to/website push origin main
@@ -336,19 +338,18 @@ The documentation site (`../docs` relative to this repo, docs.gaiareact.com) sho
 DOCS="$(git rev-parse --show-toplevel)/../docs"
 [ -d "$DOCS/.git" ] || { echo "docs checkout not found at $DOCS, lockstep cannot complete here"; exit 1; }
 DOCS="$(git -C "$DOCS" rev-parse --show-toplevel)"   # canonical absolute path
-echo "docs resolved to: $DOCS"                       # ← note this literal path; inline it (NOT $DOCS) into the push below
+echo "docs resolved to: $DOCS"                       # ← note this literal path; inline it (NOT $DOCS) into the commit and push below
 ```
 
 - `$DOCS/src/version.ts` → `export const GAIA_VERSION = '<NEW_VERSION>';` (imported by `src/overrides/PageSidebar.astro`'s colophon)
 
-Commit and push directly to `main` in the docs repo (mirror Step 14's website push; if docs enforces branch protection, route through a PR as in Step 11). The push follows Step 13's sibling-repo push protocol.
+Commit and push directly to `main` in the docs repo (mirror Step 14's website push; if docs enforces branch protection, route through a PR as in Step 11). Both follow Step 13's sibling-repo commit and push protocol.
 
 ```bash
-git -C "$DOCS" add src/version.ts
-git -C "$DOCS" commit -m "chore: lockstep GAIA v<NEW_VERSION>"
+git -C /abs/path/to/docs add src/version.ts && git -C /abs/path/to/docs commit -m "chore: lockstep GAIA v<NEW_VERSION>"
 ```
 
-Push, per the push protocol:
+Push, per the commit and push protocol:
 
 ```bash
 git -C /abs/path/to/docs push origin main

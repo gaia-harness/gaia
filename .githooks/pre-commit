@@ -48,6 +48,16 @@ if [ -f "$ROOT/.gaia/scripts/cli-autobundle.sh" ]; then
 fi
 # gaia:maintainer-only:end
 
+# gaia:maintainer-only:start
+# The labels page's generated span must match the registry whenever either is
+# staged. It runs after the autobundle arm so the check is the freshly built
+# one. It reads the working tree, so a page staged stale while a regenerated
+# copy sits unstaged passes; CI's run of the same check catches that commit.
+if [ -n "$(git diff --cached --name-only -- .gaia/labels.json 'wiki/concepts/GitHub Labels.md')" ]; then
+  "$ROOT/.gaia/cli/gaia-maintainer" labels docs --check --repo-root "$ROOT" || exit 1
+fi
+# gaia:maintainer-only:end
+
 # Generated package settings: a staged change to the root settings, the
 # registry, or a package's settings or overlay must leave every generated
 # `<package>/.claude/settings.json` current and complete, or a session launched

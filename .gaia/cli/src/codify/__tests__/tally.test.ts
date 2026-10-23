@@ -1406,3 +1406,244 @@ describe('codify-tally run', () => {
     ]);
   });
 });
+
+// Merged PR bodies as `audit-dispositions-check.sh pr-sections` renders them,
+// copied from real merged pull requests: a triage waive is
+// `- <path>:<line> <class>: <reason>`, an accepted residual carries a wrapped
+// dedup key. The trailing lines are what follows the sections in a real body.
+const WAIVED_BODY = [
+  '## Summary',
+  '',
+  '- Tightens the decision-prompt lint.',
+  '',
+  '## Waived below triage threshold (not filed)',
+  '',
+  '- .gaia/tests/hooks/spec-decision-prompts.bats:36 holistic/drifting-duplicate: a UX-consistency doc lint; narrowing it drops no protection for security, destroyed work, false shipped text or the merge gate, so no criterion 0-5 applies',
+  '- .gaia/tests/hooks/spec-decision-prompts.bats:127 holistic/hollow-assertion: a heuristic doc lint over UX wording; a missed case leaves a free-text confirmation, which is workable and meets no criterion 0-5',
+  '',
+  '🤖 Generated with [Claude Code](https://claude.com/claude-code)',
+].join('\n');
+
+const ACCEPTED_BODY = [
+  '## Accepted residuals (recorded, not fixed)',
+  '',
+  '- `frontend/app/utils/date.ts:7` Pre-existing and matches the repo-wide convention for module constants; folding it would rotate the frontend digest after the member cleared.. <!-- gaia-debt-key: v1 class=holistic/unclassified path=frontend/app/utils/date.ts line=7 -->',
+  '- `frontend/app/utils/tests/date.test.ts:13` Pre-existing and matches the repo-wide SCREAMING_SNAKE convention; folding it would rotate the frontend digest after the member cleared.. <!-- gaia-debt-key: v1 class=holistic/unclassified path=frontend/app/utils/tests/date.test.ts line=13 -->',
+  '',
+  'Closes #2929',
+  '',
+  '🤖 Generated with [Claude Code](https://claude.com/claude-code)',
+].join('\n');
+
+const ghPrWithBody = (
+  prNumber: number,
+  body: unknown,
+  comments: TallyComment[]
+) => ({body, comments, number: prNumber});
+
+const hooksFinding = (findingClass: string): BlockFinding => ({
+  area_tags: ['.gaia/tests/hooks'],
+  finding_class: findingClass,
+  severity: 'minor',
+});
+
+const waivedPr = (prNumber: number, auditors: readonly string[] = ['local']) =>
+  ghPrWithBody(
+    prNumber,
+    WAIVED_BODY,
+    auditors.map((auditor) =>
+      findingsComment(prNumber, auditor, [
+        hooksFinding('holistic/drifting-duplicate'),
+        hooksFinding('holistic/hollow-assertion'),
+      ])
+    )
+  );
+
+const WAIVED_PR_NUMBERS = [2817, 2807, 2800] as const;
+
+const inventoryClasses = (printed: Record<string, unknown>): string[] =>
+  (printed.class_inventory as {finding_class: string}[]).map(
+    (entry) => entry.finding_class
+  );
+
+describe('codify-tally run: findings the PR body disposes of', () => {
+  let sandbox: Sandbox;
+  let stdout: ReturnType<typeof captureStdout>;
+
+  beforeEach(() => {
+    sandbox = setupSandbox();
+    stdout = captureStdout();
+  });
+
+  afterEach(() => {
+    stdout.restore();
+    sandbox.cleanup();
+    vi.restoreAllMocks();
+  });
+
+  test('requests each PR body in the same window read', () => {
+    const ghSpy = vi.spyOn(runProcess, 'runGh').mockReturnValue(stubGh([]));
+
+    run([], {cwd: sandbox.root, ledger: noDeclines});
+
+    expect(ghSpy).toHaveBeenCalledTimes(1);
+    const args = ghSpy.mock.calls[0]?.[0] ?? [];
+    const fields = (args[args.indexOf('--json') + 1] ?? '').split(',');
+
+    expect(fields).toContain('body');
+    expect(fields).toContain('comments');
+  });
+
+  test('a class waived on every PR it appears on is not counted, and the PRs stay audited', () => {
+    vi.spyOn(runProcess, 'runGh').mockReturnValue(
+      stubGh(WAIVED_PR_NUMBERS.map((prNumber) => waivedPr(prNumber)))
+    );
+
+    run([], {cwd: sandbox.root, ledger: noDeclines});
+
+    const printed = parseStdout(stdout.out);
+
+    expect(printed.candidate_count).toBe(0);
+    expect(inventoryClasses(printed)).toEqual([]);
+    expect(printed.audited_pr_count).toBe(3);
+  });
+
+  test('the same findings under a body with no disposing section still count', () => {
+    vi.spyOn(runProcess, 'runGh').mockReturnValue(
+      stubGh(
+        WAIVED_PR_NUMBERS.map((prNumber) =>
+          ghPrWithBody(
+            prNumber,
+            '## Summary\n\n- Nothing waived.',
+            waivedPr(prNumber).comments
+          )
+        )
+      )
+    );
+
+    run([], {cwd: sandbox.root, ledger: noDeclines});
+
+    const candidates = parseStdout(stdout.out).candidates as {
+      distinct_pr_count: number;
+      finding_class: string;
+    }[];
+
+    expect(
+      candidates.map((candidate) => [
+        candidate.finding_class,
+        candidate.distinct_pr_count,
+      ])
+    ).toEqual([
+      ['holistic/drifting-duplicate', 3],
+      ['holistic/hollow-assertion', 3],
+    ]);
+  });
+
+  test('a waive cancels the finding in every auditor block that reported it', () => {
+    vi.spyOn(runProcess, 'runGh').mockReturnValue(
+      stubGh(
+        WAIVED_PR_NUMBERS.map((prNumber) => waivedPr(prNumber, ['ci', 'local']))
+      )
+    );
+
+    run([], {cwd: sandbox.root, ledger: noDeclines});
+
+    expect(parseStdout(stdout.out).candidate_count).toBe(0);
+  });
+
+  test('a waive cancels one finding, so a second finding of the class still counts its PR', () => {
+    vi.spyOn(runProcess, 'runGh').mockReturnValue(
+      stubGh(
+        WAIVED_PR_NUMBERS.map((prNumber) =>
+          ghPrWithBody(prNumber, WAIVED_BODY, [
+            findingsComment(prNumber, 'local', [
+              hooksFinding('holistic/drifting-duplicate'),
+              hooksFinding('holistic/drifting-duplicate'),
+            ]),
+          ])
+        )
+      )
+    );
+
+    run([], {cwd: sandbox.root, ledger: noDeclines});
+
+    expect(parseStdout(stdout.out).candidate_count).toBe(1);
+  });
+
+  test('a waive whose directory matches no area tag cancels nothing', () => {
+    vi.spyOn(runProcess, 'runGh').mockReturnValue(
+      stubGh(
+        WAIVED_PR_NUMBERS.map((prNumber) =>
+          ghPrWithBody(prNumber, WAIVED_BODY, [
+            findingsComment(prNumber, 'local', [
+              {
+                area_tags: ['.gaia/scripts'],
+                finding_class: 'holistic/drifting-duplicate',
+                severity: 'minor',
+              },
+            ]),
+          ])
+        )
+      )
+    );
+
+    run([], {cwd: sandbox.root, ledger: noDeclines});
+
+    expect(parseStdout(stdout.out).candidate_count).toBe(1);
+  });
+
+  test('accepted residuals cancel by their dedup key, leaving the unmatched finding counted', () => {
+    // The block posted beside ACCEPTED_BODY: three classless findings, two of
+    // them the accepted residuals.
+    const utilsFinding: BlockFinding = {
+      area_tags: ['frontend/app/utils'],
+      finding_class: 'holistic/unclassified',
+      severity: 'minor',
+    };
+    const testsFinding: BlockFinding = {
+      area_tags: ['frontend/app/utils/tests'],
+      finding_class: 'holistic/unclassified',
+      severity: 'minor',
+    };
+
+    vi.spyOn(runProcess, 'runGh').mockReturnValue(
+      stubGh([
+        ghPrWithBody(2931, ACCEPTED_BODY, [
+          findingsComment(2931, 'local', [
+            utilsFinding,
+            utilsFinding,
+            testsFinding,
+          ]),
+        ]),
+        ghPrWithBody(2762, ACCEPTED_BODY, [
+          findingsComment(2762, 'local', [utilsFinding, testsFinding]),
+        ]),
+        ghPrWithBody(2649, ACCEPTED_BODY, [
+          findingsComment(2649, 'local', [utilsFinding, testsFinding]),
+        ]),
+      ])
+    );
+
+    run([], {cwd: sandbox.root, ledger: noDeclines});
+
+    const printed = parseStdout(stdout.out);
+
+    expect(printed.unclassified).toBeNull();
+    expect(printed.unclassified_window_count).toBe(1);
+  });
+
+  test('a body that is missing or not a string disposes of nothing', () => {
+    vi.spyOn(runProcess, 'runGh').mockReturnValue(
+      stubGh(
+        WAIVED_PR_NUMBERS.map((prNumber, index) => ({
+          ...waivedPr(prNumber),
+          body: index === 0 ? undefined : 42,
+        }))
+      )
+    );
+
+    run([], {cwd: sandbox.root, ledger: noDeclines});
+
+    expect(parseStdout(stdout.out).candidate_count).toBe(2);
+  });
+});
