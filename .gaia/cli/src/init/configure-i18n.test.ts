@@ -163,6 +163,24 @@ describe('init configure-i18n', () => {
     ).toContain("fallbackLng: 'fr'");
   });
 
+  test('leaves the index byte-identical when every registered locale was picked', () => {
+    sandbox = setupSandbox();
+    const handEdited = `// Registered by add-locale.
+${LANGUAGES_INDEX_TEMPLATE}`;
+    writeFileSync(
+      path.join(sandbox.root, 'app', 'languages', 'index.ts'),
+      handEdited,
+      'utf8'
+    );
+
+    const exit = run(['--locales', 'en,es', '--strip', 'false'], {
+      cwd: sandbox.root,
+    });
+    expect(exit).toBe(0);
+
+    expect(readLanguagesIndex(sandbox.root)).toBe(handEdited);
+  });
+
   test('drops a registered locale that was not picked once a picked one is registered', () => {
     sandbox = setupSandbox();
     writeLanguageTree(sandbox.root, 'fr');
@@ -193,6 +211,52 @@ export type Language = 'fr';
 
 export default {fr} as const;
 `);
+  });
+
+  test('prunes a LANGUAGES array that a formatter wrapped over several lines', () => {
+    sandbox = setupSandbox();
+    writeLanguageTree(sandbox.root, 'de');
+    writeFileSync(
+      path.join(sandbox.root, 'app', 'languages', 'index.ts'),
+      `import de from './de';
+import en from './en';
+
+export const LANGUAGES = [
+  'de',
+  'en',
+];
+
+export type Language = 'de' | 'en';
+
+export default {de, en} as const;
+`,
+      'utf8'
+    );
+
+    const exit = run(['--locales', 'de', '--strip', 'false'], {
+      cwd: sandbox.root,
+    });
+    expect(exit).toBe(0);
+
+    expect(readLanguagesIndex(sandbox.root)).toContain(
+      "export const LANGUAGES = ['de'];"
+    );
+    expect(readLanguagesIndex(sandbox.root)).not.toContain('./en');
+  });
+
+  test('exit 2 when the index has no LANGUAGES array to read', () => {
+    sandbox = setupSandbox();
+    writeFileSync(
+      path.join(sandbox.root, 'app', 'languages', 'index.ts'),
+      'export {};\n',
+      'utf8'
+    );
+
+    const exit = run(['--locales', 'en', '--strip', 'false'], {
+      cwd: sandbox.root,
+    });
+    expect(exit).toBe(2);
+    expect(stdio.errors.join('')).toContain('configure_i18n_failed');
   });
 
   test('--strip true skips edits but records state', () => {
