@@ -74,6 +74,12 @@ file|deny|.claude/skills/gaia/references/spec/spec-template.md
 dir|deny|.github/workflows/
 "
 
+# lowercase <string>
+# Echoes the string lowercased. tr, not ${var,,}, so it runs on macOS bash 3.2.
+lowercase() {
+  printf '%s' "$1" | tr '[:upper:]' '[:lower:]'
+}
+
 # classify_path <path>
 # Echoes "<type>|<reason>" where:
 #   type   = allow | deny
@@ -95,7 +101,7 @@ classify_path() {
     pattern=${rest#*|}
 
     if [ "$kind" = "name" ]; then
-      if [ "${candidate##*/}" = "$pattern" ]; then
+      if [ "$(lowercase "${candidate##*/}")" = "$(lowercase "$pattern")" ]; then
         unset IFS
         printf 'deny|denylist'
         return 0
@@ -106,6 +112,12 @@ classify_path() {
     matched=0
     if [ "$kind" = "file" ]; then
       if [ "$candidate" = "$pattern" ]; then
+        matched=1
+      elif [ "$type" = "deny" ] &&
+        [ "$(lowercase "$candidate")" = "$(lowercase "$pattern")" ]; then
+        # A case variant of a denied file overwrites it on a case-insensitive
+        # checkout (macOS APFS), so deny decisions compare case-folded. Allow
+        # rules stay exact: a variant must not inherit an allow.
         matched=1
       fi
     else

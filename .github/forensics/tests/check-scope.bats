@@ -388,3 +388,15 @@ setup() {
     *) printf 'unexpected output: %s\n' "$output" >&2; return 1 ;;
   esac
 }
+
+# --- case-variant deny (case-insensitive checkouts) ------------------------
+
+@test "denylist: case variant of a denied file under an allowed prefix (.gaia/cli/GAIA)" {
+  run "$SCRIPT" .gaia/cli/GAIA
+  [ "$output" = '{"ok":false,"allowed":[],"denied":[{"path":".gaia/cli/GAIA","reason":"denylist"}]}' ]
+}
+
+@test "denylist: case variant of a denied name under an allowed prefix (.gaia/cli/Package.json)" {
+  run "$SCRIPT" .gaia/cli/Package.json
+  [ "$output" = '{"ok":false,"allowed":[],"denied":[{"path":".gaia/cli/Package.json","reason":"denylist"}]}' ]
+}

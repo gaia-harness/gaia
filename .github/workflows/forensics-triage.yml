@@ -19,12 +19,14 @@ name: 'GAIA: Forensics Triage'
 #                 (a route) and hands the files the later jobs need, the fix
 #                 commit among them as a git bundle, over as an artifact. It
 #                 writes nothing to GitHub.
-#   quality-gate  read-only, no secrets. Re-checks the fix commit's paths
-#                 against this checkout's check-scope.sh before checking it
-#                 out, then runs the gate over it.
+#   quality-gate  read-only, no secrets. Derives the fix's base from its own
+#                 checkout (never from the artifact), requires exactly one
+#                 commit on top of it, re-checks that commit's paths against
+#                 this checkout's check-scope.sh before checking it out, then
+#                 runs the gate over it. It exports the verified commit sha.
 #   publish       the only job with write permissions, each token scoped to
-#                 the step that uses it. Runs the handlers and pushes the fix
-#                 branch from the bundle; it never checks out or executes the
+#                 the step that uses it. Runs the handlers and pushes only the
+#                 verified fix sha; it never checks out or executes the
 #                 model-edited tree.
 # Every checkout sets persist-credentials: false, so no token is left in
 # .git/config for a later step to read.
@@ -736,9 +738,8 @@ jobs:
           # Already `git add -A`'d in verify-diff.
           git commit -m "fix(forensics): auto-fix attempt for #${ISSUE_NUMBER}"
           handoff_dir="${RUNNER_TEMP}/forensics-handoff"
-          # The base commit is the bundle's prerequisite and the left side
-          # of the quality-gate job's scope re-check.
-          git rev-parse refs/remotes/origin/main > "$handoff_dir/base-sha"
+          # The quality-gate job derives the base from its own checkout and
+          # never reads one from this artifact.
           git bundle create "$handoff_dir/fix.bundle" \
             "refs/heads/$FIX_BRANCH" ^refs/remotes/origin/main
           printf 'route=fix-ready\n' > "$handoff_dir/route.env"
@@ -770,9 +771,11 @@ jobs:
   # ------------------------------------------------------------------
   # Quality Gate over the fix. Read-only token and no secrets: this is
   # the job that executes model-edited files, so it holds nothing worth
-  # taking. The fix commit's paths are re-checked against this
-  # checkout's own check-scope.sh before the fix is checked out, so no
-  # model-edited file runs unless it is in scope.
+  # taking. The fix's base is derived from this checkout's own main, not
+  # read from the artifact, and the fix must be exactly one commit on it.
+  # That commit's paths are re-checked against this checkout's own
+  # check-scope.sh before the fix is checked out, so no model-edited file
+  # runs unless it is in scope.
   # ------------------------------------------------------------------
   quality-gate:
     name: Quality Gate on the fix
@@ -784,6 +787,8 @@ jobs:
       contents: read
     outputs:
       outcome: ${{ steps.quality-gate.outcome }}
+      scope_ok: ${{ steps.scope.outputs.scope_ok }}
+      fix_sha: ${{ steps.scope.outputs.fix_sha }}
     env:
       FORENSICS_DIR: .github/forensics
       FIX_BRANCH: ${{ needs.triage.outputs.fix_branch }}
@@ -800,33 +805,64 @@ jobs:
           name: forensics-handoff
           path: ${{ runner.temp }}/forensics-handoff
 
+      # A rejection sets scope_ok=false and writes scope-rejection.md beside
+      # the gate summary, then exits 0: the later steps skip and publish
+      # reports a scope rejection, not a gate failure. A bundle that cannot be
+      # read at all still fails the job.
       - name: Re-check scope, then check out the fix
+        id: scope
         run: |
           set -eu
           handoff_dir="${RUNNER_TEMP}/forensics-handoff"
-          base_sha="$(cat "$handoff_dir/base-sha")"
+          gate_dir="${RUNNER_TEMP}/forensics-gate"
+          mkdir -p "$gate_dir"
+          rejection_file="$gate_dir/scope-rejection.md"
+          reject() {
+            printf '%s\n' "$1" > "$rejection_file"
+            echo "::error::$1"
+            echo "scope_ok=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          }
           git fetch "$handoff_dir/fix.bundle" "refs/heads/$FIX_BRANCH:refs/heads/$FIX_BRANCH"
+          fix_sha="$(git rev-parse "refs/heads/$FIX_BRANCH")"
+          # The base comes from this checkout, never from the artifact: the
+          # triage job runs model-edited files and could name any base.
+          base_sha="$(git merge-base refs/remotes/origin/main "$fix_sha")"
+          if ! git merge-base --is-ancestor refs/remotes/origin/main "$fix_sha"; then
+            reject "the fix does not descend from origin/main (merge base $base_sha)"
+          fi
+          commit_count="$(git rev-list --count "$base_sha..$fix_sha")"
+          if [ "$commit_count" != "1" ] || [ "$(git rev-parse "$fix_sha^")" != "$base_sha" ]; then
+            reject "the fix must be exactly one commit directly on origin/main, found $commit_count commits above $base_sha"
+          fi
           # NUL-delimited for the reason the triage job's verify-diff step
           # gives: git would otherwise C-quote a non-ASCII path.
           touched_file="${RUNNER_TEMP}/fix-touched-paths.nul"
-          git diff --name-only -z "$base_sha" "refs/heads/$FIX_BRANCH" > "$touched_file"
+          git diff --name-only -z "$base_sha" "$fix_sha" > "$touched_file"
           if [ ! -s "$touched_file" ]; then
-            echo "::error::the fix bundle changes no path"
-            exit 1
+            reject "the fix bundle changes no path"
           fi
           mapfile -d '' -t touched < "$touched_file"
           # check-scope.sh runs from this job's checkout of main, not from
           # the fix: the model's edits cannot reach the copy that judges them.
           scope_json="$("$FORENSICS_DIR/check-scope.sh" "${touched[@]}")"
           if [ "$(printf '%s' "$scope_json" | jq -r '.ok')" != "true" ]; then
+            # shellcheck disable=SC2016 # jq filter uses literal interpolation `\(.field)`
+            printf '%s' "$scope_json" | jq -r '.denied[] | "- `\(.path)`, \(.reason)"' > "$rejection_file"
             echo "::error::the fix touches paths outside the forensics scope: $scope_json"
-            exit 1
+            echo "scope_ok=false" >> "$GITHUB_OUTPUT"
+            exit 0
           fi
           git checkout "$FIX_BRANCH"
+          {
+            echo "scope_ok=true"
+            echo "fix_sha=$fix_sha"
+          } >> "$GITHUB_OUTPUT"
 
       # Node + pnpm are provisioned only in this job, the one consumer of
       # them.
       - name: Setup pnpm
+        if: steps.scope.outputs.scope_ok == 'true'
         # Bounds a stalled fetch, not a budget for the work: strictly under
         # the job's own 30-minute cap so this step fires first and the job
         # reds with a step name attached rather than a generic job timeout.
@@ -841,6 +877,7 @@ jobs:
           npm_config_fetch_timeout: '60000'
 
       - name: Setup Node
+        if: steps.scope.outputs.scope_ok == 'true'
         # Bounds a stalled Node tarball fetch, not a budget for the work:
         # strictly under the job's own 30-minute cap so this step fires first
         # and the job reds with a step name attached rather than a generic job
@@ -852,6 +889,7 @@ jobs:
 
       - name: Run Quality Gate
         id: quality-gate
+        if: steps.scope.outputs.scope_ok == 'true'
         continue-on-error: true
         run: |
           set -eu
@@ -871,8 +909,8 @@ jobs:
   # Publish. The only job with write permissions; GH_TOKEN is set on
   # the steps that call GitHub, never job-wide. It reads the handoff,
   # runs the handler for the route, and on a gate pass pushes the fix
-  # branch straight from the bundle. It never checks out the fix, so
-  # no model-edited file runs here.
+  # commit the quality-gate job verified, taken from the bundle. It never
+  # checks out the fix, so no model-edited file runs here.
   # ------------------------------------------------------------------
   publish:
     name: Report triage outcome
@@ -955,8 +993,35 @@ jobs:
 
       # A gate job that failed before the gate step ran reports no outcome,
       # which reads as a failure here, never as a pass.
+      - name: Handle scope rejection
+        if: needs.triage.outputs.route == 'fix-ready' && needs.quality-gate.outputs.scope_ok == 'false'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -eu
+          # The triage job's own scope check passed this fix, so a rejection
+          # here means that check was bypassed or tampered with. The branch is
+          # never pushed.
+          reason_file="${RUNNER_TEMP}/scope-rejection-reason.md"
+          rejection_file="${RUNNER_TEMP}/forensics-gate/scope-rejection.md"
+          {
+            cat "${RUNNER_TEMP}/forensics-handoff/reasoning.md"
+            printf '\n\n---\n\nThe quality-gate job rejected the fix on its independent scope check, which the triage job had passed (possible tampering):\n\n'
+            if [ -f "$rejection_file" ]; then
+              cat "$rejection_file"
+            else
+              printf '_(rejection detail missing, see workflow run logs)_\n'
+            fi
+            printf '\n\nworkflow run: %s/%s/actions/runs/%s\n' \
+              "${GITHUB_SERVER_URL}" "${GITHUB_REPOSITORY}" "${GITHUB_RUN_ID}"
+          } > "$reason_file"
+          "$FORENSICS_DIR/handlers/handle-needs-human.sh" \
+            "$ISSUE_NUMBER" \
+            "$reason_file" \
+            "out-of-scope"
+
       - name: Handle Quality Gate failure
-        if: needs.triage.outputs.route == 'fix-ready' && needs.quality-gate.outputs.outcome != 'success'
+        if: needs.triage.outputs.route == 'fix-ready' && needs.quality-gate.outputs.outcome != 'success' && needs.quality-gate.outputs.scope_ok != 'false'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -993,21 +1058,28 @@ jobs:
       # by construction.
       # ----------------------------------------------------------------
       - name: Push fix branch
-        if: needs.triage.outputs.route == 'fix-ready' && needs.quality-gate.outputs.outcome == 'success'
+        if: needs.triage.outputs.route == 'fix-ready' && needs.quality-gate.outputs.outcome == 'success' && needs.quality-gate.outputs.scope_ok == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
           FIX_BRANCH: ${{ needs.triage.outputs.fix_branch }}
+          VERIFIED_FIX_SHA: ${{ needs.quality-gate.outputs.fix_sha }}
         run: |
           set -eu
           git fetch "${RUNNER_TEMP}/forensics-handoff/fix.bundle" \
             "refs/heads/$FIX_BRANCH:refs/heads/$FIX_BRANCH"
+          # Push only the commit the quality-gate job verified and gated; the
+          # bundle must still name that same commit.
+          if [ -z "$VERIFIED_FIX_SHA" ] || [ "$(git rev-parse "refs/heads/$FIX_BRANCH")" != "$VERIFIED_FIX_SHA" ]; then
+            echo "::error::the bundle's fix ref does not match the commit the quality gate verified"
+            exit 1
+          fi
           # The credential rides on this one command, the same header
           # actions/checkout would have persisted; nothing is written to
           # .git/config.
           auth_header="AUTHORIZATION: basic $(printf 'x-access-token:%s' "$GH_TOKEN" | base64 -w0)"
           echo "::add-mask::$auth_header"
           git -c "http.https://github.com/.extraheader=$auth_header" \
-            push origin "refs/heads/$FIX_BRANCH:refs/heads/$FIX_BRANCH"
+            push origin "$VERIFIED_FIX_SHA:refs/heads/$FIX_BRANCH"
 
       - name: Compose PR body
         id: pr-body

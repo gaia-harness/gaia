@@ -21,8 +21,8 @@ Trigger: `issues.opened` and `issues.labeled` events. The job-level `if` filter 
 The run splits across three jobs so that no job holding a write token runs the model or executes a model-edited file:
 
 - `triage` (read-only token) runs the parser, both model steps and the scope checks. It writes nothing to GitHub: each outcome records a route, and the files the later jobs need, the fix commit among them as a git bundle, travel as the `forensics-handoff` artifact.
-- `quality-gate` (read-only token, no secrets) runs only for a fix. It re-checks the fix commit's paths with its own checkout's `check-scope.sh` before checking the fix out, then runs the gate.
-- `publish` is the only job with write permissions, and its token is set on the steps that call GitHub, never job-wide. It runs the handler for the route and, on a gate pass, pushes the fix branch straight from the bundle. It never checks out the fix.
+- `quality-gate` (read-only token, no secrets) runs only for a fix. It derives the fix's base from its own checkout (never from the artifact), requires the fix to be exactly one commit on `origin/main`, re-checks that commit's paths with its own checkout's `check-scope.sh` before checking the fix out, then runs the gate. A scope rejection here demotes the issue with reason-code `out-of-scope`, as a possible bypass of the triage-side check.
+- `publish` is the only job with write permissions, and its token is set on the steps that call GitHub, never job-wide. It runs the handler for the route and, on a gate pass, pushes the verified fix commit from the bundle. It never checks out the fix.
 
 Every checkout sets `persist-credentials: false`.
 
@@ -47,6 +47,8 @@ The workflow file at `.github/workflows/forensics-triage.yml` is on the canonica
 ## Path policy
 
 Default-deny. Any path in neither list below is denylisted by default; allowlist expansion requires a SPEC reopen, not a PR-time decision.
+
+Deny matches on file names and exact files compare case-insensitively, because a case variant of a denied file overwrites it on a case-insensitive checkout (macOS); allow matches stay exact.
 
 ### Allowlist (eligible for autonomous fixes)
 
