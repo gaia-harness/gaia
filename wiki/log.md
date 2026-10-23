@@ -11,6 +11,10 @@ tags: [meta, log]
 
 ## [Unreleased]
 
+- 2026-10-23 6bfb741 WORTHY - forensics triage split + trusted-author codify tally → wiki/concepts/Policy-Memory Loop.md (Forensics Triage Workflow.md updated in-commit)
+- 2026-10-23 e6ef246 WORTHY - update-deps busts update-check cache again after merge → wiki/modules/Claude Integration.md
+- 2026-10-23 c7157cf WORTHY - rule globs narrowed (wiki-style, ports, design-baseline); no wiki page restates them, no edit
+- 2026-10-23 cf0bb85 WORTHY - fenced-copy-paste rule split out of context-discipline; no wiki page describes it, no edit
 - 2026-10-22 4551e56 WORTHY - wiki: 2026-10-21 08:36 UTC: relevant wiki pages updated in the same commit or no page owns the detail
 - 2026-10-22 cfe0580 WORTHY - ci(audit): run change-scoped bats legs for frontend and wiki changes: relevant wiki pages updated in the same commit or no page owns the detail
 - 2026-10-22 37515c3 WORTHY - fix(usage): end /gaia-wiki, /update-deps and /update-gaia with the run's Cost line: relevant wiki pages updated in the same commit or no page owns the detail
