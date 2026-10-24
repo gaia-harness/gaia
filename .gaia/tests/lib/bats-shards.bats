@@ -266,6 +266,7 @@ write_trivial_bats() {
   grep -qF -- 'misc' <<<"$output"
 }
 
+# bats test_tags=whole-tree
 @test "S8: usage errors" {
   run bash "$SCRIPT" files nope
   [ "$status" -eq 2 ]

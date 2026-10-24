@@ -1368,6 +1368,7 @@ EOF
   printf '%s' "$legs" | LC_ALL=C sort -u
 }
 
+# bats test_tags=whole-tree
 @test "W10: the apt step's shard list equals the exchange groups that need zsh or a YAML parser" {
   local declared legs
   # read_workflow's reader imports yaml unconditionally, so without this gate a box
@@ -1396,6 +1397,7 @@ EOF
   }
 }
 
+# bats test_tags=whole-tree
 @test "W10 adversarial: dropping a needed shard from the apt step is caught" {
   local doctored="$BATS_TEST_TMPDIR/dropped.yml" declared needed line mutated
   require_yaml_parser
