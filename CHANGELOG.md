@@ -17,6 +17,7 @@ A release change that requires the adopter to act, run a command or hand-migrate
 ### Fixed
 
 - **Worktrees wiki page:** a sentence explaining why `.gaia/local/` has no allowlist was missing from the shipped page, because it shared a line with a maintainer-only marker and the bundle scrub drops that whole line. The release build now refuses any marker line that carries other text, so a scrub can no longer drop adopter content silently (#3049)
+- **`/gaia-fitness` grade card:** the CLAUDE.md category is labelled `CLAUDE.md` instead of its internal id `claudemd`, in both its grade row and its findings header. The JSON report and rule ids keep `claudemd`, so nothing that reads them changes (#3047)
 
 ## [2.1.0] - 2026-10-23
 
