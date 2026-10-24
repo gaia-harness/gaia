@@ -36,7 +36,8 @@ const HELP_TEXT = `Usage: gaia init strip-branding --title <T>
 
   Exit codes:
     0  success (no stdout)
-    1  user-correctable error (missing flag, missing template)
+    1  user-correctable error (missing flag, missing template, no Storybook
+       brand declaration to de-brand)
     2  unexpected (filesystem failure)
     30 the package registry (.gaia/packages.json) cannot resolve the frontend
        package
@@ -95,6 +96,9 @@ const README_TEMPLATE = '.gaia/templates/README.md';
 const README_TARGET = 'README.md';
 const PREVIEW_FILE = '.storybook/preview.ts';
 const PLACEHOLDER = '{{PROJECT_TITLE}}';
+const BRAND_DECLARATION = /const storybookBrandOptions = \{[\s\S]*?\};/u;
+
+class StorybookBrandMissingError extends Error {}
 
 const removeIfPresent = (cwd: string, relative: string): void => {
   const absolute = path.join(cwd, relative);
@@ -129,14 +133,20 @@ const debrandStorybook = (cwd: string, title: string): void => {
   const original = readFileSync(target, 'utf8');
   let next = original;
 
+  if (!BRAND_DECLARATION.test(original)) {
+    throw new StorybookBrandMissingError(
+      `${PREVIEW_FILE} has no \`const storybookBrandOptions = {...};\` declaration to de-brand`
+    );
+  }
+
   // Rewrite the brand to the project wordmark: no GAIA title or URL.
   // A function replacement avoids `$` in the title being read as a backref.
   const safeTitle = escapeJsLiteralValue(title, "'");
 
-  next = next.replaceAll(
-    /const BRAND = \{[\s\S]*?\};/gu,
+  next = next.replace(
+    BRAND_DECLARATION,
     () =>
-      `const BRAND = {\n  brandTarget: '_blank',\n  brandTitle: '${safeTitle}',\n};`
+      `const storybookBrandOptions = {\n  brandTarget: '_blank',\n  brandTitle: '${safeTitle}',\n};`
   );
 
   if (next !== original) {
@@ -191,6 +201,16 @@ export const run = (
     debrandStorybook(target.packageDir, parsed.flags.title);
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
+
+    if (error instanceof StorybookBrandMissingError) {
+      structuredError({
+        code: 'storybook_brand_missing',
+        message,
+        subcommand: 'init strip-branding',
+      });
+
+      return EXIT_CODES.UNKNOWN_SUBCOMMAND;
+    }
 
     if (message.includes('not found')) {
       structuredError({

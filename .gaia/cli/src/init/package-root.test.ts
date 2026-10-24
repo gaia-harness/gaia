@@ -26,7 +26,7 @@ const write = (root: string, relative: string, contents: string): void => {
 const read = (root: string, relative: string): string =>
   readFileSync(path.join(root, relative), 'utf8');
 
-const PREVIEW = `const BRAND = {
+const PREVIEW = `const storybookBrandOptions = {
   brandTarget: '_blank',
   brandTitle: 'GAIA',
   brandUrl: 'https://gaiareact.com/docs/',
