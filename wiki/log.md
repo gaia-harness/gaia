@@ -2,13 +2,13 @@
 type: meta
 title: Log
 status: active
-created: 2026-10-23
-updated: 2026-10-23
+created: 2026-10-24
+updated: 2026-10-24
 tags: [meta, log]
 ---
 
 # Log
 
-## [v2.1.0] 2026-10-23 | Released
+## [v2.1.1] 2026-10-24 | Released
 
 See CHANGELOG.md for details.
