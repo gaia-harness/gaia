@@ -15,7 +15,7 @@ setup() {
   : > "$GH_LOG"
   : > "$BODY_LOG"
   : > "$STUB_DIRECTORY/issues.txt"
-  : > "$STUB_DIRECTORY/issue-text.txt"
+  write_issue_view "github-actions" ""
   printf '%s\n' 'shard-alpha' 'shard-beta' > "$STUB_DIRECTORY/jobs-failed.txt"
   printf 'ahead\n' > "$STUB_DIRECTORY/compare.txt"
   cat > "$STUB_DIRECTORY/bin/gh" <<'STUB'
@@ -33,10 +33,21 @@ if [ -n "${GH_FAIL_ON:-}" ] && [ "$1 $2" = "$GH_FAIL_ON" ]; then
 fi
 case "$1 $2" in
   "issue list") cat "$STUB_DIRECTORY/issues.txt" ;;
-  "issue view") cat "$STUB_DIRECTORY/issue-text.txt" ;;
+  "issue view")
+    expression=""
+    previous=""
+    for argument in "$@"; do
+      [ "$previous" = "--jq" ] && expression="$argument"
+      previous="$argument"
+    done
+    jq -r "$expression" "$STUB_DIRECTORY/issue-view.json"
+    ;;
   "issue create") printf 'https://example.test/issues/9\n' ;;
   "api --paginate") cat "$STUB_DIRECTORY/jobs-failed.txt" ;;
-  api\ repos/*/compare/*) cat "$STUB_DIRECTORY/compare.txt" ;;
+  api\ repos/*/compare/*)
+    [ -f "$STUB_DIRECTORY/compare-fails" ] && exit 1
+    cat "$STUB_DIRECTORY/compare.txt"
+    ;;
 esac
 exit 0
 STUB
@@ -51,6 +62,19 @@ STUB
   export BEFORE_SHA="aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
   export HEAD_SHA="bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
   export SHARDS_RESULT="failure"
+}
+
+# write_issue_view <body author login> <body text> [<comment author login> <comment text>]...
+write_issue_view() {
+  local body_login="$1" body_text="$2"
+  shift 2
+  local comments='[]'
+  while [ "$#" -ge 2 ]; do
+    comments=$(jq -c --arg login "$1" --arg text "$2" '. + [{author: {login: $login}, body: $text}]' <<<"$comments")
+    shift 2
+  done
+  jq -n --arg login "$body_login" --arg text "$body_text" --argjson comments "$comments" \
+    '{author: {login: $login}, body: $text, comments: $comments}' > "$STUB_DIRECTORY/issue-view.json"
 }
 
 calls_matching() {
@@ -124,7 +148,7 @@ calls_matching() {
 @test "green on a descendant of the red commit closes with a link to the run" {
   export SHARDS_RESULT="success"
   printf '42\n' > "$STUB_DIRECTORY/issues.txt"
-  printf 'body\n<!-- red-main-sha: cccccccccccccccccccccccccccccccccccccccc -->\n' > "$STUB_DIRECTORY/issue-text.txt"
+  write_issue_view "github-actions" $'body\n<!-- red-main-sha: cccccccccccccccccccccccccccccccccccccccc -->'
   printf 'ahead\n' > "$STUB_DIRECTORY/compare.txt"
   run bash "$SCRIPT"
   [ "$status" -eq 0 ]
@@ -136,7 +160,7 @@ calls_matching() {
 @test "green on the identical commit also closes" {
   export SHARDS_RESULT="success"
   printf '42\n' > "$STUB_DIRECTORY/issues.txt"
-  printf '<!-- red-main-sha: %s -->\n' "$HEAD_SHA" > "$STUB_DIRECTORY/issue-text.txt"
+  write_issue_view "github-actions" "<!-- red-main-sha: ${HEAD_SHA} -->"
   printf 'identical\n' > "$STUB_DIRECTORY/compare.txt"
   run bash "$SCRIPT"
   [ "$status" -eq 0 ]
@@ -146,9 +170,8 @@ calls_matching() {
 @test "the newest marker across body and comments decides the compare" {
   export SHARDS_RESULT="success"
   printf '42\n' > "$STUB_DIRECTORY/issues.txt"
-  printf '<!-- red-main-sha: %s -->\nnoise\n<!-- red-main-sha: %s -->\n' \
-    "1111111111111111111111111111111111111111" \
-    "2222222222222222222222222222222222222222" > "$STUB_DIRECTORY/issue-text.txt"
+  write_issue_view "github-actions" "<!-- red-main-sha: 1111111111111111111111111111111111111111 -->" \
+    "github-actions" "<!-- red-main-sha: 2222222222222222222222222222222222222222 -->"
   run bash "$SCRIPT"
   [ "$status" -eq 0 ]
   grep -qF -- "compare/2222222222222222222222222222222222222222...${HEAD_SHA}" "$GH_LOG"
@@ -156,10 +179,43 @@ calls_matching() {
   true
 }
 
+@test "a marker in a comment from another author is ignored" {
+  export SHARDS_RESULT="success"
+  printf '42\n' > "$STUB_DIRECTORY/issues.txt"
+  write_issue_view "github-actions" "<!-- red-main-sha: cccccccccccccccccccccccccccccccccccccccc -->" \
+    "some-stranger" "<!-- red-main-sha: dddddddddddddddddddddddddddddddddddddddd -->"
+  run bash "$SCRIPT"
+  [ "$status" -eq 0 ]
+  grep -qF -- "compare/cccccccccccccccccccccccccccccccccccccccc...${HEAD_SHA}" "$GH_LOG"
+  grep -qF -- "compare/dddddddddddddddddddddddddddddddddddddddd" "$GH_LOG" && return 1
+  true
+}
+
+@test "a marker only from another author counts as no marker" {
+  export SHARDS_RESULT="success"
+  printf '42\n' > "$STUB_DIRECTORY/issues.txt"
+  write_issue_view "some-stranger" "<!-- red-main-sha: cccccccccccccccccccccccccccccccccccccccc -->"
+  run bash "$SCRIPT"
+  [ "$status" -eq 0 ]
+  [ "$(calls_matching '^issue close ')" -eq 0 ]
+  [ "$(calls_matching '^api repos/')" -eq 0 ]
+}
+
+@test "an unresolvable marker sha does not fail the reporter or close the issue" {
+  export SHARDS_RESULT="success"
+  printf '42\n' > "$STUB_DIRECTORY/issues.txt"
+  write_issue_view "github-actions" "<!-- red-main-sha: cccccccccccccccccccccccccccccccccccccccc -->"
+  : > "$STUB_DIRECTORY/compare-fails"
+  run bash "$SCRIPT"
+  [ "$status" -eq 0 ]
+  [ "$(calls_matching '^issue close ')" -eq 0 ]
+  [ "$(calls_matching '^issue comment 42 ')" -eq 1 ]
+}
+
 @test "green on an older or diverged commit does not close, and says so" {
   export SHARDS_RESULT="success"
   printf '42\n' > "$STUB_DIRECTORY/issues.txt"
-  printf '<!-- red-main-sha: cccccccccccccccccccccccccccccccccccccccc -->\n' > "$STUB_DIRECTORY/issue-text.txt"
+  write_issue_view "github-actions" "<!-- red-main-sha: cccccccccccccccccccccccccccccccccccccccc -->"
   for compare_status in behind diverged; do
     : > "$GH_LOG"
     : > "$BODY_LOG"
@@ -175,7 +231,7 @@ calls_matching() {
 @test "green with an open issue that carries no marker does not close" {
   export SHARDS_RESULT="success"
   printf '42\n' > "$STUB_DIRECTORY/issues.txt"
-  printf 'hand-written issue\n' > "$STUB_DIRECTORY/issue-text.txt"
+  write_issue_view "github-actions" "hand-written issue"
   run bash "$SCRIPT"
   [ "$status" -eq 0 ]
   [ "$(calls_matching '^issue close ')" -eq 0 ]

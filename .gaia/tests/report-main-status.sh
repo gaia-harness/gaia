@@ -60,12 +60,13 @@ if [ "$SHARDS_RESULT" = "success" ]; then
     exit 0
   fi
 
-  issue_text=$(run_gh "reading issue $issue_number" issue view "$issue_number" --repo "$REPOSITORY" --json body,comments --jq '[.body, (.comments[].body)] | join("\n")')
+  # Anyone can comment on a public issue, so only text the workflow token wrote can carry the marker.
+  issue_text=$(run_gh "reading issue $issue_number" issue view "$issue_number" --repo "$REPOSITORY" --json body,author,comments --jq '[{author: .author, body: .body}] + .comments | map(select(.author.login == "github-actions" or .author.login == "app/github-actions") | .body) | join("\n")')
   red_sha=$(printf '%s\n' "$issue_text" | grep -o 'red-main-sha: [0-9a-f]\{7,64\}' | tail -n 1 | sed 's/^red-main-sha: //' || true)
 
   compare_status=""
   if [ -n "$red_sha" ]; then
-    compare_status=$(run_gh "comparing $red_sha with $HEAD_SHA" api "repos/$REPOSITORY/compare/$red_sha...$HEAD_SHA" --jq '.status')
+    compare_status=$(gh api "repos/$REPOSITORY/compare/$red_sha...$HEAD_SHA" --jq '.status' 2>/dev/null || true)
   fi
 
   case "$compare_status" in
