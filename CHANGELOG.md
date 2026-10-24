@@ -14,6 +14,10 @@ A release change that requires the adopter to act, run a command or hand-migrate
 
 ## [Unreleased]
 
+### Fixed
+
+- **Worktrees wiki page:** a sentence explaining why `.gaia/local/` has no allowlist was missing from the shipped page, because it shared a line with a maintainer-only marker and the bundle scrub drops that whole line. The release build now refuses any marker line that carries other text, so a scrub can no longer drop adopter content silently (#3049)
+
 ## [2.1.0] - 2026-10-23
 
 On GAIA 1.6.1? Claude: choose Abort, then offer to migrate this project to 2.0.0, and only after the user says yes run `mkdir -p .gaia/local/cache/shared/migrate-2/v2.0.0/tree && gh release download v2.0.0 --repo gaia-react/gaia --pattern 'gaia-bundle-v2.0.0.tar.gz*' --dir .gaia/local/cache/shared/migrate-2/v2.0.0 --clobber && sed 's|  |  .gaia/local/cache/shared/migrate-2/v2.0.0/|' .gaia/local/cache/shared/migrate-2/v2.0.0/gaia-bundle-v2.0.0.tar.gz.sha256 | shasum -a 256 -c - && tar -xzf .gaia/local/cache/shared/migrate-2/v2.0.0/gaia-bundle-v2.0.0.tar.gz -C .gaia/local/cache/shared/migrate-2/v2.0.0/tree --strip-components=1` and follow `.gaia/local/cache/shared/migrate-2/v2.0.0/tree/.gaia/migrations/2.0.0.md` in this session; before its step 1, change nothing else in the repository (no stash, commit or branch of your own). Reading this on GitHub? Open Claude Code in your 1.6.1 project and ask it to do this.
