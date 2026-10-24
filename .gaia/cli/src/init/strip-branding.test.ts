@@ -10,6 +10,7 @@ import {
 import {tmpdir} from 'node:os';
 import path from 'node:path';
 import {writeFrontendRegistry} from '../util/package-fixture.js';
+import {resolveRepoRootFromImportMeta} from '../util/repo-root-fixture.js';
 import {run} from './strip-branding.js';
 import {readState} from './util/state.js';
 
@@ -21,27 +22,17 @@ type Sandbox = {
 const TEMPLATE_README =
   '# {{PROJECT_TITLE}}\n\nWelcome to {{PROJECT_TITLE}}!\n';
 
-const PREVIEW_BEFORE = `import type {Preview} from '@storybook/react-vite';
-import {themes} from 'storybook/theming';
-import '~/styles/tailwind.css';
-
-const BRAND = {
-  brandTarget: '_blank',
-  brandTitle: 'GAIA',
-  brandUrl: 'https://gaiareact.com/docs/',
-};
-
-const preview: Preview = {
-  parameters: {
-    darkMode: {
-      dark: {...themes.dark, ...BRAND},
-      light: {...themes.light, ...BRAND},
-    },
-  },
-};
-
-export default preview;
-`;
+// The shipped preview, not a hand-written copy: renaming its brand
+// declaration has to fail here rather than leave the de-brand a silent no-op.
+const PREVIEW_BEFORE = readFileSync(
+  path.join(
+    resolveRepoRootFromImportMeta(import.meta.url),
+    'frontend',
+    '.storybook',
+    'preview.ts'
+  ),
+  'utf8'
+);
 
 const setupSandbox = (): Sandbox => {
   const root = mkdtempSync(path.join(tmpdir(), 'gaia-init-strip-branding-'));
@@ -221,6 +212,21 @@ describe('init strip-branding', () => {
     const exit = run(['--title', 'X'], {cwd: sandbox.root});
     expect(exit).toBe(1);
     expect(stdio.errors.join('')).toContain('template_missing');
+  });
+
+  test('exit 1 without recording the step when the brand declaration is missing', () => {
+    sandbox = setupSandbox();
+    const previewPath = path.join(sandbox.root, '.storybook', 'preview.ts');
+    const customized = 'export default {};\n';
+    writeFileSync(previewPath, customized, 'utf8');
+
+    const exit = run(['--title', 'X'], {cwd: sandbox.root});
+    expect(exit).toBe(1);
+    expect(stdio.errors.join('')).toContain('storybook_brand_missing');
+    expect(readFileSync(previewPath, 'utf8')).toBe(customized);
+    expect(readState(sandbox.root).completed_steps).not.toContain(
+      'strip-branding'
+    );
   });
 
   test('rejects unknown flags', () => {
