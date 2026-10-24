@@ -20,6 +20,14 @@ const UPSTREAM_NOTE =
   'GAIA ships these files; /update-gaia takes the upstream fix.';
 const SEVERITY_ORDER = ['error', 'warning', 'info'] as const;
 
+// The JSON report and rule ids keep the `claudemd` id, which the cleanse
+// playbooks and statusline read; only the card shows the file's real name.
+const CATEGORY_LABELS: Readonly<Record<string, string>> = {
+  claudemd: 'CLAUDE.md',
+};
+
+const categoryLabel = (name: string): string => CATEGORY_LABELS[name] ?? name;
+
 const FindingSchema = z.object({
   category: z.string(),
   file: z.string(),
@@ -112,7 +120,11 @@ const computeInner = (
   cols: number
 ): number => {
   const floor =
-    Math.max(...report.categories.map((category) => category.name.length)) +
+    Math.max(
+      ...report.categories.map(
+        (category) => categoryLabel(category.name).length
+      )
+    ) +
     1 +
     clusterWidth;
 
@@ -124,7 +136,7 @@ const computeInner = (
         ?.grade ?? '';
 
     naturals.push(
-      `${finding.category}: ${grade}`.length,
+      `${categoryLabel(finding.category)}: ${grade}`.length,
       INDENT + location(finding).length,
       INDENT + finding.rule_id.length,
       INDENT + finding.remediation.length
@@ -188,7 +200,7 @@ const renderCategoryFindings = (
   const {line} = context;
   const lines: string[] = [
     line(''),
-    line(`${category.name}: ${category.grade}`),
+    line(`${categoryLabel(category.name)}: ${category.grade}`),
   ];
 
   for (const finding of findings) {
@@ -242,7 +254,13 @@ export const renderCard = (report: FitnessReport, cols: number): string => {
   ];
 
   for (const category of categories) {
-    out.push(rightRow(category.name, noteFor(category.name), category.grade));
+    out.push(
+      rightRow(
+        categoryLabel(category.name),
+        noteFor(category.name),
+        category.grade
+      )
+    );
   }
 
   if (report.findings.length > 0) {

@@ -5,7 +5,7 @@ exports[`renderCard > renders a clean A+ report without a findings block or foot
 | GAIA FITNESS OVERALL   A+  |
 +----------------------------+
 | authoring              A+  |
-| claudemd               A+  |
+| CLAUDE.md              A+  |
 | frontmatter            A+  |
 | hooks                  A+  |
 | prompt                 A+  |
@@ -20,7 +20,7 @@ exports[`renderCard > renders a mixed report 1`] = `
 | GAIA FITNESS                                                                       OVERALL   C+  |
 +--------------------------------------------------------------------------------------------------+
 | authoring                                                                                    A+  |
-| claudemd                                                                                     A+  |
+| CLAUDE.md                                                                                    A+  |
 | frontmatter                                                                      1 warning   B+  |
 | hooks                                                                              1 error   C+  |
 | prompt                                                                                       A+  |
@@ -56,7 +56,7 @@ exports[`renderCard > renders an all n/a report as categories and an overall n/a
 | GAIA FITNESS OVERALL   n/a |
 +----------------------------+
 | authoring              n/a |
-| claudemd               n/a |
+| CLAUDE.md              n/a |
 | frontmatter            n/a |
 | hooks                  n/a |
 | prompt                 n/a |
@@ -71,7 +71,7 @@ exports[`renderCard > renders upstream findings in their own block pointing at /
 | GAIA FITNESS                                   OVERALL   A+  |
 +--------------------------------------------------------------+
 | authoring                                                A+  |
-| claudemd                                                 A+  |
+| CLAUDE.md                                                A+  |
 | frontmatter                                              A+  |
 | hooks                                                    A+  |
 | prompt                                                   A+  |

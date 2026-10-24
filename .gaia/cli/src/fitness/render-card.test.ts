@@ -151,7 +151,9 @@ describe('renderCard', () => {
     report.categories = reversed;
 
     const card = renderCard(report, 80);
-    const indices = CATEGORY_NAMES.map((name) => card.indexOf(`| ${name}`));
+    const indices = CATEGORY_NAMES.map((name) =>
+      card.indexOf(`| ${name === 'claudemd' ? 'CLAUDE.md' : name}`)
+    );
 
     for (const index of indices) expect(index).toBeGreaterThan(-1);
 
@@ -223,6 +225,28 @@ describe('renderCard', () => {
     const card = renderCard(report, 100);
 
     expect(card).toContain('1 error, 1 info');
+    expect(allEqual(lineWidths(card))).toBe(true);
+  });
+
+  test('labels the claudemd category as CLAUDE.md in its row and findings header', () => {
+    const report = reportWith({claudemd: 'B'}, 'B', {
+      findings: [
+        {
+          category: 'claudemd',
+          file: 'CLAUDE.md',
+          line: 4,
+          remediation: 'Remove the dead path.',
+          rule_id: 'claudemd.dead-path',
+          severity: 'warning',
+        },
+      ],
+    });
+    const card = renderCard(report, 100);
+
+    expect(card).toMatch(/\| CLAUDE\.md +1 warning +B +\|/);
+    expect(card).toContain('| CLAUDE.md: B ');
+    expect(card).not.toContain('| claudemd');
+    expect(card).toContain('claudemd.dead-path');
     expect(allEqual(lineWidths(card))).toBe(true);
   });
 

@@ -32457,6 +32457,10 @@ var OVERALL_LABEL = "OVERALL";
 var TITLE = "GAIA FITNESS";
 var UPSTREAM_NOTE = "GAIA ships these files; /update-gaia takes the upstream fix.";
 var SEVERITY_ORDER = ["error", "warning", "info"];
+var CATEGORY_LABELS = {
+  claudemd: "CLAUDE.md"
+};
+var categoryLabel = (name) => CATEGORY_LABELS[name] ?? name;
 var FindingSchema = external_exports.object({
   category: external_exports.string(),
   file: external_exports.string(),
@@ -32516,12 +32520,16 @@ var wrapText = (text, width) => {
   return lines.length > 0 ? lines : [""];
 };
 var computeInner = (report2, clusterWidth, cols) => {
-  const floor = Math.max(...report2.categories.map((category) => category.name.length)) + 1 + clusterWidth;
+  const floor = Math.max(
+    ...report2.categories.map(
+      (category) => categoryLabel(category.name).length
+    )
+  ) + 1 + clusterWidth;
   const naturals = [floor, TITLE.length + 1 + clusterWidth, "FINDINGS".length];
   for (const finding of report2.findings) {
     const grade = report2.categories.find((category) => category.name === finding.category)?.grade ?? "";
     naturals.push(
-      `${finding.category}: ${grade}`.length,
+      `${categoryLabel(finding.category)}: ${grade}`.length,
       INDENT + location(finding).length,
       INDENT + finding.rule_id.length,
       INDENT + finding.remediation.length
@@ -32559,7 +32567,7 @@ var renderCategoryFindings = (category, findings, context) => {
   const { line } = context;
   const lines = [
     line(""),
-    line(`${category.name}: ${category.grade}`)
+    line(`${categoryLabel(category.name)}: ${category.grade}`)
   ];
   for (const finding of findings) {
     lines.push(...renderFinding(finding, context, true));
@@ -32598,7 +32606,13 @@ var renderCard = (report2, cols) => {
     bar()
   ];
   for (const category of categories) {
-    out.push(rightRow(category.name, noteFor(category.name), category.grade));
+    out.push(
+      rightRow(
+        categoryLabel(category.name),
+        noteFor(category.name),
+        category.grade
+      )
+    );
   }
   if (report2.findings.length > 0) {
     out.push(bar(), line("FINDINGS"));
