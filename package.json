@@ -1,6 +1,6 @@
 {
   "name": "gaia",
-  "version": "2.0.1",
+  "version": "2.1.0",
   "description": "GAIA: A serious harness for Claude Code",
   "author": "Steven Sacks <stevensacks@gmail.com>",
   "sideEffects": false,
