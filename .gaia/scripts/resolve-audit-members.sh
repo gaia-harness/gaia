@@ -176,7 +176,7 @@ type audit_owners_for_paths >/dev/null 2>&1 || exit 0
 type audit_local_base_reference >/dev/null 2>&1 || exit 0
 
 if ! audit_scope_init "$repo_root" 2>/dev/null; then
-  echo "resolve-audit-members: ${repo_root}/.gaia/audit-ci.yml has no auditors: roster; restore the auditors: block from the GAIA template" >&2
+  echo "resolve-audit-members: ${repo_root}/.gaia/audit-ci.yml has no auditors: roster; restore the auditors: block from the copy of .gaia/audit-ci.yml GAIA ships" >&2
   exit 2
 fi
 

@@ -66,7 +66,7 @@ const MANIFEST_RELATIVE = path.join('.gaia', 'manifest.json');
 /**
  * `.gaia/cli/src` is the CLI's TypeScript source, which is excluded from the
  * adopter bundle: adopters get the compiled `.gaia/cli/gaia` and `.gaia/cli/templates/`,
- * so the directory is present only in the GAIA template source itself.
+ * so the directory is present only in GAIA's own source tree.
  */
 const CLI_SOURCE_RELATIVE = path.join('.gaia', 'cli', 'src');
 
@@ -88,7 +88,7 @@ const targetRefusal = (cwd: string, subcommand: string): null | number => {
   if (existsSync(path.join(cwd, CLI_SOURCE_RELATIVE))) {
     structuredError({
       code: 'gaia_template_source',
-      message: `refusing to run in ${cwd}: ${CLI_SOURCE_RELATIVE} is present, so this is the GAIA template source rather than a project scaffolded from it`,
+      message: `refusing to run in ${cwd}: ${CLI_SOURCE_RELATIVE} is present, so this is GAIA's own source tree rather than a project scaffolded from it`,
       subcommand: `init ${subcommand}`,
     });
 

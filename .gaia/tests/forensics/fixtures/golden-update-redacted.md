@@ -17,4 +17,4 @@ class_state_files:
   - .claude/hooks/wiki-session-stop.sh: conflict marker present
 
 ## Reproduction context
-The user ran /update-gaia to pull in the latest GAIA template changes. A merge conflict appeared in .claude/hooks/wiki-session-stop.sh because the upstream changed the hook structure while the user had added a custom notification block. The three-way merge could not resolve the overlap automatically.
+The user ran /update-gaia to pull in the latest GAIA changes. A merge conflict appeared in .claude/hooks/wiki-session-stop.sh because the upstream changed the hook structure while the user had added a custom notification block. The three-way merge could not resolve the overlap automatically.

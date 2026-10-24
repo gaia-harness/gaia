@@ -35473,7 +35473,7 @@ var targetRefusal = (cwd, subcommand) => {
   if (existsSync21(path40.join(cwd, CLI_SOURCE_RELATIVE))) {
     structuredError({
       code: "gaia_template_source",
-      message: `refusing to run in ${cwd}: ${CLI_SOURCE_RELATIVE} is present, so this is the GAIA template source rather than a project scaffolded from it`,
+      message: `refusing to run in ${cwd}: ${CLI_SOURCE_RELATIVE} is present, so this is GAIA's own source tree rather than a project scaffolded from it`,
       subcommand: `init ${subcommand}`
     });
     return EXIT_CODES.UNKNOWN_SUBCOMMAND;

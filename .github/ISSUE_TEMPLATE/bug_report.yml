@@ -1,5 +1,5 @@
 name: Bug report
-description: Something in the GAIA template is broken or behaves unexpectedly.
+description: Something in GAIA is broken or behaves unexpectedly.
 labels: [bug]
 body:
   - type: markdown

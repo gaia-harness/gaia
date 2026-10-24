@@ -1,5 +1,5 @@
 # .gaia/audit-ci.yml: the Code Audit Team roster.
-# This file ships in the GAIA template; adopters edit values to tune behavior.
+# GAIA ships this file; adopters edit values to tune behavior.
 # The local audit reads it on every run.
 
 # Code Audit Team roster. Each entry maps file-globs to a specialized auditor
