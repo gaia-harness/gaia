@@ -275,7 +275,7 @@ audit_scope_init() {
     records="$(_audit_scope_parse_auditors < "$config_file")"
   fi
   if [ -z "$records" ]; then
-    printf 'audit-scope: no auditors: roster in %s; restore the auditors: block from the GAIA template\n' "$config_file" >&2
+    printf 'audit-scope: no auditors: roster in %s; restore the auditors: block from the copy of .gaia/audit-ci.yml GAIA ships\n' "$config_file" >&2
     return 1
   fi
 

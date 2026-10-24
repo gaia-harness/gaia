@@ -380,7 +380,7 @@ tree_root="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
 # here with its own named remedy, ahead of the digest deny below, whose text
 # would otherwise blame a missing sha256 tool.
 if ! audit_scope_init "$tree_root" 2>/dev/null; then
-  jq -n --arg reason "PR merge gate: ${tree_root}/.gaia/audit-ci.yml has no auditors: roster, so no Code Audit Team member can be resolved or cleared for HEAD ${sha:0:12}. There is no fallback roster. Restore the auditors: block from the GAIA template's .gaia/audit-ci.yml, commit it, and retry.${gate_arm_note}" '{
+  jq -n --arg reason "PR merge gate: ${tree_root}/.gaia/audit-ci.yml has no auditors: roster, so no Code Audit Team member can be resolved or cleared for HEAD ${sha:0:12}. There is no fallback roster. Restore the auditors: block from the copy of .gaia/audit-ci.yml GAIA ships, commit it, and retry.${gate_arm_note}" '{
     hookSpecificOutput: {
       hookEventName: "PreToolUse",
       permissionDecision: "deny",
