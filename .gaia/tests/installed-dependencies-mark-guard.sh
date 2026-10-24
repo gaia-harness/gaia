@@ -137,7 +137,7 @@ node_builtins="assert async_hooks buffer child_process cluster console constants
 
 discover_tracked() {
   local pathspec="$1" listing
-  listing="$(git -C "$root" -c core.quotepath=false ls-files "$pathspec" 2>/dev/null)"
+  listing="$(git -C "$root" -c core.quotepath=false ls-files -z "$pathspec" 2>/dev/null | tr '\0' '\n')"
   if [ -z "$listing" ]; then
     listing="$(find "$root" -type f -name "$pathspec" -not -path '*/.git/*' -not -path '*/node_modules/*' -not -path '*/vendor/*' 2>/dev/null | sed "s|^$root/||")"
   fi

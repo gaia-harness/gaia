@@ -354,11 +354,11 @@ $scoped_path -> status $status, output: $output"
   local real_root
   real_root="$(git -C "$BATS_TEST_DIRNAME" rev-parse --show-toplevel)"
   local skill_doc command_doc agent_doc cli_source wiki_page lone_hook
-  skill_doc="$(git -C "$real_root" ls-files -- '.claude/skills/*/SKILL.md' | head -n 1)"
-  command_doc="$(git -C "$real_root" ls-files -- '.claude/commands/*.md' | head -n 1)"
-  agent_doc="$(git -C "$real_root" ls-files -- '.claude/agents/*.md' | head -n 1)"
-  cli_source="$(git -C "$real_root" ls-files -- '.gaia/cli/src/*.ts' | head -n 1)"
-  wiki_page="$(git -C "$real_root" ls-files -- 'wiki/*.md' | head -n 1)"
+  skill_doc="$(git -C "$real_root" ls-files -z -- '.claude/skills/*/SKILL.md' | tr '\0' '\n' | sed -n 1p)"
+  command_doc="$(git -C "$real_root" ls-files -z -- '.claude/commands/*.md' | tr '\0' '\n' | sed -n 1p)"
+  agent_doc="$(git -C "$real_root" ls-files -z -- '.claude/agents/*.md' | tr '\0' '\n' | sed -n 1p)"
+  cli_source="$(git -C "$real_root" ls-files -z -- '.gaia/cli/src/*.ts' | tr '\0' '\n' | sed -n 1p)"
+  wiki_page="$(git -C "$real_root" ls-files -z -- 'wiki/*.md' | tr '\0' '\n' | sed -n 1p)"
   lone_hook=""
   local hook_path hook_name
   while IFS= read -r hook_path; do
@@ -367,7 +367,7 @@ $scoped_path -> status $status, output: $output"
       lone_hook="$hook_path"
       break
     fi
-  done < <(git -C "$real_root" ls-files -- '.claude/hooks/*.sh')
+  done < <(git -C "$real_root" ls-files -z -- '.claude/hooks/*.sh' | tr '\0' '\n')
   local category_path
   for category_path in "$skill_doc" "$command_doc" "$agent_doc" "$cli_source" "$wiki_page" "$lone_hook"; do
     [ -n "$category_path" ]
