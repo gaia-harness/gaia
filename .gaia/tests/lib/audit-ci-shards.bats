@@ -1527,23 +1527,23 @@ w5_step_caps() {
   [ "$matrix_list" != "$expected" ] || { echo "adding a bogus shard id did not desync the matrix from the sharder" >&2; return 1; }
 }
 
-@test "W6 adversarial: dropping lib from the matrix is caught" {
+@test "W6 adversarial: dropping lib-1 from the matrix is caught" {
   require_yaml_parser
   local doctored="$BATS_TEST_TMPDIR/w6b.yml" line mutated
   line="$(sole_line_matching "$WORKFLOW" "$MATRIX_SHARD_PATTERN")" || return 1
-  # Three forms because the list is comma-separated and lib can sit anywhere in
-  # it. Each bounds both sides of the id, so a future shard whose name ENDS in
-  # lib is not silently rewritten instead: that would leave a changed line
+  # Three forms because the list is comma-separated and lib-1 can sit anywhere
+  # in it. Each bounds both sides of the id, so a future shard whose name ENDS
+  # in lib-1 is not silently rewritten instead: that would leave a changed line
   # assert_doctored accepts while the case no longer performs the mutation its
   # name states.
-  mutated="$(printf '%s' "$line" | sed -e 's/\[lib, /[/' -e 's/, lib, /, /' -e 's/, lib\]/]/')"
-  assert_doctored "$line" "$mutated" "dropping lib" || return 1
+  mutated="$(printf '%s' "$line" | sed -e 's/\[lib-1, /[/' -e 's/, lib-1, /, /' -e 's/, lib-1\]/]/')"
+  assert_doctored "$line" "$mutated" "dropping lib-1" || return 1
   replace_line "$WORKFLOW" "$line" "$mutated" "$doctored"
 
   local matrix_list expected
   matrix_list="$(read_workflow matrix "$doctored" shards | LC_ALL=C sort)"
   expected="$(printf '%s\nsandbox\nconcurrency\ncommitlint\n' "$(bash "$BATS_SHARDS" shards)" | LC_ALL=C sort)"
-  [ "$matrix_list" != "$expected" ] || { echo "dropping lib from the matrix did not desync it from the sharder" >&2; return 1; }
+  [ "$matrix_list" != "$expected" ] || { echo "dropping lib-1 from the matrix did not desync it from the sharder" >&2; return 1; }
 }
 
 # W7. Exactly one dorny/paths-filter step in the whole workflow, pinning the
@@ -2008,27 +2008,28 @@ seed_seam_tree() {
 # Points ONE seam at the seeded tree's needing directory and every other seam at
 # its clean one, then runs <helper> (shard_package_needs or shard_package_legs)
 # over the result. <group> selects which weighted group holds the needing
-# suite: `hooks` (the default) or `scripts`.
+# suite: `hooks` (the default), `scripts` or `lib`.
 #
 # The group is a parameter rather than a second copy of this function because
-# the two weighted groups are the two arms of group_for_shard, and a fixture set
-# that only ever drives one of them cannot see a narrowing edit to the other.
+# each weighted group is its own arm of group_for_shard, and a fixture set
+# that only ever drives one of them cannot see a narrowing edit to another.
 # That is not hypothetical: before these fixtures covered both arms, the
 # scripts arm could be reduced to a singleton with every test in this
 # repository still green.
 seam_tree_scan() {
   local helper_function="$1" root="$2" group="${3:-hooks}" sharder="${4:-$BATS_SHARDS}"
-  local hooks_directory="$root/clean" scripts_directory="$root/clean"
+  local hooks_directory="$root/clean" scripts_directory="$root/clean" library_directory="$root/clean"
   case "$group" in
     hooks) hooks_directory="$root/needs" ;;
     scripts) scripts_directory="$root/needs" ;;
+    lib) library_directory="$root/needs" ;;
     *)
       echo "seam_tree_scan: unknown group $group" >&2
       return 2
       ;;
   esac
   HOOKS_DIRECTORY="$hooks_directory" SCRIPTS_TESTS_DIRECTORY="$scripts_directory" \
-    AUDIT_TESTS_DIRECTORY="$root/clean" LIBRARY_DIRECTORY="$root/clean" \
+    AUDIT_TESTS_DIRECTORY="$root/clean" LIBRARY_DIRECTORY="$library_directory" \
     FORENSICS_DIRECTORY="$root/clean" STATUSLINE_DIRECTORY="$root/clean" \
     "$helper_function" "$sharder" "$root"
 }
@@ -2152,7 +2153,7 @@ copy_sharder_without_group() {
 
   # Every seam but HOOKS_DIRECTORY points at the clean tree, so no other group holds
   # a needing suite and none of their legs may appear.
-  grep -qE '^(audit|lib|misc|scripts-[0-9]+)$' <<<"$legs" && {
+  grep -qE '^(audit|lib-[0-9]+|misc|scripts-[0-9]+)$' <<<"$legs" && {
     echo "rounding up reached a group with no needing suite:" >&2
     printf '%s\n' "$legs" >&2
     return 1
@@ -2212,33 +2213,38 @@ copy_sharder_without_group() {
 # satisfies, so the partition alone cannot see a narrowing. The empirical half,
 # that a declared group really is a superset of what a reshuffle can move
 # across, is what has to be driven per arm.
-@test "W10: rounding up survives a reshuffle in the scripts group too, not only hooks" {
-  local root="$BATS_TEST_TMPDIR/scripts-seam" needs_before needs_after legs_before legs_after
+# w10_reshuffle_check <group> <outside-pattern>: the needing suite in <group>'s
+# seam lands on exactly one of its legs, rounding up widens to more than one
+# leg and to nothing matching <outside-pattern>, and growing an unrelated suite
+# until the needing leg moves leaves the rounded-up set unchanged.
+w10_reshuffle_check() {
+  local group="$1" outside_pattern="$2"
+  local root="$BATS_TEST_TMPDIR/$group-seam" needs_before needs_after legs_before legs_after
   local i=0 moved=''
   seed_seam_tree "$root"
   printf '#!/usr/bin/env bats\ncommand -v zsh\n' >"$root/needs/uses-zsh.bats"
 
-  needs_before="$(seam_tree_scan shard_package_needs "$root" scripts)" || return 1
-  legs_before="$(seam_tree_scan shard_package_legs "$root" scripts)" || return 1
+  needs_before="$(seam_tree_scan shard_package_needs "$root" "$group")" || return 1
+  legs_before="$(seam_tree_scan shard_package_legs "$root" "$group")" || return 1
 
   [ "$(printf '%s\n' "$needs_before" | grep -c .)" -eq 1 ] || {
     echo "the fixture did not produce a single needing leg:" >&2
     printf '%s\n' "$needs_before" >&2
     return 1
   }
-  grep -qE '^scripts-[0-9]+$' <<<"$needs_before" || {
-    echo "the needing suite did not land on a scripts leg:" >&2
+  grep -qE "^$group-[0-9]+\$" <<<"$needs_before" || {
+    echo "the needing suite did not land on a $group leg:" >&2
     printf '%s\n' "$needs_before" >&2
     return 1
   }
-  # Rounding up has to widen, and widen only within the scripts group.
+  # Rounding up has to widen, and widen only within the group.
   [ "$(printf '%s\n' "$legs_before" | grep -c .)" -gt 1 ] || {
-    echo "rounding up did not widen the scripts set:" >&2
+    echo "rounding up did not widen the $group set:" >&2
     printf '%s\n' "$legs_before" >&2
     return 1
   }
-  grep -qE '^(audit|lib|misc|hooks-[0-9]+)$' <<<"$legs_before" && {
-    echo "rounding up reached outside the scripts group:" >&2
+  grep -qE "$outside_pattern" <<<"$legs_before" && {
+    echo "rounding up reached outside the $group group:" >&2
     printf '%s\n' "$legs_before" >&2
     return 1
   }
@@ -2246,26 +2252,34 @@ copy_sharder_without_group() {
   while [ "$i" -lt 24 ]; do
     printf '# pad %s\n' "$i" >>"$root/needs/plain-0.bats"
     i=$((i + 1))
-    needs_after="$(seam_tree_scan shard_package_needs "$root" scripts)" || return 1
+    needs_after="$(seam_tree_scan shard_package_needs "$root" "$group")" || return 1
     if [ "$needs_after" != "$needs_before" ]; then
       moved=yes
       break
     fi
   done
   [ -n "$moved" ] || {
-    echo "growing an unrelated suite never moved the needing scripts leg off" >&2
+    echo "growing an unrelated suite never moved the needing $group leg off" >&2
     echo "$needs_before, so this fixture proved nothing about stability" >&2
     return 1
   }
 
-  legs_after="$(seam_tree_scan shard_package_legs "$root" scripts)" || return 1
+  legs_after="$(seam_tree_scan shard_package_legs "$root" "$group")" || return 1
   [ "$legs_after" = "$legs_before" ] || {
     echo "the needing leg moved from $needs_before to $needs_after and the declared" >&2
-    echo "legs moved with it, so the scripts group is not rounded up:" >&2
+    echo "legs moved with it, so the $group group is not rounded up:" >&2
     printf 'before: %s\n' "$(printf '%s' "$legs_before" | tr '\n' ' ')" >&2
     printf 'after:  %s\n' "$(printf '%s' "$legs_after" | tr '\n' ' ')" >&2
     return 1
   }
+}
+
+@test "W10: rounding up survives a reshuffle in the scripts group too, not only hooks" {
+  w10_reshuffle_check scripts '^(audit|lib-[0-9]+|misc|hooks-[0-9]+)$'
+}
+
+@test "W10: rounding up survives a reshuffle in the lib group too" {
+  w10_reshuffle_check lib '^(audit|misc|hooks-[0-9]+|scripts-[0-9]+)$'
 }
 
 # The apt list is only meaningful as a MEMBERSHIP list, and a negated gate
@@ -2351,7 +2365,7 @@ copy_sharder_without_group() {
     printf '%s\n' "$scan_output" >&2
     return 1
   }
-  grep -qE '^(audit|lib|misc|scripts-[0-9]+)$' <<<"$scan_output" && {
+  grep -qE '^(audit|lib-[0-9]+|misc|scripts-[0-9]+)$' <<<"$scan_output" && {
     echo "a shard drawing only from the clean directory was reported" >&2
     return 1
   }

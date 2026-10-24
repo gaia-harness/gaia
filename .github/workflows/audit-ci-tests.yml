@@ -94,7 +94,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        shard: [hooks-1, hooks-2, hooks-3, hooks-4, scripts-1, scripts-2, scripts-3, scripts-4, audit, lib, misc, sandbox, concurrency, commitlint]
+        shard: [hooks-1, hooks-2, hooks-3, hooks-4, scripts-1, scripts-2, scripts-3, scripts-4, scripts-5, audit, lib-1, lib-2, misc, sandbox, concurrency, commitlint]
     steps:
       # Depth 2 so the change-scoped run can diff the pull request's merge
       # commit against its first parent, the base branch it merges into.
@@ -574,7 +574,7 @@ jobs:
       # suite's dependency changed or a group's membership did, and the repair
       # is to copy the set W10 names, which it derives from the suites and the
       # sharder's own groups rather than from here.
-      - if: contains(fromJSON('["lib", "scripts-1", "scripts-2", "scripts-3", "scripts-4"]'), matrix.shard) && contains(fromJSON('["full","scoped"]'), steps.selection.outputs.mode)
+      - if: contains(fromJSON('["lib-1", "lib-2", "scripts-1", "scripts-2", "scripts-3", "scripts-4", "scripts-5"]'), matrix.shard) && contains(fromJSON('["full","scoped"]'), steps.selection.outputs.mode)
         name: Install the YAML parser and zsh
         # Sized for fast failure and honest attribution, NOT to the leg. When
         # this cap fires is the budget paragraph's subject, not this one's,
@@ -774,7 +774,7 @@ jobs:
       # and a step's `timeout-minutes` has to be an integer literal (W5 refuses
       # an expression, so a per-leg value cannot come from the matrix). Each
       # literal is the group's measured whole-shard p95 with headroom, so a
-      # hung leg fails at its own bound rather than at the job's. The three leg
+      # hung leg fails at its own bound rather than at the job's. The leg
       # lists partition the sharder's shards; audit-ci-shards.bats checks that
       # every bats leg reaches exactly one of them.
       #
@@ -801,7 +801,7 @@ jobs:
           else
             bash .gaia/tests/bats-shards.sh run-for-change "$SHARD" "$MERGE_COMMIT^1" "$MERGE_COMMIT"
           fi
-      - if: contains(fromJSON('["scripts-1", "scripts-2", "scripts-3", "scripts-4"]'), matrix.shard) && contains(fromJSON('["full","scoped"]'), steps.selection.outputs.mode)
+      - if: contains(fromJSON('["scripts-1", "scripts-2", "scripts-3", "scripts-4", "scripts-5"]'), matrix.shard) && contains(fromJSON('["full","scoped"]'), steps.selection.outputs.mode)
         name: Run a bats shard (scripts group)
         timeout-minutes: 12
         env:
@@ -815,7 +815,21 @@ jobs:
           else
             bash .gaia/tests/bats-shards.sh run-for-change "$SHARD" "$MERGE_COMMIT^1" "$MERGE_COMMIT"
           fi
-      - if: contains(fromJSON('["hooks-1", "audit", "lib", "misc"]'), matrix.shard) && contains(fromJSON('["full","scoped"]'), steps.selection.outputs.mode)
+      - if: contains(fromJSON('["lib-1", "lib-2"]'), matrix.shard) && contains(fromJSON('["full","scoped"]'), steps.selection.outputs.mode)
+        name: Run a bats shard (lib group)
+        timeout-minutes: 9
+        env:
+          SHARD: ${{ matrix.shard }}
+          PLAN_MODE: ${{ steps.selection.outputs.mode }}
+          MERGE_COMMIT: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          if [ "$PLAN_MODE" = full ]; then
+            bash .gaia/tests/bats-shards.sh run "$SHARD"
+          else
+            bash .gaia/tests/bats-shards.sh run-for-change "$SHARD" "$MERGE_COMMIT^1" "$MERGE_COMMIT"
+          fi
+      - if: contains(fromJSON('["hooks-1", "audit", "misc"]'), matrix.shard) && contains(fromJSON('["full","scoped"]'), steps.selection.outputs.mode)
         name: Run a bats shard (single-shard legs)
         timeout-minutes: 12
         env:

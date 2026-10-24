@@ -62,14 +62,14 @@
 #
 # Assignment rules: hooks-1 is the pinned list below; HOOKS_GREEDY_IDS split
 # the rest of HOOKS_DIRECTORY by weight, SCRIPTS_IDS split SCRIPTS_TESTS_DIRECTORY the same
-# way; audit and lib are their whole directories; misc is FORENSICS_DIRECTORY plus
-# STATUSLINE_DIRECTORY combined.
+# way, and LIBRARY_IDS split LIBRARY_DIRECTORY; audit is its whole directory;
+# misc is FORENSICS_DIRECTORY plus STATUSLINE_DIRECTORY combined.
 #
 # Exchange groups, which `group <shard-id>` reports. A shard's group is the set
-# of ids a file can move BETWEEN without anyone editing this script: the two
+# of ids a file can move BETWEEN without anyone editing this script: the
 # weighted groups exchange files among their own buckets on every size change,
 # and every other shard is a group of one, because its files are selected by
-# name (hooks-1) or by whole directory (audit, lib, misc) and no reshuffle can
+# name (hooks-1) or by whole directory (audit, misc) and no reshuffle can
 # move one across that boundary. A caller that must stay correct across
 # reshuffles asks about the group rather than the shard; the apt step in
 # .github/workflows/audit-ci-tests.yml is the one that does.
@@ -184,18 +184,30 @@ SCRIPTS_COST_OUTLIERS=(audit-light-route.bats)
 # `wiki/decisions/Sharded CI Test Matrix.md` carries the measurements.
 HOOKS_COST_OUTLIERS=(audit-scope-routing-parity.bats audit-loop-bound.bats githooks-pre-push-e2e.bats)
 
-# The two weighted groups, each listed once and in matrix order. Adding a shard
+# The weighted groups, each listed once and in matrix order. Adding a shard
 # to a group is a one-word edit here: SHARD_IDS is built from these rather than
 # restated, so the id list and the assignment cannot disagree about how many
 # buckets a group has.
+#
+# A group's bucket count is sized to its measured CI runtime, not to its file
+# count: each leg's run step carries a cap in
+# .github/workflows/audit-ci-tests.yml, and a leg whose p95 times 1.25 passes
+# that cap is a leg a slower runner times out with every test green. The lib
+# directory is a group rather than a whole-directory leg because its whole run
+# outgrows that cap, and its plain byte walk splits it evenly enough by runtime
+# that it needs no cost outliers.
+# `wiki/decisions/Sharded CI Test Matrix.md` carries the measurements.
 HOOKS_GREEDY_IDS=(hooks-2 hooks-3 hooks-4)
-SCRIPTS_IDS=(scripts-1 scripts-2 scripts-3 scripts-4)
+SCRIPTS_IDS=(scripts-1 scripts-2 scripts-3 scripts-4 scripts-5)
+LIBRARY_IDS=(lib-1 lib-2)
 
 SHARD_IDS=(
   hooks-1
   ${HOOKS_GREEDY_IDS[@]+"${HOOKS_GREEDY_IDS[@]}"}
   ${SCRIPTS_IDS[@]+"${SCRIPTS_IDS[@]}"}
-  audit lib misc
+  audit
+  ${LIBRARY_IDS[@]+"${LIBRARY_IDS[@]}"}
+  misc
 )
 
 TAB="$(printf '\t')"
@@ -513,7 +525,10 @@ files_for_shard() {
         ${SCRIPTS_IDS[@]+"${SCRIPTS_IDS[@]}"}
       ;;
     audit) discover_bats "$AUDIT_TESTS_DIRECTORY" ;;
-    lib) discover_bats "$LIBRARY_DIRECTORY" ;;
+    lib-*)
+      greedy_bucket "$LIBRARY_DIRECTORY" "$1" all "" \
+        ${LIBRARY_IDS[@]+"${LIBRARY_IDS[@]}"}
+      ;;
     misc)
       discover_bats "$FORENSICS_DIRECTORY"
       discover_bats "$STATUSLINE_DIRECTORY"
@@ -540,7 +555,12 @@ group_for_shard() {
         printf '%s\n' "$id"
       done
       ;;
-    audit | lib | misc) printf '%s\n' "$1" ;;
+    lib-*)
+      for id in ${LIBRARY_IDS[@]+"${LIBRARY_IDS[@]}"}; do
+        printf '%s\n' "$id"
+      done
+      ;;
+    audit | misc) printf '%s\n' "$1" ;;
   esac
 }
 
