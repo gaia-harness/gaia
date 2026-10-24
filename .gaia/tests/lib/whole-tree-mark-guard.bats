@@ -525,6 +525,70 @@ HOPS="root-argument working-directory no-argument helper suffix-path"
   [ "$status" -eq 0 ] || { echo "sourced helper on a fixture flagged: $output" >&2; return 1; }
 }
 
+@test "a call written inside an unquoted heredoc body is data, not a hop, and the same call outside it is flagged" {
+  local tree="$BATS_TEST_TMPDIR/tree" suite
+  write_tree "$tree"
+  suite="$tree/.gaia/scripts/tests/heredoc-body.bats"
+  write_call_suite "$suite" no '  cat >"$BATS_TEST_TMPDIR/notes.txt" <<EOF' '  run bash "$LINT" --root "$ROOT"' 'EOF'
+  run bash "$GUARD" --root "$tree" "$suite"
+  [ "$status" -eq 0 ] || { echo "call inside an unquoted heredoc body flagged: $output" >&2; return 1; }
+  write_call_suite "$suite" no '  cat >"$BATS_TEST_TMPDIR/notes.txt" <<EOF' 'EOF' '  run bash "$LINT" --root "$ROOT"'
+  run bash "$GUARD" --root "$tree" "$suite"
+  [ "$status" -eq 1 ] || { echo "call after the heredoc closes not flagged: $output" >&2; return 1; }
+}
+
+@test "a << inside a quoted literal opens no heredoc, so the call below it is still flagged" {
+  local tree="$BATS_TEST_TMPDIR/tree" suite
+  write_tree "$tree"
+  suite="$tree/.gaia/scripts/tests/quoted-heredoc-operator.bats"
+  # The multi-line literal holds a bare EOF line: a guard that read the first
+  # line as opening a heredoc would close it there, after swallowing the call.
+  write_call_suite "$suite" no "  local body='cat <<EOF'" '  run bash "$LINT" --root "$ROOT"' "  body='" 'EOF' "'"
+  run bash "$GUARD" --root "$tree" "$suite"
+  [ "$status" -eq 1 ] || { echo "call below a quoted << not flagged: $output" >&2; return 1; }
+}
+
+@test "a definition written inside a heredoc in a sourced library does not shadow the real one" {
+  local tree="$BATS_TEST_TMPDIR/tree" suite
+  write_tree "$tree"
+  {
+    printf '%s\n' 'cat >/dev/null <<EOF'
+    printf '%s\n' 'scan_tree() { :; }'
+    printf '%s\n' 'EOF'
+    printf '%s\n' 'scan_tree() {'
+    printf '%s\n' '  find "$1/.claude" -name "*.md"'
+    printf '%s\n' '}'
+  } >"$tree/.gaia/scripts/fixture-heredoc-lib.sh"
+  suite="$tree/.gaia/scripts/tests/sourced-heredoc.bats"
+  write_call_suite "$suite" no 'setup:  . "$ROOT/.gaia/scripts/fixture-heredoc-lib.sh"' '  run scan_tree "$ROOT"'
+  run bash "$GUARD" --root "$tree" "$suite"
+  [ "$status" -eq 1 ] || { echo "scanning helper shadowed by a heredoc line: $output" >&2; return 1; }
+}
+
+@test "a root variable inside a single-quoted literal is not an argument, and the same variable double-quoted is" {
+  local tree="$BATS_TEST_TMPDIR/tree" suite
+  write_tree "$tree"
+  suite="$tree/.gaia/scripts/tests/single-quoted-root.bats"
+  write_call_suite "$suite" no "  run bash \"\$LINT\" '\$ROOT'"
+  run bash "$GUARD" --root "$tree" "$suite"
+  [ "$status" -eq 0 ] || { echo "single-quoted root read as an argument: $output" >&2; return 1; }
+  write_call_suite "$suite" no '  run bash "$LINT" "$ROOT"'
+  run bash "$GUARD" --root "$tree" "$suite"
+  [ "$status" -eq 1 ] || { echo "double-quoted root not read as an argument: $output" >&2; return 1; }
+}
+
+@test "a separator inside a single-quoted literal does not start a command, and the same separator outside it does" {
+  local tree="$BATS_TEST_TMPDIR/tree" suite
+  write_tree "$tree"
+  suite="$tree/.gaia/scripts/tests/single-quoted-separator.bats"
+  write_call_suite "$suite" no "  run grep -q 'x; bash' \"\$ROOT\""
+  run bash "$GUARD" --root "$tree" "$suite"
+  [ "$status" -eq 0 ] || { echo "separator inside a single-quoted literal split the statement: $output" >&2; return 1; }
+  write_call_suite "$suite" no "  grep -q 'x'; bash \"\$ROOT\""
+  run bash "$GUARD" --root "$tree" "$suite"
+  [ "$status" -eq 1 ] || { echo "separator outside the literal did not split the statement: $output" >&2; return 1; }
+}
+
 @test "a call reached only from a helper outside every test body needs the file-level mark" {
   local tree="$BATS_TEST_TMPDIR/tree" suite
   write_tree "$tree"
