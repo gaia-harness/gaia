@@ -18,7 +18,7 @@ A release change that requires the adopter to act, run a command or hand-migrate
 
 - **Worktrees wiki page:** a sentence explaining why `.gaia/local/` has no allowlist was missing from the shipped page, because it shared a line with a maintainer-only marker and the bundle scrub drops that whole line. The release build now refuses any marker line that carries other text, so a scrub can no longer drop adopter content silently (#3049)
 - **`/gaia-fitness` grade card:** the CLAUDE.md category is labelled `CLAUDE.md` instead of its internal id `claudemd`, in both its grade row and its findings header. The JSON report and rule ids keep `claudemd`, so nothing that reads them changes (#3047)
-- **"GAIA template" wording:** shipped strings that still called GAIA a template now say what they mean. The missing-roster refusals from the audit scope, the merge gate and the member resolver point at the copy of `.gaia/audit-ci.yml` GAIA ships, and the default `siteName` is now `GAIA` (#3045)
+- **"GAIA template" wording:** shipped strings that still called GAIA a template now say what they mean. The missing-roster refusals from the audit scope, the merge gate and the member resolver point at the copy of `.gaia/audit-ci.yml` GAIA ships, `gaia init` refuses GAIA's own source tree by that name, and the default `siteName` is now `GAIA` (#3045)
 
 ## [2.1.0] - 2026-10-23
 
