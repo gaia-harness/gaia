@@ -14,7 +14,7 @@ export default {
   language: 'Language',
   loading: 'Loading',
   meta: {
-    siteName: 'GAIA Template',
+    siteName: 'GAIA',
   },
   name: 'Name',
   next: 'Next',

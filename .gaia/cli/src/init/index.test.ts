@@ -41,7 +41,7 @@ const makeScaffold = (root: string): void => {
   writeFileSync(path.join(root, '.gaia', 'manifest.json'), '{"files":{}}\n');
 };
 
-/** A tree that looks like the GAIA template source: `.gaia/cli/src` present. */
+/** A tree that looks like GAIA's own source tree: `.gaia/cli/src` present. */
 const makeTemplateSource = (root: string): void => {
   makeScaffold(root);
   mkdirSync(path.join(root, '.gaia', 'cli', 'src'), {recursive: true});
@@ -113,7 +113,7 @@ describe('gaia init router target guard', () => {
     expect(stdio.errors.join('')).toContain(sandbox.root);
   });
 
-  test('refuses the GAIA template source even though it is a GAIA project', async () => {
+  test('refuses the GAIA source tree itself even though it is a GAIA project', async () => {
     makeTemplateSource(sandbox.root);
 
     const exitCode = await run(['rename', '--title', 'X', '--kebab', 'x'], {

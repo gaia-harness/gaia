@@ -4,7 +4,7 @@
  * Carries the `release` namespace and the maintainer `labels docs` command.
  * Bundles to `.gaia/cli/gaia-maintainer`, which
  * `.gaia/release-exclude` strips from the adopter tarball. Adopters never
- * see this binary or any of its commands; only the GAIA template's own
+ * see this binary or any of its commands; only GAIA's own
  * maintainer (and CI jobs running on the maintainer's clone) invokes it.
  */
 

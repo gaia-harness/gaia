@@ -193,7 +193,7 @@ git log -1 --oneline    # verify this is the release PR's squash commit
 
 ### 13. Lockstep `create-gaia`
 
-`create-gaia` (the `npx create-gaia` scaffolder) must stay in **version lockstep** with the GAIA template: its `package.json` `version` and its offline `FALLBACK_VERSION` (`bin/index.js`) both track the release just cut. Its `publish.yml` triggers on a `v*.*.*` tag and refuses to publish unless the tag equals `package.json` version.
+`create-gaia` (the `npx create-gaia` scaffolder) must stay in **version lockstep** with the GAIA release: its `package.json` `version` and its offline `FALLBACK_VERSION` (`bin/index.js`) both track the release just cut. Its `publish.yml` triggers on a `v*.*.*` tag and refuses to publish unless the tag equals `package.json` version.
 
 It lives in a sibling checkout (`../create-gaia` relative to the GAIA repo root). If the sibling is absent on this machine, STOP and report, do not silently skip; lockstep is mandatory and a maintainer with the checkout must complete it.
 

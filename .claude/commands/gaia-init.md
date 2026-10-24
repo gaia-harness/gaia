@@ -337,7 +337,7 @@ If `STRIP_I18N == true`, read `frontend/.claude/instructions/remove-i18n.md` and
 
 ## Step 5: Create CODEOWNERS
 
-The GAIA template does not ship a `.github/CODEOWNERS`, so create one: a single line naming the user's GitHub username as the repo-wide code owner.
+GAIA does not ship a `.github/CODEOWNERS`, so create one: a single line naming the user's GitHub username as the repo-wide code owner.
 
 ```bash
 printf '* @%s\n' "<github-username>" > .github/CODEOWNERS

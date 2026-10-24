@@ -11,7 +11,7 @@
 # rather than restating them.
 
 # --- 1. Maintainer-only Claude surface ---
-# /gaia-release cuts releases of the GAIA template itself; adopters never
+# /gaia-release cuts releases of GAIA itself; adopters never
 # release GAIA. The release-notes skill translates GAIA's CHANGELOG into
 # public release notes for the marketing site, a release-time maintainer
 # task, so it ships nowhere just like /gaia-release. Other
@@ -255,7 +255,7 @@ frontend/.playwright/e2e/react-perf-smoke.spec.ts
 .claude/agent-memory
 
 # --- 9. Maintainer-only CI workflows ---
-# `release.yml` cuts releases of the GAIA template itself (triggered by
+# `release.yml` cuts releases of GAIA itself (triggered by
 # `v*.*.*` tags); adopters never release GAIA. `cli-tests.yml` runs the
 # .gaia/cli/ vitest suite; adopters receive only the bundled binary, so
 # the test workflow has nothing to test on their side.
@@ -284,7 +284,7 @@ frontend/.playwright/e2e/react-perf-smoke.spec.ts
 
 # --- 10. Maintainer-only distribution-boundary taxonomy ---
 # `.gaia/cli/health/` holds the distribution-boundary taxonomy the release
-# scrub names. Only maintainers audit the GAIA template's own boundary;
+# scrub names. Only maintainers audit GAIA's own boundary;
 # adopters audit their own app via the standard `code-audit-frontend` agent.
 .gaia/cli/health
 
