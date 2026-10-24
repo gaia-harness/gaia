@@ -34555,7 +34555,8 @@ var HELP_TEXT15 = `Usage: gaia init strip-branding --title <T>
 
   Exit codes:
     0  success (no stdout)
-    1  user-correctable error (missing flag, missing template)
+    1  user-correctable error (missing flag, missing template, no Storybook
+       brand declaration to de-brand)
     2  unexpected (filesystem failure)
     30 the package registry (.gaia/packages.json) cannot resolve the frontend
        package
@@ -34588,6 +34589,9 @@ var README_TEMPLATE = ".gaia/templates/README.md";
 var README_TARGET = "README.md";
 var PREVIEW_FILE = ".storybook/preview.ts";
 var PLACEHOLDER3 = "{{PROJECT_TITLE}}";
+var BRAND_DECLARATION = /const storybookBrandOptions = \{[\s\S]*?\};/u;
+var StorybookBrandMissingError = class extends Error {
+};
 var removeIfPresent2 = (cwd, relative) => {
   const absolute = path36.join(cwd, relative);
   if (existsSync18(absolute)) {
@@ -34613,10 +34617,15 @@ var debrandStorybook = (cwd, title) => {
   if (!existsSync18(target)) return;
   const original = readFileSync23(target, "utf8");
   let next = original;
+  if (!BRAND_DECLARATION.test(original)) {
+    throw new StorybookBrandMissingError(
+      `${PREVIEW_FILE} has no \`const storybookBrandOptions = {...};\` declaration to de-brand`
+    );
+  }
   const safeTitle = escapeJsLiteralValue(title, "'");
-  next = next.replaceAll(
-    /const BRAND = \{[\s\S]*?\};/gu,
-    () => `const BRAND = {
+  next = next.replace(
+    BRAND_DECLARATION,
+    () => `const storybookBrandOptions = {
   brandTarget: '_blank',
   brandTitle: '${safeTitle}',
 };`
@@ -34656,6 +34665,14 @@ var run20 = (argv, options = {}) => {
     debrandStorybook(target.packageDir, parsed.flags.title);
   } catch (error62) {
     const message = error62 instanceof Error ? error62.message : String(error62);
+    if (error62 instanceof StorybookBrandMissingError) {
+      structuredError({
+        code: "storybook_brand_missing",
+        message,
+        subcommand: "init strip-branding"
+      });
+      return EXIT_CODES.UNKNOWN_SUBCOMMAND;
+    }
     if (message.includes("not found")) {
       structuredError({
         code: "template_missing",
