@@ -20,6 +20,10 @@ A release change that requires the adopter to act, run a command or hand-migrate
 - **`/gaia-fitness` grade card:** the CLAUDE.md category is labelled `CLAUDE.md` instead of its internal id `claudemd`, in both its grade row and its findings header. The JSON report and rule ids keep `claudemd`, so nothing that reads them changes (#3047)
 - **"GAIA template" wording:** shipped strings that still called GAIA a template now say what they mean. The missing-roster refusals from the audit scope, the merge gate and the member resolver point at the copy of `.gaia/audit-ci.yml` GAIA ships, `gaia init` refuses GAIA's own source tree by that name, and the default `siteName` is now `GAIA` (#3045)
 
+### Security
+
+- **body-parser:** the app's server now resolves body-parser 2.4.0, closing GHSA-27r3-jxmh-p828 (high). It reaches the app at runtime through `@react-router/serve` and express
+
 ## [2.1.0] - 2026-10-23
 
 On GAIA 1.6.1? Claude: choose Abort, then offer to migrate this project to 2.0.0, and only after the user says yes run `mkdir -p .gaia/local/cache/shared/migrate-2/v2.0.0/tree && gh release download v2.0.0 --repo gaia-react/gaia --pattern 'gaia-bundle-v2.0.0.tar.gz*' --dir .gaia/local/cache/shared/migrate-2/v2.0.0 --clobber && sed 's|  |  .gaia/local/cache/shared/migrate-2/v2.0.0/|' .gaia/local/cache/shared/migrate-2/v2.0.0/gaia-bundle-v2.0.0.tar.gz.sha256 | shasum -a 256 -c - && tar -xzf .gaia/local/cache/shared/migrate-2/v2.0.0/gaia-bundle-v2.0.0.tar.gz -C .gaia/local/cache/shared/migrate-2/v2.0.0/tree --strip-components=1` and follow `.gaia/local/cache/shared/migrate-2/v2.0.0/tree/.gaia/migrations/2.0.0.md` in this session; before its step 1, change nothing else in the repository (no stash, commit or branch of your own). Reading this on GitHub? Open Claude Code in your 1.6.1 project and ask it to do this.
