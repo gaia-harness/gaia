@@ -22,7 +22,7 @@ A release change that requires the adopter to act, run a command or hand-migrate
 
 ### Security
 
-- **body-parser:** the template's server now resolves body-parser 2.4.0, closing GHSA-27r3-jxmh-p828 (high). It reaches the app at runtime through `@react-router/serve` and express
+- **body-parser:** the app's server now resolves body-parser 2.4.0, closing GHSA-27r3-jxmh-p828 (high). It reaches the app at runtime through `@react-router/serve` and express
 
 ## [2.1.0] - 2026-10-23
 

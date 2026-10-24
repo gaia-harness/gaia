@@ -70,7 +70,7 @@ trustPolicyExclude:
 minimumReleaseAgeExclude:
   - '@gaia-react/lint'
   # Security fix needed before the window clears: 2.4.0 closes
-  # GHSA-27r3-jxmh-p828 (high), reaching the template at runtime through
+  # GHSA-27r3-jxmh-p828 (high), reaching the app at runtime through
   # @react-router/serve -> express -> body-parser. Exempted on the maintainer's
   # call after a hand check: SLSA v1 provenance via GitHub trusted publishing,
   # approved by the same maintainer who published 2.3.0, matching the
