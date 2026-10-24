@@ -10,7 +10,7 @@
 # the helper. These tests exercise both against the fixture test files under
 # fixtures/red-ledger/.
 
-# bats file_tags=whole-tree
+# bats file_tags=whole-tree,installed-dependencies
 
 setup() {
   REPO_ROOT=$(cd "$BATS_TEST_DIRNAME/../../.." && pwd)
