@@ -54,6 +54,7 @@ import {
 } from './excluded-refs.js';
 import {listGitFiles, parseExcludeLines} from './manifest.js';
 import {stripMarkerBlocks} from './marker-strip.js';
+import type {MarkerIssueReason} from './marker-strip.js';
 import {checkStrippedPair, stripPnpmMember} from './pnpm-member-strip.js';
 import type {
   PnpmMemberStripInput,
@@ -272,7 +273,7 @@ export type MarkerStripResult = {
   unbalanced: readonly {
     file: string;
     line: number;
-    reason: 'end_without_start' | 'start_without_end';
+    reason: MarkerIssueReason;
   }[];
 };
 
@@ -285,7 +286,7 @@ const applyMarkerStrip = (
   const unbalanced: {
     file: string;
     line: number;
-    reason: 'end_without_start' | 'start_without_end';
+    reason: MarkerIssueReason;
   }[] = [];
   let blocksStripped = 0;
 

@@ -349,6 +349,111 @@ transforms:
     expect(stdio.outputs.join('')).toContain('end_without_start');
   });
 
+  test('refuses an end marker line that carries prose after the marker', () => {
+    sandbox = setupSandbox({config: MARKER_ONLY_CONFIG});
+    sandbox.writeStaged(
+      'wiki/broken.md',
+      [
+        '# Broken',
+        '<!-- gaia:maintainer-only:start -->',
+        'maintainer note',
+        '<!-- gaia:maintainer-only:end --> Adopter prose the strip would drop.',
+        '',
+      ].join('\n')
+    );
+
+    const exit = run([sandbox.stagingDir, '--json'], {cwd: sandbox.rootDir});
+    expect(exit).toBe(1);
+
+    const report = JSON.parse(stdio.outputs.join('')) as {
+      unbalanced_markers: {file: string; line: number; reason: string}[];
+    };
+    expect(report.unbalanced_markers).toEqual([
+      {file: 'wiki/broken.md', line: 4, reason: 'marker_line_has_text'},
+    ]);
+  });
+
+  test('refuses a start marker line that carries prose before the marker', () => {
+    sandbox = setupSandbox({config: MARKER_ONLY_CONFIG});
+    sandbox.writeStaged(
+      'wiki/broken.md',
+      [
+        '# Broken',
+        'Adopter prose the strip would drop. <!-- gaia:maintainer-only:start -->',
+        'maintainer note',
+        '<!-- gaia:maintainer-only:end -->',
+        '',
+      ].join('\n')
+    );
+
+    const exit = run([sandbox.stagingDir], {cwd: sandbox.rootDir});
+    expect(exit).toBe(1);
+    expect(stdio.outputs.join('')).toContain('wiki/broken.md:2');
+    expect(stdio.outputs.join('')).toContain('marker_line_has_text');
+  });
+
+  test('refuses a single-line block with prose outside its markers', () => {
+    sandbox = setupSandbox({config: MARKER_ONLY_CONFIG});
+    sandbox.writeStaged(
+      'wiki/broken.md',
+      [
+        '# Broken',
+        '<!-- gaia:maintainer-only:start --> note <!-- gaia:maintainer-only:end --> Adopter prose.',
+        '',
+      ].join('\n')
+    );
+
+    const exit = run([sandbox.stagingDir], {cwd: sandbox.rootDir});
+    expect(exit).toBe(1);
+    expect(stdio.outputs.join('')).toContain('marker_line_has_text');
+  });
+
+  test('accepts a single-line block with nothing outside its markers', () => {
+    sandbox = setupSandbox({config: MARKER_ONLY_CONFIG});
+    sandbox.writeStaged(
+      'wiki/single.md',
+      [
+        '# Single',
+        '  <!-- gaia:maintainer-only:start --> note <!-- gaia:maintainer-only:end -->',
+        'public',
+        '',
+      ].join('\n')
+    );
+
+    const exit = run([sandbox.stagingDir], {cwd: sandbox.rootDir});
+    expect(exit).toBe(0);
+
+    const after = readFileSync(
+      path.join(sandbox.stagingDir, 'wiki/single.md'),
+      'utf8'
+    );
+    expect(after).toBe('# Single\npublic\n');
+  });
+
+  test('accepts indented marker lines and strips their block', () => {
+    sandbox = setupSandbox({config: MARKER_ONLY_CONFIG});
+    sandbox.writeStaged(
+      'wiki/indented.md',
+      [
+        '- a list item',
+        '  <!-- gaia:maintainer-only:start -->',
+        '  maintainer note',
+        '  <!-- gaia:maintainer-only:end -->',
+        '- another item',
+        '',
+      ].join('\n')
+    );
+
+    const exit = run([sandbox.stagingDir], {cwd: sandbox.rootDir});
+    expect(exit).toBe(0);
+
+    const after = readFileSync(
+      path.join(sandbox.stagingDir, 'wiki/indented.md'),
+      'utf8'
+    );
+    expect(after).toBe('- a list item\n- another item\n');
+  });
+
   test('flags UAT-NNN narrative in shipped instruction surfaces', () => {
     sandbox = setupSandbox({config: LEAK_ONLY_CONFIG});
     sandbox.writeStaged(

@@ -25190,6 +25190,11 @@ var collectTreeFiles = (root, extensions) => {
 };
 
 // src/release/marker-strip.ts
+var textBesideMarkers = (line, lineNumber, bounds) => {
+  const trimmed = line.trim();
+  const isBare = bounds.first === bounds.last ? trimmed === bounds.first : trimmed.startsWith(bounds.first) && trimmed.endsWith(bounds.last);
+  return isBare ? [] : [{ line: lineNumber, reason: "marker_line_has_text" }];
+};
 var stripMarkerBlocks = (source, startMarker, endMarker) => {
   const lines = source.split("\n");
   const out = [];
@@ -25202,11 +25207,29 @@ var stripMarkerBlocks = (source, startMarker, endMarker) => {
     const hasStart = line.includes(startMarker);
     const hasEnd = line.includes(endMarker);
     if (!inBlock && hasStart && hasEnd) {
+      unbalanced.push(
+        ...textBesideMarkers(line, lineNumber, {
+          first: startMarker,
+          last: endMarker
+        })
+      );
       blocks += 1;
     } else if (!inBlock && hasStart) {
+      unbalanced.push(
+        ...textBesideMarkers(line, lineNumber, {
+          first: startMarker,
+          last: startMarker
+        })
+      );
       inBlock = true;
       blockStartLine = lineNumber;
     } else if (inBlock && hasEnd) {
+      unbalanced.push(
+        ...textBesideMarkers(line, lineNumber, {
+          first: endMarker,
+          last: endMarker
+        })
+      );
       inBlock = false;
       blocks += 1;
     } else if (!inBlock && hasEnd) {
