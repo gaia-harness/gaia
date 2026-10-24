@@ -408,6 +408,28 @@ transforms:
     expect(stdio.outputs.join('')).toContain('marker_line_has_text');
   });
 
+  test('accepts a single-line block with nothing outside its markers', () => {
+    sandbox = setupSandbox({config: MARKER_ONLY_CONFIG});
+    sandbox.writeStaged(
+      'wiki/single.md',
+      [
+        '# Single',
+        '  <!-- gaia:maintainer-only:start --> note <!-- gaia:maintainer-only:end -->',
+        'public',
+        '',
+      ].join('\n')
+    );
+
+    const exit = run([sandbox.stagingDir], {cwd: sandbox.rootDir});
+    expect(exit).toBe(0);
+
+    const after = readFileSync(
+      path.join(sandbox.stagingDir, 'wiki/single.md'),
+      'utf8'
+    );
+    expect(after).toBe('# Single\npublic\n');
+  });
+
   test('accepts indented marker lines and strips their block', () => {
     sandbox = setupSandbox({config: MARKER_ONLY_CONFIG});
     sandbox.writeStaged(
