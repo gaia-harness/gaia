@@ -62,7 +62,7 @@ Persist the trimmed version as `BASELINE` (e.g., `2.0.0`).
 ## Step 2: Resolve latest release
 
 ```bash
-gh release list --repo gaia-react/gaia --limit 1 --json tagName --jq '.[0].tagName'
+gh release list --repo gaia-harness/gaia --limit 1 --json tagName --jq '.[0].tagName'
 ```
 
 Persist as `LATEST_TAG` (e.g., `v2.0.1`) and `LATEST` (strip leading `v`).
@@ -70,7 +70,7 @@ Persist as `LATEST_TAG` (e.g., `v2.0.1`) and `LATEST` (strip leading `v`).
 If `gh` is unavailable, fall back to:
 
 ```bash
-curl -fsSL https://api.github.com/repos/gaia-react/gaia/releases/latest | jq -r .tag_name
+curl -fsSL https://api.github.com/repos/gaia-harness/gaia/releases/latest | jq -r .tag_name
 ```
 
 If both fail, stop and ask the user to supply the target version explicitly.

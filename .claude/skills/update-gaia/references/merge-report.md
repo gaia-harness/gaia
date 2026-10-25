@@ -138,7 +138,7 @@ An open item lives either in an `open` entry (one item, `id` is the path) or in 
 
 `adopterChange` and `gaiaChange` say in plain words what each side did (B to A, B to L), never as a diff. `changelogReason` is the text of a CHANGELOG entry in the saved range that names the path or its basename, or null. `reason` is one line saying why the recommended option comes first. `earlierDecision` copies the two fields `update-decisions.sh context` prints on its `EARLIER <tag> <decision>` line, or is null when it prints nothing; the orchestrator formats the sentence.
 
-Claims about the adopter's change stay factual: "yours also catches X; GAIA's does not", never that theirs is better. A `same-concern-adopter` item's `suggestion` is one line: open an issue on gaia-react/gaia describing what yours covers.
+Claims about the adopter's change stay factual: "yours also catches X; GAIA's does not", never that theirs is better. A `same-concern-adopter` item's `suggestion` is one line: open an issue on gaia-harness/gaia describing what yours covers.
 
 ## Options and the option order table
 

@@ -2477,6 +2477,69 @@ describe('shipped absolute-paths check', () => {
   });
 });
 
+// Handed to the real engine as shipped, same shape as the blocks above. The
+// previous owner's name is assembled at runtime so this file never carries a
+// literal reference to it.
+const shippedProjectIssueRefsConfig = (): string => {
+  const {check, transform} = shippedLeakCheck('project-issue-refs');
+
+  return dumpYaml({transforms: [{...transform, checks: [check]}]});
+};
+
+describe('shipped project-issue-refs check', () => {
+  const oldOwner = ['gaia', 'react'].join('-');
+  let sandbox: Sandbox;
+  let stdio: ReturnType<typeof captureStdio>;
+
+  beforeEach(() => {
+    stdio = captureStdio();
+    sandbox = setupSandbox({config: shippedProjectIssueRefsConfig()});
+  });
+
+  afterEach(() => {
+    stdio.restore();
+    sandbox.cleanup();
+    vi.restoreAllMocks();
+  });
+
+  const expectLeak = (file: string, reference: string): void => {
+    sandbox.writeStaged(file, `See ${reference} for detail.\n`);
+
+    expect(run([sandbox.stagingDir, '--config', sandbox.configPath])).toBe(1);
+
+    const out = stdio.outputs.join('');
+
+    expect(out).toContain(file);
+    expect(out).toContain(reference.replace('https://', ''));
+  };
+
+  test('flags a qualified reference under the previous owner', () => {
+    expectLeak('docs/notes.md', `${oldOwner}/gaia#123`);
+  });
+
+  test('flags a qualified reference under the current owner', () => {
+    expectLeak('docs/notes.md', 'gaia-harness/gaia#123');
+  });
+
+  test('flags an issue URL under the previous owner', () => {
+    expectLeak(
+      'docs/issue.md',
+      `https://github.com/${oldOwner}/gaia/issues/123`
+    );
+  });
+
+  test('flags a pull request URL under the current owner', () => {
+    expectLeak('docs/pull.md', 'https://github.com/gaia-harness/gaia/pull/123');
+  });
+
+  test('passes a third-party tracker reference', () => {
+    sandbox.writeStaged('docs/notes.md', 'See capricorn86/happy-dom#978.\n');
+
+    expect(run([sandbox.stagingDir, '--config', sandbox.configPath])).toBe(0);
+    expect(stdio.outputs.join('')).toContain('leaks: none');
+  });
+});
+
 // Handed to the real engine as shipped, same shape as the absolute-paths block
 // above: the check plus its holding transform, siblings filtered out so an
 // unrelated pattern cannot decide these fixtures.

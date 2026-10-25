@@ -8,9 +8,11 @@
 
 HERE="$(cd "$(dirname "${BATS_TEST_FILENAME}")" && pwd)"
 LIBRARY_DIRECTORY="$HERE/lib"
+source "$LIBRARY_DIRECTORY/runbook-repo.sh"
 FIXTURES="$HERE/fixtures"
 
 setup() {
+  RUNBOOK_REPO="$(runbook_repo "$BATS_TEST_DIRNAME")"
   source "$LIBRARY_DIRECTORY/classify.sh"
   WORK_DIRECTORY="$(mktemp -d)"
   CAPTURE_FILE="$WORK_DIRECTORY/gh-argv.txt"
@@ -111,14 +113,15 @@ other_class_surrogate() {
 
   # Simulate the 'other' gh invocation
   PATH="$stub_directory:$PATH" gh issue create \
-    --repo "gaia-react/gaia" \
+    --repo "$RUNBOOK_REPO" \
     --label "gaia-forensics" \
     --title "forensics: other, unknown failure outside taxonomy" \
     --body-file "$body_file"
 
   rm -rf "$stub_directory"
 
-  grep -xF -- 'gaia-react/gaia' "$CAPTURE_FILE"
+  grep -xF -- "$RUNBOOK_REPO" "$CAPTURE_FILE"
+  [[ "$RUNBOOK_REPO" == "gaia-harness/gaia" ]]
   grep -xF -- 'gaia-forensics' "$CAPTURE_FILE"
   grep -qF 'forensics: other,' "$CAPTURE_FILE"
 }

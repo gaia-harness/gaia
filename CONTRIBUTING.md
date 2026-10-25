@@ -17,7 +17,7 @@ For feature requests, docs gaps, or a bug you're filing by hand, a good issue:
 
 - A short title that names the surface (rule, hook, skill, command, wiki page).
 - A reproduction. What you ran, what you expected, what happened.
-- GAIA version (from your project's `package.json`, or `git log -1` from a clone of `gaia-react/gaia`).
+- GAIA version (from your project's `package.json`, or `git log -1` from a clone of `gaia-harness/gaia`).
 - Node version, package manager, OS.
 
 Issues that aren't bugs:

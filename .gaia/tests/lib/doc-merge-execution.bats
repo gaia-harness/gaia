@@ -111,7 +111,7 @@ merge_execution_is_merge_only() {
   for file in "$MERGE_EXECUTION" "$MERGE_GENERATED"; do
     merge_execution_is_merge_only "$file" || { echo "orchestrator write in $file" >&2; return 1; }
     copy="$BATS_TEST_TMPDIR/$(basename "$file" .md)-readded.md"
-    for line in 'gh release download "$tag" --repo gaia-react/gaia' 'echo "$LATEST" > .gaia/VERSION' \
+    for line in 'gh release download "$tag" --repo gaia-harness/gaia' 'echo "$LATEST" > .gaia/VERSION' \
       'GAIA_MANIFEST_WRITE=release cp "$LATEST_DIR/.gaia/manifest.json" .gaia/manifest.json' \
       '.gaia/cli/gaia ping --event update --from "$BASELINE" --to "$LATEST" || true'; do
       { cat "$file"; printf '%s\n' "$line"; } > "$copy"

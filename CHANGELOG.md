@@ -731,7 +731,7 @@ GAIA v1.0.0 is the inaugural public release of the GAIA React workflow, a Claude
 - **Quality gate.** Mandatory pre-commit pipeline: simplify, localization check, typecheck, lint, unit tests, E2E tests, dev smoke test, build. Zero warnings tolerated.
 - **Release tooling.** Tag-triggered `release.yml` builds a scrubbed tarball; `create-gaia` bootstrapper consumes it via `npx create-gaia@latest my-app`.
 
-[Unreleased]: https://github.com/gaia-react/gaia/compare/v2.1.1...HEAD
+[Unreleased]: https://github.com/gaia-harness/gaia/compare/v2.1.1...HEAD
 [2.1.1]: https://github.com/gaia-react/gaia/releases/tag/v2.1.1
 [2.1.0]: https://github.com/gaia-react/gaia/releases/tag/v2.1.0
 [2.0.1]: https://github.com/gaia-react/gaia/releases/tag/v2.0.1

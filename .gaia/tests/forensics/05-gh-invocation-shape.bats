@@ -1,11 +1,12 @@
 #!/usr/bin/env bats
-# UAT-012: gh issue create uses --repo gaia-react/gaia, --label gaia-forensics,
+# UAT-012: gh issue create uses --repo gaia-harness/gaia, --label gaia-forensics,
 #          and the title format "forensics: <class>, <one-line user description>"
 # UAT-006: on gh failure (auth error / label-not-found), the skill surfaces gh's
 #          native error verbatim, leaves the local report in place, exits non-zero.
 
 HERE="$(cd "$(dirname "${BATS_TEST_FILENAME}")" && pwd)"
 LIBRARY_DIRECTORY="$HERE/lib"
+source "$LIBRARY_DIRECTORY/runbook-repo.sh"
 
 # ---------------------------------------------------------------------------
 # gh invocation surrogate
@@ -31,7 +32,7 @@ invoke_gh_surrogate() {
 
   # Simulate the runbook's gh invocation (frozen contract from forensics.md § 8)
   PATH="$stub_directory:$PATH" gh issue create \
-    --repo "gaia-react/gaia" \
+    --repo "$RUNBOOK_REPO" \
     --label "gaia-forensics" \
     --title "forensics: $class, $one_line" \
     --body-file "$body_file"
@@ -40,6 +41,7 @@ invoke_gh_surrogate() {
 }
 
 setup() {
+  RUNBOOK_REPO="$(runbook_repo "$BATS_TEST_DIRNAME")"
   WORK_DIRECTORY="$(mktemp -d)"
   CAPTURE_FILE="$WORK_DIRECTORY/gh-argv.txt"
   BODY_FILE="$WORK_DIRECTORY/body.md"
@@ -54,10 +56,10 @@ teardown() {
 # Tests
 # ---------------------------------------------------------------------------
 
-@test "UAT-012: gh is invoked with --repo gaia-react/gaia" {
+@test "UAT-012: gh is invoked with --repo gaia-harness/gaia" {
   invoke_gh_surrogate "$CAPTURE_FILE" "init" "gaia-init rename step failed" "$BODY_FILE"
   grep -xF -- '--repo' "$CAPTURE_FILE"
-  grep -xF -- 'gaia-react/gaia' "$CAPTURE_FILE"
+  grep -xF -- "$RUNBOOK_REPO" "$CAPTURE_FILE"
 }
 
 @test "UAT-012: gh is invoked with --label gaia-forensics" {
@@ -82,10 +84,11 @@ teardown() {
 }
 
 @test "UAT-012: gh repo arg is hardcoded constant, not derived from git remote" {
-  # The frozen contract: the repo value must be exactly "gaia-react/gaia"
+  # The frozen contract: the repo value must be exactly "gaia-harness/gaia"
   # regardless of what git remote would return.
   invoke_gh_surrogate "$CAPTURE_FILE" "init" "rename step failed" "$BODY_FILE"
-  grep -xF -- 'gaia-react/gaia' "$CAPTURE_FILE"
+  grep -xF -- "$RUNBOOK_REPO" "$CAPTURE_FILE"
+  [[ "$RUNBOOK_REPO" == "gaia-harness/gaia" ]]
   # Confirm the captured argv does not contain any git-remote-derived value
   ! grep -q 'origin' "$CAPTURE_FILE"
 }
@@ -133,7 +136,7 @@ invoke_gh_failing_surrogate() {
   local gh_exit=0
   local gh_stderr
   gh_stderr="$(PATH="$stub_directory:$PATH" gh issue create \
-    --repo "gaia-react/gaia" \
+    --repo "$RUNBOOK_REPO" \
     --label "gaia-forensics" \
     --title "forensics: $class, test failure" \
     --body-file "$report_path" 2>&1)" || gh_exit=$?
@@ -177,7 +180,7 @@ invoke_gh_failing_surrogate() {
   printf '## Symptom\nTest.\n' > "$body_file"
 
   PATH="$stub_directory:$PATH" gh issue create \
-    --repo "gaia-react/gaia" \
+    --repo "$RUNBOOK_REPO" \
     --label "gaia-forensics" \
     --title "forensics: update, test" \
     --body-file "$body_file" 2>/dev/null || true

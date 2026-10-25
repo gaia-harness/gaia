@@ -3,8 +3,8 @@
 <img src="./docs/assets/gaia-logo.svg" height="100" alt="GAIA"/>
 
 [![Claude](https://img.shields.io/badge/Claude-D97757?logo=claude&logoColor=fff)](https://claude.com/claude-code)
-[![Tests](https://img.shields.io/github/actions/workflow/status/gaia-react/gaia/tests.yml?event=pull_request&label=tests)](https://github.com/gaia-react/gaia/actions/workflows/tests.yml)
-[![License: MIT](https://img.shields.io/github/license/gaia-react/gaia)](./LICENSE)
+[![Tests](https://img.shields.io/github/actions/workflow/status/gaia-harness/gaia/tests.yml?event=pull_request&label=tests)](https://github.com/gaia-harness/gaia/actions/workflows/tests.yml)
+[![License: MIT](https://img.shields.io/github/license/gaia-harness/gaia)](./LICENSE)
 [![Node](https://img.shields.io/badge/node-%3E%3D22.22.0-brightgreen)](https://nodejs.org/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-6-blue?logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
 
@@ -51,7 +51,7 @@ You end up with a clean app shell and a fully-configured Claude workflow.
 
 ### Repository layout
 
-GAIA is a monorepo. The harness (`.claude/`, `.gaia/`, `.githooks/`, `.github/`, `wiki/`) lives at the repo root and the React app lives in `frontend/`. Launch Claude at the root for harness workflows (audits, merges, releases, `/gaia-*` commands); a launch inside `frontend/` supports frontend work through commit. Upgrading a 1.6.1 project? Open Claude Code in the 1.6.1 project and ask it to fetch, verify and follow the bundled 2.0.0 migration note, as the first line of the [v2.0.0 release](https://github.com/gaia-react/gaia/releases/tag/v2.0.0) describes.
+GAIA is a monorepo. The harness (`.claude/`, `.gaia/`, `.githooks/`, `.github/`, `wiki/`) lives at the repo root and the React app lives in `frontend/`. Launch Claude at the root for harness workflows (audits, merges, releases, `/gaia-*` commands); a launch inside `frontend/` supports frontend work through commit. Upgrading a 1.6.1 project? Open Claude Code in the 1.6.1 project and ask it to fetch, verify and follow the bundled 2.0.0 migration note, as the first line of the [v2.0.0 release](https://github.com/gaia-harness/gaia/releases/tag/v2.0.0) describes.
 
 ## What Breaks Claude on Real Projects
 
@@ -164,7 +164,7 @@ GAIA is driven through Claude. Ask for what you need.
 
 ## Feedback
 
-Questions, ideas, and reports of what worked and what didn't go to the [Feedback discussions](https://github.com/gaia-react/gaia/discussions/categories/feedback). It is GAIA's one community channel. When a GAIA workflow misfires, `/gaia-forensics` turns it into a filing-ready bug report.
+Questions, ideas, and reports of what worked and what didn't go to the [Feedback discussions](https://github.com/gaia-harness/gaia/discussions/categories/feedback). It is GAIA's one community channel. When a GAIA workflow misfires, `/gaia-forensics` turns it into a filing-ready bug report.
 
 ## History
 

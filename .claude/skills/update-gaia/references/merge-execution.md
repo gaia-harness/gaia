@@ -130,7 +130,7 @@ Run it on every such file, whether the text merge was clean or not. A clean text
 | Independent concerns, clean text merge | Write the merge to A (see Chunking for who writes it); status `auto-merged`, no question |
 | Independent concerns, the text merge conflicts | `open`, kind `text-conflict`: `combine, keep, gaia, defer` with the resolved combination as the `combine` candidate; when combining is not meaningful, the class-fallback order with no `combine` |
 | Same concern, GAIA's covers it | `open`, kind `same-concern-gaia`: `combine` is GAIA's version of that concern with the adopter's other edits to the file kept |
-| Same concern, the adopter's covers something GAIA's misses | `open`, kind `same-concern-adopter`: `combine` keeps both parts, and `suggestion` is the one line "open an issue on gaia-react/gaia describing what yours covers" |
+| Same concern, the adopter's covers something GAIA's misses | `open`, kind `same-concern-adopter`: `combine` keeps both parts, and `suggestion` is the one line "open an issue on gaia-harness/gaia describing what yours covers" |
 | Contradictory | `open`, kind `contradictory`: recommend whichever fits, with a one-line `reason`; the rest of `combine, keep, gaia` follow in that order, then `defer` |
 
 Claims about the adopter's change stay factual: "yours also catches X; GAIA's does not", never that theirs is superior. Option orders follow the option order table in `merge-report.md` exactly.
