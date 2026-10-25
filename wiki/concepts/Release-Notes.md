@@ -6,7 +6,7 @@ description: Maintainer-only. Translate a version's GAIA CHANGELOG entries into 
 
 # Release Notes
 
-Maintainer-only skill that translates a version's CHANGELOG entries into adopter-facing public release notes for gaiareact.com.
+Maintainer-only skill that translates a version's CHANGELOG entries into adopter-facing public release notes for gaiaharness.com.
 
 ## Purpose
 
@@ -43,5 +43,5 @@ The CHANGELOG is written for GAIA's own contributors: terse, imperative, full of
 ## Relation to other skills
 
 - **Not `/gaia-release`**: that cuts the release itself (version bump, manifest, tag). This translates CHANGELOG for the website.
-- **Not for adopters' own release notes**: only for GAIA public notes on gaiareact.com.
+- **Not for adopters' own release notes**: only for GAIA public notes on gaiaharness.com.
 - **Excludes from distribution tarball**: maintainers only, like `/gaia-release`.

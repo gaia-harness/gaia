@@ -8,7 +8,7 @@
 [![Node](https://img.shields.io/badge/node-%3E%3D22.22.0-brightgreen)](https://nodejs.org/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-6-blue?logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
 
-**Claude is raw power. [GAIA](https://gaiareact.com/) is order and focus.**
+**Claude is raw power. [GAIA](https://gaiaharness.com/) is order and focus.**
 
 A serious harness for Claude Code. It keeps Claude-shipped code production-grade as your team scales. The React frontend is handled. You build the rest of your app on top. Every convention enforced in code. Every shortcut blocked at the source. Every merge audited before it lands.
 
@@ -34,7 +34,7 @@ One command. GAIA handles the rest, then `/gaia-init` finishes the last-mile set
 
 **Requirements:** [Node.js](https://nodejs.org/) >= 22.22.0 ([nvm](https://github.com/nvm-sh/nvm) recommended). macOS or Linux; on Windows, run inside [WSL2](https://learn.microsoft.com/en-us/windows/wsl/install) (the hooks and CLI need bash and POSIX file paths, and native Windows isn't exercised in CI).
 
-[Learn more about GAIA →](https://gaiareact.com/)
+[Learn more about GAIA →](https://gaiaharness.com/)
 
 ### Then: `/gaia-init`
 
@@ -94,7 +94,7 @@ The quality gate keeps each commit clean and Knip keeps dead code out (see [Tech
 
 ## Tech Stack
 
-Every piece of GAIA's [tech stack](https://gaiareact.com/#stack) is pre-configured and wired into the Claude layer.
+Every piece of GAIA's [tech stack](https://gaiaharness.com/features/#stack) is pre-configured and wired into the Claude layer.
 
 - **Over 1,200 lint rules** via ESLint, [Stylelint](https://stylelint.io/), and [commitlint](https://commitlint.js.org/) that catch the patterns Claude drifts into first: complexity creep, architectural shortcuts, mismatched filenames, broken CSS, inconsistent commit messages. [Prettier](https://prettier.io/) formats every file, and [Knip](https://knip.dev/) detects unused files, exports, and dependencies.
 - **Pre-commit hooks** (native git hooks + [lint-staged](https://github.com/lint-staged/lint-staged)): typecheck, lint, and test before CI.
@@ -108,7 +108,7 @@ Every piece of GAIA's [tech stack](https://gaiareact.com/#stack) is pre-configur
 - **Toast notifications** with [remix-toast](https://remix.run/resources/remix-toast) and a shadcn/ui toast built on [Base UI](https://base-ui.com/).
 - Built with [React Router 8](https://reactrouter.com/), [Tailwind](https://tailwindcss.com/), [shadcn/ui](https://ui.shadcn.com/) components, and [lucide-react](https://lucide.dev/) icons.
 
-GAIA also wires agentic-design patterns into the project structure rather than the prompt, so they run the same way every session and every model variant: stop hooks, a blocking pre-merge audit, multi-agent review, spec-driven development, a committed knowledge base, a filesystem deny list, and more. The [features page](https://gaiareact.com/features/#agentic-design) walks through all twelve, grouped as workflow control, context engineering, and tooling and safety.
+GAIA also wires agentic-design patterns into the project structure rather than the prompt, so they run the same way every session and every model variant: stop hooks, a blocking pre-merge audit, multi-agent review, spec-driven development, a committed knowledge base, a filesystem deny list, and more. The [features page](https://gaiaharness.com/features/#agentic-design) walks through all twelve, grouped as workflow control, context engineering, and tooling and safety.
 
 ## Claude Workflow
 

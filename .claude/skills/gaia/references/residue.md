@@ -152,7 +152,7 @@ A promotion whose filing ends diverted, absent, transient, or failed files no is
 Once `aged_candidate_count` is `0`, a `candidate_count` above `0` means newer residuals remain, ones the nudge does not count yet. Sweeping them is optional work, so never start one of their batches without asking. Before each batch ask one `AskUserQuestion`, its numbers taken from the fresh emit:
 
 - **header:** `"Residue"`
-- **question:** `"Sweep the next <candidate_count> newer residuals? More: https://docs.gaiareact.com/maintenance/residue/"`
+- **question:** `"Sweep the next <candidate_count> newer residuals? More: https://docs.gaiaharness.com/maintenance/residue/"`
 - **options (this exact order):**
   1. `{ label: "Sweep the next <candidate_count> (of <remaining_count> remaining)", description: "Triage one more batch, then ask again." }`
   2. `{ label: "Stop here", description: "End the sweep and publish what this run recorded." }`

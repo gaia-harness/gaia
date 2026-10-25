@@ -22,8 +22,8 @@ For feature requests, docs gaps, or a bug you're filing by hand, a good issue:
 
 Issues that aren't bugs:
 
-- Questions about how to use GAIA go to the docs site at [gaiareact.com](https://gaiareact.com), or open a GitHub Discussion if enabled.
-- Security issues go to steven@gaiareact.com. Do not file public issues for vulnerabilities.
+- Questions about how to use GAIA go to the docs site at [docs.gaiaharness.com](https://docs.gaiaharness.com/), or open a GitHub Discussion if enabled.
+- Security issues go to security@gaiaharness.com. Do not file public issues for vulnerabilities.
 
 ## Contributing code
 

@@ -321,7 +321,7 @@ The first line must equal the output of `bash .gaia/scripts/compose-release-body
 
 ### 15. Lockstep docs
 
-The documentation site (`../docs` relative to this repo, docs.gaiareact.com) shows the current GAIA version in its sidebar colophon. Update it to match the release just cut.
+The documentation site (`../docs` relative to this repo, docs.gaiaharness.com) shows the current GAIA version in its sidebar colophon. Update it to match the release just cut.
 
 ```bash
 DOCS="$(git rev-parse --show-toplevel)/../docs"

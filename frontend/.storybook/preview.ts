@@ -12,7 +12,7 @@ import '~/styles/tailwind.css';
 const storybookBrandOptions = {
   brandTarget: '_blank',
   brandTitle: 'GAIA',
-  brandUrl: 'https://gaiareact.com/docs/',
+  brandUrl: 'https://docs.gaiaharness.com/',
 };
 
 const preview: Preview = {
