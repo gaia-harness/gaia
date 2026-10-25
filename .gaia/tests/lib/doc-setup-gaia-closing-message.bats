@@ -164,7 +164,7 @@ check_no_restart_or_reload() {
     echo "no reference files found under ${directory}" >&2
     return 1
   }
-  for file in "$page" $files; do
+  while IFS= read -r file; do
     [ -f "$file" ] || {
       echo "unreadable file: ${file}" >&2
       return 1
@@ -174,7 +174,7 @@ check_no_restart_or_reload() {
       echo "restart or reload wording in ${file}" >&2
       return 1
     }
-  done
+  done <<<"$(printf '%s\n%s\n' "$page" "$files")"
   [ "$count" -gt 1 ] || {
     echo "only ${count} file read" >&2
     return 1
