@@ -103,7 +103,7 @@ Separate repo, separate npm package (`create-gaia`). Zero runtime deps. When an 
 5. `pnpm install` (after `corepack enable pnpm`), unless `--no-install`. The scaffolded project pins pnpm via `packageManager` in `package.json`; corepack provisions the matching version transparently.
 6. Prints welcome pointing at `/gaia-init`.
 
-The CLI is deliberately thin; heavy lifting (i18n, branding strip, plugin install) happens inside Claude Code via `/gaia-init`. See the `create-gaia` repo for the implementation.
+The CLI is deliberately thin; heavy lifting happens inside Claude Code, where `/setup-gaia` installs the plugins. It runs as the continuation of `/gaia-init`, which handles i18n and the branding strip. See the `create-gaia` repo for the implementation.
 
 ## Distribution boundary vs. source tree presence
 

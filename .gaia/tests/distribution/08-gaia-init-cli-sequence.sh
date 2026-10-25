@@ -50,10 +50,14 @@
 #                   GAIA_TELEMETRY_PING_DISABLE=1 so this regression
 #                   never fires a real network ping.
 #
-#   references      Every setup reference path gaia-init.md and setup-gaia.md
-#                   name exists in the staged tree, every .gaia/scripts path
-#                   per-machine.md names exists, and the references survive
-#                   finalize (setup-gaia reads them after init is gone).
+#   references      gaia-init.md names no setup reference path and names
+#                   .claude/commands/setup-gaia.md. Every setup reference path
+#                   setup-gaia.md names exists in the staged tree, every
+#                   .gaia/scripts path per-machine.md and gaia-init.md name
+#                   exists, and setup-gaia.md and its references survive
+#                   finalize (init reads setup-gaia.md after init finalize
+#                   deleted gaia-init.md, and setup reads its references after
+#                   that).
 #
 # Layer 0.5: runs on the host or runner, no Docker, no Claude OAuth
 # token. Cheap (~few seconds after build-staging); file-level transforms
@@ -114,21 +118,20 @@ rsync -a "$STAGING"/ "$SCAFFOLD"/
 [ -f "$SCAFFOLD/.claude/commands/gaia-init.md" ] \
   || { fail "staged tree missing .claude/commands/gaia-init.md (finalize deletion target)"; exit 1; }
 
-# Setup references. /gaia-init reads references under
-# .claude/skills/gaia/references/setup/, and /setup-gaia reads them after init
-# has finished, so a reference missing from the staged tree breaks the adopter
+# Setup references. /gaia-init reads no setup reference: it hands the whole
+# machine setup to /setup-gaia by reading .claude/commands/setup-gaia.md, which
+# reads the references under .claude/skills/gaia/references/setup/ after init
+# has finished. A reference missing from the staged tree breaks the adopter
 # flow at the step that reads it. An empty parse would make the check vacuous,
 # so it fails instead.
 SETUP_REFERENCE_PATTERN='\.claude/skills/gaia/references/setup/[A-Za-z0-9._-]+\.md'
 INIT_REFERENCES="$(grep -oE "$SETUP_REFERENCE_PATTERN" "$SCAFFOLD/.claude/commands/gaia-init.md" | sort -u || true)"
-[ -n "$INIT_REFERENCES" ] \
-  || { fail "found no setup reference path in staged .claude/commands/gaia-init.md (the parse is vacuous)"; exit 1; }
-while IFS= read -r reference_path; do
-  [ -f "$SCAFFOLD/$reference_path" ] \
-    || { fail "staged tree missing $reference_path (read by /gaia-init; check .gaia/release-exclude)"; exit 1; }
-done <<EOF
-$INIT_REFERENCES
-EOF
+[ -z "$INIT_REFERENCES" ] \
+  || { fail "staged .claude/commands/gaia-init.md names a setup reference: $INIT_REFERENCES"; exit 1; }
+grep -qF '.claude/commands/setup-gaia.md' "$SCAFFOLD/.claude/commands/gaia-init.md" \
+  || { fail "staged .claude/commands/gaia-init.md does not name .claude/commands/setup-gaia.md (the handoff is gone)"; exit 1; }
+[ -f "$SCAFFOLD/.claude/commands/setup-gaia.md" ] \
+  || { fail "staged tree missing .claude/commands/setup-gaia.md (read by /gaia-init)"; exit 1; }
 
 SETUP_GAIA_REFERENCES="$(grep -oE "$SETUP_REFERENCE_PATTERN" "$SCAFFOLD/.claude/commands/setup-gaia.md" | sort -u || true)"
 [ -n "$SETUP_GAIA_REFERENCES" ] \
@@ -140,8 +143,20 @@ done <<EOF
 $SETUP_GAIA_REFERENCES
 EOF
 
-# per-machine.md runs scripts under .gaia/scripts/ for /gaia-init, so the
-# staged tree must ship each one it names.
+# gaia-init.md runs scripts under .gaia/scripts/ itself (the React Doctor
+# installer), so the staged tree must ship each one it names.
+INIT_SCRIPTS="$(grep -oE '\.gaia/scripts/[A-Za-z0-9._-]+\.sh' "$SCAFFOLD/.claude/commands/gaia-init.md" | sort -u || true)"
+[ -n "$INIT_SCRIPTS" ] \
+  || { fail "found no .gaia/scripts path in staged gaia-init.md (the parse is vacuous)"; exit 1; }
+while IFS= read -r script_path; do
+  [ -f "$SCAFFOLD/$script_path" ] \
+    || { fail "staged tree missing $script_path (run by /gaia-init; check .gaia/release-exclude)"; exit 1; }
+done <<EOF
+$INIT_SCRIPTS
+EOF
+
+# per-machine.md runs scripts under .gaia/scripts/ for /setup-gaia, not
+# /gaia-init, so the staged tree must ship each one it names.
 PER_MACHINE_REFERENCE="$SCAFFOLD/.claude/skills/gaia/references/setup/per-machine.md"
 PER_MACHINE_SCRIPTS="$(grep -oE '\.gaia/scripts/[A-Za-z0-9._-]+\.sh' "$PER_MACHINE_REFERENCE" | sort -u || true)"
 [ -n "$PER_MACHINE_SCRIPTS" ] \
@@ -281,11 +296,17 @@ run_step "finalize" \
 [ ! -f "$SCAFFOLD/.claude/commands/gaia-init.md" ] \
   || { fail "finalize did not remove .claude/commands/gaia-init.md"; exit 1; }
 
-while IFS= read -r reference_path; do
-  [ -f "$SCAFFOLD/$reference_path" ] \
-    || { fail "finalize removed a reference /setup-gaia still reads: $reference_path"; exit 1; }
+# Init reads setup-gaia.md after init finalize deleted gaia-init.md, and setup
+# reads its references after that, so both must survive finalize.
+SURVIVING_PATHS=".claude/commands/setup-gaia.md
+$SETUP_GAIA_REFERENCES"
+[ -n "$SETUP_GAIA_REFERENCES" ] \
+  || { fail "found no setup reference path to check after finalize (the parse is vacuous)"; exit 1; }
+while IFS= read -r surviving_path; do
+  [ -f "$SCAFFOLD/$surviving_path" ] \
+    || { fail "finalize removed a file /setup-gaia still reads: $surviving_path"; exit 1; }
 done <<EOF
-$INIT_REFERENCES
+$SURVIVING_PATHS
 EOF
 
-pass "gaia init full sequence (strip-branding → configure-i18n → configure-data-layer → rename → wire-statusline → finalize) produced expected post-conditions on staged tree, and the setup references and per-machine scripts ship and survive finalize"
+pass "gaia init full sequence (strip-branding → configure-i18n → configure-data-layer → rename → wire-statusline → finalize) produced expected post-conditions on staged tree, gaia-init.md names no setup reference and hands off to setup-gaia.md, and the init and per-machine scripts ship and setup-gaia.md and its references survive finalize"

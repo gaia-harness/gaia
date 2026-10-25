@@ -9,6 +9,10 @@ tags: [meta, log]
 
 # Log
 
+## [promote] 2026-10-26 | Single-session onboarding promoted
+
+- 2026-10-26 PROMOTED: wiki/concepts/Single-session First-time Onboarding.md (PR #3071)
+
 ## [docs] 2026-10-25 | Change-scoped audit CI documented
 
 Sharded CI Test Matrix, Audit Round Procedure, PR Merge Workflow, the bats assertions rule, CONTRIBUTING and the verify-harness round-mode comment now describe change-scoped bats legs on pull requests, the full run on every push to main, per-step run caps, and the red-main issue reporter. The whole-tree mark guard's delegated-script limit is restated as what it still cannot see.

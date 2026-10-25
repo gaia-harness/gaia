@@ -1,6 +1,6 @@
 # Per-machine setup
 
-The four per-machine steps `/gaia-init` (Step 8) and `/setup-gaia` (Phase 2) share: external tools, Claude plugins, the statusline executable bit, and the app `.env`, plus the git hooks check (`## Git hooks`), which runs first on every read. Run from the repository root. The calling command says what a halt means for it and how to resume.
+The four per-machine steps `/setup-gaia` runs in Phase 2: external tools, Claude plugins, the statusline executable bit, and the app `.env`, plus the git hooks check (`## Git hooks`), which runs first on every read. Run from the repository root. The calling command says what a halt means for it and how to resume.
 
 For each step below, read `completed_steps` from `.gaia/cli/gaia setup status --json`, then:
 
@@ -13,6 +13,8 @@ A failed command, or a probe that still fails after the install: print one `[ok]
 ## Step 1: install-tools
 
 Two external tools need per-machine setup. Probes: React Doctor, Playwright CLI.
+
+Run each tool's install only when its own probe fails, so a React Doctor skill already on disk is recorded without being installed again. A session that read a file under `frontend/` before this install lists the skill only from its next session; the closing message adds no restart line for it.
 
 - [React Doctor](https://github.com/millionco/react-doctor): Run `bash .gaia/scripts/install-react-doctor.sh`. It installs the Claude Code skill under `frontend/.claude/skills/`, strips the installer's extras, and leaves `package.json`, `pnpm-lock.yaml` and `.githooks/pre-commit` unchanged; `wiki/dependencies/react-doctor.md` holds the verification record.
 - [Playwright CLI](https://github.com/microsoft/playwright-cli): `npm install -g @playwright/cli@latest`. The bundled skill shells out to the global binary; `/update-deps` keeps it current; `wiki/dependencies/playwright-cli.md` covers the fallback.
@@ -70,4 +72,4 @@ hooks_path="$(git config --get core.hooksPath)"
 [ "$hooks_path" = .githooks ] && echo HOOKS_ACTIVE || echo "HOOKS_INACTIVE ${hooks_path:-unset}"
 ```
 
-On `HOOKS_INACTIVE`, ask with `AskUserQuestion` (`Git hooks are not active on this clone (core.hooksPath is <value>), so commits skip GAIA's pre-commit and commit-msg checks. Turn them on?`, header `Git hooks`, options `Turn them on (Recommended)` and `Leave them off`). On `Turn them on`, run `git config core.hooksPath .githooks` and confirm the check above prints `HOOKS_ACTIVE`. On `Leave them off`, say the clone commits without those checks until it is set. A caller running in an automatic mode turns them on without asking.
+On `HOOKS_INACTIVE`, ask with `AskUserQuestion` (`Git hooks are not active on this clone (core.hooksPath is <value>), so commits skip GAIA's pre-commit and commit-msg checks. Turn them on?`, header `Git hooks`, options `Turn them on (Recommended)` and `Leave them off`). On `Turn them on`, run `git config core.hooksPath .githooks` and confirm the check above prints `HOOKS_ACTIVE`. On `Leave them off`, say the clone commits without those checks until it is set.
