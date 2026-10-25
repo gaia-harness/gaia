@@ -217,6 +217,7 @@
     ".gaia/cli/templates/service/urls.ts.tmpl": "owned",
     ".gaia/conventional-commits.json": "owned",
     ".gaia/labels.json": "owned",
+    ".gaia/LICENSE": "owned",
     ".gaia/migrations/2.0.0.md": "owned",
     ".gaia/scripts/audit-dispositions-check.sh": "owned",
     ".gaia/scripts/audit-fix-verify.sh": "owned",
@@ -754,7 +755,7 @@
     "wiki/overview.md": "wiki-owned",
     "wiki/README.md": "wiki-owned"
   },
-  "generated": "2026-10-24T06:05:30.321Z",
+  "generated": "2026-10-25T00:12:16.315Z",
   "regions": [
     {
       "endMarker": "<!-- gaia:audit-remit:end -->",

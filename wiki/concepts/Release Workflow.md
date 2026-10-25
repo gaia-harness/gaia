@@ -78,6 +78,8 @@ GAIA is a template repository that also carries its own maintainers' tooling: re
 
 `.gaia/release-exclude` is the single authoritative list of what is withheld. Its numbered categories each carry their rationale beside the paths they cover, and this page does not restate them. Everything git tracks that no line there masks ships in the adopter tarball and is classified in `.gaia/manifest.json`. An audit that flags a withheld path as "missing from manifest" should read that path's category in `.gaia/release-exclude` first: the absence is intentional, not a bug.
 
+GAIA's root `LICENSE` is withheld with the rest of its governance, so a generated project's root stays free for the adopter's own license. GAIA's license notice ships instead as `.gaia/LICENSE`: the MIT License, prefaced by a scope statement that it covers every file GAIA provides, wherever that file sits in the project.
+
 ### Adopter-owned sentinels
 
 These ARE distributed but excluded from `.gaia/manifest.json` by the classifier (not by `.gaia/release-exclude`) because adopters take ownership at first install and `/update-gaia` must never touch them:
