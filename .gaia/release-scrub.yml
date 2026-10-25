@@ -440,7 +440,9 @@ transforms:
       # If the exclude lines are reverted by mistake, the files would
       # silently ship and adopters would inherit GAIA's governance. Using
       # `.*` as the pattern means any line (including the empty file
-      # `LICENSE`) triggers a leak; file presence is the signal.
+      # `LICENSE`) triggers a leak; file presence is the signal. Scope globs
+      # are anchored at the staging root, so the shipped `.gaia/LICENSE`
+      # (GAIA's license notice) is out of scope: keep these root-relative.
       - id: governance-files
         description: "Maintainer governance files present at staging root"
         pattern: ".*"

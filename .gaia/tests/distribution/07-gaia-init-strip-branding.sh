@@ -17,6 +17,9 @@
 #   - Exit code 0, no stdout (per the subcommand contract).
 #   - README.md exists at scaffold root and contains "Test Project"
 #     (regenerated from .gaia/templates/README.md, which ships).
+#   - .gaia/LICENSE, GAIA's license notice for the files it provides, is
+#     staged and survives strip-branding byte-identical to the source copy,
+#     while the root LICENSE stays release-excluded for the adopter's own.
 #
 # Layer 0.5: runs on the host or runner, no Docker. Cheap (~1s after
 # build-staging); no pnpm install, just file-level transforms.
@@ -49,6 +52,10 @@ if [ -f "$SCAFFOLD/README.md" ]; then
 fi
 [ -x "$SCAFFOLD/.gaia/cli/gaia" ] \
   || { fail "staged tree missing or non-executable .gaia/cli/gaia (bundled CLI)"; exit 1; }
+[ -f "$SCAFFOLD/.gaia/LICENSE" ] \
+  || { fail "staged tree missing .gaia/LICENSE (GAIA's license notice)"; exit 1; }
+[ ! -e "$SCAFFOLD/LICENSE" ] \
+  || { fail "staged tree carries a root LICENSE; the root is the adopter's"; exit 1; }
 
 # Run strip-branding from inside $SCAFFOLD via a subshell so the CLI's
 # default `process.cwd()` resolves there. The parent scenario keeps its
@@ -71,5 +78,8 @@ fi
 
 grep -q "$TITLE" "$SCAFFOLD/README.md" \
   || { fail "strip-branding did not substitute '$TITLE' into README.md"; exit 1; }
+
+cmp -s "$PROJECT_ROOT/.gaia/LICENSE" "$SCAFFOLD/.gaia/LICENSE" \
+  || { fail "strip-branding removed or rewrote .gaia/LICENSE"; exit 1; }
 
 pass "gaia init strip-branding produced expected post-conditions on staged tree"
