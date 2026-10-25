@@ -14,6 +14,10 @@ A release change that requires the adopter to act, run a command or hand-migrate
 
 ## [Unreleased]
 
+### Added
+
+- **License notice in new projects:** new projects now carry GAIA's license notice at `.gaia/LICENSE`: the MIT License, prefaced by a short statement that it covers every file GAIA provides, wherever it sits in the project, while the project's own license covers everything else. The project root stays free for your own `LICENSE`. GAIA's copyright holder is now named as Steven Sacks rather than "GAIA"
+
 ### Fixed
 
 - **`gaia init strip-branding`:** the Storybook sidebar is de-branded again. The step stopped finding the brand declaration after it was renamed in `.storybook/preview.ts`, so new projects kept the GAIA title and link while init reported the step complete. It now rewrites the current declaration and exits 1 with `storybook_brand_missing`, recording nothing, when a preview it cannot de-brand is present (#3058)

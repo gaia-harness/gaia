@@ -391,6 +391,11 @@ unowned:
   # executed by nothing. On an adopter clone it sits under GAIA's own `.gaia/`
   # tree, which needs no entry, so this one ships nowhere.
   - ".gaia/audit-residual-dismissals.jsonl"
+  # GAIA's license notice for the files it provides in a generated project:
+  # legal text, executed by nothing. It ships, but on an adopter clone it sits
+  # under GAIA's own `.gaia/` tree, which needs no entry, so this one ships
+  # nowhere.
+  - ".gaia/LICENSE"
   # GAIA's fixtures, generated bundles, test data and inert documentation.
   # Several are extension-qualified rather than whole-subtree because a member
   # already owns a sibling inside the same tree (`.gaia/**/*.sh`,

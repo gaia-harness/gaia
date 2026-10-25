@@ -305,7 +305,11 @@ frontend/.playwright/e2e/react-perf-smoke.spec.ts
 # adopter's issue intake is their own. `.gaia/project.json` holds GAIA's own
 # team settings and setup decisions; an adopter records their own through
 # `/gaia-init` and `/setup-gaia`, and shipping GAIA's copy would mark an
-# adopter's setup features as already decided.
+# adopter's setup features as already decided. The root LICENSE is withheld
+# so the project root stays free for the adopter's own; GAIA's license notice
+# ships instead as `.gaia/LICENSE`. Entries match from the repository root
+# (`release exclude-regex` anchors each one), so the `LICENSE` entry never
+# withholds `.gaia/LICENSE`.
 .gaia/project.json
 .github/CODEOWNERS
 .github/ISSUE_TEMPLATE/bug_report.yml
