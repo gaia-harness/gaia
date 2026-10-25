@@ -1,17 +1,14 @@
 ---
 name: gaia-init
-description: Initializes a new project from the GAIA harness. Renames, strips GAIA branding, configures i18n, and installs Claude skills and plugins.
+description: Initializes a new project from the GAIA harness. Renames, strips GAIA branding, configures i18n, installs the React Doctor skill, then continues into /setup-gaia in the same session.
 disable-model-invocation: true
 ---
 
-Initialize a new project from the GAIA harness. It already ships clean (no example code, no docs site, no auth). This command renames, strips GAIA-specific branding, configures i18n, installs Claude skills/plugins, and hands you a ready-to-build project.
+Initialize a new project from the GAIA harness. It already ships clean (no example code, no docs site, no auth). This command renames, strips GAIA-specific branding, configures i18n, installs the React Doctor skill first, and then continues straight into /setup-gaia's phases in this same session, which install this machine's other tools and plugins and connect GitHub.
 
 **Language meta-instruction:** Conduct this entire conversation in the language the user has been typing in. Detect it from prior context, no explicit detection step needed. Do not translate source files, rules, skills, or wiki entries, those stay English regardless. Only translate the prompts you show the user.
 
-Contents: Interactive gates: run mode and non-response policy; Step 0: Ensure pnpm is available; Step 1: Install dependencies; Step 2: Gather user input; Step 3: Run the init CLI; Step 4: Locale-specific scaffolding; Step 5: Create CODEOWNERS; Step 6: Check `.env`; Step 7: Verify the build; Step 8: Claude configuration; Step 9: Project settings; Step 10: Refresh the wiki; Step 11: Finalize; On failure: resume.
-
-This command reads these references, all under `.claude/skills/gaia/references/setup/`. Read one only when a "Read ... now" line sends you there, and then read the whole file:
-- `per-machine.md`: Step 8, the per-machine tool, plugin, statusline and `.env` steps with their probes.
+Contents: Interactive gates: run mode and non-response policy; Step 0: Ensure pnpm is available; Step 1: Install dependencies; Step 2: Gather user input; Step 3: Run the init CLI; Step 4: Locale-specific scaffolding; Step 5: Create CODEOWNERS; Step 6: Check `.env`; Step 7: Verify the build; Step 8: Project settings; Step 9: Refresh the wiki; Step 10: Finalize; Step 11: Continue into /setup-gaia; On failure: resume.
 
 ## Interactive gates: run mode and non-response policy
 
@@ -36,7 +33,7 @@ Before Step 0's pnpm check, ask this as the **very first** AskUserQuestion (in t
 > How do you want to handle the setup questions?
 >
 > - **Interactive** (Recommended). GAIA asks its setup questions and waits for your answer on the consequential ones.
-> - **Automatic.** GAIA selects the recommended default for every question for you, without stopping to ask. It shows you the full list of chosen defaults first, and you can change anything afterward.
+> - **Automatic.** GAIA selects the recommended default for every one of its own setup questions, without stopping to ask. It shows you the full list of chosen defaults first, and you can change anything afterward. The GitHub connect question that follows is still asked.
 
 List **Interactive** first (the recommended option) and **Automatic** second. This gate is itself HARD-BLOCK: on non-response, re-ask, never assume a mode.
 
@@ -83,7 +80,7 @@ fi
 `gh api user` is the most reliable method: a single call both verifies auth and returns the login. Treat detection as **failed** if `gh` is absent, unauthenticated, or the call returns empty. Do **not** fall back to `git config user.name` (a display name, not a handle) or remote-URL parsing (there is no remote at init time). What stays never-fabricated is any handle that is neither user-typed nor gh-detected: never invent a plausible-looking one.
 
 - Interactive: offer the gh-detected handle as the recommended default; the user can override it. HARD-BLOCK applies only when detection failed (no default to fall back to): re-ask, do not reach Step 5 without a real handle.
-- Automatic: use the gh-detected handle when available. Only when detection also fails, write a loud placeholder that fails visibly, never a guess. Use `REPLACE-WITH-YOUR-GITHUB-HANDLE`, GitHub flags it as an unknown owner so the gap is obvious, and surface it in the Step 11 summary as a required follow-up.
+- Automatic: use the gh-detected handle when available. Only when detection also fails, write a loud placeholder that fails visibly, never a guess. Use `REPLACE-WITH-YOUR-GITHUB-HANDLE`, GitHub flags it as an unknown owner so the gap is obvious, and surface it as a required follow-up in Step 11's `### CODEOWNERS follow-up`.
 
 ### Automatic defaults, per gate
 
@@ -116,7 +113,7 @@ Then apply the defaults and proceed without stopping (the user chose Automatic; 
 - Backend casing (Step 2): `camelCase` (`CASING=camel`).
 - TanStack Query (Step 2): `No` (`QUERY=false`).
 
-Step 9's two team defaults are the same in both modes, so they need no Automatic default of their own.
+Step 8's two team defaults are the same in both modes, so they need no Automatic default of their own.
 
 ## Step 0: Ensure pnpm is available (and new enough)
 
@@ -182,6 +179,8 @@ pnpm install --config.confirm-modules-purge=false
 If install fails, stop and report the error.
 
 Then tell the user "Installing Chromium for the browser tests…" and run `pnpm -C frontend exec playwright install chromium`. Stories and hook tests run in headless Chromium and `pnpm install` installs no browsers, so without it Step 7's `pnpm test:ci` fails with `Executable doesn't exist`. It installs Chromium alone into the per-user Playwright cache, without the system libraries `pnpm install:browsers` (`--with-deps`) adds, so it never asks for `sudo`, and it is a quick no-op when the matching Chromium is already installed. If it fails, stop and report the error with the command to retry it. On Linux, a later browser launch can still fail with `Host system is missing dependencies`; then tell the user to run `pnpm -C frontend exec playwright install-deps chromium` themselves (it asks for their `sudo` password to install the system libraries) and re-run /gaia-init.
+
+Then tell the user "Installing the React Doctor skill…" and run `bash .gaia/scripts/install-react-doctor.sh`. It runs here, before any later step reads a file under `frontend/`, because Claude Code lists the skills in `frontend/.claude/skills/` the first time the session reads a file in that folder, and a skill added after that scan appears only from the next session. It records nothing: `/setup-gaia`'s tool step finds the skill already installed and records it. If it fails, show its error as a warning and continue; `/setup-gaia` runs the same install again.
 
 ## Step 2: Gather user input (in the user's language)
 
@@ -347,7 +346,7 @@ printf '* @%s\n' "<github-username>" > .github/CODEOWNERS
 
 `<github-username>` is the handle Q3 resolved: the user's typed handle, or the gh-detected login when the user accepted (or automatic mode used) that default. Any of these is a real handle, write `* @<handle>` and emit **no** Step 11 follow-up warning.
 
-Only when Q3 obtained no real handle (the user picked `Set it later`, or automatic mode where gh detection also failed) is `<github-username>` the placeholder `REPLACE-WITH-YOUR-GITHUB-HANDLE`. Write it anyway, GitHub flags the unknown owner in its CODEOWNERS validation, so the gap is visible. Add a follow-up to the Step 11 summary: "`.github/CODEOWNERS` holds a placeholder owner; `/setup-gaia` offers to set your GitHub handle before its first push."
+Only when Q3 obtained no real handle (the user picked `Set it later`, or automatic mode where gh detection also failed) is `<github-username>` the placeholder `REPLACE-WITH-YOUR-GITHUB-HANDLE`. Write it anyway, GitHub flags the unknown owner in its CODEOWNERS validation, so the gap is visible. Step 11's `### CODEOWNERS follow-up` prints the warning.
 
 ## Step 6: Check `.env`
 
@@ -369,15 +368,7 @@ pnpm typecheck && pnpm lint && pnpm test:ci && pnpm build
 
 Fix any issues before moving on.
 
-## Step 8: Claude configuration
-
-Read `.claude/skills/gaia/references/setup/per-machine.md` now, the whole file, and run its steps in order.
-
-On a halt, print the probe lines, say which components failed verification, then follow "On failure: resume" below with the failed install commands as the commands to re-run.
-
-When every step is recorded, continue to Step 9. `/setup-gaia` runs the same reference, so a machine set up here owes it nothing per-machine.
-
-## Step 9: Project settings
+## Step 8: Project settings
 
 Write GAIA's two team-level defaults to `.gaia/project.json` and record them, with no question: the sandbox is not recommended, and the git isolation policy is left unset, which is GAIA's default, `always-worktree` (every `/gaia-plan`, `/gaia-debt` and ad-hoc task works in its own worktree). GAIA is built for concurrent multi-agent work, so worktrees are the default; the OS-level Bash sandbox breaks `gh`, git-over-https and `docker` until allowlisted, and GAIA's lifecycle runs on `gh`, so it is not recommended. The file is committed and team-shared, and `/update-gaia`'s merge never overwrites it. A repo admin changes either setting later with `/setup-gaia --reconfigure`.
 
@@ -393,9 +384,9 @@ If it exits non-zero, surface the structured-error JSON verbatim, then follow "O
 
 The two records mean `/setup-gaia` owes neither decision.
 
-End of Step 9.
+End of Step 8.
 
-## Step 10: Refresh the wiki
+## Step 9: Refresh the wiki
 
 The template ships with a wiki shaped for the upstream GAIA project. Refresh the file that encodes "where we are right now" so the new project starts with a clean context.
 
@@ -420,20 +411,11 @@ Append-only. New entries at the TOP.
 - Project name: <PROJECT_TITLE>
 - Languages: <LANGUAGES>
 - Removed: GAIA branding (FUNDING.yml, README, Storybook brand)
-- Installed: React Doctor, Playwright CLI, typescript-lsp plugin
 ```
 
-## Step 11: Finalize
+## Step 10: Finalize
 
-Step 8 recorded each per-machine step through the shared reference, so stamp completion now. This clears "⚙️ /setup-gaia (Required)" from the statusline, which then shows a `⚙️ /setup-gaia` nudge until `/setup-gaia` records this machine's remaining choices (the sandbox, the statusline left side):
-
-```bash
-.gaia/cli/gaia setup finalize
-```
-
-If the CLI exits non-zero, it surfaces a structured error whose `code` field explains the cause (e.g. `not_a_git_repo`, `state_malformed`); surface that JSON line verbatim and stop. Do not retry or self-heal.
-
-Then run the CLI's init finalize step, it deletes this command file and, once every init step is recorded complete, the `.gaia/init-state.json` resume cursor:
+This step deletes this command file and, once every init step is recorded complete, the `.gaia/init-state.json` resume cursor:
 
 ```bash
 .gaia/cli/gaia init finalize
@@ -452,7 +434,9 @@ git add -A && git commit -m "chore: initialize project with /gaia-init" && echo 
 rm -f .gaia/local/setup-in-progress
 ```
 
-On `COMMIT_FAILED`, surface the commit's error and prepend this required follow-up to the closing message below: "⚠ Required: the init changes are not committed. Review them with `git status`, then commit them before `/setup-gaia`, which pushes only what is committed." Do not retry with `--no-verify`.
+On `COMMIT_FAILED`, surface the commit's error and hold it for Step 11, which stops before the handoff. Do not retry with `--no-verify`.
+
+## Step 11: Continue into /setup-gaia
 
 ### Send the adoption ping
 
@@ -467,19 +451,35 @@ Derive the two values from state this run already holds, never from a state file
 - **`$MODE`** is the run-mode answer from the very first gate ("Interactive gates: run mode and non-response policy" above): `interactive` or `automatic`. Held for the whole run.
 - **`$I18N_COUNT`** is `0` when `STRIP_I18N` is `true` (Step 2 Q2, i18n stripped); otherwise the number of locales in `LOCALES` (the count passed to `gaia init configure-i18n --locales`). Automatic mode keeps i18n with only the detected primary language, so `$I18N_COUNT` is `1` there.
 
-Then output the message below verbatim. Output the `cd` line exactly as written, even though Claude is running inside the project folder: when the user exits Claude, their shell returns to the directory they launched from (the parent), not the project folder.
+### Stop on an uncommitted init
 
-**If `.github/CODEOWNERS` holds the `REPLACE-WITH-YOUR-GITHUB-HANDLE` placeholder** (automatic mode where gh detection also failed, or any run where a real handle was never obtained), prepend this follow-up to the message: "⚠ `.github/CODEOWNERS` has a placeholder owner. `/setup-gaia` offers to set your GitHub handle before its first push." A gh-detected or user-typed handle writes a real owner, so this warning does not appear.
+When Step 10 printed `COMMIT_FAILED`, print this and stop; do not continue into `/setup-gaia`, whose GitHub step pushes only what is committed:
 
-> <Project Title> is ready for development. Exit Claude, then from your terminal:
->
-> ```
-> cd <project-folder-name>
-> ```
->
-> Then start Claude again, and run `/setup-gaia`. After your first push, `/setup-gaia` registers the `GAIA-Audit` required check.
->
-> The statusline shows `/update-deps` when packages are outdated or have security advisories; run it when you are ready.
+```
+⚠ Required: the init changes are not committed. Review them with `git status`, commit them on your default branch, then run `/setup-gaia`.
+```
+
+A project created with `--no-git` stops here.
+
+### CODEOWNERS follow-up
+
+**If `.github/CODEOWNERS` holds the `REPLACE-WITH-YOUR-GITHUB-HANDLE` placeholder** (automatic mode where gh detection also failed, or any run where a real handle was never obtained), print this warning now, before the handoff:
+
+```
+⚠ `.github/CODEOWNERS` has a placeholder owner. `/setup-gaia` offers to set your GitHub handle before its first push.
+```
+
+A gh-detected or user-typed handle writes a real owner, so this warning does not appear.
+
+### Hand off to /setup-gaia
+
+First print this line, in the user's language:
+
+> <Project Title> is configured. Setup is now running: GAIA continues with /setup-gaia in this session, so the statusline's ⚙️ /setup-gaia (Required) nudge stays until it finishes. After your first push, `/setup-gaia` registers the `GAIA-Audit` required check. The statusline shows /update-deps when packages are outdated or have security advisories; run it when you are ready.
+
+From here on, this command's interactive-gate rules and its `## On failure: resume` no longer apply. Setup's phases run under setup's own gates: the run mode chosen at the first gate, Automatic included, covered init's questions only, and setup's repo connect question is always asked, never answered for the user. Any halt during setup's phases, a step Claude Code's auto-mode classifier denies included, tells the user to re-run `/setup-gaia`, never `gaia init resume`.
+
+Read `.claude/commands/setup-gaia.md` now, the whole file, and run it from its `## Pre-flight: Worktree check` with `RECONFIGURE` false, then Phase 0 onward through Phase 6. A file read this way gets no `$ARGUMENTS` substitution, so its Argument parse finds no flag. Its closing message ends this session's onboarding.
 
 ## On failure: resume
 
@@ -487,7 +487,7 @@ If any `gaia init <step>` invocation exits non-zero, the structured-error JSON o
 
 1. Name the cause from the error. When Claude can fix it within the project, fix it and go to item 3.
 2. Otherwise say what the user needs to change, and ask with `AskUserQuestion` whether it is fixed: `Fixed, resume (Recommended)` and `Stop here`. On `Stop here`, end the run and say that asking Claude to resume `/gaia-init` later continues from the failed step.
-3. Resume. A failed Step 8 install is re-run first, since it is not a `gaia init` step; a failed `gaia init <step>` is replayed by the resume itself:
+3. Resume. A failed `gaia init <step>` is replayed by the resume itself:
 
 ```bash
 .gaia/cli/gaia init resume
@@ -496,3 +496,7 @@ If any `gaia init <step>` invocation exits non-zero, the structured-error JSON o
 When it fails again, return to item 1 with its new error.
 
 Resume reads `.gaia/init-state.json`, skips already-complete steps, and replays remaining steps using the saved arguments. Use `--from-step <N>` to force restart from a specific step (1-indexed: 1=strip-branding, 2=configure-i18n, 3=configure-data-layer, 4=rename, 5=wire-statusline, 6=bootstrap-env, 7=write-project-config, 8=finalize).
+
+After the resume, the run continues with the remaining steps through Step 11, which hands off to `/setup-gaia` as on a first run.
+
+This section covers Steps 0 to 11 up to the handoff. Once Step 11 hands off, a halt follows `.claude/commands/setup-gaia.md` `## On failure: re-run`.

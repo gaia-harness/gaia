@@ -40,7 +40,7 @@ gaia_refuse_if_worktree "/setup-gaia" || exit 1
 
 ## Argument parse
 
-Parse `$ARGUMENTS` for the `--reconfigure` flag. Cache the boolean as `RECONFIGURE`. It re-opens these settled decisions and nothing else: the sandbox decision in Phase 2, whose answer from an admin also sets the sandbox recommendation, the isolation policy in Phase 3.5 (and the sandbox recommendation there, only when Phase 2's answer did not set it), the squash-only-merge offer in Phase 3.7, and the statusline left-side choice in Phase 4.6.
+Parse `$ARGUMENTS` for the `--reconfigure` flag. Cache the boolean as `RECONFIGURE`. It re-opens these settled decisions and nothing else: the sandbox decision in Phase 2, whose answer from an admin also sets the sandbox recommendation, the isolation policy in Phase 3.5 (and the sandbox recommendation there, only when Phase 2's answer did not set it), the squash-only-merge offer in Phase 3.7, and the statusline left-side choice in Phase 4.6. When `/gaia-init` reads this file inline at its last step, `$ARGUMENTS` is not substituted: `RECONFIGURE` is false.
 
 ## Phase 0: Prerequisites (every invocation, never skipped)
 
@@ -144,7 +144,7 @@ The classification only routes the phases below; each phase re-checks its own co
 
 ## Phase 2: Per-machine setup (skip if finalized and nothing is owed)
 
-If `setup status --json` reports a non-null `completed_at` and no per-machine id is owed, this whole phase no-ops **except for the sandbox decision below** (a first adopter finished per-machine work inside `/gaia-init`, so the repo prompt in Phase 3 is their first real interaction, with no tool-install log lines before it, and the recorded per-machine steps are unchanged).
+If `setup status --json` reports a non-null `completed_at` and no per-machine id is owed, this whole phase no-ops **except for the sandbox decision below** (a machine already set up keeps its recorded per-machine steps unchanged).
 
 **Sandbox decision (runs even when `completed_at` is non-null).** The OS-level Bash sandbox is off by default: it breaks `gh`, git-over-https and `docker` until they are allowlisted, and GAIA's lifecycle runs on `gh`. A plain run asks about it only when the team recommends it. Before falling through to Phase 3, always run this route, with `RECONFIGURE` declared from the cached value (`true`, or empty):
 
@@ -164,9 +164,11 @@ fi
 
 Read `.claude/skills/gaia/references/setup/sandbox.md` now, the whole file, and run the part the route names:
 
-- `SANDBOX=ask`: the decision steps, which ask on a `ready` machine and record the outcome, then set the team recommendation from an admin's `--reconfigure` answer. Cache the `SANDBOX_TEAM_SET` they print for Phase 3.5.
+- `SANDBOX=ask`: the decision steps, which ask on a `ready` machine and record the outcome, then set the team recommendation from an admin's `--reconfigure` answer. Cache the `SANDBOX_TEAM_SET` they print for Phase 3.5, and `SANDBOX_ANSWER` (`enable`, `decline`, or unset) for Phase 6's closing message.
 - `SANDBOX=stands`: the marker holds this machine's answer (or its incapability); do NOT re-prompt and do NOT flip it. When `sandbox` is owed (the owed check), run `## Record a settled decision` alone.
 - `SANDBOX=default-off`: `## Default off` alone, which asks nothing and leaves the sandbox off.
+
+On `SANDBOX=stands` or `SANDBOX=default-off`, `SANDBOX_ANSWER` stays unset: only an answer given this run counts.
 
 Only an answered question or an incapable machine found while asking writes the marker; the default writes none. So a team that sets `sandbox_recommended: true` after a machine took the default still gets that machine asked on its next run, while a developer who answered the question is never re-asked on a plain run.
 
@@ -450,7 +452,7 @@ When `MAY_RECORD_PROJECT` is not `none`, Read `.claude/skills/gaia/references/se
 
 ## Phase 6: Finalize
 
-Stamp per-machine setup-state as complete, then report. `setup finalize` refuses to finalize while any step is pending (it returns non-zero without stamping `completed_at`), and a first adopter reaches here with every step in `completed_steps` and `completed_at` stamped (their `/gaia-init` recorded each per-machine step through the shared reference and ran a plain `gaia setup finalize`), so the short-circuit below applies; this phase must both **short-circuit when already finalized** and **pass `--force` when any other run still has a step pending**.
+Stamp per-machine setup-state as complete, then report. `setup finalize` refuses to finalize while any step is pending (it returns non-zero without stamping `completed_at`), and a first adopter reaches here with `completed_at` null and the per-machine steps Phase 2 recorded, so the plain finalize below stamps it; this phase must both **short-circuit when already finalized** and **pass `--force` when any other run still has a step pending**.
 
 First, defensively clear the setup sentinel, unconditionally and before the short-circuit below, so a Phase 3.5 commit that aborted between creating and removing it cannot leave main-branch protection suspended on this machine:
 
@@ -494,4 +496,4 @@ A plain re-run on a fully decided project mutates nothing, and its one branch-pr
 
 ## On failure: re-run
 
-Every step and CLI primitive is idempotent and safe to re-run on partial state. After fixing any failure cause (auth missing, network error, malformed config), simply re-run `/setup-gaia`, each phase detects its own completion and resumes from the first owed step.
+Every step and CLI primitive is idempotent and safe to re-run on partial state. After fixing any failure cause (auth missing, network error, malformed config), simply re-run `/setup-gaia`, each phase detects its own completion and resumes from the first owed step. This covers a run entered from `/gaia-init`'s last step, and a step Claude Code's auto-mode classifier denies: stop, say which step was denied, and tell the user to re-run `/setup-gaia`, approving the action when asked; never point at `gaia init resume`.

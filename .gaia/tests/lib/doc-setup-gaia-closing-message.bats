@@ -8,11 +8,27 @@
 # reads as done, and the message reads the same predicate the statusline's
 # setup nudge counts, so the two never disagree.
 #
+# The closing is a sequence of separate lines in a fixed order: the status
+# line, the sandbox and auto-mode lines (each printed only under its own
+# condition), the fresh-context line and the docs line. The sandbox line reads
+# only this run's sandbox answer, never the sandbox marker, so a machine an
+# earlier run enabled gets no sentence. No setup surface file tells the user
+# to restart Claude Code or to reload plugins. Every changed check has a
+# scratch-copy twin that puts the old content back or removes the new and
+# asserts the named failure.
+#
 # Assertion style: .claude/rules/bats-assertions.md.
 
-DONE_LINE="You're all set: your GAIA project is ready. Restart Claude Code to load your new plugins and skills."
-NOT_DONE_LINE="Setup isn't finished: these project settings are still owed: <the OWED_AT_END ids>. Fix what stopped them above, then re-run /setup-gaia; it resumes from the first owed step. Restart Claude Code to load your new plugins and skills."
+DONE_LINE="You're all set: your GAIA project is ready."
+NOT_DONE_LINE="Setup isn't finished: these project settings are still owed: <the OWED_AT_END ids>. Fix what stopped them above, then re-run /setup-gaia; it resumes from the first owed step."
 DOCS_LINE='New to GAIA? The docs walk you through your first feature: https://docs.gaiaharness.com/'
+FRESH_CONTEXT_LINE='Type /clear to start your first feature with a fresh context.'
+SANDBOX_LINE='The sandbox you enabled takes effect from your next Claude Code session.'
+SANDBOX_CONDITION="When \`SANDBOX_ANSWER\` is \`enable\`"
+SANDBOX_BULLET="- ${SANDBOX_CONDITION} (this run's Phase 2 enabled the sandbox; a sandbox an earlier run enabled does not count): \`${SANDBOX_LINE}\`"
+AUTO_MODE_LINE='This session is still in auto mode. Press Shift+Tab to leave it, or start Claude with plain claude next time.'
+AUTO_MODE_CONDITION='When this session runs in auto permission mode'
+AUTO_MODE_BULLET="- ${AUTO_MODE_CONDITION} (Claude can tell from its own context): \`${AUTO_MODE_LINE}\`"
 
 setup() {
   REPO_ROOT="$(cd "${BATS_TEST_DIRNAME}/../../.." && pwd)"
@@ -25,8 +41,8 @@ setup() {
       return 1
     }
   done
-  PHASE_SIX="$(awk '/^## Phase 6: Finalize$/ { inside = 1; next } inside && /^## / { exit } inside' "$PAGE")"
-  CLOSING="$(awk '/^## The closing message$/ { inside = 1; next } inside && /^## / { exit } inside' "$REFERENCE")"
+  PHASE_SIX="$(section_of "$PAGE" '## Phase 6: Finalize')"
+  CLOSING="$(section_of "$REFERENCE" '## The closing message')"
   [ -n "$PHASE_SIX" ] || {
     echo "Phase 6 of ${PAGE} is empty or missing" >&2
     return 1
@@ -35,6 +51,154 @@ setup() {
     echo "## The closing message of ${REFERENCE} is empty or missing" >&2
     return 1
   }
+}
+
+# section_of <file> <heading>: the lines under a "## " heading, up to the next one.
+section_of() {
+  awk -v heading="$2" '$0 == heading { inside = 1; next } inside && /^## / { exit } inside' "$1"
+}
+
+# mutate_file <source> <name> <old> <new>: copy <source> into the test's temp
+# dir with every literal <old> replaced by <new>, and print the copy's path.
+# Fails when the replacement changed nothing, so a control can never run on an
+# unmutated copy.
+mutate_file() {
+  local copy="${BATS_TEST_TMPDIR}/$2" content
+  content="$(cat "$1")"
+  content="${content//"$3"/$4}"
+  printf '%s\n' "$content" >"$copy"
+  cmp -s "$1" "$copy" && {
+    echo "the mutation changed nothing in $2" >&2
+    return 1
+  }
+  printf '%s\n' "$copy"
+}
+
+# check_closing_order <closing-text>: each status line is a whole line, the
+# first occurrences strictly increase in the printed order, and the
+# fresh-context and docs lines occur once.
+check_closing_order() {
+  local closing="$1" previous=0 position index count text
+  local -a modes=(-xF -xF -F -F -xF -xF)
+  local -a texts=("$DONE_LINE" "$NOT_DONE_LINE" "$SANDBOX_LINE" "$AUTO_MODE_LINE" "$FRESH_CONTEXT_LINE" "$DOCS_LINE")
+  for index in 0 1 2 3 4 5; do
+    position="$(grep -n "${modes[$index]}" -- "${texts[$index]}" <<<"$closing" | head -n 1 | cut -d: -f1 || true)"
+    [ -n "$position" ] || {
+      echo "missing whole line: ${texts[$index]}" >&2
+      return 1
+    }
+    [ "$position" -gt "$previous" ] || {
+      echo "out of order: ${texts[$index]}" >&2
+      return 1
+    }
+    previous="$position"
+  done
+  for text in "$FRESH_CONTEXT_LINE" "$DOCS_LINE"; do
+    count="$(grep -cxF -- "$text" <<<"$closing" || true)"
+    [ "$count" = 1 ] || {
+      echo "line occurs ${count} times, not once: ${text}" >&2
+      return 1
+    }
+  done
+  return 0
+}
+
+# check_conditional_line <closing-text> <sentence> <condition>: exactly one
+# line carries the sentence, and that same line carries the condition.
+check_conditional_line() {
+  local closing="$1" sentence="$2" condition="$3" count line
+  count="$(grep -cF -- "$sentence" <<<"$closing" || true)"
+  [ "$count" = 1 ] || {
+    echo "exactly one line must carry the sentence, found ${count}: ${sentence}" >&2
+    return 1
+  }
+  line="$(grep -F -- "$sentence" <<<"$closing")"
+  grep -qF -- "$condition" <<<"$line" || {
+    echo "the sentence is not gated by its condition (${condition}): ${sentence}" >&2
+    return 1
+  }
+  return 0
+}
+
+# check_sandbox_gate <closing-text>: the sandbox sentence reads only this run's
+# answer; the closing never names the sandbox marker or its outcome value.
+check_sandbox_gate() {
+  local closing="$1"
+  grep -qF -- 'sandbox status' <<<"$closing" && {
+    echo "the closing names the sandbox marker (sandbox status)" >&2
+    return 1
+  }
+  grep -qF -- '`enabled`' <<<"$closing" && {
+    echo "the closing reads the sandbox marker's outcome value" >&2
+    return 1
+  }
+  check_conditional_line "$closing" "$SANDBOX_LINE" "$SANDBOX_CONDITION"
+}
+
+# check_no_restart_or_reload <page> <references-directory>: no line of the
+# command or of any reference under the directory tells the user to restart
+# Claude or reload plugins. The file list is derived from the directory and
+# every file is asserted read.
+check_no_restart_or_reload() {
+  local page="$1" directory="$2" file files count=0
+  files="$(find "$directory" -maxdepth 1 -name '*.md' | sort)"
+  [ -n "$files" ] || {
+    echo "no reference files found under ${directory}" >&2
+    return 1
+  }
+  for file in "$page" $files; do
+    [ -f "$file" ] || {
+      echo "unreadable file: ${file}" >&2
+      return 1
+    }
+    count=$((count + 1))
+    grep -qE 'Restart Claude|restart Claude|reload-plugins' "$file" && {
+      echo "restart or reload wording in ${file}" >&2
+      return 1
+    }
+  done
+  [ "$count" -gt 1 ] || {
+    echo "only ${count} file read" >&2
+    return 1
+  }
+  return 0
+}
+
+# check_sandbox_answer_cached <page>: Phase 2 caches the sandbox answer for the
+# closing message and says the answer stays unset on the two routes that ask
+# nothing.
+check_sandbox_answer_cached() {
+  local phase_two
+  phase_two="$(section_of "$1" '## Phase 2: Per-machine setup (skip if finalized and nothing is owed)')"
+  [ -n "$phase_two" ] || {
+    echo "Phase 2 is empty or missing" >&2
+    return 1
+  }
+  grep -qF -- 'and `SANDBOX_ANSWER` (`enable`, `decline`, or unset) for Phase 6' <<<"$phase_two" || {
+    echo "Phase 2 does not cache SANDBOX_ANSWER for Phase 6" >&2
+    return 1
+  }
+  grep -qF -- 'On `SANDBOX=stands` or `SANDBOX=default-off`, `SANDBOX_ANSWER` stays unset' <<<"$phase_two" || {
+    echo "Phase 2 does not say SANDBOX_ANSWER stays unset on the other routes" >&2
+    return 1
+  }
+  return 0
+}
+
+HALT_SENTENCE='This covers a run entered from `/gaia-init`'"'"'s last step, and a step Claude Code'"'"'s auto-mode classifier denies: stop, say which step was denied, and tell the user to re-run `/setup-gaia`, approving the action when asked; never point at `gaia init resume`.'
+
+# check_halt_rule <page>: the re-run section tells a halt (including a step the
+# auto-mode classifier denies) to re-run setup, never to resume init.
+check_halt_rule() {
+  local section
+  section="$(section_of "$1" '## On failure: re-run')"
+  grep -qF -- "$HALT_SENTENCE" <<<"$section" || {
+    echo "the re-run section lacks the halt sentence" >&2
+    grep -qF -- 'auto-mode classifier denies' <<<"$section" || echo "missing phrase: auto-mode classifier denies" >&2
+    grep -qF -- 'never point at `gaia init resume`' <<<"$section" || echo "missing phrase: never point at gaia init resume" >&2
+    return 1
+  }
+  return 0
 }
 
 @test "Phase 6 runs the closing message and prints no closing line of its own" {
@@ -49,10 +213,150 @@ setup() {
   grep -qF -- 'gaia_setup_owed_ids .' <<<"$CLOSING"
 }
 
-@test "the closing message prints the done line, the not-finished line and the docs line" {
+@test "the closing message prints each status, conditional, fresh-context and docs line as a whole line" {
   grep -qxF -- "$DONE_LINE" <<<"$CLOSING"
   grep -qxF -- "$NOT_DONE_LINE" <<<"$CLOSING"
+  grep -qxF -- "$FRESH_CONTEXT_LINE" <<<"$CLOSING"
   grep -qxF -- "$DOCS_LINE" <<<"$CLOSING"
+  grep -qxF -- "$SANDBOX_BULLET" <<<"$CLOSING"
+  grep -qxF -- "$AUTO_MODE_BULLET" <<<"$CLOSING"
+}
+
+@test "the closing lines print in order, the fresh-context and docs lines once" {
+  check_closing_order "$CLOSING"
+}
+
+@test "the closing order check fails with the fresh-context and docs lines swapped" {
+  local copy
+  copy="$(mutate_file "$REFERENCE" order-one.md "$FRESH_CONTEXT_LINE" '@@FRESH@@')"
+  copy="$(mutate_file "$copy" order-two.md "$DOCS_LINE" "$FRESH_CONTEXT_LINE")"
+  copy="$(mutate_file "$copy" order-three.md '@@FRESH@@' "$DOCS_LINE")"
+  run check_closing_order "$(section_of "$copy" '## The closing message')"
+  [ "$status" -ne 0 ]
+  grep -qF 'out of order' <<<"$output"
+}
+
+@test "the closing order check fails when the fresh-context sentence joins the done line" {
+  local copy
+  copy="$(mutate_file "$REFERENCE" order-joined.md "$DONE_LINE" "$DONE_LINE $FRESH_CONTEXT_LINE")"
+  run check_closing_order "$(section_of "$copy" '## The closing message')"
+  [ "$status" -ne 0 ]
+  grep -qF 'missing whole line' <<<"$output"
+}
+
+@test "the sandbox sentence prints once, gated on this run's answer, and never reads the marker" {
+  check_sandbox_gate "$CLOSING"
+}
+
+@test "the sandbox gate check fails when the sentence loses its condition" {
+  local copy
+  copy="$(mutate_file "$REFERENCE" sandbox-ungated.md "$SANDBOX_BULLET" "\`${SANDBOX_LINE}\`")"
+  run check_sandbox_gate "$(section_of "$copy" '## The closing message')"
+  [ "$status" -ne 0 ]
+  grep -qF 'not gated' <<<"$output"
+}
+
+@test "the sandbox gate check fails when the condition reads the marker" {
+  local copy
+  copy="$(mutate_file "$REFERENCE" sandbox-marker.md "$SANDBOX_CONDITION" "When the sandbox marker's outcome is \`enabled\`")"
+  run check_sandbox_gate "$(section_of "$copy" '## The closing message')"
+  [ "$status" -ne 0 ]
+  grep -qF 'marker' <<<"$output"
+}
+
+@test "the sandbox gate check fails when the sentence is removed" {
+  local copy
+  copy="$(mutate_file "$REFERENCE" sandbox-absent.md "$SANDBOX_BULLET" '')"
+  run check_sandbox_gate "$(section_of "$copy" '## The closing message')"
+  [ "$status" -ne 0 ]
+  grep -qF 'exactly one line' <<<"$output"
+}
+
+@test "the auto-mode sentence prints once, gated on the session's permission mode" {
+  check_conditional_line "$CLOSING" "$AUTO_MODE_LINE" "$AUTO_MODE_CONDITION"
+}
+
+@test "the auto-mode check fails when the sentence loses its condition" {
+  local copy
+  copy="$(mutate_file "$REFERENCE" auto-ungated.md "$AUTO_MODE_BULLET" "\`${AUTO_MODE_LINE}\`")"
+  run check_conditional_line "$(section_of "$copy" '## The closing message')" "$AUTO_MODE_LINE" "$AUTO_MODE_CONDITION"
+  [ "$status" -ne 0 ]
+  grep -qF 'not gated' <<<"$output"
+}
+
+@test "the auto-mode check fails when the sentence is removed" {
+  local copy
+  copy="$(mutate_file "$REFERENCE" auto-absent.md "$AUTO_MODE_BULLET" '')"
+  run check_conditional_line "$(section_of "$copy" '## The closing message')" "$AUTO_MODE_LINE" "$AUTO_MODE_CONDITION"
+  [ "$status" -ne 0 ]
+  grep -qF 'exactly one line' <<<"$output"
+}
+
+@test "no setup surface file tells the user to restart Claude or reload plugins" {
+  check_no_restart_or_reload "$PAGE" "$(dirname "$REFERENCE")"
+}
+
+@test "the restart check fails with the old restart sentence put back in a reference" {
+  local directory
+  directory="${BATS_TEST_TMPDIR}/restart-references"
+  mkdir -p "$directory"
+  cp "$(dirname "$REFERENCE")"/*.md "$directory"/
+  mutate_file "$REFERENCE" restart-old.md "$DONE_LINE" "$DONE_LINE Restart Claude Code to load your new plugins and skills." >/dev/null
+  cp "${BATS_TEST_TMPDIR}/restart-old.md" "${directory}/land-decisions.md"
+  run check_no_restart_or_reload "$PAGE" "$directory"
+  [ "$status" -ne 0 ]
+  grep -qF 'land-decisions.md' <<<"$output"
+}
+
+@test "the restart check fails with a reload command added to a reference" {
+  local directory
+  directory="${BATS_TEST_TMPDIR}/reload-references"
+  mkdir -p "$directory"
+  cp "$(dirname "$REFERENCE")"/*.md "$directory"/
+  printf '%s\n' 'Type `/reload-plugins --force` to load your new plugins and skills in this session.' >>"${directory}/land-decisions.md"
+  run check_no_restart_or_reload "$PAGE" "$directory"
+  [ "$status" -ne 0 ]
+  grep -qF 'land-decisions.md' <<<"$output"
+}
+
+@test "Phase 2 caches the sandbox answer for the closing message" {
+  check_sandbox_answer_cached "$PAGE"
+}
+
+@test "the sandbox-answer check fails without the caching clause" {
+  local copy
+  copy="$(mutate_file "$PAGE" cache-clause.md ', and `SANDBOX_ANSWER` (`enable`, `decline`, or unset) for Phase 6'"'"'s closing message' '')"
+  run check_sandbox_answer_cached "$copy"
+  [ "$status" -ne 0 ]
+  grep -qF 'does not cache' <<<"$output"
+}
+
+@test "the sandbox-answer check fails without the stays-unset sentence" {
+  local copy
+  copy="$(mutate_file "$PAGE" stays-unset.md 'On `SANDBOX=stands` or `SANDBOX=default-off`, `SANDBOX_ANSWER` stays unset: only an answer given this run counts.' '')"
+  run check_sandbox_answer_cached "$copy"
+  [ "$status" -ne 0 ]
+  grep -qF 'stays unset' <<<"$output"
+}
+
+@test "the re-run section names a classifier-denied step and never points at init resume" {
+  check_halt_rule "$PAGE"
+}
+
+@test "the halt-rule check fails with the sentence removed" {
+  local copy
+  copy="$(mutate_file "$PAGE" halt-absent.md " ${HALT_SENTENCE}" '')"
+  run check_halt_rule "$copy"
+  [ "$status" -ne 0 ]
+  grep -qF 'lacks the halt sentence' <<<"$output"
+}
+
+@test "the halt-rule check fails with the init-resume prohibition deleted" {
+  local copy
+  copy="$(mutate_file "$PAGE" halt-no-resume.md '; never point at `gaia init resume`' '')"
+  run check_halt_rule "$copy"
+  [ "$status" -ne 0 ]
+  grep -qF 'missing phrase: never point at gaia init resume' <<<"$output"
 }
 
 @test "the summary's Dependabot item is the approved line verbatim, reason included" {

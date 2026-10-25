@@ -198,7 +198,7 @@ See root `CLAUDE.md` § Wiki for the authoritative directive.
 
 ## 12. React Doctor (per-machine install)
 
-Do **not** vendor `react-doctor` into the repo. Do not symlink it. Install per-machine with `.gaia/scripts/install-react-doctor.sh`, which `/gaia-init` and `/setup-gaia` run through `.claude/skills/gaia/references/setup/per-machine.md`. The skill lands in `frontend/.claude/skills/react-doctor/`.
+Do **not** vendor `react-doctor` into the repo. Do not symlink it. Install per-machine with `.gaia/scripts/install-react-doctor.sh`, which `/gaia-init` runs at the end of its dependency step, before anything reads `frontend/`, and `/setup-gaia` runs through `.claude/skills/gaia/references/setup/per-machine.md` when the skill is absent. The skill lands in `frontend/.claude/skills/react-doctor/`.
 
 The `code-audit-frontend` agent dispatches react-doctor **in parallel** with its specialist subagents. `.claude/agents/code-audit-frontend.md` owns the command and its scope flag.
 

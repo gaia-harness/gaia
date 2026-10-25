@@ -197,6 +197,37 @@ wait_for_file() {
   return 0
 }
 
+@test "a project whose init finalized but whose setup has not finished shows the Required nudge" {
+  # Init no longer writes the setup marker, and the gate file is gone once init
+  # finalized: the nudge must show until setup stamps completion.
+  rm -f "$MAIN/.gaia/local/setup-state.json"
+  run_statusline "$MAIN"
+  [ "$status" -eq 0 ]
+  grep -qF -- "⚙️ /setup-gaia (Required)" <<<"$output"
+
+  # Setup stopped after its first per-machine step.
+  printf '{"completed_at":null,"completed_steps":["install-tools"]}' > "$MAIN/.gaia/local/setup-state.json"
+  run_statusline "$MAIN"
+  [ "$status" -eq 0 ]
+  grep -qF -- "⚙️ /setup-gaia (Required)" <<<"$output"
+
+  # The stamped end state an older init left: no nudge. This half proves the
+  # test discriminates a stamped marker from an unfinished one.
+  printf '{"completed_at":"2026-01-01T00:00:00Z"}' > "$MAIN/.gaia/local/setup-state.json"
+  run_statusline "$MAIN"
+  [ "$status" -eq 0 ]
+  grep -qF -- "(Required)" <<<"$output" && return 1
+
+  # Control: mid-init (gate file present, no marker) still suppresses it.
+  rm -f "$MAIN/.gaia/local/setup-state.json"
+  mkdir -p "$MAIN/.claude/commands"
+  printf 'x\n' > "$MAIN/.claude/commands/gaia-init.md"
+  run_statusline "$MAIN"
+  [ "$status" -eq 0 ]
+  grep -qF -- "setup-gaia" <<<"$output" && return 1
+  true
+}
+
 @test "a checkout with no git still renders, falling back to the install path" {
   # The resolver-failure disposition for this consumer is to degrade silently
   # (SPEC-058), and the honest fallback is this script's own checkout: a tree
