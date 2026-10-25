@@ -194,12 +194,17 @@ HOOKS_COST_OUTLIERS=(audit-scope-routing-parity.bats audit-loop-bound.bats githo
 # .github/workflows/audit-ci-tests.yml, and a leg whose p95 times 1.25 passes
 # that cap is a leg a slower runner times out with every test green. The lib
 # directory is a group rather than a whole-directory leg because its whole run
-# outgrows that cap, and its plain byte walk splits it evenly enough by runtime
-# that it needs no cost outliers.
+# outgrows that cap. It takes three buckets where an even two-way split would
+# fit, because its suites' seconds per byte vary widely, so which two-way leg
+# draws the costly suites swings with any suite's size: replayed against one CI
+# run's per-file times over trees within 2% of each file's size, two buckets put
+# the slower leg past the cap's headroom in most draws, with or without
+# anchors, and three never did. No cost outliers, because no anchor list held up
+# across those draws.
 # `wiki/decisions/Sharded CI Test Matrix.md` carries the measurements.
 HOOKS_GREEDY_IDS=(hooks-2 hooks-3 hooks-4)
 SCRIPTS_IDS=(scripts-1 scripts-2 scripts-3 scripts-4 scripts-5)
-LIBRARY_IDS=(lib-1 lib-2)
+LIBRARY_IDS=(lib-1 lib-2 lib-3)
 
 SHARD_IDS=(
   hooks-1
