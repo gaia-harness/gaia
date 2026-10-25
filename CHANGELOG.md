@@ -16,7 +16,7 @@ A release change that requires the adopter to act, run a command or hand-migrate
 
 ### Added
 
-- **License notice in new projects:** new projects now carry GAIA's license notice at `.gaia/LICENSE`: the MIT License, prefaced by a short statement that it covers every file GAIA provides, wherever it sits in the project, while the project's own license covers everything else. The project root stays free for your own `LICENSE`. GAIA's copyright holder is now named as Steven Sacks rather than "GAIA"
+- **License notice in new projects:** new projects now carry GAIA's license notice at `.gaia/LICENSE`: the MIT License, prefaced by a short statement that it covers every file GAIA provides, wherever it sits in the project, while the project's own license covers everything else. The project root stays free for your own `LICENSE`. GAIA's copyright holder is now named as Steven Sacks rather than "GAIA" (#3065)
 
 ### Fixed
 
