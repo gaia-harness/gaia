@@ -42,9 +42,12 @@ The CLI surface is the source of truth. The classification rules for `.gaia/mani
 ```bash
 .gaia/cli/gaia-maintainer release preflight
 bash .gaia/scripts/verify-required-checks.sh
+bash .gaia/scripts/verify-main-green.sh
 ```
 
 `verify-required-checks.sh` confirms every context in its own `REQUIRED_CONTEXTS` list is required by the default branch's live rules. Exit 1 names the contexts missing from those rules; exit 2 means it could not resolve the repository or read its rules. On non-zero, STOP and report.
+
+`verify-main-green.sh` refuses while main is red: an open `ci-red-main` issue, or a push-to-main run of `GAIA: Audit CI Tests` on the commit that is not `success`. A pull request runs only the bats suites its change can affect, and the full suite on main is the backstop for the rest, so a release cut from a red main can ship a defect no pull request run saw. Its header owns the exit codes. On non-zero, STOP and relay its refusal, which names the run or issue and the repair: fix main, wait for a run still in progress (`gh run watch <id>`), or rerun a flaky leg (`gh run rerun <id> --failed`). There is no bypass. Steps 11 and 12 run it again.
 
 Verifies: on `main`, clean working tree, and `wiki/.state.json` is current. The wiki check reads `gaia wiki state --json`: a reachable state passes on `commits_ahead === 0`; an orphaned state (`reachable:false`, the normal post-squash-merge condition, where `commits_ahead` is `0`) is judged on `drift_count`, counted from `suggested_base`, so an un-evaluated window isn't read as a silent zero. Either way, drift that is only wiki-sync squash artifacts passes; substantive drift exits non-zero with an explanation. STOP and report; the maintainer fixes (commit, push, run bare `/gaia-wiki`, which runs sync, consolidate prompts, and lint's fix loop (which can file tech-debt issues) and lands them through its own PR, so expect it to finish before re-running `/gaia-release`).
 
@@ -158,6 +161,12 @@ Members write their markers only; they do not post the `GAIA-Audit` success stat
 
 ### 11. Merge the PR
 
+Main must be green at the release pull request's base first; on non-zero, STOP and relay the refusal as in Step 1:
+
+```bash
+bash .gaia/scripts/verify-main-green.sh
+```
+
 ```bash
 gh pr merge <N> --squash --auto --delete-branch
 # --squash: the repository allows squash merges only. --auto is mandatory:
@@ -184,8 +193,11 @@ Before tagging, ask with AskUserQuestion: "Context footprint measured for this v
 git checkout main
 git pull --ff-only origin main
 git log -1 --oneline    # verify this is the release PR's squash commit
+bash .gaia/scripts/verify-main-green.sh --sha "$(git rev-parse HEAD)"
 .gaia/cli/gaia-maintainer release commit-and-tag --tag
 ```
+
+Run the tag only when the check exits 0. The squash commit's own push run starts at merge, so the check usually exits 3 here: wait with the `gh run watch <id> --exit-status` it names, then run the check again. Any other non-zero, STOP and relay the refusal as in Step 1; never tag a red main.
 
 `commit-and-tag --tag` refuses (`REFUSED:`) a tag whose major is below the highest existing `vX.Y.Z` release tag's major, read from local tags and origin's, because a 1.x `/update-gaia` resolves the newest-created release.
 
