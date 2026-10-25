@@ -120,6 +120,20 @@ gaia_statusline_right() {
     mid_init=0
   fi
   # gaia:maintainer-only:end
+  # While setup runs, the nudge would tell the user to run the command already
+  # running. /gaia-init and /setup-gaia touch .gaia/local/setup-running for that
+  # window, so a fresh marker suppresses the right side like the gate above.
+  # The marker expires after 120 minutes: a session that dies mid-setup never
+  # removes it, and a stale one must let the nudge come back rather than hide it
+  # for good. `find -mmin` is the freshness test because it behaves the same on
+  # BSD and GNU, where `stat` flags differ. It is not .gaia/local/setup-in-progress,
+  # which also stands down the main-branch commit guard and so has to stay
+  # short-lived. The -f test first keeps the common no-marker render free of a
+  # fork.
+  if [ -f "$state_root/.gaia/local/setup-running" ] \
+    && [ -n "$(find "$state_root/.gaia/local/setup-running" -mmin -120 2>/dev/null)" ]; then
+    mid_init=1
+  fi
   if [ "$mid_init" -eq 1 ]; then
     : # /gaia-init in progress, no right-side indicators
   else

@@ -107,5 +107,5 @@ Type /clear to start your first feature with a fresh context.
 **The docs line**, always, last:
 
 ```text
-New to GAIA? The docs walk you through your first feature: https://docs.gaiaharness.com/
+New to GAIA? The docs walk you through your first feature: https://docs.gaiaharness.com/getting-started/onboarding/
 ```

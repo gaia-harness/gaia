@@ -21,7 +21,7 @@
 
 DONE_LINE="You're all set: your GAIA project is ready."
 NOT_DONE_LINE="Setup isn't finished: these project settings are still owed: <the OWED_AT_END ids>. Fix what stopped them above, then re-run /setup-gaia; it resumes from the first owed step."
-DOCS_LINE='New to GAIA? The docs walk you through your first feature: https://docs.gaiaharness.com/'
+DOCS_LINE='New to GAIA? The docs walk you through your first feature: https://docs.gaiaharness.com/getting-started/onboarding/'
 FRESH_CONTEXT_LINE='Type /clear to start your first feature with a fresh context.'
 SANDBOX_LINE='The sandbox you enabled takes effect from your next Claude Code session.'
 SANDBOX_CONDITION="When \`SANDBOX_ANSWER\` is \`enable\`"
@@ -371,4 +371,59 @@ check_halt_rule() {
 @test "the done line is gated: the closing message names when each line prints" {
   grep -qF -- 'When `OWED_AT_END` is empty:' <<<"$CLOSING"
   grep -qF -- 'When `OWED_AT_END` is not empty' <<<"$CLOSING"
+}
+
+# check_running_marker <page>: Pre-flight touches the marker after the worktree
+# refusal, Phase 6 removes it before the adoption ping, and the re-run section
+# removes it on a halt.
+check_running_marker() {
+  local preflight phase_six failure touch_line refuse_line remove_line ping_line
+  preflight="$(section_of "$1" '## Pre-flight: Worktree check')"
+  phase_six="$(section_of "$1" '## Phase 6: Finalize')"
+  failure="$(section_of "$1" '## On failure: re-run')"
+  touch_line="$(grep -nxF -- 'mkdir -p .gaia/local && touch .gaia/local/setup-running' <<<"$preflight" | head -n 1 | cut -d: -f1)"
+  refuse_line="$(grep -nF -- 'gaia_refuse_if_worktree "/setup-gaia" || exit 1' <<<"$preflight" | head -n 1 | cut -d: -f1)"
+  [ -n "$touch_line" ] || {
+    echo "Pre-flight does not touch the setup-running marker" >&2
+    return 1
+  }
+  { [ -n "$refuse_line" ] && [ "$touch_line" -gt "$refuse_line" ]; } || {
+    echo "Pre-flight touches the marker before the worktree refusal" >&2
+    return 1
+  }
+  remove_line="$(grep -nxF -- 'rm -f .gaia/local/setup-running' <<<"$phase_six" | head -n 1 | cut -d: -f1)"
+  ping_line="$(grep -nF -- '**Adoption ping.**' <<<"$phase_six" | head -n 1 | cut -d: -f1)"
+  { [ -n "$remove_line" ] && [ -n "$ping_line" ] && [ "$remove_line" -lt "$ping_line" ]; } || {
+    echo "Phase 6 does not remove the marker before the adoption ping" >&2
+    return 1
+  }
+  grep -qF -- 'rm -f .gaia/local/setup-running' <<<"$failure" || {
+    echo "the re-run section does not remove the marker" >&2
+    return 1
+  }
+}
+
+@test "setup-gaia.md marks setup running after the worktree refusal and clears it on finish and on halt" {
+  check_running_marker "$PAGE"
+}
+
+@test "the running-marker check fails for each broken site" {
+  local copy
+  copy="$(mutate_file "$PAGE" no-touch.md 'mkdir -p .gaia/local && touch .gaia/local/setup-running' 'true')"
+  run check_running_marker "$copy"
+  [ "$status" -ne 0 ]
+  grep -qF 'does not touch the setup-running marker' <<<"$output"
+
+  copy="$(mutate_file "$PAGE" no-failure-rm.md 'On any halt, first run `rm -f .gaia/local/setup-running`' 'On any halt')"
+  run check_running_marker "$copy"
+  [ "$status" -ne 0 ]
+  grep -qF 'the re-run section does not remove the marker' <<<"$output"
+
+  copy="$(mutate_file "$PAGE" no-phase-six-rm.md 'rm -f .gaia/local/setup-running
+```
+
+**Adoption ping.**' '**Adoption ping.**')"
+  run check_running_marker "$copy"
+  [ "$status" -ne 0 ]
+  grep -qF 'Phase 6 does not remove the marker' <<<"$output"
 }

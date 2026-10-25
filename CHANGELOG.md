@@ -24,6 +24,7 @@ A release change that requires the adopter to act, run a command or hand-migrate
 
 ### Fixed
 
+- **Fitness grade on new projects:** a freshly created project no longer shows `/gaia-fitness (grade B-)` on the statusline for its first hours. The wiki's citations of the machine-local `frontend/.env` counted as dead paths until setup wrote that file, and the statusline cached the resulting grade; the dead-path check now treats that file as machine-local.
 - **`gaia init strip-branding`:** the Storybook sidebar is de-branded again. The step stopped finding the brand declaration after it was renamed in `.storybook/preview.ts`, so new projects kept the GAIA title and link while init reported the step complete. It now rewrites the current declaration and exits 1 with `storybook_brand_missing`, recording nothing, when a preview it cannot de-brand is present (#3058)
 
 ## [2.1.1] - 2026-10-24

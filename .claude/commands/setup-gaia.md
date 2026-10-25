@@ -38,6 +38,12 @@ Detection (run this first, before anything else):
 gaia_refuse_if_worktree "/setup-gaia" || exit 1
 ```
 
+Once the refusal has passed, mark setup as running so the statusline stops telling the user to run the command that is already running. A refused worktree run never reaches this call:
+
+```bash
+mkdir -p .gaia/local && touch .gaia/local/setup-running
+```
+
 ## Argument parse
 
 Parse `$ARGUMENTS` for the `--reconfigure` flag. Cache the boolean as `RECONFIGURE`. It re-opens these settled decisions and nothing else: the sandbox decision in Phase 2, whose answer from an admin also sets the sandbox recommendation, the isolation policy in Phase 3.5 (and the sandbox recommendation there, only when Phase 2's answer did not set it), the squash-only-merge offer in Phase 3.7, and the statusline left-side choice in Phase 4.6. When `/gaia-init` reads this file inline at its last step, `$ARGUMENTS` is not substituted: `RECONFIGURE` is false.
@@ -477,6 +483,12 @@ Read `setup status --json`:
 
   Never leave `completed_at` unstamped because a step was skipped upstream.
 
+Then remove the running marker, so the statusline reports whatever this run left owed:
+
+```bash
+rm -f .gaia/local/setup-running
+```
+
 **Adoption ping.** After finalize completes (or short-circuits above), compute **`$SETUP_TYPE`** from Phase 1's classification and `RECONFIGURE`:
 
 - `RECONFIGURE` is set: `reconfigure`.
@@ -495,5 +507,7 @@ Then run `land-decisions.md`'s `## The closing message`. It prints the done line
 A plain re-run on a fully decided project mutates nothing, and its one branch-protection exception is the owed `GAIA-Audit` registration (the opening paragraph owns both, and Argument parse owns what `--reconfigure` re-opens). A run that records a decision for an id undecided at its start relaxes that promise for `setup_decisions`, and lands it through Phase 5.5. New `--reconfigure` answers overwrite the records.
 
 ## On failure: re-run
+
+On any halt, first run `rm -f .gaia/local/setup-running`, so the statusline shows the setup nudge again.
 
 Every step and CLI primitive is idempotent and safe to re-run on partial state. After fixing any failure cause (auth missing, network error, malformed config), simply re-run `/setup-gaia`, each phase detects its own completion and resumes from the first owed step. This covers a run entered from `/gaia-init`'s last step, and a step Claude Code's auto-mode classifier denies: stop, say which step was denied, and tell the user to re-run `/setup-gaia`, approving the action when asked; never point at `gaia init resume`.

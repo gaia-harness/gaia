@@ -211,6 +211,27 @@ wait_for_file() {
   [ "$status" -eq 0 ]
   grep -qF -- "⚙️ /setup-gaia (Required)" <<<"$output"
 
+  # The running marker hides the nudge while setup runs, from main and from the
+  # worktree, since both read the marker under main's state root.
+  touch "$MAIN/.gaia/local/setup-running"
+  run_statusline "$MAIN"
+  [ "$status" -eq 0 ]
+  grep -qF -- "setup-gaia" <<<"$output" && return 1
+  run_statusline "$WORKTREE"
+  [ "$status" -eq 0 ]
+  grep -qF -- "setup-gaia" <<<"$output" && return 1
+
+  # Control: a marker a dead session left behind, older than the 120 minute
+  # window, lets the nudge back.
+  touch -t 202001010000 "$MAIN/.gaia/local/setup-running"
+  run_statusline "$MAIN"
+  [ "$status" -eq 0 ]
+  grep -qF -- "⚙️ /setup-gaia (Required)" <<<"$output"
+  run_statusline "$WORKTREE"
+  [ "$status" -eq 0 ]
+  grep -qF -- "⚙️ /setup-gaia (Required)" <<<"$output"
+  rm -f "$MAIN/.gaia/local/setup-running"
+
   # The stamped end state an older init left: no nudge. This half proves the
   # test discriminates a stamped marker from an unfinished one.
   printf '{"completed_at":"2026-01-01T00:00:00Z"}' > "$MAIN/.gaia/local/setup-state.json"
@@ -226,6 +247,20 @@ wait_for_file() {
   [ "$status" -eq 0 ]
   grep -qF -- "setup-gaia" <<<"$output" && return 1
   true
+}
+
+@test "the running-marker suppression fails when the freshness gate is inverted" {
+  # Proves the suppression half above can fail: with the gate turned onto a
+  # stale marker, a fresh marker no longer hides the nudge.
+  local right="$MAIN/.gaia/statusline/gaia-statusline-right.sh"
+  sed 's/-mmin -120/-mmin +120/' "$right" > "$BATS_TEST_TMPDIR/right.sh"
+  cmp -s "$right" "$BATS_TEST_TMPDIR/right.sh" && return 1
+  cp "$BATS_TEST_TMPDIR/right.sh" "$right"
+  printf '{"completed_at":null}' > "$MAIN/.gaia/local/setup-state.json"
+  touch "$MAIN/.gaia/local/setup-running"
+  run_statusline "$MAIN"
+  [ "$status" -eq 0 ]
+  grep -qF -- "⚙️ /setup-gaia (Required)" <<<"$output"
 }
 
 @test "a checkout with no git still renders, falling back to the install path" {

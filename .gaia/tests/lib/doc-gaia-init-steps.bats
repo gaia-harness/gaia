@@ -600,7 +600,7 @@ check_handoff_order() {
 # ---------------------------------------------------------------------------
 
 HANDOFF_PHRASES=(
-  'Setup is now running'
+  'Setup is now running: GAIA continues with /setup-gaia in this session. After your first push'
   'with `RECONFIGURE` false'
   'no `$ARGUMENTS` substitution'
   "Automatic included, covered init's questions only"
@@ -659,6 +659,69 @@ check_handoff_contract() {
     ran=$((ran + 1))
   done
   [ "$ran" -eq "$expected" ]
+}
+
+# ---------------------------------------------------------------------------
+# The setup-running marker
+# ---------------------------------------------------------------------------
+
+RUNNING_MARKER_TOUCH='mkdir -p .gaia/local && touch .gaia/local/setup-running'
+RUNNING_MARKER_REMOVE='rm -f .gaia/local/setup-running'
+
+# check_running_marker <init>: Step 10 touches the marker on a line before the
+# finalize call, and the uncommitted-init stop removes it.
+check_running_marker() {
+  local file="$1" step stop touch_line finalize_line
+  step="$(section_of "$file" '## Step 10: Finalize')"
+  stop="$(section_of "$file" '### Stop on an uncommitted init')"
+  touch_line="$(grep -nxF -- "$RUNNING_MARKER_TOUCH" <<<"$step" | head -n 1 | cut -d: -f1)"
+  finalize_line="$(grep -nxF -- '.gaia/cli/gaia init finalize' <<<"$step" | head -n 1 | cut -d: -f1)"
+  [ -n "$touch_line" ] || {
+    echo "Step 10 does not touch the setup-running marker" >&2
+    return 1
+  }
+  [ -n "$finalize_line" ] || {
+    echo "Step 10 has no finalize call" >&2
+    return 1
+  }
+  [ "$touch_line" -lt "$finalize_line" ] || {
+    echo "Step 10 touches the marker after finalize" >&2
+    return 1
+  }
+  grep -qxF -- "$RUNNING_MARKER_REMOVE" <<<"$stop" || {
+    echo "the uncommitted-init stop does not remove the marker" >&2
+    return 1
+  }
+}
+
+@test "gaia-init.md marks setup running before finalize and clears it on the uncommitted stop" {
+  check_running_marker "$INIT_MD"
+}
+
+@test "the running-marker check fails when the touch, its order, or the removal is broken" {
+  local scratch="$BATS_TEST_TMPDIR/gaia-init.scratch.md"
+  drop_line "$INIT_MD" "$scratch" "$RUNNING_MARKER_TOUCH"
+  cmp -s "$INIT_MD" "$scratch" && return 1
+  run check_running_marker "$scratch"
+  [ "$status" -ne 0 ]
+  grep -qF 'does not touch the setup-running marker' <<<"$output"
+
+  drop_line "$INIT_MD" "$scratch" "$RUNNING_MARKER_REMOVE"
+  cmp -s "$INIT_MD" "$scratch" && return 1
+  run check_running_marker "$scratch"
+  [ "$status" -ne 0 ]
+  grep -qF 'does not remove the marker' <<<"$output"
+
+  # Order: the touch moved to just after the finalize call.
+  awk -v touch="$RUNNING_MARKER_TOUCH" '
+    $0 == touch { next }
+    { print }
+    $0 == ".gaia/cli/gaia init finalize" { print touch }
+  ' "$INIT_MD" > "$scratch"
+  cmp -s "$INIT_MD" "$scratch" && return 1
+  run check_running_marker "$scratch"
+  [ "$status" -ne 0 ]
+  grep -qF 'touches the marker after finalize' <<<"$output"
 }
 
 # ---------------------------------------------------------------------------

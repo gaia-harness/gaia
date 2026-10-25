@@ -415,6 +415,12 @@ Append-only. New entries at the TOP.
 
 ## Step 10: Finalize
 
+Mark setup as running first, in its own call. Finalize deletes this command file, which ends the statusline's mid-init gate, and setup runs next in this session, so the marker keeps the statusline from telling the user to run the setup that is about to run:
+
+```bash
+mkdir -p .gaia/local && touch .gaia/local/setup-running
+```
+
 This step deletes this command file and, once every init step is recorded complete, the `.gaia/init-state.json` resume cursor:
 
 ```bash
@@ -453,7 +459,13 @@ Derive the two values from state this run already holds, never from a state file
 
 ### Stop on an uncommitted init
 
-When Step 10 printed `COMMIT_FAILED`, print this and stop; do not continue into `/setup-gaia`, whose GitHub step pushes only what is committed:
+When Step 10 printed `COMMIT_FAILED`, print this and stop; do not continue into `/setup-gaia`, whose GitHub step pushes only what is committed. First remove the setup marker, since setup will not run:
+
+```bash
+rm -f .gaia/local/setup-running
+```
+
+Then print:
 
 ```
 ⚠ Required: the init changes are not committed. Review them with `git status`, commit them on your default branch, then run `/setup-gaia`.
@@ -475,7 +487,7 @@ A gh-detected or user-typed handle writes a real owner, so this warning does not
 
 First print this line, in the user's language:
 
-> <Project Title> is configured. Setup is now running: GAIA continues with /setup-gaia in this session, so the statusline's ⚙️ /setup-gaia (Required) nudge stays until it finishes. After your first push, `/setup-gaia` registers the `GAIA-Audit` required check. The statusline shows /update-deps when packages are outdated or have security advisories; run it when you are ready.
+> <Project Title> is configured. Setup is now running: GAIA continues with /setup-gaia in this session. After your first push, `/setup-gaia` registers the `GAIA-Audit` required check. The statusline shows /update-deps when packages are outdated or have security advisories; run it when you are ready.
 
 From here on, this command's interactive-gate rules and its `## On failure: resume` no longer apply. Setup's phases run under setup's own gates: the run mode chosen at the first gate, Automatic included, covered init's questions only, and setup's repo connect question is always asked, never answered for the user. Any halt during setup's phases, a step Claude Code's auto-mode classifier denies included, tells the user to re-run `/setup-gaia`, never `gaia init resume`.
 
