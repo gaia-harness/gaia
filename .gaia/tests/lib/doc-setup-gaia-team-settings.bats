@@ -142,12 +142,12 @@ check_project_json() {
 }
 
 @test "the project.json check fails when a commit stages another file" {
-  local copy surface
-  copy="$(scratch_copy "$PAGE" "project-json-commit.md")"
+  local directory surface
+  directory="$(scratch_references project-json-commit)"
   awk '/^git add \.gaia\/project\.json/ && !done { sub(/project\.json/, "other.json"); done = 1 } { print }' \
-    "$PAGE" >"$copy"
-  cmp -s "$PAGE" "$copy" && return 1
-  surface="$(build_surface "$copy" "$REFERENCES_DIRECTORY" surface-project-json-commit.md)"
+    "${REFERENCES_DIRECTORY}/isolation-question.md" >"${directory}/isolation-question.md"
+  cmp -s "${REFERENCES_DIRECTORY}/isolation-question.md" "${directory}/isolation-question.md" && return 1
+  surface="$(build_surface "$PAGE" "$directory" surface-project-json-commit.md)"
   run check_project_json "$surface"
   [ "$status" -ne 0 ]
 }

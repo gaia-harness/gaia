@@ -79,18 +79,38 @@ When the run's summary lists what changed on GitHub and this run applied the Dep
 Dependabot security alerts are on. GAIA updates vulnerable packages for you and tests the result before anything changes, so Dependabot's own security fix pull requests are turned off.
 ```
 
-Then output (in the user's language), with a blank line between the two lines. When `OWED_AT_END` is empty:
+Then output these lines (in the user's language), each its own paragraph with a blank line between them, in this order. The closing never asks for a reload command or a restart: a plugin setup installs from the shell loads in this session, and `per-machine.md`'s install-tools names the one case where a skill appears only from the next session.
+
+**The status line.** When `OWED_AT_END` is empty:
 
 ```text
-You're all set: your GAIA project is ready. Restart Claude Code to load your new plugins and skills.
-
-New to GAIA? The docs walk you through your first feature: https://docs.gaiaharness.com/
+You're all set: your GAIA project is ready.
 ```
 
 When `OWED_AT_END` is not empty, name its ids in place of the placeholder:
 
 ```text
-Setup isn't finished: these project settings are still owed: <the OWED_AT_END ids>. Fix what stopped them above, then re-run /setup-gaia; it resumes from the first owed step. Restart Claude Code to load your new plugins and skills.
+Setup isn't finished: these project settings are still owed: <the OWED_AT_END ids>. Fix what stopped them above, then re-run /setup-gaia; it resumes from the first owed step.
+```
 
-New to GAIA? The docs walk you through your first feature: https://docs.gaiaharness.com/
+**The sandbox line.** After the status line, add this line when its condition holds:
+
+- When `SANDBOX_ANSWER` is `enable` (this run's Phase 2 enabled the sandbox; a sandbox an earlier run enabled does not count): `The sandbox you enabled takes effect from your next Claude Code session.`
+
+**The auto-mode line**, always. Its wording holds in any permission mode, so it prints without Claude judging which mode the session is in, a judgment that does not hold run to run:
+
+```text
+If this session is in auto mode, press Shift+Tab to leave it, or start Claude with plain claude next time.
+```
+
+**The fresh-context line**, always:
+
+```text
+Type /clear to start your first feature with a fresh context.
+```
+
+**The docs line**, always, last:
+
+```text
+New to GAIA? The docs walk you through your first feature: https://docs.gaiaharness.com/getting-started/onboarding/
 ```

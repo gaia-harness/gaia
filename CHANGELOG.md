@@ -18,8 +18,13 @@ A release change that requires the adopter to act, run a command or hand-migrate
 
 - **License notice in new projects:** new projects now carry GAIA's license notice at `.gaia/LICENSE`: the MIT License, prefaced by a short statement that it covers every file GAIA provides, wherever it sits in the project, while the project's own license covers everything else. The project root stays free for your own `LICENSE`. GAIA's copyright holder is now named as Steven Sacks rather than "GAIA" (#3065)
 
+### Changed
+
+- **Onboarding finishes in one Claude session.** After `npx create-gaia`, `/gaia-init` continues straight into `/setup-gaia` instead of telling you to exit and restart Claude twice, and setup ends with no restart and no reload: it suggests `/clear` to start your first feature with a fresh context. `/gaia-init` installs the React Doctor skill first, so it is available in that same session; the other per-machine installs (Playwright CLI, the typescript-lsp plugin) run only in `/setup-gaia`, so a first run that stops after init finishes shows `⚙️ /setup-gaia (Required)` until setup finishes.
+
 ### Fixed
 
+- **Fitness grade on new projects:** a freshly created project no longer shows `/gaia-fitness (grade B-)` on the statusline for its first hours. The wiki's citations of the machine-local `frontend/.env` counted as dead paths until setup wrote that file, and the statusline cached the resulting grade; the dead-path check now treats that file as machine-local.
 - **`gaia init strip-branding`:** the Storybook sidebar is de-branded again. The step stopped finding the brand declaration after it was renamed in `.storybook/preview.ts`, so new projects kept the GAIA title and link while init reported the step complete. It now rewrites the current declaration and exits 1 with `storybook_brand_missing`, recording nothing, when a preview it cannot de-brand is present (#3058)
 
 ## [2.1.1] - 2026-10-24

@@ -195,6 +195,19 @@ describe('wiki dead-paths', () => {
     ]);
   });
 
+  test('ignores the gitignored per-machine env file, by exact token, and still flags a missing tracked path', () => {
+    sandbox.writeFile(
+      'wiki/concepts/Environment.md',
+      '# Environment\n\nCopy `frontend/.env.example` to `frontend/.env`, never `frontend/.env.bak`. See `frontend/app/missing.ts`.\n'
+    );
+
+    expect(scanWikiPaths(sandbox.root).dead.map((d) => d.path)).toEqual([
+      'frontend/.env.example',
+      'frontend/.env.bak',
+      'frontend/app/missing.ts',
+    ]);
+  });
+
   test('ignores shipped citations of files a post-init adopter tree lacks by design, by exact token', () => {
     // The sandbox is a post-init adopter tree: init finalize has deleted the
     // init command, and the optional fitness config was never shipped.

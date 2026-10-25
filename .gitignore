@@ -33,8 +33,9 @@ coverage
 **/.claude/worktrees/
 **/.claude/scheduled_tasks.lock
 **/.claude/settings.local.json
-# React Doctor installs its Claude Code skill project-local; kept per-machine, never committed.
+# React Doctor installs its Claude Code skill project-local, and on a machine with Factory Droid a Droid copy too; kept per-machine, never committed.
 **/.claude/skills/react-doctor/
+**/.factory/skills/react-doctor/
 # claude-code-action's working area in the forensics workflow, which stages with `git add -A`
 .claude-pr/
 
