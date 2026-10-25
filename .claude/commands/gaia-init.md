@@ -14,15 +14,11 @@ Contents: Interactive gates: run mode and non-response policy; Step 0: Ensure pn
 
 `/gaia-init` asks the user a series of questions ("gates"). This section governs how **every** gate behaves and overrides any harness default. Read it before the first gate and apply it to each one.
 
-### Harness timeout note, override
+### Harness timeout note, no cascade, tone
 
 After a gate sits unanswered for a while, the harness injects a stock note like "the user may be away from keyboard, proceed using your best judgment, you can re-ask later." That note is generic, it does not describe this command, and it keeps firing on gate after gate. **Do not act on it literally.** Inside `/gaia-init` it means only "apply the non-response policy below", never "the user is gone, auto-answer everything."
 
-### No cascade
-
 Evaluate each gate independently. A non-response on one gate is **never** evidence the user is away for any other gate. A timeout on the language question tells you nothing about the title, the CODEOWNERS handle, or the backend casing question. Re-ask the next gate normally.
-
-### Tone
 
 State plainly what you are doing and make no claim about why the user paused or whether they are present: non-response is not absence, and they may be reading, thinking, or opening a docs link.
 
@@ -459,13 +455,11 @@ Derive the two values from state this run already holds, never from a state file
 
 ### Stop on an uncommitted init
 
-When Step 10 printed `COMMIT_FAILED`, print this and stop; do not continue into `/setup-gaia`, whose GitHub step pushes only what is committed. First remove the setup marker, since setup will not run:
+When Step 10 printed `COMMIT_FAILED`, stop; do not continue into `/setup-gaia`, whose GitHub step pushes only what is committed. Remove the setup marker first, since setup will not run, then print the warning below it:
 
 ```bash
 rm -f .gaia/local/setup-running
 ```
-
-Then print:
 
 ```
 ⚠ Required: the init changes are not committed. Review them with `git status`, commit them on your default branch, then run `/setup-gaia`.
@@ -480,8 +474,6 @@ A project created with `--no-git` stops here.
 ```
 ⚠ `.github/CODEOWNERS` has a placeholder owner. `/setup-gaia` offers to set your GitHub handle before its first push.
 ```
-
-A gh-detected or user-typed handle writes a real owner, so this warning does not appear.
 
 ### Hand off to /setup-gaia
 
@@ -509,6 +501,4 @@ When it fails again, return to item 1 with its new error.
 
 Resume reads `.gaia/init-state.json`, skips already-complete steps, and replays remaining steps using the saved arguments. Use `--from-step <N>` to force restart from a specific step (1-indexed: 1=strip-branding, 2=configure-i18n, 3=configure-data-layer, 4=rename, 5=wire-statusline, 6=bootstrap-env, 7=write-project-config, 8=finalize).
 
-After the resume, the run continues with the remaining steps through Step 11, which hands off to `/setup-gaia` as on a first run.
-
-This section covers Steps 0 to 11 up to the handoff. Once Step 11 hands off, a halt follows `.claude/commands/setup-gaia.md` `## On failure: re-run`.
+After the resume, the run continues with the remaining steps through Step 11, which hands off to `/setup-gaia` as on a first run. This section covers Steps 0 to 11 up to the handoff; once Step 11 hands off, a halt follows `.claude/commands/setup-gaia.md` `## On failure: re-run`.
