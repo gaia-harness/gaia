@@ -240,6 +240,7 @@ check_no_init_per_machine_claim() {
 # touch it), derived from the directory.
 claim_command_files() {
   local command_file
+  # gaia-lint-ignore whole-tree-mark-guard: the one test that calls this helper carries the per-test whole-tree mark
   for command_file in "${REPO_ROOT}"/.claude/commands/*.md; do
     case "$(basename "$command_file")" in
       gaia-init.md | gaia-release.md) continue ;;
@@ -248,6 +249,7 @@ claim_command_files() {
   done
 }
 
+# bats test_tags=whole-tree
 @test "no setup reference or command says /gaia-init runs the per-machine work" {
   local files file count=0
   files="$(surface_files "$PAGE" "$REFERENCES_DIRECTORY")"
