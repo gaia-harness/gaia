@@ -35,6 +35,18 @@ setup() {
   LIB_DIR_DEFAULT='.gaia/tests/lib'
   FORENSICS_DIRECTORY_DEFAULT='.gaia/tests/forensics'
   STATUSLINE_DIR_DEFAULT='.gaia/tests/statusline'
+  # The change-scoped commands run the classifier against the diff arguments
+  # first. A fixture diff names nothing the real classifier could read, so every
+  # case gets a stub that prints $STUB_CLASSIFIER_OUTPUT and exits
+  # $STUB_CLASSIFIER_STATUS, and says nothing by default.
+  cat >"$BATS_TEST_TMPDIR/classifier.sh" <<'STUB'
+#!/usr/bin/env bash
+if [ -n "${STUB_CLASSIFIER_OUTPUT:-}" ]; then
+  printf '%s\n' "$STUB_CLASSIFIER_OUTPUT"
+fi
+exit "${STUB_CLASSIFIER_STATUS:-0}"
+STUB
+  export CHANGE_SCOPE_SCRIPT="$BATS_TEST_TMPDIR/classifier.sh"
 }
 
 teardown() {
@@ -266,6 +278,7 @@ write_trivial_bats() {
   grep -qF -- 'misc' <<<"$output"
 }
 
+# bats test_tags=whole-tree
 @test "S8: usage errors" {
   run bash "$SCRIPT" files nope
   [ "$status" -eq 2 ]
@@ -417,7 +430,7 @@ within_load_bound() {
 doctor_groupless_shard() {
   local destination line
   destination="$(copy_sharder a5-groupless.sh)"
-  line="$(grep -nF 'audit | lib | misc) printf' "$destination" | head -1 | cut -d: -f1)"
+  line="$(grep -nF 'audit | misc) printf' "$destination" | head -1 | cut -d: -f1)"
   [ -n "$line" ] || return 1
   awk -v removed_line="$line" 'NR != removed_line { print }' "$destination" >"$destination.new"
   mv "$destination.new" "$destination"
@@ -435,10 +448,10 @@ doctor_groupless_shard() {
   [ "$status" -eq 0 ]
   [ -n "$output" ]
 
-  run bash "$copy" group lib
+  run bash "$copy" group audit
   [ "$status" -eq 2 ]
   [ -n "$output" ]
-  grep -qF -- 'lib' <<<"$output"
+  grep -qF -- 'audit' <<<"$output"
 }
 
 # bats test_tags=whole-tree
@@ -454,8 +467,17 @@ doctor_groupless_shard() {
   run within_load_bound "$SCRIPT" "$total" "$largest" hooks-2 hooks-3 hooks-4
   [ "$status" -eq 0 ]
 
+  # The scripts and lib ids are asked for too: SCRIPTS_IDS and LIBRARY_IDS are
+  # where a bucket is added, and a literal list here would leave the new bucket
+  # out of the bound.
   read -r total largest < <(discover_independent "$SCRIPTS_TESTS_DIRECTORY_DEFAULT" | weight_profile)
-  run within_load_bound "$SCRIPT" "$total" "$largest" scripts-1 scripts-2 scripts-3 scripts-4
+  # shellcheck disable=SC2046 # one id per word
+  run within_load_bound "$SCRIPT" "$total" "$largest" $(bash "$SCRIPT" group scripts-1)
+  [ "$status" -eq 0 ]
+
+  read -r total largest < <(discover_independent "$LIB_DIR_DEFAULT" | weight_profile)
+  # shellcheck disable=SC2046 # one id per word
+  run within_load_bound "$SCRIPT" "$total" "$largest" $(bash "$SCRIPT" group lib-1)
   [ "$status" -eq 0 ]
 }
 
@@ -477,35 +499,42 @@ doctor_unweighted() {
   printf '%s\n' "$destination"
 }
 
-# A seam directory whose round-robin split across four shards is lopsided and
-# whose weighted split is not: two heavy files four positions apart in the
+# A seam directory whose round-robin split across $2 shards is lopsided and
+# whose weighted split is not: two heavy files $2 positions apart in the
 # sorted listing land on the same shard when position decides, and on different
-# shards when weight does. Six files, so no shard is empty under round-robin
-# either way.
+# shards when weight does. Two files more than there are shards, so no shard is
+# empty under round-robin either way. The spacing follows the bucket count
+# rather than a literal, so a bucket added to the group keeps the two heavy
+# files on one round-robin shard.
 seed_lopsided_tree() {
-  local directory="$1" name
+  local directory="$1" bucket_count="$2" position=0 name
   mkdir -p "$directory"
-  for name in s-a s-e; do
-    write_trivial_bats "$directory/$name.bats" "HEAVY-$name"
-    # Padded to a size the light files cannot approach, as one trailing comment
-    # line, so which shard holds the two heavy files is what decides the
-    # comparison.
-    head -c 1000 /dev/zero | tr '\0' '#' >>"$directory/$name.bats"
-  done
-  for name in s-b s-c s-d s-f; do
-    write_trivial_bats "$directory/$name.bats" "LIGHT-$name"
+  while [ "$position" -le $((bucket_count + 1)) ]; do
+    name="$(printf 's-%02d' "$position")"
+    if [ "$position" -eq 0 ] || [ "$position" -eq "$bucket_count" ]; then
+      write_trivial_bats "$directory/$name.bats" "HEAVY-$name"
+      # Padded to a size the light files cannot approach, as one trailing
+      # comment line, so which shard holds the two heavy files is what decides
+      # the comparison.
+      head -c 1000 /dev/zero | tr '\0' '#' >>"$directory/$name.bats"
+    else
+      write_trivial_bats "$directory/$name.bats" "LIGHT-$name"
+    fi
+    position=$((position + 1))
   done
 }
 
 @test "A4: a group split by file count rather than weight reds the load bound" {
-  local directory copy total largest
+  local directory copy total largest scripts_ids
   directory="$BATS_TEST_TMPDIR/a4-scripts"
-  seed_lopsided_tree "$directory"
+  scripts_ids="$(bash "$SCRIPT" group scripts-1)"
+  seed_lopsided_tree "$directory" "$(printf '%s\n' "$scripts_ids" | grep -c .)"
   read -r total largest < <(printf '%s\n' "$directory"/*.bats | weight_profile)
 
   # The healthy arm first, so a bound loose enough to pass anything could not
   # pass this test.
-  SCRIPTS_TESTS_DIRECTORY="$directory" run within_load_bound "$SCRIPT" "$total" "$largest" scripts-1 scripts-2 scripts-3 scripts-4
+  # shellcheck disable=SC2086 # one id per word
+  SCRIPTS_TESTS_DIRECTORY="$directory" run within_load_bound "$SCRIPT" "$total" "$largest" $scripts_ids
   [ "$status" -eq 0 ]
 
   copy="$(doctor_unweighted)"
@@ -513,7 +542,8 @@ seed_lopsided_tree() {
   SCRIPTS_TESTS_DIRECTORY="$directory" run check_no_duplicates "$copy"
   [ "$status" -eq 0 ]
   # ...and is still caught, because the two heavy files landed together.
-  SCRIPTS_TESTS_DIRECTORY="$directory" run within_load_bound "$copy" "$total" "$largest" scripts-1 scripts-2 scripts-3 scripts-4
+  # shellcheck disable=SC2086 # one id per word
+  SCRIPTS_TESTS_DIRECTORY="$directory" run within_load_bound "$copy" "$total" "$largest" $scripts_ids
   [ "$status" -eq 1 ]
 }
 
@@ -534,7 +564,7 @@ seed_lopsided_tree() {
     write_trivial_bats "$directory/$name.bats" "LIGHT-$name"
   done
 
-  for shard in scripts-1 scripts-2 scripts-3 scripts-4; do
+  for shard in $(bash "$SCRIPT" group scripts-1); do
     # stdout alone: a wc complaint about the directory is not a listed file.
     listing="$(SCRIPTS_TESTS_DIRECTORY="$directory" bash "$SCRIPT" files "$shard" 2>/dev/null)" || return 1
     if grep -qF 'heavy.bats' <<<"$listing"; then
@@ -614,20 +644,27 @@ scripts_shard_of() {
 }
 
 # A seam whose pure lightest-bucket walk provably co-locates two files, so the
-# anchoring arm has something to separate. Three fillers take one bucket each
-# (1000, 1000, 300), which leaves the third bucket light enough to win the next
-# TWO picks: both trailing files land on it. The gap is what does the work, not
-# the file count, so this stays a fixture about the walk rather than about how
-# many files happen to be here.
+# anchoring arm has something to separate. One filler per scripts bucket but
+# one takes a bucket each (1000 bytes apiece, the last 300), which leaves the
+# one empty bucket to win the next TWO picks: both trailing files land on it.
+# The gap is what does the work, not the file count, so this stays a fixture
+# about the walk rather than about how many files happen to be here. The
+# filler count follows the group's bucket count, asked for rather than spelled
+# out, so a bucket added to SCRIPTS_IDS leaves no second empty bucket to split
+# the trailing pair.
 seed_anchor_tree() {
-  local directory="$1"
+  local directory="$1" bucket_count filler=1
+  bucket_count="$(bash "$SCRIPT" group scripts-1 | grep -c .)"
   mkdir -p "$directory"
-  write_trivial_bats "$directory/fill-a.bats" "FILL-A"
-  head -c 1000 /dev/zero | tr '\0' '#' >>"$directory/fill-a.bats"
-  write_trivial_bats "$directory/fill-b.bats" "FILL-B"
-  head -c 1000 /dev/zero | tr '\0' '#' >>"$directory/fill-b.bats"
-  write_trivial_bats "$directory/fill-c.bats" "FILL-C"
-  head -c 300 /dev/zero | tr '\0' '#' >>"$directory/fill-c.bats"
+  while [ "$filler" -lt "$bucket_count" ]; do
+    write_trivial_bats "$directory/fill-$filler.bats" "FILL-$filler"
+    if [ "$filler" -eq $((bucket_count - 1)) ]; then
+      head -c 300 /dev/zero | tr '\0' '#' >>"$directory/fill-$filler.bats"
+    else
+      head -c 1000 /dev/zero | tr '\0' '#' >>"$directory/fill-$filler.bats"
+    fi
+    filler=$((filler + 1))
+  done
   write_trivial_bats "$directory/heavy-x.bats" "HEAVY-X"
   write_trivial_bats "$directory/heavy-y.bats" "HEAVY-Y"
 }
@@ -721,11 +758,18 @@ seed_anchor_tree() {
 # would silently put two of them together, which is the state the list exists
 # to forbid.
 @test "A8: more anchored files than shards is a fail-closed error" {
-  local directory copy
+  local directory copy bucket_count filler=1 every_file='heavy-x.bats heavy-y.bats'
   directory="$BATS_TEST_TMPDIR/a8-scripts"
   seed_anchor_tree "$directory"
-  copy="$(doctor_outliers a8-over.sh \
-    'fill-a.bats fill-b.bats fill-c.bats heavy-x.bats heavy-y.bats')"
+  # Every file seed_anchor_tree writes, which is one more than the group has
+  # buckets.
+  bucket_count="$(bash "$SCRIPT" group scripts-1 | grep -c .)"
+  while [ "$filler" -lt "$bucket_count" ]; do
+    every_file="fill-$filler.bats $every_file"
+    filler=$((filler + 1))
+  done
+  [ -f "$directory/fill-1.bats" ]
+  copy="$(doctor_outliers a8-over.sh "$every_file")"
   SCRIPTS_TESTS_DIRECTORY="$directory" run bash "$copy" files scripts-1
   [ "$status" -eq 2 ]
   # The phrase, not a word inside it: this script prints several exit-2
@@ -911,11 +955,11 @@ doctor_ungated_run() {
 # the subject arm with run's own export deleted.
 @test "S17: run gates git's background maintenance for every suite it runs" {
   local fixture_directory ok_count
-  fixture_directory="$BATS_TEST_TMPDIR/s17-lib"
+  fixture_directory="$BATS_TEST_TMPDIR/s17-audit"
   mkdir -p "$fixture_directory"
   write_maintenance_fixture "$fixture_directory/maintenance.bats"
 
-  GIT_CONFIG_COUNT=0 LIBRARY_DIRECTORY="$fixture_directory" run bash "$SCRIPT" run lib
+  GIT_CONFIG_COUNT=0 AUDIT_TESTS_DIRECTORY="$fixture_directory" run bash "$SCRIPT" run audit
   [ "$status" -eq 0 ]
   grep -qE '^ok [0-9]+ control$' <<<"$output"
   grep -qE '^ok [0-9]+ subject$' <<<"$output"
@@ -926,11 +970,11 @@ doctor_ungated_run() {
 @test "A9: a run that leaves maintenance ungated reds S17's subject arm" {
   local copy fixture_directory
   copy="$(doctor_ungated_run)"
-  fixture_directory="$BATS_TEST_TMPDIR/a9-lib"
+  fixture_directory="$BATS_TEST_TMPDIR/a9-audit"
   mkdir -p "$fixture_directory"
   write_maintenance_fixture "$fixture_directory/maintenance.bats"
 
-  GIT_CONFIG_COUNT=0 LIBRARY_DIRECTORY="$fixture_directory" run bash "$copy" run lib
+  GIT_CONFIG_COUNT=0 AUDIT_TESTS_DIRECTORY="$fixture_directory" run bash "$copy" run audit
   [ "$status" -eq 1 ]
   grep -qE '^ok [0-9]+ control$' <<<"$output"
   grep -qE '^not ok [0-9]+ subject$' <<<"$output"
@@ -1200,37 +1244,37 @@ EOF
 # a column-0 tag line in this file would mark this suite's own next test.
 write_change_fixture() {
   local directory="$1" at_test='@test'
-  mkdir -p "$directory/lib"
+  mkdir -p "$directory/audit"
   {
     printf '#!/usr/bin/env bats\n'
     printf '%s "picked one" {\n  true\n}\n' "$at_test"
     printf '%s "picked two" {\n  true\n}\n' "$at_test"
-  } >"$directory/lib/picked.bats"
+  } >"$directory/audit/picked.bats"
   {
     printf '#!/usr/bin/env bats\n'
     printf '# bats %s\n' 'test_tags=whole-tree'
     printf '%s "marked whole-tree" {\n  true\n}\n' "$at_test"
     printf '%s "marked plain" {\n  true\n}\n' "$at_test"
-  } >"$directory/lib/marked.bats"
+  } >"$directory/audit/marked.bats"
   {
     printf '#!/usr/bin/env bats\n'
     printf '%s "unrelated" {\n  true\n}\n' "$at_test"
-  } >"$directory/lib/unrelated.bats"
+  } >"$directory/audit/unrelated.bats"
   # The stub records its argv one per line and picks one suite, or exits 3,
   # the selector's "the change could not be read", when told to.
   cat >"$directory/selector.sh" <<'STUB'
 #!/usr/bin/env bash
 printf '%s\n' "$@" >"$STUB_DIRECTORY/selector-argv"
 [ -n "${STUB_SELECTOR_FAILS:-}" ] && exit 3
-printf '%s\n' "$STUB_DIRECTORY/lib/picked.bats"
+printf '%s\n' "$STUB_DIRECTORY/audit/picked.bats"
 STUB
 }
 
 # run_for_change_fixture <sharder> <fixture-directory> <subcommand>: the
 # change-scoped subcommand against the fixture shard and its stub selector.
 run_for_change_fixture() {
-  STUB_DIRECTORY="$2" LIBRARY_DIRECTORY="$2/lib" SUITES_FOR_CHANGE_SCRIPT="$2/selector.sh" \
-    bash "$1" "$3" lib base-ref head-ref
+  STUB_DIRECTORY="$2" AUDIT_TESTS_DIRECTORY="$2/audit" SUITES_FOR_CHANGE_SCRIPT="$2/selector.sh" \
+    bash "$1" "$3" audit base-ref head-ref
 }
 
 @test "S19: files-for-change lists the picked and the whole-tree-marked suites of the shard, and no other" {
@@ -1239,7 +1283,7 @@ run_for_change_fixture() {
 
   run run_for_change_fixture "$SCRIPT" "$directory" files-for-change
   [ "$status" -eq 0 ]
-  [ "$(printf '%s\n' "$output" | LC_ALL=C sort)" = "$(printf '%s\n%s' "$directory/lib/marked.bats" "$directory/lib/picked.bats")" ]
+  [ "$(printf '%s\n' "$output" | LC_ALL=C sort)" = "$(printf '%s\n%s' "$directory/audit/marked.bats" "$directory/audit/picked.bats")" ]
   # The diff arguments reach the selector verbatim, after the repository root.
   [ "$(sed -n '1p' "$directory/selector-argv")" = "--dir" ]
   [ "$(sed -n '3,4p' "$directory/selector-argv" | tr '\n' ' ')" = "base-ref head-ref " ]
@@ -1275,9 +1319,9 @@ run_for_change_fixture() {
 }
 
 @test "S22: the change-scoped subcommands refuse a call that names no change or no known shard" {
-  run bash "$SCRIPT" run-for-change lib
+  run bash "$SCRIPT" run-for-change audit
   [ "$status" -eq 2 ]
-  run bash "$SCRIPT" files-for-change lib
+  run bash "$SCRIPT" files-for-change audit
   [ "$status" -eq 2 ]
   run bash "$SCRIPT" run-for-change no-such-shard base-ref head-ref
   [ "$status" -eq 2 ]
@@ -1300,12 +1344,247 @@ run_for_change_fixture() {
   local copy directory="$BATS_TEST_TMPDIR/a12"
   copy="$(copy_sharder)"
   grep -qF 'subcommand_run "$id"' "$copy" || return 1
-  sed 's/^\( *\)subcommand_run "\$id" # selector fallback$/\1exit 0/' "$copy" >"$copy.new"
+  sed 's/^\( *\)subcommand_run "\$id" # whole-shard fallback$/\1exit 0/' "$copy" >"$copy.new"
   mv "$copy.new" "$copy"
-  grep -qF '# selector fallback' "$copy" && return 1
+  grep -qF '# whole-shard fallback' "$copy" && return 1
   write_change_fixture "$directory"
 
   STUB_SELECTOR_FAILS=1 run run_for_change_fixture "$copy" "$directory" run-for-change
   grep -qE '^ok [0-9]+ unrelated$' <<<"$output" && return 1
   true
+}
+
+# The shard plan. The fixture shard holds a suite carrying the
+# installed-dependencies mark, one carrying the whole-tree mark, a plain one,
+# and a Chromium suite by name; a stub selector picks only what
+# $STUB_SELECTOR_PICKS names. Tag lines are assembled at run time, as above.
+write_plan_fixture() {
+  local directory="$1" at_test='@test'
+  mkdir -p "$directory/audit"
+  {
+    printf '#!/usr/bin/env bats\n'
+    printf '# bats %s\n' 'file_tags=installed-dependencies'
+    printf '%s "dependency one" {\n  true\n}\n' "$at_test"
+    printf '%s "dependency two" {\n  true\n}\n' "$at_test"
+  } >"$directory/audit/dependent.bats"
+  {
+    printf '#!/usr/bin/env bats\n'
+    printf '# bats %s\n' 'test_tags=whole-tree'
+    printf '%s "marked whole-tree" {\n  true\n}\n' "$at_test"
+    printf '%s "marked plain" {\n  true\n}\n' "$at_test"
+  } >"$directory/audit/marked.bats"
+  {
+    printf '#!/usr/bin/env bats\n'
+    printf '%s "unrelated" {\n  true\n}\n' "$at_test"
+  } >"$directory/audit/unrelated.bats"
+  {
+    printf '#!/usr/bin/env bats\n'
+    printf '%s "lifecycle" {\n  true\n}\n' "$at_test"
+  } >"$directory/audit/uat-lifecycle-e2e.bats"
+  cat >"$directory/selector.sh" <<'STUB'
+#!/usr/bin/env bash
+[ -z "${STUB_SELECTOR_FAILS:-}" ] || exit 3
+if [ -n "${STUB_SELECTOR_PICKS:-}" ]; then
+  printf '%s\n' "$STUB_SELECTOR_PICKS"
+fi
+exit 0
+STUB
+}
+
+# plan_fixture <sharder> <fixture-directory> <subcommand> <args>...: the
+# subcommand over the fixture shard, stderr left in $BATS_TEST_TMPDIR/stderr.
+plan_fixture() {
+  local sharder="$1" directory="$2"
+  shift 2
+  AUDIT_TESTS_DIRECTORY="$directory/audit" SUITES_FOR_CHANGE_SCRIPT="$directory/selector.sh" \
+    bash "$sharder" "$@" 2>"$BATS_TEST_TMPDIR/stderr"
+}
+
+@test "P1: a harness change runs the whole shard and says why on one stderr line" {
+  local directory="$BATS_TEST_TMPDIR/p1"
+  write_plan_fixture "$directory"
+  STUB_CLASSIFIER_OUTPUT=$(printf 'harness\t.claude/hooks/lib/x.sh')
+  export STUB_CLASSIFIER_OUTPUT
+
+  run plan_fixture "$SCRIPT" "$directory" files-for-change audit base-ref head-ref
+  [ "$status" -eq 0 ]
+  [ "$(printf '%s\n' "$output" | grep -c '\.bats$')" -eq 4 ]
+  [ "$(cat "$BATS_TEST_TMPDIR/stderr")" = "bats-shards: harness-change; running all of audit" ]
+
+  run plan_fixture "$SCRIPT" "$directory" plan audit base-ref head-ref
+  [ "$status" -eq 0 ]
+  [ "$(sed -n '1,2p' <<<"$output" | tr '\n' ' ')" = "mode=full reason=harness-change " ]
+}
+
+@test "P2: an unreadable change runs the whole shard even when a dependency path was printed" {
+  local directory="$BATS_TEST_TMPDIR/p2"
+  write_plan_fixture "$directory"
+
+  STUB_CLASSIFIER_STATUS=3 run plan_fixture "$SCRIPT" "$directory" files-for-change audit base-ref head-ref
+  [ "$status" -eq 0 ]
+  [ "$(printf '%s\n' "$output" | grep -c '\.bats$')" -eq 4 ]
+  [ "$(cat "$BATS_TEST_TMPDIR/stderr")" = "bats-shards: change-unreadable; running all of audit" ]
+  STUB_CLASSIFIER_STATUS=3 run plan_fixture "$SCRIPT" "$directory" plan audit base-ref head-ref
+  grep -qx 'reason=change-unreadable' <<<"$output"
+
+  STUB_CLASSIFIER_OUTPUT=$(printf 'dependency\tpnpm-lock.yaml')
+  export STUB_CLASSIFIER_OUTPUT
+  STUB_SELECTOR_FAILS=1 run plan_fixture "$SCRIPT" "$directory" files-for-change audit base-ref head-ref
+  [ "$status" -eq 0 ]
+  [ "$(printf '%s\n' "$output" | grep -c '\.bats$')" -eq 4 ]
+  [ "$(cat "$BATS_TEST_TMPDIR/stderr")" = "bats-shards: change-unreadable; running all of audit" ]
+  STUB_SELECTOR_FAILS=1 run plan_fixture "$SCRIPT" "$directory" plan audit base-ref head-ref
+  grep -qx 'mode=full' <<<"$output"
+  grep -qx 'reason=change-unreadable' <<<"$output"
+}
+
+@test "P3: a dependency change runs the installed-dependencies suites in full beside the whole-tree ones" {
+  local directory="$BATS_TEST_TMPDIR/p3"
+  write_plan_fixture "$directory"
+  STUB_CLASSIFIER_OUTPUT=$(printf 'dependency\tpnpm-lock.yaml')
+  export STUB_CLASSIFIER_OUTPUT
+
+  run plan_fixture "$SCRIPT" "$directory" files-for-change audit base-ref head-ref
+  [ "$status" -eq 0 ]
+  [ "$(printf '%s\n' "$output" | LC_ALL=C sort)" = "$(printf '%s\n%s' "$directory/audit/dependent.bats" "$directory/audit/marked.bats")" ]
+
+  run plan_fixture "$SCRIPT" "$directory" run-for-change audit base-ref head-ref
+  [ "$status" -eq 0 ]
+  grep -qE '^ok [0-9]+ dependency one$' <<<"$output"
+  grep -qE '^ok [0-9]+ dependency two$' <<<"$output"
+  grep -qE '^ok [0-9]+ marked whole-tree$' <<<"$output"
+  grep -qE 'marked plain$' <<<"$output" && return 1
+  grep -qE 'unrelated$' <<<"$output" && return 1
+
+  run plan_fixture "$SCRIPT" "$directory" plan audit base-ref head-ref
+  [ "$status" -eq 0 ]
+  grep -qx 'mode=scoped' <<<"$output"
+  grep -qx 'reason=selected' <<<"$output"
+  grep -qx 'needs_node=1' <<<"$output"
+  grep -qx 'needs_chromium=0' <<<"$output"
+}
+
+@test "P4: without a dependency line the installed-dependencies suite is not listed" {
+  local directory="$BATS_TEST_TMPDIR/p4"
+  write_plan_fixture "$directory"
+
+  run plan_fixture "$SCRIPT" "$directory" files-for-change audit base-ref head-ref
+  [ "$status" -eq 0 ]
+  [ "$output" = "$directory/audit/marked.bats" ]
+  run plan_fixture "$SCRIPT" "$directory" plan audit base-ref head-ref
+  grep -qx 'needs_node=0' <<<"$output"
+}
+
+@test "P5: a change that owes nothing selects nothing and installs nothing" {
+  local directory="$BATS_TEST_TMPDIR/p5"
+  write_plan_fixture "$directory"
+  rm "$directory/audit/dependent.bats" "$directory/audit/marked.bats" "$directory/audit/uat-lifecycle-e2e.bats"
+
+  run plan_fixture "$SCRIPT" "$directory" files-for-change audit base-ref head-ref
+  [ "$status" -eq 0 ]
+  [ -z "$output" ]
+  run plan_fixture "$SCRIPT" "$directory" run-for-change audit base-ref head-ref
+  [ "$status" -eq 0 ]
+  grep -qF 'audit holds no suite this change owes' <<<"$output"
+  run plan_fixture "$SCRIPT" "$directory" plan audit base-ref head-ref
+  [ "$status" -eq 0 ]
+  [ "$output" = "$(printf 'mode=none\nreason=nothing-selected\nneeds_node=0\nneeds_chromium=0')" ]
+}
+
+@test "P6: the Chromium need follows the set the leg will run" {
+  local directory="$BATS_TEST_TMPDIR/p6"
+  write_plan_fixture "$directory"
+
+  STUB_SELECTOR_PICKS="$directory/audit/uat-lifecycle-e2e.bats" run plan_fixture "$SCRIPT" "$directory" plan audit base-ref head-ref
+  grep -qx 'needs_chromium=1' <<<"$output"
+  run plan_fixture "$SCRIPT" "$directory" plan audit base-ref head-ref
+  grep -qx 'needs_chromium=0' <<<"$output"
+  run plan_fixture "$SCRIPT" "$directory" plan audit --full
+  [ "$status" -eq 0 ]
+  [ "$output" = "$(printf 'mode=full\nreason=requested\nneeds_node=1\nneeds_chromium=1')" ]
+}
+
+@test "P7: plan prints exactly four key=value lines in order, on every arm" {
+  local directory="$BATS_TEST_TMPDIR/p7" arm
+  write_plan_fixture "$directory"
+
+  for arm in full harness unreadable selected none; do
+    unset STUB_CLASSIFIER_OUTPUT STUB_CLASSIFIER_STATUS STUB_SELECTOR_PICKS
+    case "$arm" in
+      full) set -- --full ;;
+      harness)
+        STUB_CLASSIFIER_OUTPUT="$(printf 'harness\tx.sh')"
+        set -- base-ref head-ref
+        ;;
+      unreadable)
+        STUB_CLASSIFIER_STATUS=3
+        set -- base-ref head-ref
+        ;;
+      selected)
+        STUB_SELECTOR_PICKS="$directory/audit/unrelated.bats"
+        set -- base-ref head-ref
+        ;;
+      none)
+        rm -f "$directory/audit/marked.bats" "$directory/audit/dependent.bats"
+        set -- base-ref head-ref
+        ;;
+    esac
+    export STUB_CLASSIFIER_OUTPUT STUB_CLASSIFIER_STATUS STUB_SELECTOR_PICKS
+    run plan_fixture "$SCRIPT" "$directory" plan audit "$@"
+    [ "$status" -eq 0 ]
+    [ "$(printf '%s\n' "$output" | wc -l | tr -d ' ')" -eq 4 ]
+    [ "$(sed -n '1p' <<<"$output" | cut -d= -f1)" = mode ]
+    [ "$(sed -n '2p' <<<"$output" | cut -d= -f1)" = reason ]
+    [ "$(sed -n '3p' <<<"$output" | cut -d= -f1)" = needs_node ]
+    [ "$(sed -n '4p' <<<"$output" | cut -d= -f1)" = needs_chromium ]
+    [ "$(grep -cE '^[a-z_]+=[a-z0-9-]+$' <<<"$output")" -eq 4 ]
+  done
+}
+
+@test "P8: plan refuses a call with no shard, an unknown shard, or no change" {
+  run bash "$SCRIPT" plan
+  [ "$status" -eq 2 ]
+  grep -q '^bats-shards:' <<<"$output"
+  run bash "$SCRIPT" plan no-such-shard --full
+  [ "$status" -eq 2 ]
+  grep -q '^bats-shards:' <<<"$output"
+  run bash "$SCRIPT" plan audit
+  [ "$status" -eq 2 ]
+  grep -q '^bats-shards:' <<<"$output"
+}
+
+# bats test_tags=whole-tree
+@test "P9: a lockfile-only change owes every real shard its installed-dependencies and whole-tree suites" {
+  local derived shard_id shard_file expected actual union=''
+  derived="$(bash "$REPO_ROOT/.gaia/tests/installed-dependencies-mark-guard.sh" --list-derived)"
+  [ -n "$derived" ]
+  STUB_CLASSIFIER_OUTPUT=$(printf 'dependency\tpnpm-lock.yaml')
+  export STUB_CLASSIFIER_OUTPUT
+  export SUITES_FOR_CHANGE_SCRIPT="$BATS_TEST_TMPDIR/silent-selector.sh"
+  printf '#!/usr/bin/env bash\nexit 0\n' >"$SUITES_FOR_CHANGE_SCRIPT"
+
+  for shard_id in $(bash "$SCRIPT" shards); do
+    expected=''
+    for shard_file in $(bash "$SCRIPT" files "$shard_id"); do
+      if grep -qxF -- "$shard_file" <<<"$derived" ||
+        grep -qE '^# bats (file|test)_tags=([^,]*,)*whole-tree(,|$)' "$REPO_ROOT/$shard_file"; then
+        expected="$expected$shard_file"$'\n'
+      fi
+    done
+    actual="$(bash "$SCRIPT" files-for-change "$shard_id" base-ref head-ref | sed "s|^$REPO_ROOT/||")"
+    [ "$(printf '%s' "$actual" | LC_ALL=C sort)" = "$(printf '%s' "$expected" | sed '/^$/d' | LC_ALL=C sort)" ]
+    union="$union$actual"$'\n'
+    run bash "$SCRIPT" plan "$shard_id" base-ref head-ref
+    [ "$status" -eq 0 ]
+    grep -qx 'mode=full' <<<"$output" && return 1
+  done
+  for shard_file in capture-red-observations red-ledger-lib red-verify-commit-check red-verify-e2e worthiness-presence-check extract-test-signals-stories-reporter uat-lifecycle-e2e; do
+    grep -q "/$shard_file\.bats\$" <<<"$union"
+  done
+}
+
+# bats test_tags=whole-tree
+@test "P10: the default classifier and selector seams resolve over the real tree" {
+  run env -u CHANGE_SCOPE_SCRIPT -u SUITES_FOR_CHANGE_SCRIPT bash "$SCRIPT" files-for-change lib-1 HEAD HEAD
+  [ "$status" -eq 0 ]
 }
