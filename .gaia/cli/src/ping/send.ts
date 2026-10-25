@@ -25,7 +25,7 @@ export type PingEvent = 'init' | 'setup' | 'update';
 
 export type PingPayload = Record<string, number | string> & {event: PingEvent};
 
-const PING_URL = 'https://telemetry.gaiareact.com/ping';
+const PING_URL = 'https://telemetry.gaiaharness.com/ping';
 const TIMEOUT_MS = 2000;
 const MANIFEST_RELATIVE = '.gaia/manifest.json';
 

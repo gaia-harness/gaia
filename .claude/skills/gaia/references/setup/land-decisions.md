@@ -84,7 +84,7 @@ Then output (in the user's language), with a blank line between the two lines. W
 ```text
 You're all set: your GAIA project is ready. Restart Claude Code to load your new plugins and skills.
 
-New to GAIA? The docs walk you through your first feature: https://docs.gaiareact.com/
+New to GAIA? The docs walk you through your first feature: https://docs.gaiaharness.com/
 ```
 
 When `OWED_AT_END` is not empty, name its ids in place of the placeholder:
@@ -92,5 +92,5 @@ When `OWED_AT_END` is not empty, name its ids in place of the placeholder:
 ```text
 Setup isn't finished: these project settings are still owed: <the OWED_AT_END ids>. Fix what stopped them above, then re-run /setup-gaia; it resumes from the first owed step. Restart Claude Code to load your new plugins and skills.
 
-New to GAIA? The docs walk you through your first feature: https://docs.gaiareact.com/
+New to GAIA? The docs walk you through your first feature: https://docs.gaiaharness.com/
 ```

@@ -227,7 +227,7 @@ describe('gaia ping', () => {
     expect(exit).toBe(0);
     expect(fetchSpy).toHaveBeenCalledTimes(1);
     const [url, init] = fetchSpy.mock.calls[0] as [string, RequestInit];
-    expect(url).toBe('https://telemetry.gaiareact.com/ping');
+    expect(url).toBe('https://telemetry.gaiaharness.com/ping');
     expect(init.method).toBe('POST');
   });
 

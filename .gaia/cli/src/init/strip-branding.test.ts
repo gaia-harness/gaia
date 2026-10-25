@@ -131,7 +131,7 @@ describe('init strip-branding', () => {
       'utf8'
     );
     expect(preview).not.toContain("brandTitle: 'GAIA'");
-    expect(preview).not.toContain('gaiareact.com');
+    expect(preview).not.toContain('gaiaharness.com');
     expect(preview).toContain("brandTitle: 'Hello World'");
 
     const state = readState(sandbox.root);

@@ -36521,7 +36521,7 @@ var readOrCreateProjectId = (roots) => {
 };
 
 // src/ping/send.ts
-var PING_URL = "https://telemetry.gaiareact.com/ping";
+var PING_URL = "https://telemetry.gaiaharness.com/ping";
 var TIMEOUT_MS = 2e3;
 var MANIFEST_RELATIVE2 = ".gaia/manifest.json";
 var PLATFORM_LABELS = {

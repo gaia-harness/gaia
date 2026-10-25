@@ -1,6 +1,6 @@
 ---
 name: release-notes
-description: Maintainer-only. Translates a version's GAIA CHANGELOG entries into plain-language public release notes for the marketing site (gaiareact.com), writing a release-data `.ts` file under `../website/src/pages/changelog/releases/` plus an editorial-decisions report for human review. Use when the maintainer wants the public notes for a version ("write release notes", "what's new on the site for v1.5.0"), right after cutting a release, or to backfill a historical `## [x.y.z]` block. Not for editing `CHANGELOG.md` or cutting a release (`/gaia-release`).
+description: Maintainer-only. Translates a version's GAIA CHANGELOG entries into plain-language public release notes for the marketing site (gaiaharness.com), writing a release-data `.ts` file under `../website/src/pages/changelog/releases/` plus an editorial-decisions report for human review. Use when the maintainer wants the public notes for a version ("write release notes", "what's new on the site for v1.5.0"), right after cutting a release, or to backfill a historical `## [x.y.z]` block. Not for editing `CHANGELOG.md` or cutting a release (`/gaia-release`).
 ---
 
 # release-notes

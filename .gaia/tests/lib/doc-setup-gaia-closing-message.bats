@@ -12,7 +12,7 @@
 
 DONE_LINE="You're all set: your GAIA project is ready. Restart Claude Code to load your new plugins and skills."
 NOT_DONE_LINE="Setup isn't finished: these project settings are still owed: <the OWED_AT_END ids>. Fix what stopped them above, then re-run /setup-gaia; it resumes from the first owed step. Restart Claude Code to load your new plugins and skills."
-DOCS_LINE='New to GAIA? The docs walk you through your first feature: https://docs.gaiareact.com/'
+DOCS_LINE='New to GAIA? The docs walk you through your first feature: https://docs.gaiaharness.com/'
 
 setup() {
   REPO_ROOT="$(cd "${BATS_TEST_DIRNAME}/../../.." && pwd)"

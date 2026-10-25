@@ -14,7 +14,7 @@ The terminal prints the dev server URL. Each worktree gets its own port.
 
 ## Useful Claude commands
 
-This project ships with [GAIA](https://gaiareact.com/). Run these slash commands from inside Claude Code:
+This project ships with [GAIA](https://gaiaharness.com/). Run these slash commands from inside Claude Code:
 
 - `/gaia-plan`: plan a feature as a graph of tasks for fresh-context subagents to execute (it plans only; paste the kickoff prompt it prints into a fresh session to run it)
 - `/gaia-spec`: run Socratic discovery and produce an immutable SPEC artifact
@@ -26,4 +26,4 @@ This project ships with [GAIA](https://gaiareact.com/). Run these slash commands
 
 ## Learn more
 
-- GAIA docs: [https://docs.gaiareact.com/](https://docs.gaiareact.com/)
+- GAIA docs: [https://docs.gaiaharness.com/](https://docs.gaiaharness.com/)

@@ -49,7 +49,7 @@ describe('postPing', () => {
 
     expect(fetchSpy).toHaveBeenCalledTimes(1);
     const [url, init] = fetchSpy.mock.calls[0] as [string, RequestInit];
-    expect(url).toBe('https://telemetry.gaiareact.com/ping');
+    expect(url).toBe('https://telemetry.gaiaharness.com/ping');
     expect(init.method).toBe('POST');
     expect((init.headers as Record<string, string>)['content-type']).toBe(
       'application/json'
