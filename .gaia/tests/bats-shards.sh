@@ -18,17 +18,31 @@
 #   bash .gaia/tests/bats-shards.sh run <shard-id>       # bats those paths, one invocation
 #   bash .gaia/tests/bats-shards.sh run-for-change <shard-id> <git-diff-arg>...
 #   bash .gaia/tests/bats-shards.sh files-for-change <shard-id> <git-diff-arg>...
+#   bash .gaia/tests/bats-shards.sh plan <shard-id> --full | <git-diff-arg>...
 #   bash .gaia/tests/bats-shards.sh -h | --help
 #
-# The two change-scoped commands are what a leg runs when the change is one
-# the workflow's `scoped` filter output names and its `code` output does not.
-# They run the shard's share of what .gaia/tests/verify-harness.sh runs in
-# branch mode: every suite of the shard the change selector
+# The change-scoped commands are what a leg runs for a change that is not a
+# full run. They run the shard's share of what .gaia/tests/verify-harness.sh
+# runs in branch mode: every suite of the shard the change selector
 # (.gaia/scripts/bats-suites-for-change.sh, handed the diff arguments verbatim)
 # picks, in full, and every other whole-tree-marked suite of the shard under
 # the whole-tree tag. `files-for-change` prints the suites that run hands bats.
-# A selector that cannot read the change runs the whole shard: the fallback
-# widens rather than narrows, so a broken diff never greens a leg on nothing.
+#
+# Two rules widen that share, both decided by the change classifier
+# (.gaia/tests/bats-change-scope.sh). A change touching harness machinery or a
+# shared shell library runs the whole shard, because the selector cannot see
+# what a suite reaches through that code. A change touching a dependency
+# install input also runs, in full, every installed-dependencies-marked suite
+# of the shard. A classifier or selector that cannot read the change runs the
+# whole shard too: the fallback widens rather than narrows, so a broken diff
+# never greens a leg on nothing. Each whole-shard fallback prints one stderr
+# line, `bats-shards: <cause>; running all of <shard-id>`, with the cause
+# `harness-change` or `change-unreadable`.
+#
+# `plan` answers once, before the leg installs anything, what the leg will run
+# and what that needs: it prints `mode` (`full`, `scoped` or `none`), `reason`,
+# `needs_node` and `needs_chromium` as `key=value` lines, computed over the
+# suites the leg will run. A leg with `mode=none` installs and runs nothing.
 #
 # Exit codes:
 #   0  success (shards/files listed, or run's bats invocation passed)
@@ -48,14 +62,14 @@
 #
 # Assignment rules: hooks-1 is the pinned list below; HOOKS_GREEDY_IDS split
 # the rest of HOOKS_DIRECTORY by weight, SCRIPTS_IDS split SCRIPTS_TESTS_DIRECTORY the same
-# way; audit and lib are their whole directories; misc is FORENSICS_DIRECTORY plus
-# STATUSLINE_DIRECTORY combined.
+# way, and LIBRARY_IDS split LIBRARY_DIRECTORY; audit is its whole directory;
+# misc is FORENSICS_DIRECTORY plus STATUSLINE_DIRECTORY combined.
 #
 # Exchange groups, which `group <shard-id>` reports. A shard's group is the set
-# of ids a file can move BETWEEN without anyone editing this script: the two
+# of ids a file can move BETWEEN without anyone editing this script: the
 # weighted groups exchange files among their own buckets on every size change,
 # and every other shard is a group of one, because its files are selected by
-# name (hooks-1) or by whole directory (audit, lib, misc) and no reshuffle can
+# name (hooks-1) or by whole directory (audit, misc) and no reshuffle can
 # move one across that boundary. A caller that must stay correct across
 # reshuffles asks about the group rather than the shard; the apt step in
 # .github/workflows/audit-ci-tests.yml is the one that does.
@@ -145,11 +159,11 @@ PINNED_HOOKS=(local-janitor.bats)
 # and no longer list does better on either run.
 #
 # What a bad draw breaks is the partition, not the estimate: a leg that stacks
-# the heavy suites gates the whole workflow, and past
-# .github/workflows/audit-ci-tests.yml's per-shard cap the job is cancelled
-# with no failing assertion. The lever against that is a suite's own runtime,
-# not its bucket: a suite cheap enough that no draw of it matters needs no
-# anchor.
+# the heavy suites gates the whole workflow, and past its cap a hung leg fails
+# at the run step's own step-level cap, with the job-level cap in
+# .github/workflows/audit-ci-tests.yml as the outer bound. The lever against
+# that is a suite's own runtime, not its bucket: a suite cheap enough that no
+# draw of it matters needs no anchor.
 #
 # Membership rule for a future maintainer: a suite belongs here when its cost
 # is dominated by an external command it runs per test, AND anchoring it
@@ -170,18 +184,35 @@ SCRIPTS_COST_OUTLIERS=(audit-light-route.bats)
 # `wiki/decisions/Sharded CI Test Matrix.md` carries the measurements.
 HOOKS_COST_OUTLIERS=(audit-scope-routing-parity.bats audit-loop-bound.bats githooks-pre-push-e2e.bats)
 
-# The two weighted groups, each listed once and in matrix order. Adding a shard
+# The weighted groups, each listed once and in matrix order. Adding a shard
 # to a group is a one-word edit here: SHARD_IDS is built from these rather than
 # restated, so the id list and the assignment cannot disagree about how many
 # buckets a group has.
+#
+# A group's bucket count is sized to its measured CI runtime, not to its file
+# count: each leg's run step carries a cap in
+# .github/workflows/audit-ci-tests.yml, and a leg whose p95 times 1.25 passes
+# that cap is a leg a slower runner times out with every test green. The lib
+# directory is a group rather than a whole-directory leg because its whole run
+# outgrows that cap. It takes three buckets where an even two-way split would
+# fit, because its suites' seconds per byte vary widely, so which two-way leg
+# draws the costly suites swings with any suite's size: replayed against one CI
+# run's per-file times over trees within 2% of each file's size, two buckets put
+# the slower leg past the cap's headroom in most draws, with or without
+# anchors, and three never did. No cost outliers, because no anchor list held up
+# across those draws.
+# `wiki/decisions/Sharded CI Test Matrix.md` carries the measurements.
 HOOKS_GREEDY_IDS=(hooks-2 hooks-3 hooks-4)
-SCRIPTS_IDS=(scripts-1 scripts-2 scripts-3 scripts-4)
+SCRIPTS_IDS=(scripts-1 scripts-2 scripts-3 scripts-4 scripts-5)
+LIBRARY_IDS=(lib-1 lib-2 lib-3)
 
 SHARD_IDS=(
   hooks-1
   ${HOOKS_GREEDY_IDS[@]+"${HOOKS_GREEDY_IDS[@]}"}
   ${SCRIPTS_IDS[@]+"${SCRIPTS_IDS[@]}"}
-  audit lib misc
+  audit
+  ${LIBRARY_IDS[@]+"${LIBRARY_IDS[@]}"}
+  misc
 )
 
 TAB="$(printf '\t')"
@@ -191,6 +222,7 @@ REPO_ROOT="$(git -C "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)" rev-parse --
 # A seam like the directory ones above, so the guard suite drives the
 # change-scoped commands with a stub selector instead of a live diff.
 SUITES_FOR_CHANGE_SCRIPT="${SUITES_FOR_CHANGE_SCRIPT:-$REPO_ROOT/.gaia/scripts/bats-suites-for-change.sh}"
+CHANGE_SCOPE_SCRIPT="${CHANGE_SCOPE_SCRIPT:-$REPO_ROOT/.gaia/tests/bats-change-scope.sh}"
 
 # The whole-tree mark patterns, defined once there and restated nowhere.
 # shellcheck source=.gaia/tests/helpers/verify-harness-bats-lib.sh
@@ -203,6 +235,7 @@ usage() {
   printf '       bash .gaia/tests/bats-shards.sh run <shard-id>\n'
   printf '       bash .gaia/tests/bats-shards.sh run-for-change <shard-id> <git-diff-arg>...\n'
   printf '       bash .gaia/tests/bats-shards.sh files-for-change <shard-id> <git-diff-arg>...\n'
+  printf '       bash .gaia/tests/bats-shards.sh plan <shard-id> --full | <git-diff-arg>...\n'
   printf '       bash .gaia/tests/bats-shards.sh -h | --help\n'
 }
 
@@ -497,7 +530,10 @@ files_for_shard() {
         ${SCRIPTS_IDS[@]+"${SCRIPTS_IDS[@]}"}
       ;;
     audit) discover_bats "$AUDIT_TESTS_DIRECTORY" ;;
-    lib) discover_bats "$LIBRARY_DIRECTORY" ;;
+    lib-*)
+      greedy_bucket "$LIBRARY_DIRECTORY" "$1" all "" \
+        ${LIBRARY_IDS[@]+"${LIBRARY_IDS[@]}"}
+      ;;
     misc)
       discover_bats "$FORENSICS_DIRECTORY"
       discover_bats "$STATUSLINE_DIRECTORY"
@@ -524,7 +560,12 @@ group_for_shard() {
         printf '%s\n' "$id"
       done
       ;;
-    audit | lib | misc) printf '%s\n' "$1" ;;
+    lib-*)
+      for id in ${LIBRARY_IDS[@]+"${LIBRARY_IDS[@]}"}; do
+        printf '%s\n' "$id"
+      done
+      ;;
+    audit | misc) printf '%s\n' "$1" ;;
   esac
 }
 
@@ -598,13 +639,28 @@ EOF
 
 # plan_for_change <shard-id> <git-diff-arg>...: one `full<TAB><path>` or
 # `whole-tree<TAB><path>` line per suite of the shard the change owes, paths
-# absolute. Returns 3 when the selector could not read the change, and the
-# status of `files` when that refused the shard.
+# absolute. Returns 3 when the classifier or the selector could not read the
+# change, 4 when the change touches harness machinery or a shared shell library
+# (the whole shard runs either way), and the status of `files` when that
+# refused the shard. A dependency line from the classifier owes the shard's
+# installed-dependencies suites in full: an install input can break any of
+# them without naming it.
 plan_for_change() {
-  local id="$1" shard_files selected status suite_path
+  local id="$1" shard_files classified selected status suite_path dependency_change
   shift
   status=0
   shard_files="$(subcommand_files "$id")" || return $?
+  classified="$(bash "$CHANGE_SCOPE_SCRIPT" --dir "$REPO_ROOT" "$@")" || status=$?
+  if [ "$status" -ne 0 ]; then
+    return 3
+  fi
+  if grep -q "^harness$TAB" <<<"$classified"; then
+    return 4
+  fi
+  dependency_change=0
+  if grep -q "^dependency$TAB" <<<"$classified"; then
+    dependency_change=1
+  fi
   selected="$(bash "$SUITES_FOR_CHANGE_SCRIPT" --dir "$REPO_ROOT" "$@")" || status=$?
   if [ "$status" -ne 0 ]; then
     return 3
@@ -624,6 +680,8 @@ EOF
     # shellcheck disable=SC2154 # assigned by the sourced verify-harness-bats-lib.sh
     if grep -qxF -- "$suite_path" <<<"$selected"; then
       printf 'full%s%s\n' "$TAB" "$suite_path"
+    elif [ "$dependency_change" -eq 1 ] && grep -qE "$verify_installed_dependencies_mark_pattern" "$suite_path"; then
+      printf 'full%s%s\n' "$TAB" "$suite_path"
     elif grep -qE "$verify_whole_tree_mark_pattern" "$suite_path"; then
       printf 'whole-tree%s%s\n' "$TAB" "$suite_path"
     fi
@@ -632,11 +690,22 @@ $shard_files
 EOF
 }
 
+# The one stderr line a whole-shard fallback prints, `<cause>` being the token
+# the workflow log and the guard suite read.
+announce_whole_shard() {
+  local status="$1" id="$2" cause=change-unreadable
+  if [ "$status" -eq 4 ]; then
+    cause=harness-change
+  fi
+  printf 'bats-shards: %s; running all of %s\n' "$cause" "$id" >&2
+}
+
 subcommand_files_for_change() {
   local id="$1" plan status
   status=0
   plan="$(plan_for_change "$@")" || status=$?
-  if [ "$status" -eq 3 ]; then
+  if [ "$status" -eq 3 ] || [ "$status" -eq 4 ]; then
+    announce_whole_shard "$status" "$id"
     subcommand_files "$id"
     return
   fi
@@ -649,9 +718,9 @@ subcommand_run_for_change() {
   local -a full_suites whole_tree_suites
   status=0
   plan="$(plan_for_change "$@")" || status=$?
-  if [ "$status" -eq 3 ]; then
-    printf 'bats-shards: the change selector could not read the change; running all of %s\n' "$id" >&2
-    subcommand_run "$id" # selector fallback
+  if [ "$status" -eq 3 ] || [ "$status" -eq 4 ]; then
+    announce_whole_shard "$status" "$id"
+    subcommand_run "$id" # whole-shard fallback
     return
   fi
   [ "$status" -eq 0 ] || exit "$status"
@@ -677,6 +746,58 @@ EOF
     run_bats_gated --filter-tags whole-tree ${whole_tree_suites[@]+"${whole_tree_suites[@]}"} || exit_status=1
   fi
   return "$exit_status"
+}
+
+# plan <shard-id> --full | <shard-id> <git-diff-arg>...: what the leg will run
+# and what it must install first, as four `key=value` lines for $GITHUB_OUTPUT.
+# The Chromium suites are named by file because nothing else says they drive a
+# browser; the Node need is the installed-dependencies mark.
+subcommand_plan() {
+  local id="$1" mode reason status plan run_set suite_path needs_node needs_chromium
+  shift
+  status=0
+  if [ "$1" = --full ]; then
+    mode=full
+    reason=requested
+    run_set="$(subcommand_files "$id")" || exit $?
+  else
+    plan="$(plan_for_change "$id" "$@")" || status=$?
+    case "$status" in
+      0)
+        run_set="$(printf '%s\n' "$plan" | cut -f2 | sed '/^$/d')"
+        if [ -n "$run_set" ]; then
+          mode=scoped
+          reason=selected
+        else
+          mode=none
+          reason=nothing-selected
+        fi
+        ;;
+      3 | 4)
+        mode=full
+        reason=change-unreadable
+        if [ "$status" -eq 4 ]; then
+          reason=harness-change
+        fi
+        run_set="$(subcommand_files "$id")" || exit $?
+        ;;
+      *) exit "$status" ;;
+    esac
+  fi
+  needs_node=0
+  needs_chromium=0
+  while IFS= read -r suite_path; do
+    [ -n "$suite_path" ] || continue
+    case "${suite_path##*/}" in
+      extract-test-signals-stories-reporter.bats | uat-lifecycle-e2e.bats) needs_chromium=1 ;;
+    esac
+    if grep -qE "$verify_installed_dependencies_mark_pattern" "$(resolve_directory "$suite_path")"; then
+      needs_node=1
+    fi
+  done <<EOF
+$run_set
+EOF
+  printf 'mode=%s\nreason=%s\nneeds_node=%s\nneeds_chromium=%s\n' "$mode" "$reason" "$needs_node" "$needs_chromium"
 }
 
 # run_bats_gated <bats-arg>...: bats with git's background maintenance gated.
@@ -738,6 +859,11 @@ main() {
       else
         subcommand_files_for_change "$@"
       fi
+      ;;
+    plan)
+      [ $# -ge 3 ] || die_usage 'plan needs a shard id and --full or at least one diff argument'
+      shift
+      subcommand_plan "$@"
       ;;
     '')
       die_usage 'missing command'
