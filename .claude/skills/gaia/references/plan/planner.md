@@ -282,7 +282,7 @@ Then write the following files directly to `{PLAN_DIR}/`:
       **Consolidation and wiki promotion.** Runs after every dispatched Code Audit Team member has cleared and the human has confirmed the PR is ready to merge, and before the merge.
 
       1. Consolidate per `.claude/skills/gaia/references/spec/lifecycle.md` `## Consolidation`. It writes `SUMMARY.md` and runs `summary-verify.sh`, and removes nothing. When its verify fails it records the wiki promotion block itself; skip step 2 and go to step 4.
-      2. Promote per `.claude/skills/gaia/references/spec/wiki-promote.md`. Its Step 2 reads `SUMMARY.md`'s `wiki_promote_default` and `wiki_promote_targets` and decides whether pages are written and which Choice token results; this block does not decide it. A promotion commit holds only `wiki/**` paths, lands on this PR branch, and is pushed before the merge. Nothing writes a defer cache.
+      2. Promote per `.claude/skills/gaia/references/spec/wiki-promote.md`. Its Step 2 reads `SUMMARY.md`'s `wiki_promote_default` and `wiki_promote_targets` and decides whether pages are written and which Choice token results; this block does not decide it. A promotion commit holds the paths that file's Step 6 names, lands on this PR branch, and is pushed before the merge. Nothing writes a defer cache.
       3. Append the record to `{PLAN_DIR}/PROGRESS.md`, with the Choice token and `Reason:` line exactly as that Step 2 returned them:
 
              ## Wiki promotion
