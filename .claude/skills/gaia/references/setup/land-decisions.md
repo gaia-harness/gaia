@@ -93,10 +93,15 @@ When `OWED_AT_END` is not empty, name its ids in place of the placeholder:
 Setup isn't finished: these project settings are still owed: <the OWED_AT_END ids>. Fix what stopped them above, then re-run /setup-gaia; it resumes from the first owed step.
 ```
 
-**The conditional lines.** After the status line, add each line below whose condition holds, in this order:
+**The sandbox line.** After the status line, add this line when its condition holds:
 
 - When `SANDBOX_ANSWER` is `enable` (this run's Phase 2 enabled the sandbox; a sandbox an earlier run enabled does not count): `The sandbox you enabled takes effect from your next Claude Code session.`
-- When this session runs in auto permission mode (Claude can tell from its own context): `This session is still in auto mode. Press Shift+Tab to leave it, or start Claude with plain claude next time.`
+
+**The auto-mode line**, always. Its wording holds in any permission mode, so it prints without Claude judging which mode the session is in, a judgment that does not hold run to run:
+
+```text
+If this session is in auto mode, press Shift+Tab to leave it, or start Claude with plain claude next time.
+```
 
 **The fresh-context line**, always:
 

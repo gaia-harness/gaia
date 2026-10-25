@@ -9,8 +9,10 @@
 # setup nudge counts, so the two never disagree.
 #
 # The closing is a sequence of separate lines in a fixed order: the status
-# line, the sandbox and auto-mode lines (each printed only under its own
-# condition), the fresh-context line and the docs line. The sandbox line reads
+# line, the sandbox line (printed only under its condition), the auto-mode
+# line, the fresh-context line and the docs line. The auto-mode line prints
+# unconditionally, with wording true in any permission mode, because Claude's
+# judgment of its own mode does not hold run to run. The sandbox line reads
 # only this run's sandbox answer, never the sandbox marker, so a machine an
 # earlier run enabled gets no sentence. No setup surface file tells the user
 # to restart Claude Code or to reload plugins. Every changed check has a
@@ -26,9 +28,7 @@ FRESH_CONTEXT_LINE='Type /clear to start your first feature with a fresh context
 SANDBOX_LINE='The sandbox you enabled takes effect from your next Claude Code session.'
 SANDBOX_CONDITION="When \`SANDBOX_ANSWER\` is \`enable\`"
 SANDBOX_BULLET="- ${SANDBOX_CONDITION} (this run's Phase 2 enabled the sandbox; a sandbox an earlier run enabled does not count): \`${SANDBOX_LINE}\`"
-AUTO_MODE_LINE='This session is still in auto mode. Press Shift+Tab to leave it, or start Claude with plain claude next time.'
-AUTO_MODE_CONDITION='When this session runs in auto permission mode'
-AUTO_MODE_BULLET="- ${AUTO_MODE_CONDITION} (Claude can tell from its own context): \`${AUTO_MODE_LINE}\`"
+AUTO_MODE_LINE='If this session is in auto mode, press Shift+Tab to leave it, or start Claude with plain claude next time.'
 
 setup() {
   REPO_ROOT="$(cd "${BATS_TEST_DIRNAME}/../../.." && pwd)"
@@ -76,10 +76,10 @@ mutate_file() {
 
 # check_closing_order <closing-text>: each status line is a whole line, the
 # first occurrences strictly increase in the printed order, and the
-# fresh-context and docs lines occur once.
+# auto-mode, fresh-context and docs lines occur once.
 check_closing_order() {
   local closing="$1" previous=0 position index count text
-  local -a modes=(-xF -xF -F -F -xF -xF)
+  local -a modes=(-xF -xF -F -xF -xF -xF)
   local -a texts=("$DONE_LINE" "$NOT_DONE_LINE" "$SANDBOX_LINE" "$AUTO_MODE_LINE" "$FRESH_CONTEXT_LINE" "$DOCS_LINE")
   for index in 0 1 2 3 4 5; do
     position="$(grep -n "${modes[$index]}" -- "${texts[$index]}" <<<"$closing" | head -n 1 | cut -d: -f1 || true)"
@@ -93,7 +93,7 @@ check_closing_order() {
     }
     previous="$position"
   done
-  for text in "$FRESH_CONTEXT_LINE" "$DOCS_LINE"; do
+  for text in "$AUTO_MODE_LINE" "$FRESH_CONTEXT_LINE" "$DOCS_LINE"; do
     count="$(grep -cxF -- "$text" <<<"$closing" || true)"
     [ "$count" = 1 ] || {
       echo "line occurs ${count} times, not once: ${text}" >&2
@@ -115,6 +115,24 @@ check_conditional_line() {
   line="$(grep -F -- "$sentence" <<<"$closing")"
   grep -qF -- "$condition" <<<"$line" || {
     echo "the sentence is not gated by its condition (${condition}): ${sentence}" >&2
+    return 1
+  }
+  return 0
+}
+
+# check_unconditional_line <closing-text> <sentence>: the sentence is a whole
+# line of its own, once, and no other line carries it (a condition bullet
+# would).
+check_unconditional_line() {
+  local closing="$1" sentence="$2" whole any
+  whole="$(grep -cxF -- "$sentence" <<<"$closing" || true)"
+  any="$(grep -cF -- "$sentence" <<<"$closing" || true)"
+  [ "$whole" = 1 ] || {
+    echo "the sentence must be one whole line, found ${whole}: ${sentence}" >&2
+    return 1
+  }
+  [ "$any" = 1 ] || {
+    echo "the sentence also sits inside another line, so it is gated: ${sentence}" >&2
     return 1
   }
   return 0
@@ -219,7 +237,7 @@ check_halt_rule() {
   grep -qxF -- "$FRESH_CONTEXT_LINE" <<<"$CLOSING"
   grep -qxF -- "$DOCS_LINE" <<<"$CLOSING"
   grep -qxF -- "$SANDBOX_BULLET" <<<"$CLOSING"
-  grep -qxF -- "$AUTO_MODE_BULLET" <<<"$CLOSING"
+  grep -qxF -- "$AUTO_MODE_LINE" <<<"$CLOSING"
 }
 
 @test "the closing lines print in order, the fresh-context and docs lines once" {
@@ -272,24 +290,32 @@ check_halt_rule() {
   grep -qF 'exactly one line' <<<"$output"
 }
 
-@test "the auto-mode sentence prints once, gated on the session's permission mode" {
-  check_conditional_line "$CLOSING" "$AUTO_MODE_LINE" "$AUTO_MODE_CONDITION"
+@test "the auto-mode line prints once, unconditionally, as a whole line" {
+  check_unconditional_line "$CLOSING" "$AUTO_MODE_LINE"
 }
 
-@test "the auto-mode check fails when the sentence loses its condition" {
+@test "the auto-mode check fails when the line is put back under a mode condition" {
   local copy
-  copy="$(mutate_file "$REFERENCE" auto-ungated.md "$AUTO_MODE_BULLET" "\`${AUTO_MODE_LINE}\`")"
-  run check_conditional_line "$(section_of "$copy" '## The closing message')" "$AUTO_MODE_LINE" "$AUTO_MODE_CONDITION"
+  copy="$(mutate_file "$REFERENCE" auto-gated.md "$AUTO_MODE_LINE" "- When this session runs in auto permission mode: \`${AUTO_MODE_LINE}\`")"
+  run check_unconditional_line "$(section_of "$copy" '## The closing message')" "$AUTO_MODE_LINE"
   [ "$status" -ne 0 ]
-  grep -qF 'not gated' <<<"$output"
+  grep -qF 'one whole line' <<<"$output"
 }
 
-@test "the auto-mode check fails when the sentence is removed" {
+@test "the auto-mode check fails when the line also appears inside another line" {
   local copy
-  copy="$(mutate_file "$REFERENCE" auto-absent.md "$AUTO_MODE_BULLET" '')"
-  run check_conditional_line "$(section_of "$copy" '## The closing message')" "$AUTO_MODE_LINE" "$AUTO_MODE_CONDITION"
+  copy="$(mutate_file "$REFERENCE" auto-doubled.md "$DONE_LINE" "$DONE_LINE $AUTO_MODE_LINE")"
+  run check_unconditional_line "$(section_of "$copy" '## The closing message')" "$AUTO_MODE_LINE"
   [ "$status" -ne 0 ]
-  grep -qF 'exactly one line' <<<"$output"
+  grep -qF 'inside another line' <<<"$output"
+}
+
+@test "the auto-mode check fails when the line is removed" {
+  local copy
+  copy="$(mutate_file "$REFERENCE" auto-absent.md "$AUTO_MODE_LINE" '')"
+  run check_unconditional_line "$(section_of "$copy" '## The closing message')" "$AUTO_MODE_LINE"
+  [ "$status" -ne 0 ]
+  grep -qF 'one whole line' <<<"$output"
 }
 
 @test "no setup surface file tells the user to restart Claude or reload plugins" {
