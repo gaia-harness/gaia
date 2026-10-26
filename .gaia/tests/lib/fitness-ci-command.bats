@@ -20,6 +20,9 @@ setup_file() {
   mkdir -p "$tree"
   git -C "$repo_root" archive "$(git -C "$repo_root" write-tree)" | tar -x -C "$tree"
   git -C "$tree" init -q
+  # The whole-tree commit leaves enough loose objects to start a detached
+  # `git gc --auto`, and each test's `cp -R` in setup would race its repack.
+  git -C "$tree" config gc.auto 0
   git -C "$tree" add -A
   git -C "$tree" -c user.email=bats@example.com -c user.name=bats -c commit.gpgsign=false commit -q -m base
   cp "$tree/.claude/gaia-fitness.json" "$BATS_FILE_TMPDIR/base-config.json"
