@@ -65,6 +65,10 @@ export const isReachable = (sha: string, cwd: string): boolean => {
   }
 };
 
+/** Test whether `sha` names a commit object present in the local repository. */
+export const hasCommitObject = (sha: string, cwd: string): boolean =>
+  tryRunGit(['cat-file', '-e', `${sha}^{commit}`], {cwd}) !== null;
+
 /**
  * Resolve the newest commit on HEAD's **first-parent chain** whose committer
  * date is at or older than `isoTimestamp`
