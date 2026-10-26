@@ -4,7 +4,7 @@ status: active
 priority: 1
 date: 2026-06-04
 created: 2026-06-04
-updated: 2026-10-14
+updated: 2026-10-26
 tags: [decision, tdd, hooks, quality]
 ---
 
@@ -65,7 +65,7 @@ A test whose title cannot be computed at extraction time emits no signal, so it 
 
 An uncomputable describe title reaches further than its own title segment, because each nested test's `fullName` is built by prefixing the enclosing describe's. The extractor therefore suppresses signal emission for the whole subtree under any describe whose title it cannot compute, whichever trigger put it out of reach: a plainly-static `test('does the thing')` nested inside a `describe.each`, or inside a `` describe(`group ${x}`) ``, emits no signal and commits with no RED. Suppressing only the title segment would be worse than emitting nothing, since the descendant would then be recorded under a silently shortened name that matches no runtime `fullName` either. A static sibling under a static parent is untouched. That is the carve-out relaxing rather than tightening, consistent with [[#Determinism carve-out]]'s posture; the extractor has no way to compute the expanded name from inside the subtree, so exempting it wholesale is the only behavior available.
 
-`@gaia-react/lint`'s `sonarjs/parameterized-tests` rule pushes authors toward `test.each` for repeated assertions, so this carve-out keeps that lint rule and this gate from pulling in opposite directions.
+`@gaia-harness/lint`'s `sonarjs/parameterized-tests` rule pushes authors toward `test.each` for repeated assertions, so this carve-out keeps that lint rule and this gate from pulling in opposite directions.
 
 ## Determinism carve-out
 

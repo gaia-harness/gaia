@@ -4,7 +4,7 @@ status: active
 package: react-doctor
 role: react-quality-scanner
 created: 2026-06-23
-updated: 2026-10-13
+updated: 2026-10-26
 tags: [dependency, quality, ci]
 ---
 
@@ -38,7 +38,7 @@ Verdicts:
 
 - With `--cwd frontend` the devDependency still lands in the root `package.json` and the `doctor` script in `frontend/package.json`, so the script removes the dependency at the root and the script key with `pnpm --dir frontend`.
 - `pnpm remove` at the workspace root works without `-w` on GAIA's pinned pnpm.
-- `pnpm remove` does not return the lockfile to its pre-install state. The install resolves `oxlint` and `@opentelemetry/api` into optional peer slots of `@gaia-react/lint` and `vitest`, and those resolutions survive `pnpm remove`, `pnpm install`, and `pnpm dedupe`. Only restoring a snapshot taken before the install clears them, which is why the install runs inside the strip block.
+- `pnpm remove` does not return the lockfile to its pre-install state. The install resolves `oxlint` and `@opentelemetry/api` into optional peer slots of `@gaia-harness/lint` and `vitest`, and those resolutions survive `pnpm remove`, `pnpm install`, and `pnpm dedupe`. Only restoring a snapshot taken before the install clears them, which is why the install runs inside the strip block.
 - The installer writes the CI workflow even under `--yes`.
 - GAIA never passes `--agent-hooks`. Without that flag `--yes` installs no agent hooks. With it the installer adds a Stop hook to `.claude/settings.json`, a `react-doctor.mjs` script under `.claude/hooks/`, and Cursor hook files.
 - The `.agents/skills/` copy is written for many agents (Codex, Cursor, Gemini CLI, GitHub Copilot, OpenCode, Pi, Warp, and others), not only Copilot and Warp.

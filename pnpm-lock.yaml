@@ -172,7 +172,7 @@ importers:
       '@commitlint/config-conventional':
         specifier: 21.2.4
         version: 21.2.4
-      '@gaia-react/lint':
+      '@gaia-harness/lint':
         specifier: 3.0.3
         version: 3.0.3(32dab1a7f390ed7a21122a523c5dc639)
       lint-staged:
@@ -200,7 +200,7 @@ importers:
         specifier: 4.6.7
         version: 4.6.7
     devDependencies:
-      '@gaia-react/lint':
+      '@gaia-harness/lint':
         specifier: 3.0.3
         version: 3.0.3(32dab1a7f390ed7a21122a523c5dc639)
       '@types/node':
@@ -333,7 +333,7 @@ importers:
       '@faker-js/faker':
         specifier: 10.6.0
         version: 10.6.0
-      '@gaia-react/lint':
+      '@gaia-harness/lint':
         specifier: 3.0.3
         version: 3.0.3(32dab1a7f390ed7a21122a523c5dc639)
       '@msw/data':
@@ -1202,8 +1202,8 @@ packages:
   '@floating-ui/utils@0.2.12':
     resolution: {integrity: sha512-HpCo8tmWzLVad5s2d19EhAz5zqrrQ6s69qd6moPMQvkOuSwDT1YgRfWSVuc4ennqrgv3OHppiOGMQ7oC13yIww==}
 
-  '@gaia-react/lint@3.0.3':
-    resolution: {integrity: sha512-WTgEASslPGPSJIzAM1TpRUJiOS0Pf0CbrV5CGH/w9yLmzSBN9GmoWufR+i6b4wV4NFgu994Dj4NybLEIeZcv1w==}
+  '@gaia-harness/lint@3.0.3':
+    resolution: {integrity: sha512-fqgT3gKX0XXNfBtDTnovre/689oyvBVUx3E4DqnM/EWRSZ2Ic4rqQBMvqse289VD2w4kbSW6ySdABoScvT0jIw==}
     engines: {node: '>=22.19.0'}
     peerDependencies:
       eslint: ^9.30.0
@@ -7228,7 +7228,7 @@ snapshots:
 
   '@floating-ui/utils@0.2.12': {}
 
-  '@gaia-react/lint@3.0.3(32dab1a7f390ed7a21122a523c5dc639)':
+  '@gaia-harness/lint@3.0.3(32dab1a7f390ed7a21122a523c5dc639)':
     dependencies:
       '@eslint-community/eslint-plugin-eslint-comments': 4.8.1(eslint@9.39.5(jiti@2.7.0)(supports-color@10.2.2))
       '@eslint-react/eslint-plugin': 5.28.2(eslint@9.39.5(jiti@2.7.0)(supports-color@10.2.2))(supports-color@10.2.2)(typescript@6.0.3)

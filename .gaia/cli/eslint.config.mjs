@@ -1,11 +1,11 @@
-import gaiaLint from '@gaia-react/lint';
+import gaiaLint from '@gaia-harness/lint';
 import {defineConfig} from 'eslint/config';
 
 /*
- * ESLint config for the gaia CLI (@gaia-react/cli).
+ * ESLint config for the gaia CLI (@gaia-harness/cli).
  *
  * The CLI is a Node/TypeScript program (NodeNext ESM, esbuild-bundled), not a
- * React app. It consumes @gaia-react/lint's base/testing/styleHygiene/
+ * React app. It consumes @gaia-harness/lint's base/testing/styleHygiene/
  * guardrails/prettier presets and OMITS the React-app-only presets (storybook,
  * playwright, reactRouter, betterTailwind). `react` is spread in only because
  * `base` transitively references `react/*` rules through airbnb's shared
@@ -31,7 +31,7 @@ export default defineConfig([
       // this rule's autofix rewrites deep imports to '~/…', which does not
       // resolve and breaks both typecheck and the esbuild bundle.
       'no-relative-import-paths/no-relative-import-paths': 'off',
-      // GAIA-React convention: test/story files must sit in a `tests/` folder.
+      // GAIA convention: test/story files must sit in a `tests/` folder.
       // The CLI co-locates tests and uses `__tests__/`, so this fires on every
       // test file.
       'check-file/folder-match-with-fex': 'off',

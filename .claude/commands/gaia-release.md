@@ -127,7 +127,7 @@ Writes `.gaia/manifest.json`, sorted alphabetically. Walks `git ls-files`, subtr
 ### 7b. Rebuild the bundled CLIs
 
 ```bash
-pnpm --filter @gaia-react/cli bundle
+pnpm --filter @gaia-harness/cli bundle
 ```
 
 Rebuilds both `.gaia/cli/gaia` (adopter binary) and `.gaia/cli/gaia-maintainer` (maintainer binary, excluded from the tarball). Skip only when no `.gaia/cli/src/` files changed since the last release; when in doubt, rebuild, the script is fast and idempotent. The release tarball ships the committed `gaia` binary as-is, so a stale bundle ships a stale CLI.

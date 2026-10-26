@@ -4,7 +4,7 @@ status: active
 priority: 1
 date: 2026-10-05
 created: 2026-10-05
-updated: 2026-10-21
+updated: 2026-10-26
 tags: [decision, components, shadcn, styling, accessibility]
 ---
 
@@ -74,7 +74,7 @@ The axe scans cover every page and every story in light and dark (stories in lig
 - **Eight rules that unedited shadcn source trips are also off there**, by maintainer decision: `@typescript-eslint/prefer-destructuring` (the toast re-exports namespace members), `@typescript-eslint/no-unnecessary-condition`, `eqeqeq`, `react/no-array-index-key`, `jsx-a11y/label-has-associated-control`, `jsx-a11y/click-events-have-key-events`, `jsx-a11y/no-noninteractive-element-interactions` and `shadcn/require-static-classes`. The `react` entry of the import ban is lifted too, because shadcn's `import * as React` is a namespace import the rule reports; every other import ban stays.
 - **Correctness stays on.** `shadcn/no-raw-colors`, `react-hooks/*` and the remaining correctness rules apply to ui files.
 - **`ui/tests/**` is fully linted.** The exemption never reaches the GAIA-authored stories and tests.
-- **How the exemption was chosen.** The rule list was measured by linting unedited `shadcn add` output for GAIA's set, plus a wider registry sample GAIA does not ship (`dialog`, `dropdown-menu`, `combobox`, `slider`, `select`, `popover`, `sheet`, `tooltip`) so the exemption also covers what adopters typically add. The wider sample surfaced only house-style rules, no correctness rule. A correctness finding on a file added later is a real finding, not an exemption candidate; a new house-style rule firing on an added file means extending the vendored-ui block in `@gaia-react/lint`.
+- **How the exemption was chosen.** The rule list was measured by linting unedited `shadcn add` output for GAIA's set, plus a wider registry sample GAIA does not ship (`dialog`, `dropdown-menu`, `combobox`, `slider`, `select`, `popover`, `sheet`, `tooltip`) so the exemption also covers what adopters typically add. The wider sample surfaced only house-style rules, no correctness rule. A correctness finding on a file added later is a real finding, not an exemption candidate; a new house-style rule firing on an added file means extending the vendored-ui block in `@gaia-harness/lint`.
 - **Path-scoped rule.** `frontend/.claude/rules/shadcn-ui.md` loads this policy for Claude when it touches `app/components/ui/**`.
 
 ## Local patches

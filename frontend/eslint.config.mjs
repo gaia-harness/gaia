@@ -1,4 +1,4 @@
-import gaiaLint from '@gaia-react/lint';
+import gaiaLint from '@gaia-harness/lint';
 import {defineConfig} from 'eslint/config';
 
 const lint = gaiaLint();
