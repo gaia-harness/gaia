@@ -131,6 +131,16 @@ describe('line-limit rules', () => {
       `error ${MAX} ${CEILINGS_PATH}`,
       `error ${MAX} ${SCRIPT_PATH}`,
     ]);
+    expect(findingsOf({files})[0]?.message).toContain('is not JSON');
+  });
+
+  test('a ceilings file with no ceilings object is an error', () => {
+    const project = maintainerProject({[SCRIPT_PATH]: filler(401)});
+    const files = {...project.files, [CEILINGS_PATH]: '[]\n'};
+
+    expect(findingsOf({files})[0]?.message).toContain(
+      'has no "ceilings" object'
+    );
   });
 
   test('a ceiling that is not a positive whole number is an error', () => {
