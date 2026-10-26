@@ -35,6 +35,10 @@ auditors:
       - "frontend/test/**"
       - "frontend/.storybook/**"
       - ".github/workflows/**"
+      # The scripts a composite action runs are CI code too. The shell member
+      # claims them here, but that member does not ship, so in an adopter
+      # tree they dispatched no one.
+      - ".github/actions/**/*.sh"
       - "package.json"
       - "pnpm-lock.yaml"
       - "pnpm-workspace.yaml"
@@ -131,8 +135,10 @@ auditors:
       - "*.config.cjs"
       - "*.config.js"
       - "frontend/dev-ports*.ts"
-      # CI workflows execute with repository secrets and permissions.
+      # CI workflows execute with repository secrets and permissions, and so
+      # do the scripts their composite actions run.
       - ".github/workflows/**"
+      - ".github/actions/**/*.sh"
       # Test and tooling trees: executed test code a weakened assertion can
       # hollow out without changing a line of app source.
       - "frontend/test/**"
