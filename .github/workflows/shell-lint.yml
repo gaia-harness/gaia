@@ -86,7 +86,8 @@ jobs:
               # The gate folds in guards whose scan surface INCLUDES the
               # workflow `run:` blocks, which no *.sh glob reaches:
               # lint-git-path-quoting.sh, lint-workflow-run-interpolation.sh,
-              # lint-errexit-status-read.sh, and lint-sigpipe-readers.sh. Only
+              # lint-errexit-status-read.sh, lint-sigpipe-readers.sh, and
+              # lint-jq-as-binding.sh. Only
               # lint-workflow-run-interpolation.sh is
               # workflow/action-only; the rest scan tracked *.sh as
               # well, so this line is not their whole surface, it is the only
@@ -101,9 +102,9 @@ jobs:
               # check having linted the very files it just changed -- the same
               # gap the .githooks/** line above closes, one file type over.
               - '.github/workflows/**'
-              # The run-interpolation, status-read and sigpipe-reader guards
-              # also scan the composite actions, which the glob above does not
-              # reach. The
+              # The run-interpolation, status-read, sigpipe-reader and jq
+              # as-binding guards also scan the composite actions, which the
+              # glob above does not reach. The
               # composite actions are where the sigpipe-reader guard's oracle
               # has the most to say: GitHub's schema makes `shell:` mandatory on
               # a composite `run:` step, and every composite step in this tree

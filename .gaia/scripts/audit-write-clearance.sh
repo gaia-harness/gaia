@@ -1088,9 +1088,10 @@ if [ -n "$BASE" ]; then
         # moved to fixed_last_round with its resolution. An id echoed twice is
         # claimed by its first finding only, so ids stay unique. Other members'
         # entries and provenance pass through untouched.
-        # Every `as` binding is fully parenthesized: jq's `as` binds looser than
-        # `+` and `//`, so `a + 1 as $r | body` parses as `a + (1 as $r | body)`
-        # and errors at runtime. jq's stderr is captured rather than discarded --
+        # Every `as` binding is fully parenthesized because jq versions disagree
+        # on how far left one reaches: jq 1.7 reads `a + 1 as $r | body` as
+        # `a + (1 as $r | body)`, jq 1.8 as `(a + 1) as $r | body`, and `//`
+        # splits the same way. jq's stderr is captured rather than discarded --
         # a silently-swallowed program error here would look exactly like "there
         # was nothing to write".
         if ! ledger_body="$(jq -n \
