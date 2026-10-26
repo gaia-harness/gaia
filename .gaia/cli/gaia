@@ -28547,6 +28547,12 @@ var STEP_ORDER = [
   "finalize"
 ];
 
+// src/tooling-paths.ts
+var TOOLING_PATHS = /* @__PURE__ */ new Set([
+  STATE_FILE_RELATIVE,
+  "wiki/meta"
+]);
+
 // src/fitness/paths.ts
 var BARE_FILE_EXTENSIONS = /* @__PURE__ */ new Set([
   "bats",
@@ -28652,10 +28658,6 @@ var resolveEverywhere = (context, reference, candidate) => [
     (anchor2) => context.resolve(anchor2, candidate, "file-dir")
   )
 ];
-var TOOLING_PATHS = /* @__PURE__ */ new Set([
-  STATE_FILE_RELATIVE,
-  "wiki/meta"
-]);
 var isRuntimeArtifact = (context, relative, folder) => TOOLING_PATHS.has(relative) || context.gitIgnored(folder ? `${relative}/` : relative) === true;
 var resolveReference = (context, reference) => {
   const { token } = reference;
@@ -30860,6 +30862,7 @@ var isTrackedPath = (token, prefixes) => {
   if (ADOPTER_OWNED_SENTINELS.has(token)) return false;
   if (MACHINE_LOCAL_PATHS.has(token)) return false;
   if (ABSENT_BY_DESIGN_PATHS.has(token)) return false;
+  if (TOOLING_PATHS.has(token)) return false;
   if (RUNTIME_PREFIXES.some((prefix) => token.startsWith(prefix))) return false;
   if (SIBLING_REPO_PATTERN.test(token)) return true;
   return prefixes.some((prefix) => token.startsWith(prefix));
