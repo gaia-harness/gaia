@@ -11,6 +11,7 @@ tags: [meta, log]
 
 ## [promote] 2026-10-26 | Single-session onboarding promoted
 
+- 2026-10-26 b8f8300 WORTHY - renamed-dependency removal in package merge → wiki/concepts/Update Workflow.md
 - 2026-10-26 10bdf13 WORTHY - jq as-binding lint folded into shell-lint; maintainer-only guard, no page change
 - 2026-10-26 2b6ae16 WORTHY - all lock directories taken through one exclusive helper → wiki/concepts/GAIA Scripts.md
 - 2026-10-26 1cce8f8 WORTHY - RED-capture re-run no longer installs dependencies → wiki/concepts/Claude Hooks.md, wiki/decisions/TDD RED Verification.md
