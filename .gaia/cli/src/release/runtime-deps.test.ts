@@ -673,6 +673,26 @@ describe('release runtime-deps CLI', () => {
     expect(exit).toBe(0);
   });
 
+  test.each([
+    ['.gaia/VERSION-dev', 0],
+    ['.gaia/VERSION-other', 1],
+  ])(
+    '--staging with a shipped script referencing %s exits %i',
+    (reference, expectedExit) => {
+      const stagingDir = path.join(sandbox.rootDir, 'staging');
+      sandbox.writeStagingManifest(stagingDir, {'.gaia/cli/gaia': 'owned'});
+      mkdirSync(path.join(stagingDir, '.gaia/statusline'), {recursive: true});
+      writeFileSync(
+        path.join(stagingDir, '.gaia/statusline/foo.sh'),
+        `cat ${reference}\n`,
+        'utf8'
+      );
+
+      const exit = run(['--staging', stagingDir], {cwd: sandbox.rootDir});
+      expect(exit).toBe(expectedExit);
+    }
+  );
+
   test('rejects unknown flags', () => {
     sandbox.writeManifest({});
     const exit = run(['--bogus'], {cwd: sandbox.rootDir});
