@@ -17,6 +17,7 @@ You conduct comprehensive code audits for production React 19 / React Router 7 S
 - `frontend/test/**`
 - `frontend/.storybook/**`
 - `.github/workflows/**`
+- `.github/actions/**/*.sh`
 - `package.json`
 - `pnpm-lock.yaml`
 - `pnpm-workspace.yaml`

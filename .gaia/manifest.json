@@ -361,6 +361,8 @@
     ".gaia/vendor/playwright-cli.json": "owned",
     ".githooks/commit-msg": "owned",
     ".githooks/pre-commit": "owned",
+    ".github/actions/gaia-apt-cache/action.yml": "owned",
+    ".github/actions/gaia-apt-cache/apt-cached-install.sh": "owned",
     ".github/actions/gaia-setup-node/action.yml": "owned",
     ".github/audit/resolve-audit-base.sh": "owned",
     ".github/audit/resolve-check-base.sh": "owned",
@@ -757,7 +759,7 @@
     "wiki/overview.md": "wiki-owned",
     "wiki/README.md": "wiki-owned"
   },
-  "generated": "2026-10-26T12:58:06.253Z",
+  "generated": "2026-10-26T15:46:59.544Z",
   "regions": [
     {
       "endMarker": "<!-- gaia:audit-remit:end -->",

@@ -1488,7 +1488,7 @@ w5_step_caps() {
 @test "W5 adversarial: an expression-valued cap is caught" {
   require_yaml_parser
   local doctored="$BATS_TEST_TMPDIR/w5c.yml"
-  replace_line "$WORKFLOW" "    timeout-minutes: 13" "    timeout-minutes: \${{ github.event_name }}" "$doctored"
+  replace_line "$WORKFLOW" "    timeout-minutes: 25" "    timeout-minutes: \${{ github.event_name }}" "$doctored"
 
   [ "$(read_workflow capkind "$doctored" shards)" = "other" ] || {
     echo "an expression-valued cap still read as an integer" >&2
