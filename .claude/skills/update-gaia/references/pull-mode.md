@@ -69,3 +69,5 @@ Then read the cache file back and confirm `gaiaCurrent` is `<new version>`. `SKI
 Caller `gate` skips the update offer and returns to `pull-gate.md`'s restart step.
 
 Caller `update-gaia`: when the cache's `gaiaLatest` is above `<new version>`, ask with `AskUserQuestion`: "Continue to the full update to <tag> (Recommended)" or "Stop here". On continue, invoke `/update-gaia` again through the Skill tool so the update runs from the pulled copy of the skill. Otherwise report the pull and finish.
+
+Caller `update-gaia` on a run invoked with `--local <tarball>` takes this offer in place of the one above, whatever `gaiaLatest` says: ask with `AskUserQuestion`: "Continue to the local sync (Recommended)" or "Stop here". On continue, invoke `/update-gaia --local <tarball path>` again through the Skill tool, with the tarball path the run was given. Otherwise report the pull and finish.

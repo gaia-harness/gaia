@@ -64,7 +64,7 @@ It prints `CHUNKS <k> <total>` and writes `chunk-1.txt` to `chunk-<k>.txt` into 
 
 ### Dispatch the execution agent
 
-Spawn the agent for Steps 6 to 9. Its prompt passes `BASELINE`, `LATEST`, `LATEST_TAG`, `BASELINE_DIR`, `LATEST_DIR`, every `EXTRA_DIR=<tag>:<path>` line as printed, the acting tree's absolute path, `<run dir>`, the decision log `<acting tree>/.gaia/update-decisions.json`, the CHANGELOG range file `.gaia/local/cache/shared/update-gaia/<LATEST_TAG>/changelog-range.md`, and, when `<k>` is 2 or more, `<run dir>/chunk-1.txt` as the only paths it judges. The prompt tells it:
+Spawn the agent for Steps 6 to 9. Its prompt passes `BASELINE`, `LATEST`, `LATEST_TAG`, `BASELINE_TAG`, `BASELINE_DIR`, `LATEST_DIR`, every `EXTRA_DIR=<tag>:<path>` line as printed, the acting tree's absolute path, `<run dir>`, the decision log `<acting tree>/.gaia/update-decisions.json`, the CHANGELOG range file `.gaia/local/cache/shared/update-gaia/<LATEST_TAG>/changelog-range.md`, and, when `<k>` is 2 or more, `<run dir>/chunk-1.txt` as the only paths it judges. The prompt tells it:
 
 - the acting tree is its working root: every path in the instructions is relative to it, and it runs nothing against any other checkout;
 - to read `<run dir>/instructions/merge-execution.md`, `<run dir>/instructions/merge-generated.md` and `<run dir>/instructions/merge-report.md` in full before Step 6 (in chunks if the Read tool refuses the size, but every chunk before Step 6), and follow them exactly;
