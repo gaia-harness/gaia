@@ -47,7 +47,7 @@ export type VerdictItem = {
   key: string;
   kind: 'entry' | 'key';
   latest?: unknown;
-  reason?: 'added' | 'changed';
+  reason?: 'added' | 'changed' | 'removed';
   recommendation?: Recommendation;
   section?: string;
   versionValued?: boolean;
@@ -208,7 +208,8 @@ const buildItem = (triple: Triple): VerdictItem => {
 const sortKey = (item: VerdictItem): string =>
   `${item.section ?? ''}\u0000${item.key}`;
 
-const bySortKey = (a: VerdictItem, b: VerdictItem): number =>
+/** Orders report items by section, then key. */
+export const bySortKey = (a: VerdictItem, b: VerdictItem): number =>
   sortKey(a).localeCompare(sortKey(b));
 
 /** Classifies every triple into the five report buckets, each sorted. */

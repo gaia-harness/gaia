@@ -20,13 +20,15 @@ import {parseValueFlags} from '../util/parse-value-flags.js';
 import type {ValueFlagMap} from '../util/parse-value-flags.js';
 import {
   asRecord,
+  bySortKey,
   classifyTriples,
   extractDeferredBaselines,
   lookup,
   renderHumanReport,
+  tripleId,
   triplesWithDeferred,
 } from './field-verdict.js';
-import type {Triple} from './field-verdict.js';
+import type {FieldMergeReport, Triple, VerdictItem} from './field-verdict.js';
 
 const HELP_TEXT = `Usage: gaia update merge-package --baseline <file> --latest <file> --current <file> [--deferred-baseline <key>=<file>]... [--json]
 
@@ -58,6 +60,17 @@ const ENTRY_SECTIONS: readonly {name: string; versionValued: boolean}[] = [
 ];
 
 const WHOLE_VALUE_KEY = 'packageManager';
+
+const DEPENDENCY_SECTIONS = new Set(['dependencies', 'devDependencies']);
+
+// Old package name to the package that replaces it. A replaced package the
+// adopter still carries is removed only where its replacement landed, so a
+// conflict on the replacement leaves the old package in place. The old name is
+// joined rather than written whole so a repository-wide rename of it cannot
+// rewrite this entry into a self-mapping.
+const RENAMED_PACKAGES: ReadonlyMap<string, string> = new Map([
+  [['@gaia', 'react/lint'].join('-'), '@gaia-harness/lint'],
+]);
 
 type Flags = {
   baseline: string;
@@ -137,6 +150,35 @@ const buildTriples =
       }));
     }),
   ];
+
+/** Moves each replaced package whose replacement landed to an applied removal. */
+const removeReplacedPackages = (report: FieldMergeReport): FieldMergeReport => {
+  const landed = new Set(
+    [...report.applied, ...report.alreadyLatest]
+      .filter((item) => DEPENDENCY_SECTIONS.has(item.section ?? ''))
+      .map((item) => tripleId(item))
+  );
+
+  const isReplaced = (item: VerdictItem): boolean => {
+    const replacement = RENAMED_PACKAGES.get(item.key);
+
+    return (
+      replacement !== undefined &&
+      landed.has(tripleId({key: replacement, section: item.section}))
+    );
+  };
+  const removals = report.removedUpstream.filter((item) => isReplaced(item));
+  const applied: VerdictItem[] = [
+    ...report.applied,
+    ...removals.map((item) => ({...item, reason: 'removed' as const})),
+  ];
+
+  return {
+    ...report,
+    applied: applied.toSorted(bySortKey),
+    removedUpstream: report.removedUpstream.filter((item) => !isReplaced(item)),
+  };
+};
 
 type LoadResult =
   | {
@@ -244,8 +286,14 @@ export const run = (
     Record<string, unknown>,
     Record<string, unknown>,
   ];
-  const report = classifyTriples(
-    triplesWithDeferred(buildTriples(latest, current), baseline, deferredRoots)
+  const report = removeReplacedPackages(
+    classifyTriples(
+      triplesWithDeferred(
+        buildTriples(latest, current),
+        baseline,
+        deferredRoots
+      )
+    )
   );
 
   if (parsed.flags.json) {

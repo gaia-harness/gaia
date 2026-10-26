@@ -45388,6 +45388,10 @@ var ENTRY_SECTIONS = [
   { name: "engines", versionValued: true }
 ];
 var WHOLE_VALUE_KEY = "packageManager";
+var DEPENDENCY_SECTIONS = /* @__PURE__ */ new Set(["dependencies", "devDependencies"]);
+var RENAMED_PACKAGES = /* @__PURE__ */ new Map([
+  [["@gaia", "react/lint"].join("-"), "@gaia-harness/lint"]
+]);
 var VALUE_FLAGS5 = {
   "--baseline": "baseline",
   "--current": "current",
@@ -45442,6 +45446,25 @@ var buildTriples2 = (latest, current) => (baseline) => [
     }));
   })
 ];
+var removeReplacedPackages = (report2) => {
+  const landed = new Set(
+    [...report2.applied, ...report2.alreadyLatest].filter((item) => DEPENDENCY_SECTIONS.has(item.section ?? "")).map((item) => tripleId(item))
+  );
+  const isReplaced = (item) => {
+    const replacement = RENAMED_PACKAGES.get(item.key);
+    return replacement !== void 0 && landed.has(tripleId({ key: replacement, section: item.section }));
+  };
+  const removals = report2.removedUpstream.filter((item) => isReplaced(item));
+  const applied = [
+    ...report2.applied,
+    ...removals.map((item) => ({ ...item, reason: "removed" }))
+  ];
+  return {
+    ...report2,
+    applied: applied.toSorted(bySortKey),
+    removedUpstream: report2.removedUpstream.filter((item) => !isReplaced(item))
+  };
+};
 var loadPackage = (absPath, role) => {
   if (!existsSync38(absPath)) {
     return {
@@ -45511,8 +45534,14 @@ var run65 = (argv, options = {}) => {
     }
   }
   const [baseline, latest, current] = roots;
-  const report2 = classifyTriples(
-    triplesWithDeferred(buildTriples2(latest, current), baseline, deferredRoots)
+  const report2 = removeReplacedPackages(
+    classifyTriples(
+      triplesWithDeferred(
+        buildTriples2(latest, current),
+        baseline,
+        deferredRoots
+      )
+    )
   );
   if (parsed.flags.json) {
     process.stdout.write(`${JSON.stringify(report2)}
