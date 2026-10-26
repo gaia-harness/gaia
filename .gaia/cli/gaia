@@ -47186,6 +47186,7 @@ var isReachable = (sha, cwd) => {
     return false;
   }
 };
+var hasCommitObject = (sha, cwd) => tryRunGit(["cat-file", "-e", `${sha}^{commit}`], { cwd }) !== null;
 var ancestorBefore = (isoTimestamp, cwd) => {
   const result = tryRunGit(
     ["rev-list", "-1", "--first-parent", `--before=${isoTimestamp}`, "HEAD"],
@@ -47417,7 +47418,8 @@ var computeWikiState = (repoRoot) => {
   const counts = countDomainPages(wikiRoot);
   const suggestedFull = !reachable && stateAt !== "" ? ancestorBefore(stateAt, repoRoot) : "";
   const suggestedBase = suggestedFull === "" ? "" : shortSha(suggestedFull, repoRoot);
-  const driftCount = reachable ? ahead : countDriftCommits(suggestedFull, repoRoot);
+  const orphanPresent = !reachable && stateSha !== "" && stateSha !== ALL_ZERO_SHA && hasCommitObject(stateSha, repoRoot);
+  const driftCount = reachable ? ahead : countDriftCommits(orphanPresent ? stateSha : suggestedFull, repoRoot);
   return {
     commits_ahead: ahead,
     drift_count: driftCount,

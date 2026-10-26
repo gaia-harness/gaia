@@ -5,9 +5,9 @@
  * HEAD`. `drift_count` is the one drift definition shared by the statusline
  * nudge and the release preflight: commits since the baseline, minus wiki
  * bookkeeping subjects (`countDriftCommits`). The baseline is
- * `last_evaluated_sha` when it is a real ancestor of HEAD, else
- * `suggested_base`, else the whole history, so it is a number even for a fresh
- * adopter clone whose state file names an upstream SHA.
+ * `last_evaluated_sha` when its commit object is present locally, reachable or
+ * not, else `suggested_base`, else the whole history, so it is a number even
+ * for a fresh adopter clone whose state file names an upstream SHA.
  *
  * Severity thresholds classify `commits_ahead`:
  *   - none:   commits_ahead === 0
@@ -27,6 +27,7 @@ import {resolveRepoRoot} from '../util/repo-root.js';
 import {
   ancestorBefore,
   countDriftCommits,
+  hasCommitObject,
   headSha,
   isReachable,
   recentCommits,
@@ -191,8 +192,20 @@ export const computeWikiState = (repoRoot: string): WikiState => {
   const suggestedBase =
     suggestedFull === '' ? '' : shortSha(suggestedFull, repoRoot);
 
+  // A squash-merged wiki branch orphans the recorded SHA, but the object stays
+  // until gc, and `<sha>..HEAD` is exact: commits the branch absorbed by a
+  // catch-up merge after `last_evaluated_at` are its ancestors, while the
+  // date-based `suggested_base` would count them as drift. The squash commit
+  // itself is a bookkeeping subject and drops out.
+  const orphanPresent =
+    !reachable &&
+    stateSha !== '' &&
+    stateSha !== ALL_ZERO_SHA &&
+    hasCommitObject(stateSha, repoRoot);
   const driftCount =
-    reachable ? ahead : countDriftCommits(suggestedFull, repoRoot);
+    reachable ? ahead : (
+      countDriftCommits(orphanPresent ? stateSha : suggestedFull, repoRoot)
+    );
 
   return {
     commits_ahead: ahead,

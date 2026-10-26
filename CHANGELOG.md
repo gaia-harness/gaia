@@ -17,6 +17,7 @@ A release change that requires the adopter to act, run a command or hand-migrate
 ### Fixed
 
 - **Tests workflow on a slow Ubuntu mirror:** installing Playwright's system dependencies no longer stalls the Tests job until its timeout. The packages are cached per runner image and install offline once cached; an uncached install is bounded and retried, keeps what each attempt downloaded, and on final failure names the `gh run rerun <id> --failed` command that recovers it. The workflow now uses the new `.github/actions/gaia-apt-cache` action, which `/update-gaia` installs with it (#3039, #3090)
+- **Wiki drift after a squash-merged wiki PR:** `gaia wiki state` no longer counts main commits the wiki branch already synced through a catch-up merge as drift, so the statusline nudge stays quiet and `/gaia-release` preflight no longer refuses with a false "wiki is N commits behind HEAD" (#3098)
 
 ## [2.2.0] - 2026-10-26
 
