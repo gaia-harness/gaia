@@ -2,7 +2,7 @@
 type: concept
 status: active
 created: 2026-09-20
-updated: 2026-10-13
+updated: 2026-10-26
 tags: [concept, gaia, scripts]
 ---
 
@@ -47,6 +47,8 @@ The root holds the shell layer; each subdirectory holds one family that is not r
 | `notebook/` | The notebook library (catalog, paths, research), the one-time move, the catalog reconcile and the research reaper. |
 | `red-ledger/` | The Node extractors that read test and story signals out of a RED run. |
 | `lib/` | Helpers sourced or imported by a root script rather than run on their own. |
+
+Lock directories are taken through one helper, `exclusive-lock-lib.sh`, never by trusting `mkdir`'s exit status: some `mkdir` implementations let two racing calls both succeed. Ownership is the exclusive creation of an owner file inside the lock, and each caller keeps its own deadline and stale-reclaim rules.
 
 <!-- gaia:maintainer-only:start -->
 `tests/` is separate, and separate on purpose. It holds the bats suites that guard the root scripts, and it is far larger than everything above it put together. A suite there is the blocking runner for the guard beside it, which is why a guard's conformance lives next to the guard rather than in the general test tree. It is not described here: a suite is discovered from the script it names.
