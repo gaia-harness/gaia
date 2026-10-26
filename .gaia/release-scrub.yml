@@ -301,6 +301,11 @@ transforms:
           # Anchored to a bare JSON array-element string so an ordinary
           # reference anywhere else in package.json still trips the check.
           - "^\\s*\"\\.gaia/(cli/src|tests|scripts/tests)/\",?$"
+          # The fitness harness line limit gates itself on the maintainer
+          # marker being tracked and reads its ceilings from a maintainer-only
+          # file; on an adopter clone both are absent, which is what keeps the
+          # rule off there. Anchored to the two bundled declarations.
+          - "^var (MAINTAINER_MARKER_PATH|CEILINGS_PATH) = \"\\.claude/(rules/)?maintainers/[a-z-]+\\.(md|json)\";$"
 
       # ---- Code Audit Team maintainer-only member names ----
       # A mis-wrapped roster entry or resolver block would leave a

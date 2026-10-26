@@ -24,3 +24,10 @@ export const NESTED_CLAUDE_MD_WORD_BUDGET = 400;
  * page loaded on demand.
  */
 export const RULE_LINE_BUDGET = 200;
+
+/**
+ * Lines allowed in one harness code file, the split threshold the root
+ * CLAUDE.md states. Past it a file costs an agent more to read and change, and
+ * every audit round re-reads it.
+ */
+export const HARNESS_CODE_LINE_BUDGET = 400;

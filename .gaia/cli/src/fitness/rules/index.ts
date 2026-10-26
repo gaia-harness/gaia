@@ -5,6 +5,7 @@ import {CLAUDEMD_RULES} from './claudemd.js';
 import {FITNESS_CONFIG_RULES} from './fitness-config.js';
 import {FRONTMATTER_RULES} from './frontmatter.js';
 import {HOOKS_RULES} from './hooks.js';
+import {LINE_LIMIT_RULES} from './line-limit.js';
 import {PROMPT_RULES} from './prompt.js';
 import {RULES_RULES} from './rules.js';
 import {SETTINGS_RULES} from './settings.js';
@@ -18,6 +19,7 @@ const ALL_RULES: readonly RuleDefinition[] = [
   ...RULES_RULES,
   ...CLAUDEMD_RULES,
   ...AUTHORING_RULES,
+  ...LINE_LIMIT_RULES,
   ...PROMPT_RULES,
   ...WIKI_RULES,
   ...FITNESS_CONFIG_RULES,
