@@ -76,13 +76,14 @@ cmp pnpm-lock.yaml <snapshot>/pnpm-lock.yaml
 
 Take each advisory's candidates in its plan order, starting with the first one not already tried. A chain-head candidate (`chain-head-in-run`, `chain-head-minor`, `chain-head-major`) was the waves' job: it is spent once its wave returned, so here it is skipped. When the advisory has no candidate left, report the reason the last attempt failed with (from step 5 or step 6), or `wave reverted (Wave A)` / `wave reverted (<group>)` when the only attempt was a reverted wave.
 
-**In-range refresh** (`in-range-refresh`), verified on pnpm 12.7.0:
+**In-range refresh** (`in-range-refresh`), verified on pnpm 12.11.2:
 
 ```bash
+pnpm cache delete <package>
 pnpm -C frontend update --no-save <package>
 ```
 
-Name the package only, never `name@version`. `--no-save` leaves every declared range as it is, and pnpm 12 re-resolves to unlimited depth by default (it rejects `--depth Infinity`), so the command moves only the named package to the newest version its parents' ranges admit, or nothing when it is already newest. Then run the guards Phase 5b runs, against this resolution's snapshot:
+Name the package only, never `name@version`. `--no-save` leaves every declared range as it is, and pnpm 12 re-resolves to unlimited depth by default (it rejects `--depth Infinity`), so the command moves only the named package to the newest version its parents' ranges admit, or nothing when it is already newest. The `cache delete` line is required, for the reason Phase 5b's refresh step gives (`transitive-refresh.md`): without it a patch a `minimumReleaseAgeExclude` entry admits can be invisible, and `update` exits 0 having moved nothing. It clears only that package's metadata, from pnpm's machine-wide cache, so any project's next resolve of it refetches it from the registry; packages and lockfiles are untouched. Then run the guards Phase 5b runs, against this resolution's snapshot:
 
 - `package.json`, `frontend/package.json`, and `pnpm-workspace.yaml` must be byte-identical to the resolution snapshot (`cmp`). A difference means pnpm rewrote a range or recorded a release-age exemption: revert and report `quality gate failed`, naming the rewritten file.
 - Re-run the snapshot's `pnpm -C frontend ls` line into `.gaia/local/cache/shared/update-deps-security-resolution/direct-after.json` and compare each held package's version with `direct.json`. The held packages are the payload's `skipped[]` entries with `reason: "held"`; a snoozed group never blocks a security resolution. A held package whose version moved reverts the resolution and reports `held by config (<pkg> ceiling <ceiling>)`.

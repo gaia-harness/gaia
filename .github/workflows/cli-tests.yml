@@ -190,6 +190,14 @@ jobs:
               # skips the Vitest step, and greens this required check having
               # run the lockstep zero times.
               - '.gaia/conventional-commits.json'
+              # src/update-deps/refresh-method.test.ts reads its two refresh
+              # scripts out of these references. They match no other entry
+              # here, so without these lines a pull request that edits only
+              # them (dropping the cache delete the test guards) resolves
+              # `code=false`, skips the Vitest step, and greens this required
+              # check having run the guard zero times.
+              - '.claude/skills/update-deps/references/security.md'
+              - '.claude/skills/update-deps/references/transitive-refresh.md'
             # Everything the fitness lint grades or reads: the harness files
             # themselves, the CLI that lints them, and the manifest, vendor
             # pins and ownership script that decide which files are GAIA's.
