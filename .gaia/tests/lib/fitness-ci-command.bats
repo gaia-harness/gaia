@@ -136,6 +136,53 @@ commit_tree() {
   [ "$status" -eq 0 ]
 }
 
+# bats test_tags=whole-tree
+@test "a new harness script over 400 lines fails and names the file and rule" {
+  script=".gaia/scripts/line-limit-probe.sh"
+  seq 1 401 >"$TREE/$script"
+  commit_tree
+  run run_ci_lint "$WORKFLOW" "$TREE" "$BASE_CONFIG"
+  [ "$status" -ne 0 ]
+  grep -qF -- "$script" <<<"$output" || return 1
+  grep -qF -- "authoring.harness.max-lines" <<<"$output" || return 1
+}
+
+# grandfathered_entry: the first grandfathered path and its ceiling, from the
+# tree's own ceilings file.
+grandfathered_entry() {
+  jq -r '.ceilings | to_entries[0] | "\(.key) \(.value)"' "$TREE/.claude/maintainers/line-limit-ceilings.json"
+}
+
+# bats test_tags=whole-tree
+@test "a grandfathered file grown one line past its ceiling fails" {
+  read -r file ceiling <<<"$(grandfathered_entry)"
+  [ -n "$file" ] && [ "$ceiling" -gt 400 ]
+  line_count="$(wc -l <"$TREE/$file" | tr -d ' ')"
+  seq "$line_count" "$ceiling" >>"$TREE/$file"
+  [ "$(wc -l <"$TREE/$file" | tr -d ' ')" -eq $((ceiling + 1)) ]
+  commit_tree
+  run run_ci_lint "$WORKFLOW" "$TREE" "$BASE_CONFIG"
+  [ "$status" -ne 0 ]
+  grep -qF -- "past its grandfathered ceiling of $ceiling" <<<"$output" || return 1
+}
+
+# bats test_tags=whole-tree
+@test "a grandfathered file shrunk under 400 lines passes with a stale-ceiling warning" {
+  read -r file ceiling <<<"$(grandfathered_entry)"
+  [ -n "$file" ] && [ "$ceiling" -gt 400 ]
+  # Rewritten in place, not replaced, so a hook keeps its executable bit.
+  head -n 10 "$TREE/$file" >"$BATS_TEST_TMPDIR/shrunk"
+  cat "$BATS_TEST_TMPDIR/shrunk" >"$TREE/$file"
+  commit_tree
+  run run_ci_lint "$WORKFLOW" "$TREE" "$BASE_CONFIG"
+  [ "$status" -eq 0 ]
+  grep -qF -- "authoring.harness.ceiling-stale" <<<"$output"
+}
+
+@test "the line-limit ceilings file is release-excluded" {
+  grep -qxF '.claude/maintainers' "$REPO_ROOT/.gaia/release-exclude"
+}
+
 @test "red twin: a workflow with no fitness line fails the extraction" {
   broken="$BATS_TEST_TMPDIR/cli-tests.yml"
   grep -v 'gaia fitness check' "$WORKFLOW" >"$broken"

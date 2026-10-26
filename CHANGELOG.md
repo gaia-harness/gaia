@@ -14,6 +14,10 @@ A release change that requires the adopter to act, run a command or hand-migrate
 
 ## [Unreleased]
 
+### Added
+
+- **Harness file line limit (maintainer repo only):** GAIA's own CI now fails a harness code file over 400 lines unless it is grandfathered at a recorded ceiling, and fails a grandfathered file that grows past its ceiling (#3109)
+
 ### Fixed
 
 - **`/update-deps` lands an in-range patch you exempted from the release-age window.** When a fresh release was admitted early by a `minimumReleaseAgeExclude` entry, the security phase's in-range refresh and the transitive refresh could finish cleanly having moved nothing, because pnpm answered from metadata it had cached before that release existed. Both refreshes now drop that cached metadata before resolving (#3054)
