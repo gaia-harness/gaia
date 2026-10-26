@@ -86,18 +86,52 @@ setup() {
   . "$REPO_ROOT/.gaia/tests/helpers/catchup-fixture.sh"
   AGENTS_DIRECTORY="$REPO_ROOT/.claude/agents"
   require_jq
+  derive_member_sets || return 1
+}
 
-  MEMBERS=(
-    code-audit-frontend
-    code-audit-github-workflows
-    code-audit-maintainer-shell
-    code-audit-maintainer-node
-  )
-  SPECIALISTS=(
-    code-audit-github-workflows
-    code-audit-maintainer-shell
-    code-audit-maintainer-node
-  )
+# derive_member_sets
+#
+# MEMBERS is every roster entry; SPECIALISTS is every member whose definition
+# carries the self-skip arm. A short read is checked against a count taken from
+# the definitions' own resolver lines, so a derivation that drops a member
+# fails here rather than narrowing every probe that names "each specialist".
+derive_member_sets() {
+  local roster="$REPO_ROOT/.gaia/audit-ci.yml" member roster_count definition_file
+  local expected_specialist_count skip_full_base_count=0 specialist
+  MEMBERS=()
+  SPECIALISTS=()
+  while IFS= read -r member; do
+    MEMBERS+=("$member")
+  done < <(sed -n 's/^  - name: *//p' "$roster")
+  roster_count="$(grep -cE '^[[:space:]]*-[[:space:]]+name:' "$roster")"
+  [ "${#MEMBERS[@]}" -gt 0 ] && [ "${#MEMBERS[@]}" -eq "$roster_count" ] || {
+    printf 'derived %s members, the roster lists %s\n' "${#MEMBERS[@]}" "$roster_count" >&2
+    return 1
+  }
+  for member in "${MEMBERS[@]}"; do
+    definition_file="$AGENTS_DIRECTORY/${member}.md"
+    [ -f "$definition_file" ] || {
+      printf 'roster member %s has no definition at %s\n' "$member" "$definition_file" >&2
+      return 1
+    }
+    if grep -qE '^<root>/\.gaia/scripts/audit-resolve-scope\.sh .*--skip-full-base' "$definition_file"; then
+      skip_full_base_count=$((skip_full_base_count + 1))
+    elif grep -qF 'self-skip on `FULL_CHANGED` filtered to your remit' "$definition_file"; then
+      SPECIALISTS+=("$member")
+    fi
+  done
+  expected_specialist_count=$((${#MEMBERS[@]} - skip_full_base_count))
+  [ "${#SPECIALISTS[@]}" -gt 0 ] && [ "${#SPECIALISTS[@]}" -eq "$expected_specialist_count" ] || {
+    printf 'derived %s specialists, expected %s (members minus the %s that pass --skip-full-base)\n' \
+      "${#SPECIALISTS[@]}" "$expected_specialist_count" "$skip_full_base_count" >&2
+    return 1
+  }
+  for specialist in "${SPECIALISTS[@]}"; do
+    printf '%s\n' "${MEMBERS[@]}" | grep -qxF "$specialist" || {
+      printf 'specialist %s is not a roster member\n' "$specialist" >&2
+      return 1
+    }
+  done
 }
 
 # --- section 0: the gate itself ----------------------------------------------
@@ -337,13 +371,33 @@ MOCK
 # working root in; the result runs through `bash -c` so the definition's own
 # quoting (the frontend's `'*.ts'` pathspecs) is parsed as a shell parses it.
 # stderr is left alone so a caller can read the resolver's diagnostics.
+#
+# A test that sets SCOPE_MEMO runs each (member, repository, HEAD) resolver once
+# and replays its stdout and status after that. The HEAD sha is in the memo key
+# so a test that commits between calls re-resolves; the working tree and the
+# clearance store are not, so a test that edits either mid-test must not opt in.
 evaluate_scope() {
-  local member="$1" repo="$2" line
+  local member="$1" repo="$2" line memo_path="" resolver_status=0
+  if [ -n "${SCOPE_MEMO:-}" ]; then
+    memo_path="$BATS_TEST_TMPDIR/scope-memo/${member}.${repo//\//_}.$(git -C "$repo" rev-parse HEAD)"
+    if [ -f "$memo_path.status" ]; then
+      cat "$memo_path.out"
+      return "$(cat "$memo_path.status")"
+    fi
+  fi
   line="$(extract_resolver_line "$AGENTS_DIRECTORY/${member}.md")" || {
     printf '%s: expected exactly one resolver command line in its definition\n' "$member" >&2
     return 1
   }
-  bash -c "${line//<root>/$repo}"
+  if [ -z "$memo_path" ]; then
+    bash -c "${line//<root>/$repo}"
+    return
+  fi
+  mkdir -p "$BATS_TEST_TMPDIR/scope-memo"
+  bash -c "${line//<root>/$repo}" >"$memo_path.out" || resolver_status=$?
+  printf '%s\n' "$resolver_status" >"$memo_path.status"
+  cat "$memo_path.out"
+  return "$resolver_status"
 }
 
 # scope_values <member> <repo> <KEY>: every value the member's resolver printed
@@ -417,6 +471,7 @@ owners_of() {
 
 @test "every member resolves the same KEY_BASE and the same audit key, matching the merge-time producer" {
   local repo
+  SCOPE_MEMO=1
   repo="$(make_repo agreement)"
   start_branch "$repo" feat
   commit_file "$repo" "app/a.txt" "commit A"
@@ -488,6 +543,7 @@ owners_of() {
 
 @test "two co-dispatched members resolve DIFFERENT review bases from one shared key" {
   local repo shell_member workflows_member team_signal_sha member_clearance_sha
+  SCOPE_MEMO=1
 
   repo="$(make_repo two-bases)"
   start_branch "$repo" feat
@@ -782,6 +838,7 @@ STUB
 # probe_deadlock <member> <owned-path> <machinery-path-outside-remit>
 probe_deadlock() {
   local member="$1" owned="$2" machinery="$3" repo
+  SCOPE_MEMO=1
   repo="$(make_repo "deadlock-${member}")"
   start_branch "$repo" feat
   commit_file "$repo" "$owned" "owned change"
@@ -901,6 +958,7 @@ probe_deadlock() {
 
 @test "an unloadable machinery lib resets every member to full scope with reason degraded" {
   local repo member
+  SCOPE_MEMO=1
 
   repo="$(make_repo degraded-arm no)"
   start_branch "$repo" feat

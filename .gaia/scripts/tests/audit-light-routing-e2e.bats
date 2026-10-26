@@ -12,6 +12,29 @@
 
 bats_require_minimum_version 1.5.0
 
+# The plain and maintainer sandboxes are built once for the whole file, and each
+# flavor gets a prepared twin carrying the full clearance and the small owned
+# Markdown commit prepare_light starts from; a case copies the one it needs
+# instead of rebuilding a repository, an origin and a clearance of its own.
+setup_file() {
+  command -v jq >/dev/null 2>&1 || skip "jq not available"
+  REPO_ROOT="$(cd "$BATS_TEST_DIRNAME/../../.." && pwd)"
+  # shellcheck source=.gaia/scripts/tests/helpers/light-sandbox.sh
+  . "$REPO_ROOT/.gaia/scripts/tests/helpers/light-sandbox.sh"
+  lsb_build_templates plain maintainer
+  local flavor
+  for flavor in plain maintainer; do
+    (
+      BATS_TEST_TMPDIR="$LSB_TEMPLATE_ROOT/prepared-$flavor"
+      mkdir -p "$BATS_TEST_TMPDIR"
+      if [ "$flavor" = maintainer ]; then lsb_init --maintainer; else lsb_init; fi
+      lsb_full_clearance code-audit-frontend
+      lsb_commit frontend/app/notes.md "$(printf 'one\ntwo\nthree')"
+      cp "$LSB_TEMPLATE_ROOT/$flavor/slug" "$BATS_TEST_TMPDIR/slug"
+    ) || return 1
+  done
+}
+
 setup() {
   REPO_ROOT="$(cd "$BATS_TEST_DIRNAME/../../.." && pwd)"
   # shellcheck source=.gaia/scripts/tests/helpers/light-sandbox.sh
@@ -86,9 +109,9 @@ assert_gate_denies() {
 # prepare_light [--maintainer]: a full clearance, then an owned Markdown-only
 # commit inside the cap, routed light.
 prepare_light() {
-  lsb_init "$@"
-  lsb_full_clearance "$FRONTEND"
-  lsb_commit frontend/app/notes.md "$(printf 'one\ntwo\nthree')"
+  local flavor=plain
+  [ "${1:-}" = "--maintainer" ] && flavor=maintainer
+  lsb_from_template "prepared-$flavor"
   lsb_route "$FRONTEND"
   expect_light_eligible
 }

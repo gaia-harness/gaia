@@ -191,6 +191,39 @@ undecided_ids() {
   in_repo "$1" .gaia/cli/gaia setup drift --json | jq -r '[.undecided[].id] | join(" ")'
 }
 
+# drift_json <repo>: drift's JSON, read once per state of the repository. The
+# cache is keyed on the content of every file a record or a block writes, so a
+# record between two reads is seen by the second.
+drift_json() {
+  local repo="$1" name key cache
+  name="$(basename "$repo")"
+  cache="${BATS_TEST_TMPDIR}/drift-cache-${name}"
+  key="$(
+    {
+      find "${repo}/.gaia/local" -type f 2>/dev/null | sort | while IFS= read -r file; do
+        printf '%s\n' "$file"
+        cat "$file"
+      done
+      cat "${repo}/.gaia/project.json" "${HOME}/.claude/settings.json" 2>/dev/null
+    } | cksum
+  )"
+  if [ ! -f "${cache}.json" ] || [ "$(cat "${cache}.key" 2>/dev/null)" != "$key" ]; then
+    in_repo "$repo" .gaia/cli/gaia setup drift --json >"${cache}.json" || return 1
+    printf '%s\n' "$key" >"${cache}.key"
+  fi
+  cat "${cache}.json"
+}
+
+# decision_cached <repo> <id>: decision, from the once-per-state drift read.
+decision_cached() {
+  drift_json "$1" | jq -r --arg id "$2" '.decided[$id] // empty'
+}
+
+# undecided_ids_cached <repo>: undecided_ids, from the once-per-state drift read.
+undecided_ids_cached() {
+  drift_json "$1" | jq -r '[.undecided[].id] | join(" ")'
+}
+
 # record_all_but <repo> <id>: record every listed id except one as applied.
 record_all_but() {
   local repo="$1" skip="$2" id
@@ -341,12 +374,12 @@ record_standalone_not_applicable() {
   repo="$(make_provisioned probes)"
   [ "$(grep -cE '\.gaia/cli/gaia setup record [a-z-]+ applied' "${REFERENCES}/per-machine.md")" -eq 4 ]
   record_settled_state "$repo" admin >/dev/null
-  [ "$(decision "$repo" sandbox)" = declined ]
-  [ "$(decision "$repo" statusline-left)" = applied ]
+  [ "$(decision_cached "$repo" sandbox)" = declined ]
+  [ "$(decision_cached "$repo" statusline-left)" = applied ]
   for id in github-repository branch-protection gaia-audit-check push-protection delete-branch-on-merge \
     dependabot-posture squash-only label-sync install-tools install-plugins chmod-statusline bootstrap-env; do
-    [ "$(decision "$repo" "$id")" = applied ] || {
-      echo "${id} recorded '$(decision "$repo" "$id")', expected applied" >&2
+    [ "$(decision_cached "$repo" "$id")" = applied ] || {
+      echo "${id} recorded '$(decision_cached "$repo" "$id")', expected applied" >&2
       return 1
     }
   done
@@ -358,7 +391,7 @@ record_standalone_not_applicable() {
   in_repo "$repo" .gaia/cli/gaia setup write-sandbox-recommendation false >/dev/null
   in_repo "$repo" .gaia/cli/gaia setup record sandbox-recommendation declined >/dev/null
   record_standalone_not_applicable "$repo"
-  [ -z "$(undecided_ids "$repo")" ]
+  [ -z "$(undecided_ids_cached "$repo")" ]
   [ "$(jq -c 'keys' "${repo}/.gaia/project.json")" = '["isolation_policy","sandbox_recommended","setup_decisions","version"]' ]
 }
 
@@ -643,14 +676,14 @@ label_sync_block() {
     OWNER=o REPO=r HOST=git.example.com DEFAULT_BRANCH=main MAY_RECORD_PROJECT=not-applicable-only >/dev/null
   for id in github-repository push-protection branch-protection gaia-audit-check delete-branch-on-merge \
     dependabot-posture label-sync; do
-    [ "$(decision "$repo" "$id")" = not-applicable ] || {
-      echo "${id} recorded '$(decision "$repo" "$id")', expected not-applicable" >&2
+    [ "$(decision_cached "$repo" "$id")" = not-applicable ] || {
+      echo "${id} recorded '$(decision_cached "$repo" "$id")', expected not-applicable" >&2
       return 1
     }
   done
-  [ "$(decision "$repo" squash-only)" = declined ]
+  [ "$(decision_cached "$repo" squash-only)" = declined ]
   [ "$(jq -r '.setup_decisions | keys | length' "${repo}/.gaia/project.json")" -eq 8 ]
-  [ "$(undecided_ids "$repo")" = 'install-tools install-plugins chmod-statusline bootstrap-env sandbox statusline-left isolation-policy sandbox-recommendation migrate-2-machine' ]
+  [ "$(undecided_ids_cached "$repo")" = 'install-tools install-plugins chmod-statusline bootstrap-env sandbox statusline-left isolation-policy sandbox-recommendation migrate-2-machine' ]
   [ ! -s "$GH_LOG" ]
 }
 

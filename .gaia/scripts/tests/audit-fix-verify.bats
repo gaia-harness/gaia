@@ -368,13 +368,50 @@ enforcement_case() {
 }
 
 @test "directive 2: a declared edit to every enforcement-set path fails enforcement-path" {
-  local path_count=0 file_path
+  local path_count=0 file_path entries_json result_json
+  # One repository holds every enforcement path (force-added: the local
+  # settings file is gitignored), every path is edited, and one check runs.
+  REPO="$BATS_TEST_TMPDIR/enforcement-all"
+  make_repo "$REPO"
   while IFS= read -r file_path; do
     path_count=$((path_count + 1))
-    enforcement_case "$file_path" "$path_count" || return 1
+    mkdir -p "$REPO/$(dirname "$file_path")"
+    printf 'orig\n' >"$REPO/$file_path"
   done < <(enforcement_paths)
   [ "$path_count" -eq "$(enforcement_paths | wc -l | tr -d ' ')" ]
   [ "$path_count" -gt "$PRE_SPEC093_ENFORCEMENT_COUNT" ]
+  git -C "$REPO" add -f -A
+  git -C "$REPO" commit -q -m enforcement
+  RUN_FOLDER="$REPO/.gaia/local/runs/b"
+  mkdir -p "$RUN_FOLDER"
+  DISPOSITIONS_FILE="$RUN_FOLDER/dispositions-1.json"
+  BASELINE_FILE="$RUN_FOLDER/baseline-1.json"
+  RESULT_FILE="$RUN_FOLDER/fixer-1-audit.json"
+  VERIFIER_OUTPUT_FILE="$RUN_FOLDER/verifier-1-1.json"
+  entries_json="$(enforcement_paths | jq -R . | jq -s 'map({member: "m", finding_class: "c1", path: ., line: 1, disposition: "fix"})')"
+  result_json="$(jq -n --argjson entries "$entries_json" '{schema: 1, round: 1, attempt: 1,
+    results: ($entries | map({member, finding_class, path, line, disposition: "fixed", reason: "r", changed_paths: [.path]})),
+    changed_paths: ($entries | map(.path)), reverted_paths: []}')"
+  write_dispositions "$entries_json"
+  take_baseline
+  take_digests
+  while IFS= read -r file_path; do
+    edit "$file_path"
+  done < <(enforcement_paths)
+  printf '%s' "$result_json" >"$RESULT_FILE"
+  do_check
+  [ "$status" -eq 1 ] || {
+    echo "the batch did not fail: $output"
+    return 1
+  }
+  while IFS= read -r file_path; do
+    jq -e --arg file_path "$file_path" \
+      '[.errors[] | select(.kind == "enforcement-path" and .detail == $file_path)] | length == 1' \
+      "$VERIFIER_OUTPUT_FILE" >/dev/null || {
+      echo "$file_path: no enforcement-path error naming it"
+      return 1
+    }
+  done < <(enforcement_paths)
 }
 
 @test "UAT-032: an unlisted edit to each SPEC-093 enforcement path fails enforcement-path" {

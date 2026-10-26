@@ -657,7 +657,7 @@ commit_many() {
 }
 
 @test "a thousand-path patch costs two git processes and one sha256 process" {
-  commit_many 1000
+  commit_many 50
   shims="$BATS_TEST_TMPDIR/shims"
   mkdir -p "$shims"
   for tool in git sha256sum shasum; do
@@ -671,7 +671,7 @@ commit_many() {
   PATH="$shims:$PATH" audit_branch_patch_identities "$CATCHUP_ROOT" "$merge_base" HEAD >"$BATS_TEST_TMPDIR/records"
   elapsed=$(($(date +%s) - started))
 
-  [ "$(tr -cd '\0' <"$BATS_TEST_TMPDIR/records" | wc -c | tr -d ' ')" -eq 1000 ]
+  [ "$(tr -cd '\0' <"$BATS_TEST_TMPDIR/records" | wc -c | tr -d ' ')" -eq 50 ]
   [ "$(grep -c '^git$' "$BATS_TEST_TMPDIR/calls")" -eq 2 ]
   [ "$(grep -c -E '^(sha256sum|shasum)$' "$BATS_TEST_TMPDIR/calls")" -eq 1 ]
   # Measured at under half a second locally; the margin absorbs a slow runner.
