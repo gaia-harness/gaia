@@ -7,8 +7,9 @@
 # run-interpolation guard (.gaia/scripts/lint-workflow-run-interpolation.sh),
 # the errexit status-read guard (.gaia/scripts/lint-errexit-status-read.sh),
 # the SIGPIPE-reader guard (.gaia/scripts/lint-sigpipe-readers.sh), the hook
-# cwd-relative-load guard (.gaia/scripts/lint-hook-cwd-relative-loads.sh), and
-# the hook jq-availability guard (.gaia/scripts/lint-hook-jq-availability.sh).
+# cwd-relative-load guard (.gaia/scripts/lint-hook-cwd-relative-loads.sh), the
+# hook jq-availability guard (.gaia/scripts/lint-hook-jq-availability.sh), and
+# the jq `as`-binding guard (.gaia/scripts/lint-jq-as-binding.sh).
 # Exit 0 when clean, 1 on any finding at or above the severity floor, and 1 on
 # a pass that cannot run at all (no shellcheck binary, an empty *.sh discovery
 # set, an unusable bash-3.2 interpreter). A red gate is therefore not always a
@@ -574,6 +575,18 @@ fi
 # across the whole fail-closed layer at once.
 echo "--> lint-hook-jq-availability (a blocking hook standing down on a missing jq)"
 if ! run_guard lint-hook-jq-availability; then
+  status=1
+fi
+
+# Fold in the jq `as`-binding guard: no shell linter reads the jq programs a
+# script carries in quoted strings, and the class is version-dependent rather
+# than wrong on its face. An operator left of an unparenthesized `as` binds
+# differently in jq 1.7 and 1.8, so the program passes every test on the jq the
+# author has and returns different values on the other with no error. Run from
+# the repo root so its `git ls-files` discovery resolves and the file:line it
+# prints is repo-relative.
+echo "--> lint-jq-as-binding (an operator left of an unparenthesized jq \`as\` binding)"
+if ! run_guard lint-jq-as-binding; then
   status=1
 fi
 

@@ -90,7 +90,7 @@ _join_locked() {
           # A session with no spend before the run began holds none of
           # another task, so all of it counts; one that predates the run
           # counts from now.
-          (if any($rows[]; .kind == "segment" and (.first_ts | usage_epoch) as $t | $t != null and $t < $origin_t) then $now else $origin_ts end) as $ts
+          (if any($rows[]; .kind == "segment" and ((.first_ts | usage_epoch) as $t | $t != null and $t < $origin_t)) then $now else $origin_ts end) as $ts
           | {schema_version: 1, kind: "binding", type: "start", session_id: $session_id, ts: $ts, workflow: $workflow,
              source: "join-command", run: {session_id: $origin_session, ts: $origin_ts}}
         end')" || return 6

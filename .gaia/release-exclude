@@ -109,6 +109,8 @@
 .gaia/scripts/lint-hook-cwd-relative-loads.sh
 # Deterministic lint over GAIA's own hook layer, withheld on the same terms as its two siblings above: every runner is release-excluded, so an adopter clone would carry a check nothing invokes. The shared arm it enforces (.claude/hooks/lib/jq-availability.sh) and the hooks reaching it both ship.
 .gaia/scripts/lint-hook-jq-availability.sh
+# Deterministic lint over the jq programs in GAIA's own framework shell, git hooks and workflow YAML; every runner (shell-lint.sh and its sibling bats suite) is release-excluded, so an adopter clone would carry a check nothing invokes. It also sources guard-awk-lib.sh, withheld above, so the absent dependency would decide the withhold on its own. The parenthesized programs it holds in place ship.
+.gaia/scripts/lint-jq-as-binding.sh
 # The PreToolUse registration read and blocking oracle the two hook-layer gates share. Both consumers are withheld above, so an adopter clone would carry a library nothing sources.
 .gaia/scripts/hook-registration-lib.sh
 # The retired-path gate fails on a harness citation of a root path that moved under frontend/, and its allowlist names the surviving ones. Both describe GAIA's own harness layout and its runner (shell-lint.sh) and sibling suite (.gaia/scripts/tests/check-retired-paths.bats) are release-excluded, so an adopter clone would carry a check nothing invokes.
