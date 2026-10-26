@@ -2,7 +2,7 @@
 type: decision
 status: active
 created: 2026-05-12
-updated: 2026-10-14
+updated: 2026-10-27
 tags: [decision, claude, fitness]
 ---
 
@@ -23,6 +23,16 @@ GAIA is a foundation: a project's `.claude/` mixes files GAIA ships, files the p
 ## Grading
 
 The grade is a pure function of the finding set. The CLI owns the bands and the overall rule, and the report's `categories`, `overall` and `findings` keys carry the result. Optional `.claude/gaia-fitness.json` suppresses a finding by rule id and path with a stated reason; [[Customizing GAIA#Silencing a fitness finding]] shows its shape. This page restates neither the bands nor the rules.
+
+<!-- gaia:maintainer-only:start -->
+### The harness line limit (maintainer repo only)
+
+GAIA's own CI also holds harness code to the root `CLAUDE.md`'s split threshold, through the `authoring.harness.*` rules. They run only where the maintainer marker those rules name is tracked, so an adopter is never failed on a GAIA-shipped file it cannot split. The threshold lives in `budgets.ts`; the rules' detections say which files count.
+
+A file already over the threshold is grandfathered at an exact ceiling in `.claude/maintainers/line-limit-ceilings.json`. A new file over the threshold, or a grandfathered file past its ceiling, is an error; the finding prints the one-line bump. Exact ceilings over headroom: headroom lets a grandfathered file creep without anyone seeing it, and only defers the same bump, so the bump in the diff is the review signal that a big file grew. Splitting a file below the threshold leaves a stale-ceiling warning until its entry is removed; a file that shrinks but stays over keeps its ceiling, so deleting lines never forces an edit.
+
+The ceilings are read from the checkout under test, not from the base branch the way CI reads the suppression file, because a pull request that splits or grows a grandfathered file has to update its entry in the same diff.
+<!-- gaia:maintainer-only:end -->
 
 ## Heal protocol
 

@@ -20,6 +20,8 @@ type RuleListing = {
 /** The catalog as published, hard-coded because the document that defines it is not tracked. */
 const EXPECTED_RULE_IDS = [
   'authoring.content.time-sensitive',
+  'authoring.harness.ceiling-stale',
+  'authoring.harness.max-lines',
   'authoring.path.windows-separator',
   'authoring.playbook.max-lines',
   'authoring.reference.depth.one-level',

@@ -4,6 +4,7 @@ import {CLAUDEMD_FIXTURES} from './claudemd.fixtures.js';
 import {FITNESS_CONFIG_FIXTURES} from './fitness-config.fixtures.js';
 import {FRONTMATTER_FIXTURES} from './frontmatter.fixtures.js';
 import {HOOKS_FIXTURES} from './hooks.fixtures.js';
+import {LINE_LIMIT_FIXTURES} from './line-limit.fixtures.js';
 import {PROMPT_FIXTURES} from './prompt.fixtures.js';
 import {RULES_FIXTURES} from './rules.fixtures.js';
 import {SETTINGS_FIXTURES} from './settings.fixtures.js';
@@ -33,6 +34,7 @@ export const ALL_FIXTURES: FixtureMap = merge([
   RULES_FIXTURES,
   CLAUDEMD_FIXTURES,
   AUTHORING_FIXTURES,
+  LINE_LIMIT_FIXTURES,
   PROMPT_FIXTURES,
   WIKI_FIXTURES,
   FITNESS_CONFIG_FIXTURES,
