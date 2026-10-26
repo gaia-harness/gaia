@@ -172,6 +172,7 @@
     ".claude/skills/update-deps/SKILL.md": "owned",
     ".claude/skills/update-gaia/references/claim-flow.md": "owned",
     ".claude/skills/update-gaia/references/conflict-flow.md": "owned",
+    ".claude/skills/update-gaia/references/local-bundle.md": "owned",
     ".claude/skills/update-gaia/references/merge-execution.md": "owned",
     ".claude/skills/update-gaia/references/merge-generated.md": "owned",
     ".claude/skills/update-gaia/references/merge-report.md": "owned",
@@ -330,6 +331,8 @@
     ".gaia/scripts/update-decisions.sh": "owned",
     ".gaia/scripts/update-gaia-branch-state.sh": "owned",
     ".gaia/scripts/update-gaia-drift.sh": "owned",
+    ".gaia/scripts/update-gaia-local-lib.sh": "owned",
+    ".gaia/scripts/update-gaia-local.sh": "owned",
     ".gaia/scripts/update-gaia-preflight.sh": "owned",
     ".gaia/scripts/update-gaia-pull.sh": "owned",
     ".gaia/scripts/update-gaia-report.sh": "owned",
@@ -759,7 +762,7 @@
     "wiki/overview.md": "wiki-owned",
     "wiki/README.md": "wiki-owned"
   },
-  "generated": "2026-10-26T15:46:59.544Z",
+  "generated": "2026-10-26T20:14:21.563Z",
   "regions": [
     {
       "endMarker": "<!-- gaia:audit-remit:end -->",
