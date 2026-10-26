@@ -22,6 +22,9 @@
 #
 # Assertion style: .claude/rules/bats-assertions.md.
 
+# The masked-tool test uses `run --separate-stderr`.
+bats_require_minimum_version 1.5.0
+
 setup() {
   . "$(cd "$BATS_TEST_DIRNAME/../../.." && pwd)/.gaia/tests/helpers/audit-roster.sh"
   . "$(cd "$BATS_TEST_DIRNAME/../../.." && pwd)/.gaia/tests/helpers/catchup-fixture.sh"
@@ -315,7 +318,10 @@ mutate_commit() {
   mkdir -p "$ROOT"
   seed_repo "$ROOT"
   mutate_commit "$ROOT" "app/x.ts" >/dev/null
-  run bash -c '
+  # stdout only: the masked hasher never reads its pipe, and uutils sort
+  # (Ubuntu 26.04) reports the failed write on stderr where GNU sort dies of
+  # SIGPIPE silently. The contract is no digest on stdout.
+  run --separate-stderr bash -c '
     sha256sum() { return 1; }
     shasum() { return 1; }
     . "$1"
