@@ -38,7 +38,7 @@ If drift > 30 commits, ASK the user via `AskUserQuestion`:
 
 Only proceed automatically when drift ≤ 30.
 
-The drift count is `drift_count`, on the normal path and on the recovery path alike. The CLI already counts from the right base (the recorded SHA when reachable, else `suggested_base`) and leaves out the wiki bookkeeping commits, so do not recompute it with `git rev-list`. Apply the cap to `drift_count`. A batch that landed since the last sync (worst case, a whole release) shows up here and is capped exactly like normal drift.
+The drift count is `drift_count`, on the normal path and on the recovery path alike. The CLI already counts from the right base (the recorded SHA while its commit object is present locally, else `suggested_base`) and leaves out the wiki bookkeeping commits, so do not recompute it with `git rev-list`. Apply the cap to `drift_count`. A batch that landed since the last sync (worst case, a whole release) shows up here and is capped exactly like normal drift.
 
 ## Step 3: First-pass, classify commits
 

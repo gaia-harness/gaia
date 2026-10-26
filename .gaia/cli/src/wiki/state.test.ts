@@ -616,7 +616,77 @@ describe('wiki state', () => {
       60_000
     );
 
-    test('counts suggested_base..HEAD when the recorded SHA is orphaned', () => {
+    test('counts no drift for main commits the squashed wiki branch merged after its evaluation timestamp', () => {
+      sandbox.commitAt('A', {'app/a.ts': 'a\n'}, '2026-01-01T00:00:00Z');
+      const shaB = sandbox.commitAt(
+        'B',
+        {'app/b.ts': 'b\n'},
+        '2026-01-02T00:00:00Z'
+      );
+      execFileSync('git', ['checkout', '-q', '-b', 'wiki-sync', shaB], {
+        cwd: sandbox.root,
+      });
+      sandbox.commitAt(
+        'wiki page edit',
+        {'wiki/page.md': 'page\n'},
+        '2026-01-02T06:00:00Z'
+      );
+      execFileSync('git', ['checkout', '-q', 'main'], {cwd: sandbox.root});
+      sandbox.commitAt('M', {'app/m.ts': 'm\n'}, '2026-01-03T00:00:00Z');
+      // The wiki branch catches up with main after its evaluation timestamp,
+      // so the recorded SHA already contains M, which is dated after it.
+      execFileSync('git', ['checkout', '-q', 'wiki-sync'], {cwd: sandbox.root});
+      const lateDate = '2026-01-03T06:00:00Z';
+      execFileSync('git', ['merge', '-q', '--no-edit', 'main'], {
+        cwd: sandbox.root,
+        env: {
+          ...process.env,
+          GIT_AUTHOR_DATE: lateDate,
+          GIT_COMMITTER_DATE: lateDate,
+        },
+      });
+      const evaluatedSha = execFileSync('git', ['rev-parse', 'HEAD'], {
+        cwd: sandbox.root,
+        encoding: 'utf8',
+      }).trim();
+      execFileSync('git', ['checkout', '-q', 'main'], {cwd: sandbox.root});
+      execFileSync('git', ['merge', '-q', '--squash', 'wiki-sync'], {
+        cwd: sandbox.root,
+      });
+      sandbox.commitAt(
+        'wiki: 2026-01-02 12:00 UTC (#9)',
+        {},
+        '2026-01-04T00:00:00Z'
+      );
+      writeStateFileAt(sandbox.root, evaluatedSha, '2026-01-02T12:00:00Z');
+
+      const json = readStateJson(sandbox.root);
+      expect(json.reachable).toBe(false);
+      // The date fallback alone would count M, which the wiki already absorbed.
+      expect(countRange(sandbox.root, `${shaB}..HEAD`)).toBe(2);
+      expect(json.drift_count).toBe(0);
+    }, 30_000);
+
+    test('falls back to suggested_base..HEAD when the orphaned SHA is missing locally', () => {
+      sandbox.commitAt('A', {'app/a.ts': 'a\n'}, '2026-01-01T00:00:00Z');
+      const shaB = sandbox.commitAt(
+        'B',
+        {'app/b.ts': 'b\n'},
+        '2026-01-02T00:00:00Z'
+      );
+      sandbox.commitAt('C', {'app/c.ts': 'c\n'}, '2026-01-03T00:00:00Z');
+      writeStateFileAt(
+        sandbox.root,
+        'deadbeefdeadbeefdeadbeefdeadbeefdeadbeef',
+        '2026-01-02T12:00:00Z'
+      );
+
+      const json = readStateJson(sandbox.root);
+      expect(json.suggested_base).toBe(shortShaOf(sandbox.root, shaB));
+      expect(json.drift_count).toBe(1);
+    }, 30_000);
+
+    test('counts from the orphaned SHA when its object is still present', () => {
       sandbox.commitAt('A', {'app/a.ts': 'a\n'}, '2026-01-01T00:00:00Z');
       const shaB = sandbox.commitAt(
         'B',
