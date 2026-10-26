@@ -20,6 +20,9 @@ setup_file() {
   git -C "$BASE_SANDBOX" init -q
   git -C "$BASE_SANDBOX" config user.email test@example.invalid
   git -C "$BASE_SANDBOX" config user.name test
+  # The whole-tree commit leaves enough loose objects to start a detached
+  # `git gc --auto`, and each test's `cp -R` in setup would race its repack.
+  git -C "$BASE_SANDBOX" config gc.auto 0
   git -C "$BASE_SANDBOX" add -A
   git -C "$BASE_SANDBOX" -c core.hooksPath=/dev/null commit -qm "chore: base"
   # The commit-msg hook fails closed when commitlint cannot run, and the sandbox
