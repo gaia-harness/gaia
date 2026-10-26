@@ -9,6 +9,10 @@ tags: [meta, log]
 
 # Log
 
+## [Unreleased]
+
+- 2026-10-27 PROMOTED: wiki/concepts/Local Bundle Sync (Concept).md, wiki/decisions/Local Bundle Sync (Decision).md (PR #3110)
+
 ## [v2.2.0] 2026-10-26 | Released
 
 See CHANGELOG.md for details.

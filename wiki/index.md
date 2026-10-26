@@ -98,6 +98,7 @@ Master catalog of every page in the wiki. Newly created pages must be added here
 - [[Workflow Naming Convention]]: how to name a workflow file, its `name:` and its jobs, including any workflow you add: Title Case workflow names, sentence-case `Tool (scope)` job names, `(advisory)` on non-blocking pull request jobs.
 - [[Composite Action Step Timeouts]]: Node-provisioning steps are bounded by their owning job's `timeout-minutes`; a step-level cap is a per-workflow choice, not a rule.
 - [[Code Audit Team]]: config-driven auditor roster + dispatch resolver; AND-aggregation across dispatched members at the merge gate.
+- [[Local Bundle Sync (Decision)|Local Bundle Sync]]: a local build is recorded in a sidecar file and a prerelease `-dev` tag, never a version suffix, so every version-file reader stays untouched.
 - [[Deliberate Configuration Asymmetries]]: config that differs from its siblings on purpose; the `.claude/hooks/` Edit carve-out, the skill `model:` pinning criterion, the non-opt-outable update check, and why the agent-teams flag is not enabled.
 <!-- gaia:maintainer-only:start -->
 - [[CLI-Binary-Split]]
@@ -161,6 +162,7 @@ Master catalog of every page in the wiki. Newly created pages must be added here
 - [[Worktrees]]: the worktree model a feature author needs: tree identity from the acting event's working directory, the single main-checkout resolver, the single `.gaia/local` symlink, and the state registry's four scopes.
 - [[Claude Skills]]
 - [[Update Workflow]]: `/update-gaia` three-way diff, manifest classes (`owned` / `shared` / `wiki-owned`), conflicts answered during the run.
+- [[Local Bundle Sync (Concept)|Local Bundle Sync]]: `/update-gaia --local <tarball>` merges a locally built bundle through the release updater; the build record, dev tags, and the baseline after a local sync.
 - [[Generated Regions]]: marker-delimited spans inside shipped files a shipped command regenerates; the region-aware merge oracle, the regeneration runner, and the trust model they operate inside.
 <!-- gaia:maintainer-only:start -->
 - [[Release Workflow]]: Maintainer flow: `/gaia-release`, `release.yml`, tarball scrubbing, `create-gaia` bootstrapper.

@@ -64,6 +64,10 @@ const setupSandbox = (): Sandbox => {
 };
 
 describe('classifyPath', () => {
+  test('treats the local build record as adopter-owned', () => {
+    expect(classifyPath('.gaia/VERSION-dev')).toBeNull();
+  });
+
   test('adopter sentinels return null', () => {
     expect(classifyPath('wiki/log.md')).toBeNull();
     expect(classifyPath('.gaia/VERSION')).toBeNull();
@@ -203,6 +207,25 @@ describe('buildManifest', () => {
 
   afterEach(() => {
     sandbox.cleanup();
+  });
+
+  test('refuses a source tree that tracks the local build record', () => {
+    sandbox.commit('seed', {
+      '.gaia/release-exclude': '# none\n',
+      '.gaia/VERSION': '1.2.3\n',
+      '.gaia/VERSION-dev': 'dev.0123456789ab\n',
+    });
+
+    expect(() => buildManifest(sandbox.root)).toThrow(/\.gaia\/VERSION-dev/);
+  });
+
+  test('builds cleanly when the local build record is not tracked', () => {
+    sandbox.commit('seed', {
+      '.gaia/release-exclude': '# none\n',
+      '.gaia/VERSION': '1.2.3\n',
+    });
+
+    expect(() => buildManifest(sandbox.root)).not.toThrow();
   });
 
   test('produces sorted file map with correct classes', () => {

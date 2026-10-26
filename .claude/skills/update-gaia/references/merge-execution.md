@@ -20,6 +20,7 @@ Contents:
 The orchestrator passes:
 
 - `BASELINE`, `LATEST` (versions without the leading `v`) and `LATEST_TAG`.
+- `BASELINE_TAG`, the tag of the bundle `BASELINE_DIR` was extracted from: `v$BASELINE`, or a recorded local build's tag.
 - `BASELINE_DIR` and `LATEST_DIR`, the verified, freshly extracted trees.
 - Zero or more `EXTRA_DIR=<tag>:<path>` lines, one per deferred baseline tag: the verified tree for a bundle an earlier update deferred a path from.
 - The acting tree, the update worktree on a default-branch run. It is this agent's working root: every path in this file is relative to it, and the agent runs nothing against any other checkout.
@@ -60,7 +61,7 @@ mkdir -p "$BACKUP_DIR"
 
 **The expected set.** The report's `files[]` holds one entry per path in keys(baseline manifest `.files`) ∪ keys(latest manifest `.files`) ∪ the path of every `deferred` decision-log entry. Non-deferred decision-log entries add no path. A deferred path absent from both manifests (a deferred upstream removal) gets `class: null` and is evaluated as an upstream removal against its deferred baseline copy (`deleted`, `removed`, or an open `removal` item).
 
-**Deferred entries.** `bash .gaia/scripts/update-decisions.sh deferred --file "$DECISIONS"` prints one `DEFERRED <baselineTag> <path> [<key>]` line per deferred entry. A line without a key defers a whole file: for that path, B is `<EXTRA_DIR path for baselineTag>/<path>` instead of `$BASELINE_DIR/<path>`, and its entry's `baselineTag` is that tag. A line with a key defers one key of a field-aware file (Step 7a to 7c). Every other entry's `baselineTag` is `v$BASELINE`.
+**Deferred entries.** `bash .gaia/scripts/update-decisions.sh deferred --file "$DECISIONS"` prints one `DEFERRED <baselineTag> <path> [<key>]` line per deferred entry. A line without a key defers a whole file: for that path, B is `<EXTRA_DIR path for baselineTag>/<path>` instead of `$BASELINE_DIR/<path>`, and its entry's `baselineTag` is that tag. A line with a key defers one key of a field-aware file (Step 7a to 7c). Every other entry's `baselineTag` is `$BASELINE_TAG`.
 
 **Region declarations.** Load them as `merge-generated.md` describes (`Load the region declarations`), before the walk.
 

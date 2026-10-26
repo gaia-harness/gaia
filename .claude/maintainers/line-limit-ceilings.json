@@ -34,7 +34,7 @@
     ".gaia/cli/src/release/changelog.ts": 529,
     ".gaia/cli/src/release/commit-and-tag.ts": 497,
     ".gaia/cli/src/release/manifest-answers.ts": 424,
-    ".gaia/cli/src/release/manifest.ts": 543,
+    ".gaia/cli/src/release/manifest.ts": 557,
     ".gaia/cli/src/release/pnpm-member-strip.ts": 907,
     ".gaia/cli/src/release/runtime-deps.ts": 795,
     ".gaia/cli/src/release/scrub.ts": 1707,
