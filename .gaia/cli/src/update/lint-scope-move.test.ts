@@ -2,7 +2,8 @@
  * Strategy: drive the real package merge over a project that still carries
  * the old lint package, and assert the outcome is either "the new dependency
  * applied" or "a conflict reported", never neither (configs importing the new
- * package while package.json lacks it).
+ * package while package.json lacks it). The old package is removed only when
+ * the new one lands, so a conflict never leaves the project with neither.
  */
 import {afterEach, beforeEach, describe, expect, test, vi} from 'vitest';
 import {mkdtempSync, readFileSync, rmSync, writeFileSync} from 'node:fs';
@@ -86,6 +87,14 @@ const wasAdded = (report: FieldMergeReport): boolean =>
       item.latest === LINT_VERSION
   );
 
+const wasRemoved = (report: FieldMergeReport): boolean =>
+  report.applied.some(
+    (item) =>
+      item.section === 'devDependencies' &&
+      item.key === OLD_LINT &&
+      item.reason === 'removed'
+  );
+
 const landsOnNewLint = (report: FieldMergeReport): boolean =>
   wasAdded(report) || report.conflicts.length > 0;
 
@@ -110,26 +119,40 @@ afterEach(() => {
 });
 
 describe('package.json merge', () => {
-  test('an untouched lint pin gains the new package and keeps the old one for the adopter', () => {
+  test('an untouched lint pin gains the new package and has the old one removed', () => {
     const report = mergeReport({
       current: currentUntouched,
       latest: latestInline,
     });
 
-    expect(landsOnNewLint(report)).toBe(true);
     expect(wasAdded(report)).toBe(true);
-    expect(report.removedUpstream.map((item) => item.key)).toContain(OLD_LINT);
+    expect(wasRemoved(report)).toBe(true);
+    expect(report.removedUpstream.map((item) => item.key)).not.toContain(
+      OLD_LINT
+    );
     expect(report.conflicts.map((item) => item.key)).not.toContain(OLD_LINT);
   });
 
-  test('an edited lint pin still lands on the new package or reports a conflict, and never removes the adopter line', () => {
+  test('an edited lint pin is removed once the new package lands', () => {
     const report = mergeReport({
       current: currentEdited,
       latest: latestInline,
     });
 
-    expect(landsOnNewLint(report)).toBe(true);
-    expect(report.applied.map((item) => item.key)).not.toContain(OLD_LINT);
+    expect(wasAdded(report)).toBe(true);
+    expect(wasRemoved(report)).toBe(true);
+  });
+
+  test('a project that does not carry the old package gets no removal', () => {
+    const report = mergeReport({
+      current: {devDependencies: {prettier: '3.9.10'}},
+      latest: latestInline,
+    });
+
+    expect(wasAdded(report)).toBe(true);
+    expect(
+      [...report.applied, ...report.removedUpstream].map((item) => item.key)
+    ).not.toContain(OLD_LINT);
   });
 });
 
@@ -142,6 +165,8 @@ describe('merge outcome edge cases', () => {
 
     expect(report.conflicts.map((item) => item.key)).toContain(NEW_LINT);
     expect(landsOnNewLint(report)).toBe(true);
+    expect(wasRemoved(report)).toBe(false);
+    expect(report.removedUpstream.map((item) => item.key)).toContain(OLD_LINT);
 
     const human = mergeWith(
       {current: currentConflicting, latest: latestInline},
@@ -173,7 +198,7 @@ describe('merge outcome edge cases', () => {
 
 describe('real release files', () => {
   test.each(['frontend/package.json', 'package.json'])(
-    'the untouched old lint pin merged into %s gains the new package',
+    'the untouched old lint pin merged into %s swaps to the new package',
     (relativePath) => {
       const report = mergeReport({
         current: currentUntouched,
@@ -181,6 +206,7 @@ describe('real release files', () => {
       });
 
       expect(wasAdded(report)).toBe(true);
+      expect(wasRemoved(report)).toBe(true);
     }
   );
 
