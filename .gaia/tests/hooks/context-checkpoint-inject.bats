@@ -61,7 +61,7 @@ install_hook() {
   cp "$HOOK_SOURCE_PATH" "$root/.claude/hooks/context-checkpoint-inject.sh"
   chmod 755 "$root/.claude/hooks/context-checkpoint-inject.sh"
   for library_file in context-checkpoint-lib.sh main-root-lib.sh branch-name-lib.sh usage-lib.sh \
-    audit-loop-state-lib.sh audit-key-lib.sh; do
+    audit-loop-state-lib.sh audit-key-lib.sh exclusive-lock-lib.sh; do
     cp "$REPO_ROOT/.gaia/scripts/$library_file" "$root/.gaia/scripts/$library_file"
   done
   cp "$REAL_DOCTRINE" "$root/.claude/doctrine/context-checkpoint.md"

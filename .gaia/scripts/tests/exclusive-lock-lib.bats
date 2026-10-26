@@ -26,7 +26,7 @@ setup() {
 }
 
 @test "take: concurrent writers through the lock all land, with a non-exclusive mkdir first on PATH" {
-  local counter="$BATS_TEST_TMPDIR/counter" writer_count=6 index
+  local counter="$BATS_TEST_TMPDIR/counter" writer_count=6
   PATH="$(non_exclusive_mkdir_path)"
   printf '0\n' >"$counter"
   writer() {
@@ -40,7 +40,7 @@ setup() {
     printf '%s\n' $((value + 1)) >"$counter"
     gaia_exclusive_lock_release "$LOCK"
   }
-  for index in $(seq 1 "$writer_count"); do writer & done
+  for _ in $(seq 1 "$writer_count"); do writer & done
   wait
   [ "$(cat "$counter")" -eq "$writer_count" ]
   [ ! -e "$LOCK" ]

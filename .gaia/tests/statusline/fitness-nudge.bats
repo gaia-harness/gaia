@@ -39,7 +39,7 @@ setup() {
   mkdir -p "$REPOSITORY_FIXTURE/.gaia/scripts" "$REPOSITORY_FIXTURE/.gaia/cli" \
     "$REPOSITORY_FIXTURE/.gaia/statusline" "$REPOSITORY_FIXTURE/.gaia/local/cache/shared" \
     "$REPOSITORY_FIXTURE/.claude/rules" "$REPOSITORY_FIXTURE/wiki"
-  for script_name in check-updates.sh main-root-lib.sh knowledge-inventory.sh \
+  for script_name in check-updates.sh exclusive-lock-lib.sh main-root-lib.sh knowledge-inventory.sh \
     fitness-nudge-lib.sh update-check-bust.sh; do
     cp "$REPO_ROOT/.gaia/scripts/$script_name" "$REPOSITORY_FIXTURE/.gaia/scripts/$script_name"
   done
