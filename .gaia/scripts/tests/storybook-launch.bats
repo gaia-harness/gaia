@@ -19,7 +19,7 @@ setup() {
   FIXTURE_MAIN="$(cd "$BATS_TEST_TMPDIR/main" && pwd -P)"
   : >"$FIXTURE_MAIN/frontend/react-router.config.ts"
   mkdir -p "$FIXTURE_MAIN/.gaia/scripts" "$FIXTURE_MAIN/.claude/hooks/lib"
-  cp "$REPO_ROOT"/.gaia/scripts/{storybook-launch,ports,worktree-ports-lib,server-process-lib,main-root-lib}.sh "$FIXTURE_MAIN/.gaia/scripts/"
+  cp "$REPO_ROOT"/.gaia/scripts/{storybook-launch,ports,worktree-ports-lib,exclusive-lock-lib,server-process-lib,main-root-lib}.sh "$FIXTURE_MAIN/.gaia/scripts/"
   cp "$REPO_ROOT"/.claude/hooks/lib/*.sh "$FIXTURE_MAIN/.claude/hooks/lib/"
   git -C "$FIXTURE_MAIN" add -A
   git -C "$FIXTURE_MAIN" -c user.email=t@example.com -c user.name=T -c commit.gpgsign=false commit -q -m base

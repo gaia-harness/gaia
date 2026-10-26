@@ -13,15 +13,16 @@
 # passes through unchanged.
 #
 # Lock primitive selection, in order:
-#   1. GAIA_LEDGER_LOCK_FORCE_FALLBACK=1 → atomic-mkdir lock (test knob).
+#   1. GAIA_LEDGER_LOCK_FORCE_FALLBACK=1 → the lock-directory fallback (test knob).
 #   2. flock present → flock on <lock_directory>/specs.lock (kernel releases the fd
 #      on process death; no stale handling needed).
-#   3. else → atomic-mkdir lock on <lock_directory>/specs.lock.d. mkdir is atomic on
-#      POSIX/HFS+/APFS: the process that creates the dir owns the lock. macOS
-#      has no util-linux flock, so this is the load-bearing path here.
+#   3. else → <lock_directory>/specs.lock.d taken through gaia_exclusive_lock_take
+#      (../exclusive-lock-lib.sh, whose header says why mkdir alone is not a
+#      lock). macOS has no util-linux flock, so this is the load-bearing path
+#      there.
 #
-# Deadlock prevention (mkdir path): an EXIT arm rmdirs the lock dir iff this
-# process created it, and separate INT and TERM arms exit into it so an
+# Deadlock prevention (fallback path): an EXIT arm removes the lock dir iff this
+# process took it, and separate INT and TERM arms exit into it so an
 # interrupt still releases the lock AND still terminates; a stale lock dir older
 # than GAIA_LEDGER_LOCK_STALE_SECONDS is reclaimed and the mkdir retried once.
 #
@@ -29,7 +30,7 @@
 #   GAIA_LEDGER_LOCK_TIMEOUT_SECONDS    acquisition timeout       (default 10)
 #   GAIA_LEDGER_LOCK_STALE_SECONDS      stale-lock age threshold  (default 30)
 #   GAIA_LEDGER_LOCK_POLL_SECONDS       inter-attempt sleep       (default 0.2)
-#   GAIA_LEDGER_LOCK_FORCE_FALLBACK  =1 forces the mkdir path  (unset)
+#   GAIA_LEDGER_LOCK_FORCE_FALLBACK  =1 forces the fallback    (unset)
 #
 # Diagnostics go to stderr only; the helper writes nothing to stdout itself.
 # On acquisition timeout it returns 75 (EX_TEMPFAIL); callers map this onto
@@ -39,6 +40,11 @@
 # until the function is called.
 
 if ! declare -f with_ledger_lock >/dev/null 2>&1; then
+
+_with_ledger_lock_library_directory="${BASH_SOURCE[0]%/*}"
+[ "$_with_ledger_lock_library_directory" = "${BASH_SOURCE[0]}" ] && _with_ledger_lock_library_directory="."
+# shellcheck source=../exclusive-lock-lib.sh
+. "$_with_ledger_lock_library_directory/../exclusive-lock-lib.sh"
 
 with_ledger_lock() {
   local lock_directory="$1"
@@ -68,7 +74,7 @@ with_ledger_lock() {
     return "$exit_status"
   fi
 
-  # ---- portable atomic-mkdir fallback --------------------------------------
+  # ---- portable lock-directory fallback ------------------------------------
   local fallback_lock_directory="${lock_directory%/}/specs.lock.d"
   local owned=0
   local saved_exit saved_int saved_term
@@ -81,7 +87,7 @@ with_ledger_lock() {
 
   _with_ledger_lock_release() {
     if [ "$owned" -eq 1 ]; then
-      rmdir "$fallback_lock_directory" 2>/dev/null || true
+      gaia_exclusive_lock_release "$fallback_lock_directory"
       owned=0
     fi
   }
@@ -119,7 +125,7 @@ with_ledger_lock() {
   start_epoch_seconds="$(date +%s)"
 
   while true; do
-    if mkdir "$fallback_lock_directory" 2>/dev/null; then
+    if gaia_exclusive_lock_take "$fallback_lock_directory"; then
       owned=1
       local exit_status=0
       "$@" || exit_status=$?
@@ -132,7 +138,7 @@ with_ledger_lock() {
     if age="$(_with_ledger_lock_age_seconds)" && [ -n "$age" ] \
       && [ "$age" -gt "$stale_threshold_seconds" ]; then
       rm -rf "$fallback_lock_directory" 2>/dev/null || true
-      if mkdir "$fallback_lock_directory" 2>/dev/null; then
+      if gaia_exclusive_lock_take "$fallback_lock_directory"; then
         owned=1
         local exit_status=0
         "$@" || exit_status=$?

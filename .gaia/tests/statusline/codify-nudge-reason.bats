@@ -45,6 +45,7 @@ setup() {
   mkdir -p "$REFRESH_ROOT/.gaia/scripts" "$REFRESH_ROOT/.gaia/cli" \
     "$REFRESH_ROOT/.gaia/local/cache/shared" "$REFRESH_ROOT/.gaia/local/codify"
   cp "$CHECK_UPDATES_SOURCE" "$REFRESH_ROOT/.gaia/scripts/check-updates.sh"
+  cp "$(dirname "$CHECK_UPDATES_SOURCE")/exclusive-lock-lib.sh" "$REFRESH_ROOT/.gaia/scripts/exclusive-lock-lib.sh"
   chmod +x "$REFRESH_ROOT/.gaia/scripts/check-updates.sh"
   write_mock_gaia "$REFRESH_ROOT/.gaia/cli/gaia"
 

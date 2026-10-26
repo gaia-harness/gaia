@@ -21,7 +21,7 @@
 
 bats_require_minimum_version 1.5.0
 
-REAPER_FILES="state-reaper.sh state-reaper-lib.sh state-reaper-classes.sh main-root-lib.sh state-registry-lib.sh branch-name-lib.sh audit-key-lib.sh audit-loop-state-lib.sh"
+REAPER_FILES="state-reaper.sh state-reaper-lib.sh state-reaper-classes.sh main-root-lib.sh state-registry-lib.sh branch-name-lib.sh audit-key-lib.sh audit-loop-state-lib.sh exclusive-lock-lib.sh"
 HOOK_NAME="state-reaper-session-start.sh"
 
 setup() {
@@ -118,6 +118,7 @@ make_fixture() {
   mkdir -p "$MAIN/.claude/hooks" "$MAIN/.gaia/scripts"
   cp "$REPO_ROOT/.claude/hooks/$HOOK_NAME" "$MAIN/.claude/hooks/$HOOK_NAME"
   cp "$REPO_ROOT/.gaia/scripts/main-root-lib.sh" "$MAIN/.gaia/scripts/main-root-lib.sh"
+  cp "$REPO_ROOT/.gaia/scripts/exclusive-lock-lib.sh" "$MAIN/.gaia/scripts/exclusive-lock-lib.sh"
   if [ "${1:-stub}" = real ]; then
     for file in $REAPER_FILES; do
       cp "$REPO_ROOT/.gaia/scripts/$file" "$MAIN/.gaia/scripts/$file"
@@ -266,6 +267,20 @@ mutate_hook() {
 }
 
 # bats test_tags=whole-tree
+@test "a lock held through the shared helper launches nothing, with a non-exclusive mkdir first on PATH" {
+  make_fixture
+  mkdir -p "$STATE_DIRECTORY"
+  bash -c '. "$1"; gaia_exclusive_lock_take "$2"' _ "$REPO_ROOT/.gaia/scripts/exclusive-lock-lib.sh" "$LOCK"
+  # shellcheck source=/dev/null
+  . "$REPO_ROOT/.gaia/tests/helpers/non-exclusive-mkdir.sh"
+  PATH="$(non_exclusive_mkdir_path)"
+  run_hook "$MAIN"
+  [ "$status" -eq 0 ]
+  sleep 0.5
+  [ "$(launch_count)" -eq 0 ]
+}
+
+# bats test_tags=whole-tree
 @test "a lock older than 10 minutes is reclaimed and the reaper launches" {
   make_fixture
   mkdir "$LOCK"
@@ -280,7 +295,7 @@ mutate_hook() {
 # bats test_tags=whole-tree
 @test "red state: without the lock a held fresh lock does not stop a launch" {
   make_fixture
-  mutate_hook 'if ! mkdir "$lock_directory" 2>/dev/null; then' 'if ! true; then'
+  mutate_hook 'if ! gaia_exclusive_lock_take "$lock_directory"; then' 'if ! true; then'
   mkdir "$LOCK"
   run_hook "$MAIN"
   [ "$status" -eq 0 ]
@@ -296,6 +311,7 @@ mutate_hook() {
   mkdir -p "$bare/.claude/hooks" "$bare/.gaia/scripts"
   cp "$REPO_ROOT/.claude/hooks/$HOOK_NAME" "$bare/.claude/hooks/"
   cp "$REPO_ROOT/.gaia/scripts/main-root-lib.sh" "$bare/.gaia/scripts/"
+  cp "$REPO_ROOT/.gaia/scripts/exclusive-lock-lib.sh" "$bare/.gaia/scripts/"
   MAIN="$bare"
   write_stub_reaper
   run_hook "$bare"
@@ -311,6 +327,7 @@ mutate_hook() {
   mkdir -p "$bare/.claude/hooks" "$bare/.gaia/scripts"
   cp "$REPO_ROOT/.claude/hooks/$HOOK_NAME" "$bare/.claude/hooks/"
   cp "$REPO_ROOT/.gaia/scripts/main-root-lib.sh" "$bare/.gaia/scripts/"
+  cp "$REPO_ROOT/.gaia/scripts/exclusive-lock-lib.sh" "$bare/.gaia/scripts/"
   MAIN="$bare"
   write_stub_reaper
   mutate_hook 'main_root="$(gaia_resolve_main_root 2>/dev/null)" || exit 0' 'main_root="$(gaia_resolve_main_root 2>/dev/null)" || main_root="$PWD"'

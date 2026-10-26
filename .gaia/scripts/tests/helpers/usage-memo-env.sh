@@ -64,6 +64,7 @@ _umemo_build_tree() {
     cp "$script_file" "$root/.gaia/scripts/" || return 1
   done
   cp "$UM_SOURCE_ROOT/.gaia/scripts/spec/with-ledger-lock.sh" "$root/.gaia/scripts/spec/" || return 1
+  cp "$UM_SOURCE_ROOT/.gaia/scripts/exclusive-lock-lib.sh" "$root/.gaia/scripts/" || return 1
   mkdir -p "$root/.gaia/scripts/notebook"
   cp "$UM_SOURCE_ROOT"/.gaia/scripts/notebook/*.sh "$root/.gaia/scripts/notebook/" || return 1
   cat >"$root/.gaia/scripts/token-rates.json" <<'EOF'
@@ -118,6 +119,7 @@ SHIM
   # The frozen baseline loads the ledger lock only from its old relative path.
   mkdir -p "$UM_OLD/.specify/extensions/gaia/lib" || return 1
   cp "$UM_SOURCE_ROOT/.gaia/scripts/spec/with-ledger-lock.sh" "$UM_OLD/.specify/extensions/gaia/lib/" || return 1
+  cp "$UM_SOURCE_ROOT/.gaia/scripts/exclusive-lock-lib.sh" "$UM_OLD/.specify/extensions/gaia/" || return 1
   UM_MAIN="$UM_TEMPORARY_DIRECTORY/main"
   UM_TELEMETRY_DIRECTORY="$UM_MAIN/.gaia/local/telemetry"
   UM_PROJECTS_DIRECTORY="$UM_TEMPORARY_DIRECTORY/projects"

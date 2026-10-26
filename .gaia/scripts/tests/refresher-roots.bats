@@ -53,6 +53,7 @@ make_pair() {
   fi
   printf '1.0.0\n' > "$MAIN/.gaia/VERSION"
   cp "$SCRIPTS_DIRECTORY/knowledge-inventory.sh" "$MAIN/.gaia/scripts/knowledge-inventory.sh"
+  cp "$SCRIPTS_DIRECTORY/exclusive-lock-lib.sh" "$MAIN/.gaia/scripts/exclusive-lock-lib.sh"
 
   git -C "$MAIN" init -q
   git -C "$MAIN" config user.email t@t.t

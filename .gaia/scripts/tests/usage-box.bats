@@ -342,6 +342,7 @@ one_space_margins() {
     [ -f "$file" ] && cp "$file" "$scratch/"
   done
   cp "$SCRIPTS/spec/with-ledger-lock.sh" "$scratch/spec/"
+  cp "$SCRIPTS/exclusive-lock-lib.sh" "$scratch/"
   cp "$SCRIPTS"/notebook/*.sh "$scratch/notebook/"
   printf '#!/usr/bin/env bash\nsleep 3\n' >"$scratch/usage-flush.sh"
   spec_and_plan_rows
@@ -371,6 +372,7 @@ box_join_scenario() {
     [ -f "$file" ] && cp "$file" "$scratch/"
   done
   cp "$SCRIPTS/spec/with-ledger-lock.sh" "$scratch/spec/"
+  cp "$SCRIPTS/exclusive-lock-lib.sh" "$scratch/"
   cp "$SCRIPTS"/notebook/*.sh "$scratch/notebook/"
   printf '#!/usr/bin/env bash\n: >"%s/own-started"\n' "$scratch" >"$scratch/usage-flush.sh"
   printf '#!/usr/bin/env bash\nsleep 30\n' >"$TEMPORARY_DIRECTORY/other/usage-flush.sh"

@@ -36,6 +36,7 @@ setup() {
     "$REPOSITORY_FIXTURE/.gaia/local/cache/shared" "$REPOSITORY_FIXTURE/.gaia/local/audit" \
     "$REPOSITORY_FIXTURE/.claude/rules" "$REPOSITORY_FIXTURE/wiki"
   cp "$REPO_ROOT/.gaia/scripts/check-updates.sh" "$REPOSITORY_FIXTURE/.gaia/scripts/check-updates.sh"
+  cp "$REPO_ROOT/.gaia/scripts/exclusive-lock-lib.sh" "$REPOSITORY_FIXTURE/.gaia/scripts/exclusive-lock-lib.sh"
   cp "$REPO_ROOT/.gaia/scripts/main-root-lib.sh" "$REPOSITORY_FIXTURE/.gaia/scripts/main-root-lib.sh"
   cp "$REPO_ROOT/.gaia/scripts/knowledge-inventory.sh" "$REPOSITORY_FIXTURE/.gaia/scripts/knowledge-inventory.sh"
   cat > "$REPOSITORY_FIXTURE/.gaia/cli/gaia" <<'WRAPPER'

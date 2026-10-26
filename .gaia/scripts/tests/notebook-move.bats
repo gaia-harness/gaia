@@ -22,7 +22,11 @@ setup() {
   SHIM_DIRECTORY="$BATS_TEST_TMPDIR/shims"
   RM_CALLS="$BATS_TEST_TMPDIR/rm-calls"
   mkdir -p "$SHIM_DIRECTORY"
-  printf '#!/bin/sh\necho "$@" >> "%s"\nexit 0\n' "$RM_CALLS" > "$SHIM_DIRECTORY/rm"
+  # The ledger lock's own release (`rm -rf <dir>/specs.lock.d`) is GAIA's
+  # transient state, not content the move could lose, so it runs for real and
+  # is not recorded; every other rm is.
+  printf '#!/bin/sh\ncase "$*" in "-rf "*/specs.lock.d) exec "%s" "$@" ;; esac\necho "$@" >> "%s"\nexit 0\n' \
+    "$(command -v rm)" "$RM_CALLS" > "$SHIM_DIRECTORY/rm"
   chmod +x "$SHIM_DIRECTORY/rm"
   export GAIA_NOTEBOOK_MEMORY_DIR="$BATS_TEST_TMPDIR/memory-absent"
   REPO=""

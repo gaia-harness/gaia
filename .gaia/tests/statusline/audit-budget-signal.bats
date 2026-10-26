@@ -30,6 +30,7 @@ setup() {
     "$REPOSITORY_FIXTURE/.gaia/local/cache/shared" "$REPOSITORY_FIXTURE/.claude/rules" \
     "$REPOSITORY_FIXTURE/wiki"
   cp "$REPO_ROOT/.gaia/scripts/check-updates.sh" "$REPOSITORY_FIXTURE/.gaia/scripts/check-updates.sh"
+  cp "$REPO_ROOT/.gaia/scripts/exclusive-lock-lib.sh" "$REPOSITORY_FIXTURE/.gaia/scripts/exclusive-lock-lib.sh"
   cp "$REPO_ROOT/.gaia/scripts/main-root-lib.sh" "$REPOSITORY_FIXTURE/.gaia/scripts/main-root-lib.sh"
   printf '#!/usr/bin/env bash\nexit 0\n' > "$REPOSITORY_FIXTURE/.gaia/scripts/resolve-audit-members.sh"
   chmod +x "$REPOSITORY_FIXTURE/.gaia/scripts/resolve-audit-members.sh"

@@ -15,6 +15,7 @@ setup() {
   REFRESH_ROOT="$(cd "$REFRESH_ROOT" && pwd -P)"
   mkdir -p "$REFRESH_ROOT/.gaia/scripts" "$REFRESH_ROOT/.gaia/cli" "$REFRESH_ROOT/.gaia/local/cache/shared" "$BATS_TEST_TMPDIR/bin"
   cp "$SCRIPTS_DIRECTORY/check-updates.sh" "$REFRESH_ROOT/.gaia/scripts/check-updates.sh"
+  cp "$SCRIPTS_DIRECTORY/exclusive-lock-lib.sh" "$REFRESH_ROOT/.gaia/scripts/exclusive-lock-lib.sh"
   cp "$SCRIPTS_DIRECTORY/update-claim.sh" "$REFRESH_ROOT/.gaia/scripts/update-claim.sh"
   printf '#!/usr/bin/env bash\nexit 1\n' >"$REFRESH_ROOT/.gaia/cli/gaia"
   chmod +x "$REFRESH_ROOT/.gaia/cli/gaia"

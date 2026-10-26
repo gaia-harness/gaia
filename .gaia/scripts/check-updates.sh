@@ -321,19 +321,20 @@ LOCK_STALE_MINUTES=10
 lock_is_stale() {
   [ -n "$(find "$1" -maxdepth 0 -mmin +"$LOCK_STALE_MINUTES" 2>/dev/null)" ]
 }
-if ! mkdir "$LOCK_DIRECTORY" 2>/dev/null; then
+# shellcheck source=exclusive-lock-lib.sh
+. "$SCRIPT_DIRECTORY/exclusive-lock-lib.sh" || exit 0
+if ! gaia_exclusive_lock_take "$LOCK_DIRECTORY"; then
   if lock_is_stale "$LOCK_DIRECTORY" && mv "$LOCK_DIRECTORY" "$LOCK_DIRECTORY.stale.$$" 2>/dev/null; then
     if ! lock_is_stale "$LOCK_DIRECTORY.stale.$$"; then
       mv "$LOCK_DIRECTORY.stale.$$" "$LOCK_DIRECTORY" 2>/dev/null
       exit 0
     fi
     rm -rf "$LOCK_DIRECTORY.stale.$$" 2>/dev/null
-    mkdir "$LOCK_DIRECTORY" 2>/dev/null || exit 0
+    gaia_exclusive_lock_take "$LOCK_DIRECTORY" || exit 0
   else
     exit 0
   fi
 fi
-printf '%s\n' "$$" > "$LOCK_DIRECTORY/owner" 2>/dev/null
 trap '[ "$(cat "$LOCK_DIRECTORY/owner" 2>/dev/null)" = "$$" ] && rm -rf "$LOCK_DIRECTORY" 2>/dev/null' EXIT
 
 # ---------- outdatedCount ----------

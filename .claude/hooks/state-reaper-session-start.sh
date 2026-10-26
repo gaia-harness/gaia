@@ -25,6 +25,10 @@ main_root_library="$here/../../.gaia/scripts/main-root-lib.sh"
 [ -f "$main_root_library" ] || exit 0
 # shellcheck source=/dev/null
 source "$main_root_library" || exit 0
+exclusive_lock_library="$here/../../.gaia/scripts/exclusive-lock-lib.sh"
+[ -f "$exclusive_lock_library" ] || exit 0
+# shellcheck source=/dev/null
+source "$exclusive_lock_library" || exit 0
 
 main_root="$(gaia_resolve_main_root 2>/dev/null)" || exit 0
 [ -n "$main_root" ] || exit 0
@@ -52,23 +56,23 @@ lock_is_stale() {
 
 stamp_is_fresh && exit 0
 
-# Single flight: mkdir is the atomic test-and-set. A lock older than
+# Single flight: gaia_exclusive_lock_take is the test-and-set. A lock older than
 # LOCK_STALE_MINUTES belongs to a hook killed before it released; it is renamed
 # aside, re-checked on the renamed directory (a rename keeps its mtime) so a
 # live lock another contender just retook is handed back, and retaken.
-if ! mkdir "$lock_directory" 2>/dev/null; then
+if ! gaia_exclusive_lock_take "$lock_directory"; then
   if lock_is_stale "$lock_directory" && mv "$lock_directory" "$lock_directory.stale.$$" 2>/dev/null; then
     if ! lock_is_stale "$lock_directory.stale.$$"; then
       mv "$lock_directory.stale.$$" "$lock_directory" 2>/dev/null
       exit 0
     fi
     rm -rf "$lock_directory.stale.$$" 2>/dev/null
-    mkdir "$lock_directory" 2>/dev/null || exit 0
+    gaia_exclusive_lock_take "$lock_directory" || exit 0
   else
     exit 0
   fi
 fi
-trap 'rmdir "$lock_directory" 2>/dev/null; exit 0' EXIT
+trap 'gaia_exclusive_lock_release "$lock_directory"; exit 0' EXIT
 
 # Re-read under the lock: a contender may have launched between the gate above
 # and the mkdir.

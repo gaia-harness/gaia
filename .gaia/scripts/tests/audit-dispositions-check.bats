@@ -525,7 +525,7 @@ tree_state() {
 @test "red state: a copy reading severity from the dispositions entry passes the relabelled Critical" {
   local mutant_directory="$BATS_TEST_TMPDIR/mutant" script_name entry
   mkdir -p "$mutant_directory"
-  for script_name in audit-dispositions-check.sh audit-loop-eval.sh audit-loop-state-lib.sh audit-loop-signals-lib.sh context-checkpoint-lib.sh branch-name-lib.sh main-root-lib.sh audit-key-lib.sh; do
+  for script_name in audit-dispositions-check.sh audit-loop-eval.sh audit-loop-state-lib.sh exclusive-lock-lib.sh audit-loop-signals-lib.sh context-checkpoint-lib.sh branch-name-lib.sh main-root-lib.sh audit-key-lib.sh; do
     cp "$SCRIPTS/$script_name" "$mutant_directory/$script_name"
   done
   # shellcheck disable=SC2016
