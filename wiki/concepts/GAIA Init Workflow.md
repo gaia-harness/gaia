@@ -2,7 +2,7 @@
 type: concept
 status: active
 created: 2026-05-07
-updated: 2026-10-19
+updated: 2026-10-26
 tags: [concept, claude, cli, workflow]
 ---
 
@@ -12,7 +12,7 @@ The `/gaia init` namespace provides subcommands for on-boarding a project cloned
 
 ## Subcommands
 
-**`strip-branding`**: Removes GAIA-specific branding and identifiers from the codebase. Prepares a "vanilla" template for forking or white-label adoption. The `--title` it takes is escaped for each sink's own syntax (a single-quoted JavaScript literal in `frontend/.storybook/preview.ts`) rather than passed through raw.
+**`strip-branding`**: Removes GAIA-specific branding and identifiers from the codebase. Prepares a "vanilla" template for forking or white-label adoption. The `--title` it takes is escaped for each sink's own syntax (a single-quoted JavaScript literal in `frontend/.storybook/preview.ts`) rather than passed through raw. The Storybook de-brand anchors on the `storybookBrandOptions` declaration in `frontend/.storybook/preview.ts`; a preview file present without it exits 1 with `storybook_brand_missing` and records no completed step, so a renamed declaration fails loudly instead of leaving the step marked done with nothing changed.
 
 **`configure-i18n`**: With `--strip false`, drops every locale registered in `frontend/app/languages/index.ts` that the chosen list leaves out, keeping at least one, and sets `fallbackLng` in `frontend/app/i18n.ts` to the first chosen locale. It never registers a locale: `frontend/.claude/instructions/add-locale.md` does that as it creates each locale's language tree, and `/gaia-init` re-runs `configure-i18n` after the last locale so a template locale the user did not pick is dropped. With `--strip true` it only records the decision (the `/gaia-init` skill then follows `frontend/.claude/instructions/remove-i18n.md` to remove the scaffolding). The locale list is recorded in the init state file.
 
