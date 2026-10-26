@@ -22,6 +22,7 @@ A release change that requires the adopter to act, run a command or hand-migrate
 
 - **Onboarding finishes in one Claude session.** After `npx create-gaia`, `/gaia-init` continues straight into `/setup-gaia` instead of telling you to exit and restart Claude twice, and setup ends with no restart and no reload: it suggests `/clear` to start your first feature with a fresh context. `/gaia-init` installs the React Doctor skill first, so it is available in that same session; the other per-machine installs (Playwright CLI, the typescript-lsp plugin) run only in `/setup-gaia`, so a first run that stops after init finishes shows `⚙️ /setup-gaia (Required)` until setup finishes.
 - **Lint package:** GAIA's lint package is now `@gaia-harness/lint`. `/update-gaia` adds it and swaps the lint config imports, and `@gaia-react/lint` stays installable (deprecated). **Action required:** `pnpm remove @gaia-react/lint`.
+- **query-string 10:** the app's API URL helper now uses query-string 10, whose `stringify()` throws a `TypeError` for a search-param value it cannot represent (a nested object, a function, a `Date`) instead of sending `[object Object]`. Pass such values as strings, or convert them with query-string's `replacer` option (#3093)
 
 ### Fixed
 
