@@ -30,7 +30,9 @@
 # `timeout` ends a call that is transferring, only slowly. Neither alone
 # makes the retry reachable: the caller's step `timeout-minutes` must exceed
 # attempts x (update + install) + the backoff below, which is
-# 10 x attempts x (attempts - 1) / 2 seconds.
+# 10 x attempts x (attempts - 1) / 2 seconds, plus one more install bound when
+# the archive directory may be warm. That shorter formula holds only when the
+# warm attempt fails fast.
 #
 # Exit status: 0 installed, 1 every attempt failed, 2 usage error.
 

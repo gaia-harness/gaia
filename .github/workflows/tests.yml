@@ -233,8 +233,11 @@ jobs:
       # every .deb an attempt finishes stays in the archive directory, so a
       # slow mirror spends three attempts on one download rather than three
       # restarts. 3 x 180 of apt plus 30 of backoff is 570s, inside this
-      # step's 10 minutes, so the third attempt is reachable. A warm run never
-      # contacts the mirror.
+      # step's 10 minutes, so the third cold attempt is reachable. A warm
+      # archive directory first runs one offline install under its own 180s
+      # bound, so the worst case is 750s, and the third cold attempt is
+      # reachable inside this cap only when the warm attempt fails fast. A warm
+      # run that succeeds never contacts the mirror.
       - if: steps.chore-deps.outputs.skip == 'false' && steps.filter.outputs.code == 'true'
         name: Install Playwright system dependencies
         timeout-minutes: 10

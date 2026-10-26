@@ -67,12 +67,16 @@ jobs:
     # Pinned off ubuntu-latest (26.04) until the suites pass there: gaia-harness/gaia#3082.
     runs-on: ubuntu-24.04
     # The outer bound only. A matrix takes ONE integer job cap for every leg,
-    # so this one is sized to the heaviest leg's whole run, installs included.
+    # so this one covers the heaviest leg's whole run: the install step's
+    # 11-minute cap, the heaviest run step's 12-minute cap, and checkout and
+    # setup, with margin. It is deliberately not the tight bound; a step cap
+    # below is, so the install retries can finish and still leave the shard its
+    # full time.
     # What fails a hung leg at its own bound is the integer literal
     # `timeout-minutes` on each run step below, each sized to that step's own
     # measured runtime and kept strictly below this one.
     # `.gaia/tests/lib/audit-ci-shards.bats` W5 checks both.
-    timeout-minutes: 13
+    timeout-minutes: 25
     # Read-only token: the job checks out, resolves changed files via
     # dorny/paths-filter, and runs bats or the sandbox/concurrency runners; it
     # needs no write scopes.
@@ -564,7 +568,7 @@ jobs:
       # The cost is one apt on the legs of a needing group that hold no needing
       # suite themselves, and it has two halves. Runtime: an over-match costs
       # seconds, an under-match silently retires a suite's assertions, and that
-      # trade is the one this whole scan already prefers. Blast radius: every
+      # trade is the one this whole scan already prefers. Blast radius: on a cold apt archive cache every
       # listed leg joins the concurrent `apt-get update` burst, where a mirror
       # hash-sum mismatch on any one of them reds `Audit CI Tests`, a
       # declared-required context. `wiki/decisions/Sharded CI Test Matrix.md` prices that second
@@ -597,8 +601,11 @@ jobs:
         # (.gaia/scripts/verify-required-checks.sh names it required) and that
         # leg's tests do not run.
         #
-        # The budget is what makes three attempts reachable: 3 x (45 + 150) of
-        # apt plus 30 of backoff is 615, inside this 660. The install bound is
+        # The budget is what makes three attempts reachable on a cold run: 3 x
+        # (45 + 150) of apt plus 30 of backoff is 615, inside this 660. A warm
+        # archive directory first runs one offline install under its own 150s
+        # bound, so the worst case is 765, and the third cold attempt is
+        # reachable inside this cap only when the warm attempt fails fast. The install bound is
         # sized to a slow but live transfer, not to a stall: zsh-common alone
         # is about 4 MB, and a mirror serving a few tens of kB/s needs about
         # two minutes for the three packages, which a 45s install bound never
