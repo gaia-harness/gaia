@@ -35,7 +35,8 @@
  *
  * Fires on the pull request that bumps pnpm: `package.json` (whose
  * `packageManager` pins the version CI installs) is in the `code` paths filter
- * of `cli-tests.yml`. Maintainer-only by construction: `.gaia/cli/src` is
+ * of `cli-tests.yml`. It also fires on a pull request that edits only the two
+ * references, which that filter lists for the same reason. Maintainer-only by construction: `.gaia/cli/src` is
  * release-excluded.
  */
 import {
