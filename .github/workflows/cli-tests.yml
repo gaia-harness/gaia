@@ -29,7 +29,8 @@ jobs:
   cli-tests:
     name: Vitest (.gaia/cli)
     if: github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch'
-    runs-on: ubuntu-latest
+    # Pinned off ubuntu-latest (26.04) until the suites pass there: gaia-harness/gaia#3082.
+    runs-on: ubuntu-24.04
     # This job is a declared-required context, so a wedged install or a hung
     # Vitest run would hold every PR at "Expected" for the 6-hour runner
     # default. Fail fast instead. The cap is sized for a wedged install rather
@@ -377,7 +378,8 @@ jobs:
     # `skipped` on the dispatched HEAD, which reads as a regression rather than
     # the "not evaluated" it actually is.
     if: github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch'
-    runs-on: ubuntu-latest
+    # Pinned off ubuntu-latest (26.04) until the suites pass there: gaia-harness/gaia#3082.
+    runs-on: ubuntu-24.04
     timeout-minutes: 15
     # Same three consumers as cli-tests above; the scenarios run without a
     # token by design (see the step name at the harness invocation below).
@@ -518,7 +520,8 @@ jobs:
     # `skipped` on the dispatched HEAD, which reads as a regression rather than
     # the "not evaluated" it actually is.
     if: github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch'
-    runs-on: ubuntu-latest
+    # Pinned off ubuntu-latest (26.04) until the suites pass there: gaia-harness/gaia#3082.
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
     # `contents: read` and nothing more: checkout needs it to clone, and
     # setup-node defaults its `token` input to `github.token` for the

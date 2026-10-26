@@ -64,7 +64,8 @@ jobs:
   shards:
     name: Shard (${{ matrix.shard }})
     if: github.event_name == 'pull_request' || github.event_name == 'push' || github.event_name == 'workflow_dispatch'
-    runs-on: ubuntu-latest
+    # Pinned off ubuntu-latest (26.04) until the suites pass there: gaia-harness/gaia#3082.
+    runs-on: ubuntu-24.04
     # The outer bound only. A matrix takes ONE integer job cap for every leg,
     # so this one is sized to the heaviest leg's whole run, installs included.
     # What fails a hung leg at its own bound is the integer literal
@@ -876,7 +877,8 @@ jobs:
     name: Audit CI Tests
     needs: [shards]
     if: always() && (github.event_name == 'pull_request' || github.event_name == 'push' || github.event_name == 'workflow_dispatch')
-    runs-on: ubuntu-latest
+    # Pinned off ubuntu-latest (26.04) until the suites pass there: gaia-harness/gaia#3082.
+    runs-on: ubuntu-24.04
     timeout-minutes: 2
     # No checkout and no scopes: this job reads its `needs:` results and
     # exits, so it needs nothing a default-deny leaves it without. Stated
@@ -913,7 +915,8 @@ jobs:
     name: Report main status
     needs: [shards]
     if: always() && github.event_name == 'push' && github.ref == 'refs/heads/main'
-    runs-on: ubuntu-latest
+    # Pinned off ubuntu-latest (26.04) until the suites pass there: gaia-harness/gaia#3082.
+    runs-on: ubuntu-24.04
     timeout-minutes: 3
     # The only write scope in this workflow. `contents: read` for the
     # checkout, `issues: write` to open, comment on and close the issue, and
