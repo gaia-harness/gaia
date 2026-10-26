@@ -676,6 +676,34 @@ assert_frontend_capture() {
   [ "$(fixture_ledger_lines)" -eq 0 ]
 }
 
+# --- the re-run never installs ------------------------------------------------
+#
+# The hook's re-run is its own process, so an inline env prefix on the agent's
+# command never reaches it. This case drives the real pnpm (not the stub): the
+# package was installed with a `link:` dependency, then its manifest dropped it,
+# so pnpm's verify-deps-before-run check would rewrite the lockfile with an
+# offline install before running vitest.
+
+@test "the re-run does not install when the manifest disagrees with the lockfile" {
+  command -v pnpm >/dev/null
+  make_package_fixture
+  rm "$STUB_BIN/pnpm"
+  mkdir -p "$FIXTURE/frontend/local-dependency"
+  printf '{"name":"local-dependency","version":"1.0.0"}\n' >"$FIXTURE/frontend/local-dependency/package.json"
+  printf '{"name":"frontend","version":"1.0.0","private":true,"dependencies":{"local-dependency":"link:./local-dependency"}}\n' \
+    >"$FIXTURE/frontend/package.json"
+  pnpm_config_verify_deps_before_run=false pnpm -C "$FIXTURE/frontend" install --offline >/dev/null 2>&1
+  printf '{"name":"frontend","version":"1.0.0","private":true}\n' >"$FIXTURE/frontend/package.json"
+  local lockfile_hash_before
+  lockfile_hash_before=$(git hash-object "$FIXTURE/frontend/pnpm-lock.yaml")
+
+  run_capture_in_fixture "$FIXTURE" "pnpm -C frontend test --run app/utils/x.test.ts"
+  [ "$status" -eq 0 ]
+  [ -s "$STUB_VITEST_LOG" ]
+  [ "$(git hash-object "$FIXTURE/frontend/pnpm-lock.yaml")" = "$lockfile_hash_before" ]
+  [ -e "$FIXTURE/frontend/node_modules/local-dependency" ]
+}
+
 # --- the failure event: a failing run's Bash call errors ----------------------
 #
 # A vitest run with a failing test exits non-zero, and Claude Code reports a
