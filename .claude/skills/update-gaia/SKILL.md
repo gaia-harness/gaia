@@ -3,14 +3,14 @@ name: update-gaia
 description: Pulls the latest GAIA release into this project without clobbering customizations, with a three-way merge per file using .gaia/manifest.json classes. Trigger when the user clicks the statusline `🚀 /update-gaia` indicator or asks "update GAIA", "pull the latest GAIA", "apply the new GAIA release".
 ---
 
-Contents: Pre-flight: Worktree check; Pre-flight: Branch check (run modes); Step 1: Read baseline version; Step 2: Resolve latest release; Step 3: Compare versions (main checkout, worktree run in place); Pre-flight: Pull check (reads `references/pull-mode.md`); Pre-flight: Decision log check; Pre-flight: Claim check (reads `references/claim-flow.md`); Step 3b: Refuse a 1.x baseline; Step 3c: Download and verify the bundles; Step 3d: Select migration notes; Step 4: Show the release notes and confirm (on Proceed: the update worktree, the worktree notice, the stop rule, the claim); Step 4b: Prune prior-run artifacts; Conflict flow (reads `references/conflict-flow.md`: dispatch, questions, decisions, follow-ups); Step 9b: Follow the after-merge notes; Step 9c: Carry new setup features (machine scope deferred to the post-merge cleanup); Step 9d: Record the update; Quality gate; Review point; Step 11 (orchestrator, after the review-point commit); Step 12: The leftover-file cleanup; Cost record (run end).
+Contents: Pre-flight: Worktree check; Pre-flight: Branch check (run modes); Step 1: Read baseline version; Step 2: Resolve latest release; Step 3: Compare versions (main checkout, worktree run in place); Pre-flight: Pull check (reads `references/pull-mode.md`); Pre-flight: Decision log check; Pre-flight: Claim check (reads `references/claim-flow.md`); Step 3b: Refuse a 1.x baseline; Step 3c: Download and verify the bundles; Step 3d: Select migration notes; Step 4: Show the release notes and confirm (on Proceed: the update worktree, the worktree notice, the stop rule, the claim); Step 4b: Prune prior-run artifacts; Conflict flow (reads `references/conflict-flow.md`: dispatch, questions, decisions, follow-ups); Step 9b: Follow the after-merge notes; Step 9c: Carry new setup features (machine scope deferred to the post-merge cleanup); Step 9d: Record the update; Quality gate; Review point; Step 11 (orchestrator, after the review-point commit); Step 12: The leftover-file cleanup; Cost record (run end). Local runs (`--local <tarball>`) and recorded local builds: `references/local-bundle.md`, read at Step 1.
 
 Pull the latest GAIA release into this project without clobbering customizations. Does a three-way comparison per file (adopter / baseline / latest) and respects explicit classes in `.gaia/manifest.json`:
 
 - **`owned`** (GAIA-owned, not the adopter's): GAIA controls fully.
 - **`shared`**: GAIA seeds, you customize.
 - **`wiki-owned`** (adopter-editable; handled exactly like `shared`): GAIA-seeded wiki pages.
-- **adopter-owned (implicit)**: anything not in the manifest, plus sentinels like `wiki/log.md`, `CHANGELOG.md`, `.gaia/VERSION`, `.gaia/manifest.json`, `.gaia/update-decisions.json`. The merge walk never touches them; Step 9d rewrites `.gaia/manifest.json` and `.gaia/VERSION` once the merge is done, and the decision steps below write `.gaia/update-decisions.json`.
+- **adopter-owned (implicit)**: anything not in the manifest, plus sentinels like `wiki/log.md`, `CHANGELOG.md`, `.gaia/VERSION`, `.gaia/VERSION-dev`, `.gaia/manifest.json`, `.gaia/update-decisions.json`. The merge walk never touches them; Step 9d rewrites `.gaia/manifest.json` and `.gaia/VERSION` once the merge is done, and the decision steps below write `.gaia/update-decisions.json`.
 
 The first three take the same Step 7 rows. The class changes only two of them: which status a clean overwrite reports (`owned` → `overwrite`, the other two → `merge`), and what happens when the release newly owns a path the adopter already has (`owned` backs up and overwrites, the other two fall through to the ordinary rows). Step 7 is authoritative.
 
@@ -59,7 +59,11 @@ In mode 1 this reads the worktree's own file. If the file is missing, stop and t
 
 Persist the trimmed version as `BASELINE` (e.g., `2.0.0`).
 
+When the invocation carries `--local <tarball>`, or `.gaia/VERSION-dev` exists in the same checkout, read `references/local-bundle.md` now and apply its section at each step it names; a local run prints its trust label (`## Trust label at invocation`) before any other command.
+
 ## Step 2: Resolve latest release
+
+On a local run (`--local`), skip this step: `references/local-bundle.md` `## The source step` replaces it. On every run that read that file, its `## The baseline` follows here.
 
 ```bash
 gh release list --repo gaia-harness/gaia --limit 1 --json tagName --jq '.[0].tagName'
@@ -79,7 +83,10 @@ If both fail, stop and ask the user to supply the target version explicitly.
 
 In mode 1, run `### Step 3, worktree run in place` first: the worktree's own bump makes an applied update read as current.
 
+On a local run (`--local`), `references/local-bundle.md` `## Step 3 on a local run` replaces the comparison below.
+
 - If `LATEST == BASELINE`:
+  - **A recorded local build.** When `.gaia/VERSION-dev` exists, skip both bullets below: follow `references/local-bundle.md` `## Step 3 on a release run after a local sync`, which merges against the recorded build and removes it.
   - **First, detect an uncommitted bump.** If `.gaia/VERSION` differs from the last commit (`git diff --quiet HEAD -- .gaia/VERSION` exits non-zero, this catches a staged or unstaged bump), a previous in-place `/update-gaia` already bumped the version but the update was never committed. Do **not** print "up to date", the bumped VERSION makes every re-run look current, so saying it dead-ends the user. Instead read the committed baseline (`git show HEAD:.gaia/VERSION`) for context, tell the user the update to `v<LATEST>` is already applied to the working tree but not committed, tell them to review `git diff` and commit it, and exit. To start over instead, the user runs `git checkout -- .gaia/VERSION` to discard the bump and re-runs `/update-gaia`.
   - Otherwise print "You are up to date on GAIA v<BASELINE>." and exit.
 - If `semver(LATEST) < semver(BASELINE)` → print a warning that the installed version is ahead of the latest release and exit. Never downgrade.
@@ -103,6 +110,8 @@ It classifies the most recently committed `update/<LATEST_TAG>-*` branch by the 
 
 ### Step 3, worktree run in place
 
+A release run's prefix check below never accepts a branch that continues `update/<LATEST_TAG>-dev.`: that is a local sync's branch, so it stops the same way (`references/local-bundle.md` `## Step 3 on a local run`).
+
 Mode 1. The current branch must start `update/<LATEST_TAG>-`; otherwise stop: this worktree updates to an older release, so print the worktree notice (Step 4) and tell the user to remove it with those commands and re-run `/update-gaia` from the main checkout. Then, from the worktree:
 
 ```bash
@@ -122,6 +131,8 @@ bash .gaia/scripts/update-claim.sh origin-version --tree <main checkout path>
 ```
 
 Exit 3 (`ORIGIN_VERSION_UNAVAILABLE`) continues to the decision log check: the check fails open. When `ORIGIN_VERSION <x.y.z>` is above `BASELINE`, the checkout lags origin: read `references/pull-mode.md` and follow it with caller `update-gaia` and the main checkout path, creating no worktree and downloading nothing. The run ends there; pull mode's continue offer invokes this skill again from the pulled copy. Otherwise continue to the decision log check.
+
+On a local run the check is the same, and pull mode's continue offer carries `--local <tarball path>` (`references/local-bundle.md` `## Pull check on a local run`).
 
 ## Pre-flight: Decision log check
 
@@ -153,7 +164,7 @@ From Step 4b on, the acting tree's copy, `<acting tree>/.gaia/update-decisions.j
 
 ## Pre-flight: Claim check
 
-Before Step 3b and any download, in every mode, read `references/claim-flow.md` `## Claim check` and follow it in the checkout the run starts in. It reads the live update claims and the current login with `update-claim.sh`; a teammate's claim stops the run, creating no worktree, branch or cache entry; the user's own claim resumes the run, or is closed to start fresh; a skipped check continues with no claim.
+Before Step 3b and any download, in every mode, read `references/claim-flow.md` `## Claim check` and follow it in the checkout the run starts in. It reads the live update claims and the current login with `update-claim.sh`; a teammate's claim stops the run, creating no worktree, branch or cache entry; the user's own claim resumes the run, or is closed to start fresh; a skipped check continues with no claim. A local run claims under its local tag (`references/local-bundle.md` `## Claim on a local run`).
 
 ## Step 3b: Refuse a 1.x baseline
 
@@ -168,6 +179,8 @@ On `REFUSED`, stop and relay the message: no worktree, no branch, no prune, no d
 ## Step 3c: Download and verify the bundles
 
 Every bundle this run reads is verified against its release's `.sha256` asset in this run, before the Proceed question, and every tree it reads is extracted again from that verified tarball. Each tag's cache directory, `.gaia/local/cache/shared/update-gaia/<tag>/` (gitignored, shared across worktrees), holds the tarball, its checksum and `tree/`; the target's directory also holds the `changelog-range.md` Step 4 saves.
+
+A local build's bundle is the one exception: its checksum is computed locally and guards only against cache corruption, never authenticity. On a local run, or whenever the baseline step printed a dev `BASELINE_TAG`, run the call `references/local-bundle.md` `## Step 3c with a local build` gives instead.
 
 Print the extra baseline tags the decision log check found (or that there are none), then run, adding one `--extra-tag <tag>` per extra baseline tag:
 
@@ -188,7 +201,7 @@ Each failure line names the tag and removes that tag's cache directory, so a re-
 
 ## Step 3d: Select migration notes
 
-A release can ship migration notes, one per version, in its bundle. The call runs the verified target bundle's own selector, never the project's copy, so a mode or key a later release adds is judged by that release's selector:
+A release can ship migration notes, one per version, in its bundle. The call runs the verified target bundle's own selector, never the project's copy, so a mode or key a later release adds is judged by that release's selector. On a local run, `--latest` is `<LOCAL_CORE>` and the not-run notes follow (`references/local-bundle.md` `## Step 3d on a local run`):
 
 ```bash
 bash .gaia/scripts/update-gaia-preflight.sh select-notes --latest-dir <LATEST_DIR> --baseline <BASELINE> --latest <LATEST>
@@ -201,6 +214,8 @@ It prints `AFTER_MERGE <version> <path>` for each after-merge note in version or
 - **`BLOCKING <version> <path>`**: stop here, before the Proceed question. Tell the user the update crosses a blocking migration note, name its path inside the verified bundle, and list each `AFTER_MERGE` note as a note to follow after the blocking note's merge step and before its version write. Then ask with `AskUserQuestion` whether to follow the blocking note in this session. On yes, read the note from that path and follow it: it owns the hop to its own version, including its own merge and its `.gaia/VERSION` and manifest write at that version, and the user re-runs `/update-gaia` afterwards for any later notes and the setup drift. On no, stop: nothing was branched, pruned or merged, no worktree was created, `.gaia/VERSION` is unchanged, and only the verified update cache remains. Its options are `Follow it now` (Recommended) and `Stop`.
 
 ## Step 4: Show the release notes and confirm
+
+On a local run, the build commit and the question come from `references/local-bundle.md` `## Step 4 on a local run`; on a release run after a local sync, the question adds the baseline line from its `## Step 4 on a release run after a local sync`. A fresh worktree on either also runs its `## Step 4 worktree check with a recorded build` after the baseline check.
 
 Show the human the **full baseline-to-latest CHANGELOG range**, not just the single latest tag's GitHub body, an adopter several versions behind needs every intervening entry. When there are extra baseline tags, add `--save-from <oldest extra tag's version, without its leading v>` (the first tag `deferred-tags` printed; the script cuts a prerelease to its core version itself):
 
@@ -264,7 +279,7 @@ Line 1 is the verdict, line 2 the `Log:` path. `STILL_RUNNING` (exit 4): call it
 
 ## Step 4b: Prune prior-run artifacts
 
-Two gitignored directories accumulate across updates: `.gaia-backup/` and `.gaia/local/cache/shared/update-gaia/` (which also holds a stopped run's run directory). Prune the prior runs' leftovers at the start of a confirmed update, before this run creates any merge artifact of its own (Step 7 creates `$BACKUP_DIR`), so its fresh safety net is never touched. Only a Step 4 `Proceed` reaches here, so an abort, an already-up-to-date exit, and an uncommitted bump never prune. Run it in the acting tree, adding `--resume` on any resumed run (a mode 2 resume, or mode 1), which keeps `.gaia-backup/` as the only copy of what the interrupted merge overwrote, and one `--keep-tag <tag>` per extra baseline tag, so the deferred items' bundles survive:
+Two gitignored directories accumulate across updates: `.gaia-backup/` and `.gaia/local/cache/shared/update-gaia/` (which also holds a stopped run's run directory). Prune the prior runs' leftovers at the start of a confirmed update, before this run creates any merge artifact of its own (Step 7 creates `$BACKUP_DIR`), so its fresh safety net is never touched. Only a Step 4 `Proceed` reaches here, so an abort, an already-up-to-date exit, and an uncommitted bump never prune. Run it in the acting tree, adding `--resume` on any resumed run (a mode 2 resume, or mode 1), which keeps `.gaia-backup/` as the only copy of what the interrupted merge overwrote, and one `--keep-tag <tag>` per extra baseline tag, so the deferred items' bundles survive. When `BASELINE_TAG` is a local build's tag, run the call in `references/local-bundle.md` `## Step 4b with a local build` instead:
 
 ```bash
 bash .gaia/scripts/update-gaia-preflight.sh prune --baseline <BASELINE> --latest-tag <LATEST_TAG>
@@ -308,6 +323,8 @@ jq -r '.features[] | select(.scope == "machine") | .id' <LATEST_DIR>/.gaia/setup
 Take each `APPLY` or `ASK` token whose id is listed as deferred: run, ask and record nothing for it, and keep its id for the Step 9d addendum. The post-merge cleanup runs them in the pulled main checkout (`.claude/skills/gaia/references/work-lifecycle.md`, `### Leftover-file cleanup after an update merge`). Project-scope tokens are taken as above.
 
 ## Step 9d: Record the update
+
+On a local run, the calls in `references/local-bundle.md` `## Step 9d on a local run` replace the four below; on a release run after a local sync, its `## Step 9d on a release run after a local sync` adds the record's removal after them.
 
 The merge, the answers, the follow-ups, the notes and the drift are done, so record the update. Run these four commands in the acting tree as separate calls; the order is the contract:
 
@@ -356,6 +373,8 @@ Run the quality gate per `wiki/decisions/Quality Gate.md` in the acting tree, ap
 Red: ask with `AskUserQuestion` whether to fix it, options `Fix it now (Recommended)` and `Stop here`, with the failing output in the question. On `Fix it now`, the orchestrator fixes the failures and runs the gate again, at most two fix attempts in all. Still red after the second: ask once more with only `Stop here`, showing the failing output. `Stop here` ends the run per the stop rule: the worktree is kept, the update stays uncommitted with its version written, the worktree notice is printed, and the next step is re-running `/update-gaia` inside the worktree, which resumes at this gate.
 
 ## Review point
+
+On a local run, or a release run after a local sync, the summary also carries what `references/local-bundle.md` `## Review point with a local build` lists.
 
 Wait for provisioning again first:
 
@@ -414,6 +433,8 @@ The execution agent's work ends at Step 9, with its report; the orchestrator run
 
 ### Step 11: Open a pull request
 
+On a local run, or a release run after a local sync, check 2 and (on a local run) the PR's title and body come from `references/local-bundle.md` `## Step 11 with a local build`.
+
 After the review-point commit lands, `/update-gaia` must not leave the branch stranded: open a PR so the update can be reviewed and merged. The checks below are a backstop for that commit. `<branch>` is the update branch (`<branch-name>`, the resumed branch, or the current branch in mode 1). Run each as its own plain command, in order, stopping on a failure and printing the worktree notice on a worktree run.
 
 `<default branch>` is the repository's default branch, never a literal `main`. Read it first with `git -C <acting tree> symbolic-ref --quiet --short refs/remotes/origin/HEAD`, which prints `origin/<name>`; carry `<name>` as a typed literal. When it prints nothing, take `main` when `git -C <acting tree> show-ref --verify --quiet refs/remotes/origin/main` exits 0, else `master` when `git -C <acting tree> show-ref --verify --quiet refs/remotes/origin/master` exits 0, else `main`.
@@ -451,5 +472,6 @@ Every path that ends the run appends exactly one cost record immediately before 
 - Step 4, `Abort`.
 - Every stop under Step 4's stop rule, a lost claim race, and every other stop from Step 4b on.
 - Step 12, the end of a completed run: pass-through.
+- Every stop `references/local-bundle.md` adds, as its `## Run ends` lists.
 
 Apply the shared record recipe in `.claude/skills/gaia/references/cost-record.md` with `{{COMMAND}}` = `update-gaia`.

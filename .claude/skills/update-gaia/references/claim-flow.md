@@ -30,7 +30,7 @@ bash .gaia/scripts/update-claim.sh login --tree <starting checkout>
     bash .gaia/scripts/update-gaia-branch-state.sh classify --tag <LATEST_TAG> --latest <LATEST> --branch <headRefName>
     ```
 
-    Follow Step 3's default-branch routes for that result and persist what they persist. A `COMMITTED` own claim reports the PR's state and exits instead of resuming. Step 4's claim is then idempotent.
+    On a local run this call also carries `--build <LOCAL_BUILD>` (`local-bundle.md` `## Claim on a local run`). Follow Step 3's default-branch routes for that result and persist what they persist. A `COMMITTED` own claim reports the PR's state and exits instead of resuming. Step 4's claim is then idempotent.
 - **The user's own claim for another tag**: report its PR number and age, then ask with `AskUserQuestion` "Close it and start fresh (Recommended)" or "Stop". On Stop, exit. On close, run the call below, then continue as a fresh run. A second update PR is never opened while an own claim is open.
 
   ```bash
@@ -65,7 +65,7 @@ A resumed run (mode 1, or mode 2 resuming a claimed branch) calls `start` too: i
 
 **Adopt an own open claim when `CLAIM_PR` is unset.** A run that reached Step 11 with the update commit already on the branch never passed the claim check's resume or Step 4's claim, so `CLAIM_PR` is empty while its claim PR may be open. Read it from the re-list above (`list --tree <main checkout path>`, with the login from `login --tree <main checkout path>`) rather than listing again: a `CLAIM` line whose `headRefName` equals `<branch>` and whose login equals the current login is this run's own claim, so set `CLAIM_PR` to its number and continue as a claimed run. Nothing here closes, creates or forces anything. When the list or `login` exits 3, or no line matches, `CLAIM_PR` stays unset and the run continues unclaimed.
 
-**After the push, when `CLAIM_PR` is set.** The push updated the claim PR, so replace its placeholder body with the review point's summary: the counts per status, the auto-merged files, the answers and what is still deferred, the follow-ups, the report states, the Step 9d addendum and the quality gate result, in Markdown under the line `Pulls GAIA <LATEST_TAG> into the project.`. Write it with one `printf '%s\n'` command, each line single-quoted (a quote inside a line is written `'\''`):
+**After the push, when `CLAIM_PR` is set.** The push updated the claim PR, so replace its placeholder body with the review point's summary: the counts per status, the auto-merged files, the answers and what is still deferred, the follow-ups, the report states, the Step 9d addendum and the quality gate result, in Markdown under the line `Pulls GAIA <LATEST_TAG> into the project.`. On a local run that line is the local one in `local-bundle.md` `## Step 11 with a local build`. Write it with one `printf '%s\n'` command, each line single-quoted (a quote inside a line is written `'\''`):
 
 ```bash
 printf '%s\n' '<summary line>' '<summary line>' > <main checkout path>/.gaia/local/cache/shared/update-gaia/run/pr-body.md

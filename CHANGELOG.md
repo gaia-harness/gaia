@@ -16,6 +16,7 @@ A release change that requires the adopter to act, run a command or hand-migrate
 
 ### Added
 
+- **`/update-gaia --local <tarball>`:** syncs a project from a GAIA bundle built from an unreleased, committed checkout through the same merge, conflict and record steps as a release update. The source is labeled local and unverified and only released migration notes run. The project records the build in a committed `.gaia/VERSION-dev`, the next update merges against that build, and the next release update removes the file. The bundle builder is maintainer-only (#2747)
 - **Harness file line limit (maintainer repo only):** GAIA's own CI now fails a harness code file over 400 lines unless it is grandfathered at a recorded ceiling, and fails a grandfathered file that grows past its ceiling (#3109)
 
 ### Changed

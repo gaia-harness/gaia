@@ -5,10 +5,10 @@
 # subcommands, run with the working directory at the checkout root (the main
 # checkout, or the update worktree). Every path stays repo-relative.
 #   bash .gaia/scripts/update-gaia-preflight.sh refuse-1x      --baseline <v>
-#   bash .gaia/scripts/update-gaia-preflight.sh verify-bundles --baseline <v> --latest-tag <tag> [--extra-tag <tag>]...
+#   bash .gaia/scripts/update-gaia-preflight.sh verify-bundles --baseline <v> --latest-tag <tag> [--baseline-tag <tag>] [--extra-tag <tag>]...
 #   bash .gaia/scripts/update-gaia-preflight.sh select-notes   --latest-dir <dir> --baseline <v> --latest <v>
 #   bash .gaia/scripts/update-gaia-preflight.sh changelog      --baseline <v> --latest <v> --latest-tag <tag> [--save-from <v>]
-#   bash .gaia/scripts/update-gaia-preflight.sh prune          --baseline <v> --latest-tag <tag> [--resume] [--keep-tag <tag>]...
+#   bash .gaia/scripts/update-gaia-preflight.sh prune          --baseline <v> --latest-tag <tag> [--baseline-tag <tag>] [--resume] [--keep-tag <tag>]...
 #
 # WHY A SCRIPT. Inside a linked worktree session the Claude Code runtime
 # refuses a command it cannot verify stays inside the worktree: a captured
@@ -25,13 +25,17 @@
 # printed on stdout); 2 a usage error (an unknown subcommand, an unknown flag,
 # or a missing required flag), with the usage line on stderr.
 
+# The dev-tag helpers live beside this script; sourcing them has no side effects.
+# shellcheck source=update-gaia-local-lib.sh
+. "$(dirname "${BASH_SOURCE[0]}")/update-gaia-local-lib.sh"
+
 usage() {
   cat >&2 <<'USAGE'
 usage: update-gaia-preflight.sh refuse-1x      --baseline <v>
-       update-gaia-preflight.sh verify-bundles --baseline <v> --latest-tag <tag> [--extra-tag <tag>]...
+       update-gaia-preflight.sh verify-bundles --baseline <v> --latest-tag <tag> [--baseline-tag <tag>] [--extra-tag <tag>]...
        update-gaia-preflight.sh select-notes   --latest-dir <dir> --baseline <v> --latest <v>
        update-gaia-preflight.sh changelog      --baseline <v> --latest <v> --latest-tag <tag> [--save-from <v>]
-       update-gaia-preflight.sh prune          --baseline <v> --latest-tag <tag> [--resume] [--keep-tag <tag>]...
+       update-gaia-preflight.sh prune          --baseline <v> --latest-tag <tag> [--baseline-tag <tag>] [--resume] [--keep-tag <tag>]...
 USAGE
   exit 2
 }
@@ -47,6 +51,7 @@ baseline=''
 latest=''
 latest_tag=''
 latest_dir=''
+baseline_tag=''
 save_from=''
 extra_tags=()
 keep_tags=()
@@ -71,7 +76,7 @@ while [ "$#" -gt 0 ]; do
       esac
       shift 2
       ;;
-    --extra-tag | --keep-tag | --save-from)
+    --extra-tag | --keep-tag | --save-from | --baseline-tag)
       [ "$#" -ge 2 ] || usage
       case "$1" in
         --extra-tag)
@@ -83,6 +88,10 @@ while [ "$#" -gt 0 ]; do
           keep_tags+=("$2")
           ;;
         --save-from) save_from="$2" ;;
+        --baseline-tag)
+          [[ "$2" =~ $tag_pattern ]] || usage
+          baseline_tag="$2"
+          ;;
       esac
       shift 2
       ;;
@@ -125,16 +134,18 @@ verify_checklist() {
   fi
 }
 
-# Step: download and verify the bundles. Every bundle the run reads is verified
-# against its release's .sha256 asset in this run, and every tree it reads is
-# extracted again from that verified tarball. A cached tarball skips only the
-# download, never the verification or the extract; there is no verified-marker
-# file. The asset is gaia-bundle-<tag>.tar.gz from 2.0.0 on; the different name
+# Step: download and verify the bundles. Every release bundle the run reads is
+# verified against its release .sha256 asset in this run, and every tree it
+# reads is extracted again from that verified tarball. A cached tarball skips
+# only the download, never the verification or the extract; there is no
+# verified-marker file. A local build (a dev tag) is never downloaded: it
+# resolves from the cache only, and its checksum, computed locally when the
+# bundle was cached, guards only against cache corruption, never authenticity. The asset is gaia-bundle-<tag>.tar.gz from 2.0.0 on; the different name
 # from the earlier gaia-<tag>.tar.gz is what makes a 1.6.1 /update-gaia fail at
 # its fetch step, before it writes anything.
 verify_bundles() {
   local tag dir tarball extra_tag
-  local tags=("v$baseline" "$latest_tag")
+  local tags=("${baseline_tag:-v$baseline}" "$latest_tag") verify_status
   # An extra tag equal to one already listed is fetched once.
   for extra_tag in ${extra_tags[@]+"${extra_tags[@]}"}; do
     case " ${tags[*]} " in
@@ -145,6 +156,15 @@ verify_bundles() {
   for tag in "${tags[@]}"; do
     dir=".gaia/local/cache/shared/update-gaia/$tag"
     tarball="gaia-bundle-${tag}.tar.gz"
+    if gaia_local_is_dev_tag "$tag"; then
+      gaia_local_verify_cached "$tag"
+      verify_status=$?
+      case "$verify_status" in
+        0) echo "VERIFIED_LOCAL $tag"; continue ;;
+        3) echo "CACHE_MISSING $tag"; exit 1 ;;
+        *) rm -rf "$dir"; echo "VERIFY_FAILED $tag"; exit 1 ;;
+      esac
+    fi
     # A cached directory with no checksum predates verification: a cache miss.
     if [ -d "$dir" ] && [ ! -f "$dir/$tarball.sha256" ]; then
       rm -rf "$dir"
@@ -183,7 +203,7 @@ verify_bundles() {
     fi
     echo "VERIFIED $tag"
   done
-  echo "BASELINE_DIR=.gaia/local/cache/shared/update-gaia/v$baseline/tree"
+  echo "BASELINE_DIR=.gaia/local/cache/shared/update-gaia/${baseline_tag:-v$baseline}/tree"
   echo "LATEST_DIR=.gaia/local/cache/shared/update-gaia/$latest_tag/tree"
   for extra_tag in ${extra_tags[@]+"${extra_tags[@]}"}; do
     echo "EXTRA_DIR=$extra_tag:.gaia/local/cache/shared/update-gaia/$extra_tag/tree"
@@ -279,7 +299,7 @@ prune() {
     for d in .gaia/local/cache/shared/update-gaia/*/; do
       [ -d "$d" ] || continue
       case "$(basename "$d")" in
-        "v$baseline" | "$latest_tag") continue ;;
+        "${baseline_tag:-v$baseline}" | "$latest_tag") continue ;;
       esac
       for kept_tag in ${keep_tags[@]+"${keep_tags[@]}"}; do
         [ "$(basename "$d")" = "$kept_tag" ] && continue 2

@@ -40,6 +40,9 @@ export const ADOPTER_OWNED_SENTINELS: ReadonlySet<string> = new Set([
   // a package by editing it, so /update-gaia must never merge or overwrite it.
   '.gaia/packages.json',
   '.gaia/VERSION',
+  // The record of the local build a project was synced from: adopter-owned,
+  // and never present in GAIA's own tree.
+  '.gaia/VERSION-dev',
   'wiki/log.md',
 ]);
 
@@ -277,6 +280,16 @@ export const listGitFiles = (cwd: string): string[] =>
     })
   );
 
+export const assertNoLocalBuildRecordTracked = (
+  tracked: readonly string[]
+): void => {
+  if (tracked.includes('.gaia/VERSION-dev')) {
+    throw new Error(
+      '.gaia/VERSION-dev is tracked: it records a local build in an adopter project, so the GAIA source must never track it (the release tarball is staged from tracked files)'
+    );
+  }
+};
+
 export const buildManifest = (
   cwd: string,
   options: BuildOptions = {}
@@ -292,6 +305,7 @@ export const buildManifest = (
     excludePatterns.some((pattern) => pattern.test(candidate));
 
   const tracked = listGitFiles(repoRoot);
+  assertNoLocalBuildRecordTracked(tracked);
   const entries: [string, ManifestClass][] = [];
 
   for (const relativePath of tracked) {

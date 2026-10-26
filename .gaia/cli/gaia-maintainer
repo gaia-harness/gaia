@@ -23925,6 +23925,9 @@ var ADOPTER_OWNED_SENTINELS = /* @__PURE__ */ new Set([
   // a package by editing it, so /update-gaia must never merge or overwrite it.
   ".gaia/packages.json",
   ".gaia/VERSION",
+  // The record of the local build a project was synced from: adopter-owned,
+  // and never present in GAIA's own tree.
+  ".gaia/VERSION-dev",
   "wiki/log.md"
 ]);
 var SHARED = /* @__PURE__ */ new Set([
@@ -24023,6 +24026,13 @@ var listGitFiles = (cwd) => splitZStream(
     stdio: ["ignore", "pipe", "pipe"]
   })
 );
+var assertNoLocalBuildRecordTracked = (tracked) => {
+  if (tracked.includes(".gaia/VERSION-dev")) {
+    throw new Error(
+      ".gaia/VERSION-dev is tracked: it records a local build in an adopter project, so the GAIA source must never track it (the release tarball is staged from tracked files)"
+    );
+  }
+};
 var buildManifest = (cwd, options = {}) => {
   const repoRoot = options.repoRoot ?? resolveRepoRoot(cwd);
   const versionPath = path8.resolve(repoRoot, ".gaia/VERSION");
@@ -24032,6 +24042,7 @@ var buildManifest = (cwd, options = {}) => {
   const excludePatterns = parseExcludePatterns(excludeText);
   const isExcluded = (candidate) => excludePatterns.some((pattern) => pattern.test(candidate));
   const tracked = listGitFiles(repoRoot);
+  assertNoLocalBuildRecordTracked(tracked);
   const entries = [];
   for (const relativePath of tracked) {
     if (!isExcluded(relativePath)) {
