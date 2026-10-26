@@ -166,7 +166,11 @@ Per managed entry key `k`, with `B`, `L` and `A` the baseline, latest and adopte
 
 The load-bearing guarantee: a dependency the adopter removed is **never re-added**, the JSON-key analog of the file-level "respect adopter deletions" rule. A key GAIA newly adds is applied without asking when the adopter does not have it, because a new GAIA dependency the adopter never receives is a capability silently missing. Clean applies are written surgically (the changed line only, preserving the adopter's formatting). The review summary names, per file, the keys applied and the keys kept removed. A version-only release touches nothing and names nothing.
 
-One exception to leaving a GAIA-removed key in place: a dependency GAIA renamed. When the adopter still carries the old package and its replacement landed in the same section (applied or already latest), the merge reports the old key as an applied removal (`reason: "removed"`) and the merge execution deletes it. A conflict on the replacement leaves the old package in place, so a project never ends up with neither. The rename map lives in `.gaia/cli/src/update/merge-package.ts`.
+One exception to leaving a GAIA-removed key in place: a dependency GAIA renamed. When the adopter still carries the old package and its replacement landed in the same section (applied or already latest), the merge reports the old key as an applied removal (`reason: "removed"`) and the merge execution deletes it. A conflict on the replacement leaves the old package in place, so a project never ends up with neither.
+
+<!-- gaia:maintainer-only:start -->
+The rename map lives in `.gaia/cli/src/update/merge-package.ts`.
+<!-- gaia:maintainer-only:end -->
 
 ## Audit configuration merge
 
