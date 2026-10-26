@@ -53,8 +53,7 @@ jobs:
   triage:
     name: Triage gaia-forensics issue
     if: contains(github.event.issue.labels.*.name, 'gaia-forensics')
-    # Pinned off ubuntu-latest (26.04) until the suites pass there: gaia-harness/gaia#3082.
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-latest
     timeout-minutes: 30
     # Read-only. claude-code-action hands the job token to the model's
     # process and writes it into the git remote, so the model steps run in a
@@ -783,8 +782,7 @@ jobs:
     name: Quality Gate on the fix
     needs: triage
     if: needs.triage.outputs.route == 'fix-ready'
-    # Pinned off ubuntu-latest (26.04) until the suites pass there: gaia-harness/gaia#3082.
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-latest
     timeout-minutes: 30
     permissions:
       contents: read
@@ -926,8 +924,7 @@ jobs:
     name: Report triage outcome
     needs: [triage, quality-gate]
     if: always() && needs.triage.result != 'skipped'
-    # Pinned off ubuntu-latest (26.04) until the suites pass there: gaia-harness/gaia#3082.
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
       contents: write

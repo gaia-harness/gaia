@@ -47,8 +47,7 @@ permissions: {}
 jobs:
   shell-lint:
     name: Shellcheck (tracked *.sh + *.bats) (advisory)
-    # Pinned off ubuntu-latest (26.04) until the suites pass there: gaia-harness/gaia#3082.
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-latest
     # A checkout, one pinned-tarball download, and a whole-tree shellcheck run.
     # Ten minutes is a wide margin for an ordinary run, wider than it looks
     # because the one step that can hang is a network fetch from github.com,

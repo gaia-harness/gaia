@@ -14,7 +14,8 @@ permissions: {}
 jobs:
   release:
     name: Publish GitHub release
-    # Pinned off ubuntu-latest (26.04) until the suites pass there: gaia-harness/gaia#3082.
+    # Pinned off ubuntu-latest (26.04): a tag push is the only trigger, so no
+    # branch run can prove this job there first. gaia-harness/gaia#3111.
     runs-on: ubuntu-24.04
     # `gh release create` in the last step publishes the release and uploads
     # the tarball; nothing else here writes.

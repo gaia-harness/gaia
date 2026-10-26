@@ -18,6 +18,10 @@ A release change that requires the adopter to act, run a command or hand-migrate
 
 - **Harness file line limit (maintainer repo only):** GAIA's own CI now fails a harness code file over 400 lines unless it is grandfathered at a recorded ceiling, and fails a grandfathered file that grows past its ceiling (#3109)
 
+### Changed
+
+- **CI back on ubuntu-latest (maintainer repo only):** GAIA's own test, lint and triage workflows run on ubuntu-latest (Ubuntu 26.04) again, so CI exercises the runner adopters are moving to. The release workflow stays on ubuntu-24.04 until a release run is proven on 26.04 (#3082, #3111)
+
 ### Fixed
 
 - **Tests workflow on a slow Ubuntu mirror:** installing Playwright's system dependencies no longer stalls the Tests job until its timeout. The packages are cached per runner image and install offline once cached; an uncached install is bounded and retried, keeps what each attempt downloaded, and on final failure names the `gh run rerun <id> --failed` command that recovers it. The workflow now uses the new `.github/actions/gaia-apt-cache` action, which `/update-gaia` installs with it (#3039, #3090)
