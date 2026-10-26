@@ -43,9 +43,9 @@ GAIA ships clean. `/gaia-init` does the last-mile setup:
 - **Configures the project.** Title, package name, docs title, CODEOWNERS, localized site titles.
 - **Installs dependencies.** Bootstraps pnpm via `corepack`, runs `pnpm install`.
 - **Configures i18n.** Prompts for your language set, scaffolds the matching language files, updates the component and Storybook wiring.
-- **Installs Claude skills and plugins.** [React Doctor](https://github.com/millionco/react-doctor), [Playwright CLI](https://github.com/microsoft/playwright-cli), and `typescript-lsp`.
+- **Installs the React Doctor skill.** [React Doctor](https://github.com/millionco/react-doctor), first, so it is ready in the same session.
 
-Then `/setup-gaia` runs the rest of the onboarding: GitHub repository provisioning (for a repo admin, branch protection with the `GAIA-Audit` required check and squash-only merges) and the per-machine sandbox and statusline choices. It runs only the steps a clone still owes, so any developer can re-run it safely.
+When it finishes, it continues straight into `/setup-gaia` in the same Claude session, which installs [Playwright CLI](https://github.com/microsoft/playwright-cli) and the `typescript-lsp` plugin, provisions the GitHub repository (for a repo admin, branch protection with the `GAIA-Audit` required check and squash-only merges) and asks the per-machine sandbox and statusline choices; it ends without a restart, suggesting `/clear` to start your first feature with a fresh context. `/setup-gaia` runs only the steps a clone still owes, so any developer can re-run it safely.
 
 You end up with a clean app shell and a fully-configured Claude workflow.
 

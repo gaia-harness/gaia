@@ -712,7 +712,7 @@ team_from_sandbox_block() {
 }
 
 init_settings_block() {
-  block_under "${REPO_ROOT}/${INIT_COMMAND_PATH}" '## Step 9: Project settings'
+  block_under "${REPO_ROOT}/${INIT_COMMAND_PATH}" '## Step 8: Project settings'
 }
 
 @test "the sandbox route: a plain run with no marker and no recommendation takes the default, asking nothing" {

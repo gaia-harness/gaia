@@ -5,6 +5,12 @@
 #   - The React Doctor probe names the `frontend/` skill location, and neither
 #     the setup surface nor `.claude/commands/gaia-init.md` carries the
 #     root-level probe.
+#   - install-tools runs a tool's install only when its own probe fails, and a
+#     resumed run skips a step already recorded.
+#   - No setup reference and no command except the init command and the release
+#     command (another change owns the release command) pairs `/gaia-init`
+#     with per-machine work, and per-machine.md names no automatic caller.
+#   - Argument parse says an inline read from init leaves `RECONFIGURE` false.
 #
 # Every test that proves the real files pass has a twin that runs the same
 # check over a scratch copy with the guarded content removed or the old
@@ -144,4 +150,199 @@ check_react_doctor_location() {
   run check_react_doctor_location "$copy" "$(real_surface)" "$INIT_PAGE"
   [ "$status" -ne 0 ]
   grep -qF 'does not name' <<<"$output"
+}
+
+# mutate_file <source> <name> <old> <new>: copy <source> into the test's temp
+# dir with every literal <old> replaced by <new>, and print the copy's path.
+# Fails when the replacement changed nothing, so a control can never run on an
+# unmutated copy.
+mutate_file() {
+  local copy="${BATS_TEST_TMPDIR}/$2" content
+  content="$(cat "$1")"
+  content="${content//"$3"/$4}"
+  printf '%s\n' "$content" >"$copy"
+  cmp -s "$1" "$copy" && {
+    echo "the mutation changed nothing in $2" >&2
+    return 1
+  }
+  printf '%s\n' "$copy"
+}
+
+# ---------------------------------------------------------------------------
+# install-tools runs a tool's install only when its own probe fails
+# ---------------------------------------------------------------------------
+
+PER_TOOL_SENTENCE="Run each tool's install only when its own probe fails, so a React Doctor skill already on disk is recorded without being installed again."
+STANDALONE_GAP_SENTENCE='A session that read a file under `frontend/` before this install lists the skill only from its next session; the closing message adds no restart line for it.'
+
+# check_install_tools_per_tool <per-machine>: the install-tools step carries
+# the per-tool install sentence and the standalone-gap sentence.
+check_install_tools_per_tool() {
+  local step
+  step="$(awk '$0 == "## Step 1: install-tools" { inside = 1; next } inside && /^## / { exit } inside' "$1")"
+  [ -n "$step" ] || {
+    echo "## Step 1: install-tools is empty or missing" >&2
+    return 1
+  }
+  grep -qF -- "$PER_TOOL_SENTENCE" <<<"$step" || {
+    echo "install-tools lacks the per-tool install sentence" >&2
+    return 1
+  }
+  grep -qF -- "$STANDALONE_GAP_SENTENCE" <<<"$step" || {
+    echo "install-tools lacks the standalone-gap sentence" >&2
+    return 1
+  }
+  return 0
+}
+
+@test "install-tools runs each tool's install only when its own probe fails" {
+  check_install_tools_per_tool "$PER_MACHINE_REFERENCE"
+}
+
+@test "the per-tool check fails without the per-tool install sentence" {
+  local copy
+  copy="$(mutate_file "$PER_MACHINE_REFERENCE" per-tool-no-install.md "$PER_TOOL_SENTENCE " '')"
+  run check_install_tools_per_tool "$copy"
+  [ "$status" -ne 0 ]
+  grep -qF 'per-tool install sentence' <<<"$output"
+}
+
+@test "the per-tool check fails without the standalone-gap sentence" {
+  local copy
+  copy="$(mutate_file "$PER_MACHINE_REFERENCE" per-tool-no-gap.md " $STANDALONE_GAP_SENTENCE" '')"
+  run check_install_tools_per_tool "$copy"
+  [ "$status" -ne 0 ]
+  grep -qF 'standalone-gap sentence' <<<"$output"
+}
+
+# ---------------------------------------------------------------------------
+# No setup or command file says /gaia-init runs the per-machine work
+# ---------------------------------------------------------------------------
+
+# check_no_init_per_machine_claim <file>: no line names /gaia-init together
+# with a per-machine word.
+check_no_init_per_machine_claim() {
+  local file="$1" hits
+  [ -f "$file" ] || {
+    echo "unreadable file: ${file}" >&2
+    return 1
+  }
+  hits="$(grep -F -- '/gaia-init' "$file" | grep -E 'per-machine|mark-step|setup finalize|install|plugin|React Doctor|typescript-lsp' || true)"
+  [ -z "$hits" ] || {
+    echo "${file} pairs /gaia-init with per-machine work: ${hits}" >&2
+    return 1
+  }
+  return 0
+}
+
+# claim_command_files: every command except the init command (it has its own
+# checks) and the release command (another change owns it and no edit here may
+# touch it), derived from the directory.
+claim_command_files() {
+  local command_file
+  # gaia-lint-ignore whole-tree-mark-guard: the one test that calls this helper carries the per-test whole-tree mark
+  for command_file in "${REPO_ROOT}"/.claude/commands/*.md; do
+    case "$(basename "$command_file")" in
+      gaia-init.md | gaia-release.md) continue ;;
+    esac
+    printf '%s\n' "$command_file"
+  done
+}
+
+# bats test_tags=whole-tree
+@test "no setup reference or command says /gaia-init runs the per-machine work" {
+  local files file count=0
+  files="$(surface_files "$PAGE" "$REFERENCES_DIRECTORY")"
+  files="${files}"$'\n'"$(claim_command_files)"
+  while IFS= read -r file; do
+    check_no_init_per_machine_claim "$file"
+    count=$((count + 1))
+  done <<<"$files"
+  # the surface alone is the entry plus every expected reference
+  [ "$count" -gt "$(wc -w <<<"$EXPECTED_SETUP_REFERENCES")" ]
+}
+
+@test "the init-claim check fails with the old per-machine header put back" {
+  local copy
+  copy="$(mutate_file "$PER_MACHINE_REFERENCE" init-claim-header.md 'The four per-machine steps `/setup-gaia` runs in Phase 2:' 'The four per-machine steps `/gaia-init` (Step 8) and `/setup-gaia` (Phase 2) share:')"
+  run check_no_init_per_machine_claim "$copy"
+  [ "$status" -ne 0 ]
+  grep -qF 'The four per-machine steps `/gaia-init` (Step 8)' <<<"$output"
+}
+
+# ---------------------------------------------------------------------------
+# Entry by inline read, no automatic caller, resume skips recorded steps
+# ---------------------------------------------------------------------------
+
+READ_ENTRY_SENTENCE='When `/gaia-init` reads this file inline at its last step, `$ARGUMENTS` is not substituted: `RECONFIGURE` is false.'
+SKIP_COMPLETED_SENTENCE='A step already in `completed_steps` is not re-run.'
+
+# check_read_entry_sentence <page>: Argument parse says an inline read carries
+# no flag.
+check_read_entry_sentence() {
+  local section
+  section="$(awk '$0 == "## Argument parse" { inside = 1; next } inside && /^## / { exit } inside' "$1")"
+  grep -qF -- "$READ_ENTRY_SENTENCE" <<<"$section" || {
+    echo "Argument parse lacks the inline-read sentence" >&2
+    return 1
+  }
+  return 0
+}
+
+@test "Argument parse says an inline read from init leaves RECONFIGURE false" {
+  check_read_entry_sentence "$PAGE"
+}
+
+@test "the inline-read check fails on a copy without the sentence" {
+  local copy
+  copy="$(mutate_file "$PAGE" read-entry-absent.md " $READ_ENTRY_SENTENCE" '')"
+  run check_read_entry_sentence "$copy"
+  [ "$status" -ne 0 ]
+  grep -qF 'inline-read sentence' <<<"$output"
+}
+
+# check_no_automatic_caller <per-machine>: no sentence lets an automatic mode
+# answer a setup gate.
+check_no_automatic_caller() {
+  grep -qF -- 'automatic mode' "$1" && {
+    echo "per-machine.md names an automatic mode" >&2
+    return 1
+  }
+  return 0
+}
+
+@test "per-machine setup names no automatic caller" {
+  check_no_automatic_caller "$PER_MACHINE_REFERENCE"
+}
+
+@test "the automatic-caller check fails with the old sentence put back" {
+  local copy
+  copy="$(scratch_copy "$PER_MACHINE_REFERENCE" automatic-caller.md)"
+  printf '%s\n' 'A caller running in an automatic mode turns them on without asking.' >>"$copy"
+  run check_no_automatic_caller "$copy"
+  [ "$status" -ne 0 ]
+  grep -qF 'automatic mode' <<<"$output"
+}
+
+# check_resume_skips_completed <per-machine>: the skip-completed rule and the
+# per-tool install rule are both present, so a resumed run neither repeats a
+# recorded step nor reinstalls a tool whose probe passes.
+check_resume_skips_completed() {
+  grep -qF -- "$SKIP_COMPLETED_SENTENCE" "$1" || {
+    echo "per-machine.md lacks the skip-completed rule: ${SKIP_COMPLETED_SENTENCE}" >&2
+    return 1
+  }
+  check_install_tools_per_tool "$1"
+}
+
+@test "a resumed setup skips recorded steps and reinstalls no tool whose probe passes" {
+  check_resume_skips_completed "$PER_MACHINE_REFERENCE"
+}
+
+@test "the resume check fails without the skip-completed rule" {
+  local copy
+  copy="$(mutate_file "$PER_MACHINE_REFERENCE" skip-completed-absent.md "$SKIP_COMPLETED_SENTENCE" '')"
+  run check_resume_skips_completed "$copy"
+  [ "$status" -ne 0 ]
+  grep -qF 'skip-completed rule' <<<"$output"
 }

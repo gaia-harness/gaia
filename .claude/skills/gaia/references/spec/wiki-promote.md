@@ -240,7 +240,11 @@ This command does NOT commit or push; the orchestrator does. Return a structured
 }
 ```
 
-The orchestrator stages exactly the `pages_written` and `pages_updated` paths plus `wiki/index.md` and `wiki/log.md`, commits them with a `wiki:` Conventional Commits subject (`.gaia/conventional-commits.json` has a `wiki` type), and pushes. The commit must contain only `wiki/**` paths: `wiki/**` is outside every Code Audit Team member's scope, and that is what keeps the members' already-posted markers valid. A commit that touches any other path invalidates them.
+The orchestrator stages exactly the `pages_written` and `pages_updated` paths plus `wiki/index.md` and `wiki/log.md`, commits them with a `wiki:` Conventional Commits subject (`.gaia/conventional-commits.json` has a `wiki` type), and pushes. `wiki/**` is outside every Code Audit Team member's scope, so a commit of only `wiki/**` paths keeps the members' already-posted markers valid; any other path in the commit rotates the marker of the member that owns it.
+
+<!-- gaia:maintainer-only:start -->
+GAIA maintainers: a non-empty `pages_written` also owes a manifest answer, because `.gaia/cli/gaia-maintainer release manifest --check` fails on a new wiki page until `.gaia/manifest.json` lists it. Answer every new page in the promotion commit: run `.gaia/cli/gaia-maintainer release manifest` once with one `--ship <path>` per `pages_written` entry, and stage `.gaia/manifest.json` with the pages. The manifest is in code-audit-maintainer-shell's scope, so that commit rotates the shell member's marker, and before the merge a fresh `bash .gaia/tests/verify-harness.sh branch` pass and a shell re-audit are owed (`.claude/rules/pr-merge.md`). A promotion that only updates existing pages owes no answer and rotates nothing. Promotion runs after audit clearance because consolidation summarizes the audited code, so moving it earlier does not avoid this cost: plan for the extra verify run and shell audit unit whenever a promotion writes a new page.
+<!-- gaia:maintainer-only:end -->
 
 When every page was skipped (the union of `pages_written` and `pages_updated` is empty), return Choice `no`, `Pages: none` and `Reason: every target page was skipped; see warnings`, and the orchestrator makes no commit.
 

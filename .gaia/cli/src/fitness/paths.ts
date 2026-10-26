@@ -1,4 +1,4 @@
-import {STATE_FILE_RELATIVE} from '../init/util/state.js';
+import {TOOLING_PATHS} from '../tooling-paths.js';
 import {escapeRegExp} from '../util/escape-regexp.js';
 import type {ResolvedPath, RuleContext} from './context.js';
 import {bodyLines, splitFrontmatter, stripInlineCode} from './markdown.js';
@@ -227,18 +227,6 @@ const resolveEverywhere = (
     context.resolve(anchor, candidate, 'file-dir')
   ),
 ];
-
-/**
- * Paths GAIA's own tooling writes on first use, so a fresh tree lacks them and
- * no ignore file names them: `gaia init` writes its resume cursor, and the wiki
- * maintenance passes write their audit reports under `wiki/meta/`. Only the
- * folder is listed: a report's name varies, so a cited file under it is still
- * a claim that the file exists.
- */
-const TOOLING_PATHS: ReadonlySet<string> = new Set([
-  STATE_FILE_RELATIVE,
-  'wiki/meta',
-]);
 
 /**
  * Whether a missing path is a runtime artifact a fresh clone lacks: one GAIA's

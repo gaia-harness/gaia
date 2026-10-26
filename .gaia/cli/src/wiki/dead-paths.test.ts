@@ -184,6 +184,18 @@ describe('wiki dead-paths', () => {
     expect(scanWikiPaths(sandbox.root).dead).toEqual([]);
   });
 
+  test('ignores the init resume cursor, by exact token, and still flags a near miss', () => {
+    sandbox.writeFile(
+      'wiki/concepts/Onboarding.md',
+      '# Onboarding\n\nInit resumes from `.gaia/init-state.json`, not `.gaia/init-state.json.bak` or `.gaia/init_state.json`.\n'
+    );
+
+    expect(scanWikiPaths(sandbox.root).dead.map((d) => d.path)).toEqual([
+      '.gaia/init-state.json.bak',
+      '.gaia/init_state.json',
+    ]);
+  });
+
   test('ignores the machine-local Claude Code settings file, by exact token', () => {
     sandbox.writeFile(
       'wiki/concepts/Local Settings.md',
@@ -192,6 +204,19 @@ describe('wiki dead-paths', () => {
 
     expect(scanWikiPaths(sandbox.root).dead.map((d) => d.path)).toEqual([
       '.claude/settings.local.json.bak',
+    ]);
+  });
+
+  test('ignores the gitignored per-machine env file, by exact token, and still flags a missing tracked path', () => {
+    sandbox.writeFile(
+      'wiki/concepts/Environment.md',
+      '# Environment\n\nCopy `frontend/.env.example` to `frontend/.env`, never `frontend/.env.bak`. See `frontend/app/missing.ts`.\n'
+    );
+
+    expect(scanWikiPaths(sandbox.root).dead.map((d) => d.path)).toEqual([
+      'frontend/.env.example',
+      'frontend/.env.bak',
+      'frontend/app/missing.ts',
     ]);
   });
 

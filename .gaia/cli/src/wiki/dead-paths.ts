@@ -14,6 +14,7 @@ import {readFileSync, statSync} from 'node:fs';
 import path from 'node:path';
 import {EXIT_CODES} from '../exit.js';
 import {structuredError} from '../stderr.js';
+import {TOOLING_PATHS} from '../tooling-paths.js';
 import {loadPackages} from '../util/packages.js';
 import {
   collectWikiMarkdown,
@@ -113,9 +114,15 @@ export const ADOPTER_OWNED_SENTINELS: ReadonlySet<string> = new Set([
   '.gaia/update-decisions.json',
 ]);
 
-/** Machine-local, gitignored, and written by Claude Code, never by GAIA. */
+/**
+ * Machine-local, gitignored files written per machine and never committed,
+ * whoever writes them: Claude Code writes the settings file, and the env
+ * bootstrap copies `frontend/.env` from its tracked example. A fresh clone or
+ * scaffold lacks them until that step runs, so a citation is not rot.
+ */
 const MACHINE_LOCAL_PATHS: ReadonlySet<string> = new Set([
   '.claude/settings.local.json',
+  'frontend/.env',
 ]);
 
 /**
@@ -173,6 +180,7 @@ const isTrackedPath = (token: string, prefixes: readonly string[]): boolean => {
   if (ADOPTER_OWNED_SENTINELS.has(token)) return false;
   if (MACHINE_LOCAL_PATHS.has(token)) return false;
   if (ABSENT_BY_DESIGN_PATHS.has(token)) return false;
+  if (TOOLING_PATHS.has(token)) return false;
   if (RUNTIME_PREFIXES.some((prefix) => token.startsWith(prefix))) return false;
   if (SIBLING_REPO_PATTERN.test(token)) return true;
 
