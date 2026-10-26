@@ -55,6 +55,23 @@ exit "$exit_code"
 SHIM
   chmod +x "$SANDBOX/bin/pnpm"
 
+  # The browsers step installs apt dependencies only on Linux. uname reports
+  # Darwin unless a test sets UNAME_SYSTEM, so the suite takes the same path
+  # on a Mac and on a Linux runner, where the real apt-get must never run.
+  # The Linux tests drive the real apt helper with sudo, timeout, apt-get and
+  # sleep stubbed, and node standing in for Playwright's install-deps.
+  printf '%s\n' '#!/usr/bin/env bash' 'echo "${UNAME_SYSTEM:-Darwin}"' > "$SANDBOX/bin/uname"
+  printf '%s\n' '#!/usr/bin/env bash' 'exec "$@"' > "$SANDBOX/bin/sudo"
+  printf '%s\n' '#!/usr/bin/env bash' 'shift' 'exec "$@"' > "$SANDBOX/bin/timeout"
+  printf '%s\n' '#!/usr/bin/env bash' 'exit 0' > "$SANDBOX/bin/apt-get"
+  printf '%s\n' '#!/usr/bin/env bash' 'exit 0' > "$SANDBOX/bin/sleep"
+  printf '%s\n' '#!/usr/bin/env bash' \
+    'echo "node $*" >> "$PNPM_LOG"' \
+    'exit "${NODE_INSTALL_DEPS_EXIT:-0}"' > "$SANDBOX/bin/node"
+  chmod +x "$SANDBOX/bin"/*
+  export APT_CONFIGURATION_FILE="$SANDBOX/90gaia-archive-cache"
+  export RUNNER_TEMP="$SANDBOX/runner-temp"
+
   PATH="$SANDBOX/bin:$PATH"
   export PATH
 
@@ -142,6 +159,35 @@ pnpm_log_count() {
   test_line=$(grep -nE '^pnpm test( |$)' "$PNPM_LOG" | head -1 | cut -d: -f1)
   [ "$lint_line" -lt "$browsers_line" ]
   [ "$browsers_line" -lt "$test_line" ]
+}
+
+@test "all-green off Linux: no apt dependency install, and never --with-deps" {
+  run "$RUNNER" "$SUMMARY"
+  [ "$status" -eq 0 ]
+  grep -qF 'install-deps' "$PNPM_LOG" && return 1
+  grep -qF -- '--with-deps' "$PNPM_LOG" && return 1
+  true
+}
+
+@test "all-green on Linux: apt dependencies install through the helper, then the browser" {
+  UNAME_SYSTEM=Linux run "$RUNNER" "$SUMMARY"
+  [ "$status" -eq 0 ]
+  [ "$(grep -cxF 'node frontend/node_modules/playwright/cli.js install-deps chromium' "$PNPM_LOG")" = "1" ]
+  deps_line=$(grep -nF 'install-deps chromium' "$PNPM_LOG" | head -1 | cut -d: -f1)
+  browsers_line=$(grep -nxF 'pnpm -C frontend exec playwright install chromium' "$PNPM_LOG" | head -1 | cut -d: -f1)
+  [ "$deps_line" -lt "$browsers_line" ]
+  grep -qF -- '--with-deps' "$PNPM_LOG" && return 1
+  true
+}
+
+@test "fail at the Linux apt dependencies: browsers fails after three attempts, naming the re-run" {
+  UNAME_SYSTEM=Linux NODE_INSTALL_DEPS_EXIT=100 run "$RUNNER" "$SUMMARY"
+  [ "$status" -eq 1 ]
+  [ "$(grep -cF 'install-deps chromium' "$PNPM_LOG")" = "3" ]
+  grep -qxF 'pnpm -C frontend exec playwright install chromium' "$PNPM_LOG" && return 1
+  [ "$(pnpm_log_count test)" = "0" ]
+  grep -qF '"failed_step": "browsers"' "$SUMMARY"
+  grep -qF 'gh run rerun' "$SUMMARY"
 }
 
 @test "all-green: install uses --frozen-lockfile" {

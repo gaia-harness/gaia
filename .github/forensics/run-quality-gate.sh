@@ -15,7 +15,9 @@
 #   2. pnpm typecheck
 #   3. pnpm lint
 #   4. playwright install chromium     (Vitest's browser and storybook
-#                                        projects launch headless Chromium)
+#                                        projects launch headless Chromium;
+#                                        on Linux its apt dependencies
+#                                        first, bounded and retried)
 #   5. pnpm test --run                  (vitest only; playwright is out of
 #                                        scope for the triage gate, see
 #                                        task-quality-gate-runner.md)
@@ -157,6 +159,24 @@ JSON
   return 1
 }
 
+# Chromium's system libraries come through the shared bounded apt helper
+# rather than `--with-deps`, whose one unbounded apt run on a slow mirror
+# stalls the gate until the job cap. No archive cache restores into this job,
+# so every run takes the helper's cold path. Elsewhere (a
+# maintainer's Mac) the libraries are the OS's own, so only the browser
+# installs. Bounds match tests.yml's install step: `install-deps` runs its own
+# `apt-get update` inside each 180s call.
+apt_cached_install="$(dirname "$0")/../actions/gaia-apt-cache/apt-cached-install.sh"
+# shellcheck disable=SC2329 # invoked through run_step
+install_browsers() {
+  if [ "$(uname -s)" = Linux ] && command -v apt-get >/dev/null 2>&1; then
+    bash "$apt_cached_install" --archive-dir "${RUNNER_TEMP:-$work_directory}/gaia-apt-cache/forensics-playwright" \
+      --update-seconds 0 --install-seconds 180 --attempts 3 \
+      -- node frontend/node_modules/playwright/cli.js install-deps chromium || return
+  fi
+  pnpm -C frontend exec playwright install chromium
+}
+
 # ---------------------------------------------------------------------------
 # Steps. Halt-on-first-fail: each `run_step` returns 1 to bubble up here
 # via `|| exit 1`; we never proceed past a failure. Order matches the
@@ -165,7 +185,7 @@ JSON
 run_step install   pnpm install --frozen-lockfile --ignore-scripts || exit 1
 run_step typecheck pnpm typecheck                  || exit 1
 run_step lint      pnpm lint                       || exit 1
-run_step browsers  pnpm -C frontend exec playwright install --with-deps chromium || exit 1
+run_step browsers  install_browsers                || exit 1
 run_step test      pnpm test --run                 || exit 1
 run_step knip      pnpm knip                       || exit 1
 

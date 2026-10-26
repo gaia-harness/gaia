@@ -4,7 +4,7 @@ status: active
 priority: 2
 date: 2026-08-13
 created: 2026-08-13
-updated: 2026-10-25
+updated: 2026-10-27
 tags: [decision, ci, performance, github-actions, bats]
 ---
 
@@ -108,7 +108,7 @@ The hooks group stops at three shards even though a fourth would lower its own h
 
 Widening the matrix is not free, and two costs are measured rather than theoretical:
 
-- **Shared-host bursts.** The legs that install a package run `apt-get update` within seconds of each other, and a mirror hash-sum mismatch on any one of them reds a declared-required context. The bats archive is vendored rather than fetched for exactly this reason: fetching it puts a second host in the same burst, and GitHub's codeload answers that burst with `503`s costing an affected leg roughly two minutes of backoff. Any change that adds legs, or that puts a fetch back on an install path, widens what is left.
+- **Shared-host bursts.** On a cold apt archive cache (a new runner image), the legs that install a package run `apt-get update` within seconds of each other, and a mirror failure on any one of them that outlasts its bounded retries reds a declared-required context. A warm cache installs the archived packages offline and contacts no mirror; the install goes through `.github/actions/gaia-apt-cache/`. The bats archive is vendored rather than fetched for exactly this reason: fetching it puts a second host in the same burst, and GitHub's codeload answers that burst with `503`s costing an affected leg roughly two minutes of backoff. Any change that adds legs, or that puts a fetch back on an install path, widens what is left.
 - **Fixed overhead multiplies.** Each leg pays provisioning, checkout, and install. Below roughly a minute of real work, a leg is mostly overhead.
 
 Total machine time rises with fan-out even as wall-clock falls. Fan-out optimizes human-facing latency on the critical path, not runner minutes; change-scoped selection is the lever on runner minutes and timeout exposure.

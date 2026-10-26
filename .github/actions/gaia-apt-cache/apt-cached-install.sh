@@ -91,6 +91,7 @@ apt_configuration="${APT_CONFIGURATION_FILE:-/etc/apt/apt.conf.d/90gaia-archive-
 
 # apt runs as root and leaves a root-only partial/ and lock behind; the cache
 # step that saves this directory runs as the runner user and cannot read them.
+# shellcheck disable=SC2329 # invoked through the EXIT trap
 release_archive_directory() {
   as_root rm -f "$apt_configuration"
   as_root rm -rf "$archive_directory/partial" "$archive_directory/lock"
