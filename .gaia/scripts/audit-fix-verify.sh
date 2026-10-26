@@ -143,6 +143,7 @@ ENFORCEMENT_PATHS=(
   '.gaia/scripts/audit-fix-verify.sh'         # this verifier
   '.gaia/scripts/branch-name-lib.sh'          # branch key every state path derives from
   '.gaia/scripts/main-root-lib.sh'            # main-checkout resolution for every state path
+  '.gaia/scripts/exclusive-lock-lib.sh'       # the state file's lock
   '.claude/settings.json'                     # hook registrations and env knobs
   '.claude/settings.local.json'               # machine-local overrides of the same
   '.claude/hooks/audit-loop-ask-grant.sh'     # records the human's AskUserQuestion answer

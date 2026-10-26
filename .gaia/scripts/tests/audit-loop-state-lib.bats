@@ -23,6 +23,8 @@ setup() {
   . "$REPO_ROOT/.gaia/tests/helpers/path.sh"
   # shellcheck source=/dev/null
   . "$REPO_ROOT/.gaia/tests/helpers/files.sh"
+  # shellcheck source=/dev/null
+  . "$REPO_ROOT/.gaia/tests/helpers/non-exclusive-mkdir.sh"
   alf_init
 }
 
@@ -144,6 +146,27 @@ EOF
   [ "$(jq '.history.rounds | length' "$state_file")" -eq 3 ]
   case "$output" in *"$first_tree"*) ;; *) return 1 ;; esac
   case "$output" in *"$second_tree"*) ;; *) return 1 ;; esac
+  [ ! -d "$state_file.lock" ]
+}
+
+@test "lock: two concurrent writers both land, with a non-exclusive mkdir first on PATH" {
+  local state_file="$BATS_TEST_TMPDIR/s/x.json" first_tree second_tree
+  gaia_loop_write_state "$state_file" "$(valid_state)"
+  first_tree="$(printf '1%.0s' $(seq 1 40))"
+  second_tree="$(printf '2%.0s' $(seq 1 40))"
+  PATH="$(non_exclusive_mkdir_path)"
+  writer() {
+    gaia_loop_lock "$state_file" $(($(date +%s) + 20)) || return 1
+    local state_json
+    state_json="$(gaia_loop_read_state "$state_file")"
+    sleep 0.3
+    gaia_loop_write_state "$state_file" "$(printf '%s' "$state_json" | jq -c --arg tree "$1" '.history.rounds += [.history.rounds[0] + {tree: $tree}]')"
+    gaia_loop_unlock "$state_file"
+  }
+  writer "$first_tree" &
+  writer "$second_tree" &
+  wait
+  [ "$(jq '.history.rounds | length' "$state_file")" -eq 3 ]
   [ ! -d "$state_file.lock" ]
 }
 

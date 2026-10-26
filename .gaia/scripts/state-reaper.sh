@@ -49,16 +49,15 @@ state_reaper_lock_is_stale() {
 # have retaken a live lock in its place; a live lock is handed back.
 state_reaper_take_lock() {
   local lock="$1"
-  if ! mkdir "$lock" 2>/dev/null; then
+  if ! gaia_exclusive_lock_take "$lock"; then
     state_reaper_lock_is_stale "$lock" && mv "$lock" "$lock.stale.$$" 2>/dev/null || return 1
     if ! state_reaper_lock_is_stale "$lock.stale.$$"; then
       mv "$lock.stale.$$" "$lock" 2>/dev/null
       return 1
     fi
     rm -rf "$lock.stale.$$" 2>/dev/null
-    mkdir "$lock" 2>/dev/null || return 1
+    gaia_exclusive_lock_take "$lock" || return 1
   fi
-  printf '%s\n' "$$" >"$lock/owner" 2>/dev/null
   state_reaper_release_lock="$lock"
   return 0
 }
@@ -95,6 +94,8 @@ state_reaper_main() {
   script_directory="$(cd "${BASH_SOURCE[0]%/*}" 2>/dev/null && pwd -P)" || return 0
   # shellcheck source=/dev/null
   . "$script_directory/state-reaper-classes.sh" || return 0
+  # shellcheck source=/dev/null
+  . "$script_directory/exclusive-lock-lib.sh" || return 0
   main_root="$(gaia_resolve_main_root "$script_directory" 2>/dev/null)" || return 0
   local_root="$main_root/.gaia/local"
   state_directory="$local_root/cache/state-reaper"

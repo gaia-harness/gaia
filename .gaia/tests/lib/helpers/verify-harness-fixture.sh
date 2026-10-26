@@ -142,7 +142,7 @@ vhf_init() {
   printf '.gaia/local/\n' >"$VHF_ROOT/.gitignore"
 
   mkdir -p "$VHF_ROOT/.gaia/scripts" "$VHF_ROOT/.gaia/tests/helpers" "$VHF_ROOT/.gaia/cli" || return 1
-  for script_name in bats-suites-for-change.sh bats5.sh audit-loop-state-lib.sh branch-name-lib.sh \
+  for script_name in bats-suites-for-change.sh bats5.sh audit-loop-state-lib.sh exclusive-lock-lib.sh branch-name-lib.sh \
     main-root-lib.sh audit-key-lib.sh; do
     cp "$source_root/.gaia/scripts/$script_name" "$VHF_ROOT/.gaia/scripts/$script_name" || return 1
   done

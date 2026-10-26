@@ -12,6 +12,8 @@ setup() {
   REPO_ROOT="$(cd "$BATS_TEST_DIRNAME/../../.." && pwd)"
   # shellcheck source=/dev/null
   . "$REPO_ROOT/.gaia/scripts/worktree-ports-lib.sh"
+  # shellcheck source=/dev/null
+  . "$REPO_ROOT/.gaia/tests/helpers/non-exclusive-mkdir.sh"
   STATE="$BATS_TEST_TMPDIR/state"
   export GAIA_PORTS_STATE_DIRECTORY="$STATE"
   unset GAIA_PORTS_DEV_BASE_PORT GAIA_PORTS_STORYBOOK_BASE_PORT SITE_URL
@@ -332,6 +334,17 @@ add_other_project_tree() {
   [ "$status" -eq 1 ]
   [ "$(($(date +%s) - start))" -le 3 ]
   [ -d "$STATE/slots.lock" ]
+}
+
+@test "lock: a held lock stops a second taker, with a non-exclusive mkdir first on PATH" {
+  PATH="$(non_exclusive_mkdir_path)"
+  export GAIA_PORTS_LOCK_DEADLINE_SECONDS=1
+  gaia_ports_lock "$STATE"
+  run gaia_ports_lock "$STATE"
+  [ "$status" -eq 1 ]
+  gaia_ports_unlock "$STATE"
+  [ -d "$STATE/slots.lock" ] && return 1
+  true
 }
 
 @test "lock: a lock past a minute old is broken and taken, and unlock releases it" {

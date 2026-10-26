@@ -99,6 +99,7 @@ traced_scripts() {
     [ -f "$file" ] && cp "$file" "$scratch/"
   done
   cp "$SCRIPTS/spec/with-ledger-lock.sh" "$scratch/spec/"
+  cp "$SCRIPTS/exclusive-lock-lib.sh" "$scratch/"
   # shellcheck disable=SC2016  # the appended definitions expand at call time
   {
     printf '\ngaia_usage_memo_readout() { : >"$GAIA_TEST_SENTINEL"; exit 99; }\n'

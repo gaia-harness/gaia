@@ -15,7 +15,7 @@
 # Run via: bash .gaia/scripts/bats5.sh .gaia/scripts/tests/state-reaper.bats < /dev/null
 # Assertion style: bash-3.2-safe per .claude/rules/bats-assertions.md.
 
-SCRIPT_FILES="state-reaper.sh state-reaper-lib.sh state-reaper-classes.sh main-root-lib.sh state-registry-lib.sh branch-name-lib.sh audit-key-lib.sh audit-loop-state-lib.sh"
+SCRIPT_FILES="state-reaper.sh state-reaper-lib.sh state-reaper-classes.sh main-root-lib.sh state-registry-lib.sh branch-name-lib.sh audit-key-lib.sh audit-loop-state-lib.sh exclusive-lock-lib.sh"
 SHA="0123456789abcdef0123456789abcdef01234567"
 
 setup() {
@@ -47,6 +47,7 @@ make_fixture() {
   mkdir -p "$MAIN/.gaia/scripts/notebook" "$MAIN/.gaia/scripts/spec"
   cp "$SCRIPTS_DIRECTORY"/notebook/*.sh "$MAIN/.gaia/scripts/notebook/"
   cp "$SCRIPTS_DIRECTORY/spec/with-ledger-lock.sh" "$MAIN/.gaia/scripts/spec/"
+  cp "$SCRIPTS_DIRECTORY/exclusive-lock-lib.sh" "$MAIN/.gaia/scripts/"
   cp "$REAL_REGISTRY" "$MAIN/.gaia/state-registry.json"
   "$REAL_GIT" -C "$MAIN" init -q
   "$REAL_GIT" -C "$MAIN" symbolic-ref HEAD refs/heads/main
@@ -613,6 +614,22 @@ plant_git_failure_fixture() {
   jq -e '.schema == 1 and (.started_at | type) == "string" and (.finished_at | type) == "string" and (.skipped | type) == "array"
     and .removed["doctrine-injected-marker"] == 2 and .removed["context-readings"] == 1 and ([.removed[]] | add) == 3' \
     "$LOCAL/cache/state-reaper/last-run.json" >/dev/null
+}
+
+# bats test_tags=whole-tree
+@test "a run lock held through the shared helper stops a run, with a non-exclusive mkdir first on PATH" {
+  make_fixture
+  local marker_days
+  marker_days=$(($(window doctrine-injected-marker) + 1))
+  plant_file cache/doctrine-injected.one "$marker_days"
+  mkdir -p "$LOCAL/cache/state-reaper"
+  bash -c '. "$1"; gaia_exclusive_lock_take "$2"' _ "$SCRIPTS_DIRECTORY/exclusive-lock-lib.sh" "$LOCAL/cache/state-reaper/run.lock.d"
+  # shellcheck source=/dev/null
+  . "$SCRIPTS_DIRECTORY/../tests/helpers/non-exclusive-mkdir.sh"
+  PATH="$(non_exclusive_mkdir_path)"
+  run_reaper
+  [ "$status" -eq 0 ]
+  present cache/doctrine-injected.one
 }
 
 # bats test_tags=whole-tree

@@ -69,6 +69,7 @@ real_repo() {
     cp "$REPO_ROOT/.gaia/scripts/$script_name" "$REPO/.gaia/scripts/"
   done
   cp "$REPO_ROOT/.gaia/scripts/spec/with-ledger-lock.sh" "$REPO/.gaia/scripts/spec/"
+  cp "$REPO_ROOT/.gaia/scripts/exclusive-lock-lib.sh" "$REPO/.gaia/scripts/"
   mkdir -p "$REPO/.gaia/scripts/notebook"
   cp "$REPO_ROOT"/.gaia/scripts/notebook/*.sh "$REPO/.gaia/scripts/notebook/"
 }

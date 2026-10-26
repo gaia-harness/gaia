@@ -46,7 +46,7 @@ build_hook_root() {
   local hook_root="$BATS_TEST_TMPDIR/hook-root" script_name
   rm -rf "$hook_root"
   mkdir -p "$hook_root/.claude/hooks" "$hook_root/.gaia/scripts" "$hook_root/.gaia/tests/helpers"
-  for script_name in audit-loop-state-lib.sh branch-name-lib.sh main-root-lib.sh audit-key-lib.sh context-checkpoint-lib.sh \
+  for script_name in audit-loop-state-lib.sh exclusive-lock-lib.sh branch-name-lib.sh main-root-lib.sh audit-key-lib.sh context-checkpoint-lib.sh \
     audit-loop-eval.sh audit-loop-signals-lib.sh audit-dispositions-check.sh; do
     cp "$REPO_ROOT/.gaia/scripts/$script_name" "$hook_root/.gaia/scripts/$script_name"
   done

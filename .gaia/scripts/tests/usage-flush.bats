@@ -88,6 +88,7 @@ scratch_flusher() {
   cp "$SCRIPTS"/usage-flush.sh "$SCRIPTS"/usage-parse-lib.sh "$SCRIPTS"/usage-lib.sh "$SCRIPTS"/main-root-lib.sh \
     "$SCRIPTS"/branch-name-lib.sh "$scratch_directory/.gaia/scripts/"
   cp "$SCRIPTS/spec/with-ledger-lock.sh" "$scratch_directory/.gaia/scripts/spec/"
+  cp "$SCRIPTS/exclusive-lock-lib.sh" "$scratch_directory/.gaia/scripts/"
   mkdir -p "$scratch_directory/.gaia/scripts/notebook"
   cp "$SCRIPTS"/notebook/*.sh "$scratch_directory/.gaia/scripts/notebook/"
   sed "$1" "$SCRIPTS/$2" >"$scratch_directory/.gaia/scripts/$2.m"
@@ -395,6 +396,19 @@ cas_run() {
   : >"$TEMPORARY_DIRECTORY/bar"
   wait "$pid"
   assert_golden sweep
+}
+
+@test "sweep singleton: a lock held through the shared helper stops a sweep, with a non-exclusive mkdir first on PATH" {
+  install sweep
+  mkdir -p "$TEL"
+  bash -c '. "$1"; gaia_exclusive_lock_take "$2"' _ "$SCRIPTS/exclusive-lock-lib.sh" "$TEL/usage-sweep.lock.d"
+  # shellcheck source=/dev/null
+  . "$SCRIPTS/../tests/helpers/non-exclusive-mkdir.sh"
+  PATH="$(non_exclusive_mkdir_path)"
+  run flush --sweep
+  [ "$status" -eq 0 ]
+  [ -e "$TEL/usage.jsonl" ] && return 1
+  true
 }
 
 @test "sweep singleton: a lock dir older than the reclaim age is reclaimed" {

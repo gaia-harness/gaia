@@ -30,6 +30,7 @@ make_main() {
   mkdir -p "$MAIN/.gaia/scripts/notebook" "$MAIN/.gaia/scripts/spec" "$MAIN/.gaia/local"
   cp "$SCRIPT_DIRECTORY/state-registry-lib.sh" "$SCRIPT_DIRECTORY/main-root-lib.sh" "$MAIN/.gaia/scripts/"
   cp "$SCRIPT_DIRECTORY/spec/with-ledger-lock.sh" "$MAIN/.gaia/scripts/spec/"
+  cp "$SCRIPT_DIRECTORY/exclusive-lock-lib.sh" "$MAIN/.gaia/scripts/"
   cp "$SCRIPT_DIRECTORY"/notebook/*.sh "$MAIN/.gaia/scripts/notebook/"
   cp "$REGISTRY" "$MAIN/.gaia/state-registry.json"
   git -C "$MAIN" init -q
