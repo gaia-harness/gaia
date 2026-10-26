@@ -157,8 +157,8 @@ grandfathered_entry() {
 @test "a grandfathered file grown one line past its ceiling fails" {
   read -r file ceiling <<<"$(grandfathered_entry)"
   [ -n "$file" ] && [ "$ceiling" -gt 400 ]
-  lines="$(wc -l <"$TREE/$file" | tr -d ' ')"
-  seq "$lines" "$ceiling" >>"$TREE/$file"
+  line_count="$(wc -l <"$TREE/$file" | tr -d ' ')"
+  seq "$line_count" "$ceiling" >>"$TREE/$file"
   [ "$(wc -l <"$TREE/$file" | tr -d ' ')" -eq $((ceiling + 1)) ]
   commit_tree
   run run_ci_lint "$WORKFLOW" "$TREE" "$BASE_CONFIG"
