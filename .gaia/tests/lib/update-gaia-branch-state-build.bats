@@ -66,7 +66,7 @@ run_script_in() {
 }
 
 classify_local() {
-  run_script_in "$MAIN" classify --tag "$DEV_TAG" --latest "$VERSION" --build "$TARGET_BUILD" "$@"
+  run_script_in "$MAIN" classify --tag "$DEV_TAG" --latest "$VERSION" --build "$TARGET_BUILD"
 }
 
 classify_release() {
