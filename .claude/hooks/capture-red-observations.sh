@@ -345,10 +345,13 @@ else
   # owning package's directory with the package-relative scope. `pnpm -C <dir>
   # exec vitest` avoids the project `test` script and passes json cleanly; this
   # is a hook subprocess, not a Bash-tool call, so no PreToolUse hook intercepts
-  # it.
+  # it, and no env prefix on the agent's command reaches it either. With pnpm's
+  # verify-deps-before-run on, a manifest that disagrees with the lockfile makes
+  # `pnpm exec` install first, rewriting the lockfile and node_modules unasked;
+  # the re-run only ever needs vitest, so the check is off here.
   rerun_output_file=$(mktemp "${temporary_directory}/vitest-output-XXXXXX" 2>/dev/null || echo "")
   # shellcheck disable=SC2086 # $run_scope is an intentional word-split arg list.
-  pnpm -C "$run_directory" exec vitest --run --reporter=json --outputFile="$json_file" $run_scope \
+  pnpm_config_verify_deps_before_run=false pnpm -C "$run_directory" exec vitest --run --reporter=json --outputFile="$json_file" $run_scope \
     >"${rerun_output_file:-/dev/null}" 2>&1 || true
   set +f
 
