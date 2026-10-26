@@ -4,7 +4,7 @@ status: active
 priority: 1
 date: 2026-05-09
 created: 2026-05-09
-updated: 2026-10-13
+updated: 2026-10-26
 tags: [decision, distribution, maintainer, cli]
 ---
 
@@ -41,7 +41,7 @@ Tree-shaking via esbuild at build time requires two entry points:
 
 ## Impact on the release flow
 
-The `/gaia-release` command invokes `.gaia/cli/gaia-maintainer release <subcommand>` by full path (never `gaia release`). When bundling at release time, both binaries are rebuilt via `pnpm --filter @gaia-react/cli bundle` in Step 7b to ensure the new version's `--version` output stays current.
+The `/gaia-release` command invokes `.gaia/cli/gaia-maintainer release <subcommand>` by full path (never `gaia release`). When bundling at release time, both binaries are rebuilt via `pnpm --filter @gaia-harness/cli bundle` in Step 7b to ensure the new version's `--version` output stays current.
 
 ## GAIA-internal code placement rule
 

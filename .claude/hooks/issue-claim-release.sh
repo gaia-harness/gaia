@@ -101,7 +101,7 @@ command_repo="$GAIA_GH_MERGE_REPO"
 gaia_repo_scope_resolve_home || exit 0
 home="$GAIA_REPO_SCOPE_HOME_SLUG"
 # GitHub resolves OWNER/REPO case-insensitively, so a merge spelled
-# `gaia-react/GAIA` lands on the home repository and a case-sensitive
+# `gaia-harness/GAIA` lands on the home repository and a case-sensitive
 # comparison would read it as another one. Every comparison against `home`
 # below uses this form; only the label write uses the exact spelling gh
 # reported.

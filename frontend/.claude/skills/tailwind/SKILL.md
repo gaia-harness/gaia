@@ -59,7 +59,7 @@ cn('base', isActive && 'bg-accent', !isDisabled && 'hover:bg-muted');
 cn('base', condition ? 'text-foreground' : 'text-muted-foreground');
 ```
 
-Lint rejects object conditionals and ternaries with an empty branch passed to `cn` (`cn-conditional/cn-conditional` from `@gaia-react/lint`), in components, tests, and stories alike.
+Lint rejects object conditionals and ternaries with an empty branch passed to `cn` (`cn-conditional/cn-conditional` from `@gaia-harness/lint`), in components, tests, and stories alike.
 
 ## Variants with cva
 

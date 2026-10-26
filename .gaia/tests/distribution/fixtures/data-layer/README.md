@@ -20,7 +20,7 @@ Maintainer test infrastructure for the API data layer, never shipped. `19-data-l
 | `story-isolation/item-names/tests/handler-a-first.stories.tsx`, `handler-b-first.stories.tsx` | `app/components/item-names/tests/` | Two stories per file with different `parameters.msw.handlers` for the same query key, in opposite orders; each play asserts only its own handler's data, so a QueryClient shared across stories fails the second story of either file. |
 | `lint-probes/imperative-query-probe.ts` | `app/imperative-query-probe.ts`, removed after the run | Four imperative fetches through local stand-ins; each must fail `no-imperative-query-fetch/no-imperative-query-fetch` naming `queryClient.query`. |
 | `lint-probes/restricted-properties-probe.ts` | `app/restricted-properties-probe.ts`, removed after the run | `Math.pow` must still fail the inherited `no-restricted-properties` entry. |
-| `lint-probes/restricted-syntax-probe.tsx` | `app/restricted-syntax-probe.tsx`, removed after the run | A ternary rendering `null` must still fail the `@gaia-react/lint` `no-restricted-syntax` selector. |
+| `lint-probes/restricted-syntax-probe.tsx` | `app/restricted-syntax-probe.tsx`, removed after the run | A ternary rendering `null` must still fail the `@gaia-harness/lint` `no-restricted-syntax` selector. |
 
 ## The SSR check
 

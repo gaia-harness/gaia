@@ -83,6 +83,6 @@ runs:
     - name: Install CLI dependencies
       if: inputs.install == 'cli'
       shell: bash
-      run: pnpm install --frozen-lockfile --filter "@gaia-react/cli..." $PNPM_IGNORE_SCRIPTS_FLAG
+      run: pnpm install --frozen-lockfile --filter "@gaia-harness/cli..." $PNPM_IGNORE_SCRIPTS_FLAG
       env:
         PNPM_IGNORE_SCRIPTS_FLAG: ${{ inputs.ignore-scripts == 'true' && '--ignore-scripts' || '' }}

@@ -1,5 +1,5 @@
 {
-  "name": "@gaia-react/cli",
+  "name": "@gaia-harness/cli",
   "private": true,
   "type": "module",
   "description": "GAIA CLI: init/update/wiki/scaffold/setup subcommands. Maintainer source; ships to adopters as a single bundled binary at .gaia/cli/gaia. The maintainer binary at .gaia/cli/gaia-maintainer adds the release namespace and is excluded from the adopter tarball.",
@@ -21,7 +21,7 @@
     "zod": "4.6.7"
   },
   "devDependencies": {
-    "@gaia-react/lint": "3.0.3",
+    "@gaia-harness/lint": "3.0.3",
     "@types/node": "26.6.5",
     "@types/picomatch": "4.0.3",
     "@types/semver": "7.8.0",

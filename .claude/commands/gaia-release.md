@@ -127,7 +127,7 @@ Writes `.gaia/manifest.json`, sorted alphabetically. Walks `git ls-files`, subtr
 ### 7b. Rebuild the bundled CLIs
 
 ```bash
-pnpm --filter @gaia-react/cli bundle
+pnpm --filter @gaia-harness/cli bundle
 ```
 
 Rebuilds both `.gaia/cli/gaia` (adopter binary) and `.gaia/cli/gaia-maintainer` (maintainer binary, excluded from the tarball). Skip only when no `.gaia/cli/src/` files changed since the last release; when in doubt, rebuild, the script is fast and idempotent. The release tarball ships the committed `gaia` binary as-is, so a stale bundle ships a stale CLI.
@@ -222,7 +222,7 @@ Set both version sites to `<NEW_VERSION>` (no `v` in `package.json`, `v`-prefixe
 - `$CG/package.json` → `"version": "<NEW_VERSION>"`
 - `$CG/bin/index.js` → `const FALLBACK_VERSION = 'v<NEW_VERSION>';`
 
-Commit on a branch, open + merge a PR, then tag. The PR-merge and main-push guards are repo-scoped (`.claude/hooks/lib/repo-scope.sh`), but the two surfaces resolve the sibling differently. `gh pr merge -R gaia-react/create-gaia` is recognized as foreign by repo-**name** (basename) comparison, so this repo's audit gate does **not** fire, no manual-UI detour needed. Raw-git commits and pushes follow the sibling-repo commit and push protocol below. `create-gaia` has no audit infrastructure or branch protection of its own; a plain `--merge` (not `--auto`) is correct there.
+Commit on a branch, open + merge a PR, then tag. The PR-merge and main-push guards are repo-scoped (`.claude/hooks/lib/repo-scope.sh`), but the two surfaces resolve the sibling differently. `gh pr merge -R gaia-harness/create-gaia` is recognized as foreign by repo-**name** (basename) comparison, so this repo's audit gate does **not** fire, no manual-UI detour needed. Raw-git commits and pushes follow the sibling-repo commit and push protocol below. `create-gaia` has no audit infrastructure or branch protection of its own; a plain `--merge` (not `--auto`) is correct there.
 
 > [!important] Sibling-repo commit and push protocol
 > The main-branch commit and push guard (`.claude/hooks/block-main-destructive-git.sh`, with `.claude/hooks/lib/repo-scope.sh`) reads the raw command string and never expands it. It stands down for a sibling only when every git command in the Bash call resolves to the sibling; otherwise it reads the call as this repository and judges each `git commit` and `git push` in it against the branch of the checkout it names, which for this checkout, and for website and docs, is `main`. So a Bash call that commits or pushes in a sibling:
@@ -252,10 +252,10 @@ git -C /abs/path/to/create-gaia push -u origin "<RELEASE_BRANCH>"
 ```
 
 ```bash
-gh pr create -R gaia-react/create-gaia --base main --head "<RELEASE_BRANCH>" \
+gh pr create -R gaia-harness/create-gaia --base main --head "<RELEASE_BRANCH>" \
   --title "chore: release v<NEW_VERSION>" --body "Lockstep with GAIA v<NEW_VERSION>."
-gh pr merge -R gaia-react/create-gaia <CG_N> --merge --delete-branch
-bash .gaia/scripts/pr-wait-merge.sh --pr <CG_N> --repo gaia-react/create-gaia \
+gh pr merge -R gaia-harness/create-gaia <CG_N> --merge --delete-branch
+bash .gaia/scripts/pr-wait-merge.sh --pr <CG_N> --repo gaia-harness/create-gaia \
   --attempts 10 --interval 15 \
   || { echo "create-gaia PR did not confirm as MERGED (read the wait's own message above, which names the verdict or the refusal), investigate before tagging"; exit 1; }
 git -C "$CG" fetch origin --quiet && git -C "$CG" checkout main --quiet && git -C "$CG" pull --ff-only origin main --quiet
@@ -271,7 +271,7 @@ git -C /abs/path/to/create-gaia push origin "v<NEW_VERSION>"
 The tag push triggers `create-gaia`'s `publish.yml` (npm publish with `--provenance`). Confirm it before considering the release complete:
 
 ```bash
-gh run list -R gaia-react/create-gaia --workflow=publish.yml --limit 1
+gh run list -R gaia-harness/create-gaia --workflow=publish.yml --limit 1
 npm view create-gaia@<NEW_VERSION> version    # registry CDN may lag a minute
 ```
 
@@ -318,7 +318,7 @@ git -C /abs/path/to/website push origin main
 
 ```bash
 node "$WEB/scripts/render-release-md.mjs" <NEW_VERSION> > "/tmp/gh-notes-v<NEW_VERSION>.md"
-gh release edit "v<NEW_VERSION>" -R gaia-react/gaia --notes-file "/tmp/gh-notes-v<NEW_VERSION>.md"
+gh release edit "v<NEW_VERSION>" -R gaia-harness/gaia --notes-file "/tmp/gh-notes-v<NEW_VERSION>.md"
 ```
 
 `gh release edit` is neither a push nor a `gh pr merge`, so the repo-scope and audit hooks do not apply; no literal-path treatment is needed here.
@@ -326,7 +326,7 @@ gh release edit "v<NEW_VERSION>" -R gaia-react/gaia --notes-file "/tmp/gh-notes-
 **2.x routing line check.** A 1.x `/update-gaia` resolves the newest-created release, so a 1.6.1 project meets whichever 2.x release is newest, not only 2.0.0. The routing line reaches the release body only when this release's `## [<NEW_VERSION>]` CHANGELOG entry carries it: `compose-release-body.sh` then hoists it to the first line, and it refuses to compose without it only for `v2.0.0`. When the entry carries it, the release data `<NEW_VERSION>.ts` must carry a matching `preamble` (the routing line, the Proceed side-effects line, the sha256 line) that the renderer emits verbatim before the headline. After the edit, verify the body still leads with the routing line, and re-render if not:
 
 ```bash
-gh release view "v<NEW_VERSION>" -R gaia-react/gaia --json body --jq .body | head -1
+gh release view "v<NEW_VERSION>" -R gaia-harness/gaia --json body --jq .body | head -1
 ```
 
 The first line must equal the output of `bash .gaia/scripts/compose-release-body.sh --routing-line`. See `wiki/concepts/Release Workflow.md`.

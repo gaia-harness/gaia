@@ -1,23 +1,23 @@
 ---
 type: dependency
 status: active
-package: '@gaia-react/lint'
+package: '@gaia-harness/lint'
 role: lint-config
 created: 2026-04-27
-updated: 2026-10-15
+updated: 2026-10-26
 tags: [dependency, lint, eslint]
 ---
 
-# @gaia-react/lint
+# @gaia-harness/lint
 
 ## What it is
 
-GAIA's lint config, extracted to a standalone package under `github.com/gaia-react/lint`. The default export is the ESLint flat-config factory; the package also ships Prettier and Stylelint configs as the `@gaia-react/lint/prettier` and `@gaia-react/lint/stylelint` subpath exports (optional peer deps). The engine-neutral name supports a future Biome migration without consumer breakage.
+GAIA's lint config, extracted to a standalone package under `github.com/gaia-harness/lint`. The default export is the ESLint flat-config factory; the package also ships Prettier and Stylelint configs as the `@gaia-harness/lint/prettier` and `@gaia-harness/lint/stylelint` subpath exports (optional peer deps). The engine-neutral name supports a future Biome migration without consumer breakage.
 
 ## Why a separate repo
 
-- Reuse across gaia-react org repos (gaia, create-gaia bootstrapper, branding, docs, future apps) without copy/paste drift.
-- Single upgrade path: bump `@gaia-react/lint` instead of chasing each plugin upgrade per consumer.
+- Reuse across gaia-harness org repos (gaia, create-gaia bootstrapper, branding, docs, future apps) without copy/paste drift.
+- Single upgrade path: bump `@gaia-harness/lint` instead of chasing each plugin upgrade per consumer.
 - Engine swap freedom: name doesn't mention ESLint, so a v2 Biome backend is a non-breaking rename.
 
 ## Where rules live
@@ -31,7 +31,7 @@ The project's `frontend/eslint.config.mjs` is a thin consumer: it spreads the pa
 The default export is a factory: call it once to get the config bundle, spread the bundle's arrays first, then add project-specific overrides last (flat-config last-write-wins). `gaiaLint(opts?)` accepts `{sourceDir}` (default `'app'`) to scope file-path-based rules; pass `{sourceDir: 'src'}` when source lives elsewhere.
 
 ```js
-import gaiaLint from '@gaia-react/lint';
+import gaiaLint from '@gaia-harness/lint';
 import {defineConfig} from 'eslint/config';
 
 const lint = gaiaLint();
@@ -80,21 +80,21 @@ export default defineConfig([
 
 `lint.shadcn({ui})` wires the shadcn token rules and the `shadcn/vendored-ui` block, which exempts `ui/*.tsx` (never `ui/tests/**`) from Prettier, the house-style rules and a short list of correctness rules unedited shadcn source trips, while `shadcn/no-raw-colors` and `react-hooks/*` stay on. The rule list and why it was chosen are in [[shadcn Component Layer]]. A new house-style rule firing on a ui file added later means extending that block upstream. The restricted-imports config also rejects importing `FC` or `FunctionComponent` from `react`, so components are typed inline; the vendored-ui block lifts only that `react` entry, because shadcn source uses `import * as React`.
 
-The `shadcn` group and the `FC` ban ship in 3.0.0 of `@gaia-react/lint`; the `eslint` peer floor is `>=9.30.0` within the 9 line, which `@shadcn/lint` requires.
+The `shadcn` group and the `FC` ban ship in 3.0.0 of `@gaia-harness/lint`; the `eslint` peer floor is `>=9.30.0` within the 9 line, which `@shadcn/lint` requires.
 
 The `resources.*` and `actions.*` carve-out means UI-layer files may import typed action/loader types from flat-file resource routes without an `eslint-disable` comment. Consumer tests must not import from `*.server` files or internal server surfaces; the `frontend/test/setup.ts` global Vitest setupFile is the single sanctioned place to start the MSW harness.
 
 ## When to edit
 
-- Change `@gaia-react/lint` upstream when the rule should propagate to **all** consumers.
+- Change `@gaia-harness/lint` upstream when the rule should propagate to **all** consumers.
 - Override in the project's `frontend/eslint.config.mjs` when the change is **project-specific** (folder layout, app-only relaxations).
 
 <!-- gaia:maintainer-only:start -->
 ## CLI consumer
 
-`.gaia/cli` (`@gaia-react/cli`) is a second consumer, as a root workspace member with its own `.gaia/cli/eslint.config.mjs`. It consumes `base`/`react`/`testing`/`styleHygiene`/`guardrails`/`prettier` with `sourceDir: 'src'`, omitting the React-app-only presets (`storybook`, `playwright`, `reactRouter`, `betterTailwind`). It spreads `react` only because `base` transitively references `react/*` rules; the ruleset is inert on the CLI's non-JSX TypeScript. It disables a small Node/CLI set (`sonarjs/no-os-command-from-path`, `no-relative-import-paths`, `check-file/folder-match-with-fex`, the Testing Library render-result naming rule) and extends the `unicorn/prevent-abbreviations` ignore list for CLI idioms. `.gaia/cli/eslint.config.mjs` is the source of truth for the full rule table and the exact rule ids.
+`.gaia/cli` (`@gaia-harness/cli`) is a second consumer, as a root workspace member with its own `.gaia/cli/eslint.config.mjs`. It consumes `base`/`react`/`testing`/`styleHygiene`/`guardrails`/`prettier` with `sourceDir: 'src'`, omitting the React-app-only presets (`storybook`, `playwright`, `reactRouter`, `betterTailwind`). It spreads `react` only because `base` transitively references `react/*` rules; the ruleset is inert on the CLI's non-JSX TypeScript. It disables a small Node/CLI set (`sonarjs/no-os-command-from-path`, `no-relative-import-paths`, `check-file/folder-match-with-fex`, the Testing Library render-result naming rule) and extends the `unicorn/prevent-abbreviations` ignore list for CLI idioms. `.gaia/cli/eslint.config.mjs` is the source of truth for the full rule table and the exact rule ids.
 
-`.gaia/cli` pins `@gaia-react/lint` in its own `package.json`, and the pin resolves through the root lockfile. The frontend's pin and the CLI's are separate importers, so nothing keeps them in step automatically; drift between the two is aligned by hand. See [[pnpm]] for the workspace layout.
+`.gaia/cli` pins `@gaia-harness/lint` in its own `package.json`, and the pin resolves through the root lockfile. The frontend's pin and the CLI's are separate importers, so nothing keeps them in step automatically; drift between the two is aligned by hand. See [[pnpm]] for the workspace layout.
 <!-- gaia:maintainer-only:end -->
 
 ## See also

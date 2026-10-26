@@ -13,7 +13,7 @@
 # The capture file contains one argv token per line, so the caller can
 # assert individual flags:
 #   grep -x -- '--repo' "$STUB_GH_CAPTURE_FILE"
-#   grep -x -- 'gaia-react/gaia' "$STUB_GH_CAPTURE_FILE"
+#   grep -x -- 'gaia-harness/gaia' "$STUB_GH_CAPTURE_FILE"
 
 set -euo pipefail
 

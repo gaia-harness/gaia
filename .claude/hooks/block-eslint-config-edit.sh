@@ -10,7 +10,7 @@
 # Adding a bare `...lint.<group>` preset spread is the migration GAIA's own
 # CHANGELOG tells adopters to make, and it is also how a rule gets turned off: a
 # later config object overrides an earlier one, and the groups in
-# `@gaia-react/lint` overlap heavily rather than partitioning the rule space.
+# `@gaia-harness/lint` overlap heavily rather than partitioning the rule space.
 # Adding `...lint.reactRouter` after `...lint.base` turns `no-empty-pattern` off;
 # adding `...lint.storybook` after `...lint.react` turns
 # `react-hooks/rules-of-hooks` off.

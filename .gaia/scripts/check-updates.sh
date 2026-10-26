@@ -795,14 +795,14 @@ fi
 # ---------- gaiaLatest ----------
 gaia_latest=""
 if command -v gh >/dev/null 2>&1; then
-  gaia_latest=$(gh release list --repo gaia-react/gaia --limit 1 --json tagName --jq '.[0].tagName' 2>/dev/null)
+  gaia_latest=$(gh release list --repo gaia-harness/gaia --limit 1 --json tagName --jq '.[0].tagName' 2>/dev/null)
 fi
 if [ -z "$gaia_latest" ] && command -v curl >/dev/null 2>&1; then
   if command -v jq >/dev/null 2>&1; then
-    gaia_latest=$(curl -fsSL --max-time 5 https://api.github.com/repos/gaia-react/gaia/releases/latest 2>/dev/null | jq -r '.tag_name // empty' 2>/dev/null)
+    gaia_latest=$(curl -fsSL --max-time 5 https://api.github.com/repos/gaia-harness/gaia/releases/latest 2>/dev/null | jq -r '.tag_name // empty' 2>/dev/null)
   else
     # Last-resort: grep the tag_name out of the JSON without jq.
-    gaia_latest=$(curl -fsSL --max-time 5 https://api.github.com/repos/gaia-react/gaia/releases/latest 2>/dev/null \
+    gaia_latest=$(curl -fsSL --max-time 5 https://api.github.com/repos/gaia-harness/gaia/releases/latest 2>/dev/null \
       | grep -o '"tag_name"[[:space:]]*:[[:space:]]*"[^"]*"' \
       | head -1 \
       | sed 's/.*"tag_name"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/')

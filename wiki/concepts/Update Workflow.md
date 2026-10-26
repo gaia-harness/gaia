@@ -214,7 +214,7 @@ In every case the adopter is back at the prior baseline and can retry `/update-g
 
 ## When to run
 
-After a new GAIA release is announced (watch releases on `gaia-react/gaia`). Cadence is fully at the adopter's discretion; skipping versions is fine; the three-way diff works with any gap.
+After a new GAIA release is announced (watch releases on `gaia-harness/gaia`). Cadence is fully at the adopter's discretion; skipping versions is fine; the three-way diff works with any gap.
 
 ## See also
 

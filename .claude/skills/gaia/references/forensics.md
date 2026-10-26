@@ -115,7 +115,7 @@ command -v gh
 - **`gh` installed:** offer issue creation via `AskUserQuestion`:
   - question: `"File a GitHub issue for this report?"`
   - options:
-    - `{ label: "Yes, file the issue (Recommended)", description: "Creates an issue on gaia-react/gaia with the gaia-forensics label." }`
+    - `{ label: "Yes, file the issue (Recommended)", description: "Creates an issue on gaia-harness/gaia with the gaia-forensics label." }`
     - `{ label: "No, save locally only", description: "The report is already saved locally; no issue will be filed." }`
 
   - **On `No`:** exit zero. Print the local path. Do not invoke `gh`.
@@ -124,7 +124,7 @@ command -v gh
 
     ```bash
     gh issue create \
-      --repo gaia-react/gaia \
+      --repo gaia-harness/gaia \
       --label gaia-forensics \
       --title "forensics: <class>, <one-line user description>" \
       --body-file <tempfile>
@@ -137,10 +137,10 @@ command -v gh
 
     On failure (`rc != 0`), the cost record is written right here with no `--issue` (there is no issue), and the non-zero status reaches the caller unchanged. On success (`rc = 0`), this line emits nothing; the run continues below and step 9 emits the one record carrying the issue pass-through. Exactly one record either way.
 
-    - On success: capture the issue URL printed by `gh`. Record it in the frontmatter `gh_issue_url` field of the already-saved local file (update the file in place). Then verify the `gaia-forensics` label actually attached (GitHub silently drops labels when the issue author lacks triage access on `gaia-react/gaia`, the common case for an adopter filing upstream):
+    - On success: capture the issue URL printed by `gh`. Record it in the frontmatter `gh_issue_url` field of the already-saved local file (update the file in place). Then verify the `gaia-forensics` label actually attached (GitHub silently drops labels when the issue author lacks triage access on `gaia-harness/gaia`, the common case for an adopter filing upstream):
 
       ```bash
-      gh issue view <issue-url> --repo gaia-react/gaia --json labels --jq '[.labels[].name]'
+      gh issue view <issue-url> --repo gaia-harness/gaia --json labels --jq '[.labels[].name]'
       ```
 
       - `gaia-forensics` present: the report is filed and label-gated triage will fire. Continue to step 9 unchanged.
@@ -158,7 +158,7 @@ Record cost (see **Cost record (run end)** below), then print a single confirmat
 
 If the GH issue was filed but step 8's label verification found `gaia-forensics` absent (silently dropped), print the confirmation line above and then this warning:
 
-> Warning: the `gaia-forensics` label did not attach to the issue. GitHub drops labels for authors without triage access on `gaia-react/gaia`, so the label-gated autonomous triage will not run. Ask a maintainer to add the `gaia-forensics` label to <issue URL> to trigger triage.
+> Warning: the `gaia-forensics` label did not attach to the issue. GitHub drops labels for authors without triage access on `gaia-harness/gaia`, so the label-gated autonomous triage will not run. Ask a maintainer to add the `gaia-forensics` label to <issue URL> to trigger triage.
 
 Exit zero regardless, the report is saved and the issue exists.
 
@@ -175,14 +175,14 @@ bash .gaia/scripts/usage.sh record command:gaia-forensics --workflow gaia-forens
 On exit 0 relay the `Cost:` line and every `Note:` line under it verbatim as the last lines of the reply; on a non-zero exit nothing was recorded, so relay the one stderr line in its place. The record never blocks the run or changes its exit status.
 
 - User-config branch, `gh` not installed, and the user answering `No` all exit zero with no issue filed: run the bare call above at step 9, no `--issue`.
-- Issue filed successfully: at step 9, append `--issue <N>` only when the current repo is `gaia-react/gaia` (check with `gh repo view --json nameWithOwner -q .nameWithOwner`, which must print `gaia-react/gaia`; an `issue:N` ref carries no repo, so in any other repo it would collide with that repo's own issue N), otherwise record the bare call. `<N>` is sourced from the `gh_issue_url` frontmatter this run already persisted to its own report, never reconstructed, never looked up:
+- Issue filed successfully: at step 9, append `--issue <N>` only when the current repo is `gaia-harness/gaia` (check with `gh repo view --json nameWithOwner -q .nameWithOwner`, which must print `gaia-harness/gaia`; an `issue:N` ref carries no repo, so in any other repo it would collide with that repo's own issue N), otherwise record the bare call. `<N>` is sourced from the `gh_issue_url` frontmatter this run already persisted to its own report, never reconstructed, never looked up:
 
   ```bash
   bash .gaia/scripts/usage.sh record command:gaia-forensics --workflow gaia-forensics \
     --issue <N>
   ```
 
-  The issue always lives in `gaia-react/gaia`, which is not necessarily the repo the command ran in; that is why the same-repo check gates `--issue`.
+  The issue always lives in `gaia-harness/gaia`, which is not necessarily the repo the command ran in; that is why the same-repo check gates `--issue`.
 - The step 5 sanity-recheck halt and the step 7 tree-key stop end the run with no saved report: run the bare call above before ending (the usage ledger is not a `.gaia/local/forensics/` write).
 
 ## Output schema (load-bearing)
@@ -222,7 +222,7 @@ The GH issue body is byte-identical to the local file body, frontmatter and all 
 
 These values are baked in and must not be derived at runtime:
 
-- **Issue target repo:** `gaia-react/gaia`, literal in the `--repo` flag. Never derived from `git remote`.
+- **Issue target repo:** `gaia-harness/gaia`, literal in the `--repo` flag. Never derived from `git remote`.
 - **Issue label:** `gaia-forensics`, must pre-exist on the upstream repo. The skill never auto-creates it.
 - **Issue title format:** `forensics: <class>, <one-line user description>`
 - **Local save path:** `.gaia/local/forensics/<tree_key>/<timestamp>-<class>.md` where `<tree_key>` is the tree key resolved in step 7 and `<timestamp>` is `YYYYMMDDTHHMMSSZ`.

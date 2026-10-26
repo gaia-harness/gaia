@@ -4,7 +4,7 @@ status: active
 package: vitest
 role: test-runner
 created: 2026-04-20
-updated: 2026-10-13
+updated: 2026-10-26
 tags: [dependency, testing]
 ---
 
@@ -18,7 +18,7 @@ Test runner for unit tests and, through `@storybook/addon-vitest`, for the story
 - `@vitest/browser-playwright` and `vitest-browser-react`: the browser provider and the hook-test renderer for the `browser` project
 - `@storybook/addon-vitest`: the `storybook` project's plugin, which turns every story into a test
 
-Vitest-aware lint rules come from `@vitest/eslint-plugin`, which the shared `@gaia-react/lint` config pulls in transitively; GAIA's `package.json` does not declare it directly.
+Vitest-aware lint rules come from `@vitest/eslint-plugin`, which the shared `@gaia-harness/lint` config pulls in transitively; GAIA's `package.json` does not declare it directly.
 
 ## Conventions
 

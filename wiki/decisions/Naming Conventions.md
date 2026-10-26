@@ -49,7 +49,7 @@ The harness names a worktree branch `worktree-<name>` with each `/` in the name 
 
 The convention assumes squash merges titled from the PR title.
 <!-- gaia:maintainer-only:start -->
-`gaia-react/gaia` is configured squash-only, with the squash title taken from the PR title and the squash body from the commit messages.
+`gaia-harness/gaia` is configured squash-only, with the squash title taken from the PR title and the squash body from the commit messages.
 <!-- gaia:maintainer-only:end -->
 
 See [[Git Workflow]], [[PR Merge Workflow]], [[Pre-commit Hooks]], and [[Workflow Naming Convention]] for the workflow and job naming the `PR Conventions` workflow follows.

@@ -151,7 +151,7 @@ verify_bundles() {
     fi
     mkdir -p "$dir"
     if [ ! -f "$dir/$tarball" ] || [ ! -f "$dir/$tarball.sha256" ]; then
-      if ! gh release download "$tag" --repo gaia-react/gaia \
+      if ! gh release download "$tag" --repo gaia-harness/gaia \
         --pattern "gaia-bundle-${tag}.tar.gz" \
         --pattern "gaia-bundle-${tag}.tar.gz.sha256" \
         --dir "$dir" --clobber; then
@@ -230,9 +230,9 @@ SELECTED
 # because the range helper reads only x.y.z.
 changelog() {
   local changelog_text range range_file saved_range
-  changelog_text="$(curl -fsSL "https://raw.githubusercontent.com/gaia-react/gaia/$latest_tag/CHANGELOG.md" 2>/dev/null)"
+  changelog_text="$(curl -fsSL "https://raw.githubusercontent.com/gaia-harness/gaia/$latest_tag/CHANGELOG.md" 2>/dev/null)"
   if [ -z "$changelog_text" ] && command -v gh >/dev/null 2>&1; then
-    changelog_text="$(gh api "repos/gaia-react/gaia/contents/CHANGELOG.md?ref=$latest_tag" \
+    changelog_text="$(gh api "repos/gaia-harness/gaia/contents/CHANGELOG.md?ref=$latest_tag" \
       -H "Accept: application/vnd.github.raw" 2>/dev/null)"
   fi
 
@@ -250,7 +250,7 @@ changelog() {
     rm -f "$range_file"
     # Fetch failed (offline, private, missing file): fall back to the
     # single-tag GitHub release body so the gate still has context.
-    gh release view "$latest_tag" --repo gaia-react/gaia --json body --jq .body
+    gh release view "$latest_tag" --repo gaia-harness/gaia --json body --jq .body
   fi
 }
 

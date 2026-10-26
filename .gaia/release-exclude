@@ -269,7 +269,7 @@ frontend/.playwright/e2e/react-perf-smoke.spec.ts
 # those scripts as GAIA-controlled code they never edit, so the suite guards
 # only maintainer changes. `forensics-triage.yml` runs autonomous Claude Code
 # triage against `gaia-forensics`-labeled issues on the upstream
-# `gaia-react/gaia` repo; the workflow's helpers under `.github/forensics/`
+# `gaia-harness/gaia` repo; the workflow's helpers under `.github/forensics/`
 # include scope checks, classifier prompts, fixtures, and bats tests that
 # only matter on the maintainer's clone. `shell-lint.yml` runs
 # shellcheck over GAIA's framework bash via the `.gaia/tests/shell-lint.sh`

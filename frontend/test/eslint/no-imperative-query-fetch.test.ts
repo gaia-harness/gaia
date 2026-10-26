@@ -1,5 +1,5 @@
 // Runs in the node project.
-// The rule itself is tested in @gaia-react/lint; this asserts the resolved
+// The rule itself is tested in @gaia-harness/lint; this asserts the resolved
 // project config still carries it beside the inherited entries.
 import type {Linter} from 'eslint';
 import {ESLint} from 'eslint';

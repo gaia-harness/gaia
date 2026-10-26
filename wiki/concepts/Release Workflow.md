@@ -9,7 +9,7 @@ tags: [release, claude, maintainer, versioning]
 
 # Release Workflow
 
-How GAIA cuts a public release. Two surfaces (the template repo (`gaia-react/gaia`) and the bootstrapper (`gaia-react/create-gaia`)) ship on independent cadences.
+How GAIA cuts a public release. Two surfaces (the template repo (`gaia-harness/gaia`) and the bootstrapper (`gaia-harness/create-gaia`)) ship on independent cadences.
 
 > [!note] Audience
 > Maintainer-only. This page is excluded from adopter distribution by `.gaia/release-exclude`. Adopter-facing background on what each release contains and how `/update-gaia` consumes it lives in [[Update Workflow]].
@@ -97,7 +97,7 @@ The classifier is in `.gaia/cli/src/release/manifest.ts`, `ADOPTER_OWNED_SENTINE
 Separate repo, separate npm package (`create-gaia`). Zero runtime deps. When an adopter runs `npx create-gaia@latest my-app`:
 
 1. Resolves the target version (flag, or latest GitHub release).
-2. Downloads the release tarball from `github.com/gaia-react/gaia/releases/download/vX.Y.Z/`: `gaia-bundle-vX.Y.Z.tar.gz` for 2.x and later, `gaia-vX.Y.Z.tar.gz` for a 1.x version.
+2. Downloads the release tarball from `github.com/gaia-harness/gaia/releases/download/vX.Y.Z/`: `gaia-bundle-vX.Y.Z.tar.gz` for 2.x and later, `gaia-vX.Y.Z.tar.gz` for a 1.x version.
 3. Extracts into `my-app/`.
 4. `git init` + initial commit (unless `--no-git`).
 5. `pnpm install` (after `corepack enable pnpm`), unless `--no-install`. The scaffolded project pins pnpm via `packageManager` in `package.json`; corepack provisions the matching version transparently.

@@ -14,7 +14,7 @@ export default {
     'test/**/*.{ts,tsx}',
   ],
   ignoreDependencies: [
-    // stylelint.config.mjs loads these presets, which @gaia-react/lint provides
+    // stylelint.config.mjs loads these presets, which @gaia-harness/lint provides
     // rather than this package.json.
     'stylelint-config-clean-order',
     'stylelint-config-standard',

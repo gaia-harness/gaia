@@ -1663,7 +1663,7 @@ describe('update-deps run: CLI workspace member', () => {
     writeMemberList(['frontend', '.gaia/cli']);
     writeJson('.gaia/cli/package.json', {
       devDependencies: {vitest: '4.0.0'},
-      name: '@gaia-react/cli',
+      name: '@gaia-harness/cli',
     });
     const calls: Call[] = [];
     const memberDirectory = path.join(root, '.gaia/cli');
@@ -1704,7 +1704,7 @@ describe('update-deps run: CLI workspace member', () => {
     writeMemberList(['frontend', '.gaia/cli']);
     writeJson('.gaia/cli/package.json', {
       devDependencies: {foo: '1.2.3'},
-      name: '@gaia-react/cli',
+      name: '@gaia-harness/cli',
     });
     const result = computeUpdates({
       cwd: root,
@@ -1739,7 +1739,7 @@ describe('update-deps run: CLI workspace member', () => {
     });
     writeJson('.gaia/cli/package.json', {
       devDependencies: {vite: '7.0.0'},
-      name: '@gaia-react/cli',
+      name: '@gaia-harness/cli',
     });
     const result = computeUpdates({
       cwd: root,
