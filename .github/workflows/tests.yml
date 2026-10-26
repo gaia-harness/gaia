@@ -19,15 +19,16 @@ jobs:
   tests:
     name: Vitest and Playwright
     if: github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch'
-    # 20 minutes bounds execution: a job that hits the cap is cancelled and
+    # 25 minutes bounds execution: a job that hits the cap is cancelled and
     # reports an ordinary red check to re-run rather than hanging. A full run
     # here is a few minutes: typecheck, lint, Vitest and Playwright (which
     # includes the per-story dark a11y scan over the built Storybook, one
     # worker per core). On CI each broken story costs about 3.5 minutes across
     # its retries, so the cap leaves room for a few broken stories to report
-    # in full. The browser install below fetches one engine rather than every
-    # engine Playwright ships.
-    timeout-minutes: 20
+    # in full even when the system-dependency install below spends most of
+    # its own 10-minute bound on a slow apt mirror. The browser install below
+    # fetches one engine rather than every engine Playwright ships.
+    timeout-minutes: 25
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -138,8 +139,10 @@ jobs:
           # playwright.config.ts, so a change to one is test-relevant too.
           # The committed msw worker script is read by the node-project drift
           # test, so a change to it alone is test-relevant.
+          # The apt archive cache action installs Chromium's system
+          # dependencies for this job, so a change to it must run the job.
           changed=$(set -o pipefail; git diff --name-only -z --no-renames "${CHECK_BASE}...HEAD" | tr '\0' '\n')
-          pattern='^frontend/(app|test)/|^frontend/\.playwright/|^frontend/\.storybook/|^(package\.json|pnpm-lock\.yaml|pnpm-workspace\.yaml|\.npmrc|\.node-version)$|^frontend/package\.json$|^frontend/tsconfig[^/]*\.json$|^frontend/dev-ports[^/]*\.ts$|^frontend/components\.json$|^frontend/(vite|vitest|playwright|eslint|react-router|react-compiler|doctor|knip|prettier|stylelint)\.config\.|^\.gaia/packages\.json$|^frontend/gaia\.package\.json$|^frontend/public/mockServiceWorker\.js$|^\.github/workflows/tests\.yml$'
+          pattern='^frontend/(app|test)/|^frontend/\.playwright/|^frontend/\.storybook/|^(package\.json|pnpm-lock\.yaml|pnpm-workspace\.yaml|\.npmrc|\.node-version)$|^frontend/package\.json$|^frontend/tsconfig[^/]*\.json$|^frontend/dev-ports[^/]*\.ts$|^frontend/components\.json$|^frontend/(vite|vitest|playwright|eslint|react-router|react-compiler|doctor|knip|prettier|stylelint)\.config\.|^\.gaia/packages\.json$|^frontend/gaia\.package\.json$|^frontend/public/mockServiceWorker\.js$|^\.github/workflows/tests\.yml$|^\.github/actions/gaia-apt-cache/'
           if printf '%s\n' "$changed" | grep -qE "$pattern"; then
             echo "code=true" >> "$GITHUB_OUTPUT"
           else
@@ -194,11 +197,55 @@ jobs:
       #
       # Caching ~/.cache/ms-playwright is deliberately not done: Playwright's CI
       # guide advises against it because restoring the cache costs about what
-      # downloading the binaries does, and the apt packages `--with-deps` installs
-      # are not cacheable, so the step stays either way.
+      # downloading the binaries does. The system libraries and fonts Chromium
+      # needs are a different matter: they come from the runner's Ubuntu apt
+      # mirror, which can serve a few tens of kB/s for minutes, so the three
+      # steps below cache the .deb archives instead and install them offline
+      # on a later run of the same pull request.
+      #
+      # The browser binary and its system dependencies install separately
+      # (`install chromium` plus `install-deps chromium`, the two halves of
+      # `install --with-deps chromium`), so only the apt half goes through the
+      # cache and its bounds. The fonts stay: the e2e and visual suites render
+      # text, so dropping them is not this workflow's call.
+      - if: steps.chore-deps.outputs.skip == 'false' && steps.filter.outputs.code == 'true'
+        name: Read the Playwright version
+        id: playwright-version
+        run: |
+          set -euo pipefail
+          version="$(pnpm -C frontend exec playwright --version)"
+          version="${version#Version }"
+          case "$version" in
+            '' | *[!0-9A-Za-z.-]*) echo "::error::could not read the Playwright version, got '${version}'"; exit 1 ;;
+          esac
+          echo "version=${version}" >> "$GITHUB_OUTPUT"
+      - if: steps.chore-deps.outputs.skip == 'false' && steps.filter.outputs.code == 'true'
+        name: Restore the Playwright system dependency archives
+        id: apt-cache
+        uses: ./.github/actions/gaia-apt-cache
+        with:
+          name: playwright-chromium
+          version: ${{ steps.playwright-version.outputs.version }}
+      # Bounds: `install-deps` runs its own `apt-get update` inside the one
+      # bounded call, so each attempt is a single 180s call. 180s fits the
+      # healthy-mirror install (well under a minute) several times over, and
+      # every .deb an attempt finishes stays in the archive directory, so a
+      # slow mirror spends three attempts on one download rather than three
+      # restarts. 3 x 180 of apt plus 30 of backoff is 570s, inside this
+      # step's 10 minutes, so the third attempt is reachable. A warm run never
+      # contacts the mirror.
+      - if: steps.chore-deps.outputs.skip == 'false' && steps.filter.outputs.code == 'true'
+        name: Install Playwright system dependencies
+        timeout-minutes: 10
+        env:
+          ARCHIVE_DIRECTORY: ${{ steps.apt-cache.outputs.directory }}
+        run: >-
+          bash .github/actions/gaia-apt-cache/apt-cached-install.sh
+          --archive-dir "$ARCHIVE_DIRECTORY" --update-seconds 0 --install-seconds 180 --attempts 3
+          -- node frontend/node_modules/playwright/cli.js install-deps chromium
       - if: steps.chore-deps.outputs.skip == 'false' && steps.filter.outputs.code == 'true'
         name: Install Playwright Browsers
-        run: pnpm -C frontend exec playwright install --with-deps chromium
+        run: pnpm -C frontend exec playwright install chromium
       - if: steps.chore-deps.outputs.skip == 'false' && steps.filter.outputs.code == 'true'
         name: Run Vitest tests
         run: pnpm test:ci

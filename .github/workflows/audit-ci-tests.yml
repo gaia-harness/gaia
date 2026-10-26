@@ -575,6 +575,18 @@ jobs:
       # suite's dependency changed or a group's membership did, and the repair
       # is to copy the set W10 names, which it derives from the suites and the
       # sharder's own groups rather than from here.
+      #
+      # The archives this step downloads are cached per runner image, so a leg
+      # after the first on that image installs them offline and never reaches
+      # the mirror. Same `if:` as the install step: a leg that skips the
+      # install has nothing to cache. A leg whose restore did not run still
+      # installs, cold, into a directory of its own.
+      - if: contains(fromJSON('["lib-1", "lib-2", "lib-3", "scripts-1", "scripts-2", "scripts-3", "scripts-4", "scripts-5"]'), matrix.shard) && contains(fromJSON('["full","scoped"]'), steps.selection.outputs.mode)
+        name: Restore the YAML parser and zsh archives
+        id: apt-cache
+        uses: ./.github/actions/gaia-apt-cache
+        with:
+          name: yaml-parser-zsh
       - if: contains(fromJSON('["lib-1", "lib-2", "lib-3", "scripts-1", "scripts-2", "scripts-3", "scripts-4", "scripts-5"]'), matrix.shard) && contains(fromJSON('["full","scoped"]'), steps.selection.outputs.mode)
         name: Install the YAML parser and zsh
         # Sized for fast failure and honest attribution, NOT to the leg. When
@@ -584,9 +596,13 @@ jobs:
         # (.gaia/scripts/verify-required-checks.sh names it required) and that
         # leg's tests do not run.
         #
-        # The budget is what makes three attempts reachable: 3 x (45 + 45) of
-        # apt plus 30 of backoff is 300, inside this 360. Read 300 as the
-        # intended shape, not a ceiling. `timeout` REQUESTS termination, and
+        # The budget is what makes three attempts reachable: 3 x (45 + 150) of
+        # apt plus 30 of backoff is 615, inside this 660. The install bound is
+        # sized to a slow but live transfer, not to a stall: zsh-common alone
+        # is about 4 MB, and a mirror serving a few tens of kB/s needs about
+        # two minutes for the three packages, which a 45s install bound never
+        # allowed. The update keeps 45s. Read 615 as the intended shape, not a
+        # ceiling. `timeout` REQUESTS termination, and
         # dpkg defers SIGTERM while unpacking, so a per-call bound can be
         # overrun and this step cap is the only bound that always holds.
         # `-k` would make it a ceiling and is deliberately not used: SIGKILL
@@ -606,60 +622,33 @@ jobs:
         # retry absorbed nothing on the one failure it exists for. Bounding the
         # call itself is what makes the loop reachable, whichever mirror is the
         # one misbehaving.
-        timeout-minutes: 6
+        timeout-minutes: 11
         # Bounded three times, because the three bounds catch different
         # failures and none is sufficient alone: `Acquire::*::Timeout` per
-        # connection, `timeout` per call, and `timeout-minutes` per step.
-        #
-        # `Acquire::*::Timeout` ends a STALLED connection in seconds rather
-        # than letting it hold. It bounds a connection, never a call: with
-        # `Acquire::Retries=2` one dead URI is three tries of 20, so a single
-        # apt call can still run past its 45s wrapper and be killed there.
-        # These knobs do NOT make the retry reachable, which is the per-call
-        # `timeout` above's job: they were the only bound on a call for two
-        # runs, and both spent the whole step budget in attempt 1 because the
-        # failure was never a stall. Both the `http` and `https` knobs are set
-        # because the option is keyed on the acquire method, not on the scheme
-        # the loop happens to hit.
+        # connection (the helper sets it), `timeout` per call, and
+        # `timeout-minutes` per step. A connection bound never made the retry
+        # reachable here: it was the only bound on a call for two runs, and
+        # both spent the whole step budget in attempt 1 because the failure
+        # was never a stall.
         #
         # Three attempts because an archive.ubuntu.com stall is transient:
         # re-running an identically-stalled leg by hand passes it in a
         # fraction of the time it hung for. A genuine mirror outage still
-        # fails red rather than hanging, three short attempts later.
+        # fails red rather than hanging, three bounded attempts later, with a
+        # last line naming the re-run that recovers it.
         #
         # A bounded shell retry rather than a marketplace retry action: this
         # repository vendors its pinned bats and keeps its composite actions
         # local under .github/actions/, so a third-party action here would be
-        # the only dependency of its kind, pinned and reviewed for a loop bash
-        # states in ten lines.
-        run: |
-          set -euo pipefail
-          apt_opts=(-o Acquire::Retries=2 -o Acquire::http::Timeout=20 -o Acquire::https::Timeout=20)
-          # `sudo timeout`, not `timeout sudo`: the latter signals sudo and can
-          # leave the apt child running past the bound, which is the bound not
-          # holding. Exit 124 is timeout's own "I killed it", reported so a log
-          # reader can tell a bounded attempt from a failed one.
-          apt_bounded() {
-            local what="$1"; shift
-            local rc=0
-            sudo timeout 45 "$@" || rc=$?
-            if [ "${rc}" -eq 124 ]; then
-              echo "apt ${what} exceeded its 45s bound" >&2
-            fi
-            return "${rc}"
-          }
-          for attempt in 1 2 3; do
-            if apt_bounded update apt-get "${apt_opts[@]}" update \
-              && apt_bounded install apt-get "${apt_opts[@]}" install -y python3-yaml zsh; then
-              exit 0
-            fi
-            echo "apt attempt ${attempt} of 3 failed" >&2
-            if [ "${attempt}" -lt 3 ]; then
-              sleep $((attempt * 10))
-            fi
-          done
-          echo "apt-get failed after 3 attempts; python3-yaml and zsh are unavailable" >&2
-          exit 1
+        # the only dependency of its kind. The loop is the shared helper the
+        # shipped Tests workflow uses too, so both apt paths follow one policy.
+        env:
+          ARCHIVE_DIRECTORY: ${{ steps.apt-cache.outputs.directory }}
+        run: >-
+          bash .github/actions/gaia-apt-cache/apt-cached-install.sh
+          --archive-dir "${ARCHIVE_DIRECTORY:-${RUNNER_TEMP}/gaia-apt-uncached}"
+          --update-seconds 45 --install-seconds 150 --attempts 3
+          -- apt-get install -y python3-yaml zsh
       # No apt at all: the sandbox tree provably needs neither python3-yaml nor
       # zsh (W9 above), so this leg only needs the pinned bats binary. A PR
       # that arms `sandbox` alone therefore runs no apt at all, instead of the
