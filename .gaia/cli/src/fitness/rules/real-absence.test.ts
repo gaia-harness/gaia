@@ -2,6 +2,7 @@ import {describe, expect, test} from 'vitest';
 import {registerScratchProjects} from '../check-support.js';
 import {runCheck} from '../check.js';
 import type {Finding, FixtureProject} from '../types.js';
+import {registryFiles} from './wiki.fixtures.js';
 
 const createProject = registerScratchProjects();
 
@@ -48,6 +49,22 @@ describe('a path GAIA tooling creates on first use', () => {
         'rules.dead-path'
       )
     ).toEqual([]);
+  });
+
+  test('is not dead in a wiki page before the tooling has written it', () => {
+    // The near miss proves the scan ran, so an empty result cannot mean it was skipped.
+    expect(
+      findingsOf(
+        rule('Root.\n', {
+          ...registryFiles(),
+          'wiki/concepts/Onboarding.md':
+            '# Onboarding\n\nInit resumes from `.gaia/init-state.json`, not `.gaia/init_state.json`.\n',
+        }),
+        'wiki.dead-paths'
+      ).map((finding) => finding.message)
+    ).toEqual([
+      'The wiki cites `.gaia/init_state.json`, which does not exist in this project.',
+    ]);
   });
 
   test('is not a broken link in a command before the tooling has written it', () => {
