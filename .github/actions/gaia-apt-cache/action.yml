@@ -7,9 +7,11 @@ description: |
   output as its `--archive-dir`.
 
   Keyed on the runner image (ImageOS and ImageVersion, set on GitHub-hosted
-  runners) and the caller's `version`, with no restore-keys: the archives are
-  the exact packages one image lacked, and a set from another image could
-  downgrade or conflict. A miss is a cold install, never a failure.
+  runners), the caller's `request` (hashed) and its `version`, with no
+  restore-keys: the archives are the exact packages one image lacked for one
+  install request, and a set from another image or request could downgrade,
+  conflict, or leave the newly requested package uninstalled. A miss is a cold
+  install, never a failure.
 
   The save runs in the cache action's post step, only when the job succeeds,
   and under the ref the job ran on: a pull request's cache serves that pull
@@ -20,11 +22,17 @@ inputs:
       Which install this cache holds, used in the key and the directory name.
       Letters, digits, dots, underscores and dashes.
     required: true
+  request:
+    description: >-
+      The install request the archives serve, such as the package list or the
+      install command. Hashed into the key, so changing it misses the old
+      entry instead of restoring archives that lack the new packages.
+    required: true
   version:
     description: >-
-      Anything else the package set depends on, such as the Playwright version
-      whose dependency list the install follows. Empty when the package list
-      is fixed in the caller.
+      Anything the package set depends on beyond `request`, such as the
+      Playwright version whose dependency list the install follows. Empty when
+      the request fully determines it.
     required: false
     default: ''
 outputs:
@@ -40,13 +48,15 @@ runs:
       env:
         CACHE_NAME: ${{ inputs.name }}
         CACHE_VERSION: ${{ inputs.version }}
+        CACHE_REQUEST: ${{ inputs.request }}
       run: |
         set -euo pipefail
         case "$CACHE_NAME" in
           '' | *[!A-Za-z0-9._-]*) echo "::error::gaia-apt-cache: name must be letters, digits, dots, underscores or dashes, got '${CACHE_NAME}'"; exit 1 ;;
         esac
+        request_digest=$(printf '%s' "$CACHE_REQUEST" | sha256sum | cut -c1-16)
         {
-          echo "key=gaia-apt-${CACHE_NAME}-${ImageOS:-unknown-image}-${ImageVersion:-unknown-version}-${CACHE_VERSION}"
+          echo "key=gaia-apt-${CACHE_NAME}-${ImageOS:-unknown-image}-${ImageVersion:-unknown-version}-${request_digest}-${CACHE_VERSION}"
           echo "directory=${RUNNER_TEMP}/gaia-apt-cache/${CACHE_NAME}"
         } >> "$GITHUB_OUTPUT"
     - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0

@@ -587,6 +587,7 @@ jobs:
         uses: ./.github/actions/gaia-apt-cache
         with:
           name: yaml-parser-zsh
+          request: python3-yaml zsh
       - if: contains(fromJSON('["lib-1", "lib-2", "lib-3", "scripts-1", "scripts-2", "scripts-3", "scripts-4", "scripts-5"]'), matrix.shard) && contains(fromJSON('["full","scoped"]'), steps.selection.outputs.mode)
         name: Install the YAML parser and zsh
         # Sized for fast failure and honest attribution, NOT to the leg. When

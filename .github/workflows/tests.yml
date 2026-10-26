@@ -225,6 +225,7 @@ jobs:
         uses: ./.github/actions/gaia-apt-cache
         with:
           name: playwright-chromium
+          request: playwright install-deps chromium
           version: ${{ steps.playwright-version.outputs.version }}
       # Bounds: `install-deps` runs its own `apt-get update` inside the one
       # bounded call, so each attempt is a single 180s call. 180s fits the
