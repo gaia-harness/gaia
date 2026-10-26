@@ -183,10 +183,6 @@ bash .gaia/scripts/pr-wait-merge.sh --pr <N> --attempts 20
 
 The merge above is already queued, and this script issues no `gh pr merge` of its own, so nothing here re-merges. Do not run any local cleanup or tagging until it prints `MERGED` (exit 0). On `CONFLICTING` (exit 3), repair per `wiki/concepts/PR Merge Workflow.md`'s `### Conflict found mid-wait` and run the wait again; on `CHECK_FAILED` (exit 4), inspect the failing check; on `TIMEOUT` (exit 5), inspect `gh pr view <N>` for a stuck merge queue; on `CLOSED` (exit 6), the release pull request was closed without merging, so stop and do not tag. Exit 2 is a refusal rather than a verdict and says nothing about the pull request: read the message, which names what could not be read. The script's `--help` is the authority on that set.
 
-### 11b. Context footprint check
-
-Before tagging, ask with AskUserQuestion: "Context footprint measured for this version and the token-efficiency page updated?" Options: **Done**; **Run it now (stop)**, which stops the release so the maintainer runs `.claude/maintainers/context-footprint-prompt.md` against a probe built from this release candidate; **Skip this release**, which asks for the reason and records it in the release PR. Continue only on Done or Skip.
-
 ### 12. Tag the squash commit
 
 ```bash
@@ -277,7 +273,7 @@ npm view create-gaia@<NEW_VERSION> version    # registry CDN may lag a minute
 
 ### 14. Lockstep website
 
-The marketing/docs site (`../website` relative to this repo) embeds two version references plus a public changelog entry that must match the release just cut. Update all of them before considering the release complete.
+The marketing/docs site (`../website` relative to this repo) embeds two version references, a minor-version announcement on the homepage, and a public changelog entry that must match the release just cut. Update all of them before considering the release complete.
 
 ```bash
 WEB="$(git rev-parse --show-toplevel)/../website"
@@ -294,18 +290,22 @@ echo "website resolved to: $WEB"                   # ← note this literal path;
 
 - `$WEB/index.html` → `"softwareVersion": "<NEW_VERSION>",`
 
+**Homepage hero pill**, on a minor or major release only (`<NEW_VERSION>` is `X.Y.0`), update the announcement to the new `<major.minor>`; a patch release leaves it alone. Find it by its text, not a line number:
+
+- `$WEB/src/pages/home/sections/Hero.tsx` → `GAIA <major.minor> is out.`
+
 **Public changelog page (release notes).** The two edits above are version strings; the human-readable "what's new" entry on the site's changelog page is a separate artifact owned by the `release-notes` skill. Generate it for the version just cut:
 
 - Invoke the `release-notes` skill with `<NEW_VERSION>` (no leading `v`). It reads the graduated `## [<NEW_VERSION>]` block from `CHANGELOG.md`, translates it to adopter-facing notes, writes `$WEB/src/pages/changelog/releases/<NEW_VERSION>.ts` (the page auto-discovers the file via `import.meta.glob`; there is no index to update), and prints an editorial-decisions report.
 - The report is a human gate: review the **Dropped** and **Consolidated** lists and resolve every **Needs a human ruling** item before accepting, then adjust the file per the maintainer's rulings. Ask each ruling through `AskUserQuestion`, up to 4 questions per call, the skill's suggested reading first and marked `(Recommended)`; then ask `Accept the notes (Recommended)` or `Adjust`.
 - The skill only reads `CHANGELOG.md`; never edit the changelog here.
 
-Stage the generated `<NEW_VERSION>.ts` alongside the two version edits so all three land in one website commit.
+Stage the generated `<NEW_VERSION>.ts` alongside the version edits (and the hero pill on a minor or major release) so they all land in one website commit.
 
 Commit and push directly to `main` in the website repo (no branch protection on `website`). Both follow Step 13's sibling-repo commit and push protocol.
 
 ```bash
-git -C /abs/path/to/website add src/pages/get-started/sections/GetStarted.tsx index.html src/pages/changelog/releases/<NEW_VERSION>.ts && git -C /abs/path/to/website commit -m "chore: lockstep GAIA v<NEW_VERSION>"
+git -C /abs/path/to/website add src/pages/get-started/sections/GetStarted.tsx index.html src/pages/home/sections/Hero.tsx src/pages/changelog/releases/<NEW_VERSION>.ts && git -C /abs/path/to/website commit -m "chore: lockstep GAIA v<NEW_VERSION>"
 ```
 
 Push, per the commit and push protocol:
