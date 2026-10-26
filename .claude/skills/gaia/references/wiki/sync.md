@@ -38,7 +38,7 @@ If drift > 30 commits, ASK the user via `AskUserQuestion`:
 
 Only proceed automatically when drift ≤ 30.
 
-The drift count is `drift_count`, on the normal path and on the recovery path alike. The CLI already counts from the right base (the recorded SHA when reachable, else `suggested_base`) and leaves out the wiki bookkeeping commits, so do not recompute it with `git rev-list`. Apply the cap to `drift_count`. A batch that landed since the last sync (worst case, a whole release) shows up here and is capped exactly like normal drift.
+The drift count is `drift_count`, on the normal path and on the recovery path alike. The CLI already counts from the right base (the recorded SHA while its commit object is present locally, else `suggested_base`) and leaves out the wiki bookkeeping commits, so do not recompute it with `git rev-list`. Apply the cap to `drift_count`. A batch that landed since the last sync (worst case, a whole release) shows up here and is capped exactly like normal drift.
 
 ## Step 3: First-pass, classify commits
 
@@ -50,7 +50,7 @@ Run, using the evaluation baseline from Step 1 (normal path: `last_evaluated_sha
 .gaia/cli/gaia wiki commit-classify --since "$BASE" --json
 ```
 
-On the recovery path, classify from `suggested_base`, NOT the orphaned `last_evaluated_sha`. The orphaned SHA's `..HEAD` range is topologically unreliable after a squash; `suggested_base` is reachable and time-anchored.
+On the recovery path, classify from `suggested_base`, NOT the orphaned `last_evaluated_sha`. `suggested_base` is reachable from `HEAD` and time-anchored, so it covers at least the commits the orphaned range does.
 
 The CLI emits a deterministic `suggestion` field per commit (`WORTHY` or `SKIP`) along with `subject`, `body`, file stats, and `suggestion_reason`. Treat the `WORTHY` subset as candidates for deep-read. Take the CLI's `suggestion` as the classification. Log the `suggestion_reason` verbatim alongside the decision in Step 5.
 
