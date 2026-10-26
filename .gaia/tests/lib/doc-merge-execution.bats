@@ -185,6 +185,7 @@ CONTRACT_NEEDLES=(
   'keys(baseline manifest `.files`) ∪ keys(latest manifest `.files`) ∪ the path of every `deferred` decision-log entry'
   '`pending-judgment`'
   'bash .gaia/scripts/update-gaia-report.sh validate'
+  'A removed key (`reason: "removed"`, no `latest`)'
 )
 
 # Prints each contract needle missing from file `$1`.
@@ -196,7 +197,7 @@ missing_contract_needles() {
 }
 
 @test "contract: merge-execution.md names every call and rule it owes the orchestrator" {
-  [ "${#CONTRACT_NEEDLES[@]}" -eq 19 ]
+  [ "${#CONTRACT_NEEDLES[@]}" -eq 20 ]
   [ -z "$(missing_contract_needles "$MERGE_EXECUTION")" ]
   local copy="$BATS_TEST_TMPDIR/merge-execution-missing.md" needle
   for needle in "${CONTRACT_NEEDLES[@]}"; do
