@@ -96,7 +96,7 @@
     ".github/audit/resolve-audit-base.sh": 1073,
     ".github/forensics/parse-issue-body.sh": 404,
     ".github/workflows/audit-ci-tests.yml": 958,
-    ".github/workflows/cli-tests.yml": 597,
+    ".github/workflows/cli-tests.yml": 605,
     ".github/workflows/forensics-triage.yml": 1151
   },
   "version": 1
