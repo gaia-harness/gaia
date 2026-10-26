@@ -44,6 +44,7 @@ _notebook_library_files() {
   gaia_copy_real "$MAIN" \
     .gaia/scripts/spec/plan-allocator.sh \
     .gaia/scripts/spec/with-ledger-lock.sh \
+    .gaia/scripts/exclusive-lock-lib.sh \
     .gaia/scripts/spec/title-normalize.sh \
     .gaia/scripts/main-root-lib.sh \
     $notebook_files
@@ -358,6 +359,7 @@ JS
   gaia_copy_real "$MAIN" \
     .gaia/scripts/spec/plan-allocator.sh \
     .gaia/scripts/spec/with-ledger-lock.sh \
+    .gaia/scripts/exclusive-lock-lib.sh \
     .gaia/scripts/spec/title-normalize.sh \
     .gaia/scripts/main-root-lib.sh \
     $notebook_files

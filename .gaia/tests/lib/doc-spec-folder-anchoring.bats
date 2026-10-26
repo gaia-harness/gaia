@@ -89,6 +89,7 @@ setup() {
 
   mkdir -p "$MAIN/.gaia/scripts/notebook" "$MAIN/.gaia/scripts/spec"
   cp "$REPO_ROOT/.gaia/scripts/main-root-lib.sh" "$MAIN/.gaia/scripts/main-root-lib.sh"
+  cp "$REPO_ROOT/.gaia/scripts/exclusive-lock-lib.sh" "$MAIN/.gaia/scripts/exclusive-lock-lib.sh"
   # The notebook library, its private parts and the lock primitive it sources.
   cp "$REPO_ROOT"/.gaia/scripts/notebook/*.sh "$MAIN/.gaia/scripts/notebook/"
   cp "$REPO_ROOT/.gaia/scripts/spec/with-ledger-lock.sh" "$MAIN/.gaia/scripts/spec/with-ledger-lock.sh"
@@ -245,6 +246,7 @@ check_s1() {
   mkdir -p "$broken/.gaia/scripts/notebook" "$broken/.gaia/scripts/spec"
   cp "$MAIN/.gaia/scripts/notebook/"*.sh "$broken/.gaia/scripts/notebook/"
   cp "$MAIN/.gaia/scripts/spec/with-ledger-lock.sh" "$broken/.gaia/scripts/spec/with-ledger-lock.sh"
+  cp "$MAIN/.gaia/scripts/exclusive-lock-lib.sh" "$broken/.gaia/scripts/exclusive-lock-lib.sh"
   printf '#!/usr/bin/env bash\nexit 1\n' > "$broken/.gaia/scripts/main-root-lib.sh"
 
   run bash -c "cd '$broken' && SPEC_ID=SPEC-998 bash '$script'"

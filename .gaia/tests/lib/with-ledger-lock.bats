@@ -101,3 +101,21 @@ teardown() {
   [[ "$output" == *"ONE"* ]]
   [[ "$output" == *"TWO"* ]]
 }
+
+@test "8: forced fallback; concurrent increments all land with a non-exclusive mkdir first on PATH" {
+  # shellcheck source=/dev/null
+  . "$(cd "$BATS_TEST_DIRNAME/../../.." && pwd)/.gaia/tests/helpers/non-exclusive-mkdir.sh"
+  local counter="$BATS_TEST_TMPDIR/counter" shim_path
+  shim_path="$(non_exclusive_mkdir_path)"
+  printf '0\n' >"$counter"
+  run env PATH="$shim_path" bash -c "
+    . '$LOCK_HELPER'
+    export GAIA_LEDGER_LOCK_FORCE_FALLBACK=1 GAIA_LEDGER_LOCK_POLL_SECONDS=0.05
+    increment() { value=\$(cat '$counter'); sleep 0.2; printf '%s\n' \$((value + 1)) >'$counter'; }
+    for _ in 1 2 3 4; do ( with_ledger_lock '$LOCK_DIRECTORY' increment ) & done
+    wait
+    cat '$counter'
+  "
+  [ "$status" -eq 0 ]
+  [ "$output" = 4 ]
+}

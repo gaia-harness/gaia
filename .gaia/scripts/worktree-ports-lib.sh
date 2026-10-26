@@ -15,6 +15,8 @@ _GAIA_PORTS_LIBRARY_DIRECTORY="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # shellcheck source=main-root-lib.sh
 source "$_GAIA_PORTS_LIBRARY_DIRECTORY/main-root-lib.sh"
+# shellcheck source=exclusive-lock-lib.sh
+source "$_GAIA_PORTS_LIBRARY_DIRECTORY/exclusive-lock-lib.sh"
 # shellcheck source=../../.claude/hooks/lib/gaia-packages.sh
 source "$_GAIA_PORTS_LIBRARY_DIRECTORY/../../.claude/hooks/lib/gaia-packages.sh"
 
@@ -190,7 +192,7 @@ gaia_ports_lock() {
   lock="$state_directory/slots.lock"
   deadline=$(( $(date +%s) + allowed ))
   while :; do
-    mkdir "$lock" 2>/dev/null && return 0
+    gaia_exclusive_lock_take "$lock" && return 0
     # A holder keeps the lock for a few file operations, far under a minute,
     # so an older lock belongs to a dead writer and is broken once.
     if [ "$broke" -eq 0 ] && [ -n "$(find "$lock" -maxdepth 0 -mmin +1 2>/dev/null)" ]; then
@@ -205,8 +207,7 @@ gaia_ports_lock() {
 }
 
 gaia_ports_unlock() {
-  local lock="${1:-}/slots.lock"
-  rmdir "$lock" 2>/dev/null || rm -rf "$lock"
+  gaia_exclusive_lock_release "${1:-}/slots.lock"
 }
 
 _gaia_ports_write_atomic() {

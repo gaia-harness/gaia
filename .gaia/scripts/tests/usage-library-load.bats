@@ -76,6 +76,7 @@ source_line_violations() {
     mkdir -p "$scratch/spec"
     cp "$SCRIPTS"/*.sh "$SCRIPTS"/*.json "$scratch/"
     cp "$SCRIPTS/spec/with-ledger-lock.sh" "$scratch/spec/"
+    cp "$SCRIPTS/exclusive-lock-lib.sh" "$scratch/"
     rm "$scratch/$library"
     run --separate-stderr bash "$scratch/usage.sh" initiative spec:SPEC-001 --main-root "$MAIN"
     [ "$status" -ne 0 ] || { printf 'without %s the run exited 0\n' "$library" >&2; return 1; }

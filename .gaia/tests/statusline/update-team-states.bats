@@ -205,6 +205,7 @@ render_at() {
   write_busy_cache
   mkdir -p "$MAIN/.gaia/scripts" "$BATS_TEST_TMPDIR/bin"
   cp "$REPO_ROOT/.gaia/scripts/check-updates.sh" "$MAIN/.gaia/scripts/check-updates.sh"
+  cp "$REPO_ROOT/.gaia/scripts/exclusive-lock-lib.sh" "$MAIN/.gaia/scripts/exclusive-lock-lib.sh"
   printf '#!/bin/bash\necho "$@" >> "%s/gh.log"\nexit 1\n' "$BATS_TEST_TMPDIR" > "$BATS_TEST_TMPDIR/bin/gh"
   chmod +x "$BATS_TEST_TMPDIR/bin/gh"
   : > "$BATS_TEST_TMPDIR/gh.log"
@@ -302,6 +303,7 @@ write_pull_cache() {
   write_pull_cache
   mkdir -p "$MAIN/.gaia/scripts" "$BATS_TEST_TMPDIR/bin"
   cp "$REPO_ROOT/.gaia/scripts/check-updates.sh" "$MAIN/.gaia/scripts/check-updates.sh"
+  cp "$REPO_ROOT/.gaia/scripts/exclusive-lock-lib.sh" "$MAIN/.gaia/scripts/exclusive-lock-lib.sh"
   printf '#!/bin/bash\necho "$@" >> "%s/gh.log"\nexit 1\n' "$BATS_TEST_TMPDIR" > "$BATS_TEST_TMPDIR/bin/gh"
   chmod +x "$BATS_TEST_TMPDIR/bin/gh"
   : > "$BATS_TEST_TMPDIR/gh.log"

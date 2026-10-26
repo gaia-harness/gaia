@@ -293,7 +293,7 @@
       "match": "prefix",
       "kind": "dir",
       "scope": "shared",
-      "keyed_by": "singleton per clone; atomic mkdir",
+      "keyed_by": "singleton per clone; exclusive owner file",
       "why": "Singleton guard for the SessionStart transcript sweep, so two sessions starting together do not both parse the backlog.",
       "writer": "code",
       "retention": {
@@ -770,7 +770,7 @@
       "kind": "dir",
       "scope": "ephemeral",
       "keyed_by": null,
-      "why": "A singleton mkdir lock serializing ledger rewrites across trees, with no partition key. Held only for the read-modify-write, never across a signal or a wait.",
+      "why": "A singleton lock directory serializing ledger rewrites across trees, with no partition key. Held only for the read-modify-write, never across a signal or a wait.",
       "writer": "code",
       "retention": {
         "class": "owned",
