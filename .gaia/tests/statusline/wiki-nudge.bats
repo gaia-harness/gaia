@@ -194,6 +194,7 @@ make_repo() {
   printf '.gaia/local/\n.claude/commands/\n' >> "$REPOSITORY_FIXTURE/.git/info/exclude"
   mkdir -p "$REPOSITORY_FIXTURE/.gaia/scripts" "$REPOSITORY_FIXTURE/.gaia/statusline" "$REPOSITORY_FIXTURE/.gaia/cli" "$REPOSITORY_FIXTURE/.gaia/local/cache/shared" "$REPOSITORY_FIXTURE/wiki"
   cp "$CHECK_UPDATES_SOURCE" "$REPOSITORY_FIXTURE/.gaia/scripts/check-updates.sh"
+  cp "$REPO_ROOT/.gaia/scripts/exclusive-lock-lib.sh" "$REPOSITORY_FIXTURE/.gaia/scripts/exclusive-lock-lib.sh"
   cp "$MAIN_ROOT_LIBRARY_SOURCE" "$REPOSITORY_FIXTURE/.gaia/scripts/main-root-lib.sh"
   cp "$STATUSLINE_SOURCE" "$REPOSITORY_FIXTURE/.gaia/statusline/gaia-statusline.sh"
   cp "$STATUSLINE_RIGHT_SOURCE" "$REPOSITORY_FIXTURE/.gaia/statusline/gaia-statusline-right.sh"

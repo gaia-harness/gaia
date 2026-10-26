@@ -51,6 +51,7 @@ build_repo() {
     cp "$copied_file" "$REPO/.gaia/scripts/"
   done
   cp "$SOURCE_ROOT/.gaia/scripts/spec/with-ledger-lock.sh" "$REPO/.gaia/scripts/spec/"
+  cp "$SOURCE_ROOT/.gaia/scripts/exclusive-lock-lib.sh" "$REPO/.gaia/scripts/"
   mkdir -p "$REPO/.gaia/scripts/notebook"
   cp "$SOURCE_ROOT"/.gaia/scripts/notebook/*.sh "$REPO/.gaia/scripts/notebook/"
   cat >"$REPO/.gaia/audit-ci.yml" <<'EOF'

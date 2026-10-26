@@ -38,6 +38,8 @@ _gaia_loop_library_directory="${BASH_SOURCE[0]%/*}"
 . "$_gaia_loop_library_directory/main-root-lib.sh"
 # shellcheck source=/dev/null
 . "$_gaia_loop_library_directory/audit-key-lib.sh"
+# shellcheck source=/dev/null
+. "$_gaia_loop_library_directory/exclusive-lock-lib.sh"
 unset _gaia_loop_library_directory
 
 # Git with the repository-discovery overrides stripped, so an ambient GIT_DIR
@@ -168,8 +170,8 @@ gaia_loop_write_state() {
   mv -f "$temporary_file" "$file" || { rm -f "$temporary_file"; return 1; }
 }
 
-# gaia_loop_lock <file> <deadline-epoch>: take `<file>.lock` by `mkdir`
-# (atomic on every local filesystem). A lock older than a minute belongs to a
+# gaia_loop_lock <file> <deadline-epoch>: take `<file>.lock` through
+# gaia_exclusive_lock_take. A lock older than a minute belongs to a
 # writer that died: every writer holds it for a few jq calls, far below that,
 # so it is broken once. rc 1 when the deadline passes. The caller re-reads the
 # state after this returns.
@@ -179,7 +181,7 @@ gaia_loop_lock() {
   case "$deadline" in '' | *[!0-9]*) return 1 ;; esac
   mkdir -p "${file%/*}" 2>/dev/null || return 1
   while :; do
-    mkdir "$lock" 2>/dev/null && return 0
+    gaia_exclusive_lock_take "$lock" && return 0
     if [ "$broke" -eq 0 ] && [ -n "$(find "$lock" -maxdepth 0 -mmin +1 2>/dev/null)" ]; then
       rmdir "$lock" 2>/dev/null || rm -rf "$lock"
       broke=1
@@ -193,7 +195,7 @@ gaia_loop_lock() {
 
 # gaia_loop_unlock <file>: release the lock taken by gaia_loop_lock.
 gaia_loop_unlock() {
-  rmdir "${1-}.lock" 2>/dev/null || rm -rf "${1-}.lock"
+  gaia_exclusive_lock_release "${1-}.lock"
 }
 
 # gaia_loop_resolve_audited_root <payload-json>: the audited checkout.

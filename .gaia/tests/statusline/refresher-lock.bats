@@ -17,6 +17,7 @@ setup() {
   REFRESH_ROOT=$(mktemp -d -t gaia-cu-lock-XXXXXX)
   mkdir -p "$REFRESH_ROOT/.gaia/scripts" "$REFRESH_ROOT/.gaia/cli" "$REFRESH_ROOT/.gaia/local/cache/shared"
   cp "$CHECK_UPDATES_SOURCE" "$REFRESH_ROOT/.gaia/scripts/check-updates.sh"
+  cp "${CHECK_UPDATES_SOURCE%/*}/exclusive-lock-lib.sh" "$REFRESH_ROOT/.gaia/scripts/exclusive-lock-lib.sh"
   chmod +x "$REFRESH_ROOT/.gaia/scripts/check-updates.sh"
   write_mock_gaia "$REFRESH_ROOT/.gaia/cli/gaia"
 
@@ -136,6 +137,17 @@ wait_for_entered() {
   [ ! -f "$CACHE_FILE" ]
   [ ! -e "$MOCK_LOG" ]
   [ -d "$LOCK_DIRECTORY" ]
+}
+
+@test "a lock held through the shared helper blocks this run, with a non-exclusive mkdir first on PATH" {
+  bash -c '. "$1"; gaia_exclusive_lock_take "$2"' _ "$(cd "$BATS_TEST_DIRNAME/../../scripts" && pwd)/exclusive-lock-lib.sh" "$LOCK_DIRECTORY"
+  # shellcheck source=/dev/null
+  . "$(cd "$BATS_TEST_DIRNAME/../.." && pwd)/tests/helpers/non-exclusive-mkdir.sh"
+  PATH="$(non_exclusive_mkdir_path)"
+  run bash "$REFRESH_ROOT/.gaia/scripts/check-updates.sh"
+  [ "$status" -eq 0 ]
+  [ ! -f "$CACHE_FILE" ]
+  [ ! -e "$MOCK_LOG" ]
 }
 
 @test "a run whose lock was reclaimed leaves its successor's lock in place on exit" {

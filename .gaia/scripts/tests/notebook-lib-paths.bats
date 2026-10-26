@@ -43,7 +43,7 @@ make_repo() {
   git -C "$repository" config core.excludesFile "$SCRATCH/empty-excludes"
   printf '.notebook\n' >"$repository/.gitignore"
   mkdir -p "$repository/.gaia/scripts/spec" "$repository/.gaia/scripts/notebook"
-  for relative in .gaia/scripts/main-root-lib.sh .gaia/scripts/spec/with-ledger-lock.sh \
+  for relative in .gaia/scripts/main-root-lib.sh .gaia/scripts/spec/with-ledger-lock.sh .gaia/scripts/exclusive-lock-lib.sh \
     .gaia/scripts/notebook/notebook-lib.sh .gaia/scripts/notebook/notebook-lib-catalog.sh \
     .gaia/scripts/notebook/notebook-lib-paths.sh .gaia/scripts/notebook/legacy-roots.sh; do
     cp "$SOURCE_ROOT/$relative" "$repository/$relative"

@@ -158,6 +158,7 @@ holds_within() {
   cp "$SCRIPTS"/usage-flush.sh "$SCRIPTS"/usage-parse-lib.sh "$SCRIPTS"/usage-lib.sh "$SCRIPTS"/main-root-lib.sh \
     "$SCRIPTS"/branch-name-lib.sh "$scratch_directory/.gaia/scripts/"
   cp "$REPO_ROOT/.gaia/scripts/spec/with-ledger-lock.sh" "$scratch_directory/.gaia/scripts/spec/"
+  cp "$REPO_ROOT/.gaia/scripts/exclusive-lock-lib.sh" "$scratch_directory/.gaia/scripts/"
   mkdir -p "$scratch_directory/.gaia/scripts/notebook"
   cp "$SCRIPTS"/notebook/*.sh "$scratch_directory/.gaia/scripts/notebook/"
   sed 's/^  commit_started_at="\$(_uf_now)"$/  commit_started_at="$(_uf_now)"; sleep 3/' "$SCRIPTS/usage-flush.sh" >"$scratch_directory/.gaia/scripts/usage-flush.sh"

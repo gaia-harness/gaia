@@ -25,6 +25,7 @@ setup() {
   STUB_BIN="$BATS_TEST_TMPDIR/bin"
   mkdir -p "$SCRATCH_ROOT/.gaia/scripts" "$SCRATCH_ROOT/.gaia/cli" "$SCRATCH_ROOT/.gaia/local/cache/shared" "$STUB_BIN"
   cp "$SCRIPTS_DIRECTORY/check-updates.sh" "$SCRATCH_ROOT/.gaia/scripts/check-updates.sh"
+  cp "$SCRIPTS_DIRECTORY/exclusive-lock-lib.sh" "$SCRATCH_ROOT/.gaia/scripts/exclusive-lock-lib.sh"
   cp "$SCRIPTS_DIRECTORY/main-root-lib.sh" "$SCRATCH_ROOT/.gaia/scripts/main-root-lib.sh"
   cp "$REAL_BUNDLE" "$SCRATCH_ROOT/.gaia/cli/gaia-real"
   write_wrapper_gaia "$SCRATCH_ROOT/.gaia/cli/gaia"

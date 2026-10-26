@@ -54,6 +54,8 @@ command -v jq >/dev/null 2>&1 || exit 0
 . "$UF_SCRIPT_DIRECTORY/usage-lib.sh" 2>/dev/null || { _uf_log "cannot load $UF_SCRIPT_DIRECTORY/usage-lib.sh"; exit 1; }
 # shellcheck source=usage-parse-lib.sh
 . "$UF_SCRIPT_DIRECTORY/usage-parse-lib.sh" 2>/dev/null || { _uf_log "cannot load $UF_SCRIPT_DIRECTORY/usage-parse-lib.sh"; exit 1; }
+# shellcheck source=exclusive-lock-lib.sh
+. "$UF_SCRIPT_DIRECTORY/exclusive-lock-lib.sh" 2>/dev/null || { _uf_log "cannot load $UF_SCRIPT_DIRECTORY/exclusive-lock-lib.sh"; exit 1; }
 
 UF_SESSION="" UF_TRANSCRIPT="" UF_FINISHED_MAIN=false UF_ALL_SIDECARS_FINISHED=0 UF_SWEEP=0 UF_SELF=""
 UF_PROJECTS="" UF_MAIN="" UF_TELEMETRY_DIRECTORY=""
@@ -120,7 +122,7 @@ UF_COMMITTED=0
 _uf_cleanup() {
   rm -rf "$UF_WORK" 2>/dev/null
   rm -f "$UF_BATCH" 2>/dev/null
-  if [ "$UF_SWEEP_OWNED" = 1 ]; then rmdir "$UF_SWEEP_LOCK" 2>/dev/null; fi
+  if [ "$UF_SWEEP_OWNED" = 1 ]; then gaia_exclusive_lock_release "$UF_SWEEP_LOCK"; fi
 }
 trap _uf_cleanup EXIT
 trap 'exit 130' INT
@@ -518,14 +520,14 @@ _uf_sweep() {
   local start line size path modified_time modified_path file_finished budget="${GAIA_USAGE_SWEEP_BUDGET_SECONDS:-240}" age
   local -a sizes=() paths=() modified_time_lines=()
   mkdir -p "$UF_TELEMETRY_DIRECTORY" 2>/dev/null || return 0
-  if ! mkdir "$UF_SWEEP_LOCK" 2>/dev/null; then
+  if ! gaia_exclusive_lock_take "$UF_SWEEP_LOCK"; then
     modified_time="$(stat "$UF_STAT_FLAG" "${UF_STAT_FORMAT#* }" "$UF_SWEEP_LOCK" 2>/dev/null)" || return 0
     age=$(($(date +%s) - modified_time))
     # A sweep killed without its EXIT trap leaves the dir behind; past the
     # budget plus a margin no live sweep can still own it.
     [ "$age" -gt $((budget + 60)) ] || return 0
     rm -rf "$UF_SWEEP_LOCK" 2>/dev/null
-    mkdir "$UF_SWEEP_LOCK" 2>/dev/null || return 0
+    gaia_exclusive_lock_take "$UF_SWEEP_LOCK" || return 0
   fi
   UF_SWEEP_OWNED=1
   start="$(date +%s)"

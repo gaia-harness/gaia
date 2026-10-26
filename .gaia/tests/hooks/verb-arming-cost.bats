@@ -534,6 +534,7 @@ CEILING_USAGE_MERGE_MS=4000
     cp "$copied_file" "$REPO/.gaia/scripts/"
   done
   cp "$HOOKS_DIRECTORY/../../.gaia/scripts/spec/with-ledger-lock.sh" "$REPO/.gaia/scripts/spec/"
+  cp "$HOOKS_DIRECTORY/../../.gaia/scripts/exclusive-lock-lib.sh" "$REPO/.gaia/scripts/"
   printf '#!/usr/bin/env bash\nexit 1\n' >"$GH_BIN/gh"
   chmod +x "$GH_BIN/gh"
 
