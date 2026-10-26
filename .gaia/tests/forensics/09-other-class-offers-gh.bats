@@ -121,7 +121,7 @@ other_class_surrogate() {
   rm -rf "$stub_directory"
 
   grep -xF -- "$RUNBOOK_REPO" "$CAPTURE_FILE"
-  [[ "$RUNBOOK_REPO" == "gaia-harness/gaia" ]]
+  [ "$RUNBOOK_REPO" = "gaia-harness/gaia" ] || return 1
   grep -xF -- 'gaia-forensics' "$CAPTURE_FILE"
   grep -qF 'forensics: other,' "$CAPTURE_FILE"
 }

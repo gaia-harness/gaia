@@ -88,7 +88,7 @@ teardown() {
   # regardless of what git remote would return.
   invoke_gh_surrogate "$CAPTURE_FILE" "init" "rename step failed" "$BODY_FILE"
   grep -xF -- "$RUNBOOK_REPO" "$CAPTURE_FILE"
-  [[ "$RUNBOOK_REPO" == "gaia-harness/gaia" ]]
+  [ "$RUNBOOK_REPO" = "gaia-harness/gaia" ] || return 1
   # Confirm the captured argv does not contain any git-remote-derived value
   ! grep -q 'origin' "$CAPTURE_FILE"
 }
