@@ -174,7 +174,7 @@ Members opt in to light routing one by one through `light_review` in `.gaia/audi
 
 **The quick arm.** First-dispatch quick routes carry `anchor_kind: merge-base` and are excluded from every kill-rule figure above. They are measured separately on `tally`'s `quick_routes` and `quick_cleared` lines.
 
-**The measurement.** `bash .gaia/scripts/audit-light-telemetry.sh tally` prints the window PR count, the eligible re-audit count and the light-cleared count, overall and per member, from the local telemetry log. Read `light_cleared_rate` only once `window_prs` reaches 30. The log records a branch, not a merge, so the window counts branches that touched the frontend member's remit; check that they merged before acting on the figure.
+**The measurement.** `bash .gaia/scripts/audit-light-telemetry.sh tally` prints the window PR count, the eligible re-audit count and the light-cleared count, overall and per member, from the local telemetry log. Read `light_cleared_rate` only once `window_prs` reaches 30. The log records a branch, not a merge, so the window counts branches that touched the frontend member's remit; check that they merged before acting on the figure. `.gaia/scripts/audit-dispatch-cost.sh` records the cost of every member and light reviewer dispatch beside the tally, and `bash .gaia/scripts/audit-dispatch-cost.sh report` prints it. The cost report windows by branch, not by definition version, so a change to a member's definition shows as a moving median.
 
 **Why the pooled figure.** A single member's re-audits are too few to judge alone, and the question is whether the mechanism as a whole pays for its upkeep, which the per-member lines then locate.
 

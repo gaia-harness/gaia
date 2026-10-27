@@ -120,6 +120,10 @@
 .gaia/scripts/bats-suites-for-change.sh
 # Appends light-review routing events to a local log and tallies it. Adopters record nothing, and the tally reads a log only the maintainer repo ever writes, so an adopter clone would carry a script nothing invokes. Its shipped callers sit inside maintainer-only blocks the bundle-time scrub removes.
 .gaia/scripts/audit-light-telemetry.sh
+# Record, measure and report audit dispatch cost into the maintainer's local telemetry log. Every caller sits inside a maintainer-only block the bundle-time scrub removes, so an adopter clone would carry scripts nothing invokes.
+.gaia/scripts/audit-dispatch-cost-lib.sh
+.gaia/scripts/audit-dispatch-cost-report.sh
+.gaia/scripts/audit-dispatch-cost.sh
 # Deterministic lint over GAIA's own framework shell; every runner (shell-lint.sh and its sibling bats suite) is release-excluded, so an adopter clone would carry a check nothing invokes.
 .gaia/scripts/lint-hook-array-guard.sh
 # Invariant check over the audit agent definitions; its only runner is its own release-excluded bats suite, so an adopter clone would carry a check nothing invokes.
@@ -148,6 +152,8 @@ wiki/decisions/Shell Guard Fixture Discrimination.md
 wiki/decisions/Local Test Runtime.md
 # Design rationale for treating Dependabot as a data source and resolving advisories in /update-deps; maintainer kept it internal
 wiki/decisions/Dependabot as a Data Source.md
+# Documents the audit dispatch-cost recorder, library and report, all release-excluded; an adopter clone has none of them.
+wiki/concepts/Per-dispatch Audit Cost Telemetry.md
 
 # --- 3. Test harnesses and audit reports ---
 # Smoke / observability harnesses run by maintainers in CI; never invoked

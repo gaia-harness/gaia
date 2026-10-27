@@ -255,7 +255,7 @@
       "kind": "file",
       "scope": "shared",
       "keyed_by": "singleton store; append-only rows that identify themselves by branch, member and digest",
-      "why": "Maintainer-repo-only log of each light-review routing decision, appended by the routing telemetry script and read by its tally. It does not exist on an adopter clone.",
+      "why": "Maintainer-repo-only log of the audit loop's evidence: each light-review routing decision and each dispatch cost record. Appended by the routing telemetry script and by the dispatch-cost recorder, read by the routing tally and by the cost report. It does not exist on an adopter clone.",
       "writer": "code",
       "retention": {
         "class": "keep"
