@@ -294,7 +294,10 @@
     ".gaia/scripts/red-ledger/README.md": "owned",
     ".gaia/scripts/resolve-audit-members.sh": "owned",
     ".gaia/scripts/select-migration-notes.sh": "owned",
+    ".gaia/scripts/server-process-discovery.sh": "owned",
     ".gaia/scripts/server-process-lib.sh": "owned",
+    ".gaia/scripts/server-process-sessions.sh": "owned",
+    ".gaia/scripts/server-process-stop.sh": "owned",
     ".gaia/scripts/setup-ping.sh": "owned",
     ".gaia/scripts/spec/handoff-clear.sh": "owned",
     ".gaia/scripts/spec/ledger-lib.sh": "owned",
@@ -768,7 +771,7 @@
     "wiki/overview.md": "wiki-owned",
     "wiki/README.md": "wiki-owned"
   },
-  "generated": "2026-10-27T07:39:44.543Z",
+  "generated": "2026-10-27T10:11:35.597Z",
   "regions": [
     {
       "endMarker": "<!-- gaia:audit-remit:end -->",
