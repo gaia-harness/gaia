@@ -277,3 +277,118 @@ jobs:
           name: playwright-traces
           path: frontend/.playwright/output
           retention-days: 5
+
+  # Lints the shell a pull request changes and runs the project's bats suite
+  # when shell changed. It has no paths filter so it always reports, which is
+  # what lets it be a required check; with nothing to do it exits green from
+  # its first step, before any checkout or install. The selection rules, the
+  # `"shellcheck": false` opt-out in .gaia/project.json and the GAIA-update
+  # owned-file skip live in .gaia/scripts/shell-checks-select.sh.
+  shell:
+    name: Shellcheck and bats
+    if: github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      # The changed-files list comes from the pull request files endpoint.
+      pull-requests: read
+    steps:
+      # No checkout yet: the selector itself and every input it reads come
+      # through the API, so a pull request without shell never pays for a
+      # checkout. It lints the whole pull request's selection on every push,
+      # not the push's own delta: the check is required per head commit, so a
+      # narrower lint would let a head pass while an earlier push's failing
+      # file is still in the pull request.
+      - name: Select shell to check
+        id: select
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          PULL_REQUEST: ${{ github.event.pull_request.number }}
+          CHANGED_FILE_COUNT: ${{ github.event.pull_request.changed_files }}
+        run: |
+          set -euo pipefail
+          selector="$RUNNER_TEMP/shell-checks-select.sh"
+          gh api -H 'Accept: application/vnd.github.raw' \
+            "repos/$REPOSITORY/contents/.gaia/scripts/shell-checks-select.sh?ref=$HEAD_SHA" > "$selector"
+          arguments=(plan --repository "$REPOSITORY" --head-sha "$HEAD_SHA" --output-directory "$RUNNER_TEMP/shell-checks")
+          if [ -n "$PULL_REQUEST" ]; then
+            arguments+=(--pull-request "$PULL_REQUEST" --base-sha "$BASE_SHA" --changed-file-count "$CHANGED_FILE_COUNT")
+          fi
+          plan="$(bash "$selector" "${arguments[@]}")"
+          printf '%s\n' "$plan" | tee -a "$GITHUB_OUTPUT"
+          {
+            delimiter="patterns_$(openssl rand -hex 16)"
+            echo "sparse_patterns<<$delimiter"
+            cat "$RUNNER_TEMP/shell-checks/sparse-patterns"
+            echo "/.gaia/scripts/shell-checks-lint.sh"
+            echo "$delimiter"
+          } >> "$GITHUB_OUTPUT"
+      - if: steps.select.outputs.checkout == 'sparse'
+        name: Check out the selected files
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+          filter: blob:none
+          sparse-checkout: ${{ steps.select.outputs.sparse_patterns }}
+          sparse-checkout-cone-mode: false
+      - if: steps.select.outputs.checkout == 'full'
+        name: Check out the repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+      # A pinned release binary rather than the runner image's shellcheck,
+      # which varies with the image. The digest is pinned as well as the
+      # version: a release tag is mutable, so the tarball is verified before it
+      # is extracted and never piped straight into `tar`. The selector reads
+      # SHELLCHECK_VERSION from this file to lint everything when it changes.
+      - if: steps.select.outputs.lint != 'none'
+        name: Install shellcheck (pinned and digest-verified)
+        env:
+          SHELLCHECK_VERSION: '0.11.0'
+          SHELLCHECK_SHA256: '8c3be12b05d5c177a04c29e3c78ce89ac86f1595681cab149b65b97c4e227198'
+        run: |
+          set -euo pipefail
+          url="https://github.com/koalaman/shellcheck/releases/download/v${SHELLCHECK_VERSION}/shellcheck-v${SHELLCHECK_VERSION}.linux.x86_64.tar.xz"
+          curl -fsSL "$url" -o "$RUNNER_TEMP/shellcheck.tar.xz"
+          echo "${SHELLCHECK_SHA256}  $RUNNER_TEMP/shellcheck.tar.xz" | sha256sum -c -
+          tar -xJf "$RUNNER_TEMP/shellcheck.tar.xz" -C "$RUNNER_TEMP"
+          sudo install -m 0755 "$RUNNER_TEMP/shellcheck-v${SHELLCHECK_VERSION}/shellcheck" /usr/local/bin/shellcheck
+          shellcheck --version
+      - if: steps.select.outputs.lint == 'changed'
+        name: Shellcheck the changed shell
+        run: bash .gaia/scripts/shell-checks-lint.sh --root . < "$RUNNER_TEMP/shell-checks/lint-paths"
+      - if: steps.select.outputs.lint == 'full'
+        name: Shellcheck every shell file
+        run: |
+          set -euo pipefail
+          git ls-files -z -- '*.sh' '*.bats' \
+            | bash .gaia/scripts/shell-checks-select.sh filter --owned "$RUNNER_TEMP/shell-checks/owned" \
+            | bash .gaia/scripts/shell-checks-lint.sh --root .
+      # Only the pinned bats, not the workspace install: the suite needs the
+      # runner and nothing else, and the root package.json pin is the version
+      # `pnpm test:shell` resolves locally.
+      - if: steps.select.outputs.bats == 'true'
+        name: Install bats
+        run: |
+          set -euo pipefail
+          version="$(jq -r '.devDependencies.bats // .dependencies.bats // empty' package.json)"
+          [ -n "$version" ] || { echo "tests/shell holds bats suites but package.json pins no bats" >&2; exit 1; }
+          npm install --global --prefix "$RUNNER_TEMP/bats" --no-audit --no-fund "bats@$version"
+          echo "$RUNNER_TEMP/bats/bin" >> "$GITHUB_PATH"
+      # pnpm comes from the pinned action, which reads packageManager, so this
+      # job does not depend on the runner image's default Node shipping corepack
+      # (Node 25+ does not). No Node setup and no install: only pnpm is needed.
+      - if: steps.select.outputs.bats == 'true'
+        name: Set up pnpm
+        uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+        env:
+          npm_config_fetch_timeout: '60000'
+      - if: steps.select.outputs.bats == 'true'
+        name: Run the bats suites
+        run: pnpm test:shell

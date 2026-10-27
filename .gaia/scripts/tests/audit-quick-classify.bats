@@ -85,26 +85,22 @@ export {Chip, chipVariants};
 EOF
 )"
   STORY_BASE="$(cat <<'EOF'
-import type {Meta, StoryObj} from '@storybook/react-vite';
+import preview from '#.storybook/preview';
 import {expect, within} from 'storybook/test';
 import Card from '..';
 
-const meta: Meta<typeof Card> = {
+const meta = preview.meta({
   component: Card,
   title: 'Components/Card',
-};
+});
 
-export default meta;
-
-type Story = StoryObj<typeof Card>;
-
-export const Default: Story = {
+export const Default = meta.story({
   args: {
     label: 'Save',
   },
-};
+});
 
-export const Interactive: Story = {
+export const Interactive = meta.story({
   args: {label: 'Go'},
   parameters: {
     a11y: {test: 'error'},
@@ -113,7 +109,11 @@ export const Interactive: Story = {
     const canvas = within(canvasElement);
     await expect(canvas.getByText('Go')).toBeVisible();
   },
-};
+});
+
+Default.test('shows the label', async ({canvas}) => {
+  await expect(canvas.getByText('Save')).toBeVisible();
+});
 EOF
 )"
   ENGLISH_BASE="$(cat <<'EOF'
@@ -421,7 +421,7 @@ render_wrapped() {
     quick-map quick-cva quick-cn-argument quick-element quick-tag quick-attribute
     quick-hiding-token quick-motion-order-token quick-palette quick-arbitrary-value
     quick-language-shape quick-language-key quick-placeholder quick-nesting quick-html
-    quick-empty-value quick-locale-missing quick-text-deleted quick-story-play quick-story-shape
+    quick-empty-value quick-locale-missing quick-text-deleted quick-story-format quick-story-play quick-story-shape
     quick-unclassified)
   local router_owned=(anchor-unresolved refusal-newer unclassifiable-path special-file machinery
     ownerless hard-full no-delta over-cap fence-collision)
@@ -614,11 +614,11 @@ EOF
 
 @test "red quick-path: a story whose component is not in the selected set" {
   qc_story
-  qc_edit "$STORY" replace 16 "    label: 'Submit',"
+  qc_edit "$STORY" replace 12 "    label: 'Submit',"
   qc_paths "$STORY"
   qc_expect_deep quick-path "$STORY" -
   qc_story
-  qc_edit "$STORY" replace 16 "    label: 'Submit',"
+  qc_edit "$STORY" replace 12 "    label: 'Submit',"
   qc_paths "$COMPONENT" "$STORY"
   qc_expect_quick
 }
@@ -724,11 +724,11 @@ EOF
 
 @test "must-quick: a paired story args literal change alongside its component's change" {
   qc_story
-  qc_edit "$STORY" replace 16 "    label: 'Submit',"
+  qc_edit "$STORY" replace 12 "    label: 'Submit',"
   qc_lines "$COMPONENT" "$STORY"
   qc_expect_quick || return 1
   qc_story
-  qc_edit "$STORY" replace 21 "  args: {label: 'Run'},"
+  qc_edit "$STORY" replace 17 "  args: {label: 'Run'},"
   qc_lines "$COMPONENT" "$STORY"
   qc_expect_quick
 }
@@ -1008,23 +1008,128 @@ EOF
 
 @test "red quick-story-shape: a story parameters change that turns a11y off" {
   qc_story
-  qc_edit "$STORY" replace 23 "    a11y: {test: 'off'},"
+  qc_edit "$STORY" replace 19 "    a11y: {test: 'off'},"
   qc_lines "$COMPONENT" "$STORY"
-  qc_expect_deep quick-story-shape "$STORY" pre:23 || return 1
+  qc_expect_deep quick-story-shape "$STORY" pre:19 || return 1
   qc_story
-  qc_edit "$STORY" replace 16 "    label: 'Off',"
+  qc_edit "$STORY" replace 12 "    label: 'Off',"
   qc_lines "$COMPONENT" "$STORY"
   qc_expect_quick
 }
 
 @test "red quick-story-play: a story expect change" {
   qc_story
-  qc_edit "$STORY" replace 27 "    await expect(canvas.getByText('Run')).toBeVisible();"
+  qc_edit "$STORY" replace 23 "    await expect(canvas.getByText('Run')).toBeVisible();"
   qc_lines "$COMPONENT" "$STORY"
-  qc_expect_deep quick-story-play "$STORY" pre:27 || return 1
+  qc_expect_deep quick-story-play "$STORY" pre:23 || return 1
   qc_story
-  qc_edit "$STORY" replace 21 "  args: {label: 'Run'},"
+  qc_edit "$STORY" replace 17 "  args: {label: 'Run'},"
   qc_lines "$COMPONENT" "$STORY"
+  qc_expect_quick
+}
+
+# qc_swap <text> <old> <new>: the text with the first literal <old> replaced.
+qc_swap() {
+  printf '%s' "${1/"$2"/"$3"}"
+}
+
+# qc_story_args_edit <story text>: commits the text as the paired story, changes
+# the first label literal in its args, and classifies the story with its component.
+qc_story_args_edit() {
+  local line
+  qc_start
+  qc_put "$COMPONENT" "$COMPONENT_BASE"
+  qc_put "$STORY" "$1"
+  qc_base
+  qc_edit "$COMPONENT" replace 10 '      Hello there'
+  line="$(grep -n "label: 'Save'" "$QC_ROOT/$STORY" | head -n 1 | cut -d: -f1)"
+  qc_edit "$STORY" replace "$line" "    label: 'Submit',"
+  qc_lines "$COMPONENT" "$STORY"
+}
+
+@test "red quick-story-play: a test added to a story file" {
+  qc_story
+  qc_edit "$STORY" insert 29 "
+Default.test('shows a second label', async ({canvas}) => {
+  await expect(canvas.getByText('Save')).toBeVisible();
+});"
+  qc_lines "$COMPONENT" "$STORY"
+  qc_expect_deep quick-story-play "$STORY" post:31 || return 1
+  qc_story
+  qc_edit "$STORY" insert 27 "  const note = 'x';"
+  qc_lines "$COMPONENT" "$STORY"
+  qc_expect_deep quick-story-play "$STORY" post:28
+}
+
+@test "red quick-story-play: a line added inside a play body that holds no assertion word" {
+  qc_story
+  qc_edit "$STORY" insert 22 "    const delay = 1;"
+  qc_lines "$COMPONENT" "$STORY"
+  qc_expect_deep quick-story-play "$STORY" post:23
+}
+
+@test "red quick-story-format: an old-format story file editing only an args literal" {
+  local old_format
+  old_format="$(cat <<'EOF'
+import type {Meta, StoryObj} from '@storybook/react-vite';
+import Card from '..';
+
+const meta: Meta<typeof Card> = {
+  component: Card,
+};
+
+export default meta;
+
+type Story = StoryObj<typeof Card>;
+
+export const Default: Story = {
+  args: {
+    label: 'Save',
+  },
+};
+EOF
+)"
+  qc_story_args_edit "$old_format"
+  qc_expect_deep quick-story-format "$STORY" - || return 1
+  qc_story_args_edit "$STORY_BASE"
+  qc_expect_quick
+}
+
+@test "red quick-story-format: a story export that is an object literal" {
+  qc_story_args_edit "$STORY_BASE"$'\n\n'"export const Raw = {args: {label: 'Save'}};"
+  qc_expect_deep quick-story-format "$STORY" - || return 1
+  qc_story_args_edit "$STORY_BASE"$'\n\n'"export const Typed: Story = {args: {label: 'Save'}};"
+  qc_expect_deep quick-story-format "$STORY" -
+}
+
+@test "red quick-story-format: clause (a), an export default line alone" {
+  qc_story_args_edit "$STORY_BASE"$'\n\nexport default meta;'
+  qc_expect_deep quick-story-format "$STORY" -
+}
+
+@test "red quick-story-format: clause (b), a preview import that is not the preview module" {
+  qc_story_args_edit "$(qc_swap "$STORY_BASE" '#.storybook/preview' './preview')"
+  qc_expect_deep quick-story-format "$STORY" - || return 1
+  qc_story_args_edit "$(qc_swap "$STORY_BASE" '#.storybook/preview' './nested.storybook/preview')"
+  qc_expect_deep quick-story-format "$STORY" -
+}
+
+@test "red quick-story-format: clause (c), no binding from the preview import's meta" {
+  qc_story_args_edit "$(qc_swap "$STORY_BASE" '= preview.meta(' '= preview.configure(')"
+  qc_expect_deep quick-story-format "$STORY" - || return 1
+  qc_story_args_edit "$(qc_swap "$STORY_BASE" '= preview.meta(' '= other.meta(')"
+  qc_expect_deep quick-story-format "$STORY" -
+}
+
+@test "red quick-story-format: clause (d), a named export initialized with an object literal" {
+  qc_story_args_edit "$STORY_BASE"$'\n\nexport const Raw: Record<string, string> = {a: 1};'
+  qc_expect_deep quick-story-format "$STORY" -
+}
+
+@test "must-quick: a relative preview import and a type-parameterized meta are CSF Next" {
+  qc_story_args_edit "$(qc_swap "$STORY_BASE" '#.storybook/preview' '../../../.storybook/preview.ts')"
+  qc_expect_quick || return 1
+  qc_story_args_edit "$(qc_swap "$STORY_BASE" '= preview.meta(' '= preview.type<{args: {label: string}}>().meta(')"
   qc_expect_quick
 }
 

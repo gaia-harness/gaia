@@ -190,6 +190,8 @@ function code_char(line, i, c,   n, j, k, w, callee, t) {
     while (j + 1 <= linelength && substr(line, j + 1, 1) ~ /[A-Za-z0-9_$]/) j++
     w = substr(line, i, j - i + 1)
     emit(w); cvadd(w); cnmark("I")
+    prevhead = (prev == ".") ? dotword : ""
+    if (depth == 0 && i == 1) stmtname = w
     if (depth == 0) {
       if (w == "export") pendstate = 1
       else if (w == "const" && pendstate == 1) pendstate = 2
@@ -240,6 +242,7 @@ function code_char(line, i, c,   n, j, k, w, callee, t) {
     return i
   }
   emit(c); cvadd(c); cnmark(c)
+  if (c == ".") dotword = prevword
   if (c == ";" && depth == 0) { pendstate = 0; pendstory = "" }
   prev = c; prevword = ""
   return i
@@ -270,6 +273,7 @@ function line_start(s, L,   k) {
     startchain[s, L] = (k >= 1) ? chain_walk(k - 1) : " BAD"
   }
   for (k = 1; k <= depth; k++) if (fstory[k] ~ /^story:/) { story0[s, L] = substr(fstory[k], 7); if (fprop[k] == "play") playany[s, L] = 1; break }
+  for (k = 1; k <= depth; k++) if (fstory[k] == "test") playany[s, L] = 1
   argsdirect0[s, L] = (depth > 0 && fstory[depth] == "args") ? 1 : 0
   storytop0[s, L] = (depth > 0 && fstory[depth] ~ /^story:/) ? 1 : 0
   cnframe0[s, L] = (depth > 0 && ft[depth] == "paren" && fname[depth] == "cn") ? fid[depth] : 0
@@ -284,6 +288,7 @@ function line_end(s, L,   k, key, rest) {
   d1[s, L] = depth
   cnd1[s, L] = cndepth
   for (k = 1; k <= depth; k++) if (fstory[k] ~ /^story:/) { if (fprop[k] == "play") playany[s, L] = 1; break }
+  for (k = 1; k <= depth; k++) if (fstory[k] == "test") playany[s, L] = 1
   if (argsdirect0[s, L] && d1[s, L] == d0[s, L] && raw[s, L] ~ ARGLINE) {
     key = raw[s, L]; sub(/^[ \t]*/, "", key); sub(/[ \t]*:.*$/, "", key)
     argskey[s, story0[s, L], key] = 1
@@ -304,7 +309,7 @@ function inline_keys(t,   rest, keys, key) {
 function tokenize(s,   L, line, i, c, t) {
   depth = 0; instr = ""; inblock = 0; inattrstr = ""; prev = ""; prevword = ""
   cvadepth = 0; cndepth = 0; capdepth = 0; capbuf = ""; capname = ""; capkind = ""
-  pendstate = 0; pendstory = ""; attrval = ""; attrname = ""
+  pendstate = 0; pendstory = ""; attrval = ""; attrname = ""; stmtname = ""; dotword = ""; prevhead = ""
   CS = s; NEWLEX = (s ~ /^n/) ? 1 : 0
   for (L = 1; L <= nlines[s]; L++) {
     CL = L

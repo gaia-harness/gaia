@@ -363,6 +363,46 @@ describe('anchors', () => {
     expect(configure('--query', 'true').changed).toEqual([]);
   });
 
+  test('the definePreview preview gains the decorator and its import, nothing else, and a rerun changes nothing', () => {
+    const before = read('.storybook/preview.ts');
+    const first = configure('--query', 'true');
+    const after = read('.storybook/preview.ts');
+
+    expect(first.code).toBe(0);
+    expect(after).toContain(
+      'decorators: [...decorators, QueryClientDecorator],'
+    );
+    expect(
+      after
+        .replace(
+          "import QueryClientDecorator from './decorators/query-client-decorator';\n",
+          ''
+        )
+        .replace(
+          'decorators: [...decorators, QueryClientDecorator],',
+          'decorators,'
+        )
+    ).toBe(before);
+    expect(configure('--query', 'true').changed).toEqual([]);
+    expect(read('.storybook/preview.ts')).toBe(after);
+  });
+
+  test('a definePreview preview whose decorators cannot be located prints the hand edit and writes nothing', () => {
+    write(
+      '.storybook/preview.ts',
+      "import {definePreview} from '@storybook/react-vite';\n\nexport default definePreview({\n  addons: [],\n});\n"
+    );
+    const before = snapshot();
+    const result = configure('--query', 'true');
+
+    expect(result.code).toBe(1);
+    expect(result.errors).toContain('data_layer_anchor_missing');
+    expect(result.errors).toContain(
+      'add QueryClientDecorator to the decorators array'
+    );
+    expect(snapshot()).toEqual(before);
+  });
+
   test.each([
     [
       'app/state/index.tsx',

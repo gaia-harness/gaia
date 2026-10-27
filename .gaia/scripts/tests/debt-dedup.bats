@@ -334,28 +334,42 @@ input_refusal() {
   input_refusal
 }
 
-@test "unreadable: an open result that fills its limit is saturated" {
-  local limit
-  limit="$(grep -E '^open_limit=' "$SCRIPT" | head -n 1 | cut -d= -f2)"
-  [ -n "$limit" ]
-  jq -n -c --argjson n "$limit" '[range(0; $n) | {number: (. + 1), body: "x"}]' >"$OPEN_FILE"
-  dedup --path src/foo.ts --line 4
-  input_refusal
+# live_stub <mode>: a `gh` on PATH serving the tech-debt lists as REST pages.
+# The closed list is two pages; mode "fail" makes the closed read fail after
+# its first page.
+live_stub() {
+  mkdir -p "$BATS_TEST_TMPDIR/bin"
+  cat >"$BATS_TEST_TMPDIR/bin/gh" <<'STUB'
+#!/usr/bin/env bash
+case "$*" in
+  "api --paginate"*"state=open"*) echo '[]' ;;
+  "api --paginate"*"state=closed"*)
+    echo '[{"number":1,"body":"unrelated","labels":[],"state_reason":"completed"}]'
+    [ "$STUB_MODE" = fail ] && exit 1
+    echo '[{"number":2,"body":"<!-- gaia-debt-key: v1 class=a/b path=src/foo.ts line=4 -->","labels":[{"name":"wontfix"}],"state_reason":"not_planned"}]'
+    ;;
+  *) exit 1 ;;
+esac
+STUB
+  chmod +x "$BATS_TEST_TMPDIR/bin/gh"
+  PATH="$BATS_TEST_TMPDIR/bin:$PATH"
+  STUB_MODE="$1"
+  export PATH STUB_MODE
 }
 
-@test "unreadable: a closed result that fills its limit is saturated" {
-  local limit
-  limit="$(grep -E '^closed_limit=' "$SCRIPT" | head -n 1 | cut -d= -f2)"
-  [ -n "$limit" ]
-  jq -n -c --argjson n "$limit" '[range(0; $n) | {number: (. + 1), body: "x", labels: [], stateReason: "COMPLETED"}]' >"$CLOSED_FILE"
-  dedup --path src/foo.ts --line 4
-  input_refusal
+@test "the live read finds a match that sits on the second page of a list" {
+  live_stub ok
+  run --separate-stderr "$BASH" "$SCRIPT" --path src/foo.ts --line 4
+  [ "$status" -eq 1 ]
+  [ "$(jq -r '.number' <<<"$output")" -eq 2 ]
+  [ "$(jq -r '.declined' <<<"$output")" = true ]
 }
 
-@test "a result one short of its limit is read normally" {
-  local limit
-  limit="$(grep -E '^open_limit=' "$SCRIPT" | head -n 1 | cut -d= -f2)"
-  jq -n -c --argjson n "$((limit - 1))" '[range(0; $n) | {number: (. + 1), body: "x"}]' >"$OPEN_FILE"
-  dedup --path src/foo.ts --line 4
-  [ "$status" -eq 0 ]
+@test "the live read refuses a list whose later page failed" {
+  live_stub fail
+  run --separate-stderr "$BASH" "$SCRIPT" --path src/foo.ts --line 4
+  [ "$status" -eq 3 ]
+  [ -z "$output" ]
+  [ "$(printf '%s\n' "$stderr" | wc -l | tr -d ' ')" -eq 1 ]
+  case "$stderr" in "debt-dedup: "*) ;; *) return 1 ;; esac
 }

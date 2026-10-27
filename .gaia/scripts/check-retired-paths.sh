@@ -46,7 +46,9 @@
 #     would flag every `frontend/app/` citation.
 #   - `.playwright/` and `.storybook/` use the same rule minus the `.` (the dot
 #     is part of the token). A backslash also blocks the match, so a regex that
-#     escapes the dot (`^frontend/\.storybook/`) is read as the nested form.
+#     escapes the dot (`^frontend/\.storybook/`) is read as the nested form. A
+#     `#` blocks it too: `#.storybook/preview` is a package.json `imports`
+#     subpath specifier that resolves inside the package, not a root path.
 #   - A config name must also end at a non-word boundary, so `Dockerfiles` and
 #     `.env.examples` do not trip. `Dockerfile.dockerignore` is blanked first: it
 #     is the package-side name, not a retired one.
@@ -163,7 +165,7 @@ function trim_text(text) {
 function hit_kind(line,    rest, offset, before, lead) {
   gsub(/public\/(internal|private)|test\/(CI|describe)|Dockerfile\.dockerignore/, "", line)
   if (line ~ /(^|[^A-Za-z0-9_.\\\/-])(app|test|public)\//) return 1
-  if (line ~ /(^|[^A-Za-z0-9_\\\/-])\.(playwright|storybook)\//) return 1
+  if (line ~ /(^|[^A-Za-z0-9_#\\\/-])\.(playwright|storybook)\//) return 1
   if (line ~ /(^|[^A-Za-z0-9_.\\\/-])((vite|vitest|playwright|react-router|knip|stylelint|doctor)\.config\.[a-z]+|tsconfig\.json|\.lintstagedrc\.json|eslint\.config\.mjs|Dockerfile|\.dockerignore|\.env\.example)([^A-Za-z0-9_-]|$)/) return 1
   rest = line
   offset = 0

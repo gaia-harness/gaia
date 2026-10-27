@@ -19,6 +19,7 @@ import {tmpdir} from 'node:os';
 import path from 'node:path';
 import {writeFrontendRegistry} from '../util/package-fixture.js';
 import {run} from './component.js';
+import {csf4Violations} from './story-shape-fixture.js';
 import {scaffoldTemplatesDirectory} from './template.js';
 
 const TEMPLATES_SOURCE = path.join(scaffoldTemplatesDirectory(), 'component');
@@ -128,17 +129,17 @@ describe('scaffold component', () => {
 
     const storyContents = read(storyPath);
     expect(storyContents).toContain("import Foo from '..';");
+    expect(storyContents).toContain("import {expect} from 'storybook/test';");
     expect(storyContents).toContain(
-      "import {expect, within} from 'storybook/test';"
+      "import preview from '#.storybook/preview';"
     );
+    expect(csf4Violations(storyContents)).toEqual([]);
     expect(storyContents).toContain("title: 'Components/Foo',");
-    expect(storyContents).toContain(
-      'export const Default: StoryFn = () => <Foo />;'
-    );
-    expect(storyContents).toContain(
-      'export const Renders: StoryFn = () => <Foo />;'
-    );
-    expect(storyContents).toContain('Renders.play = async');
+    expect(storyContents).toContain('export const Default = meta.story({');
+    expect(storyContents).toContain('render: () => <Foo />,');
+    expect(storyContents).toContain('export const Renders = meta.story({');
+    expect(storyContents).toContain('Renders.test(');
+    expect(storyContents).not.toContain('.play');
     expect(storyContents).toContain("getByRole('region', {name: 'Foo'})");
   });
 
@@ -199,13 +200,14 @@ describe('scaffold component', () => {
     );
     // Default must carry representative props, not a bare `<Card />`, so the
     // accessibility check renders against a real DOM and can fail.
-    expect(storyContents).toContain('export const Default: StoryFn = () => (');
+    expect(storyContents).toContain('export const Default = meta.story({');
+    expect(csf4Violations(storyContents)).toEqual([]);
     expect(storyContents).toContain('title="title"');
     expect(storyContents).toContain('count={0}');
-    expect(storyContents).not.toContain('=> <Card />;');
+    expect(storyContents).not.toContain('<Card />');
 
-    // The play story renders the same representative instance.
-    expect(storyContents).toContain('export const Renders: StoryFn = () => (');
+    // The tested story renders the same representative instance.
+    expect(storyContents).toContain('export const Renders = meta.story({');
     expect(storyContents.match(/title="title"/g)).toHaveLength(2);
     expect(
       existsSync(path.join(sandbox.parent, 'card', 'tests', 'index.test.tsx'))

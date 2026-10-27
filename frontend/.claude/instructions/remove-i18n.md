@@ -261,11 +261,27 @@ locales: {
 },
 ```
 
-Remove the locale-sync loader (the async function that reads `globals.locale` and calls `i18n.changeLanguage`) and its comment from `loaders`, keeping `mswLoader()`. Remove the `i18n` key from `parameters`:
+Remove the locale-sync loader (the async function that reads `globals.locale` and calls `i18n.changeLanguage`) and its comment from `loaders`; if that leaves `loaders` empty, remove the `loaders` property too. Remove the `i18n` key from `parameters`:
 
 ```ts
 i18n,
 ```
+
+Remove the i18next entry from the `addons` array of the `definePreview({...})` call, together with the `eslint-disable-next-line` comment above it:
+
+```ts
+definePreviewAddon<AddonTypes>(storybookReactI18next),
+```
+
+Then remove its two imports, plus the `// Storybook internal import` comment above them. Keep `import {definePreviewAddon} from 'storybook/internal/csf';` and `import type {AddonTypes} from 'storybook/internal/csf';` only if another `addons` entry still uses `definePreviewAddon` or `AddonTypes`; otherwise remove them too:
+
+```ts
+import storybookReactI18next from 'storybook-react-i18next/preview';
+import type {AddonTypes} from 'storybook/internal/csf';
+import {definePreviewAddon} from 'storybook/internal/csf';
+```
+
+Leave `addonMsw()` and the other addons in place.
 
 ### D2. `getLanguage` callers
 

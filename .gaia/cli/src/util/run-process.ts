@@ -74,7 +74,7 @@ export const defaultRunner: CommandRunner = (command, args, options) =>
     stdio: ['ignore', 'pipe', 'pipe'],
   });
 
-const run = (
+export const run = (
   command: string,
   args: readonly string[],
   options: RunOptions = {}

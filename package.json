@@ -36,6 +36,7 @@
     "lint:cli": "pnpm -C .gaia/cli lint",
     "test:forensics": "bash .gaia/tests/forensics/run-all.sh",
     "test:sandbox": "bash .gaia/tests/sandbox/run-all.sh",
+    "test:shell": "sh .gaia/scripts/test-shell.sh",
     "install:browsers": "pnpm -C frontend install:browsers",
     "build": "pnpm -C frontend build",
     "dev": "pnpm -C frontend dev",
@@ -60,6 +61,7 @@
     "@commitlint/cli": "21.2.4",
     "@commitlint/config-conventional": "21.2.4",
     "@gaia-harness/lint": "3.0.3",
+    "bats": "1.13.0",
     "lint-staged": "17.6.0",
     "prettier": "3.9.10",
     "typescript": "6.0.3"

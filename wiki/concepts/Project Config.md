@@ -2,7 +2,7 @@
 type: concept
 status: active
 created: 2026-10-01
-updated: 2026-10-14
+updated: 2026-10-28
 tags: [concept, claude, config, workflow]
 ---
 
@@ -19,6 +19,7 @@ All keys are optional except `version`, which is `1`.
 | `sandbox_recommended` | `true` or `false` | The owner's recommendation to run Claude Code's OS sandbox; absent means not recommended. Each machine still resolves it for itself; see [[OS Sandbox]]. |
 | `isolation_policy` | `always-worktree`, `prefer-worktree`, `prefer-branch` | How a session isolates work that closes an issue, runs a plan, or is ad-hoc committed work (through `## 3. Isolate` in `.claude/skills/gaia/references/work-lifecycle.md`); absent means `always-worktree`. The reading rules live in `.claude/skills/gaia/references/isolation.md`. |
 | `fitness_commit_threshold` | a positive whole number | How many of the team's harness commits since the last `/gaia-fitness` run arm the `/gaia-fitness` statusline nudge; absent or invalid means 15. Set it by editing the file; no command writes it. |
+| `shellcheck` | `true` or `false` | `false` turns off the shellcheck lint in the tests workflow's `Shellcheck and bats` job; absent means on. Set it by editing the file; no command writes it. See [[Shell Testing and CI]]. |
 | `setup_decisions` | an object of setup feature id to `applied`, `declined` or `not-applicable` | The project-scope decisions made through `/gaia-init`, `/setup-gaia` and `/update-gaia`. See [[Setup Features]]. |
 
 A reader treats an unknown or invalid value as absent, so a typo or a value a newer GAIA wrote never breaks the file. The known values are enforced when the file is written.
@@ -36,7 +37,11 @@ A writer merges into the raw file, so a key or a `setup_decisions` entry it does
 
 ## Readers
 
-The statusline refresher reads `fitness_commit_threshold` each time it recomputes the `/gaia-fitness` nudge. `/setup-gaia` reads the sandbox recommendation to decide whether a machine is asked about the sandbox. The isolation policy is also read at the start of work that cuts a branch or worktree. `gaia setup drift` reads `setup_decisions` to report the undecided setup features, and `/setup-gaia` uses that to route owed phases.
+The statusline refresher reads `fitness_commit_threshold` each time it recomputes the `/gaia-fitness` nudge. `/setup-gaia` reads the sandbox recommendation to decide whether a machine is asked about the sandbox. The isolation policy is also read at the start of work that cuts a branch or worktree. `gaia setup drift` reads `setup_decisions` to report the undecided setup features, and `/setup-gaia` uses that to route owed phases. The tests workflow reads `shellcheck` from the pull request's head.
+
+### Toggles in shipped workflows
+
+A workflow GAIA ships reads its GAIA toggles from this file and its credentials from secrets, never from repository variables. The file is versioned with the code, so a pull request that changes a toggle is reviewed like any other change and takes effect on its own head, and a fork or a fresh clone reads the same answer the team committed.
 
 ## Ownership
 

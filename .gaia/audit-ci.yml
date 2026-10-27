@@ -35,10 +35,6 @@ auditors:
       - "frontend/test/**"
       - "frontend/.storybook/**"
       - ".github/workflows/**"
-      # The scripts a composite action runs are CI code too. The shell member
-      # claims them here, but that member does not ship, so in an adopter
-      # tree they dispatched no one.
-      - ".github/actions/**/*.sh"
       - "package.json"
       - "pnpm-lock.yaml"
       - "pnpm-workspace.yaml"
@@ -135,10 +131,8 @@ auditors:
       - "*.config.cjs"
       - "*.config.js"
       - "frontend/dev-ports*.ts"
-      # CI workflows execute with repository secrets and permissions, and so
-      # do the scripts their composite actions run.
+      # CI workflows execute with repository secrets and permissions.
       - ".github/workflows/**"
-      - ".github/actions/**/*.sh"
       # Test and tooling trees: executed test code a weakened assertion can
       # hollow out without changing a line of app source.
       - "frontend/test/**"
@@ -214,6 +208,9 @@ auditors:
       - ".gaia/scripts/tests/fixtures/**/*.jq"
       - ".gaia/scripts/tests/fixtures/**/*.sed"
       - ".gaia/scripts/tests/fixtures/**/SHA256SUMS"
+      # The hooks suites run awk fixtures too: a frozen copy of an earlier
+      # parser that a compatibility test executes beside the current one.
+      - ".gaia/tests/hooks/fixtures/*.awk"
       # The quick-review corpus pins which shapes the light router clears with
       # one quick reviewer, so an edited entry quietly widens what skips the
       # full member. It is gate machinery, and machinery is never unowned.
@@ -294,6 +291,10 @@ auditors:
       - ".gaia/cli/templates/**/*.tmpl"
       - ".gaia/cli/src/**/*.snap"
       - ".gaia/cli/templates/.gitkeep"
+      # Story sources the migration repairs read as input (CSF3 originals and
+      # the upstream codemod's output), stored under suffixes so no story
+      # reader loads them; their contents decide what the repair tests prove.
+      - ".gaia/cli/test-fixtures/migrate-csf4/**"
       # The CLI build/config surface beside src/: the bundle build scripts and
       # runtime deps (package.json), the build config (tsconfig*.json), and
       # the CLI's own
@@ -347,6 +348,24 @@ auditors:
       - ".gaia/scripts/**/*.mjs"
     audience: maintainer
   # gaia:maintainer-only:end
+  # The adopter shell member sits after the maintainer-only block on purpose:
+  # first-match routing keeps this repository's own shell on the maintainer
+  # shell member, and on an adopter clone, where that block is stripped, these
+  # globs route to this member.
+  - name: code-audit-shell
+    globs:
+      - "**/*.sh"
+      - "**/*.bats"
+      - ".claude/hooks/**"
+      - ".githooks/**"
+    skip_gaia_release_changes: true
+    light_review: true
+    light_line_cap: 30
+    light_hard_full:
+      - ".claude/hooks/**"
+      - ".githooks/**"
+      - "**/*.bats"
+    audience: adopter
 
 # Paths that are MEANT to dispatch no auditor. The roster above answers "who
 # owns this path"; this list answers the question the dispatch resolver

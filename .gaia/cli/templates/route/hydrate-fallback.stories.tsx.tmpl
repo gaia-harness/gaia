@@ -1,19 +1,17 @@
-import type {Meta, StoryFn} from '@storybook/react-vite';
-import {expect, within} from 'storybook/test';
+import {expect} from 'storybook/test';
+import preview from '#.storybook/preview';
 import HydrateFallback from '..';
 
-const meta: Meta = {
+const meta = preview.meta({
   component: HydrateFallback,
   title: 'Pages/{{storyTitle}}/HydrateFallback',
-};
+});
 
-export default meta;
+export const Default = meta.story({
+  render: () => <HydrateFallback />,
+});
 
-export const Default: StoryFn = () => <HydrateFallback />;
-
-Default.play = async ({canvasElement}) => {
-  const canvas = within(canvasElement);
-
+Default.test('shows a status indicator and one heading', async ({canvas}) => {
   await expect(canvas.getByRole('status')).toBeInTheDocument();
   await expect(canvas.getAllByRole('heading', {level: 1})).toHaveLength(1);
-};
+});

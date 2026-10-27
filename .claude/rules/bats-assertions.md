@@ -5,13 +5,15 @@ paths:
 
 # Bats Assertion Hygiene (bash 3.2 safe)
 
-macOS ships bash 3.2.57 as `/bin/bash`, which is what bats-core resolves to by default on a stock Mac, and bash 3.2 silently skips a failing bare `[[ ... ]]` inside a `@test` body under `set -e` so a broken assertion greens locally with nothing to catch it, which is why bats always runs through the bash-5 guard below rather than directly.
+macOS ships bash 3.2.57 as `/bin/bash`, which is what bats-core resolves to by default on a stock Mac, and bash 3.2 silently skips a failing bare `[[ ... ]]` inside a `@test` body under `set -e` so a broken assertion greens locally with nothing to catch it. Run bats under bash 4 or later; for how, see `.claude/skills/tdd/references/tests-shell.md`.
 
 ## Run bats under bash 5 (pre-flight)
 
-A bash-3.2 local `bats` run is a **weaker signal than CI** (ubuntu bash 5), and the gap is not limited to the `[[ ]]` skip above. A second, independent gap is BSD-vs-GNU CLI divergence: a macOS-only green misses commands that only exist in one flavor. The concrete case is `date -v` (BSD) versus `date -d` (GNU): the losing form exits non-zero on Linux, and under bats' `set -e` that aborts the test before any fallback runs.
+A macOS bash-3.2 `bats` run is a **weaker signal than a Linux run under bash 5**, and the gap is not limited to the `[[ ]]` skip above. A second, independent gap is BSD-vs-GNU CLI divergence: a macOS-only green misses commands that only exist in one flavor. The concrete case is `date -v` (BSD) versus `date -d` (GNU): the losing form exits non-zero on Linux, and under bats' `set -e` that aborts the test before any fallback runs.
 
-Run bats through the guard in `.gaia/scripts/bats5.sh` instead of calling `bats` directly: `source .gaia/scripts/bats5.sh`, then call `bats5` wherever the rest of this page says `bats` (or run `.gaia/scripts/bats5.sh <args>` directly). It prefers a Homebrew bash 5 and warns on stderr only when the bash bats will use is older than 4.
+<!-- gaia:maintainer-only:start -->
+Run bats through the guard in `.gaia/scripts/bats5.sh` instead of calling `bats` directly: `source .gaia/scripts/bats5.sh`, then call `bats5` wherever the rest of this page says `bats` (or run `.gaia/scripts/bats5.sh <args>` directly). It prefers a Homebrew bash 5 and warns on stderr only when the bash bats will use is older than 4. In GAIA's own repository `bats5.sh` stays authoritative, and `test:shell` is the adopter path. Because pnpm puts `node_modules/.bin` first on `PATH` in every pnpm script, any bats a pnpm script launches here (for example `pnpm test:sandbox`, which runs `.gaia/tests/sandbox/run-all.sh`) resolves to the npm `bats` pin, not the vendored bats-core.
+<!-- gaia:maintainer-only:end -->
 
 ## `!`-negated assertions never fail a non-final test line (all bash versions)
 
@@ -44,6 +46,7 @@ Those sections decide whether an assertion *can* fail; this one decides whether 
 
 - **A short read is more dangerous than an empty one.** A derivation that yields nothing trips a non-empty guard. A derivation that yields three of four entries does not: the guard stays satisfied and the suite drives a subset while its names still say "every". Count the entries the derivation should have produced, compare against the names it actually read, and fail on the difference. Symmetrically, a per-element claim over an empty set is true without meaning anything, so a derivation that can legitimately come back empty reports that as a failure, never as a pass.
 
+<!-- gaia:maintainer-only:start -->
 ## Mark a whole-tree test with `# bats test_tags=whole-tree`
 
 The change selector picks a suite only when the suite names a changed file. A test whose outcome depends on tracked files its suite does not name (an invariant over every agent file, every shell script, every workflow) is never picked, so it goes red on CI after the push. Mark it.
@@ -64,3 +67,4 @@ The change selector picks a suite only when the suite names a changed file. A te
 **How the runner uses the marks.** The verification runner (`.gaia/tests/verify-harness.sh`) runs every marked test in branch mode (`--filter-tags whole-tree`), runs a suite the change selector picks in full under bats selected, and leaves marks out of round mode; the why is the maintainer block in `wiki/concepts/Audit Round Procedure.md`. Pre-merge CI runs every marked test, so it catches a round fix that breaks a whole-tree invariant, and the full suite runs on every push to main. The patterns in `.gaia/tests/helpers/verify-harness-bats-lib.sh` define the marked set.
 
 `.gaia/tests/whole-tree-mark-guard.sh` flags an unmarked test or suite that enumerates the real tracked tree through an idiom it recognizes; its header lists the idioms. It also sees a test that reaches the tree through a script or helper it calls; its header owns the hops it follows and the idioms it recognizes. What it cannot see (a path built at run time) needs a hand mark, and an unmarked one is caught only by the push-to-main full run. A suite that writes fixture suites carrying either tag assembles the line at run time (`printf '# bats %s\n' 'test_tags=whole-tree'`) so it never holds the line at column 0 itself.
+<!-- gaia:maintainer-only:end -->

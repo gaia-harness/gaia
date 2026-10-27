@@ -18,6 +18,7 @@ import {
   writeItemsService,
 } from './route-fixture.js';
 import type {Sandbox} from './route-fixture.js';
+import {csf4Violations} from './story-shape-fixture.js';
 
 /** The body of the exported const `name`, up to the next top-level close. */
 const exportBody = (source: string, name: string): string => {
@@ -185,6 +186,19 @@ describe.each(CASES)('scaffold route --data: $data $shape', (dataCase) => {
     expectNoRouteImports(pageDir);
   });
 
+  if (dataCase.hasFallback) {
+    test('the hydrate fallback story is a CSF Next story with a test', () => {
+      const story = read(
+        pageDirOf(sandbox.root, dataCase),
+        'hydrate-fallback',
+        'tests',
+        'index.stories.tsx'
+      );
+
+      expect(csf4Violations(story)).toEqual([]);
+    });
+  }
+
   test('the page story serves MSW data and checks the wire body', () => {
     const story = read(
       pageDirOf(sandbox.root, dataCase),
@@ -194,12 +208,16 @@ describe.each(CASES)('scaffold route --data: $data $shape', (dataCase) => {
 
     expect(story).toContain("from 'msw/http'");
     expect(story).not.toContain("from 'msw';");
-    expect(story).toContain('handlers: [');
+    expect(csf4Violations(story)).toEqual([]);
+    expect(story).toContain('beforeEach: ({msw}) => {');
+    expect(story).toContain('msw.use(');
+    expect(story).not.toContain('parameters');
+    expect(story).not.toContain('handlers: [');
     expect(story).toContain('stubs.reactRouter({');
     expect(story).toContain("destinations: ['/items'],");
     expect(story).toContain(dataCase.storyStart);
     expect(story).toContain(dataCase.storyHandler);
-    expect(story).toContain('.play = async');
+    expect(story).toContain('Default.test(');
     expect(story).toContain('submittedBody = await request.json();');
     expect(story).toContain("await canvas.findByText('Navigated to /items')");
     // The wire carries the camelCase default keys, which the play checks the handler got.

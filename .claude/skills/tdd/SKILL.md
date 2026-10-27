@@ -12,6 +12,7 @@ Contents: Selecting a Stack Reference; Philosophy; Anti-Pattern: Horizontal Slic
 Before writing the first red test, consult the reference for your stack:
 
 - **React / Vitest / MSW / Storybook** → the `tdd-react` skill (`frontend/.claude/skills/tdd-react/SKILL.md`)
+- **Shell / bats** → `.claude/skills/tdd/references/tests-shell.md`
 
 Add a new stack reference (a skill or a `references/tests-{stack}.md`) when adopting a new stack. The stack reference covers concrete patterns, test layers, mocking rules, and good/bad examples specific to that environment.
 

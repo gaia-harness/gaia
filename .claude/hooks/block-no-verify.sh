@@ -100,7 +100,10 @@ fi
 # fail-open rather than a deny.
 _hook_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." 2>/dev/null && pwd)" || _hook_root=''
 _repo_scope_library="$_hook_root/.claude/hooks/lib/repo-scope.sh"
-set +e; [ -n "$_hook_root" ] && [ -f "$_repo_scope_library" ] && . "$_repo_scope_library" 2>/dev/null; set -e
+set +e
+# shellcheck source=/dev/null
+[ -n "$_hook_root" ] && [ -f "$_repo_scope_library" ] && . "$_repo_scope_library" 2>/dev/null
+set -e
 if type command_targets_foreign_repo >/dev/null 2>&1 \
    && command_targets_foreign_repo "$command_line"; then
   exit 0

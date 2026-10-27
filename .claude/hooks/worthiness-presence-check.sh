@@ -372,20 +372,16 @@ while IFS= read -r path; do
   # helper reads the file from disk at the repo-relative path, so from a
   # subdirectory it finds nothing, and "no signals" is a `continue` -- the file
   # leaves the scan and the merge clears with no verdict demanded.
-  # Exit 7 is the extractor refusing a shape it cannot resolve (a story play it
-  # cannot follow): the one failure that denies, because skipping it would let an
-  # unreviewable test through. Every other non-zero is a mid-edit parse error.
+  # Exit 7 (a story play it cannot follow) and exit 8 (an old-format story file)
+  # are extractor refusals: they deny, because skipping would let an unreviewable
+  # test through. Every other non-zero is a mid-edit parse error.
   extractor_error_file=$(mktemp "${TMPDIR:-/tmp}/worthiness-extractor-XXXXXX") || extractor_error_file=/dev/null
   extractor_status=0
   current_ndjson=$( cd "$tree_root" && red_ledger_signals "$relative_path" 2>"$extractor_error_file" ) || extractor_status=$?
-  if [ "$extractor_status" -eq 7 ]; then
+  if [ "$extractor_status" = "$RED_LEDGER_UNRESOLVABLE_SHAPE_STATUS" ] || [ "$extractor_status" = "$RED_LEDGER_OLD_FORMAT_STATUS" ]; then
     extractor_error_line=$(head -n 1 "$extractor_error_file" 2>/dev/null || true)
     [ "$extractor_error_file" = /dev/null ] || rm -f "$extractor_error_file"
-    deny_with_reason "Worthiness presence gate: the test-identity extractor cannot read ${relative_path}, so its tests cannot be checked for a worthiness verdict.
-
-${extractor_error_line:-extract-test-signals: unsupported story shape in ${relative_path}}
-
-Next step: rewrite the story in a supported shape (see wiki Stories as Tests), then retry gh pr merge."
+    deny_with_reason "$(red_ledger_refusal_reason "$extractor_status" "$relative_path" "$extractor_error_line")"
   fi
   [ "$extractor_error_file" = /dev/null ] || rm -f "$extractor_error_file"
   [ "$extractor_status" -eq 0 ] || continue

@@ -71,6 +71,7 @@ REMIT_HEADING='## Remit and self-skip'
 # path. Kept here, not in the check: the check does not compare sentence text
 # (see verify-audit-roster.sh's remit invariant), so this is their one home.
 CLAIMANT_SENTENCE='Filter the changed-file list against the globs above. **If none match, self-skip cleanly.** Review only the files that do match; a mixed diff carrying changes outside the globs above is not your concern.'
+RELEASE_SKIP_SENTENCE='The scope resolver already removes a GAIA-owned file this branch changes by applying a GAIA release, so neither changed-file list carries one.'
 DEFAULT_SENTENCE='Your globs above are a **second precedence tier**: every claimant member'\''s globs are matched first, first-match-wins over roster order, and a path any claimant claims belongs to that claimant even when a glob above also matches it. Only a path no claimant claims reaches you. The roster is the whole truth about your reach; nothing outside this region grants you a file it does not declare.'
 
 root=""
@@ -152,6 +153,8 @@ while IFS= read -r name; do
 
   globs="$(printf '%s\n' "$records" | awk -F'\t' -v member_name="$name" '$1 == "RAW" && $2 == member_name { print $3 }')"
 
+  release_skip_value="$(printf '%s\n' "$records" | awk -F'\t' -v member_name="$name" '$1 == "RELEASESKIP" && $2 == member_name { print $3; exit }')"
+
   is_default=0
   [ "$name" = "$default_name" ] && is_default=1
 
@@ -227,6 +230,8 @@ EOF
   printf '\n' >> "$body_file"
   if [ "$is_default" -eq 1 ]; then
     printf '%s\n' "$DEFAULT_SENTENCE" >> "$body_file"
+  elif [ "$release_skip_value" = "true" ]; then
+    printf '%s %s\n' "$CLAIMANT_SENTENCE" "$RELEASE_SKIP_SENTENCE" >> "$body_file"
   else
     printf '%s\n' "$CLAIMANT_SENTENCE" >> "$body_file"
   fi

@@ -4,11 +4,15 @@
 const RECORD = {
 {{recordLines}}};
 {{#hasAction}}
-// The body the mutation handler received, which the play checks to prove what
-// reached the wire, keys included.
+// The body the mutation handler received, which the submit test checks to
+// prove what reached the wire, keys included.
 let submittedBody: unknown;
 {{/hasAction}}
-const meta: Meta = {
+const meta = preview.meta({
+  beforeEach: ({msw}) => {
+    msw.use(
+{{handlerLines}}    );
+  },
   component: {{pageName}},
   decorators: [
     (Story) => (
@@ -22,36 +26,25 @@ const meta: Meta = {
       destinations: ['/{{routeSlug}}'],
 {{#isDetail}}      initialEntry: '{{initialEntry}}',
 {{/isDetail}}{{#isList}}      // The page mounts at `/`, not `/{{routeSlug}}`, so the redirect to
-      // `/{{routeSlug}}` lands on the destination route the play can see.
+      // `/{{routeSlug}}` lands on the destination route the test can see.
 {{/isList}}      path: '{{storyPath}}',
       route: {{{routeExports}}},
     }),
   ],
-  parameters: {
-    msw: {
-      handlers: [
-{{handlerLines}}      ],
-    },
-  },
   title: 'Pages/{{storyTitle}}',
-};
+});
 
-export default meta;
+export const Default = meta.story({
+  render: () => <{{pageName}} />,
+});
 
-export const Default: StoryFn = () => <{{pageName}} />;
-
-Default.play = async ({canvasElement}) => {
-  const canvas = within(canvasElement);
-
+Default.test('renders the served data', async ({canvas}) => {
 {{renderAssertion}}  await expect(canvas.getAllByRole('heading', {level: 1})).toHaveLength(1);
   await expect(canvas.getAllByRole('main')).toHaveLength(1);
-};
+});
 {{#hasAction}}
-export const {{submitStoryName}}: StoryFn = () => <{{pageName}} />;
 
-{{submitStoryName}}.play = async ({canvasElement}) => {
-  const canvas = within(canvasElement);
-
+Default.test('{{submitTestName}}', async ({canvas, userEvent}) => {
   submittedBody = undefined;
 {{renderAssertion}}{{fillSteps}}  await userEvent.click(canvas.getByRole('button', {name: '{{saveLabel}}'}));
 
@@ -59,5 +52,5 @@ export const {{submitStoryName}}: StoryFn = () => <{{pageName}} />;
     await canvas.findByText('Navigated to /{{routeSlug}}')
   ).toBeInTheDocument();
   await expect(submittedBody).toMatchObject({{expectedBody}});
-};
+});
 {{/hasAction}}

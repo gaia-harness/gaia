@@ -133,6 +133,10 @@
 .gaia/scripts/check-audit-key-callers.sh
 # Invariant check that every Code Audit Team member derives one review base; its only runners are release-excluded bats suites, so an adopter clone would carry a check nothing invokes.
 .gaia/scripts/check-audit-base-derivation.sh
+# Builds and resolves the maintainer-only tech-debt source line; its one shipped caller sits inside maintainer-only blocks the bundle-time scrub removes, so an adopter clone would carry a library nothing invokes.
+.gaia/scripts/debt-source-lib.sh
+# Reports tech-debt filings per branch from the maintainer-only source line, which a release tree never writes, so an adopter clone would carry a report with nothing to read.
+.gaia/scripts/debt-source-report.sh
 
 # --- 2. Maintainer-only wiki content ---
 # Internal vault administration files and team-specific knowledge that
@@ -157,6 +161,8 @@ wiki/decisions/Local Test Runtime.md
 wiki/decisions/Dependabot as a Data Source.md
 # Documents the audit dispatch-cost recorder, library and report, all release-excluded; an adopter clone has none of them.
 wiki/concepts/Per-dispatch Audit Cost Telemetry.md
+# Describes the maintainer-only tech-debt source record and its report, both stripped or release-excluded, so an adopter clone would carry a page about machinery it does not have.
+wiki/concepts/Maintainer-only Debt Source Record.md
 
 # --- 3. Test harnesses and audit reports ---
 # Smoke / observability harnesses run by maintainers in CI; never invoked
@@ -198,8 +204,6 @@ frontend/.playwright/e2e/react-perf-smoke.spec.ts
 .gaia/codify-declines
 # Runs bats under bash 5. Every .bats suite it runs is release-excluded and every shipped mention sits in a maintainer-only block the bundle scrub strips, so it serves only maintainer test runs.
 .gaia/scripts/bats5.sh
-# Assertion-hygiene rule scoped to *.bats files; every .bats suite is release-excluded, so on an adopter clone it guards nothing. Withdrawn with its companion bats5.sh.
-.claude/rules/bats-assertions.md
 # The maintainer's pre-push verification. It only calls the verification runner under .gaia/tests, which is release-excluded above, so on an adopter clone it would run nothing. The other .githooks entries ship; this one does not.
 .githooks/pre-push
 # Generated-bundle diff attributes for the maintainer's committed CLI bundles. An adopter's own root .gitattributes would collide with a shipped one, and their bundle diffs arrive once per release.

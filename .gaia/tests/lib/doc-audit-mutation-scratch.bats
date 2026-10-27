@@ -46,7 +46,8 @@ setup() {
     code-audit-frontend \
     code-audit-github-workflows \
     code-audit-maintainer-node \
-    code-audit-maintainer-shell; do
+    code-audit-maintainer-shell \
+    code-audit-shell; do
     grep -qF -- 'mutation-scratch' "$ROOT/.claude/agents/${member}.md" || {
       echo "${member}.md no longer names its scratch directory; every check below would skip it" >&2
       return 1

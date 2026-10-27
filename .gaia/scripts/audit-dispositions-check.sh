@@ -253,6 +253,7 @@ _roster_owned_indexes() {
   if [ -n "$candidates" ] && [ -f "$library" ]; then
     # shellcheck source=/dev/null
     . "$library" 2>/dev/null
+    # No release context is armed: only the triage members write these marks, and a release-skip member never triages.
     if type audit_owner_for_path >/dev/null 2>&1 && audit_scope_init "$ROOT" 2>/dev/null; then
       while IFS=$'\t' read -r index member path; do
         [ -n "$path" ] || continue

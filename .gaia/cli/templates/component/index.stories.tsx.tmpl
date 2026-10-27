@@ -1,26 +1,23 @@
-import type {Meta, StoryFn} from '@storybook/react-vite';
-import {expect, within} from 'storybook/test';
+import {expect} from 'storybook/test';
+import preview from '#.storybook/preview';
 import {{Name}} from '..';
 
-const meta: Meta = {
+const meta = preview.meta({
   component: {{Name}},
   parameters: {
     wrap: 'w-fit p-4',
   },
   title: '{{storyTitle}}',
-};
-
-export default meta;
+});
 
 {{storyDefault}}
 
-// Starting point only: a render check is not complete evidence. The story is
-// this component's test and the accessibility check runs on every story. Add
-// interaction assertions and prop variants as the component grows.
+// Starting point only: a render check is not complete evidence. A story is a
+// visual state and a behavior is a `.test()` on it; the accessibility check
+// runs on every story. Add a `.test()` per behavior and a story per prop
+// variant as the component grows.
 {{storyRenders}}
 
-Renders.play = async ({canvasElement}) => {
-  await expect(
-    within(canvasElement).getByRole('region', {name: '{{Name}}'})
-  ).toBeVisible();
-};
+Renders.test('renders the {{Name}} region', async ({canvas}) => {
+  await expect(canvas.getByRole('region', {name: '{{Name}}'})).toBeVisible();
+});

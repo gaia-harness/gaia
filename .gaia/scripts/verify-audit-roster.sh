@@ -68,6 +68,18 @@
 #      least one tracked file, unless it sits on the allowlist inside this
 #      script. A roster comment never exempts a glob. Runs with the coverage
 #      invariant and is skipped with it.
+#   7. The release-skip key. A member carrying `skip_gaia_release_changes`
+#      states it as the literal `true` or `false`, and the default member does
+#      not carry it. The classifier honors only a literal `true`, so any other
+#      spelling would read as opted in here and not there. The raw scrape's set
+#      of `true` members must also equal the classifier's
+#      (audit_roster_release_skip_members); a disagreement is roster-reader
+#      drift and withholds the same verdicts as a glob-count disagreement.
+#
+# This check classifies the whole tracked tree with no diff, so the classifier's
+# release context is never armed here: zero-match, coverage and OVERBROAD read
+# raw owners, which is also the post-skip answer for every state that applies
+# no GAIA release.
 #
 # A retired member-level key left in an adopter's roster is an ordinary scalar
 # to both readers here: they end the `globs:` list on it and read nothing from
@@ -123,8 +135,8 @@ Usage: verify-audit-roster.sh [--root <dir>] [--config <file>] [--emit-roster]
                    Injection point for the machinery list and the agent files.
   --config <file>  roster to verify. Default: <root>/.gaia/audit-ci.yml.
                    Injection point for the roster.
-  --emit-roster    print the roster's raw member/glob/default records and
-                   exit; read-only, runs no invariant.
+  --emit-roster    print the roster's raw member/glob/release-skip/default
+                   records and exit; read-only, runs no invariant.
   --help | -h      this text.
 
 Exit codes:
@@ -217,6 +229,8 @@ findings=0
 # Emits, tab-separated so a glob may legally contain a space:
 #   MEMBER <name>
 #   RAW <name> <glob>
+#   RELEASESKIP <name> <raw value>   (only a member carrying the key; the value
+#                                     is comment-stripped, never unquoted)
 
 _verify_roster_read_globs() {
   awk '
@@ -247,6 +261,15 @@ _verify_roster_read_globs() {
         next
       }
       if (raw ~ /^[[:space:]]+globs[[:space:]]*:/) { in_globs = 1; next }
+      if (raw ~ /^[[:space:]]+skip_gaia_release_changes[[:space:]]*:/) {
+        in_globs = 0
+        skip_text = raw
+        sub(/^[[:space:]]+skip_gaia_release_changes[[:space:]]*:[[:space:]]*/, "", skip_text)
+        sub(/[[:space:]]+#.*$/, "", skip_text)
+        sub(/[[:space:]]+$/, "", skip_text)
+        print "RELEASESKIP", member, skip_text
+        next
+      }
       # Any other member-level scalar key ends the glob sublist.
       if (raw ~ /^[[:space:]]+[A-Za-z_]+[[:space:]]*:/) { in_globs = 0; next }
       if (in_globs && raw ~ /^[[:space:]]*-[[:space:]]+/) {
@@ -354,6 +377,16 @@ unowned_records="$(_audit_scope_parse_unowned < "$config")"
 # The light-review keys, read once for the dialect-and-coverage pass below and
 # the scalar checks after it.
 light_records="$(_audit_scope_parse_light < "$config")"
+
+# The classifier's reading of the release-skip key, as SKIPCLASS records for the
+# drift comparison. Absent from a library copy that predates the key, in which
+# case there is no second reader to compare against: the SKIPREADER record is
+# what arms the comparison, since an empty SKIPCLASS set alone cannot tell "the
+# classifier keys no member" from "there is no classifier reading".
+skip_class_records=""
+if command -v audit_roster_release_skip_members >/dev/null 2>&1; then
+  skip_class_records="$(printf 'SKIPREADER\n'; audit_roster_release_skip_members "$config" | awk 'NF { printf "SKIPCLASS\t%s\n", $1 }')"
+fi
 
 # --- Invariant: the shared machinery list is readable ------------------------
 #
@@ -530,6 +563,7 @@ violation_records="$(
     printf '%s\n' "$region_records"
     printf '%s\n' "$unowned_records"
     printf '%s\n' "$light_records"
+    printf '%s\n' "$skip_class_records"
   } | awk -F'\t' '
     # --- The glob layer ------------------------------------------------------
     #
@@ -574,6 +608,9 @@ violation_records="$(
     # Field 3 is the compiled regex, which this pass never reads: it classifies
     # the raw glob, exactly as the claimant and region positions do.
     $1 == "UNOWNED" { unowned_entry_count++; unowned_globs[unowned_entry_count] = $2; next }
+    $1 == "RELEASESKIP" && $3 == "true" { raw_skip[$2] = 1; next }
+    $1 == "SKIPREADER" { class_skip_reader = 1; next }
+    $1 == "SKIPCLASS" { class_skip[$2] = 1; next }
     $1 == "HARDFULL" { light_glob_count++; light_glob_member[light_glob_count] = $2; light_glob_text[light_glob_count] = $3; next }
 
     END {
@@ -589,6 +626,10 @@ violation_records="$(
           printf "MISMATCH\t%s\t%d\t%d\n", member, raw_glob_count[member] + 0, compiled_glob_count[member] + 0
           drift = 1
         }
+      }
+      if (class_skip_reader) {
+        for (member in raw_skip) if (!(member in class_skip)) { printf "SKIPDRIFT\t%s\tthis check\tthe classifier\n", member; drift = 1 }
+        for (member in class_skip) if (!(member in raw_skip)) { printf "SKIPDRIFT\t%s\tthe classifier\tthis check\n", member; drift = 1 }
       }
       if (drift) exit 0
 
@@ -702,6 +743,17 @@ while IFS=$'\t' read -r kind first_field second_field third_field fourth_field; 
       printf '  format. The remit-region parity, unowned-dialect and\n'
       printf '  light_hard_full dialect-and-coverage checks below did not run\n'
       printf '  either, for the same reason. Fix that before trusting this check.\n'
+      printf '\n'
+      ;;
+    SKIPDRIFT)
+      findings=$((findings + 1))
+      printf 'verify-audit-roster: FAIL roster-reader-drift\n'
+      printf '  member: %s\n' "$first_field"
+      printf '  `skip_gaia_release_changes` is read as true by %s and not by %s.\n' "$second_field" "$third_field"
+      printf '  The two readers disagree about the roster, so no remit-parity\n'
+      printf '  verdict was produced, and the unowned-dialect and light_hard_full\n'
+      printf '  dialect-and-coverage checks below did not run either. Fix that\n'
+      printf '  before trusting this check.\n'
       printf '\n'
       ;;
     REMITMISSING)
@@ -893,6 +945,38 @@ while IFS=$'\t' read -r kind member value; do
   esac
 done < <(printf '%s\n' "$light_records")
 
+# --- Invariant: the release-skip key -------------------------------------------
+#
+# Checked as typed, like the light-review keys: the classifier honors only the
+# raw literal `true`, so a quoted or capitalized spelling would read as opted in
+# on the roster and as not opted in at dispatch. The default member owns whatever
+# no claimant claims, so skipping GAIA-owned files there would hide them from
+# every member.
+
+skip_default_member="$(printf '%s\n' "$class_records" | awk '$1 == "DEFAULT" { print $2; exit }')"
+
+while IFS=$'\t' read -r kind member value; do
+  [ "$kind" = "RELEASESKIP" ] || continue
+  skip_problem=""
+  if [ "$value" != "true" ] && [ "$value" != "false" ]; then
+    skip_problem="not the literal \`true\` or \`false\`"
+  elif [ "$member" = "$skip_default_member" ]; then
+    skip_problem="the default member cannot carry the key"
+  fi
+  if [ -n "$skip_problem" ]; then
+    findings=$((findings + 1))
+    printf 'verify-audit-roster: FAIL invalid-release-skip-key\n'
+    printf '  member: %s\n' "$member"
+    printf '  value:  %s\n' "$value"
+    printf '  reason: %s\n' "$skip_problem"
+    printf '  `skip_gaia_release_changes` is the literal `true` or `false`, on a\n'
+    printf '  claimant member only. The classifier honors only `true`, so any other\n'
+    printf '  spelling leaves the member reviewing release-applied files while the\n'
+    printf '  roster reads as if it opted out. Set it to `true`, `false`, or drop it.\n'
+    printf '\n'
+  fi
+done < <(printf '%s\n' "$raw_records")
+
 # --- Invariant: every tracked path resolves an owner -------------------------
 #
 # The inverse of every invariant above. Those ask whether the roster's entries
@@ -1002,6 +1086,7 @@ if [ -n "$coverage_universe" ]; then
   # paragraph above forbids, and a coverage check that disagrees with dispatch
   # about who owns a path reports the wrong set in both directions. Speed on a
   # read-only advisory job is not worth buying with that.
+  # No release context is armed: this classifies the whole tracked tree with no diff, so raw ownership is the answer.
   audit_scope_init "$root" "$config"
 
   coverage_records="$(
@@ -1133,6 +1218,7 @@ frontend/*.config.js
 *.config.js
 .github/workflows/*.yaml
 .github/actions/**/*.yaml
+**/*.bats
 LICENSE
 docs/**
 # gaia:maintainer-only:start

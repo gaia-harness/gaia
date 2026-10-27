@@ -203,23 +203,19 @@ EOF
 # quick_story_text <label>
 quick_story_text() {
   cat <<EOF
-import type {Meta, StoryObj} from '@storybook/react-vite';
+import preview from '#.storybook/preview';
 import ConfirmDialog from '..';
 
-const meta: Meta<typeof ConfirmDialog> = {
+const meta = preview.meta({
   component: ConfirmDialog,
   title: 'Components/ConfirmDialog',
-};
+});
 
-export default meta;
-
-type Story = StoryObj<typeof ConfirmDialog>;
-
-export const Default: Story = {
+export const Default = meta.story({
   args: {
     label: '$1',
   },
-};
+});
 EOF
 }
 

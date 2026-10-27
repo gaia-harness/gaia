@@ -927,3 +927,44 @@ STUB
   v2_identity_listings || return 1
   [ "$V2_LISTINGS" -gt 1 ]
 }
+
+# ---------------------------------------------------------------------------
+# The release-change skip: the digest arms the classifier's release context, so
+# the members whose frame holds more than machinery are exactly the members the
+# dispatch resolver names, on a release-applying branch and on an ordinary one,
+# for HEAD and for HEAD's bare tree id (the fix verifier's target).
+# The mutation proofs live in audit-scope-release-skip.bats.
+# ---------------------------------------------------------------------------
+
+# release_skip_digest_set <root> <target>: members whose digest differs from
+# fixture-idle's machinery-only digest, sorted.
+release_skip_digest_set() {
+  local root="$1" merge_base lines idle
+  merge_base="$(git -C "$root" merge-base main HEAD)"
+  lines="$(bash -c '. "$1"; audit_branch_digests_all "$2" "$3" "$4"' _ "$DIGEST_LIBRARY" "$root" "$merge_base" "$2")" || return 1
+  idle="$(printf '%s\n' "$lines" | awk -F'\t' '$1 == "fixture-idle" { print $2 }')"
+  [ -n "$idle" ] || return 1
+  printf '%s\n' "$lines" | awk -F'\t' -v idle="$idle" '$2 != idle { print $1 }' | LC_ALL=C sort
+}
+
+release_skip_digest_agrees() {
+  local root="$BATS_TEST_TMPDIR/release-skip-$1" resolved by_head by_tree
+  command -v jq >/dev/null 2>&1 || skip "jq required"
+  . "$REPO_ROOT/.gaia/tests/helpers/release-skip-fixture.sh"
+  release_skip_init "$root"
+  release_skip_branch "$root" "$1"
+  resolved="$("$REPO_ROOT/.gaia/scripts/resolve-audit-members.sh" --root "$root" --base "$(git -C "$root" merge-base main HEAD)")"
+  [ "$resolved" = "$2" ] || { echo "resolver: $resolved" >&2; return 1; }
+  by_head="$(release_skip_digest_set "$root" HEAD)"
+  by_tree="$(release_skip_digest_set "$root" "$(git -C "$root" rev-parse 'HEAD^{tree}')")"
+  [ "$by_head" = "$resolved" ] || { echo "digest (HEAD): $by_head" >&2; return 1; }
+  [ "$by_tree" = "$resolved" ] || { echo "digest (tree): $by_tree" >&2; return 1; }
+}
+
+@test "release skip: the digest's member set equals the resolver's on a release-applying branch" {
+  release_skip_digest_agrees release "$(printf 'fixture-default\nfixture-scripts')"
+}
+
+@test "release skip: the digest's member set equals the resolver's on an ordinary branch" {
+  release_skip_digest_agrees ordinary fixture-shell
+}

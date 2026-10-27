@@ -34,6 +34,9 @@ export const ProjectConfigStrictShape = {
   // Values stay free strings at the write boundary so a decision value a newer
   // GAIA wrote never makes an older writer refuse the whole file.
   setup_decisions: z.record(z.string(), z.string()).optional(),
+  // `false` turns off the tests workflow's shellcheck; absent means on. The
+  // workflow reads the raw file, not this schema.
+  shellcheck: z.boolean().optional(),
   version: z.literal(1),
 };
 
@@ -83,6 +86,7 @@ export const ProjectConfigSchema = z.object({
     undefined
   ),
   setup_decisions: withFallback(ReadSetupDecisionsSchema.optional(), undefined),
+  shellcheck: withFallback(ProjectConfigStrictShape.shellcheck, undefined),
   // An unrecognized or absent version degrades to 1 rather than malforming
   // the config.
   version: withFallback(ProjectConfigStrictShape.version, 1),

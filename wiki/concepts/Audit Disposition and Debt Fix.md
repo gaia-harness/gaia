@@ -2,7 +2,7 @@
 type: concept
 status: active
 created: 2026-06-30
-updated: 2026-10-13
+updated: 2026-10-28
 tags: [concept, claude, review]
 ---
 
@@ -76,6 +76,10 @@ On the GAIA maintainer repository the issue carries one more, exactly one `audie
 A deterministic check reads that metadata back before the issue is created, and the filing does not proceed on a finding. It verifies the label vocabulary and counts, the dedup key's shape, and that no label belonging to a later lifecycle stage (the drain's claim and park labels) has been applied by a filing. It runs offline, so it needs neither network nor `gh`. What it deliberately cannot check is whether a grade was applied honestly: whether a fix carries a design decision is a judgment about code, so the mechanical half of the rules is enforced and the rubric half stays a filer's obligation. The same check has advisory modes that audit one already-filed issue or sweep the whole open backlog, and those relabel nothing: repairing an existing issue is a decision per issue.
 
 The audit loop unit files through `.gaia/scripts/file-tech-debt.sh`, which screens for security, probes the backend, dedups, files and verifies the filing in that order, and appends one outcome line per finding. The `file-tech-debt` skill (`.claude/skills/file-tech-debt/SKILL.md`) is the source of truth for the filing mechanics: key construction, the `--body-file` invocation, idempotent labels, the metadata check, the body schema, and the sentinel touch.
+
+<!-- gaia:maintainer-only:start -->
+On this repository the filing script writes a source line, `<!-- gaia-debt-source: v1 branch=<value> -->`, on line 2 of the issue body, directly after the dedup key line. The branch is the one checked out in the tree holding the running script, so a caller attributes a filing by which tree's copy it runs; the audit loop unit runs the pull request worktree's copy. The value is a digest of the branch (the library header, `.gaia/scripts/debt-source-lib.sh`, owns the rule), `detached` for a detached HEAD, or `unknown` when the tree cannot be read. A transient filing's retry file keeps the first attempt's branch, so a replay records where the filing started. `.gaia/scripts/debt-source-report.sh` reads the lines back from GitHub with `filed`, `baseline` and `coverage` subcommands (its header owns the output format) to measure how many new issues each pull request's audit files. The record and the report stay maintainer-only until the record has been shown complete on this repository.
+<!-- gaia:maintainer-only:end -->
 
 ### Idempotent dedup
 

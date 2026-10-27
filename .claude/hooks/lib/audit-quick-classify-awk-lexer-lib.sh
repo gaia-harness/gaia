@@ -40,7 +40,9 @@ function pushf(type, name,   p) {
   if (type == "attrexpr") fsig[CS, frameseq] = ""
   if (type == "paren" && name == "cva") { cvadepth++; cvaany[CS, CL] = 1 }
   if (type == "paren" && name == "cn") { cndepth++; cnopen[CS, CL]++ }
-  if (type == "brace" && p == 0 && pendstory != "" && prev == "=") { fstory[depth] = "story:" pendstory; pendstory = ""; pendstate = 0 }
+  if (type == "paren" && p == 0 && pendstory != "" && (name == "story" || name == "extend")) fstory[depth] = "storycall:" pendstory
+  if (type == "paren" && p == 0 && name == "test" && stmtname != "" && prevhead == stmtname) { fstory[depth] = "test"; playany[CS, CL] = 1 }
+  if (type == "brace" && p > 0 && fstory[p] ~ /^storycall:/ && prev == "(") { fstory[depth] = "story:" substr(fstory[p], 11); pendstory = ""; pendstate = 0 }
   if (type == "brace" && p > 0 && fstory[p] ~ /^story:/ && fprop[p] == "args") fstory[depth] = "args"
 }
 function popf(   b) {

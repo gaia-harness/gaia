@@ -787,27 +787,30 @@ test("renders a label", () => {
 
 # --- story files: play stories are emergent and gated like component tests ---
 
-# A story file with one play story, parameterized by the export name and the
-# text the play looks for.
+# A CSF4 story file with one story carrying one test, parameterized by the
+# export name and the text the test looks for. The extractor emits the story's
+# base story plus its test.
 story_source() {
   local export_name="$1" marker="$2"
   printf '%s\n' \
-    "import type {Meta, StoryObj} from '@storybook/react-vite';" \
-    "import {expect, within} from 'storybook/test';" \
+    "import preview from '#.storybook/preview';" \
+    "import {expect} from 'storybook/test';" \
     "" \
     "const Marker = () => <p>${marker}</p>;" \
     "" \
-    "const meta = {component: Marker, title: 'Internal/${marker}'} satisfies Meta<typeof Marker>;" \
+    "const meta = preview.meta({component: Marker, title: 'Internal/${marker}'});" \
     "" \
-    "export default meta;" \
+    "export const ${export_name} = meta.story({});" \
     "" \
-    "type Story = StoryObj<typeof meta>;" \
-    "" \
-    "export const ${export_name}: Story = {" \
-    "  play: async ({canvasElement}) => {" \
-    "    await expect(within(canvasElement).getByText('${marker}')).toBeTruthy();" \
-    "  }," \
-    "};"
+    "${export_name}.test('shows the marker', async ({canvas}) => {" \
+    "  await expect(canvas.getByText('${marker}')).toBeTruthy();" \
+    "});"
+}
+
+# Verdicts for both units a story_source file emits.
+record_story_verdicts() {
+  record_verdict "$1" "$2   base story"
+  record_verdict "$1" "$2   shows the marker"
 }
 
 # Record a verdict through the real ledger writer, aimed at REPO's ledger.
@@ -824,7 +827,7 @@ write_story_descriptor() {
   write_builtin_descriptor "$REPO" '' '' '["app/components/**/*.test.ts","app/components/**/*.test.tsx",".playwright/**/*.spec.ts",".playwright/**/*.spec.tsx",".playwright/**/*.test.ts",".playwright/**/*.test.tsx","app/**/*.stories.tsx"]'
 }
 
-@test "denies a changed play story under app/components and one under app/utils/tests, then allows once verdicts are recorded" {
+@test "denies a changed CSF4 story under app/components and one under app/utils/tests, then allows once verdicts are recorded" {
   write_story_descriptor
   local component_story="frontend/app/components/Marker/tests/marker.stories.tsx"
   local utility_story="frontend/app/utils/tests/utility-marker.stories.tsx"
@@ -835,70 +838,86 @@ write_story_descriptor() {
   [ "$status" -eq 0 ]
   denied
   grep -qF -- "$component_story" <<<"$output"
-  grep -qF -- "Shows Component Marker" <<<"$output"
+  grep -qF -- "Shows Component Marker   base story" <<<"$output"
+  grep -qF -- "Shows Component Marker   shows the marker" <<<"$output"
   grep -qF -- "$utility_story" <<<"$output"
-  grep -qF -- "Shows Utility Marker" <<<"$output"
+  grep -qF -- "Shows Utility Marker   shows the marker" <<<"$output"
 
-  record_verdict "$component_story" "Shows Component Marker"
-  record_verdict "$utility_story" "Shows Utility Marker"
+  record_story_verdicts "$component_story" "Shows Component Marker"
+  record_story_verdicts "$utility_story" "Shows Utility Marker"
   run_merge_hook
   [ "$status" -eq 0 ]
   refute_denied
 }
 
-@test "a story whose play changed after its verdict is denied again" {
+@test "a story test with no verdict is denied even when its base story has one" {
   write_story_descriptor
   local story="frontend/app/utils/tests/utility-marker.stories.tsx"
   commit_file "$story" "$(story_source ShowsUtilityMarker 'utility marker')"
-  record_verdict "$story" "Shows Utility Marker"
+  record_verdict "$story" "Shows Utility Marker   base story"
+  run_merge_hook
+  [ "$status" -eq 0 ]
+  denied
+  grep -qF -- "Shows Utility Marker   shows the marker" <<<"$output"
+  grep -qF -- "Shows Utility Marker   base story" <<<"$output" && return 1
+  true
+}
+
+@test "a story whose test changed after its verdict is denied again" {
+  write_story_descriptor
+  local story="frontend/app/utils/tests/utility-marker.stories.tsx"
+  commit_file "$story" "$(story_source ShowsUtilityMarker 'utility marker')"
+  record_story_verdicts "$story" "Shows Utility Marker"
   commit_file "$story" "$(story_source ShowsUtilityMarker 'utility marker edited')"
   run_merge_hook
   [ "$status" -eq 0 ]
   denied
-  grep -qF -- "Shows Utility Marker" <<<"$output"
+  grep -qF -- "Shows Utility Marker   shows the marker" <<<"$output"
 }
 
-@test "a render-only story file demands no verdict" {
+@test "a render-only CSF4 story file demands no verdict" {
   write_story_descriptor
-  commit_file "frontend/app/components/Marker/tests/marker.stories.tsx" "import type {Meta, StoryObj} from '@storybook/react-vite';
+  commit_file "frontend/app/components/Marker/tests/marker.stories.tsx" "import preview from '#.storybook/preview';
 
 const Marker = () => <p>marker</p>;
 
-const meta = {component: Marker, title: 'Internal/Marker'} satisfies Meta<typeof Marker>;
+const meta = preview.meta({component: Marker, title: 'Internal/Marker'});
 
-export default meta;
-
-type Story = StoryObj<typeof meta>;
-
-export const Plain: Story = {};
+export const Plain = meta.story({});
 "
   run_merge_hook
   [ "$status" -eq 0 ]
   refute_denied
 }
 
+@test "an old-format story file is denied with the extractor's migration line, not skipped" {
+  write_story_descriptor
+  local story="frontend/app/utils/tests/old-format.stories.tsx"
+  commit_file "$story" "$(cat "$BATS_TEST_DIRNAME/fixtures/red-ledger/csf3-old-format.stories.tsx")"
+  run_merge_hook
+  [ "$status" -eq 0 ]
+  denied
+  grep -qF -- "extract-test-signals: $story is an old-format story file; migrate it with: .gaia/cli/gaia migrate-csf4" <<<"$output"
+  grep -qF -- "Next step:" <<<"$output"
+}
+
 @test "a story whose play is an imported identifier is denied naming the file and the unsupported shape" {
   write_story_descriptor
   local story="frontend/app/utils/tests/imported-play.stories.tsx"
-  commit_file "$story" "import type {Meta, StoryObj} from '@storybook/react-vite';
+  commit_file "$story" "import preview from '#.storybook/preview';
 import {sharedPlay} from './shared-play';
 
 const Marker = () => <p>marker</p>;
 
-const meta = {component: Marker, title: 'Internal/Imported'} satisfies Meta<typeof Marker>;
+const meta = preview.meta({component: Marker, title: 'Internal/Imported'});
 
-export default meta;
-
-type Story = StoryObj<typeof meta>;
-
-export const UsesImportedPlay: Story = {play: sharedPlay};
+export const UsesImportedPlay = meta.story({play: sharedPlay});
 "
   run_merge_hook
   [ "$status" -eq 0 ]
   denied
   grep -qF -- "$story" <<<"$output"
   grep -qF -- "unsupported story shape" <<<"$output"
-  grep -qF -- "UsesImportedPlay" <<<"$output"
   grep -qF -- "Next step:" <<<"$output"
 }
 

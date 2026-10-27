@@ -684,3 +684,56 @@ YAML
   grep -qF 'in_auditors' "$WRITER" && return 1
   grep -qF -- '--emit-roster' "$WRITER"
 }
+
+# --- The release-skip key ------------------------------------------------------
+
+skip_roster_fixture() {
+  fixture_root "$1" <<'YAML'
+auditors:
+  - name: code-audit-default
+    globs:
+      - "zzz-default-only/**"
+    default: true
+  - name: code-audit-a
+    globs:
+      - "a/**"
+    skip_gaia_release_changes: true
+  - name: code-audit-b
+    globs:
+      - "b/**"
+YAML
+}
+
+@test "release-skip: a keyed claimant's region carries the extra sentence and nothing else changes" {
+  local fixture_directory="$BATS_TEST_TMPDIR/skip-writer"
+  skip_roster_fixture "$fixture_directory"
+  run_writer "$fixture_directory"
+  [ "$status" -eq 0 ]
+  local keyed unkeyed default_agent
+  keyed="$fixture_directory/.claude/agents/code-audit-a.md"
+  unkeyed="$fixture_directory/.claude/agents/code-audit-b.md"
+  default_agent="$fixture_directory/.claude/agents/code-audit-default.md"
+
+  [ "$(region_sentence_lines "$keyed" | wc -l | tr -d ' ')" -eq 1 ]
+  region_sentence_lines "$keyed" | grep -qF 'Filter the changed-file list against the globs above.'
+  region_sentence_lines "$keyed" | grep -qF 'removes a GAIA-owned file this branch changes by applying a GAIA release'
+  region_sentence_lines "$unkeyed" | grep -qF 'removes a GAIA-owned file' && return 1
+  region_sentence_lines "$default_agent" | grep -qF 'removes a GAIA-owned file' && return 1
+  region_sentence_lines "$unkeyed" | grep -qF 'Filter the changed-file list against the globs above.'
+  region_sentence_lines "$default_agent" | grep -qF 'second precedence tier'
+}
+
+@test "release-skip: a second run is byte-identical and the check passes remit parity" {
+  local fixture_directory="$BATS_TEST_TMPDIR/skip-idempotent"
+  skip_roster_fixture "$fixture_directory"
+  run_writer "$fixture_directory"
+  [ "$status" -eq 0 ]
+  local before="$BATS_TEST_TMPDIR/skip-before"
+  rm -rf "$before"
+  cp -R "$fixture_directory/.claude/agents" "$before"
+  run_writer "$fixture_directory"
+  [ "$status" -eq 0 ]
+  diff -r "$before" "$fixture_directory/.claude/agents"
+  run bash "$CHECK" --root "$fixture_directory" --config "$fixture_directory/.gaia/audit-ci.yml"
+  [ "$status" -eq 0 ] || { printf '%s\n' "$output" >&2; return 1; }
+}

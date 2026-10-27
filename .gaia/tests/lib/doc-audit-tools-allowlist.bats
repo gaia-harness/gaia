@@ -34,6 +34,7 @@ code-audit-frontend tools: Agent, Bash, Read, Write
 code-audit-github-workflows tools: Bash, Read
 code-audit-maintainer-node tools: Bash, Read
 code-audit-maintainer-shell tools: Bash, Monitor, Read, WebFetch
+code-audit-shell tools: Bash, Read
 audit-loop-unit tools: Agent, Bash, Monitor, Read, SendMessage, Write
 worthiness-evaluator tools: Bash, Read, Write
 audit-rule-specialist tools: Bash, Read
@@ -112,9 +113,9 @@ assert_named_tools_are_prohibitions() {
 
 # --- the table ----------------------------------------------------------------
 
-@test "the tools table has exactly the eight agents, each once" {
-  [ "$(tools_rows | grep -c '')" -eq 8 ]
-  [ "$(tools_rows | cut -d' ' -f1 | sort -u | grep -c '')" -eq 8 ]
+@test "the tools table has exactly the nine agents, each once" {
+  [ "$(tools_rows | grep -c '')" -eq 9 ]
+  [ "$(tools_rows | cut -d' ' -f1 | sort -u | grep -c '')" -eq 9 ]
 }
 
 # bats test_tags=whole-tree
@@ -145,6 +146,11 @@ assert_named_tools_are_prohibitions() {
 }
 
 # bats test_tags=whole-tree
+@test "code-audit-shell carries its pinned tools line" {
+  assert_row code-audit-shell "$AGENTS_DIRECTORY/code-audit-shell.md"
+}
+
+# bats test_tags=whole-tree
 @test "audit-loop-unit carries its pinned tools line" {
   assert_row audit-loop-unit "$AGENTS_DIRECTORY/audit-loop-unit.md"
 }
@@ -172,9 +178,9 @@ assert_named_tools_are_prohibitions() {
 }
 
 # bats test_tags=whole-tree
-@test "the other seven definitions name no tool outside their allowlist except as a prohibition" {
+@test "the other definitions name no tool outside their allowlist except as a prohibition" {
   local agent
-  for agent in code-audit-github-workflows code-audit-maintainer-node code-audit-maintainer-shell audit-loop-unit worthiness-evaluator audit-rule-specialist audit-refuter; do
+  for agent in code-audit-github-workflows code-audit-maintainer-node code-audit-maintainer-shell code-audit-shell audit-loop-unit worthiness-evaluator audit-rule-specialist audit-refuter; do
     assert_named_tools_are_prohibitions "$agent" "$AGENTS_DIRECTORY/$agent.md" || return 1
   done
 }

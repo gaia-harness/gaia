@@ -433,14 +433,12 @@ const buildStoryExport = (
   props: readonly PropertyEntry[]
 ): string => {
   if (props.length === 0) {
-    return `export const ${exportName}: StoryFn = () => <${componentName} />;`;
+    return `export const ${exportName} = meta.story({\n  render: () => <${componentName} />,\n});`;
   }
 
-  return [
-    `export const ${exportName}: StoryFn = () => (`,
-    `  <${componentName} ${buildPropertyAttributes(props)} />`,
-    ');',
-  ].join('\n');
+  const element = `<${componentName} ${buildPropertyAttributes(props)} />`;
+
+  return `export const ${exportName} = meta.story({\n  render: () => (\n    ${element}\n  ),\n});`;
 };
 
 /**

@@ -267,6 +267,30 @@ assert_spaced_redirect_target_absent() {
   [ "$(ledger_lines)" -eq 0 ]
 }
 
+# --- story files: CSF4 tests record, old-format files warn ---------------------
+
+@test "a failing .test() on a CSF4 story records one line named <Story Name>   <test name>" {
+  run_capture "Bash" \
+    "pnpm test --run $FIXTURE_RELATIVE_DIRECTORY/csf4-with-tests.stories.tsx" \
+    "$JSON_FIXTURE_RELATIVE_DIRECTORY/csf4-story-test-fail.json"
+  [ "$status" -eq 0 ]
+  [ "$(ledger_lines)" -eq 1 ]
+  line=$(cat "$LEDGER_ABSOLUTE_PATH")
+  [ "$(printf '%s' "$line" | jq -r '.file')" = "$FIXTURE_RELATIVE_DIRECTORY/csf4-with-tests.stories.tsx" ]
+  [ "$(printf '%s' "$line" | jq -r '.fullName')" = "Default   shows the marker" ]
+  [[ "$(printf '%s' "$line" | jq -r '.signal')" == sha256:* ]]
+}
+
+@test "a failing test in an old-format story file warns with the extractor's line and records nothing" {
+  run_capture "Bash" \
+    "pnpm test --run $FIXTURE_RELATIVE_DIRECTORY/csf3-old-format.stories.tsx" \
+    "$JSON_FIXTURE_RELATIVE_DIRECTORY/csf3-story-fail.json"
+  [ "$status" -eq 0 ]
+  [ "$(ledger_lines)" -eq 0 ]
+  expected_line="extract-test-signals: $FIXTURE_RELATIVE_DIRECTORY/csf3-old-format.stories.tsx is an old-format story file; migrate it with: .gaia/cli/gaia migrate-csf4"
+  grep -qF -- "warning: $expected_line" <<<"$output"
+}
+
 # --- scope match: only `(pnpm|npm) test … --run …` acts -----------------------
 
 @test "bare pnpm test (no --run) exits 0 and writes nothing" {

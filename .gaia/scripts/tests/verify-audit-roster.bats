@@ -1335,3 +1335,145 @@ roster_with_node_hard_full() {
   [ "$status" -eq 0 ] || { printf '%s\n' "$output" >&2; return 1; }
   assert_contains "roster clean"
 }
+
+# --- The release-skip key ------------------------------------------------------
+
+# <key-line> -- a roster whose claimant carries the key line verbatim ("" for a
+# roster without it).
+skip_key_roster() {
+  cat <<YAML
+auditors:
+  - name: code-audit-default
+    globs:
+      - "zzz-default-only/**"
+    default: true
+  - name: code-audit-a
+    globs:
+      - "a/**"
+      - "a/b/*.ts"
+$1
+YAML
+}
+
+@test "release-skip key: a malformed value fails exactly once, naming the member and the value" {
+  local value fixture_directory
+  for value in '"true"' 'yes' 'True' ''; do
+    fixture_directory="$BATS_TEST_TMPDIR/skip-bad"
+    skip_key_roster "    skip_gaia_release_changes: $value" | scaffold_root "$fixture_directory"
+    run_root "$fixture_directory"
+    [ "$status" -eq 1 ] || { printf 'value [%s]: %s\n' "$value" "$output" >&2; return 1; }
+    assert_contains "FAIL invalid-release-skip-key"
+    assert_contains "member: code-audit-a"
+    assert_contains "value:  $value"
+    [ "$(grep -cF 'FAIL invalid-release-skip-key' <<<"$output")" -eq 1 ]
+  done
+}
+
+@test "release-skip key: literal true and false and an absent key pass" {
+  local line fixture_directory
+  for line in '    skip_gaia_release_changes: true' '    skip_gaia_release_changes: false' '    skip_gaia_release_changes: true # why' ''; do
+    fixture_directory="$BATS_TEST_TMPDIR/skip-good"
+    skip_key_roster "$line" | scaffold_root "$fixture_directory"
+    run_root "$fixture_directory"
+    [ "$status" -eq 0 ] || { printf 'line [%s]: %s\n' "$line" "$output" >&2; return 1; }
+    grep -qF 'invalid-release-skip-key' <<<"$output" && return 1
+    true
+  done
+}
+
+@test "release-skip key: the default member cannot carry it" {
+  local fixture_directory="$BATS_TEST_TMPDIR/skip-default"
+  scaffold_root "$fixture_directory" <<'YAML'
+auditors:
+  - name: code-audit-default
+    globs:
+      - "zzz-default-only/**"
+    default: true
+    skip_gaia_release_changes: true
+  - name: code-audit-a
+    globs:
+      - "a/**"
+YAML
+  run_root "$fixture_directory"
+  [ "$status" -eq 1 ]
+  assert_contains "FAIL invalid-release-skip-key"
+  assert_contains "member: code-audit-default"
+  assert_contains "the default member cannot carry the key"
+}
+
+@test "release-skip key: --emit-roster prints one RELEASESKIP record for the keyed member only" {
+  local fixture_directory="$BATS_TEST_TMPDIR/skip-emit"
+  skip_key_roster '    skip_gaia_release_changes: true' | scaffold_root "$fixture_directory"
+  run bash "$SCRIPT" --emit-roster --root "$fixture_directory" --config "$fixture_directory/.gaia/audit-ci.yml"
+  [ "$status" -eq 0 ]
+  [ "$(grep -c '^RELEASESKIP' <<<"$output")" -eq 1 ]
+  printf '%s\n' "$output" | grep -qxF "$(printf 'RELEASESKIP\tcode-audit-a\ttrue')"
+  printf '%s\n' "$output" | grep -qxF "$(printf 'RAW\tcode-audit-a\ta/**')"
+  printf '%s\n' "$output" | grep -qxF "$(printf 'MEMBER\tcode-audit-default')"
+  printf '%s\n' "$output" | grep -qxF "$(printf 'DEFAULT\tcode-audit-default')"
+}
+
+# A copy of the check whose scrape never reads the key as true, beside the
+# classifier library that does.
+skip_drift_sandbox() {
+  local sandbox="$1"
+  mkdir -p "$sandbox/.gaia/scripts" "$sandbox/.claude/hooks/lib"
+  sed 's|\$1 == "RELEASESKIP" \&\& \$3 == "true"|$1 == "RELEASESKIP" \&\& $3 == "never"|' \
+    "$SCRIPT" > "$sandbox/.gaia/scripts/verify-audit-roster.sh"
+  cp "$REPO_ROOT/.claude/hooks/lib/audit-scope.sh" "$sandbox/.claude/hooks/lib/audit-scope.sh"
+  cp "$REPO_ROOT/.claude/hooks/lib/audit-scope-release.sh" "$sandbox/.claude/hooks/lib/audit-scope-release.sh"
+  cp "$REPO_ROOT/.claude/hooks/lib/audit-machinery.sh" "$sandbox/.claude/hooks/lib/audit-machinery.sh"
+  grep -qF '$3 == "never"' "$sandbox/.gaia/scripts/verify-audit-roster.sh"
+}
+
+@test "release-skip key: a scrape that misreads the key is roster-reader-drift and withholds remit parity" {
+  local fixture_directory="$BATS_TEST_TMPDIR/skip-drift"
+  skip_key_roster '    skip_gaia_release_changes: true' | scaffold_root "$fixture_directory"
+  # A real remit-parity violation, so a withheld verdict is observable.
+  sed -i.bak '/^- `a\/b\/\*\.ts`$/d' "$fixture_directory/.claude/agents/code-audit-a.md"
+  rm -f "$fixture_directory/.claude/agents/code-audit-a.md.bak"
+
+  run_root "$fixture_directory"
+  [ "$status" -eq 1 ]
+  assert_contains "remit-glob-missing"
+  grep -qF 'roster-reader-drift' <<<"$output" && return 1
+
+  local sandbox="$BATS_TEST_TMPDIR/skip-drift-sandbox"
+  skip_drift_sandbox "$sandbox"
+  run bash "$sandbox/.gaia/scripts/verify-audit-roster.sh" --root "$fixture_directory" --config "$fixture_directory/.gaia/audit-ci.yml"
+  [ "$status" -eq 1 ]
+  assert_contains "roster-reader-drift"
+  assert_contains "member: code-audit-a"
+  assert_contains "skip_gaia_release_changes"
+  grep -qF 'remit-glob-missing' <<<"$output" && return 1
+  true
+}
+
+@test "release-skip key: zero-match reads raw globs, so a list of owned files naming the keyed files changes nothing" {
+  local fixture_directory="$BATS_TEST_TMPDIR/skip-zero-match"
+  cat <<'YAML' | scaffold_tracked_root "$fixture_directory" app/a.ts lib/b.ts .gaia/owned-files.json
+auditors:
+  - name: code-audit-frontend
+    globs:
+      - "app/**"
+    default: true
+  - name: code-audit-alpha
+    globs:
+      - "lib/**"
+    skip_gaia_release_changes: true
+unowned:
+  - ".claude/**"
+  - ".gaia/**"
+YAML
+  printf '{"files":{"lib/b.ts":{"policy":"owned"}}}\n' > "$fixture_directory/.gaia/owned-files.json"
+  run_root "$fixture_directory"
+  [ "$status" -eq 0 ] || { printf '%s\n' "$output" >&2; return 1; }
+  assert_contains "roster clean"
+
+  # The guard can fail: a misspelled unrelated glob in the same fixture.
+  printf '  - "libz/**"\n' >> "$fixture_directory/.gaia/audit-ci.yml"
+  run_root "$fixture_directory"
+  [ "$status" -eq 1 ]
+  assert_contains "zero-match-glob"
+  assert_contains "libz/**"
+}

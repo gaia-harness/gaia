@@ -430,7 +430,7 @@ if [ -n "$failures" ]; then
       # RED-before-GREEN commit gate, which now enforces from a subdirectory.
       # A feeder that silently records nothing there would leave that gate
       # denying every new test with no way to satisfy it.
-      cached_signals=$( cd "$tree_root" && red_ledger_signals "$relative_file" 2>/dev/null || echo "")
+      cached_signals=$( cd "$tree_root" && red_ledger_signals_or_warn "$relative_file" || echo "")
     fi
     [ -n "$cached_signals" ] || continue
 
