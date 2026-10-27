@@ -18,6 +18,7 @@ A release change that requires the adopter to act, run a command or hand-migrate
 
 - **`/update-gaia --local <tarball>`:** syncs a project from a GAIA bundle built from an unreleased, committed checkout through the same merge, conflict and record steps as a release update. The source is labeled local and unverified and only released migration notes run. The project records the build in a committed `.gaia/VERSION-dev`, the next update merges against that build, and the next release update removes the file. The bundle builder is maintainer-only (#2747)
 - **Harness file line limit (maintainer repo only):** GAIA's own CI now fails a harness code file over 400 lines unless it is grandfathered at a recorded ceiling, and fails a grandfathered file that grows past its ceiling (#3109)
+- **Per-dispatch audit cost (maintainer repo only):** each Code Audit Team member and light reviewer dispatch now records its own tokens, calls, wall time and dollars, with per-role figures for the agents it spawned, and members already cleared for HEAD record that they were not dispatched. A report prints per-member medians over recent branches and counts results with no cost record, so audit spend is measured rather than estimated (#2913, #3117)
 
 ### Changed
 
