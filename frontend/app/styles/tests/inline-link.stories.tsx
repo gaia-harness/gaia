@@ -2,7 +2,6 @@ import type {Meta, StoryFn} from '@storybook/react-vite';
 
 const meta: Meta = {
   parameters: {
-    controls: {hideNoControlsWarning: true},
     wrap: 'max-w-prose p-4',
   },
   title: 'Styles/InlineLink',

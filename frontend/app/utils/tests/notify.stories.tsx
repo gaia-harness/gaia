@@ -35,7 +35,6 @@ const meta: Meta = {
     <p className="text-sm">Notifications appear bottom right.</p>
   ),
   parameters: {
-    controls: {hideNoControlsWarning: true},
     wrap: 'p-4',
   },
   title: 'Utils/Notify',

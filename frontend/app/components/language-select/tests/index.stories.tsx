@@ -44,7 +44,6 @@ const meta: Meta<StoryArgs> = {
     })),
   ],
   parameters: {
-    controls: {hideNoControlsWarning: true},
     wrap: 'p-4',
   },
   render: ({languages}) => <LanguageSelect languages={languages} />,

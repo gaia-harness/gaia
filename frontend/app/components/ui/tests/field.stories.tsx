@@ -15,7 +15,6 @@ import {Input} from '~/components/ui/input';
 const meta: Meta = {
   component: Field,
   parameters: {
-    controls: {hideNoControlsWarning: true},
     wrap: 'max-w-md p-4',
   },
   title: 'Components/Ui/Field',

@@ -10,7 +10,7 @@ const a11y = {
     runOnly: {
       type: 'tag',
       values: AXE_WCAG_TAGS,
-    },
+    } as const,
   },
   test: 'error',
 };

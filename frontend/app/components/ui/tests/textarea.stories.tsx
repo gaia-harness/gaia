@@ -5,7 +5,6 @@ import {Textarea} from '~/components/ui/textarea';
 const meta: Meta = {
   component: Textarea,
   parameters: {
-    controls: {hideNoControlsWarning: true},
     wrap: 'max-w-sm p-4',
   },
   title: 'Components/Ui/Textarea',
