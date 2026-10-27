@@ -190,8 +190,7 @@ scratch_scripts() {
   [[ "$(last_stdout_line)" =~ ^Cost:\ 0\.0M\ tokens,\ \$0\.01,\ [0-9hms]+(\ \([0-9hms]+\+?\ active\))?$ ]]
   main_start f2 "$(after_last_close 1)" gaia-fitness
   main_usage m2 "$(after_last_close 2)" 6000 0
-  sleep 3
-  run record command:gaia-fitness --workflow gaia-fitness --pr 77 --issue 55
+  GAIA_USAGE_TEST_NOW="$(after_last_close 3)" run record command:gaia-fitness --workflow gaia-fitness --pr 77 --issue 55
   [ "$status" -eq 0 ]
   [[ "$(last_stdout_line)" =~ ^Cost: ]]
   first_ref="$(jq -rs '[.[] | select(.kind == "binding" and .type == "close")][0].ref' "$(ledger)")"
@@ -358,8 +357,7 @@ scratch_scripts() {
   [ "$(jq -r '.tokens' <<<"$(last_stdout_line)")" -eq 1000 ]
   main_start s2 "$(after_last_close 1)" gaia-spec
   main_usage m2 "$(after_last_close 2)" 2000 0
-  sleep 3
-  run record spec:SPEC-902 --workflow gaia-spec --json
+  GAIA_USAGE_TEST_NOW="$(after_last_close 3)" run record spec:SPEC-902 --workflow gaia-spec --json
   [ "$status" -eq 0 ]
   [ "$(jq -r '.tokens' <<<"$(last_stdout_line)")" -eq 2000 ]
   [ "$(initiative_tokens spec:SPEC-901)" -eq 1000 ]

@@ -34,6 +34,18 @@ setup() {
 teardown() {
   [ -n "${REPO:-}" ] && rm -rf "$REPO" || true
   [ -n "${FOREIGN:-}" ] && rm -rf "$FOREIGN" || true
+  reap_gh_stub_pids
+  return 0
+}
+
+# A hanging gh stub records its pid (and its sleeping child's) in gh-pids; kill
+# any still alive so an orphaned sleep cannot outlive the test.
+reap_gh_stub_pids() {
+  local pid
+  [ -f "${BATS_TEST_TMPDIR:-/nonexistent}/gh-pids" ] || return 0
+  for pid in $(cat "$BATS_TEST_TMPDIR/gh-pids"); do
+    kill -KILL "$pid" 2>/dev/null || true
+  done
   return 0
 }
 
@@ -1109,7 +1121,12 @@ on_feature_with_second_commit() {
 # nothing (merged, closed, never opened), `fail` exits non-zero, `hang` never
 # answers, `hangwrap` never answers from a child the stub does NOT exec (the
 # wrapper shape a real `gh` shim takes), `garbage` answers with something that
-# is not a number. The owner is
+# is not a number. Every call appends its argv to gh-calls, so a test can prove
+# gh was never reached. The hang is 90 s, far above the tests' 60 s wall-clock
+# ceilings, so a machine loaded enough to stretch the hook's tick-counted bound
+# cannot make a hang look like an answer; the proof the bound fired is the
+# hook's own `timed out` line. The sleeps close fd 3 (bats' output) and every
+# pid is recorded for teardown. The owner is
 # proved by the `gh pr create` breadcrumb, written here through the same lib the
 # capture hook writes it with, so the path and shape cannot drift from the
 # reader's.
@@ -1119,13 +1136,14 @@ stub_gh() {
   mkdir -p "$STUB_BIN"
   cat >"$STUB_BIN/gh" <<'STUB'
 #!/usr/bin/env bash
+printf '%s\n' "$*" >>"$BATS_TEST_TMPDIR/gh-calls"
 [ "$1 $2" = "pr list" ] || exit 1
 case "${GH_STUB:-none}" in
   open:*) printf '%s\n' "${GH_STUB#open:}" ;;
   none) ;;
   fail) echo "gh: authentication required" >&2; exit 4 ;;
-  hang) exec sleep 30 ;;
-  hangwrap) sleep 30 ;;
+  hang) echo "$$" >>"$BATS_TEST_TMPDIR/gh-pids"; exec sleep 90 3>&- ;;
+  hangwrap) sleep 90 3>&- & echo "$$ $!" >>"$BATS_TEST_TMPDIR/gh-pids"; wait ;;
   garbage) echo "not-a-number" ;;
 esac
 STUB
@@ -1247,8 +1265,10 @@ run_hop() {
   local start=$SECONDS
   run_hop 'git switch other' sid-owner
   assert_allowed_by_json
+  # The owner is decided before gh is reached: the stub saw no call at all.
+  [ ! -s "$BATS_TEST_TMPDIR/gh-calls" ] || return 1
   grep -qF -- 'timed out' <<<"$output" && return 1
-  [ $((SECONDS - start)) -lt 4 ]
+  [ $((SECONDS - start)) -lt 60 ]
 }
 
 @test "hop guard: a missing breadcrumb counts as not the owner" {
@@ -1303,7 +1323,7 @@ run_hop() {
   run_hop 'git checkout main' sid-peer
   assert_allowed_by_json
   grep -qF -- 'timed out' <<<"$output"
-  [ $((SECONDS - start)) -lt 20 ]
+  [ $((SECONDS - start)) -lt 60 ]
 }
 
 @test "hop guard: gh missing from PATH fails open with the named cause" {

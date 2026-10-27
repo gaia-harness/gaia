@@ -9,6 +9,13 @@
 
 bats_require_minimum_version 1.5.0
 
+# The malformed-reply refusals share one sandbox per route kind (see
+# setup_file). Under bats --jobs the cases of a file run in parallel, so they
+# would mark against each other's reply mid-test. Keep this file's cases
+# serial; other files still run in parallel.
+# shellcheck disable=SC2034 # read by bats itself
+BATS_NO_PARALLELIZE_WITHIN_FILE=true
+
 setup_file() {
   command -v jq >/dev/null 2>&1 || skip "jq not available"
   REPO_ROOT="$(cd "$BATS_TEST_DIRNAME/../../.." && pwd)"
@@ -42,6 +49,18 @@ setup_file() {
       routed="$(bash "$LSB_ROOT/.gaia/scripts/audit-light-route.sh" --root "$LSB_ROOT" --member code-audit-frontend)"
       [ "$routed" = "$(printf 'light\tquick-eligible')" ] || { printf 'quick template router: %s\n' "$routed" >&2; exit 1; }
       cp "$LSB_TEMPLATE_ROOT/$flavor/slug" "$BATS_TEST_TMPDIR/slug"
+    ) || return 1
+  done
+  # The malformed-reply refusals persist the reply but never a marker, so they
+  # share one prepared sandbox per route kind instead of copying one per case.
+  # Each of those cases still asserts that no marker exists, so a marker left
+  # by an earlier case fails every later one.
+  local shared
+  for shared in light quick; do
+    (
+      BATS_TEST_TMPDIR="$BATS_FILE_TMPDIR/shared-$shared"
+      mkdir -p "$BATS_TEST_TMPDIR"
+      if [ "$shared" = quick ]; then lsb_from_template prepared-quick-plain; else lsb_from_template prepared-plain; fi
     ) || return 1
   done
 }
@@ -126,6 +145,27 @@ prepare_quick() {
   local flavor=plain
   [ "${1:-}" = "--maintainer" ] && flavor=maintainer
   lsb_from_template "prepared-quick-$flavor"
+}
+
+# use_shared_light / use_shared_quick: point the helpers at the one prepared
+# sandbox the malformed-reply cases share (see setup_file) instead of copying a
+# template. Only cases whose every outcome is a refusal use these.
+# shellcheck disable=SC2034 # LSB_ORIGIN and LSB_BRANCH are read by the sourced sandbox helpers
+use_shared_sandbox() {
+  local directory="$BATS_FILE_TMPDIR/shared-$1"
+  LSB_ORIGIN="$directory/lsb-origin.git"
+  LSB_ROOT="$(cd "$directory/lsb-repo" && pwd -P)" || return 1
+  LSB_BRANCH="feat/light-sandbox"
+  LSB_SLUG="$(cat "$LSB_TEMPLATE_ROOT/prepared-plain/slug")" || return 1
+  _lsb_set_head
+}
+
+use_shared_light() {
+  use_shared_sandbox light
+}
+
+use_shared_quick() {
+  use_shared_sandbox quick
 }
 
 # assert_quick_refused <reason>: the last mark printed full <reason>, left no
@@ -347,7 +387,7 @@ light_sidecar_files() {
 
 # bats test_tags=whole-tree
 @test "non-JSON stdin prints full verdict-noop and writes no marker" {
-  prepare_light
+  use_shared_light
   printf 'looks fine to me\n' >"$REPLY_FILE"
   lsb_mark "$FRONTEND" "$REPLY_FILE"
   expect_full verdict-noop
@@ -357,7 +397,7 @@ light_sidecar_files() {
 
 # bats test_tags=whole-tree
 @test "JSON without files prints full verdict-noop" {
-  prepare_light
+  use_shared_light
   clear_reply_to_file
   reply_edit 'del(.files)'
   lsb_mark "$FRONTEND" "$REPLY_FILE"
@@ -367,7 +407,7 @@ light_sidecar_files() {
 
 # bats test_tags=whole-tree
 @test "an unknown verdict value prints full verdict-malformed" {
-  prepare_light
+  use_shared_light
   clear_reply_to_file
   reply_edit '.verdict = "approve"'
   lsb_mark "$FRONTEND" "$REPLY_FILE"
@@ -377,7 +417,7 @@ light_sidecar_files() {
 
 # bats test_tags=whole-tree
 @test "an unknown per-file verdict value prints full verdict-malformed" {
-  prepare_light
+  use_shared_light
   clear_reply_to_file
   reply_edit '.files[0].verdict = "approve"'
   lsb_mark "$FRONTEND" "$REPLY_FILE"
@@ -387,7 +427,7 @@ light_sidecar_files() {
 
 # bats test_tags=whole-tree
 @test "a wrong schema number prints full verdict-malformed" {
-  prepare_light
+  use_shared_light
   clear_reply_to_file
   reply_edit '.schema = 2'
   lsb_mark "$FRONTEND" "$REPLY_FILE"
@@ -397,7 +437,7 @@ light_sidecar_files() {
 
 # bats test_tags=whole-tree
 @test "a reply that is a JSON array prints full verdict-noop" {
-  prepare_light
+  use_shared_light
   printf '[{"path":"frontend/app/notes.md","verdict":"clear"}]' >"$REPLY_FILE"
   lsb_mark "$FRONTEND" "$REPLY_FILE"
   expect_full verdict-noop
@@ -420,7 +460,7 @@ light_sidecar_files() {
 
 # bats test_tags=whole-tree
 @test "a file path the route record does not list prints full verdict-mismatch" {
-  prepare_light
+  use_shared_light
   clear_reply_to_file
   reply_edit '.files[0].path = "frontend/app/other.md"'
   lsb_mark "$FRONTEND" "$REPLY_FILE"
@@ -444,7 +484,7 @@ light_sidecar_files() {
 
 # bats test_tags=whole-tree
 @test "a wrong digest in the verdict prints full verdict-mismatch" {
-  prepare_light
+  use_shared_light
   clear_reply_to_file
   reply_edit '.digest = "0000000000000000000000000000000000000000000000000000000000000000"'
   lsb_mark "$FRONTEND" "$REPLY_FILE"
@@ -454,7 +494,7 @@ light_sidecar_files() {
 
 # bats test_tags=whole-tree
 @test "a wrong tree in the verdict prints full verdict-mismatch" {
-  prepare_light
+  use_shared_light
   clear_reply_to_file
   reply_edit '.tree = "0000000000000000000000000000000000000001"'
   lsb_mark "$FRONTEND" "$REPLY_FILE"
@@ -464,7 +504,7 @@ light_sidecar_files() {
 
 # bats test_tags=whole-tree
 @test "a wrong member in the verdict prints full verdict-mismatch" {
-  prepare_light
+  use_shared_light
   clear_reply_to_file
   reply_edit '.member = "code-audit-maintainer-shell"'
   lsb_mark "$FRONTEND" "$REPLY_FILE"
@@ -829,7 +869,7 @@ line 5')"
 
 # bats test_tags=whole-tree
 @test "a merge-base reply carrying a findings array prints full verdict-malformed and writes no marker" {
-  prepare_quick
+  use_shared_quick
   clear_reply_to_file
   reply_edit '. + {findings: []}'
   lsb_mark "$FRONTEND" "$REPLY_FILE"
@@ -838,7 +878,7 @@ line 5')"
 
 # bats test_tags=whole-tree
 @test "a merge-base reply carrying any extra key prints full verdict-malformed and writes no marker" {
-  prepare_quick
+  use_shared_quick
   clear_reply_to_file
   reply_edit '. + {extra: 1}'
   lsb_mark "$FRONTEND" "$REPLY_FILE"
@@ -847,7 +887,7 @@ line 5')"
 
 # bats test_tags=whole-tree
 @test "a merge-base reply missing a required key prints full verdict-malformed and writes no marker" {
-  prepare_quick
+  use_shared_quick
   clear_reply_to_file
   reply_edit 'del(.reason)'
   lsb_mark "$FRONTEND" "$REPLY_FILE"
@@ -856,7 +896,7 @@ line 5')"
 
 # bats test_tags=whole-tree
 @test "a merge-base reply with a file object carrying an extra key prints full verdict-malformed" {
-  prepare_quick
+  use_shared_quick
   clear_reply_to_file
   reply_edit '.files[0].extra = 1'
   lsb_mark "$FRONTEND" "$REPLY_FILE"
@@ -865,7 +905,7 @@ line 5')"
 
 # bats test_tags=whole-tree
 @test "a merge-base reply with a non-empty resolved list prints full verdict-malformed" {
-  prepare_quick
+  use_shared_quick
   clear_reply_to_file
   reply_edit '.resolved = ["x"]'
   lsb_mark "$FRONTEND" "$REPLY_FILE"
@@ -874,7 +914,7 @@ line 5')"
 
 # bats test_tags=whole-tree
 @test "a merge-base reply whose reason names a minor nit prints full verdict-malformed" {
-  prepare_quick
+  use_shared_quick
   clear_reply_to_file
   reply_edit '.reason = "one minor nit"'
   lsb_mark "$FRONTEND" "$REPLY_FILE"
@@ -883,7 +923,7 @@ line 5')"
 
 # bats test_tags=whole-tree
 @test "a merge-base reply whose file note says Minor prints full verdict-malformed" {
-  prepare_quick
+  use_shared_quick
   clear_reply_to_file
   reply_edit '.files[0].note = "Minor: spacing"'
   lsb_mark "$FRONTEND" "$REPLY_FILE"

@@ -218,12 +218,18 @@ teardown() {
 #   evalenv <job-id> <env-name> <shard> [<key>=<value>...]
 #                         each step's `if:` (or <env-name> value) evaluated for
 #                         one leg; the assignments are described at the mode
+#   evalbatch <out-dir> <query-file>
+#                         many evalgates / evalenv queries in one parse of the
+#                         workflow, one `<label> <mode> <args...>` per line,
+#                         each result written to <out-dir>/<label>
 #
 # Exits 2 when the file will not parse, declares no jobs mapping, or names no
 # such job. A caller must check the status.
 read_workflow() {
   python3 - "$@" <<'PY'
+import contextlib
 import json
+import os
 import re
 import sys
 
@@ -600,7 +606,7 @@ elif mode == 'runsteps':
         name = str(step.get('name', '')) or str(step.get('uses', ''))
         environment = step.get('env') if isinstance(step.get('env'), dict) else {}
         print('%s\t%s\t%s' % (name, ','.join(sorted(str(key) for key in environment)), ' '.join(str(step['run']).split())))
-elif mode in ('evalgates', 'evalenv'):
+elif mode in ('evalgates', 'evalenv', 'evalbatch'):
     # evalgates <job-id> <shard> [<key>=<value>...]
     #   one `<step-name>\t<run|skip>` line per step, in document order
     # evalenv <job-id> <env-name> <shard> [<key>=<value>...]
@@ -614,171 +620,199 @@ elif mode in ('evalgates', 'evalenv'):
     # its output sees the empty string, exactly as a skipped step behaves.
     # Fails closed: an identifier, function or operator outside the small
     # grammar these gates use exits 2 naming it, rather than guessing.
-    require_job(rest[0])
-    if mode == 'evalenv':
-        env_name, shard, assignments = rest[1], rest[2], rest[3:]
+    # evalbatch <out-dir> <query-file>
+    #   reads one query per line of <query-file>, `<label> <evalgates|evalenv> <job-id> ...`
+    #   (the arguments the single-query modes take), parses the workflow once,
+    #   and writes each query's output to <out-dir>/<label>. A query that dies
+    #   exits 2 for the whole batch.
+    if mode == 'evalbatch':
+        queries = []
+        with open(rest[1], encoding='utf-8') as query_handle:
+            query_lines = query_handle.read().splitlines()
+        for query_line in query_lines:
+            words = query_line.split()
+            if words:
+                queries.append((words[1], words[2:], os.path.join(rest[0], words[0])))
     else:
-        env_name, shard, assignments = None, rest[1], rest[2:]
-    context = {'github.event_name': '', 'github.ref': '', 'github.sha': 'commit-sha',
-               'github.workflow': 'workflow', 'matrix.shard': shard}
-    emitted = {}
-    for assignment in assignments:
-        key, _, value = assignment.partition('=')
-        if key == 'event':
-            context['github.event_name'] = value
-        elif key == 'ref':
-            context['github.ref'] = value
+        queries = [(mode, rest, None)]
+    for mode, rest, output_path in queries:
+      with (open(output_path, 'w', encoding='utf-8') if output_path else contextlib.nullcontext(sys.stdout)) as stream, contextlib.redirect_stdout(stream):
+        require_job(rest[0])
+        if mode == 'evalenv':
+            env_name, shard, assignments = rest[1], rest[2], rest[3:]
         else:
-            step_id, _, output = key.partition('.')
-            emitted.setdefault(step_id, {})[output] = value
-    step_outputs = {}
-
-    def tokenize(text):
-        tokens, index = [], 0
-        while index < len(text):
-            character = text[index]
-            if character.isspace():
-                index += 1
-            elif text.startswith(('&&', '||', '==', '!='), index):
-                tokens.append(('op', text[index:index + 2]))
-                index += 2
-            elif character in '(),!':
-                tokens.append(('op', character))
-                index += 1
-            elif character == "'":
-                end, value = index + 1, ''
-                while True:
-                    if end >= len(text):
-                        die('unterminated string in %r' % text)
-                    if text[end] == "'":
-                        if text.startswith("''", end):
-                            value, end = value + "'", end + 2
-                            continue
-                        break
-                    value, end = value + text[end], end + 1
-                tokens.append(('str', value))
-                index = end + 1
+            env_name, shard, assignments = None, rest[1], rest[2:]
+        context = {'github.event_name': '', 'github.ref': '', 'github.sha': 'commit-sha',
+                   'github.workflow': 'workflow', 'matrix.shard': shard}
+        emitted = {}
+        for assignment in assignments:
+            key, _, value = assignment.partition('=')
+            if key == 'event':
+                context['github.event_name'] = value
+            elif key == 'ref':
+                context['github.ref'] = value
             else:
-                found = re.match(r'[A-Za-z_][A-Za-z0-9_.\-]*|[0-9]+', text[index:])
-                if found is None:
-                    die('unexpected character %r in %r' % (character, text))
-                tokens.append(('word', found.group(0)))
-                index += len(found.group(0))
-        return tokens
+                step_id, _, output = key.partition('.')
+                emitted.setdefault(step_id, {})[output] = value
+        step_outputs = {}
 
-    def truthy(value):
-        return value not in ('', None, False, 0)
+        def tokenize(text):
+            tokens, index = [], 0
+            while index < len(text):
+                character = text[index]
+                if character.isspace():
+                    index += 1
+                elif text.startswith(('&&', '||', '==', '!='), index):
+                    tokens.append(('op', text[index:index + 2]))
+                    index += 2
+                elif character in '(),!':
+                    tokens.append(('op', character))
+                    index += 1
+                elif character == "'":
+                    end, value = index + 1, ''
+                    while True:
+                        if end >= len(text):
+                            die('unterminated string in %r' % text)
+                        if text[end] == "'":
+                            if text.startswith("''", end):
+                                value, end = value + "'", end + 2
+                                continue
+                            break
+                        value, end = value + text[end], end + 1
+                    tokens.append(('str', value))
+                    index = end + 1
+                else:
+                    found = re.match(r'[A-Za-z_][A-Za-z0-9_.\-]*|[0-9]+', text[index:])
+                    if found is None:
+                        die('unexpected character %r in %r' % (character, text))
+                    tokens.append(('word', found.group(0)))
+                    index += len(found.group(0))
+            return tokens
 
-    def lookup(word):
-        if word in context:
-            return context[word]
-        found = re.match(r'^steps\.([A-Za-z0-9_-]+)\.outputs\.([A-Za-z0-9_-]+)$', word)
-        if found:
-            return step_outputs.get(found.group(1), {}).get(found.group(2), '')
-        if word in ('true', 'false'):
-            return word == 'true'
-        if word == 'null':
-            return None
-        if re.match(r'^[0-9]+$', word):
-            return int(word)
-        die('unknown identifier %r' % word)
+        def truthy(value):
+            return value not in ('', None, False, 0)
 
-    def evaluate(text):
-        tokens = tokenize(text)
-        position = [0]
+        def lookup(word):
+            if word in context:
+                return context[word]
+            found = re.match(r'^steps\.([A-Za-z0-9_-]+)\.outputs\.([A-Za-z0-9_-]+)$', word)
+            if found:
+                return step_outputs.get(found.group(1), {}).get(found.group(2), '')
+            if word in ('true', 'false'):
+                return word == 'true'
+            if word == 'null':
+                return None
+            if re.match(r'^[0-9]+$', word):
+                return int(word)
+            die('unknown identifier %r' % word)
 
-        def peek():
-            return tokens[position[0]] if position[0] < len(tokens) else (None, None)
+        def evaluate(text):
+            tokens = tokenize(text)
+            position = [0]
 
-        def take(expected=None):
-            token = peek()
-            if token[0] is None or (expected is not None and token[1] != expected):
-                die('expected %r in %r' % (expected, text))
-            position[0] += 1
-            return token
+            def peek():
+                return tokens[position[0]] if position[0] < len(tokens) else (None, None)
 
-        def parse_or():
-            value = parse_and()
-            while peek() == ('op', '||'):
-                take()
-                right = parse_and()
-                value = value if truthy(value) else right
-            return value
+            def take(expected=None):
+                token = peek()
+                if token[0] is None or (expected is not None and token[1] != expected):
+                    die('expected %r in %r' % (expected, text))
+                position[0] += 1
+                return token
 
-        def parse_and():
-            value = parse_unary()
-            while peek() == ('op', '&&'):
-                take()
-                right = parse_unary()
-                value = right if truthy(value) else value
-            return value
-
-        def parse_unary():
-            if peek() == ('op', '!'):
-                take()
-                return not truthy(parse_unary())
-            left = parse_primary()
-            if peek() in (('op', '=='), ('op', '!=')):
-                operator = take()[1]
-                right = parse_primary()
-                same = (left.lower() == right.lower()) if isinstance(left, str) and isinstance(right, str) else left == right
-                return same if operator == '==' else not same
-            return left
-
-        def parse_primary():
-            kind, value = take()
-            if kind == 'str':
-                return value
-            if kind == 'op' and value == '(':
-                inner = parse_or()
-                take(')')
-                return inner
-            if kind == 'word':
-                if peek() == ('op', '('):
+            def parse_or():
+                value = parse_and()
+                while peek() == ('op', '||'):
                     take()
-                    arguments = []
-                    if peek() != ('op', ')'):
-                        arguments.append(parse_or())
-                        while peek() == ('op', ','):
-                            take()
-                            arguments.append(parse_or())
+                    right = parse_and()
+                    value = value if truthy(value) else right
+                return value
+
+            def parse_and():
+                value = parse_unary()
+                while peek() == ('op', '&&'):
+                    take()
+                    right = parse_unary()
+                    value = right if truthy(value) else value
+                return value
+
+            def parse_unary():
+                if peek() == ('op', '!'):
+                    take()
+                    return not truthy(parse_unary())
+                left = parse_primary()
+                if peek() in (('op', '=='), ('op', '!=')):
+                    operator = take()[1]
+                    right = parse_primary()
+                    same = (left.lower() == right.lower()) if isinstance(left, str) and isinstance(right, str) else left == right
+                    return same if operator == '==' else not same
+                return left
+
+            def parse_primary():
+                kind, value = take()
+                if kind == 'str':
+                    return value
+                if kind == 'op' and value == '(':
+                    inner = parse_or()
                     take(')')
-                    if value in ('always', 'success') and not arguments:
-                        return True
-                    if value == 'fromJSON' and len(arguments) == 1:
-                        return json.loads(arguments[0])
-                    if value == 'contains' and len(arguments) == 2:
-                        haystack, needle = arguments
-                        if isinstance(haystack, list):
-                            return any(str(item).lower() == str(needle).lower() for item in haystack)
-                        return str(needle).lower() in str(haystack).lower()
-                    die('unsupported function %r in %r' % (value, text))
-                return lookup(value)
-            die('unexpected token %r in %r' % (value, text))
+                    return inner
+                if kind == 'word':
+                    if peek() == ('op', '('):
+                        take()
+                        arguments = []
+                        if peek() != ('op', ')'):
+                            arguments.append(parse_or())
+                            while peek() == ('op', ','):
+                                take()
+                                arguments.append(parse_or())
+                        take(')')
+                        if value in ('always', 'success') and not arguments:
+                            return True
+                        if value == 'fromJSON' and len(arguments) == 1:
+                            return json.loads(arguments[0])
+                        if value == 'contains' and len(arguments) == 2:
+                            haystack, needle = arguments
+                            if isinstance(haystack, list):
+                                return any(str(item).lower() == str(needle).lower() for item in haystack)
+                            return str(needle).lower() in str(haystack).lower()
+                        die('unsupported function %r in %r' % (value, text))
+                    return lookup(value)
+                die('unexpected token %r in %r' % (value, text))
 
-        result = parse_or()
-        if position[0] != len(tokens):
-            die('trailing tokens in %r' % text)
-        return result
+            result = parse_or()
+            if position[0] != len(tokens):
+                die('trailing tokens in %r' % text)
+            return result
 
-    for step in jobs[rest[0]].get('steps') or []:
-        if not isinstance(step, dict):
-            continue
-        name = str(step.get('name', '')) or str(step.get('uses', ''))
-        gate = normalize(step.get('if', '')) if 'if' in step else 'success()'
-        runs = truthy(evaluate(gate))
-        if mode == 'evalgates':
-            print('%s\t%s' % (name, 'run' if runs else 'skip'))
-        else:
-            environment = step.get('env') if isinstance(step.get('env'), dict) else {}
-            if env_name in environment:
-                value = evaluate(normalize(environment[env_name]))
-                print('%s\t%s' % (name, str(value).lower() if isinstance(value, bool) else value))
-        if runs and step.get('id') is not None:
-            step_outputs[str(step['id'])] = emitted.get(str(step['id']), {})
+        for step in jobs[rest[0]].get('steps') or []:
+            if not isinstance(step, dict):
+                continue
+            name = str(step.get('name', '')) or str(step.get('uses', ''))
+            gate = normalize(step.get('if', '')) if 'if' in step else 'success()'
+            runs = truthy(evaluate(gate))
+            if mode == 'evalgates':
+                print('%s\t%s' % (name, 'run' if runs else 'skip'))
+            else:
+                environment = step.get('env') if isinstance(step.get('env'), dict) else {}
+                if env_name in environment:
+                    value = evaluate(normalize(environment[env_name]))
+                    print('%s\t%s' % (name, str(value).lower() if isinstance(value, bool) else value))
+            if runs and step.get('id') is not None:
+                step_outputs[str(step['id'])] = emitted.get(str(step['id']), {})
 else:
     die('unknown mode %r' % mode)
 PY
+}
+
+# eval_batch <workflow> <query-file> <result-dir>
+#
+# Runs every query in <query-file> (see `evalbatch` above) in one parse of the
+# workflow, so a check that evaluates every leg for several events pays for one
+# python launch rather than one per leg per event. <result-dir> starts empty.
+eval_batch() {
+  rm -rf "$3"
+  mkdir -p "$3"
+  read_workflow evalbatch "$1" "$3" "$2"
 }
 
 # Writes a copy of $1 to $4 with every line that equals $2 byte-for-byte
@@ -1305,7 +1339,8 @@ w2_check() {
 # reporter admit push and workflow_dispatch, negating neither, and every
 # FULL_RUN expression on the bats legs evaluates true for both events.
 w4_check() {
-  local workflow="$1" job_id expression gaps="" count=0 event shard step value full_run_count
+  local workflow="$1" job_id expression gaps="" count=0 event shard step value full_run_count bats_shards
+  local queries="$BATS_TEST_TMPDIR/w4-queries" results="$BATS_TEST_TMPDIR/w4-results"
   while IFS=$'\t' read -r job_id expression; do
     [ -n "$job_id" ] || continue
     count=$((count + 1))
@@ -1331,14 +1366,25 @@ w4_check() {
     done
   done
 
+  bats_shards="$(bash "$BATS_SHARDS" shards)" || return 1
+  : >"$queries"
+  for shard in $bats_shards; do
+    for event in push workflow_dispatch; do
+      printf 'full.%s.%s evalenv shards FULL_RUN %s event=%s\n' "$event" "$shard" "$shard" "$event" >>"$queries"
+    done
+    printf 'scoped.%s evalenv shards FULL_RUN %s event=pull_request filter.scoped=true\n' "$shard" "$shard" >>"$queries"
+    printf 'code.%s evalenv shards FULL_RUN %s event=pull_request filter.code=true\n' "$shard" "$shard" >>"$queries"
+  done
+  eval_batch "$workflow" "$queries" "$results" || return 1
+
   full_run_count=0
-  for shard in $(bash "$BATS_SHARDS" shards); do
+  for shard in $bats_shards; do
     for event in push workflow_dispatch; do
       while IFS=$'\t' read -r step value; do
         [ -n "$step" ] || continue
         full_run_count=$((full_run_count + 1))
         [ "$value" = "true" ] || gaps="${gaps}${step} on ${shard}: FULL_RUN reads ${value} for ${event}"$'\n'
-      done < <(read_workflow evalenv "$workflow" shards FULL_RUN "$shard" "event=$event")
+      done <"$results/full.$event.$shard"
     done
   done
   [ "$full_run_count" -gt 0 ] || {
@@ -1347,15 +1393,15 @@ w4_check() {
   }
   # And only those, plus `code`: a pull request arming `scoped` alone plans
   # change-scoped, which is the whole point of the arm.
-  for shard in $(bash "$BATS_SHARDS" shards); do
+  for shard in $bats_shards; do
     while IFS=$'\t' read -r step value; do
       [ -n "$step" ] || continue
       [ "$value" = "false" ] || gaps="${gaps}${step} on ${shard}: FULL_RUN reads ${value} for a scoped-only pull request"$'\n'
-    done < <(read_workflow evalenv "$workflow" shards FULL_RUN "$shard" event=pull_request filter.scoped=true)
+    done <"$results/scoped.$shard"
     while IFS=$'\t' read -r step value; do
       [ -n "$step" ] || continue
       [ "$value" = "true" ] || gaps="${gaps}${step} on ${shard}: FULL_RUN reads ${value} for a pull request arming code"$'\n'
-    done < <(read_workflow evalenv "$workflow" shards FULL_RUN "$shard" event=pull_request filter.code=true)
+    done <"$results/code.$shard"
   done
   [ -z "$gaps" ] || { printf '%s' "$gaps" >&2; return 1; }
 }
@@ -2958,30 +3004,42 @@ SELECTION_STEP_NAME="Plan this shard's suites"
 
 # w25_check <workflow>
 w25_check() {
-  local workflow="$1" shard name verdict gaps="" arming selection_body bats_install ran
+  local workflow="$1" shard name verdict gaps="" arming selection_body bats_install ran run_steps armings arming_index
+  local queries="$BATS_TEST_TMPDIR/w25-queries" results="$BATS_TEST_TMPDIR/w25-results"
+  armings=("event=pull_request filter.code=true" "event=pull_request filter.scoped=true" "event=push" "event=workflow_dispatch")
+  : >"$queries"
+  for shard in $(bash "$BATS_SHARDS" shards); do
+    printf 'none.%s evalgates shards %s event=pull_request filter.scoped=true selection.mode=none\n' "$shard" "$shard" >>"$queries"
+    printf 'unarmed.%s evalgates shards %s event=pull_request\n' "$shard" "$shard" >>"$queries"
+  done
+  for arming_index in "${!armings[@]}"; do
+    printf 'concurrency.%s evalgates shards concurrency %s\n' "$arming_index" "${armings[$arming_index]}" >>"$queries"
+  done
+  eval_batch "$workflow" "$queries" "$results" || return 1
   for shard in $(bash "$BATS_SHARDS" shards); do
     while IFS=$'\t' read -r name verdict; do
       [ "$verdict" = "run" ] || continue
       case "$name" in actions/checkout@* | dorny/paths-filter@* | "$SELECTION_STEP_NAME") continue ;; esac
       gaps="${gaps}${shard}: ${name} runs with mode=none"$'\n'
-    done < <(read_workflow evalgates "$workflow" shards "$shard" event=pull_request filter.scoped=true selection.mode=none)
+    done <"$results/none.$shard"
     while IFS=$'\t' read -r name verdict; do
       [ "$verdict" = "run" ] || continue
       case "$name" in actions/checkout@* | dorny/paths-filter@*) continue ;; esac
       gaps="${gaps}${shard}: ${name} runs when no filter armed the leg"$'\n'
-    done < <(read_workflow evalgates "$workflow" shards "$shard" event=pull_request)
+    done <"$results/unarmed.$shard"
   done
 
-  selection_body="$(read_workflow runsteps "$workflow" shards | awk -F'\t' -v name="$SELECTION_STEP_NAME" '$1 == name { print $3 }')"
+  run_steps="$(read_workflow runsteps "$workflow" shards)" || return 1
+  selection_body="$(awk -F'\t' -v name="$SELECTION_STEP_NAME" '$1 == name { print $3 }' <<<"$run_steps")"
   case "$selection_body" in
     'set -euo pipefail '*) ;;
     *) gaps="${gaps}the selection step does not open with set -euo pipefail"$'\n' ;;
   esac
 
-  bats_install="$(read_workflow runsteps "$workflow" shards | awk -F'\t' '$3 == "bash .gaia/tests/install-bats.sh" { print $1 }')"
-  for arming in "event=pull_request filter.code=true" "event=pull_request filter.scoped=true" "event=push" "event=workflow_dispatch"; do
-    # shellcheck disable=SC2086
-    ran="$(read_workflow evalgates "$workflow" shards concurrency $arming | awk -F'\t' '$2 == "run" { print $1 }')"
+  bats_install="$(awk -F'\t' '$3 == "bash .gaia/tests/install-bats.sh" { print $1 }' <<<"$run_steps")"
+  for arming_index in "${!armings[@]}"; do
+    arming="${armings[$arming_index]}"
+    ran="$(awk -F'\t' '$2 == "run" { print $1 }' "$results/concurrency.$arming_index")"
     printf '%s\n' "$ran" | grep -qxF -f <(printf '%s\n' "$bats_install") \
       || gaps="${gaps}concurrency: no bats install runs for ${arming}"$'\n'
   done
@@ -3020,6 +3078,17 @@ w25_check() {
 
 DEPENDENCY_GUARD_RELATIVE='.gaia/tests/installed-dependencies-mark-guard.sh'
 NODE_STEP_NAME='Setup Node for the node-dependent RED suites'
+
+# split_dependency_listing <root> <directory>
+#
+# One guard scan of <root> written to <directory>/derived and
+# <directory>/backstopped, the two files node_provision_legs reads.
+split_dependency_listing() {
+  local root="$1" directory="$2" listing
+  listing="$(bash "$REPO_ROOT/$DEPENDENCY_GUARD_RELATIVE" --root "$root" --list-both)" || return 1
+  awk -F'\t' '$1 == "derived" { print $2 }' <<<"$listing" >"$directory/derived"
+  awk -F'\t' '$1 == "backstopped" { print $2 }' <<<"$listing" >"$directory/backstopped"
+}
 
 # node_provision_legs <sharder> <root> <derived-file> <backstopped-file>
 #
@@ -3069,8 +3138,7 @@ EOF
 @test "W26: the Node step's leg list equals the groups holding an unprovisioned dependency suite" {
   require_yaml_parser
   local declared legs
-  bash "$REPO_ROOT/$DEPENDENCY_GUARD_RELATIVE" --list-derived >"$BATS_TEST_TMPDIR/derived" || return 1
-  bash "$REPO_ROOT/$DEPENDENCY_GUARD_RELATIVE" --list-backstopped >"$BATS_TEST_TMPDIR/backstopped" || return 1
+  split_dependency_listing "$REPO_ROOT" "$BATS_TEST_TMPDIR" || return 1
   [ -s "$BATS_TEST_TMPDIR/derived" ] || { echo "the guard derived no dependency suite; W26 would assert nothing" >&2; return 1; }
   declared="$(read_workflow stepshards "$WORKFLOW" shards "$NODE_STEP_NAME")" || return 1
   legs="$(node_provision_legs "$BATS_SHARDS" "$REPO_ROOT" "$BATS_TEST_TMPDIR/derived" "$BATS_TEST_TMPDIR/backstopped")" || return 1
@@ -3107,8 +3175,7 @@ seed_dependency_fixture() {
   mkdir -p "$root/.github/workflows"
   printf 'name: Provisions\non: push\njobs:\n  run:\n    runs-on: ubuntu-latest\n    steps:\n      - run: bats seams/needs/uses-vitest.bats\n' \
     >"$root/.github/workflows/provisions.yml"
-  bash "$REPO_ROOT/$DEPENDENCY_GUARD_RELATIVE" --root "$root" --list-derived >"$root/derived" || return 1
-  bash "$REPO_ROOT/$DEPENDENCY_GUARD_RELATIVE" --root "$root" --list-backstopped >"$root/backstopped" || return 1
+  split_dependency_listing "$root" "$root" || return 1
 }
 
 # The fixture's legs, with the scripts seam on the directory holding the
@@ -3149,20 +3216,35 @@ W27_WIDEST='event=pull_request filter.code=true filter.scoped=true filter.sandbo
 
 # w27_check <workflow>
 w27_check() {
-  local workflow="$1" shard event widest actual gaps="" run_steps ran count full_run
+  local workflow="$1" shard event widest actual gaps="" run_steps ran count full_run matrix_shards bats_shards
+  local queries="$BATS_TEST_TMPDIR/w27-queries" results="$BATS_TEST_TMPDIR/w27-results"
+  local full_plan='selection.mode=full selection.needs_node=1 selection.needs_chromium=1'
   run_steps="$(read_workflow runsteps "$workflow" shards | awk -F'\t' 'index($3, "bats-shards.sh run \"$SHARD\"") { print $1 }')"
   [ -n "$run_steps" ] || { echo "no step runs a whole shard; W27 would assert nothing" >&2; return 1; }
+  matrix_shards="$(read_workflow matrix "$workflow" shards)" || return 1
+  bats_shards="$(bash "$BATS_SHARDS" shards)" || return 1
+  : >"$queries"
   for event in push workflow_dispatch; do
-    for shard in $(read_workflow matrix "$workflow" shards); do
-      # shellcheck disable=SC2086
-      widest="$(read_workflow evalgates "$workflow" shards "$shard" $W27_WIDEST | awk -F'\t' '$2 == "run" && $1 !~ /^dorny\/paths-filter@/ { print $1 }')"
-      actual="$(read_workflow evalgates "$workflow" shards "$shard" "event=$event" selection.mode=full selection.needs_node=1 selection.needs_chromium=1 | awk -F'\t' '$2 == "run" { print $1 }')"
+    for shard in $matrix_shards; do
+      printf 'widest.%s.%s evalgates shards %s %s\n' "$event" "$shard" "$shard" "$W27_WIDEST" >>"$queries"
+      printf 'actual.%s.%s evalgates shards %s event=%s %s\n' "$event" "$shard" "$shard" "$event" "$full_plan" >>"$queries"
+    done
+    for shard in $bats_shards; do
+      printf 'fullrun.%s.%s evalenv shards FULL_RUN %s event=%s\n' "$event" "$shard" "$shard" "$event" >>"$queries"
+      printf 'ran.%s.%s evalgates shards %s event=%s %s\n' "$event" "$shard" "$shard" "$event" "$full_plan" >>"$queries"
+    done
+  done
+  eval_batch "$workflow" "$queries" "$results" || return 1
+  for event in push workflow_dispatch; do
+    for shard in $matrix_shards; do
+      widest="$(awk -F'\t' '$2 == "run" && $1 !~ /^dorny\/paths-filter@/ { print $1 }' "$results/widest.$event.$shard")"
+      actual="$(awk -F'\t' '$2 == "run" { print $1 }' "$results/actual.$event.$shard")"
       [ "$widest" = "$actual" ] || gaps="${gaps}${shard} on ${event}: runs [$(printf '%s' "$actual" | tr '\n' ',')] but the widest pull request runs [$(printf '%s' "$widest" | tr '\n' ',')]"$'\n'
     done
-    for shard in $(bash "$BATS_SHARDS" shards); do
-      full_run="$(read_workflow evalenv "$workflow" shards FULL_RUN "$shard" "event=$event" | awk -F'\t' -v name="$SELECTION_STEP_NAME" '$1 == name { print $2 }')"
+    for shard in $bats_shards; do
+      full_run="$(awk -F'\t' -v name="$SELECTION_STEP_NAME" '$1 == name { print $2 }' "$results/fullrun.$event.$shard")"
       [ "$full_run" = "true" ] || gaps="${gaps}${shard} on ${event}: the selection step does not plan --full"$'\n'
-      ran="$(read_workflow evalgates "$workflow" shards "$shard" "event=$event" selection.mode=full selection.needs_node=1 selection.needs_chromium=1 | awk -F'\t' '$2 == "run" { print $1 }')"
+      ran="$(awk -F'\t' '$2 == "run" { print $1 }' "$results/ran.$event.$shard")"
       count="$(printf '%s\n' "$ran" | grep -cxF -f <(printf '%s\n' "$run_steps"))" || true
       [ "$count" -eq 1 ] || gaps="${gaps}${shard} on ${event}: ${count} steps run the whole shard, expected exactly 1"$'\n'
     done

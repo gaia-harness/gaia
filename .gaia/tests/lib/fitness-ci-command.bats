@@ -26,6 +26,17 @@ setup_file() {
   git -C "$tree" add -A
   git -C "$tree" -c user.email=bats@example.com -c user.name=bats -c commit.gpgsign=false commit -q -m base
   cp "$tree/.claude/gaia-fitness.json" "$BATS_FILE_TMPDIR/base-config.json"
+  # The smallest tree the extracted CI line lints: one skill, the suppression
+  # file, and the root CLAUDE.md (without it the line fails on its own for a
+  # missing root, which would pass every red case vacuously). The line walks the
+  # filesystem, so nothing else is read.
+  minimal="$BATS_FILE_TMPDIR/minimal"
+  mkdir -p "$minimal"
+  git -C "$repo_root" archive "$(git -C "$repo_root" write-tree)" -- CLAUDE.md .claude/skills/tdd/SKILL.md .claude/gaia-fitness.json | tar -x -C "$minimal"
+  git -C "$minimal" init -q
+  git -C "$minimal" config gc.auto 0
+  git -C "$minimal" add -A
+  git -C "$minimal" -c user.email=bats@example.com -c user.name=bats -c commit.gpgsign=false commit -q -m base
 }
 
 setup() {
@@ -33,6 +44,14 @@ setup() {
   WORKFLOW="$REPO_ROOT/.github/workflows/cli-tests.yml"
   BASE_CONFIG="$BATS_FILE_TMPDIR/base-config.json"
   TREE="$BATS_TEST_TMPDIR/tree"
+  cp -R "$BATS_FILE_TMPDIR/minimal" "$TREE"
+}
+
+# full_tree: swap the scratch tree for a whole-index copy. The tests that grade
+# the unmodified tree and the long description (and the line-limit cases that
+# scan the whole harness) need it; the others lint the minimal tree.
+full_tree() {
+  rm -rf "$TREE"
   cp -R "$BATS_FILE_TMPDIR/base" "$TREE"
 }
 
@@ -80,12 +99,14 @@ commit_tree() {
 
 # bats test_tags=whole-tree
 @test "the unmodified tree passes" {
+  full_tree
   run run_ci_lint "$WORKFLOW" "$TREE" "$BASE_CONFIG"
   [ "$status" -eq 0 ]
 }
 
 # bats test_tags=whole-tree
 @test "a skill description past 1024 characters fails and names the file and rule" {
+  full_tree
   skill=".claude/skills/tdd/SKILL.md"
   long="$(printf 'x%.0s' $(seq 1 1100))"
   sed -i.bak -E "s|^description: .*|description: ${long}|" "$TREE/$skill"
@@ -97,7 +118,6 @@ commit_tree() {
   grep -qF -- "frontmatter.skill.description.max-length" <<<"$output" || return 1
 }
 
-# bats test_tags=whole-tree
 @test "a skill name that gains the reserved word claude fails and names the rule" {
   skill=".claude/skills/tdd/SKILL.md"
   sed -i.bak -E "s|^name: tdd\$|name: claude-tdd|" "$TREE/$skill"
@@ -108,7 +128,6 @@ commit_tree() {
   grep -qF -- "frontmatter.skill.name.reserved-word" <<<"$output" || return 1
 }
 
-# bats test_tags=whole-tree
 @test "a pull request that suppresses its own violation still fails, because suppressions come from the base" {
   skill=".claude/skills/tdd/SKILL.md"
   long="$(printf 'x%.0s' $(seq 1 1100))"
@@ -123,7 +142,6 @@ commit_tree() {
   grep -qF -- "frontmatter.skill.description.max-length" <<<"$output" || return 1
 }
 
-# bats test_tags=whole-tree
 @test "red twin: a workflow copy without --enforce frontmatter changes the extracted line and lets the reserved-word case pass" {
   broken="$BATS_TEST_TMPDIR/cli-tests.yml"
   sed 's| --enforce frontmatter||' "$WORKFLOW" >"$broken"
@@ -138,6 +156,7 @@ commit_tree() {
 
 # bats test_tags=whole-tree
 @test "a new harness script over 400 lines fails and names the file and rule" {
+  full_tree
   script=".gaia/scripts/line-limit-probe.sh"
   seq 1 401 >"$TREE/$script"
   commit_tree
@@ -155,6 +174,7 @@ grandfathered_entry() {
 
 # bats test_tags=whole-tree
 @test "a grandfathered file grown one line past its ceiling fails" {
+  full_tree
   read -r file ceiling <<<"$(grandfathered_entry)"
   [ -n "$file" ] && [ "$ceiling" -gt 400 ]
   line_count="$(wc -l <"$TREE/$file" | tr -d ' ')"
@@ -168,6 +188,7 @@ grandfathered_entry() {
 
 # bats test_tags=whole-tree
 @test "a grandfathered file shrunk under 400 lines passes with a stale-ceiling warning" {
+  full_tree
   read -r file ceiling <<<"$(grandfathered_entry)"
   [ -n "$file" ] && [ "$ceiling" -gt 400 ]
   # Rewritten in place, not replaced, so a hook keeps its executable bit.

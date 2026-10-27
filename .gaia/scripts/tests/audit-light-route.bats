@@ -529,8 +529,7 @@ refuse_notes() {
   local path rows=0
   for path in frontend/vite.config.ts pnpm-lock.yaml package.json frontend/package.json frontend/test/setup.ts; do
     rm -rf "$BATS_TEST_TMPDIR/lsb-repo" "$BATS_TEST_TMPDIR/lsb-origin.git"
-    lsb_init
-    lsb_full_clearance "$FRONTEND"
+    lsb_from_template cleared-frontend
     lsb_commit "$path" "one line"
     lsb_route "$FRONTEND"
     expect_route full hard-full || { printf 'path %s\n' "$path" >&2; return 1; }

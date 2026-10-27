@@ -747,16 +747,16 @@ EOF
 
 @test "a deadline override larger than the default is ignored and a smaller one is honoured" {
   mk_slow_git
-  scratch_hook 4
+  scratch_hook 2
   new_tree
   export GAIA_AUDIT_LOOP_DEADLINE_SECONDS=999
   run_payload "$(payload "$FRONTEND_MEMBER" "$SID" "$ALF_ROOT" "$ALF_ROOT")" "$SLOW"
   assert_denied
-  reason | grep -qF -- "4s internal deadline"
-  export GAIA_AUDIT_LOOP_DEADLINE_SECONDS=2
+  reason | grep -qF -- "2s internal deadline"
+  export GAIA_AUDIT_LOOP_DEADLINE_SECONDS=1
   run_payload "$(payload "$FRONTEND_MEMBER" "$SID" "$ALF_ROOT" "$ALF_ROOT")" "$SLOW"
   assert_denied
-  reason | grep -qF -- "2s internal deadline"
+  reason | grep -qF -- "1s internal deadline"
   pgrep -f "sleep 6.$$" >/dev/null && return 1
   return 0
 }

@@ -4,10 +4,10 @@
 # launches the backstop reaper detached, at most once per 24 hours, from any
 # tree. Every case builds a fixture main checkout (and, where it matters, a
 # linked worktree whose .gaia/local is a symlink to main's) under
-# $BATS_TEST_TMPDIR. The launched reaper is a sleeping stub that appends a
-# launch marker, except in the end-to-end cases, which copy the real reaper,
-# its libraries and the committed registry. gh and curl stubs that record a
-# call sit first on PATH in every case.
+# $BATS_TEST_TMPDIR. The launched reaper is a stub that appends a
+# launch marker and blocks until released, except in the end-to-end cases,
+# which copy the real reaper, its libraries and the committed registry. gh and
+# curl stubs that record a call sit first on PATH in every case.
 #
 # Each guard is proven able to fail on a scratch edit of the hook with that
 # check removed (the stamp gate, the lock, the main-root resolution).
@@ -88,6 +88,13 @@ wait_for_file() {
   return 1
 }
 
+# release_stub <local-directory>: lets the blocked stub finish and waits for it
+# to record launch-done, so no stub outlives the test.
+release_stub() {
+  touch "$1/launch-release"
+  wait_for_file "$1/launch-done" 100
+}
+
 launch_count() {
   if [ -f "$LAUNCH_MARKER" ]; then
     wc -l <"$LAUNCH_MARKER" | tr -d ' '
@@ -97,14 +104,19 @@ launch_count() {
 }
 
 # write_stub_reaper: a reaper that records its launch under main's .gaia/local
-# and then sleeps, so a hook that waited for it would show in the timing.
+# and then blocks on a release file (giving up after 30 seconds), so a hook that
+# waited for it would never return and a test ends the stub on demand.
 write_stub_reaper() {
   mkdir -p "$MAIN/.gaia/scripts"
   cat >"$MAIN/.gaia/scripts/state-reaper.sh" <<'STUB'
 #!/bin/sh
 local_directory="$(dirname "$0")/../local"
 printf 'launched\n' >> "$local_directory/launch-marker"
-sleep 3
+tries=300
+while [ ! -e "$local_directory/launch-release" ] && [ "$tries" -gt 0 ]; do
+  sleep 0.1
+  tries=$((tries - 1))
+done
 printf 'done\n' >> "$local_directory/launch-done"
 STUB
 }
@@ -194,7 +206,7 @@ mutate_hook() {
   for tree in "$MAIN" "$TREE"; do
     touch "$STAMP"
     age_path 25 "$STAMP"
-    rm -f "$LAUNCH_DONE"
+    rm -f "$LAUNCH_DONE" "$LOCAL/launch-release"
     start="$(now_ms)"
     run_hook "$tree"
     finish="$(now_ms)"
@@ -210,8 +222,8 @@ mutate_hook() {
     [ "$(launch_count)" -eq "$expected" ]
     [ ! -e "$LAUNCH_DONE" ]
     [ -z "$(find "$STAMP" -maxdepth 0 -mmin +1)" ]
+    release_stub "$LOCAL"
   done
-  sleep 3.5
 }
 
 # bats test_tags=whole-tree
@@ -221,7 +233,7 @@ mutate_hook() {
   [ "$status" -eq 0 ]
   wait_for_file "$LAUNCH_MARKER"
   [ -f "$STAMP" ]
-  sleep 3.5
+  release_stub "$LOCAL"
 }
 
 # bats test_tags=whole-tree
@@ -233,7 +245,7 @@ mutate_hook() {
   run_hook "$MAIN"
   [ "$status" -eq 0 ]
   wait_for_file "$LAUNCH_MARKER"
-  sleep 3.5
+  release_stub "$LOCAL"
 }
 
 # ---------- single flight ----------
@@ -252,7 +264,7 @@ mutate_hook() {
   wait_for_file "$LAUNCH_MARKER"
   sleep 1
   [ "$(launch_count)" -eq 1 ]
-  sleep 3
+  release_stub "$LOCAL"
 }
 
 # bats test_tags=whole-tree
@@ -289,7 +301,7 @@ mutate_hook() {
   [ "$status" -eq 0 ]
   wait_for_file "$LAUNCH_MARKER"
   [ ! -e "$LOCK" ]
-  sleep 3.5
+  release_stub "$LOCAL"
 }
 
 # bats test_tags=whole-tree
@@ -300,7 +312,7 @@ mutate_hook() {
   run_hook "$MAIN"
   [ "$status" -eq 0 ]
   wait_for_file "$LAUNCH_MARKER"
-  sleep 3.5
+  release_stub "$LOCAL"
 }
 
 # ---------- fail open ----------
@@ -334,7 +346,7 @@ mutate_hook() {
   run_hook "$bare"
   [ "$status" -eq 0 ]
   wait_for_file "$bare/.gaia/local/launch-marker"
-  sleep 3.5
+  release_stub "$bare/.gaia/local"
 }
 
 # bats test_tags=whole-tree
