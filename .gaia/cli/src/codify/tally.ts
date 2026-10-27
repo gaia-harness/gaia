@@ -4,15 +4,16 @@
  *
  * Resolves the rolling 90-day merged-PR window via `gh`, extracts each PR's
  * machine-readable findings block, counts distinct PRs per `finding_class` at
- * any severity, drops classes a promoted rule already covers or the decline
- * ledger suppresses, self-cleans the ledger, and prints the candidate list
- * plus the classless `unclassified` recurrence signal as JSON to stdout. The
+ * any severity, drops classes a promoted rule already covers or a decline
+ * (committed store or legacy ledger) suppresses, and prints the candidate
+ * list, the classes a decline suppresses (`team_declined`) and the classless
+ * `unclassified` recurrence signal as JSON to stdout. The
  * statusline refresher composes a nudge reason from `triggers` (or from
  * counts when no review snapshot exists); `/gaia-codify` re-runs this
  * to get the live list.
  *
- * No LLM, no drafting, no writes other than (indirectly) the ledger prune and the one-time
- * state-directory move `resolveCodifyRoot` may do. The
+ * No LLM, no drafting, no writes other than the one-time state-directory move
+ * `resolveCodifyRoot` may do. The
  * window read is the only network access and it is non-fatal: a gh failure or
  * a window the paged read cannot finish yields an empty candidate list and
  * `gh_ok: false` rather than aborting the refresher.
@@ -34,29 +35,33 @@ import {
   readMergedPrWindow,
 } from '../util/merged-pr-window.js';
 import {resolveRepoRoot} from '../util/repo-root.js';
-import {computeTally, windowClasses} from './compute-tally.js';
+import {computeTally} from './compute-tally.js';
 import type {TallyPrRecord, TallyResult} from './compute-tally.js';
 import {coveredClassesFromRules} from './covered-classes.js';
-import {checkDeclineSuppression, pruneDeclineLedger} from './ledger.js';
-import type {DeclineSuppression} from './ledger.js';
+import {loadDeclineSources} from './decline-suppression.js';
+import type {DeclineSources} from './decline-suppression.js';
 import {TALLY_SCHEMA_VERSION} from './material-rise.js';
 import {parseFindingsBlock} from './parse-findings-block.js';
 import {resolveCodifyRoot} from './state-dir.js';
 import {evaluateTriggers} from './triggers.js';
 import type {CodifyTrigger} from './triggers.js';
+import {WINDOW_DAYS} from './window.js';
+
+export {WINDOW_DAYS} from './window.js';
 
 const HELP_TEXT = `Usage: gaia codify-tally
 
   Tallies recurring Code Audit Team findings across the rolling 90-day
   merged-PR window and prints the candidate list as JSON. A class is a
   candidate when it recurs across >= 3 distinct PRs at any severity, no
-  promoted rule covers it, and the decline ledger does not suppress it. A
-  classless (unclassified) finding recurring the same way surfaces separately
+  promoted rule covers it, and no decline suppresses it (a committed
+  decline or a legacy machine-local one). A classless (unclassified) finding recurring the same way surfaces separately
   as the \`unclassified\` field instead of a candidate.
 
   Also emits audited_pr_count (the window's audited-PR denominator),
   class_inventory (every uncovered, unsuppressed counted class,
-  below-threshold included), unclassified_window_count (the classless
+  below-threshold included), team_declined (the at-threshold classes a
+  decline suppresses, same shape as candidates), unclassified_window_count (the classless
   count below its signal threshold), tally_schema_version, and, against
   the last completed review's snapshot, snapshot_present /
   snapshot_reviewed_at / triggers.
@@ -69,17 +74,6 @@ const HELP_TEXT = `Usage: gaia codify-tally
 
 const HELP_TOKENS = new Set(['--help', '-h', 'help']);
 
-export const WINDOW_DAYS = 90;
-
-type DeclineLedgerAccess = {
-  check: (
-    findingClass: string,
-    currentPrCount: number,
-    currentAuditedPrCount: number
-  ) => DeclineSuppression;
-  prune: (windowClasses: readonly string[]) => void;
-};
-
 /** The emitted tally JSON: the pure result plus the window-read fields. */
 type EmittedTally = TallyResult & {
   gh_ok: boolean;
@@ -91,14 +85,19 @@ type EmittedTally = TallyResult & {
 
 type RunOptions = {
   cwd?: string;
-  ledger?: DeclineLedgerAccess;
+  declines?: Pick<DeclineSources, 'check'>;
+  now?: () => Date;
 };
 
 /**
- * The decline ledger bound to one repository root, or `null` when the root
- * cannot be resolved so the caller can fail closed.
+ * The decline sources for one repository root, loaded once, or `null` when the
+ * root cannot be resolved so the caller can fail closed. Load reports go to
+ * stderr as structured errors.
  */
-const openDeclineLedger = (cwd: string): DeclineLedgerAccess | null => {
+const openDeclineSources = (
+  cwd: string,
+  now: Date
+): null | Pick<DeclineSources, 'check'> => {
   let repoRoot: string;
 
   try {
@@ -107,18 +106,13 @@ const openDeclineLedger = (cwd: string): DeclineLedgerAccess | null => {
     return null;
   }
 
-  return {
-    check: (findingClass, currentPrCount, currentAuditedPrCount) =>
-      checkDeclineSuppression({
-        currentAuditedPrCount,
-        currentPrCount,
-        findingClass,
-        repoRoot,
-      }),
-    prune: (classes) => {
-      pruneDeclineLedger({repoRoot, windowClasses: classes});
-    },
-  };
+  const sources = loadDeclineSources({now, repoRoot, windowDays: WINDOW_DAYS});
+
+  for (const report of sources.reports) {
+    structuredError({...report, subcommand: 'codify-tally'});
+  }
+
+  return sources;
 };
 
 /**
@@ -153,7 +147,7 @@ type GhPr = {
 // On a public repository anyone can comment, and the block's in-band
 // `auditor` field is self-declared, so a comment from any other association,
 // or with none, never reaches the tally: it could otherwise supersede a real
-// block, fabricate a recurring class, or prune a decline from the ledger.
+// block or fabricate a recurring class.
 const TRUSTED_AUTHOR_ASSOCIATIONS: ReadonlySet<string> = new Set([
   'COLLABORATOR',
   'MEMBER',
@@ -339,9 +333,8 @@ const fetchWindowPrs = (cwd: string, now: Date): WindowPrs => {
   if (!window.ok) return {ghOk: false, prs: []};
 
   // An unfinished window is not a complete one: reading it as whole would
-  // undercount every class and let the ledger prune declines the unread PRs
-  // still carry. The stderr line is what separates this from an outage, whose
-  // remedy (wait for gh) does not fix it.
+  // undercount every class. The stderr line is what separates this from an
+  // outage, whose remedy (wait for gh) does not fix it.
   if (window.truncated) {
     structuredError({
       code: 'window_truncated',
@@ -385,41 +378,30 @@ export const run = (
     // Not inside a repository: the reads below already degrade on their own.
   }
 
-  const ledger = options.ledger ?? openDeclineLedger(cwd);
-  const now = new Date();
+  // One clock read serves the window start and the decline lapse.
+  const now = (options.now ?? (() => new Date()))();
+  const declines = options.declines ?? openDeclineSources(cwd, now);
 
   const {ghOk, prs} = fetchWindowPrs(cwd, now);
   const covered = coveredClassesFromRules(path.join(cwd, '.claude', 'rules'));
-  const {malformed: vocabularyMalformed, vocabulary} =
-    readProjectFindingClassesChecked(cwd);
+  const {vocabulary} = readProjectFindingClassesChecked(cwd);
 
   const tallyResult = computeTally({
     coveredClass: (findingClass) => covered.has(findingClass),
     prs,
-    // Fail closed: an unresolvable root or an unreadable ledger keeps a class
-    // suppressed, so a corrupt file never silently re-surfaces a decline.
+    // Fail closed: an unresolvable root keeps a class suppressed, so a
+    // missing store never silently re-surfaces a decline.
     suppressedClass: (findingClass, currentPrCount, currentAuditedPrCount) => {
-      if (ledger === null) return true;
+      if (declines === null) return true;
 
       return (
-        ledger.check(findingClass, currentPrCount, currentAuditedPrCount)
-          .status !== 'resurface'
+        declines.check(findingClass, currentPrCount, currentAuditedPrCount)
+          .status === 'suppressed'
       );
     },
     vocabulary,
     windowDays: WINDOW_DAYS,
   });
-
-  // Self-clean the ledger: drop declines whose class no longer recurs. Gated on
-  // `ghOk` because a failed window read also yields an empty `prs`, which the
-  // prune would read as authoritative evidence that every declined class
-  // stopped recurring and wipe the ledger. An unread window is not evidence, so
-  // this fails closed, matching the suppression predicate. A malformed project
-  // vocabulary is an unread input too: it reads empty, every project class then
-  // counts as unclassified, and the prune would drop their declines.
-  if (ghOk && !vocabularyMalformed && ledger !== null) {
-    ledger.prune(windowClasses(prs, vocabulary));
-  }
 
   // Read the review snapshot unconditionally (not gated on `ghOk`), so a
   // malformed snapshot is always reported. A malformed snapshot reads as

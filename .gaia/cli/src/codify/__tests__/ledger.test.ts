@@ -1,48 +1,32 @@
-/* eslint-disable no-bitwise -- POSIX file modes are bitfields; `& 0o777`
-   is the standard idiom for masking off the permission bits. */
 import {afterEach, beforeEach, describe, expect, test, vi} from 'vitest';
 import {execFileSync} from 'node:child_process';
 import {
   existsSync,
   mkdirSync,
   mkdtempSync,
+  readdirSync,
   readFileSync,
   rmSync,
-  statSync,
   writeFileSync,
 } from 'node:fs';
 import {tmpdir} from 'node:os';
 import path from 'node:path';
 import {EXIT_CODES} from '../../exit.js';
 import {declineLedgerPath} from '../../schemas/decline-ledger.js';
-import type {DeclineLedger} from '../../schemas/decline-ledger.js';
-import {isValidFindingClass} from '../../schemas/finding-class.js';
 import {reviewSnapshotPath} from '../../schemas/review-snapshot.js';
-import type {DeclineSuppression} from '../ledger.js';
-import {checkDeclineSuppression, run} from '../ledger.js';
-import {isMaterialRise, TALLY_SCHEMA_VERSION} from '../material-rise.js';
-import type * as MaterialRiseModule from '../material-rise.js';
-
-// A partial mock: every other test in this file drives the real
-// `isMaterialRise`, since the mock's default implementation calls through to
-// the actual function. Only the spy-proof test below overrides a single call
-// with `mockReturnValueOnce`, which is what makes it a guard against an
-// inline reimplementation of the rule rather than a coverage line.
-vi.mock('../material-rise.js', async (importOriginal) => {
-  const actual = await importOriginal<typeof MaterialRiseModule>();
-
-  return {...actual, isMaterialRise: vi.fn(actual.isMaterialRise)};
-});
+import {run} from '../ledger.js';
+import {TALLY_SCHEMA_VERSION} from '../material-rise.js';
 
 type Sandbox = {
   cleanup: () => void;
   ledgerPath: string;
   root: string;
+  storePath: string;
 };
 
 const setupSandbox = (): Sandbox => {
   const root = mkdtempSync(path.join(tmpdir(), 'gaia-codify-ledger-'));
-  // The handler calls resolveRepoRoot, so we need a real git repo.
+  // The handler resolves the repository root, so we need a real git repo.
   execFileSync('git', ['init', '-q', '-b', 'main'], {cwd: root});
 
   return {
@@ -51,10 +35,11 @@ const setupSandbox = (): Sandbox => {
     },
     ledgerPath: declineLedgerPath(root),
     root,
+    storePath: path.join(root, '.gaia', 'codify-declines'),
   };
 };
 
-const writeLedgerFixture = (ledgerPath: string, fixture: unknown): void => {
+const writeLegacyLedger = (ledgerPath: string, fixture: unknown): void => {
   mkdirSync(path.dirname(ledgerPath), {recursive: true});
   writeFileSync(ledgerPath, JSON.stringify(fixture), 'utf8');
 };
@@ -87,26 +72,48 @@ const captureStdio = () => {
   };
 };
 
-const readLedger = (ledgerPath: string): DeclineLedger =>
-  JSON.parse(readFileSync(ledgerPath, 'utf8')) as DeclineLedger;
-
 const FIXED_NOW = new Date('2026-06-05T14:32:00.000Z');
+const DAY_MS = 86_400_000;
+
+const recordArgs = (findingClass: string, prCount = 4, audited = 40) => [
+  'record',
+  '--finding-class',
+  findingClass,
+  '--pr-count',
+  String(prCount),
+  '--audited-pr-count',
+  String(audited),
+];
+
+const legacyEntry = (findingClass: string, declinedAt: string) => ({
+  declined_at: declinedAt,
+  declined_at_audited_pr_count: 400,
+  declined_at_pr_count: 7,
+  finding_class: findingClass,
+  tally_schema_version: TALLY_SCHEMA_VERSION,
+});
 
 describe('codify-ledger', () => {
   let sandbox: Sandbox;
   let io: ReturnType<typeof captureStdio>;
 
-  const checkSuppression = (
-    findingClass: string,
-    currentPrCount: number,
-    currentAuditedPrCount: number
-  ): DeclineSuppression =>
-    checkDeclineSuppression({
-      currentAuditedPrCount,
-      currentPrCount,
-      findingClass,
-      repoRoot: sandbox.root,
+  const storeFiles = (): string[] =>
+    existsSync(sandbox.storePath) ? readdirSync(sandbox.storePath) : [];
+
+  const listOutput = () => {
+    io.out.length = 0;
+    const code = run(['list'], {cwd: sandbox.root, now: () => FIXED_NOW});
+
+    return {code, json: JSON.parse(io.out.join('')) as Record<string, any>};
+  };
+
+  const recordAt = (daysOld: number): void => {
+    run(recordArgs(`rule/age-${daysOld}`), {
+      cwd: sandbox.root,
+      now: () => new Date(FIXED_NOW.getTime() - daysOld * DAY_MS),
     });
+    io.out.length = 0;
+  };
 
   beforeEach(() => {
     sandbox = setupSandbox();
@@ -118,654 +125,213 @@ describe('codify-ledger', () => {
     sandbox.cleanup();
   });
 
-  describe('list', () => {
-    test('prints the empty ledger and exits 0 on a fresh repo', () => {
-      const code = run(['list'], {cwd: sandbox.root});
-
-      expect(code).toBe(EXIT_CODES.OK);
-      expect(io.out.join('')).toBe('{"version":2,"declines":[]}\n');
-    });
-  });
-
   describe('record', () => {
-    test('creates exactly one entry with an ISO timestamp, pr count, and audited-pr count', () => {
-      const code = run(
-        [
-          'record',
-          '--finding-class',
-          'react-doctor/no-generic-handler-names',
-          '--pr-count',
-          '7',
-          '--audited-pr-count',
-          '400',
-        ],
-        {cwd: sandbox.root, now: () => FIXED_NOW}
-      );
-
-      expect(code).toBe(EXIT_CODES.OK);
-
-      const ledger = readLedger(sandbox.ledgerPath);
-      expect(ledger.declines).toHaveLength(1);
-      expect(ledger.declines[0]).toEqual({
-        declined_at: '2026-06-05T14:32:00.000Z',
-        declined_at_audited_pr_count: 400,
-        declined_at_pr_count: 7,
-        finding_class: 'react-doctor/no-generic-handler-names',
-        tally_schema_version: TALLY_SCHEMA_VERSION,
-      });
-    });
-
-    test('upserts: re-recording the same class overwrites count, denominator, and timestamp', () => {
-      run(
-        [
-          'record',
-          '--finding-class',
-          'axe/color-contrast',
-          '--pr-count',
-          '7',
-          '--audited-pr-count',
-          '400',
-        ],
-        {
-          cwd: sandbox.root,
-          now: () => new Date('2026-06-01T00:00:00.000Z'),
-        }
-      );
-      run(
-        [
-          'record',
-          '--finding-class',
-          'axe/color-contrast',
-          '--pr-count',
-          '9',
-          '--audited-pr-count',
-          '400',
-        ],
-        {
-          cwd: sandbox.root,
-          now: () => new Date('2026-06-05T00:00:00.000Z'),
-        }
-      );
-
-      const ledger = readLedger(sandbox.ledgerPath);
-      expect(ledger.declines).toHaveLength(1);
-      expect(ledger.declines[0]).toEqual({
-        declined_at: '2026-06-05T00:00:00.000Z',
-        declined_at_audited_pr_count: 400,
-        declined_at_pr_count: 9,
-        finding_class: 'axe/color-contrast',
-        tally_schema_version: TALLY_SCHEMA_VERSION,
-      });
-    });
-
-    test('keeps distinct classes as separate entries', () => {
-      run(
-        [
-          'record',
-          '--finding-class',
-          'knip/exports',
-          '--pr-count',
-          '3',
-          '--audited-pr-count',
-          '400',
-        ],
-        {cwd: sandbox.root}
-      );
-      run(
-        [
-          'record',
-          '--finding-class',
-          'cve/1098765',
-          '--pr-count',
-          '5',
-          '--audited-pr-count',
-          '400',
-        ],
-        {cwd: sandbox.root}
-      );
-
-      const ledger = readLedger(sandbox.ledgerPath);
-      expect(ledger.declines).toHaveLength(2);
-    });
-
-    test('creates the codify dir with mode 755', () => {
-      run(
-        [
-          'record',
-          '--finding-class',
-          'knip/types',
-          '--pr-count',
-          '1',
-          '--audited-pr-count',
-          '400',
-        ],
-        {cwd: sandbox.root}
-      );
-
-      const mode = statSync(path.dirname(sandbox.ledgerPath)).mode & 0o777;
-      expect(mode).toBe(0o755);
-    });
-
-    test('exits non-zero when --finding-class is missing', () => {
-      const code = run(
-        ['record', '--pr-count', '7', '--audited-pr-count', '400'],
-        {cwd: sandbox.root}
-      );
-
-      expect(code).not.toBe(EXIT_CODES.OK);
-    });
-
-    test('exits non-zero when --pr-count is missing', () => {
-      const code = run(
-        [
-          'record',
-          '--finding-class',
-          'knip/exports',
-          '--audited-pr-count',
-          '400',
-        ],
-        {cwd: sandbox.root}
-      );
-
-      expect(code).not.toBe(EXIT_CODES.OK);
-    });
-  });
-
-  describe('suppression ratio rule', () => {
-    beforeEach(() => {
-      run(
-        [
-          'record',
-          '--finding-class',
-          'rule/switch-statement',
-          '--pr-count',
-          '7',
-          '--audited-pr-count',
-          '400',
-        ],
-        {
-          cwd: sandbox.root,
-          now: () => FIXED_NOW,
-        }
-      );
-    });
-
-    test('stays suppressed below the material-rise floor (delta 1)', () => {
-      expect(checkSuppression('rule/switch-statement', 8, 400)).toEqual({
-        status: 'suppressed',
-      });
-    });
-
-    test('re-surfaces once the rise is material (delta 3, 10 * 4 >= 5 * 7)', () => {
-      expect(checkSuppression('rule/switch-statement', 10, 400)).toEqual({
-        reason: 'material_rise',
-        status: 'resurface',
-      });
-    });
-
-    test('re-surfaces an unknown class with no decline entry', () => {
-      expect(checkSuppression('holistic/n-plus-one', 99, 400)).toEqual({
-        reason: 'no_decline_entry',
-        status: 'resurface',
-      });
-    });
-  });
-
-  describe('suppression proportional growth and schema version', () => {
-    beforeEach(() => {
-      run(
-        [
-          'record',
-          '--finding-class',
-          'rule/ratio-target',
-          '--pr-count',
-          '40',
-          '--audited-pr-count',
-          '400',
-        ],
-        {cwd: sandbox.root, now: () => FIXED_NOW}
-      );
-    });
-
-    test('suppressed at a proportional rise (48 / 400, ratio 1.2)', () => {
-      expect(checkSuppression('rule/ratio-target', 48, 400)).toEqual({
-        status: 'suppressed',
-      });
-    });
-
-    test('re-surfaces once the rise is material (50 / 400, ratio 1.25, delta 10)', () => {
-      expect(checkSuppression('rule/ratio-target', 50, 400)).toEqual({
-        reason: 'material_rise',
-        status: 'resurface',
-      });
-    });
-
-    test('stays suppressed when both the count and the denominator grow proportionally (80 / 800)', () => {
-      expect(checkSuppression('rule/ratio-target', 80, 800)).toEqual({
-        status: 'suppressed',
-      });
-    });
-
-    test('an entry recorded under a stale tally_schema_version never suppresses', () => {
-      mkdirSync(path.dirname(sandbox.ledgerPath), {recursive: true});
-      writeFileSync(
-        sandbox.ledgerPath,
-        JSON.stringify({
-          declines: [
-            {
-              declined_at: FIXED_NOW.toISOString(),
-              declined_at_audited_pr_count: 400,
-              declined_at_pr_count: 40,
-              finding_class: 'rule/stale-schema',
-              tally_schema_version: TALLY_SCHEMA_VERSION - 1,
-            },
-          ],
-          version: 2,
-        }),
-        'utf8'
-      );
-
-      expect(checkSuppression('rule/stale-schema', 40, 400)).toEqual({
-        reason: 'schema_version_mismatch',
-        status: 'resurface',
-      });
-    });
-  });
-
-  describe('suppression floor (RISE_MIN_PR_DELTA)', () => {
-    beforeEach(() => {
-      run(
-        [
-          'record',
-          '--finding-class',
-          'rule/floor-target',
-          '--pr-count',
-          '4',
-          '--audited-pr-count',
-          '400',
-        ],
-        {cwd: sandbox.root, now: () => FIXED_NOW}
-      );
-    });
-
-    test('stays suppressed when the ratio passes but the delta misses the floor (6 / 400)', () => {
-      expect(checkSuppression('rule/floor-target', 6, 400)).toEqual({
-        status: 'suppressed',
-      });
-    });
-
-    test('re-surfaces once the delta reaches the floor (7 / 400)', () => {
-      expect(checkSuppression('rule/floor-target', 7, 400)).toEqual({
-        reason: 'material_rise',
-        status: 'resurface',
-      });
-    });
-  });
-
-  describe('suppression decides through the shared isMaterialRise function', () => {
-    test('calls the spy with the exact material-rise args, and an overridden verdict flips the status', () => {
-      const spy = vi.mocked(isMaterialRise);
-
-      run(
-        [
-          'record',
-          '--finding-class',
-          'rule/spy-target',
-          '--pr-count',
-          '40',
-          '--audited-pr-count',
-          '400',
-        ],
-        {cwd: sandbox.root, now: () => FIXED_NOW}
-      );
-      spy.mockClear();
-
-      expect(checkSuppression('rule/spy-target', 48, 400)).toEqual({
-        status: 'suppressed',
-      });
-      expect(spy).toHaveBeenCalledTimes(1);
-      expect(spy).toHaveBeenCalledWith({
-        baseAuditedPrCount: 400,
-        baseCount: 40,
-        liveAuditedPrCount: 400,
-        liveCount: 48,
+    test('writes exactly one committed file with the decline fields and prints its path', () => {
+      writeLegacyLedger(sandbox.ledgerPath, {
+        declines: [legacyEntry('other/class', FIXED_NOW.toISOString())],
+        version: 2,
       });
 
-      spy.mockClear();
-      spy.mockReturnValueOnce(true);
-
-      // An inline reimplementation of the rule ignores the mock, so this
-      // assertion fails against it: that is what makes this a guard.
-      expect(checkSuppression('rule/spy-target', 48, 400)).toEqual({
-        reason: 'material_rise',
-        status: 'resurface',
-      });
-    });
-  });
-
-  describe('prune', () => {
-    beforeEach(() => {
-      run(
-        [
-          'record',
-          '--finding-class',
-          'knip/exports',
-          '--pr-count',
-          '3',
-          '--audited-pr-count',
-          '400',
-        ],
-        {cwd: sandbox.root}
-      );
-      run(
-        [
-          'record',
-          '--finding-class',
-          'knip/types',
-          '--pr-count',
-          '4',
-          '--audited-pr-count',
-          '400',
-        ],
-        {cwd: sandbox.root}
-      );
-    });
-
-    test('removes entries not in the window-classes set, keeps those in it', () => {
-      const code = run(['prune', '--window-classes', 'knip/exports'], {
+      const code = run(recordArgs('rule/x'), {
         cwd: sandbox.root,
+        now: () => FIXED_NOW,
       });
 
       expect(code).toBe(EXIT_CODES.OK);
 
-      const ledger = readLedger(sandbox.ledgerPath);
-      expect(ledger.declines).toHaveLength(1);
-      expect(ledger.declines[0]?.finding_class).toBe('knip/exports');
-    });
-
-    test('is idempotent: a second prune with the same set is a no-op', () => {
-      run(['prune', '--window-classes', 'knip/exports'], {cwd: sandbox.root});
-      const code = run(['prune', '--window-classes', 'knip/exports'], {
-        cwd: sandbox.root,
-      });
-
-      expect(code).toBe(EXIT_CODES.OK);
-
-      const ledger = readLedger(sandbox.ledgerPath);
-      expect(ledger.declines).toHaveLength(1);
-    });
-
-    test('prunes all entries when given an empty set', () => {
-      const code = run(['prune', '--window-classes', ''], {cwd: sandbox.root});
-
-      expect(code).toBe(EXIT_CODES.OK);
-
-      const ledger = readLedger(sandbox.ledgerPath);
-      expect(ledger.declines).toHaveLength(0);
-    });
-
-    // The classless fallback key carries no exemption here. Its suppression
-    // baseline has to be released once the cluster stops recurring, or the next
-    // unrelated classless cluster is measured against a high-water mark nothing
-    // in the window still supports. Both directions are asserted because an
-    // over-correction (always dropping the key) is as wrong as the exemption.
-    test('treats the classless fallback key like any other: kept when the window set names it, removed when it does not', () => {
-      run(
-        [
-          'record',
-          '--finding-class',
-          'holistic/unclassified',
-          '--pr-count',
-          '5',
-          '--audited-pr-count',
-          '400',
-        ],
-        {cwd: sandbox.root}
-      );
-
+      const files = storeFiles();
+      expect(files).toHaveLength(1);
+      expect(io.out.join('')).toBe(`.gaia/codify-declines/${files[0]}\n`);
       expect(
-        run(
-          ['prune', '--window-classes', 'knip/exports,holistic/unclassified'],
-          {
-            cwd: sandbox.root,
-          }
+        JSON.parse(
+          readFileSync(path.join(sandbox.storePath, files[0] ?? ''), 'utf8')
         )
-      ).toBe(EXIT_CODES.OK);
-      expect(
-        readLedger(sandbox.ledgerPath).declines.map((d) => d.finding_class)
-      ).toEqual(['knip/exports', 'holistic/unclassified']);
+      ).toEqual({
+        declined_at: '2026-06-05T14:32:00.000Z',
+        declined_at_audited_pr_count: 40,
+        declined_at_pr_count: 4,
+        finding_class: 'rule/x',
+        format_version: 1,
+        tally_schema_version: TALLY_SCHEMA_VERSION,
+      });
+    });
 
+    test('leaves the legacy ledger byte-identical', () => {
+      writeLegacyLedger(sandbox.ledgerPath, {
+        declines: [legacyEntry('other/class', FIXED_NOW.toISOString())],
+        version: 2,
+      });
+      const before = readFileSync(sandbox.ledgerPath);
+
+      run(recordArgs('rule/x'), {cwd: sandbox.root, now: () => FIXED_NOW});
+
+      expect(readFileSync(sandbox.ledgerPath).equals(before)).toBe(true);
+    });
+
+    test('creates no legacy ledger when none existed', () => {
+      run(recordArgs('rule/x'), {cwd: sandbox.root, now: () => FIXED_NOW});
+
+      expect(existsSync(sandbox.ledgerPath)).toBe(false);
+    });
+
+    test('two records of one class at one instant make two files, one governing', () => {
+      const options = {cwd: sandbox.root, now: () => FIXED_NOW};
+      run(recordArgs('rule/x'), options);
+      run(recordArgs('rule/x', 5), options);
+
+      expect(storeFiles()).toHaveLength(2);
+
+      const {json} = listOutput();
+      expect(json.committed).toHaveLength(2);
       expect(
-        run(['prune', '--window-classes', 'knip/exports'], {cwd: sandbox.root})
-      ).toBe(EXIT_CODES.OK);
-      expect(
-        readLedger(sandbox.ledgerPath).declines.map((d) => d.finding_class)
-      ).toEqual(['knip/exports']);
+        json.committed.filter((entry: {governing: boolean}) => entry.governing)
+      ).toHaveLength(1);
+    });
+
+    test('exits with a structured error when the store path is a regular file', () => {
+      mkdirSync(path.join(sandbox.root, '.gaia'), {recursive: true});
+      writeFileSync(sandbox.storePath, 'not a folder', 'utf8');
+
+      const code = run(recordArgs('rule/x'), {
+        cwd: sandbox.root,
+        now: () => FIXED_NOW,
+      });
+
+      expect(code).toBe(EXIT_CODES.STORAGE_INACCESSIBLE);
+      expect(io.err.join('')).toContain('decline_write_failed');
+    });
+
+    test.each([
+      [
+        '--finding-class',
+        ['record', '--pr-count', '7', '--audited-pr-count', '4'],
+      ],
+      [
+        '--pr-count',
+        ['record', '--finding-class', 'x', '--audited-pr-count', '4'],
+      ],
+      [
+        '--audited-pr-count',
+        ['record', '--finding-class', 'x', '--pr-count', '1'],
+      ],
+    ])('exits 1 and writes nothing when %s is missing', (_flag, argv) => {
+      const code = run(argv, {cwd: sandbox.root});
+
+      expect(code).toBe(EXIT_CODES.UNKNOWN_SUBCOMMAND);
+      expect(storeFiles()).toEqual([]);
     });
   });
 
-  describe('fallback-key round trip', () => {
-    test('record and the suppression check round-trip on the classless fallback without widening the closed vocabulary', () => {
-      run(
-        [
-          'record',
-          '--finding-class',
-          'holistic/unclassified',
-          '--pr-count',
-          '27',
-          '--audited-pr-count',
-          '400',
+  describe('list', () => {
+    test('prints empty sources on a fresh repo', () => {
+      const {code, json} = listOutput();
+
+      expect(code).toBe(EXIT_CODES.OK);
+      expect(json).toEqual({
+        committed: [],
+        legacy: [],
+        legacy_error: null,
+        skipped: [],
+      });
+    });
+
+    test('prints a committed file and a legacy entry, each with its lapsed flag', () => {
+      run(recordArgs('rule/x'), {cwd: sandbox.root, now: () => FIXED_NOW});
+      writeLegacyLedger(sandbox.ledgerPath, {
+        declines: [
+          legacyEntry(
+            'old/class',
+            new Date(FIXED_NOW.getTime() - 100 * DAY_MS).toISOString()
+          ),
         ],
-        {cwd: sandbox.root}
+        version: 2,
+      });
+
+      const {code, json} = listOutput();
+
+      expect(code).toBe(EXIT_CODES.OK);
+      expect(json.committed).toHaveLength(1);
+      expect(json.committed[0]).toMatchObject({
+        finding_class: 'rule/x',
+        governing: true,
+        lapsed: false,
+      });
+      expect(json.legacy).toHaveLength(1);
+      expect(json.legacy[0]).toMatchObject({
+        finding_class: 'old/class',
+        lapsed: true,
+      });
+      expect(json.legacy_error).toBeNull();
+    });
+
+    test('reports a malformed legacy ledger as data and still exits 0', () => {
+      run(recordArgs('rule/x'), {cwd: sandbox.root, now: () => FIXED_NOW});
+      mkdirSync(path.dirname(sandbox.ledgerPath), {recursive: true});
+      writeFileSync(sandbox.ledgerPath, '{ not valid json', 'utf8');
+
+      const {code, json} = listOutput();
+
+      expect(code).toBe(EXIT_CODES.OK);
+      expect(typeof json.legacy_error).toBe('string');
+      expect(json.legacy_error.length).toBeGreaterThan(0);
+      expect(json.legacy).toEqual([]);
+      expect(json.committed).toHaveLength(1);
+    });
+
+    test('rejects an argument', () => {
+      expect(run(['list', 'extra'], {cwd: sandbox.root})).toBe(
+        EXIT_CODES.UNKNOWN_SUBCOMMAND
       );
-
-      // Below the floor (delta 2): the ratio never gets evaluated.
-      expect(checkSuppression('holistic/unclassified', 29, 400)).toEqual({
-        status: 'suppressed',
-      });
-      // Past the floor, but the ratio still refuses (30 * 4 = 120 < 5 * 27 = 135).
-      expect(checkSuppression('holistic/unclassified', 30, 400)).toEqual({
-        status: 'suppressed',
-      });
-      expect(checkSuppression('holistic/unclassified', 33, 400)).toEqual({
-        status: 'suppressed',
-      });
-      // The smallest count where the ratio holds (34 * 4 = 136 >= 135, delta 7).
-      expect(checkSuppression('holistic/unclassified', 34, 400)).toEqual({
-        reason: 'material_rise',
-        status: 'resurface',
-      });
-
-      expect(isValidFindingClass('holistic/unclassified')).toBe(false);
     });
   });
 
-  describe('well-formed version-2 ledger', () => {
-    test('a complete version-2 entry lists and suppresses without error', () => {
-      run(
-        [
-          'record',
-          '--finding-class',
-          'rule/v2-complete',
-          '--pr-count',
-          '10',
-          '--audited-pr-count',
-          '400',
-        ],
-        {cwd: sandbox.root, now: () => FIXED_NOW}
+  describe('lapsed', () => {
+    test('prints only the path of a file older than the window', () => {
+      recordAt(91);
+      recordAt(10);
+
+      const code = run(['lapsed'], {cwd: sandbox.root, now: () => FIXED_NOW});
+
+      expect(code).toBe(EXIT_CODES.OK);
+
+      const lines = io.out.join('').split('\n').filter(Boolean);
+      expect(lines).toHaveLength(1);
+      expect(lines[0]).toContain('rule-age-91-');
+    });
+
+    test('prints nothing when none is lapsed', () => {
+      recordAt(10);
+
+      const code = run(['lapsed'], {cwd: sandbox.root, now: () => FIXED_NOW});
+
+      expect(code).toBe(EXIT_CODES.OK);
+      expect(io.out.join('')).toBe('');
+    });
+
+    test('rejects an argument', () => {
+      expect(run(['lapsed', 'extra'], {cwd: sandbox.root})).toBe(
+        EXIT_CODES.UNKNOWN_SUBCOMMAND
       );
-
-      const listCode = run(['list'], {cwd: sandbox.root});
-      expect(listCode).toBe(EXIT_CODES.OK);
-      expect(io.out.join('')).toContain('"version":2');
-
-      expect(checkSuppression('rule/v2-complete', 11, 400)).toEqual({
-        status: 'suppressed',
-      });
     });
   });
 
-  describe('ledgers that are not complete version 2', () => {
-    const entryWithoutFields = {
-      declined_at: '2026-08-01T00:00:00.000Z',
-      declined_at_pr_count: 60,
-      finding_class: 'holistic/unclassified',
-    };
-
-    const unreadableFixtures: readonly (readonly [string, unknown])[] = [
-      ['a version-1 file', {declines: [entryWithoutFields], version: 1}],
-      [
-        'a version-2 entry missing both fields',
-        {declines: [entryWithoutFields], version: 2},
-      ],
-      [
-        'a version-2 entry missing tally_schema_version',
-        {
-          declines: [
-            {...entryWithoutFields, declined_at_audited_pr_count: 400},
-          ],
-          version: 2,
-        },
-      ],
-      [
-        'a version-2 entry missing declined_at_audited_pr_count',
-        {
-          declines: [
-            {...entryWithoutFields, tally_schema_version: TALLY_SCHEMA_VERSION},
-          ],
-          version: 2,
-        },
-      ],
-    ];
-
-    test.each(unreadableFixtures)(
-      'list exits CONFIG_INVALID with a structured error naming the file for %s',
-      (_label, fixture) => {
-        writeLedgerFixture(sandbox.ledgerPath, fixture);
-
-        const code = run(['list'], {cwd: sandbox.root});
-
-        expect(code).toBe(EXIT_CODES.CONFIG_INVALID);
-        expect(io.err.join('')).toContain('malformed_ledger');
-        expect(io.err.join('')).toContain('declines.json');
-        expect(io.out.join('')).toBe('');
-      }
-    );
-
-    test.each(unreadableFixtures)(
-      'record exits CONFIG_INVALID and leaves the file untouched for %s',
-      (_label, fixture) => {
-        writeLedgerFixture(sandbox.ledgerPath, fixture);
-        const before = readFileSync(sandbox.ledgerPath, 'utf8');
-
-        const code = run(
-          [
-            'record',
-            '--finding-class',
-            'holistic/other',
-            '--pr-count',
-            '5',
-            '--audited-pr-count',
-            '100',
-          ],
-          {cwd: sandbox.root, now: () => FIXED_NOW}
-        );
-
-        expect(code).toBe(EXIT_CODES.CONFIG_INVALID);
-        expect(io.err.join('')).toContain('malformed_ledger');
-        expect(readFileSync(sandbox.ledgerPath, 'utf8')).toBe(before);
-      }
-    );
-
-    test.each(unreadableFixtures)(
-      'the suppression check fails closed as unreadable for %s',
-      (_label, fixture) => {
-        writeLedgerFixture(sandbox.ledgerPath, fixture);
-
-        expect(checkSuppression('holistic/unclassified', 60, 400).status).toBe(
-          'unreadable'
-        );
-        expect(io.err.join('')).toBe('');
-      }
-    );
-  });
-
-  describe('argument-error refusal', () => {
-    test('the removed is-suppressed verb is an unknown subcommand', () => {
-      const code = run(
-        [
-          'is-suppressed',
-          '--finding-class',
-          'x',
-          '--current-pr-count',
-          '3',
-          '--current-audited-pr-count',
-          '4',
-        ],
-        {cwd: sandbox.root}
-      );
+  describe('removed verbs', () => {
+    test('prune is an unknown subcommand and writes nothing', () => {
+      const code = run(['prune', '--window-classes', ''], {cwd: sandbox.root});
 
       expect(code).toBe(EXIT_CODES.UNKNOWN_SUBCOMMAND);
       expect(io.err.join('')).toContain('unknown_subcommand');
+      expect(existsSync(sandbox.ledgerPath)).toBe(false);
+      expect(storeFiles()).toEqual([]);
     });
 
-    test('record without --audited-pr-count exits 1 and writes nothing', () => {
-      const code = run(['record', '--finding-class', 'x', '--pr-count', '1'], {
+    test('is-suppressed is an unknown subcommand', () => {
+      const code = run(['is-suppressed', '--finding-class', 'x'], {
         cwd: sandbox.root,
       });
 
       expect(code).toBe(EXIT_CODES.UNKNOWN_SUBCOMMAND);
-      expect(existsSync(sandbox.ledgerPath)).toBe(false);
-    });
-  });
-
-  describe('corrupt file', () => {
-    test('list fails loud (non-zero, structured error) rather than treating as empty', () => {
-      run(
-        [
-          'record',
-          '--finding-class',
-          'knip/exports',
-          '--pr-count',
-          '1',
-          '--audited-pr-count',
-          '400',
-        ],
-        {cwd: sandbox.root}
-      );
-      writeFileSync(sandbox.ledgerPath, '{ not valid json', 'utf8');
-
-      const code = run(['list'], {cwd: sandbox.root});
-
-      expect(code).not.toBe(EXIT_CODES.OK);
-      expect(io.err.join('')).toContain('malformed_ledger');
-    });
-
-    test('the suppression check reports unreadable, silently, rather than re-surfacing a declined class', () => {
-      // Seed a valid entry first so the codify dir exists, then corrupt it.
-      run(
-        [
-          'record',
-          '--finding-class',
-          'knip/exports',
-          '--pr-count',
-          '1',
-          '--audited-pr-count',
-          '400',
-        ],
-        {cwd: sandbox.root}
-      );
-      writeFileSync(
-        sandbox.ledgerPath,
-        JSON.stringify({declines: 'nope', version: 2}),
-        'utf8'
-      );
-
-      const result = checkSuppression('knip/exports', 1, 400);
-
-      expect(result.status).toBe('unreadable');
-      expect(io.err.join('')).toBe('');
-      expect(io.out.join('')).toBe('');
+      expect(io.err.join('')).toContain('unknown_subcommand');
     });
   });
 
@@ -798,9 +364,7 @@ describe('codify-ledger', () => {
 
   describe('unknown subcommand', () => {
     test('exits non-zero', () => {
-      const code = run(['frobnicate'], {cwd: sandbox.root});
-
-      expect(code).not.toBe(EXIT_CODES.OK);
+      expect(run(['frobnicate'], {cwd: sandbox.root})).not.toBe(EXIT_CODES.OK);
     });
   });
 });
