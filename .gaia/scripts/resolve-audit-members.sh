@@ -207,6 +207,11 @@ resolve_base() {
 base="$(resolve_base)"
 [ -n "$base" ] || exit 0
 
+# Armed against the same base the diff below reads, as the branch-own digest
+# and the scope resolver arm theirs, so a keyed member is dropped from a
+# release-applying branch here exactly where its marker stops being owed.
+audit_scope_release_context "$repo_root" "$base"
+
 # `-z`, because this list decides MEMBERSHIP and a quoted path fails open.
 # Under git's default core.quotePath, `diff --name-only` C-quotes any path
 # carrying non-ASCII or control bytes and emits the surrounding double quotes

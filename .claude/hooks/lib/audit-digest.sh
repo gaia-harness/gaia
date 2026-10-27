@@ -130,6 +130,10 @@ _audit_branch_digests_compute() {
   fi
 
   audit_scope_init "$root" || return 1
+  # The merge base is passed twice: a bare tree id target (the fix verifier's
+  # uncommitted tree) has no merge base of its own, and it must arm exactly as
+  # the commit it will become does, or the two digests disagree.
+  audit_scope_release_context "$root" "$merge_base" "$target" "$merge_base"
   _audit_digest_load_roster || return 1
 
   local branch_key

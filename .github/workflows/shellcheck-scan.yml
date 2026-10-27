@@ -1,0 +1,64 @@
+name: Shellcheck Scan
+
+# Advisory shellcheck over the shell files a pull request changes (`.sh` and
+# `.bats`), so a project's own scripts get a lint without a hand-built workflow.
+#
+# Off by default: the lint job is skipped until the repository variable
+# GAIA_SHELLCHECK is set to `true` (Settings, Secrets and variables, Actions,
+# Variables). A skipped job does nothing and costs nothing.
+#
+# It never lints a file GAIA owns: any path the base or head `.gaia/manifest.json`
+# lists as "owned" is excluded, and only files the pull request changed are
+# considered, so unchanged files are never linted. A `.shellcheckrc` in the
+# repository applies, so project policy (disabled codes, severity) is honored.
+# The selection and lint logic live in `.gaia/scripts/shellcheck-changed.sh`.
+
+on:
+  pull_request:
+
+permissions: {}
+
+jobs:
+  shellcheck:
+    name: Shellcheck (changed adopter shell) (advisory)
+    if: vars.GAIA_SHELLCHECK == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+      # A pinned release binary rather than the runner image's shellcheck, which
+      # varies with the image. The digest is pinned as well as the version: a
+      # release tag is mutable, so the tarball is verified before it is
+      # extracted and never piped straight into `tar`.
+      - name: Install shellcheck (pinned and digest-verified)
+        env:
+          SHELLCHECK_VERSION: '0.11.0'
+          SHELLCHECK_SHA256: '8c3be12b05d5c177a04c29e3c78ce89ac86f1595681cab149b65b97c4e227198'
+        run: |
+          set -euo pipefail
+          url="https://github.com/koalaman/shellcheck/releases/download/v${SHELLCHECK_VERSION}/shellcheck-v${SHELLCHECK_VERSION}.linux.x86_64.tar.xz"
+          curl -fsSL "$url" -o shellcheck.tar.xz
+          echo "${SHELLCHECK_SHA256}  shellcheck.tar.xz" | sha256sum -c -
+          tar -xJf shellcheck.tar.xz
+          sudo install -m 0755 "shellcheck-v${SHELLCHECK_VERSION}/shellcheck" /usr/local/bin/shellcheck
+          rm -rf "shellcheck-v${SHELLCHECK_VERSION}" shellcheck.tar.xz
+          shellcheck --version
+      - name: Shellcheck changed adopter shell
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+          manifest_arguments=()
+          if git show "$BASE_SHA:.gaia/manifest.json" > "$RUNNER_TEMP/base-manifest.json" 2>/dev/null; then
+            manifest_arguments+=(--manifest "$RUNNER_TEMP/base-manifest.json")
+          fi
+          if [ -f .gaia/manifest.json ]; then
+            manifest_arguments+=(--manifest .gaia/manifest.json)
+          fi
+          git diff -z --name-only --no-renames --diff-filter=d "$BASE_SHA...$HEAD_SHA" \
+            | bash .gaia/scripts/shellcheck-changed.sh --root "$GITHUB_WORKSPACE" "${manifest_arguments[@]}"

@@ -175,6 +175,9 @@ importers:
       '@gaia-harness/lint':
         specifier: 3.0.3
         version: 3.0.3(32dab1a7f390ed7a21122a523c5dc639)
+      bats:
+        specifier: 1.13.0
+        version: 1.13.0
       lint-staged:
         specifier: 17.6.0
         version: 17.6.0
@@ -2945,6 +2948,10 @@ packages:
   basic-auth@2.0.1:
     resolution: {integrity: sha512-NF+epuEdnUYVlGuhaxbbq+dvJttwLnGY+YixlXlME5KpQ5W3CnXA5cVTneY3SPbPDRkcjMbifrwmFYcClgOZeg==}
     engines: {node: '>= 0.8'}
+
+  bats@1.13.0:
+    resolution: {integrity: sha512-giSYKGTOcPZyJDbfbTtzAedLcNWdjCLbXYU3/MwPnjyvDXzu6Dgw8d2M+8jHhZXSmsCMSQqCp+YBsJ603UO4vQ==}
+    hasBin: true
 
   bippy@0.7.3:
     resolution: {integrity: sha512-C3yYBkcthd9kMXJwwwR69+ICGruw+R/Mcoq1LqsoscEoPe1OshyhYjMtYmtpoDSiJX40a867qhG4TT7g4mMIdQ==}
@@ -8748,6 +8755,8 @@ snapshots:
   basic-auth@2.0.1:
     dependencies:
       safe-buffer: 5.1.2
+
+  bats@1.13.0: {}
 
   bippy@0.7.3(@types/react@19.3.0)(react@19.3.1):
     dependencies:

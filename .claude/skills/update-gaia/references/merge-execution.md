@@ -188,7 +188,7 @@ Record the entry with status `field-aware`, `fieldMerge` holding the four non-co
 
 **7b: `pnpm-workspace.yaml`.** A mixed file: GAIA-authored settings (supply-chain and resolution keys, compared whole-value) and the adopter-extensible `overrides` and `allowBuilds` maps (compared per entry), so an adopter who adds one override never sees the whole file asked.
 
-**7c: `.gaia/audit-ci.yml`.** One managed section, the `auditors` roster: GAIA-authored and adopter-extensible at once, parsed into members by exact name, each member's whole mapping compared as one unit. A GAIA-authored member this release adds lands in `applied`, so a new auditor always reaches an existing adopter's file. A 1.x roster, whose members carry unprefixed `app/**` globs, never reaches this step: the orchestrator refuses a 1.x baseline before anything is fetched.
+**7c: `.gaia/audit-ci.yml`.** One managed section, the `auditors` roster: GAIA-authored and adopter-extensible at once, parsed into members by exact name, each member's whole mapping compared as one unit. A GAIA-authored member this release adds lands in `applied`, so a new auditor always reaches an existing adopter's file. A 1.x roster, whose members carry unprefixed `app/**` globs, never reaches this step: the orchestrator refuses a 1.x baseline before anything is fetched. The merge agent never edits the `unowned:` list: the orchestrator prunes the entries a newly added member makes overbroad after the merge (SKILL.md Step 9c2).
 
 ### Step 7d and Step 7e: Generated content
 

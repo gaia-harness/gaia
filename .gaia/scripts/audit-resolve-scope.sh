@@ -232,6 +232,45 @@ if [ "$skip_full_base" -eq 0 ]; then
   done < "$ars_temporary_directory/full"
 fi
 
+# A member keyed to skip GAIA release changes lists only the paths it owns, with
+# the release context armed against the membership base, so a mixed update
+# branch hands it the adopter's own files and none of the shipped ones it was
+# not dispatched for. Every other member's lists are untouched. A missing
+# classifier or an unreadable roster leaves the lists unfiltered (over-review).
+release_skip_filter=0
+scope_library_path="$self_root/.claude/hooks/lib/audit-scope.sh"
+if [ -f "$scope_library_path" ]; then
+  # shellcheck source=/dev/null
+  . "$scope_library_path" 2>/dev/null
+  if command -v _audit_scope_release_member_skips >/dev/null 2>&1 \
+    && audit_scope_init "$root" 2>/dev/null \
+    && _audit_scope_release_member_skips "$member"; then
+    release_skip_filter=1
+    [ -z "${FULL_BASE:-}" ] || audit_scope_release_context "$root" "$FULL_BASE"
+  fi
+fi
+
+# _ars_owned_by_member <path>...: prints each path the member owns, one per line.
+_ars_owned_by_member() {
+  local line
+  [ "$#" -gt 0 ] || return 0
+  while IFS= read -r line; do
+    [ "${line##*$'\t'}" = "$member" ] && printf '%s\n' "${line%$'\t'*}"
+  done < <(printf '%s\n' "$@" | audit_owners_for_paths)
+  return 0
+}
+
+# _ars_keep_owned <path>...: sets kept_paths to the paths the member owns.
+_ars_keep_owned() {
+  local path
+  kept_paths=()
+  while IFS= read -r path; do kept_paths+=("$path"); done < <(_ars_owned_by_member "$@")
+}
+if [ "$release_skip_filter" -eq 1 ]; then
+  _ars_keep_owned ${full_changed[@]+"${full_changed[@]}"}
+  full_changed=(${kept_paths[@]+"${kept_paths[@]}"})
+fi
+
 # The resolver reads its tree from the working directory, so it runs from the
 # root rather than from wherever this script was invoked.
 BASE_OUTPUT="$(cd "$root" && "$root/.github/audit/resolve-audit-base.sh" --member "$member")"
@@ -405,6 +444,10 @@ if [ -n "$BASE_SHA" ]; then
   while IFS= read -r -d '' path; do
     changed+=("$path")
   done < "$ars_temporary_directory/own"
+fi
+if [ "$release_skip_filter" -eq 1 ]; then
+  _ars_keep_owned ${changed[@]+"${changed[@]}"}
+  changed=(${kept_paths[@]+"${kept_paths[@]}"})
 fi
 
 # `Read` returns working-tree bytes while the clearance attests to HEAD, so a

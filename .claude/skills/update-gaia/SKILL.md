@@ -3,7 +3,7 @@ name: update-gaia
 description: Pulls the latest GAIA release into this project without clobbering customizations, with a three-way merge per file using .gaia/manifest.json classes. Trigger when the user clicks the statusline `🚀 /update-gaia` indicator or asks "update GAIA", "pull the latest GAIA", "apply the new GAIA release".
 ---
 
-Contents: Pre-flight: Worktree check; Pre-flight: Branch check (run modes); Step 1: Read baseline version; Step 2: Resolve latest release; Step 3: Compare versions (main checkout, worktree run in place); Pre-flight: Pull check (reads `references/pull-mode.md`); Pre-flight: Decision log check; Pre-flight: Claim check (reads `references/claim-flow.md`); Step 3b: Refuse a 1.x baseline; Step 3c: Download and verify the bundles; Step 3d: Select migration notes; Step 4: Show the release notes and confirm (on Proceed: the update worktree, the worktree notice, the stop rule, the claim); Step 4b: Prune prior-run artifacts; Conflict flow (reads `references/conflict-flow.md`: dispatch, questions, decisions, follow-ups); Step 9b: Follow the after-merge notes; Step 9c: Carry new setup features (machine scope deferred to the post-merge cleanup); Step 9d: Record the update; Quality gate; Review point; Step 11 (orchestrator, after the review-point commit); Step 12: The leftover-file cleanup; Cost record (run end). Local runs (`--local <tarball>`) and recorded local builds: `references/local-bundle.md`, read at Step 1.
+Contents: Pre-flight: Worktree check; Pre-flight: Branch check (run modes); Step 1: Read baseline version; Step 2: Resolve latest release; Step 3: Compare versions (main checkout, worktree run in place); Pre-flight: Pull check (reads `references/pull-mode.md`); Pre-flight: Decision log check; Pre-flight: Claim check (reads `references/claim-flow.md`); Step 3b: Refuse a 1.x baseline; Step 3c: Download and verify the bundles; Step 3d: Select migration notes; Step 4: Show the release notes and confirm (on Proceed: the update worktree, the worktree notice, the stop rule, the claim); Step 4b: Prune prior-run artifacts; Conflict flow (reads `references/conflict-flow.md`: dispatch, questions, decisions, follow-ups); Step 9b: Follow the after-merge notes; Step 9c: Carry new setup features (machine scope deferred to the post-merge cleanup); Step 9c2: Prune overbroad unowned entries; Step 9d: Record the update; Quality gate; Review point; Step 11 (orchestrator, after the review-point commit); Step 12: The leftover-file cleanup; Cost record (run end). Local runs (`--local <tarball>`) and recorded local builds: `references/local-bundle.md`, read at Step 1.
 
 Pull the latest GAIA release into this project without clobbering customizations. Does a three-way comparison per file (adopter / baseline / latest) and respects explicit classes in `.gaia/manifest.json`:
 
@@ -321,6 +321,18 @@ jq -r '.features[] | select(.scope == "machine") | .id' <LATEST_DIR>/.gaia/setup
 ```
 
 Take each `APPLY` or `ASK` token whose id is listed as deferred: run, ask and record nothing for it, and keep its id for the Step 9d addendum. The post-merge cleanup runs them in the pulled main checkout (`.claude/skills/gaia/references/work-lifecycle.md`, `### Leftover-file cleanup after an update merge`). Project-scope tokens are taken as above.
+
+## Step 9c2: Prune overbroad unowned entries
+
+A roster member this release adds can claim paths the adopter had declared ownerless, leaving an `unowned:` entry that reaches a path a member now owns. The roster check fails that as `overbroad-unowned-glob`, and the pre-commit hook runs it on the update commit. This step removes those entries before the version write, so a stop here leaves `.gaia/VERSION` at the baseline and the next run repeats it (the script is idempotent).
+
+Name the members to prune: each member the `.gaia/audit-ci.yml` field-aware entry in the report applied with reason `added`, plus, on a resumed run whose merge no longer reports it, each member named in `<LATEST_DIR>/.gaia/audit-ci.yml` and absent from `<BASELINE_DIR>/.gaia/audit-ci.yml`. With none, skip the step. Otherwise run, in the acting tree:
+
+```bash
+bash .gaia/scripts/roster-prune-overbroad.sh --root <acting tree> --member <name> [--member <name>]...
+```
+
+List every `REMOVED<TAB><glob><TAB><witness path><TAB><owner>` line in the run summary as the glob, the member that now owns it, and the witness path, so the adopter sees what changed. A stderr line saying the removed entry also covered ownerless paths goes into the summary too; the quality gate surfaces the roster finding. A non-zero exit stops the run with its stderr line, `.gaia/VERSION` still at the baseline, and prints the worktree notice on a worktree run.
 
 ## Step 9d: Record the update
 

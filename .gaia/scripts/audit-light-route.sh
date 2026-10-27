@@ -529,6 +529,7 @@ light_route_main() {
     index=$((index + 1))
   done
   audit_scope_init "$root" 2>/dev/null || _light_route_finish full unclassifiable-path
+  audit_scope_release_context "$root" "$main_reference"
   local default_member="${_AUDIT_SCOPE_DEFAULT_MEMBER:-}"
   if [ "$LIGHT_DELTA_COUNT" -gt 0 ]; then
     while IFS= read -r classified; do owners[${#owners[@]}]="$classified"; done \

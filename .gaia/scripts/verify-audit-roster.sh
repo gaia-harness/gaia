@@ -1002,6 +1002,7 @@ if [ -n "$coverage_universe" ]; then
   # paragraph above forbids, and a coverage check that disagrees with dispatch
   # about who owns a path reports the wrong set in both directions. Speed on a
   # read-only advisory job is not worth buying with that.
+  # No release context is armed: this classifies the whole tracked tree with no diff, so raw ownership is the answer.
   audit_scope_init "$root" "$config"
 
   coverage_records="$(

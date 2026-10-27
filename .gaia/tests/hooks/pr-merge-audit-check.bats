@@ -88,6 +88,7 @@ setup() {
   # real repo regardless.
   mkdir -p "$REPO/.claude/hooks/lib"
   cp "$LIBRARY_DIRECTORY/audit-scope.sh" "$REPO/.claude/hooks/lib/audit-scope.sh"
+  cp "$LIBRARY_DIRECTORY/audit-scope-release.sh" "$REPO/.claude/hooks/lib/audit-scope-release.sh"
   cp "$LIBRARY_DIRECTORY/audit-machinery.sh" "$REPO/.claude/hooks/lib/audit-machinery.sh"
   cp "$LIBRARY_DIRECTORY/audit-clearance.sh" "$REPO/.claude/hooks/lib/audit-clearance.sh"
   cp "$LIBRARY_DIRECTORY/audit-digest.sh" "$REPO/.claude/hooks/lib/audit-digest.sh"
@@ -2805,4 +2806,79 @@ run_merge_hook_library_absent() {
   [ -z "$output" ]
   spawn_count=$(wc -c <"$spawn_log" | tr -d ' ')
   [ "$spawn_count" -eq 1 ]
+}
+
+# ---------------------------------------------------------------------------
+# The release-change skip: the gate owes markers from exactly the members the
+# resolver names, and the digests it matches them against arm the same release
+# context, on a release-applying branch and on an ordinary one. The fixture is
+# .gaia/tests/helpers/release-skip-fixture.sh, whose fixture-shell member is
+# keyed skip_gaia_release_changes: true.
+# ---------------------------------------------------------------------------
+
+# release_skip_gate_branch <kind>: rebuilds main as the fixture base, publishes
+# it to the origin, and re-cuts feature as one <kind> commit on top.
+release_skip_gate_branch() {
+  . "$(cd "$BATS_TEST_DIRNAME/../../.." && pwd)/.gaia/tests/helpers/release-skip-fixture.sh"
+  git -C "$REPO" checkout -q main
+  release_skip_seed_base "$REPO"
+  git -C "$REPO" push -q origin main 2>/dev/null
+  git -C "$REPO" fetch -q origin
+  git -C "$REPO" checkout -q -B feature main
+  release_skip_apply "$REPO" "$1"
+}
+
+# gate_pending_members: the members the last deny names PENDING, sorted.
+gate_pending_members() {
+  printf '%s\n' "$output" | jq -r '.hookSpecificOutput.permissionDecisionReason' \
+    | sed -n 's/^  - \([^:]*\): PENDING.*/\1/p' | LC_ALL=C sort
+}
+
+# release_skip_gate_agrees <kind> <expected-members> [<hook>]: the deny names
+# exactly the resolver's members, and their markers then allow the merge.
+release_skip_gate_agrees() {
+  local hook="${3:-$HOOK_ABSOLUTE_PATH}" set json
+  set="$(spawn_set)"
+  [ "$set" = "$2" ] || { echo "resolver: $set" >&2; return 1; }
+  json="$(jq -n '{tool_name: "Bash", tool_input: {command: "gh pr merge 30 --squash --delete-branch"}}')"
+  invoke_hook_in "$REPO" "$json" "$hook"
+  [ "$(gate_pending_members)" = "$set" ] || { echo "pending: $(gate_pending_members)" >&2; return 1; }
+  write_markers_for_spawn_set "$set"
+  invoke_hook_in "$REPO" "$json" "$hook"
+  assert_allowed_by_json || { echo "markers for the resolver's members did not clear: $output" >&2; return 1; }
+}
+
+@test "release skip: the gate owes markers from exactly the resolver's members on a release-applying branch" {
+  command -v jq >/dev/null 2>&1 || skip "jq required"
+  release_skip_gate_branch release
+  release_skip_gate_agrees release "$(printf 'fixture-default\nfixture-scripts')"
+}
+
+@test "release skip: the gate owes markers from exactly the resolver's members on an ordinary branch" {
+  command -v jq >/dev/null 2>&1 || skip "jq required"
+  release_skip_gate_branch ordinary
+  release_skip_gate_agrees ordinary fixture-shell
+}
+
+@test "release skip: the gate agreement fails when the digest arms against the base tip instead of the merge base" {
+  command -v jq >/dev/null 2>&1 || skip "jq required"
+  release_skip_gate_branch release
+  # The base takes the same update after the branch was cut, so the tip's
+  # VERSION matches the branch head while the merge base's does not.
+  catchup_base_commit .gaia/VERSION 1.1.0
+  local real_root
+  real_root="$(cd "$BATS_TEST_DIRNAME/../../.." && pwd)"
+  release_skip_gate_agrees release "$(printf 'fixture-default\nfixture-scripts')"
+
+  local scratch="$BATS_TEST_TMPDIR/tip-armed-hook"
+  mkdir -p "$scratch/.claude" "$scratch/.gaia/scripts"
+  cp -R "$real_root/.claude/hooks" "$scratch/.claude/hooks"
+  cp "$real_root"/.gaia/scripts/*.sh "$scratch/.gaia/scripts/"
+  sed 's|audit_scope_release_context "\$root" "\$merge_base" "\$target" "\$merge_base"|audit_scope_release_context "$root" refs/remotes/origin/main "$target" "$(git -C "$root" rev-parse refs/remotes/origin/main)"|' \
+    "$real_root/.claude/hooks/lib/audit-digest.sh" > "$scratch/.claude/hooks/lib/audit-digest.sh"
+  grep -q 'refs/remotes/origin/main "\$target"' "$scratch/.claude/hooks/lib/audit-digest.sh"
+  rm -rf "$REPO/.gaia/local/audit"
+  run release_skip_gate_agrees release "$(printf 'fixture-default\nfixture-scripts')" "$scratch/.claude/hooks/pr-merge-audit-check.sh"
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"markers for the resolver's members did not clear"* ]] || return 1
 }
