@@ -267,7 +267,7 @@ Two steps come first, in this order:
 Once **every dispatched member's** marker exists for HEAD and the `GAIA-Audit` status is posted (see [[#Posting the status last]]), run `gh pr merge`. The hook short-circuits to allow the call.
 
 <!-- gaia:maintainer-only:start -->
-GAIA maintainers: light routing appends one event per route and per light outcome to `.gaia/local/telemetry/audit-light-routing.jsonl` in the main checkout, and `bash .gaia/scripts/audit-light-telemetry.sh tally` prints the engagement and escalation rates, the light-miss count, and median light-path tokens against a baseline. The audit loop unit also records a per-dispatch cost event for every member and light reviewer dispatch with `.gaia/scripts/audit-dispatch-cost.sh`, and `bash .gaia/scripts/audit-dispatch-cost.sh report` prints per-member, per-kind median cost. The scripts are release-excluded and write nothing outside this repo.
+GAIA maintainers: light routing appends one event per route and per light outcome to `.gaia/local/telemetry/audit-light-routing.jsonl` in the main checkout, and `bash .gaia/scripts/audit-light-telemetry.sh tally` prints the engagement and escalation rates, the light-miss count, and the median light reviewer spend against the median spend of the full member it stands in for. The audit loop unit also records a per-dispatch cost event for every member and light reviewer dispatch with `.gaia/scripts/audit-dispatch-cost.sh`, and `bash .gaia/scripts/audit-dispatch-cost.sh report` prints per-member, per-kind median cost. The scripts are release-excluded and write nothing outside this repo.
 <!-- gaia:maintainer-only:end -->
 
 <!-- gaia:maintainer-only:start -->

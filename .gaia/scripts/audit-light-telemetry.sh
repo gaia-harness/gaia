@@ -46,12 +46,19 @@
 # overall and per member. A pull request is a branch in the log, because the
 # log records no merge; it is in the window when the log holds a route,
 # light-outcome, member-result or escalation-follow-up event for
-# code-audit-frontend on that branch, and the window is the branches whose last event is newest. An eligible re-audit is a route event with a reason
-# other than the four excluded above, so a member that never opted in
-# contributes none and the overall figure is the sum across opted-in members. A
+# code-audit-frontend on that branch, and the window is the branches whose last
+# event is newest. An eligible re-audit is a route event with a reason other
+# than the four excluded above, so a member that never opted in contributes
+# none and the overall figure is the sum across opted-in members. A
 # light-cleared re-audit is a light_outcome event with verdict clear. The
 # decision rule that reads these figures lives in the Code Audit Team decision
 # page, not here.
+#
+# The spend ratio compares deduplicated tokens (every bucket, own plus
+# children) of complete dispatch_cost events: the light reviewer event matching
+# each light outcome over the full member events of the same members, else
+# --baseline-tokens (baseline_source says which). An outcome with no complete
+# cost event of its own counts in light_unmeasured, never in the ratio.
 #
 # Anchor kind. A first-dispatch quick review anchors on the merge base and its
 # route records carry `anchor_kind: "merge-base"`; `route` copies the field into
@@ -250,7 +257,7 @@ run_tally() {
   log=""
   [ -n "$main" ] && log="$main/$LOG_RELATIVE_PATH"
 
-  counts="0	0	0	0	0	0	0	0	"
+  counts="0	0	0	0	0	0	0	0	0		"
   if [ -n "$log" ] && [ -f "$log" ]; then
     # A torn or hand-edited line is dropped rather than failing the report.
     counts="$(jq -R -c 'fromjson? // empty' "$log" 2>/dev/null | jq -s -r '
@@ -258,6 +265,9 @@ run_tally() {
       def quick_anchor: (.anchor_kind // null) == "merge-base";
       def median: sort | if length == 0 then null
         else ((.[((length - 1) / 2 | floor)] + .[(length / 2 | floor)]) / 2 | round) end;
+      def complete_cost($kind): .event == "dispatch_cost" and .kind == $kind and .state == "ok"
+        and .incomplete == false and .children_state == "ok";
+      def spend: [(.own, (.children // {})[]) | to_entries[] | select(.key | endswith("_tokens")).value] | add;
       def covered_by($routes; $outcome; $location):
         any($routes[];
           .member == $outcome.member
@@ -284,6 +294,11 @@ run_tally() {
                 and (.branch // "") == ($result.branch // "")
                 and covered_by($routes; .; $location)))
         ] | length as $light_misses
+      | [$outcomes[] | . as $outcome | first($events[] | select(complete_cost("light_reviewer")
+          and .member == $outcome.member and (.branch // "") == ($outcome.branch // "")
+          and .digest == $outcome.digest)) | {member, spend: spend}] as $light_spends
+      | [$events[] | select(complete_cost("member") and (.member as $member
+          | any($light_spends[]; .member == $member))) | spend] as $member_spends
       | [
           ($routes | length),
           ([$routes[] | select(.route == "light")] | length),
@@ -293,7 +308,8 @@ run_tally() {
           ([$followups[] | select(.result == "refused")] | length),
           ($followups | length),
           $light_misses,
-          ([$outcomes[] | .tokens | select(type == "number")] | median // "")
+          ($outcomes | length) - ($light_spends | length),
+          ([$light_spends[].spend] | median // ""), ($member_spends | median // "")
         ] | map(tostring) | join("\t")' 2>/dev/null)" || counts=""
     [ -n "$counts" ] || {
       printf 'audit-light-telemetry: cannot read %s\n' "$log" >&2
@@ -302,9 +318,9 @@ run_tally() {
   fi
 
   local rotations light_routes denominator escalations light_outcomes
-  local refused_followups followups light_misses median_tokens
+  local refused_followups followups light_misses light_unmeasured light_spend member_spend
   IFS='	' read -r rotations light_routes denominator escalations light_outcomes \
-    refused_followups followups light_misses median_tokens <<EOF
+    refused_followups followups light_misses light_unmeasured light_spend member_spend <<EOF
 $counts
 EOF
 
@@ -315,17 +331,12 @@ EOF
   printf 'escalation_rate: %s\n' "$(format_ratio "$escalations" "$light_outcomes")"
   printf 'escalation_precision: %s\n' "$(format_ratio "$refused_followups" "$followups")"
   printf 'light_misses: %s\n' "$light_misses"
-  if [ -n "$median_tokens" ]; then
-    printf 'light_median_tokens: %s\n' "$median_tokens"
-  else
-    printf 'light_median_tokens: n/a\n'
-  fi
-  printf 'baseline_tokens: %s\n' "$baseline_tokens"
-  if [ -n "$median_tokens" ]; then
-    printf 'light_vs_baseline: %s\n' "$(format_ratio "$median_tokens" "$baseline_tokens")"
-  else
-    printf 'light_vs_baseline: n/a\n'
-  fi
+  printf 'light_unmeasured: %s\nlight_spend_median_tokens: %s\n' "${light_unmeasured:-0}" "${light_spend:-n/a}"
+  local baseline_source=default spend_ratio=n/a
+  [ -z "$member_spend" ] || { baseline_tokens="$member_spend" && baseline_source="member-median"; }
+  [ -z "$light_spend" ] || spend_ratio="$(format_ratio "$light_spend" "$baseline_tokens")"
+  printf 'baseline_tokens: %s\nbaseline_source: %s\n' "$baseline_tokens" "$baseline_source"
+  printf 'light_spend_vs_member_spend: %s\n' "$spend_ratio"
 
   local kill_figures="" eligible_count=0 cleared_count=0 figure_line
   if [ -n "$log" ] && [ -f "$log" ]; then
