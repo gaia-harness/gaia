@@ -5,15 +5,15 @@ on:
     tags:
       - 'v*.*.*'
   # Dry run: rebuilds an already-published tag through every step up to the
-  # composed release body and publishes nothing, so a runner-image or toolchain
-  # change can be proven before the next real tag meets it. The publish job
-  # runs on a tag push only.
+  # composed release body and publishes nothing, so a runner-image change can
+  # be proven before the next real tag meets it. The checkout is the tag's
+  # tree, so toolchain pins committed after the tag are first exercised by the
+  # next real tag. The publish job runs on a tag push only.
   workflow_dispatch:
     inputs:
       tag:
         description: 'Existing release tag to rebuild (vX.Y.Z); nothing is published'
         required: true
-        default: 'v2.2.0'
         type: string
 
 # Default-deny, so a job added later inherits no scope rather than the
