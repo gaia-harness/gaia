@@ -261,7 +261,7 @@ anchors_resolve() {
 @test "UAT-005 and UAT-040: the fix round files through the filing script, runs the retry pass and reconciles with check-outcomes" {
   local section_text
   section_text="$(section "$FIXROUND")" || return 1
-  grep -qF -- 'bash .gaia/scripts/file-tech-debt.sh file --finding <that file> --outcome-file <RUN_FOLDER>/filing-outcomes-<r>.jsonl --disposition <file|divert>' <<<"$section_text" || return 1
+  grep -qF -- 'bash <RESOLVED_ROOT>/.gaia/scripts/file-tech-debt.sh file --finding <that file> --outcome-file <RUN_FOLDER>/filing-outcomes-<r>.jsonl --disposition <file|divert>' <<<"$section_text" || return 1
   sentences <<<"$section_text" | grep -qF -- 'Then run the retry pass: the same command, `--finding <f>` for each file in `<RUN_FOLDER>/filing-retry/` that an earlier `transient` outcome left, into the same outcome file.' || return 1
   grep -qF -- 'audit-dispositions-check.sh check-outcomes --root <RESOLVED_ROOT> --run-folder <RUN_FOLDER> --round <r>' <<<"$section_text" || return 1
   sentences <<<"$section_text" | grep -qF -- 'An `absent` backend and a `transient` failure pass: neither blocks the merge' || return 1

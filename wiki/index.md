@@ -167,6 +167,7 @@ Master catalog of every page in the wiki. Newly created pages must be added here
 - [[Local Bundle Sync (Concept)|Local Bundle Sync]]: `/update-gaia --local <tarball>` merges a locally built bundle through the release updater; the build record, dev tags, and the baseline after a local sync.
 - [[Generated Regions]]: marker-delimited spans inside shipped files a shipped command regenerates; the region-aware merge oracle, the regeneration runner, and the trust model they operate inside.
 <!-- gaia:maintainer-only:start -->
+- [[Maintainer-only Debt Source Record|Maintainer-only debt source record]]: the branch digest on line 2 of every maintainer tech-debt filing and the report that reads it back.
 - [[Per-dispatch Audit Cost Telemetry|Per-dispatch audit cost telemetry]]: one cost event per Code Audit Team and light reviewer dispatch, the recorder the audit loop unit runs, and the per-member median report.
 - [[Release Workflow]]: Maintainer flow: `/gaia-release`, `release.yml`, tarball scrubbing, `create-gaia` bootstrapper.
 - [[Release-Notes]]

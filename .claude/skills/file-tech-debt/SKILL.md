@@ -62,7 +62,7 @@ Its exit code is the answer:
 
 - **0**: no match. Continue to step 4.
 - **1**: a match. Read `number`, `state`, `declined`, and `inner_key` from its one JSON line and hand them back to the caller. An open match's `inner_key` is the key the caller records, never a freshly built one; it is `null` when `source` is `keyless` (a hand-filed issue with no parsed key), so the caller records the number alone; a declined match gets no bookkeeping entry.
-- **2 or 3**: the check could not run (usage error, or an input it could not read or that hit its result limit). Report its stderr line, do not file, and do not treat it as a pass.
+- **2 or 3**: the check could not run (usage error, or an input it could not read; a failed or partial list read is exit 3). Report its stderr line, do not file, and do not treat it as a pass.
 
 The script's header owns the matching rules: path plus line with `class=` ignored, declined-closed detection, the keyless fallback for hand-filed issues, and the accepted collapse of distinct findings on one `path:line`. This recipe records nothing itself; callers own their bookkeeping (see above).
 
@@ -163,6 +163,10 @@ Build a self-contained issue body with these parts, in order:
   Both lines carry real content. "Needs more thought" is not a question and "investigation" is not evidence; the question names the fact whose value decides the grade, and `**Settled by:**` names the thing that would establish it. This is what the grade costs, and the cost is the point: the value is only worth having if saying "I do not know" requires saying what is not known. A filing that cannot fill these two lines was not uncertain about the severity, it just did not look.
 
   On a filing graded anything else the block is **forbidden**, not merely unnecessary. Re-grading an issue removes the block in the same edit that replaces the label, because a block left behind asserts an open question that has since been answered, and a reader believes it.
+
+<!-- gaia:maintainer-only:start -->
+On the GAIA maintainer repository, `.gaia/scripts/file-tech-debt.sh` writes a source line, `<!-- gaia-debt-source: v1 branch=<value> -->`, on line 2, directly after the dedup-key line. It records a digest of the branch checked out in the tree that ran the script. It is a measurement record, not a classification field, so the paragraph below still holds. Any body rewrite, the investigate re-grade's `gh issue edit <n> ... --body-file <path>` included, keeps that line verbatim on line 2.
+<!-- gaia:maintainer-only:end -->
 
 The body carries no classification fields of its own. Every classification axis steps 6 and 7 define rides as a label, so a body line restating one of them is a second representation of a value the labels already hold, and the two drift.
 

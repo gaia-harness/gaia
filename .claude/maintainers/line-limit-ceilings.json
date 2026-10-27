@@ -57,7 +57,7 @@
     ".gaia/scripts/check-debt-issue-metadata.sh": 640,
     ".gaia/scripts/check-updates.sh": 950,
     ".gaia/scripts/classifier/classify-determinism.mjs": 580,
-    ".gaia/scripts/file-tech-debt.sh": 735,
+    ".gaia/scripts/file-tech-debt.sh": 773,
     ".gaia/scripts/guard-awk-lib.sh": 979,
     ".gaia/scripts/kept-worktrees.sh": 432,
     ".gaia/scripts/lint-errexit-status-read.sh": 535,

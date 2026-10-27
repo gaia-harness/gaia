@@ -32,7 +32,7 @@
 #            "source":"key"|"keyless","inner_key":"v1 class=... path=... line=..."|null}
 #           inner_key is the verbatim text inside the matched key comment.
 # Exit 2: usage error. Exit 3: an input could not be read (gh failed, invalid
-# JSON, jq missing, or a result that fills its limit and so may be truncated).
+# JSON, jq missing, or a failed or partial paginated read).
 # Both print nothing on stdout and one `debt-dedup: <reason>` line on stderr.
 # The caller never files on 2 or 3: filing on a check that did not run is the
 # duplicate this script exists to prevent.
@@ -45,12 +45,6 @@
 # {number, body, labels, stateReason}).
 
 set -uo pipefail
-
-# A result whose length equals its limit may have been cut off, and a missing
-# declined issue re-files a rejected finding, so equality is a failure, never
-# a pass. The closed set grows without bound, hence the larger ceiling.
-open_limit=1000
-closed_limit=5000
 
 search_path=""
 search_line=""
@@ -96,30 +90,28 @@ trap 'rm -rf "$work_directory"' EXIT
 open_copy="$work_directory/open.json"
 closed_copy="$work_directory/closed.json"
 
+if [ -z "$open_file" ] || [ -z "$closed_file" ]; then
+  script_directory="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)" || die_input "cannot resolve the script directory"
+  # shellcheck source=/dev/null
+  . "$script_directory/debt-list-lib.sh" || die_input "cannot read the list library"
+fi
 if [ -n "$open_file" ]; then
   cat "$open_file" >"$open_copy" 2>/dev/null || die_input "cannot read $open_file"
 else
-  gh issue list --label tech-debt --state open --limit "$open_limit" \
-    --json number,body >"$open_copy" 2>/dev/null \
-    || die_input "gh issue list (open) failed (auth, network, or rate limit)"
+  gaia_debt_list_read "" open "$open_copy" 2>/dev/null \
+    || die_input "reading the open tech-debt issues failed (auth, network, rate limit, or a partial read)"
 fi
 if [ -n "$closed_file" ]; then
   cat "$closed_file" >"$closed_copy" 2>/dev/null || die_input "cannot read $closed_file"
 else
-  gh issue list --label tech-debt --state closed --limit "$closed_limit" \
-    --json number,body,labels,stateReason >"$closed_copy" 2>/dev/null \
-    || die_input "gh issue list (closed) failed (auth, network, or rate limit)"
+  gaia_debt_list_read "" closed "$closed_copy" 2>/dev/null \
+    || die_input "reading the closed tech-debt issues failed (auth, network, rate limit, or a partial read)"
 fi
 
 for list_name in open closed; do
   list_copy="$work_directory/$list_name.json"
   jq -e 'type == "array"' "$list_copy" >/dev/null 2>&1 \
     || die_input "the $list_name list is not a JSON array"
-  list_length="$(jq 'length' "$list_copy")" \
-    || die_input "the $list_name list could not be counted"
-  if [ "$list_name" = open ]; then list_limit="$open_limit"; else list_limit="$closed_limit"; fi
-  [ "$list_length" -lt "$list_limit" ] \
-    || die_input "the $list_name list has $list_length issues, which fills its limit of $list_limit and may be truncated"
 done
 
 verdict="$(
