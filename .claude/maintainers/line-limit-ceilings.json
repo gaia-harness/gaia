@@ -43,7 +43,6 @@
     ".gaia/cli/src/scaffold/service.ts": 984,
     ".gaia/cli/src/update-deps/advisories.ts": 611,
     ".gaia/cli/src/update-deps/advisory-model.ts": 731,
-    ".gaia/cli/src/update-deps/run.ts": 1448,
     ".gaia/cli/src/update/regen-regions.ts": 1448,
     ".gaia/cli/src/wiki/chain.ts": 686,
     ".gaia/cli/src/wiki/commit-classify.ts": 639,
