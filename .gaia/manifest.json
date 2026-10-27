@@ -67,6 +67,9 @@
     ".claude/hooks/lib/reader-operands.sh": "owned",
     ".claude/hooks/lib/red-ledger.sh": "owned",
     ".claude/hooks/lib/repo-scope.sh": "owned",
+    ".claude/hooks/lib/verb-arming-live-helpers.sh": "owned",
+    ".claude/hooks/lib/verb-arming-live-view.sh": "owned",
+    ".claude/hooks/lib/verb-arming-view.sh": "owned",
     ".claude/hooks/lib/verb-arming-walk.sh": "owned",
     ".claude/hooks/lib/verb-arming.sh": "owned",
     ".claude/hooks/lib/worthiness-ledger.sh": "owned",
@@ -765,7 +768,7 @@
     "wiki/overview.md": "wiki-owned",
     "wiki/README.md": "wiki-owned"
   },
-  "generated": "2026-10-27T04:41:59.417Z",
+  "generated": "2026-10-27T07:39:44.543Z",
   "regions": [
     {
       "endMarker": "<!-- gaia:audit-remit:end -->",
