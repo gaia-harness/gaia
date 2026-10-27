@@ -400,7 +400,7 @@ EXEMPT_CONSUMERS='.gaia/scripts/verify-audit-roster.sh
 # _non_comment_mentions <file> <extended-regex>: exit 0 when a non-comment line
 # names the pattern.
 _non_comment_mentions() {
-  grep -vE '^[[:space:]]*#' "$1" | grep -qE "$2"
+  awk -v pattern="$2" '!/^[[:space:]]*#/ && $0 ~ pattern { found = 1; exit } END { exit !found }' "$1"
 }
 
 # release_context_violations <root>: prints each consumer that neither arms the
