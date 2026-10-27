@@ -75,3 +75,20 @@ assert_block_pinned() {
   assert_block_pinned "$ROUNDS" 'never a pass' rounds-without-timeout.md
   assert_block_pinned "$AGENT" 'never a pass' agent-without-timeout.md
 }
+
+@test "the agent prescribes the background round run as one plain command the runner signals" {
+  assert_block_pinned "$AGENT" 'as exactly `bash <root>/.gaia/tests/verify-harness.sh round < /dev/null > <scratch>/gate-<r>-<k>.log 2>&1`' agent-without-plain-round.md
+  assert_block_pinned "$AGENT" 'The runner writes `verify-harness exit <status>` as its own last line' agent-without-runner-exit-line.md
+  assert_block_pinned "$ROUNDS" 'the runner writes its own completion signal' rounds-without-runner-exit-line.md
+}
+
+@test "no surface prescribes appending the exit line after the round run" {
+  local surface compound="; printf 'verify-harness exit" planted="$BATS_TEST_TMPDIR/planted-compound.md"
+  # Red twin: the predicate sees the compound when a maintainer-only block carries it.
+  printf '<!-- gaia:maintainer-only:start -->\nround.log 2>&1%s %%s\\n" "$?" >> round.log\n<!-- gaia:maintainer-only:end -->\n' "$compound" >"$planted"
+  block_has "$planted" "$compound" || { echo "red twin did not see the planted compound" >&2; return 1; }
+  for surface in "$AGENT" "$ROUNDS" "$WIKI" "$RULE"; do
+    grep -qF -- "$compound" "$surface" && { echo "compound round spelling in $surface" >&2; return 1; }
+  done
+  true
+}
