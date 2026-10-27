@@ -31,9 +31,22 @@ setup() {
 }
 
 teardown() {
+  reap_shim_pids
   [ -n "${REPO:-}" ] && rm -rf "$REPO"
   [ -n "${ORIGIN:-}" ] && rm -rf "$ORIGIN"
   [ -n "${SHIM_DIRECTORY:-}" ] && rm -rf "$SHIM_DIRECTORY"
+  return 0
+}
+
+# A hanging fetch shim records its pid (and its sleep child's) in
+# $SHIM_DIRECTORY/pids; kill any still alive so an orphaned sleep can neither
+# hold bats' output nor outlive the suite.
+reap_shim_pids() {
+  local pid
+  [ -n "${SHIM_DIRECTORY:-}" ] && [ -f "$SHIM_DIRECTORY/pids" ] || return 0
+  for pid in $(cat "$SHIM_DIRECTORY/pids"); do
+    kill -KILL "$pid" 2>/dev/null || true
+  done
   return 0
 }
 
@@ -285,20 +298,64 @@ SHIM
 }
 
 # PATH-shimmed `git` whose fetch arm hangs for $1 seconds (default 60); every
-# other call passes through to the real binary.
+# other call passes through to the real binary. The hang calls the real sleep
+# by absolute path, so a tick shim for `sleep` on the same PATH never sees it,
+# closes fd 3 (bats' output) and records its pid and its child's.
 make_hanging_fetch_shim() {
   local sleep_seconds="${1:-60}"
   SHIM_DIRECTORY=$(mktemp -d -t gaia-janitor-shim-XXXXXX)
-  local real_git
+  local real_git real_sleep
   real_git=$(command -v git)
+  real_sleep=$(command -v sleep)
   cat > "$SHIM_DIRECTORY/git" <<SHIM
 #!/bin/bash
 case "\$*" in
-  *fetch*) sleep $sleep_seconds; exit 0 ;;
+  *fetch*)
+    "$real_sleep" $sleep_seconds 3>&- &
+    echo "\$\$ \$!" >> "$SHIM_DIRECTORY/pids"
+    wait
+    exit 0
+    ;;
 esac
 exec "$real_git" "\$@"
 SHIM
   chmod +x "$SHIM_DIRECTORY/git"
+}
+
+# PATH shim for `sleep` beside the hanging fetch shim (call after
+# make_hanging_fetch_shim): every call appends its argument to $SLEEP_TICKS, one
+# line per tick of the hook's own wait loop. `passthrough` then runs the real
+# sleep so timing stays real; `instant` returns at once so a long wait costs no
+# wall-clock time. The fetch shim's hang calls the real sleep by absolute path,
+# so it is never counted and never short-circuited.
+make_sleep_tick_shim() {
+  local mode="$1" real_sleep
+  real_sleep=$(command -v sleep)
+  SLEEP_TICKS="$SHIM_DIRECTORY/sleep-ticks"
+  : > "$SLEEP_TICKS"
+  case "$mode" in
+    passthrough)
+      cat > "$SHIM_DIRECTORY/sleep" <<SHIM
+#!/bin/bash
+echo "\$*" >> "$SLEEP_TICKS"
+exec "$real_sleep" "\$@"
+SHIM
+      ;;
+    instant)
+      cat > "$SHIM_DIRECTORY/sleep" <<SHIM
+#!/bin/bash
+echo "\$*" >> "$SLEEP_TICKS"
+exit 0
+SHIM
+      ;;
+  esac
+  chmod +x "$SHIM_DIRECTORY/sleep"
+}
+
+# assert_sleep_ticks <n>: the hook slept exactly <n> times, each for 1 second.
+assert_sleep_ticks() {
+  [ "$(grep -c '' "$SLEEP_TICKS")" -eq "$1" ] || return 1
+  [ "$(grep -cvx 1 "$SLEEP_TICKS")" -eq 0 ] || return 1
 }
 
 # PATH-shimmed `git` whose fetch arm backgrounds a long-sleeping grandchild
@@ -382,7 +439,8 @@ SHIM
 @test "sweep 1: a mistyped ceiling clamps rather than blowing the budget" {
   make_repo
   make_live_branch "wiki/2026-07-09-1009"
-  make_hanging_fetch_shim 3600
+  make_hanging_fetch_shim 90
+  make_sleep_tick_shim instant
   cd "$REPO"
   # Neutralize the min-interval knob for both sub-cases below: this test's
   # second invocation must actually re-attempt the fetch, not be skipped by
@@ -394,18 +452,22 @@ SHIM
   PATH="$SHIM_DIRECTORY:$PATH" run bash "$HOOK_ABSOLUTE_PATH"
   end=$(date +%s)
   [ "$status" -eq 0 ]
-  elapsed=$((end - start))
-  [ "$elapsed" -ge 4 ] || return 1
-  [ "$elapsed" -lt 10 ] || return 1
+  # A non-numeric ceiling falls back to 5: five loop ticks plus the post-kill
+  # tick. (Replaces the old elapsed -ge 4 / -lt 10 bounds.) The wall-clock
+  # ceiling only catches a hook that ignores the shim and sleeps for real.
+  assert_sleep_ticks 6 || return 1
+  [ "$((end - start))" -lt 30 ] || return 1
 
+  : > "$SLEEP_TICKS"
   export GAIA_WIKI_FETCH_TIMEOUT_SECONDS=9999
   start=$(date +%s)
   PATH="$SHIM_DIRECTORY:$PATH" run bash "$HOOK_ABSOLUTE_PATH"
   end=$(date +%s)
   [ "$status" -eq 0 ]
-  elapsed=$((end - start))
-  [ "$elapsed" -ge 25 ] || return 1
-  [ "$elapsed" -lt 45 ] || return 1
+  # 9999 clamps to 30: thirty loop ticks plus the post-kill tick. (Replaces the
+  # old elapsed -ge 25 / -lt 45 bounds.)
+  assert_sleep_ticks 31 || return 1
+  [ "$((end - start))" -lt 30 ] || return 1
 }
 
 @test "sweep 1: a zero-padded min-interval still rate-limits the fetch" {
@@ -540,14 +602,19 @@ SHIM
 @test "sweep 1: the WHOLE hook stays inside the SessionStart budget on a hanging remote" {
   make_repo
   make_live_branch "wiki/2026-07-16-1016"
-  make_hanging_fetch_shim 60
+  make_hanging_fetch_shim 90
+  make_sleep_tick_shim passthrough
   cd "$REPO"
   start=$(date +%s)
   PATH="$SHIM_DIRECTORY:$PATH" run bash "$HOOK_ABSOLUTE_PATH"
   end=$(date +%s)
   [ "$status" -eq 0 ]
+  # The bound fired by the hook's own count: the default timeout of 5 is five
+  # loop ticks plus the post-kill tick, however long a loaded machine took.
+  assert_sleep_ticks 6 || return 1
+  # The hang is 90 s, so a hook that waited it out lands far past this ceiling.
   elapsed=$((end - start))
-  [ "$elapsed" -lt 20 ] || return 1
+  [ "$elapsed" -lt 60 ] || return 1
 }
 
 @test "sweep 1: a checkout with no .gaia/local is not recreated by the breadcrumb write" {
