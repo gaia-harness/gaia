@@ -75,7 +75,6 @@
     ".gaia/scripts/post-findings-block.sh": 469,
     ".gaia/scripts/red-ledger/extract-story-signals.mjs": 721,
     ".gaia/scripts/red-ledger/extract-test-signals.mjs": 526,
-    ".gaia/scripts/server-process-lib.sh": 1138,
     ".gaia/scripts/spec/spec-allocator.sh": 625,
     ".gaia/scripts/spec/spec-session-lock.sh": 600,
     ".gaia/scripts/state-reaper-classes.sh": 571,
