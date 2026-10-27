@@ -1555,9 +1555,9 @@ plan_fixture() {
 
 # bats test_tags=whole-tree
 @test "P9: a lockfile-only change owes every real shard its installed-dependencies and whole-tree suites" {
-  local derived shard_id shard_file expected actual union=''
-  derived="$(bash "$REPO_ROOT/.gaia/tests/installed-dependencies-mark-guard.sh" --list-derived)"
-  [ -n "$derived" ]
+  local shard_id shard_file expected actual union='' marked_count=0
+  # shellcheck source=.gaia/tests/helpers/verify-harness-bats-lib.sh
+  . "$REPO_ROOT/.gaia/tests/helpers/verify-harness-bats-lib.sh"
   STUB_CLASSIFIER_OUTPUT=$(printf 'dependency\tpnpm-lock.yaml')
   export STUB_CLASSIFIER_OUTPUT
   export SUITES_FOR_CHANGE_SCRIPT="$BATS_TEST_TMPDIR/silent-selector.sh"
@@ -1565,8 +1565,12 @@ plan_fixture() {
 
   for shard_id in $(bash "$SCRIPT" shards); do
     expected=''
+    # shellcheck disable=SC2154 # assigned by the sourced bats lib
     for shard_file in $(bash "$SCRIPT" files "$shard_id"); do
-      if grep -qxF -- "$shard_file" <<<"$derived" ||
+      if grep -qE "$verify_installed_dependencies_mark_pattern" "$REPO_ROOT/$shard_file"; then
+        marked_count=$((marked_count + 1))
+      fi
+      if grep -qE "$verify_installed_dependencies_mark_pattern" "$REPO_ROOT/$shard_file" ||
         grep -qE '^# bats (file|test)_tags=([^,]*,)*whole-tree(,|$)' "$REPO_ROOT/$shard_file"; then
         expected="$expected$shard_file"$'\n'
       fi
@@ -1578,6 +1582,7 @@ plan_fixture() {
     [ "$status" -eq 0 ]
     grep -qx 'mode=full' <<<"$output" && return 1
   done
+  [ "$marked_count" -gt 0 ]
   for shard_file in capture-red-observations red-ledger-lib red-verify-commit-check red-verify-e2e worthiness-presence-check extract-test-signals-stories-reporter uat-lifecycle-e2e; do
     grep -q "/$shard_file\.bats\$" <<<"$union"
   done

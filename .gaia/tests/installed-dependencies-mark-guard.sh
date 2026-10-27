@@ -63,6 +63,8 @@
 #   bash .gaia/tests/installed-dependencies-mark-guard.sh [--root <repo>]
 #   ... --list-derived      the derived set, one repo-relative path per line
 #   ... --list-backstopped  the marked suites carrying a valid backstop line
+#   ... --list-both         both sets from one scan, one tab-separated
+#                           `derived` or `backstopped` prefix per path
 # Exit: 0 the derived set equals the marked set and every marked suite is
 # provisioned; 1 a difference, each finding on its own line naming the suite;
 # 2 a usage error, an empty discovery set, or a scan that could not run.
@@ -70,7 +72,7 @@
 set -u
 
 usage() {
-  echo "usage: installed-dependencies-mark-guard.sh [--root <repo>] [--list-derived | --list-backstopped]" >&2
+  echo "usage: installed-dependencies-mark-guard.sh [--root <repo>] [--list-derived | --list-backstopped | --list-both]" >&2
 }
 
 root=""
@@ -85,7 +87,7 @@ while [ "$#" -gt 0 ]; do
       root="$2"
       shift 2
       ;;
-    --list-derived | --list-backstopped)
+    --list-derived | --list-backstopped | --list-both)
       list_mode="$1"
       shift
       ;;
@@ -753,6 +755,13 @@ case "$list_mode" in
     ;;
   --list-backstopped)
     cat "$work_directory/backstopped"
+    exit 0
+    ;;
+  --list-both)
+    # shellcheck disable=SC2016
+    "$GAIA_AWK" '{ print "derived\t" $0 }' "$work_directory/derived"
+    # shellcheck disable=SC2016
+    "$GAIA_AWK" '{ print "backstopped\t" $0 }' "$work_directory/backstopped"
     exit 0
     ;;
 esac

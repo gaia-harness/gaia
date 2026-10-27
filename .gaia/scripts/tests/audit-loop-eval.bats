@@ -513,6 +513,8 @@ brief_check() {
 @test "brief: unknown recommends grant; a failing or hanging usage.sh only blanks spend" {
   local base mode
   cli_copy
+  sed -i.bak 's/^_GAIA_LOOP_SPEND_TIMEOUT=5$/_GAIA_LOOP_SPEND_TIMEOUT=1/' "$CLI/audit-loop-eval.sh"
+  grep -qx '_GAIA_LOOP_SPEND_TIMEOUT=1' "$CLI/audit-loop-eval.sh"
   alf_fill f.txt 12 feature
   alf_commit "round 1"
   alf_add_round '["code-audit-frontend","code-audit-maintainer-shell"]'

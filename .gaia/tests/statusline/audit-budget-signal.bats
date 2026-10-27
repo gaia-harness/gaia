@@ -36,6 +36,10 @@ setup() {
   chmod +x "$REPOSITORY_FIXTURE/.gaia/scripts/resolve-audit-members.sh"
   cat > "$REPOSITORY_FIXTURE/.gaia/cli/gaia" <<'WRAPPER'
 #!/usr/bin/env bash
+# An opt-in call log: when GAIA_TEST_CALL_LOG names a file, each subcommand is
+# appended to it, and the fitness arm also appends its exit status. Unset, the
+# wrapper behaves exactly as without it.
+[ -n "${GAIA_TEST_CALL_LOG:-}" ] && printf '%s\n' "$1" >> "$GAIA_TEST_CALL_LOG"
 case "$1" in
   update-deps)
     output_path=""
@@ -61,6 +65,12 @@ case "$1" in
     exit 0
     ;;
   fitness)
+    if [ -n "${GAIA_TEST_CALL_LOG:-}" ]; then
+      "$GAIA_TEST_FITNESS_BUNDLE" "$@"
+      fitness_exit=$?
+      printf 'fitness %s exit=%s\n' "$2" "$fitness_exit" >> "$GAIA_TEST_CALL_LOG"
+      exit "$fitness_exit"
+    fi
     exec "$GAIA_TEST_FITNESS_BUNDLE" "$@"
     ;;
   *) exit 1 ;;
@@ -193,47 +203,71 @@ budget_finding_files() {
   [ "$(budget_finding_files "$output")" = "" ]
 }
 
-# A PATH directory holding a symlink to every executable on the current PATH
-# except node, first match per name.
-build_path_without_node() {
-  local target="$1" directory entry name
-  mkdir -p "$target"
-  local old_ifs="$IFS"
-  IFS=:
-  for directory in $PATH; do
-    [ -d "$directory" ] || continue
-    for entry in "$directory"/*; do
-      [ -f "$entry" ] && [ -x "$entry" ] || continue
-      name=$(basename "$entry")
-      [ "$name" = "node" ] && continue
-      [ -e "$target/$name" ] || ln -s "$entry" "$target/$name"
-    done
+
+# The tools the refresher, main-root-lib.sh, exclusive-lock-lib.sh and the gaia
+# wrapper reach through PATH on the node-absent paths, found by tracing a run of
+# the real refresher. The required ones must resolve; the optional ones are
+# linked when the runner has them, so the run sees what a machine without node
+# sees.
+NODE_ABSENT_REQUIRED_TOOLS="bash cat date dirname env git grep head jq ls mkdir mktemp mv rm sed sort tail tr awk find"
+NODE_ABSENT_OPTIONAL_TOOLS="curl gh stat touch timeout"
+
+# Builds the node-absent PATH directory once per file run: links to only the
+# tools above, never node.
+setup_file() {
+  NODE_ABSENT_BIN="$BATS_FILE_TMPDIR/no-node-bin"
+  export NODE_ABSENT_BIN
+  mkdir -p "$NODE_ABSENT_BIN"
+  [ -z "${NODE_ABSENT_BUILD_TRACE:-}" ] || printf 'built\n' >> "$NODE_ABSENT_BUILD_TRACE"
+  local tool tool_path
+  for tool in $NODE_ABSENT_REQUIRED_TOOLS $NODE_ABSENT_OPTIONAL_TOOLS; do
+    tool_path=$(command -v "$tool" 2>/dev/null) || continue
+    case "$tool_path" in /*) ln -s "$tool_path" "$NODE_ABSENT_BIN/$tool" ;; esac
   done
-  IFS="$old_ifs"
+}
+
+# The refresher degrades silently by design, so a tool missing from the minimal
+# PATH would let a no-nudge assertion pass without the budget step ever running.
+# The witness: node is absent, every required tool resolves, and the refresher
+# attempted the fitness check and the attempt failed.
+assert_node_absent_witness() {
+  local call_log="$1" tool fitness_line
+  for tool in $NODE_ABSENT_REQUIRED_TOOLS; do
+    PATH="$NODE_ABSENT_BIN" command -v "$tool" >/dev/null || { echo "missing from minimal PATH: $tool"; return 1; }
+  done
+  PATH="$NODE_ABSENT_BIN" command -v node >/dev/null && { echo "node resolves on the minimal PATH"; return 1; }
+  grep -q '^fitness check exit=[1-9][0-9]*$' "$call_log" || { echo "fitness check was not attempted and failed: $(cat "$call_log" 2>/dev/null)"; return 1; }
+  while IFS= read -r fitness_line; do
+    case "$fitness_line" in
+      fitness*exit=0) echo "a fitness call succeeded with node absent: $fitness_line"; return 1 ;;
+    esac
+  done < "$call_log"
+  return 0
+}
+
+refresh_without_node() {
+  CALL_LOG="$BATS_TEST_TMPDIR/gaia-calls.log"
+  : > "$CALL_LOG"
+  run env HOME="$TEMPORARY_HOME" PATH="$NODE_ABSENT_BIN" GAIA_TEST_CALL_LOG="$CALL_LOG" bash "$REPOSITORY_FIXTURE/.gaia/scripts/check-updates.sh"
+  [ "$status" -eq 0 ]
 }
 
 @test "with node absent the budget signal is skipped and the draft-resume signal still fires" {
-  local bin_directory="$BATS_TEST_TMPDIR/no-node-bin"
-  build_path_without_node "$bin_directory"
-  [ ! -e "$bin_directory/node" ]
   write_words 600 "$REPOSITORY_FIXTURE/CLAUDE.md"
   mkdir -p "$REPOSITORY_FIXTURE/.gaia/local/cleanse"
   printf -- '---\nstatus: draft\n---\n\n# Report\n' > "$REPOSITORY_FIXTURE/.gaia/local/cleanse/KNOWLEDGE-2026-01-01-1200.md"
   commit_fixture
   rm -f "$REPOSITORY_FIXTURE/.gaia/local/cache/shared/update-check.json"
-  run env HOME="$TEMPORARY_HOME" PATH="$bin_directory" bash "$REPOSITORY_FIXTURE/.gaia/scripts/check-updates.sh"
-  [ "$status" -eq 0 ]
+  refresh_without_node
+  assert_node_absent_witness "$CALL_LOG"
   [ "$(cache_value cleanseNudgeReason)" = "resume draft" ]
 }
 
 @test "with node absent an over-budget CLAUDE.md alone records no nudge" {
-  local bin_directory="$BATS_TEST_TMPDIR/no-node-bin"
-  build_path_without_node "$bin_directory"
-  [ ! -e "$bin_directory/node" ]
   write_words 600 "$REPOSITORY_FIXTURE/CLAUDE.md"
   commit_fixture
-  run env HOME="$TEMPORARY_HOME" PATH="$bin_directory" bash "$REPOSITORY_FIXTURE/.gaia/scripts/check-updates.sh"
-  [ "$status" -eq 0 ]
+  refresh_without_node
+  assert_node_absent_witness "$CALL_LOG"
   [ "$(cache_value cleanseNudge)" = "false" ]
   [ "$(cache_value cleanseNudgeReason)" = "" ]
 }

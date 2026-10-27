@@ -21,9 +21,14 @@
 
 bats_require_minimum_version 1.5.0
 
-# How long the held-lock case keeps the ledger lock. The stale-lock reclaim
-# threshold is 30 s, so a longer hold would let the lock lib reclaim it.
-LOCK_HOLD_SECONDS=15
+# The held-lock case keeps the ledger lock until the test touches a release
+# file, so the hold lasts exactly as long as the assertions need it. The
+# releaser gives up after this many seconds so a broken test cannot hang the
+# suite; it stays under the 30 s stale-lock reclaim threshold so the lock lib
+# never reclaims the hold itself.
+LOCK_HOLD_LIMIT_SECONDS=25
+# How long the copy that saves under the lock is watched while the lock is held.
+LOCK_BLOCKED_OBSERVE_SECONDS=2
 
 setup() {
   # shellcheck source=.gaia/scripts/tests/helpers/usage-memo-env.sh
@@ -374,14 +379,22 @@ differs() { if cmp -s "$1" "$2"; then return 1; fi; return 0; }
 # --- 7. held lock and a mid-read append --------------------------------------
 
 @test "lock: a readout started while the ledger lock is held finishes first; a copy that saves under the lock waits for it" {
-  local started_seconds elapsed releaser_pid
+  local started_seconds elapsed releaser_pid mutant_pid mutant_status=0 release_file="$BATS_TEST_TMPDIR/release-lock"
   export GAIA_LEDGER_LOCK_FORCE_FALLBACK=1 GAIA_LEDGER_LOCK_TIMEOUT_SECONDS=60
-  rm -f "$MEMO"
+  rm -f "$MEMO" "$release_file"
   mkdir "$UM_TELEMETRY_DIRECTORY/specs.lock.d"
   started_seconds=$SECONDS
-  ( sleep "$LOCK_HOLD_SECONDS"; rmdir "$UM_TELEMETRY_DIRECTORY/specs.lock.d" ) >/dev/null 2>&1 3>&- &
+  (
+    for _ in $(seq 1 "$((LOCK_HOLD_LIMIT_SECONDS * 10))"); do
+      [ -e "$release_file" ] && break
+      sleep 0.1
+    done
+    rmdir "$UM_TELEMETRY_DIRECTORY/specs.lock.d"
+  ) >/dev/null 2>&1 3>&- &
   releaser_pid=$!
 
+  # The lock stays held until this test releases it, so a readout that waited
+  # for the lock would not finish inside the bound.
   check_same pr "$PR"
   elapsed=$((SECONDS - started_seconds))
   [ -d "$UM_TELEMETRY_DIRECTORY/specs.lock.d" ]
@@ -389,8 +402,9 @@ differs() { if cmp -s "$1" "$2"; then return 1; fi; return 0; }
   assert_trace "write=ok"
   [ -f "$MEMO" ]
 
-  # Guard red, in the same hold window: a copy whose save takes the ledger lock
-  # waits out the hold, so the bound above is not a property of a fast machine.
+  # Guard red, in the same hold: a copy whose save takes the ledger lock must
+  # still be running after the observation interval while the lock is held, and
+  # finishes only once the test releases it.
   make_tree lock
   mutate "$MUTANT_TREE/$LIBRARY" 'gaia_usage_memo_save() {' '_gaia_usage_memo_save_inner() {'
   printf '%s\n' \
@@ -399,12 +413,23 @@ differs() { if cmp -s "$1" "$2"; then return 1; fi; return 0; }
     '  with_ledger_lock "${1%/*}" _gaia_usage_memo_save_inner "$1"' \
     '}' >>"$MUTANT_TREE/$LIBRARY"
   rm -f "$MEMO"
-  run_mutant_tree "$MUTANT_TREE" "$NEW_OUTPUT_FILE" "$NEW_ERROR_FILE" pr "$PR"
-  elapsed=$((SECONDS - started_seconds))
-  [ "$elapsed" -ge "$((LOCK_HOLD_SECONDS - 3))" ]
+  run_mutant_tree "$MUTANT_TREE" "$NEW_OUTPUT_FILE" "$NEW_ERROR_FILE" pr "$PR" 3>&- &
+  mutant_pid=$!
+  sleep "$LOCK_BLOCKED_OBSERVE_SECONDS"
+  if ! kill -0 "$mutant_pid" 2>/dev/null; then
+    touch "$release_file"
+    wait "$releaser_pid"
+    printf 'the copy that saves under the lock finished while the lock was held\n' >&2
+    return 1
+  fi
+  [ -d "$UM_TELEMETRY_DIRECTORY/specs.lock.d" ]
+  [ ! -e "$MEMO" ]
+  touch "$release_file"
+  wait "$mutant_pid" || mutant_status=$?
+  wait "$releaser_pid"
+  [ "$mutant_status" = 0 ]
   assert_priced "$NEW_OUTPUT_FILE"
   assert_same "$OLD_OUTPUT_FILE" "$NEW_OUTPUT_FILE"
-  wait "$releaser_pid"
 }
 
 @test "seam: rows appended between the warm-up and the parse are found by the coverage check" {

@@ -19,6 +19,33 @@ setup() {
   reaper_setup
 }
 
+# The table fixture is built once and `list` runs over it twice (list is
+# read-only, which is what makes sharing safe). The two outputs, the on-disk
+# state around them and the gh call log after the first run are saved under
+# BATS_FILE_TMPDIR; the table tests assert on those saved artifacts.
+setup_file() {
+  load helpers/research-reaper-fixture.sh
+  SHARED="$BATS_FILE_TMPDIR/table"
+  export SHARED
+  mkdir -p "$SHARED"
+  (
+    # The helper roots its scratch at BATS_TEST_TMPDIR, which setup_file lacks.
+    BATS_TEST_TMPDIR="$SHARED/scratch"
+    mkdir -p "$BATS_TEST_TMPDIR"
+    reaper_setup
+    build_table_fixture
+    tree_digest >"$SHARED/tree-before"
+    catalog_snapshot >"$SHARED/catalog-before"
+    local status=0
+    bash "$REAPER" list >"$SHARED/output-first" 2>"$SHARED/stderr-first" || status=$?
+    printf '%s\n' "$status" >"$SHARED/status-first"
+    cp "$GH_STUB_DIR/calls.log" "$SHARED/calls-after-first"
+    bash "$REAPER" list >"$SHARED/output-second" 2>"$SHARED/stderr-second" || true
+    tree_digest >"$SHARED/tree-after"
+    catalog_snapshot >"$SHARED/catalog-after"
+  ) || return 1
+}
+
 # name|rule: one kept folder (keep-<name>) per row, with a twin (twin-<name>)
 # identical except that the rule no longer applies.
 KEEP_RULE_TABLE='active|status-active
@@ -125,9 +152,9 @@ EOF
 }
 
 @test "list: every folder failing a keep rule is kept with that rule and never eligible" {
-  build_table_fixture
-  run_reaper list
-  [ "$status" -eq 0 ]
+  [ "$(cat "$SHARED/status-first")" -eq 0 ]
+  local output
+  output="$(cat "$SHARED/output-first")"
   local name rule checked=0 expected_rule
   while IFS='|' read -r name rule; do
     [ -n "$name" ] || continue
@@ -149,9 +176,9 @@ EOF
 }
 
 @test "list: a twin that differs only in the rule no longer applying is eligible, so each rule is live" {
-  build_table_fixture
-  run_reaper list
-  [ "$status" -eq 0 ]
+  [ "$(cat "$SHARED/status-first")" -eq 0 ]
+  local output
+  output="$(cat "$SHARED/output-first")"
   local name rule checked=0
   while IFS='|' read -r name rule; do
     [ -n "$name" ] || continue
@@ -169,9 +196,9 @@ EOF
 }
 
 @test "list: untagged, row-less and loose files are reported, and a folder cited only by an abandoned spec is eligible" {
-  build_table_fixture
-  run_reaper list
-  [ "$status" -eq 0 ]
+  [ "$(cat "$SHARED/status-first")" -eq 0 ]
+  local output
+  output="$(cat "$SHARED/output-first")"
   [ "$(printf '%s' "$output" | jq -c '.reported.untagged | sort')" = '["keep-untagged"]' ]
   [ "$(printf '%s' "$output" | jq -c '.reported.rowless')" = '["keep-norow"]' ]
   [ "$(printf '%s' "$output" | jq -c '.reported.loose_files')" = '["loose-notes.txt"]' ]
@@ -180,10 +207,8 @@ EOF
 }
 
 @test "list: runs one GitHub read for all candidates, never one per folder" {
-  build_table_fixture
-  run_reaper list
-  [ "$status" -eq 0 ]
-  [ "$(grep -c '^api ' "$GH_STUB_DIR/calls.log")" -eq 1 ]
+  [ "$(cat "$SHARED/status-first")" -eq 0 ]
+  [ "$(grep -c '^api ' "$SHARED/calls-after-first")" -eq 1 ]
 }
 
 @test "list: a folder with nothing left to ask GitHub about makes no GitHub call" {
@@ -371,16 +396,10 @@ EOF
 # --- read-only, usage and readiness ----------------------------------------
 
 @test "list: twice in a row prints byte-identical output and changes nothing on disk" {
-  build_table_fixture
-  local before_tree before_catalog first_output
-  before_tree="$(tree_digest)"
-  before_catalog="$(catalog_snapshot)"
-  run_reaper list
-  first_output="$output"
-  run_reaper list
-  [ "$output" = "$first_output" ]
-  [ "$(tree_digest)" = "$before_tree" ]
-  [ "$(catalog_snapshot)" = "$before_catalog" ]
+  [ "$(cat "$SHARED/status-first")" -eq 0 ]
+  cmp "$SHARED/output-first" "$SHARED/output-second"
+  cmp "$SHARED/tree-before" "$SHARED/tree-after"
+  cmp "$SHARED/catalog-before" "$SHARED/catalog-after"
 }
 
 @test "list: with no verb is the same as list, and a stray operand is a usage error" {
