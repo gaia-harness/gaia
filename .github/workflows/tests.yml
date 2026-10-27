@@ -39,8 +39,8 @@ jobs:
       # Only SESSION_SECRET comes from a repo secret; its placeholder fallback lets PRs from forks
       # (which can't read repo secrets) still run the suite. The other values are non-production
       # placeholders: MSW intercepts outbound HTTP in CI, so no real endpoint is needed. SITE_URL is
-      # the Playwright site address and must stay a non-production host; API_URL prefixes the MSW
-      # mock routes.
+      # the host the app treats as production, so it must differ from the dev-server host the e2e
+      # run uses; API_URL prefixes the MSW mock routes.
       API_URL: 'http://localhost:3000/api'
       MSW_ENABLED: 'true'
       SESSION_SECRET: ${{ secrets.SESSION_SECRET || 'ci-placeholder-session-secret-not-real' }}
