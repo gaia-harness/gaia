@@ -1,6 +1,12 @@
 import {afterEach, beforeEach, describe, expect, test, vi} from 'vitest';
 import {execFileSync} from 'node:child_process';
-import {mkdtempSync, readFileSync, rmSync, writeFileSync} from 'node:fs';
+import {
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs';
 import {tmpdir} from 'node:os';
 import path from 'node:path';
 import {writeFrontendRegistry} from '../util/package-fixture.js';
@@ -169,12 +175,20 @@ describe('update-deps run isolation from global tools', () => {
     expect(payload).not.toContain('@playwright/cli');
   });
 
-  test('run.ts does not import global-tools', () => {
-    const source = readFileSync(
-      path.join(import.meta.dirname, 'run.ts'),
-      'utf8'
+  test('run.ts and its run-* modules do not import global-tools', () => {
+    const runModules = readdirSync(import.meta.dirname).filter(
+      (name) =>
+        /^run(?:-[a-z-]+)?\.ts$/u.test(name) && !name.endsWith('.test.ts')
     );
 
-    expect(source).not.toContain('global-tools');
+    expect(runModules).toContain('run.ts');
+
+    const importers = runModules.filter((name) =>
+      readFileSync(path.join(import.meta.dirname, name), 'utf8').includes(
+        'global-tools'
+      )
+    );
+
+    expect(importers).toEqual([]);
   });
 });

@@ -33,7 +33,7 @@ const LEDGER_RELATIVE_PATH = path.join(
 
 /**
  * Minimal structural view of the emitted updates payload, just the fields the
- * count helpers need. Declared locally (not imported from `run.ts`) so this
+ * count helpers need. Declared locally (not imported from `run-types.ts`) so this
  * module stays free of an import cycle.
  */
 export type CountablePayload = {
