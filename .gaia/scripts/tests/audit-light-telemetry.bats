@@ -695,3 +695,97 @@ preexisting_lines() {
   cmp -s "$SCRIPT" "$scratch/audit-light-telemetry.sh" && return 1
   [ "$(preexisting_lines "$scratch/audit-light-telemetry.sh")" != "$baseline_figures" ]
 }
+
+# ---------------------------------------------------------------------------
+# tally and follow-up: cost events stay out of every reader
+# ---------------------------------------------------------------------------
+
+# log_cost_event <branch> <member>: one dispatch_cost fixture line.
+log_cost_event() {
+  log_json "$(jq -n -c --arg branch "$1" --arg member "$2" \
+    '{event: "dispatch_cost", schema: 1, branch: $branch, member: $member, kind: "member", state: "ok"}')"
+}
+
+# write_kill_log_with_cost: write_kill_log with cost events interleaved, ending
+# in frontend cost events on a branch (b9) that has no other event.
+write_kill_log_with_cost() {
+  log_event route b1 "$FRONTEND_MEMBER" light-eligible
+  log_cost_event b1 "$FRONTEND_MEMBER"
+  log_event outcome b1 "$FRONTEND_MEMBER" clear
+  log_event route b2 "$FRONTEND_MEMBER" no-full-clearance
+  log_cost_event b2 "$SHELL_MEMBER"
+  log_event route b2 "$SHELL_MEMBER" refusal-anchored
+  log_event outcome b2 "$SHELL_MEMBER" clear
+  log_event route b3 "$FRONTEND_MEMBER" over-cap
+  log_event route b3 "$SHELL_MEMBER" over-cap
+  log_event outcome b3 "$SHELL_MEMBER" escalate
+  log_event route b4 "$SHELL_MEMBER" light-eligible
+  log_cost_event b9 "$FRONTEND_MEMBER"
+  log_cost_event b9 "$FRONTEND_MEMBER"
+}
+
+# tally_with_and_without_cost <script> <tally args...>: sets plain_figures and
+# cost_figures to the tally of the fixture log without and with cost events.
+tally_with_and_without_cost() {
+  local script="$1"
+  shift
+  rm -f "$LOG"
+  write_kill_log
+  plain_figures="$(bash "$script" tally --root "$ROOT" "$@")"
+  rm -f "$LOG"
+  write_kill_log_with_cost
+  cost_figures="$(bash "$script" tally --root "$ROOT" "$@")"
+}
+
+@test "tally output is byte-identical with cost events interleaved, in a window the cost-only branch would enter and in the default window" {
+  tally_with_and_without_cost "$SCRIPT" --window 3
+  [ -n "$plain_figures" ]
+  [ "$plain_figures" = "$cost_figures" ]
+  tally_with_and_without_cost "$SCRIPT"
+  [ "$plain_figures" = "$cost_figures" ]
+}
+
+@test "a scratch copy without the event-type allowlist lets a cost-only branch change window_prs" {
+  scratch="$BATS_TEST_TMPDIR/scratch-allowlist"
+  mkdir -p "$scratch"
+  cp "$SCRIPT" "$REPO_ROOT/.gaia/scripts/main-root-lib.sh" "$REPO_ROOT/.gaia/scripts/audit-key-lib.sh" "$scratch/"
+  sed 's/ and (\.event | IN([^)]*))//' "$SCRIPT" > "$scratch/audit-light-telemetry.sh"
+  cmp -s "$SCRIPT" "$scratch/audit-light-telemetry.sh" && return 1
+  tally_with_and_without_cost "$scratch/audit-light-telemetry.sh" --window 4
+  plain_window="$(grep -x 'window_prs: .*' <<<"$plain_figures")"
+  cost_window="$(grep -x 'window_prs: .*' <<<"$cost_figures")"
+  [ "$plain_window" = "window_prs: 3" ]
+  [ "$plain_window" != "$cost_window" ]
+}
+
+# followup_without_time <yes|no>: the escalation follow-up the member-result
+# subcommand appends, minus its timestamp, with cost events before it or not.
+followup_without_time() {
+  rm -f "$LOG"
+  write_light_route_record
+  run_route
+  run_outcome --verdict escalate
+  if [ "$1" = "yes" ]; then
+    log_json "$(jq -n -c --arg branch "$SLUG" --arg member "$MEMBER" --arg digest "$DIGEST" --arg tree "$TREE" \
+      '{event: "dispatch_cost", schema: 1, branch: $branch, member: $member, kind: "member", digest: $digest, tree: $tree, state: "ok"}')"
+  fi
+  bash "$WRITER" --root "$ROOT" --member "$MEMBER" --provenance refused >/dev/null
+  write_sidecar '[{"path":"frontend/app/x.tsx","line":12,"title":"a"}]'
+  run_member_result
+  jq -c 'select(.event == "escalation_followup") | del(.at)' "$LOG"
+}
+
+@test "member-result appends the same escalation follow-up with cost events for the same member, branch and tree before it" {
+  enable_maintainer_repo
+  plain_followup="$(followup_without_time no)"
+  cost_followup="$(followup_without_time yes)"
+  [ "$(jq -r '.route_digest' <<<"$plain_followup")" = "$DIGEST" ]
+  [ "$plain_followup" = "$cost_followup" ]
+}
+
+# bats test_tags=whole-tree
+@test "the telemetry script stays within its recorded line ceiling" {
+  ceiling="$(jq -r '.ceilings[".gaia/scripts/audit-light-telemetry.sh"]' "$REPO_ROOT/.claude/maintainers/line-limit-ceilings.json")"
+  [ "$ceiling" -gt 0 ]
+  [ "$(wc -l < "$SCRIPT")" -le "$ceiling" ]
+}

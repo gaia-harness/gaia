@@ -120,6 +120,9 @@
 .gaia/scripts/bats-suites-for-change.sh
 # Appends light-review routing events to a local log and tallies it. Adopters record nothing, and the tally reads a log only the maintainer repo ever writes, so an adopter clone would carry a script nothing invokes. Its shipped callers sit inside maintainer-only blocks the bundle-time scrub removes.
 .gaia/scripts/audit-light-telemetry.sh
+# Measure and report audit dispatch cost into the maintainer's local telemetry log. Every caller sits inside a maintainer-only block the bundle-time scrub removes, so an adopter clone would carry scripts nothing invokes.
+.gaia/scripts/audit-dispatch-cost-lib.sh
+.gaia/scripts/audit-dispatch-cost-report.sh
 # Deterministic lint over GAIA's own framework shell; every runner (shell-lint.sh and its sibling bats suite) is release-excluded, so an adopter clone would carry a check nothing invokes.
 .gaia/scripts/lint-hook-array-guard.sh
 # Invariant check over the audit agent definitions; its only runner is its own release-excluded bats suite, so an adopter clone would carry a check nothing invokes.
