@@ -309,7 +309,7 @@ second_branch_from_base() {
   mkdir -p "$scratch/.claude/hooks"
   cp -R "$MGF_LIBRARY_DIRECTORY" "$scratch/.claude/hooks/lib"
   ln -s "$MGF_REPO_ROOT/.gaia" "$scratch/.gaia"
-  cp "$MGF_HOOK" "$scratch/.claude/hooks/pr-merge-audit-check.sh"
+  cp "$MGF_HOOK" "${MGF_HOOK%.sh}"-*.sh "$scratch/.claude/hooks/"
   mutant="$scratch/.claude/hooks/pr-merge-audit-check.sh"
   perl -0pi -e 's/"\$branch_key"; LC_ALL=C sort -z/""; LC_ALL=C sort -z/' "$scratch/.claude/hooks/lib/audit-digest.sh"
   if cmp -s "$scratch/.claude/hooks/lib/audit-digest.sh" "$MGF_LIBRARY_DIRECTORY/audit-digest.sh"; then
@@ -396,7 +396,7 @@ second_branch_from_base() {
   cp -R "$MGF_LIBRARY_DIRECTORY" "$scratch/.claude/hooks/lib"
   rm "$scratch/.claude/hooks/lib/audit-branch-patch.sh"
   ln -s "$MGF_REPO_ROOT/.gaia" "$scratch/.gaia"
-  cp "$MGF_HOOK" "$scratch/.claude/hooks/pr-merge-audit-check.sh"
+  cp "$MGF_HOOK" "${MGF_HOOK%.sh}"-*.sh "$scratch/.claude/hooks/"
   cleared_pull_request
 
   mgf_run_merge "gh pr merge 12 --squash" "$scratch/.claude/hooks/pr-merge-audit-check.sh"

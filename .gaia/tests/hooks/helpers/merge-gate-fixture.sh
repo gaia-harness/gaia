@@ -228,15 +228,20 @@ mgf_post_count() {
 # its own location, so a mutant runs exactly as the real hook would. Prints the
 # copy's path; fails when the substitution changed nothing.
 mgf_scratch_hook() {
-  local scratch="$BATS_TEST_TMPDIR/scratch-$RANDOM" copy
+  local scratch="$BATS_TEST_TMPDIR/scratch-$RANDOM" source changed=0
   mkdir -p "$scratch/.claude/hooks"
   ln -s "$MGF_LIBRARY_DIRECTORY" "$scratch/.claude/hooks/lib"
   ln -s "$MGF_REPO_ROOT/.gaia" "$scratch/.gaia"
-  copy="$scratch/.claude/hooks/pr-merge-audit-check.sh"
-  perl -0pe "$1" "$MGF_HOOK" > "$copy"
-  if cmp -s "$copy" "$MGF_HOOK"; then
+  # The hook and its pr-merge-audit-check-*.sh siblings are one program: carry
+  # them all and apply the substitution wherever its text now lives.
+  for source in "$MGF_HOOK" "${MGF_HOOK%.sh}"-*.sh; do
+    [ -f "$source" ] || continue
+    perl -0pe "$1" "$source" > "$scratch/.claude/hooks/${source##*/}"
+    cmp -s "$scratch/.claude/hooks/${source##*/}" "$source" || changed=1
+  done
+  if [ "$changed" -eq 0 ]; then
     printf 'mutation left the hook unchanged: %s\n' "$1" >&2
     return 1
   fi
-  printf '%s\n' "$copy"
+  printf '%s\n' "$scratch/.claude/hooks/pr-merge-audit-check.sh"
 }

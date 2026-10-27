@@ -201,7 +201,9 @@ setup() {
     cp "$REPO_ROOT/.gaia/scripts/$script_name" "$MAIN/.gaia/scripts/$script_name"
     chmod +x "$MAIN/.gaia/scripts/$script_name"
   done
-  for script_name in pr-merge-audit-check.sh post-audit-status.sh; do
+  for script_name in pr-merge-audit-check.sh pr-merge-audit-check-context.sh pr-merge-audit-check-signals.sh \
+           pr-merge-audit-check-binding.sh pr-merge-audit-check-bypass.sh pr-merge-audit-check-dispatch.sh \
+           post-audit-status.sh; do
     cp "$REPO_ROOT/.claude/hooks/$script_name" "$MAIN/.claude/hooks/$script_name"
     chmod +x "$MAIN/.claude/hooks/$script_name"
   done
@@ -254,6 +256,7 @@ setup() {
   SCRIPT_WRITE_CLEARANCE="$MAIN/.gaia/scripts/audit-write-clearance.sh"
   HOOK_POST="$MAIN/.claude/hooks/post-audit-status.sh"
   HOOK_MERGE="$MAIN/.claude/hooks/pr-merge-audit-check.sh"
+  HOOK_MERGE_CONTEXT="$MAIN/.claude/hooks/pr-merge-audit-check-context.sh"
   AGENT_MD="$MAIN/.claude/agents/code-audit-frontend.md"
   DIGEST_LIBRARY="$MAIN/.claude/hooks/lib/audit-digest.sh"
 
@@ -897,7 +900,7 @@ run_audit_root_block() {
 
 @test "stage 7 non-vacuity (source mutation): collapsing the main-anchored root onto the acting tree turns the store assertion red while the digest assertion stays green; byte-identical restore verified" {
   local orig_sum member_name digest payload start mutated_sum store_went_red=0 digest_stayed_green=0 restored_sum worktree_frontend_digest
-  orig_sum="$(backup_file "$HOOK_MERGE")"
+  orig_sum="$(backup_file "$HOOK_MERGE_CONTEXT")"
 
   # Baseline (unmutated): the store assertion holds.
   for member_name in "${ALL_MEMBERS[@]}"; do
@@ -907,7 +910,7 @@ run_audit_root_block() {
   invoke_merge_hook_in "$WORKTREE" "$payload"
   if grep -qF -- '"permissionDecision": "deny"' <<<"$output"; then
     echo "baseline (unmutated) stage 7 store assertion failed: $output" >&2
-    restore_file "$HOOK_MERGE" "$orig_sum"
+    restore_file "$HOOK_MERGE_CONTEXT" "$orig_sum"
     return 1
   fi
 
@@ -919,23 +922,23 @@ run_audit_root_block() {
   invoke_merge_hook_in "$WORKTREE" "$payload"
   if ! grep -qF -- "$worktree_frontend_digest" <<<"$output"; then
     echo "baseline (unmutated) stage 7 digest assertion failed: $output" >&2
-    restore_file "$HOOK_MERGE" "$orig_sum"
+    restore_file "$HOOK_MERGE_CONTEXT" "$orig_sum"
     return 1
   fi
 
   # Mutation: collapse the main-anchored `root` derivation onto the
   # acting-tree toplevel query -- the exact simplification FC-4 forbids.
-  start=$(grep -n '^root=""$' "$HOOK_MERGE" | head -1 | cut -d: -f1)
+  start=$(grep -n '^root=""$' "$HOOK_MERGE_CONTEXT" | head -1 | cut -d: -f1)
   if [ -z "$start" ]; then
     echo "could not locate the main-anchored root derivation" >&2
-    restore_file "$HOOK_MERGE" "$orig_sum"
+    restore_file "$HOOK_MERGE_CONTEXT" "$orig_sum"
     return 1
   fi
-  mutate_lines "$HOOK_MERGE" "$start" $((start + 4)) 'root="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"'
-  mutated_sum="$(sha_of "$HOOK_MERGE")"
+  mutate_lines "$HOOK_MERGE_CONTEXT" "$start" $((start + 4)) 'root="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"'
+  mutated_sum="$(sha_of "$HOOK_MERGE_CONTEXT")"
   if [ "$mutated_sum" = "$orig_sum" ]; then
     echo "mutation did not change the file" >&2
-    restore_file "$HOOK_MERGE" "$orig_sum"
+    restore_file "$HOOK_MERGE_CONTEXT" "$orig_sum"
     return 1
   fi
 
@@ -956,8 +959,8 @@ run_audit_root_block() {
   invoke_merge_hook_in "$WORKTREE" "$payload"
   grep -qF -- "$worktree_frontend_digest" <<<"$output" && digest_stayed_green=1
 
-  restore_file "$HOOK_MERGE" "$orig_sum"
-  restored_sum="$(sha_of "$HOOK_MERGE")"
+  restore_file "$HOOK_MERGE_CONTEXT" "$orig_sum"
+  restored_sum="$(sha_of "$HOOK_MERGE_CONTEXT")"
   [ "$restored_sum" = "$orig_sum" ] || { echo "restore did not reproduce the original bytes" >&2; return 1; }
 
   [ "$store_went_red" -eq 1 ] || { echo "the store assertion did not go red under the mutation" >&2; return 1; }

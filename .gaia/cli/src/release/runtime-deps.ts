@@ -124,7 +124,7 @@ const PATH_PREFIXES = ['.gaia/', '.claude/', '.github/'] as const;
  * adjudicated against this allowlist as that directory rather than as the
  * longer token its literal spelling would produce.
  *
- *   - `.github/workflows`: named in `.claude/hooks/pr-merge-audit-check.sh`'s
+ *   - `.github/workflows`: named in `.claude/hooks/pr-merge-audit-check-dispatch.sh`'s
  *     merge-gate error message as an example in-scope path, alongside
  *     `frontend/app/`, `frontend/test/`, `configs`. The directory is release-excluded; the reference is
  *     descriptive, not an invocation. An inline-ignore comment cannot annotate

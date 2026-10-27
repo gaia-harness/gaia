@@ -90,6 +90,11 @@
     ".claude/hooks/ports-session-start.sh": "owned",
     ".claude/hooks/post-audit-status.sh": "owned",
     ".claude/hooks/post-findings-block-on-merge.sh": "owned",
+    ".claude/hooks/pr-merge-audit-check-binding.sh": "owned",
+    ".claude/hooks/pr-merge-audit-check-bypass.sh": "owned",
+    ".claude/hooks/pr-merge-audit-check-context.sh": "owned",
+    ".claude/hooks/pr-merge-audit-check-dispatch.sh": "owned",
+    ".claude/hooks/pr-merge-audit-check-signals.sh": "owned",
     ".claude/hooks/pr-merge-audit-check.sh": "owned",
     ".claude/hooks/pr-merge-cost.sh": "owned",
     ".claude/hooks/provision-worktree.sh": "owned",
@@ -381,6 +386,10 @@
     ".gaia/scripts/usage-render-lib.sh": "owned",
     ".gaia/scripts/usage-resolve-lib.sh": "owned",
     ".gaia/scripts/usage.sh": "owned",
+    ".gaia/scripts/verify-audit-roster-coverage.sh": "owned",
+    ".gaia/scripts/verify-audit-roster-dialect.sh": "owned",
+    ".gaia/scripts/verify-audit-roster-keys.sh": "owned",
+    ".gaia/scripts/verify-audit-roster-registration.sh": "owned",
     ".gaia/scripts/verify-audit-roster.sh": "owned",
     ".gaia/scripts/worktree-ports-lib.sh": "owned",
     ".gaia/scripts/worktree-removal-check.sh": "owned",
@@ -809,7 +818,7 @@
     "wiki/overview.md": "wiki-owned",
     "wiki/README.md": "wiki-owned"
   },
-  "generated": "2026-10-27T22:00:41.076Z",
+  "generated": "2026-10-27T22:30:11.045Z",
   "regions": [
     {
       "endMarker": "<!-- gaia:audit-remit:end -->",
