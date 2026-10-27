@@ -21,6 +21,7 @@ A release change that requires the adopter to act, run a command or hand-migrate
 
 ### Changed
 
+- **`/gaia-codify` declines are shared with the team:** a decline is now a small committed file in `.gaia/codify-declines/`, published through the codify pull request, so once it merges it suppresses the candidate on every teammate's clone. It lifts on a material rise, a tally-schema change, or once it is older than one tally window, and every `/gaia-codify` run lists team-declined classes where a teammate can override one with an approval. A run that only declines now opens a pull request. Migration: no action needed; existing machine-local declines keep suppressing on their own clone until each is older than one tally window, after which `.gaia/local/codify/declines.json` can be deleted (#2837, #3116)
 - **CI back on ubuntu-latest (maintainer repo only):** GAIA's own test, lint and triage workflows run on ubuntu-latest (Ubuntu 26.04) again, so CI exercises the runner adopters are moving to. The release workflow stays on ubuntu-24.04 until a release run is proven on 26.04 (#3082, #3111)
 
 ### Fixed
