@@ -81,6 +81,9 @@
 # adopter clone does have a populated scan surface, so neither withhold rests on
 # an empty one.
 .gaia/scripts/lint-errexit-status-read.sh
+# The two halves of that lint's shared detector, sourced only by it, withheld with it.
+.gaia/scripts/lint-errexit-status-read-walk.sh
+.gaia/scripts/lint-errexit-status-read-detect.sh
 # The SIGPIPE-reader lint flags a short-circuiting reader -- a `grep` or `rg` told to stop early, in whichever spelling the gate's own header enumerates -- standing downstream of a pipe where `pipefail` is armed, in a tracked shell script or in an Actions `run:` body, the shape whose pipeline status inverts on a match because the reader closes the pipe and the upstream dies of SIGPIPE. Withheld on the same reasoning as the lints above: every one of its runners is release-excluded, so shipping this file would ship a check nothing on an adopter clone invokes. Those runners are shell-lint.sh, excluded by the .gaia/tests entry below, and the sibling bats suite .gaia/scripts/tests/lint-sigpipe-readers.bats via the separate .gaia/scripts/tests entry beside it. It also sources guard-awk-lib.sh, withheld just below, so the absent dependency would decide the withhold on its own. An adopter clone does carry a populated scan surface, so neither withhold rests on an empty one.
 .gaia/scripts/lint-sigpipe-readers.sh
 # The awk-source library the bats-arming shell guards source; every one of those guards is itself withheld above, so nothing on an adopter clone sources it.
