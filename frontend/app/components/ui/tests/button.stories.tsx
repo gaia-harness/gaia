@@ -1,25 +1,27 @@
-import type {ComponentProps, MouseEvent} from 'react';
+import type {ComponentProps, MouseEvent, MouseEventHandler} from 'react';
 import {Fragment} from 'react';
 import {useTranslation} from 'react-i18next';
 import {Link, NavLink} from 'react-router';
-import type {Meta, StoryFn, StoryObj} from '@storybook/react-vite';
 import {cn} from 'cn';
 import {StarIcon} from 'lucide-react';
 import {expect, fn, userEvent, within} from 'storybook/test';
 import stubs from 'test/stubs';
+import preview from '#.storybook/preview';
 import {Button, buttonVariants} from '~/components/ui/button';
 import {Spinner} from '~/components/ui/spinner';
 
-const meta: Meta = {
+// Stories whose args exceed the component's props: the link stories hand an
+// onClick spy to an anchor, which Button's own onClick type would reject.
+type StoryArgs = {onClick?: MouseEventHandler<HTMLElement>};
+
+const meta = preview.type<{args: StoryArgs}>().meta({
   component: Button,
   decorators: [stubs.reactRouter({destinations: ['/target']})],
   parameters: {
     wrap: 'w-fit p-4',
   },
   title: 'Components/Ui/Button',
-};
-
-export default meta;
+});
 
 // Compile-time guard: fails when a variant or size is missing from the lists
 // below, so a registry overwrite that adds one cannot leave the grid behind.
@@ -109,24 +111,32 @@ const ButtonGrid = ({
   );
 };
 
-export const Default: StoryFn = () => <ButtonGrid />;
+export const Default = meta.story({render: () => <ButtonGrid />});
 
-export const Disabled: StoryFn = () => <ButtonGrid isDisabled={true} />;
+export const Disabled = meta.story({
+  render: () => <ButtonGrid isDisabled={true} />,
+});
 
-export const Loading: StoryFn = () => <ButtonGrid isLoading={true} />;
-Loading.parameters = {
-  chromatic: {disableSnapshot: true},
-};
+export const Loading = meta.story({
+  parameters: {
+    chromatic: {disableSnapshot: true},
+  },
+  render: () => <ButtonGrid isLoading={true} />,
+});
 
-export const Invalid: StoryFn = () => <ButtonGrid isInvalid={true} />;
+export const Invalid = meta.story({
+  render: () => <ButtonGrid isInvalid={true} />,
+});
 
-export const Icon: StoryFn = () => <ButtonGrid content="icon" />;
+export const Icon = meta.story({render: () => <ButtonGrid content="icon" />});
 
-export const IconDisabled: StoryFn = () => (
-  <ButtonGrid content="icon" isDisabled={true} />
-);
+export const IconDisabled = meta.story({
+  render: () => <ButtonGrid content="icon" isDisabled={true} />,
+});
 
-export const IconText: StoryFn = () => <ButtonGrid content="icon-text" />;
+export const IconText = meta.story({
+  render: () => <ButtonGrid content="icon-text" />,
+});
 
 type LinkButtonProps = {label?: string; to?: string};
 
@@ -173,9 +183,7 @@ const ExternalLinkButton = () => {
   );
 };
 
-const expectLinkSemantics = async (canvasElement: HTMLElement) => {
-  const link = within(canvasElement).getByRole('link');
-
+const expectLinkSemantics = async (link: HTMLElement) => {
   await expect(link).toHaveAttribute('data-slot', 'button');
   await expect(link).not.toHaveAttribute('type');
   await expect(link).toHaveClass(
@@ -183,53 +191,28 @@ const expectLinkSemantics = async (canvasElement: HTMLElement) => {
   );
 };
 
-export const AsLink: StoryObj<typeof meta> = {
-  play: async ({canvasElement}) => {
-    await expectLinkSemantics(canvasElement);
-    await expect(within(canvasElement).getByRole('link')).toHaveAttribute(
-      'href',
-      '/'
-    );
-  },
+export const AsLink = meta.story({
   render: () => <LinkButton />,
-};
+});
 
-export const AsNavLink: StoryObj<typeof meta> = {
-  play: async ({canvasElement}) => {
-    await expectLinkSemantics(canvasElement);
-    await expect(within(canvasElement).getByRole('link')).toHaveAttribute(
-      'href',
-      '/'
-    );
-  },
+export const AsNavLink = meta.story({
   render: () => <NavLinkButton />,
-};
+});
 
-export const AsExternalLink: StoryObj<typeof meta> = {
-  play: async ({canvasElement}) => {
-    await expectLinkSemantics(canvasElement);
-    await expect(within(canvasElement).getByRole('link')).toHaveAttribute(
-      'href',
-      'https://example.com'
-    );
-  },
+export const AsExternalLink = meta.story({
   render: () => <ExternalLinkButton />,
-};
+});
 
-// The navigating stories end on the destination page, so the render-only link
-// stories above stay axe-scanned in their resting state.
-const navigatesOnClick: StoryObj<typeof meta>['play'] = async ({
-  canvasElement,
-}) => {
+// The navigating behaviors run as tests, so the link stories stay axe-scanned
+// in their resting state.
+const expectNavigatesOnClick = async (canvasElement: HTMLElement) => {
   await userEvent.click(within(canvasElement).getByRole('link', {name: 'Go'}));
   await expect(
     await within(canvasElement).findByText('Navigated to /target')
   ).toBeVisible();
 };
 
-const navigatesOnEnter: StoryObj<typeof meta>['play'] = async ({
-  canvasElement,
-}) => {
+const expectNavigatesOnEnter = async (canvasElement: HTMLElement) => {
   await userEvent.tab();
   await expect(
     within(canvasElement).getByRole('link', {name: 'Go'})
@@ -240,46 +223,21 @@ const navigatesOnEnter: StoryObj<typeof meta>['play'] = async ({
   ).toBeVisible();
 };
 
-export const LinkNavigatesOnClick: StoryObj<typeof meta> = {
-  play: navigatesOnClick,
+export const LinkNavigates = meta.story({
   render: () => <LinkButton label="Go" to="/target" />,
-};
+});
 
-export const LinkNavigatesOnEnter: StoryObj<typeof meta> = {
-  play: navigatesOnEnter,
-  render: () => <LinkButton label="Go" to="/target" />,
-};
-
-export const NavLinkNavigatesOnClick: StoryObj<typeof meta> = {
-  play: navigatesOnClick,
+export const NavLinkNavigates = meta.story({
   render: () => <NavLinkButton label="Go" to="/target" />,
-};
-
-export const NavLinkNavigatesOnEnter: StoryObj<typeof meta> = {
-  play: navigatesOnEnter,
-  render: () => <NavLinkButton label="Go" to="/target" />,
-};
+});
 
 // The handler stops the navigation so the test never leaves the page, and
 // records that Enter activated the link.
-export const ExternalLinkActivatesOnEnter: StoryObj<typeof meta> = {
+export const ExternalLinkActivatesOnEnter = meta.story({
   args: {
-    onClick: fn((event: MouseEvent<HTMLAnchorElement>) => {
+    onClick: fn((event: MouseEvent<HTMLElement>) => {
       event.preventDefault();
     }),
-  },
-  play: async ({args, canvasElement}) => {
-    await userEvent.tab();
-
-    const link = within(canvasElement).getByRole('link', {name: 'Docs'});
-
-    await expect(link).toHaveFocus();
-    await userEvent.keyboard('{Enter}');
-    await expect(link).toHaveAttribute('href', 'https://example.com/docs');
-    await expect(args.onClick).toHaveBeenCalledTimes(1);
-    await expect(args.onClick).toHaveBeenCalledWith(
-      expect.objectContaining({type: 'click'})
-    );
   },
   render: (args) => (
     <Button
@@ -292,22 +250,89 @@ export const ExternalLinkActivatesOnEnter: StoryObj<typeof meta> = {
       Docs
     </Button>
   ),
-};
+});
 
-export const DisabledDoesNotFire: StoryObj<typeof meta> = {
+export const DisabledDoesNotFire = meta.story({
   args: {onClick: fn()},
-  play: async ({args, canvasElement}) => {
-    const button = within(canvasElement).getByRole('button', {name: 'Save'});
+  render: (args) => (
+    <Button disabled={true} onClick={args.onClick}>
+      Save
+    </Button>
+  ),
+});
+
+AsLink.test('renders a link with button semantics', async ({canvas}) => {
+  await expectLinkSemantics(canvas.getByRole('link'));
+});
+
+AsLink.test('points at the root path', async ({canvas}) => {
+  await expect(canvas.getByRole('link')).toHaveAttribute('href', '/');
+});
+
+AsNavLink.test('renders a nav link with button semantics', async ({canvas}) => {
+  await expectLinkSemantics(canvas.getByRole('link'));
+});
+
+AsNavLink.test('points at the root path', async ({canvas}) => {
+  await expect(canvas.getByRole('link')).toHaveAttribute('href', '/');
+});
+
+AsExternalLink.test(
+  'renders an external link with button semantics',
+  async ({canvas}) => {
+    await expectLinkSemantics(canvas.getByRole('link'));
+  }
+);
+
+AsExternalLink.test('points at the external address', async ({canvas}) => {
+  await expect(canvas.getByRole('link')).toHaveAttribute(
+    'href',
+    'https://example.com'
+  );
+});
+
+LinkNavigates.test('navigates when clicked', async ({canvasElement}) => {
+  await expectNavigatesOnClick(canvasElement);
+});
+
+LinkNavigates.test('navigates on Enter', async ({canvasElement}) => {
+  await expectNavigatesOnEnter(canvasElement);
+});
+
+NavLinkNavigates.test('navigates when clicked', async ({canvasElement}) => {
+  await expectNavigatesOnClick(canvasElement);
+});
+
+NavLinkNavigates.test('navigates on Enter', async ({canvasElement}) => {
+  await expectNavigatesOnEnter(canvasElement);
+});
+
+ExternalLinkActivatesOnEnter.test(
+  'fires the click handler when Enter activates the link',
+  async ({args, canvas}) => {
+    await userEvent.tab();
+
+    const link = canvas.getByRole('link', {name: 'Docs'});
+
+    await expect(link).toHaveFocus();
+    await userEvent.keyboard('{Enter}');
+    await expect(link).toHaveAttribute('href', 'https://example.com/docs');
+    await expect(args.onClick).toHaveBeenCalledTimes(1);
+    await expect(args.onClick).toHaveBeenCalledWith(
+      expect.objectContaining({type: 'click'})
+    );
+  }
+);
+
+DisabledDoesNotFire.test(
+  'ignores a click while disabled',
+  async ({args, canvas}) => {
+    const button = canvas.getByRole('button', {name: 'Save'});
 
     await expect(button).toBeDisabled();
     // The disabled button sets pointer-events: none, which the default
     // userEvent refuses to click through.
     await userEvent.setup({pointerEventsCheck: 0}).click(button);
     await expect(args.onClick).not.toHaveBeenCalled();
-  },
-  render: (args) => (
-    <Button disabled={true} onClick={args.onClick}>
-      Save
-    </Button>
-  ),
-};
+  }
+);

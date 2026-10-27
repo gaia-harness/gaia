@@ -1,16 +1,19 @@
-import type {Meta, StoryFn} from '@storybook/react-vite';
-import {expect, spyOn, userEvent, within} from 'storybook/test';
+import {expect, mocked, spyOn} from 'storybook/test';
+import preview from '#.storybook/preview';
 import ErrorStack from '..';
 
-const meta: Meta = {
+const meta = preview.meta({
+  beforeEach: () => {
+    const writeText = spyOn(navigator.clipboard, 'writeText');
+
+    return () => writeText.mockRestore();
+  },
   component: ErrorStack,
   parameters: {
     wrap: 'p-4',
   },
   title: 'Components/Errors/ErrorStack',
-};
-
-export default meta;
+});
 
 const stack = `Unable to do something
   SyntaxError: Unexpected token (17:33)
@@ -39,73 +42,75 @@ const stack = `Unable to do something
     at xv.parseStatementContent (/Users/username/Development/gaia/framework/remix/node_modules/@storybook/core/dist/babel/index.cjs:141050:20)
     at xv.parseStatementLike (/Users/username/Development/gaia/framework/remix/node_modules/@storybook/core/dist/babel/index.cjs:143022:69)`;
 
-export const Default: StoryFn = () => (
-  <ErrorStack
-    className="max-h-96 max-w-360 overflow-y-auto"
-    stack={stack}
-    status={500}
-    statusText="Server error"
-  />
+export const Default = meta.story({
+  render: () => (
+    <ErrorStack
+      className="max-h-96 max-w-360 overflow-y-auto"
+      stack={stack}
+      status={500}
+      statusText="Server error"
+    />
+  ),
+});
+
+export const WithoutStatus = meta.story({
+  render: () => (
+    <ErrorStack className="max-h-96 max-w-360 overflow-y-auto" stack={stack} />
+  ),
+});
+
+export const CopiesStack = meta.story({
+  render: () => <ErrorStack stack="boom stack" />,
+});
+
+CopiesStack.test(
+  'copies the stack when the button is clicked',
+  async ({canvas, userEvent}) => {
+    await userEvent.click(canvas.getByRole('button', {name: /copy/i}));
+
+    await expect(navigator.clipboard.writeText).toHaveBeenCalledWith(
+      'boom stack'
+    );
+  }
 );
 
-export const WithoutStatus: StoryFn = () => (
-  <ErrorStack className="max-h-96 max-w-360 overflow-y-auto" stack={stack} />
+CopiesStack.test(
+  'copies the stack when activated by keyboard',
+  async ({canvas, userEvent}) => {
+    const button = canvas.getByRole('button', {name: /copy/i});
+
+    await userEvent.tab();
+    await expect(button).toHaveFocus();
+
+    await userEvent.keyboard('{Enter}');
+
+    await expect(navigator.clipboard.writeText).toHaveBeenCalledWith(
+      'boom stack'
+    );
+  }
 );
 
-export const CopiesStack: StoryFn = () => <ErrorStack stack="boom stack" />;
+CopiesStack.test(
+  'keeps the control when the clipboard rejects',
+  async ({canvas, userEvent}) => {
+    mocked(navigator.clipboard.writeText).mockRejectedValue(
+      new Error('clipboard denied')
+    );
 
-CopiesStack.play = async ({canvasElement}) => {
-  const writeText = spyOn(navigator.clipboard, 'writeText');
+    await userEvent.click(canvas.getByRole('button', {name: /copy/i}));
 
-  await userEvent.click(
-    within(canvasElement).getByRole('button', {name: /copy/i})
-  );
-
-  await expect(writeText).toHaveBeenCalledWith('boom stack');
-  writeText.mockRestore();
-};
-
-export const KeyboardCopiesStack: StoryFn = () => (
-  <ErrorStack stack="boom stack" />
+    // A surfaced rejection would fail the run as an unhandled error, and would
+    // replace the control with an error boundary.
+    await expect(navigator.clipboard.writeText).toHaveBeenCalledWith(
+      'boom stack'
+    );
+    await expect(canvas.getByRole('button', {name: /copy/i})).toBeVisible();
+  }
 );
 
-KeyboardCopiesStack.play = async ({canvasElement}) => {
-  const writeText = spyOn(navigator.clipboard, 'writeText');
-  const button = within(canvasElement).getByRole('button', {name: /copy/i});
-
-  await userEvent.tab();
-  await expect(button).toHaveFocus();
-
-  await userEvent.keyboard('{Enter}');
-
-  await expect(writeText).toHaveBeenCalledWith('boom stack');
-  writeText.mockRestore();
-};
-
-export const ClipboardRejection: StoryFn = () => (
-  <ErrorStack stack="boom stack" />
-);
-
-ClipboardRejection.play = async ({canvasElement}) => {
-  const writeText = spyOn(navigator.clipboard, 'writeText').mockRejectedValue(
-    new Error('clipboard denied')
-  );
-  const canvas = within(canvasElement);
-
-  await userEvent.click(canvas.getByRole('button', {name: /copy/i}));
-
-  // A surfaced rejection would fail the run as an unhandled error, and would
-  // replace the control with an error boundary.
-  await expect(writeText).toHaveBeenCalledWith('boom stack');
-  await expect(canvas.getByRole('button', {name: /copy/i})).toBeVisible();
-  writeText.mockRestore();
-};
-
-export const CopyIcon: StoryFn = () => <ErrorStack stack="boom stack" />;
-
-CopyIcon.play = async ({canvasElement}) => {
-  const button = within(canvasElement).getByRole('button');
+CopiesStack.test('shows a copy icon on the button', async ({canvas}) => {
+  const button = canvas.getByRole('button');
 
   // Icons are aria-hidden, so the lucide class is the only handle on them.
   await expect(button.querySelector('svg.lucide')).toBeInTheDocument();
-};
+});

@@ -1,5 +1,11 @@
-import type {Preview} from '@storybook/react-vite';
-import {mswLoader} from 'msw-storybook-addon/csf3';
+import addonA11y from '@storybook/addon-a11y';
+import addonLinks from '@storybook/addon-links';
+import {definePreview} from '@storybook/react-vite';
+import addonMsw from 'msw-storybook-addon';
+import storybookReactI18next from 'storybook-react-i18next/preview';
+// Storybook internal import: it can change in any upgrade.
+import type {AddonTypes} from 'storybook/internal/csf';
+import {definePreviewAddon} from 'storybook/internal/csf';
 import {themes} from 'storybook/theming';
 import {DEFAULT_LOCALE} from '~/i18n';
 import a11y from './a11y';
@@ -15,7 +21,14 @@ const storybookBrandOptions = {
   brandUrl: 'https://docs.gaiaharness.com/',
 };
 
-const preview: Preview = {
+export default definePreview({
+  addons: [
+    addonA11y(),
+    addonLinks(),
+    // eslint-disable-next-line @typescript-eslint/no-unnecessary-type-arguments -- the explicit argument is the documented CSF Next wiring
+    definePreviewAddon<AddonTypes>(storybookReactI18next),
+    addonMsw(),
+  ],
   decorators,
   initialGlobals: {
     locale: DEFAULT_LOCALE,
@@ -31,7 +44,6 @@ const preview: Preview = {
   // play function that queries at once can race it and read English. Loaders
   // finish before render and play, which makes a story's locale deterministic.
   loaders: [
-    mswLoader(),
     async ({globals}) => {
       const locale =
         typeof globals.locale === 'string' ? globals.locale : DEFAULT_LOCALE;
@@ -66,6 +78,4 @@ const preview: Preview = {
     layout: 'fullscreen',
     viewport,
   },
-};
-
-export default preview;
+});

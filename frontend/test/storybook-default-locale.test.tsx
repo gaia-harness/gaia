@@ -13,7 +13,7 @@ describe('Storybook default locale', () => {
   test('the initial locale global follows DEFAULT_LOCALE', async () => {
     const {default: preview} = await import('../.storybook/preview');
 
-    expect(preview.initialGlobals?.locale).toBe('cimode');
+    expect(preview.input.initialGlobals?.locale).toBe('cimode');
   });
 
   test('the Storybook i18next instance starts in DEFAULT_LOCALE', async () => {

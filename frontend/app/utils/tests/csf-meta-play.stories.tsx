@@ -1,24 +1,29 @@
-import type {Meta, StoryObj} from '@storybook/react-vite';
-import {expect, within} from 'storybook/test';
+import {expect} from 'storybook/test';
+import preview from '#.storybook/preview';
 
 type MarkerProps = {text: string};
 
 const Marker = ({text}: MarkerProps) => <p>{text}</p>;
 
 // Fixture for the test-identity extractor: a play on the meta is inherited by
-// every story in the file. The play asserts the marker renders exactly once.
-const meta = {
+// every story in the file, so a render-only story cannot share a file with it.
+const meta = preview.meta({
   args: {text: 'meta play marker'},
   component: Marker,
   parameters: {chromatic: {disableSnapshot: true}},
-  play: async ({args, canvasElement}) => {
-    await expect(within(canvasElement).getAllByText(args.text)).toHaveLength(1);
+  play: async ({canvasElement}) => {
+    canvasElement.dataset.played = 'meta play';
   },
   title: 'Internal/CSF Meta Play',
-} satisfies Meta<typeof Marker>;
+});
 
-export default meta;
+export const InheritsMetaPlay = meta.story({});
 
-type Story = StoryObj<typeof meta>;
+export const InheritsMetaPlayWithTest = meta.story({});
 
-export const InheritsMetaPlay: Story = {};
+InheritsMetaPlayWithTest.test(
+  'runs the meta play first',
+  async ({canvasElement}) => {
+    await expect(canvasElement).toHaveAttribute('data-played', 'meta play');
+  }
+);

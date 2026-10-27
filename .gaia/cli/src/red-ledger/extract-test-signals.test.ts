@@ -241,11 +241,13 @@ describe('extract-test-signals .for title handling', () => {
 });
 
 /**
- * Story mode: a `*.stories.tsx` path is read as CSF. Each story with an
- * effective play function is one test addon-vitest runs, so the helper emits
- * one signal per such story, named the way Storybook names the test, and
- * refuses (exit 7, empty stdout) any shape whose play it cannot resolve: a
- * silent empty result would let the worthiness gate pass the file unjudged.
+ * Story mode: a `*.stories.tsx` path is read as a CSF4 story file. A story
+ * with `.test()` calls is a describe block of a `base story` test plus one test
+ * per call; a story with an effective play and no tests is one test. The
+ * helper names each the way Storybook's Vitest run does, refuses (exit 7,
+ * empty stdout) any shape it cannot resolve, and refuses an older story format
+ * (exit 8) with the migration command: a silent empty result would let the
+ * worthiness gate pass the file unjudged.
  */
 const STORY_FILE_REL = 'frontend/app/generated/tests/index.stories.tsx';
 
@@ -283,19 +285,21 @@ const namesOf = (lines: ExtractedSignal[]) =>
 const signalOf = (lines: ExtractedSignal[], fullName: string) =>
   lines.find((line) => line.fullName === fullName)?.signal;
 
+const PREVIEW_IMPORT = `import preview from '#.storybook/preview';`;
+
 const META = `
-  const meta = {component: Widget, args: {size: 'small'}, title: 'Widget'};
-  export default meta;
+  ${PREVIEW_IMPORT}
+  const meta = preview.meta({component: Widget, args: {size: 'small'}, title: 'Widget'});
 `;
 
-describe('extract-test-signals story mode: play shapes', () => {
-  test('an object-property play emits one runtime line named by start-casing the export', () => {
+describe('extract-test-signals story mode: names', () => {
+  test('a story with a play emits one runtime line named by start-casing the export', () => {
     const lines = storyLines(`${META}
-      export const LongStoryName = {
+      export const LongStoryName = meta.story({
         play: async () => {
-          await check();
+          await drive();
         },
-      };
+      });
     `);
 
     expect(lines).toHaveLength(1);
@@ -308,187 +312,315 @@ describe('extract-test-signals story mode: play shapes', () => {
 
   test('a digit in the export name is split the way Storybook splits it', () => {
     const lines = storyLines(`${META}
-      export const Step2Done = {play: async () => check()};
+      export const Step2Done = meta.story({play: async () => drive()});
     `);
 
     expect(namesOf(lines)).toEqual(['Step 2 Done']);
   });
 
-  test('a string-literal name property overrides the export name', () => {
+  test('a string-literal name in the story argument overrides the export name', () => {
     const lines = storyLines(`${META}
-      export const Renamed = {name: 'Custom', play: async () => check()};
+      export const Renamed = meta.story({name: 'Custom', play: async () => drive()});
     `);
 
     expect(namesOf(lines)).toEqual(['Custom']);
   });
 
-  test('a storyName assignment overrides the export name', () => {
+  test('a story with tests emits base story then each test, joined by three spaces', () => {
     const lines = storyLines(`${META}
-      export const Renamed = {play: async () => check()};
-      Renamed.storyName = 'Assigned Name';
+      export const Default = meta.story({play: async () => drive()});
+      Default.test('shows the label', async () => check());
+      Default.test('hides the hint', async () => check());
     `);
 
-    expect(namesOf(lines)).toEqual(['Assigned Name']);
+    expect(namesOf(lines)).toEqual([
+      'Default   base story',
+      'Default   shows the label',
+      'Default   hides the hint',
+    ]);
   });
 
-  test('a play assigned after a function story emits that story', () => {
+  test('a render-only story with a test still emits its base story', () => {
     const lines = storyLines(`${META}
-      export const Invalid = () => <Widget />;
-      Invalid.play = async () => {
-        await check();
-      };
+      export const Plain = meta.story({args: {size: 'large'}});
+      Plain.test('renders large', async () => check());
     `);
 
-    expect(namesOf(lines)).toEqual(['Invalid']);
+    expect(namesOf(lines)).toEqual([
+      'Plain   base story',
+      'Plain   renders large',
+    ]);
   });
 
-  test('a play shared by identifier emits every story that uses it', () => {
+  test('a test with an overrides argument is named by its first argument', () => {
     const lines = storyLines(`${META}
-      const showError = async () => {
-        await check();
-      };
-      export const Default = () => <Widget />;
-      Default.play = showError;
-      export const Hidden = () => <Widget hidden />;
-      Hidden.play = showError;
+      export const Plain = meta.story({});
+      Plain.test('with overrides', {parameters: {a11y: {test: 'off'}}}, async () => check());
     `);
 
-    expect(namesOf(lines)).toEqual(['Default', 'Hidden']);
+    expect(namesOf(lines)).toEqual([
+      'Plain   base story',
+      'Plain   with overrides',
+    ]);
   });
 
-  test('a story built by a same-file factory inherits the play the factory returns', () => {
+  test('a render-only story without tests emits nothing', () => {
+    expect(
+      storyLines(`${META}
+        export const Default = meta.story({args: {size: 'large'}});
+        export const Rendered = meta.story(() => <Widget />);
+        export const Bare = meta.story();
+      `)
+    ).toEqual([]);
+  });
+
+  test('an extend story is named by its own export, never by the source name', () => {
     const lines = storyLines(`${META}
-      const createArrowStory = (type) => ({play: async () => check(type)});
-      function createBlockStory(type) {
-        const label = type + ' story';
-        return {play: async () => check(label)};
-      }
-      export const ErrorType = createArrowStory('error');
-      export const Info = createBlockStory('info');
+      export const Source = meta.story({name: 'Source Display', play: async () => drive()});
+      export const Variant = Source.extend({args: {size: 'large'}});
+      export const Relabeled = Source.extend({name: 'Own Label'});
     `);
 
-    expect(namesOf(lines)).toEqual(['Error Type', 'Info']);
+    expect(namesOf(lines)).toEqual(['Source Display', 'Variant', 'Own Label']);
   });
 
-  test('a meta-level play makes every story without its own play a test', () => {
-    const lines = storyLines(`
-      const meta = {component: Widget, play: async () => check(), title: 'Widget'};
-      export default meta;
-      export const Plain = {};
-      export const Rendered = () => <Widget />;
+  test('tests on an extend story are named under the extend story', () => {
+    const lines = storyLines(`${META}
+      export const Source = meta.story({});
+      export const Variant = Source.extend({args: {size: 'large'}});
+      Variant.test('is large', async () => check());
+    `);
+
+    expect(namesOf(lines)).toEqual([
+      'Variant   base story',
+      'Variant   is large',
+    ]);
+  });
+});
+
+describe('extract-test-signals story mode: effective play', () => {
+  test('a meta play makes every story without its own play a test', () => {
+    const lines = storyLines(`${PREVIEW_IMPORT}
+      const meta = preview.meta({component: Widget, play: async () => drive(), title: 'Widget'});
+      export const Plain = meta.story({});
+      export const Rendered = meta.story(() => <Widget />);
     `);
 
     expect(namesOf(lines)).toEqual(['Plain', 'Rendered']);
   });
 
-  test('a story spreading another story inherits its play', () => {
+  test('an extend story without its own play inherits the source play', () => {
     const lines = storyLines(`${META}
-      export const Base = {play: async () => check()};
-      export const Variant = {...Base, args: {size: 'large'}};
+      const Hidden = meta.story({play: async () => drive()});
+      export const Variant = Hidden.extend({args: {size: 'large'}});
     `);
 
-    expect(namesOf(lines)).toEqual(['Base', 'Variant']);
+    expect(namesOf(lines)).toEqual(['Variant']);
   });
 
-  test('a render-only story emits nothing', () => {
+  test('an extend play set to undefined overrides the source play and falls through to the meta, here absent', () => {
     expect(
       storyLines(`${META}
-        export const Default = {args: {size: 'large'}};
-        export const Rendered = () => <Widget />;
+        const Hidden = meta.story({play: async () => drive()});
+        export const Cleared = Hidden.extend({play: undefined});
       `)
     ).toEqual([]);
   });
 
-  test('a play overridden to undefined falls through to the meta, here absent', () => {
-    expect(
-      storyLines(`${META}
-        export const Base = {play: async () => check()};
-        Base.play = undefined;
-        export const Variant = {...Base};
-        export const Cleared = {play: async () => check(), ...{play: undefined}};
-      `)
-    ).toEqual([]);
+  test('a play shared by a same-file identifier emits every story that uses it', () => {
+    const lines = storyLines(`${META}
+      const sharedPlay = async () => {
+        await drive();
+      };
+      export const First = meta.story({play: sharedPlay});
+      export const Second = meta.story({play: sharedPlay});
+    `);
+
+    expect(namesOf(lines)).toEqual(['First', 'Second']);
+  });
+
+  test('a relative .storybook/preview import is read as CSF4', () => {
+    const lines = storyLines(`
+      import preview from '../../.storybook/preview';
+      const meta = preview.meta({component: Widget, title: 'Widget'});
+      export const Typed = meta.story({play: async () => drive()});
+    `);
+
+    expect(namesOf(lines)).toEqual(['Typed']);
+  });
+
+  test('a typed meta through preview.type<…>().meta is read as CSF4', () => {
+    const lines = storyLines(`${PREVIEW_IMPORT}
+      const meta = preview.type<{args: {size: string}}>().meta({component: Widget, title: 'Widget'});
+      export const Typed = meta.story({play: async () => drive()});
+    `);
+
+    expect(namesOf(lines)).toEqual(['Typed']);
+  });
+
+  test('a play body that calls imported helpers is not refused', () => {
+    const lines = storyLines(`import {expectToast} from './expect-toast';
+      ${META}
+      export const Toasted = meta.story({play: async ({canvasElement}) => expectToast(canvasElement, 'Saved')});
+    `);
+
+    expect(namesOf(lines)).toEqual(['Toasted']);
   });
 });
 
 describe('extract-test-signals story mode: test tags', () => {
-  test('a story tagged !test emits nothing', () => {
+  test('a story tagged !test emits nothing, its tests included', () => {
     const lines = storyLines(`${META}
-      export const Kept = {play: async () => check()};
-      export const Dropped = {play: async () => check(), tags: ['!test']};
+      export const Kept = meta.story({play: async () => drive()});
+      export const Dropped = meta.story({play: async () => drive(), tags: ['!test']});
+      Dropped.test('never runs', async () => check());
     `);
 
     expect(namesOf(lines)).toEqual(['Kept']);
   });
 
   test('a meta tagged !test suppresses every story that does not re-add test', () => {
-    const lines = storyLines(`
-      const meta = {component: Widget, tags: ['!test'], title: 'Widget'};
-      export default meta;
-      export const Suppressed = {play: async () => check()};
-      export const Restored = {play: async () => check(), tags: ['test']};
+    const lines = storyLines(`${PREVIEW_IMPORT}
+      const meta = preview.meta({component: Widget, tags: ['!test'], title: 'Widget'});
+      export const Suppressed = meta.story({play: async () => drive()});
+      export const Restored = meta.story({play: async () => drive(), tags: ['test']});
     `);
 
     expect(namesOf(lines)).toEqual(['Restored']);
   });
 });
 
-const sharedPlaySource = (body: string, metaArgs: string) => `
-  const meta = {component: Widget, args: ${metaArgs}, title: 'Widget'};
-  export default meta;
-  const showError = async () => {
-    ${body}
-  };
-  export const Default = () => <Widget />;
-  Default.play = showError;
-  export const Hidden = () => <Widget hidden />;
-  Hidden.play = showError;
-  export const Own = {play: async () => check()};
+const rotationSource = ({
+  metaArgs = "{size: 'small'}",
+  playBody = 'await drive();',
+  siblingArgs = "{size: 'large'}",
+  testBody = 'await check();',
+} = {}) => `
+  ${PREVIEW_IMPORT}
+  const meta = preview.meta({component: Widget, args: ${metaArgs}, title: 'Widget'});
+  export const Default = meta.story({
+    play: async () => {
+      ${playBody}
+    },
+  });
+  Default.test('first', async () => {
+    ${testBody}
+  });
+  Default.test('second', async () => check());
+  export const Variant = Default.extend({args: {size: 'medium'}});
+  export const Sibling = meta.story({args: ${siblingArgs}, play: async () => drive()});
 `;
 
-const baseLines = () =>
-  storyLines(sharedPlaySource('await check();', "{size: 'small'}"));
+const ROTATION_NAMES = [
+  'Default   base story',
+  'Default   first',
+  'Default   second',
+  'Variant',
+  'Sibling',
+];
 
 describe('extract-test-signals story mode: signal rotation', () => {
-  test('editing the shared play body rotates both stories that use it, and only them', () => {
-    const base = baseLines();
+  test("editing a story's play rotates its base story, every test and the extend story inheriting it, and no sibling", () => {
+    const base = storyLines(rotationSource());
     const edited = storyLines(
-      sharedPlaySource('await check(); await again();', "{size: 'small'}")
+      rotationSource({playBody: 'await drive(); await again();'})
     );
 
-    expect(namesOf(edited)).toEqual(['Default', 'Hidden', 'Own']);
-    expect(signalOf(edited, 'Default')).not.toBe(signalOf(base, 'Default'));
-    expect(signalOf(edited, 'Hidden')).not.toBe(signalOf(base, 'Hidden'));
-    expect(signalOf(edited, 'Own')).toBe(signalOf(base, 'Own'));
+    expect(namesOf(edited)).toEqual(ROTATION_NAMES);
+
+    for (const name of ROTATION_NAMES.slice(0, 4)) {
+      expect(signalOf(edited, name)).not.toBe(signalOf(base, name));
+    }
+    expect(signalOf(edited, 'Sibling')).toBe(signalOf(base, 'Sibling'));
   });
 
-  test("editing the meta's args rotates every story in the file", () => {
-    const base = baseLines();
+  test("editing one test's body rotates that test only", () => {
+    const base = storyLines(rotationSource());
     const edited = storyLines(
-      sharedPlaySource('await check();', "{size: 'large'}")
+      rotationSource({testBody: 'await check(); await again();'})
     );
 
-    for (const name of ['Default', 'Hidden', 'Own']) {
+    expect(signalOf(edited, 'Default   first')).not.toBe(
+      signalOf(base, 'Default   first')
+    );
+
+    for (const name of ROTATION_NAMES.filter(
+      (entry) => entry !== 'Default   first'
+    )) {
+      expect(signalOf(edited, name)).toBe(signalOf(base, name));
+    }
+  });
+
+  test('editing a sibling story rotates nothing of another story', () => {
+    const base = storyLines(rotationSource());
+    const edited = storyLines(rotationSource({siblingArgs: "{size: 'huge'}"}));
+
+    expect(signalOf(edited, 'Sibling')).not.toBe(signalOf(base, 'Sibling'));
+
+    for (const name of ROTATION_NAMES.slice(0, 4)) {
+      expect(signalOf(edited, name)).toBe(signalOf(base, name));
+    }
+  });
+
+  test("editing the meta's args rotates every entry in the file", () => {
+    const base = storyLines(rotationSource());
+    const edited = storyLines(rotationSource({metaArgs: "{size: 'tiny'}"}));
+
+    for (const name of ROTATION_NAMES) {
       expect(signalOf(edited, name)).not.toBe(signalOf(base, name));
     }
   });
 
   test('reformatting whitespace or rewording a comment rotates no signal', () => {
     const reworded = storyLines(
-      sharedPlaySource(
-        '// a reworded comment\n\n      await   check();',
-        "{size:\n        'small'}"
-      )
+      rotationSource({
+        metaArgs: "{size:\n        'small'}",
+        playBody: '// a reworded comment\n\n      await   drive();',
+      })
     );
     const original = storyLines(
-      sharedPlaySource(
-        '// the first comment\n      await check();',
-        "{size: 'small'}"
-      )
+      rotationSource({playBody: '// the first comment\n      await drive();'})
     );
 
     expect(reworded).toEqual(original);
-    expect(namesOf(original)).toEqual(['Default', 'Hidden', 'Own']);
+    expect(namesOf(original)).toEqual(ROTATION_NAMES);
+  });
+});
+
+const OLD_FORMAT_LINE = `extract-test-signals: ${STORY_FILE_REL} is an old-format story file; migrate it with: .gaia/cli/gaia migrate-csf4\n`;
+
+describe('extract-test-signals story mode: old formats', () => {
+  test('a CSF3 file exits 8 with the migration line and no stdout', () => {
+    const result = runStory(`
+      const meta = {component: Widget, title: 'Widget'};
+      export default meta;
+      export const Default = {play: async () => drive()};
+    `);
+
+    expect(result.status).toBe(8);
+    expect(result.stdout).toBe('');
+    expect(result.stderr).toBe(OLD_FORMAT_LINE);
+  });
+
+  test('a CSF2 Template.bind file exits 8 with the migration line', () => {
+    const result = runStory(`
+      export default {component: Widget, title: 'Widget'};
+      const Template = (args) => <Widget {...args} />;
+      export const Default = Template.bind({});
+    `);
+
+    expect(result.status).toBe(8);
+    expect(result.stdout).toBe('');
+    expect(result.stderr).toBe(OLD_FORMAT_LINE);
+  });
+
+  test('a storiesOf file exits 8 even with a preview meta beside it', () => {
+    const result = runStory(`${META}
+      storiesOf('Widget', module).add('default', () => <Widget />);
+    `);
+
+    expect(result.status).toBe(8);
+    expect(result.stderr).toBe(OLD_FORMAT_LINE);
   });
 });
 
@@ -507,66 +639,111 @@ const expectRefusal = (source: string, exportName: string, reason: RegExp) => {
 };
 
 describe('extract-test-signals story mode: refusal', () => {
+  test('a file that is neither CSF4 nor an older format is refused, not sent to migration', () => {
+    expectRefusal(
+      `${META}
+      export const Leftover = {args: {size: 'large'}};
+    `,
+      'default',
+      /not a CSF4 story file/
+    );
+  });
+
+  test('a file with no preview import is refused as unknown', () => {
+    expectRefusal(
+      `import preview from './somewhere/else';
+      const meta = preview.meta({component: Widget, title: 'Widget'});
+      export const Default = meta.story({});
+    `,
+      'default',
+      /not a CSF4 story file/
+    );
+  });
+
   test('a play bound to an imported identifier is refused', () => {
     expectRefusal(
       `import {sharedPlay} from './plays';
       ${META}
-      export const Default = () => <Widget />;
-      Default.play = sharedPlay;
+      export const Default = meta.story({play: sharedPlay});
     `,
       'Default',
       /imported identifier sharedPlay/
     );
   });
 
-  test('a CSF4 meta.story() export is refused', () => {
+  test('a play bound to a mutable binding is refused', () => {
     expectRefusal(
       `${META}
-      export const Primary = meta.story({args: {size: 'large'}});
+      let sharedPlay = async () => drive();
+      export const Default = meta.story({play: sharedPlay});
     `,
-      'Primary',
-      /CSF4 factory story/
+      'Default',
+      /not a const or function declaration/
     );
   });
 
-  test('a spread cycle is refused', () => {
+  test('an imported play inherited through extend is refused on the extend story', () => {
+    expectRefusal(
+      `import {sharedPlay} from './plays';
+      ${META}
+      const Hidden = meta.story({play: sharedPlay});
+      export const Variant = Hidden.extend({});
+    `,
+      'Variant',
+      /imported identifier sharedPlay/
+    );
+  });
+
+  test('a .test() call whose name is not a string literal is refused', () => {
     expectRefusal(
       `${META}
-      export const First = {...Second};
-      export const Second = {...First};
+      export const Default = meta.story({});
+      const label = 'dynamic';
+      Default.test(\`\${label} name\`, async () => check());
+    `,
+      'Default',
+      /string literal/
+    );
+  });
+
+  test('a .test() on a story that is not exported is refused', () => {
+    expectRefusal(
+      `${META}
+      const Hidden = meta.story({});
+      Hidden.test('runs', async () => check());
+    `,
+      'Hidden',
+      /not an exported story/
+    );
+  });
+
+  test('an assignment to a story after its declaration is refused', () => {
+    expectRefusal(
+      `${META}
+      export const Default = meta.story({});
+      Default.play = async () => drive();
+    `,
+      'Default',
+      /assign/
+    );
+  });
+
+  test('an extend cycle is refused', () => {
+    expectRefusal(
+      `${META}
+      export const First = Second.extend({});
+      export const Second = First.extend({});
     `,
       'First',
       /cycle/
     );
   });
 
-  test('a story built by an imported function is refused', () => {
-    expectRefusal(
-      `import {makeStory} from './factory';
-      ${META}
-      export const Built = makeStory('x');
-    `,
-      'Built',
-      /imported function makeStory/
-    );
-  });
-
-  test('a .test() call on a story is refused', () => {
-    expectRefusal(
-      `${META}
-      export const Primary = {};
-      Primary.test('does a thing', async () => check());
-    `,
-      'Primary',
-      /test story/
-    );
-  });
-
   test('a meta excludeStories is refused before any story', () => {
     expectRefusal(
-      `const meta = {component: Widget, excludeStories: /.*Data$/, title: 'Widget'};
-      export default meta;
-      export const Primary = {play: async () => check()};
+      `${PREVIEW_IMPORT}
+      const meta = preview.meta({component: Widget, excludeStories: /.*Data$/, title: 'Widget'});
+      export const Primary = meta.story({play: async () => drive()});
     `,
       'default',
       /excludeStories/
@@ -576,7 +753,7 @@ describe('extract-test-signals story mode: refusal', () => {
   test('an export clause is refused', () => {
     expectRefusal(
       `${META}
-      const Hidden = {play: async () => check()};
+      const Hidden = meta.story({play: async () => drive()});
       export {Hidden as Shown};
     `,
       'Shown',
@@ -584,12 +761,13 @@ describe('extract-test-signals story mode: refusal', () => {
     );
   });
 
-  test('a play body that calls imported helpers is not refused', () => {
-    const lines = storyLines(`import {expectToast} from './expect-toast';
-      ${META}
-      export const Toasted = {play: async ({canvasElement}) => expectToast(canvasElement, 'Saved')};
-    `);
-
-    expect(namesOf(lines)).toEqual(['Toasted']);
+  test('non-literal story tags are refused', () => {
+    expectRefusal(
+      `${META}
+      export const Tagged = meta.story({play: async () => drive(), tags: makeTags()});
+    `,
+      'Tagged',
+      /tags/
+    );
   });
 });

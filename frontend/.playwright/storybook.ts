@@ -4,6 +4,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {requireDevPorts} from '../dev-ports';
+import {isVisualStoryEntry} from './story-index';
 import type {Theme} from './theme';
 import {forceDarkBeforeLoad} from './theme';
 
@@ -11,6 +12,7 @@ export type StoryEntry = {
   exportName: string;
   id: string;
   importPath: string;
+  subtype?: string;
   title: string;
   type: string;
 };
@@ -117,7 +119,7 @@ export const readStoryIndex = (): StoryEntry[] => {
     entries: Record<string, StoryEntry>;
   };
 
-  return Object.values(entries).filter((entry) => entry.type === 'story');
+  return Object.values(entries).filter(isVisualStoryEntry);
 };
 
 type StoryPreview = {currentRender?: {phase?: string}};
