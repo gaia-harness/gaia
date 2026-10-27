@@ -255,7 +255,7 @@ in_directory() {
 @test "git -C <sibling> with the main-root resolver unavailable: home (enforce, fail closed)" {
   local stage="$BATS_TEST_TMPDIR/stage"
   mkdir -p "$stage/.claude/hooks/lib"
-  cp "$LIBRARY_FILE" "$stage/.claude/hooks/lib/repo-scope.sh"
+  cp "${LIBRARY_FILE%/*}"/repo-scope*.sh "$stage/.claude/hooks/lib/"
   run bash -c 'cd "$1" && . "$2" && command_targets_foreign_repo "$3"' _ \
     "$HOME_REPO" "$stage/.claude/hooks/lib/repo-scope.sh" \
     "git -C $SIBLING_REPO push origin main"

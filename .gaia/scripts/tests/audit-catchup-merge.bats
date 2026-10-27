@@ -494,7 +494,7 @@ assert_open_finding_survives() {
 }
 
 @test "mutation: a resolver whose shared base is the merge base with the base tip moves the artifact key on a clean catch-up" {
-  local resolver="$LSB_ROOT/.github/audit/resolve-audit-base.sh" before after
+  local resolver="$LSB_ROOT/.github/audit/resolve-audit-base-context.sh" before after
   sed -i.original 's|computed_fork_point="\$(audit_branch_patch_fork_point "\$repo_root" "\$base_tip" HEAD 2>/dev/null)"|computed_fork_point="$(git -C "$repo_root" merge-base "$base_tip" HEAD 2>/dev/null)"|' "$resolver"
   if cmp -s "$resolver" "$resolver.original"; then
     printf 'the mutation left the resolver unchanged\n' >&2

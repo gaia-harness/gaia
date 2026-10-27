@@ -16,6 +16,7 @@ unit-testable primitives the workflow shells out to.
 | `render-prompt.sh`     | Literal single-pass prompt-template renderer.                                                                                                     |
 | `run-quality-gate.sh`  | Runs the Quality Gate on the auto-fix branch; JSON summary.                                                                                       |
 | `handlers/`            | Per-verdict action handlers (non-issue, needs-human, auto-fixable, malformed-body, already-triaged).                                              |
+| `steps/`               | Workflow step bodies, run verbatim from `run:`. Only steps that never run in a model-edited tree live here; the rest stay inline in the workflow. |
 
 ## Label vocabulary
 

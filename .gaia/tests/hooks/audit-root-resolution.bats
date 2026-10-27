@@ -195,7 +195,9 @@ setup() {
 
   local script_name
   for script_name in resolve-audit-members.sh audit-member-digest.sh \
-           audit-write-clearance.sh main-root-lib.sh audit-key-lib.sh; do
+           audit-write-clearance.sh audit-write-clearance-args.sh audit-write-clearance-gates.sh \
+           audit-write-clearance-accounting.sh audit-write-clearance-publish.sh \
+           audit-write-clearance-ledger.sh main-root-lib.sh audit-key-lib.sh; do
     cp "$REPO_ROOT/.gaia/scripts/$script_name" "$MAIN/.gaia/scripts/$script_name"
     chmod +x "$MAIN/.gaia/scripts/$script_name"
   done
@@ -204,7 +206,9 @@ setup() {
     chmod +x "$MAIN/.claude/hooks/$script_name"
   done
   for script_name in audit-scope.sh audit-machinery.sh audit-clearance.sh audit-digest.sh audit-branch-patch.sh gaia-version.sh audit-base-provenance.sh \
-           jq-availability.sh hook-payload.sh verb-arming.sh verb-arming-walk.sh repo-scope.sh \
+           jq-availability.sh hook-payload.sh verb-arming.sh verb-arming-walk.sh \
+           verb-arming-view.sh verb-arming-live-helpers.sh verb-arming-live-view.sh repo-scope.sh \
+           repo-scope-segment.sh repo-scope-scan.sh repo-scope-home.sh \
            cross-repo-refusal.sh audit-bypass-stamp.sh; do
     cp "$REPO_ROOT/.claude/hooks/lib/$script_name" "$MAIN/.claude/hooks/lib/$script_name"
   done

@@ -9,6 +9,18 @@
 
 Write no error handling for a state that cannot occur, but handle and bound real failure modes (a command exits non-zero, a loop does not converge, a network call fails).
 
+Before writing new code, walk this order and use the first step that fully solves the need:
+
+1. Reuse what the codebase already has, the way surrounding code uses it.
+2. Use the standard library or a platform feature, unless the project has its own: the project's own wins.
+3. Use an installed dependency.
+4. Add a new dependency only when the earlier steps fall short and it earns its weight, never for a few lines.
+5. Only then write the minimum new code.
+
+On a bug fix whose defect lives in shared code, fix it there once rather than at each call site, then check that every caller still holds. Change only callers your fix breaks; a problem found in any other caller is out of scope, so file it as tech debt.
+
+Validation at trust boundaries, error handling that prevents data loss, security, and accessibility are never cut to make code smaller.
+
 ## 2. Surgical Changes
 
 Touch only what's needed: don't improve adjacent code, don't refactor unbroken things, match existing style. Remove only the imports/variables YOUR changes made unused; mention (don't delete) pre-existing dead code.

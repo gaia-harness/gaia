@@ -63,6 +63,11 @@ AUDIT_GLOBAL_RULES_PATHS="$(cat <<'EOF'
 # logic must not quietly demote the tier it was reviewed under.
 .claude/hooks/lib/gaia-version.sh
 .gaia/scripts/audit-write-clearance.sh
+.gaia/scripts/audit-write-clearance-args.sh
+.gaia/scripts/audit-write-clearance-gates.sh
+.gaia/scripts/audit-write-clearance-accounting.sh
+.gaia/scripts/audit-write-clearance-publish.sh
+.gaia/scripts/audit-write-clearance-ledger.sh
 .gaia/scripts/audit-member-digest.sh
 .gaia/scripts/audit-key-lib.sh
 .gaia/scripts/audit-resolve-scope.sh
@@ -71,6 +76,10 @@ AUDIT_GLOBAL_RULES_PATHS="$(cat <<'EOF'
 .claude/hooks/post-audit-status.sh
 .claude/hooks/pr-merge-audit-check.sh
 .github/audit/resolve-audit-base.sh
+.github/audit/resolve-audit-base-context.sh
+.github/audit/resolve-audit-base-scan.sh
+.github/audit/resolve-audit-base-walk.sh
+.github/audit/resolve-audit-base-refusal.sh
 # The light-review router with its helper library, the light-marker script and
 # the reviewer definition decide whether a clearance is believed: they route a
 # re-audit to the cheap reviewer and turn its verdict into a marker, so a
@@ -79,6 +88,12 @@ AUDIT_GLOBAL_RULES_PATHS="$(cat <<'EOF'
 .gaia/scripts/audit-light-route.sh
 .claude/hooks/lib/audit-light-route-lib.sh
 .claude/hooks/lib/audit-quick-classify-lib.sh
+.claude/hooks/lib/audit-quick-classify-paths-lib.sh
+.claude/hooks/lib/audit-quick-classify-lines-lib.sh
+.claude/hooks/lib/audit-quick-classify-awk-lexer-lib.sh
+.claude/hooks/lib/audit-quick-classify-awk-nested-lib.sh
+.claude/hooks/lib/audit-quick-classify-awk-helpers-lib.sh
+.claude/hooks/lib/audit-quick-classify-awk-main-lib.sh
 .gaia/scripts/audit-light-mark.sh
 .claude/agents/audit-light-reviewer.md
 # gaia:maintainer-only:start
