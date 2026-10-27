@@ -846,3 +846,43 @@ YAML
   [ -n "$digest_two" ]
   [ "$digest_one" != "$digest_two" ]
 }
+
+# ---------- the release-change skip ------------------------------------------
+#
+# The fixture (.gaia/tests/helpers/release-skip-fixture.sh) keys fixture-shell
+# with skip_gaia_release_changes: true.
+
+# release_skip_resolve <kind>: the resolver's member set for a fresh fixture
+# branch of <kind>, against its merge base with main.
+release_skip_resolve() {
+  local root="$BATS_TEST_TMPDIR/release-skip"
+  command -v jq >/dev/null 2>&1 || skip "jq required"
+  . "$(cd "$BATS_TEST_DIRNAME/../../.." && pwd)/.gaia/tests/helpers/release-skip-fixture.sh"
+  release_skip_init "$root"
+  release_skip_branch "$root" "$1"
+  "$SCRIPT" --root "$root" --base "$(git -C "$root" merge-base main HEAD)"
+}
+
+@test "release skip: a release-applying branch does not dispatch the keyed member" {
+  run release_skip_resolve release
+  [ "$status" -eq 0 ]
+  [ "$output" = "$(printf 'fixture-default\nfixture-scripts')" ]
+}
+
+@test "release skip: adopter shell on an ordinary branch dispatches the keyed member" {
+  run release_skip_resolve ordinary
+  [ "$status" -eq 0 ]
+  [ "$output" = fixture-shell ]
+}
+
+@test "release skip: an adopter edit to a shipped hook dispatches the keyed member" {
+  run release_skip_resolve hand-edit
+  [ "$status" -eq 0 ]
+  [ "$output" = fixture-shell ]
+}
+
+@test "release skip: adopter shell on a release-applying branch keeps the keyed member dispatched" {
+  run release_skip_resolve mixed
+  [ "$status" -eq 0 ]
+  [ "$output" = "$(printf 'fixture-default\nfixture-scripts\nfixture-shell')" ]
+}

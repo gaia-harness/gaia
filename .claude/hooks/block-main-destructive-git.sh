@@ -105,7 +105,10 @@ fi
 # gaia:maintainer-only:end
 _hook_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." 2>/dev/null && pwd)" || _hook_root=''
 _repo_scope_library="$_hook_root/.claude/hooks/lib/repo-scope.sh"
-set +e; [ -n "$_hook_root" ] && [ -f "$_repo_scope_library" ] && . "$_repo_scope_library" 2>/dev/null; set -e
+set +e
+# shellcheck source=/dev/null
+[ -n "$_hook_root" ] && [ -f "$_repo_scope_library" ] && . "$_repo_scope_library" 2>/dev/null
+set -e
 #
 # A verdict for the commit and push rules only, never for the hop guard below.
 # The helper answers "same repository", and every linked worktree of THIS

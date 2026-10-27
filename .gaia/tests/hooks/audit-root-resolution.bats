@@ -261,11 +261,12 @@ setup() {
   # .gaia/audit-ci.yml's globs), none of them listed in
   # .claude/hooks/lib/audit-machinery.sh, so diverging one rotates only its
   # owning member's digest, never every member's at once.
-  mkdir -p "$MAIN/frontend/app" "$MAIN/.github/workflows" "$MAIN/.gaia/cli/src" "$MAIN/.claude/skills/audit-root-fixture"
+  mkdir -p "$MAIN/frontend/app" "$MAIN/frontend/scripts" "$MAIN/.github/workflows" "$MAIN/.gaia/cli/src" "$MAIN/.claude/skills/audit-root-fixture"
   printf 'export const x = 1;\n' > "$MAIN/frontend/app/x.ts"
   printf 'name: ci\n' > "$MAIN/.github/workflows/ci.yml"
   printf '#!/bin/bash\necho shell\n' > "$MAIN/.gaia/scripts/fixture-example.sh"
   chmod +x "$MAIN/.gaia/scripts/fixture-example.sh"
+  printf '#!/bin/bash\necho adopter\n' > "$MAIN/frontend/scripts/fixture-adopter.sh"
   printf 'export const y = 1;\n' > "$MAIN/.gaia/cli/src/foo.ts"
   printf '# fixture skill\n' > "$MAIN/.claude/skills/audit-root-fixture/SKILL.md"
 
@@ -289,6 +290,7 @@ setup() {
   printf 'export const x = 2;\n' > "$WORKTREE/frontend/app/x.ts"
   printf 'name: ci-changed\n' > "$WORKTREE/.github/workflows/ci.yml"
   printf '#!/bin/bash\necho shell-changed\n' > "$WORKTREE/.gaia/scripts/fixture-example.sh"
+  printf '#!/bin/bash\necho adopter-changed\n' > "$WORKTREE/frontend/scripts/fixture-adopter.sh"
   printf 'export const y = 2;\n' > "$WORKTREE/.gaia/cli/src/foo.ts"
   printf '# fixture skill changed\n' > "$WORKTREE/.claude/skills/audit-root-fixture/SKILL.md"
   git -C "$WORKTREE" add -A

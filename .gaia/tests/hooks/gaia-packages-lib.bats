@@ -128,6 +128,7 @@ check_case() {
 }
 
 @test "corpus: every case's expected answers hold for the bash reader" {
+  # shellcheck source=/dev/null
   . "$LIBRARY"
   local case_directory case_name checked=0 failed=0 report
   for case_directory in "$CORPUS"/*/; do
@@ -156,6 +157,7 @@ check_case() {
 }
 
 @test "corpus: the check itself fails on a wrong expectation (guard can fail)" {
+  # shellcheck source=/dev/null
   . "$LIBRARY"
   local root="$BATS_TEST_TMPDIR/mutant" expected="$BATS_TEST_TMPDIR/expected.json"
   materialize "$CORPUS/path-frontend" "$root"
@@ -184,6 +186,7 @@ check_case() {
 }
 
 @test "a descriptor that still carries a retired globs key loads clean and the key answers nothing" {
+  # shellcheck source=/dev/null
   . "$LIBRARY"
   local retired_key status=0 key_status=0
   # The retired key is whatever the leftover fixture carries beyond a current descriptor.
@@ -201,6 +204,7 @@ check_case() {
 }
 
 @test "a failed load after a good one clears the earlier answers" {
+  # shellcheck source=/dev/null
   . "$LIBRARY"
   materialize "$CORPUS/path-frontend" "$BATS_TEST_TMPDIR/good"
   materialize "$CORPUS/registry-malformed-json" "$BATS_TEST_TMPDIR/bad"
@@ -237,6 +241,7 @@ check_case() {
 }
 
 @test "registry absent: the committed descriptor drives the built-in default, frontend/app matches and root app does not" {
+  # shellcheck source=/dev/null
   . "$LIBRARY"
   mkdir -p "$BATS_TEST_TMPDIR/absent/frontend"
   cp "$REPO_ROOT/frontend/gaia.package.json" "$BATS_TEST_TMPDIR/absent/frontend/"
@@ -249,6 +254,7 @@ check_case() {
 }
 
 @test "package globs: each glob joined to its package path in registry order, empty before a load, 1 on an unknown key" {
+  # shellcheck source=/dev/null
   . "$LIBRARY"
   local status=0
   [ -z "$(gaia_package_globs tddStrictCandidates)" ]
@@ -271,6 +277,7 @@ check_case() {
 
 # bats test_tags=whole-tree
 @test "the committed descriptor loads clean through the committed registry" {
+  # shellcheck source=/dev/null
   . "$LIBRARY"
   local status=0
   gaia_packages_load "$REPO_ROOT" || status=$?
@@ -278,6 +285,7 @@ check_case() {
 }
 
 @test "hostile registry path is malformed (2) and runs nothing" {
+  # shellcheck source=/dev/null
   . "$LIBRARY"
   local root="$BATS_TEST_TMPDIR/hostile" marker="$BATS_TEST_TMPDIR/pwned" status=0
   mkdir -p "$root/.gaia"
@@ -288,6 +296,7 @@ check_case() {
 }
 
 @test "hostile descriptor glob is data: it compiles to an ERE and runs nothing" {
+  # shellcheck source=/dev/null
   . "$LIBRARY"
   local root="$BATS_TEST_TMPDIR/hostile-glob" marker="$BATS_TEST_TMPDIR/pwned-glob" status=0
   materialize "$CORPUS/path-frontend" "$root"

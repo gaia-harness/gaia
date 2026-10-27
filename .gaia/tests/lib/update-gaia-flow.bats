@@ -1540,7 +1540,10 @@ post_merge_order_holds() {
   local section
   exact_in_order "$1" "$STEP_CONFLICT_FLOW" \
     '## Step 9b: Follow the after-merge notes' '## Step 9c: Carry new setup features' \
-    '## Step 9d: Record the update' '## Quality gate' '## Review point' || return 1
+    '## Step 9c2: Prune overbroad unowned entries' '## Step 9d: Record the update' \
+    '## Quality gate' '## Review point' || return 1
+  # The prune's call sits before Step 9d's version write, never after it.
+  [ "$(first_line "$1" 'roster-prune-overbroad.sh --root')" -lt "$(first_line "$1" 'echo <LATEST> > .gaia/VERSION')" ] || return 1
   [ "$(first_line "$1" "$COMMIT_QUESTION")" -gt "$(exact_line "$1" '## Review point')" ] || return 1
   exact_in_order "$2" '## Questions' '## Apply answers and record decisions' '## Follow-ups' || return 1
   section="$(section_file "$2" '## Follow-ups')" || return 1
@@ -1555,6 +1558,13 @@ post_merge_order_holds() {
   post_merge_order_holds "$COPY" "$CONFLICT_FLOW" && return 1
   # Failing state: the version written after the gate.
   sed -e 's/^## Quality gate$/## SWAPPED/' -e 's/^## Step 9d: Record the update$/## Quality gate/' -e 's/^## SWAPPED$/## Step 9d: Record the update/' "$SKILL" > "$COPY"
+  post_merge_order_holds "$COPY" "$CONFLICT_FLOW" && return 1
+  # Failing state: the prune step after Step 9d's version write.
+  sed -e 's/^## Step 9d: Record the update$/## SWAPPED/' -e 's/^## Step 9c2: Prune overbroad unowned entries$/## Step 9d: Record the update/' -e 's/^## SWAPPED$/## Step 9c2: Prune overbroad unowned entries/' "$SKILL" > "$COPY"
+  post_merge_order_holds "$COPY" "$CONFLICT_FLOW" && return 1
+  # Failing state: the prune's call moved below the version write.
+  grep -vF -- 'roster-prune-overbroad.sh --root' "$SKILL" > "$COPY"
+  printf 'bash .gaia/scripts/roster-prune-overbroad.sh --root x\n' >> "$COPY"
   post_merge_order_holds "$COPY" "$CONFLICT_FLOW" && return 1
   # Failing state: the follow-ups run before the answers.
   sed -e 's/^## Follow-ups$/## SWAPPED/' -e 's/^## Apply answers and record decisions$/## Follow-ups/' -e 's/^## SWAPPED$/## Apply answers and record decisions/' "$CONFLICT_FLOW" > "$COPY"

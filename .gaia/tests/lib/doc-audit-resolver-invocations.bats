@@ -26,6 +26,7 @@ expected_line() {
     code-audit-github-workflows) echo "<root>/.gaia/scripts/audit-resolve-scope.sh --member code-audit-github-workflows --root <root>" ;;
     code-audit-maintainer-node) echo "<root>/.gaia/scripts/audit-resolve-scope.sh --member code-audit-maintainer-node --root <root>" ;;
     code-audit-maintainer-shell) echo "<root>/.gaia/scripts/audit-resolve-scope.sh --member code-audit-maintainer-shell --root <root>" ;;
+    code-audit-shell) echo "<root>/.gaia/scripts/audit-resolve-scope.sh --member code-audit-shell --root <root>" ;;
     *) return 1 ;;
   esac
 }
@@ -108,6 +109,11 @@ assert_only_frontend_names_flag() {
 # bats test_tags=whole-tree
 @test "the shell definition's resolver line equals its row" {
   assert_row "$AGENTS_DIRECTORY/code-audit-maintainer-shell.md" code-audit-maintainer-shell
+}
+
+# bats test_tags=whole-tree
+@test "the adopter shell definition's resolver line equals its row" {
+  assert_row "$AGENTS_DIRECTORY/code-audit-shell.md" code-audit-shell
 }
 
 # bats test_tags=whole-tree

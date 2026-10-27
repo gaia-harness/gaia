@@ -72,6 +72,7 @@ setup() {
     "$ROOT/.claude/agents/code-audit-github-workflows.md"
     "$ROOT/.claude/agents/code-audit-maintainer-node.md"
     "$ROOT/.claude/agents/code-audit-maintainer-shell.md"
+    "$ROOT/.claude/agents/code-audit-shell.md"
     # The shared member protocol file, which carries every member's
     # "## Findings sidecar" section in place of their own definitions.
     "$ROOT/.claude/hooks/lib/audit-member-protocol.md"
@@ -86,6 +87,7 @@ setup() {
     "$ROOT/.claude/agents/code-audit-github-workflows.md"
     "$ROOT/.claude/agents/code-audit-maintainer-node.md"
     "$ROOT/.claude/agents/code-audit-maintainer-shell.md"
+    "$ROOT/.claude/agents/code-audit-shell.md"
   )
   WIKI_PAGE="$ROOT/wiki/concepts/Policy-Memory Loop.md"
   AUDIT_AGENT_PAGE="$ROOT/wiki/concepts/Code Review Audit Agent.md"

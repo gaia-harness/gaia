@@ -486,6 +486,12 @@ gate_require_digests() {
       ;;
   esac
 
+  # Arms this shell's classifier against the base the digests below measure,
+  # the first point that base is known. The owner sets this gate trusts are
+  # computed where they arm themselves (the digest library and the member
+  # resolver); this keeps any direct classification here in agreement with them.
+  audit_scope_release_context "$tree_root" "$merge_base" HEAD "$merge_base"
+
   digest_batch="$(audit_branch_digests_all "$tree_root" "$merge_base" 2>/dev/null)" || digest_batch=""
   if [ -z "$digest_batch" ]; then
     gate_emit_deny "PR merge gate: cannot derive per-member branch-own digests for HEAD ${sha:0:12} (audit_branch_digests_all failed or returned nothing). This usually means a missing sha256 tool (sha256sum / shasum -a 256), a git failure, a detached HEAD with no branch name to bind the digest to, or a corrupted checkout. Every Code Audit Team marker is keyed to a member's digest, so this gate denies rather than match against an empty or partial one. Restore the missing tool or checkout and retry."

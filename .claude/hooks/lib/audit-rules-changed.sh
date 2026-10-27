@@ -48,6 +48,7 @@ AUDIT_GLOBAL_RULES_PATHS="$(cat <<'EOF'
 .gaia/VERSION
 .gaia/audit-ci.yml
 .claude/hooks/lib/audit-scope.sh
+.claude/hooks/lib/audit-scope-release.sh
 .claude/hooks/lib/audit-machinery.sh
 .claude/hooks/lib/audit-clearance.sh
 .claude/hooks/lib/audit-digest.sh

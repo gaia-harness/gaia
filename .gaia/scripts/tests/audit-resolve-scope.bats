@@ -26,6 +26,7 @@ setup() {
   chmod +x "$BATS_TEST_TMPDIR/no-gh/gh"
   REPO_ROOT="$(git -C "$THIS_DIRECTORY" rev-parse --show-toplevel)"
   . "$REPO_ROOT/.gaia/tests/helpers/catchup-fixture.sh"
+  . "$REPO_ROOT/.gaia/tests/helpers/release-skip-fixture.sh"
   if ! command -v jq >/dev/null 2>&1; then
     if [ -n "${GITHUB_ACTIONS:-}" ]; then
       echo "jq not present on a CI runner; the capture probes here would report green" >&2
@@ -56,6 +57,7 @@ make_repo() {
   chmod +x "$repository_directory/.github/audit/resolve-audit-base.sh"
   cp "$REPO_ROOT/.gaia/audit-ci.yml" "$repository_directory/.gaia/"
   cp "$REPO_ROOT/.claude/hooks/lib/audit-scope.sh" \
+    "$REPO_ROOT/.claude/hooks/lib/audit-scope-release.sh" \
     "$REPO_ROOT/.claude/hooks/lib/audit-base-provenance.sh" \
     "$REPO_ROOT/.claude/hooks/lib/audit-branch-patch.sh" \
     "$REPO_ROOT/.claude/hooks/lib/audit-rules-changed.sh" \
@@ -943,4 +945,60 @@ const text = t('key');"
   grep -q '^#   --specialists ' "$repo/.gaia/scripts/audit-resolve-scope.sh"
   run --separate-stderr "$repo/.gaia/scripts/audit-resolve-scope.sh" --specialists
   [ "$status" -eq 2 ]
+}
+
+# ---------- the release-change skip ------------------------------------------
+
+# release_skip_repo <name> <kind>: a repository holding the release-skip
+# fixture's base on main and one branch of <kind> checked out.
+release_skip_repo() {
+  local repo
+  repo="$(make_repo "$1")"
+  release_skip_seed_base "$repo"
+  publish_main "$repo"
+  start_branch "$repo" "$2"
+  release_skip_apply "$repo" "$2"
+  printf '%s' "$repo"
+}
+
+# list_lines <output>: the FULL_CHANGED and CHANGED lines, in order.
+list_lines() {
+  printf '%s\n' "$1" | grep -E '^(FULL_CHANGED|CHANGED)='
+}
+
+@test "a release-skip member lists only the adopter files on a mixed release branch" {
+  local repo
+  repo="$(release_skip_repo release-mixed mixed)"
+  PATH="$BATS_TEST_TMPDIR/no-gh:$PATH" run --separate-stderr "$repo/.gaia/scripts/audit-resolve-scope.sh" --member fixture-shell --root "$repo"
+  [ "$status" -eq 0 ]
+  [ "$(list_lines "$output")" = "$(printf 'FULL_CHANGED=scripts/deploy.sh\nCHANGED=scripts/deploy.sh')" ]
+  printf '%s\n' "$output" | grep -q 'gaia-tool.sh' && return 1
+  true
+}
+
+@test "a release-skip member keeps an adopter edit to a shipped file on an ordinary branch" {
+  local repo
+  repo="$(release_skip_repo release-hand-edit hand-edit)"
+  PATH="$BATS_TEST_TMPDIR/no-gh:$PATH" run --separate-stderr "$repo/.gaia/scripts/audit-resolve-scope.sh" --member fixture-shell --root "$repo"
+  [ "$status" -eq 0 ]
+  [ "$(list_lines "$output")" = "$(printf 'FULL_CHANGED=.claude/hooks/gaia-guard.sh\nCHANGED=.claude/hooks/gaia-guard.sh')" ]
+}
+
+@test "an unkeyed member's output on a mixed release branch is byte-identical with the keyed entry absent" {
+  local repo with_keyed without_keyed
+  repo="$(release_skip_repo release-unkeyed mixed)"
+  with_keyed="$(PATH="$BATS_TEST_TMPDIR/no-gh:$PATH" "$repo/.gaia/scripts/audit-resolve-scope.sh" --member fixture-scripts --root "$repo" 2>/dev/null)"
+  printf '%s\n' "$with_keyed" | grep -q '^FULL_CHANGED=scripts/deploy.sh$'
+  release_skip_roster "$repo/.gaia/audit-ci.yml" without-keyed
+  without_keyed="$(PATH="$BATS_TEST_TMPDIR/no-gh:$PATH" "$repo/.gaia/scripts/audit-resolve-scope.sh" --member fixture-scripts --root "$repo" 2>/dev/null)"
+  [ "$with_keyed" = "$without_keyed" ]
+}
+
+@test "a release-skip member's lists stay unfiltered when the classifier is missing" {
+  local repo
+  repo="$(release_skip_repo release-no-classifier mixed)"
+  rm "$repo/.claude/hooks/lib/audit-scope.sh"
+  PATH="$BATS_TEST_TMPDIR/no-gh:$PATH" run --separate-stderr "$repo/.gaia/scripts/audit-resolve-scope.sh" --member fixture-shell --root "$repo"
+  printf '%s\n' "$output" | grep -q '^FULL_CHANGED=.gaia/scripts/gaia-tool.sh$'
+  printf '%s\n' "$output" | grep -q '^FULL_CHANGED=scripts/deploy.sh$'
 }

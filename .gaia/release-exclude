@@ -204,8 +204,6 @@ frontend/.playwright/e2e/react-perf-smoke.spec.ts
 .gaia/codify-declines
 # Runs bats under bash 5. Every .bats suite it runs is release-excluded and every shipped mention sits in a maintainer-only block the bundle scrub strips, so it serves only maintainer test runs.
 .gaia/scripts/bats5.sh
-# Assertion-hygiene rule scoped to *.bats files; every .bats suite is release-excluded, so on an adopter clone it guards nothing. Withdrawn with its companion bats5.sh.
-.claude/rules/bats-assertions.md
 # The maintainer's pre-push verification. It only calls the verification runner under .gaia/tests, which is release-excluded above, so on an adopter clone it would run nothing. The other .githooks entries ship; this one does not.
 .githooks/pre-push
 # Generated-bundle diff attributes for the maintainer's committed CLI bundles. An adopter's own root .gitattributes would collide with a shipped one, and their bundle diffs arrive once per release.

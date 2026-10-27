@@ -130,6 +130,7 @@ Master catalog of every page in the wiki. Newly created pages must be added here
 - [[Coding Guidelines]]
 - [[Design System]]
 - [[Component Testing]]
+- [[Shell Testing and CI]]: the shell audit member, the bats stack (`pnpm test:shell`), and the default-on `Shellcheck and bats` CI job for a project's own shell
 - [[API Service Pattern]]
 - [[Data Loading]]: server loader vs `clientLoader` vs `clientLoader` + TanStack Query, the service and QueryClient wiring, security and cost gaps, and turning Query on later.
 - [[Accessibility]]

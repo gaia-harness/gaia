@@ -91,7 +91,8 @@ setup() {
     code-audit-frontend \
     code-audit-github-workflows \
     code-audit-maintainer-node \
-    code-audit-maintainer-shell; do
+    code-audit-maintainer-shell \
+    code-audit-shell; do
     [ -s "$ROOT/.claude/agents/${member}.md" ] || {
       echo "roster member ${member}.md is missing or empty; every per-spec loop here would skip it silently" >&2
       return 1
@@ -109,7 +110,8 @@ setup() {
     code-audit-frontend \
     code-audit-github-workflows \
     code-audit-maintainer-node \
-    code-audit-maintainer-shell; do
+    code-audit-maintainer-shell \
+    code-audit-shell; do
     grep -qF -- "$PROTOCOL_RELATIVE_PATH" "$ROOT/.claude/agents/${member}.md" || {
       echo "${member}.md does not point at $PROTOCOL_RELATIVE_PATH" >&2
       return 1

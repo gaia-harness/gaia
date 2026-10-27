@@ -35316,6 +35316,9 @@ var ProjectConfigStrictShape = {
   // Values stay free strings at the write boundary so a decision value a newer
   // GAIA wrote never makes an older writer refuse the whole file.
   setup_decisions: external_exports.record(external_exports.string(), external_exports.string()).optional(),
+  // `false` turns off the tests workflow's shellcheck; absent means on. The
+  // workflow reads the raw file, not this schema.
+  shellcheck: external_exports.boolean().optional(),
   version: external_exports.literal(1)
 };
 var ReadSetupDecisionsSchema = external_exports.record(external_exports.string(), external_exports.unknown()).transform((entries) => {
@@ -35340,6 +35343,7 @@ var ProjectConfigSchema = external_exports.object({
     void 0
   ),
   setup_decisions: withFallback(ReadSetupDecisionsSchema.optional(), void 0),
+  shellcheck: withFallback(ProjectConfigStrictShape.shellcheck, void 0),
   // An unrecognized or absent version degrades to 1 rather than malforming
   // the config.
   version: withFallback(ProjectConfigStrictShape.version, 1)

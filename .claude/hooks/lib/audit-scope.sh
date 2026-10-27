@@ -19,6 +19,18 @@
 #                                  member's own declared globs; otherwise
 #                                  ownerless
 #
+# Release-change skip: a member keyed `skip_gaia_release_changes: true` owns no
+# file GAIA ships (manifest class `owned`) on a branch that changes
+# .gaia/VERSION, once a consumer arms the context with
+# audit_scope_release_context after its init. The path falls through to later
+# claimants, then the default tier. Every consumer that classifies a branch
+# diff arms it with the base it already diffs against, or the dispatch resolver
+# and the merge gate disagree about who owes a marker and the merge deadlocks.
+# The signal, the accepted manifest self-exemption, and why a partial update or
+# an unreadable input fails toward over-review: audit-scope-release.sh's header.
+# A copy of this file without that sibling never arms, so it routes exactly as
+# it did before the key existed.
+#
 # Conflating the two is a merge-gate bypass. In particular, the
 # out-of-scope allowlist is NOT an audit-skip predicate: a path can be both
 # allowlisted here (reached only when the roster dispatches nobody) and
@@ -33,6 +45,18 @@
 #
 # Bash 3.2 compatible (macOS default): no associative arrays, no `mapfile`,
 # no `${var^^}`. Never `cd`.
+
+# Located by parameter expansion, not dirname, so sourcing spawns no process.
+case "${BASH_SOURCE[0]}" in
+  */*) _audit_scope_release_library="${BASH_SOURCE[0]%/*}/audit-scope-release.sh" ;;
+  *) _audit_scope_release_library="audit-scope-release.sh" ;;
+esac
+# shellcheck source=/dev/null
+if [ ! -f "$_audit_scope_release_library" ] || ! . "$_audit_scope_release_library" 2>/dev/null; then
+  _audit_scope_release_reset() { _AUDIT_SCOPE_RELEASE_ARMED=0; _AUDIT_SCOPE_SKIP_MEMBERS=""; }
+  audit_scope_release_context() { return 0; }
+fi
+unset _audit_scope_release_library
 
 # --- The merge gate's out-of-scope allowlist ---------------------------------
 #
@@ -269,6 +293,7 @@ audit_scope_init() {
   _AUDIT_SCOPE_SPEC_REGEX=()
   _AUDIT_SCOPE_DEFAULT_GLOB_COUNT=0
   _AUDIT_SCOPE_DEFAULT_REGEX=()
+  _audit_scope_release_reset "$config_file"
 
   records=""
   if [ -f "$config_file" ]; then
@@ -437,12 +462,14 @@ audit_glob_matches() {
 # public entry points below so neither one forks a process per path.
 
 _audit_scope_owner_of() {
-  local path="$1" i=0
+  local path="$1" i=0 release_owned=0
 
   _AUDIT_SCOPE_OWNER_RESULT=""
+  [ "${_AUDIT_SCOPE_RELEASE_ARMED:-0}" != 1 ] || ! _audit_scope_release_path_owned "$path" || release_owned=1
 
   while [ "$i" -lt "$_AUDIT_SCOPE_SPEC_COUNT" ]; do
-    if [[ "$path" =~ ${_AUDIT_SCOPE_SPEC_REGEX[$i]} ]]; then
+    if [[ "$path" =~ ${_AUDIT_SCOPE_SPEC_REGEX[$i]} ]] \
+      && { [ "$release_owned" = 0 ] || ! _audit_scope_release_member_skips "${_AUDIT_SCOPE_SPEC_MEMBER[$i]}"; }; then
       _AUDIT_SCOPE_OWNER_RESULT="${_AUDIT_SCOPE_SPEC_MEMBER[$i]}"
       return 0
     fi

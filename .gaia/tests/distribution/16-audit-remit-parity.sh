@@ -11,10 +11,17 @@
 #   1. The bundle carries the writer (.gaia/scripts/write-audit-remits.sh).
 #   2. The writer is not release-excluded (source .gaia/release-exclude).
 #   3. The writer's manifest class equals the check's (staged manifest).
-#   4. The check exits 0 on the scrubbed, marker-stripped tree once it is
-#      indexed, with no invariant skipped.
-#   5. The staged roster is the adopter shape: exactly two members, neither
-#      maintainer-only, and no code-audit-maintainer-*.md ships.
+#   4. The staged tree carries no .bats file (an adopter starts with no shell
+#      suites), and the check exits 0 on the scrubbed, marker-stripped tree
+#      once it is indexed, with no invariant skipped. That exit 0 includes
+#      the zero-match invariant: every glob of the shell member matches
+#      something even with no adopter shell present.
+#   4b. Guard can fail: a scratch roster copy with a misspelled glob added to
+#      the frontend member makes the same check fail, naming that glob.
+#   5. The staged roster is the adopter shape: its members are exactly the
+#      source roster's non-maintainer members, which include the frontend,
+#      workflow and shell members, none maintainer-only, and no
+#      code-audit-maintainer-*.md ships.
 #   6. No shipped region names a glob belonging to a stripped member
 #      (UAT-010).
 #   7. The bundled writer repairs a drifted shipped definition byte-exact
@@ -94,6 +101,13 @@ fi
 # and skip on a tree that is not a repository root, so without the index this
 # assertion would pass with both of them never run. An index is enough; no
 # commit is needed for `ls-files` to see the tree.
+staged_bats_files="$(find "$STAGING" -name '*.bats' -not -path '*/node_modules/*' -print)"
+if [ -n "$staged_bats_files" ]; then
+  log "staged .bats files:"
+  printf '%s\n' "$staged_bats_files" >&2
+  fail "the staged tree ships a .bats file, so the no-adopter-shell premise of the zero-match check does not hold"
+  exit 1
+fi
 git -C "$STAGING" init -q || { fail "git init of the staged tree failed"; exit 1; }
 git -C "$STAGING" add -A || { fail "git add of the staged tree failed"; exit 1; }
 CHECK_OUTPUT=""
@@ -112,16 +126,45 @@ if grep -qF "SKIPPED" <<<"$CHECK_OUTPUT"; then
   exit 1
 fi
 
+# --- Assertion 4b: the zero-match invariant can fail ---------------------
+MISSPELLED_ROSTER="$STAGING/.gaia/audit-ci-misspelled.yml"
+sed 's|^      - "frontend/app/\*\*"$|&\
+      - "frontend/apps/**"|' "$ROSTER" > "$MISSPELLED_ROSTER"
+if cmp -s "$ROSTER" "$MISSPELLED_ROSTER"; then
+  fail "could not plant a misspelled glob in the roster copy"
+  exit 1
+fi
+MISSPELLED_EXIT_STATUS=0
+MISSPELLED_OUTPUT="$(bash "$CHECK" --root "$STAGING" --config "$MISSPELLED_ROSTER" 2>&1)" || MISSPELLED_EXIT_STATUS=$?
+rm -f "$MISSPELLED_ROSTER"
+if [ "$MISSPELLED_EXIT_STATUS" -eq 0 ]; then
+  fail "guard-can-fail: the roster check accepted a glob (frontend/apps/**) that matches no file"
+  exit 1
+fi
+if ! grep -qF "frontend/apps/**" <<<"$MISSPELLED_OUTPUT"; then
+  printf '%s\n' "$MISSPELLED_OUTPUT" >&2
+  fail "guard-can-fail: the roster check failed without naming the misspelled glob"
+  exit 1
+fi
+
 # --- Assertion 5: the staged roster is the adopter shape ---------------
 staged_members="$(bash "$CHECK" --emit-roster --root "$STAGING" --config "$ROSTER" \
   | awk -F'\t' '$1=="MEMBER"{print $2}')"
-staged_member_count="$(printf '%s\n' "$staged_members" | grep -c . || true)"
-if [ "$staged_member_count" -ne 2 ]; then
+expected_members="$(bash "$PROJECT_ROOT/.gaia/scripts/verify-audit-roster.sh" --emit-roster \
+  --root "$PROJECT_ROOT" --config "$PROJECT_ROOT/.gaia/audit-ci.yml" \
+  | awk -F'\t' '$1=="MEMBER"{print $2}' | grep -v '^code-audit-maintainer-' | sort)"
+if [ -z "$expected_members" ] || [ "$(printf '%s\n' "$staged_members" | sort)" != "$expected_members" ]; then
   log "staged roster members:"
   printf '%s\n' "$staged_members" >&2
-  fail "staged roster has $staged_member_count member(s), expected 2 (adopter shape)"
+  log "expected (source roster's non-maintainer members):"
+  printf '%s\n' "$expected_members" >&2
+  fail "staged roster is not exactly the source roster's non-maintainer members (adopter shape)"
   exit 1
 fi
+for adopter_member in code-audit-frontend code-audit-github-workflows code-audit-shell; do
+  grep -qxF "$adopter_member" <<<"$staged_members" \
+    || { fail "staged roster lacks the adopter member $adopter_member"; exit 1; }
+done
 if grep -q '^code-audit-maintainer-' <<<"$staged_members"; then
   fail "staged roster still declares a code-audit-maintainer-* member, scrub did not strip it"
   exit 1
