@@ -11,6 +11,7 @@ tags: [meta, log]
 
 ## [Unreleased]
 
+- 2026-10-28 PROMOTED: wiki/concepts/Maintainer-only Debt Source Record.md (PR #3141)
 - 2026-10-27 PROMOTED: wiki/concepts/Per-dispatch Audit Cost Telemetry.md (PR #3117)
 - 2026-10-27 PROMOTED: wiki/decisions/Shared Codify Declines.md (PR #3116)
 - 2026-10-27 PROMOTED: wiki/concepts/Local Bundle Sync (Concept).md, wiki/decisions/Local Bundle Sync (Decision).md (PR #3110)

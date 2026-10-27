@@ -56,6 +56,10 @@ pop() {
     mv "$stub/$1.next" "$stub/$1"
   fi
 }
+# rest_issues <file>: the fixture list (gh issue list shape) in REST shape.
+rest_issues() {
+  { cat "$1" 2>/dev/null || echo '[]'; } | jq -c 'map(. + {state_reason: ((.stateReason // null) | if . == null then null else ascii_downcase end)})'
+}
 args="$*"
 case "$args" in
   *"--json nameWithOwner"*)
@@ -87,12 +91,14 @@ case "$args" in
     [ -f "$stub/investigate-fail" ] && exit 1
     cat "$stub/investigate.json" 2>/dev/null || echo '[]'
     ;;
-  "issue list"*"--state open"*)
+  "api --paginate"*"state=open"*)
     [ -f "$stub/list-fail" ] && exit 1
-    cat "$stub/open.json" 2>/dev/null || echo '[]'
+    rest_issues "$stub/open.json"
     ;;
-  "issue list"*"--state closed"*)
-    cat "$stub/closed.json" 2>/dev/null || echo '[]'
+  "api --paginate"*"state=closed"*)
+    rest_issues "$stub/closed.json"
+    # A second page is printed as a second array, the way gh --paginate does.
+    [ -f "$stub/closed-page2.json" ] && rest_issues "$stub/closed-page2.json"
     ;;
   "issue create"*)
     [ -f "$stub/create-fail" ] && exit 1
@@ -145,7 +151,7 @@ make_finding() {
 
 # reset_state: a clean stub log and record directory between loop iterations.
 reset_state() {
-  rm -f "$STUB/log" "$OUTCOMES" "$STUB/open.json" "$STUB/closed.json" "$STUB/created.json"
+  rm -f "$STUB/log" "$OUTCOMES" "$STUB/open.json" "$STUB/closed.json" "$STUB/closed-page2.json" "$STUB/created.json"
   rm -rf "$WORK_REPO/.gaia/local" "$BATS_TEST_TMPDIR/run"
 }
 
@@ -391,7 +397,7 @@ CASES
   make_finding '.security = true'
   run_file
   grep -q -e 'hasIssuesEnabled' "$STUB/log" && return 1
-  grep -q -e '^issue list' "$STUB/log" && return 1
+  grep -q -e '^api --paginate' "$STUB/log" && return 1
   make_finding '.'
   reset_state
   run_file
@@ -420,7 +426,7 @@ CASES
   local key_hash
   key_hash="$(printf '%s' '<!-- gaia-debt-key: v1 class=holistic/swallowed-error path=app/a.ts line=10 -->' | shasum -a 256 | cut -d' ' -f1)"
   [ "$(retry_count)" -eq 1 ]
-  cmp "$BATS_TEST_TMPDIR/run/filing-retry/$key_hash.json" "$FINDING"
+  [ "$(jq -S 'del(.source_branch)' "$BATS_TEST_TMPDIR/run/filing-retry/$key_hash.json")" = "$(jq -S . "$FINDING")" ]
 }
 
 @test "the retry file is removed by a later filed, absent or failed run and kept by another transient" {
@@ -507,6 +513,22 @@ CASES
   [ "$output" = "matched 9" ]
   grep -q '^issue create' "$STUB/log" && return 1
   true
+}
+
+@test "a declined-closed issue on the second page of the closed list is still matched" {
+  printf '[{"number":8,"body":"unrelated","labels":[],"stateReason":"COMPLETED"}]\n' >"$STUB/closed.json"
+  printf '[{"number":9,"body":"<!-- gaia-debt-key: v1 class=holistic/swallowed-error path=app/a.ts line=10 -->","labels":[{"name":"wontfix"}],"stateReason":"NOT_PLANNED"}]\n' >"$STUB/closed-page2.json"
+  run_file
+  [ "$output" = "matched 9" ]
+  grep -q '^issue create' "$STUB/log" && return 1
+  true
+}
+
+@test "the same closed lists without the declined issue file a new issue" {
+  printf '[{"number":8,"body":"unrelated","labels":[],"stateReason":"COMPLETED"}]\n' >"$STUB/closed.json"
+  printf '[{"number":7,"body":"also unrelated","labels":[],"stateReason":"COMPLETED"}]\n' >"$STUB/closed-page2.json"
+  run_file
+  grep -q '^issue create' "$STUB/log"
 }
 
 @test "a create the label-filtered list does not show yet still verifies by its number" {
@@ -698,7 +720,7 @@ CASES
 @test "every gh call carries the same --repo" {
   run_file
   local unpinned
-  unpinned="$(grep -v -e '--repo owner/name' -e '^repo view owner/name ' "$STUB/log" | wc -l | tr -d ' ')"
+  unpinned="$(grep -v -e '--repo owner/name' -e '^repo view owner/name ' -e '^api --paginate repos/owner/name/' "$STUB/log" | wc -l | tr -d ' ')"
   [ "$unpinned" -eq 0 ]
   [ "$(wc -l <"$STUB/log" | tr -d ' ')" -gt 5 ]
 }
@@ -707,7 +729,7 @@ CASES
   run bash "$SCRIPT" file --finding "$FINDING" --outcome-file "$OUTCOMES"
   [ "$status" -eq 0 ]
   [ "$(grep -c -e '--json nameWithOwner' "$STUB/log")" -eq 1 ]
-  [ "$(grep -v -e '--json nameWithOwner' "$STUB/log" | grep -v -e '--repo owner/name' | grep -vc '^repo view owner/name ')" -eq 0 ]
+  [ "$(grep -v -e '--json nameWithOwner' "$STUB/log" | grep -v -e '--repo owner/name' | grep -v '^api --paginate repos/owner/name/' | grep -vc '^repo view owner/name ')" -eq 0 ]
 }
 
 @test "a missing jq exits 3 with a message" {
