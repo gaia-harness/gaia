@@ -134,7 +134,7 @@ _AUDIT_SCOPE_GLOB_AWK='
       return s
     }
     # Convert a posix glob (**, *) into an anchored ERE, matched against
-    # repo-relative POSIX paths. Mirrors scrub.ts globToRegex: escape ERE
+    # repo-relative POSIX paths. Mirrors globToRegex in the release scrub: escape ERE
     # specials (not *), then handle **/, **, * via sentinels so single-* is
     # not re-substituted.
     function glob_to_regex(glob,   g) {

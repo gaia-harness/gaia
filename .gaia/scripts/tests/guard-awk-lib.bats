@@ -1294,12 +1294,7 @@ strip_full_line_comments() {
   # for no gain. The literal pathspec token '*.bats' can never match this
   # character class, because the character before the dot is '*', outside
   # [A-Za-z0-9_.-], so there is no allowlist arm to carve out.
-  local guard_file
-  while IFS= read -r guard_file; do
-    strip_full_line_comments "$guard_file" | grep -qE '[A-Za-z0-9_.-]+\.bats' \
-      && { echo "$guard_file: names a bats basename on a non-comment line" >&2; return 1; }
-  done < <(wiki_citing_files)
-  true
+  no_bats_basename_on_code_lines
 }
 
 @test "a bats suite basename planted on a non-comment line reds the no-basename-list check" {
@@ -1314,8 +1309,40 @@ strip_full_line_comments() {
 # here. The library itself is checked too and is not a guard, so it is
 # appended.
 wiki_citing_files() {
-  production_guards
+  local guard_file
+  while IFS= read -r guard_file; do
+    guard_text_files "$guard_file"
+  done < <(production_guards)
   printf '%s\n' "$REPO_ROOT/.gaia/scripts/guard-awk-lib.sh"
+}
+
+# no_bats_basename_on_code_lines: fail naming the first file of
+# wiki_citing_files that names a bats basename on a non-comment line.
+no_bats_basename_on_code_lines() {
+  local guard_file
+  while IFS= read -r guard_file; do
+    strip_full_line_comments "$guard_file" | grep -qE '[A-Za-z0-9_.-]+\.bats' \
+      && { echo "$guard_file: names a bats basename on a non-comment line" >&2; return 1; }
+  done < <(wiki_citing_files)
+  true
+}
+
+# A split guard is read as its whole text set, so a basename moved into one of
+# its pieces is still caught. The guard file itself stays clean here: only
+# reading the pieces can find the plant.
+@test "a bats suite basename planted in a split guard's piece reds the no-basename-list check" {
+  local directory="$TEMPORARY_DIRECTORY/split-guard" text_file
+  mkdir -p "$directory"
+  while IFS= read -r text_file; do
+    cp "$text_file" "$directory/"
+  done < <(guard_text_files "$REPO_ROOT/.gaia/scripts/lint-errexit-status-read.sh")
+  [ -f "$directory/lint-errexit-status-read-walk.sh" ]
+  printf '\nSUITE=lint-errexit-status-read.bats\n' >> "$directory/lint-errexit-status-read-walk.sh"
+  production_guards() { printf '%s\n' "$directory/lint-errexit-status-read.sh"; }
+  strip_full_line_comments "$directory/lint-errexit-status-read.sh" | grep -qE '[A-Za-z0-9_.-]+\.bats' && return 1
+  run no_bats_basename_on_code_lines
+  [ "$status" -eq 1 ]
+  grep -qF "lint-errexit-status-read-walk.sh: names a bats basename" <<<"$output"
 }
 
 # ============================================================================
