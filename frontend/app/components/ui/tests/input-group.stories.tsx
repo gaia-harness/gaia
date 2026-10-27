@@ -14,7 +14,6 @@ import {
 const meta: Meta = {
   component: InputGroup,
   parameters: {
-    controls: {hideNoControlsWarning: true},
     wrap: 'max-w-sm p-4',
   },
   title: 'Components/Ui/InputGroup',

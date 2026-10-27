@@ -5,7 +5,6 @@ import ErrorStack from '..';
 const meta: Meta = {
   component: ErrorStack,
   parameters: {
-    controls: {hideNoControlsWarning: true},
     wrap: 'p-4',
   },
   title: 'Components/Errors/ErrorStack',

@@ -5,7 +5,6 @@ import {Alert, AlertDescription, AlertTitle} from '~/components/ui/alert';
 const meta: Meta = {
   component: Alert,
   parameters: {
-    controls: {hideNoControlsWarning: true},
     wrap: 'max-w-md p-4',
   },
   title: 'Components/Ui/Alert',

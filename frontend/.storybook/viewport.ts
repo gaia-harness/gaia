@@ -1,6 +1,6 @@
 /* eslint-disable perfectionist/sort-objects -- viewports read smallest to largest, not alphabetically */
 const viewport = {
-  viewports: {
+  options: {
     landscape: {
       name: 'Landscape',
       right: 'lg',
