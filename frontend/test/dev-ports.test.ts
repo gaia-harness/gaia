@@ -338,8 +338,8 @@ describe('slot-0 base ports match the shell defaults', () => {
     ).toEqual([STORYBOOK_BASE_PORT]);
   });
 
-  test('server-process-lib.sh defaults equal the TypeScript base ports', () => {
-    const text = readScript('server-process-lib.sh');
+  test('server-process-stop.sh defaults equal the TypeScript base ports', () => {
+    const text = readScript('server-process-stop.sh');
 
     expect(
       matchDefaults(text, /GAIA_PORTS_DEV_BASE_PORT:-\}"\s+(\d+)\)/g)
