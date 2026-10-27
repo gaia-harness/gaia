@@ -9,6 +9,13 @@
 
 bats_require_minimum_version 1.5.0
 
+# The malformed-reply refusals share one sandbox per route kind (see
+# setup_file). Under bats --jobs the cases of a file run in parallel, so they
+# would mark against each other's reply mid-test. Keep this file's cases
+# serial; other files still run in parallel.
+# shellcheck disable=SC2034 # read by bats itself
+BATS_NO_PARALLELIZE_WITHIN_FILE=true
+
 setup_file() {
   command -v jq >/dev/null 2>&1 || skip "jq not available"
   REPO_ROOT="$(cd "$BATS_TEST_DIRNAME/../../.." && pwd)"

@@ -191,6 +191,18 @@ undecided_ids() {
   in_repo "$1" .gaia/cli/gaia setup drift --json | jq -r '[.undecided[].id] | join(" ")'
 }
 
+# drift_state <repo>: the name and content of every file a record or a block
+# writes, the key drift_json caches on.
+drift_state() {
+  local repo="$1"
+  # gaia-lint-ignore whole-tree-mark-guard: the operand is a make_repo sandbox under BATS_TEST_TMPDIR, not the tracked tree
+  find "${repo}/.gaia/local" -type f 2>/dev/null | sort | while IFS= read -r file; do
+    printf '%s\n' "$file"
+    cat "$file"
+  done
+  cat "${repo}/.gaia/project.json" "${HOME}/.claude/settings.json" 2>/dev/null
+}
+
 # drift_json <repo>: drift's JSON, read once per state of the repository. The
 # cache is keyed on the content of every file a record or a block writes, so a
 # record between two reads is seen by the second.
@@ -198,15 +210,7 @@ drift_json() {
   local repo="$1" name key cache
   name="$(basename "$repo")"
   cache="${BATS_TEST_TMPDIR}/drift-cache-${name}"
-  key="$(
-    {
-      find "${repo}/.gaia/local" -type f 2>/dev/null | sort | while IFS= read -r file; do
-        printf '%s\n' "$file"
-        cat "$file"
-      done
-      cat "${repo}/.gaia/project.json" "${HOME}/.claude/settings.json" 2>/dev/null
-    } | cksum
-  )"
+  key="$(drift_state "$repo" | cksum)"
   if [ ! -f "${cache}.json" ] || [ "$(cat "${cache}.key" 2>/dev/null)" != "$key" ]; then
     in_repo "$repo" .gaia/cli/gaia setup drift --json >"${cache}.json" || return 1
     printf '%s\n' "$key" >"${cache}.key"
