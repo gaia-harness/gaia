@@ -58,7 +58,7 @@ newline=$'\n'
 owned_framed="$newline"
 if [ "${#manifests[@]}" -gt 0 ]; then
   command -v jq >/dev/null 2>&1 || { echo "shellcheck-changed: jq is required to read a manifest" >&2; exit 2; }
-  for manifest in "${manifests[@]}"; do
+  for manifest in ${manifests[@]+"${manifests[@]}"}; do
     [ -f "$manifest" ] || { echo "shellcheck-changed: manifest not found: $manifest" >&2; exit 2; }
     manifest_owned="$(jq -r '.files | to_entries[] | select(.value == "owned") | .key' "$manifest")" \
       || { echo "shellcheck-changed: cannot parse manifest: $manifest" >&2; exit 2; }
@@ -88,9 +88,7 @@ while IFS= read -r -d '' path; do
 done
 
 if [ "$select_only" -eq 1 ]; then
-  if [ "${#selected[@]}" -gt 0 ]; then
-    printf '%s\0' "${selected[@]}"
-  fi
+  [ "${#selected[@]}" -eq 0 ] || printf '%s\0' "${selected[@]}"
   exit 0
 fi
 
@@ -99,12 +97,10 @@ fi
 command -v shellcheck >/dev/null 2>&1 || { echo "shellcheck-changed: shellcheck is not installed" >&2; exit 2; }
 
 status=0
-if [ "${#shell_files[@]}" -gt 0 ]; then
-  shellcheck -S warning -- "${shell_files[@]}" || status=$?
-fi
+[ "${#shell_files[@]}" -eq 0 ] || shellcheck -S warning -- "${shell_files[@]}" || status=$?
 if [ "${#bats_files[@]}" -gt 0 ]; then
   bats_status=0
-  shellcheck -S warning -s bash -- "${bats_files[@]}" || bats_status=$?
+  shellcheck -S warning -s bash -- ${bats_files[@]+"${bats_files[@]}"} || bats_status=$?
   [ "$status" -ne 0 ] || status="$bats_status"
 fi
 exit "$status"

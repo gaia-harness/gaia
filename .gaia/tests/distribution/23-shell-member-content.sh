@@ -56,6 +56,7 @@ done
 # runtime scratch directory under the gitignored local state).
 check_citations() {
   local file="$1" token missing=0 title
+  # shellcheck disable=SC2016 # the backticks are literal Markdown code-span delimiters
   while IFS= read -r token; do
     case "$token" in
       *'<'* | *'*'* | *'$'* | *'>'* | *' '*) continue ;;
@@ -105,6 +106,7 @@ grep -qF 'This lens activates only for hook scripts' "$member" \
   || { fail "the hook lens is not scoped to hook scripts"; exit 1; }
 grep -qE '^## Conditional bats-suite lens' "$member" \
   || { fail "member definition lacks the bats-suite lens heading"; exit 1; }
+# shellcheck disable=SC2016 # the backticks are literal Markdown
 grep -qF 'This lens activates only for `.bats` files' "$member" \
   || { fail "the bats lens is not scoped to .bats files"; exit 1; }
 for forbidden in 'Conditional declarative-surface lens' 'Triage threshold' 'harness-triage-threshold'; do
@@ -134,22 +136,23 @@ done <<<"$maintainer_globs"
 for document in "$DEFINITION" "$STACK_REFERENCE" "$WIKI_PAGE"; do
   check_citations "$STAGING/$document" \
     || { fail "$document cites a path or wikilink the staged bundle lacks"; exit 1; }
-  check_denylist "$STAGING/$document" "${SHELL_DENYLIST[@]}" \
+  check_denylist "$STAGING/$document" ${SHELL_DENYLIST[@]+"${SHELL_DENYLIST[@]}"} \
     || { fail "$document mentions a maintainer-only tool or path"; exit 1; }
 done
 
 # --- Assertion 3: the shipped bats assertion rule ----------------------------
 rule="$STAGING/$ASSERTION_RULE"
-awk 'NR == 1 && $0 == "---" { inside = 1; next } inside && $0 == "---" { exit } inside' "$rule" \
-  | grep -qxF "  - '**/*.bats'" \
+rule_frontmatter="$(awk 'NR == 1 && $0 == "---" { inside = 1; next } inside && $0 == "---" { exit } inside' "$rule")"
+grep -qxF "  - '**/*.bats'" <<<"$rule_frontmatter" \
   || { fail "the bats assertion rule's frontmatter paths do not list '**/*.bats'"; exit 1; }
 check_citations "$rule" \
   || { fail "the bats assertion rule cites a path the staged bundle lacks"; exit 1; }
-check_denylist "$rule" "${RULE_DENYLIST[@]}" \
+check_denylist "$rule" ${RULE_DENYLIST[@]+"${RULE_DENYLIST[@]}"} \
   || { fail "the bats assertion rule carries maintainer-only content"; exit 1; }
 
 # --- Assertion 4: pointers ----------------------------------------------------
-grep -E '^- ' "$STAGING/$TDD_SKILL" | grep -qF "\`$STACK_REFERENCE\`" \
+tdd_skill_bullets="$(grep -E '^- ' "$STAGING/$TDD_SKILL" || true)"
+grep -qF "\`$STACK_REFERENCE\`" <<<"$tdd_skill_bullets" \
   || { fail "the tdd skill's stack list has no bullet pointing at $STACK_REFERENCE"; exit 1; }
 for citing in "$STACK_REFERENCE" "$DEFINITION"; do
   grep -qF "$WIKI_PAGE" "$STAGING/$citing" \
@@ -159,6 +162,7 @@ done
 # --- Assertion 5: both guards can fail --------------------------------------
 planted="$SCRATCH/planted-citation.md"
 cp "$member" "$planted"
+# shellcheck disable=SC2016 # the backticks are literal Markdown
 printf '\nSee `.claude/hooks/lib/no-such-helper.sh` for details.\n' >> "$planted"
 if (check_citations "$planted") 2>/dev/null; then
   fail "guard-can-fail: the citation check accepted a planted nonexistent path"; exit 1
@@ -166,7 +170,7 @@ fi
 planted="$SCRATCH/planted-denylist.md"
 cp "$member" "$planted"
 printf '\nRun the suite with bats5 first.\n' >> "$planted"
-if (check_denylist "$planted" "${SHELL_DENYLIST[@]}") 2>/dev/null; then
+if (check_denylist "$planted" ${SHELL_DENYLIST[@]+"${SHELL_DENYLIST[@]}"}) 2>/dev/null; then
   fail "guard-can-fail: the denylist check accepted a planted maintainer-only tool name"; exit 1
 fi
 

@@ -191,9 +191,9 @@ SMOKE
   if [ -n "$BASH4_DIRECTORY" ]; then
     suite_output="$(PATH="$BASH4_DIRECTORY:$PATH" pnpm test:shell 2>&1)" \
       || { printf 'pnpm test:shell failed under bash 4:\n%s\n' "$suite_output" >&2; exit 1; }
-    printf '%s\n' "$suite_output" | grep -qx '1\.\.1' \
+    grep -qx '1\.\.1' <<<"$suite_output" \
       || { printf 'pnpm test:shell did not plan one test:\n%s\n' "$suite_output" >&2; exit 1; }
-    printf '%s\n' "$suite_output" | grep -q '^ok 1 ' \
+    grep -q '^ok 1 ' <<<"$suite_output" \
       || { printf 'pnpm test:shell did not report ok 1:\n%s\n' "$suite_output" >&2; exit 1; }
   fi
 
@@ -207,7 +207,7 @@ SMOKE
     printf 'expected exactly one line naming the shell stack reference:\n%s\n' "$refusal_output" >&2
     exit 1
   fi
-  if printf '%s\n' "$refusal_output" | grep -qx '1\.\.1'; then
+  if grep -qx '1\.\.1' <<<"$refusal_output"; then
     printf 'pnpm test:shell planned a test despite the old bash:\n%s\n' "$refusal_output" >&2
     exit 1
   fi

@@ -1014,6 +1014,7 @@ probe_deadlock() {
   commit_file "$repo" ".claude/rules/règle.md" "shell"
   commit_file "$repo" ".gaia/cli/src/café.ts" "node"
   commit_file "$repo" ".claude/skills/naïve/SKILL.md" "prose"
+  commit_file "$repo" "frontend/scripts/déployer.sh" "adopter shell"
 
   for member in "${SPECIALISTS[@]}"; do
     full="$(scope_values "$member" "$repo" FULL_CHANGED)"

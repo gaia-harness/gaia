@@ -408,7 +408,7 @@ _non_comment_mentions() {
 # exists or no longer calls the classifier. Non-empty output is a failure.
 release_context_violations() {
   local root="$1" call_pattern='audit_scope_init|audit_owner_for_path|audit_owners_for_paths|audit_branch_digests_[A-Za-z_]+' file consumers="" listed
-  while IFS= read -r file; do
+  while IFS= read -r -d '' file; do
     case "$file" in
       .gaia/tests/*|*/tests/*|.claude/hooks/lib/audit-scope.sh|.claude/hooks/lib/audit-scope-release.sh) continue ;;
     esac
@@ -418,7 +418,7 @@ release_context_violations() {
     _non_comment_mentions "$root/$file" 'audit_scope_release_context' && continue
     printf '%s\n%s\n' "$DIGEST_ONLY_CALLERS" "$EXEMPT_CONSUMERS" | grep -Fxq -- "$file" && continue
     printf 'unarmed consumer: %s\n' "$file"
-  done < <(git -C "$root" ls-files --cached --others --exclude-standard -- '*.sh')
+  done < <(git -C "$root" ls-files -z --cached --others --exclude-standard -- '*.sh')
   [ -n "$consumers" ] || printf 'no consumer found\n'
   while IFS= read -r listed; do
     printf '%s' "$consumers" | grep -Fxq -- "$listed" || printf 'stale exemption: %s\n' "$listed"
@@ -443,11 +443,11 @@ release_context_violations() {
   local scratch="$BATS_TEST_TMPDIR/guard-tree" file
   mkdir -p "$scratch"
   git -C "$scratch" init -q
-  while IFS= read -r file; do
+  while IFS= read -r -d '' file; do
     case "$file" in .gaia/tests/*|*/tests/*) continue ;; esac
     mkdir -p "$scratch/$(dirname "$file")"
     cp "$REPO_ROOT/$file" "$scratch/$file"
-  done < <(git -C "$REPO_ROOT" ls-files --cached --others --exclude-standard -- '*.sh')
+  done < <(git -C "$REPO_ROOT" ls-files -z --cached --others --exclude-standard -- '*.sh')
   git -C "$scratch" add -A
   run release_context_violations "$scratch"
   [ -z "$output" ]

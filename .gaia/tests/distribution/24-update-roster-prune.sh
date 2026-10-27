@@ -115,13 +115,13 @@ fi
 
 # --- Assertion 2: the selector hands the previous update the prune note ------
 NOTE_FILES="$(grep -l 'roster-prune-overbroad.sh' "$STAGING"/.gaia/migrations/*.md || true)"
-[ "$(printf '%s\n' "$NOTE_FILES" | grep -c .)" -eq 1 ] \
+[ "$(grep -c . <<<"$NOTE_FILES")" -eq 1 ] \
   || { fail "expected exactly one staged migration note naming the prune script, got: $NOTE_FILES"; exit 1; }
 NOTE_FILE="$NOTE_FILES"
 NOTE_VERSION="$(basename "$NOTE_FILE" .md)"
 # The baseline is the newest release below the note's, so only the note's own
 # release falls in the selected range.
-SELECT_BASELINE="$(ls "$STAGING/.gaia/migrations" | sed 's/\.md$//' \
+SELECT_BASELINE="$(for migration_note in "$STAGING"/.gaia/migrations/*.md; do basename "$migration_note" .md; done \
   | sort -t. -k1,1n -k2,2n -k3,3n \
   | awk -v note="$NOTE_VERSION" '$0 == note { print previous; exit } { previous = $0 }')"
 [ -n "$SELECT_BASELINE" ] || SELECT_BASELINE="0.0.0"
@@ -218,9 +218,10 @@ if [ "$POST_PRUNE_STATUS" -ne 0 ]; then
   printf '%s\n' "$POST_PRUNE_OUTPUT" >&2
   fail "the roster check exited $POST_PRUNE_STATUS after the prune, expected 0"; exit 1
 fi
-grep -q 'verify-audit-roster.sh' "$ADOPTER/.githooks/pre-commit" \
-  && grep -q 'audit-ci' "$ADOPTER/.githooks/pre-commit" \
-  || { fail "the staged pre-commit hook no longer runs the roster check for a roster change"; exit 1; }
+if ! grep -q 'verify-audit-roster.sh' "$ADOPTER/.githooks/pre-commit" \
+  || ! grep -q 'audit-ci' "$ADOPTER/.githooks/pre-commit"; then
+  fail "the staged pre-commit hook no longer runs the roster check for a roster change"; exit 1
+fi
 
 # --- Assertion 4: a second run is idempotent ---------------------------------
 ROSTER_BEFORE_SECOND_RUN="$WORK/roster-before-second-run.yml"

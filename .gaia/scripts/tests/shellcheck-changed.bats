@@ -160,7 +160,7 @@ selection() {
   scratch="$BATS_TEST_TMPDIR/mutant.sh"
   # Make the owned-path comparison never match, which removes the exclusion.
   sed 's/\*"\$newline\$path\$newline"\*)/*"x$newline$path$newline"*)/' "$SCRIPT" > "$scratch"
-  ! cmp -s "$SCRIPT" "$scratch"
+  cmp -s "$SCRIPT" "$scratch" && return 1
   write_warning .gaia/scripts/gaia-owned.sh
   run bash -c 'printf "%s\0" .gaia/scripts/gaia-owned.sh | bash "$0" --root "$FIXTURE_ROOT" --manifest "$MANIFEST" --select-only' "$scratch"
   [ "$status" -eq 0 ]
