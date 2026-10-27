@@ -380,10 +380,12 @@ light_records="$(_audit_scope_parse_light < "$config")"
 
 # The classifier's reading of the release-skip key, as SKIPCLASS records for the
 # drift comparison. Absent from a library copy that predates the key, in which
-# case there is no second reader to compare against.
+# case there is no second reader to compare against: the SKIPREADER record is
+# what arms the comparison, since an empty SKIPCLASS set alone cannot tell "the
+# classifier keys no member" from "there is no classifier reading".
 skip_class_records=""
 if command -v audit_roster_release_skip_members >/dev/null 2>&1; then
-  skip_class_records="$(audit_roster_release_skip_members "$config" | awk 'NF { printf "SKIPCLASS\t%s\n", $1 }')"
+  skip_class_records="$(printf 'SKIPREADER\n'; audit_roster_release_skip_members "$config" | awk 'NF { printf "SKIPCLASS\t%s\n", $1 }')"
 fi
 
 # --- Invariant: the shared machinery list is readable ------------------------
@@ -607,6 +609,7 @@ violation_records="$(
     # the raw glob, exactly as the claimant and region positions do.
     $1 == "UNOWNED" { unowned_entry_count++; unowned_globs[unowned_entry_count] = $2; next }
     $1 == "RELEASESKIP" && $3 == "true" { raw_skip[$2] = 1; next }
+    $1 == "SKIPREADER" { class_skip_reader = 1; next }
     $1 == "SKIPCLASS" { class_skip[$2] = 1; next }
     $1 == "HARDFULL" { light_glob_count++; light_glob_member[light_glob_count] = $2; light_glob_text[light_glob_count] = $3; next }
 
@@ -624,8 +627,10 @@ violation_records="$(
           drift = 1
         }
       }
-      for (member in raw_skip) if (!(member in class_skip)) { printf "SKIPDRIFT\t%s\tthis check\tthe classifier\n", member; drift = 1 }
-      for (member in class_skip) if (!(member in raw_skip)) { printf "SKIPDRIFT\t%s\tthe classifier\tthis check\n", member; drift = 1 }
+      if (class_skip_reader) {
+        for (member in raw_skip) if (!(member in class_skip)) { printf "SKIPDRIFT\t%s\tthis check\tthe classifier\n", member; drift = 1 }
+        for (member in class_skip) if (!(member in raw_skip)) { printf "SKIPDRIFT\t%s\tthe classifier\tthis check\n", member; drift = 1 }
+      }
       if (drift) exit 0
 
       # --- Remit region parity, and the region-glob dialect -------------------
@@ -1213,6 +1218,7 @@ frontend/*.config.js
 *.config.js
 .github/workflows/*.yaml
 .github/actions/**/*.yaml
+**/*.bats
 LICENSE
 docs/**
 # gaia:maintainer-only:start

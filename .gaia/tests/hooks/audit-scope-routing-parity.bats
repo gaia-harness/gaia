@@ -155,18 +155,23 @@ release_parity_setup() {
   command -v jq >/dev/null 2>&1 || skip "jq required"
   KEYED_ROSTER="$BATS_TEST_TMPDIR/keyed.yml"
   REMOVED_ROSTER="$BATS_TEST_TMPDIR/removed.yml"
+  # The live roster already keys the adopter shell member; the fixtures key
+  # only the maintainer shell member, so the keys the live roster carries
+  # come off first.
+  local unkeyed="$BATS_TEST_TMPDIR/unkeyed.yml"
+  grep -v '^    skip_gaia_release_changes: true$' "$REPO_ROOT/.gaia/audit-ci.yml" > "$unkeyed"
   awk '
     /^auditors:/ { in_auditors = 1 }
     in_auditors && /^[A-Za-z_]/ && !/^auditors:/ { if (pending) print "    skip_gaia_release_changes: true"; pending = 0; in_auditors = 0 }
     in_auditors && /^  - name:/ { if (pending) print "    skip_gaia_release_changes: true"; pending = ($0 ~ /code-audit-maintainer-shell$/) }
     { print }
-  ' "$REPO_ROOT/.gaia/audit-ci.yml" > "$KEYED_ROSTER"
+  ' "$unkeyed" > "$KEYED_ROSTER"
   awk '
     /^auditors:/ { in_auditors = 1 }
     in_auditors && /^[A-Za-z_]/ && !/^auditors:/ { dropping = 0; in_auditors = 0 }
     in_auditors && /^  - name:/ { dropping = ($0 ~ /code-audit-maintainer-shell$/) }
     !dropping { print }
-  ' "$REPO_ROOT/.gaia/audit-ci.yml" > "$REMOVED_ROSTER"
+  ' "$unkeyed" > "$REMOVED_ROSTER"
   [ "$(grep -c '^    skip_gaia_release_changes: true$' "$KEYED_ROSTER")" -eq 1 ]
   grep -q 'name: code-audit-maintainer-shell$' "$REMOVED_ROSTER" && return 1
   mkdir -p "$repository/.gaia"

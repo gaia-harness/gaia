@@ -6,6 +6,7 @@
     ".claude/agents/audit-rule-specialist.md": "owned",
     ".claude/agents/code-audit-frontend.md": "owned",
     ".claude/agents/code-audit-github-workflows.md": "owned",
+    ".claude/agents/code-audit-shell.md": "owned",
     ".claude/agents/fitness-judge.md": "owned",
     ".claude/agents/uat-fidelity-judge.md": "owned",
     ".claude/agents/worthiness-evaluator.md": "owned",
@@ -689,6 +690,7 @@
     "wiki/concepts/React Perf Diagnostic.md": "wiki-owned",
     "wiki/concepts/Registering a Code Audit Team Member.md": "wiki-owned",
     "wiki/concepts/Setup Features.md": "wiki-owned",
+    "wiki/concepts/Shell Testing and CI.md": "wiki-owned",
     "wiki/concepts/Single-session First-time Onboarding.md": "wiki-owned",
     "wiki/concepts/Task Orchestration.md": "wiki-owned",
     "wiki/concepts/Token Cost Readout.md": "wiki-owned",
@@ -773,14 +775,15 @@
     "wiki/overview.md": "wiki-owned",
     "wiki/README.md": "wiki-owned"
   },
-  "generated": "2026-10-27T05:17:53.280Z",
+  "generated": "2026-10-27T05:38:19.452Z",
   "regions": [
     {
       "endMarker": "<!-- gaia:audit-remit:end -->",
       "id": "audit-remit",
       "paths": [
         ".claude/agents/code-audit-frontend.md",
-        ".claude/agents/code-audit-github-workflows.md"
+        ".claude/agents/code-audit-github-workflows.md",
+        ".claude/agents/code-audit-shell.md"
       ],
       "regenerate": {
         "args": [],

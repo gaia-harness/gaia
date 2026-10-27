@@ -35,10 +35,6 @@ auditors:
       - "frontend/test/**"
       - "frontend/.storybook/**"
       - ".github/workflows/**"
-      # The scripts a composite action runs are CI code too. The shell member
-      # claims them here, but that member does not ship, so in an adopter
-      # tree they dispatched no one.
-      - ".github/actions/**/*.sh"
       - "package.json"
       - "pnpm-lock.yaml"
       - "pnpm-workspace.yaml"
@@ -135,10 +131,8 @@ auditors:
       - "*.config.cjs"
       - "*.config.js"
       - "frontend/dev-ports*.ts"
-      # CI workflows execute with repository secrets and permissions, and so
-      # do the scripts their composite actions run.
+      # CI workflows execute with repository secrets and permissions.
       - ".github/workflows/**"
-      - ".github/actions/**/*.sh"
       # Test and tooling trees: executed test code a weakened assertion can
       # hollow out without changing a line of app source.
       - "frontend/test/**"
@@ -345,6 +339,24 @@ auditors:
       - ".gaia/scripts/**/*.mjs"
     audience: maintainer
   # gaia:maintainer-only:end
+  # The adopter shell member sits after the maintainer-only block on purpose:
+  # first-match routing keeps this repository's own shell on the maintainer
+  # shell member, and on an adopter clone, where that block is stripped, these
+  # globs route to this member.
+  - name: code-audit-shell
+    globs:
+      - "**/*.sh"
+      - "**/*.bats"
+      - ".claude/hooks/**"
+      - ".githooks/**"
+    skip_gaia_release_changes: true
+    light_review: true
+    light_line_cap: 30
+    light_hard_full:
+      - ".claude/hooks/**"
+      - ".githooks/**"
+      - "**/*.bats"
+    audience: adopter
 
 # Paths that are MEANT to dispatch no auditor. The roster above answers "who
 # owns this path"; this list answers the question the dispatch resolver

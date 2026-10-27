@@ -66,7 +66,7 @@ section_text() {
 @test "the member glob resolves to at least the four known members, none empty" {
   [ "${#MEMBERS[@]}" -ge 4 ] || { echo "only ${#MEMBERS[@]} member definitions found" >&2; return 1; }
   local member
-  for member in code-audit-frontend code-audit-github-workflows code-audit-maintainer-node code-audit-maintainer-shell; do
+  for member in code-audit-frontend code-audit-github-workflows code-audit-maintainer-node code-audit-maintainer-shell code-audit-shell; do
     [ -s "$AGENTS_DIRECTORY/${member}.md" ] || { echo "${member}.md is missing or empty" >&2; return 1; }
   done
 }

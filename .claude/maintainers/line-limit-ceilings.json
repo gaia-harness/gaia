@@ -89,7 +89,7 @@
     ".gaia/scripts/usage-record-lib.sh": 434,
     ".gaia/scripts/usage-render-lib.sh": 619,
     ".gaia/scripts/usage.sh": 489,
-    ".gaia/scripts/verify-audit-roster.sh": 1273,
+    ".gaia/scripts/verify-audit-roster.sh": 1279,
     ".gaia/scripts/worktree-ports-lib.sh": 491,
     ".gaia/statusline/gaia-statusline-right.sh": 637,
     ".github/audit/resolve-audit-base.sh": 1073,
