@@ -50,7 +50,7 @@ export const classifyBucket = (current: string, latest: string): Bucket => {
 };
 
 /** Plain ascending string comparator, shared by every stable-sort call in
- * this module so sort callsites stay a one-line delegation instead of a
+ * the run modules so sort callsites stay a one-line delegation instead of a
  * repeated ternary chain. */
 export const compareStrings = (a: string, b: string): number => {
   if (a < b) return -1;

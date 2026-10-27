@@ -19,7 +19,7 @@
  *          outdated siblings along; so the group moves together.
  *
  * Output: a JSON payload at the path passed to `--emit-updates`,
- * mirrored as a type below.
+ * mirrored by the `UpdatesPayload` type.
  */
 import {mkdirSync, writeFileSync} from 'node:fs';
 import path from 'node:path';
