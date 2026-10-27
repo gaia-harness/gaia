@@ -321,7 +321,8 @@
     ".gaia/scripts/server-process-sessions.sh": "owned",
     ".gaia/scripts/server-process-stop.sh": "owned",
     ".gaia/scripts/setup-ping.sh": "owned",
-    ".gaia/scripts/shellcheck-changed.sh": "owned",
+    ".gaia/scripts/shell-checks-lint.sh": "owned",
+    ".gaia/scripts/shell-checks-select.sh": "owned",
     ".gaia/scripts/spec/handoff-clear.sh": "owned",
     ".gaia/scripts/spec/ledger-lib.sh": "owned",
     ".gaia/scripts/spec/ledger-update.sh": "owned",
@@ -405,7 +406,6 @@
     ".github/audit/resolve-check-base.sh": "owned",
     ".github/workflows/chromatic.yml": "shared",
     ".github/workflows/pr-conventions.yml": "shared",
-    ".github/workflows/shellcheck-scan.yml": "shared",
     ".github/workflows/tests.yml": "shared",
     ".gitignore": "owned",
     ".node-version": "owned",
@@ -801,7 +801,7 @@
     "wiki/overview.md": "wiki-owned",
     "wiki/README.md": "wiki-owned"
   },
-  "generated": "2026-10-27T15:46:53.978Z",
+  "generated": "2026-10-27T16:20:17.212Z",
   "regions": [
     {
       "endMarker": "<!-- gaia:audit-remit:end -->",

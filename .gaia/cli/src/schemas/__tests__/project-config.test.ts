@@ -255,3 +255,66 @@ describe('setup_decisions at the write boundary', () => {
     expect(readFileSync(projectConfigPath(root), 'utf8')).toBe(before);
   });
 });
+
+describe('shellcheck', () => {
+  let root: string;
+
+  beforeEach(() => {
+    root = mkdtempSync(path.join(tmpdir(), 'gaia-project-config-shellcheck-'));
+    mkdirSync(path.join(root, '.gaia'), {recursive: true});
+  });
+
+  afterEach(() => {
+    rmSync(root, {force: true, recursive: true});
+  });
+
+  test.each([[true], [false]])('%j reads as itself', (value) => {
+    expect(ProjectConfigSchema.parse({shellcheck: value}).shellcheck).toBe(
+      value
+    );
+  });
+
+  test.each([['false'], [0], [null]])(
+    '%j reads as absent without malforming',
+    (value) => {
+      const parsed = ProjectConfigSchema.parse({
+        isolation_policy: 'prefer-branch',
+        shellcheck: value,
+      });
+
+      expect(parsed.shellcheck).toBeUndefined();
+      expect(parsed.isolation_policy).toBe('prefer-branch');
+    }
+  );
+
+  test('the write boundary accepts a boolean and refuses anything else', () => {
+    writeFileSync(
+      projectConfigPath(root),
+      JSON.stringify({version: 1}),
+      'utf8'
+    );
+
+    updateProjectConfig(root, {shellcheck: false});
+
+    expect(
+      JSON.parse(readFileSync(projectConfigPath(root), 'utf8')).shellcheck
+    ).toBe(false);
+    expect(() => {
+      updateProjectConfig(root, {shellcheck: 'off'});
+    }).toThrow(ProjectConfigError);
+  });
+
+  test('another writer keeps the opt-out', () => {
+    writeFileSync(
+      projectConfigPath(root),
+      JSON.stringify({shellcheck: false, version: 1}),
+      'utf8'
+    );
+
+    updateProjectConfig(root, {isolation_policy: 'prefer-branch'});
+
+    expect(
+      JSON.parse(readFileSync(projectConfigPath(root), 'utf8')).shellcheck
+    ).toBe(false);
+  });
+});

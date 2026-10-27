@@ -57,4 +57,4 @@ Say the script `scripts/slugify.sh` should print a lowercase, dash-separated slu
 
 ## More
 
-`wiki/concepts/Shell Testing and CI.md` covers linting shell with shellcheck in CI, keeping a suite fast, and sharding a large one. Read it when you add a CI job for shell or a suite gets slow.
+`wiki/concepts/Shell Testing and CI.md` covers the tests workflow's `Shellcheck and bats` job (which runs `tests/shell/` in CI when shell changes), keeping a suite fast, and sharding a large one. Read it when CI fails a shell check or a suite gets slow.
