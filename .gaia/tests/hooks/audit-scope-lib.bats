@@ -535,6 +535,9 @@ golden_run_hook() {
   cp "$REPO_ROOT/.claude/hooks/lib/hook-payload.sh" "$SANDBOX/.claude/hooks/lib/hook-payload.sh"
   cp "$REPO_ROOT/.claude/hooks/lib/verb-arming.sh" "$SANDBOX/.claude/hooks/lib/verb-arming.sh"
   cp "$REPO_ROOT/.claude/hooks/lib/verb-arming-walk.sh" "$SANDBOX/.claude/hooks/lib/verb-arming-walk.sh"
+  cp "$REPO_ROOT/.claude/hooks/lib/verb-arming-view.sh" "$SANDBOX/.claude/hooks/lib/verb-arming-view.sh"
+  cp "$REPO_ROOT/.claude/hooks/lib/verb-arming-live-helpers.sh" "$SANDBOX/.claude/hooks/lib/verb-arming-live-helpers.sh"
+  cp "$REPO_ROOT/.claude/hooks/lib/verb-arming-live-view.sh" "$SANDBOX/.claude/hooks/lib/verb-arming-live-view.sh"
   cp "$REPO_ROOT/.claude/hooks/lib/repo-scope.sh" "$SANDBOX/.claude/hooks/lib/repo-scope.sh"
 
   json=$(jq -n '{tool_name: "Bash", tool_input: {command: "gh pr merge 1 --squash"}}')
