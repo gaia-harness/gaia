@@ -190,6 +190,20 @@ workflow_job_condition() {
   [ "$triggers" = "pull_request" ]
 }
 
+workflow_paths() {
+  awk '/^    paths:/{f=1; next} f && /^      - /{sub(/^      - */, ""); print; next} f{exit}' "$1"
+}
+
+@test "workflow runs only on pull requests that change shell files" {
+  [ "$( workflow_paths "$WORKFLOW" | tr '\n' ' ' )" = "'**/*.sh' '**/*.bats' " ]
+}
+
+@test "guard can fail: the paths assertion reds on a copy without the filter" {
+  scratch="$BATS_TEST_TMPDIR/no-paths.yml"
+  grep -v "^    paths:" "$WORKFLOW" > "$scratch"
+  [ -z "$( workflow_paths "$scratch" )" ]
+}
+
 @test "workflow names match the contract" {
   grep -qx 'name: Shellcheck Scan' "$WORKFLOW"
   grep -qx '  shellcheck:' "$WORKFLOW"

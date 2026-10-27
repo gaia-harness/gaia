@@ -33,7 +33,7 @@ A bare `[[ ]]` or arithmetic test inside a bats test passes silently on some bas
 
 `.github/workflows/shellcheck-scan.yml` is off until you opt in. Set the repository variable `GAIA_SHELLCHECK` to `true` under the repository's Settings, Secrets and variables, Actions, Variables. A skipped job costs nothing.
 
-When on, it lints the `.sh` and `.bats` files a pull request changes, minus every file the manifest lists as owned. Unchanged files are never linted. A `.shellcheckrc` in the repository applies, so your own policy (disabled codes, severity) is honored. The job is advisory by default; add it as a required check in your own ruleset when you want it to block.
+When on, it runs only on pull requests that change a `.sh` or `.bats` file, and lints those files minus every file the manifest lists as owned. Unchanged files are never linted. A `.shellcheckrc` in the repository applies, so your own policy (disabled codes, severity) is honored. The check is advisory: do not mark it required, because a pull request that changes no shell file reports no check at all and would wait on it forever.
 
 ## Keeping suites fast
 

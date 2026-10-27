@@ -12,9 +12,14 @@ name: Shellcheck Scan
 # considered, so unchanged files are never linted. A `.shellcheckrc` in the
 # repository applies, so project policy (disabled codes, severity) is honored.
 # The selection and lint logic live in `.gaia/scripts/shellcheck-changed.sh`.
+# Advisory: never mark it required, since the paths filter means a pull request
+# that changes no shell file reports no check at all.
 
 on:
   pull_request:
+    paths:
+      - '**/*.sh'
+      - '**/*.bats'
 
 permissions: {}
 
