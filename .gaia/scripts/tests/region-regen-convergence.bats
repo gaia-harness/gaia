@@ -56,7 +56,7 @@ scaffold_scripts() {
   local sandbox="$1"
   mkdir -p "$sandbox/.gaia/scripts" "$sandbox/.claude/hooks/lib" "$sandbox/.claude/agents"
   cp "$WRITER_SOURCE" "$sandbox/.gaia/scripts/write-audit-remits.sh"
-  cp "$CHECK_SOURCE" "$sandbox/.gaia/scripts/verify-audit-roster.sh"
+  cp "$CHECK_SOURCE" "${CHECK_SOURCE%.sh}"-*.sh "$sandbox/.gaia/scripts/"
   cp "$LIBRARY_SOURCE" "$sandbox/.claude/hooks/lib/audit-scope.sh"
 }
 

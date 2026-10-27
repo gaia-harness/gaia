@@ -66,6 +66,41 @@ assert_contains() {
 # (`audit-write-clearance.bats`,
 # `.gaia/tests/statusline/statusline-worktree.bats`), so a change here belongs
 # in all of them, and in the real parser too if the transform it models changed.
+# stage_roster_check <scripts-directory> <filter> [argument...]: write the check
+# and its verify-audit-roster-*.sh siblings into <scripts-directory>, each one
+# through <filter>, which is handed the source file as its last argument.
+stage_roster_check() {
+  local directory="$1" source
+  shift
+  while IFS= read -r source; do
+    "$@" "$source" >"$directory/${source##*/}"
+  done < <(roster_check_files)
+}
+
+# roster_check_files: the check's own text, the script and the siblings its
+# loader sources, read from the loader's own list. A structural check over the
+# check reads all of them.
+roster_check_files() {
+  local sibling
+  printf '%s\n' "$SCRIPT"
+  for sibling in $(roster_loader_siblings); do
+    printf '%s\n' "${SCRIPT%.sh}-$sibling.sh"
+  done
+}
+
+roster_loader_siblings() {
+  sed -n "s/^_verify_roster_siblings='\\(.*\\)'$/\\1/p" "$SCRIPT"
+}
+
+# roster_check_text [filter]: the text of every roster_check_files file, each
+# through <filter> (default cat).
+roster_check_text() {
+  local source
+  while IFS= read -r source; do
+    "${@:-cat}" "$source"
+  done < <(roster_check_files)
+}
+
 strip_maintainer_only() {
   awk -v start_marker="$MAINTAINER_START" -v end_marker="$MAINTAINER_END" '
     {
@@ -547,8 +582,8 @@ drifted_reader_sandbox() {
   # A copy of the check whose scrape drops one glob the classifier still
   # compiles: exactly the shape of a future edit to one reader and not the
   # other.
-  sed 's|if (glob != "") print "RAW", member, glob|if (glob != "" \&\& glob != "a/**") print "RAW", member, glob|' \
-    "$SCRIPT" > "$sandbox/.gaia/scripts/verify-audit-roster.sh"
+  stage_roster_check "$sandbox/.gaia/scripts" \
+    sed 's|if (glob != "") print "RAW", member, glob|if (glob != "" \&\& glob != "a/**") print "RAW", member, glob|'
   cp "$REPO_ROOT/.claude/hooks/lib/audit-scope.sh" "$sandbox/.claude/hooks/lib/audit-scope.sh"
   cp "$REPO_ROOT/.claude/hooks/lib/audit-machinery.sh" "$sandbox/.claude/hooks/lib/audit-machinery.sh"
   # The writer resolves the check beside itself, so a copy here observes the
@@ -674,17 +709,22 @@ YAML
 
 @test "lockstep: the maintainer-only markers balance" {
   local starts ends
-  starts="$(grep -cF -- "$MAINTAINER_START" "$SCRIPT")"
-  ends="$(grep -cF -- "$MAINTAINER_END" "$SCRIPT")"
+  starts="$(roster_check_text | grep -cF -- "$MAINTAINER_START")"
+  ends="$(roster_check_text | grep -cF -- "$MAINTAINER_END")"
   [ "$starts" -ge 1 ]
   [ "$starts" -eq "$ends" ]
 }
 
 @test "lockstep: the script is valid bash with the maintainer-only block stripped" {
-  local stripped="$BATS_TEST_TMPDIR/stripped.sh"
-  strip_maintainer_only "$SCRIPT" > "$stripped"
-  grep -qF "gaia:maintainer-only" "$stripped" && return 1
-  bash -n "$stripped"
+  local stripped="$BATS_TEST_TMPDIR/stripped" source checked=0
+  mkdir -p "$stripped"
+  stage_roster_check "$stripped" strip_maintainer_only
+  for source in "$stripped"/*.sh; do
+    grep -qF "gaia:maintainer-only" "$source" && return 1
+    bash -n "$source"
+    checked=$((checked + 1))
+  done
+  [ "$checked" -eq "$(roster_check_files | wc -l)" ]
 }
 
 @test "lockstep: the stripped script still runs and still decides a roster" {
@@ -692,7 +732,7 @@ YAML
   # the stripped copy's own script-relative library resolution is exercised too.
   local sandbox="$BATS_TEST_TMPDIR/stripped-sandbox"
   mkdir -p "$sandbox/.gaia/scripts" "$sandbox/.claude/hooks/lib"
-  strip_maintainer_only "$SCRIPT" > "$sandbox/.gaia/scripts/verify-audit-roster.sh"
+  stage_roster_check "$sandbox/.gaia/scripts" strip_maintainer_only
   cp "$REPO_ROOT/.claude/hooks/lib/audit-scope.sh" "$sandbox/.claude/hooks/lib/audit-scope.sh"
   cp "$REPO_ROOT/.claude/hooks/lib/audit-machinery.sh" "$sandbox/.claude/hooks/lib/audit-machinery.sh"
 
@@ -747,8 +787,8 @@ YAML
 @test "the check never writes: no mutating command appears in the source" {
   # A structural backstop for the runtime check above: the script reads live
   # state and must never acquire a writer.
-  grep -qE 'gh api .*--method (POST|PUT|PATCH|DELETE)' "$SCRIPT" && return 1
-  grep -qE '^[^#]*git [a-z -]*(commit|push|checkout|add|reset)' "$SCRIPT" && return 1
+  roster_check_text | grep -qE 'gh api .*--method (POST|PUT|PATCH|DELETE)' && return 1
+  roster_check_text | grep -qE '^[^#]*git [a-z -]*(commit|push|checkout|add|reset)' && return 1
   return 0
 }
 
@@ -837,7 +877,7 @@ YAML
 stripped_check() {
   local sandbox="$BATS_TEST_TMPDIR/adopter-check"
   mkdir -p "$sandbox/.gaia/scripts" "$sandbox/.claude/hooks/lib"
-  strip_maintainer_only "$SCRIPT" > "$sandbox/.gaia/scripts/verify-audit-roster.sh"
+  stage_roster_check "$sandbox/.gaia/scripts" strip_maintainer_only
   cp "$REPO_ROOT/.claude/hooks/lib/audit-scope.sh" "$sandbox/.claude/hooks/lib/audit-scope.sh"
   cp "$REPO_ROOT/.claude/hooks/lib/audit-machinery.sh" "$sandbox/.claude/hooks/lib/audit-machinery.sh"
   printf '%s\n' "$sandbox/.gaia/scripts/verify-audit-roster.sh"
@@ -1079,7 +1119,7 @@ YAML
 
 @test "zero-match: the stripped script keeps the shipped allowlist and names no maintainer path" {
   local stripped="$BATS_TEST_TMPDIR/stripped-zero.sh"
-  strip_maintainer_only "$SCRIPT" > "$stripped"
+  roster_check_text strip_maintainer_only > "$stripped"
   grep -qF -- '.github/workflows/*.yaml' "$stripped"
   grep -qF -- '.gaia/cli' "$stripped" && return 1
   true
@@ -1221,7 +1261,7 @@ light_root() {
   # the one concrete test this invariant makes, so it must go red.
   local scratch="$BATS_TEST_TMPDIR/matcher-failure-copy"
   mkdir -p "$scratch/.gaia/scripts" "$scratch/.claude/hooks/lib"
-  cp "$SCRIPT" "$scratch/.gaia/scripts/verify-audit-roster.sh"
+  stage_roster_check "$scratch/.gaia/scripts" cat
   cp "$REPO_ROOT/.claude/hooks/lib/audit-scope.sh" "$scratch/.claude/hooks/lib/audit-scope.sh"
   cp "$REPO_ROOT/.claude/hooks/lib/audit-machinery.sh" "$scratch/.claude/hooks/lib/audit-machinery.sh"
   printf '\naudit_glob_matches() { return 2; }\n' >> "$scratch/.claude/hooks/lib/audit-scope.sh"
@@ -1327,8 +1367,8 @@ roster_with_node_hard_full() {
   # Scratch copy with the literal-path coverage test forced to pass: the moved
   # roster is then accepted.
   mkdir -p "$scratch/.gaia/scripts" "$scratch/.claude/hooks/lib"
-  sed 's/light_literal_covered=0$/light_literal_covered=1/' "$SCRIPT" >"$scratch/.gaia/scripts/verify-audit-roster.sh"
-  cmp -s "$SCRIPT" "$scratch/.gaia/scripts/verify-audit-roster.sh" && return 1
+  stage_roster_check "$scratch/.gaia/scripts" sed 's/light_literal_covered=0$/light_literal_covered=1/'
+  cmp -s "${SCRIPT%.sh}-dialect.sh" "$scratch/.gaia/scripts/verify-audit-roster-dialect.sh" && return 1
   cp "$REPO_ROOT/.claude/hooks/lib/audit-scope.sh" "$scratch/.claude/hooks/lib/audit-scope.sh"
   cp "$REPO_ROOT/.claude/hooks/lib/audit-machinery.sh" "$scratch/.claude/hooks/lib/audit-machinery.sh"
   run bash "$scratch/.gaia/scripts/verify-audit-roster.sh" --root "$REPO_ROOT" --config "$moved"
@@ -1418,12 +1458,12 @@ YAML
 skip_drift_sandbox() {
   local sandbox="$1"
   mkdir -p "$sandbox/.gaia/scripts" "$sandbox/.claude/hooks/lib"
-  sed 's|\$1 == "RELEASESKIP" \&\& \$3 == "true"|$1 == "RELEASESKIP" \&\& $3 == "never"|' \
-    "$SCRIPT" > "$sandbox/.gaia/scripts/verify-audit-roster.sh"
+  stage_roster_check "$sandbox/.gaia/scripts" \
+    sed 's|\$1 == "RELEASESKIP" \&\& \$3 == "true"|$1 == "RELEASESKIP" \&\& $3 == "never"|'
   cp "$REPO_ROOT/.claude/hooks/lib/audit-scope.sh" "$sandbox/.claude/hooks/lib/audit-scope.sh"
   cp "$REPO_ROOT/.claude/hooks/lib/audit-scope-release.sh" "$sandbox/.claude/hooks/lib/audit-scope-release.sh"
   cp "$REPO_ROOT/.claude/hooks/lib/audit-machinery.sh" "$sandbox/.claude/hooks/lib/audit-machinery.sh"
-  grep -qF '$3 == "never"' "$sandbox/.gaia/scripts/verify-audit-roster.sh"
+  grep -qF '$3 == "never"' "$sandbox/.gaia/scripts/verify-audit-roster-dialect.sh"
 }
 
 @test "release-skip key: a scrape that misreads the key is roster-reader-drift and withholds remit parity" {
@@ -1476,4 +1516,48 @@ YAML
   [ "$status" -eq 1 ]
   assert_contains "zero-match-glob"
   assert_contains "libz/**"
+}
+
+# The structural checks above read roster_check_files, the loader's own list,
+# so that list must name exactly the verify-audit-roster-*.sh files on disk: a
+# sibling the loader never sources, or one it names that is not there, fails.
+# bats test_tags=whole-tree
+@test "the loader's sibling list is exactly the check's siblings on disk" {
+  local listed on_disk="" source
+  listed="$(roster_check_files | sed 1d | LC_ALL=C sort)"
+  [ -n "$listed" ]
+  for source in "${SCRIPT%.sh}"-*.sh; do
+    [ -f "$source" ] && on_disk="$on_disk$source"$'\n'
+  done
+  [ "$listed" = "$(printf '%s' "$on_disk" | LC_ALL=C sort)" ] || { printf 'listed:\n%s\non disk:\n%s\n' "$listed" "$on_disk" >&2; return 1; }
+}
+
+# bats test_tags=whole-tree
+@test "a missing or cut-short sibling exits 1 naming it, never reports the roster clean" {
+  local scratch="$BATS_TEST_TMPDIR/sibling-loader" source sibling_name checked=0
+  while IFS= read -r source; do
+    [ "$source" = "$SCRIPT" ] && continue
+    sibling_name="${source##*/}"
+    rm -rf "$scratch"
+    mkdir -p "$scratch/.gaia/scripts" "$scratch/.claude/hooks/lib"
+    stage_roster_check "$scratch/.gaia/scripts" cat
+    cp "$REPO_ROOT/.claude/hooks/lib/audit-scope.sh" "$scratch/.claude/hooks/lib/audit-scope.sh"
+    cp "$REPO_ROOT/.claude/hooks/lib/audit-machinery.sh" "$scratch/.claude/hooks/lib/audit-machinery.sh"
+    # Positive control: the full copy decides the repo's roster clean, so an
+    # exit 1 below is the sibling's doing and not the fixture's.
+    run bash "$scratch/.gaia/scripts/verify-audit-roster.sh" --root "$REPO_ROOT"
+    [ "$status" -eq 0 ] || { printf 'control failed for %s: %s\n' "$sibling_name" "$output" >&2; return 1; }
+    # Cut short above its last line.
+    sed '$d' "$source" >"$scratch/.gaia/scripts/$sibling_name"
+    run bash "$scratch/.gaia/scripts/verify-audit-roster.sh" --root "$REPO_ROOT"
+    [ "$status" -eq 1 ] || { printf '%s cut short: exit %s\n' "$sibling_name" "$status" >&2; return 1; }
+    assert_contains "cannot load $sibling_name: it stopped before its last line"
+    rm -f "$scratch/.gaia/scripts/$sibling_name"
+    run bash "$scratch/.gaia/scripts/verify-audit-roster.sh" --root "$REPO_ROOT"
+    [ "$status" -eq 1 ] || { printf '%s missing: exit %s\n' "$sibling_name" "$status" >&2; return 1; }
+    assert_contains "cannot load $sibling_name: it is missing"
+    checked=$((checked + 1))
+  done < <(roster_check_files)
+  [ "$checked" -gt 0 ]
+  [ "$checked" -eq "$(($(roster_check_files | wc -l) - 1))" ]
 }

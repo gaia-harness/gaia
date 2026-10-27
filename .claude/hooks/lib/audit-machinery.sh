@@ -44,6 +44,11 @@ AUDIT_MACHINERY_PATHS="$(cat <<'EOF'
 .gaia/scripts/audit-resolve-scope.sh
 .gaia/scripts/resolve-audit-members.sh
 .claude/hooks/pr-merge-audit-check.sh
+.claude/hooks/pr-merge-audit-check-context.sh
+.claude/hooks/pr-merge-audit-check-signals.sh
+.claude/hooks/pr-merge-audit-check-binding.sh
+.claude/hooks/pr-merge-audit-check-bypass.sh
+.claude/hooks/pr-merge-audit-check-dispatch.sh
 .claude/hooks/post-audit-status.sh
 .claude/hooks/lib/**
 .gaia/scripts/audit-noop-detect.sh

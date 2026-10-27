@@ -75,6 +75,11 @@ AUDIT_GLOBAL_RULES_PATHS="$(cat <<'EOF'
 .gaia/scripts/resolve-audit-members.sh
 .claude/hooks/post-audit-status.sh
 .claude/hooks/pr-merge-audit-check.sh
+.claude/hooks/pr-merge-audit-check-context.sh
+.claude/hooks/pr-merge-audit-check-signals.sh
+.claude/hooks/pr-merge-audit-check-binding.sh
+.claude/hooks/pr-merge-audit-check-bypass.sh
+.claude/hooks/pr-merge-audit-check-dispatch.sh
 .github/audit/resolve-audit-base.sh
 .github/audit/resolve-audit-base-context.sh
 .github/audit/resolve-audit-base-scan.sh

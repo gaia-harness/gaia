@@ -391,10 +391,10 @@ DIGEST_ONLY_CALLERS='.claude/hooks/post-audit-status.sh
 .gaia/scripts/audit-scope-digest.sh
 .gaia/scripts/audit-write-clearance-gates.sh
 .github/audit/resolve-audit-base-context.sh'
-# By design: verify-audit-roster.sh classifies the whole tree with no diff, and
+# By design: verify-audit-roster-coverage.sh classifies the whole tree with no diff, and
 # audit-dispositions-check.sh asks ownership only for triage marks, which only
 # the maintainer members write.
-EXEMPT_CONSUMERS='.gaia/scripts/verify-audit-roster.sh
+EXEMPT_CONSUMERS='.gaia/scripts/verify-audit-roster-coverage.sh
 .gaia/scripts/audit-dispositions-check.sh'
 
 # _non_comment_mentions <file> <extended-regex>: exit 0 when a non-comment line
@@ -432,7 +432,7 @@ release_context_violations() {
   [ -z "$output" ] || { printf '%s\n' "$output" >&2; return 1; }
   # The arming consumers are present in the enumeration.
   local file
-  for file in .gaia/scripts/resolve-audit-members.sh .claude/hooks/lib/audit-digest.sh .claude/hooks/pr-merge-audit-check.sh \
+  for file in .gaia/scripts/resolve-audit-members.sh .claude/hooks/lib/audit-digest.sh .claude/hooks/pr-merge-audit-check-context.sh \
     .gaia/scripts/audit-light-route.sh .gaia/scripts/audit-resolve-scope.sh; do
     _non_comment_mentions "$REPO_ROOT/$file" 'audit_scope_release_context'
   done

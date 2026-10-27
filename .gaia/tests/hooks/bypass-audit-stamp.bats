@@ -100,7 +100,7 @@ wiki_pr_with_stale_marker() {
   local mutant
   mutant="$(mgf_scratch_hook 's/\n  check_out_of_scope_pr && out_of_scope_pr=1\n/\n  frontend_cleared || { check_out_of_scope_pr && out_of_scope_pr=1; }\n/')"
   # Not deleted: the evaluation still runs, but only when no marker clears first.
-  [ "$(grep -c 'check_out_of_scope_pr && out_of_scope_pr=1' "$mutant")" -eq 1 ]
+  [ "$(grep -c 'check_out_of_scope_pr && out_of_scope_pr=1' "${mutant%.sh}-dispatch.sh")" -eq 1 ]
   wiki_pr_with_stale_marker
 
   mgf_run_merge "gh pr merge 12 --squash" "$mutant"
@@ -425,6 +425,7 @@ uat_004_fixture() {
 }
 
 @test "UAT-004: the merge gate carries no self-modification bypass" {
-  grep -nE 'check_self_mod_only_update_pr|self_mod_only' "$MGF_HOOK" && return 1
+  . "$BATS_TEST_DIRNAME/helpers/merge-gate-text.sh"
+  merge_gate_text "$MGF_HOOK" | grep -nE 'check_self_mod_only_update_pr|self_mod_only' && return 1
   true
 }
