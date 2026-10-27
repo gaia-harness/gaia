@@ -2,7 +2,7 @@
  * Shared `git status --porcelain -z` record parser.
  *
  * One copy, because two callers need the same answer from the same command:
- * `update/regen-regions.ts` compares a region's writes against its declared
+ * `update/regen-regions-spawn.ts` compares a region's writes against its declared
  * paths, and `wiki/util/branch.ts` classifies a working tree as wiki or
  * non-wiki. A second hand-rolled copy is how one of them keeps a defect the
  * other has already fixed.
