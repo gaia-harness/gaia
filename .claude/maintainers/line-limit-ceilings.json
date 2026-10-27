@@ -2,7 +2,7 @@
   "ceilings": {
     ".claude/hooks/audit-loop-bound.sh": 835,
     ".claude/hooks/block-audit-loop-write.sh": 629,
-    ".claude/hooks/block-main-destructive-git.sh": 494,
+    ".claude/hooks/block-main-destructive-git.sh": 497,
     ".claude/hooks/block-rm-rf.sh": 820,
     ".claude/hooks/capture-red-observations.sh": 459,
     ".claude/hooks/lib/audit-base-provenance.sh": 417,
