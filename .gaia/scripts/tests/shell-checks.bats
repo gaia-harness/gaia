@@ -37,7 +37,10 @@ setup() {
 
 # install_gh_stub: a `gh` that answers the endpoints the selector calls from
 # $FIXTURE, logs each endpoint to $GH_LOG, and fails any endpoint matching
-# $GH_STUB_FAIL with an HTTP 500.
+# $GH_STUB_FAIL with an HTTP 500. A contents read must ask for the plain raw
+# media type: under `raw+json` the real gh treats the body as JSON and rewrites
+# it (a `\u0000` escape in a fetched script comes back as a NUL byte), so the
+# stub refuses any other Accept header.
 install_gh_stub() {
   mkdir -p "$BATS_TEST_TMPDIR/bin"
   cat > "$BATS_TEST_TMPDIR/bin/gh" <<'STUB'
@@ -45,10 +48,10 @@ install_gh_stub() {
 set -euo pipefail
 [ "$1" = api ] || { echo "stub: unexpected gh $*" >&2; exit 64; }
 shift
-endpoint=""
+endpoint="" accept=""
 while [ "$#" -gt 0 ]; do
   case "$1" in
-    -H) shift 2 ;;
+    -H) accept="$2"; shift 2 ;;
     --paginate) shift ;;
     *) endpoint="$1"; shift ;;
   esac
@@ -74,8 +77,12 @@ case "$endpoint" in
   repos/*/contents/*)
     path="${endpoint#repos/*/contents/}"; reference="${path#*\?ref=}"; path="${path%%\?*}"
     case "$(git -C "$FIXTURE" cat-file -t "$reference:$path" 2>/dev/null || true)" in
-      blob) git -C "$FIXTURE" show "$reference:$path" ;;
+      blob)
+        [ "$accept" = "Accept: application/vnd.github.raw" ] || { echo "stub: file read with header [$accept]" >&2; exit 65; }
+        git -C "$FIXTURE" show "$reference:$path"
+        ;;
       tree)
+        [ -z "$accept" ] || { echo "stub: directory listing with header [$accept]" >&2; exit 65; }
         git -C "$FIXTURE" ls-tree "$reference:$path" \
           | awk -F'\t' '{ split($1, f, " "); printf "%s\t%s\n", (f[2] == "blob" ? "file" : "dir"), $2 }' \
           | jq -R -s 'split("\n") | map(select(length > 0) | split("\t") | {type: .[0], name: .[1]})'
@@ -522,7 +529,10 @@ if not steps or steps[0].get("id") != "select" or "uses" in steps[0]:
 for step in steps[1:]:
     if "steps.select.outputs." not in str(step.get("if", "")):
         problems.append(f"step '{step.get('name')}' is not gated on the select step")
-if "vars." in open(sys.argv[1]).read():
+text = open(sys.argv[1]).read()
+if "vnd.github.raw+json" in text:
+    problems.append("a contents read uses the raw+json media type, which gh rewrites")
+if "vars." in text:
     problems.append("the workflow reads a repository variable")
 for problem in problems:
     print("PROBLEM " + problem)

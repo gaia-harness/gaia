@@ -309,7 +309,7 @@ jobs:
         run: |
           set -euo pipefail
           selector="$RUNNER_TEMP/shell-checks-select.sh"
-          gh api -H 'Accept: application/vnd.github.raw+json' \
+          gh api -H 'Accept: application/vnd.github.raw' \
             "repos/$REPOSITORY/contents/.gaia/scripts/shell-checks-select.sh?ref=$HEAD_SHA" > "$selector"
           arguments=(plan --repository "$REPOSITORY" --head-sha "$HEAD_SHA" --output-directory "$RUNNER_TEMP/shell-checks")
           if [ -n "$PULL_REQUEST" ]; then

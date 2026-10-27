@@ -80,7 +80,7 @@ filter_shell_paths() {
 # fetch_raw <ref> <path> <out-file>: 0 written, 3 not found, 1 any other error.
 fetch_raw() {
   local error_file="$output_directory/.fetch-error" status=0
-  gh api -H 'Accept: application/vnd.github.raw+json' \
+  gh api -H 'Accept: application/vnd.github.raw' \
     "repos/$repository/contents/$2?ref=$1" > "$3" 2> "$error_file" || status=$?
   [ "$status" -eq 0 ] && return 0
   if grep -q 'HTTP 404' "$error_file"; then
