@@ -98,7 +98,7 @@ check_record_prose() {
   local unclassified_line record_heading_line publish_line
   unclassified_line=$(grep -n "^## Unclassified recurrence signal" "$file" | head -1 | cut -d: -f1)
   record_heading_line=$(grep -n "^## Record the review (end of run)" "$file" | head -1 | cut -d: -f1)
-  publish_line=$(grep -n "^## Publish approved changes (end of run)" "$file" | head -1 | cut -d: -f1)
+  publish_line=$(grep -n "^## Publish the run's changes (end of run)" "$file" | head -1 | cut -d: -f1)
   if [ -z "$unclassified_line" ] || [ -z "$record_heading_line" ] || [ -z "$publish_line" ]; then
     echo "missing one of the Unclassified / Record / Publish headings"
     return 1
@@ -208,7 +208,7 @@ check_no_stale_phrasing() {
   cp "$CODIFY_MARKDOWN" "$copy"
   local record_line publish_line
   record_line=$(grep -n "^## Record the review (end of run)" "$copy" | head -1 | cut -d: -f1)
-  publish_line=$(grep -n "^## Publish approved changes (end of run)" "$copy" | head -1 | cut -d: -f1)
+  publish_line=$(grep -n "^## Publish the run's changes (end of run)" "$copy" | head -1 | cut -d: -f1)
   swap_lines "$copy" "$record_line" "$publish_line"
   run check_record_prose "$copy"
   [ "$status" -ne 0 ]
@@ -219,7 +219,7 @@ check_no_stale_phrasing() {
   cp "$CODIFY_MARKDOWN" "$copy"
   local record_heading_line publish_line record_relative_line clear_relative_line record_absolute_line clear_absolute_line
   record_heading_line=$(grep -n "^## Record the review (end of run)" "$copy" | head -1 | cut -d: -f1)
-  publish_line=$(grep -n "^## Publish approved changes (end of run)" "$copy" | head -1 | cut -d: -f1)
+  publish_line=$(grep -n "^## Publish the run's changes (end of run)" "$copy" | head -1 | cut -d: -f1)
   record_relative_line=$(sed -n "${record_heading_line},${publish_line}p" "$copy" | grep -n "codify-ledger snapshot record --tally-file" | head -1 | cut -d: -f1)
   clear_relative_line=$(sed -n "${record_heading_line},${publish_line}p" "$copy" | grep -nF '.codifyNudgeReason = ""' | head -1 | cut -d: -f1)
   record_absolute_line=$((record_heading_line + record_relative_line - 1))

@@ -1,6 +1,12 @@
 import {afterEach, beforeEach, describe, expect, test, vi} from 'vitest';
 import {execFileSync} from 'node:child_process';
-import {mkdirSync, mkdtempSync, rmSync, writeFileSync} from 'node:fs';
+import {
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs';
 import {tmpdir} from 'node:os';
 import path from 'node:path';
 import {
@@ -12,8 +18,10 @@ import type {ReviewSnapshot} from '../../schemas/review-snapshot.js';
 import {MERGED_PR_PAGE_CEILING} from '../../util/merged-pr-window.js';
 import * as runProcess from '../../util/run-process.js';
 import type {ProcessResult} from '../../util/run-process.js';
+import {loadDeclineSources} from '../decline-suppression.js';
+import type * as DeclineSuppressionModule from '../decline-suppression.js';
 import {markerComment} from '../marker.js';
-import {isMaterialRise, TALLY_SCHEMA_VERSION} from '../material-rise.js';
+import {TALLY_SCHEMA_VERSION} from '../material-rise.js';
 import {run} from '../tally.js';
 
 type Sandbox = {
@@ -193,105 +201,18 @@ const recurringFinding = (prNumber: number) =>
     },
   ]);
 
-type FakeLedger = {
-  calls: {prune: (readonly string[])[]};
-  has: (findingClass: string) => boolean;
-  ledger: LedgerAccess;
-  record: (
-    findingClass: string,
-    prCount: number,
-    auditedPrCount: number
-  ) => void;
-};
-
-type LedgerAccess = NonNullable<
-  NonNullable<Parameters<typeof run>[1]>['ledger']
+type DeclinesFake = NonNullable<
+  NonNullable<Parameters<typeof run>[1]>['declines']
 >;
 
-// A ledger with no decline entries: every class re-surfaces.
-const noDeclines: LedgerAccess = {
-  check: () => ({reason: 'no_decline_entry', status: 'resurface'}),
-  prune: () => undefined,
+// No decline: every class re-surfaces.
+const noDeclines: DeclinesFake = {
+  check: () => ({reason: 'no_decline', status: 'resurface'}),
 };
 
-// A ledger whose file cannot be read: the tally must keep every class
-// suppressed rather than re-surface a declined candidate.
-const unreadableLedger: LedgerAccess = {
-  check: () => ({error: 'corrupt', status: 'unreadable'}),
-  prune: () => undefined,
-};
-
-// A fake, stateful ledger over an in-memory store keyed on `finding_class`,
-// deciding through the same `isMaterialRise` the real ledger uses, so a test
-// can drive the composed suppress-then-prune call site in `run()` without a
-// ledger file. `ledger.test.ts` owns the proof of the real filter.
-const makeFakeLedger = (): FakeLedger => {
-  const store = new Map<
-    string,
-    {declined_at_audited_pr_count: number; declined_at_pr_count: number}
-  >();
-  const calls: FakeLedger['calls'] = {prune: []};
-
-  return {
-    calls,
-    has: (findingClass) => store.has(findingClass),
-    ledger: {
-      check: (findingClass, currentPrCount, currentAuditedPrCount) => {
-        const entry = store.get(findingClass);
-
-        if (entry === undefined) {
-          return {reason: 'no_decline_entry', status: 'resurface'};
-        }
-
-        return (
-            isMaterialRise({
-              baseAuditedPrCount: entry.declined_at_audited_pr_count,
-              baseCount: entry.declined_at_pr_count,
-              liveAuditedPrCount: currentAuditedPrCount,
-              liveCount: currentPrCount,
-            })
-          ) ?
-            {reason: 'material_rise', status: 'resurface'}
-          : {status: 'suppressed'};
-      },
-      // Every key the window-classes set does not name is dropped, the
-      // classless fallback included.
-      prune: (windowClasses) => {
-        calls.prune.push(windowClasses);
-
-        for (const findingClass of [...store.keys()].filter(
-          (key) => !windowClasses.includes(key)
-        )) {
-          store.delete(findingClass);
-        }
-      },
-    },
-    record: (findingClass, prCount, auditedPrCount) => {
-      store.set(findingClass, {
-        declined_at_audited_pr_count: auditedPrCount,
-        declined_at_pr_count: prCount,
-      });
-    },
-  };
-};
-
-const projectWindow = (): void => {
-  vi.spyOn(runProcess, 'runGh').mockReturnValue(
-    stubGh(
-      [3, 2, 1].map((n) =>
-        ghPr(n, [
-          findingsComment(n, 'ci', [
-            {area_tags: [], finding_class: 'acme/rule', severity: 'major'},
-          ]),
-        ])
-      )
-    )
-  );
-};
-
-const writeVocabulary = (root: string, text: string): void => {
-  mkdirSync(path.join(root, '.gaia'), {recursive: true});
-  writeFileSync(path.join(root, '.gaia', 'finding-classes.json'), text);
+// Every class reads as suppressed.
+const allSuppressed: DeclinesFake = {
+  check: () => ({source: 'committed', status: 'suppressed'}),
 };
 
 describe('codify-tally run', () => {
@@ -344,7 +265,7 @@ describe('codify-tally run', () => {
 
     const exit = run([], {
       cwd: sandbox.root,
-      ledger: noDeclines,
+      declines: noDeclines,
     });
     expect(exit).toBe(0);
 
@@ -394,7 +315,7 @@ describe('codify-tally run', () => {
 
     run([], {
       cwd: sandbox.root,
-      ledger: noDeclines,
+      declines: noDeclines,
     });
 
     const printed = parseStdout(stdout.out);
@@ -450,7 +371,7 @@ describe('codify-tally run', () => {
 
     run([], {
       cwd: sandbox.root,
-      ledger: noDeclines,
+      declines: noDeclines,
     });
 
     const printed = parseStdout(stdout.out);
@@ -524,7 +445,7 @@ describe('codify-tally run', () => {
 
     run([], {
       cwd: sandbox.root,
-      ledger: noDeclines,
+      declines: noDeclines,
     });
 
     const printed = parseStdout(stdout.out);
@@ -574,8 +495,7 @@ describe('codify-tally run', () => {
       ])
     );
 
-    const fake = makeFakeLedger();
-    run([], {cwd: sandbox.root, ledger: fake.ledger});
+    run([], {cwd: sandbox.root, declines: noDeclines});
 
     const printed = parseStdout(stdout.out);
     expect(printed.audited_pr_count).toBe(3);
@@ -585,7 +505,6 @@ describe('codify-tally run', () => {
     expect(candidates[0]?.pr_numbers).toEqual(
       expect.arrayContaining([1, 2, 3])
     );
-    expect(fake.calls.prune).toEqual([['axe/color-contrast']]);
   });
 
   test('fails closed on a comment whose authorAssociation is missing or unrecognized', () => {
@@ -612,7 +531,7 @@ describe('codify-tally run', () => {
       ])
     );
 
-    run([], {cwd: sandbox.root, ledger: noDeclines});
+    run([], {cwd: sandbox.root, declines: noDeclines});
 
     const printed = parseStdout(stdout.out);
     expect(printed.audited_pr_count).toBe(0);
@@ -632,7 +551,7 @@ describe('codify-tally run', () => {
       ])
     );
 
-    run([], {cwd: sandbox.root, ledger: noDeclines});
+    run([], {cwd: sandbox.root, declines: noDeclines});
 
     const printed = parseStdout(stdout.out);
     expect(printed.audited_pr_count).toBe(3);
@@ -684,7 +603,7 @@ describe('codify-tally run', () => {
 
     run([], {
       cwd: sandbox.root,
-      ledger: noDeclines,
+      declines: noDeclines,
     });
 
     const printed = parseStdout(stdout.out);
@@ -712,7 +631,7 @@ describe('codify-tally run', () => {
 
     run([], {
       cwd: sandbox.root,
-      ledger: noDeclines,
+      declines: noDeclines,
     });
 
     expect(parseStdout(stdout.out).candidate_count).toBe(0);
@@ -733,7 +652,7 @@ describe('codify-tally run', () => {
 
     run([], {
       cwd: sandbox.root,
-      ledger: noDeclines,
+      declines: noDeclines,
     });
 
     expect(parseStdout(stdout.out).candidate_count).toBe(0);
@@ -758,7 +677,7 @@ describe('codify-tally run', () => {
 
     run([], {
       cwd: sandbox.root,
-      ledger: noDeclines,
+      declines: noDeclines,
     });
 
     const printed = parseStdout(stdout.out);
@@ -786,7 +705,7 @@ describe('codify-tally run', () => {
 
     run([], {
       cwd: sandbox.root,
-      ledger: noDeclines,
+      declines: noDeclines,
     });
 
     const printed = parseStdout(stdout.out);
@@ -818,7 +737,7 @@ describe('codify-tally run', () => {
 
     run([], {
       cwd: sandbox.root,
-      ledger: noDeclines,
+      declines: noDeclines,
     });
 
     expect(parseStdout(stdout.out).unclassified).toBeNull();
@@ -849,13 +768,13 @@ describe('codify-tally run', () => {
 
     run([], {
       cwd: sandbox.root,
-      ledger: noDeclines,
+      declines: noDeclines,
     });
 
     expect(parseStdout(stdout.out).candidate_count).toBe(0);
   });
 
-  test('drops a ledger-suppressed class, then re-surfaces once it crosses the threshold again', () => {
+  test('drops a decline-suppressed class, then re-surfaces once it crosses the threshold again', () => {
     const gh = stubGh(
       [3, 2, 1].map((n) =>
         ghPr(n, [
@@ -871,79 +790,22 @@ describe('codify-tally run', () => {
     );
     vi.spyOn(runProcess, 'runGh').mockReturnValue(gh);
 
-    // Ledger says suppressed (exit 0): no candidate.
-    run([], {
-      cwd: sandbox.root,
-      ledger: {
-        check: () => ({status: 'suppressed'}),
-        prune: () => undefined,
-      },
-    });
+    // The loader says suppressed: no candidate.
+    run([], {cwd: sandbox.root, declines: allSuppressed});
     expect(parseStdout(stdout.out).candidate_count).toBe(0);
 
-    // Fresh evidence: ledger now says NOT suppressed (exit 1): re-surfaces.
+    // Fresh evidence: the loader now says resurface: re-surfaces.
     stdout.out.length = 0;
     run([], {
       cwd: sandbox.root,
-      ledger: {
+      declines: {
         check: () => ({reason: 'material_rise', status: 'resurface'}),
-        prune: () => undefined,
       },
     });
     expect(parseStdout(stdout.out).candidate_count).toBe(1);
   });
 
-  test('prunes the ledger with the classes still recurring in the window', () => {
-    vi.spyOn(runProcess, 'runGh').mockReturnValue(
-      stubGh(
-        [3, 2, 1].map((n) =>
-          ghPr(n, [
-            findingsComment(n, 'ci', [
-              {
-                area_tags: [],
-                finding_class: 'axe/color-contrast',
-                severity: 'major',
-              },
-            ]),
-          ])
-        )
-      )
-    );
-
-    const fake = makeFakeLedger();
-    run([], {cwd: sandbox.root, ledger: fake.ledger});
-
-    expect(fake.calls.prune).toEqual([['axe/color-contrast']]);
-  });
-
-  test('keeps an at-threshold class suppressed when the ledger is unreadable', () => {
-    vi.spyOn(runProcess, 'runGh').mockReturnValue(
-      stubGh(
-        [3, 2, 1].map((n) =>
-          ghPr(n, [
-            findingsComment(n, 'ci', [
-              {
-                area_tags: [],
-                finding_class: 'axe/color-contrast',
-                severity: 'major',
-              },
-            ]),
-          ])
-        )
-      )
-    );
-
-    run([], {cwd: sandbox.root, ledger: unreadableLedger});
-    expect(parseStdout(stdout.out).candidate_count).toBe(0);
-
-    // The same window with a readable, empty ledger surfaces the class, so the
-    // zero above is the guard refusing and not an empty window.
-    stdout.out.length = 0;
-    run([], {cwd: sandbox.root, ledger: noDeclines});
-    expect(parseStdout(stdout.out).candidate_count).toBe(1);
-  });
-
-  test('suppresses every class and skips the prune when no repository root resolves', () => {
+  test('suppresses every class when no repository root resolves', () => {
     vi.spyOn(runProcess, 'runGh').mockReturnValue(
       stubGh(
         [3, 2, 1].map((n) =>
@@ -966,7 +828,7 @@ describe('codify-tally run', () => {
     expect(parseStdout(stdout.out).candidate_count).toBe(0);
   });
 
-  test('reads a real ledger in process and writes nothing to stderr when a class re-surfaces', () => {
+  test('reads the real decline sources in process and writes nothing to stderr when a class re-surfaces', () => {
     execFileSync('git', ['init', '-q', '-b', 'main'], {cwd: sandbox.root});
     vi.spyOn(runProcess, 'runGh').mockReturnValue(
       stubGh(
@@ -987,56 +849,12 @@ describe('codify-tally run', () => {
       .spyOn(process.stderr, 'write')
       .mockImplementation(() => true);
 
-    // No decline entry for the class: the ledger answers `no_decline_entry`
-    // and the prune finds nothing to drop. Neither may print.
+    // No decline for the class: the loader answers `no_decline` and
+    // reports nothing. Nothing may print.
     run([], {cwd: sandbox.root});
 
     expect(parseStdout(stdout.out).candidate_count).toBe(1);
     expect(stderr).not.toHaveBeenCalled();
-  });
-
-  describe('project vocabulary and the prune', () => {
-    test('keeps a project-class decline when the vocabulary file is malformed', () => {
-      projectWindow();
-      writeVocabulary(sandbox.root, '{"classes": ["acme/rule",],}');
-      vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
-
-      const fake = makeFakeLedger();
-      fake.record('acme/rule', 3, 3);
-
-      run([], {cwd: sandbox.root, ledger: fake.ledger});
-
-      expect(fake.calls.prune).toEqual([]);
-      expect(fake.has('acme/rule')).toBe(true);
-    });
-
-    test('still prunes when the vocabulary file is absent', () => {
-      projectWindow();
-
-      const fake = makeFakeLedger();
-      fake.record('acme/rule', 3, 3);
-
-      run([], {cwd: sandbox.root, ledger: fake.ledger});
-
-      expect(fake.calls.prune).toHaveLength(1);
-      expect(fake.has('acme/rule')).toBe(false);
-    });
-  });
-
-  test('leaves the ledger unpruned when the window read failed', () => {
-    vi.spyOn(runProcess, 'runGh').mockReturnValue({
-      exitCode: 4,
-      stderr: 'gh: not authenticated',
-      stdout: '',
-    });
-
-    const fake = makeFakeLedger();
-    fake.record('knip/exports', 4, 4);
-
-    run([], {cwd: sandbox.root, ledger: fake.ledger});
-
-    expect(fake.calls.prune).toEqual([]);
-    expect(fake.has('knip/exports')).toBe(true);
   });
 
   test('falls back to candidate_count 0 and gh_ok false when gh fails (non-fatal)', () => {
@@ -1048,7 +866,7 @@ describe('codify-tally run', () => {
 
     const exit = run([], {
       cwd: sandbox.root,
-      ledger: noDeclines,
+      declines: noDeclines,
     });
     expect(exit).toBe(0);
 
@@ -1063,7 +881,7 @@ describe('codify-tally run', () => {
 
     const exit = run([], {
       cwd: sandbox.root,
-      ledger: noDeclines,
+      declines: noDeclines,
     });
     expect(exit).toBe(0);
 
@@ -1072,62 +890,16 @@ describe('codify-tally run', () => {
     expect(printed.candidate_count).toBe(0);
   });
 
-  test('a fallback suppression recorded between two run() calls survives the intervening prune and silences unclassified', () => {
-    vi.spyOn(runProcess, 'runGh').mockReturnValue(
-      stubGh(
-        [3, 2, 1].map((n) =>
-          ghPr(n, [
-            findingsComment(n, 'ci', [
-              {
-                area_tags: [],
-                finding_class: 'holistic/unclassified',
-                severity: 'major',
-              },
-            ]),
-          ])
-        )
-      )
-    );
+  test('a fallback suppression silences unclassified', () => {
+    stubClasslessWindow([3, 2, 1]);
 
-    const fake = makeFakeLedger();
-
-    run([], {cwd: sandbox.root, ledger: fake.ledger});
+    run([], {cwd: sandbox.root, declines: noDeclines});
     expect(parseStdout(stdout.out).unclassified).not.toBeNull();
 
-    fake.record('holistic/unclassified', 3, 3);
-
     stdout.out.length = 0;
-    run([], {cwd: sandbox.root, ledger: fake.ledger});
+    run([], {cwd: sandbox.root, declines: allSuppressed});
 
     expect(parseStdout(stdout.out).unclassified).toBeNull();
-    expect(fake.has('holistic/unclassified')).toBe(true);
-  });
-
-  test('a fallback baseline is released once its cluster drains, so a later unrelated cluster surfaces at the threshold', () => {
-    const fake = makeFakeLedger();
-
-    // Suppress a classless cluster at a high-water count of 8.
-    stubClasslessWindow([8, 7, 6, 5, 4, 3, 2, 1]);
-    run([], {cwd: sandbox.root, ledger: fake.ledger});
-    fake.record('holistic/unclassified', 8, 8);
-
-    // The cluster ages out of the window, taking its baseline with it.
-    stubClasslessWindow([9]);
-    stdout.out.length = 0;
-    run([], {cwd: sandbox.root, ledger: fake.ledger});
-    expect(fake.has('holistic/unclassified')).toBe(false);
-
-    // A genuinely different classless cluster now surfaces at 3, not at 11.
-    stubClasslessWindow([12, 11, 10]);
-    stdout.out.length = 0;
-    run([], {cwd: sandbox.root, ledger: fake.ledger});
-
-    const unclassified = parseStdout(stdout.out).unclassified as Record<
-      string,
-      unknown
-    >;
-    expect(unclassified).not.toBeNull();
-    expect(unclassified.distinct_pr_count).toBe(3);
   });
 
   test('counts PRs past the first search page, so the 1000-result cap is not the window', () => {
@@ -1151,7 +923,7 @@ describe('codify-tally run', () => {
 
     run([], {
       cwd: sandbox.root,
-      ledger: noDeclines,
+      declines: noDeclines,
     });
 
     const printed = parseStdout(stdout.out);
@@ -1161,25 +933,21 @@ describe('codify-tally run', () => {
     expect(candidates[0]?.distinct_pr_count).toBe(3);
   });
 
-  test('reads a window the walk cannot finish as unread: gh_ok false, ledger unpruned, window_truncated', () => {
+  test('reads a window the walk cannot finish as unread: gh_ok false, window_truncated', () => {
     vi.spyOn(runProcess, 'runGh').mockImplementation(() =>
       stubGh(fullSearchPage(90_000))
     );
-
-    const fake = makeFakeLedger();
-    fake.record('knip/exports', 4, 4);
 
     const stderr = vi
       .spyOn(process.stderr, 'write')
       .mockImplementation(() => true);
 
-    const exit = run([], {cwd: sandbox.root, ledger: fake.ledger});
+    const exit = run([], {cwd: sandbox.root, declines: noDeclines});
     expect(exit).toBe(0);
 
     const printed = parseStdout(stdout.out);
     expect(printed.gh_ok).toBe(false);
     expect(printed.candidate_count).toBe(0);
-    expect(fake.has('knip/exports')).toBe(true);
     const diagnostic = JSON.parse(String(stderr.mock.calls[0]?.[0])) as Record<
       string,
       unknown
@@ -1192,7 +960,7 @@ describe('codify-tally run', () => {
 
     run([], {
       cwd: sandbox.root,
-      ledger: noDeclines,
+      declines: noDeclines,
     });
 
     const args = ghSpy.mock.calls[0]?.[0] ?? [];
@@ -1234,7 +1002,7 @@ describe('codify-tally run', () => {
 
     run([], {
       cwd: sandbox.root,
-      ledger: noDeclines,
+      declines: noDeclines,
     });
 
     const printed = parseStdout(stdout.out);
@@ -1255,7 +1023,7 @@ describe('codify-tally run', () => {
 
     run([], {
       cwd: sandbox.root,
-      ledger: noDeclines,
+      declines: noDeclines,
     });
     const firstEmitted = ReviewTallyInputSchema.parse(parseStdout(stdout.out));
 
@@ -1267,7 +1035,7 @@ describe('codify-tally run', () => {
     stdout.out.length = 0;
     run([], {
       cwd: sandbox.root,
-      ledger: noDeclines,
+      declines: noDeclines,
     });
 
     const printed = parseStdout(stdout.out);
@@ -1303,7 +1071,7 @@ describe('codify-tally run', () => {
 
     run([], {
       cwd: sandbox.root,
-      ledger: noDeclines,
+      declines: noDeclines,
     });
     expect(parseStdout(stdout.out).triggers).toEqual([{type: 'schema_change'}]);
 
@@ -1316,7 +1084,7 @@ describe('codify-tally run', () => {
     stdout.out.length = 0;
     run([], {
       cwd: sandbox.root,
-      ledger: noDeclines,
+      declines: noDeclines,
     });
     expect(parseStdout(stdout.out).triggers).toEqual([]);
 
@@ -1327,7 +1095,7 @@ describe('codify-tally run', () => {
     stdout.out.length = 0;
     run([], {
       cwd: sandbox.root,
-      ledger: noDeclines,
+      declines: noDeclines,
     });
     expect(parseStdout(stdout.out).triggers).toEqual([{type: 'schema_change'}]);
 
@@ -1342,7 +1110,7 @@ describe('codify-tally run', () => {
     stdout.out.length = 0;
     run([], {
       cwd: sandbox.root,
-      ledger: noDeclines,
+      declines: noDeclines,
     });
     expect(parseStdout(stdout.out).triggers).toEqual([]);
   });
@@ -1363,7 +1131,7 @@ describe('codify-tally run', () => {
 
       run([], {
         cwd: sandbox.root,
-        ledger: noDeclines,
+        declines: noDeclines,
       });
 
       const printed = parseStdout(stdout.out);
@@ -1400,7 +1168,7 @@ describe('codify-tally run', () => {
 
     run([], {
       cwd: sandbox.root,
-      ledger: noDeclines,
+      declines: noDeclines,
     });
 
     const printed = parseStdout(stdout.out);
@@ -1416,16 +1184,10 @@ describe('codify-tally run', () => {
       recurring: 3,
     });
 
-    // First run: the ledger fake reports the class suppressed, so it is
-    // absent from both candidates and class_inventory in this run's emitted
-    // JSON, and therefore absent from the snapshot built from it.
-    run([], {
-      cwd: sandbox.root,
-      ledger: {
-        check: () => ({status: 'suppressed'}),
-        prune: () => undefined,
-      },
-    });
+    // First run: every class reads as suppressed, so it is absent from both
+    // candidates and class_inventory in this run's emitted JSON, and therefore
+    // absent from the snapshot built from it.
+    run([], {cwd: sandbox.root, declines: allSuppressed});
     const suppressedEmitted = ReviewTallyInputSchema.parse(
       parseStdout(stdout.out)
     );
@@ -1441,11 +1203,11 @@ describe('codify-tally run', () => {
     );
 
     // Second run, same window: an empty fake store stands in for a decline
-    // that re-surfaced, so the ledger no longer reports it suppressed.
+    // that re-surfaced, so the loader no longer reports it suppressed.
     stdout.out.length = 0;
     run([], {
       cwd: sandbox.root,
-      ledger: noDeclines,
+      declines: noDeclines,
     });
 
     expect(parseStdout(stdout.out).triggers).toEqual([
@@ -1531,7 +1293,7 @@ describe('codify-tally run: findings the PR body disposes of', () => {
   test('requests each PR body in the same window read', () => {
     const ghSpy = vi.spyOn(runProcess, 'runGh').mockReturnValue(stubGh([]));
 
-    run([], {cwd: sandbox.root, ledger: noDeclines});
+    run([], {cwd: sandbox.root, declines: noDeclines});
 
     expect(ghSpy).toHaveBeenCalledTimes(1);
     const args = ghSpy.mock.calls[0]?.[0] ?? [];
@@ -1546,7 +1308,7 @@ describe('codify-tally run: findings the PR body disposes of', () => {
       stubGh(WAIVED_PR_NUMBERS.map((prNumber) => waivedPr(prNumber)))
     );
 
-    run([], {cwd: sandbox.root, ledger: noDeclines});
+    run([], {cwd: sandbox.root, declines: noDeclines});
 
     const printed = parseStdout(stdout.out);
 
@@ -1570,7 +1332,7 @@ describe('codify-tally run: findings the PR body disposes of', () => {
         )
       )
     );
-    run([], {cwd: sandbox.root, ledger: noDeclines});
+    run([], {cwd: sandbox.root, declines: noDeclines});
 
     expect(parseStdout(stdout.out).unclassified_window_count).toBe(3);
 
@@ -1585,7 +1347,7 @@ describe('codify-tally run: findings the PR body disposes of', () => {
         )
       )
     );
-    run([], {cwd: sandbox.root, ledger: noDeclines});
+    run([], {cwd: sandbox.root, declines: noDeclines});
 
     const printed = parseStdout(stdout.out);
 
@@ -1607,7 +1369,7 @@ describe('codify-tally run: findings the PR body disposes of', () => {
       )
     );
 
-    run([], {cwd: sandbox.root, ledger: noDeclines});
+    run([], {cwd: sandbox.root, declines: noDeclines});
 
     const candidates = parseStdout(stdout.out).candidates as {
       distinct_pr_count: number;
@@ -1632,7 +1394,7 @@ describe('codify-tally run: findings the PR body disposes of', () => {
       )
     );
 
-    run([], {cwd: sandbox.root, ledger: noDeclines});
+    run([], {cwd: sandbox.root, declines: noDeclines});
 
     expect(parseStdout(stdout.out).candidate_count).toBe(0);
   });
@@ -1651,7 +1413,7 @@ describe('codify-tally run: findings the PR body disposes of', () => {
       )
     );
 
-    run([], {cwd: sandbox.root, ledger: noDeclines});
+    run([], {cwd: sandbox.root, declines: noDeclines});
 
     expect(parseStdout(stdout.out).candidate_count).toBe(1);
   });
@@ -1673,7 +1435,7 @@ describe('codify-tally run: findings the PR body disposes of', () => {
       )
     );
 
-    run([], {cwd: sandbox.root, ledger: noDeclines});
+    run([], {cwd: sandbox.root, declines: noDeclines});
 
     expect(parseStdout(stdout.out).candidate_count).toBe(1);
   });
@@ -1710,7 +1472,7 @@ describe('codify-tally run: findings the PR body disposes of', () => {
       ])
     );
 
-    run([], {cwd: sandbox.root, ledger: noDeclines});
+    run([], {cwd: sandbox.root, declines: noDeclines});
 
     const printed = parseStdout(stdout.out);
 
@@ -1728,8 +1490,441 @@ describe('codify-tally run: findings the PR body disposes of', () => {
       )
     );
 
-    run([], {cwd: sandbox.root, ledger: noDeclines});
+    run([], {cwd: sandbox.root, declines: noDeclines});
 
     expect(parseStdout(stdout.out).candidate_count).toBe(2);
+  });
+});
+
+vi.mock('../decline-suppression.js', async (importOriginal) => {
+  const original = await importOriginal<typeof DeclineSuppressionModule>();
+
+  return {...original, loadDeclineSources: vi.fn(original.loadDeclineSources)};
+});
+
+const DECLINE_NOW = new Date('2026-10-27T12:00:00.000Z');
+const LIVE_DECLINED_AT = '2026-10-20T00:00:00.000Z';
+const FAR_GIT_DATE = '2001-01-01T00:00:00Z';
+
+type CommittedDecline = {
+  auditedCount?: number;
+  count?: number;
+  declinedAt?: string;
+  findingClass: string;
+  formatVersion?: number;
+  name: string;
+  schemaVersion?: number;
+};
+
+// Writes decline files into the sandbox's committed store and commits them.
+// Commit and author dates are set far from `declined_at` to show the reader
+// never consults them.
+const commitDeclines = (root: string, declines: CommittedDecline[]): void => {
+  const folder = path.join(root, '.gaia', 'codify-declines');
+
+  mkdirSync(folder, {recursive: true});
+
+  for (const decline of declines) {
+    writeFileSync(
+      path.join(folder, `${decline.name}.json`),
+      `${JSON.stringify(
+        {
+          declined_at: decline.declinedAt ?? LIVE_DECLINED_AT,
+          declined_at_audited_pr_count: decline.auditedCount ?? 3,
+          declined_at_pr_count: decline.count ?? 3,
+          finding_class: decline.findingClass,
+          format_version: decline.formatVersion ?? 1,
+          tally_schema_version: decline.schemaVersion ?? TALLY_SCHEMA_VERSION,
+        },
+        null,
+        2
+      )}\n`
+    );
+  }
+
+  execFileSync('git', ['add', '-A'], {cwd: root, stdio: 'ignore'});
+  execFileSync(
+    'git',
+    [
+      '-c',
+      'user.name=t',
+      '-c',
+      'user.email=t@example.com',
+      'commit',
+      '-q',
+      '-m',
+      'merge',
+    ],
+    {
+      cwd: root,
+      env: {
+        ...process.env,
+        GIT_AUTHOR_DATE: FAR_GIT_DATE,
+        GIT_COMMITTER_DATE: FAR_GIT_DATE,
+      },
+      stdio: 'ignore',
+    }
+  );
+};
+
+const legacyLedgerPath = (root: string): string =>
+  path.join(root, '.gaia', 'local', 'codify', 'declines.json');
+
+const legacyDecline = (
+  findingClass: string,
+  declinedAt = LIVE_DECLINED_AT
+) => ({
+  declined_at: declinedAt,
+  declined_at_audited_pr_count: 3,
+  declined_at_pr_count: 3,
+  finding_class: findingClass,
+  tally_schema_version: TALLY_SCHEMA_VERSION,
+});
+
+const writeLegacyLedger = (
+  root: string,
+  declines: ReturnType<typeof legacyDecline>[]
+): string => {
+  mkdirSync(path.dirname(legacyLedgerPath(root)), {recursive: true});
+  const contents = `${JSON.stringify({declines, version: 2})}\n`;
+
+  writeFileSync(legacyLedgerPath(root), contents);
+
+  return contents;
+};
+
+const classFinding = (findingClass: string) => ({
+  area_tags: [],
+  finding_class: findingClass,
+  severity: 'major',
+});
+
+// One PR per number, each carrying every named class.
+const stubWindowWith = (
+  prNumbers: readonly number[],
+  classes: readonly string[]
+): void => {
+  vi.spyOn(runProcess, 'runGh').mockReturnValue(
+    stubGh(
+      prNumbers.map((n) =>
+        ghPr(n, [findingsComment(n, 'ci', classes.map(classFinding))])
+      )
+    )
+  );
+};
+
+const range = (count: number): number[] =>
+  Array.from({length: count}, (_u, index) => index + 1);
+
+const classesOf = (printed: Record<string, unknown>, key: string): string[] =>
+  (printed[key] as {finding_class: string}[]).map(
+    (entry) => entry.finding_class
+  );
+
+const X = 'rule/use-effect-derived-state';
+const UNCLASSIFIED = 'holistic/unclassified';
+// A decline of 3 is materially exceeded at 6 PRs, not at 4.
+const BELOW_RISE = 4;
+const MATERIAL_RISE = 6;
+
+describe('codify-tally run: team declines', () => {
+  let sandbox: Sandbox;
+  let stdout: ReturnType<typeof captureStdout>;
+  let stderrLines: string[];
+
+  const runTally = (options: Parameters<typeof run>[1] = {}): number =>
+    run([], {cwd: sandbox.root, now: () => DECLINE_NOW, ...options});
+
+  const printedTally = (): Record<string, unknown> => parseStdout(stdout.out);
+
+  beforeEach(async () => {
+    sandbox = setupSandbox();
+    stdout = captureStdout();
+    stderrLines = [];
+    execFileSync('git', ['init', '-q', '-b', 'main'], {cwd: sandbox.root});
+    vi.spyOn(process.stderr, 'write').mockImplementation((chunk: unknown) => {
+      stderrLines.push(String(chunk));
+
+      return true;
+    });
+    const original = await vi.importActual<typeof DeclineSuppressionModule>(
+      '../decline-suppression.js'
+    );
+
+    vi.mocked(loadDeclineSources)
+      .mockReset()
+      .mockImplementation(original.loadDeclineSources);
+  });
+
+  afterEach(() => {
+    stdout.restore();
+    sandbox.cleanup();
+    vi.restoreAllMocks();
+  });
+
+  test('never writes the legacy ledger, even for a class absent from the window', () => {
+    const before = `${JSON.stringify({
+      declines: [legacyDecline('knip/exports')],
+      version: 2,
+    })}\n`;
+
+    writeLegacyLedger(sandbox.root, [legacyDecline('knip/exports')]);
+    stubWindowWith(range(3), [X]);
+
+    expect(runTally()).toBe(0);
+
+    expect(readFileSync(legacyLedgerPath(sandbox.root), 'utf8')).toBe(before);
+  });
+
+  test('a committed decline below a material rise moves the class to team_declined only', () => {
+    commitDeclines(sandbox.root, [{findingClass: X, name: 'x-1'}]);
+    stubWindowWith(range(BELOW_RISE), [X]);
+
+    runTally();
+
+    const printed = printedTally();
+    expect(classesOf(printed, 'candidates')).toEqual([]);
+    expect(classesOf(printed, 'team_declined')).toEqual([X]);
+    expect(printed.candidate_count).toBe(0);
+    expect(printed.class_inventory).toEqual([]);
+    expect(printed.triggers).toEqual([]);
+  });
+
+  test('a committed decline stays out of the triggers against a snapshot that lacks the class', () => {
+    commitDeclines(sandbox.root, [{findingClass: X, name: 'x-1'}]);
+    stubWindowWith(range(BELOW_RISE), [X]);
+    runTally();
+    writeReviewSnapshot(
+      sandbox.root,
+      snapshotFromTally(
+        ReviewTallyInputSchema.parse(printedTally()),
+        REFERENCE_NOW
+      )
+    );
+
+    stdout.out.length = 0;
+    runTally();
+
+    expect(printedTally().triggers).toEqual([]);
+  });
+
+  test('a material rise over the committed decline re-surfaces the class as a candidate', () => {
+    commitDeclines(sandbox.root, [{findingClass: X, name: 'x-1'}]);
+    stubWindowWith(range(MATERIAL_RISE), [X]);
+
+    runTally();
+
+    const printed = printedTally();
+    expect(classesOf(printed, 'candidates')).toEqual([X]);
+    expect(printed.team_declined).toEqual([]);
+  });
+
+  test('a committed decline from another tally schema version does not suppress', () => {
+    commitDeclines(sandbox.root, [
+      {findingClass: X, name: 'x-1', schemaVersion: TALLY_SCHEMA_VERSION - 1},
+    ]);
+    stubWindowWith(range(BELOW_RISE), [X]);
+
+    runTally();
+
+    expect(classesOf(printedTally(), 'candidates')).toEqual([X]);
+  });
+
+  test('a decline older than the window lifts the class and the unclassified signal', () => {
+    commitDeclines(sandbox.root, [
+      {declinedAt: '2026-07-29T11:59:59.000Z', findingClass: X, name: 'x-1'},
+      {
+        declinedAt: '2026-07-29T11:59:59.000Z',
+        findingClass: UNCLASSIFIED,
+        name: 'u-1',
+      },
+    ]);
+    stubWindowWith(range(3), [X, UNCLASSIFIED]);
+
+    runTally();
+
+    const printed = printedTally();
+    expect(classesOf(printed, 'candidates')).toEqual([X]);
+    expect(printed.unclassified).not.toBeNull();
+  });
+
+  test('the same declines one day inside the window suppress both', () => {
+    commitDeclines(sandbox.root, [
+      {declinedAt: '2026-07-30T12:00:00.000Z', findingClass: X, name: 'x-1'},
+      {
+        declinedAt: '2026-07-30T12:00:00.000Z',
+        findingClass: UNCLASSIFIED,
+        name: 'u-1',
+      },
+    ]);
+    stubWindowWith(range(3), [X, UNCLASSIFIED]);
+
+    runTally();
+
+    const printed = printedTally();
+    expect(classesOf(printed, 'candidates')).toEqual([]);
+    expect(classesOf(printed, 'team_declined')).toEqual([X]);
+    expect(printed.unclassified).toBeNull();
+  });
+
+  test('a live unclassified decline lifts on a material rise of the classless cluster', () => {
+    commitDeclines(sandbox.root, [{findingClass: UNCLASSIFIED, name: 'u-1'}]);
+    stubWindowWith(range(MATERIAL_RISE), [UNCLASSIFIED]);
+
+    runTally();
+
+    expect(printedTally().unclassified).not.toBeNull();
+  });
+
+  test('a live committed decline suppresses however long the class has recurred', () => {
+    commitDeclines(sandbox.root, [
+      {declinedAt: '2026-08-01T00:00:00.000Z', findingClass: X, name: 'x-1'},
+    ]);
+    stubWindowWith(range(BELOW_RISE), [X]);
+
+    runTally();
+
+    const printed = printedTally();
+    expect(classesOf(printed, 'candidates')).toEqual([]);
+    expect(classesOf(printed, 'team_declined')).toEqual([X]);
+  });
+
+  test('a legacy-only decline within the window suppresses and leaves the file untouched', () => {
+    const before = writeLegacyLedger(sandbox.root, [legacyDecline(X)]);
+    stubWindowWith(range(BELOW_RISE), [X]);
+
+    runTally();
+
+    const printed = printedTally();
+    expect(classesOf(printed, 'candidates')).toEqual([]);
+    expect(classesOf(printed, 'team_declined')).toEqual([X]);
+    expect(readFileSync(legacyLedgerPath(sandbox.root), 'utf8')).toBe(before);
+  });
+
+  test('a legacy entry older than the window suppresses nothing and the file is untouched', () => {
+    const before = writeLegacyLedger(sandbox.root, [
+      legacyDecline(X, '2026-07-01T00:00:00.000Z'),
+    ]);
+    stubWindowWith(range(BELOW_RISE), [X]);
+
+    runTally();
+
+    expect(classesOf(printedTally(), 'candidates')).toEqual([X]);
+    expect(readFileSync(legacyLedgerPath(sandbox.root), 'utf8')).toBe(before);
+  });
+
+  test('with no legacy ledger and no store the run prints nothing to stderr', () => {
+    stubWindowWith(range(BELOW_RISE), [X]);
+
+    expect(runTally()).toBe(0);
+
+    expect(stderrLines).toEqual([]);
+  });
+
+  test('reports each skipped decline file and still applies the valid ones', () => {
+    commitDeclines(sandbox.root, [
+      {findingClass: 'rule/switch-statement', name: 'y-1'},
+      {findingClass: X, formatVersion: 9, name: 'x-v9'},
+    ]);
+    writeFileSync(
+      path.join(sandbox.root, '.gaia', 'codify-declines', 'x-bad.json'),
+      '{not json'
+    );
+    stubWindowWith(range(BELOW_RISE), [X, 'rule/switch-statement']);
+
+    expect(runTally()).toBe(0);
+
+    const printed = printedTally();
+    expect(classesOf(printed, 'candidates')).toEqual([X]);
+    expect(classesOf(printed, 'team_declined')).toEqual([
+      'rule/switch-statement',
+    ]);
+    const reports = stderrLines.map(
+      (line) => JSON.parse(line) as Record<string, unknown>
+    );
+    expect(reports.map((report) => report.code)).toEqual([
+      'skipped_decline_file',
+      'skipped_decline_file',
+    ]);
+    expect(reports.map((report) => report.path)).toEqual(
+      expect.arrayContaining([
+        '.gaia/codify-declines/x-bad.json',
+        '.gaia/codify-declines/x-v9.json',
+      ])
+    );
+    expect(
+      reports.every((report) => report.subcommand === 'codify-tally')
+    ).toBe(true);
+  });
+
+  test('a malformed legacy ledger yields one report and suppresses nothing', () => {
+    mkdirSync(path.dirname(legacyLedgerPath(sandbox.root)), {recursive: true});
+    writeFileSync(legacyLedgerPath(sandbox.root), '{not json');
+    stubWindowWith(range(BELOW_RISE), [X]);
+
+    runTally();
+
+    expect(classesOf(printedTally(), 'candidates')).toEqual([X]);
+    const reports = stderrLines.map(
+      (line) => JSON.parse(line) as Record<string, unknown>
+    );
+    expect(reports).toHaveLength(1);
+    expect(reports[0]?.code).toBe('malformed_decline_ledger');
+  });
+
+  test('a promoted rule marker wins over a committed decline', () => {
+    commitDeclines(sandbox.root, [{findingClass: X, name: 'x-1'}]);
+    stubWindowWith(range(BELOW_RISE), [X]);
+
+    runTally();
+    expect(classesOf(printedTally(), 'team_declined')).toEqual([X]);
+
+    mkdirSync(sandbox.rulesDir, {recursive: true});
+    writeFileSync(
+      path.join(sandbox.rulesDir, 'promoted.md'),
+      `${markerComment(X)}\n`
+    );
+    stdout.out.length = 0;
+    runTally();
+
+    const printed = printedTally();
+    expect(classesOf(printed, 'candidates')).toEqual([]);
+    expect(classesOf(printed, 'team_declined')).toEqual([]);
+  });
+
+  test('a clone whose checkout lacks the decline file still sees a candidate, silenced by the snapshot', () => {
+    stubWindowWith(range(BELOW_RISE), [X]);
+    runTally();
+    const first = ReviewTallyInputSchema.parse(printedTally());
+
+    writeReviewSnapshot(sandbox.root, snapshotFromTally(first, REFERENCE_NOW));
+    stdout.out.length = 0;
+    runTally();
+
+    const printed = printedTally();
+    expect(classesOf(printed, 'candidates')).toEqual([X]);
+    expect(printed.triggers).toEqual([]);
+  });
+
+  test('loads the decline sources once for a run with several at-threshold classes', () => {
+    stubWindowWith(range(3), ['rule/a', 'rule/b', 'rule/c']);
+
+    runTally();
+
+    expect(loadDeclineSources).toHaveBeenCalledTimes(1);
+  });
+
+  test('the injected clock drives the window start and the decline lapse', () => {
+    const ghSpy = vi.spyOn(runProcess, 'runGh').mockReturnValue(stubGh([]));
+
+    runTally();
+
+    const args = ghSpy.mock.calls[0]?.[0] ?? [];
+    expect(args[args.indexOf('--search') + 1]).toBe(
+      'merged:>=2026-07-29 sort:created-desc'
+    );
+    expect(loadDeclineSources).toHaveBeenCalledWith(
+      expect.objectContaining({now: DECLINE_NOW, windowDays: 90})
+    );
   });
 });

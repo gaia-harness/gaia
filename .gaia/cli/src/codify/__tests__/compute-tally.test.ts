@@ -1,12 +1,18 @@
 import {describe, expect, test, vi} from 'vitest';
 import {isValidFindingClass} from '../../schemas/finding-class.js';
-import {computeTally, windowClasses} from '../compute-tally.js';
+import {computeTally} from '../compute-tally.js';
 import type {TallyPrRecord} from '../compute-tally.js';
 
 const pr = (
   prNumber: number,
   findings: TallyPrRecord['findings']
 ): TallyPrRecord => ({findings, pr_number: prNumber});
+
+const finding = (findingClass: string) => ({
+  area_tags: ['app'],
+  finding_class: findingClass,
+  severity: 'major' as const,
+});
 
 const noCover = (): boolean => false;
 const noSuppress = (): boolean => false;
@@ -338,11 +344,6 @@ describe('computeTally', () => {
       {finding_class: 'billing/double-charge', is_oracle: false},
       {finding_class: 'semgrep/python.lang.eval', is_oracle: true},
     ]);
-    expect(windowClasses(prs, vocabulary)).toEqual([
-      'billing/double-charge',
-      'semgrep/python.lang.eval',
-    ]);
-    expect(windowClasses(prs)).toEqual(['holistic/unclassified']);
   });
 
   test('UAT-003: a classless recurring finding surfaces as the distinct unclassified signal, not a candidate', () => {
@@ -414,34 +415,6 @@ describe('computeTally', () => {
     });
 
     expect(result.unclassified).toBeNull();
-  });
-
-  test('windowClasses includes the classless unclassified bucket once it recurs at threshold', () => {
-    const prs = [3, 2, 1].map((n) =>
-      pr(n, [
-        {
-          area_tags: [],
-          finding_class: 'holistic/unclassified',
-          severity: 'major',
-        },
-      ])
-    );
-
-    expect(windowClasses(prs)).toEqual(['holistic/unclassified']);
-  });
-
-  test('windowClasses drops the classless unclassified bucket below threshold, so the prune releases a stale baseline', () => {
-    const prs = [2, 1].map((n) =>
-      pr(n, [
-        {
-          area_tags: [],
-          finding_class: 'holistic/unclassified',
-          severity: 'major',
-        },
-      ])
-    );
-
-    expect(windowClasses(prs)).toEqual([]);
   });
 
   test('Directive #1: severity_max is a running max across PRs (minor then critical -> critical)', () => {
@@ -602,21 +575,61 @@ describe('computeTally', () => {
     expect(seen).toContainEqual([3, 3]);
   });
 
-  test('windowClasses returns classes with >= threshold recurrence regardless of suppression', () => {
+  test('team_declined holds a suppressed at-threshold seeded class, never a below-threshold, covered or fallback one', () => {
     const prs = [
-      ...[3, 2, 1].map((n) =>
+      ...[1, 2, 3].map((n) =>
         pr(n, [
-          {
-            area_tags: [],
-            finding_class: 'axe/color-contrast',
-            severity: 'major',
-          },
+          finding('rule/switch-statement'),
+          finding('knip/exports'),
+          finding('holistic/unclassified'),
         ])
       ),
-      pr(99, [{area_tags: [], finding_class: 'knip/types', severity: 'major'}]),
+      pr(4, [finding('rule/switch-statement'), finding('knip/types')]),
+      pr(5, [finding('knip/types')]),
+      ...[6, 7].map((n) => pr(n, [finding('holistic/n-plus-one')])),
     ];
 
-    expect(windowClasses(prs)).toEqual(['axe/color-contrast']);
+    const result = computeTally({
+      coveredClass: (findingClass) => findingClass === 'knip/exports',
+      prs: [...prs, pr(8, [finding('holistic/n-plus-one')])],
+      suppressedClass: () => true,
+      windowDays: 90,
+    });
+
+    expect(result.candidates).toEqual([]);
+    expect(result.team_declined).toEqual([
+      {
+        area_tags: ['app'],
+        distinct_pr_count: 4,
+        finding_class: 'rule/switch-statement',
+        is_oracle: false,
+        pr_numbers: [1, 2, 3, 4],
+        severity_max: 'major',
+      },
+      {
+        area_tags: ['app'],
+        distinct_pr_count: 3,
+        finding_class: 'holistic/n-plus-one',
+        is_oracle: false,
+        pr_numbers: [6, 7, 8],
+        severity_max: 'major',
+      },
+    ]);
+    expect(result.candidate_count).toBe(0);
+    expect(result.class_inventory).toEqual([
+      {distinct_pr_count: 2, finding_class: 'knip/types'},
+    ]);
+  });
+
+  test('team_declined is empty when nothing is suppressed', () => {
+    const result = computeTally({
+      coveredClass: noCover,
+      prs: fallbackWindow(3),
+      suppressedClass: noSuppress,
+      windowDays: 90,
+    });
+
+    expect(result.team_declined).toEqual([]);
   });
 
   const fallbackPrs = [3, 2, 1].map((n) =>
