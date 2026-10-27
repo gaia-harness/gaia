@@ -1668,6 +1668,64 @@ run_staged_hook() {
   [ -z "$output" ]
 }
 
+# --- an unloadable guard library refuses loudly, never fails open ---
+#
+# The parser and the hop guard hold every rule the walk applies, so a hook
+# that loaded neither would allow every commit and push. Absent and
+# unparseable are separate cases: the `[ -f ]` test catches the first, and
+# only the errexit bracket keeps the second from exiting 2 before the `type`
+# check can name the library.
+stage_hook_tree_with_degraded_library() {
+  STAGED_ROOT="$BATS_TEST_TMPDIR/staged"
+  rm -rf "$STAGED_ROOT"
+  mkdir -p "$STAGED_ROOT/.claude"
+  cp -R "$HOOKS_SOURCE_DIRECTORY" "$STAGED_ROOT/.claude/hooks"
+  case "$2" in
+    absent) rm -f "$STAGED_ROOT/.claude/hooks/lib/$1" ;;
+    conflicted) write_conflicted_library "$STAGED_ROOT/.claude/hooks/lib/$1" ;;
+  esac
+  STAGED_HOOK="$STAGED_ROOT/.claude/hooks/block-main-destructive-git.sh"
+}
+
+@test "main-git-guard-parse.sh absent: a git commit call exits 2 naming the library" {
+  on_main
+  stage_hook_tree_with_degraded_library main-git-guard-parse.sh absent
+  run_staged_hook 'git commit -m x'
+  [ "$status" -eq 2 ]
+  grep -qF 'BLOCKED: block-main-destructive-git.sh cannot load lib/main-git-guard-parse.sh' <<<"$output"
+}
+
+@test "main-git-guard-parse.sh holding conflict markers: a git commit call exits 2 naming the library" {
+  on_main
+  stage_hook_tree_with_degraded_library main-git-guard-parse.sh conflicted
+  run_staged_hook 'git commit -m x'
+  [ "$status" -eq 2 ]
+  grep -qF 'BLOCKED: block-main-destructive-git.sh cannot load lib/main-git-guard-parse.sh' <<<"$output"
+}
+
+@test "main-checkout-hop-guard.sh absent: a git commit call exits 2 naming the library" {
+  on_main
+  stage_hook_tree_with_degraded_library main-checkout-hop-guard.sh absent
+  run_staged_hook 'git commit -m x'
+  [ "$status" -eq 2 ]
+  grep -qF 'BLOCKED: block-main-destructive-git.sh cannot load lib/main-checkout-hop-guard.sh' <<<"$output"
+}
+
+@test "main-checkout-hop-guard.sh holding conflict markers: a git commit call exits 2 naming the library" {
+  on_main
+  stage_hook_tree_with_degraded_library main-checkout-hop-guard.sh conflicted
+  run_staged_hook 'git commit -m x'
+  [ "$status" -eq 2 ]
+  grep -qF 'BLOCKED: block-main-destructive-git.sh cannot load lib/main-checkout-hop-guard.sh' <<<"$output"
+}
+
+@test "main-git-guard-parse.sh absent: a non-git call is still allowed" {
+  stage_hook_tree_with_degraded_library main-git-guard-parse.sh absent
+  run_staged_hook 'ls'
+  [ "$status" -eq 0 ]
+  [ -z "$output" ]
+}
+
 # --- the early exit for subcommands no rule reads ---
 
 # A `git` shim first on PATH logs each argv and execs the real git, so the

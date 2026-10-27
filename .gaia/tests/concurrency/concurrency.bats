@@ -489,6 +489,9 @@ JS
     .claude/hooks/lib/jq-availability.sh \
     .claude/hooks/lib/red-ledger.sh \
     .claude/hooks/lib/repo-scope.sh \
+    .claude/hooks/lib/repo-scope-segment.sh \
+    .claude/hooks/lib/repo-scope-scan.sh \
+    .claude/hooks/lib/repo-scope-home.sh \
     .gaia/scripts/main-root-lib.sh \
     .gaia/scripts/state-registry-lib.sh \
     .gaia/scripts/link-worktree.sh

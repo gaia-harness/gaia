@@ -50,7 +50,9 @@ setup() {
   # Mirror the repo-relative layout both hooks resolve from pwd.
   mkdir -p "$REPO/.claude/hooks/lib" "$REPO/.gaia/scripts"
   ln -s "$HOME_ROOT/.claude/hooks/lib/red-ledger.sh" "$REPO/.claude/hooks/lib/red-ledger.sh"
-  ln -s "$HOME_ROOT/.claude/hooks/lib/repo-scope.sh" "$REPO/.claude/hooks/lib/repo-scope.sh"
+  for repo_scope_file in repo-scope.sh repo-scope-segment.sh repo-scope-scan.sh repo-scope-home.sh; do
+    ln -s "$HOME_ROOT/.claude/hooks/lib/$repo_scope_file" "$REPO/.claude/hooks/lib/$repo_scope_file"
+  done
   ln -s "$HOME_ROOT/.gaia/scripts/red-ledger" "$REPO/.gaia/scripts/red-ledger"
   # red_ledger_path (inside the symlinked red-ledger.sh above) sources this
   # relative to ITS OWN location to reach gaia_tree_key, so it needs to

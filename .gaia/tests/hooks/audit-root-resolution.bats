@@ -206,6 +206,7 @@ setup() {
   for script_name in audit-scope.sh audit-machinery.sh audit-clearance.sh audit-digest.sh audit-branch-patch.sh gaia-version.sh audit-base-provenance.sh \
            jq-availability.sh hook-payload.sh verb-arming.sh verb-arming-walk.sh \
            verb-arming-view.sh verb-arming-live-helpers.sh verb-arming-live-view.sh repo-scope.sh \
+           repo-scope-segment.sh repo-scope-scan.sh repo-scope-home.sh \
            cross-repo-refusal.sh audit-bypass-stamp.sh; do
     cp "$REPO_ROOT/.claude/hooks/lib/$script_name" "$MAIN/.claude/hooks/lib/$script_name"
   done
