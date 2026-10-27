@@ -13,7 +13,7 @@
  * arrives, and it exists only so a large-but-legitimate read completes
  * instead of throwing.
  *
- * Not the bound for every spawn. `update/regen-regions.ts` keeps its own
+ * Not the bound for every spawn. `update/regen-regions-spawn.ts` keeps its own
  * `SPAWN_MAX_BUFFER_BYTES` at 32 MiB, because it bounds the region-digest
  * spawner rather than a history read.
  */
