@@ -274,7 +274,7 @@ hasher_fails() { return 1; }
 # A scratch repository on main holds copies of the filing script and its
 # siblings; a linked worktree carries the branch under test. gh is a stub.
 
-FX_SIBLINGS="file-tech-debt.sh main-root-lib.sh debt-dedup.sh check-debt-issue-metadata.sh branch-name-lib.sh debt-source-lib.sh"
+FX_SIBLINGS="file-tech-debt.sh main-root-lib.sh debt-dedup.sh check-debt-issue-metadata.sh branch-name-lib.sh debt-source-lib.sh debt-list-lib.sh"
 
 # fx_copy_scripts <directory>: copies of the script and its siblings, never links.
 fx_copy_scripts() {
@@ -302,8 +302,8 @@ case "$*" in
     ;;
   "issue list"*"--limit 1 "*) echo '[]' ;;
   "issue list"*"--label severity:investigate"*) echo '[]' ;;
-  "issue list"*"--state open"*) cat "$stub/open.json" 2>/dev/null || echo '[]' ;;
-  "issue list"*"--state closed"*) echo '[]' ;;
+  "api --paginate"*"state=open"*) cat "$stub/open.json" 2>/dev/null || echo '[]' ;;
+  "api --paginate"*"state=closed"*) echo '[]' ;;
   "issue create"*)
     body_file="$(printf '%s\n' "$@" | sed -n '/^--body-file$/{n;p;}')"
     count=0

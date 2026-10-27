@@ -112,8 +112,9 @@
 # match (keyed or keyless) is not filed again and is recorded as outcome
 # `matched` with the matched issue's number. A declined-closed match follows the
 # skill's idempotency step the same way: no second filing, outcome `matched`
-# with the matched number. A list that cannot be fetched is transient (non-security)
-# or a divert (security-class); a list that fills its limit is `failed`.
+# with the matched number. A list that cannot be fetched completely, a failed
+# or partial paginated read, is transient (non-security) or a divert
+# (security-class).
 #
 # Honest limits. An issue filed while the repository is PRIVATE becomes public
 # if visibility later flips. A caller that mislabels `security` as false
@@ -127,8 +128,6 @@
 set -u
 
 program_name="file-tech-debt"
-open_limit=1000
-closed_limit=5000
 
 die_usage() {
   printf '%s: %s\n' "$program_name" "$1" >&2
@@ -143,6 +142,8 @@ die_input() {
 command -v jq >/dev/null 2>&1 || die_input "jq is not installed; refusing to continue (never a silent pass)"
 
 script_directory="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)" || die_input "cannot resolve the script directory"
+# shellcheck source=/dev/null
+. "$script_directory/debt-list-lib.sh" || die_input "cannot read the list library"
 
 work_directory=""
 # shellcheck disable=SC2329
@@ -496,12 +497,8 @@ finish_diverted() {
 # fetch_lists: the open and closed tech-debt lists into the work directory.
 # Sets list_status: 0 ok, 1 gh could not answer.
 fetch_lists() {
-  run_gh issue list --repo "$repo" --label tech-debt --state open --limit "$open_limit" --json number,body
-  [ "$gh_status" -eq 0 ] || return 1
-  printf '%s\n' "$gh_output" >"$work_directory/open.json"
-  run_gh issue list --repo "$repo" --label tech-debt --state closed --limit "$closed_limit" --json number,body,labels,stateReason
-  [ "$gh_status" -eq 0 ] || return 1
-  printf '%s\n' "$gh_output" >"$work_directory/closed.json"
+  gaia_debt_list_read "$repo" open "$work_directory/open.json" 2>"$work_directory/gh-error" || return 1
+  gaia_debt_list_read "$repo" closed "$work_directory/closed.json" 2>"$work_directory/gh-error" || return 1
   return 0
 }
 

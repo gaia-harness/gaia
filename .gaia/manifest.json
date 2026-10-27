@@ -270,6 +270,7 @@
     ".gaia/scripts/debt-batch-budget.sh": "owned",
     ".gaia/scripts/debt-count-refresh.sh": "owned",
     ".gaia/scripts/debt-dedup.sh": "owned",
+    ".gaia/scripts/debt-list-lib.sh": "owned",
     ".gaia/scripts/debt-parse-args.sh": "owned",
     ".gaia/scripts/debt-path-probe.sh": "owned",
     ".gaia/scripts/debt-stale-claims.sh": "owned",
@@ -791,7 +792,7 @@
     "wiki/overview.md": "wiki-owned",
     "wiki/README.md": "wiki-owned"
   },
-  "generated": "2026-10-27T17:10:47.947Z",
+  "generated": "2026-10-27T17:30:21.735Z",
   "regions": [
     {
       "endMarker": "<!-- gaia:audit-remit:end -->",
