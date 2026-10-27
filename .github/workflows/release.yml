@@ -4,47 +4,76 @@ on:
   push:
     tags:
       - 'v*.*.*'
+  # Dry run: rebuilds an already-published tag through every step up to the
+  # composed release body and publishes nothing, so a runner-image or toolchain
+  # change can be proven before the next real tag meets it. The publish job
+  # runs on a tag push only.
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Existing release tag to rebuild (vX.Y.Z); nothing is published'
+        required: true
+        default: 'v2.2.0'
+        type: string
 
 # Default-deny, so a job added later inherits no scope rather than the
 # repository default. This is the one workflow in the directory whose token can
 # write to the repository, so an inherited grant here is the widest one an
-# unreviewed job could pick up. The job below grants exactly what it needs.
+# unreviewed job could pick up. Each job below grants exactly what it needs.
 permissions: {}
 
 jobs:
-  release:
-    name: Publish GitHub release
-    # Pinned off ubuntu-latest (26.04): a tag push is the only trigger, so no
-    # branch run can prove this job there first. gaia-harness/gaia#3111.
-    runs-on: ubuntu-24.04
-    # `gh release create` in the last step publishes the release and uploads
-    # the tarball; nothing else here writes.
+  build:
+    name: Build release bundle
+    runs-on: ubuntu-latest
+    # Read-only: everything that can write to the repository lives in the
+    # publish job, so a dry run never holds a write token, and on a tag push the
+    # write token exists only for the minutes the upload takes.
     permissions:
-      contents: write
+      contents: read
     # This cap bounds everything in the job -- the CLI install, the bundle
-    # rebuild, the staging, the distribution-gate step, `gh release create` --
-    # so a hang in any of them cannot hold a runner for the 6-hour default
-    # while holding `contents: write`, the widest token any workflow in this
-    # directory carries. Thirty minutes is a wide margin over a real cut: the
-    # gate is 3-4 minutes and everything around it is checkout, install, and
-    # staging.
+    # rebuild, the staging, the distribution-gate step -- so a hang in any of
+    # them cannot hold a runner for the 6-hour default. Thirty minutes is a
+    # wide margin over a real cut: the gate is 3-4 minutes and everything
+    # around it is checkout, install, and staging.
     timeout-minutes: 30
+    outputs:
+      tag: ${{ steps.version.outputs.tag }}
     steps:
+      # Runs before checkout because a dispatch names its tag only as an input,
+      # and the checkout below needs the validated value. The input reaches the
+      # shell through env, never interpolated into the script.
+      - name: Derive version
+        id: version
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          DISPATCH_TAG: ${{ inputs.tag }}
+        run: |
+          if [ "$EVENT_NAME" = 'workflow_dispatch' ]; then
+            TAG="$DISPATCH_TAG"
+            # bash's =~ anchors ^ and $ at the whole string, so a value with an
+            # embedded newline cannot pass on one well-formed line.
+            if ! [[ "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+              echo "::error::Dispatch input 'tag' must be an existing release tag of the form vX.Y.Z."
+              exit 1
+            fi
+          else
+            TAG="${GITHUB_REF#refs/tags/}"
+          fi
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "version=${TAG#v}" >> "$GITHUB_OUTPUT"
+
       - name: Checkout at tag
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          # Empty on a tag push, which keeps checkout's default: the pushed tag.
+          # A dispatch runs from a branch, so it names the tag explicitly; the
+          # refs/tags/ prefix makes a branch of the same name unresolvable here.
+          ref: ${{ github.event_name == 'workflow_dispatch' && format('refs/tags/{0}', steps.version.outputs.tag) || '' }}
           fetch-depth: 0
-          # Keep the contents: write token out of .git/config. Nothing after
-          # checkout talks to the remote through git; the one step that writes,
-          # `gh release create`, takes its token from its own step env.
+          # Nothing after checkout talks to the remote through git, so no
+          # token belongs in .git/config.
           persist-credentials: false
-
-      - name: Derive version
-        id: version
-        run: |
-          TAG="${GITHUB_REF#refs/tags/}"
-          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
-          echo "version=${TAG#v}" >> "$GITHUB_OUTPUT"
 
       - name: Verify .gaia/VERSION matches tag
         env:
@@ -227,10 +256,50 @@ jobs:
             "$TAG" release-notes.md "gaia-bundle-${TAG}.tar.gz.sha256" release-body.md
           head -n 1 release-body.md
 
+      # Runs on a dry run too, so the dispatch proves the hand-off to the
+      # publish job and leaves the bundle it built inspectable. One day of
+      # retention: the publish job reads it minutes later, and the release
+      # itself is the durable copy.
+      - name: Hand the release assets to the publish job
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: release-assets
+          path: |
+            gaia-bundle-${{ steps.version.outputs.tag }}.tar.gz
+            gaia-bundle-${{ steps.version.outputs.tag }}.tar.gz.sha256
+            release-body.md
+          if-no-files-found: error
+          retention-days: 1
+
+  publish:
+    name: Publish GitHub release
+    needs: build
+    # A tag push only: a dry run stops at the build job. The ref test repeats
+    # what the push filter already guarantees, so a push trigger added to this
+    # file later for branches cannot reach the write token.
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    # `gh release create` publishes the release and uploads the tarball;
+    # nothing else here writes.
+    permissions:
+      contents: write
+    # A download and one API call. The cap keeps a hang from holding the
+    # widest token any workflow in this directory carries for the 6-hour
+    # default.
+    timeout-minutes: 10
+    steps:
+      - name: Receive the release assets
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: release-assets
+
       - name: Create GitHub Release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          TAG: ${{ steps.version.outputs.tag }}
+          # No checkout in this job, so gh takes the repository from here
+          # rather than from a git remote.
+          GH_REPO: ${{ github.repository }}
+          TAG: ${{ needs.build.outputs.tag }}
         run: |
           gh release create "$TAG" \
             "gaia-bundle-${TAG}.tar.gz" \
