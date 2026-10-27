@@ -214,6 +214,9 @@ auditors:
       - ".gaia/scripts/tests/fixtures/**/*.jq"
       - ".gaia/scripts/tests/fixtures/**/*.sed"
       - ".gaia/scripts/tests/fixtures/**/SHA256SUMS"
+      # The hooks suites run awk fixtures too: a frozen copy of an earlier
+      # parser that a compatibility test executes beside the current one.
+      - ".gaia/tests/hooks/fixtures/*.awk"
       # The quick-review corpus pins which shapes the light router clears with
       # one quick reviewer, so an edited entry quietly widens what skips the
       # full member. It is gate machinery, and machinery is never unowned.

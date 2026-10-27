@@ -22,7 +22,7 @@ The **Remit and self-skip** section runs the root fence, sends the member to the
 
 ### 2. Register in the roster
 
-Add an entry to the `auditors:` list in `.gaia/audit-ci.yml`: `name`, `globs`, and `audience: adopter`. That list is the only roster: the ownership classifier has no fallback, and a config without an `auditors:` block fails closed. Claimant globs match first-match-wins in roster order, so place the entry where its globs neither shadow nor are shadowed by an earlier member's (see `## Choices to make per member`).
+Add an entry to the `auditors:` list in `.gaia/audit-ci.yml`: `name`, `globs`, and `audience: adopter`, plus the optional `skip_gaia_release_changes` key (see `## Choices to make per member`). That list is the only roster: the ownership classifier has no fallback, and a config without an `auditors:` block fails closed. Claimant globs match first-match-wins in roster order, so place the entry where its globs neither shadow nor are shadowed by an earlier member's (see `## Choices to make per member`).
 
 ### 3. Generate the remit region
 
@@ -70,6 +70,7 @@ A maintainer member takes `audience: maintainer` in step 2, inside the roster's 
 - **Read-only and gating.** Every member only reports: it edits no tracked file, and after a full review it clears or withholds its own marker. Repair belongs to the one verifier-checked fixer the audit loop unit drives, so no roster key grants a member write access. A roster an older release wrote may still carry a retired per-member repair key; the roster readers ignore it and `/update-gaia` drops it when it applies the member's mapping.
 - **`audience`.** `adopter` ships to every clone. `maintainer` entries sit inside `# gaia:maintainer-only` marker comments in the roster, and the release scrub strips them, so an adopter's roster only ever carries adopter-audience members.
 - **Globs and roster order.** Every claimant member's globs are matched first-match-wins over roster order; the default member's globs are a catch-all tier reached only once every claimant has failed to match. Two claimants claiming overlapping territory silently hands a path to whichever member the roster happens to list first, so check for that by eye when adding a member; `.gaia/scripts/verify-audit-roster.sh` asserts remit region parity (each member's agent definition carries exactly its roster globs, in roster order, inside a balanced marker pair), ownerless-path coverage, the `code-audit-` name prefix, and machinery registration. It ships to every clone and the pre-commit hook runs it on a roster commit (step 6); it does not catch overlapping claimant globs.
+- **`skip_gaia_release_changes`.** Set `skip_gaia_release_changes: true`, after the member's `globs`, when its globs would otherwise claim files GAIA ships, so a GAIA update does not dispatch the member for changes it did not author. On a branch that applies a release, a file the manifest lists as `owned` stops matching the member; your own edits to those files still do. Omit it otherwise, and never set it on the default member.
 
 <!-- gaia:maintainer-only:start -->
 ## Local-gate checklist
