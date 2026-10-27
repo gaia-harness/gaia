@@ -404,8 +404,8 @@ audit_shell_paths() {
     . "$library/audit-scope.sh" || exit 9
     audit_scope_init "$root" "$root/.gaia/audit-ci.yml" || exit 9
     audit_scope_release_context "$root" main HEAD
-    git -C "$root" diff --name-only --no-renames --diff-filter=d "$(git -C "$root" merge-base main HEAD)" HEAD \
-      | grep -E "\.(sh|bats)$" | audit_owners_for_paths
+    git -C "$root" diff --name-only -z --no-renames --diff-filter=d "$(git -C "$root" merge-base main HEAD)" HEAD \
+      | tr "\0" "\n" | grep -E "\.(sh|bats)$" | audit_owners_for_paths
   ' _ "$REPO_ROOT/.claude/hooks/lib" "$FIXTURE" | awk -F'\t' '$2 == "fixture-shell" { print $1 }' | sort
 }
 

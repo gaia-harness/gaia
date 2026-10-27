@@ -383,14 +383,14 @@ mutated_digest_library() {
 # ---------- every branch-diff consumer arms the context ------------------------
 
 # Digest-only callers: their classification happens inside audit-digest.sh,
-# which arms itself. resolve-audit-base.sh's only classifier reference is a
-# presence probe.
+# which arms itself. resolve-audit-base-context.sh's only classifier reference
+# is a presence probe.
 DIGEST_ONLY_CALLERS='.claude/hooks/post-audit-status.sh
 .gaia/scripts/audit-fix-verify.sh
 .gaia/scripts/audit-member-digest.sh
 .gaia/scripts/audit-scope-digest.sh
-.gaia/scripts/audit-write-clearance.sh
-.github/audit/resolve-audit-base.sh'
+.gaia/scripts/audit-write-clearance-gates.sh
+.github/audit/resolve-audit-base-context.sh'
 # By design: verify-audit-roster.sh classifies the whole tree with no diff, and
 # audit-dispositions-check.sh asks ownership only for triage marks, which only
 # the maintainer members write.
