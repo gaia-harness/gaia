@@ -11,15 +11,11 @@ Contents: Reach for the Platform First; Pre-Flight Gates; Memoization: compiler-
 
 ## Reach for the Platform First
 
-Before installing a package or hand-rolling a primitive, walk this ladder and stop at the first hit:
+Before installing a package or hand-rolling a primitive, follow the reuse order in Simplicity First (`.claude/rules/coding-guidelines.md`). On the frontend:
 
-1. **Existing project code**, a component, hook, or util already covers it (form inputs → Gate 2).
-2. **Web platform**, a browser API or native element does the job (`Intl`, `URL`, `structuredClone()`, `<dialog>`, modern CSS).
-3. **Already-installed dependency**, check `package.json` before adding a sibling that does the same job. For component/hook traps Claude often hand-rolls (client-only/useHydrated, sse, debounce-fetcher), see the remix-utils decision map at `wiki/dependencies/remix-utils.md` before reinventing.
-4. **New dependency**, only when 1-3 genuinely fall short; the added weight has to earn its place.
-5. **Custom code**, last resort, kept minimal.
-
-Reaching for the platform replaces a needless dependency or bespoke widget; it never overrides accessibility, input validation, or an existing project component (a wrapper exists for a reason).
+- **Existing project code** covers form inputs (Gate 2); a project component wins over a native element, since a wrapper exists for a reason.
+- **Web platform** means a browser API or native element (`Intl`, `URL`, `structuredClone()`, `<dialog>`, modern CSS).
+- **Installed dependency:** for component/hook traps Claude often hand-rolls (client-only/useHydrated, sse, debounce-fetcher), see the remix-utils decision map at `wiki/dependencies/remix-utils.md` before reinventing.
 
 ## Pre-Flight Gates
 
