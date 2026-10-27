@@ -83,6 +83,12 @@ AUDIT_GLOBAL_RULES_PATHS="$(cat <<'EOF'
 .gaia/scripts/audit-light-route.sh
 .claude/hooks/lib/audit-light-route-lib.sh
 .claude/hooks/lib/audit-quick-classify-lib.sh
+.claude/hooks/lib/audit-quick-classify-paths-lib.sh
+.claude/hooks/lib/audit-quick-classify-lines-lib.sh
+.claude/hooks/lib/audit-quick-classify-awk-lexer-lib.sh
+.claude/hooks/lib/audit-quick-classify-awk-nested-lib.sh
+.claude/hooks/lib/audit-quick-classify-awk-helpers-lib.sh
+.claude/hooks/lib/audit-quick-classify-awk-main-lib.sh
 .gaia/scripts/audit-light-mark.sh
 .claude/agents/audit-light-reviewer.md
 # gaia:maintainer-only:start

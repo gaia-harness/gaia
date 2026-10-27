@@ -7,7 +7,6 @@
     ".claude/hooks/capture-red-observations.sh": 459,
     ".claude/hooks/lib/audit-base-provenance.sh": 417,
     ".claude/hooks/lib/audit-branch-patch.sh": 564,
-    ".claude/hooks/lib/audit-quick-classify-lib.sh": 1289,
     ".claude/hooks/lib/audit-scope.sh": 498,
     ".claude/hooks/lib/gaia-packages.sh": 405,
     ".claude/hooks/lib/repo-scope.sh": 1095,

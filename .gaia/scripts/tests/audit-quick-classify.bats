@@ -449,20 +449,93 @@ render_wrapped() {
   [ "$last_router" -lt "$first_classifier" ]
 }
 
+# The siblings the library loads beside itself, in its load order.
+quick_siblings() {
+  printf '%s\n' audit-quick-classify-paths-lib.sh audit-quick-classify-awk-lexer-lib.sh \
+    audit-quick-classify-awk-nested-lib.sh audit-quick-classify-awk-helpers-lib.sh \
+    audit-quick-classify-awk-main-lib.sh audit-quick-classify-lines-lib.sh
+}
+
+# The library and every sibling it loads, as absolute paths.
+quick_library_files() {
+  local sibling
+  printf '%s\n' "$LIBRARY"
+  for sibling in $(quick_siblings); do
+    printf '%s\n' "$REPO_ROOT/.claude/hooks/lib/$sibling"
+  done
+}
+
 # bats test_tags=whole-tree
 @test "the library holds no cd, no GAIA or CI variable read, no machine-local path and no working-document id" {
-  grep -nE '(^|[;&|[:space:]])cd[[:space:]]' "$LIBRARY" && return 1
-  grep -nE '\$\{?(GAIA_[A-Za-z0-9_]*|CI)([^A-Za-z0-9_]|$)' "$LIBRARY" && return 1
-  grep -nF '.gaia/local' "$LIBRARY" && return 1
-  grep -nE '(SPEC|UAT|PLAN)-[0-9]|(^|[^A-Za-z])[A-Z]{2,5}-[0-9]{3}([^0-9]|$)|#[0-9]{2,}' "$LIBRARY" && return 1
+  local files=() file
+  for file in $(quick_library_files); do
+    [ -f "$file" ] || { printf 'missing %s\n' "$file" >&2; return 1; }
+    files[${#files[@]}]="$file"
+  done
+  [ "${#files[@]}" -eq "$(quick_library_files | grep -c .)" ]
+  grep -nE '(^|[;&|[:space:]])cd[[:space:]]' "${files[@]}" && return 1
+  grep -nE '\$\{?(GAIA_[A-Za-z0-9_]*|CI)([^A-Za-z0-9_]|$)' "${files[@]}" && return 1
+  grep -nF '.gaia/local' "${files[@]}" && return 1
+  grep -nE '(SPEC|UAT|PLAN)-[0-9]|(^|[^A-Za-z])[A-Z]{2,5}-[0-9]{3}([^0-9]|$)|#[0-9]{2,}' "${files[@]}" && return 1
   true
 }
 
 # bats test_tags=whole-tree
 @test "the library is shellcheck clean" {
   command -v shellcheck >/dev/null 2>&1 || skip "shellcheck not available"
-  run shellcheck -x "$LIBRARY"
+  # shellcheck disable=SC2046
+  run shellcheck -x $(quick_library_files)
   [ "$status" -eq 0 ] || { printf '%s\n' "$output" >&2; return 1; }
+}
+
+# bats test_tags=whole-tree
+@test "the line program is the awk fragments joined in their documented order, each from its own file" {
+  local directory="$REPO_ROOT/.claude/hooks/lib" variable file expected_first value checked=0 newline='
+'
+  [ "$(quick_siblings | grep -c .)" -eq "$(find "$directory" -name 'audit-quick-classify-*-lib.sh' | grep -c .)" ]
+  while read -r variable file expected_first; do
+    value="${!variable}"
+    [ -n "$value" ] || { printf '%s is empty\n' "$variable" >&2; return 1; }
+    case "$value" in
+      "$expected_first"*) ;;
+      *) printf '%s does not start with %s\n' "$variable" "$expected_first" >&2; return 1 ;;
+    esac
+    case "$value" in
+      *"$newline") ;;
+      *) printf '%s lost its trailing newline\n' "$variable" >&2; return 1 ;;
+    esac
+    grep -qF "read -r -d '' $variable <<'AWK'" "$directory/$file" ||
+      { printf '%s is not assigned in %s\n' "$variable" "$file" >&2; return 1; }
+    checked=$((checked + 1))
+  done <<'EOF'
+_QUICK_AWK_LEXER audit-quick-classify-awk-lexer-lib.sh function trim(
+_QUICK_AWK_NESTED audit-quick-classify-awk-nested-lib.sh # ---- nested-element pass
+_QUICK_AWK_HELPERS audit-quick-classify-awk-helpers-lib.sh # ---- TSX line helpers
+_QUICK_AWK_MAIN audit-quick-classify-awk-main-lib.sh # ---- story lines
+EOF
+  [ "$checked" -eq "$(quick_siblings | grep -c -- '-awk-')" ]
+  [ "$_QUICK_LINE_PROGRAM" = "$_QUICK_AWK_LEXER$_QUICK_AWK_NESTED$_QUICK_AWK_HELPERS$_QUICK_AWK_MAIN" ]
+}
+
+# bats test_tags=whole-tree
+@test "a missing sibling leaves the library unusable, loudly, with the source failing" {
+  local copy sibling file checked=0
+  copy="$BATS_TEST_TMPDIR/library"
+  for sibling in $(quick_siblings); do
+    rm -rf "$copy"
+    mkdir -p "$copy"
+    for file in $(quick_library_files); do cp "$file" "$copy/"; done
+    rm "$copy/$sibling"
+    run --separate-stderr bash -c '. "$1"; loaded=$?
+      for entry in quick_classify_paths quick_classify_lines quick_story_component quick_path_class; do
+        command -v "$entry" >/dev/null 2>&1 && exit 9
+      done
+      exit "$loaded"' _ "$copy/audit-quick-classify-lib.sh"
+    [ "$status" -eq 1 ] || { printf 'without %s: status %s\n' "$sibling" "$status" >&2; return 1; }
+    [[ "$stderr" == *"the quick classifier is unusable"* ]] || { printf 'without %s: no stderr line\n' "$sibling" >&2; return 1; }
+    checked=$((checked + 1))
+  done
+  [ "$checked" -gt 0 ] && [ "$checked" -eq "$(quick_siblings | grep -c .)" ]
 }
 
 # --- path shapes ------------------------------------------------------------
