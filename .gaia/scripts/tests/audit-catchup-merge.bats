@@ -240,7 +240,7 @@ digest_engine_hashing_head_content() {
   mkdir -p "$scratch/.claude/hooks"
   cp -R "$LSB_ROOT/.claude/hooks/lib" "$scratch/.claude/hooks/lib"
   ln -s "$LSB_ROOT/.gaia" "$scratch/.gaia"
-  cp "$LSB_ROOT/.claude/hooks/pr-merge-audit-check.sh" "$scratch/.claude/hooks/pr-merge-audit-check.sh"
+  cp "$LSB_ROOT/.claude/hooks"/pr-merge-audit-check*.sh "$scratch/.claude/hooks/"
   library="$scratch/.claude/hooks/lib/audit-digest.sh"
   sed -i.original 's|audit_branch_patch_identities "\$root" "\$merge_base" "\$target" >"\$work/identities"|_head_content_identities "\$root" "\$target" >"\$work/identities"|' "$library"
   if cmp -s "$library" "$library.original"; then
@@ -520,17 +520,22 @@ assert_open_finding_survives() {
 # to the sandbox's libraries and scripts, with one source mutation applied.
 # Prints the copy's path; fails when the mutation changed nothing.
 mutant_hook() {
-  local scratch="$BATS_TEST_TMPDIR/mutant-$1" copy
+  local scratch="$BATS_TEST_TMPDIR/mutant-$1" source changed=0
   mkdir -p "$scratch/.claude/hooks"
   ln -s "$LSB_ROOT/.claude/hooks/lib" "$scratch/.claude/hooks/lib"
   ln -s "$LSB_ROOT/.gaia" "$scratch/.gaia"
-  copy="$scratch/.claude/hooks/$1"
-  sed "$2" "$LSB_ROOT/.claude/hooks/$1" >"$copy"
-  if cmp -s "$copy" "$LSB_ROOT/.claude/hooks/$1"; then
+  # A hook split into siblings (<hook>-*.sh) is one program: carry them all and
+  # apply the mutation wherever its text now lives.
+  for source in "$LSB_ROOT/.claude/hooks/$1" "$LSB_ROOT/.claude/hooks/${1%.sh}"-*.sh; do
+    [ -f "$source" ] || continue
+    sed "$2" "$source" >"$scratch/.claude/hooks/${source##*/}"
+    cmp -s "$scratch/.claude/hooks/${source##*/}" "$source" || changed=1
+  done
+  if [ "$changed" -eq 0 ]; then
     printf 'the mutation left %s unchanged\n' "$1" >&2
     return 1
   fi
-  printf '%s\n' "$copy"
+  printf '%s\n' "$scratch/.claude/hooks/$1"
 }
 
 # local_base_gate / local_base_poster: the gate and the poster measuring the

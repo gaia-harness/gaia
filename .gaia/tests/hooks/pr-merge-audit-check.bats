@@ -56,6 +56,7 @@ setup() {
   . "$(cd "$BATS_TEST_DIRNAME/../../.." && pwd)/.gaia/tests/helpers/catchup-fixture.sh"
   . "$BATS_TEST_DIRNAME/helpers/package-fixture.sh"
   HOOK_ABSOLUTE_PATH=$(cd "$BATS_TEST_DIRNAME/../../../.claude/hooks" && pwd)/pr-merge-audit-check.sh
+  . "$BATS_TEST_DIRNAME/helpers/merge-gate-text.sh"
   SETTINGS_ABSOLUTE_PATH=$(cd "$BATS_TEST_DIRNAME/../../../.claude" && pwd)/settings.json
   RESOLVER_ABSOLUTE_PATH=$(cd "$BATS_TEST_DIRNAME/../../../.gaia/scripts" && pwd)/resolve-audit-members.sh
   LIBRARY_DIRECTORY=$(cd "$BATS_TEST_DIRNAME/../../../.claude/hooks/lib" && pwd)
@@ -1523,7 +1524,7 @@ install_recording_hook_copy() {
   RECORD_FILE="$BATS_TEST_TMPDIR/arbp-argv.txt"
   : > "$RECORD_FILE"
   mkdir -p "$REPO/.claude/hooks/lib"
-  cp "$HOOK_ABSOLUTE_PATH" "$REPO/.claude/hooks/pr-merge-audit-check.sh"
+  cp "$HOOK_ABSOLUTE_PATH" "${HOOK_ABSOLUTE_PATH%.sh}"-*.sh "$REPO/.claude/hooks/"
   cp "$LIBRARY_DIRECTORY"/*.sh "$REPO/.claude/hooks/lib/"
   cat > "$REPO/.claude/hooks/lib/audit-base-provenance.sh" <<EOF
 #!/usr/bin/env bash
@@ -1569,7 +1570,7 @@ run_recording_hook() {
 }
 
 @test "the gate emits no permissionDecision allow at all" {
-  grep -qF 'permissionDecision: "allow"' "$HOOK_ABSOLUTE_PATH" && return 1
+  merge_gate_text "$HOOK_ABSOLUTE_PATH" | grep -qF 'permissionDecision: "allow"' && return 1
   true
 }
 
@@ -1871,7 +1872,7 @@ merge 999 --squash'
 
 @test "every audit_resolve_base_provenance call in the gate source passes an empty supplied base" {
   local calls bad
-  calls="$(grep -n 'audit_resolve_base_provenance ' "$HOOK_ABSOLUTE_PATH" | grep -v '^[0-9]*:[[:space:]]*#')"
+  calls="$(merge_gate_text "$HOOK_ABSOLUTE_PATH" | grep -n 'audit_resolve_base_provenance ' | grep -v '^[0-9]*:[[:space:]]*#')"
   [ -n "$calls" ] || return 1
   bad="$(printf '%s\n' "$calls" \
     | grep -vF 'audit_resolve_base_provenance "$tree_root" pr-record "" "$pr_record_base"' || true)"
@@ -2788,6 +2789,49 @@ run_merge_hook_library_absent() {
   run bash -c 'cd "$1" && printf %s "$2" | bash "$3"' _ "$BATS_TEST_TMPDIR" "$payload" "$scratch_hooks/pr-merge-audit-check.sh"
   [ "$status" -eq 2 ]
   grep -qF 'BLOCKED: pr-merge-audit-check.sh cannot load lib/hook-payload.sh' <<<"$output"
+}
+
+# --- the gate's own siblings ---
+
+# bats test_tags=whole-tree
+@test "a missing or cut-short gate sibling denies the merge, never allows it" {
+  # The gate's checks live in siblings it sources from its own directory. A
+  # copy missing one, or holding one that stops before its end, must deny: a
+  # gate that ran without a sibling's checks, or fell off the end of a file,
+  # would exit 0 with no decision, which is an allow.
+  local hooks_directory scratch_hooks payload sibling_file sibling_name checked=0
+  hooks_directory=$(cd "$BATS_TEST_DIRNAME/../../../.claude/hooks" && pwd)
+  scratch_hooks="$BATS_TEST_TMPDIR/sibling-hooks"
+  commit_files ".claude/skills/release-notes/SKILL.md" "updated"
+  payload=$(jq -nc --arg command 'gh pr merge 30 --squash --delete-branch' '{tool_name: "Bash", tool_input: {command: $command}}')
+  for sibling_file in "$hooks_directory"/pr-merge-audit-check-*.sh; do
+    [ -f "$sibling_file" ] || continue
+    sibling_name="${sibling_file##*/}"
+    rm -rf "$scratch_hooks"
+    mkdir -p "$scratch_hooks"
+    cp -R "$hooks_directory/." "$scratch_hooks/"
+    # Positive control: the full copy allows this out-of-scope diff, so a deny
+    # below is the sibling's doing and not the fixture's.
+    invoke_hook_in "$REPO" "$payload" "$scratch_hooks/pr-merge-audit-check.sh"
+    [ "$status" -eq 0 ] || return 1
+    [[ "$output" != *'"permissionDecision": "deny"'* ]] || { printf 'control denied for %s: %s\n' "$sibling_name" "$output" >&2; return 1; }
+    # Cut short to its header: it defines nothing and decides nothing.
+    head -n 12 "$sibling_file" > "$scratch_hooks/$sibling_name"
+    invoke_hook_in "$REPO" "$payload" "$scratch_hooks/pr-merge-audit-check.sh"
+    [ "$status" -eq 0 ] || return 1
+    [[ "$output" == *'"permissionDecision": "deny"'* ]] || { printf '%s cut short: no deny: %s\n' "$sibling_name" "$output" >&2; return 1; }
+    grep -qF "cannot load the gate sibling" <<<"$output" || return 1
+    grep -qF "$sibling_name" <<<"$output" || return 1
+    rm -f "$scratch_hooks/$sibling_name"
+    invoke_hook_in "$REPO" "$payload" "$scratch_hooks/pr-merge-audit-check.sh"
+    [ "$status" -eq 0 ] || return 1
+    [[ "$output" == *'"permissionDecision": "deny"'* ]] || { printf '%s missing: no deny: %s\n' "$sibling_name" "$output" >&2; return 1; }
+    grep -qF "$sibling_name': it is missing" <<<"$output" || return 1
+    checked=$((checked + 1))
+  done
+  # Non-vacuity: every sibling the loader names was exercised.
+  [ "$checked" -gt 0 ]
+  [ "$checked" -eq "$(grep -cE '^  [a-z]+:[a-z_]*$' "$hooks_directory/pr-merge-audit-check.sh")" ]
 }
 
 @test "a non-arming Bash payload spawns exactly one jq process" {

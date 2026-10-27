@@ -214,7 +214,7 @@ set_frontmatter_line() {
   local scratch="$BATS_TEST_TMPDIR/roster-scratch" file
   mkdir -p "$scratch/.gaia/scripts" "$scratch/.claude/hooks/lib" "$scratch/.claude/agents"
   cp "$REPO_ROOT/.gaia/audit-ci.yml" "$scratch/.gaia/audit-ci.yml"
-  cp "$REPO_ROOT/.gaia/scripts/verify-audit-roster.sh" "$scratch/.gaia/scripts/verify-audit-roster.sh"
+  cp "$REPO_ROOT"/.gaia/scripts/verify-audit-roster*.sh "$scratch/.gaia/scripts/"
   for file in "$REPO_ROOT"/.claude/hooks/lib/*; do
     [ -f "$file" ] && cp "$file" "$scratch/.claude/hooks/lib/"
   done

@@ -20,6 +20,10 @@ setup() {
   PROVENANCE_LIBRARY="$REPO_ROOT/.claude/hooks/lib/audit-base-provenance.sh"
   RESOLVER="$REPO_ROOT/.gaia/scripts/resolve-audit-members.sh"
   HOOK="$REPO_ROOT/.claude/hooks/pr-merge-audit-check.sh"
+  # The gate's whole text, the hook and its siblings, for the structural reads.
+  . "$THIS_DIRECTORY/helpers/merge-gate-text.sh"
+  HOOK_TEXT="$BATS_TEST_TMPDIR/merge-gate-text.sh"
+  merge_gate_text "$HOOK" > "$HOOK_TEXT"
   # One entry per arm of the allowlist, not just the first. The uniqueness
   # invariant below is what stops a second copy of this set appearing in another
   # tracked script and drifting from this one, and an arm it does not name is an
@@ -236,9 +240,9 @@ last_definition() {
 }
 
 @test "pr-merge-audit-check.sh sources audit-scope.sh and audit-machinery.sh, and calls audit_scope_init once" {
-  grep -qF -- "audit-scope.sh" "$HOOK" || return 1
-  grep -qF -- "audit-machinery.sh" "$HOOK" || return 1
-  count="$(count_invocations "$HOOK" audit_scope_init)"
+  grep -qF -- "audit-scope.sh" "$HOOK_TEXT" || return 1
+  grep -qF -- "audit-machinery.sh" "$HOOK_TEXT" || return 1
+  count="$(count_invocations "$HOOK_TEXT" audit_scope_init)"
   [ "$count" -eq 1 ]
 }
 
@@ -249,7 +253,7 @@ last_definition() {
   # re-source or re-init. Grep each consumer's post-init body for a second
   # audit_scope_init call is already covered above (count -eq 1); this test
   # additionally proves the dispatch loop itself never calls it.
-  for consumer_file in "$RESOLVER" "$HOOK"; do
+  for consumer_file in "$RESOLVER" "$HOOK_TEXT"; do
     dispatch_loop="$(awk '/while IFS= read -r path; do/,/^done/' "$consumer_file")"
     [ -z "$dispatch_loop" ] && continue
     grep -qF "audit_scope_init" <<<"$dispatch_loop" && return 1
@@ -272,7 +276,7 @@ last_definition() {
 @test "the out-of-scope allowlist is defined, and the self-modification classifier is gone from the library and the gate" {
   grep -qF "audit_out_of_scope_allowlisted() {" "$SCOPE_LIBRARY" || return 1
   grep -qF "audit_self_mod_classify" "$SCOPE_LIBRARY" && return 1
-  grep -qE "audit_self_mod_classify|check_self_mod_only_update_pr|self_mod_only" "$HOOK" && return 1
+  grep -qE "audit_self_mod_classify|check_self_mod_only_update_pr|self_mod_only" "$HOOK_TEXT" && return 1
   true
 }
 
@@ -515,7 +519,7 @@ golden_run_hook() {
 @test "absent classifier module: a copied hook with no lib/ directory denies, never allows" {
   SANDBOX=$(mktemp -d -t audit-scope-absent-XXXXXX)
   mkdir -p "$SANDBOX/.claude/hooks"
-  cp "$HOOK" "$SANDBOX/.claude/hooks/pr-merge-audit-check.sh"
+  cp "$HOOK" "${HOOK%.sh}"-*.sh "$SANDBOX/.claude/hooks/"
   chmod +x "$SANDBOX/.claude/hooks/pr-merge-audit-check.sh"
 
   # Seed the libraries the gate reaches BEFORE its classifier load, and no
