@@ -251,8 +251,8 @@ fi
 # deliberate fail-closed path distinct from every other guard in this hook
 # (which fail OPEN on an unusable lookup).
 #
-# repo-scope.sh joined this list when the command-binding predicate stopped
-# being a bypass relaxation and became a conjunct on EVERY clearance permit.
+# repo-scope.sh and its three siblings joined this list when the command-binding
+# predicate stopped being a bypass relaxation and became a conjunct on EVERY clearance permit.
 # Its absence makes gate_command_names_the_record_pr return 1 above the scanner
 # run, which used to mean only "this relaxation does not fire" and now means
 # every permit denies. Left out of this guard the denial surfaces through the
@@ -271,10 +271,13 @@ _branch_patch_library="$_library_directory/audit-branch-patch.sh"
 _version_library="$_library_directory/gaia-version.sh"
 _provenance_library="$_library_directory/audit-base-provenance.sh"
 _repo_scope_library="$_library_directory/repo-scope.sh"
+_repo_scope_segment_library="$_library_directory/repo-scope-segment.sh"
+_repo_scope_scan_library="$_library_directory/repo-scope-scan.sh"
+_repo_scope_home_library="$_library_directory/repo-scope-home.sh"
 _cross_repo_library="$_library_directory/cross-repo-refusal.sh"
 _bypass_stamp_library="$_library_directory/audit-bypass-stamp.sh"
-if [ -z "$_library_directory" ] || [ ! -f "$_audit_scope_library" ] || [ ! -f "$_machinery_library" ] || [ ! -f "$_digest_library" ] || [ ! -f "$_branch_patch_library" ] || [ ! -f "$_version_library" ] || [ ! -f "$_provenance_library" ] || [ ! -f "$_repo_scope_library" ] || [ ! -f "$_cross_repo_library" ] || [ ! -f "$_bypass_stamp_library" ]; then
-  jq -n --arg reason "PR merge gate: cannot load the ownership classifier, the digest engine, the branch-own patch library, the version normalizer, the base provenance resolver, the command scanner, the fork check, or the bypass stamp (.claude/hooks/lib/audit-scope.sh, .claude/hooks/lib/audit-machinery.sh, .claude/hooks/lib/audit-digest.sh, .claude/hooks/lib/audit-branch-patch.sh, .claude/hooks/lib/gaia-version.sh, .claude/hooks/lib/audit-base-provenance.sh, .claude/hooks/lib/repo-scope.sh, .claude/hooks/lib/cross-repo-refusal.sh, and .claude/hooks/lib/audit-bypass-stamp.sh must all exist and be readable). Every marker check below is keyed to a member's branch-own digest and to a version literal this gate compares for equality against the stamped one; this gate's out-of-scope bypass depends on the classifier to know what a changed path is, and on the provenance resolver to know what base its change set is read against; every permit this gate issues is bound to the pull request the merge names, which it reads through the command scanner; a fork pull request is refused through the fork check; and a bypass allow posts its GAIA-Audit status through the stamp. So it denies rather than guess. Restore every file named above (they ship with the framework; a missing or corrupted checkout is the usual cause) and retry.${gate_arm_note}" '{
+if [ -z "$_library_directory" ] || [ ! -f "$_audit_scope_library" ] || [ ! -f "$_machinery_library" ] || [ ! -f "$_digest_library" ] || [ ! -f "$_branch_patch_library" ] || [ ! -f "$_version_library" ] || [ ! -f "$_provenance_library" ] || [ ! -f "$_repo_scope_library" ] || [ ! -f "$_repo_scope_segment_library" ] || [ ! -f "$_repo_scope_scan_library" ] || [ ! -f "$_repo_scope_home_library" ] || [ ! -f "$_cross_repo_library" ] || [ ! -f "$_bypass_stamp_library" ]; then
+  jq -n --arg reason "PR merge gate: cannot load the ownership classifier, the digest engine, the branch-own patch library, the version normalizer, the base provenance resolver, the command scanner, the fork check, or the bypass stamp (.claude/hooks/lib/audit-scope.sh, .claude/hooks/lib/audit-machinery.sh, .claude/hooks/lib/audit-digest.sh, .claude/hooks/lib/audit-branch-patch.sh, .claude/hooks/lib/gaia-version.sh, .claude/hooks/lib/audit-base-provenance.sh, .claude/hooks/lib/repo-scope.sh, .claude/hooks/lib/repo-scope-segment.sh, .claude/hooks/lib/repo-scope-scan.sh, .claude/hooks/lib/repo-scope-home.sh, .claude/hooks/lib/cross-repo-refusal.sh, and .claude/hooks/lib/audit-bypass-stamp.sh must all exist and be readable). Every marker check below is keyed to a member's branch-own digest and to a version literal this gate compares for equality against the stamped one; this gate's out-of-scope bypass depends on the classifier to know what a changed path is, and on the provenance resolver to know what base its change set is read against; every permit this gate issues is bound to the pull request the merge names, which it reads through the command scanner; a fork pull request is refused through the fork check; and a bypass allow posts its GAIA-Audit status through the stamp. So it denies rather than guess. Restore every file named above (they ship with the framework; a missing or corrupted checkout is the usual cause) and retry.${gate_arm_note}" '{
     hookSpecificOutput: {
       hookEventName: "PreToolUse",
       permissionDecision: "deny",

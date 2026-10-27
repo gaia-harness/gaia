@@ -12,7 +12,7 @@
     ".claude/hooks/lib/gaia-packages.sh": 405,
     ".claude/hooks/local-janitor.sh": 528,
     ".claude/hooks/post-audit-status.sh": 653,
-    ".claude/hooks/pr-merge-audit-check.sh": 1550,
+    ".claude/hooks/pr-merge-audit-check.sh": 1553,
     ".claude/hooks/provision-worktree.sh": 615,
     ".claude/hooks/red-verify-commit-check.sh": 501,
     ".claude/hooks/workflow-doctrine-inject.sh": 586,

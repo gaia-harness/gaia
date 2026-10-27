@@ -711,6 +711,63 @@ run_staged_merge_hook() {
   return 0
 }
 
+# repo-scope.sh pulls its three siblings in through further sources, past the
+# parse-check on repo-scope.sh itself, so each needs its own conflicted case.
+@test "a repo-scope sibling holds conflict markers: exit 0, the merge is not denied" {
+  local sibling
+  for sibling in repo-scope-segment.sh repo-scope-scan.sh repo-scope-home.sh; do
+    write_sidecar
+    export FAKE_GH_STATE
+    stage_merge_hook
+    cp "${REPO_SCOPE_ABSOLUTE_PATH%/*}/$sibling" "$REPO/.claude/hooks/lib/$sibling"
+    write_conflicted_library "$REPO/.claude/hooks/lib/$sibling"
+
+    run_staged_merge_hook
+    [ "$status" -eq 0 ] || { echo "$sibling: status $status"; return 1; }
+    grep -qF -- '"permissionDecision"' <<<"$output" && return 1
+    cp "${REPO_SCOPE_ABSOLUTE_PATH%/*}/$sibling" "$REPO/.claude/hooks/lib/$sibling"
+  done
+  return 0
+}
+
+@test "a repo-scope sibling is missing: exit 0, the merge is not denied" {
+  local sibling
+  for sibling in repo-scope-segment.sh repo-scope-scan.sh repo-scope-home.sh; do
+    write_sidecar
+    export FAKE_GH_STATE
+    stage_merge_hook
+    rm -f "$REPO/.claude/hooks/lib/$sibling"
+
+    run_staged_merge_hook
+    [ "$status" -eq 0 ] || { echo "$sibling: status $status"; return 1; }
+    grep -qF -- '"permissionDecision"' <<<"$output" && return 1
+    cp "${REPO_SCOPE_ABSOLUTE_PATH%/*}/$sibling" "$REPO/.claude/hooks/lib/$sibling"
+  done
+  return 0
+}
+
+# Pinned to stock bash 3.2, where an unbracketed failed source abandons the
+# shell before the load's `|| true`.
+@test "a repo-scope sibling holds conflict markers, under stock /bin/bash: exit 0, the merge is not denied" {
+  [ -x /bin/bash ] || skip "no /bin/bash"
+  local sibling json
+  json=$(jq -n --arg command_line "gh pr merge 42 --squash --delete-branch" \
+    '{tool_name: "Bash", tool_input: {command: $command_line}}')
+  for sibling in repo-scope-segment.sh repo-scope-scan.sh repo-scope-home.sh; do
+    write_sidecar
+    export FAKE_GH_STATE
+    stage_merge_hook
+    cp "${REPO_SCOPE_ABSOLUTE_PATH%/*}/$sibling" "$REPO/.claude/hooks/lib/$sibling"
+    write_conflicted_library "$REPO/.claude/hooks/lib/$sibling"
+
+    run bash -c 'cd "$1" && printf %s "$2" | /bin/bash "$3"' _ "$REPO" "$json" "$STAGED_HOOK"
+    [ "$status" -eq 0 ] || { echo "$sibling: status $status"; return 1; }
+    grep -qF -- '"permissionDecision"' <<<"$output" && return 1
+    cp "${REPO_SCOPE_ABSOLUTE_PATH%/*}/$sibling" "$REPO/.claude/hooks/lib/$sibling"
+  done
+  return 0
+}
+
 # The pre-gate load, and the widest exposure of the hooks that share it:
 # this one is PreToolUse and the load sits ahead of the arming gate, so an
 # unparseable verb-arming.sh denied EVERY Bash tool call rather than merges

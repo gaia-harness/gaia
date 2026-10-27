@@ -328,12 +328,18 @@ _gaia_repo_scope_opens_group() {
 # of them through this one source. A sibling that is missing or does not parse
 # leaves its functions undefined, and a call to one returns non-zero, which the
 # guard reads as home (enforce) and the act-on-home entry points read as a
-# reason to decline.
+# reason to decline. Errexit is suspended across the three sources for the
+# reason given at _gaia_repo_scope_load_main_root.
 _gaia_repo_scope_directory="${BASH_SOURCE[0]%/*}"
 [ "$_gaia_repo_scope_directory" != "${BASH_SOURCE[0]}" ] || _gaia_repo_scope_directory=.
+_gaia_repo_scope_errexit_was=0
+case $- in *e*) _gaia_repo_scope_errexit_was=1 ;; esac
+set +e
 # shellcheck source=/dev/null
-. "$_gaia_repo_scope_directory/repo-scope-segment.sh"
+. "$_gaia_repo_scope_directory/repo-scope-segment.sh" 2>/dev/null
 # shellcheck source=/dev/null
-. "$_gaia_repo_scope_directory/repo-scope-scan.sh"
+. "$_gaia_repo_scope_directory/repo-scope-scan.sh" 2>/dev/null
 # shellcheck source=/dev/null
-. "$_gaia_repo_scope_directory/repo-scope-home.sh"
+. "$_gaia_repo_scope_directory/repo-scope-home.sh" 2>/dev/null
+if [ "$_gaia_repo_scope_errexit_was" = 1 ]; then set -e; fi
+unset _gaia_repo_scope_errexit_was
