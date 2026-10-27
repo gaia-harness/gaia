@@ -99,6 +99,7 @@ Master catalog of every page in the wiki. Newly created pages must be added here
 - [[Composite Action Step Timeouts]]: Node-provisioning steps are bounded by their owning job's `timeout-minutes`; a step-level cap is a per-workflow choice, not a rule.
 - [[Code Audit Team]]: config-driven auditor roster + dispatch resolver; AND-aggregation across dispatched members at the merge gate.
 - [[Local Bundle Sync (Decision)|Local Bundle Sync]]: a local build is recorded in a sidecar file and a prerelease `-dev` tag, never a version suffix, so every version-file reader stays untouched.
+- [[Shared Codify Declines]]: a `/gaia-codify` decline is one committed file per decline, published through the codify pull request; it lapses by age, a teammate overrides it by approving, and the folder is the adopter's own data.
 - [[Deliberate Configuration Asymmetries]]: config that differs from its siblings on purpose; the `.claude/hooks/` Edit carve-out, the skill `model:` pinning criterion, the non-opt-outable update check, and why the agent-teams flag is not enabled.
 <!-- gaia:maintainer-only:start -->
 - [[CLI-Binary-Split]]
