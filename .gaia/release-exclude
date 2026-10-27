@@ -182,6 +182,11 @@ frontend/.playwright/e2e/react-perf-smoke.spec.ts
 # file excludes, so the store's absence from `.gaia/manifest.json` is a
 # consequence of this line and never the mechanism.
 .gaia/audit-residual-dismissals.jsonl
+# The codify decline folder is the adopter's own data, one file per decline
+# written by /gaia-codify. The machinery ships and the data does not. The
+# manifest is derived by skipping what this file excludes, so the folder's
+# absence from `.gaia/manifest.json` is a consequence of this line.
+.gaia/codify-declines
 # Runs bats under bash 5. Every .bats suite it runs is release-excluded and every shipped mention sits in a maintainer-only block the bundle scrub strips, so it serves only maintainer test runs.
 .gaia/scripts/bats5.sh
 # Assertion-hygiene rule scoped to *.bats files; every .bats suite is release-excluded, so on an adopter clone it guards nothing. Withdrawn with its companion bats5.sh.

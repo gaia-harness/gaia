@@ -397,6 +397,7 @@ unowned:
   # executed by nothing. On an adopter clone it sits under GAIA's own `.gaia/`
   # tree, which needs no entry, so this one ships nowhere.
   - ".gaia/audit-residual-dismissals.jsonl"
+  - ".gaia/codify-declines/**"
   # GAIA's license notice for the files it provides in a generated project:
   # legal text, executed by nothing. It ships, but on an adopter clone it sits
   # under GAIA's own `.gaia/` tree, which needs no entry, so this one ships

@@ -376,8 +376,8 @@
       "match": "exact",
       "kind": "file",
       "scope": "shared",
-      "keyed_by": "singleton per-clone ledger keyed internally by finding_class; atomic replace without a cross-tree lock, so simultaneous writes can drop one decline and re-offer that candidate",
-      "why": "The operator's declines on the machine's codify candidates. The candidate set is the repo's merged-PR window and the nudge it feeds is machine-scoped, so one copy per clone is the only scope at which a decline can suppress what it declined. Shared through the registry-driven symlink, so a decline recorded in a linked worktree lands in the main checkout's copy and survives that worktree's removal.",
+      "keyed_by": "singleton per-clone legacy decline ledger keyed internally by finding_class; read-only for current GAIA",
+      "why": "The legacy per-clone decline ledger. Current GAIA only reads it: each entry lapses once older than the tally window, and a malformed file suppresses nothing. Team declines live in the committed .gaia/codify-declines/ folder. An older GAIA in a sibling worktree can still write this file, so it stays a live keep entry rather than residue: marking it residue would let residue-sweep offer to delete declines that are still honored.",
       "writer": "code",
       "retention": {
         "class": "keep"
@@ -403,7 +403,7 @@
       "kind": "file",
       "scope": "shared",
       "keyed_by": "singleton per-clone snapshot; atomic replace, so a review completed in one tree unconditionally supersedes another's",
-      "why": "What a completed /gaia-codify review saw: the audited-PR denominator, the class inventory, and when it ran, plus the start-of-run tally it was built from. The nudge it silences is machine-scoped like the decline ledger, so one copy per clone is the only scope at which a review can discharge what it reviewed. Shared through the registry-driven symlink, so a review completed in a linked worktree lands in the main checkout's copy and survives that worktree's removal.",
+      "why": "What a completed /gaia-codify review saw: the audited-PR denominator, the class inventory, and when it ran, plus the start-of-run tally it was built from. The snapshot is per-clone because it records what this clone last reviewed and silences this clone's nudge, so one copy per clone is the only scope at which a review can discharge what it reviewed. Shared through the registry-driven symlink, so a review completed in a linked worktree lands in the main checkout's copy and survives that worktree's removal.",
       "writer": "code",
       "retention": {
         "class": "keep"
