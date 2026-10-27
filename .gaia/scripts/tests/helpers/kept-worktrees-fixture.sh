@@ -50,7 +50,10 @@ stage_scripts() {
   cp "$REPO_ROOT/.gaia/scripts/worktree-removal-check.sh" \
     "$REPO_ROOT/.gaia/scripts/kept-worktrees.sh" \
     "$REPO_ROOT/.gaia/scripts/main-root-lib.sh" \
-    "$REPO_ROOT/.gaia/scripts/server-process-lib.sh" "$SCRIPTS/" || return 1
+    "$REPO_ROOT/.gaia/scripts/server-process-lib.sh" \
+    "$REPO_ROOT/.gaia/scripts/server-process-discovery.sh" \
+    "$REPO_ROOT/.gaia/scripts/server-process-stop.sh" \
+    "$REPO_ROOT/.gaia/scripts/server-process-sessions.sh" "$SCRIPTS/" || return 1
   # shellcheck disable=SC2034 # read by the suites that source this file
   CHECK="$SCRIPTS/worktree-removal-check.sh"
   KEPT="$SCRIPTS/kept-worktrees.sh"
