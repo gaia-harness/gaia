@@ -1,7 +1,7 @@
 /**
  * The only threshold definitions for "has a finding class materially risen",
  * shared by trigger evaluation (`codify-tally`) and decline re-surface
- * (`checkDeclineSuppression`). Fixed by design; changing a value here is
+ * (`loadDeclineSources` in `decline-suppression.ts`). Fixed by design; changing a value here is
  * an ask-first decision, not a tuning knob.
  *
  * `TALLY_SCHEMA_VERSION` is bumped whenever the tally's counting semantics

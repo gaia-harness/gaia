@@ -705,6 +705,7 @@
     "wiki/decisions/Quality Gate.md": "wiki-owned",
     "wiki/decisions/React Compiler.md": "wiki-owned",
     "wiki/decisions/shadcn Component Layer.md": "wiki-owned",
+    "wiki/decisions/Shared Codify Declines.md": "wiki-owned",
     "wiki/decisions/Stories as Tests.md": "wiki-owned",
     "wiki/decisions/TDD RED Verification.md": "wiki-owned",
     "wiki/decisions/Thin Routes.md": "wiki-owned",
@@ -764,7 +765,7 @@
     "wiki/overview.md": "wiki-owned",
     "wiki/README.md": "wiki-owned"
   },
-  "generated": "2026-10-26T20:41:22.652Z",
+  "generated": "2026-10-27T03:08:50.473Z",
   "regions": [
     {
       "endMarker": "<!-- gaia:audit-remit:end -->",

@@ -292,6 +292,7 @@ transforms:
           - "wiki/meta" # wiki lint and consolidate write their reports here.
           - "wiki/entities" # an adopter's wiki grows its own entity pages.
           - ".gaia/audit-residual-dismissals.jsonl" # /gaia-residue writes the adopter's store.
+          - ".gaia/codify-declines" # /gaia-codify writes the adopter's declines.
           - ".github/FUNDING.yml" # an adopter may keep their own; `gaia init` deletes only GAIA's.
           - ".claude/gaia-fitness.json" # adopters create their own fitness suppression file.
         line-allowlist:

@@ -5,16 +5,16 @@
  * machine-readable PR-comment blocks of the rolling window) into the candidate
  * list the statusline nudge and `/gaia-codify` consume. No I/O lives
  * here: the caller resolves the PR window, parses the comment blocks, and wires
- * the suppression inputs (promoted rules, the decline ledger) as predicates.
+ * the suppression inputs (promoted rules, declines) as predicates.
  *
  * A finding_class becomes a candidate once it recurs across at least
  * `RECURRENCE_THRESHOLD` DISTINCT PRs, at any severity, is not already covered
- * by a promoted rule, and is not currently suppressed by the decline ledger.
+ * by a promoted rule, and is not currently suppressed by a decline (committed store or legacy ledger).
  * `severity_max` is a running max across the recurrence, not an eligibility
  * gate. A classless finding (the `holistic/unclassified` fallback, or any
  * class outside the built-in and project vocabulary) recurs the same way but
  * routes to the separate `unclassified` signal instead: it is never a
- * candidate and never covered, but it is subject to the decline ledger's
+ * candidate and never covered, but it is subject to a decline's
  * suppression, so a maintainer who seeds the vocabulary a cluster was missing
  * can discharge the signal rather than see it re-surface every tally. Findings repeated within a single PR still collapse to one
  * distinct-PR increment either way.
@@ -24,7 +24,7 @@
  * review snapshot holds the full picture and a class crossing the threshold
  * later reads as a rise rather than a "new pattern". `audited_pr_count` is
  * the window's denominator (`prs.length`), passed to `suppressedClass`
- * alongside each class's own count so the decline ledger can compare shares
+ * alongside each class's own count so a decline can compare shares
  * instead of raw counts.
  */
 import {
@@ -47,9 +47,9 @@ export type ComputeTallyArgs = {
   coveredClass: (findingClass: string) => boolean;
   prs: readonly TallyPrRecord[];
   /**
-   * True when the decline ledger suppresses the class at this PR count out of
+   * True when a decline (committed store or legacy ledger) suppresses the class at this PR count out of
    * this audited-PR denominator (the window's total audited-PR count, passed
-   * unconditionally so the ledger's share-based rule can compare against it).
+   * unconditionally so the share-based rule can compare against it).
    */
   suppressedClass: (
     findingClass: string,
@@ -89,6 +89,8 @@ export type TallyResult = {
   candidate_count: number;
   candidates: TallyCandidate[];
   class_inventory: ClassInventoryEntry[];
+  /** At-threshold, uncovered seeded classes a decline suppresses. */
+  team_declined: TallyCandidate[];
   unclassified: null | UnclassifiedSignal;
   unclassified_window_count: null | number;
   window_days: number;
@@ -250,7 +252,7 @@ type FallbackOutcomeArgs = {
 };
 
 // The classless bucket is never covered and never a candidate, but its
-// surfacing is gated by the decline ledger's suppression like every seeded
+// surfacing is gated by a decline's suppression like every seeded
 // class, and it never joins the inventory of seeded classes.
 const fallbackOutcome = ({
   aggregate,
@@ -274,6 +276,7 @@ const fallbackOutcome = ({
 type SeededEntry = {
   candidate: null | TallyCandidate;
   inventoryEntry: ClassInventoryEntry | null;
+  teamDeclined: null | TallyCandidate;
 };
 
 type SeededEntryArgs = {
@@ -296,23 +299,22 @@ const seededEntry = ({
   suppressed,
 }: SeededEntryArgs): SeededEntry => {
   const eligible = !covered && !suppressed;
+  const entry: TallyCandidate = {
+    area_tags: aggregate.areaTags,
+    distinct_pr_count: distinctPrCount,
+    finding_class: findingClass,
+    is_oracle: isOracle,
+    pr_numbers: aggregate.prNumbers,
+    severity_max: aggregate.severityMax,
+  };
 
   return {
-    candidate:
-      atThreshold && eligible ?
-        {
-          area_tags: aggregate.areaTags,
-          distinct_pr_count: distinctPrCount,
-          finding_class: findingClass,
-          is_oracle: isOracle,
-          pr_numbers: aggregate.prNumbers,
-          severity_max: aggregate.severityMax,
-        }
-      : null,
+    candidate: atThreshold && eligible ? entry : null,
     inventoryEntry:
       distinctPrCount >= 1 && eligible ?
         {distinct_pr_count: distinctPrCount, finding_class: findingClass}
       : null,
+    teamDeclined: atThreshold && !covered && suppressed ? entry : null,
   };
 };
 
@@ -340,10 +342,9 @@ const classOutcome = ({
 }: ClassOutcomeArgs): ClassOutcome => {
   const distinctPrCount = aggregate.prNumbers.length;
   const atThreshold = distinctPrCount >= RECURRENCE_THRESHOLD;
-  // Below-threshold keys are never queried: this run's ledger prune drops any
-  // decline whose class fell below the threshold, so a below-threshold key
-  // has no live decline to honor, and skipping the query avoids one process
-  // spawn per rare class.
+  // Below-threshold keys are never queried: a class under the recurrence
+  // threshold is neither a candidate nor team-declined, so a decline has
+  // nothing to suppress there.
   const suppressed =
     atThreshold ?
       suppressedClass(findingClass, distinctPrCount, auditedPrCount)
@@ -353,6 +354,7 @@ const classOutcome = ({
     return {
       candidate: null,
       inventoryEntry: null,
+      teamDeclined: null,
       ...fallbackOutcome({aggregate, atThreshold, distinctPrCount, suppressed}),
     };
   }
@@ -384,6 +386,7 @@ export const computeTally = ({
 
   const candidates: TallyCandidate[] = [];
   const classInventory: ClassInventoryEntry[] = [];
+  const teamDeclined: TallyCandidate[] = [];
   let unclassified: null | UnclassifiedSignal = null;
   let unclassifiedWindowCount: null | number = null;
 
@@ -398,6 +401,7 @@ export const computeTally = ({
     });
 
     if (outcome.candidate !== null) candidates.push(outcome.candidate);
+    if (outcome.teamDeclined !== null) teamDeclined.push(outcome.teamDeclined);
 
     if (outcome.inventoryEntry !== null) {
       classInventory.push(outcome.inventoryEntry);
@@ -414,39 +418,10 @@ export const computeTally = ({
     candidate_count: candidates.length,
     candidates,
     class_inventory: classInventory,
+    team_declined: teamDeclined,
     unclassified,
     unclassified_window_count: unclassifiedWindowCount,
     window_days: windowDays,
   };
 };
 // tally-semantics:end
-
-/**
- * The set of keys with qualifying recurrence evidence (>= threshold distinct
- * PRs, any severity) in the window, before any suppression/coverage filtering.
- * The ledger-prune pass consumes this so it can drop decline entries whose key
- * no longer recurs.
- *
- * The classless `unclassified` bucket is included on the same terms as every
- * seeded class. It is declinable, so its stored baseline has to be released
- * once the cluster that justified it leaves the window; excluding it here
- * would leave a high-water baseline governing whatever unrelated cluster
- * arrives next. A failed window read never reaches the prune (see the `ghOk`
- * gate in `tally.ts`), so an empty list here means evidence of absence rather
- * than absence of evidence.
- */
-export const windowClasses = (
-  prs: readonly TallyPrRecord[],
-  vocabulary: FindingClassVocabulary = EMPTY_FINDING_CLASS_VOCABULARY
-): string[] => {
-  const byClass = aggregateByClass(prs, vocabulary);
-  const classes: string[] = [];
-
-  for (const [findingClass, aggregate] of byClass) {
-    if (aggregate.prNumbers.length >= RECURRENCE_THRESHOLD) {
-      classes.push(findingClass);
-    }
-  }
-
-  return classes;
-};

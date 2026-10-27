@@ -1140,6 +1140,7 @@ docs/**
 .gaia/cli/*.config.mts
 .gaia/cli/*.config.cjs
 .gaia/cli/*.config.js
+.gaia/codify-declines/**
 # gaia:maintainer-only:end
 ALLOWLIST
 )"

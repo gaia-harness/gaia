@@ -2,7 +2,7 @@
 
 Human-gated codifying for the policy-memory loop. `/gaia-codify` is the ONLY code path that authors or activates anything in this loop, and it runs only under explicit human invocation. For each recurring finding it judges the lowest-context-weight form that fits, checks edit-vs-new first, and recommends exactly one action with rationale. It explains every item in plain language, presents the whole recommended plan once, and asks the human to accept it, change some items, or stop. Nothing is authored or activated unattended.
 
-Contents: Execution model, READ FIRST; Invocation; Fetch the live candidate list; Judge-the-form logic (the heart of the command); Per-form action handling; The prose-rule template (fill in, then write); Unclassified recurrence signal (seed-a-class-or-investigate); Record the review (end of run); Publish approved changes (end of run); Cost record (run end); Guardrails.
+Contents: Execution model, READ FIRST; Invocation; Fetch the live candidate list; Judge-the-form logic (the heart of the command); Per-form action handling; The prose-rule template (fill in, then write); Unclassified recurrence signal (seed-a-class-or-investigate); Record the review (end of run); Publish the run's changes (end of run); Cost record (run end); Guardrails.
 
 v1 owns prose-rule create/edit end to end. Skills and deterministic checks are recommended and scaffolded only (a skill-creator handoff; a hook+script sketch), never auto-authored or auto-activated.
 
@@ -10,7 +10,7 @@ v1 owns prose-rule create/edit end to end. Skills and deterministic checks are r
 
 Execute the playbook yourself in the current conversation. This is an interactive, human-gated flow. The invariant is **no disposition without an explicit human answer**: every candidate's approve / decline / defer / redirect outcome comes from the human, never the agent. Accepting the presented plan as a whole is one explicit answer and counts for every item it covers. Do not dispatch a subagent to make these calls, and do not apply any disposition before the human has answered.
 
-The agent never runs `git add`, `git commit`, or `git push` *while dispositions are collected and applied*: each approve / decline / defer lands in the working tree or the ledger (or persists nothing), and the human owns every call. After the last candidate is dispositioned, one end-of-run publish step (`## Publish approved changes (end of run)`) carries any approved working-tree change through a PR, and merges only on the human's answer. A decline writes one bounded entry to the machine-local, gitignored ledger and nowhere else. A defer persists nothing of its own. Besides the decline ledger, a completed review writes one more machine-local file, the review snapshot, and clears the cached statusline nudge; see `## Record the review (end of run)`.
+The agent never runs `git add`, `git commit`, or `git push` *while dispositions are collected and applied*: each approve / decline / defer lands in the working tree (or persists nothing), and the human owns every call. A decline writes one new file into the committed decline folder, `.gaia/codify-declines/`, on the run's own branch, and the unclassified-signal suppression is written the same way. A defer persists nothing of its own. After the last candidate is dispositioned, one end-of-run publish step (`## Publish the run's changes (end of run)`) carries approvals, declines and the suppression through one PR, and merges only on the human's answer. A completed review also writes the review snapshot, a file that stays on this clone, and clears the cached statusline nudge; see `## Record the review (end of run)`.
 
 ## Invocation
 
@@ -24,7 +24,13 @@ Read the live list from the tally primitive. Re-run it; never trust a stale coun
 mkdir -p .gaia/local/codify && .gaia/cli/gaia codify-tally > .gaia/local/codify/review-tally.json
 ```
 
-A structured `malformed_snapshot` error on stderr means the prior review snapshot is ignored for this run's triggers; the next completed review replaces it. It prints JSON to stdout:
+Structured errors on stderr, one JSON line each, never fatal:
+
+- `malformed_snapshot`: the prior review snapshot is ignored for this run's triggers; the next completed review replaces it.
+- `skipped_decline_file` (carries `path` and `reason`): a file in the decline folder could not be read or has an unknown format version, so it suppresses nothing.
+- `malformed_decline_ledger` (carries `path` and `message`): the clone's legacy per-clone ledger is unreadable, so it suppresses nothing while the committed declines still apply.
+
+Name every reported path to the human in this run's output, with its reason; never drop a report silently. The tally prints JSON to stdout:
 
 ```jsonc
 {
@@ -52,6 +58,16 @@ A structured `malformed_snapshot` error on stderr means the prior review snapsho
   "class_inventory": [
     {"finding_class": "holistic/a", "distinct_pr_count": 40}
   ],
+  "team_declined": [
+    {
+      "finding_class": "rule/example-declined",
+      "distinct_pr_count": 5,
+      "pr_numbers": [330, 331, 335, 338, 340],
+      "area_tags": ["frontend/app/routes"],
+      "severity_max": "minor",
+      "is_oracle": false
+    }
+  ],
   "unclassified_window_count": 120,
   "snapshot_present": true,
   "snapshot_reviewed_at": "2026-09-18T10:00:00.000Z",
@@ -66,18 +82,20 @@ A structured `malformed_snapshot` error on stderr means the prior review snapsho
 
 - `audited_pr_count`: the window's audited-PR denominator, the count decline and snapshot records bind as `--audited-pr-count`.
 - `tally_schema_version`: the tally's counting-semantics version; a mismatch against the review snapshot is the `schema_change` trigger.
-- `class_inventory`: every non-fallback class counted at least once in the window that no promoted rule covers and the decline ledger does not suppress, below-threshold included.
+- `class_inventory`: every non-fallback class counted at least once in the window that no promoted rule covers and no decline suppresses, below-threshold included.
+- `team_declined`: classes at or above the recurrence threshold that a decline suppresses (a committed decline file, or the clone's legacy ledger). Same entry shape as `candidates`. They are never candidates and never count toward `candidate_count`, `class_inventory` or `triggers`.
 - `unclassified_window_count`: the classless fallback count, even below its own signal threshold.
 - `snapshot_present` / `snapshot_reviewed_at`: whether a schema-valid review snapshot was read, and when it was recorded.
 - `triggers`: what changed against the last completed review's snapshot; empty when there is no snapshot or `gh_ok` is `false`.
 
 `unclassified` is `null` when no classless cluster has crossed the recurrence threshold; otherwise it carries `distinct_pr_count`, `pr_numbers`, `area_tags`, and `severity_max` for that one cluster.
 
-Bind to these fields per candidate: `finding_class`, `distinct_pr_count`, `pr_numbers`, `area_tags`, `severity_max`, `is_oracle`. Also bind the top-level `unclassified` field (an object or `null`, see below). The tally already drops classes a promoted rule covers and classes the decline ledger suppresses, so every entry it returns is an open candidate. Coverage detection is class-level and scope-blind in v1: a promoted rule suppresses its `finding_class` regardless of the rule's `paths:` glob, because coverage keys only on the provenance marker's `finding_class`, not on scope. `codify-tally` is network-dependent and non-fatal: it always exits 0, and the emitted `gh_ok` boolean separates a real all-clear from a window it did not fully read. Branch on the result:
+Bind to these fields per candidate: `finding_class`, `distinct_pr_count`, `pr_numbers`, `area_tags`, `severity_max`, `is_oracle`. Also bind the top-level `unclassified` field (an object or `null`, see below). The tally already drops classes a promoted rule covers and classes a decline suppresses (those move to `team_declined`), so every entry in `candidates` is an open candidate. Coverage detection is class-level and scope-blind in v1: a promoted rule suppresses its `finding_class` regardless of the rule's `paths:` glob, because coverage keys only on the provenance marker's `finding_class`, not on scope. `codify-tally` is network-dependent and non-fatal: it always exits 0, and the emitted `gh_ok` boolean separates a real all-clear from a window it did not fully read. Branch on the result:
 
 - **`gh_ok` is `false`**: the merged-PR window could not be read (a `gh`/network outage), which is NOT an all-clear. Report "could not read the merged-PR window; this is not an all-clear, re-run when `gh` is available" and stop, never claim no findings. (Run ends here; see `## Cost record (run end)`.)
-- **`gh_ok` is `true`, `candidate_count` is `0`, `unclassified` is `null`**: report "no recurring findings crossed the threshold in the last 90 days". Before stopping, run the combined record-and-clear block from `## Record the review (end of run)` as one Bash call: shell variables do not persist across separate calls, so the record and the clear must run together. On a non-zero `record_status`, report it the way that section says (quote the structured error code); either way this stop does not proceed to Publish. (Run ends here; see `## Cost record (run end)`.)
-- **`gh_ok` is `true`, `candidate_count` is `0`, `unclassified` is non-null**: do NOT stop. Skip judging and the plan question (there is no candidate to disposition) and go straight to `## Unclassified recurrence signal (seed-a-class-or-investigate)` below, which flows on to `## Record the review (end of run)`.
+- **`gh_ok` is `true`, `candidate_count` is `0`, `unclassified` is `null`, `team_declined` is empty**: report "no recurring findings crossed the threshold in the last 90 days". Before stopping, run the combined record-and-clear block from `## Record the review (end of run)` as one Bash call: shell variables do not persist across separate calls, so the record and the clear must run together. On a non-zero `record_status`, report it the way that section says (quote the structured error code); either way this stop does not proceed to Publish. (Run ends here; see `## Cost record (run end)`.)
+- **`gh_ok` is `true`, `candidate_count` is `0`, `unclassified` is `null`, `team_declined` is non-empty**: show `#### Declined by the team` and offer the override with one `AskUserQuestion` (header `Team declines`): **Leave all declined (Recommended)** or **Reconsider some**. Leaving every row declined takes the record-and-stop branch above (run the combined record-and-clear block and stop, no publish). Reconsidering picks rows, judges each through the normal form logic (Axis 1 to 3), and routes an approved row through `## Per-form action handling` (isolation included), the unclassified and record steps, and `## Publish the run's changes (end of run)`, exactly as a candidate approval does.
+- **`gh_ok` is `true`, `candidate_count` is `0`, `unclassified` is non-null**: do NOT stop. Skip judging and the plan table (there is no candidate to disposition), present the signal in plain language, and ask one `AskUserQuestion` (header `Unclassified signal`) before writing anything: **Record the suppression (Recommended)** or **Do not record it**. A yes isolates first (the same isolate-once step as `## Per-form action handling`, which this path otherwise skips), then writes the suppression and publishes; a no writes nothing. Either answer flows on to `## Unclassified recurrence signal (seed-a-class-or-investigate)` and `## Record the review (end of run)`, so the run still records the review.
 - **Otherwise**: judge every candidate (below), then present the plan and ask once (`### Present the plan, then ask once`).
 
 ## Judge-the-form logic (the heart of the command)
@@ -143,7 +161,7 @@ Per item, lead with:
   - enforcement edit: "make the existing `<tool>` check block the merge"
   - deterministic check: "write an outline of an automated check for you to finish; nothing is switched on"
   - skill: "write an outline of a skill for you to finish; nothing is switched on"
-  - decline: "record, on this machine only, that we are not acting on this; it comes back if it gets noticeably worse"
+  - decline: "record, for the whole team once merged, that we are not acting on this; it comes back if it gets noticeably worse or after one tally window"
   - defer: "do nothing now; it comes back if it gets worse or the counting changes"
 - **Why this recommendation**, in one sentence a non-author can check against the example and the frequency.
 
@@ -151,7 +169,7 @@ Then, as secondary detail: the `finding_class`, the `pr_numbers`, and `severity_
 
 ### Present the plan, then ask once
 
-Present the whole plan before asking anything. Print one summary table, one row per candidate in tally order, with columns: row number, what keeps going wrong, how often, recommended action (plain words), and why. When `unclassified` is non-null, add it as a final row marked **not a candidate**, with "record a suppression; the signal returns if it rises materially" as its action (`## Unclassified recurrence signal (seed-a-class-or-investigate)` below owns what that means). Print each row's example and secondary detail below the table, keyed by row number.
+Present the whole plan before asking anything. Print one summary table, one row per candidate in tally order, with columns: row number, what keeps going wrong, how often, recommended action (plain words), and why. When `unclassified` is non-null, add it as a final row marked **not a candidate**, with "record a suppression; the signal returns if it rises materially" as its action (`## Unclassified recurrence signal (seed-a-class-or-investigate)` below owns what that means). Print each row's example and secondary detail below the table, keyed by row number. When `team_declined` is non-empty, print `#### Declined by the team` after it.
 
 Then ask one question through an explicit user-question step (`AskUserQuestion`, header `Codify plan`, single-select), options in this order:
 
@@ -159,31 +177,37 @@ Then ask one question through an explicit user-question step (`AskUserQuestion`,
 2. **Change some**: pick which rows to change, then choose their actions; every other row takes its recommendation.
 3. **Stop without changes**: disposition nothing, author nothing, record nothing.
 
-On **Change some**, ask which rows to change. Only candidate rows are selectable: the unclassified row carries no disposition, so it keeps its suppression unless the human chooses **Stop without changes**. Ask in one multi-select `AskUserQuestion` naming each row; past four candidates, spread them over further questions of the call, and past sixteen, further calls. Then, for each chosen row only, ask one single-select question with the action set **approve / decline / defer / redirect**, the recommended action first and marked `(Recommended)`. `AskUserQuestion` takes up to four questions per call, so group them in fours. Any row the human did not choose takes its recommendation.
+On **Change some**, ask which rows to change. Candidate rows and team-declined rows are selectable (a team-declined row takes only the actions `#### Declined by the team` names): the unclassified row carries no disposition, so it keeps its suppression unless the human chooses **Stop without changes**. Ask in one multi-select `AskUserQuestion` naming each row; past four candidates, spread them over further questions of the call, and past sixteen, further calls. Then, for each chosen row only, ask one single-select question with the action set **approve / decline / defer / redirect**, the recommended action first and marked `(Recommended)`. `AskUserQuestion` takes up to four questions per call, so group them in fours. Any row the human did not choose takes its recommendation.
 
-On **Stop without changes**, apply nothing, write no ledger entry, skip the unclassified suppression, and do not reach `## Record the review (end of run)` or `## Publish approved changes (end of run)`. (Run ends here; see `## Cost record (run end)`.)
+On **Stop without changes**, apply nothing, write no decline file, skip the unclassified suppression, and do not reach `## Record the review (end of run)` or `## Publish the run's changes (end of run)`. (Run ends here; see `## Cost record (run end)`.)
 
 Once every candidate has a disposition, from the plan answer or a per-row answer, apply each one through `## Per-form action handling` below, in table order.
 
-Accepting a recommended decline or defer is a decision, the same as choosing it row by row. The two persisting actions differ: `decline` writes a machine-local, evidence-gated ledger entry; `defer` persists nothing of its own, but the review snapshot a completed review writes still snoozes it until the class rises materially or the tally's counting changes, the same trigger rule that governs every other candidate; it still appears in the next review.
+Accepting a recommended decline or defer is a decision, the same as choosing it row by row. The two persisting actions differ: `decline` writes a committed decline file, evidence-gated and shared with the team once its PR merges; `defer` persists nothing of its own, but the review snapshot a completed review writes still snoozes it until the class rises materially or the tally's counting changes, the same trigger rule that governs every other candidate; it still appears in the next review.
 
 `redirect` means the engineer overrides the form choice (e.g. "make it a prose rule even though you recommended a skill"). Honor the override and run that form's action handling. Axis-2 guardrails win over a redirect, though: a redirect cannot force a prose rule for an oracle class, and a redirect toward an enforcement-edit cannot manufacture one where no existing check or quality-gate step exists.
 
+#### Declined by the team
+
+Whenever `team_declined` is non-empty, print a short **Declined by the team** list after the candidate table and apart from it. Per row: the plain-language description of what keeps going wrong, its share (`distinct_pr_count` of `audited_pr_count` over the window), and when and at what count it was declined, read from `.gaia/cli/gaia codify-ledger list` (the governing committed file, or the legacy entry). These rows are never candidates, carry no recommended action, and default to **leave declined**. They never reach the statusline nudge.
+
+Under **Change some**, the human may also pick team-declined rows. A picked row's only actions are **approve** (judged through the normal form logic, Axis 1 to 3, then applied by the approve handler) or **leave declined**. An approval never writes, edits or deletes a decline file: a prose-rule approval makes the class promoted (coverage wins once the rule merges); any other approve form writes its change, and the decline lifts on its own terms (a material rise, a tally-schema change, or its timestamp passing one tally window).
+
 ## Per-form action handling
 
-**Isolate before the first working-tree write**, once per run: before the first approve handler that writes a file (new prose rule, edit existing prose rule, enforcement edit) runs, so the approved changes land on this run's own branch and never on whatever branch the checkout holds. Mint the name and carry it as a literal, `<CODIFY_BRANCH>`, into every later call, since shell variables do not persist between calls:
+**Isolate before the first working-tree write**, once per run: before the first approve handler that writes a file (new prose rule, edit existing prose rule, enforcement edit), the first decline file, or the unclassified suppression file, so every change lands on this run's own branch and never on whatever branch the checkout holds. A decline file and the suppression file are working-tree writes, so a run that declines or records the suppression isolates exactly as an approval run does. Mint the name and carry it as a literal, `<CODIFY_BRANCH>`, into every later call, since shell variables do not persist between calls:
 
 ```bash
 bash .gaia/scripts/branch-name-lib.sh name codify
 ```
 
-Then read `.claude/skills/gaia/references/isolation.md` and apply it now, with `{{SUBJECT}}` = "this codify run", `{{WORKER}}` = "the run", `{{OWNER}}` = "this codify run", `{{SIBLING}}` = "another task", passing `<CODIFY_BRANCH>` as the branch name. Carry `RESOLVED_MODE` and `RESOLVED_ROOT` to the publish step; every write, and everything after it, runs from `RESOLVED_ROOT`. A run whose approvals write no file (scaffolds, declines, defers) never isolates.
+Then read `.claude/skills/gaia/references/isolation.md` and apply it now, with `{{SUBJECT}}` = "this codify run", `{{WORKER}}` = "the run", `{{OWNER}}` = "this codify run", `{{SIBLING}}` = "another task", passing `<CODIFY_BRANCH>` as the branch name. Carry `RESOLVED_MODE` and `RESOLVED_ROOT` to the publish step; every write, and everything after it, runs from `RESOLVED_ROOT`. A run whose dispositions write no file (only scaffolds and defers) never isolates.
 
 ### approve, prose rule
 
 Draft the rule file into the working tree from the template below, following its filling rules (the mandatory `paths:` glob and its fallback, the verbatim provenance marker, present-tense body prose).
 
-After writing, tell the engineer the rule is in the working tree. Do not commit or PR here; the end-of-run publish step handles that (`## Publish approved changes (end of run)`).
+After writing, tell the engineer the rule is in the working tree. Do not commit or PR here; the end-of-run publish step handles that (`## Publish the run's changes (end of run)`).
 
 ### approve, edit existing prose rule
 
@@ -192,7 +216,7 @@ Use this handler, not the new-file path above, when Axis 1 recommended EDITING a
 - **Append the new guidance to the existing rule file** Axis 1 named, under the most relevant existing `## …` section or a new `## …` heading in that same file. Body prose is present tense and follows `.claude/rules/wiki-style.md`.
 - **Append a provenance marker for the newly-approved `finding_class`**, adjacent to the appended guidance: the verbatim marker (see the frozen marker below) with `<class>` set to that class. The file's existing marker names the class the rule was first promoted from, and the tally drops a class only when a marker for that exact class appears anywhere in the file, so this second marker is required: it drops the candidate on the next tally. It need not be the first line after the frontmatter.
 - **Do NOT write a second frontmatter block.** Reconcile the existing `paths:` instead: union the candidate's glob (derived per the template's `paths:` filling rule, never `**/*`) into the existing frontmatter `paths:` list, adding a line only when the glob is not already covered by an entry there.
-- After editing, tell the engineer the rule change is in the working tree. Do not commit or PR here; the end-of-run publish step handles that (`## Publish approved changes (end of run)`).
+- After editing, tell the engineer the rule change is in the working tree. Do not commit or PR here; the end-of-run publish step handles that (`## Publish the run's changes (end of run)`).
 
 ### approve, deterministic check
 
@@ -204,25 +228,29 @@ Produce ONLY a skill scaffold; activate nothing and write no `.claude/rules/` fi
 
 ### approve, enforcement edit (oracle class)
 
-Make the existing deterministic check blocking or add it to the quality gate. This is an edit to existing enforcement wiring (the tool's rule file, the `code-audit-frontend` agent, the quality gate doc, or the CI workflow), not a new prose rule. Land the edit in the working tree; the end-of-run publish step commits and PRs it (`## Publish approved changes (end of run)`).
+Make the existing deterministic check blocking or add it to the quality gate. This is an edit to existing enforcement wiring (the tool's rule file, the `code-audit-frontend` agent, the quality gate doc, or the CI workflow), not a new prose rule. Land the edit in the working tree; the end-of-run publish step commits and PRs it (`## Publish the run's changes (end of run)`).
 
 **No provenance marker (deterministic-check / skill / enforcement-edit forms).** These three approve handlers author no `.claude/rules/` marker, but they no longer leave the statusline nudge persisting on their own: the completed review still snapshots the class the way it snapshots every other candidate, so the nudge returns only on a trigger (the class rises materially, or the tally's counting changes), not on every tally the way it used to. It is not silenced by a promoted-rule coverage marker the way a prose approval is, but the review snapshot governs it on the same terms as decline and defer.
 
 ### decline
 
-Record one bounded entry to the machine-local ledger, passing the candidate's current distinct-PR count:
+After isolating, record one decline file from `RESOLVED_ROOT`, passing the candidate's current distinct-PR count; the call prints the new file's repo-relative path:
 
 ```bash
 .gaia/cli/gaia codify-ledger record --finding-class "<finding_class>" --pr-count <distinct_pr_count> --audited-pr-count <audited_pr_count>
 ```
 
-Check the `codify-ledger record` exit code before reporting the outcome. On exit `0` the entry is written: report the machine-local decline as described below. On any non-zero exit (notably `CONFIG_INVALID` 30 for a corrupt or version-skewed ledger, or `STORAGE_INACCESSIBLE` 20; `record` itself never exits `2`) the entry was NOT recorded: tell the engineer the decline did not persist and why, and do not claim success. Because nothing was suppressed, the candidate re-surfaces on the next tally. A failed decline write does not halt the review: the run continues to the next candidate and, after the last one, proceeds through the unclassified section to `## Record the review (end of run)`, so the snapshot still records; the declined-but-unsuppressed class simply reappears in the next review.
+Check the exit code before reporting the outcome. Exit codes: `0` written; `1` bad arguments; `20` the file could not be written (`decline_write_failed`); it never exits `2`. On `0`, report the decline and the path. On any non-zero exit, say the decline did not persist and why, and do not claim success: nothing was suppressed, so the candidate re-surfaces on the next tally. A failed decline write does not halt the review: the run continues to the next candidate and, after the last one, proceeds through the unclassified section to `## Record the review (end of run)`, so the snapshot still records.
 
-State that the decline is machine-local only (the ledger is gitignored) and never shared: a teammate still sees the nudge and can approve. The decline re-surfaces on evidence, the ledger handles that: the candidate returns once the rise from the count recorded at decline to the live count is material, the same share-based material-rise rule that governs every other trigger (see `wiki/concepts/Policy-Memory Loop.md`), with a floor requiring at least 3 more distinct PRs, and measured against the same tally schema version. An entry recorded under a different tally schema version never suppresses; re-decline it to restore a suppression under the live rule. A mis-decline is reversible: re-record with a corrected count, or let `.gaia/cli/gaia codify-ledger prune` drop the entry once the class leaves the window, the undo and hygiene path for the ledger.
+The decline is a team decision once its PR merges: it suppresses the class on every clone whose checkout holds the merge, at that clone's next tally refresh. It lifts when the rise from the count recorded at decline to the live count is material (the same share-based material-rise rule that governs every other trigger, see `wiki/concepts/Policy-Memory Loop.md`, with a floor requiring at least 3 more distinct PRs), when the tally schema version differs from the one recorded, or once its recorded timestamp is older than the tally window. Leaving the window does not lift it. A re-decline adds a newer file, which then governs. A mistaken decline is undone by approving the class from `#### Declined by the team`; nothing edits or deletes a live decline file.
+
+A clone may still hold an earlier GAIA's per-clone decline ledger: it is read only, suppresses on the same terms until it lapses, and is never written.
+
+Under the default worktree isolation the main checkout stays on the default branch, so until this decline's PR merges, this clone's tally still lists the class on a manual `/gaia-codify` run, while the review snapshot keeps the nudge silent. The publish step's merge recommendation is how the decline takes effect here.
 
 ### defer
 
-Persist nothing of its own: do not write the ledger, do not draft a file. The review snapshot a completed review writes still snoozes the candidate on the same trigger rule as any other, until the class rises materially or the tally's counting changes. It never hides the candidate from the next review; it only silences the statusline nudge until a trigger fires.
+Persist nothing of its own: do not write a decline file, do not draft a file. The review snapshot a completed review writes still snoozes the candidate on the same trigger rule as any other, until the class rises materially or the tally's counting changes. It never hides the candidate from the next review; it only silences the statusline nudge until a trigger fires.
 
 ## The prose-rule template (fill in, then write)
 
@@ -274,7 +302,7 @@ The marker text lives once, in `.gaia/cli/src/codify/marker.ts`'s `markerComment
 
 ## Unclassified recurrence signal (seed-a-class-or-investigate)
 
-Runs once, after the last candidate is dispositioned (or immediately, skipping straight here, when `candidate_count` was `0`). This section sits outside the approve/decline/defer/redirect dispositions above.
+Runs once, after the last candidate is dispositioned (or, when `candidate_count` was `0`, after the zero-candidate question). This section sits outside the approve/decline/defer/redirect dispositions above.
 
 When `unclassified` is `null`, skip this section silently and proceed to `## Record the review (end of run)`.
 
@@ -282,14 +310,16 @@ When `unclassified` is non-null, present it to the engineer as a distinct signal
 
 - It is NEVER placed in the draftable candidate set. `/gaia-codify` NEVER drafts a path-scoped rule, a deterministic-check sketch, a skill scaffold, or any other artifact for it.
 - It carries no approve / decline / defer / redirect action; there is nothing to ask the engineer to disposition here.
-- A class is seeded in `.gaia/finding-classes.json`: a closed `<prefix>/<slug>` class under `classes`, or the prefix of a project tool whose ids it accepts verbatim under `oracle_prefixes`. A malformed file is reported on `codify-tally`'s stderr as `malformed_finding_classes` and read as empty; while it is malformed the tally leaves the decline ledger unpruned, so a mid-edit save never drops a project class's declines.
+- A class is seeded in `.gaia/finding-classes.json`: a closed `<prefix>/<slug>` class under `classes`, or the prefix of a project tool whose ids it accepts verbatim under `oracle_prefixes`. A malformed file is reported on `codify-tally`'s stderr as `malformed_finding_classes` and read as empty.
 <!-- gaia:maintainer-only:start -->
 - In the GAIA repo a class every adopter should get is seeded in the built-in vocabulary, `.gaia/cli/src/schemas/finding-class.ts`, with its parity list, instead of `.gaia/finding-classes.json`.
 <!-- gaia:maintainer-only:end -->
 - Seeding reclassifies only findings whose pull request recorded the class string itself: the tally buckets each finding on that literal string, and a string outside every vocabulary counts as classless until it is seeded. A finding written down as `holistic/unclassified` stays classless until it ages out of the window, so for those findings seeding reaches forward only, to what a member assigns next.
-- Because of that, the signal carries a **suppression**, recorded the way a decline is: `.gaia/cli/gaia codify-ledger record --finding-class holistic/unclassified --pr-count <distinct_pr_count> --audited-pr-count <audited_pr_count>`, passing the count the signal currently carries. The signal falls silent, and it returns on the same share-based material-rise rule as every other trigger (see `wiki/concepts/Policy-Memory Loop.md`), with the same distinct-PR floor, measured against the same tally schema version. The live count is read from the rolling 90-day window, so as old pull requests age out the return can be delayed or never come. A baseline recorded at the wrong count is corrected by recording again with the right one, and the `### decline` prune drops it once the classless cluster stops recurring at the threshold.
-- The suppression is machine-local: the ledger is gitignored and per-clone (the state registry shares one copy across a clone's worktrees), so it silences the nudge only for the developer who records it while the change it discharges is committed and shared. Every other clone keeps seeing the nudge until the cluster ages out.
-- The nudge is rendered by the statusline from the reason the refresher caches, which `## Record the review (end of run)` clears at once. To confirm the record landed without waiting, read the ledger directly: `.gaia/cli/gaia codify-ledger list`.
+- Because of that, the signal carries a **suppression**: one committed file keyed `holistic/unclassified`, written by the same `record` call a decline uses, passing the count the signal currently carries. Once its PR merges the signal falls silent on every clone whose checkout holds the merge. It returns on the same share-based material-rise rule as every other trigger (see `wiki/concepts/Policy-Memory Loop.md`), with the same distinct-PR floor and the same tally schema version, or once the file is older than the tally window. The live count is read from the rolling 90-day window, so as old pull requests age out the return can be delayed or never come. A baseline recorded at the wrong count is corrected by recording again with the right one: the newer file governs.
+- Write the suppression only when `unclassified` was non-null in this run's tally (shown un-suppressed), on the human's acceptance of the plan or the zero-candidate question's yes. A run that saw the signal already suppressed (`unclassified` null) writes nothing for it, and a no to the zero-candidate question writes nothing.
+- Isolate before the write. The suppression file is a working-tree write, and the zero-candidate path reaches this section without passing through `## Per-form action handling`: when the run has not yet isolated, mint the branch and apply `isolation.md` exactly as that section does, once per run.
+- Then record it from `RESOLVED_ROOT`: `.gaia/cli/gaia codify-ledger record --finding-class holistic/unclassified --pr-count <distinct_pr_count> --audited-pr-count <audited_pr_count>`. A failed write is reported the way `### decline` reports one.
+- The suppression ships through `## Publish the run's changes (end of run)` with the run's other changes. The nudge is rendered by the statusline from the reason the refresher caches, which `## Record the review (end of run)` clears at once. To confirm the file landed without waiting, run `.gaia/cli/gaia codify-ledger list`, which shows the committed files.
 
 Then proceed to `## Record the review (end of run)`.
 
@@ -316,15 +346,15 @@ if [ "$record_status" -eq 0 ]; then
 fi
 ```
 
-On a non-zero `record_status`, the snapshot did NOT record: report that the review is complete but its snapshot did not, quoting the structured error code (`PAYLOAD_VALIDATION_FAILED` 11 means the saved tally was refused, malformed or read from a `gh_ok: false` run; `STORAGE_INACCESSIBLE` 20 means the saved tally could not be read); the block above already skips the cache clear in that case. Either way, continue to `## Publish approved changes (end of run)` regardless. A failed record never blocks publishing, and a publish failure never undoes a snapshot that did record.
+On a non-zero `record_status`, the snapshot did NOT record: report that the review is complete but its snapshot did not, quoting the structured error code (`PAYLOAD_VALIDATION_FAILED` 11 means the saved tally was refused, malformed or read from a `gh_ok: false` run; `STORAGE_INACCESSIBLE` 20 means the saved tally could not be read); the block above already skips the cache clear in that case. Either way, continue to `## Publish the run's changes (end of run)` regardless. A failed record never blocks publishing, and a publish failure never undoes a snapshot that did record.
 
-## Publish approved changes (end of run)
+## Publish the run's changes (end of run)
 
-Runs once, after `## Record the review (end of run)`. It exists so an engineer who approved at least one change does not then have to ask for a branch and PR by hand.
+Runs once, after `## Record the review (end of run)`. It exists so an engineer who approved a change, declined a class, or recorded the suppression does not then have to ask for a branch and PR by hand.
 
-**Precondition.** While applying the dispositions, track whether any candidate was approved through a handler that writes to the working tree: **new prose rule**, **edit existing prose rule**, or **enforcement edit**. The scaffold-only handlers (deterministic-check sketch, skill scaffold) write no file and never count, and decline / defer produce no change. If no approval produced a working-tree change, there is nothing to publish: say so briefly and stop. (Run ends here; see `## Cost record (run end)`.)
+**Precondition.** While applying the dispositions, track whether the run (a) approved a candidate through a handler that writes to the working tree: **new prose rule**, **edit existing prose rule**, or **enforcement edit**, (b) recorded any decline, or (c) recorded the unclassified suppression. The scaffold-only handlers (deterministic-check sketch, skill scaffold) write no file and never count, and a defer produces no change. If none of (a) to (c) happened, there is nothing to publish: say so briefly and stop. (Run ends here; see `## Cost record (run end)`.)
 
-Publish runs from `RESOLVED_ROOT`, on `<CODIFY_BRANCH>` (`## Per-form action handling` isolated it), whichever branch the main checkout holds.
+Publish runs from `RESOLVED_ROOT`, on `<CODIFY_BRANCH>` (`## Per-form action handling`, or the unclassified section, isolated it), whichever branch the main checkout holds.
 
 **Confirm there are real changes.** Before committing, verify the working tree actually carries the edits:
 
@@ -332,9 +362,19 @@ Publish runs from `RESOLVED_ROOT`, on `<CODIFY_BRANCH>` (`## Per-form action han
 git status --porcelain
 ```
 
-If it is empty, no-op (a redirect or an unapplied too-invasive edit can leave the approval count and the tree disagreeing): release the isolation per isolation.md's `## Releasing an isolation that holds nothing`, report that nothing landed, and stop. (Run ends here; see `## Cost record (run end)`.)
+If it is empty, no-op (a redirect, an unapplied too-invasive edit, or a failed decline write can leave the run's tally and the tree disagreeing): release the isolation per isolation.md's `## Releasing an isolation that holds nothing`, report that nothing landed, and stop. (Run ends here; see `## Cost record (run end)`.)
 
 **Repo-state safety.** If a merge / cherry-pick / bisect is in progress in `RESOLVED_ROOT`, do not commit: leave the approved changes on `<CODIFY_BRANCH>`, name its path, tell the engineer they ship through normal PR review, and stop. (Run ends here; see `## Cost record (run end)`.)
+
+**Housekeeping for lapsed declines.** Only on a run that already publishes, before committing, list the committed declines older than the tally window and remove them:
+
+```bash
+.gaia/cli/gaia codify-ledger lapsed
+```
+
+Run `git rm --quiet -- <path>` for each printed path. A run that would otherwise publish nothing never opens a pull request just to delete lapsed files.
+
+A diff whose changes are all under `.gaia/codify-declines/` carries no rule file: it skips the rule-file obligations below, and its pull request holds only decline-folder changes.
 
 Publish runs to a terminal state, the way `/update-deps` does on a main-branch run: merged and cleaned up, left open because the human chose to, or stopped on a named failure. It never ends at "PR opened, audit pending", because nothing else ever dispatches the audit a codify PR owes.
 
@@ -345,7 +385,7 @@ Publish runs to a terminal state, the way `/update-deps` does on a main-branch r
 - **Keep release-excluded citations out of a shipped rule's visible body** (see `## The prose-rule template (fill in, then write)`, its filling rules).
 <!-- gaia:maintainer-only:end -->
 
-**Commit and push, then open the PR, as two calls.** Route the commit message through a file, never `-m`. Subject: `chore(codify): <the approved forms, e.g. "promote use-effect-derived-state rule">`.
+**Commit and push, then open the PR, as two calls.** Route the commit message through a file, never `-m`. Subject: `chore(codify): <the approved forms and declines, e.g. "promote use-effect-derived-state rule">`.
 
 ```bash
 git add -A && git commit -F <commit-message-file> && git push -u origin <CODIFY_BRANCH>
@@ -356,17 +396,17 @@ gh pr create --draft --title "<commit subject>" --body-file <pr-body-file>
 ```
 
 <!-- gaia:maintainer-only:start -->
-**Clear the CHANGELOG gate** per `wiki/concepts/PR Merge Workflow.md` in a follow-up commit, now that the PR number exists for its `(#<PR>)` reference, and push it before any audit dispatch anchors on HEAD. A promoted policy rule that changes how the agent works usually warrants a `## [Unreleased]` entry.
+**Clear the CHANGELOG gate** per `wiki/concepts/PR Merge Workflow.md` in a follow-up commit, now that the PR number exists for its `(#<PR>)` reference, and push it before any audit dispatch anchors on HEAD. A promoted policy rule that changes how the agent works usually warrants a `## [Unreleased]` entry. A decline-only diff owes none: skip this follow-up commit.
 <!-- gaia:maintainer-only:end -->
 
-**Run the audit, on every path.** Read `wiki/concepts/PR Merge Workflow.md` and run its `#### Before the first dispatch: verify your own work` checks, then resolve the members per its `## Who audits: the dispatched member set`. Do not assume a codify diff is out of audit scope: a rule file or enforcement wiring can sit in a member's remit. When members are named, complete the workflow's marker handshake (dispatch the `audit-loop-unit` agent per its `## Dispatch the audit loop unit`, which spawns, fixes and re-audits under the `#### The branch checkpoint`); once that page's `#### Posting the status last` conditions hold, post the status yourself, `bash .claude/hooks/post-audit-status.sh <path to a current member marker>`, before the merge question below. At a checkpoint, ask the human the same checkpoint `AskUserQuestion` the workflow prescribes for an interactive run: the pinned question `bash .gaia/scripts/audit-loop-eval.sh pinned-question --root <root>` prints, asked verbatim, with the evidence from `bash .gaia/scripts/audit-loop-eval.sh brief --root <root>` shown beside it.
+**Run the audit, on every path.** Read `wiki/concepts/PR Merge Workflow.md` and run its `#### Before the first dispatch: verify your own work` checks, then resolve the members per its `## Who audits: the dispatched member set`. Do not assume a codify diff is out of audit scope: a rule file or enforcement wiring can sit in a member's remit. Resolve the members first. When `resolve-audit-members.sh` names nobody and every changed path is under `.gaia/codify-declines/`, the diff is out of audit scope: run no pre-dispatch verification and dispatch no audit loop unit; the merge hook's out-of-scope bypass clears it and posts the status, and the check watch and merge question below apply unchanged. When members are named, complete the workflow's marker handshake (dispatch the `audit-loop-unit` agent per its `## Dispatch the audit loop unit`, which spawns, fixes and re-audits under the `#### The branch checkpoint`); once that page's `#### Posting the status last` conditions hold, post the status yourself, `bash .claude/hooks/post-audit-status.sh <path to a current member marker>`, before the merge question below. At a checkpoint, ask the human the same checkpoint `AskUserQuestion` the workflow prescribes for an interactive run: the pinned question `bash .gaia/scripts/audit-loop-eval.sh pinned-question --root <root>` prints, asked verbatim, with the evidence from `bash .gaia/scripts/audit-loop-eval.sh brief --root <root>` shown beside it.
 
 **Watch the checks.** Read the whole `gh pr checks <N>` output once per look, as a bounded series of single calls, until no required check is pending. Single reads rather than a shell loop: `.claude/hooks/block-handrolled-pr-poll.sh` denies a loop naming `gh pr checks` that reads no `mergeable`, and the merge wait it offers instead is the wrong instrument here: it has no arm that fires on the required checks merely going green, so on that path it can only spend its bound. A failing check is a named-failure stop: read its log, report which check failed and why, and stop with the PR open. A window that closes with checks still pending is not a failure: go on to the merge question, and `--auto` queues the merge behind them.
 
-**Ask the merge question**, once, via `AskUserQuestion`, after the audit has cleared and the check watch ended without a failing check. A candidate the human declined or deferred is no reason to withhold the merge: the PR carries only what they approved.
+**Ask the merge question**, once, via `AskUserQuestion`, after the audit has cleared (or the diff was out of audit scope) and the check watch ended without a failing check. A candidate the human deferred is no reason to withhold the merge: the PR carries what they approved and declined.
 
 - **header:** `"Merge codify PR?"`
-- **question:** `"PR #<N> has cleared its audit. Merge it now, or leave it open for review?"`
+- **question:** `"PR #<N> is ready to merge. Merge it now, or leave it open for review?"`
 - **options (this exact order):**
   1. `{ label: "Merge", description: "Squash-merge PR #<N> now and clean up the branch." }`
   2. `{ label: "Leave open", description: "Keep the PR open; you merge it after review." }`
@@ -382,11 +422,11 @@ If any `git` or `gh` command above exits non-zero, print the error and STOP. Do 
 
 Every path that ends a `/gaia-codify` run appends exactly one cost record, the run-ending paths above:
 
-- The `gh_ok: false` and zero-candidate stops from the live candidate fetch.
+- The `gh_ok: false`, zero-candidate and leave-all-declined stops from the live candidate fetch.
 - **Stop without changes** at the plan question.
-- Publish's no-change stop (no approval touched the working tree, or `git status --porcelain` came back empty).
+- Publish's no-change stop (no approval, decline or suppression was recorded, or `git status --porcelain` came back empty).
 - Publish's unsafe-repo-state stop.
-- Publish's terminal outcomes: `MERGED` after cleanup, a merge still queued when the wait's window closes, a "Leave open" the human chose, a "Stop and file" the human chose at the audit's branch checkpoint, a failing check, a pull request closed without merging, a merge wait that refused because it read nothing, or a non-zero-exit STOP on a `git` or `gh` command.
+- Publish's terminal outcomes, on an approval, decline-only or suppression-only run alike: `MERGED` after cleanup, a merge still queued when the wait's window closes, a "Leave open" the human chose, a "Stop and file" the human chose at the audit's branch checkpoint, a failing check, a pull request closed without merging, a merge wait that refused because it read nothing, or a non-zero-exit STOP on a `git` or `gh` command.
 
 On the publish path the record is written once, at one of those outcomes, and its `Cost:` line is the last thing the run prints. Opening the PR is not a run end: the audit, the checks, and the merge question still follow it.
 
@@ -394,6 +434,6 @@ Apply the shared record recipe in `.claude/skills/gaia/references/cost-record.md
 
 ## Guardrails
 
-- Never `git add`, `git commit`, or `git push` while dispositions are collected and applied. The single end-of-run publish step (`## Publish approved changes (end of run)`) is the only writer to git, and it merges only on the human's answer to its merge prompt, never automatically.
+- Never `git add`, `git commit`, or `git push` while dispositions are collected and applied. The single end-of-run publish step (`## Publish the run's changes (end of run)`) is the only writer to git, and it merges only on the human's answer to its merge prompt, never automatically.
 - This loop keys only on `finding_class` recurrence from the PR window.
-- The `unclassified` signal is never a draftable candidate and is never auto-drafted: it carries no approve/decline/defer/redirect action and authors no artifact. It carries a suppression instead, on the terms `## Unclassified recurrence signal (seed-a-class-or-investigate)` states, including its release by the prune. Relaxing this guardrail is deliberate: seeding provably cannot shrink the cluster it answers. What spares the developer the nudge is no longer the suppression alone, the review snapshot does that on the same trigger terms as every other candidate; the suppression's own job is narrower, it removes the unclassified section from a review until the signal rises materially, so a review that has already seen it is not asked to re-litigate an unchanged cluster. No later change widens this further without the same justification.
+- The `unclassified` signal is never a draftable candidate and is never auto-drafted: it carries no approve/decline/defer/redirect action and authors no artifact. It carries a suppression instead, on the terms `## Unclassified recurrence signal (seed-a-class-or-investigate)` states, including its lapse once its file is older than the tally window. Relaxing this guardrail is deliberate: seeding provably cannot shrink the cluster it answers. What spares the developer the nudge is no longer the suppression alone, the review snapshot does that on the same trigger terms as every other candidate; the suppression's own job is narrower, it removes the unclassified section from a review until the signal rises materially, so a review that has already seen it is not asked to re-litigate an unchanged cluster. No later change widens this further without the same justification.

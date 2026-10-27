@@ -1,28 +1,18 @@
 /**
- * Zod schema + read/write helpers for the machine-local decline ledger.
- *
- * When an engineer declines a codify candidate, that decline is recorded
- * only on their machine so it never vetoes the rule for a teammate. The
- * ledger holds one bounded entry per `finding_class`; re-recording a class
- * overwrites its timestamp, PR count, and denominator.
+ * Schema and reader for the legacy per-clone decline ledger at
+ * `.gaia/local/codify/declines.json`. Current GAIA reads it and never writes
+ * it: committed declines live in `.gaia/codify-declines/`. An entry is judged
+ * by its own `declined_at` and lapses with the tally window; a malformed
+ * file suppresses nothing, and the `read*` result carries
+ * `status: 'malformed'` so the caller can report it.
  *
  * The schema is version 2 and every entry carries both
  * `declined_at_audited_pr_count` and `tally_schema_version`, because a raw
  * count with no denominator cannot be compared to a live share honestly.
- *
- * The file lives at `.gaia/local/codify/declines.json` (gitignored). A
- * corrupt, hand-edited, version-1 or incomplete-entry file fails loud (the
- * discriminated `read*` result carries `status: 'malformed'`) rather than
- * being silently treated as empty, which would wrongly re-surface or wrongly
- * suppress a candidate.
- * The path is shared across the clone's worktrees by the state registry's
- * symlink, so a decline recorded from a linked worktree lands in the main
- * checkout's copy and survives that worktree's removal.
  */
 import {z} from 'zod';
-import {existsSync, mkdirSync, readFileSync} from 'node:fs';
+import {existsSync, readFileSync} from 'node:fs';
 import path from 'node:path';
-import {atomicWriteFileSync} from '../util/atomic-write.js';
 import {summarizeZodError} from './zod-error.js';
 
 export const declineLedgerPath = (repoRoot: string): string =>
@@ -47,12 +37,6 @@ export const DeclineLedgerSchema = z.object({
 });
 
 export type DeclineLedger = z.infer<typeof DeclineLedgerSchema>;
-
-export const emptyDeclineLedger = (): DeclineLedger => ({
-  version: 2,
-  // eslint-disable-next-line perfectionist/sort-objects -- serialization order load-bearing, version-first
-  declines: [],
-});
 
 export type ReadDeclineLedgerResult =
   | {error: string; status: 'malformed'}
@@ -98,18 +82,4 @@ export const readDeclineLedger = (
   }
 
   return {ledger: result.data, status: 'ok'};
-};
-
-export const writeDeclineLedger = (
-  repoRoot: string,
-  ledger: DeclineLedger
-): void => {
-  const target = declineLedgerPath(repoRoot);
-  // Mode 755 matches the other `.gaia/local` state writers (setup-state, the
-  // sandbox marker, project-id), so the directory stays traversable by a
-  // subprocess running as another user.
-  mkdirSync(path.dirname(target), {mode: 0o755, recursive: true});
-
-  const serialized = `${JSON.stringify(ledger, null, 2)}\n`;
-  atomicWriteFileSync(target, serialized);
 };
