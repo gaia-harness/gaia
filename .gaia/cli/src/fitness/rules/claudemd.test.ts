@@ -460,6 +460,46 @@ describe('claudemd.no-absolute-machine-path', () => {
     expect(JSON.stringify(found)).not.toContain('someone');
   });
 
+  const macPath = ['', 'Users', 'alice', 'x'].join('/');
+  const linuxPath = ['', 'home', 'bob', 'x'].join('/');
+
+  test.each([
+    ['at the start of a line', `${macPath}\n`],
+    ['after whitespace', `Read ${linuxPath}\n`],
+    ['after a backtick', `Read \`${macPath}\`\n`],
+    ['after a double quote', `Read "${linuxPath}"\n`],
+    ['after a single quote', `Read '${macPath}'\n`],
+    ['inside parentheses', `See (${macPath}) first\n`],
+    ['after an equals sign', `ROOT=${linuxPath}\n`],
+    ['after a colon', `path:${macPath}\n`],
+    ['as a drive-letter user path', `Read ${windowsPath}\\x\n`],
+  ])('flags a home path %s', (_context, line) => {
+    expect(
+      findingsOf(
+        {files: {'CLAUDE.md': line}, git: true},
+        'claudemd.no-absolute-machine-path'
+      ).map((finding) => finding.line)
+    ).toEqual([1]);
+  });
+
+  test.each([
+    'src/pages/home/sections/Hero.tsx',
+    '$WEB/src/pages/home/sections/Hero.tsx',
+    'app/Users/admin/list.tsx',
+    '/abs/path/to/website/src/pages/home/sections/Hero.tsx',
+    'git -C /abs/path/to/website add src/pages/home/sections/Hero.tsx',
+  ])(
+    'a home or Users folder inside a project path is not a machine path: %s',
+    (text) => {
+      expect(
+        findingsOf(
+          {files: {'CLAUDE.md': `${text}\n`}, git: true},
+          'claudemd.no-absolute-machine-path'
+        )
+      ).toEqual([]);
+    }
+  );
+
   test('a placeholder user name is not a machine path', () => {
     expect(
       findingsOf(

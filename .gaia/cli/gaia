@@ -29540,7 +29540,7 @@ var outsideRootCheck = (context) => filesOfKinds(context, ["claudemd", "claudemd
     );
   }
 );
-var MACHINE_PATH = /\/Users\/[^\s/<>]+\/|\/home\/[^\s/<>]+\/|[A-Za-z]:\\Users\\[^\s\\<>]+\\/;
+var MACHINE_PATH = /(?<![^\s"'`(=:])(?:\/Users\/[^\s/<>]+\/|\/home\/[^\s/<>]+\/|[A-Za-z]:\\Users\\[^\s\\<>]+\\)/;
 var machinePathCheck = (context) => filesOfKinds(context, [
   "claudemd",
   "rule",
