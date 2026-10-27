@@ -44,9 +44,9 @@
 # (default 30) pull requests that touched code-audit-frontend's remit, the
 # window PR count, the eligible re-audit count and the light-cleared count,
 # overall and per member. A pull request is a branch in the log, because the
-# log records no merge; it is in the window when the log holds any event for
-# code-audit-frontend on that branch, and the window is the branches whose last
-# such event is newest. An eligible re-audit is a route event with a reason
+# log records no merge; it is in the window when the log holds a route,
+# light-outcome, member-result or escalation-follow-up event for
+# code-audit-frontend on that branch, and the window is the branches whose last event is newest. An eligible re-audit is a route event with a reason
 # other than the four excluded above, so a member that never opted in
 # contributes none and the overall figure is the sum across opted-in members. A
 # light-cleared re-audit is a light_outcome event with verdict clear. The
@@ -334,7 +334,7 @@ EOF
       def quick_anchor: (.anchor_kind // null) == "merge-base";
       . as $events
       | ([range(0; $events | length) as $i | $events[$i]
-          | select(.member == "code-audit-frontend" and ((.branch // "") != ""))
+          | select(.member == "code-audit-frontend" and ((.branch // "") != "") and (.event | IN("route", "light_outcome", "member_result", "escalation_followup")))
           | {branch: .branch, position: $i}]
          | group_by(.branch)
          | map({branch: .[0].branch, last: (map(.position) | max)})

@@ -53,6 +53,12 @@ For every member the wave would dispatch that is not already cleared for its cur
 4. On `light-cleared` the member is cleared for this digest: do not dispatch it. On any `full` line or a non-zero exit, dispatch the member on the same tree in this round; the bound hook counts that dispatch as a round as usual. A no-op, empty, or malformed reply is not re-dispatched, unlike the single re-dispatch `.claude/rules/subagent-dispatch.md` prescribes for a no-op agent artifact: the full member is strictly more coverage than a second light attempt, so falling back to it is the retry.
 5. The light-marker script is the only light writer. Never write a verdict, route record, or marker by any other route.
 
+<!-- gaia:maintainer-only:start -->
+- When running step 3's mark, prefix it in the same Bash command with `[ -f <root>/.gaia/scripts/audit-dispatch-cost.sh ] && bash <root>/.gaia/scripts/audit-dispatch-cost.sh record --root <root> --kind light_reviewer --member <m> --agent-id <id> 2>/dev/null || true;`, `<id>` being the reviewer's `agentId` from its launch result.
+- When a wave skips any owed member because it is already cleared for its current digest, prefix the wave's first `audit-light-route.sh` call in the same Bash command with `[ -f <root>/.gaia/scripts/audit-dispatch-cost.sh ] && bash <root>/.gaia/scripts/audit-dispatch-cost.sh record --root <root> --kind member --state not_dispatched --reason already_cleared --member <m> 2>/dev/null || true;`, one `--member` per skipped member, all in that one call. When the wave runs no `audit-light-route.sh` call (every owed member is already cleared), run that same command alone as its own Bash call, once per wave. A member a light reviewer clears is not one of them: the reviewer's own event stands for it.
+- Every recorder call is best-effort: its exit status and output never change a routing, marking or dispatch decision. The prefixes discard the recorder's stderr because they share a Bash command whose output you read (the router's first field, the mark's line).
+<!-- gaia:maintainer-only:end -->
+
 Light routing happens only in this unit's member wave.
 
 ### Waiting for a dispatch
@@ -68,7 +74,7 @@ Follow the page in this order: `#### The audit loop unit` for the unit's shape, 
 - Dispatch the round's members in parallel, each routed as `## Routing each member` says.
 - A member that light-cleared in a round is never dispatched to a fixer and never the subject of a fix round; findings exist only from dispatched full members.
 <!-- gaia:maintainer-only:start -->
-- After each member's result lands, run `[ -f <root>/.gaia/scripts/audit-light-telemetry.sh ] && bash <root>/.gaia/scripts/audit-light-telemetry.sh member-result --root <root> --member <m> || true`.
+- Keep each dispatch's `agentId` from its Agent launch result. After each member's completion notification arrives, run this as one Bash command, `<id>` being the `agentId` that member's launch returned: `[ -f <root>/.gaia/scripts/audit-dispatch-cost.sh ] && bash <root>/.gaia/scripts/audit-dispatch-cost.sh record --root <root> --kind member --member <m> --agent-id <id> || true; [ -f <root>/.gaia/scripts/audit-light-telemetry.sh ] && bash <root>/.gaia/scripts/audit-light-telemetry.sh member-result --root <root> --member <m> || true`. The recorder runs first so its event precedes the member result in the log.
 <!-- gaia:maintainer-only:end -->
 <!-- gaia:maintainer-only:start -->
 - Before writing any disposition, Read `.claude/maintainers/harness-triage-threshold.md` and dispose findings under it.

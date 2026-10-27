@@ -1,0 +1,4 @@
+{"type":"user","timestamp":"2026-10-19T08:03:50.000Z","version":"2.1.304","message":{"role":"user","content":"work"}}
+{"type":"assistant","timestamp":"2026-10-19T08:03:55.000Z","message":{"id":"msg_other11","role":"assistant","model":"claude-haiku-5-5","content":[{"type":"text","text":"step"}],"usage":{"input_tokens":31,"cache_creation_input_tokens":1200,"cache_creation":{"ephemeral_5m_input_tokens":1200,"ephemeral_1h_input_tokens":0},"cache_read_input_tokens":2000,"output_tokens":411}}}
+{"type":"assistant","timestamp":"2026-10-19T08:04:10.000Z","message":{"id":"msg_other12","role":"assistant","model":"claude-haiku-5-5","content":[{"type":"text","text":"step"}],"usage":{"input_tokens":17,"cache_creation_input_tokens":333,"cache_read_input_tokens":2500,"output_tokens":73}}}
+{"type":"user","timestamp":"2026-10-19T08:04:20.500Z","message":{"role":"user","content":[{"type":"text","text":"end"}]}}
