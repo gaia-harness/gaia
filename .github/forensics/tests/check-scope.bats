@@ -443,3 +443,19 @@ setup() {
   [ "$total" -ge 2 ]
   [ "$bare" -eq 0 ]
 }
+
+# --- workflow step scripts ---------------------------------------------------
+
+# bats test_tags=whole-tree
+@test "workflow: the steps/ scripts and the workflow's calls to them are the same set, all executable" {
+  workflow="${BATS_TEST_DIRNAME}/../../workflows/forensics-triage.yml"
+  steps_dir="${BATS_TEST_DIRNAME}/../steps"
+  [ -f "$workflow" ]
+  on_disk=$(cd "$steps_dir" && ls -1 -- *.sh | sort)
+  called=$(grep -oE '"\$FORENSICS_DIR/steps/[a-z0-9-]+\.sh"' "$workflow" | sed -E 's|.*/steps/||; s|"$||' | sort -u)
+  [ -n "$on_disk" ]
+  [ "$on_disk" = "$called" ]
+  while IFS= read -r script; do
+    [ -x "$steps_dir/$script" ] || { printf 'not executable: %s\n' "$script" >&2; return 1; }
+  done <<<"$on_disk"
+}
