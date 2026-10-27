@@ -963,10 +963,10 @@ function mergeDefs(...defs) {
 function cloneDef(schema) {
   return mergeDefs(schema._zod.def);
 }
-function getElementAtPath(obj, path17) {
-  if (!path17)
+function getElementAtPath(obj, path22) {
+  if (!path22)
     return obj;
-  return path17.reduce((acc, key) => acc?.[key], obj);
+  return path22.reduce((acc, key) => acc?.[key], obj);
 }
 function promiseAllObject(promisesObj) {
   const keys = Object.keys(promisesObj);
@@ -1306,11 +1306,11 @@ function explicitlyAborted(x, startIndex = 0) {
   }
   return false;
 }
-function prefixIssues(path17, issues) {
+function prefixIssues(path22, issues) {
   return issues.map((iss) => {
     var _a3;
     (_a3 = iss).path ?? (_a3.path = []);
-    iss.path.unshift(path17);
+    iss.path.unshift(path22);
     return iss;
   });
 }
@@ -1772,16 +1772,16 @@ function flattenError(error62, mapper = (issue2) => issue2.message) {
 }
 function formatError(error62, mapper = (issue2) => issue2.message) {
   const fieldErrors = { _errors: [] };
-  const processError = (error63, path17 = []) => {
+  const processError = (error63, path22 = []) => {
     for (const issue2 of error63.issues) {
       if (issue2.code === "invalid_union" && issue2.errors.length) {
-        issue2.errors.map((issues) => processError({ issues }, [...path17, ...issue2.path]));
+        issue2.errors.map((issues) => processError({ issues }, [...path22, ...issue2.path]));
       } else if (issue2.code === "invalid_key") {
-        processError({ issues: issue2.issues }, [...path17, ...issue2.path]);
+        processError({ issues: issue2.issues }, [...path22, ...issue2.path]);
       } else if (issue2.code === "invalid_element") {
-        processError({ issues: issue2.issues }, [...path17, ...issue2.path]);
+        processError({ issues: issue2.issues }, [...path22, ...issue2.path]);
       } else {
-        const fullpath = [...path17, ...issue2.path];
+        const fullpath = [...path22, ...issue2.path];
         if (fullpath.length === 0) {
           fieldErrors._errors.push(mapper(issue2));
         } else {
@@ -1820,17 +1820,17 @@ function formatError(error62, mapper = (issue2) => issue2.message) {
 }
 function treeifyError(error62, mapper = (issue2) => issue2.message) {
   const result = { errors: [] };
-  const processError = (error63, path17 = []) => {
+  const processError = (error63, path22 = []) => {
     var _a3;
     for (const issue2 of error63.issues) {
       if (issue2.code === "invalid_union" && issue2.errors.length) {
-        issue2.errors.map((issues) => processError({ issues }, [...path17, ...issue2.path]));
+        issue2.errors.map((issues) => processError({ issues }, [...path22, ...issue2.path]));
       } else if (issue2.code === "invalid_key") {
-        processError({ issues: issue2.issues }, [...path17, ...issue2.path]);
+        processError({ issues: issue2.issues }, [...path22, ...issue2.path]);
       } else if (issue2.code === "invalid_element") {
-        processError({ issues: issue2.issues }, [...path17, ...issue2.path]);
+        processError({ issues: issue2.issues }, [...path22, ...issue2.path]);
       } else {
-        const fullpath = [...path17, ...issue2.path];
+        const fullpath = [...path22, ...issue2.path];
         if (fullpath.length === 0) {
           result.errors.push(mapper(issue2));
           continue;
@@ -1869,8 +1869,8 @@ function treeifyError(error62, mapper = (issue2) => issue2.message) {
 }
 function toDotPath(_path) {
   const segs = [];
-  const path17 = _path.map((seg) => typeof seg === "object" ? seg.key : seg);
-  for (const seg of path17) {
+  const path22 = _path.map((seg) => typeof seg === "object" ? seg.key : seg);
+  for (const seg of path22) {
     if (typeof seg === "number")
       segs.push(`[${seg}]`);
     else if (typeof seg === "symbol")
@@ -19008,13 +19008,13 @@ function resolveRef(ref, ctx) {
   if (!ref.startsWith("#")) {
     throw new Error("External $ref is not supported, only local refs (#/...) are allowed");
   }
-  const path17 = ref.slice(1).split("/").filter(Boolean);
-  if (path17.length === 0) {
+  const path22 = ref.slice(1).split("/").filter(Boolean);
+  if (path22.length === 0) {
     return ctx.rootSchema;
   }
   const defsKey = ctx.version === "draft-2020-12" ? "$defs" : "definitions";
-  if (path17[0] === defsKey) {
-    const key = path17[1] === void 0 ? void 0 : decodeJSONPointerSegment(path17[1]);
+  if (path22[0] === defsKey) {
+    const key = path22[1] === void 0 ? void 0 : decodeJSONPointerSegment(path22[1]);
     if (!key || !ctx.defs[key]) {
       throw new Error(`Reference not found: ${ref}`);
     }
@@ -25791,120 +25791,8 @@ var run11 = (argv, options = {}) => {
 };
 
 // src/release/scrub.ts
-import { existsSync as existsSync11, readFileSync as readFileSync15, statSync as statSync3 } from "node:fs";
-import path16 from "node:path";
-
-// src/wiki/util/wikilinks.ts
-var WIKILINK_PATTERN = /\[\[([^\][]+)\]\]/gu;
-var extractWikilinks = (body) => {
-  const targets = [];
-  for (const [, captured] of body.matchAll(WIKILINK_PATTERN)) {
-    if (captured !== void 0) {
-      const raw = captured.trim();
-      const aliasIndex = raw.indexOf("|");
-      const withoutAlias = aliasIndex === -1 ? raw : raw.slice(0, aliasIndex);
-      const anchorIndex = withoutAlias.indexOf("#");
-      const target = (anchorIndex === -1 ? withoutAlias : withoutAlias.slice(0, anchorIndex)).trim();
-      if (target.length > 0) targets.push(target);
-    }
-  }
-  return targets;
-};
-
-// src/release/excluded-refs.ts
-import path15 from "node:path";
-var WORKFLOWS_PREFIX = ".github/workflows/";
-var COMMAND_PATTERN = /^\.claude\/(?:commands\/(?<command>[\w-]+)\.md|skills\/(?<skill>[\w-]+))$/;
-var AGENT_PATTERN = /^\.claude\/agents\/(?<agent>[\w-]+)\.md$/;
-var CODE_EXTENSIONS = /* @__PURE__ */ new Set([".mjs", ".sh", ".ts"]);
-var RIGHT_BOUNDARY = String.raw`(?![\w-])`;
-var PATH_LEFT_BOUNDARY = String.raw`(?<![\w.-])(?<![\w-]/)`;
-var NAME_LEFT_BOUNDARY = String.raw`(?<![\w/.-])`;
-var isUnder = (file2, entry) => file2 === entry || file2.startsWith(`${entry}/`);
-var isReferenceableEntry = (entry, tracked) => entry.includes("/") && !entry.startsWith(WORKFLOWS_PREFIX) && tracked.some((file2) => isUnder(file2, entry));
-var isCodeFile = (file2, isExecutable) => {
-  const extension = path15.extname(file2);
-  return extension === "" ? isExecutable(file2) : CODE_EXTENSIONS.has(extension);
-};
-var sortTokens = (tokens) => {
-  const list = [...tokens];
-  return list.toSorted((left, right) => left.localeCompare(right));
-};
-var deriveExcludedRefTokens = ({
-  excludeLines,
-  isExecutable,
-  optOut,
-  shippedBasenames,
-  tracked
-}) => {
-  const entries = excludeLines.filter(
-    (entry) => isReferenceableEntry(entry, tracked)
-  );
-  const paths = new Set(entries);
-  const commands = /* @__PURE__ */ new Set();
-  const agents = /* @__PURE__ */ new Set();
-  const basenames = /* @__PURE__ */ new Set();
-  for (const entry of entries) {
-    const commandGroups = COMMAND_PATTERN.exec(entry)?.groups;
-    const command = commandGroups?.command ?? commandGroups?.skill;
-    const agent = AGENT_PATTERN.exec(entry)?.groups?.agent;
-    if (command !== void 0) commands.add(command);
-    if (agent !== void 0) agents.add(agent);
-    for (const file2 of tracked) {
-      if (isUnder(file2, entry) && !shippedBasenames.has(path15.basename(file2)) && isCodeFile(file2, isExecutable)) {
-        basenames.add(path15.basename(file2));
-      }
-    }
-  }
-  const unusedOptOut = [];
-  for (const token of optOut) {
-    const removed = [paths, commands, agents, basenames].some(
-      (set2) => set2.delete(token)
-    );
-    if (!removed) unusedOptOut.push(token);
-  }
-  return {
-    agents: sortTokens(agents),
-    basenames: sortTokens(basenames),
-    commands: sortTokens(commands),
-    paths: sortTokens(paths),
-    unusedOptOut
-  };
-};
-var compileKind = (tokens, leftBoundary, prefix = "") => {
-  if (tokens.length === 0) return void 0;
-  const alternatives = tokens.toSorted((left, right) => right.length - left.length).map((token) => escapeRegExp(token)).join("|");
-  return new RegExp(
-    `${leftBoundary}${prefix}(?:${alternatives})${RIGHT_BOUNDARY}`,
-    "g"
-  );
-};
-var isRegExp = (value) => value !== void 0;
-var compileExcludedRefMatcher = (tokens) => {
-  const general = [
-    compileKind(tokens.paths, PATH_LEFT_BOUNDARY),
-    compileKind(tokens.commands, NAME_LEFT_BOUNDARY, "/"),
-    compileKind(tokens.agents, NAME_LEFT_BOUNDARY)
-  ].filter(isRegExp);
-  const markdown = [
-    ...general,
-    compileKind(tokens.basenames, NAME_LEFT_BOUNDARY)
-  ].filter(isRegExp);
-  return (line, options) => {
-    const found = [];
-    for (const pattern of options.markdown ? markdown : general) {
-      for (const match of line.matchAll(pattern)) {
-        found.push({ index: match.index, token: match[0] });
-      }
-    }
-    if (found.length === 0) return [];
-    return [
-      ...new Set(
-        found.toSorted((left, right) => left.index - right.index).map(({ token }) => token)
-      )
-    ];
-  };
-};
+import { statSync as statSync5 } from "node:fs";
+import path21 from "node:path";
 
 // src/release/pnpm-member-strip.ts
 var SUPPORTED_LOCKFILE_VERSION = "9.0";
@@ -26449,31 +26337,8 @@ var stripPnpmMember = (input2) => {
   return checkStrippedPair(input2, outcome) ?? outcome;
 };
 
-// src/release/scrub.ts
-var HELP_TEXT12 = `Usage: gaia-maintainer release scrub <staging-dir> [--config <path>] [--json]
-
-  Apply the bundle-time scrub transforms in .gaia/release-scrub.yml (marker,
-  JSON and pnpm workspace-member strips, then leak checks) to a staging
-  directory produced by release.yml. Writes in place inside <staging-dir>;
-  treats the source repo as read-only.
-
-  Flags:
-    --config <path>  Override config path (default: .gaia/release-scrub.yml
-                     resolved against process.cwd()).
-    --json           Emit a structured JSON report on stdout instead of
-                     human-readable summary.
-
-  Exit codes:
-    0  clean
-    1  leaks detected, unbalanced markers, refused pnpm member strip,
-       missing staging dir, bad flags
-    2  config parse error or filesystem IO failure
-`;
-var HELP_TOKENS12 = /* @__PURE__ */ new Set(["--help", "-h", "help"]);
-var UNEXPECTED_EXIT9 = 2;
-var DEFAULT_CONFIG_PATH = ".gaia/release-scrub.yml";
-var RELEASE_EXCLUDE_PATH = ".gaia/release-exclude";
-var WORKFLOWS_DIR = ".github/workflows";
+// src/release/scrub-config.ts
+import { readFileSync as readFileSync15 } from "node:fs";
 var MarkerStripSchema = external_exports.object({
   end: external_exports.string().min(1),
   paths: external_exports.array(external_exports.string().min(1)).min(1),
@@ -26555,6 +26420,137 @@ var ConfigSchema = external_exports.object({
     ])
   ).min(1)
 });
+var loadConfig = (configPath) => {
+  const raw = readFileSync15(configPath, "utf8");
+  const parsed = load(raw);
+  return ConfigSchema.parse(parsed);
+};
+
+// src/release/scrub-transforms.ts
+import { existsSync as existsSync11, readFileSync as readFileSync20, statSync as statSync4 } from "node:fs";
+import path20 from "node:path";
+
+// src/release/scrub-derived-checks.ts
+import { readFileSync as readFileSync17, statSync as statSync3 } from "node:fs";
+import path17 from "node:path";
+
+// src/wiki/util/wikilinks.ts
+var WIKILINK_PATTERN = /\[\[([^\][]+)\]\]/gu;
+var extractWikilinks = (body) => {
+  const targets = [];
+  for (const [, captured] of body.matchAll(WIKILINK_PATTERN)) {
+    if (captured !== void 0) {
+      const raw = captured.trim();
+      const aliasIndex = raw.indexOf("|");
+      const withoutAlias = aliasIndex === -1 ? raw : raw.slice(0, aliasIndex);
+      const anchorIndex = withoutAlias.indexOf("#");
+      const target = (anchorIndex === -1 ? withoutAlias : withoutAlias.slice(0, anchorIndex)).trim();
+      if (target.length > 0) targets.push(target);
+    }
+  }
+  return targets;
+};
+
+// src/release/excluded-refs.ts
+import path15 from "node:path";
+var WORKFLOWS_PREFIX = ".github/workflows/";
+var COMMAND_PATTERN = /^\.claude\/(?:commands\/(?<command>[\w-]+)\.md|skills\/(?<skill>[\w-]+))$/;
+var AGENT_PATTERN = /^\.claude\/agents\/(?<agent>[\w-]+)\.md$/;
+var CODE_EXTENSIONS = /* @__PURE__ */ new Set([".mjs", ".sh", ".ts"]);
+var RIGHT_BOUNDARY = String.raw`(?![\w-])`;
+var PATH_LEFT_BOUNDARY = String.raw`(?<![\w.-])(?<![\w-]/)`;
+var NAME_LEFT_BOUNDARY = String.raw`(?<![\w/.-])`;
+var isUnder = (file2, entry) => file2 === entry || file2.startsWith(`${entry}/`);
+var isReferenceableEntry = (entry, tracked) => entry.includes("/") && !entry.startsWith(WORKFLOWS_PREFIX) && tracked.some((file2) => isUnder(file2, entry));
+var isCodeFile = (file2, isExecutable) => {
+  const extension = path15.extname(file2);
+  return extension === "" ? isExecutable(file2) : CODE_EXTENSIONS.has(extension);
+};
+var sortTokens = (tokens) => {
+  const list = [...tokens];
+  return list.toSorted((left, right) => left.localeCompare(right));
+};
+var deriveExcludedRefTokens = ({
+  excludeLines,
+  isExecutable,
+  optOut,
+  shippedBasenames,
+  tracked
+}) => {
+  const entries = excludeLines.filter(
+    (entry) => isReferenceableEntry(entry, tracked)
+  );
+  const paths = new Set(entries);
+  const commands = /* @__PURE__ */ new Set();
+  const agents = /* @__PURE__ */ new Set();
+  const basenames = /* @__PURE__ */ new Set();
+  for (const entry of entries) {
+    const commandGroups = COMMAND_PATTERN.exec(entry)?.groups;
+    const command = commandGroups?.command ?? commandGroups?.skill;
+    const agent = AGENT_PATTERN.exec(entry)?.groups?.agent;
+    if (command !== void 0) commands.add(command);
+    if (agent !== void 0) agents.add(agent);
+    for (const file2 of tracked) {
+      if (isUnder(file2, entry) && !shippedBasenames.has(path15.basename(file2)) && isCodeFile(file2, isExecutable)) {
+        basenames.add(path15.basename(file2));
+      }
+    }
+  }
+  const unusedOptOut = [];
+  for (const token of optOut) {
+    const removed = [paths, commands, agents, basenames].some(
+      (set2) => set2.delete(token)
+    );
+    if (!removed) unusedOptOut.push(token);
+  }
+  return {
+    agents: sortTokens(agents),
+    basenames: sortTokens(basenames),
+    commands: sortTokens(commands),
+    paths: sortTokens(paths),
+    unusedOptOut
+  };
+};
+var compileKind = (tokens, leftBoundary, prefix = "") => {
+  if (tokens.length === 0) return void 0;
+  const alternatives = tokens.toSorted((left, right) => right.length - left.length).map((token) => escapeRegExp(token)).join("|");
+  return new RegExp(
+    `${leftBoundary}${prefix}(?:${alternatives})${RIGHT_BOUNDARY}`,
+    "g"
+  );
+};
+var isRegExp = (value) => value !== void 0;
+var compileExcludedRefMatcher = (tokens) => {
+  const general = [
+    compileKind(tokens.paths, PATH_LEFT_BOUNDARY),
+    compileKind(tokens.commands, NAME_LEFT_BOUNDARY, "/"),
+    compileKind(tokens.agents, NAME_LEFT_BOUNDARY)
+  ].filter(isRegExp);
+  const markdown = [
+    ...general,
+    compileKind(tokens.basenames, NAME_LEFT_BOUNDARY)
+  ].filter(isRegExp);
+  return (line, options) => {
+    const found = [];
+    for (const pattern of options.markdown ? markdown : general) {
+      for (const match of line.matchAll(pattern)) {
+        found.push({ index: match.index, token: match[0] });
+      }
+    }
+    if (found.length === 0) return [];
+    return [
+      ...new Set(
+        found.toSorted((left, right) => left.index - right.index).map(({ token }) => token)
+      )
+    ];
+  };
+};
+
+// src/release/scrub-leak-scan.ts
+import { readFileSync as readFileSync16 } from "node:fs";
+import path16 from "node:path";
+
+// src/release/scrub-glob.ts
 var REGEX_SPECIAL = /[.+^$()[\]{}|\\]/g;
 var SENTINEL_DIRSTAR = " DIRSTAR ";
 var SENTINEL_STAR = " STAR ";
@@ -26564,40 +26560,198 @@ var globToRegex = (glob) => {
   return new RegExp(`^${transformed}$`);
 };
 var matchesAnyGlob = (relativePath, globs) => globs.some((glob) => globToRegex(glob).test(relativePath));
-var applyMarkerStrip = (stagingRoot, files, transform2) => {
-  const filesTouched = [];
-  const unbalanced = [];
-  let blocksStripped = 0;
-  for (const relativePath of files) {
-    if (matchesAnyGlob(relativePath, transform2.paths)) {
-      const absolutePath = path16.join(stagingRoot, relativePath);
-      const source = readFileSync15(absolutePath, "utf8");
-      const hasAnyMarker = source.includes(transform2.start) || source.includes(transform2.end);
-      if (hasAnyMarker) {
-        const result = stripMarkerBlocks(
-          source,
-          transform2.start,
-          transform2.end
-        );
-        for (const issue2 of result.unbalanced) {
-          unbalanced.push({
-            file: relativePath,
-            line: issue2.line,
-            reason: issue2.reason
-          });
+
+// src/release/scrub-leak-scan.ts
+var trackLineAllowlist = (check2) => {
+  const entries = (check2["line-allowlist"] ?? []).map(
+    (raw) => [raw, new RegExp(raw)]
+  );
+  const unmatched = new Set(entries.map(([raw]) => raw));
+  return {
+    isAllowed: (line) => {
+      let allowed = false;
+      for (const [raw, regex] of entries) {
+        if (regex.test(line)) {
+          unmatched.delete(raw);
+          allowed = true;
         }
-        if (result.blocks > 0) {
-          atomicWriteFileSync(absolutePath, result.output, {
-            mode: statSync3(absolutePath).mode % 512
-          });
-          filesTouched.push(relativePath);
-          blocksStripped += result.blocks;
+      }
+      return allowed;
+    },
+    unused: () => [...unmatched].map((entry) => ({
+      check: check2.id,
+      entry,
+      kind: "line-allowlist"
+    }))
+  };
+};
+var isInCheckScope = (relativePath, check2, scopeSkip) => matchesAnyGlob(relativePath, check2.scope) && !matchesAnyGlob(relativePath, check2["path-allowlist"] ?? []) && !matchesAnyGlob(relativePath, scopeSkip);
+var scanForLeaks = ({ allowlist, check: check2, files, scopeSkip, stagingRoot }, findLeaksInLine) => {
+  const leaks = [];
+  for (const relativePath of files) {
+    if (isInCheckScope(relativePath, check2, scopeSkip)) {
+      const source = readFileSync16(path16.join(stagingRoot, relativePath), "utf8");
+      for (const [index, line] of source.split("\n").entries()) {
+        if (!allowlist.isAllowed(line)) {
+          leaks.push(...findLeaksInLine(line, index + 1, relativePath));
         }
       }
     }
   }
-  return { blocksStripped, filesTouched, unbalanced };
+  return leaks;
 };
+var runLeakCheck = (args) => {
+  const { check: check2 } = args;
+  const pattern = new RegExp(check2.pattern);
+  return scanForLeaks(args, (line, lineNumber, relativePath) => {
+    const match = pattern.exec(line);
+    return match === null ? [] : [
+      {
+        check: check2.id,
+        file: relativePath,
+        line: lineNumber,
+        match: match[0]
+      }
+    ];
+  });
+};
+
+// src/release/scrub-derived-checks.ts
+var RELEASE_EXCLUDE_PATH = ".gaia/release-exclude";
+var WORKFLOWS_DIR = ".github/workflows";
+var isDerivedCheck = (check2) => "derive" in check2;
+var slugFromPath = (filePath) => path17.basename(filePath, ".md");
+var isDirectory = (absolutePath) => {
+  try {
+    return statSync3(absolutePath).isDirectory();
+  } catch {
+    return false;
+  }
+};
+var addSlugsForExcludeLine = (line, cwd, addSlug) => {
+  if (line !== "wiki" && !line.startsWith("wiki/")) return;
+  if (line.endsWith(".md")) {
+    addSlug(slugFromPath(line));
+    return;
+  }
+  const absolute = path17.join(cwd, line);
+  if (!isDirectory(absolute)) return;
+  addSlug(path17.basename(line));
+  for (const relative of collectTreeFiles(absolute, EVERY_EXTENSION)) {
+    if (relative.endsWith(".md")) addSlug(slugFromPath(relative));
+  }
+};
+var buildExcludedSlugSet = (cwd) => {
+  const lines = parseExcludeLines(
+    readFileSync17(path17.join(cwd, RELEASE_EXCLUDE_PATH), "utf8")
+  );
+  const slugs = /* @__PURE__ */ new Set();
+  const addSlug = (value) => {
+    slugs.add(value.toLowerCase());
+  };
+  for (const line of lines) {
+    addSlugsForExcludeLine(line, cwd, addSlug);
+  }
+  return slugs;
+};
+var runDerivedWikilinkCheck = ({
+  allowlist,
+  check: check2,
+  cwd,
+  files,
+  scopeSkip,
+  stagingRoot
+}) => {
+  const excludedSlugs = buildExcludedSlugSet(cwd);
+  return scanForLeaks(
+    { allowlist, check: check2, files, scopeSkip, stagingRoot },
+    (line, lineNumber, relativePath) => extractWikilinks(line).filter((target) => excludedSlugs.has(target.toLowerCase())).map((target) => ({
+      check: check2.id,
+      file: relativePath,
+      line: lineNumber,
+      match: `[[${target}]]`
+    }))
+  );
+};
+var buildNeverPresentWorkflowSet = (cwd) => {
+  const lines = parseExcludeLines(
+    readFileSync17(path17.join(cwd, RELEASE_EXCLUDE_PATH), "utf8")
+  );
+  const paths = /* @__PURE__ */ new Set();
+  for (const line of lines) {
+    if (line.startsWith(`${WORKFLOWS_DIR}/`) && line.endsWith(".yml")) {
+      paths.add(line);
+    }
+  }
+  return paths;
+};
+var runDerivedWorkflowCheck = ({
+  allowlist,
+  check: check2,
+  cwd,
+  files,
+  scopeSkip,
+  stagingRoot
+}) => {
+  const neverPresent = buildNeverPresentWorkflowSet(cwd);
+  if (neverPresent.size === 0) return [];
+  return scanForLeaks(
+    { allowlist, check: check2, files, scopeSkip, stagingRoot },
+    (line, lineNumber, relativePath) => [...neverPresent].filter((excludedPath) => line.includes(excludedPath)).map((excludedPath) => ({
+      check: check2.id,
+      file: relativePath,
+      line: lineNumber,
+      match: excludedPath
+    }))
+  );
+};
+var isExecutableIn = (cwd) => (relativePath) => {
+  try {
+    return (statSync3(path17.join(cwd, relativePath)).mode & 73) !== 0;
+  } catch {
+    return false;
+  }
+};
+var runDerivedRefsCheck = ({
+  allowlist,
+  check: check2,
+  cwd,
+  files,
+  scopeSkip,
+  stagingRoot
+}) => {
+  const tokens = deriveExcludedRefTokens({
+    excludeLines: parseExcludeLines(
+      readFileSync17(path17.join(cwd, RELEASE_EXCLUDE_PATH), "utf8")
+    ),
+    isExecutable: isExecutableIn(cwd),
+    optOut: check2["ref-opt-out"] ?? [],
+    shippedBasenames: new Set(files.map((file2) => path17.basename(file2))),
+    tracked: listGitFiles(cwd)
+  });
+  const matcher = compileExcludedRefMatcher(tokens);
+  const leaks = scanForLeaks(
+    { allowlist, check: check2, files, scopeSkip, stagingRoot },
+    (line, lineNumber, relativePath) => matcher(line, { markdown: relativePath.endsWith(".md") }).map((match) => ({
+      check: check2.id,
+      file: relativePath,
+      line: lineNumber,
+      match
+    }))
+  );
+  return {
+    leaks,
+    warnings: tokens.unusedOptOut.map((entry) => ({
+      check: check2.id,
+      entry,
+      kind: "ref-opt-out"
+    }))
+  };
+};
+
+// src/release/scrub-json-strip.ts
+import { readFileSync as readFileSync18 } from "node:fs";
+import path18 from "node:path";
 var parseKeyPath = (key) => key.split(".");
 var deleteKeyPath = (obj, segments) => {
   if (segments.length === 0) return false;
@@ -26616,7 +26770,7 @@ var deleteKeyPath = (obj, segments) => {
 var stripJsonKeysFromFile = (absolutePath, relativePath, keySegments) => {
   let parsed;
   try {
-    parsed = JSON.parse(readFileSync15(absolutePath, "utf8"));
+    parsed = JSON.parse(readFileSync18(absolutePath, "utf8"));
   } catch (error62) {
     throw new Error(
       `Failed to parse JSON at ${relativePath}: ${error62 instanceof Error ? error62.message : String(error62)}`
@@ -26641,7 +26795,7 @@ var applyJsonStrip = (stagingRoot, files, transform2) => {
   const keySegments = transform2.keys.map((k) => parseKeyPath(k));
   for (const relativePath of files) {
     if (matchesAnyGlob(relativePath, transform2.paths)) {
-      const absolutePath = path16.join(stagingRoot, relativePath);
+      const absolutePath = path18.join(stagingRoot, relativePath);
       const removed = stripJsonKeysFromFile(
         absolutePath,
         relativePath,
@@ -26696,7 +26850,7 @@ var removeMatchingArrayElements = (node2, segments, match) => {
 var stripArrayElementsFromFile = (absolutePath, relativePath, selectors) => {
   let parsed;
   try {
-    parsed = JSON.parse(readFileSync15(absolutePath, "utf8"));
+    parsed = JSON.parse(readFileSync18(absolutePath, "utf8"));
   } catch (error62) {
     throw new Error(
       `Failed to parse JSON at ${relativePath}: ${error62 instanceof Error ? error62.message : String(error62)}`
@@ -26727,7 +26881,7 @@ var applyJsonStripArrayElement = (stagingRoot, files, transform2) => {
   }));
   for (const relativePath of files) {
     if (matchesAnyGlob(relativePath, transform2.paths)) {
-      const absolutePath = path16.join(stagingRoot, relativePath);
+      const absolutePath = path18.join(stagingRoot, relativePath);
       const removed = stripArrayElementsFromFile(
         absolutePath,
         relativePath,
@@ -26741,201 +26895,10 @@ var applyJsonStripArrayElement = (stagingRoot, files, transform2) => {
   }
   return { elementsRemoved, filesTouched };
 };
-var NOTHING_STRIPPED = {
-  filesTouched: [],
-  importersRemoved: 0,
-  packagesRemoved: 0,
-  refusal: null,
-  snapshotsRemoved: 0
-};
-var applyPnpmMemberStrip = (stagingRoot, transform2, strip) => {
-  const paths = {
-    lockfile: path16.join(stagingRoot, transform2.lockfile),
-    workspace: path16.join(stagingRoot, transform2.workspace)
-  };
-  const present = {
-    lockfile: existsSync11(paths.lockfile),
-    workspace: existsSync11(paths.workspace)
-  };
-  if (!present.lockfile && !present.workspace) return NOTHING_STRIPPED;
-  if (!present.lockfile || !present.workspace) {
-    const missing = present.lockfile ? "workspace" : "lockfile";
-    return {
-      ...NOTHING_STRIPPED,
-      refusal: {
-        detail: "staged without its pnpm counterpart file",
-        file: paths[missing],
-        token: "unparseable"
-      }
-    };
-  }
-  const input2 = {
-    lockfile: readFileSync15(paths.lockfile, "utf8"),
-    member: transform2.member,
-    workspace: readFileSync15(paths.workspace, "utf8")
-  };
-  const stripped = strip(input2);
-  const outcome = stripped.kind === "stripped" ? checkStrippedPair(input2, stripped) ?? stripped : stripped;
-  if (outcome.kind === "noop") return NOTHING_STRIPPED;
-  if (outcome.kind === "refused") {
-    return {
-      ...NOTHING_STRIPPED,
-      refusal: {
-        detail: outcome.detail,
-        file: paths[outcome.file],
-        token: outcome.token
-      }
-    };
-  }
-  atomicWriteFileSync(paths.workspace, outcome.workspace);
-  atomicWriteFileSync(paths.lockfile, outcome.lockfile);
-  return {
-    filesTouched: [transform2.workspace, transform2.lockfile],
-    importersRemoved: outcome.removed.importers.length,
-    packagesRemoved: outcome.removed.packages.length,
-    refusal: null,
-    snapshotsRemoved: outcome.removed.snapshots.length
-  };
-};
-var trackLineAllowlist = (check2) => {
-  const entries = (check2["line-allowlist"] ?? []).map(
-    (raw) => [raw, new RegExp(raw)]
-  );
-  const unmatched = new Set(entries.map(([raw]) => raw));
-  return {
-    isAllowed: (line) => {
-      let allowed = false;
-      for (const [raw, regex] of entries) {
-        if (regex.test(line)) {
-          unmatched.delete(raw);
-          allowed = true;
-        }
-      }
-      return allowed;
-    },
-    unused: () => [...unmatched].map((entry) => ({
-      check: check2.id,
-      entry,
-      kind: "line-allowlist"
-    }))
-  };
-};
-var isInCheckScope = (relativePath, check2, scopeSkip) => matchesAnyGlob(relativePath, check2.scope) && !matchesAnyGlob(relativePath, check2["path-allowlist"] ?? []) && !matchesAnyGlob(relativePath, scopeSkip);
-var scanForLeaks = ({ allowlist, check: check2, files, scopeSkip, stagingRoot }, findLeaksInLine) => {
-  const leaks = [];
-  for (const relativePath of files) {
-    if (isInCheckScope(relativePath, check2, scopeSkip)) {
-      const source = readFileSync15(path16.join(stagingRoot, relativePath), "utf8");
-      for (const [index, line] of source.split("\n").entries()) {
-        if (!allowlist.isAllowed(line)) {
-          leaks.push(...findLeaksInLine(line, index + 1, relativePath));
-        }
-      }
-    }
-  }
-  return leaks;
-};
-var runLeakCheck = (args) => {
-  const { check: check2 } = args;
-  const pattern = new RegExp(check2.pattern);
-  return scanForLeaks(args, (line, lineNumber, relativePath) => {
-    const match = pattern.exec(line);
-    return match === null ? [] : [
-      {
-        check: check2.id,
-        file: relativePath,
-        line: lineNumber,
-        match: match[0]
-      }
-    ];
-  });
-};
-var isDerivedCheck = (check2) => "derive" in check2;
-var slugFromPath = (filePath) => path16.basename(filePath, ".md");
-var isDirectory = (absolutePath) => {
-  try {
-    return statSync3(absolutePath).isDirectory();
-  } catch {
-    return false;
-  }
-};
-var addSlugsForExcludeLine = (line, cwd, addSlug) => {
-  if (line !== "wiki" && !line.startsWith("wiki/")) return;
-  if (line.endsWith(".md")) {
-    addSlug(slugFromPath(line));
-    return;
-  }
-  const absolute = path16.join(cwd, line);
-  if (!isDirectory(absolute)) return;
-  addSlug(path16.basename(line));
-  for (const relative of collectTreeFiles(absolute, EVERY_EXTENSION)) {
-    if (relative.endsWith(".md")) addSlug(slugFromPath(relative));
-  }
-};
-var buildExcludedSlugSet = (cwd) => {
-  const lines = parseExcludeLines(
-    readFileSync15(path16.join(cwd, RELEASE_EXCLUDE_PATH), "utf8")
-  );
-  const slugs = /* @__PURE__ */ new Set();
-  const addSlug = (value) => {
-    slugs.add(value.toLowerCase());
-  };
-  for (const line of lines) {
-    addSlugsForExcludeLine(line, cwd, addSlug);
-  }
-  return slugs;
-};
-var runDerivedWikilinkCheck = ({
-  allowlist,
-  check: check2,
-  cwd,
-  files,
-  scopeSkip,
-  stagingRoot
-}) => {
-  const excludedSlugs = buildExcludedSlugSet(cwd);
-  return scanForLeaks(
-    { allowlist, check: check2, files, scopeSkip, stagingRoot },
-    (line, lineNumber, relativePath) => extractWikilinks(line).filter((target) => excludedSlugs.has(target.toLowerCase())).map((target) => ({
-      check: check2.id,
-      file: relativePath,
-      line: lineNumber,
-      match: `[[${target}]]`
-    }))
-  );
-};
-var buildNeverPresentWorkflowSet = (cwd) => {
-  const lines = parseExcludeLines(
-    readFileSync15(path16.join(cwd, RELEASE_EXCLUDE_PATH), "utf8")
-  );
-  const paths = /* @__PURE__ */ new Set();
-  for (const line of lines) {
-    if (line.startsWith(`${WORKFLOWS_DIR}/`) && line.endsWith(".yml")) {
-      paths.add(line);
-    }
-  }
-  return paths;
-};
-var runDerivedWorkflowCheck = ({
-  allowlist,
-  check: check2,
-  cwd,
-  files,
-  scopeSkip,
-  stagingRoot
-}) => {
-  const neverPresent = buildNeverPresentWorkflowSet(cwd);
-  if (neverPresent.size === 0) return [];
-  return scanForLeaks(
-    { allowlist, check: check2, files, scopeSkip, stagingRoot },
-    (line, lineNumber, relativePath) => [...neverPresent].filter((excludedPath) => line.includes(excludedPath)).map((excludedPath) => ({
-      check: check2.id,
-      file: relativePath,
-      line: lineNumber,
-      match: excludedPath
-    }))
-  );
-};
+
+// src/release/scrub-title-check.ts
+import { readFileSync as readFileSync19 } from "node:fs";
+import path19 from "node:path";
 var WIKILINK_SPAN = /\[\[[^[\]]*\]\]/g;
 var INLINE_CODE_SPAN = /`[^`]*`/g;
 var addTitlesForExcludeLine = (line, cwd, addTitle) => {
@@ -26944,7 +26907,7 @@ var addTitlesForExcludeLine = (line, cwd, addTitle) => {
     addTitle(slugFromPath(line));
     return;
   }
-  const absolute = path16.join(cwd, line);
+  const absolute = path19.join(cwd, line);
   if (!isDirectory(absolute)) return;
   for (const relative of collectTreeFiles(absolute, EVERY_EXTENSION)) {
     if (relative.endsWith(".md")) addTitle(slugFromPath(relative));
@@ -26952,7 +26915,7 @@ var addTitlesForExcludeLine = (line, cwd, addTitle) => {
 };
 var buildExcludedTitleSet = (cwd) => {
   const lines = parseExcludeLines(
-    readFileSync15(path16.join(cwd, RELEASE_EXCLUDE_PATH), "utf8")
+    readFileSync19(path19.join(cwd, RELEASE_EXCLUDE_PATH), "utf8")
   );
   const titles = /* @__PURE__ */ new Set();
   for (const line of lines) {
@@ -27002,8 +26965,8 @@ var runDerivedTitleCheck = ({
   const leaks = [];
   for (const relativePath of files) {
     if (isInCheckScope(relativePath, check2, scopeSkip)) {
-      const content = readFileSync15(
-        path16.join(stagingRoot, relativePath),
+      const content = readFileSync19(
+        path19.join(stagingRoot, relativePath),
         "utf8"
       );
       leaks.push(
@@ -27017,147 +26980,97 @@ var runDerivedTitleCheck = ({
   }
   return leaks;
 };
-var isExecutableIn = (cwd) => (relativePath) => {
-  try {
-    return (statSync3(path16.join(cwd, relativePath)).mode & 73) !== 0;
-  } catch {
-    return false;
-  }
-};
-var runDerivedRefsCheck = ({
-  allowlist,
-  check: check2,
-  cwd,
-  files,
-  scopeSkip,
-  stagingRoot
-}) => {
-  const tokens = deriveExcludedRefTokens({
-    excludeLines: parseExcludeLines(
-      readFileSync15(path16.join(cwd, RELEASE_EXCLUDE_PATH), "utf8")
-    ),
-    isExecutable: isExecutableIn(cwd),
-    optOut: check2["ref-opt-out"] ?? [],
-    shippedBasenames: new Set(files.map((file2) => path16.basename(file2))),
-    tracked: listGitFiles(cwd)
-  });
-  const matcher = compileExcludedRefMatcher(tokens);
-  const leaks = scanForLeaks(
-    { allowlist, check: check2, files, scopeSkip, stagingRoot },
-    (line, lineNumber, relativePath) => matcher(line, { markdown: relativePath.endsWith(".md") }).map((match) => ({
-      check: check2.id,
-      file: relativePath,
-      line: lineNumber,
-      match
-    }))
-  );
-  return {
-    leaks,
-    warnings: tokens.unusedOptOut.map((entry) => ({
-      check: check2.id,
-      entry,
-      kind: "ref-opt-out"
-    }))
-  };
-};
-var loadConfig = (configPath) => {
-  const raw = readFileSync15(configPath, "utf8");
-  const parsed = load(raw);
-  return ConfigSchema.parse(parsed);
-};
-var parseFlags8 = (argv) => {
-  let configPath;
-  let json2 = false;
-  let stagingDir;
-  for (let index = 0; index < argv.length; index += 1) {
-    const token = argv[index];
-    if (token !== void 0) {
-      if (token === "--config") {
-        const taken = takeValue(argv, index + 1, "--config");
-        if (!taken.ok) return taken;
-        configPath = taken.value;
-        index += 1;
-      } else if (token === "--json") {
-        json2 = true;
-      } else if (token.startsWith("--")) {
-        return { message: `unknown flag: ${token}`, ok: false };
-      } else if (stagingDir === void 0) {
-        stagingDir = token;
-      } else {
-        return { message: `unexpected positional: ${token}`, ok: false };
+
+// src/release/scrub-transforms.ts
+var applyMarkerStrip = (stagingRoot, files, transform2) => {
+  const filesTouched = [];
+  const unbalanced = [];
+  let blocksStripped = 0;
+  for (const relativePath of files) {
+    if (matchesAnyGlob(relativePath, transform2.paths)) {
+      const absolutePath = path20.join(stagingRoot, relativePath);
+      const source = readFileSync20(absolutePath, "utf8");
+      const hasAnyMarker = source.includes(transform2.start) || source.includes(transform2.end);
+      if (hasAnyMarker) {
+        const result = stripMarkerBlocks(
+          source,
+          transform2.start,
+          transform2.end
+        );
+        for (const issue2 of result.unbalanced) {
+          unbalanced.push({
+            file: relativePath,
+            line: issue2.line,
+            reason: issue2.reason
+          });
+        }
+        if (result.blocks > 0) {
+          atomicWriteFileSync(absolutePath, result.output, {
+            mode: statSync4(absolutePath).mode % 512
+          });
+          filesTouched.push(relativePath);
+          blocksStripped += result.blocks;
+        }
       }
     }
   }
-  return { flags: { configPath, json: json2, stagingDir }, ok: true };
+  return { blocksStripped, filesTouched, unbalanced };
 };
-var renderHumanReport = (report, jsonMode) => {
-  if (jsonMode) return `${JSON.stringify(report, null, 2)}
-`;
-  const out = [
-    `release scrub: stripped ${report.marker_strip.blocks_stripped} marker block(s) across ${report.marker_strip.files_touched.length} file(s)`,
-    `release scrub: removed ${report.json_strip.keys_removed} json key(s) from ${report.json_strip.files_touched.length} file(s)`,
-    `release scrub: removed ${report.json_strip_array_element.elements_removed} json array element(s) from ${report.json_strip_array_element.files_touched.length} file(s)`,
-    `release scrub: removed ${report.pnpm_member_strip.importers_removed} pnpm importer(s), ${report.pnpm_member_strip.packages_removed} package(s), ${report.pnpm_member_strip.snapshots_removed} snapshot(s)`
-  ];
-  if (report.unbalanced_markers.length > 0) {
-    out.push("", `unbalanced markers (${report.unbalanced_markers.length}):`);
-    for (const issue2 of report.unbalanced_markers) {
-      out.push(`  ${issue2.file}:${issue2.line}  ${issue2.reason}`);
-    }
-  }
-  if (report.leaks.length > 0) {
-    out.push("", `leaks (${report.leaks.length}):`);
-    for (const leak of report.leaks) {
-      out.push(`  [${leak.check}] ${leak.file}:${leak.line}  ${leak.match}`);
-    }
-  } else {
-    out.push("leaks: none");
-  }
-  if (report.unused_allowlist.length > 0) {
-    out.push(
-      "",
-      `unused allowlist entries (${report.unused_allowlist.length}, warning only):`
-    );
-    for (const warning of report.unused_allowlist) {
-      out.push(`  [${warning.check}] ${warning.kind}: ${warning.entry}`);
-    }
-  }
-  return `${out.join("\n")}
-`;
+var NOTHING_STRIPPED = {
+  filesTouched: [],
+  importersRemoved: 0,
+  packagesRemoved: 0,
+  refusal: null,
+  snapshotsRemoved: 0
 };
-var resolveAbsolute = (cwd, value) => path16.isAbsolute(value) ? value : path16.join(cwd, value);
-var tryVerifyExists = (target) => {
-  try {
-    statSync3(target);
-    return true;
-  } catch {
-    return false;
+var applyPnpmMemberStrip = (stagingRoot, transform2, strip) => {
+  const paths = {
+    lockfile: path20.join(stagingRoot, transform2.lockfile),
+    workspace: path20.join(stagingRoot, transform2.workspace)
+  };
+  const present = {
+    lockfile: existsSync11(paths.lockfile),
+    workspace: existsSync11(paths.workspace)
+  };
+  if (!present.lockfile && !present.workspace) return NOTHING_STRIPPED;
+  if (!present.lockfile || !present.workspace) {
+    const missing = present.lockfile ? "workspace" : "lockfile";
+    return {
+      ...NOTHING_STRIPPED,
+      refusal: {
+        detail: "staged without its pnpm counterpart file",
+        file: paths[missing],
+        token: "unparseable"
+      }
+    };
   }
-};
-var tryLoadConfigOrReport = (configPath) => {
-  try {
-    return loadConfig(configPath);
-  } catch (error62) {
-    structuredError({
-      code: "config_load_failed",
-      message: error62 instanceof Error ? error62.message : String(error62),
-      path: configPath,
-      subcommand: "release scrub"
-    });
-    return null;
+  const input2 = {
+    lockfile: readFileSync20(paths.lockfile, "utf8"),
+    member: transform2.member,
+    workspace: readFileSync20(paths.workspace, "utf8")
+  };
+  const stripped = strip(input2);
+  const outcome = stripped.kind === "stripped" ? checkStrippedPair(input2, stripped) ?? stripped : stripped;
+  if (outcome.kind === "noop") return NOTHING_STRIPPED;
+  if (outcome.kind === "refused") {
+    return {
+      ...NOTHING_STRIPPED,
+      refusal: {
+        detail: outcome.detail,
+        file: paths[outcome.file],
+        token: outcome.token
+      }
+    };
   }
-};
-var tryWalkFilesOrReport = (stagingDir) => {
-  try {
-    return collectTreeFiles(stagingDir, EVERY_EXTENSION);
-  } catch (error62) {
-    structuredError({
-      code: "staging_walk_failed",
-      message: error62 instanceof Error ? error62.message : String(error62),
-      subcommand: "release scrub"
-    });
-    return null;
-  }
+  atomicWriteFileSync(paths.workspace, outcome.workspace);
+  atomicWriteFileSync(paths.lockfile, outcome.lockfile);
+  return {
+    filesTouched: [transform2.workspace, transform2.lockfile],
+    importersRemoved: outcome.removed.importers.length,
+    packagesRemoved: outcome.removed.packages.length,
+    refusal: null,
+    snapshotsRemoved: outcome.removed.snapshots.length
+  };
 };
 var runLeakChecksForTransform = (transform2, ctx) => {
   const leaks = [];
@@ -27269,6 +27182,124 @@ var tryRunTransformsOrReport = (config2, ctx) => {
     return null;
   }
 };
+
+// src/release/scrub.ts
+var HELP_TEXT12 = `Usage: gaia-maintainer release scrub <staging-dir> [--config <path>] [--json]
+
+  Apply the bundle-time scrub transforms in .gaia/release-scrub.yml (marker,
+  JSON and pnpm workspace-member strips, then leak checks) to a staging
+  directory produced by release.yml. Writes in place inside <staging-dir>;
+  treats the source repo as read-only.
+
+  Flags:
+    --config <path>  Override config path (default: .gaia/release-scrub.yml
+                     resolved against process.cwd()).
+    --json           Emit a structured JSON report on stdout instead of
+                     human-readable summary.
+
+  Exit codes:
+    0  clean
+    1  leaks detected, unbalanced markers, refused pnpm member strip,
+       missing staging dir, bad flags
+    2  config parse error or filesystem IO failure
+`;
+var HELP_TOKENS12 = /* @__PURE__ */ new Set(["--help", "-h", "help"]);
+var UNEXPECTED_EXIT9 = 2;
+var DEFAULT_CONFIG_PATH = ".gaia/release-scrub.yml";
+var parseFlags8 = (argv) => {
+  let configPath;
+  let json2 = false;
+  let stagingDir;
+  for (let index = 0; index < argv.length; index += 1) {
+    const token = argv[index];
+    if (token !== void 0) {
+      if (token === "--config") {
+        const taken = takeValue(argv, index + 1, "--config");
+        if (!taken.ok) return taken;
+        configPath = taken.value;
+        index += 1;
+      } else if (token === "--json") {
+        json2 = true;
+      } else if (token.startsWith("--")) {
+        return { message: `unknown flag: ${token}`, ok: false };
+      } else if (stagingDir === void 0) {
+        stagingDir = token;
+      } else {
+        return { message: `unexpected positional: ${token}`, ok: false };
+      }
+    }
+  }
+  return { flags: { configPath, json: json2, stagingDir }, ok: true };
+};
+var renderHumanReport = (report, jsonMode) => {
+  if (jsonMode) return `${JSON.stringify(report, null, 2)}
+`;
+  const out = [
+    `release scrub: stripped ${report.marker_strip.blocks_stripped} marker block(s) across ${report.marker_strip.files_touched.length} file(s)`,
+    `release scrub: removed ${report.json_strip.keys_removed} json key(s) from ${report.json_strip.files_touched.length} file(s)`,
+    `release scrub: removed ${report.json_strip_array_element.elements_removed} json array element(s) from ${report.json_strip_array_element.files_touched.length} file(s)`,
+    `release scrub: removed ${report.pnpm_member_strip.importers_removed} pnpm importer(s), ${report.pnpm_member_strip.packages_removed} package(s), ${report.pnpm_member_strip.snapshots_removed} snapshot(s)`
+  ];
+  if (report.unbalanced_markers.length > 0) {
+    out.push("", `unbalanced markers (${report.unbalanced_markers.length}):`);
+    for (const issue2 of report.unbalanced_markers) {
+      out.push(`  ${issue2.file}:${issue2.line}  ${issue2.reason}`);
+    }
+  }
+  if (report.leaks.length > 0) {
+    out.push("", `leaks (${report.leaks.length}):`);
+    for (const leak of report.leaks) {
+      out.push(`  [${leak.check}] ${leak.file}:${leak.line}  ${leak.match}`);
+    }
+  } else {
+    out.push("leaks: none");
+  }
+  if (report.unused_allowlist.length > 0) {
+    out.push(
+      "",
+      `unused allowlist entries (${report.unused_allowlist.length}, warning only):`
+    );
+    for (const warning of report.unused_allowlist) {
+      out.push(`  [${warning.check}] ${warning.kind}: ${warning.entry}`);
+    }
+  }
+  return `${out.join("\n")}
+`;
+};
+var resolveAbsolute = (cwd, value) => path21.isAbsolute(value) ? value : path21.join(cwd, value);
+var tryVerifyExists = (target) => {
+  try {
+    statSync5(target);
+    return true;
+  } catch {
+    return false;
+  }
+};
+var tryLoadConfigOrReport = (configPath) => {
+  try {
+    return loadConfig(configPath);
+  } catch (error62) {
+    structuredError({
+      code: "config_load_failed",
+      message: error62 instanceof Error ? error62.message : String(error62),
+      path: configPath,
+      subcommand: "release scrub"
+    });
+    return null;
+  }
+};
+var tryWalkFilesOrReport = (stagingDir) => {
+  try {
+    return collectTreeFiles(stagingDir, EVERY_EXTENSION);
+  } catch (error62) {
+    structuredError({
+      code: "staging_walk_failed",
+      message: error62 instanceof Error ? error62.message : String(error62),
+      subcommand: "release scrub"
+    });
+    return null;
+  }
+};
 var run12 = (argv, options = {}) => {
   const [firstArgument] = argv;
   if (firstArgument !== void 0 && HELP_TOKENS12.has(firstArgument)) {
@@ -27294,7 +27325,7 @@ var run12 = (argv, options = {}) => {
   }
   const cwd = options.cwd ?? process.cwd();
   const stagingDir = resolveAbsolute(cwd, parsed.flags.stagingDir);
-  const configPath = parsed.flags.configPath === void 0 ? path16.join(cwd, DEFAULT_CONFIG_PATH) : resolveAbsolute(cwd, parsed.flags.configPath);
+  const configPath = parsed.flags.configPath === void 0 ? path21.join(cwd, DEFAULT_CONFIG_PATH) : resolveAbsolute(cwd, parsed.flags.configPath);
   if (!tryVerifyExists(stagingDir)) {
     structuredError({
       code: "staging_dir_missing",

@@ -2,7 +2,7 @@
  * Pure line-block stripper for `# gaia:maintainer-only` / `<!-- gaia:maintainer-only -->`
  * style marker blocks. Shared by two callers:
  *
- *   - `scrub.ts`'s marker-strip transform, which writes the stripped output
+ *   - `scrub-transforms.ts`'s marker-strip transform, which writes the stripped output
  *     back into the release staging tree ahead of leak-check.
  *   - `runtime-deps.ts`'s bare-mode scan, which strips maintainer-only
  *     blocks from each `.sh` source in-memory before extracting path refs,
