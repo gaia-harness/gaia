@@ -381,7 +381,10 @@ jobs:
 
       # Every triage step below runs in a tree the apply-fix model has
       # edited, and its Edit and Write tools reach every file under
-      # .github/forensics/, so these step bodies stay inline in this file.
+      # .github/forensics/. Keeping these step bodies inline stops the model
+      # rewriting them, but helpers they call (check-scope.sh) still come from
+      # the edited tree. The scope check that counts is the quality-gate job's
+      # re-check from its own clean checkout.
       - name: Verify diff against proposed paths
         id: verify-diff
         if: |
