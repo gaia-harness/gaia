@@ -52,8 +52,9 @@ done
 # tokens with `<`, `*`, `$`, `>` or a space (placeholders, globs, redirects), a
 # bare extension (`.bats`), a leading `/` (a system path or slash command), the
 # `holistic/` finding-class names, and the paths an adopter creates (the
-# suite directory and the worked-example files under it, plus the member's
-# runtime scratch directory under the gitignored local state).
+# suite directory and the worked-example files under it, the project config the
+# CLI writes on first use, plus the member's runtime scratch directory under the
+# gitignored local state).
 check_citations() {
   local file="$1" token missing=0 title
   # shellcheck disable=SC2016 # the backticks are literal Markdown code-span delimiters
@@ -63,7 +64,7 @@ check_citations() {
       /* | holistic/*) continue ;;
       .sh | .md | .bats) continue ;;
       tests/shell | tests/shell/ | tests/shell/*.bats | scripts/slugify.sh) continue ;;
-      .gaia/local/cache/mutation-scratch/) continue ;;
+      .gaia/project.json | .gaia/local/cache/mutation-scratch/) continue ;;
     esac
     if [ ! -e "$STAGING/$token" ]; then
       log "cited path missing from the bundle: $token (in $file)"
