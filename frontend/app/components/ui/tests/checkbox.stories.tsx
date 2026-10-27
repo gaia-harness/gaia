@@ -8,7 +8,6 @@ import {Label} from '~/components/ui/label';
 const meta: Meta = {
   component: Checkbox,
   parameters: {
-    controls: {hideNoControlsWarning: true},
     wrap: 'w-fit p-4',
   },
   title: 'Components/Ui/Checkbox',

@@ -26,7 +26,6 @@ const meta: Meta<StoryArgs> = {
     })),
   ],
   parameters: {
-    controls: {hideNoControlsWarning: true},
     wrap: 'p-4',
   },
   render: ({userPreference}) => <ThemeSwitch userPreference={userPreference} />,

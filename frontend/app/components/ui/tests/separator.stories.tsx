@@ -4,7 +4,6 @@ import {Separator} from '~/components/ui/separator';
 const meta: Meta = {
   component: Separator,
   parameters: {
-    controls: {hideNoControlsWarning: true},
     wrap: 'max-w-sm p-4',
   },
   title: 'Components/Ui/Separator',

@@ -6,7 +6,6 @@ const meta: Meta = {
   component: Spinner,
   parameters: {
     chromatic: {disableSnapshot: true},
-    controls: {hideNoControlsWarning: true},
     wrap: 'w-fit p-4',
   },
   title: 'Components/Ui/Spinner',

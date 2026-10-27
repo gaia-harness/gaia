@@ -6,7 +6,6 @@ const meta: Meta = {
   component: RootErrorBoundary,
   decorators: [stubs.reactRouter()],
   parameters: {
-    controls: {hideNoControlsWarning: true},
     toaster: false,
   },
   title: 'Components/Errors/RootErrorBoundary',

@@ -49,9 +49,6 @@ const meta: Meta<StoryArgs> = {
       };
     }),
   ],
-  parameters: {
-    controls: {hideNoControlsWarning: true},
-  },
   title: 'Components/Form/ComposedForm',
 };
 

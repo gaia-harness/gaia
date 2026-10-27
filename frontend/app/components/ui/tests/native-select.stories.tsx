@@ -9,7 +9,6 @@ import {
 const meta: Meta = {
   component: NativeSelect,
   parameters: {
-    controls: {hideNoControlsWarning: true},
     wrap: 'p-4',
   },
   title: 'Components/Ui/NativeSelect',

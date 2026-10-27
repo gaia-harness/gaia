@@ -10,7 +10,6 @@ import {expectToast} from '~/utils/tests/expect-toast';
 const meta: Meta = {
   component: Toaster,
   parameters: {
-    controls: {hideNoControlsWarning: true},
     wrap: 'p-4',
   },
   render: () => <div />,

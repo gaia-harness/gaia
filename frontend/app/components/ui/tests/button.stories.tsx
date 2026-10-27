@@ -14,7 +14,6 @@ const meta: Meta = {
   component: Button,
   decorators: [stubs.reactRouter({destinations: ['/target']})],
   parameters: {
-    controls: {hideNoControlsWarning: true},
     wrap: 'w-fit p-4',
   },
   title: 'Components/Ui/Button',
