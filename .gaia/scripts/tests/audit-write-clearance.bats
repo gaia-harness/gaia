@@ -2195,6 +2195,7 @@ scratch_writer() {
   local scratch="$BATS_TEST_TMPDIR/scratch-writer" writer_file changed=0
   rm -rf "$scratch"
   copy_writer_tree "$scratch"
+  # gaia-lint-ignore whole-tree-mark-guard: the operand is the writer and its own phase siblings, copied into a scratch fixture; nothing here scans the tracked tree
   for writer_file in "$WRITER" "$THIS_DIRECTORY"/../audit-write-clearance-*.sh; do
     sed "$1" "$writer_file" > "$scratch/.gaia/scripts/${writer_file##*/}"
     cmp -s "$writer_file" "$scratch/.gaia/scripts/${writer_file##*/}" || changed=1
@@ -2485,6 +2486,7 @@ orphan_fixture() {
   [ -z "$(find "$AUDIT_DIRECTORY" -name '*.refused' 2>/dev/null)" ]
 }
 
+# bats test_tags=whole-tree
 @test "a missing writer phase sibling fails closed: exit 2, never 127, and no marker" {
   # The writer's phases live in siblings it sources from its own directory. A
   # copy missing one must refuse before it writes, never run without the phase

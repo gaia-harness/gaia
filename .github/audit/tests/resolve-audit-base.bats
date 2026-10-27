@@ -2033,6 +2033,7 @@ assert_degraded_with_unparseable() {
 # removed in turn from a copy of that directory: the answer must be the
 # degraded full-scope main ref on both forms, exit 0, never the anchor the
 # intact resolver would pick and never a 127 from a call into an absent stage.
+# bats test_tags=whole-tree
 @test "a missing sibling degrades to full review, never a narrower base" {
   local base copy_directory sibling_path sibling_name sibling_count=0
   add_commit a
