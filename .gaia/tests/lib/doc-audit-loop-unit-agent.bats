@@ -279,3 +279,99 @@ dispatch_time_names_are_scoped() {
   run bash "$ROOT/.gaia/scripts/verify-audit-roster.sh"
   [ "$status" -eq 0 ]
 }
+
+# The recorder literals the unit runs, one per instruction.
+MEMBER_RECORD_COMMAND='[ -f <root>/.gaia/scripts/audit-dispatch-cost.sh ] && bash <root>/.gaia/scripts/audit-dispatch-cost.sh record --root <root> --kind member --member <m> --agent-id <id> || true; [ -f <root>/.gaia/scripts/audit-light-telemetry.sh ] && bash <root>/.gaia/scripts/audit-light-telemetry.sh member-result --root <root> --member <m> || true'
+LIGHT_RECORD_PREFIX='[ -f <root>/.gaia/scripts/audit-dispatch-cost.sh ] && bash <root>/.gaia/scripts/audit-dispatch-cost.sh record --root <root> --kind light_reviewer --member <m> --agent-id <id> 2>/dev/null || true;'
+NOT_DISPATCHED_PREFIX='[ -f <root>/.gaia/scripts/audit-dispatch-cost.sh ] && bash <root>/.gaia/scripts/audit-dispatch-cost.sh record --root <root> --kind member --state not_dispatched --reason already_cleared --member <m> 2>/dev/null || true;'
+
+# in_maintainer_block <file> <literal>: rc 0 when a line carrying the literal
+# sits between a maintainer-only start line and the next end line.
+in_maintainer_block() {
+  awk -v needle="$2" '
+    /gaia:maintainer-only:start/ { inside_block = 1; next }
+    /gaia:maintainer-only:end/ { inside_block = 0; next }
+    inside_block && index($0, needle) { found = 1 }
+    END { exit found ? 0 : 1 }
+  ' "$1"
+}
+
+# shares_block_with <file> <first literal> <second literal>: rc 0 when one
+# maintainer-only block carries both.
+shares_block_with() {
+  awk -v first="$2" -v second="$3" '
+    /gaia:maintainer-only:start/ { inside_block = 1; saw_first = 0; saw_second = 0; next }
+    /gaia:maintainer-only:end/ { inside_block = 0; next }
+    inside_block && index($0, first) { saw_first = 1 }
+    inside_block && index($0, second) { saw_second = 1 }
+    inside_block && saw_first && saw_second { found = 1 }
+    END { exit found ? 0 : 1 }
+  ' "$1"
+}
+
+# without_block_markers <literal> <out>: copies the agent with the marker lines
+# of the maintainer-only block carrying the literal removed.
+without_block_markers() {
+  awk -v needle="$1" '
+    { lines[NR] = $0 }
+    END {
+      for (i = 1; i <= NR; i++) {
+        if (lines[i] ~ /gaia:maintainer-only:start/) { start_line = i }
+        if (lines[i] ~ /gaia:maintainer-only:end/) {
+          if (start_line && block_has_needle) { drop[start_line] = 1; drop[i] = 1 }
+          start_line = 0; block_has_needle = 0
+        }
+        if (start_line && index(lines[i], needle)) { block_has_needle = 1 }
+      }
+      for (i = 1; i <= NR; i++) if (!drop[i]) print lines[i]
+    }
+  ' "$AGENT" >"$2"
+}
+
+@test "the unit records each member dispatch cost with the agentId its launch returned" {
+  assert_pinned "$MEMBER_RECORD_COMMAND"
+  assert_pinned '`agentId`'
+}
+
+@test "the unit records each light reviewer dispatch cost in the same command as the mark" {
+  assert_pinned "$LIGHT_RECORD_PREFIX"
+}
+
+@test "the unit records members it skips as already cleared, and a light-cleared member gets no such record" {
+  assert_pinned "$NOT_DISPATCHED_PREFIX"
+  assert_pinned 'A member a light reviewer clears is not one of them'
+}
+
+@test "the recorder literals sit inside maintainer-only blocks, and the member one shares a block with member-result" {
+  in_maintainer_block "$AGENT" "$MEMBER_RECORD_COMMAND"
+  in_maintainer_block "$AGENT" "$LIGHT_RECORD_PREFIX"
+  in_maintainer_block "$AGENT" "$NOT_DISPATCHED_PREFIX"
+  shares_block_with "$AGENT" "$MEMBER_RECORD_COMMAND" 'audit-light-telemetry.sh member-result'
+  # Red twin: without the new block's marker lines the checks fail.
+  without_block_markers "$LIGHT_RECORD_PREFIX" "$BATS_TEST_TMPDIR/unfenced.md"
+  cmp -s "$AGENT" "$BATS_TEST_TMPDIR/unfenced.md" && return 1
+  in_maintainer_block "$BATS_TEST_TMPDIR/unfenced.md" "$LIGHT_RECORD_PREFIX" && return 1
+  in_maintainer_block "$BATS_TEST_TMPDIR/unfenced.md" "$NOT_DISPATCHED_PREFIX" && return 1
+  true
+}
+
+# bats test_tags=whole-tree
+@test "the release scrub strips the recorder instructions and keeps the step-3 mark" {
+  local mark_literal='--reviewer-dispatched-at <the time the first wait step printed>'
+  local staging_directory="$BATS_TEST_TMPDIR/staging"
+  mkdir -p "$staging_directory/.claude/agents"
+  cp "$AGENT" "$staging_directory/.claude/agents/audit-loop-unit.md"
+  run bash -c 'cd "$1" && "$1/.gaia/cli/gaia-maintainer" release scrub "$2" --config "$1/.gaia/release-scrub.yml"' _ "$ROOT" "$staging_directory"
+  [ "$status" -eq 0 ]
+  grep -qF -- 'audit-dispatch-cost' "$staging_directory/.claude/agents/audit-loop-unit.md" && return 1
+  grep -qF -- "$mark_literal" "$staging_directory/.claude/agents/audit-loop-unit.md"
+
+  # Red twin: with the new block's marker lines removed, the name survives the
+  # same scrub. The exit status is ignored: it turns 1 once the recorder is
+  # release-excluded and the surviving name reads as a leak.
+  local unfenced_directory="$BATS_TEST_TMPDIR/unfenced-staging"
+  mkdir -p "$unfenced_directory/.claude/agents"
+  without_block_markers "$LIGHT_RECORD_PREFIX" "$unfenced_directory/.claude/agents/audit-loop-unit.md"
+  run bash -c 'cd "$1" && "$1/.gaia/cli/gaia-maintainer" release scrub "$2" --config "$1/.gaia/release-scrub.yml"' _ "$ROOT" "$unfenced_directory"
+  grep -qF -- 'audit-dispatch-cost' "$unfenced_directory/.claude/agents/audit-loop-unit.md"
+}
