@@ -1,9 +1,10 @@
-/* eslint-disable perfectionist/sort-objects -- viewports read smallest to largest, not alphabetically */
+/* eslint-disable perfectionist/sort-objects -- viewports read largest to smallest, not alphabetically */
+import type {ViewportMap} from 'storybook/viewport';
+
 const viewport = {
-  viewports: {
+  options: {
     landscape: {
       name: 'Landscape',
-      right: 'lg',
       styles: {
         height: '768px',
         width: '1024px',
@@ -12,7 +13,6 @@ const viewport = {
     },
     portrait: {
       name: 'Portrait',
-      right: 'md',
       styles: {
         height: '1024px',
         width: '768px',
@@ -21,7 +21,6 @@ const viewport = {
     },
     mobileLarge: {
       name: 'Large mobile',
-      right: 'sm',
       styles: {
         height: '846px',
         width: '390px',
@@ -30,7 +29,6 @@ const viewport = {
     },
     mobileSmall: {
       name: 'Small mobile',
-      right: '',
       styles: {
         height: '812px',
         width: '375px',
@@ -38,6 +36,6 @@ const viewport = {
       type: 'mobile',
     },
   },
-};
+} satisfies {options: ViewportMap};
 
 export default viewport;

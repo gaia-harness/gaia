@@ -44,7 +44,6 @@ const preview: Preview = {
     chromatic: {modes: allModes},
     controls: {
       expanded: false,
-      hideNoControlsWarning: true,
       matchers: {
         color: /(background|color)$/i,
         date: /Date$/,

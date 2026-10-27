@@ -6,7 +6,6 @@ import {Label} from '~/components/ui/label';
 const meta: Meta = {
   component: Label,
   parameters: {
-    controls: {hideNoControlsWarning: true},
     wrap: 'max-w-sm p-4',
   },
   title: 'Components/Ui/Label',
