@@ -37,7 +37,9 @@ install_tree_links() {
   local directory="$1"
   mkdir -p "$directory/.claude/hooks/lib" "$directory/.gaia/scripts"
   ln -sfn "$HOME_ROOT/.claude/hooks/lib/red-ledger.sh" "$directory/.claude/hooks/lib/red-ledger.sh"
-  ln -sfn "$HOME_ROOT/.claude/hooks/lib/repo-scope.sh" "$directory/.claude/hooks/lib/repo-scope.sh"
+  for repo_scope_file in repo-scope.sh repo-scope-segment.sh repo-scope-scan.sh repo-scope-home.sh; do
+    ln -sfn "$HOME_ROOT/.claude/hooks/lib/$repo_scope_file" "$directory/.claude/hooks/lib/$repo_scope_file"
+  done
   ln -sfn "$HOME_ROOT/.gaia/scripts/red-ledger" "$directory/.gaia/scripts/red-ledger"
   # red_ledger_path (inside the symlinked red-ledger.sh above) sources this
   # relative to ITS OWN location to reach gaia_tree_key, so it needs to

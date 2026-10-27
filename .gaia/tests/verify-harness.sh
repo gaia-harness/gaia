@@ -71,6 +71,22 @@ unset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE GIT_COMMON_DIR GIT_PREFIX
 
 SECONDS=0
 
+# The EXIT trap, installed before the first exit so every path writes the
+# `verify-harness exit <status>` line last: a backgrounded run's waiter keys on
+# it, and the status it carries is the runner's own, re-exited unchanged.
+# shellcheck disable=SC2329
+verify_finish() {
+  local exit_status_at_trap=$?
+  if declare -F verify_cleanup >/dev/null; then
+    verify_cleanup
+  fi
+  printf 'verify-harness exit %s\n' "$exit_status_at_trap"
+  exit "$exit_status_at_trap"
+}
+trap verify_finish EXIT
+trap 'exit 130' INT
+trap 'exit 143' TERM
+
 verify_usage() {
   printf 'usage: bash .gaia/tests/verify-harness.sh branch | round | push <sha>...\n' >&2
   exit 2
@@ -154,7 +170,7 @@ flaky_list_file="$run_temporary_directory/flaky"
 : >"$flaky_list_file"
 new_failure_count=0
 
-# Invoked through the EXIT trap.
+# Called from verify_finish, the EXIT trap, once this point is reached.
 # shellcheck disable=SC2329
 verify_cleanup() {
   local cleanup_path
@@ -167,9 +183,6 @@ verify_cleanup() {
   [ -s "$worktree_list_file" ] && git -C "$verified_root" worktree prune >/dev/null 2>&1
   rm -rf "$run_temporary_directory"
 }
-trap verify_cleanup EXIT
-trap 'exit 130' INT
-trap 'exit 143' TERM
 
 head_sha="$(verify_git rev-parse HEAD 2>/dev/null)"
 tracked_tree_clean=0

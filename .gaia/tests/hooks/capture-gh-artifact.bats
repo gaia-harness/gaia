@@ -346,7 +346,7 @@ stage_hook_repo() {
   cp "$REPO_ROOT/.claude/hooks/lib/verb-arming-view.sh" "$REPO/.claude/hooks/lib/"
   cp "$REPO_ROOT/.claude/hooks/lib/verb-arming-live-helpers.sh" "$REPO/.claude/hooks/lib/"
   cp "$REPO_ROOT/.claude/hooks/lib/verb-arming-live-view.sh" "$REPO/.claude/hooks/lib/"
-  cp "$REPO_ROOT/.claude/hooks/lib/repo-scope.sh" "$REPO/.claude/hooks/lib/"
+  cp "$REPO_ROOT"/.claude/hooks/lib/repo-scope*.sh "$REPO/.claude/hooks/lib/"
   STAGED_HOOK="$REPO/.claude/hooks/capture-gh-artifact.sh"
   cp "$HOOK_ABSOLUTE_PATH" "$STAGED_HOOK"
   chmod +x "$STAGED_HOOK"

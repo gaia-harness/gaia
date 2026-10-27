@@ -70,8 +70,13 @@
     ".claude/hooks/lib/git-segments.sh": "owned",
     ".claude/hooks/lib/hook-payload.sh": "owned",
     ".claude/hooks/lib/jq-availability.sh": "owned",
+    ".claude/hooks/lib/main-checkout-hop-guard.sh": "owned",
+    ".claude/hooks/lib/main-git-guard-parse.sh": "owned",
     ".claude/hooks/lib/reader-operands.sh": "owned",
     ".claude/hooks/lib/red-ledger.sh": "owned",
+    ".claude/hooks/lib/repo-scope-home.sh": "owned",
+    ".claude/hooks/lib/repo-scope-scan.sh": "owned",
+    ".claude/hooks/lib/repo-scope-segment.sh": "owned",
     ".claude/hooks/lib/repo-scope.sh": "owned",
     ".claude/hooks/lib/verb-arming-live-helpers.sh": "owned",
     ".claude/hooks/lib/verb-arming-live-view.sh": "owned",
@@ -786,7 +791,7 @@
     "wiki/overview.md": "wiki-owned",
     "wiki/README.md": "wiki-owned"
   },
-  "generated": "2026-10-27T12:23:08.949Z",
+  "generated": "2026-10-27T13:48:32.898Z",
   "regions": [
     {
       "endMarker": "<!-- gaia:audit-remit:end -->",
