@@ -231,7 +231,9 @@ EOF
   mkdir -p "$hook_copy_directory/lib"
   cp "$HOOK" "$hook_copy_directory/block-fork-pr-checkout.sh"
   cp "$REPO_ROOT/.claude/hooks/lib/jq-availability.sh" "$REPO_ROOT/.claude/hooks/lib/verb-arming.sh" \
-    "$REPO_ROOT/.claude/hooks/lib/verb-arming-walk.sh" "$REPO_ROOT/.claude/hooks/lib/hook-payload.sh" \
+    "$REPO_ROOT/.claude/hooks/lib/verb-arming-walk.sh" "$REPO_ROOT/.claude/hooks/lib/verb-arming-view.sh" \
+    "$REPO_ROOT/.claude/hooks/lib/verb-arming-live-helpers.sh" "$REPO_ROOT/.claude/hooks/lib/verb-arming-live-view.sh" \
+    "$REPO_ROOT/.claude/hooks/lib/hook-payload.sh" \
     "$hook_copy_directory/lib/"
   run_guard 'gh pr checkout 12' "$hook_copy_directory/block-fork-pr-checkout.sh"
   assert_denied_by_json
