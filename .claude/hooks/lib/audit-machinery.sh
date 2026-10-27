@@ -22,6 +22,11 @@ AUDIT_MACHINERY_PATHS="$(cat <<'EOF'
 .claude/hooks/lib/audit-machinery.sh
 .claude/hooks/lib/audit-clearance.sh
 .gaia/scripts/audit-write-clearance.sh
+.gaia/scripts/audit-write-clearance-args.sh
+.gaia/scripts/audit-write-clearance-gates.sh
+.gaia/scripts/audit-write-clearance-accounting.sh
+.gaia/scripts/audit-write-clearance-publish.sh
+.gaia/scripts/audit-write-clearance-ledger.sh
 .gaia/scripts/audit-write-findings.sh
 # main-root-lib.sh decides WHERE the gate looks for a clearance
 # (pr-merge-audit-check.sh, post-audit-status.sh all resolve their store root

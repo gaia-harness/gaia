@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# shellcheck disable=SC2154 # some stage globals are assigned only in the sibling stages
 # resolve-audit-base.sh: resolve the incremental review base for the
 # code-review-audit agent.
 #
@@ -105,8 +106,8 @@
 #     rules-reset-global  a global-rules path changed between anchor and HEAD
 #     rules-reset-member  this member's own agent definition or a companion file changed
 #     machinery-reset     the argument-less flat machinery reset fired
-#     degraded            classifier, machinery, rules, or version lib not
-#                         sourceable
+#     degraded            classifier, machinery, rules, or version lib, or a
+#                         stage sibling, not sourceable
 #     no-version          .gaia/VERSION missing or empty
 #
 # Exit code
@@ -133,190 +134,17 @@
 #   that reviewed it is still current. The per-member arm is gated the same
 #   way, on the clearance body's own recorded version.
 #
-# Base reset on machinery change
-#   A version-matching candidate is not automatically safe: if any
-#   gate-machinery file (the ownership classifier, the machinery matcher,
-#   the digest recipe itself) changed on the branch between that candidate and
-#   HEAD, the candidate's audit ran under different membership/scoping rules
-#   than HEAD's, even though the version string didn't move. Reviewing only
-#   <candidate>..HEAD would then leave the candidate's own pre-base content
-#   unreviewed under the new rules. The argument-less form applies one flat
-#   test over the whole machinery set (via the batch machinery matcher,
-#   sourced from the checkout).
-#
-#   The delta that test reads is the branch's own change since the candidate:
-#   the paths whose branch-own patch differs between the candidate and HEAD.
-#   What a catch-up merge brought in from the base is not in it, so a base-only
-#   edit to a machinery path resets nothing, while a branch edit to one still
-#   does, including one made inside a merge commit. When that change cannot be
-#   computed the reset fires.
-#
-# The two-tier reset, --member form only
-#   The flat test is far broader than the question a single member is
-#   asking. A repair to one member's own lens file, or an edit to a hook
-#   that only posts a status, resets every member. So the per-member form
-#   tests the same branch-own delta in two tiers (audit-rules-changed.sh):
-#     global tier  the files deciding what a member owns, what counts as
-#                  machinery, how a digest is computed, whether a clearance
-#                  is believed, which members are dispatched, or under which
-#                  version any of that was decided. Resets EVERY member.
-#     member tier  a member's own agent definition or one of its companion files
-#                  (AUDIT_MEMBER_COMPANION_PATHS in audit-rules-changed.sh). Resets only that member.
-#   Machinery that is merely shared resets nobody. It still rotates digests,
-#   so a fresh clearance is still required before the merge gate opens, but
-#   the review earning it stays incremental. The tier predicate is a
-#   carve-out of the machinery set and never edits it.
-#
-# Per-member anchor: what a clearance proves, and what it does not
-#   A candidate is a per-member anchor when the member holds an earned
-#   clearance carrying `review: full` whose recorded TREE equals the
-#   candidate's tree and which the merge gate itself would accept: its
-#   recorded version equals the current one, and no live refusal of this
-#   member exists for that clearance's own digest (a re-run-until-pass
-#   clearance beside its own refusal never anchors). A
-#   `review: light` marker, and a marker whose body lacks the field, is never
-#   an anchor: it was written from a delta or before the field existed, and a
-#   later full review must start from the last full clearance. The tree rather than the commit
-#   sha is the matching field because an amend or a rebase rewrites the sha a
-#   moments-old clearance recorded while preserving the tree; matching on the
-#   sha would lose the anchor on exactly the rounds that earned it. No member digest is ever recomputed at a candidate: the
-#   ownership classifier reads the working tree's roster rather than the
-#   candidate commit's, so a recomputed digest can name a value that never
-#   existed at that commit.
-#
-#   CHAINED TRUST, a documented assumption rather than a proof. A clearance
-#   body records the member, the digest, the version, the write-time HEAD
-#   commit, and the tree, but never the RANGE the member reviewed. So a
-#   clearance at commit C attests a branch-own digest over that member's owned
-#   paths at C; that it covers everything up to C holds only by chaining,
-#   each clearance inheriting the coverage of the ones before it. A single
-#   vacuous clearance would therefore propagate forward invisibly. The
-#   clearance validity predicate this arm leans on is likewise a
-#   well-formedness and change-detection key, NOT an anti-forgery defence:
-#   anyone who can write the store can already write the working tree.
-#   Repairing either property is a human's decision, not this file's.
-#
-# Team-signal arm and review depth, --member form only
-#   The status is light-blind by design: it attests that no
-#   dispatched member is pending, not how deep any review was. So the --member
-#   form anchors on a whole-team signal S only when the local marker store
-#   shows no non-full marker among the in-range candidate trees, scanned
-#   across the whole roster and not only the resolving member: (a) no
-#   candidate in range may carry a tree holding any member's non-full earned
-#   marker (light, or a body without the field, at any version), and (b) some
-#   member's earned `review: full` marker must record S's tree. Check (a)
-#   matches a marker by the tree it recorded, so a non-full marker whose tree
-#   left the range (a content amend or a rebase rewrites the commit trees
-#   while the marker stays valid by branch-own digest) is not found and does not
-#   disable the arm; the reviewed delta of that member can then fall before
-#   the anchor. Either failing check disables the
-#   arm for the run and logs why; the walk still continues, so the per-member
-#   arm can win on an older full clearance of the resolving member, and with
-#   none in range the answer is no-anchor, the full-branch base.
-#   Documented boundary and its cost: the store is gitignored, so CI and a
-#   fresh clone have no markers, (b) is never met, and the arm refuses there.
-#   A --member resolution from such a run scopes the whole branch rather than
-#   the delta since the last team signal: wider (more tokens), never narrower.
-#   CI-side marker validation is out of scope. Line 3 and the argument-less
-#   form are unaffected: they still carry the whole-team floor and only KEY
-#   artifacts, so none of them scopes a member's review.
-#
-# Refusals, --member form: the newest member signal wins
-#   The walk goes newest first, and the member arm stops at the first of the
-#   member's own signals it meets. Per candidate tree a refusal is tested
-#   before an earned clearance, so a refusal and a clearance recorded at the
-#   same tree resolve as the refusal. A refusal of ANY recorded version is a
-#   signal: it stops the member arm there, so the member never anchors on an
-#   earned clearance older than its own refusal. A refusal recorded at HEAD's
-#   own tree is the newest signal of all and cannot be an anchor (the diff
-#   from it is empty), so it disables the member arm for the run.
-#
-#   The refusal the walk stops at becomes the anchor, reason member-refusal
-#   with line 4 carrying the refusal's recorded tree, only when every link
-#   below holds; any failure falls back to the whole-team anchor the walk
-#   found, else to no-anchor, never to the degraded reason, and logs the
-#   cause on a line naming the refused content:
-#     version   the refusal was recorded under the current version. The
-#               version match applies only to anchoring AT a refusal; an
-#               older-version refusal still stops the arm.
-#     coverage  the refusal record carries a review-coverage proof: its
-#               review_coverage.scope_digest equals its own digest, which the
-#               clearance writer records only when the member's captured
-#               review scope matched the write-time digest without an
-#               override, so the refusal really reviewed the tree it records.
-#     ledger    the re-run ledger at this branch's audit key (built from the
-#               merge-base of line 3 and HEAD, through audit-key-lib.sh)
-#               parses, is schema 1, and names this branch and that
-#               merge-base; its per-member provenance for this member names
-#               this refusal's digest, its tree, and the current version; and
-#               it holds at least one open entry for this member.
-#   The ledger is read only through `jq --arg`, for presence and the
-#   provenance fields. Without jq or
-#   the key library the link fails rather than degrading. Every reset below
-#   applies to a refusal anchor exactly as to a clearance anchor.
-#
-#   Trust boundary. The link is a completeness tripwire, not an anti-forgery
-#   defence: it proves the store holds a writer-shaped record of this
-#   refusal's open findings, which the member's next clearance write must
-#   account for, and anyone who can write the store can write the ledger too.
-#
-#   An earned clearance NEWER than a refusal still anchors. That rests on the
-#   chained-trust assumption above, not on a proof: the clearance attests the
-#   content at its own tree, and the clearance writer made it account for
-#   every open entry the refusal left. The whole-team floor likewise still
-#   runs past a refusal: the status is posted only
-#   when no dispatched member is pending, and a member holding a live refusal
-#   IS pending, so a whole-team signal newer than the refused commit is
-#   evidence that the refusal was already resolved (superseded by its author
-#   or retired by a digest rotation). That reasoning inherits the posting
-#   hook's member-pending check, which sits inside a guard with no else arm
-#   and posts anyway in a degraded environment; the floor is therefore
-#   sound in the normal case and fail-open in a degraded one.
-#
-# Fail direction: an unloadable library resets to full scope
-#   With the classifier, the machinery matcher, the rules-tier predicate, or
-#   the base libraries unsourceable, or with no local base reference to compute
-#   the fork point against (the answer then names git fetch origin), NEITHER tier can be evaluated, so the anchor's soundness
-#   for the resolving member cannot be established at all and the narrowing
-#   it would permit is member-specific and invisible. Both forms therefore
-#   emit the full-scope main ref and log the degradation; on no path is a
-#   candidate emitted. The merge gate already denies outright on the same
-#   input, so this agrees with the gate rather than adding a new denial. The
-#   accepted cost is that a checkout missing those libraries always reviews
-#   full scope.
-#
-#   audit-clearance.sh is the deliberate exception. Its absence is the same
-#   condition as an empty clearance store, which is every
-#   continuous-integration run: the store is gitignored and never uploaded
-#   between runs. Both tiers stay evaluable there, so it does not take the
-#   degraded arm (which would emit a reason of its own). In the argument-less
-#   form the whole-team signal still anchors; in the --member form the
-#   team-signal arm refuses for want of verifiable review depth and the answer
-#   is no-anchor (see the team-signal section above). Do not "fix" this into
-#   uniformity. audit-key-lib.sh is outside the degraded set for the same
-#   reason: without it only the refusal link fails, and the answer falls back
-#   exactly as it does when no ledger exists.
-#
-# Why bound the walk to merge-base..HEAD
-#   The base must be one of THIS PR's commits (or the divergence point as
-#   the floor). Walking into main's own history could pick a deeper main
-#   commit and pull already-merged, unrelated changes into this PR's review
-#   scope. The merge-base bound prevents that; reaching the floor yields the
-#   main ref, i.e. the full branch-own scope. A merge base that is not unique
-#   (a criss-cross) leaves no single range to walk, so it resolves degraded
-#   with the remedy named.
-#
-# Where the main ref comes from
-#   The resolver reads its base name through audit_local_base_reference, which
-#   consults the per-branch cache and makes at most one `gh` lookup per branch
-#   on a cache miss. That bounded lookup does not reintroduce the hazard of a
-#   base that resolves only sometimes, which for a resolver that SCOPES a
-#   review could land at or near HEAD, empty the reviewed delta, and let a
-#   member earn a clearance having read nothing: a failed lookup writes no
-#   cache and falls to origin/HEAD then main, the same answer the resolver
-#   always gave, and a success is fixed thereafter. The name is never taken
-#   from the environment. The fully-qualified remote-tracking spelling is the
-#   only form used, so a local branch named like it cannot stand in.
+# Siblings
+#   The stages live in siblings beside this file, which it sources from its
+#   own directory: resolve-audit-base-context.sh (main ref, fork point,
+#   version, candidates, predicate libraries), resolve-audit-base-scan.sh (the
+#   per-member pre-scan and the roster review-depth check),
+#   resolve-audit-base-walk.sh (the candidate walk) and
+#   resolve-audit-base-refusal.sh (the refusal link). Each defines functions
+#   only; this file calls them in order, and every exit goes through emit. A
+#   missing or incomplete sibling emits the main ref with reason degraded, the
+#   full-review answer.
+#   The rationale for each stage sits in its sibling's header.
 #
 # Conventions
 #   - Bash 3.2 compatible (macOS default). No associative arrays / mapfile.
@@ -326,6 +154,7 @@ set -euo pipefail
 
 # Defensive cap on the ancestry walk (PRs rarely exceed this many commits;
 # the merge-base bound usually keeps the list far shorter).
+# shellcheck disable=SC2034 # read by the candidate list in resolve-audit-base-context.sh
 MAXIMUM_WALK_COMMIT_COUNT=50
 
 TAB="$(printf '\t')"
@@ -398,47 +227,41 @@ if [ -z "$repo_root" ]; then
 fi
 
 # -----------------------------------------------------------------------------
-# Resolve the main ref and the branch's fork point. The main ref scopes the
-# full-scope fallback and bounds the ancestry walk; the fork point is what line
-# 3 carries on every arm that is not anchored, because the artifact key is
-# derived from it.
+# Load the siblings, from this file's own directory, never the working
+# directory. A sibling that is missing or unparseable takes the degraded arm
+# like an unloadable library: the full-scope main ref, so the review widens to
+# the whole branch and never narrows, and the exit stays 0 rather than the 127
+# a call into an absent stage would give. Bracketed for the reason given at
+# the version-normalizer load (resolve-audit-base-context.sh), and checked by
+# the LAST function each sibling defines, since bash 3.2 can stop partway
+# through an unparseable file with the earlier definitions already made.
 # -----------------------------------------------------------------------------
 
-# Bracketed for the reason given at the version-normalizer load below. Absence
-# of either library leaves the base unresolved, which takes the degraded arm
-# further down, the same way an absent predicate library does.
-for base_library_file in audit-base-provenance.sh audit-branch-patch.sh; do
+# No `cd` to absolutize it: this script never changes directory, so a relative
+# invocation path still names the same directory at every load.
+resolver_directory="$(dirname "${BASH_SOURCE[0]}")"
+
+# load_resolver_sibling <stage> <last function it defines>
+load_resolver_sibling() {
+  local sibling_file="${resolver_directory}/resolve-audit-base-$1.sh"
   set +e
   # shellcheck source=/dev/null
-  [ -f "${repo_root}/.claude/hooks/lib/${base_library_file}" ] && . "${repo_root}/.claude/hooks/lib/${base_library_file}" 2>/dev/null
+  [ -f "$sibling_file" ] && . "$sibling_file" 2>/dev/null
   set -e
-done
-
-main_reference="refs/remotes/origin/main"
-fork_point="$main_reference"
-base_tip=""
-base_failure=""
-if ! command -v audit_local_base_reference >/dev/null 2>&1 \
-  || ! command -v audit_branch_patch_fork_point >/dev/null 2>&1 \
-  || ! command -v audit_branch_patch_merge_base >/dev/null 2>&1 \
-  || ! command -v audit_branch_patch_changed_paths >/dev/null 2>&1; then
-  base_failure="the base libraries (audit-base-provenance.sh, audit-branch-patch.sh) are unavailable"
-elif ! resolved_reference="$(audit_local_base_reference "$repo_root" 2>/dev/null)"; then
-  base_failure="no local base reference ${main_reference} to compute against"
-else
-  main_reference="$resolved_reference"
-  base_tip="$(git -C "$repo_root" rev-parse --verify --quiet "${main_reference}^{commit}" 2>/dev/null || true)"
-  if [ -z "$base_tip" ]; then
-    base_failure="${main_reference} does not resolve to a commit"
-  elif computed_fork_point="$(audit_branch_patch_fork_point "$repo_root" "$base_tip" HEAD 2>/dev/null)" \
-    && [ -n "$computed_fork_point" ]; then
-    fork_point="$computed_fork_point"
-  else
-    base_failure="the branch's fork point from ${main_reference} could not be computed"
+  if ! declare -F "$2" >/dev/null 2>&1; then
     main_reference="refs/remotes/origin/main"
+    shared_base="$main_reference"
+    echo "resolve-audit-base: sibling resolve-audit-base-$1.sh unavailable; resetting to full scope (${main_reference})." >&2
+    emit "$main_reference" degraded ""
   fi
-fi
-shared_base="$fork_point"
+}
+
+load_resolver_sibling context resolve_base_load_predicates
+load_resolver_sibling scan resolve_base_read_roster
+load_resolver_sibling walk resolve_base_walk_candidates
+load_resolver_sibling refusal refusal_link_holds
+
+resolve_base_main_reference
 
 # A mis-invocation cannot be trusted to be a member call site, so it degrades
 # to the argument-less full-scope shape rather than guessing a four-line one.
@@ -449,431 +272,12 @@ if [ -n "$argument_error" ]; then
   emit "$main_reference" no-anchor ""
 fi
 
-# -----------------------------------------------------------------------------
-# Read .gaia/VERSION: missing/empty means no base can be validated, on either
-# anchor arm.
-# -----------------------------------------------------------------------------
-
-# Sourced here rather than in the library block below, because that block sits
-# after this read and the version gate has to answer before the walk starts.
-# Bracketed rather than `if [ -f ]; then . X || true; fi`: the existence test
-# admits a file that is present but UNPARSEABLE, and on bash 3.2.57 -- the
-# /bin/bash stock macOS ships, and the floor this script's Conventions block
-# claims -- errexit abandons the shell AT the load, so the `|| true` is never
-# reached and the resolver exits emitting nothing instead of degrading to full
-# scope. Dropping errexit across the load is what lets the failure reach the
-# `command -v` degrade below. The flat `set -e` restore matches this file's own
-# errexit arming above, rather than the state-preserving form a library uses.
-version_library="${repo_root}/.claude/hooks/lib/gaia-version.sh"
-set +e
-# shellcheck source=/dev/null
-[ -f "$version_library" ] && . "$version_library" 2>/dev/null
-set -e
-if ! command -v gaia_read_version >/dev/null 2>&1; then
-  echo "resolve-audit-base: version normalizer unavailable (gaia-version.sh); resetting to full scope (${main_reference})." >&2
-  emit "$main_reference" degraded ""
-fi
-
-current_version="$(gaia_read_version "${repo_root}/.gaia/VERSION")"
-if [ -z "$current_version" ]; then
-  emit "$main_reference" no-version ""
-fi
-
-# -----------------------------------------------------------------------------
-# Build the candidate list (PR commits, newest first).
-# -----------------------------------------------------------------------------
-
-head_sha=$(git -C "$repo_root" rev-parse HEAD 2>/dev/null || true)
-if [ -z "$head_sha" ]; then
-  emit "$main_reference" no-anchor ""
-fi
-
-# A unique merge base bounds the walk. More than one (a criss-cross) leaves no
-# single PR range to walk, so the answer is full scope with the remedy named.
-merge_base=""
-if [ -n "$base_tip" ]; then
-  if merge_base=$(audit_branch_patch_merge_base "$repo_root" "$base_tip" HEAD 2>/dev/null); then
-    :
-  else
-    merge_base_status=$?
-    merge_base=""
-    if [ "$merge_base_status" -eq 3 ]; then
-      echo "resolve-audit-base: HEAD has more than one merge base with ${main_reference}; merge the base branch (git merge --no-edit ${main_reference}) to make it unique. Resetting to full scope (${main_reference})." >&2
-      emit "$main_reference" degraded ""
-    fi
-  fi
-fi
-if [ -n "$merge_base" ]; then
-  candidates=$(git -C "$repo_root" rev-list --max-count="$MAXIMUM_WALK_COMMIT_COUNT" "${merge_base}..HEAD" 2>/dev/null || true)
-else
-  candidates=$(git -C "$repo_root" rev-list --max-count="$MAXIMUM_WALK_COMMIT_COUNT" HEAD 2>/dev/null || true)
-fi
-
-# -----------------------------------------------------------------------------
-# Signal extractor (the GAIA-Audit commit status shape).
-# -----------------------------------------------------------------------------
-
-# status_version_for <sha> → echoes the GAIA-Audit commit status version, or
-# empty. Only a state: success status counts; a non-success status (e.g. a
-# local-mode stand-down's pending status on this SHA) is filtered out at the
-# source, so such a commit is not a usable base from the status path. Needs
-# gh + GH_TOKEN + repo slug; a missing token / absent gh / API failure / no
-# success status all yield empty (the walk continues).
-status_version_for() {
-  local sha="$1" repo description
-  [ -n "${GH_TOKEN:-}" ] || return 0
-  command -v gh >/dev/null 2>&1 || return 0
-  repo="${GITHUB_REPOSITORY:-}"
-  [ -n "$repo" ] || return 0
-  description=$(gh api "repos/${repo}/commits/${sha}/statuses" \
-    --jq 'map(select(.context == "GAIA-Audit" and .state == "success")) | last | .description' \
-    2>/dev/null || true)
-  if [ -z "$description" ] || [ "$description" = "null" ]; then
-    return 0
-  fi
-  printf '%s' "$description" | awk '{print $1}'
-}
-
-# delta_for <anchor> → the branch's own change since the anchor, one path per
-# line; non-zero when it cannot be computed.
-#
-# The branch's own change excludes whatever a catch-up merge of the base brought
-# in, so a base-only edit to a machinery or rules path resets nothing while a
-# branch edit to one still does. Callers treat a failure as a reset.
-#
-# Fed to the batch matchers by here-string, never by pipe: they return on the
-# first match without draining stdin, so a piped producer writing past the
-# ~64KB pipe buffer takes SIGPIPE (141), and under `set -o pipefail` the
-# pipeline status collapses to false -- silently skipping the reset.
-#
-# The listing is NUL-terminated because the matchers compare their prefixes
-# literally: a path carrying non-ASCII or control bytes would come back wrapped
-# in literal double quotes under git's default core.quotePath, and a token
-# starting with `"` prefix-matches nothing. The `tr` puts back the newlines the
-# here-string feed reads by; pipefail carries the producer's status through it.
-delta_for() {
-  local listing
-  listing="$(audit_branch_patch_changed_paths "$repo_root" "$base_tip" "$1" "$head_sha" 2>/dev/null | tr '\0' '\n')" || return 1
-  printf '%s' "$listing"
-}
-
-# -----------------------------------------------------------------------------
-# Load the predicate libraries. This happens BEFORE the walk, not lazily on
-# first need, because their availability now decides the answer rather than
-# merely qualifying it.
-# -----------------------------------------------------------------------------
-
-library_directory="${repo_root}/.claude/hooks/lib"
-for library_file in audit-scope.sh audit-machinery.sh audit-rules-changed.sh audit-clearance.sh; do
-  # Bracketed for the reason given at the version-normalizer load above: an
-  # existence test admits an unparseable lib, and under errexit bash 3.2.57
-  # dies at the load rather than at the `||`. Same shape, same reason.
-  set +e
-  # shellcheck source=/dev/null
-  [ -f "${library_directory}/${library_file}" ] && . "${library_directory}/${library_file}" 2>/dev/null
-  set -e
-done
-
-# The key library builds the re-run ledger's path for the refusal link. Same
-# bracketed load; its absence fails only that link and never sets
-# missing_library below.
-key_library="${repo_root}/.gaia/scripts/audit-key-lib.sh"
-set +e
-# shellcheck source=/dev/null
-[ -f "$key_library" ] && . "$key_library" 2>/dev/null
-set -e
-
-if [ -n "$base_failure" ]; then
-  echo "resolve-audit-base: ${base_failure}; run git fetch origin. Resetting to full scope (${main_reference})." >&2
-  emit "$main_reference" degraded ""
-fi
-
-missing_library=""
-if ! command -v audit_owner_for_path >/dev/null 2>&1; then
-  missing_library="audit-scope.sh"
-elif ! command -v audit_path_is_machinery >/dev/null 2>&1 \
-  || ! command -v audit_delta_has_machinery >/dev/null 2>&1; then
-  missing_library="audit-machinery.sh"
-elif ! command -v audit_rules_reset_for >/dev/null 2>&1; then
-  missing_library="audit-rules-changed.sh"
-fi
-if [ -n "$missing_library" ]; then
-  echo "resolve-audit-base: classifier/machinery/rules libs unavailable (${missing_library}); resetting to full scope (${main_reference})." >&2
-  emit "$main_reference" degraded ""
-fi
-
-# -----------------------------------------------------------------------------
-# Per-member pre-scan: the trees at which this member holds a gate-accepted
-# earned clearance, and every refusal record it holds. Only the --member form
-# reads the store, and only when the clearance reader loaded.
-# -----------------------------------------------------------------------------
-
-# scan_field <clearance_scan line> <n> prints the n-th tab-separated field.
-# `cut` rather than `read` under a tab IFS: tab is IFS whitespace, so `read`
-# collapses the empty version or sha an old body can record and shifts every
-# later field, the review column included.
-scan_field() {
-  printf '%s\n' "$1" | cut -f"$2"
-}
-
-member_arm="false"
-earned_trees=""
-refused_trees=""
-# One line per refusal record: <tree>\t<version>\t<digest>\t<path>.
-refused_records=""
-non_full_trees=""
-non_full_owners=""
-full_trees=""
-team_arm_refusal=""
-
-if [ "$member_form" = "true" ] && command -v clearance_scan >/dev/null 2>&1; then
-  # An unreadable / empty store is not a degradation: it is the ordinary CI
-  # condition, where the whole-team floor is sound and both tiers stay
-  # evaluable. Fall back to the floor, never narrow on an absent record.
-  earned_scan="$(clearance_scan "$repo_root" "$member" earned 2>/dev/null || true)"
-  refused_scan="$(clearance_scan "$repo_root" "$member" refused 2>/dev/null || true)"
-
-  # Empty fields are excluded explicitly: the clearance writer applies no
-  # empty-guard to the fields it records, so an empty recorded value must
-  # never match an empty candidate value.
-  if [ -n "$earned_scan" ]; then
-    while IFS= read -r scan_line; do
-      [ -n "$scan_line" ] || continue
-      recorded_tree="$(scan_field "$scan_line" 1)"
-      recorded_version="$(scan_field "$scan_line" 2)"
-      recorded_review="$(scan_field "$scan_line" 4)"
-      [ -n "$recorded_tree" ] || continue
-      [ "$recorded_version" = "$current_version" ] || continue
-      # Only a `review: full` marker anchors. A light clearance was written by
-      # a reviewer that read a delta, so a later full review must start from
-      # the last full one; a body lacking the field (a legacy marker) is not
-      # full either.
-      [ "$recorded_review" = "full" ] || continue
-      # The recorded digest is not compared with any recipe's output, so a
-      # marker earned under the earlier whole-tree recipe still anchors on its
-      # version and tree: that recipe attested the full content at the tree, a
-      # superset of the branch's own change. The merge gate is what refuses it.
-      # The digest comes from the record body, never from the scan's sha
-      # column; clearance_scan has already checked it equals the filename stem.
-      recorded_digest="$(clearance_field "$(scan_field "$scan_line" 5)" digest)"
-      [ -n "$recorded_digest" ] || continue
-      # The merge gate refuses a clearance beside a live refusal for its own
-      # digest, so such a clearance is no signal here either.
-      if clearance_member_refused "$repo_root" "$recorded_digest" "$member"; then
-        continue
-      fi
-      earned_trees="${earned_trees}${recorded_tree}
-"
-    done <<EOF
-$earned_scan
-EOF
-  fi
-
-  # Every version is kept: an older-version refusal cannot anchor, but it still
-  # stops the member arm, so the member never anchors past it.
-  if [ -n "$refused_scan" ]; then
-    while IFS= read -r scan_line; do
-      [ -n "$scan_line" ] || continue
-      recorded_tree="$(scan_field "$scan_line" 1)"
-      recorded_version="$(scan_field "$scan_line" 2)"
-      recorded_path="$(scan_field "$scan_line" 5)"
-      [ -n "$recorded_tree" ] || continue
-      recorded_digest="$(clearance_field "$recorded_path" digest)"
-      refused_trees="${refused_trees}${recorded_tree}
-"
-      refused_records="${refused_records}${recorded_tree}${TAB}${recorded_version}${TAB}${recorded_digest}${TAB}${recorded_path}
-"
-    done <<EOF
-$refused_scan
-EOF
-  fi
-
-  if [ -n "$earned_trees" ] || [ -n "$refused_trees" ]; then
-    member_arm="true"
-  fi
-fi
-
-# Without a working jq the store reads as empty, so a refusal it holds is
-# invisible rather than linked; say so instead of resolving silently.
-if [ "$member_form" = "true" ] && ! jq -n 'true' >/dev/null 2>&1; then
-  echo "resolve-audit-base: jq is unavailable, so ${member}'s records cannot be read and no refused content can be linked to an open-finding record; per-member anchoring disabled for this run." >&2
-fi
-
-# A refusal at HEAD's own tree is the newest signal of all and cannot be an
-# anchor (the diff from it is empty), so nothing older may anchor either. The
-# walk still runs for the whole-team floor.
-if [ "$member_arm" = "true" ] && [ -n "$refused_trees" ]; then
-  head_tree="$(git -C "$repo_root" rev-parse "${head_sha}^{tree}" 2>/dev/null || true)"
-  if [ -n "$head_tree" ] && grep -qxF -- "$head_tree" <<<"$refused_trees"; then
-    echo "resolve-audit-base: ${member} refused content at HEAD ${head_sha}; a refusal at HEAD leaves an empty diff to anchor on, so per-member anchoring is disabled for this run." >&2
-    member_arm="false"
-  fi
-fi
-
-# -----------------------------------------------------------------------------
-# Team-arm review-depth check, --member form only. The status
-# is light-blind by design: it attests that every dispatched member holds a
-# clearance, not how deep any review was, so only the local marker store can say
-# whether a signal stands on full reviews. The scan therefore covers EVERY
-# roster member's earned markers, not only the resolving member's.
-#   (a) any candidate in range whose tree carries a non-full earned marker of
-#       any member (light, or a body lacking the field, at any version)
-#       disables the team arm for the run;
-#   (b) at the signal commit itself, some member's earned `review: full` marker
-#       must record that commit's tree (checked in the walk).
-# An empty store (CI, a fresh clone), an absent clearance reader, an unreadable
-# roster, and a marker the reader cannot parse all leave (b) unmet, so the arm
-# refuses to anchor: it cannot verify, and the cost of refusing is scope width
-# (the full-branch base), never narrower scope.
-# -----------------------------------------------------------------------------
-
-# record_roster_scan <roster member> <clearance_scan output>: sorts one member's
-# earned markers into the full-tree and non-full-tree sets.
-record_roster_scan() {
-  local roster_member="$1" roster_scan="$2" scan_line recorded_tree
-  [ -n "$roster_scan" ] || return 0
-  while IFS= read -r scan_line; do
-    [ -n "$scan_line" ] || continue
-    recorded_tree="$(scan_field "$scan_line" 1)"
-    [ -n "$recorded_tree" ] || continue
-    if [ "$(scan_field "$scan_line" 4)" = "full" ]; then
-      full_trees="${full_trees}${recorded_tree}
-"
-    else
-      non_full_trees="${non_full_trees}${recorded_tree}
-"
-      non_full_owners="${non_full_owners}${recorded_tree}${TAB}${roster_member}
-"
-    fi
-  done <<EOF
-$roster_scan
-EOF
-}
-
-# scan_roster_depth: the whole-roster scan and check (a). The walk calls it once,
-# at the first whole-team signal, because nothing else reads its result and a
-# store scan costs seconds per member; the resolving member's scan is the one
-# already captured above, not repeated.
-scan_roster_depth() {
-  local roster_member roster_includes_member="false" candidate_tree non_full_owner candidate_sha
-  while IFS= read -r roster_member; do
-    [ -n "$roster_member" ] || continue
-    if [ "$roster_member" = "$member" ]; then
-      roster_includes_member="true"
-      record_roster_scan "$roster_member" "$earned_scan"
-    else
-      record_roster_scan "$roster_member" "$(clearance_scan "$repo_root" "$roster_member" earned 2>/dev/null || true)"
-    fi
-  done <<EOF
-$roster_members
-EOF
-  [ "$roster_includes_member" = "true" ] || record_roster_scan "$member" "$earned_scan"
-  if [ -n "$non_full_trees" ]; then
-    for candidate_sha in $candidates; do
-      candidate_tree="$(git -C "$repo_root" rev-parse "${candidate_sha}^{tree}" 2>/dev/null || true)"
-      [ -n "$candidate_tree" ] || continue
-      if grep -qxF -- "$candidate_tree" <<<"$non_full_trees"; then
-        non_full_owner="$(grep -F -- "${candidate_tree}${TAB}" <<<"$non_full_owners" | head -n 1 | cut -f2 || true)"
-        team_arm_refusal="${non_full_owner:-a member} holds a non-full clearance at ${candidate_sha}, so the whole-team signal may stand on content no full review read"
-        echo "resolve-audit-base: ${team_arm_refusal}; whole-team anchoring disabled for ${member} this run." >&2
-        break
-      fi
-    done
-  fi
-}
-
-roster_members=""
-if [ "$member_form" = "true" ]; then
-  if ! command -v clearance_scan >/dev/null 2>&1; then
-    team_arm_refusal="the clearance reader is unavailable, so review depth at the whole-team signal cannot be verified"
-  else
-    roster_members="$(audit_roster_member_names "${repo_root}/.gaia/audit-ci.yml" 2>/dev/null || true)"
-    if [ -z "$roster_members" ]; then
-      team_arm_refusal="the audit roster is unreadable, so review depth at the whole-team signal cannot be verified"
-    fi
-  fi
-  if [ -n "$team_arm_refusal" ]; then
-    echo "resolve-audit-base: ${team_arm_refusal}; whole-team anchoring disabled for ${member} this run." >&2
-  fi
-fi
-
-# -----------------------------------------------------------------------------
-# One walk, two arms, newest wins. Per candidate the per-member arm is tested
-# first, so a member signal and a whole-team signal on the SAME commit resolve
-# as the former; across candidates the newer of the two wins, which is why this
-# is one walk and not two. Within the member arm a refusal is tested before an
-# earned clearance at the same tree, and the first member signal met settles
-# the arm. A refusal settles it only as a CANDIDATE: whether it anchors is
-# decided after the walk, once line 3 (which keys the ledger) is known.
-# -----------------------------------------------------------------------------
-
-team_anchor=""
-team_winner=""
-winner=""
-winner_reason=""
-winner_tree=""
-refusal_candidate=""
-refusal_candidate_tree=""
-
-for sha in $candidates; do
-  # HEAD itself can't be the base (an empty diff), and never carries a
-  # *matching* signal anyway, a match would have skipped the run upstream.
-  [ "$sha" = "$head_sha" ] && continue
-
-  if [ "$member_arm" = "true" ] && [ -z "$winner" ] && [ -z "$refusal_candidate" ]; then
-    candidate_tree="$(git -C "$repo_root" rev-parse "${sha}^{tree}" 2>/dev/null || true)"
-    if [ -n "$candidate_tree" ]; then
-      if grep -qxF -- "$candidate_tree" <<<"$refused_trees"; then
-        refusal_candidate="$sha"
-        refusal_candidate_tree="$candidate_tree"
-      elif grep -qxF -- "$candidate_tree" <<<"$earned_trees"; then
-        winner="$sha"
-        winner_reason="member-clearance"
-        winner_tree="$candidate_tree"
-      fi
-    fi
-  fi
-
-  # Only the first (newest) signal is the shared floor. Once it is found a
-  # later signal is never read: the walk only continues for the member arm.
-  if [ -z "$team_anchor" ]; then
-    status_version="$(status_version_for "$sha")"
-    if [ -n "$status_version" ] && [ "$status_version" = "$current_version" ]; then
-      team_anchor="$sha"
-    fi
-
-    # Check (b): a member's earned full marker must record the signal's tree.
-    # The shared floor keeps this signal either way, so line 3 of the member
-    # form still equals the argument-less answer.
-    if [ -n "$team_anchor" ] && [ "$member_form" = "true" ] && [ -z "$team_arm_refusal" ]; then
-      scan_roster_depth
-    fi
-    if [ -n "$team_anchor" ] && [ "$member_form" = "true" ] && [ -z "$team_arm_refusal" ]; then
-      signal_tree="$(git -C "$repo_root" rev-parse "${team_anchor}^{tree}" 2>/dev/null || true)"
-      if [ -z "$signal_tree" ] || ! grep -qxF -- "$signal_tree" <<<"$full_trees"; then
-        team_arm_refusal="no member holds a full-review clearance at the whole-team signal ${team_anchor}, so its review depth is unverifiable"
-        echo "resolve-audit-base: ${team_arm_refusal}; whole-team anchoring disabled for ${member} this run." >&2
-      fi
-    fi
-  fi
-
-  # The team arm is the floor for BOTH forms, so the walk runs until it finds
-  # one (or exhausts the range) even when the member arm already won. When the
-  # member form refuses the team arm, only the member arm can still win, so
-  # the walk goes on past the signal for an older full clearance of the member.
-  # A refusal candidate met before the signal keeps the signal as its fallback.
-  if [ -n "$team_anchor" ]; then
-    if [ -z "$team_arm_refusal" ]; then
-      if [ -z "$winner" ]; then
-        team_winner="$sha"
-      fi
-      break
-    fi
-    if [ -n "$winner" ] || [ -n "$refusal_candidate" ] || [ "$member_arm" != "true" ]; then
-      break
-    fi
-  fi
-done
+resolve_base_read_version
+resolve_base_build_candidates
+resolve_base_load_predicates
+resolve_base_scan_member_records
+resolve_base_read_roster
+resolve_base_walk_candidates
 
 # -----------------------------------------------------------------------------
 # The shared, pull-request-wide resolution: the whole-team arm plus the flat
@@ -902,129 +306,7 @@ if [ "$member_form" != "true" ]; then
   emit "$shared_base" "$shared_reason" ""
 fi
 
-# -----------------------------------------------------------------------------
-# The refusal link. A refusal candidate anchors only when the store provably
-# holds this member's open findings FROM THAT REFUSAL, and the refusal provably
-# reviewed the tree it records. Evaluated here, after the shared resolution,
-# because the ledger is keyed by the merge-base of line 3 and HEAD.
-# -----------------------------------------------------------------------------
-
 link_failure_cause=""
-
-# refusal_link_holds: exit 0 iff the refusal at refusal_candidate_tree links;
-# otherwise sets link_failure_cause and returns 1.
-refusal_link_holds() {
-  local record_line versioned_records="" proven_records="" coverage_digest
-  local key_base ledger_key ledger_path current_branch provenance_line
-  local provenance_digest provenance_tree provenance_version digest_matched="false"
-
-  if ! jq -n 'true' >/dev/null 2>&1; then
-    link_failure_cause="jq is unavailable, so the re-run ledger cannot be read"
-    return 1
-  fi
-  if ! command -v gaia_audit_key >/dev/null 2>&1; then
-    link_failure_cause="the audit key library (audit-key-lib.sh) is unavailable, so the re-run ledger cannot be located"
-    return 1
-  fi
-
-  while IFS= read -r record_line; do
-    [ -n "$record_line" ] || continue
-    [ "$(scan_field "$record_line" 1)" = "$refusal_candidate_tree" ] || continue
-    [ "$(scan_field "$record_line" 2)" = "$current_version" ] || continue
-    versioned_records="${versioned_records}${record_line}
-"
-  done <<EOF
-$refused_records
-EOF
-  if [ -z "$versioned_records" ]; then
-    link_failure_cause="version mismatch: no refusal at this tree was recorded under the current version ${current_version}"
-    return 1
-  fi
-
-  while IFS= read -r record_line; do
-    [ -n "$record_line" ] || continue
-    coverage_digest="$(jq -r '(.review_coverage | objects | .scope_digest | strings) // empty' \
-      "$(scan_field "$record_line" 4)" 2>/dev/null || true)"
-    [ -n "$coverage_digest" ] || continue
-    [ "$coverage_digest" = "$(scan_field "$record_line" 3)" ] || continue
-    proven_records="${proven_records}${record_line}
-"
-  done <<EOF
-$versioned_records
-EOF
-  if [ -z "$proven_records" ]; then
-    link_failure_cause="no review-coverage proof: the refusal record does not show its review covered the digest it records"
-    return 1
-  fi
-
-  key_base="$(git -C "$repo_root" merge-base "$shared_base" HEAD 2>/dev/null || true)"
-  ledger_key=""
-  if [ -n "$key_base" ]; then
-    ledger_key="$(gaia_audit_key "$key_base" "$repo_root" 2>/dev/null || true)"
-  fi
-  if [ -z "$ledger_key" ]; then
-    link_failure_cause="the re-run ledger key is undeterminable"
-    return 1
-  fi
-  ledger_path="${repo_root}/.gaia/local/audit/${ledger_key}.rerun.json"
-  if [ ! -f "$ledger_path" ]; then
-    link_failure_cause="no linked open-finding record: the re-run ledger is absent"
-    return 1
-  fi
-  if ! jq -e 'type == "object"' "$ledger_path" >/dev/null 2>&1; then
-    link_failure_cause="no linked open-finding record: the re-run ledger does not parse"
-    return 1
-  fi
-  current_branch="$(git -C "$repo_root" branch --show-current 2>/dev/null || true)"
-  if ! jq -e --arg branch "$current_branch" --arg base "$key_base" \
-    '(.schema == 1) and (.branch == $branch) and (.base_sha == $base)' \
-    "$ledger_path" >/dev/null 2>&1; then
-    link_failure_cause="stale re-run ledger: its schema, branch, or base does not match this checkout"
-    return 1
-  fi
-  if ! jq -e --arg member "$member" \
-    '[.remaining[]? | select(type == "object" and .member == $member)] | length > 0' \
-    "$ledger_path" >/dev/null 2>&1; then
-    link_failure_cause="no linked open-finding record: the re-run ledger holds no open entry for ${member}"
-    return 1
-  fi
-  if ! jq -e --arg member "$member" \
-    '(.member_provenance | type == "object") and (.member_provenance[$member] | type == "object")' \
-    "$ledger_path" >/dev/null 2>&1; then
-    link_failure_cause="no linked open-finding record: the re-run ledger holds no provenance for ${member}"
-    return 1
-  fi
-
-  provenance_line="$(jq -r --arg member "$member" \
-    '.member_provenance[$member] | [.refusal_digest, .refusal_tree, .version]
-      | map(if type == "string" then . else "" end) | join("\t")' \
-    "$ledger_path" 2>/dev/null || true)"
-  provenance_digest="$(scan_field "$provenance_line" 1)"
-  provenance_tree="$(scan_field "$provenance_line" 2)"
-  provenance_version="$(scan_field "$provenance_line" 3)"
-  if [ "$provenance_version" != "$current_version" ]; then
-    link_failure_cause="version mismatch: the ledger provenance for ${member} was recorded under a different version"
-    return 1
-  fi
-
-  while IFS= read -r record_line; do
-    [ -n "$record_line" ] || continue
-    [ -n "$provenance_digest" ] || continue
-    [ "$(scan_field "$record_line" 3)" = "$provenance_digest" ] || continue
-    digest_matched="true"
-    if [ "$provenance_tree" = "$(scan_field "$record_line" 1)" ]; then
-      return 0
-    fi
-  done <<EOF
-$proven_records
-EOF
-  if [ "$digest_matched" = "true" ]; then
-    link_failure_cause="no linked open-finding record: the ledger provenance records a different tree for this refusal"
-  else
-    link_failure_cause="no linked open-finding record: the ledger provenance names a different refusal of ${member}"
-  fi
-  return 1
-}
 
 # -----------------------------------------------------------------------------
 # The per-member resolution: the walk's winner, then the two-tier reset.

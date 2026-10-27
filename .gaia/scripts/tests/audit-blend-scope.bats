@@ -57,7 +57,7 @@ install_machinery() {
     "$CATCHUP_ROOT/.gaia/scripts/"
   chmod +x "$CATCHUP_ROOT/.gaia/scripts/audit-resolve-scope.sh" \
     "$CATCHUP_ROOT/.gaia/scripts/audit-scope-digest.sh"
-  cp "$REPO_ROOT/.github/audit/resolve-audit-base.sh" "$CATCHUP_ROOT/.github/audit/"
+  cp "$REPO_ROOT"/.github/audit/resolve-audit-base*.sh "$CATCHUP_ROOT/.github/audit/"
   chmod +x "$CATCHUP_ROOT/.github/audit/resolve-audit-base.sh"
   cp "$REPO_ROOT/.gaia/audit-ci.yml" "$CATCHUP_ROOT/.gaia/"
   cp "$REPO_ROOT/.claude/hooks/lib/audit-scope.sh" \

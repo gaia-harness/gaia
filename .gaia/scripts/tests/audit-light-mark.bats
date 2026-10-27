@@ -1184,14 +1184,15 @@ line 5')"
 # --- structural guards ------------------------------------------------------
 
 # review_light_offenders <repo>: tracked *.sh files outside the allowlist that
-# spell the literal. The allowlist is the two writers, the one caller, and any
-# shell file under a tests directory.
+# spell the literal. The allowlist is the two writers (the clearance writer with
+# its phase siblings), the one caller, and any shell file under a tests
+# directory.
 review_light_offenders() {
   local scanned=0 file
   while IFS= read -r -d '' file; do
     scanned=$((scanned + 1))
     case "$file" in
-      .gaia/scripts/audit-write-clearance.sh | .gaia/scripts/audit-write-findings.sh | .gaia/scripts/audit-light-mark.sh) continue ;;
+      .gaia/scripts/audit-write-clearance.sh | .gaia/scripts/audit-write-clearance-*.sh | .gaia/scripts/audit-write-findings.sh | .gaia/scripts/audit-light-mark.sh) continue ;;
       tests/* | */tests/*) continue ;;
     esac
     grep -qF -- '--review light' "$1/$file" 2>/dev/null && printf '%s\n' "$file"

@@ -62,8 +62,9 @@ build_sandbox() {
     "$REPO_ROOT/.gaia/scripts/audit-member-digest.sh" \
     "$REPO_ROOT/.gaia/scripts/audit-write-findings.sh" \
     "$REPO_ROOT/.gaia/scripts/audit-write-clearance.sh" \
+    "$REPO_ROOT/.gaia/scripts/audit-write-clearance-"*.sh \
     "$directory/.gaia/scripts/"
-  cp "$REPO_ROOT/.github/audit/resolve-audit-base.sh" "$directory/.github/audit/"
+  cp "$REPO_ROOT"/.github/audit/resolve-audit-base*.sh "$directory/.github/audit/"
   cp "$REPO_ROOT/.claude/hooks/lib/"*.sh "$REPO_ROOT/.claude/hooks/lib/audit-member-protocol.md" \
     "$directory/.claude/hooks/lib/"
   chmod +x "$directory/.gaia/scripts/"*.sh "$directory/.github/audit/resolve-audit-base.sh"
