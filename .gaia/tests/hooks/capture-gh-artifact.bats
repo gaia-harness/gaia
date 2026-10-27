@@ -343,7 +343,7 @@ stage_hook_repo() {
   mkdir -p "$REPO/.claude/hooks/lib"
   cp "$REPO_ROOT/.claude/hooks/lib/verb-arming.sh" "$REPO/.claude/hooks/lib/"
   cp "$REPO_ROOT/.claude/hooks/lib/verb-arming-walk.sh" "$REPO/.claude/hooks/lib/"
-  cp "$REPO_ROOT/.claude/hooks/lib/repo-scope.sh" "$REPO/.claude/hooks/lib/"
+  cp "$REPO_ROOT"/.claude/hooks/lib/repo-scope*.sh "$REPO/.claude/hooks/lib/"
   STAGED_HOOK="$REPO/.claude/hooks/capture-gh-artifact.sh"
   cp "$HOOK_ABSOLUTE_PATH" "$STAGED_HOOK"
   chmod +x "$STAGED_HOOK"

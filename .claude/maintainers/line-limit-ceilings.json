@@ -2,7 +2,7 @@
   "ceilings": {
     ".claude/hooks/audit-loop-bound.sh": 835,
     ".claude/hooks/block-audit-loop-write.sh": 629,
-    ".claude/hooks/block-main-destructive-git.sh": 1038,
+    ".claude/hooks/block-main-destructive-git.sh": 494,
     ".claude/hooks/block-rm-rf.sh": 820,
     ".claude/hooks/capture-red-observations.sh": 459,
     ".claude/hooks/lib/audit-base-provenance.sh": 417,
@@ -10,7 +10,6 @@
     ".claude/hooks/lib/audit-quick-classify-lib.sh": 1289,
     ".claude/hooks/lib/audit-scope.sh": 498,
     ".claude/hooks/lib/gaia-packages.sh": 405,
-    ".claude/hooks/lib/repo-scope.sh": 1095,
     ".claude/hooks/lib/verb-arming-walk.sh": 1116,
     ".claude/hooks/local-janitor.sh": 528,
     ".claude/hooks/post-audit-status.sh": 653,

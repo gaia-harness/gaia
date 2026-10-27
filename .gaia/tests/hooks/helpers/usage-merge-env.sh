@@ -42,7 +42,8 @@ build_repo() {
   mkdir -p "$REPO/.claude/hooks/lib" "$REPO/.gaia/scripts" "$REPO/.gaia/scripts/spec" "$TELEMETRY_DIRECTORY"
   local copied_file
   cp "$SOURCE_ROOT/.claude/hooks/pr-merge-cost.sh" "$REPO/.claude/hooks/"
-  for copied_file in verb-arming.sh verb-arming-walk.sh repo-scope.sh hook-payload.sh audit-scope.sh; do
+  for copied_file in verb-arming.sh verb-arming-walk.sh repo-scope.sh repo-scope-segment.sh repo-scope-scan.sh repo-scope-home.sh \
+    hook-payload.sh audit-scope.sh; do
     cp "$SOURCE_ROOT/.claude/hooks/lib/$copied_file" "$REPO/.claude/hooks/lib/"
   done
   for copied_file in "$SOURCE_ROOT"/.gaia/scripts/usage*.sh "$SOURCE_ROOT"/.gaia/scripts/token-pricing-lib.sh \

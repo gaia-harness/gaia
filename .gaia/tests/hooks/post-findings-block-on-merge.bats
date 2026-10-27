@@ -58,7 +58,7 @@ setup() {
   mkdir -p "$REPO/.gaia/scripts" "$REPO/.claude/hooks/lib" "$REPO/.gaia/local/audit"
   cp "$PRODUCER_ABSOLUTE_PATH" "$REPO/.gaia/scripts/post-findings-block.sh"
   cp "$KEY_LIBRARY_ABSOLUTE_PATH" "$REPO/.gaia/scripts/audit-key-lib.sh"
-  cp "$REPO_SCOPE_ABSOLUTE_PATH" "$REPO/.claude/hooks/lib/repo-scope.sh"
+  cp "${REPO_SCOPE_ABSOLUTE_PATH%/*}"/repo-scope*.sh "$REPO/.claude/hooks/lib/"
   cp "$VERB_ARMING_ABSOLUTE_PATH" "$REPO/.claude/hooks/lib/verb-arming.sh"
   cp "$VERB_ARMING_WALK_ABSOLUTE_PATH" "$REPO/.claude/hooks/lib/verb-arming-walk.sh"
   cp "$HOOK_PAYLOAD_ABSOLUTE_PATH" "$REPO/.claude/hooks/lib/hook-payload.sh"
