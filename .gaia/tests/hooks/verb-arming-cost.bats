@@ -525,7 +525,8 @@ CEILING_USAGE_MERGE_MS=4000
   local copied_file
   mkdir -p "$REPO/.claude/hooks/lib" "$REPO/.gaia/scripts" "$REPO/.gaia/scripts/spec"
   cp "$HOOKS_DIRECTORY/pr-merge-cost.sh" "$REPO/.claude/hooks/"
-  for copied_file in verb-arming.sh verb-arming-walk.sh repo-scope.sh repo-scope-segment.sh repo-scope-scan.sh repo-scope-home.sh \
+  for copied_file in verb-arming.sh verb-arming-walk.sh verb-arming-view.sh verb-arming-live-helpers.sh \
+    verb-arming-live-view.sh repo-scope.sh repo-scope-segment.sh repo-scope-scan.sh repo-scope-home.sh \
     hook-payload.sh audit-scope.sh; do
     cp "$HOOKS_DIRECTORY/lib/$copied_file" "$REPO/.claude/hooks/lib/"
   done

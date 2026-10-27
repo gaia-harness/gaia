@@ -61,6 +61,9 @@ setup() {
   cp "${REPO_SCOPE_ABSOLUTE_PATH%/*}"/repo-scope*.sh "$REPO/.claude/hooks/lib/"
   cp "$VERB_ARMING_ABSOLUTE_PATH" "$REPO/.claude/hooks/lib/verb-arming.sh"
   cp "$VERB_ARMING_WALK_ABSOLUTE_PATH" "$REPO/.claude/hooks/lib/verb-arming-walk.sh"
+  cp "${VERB_ARMING_WALK_ABSOLUTE_PATH%/*}/verb-arming-view.sh" "$REPO/.claude/hooks/lib/verb-arming-view.sh"
+  cp "${VERB_ARMING_WALK_ABSOLUTE_PATH%/*}/verb-arming-live-helpers.sh" "$REPO/.claude/hooks/lib/verb-arming-live-helpers.sh"
+  cp "${VERB_ARMING_WALK_ABSOLUTE_PATH%/*}/verb-arming-live-view.sh" "$REPO/.claude/hooks/lib/verb-arming-live-view.sh"
   cp "$HOOK_PAYLOAD_ABSOLUTE_PATH" "$REPO/.claude/hooks/lib/hook-payload.sh"
   chmod +x "$REPO/.gaia/scripts/post-findings-block.sh"
 

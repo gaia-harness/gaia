@@ -72,6 +72,9 @@
     ".claude/hooks/lib/repo-scope-scan.sh": "owned",
     ".claude/hooks/lib/repo-scope-segment.sh": "owned",
     ".claude/hooks/lib/repo-scope.sh": "owned",
+    ".claude/hooks/lib/verb-arming-live-helpers.sh": "owned",
+    ".claude/hooks/lib/verb-arming-live-view.sh": "owned",
+    ".claude/hooks/lib/verb-arming-view.sh": "owned",
     ".claude/hooks/lib/verb-arming-walk.sh": "owned",
     ".claude/hooks/lib/verb-arming.sh": "owned",
     ".claude/hooks/lib/worthiness-ledger.sh": "owned",
@@ -296,7 +299,10 @@
     ".gaia/scripts/red-ledger/README.md": "owned",
     ".gaia/scripts/resolve-audit-members.sh": "owned",
     ".gaia/scripts/select-migration-notes.sh": "owned",
+    ".gaia/scripts/server-process-discovery.sh": "owned",
     ".gaia/scripts/server-process-lib.sh": "owned",
+    ".gaia/scripts/server-process-sessions.sh": "owned",
+    ".gaia/scripts/server-process-stop.sh": "owned",
     ".gaia/scripts/setup-ping.sh": "owned",
     ".gaia/scripts/spec/handoff-clear.sh": "owned",
     ".gaia/scripts/spec/ledger-lib.sh": "owned",
@@ -770,7 +776,7 @@
     "wiki/overview.md": "wiki-owned",
     "wiki/README.md": "wiki-owned"
   },
-  "generated": "2026-10-27T08:32:56.799Z",
+  "generated": "2026-10-27T11:28:26.099Z",
   "regions": [
     {
       "endMarker": "<!-- gaia:audit-remit:end -->",
