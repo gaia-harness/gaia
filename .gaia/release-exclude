@@ -161,6 +161,8 @@ wiki/decisions/Local Test Runtime.md
 wiki/decisions/Dependabot as a Data Source.md
 # Documents the audit dispatch-cost recorder, library and report, all release-excluded; an adopter clone has none of them.
 wiki/concepts/Per-dispatch Audit Cost Telemetry.md
+# Describes the maintainer-only tech-debt source record and its report, both stripped or release-excluded, so an adopter clone would carry a page about machinery it does not have.
+wiki/concepts/Maintainer-only Debt Source Record.md
 
 # --- 3. Test harnesses and audit reports ---
 # Smoke / observability harnesses run by maintainers in CI; never invoked
