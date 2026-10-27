@@ -13,8 +13,8 @@
 #   audit-dispatch-cost.sh report [--root <r>] [--window <n>]
 #
 # Log: <main>/.gaia/local/telemetry/audit-light-routing.jsonl, <main> from
-# main-root-lib.sh; the same file audit-light-telemetry.sh writes, which its
-# tally reads past the dispatch_cost events.
+# main-root-lib.sh; the same file audit-light-telemetry.sh writes, whose tally
+# windows past the dispatch_cost events and reads complete ones for spend.
 #
 # Why maintainer-only: the log answers a question only the maintainer asks, and
 # adopters have no use for the file. This script is release-excluded, and

@@ -379,9 +379,11 @@ route_event_anchor_kind() {
   grep -qxF 'escalation_rate: n/a' <<<"$output"
   grep -qxF 'escalation_precision: n/a' <<<"$output"
   grep -qxF 'light_misses: 0' <<<"$output"
-  grep -qxF 'light_median_tokens: n/a' <<<"$output"
+  grep -qxF 'light_unmeasured: 0' <<<"$output"
+  grep -qxF 'light_spend_median_tokens: n/a' <<<"$output"
   grep -qxF 'baseline_tokens: 3300000' <<<"$output"
-  grep -qxF 'light_vs_baseline: n/a' <<<"$output"
+  grep -qxF 'baseline_source: default' <<<"$output"
+  grep -qxF 'light_spend_vs_member_spend: n/a' <<<"$output"
 }
 
 @test "tally rejects a non-numeric baseline with exit 2" {
@@ -422,7 +424,7 @@ write_route_events() {
   [ "$broken_rate" != "$(tally_value engagement_rate)" ]
 }
 
-@test "tally reports escalation rate, median tokens and the baseline ratio, and skips a torn line" {
+@test "tally reports escalation rate, counts outcomes with no cost event as unmeasured, and skips a torn line" {
   mkdir -p "$TELEMETRY_DIRECTORY"
   for tokens in 100 200 300 400; do
     jq -n -c --argjson tokens "$tokens" '{event: "light_outcome", branch: "b", member: "m", digest: "d", verdict: "clear", tokens: $tokens}' >> "$LOG"
@@ -431,8 +433,9 @@ write_route_events() {
   printf '{"event":"light_outcome","torn\n' >> "$LOG"
   [ "$(tally_value escalations)" = "1" ]
   [ "$(tally_value escalation_rate)" = "0.20" ]
-  [ "$(tally_value light_median_tokens)" = "250" ]
-  [ "$(tally_value light_vs_baseline --baseline-tokens 1000)" = "0.25" ]
+  [ "$(tally_value light_unmeasured)" = "5" ]
+  [ "$(tally_value light_spend_median_tokens)" = "n/a" ]
+  [ "$(tally_value light_spend_vs_member_spend --baseline-tokens 1000)" = "n/a" ]
 }
 
 # prepare_light_miss <finding-path> <finding-line>: a clear light review whose
@@ -781,6 +784,87 @@ followup_without_time() {
   cost_followup="$(followup_without_time yes)"
   [ "$(jq -r '.route_digest' <<<"$plain_followup")" = "$DIGEST" ]
   [ "$plain_followup" = "$cost_followup" ]
+}
+
+# ---------------------------------------------------------------------------
+# tally: light spend against member spend
+# ---------------------------------------------------------------------------
+
+# log_spend_cost <kind> <branch> <member> <digest> <own-total> [overlay-json]
+# [children-total]: one dispatch_cost line whose own tokens add up to
+# <own-total> across every bucket, the overlay laid over a complete event.
+log_spend_cost() {
+  local overlay="${6:-}"
+  [ -n "$overlay" ] || overlay='{}'
+  log_json "$(jq -n -c --arg kind "$1" --arg branch "$2" --arg member "$3" --arg digest "$4" \
+    --argjson total "$5" --argjson overlay "$overlay" --argjson children "${7:-0}" '
+    {event: "dispatch_cost", schema: 1, kind: $kind, branch: $branch, member: $member, digest: $digest,
+     state: "ok", incomplete: false, children_state: "ok",
+     own: {input_tokens: 1000, cache_write_5m_tokens: 500, cache_write_1h_tokens: 500,
+           cache_read_tokens: ($total - 3000), output_tokens: 1000},
+     children: (if $children == 0 then {} else {"audit-refuter": {input_tokens: 0, cache_write_5m_tokens: 0,
+       cache_write_1h_tokens: 0, cache_read_tokens: $children, output_tokens: 0}} end)} + $overlay')"
+}
+
+# write_spend_log: two re-audit light outcomes with complete light reviewer
+# cost events (400000 and 600000), one with none (written before cost events
+# existed), one whose cost event is incomplete, and a quick outcome with a cost
+# event; complete frontend member events of 2000000 (half in a child) and
+# 3000000; and frontend member events that are incomplete, unparsed in their
+# children or not dispatched, plus a shell member event, none of which is a
+# baseline value.
+write_spend_log() {
+  log_json '{"event":"light_outcome","branch":"b0","member":"code-audit-frontend","digest":"d0","verdict":"clear","tokens":90}'
+  log_json '{"event":"light_outcome","branch":"b1","member":"code-audit-frontend","digest":"d1","verdict":"clear","tokens":100}'
+  log_spend_cost light_reviewer b1 "$FRONTEND_MEMBER" d1 400000
+  log_json '{"event":"light_outcome","branch":"b2","member":"code-audit-frontend","digest":"d2","verdict":"escalate","tokens":110}'
+  log_spend_cost light_reviewer b2 "$FRONTEND_MEMBER" d2 600000
+  log_spend_cost member b2 "$FRONTEND_MEMBER" m2 1000000 '{}' 1000000
+  log_json '{"event":"light_outcome","branch":"b3","member":"code-audit-frontend","digest":"d3","verdict":"clear","tokens":120}'
+  log_spend_cost light_reviewer b3 "$FRONTEND_MEMBER" d3 9000000 '{"incomplete":true}'
+  log_json '{"event":"light_outcome","branch":"b5","member":"code-audit-frontend","digest":"q5","verdict":"clear","tokens":130,"anchor_kind":"merge-base"}'
+  log_spend_cost light_reviewer b5 "$FRONTEND_MEMBER" q5 50000
+  log_spend_cost member b4 "$FRONTEND_MEMBER" m4 3000000
+  log_spend_cost member b6 "$FRONTEND_MEMBER" m6 99000000 '{"incomplete":true}'
+  log_spend_cost member b7 "$FRONTEND_MEMBER" m7 99000000 '{"children_state":"unparsed"}'
+  log_spend_cost member b8 "$SHELL_MEMBER" m8 50000000
+  log_spend_cost member b9 "$FRONTEND_MEMBER" m9 0 '{"state":"not_dispatched","own":null}'
+}
+
+@test "tally divides the median light reviewer spend by the median member spend of the same member, counting outcomes with no complete cost event apart" {
+  write_spend_log
+  [ "$(tally_value light_unmeasured)" = "2" ]
+  [ "$(tally_value light_spend_median_tokens)" = "500000" ]
+  [ "$(tally_value baseline_tokens)" = "2500000" ]
+  [ "$(tally_value baseline_source)" = "member-median" ]
+  [ "$(tally_value light_spend_vs_member_spend)" = "0.20" ]
+  [ "$(tally_value light_spend_vs_member_spend --baseline-tokens 1000)" = "0.20" ]
+}
+
+@test "with no complete member cost event the baseline falls back to the default or the flag and says so" {
+  log_spend_cost light_reviewer b1 "$FRONTEND_MEMBER" d1 330000
+  log_json '{"event":"light_outcome","branch":"b1","member":"code-audit-frontend","digest":"d1","verdict":"clear","tokens":100}'
+  log_spend_cost member b2 "$SHELL_MEMBER" m2 1000000
+  log_spend_cost member b3 "$FRONTEND_MEMBER" m3 1000000 '{"incomplete":true}'
+  [ "$(tally_value light_unmeasured)" = "0" ]
+  [ "$(tally_value baseline_tokens)" = "3300000" ]
+  [ "$(tally_value baseline_source)" = "default" ]
+  [ "$(tally_value light_spend_vs_member_spend)" = "0.10" ]
+  [ "$(tally_value baseline_tokens --baseline-tokens 660000)" = "660000" ]
+  [ "$(tally_value light_spend_vs_member_spend --baseline-tokens 660000)" = "0.50" ]
+}
+
+@test "complete cost events, on a branch of their own too, leave the kill-rule figures unchanged" {
+  write_spend_log
+  log_spend_cost member b-cost-only "$FRONTEND_MEMBER" m10 1000000
+  log_spend_cost light_reviewer b-cost-only "$FRONTEND_MEMBER" d10 1000000
+  kill_lines='^(window_prs|eligible_reaudits|light_cleared|light_cleared_rate|quick_routes|quick_cleared)(\[|:)'
+  with_cost="$(bash "$SCRIPT" tally --root "$ROOT" --window 3 | grep -E "$kill_lines")"
+  grep -v '"dispatch_cost"' "$LOG" > "$LOG.plain"
+  mv "$LOG.plain" "$LOG"
+  without_cost="$(bash "$SCRIPT" tally --root "$ROOT" --window 3 | grep -E "$kill_lines")"
+  grep -qxF 'window_prs: 3' <<<"$without_cost"
+  [ "$with_cost" = "$without_cost" ]
 }
 
 # bats test_tags=whole-tree
