@@ -135,6 +135,8 @@
 .gaia/scripts/check-audit-base-derivation.sh
 # Builds and resolves the maintainer-only tech-debt source line; its one shipped caller sits inside maintainer-only blocks the bundle-time scrub removes, so an adopter clone would carry a library nothing invokes.
 .gaia/scripts/debt-source-lib.sh
+# Reports tech-debt filings per branch from the maintainer-only source line, which a release tree never writes, so an adopter clone would carry a report with nothing to read.
+.gaia/scripts/debt-source-report.sh
 
 # --- 2. Maintainer-only wiki content ---
 # Internal vault administration files and team-specific knowledge that

@@ -73,6 +73,15 @@
 # On the maintainer repository, `audience` adopter|maintainer is required and
 # becomes the `audience:` label.
 # gaia:maintainer-only:end
+# gaia:maintainer-only:start
+# Source line: the body's line 2 is `<!-- gaia-debt-source: v1 branch=<value> -->`,
+# directly after the key line. <value> is a 12-hex digest of the branch (the digest
+# rule is in the header of debt-source-lib.sh), `detached`, or `unknown`. The branch
+# is the finding's `source_branch` field when present (an empty string means
+# detached), else `--source-branch <name>`, else the branch checked out in the tree
+# holding this script; a tree git cannot read is `unknown`. The raw branch name is
+# never written to the body.
+# gaia:maintainer-only:end
 #
 # Order for file: screen, then (security-class only) a first visibility read,
 # probe, dedup, a second visibility read as the last gh call before the first
@@ -92,6 +101,11 @@
 # the wrapped key>.json. A later run for the same key that ends filed, matched,
 # absent or failed removes it; another transient leaves it. Security-class findings
 # never reach that directory.
+# gaia:maintainer-only:start
+# On this repository the retained copy then gains `source_branch` (the resolved raw
+# branch) when the finding lacks it, so a replay records the first attempt's branch;
+# a file that already carries it is left as copied.
+# gaia:maintainer-only:end
 #
 # Dedup choices. The lists are fetched here, with --repo, and handed to
 # debt-dedup.sh through its test seams, which owns the matching rules. An open
@@ -390,6 +404,10 @@ wrapped_key=""
 key_hash=""
 retry_file=""
 security_trigger=""
+# gaia:maintainer-only:start
+source_branch_flag=""
+source_line=""
+# gaia:maintainer-only:end
 
 # append_outcome <outcome> <issue-or-null> <record-or-empty>
 append_outcome() {
@@ -441,6 +459,9 @@ finish_transient() {
   append_outcome transient null ""
   if [ -z "$security_trigger" ] && [ "$disposition" = file ]; then
     mkdir -p "$(dirname "$retry_file")" 2>/dev/null && { [ "$finding_file" -ef "$retry_file" ] || cp "$finding_file" "$retry_file"; }
+    # gaia:maintainer-only:start
+    command -v gaia_debt_source_retain >/dev/null 2>&1 && [ -f "$retry_file" ] && gaia_debt_source_retain "$retry_file"
+    # gaia:maintainer-only:end
   fi
   printf 'transient\n'
   exit 0
@@ -514,6 +535,13 @@ cmd_file() {
         esac
         shift 2
         ;;
+      # gaia:maintainer-only:start
+      --source-branch)
+        [ "$#" -ge 2 ] && [ -n "$2" ] || die_usage "$1 needs a value"
+        source_branch_flag="$2"
+        shift 2
+        ;;
+      # gaia:maintainer-only:end
       *) die_usage "unknown argument $1" ;;
     esac
   done
@@ -541,6 +569,15 @@ cmd_file() {
   wrapped_key="<!-- gaia-debt-key: v1 class=$key_class path=$finding_path line=$finding_line -->"
   key_hash="$(sha256_of_text "$wrapped_key")" || exit 3
   retry_file="$(dirname "$outcome_file")/filing-retry/$key_hash.json"
+
+  # gaia:maintainer-only:start
+  # shellcheck source=/dev/null disable=SC2154
+  # The library is release-excluded, so shellcheck has nothing to follow here.
+  if . "$script_directory/debt-source-lib.sh" 2>/dev/null; then
+    gaia_debt_source_resolve "$finding_file" "$source_branch_flag" "$script_directory" sha256_of_text
+    source_line="$gaia_debt_source_line_text"
+  fi
+  # gaia:maintainer-only:end
 
   root="$(bash "$script_directory/main-root-lib.sh")" || die_input "cannot resolve the working root"
 
@@ -639,7 +676,11 @@ cmd_file() {
 
   local body_file="$work_directory/issue-body.md"
   {
-    printf '%s\n\n' "$wrapped_key"
+    printf '%s\n' "$wrapped_key"
+    # gaia:maintainer-only:start
+    [ -z "$source_line" ] || printf '%s\n' "$source_line"
+    # gaia:maintainer-only:end
+    printf '\n'
     # shellcheck disable=SC2016
     printf '**Location:** `%s:%s`\n\n' "$finding_path" "$finding_line"
     printf '**Failure mode:** %s\n\n' "$failure_mode"

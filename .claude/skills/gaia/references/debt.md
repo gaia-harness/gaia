@@ -104,6 +104,10 @@ It prints one JSON object, and its header owns the rules it applies. `candidates
 
 **When every candidate is excluded as investigate** (`candidates` is empty and `excluded.investigate` is not), say so and name those issues with their open questions, rather than reporting an empty backlog. An investigate issue returns to the pool once its question is answered and it is re-graded, the grade and the block moving together in one call: `gh issue edit <n> --remove-label severity:investigate --add-label severity:<tier> --body-file <path>`, where the body carries the answer in its failure-mode prose and no `gaia-investigate` block. `.claude/skills/file-tech-debt/SKILL.md` step 5 owns that rule, and `/gaia-debt` never answers an investigate question.
 
+<!-- gaia:maintainer-only:start -->
+On the maintainer repository the re-grade's rewritten body keeps the `gaia-debt-source` line verbatim on line 2, per step 5 of `.claude/skills/file-tech-debt/SKILL.md`.
+<!-- gaia:maintainer-only:end -->
+
 ### Staleness probe
 
 An issue asserts things about the tree: the dedup key's `path=`, the `file:line` locations its body cites, and any count its suggested fix depends on. Nothing re-checks those when the backlog is read, so an issue whose subject was renamed, moved, or already fixed keeps offering itself and still reads as actionable. Draining one that way documents a change that is not the change the code needs.

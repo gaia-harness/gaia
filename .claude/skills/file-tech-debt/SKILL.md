@@ -164,6 +164,10 @@ Build a self-contained issue body with these parts, in order:
 
   On a filing graded anything else the block is **forbidden**, not merely unnecessary. Re-grading an issue removes the block in the same edit that replaces the label, because a block left behind asserts an open question that has since been answered, and a reader believes it.
 
+<!-- gaia:maintainer-only:start -->
+On the GAIA maintainer repository, `.gaia/scripts/file-tech-debt.sh` writes a source line, `<!-- gaia-debt-source: v1 branch=<value> -->`, on line 2, directly after the dedup-key line. It records a digest of the branch checked out in the tree that ran the script. It is a measurement record, not a classification field, so the paragraph below still holds. Any body rewrite, the investigate re-grade's `gh issue edit <n> ... --body-file <path>` included, keeps that line verbatim on line 2.
+<!-- gaia:maintainer-only:end -->
+
 The body carries no classification fields of its own. Every classification axis steps 6 and 7 define rides as a label, so a body line restating one of them is a second representation of a value the labels already hold, and the two drift.
 
 ## 6. Labels

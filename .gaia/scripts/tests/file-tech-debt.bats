@@ -420,7 +420,7 @@ CASES
   local key_hash
   key_hash="$(printf '%s' '<!-- gaia-debt-key: v1 class=holistic/swallowed-error path=app/a.ts line=10 -->' | shasum -a 256 | cut -d' ' -f1)"
   [ "$(retry_count)" -eq 1 ]
-  cmp "$BATS_TEST_TMPDIR/run/filing-retry/$key_hash.json" "$FINDING"
+  [ "$(jq -S 'del(.source_branch)' "$BATS_TEST_TMPDIR/run/filing-retry/$key_hash.json")" = "$(jq -S . "$FINDING")" ]
 }
 
 @test "the retry file is removed by a later filed, absent or failed run and kept by another transient" {
