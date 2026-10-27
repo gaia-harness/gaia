@@ -132,8 +132,8 @@ _lsb_build() {
 }
 
 # lsb_strip_maintainer_only: remove every maintainer-only region from the
-# sandbox's tracked files, the release-excluded telemetry script and the
-# maintainer rule directory, as a release would, and commit the result. Call it
+# sandbox's tracked files, the release-excluded telemetry and dispatch-cost
+# scripts and the maintainer rule directory, as a release would, and commit the result. Call it
 # before writing any clearance: it rewrites machinery files.
 lsb_strip_maintainer_only() {
   # The marker name is assembled from two halves so this file never carries a
@@ -150,7 +150,8 @@ lsb_strip_maintainer_only() {
       !inside { print }
     ' "$LSB_ROOT/$file" >"$LSB_ROOT/$file.lsb" && cat "$LSB_ROOT/$file.lsb" >"$LSB_ROOT/$file" && rm -f "$LSB_ROOT/$file.lsb" || return 1
   done < <(lsb_git ls-files -z)
-  rm -f "$LSB_ROOT/.gaia/scripts/audit-light-telemetry.sh"
+  rm -f "$LSB_ROOT/.gaia/scripts/audit-light-telemetry.sh" "$LSB_ROOT/.gaia/scripts/audit-dispatch-cost.sh" \
+    "$LSB_ROOT/.gaia/scripts/audit-dispatch-cost-lib.sh" "$LSB_ROOT/.gaia/scripts/audit-dispatch-cost-report.sh"
   rm -rf "$LSB_ROOT/.claude/rules/maintainers"
   lsb_git add -A && lsb_git commit -q -m "strip maintainer-only" || return 1
   _lsb_set_head
