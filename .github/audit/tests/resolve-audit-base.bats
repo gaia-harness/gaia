@@ -2029,6 +2029,43 @@ assert_degraded_with_unparseable() {
   assert_degraded_with_unparseable "gaia-version.sh"
 }
 
+# The resolver sources its stages from its own directory. Each sibling is
+# removed in turn from a copy of that directory: the answer must be the
+# degraded full-scope main ref on both forms, exit 0, never the anchor the
+# intact resolver would pick and never a 127 from a call into an absent stage.
+@test "a missing sibling degrades to full review, never a narrower base" {
+  local base copy_directory sibling_path sibling_name sibling_count=0
+  add_commit a
+  base="$(stamp_anchor)"
+  add_commit b
+  for sibling_path in "$(dirname "$SCRIPT")"/resolve-audit-base-*.sh; do
+    [ -f "$sibling_path" ] || continue
+    sibling_count=$((sibling_count + 1))
+    sibling_name="$(basename "$sibling_path")"
+    copy_directory="$BATS_TEST_TMPDIR/without-${sibling_name%.sh}"
+    mkdir -p "$copy_directory"
+    cp "$(dirname "$SCRIPT")"/resolve-audit-base*.sh "$copy_directory/"
+    rm -f "$copy_directory/$sibling_name"
+    SCRIPT="$copy_directory/resolve-audit-base.sh"
+
+    run --separate-stderr run_member "$DEFAULT_MEMBER"
+    [ "$status" -eq 0 ] || return 1
+    [ "$(member_line_count)" -eq 4 ] || return 1
+    [ "$(member_base)" = "$MAIN_REF" ] || return 1
+    [ "$(member_base)" != "$base" ] || return 1
+    [ "$(member_reason)" = "degraded" ] || return 1
+    [ "$(member_shared_base)" = "$MAIN_REF" ] || return 1
+    grep -qF "$sibling_name" <<<"$stderr" || return 1
+
+    run --separate-stderr run_in_sandbox
+    [ "$status" -eq 0 ] || return 1
+    [ "$output" = "$MAIN_REF" ] || return 1
+    grep -qF "reason=degraded" <<<"$stderr" || return 1
+    SCRIPT="$THIS_DIRECTORY/../resolve-audit-base.sh"
+  done
+  [ "$sibling_count" -gt 0 ]
+}
+
 # The clearance reader is the CONTRAST on this arm exactly as it is on the
 # absent one: it is the fourth lib in the same load block, so an unparseable
 # copy abandons the shell the same way, but its unavailability falls back to the
@@ -2552,17 +2589,24 @@ clear_branch_fully() {
   write_clearance "$OTHER_MEMBER" earned "$CLEARED_TREE" 1.2.3 full >/dev/null
 }
 
-# A scratch copy of the resolver with <sed script> applied, installed as SCRIPT.
+# A scratch copy of the resolver and its siblings with <sed script> applied to
+# <file> (default the resolver itself; a sibling holding the mutated code is
+# named by its basename), the copy's resolver installed as SCRIPT. The siblings
+# are copied beside it because the resolver loads them from its own directory.
 # The mutation must change the file, or the case proving a guard can fail would
 # prove nothing.
 mutate_resolver() {
-  local mutant="$BATS_TEST_TMPDIR/mutant-resolve-audit-base.sh"
-  sed -e "$1" "$SCRIPT" > "$mutant"
-  chmod +x "$mutant"
-  if cmp -s "$SCRIPT" "$mutant"; then
+  local target_name="${2:-resolve-audit-base.sh}"
+  local source_directory mutant_directory="$BATS_TEST_TMPDIR/mutant-resolver"
+  source_directory="$(dirname "$SCRIPT")"
+  mkdir -p "$mutant_directory"
+  cp "$source_directory"/resolve-audit-base*.sh "$mutant_directory/"
+  sed -e "$1" "$source_directory/$target_name" > "$mutant_directory/$target_name"
+  chmod +x "$mutant_directory/resolve-audit-base.sh"
+  if cmp -s "$source_directory/$target_name" "$mutant_directory/$target_name"; then
     return 1
   fi
-  SCRIPT="$mutant"
+  SCRIPT="$mutant_directory/resolve-audit-base.sh"
 }
 
 # The mutation that makes the reset read the whole anchor..HEAD name diff again.
@@ -2611,7 +2655,7 @@ assert_no_reset_reasons() {
 @test "the base-only change resets once the reset reads the whole anchor..HEAD name diff again" {
   require_jq
   clear_branch_fully
-  mutate_resolver "$WHOLE_DIFF_MUTATION"
+  mutate_resolver "$WHOLE_DIFF_MUTATION" resolve-audit-base-context.sh
   catchup_base_commit ".claude/rules/new-rule.md" "from the base"
   catchup_merge_base
   run --separate-stderr run_in_sandbox
@@ -2908,7 +2952,7 @@ record_all_outputs() {
 @test "the criss-cross answer is the merge-base-status arm: without it the walk carries on" {
   add_commit a
   catchup_criss_cross
-  mutate_resolver 's|"[$]merge_base_status" -eq 3|"$merge_base_status" -eq 99|'
+  mutate_resolver 's|"[$]merge_base_status" -eq 3|"$merge_base_status" -eq 99|' resolve-audit-base-context.sh
   run --separate-stderr run_member "$DEFAULT_MEMBER"
   [ "$status" -eq 0 ]
   [ "$(member_reason)" != "degraded" ]

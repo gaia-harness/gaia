@@ -88,7 +88,6 @@
     ".gaia/scripts/verify-audit-roster.sh": 1193,
     ".gaia/scripts/worktree-ports-lib.sh": 491,
     ".gaia/statusline/gaia-statusline-right.sh": 637,
-    ".github/audit/resolve-audit-base.sh": 1073,
     ".github/forensics/parse-issue-body.sh": 404,
     ".github/workflows/audit-ci-tests.yml": 958,
     ".github/workflows/cli-tests.yml": 605,

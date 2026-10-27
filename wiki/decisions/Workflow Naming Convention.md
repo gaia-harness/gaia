@@ -45,5 +45,5 @@ The `main` ruleset's required contexts are mirrored by `REQUIRED_CONTEXTS` in `.
 
 ### Enforcement
 
-`.gaia/cli/src/release/workflow-prefix.test.ts` asserts that the set of workflows whose `name:` starts `GAIA: ` equals the release-exclude derive in `.gaia/cli/src/release/scrub.ts`. Rules 3 through 5 are convention with no automated check: the `code-audit-github-workflows` auditor's holistic dangling-reference lens catches a pointer left stale by a rename, not a case, shape, or advisory-tag mismatch.
+`.gaia/cli/src/release/workflow-prefix.test.ts` asserts that the set of workflows whose `name:` starts `GAIA: ` equals the set the release scrub derives from `.gaia/release-exclude`. Rules 3 through 5 are convention with no automated check: the `code-audit-github-workflows` auditor's holistic dangling-reference lens catches a pointer left stale by a rename, not a case, shape, or advisory-tag mismatch.
 <!-- gaia:maintainer-only:end -->

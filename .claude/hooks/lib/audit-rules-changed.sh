@@ -75,6 +75,10 @@ AUDIT_GLOBAL_RULES_PATHS="$(cat <<'EOF'
 .claude/hooks/post-audit-status.sh
 .claude/hooks/pr-merge-audit-check.sh
 .github/audit/resolve-audit-base.sh
+.github/audit/resolve-audit-base-context.sh
+.github/audit/resolve-audit-base-scan.sh
+.github/audit/resolve-audit-base-walk.sh
+.github/audit/resolve-audit-base-refusal.sh
 # The light-review router with its helper library, the light-marker script and
 # the reviewer definition decide whether a clearance is believed: they route a
 # re-audit to the cheap reviewer and turn its verdict into a marker, so a

@@ -52,7 +52,7 @@ make_repo() {
   printf 'definition body\n' > "$repository_directory/.claude/agents/code-audit-maintainer-shell.md"
   printf 'definition body\n' > "$repository_directory/.claude/agents/code-audit-frontend.md"
   chmod +x "$repository_directory/.gaia/scripts/audit-resolve-scope.sh" "$repository_directory/.gaia/scripts/audit-scope-digest.sh"
-  cp "$REPO_ROOT/.github/audit/resolve-audit-base.sh" "$repository_directory/.github/audit/"
+  cp "$REPO_ROOT"/.github/audit/resolve-audit-base*.sh "$repository_directory/.github/audit/"
   chmod +x "$repository_directory/.github/audit/resolve-audit-base.sh"
   cp "$REPO_ROOT/.gaia/audit-ci.yml" "$repository_directory/.gaia/"
   cp "$REPO_ROOT/.claude/hooks/lib/audit-scope.sh" \
