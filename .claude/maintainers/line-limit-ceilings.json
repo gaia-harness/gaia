@@ -36,7 +36,6 @@
     ".gaia/cli/src/release/manifest.ts": 557,
     ".gaia/cli/src/release/pnpm-member-strip.ts": 907,
     ".gaia/cli/src/release/runtime-deps.ts": 795,
-    ".gaia/cli/src/release/scrub.ts": 1707,
     ".gaia/cli/src/residue/tally.ts": 447,
     ".gaia/cli/src/sandbox/index.ts": 632,
     ".gaia/cli/src/scaffold/component.ts": 659,
