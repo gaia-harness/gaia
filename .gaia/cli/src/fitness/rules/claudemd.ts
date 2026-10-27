@@ -105,8 +105,12 @@ const outsideRootCheck = (context: RuleContext): readonly RawFinding[] =>
     }
   );
 
+// A home path only counts where a path can begin: at the start of a line or
+// after whitespace, a quote, a backtick, `(`, `=` or `:`. Without that anchor a
+// project path with a `home` or `Users` folder (`src/pages/home/sections/x`)
+// reads as a home directory.
 const MACHINE_PATH =
-  /\/Users\/[^\s/<>]+\/|\/home\/[^\s/<>]+\/|[A-Za-z]:\\Users\\[^\s\\<>]+\\/;
+  /(?<![^\s"'`(=:])(?:\/Users\/[^\s/<>]+\/|\/home\/[^\s/<>]+\/|[A-Za-z]:\\Users\\[^\s\\<>]+\\)/;
 
 const machinePathCheck = (context: RuleContext): readonly RawFinding[] =>
   filesOfKinds(context, [
