@@ -235,6 +235,11 @@
     ".gaia/scripts/audit-noop-detect.sh": "owned",
     ".gaia/scripts/audit-resolve-scope.sh": "owned",
     ".gaia/scripts/audit-scope-digest.sh": "owned",
+    ".gaia/scripts/audit-write-clearance-accounting.sh": "owned",
+    ".gaia/scripts/audit-write-clearance-args.sh": "owned",
+    ".gaia/scripts/audit-write-clearance-gates.sh": "owned",
+    ".gaia/scripts/audit-write-clearance-ledger.sh": "owned",
+    ".gaia/scripts/audit-write-clearance-publish.sh": "owned",
     ".gaia/scripts/audit-write-clearance.sh": "owned",
     ".gaia/scripts/audit-write-findings.sh": "owned",
     ".gaia/scripts/branch-name-lib.sh": "owned",
@@ -768,7 +773,7 @@
     "wiki/overview.md": "wiki-owned",
     "wiki/README.md": "wiki-owned"
   },
-  "generated": "2026-10-27T07:23:36.704Z",
+  "generated": "2026-10-27T11:23:18.800Z",
   "regions": [
     {
       "endMarker": "<!-- gaia:audit-remit:end -->",

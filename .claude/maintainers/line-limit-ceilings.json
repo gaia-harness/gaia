@@ -56,7 +56,6 @@
     ".gaia/scripts/audit-noop-detect.sh": 702,
     ".gaia/scripts/audit-resolve-scope.sh": 538,
     ".gaia/scripts/audit-scope-digest.sh": 465,
-    ".gaia/scripts/audit-write-clearance.sh": 1302,
     ".gaia/scripts/audit-write-findings.sh": 513,
     ".gaia/scripts/branch-name-lib.sh": 757,
     ".gaia/scripts/check-audit-base-derivation.sh": 518,

@@ -19,6 +19,11 @@ setup() {
   . "$(cd "$BATS_TEST_DIRNAME/../../.." && pwd)/.gaia/tests/helpers/catchup-fixture.sh"
   THIS_DIRECTORY="$( cd "$( dirname "$BATS_TEST_FILENAME" )" && pwd )"
   WRITER="$THIS_DIRECTORY/../audit-write-clearance.sh"
+  # The writer's phases live in siblings beside it; a structural check reads
+  # the sibling that holds the code it pins.
+  WRITER_GATES="$THIS_DIRECTORY/../audit-write-clearance-gates.sh"
+  WRITER_PUBLISH="$THIS_DIRECTORY/../audit-write-clearance-publish.sh"
+  WRITER_LEDGER="$THIS_DIRECTORY/../audit-write-clearance-ledger.sh"
   READER="$THIS_DIRECTORY/../../../.claude/hooks/lib/audit-clearance.sh"
   DIGEST_LIBRARY="$THIS_DIRECTORY/../../../.claude/hooks/lib/audit-digest.sh"
   RESOLVER="$THIS_DIRECTORY/../resolve-audit-members.sh"
@@ -187,8 +192,8 @@ add_linked_worktree() {
 
 @test "UAT-020: writes atomically via a temp file in the target dir + mv, leaving no stray temp" {
   # Structural: the writer stages a temp in the audit dir and publishes with mv.
-  grep -qF "mktemp" "$WRITER"
-  grep -qF "mv " "$WRITER"
+  grep -qF "mktemp" "$WRITER_PUBLISH"
+  grep -qF "mv " "$WRITER_PUBLISH"
   digest="$(member_digest "$ROOT" code-audit-frontend)"
   written_path="$(bash "$WRITER" --root "$ROOT" --member code-audit-frontend --provenance earned --scope-digest "$digest")"
   [ -f "$written_path" ]
@@ -383,9 +388,9 @@ add_linked_worktree() {
 }
 
 @test "structural: the writer never references audit-noop-detect.sh and carries no evidence key" {
-  grep -qF "audit-noop-detect" "$WRITER" && return 1
+  grep -qF "audit-noop-detect" "$WRITER" "$THIS_DIRECTORY"/../audit-write-clearance-*.sh && return 1
   # The JSON evidence key (quoted) never appears in the produced body.
-  grep -qF '"evidence"' "$WRITER" && return 1
+  grep -qF '"evidence"' "$WRITER" "$THIS_DIRECTORY"/../audit-write-clearance-*.sh && return 1
   return 0
 }
 
@@ -619,6 +624,7 @@ scrub_maintainer_only() {
   scrub_maintainer_only "$RESOLVER" > "$ADOPTER/.gaia/scripts/resolve-audit-members.sh"
   chmod +x "$ADOPTER/.gaia/scripts/resolve-audit-members.sh"
   cp "$WRITER" "$ADOPTER/.gaia/scripts/audit-write-clearance.sh"
+  cp "$THIS_DIRECTORY"/../audit-write-clearance-*.sh "$ADOPTER/.gaia/scripts/"
   chmod +x "$ADOPTER/.gaia/scripts/audit-write-clearance.sh"
 
   # The writer copy resolves its digest lib relative to ITSELF
@@ -747,8 +753,8 @@ scrub_maintainer_only() {
   # This is pinned STRUCTURALLY on purpose: swapping the two statements leaves
   # every behavioural supersede test above green, so only the order itself can
   # catch a future reorder. Matches this suite's existing structural checks.
-  publish_line="$(grep -nF 'mv -f "$temporary_file" "$target"' "$WRITER" | head -1 | cut -d: -f1)"
-  remove_line="$(grep -nF 'rm -f "$refused_path"' "$WRITER" | head -1 | cut -d: -f1)"
+  publish_line="$(grep -nF 'mv -f "$temporary_file" "$target"' "$WRITER_PUBLISH" | head -1 | cut -d: -f1)"
+  remove_line="$(grep -nF 'rm -f "$refused_path"' "$WRITER_PUBLISH" | head -1 | cut -d: -f1)"
   [ -n "$publish_line" ] || return 1
   [ -n "$remove_line" ] || return 1
   [ "$publish_line" -lt "$remove_line" ]
@@ -1216,8 +1222,10 @@ resolve_all_open() {
   # the order is load-bearing: reversing it would let a ledger problem abort a
   # write that must always land. Every behavioural test above stays green under a
   # reorder, so only this can catch one.
-  publish_line="$(grep -nF 'mv -f "$temporary_file" "$target"' "$WRITER" | head -1 | cut -d: -f1)"
-  ledger_line="$(grep -nF 'Re-run carry-forward ledger (only with --base)' "$WRITER" | head -1 | cut -d: -f1)"
+  # The publish and the ledger write are separate phases now, so the order
+  # pinned is the parent's call order.
+  publish_line="$(grep -nx '_write_clearance_publish_marker' "$WRITER" | head -1 | cut -d: -f1)"
+  ledger_line="$(grep -nx '_write_clearance_write_ledger' "$WRITER" | head -1 | cut -d: -f1)"
   [ -n "$publish_line" ] || return 1
   [ -n "$ledger_line" ] || return 1
   [ "$publish_line" -lt "$ledger_line" ]
@@ -1226,8 +1234,8 @@ resolve_all_open() {
 @test "ledger: a jq failure while building it is surfaced, never silently swallowed" {
   # Both jq passes here once used `2>/dev/null || true`, which turned a real
   # program error into "there was nothing to write". The status is checked now.
-  grep -qF 'cannot build the carry-forward ledger' "$WRITER"
-  grep -qF 'cannot update the carry-forward ledger' "$WRITER"
+  grep -qF 'cannot build the carry-forward ledger' "$WRITER_LEDGER"
+  grep -qF 'cannot update the carry-forward ledger' "$WRITER_LEDGER"
 }
 
 # -----------------------------------------------------------------------------
@@ -1848,11 +1856,11 @@ EOF
 unresolvable audit key
 key library
 removal itself failed"
-  helper="$(sed -n '/^_release_forfeited_capture() {/,/^}/p' "$WRITER")"
+  helper="$(sed -n '/^_release_forfeited_capture() {/,/^}/p' "$WRITER_GATES")"
   [ -n "$helper" ]
   # The statuses the caller gives an explicit arm; everything else falls to *).
-  arms="$(sed -n '/^    _release_forfeited_capture$/,/^    esac$/p' "$WRITER" \
-          | sed -n 's/^      \([0-9][0-9]*\)).*/\1/p')"
+  arms="$(sed -n '/^ *_release_forfeited_capture$/,/^ *esac$/p' "$WRITER_GATES" \
+          | sed -n 's/^ *\([0-9][0-9]*\)).*/\1/p')"
   [ -n "$arms" ]
   returns="$(grep -oE 'return [0-9]+' <<<"$helper" | sed 's/^return //')"
   [ -n "$returns" ]
@@ -2169,18 +2177,29 @@ earned_write_with_capture() {
     --scope-digest "$(read_scope_digest "$1")"
 }
 
-# scratch_writer <sed-script>: a copy of the writer with the library tree and the
-# resolver it locates relative to itself, mutated by the sed script. Prints the
-# copy's path and fails when the mutation changed nothing.
+# copy_writer_tree <directory>: a copy of the writer and its phase siblings,
+# with the library tree and the resolver it locates relative to itself.
+copy_writer_tree() {
+  local directory="$1"
+  mkdir -p "$directory/.gaia/scripts" "$directory/.claude/hooks/lib" "$directory/.github/audit"
+  cp "$THIS_DIRECTORY/../audit-key-lib.sh" "$directory/.gaia/scripts/"
+  cp "$(dirname "$READER")"/*.sh "$directory/.claude/hooks/lib/"
+  cp "$THIS_DIRECTORY"/../../../.github/audit/resolve-audit-base*.sh "$directory/.github/audit/"
+  cp "$WRITER" "$THIS_DIRECTORY"/../audit-write-clearance-*.sh "$directory/.gaia/scripts/"
+}
+
+# scratch_writer <sed-script>: copy_writer_tree, with the sed script applied to
+# the writer and to each phase sibling, so a mutation reaches the code wherever
+# it lives. Prints the copy's path and fails when the mutation changed nothing.
 scratch_writer() {
-  local scratch="$BATS_TEST_TMPDIR/scratch-writer"
+  local scratch="$BATS_TEST_TMPDIR/scratch-writer" writer_file changed=0
   rm -rf "$scratch"
-  mkdir -p "$scratch/.gaia/scripts" "$scratch/.claude/hooks/lib" "$scratch/.github/audit"
-  cp "$THIS_DIRECTORY/../audit-key-lib.sh" "$scratch/.gaia/scripts/"
-  cp "$(dirname "$READER")"/*.sh "$scratch/.claude/hooks/lib/"
-  cp "$THIS_DIRECTORY/../../../.github/audit/resolve-audit-base.sh" "$scratch/.github/audit/"
-  sed "$1" "$WRITER" > "$scratch/.gaia/scripts/audit-write-clearance.sh"
-  cmp -s "$WRITER" "$scratch/.gaia/scripts/audit-write-clearance.sh" && return 1
+  copy_writer_tree "$scratch"
+  for writer_file in "$WRITER" "$THIS_DIRECTORY"/../audit-write-clearance-*.sh; do
+    sed "$1" "$writer_file" > "$scratch/.gaia/scripts/${writer_file##*/}"
+    cmp -s "$writer_file" "$scratch/.gaia/scripts/${writer_file##*/}" || changed=1
+  done
+  [ "$changed" -eq 1 ] || return 1
   printf '%s\n' "$scratch/.gaia/scripts/audit-write-clearance.sh"
 }
 
@@ -2458,10 +2477,43 @@ orphan_fixture() {
   catchup_branch_start
   member="$CATCHUP_MEMBER"
   # The digest library reports the missing tip with status 4; the stub stands in for it.
-  scratch="$(scratch_writer $'/^command -v audit_branch_digests_local/i\\\naudit_branch_digests_local() { return 4; }')"
+  scratch="$(scratch_writer $'/^ *command -v audit_branch_digests_local/i\\\naudit_branch_digests_local() { return 4; }')"
   [ -n "$scratch" ]
   run bash "$scratch" --root "$ROOT" --member "$member" --provenance refused
   [ "$status" -eq 2 ]
   grep -qF "git fetch origin" <<<"$output" || return 1
   [ -z "$(find "$AUDIT_DIRECTORY" -name '*.refused' 2>/dev/null)" ]
+}
+
+@test "a missing writer phase sibling fails closed: exit 2, never 127, and no marker" {
+  # The writer's phases live in siblings it sources from its own directory. A
+  # copy missing one must refuse before it writes, never run without the phase
+  # (a missing publish or ledger phase would exit 0) and never exit 127, which a
+  # caller reads as the writer never having run at all.
+  local scratch="$BATS_TEST_TMPDIR/phase-loader" phase_file phase_name checked=0
+  digest="$(member_digest "$ROOT" code-audit-frontend)"
+  for phase_file in "$THIS_DIRECTORY"/../audit-write-clearance-*.sh; do
+    [ -f "$phase_file" ] || continue
+    phase_name="${phase_file##*/}"
+    rm -rf "$scratch" "$AUDIT_DIRECTORY"
+    copy_writer_tree "$scratch"
+    # Positive control: the full copy writes the marker, so a refusal below is
+    # the missing sibling's doing and not the fixture's.
+    run bash "$scratch/.gaia/scripts/audit-write-clearance.sh" --root "$ROOT" \
+      --member code-audit-frontend --provenance earned --scope-digest "$digest"
+    [ "$status" -eq 0 ] || { printf 'control failed for %s: %s\n' "$phase_name" "$output" >&2; return 1; }
+    rm -rf "$AUDIT_DIRECTORY"
+    rm -f "$scratch/.gaia/scripts/$phase_name"
+    run bash "$scratch/.gaia/scripts/audit-write-clearance.sh" --root "$ROOT" \
+      --member code-audit-frontend --provenance earned --scope-digest "$digest"
+    [ "$status" -ne 127 ] || { printf '%s missing: exit 127\n' "$phase_name" >&2; return 1; }
+    [ "$status" -eq 2 ] || { printf '%s missing: exit %s\n' "$phase_name" "$status" >&2; return 1; }
+    grep -qF "cannot load the writer phase" <<<"$output" || return 1
+    grep -qF "$phase_name" <<<"$output" || return 1
+    [ -z "$(find "$AUDIT_DIRECTORY" -name '*.ok' -o -name '*.refused' 2>/dev/null)" ] || return 1
+    checked=$((checked + 1))
+  done
+  # Non-vacuity: every sibling the loader names was exercised.
+  [ "$checked" -gt 0 ]
+  [ "$checked" -eq "$(grep -cE '^  "[a-z]+:_write_clearance_[a-z_]+"' "$WRITER")" ]
 }

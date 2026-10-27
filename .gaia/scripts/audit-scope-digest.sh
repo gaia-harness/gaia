@@ -328,7 +328,7 @@ fi
 # which strands the round after it, forever. Nothing this script can read
 # separates a round that ended silently from one still going; what CAN see it is
 # the writer, at the moment it refuses a stale capture, so
-# `_release_forfeited_capture` in audit-write-clearance.sh drops the capture as
+# `_release_forfeited_capture` in audit-write-clearance-gates.sh drops the capture as
 # that refusal exits. The cost is the one forfeited round, not every round after
 # it.
 #

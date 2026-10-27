@@ -62,6 +62,11 @@ AUDIT_GLOBAL_RULES_PATHS="$(cat <<'EOF'
 # logic must not quietly demote the tier it was reviewed under.
 .claude/hooks/lib/gaia-version.sh
 .gaia/scripts/audit-write-clearance.sh
+.gaia/scripts/audit-write-clearance-args.sh
+.gaia/scripts/audit-write-clearance-gates.sh
+.gaia/scripts/audit-write-clearance-accounting.sh
+.gaia/scripts/audit-write-clearance-publish.sh
+.gaia/scripts/audit-write-clearance-ledger.sh
 .gaia/scripts/audit-member-digest.sh
 .gaia/scripts/audit-key-lib.sh
 .gaia/scripts/audit-resolve-scope.sh

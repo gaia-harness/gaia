@@ -562,6 +562,47 @@ refuse_notes() {
   [ "$(jq -r .hard_full_rule "$(route_record_for "$FRONTEND")")" = "frontend/dev-ports*.ts" ]
 }
 
+# A hard-Full script split into siblings stays hard-Full only if every sibling
+# is too: a sibling no glob reaches lets a small edit to the moved logic route
+# to the light reviewer. For each roster member, every exact .sh path in its
+# light_hard_full list has its siblings derived from disk by the split naming
+# (<parent>-*.sh, or <stem>-*-lib.sh for a -lib.sh parent), and each must match
+# that member's hard-Full rule. The red case drops one sibling's line from the
+# member's glob list and expects the rule to miss it.
+# bats test_tags=whole-tree
+@test "every split sibling of an exact light_hard_full script is hard-Full for the same member" {
+  . "$REPO_ROOT/.claude/hooks/lib/audit-scope.sh"
+  . "$REPO_ROOT/.claude/hooks/lib/audit-light-route-lib.sh"
+  local member line globs entry sibling_pattern sibling relative checked="" dropped="" dropped_globs=""
+  while IFS= read -r member; do
+    globs=""
+    while IFS= read -r line; do
+      case "$line" in "HARDFULL"$'\t'*) globs="${globs}${line#HARDFULL$'\t'}"$'\n' ;; esac
+    done <<<"$(audit_roster_light_config "$REPO_ROOT" "$member")"
+    while IFS= read -r entry; do
+      case "$entry" in *[\*\?\[]* | "") continue ;; *.sh) ;; *) continue ;; esac
+      case "$entry" in
+        *-lib.sh) sibling_pattern="${entry%-lib.sh}-*-lib.sh" ;;
+        *) sibling_pattern="${entry%.sh}-*.sh" ;;
+      esac
+      for sibling in "$REPO_ROOT"/$sibling_pattern; do
+        [ -f "$sibling" ] || continue
+        relative="${sibling#"$REPO_ROOT"/}"
+        checked="$checked $relative"
+        light_route_hard_full_rule "$relative" "$globs" >/dev/null || { echo "$member: sibling not hard-Full: $relative (of $entry)" >&2; return 1; }
+        if [ -z "$dropped" ] && [ "$(light_route_hard_full_rule "$relative" "" 2>/dev/null)" = "" ]; then
+          dropped="$relative"
+          dropped_globs="$(printf '%s' "$globs" | grep -vxF -- "$relative")"
+        fi
+      done
+    done <<<"$globs"
+  done <<<"$(sed -n 's/^  - name: //p' "$REPO_ROOT/.gaia/audit-ci.yml")"
+  [ -n "$checked" ]
+  [ -n "$dropped" ]
+  run light_route_hard_full_rule "$dropped" "$dropped_globs"
+  [ "$status" -eq 1 ]
+}
+
 # --- special rows and renames ---------------------------------------------
 
 @test "a symlink at an owned path routes full special-file" {

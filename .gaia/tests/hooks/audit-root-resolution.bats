@@ -195,7 +195,9 @@ setup() {
 
   local script_name
   for script_name in resolve-audit-members.sh audit-member-digest.sh \
-           audit-write-clearance.sh main-root-lib.sh audit-key-lib.sh; do
+           audit-write-clearance.sh audit-write-clearance-args.sh audit-write-clearance-gates.sh \
+           audit-write-clearance-accounting.sh audit-write-clearance-publish.sh \
+           audit-write-clearance-ledger.sh main-root-lib.sh audit-key-lib.sh; do
     cp "$REPO_ROOT/.gaia/scripts/$script_name" "$MAIN/.gaia/scripts/$script_name"
     chmod +x "$MAIN/.gaia/scripts/$script_name"
   done

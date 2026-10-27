@@ -174,6 +174,39 @@ EOF
   [ "$status" -eq 0 ]
 }
 
+# A global script split into siblings keeps its tier only if every sibling is
+# listed too: a sibling left out turns an edit to the moved logic into a
+# merely-shared change that resets nobody. The siblings are derived from disk by
+# the split naming (<parent>-*.sh, or <stem>-*-lib.sh for a -lib.sh parent), so
+# a new sibling is checked the moment it exists. The red case drops one derived
+# sibling from a scratch copy of the library.
+# bats test_tags=whole-tree
+@test "every split sibling of a global script is a global rule and is also machinery" {
+  . "$REPO_ROOT/.claude/hooks/lib/audit-machinery.sh"
+  local entry sibling_pattern sibling relative siblings=""
+  while IFS= read -r entry; do
+    case "$entry" in "" | "#"*) continue ;; *.sh) ;; *) continue ;; esac
+    case "$entry" in
+      *-lib.sh) sibling_pattern="${entry%-lib.sh}-*-lib.sh" ;;
+      *) sibling_pattern="${entry%.sh}-*.sh" ;;
+    esac
+    for sibling in "$REPO_ROOT"/$sibling_pattern; do
+      [ -f "$sibling" ] || continue
+      relative="${sibling#"$REPO_ROOT"/}"
+      siblings="$siblings $relative"
+      audit_path_is_global_rule "$relative" || { echo "sibling not a global rule: $relative (of $entry)" >&2; return 1; }
+      audit_path_is_machinery "$relative" || { echo "sibling global but not machinery: $relative" >&2; return 1; }
+    done
+  done <<<"$AUDIT_GLOBAL_RULES_PATHS"
+  [ -n "$siblings" ]
+  local dropped="${siblings# }"
+  dropped="${dropped%% *}"
+  local scratch_library="$BATS_TEST_TMPDIR/audit-rules-changed-sibling-scratch.sh"
+  grep -vxF -- "$dropped" "$RULES_LIBRARY" >"$scratch_library"
+  run bash -c '. "$1"; audit_path_is_global_rule "$2"' _ "$scratch_library" "$dropped"
+  [ "$status" -ne 0 ]
+}
+
 # bats test_tags=whole-tree
 @test "the quick-route corpus is a global rule and is also machinery" {
   . "$REPO_ROOT/.claude/hooks/lib/audit-machinery.sh"
