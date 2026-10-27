@@ -1085,6 +1085,44 @@ production_guards() {
   participating_files | grep -v -- '/tests/fixtures/'
 }
 
+# The files a guard's own text lives in: the guard, then the pieces it sources
+# from beside it, named `<guard>-*.sh`. A guard whose program is split across
+# files is still one guard, so every check below that reads a guard's text
+# reads this set rather than the one file.
+guard_text_files() {
+  local guard_file="$1" piece
+  printf '%s\n' "$guard_file"
+  for piece in "${guard_file%.sh}"-*.sh; do
+    [ -f "$piece" ] && printf '%s\n' "$piece"
+  done
+  true
+}
+
+guard_text() {
+  local text_file
+  while IFS= read -r text_file; do
+    cat "$text_file"
+  done < <(guard_text_files "$1")
+}
+
+# The sibling glob is a naming convention, so it is pinned: a guard reading
+# another guard's files, or a piece left unread, would move a text check onto
+# the wrong program while every check still passed.
+@test "a guard's text set is its own: the errexit gate's two detector halves, and no piece for any other guard" {
+  local guard_file pieces expected guard_count=0
+  while IFS= read -r guard_file; do
+    guard_count=$((guard_count + 1))
+    pieces="$(guard_text_files "$guard_file" | sed 1d)"
+    case "$guard_file" in
+      */.gaia/scripts/lint-errexit-status-read.sh)
+        expected="$(printf '%s\n' "${guard_file%.sh}-detect.sh" "${guard_file%.sh}-walk.sh")" ;;
+      *) expected="" ;;
+    esac
+    [ "$pieces" = "$expected" ] || { echo "$guard_file: text set is [$pieces], expected [$expected]" >&2; return 1; }
+  done < <(participating_files)
+  [ "$guard_count" -gt 0 ]
+}
+
 # A derivation that came back short would leave a check asserting over a subset
 # while its name still says every, so every consumer check confirms the count
 # is non-empty before its per-file loop runs.
@@ -1121,7 +1159,7 @@ assert_consumer_count() {
   local guard_file name
   while IFS= read -r guard_file; do
     for name in gaia_scan_reset gaia_scan_feed gaia_scan_skip gaia_scan_suppressed gaia_scan_end; do
-      grep -qF -- "$name(" "$guard_file" || { echo "$guard_file: never calls $name" >&2; return 1; }
+      grep -qF -- "$name(" <(guard_text "$guard_file") || { echo "$guard_file: never calls $name" >&2; return 1; }
     done
   done < <(participating_files)
 }
@@ -1141,12 +1179,12 @@ assert_consumer_count() {
 @test "each production guard calls gaia_scan_prepass and gaia_scan_pragma_here; only the errexit gate also calls gaia_scan_run_only" {
   local guard_file
   while IFS= read -r guard_file; do
-    grep -qF -- "gaia_scan_prepass(" "$guard_file" || { echo "$guard_file: never calls gaia_scan_prepass" >&2; return 1; }
+    grep -qF -- "gaia_scan_prepass(" <(guard_text "$guard_file") || { echo "$guard_file: never calls gaia_scan_prepass" >&2; return 1; }
     [ "$guard_file" = "$REPO_ROOT/.gaia/tests/whole-tree-mark-guard.sh" ] && continue
-    grep -qF -- "gaia_scan_pragma_here(" "$guard_file" || { echo "$guard_file: never calls gaia_scan_pragma_here" >&2; return 1; }
+    grep -qF -- "gaia_scan_pragma_here(" <(guard_text "$guard_file") || { echo "$guard_file: never calls gaia_scan_pragma_here" >&2; return 1; }
   done < <(production_guards)
-  grep -qF -- "gaia_scan_run_only(" "$REPO_ROOT/.gaia/scripts/lint-errexit-status-read.sh" || return 1
-  grep -qF -- "gaia_scan_run_only(" "$REPO_ROOT/.gaia/scripts/lint-git-path-quoting.sh" && return 1
+  grep -qF -- "gaia_scan_run_only(" <(guard_text "$REPO_ROOT/.gaia/scripts/lint-errexit-status-read.sh") || return 1
+  grep -qF -- "gaia_scan_run_only(" <(guard_text "$REPO_ROOT/.gaia/scripts/lint-git-path-quoting.sh") && return 1
   true
 }
 
@@ -1161,7 +1199,7 @@ assert_consumer_count() {
 @test "no participating file calls gaia_scan_prepass_end directly" {
   local guard_file
   while IFS= read -r guard_file; do
-    grep -qF -- "gaia_scan_prepass_end(" "$guard_file" && { echo "$guard_file: calls gaia_scan_prepass_end directly" >&2; return 1; }
+    grep -qF -- "gaia_scan_prepass_end(" <(guard_text "$guard_file") && { echo "$guard_file: calls gaia_scan_prepass_end directly" >&2; return 1; }
   done < <(participating_files)
   true
 }
@@ -1175,7 +1213,7 @@ assert_consumer_count() {
         gaia_scan_reset|gaia_scan_prepass|gaia_scan_prepass_end|gaia_scan_feed|gaia_scan_skip|gaia_scan_suppressed|gaia_scan_pragma_here|gaia_scan_run_only|gaia_scan_in_test|gaia_scan_end) ;;
         *) echo "$guard_file: calls unrecognized entry point $name" >&2; return 1 ;;
       esac
-    done < <(grep -oE 'gaia_scan_[A-Za-z_]+\(' "$guard_file" | sed 's/(//' | sort -u)
+    done < <(guard_text "$guard_file" | grep -oE 'gaia_scan_[A-Za-z_]+\(' | sed 's/(//' | sort -u)
   done < <(participating_files)
 }
 
@@ -1212,7 +1250,7 @@ own_awk_functions() {
   # the table. Pinned against what the file defines today, per this task's
   # own instruction to build the set from the tree rather than from the
   # doc.
-  actual="$(own_awk_functions "$REPO_ROOT/.gaia/scripts/lint-errexit-status-read.sh")"
+  actual="$(own_awk_functions <(guard_text "$REPO_ROOT/.gaia/scripts/lint-errexit-status-read.sh"))"
   expected="$(printf '%s\n' arm check_desync eat_word feed has_status_read pragma_offsurface report reset_state walk yaml_feed)"
   [ "$actual" = "$expected" ]
 
@@ -1306,7 +1344,13 @@ mutate_guard_copy() {
   mkdir -p "$directory/.gaia/scripts/tests"
   awk "$program" "$REPO_ROOT/.gaia/scripts/guard-awk-lib.sh" > "$directory/.gaia/scripts/guard-awk-lib.sh"
   cmp -s "$directory/.gaia/scripts/guard-awk-lib.sh" "$REPO_ROOT/.gaia/scripts/guard-awk-lib.sh" && return 1
-  cp "$REPO_ROOT/.gaia/scripts/$guard.sh" "$directory/.gaia/scripts/$guard.sh"
+  # The library sources this beside itself; without it the guard cannot pick an
+  # interpreter, so the child suite reds whether or not the mutation took.
+  cp "$REPO_ROOT/.gaia/scripts/awk-interp-lib.sh" "$directory/.gaia/scripts/awk-interp-lib.sh"
+  local text_file
+  while IFS= read -r text_file; do
+    cp "$text_file" "$directory/.gaia/scripts/"
+  done < <(guard_text_files "$REPO_ROOT/.gaia/scripts/$guard.sh")
   cp "$REPO_ROOT/.gaia/scripts/tests/$suite" "$directory/.gaia/scripts/tests/$suite"
   CROSS_GUARD_ROOT="$directory"
   CROSS_GUARD_SUITE="$directory/.gaia/scripts/tests/$suite"

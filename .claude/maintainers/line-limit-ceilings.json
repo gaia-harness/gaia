@@ -67,7 +67,7 @@
     ".gaia/scripts/file-tech-debt.sh": 735,
     ".gaia/scripts/guard-awk-lib.sh": 979,
     ".gaia/scripts/kept-worktrees.sh": 432,
-    ".gaia/scripts/lint-errexit-status-read.sh": 1136,
+    ".gaia/scripts/lint-errexit-status-read.sh": 535,
     ".gaia/scripts/lint-git-path-quoting.sh": 563,
     ".gaia/scripts/lint-hook-cwd-relative-loads.sh": 422,
     ".gaia/scripts/lint-sigpipe-readers.sh": 880,
