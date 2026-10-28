@@ -1,7 +1,7 @@
 #!/usr/bin/env bats
 #
 # .gaia/scripts/spec/plan-verify.sh behavior: existence checks, the routing
-# table, the story play-function criterion line, the orchestrator step
+# table, the story test criterion line, the orchestrator step
 # sentinels (match rule, order rule, per-arm requirements), the verbatim
 # yield-handling block, failure aggregation and the misrouting warning. Shell
 # level only.
@@ -109,7 +109,7 @@ spec_fixture() {
   write_routing
   write_orchestrator "$S_RENDER" "$S_GATE" "$S_YIELD" "$S_PRE" "$S_WIKI" "$S_CLOSE"
   printf '# Kickoff\n' >"$PLAN/KICKOFF.md"
-  write_task '- Story play-function criterion (UAT-002): the toast reads Saved'
+  write_task '- Story test criterion (UAT-002): the toast reads Saved'
 }
 
 # spec_less_fixture: a passing spec-less plan folder.
@@ -160,7 +160,7 @@ verify_spec_less() {
 
 @test "a criterion line for the right id with a different then-clause fails" {
   spec_fixture
-  write_task '- Story play-function criterion (UAT-002): the toast reads Failed'
+  write_task '- Story test criterion (UAT-002): the toast reads Failed'
   verify_spec
   [ "$status" -eq 1 ]
   echo "$output" | grep -qF 'UAT-002'
@@ -168,7 +168,7 @@ verify_spec_less() {
 
 @test "a criterion line for a different id does not satisfy the story UAT" {
   spec_fixture
-  write_task '- Story play-function criterion (UAT-003): the toast reads Saved'
+  write_task '- Story test criterion (UAT-003): the toast reads Saved'
   verify_spec
   [ "$status" -eq 1 ]
   echo "$output" | grep -qF 'UAT-002'
@@ -176,7 +176,7 @@ verify_spec_less() {
 
 @test "whitespace-only differences in the criterion line pass" {
   spec_fixture
-  write_task "-   Story play-function criterion (UAT-002):	the   toast  reads   Saved   "
+  write_task "-   Story test criterion (UAT-002):	the   toast  reads   Saved   "
   verify_spec
   [ "$status" -eq 0 ]
 }
@@ -184,10 +184,10 @@ verify_spec_less() {
 @test "a then-clause that begins and ends with a double quote passes verbatim and is not quote-stripped" {
   spec_fixture
   write_spec "'\"Saved\" toast reads \"Done\"'"
-  write_task '- Story play-function criterion (UAT-002): "Saved" toast reads "Done"'
+  write_task '- Story test criterion (UAT-002): "Saved" toast reads "Done"'
   verify_spec
   [ "$status" -eq 0 ]
-  write_task '- Story play-function criterion (UAT-002): Saved" toast reads "Done'
+  write_task '- Story test criterion (UAT-002): Saved" toast reads "Done'
   verify_spec
   [ "$status" -eq 1 ]
 }
@@ -195,7 +195,7 @@ verify_spec_less() {
 @test "the criterion line may live in any task doc" {
   spec_fixture
   write_task '- nothing relevant'
-  printf '%s\n' '- Story play-function criterion (UAT-002): the toast reads Saved' >"$PLAN/task-two.md"
+  printf '%s\n' '- Story test criterion (UAT-002): the toast reads Saved' >"$PLAN/task-two.md"
   verify_spec
   [ "$status" -eq 0 ]
 }
@@ -301,7 +301,7 @@ verify_spec_less() {
 @test "a story row whose then-clause mentions navigation warns without changing the exit code" {
   spec_fixture
   write_spec 'the page navigates to /checkout'
-  write_task '- Story play-function criterion (UAT-002): the page navigates to /checkout'
+  write_task '- Story test criterion (UAT-002): the page navigates to /checkout'
   verify_spec
   [ "$status" -eq 0 ]
   echo "$output" | grep -qE '^WARN: UAT-002'
