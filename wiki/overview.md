@@ -3,7 +3,7 @@ type: overview
 title: GAIA Overview
 status: mature
 created: 2026-04-20
-updated: 2026-10-24
+updated: 2026-10-28
 tags: [overview, gaia]
 ---
 
@@ -26,7 +26,7 @@ See [[GAIA Philosophy]] for the long version.
 - **State**: minimal; `frontend/app/state/index.tsx` is a passthrough; theme is cookie-based (no React state for theme)
 - **Testing**: [[Vitest]] running [[Storybook]] stories as component tests ([[Stories as Tests]]) + [[Playwright]] + [[Chromatic]], with MSW seed data shared across them
 - **Mocking**: [[MSW]] + `@msw/data` for tests, Storybook, and dev
-- **Storybook** v10 with links, i18n, dark mode, Vitest and a11y addons; the MSW addon is wired, so stories mock the API through `parameters.msw.handlers` and read seed data from the shared `@msw/data` collections
+- **Storybook** v10 with links, i18n, dark mode, Vitest and a11y addons; the MSW addon is wired, so stories mock the API through msw handlers installed in `beforeEach` and read seed data from the shared `@msw/data` collections
 - **Quality**: 20+ ESLint plugins, Prettier, Stylelint, [[Pre-commit Hooks]] with [[lint-staged]]
 - **Claude Code**: [[Claude Integration]] with commands, rules, hooks, agents
 

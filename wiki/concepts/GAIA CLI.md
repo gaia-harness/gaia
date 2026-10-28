@@ -3,7 +3,7 @@ type: concept
 title: GAIA CLI
 status: active
 created: 2026-07-14
-updated: 2026-10-21
+updated: 2026-10-28
 tags: [concept, cli]
 ---
 
@@ -20,6 +20,10 @@ Maintainer source lives at `.gaia/cli/src/`. `pnpm bundle` runs `bundle:adopter`
 <!-- gaia:maintainer-only:end -->
 
 Run `gaia --help` for the current, authoritative list of top-level subcommands.
+
+## Migrating stories to CSF Next
+
+`gaia migrate-csf4 [--update-merge] [--json]` converts a project's CSF3 stories to CSF Next (CSF4), repairs what Storybook's own codemod leaves wrong, rewires the preview and `.storybook/main.ts`, and verifies each story file by typecheck, lint and a Storybook Vitest run. A factory-built story export becomes a direct `meta.story({...})` call under the same export name, because Storybook's indexer cannot attach `.test()` to an export a factory function builds. The preview repair, `rewirePreview(ts, source, mainAddons?)`, rewrites a CSF3 `Preview` object to `definePreview` and wires each known addon the preview imports or `mainAddons` lists; the command passes the addon specifiers `mainAddonSpecifiers(ts, mainSource)` reads from `.storybook/main.ts`, so an addon registered only in main (such as `@storybook/addon-links`) still gets its `addonLinks()` entry, and an addon it does not know is reported for a hand fix. It refuses a dirty tree; `--update-merge` is the form the after-update migration note passes, which tolerates the update's uncommitted merge and refuses only when a file it would write is itself dirty. It prints the command that restores what it changed. Exit codes and the `--json` report shape live in `gaia migrate-csf4 --help`. The target story format is described in [[Stories as Tests]].
 
 ## Adoption ping
 

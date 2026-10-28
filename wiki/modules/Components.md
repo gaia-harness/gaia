@@ -5,7 +5,7 @@ status: active
 language: typescript
 purpose: Shared UI components used across pages
 created: 2026-04-20
-updated: 2026-10-21
+updated: 2026-10-28
 tags: [module, components]
 ---
 
@@ -50,4 +50,4 @@ The current set of bundled components changes over time. List `frontend/app/comp
 - `form/`: the composed form fixture ([[Form Components]])
 - `ThemeSwitch` lives at `frontend/app/components/theme-switch/`. Its resource-route action and Zod schema live separately at `frontend/app/routes/resources.theme-switch.tsx`, and its theme hooks live at `frontend/app/hooks/use-theme.ts`. See [[Theme Flow]].
 
-See [[Component Testing]] for how stories with play functions test a component.
+See [[Component Testing]] for how stories with `.test()` behaviors test a component, and [[Stories as Tests]] for the doctrine.

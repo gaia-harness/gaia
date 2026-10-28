@@ -2,7 +2,7 @@
 type: concept
 status: active
 created: 2026-04-20
-updated: 2026-10-07
+updated: 2026-10-28
 tags: [concept, lint]
 ---
 
@@ -20,8 +20,8 @@ The rules below are the ones whose fix isn't obvious from the rule name. Trivial
 | `sonarjs/deprecation`          | **Fix the deprecation; never `eslint-disable`.** Deprecations land in this codebase as a signal to migrate, not a noise source. Common case: `z.email()` not `z.string().email()`.             |
 | `storybook/await-interactions` | All `userEvent` methods are async: `await userEvent.click(el)`. Forgetting the `await` causes flaky tests because assertions run before the event has propagated through React's effect queue. |
 
-## Story play testing patterns
+## Story test patterns
 
-Component tests are story play functions (see [[Stories as Tests]] and [[Component Testing]]); the Storybook and jest-dom rules apply to the `storybook/test` interactions and matchers a play uses. The full pattern is in the `eslint-fixes` skill; the concept-level point is that the awaited-interaction and jest-dom matcher preferences fire on every interact-and-assert cycle, so wire them into muscle memory rather than fighting the lint each time.
+Component tests are `.test()` calls attached to stories (see [[Stories as Tests]] and [[Component Testing]]); the Storybook and jest-dom rules apply to the `storybook/test` interactions and matchers a test uses. The full pattern is in the `eslint-fixes` skill; the concept-level point is that the awaited-interaction and jest-dom matcher preferences fire on every interact-and-assert cycle, so wire them into muscle memory rather than fighting the lint each time.
 
 See [[Zod]], [[Stories as Tests]], [[gaia-lint]].

@@ -4,7 +4,7 @@ status: active
 priority: 1
 date: 2026-06-23
 created: 2026-06-23
-updated: 2026-10-05
+updated: 2026-10-28
 tags: [decision, tdd, hooks, quality, classifier]
 ---
 
@@ -58,7 +58,7 @@ The allowlist is a constant in the classifier with a version marker (`DOM_ALLOWL
 
 ## Story files are emergent
 
-A path ending `.stories.tsx` or `.stories.ts` classifies EMERGENT before any path scoping or AST check, with the reason `story file: a *.stories.tsx is emergent regardless of path`. A story renders in a real browser and carries its own play function, so it is never a deterministic subject, and a story outside the package descriptor's globs still lands on the worthiness-gated surface. See [[Stories as Tests]].
+A path ending `.stories.tsx` or `.stories.ts` classifies EMERGENT before any path scoping or AST check, with the reason `story file: a *.stories.tsx is emergent regardless of path`. A story renders in a real browser and carries its own tests and play, so it is never a deterministic subject, and a story outside the package descriptor's globs still lands on the worthiness-gated surface. See [[Stories as Tests]].
 
 ## File-granularity limitation
 
