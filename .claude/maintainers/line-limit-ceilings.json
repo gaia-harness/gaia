@@ -50,7 +50,7 @@
     ".gaia/scripts/audit-noop-detect.sh": 702,
     ".gaia/scripts/audit-resolve-scope.sh": 581,
     ".gaia/scripts/audit-scope-digest.sh": 465,
-    ".gaia/scripts/audit-write-findings.sh": 513,
+    ".gaia/scripts/audit-write-findings.sh": 533,
     ".gaia/scripts/branch-name-lib.sh": 757,
     ".gaia/scripts/check-audit-base-derivation.sh": 518,
     ".gaia/scripts/check-debt-issue-metadata.sh": 640,

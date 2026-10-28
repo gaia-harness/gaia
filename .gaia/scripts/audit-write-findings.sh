@@ -107,6 +107,18 @@
 #                  dispositions check owns that bound.
 #   triage_reason  string, REQUIRED and non-empty when triage is true; when
 #                  present otherwise it must still be a string.
+#   grade          OPTIONAL, one of easy | medium | hard: the member's
+#                  difficulty grade of the fix. The audit loop unit copies it
+#                  into the finding file-tech-debt.sh files, which labels it
+#                  `difficulty:<grade>`. A `difficulty` key is rejected by
+#                  name, because the filing script would refuse it at filing
+#                  time, after the member that could fix it has returned.
+# gaia:maintainer-only:start
+#   audience       OPTIONAL, one of adopter | maintainer: who can observe the
+#                  defect. The audit loop unit carries it into the filing like
+#                  grade; file-tech-debt.sh requires it on the maintainer
+#                  repository and labels it `audience:<value>`.
+# gaia:maintainer-only:end
 #
 # Written shape (schema 1; the shape post-findings-block.sh merges)
 #   {"schema":1,"member":"<name>","findings":[ {<finding>}, ... ]}
@@ -369,6 +381,14 @@ if ! violation="$(printf '%s' "$raw" | jq -r '
         then "triage_reason must be a non-empty string when triage is true"
       elif ($finding | has("triage_reason")) and (($finding.triage_reason | type) != "string")
         then "triage_reason, when present, must be a string"
+      elif ($finding | has("grade")) and ((["easy","medium","hard"] | index($finding.grade)) == null)
+        then "grade, when present, must be one of easy|medium|hard"
+      elif ($finding | has("difficulty"))
+        then "difficulty is not a field; write the grade as grade"
+# gaia:maintainer-only:start
+      elif ($finding | has("audience")) and ((["adopter","maintainer"] | index($finding.audience)) == null)
+        then "audience, when present, must be one of adopter|maintainer"
+# gaia:maintainer-only:end
       else empty
       end;
   first(to_entries[] | select((.value | [reason] | length) > 0) | "\(.key)\t\(.value | reason)") // empty

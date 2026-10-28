@@ -522,6 +522,54 @@ write_with_review_base() {
   grep -qF "findings[0]: triage_reason, when present, must be a string" <<<"$output"
 }
 
+# grade: the member's difficulty grade, which the audit loop unit carries into
+# the filing script as its `difficulty:` label. A bad value is refused here,
+# where the member can still fix it, instead of failing the filing later.
+
+@test "grade: easy, medium and hard each write and are preserved; absent writes no grade key" {
+  write "[$(complete_finding | jq -c '.grade = "easy"'),$(complete_finding | jq -c '.grade = "medium"'),$(complete_finding | jq -c '.grade = "hard"'),$(complete_finding)]" >/dev/null
+  [ "$(jq -c '[.findings[] | .grade]' "$EXPECTED")" = '["easy","medium","hard",null]' ]
+  [ "$(jq -c '.findings[3] | has("grade")' "$EXPECTED")" = "false" ]
+}
+
+@test "grade: a value outside easy|medium|hard exits 2 naming the index and writes nothing" {
+  local bad
+  for bad in '"trivial"' '"Easy"' '""' '1' 'null'; do
+    rm -f "$EXPECTED"
+    run write "[$(complete_finding),$(complete_finding | jq -c ".grade = $bad")]"
+    [ "$status" -eq 2 ] || { echo "grade=$bad status $status: $output"; return 1; }
+    grep -qF "findings[1]: grade, when present, must be one of easy|medium|hard" <<<"$output" || { echo "$output"; return 1; }
+    [ ! -f "$EXPECTED" ] || return 1
+  done
+}
+
+@test "audience: adopter and maintainer each write and are preserved; absent writes no audience key" {
+  write "[$(complete_finding | jq -c '.audience = "adopter"'),$(complete_finding | jq -c '.audience = "maintainer"'),$(complete_finding)]" >/dev/null
+  [ "$(jq -c '[.findings[] | .audience]' "$EXPECTED")" = '["adopter","maintainer",null]' ]
+}
+
+@test "audience: a value outside adopter|maintainer exits 2 naming the index and writes nothing" {
+  local bad
+  for bad in '"both"' '"Adopter"' '""' '1' 'null'; do
+    rm -f "$EXPECTED"
+    run write "[$(complete_finding | jq -c ".audience = $bad")]"
+    [ "$status" -eq 2 ] || { echo "audience=$bad status $status: $output"; return 1; }
+    grep -qF "findings[0]: audience, when present, must be one of adopter|maintainer" <<<"$output" || { echo "$output"; return 1; }
+    [ ! -f "$EXPECTED" ] || return 1
+  done
+}
+
+@test "grade: a difficulty key exits 2 naming grade as the field to use, with or without a grade" {
+  local filter
+  for filter in '.difficulty = "easy"' '.difficulty = "easy" | .grade = "easy"'; do
+    rm -f "$EXPECTED"
+    run write "[$(complete_finding | jq -c "$filter")]"
+    [ "$status" -eq 2 ] || { echo "$filter status $status: $output"; return 1; }
+    grep -qF "findings[0]: difficulty is not a field; write the grade as grade" <<<"$output" || { echo "$output"; return 1; }
+    [ ! -f "$EXPECTED" ] || return 1
+  done
+}
+
 @test "structural: the writer carries no environment arm" {
   grep -nE 'GITHUB_ACTIONS|\$\{?CI\b' "$WRITER" && return 1
   true
