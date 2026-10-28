@@ -19,7 +19,7 @@
 #
 # With --spec (a spec-derived plan) additionally: the UAT routing table in
 # README.md validates (delegated to uat_lib_validate_routing); the three UAT
-# sentinels are required; every story-routed UAT has a story play-function
+# sentinels are required; every story-routed UAT has a story test
 # criterion line in some task doc whose text carries the UAT's then-clause.
 # A non-e2e row whose then-clause reads like a route, navigation, URL, redirect,
 # session or server-state check prints a non-fatal WARN: line (misrouting hint).
@@ -235,7 +235,7 @@ if [ -n "$spec_path" ] && [ -f "$readme" ]; then
       [ -n "$then_clause" ] || continue
       case "$surface" in
         story)
-          marker="Story play-function criterion ($uat_id)"
+          marker="Story test criterion ($uat_id)"
           found=0
           for task_file in ${task_files[@]+"${task_files[@]}"}; do
             while IFS= read -r task_line; do
