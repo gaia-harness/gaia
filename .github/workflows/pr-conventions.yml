@@ -82,7 +82,7 @@ jobs:
           fi
           printf 'Branch %s is valid.\n' "$HEAD_REF"
       # `install: none` and a filtered install of our own: the composite's `root`
-      # arm is a plain `pnpm install --frozen-lockfile`, which also installs the
+      # arm is an unfiltered, bounded `pnpm install --frozen-lockfile`, which also installs the
       # frontend workspace (the whole app and its test tooling) that this job
       # never touches. `--filter .` is the root importer alone, which is
       # commitlint and its shared config; the lockfile stays frozen. The composite

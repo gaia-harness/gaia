@@ -50,5 +50,5 @@ for attempt in 1 2; do
     echo "::warning::The install exceeded its ${attempt_seconds}s bound, most likely on a slow npm registry response; retrying once."
   fi
 done
-echo "::error::The install exceeded its ${attempt_seconds}s bound on both attempts, so the npm registry is slow or unreachable. Re-run the failed jobs once it recovers, or raise the gaia-setup-node install-attempt-seconds input if installs here legitimately take longer."
+echo "::error::The install exceeded its ${attempt_seconds}s bound on both attempts, so the npm registry is slow or unreachable. Re-run the failed jobs once it recovers, or raise the --attempt-seconds bound the caller passes (the gaia-setup-node install-attempt-seconds input when the install runs through that action) if installs here legitimately take longer."
 exit "$exit_status"

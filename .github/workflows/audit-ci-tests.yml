@@ -684,7 +684,7 @@ jobs:
         name: Install pinned bats for the commitlint suite
         run: bash .gaia/tests/install-bats.sh
       # `install: none` and a filtered install of our own, because the
-      # composite's `root` arm is a plain `pnpm install --frozen-lockfile`,
+      # composite's `root` arm is an unfiltered, bounded `pnpm install --frozen-lockfile`,
       # which also installs the frontend workspace this suite never touches.
       # `--filter .` is the root importer alone (commitlint and its shared
       # config are root devDependencies); the lockfile stays frozen. The
