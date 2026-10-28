@@ -543,6 +543,22 @@ write_with_review_base() {
   done
 }
 
+@test "audience: adopter and maintainer each write and are preserved; absent writes no audience key" {
+  write "[$(complete_finding | jq -c '.audience = "adopter"'),$(complete_finding | jq -c '.audience = "maintainer"'),$(complete_finding)]" >/dev/null
+  [ "$(jq -c '[.findings[] | .audience]' "$EXPECTED")" = '["adopter","maintainer",null]' ]
+}
+
+@test "audience: a value outside adopter|maintainer exits 2 naming the index and writes nothing" {
+  local bad
+  for bad in '"both"' '"Adopter"' '""' '1' 'null'; do
+    rm -f "$EXPECTED"
+    run write "[$(complete_finding | jq -c ".audience = $bad")]"
+    [ "$status" -eq 2 ] || { echo "audience=$bad status $status: $output"; return 1; }
+    grep -qF "findings[0]: audience, when present, must be one of adopter|maintainer" <<<"$output" || { echo "$output"; return 1; }
+    [ ! -f "$EXPECTED" ] || return 1
+  done
+}
+
 @test "grade: a difficulty key exits 2 naming grade as the field to use, with or without a grade" {
   local filter
   for filter in '.difficulty = "easy"' '.difficulty = "easy" | .grade = "easy"'; do

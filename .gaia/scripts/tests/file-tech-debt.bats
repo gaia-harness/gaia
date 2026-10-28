@@ -639,6 +639,41 @@ CASES
   done
 }
 
+# Same path for the maintainer repository's audience label: the member writes
+# it on the sidecar, the unit carries it, and a sidecar entry without it is
+# refused at the metadata check because the label has no fallback here.
+@test "an audit sidecar entry's audience files as its one audience label; an entry without it is refused" {
+  local audit_root="$BATS_TEST_TMPDIR/audit-root" sidecar entry_filter
+  git init -q "$audit_root"
+  git -C "$audit_root" -c user.email=t@example.com -c user.name=T -c commit.gpgsign=false commit -q --allow-empty -m init
+  git -C "$audit_root" checkout -q -b feat/x
+  for entry_filter in '.audience = "maintainer"' '.'; do
+    reset_state
+    jq -n -c "[{finding_class: \"holistic/swallowed-error\", severity: \"major\", security: false, path: \"app/a.ts\", line: 10,
+      title: \"TITLE-SENTINEL\", failure_mode: \"FAILURE-SENTINEL\", verified_by: \"VERIFIED-SENTINEL\",
+      suggested_fix: \"FIX-SENTINEL\"} | $entry_filter]" >"$BATS_TEST_TMPDIR/sidecar-input.json"
+    sidecar="$(bash "$REAL_ROOT/.gaia/scripts/audit-write-findings.sh" --root "$audit_root" --member code-audit-maintainer-shell \
+      --base "$(git -C "$audit_root" rev-parse HEAD)" --findings "$BATS_TEST_TMPDIR/sidecar-input.json")" \
+      || { echo "$entry_filter: writer refused"; return 1; }
+    jq -c '.member as $member | .findings[0] + {member: $member}' "$sidecar" >"$FINDING"
+    run_file
+    if [ "$entry_filter" = '.' ]; then
+      [ "$status" -eq 1 ] || { echo "no audience: status $status: $output"; return 1; }
+      case "$output" in
+        *"audience-count"*"failed metadata-check") ;;
+        *) echo "no audience: $output"; return 1 ;;
+      esac
+      grep -q '^issue create' "$STUB/log" && { echo "no audience: created"; return 1; }
+    else
+      [ "$status" -eq 0 ] || { echo "audience: status $status: $output"; return 1; }
+      [ "$output" = "filed 101" ] || { echo "audience: $output"; return 1; }
+      [ "$(grep '^issue create' "$STUB/log" | grep -o -e '--label audience:[a-z]*' | wc -l | tr -d ' ')" = 1 ] || return 1
+      grep '^issue create' "$STUB/log" | grep -q -e '--label audience:maintainer' || return 1
+    fi
+  done
+  true
+}
+
 # --- severity:investigate ------------------------------------------------------
 
 investigate_filter='.severity = "investigate" | .investigate_question = "QUESTION-SENTINEL" | .investigate_settled_by = "SETTLED-SENTINEL"'

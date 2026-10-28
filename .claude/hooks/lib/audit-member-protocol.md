@@ -221,6 +221,7 @@ Field contract:
 - Never write `authored`: the round's evaluator annotates authorship against the branch's own changes.
 
 <!-- gaia:maintainer-only:start -->
+- `audience` is `adopter` or `maintainer`: who can observe the defect, chosen by the rule in `.claude/skills/file-tech-debt/SKILL.md` (`## 6. Labels`, the maintainer repository block). Set it on every finding. A tech-debt filing on this repository needs exactly one `audience:` label and there is no fallback, so a filed finding without it is refused.
 - `triage` (optional boolean) with `triage_reason` (non-empty string, required when `triage` is true) marks a harness finding below `.claude/maintainers/harness-triage-threshold.md`'s threshold. The dispositions check honors the mark as disposed only when the entry's member is `code-audit-maintainer-shell` or `code-audit-maintainer-node`, its path is inside that member's roster globs, its severity is not `critical`, and `security` is exactly `false`; any other mark is ignored and the finding is graded and disposed like any other. An adopter copy of the check honors no mark at all.
 <!-- gaia:maintainer-only:end -->
 
