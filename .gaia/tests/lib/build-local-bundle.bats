@@ -28,9 +28,12 @@ setup_file() {
 
 # Clone the committed HEAD, then copy in every file the builder invokes that
 # this branch adds or changes and that is not committed yet (the builder is new
-# work until its commit; once everything is committed each copy is a no-op).
+# work until its commit, and an audit round's fix rebuilds the CLI bundle before
+# it commits; once everything is committed each copy is a no-op). The copies are
+# committed inside the clone, because the builder refuses a tree with
+# uncommitted tracked changes.
 clone_repository() {
-  local destination="$1" relative_path
+  local destination="$1" relative_path copied=0
   printf '#!/usr/bin/env bash\nexit 0\n' > "$BATS_FILE_TMPDIR/fresh-stub.sh"
   printf '#!/usr/bin/env bash\nexit 1\n' > "$BATS_FILE_TMPDIR/stale-stub.sh"
   git clone --quiet "$REPO_ROOT" "$destination"
@@ -43,8 +46,12 @@ clone_repository() {
       && ! cmp -s "$REPO_ROOT/$relative_path" "$destination/$relative_path"; then
       mkdir -p "$(dirname "$destination/$relative_path")"
       cp -p "$REPO_ROOT/$relative_path" "$destination/$relative_path"
+      copied=1
     fi
   done
+  if [ "$copied" -eq 1 ]; then
+    commit_in "$destination" "uncommitted builder and bundle"
+  fi
 }
 
 commit_in() {
