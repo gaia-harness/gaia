@@ -534,7 +534,7 @@ write_with_review_base() {
 
 @test "grade: a value outside easy|medium|hard exits 2 naming the index and writes nothing" {
   local bad
-  for bad in '"trivial"' '"Easy"' '""' '1' 'null'; do
+  for bad in '"trivial"' '"Easy"' '""' '1' 'null' '["easy"]' '["trivial"]'; do
     rm -f "$EXPECTED"
     run write "[$(complete_finding),$(complete_finding | jq -c ".grade = $bad")]"
     [ "$status" -eq 2 ] || { echo "grade=$bad status $status: $output"; return 1; }
@@ -550,7 +550,7 @@ write_with_review_base() {
 
 @test "audience: a value outside adopter|maintainer exits 2 naming the index and writes nothing" {
   local bad
-  for bad in '"both"' '"Adopter"' '""' '1' 'null'; do
+  for bad in '"both"' '"Adopter"' '""' '1' 'null' '["adopter"]' '["both"]'; do
     rm -f "$EXPECTED"
     run write "[$(complete_finding | jq -c ".audience = $bad")]"
     [ "$status" -eq 2 ] || { echo "audience=$bad status $status: $output"; return 1; }
