@@ -79,7 +79,7 @@ Universal envelope only. No class-specific reads.
 The following are never captured, not even filenames in some cases:
 
 - **Bodies of files under `frontend/app/` and `wiki/`.** Filenames from these directories are allowed in state summaries; full file contents are never read or included.
-- **Claude Code session JSONL contents.** Files matching `~/.claude/projects/**/*.jsonl` (top-level `<session-uuid>.jsonl` transcripts and their `<session-uuid>/subagents/*.jsonl` files) are entirely excluded in phase 1. Filenames from this path are also excluded.
+- **Claude Code session JSONL contents.** Files matching `~/.claude/projects/**/*.jsonl` (top-level `<session-uuid>.jsonl` transcripts and their `<session-uuid>/subagents/*.jsonl` files) are entirely excluded. Filenames from this path are also excluded.
 - **`.env*` files.** Always excluded, not even filenames appear in the snapshot.
 - **`node_modules/`.** Any path under `node_modules/` is excluded in full.
 - **`git log` body beyond one line.** Only the most recent commit's subject line is ever included; the full log body is excluded.

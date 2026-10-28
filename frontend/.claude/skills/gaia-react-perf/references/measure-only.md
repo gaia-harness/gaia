@@ -4,7 +4,7 @@ Contents: Boundaries (read first, do not exceed); Step 1: Confirm intent and tar
 
 ## Boundaries (read first, do not exceed)
 
-- **v1 is measure-only.** The skill emits a diagnosis. The human (or Claude, in
+- **The skill is measure-only.** The skill emits a diagnosis. The human (or Claude, in
   normal conversation) applies the fix. This is NOT a bounded auto-fix loop.
 - **The framework/app boundary is a name heuristic**, not a source-path check.
   The reduce filters a framework name denylist; an unusual component name can
@@ -13,8 +13,7 @@ Contents: Boundaries (read first, do not exceed); Step 1: Confirm intent and tar
   43K tokens) for a trivial flow. Only the reduced summary is read. Any
   drill-down is a targeted query (for example `jq`) against the on-disk raw, not
   a full read.
-- **Surfacing is out of scope.** The skill reports a diagnosis and stops: no
-  trip-wire offer, audit prompt, CI label, or decline persistence.
+- **The skill reports a diagnosis and stops.**
 
 ## Step 1: Confirm intent and target
 
@@ -36,7 +35,7 @@ explain this and ask them to narrow to a micro-interaction.
 ## Step 2: Drive and capture
 
 Drive the target interaction in a short Playwright spec using the committed
-Phase-1 capture helper, `frontend/.playwright/react-perf/capture.ts`. The diagnosis spec
+capture helper, `frontend/.playwright/react-perf/capture.ts`. The diagnosis spec
 installs the capture, `goto`s the target route, waits for `hydration`, drives the
 micro-interaction, then collects; it passes `{isRunDirectoryKept: true}` so the raw dump
 survives the Playwright process for the reduce step, and it logs the written
@@ -99,7 +98,7 @@ Run the deterministic reduce over the raw dump and read only its stdout JSON:
 ```
 
 The frame budget defaults to 16ms; pass `--frame-budget-ms <n>` to override the
-timing gate. The command prints a `ReducedSummary` (Contract B) to stdout and
+timing gate. The command prints a `ReducedSummary` to stdout and
 exits 0; malformed input prints a structured error and exits non-zero. The
 `ReducedSummary` is the ONLY thing you ingest.
 

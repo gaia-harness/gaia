@@ -387,7 +387,7 @@ Fall through to Phase 4.6.
 
 ## Phase 4.6: Statusline left side (per-machine, always evaluated)
 
-GAIA's statusline (`.gaia/statusline/gaia-statusline.sh`) always draws GAIA's nudges on the right. For the left side it runs the developer's global `statusLine.command` from `~/.claude/settings.json` when one exists, otherwise GAIA's own bar (project, branch, model and effort, and a context bar colored by the audit checkpoint line). This phase lets a developer with a global statusline choose between the two. It is per-machine state, not a team setting: the answer lives in `.gaia/local/settings.json` (gitignored, GAIA's writable per-machine opt-ins), and it runs even when `completed_at` is non-null, like the sandbox decision, so a clone set up before this phase existed still gets asked.
+GAIA's statusline (`.gaia/statusline/gaia-statusline.sh`) always draws GAIA's nudges on the right. For the left side it runs the developer's global `statusLine.command` from `~/.claude/settings.json` when one exists, otherwise GAIA's own bar (project, branch, model and effort, and a context bar colored by the audit checkpoint line). This phase lets a developer with a global statusline choose between the two. It is per-machine state, not a team setting: the answer lives in `.gaia/local/settings.json` (gitignored, GAIA's writable per-machine opt-ins), and it runs even when `completed_at` is non-null, like the sandbox decision, so a clone whose setup already finished still gets asked.
 
 ### The routing warning (every invocation)
 

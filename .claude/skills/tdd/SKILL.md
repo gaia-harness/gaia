@@ -90,7 +90,6 @@ After all tests pass, look for [refactor candidates](refactoring.md):
 
 - [ ] Extract duplication
 - [ ] Deepen modules (move complexity behind simple interfaces)
-- [ ] Apply SOLID principles where natural
 - [ ] Consider what new code reveals about existing code
 - [ ] Run tests after each refactor step
 
@@ -130,7 +129,7 @@ Dispatch one `Agent` leaf running the committed evaluator prompt (`.claude/agent
 
 #### Write the worthiness ledger (no-orchestrator path)
 
-With no orchestrator to record verdicts, **the tdd skill is the ledger writer**, otherwise principle-6 always-on is violated and the merge presence gate has nothing to read. For each verdict the evaluator returns, append one ledger line via the writer:
+With no orchestrator to record verdicts, **the tdd skill is the ledger writer**, otherwise the worthiness audit leaves no record and the merge presence gate has nothing to read. For each verdict the evaluator returns, append one ledger line via the writer:
 
 ```
 node .gaia/scripts/audit-ledger/append-worthiness.mjs <repo-rel-test-path> <fullName> <verdict> [artifact]
