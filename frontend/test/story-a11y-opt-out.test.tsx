@@ -22,6 +22,17 @@ describe('story a11y opt-outs', () => {
     const storyOptOuts = resolveStoryA11yOptOuts(storyModules, a11y);
 
     expect(storyOptOuts).not.toHaveLength(0);
+
+    // A module yielding no entry holds no CSF4 story, e.g. a CSF3 file the
+    // walker would otherwise skip unchecked.
+    const modulesWithoutStories = Object.entries(storyModules)
+      .filter(
+        ([, storyModule]) =>
+          resolveStoryA11yOptOuts({story: storyModule}, a11y).length === 0
+      )
+      .map(([modulePath]) => modulePath);
+
+    expect(modulesWithoutStories).toEqual([]);
     expect(
       storyOptOuts.filter(({id}) => id.includes('--unnamed-story'))
     ).toEqual([]);

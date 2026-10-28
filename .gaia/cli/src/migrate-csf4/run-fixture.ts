@@ -83,7 +83,7 @@ export const fakeRepairs: Repairs = {
   mainAddonSpecifiers: () => [],
   repairStoryFile: (_ts, codemodOutput) => ({
     notes: [],
-    source: `${codemodOutput}// repaired\n`,
+    source: `${codemodOutput}// repaired\n// preview.meta(\n`,
   }),
   restoreLeadingComment: (_before, after) => after,
   rewirePreview: (_ts, source, _mainAddons) =>

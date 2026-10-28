@@ -38475,7 +38475,18 @@ var runMigrateCsf4 = (options, deps) => {
     report2.converted = asRepoPaths(packagePath, outcome.changed);
     report2.restore = buildRestoreCommand(report2.converted);
     report2.unexpectedChanges = asRepoPaths(packagePath, outcome.unexpected);
-    repairFailures = outcome.repairFailures;
+    repairFailures = [...outcome.repairFailures];
+    plan.stories.forEach((relative) => {
+      const absolute = path50.join(packageDir, relative);
+      if (!repairFailures.includes(relative) && repairs.classifyStoryFile(
+        ts,
+        readFileSync35(absolute, "utf8"),
+        absolute
+      ) !== "csf4") {
+        repairFailures.push(relative);
+        notes.push(`${relative}: still CSF3 after conversion.`);
+      }
+    });
     notes.push(...outcome.notes);
   }
   const context = { packageDir, repoRoot };

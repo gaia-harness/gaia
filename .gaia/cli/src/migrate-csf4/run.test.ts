@@ -6,6 +6,7 @@ import {
   CSF3_STORY,
   CSF4_PREVIEW,
   CSF4_STORY,
+  fakeRepairs,
   FLAGGED_MAIN,
   git,
   makeHarness,
@@ -200,6 +201,27 @@ describe('conversion', () => {
         .map((file) => file.replace('frontend/', ''))
         .toSorted((left, right) => left.localeCompare(right))
     );
+  });
+
+  test('a story the repair leaves CSF3 exits 1 and is named as a conversion failure', () => {
+    const root = repo(standardFiles);
+    const harness = makeHarness(
+      root,
+      {},
+      {
+        repairs: {
+          ...fakeRepairs,
+          repairStoryFile: (_ts, codemodOutput) => ({
+            notes: [],
+            source: codemodOutput,
+          }),
+        },
+      }
+    );
+    const exit = runMigrateCsf4({json: true, updateMerge: false}, harness.deps);
+
+    expect(exit).toBe(1);
+    expect(harness.err.join('')).toContain('app/a/a.stories.tsx: still CSF3');
   });
 
   test('third-party writes to main, preview and package.json never reach the adopter tree', () => {
