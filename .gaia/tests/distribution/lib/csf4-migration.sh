@@ -154,7 +154,7 @@ csf4_hash_list() {
 }
 
 csf4_story_files() {
-  (cd "$SCAFFOLD" && git ls-files --cached --others --exclude-standard -- 'frontend/app/**/*.stories.tsx' | sort)
+  (cd "$SCAFFOLD" && git ls-files -z --cached --others --exclude-standard -- 'frontend/app/**/*.stories.tsx' | tr '\0' '\n' | sort)
 }
 
 csf4_vitest_report() {
@@ -167,6 +167,7 @@ csf4_vitest_report() {
 
 # Prints "loaded passed" for a repo-relative story path from a Vitest JSON report.
 csf4_report_status() {
+  # shellcheck disable=SC2016 # the template literal is JavaScript, not shell
   node -e '
     const report = JSON.parse(require("node:fs").readFileSync(process.argv[1], "utf8"));
     const match = report.testResults.find((result) => result.name.endsWith(process.argv[2]));

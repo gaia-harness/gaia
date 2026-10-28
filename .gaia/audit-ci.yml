@@ -480,6 +480,10 @@ unowned:
   - ".gaia/tests/**/*.md"
   - ".gaia/tests/**/*.ts"
   - ".gaia/tests/**/*.tsx"
+  # Old-format story sources the migration scenario converts, suffixed so no
+  # story reader loads them: input data like the `.tsx` beside them.
+  - ".gaia/tests/**/*.csf3"
+  - ".gaia/tests/**/*.csf2"
   - ".gaia/tests/**/*.txt"
   - ".gaia/tests/**/*.json"
   - ".gaia/tests/**/*.tsv"

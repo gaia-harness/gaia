@@ -114,9 +114,9 @@ grep -q 'preview.type<' "$FRONTEND/app/components/signup-form/tests/index.storie
   || { fail "custom-args story does not go through preview.type"; exit 1; }
 [ "$(node -p 'require(process.argv[1]).imports["#.storybook/preview"]' "$FRONTEND/package.json")" = "./.storybook/preview.ts" ] \
   || { fail "package.json does not map #.storybook/preview"; exit 1; }
-head -1 "$FRONTEND/app/components/status-badge/tests/index.stories.tsx" | grep -q '^// Each badge story' \
+[[ "$(head -1 "$FRONTEND/app/components/status-badge/tests/index.stories.tsx")" == '// Each badge story'* ]] \
   || { fail "the story file lost its opening comment"; exit 1; }
-head -1 "$FRONTEND/.storybook/main.ts" | grep -q '^// The preview inlines' \
+[[ "$(head -1 "$FRONTEND/.storybook/main.ts")" == '// The preview inlines'* ]] \
   || { fail "main lost its opening comment"; exit 1; }
 for pattern in 'addonMsw()' 'definePreviewAddon<AddonTypes>' 'darkMode:' 'addonLinks()' "from '@storybook/addon-links'"; do
   grep -qF "$pattern" "$FRONTEND/.storybook/preview.ts" \
