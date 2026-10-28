@@ -62,7 +62,8 @@ SHIM
   # sleep stubbed, and node standing in for Playwright's install-deps.
   printf '%s\n' '#!/usr/bin/env bash' 'echo "${UNAME_SYSTEM:-Darwin}"' > "$SANDBOX/bin/uname"
   printf '%s\n' '#!/usr/bin/env bash' 'exec "$@"' > "$SANDBOX/bin/sudo"
-  printf '%s\n' '#!/usr/bin/env bash' 'shift' 'exec "$@"' > "$SANDBOX/bin/timeout"
+  # Skips any options (the install helper passes --kill-after), then the bound.
+  printf '%s\n' '#!/usr/bin/env bash' 'while [ "${1#-}" != "$1" ]; do shift; done' 'shift' 'exec "$@"' > "$SANDBOX/bin/timeout"
   printf '%s\n' '#!/usr/bin/env bash' 'exit 0' > "$SANDBOX/bin/apt-get"
   printf '%s\n' '#!/usr/bin/env bash' 'exit 0' > "$SANDBOX/bin/sleep"
   printf '%s\n' '#!/usr/bin/env bash' \

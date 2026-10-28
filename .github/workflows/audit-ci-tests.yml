@@ -95,17 +95,10 @@ jobs:
     # cancelled rather than ran. The matrix values are the bats-shards.sh shard
     # ids plus the three workflow-level legs; audit-ci-shards.bats checks the
     # two stay in sync.
-    #
-    # `max-parallel` caps a push run, never a pull request. A push run runs
-    # every leg whole, and at the full width it takes most of the account's
-    # concurrent-job slots for its whole run, right after a merge, when other
-    # branches catch up and push: pull request legs created during a push run
-    # waited over a minute far more often than legs created outside one. Six
-    # legs at a time leaves room for a pull request's legs and lengthens the
-    # push run, which nothing waits on. A pull request's value is the leg
-    # count, so its legs all start at once. audit-ci-push-parallelism.bats
-    # holds the push value below the pull request value and the pull request
-    # value at the leg count.
+    # `max-parallel` caps only a push run, whose whole legs would otherwise hold
+    # most concurrent-job slots right after a merge and queue pull request legs;
+    # nothing waits on a push run. A pull request's value is the leg count.
+    # audit-ci-push-parallelism.bats guards both values.
     strategy:
       fail-fast: false
       max-parallel: ${{ github.event_name == 'push' && 6 || 17 }}
@@ -705,7 +698,7 @@ jobs:
           cache-dependency-path: pnpm-lock.yaml
       - if: matrix.shard == 'commitlint' && (steps.filter.outputs.commitlint == 'true' || github.event_name == 'push' || github.event_name == 'workflow_dispatch')
         name: Install the root workspace only
-        run: pnpm install --frozen-lockfile --filter .
+        run: bash .github/actions/gaia-setup-node/bounded-install.sh --attempt-seconds 180 -- pnpm install --frozen-lockfile --filter .
       # One root install on THIS leg provisions both things the meter needs:
       # the root dependencies C4-04 and C4-07 resolve `typescript` from, and
       # the CLI member's node_modules, which C3-05 needs because it runs the

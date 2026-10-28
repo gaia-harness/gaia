@@ -94,7 +94,7 @@ jobs:
           install: none
           cache-dependency-path: pnpm-lock.yaml
       - name: Install the root workspace only
-        run: pnpm install --frozen-lockfile --filter .
+        run: bash .github/actions/gaia-setup-node/bounded-install.sh --attempt-seconds 180 -- pnpm install --frozen-lockfile --filter .
       - name: Prove commitlint rejects a retired type
         run: |
           set -u

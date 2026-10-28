@@ -11,7 +11,9 @@
 #   1. pnpm install --frozen-lockfile --ignore-scripts
 #                                       (deps tree precondition; no lifecycle
 #                                        script runs, since the tree under
-#                                        test holds model-edited files)
+#                                        test holds model-edited files;
+#                                        bounded and retried once, like the
+#                                        setup action's install)
 #   2. pnpm typecheck
 #   3. pnpm lint
 #   4. playwright install chromium     (Vitest's browser and storybook
@@ -182,7 +184,7 @@ install_browsers() {
 # via `|| exit 1`; we never proceed past a failure. Order matches the
 # task spec.
 # ---------------------------------------------------------------------------
-run_step install   pnpm install --frozen-lockfile --ignore-scripts || exit 1
+run_step install   bash "$(dirname "$0")/../actions/gaia-setup-node/bounded-install.sh" --attempt-seconds 180 -- pnpm install --frozen-lockfile --ignore-scripts || exit 1
 run_step typecheck pnpm typecheck                  || exit 1
 run_step lint      pnpm lint                       || exit 1
 run_step browsers  install_browsers                || exit 1
