@@ -175,14 +175,14 @@ PINNED_HOOKS=(local-janitor.bats)
 # `wiki/decisions/Sharded CI Test Matrix.md` carries the measurements.
 SCRIPTS_COST_OUTLIERS=(audit-light-route.bats)
 
-# The hooks group's cost outliers, under the same membership rule: one
-# classifies every tracked path in a single test, one builds a fixture
+# The hooks group's cost outliers, under the same membership rule: one runs the
+# merge-gate hook against a fixture repository per case, one builds a fixture
 # repository per case, one runs real git pushes, so a small file can hold more
 # minutes than a large one. Weighed by bytes alone they can all draw onto one
 # leg and make it the slowest of the matrix; anchored, each takes a bucket of
 # its own.
 # `wiki/decisions/Sharded CI Test Matrix.md` carries the measurements.
-HOOKS_COST_OUTLIERS=(audit-scope-routing-parity.bats audit-loop-bound.bats githooks-pre-push-e2e.bats)
+HOOKS_COST_OUTLIERS=(pr-merge-audit-check.bats audit-loop-bound.bats githooks-pre-push-e2e.bats)
 
 # The weighted groups, each listed once and in matrix order. Adding a shard
 # to a group is a one-word edit here: SHARD_IDS is built from these rather than
