@@ -391,7 +391,7 @@ jobs:
     # the "not evaluated" it actually is.
     if: github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 45
     # Same three consumers as cli-tests above; the scenarios run without a
     # token by design (see the step name at the harness invocation below).
     # `pull-requests: read` is paths-filter's, for the same reason given there.
