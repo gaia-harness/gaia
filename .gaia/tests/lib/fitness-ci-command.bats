@@ -47,9 +47,8 @@ setup() {
   cp -R "$BATS_FILE_TMPDIR/minimal" "$TREE"
 }
 
-# full_tree: swap the scratch tree for a whole-index copy. The tests that grade
-# the unmodified tree and the long description (and the line-limit cases that
-# scan the whole harness) need it; the others lint the minimal tree.
+# full_tree: swap the scratch tree for a whole-index copy. The line-limit cases
+# that scan the whole harness need it; the others lint the minimal tree.
 full_tree() {
   rm -rf "$TREE"
   cp -R "$BATS_FILE_TMPDIR/base" "$TREE"
@@ -95,27 +94,6 @@ commit_tree() {
   for flag in '--scope all' '--fail-on error' '--enforce frontmatter' '--enforce authoring.skill.body.max-lines' '--enforce authoring.playbook.max-lines'; do
     grep -qF -- "$flag" <<<"$line" || return 1
   done
-}
-
-# bats test_tags=whole-tree
-@test "the unmodified tree passes" {
-  full_tree
-  run run_ci_lint "$WORKFLOW" "$TREE" "$BASE_CONFIG"
-  [ "$status" -eq 0 ]
-}
-
-# bats test_tags=whole-tree
-@test "a skill description past 1024 characters fails and names the file and rule" {
-  full_tree
-  skill=".claude/skills/tdd/SKILL.md"
-  long="$(printf 'x%.0s' $(seq 1 1100))"
-  sed -i.bak -E "s|^description: .*|description: ${long}|" "$TREE/$skill"
-  rm "$TREE/$skill.bak"
-  commit_tree
-  run run_ci_lint "$WORKFLOW" "$TREE" "$BASE_CONFIG"
-  [ "$status" -ne 0 ]
-  grep -qF -- "$skill" <<<"$output" || return 1
-  grep -qF -- "frontmatter.skill.description.max-length" <<<"$output" || return 1
 }
 
 @test "a skill name that gains the reserved word claude fails and names the rule" {

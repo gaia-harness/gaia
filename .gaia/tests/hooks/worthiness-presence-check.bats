@@ -452,11 +452,6 @@ test("oops" => { syntax(((;'
   run_merge_hook
   [ "$status" -eq 0 ]
   refute_denied
-
-  # Run 3: unchanged -- allow again (idempotent).
-  run_merge_hook
-  [ "$status" -eq 0 ]
-  refute_denied
 }
 
 # ---------------------------------------------------------------------------

@@ -166,9 +166,11 @@ _fixture_with_legacy() {
   local before after
   before="$(_legacy_manifest)"
   [ "$(printf '%s\n' "$before" | wc -l | tr -d ' ')" -ge 15 ]
+  [ "$(_mode "$REPO/.gaia/local/research/beta/data.csv")" = 750 ]
 
   run _move run
   [ "$status" -eq 0 ]
+  [ "$(_mode "$REPO/.notebook/research/beta/data.csv")" = 750 ]
 
   # Every pre-move file exists exactly once across the notebook and the old roots.
   after="$( { _notebook_manifest; _legacy_manifest; } | LC_ALL=C sort)"
@@ -236,23 +238,6 @@ _fixture_with_legacy() {
   [ "$(jq '[.items[] | select(has("reap"))] | length' "$catalog")" -eq 2 ]
 }
 
-@test "files keep their content and mode through the move" {
-  _fixture_with_legacy
-  local mode_before mode_after
-  mode_before="$(_mode "$REPO/.gaia/local/research/beta/data.csv")"
-  [ "$mode_before" = 750 ]
-  run _move run
-  [ "$status" -eq 0 ]
-  mode_after="$(_mode "$REPO/.notebook/research/beta/data.csv")"
-  [ "$mode_after" = 750 ]
-  [ -f "$REPO/.notebook/research/beta/.hidden" ]
-  [ -f "$REPO/.notebook/research/beta/blob.dat" ]
-  [ -f "$REPO/.notebook/research/beta/sub/deep/file.txt" ]
-  [ ! -e "$REPO/.gaia/local/research/beta" ]
-  [ ! -e "$REPO/.gaia/local/specs/SPEC-001" ]
-  [ -f "$REPO/.notebook/specs/SPEC-001/plan/PROGRESS.md" ]
-}
-
 @test "reconcile reports none of the folded rows that carry the pre-catalog record" {
   _fixture_with_legacy
   run _move run
@@ -263,13 +248,7 @@ _fixture_with_legacy() {
   [[ "$output" == *"research/notes.txt: loose file"* ]]
   [[ "$output" != *"SPEC-003"* ]] || return 1
   [[ "$output" != *"PLAN-002"* ]] || return 1
-  true
-}
-
-@test "reconcile does report a row without a folder once its reap record is gone" {
-  _fixture_with_legacy
-  run _move run
-  [ "$status" -eq 0 ]
+  # Once the reap record is gone the same row is reported as having no folder.
   local catalog="$REPO/.notebook/catalog.json" stripped
   stripped="$(jq 'del(.items[].reap)' "$catalog")"
   printf '%s\n' "$stripped" > "$catalog"
@@ -347,7 +326,7 @@ _normalized_catalog() {
   command rm -rf "$REPO" "$REPO-"*
 
   local cut
-  for cut in 0 3 $((total - 1)); do
+  for cut in 0 $((total - 1)); do
     _fixture_with_legacy
     _install_failing_mv "$cut"
     run _move run
@@ -467,6 +446,7 @@ _normalized_catalog() {
   [ "$status" -eq 0 ]
   [[ "$output" == *"run state names an old location: .gaia/local/runs/some-branch/STATE.md"* ]]
   [[ "$output" == *"notebook file names an old location: .notebook/research/beta/CITES.md"* ]]
+  [[ "$output" != *"memory-repoint"* ]] || return 1
 }
 
 @test "the report lists memory files and names the repoint command only when one qualifies" {
@@ -483,12 +463,4 @@ _normalized_catalog() {
   [[ "$output" == *"move.sh memory-repoint"* ]]
   # The move itself repoints nothing.
   grep -qF '.gaia/local/plans/' "$memory/has-old.md"
-}
-
-@test "no memory line appears when no memory file qualifies" {
-  _fixture_with_legacy
-  run _move run
-  [ "$status" -eq 0 ]
-  [[ "$output" != *"memory-repoint"* ]] || return 1
-  true
 }

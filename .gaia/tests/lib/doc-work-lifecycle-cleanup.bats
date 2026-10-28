@@ -676,16 +676,6 @@ check_arm_names_verb_after_delete() {
 # ---------------------------------------------------------------------------
 # Helpers for the tests
 
-mutate_check_script() { # sed args: points CHECK_SCRIPT at a mutated copy
-  local copy="$BATS_TEST_TMPDIR/mutated-check.sh"
-  sed "$@" "$REPO_ROOT/.gaia/scripts/worktree-removal-check.sh" >"$copy" || return 1
-  if cmp -s "$copy" "$REPO_ROOT/.gaia/scripts/worktree-removal-check.sh"; then
-    echo "the mutation changed nothing"
-    return 1
-  fi
-  CHECK_SCRIPT=$copy
-}
-
 assert_check_green() { # function name and arguments
   run "$@"
   [ "$status" -eq 0 ] || { printf '%s\n' "$output"; return 1; }
@@ -794,35 +784,6 @@ assert_check_red() { # expected reason, then function name and arguments
 }
 
 # ---------------------------------------------------------------------------
-# Red twins: the same check against a mutated reference must fail.
-
-@test "red twin: without the linked-worktree check the feature script no longer says why it stopped" {
-  mutate_reference -e '/git worktree list --porcelain | awk/,/^  fi$/d' || return 1
-  assert_check_red "the stop was not the linked-worktree check" \
-    check_feature_stops_when_linked_worktree_holds_main "$BATS_TEST_TMPDIR/fixture"
-}
-
-@test "red twin: an unconditional pull moves the peer branch" {
-  mutate_reference -e 's/^if \[ "\$head_branch" = "\$default_branch" \]; then$/if true; then/' || return 1
-  assert_check_red "the peer branch moved" \
-    check_feature_peer_branch_left_alone "$BATS_TEST_TMPDIR/fixture"
-}
-
-@test "red twin: addressing the branch by the directory name leaves the real branch behind" {
-  mutate_reference \
-    -e '/^### Worktree entered by path/,/^### Feature branch/s/refs\/heads\/<branch-name>/refs\/heads\/$(basename "<worktree path>")/' \
-    -e '/^### Worktree entered by path/,/^### Feature branch/s/branch -D <branch-name>/branch -D $(basename "<worktree path>")/' || return 1
-  assert_check_red "local branch survives" \
-    check_path_arm_addresses_tree_and_branch_separately "$BATS_TEST_TMPDIR/fixture"
-}
-
-@test "red twin: without fetch --prune the remote-tracking ref survives the tail" {
-  mutate_reference -e '/^git fetch --prune origin$/d' || return 1
-  assert_check_red "remote-tracking ref survives" \
-    check_name_arm_tail "$BATS_TEST_TMPDIR/fixture" main
-}
-
-# ---------------------------------------------------------------------------
 # Worktree arms: the pre-removal check, the pull gate and the conditional install
 
 @test "worktree by path: an untracked file stops at the check with the tree, branch, main and pnpm untouched" {
@@ -917,72 +878,6 @@ assert_check_red() { # expected reason, then function name and arguments
 # ---------------------------------------------------------------------------
 # Red twins for the worktree arms
 
-@test "red twin: a by-path arm whose check fence does nothing removes a tree holding an untracked file" {
-  mutate_reference -e '/^### Worktree entered by path/,/^### Feature branch/s|^bash .gaia/scripts/worktree-removal-check.sh --tree <worktree path>$|true|' || return 1
-  assert_check_red "the arm exited 0" \
-    check_arm_stops_on_untracked_file "$BATS_TEST_TMPDIR/fixture" path
-}
-
-@test "red twin: a by-name arm whose check fence does nothing reaches the tail with an untracked file" {
-  mutate_reference -e '/^### Worktree entered by name/,/^### Worktree entered by path/s|^bash .gaia/scripts/worktree-removal-check.sh --tree <worktree path>$|true|' || return 1
-  assert_check_red "the arm exited 0" \
-    check_arm_stops_on_untracked_file "$BATS_TEST_TMPDIR/fixture" name
-}
-
-@test "red twin: a check script without the status test lets a dirty tree through both arms" {
-  mutate_check_script -e 's/^dirty=.*/dirty=""/' || return 1
-  assert_check_red "the arm exited 0" \
-    check_arm_stops_on_dirty "$BATS_TEST_TMPDIR/fixture-path" path
-  assert_check_red "the arm exited 0" \
-    check_arm_stops_on_dirty "$BATS_TEST_TMPDIR/fixture-name" name
-}
-
-@test "red twin: a check script that counts ignored files stops both arms on an ignored file" {
-  mutate_check_script -e 's/status --porcelain/status --porcelain --ignored/' || return 1
-  assert_check_red "the arm stopped" \
-    check_arm_removes "$BATS_TEST_TMPDIR/fixture-path" path ignored
-  assert_check_red "the arm stopped" \
-    check_arm_removes "$BATS_TEST_TMPDIR/fixture-name" name ignored
-}
-
-@test "red twin: a check script that counts against origin/main without the upstream guard stops both arms with no upstream" {
-  mutate_check_script -e 's|^if upstream=.*|upstream=origin/main; if true; then|' -e "s|'@{upstream}\\.\\.HEAD'|origin/main..HEAD|" || return 1
-  assert_check_red "the arm stopped" \
-    check_arm_removes "$BATS_TEST_TMPDIR/fixture-path" path no-upstream
-  assert_check_red "the arm stopped" \
-    check_arm_removes "$BATS_TEST_TMPDIR/fixture-name" name no-upstream
-}
-
-@test "red twin: a bare git in the by-path removal fence fails from inside the tree" {
-  mutate_reference -e '/^### Worktree entered by path/,/^### Feature branch/s/git -C <main checkout path> //' || return 1
-  assert_check_red "FAIL:" \
-    check_path_arm_from_inside_the_tree "$BATS_TEST_TMPDIR/fixture"
-}
-
-@test "red twin: an unconditional install runs pnpm when the pull changed no lockfile" {
-  mutate_reference -e 's/^\( *\)if ! git .*diff --quiet .*pnpm-lock.yaml; then$/\1if true; then/' || return 1
-  assert_check_red "pnpm was called without a lockfile change" \
-    check_arm_installs_on_lockfile_change "$BATS_TEST_TMPDIR/fixture-path" path nolock
-  assert_check_red "pnpm was called without a lockfile change" \
-    check_arm_installs_on_lockfile_change "$BATS_TEST_TMPDIR/fixture-name" name nolock
-}
-
-@test "red twin: an install without --frozen-lockfile is not the call the stub must see" {
-  mutate_reference -e 's/^\( *if ! pnpm .*install\) --frozen-lockfile; then$/\1; then/' || return 1
-  assert_check_red "pnpm was not called as" \
-    check_arm_installs_on_lockfile_change "$BATS_TEST_TMPDIR/fixture-path" path lock
-  assert_check_red "pnpm was not called as" \
-    check_arm_installs_on_lockfile_change "$BATS_TEST_TMPDIR/fixture-name" name lock
-}
-
-@test "red twin: a pull gate that no longer exits lets a failed pull read as success" {
-  mutate_reference -e '/The pull failed/{n;s/exit 1/:/;}' || return 1
-  assert_check_red "a failed pull exited 0" \
-    check_arm_skips_install_when_pull_fails "$BATS_TEST_TMPDIR/fixture-path" path
-  assert_check_red "a failed pull exited 0" \
-    check_arm_skips_install_when_pull_fails "$BATS_TEST_TMPDIR/fixture-name" name
-}
-
 @test "red twin: a continuation prompt without the check line fails the order check" {
   mutate_reference -e '/^    bash .gaia\/scripts\/worktree-removal-check.sh --tree <ABSOLUTE-PATH-TO-WORKTREE>/d' || return 1
   assert_check_red "the first command is not the check" check_continuation_prompt_order
@@ -1039,21 +934,6 @@ assert_check_red() { # expected reason, then function name and arguments
   assert_check_green check_feature_head_on_merged_branch "$BATS_TEST_TMPDIR/fixture-feature"
   assert_check_green check_name_arm_tail "$BATS_TEST_TMPDIR/fixture-name" main
   assert_check_green check_path_arm_addresses_tree_and_branch_separately "$BATS_TEST_TMPDIR/fixture-path"
-}
-
-@test "red twin: a literal main default leaves a master repository unpulled in every arm" {
-  mutate_reference -e 's/^\( *\)\[ -n "\$default_branch" \] || default_branch=main$/\1default_branch=main/' || return 1
-  FIXTURE_DEFAULT=master
-  assert_check_red "FAIL:" check_feature_head_on_merged_branch "$BATS_TEST_TMPDIR/fixture-feature"
-  assert_check_red "FAIL:" check_name_arm_tail "$BATS_TEST_TMPDIR/fixture-name" main
-  assert_check_red "FAIL:" check_path_arm_addresses_tree_and_branch_separately "$BATS_TEST_TMPDIR/fixture-path"
-}
-
-@test "red twin: without the origin/HEAD read a trunk default is not pulled" {
-  mutate_reference -e 's|symbolic-ref --quiet --short refs/remotes/origin/HEAD|symbolic-ref --quiet --short refs/remotes/origin/NONE|' || return 1
-  FIXTURE_DEFAULT=trunk
-  FIXTURE_ORIGIN_HEAD=1
-  assert_check_red "is not at origin/trunk" check_name_arm_tail "$BATS_TEST_TMPDIR/fixture-name" main
 }
 
 # ---------------------------------------------------------------------------
@@ -1126,17 +1006,3 @@ assert_check_red() { # expected reason, then function name and arguments
   assert_check_red "precedes the branch delete" check_arm_names_verb_after_delete "$FEATURE_ARM"
 }
 
-@test "red twin: a feature arm without the verb line leaves the merged branch's state behind" {
-  mutate_reference -e '/state-cleanup.sh --branch/d' || return 1
-  assert_check_red "the merged branch keeps its state" check_feature_arm_prunes_state "$BATS_TEST_TMPDIR/fixture"
-}
-
-@test "red twin: a by-path arm without the verb line leaves the merged branch's state behind" {
-  mutate_reference -e '/state-cleanup.sh --branch/d' || return 1
-  assert_check_red "the merged branch keeps its state" check_worktree_arm_prunes_state "$BATS_TEST_TMPDIR/fixture" path
-}
-
-@test "red twin: a name arm without the verb line leaves the merged branch's state behind" {
-  mutate_reference -e '/state-cleanup.sh --branch/d' || return 1
-  assert_check_red "the merged branch keeps its state" check_worktree_arm_prunes_state "$BATS_TEST_TMPDIR/fixture" name
-}

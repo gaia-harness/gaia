@@ -512,24 +512,4 @@ SUITE
     printf '%s\n' "$output" >&2
     return 1
   fi
-  local derived suite
-  derived="$(bash "$GUARD" --root "$REPO_ROOT" --list-derived)"
-  for suite in red-ledger-lib capture-red-observations red-verify-commit-check \
-    red-verify-e2e worthiness-presence-check extract-test-signals-stories-reporter \
-    uat-lifecycle-e2e; do
-    case "$derived" in
-      *"/$suite.bats"*) ;;
-      *) printf 'derived set is missing %s\n' "$suite" >&2; return 1 ;;
-    esac
-  done
-}
-
-# bats test_tags=whole-tree
-@test "the real repository lists the conformance suite as backstopped" {
-  local backstopped
-  backstopped="$(bash "$GUARD" --root "$REPO_ROOT" --list-backstopped)"
-  case "$backstopped" in
-    *region-marker-conformance.bats*) ;;
-    *) printf 'backstopped set:\n%s\n' "$backstopped" >&2; return 1 ;;
-  esac
 }

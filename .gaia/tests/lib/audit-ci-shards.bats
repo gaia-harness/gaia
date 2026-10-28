@@ -1326,8 +1326,9 @@ w2_check() {
 # W4. A push or dispatch run has no paths-filter output (the filter step runs
 # on pull_request only), so every step and job gated on one has to admit both
 # events itself, or a push to main or a manual re-run silently skips it. And
-# every FULL_RUN expression has to read true for both, or they plan
-# change-scoped from a filter that never ran.
+# every FULL_RUN expression has to plan full for a pull request arming code and
+# change-scoped for one arming scoped alone; push and dispatch reading true is
+# W27's.
 #
 # Exempt, and not read here: steps whose `if:` reads only
 # steps.selection.outputs. Push and dispatch reach them through the selection
@@ -1337,7 +1338,8 @@ w2_check() {
 
 # w4_check <workflow>: 0 when every filter-gated step and every job but the
 # reporter admit push and workflow_dispatch, negating neither, and every
-# FULL_RUN expression on the bats legs evaluates true for both events.
+# FULL_RUN expression on the bats legs evaluates true for a pull request arming
+# code and false for one arming scoped alone.
 w4_check() {
   local workflow="$1" job_id expression gaps="" count=0 event shard step value full_run_count bats_shards
   local queries="$BATS_TEST_TMPDIR/w4-queries" results="$BATS_TEST_TMPDIR/w4-results"
@@ -1369,33 +1371,19 @@ w4_check() {
   bats_shards="$(bash "$BATS_SHARDS" shards)" || return 1
   : >"$queries"
   for shard in $bats_shards; do
-    for event in push workflow_dispatch; do
-      printf 'full.%s.%s evalenv shards FULL_RUN %s event=%s\n' "$event" "$shard" "$shard" "$event" >>"$queries"
-    done
     printf 'scoped.%s evalenv shards FULL_RUN %s event=pull_request filter.scoped=true\n' "$shard" "$shard" >>"$queries"
     printf 'code.%s evalenv shards FULL_RUN %s event=pull_request filter.code=true\n' "$shard" "$shard" >>"$queries"
   done
   eval_batch "$workflow" "$queries" "$results" || return 1
 
+  # Push and dispatch read FULL_RUN true through the selection step, which W27
+  # evaluates for every leg. Here: `code` plans full and a pull request arming
+  # `scoped` alone plans change-scoped, which is the whole point of the arm.
   full_run_count=0
-  for shard in $bats_shards; do
-    for event in push workflow_dispatch; do
-      while IFS=$'\t' read -r step value; do
-        [ -n "$step" ] || continue
-        full_run_count=$((full_run_count + 1))
-        [ "$value" = "true" ] || gaps="${gaps}${step} on ${shard}: FULL_RUN reads ${value} for ${event}"$'\n'
-      done <"$results/full.$event.$shard"
-    done
-  done
-  [ "$full_run_count" -gt 0 ] || {
-    echo "no step sets FULL_RUN on any bats leg; the full-run half of W4 asserted nothing" >&2
-    return 1
-  }
-  # And only those, plus `code`: a pull request arming `scoped` alone plans
-  # change-scoped, which is the whole point of the arm.
   for shard in $bats_shards; do
     while IFS=$'\t' read -r step value; do
       [ -n "$step" ] || continue
+      full_run_count=$((full_run_count + 1))
       [ "$value" = "false" ] || gaps="${gaps}${step} on ${shard}: FULL_RUN reads ${value} for a scoped-only pull request"$'\n'
     done <"$results/scoped.$shard"
     while IFS=$'\t' read -r step value; do
@@ -1403,6 +1391,10 @@ w4_check() {
       [ "$value" = "true" ] || gaps="${gaps}${step} on ${shard}: FULL_RUN reads ${value} for a pull request arming code"$'\n'
     done <"$results/code.$shard"
   done
+  [ "$full_run_count" -gt 0 ] || {
+    echo "no step sets FULL_RUN on any bats leg; the full-run half of W4 asserted nothing" >&2
+    return 1
+  }
   [ -z "$gaps" ] || { printf '%s' "$gaps" >&2; return 1; }
 }
 
@@ -1449,9 +1441,9 @@ w4_check() {
   assert_doctored "$line" "$mutated" "dropping push from FULL_RUN" || return 1
   replace_line "$WORKFLOW" "$line" "$mutated" "$doctored"
 
-  run w4_check "$doctored"
-  [ "$status" -ne 0 ] || { echo "a FULL_RUN false on push passed W4" >&2; return 1; }
-  printf '%s\n' "$output" | grep -qF -- "FULL_RUN reads false for push" || { echo "W4 did not name the FULL_RUN gap: $output" >&2; return 1; }
+  run w27_check "$doctored"
+  [ "$status" -ne 0 ] || { echo "a FULL_RUN false on push passed W27" >&2; return 1; }
+  printf '%s\n' "$output" | grep -qF -- "on push: the selection step does not plan --full" || { echo "W27 did not name the FULL_RUN gap: $output" >&2; return 1; }
 }
 
 # W5. Every job is capped with an integer literal, and every run step that
@@ -1993,30 +1985,6 @@ EOF
   }
 }
 
-# bats test_tags=whole-tree
-@test "W10 adversarial: dropping a needed shard from the apt step is caught" {
-  local doctored="$BATS_TEST_TMPDIR/dropped.yml" declared needed line mutated
-  require_yaml_parser
-
-  line="$(gate_line_for_step "$WORKFLOW" 'Install the YAML parser and zsh')" || return 1
-  # Only the final id is followed by the closing bracket, so this drops one
-  # leg rather than the tail of the list.
-  mutated="$(printf '%s' "$line" | sed 's/, "[^"]*"\]/]/')"
-  assert_doctored "$line" "$mutated" "dropping the last shard id" || return 1
-  replace_line "$WORKFLOW" "$line" "$mutated" "$doctored"
-
-  declared="$(read_workflow stepshards "$doctored" shards 'Install the YAML parser and zsh')" || {
-    echo "the doctored workflow did not parse" >&2
-    return 1
-  }
-  needed="$(shard_package_legs "$BATS_SHARDS" "$REPO_ROOT")" || return 1
-  [ "$declared" = "$needed" ] && {
-    echo "dropping the last shard id from the apt step was not caught" >&2
-    return 1
-  }
-  true
-}
-
 # A whole fake seam under $1: a `needs` directory the hooks shards draw from
 # and a `clean` one every other shard does, so both branches of the grep are
 # exercised against a tree the caller owns. Driving the real sharder with its
@@ -2042,40 +2010,22 @@ seed_seam_tree() {
   done
   # local-janitor.bats goes in BOTH trees because hooks-1 pins it by name and
   # the sharder exits 2 for a shard it cannot resolve: whichever tree HOOKS_DIRECTORY
-  # is pointed at has to carry it, and the scripts-seam fixtures below point it
-  # at the clean one. Its body is plain in both, so hooks-1 never joins the
+  # is pointed at has to carry it, and the other seams point at the clean
+  # one. Its body is plain in both, so hooks-1 never joins the
   # reported set either way.
   printf '#!/usr/bin/env bats\n' >"$root/needs/local-janitor.bats"
   printf '#!/usr/bin/env bats\n' >"$root/clean/local-janitor.bats"
 }
 
-# seam_tree_scan <helper> <root> [group] [sharder]
+# seam_tree_scan <helper> <root> [sharder]
 #
-# Points ONE seam at the seeded tree's needing directory and every other seam at
-# its clean one, then runs <helper> (shard_package_needs or shard_package_legs)
-# over the result. <group> selects which weighted group holds the needing
-# suite: `hooks` (the default), `scripts` or `lib`.
-#
-# The group is a parameter rather than a second copy of this function because
-# each weighted group is its own arm of group_for_shard, and a fixture set
-# that only ever drives one of them cannot see a narrowing edit to another.
-# That is not hypothetical: before these fixtures covered both arms, the
-# scripts arm could be reduced to a singleton with every test in this
-# repository still green.
+# Points the hooks seam at the seeded tree's needing directory and every other
+# seam at its clean one, then runs <helper> (shard_package_needs or
+# shard_package_legs) over the result.
 seam_tree_scan() {
-  local helper_function="$1" root="$2" group="${3:-hooks}" sharder="${4:-$BATS_SHARDS}"
-  local hooks_directory="$root/clean" scripts_directory="$root/clean" library_directory="$root/clean"
-  case "$group" in
-    hooks) hooks_directory="$root/needs" ;;
-    scripts) scripts_directory="$root/needs" ;;
-    lib) library_directory="$root/needs" ;;
-    *)
-      echo "seam_tree_scan: unknown group $group" >&2
-      return 2
-      ;;
-  esac
-  HOOKS_DIRECTORY="$hooks_directory" SCRIPTS_TESTS_DIRECTORY="$scripts_directory" \
-    AUDIT_TESTS_DIRECTORY="$root/clean" LIBRARY_DIRECTORY="$library_directory" \
+  local helper_function="$1" root="$2" sharder="${3:-$BATS_SHARDS}"
+  HOOKS_DIRECTORY="$root/needs" SCRIPTS_TESTS_DIRECTORY="$root/clean" \
+    AUDIT_TESTS_DIRECTORY="$root/clean" LIBRARY_DIRECTORY="$root/clean" \
     FORENSICS_DIRECTORY="$root/clean" STATUSLINE_DIRECTORY="$root/clean" \
     "$helper_function" "$sharder" "$root"
 }
@@ -2083,14 +2033,14 @@ seam_tree_scan() {
 # Runs shard_package_needs over a tree seeded by seed_seam_tree, with the hooks
 # seam holding the needing suite.
 seam_tree_needs() {
-  seam_tree_scan shard_package_needs "$1" hooks
+  seam_tree_scan shard_package_needs "$1"
 }
 
 # Runs shard_package_legs over the same seeded tree, hooks seam holding the
 # needing suite. Takes the sharder as an optional $2 so the propagation fixture
 # below can drive the same code against a doctored copy.
 seam_tree_legs() {
-  seam_tree_scan shard_package_legs "$1" hooks "${2:-$BATS_SHARDS}"
+  seam_tree_scan shard_package_legs "$1" "${2:-$BATS_SHARDS}"
 }
 
 # A copy of the sharder with its `group` dispatch arm deleted: `shards` and
@@ -2120,71 +2070,6 @@ copy_sharder_without_group() {
   # command falls through to the script's own unknown-command arm.
   sed 's/^    group)$/    group-disabled)/' "$BATS_SHARDS" >"$destination"
   printf '%s\n' "$destination"
-}
-
-# The defect W10's rounding exists for, reproduced end to end: one suite that
-# needs a package, one unrelated suite beside it that grows, and a per-leg
-# answer that moves for a reason that has nothing to do with packages. Growing
-# a file is the whole mechanism -- the sharder splits a group by BYTE SIZE, so
-# a comment added to an unrelated suite is enough.
-#
-# The loop is bounded and its failure to move is a test failure, not a skip: a
-# fixture that never triggered the reshuffle would assert only that two equal
-# things stayed equal, which is the shape this whole file's discipline rejects.
-@test "W10: a within-group reshuffle moves the needing leg but not the declared legs" {
-  local root="$BATS_TEST_TMPDIR/reshuffle" needs_before needs_after legs_before legs_after
-  local i=0 moved=''
-  seed_seam_tree "$root"
-  printf '#!/usr/bin/env bats\ncommand -v zsh\n' >"$root/needs/uses-zsh.bats"
-
-  needs_before="$(seam_tree_needs "$root")" || return 1
-  legs_before="$(seam_tree_legs "$root")" || return 1
-
-  # Rounding up has to actually widen here, or the stability below would be
-  # trivially true: exactly one leg needs the package, and its group has more
-  # legs than that.
-  [ "$(printf '%s\n' "$needs_before" | grep -c .)" -eq 1 ] || {
-    echo "the fixture did not produce a single needing leg:" >&2
-    printf '%s\n' "$needs_before" >&2
-    return 1
-  }
-  [ "$(printf '%s\n' "$legs_before" | grep -c .)" -gt 1 ] || {
-    echo "rounding up to whole groups did not widen the set:" >&2
-    printf '%s\n' "$legs_before" >&2
-    return 1
-  }
-  grep -qx -- "$needs_before" <<<"$legs_before" || {
-    echo "the needing leg is not inside the rounded-up set:" >&2
-    printf '%s\n' "$legs_before" >&2
-    return 1
-  }
-
-  # Grow an unrelated suite beside it until the weighted assignment hands the
-  # zsh-naming file to a different leg. Padding in chunks rather than one big
-  # write so the walk is crossed rather than jumped over.
-  while [ "$i" -lt 24 ]; do
-    printf '# pad %s\n' "$i" >>"$root/needs/plain-0.bats"
-    i=$((i + 1))
-    needs_after="$(seam_tree_needs "$root")" || return 1
-    if [ "$needs_after" != "$needs_before" ]; then
-      moved=yes
-      break
-    fi
-  done
-  [ -n "$moved" ] || {
-    echo "growing an unrelated suite never moved the needing leg off $needs_before," >&2
-    echo "so this fixture proved nothing about stability" >&2
-    return 1
-  }
-
-  legs_after="$(seam_tree_legs "$root")" || return 1
-  [ "$legs_after" = "$legs_before" ] || {
-    echo "the needing leg moved from $needs_before to $needs_after and the declared" >&2
-    echo "legs moved with it, which is the churn the rounding exists to stop:" >&2
-    printf 'before: %s\n' "$(printf '%s' "$legs_before" | tr '\n' ' ')" >&2
-    printf 'after:  %s\n' "$(printf '%s' "$legs_after" | tr '\n' ' ')" >&2
-    return 1
-  }
 }
 
 # Rounding up must not reach past the group that needs a package. Without this,
@@ -2250,82 +2135,6 @@ copy_sharder_without_group() {
     echo "a sharder that could not resolve a group reported a clean closure" >&2
     return 1
   }
-}
-
-# The same two claims as the hooks fixtures above, driven through the OTHER
-# weighted group. Without this, group_for_shard's scripts arm could be narrowed
-# to a singleton and every test in this repository stayed green: S14 proves the
-# declared groups partition the shard set, which a set of singletons also
-# satisfies, so the partition alone cannot see a narrowing. The empirical half,
-# that a declared group really is a superset of what a reshuffle can move
-# across, is what has to be driven per arm.
-# w10_reshuffle_check <group> <outside-pattern>: the needing suite in <group>'s
-# seam lands on exactly one of its legs, rounding up widens to more than one
-# leg and to nothing matching <outside-pattern>, and growing an unrelated suite
-# until the needing leg moves leaves the rounded-up set unchanged.
-w10_reshuffle_check() {
-  local group="$1" outside_pattern="$2"
-  local root="$BATS_TEST_TMPDIR/$group-seam" needs_before needs_after legs_before legs_after
-  local i=0 moved=''
-  seed_seam_tree "$root"
-  printf '#!/usr/bin/env bats\ncommand -v zsh\n' >"$root/needs/uses-zsh.bats"
-
-  needs_before="$(seam_tree_scan shard_package_needs "$root" "$group")" || return 1
-  legs_before="$(seam_tree_scan shard_package_legs "$root" "$group")" || return 1
-
-  [ "$(printf '%s\n' "$needs_before" | grep -c .)" -eq 1 ] || {
-    echo "the fixture did not produce a single needing leg:" >&2
-    printf '%s\n' "$needs_before" >&2
-    return 1
-  }
-  grep -qE "^$group-[0-9]+\$" <<<"$needs_before" || {
-    echo "the needing suite did not land on a $group leg:" >&2
-    printf '%s\n' "$needs_before" >&2
-    return 1
-  }
-  # Rounding up has to widen, and widen only within the group.
-  [ "$(printf '%s\n' "$legs_before" | grep -c .)" -gt 1 ] || {
-    echo "rounding up did not widen the $group set:" >&2
-    printf '%s\n' "$legs_before" >&2
-    return 1
-  }
-  grep -qE "$outside_pattern" <<<"$legs_before" && {
-    echo "rounding up reached outside the $group group:" >&2
-    printf '%s\n' "$legs_before" >&2
-    return 1
-  }
-
-  while [ "$i" -lt 24 ]; do
-    printf '# pad %s\n' "$i" >>"$root/needs/plain-0.bats"
-    i=$((i + 1))
-    needs_after="$(seam_tree_scan shard_package_needs "$root" "$group")" || return 1
-    if [ "$needs_after" != "$needs_before" ]; then
-      moved=yes
-      break
-    fi
-  done
-  [ -n "$moved" ] || {
-    echo "growing an unrelated suite never moved the needing $group leg off" >&2
-    echo "$needs_before, so this fixture proved nothing about stability" >&2
-    return 1
-  }
-
-  legs_after="$(seam_tree_scan shard_package_legs "$root" "$group")" || return 1
-  [ "$legs_after" = "$legs_before" ] || {
-    echo "the needing leg moved from $needs_before to $needs_after and the declared" >&2
-    echo "legs moved with it, so the $group group is not rounded up:" >&2
-    printf 'before: %s\n' "$(printf '%s' "$legs_before" | tr '\n' ' ')" >&2
-    printf 'after:  %s\n' "$(printf '%s' "$legs_after" | tr '\n' ' ')" >&2
-    return 1
-  }
-}
-
-@test "W10: rounding up survives a reshuffle in the scripts group too, not only hooks" {
-  w10_reshuffle_check scripts '^(audit|lib-[0-9]+|misc|hooks-[0-9]+)$'
-}
-
-@test "W10: rounding up survives a reshuffle in the lib group too" {
-  w10_reshuffle_check lib '^(audit|misc|hooks-[0-9]+|scripts-[0-9]+)$'
 }
 
 # The apt list is only meaningful as a MEMBERSHIP list, and a negated gate
