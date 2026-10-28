@@ -38,7 +38,7 @@ An advisory with `blockedReason: "release-age"` is never forced in. Report it st
 No resolution ever touches the five release-age and trust settings: never add a `minimumReleaseAgeExclude` entry, and never change `minimumReleaseAge`, `minimumReleaseAgeStrict`, `minimumReleaseAgeExclude`, `trustPolicy`, or `trustPolicyExclude` to land a resolution. Before gating each resolution, prove it left them alone by extracting them from the resolution's snapshot and from the working tree and comparing:
 
 ```bash
-awk '/^[^ #]/ { keep = ($0 ~ /^(minimumReleaseAge|minimumReleaseAgeStrict|minimumReleaseAgeExclude|trustPolicy|trustPolicyExclude):/) } keep && !/^[[:space:]]*#/' .gaia/local/cache/shared/update-deps-security-resolution/pnpm-workspace.yaml > .gaia/local/cache/shared/update-deps-security-resolution/release-age-before
+git show <resolution baseline>:pnpm-workspace.yaml | awk '/^[^ #]/ { keep = ($0 ~ /^(minimumReleaseAge|minimumReleaseAgeStrict|minimumReleaseAgeExclude|trustPolicy|trustPolicyExclude):/) } keep && !/^[[:space:]]*#/' > .gaia/local/cache/shared/update-deps-security-resolution/release-age-before
 awk '/^[^ #]/ { keep = ($0 ~ /^(minimumReleaseAge|minimumReleaseAgeStrict|minimumReleaseAgeExclude|trustPolicy|trustPolicyExclude):/) } keep && !/^[[:space:]]*#/' pnpm-workspace.yaml > .gaia/local/cache/shared/update-deps-security-resolution/release-age-after
 cmp .gaia/local/cache/shared/update-deps-security-resolution/release-age-before .gaia/local/cache/shared/update-deps-security-resolution/release-age-after
 ```
@@ -49,28 +49,30 @@ A difference reverts that resolution (step 6) and reports the advisory still ope
 
 #### 3. Snapshots
 
-This phase keeps its own snapshot directories under `.gaia/local/cache/shared/` and never reuses the directory Phase 5b filled. Before the batch, take one batch snapshot; before each resolution, and before each individual re-apply in step 6, take a fresh resolution snapshot with the same files:
+This phase keeps its own snapshot directories under `.gaia/local/cache/shared/` and never reuses the directory Phase 5b filled. Before the batch, take one batch snapshot; before each resolution, and before each individual re-apply in step 6, take a fresh resolution snapshot the same way.
+
+A snapshot is a git commit object holding the tracked files (its **baseline**), plus the direct dependencies' resolved versions in the snapshot directory. The files are never copied: the project's settings deny editing `pnpm-lock.yaml`, and Claude Code applies that deny to any shell command that names the file, so a `cp` of the lockfile is refused in either direction. git can read the lockfile and restore it.
 
 ```bash
 rm -rf <snapshot>
-mkdir -p <snapshot>/frontend
-cp package.json pnpm-lock.yaml pnpm-workspace.yaml <snapshot>/
-cp frontend/package.json <snapshot>/frontend/
-pnpm -C frontend ls --depth 0 --json | jq '.[0] | (.dependencies // {}) + (.devDependencies // {}) | map_values(.version)' > <snapshot>/direct.json
+mkdir -p <snapshot>
+pnpm -C frontend ls --depth 0 --json | jq -e '.[0] | (.dependencies // {}) + (.devDependencies // {}) | map_values(.version)' > <snapshot>/direct.json
+git stash create
 ```
 
-Run each line as its own call, with `<snapshot>` the batch snapshot literal for the batch snapshot and the resolution snapshot literal for a resolution snapshot. Clearing the directory first means a snapshot never holds a stale file from an earlier resolution; the resolution snapshot is live only while its resolution is being tried, so one fixed directory serves every resolution in turn.
+Run each line as its own call, with `<snapshot>` the batch snapshot literal for the batch snapshot and the resolution snapshot literal for a resolution snapshot. `git stash create` prints the id of a commit holding every tracked file as the working tree has it, uncommitted edits included, and leaves the working tree, the index and the stash list untouched. It prints nothing when no tracked file has changed; then run `git rev-parse HEAD` instead. Confirm the id holds the lockfile with `git cat-file -e <id>:pnpm-lock.yaml`, then carry it as the literal `<batch baseline>` or `<resolution baseline>`: shell variables do not survive between calls. Clearing the directory first means a snapshot never holds a stale file from an earlier resolution; the resolution snapshot is live only while its resolution is being tried, so one fixed directory serves every resolution in turn.
 
-**Revert** restores one snapshot whole, never part of it:
+**A snapshot that fails stops what it guards.** If any snapshot command exits non-zero or is refused, apply nothing it would have guarded: a failed batch snapshot applies no resolution, and a failed resolution snapshot applies neither that resolution nor any later one. Report every advisory not yet resolved still open with `snapshot failed (<command>: <first error line>)`. A change applied with no baseline can only be undone by resetting to HEAD, which also throws away the run's uncommitted wave edits.
+
+**Revert** restores one baseline whole, never part of it, leaving the index as it was. Run each line as its own call:
 
 ```bash
-cp <snapshot>/package.json <snapshot>/pnpm-lock.yaml <snapshot>/pnpm-workspace.yaml .
-cp <snapshot>/frontend/package.json frontend/package.json
+git restore --source=<baseline> --worktree -- package.json pnpm-lock.yaml pnpm-workspace.yaml frontend/package.json
 pnpm install --frozen-lockfile
-cmp pnpm-lock.yaml <snapshot>/pnpm-lock.yaml
+git diff --quiet <baseline> -- package.json pnpm-lock.yaml pnpm-workspace.yaml frontend/package.json
 ```
 
-`<snapshot>` is the batch snapshot for a failed batch and the resolution snapshot for one resolution, so reverting one resolution never restores another's state. Remove both snapshot directories (`rm -rf` on each literal path) when this phase ends.
+The last line exits 0 when all four files match the baseline again. `<baseline>` is the batch baseline for a failed batch and the resolution baseline for one resolution, so reverting one resolution never restores another's state. Remove both snapshot directories (`rm -rf` on each literal path) when this phase ends.
 
 #### 4. Methods
 
@@ -85,7 +87,7 @@ pnpm -C frontend update --no-save <package>
 
 Name the package only, never `name@version`. `--no-save` leaves every declared range as it is, and pnpm 12 re-resolves to unlimited depth by default (it rejects `--depth Infinity`), so the command moves only the named package to the newest version its parents' ranges admit, or nothing when it is already newest. The `cache delete` line is required, for the reason Phase 5b's refresh step gives (`transitive-refresh.md`): without it a patch a `minimumReleaseAgeExclude` entry admits can be invisible, and `update` exits 0 having moved nothing. It clears only that package's metadata, from pnpm's machine-wide cache, so any project's next resolve of it refetches it from the registry; packages and lockfiles are untouched. Then run the guards Phase 5b runs, against this resolution's snapshot:
 
-- `package.json`, `frontend/package.json`, and `pnpm-workspace.yaml` must be byte-identical to the resolution snapshot (`cmp`). A difference means pnpm rewrote a range or recorded a release-age exemption: revert and report `quality gate failed`, naming the rewritten file.
+- `package.json`, `frontend/package.json`, and `pnpm-workspace.yaml` must be byte-identical to the resolution baseline: `git diff --quiet <resolution baseline> -- package.json frontend/package.json pnpm-workspace.yaml` exits 0. Exit 1 means pnpm rewrote a range or recorded a release-age exemption: revert and report `quality gate failed`, naming the rewritten file.
 - Re-run the snapshot's `pnpm -C frontend ls` line into `.gaia/local/cache/shared/update-deps-security-resolution/direct-after.json` and compare each held package's version with `direct.json`. The held packages are the payload's `skipped[]` entries with `reason: "held"`; a snoozed group never blocks a security resolution. A held package whose version moved reverts the resolution and reports `held by config (<pkg> ceiling <ceiling>)`.
 
 A non-zero exit reverts and moves on to the next candidate.
