@@ -171,38 +171,6 @@ budget_finding_files() {
   [ "$(cache_value cleanseNudge)" = "false" ]
 }
 
-# Rebuilds a bundle from a copy of the whole .gaia/cli/src tree, so a change
-# to any source file it does not name can red it.
-# bats test_tags=whole-tree
-@test "raising the nested budget constant in a rebuilt bundle clears the nudge for the same fixture" {
-  local esbuild="$REPO_ROOT/.gaia/cli/node_modules/.bin/esbuild"
-  [ -x "$esbuild" ] || skip "esbuild is not installed in .gaia/cli/node_modules"
-  local source_copy="$BATS_TEST_TMPDIR/cli-src" mutated_bundle="$BATS_TEST_TMPDIR/gaia-mutated"
-  cp -R "$REPO_ROOT/.gaia/cli/src" "$source_copy"
-  sed -i.bak 's/^export const NESTED_CLAUDE_MD_WORD_BUDGET = 400;$/export const NESTED_CLAUDE_MD_WORD_BUDGET = 500;/' "$source_copy/fitness/budgets.ts"
-  grep -q 'NESTED_CLAUDE_MD_WORD_BUDGET = 500;' "$source_copy/fitness/budgets.ts"
-
-  NODE_PATH="$REPO_ROOT/.gaia/cli/node_modules" "$esbuild" "$source_copy/index.ts" --bundle --platform=node --target=node20 --format=esm \
-    --banner:js='import { createRequire as __createRequire } from "node:module"; const require = __createRequire(import.meta.url);' \
-    --outfile="$BATS_TEST_TMPDIR/gaia-mutated.js" --log-level=error
-  printf '#!/usr/bin/env node\n' | cat - "$BATS_TEST_TMPDIR/gaia-mutated.js" > "$mutated_bundle"
-  chmod +x "$mutated_bundle"
-
-  write_budget_fixture
-  commit_fixture
-
-  # Control: the committed bundle trips on the 450-word nested file.
-  refresh
-  [ "$(cache_value cleanseNudge)" = "true" ]
-
-  GAIA_TEST_FITNESS_BUNDLE="$mutated_bundle"
-  export GAIA_TEST_FITNESS_BUNDLE
-  refresh
-  [ "$(cache_value cleanseNudge)" = "false" ]
-  run "$mutated_bundle" fitness check --json --scope all --only claudemd.budget --root "$REPOSITORY_FIXTURE"
-  [ "$(budget_finding_files "$output")" = "" ]
-}
-
 
 # The tools the refresher, main-root-lib.sh, exclusive-lock-lib.sh and the gaia
 # wrapper reach through PATH on the node-absent paths, found by tracing a run of

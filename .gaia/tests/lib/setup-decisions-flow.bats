@@ -671,23 +671,36 @@ label_sync_block() {
 }
 
 @test "with MAY_RECORD_PROJECT not-applicable-only, the non-GitHub arm records only owed GitHub ids" {
-  local repo id
+  local repo id undecided expected_count=0
+  local -a owed_ids=(github-repository push-protection branch-protection gaia-audit-check delete-branch-on-merge dependabot-posture label-sync)
   repo="$(make_repo admin-other-host)"
   in_repo "$repo" .gaia/cli/gaia setup record squash-only declined >/dev/null
   run_block "$repo" "$(block_under "${REFERENCES}/github-repo.md" '## Owed and recorded settings' 1)" \
     MAY_RECORD_PROJECT=not-applicable-only >/dev/null
   run_block "$repo" "$(block_under "${REFERENCES}/github-repo.md" '## Owed and recorded settings' 2)" \
     OWNER=o REPO=r HOST=git.example.com DEFAULT_BRANCH=main MAY_RECORD_PROJECT=not-applicable-only >/dev/null
-  for id in github-repository push-protection branch-protection gaia-audit-check delete-branch-on-merge \
-    dependabot-posture label-sync; do
+  for id in "${owed_ids[@]}"; do
     [ "$(decision_cached "$repo" "$id")" = not-applicable ] || {
       echo "${id} recorded '$(decision_cached "$repo" "$id")', expected not-applicable" >&2
       return 1
     }
   done
   [ "$(decision_cached "$repo" squash-only)" = declined ]
-  [ "$(jq -r '.setup_decisions | keys | length' "${repo}/.gaia/project.json")" -eq 8 ]
-  [ "$(undecided_ids_cached "$repo")" = 'install-tools install-plugins chmod-statusline bootstrap-env sandbox statusline-left isolation-policy sandbox-recommendation migrate-2-machine' ]
+  # The recorded set is the owed GitHub ids plus the one declined id; every
+  # other registry id is still undecided, in the registry's own order.
+  [ "$(jq -r '.setup_decisions | keys | length' "${repo}/.gaia/project.json")" -eq $((${#owed_ids[@]} + 1)) ]
+  undecided="$(undecided_ids_cached "$repo")"
+  for id in $(jq -r '.features[].id' "$FEATURE_LIST"); do
+    [ "$id" = squash-only ] && continue
+    case " ${owed_ids[*]} " in *" $id "*) continue ;; esac
+    expected_count=$((expected_count + 1))
+    tr ' ' '\n' <<<"$undecided" | grep -qxF -- "$id" || {
+      echo "${id} should still be undecided: ${undecided}" >&2
+      return 1
+    }
+  done
+  [ "$expected_count" -gt 0 ]
+  [ "$(wc -w <<<"$undecided" | tr -d ' ')" -eq "$expected_count" ]
   [ ! -s "$GH_LOG" ]
 }
 

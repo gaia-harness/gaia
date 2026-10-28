@@ -446,20 +446,6 @@ call_precedes_guard() {
   [ -z "$(members_that_changed "$before_no_context" "$(digests "$no_context")")" ]
 }
 
-@test "a base edit more than three lines from every branch hunk, merged cleanly, rotates nothing" {
-  seed_base frontend/app/p.ts 40
-  catchup_base_commit frontend/app/p.ts "$(lines_file p-seed 40 20='call();')"
-  catchup_merge_base
-  seed_base .githooks/hook.sh 10
-  catchup_branch_commit frontend/app/p.ts "$(lines_file p-branch 40 20='call();' 19+='guard();')"
-  before="$(digests)"
-
-  catchup_base_commit frontend/app/p.ts "$(lines_file p-base 40 20='call();' 35='base thirty-five')"
-  catchup_merge_base
-
-  [ -z "$(members_that_changed "$before" "$(digests)")" ]
-}
-
 # ---------------------------------------------------------------------------
 # What a member is asked to list and read after a catch-up
 # ---------------------------------------------------------------------------

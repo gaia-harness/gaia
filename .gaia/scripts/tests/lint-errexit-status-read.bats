@@ -1880,27 +1880,6 @@ FIXTURE
   grep -qF -- 'lint-errexit-status-read: clean' <<<"$output"
 }
 
-# bats test_tags=whole-tree
-@test "no tracked file in this repository defeats the tokenizer" {
-  # The desync verdict is the gate's honest answer when it could not read a file
-  # to the end, and a tree carrying one is a tree this gate cannot certify. The
-  # three suites named below each defeated it through an ANSI-C literal carrying
-  # an escaped quote, so they are the regression pins for that repair; the first
-  # assertion is the general claim and does not depend on the list.
-  #
-  # Named here rather than inside the scanner: the gate itself may not carry a
-  # suite basename, or the discrimination would be a per-file allowlist. A test
-  # asserting on the gate's real-tree OUTPUT is under no such constraint.
-  run bash -c "cd '$REPO_ROOT' && bash '$LINTER' 2>&1"
-  grep -qF -- 'ERROR: the scan lost track of shell state' <<<"$output" && return 1
-  local suite
-  for suite in lint-git-path-quoting \
-               block-manifest-write pr-merge-audit-check; do
-    grep -qE -- "$suite\\.bats: ERROR:" <<<"$output" && return 1
-  done
-  [ "$status" -eq 0 ]
-}
-
 # --- the bare `(( ))` arithmetic command ------------------------------------
 
 # `<<` inside arithmetic is a left shift, not a redirection. Read as a

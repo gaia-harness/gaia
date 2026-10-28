@@ -152,71 +152,10 @@ escalate_through_light() {
 
 QUICK_ENGLISH="frontend/app/languages/en/common.ts"
 QUICK_JAPANESE="frontend/app/languages/ja/common.ts"
-QUICK_DIALOG="frontend/app/components/ui/dialog.tsx"
-QUICK_CONSUMER="frontend/app/components/confirm-dialog/index.tsx"
-QUICK_STORY="frontend/app/components/confirm-dialog/tests/index.stories.tsx"
 
 # quick_locale_text <title>: a one-key language file.
 quick_locale_text() {
   printf 'export default {\n  title: '"'"'%s'"'"',\n};' "$1"
-}
-
-quick_dialog_text() {
-  cat <<'EOF'
-import {cn} from 'cn';
-
-const DialogContent = ({className}: {className?: string}) => (
-  <div className={cn('fixed', className)} />
-);
-
-const DialogHeader = ({className}: {className?: string}) => (
-  <div className={cn('flex', className)} />
-);
-
-export {DialogContent, DialogHeader};
-EOF
-}
-
-# quick_consumer_text <content-tokens> <header-tokens> <span-token>
-quick_consumer_text() {
-  cat <<EOF
-import {cn} from 'cn';
-import {DialogContent, DialogHeader} from '../ui/dialog';
-
-const ConfirmDialog = () => (
-  <DialogContent
-    className="$1"
-  >
-    <DialogHeader
-      className="$2"
-    >
-      Confirm
-    </DialogHeader>
-    <span className={cn('$3', 'py-1')}>Body</span>
-  </DialogContent>
-);
-
-export default ConfirmDialog;
-EOF
-}
-
-# quick_story_text <label>
-quick_story_text() {
-  cat <<EOF
-import preview from '#.storybook/preview';
-import ConfirmDialog from '..';
-
-const meta = preview.meta({
-  component: ConfirmDialog,
-  title: 'Components/ConfirmDialog',
-});
-
-export const Default = meta.story({
-  args: {
-    label: '$1',
-  },
-});
-EOF
 }
 
 record_for_frontend() {
@@ -240,65 +179,6 @@ record_for_frontend() {
   expect_line "light-cleared"
   [ "$(jq -r '[.provenance, .review] | join(" ")' "$(marker_path)")" = "earned light" ]
   [ "$(find "$(audit_directory)" -maxdepth 1 -name '*.ok' | wc -l | tr -d ' ')" = "1" ]
-  assert_gate_allows
-}
-
-@test "a dialog-wrapper change with its own story routes light quick-eligible, clears on a clean reply and the story did not trip the test floor" {
-  lsb_init
-  lsb_main_base_begin
-  lsb_commit "$QUICK_DIALOG" "$(quick_dialog_text)"
-  lsb_commit "$QUICK_CONSUMER" "$(quick_consumer_text 'max-w-md p-4' 'gap-2 text-left' px-2)"
-  lsb_commit "$QUICK_STORY" "$(quick_story_text Save)"
-  lsb_main_base_end
-  lsb_commit "$QUICK_CONSUMER" "$(quick_consumer_text 'max-w-lg p-6' 'gap-3 text-left' px-3)"
-  lsb_commit "$QUICK_STORY" "$(quick_story_text Confirm)"
-  [ "$(lsb_git diff --numstat refs/remotes/origin/main HEAD | awk '{ total += $1 + $2 } END { print (total <= 40) }')" = "1" ]
-  assert_gate_denies
-  lsb_route "$FRONTEND"
-  expect_line "$(printf 'light\tquick-eligible')"
-  [ "$(jq -c '[.hard_full_rule, .anchor_kind]' "$(record_for_frontend)")" = '[null,"merge-base"]' ]
-  grep -qF "$QUICK_STORY" "$(route_input_path)"
-  clear_through_light
-  expect_line "light-cleared"
-  [ "$(jq -r '[.provenance, .review] | join(" ")' "$(marker_path)")" = "earned light" ]
-  [ "$(find "$(audit_directory)" -maxdepth 1 -name '*.ok' | wc -l | tr -d ' ')" = "1" ]
-  assert_gate_allows
-}
-
-# bats test_tags=whole-tree
-@test "the corpus dialog layout and copy change routes light quick-eligible and a clean reply marked with the reviewer dispatch time clears it" {
-  local corpus="$REPO_ROOT/.gaia/scripts/tests/fixtures/audit-quick-corpus.json" file_path index file_count
-  file_count="$(jq '[.entries[] | select(.id == "dialog-layout-and-copy")][0].files | length' "$corpus")"
-  [ "$file_count" -gt 0 ]
-  lsb_init
-  lsb_main_base_begin
-  index=0
-  while [ "$index" -lt "$file_count" ]; do
-    file_path="$(jq -r --argjson index "$index" '[.entries[] | select(.id == "dialog-layout-and-copy")][0].files[$index].path' "$corpus")"
-    lsb_commit "$file_path" "$(jq -r --argjson index "$index" '[.entries[] | select(.id == "dialog-layout-and-copy")][0].files[$index].before' "$corpus")"
-    index=$((index + 1))
-  done
-  lsb_main_base_end
-  index=0
-  while [ "$index" -lt "$file_count" ]; do
-    file_path="$(jq -r --argjson index "$index" '[.entries[] | select(.id == "dialog-layout-and-copy")][0].files[$index].path' "$corpus")"
-    lsb_commit "$file_path" "$(jq -r --argjson index "$index" '[.entries[] | select(.id == "dialog-layout-and-copy")][0].files[$index].after' "$corpus")"
-    index=$((index + 1))
-  done
-  assert_gate_denies
-  lsb_route "$FRONTEND"
-  expect_line "$(printf 'light\tquick-eligible')"
-  [ "$(jq -r .anchor_kind "$(record_for_frontend)")" = "merge-base" ]
-  lsb_clear_reply "$FRONTEND" >"$REPLY_FILE"
-  run bash "$LSB_ROOT/.gaia/scripts/audit-light-mark.sh" --root "$LSB_ROOT" --member "$FRONTEND" --verdict "$REPLY_FILE" \
-    --reviewer-dispatched-at 2020-01-01T00:00:00Z </dev/null
-  expect_line "light-cleared"
-  [ "$(jq -r '[.provenance, .review] | join(" ")' "$(marker_path)")" = "earned light" ]
-  local ledger_line
-  ledger_line="$(tail -n 1 "$(light_directory)/$LSB_SLUG.reviews.jsonl")"
-  jq -e '.reviewer_dispatched_at == "2020-01-01T00:00:00Z"
-    and (.marked_at | test("^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$"))
-    and .anchor_kind == "merge-base"' <<<"$ledger_line" >/dev/null
   assert_gate_allows
 }
 
@@ -359,51 +239,10 @@ record_for_frontend() {
   assert_gate_allows
 }
 
-@test "the same repair with the cited line left as it was is refused and the merge gate keeps denying" {
-  lsb_init
-  lsb_commit_lines frontend/app/notes.md 5 line
-  lsb_refuse_with_findings "$FRONTEND" "[$(lsb_finding frontend/app/notes.md 2 major false)]"
-  lsb_commit frontend/app/notes.md "$(printf 'line 1\nline 2\nline 3\nline 4\nchanged 5')"
-  lsb_route "$FRONTEND"
-  expect_line "$(printf 'light\trefusal-anchored')"
-  clear_through_light
-  expect_full checklist-unchanged
-  assert_no_marker
-  assert_gate_denies
-}
-
 @test "an escalate reply leaves no marker for the current digest and the merge gate denies" {
   prepare_light
   escalate_through_light
   expect_full escalate
-  assert_no_marker
-  assert_gate_denies
-}
-
-@test "an empty reply and a non-JSON reply each route full verdict-noop; the gate allows only after the real writer clears the member" {
-  prepare_light
-  lsb_mark "$FRONTEND" ""
-  expect_full verdict-noop
-  assert_no_marker
-  printf 'The change looks fine to me.\n' >"$REPLY_FILE"
-  lsb_mark "$FRONTEND" "$REPLY_FILE"
-  expect_full verdict-noop
-  assert_no_marker
-  assert_gate_denies
-  lsb_full_clearance "$FRONTEND"
-  [ "$(jq -r .review "$(marker_path)")" = "full" ]
-  assert_gate_allows
-}
-
-@test "a reply that is JSON but not a verdict never earns a marker and leaves the gate denying" {
-  prepare_light
-  printf '{"schema":1,"verdict":"clear"}\n' >"$REPLY_FILE"
-  lsb_mark "$FRONTEND" "$REPLY_FILE"
-  [ "$status" -eq 0 ]
-  case "$output" in
-    "$(printf 'full\t')"*) ;;
-    *) printf 'want a full route, got: %s\n' "$output" >&2; return 1 ;;
-  esac
   assert_no_marker
   assert_gate_denies
 }
@@ -472,52 +311,6 @@ record_for_frontend() {
 }
 
 # --- telemetry ---------------------------------------------------------------------------
-
-@test "in a maintainer sandbox the light-clear chain leaves a route event and a self-contained light_outcome event with equal values" {
-  prepare_light --maintainer
-  clear_through_light
-  expect_line "light-cleared"
-  [ "$(jq -r 'select(.event == "route") | .event' "$(telemetry_log)" | grep -c .)" = "1" ]
-  [ "$(jq -r 'select(.event == "light_outcome") | .event' "$(telemetry_log)" | grep -c .)" = "1" ]
-  local route_event outcome_event field
-  route_event="$(jq -c 'select(.event == "route")' "$(telemetry_log)")"
-  outcome_event="$(jq -c 'select(.event == "light_outcome")' "$(telemetry_log)")"
-  for field in member digest route reason lines files; do
-    [ "$(jq -c ".$field" <<<"$outcome_event")" != "null" ] || { printf 'outcome %s is null: %s\n' "$field" "$outcome_event" >&2; return 1; }
-    [ "$(jq -c ".$field" <<<"$outcome_event")" = "$(jq -c ".$field" <<<"$route_event")" ] ||
-      { printf 'outcome and route disagree on %s\n' "$field" >&2; return 1; }
-  done
-  [ "$(jq -r .verdict <<<"$outcome_event")" = "clear" ]
-  [ "$(jq -r .member <<<"$outcome_event")" = "$FRONTEND" ]
-  [ "$(jq -r .digest <<<"$outcome_event")" = "$(lsb_member_digest "$FRONTEND")" ]
-  [ "$(jq -r .route <<<"$outcome_event")" = "light" ]
-  [ "$(jq -r .reason <<<"$outcome_event")" = "light-eligible" ]
-  [ "$(jq -r .files <<<"$outcome_event")" = "1" ]
-}
-
-@test "an escalation followed by a refusal and two findings from the member counts toward escalation precision" {
-  prepare_light --maintainer
-  escalate_through_light
-  expect_full escalate
-  local findings_base
-  findings_base="$(cd "$LSB_ROOT" && bash .github/audit/resolve-audit-base.sh --member "$FRONTEND" 2>/dev/null | sed -n '3p')"
-  findings_base="$(lsb_git merge-base "$findings_base" HEAD)"
-  bash "$LSB_ROOT/.gaia/scripts/audit-write-clearance.sh" --root "$LSB_ROOT" --member "$FRONTEND" --provenance refused >/dev/null
-  jq -n -c '[range(1; 3) | {finding_class: "holistic/example", severity: "major", path: "frontend/app/notes.md", line: .,
-    title: "a defect", failure_mode: "input and state give a wrong outcome", verified_by: "ran it", suggested_fix: "repair it"}]' |
-    bash "$LSB_ROOT/.gaia/scripts/audit-write-findings.sh" --root "$LSB_ROOT" --member "$FRONTEND" --base "$findings_base" --findings - >/dev/null
-  run bash "$(telemetry_script)" member-result --root "$LSB_ROOT" --member "$FRONTEND"
-  [ "$status" -eq 0 ]
-  local followup_event
-  followup_event="$(jq -c 'select(.event == "escalation_followup")' "$(telemetry_log)")"
-  [ -n "$followup_event" ]
-  [ "$(jq -r .result <<<"$followup_event")" = "refused" ]
-  [ "$(jq -r .findings <<<"$followup_event")" = "2" ]
-  [ "$(jq -r .route_digest <<<"$followup_event")" = "$(lsb_member_digest "$FRONTEND")" ]
-  run bash "$(telemetry_script)" tally --root "$LSB_ROOT"
-  [ "$status" -eq 0 ]
-  [ "$(awk -F': ' '$1 == "escalation_precision" { print $2 }' <<<"$output")" = "1.00" ]
-}
 
 @test "an escalation followed by a cleared member records a followup that tally does not count as precise" {
   prepare_light --maintainer

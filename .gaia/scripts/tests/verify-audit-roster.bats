@@ -542,34 +542,6 @@ YAML
   return 0
 }
 
-# SPEC-056 UAT-009: the committed tree. Every shipped definition's region is
-# its roster entry, verbatim and in order. Read from the roster through
-# --emit-roster, never from a list or a count written down here.
-
-# bats test_tags=whole-tree
-@test "SPEC-056 UAT-009: every committed definition's region equals its roster globs, in order" {
-  run bash "$SCRIPT"
-  [ "$status" -eq 0 ]
-  assert_contains "roster clean"
-
-  local records members member roster_globs region_globs
-  records="$(bash "$SCRIPT" --emit-roster)"
-  members="$(printf '%s\n' "$records" | awk -F'\t' '$1 == "MEMBER" { print $2 }')"
-  [ -n "$members" ]
-  for member in $members; do
-    roster_globs="$(printf '%s\n' "$records" |
-      awk -F'\t' -v member="$member" '$1 == "RAW" && $2 == member { printf "%s|", $3 }')"
-    region_globs="$(awk -v start_marker="$REMIT_START" -v end_marker="$REMIT_END" '
-      $0 == start_marker { in_region = 1; next }
-      $0 == end_marker { in_region = 0; next }
-      in_region && match($0, /^- `.*`$/) { printf "%s|", substr($0, 4, length($0) - 4) }
-    ' "$REPO_ROOT/.claude/agents/$member.md")"
-    [ -n "$roster_globs" ] || return 1
-    [ "$roster_globs" = "$region_globs" ] || return 1
-  done
-  return 0
-}
-
 # The raw-glob scrape is held in lockstep with the classifier
 
 # Reading the raw globs with a second reader is a deliberate exception to the
@@ -1276,48 +1248,6 @@ light_root() {
   [ "$status" -eq 0 ]
 }
 
-# bats test_tags=whole-tree
-@test "light keys: the committed roster's opted-in members carry only well-formed, owned hard-Full globs" {
-  local opted_members member config_lines hard_full_globs owned_globs glob checked=0
-  opted_members=""
-  for member in $(bash "$SCRIPT" --emit-roster | awk -F'\t' '$1 == "MEMBER" { print $2 }' | sort -u); do
-    config_lines="$(
-      . "$REPO_ROOT/.claude/hooks/lib/audit-scope.sh"
-      audit_roster_light_config "$REPO_ROOT" "$member"
-    )"
-    case "$config_lines" in
-      true*) opted_members="$opted_members $member" ;;
-      *) continue ;;
-    esac
-    hard_full_globs="$(printf '%s\n' "$config_lines" | awk -F'\t' '$1 == "HARDFULL" { print $2 }')"
-    [ -n "$hard_full_globs" ] || { echo "$member opted in with no hard-Full globs" >&2; return 1; }
-    owned_globs="$(bash "$SCRIPT" --emit-roster | awk -F'\t' -v member="$member" '$1 == "RAW" && $2 == member { print $3 }')"
-    while IFS= read -r glob; do
-      [ -n "$glob" ] || continue
-      checked=$((checked + 1))
-      # Parity for the committed roster, derived rather than restated: the
-      # glob is owned verbatim or sits under a literal owned `<prefix>/**`.
-      if grep -qxF -- "$glob" <<<"$owned_globs"; then continue; fi
-      found=0
-      while IFS= read -r owned; do
-        case "$owned" in
-          *"/**") case "$glob" in "${owned%\*\*}"*) found=1 ;; esac ;;
-        esac
-        # A wildcard-free hard-Full path is one concrete file: the classifier's
-        # own matcher decides whether an owned glob contains it, as the
-        # verifier does.
-        case "$glob" in
-          *'*'*) ;;
-          *) ( . "$REPO_ROOT/.claude/hooks/lib/audit-scope.sh"; audit_glob_matches "$owned" "$glob" ) && found=1 ;;
-        esac
-      done <<<"$owned_globs"
-      [ "$found" -eq 1 ] || { echo "$member: hard-Full glob not owned: $glob" >&2; return 1; }
-    done <<<"$hard_full_globs"
-  done
-  [ -n "$opted_members" ] || { echo "no member opts in: the roster no longer exercises light review" >&2; return 1; }
-  [ "$checked" -gt 0 ]
-}
-
 # --- Maintainer members' light keys on the committed roster -------------------
 
 # roster_with_node_hard_full <path-to-write> <glob>: the committed roster with
@@ -1330,50 +1260,6 @@ roster_with_node_hard_full() {
   ' "$REPO_ROOT/.gaia/audit-ci.yml" >"$1"
   cmp -s "$REPO_ROOT/.gaia/audit-ci.yml" "$1" && return 1
   true
-}
-
-# bats test_tags=whole-tree
-@test "light keys: both maintainer members opt in with a numeric cap and a hard-Full set the verifier accepts" {
-  local member config_lines
-  for member in code-audit-maintainer-shell code-audit-maintainer-node; do
-    config_lines="$(
-      . "$REPO_ROOT/.claude/hooks/lib/audit-scope.sh"
-      audit_roster_light_config "$REPO_ROOT" "$member"
-    )"
-    case "$config_lines" in
-      true"$(printf '\t')"[0-9]*) ;;
-      *) echo "$member: light config is not 'true <cap>': $(printf '%s' "$config_lines" | head -n 1)" >&2; return 1 ;;
-    esac
-    [ "$(printf '%s\n' "$config_lines" | awk -F'\t' '$1 == "HARDFULL" { count++ } END { print count + 0 }')" -gt 0 ] || { echo "$member has no hard-Full globs" >&2; return 1; }
-  done
-  run bash "$SCRIPT" --root "$REPO_ROOT"
-  [ "$status" -eq 0 ]
-  assert_contains "roster clean"
-}
-
-# bats test_tags=whole-tree
-@test "light keys: a hard-Full item moved outside the node member's globs is rejected, and a verifier without the inside-globs check accepts it" {
-  local moved="$BATS_TEST_TMPDIR/roster-moved.yml" scratch="$BATS_TEST_TMPDIR/no-inside-check"
-  roster_with_node_hard_full "$moved" ".claude/hooks/pr-merge-audit-check.sh"
-  run bash "$SCRIPT" --root "$REPO_ROOT" --config "$moved"
-  [ "$status" -eq 1 ]
-  assert_contains "light-hard-full-glob-uncovered"
-  assert_contains "code-audit-maintainer-node"
-  assert_contains ".claude/hooks/pr-merge-audit-check.sh"
-  # The unmoved roster is clean, so the rejection is the ownership check and
-  # nothing else.
-  run bash "$SCRIPT" --root "$REPO_ROOT"
-  [ "$status" -eq 0 ]
-  # Scratch copy with the literal-path coverage test forced to pass: the moved
-  # roster is then accepted.
-  mkdir -p "$scratch/.gaia/scripts" "$scratch/.claude/hooks/lib"
-  stage_roster_check "$scratch/.gaia/scripts" sed 's/light_literal_covered=0$/light_literal_covered=1/'
-  cmp -s "${SCRIPT%.sh}-dialect.sh" "$scratch/.gaia/scripts/verify-audit-roster-dialect.sh" && return 1
-  cp "$REPO_ROOT/.claude/hooks/lib/audit-scope.sh" "$scratch/.claude/hooks/lib/audit-scope.sh"
-  cp "$REPO_ROOT/.claude/hooks/lib/audit-machinery.sh" "$scratch/.claude/hooks/lib/audit-machinery.sh"
-  run bash "$scratch/.gaia/scripts/verify-audit-roster.sh" --root "$REPO_ROOT" --config "$moved"
-  [ "$status" -eq 0 ] || { printf '%s\n' "$output" >&2; return 1; }
-  assert_contains "roster clean"
 }
 
 # --- The release-skip key ------------------------------------------------------

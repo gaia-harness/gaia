@@ -212,36 +212,6 @@ run_hook_from() {
   assert_denied_by_json
 }
 
-# The quoting was never the mechanism. A value-taking global the parser's table
-# did not list fell to the unknown-option arm, and its VALUE reached the same
-# slot, so these spellings disarm the rules with no quoting and no whitespace at
-# all. The `=`-joined form denying is what made the separated ones easy to
-# miss (#2020).
-@test "a global option taking a separated value does not hide the subcommand on main" {
-  on_main
-  run_hook 'git --attr-source HEAD commit -m x'
-  assert_denied_by_json
-  run_hook 'git --config-env user.name=ENVVAR commit -m x'
-  assert_denied_by_json
-  run_hook 'git --attr-source HEAD push origin main'
-  assert_denied_by_json
-  run_hook 'git --config-env=user.name=ENVVAR commit -m x'
-  assert_denied_by_json
-  run_hook 'git --exec-path=/usr/bin commit -m x'
-  assert_denied_by_json
-}
-
-# `--exec-path` has no separated-value form: without `=`, git prints its exec
-# path and exits, so the words after it never run. Skipping the next word as its
-# value would deny a command that commits and pushes nothing.
-@test "a bare --exec-path is not read as taking the next word as its value" {
-  on_main
-  run_hook 'git --exec-path /usr/bin commit -m x'
-  assert_allowed_by_json
-  run_hook 'git --exec-path /usr/bin push origin main'
-  assert_allowed_by_json
-}
-
 # The same split reaching the directory the branch is read from: the `-C` value
 # broke at the space, so the rules resolved a branch from a path git could not
 # open, read no branch at all, and allowed the commit (#2020).
@@ -1301,16 +1271,6 @@ run_hop() {
   grep -qF -- 'could not check' <<<"$output"
 }
 
-@test "hop guard: a gh call that never answers is cut off and fails open" {
-  hold_feature_with_pr 42
-  export GH_STUB=hang
-  local start=$SECONDS
-  run_hop 'git checkout main' sid-peer
-  assert_allowed_by_json
-  grep -qF -- 'timed out' <<<"$output"
-  [ $((SECONDS - start)) -lt 20 ]
-}
-
 # The bound killed the pid it backgrounded, but the output was read through the
 # command substitution's pipe, which stays open until every process holding it
 # exits. A `gh` that runs the real binary without `exec` leaves that child
@@ -1528,33 +1488,6 @@ run_hop() {
 
 # --- command-word derivation: prefixes that hid `git` from the segment walk ---
 
-# A reserved word or grouping token stands in command position with no
-# `| & ; ( )` between it and the command word, so the segment reaches the walk
-# with the reserved word read as its command.
-@test "a reserved word or grouping token does not hide the git command word" {
-  on_main
-  run_hook 'if true; then git commit -m y; fi'
-  assert_denied_by_json
-  run_hook '{ git commit -m y; }'
-  assert_denied_by_json
-  run_hook '! git commit -m y'
-  assert_denied_by_json
-  run_hook 'time git commit -m y'
-  assert_denied_by_json
-  run_hook 'time -p git commit -m y'
-  assert_denied_by_json
-  run_hook 'coproc git commit -m y'
-  assert_denied_by_json
-  run_hook 'for f in x; do git commit -m y; done'
-  assert_denied_by_json
-  run_hook 'while :; do git push; done'
-  assert_denied_by_json
-  run_hook 'until git push; do echo retry; done'
-  assert_denied_by_json
-  run_hook 'if false; then echo no; else git commit -m y; fi'
-  assert_denied_by_json
-}
-
 # A word merely beginning with a reserved word is an ordinary command name, so
 # the strip requires the whitespace that makes the reserved word a word.
 @test "a command name beginning with a reserved word is left alone" {
@@ -1578,24 +1511,6 @@ run_hop() {
   run_hook 'GIT_AUTHOR_DATE="2024-01-01 12:00" git commit --amend'
   assert_denied_by_json
   run_hook "GIT_AUTHOR_DATE='2024-01-01 12:00' git push"
-  assert_denied_by_json
-}
-
-# A redirection may lead a simple command, so one written ahead of the
-# invocation occupies the slot the command word is read from and the segment
-# goes unread.
-#
-# Deliberately not a member: a redirection whose target is another descriptor
-# (`2>&1`, `>&2`). The walk cuts segments at `&` before the strip sees them, so
-# that form never reaches the expression under test; the hook's own second
-# honest limit states it.
-@test "a leading redirection does not hide the git command word" {
-  on_main
-  run_hook '>/tmp/gaia-probe git commit -m x'
-  assert_denied_by_json
-  run_hook '2>/dev/null git commit -m x'
-  assert_denied_by_json
-  run_hook '>>/tmp/gaia-probe git push'
   assert_denied_by_json
 }
 

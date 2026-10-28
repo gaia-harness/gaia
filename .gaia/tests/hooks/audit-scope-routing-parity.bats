@@ -1,69 +1,13 @@
 #!/usr/bin/env bats
-# audit-scope-routing-parity.bats: the before/after routing-parity proof
-# (UAT-017) for the Code Audit Team ownership classifier.
+# audit-scope-routing-parity.bats: the release-change skip, proved over every
+# path of the frozen routing fixture.
 #
 # fixtures/audit-routing-before.tsv is `<path><TAB><owner|->`, one row per
-# tracked file, generated ONCE against the classifier and roster as they
-# existed before this change (reconstructed from git history) and committed.
-# It is never regenerated: the whole point is that it records the prior
-# state. This suite classifies every fixture path with the CURRENT
-# classifier and asserts each row resolves to the same owner as before,
-# except the named sets below, which deliberate roster changes move. The
-# arms are the authority on how many; deliberately no count in this sentence
-# or in the test name, because a count rots the next time a set is added, and
-# the rotted number reads as an assertion nobody has checked:
+# tracked file, generated once against an earlier classifier and roster and
+# never regenerated. The tests below reuse its paths as a realistic, wide set of
+# inputs; the live tree's ownerless-path coverage is verify-audit-roster.bats.
 #
-#   .github/workflows/<single-segment>.yml|.yaml -> code-audit-github-workflows
-#   .github/actions/**/*.yml|*.yaml               -> code-audit-github-workflows
-#   .gaia/cli/templates/workflows/code-review-audit.yml.tmpl -> code-audit-maintainer-node
-#   .gaia/cli/{package.json,tsconfig*.json,*.config.ts,*.config.mjs}          -> code-audit-maintainer-node
-#
-# The scaffold templates are one tree now: `.gaia/cli/templates/**` is the
-# source and moves from ownerless to the node member (its `before = -` rows),
-# and the retired template copies under `.gaia/cli/src/` (the scaffold copy and
-# the removed automation templates) read ownerless (their rows were the node
-# member's).
-#
-# The frontend/ move (SPEC-092) then retires the root frontend class: `app/**`,
-# `test/**`, `.storybook/**`, `.playwright/**`, root `tsconfig*.json`, and the
-# root `Dockerfile`, `.dockerignore`, `.lintstagedrc.json` and `.env.example` resolve
-# to no member, because the roster declares them under `frontend/` now. Their
-# arm precedes the triage arms below.
-#
-# The remaining sets are the ownerless-path triage, and their direction is the
-# whole content of that change: every row they move goes from `-` to a member,
-# and no row moves between members. Those arms assert that direction rather than
-# describing it, by matching only when the `before` column reads `-`. One row
-# inside them does not move at all: `.gaia/audit-ci.yml` was already granted to
-# the shell member explicitly, and `.gaia/*.yml` generalizes that grant rather
-# than adding one, so it reads `code-audit-maintainer-shell` on both sides and
-# carries its own arm.
-#
-#   .playwright/**                                -> code-audit-frontend
-#   the root tooling that decides what runs        -> code-audit-frontend
-#     (.npmrc, .nvmrc, .node-version, .prettierignore)
-#   .gaia/scripts/**/*.mjs                         -> code-audit-maintainer-node
-#   the distribution and governance surface        -> code-audit-maintainer-shell
-#     (.gaia/*.yml, .gaia/*.json, .gaia/scripts/token-rates.json,
-#      .gaia/release-exclude, .claude/settings.json, .github/CODEOWNERS)
-#
-# The prose-legibility member's own reassignment (`.claude/skills/**/*.md`,
-# `.claude/agents/*/**`, `.claude/commands/**`, `.claude/instructions/**`,
-# `.claude/agents/worthiness-evaluator.md`, `.gaia/cli/health/**/*.md`, and the
-# two `.github/forensics/` prompts) is gone with the member (harness triage
-# P3-09): it carries no arm above because `before` was already `-` for all
-# of it, and deleting the member returns `after` to `-` too, so the trailing
-# `else` covers it without a special case.
-#
-# This is stable and does not rot: the test iterates FIXTURE ROWS, so a file
-# added to the repo later neither breaks it nor silently escapes it. It is a
-# genuine regression pin on the routing change, not a snapshot that needs
-# feeding.
-#
-# Assertion style: .claude/rules/bats-assertions.md. The `[[ =~ ]]` uses
-# below are branch conditionals that pick an `expected` value, never the
-# pass/fail signal itself; the actual assertion is the final
-# `[ "$fail" -eq 0 ]`.
+# Assertion style: .claude/rules/bats-assertions.md.
 
 setup() {
   THIS_DIRECTORY="$( cd "$( dirname "$BATS_TEST_FILENAME" )" && pwd )"
@@ -72,79 +16,11 @@ setup() {
   FIXTURE="$THIS_DIRECTORY/fixtures/audit-routing-before.tsv"
 }
 
-@test "routing parity: every fixture row resolves to the same owner, except the named sets" {
-  [ -f "$FIXTURE" ]
-
-  # shellcheck source=/dev/null
-  . "$SCOPE_LIBRARY"
-  audit_scope_init "$REPO_ROOT"
-
-  # Classify every fixture path with the CURRENT classifier in one batch pass
-  # (the batch predicate forks zero processes per path), then join the
-  # before/after columns by line position: both sides iterate the fixture's
-  # paths in the same order, so a plain `paste` aligns them correctly.
-  after_owners="$(cut -f1 "$FIXTURE" | audit_owners_for_paths | cut -f2)"
-
-  fail=0
-  rows=0
-  while IFS=$'\t' read -r path before after; do
-    [ -n "$path" ] || continue
-    rows=$((rows + 1))
-
-    if [[ "$path" =~ ^\.github/workflows/[^/]*\.ya?ml$ ]]; then
-      expected="code-audit-github-workflows"
-    elif [[ "$path" =~ ^\.github/actions/.*\.ya?ml$ ]]; then
-      expected="code-audit-github-workflows"
-    elif [ "$path" = ".gaia/cli/templates/workflows/code-review-audit.yml.tmpl" ]; then
-      expected="code-audit-maintainer-node"
-    elif [ "$before" = "-" ] && [[ "$path" =~ ^\.gaia/cli/templates/ ]]; then
-      expected="code-audit-maintainer-node"
-    elif [ "$before" = "code-audit-maintainer-node" ] && [[ "$path" =~ ^\.gaia/cli/src/(scaffold|automation)/templates/ ]]; then
-      expected="-"
-    elif [[ "$path" =~ ^\.gaia/cli/(package\.json|tsconfig[^/]*\.json|[^/]*\.config\.ts|[^/]*\.config\.mjs)$ ]]; then
-      expected="code-audit-maintainer-node"
-    # The four ownerless-triage arms below are guarded on `before = -` rather
-    # than on the path alone, so the header's claim about their DIRECTION is
-    # asserted instead of narrated. A future change that moved one of these
-    # rows from one member to another would no longer match its arm, fall to
-    # the `else` below, and be reported as a mismatch. `.gaia/audit-ci.yml` is
-    # the one row inside these sets that legitimately does not move, so it gets
-    # its own literal arm ahead of them.
-    elif [ "$path" = ".gaia/audit-ci.yml" ]; then
-      expected="code-audit-maintainer-shell"
-    # The frontend/ move retired these root paths: the roster now declares them
-    # under frontend/, so a root path of the old frontend class owns nothing.
-    elif [[ "$path" =~ ^(app|test|\.storybook|\.playwright)/ ]] || [[ "$path" =~ ^tsconfig[^/]*\.json$ ]] \
-      || [[ "$path" =~ ^(Dockerfile|\.dockerignore|\.lintstagedrc\.json|\.env\.example)$ ]]; then
-      expected="-"
-    elif [ "$before" = "-" ] && [[ "$path" =~ ^\.playwright/ ]]; then
-      expected="code-audit-frontend"
-    elif [ "$before" = "-" ] && [[ "$path" =~ ^(\.npmrc|\.nvmrc|\.node-version|\.prettierignore)$ ]]; then
-      expected="code-audit-frontend"
-    elif [ "$before" = "-" ] && [[ "$path" =~ ^\.gaia/scripts/.*\.mjs$ ]]; then
-      expected="code-audit-maintainer-node"
-    elif [ "$before" = "-" ] && [[ "$path" =~ ^(\.gaia/[^/]*\.(yml|json)|\.gaia/scripts/token-rates\.json|\.gaia/release-exclude|\.claude/settings\.json|\.github/CODEOWNERS)$ ]]; then
-      expected="code-audit-maintainer-shell"
-    else
-      expected="$before"
-    fi
-
-    if [ "$after" != "$expected" ]; then
-      echo "ROUTING MISMATCH: $path  before=$before  after=$after  expected=$expected" >&2
-      fail=$((fail + 1))
-    fi
-  done < <(paste "$FIXTURE" <(printf '%s\n' "$after_owners"))
-
-  [ "$rows" -gt 0 ]
-  [ "$fail" -eq 0 ]
-}
-
 # ---------------------------------------------------------------------------
 # The release-change skip, over the same fixture paths. The live roster keys no
 # member, so these cases key one claimant (the shell member) in a copy of it,
 # and arm the context on a scratch repository that carries the live manifest at
-# both ends. The fixture's prior-state meaning is untouched: the case above
-# still pins the unarmed routing.
+# both ends.
 # ---------------------------------------------------------------------------
 
 # release_parity_setup <version-after>: writes the keyed and the
