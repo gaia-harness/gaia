@@ -1,53 +1,49 @@
-import type {Meta, StoryObj} from '@storybook/react-vite';
 import {http, HttpResponse} from 'msw/http';
-import {expect, within} from 'storybook/test';
+import {expect} from 'storybook/test';
 import {url} from 'test/mocks/url';
+import preview from '#.storybook/preview';
 import {ITEMS_URLS} from '~/services/gaia/items';
 import ItemNames from '..';
 
 // Both stories read the same query key from different handlers. Run in this
 // order, the second story fails if it inherits the first story's cache.
-const meta: Meta<typeof ItemNames> = {
+const meta = preview.meta({
   component: ItemNames,
   title: 'Fixtures/ItemNames/HandlerAFirst',
-};
+});
 
-export default meta;
-
-type Story = StoryObj<typeof ItemNames>;
-
-export const HandlerA: Story = {
-  parameters: {
-    msw: {
-      handlers: [
-        http.get(url(ITEMS_URLS.items), () =>
-          HttpResponse.json({data: [{display_name: 'Handler A item', id: 'a'}]})
-        ),
-      ],
-    },
+export const HandlerA = meta.story({
+  beforeEach({msw}) {
+    msw.use(
+      http.get(url(ITEMS_URLS.items), () =>
+        HttpResponse.json({data: [{display_name: 'Handler A item', id: 'a'}]})
+      )
+    );
   },
-  play: async ({canvasElement}) => {
-    const canvas = within(canvasElement);
-
-    await expect(await canvas.findByText('Handler A item')).toBeInTheDocument();
-    await expect(canvas.queryByText('Handler B item')).not.toBeInTheDocument();
+  play: async ({canvas}) => {
+    await canvas.findByText('Handler A item');
   },
-};
+});
 
-export const HandlerB: Story = {
-  parameters: {
-    msw: {
-      handlers: [
-        http.get(url(ITEMS_URLS.items), () =>
-          HttpResponse.json({data: [{display_name: 'Handler B item', id: 'b'}]})
-        ),
-      ],
-    },
-  },
-  play: async ({canvasElement}) => {
-    const canvas = within(canvasElement);
+HandlerA.test('shows only its own handler data', async ({canvas}) => {
+  await expect(await canvas.findByText('Handler A item')).toBeInTheDocument();
+  await expect(canvas.queryByText('Handler B item')).not.toBeInTheDocument();
+});
 
-    await expect(await canvas.findByText('Handler B item')).toBeInTheDocument();
-    await expect(canvas.queryByText('Handler A item')).not.toBeInTheDocument();
+export const HandlerB = meta.story({
+  beforeEach({msw}) {
+    msw.use(
+      http.get(url(ITEMS_URLS.items), () =>
+        HttpResponse.json({data: [{display_name: 'Handler B item', id: 'b'}]})
+      )
+    );
   },
-};
+  play: async ({canvas}) => {
+    await canvas.findByText('Handler B item');
+  },
+});
+
+HandlerB.test('shows only its own handler data', async ({canvas}) => {
+  await expect(await canvas.findByText('Handler B item')).toBeInTheDocument();
+  await expect(canvas.queryByText('Handler A item')).not.toBeInTheDocument();
+});

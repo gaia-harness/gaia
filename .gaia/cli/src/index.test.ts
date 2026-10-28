@@ -1,9 +1,11 @@
 import {afterEach, beforeEach, describe, expect, test, vi} from 'vitest';
 import {EXIT_CODES} from './exit.js';
+import {run as runMigrateCsf4} from './migrate-csf4/index.js';
 import {run as runPing} from './ping/index.js';
 import {run} from './index.js';
 
 vi.mock('./ping/index.js', () => ({run: vi.fn()}));
+vi.mock('./migrate-csf4/index.js', () => ({run: vi.fn()}));
 
 const captureStdio = (): {
   errors: string[];
@@ -70,6 +72,17 @@ describe('gaia top-level router', () => {
 
     await expect(run(['ping', '--x'])).resolves.toBe(7);
     expect(runPing).toHaveBeenCalledWith(['--x']);
+  });
+
+  test('migrate-csf4 dispatches to its handler and is listed in help', async () => {
+    vi.mocked(runMigrateCsf4).mockReturnValue(3);
+
+    await expect(run(['migrate-csf4', '--json'])).resolves.toBe(3);
+    expect(runMigrateCsf4).toHaveBeenCalledWith(['--json']);
+    await run(['--help']);
+    expect(stdio.outputs.join('')).toContain(
+      'migrate-csf4 [--update-merge] [--json]'
+    );
   });
 
   test('an unknown subcommand is rejected', async () => {

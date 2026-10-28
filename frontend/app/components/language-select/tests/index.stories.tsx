@@ -1,13 +1,6 @@
-import type {Meta, StoryObj} from '@storybook/react-vite';
-import {
-  expect,
-  fireEvent,
-  fn,
-  userEvent,
-  waitFor,
-  within,
-} from 'storybook/test';
+import {expect, fireEvent, fn, waitFor} from 'storybook/test';
 import stubs from 'test/stubs';
+import preview from '#.storybook/preview';
 import {ACTION_PATHS} from '~/action-paths';
 import LanguageSelect from '..';
 
@@ -17,7 +10,7 @@ type StoryArgs = {
   onSubmit: (language: FormDataEntryValue | null) => void;
 };
 
-const meta: Meta<StoryArgs> = {
+const meta = preview.type<{args: StoryArgs}>().meta({
   args: {
     actionDelayMilliseconds: 0,
     languages: ['en', 'ja'],
@@ -48,11 +41,7 @@ const meta: Meta<StoryArgs> = {
   },
   render: ({languages}) => <LanguageSelect languages={languages} />,
   title: 'Components/LanguageSelect',
-};
-
-export default meta;
-
-type Story = StoryObj<StoryArgs>;
+});
 
 // Long enough for a stray submission to reach the action before asserting none did.
 const SETTLE_MILLISECONDS = 50;
@@ -62,8 +51,9 @@ const settle = async () =>
     setTimeout(resolve, SETTLE_MILLISECONDS);
   });
 
-const findSelect = async (canvasElement: HTMLElement) =>
-  within(canvasElement).findByRole('combobox', {name: 'Language'});
+const findSelect = async (canvas: {
+  findByRole: (role: string, options: {name: string}) => Promise<HTMLElement>;
+}) => canvas.findByRole('combobox', {name: 'Language'});
 
 // A closed native select changes value on Arrow keys (Windows browsers), and
 // Chromium's closed-select arrow behavior is platform-dependent, so the keyboard
@@ -83,45 +73,46 @@ const expectSubmittedOnce = async (
   await expect(onSubmit).toHaveBeenCalledWith(language);
 };
 
-export const Default: Story = {};
+export const Default = meta.story({});
 
-export const PointerChoiceSubmits: Story = {
-  play: async ({args, canvasElement}) => {
-    const select = await findSelect(canvasElement);
+Default.test(
+  'submits when a language is chosen with the pointer',
+  async ({args, canvas, userEvent}) => {
+    const select = await findSelect(canvas);
 
     await userEvent.selectOptions(select, 'ja');
 
     await expectSubmittedOnce(args.onSubmit, 'ja');
-  },
-};
+  }
+);
 
-export const ArrowKeyMoveDoesNotSubmit: Story = {
-  play: async ({args, canvasElement}) => {
-    const select = await findSelect(canvasElement);
+Default.test(
+  'does not submit when an arrow key only moves the selection',
+  async ({args, canvas}) => {
+    const select = await findSelect(canvas);
 
     await arrowTo(select, 'ja');
 
     await settle();
     await expect(args.onSubmit).not.toHaveBeenCalled();
-  },
-};
+  }
+);
 
-export const CommitsOnEnter: Story = {
-  play: async ({args, canvasElement}) => {
-    const select = await findSelect(canvasElement);
+Default.test('submits on Enter', async ({args, canvas, userEvent}) => {
+  const select = await findSelect(canvas);
 
-    await userEvent.tab();
-    await expect(select).toHaveFocus();
-    await arrowTo(select, 'ja');
-    await userEvent.keyboard('{Enter}');
+  await userEvent.tab();
+  await expect(select).toHaveFocus();
+  await arrowTo(select, 'ja');
+  await userEvent.keyboard('{Enter}');
 
-    await expectSubmittedOnce(args.onSubmit, 'ja');
-  },
-};
+  await expectSubmittedOnce(args.onSubmit, 'ja');
+});
 
-export const CommitsOnLeaving: Story = {
-  play: async ({args, canvasElement}) => {
-    const select = await findSelect(canvasElement);
+Default.test(
+  'submits on leaving the select',
+  async ({args, canvas, userEvent}) => {
+    const select = await findSelect(canvas);
 
     await userEvent.tab();
     await expect(select).toHaveFocus();
@@ -130,12 +121,13 @@ export const CommitsOnLeaving: Story = {
     await expect(select).not.toHaveFocus();
 
     await expectSubmittedOnce(args.onSubmit, 'ja');
-  },
-};
+  }
+);
 
-export const EnterThenLeaveSubmitsOnce: Story = {
-  play: async ({args, canvasElement}) => {
-    const select = await findSelect(canvasElement);
+Default.test(
+  'submits once when Enter is followed by leaving',
+  async ({args, canvas, userEvent}) => {
+    const select = await findSelect(canvas);
 
     select.focus();
     await arrowTo(select, 'ja');
@@ -145,12 +137,13 @@ export const EnterThenLeaveSubmitsOnce: Story = {
 
     await settle();
     await expect(args.onSubmit).toHaveBeenCalledTimes(1);
-  },
-};
+  }
+);
 
-export const LeavingBackOnCurrentLanguageDoesNotSubmit: Story = {
-  play: async ({args, canvasElement}) => {
-    const select = await findSelect(canvasElement);
+Default.test(
+  'does not submit when leaving back on the current language',
+  async ({args, canvas, userEvent}) => {
+    const select = await findSelect(canvas);
 
     select.focus();
     await arrowTo(select, 'ja');
@@ -159,24 +152,29 @@ export const LeavingBackOnCurrentLanguageDoesNotSubmit: Story = {
 
     await settle();
     await expect(args.onSubmit).not.toHaveBeenCalled();
-  },
-};
+  }
+);
 
-export const PointerChoiceAfterKeydownSubmits: Story = {
-  play: async ({args, canvasElement}) => {
-    const select = await findSelect(canvasElement);
+Default.test(
+  'submits a pointer choice made after an arrow keydown',
+  async ({args, canvas, userEvent}) => {
+    const select = await findSelect(canvas);
 
     await fireEvent.keyDown(select, {key: 'ArrowDown'});
     await userEvent.selectOptions(select, 'ja');
 
     await expectSubmittedOnce(args.onSubmit, 'ja');
-  },
-};
+  }
+);
 
-export const ChoiceBackToCurrentDuringInFlightSubmit: Story = {
+export const InFlightSubmit = meta.story({
   args: {actionDelayMilliseconds: SETTLE_MILLISECONDS},
-  play: async ({args, canvasElement}) => {
-    const select = await findSelect(canvasElement);
+});
+
+InFlightSubmit.test(
+  'submits the latest choice when it changes during an in-flight submit',
+  async ({args, canvas, userEvent}) => {
+    const select = await findSelect(canvas);
 
     await userEvent.selectOptions(select, 'ja');
     await userEvent.selectOptions(select, 'en');
@@ -184,5 +182,5 @@ export const ChoiceBackToCurrentDuringInFlightSubmit: Story = {
     await waitFor(async () => {
       await expect(args.onSubmit).toHaveBeenLastCalledWith('en');
     });
-  },
-};
+  }
+);

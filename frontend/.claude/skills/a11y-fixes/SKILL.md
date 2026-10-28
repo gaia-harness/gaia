@@ -14,7 +14,7 @@ Violations come from addon-a11y, which axe-checks every story under Vitest (conf
 
 1. Fix one violation with the pattern below; for a rule id not listed here, use the violation's `help` and `failureSummary` from the axe output.
 2. Re-run the reporter that flagged it: Vitest `pnpm test --run --project storybook <story-file>`, Playwright `pnpm pw <spec-file>`.
-3. Some rules are not checked by the story run. addon-a11y runs the WCAG 2.0/2.1 A and AA tags and disables `region` (a story renders a fragment outside the page landmarks), so `landmark-one-main` and `page-has-heading-one` never fire there: assert the page landmark and heading in the page story's play instead (exactly one `main`, one level-1 heading). Verify `color-contrast` with `pnpm pw` when a story run is ambiguous, since the Playwright scan renders the same stories in the full page.
+3. Some rules are not checked by the story run. addon-a11y runs the WCAG 2.0/2.1 A and AA tags and disables `region` (a story renders a fragment outside the page landmarks), so `landmark-one-main` and `page-has-heading-one` never fire there: assert the page landmark and heading in a `.test()` on the page story instead (exactly one `main`, one level-1 heading; `wiki/decisions/Stories as Tests.md`). Verify `color-contrast` with `pnpm pw` when a story run is ambiguous, since the Playwright scan renders the same stories in the full page.
 4. Repeat until the reporter shows no violations.
 
 ## color-contrast

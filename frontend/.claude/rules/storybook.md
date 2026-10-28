@@ -12,21 +12,39 @@ The `new-component` skill scaffolds the canonical story shape. This rule covers 
 
 ## Stories are the tests
 
-A story is a test. `@storybook/addon-vitest` runs every story in headless Chromium (run `pnpm install:browsers` once), and the story passes when it renders and its play function, if any, finishes without an assertion failing. addon-a11y then axe-checks the rendered story, so a violation fails the story with no extra test. Components and pages have no `.test.tsx` beside their stories; the play function is where the assertions live. Import `expect`, `fn`, `userEvent`, `waitFor`, `within` (and `fireEvent` when a native event has no `userEvent` equivalent) from `storybook/test`; it re-exports the jest-dom matchers and user-event.
+A story is a visual state and a behavior is a `.test()` attached to that story; a play function only drives the UI into the state the snapshot must show. The doctrine and its reasoning live in `wiki/decisions/Stories as Tests.md`. `@storybook/addon-vitest` runs every story in headless Chromium (run `pnpm install:browsers` once), and addon-a11y axe-checks each render, so a violation fails with no extra test. Components and pages have no `.test.tsx` beside their stories. Import `expect`, `fn`, `userEvent`, `waitFor`, `within` (and `fireEvent` when a native event has no `userEvent` equivalent) from `storybook/test`; it re-exports the jest-dom matchers and user-event. Inside a `.test()` the context also hands you `canvas`, `args` and `userEvent`.
+
+```tsx
+import {expect, fn} from 'storybook/test';
+import preview from '#.storybook/preview';
+import {Thing} from '..';
+
+const meta = preview.meta({component: Thing, title: 'Components/Thing'});
+
+export const Default = meta.story({args: {label: 'Save', onClick: fn()}});
+export const Disabled = Default.extend({args: {isDisabled: true}});
+
+Default.test('fires onClick once', async ({args, canvas, userEvent}) => {
+  await userEvent.click(canvas.getByRole('button', {name: 'Save'}));
+  await expect(args.onClick).toHaveBeenCalledOnce();
+});
+```
+
+Every story is a direct `meta.story({...})` export; never build exports with a factory function, because the indexer cannot attach `.test()` to one. A story with any `.test()` becomes a group: its own render and play run as `base story`, and each test is a separate run that repeats the play first.
 
 ## When to write a story
 
-Write a story with a play function for every GAIA behavior a component or page owns: each interaction, state transition and error path, one story per behavior, named for the behavior (`PointerChoiceSubmits`, not `Test1`). A render-only story (no play) still runs and passes axe, and is complete only for a component with no interactive behavior. For an interactive component the plays assert a keyboard path and a focus outcome. Skip stories only for pure-utility components with no visual output (e.g. context providers, HOCs with no markup); those get a `node` or `browser` Vitest test instead.
+Write a story per visual state and a `.test()` per GAIA behavior a component or page owns: each interaction, state transition and error path, named for the behavior (`'submits on Enter'`, not `'test 1'`). A render-only story still runs and passes axe, and is complete only for a component with no interactive behavior. For an interactive component the tests cover a keyboard path and a focus outcome. Skip stories only for pure-utility components with no visual output (e.g. context providers, HOCs with no markup); those get a `node` or `browser` Vitest test instead.
 
 Configure a story through props and args (for example `LanguageSelect`'s `languages` prop), not by mutating shared constants.
 
 ## Accessibility
 
-addon-a11y runs on every story with the WCAG 2.0/2.1 A and AA tags and fails on a violation of any impact; only the `region` rule is off, because a story renders a fragment outside the page landmarks. The config is `.storybook/a11y.ts`, which `.storybook/preview.ts` sets as `parameters.a11y`. Do not opt a story out (`parameters.a11y.test: 'todo'` or `'off'`, `parameters.a11y.disable`, the `a11y.manual` global, the `!test` tag, or any per-story `parameters.a11y.context`, `config` or `options` that differs from the shared config); fix the markup instead. This check is the only light-theme axe pass a story gets, since the Playwright scan covers dark, so `test/story-a11y-opt-out.test.tsx` fails on any story carrying one of those opt-outs, unless its id and a reason are recorded there. Page landmark and heading checks are play assertions (one `main`, one level-1 heading).
+addon-a11y runs on every story with the WCAG 2.0/2.1 A and AA tags and fails on a violation of any impact; only the `region` rule is off, because a story renders a fragment outside the page landmarks. The config is `.storybook/a11y.ts`, which `.storybook/preview.ts` sets as `parameters.a11y`. The check runs for the base story and again for each attached `.test()`, always in the current light theme, while the Playwright scan covers dark. Do not opt a story out (`parameters.a11y.test: 'todo'` or `'off'`, `parameters.a11y.disable`, the `a11y.manual` global, the `!test` tag, or any per-story `parameters.a11y.context`, `config` or `options` that differs from the shared config); fix the markup instead. `test/story-a11y-opt-out.test.tsx` fails on any story carrying one of those opt-outs, unless its id and a reason are recorded there. Page landmark and heading checks are `.test()` assertions (one `main`, one level-1 heading).
 
 ## Vitest and Chromatic
 
-The Chromatic decorator (`ChromaticDecorator`) is added only when Chromatic itself snapshots, so it does not run under Vitest. Every render shows the story once: Vitest renders it in the current theme, and Chromatic renders it once per mode (light, then dark), running the play function in each.
+The Chromatic decorator (`ChromaticDecorator`) is added only when Chromatic itself snapshots, so it does not run under Vitest. Vitest renders each story in the current theme and runs the play, then each attached `.test()` as its own run (play first, loaders and axe included). Chromatic snapshots each story once per mode (light, then dark), running the play in each.
 
 ## File location
 
@@ -34,7 +52,7 @@ A story or test is `tests/<source basename>.<kind>.tsx` beside its source: `inde
 
 ## Typing
 
-Import the types from `@storybook/react-vite`: `Meta` for the default export, `StoryFn` for a render-function story (a `.play` may be assigned to it), and `StoryObj` for an object story with `args` and `play`.
+Stories are typed through the preview: `preview.meta({...})` infers args from `component`. When stories need args beyond the component's props, declare them once with `preview.type<{args: StoryArgs}>().meta({...})`. A story file imports no story types from `@storybook/react-vite`.
 
 ## Title convention
 
@@ -44,7 +62,7 @@ Slash-separated PascalCase display segments of the path under `app/`, with no la
 
 Apply stubs outermost → innermost: `state` then `reactRouter`. The global Query decorator (present only after Query is on) sits outside both, so each story gets a fresh client. Only include stubs the component actually needs (`stubs.state()` only when the component reads from `~/state`). Import from `test/stubs`.
 
-`stubs.reactRouter()` options: `path` (default `/`), `initialEntry` (the URL the stub starts at, defaults to `path`; a param route uses `path: '/items/:id'` with `initialEntry: '/items/1'`), `route` (`{action, clientAction, clientLoader, HydrateFallback, loader}`; the stub maps the client functions onto the stub route and refuses a server and client function of the same kind), `loader`, `action` (string storyId, `Record<Method, storyId>`, or full `ActionFunction`), `routes` (`{path, storyId}[]`, navigates to a story when the path loads), `actions` (`Record<path, ActionFunction>`, a per-path action that overrides the no-op entry for that path) and `destinations` (`string[]`, each path renders `Navigated to <path>` in a `main` so a play can assert arrival by text). Pass a function of the story context (`stubs.reactRouter(({args}) => ({...}))`) to read `fn()` spies from args. `actions` keys must differ from `path`: the main route matches first, so an action keyed to it never fires; observe a form posting to its own route through `action`.
+`stubs.reactRouter()` options: `path` (default `/`), `initialEntry` (the URL the stub starts at, defaults to `path`; a param route uses `path: '/items/:id'` with `initialEntry: '/items/1'`), `route` (`{action, clientAction, clientLoader, HydrateFallback, loader}`; the stub maps the client functions onto the stub route and refuses a server and client function of the same kind), `loader`, `action` (string storyId, `Record<Method, storyId>`, or full `ActionFunction`), `routes` (`{path, storyId}[]`, navigates to a story when the path loads), `actions` (`Record<path, ActionFunction>`, a per-path action that overrides the no-op entry for that path) and `destinations` (`string[]`, each path renders `Navigated to <path>` in a `main` so a `.test()` can assert arrival by text). Pass a function of the story context (`stubs.reactRouter(({args}) => ({...}))`) to read `fn()` spies from args. `actions` keys must differ from `path`: the main route matches first, so an action keyed to it never fires; observe a form posting to its own route through `action`.
 
 A story file has exactly one `stubs.reactRouter` decorator, at meta level, because a nested Router throws. Vary the router per story through the function form, never a second decorator.
 
@@ -112,14 +130,28 @@ i18n is global, no setup needed. Use `useTranslation()` inside the story functio
 
 ## Test data
 
-`msw-storybook-addon` is wired in `.storybook/preview.ts`; a story supplies request handlers through `parameters.msw.handlers`. `@msw/data` collections from `test/mocks/database` stay usable for seed data. Reads on a `Collection` are sync, so stories can call them inline:
+`msw-storybook-addon` is wired in `.storybook/preview.ts` (`addonMsw()` in `definePreview`'s addons); a story installs request handlers in `beforeEach` through the `msw` context, never through a story parameter:
+
+```tsx
+const meta = preview.meta({
+  beforeEach: ({msw}) => {
+    msw.use(http.get('/api/things', () => HttpResponse.json(THINGS)));
+  },
+  component: ThingsGrid,
+  title: 'Components/ThingsGrid',
+});
+```
+
+`@msw/data` collections from `test/mocks/database` stay usable for seed data. Reads on a `Collection` are sync, so a story can call them inline:
 
 ```tsx
 import database from 'test/mocks/database';
 import {toCamelCase} from '~/utils/object';
 
-export const Default: StoryFn = () => {
-  const things = database.things.findMany(undefined).map(toCamelCase) as Things;
-  return <ThingsGrid things={things} />;
-};
+export const Default = meta.story({
+  render: () => {
+    const things = database.things.findMany(undefined).map(toCamelCase) as Things;
+    return <ThingsGrid things={things} />;
+  },
+});
 ```

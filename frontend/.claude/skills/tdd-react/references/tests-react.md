@@ -4,11 +4,11 @@ Contents: Testing Layers; Component Tests via Stories; Hook Tests via `renderHoo
 
 ## Testing Layers
 
-Four layers share one mocking foundation (`msw` + `@msw/data`). Write tests at the **lowest layer that can verify the behavior**, a button's disabled state is a story play, not E2E; a route's redirect is E2E, a loader's parsing is a service test.
+Four layers share one mocking foundation (`msw` + `@msw/data`). Write tests at the **lowest layer that can verify the behavior**, a button's disabled state is a story `.test()`, not E2E; a route's redirect is E2E, a loader's parsing is a service test.
 
 | Layer             | Tool                                  | Vitest project | File location                           | What to assert                                      |
 | ----------------- | ------------------------------------- | -------------- | --------------------------------------- | --------------------------------------------------- |
-| Component / page  | Storybook story with a play function  | `storybook`    | `app/components/<name>/tests/*.stories.tsx` | rendered DOM, user interactions, props behavior, accessibility |
+| Component / page  | Storybook story with `.test()` behaviors | `storybook`    | `app/components/<name>/tests/*.stories.tsx` | rendered DOM, user interactions, props behavior, accessibility |
 | Hook              | `renderHook` from `vitest-browser-react` | `browser`   | `app/hooks/tests/`                      | hook return values, state transitions, callbacks    |
 | Pure / service    | MSW handlers + Zod                    | `node`         | `app/services/<name>/tests/`, `app/utils/tests/` | parsed response shape, request payload, error cases |
 | E2E               | Playwright + dev-server MSW              | Playwright     | `.playwright/e2e/*.spec.ts`             | full user flow across routes                        |
@@ -17,68 +17,62 @@ One Vitest config (`vitest.config.ts`) holds three projects. `node` runs `*.test
 
 ## Component Tests via Stories
 
-The story is the test. Each story renders the component in a real browser through the same decorators Storybook shows (i18n, router, state via `test/stubs`), and a `play` function drives it and asserts. A story with no play is a render check that still runs and is axe-checked. Never write a separate `.test.tsx` that renders the component fresh: it bypasses the story's stubs and duplicates what the story already covers.
+The story is the test. A story is a visual state, a behavior is a `.test()` attached to it, and a `play` only drives the UI into the state the snapshot must show; the doctrine is owned by `wiki/decisions/Stories as Tests.md`. Each story renders the component in a real browser through the same decorators Storybook shows (i18n, router, state via `test/stubs`). A story with no `.test()` is a render check that still runs and is axe-checked. Never write a separate `.test.tsx` that renders the component fresh: it bypasses the story's stubs and duplicates what the story already covers.
 
 ```tsx
 // app/components/price-tag/tests/index.stories.tsx
-import type {Meta, StoryFn, StoryObj} from '@storybook/react-vite';
-import {expect, within} from 'storybook/test';
+import {expect} from 'storybook/test';
+import preview from '#.storybook/preview';
 import PriceTag from '..';
 
-const meta: Meta = {component: PriceTag, title: 'Components/PriceTag'};
-export default meta;
+const meta = preview.meta({
+  component: PriceTag,
+  title: 'Components/PriceTag',
+});
 
-export const Default: StoryFn = () => <PriceTag amount={4999} currency="USD" />;
+export const Default = meta.story({args: {amount: 4999, currency: 'USD'}});
 
-export const RendersFormattedPrice: StoryObj = {
-  play: async ({canvasElement}) => {
-    await expect(within(canvasElement).getByText('$49.99')).toBeVisible();
-  },
-  render: () => <PriceTag amount={4999} currency="USD" />,
-};
+export const Discounted = Default.extend({args: {discountPercent: 20}});
 
-export const ShowsStrikeThroughOriginalWhenDiscounted: StoryObj = {
-  play: async ({canvasElement}) => {
-    const canvas = within(canvasElement);
+Default.test('renders the formatted price', async ({canvas}) => {
+  await expect(canvas.getByText('$49.99')).toBeVisible();
+});
 
-    await expect(canvas.getByText('$39.99')).toBeVisible();
-    await expect(canvas.getByText('$49.99')).toHaveClass('line-through');
-  },
-  render: () => <PriceTag amount={4999} currency="USD" discountPercent={20} />,
-};
+Discounted.test('strikes through the original price', async ({canvas}) => {
+  await expect(canvas.getByText('$39.99')).toBeVisible();
+  await expect(canvas.getByText('$49.99')).toHaveClass('line-through');
+});
 ```
 
-Import `expect`, `fn`, `userEvent`, `waitFor`, `within` and (when a native event has no `userEvent` equivalent) `fireEvent` from `storybook/test`, which re-exports the jest-dom matchers and user-event. Use ARIA roles and accessible names as selectors, `getByRole('button', {name: 'Save'})`, `getByText('$49.99')`, not class selectors or test ids, and `await` every `userEvent` call and every `expect`.
+Import `expect`, `fn`, `waitFor` and (when a native event has no `userEvent` equivalent) `fireEvent` from `storybook/test`, which re-exports the jest-dom matchers and user-event; a `.test()` and a `play` receive `canvas`, `canvasElement`, `args` and `userEvent` in their context. Use ARIA roles and accessible names as selectors, `getByRole('button', {name: 'Save'})`, `getByText('$49.99')`, not class selectors or test ids, and `await` every `userEvent` call and every `expect`.
 
-One story per behavior, named for the behavior. The story export name becomes the test name (`ShowsStrikeThroughOriginalWhenDiscounted` is "Shows Strike Through Original When Discounted"); a string `name` overrides it. A `play` on the meta is inherited by every story in the file, so put a shared play on the meta only when every story should run it.
+One story per visual state, one `.test()` per behavior, named for the behavior. The story export name is the story's display name (`Discounted` is "Discounted"); a string `name` overrides it. A story that carries any `.test()` runs its own render and play as `base story`, and the play runs again before every attached test, so put a step in `play` only when it builds the state every test and the snapshot need. A `play` on the meta is inherited by every story in the file, so put a shared play on the meta only when every story should run it. Write every story as a direct `meta.story({...})` export: the indexer cannot attach `.test()` to an export built by a factory function.
 
 ### Driving input
 
-- Pointer: `await userEvent.click(...)`, `await userEvent.selectOptions(select, 'ja')`.
+- Pointer: `await userEvent.click(...)` (from the test context), `await userEvent.selectOptions(select, 'ja')`.
 - Keyboard: `await userEvent.keyboard('{Enter}')`, `await userEvent.tab()`; focus an element first with `element.focus()` when the path needs it. A native closed `<select>` arrow move is platform-dependent in Chromium, so drive it as `fireEvent.keyDown(select, {key: 'ArrowDown'})` followed by the `fireEvent.change` it causes.
 - Settling: assert asynchronous results with `await waitFor(async () => { await expect(...)... })` or a `findBy*` query; assert that something did NOT happen only after a short settle delay long enough for a stray call to arrive.
 
 ### Overriding a prop (callback spies)
 
-A spy reaches the component through story `args`. Declare it in the meta (`args: {onChange: fn()}`), spread `{...args}` onto the component **last** in the story's render, after any hardcoded default, and read the spy in the play through `args`. `args` only reaches the real component through that spread, so a story that hardcodes the callback, or spreads `{...args}` before it, silently drops the spy and a `not.toHaveBeenCalled()` assertion passes vacuously.
+A spy reaches the component through story `args`. Declare it in the meta (`args: {onChange: fn()}`), spread `{...args}` onto the component **last** in the story's render, after any hardcoded default, and read the spy in the test through `args`. `args` only reaches the real component through that spread, so a story that hardcodes the callback, or spreads `{...args}` before it, silently drops the spy and a `not.toHaveBeenCalled()` assertion passes vacuously.
 
 ```tsx
 // app/components/toggle/tests/index.stories.tsx
-// GOOD - args carries the spy and is spread LAST, so the play's assertion is real
-const meta: Meta<typeof Toggle> = {
+// GOOD - args carries the spy and is spread LAST, so the test's assertion is real
+const meta = preview.meta({
   args: {onChange: fn()},
   component: Toggle,
   render: (args) => <Toggle label="Notifications" {...args} />,
-};
+});
 
-export const EmitsOnChangeWhenToggled: StoryObj<typeof meta> = {
-  play: async ({args, canvasElement}) => {
-    await userEvent.click(
-      within(canvasElement).getByRole('switch', {name: 'Notifications'})
-    );
-    await expect(args.onChange).toHaveBeenCalledWith(true);
-  },
-};
+export const Default = meta.story({});
+
+Default.test('emits onChange when toggled', async ({args, canvas, userEvent}) => {
+  await userEvent.click(canvas.getByRole('switch', {name: 'Notifications'}));
+  await expect(args.onChange).toHaveBeenCalledWith(true);
+});
 ```
 
 ```tsx
@@ -89,24 +83,22 @@ render: (args) => <Toggle label="Notifications" {...args} onChange={() => {}} />
 
 ```tsx
 // BAD: the spy is never wired, so this assertion passes vacuously
-export const DoesNotEmitWhileDisabled: StoryObj<typeof meta> = {
-  args: {disabled: true},
-  play: async ({args, canvasElement}) => {
-    await userEvent.click(
-      within(canvasElement).getByRole('switch', {name: 'Notifications'})
-    );
-    await expect(args.onChange).not.toHaveBeenCalled(); // green even if the disabled guard is broken
-  },
+export const Disabled = meta.story({
   render: () => <Toggle disabled={true} label="Notifications" onChange={() => {}} />,
-};
+});
+
+Disabled.test('does not emit while disabled', async ({args, canvas, userEvent}) => {
+  await userEvent.click(canvas.getByRole('switch', {name: 'Notifications'}));
+  await expect(args.onChange).not.toHaveBeenCalled(); // green even if the disabled guard is broken
+});
 ```
 
 ### The router stub
 
-`stubs.reactRouter()` from `test/stubs` wraps the story in a memory router. For a play that submits a form or navigates:
+`stubs.reactRouter()` from `test/stubs` wraps the story in a memory router. For a `.test()` that submits a form or navigates:
 
-- `actions`: `Record<path, ActionFunction>`, a per-path action that overrides the no-op entry for that path. The action receives the real `request`, so a play asserts the submitted `FormData` through a `fn()` spy called from it.
-- `destinations`: paths that render `Navigated to <path>` in a `main`, so the play asserts arrival with `findByText('Navigated to /done')`.
+- `actions`: `Record<path, ActionFunction>`, a per-path action that overrides the no-op entry for that path. The action receives the real `request`, so a test asserts the submitted `FormData` through a `fn()` spy called from it.
+- `destinations`: paths that render `Navigated to <path>` in a `main`, so the test asserts arrival with `findByText('Navigated to /done')`.
 - Function form: `stubs.reactRouter(({args}) => ({actions: {...}}))` reads the story context, so one decorator serves every story and a story varies the router through its own `args` (a delay, a spy).
 
 A story file carries exactly one `stubs.reactRouter` decorator, at meta level: routers do not nest. `actions` keys must differ from `path`, because the main route at `path` matches first and an action keyed to it never fires; a form posting to its own route is observed through the `action` option.
@@ -140,7 +132,7 @@ Assert on `result.current`, the observable hook surface. A `*.test.tsx` file als
 
 ## Service Tests via MSW
 
-MSW handlers run inside the `node` Vitest project against the MSW node server, so a service test exercises the real `api()` wrapper, real schema validation, and real URL resolution. No `vi.mock('fetch')`. Route and page tests are page stories with MSW handlers in `parameters.msw.handlers`.
+MSW handlers run inside the `node` Vitest project against the MSW node server, so a service test exercises the real `api()` wrapper, real schema validation, and real URL resolution. No `vi.mock('fetch')`. Route and page tests are page stories with MSW handlers installed in the meta's `beforeEach` (`beforeEach: ({msw}) => { msw.use(...) }`), never through a story parameter.
 
 ```tsx
 // app/services/gaia/things/tests/requests.test.ts
@@ -194,24 +186,26 @@ Mock at **system boundaries** only:
 
 **Mutating data in a test**: write to `database` directly; reset in `afterEach` via `resetTestData()` from `test/mocks/database`. The read-then-verify shape tests the interface end-to-end and survives schema renames as long as the public service contract holds.
 
-The MSW server runs in the `node` Vitest project and Playwright E2E runs against the dev server, where MSW mocks both browser and SSR requests (`wiki/dependencies/MSW.md`); stories supply handlers through `parameters.msw.handlers` or read seed data from the same `database` collections directly.
+The MSW server runs in the `node` Vitest project and Playwright E2E runs against the dev server, where MSW mocks both browser and SSR requests (`wiki/dependencies/MSW.md`); stories install handlers in `beforeEach` through the `msw` context or read seed data from the same `database` collections directly.
 
 ## Testing Forms with Conform
 
-For components using `@conform-to/react`, create a story that wraps the component with `useForm`, then drive it with a play:
+For components using `@conform-to/react`, create a story that wraps the component with `useForm`, then drive it with a `.test()`:
 
 ```tsx
-export const Default: StoryFn = () => {
-  const [form, fields] = useForm({
-    onValidate: ({formData}) => parseWithZod(formData, {schema}),
-  });
+export const Default = meta.story({
+  render: () => {
+    const [form, fields] = useForm({
+      onValidate: ({formData}) => parseWithZod(formData, {schema}),
+    });
 
-  return (
-    <Form {...getFormProps(form)}>
-      <MyFormComponent fields={fields} />
-    </Form>
-  );
-};
+    return (
+      <Form {...getFormProps(form)}>
+        <MyFormComponent fields={fields} />
+      </Form>
+    );
+  },
+});
 ```
 
 ### Custom form components: use `useInputControl`
@@ -243,12 +237,13 @@ const fieldControl = useInputControl(fields.fieldName);
 
 ```tsx
 // BAD: asserts on translation internals, not user output
-export const GreetsTheUser: StoryObj = {
-  play: async () => {
-    await expect(tSpy).toHaveBeenCalledWith('greeting.hello', {name: 'Ada'});
-  },
+export const GreetsTheUser = meta.story({
   render: () => <Greeting name="Ada" />, // with react-i18next mocked to a tSpy
-};
+});
+
+GreetsTheUser.test('greets the user', async () => {
+  await expect(tSpy).toHaveBeenCalledWith('greeting.hello', {name: 'Ada'});
+});
 ```
 
 Why bad: renaming the key (`greeting.hello` → `pages.home.greeting`) breaks the test even though the user still sees "Hello, Ada". Assert `getByText('Hello, Ada')`.
@@ -256,12 +251,12 @@ Why bad: renaming the key (`greeting.hello` → `pages.home.greeting`) breaks th
 ```tsx
 // BAD: mocks react-router, tests the mock
 vi.mock('react-router', () => ({useNavigate: () => mockNavigate}));
-export const SubmitNavigatesToDone: StoryObj = {
-  play: async ({canvasElement}) => {
-    await userEvent.click(within(canvasElement).getByRole('button'));
-    await expect(mockNavigate).toHaveBeenCalledWith('/done');
-  },
-};
+export const Default = meta.story({});
+
+Default.test('navigates to done on submit', async ({canvas, userEvent}) => {
+  await userEvent.click(canvas.getByRole('button'));
+  await expect(mockNavigate).toHaveBeenCalledWith('/done');
+});
 ```
 
 Why bad: tests the mock, not the component. Use `stubs.reactRouter({destinations: ['/done']})` and assert on the resulting page (`findByText('Navigated to /done')`).
@@ -292,26 +287,20 @@ Before keeping any test, ask:
 
 ### The composition rule
 
-A story play for component `C` asserts the **emergent behavior of its children together**: the seam where data and events flow through `C`. It never re-proves what the children's own stories already cover.
+A `.test()` on a story for component `C` asserts the **emergent behavior of its children together**: the seam where data and events flow through `C`. It never re-proves what the children's own stories already cover.
 
 ```tsx
 // app/components/checkout/tests/index.stories.tsx
 // GOOD - the seam: PriceTag + QuantityStepper feeding the running total in Checkout
-export const TotalUpdatesWhenQuantityChanges: StoryObj = {
-  play: async ({canvasElement}) => {
-    const canvas = within(canvasElement);
-
-    await userEvent.click(canvas.getByRole('button', {name: 'Increase quantity'}));
-    await expect(canvas.getByRole('status', {name: 'Order total'})).toHaveTextContent('$99.98');
-  },
-};
+Default.test('total updates when quantity changes', async ({canvas, userEvent}) => {
+  await userEvent.click(canvas.getByRole('button', {name: 'Increase quantity'}));
+  await expect(canvas.getByRole('status', {name: 'Order total'})).toHaveTextContent('$99.98');
+});
 
 // BAD - re-proves PriceTag's own stories; nothing here is about Checkout
-export const PriceRendersWithTwoDecimals: StoryObj = {
-  play: async ({canvasElement}) => {
-    await expect(within(canvasElement).getByText('$49.99')).toBeVisible(); // PriceTag's job, covered in PriceTag's stories
-  },
-};
+Default.test('price renders with two decimals', async ({canvas}) => {
+  await expect(canvas.getByText('$49.99')).toBeVisible(); // PriceTag's job, covered in PriceTag's stories
+});
 ```
 
 This is a judgment call, not a lint rule: applied bluntly it strips real integration regressions. An agent applies it **PROPOSE-only and NEVER auto-deletes a child-redundant test.** Any proposed delete must cite both the specific redundant sibling assertion AND the seam assertion that subsumes it, and the cited sibling assertion is machine-verified to contain a matching assertion before the proposal reaches a human. Security, escaping, and data-integrity seam tests (for example a Toast XSS-escaping test) carry a never-delete-without-a-verified-sibling carve-out: they stay even when a sibling looks redundant.
@@ -348,9 +337,9 @@ The null-amount guard and the cents-to-major conversion and the currency-to-loca
 
 ## Render-only stories and a11y
 
-A story with no play renders the component and is axe-checked by addon-a11y (WCAG 2.0/2.1 A and AA, any impact fails; `region` is off). That is **complete evidence ONLY for a component with no interactive behavior** (a Spinner, a static badge). For a behavior-rich component a render-only story is the start of a test, not the whole of it: the interactions, state transitions, and error paths still need a story with a play per behavior.
+A story with no `.test()` renders the component and is axe-checked by addon-a11y (WCAG 2.0/2.1 A and AA, any impact fails; `region` is off); the check runs for the base story and again for each attached test. That is **complete evidence ONLY for a component with no interactive behavior** (a Spinner, a static badge). For a behavior-rich component a render-only story is the start of a test, not the whole of it: the interactions, state transitions, and error paths still need a `.test()` per behavior.
 
-An axe pass says nothing about focus order, keyboard operation, or the accessible state of controls a user drives. For an interactive component, the plays assert a keyboard path (Tab, Enter, Escape, arrows as the widget requires) and a focus outcome (where focus lands, or that it returns to the trigger). Page stories also assert the landmark structure (one `main`, one level-1 heading), which the story-level axe run does not check. Opting a story out of addon-a11y needs its story id and a reason recorded in `A11Y_OPT_OUT_REASONS` in `test/story-a11y-opt-out.test.tsx`.
+An axe pass says nothing about focus order, keyboard operation, or the accessible state of controls a user drives. For an interactive component, the tests assert a keyboard path (Tab, Enter, Escape, arrows as the widget requires) and a focus outcome (where focus lands, or that it returns to the trigger). Page stories also carry a `.test()` for the landmark structure (one `main`, one level-1 heading), which the story-level axe run does not check. Opting a story out of addon-a11y needs its story id and a reason recorded in `A11Y_OPT_OUT_REASONS` in `test/story-a11y-opt-out.test.tsx`.
 
 ## Red Flags
 

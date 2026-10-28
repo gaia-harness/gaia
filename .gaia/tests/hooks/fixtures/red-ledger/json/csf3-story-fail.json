@@ -1,0 +1,24 @@
+{
+  "numTotalTestSuites": 1,
+  "numFailedTests": 1,
+  "numPassedTests": 0,
+  "numTotalTests": 1,
+  "success": false,
+  "testResults": [
+    {
+      "name": ".gaia/tests/hooks/fixtures/red-ledger/csf3-old-format.stories.tsx",
+      "status": "failed",
+      "message": "",
+      "assertionResults": [
+        {
+          "title": "With Play",
+          "fullName": "With Play",
+          "status": "failed",
+          "failureMessages": [
+            "AssertionError: expected 1 to be 2 // Object.is equality\n    at <anonymous>"
+          ]
+        }
+      ]
+    }
+  ]
+}

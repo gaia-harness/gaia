@@ -4,7 +4,7 @@ status: active
 priority: 1
 date: 2026-06-23
 created: 2026-06-23
-updated: 2026-10-05
+updated: 2026-10-28
 tags: [decision, tdd, testing, audit, quality]
 ---
 
@@ -65,7 +65,7 @@ and is **always human-gated**.
 
 ### Stories are audited tests
 
-A story with an effective play function is one test to the audit, wherever the file sits: stories classify emergent ([[Determinism Classifier]]), and `extract-test-signals.mjs` emits one identity per such story (see [[Stories as Tests]]). A render-only story is not counted. The a11y axe check is automatic for every story, so a story that only renders and passes axe is a complete a11y test for a component with no interactive behavior; the reviewer judges a play on its behavior assertions, and a play that asserts nothing a user could see break returns `fix`. No separate static a11y check runs: addon-a11y covers the mechanical half.
+A story is a visual state and a behavior is a `.test()` attached to it ([[Stories as Tests]]). Each attached test, with its story's `base story` entry, is one test to the audit, wherever the file sits: stories classify emergent ([[Determinism Classifier]]), and `extract-test-signals.mjs` emits one identity per entry. A story with an effective play and no tests is one test; a render-only story is not counted. The a11y axe check is automatic for every story, so a story that only renders and passes axe is a complete a11y test for a component with no interactive behavior; the reviewer judges a `.test()` on its behavior assertions, and a test that asserts nothing a user could see break returns `fix`; an `expect` inside a play also returns `fix`. No separate static a11y check runs: addon-a11y covers the mechanical half.
 
 ### Two-tier surfacing
 

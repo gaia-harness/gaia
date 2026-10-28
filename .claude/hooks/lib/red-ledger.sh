@@ -98,3 +98,40 @@ red_ledger_signals() {
 
   node "$script" "$relative_path"
 }
+
+# Exit 7 is the extractor refusing a story shape it cannot resolve.
+# shellcheck disable=SC2034 # read by the hooks that source this library
+RED_LEDGER_UNRESOLVABLE_SHAPE_STATUS=7
+
+# Exit 8 is the extractor refusing an old-format story file. Its stderr line
+# already names the migration command, so callers carry it verbatim and never
+# re-spell it.
+RED_LEDGER_OLD_FORMAT_STATUS=8
+
+# Deny text for an extractor refusal (exit 7: a story shape it cannot resolve;
+# exit 8: an old-format story file), carrying the extractor's own stderr line.
+red_ledger_refusal_reason() {
+  local status="$1" relative_path="$2" extractor_line="$3"
+  if [ "$status" -eq "$RED_LEDGER_OLD_FORMAT_STATUS" ]; then
+    printf 'Worthiness presence gate: %s is an old-format story file, so its tests cannot be checked for a worthiness verdict.\n\n%s\n\nNext step: run .gaia/cli/gaia migrate-csf4, then retry gh pr merge.' \
+      "$relative_path" "${extractor_line:-extract-test-signals: ${relative_path} is an old-format story file; migrate it with: .gaia/cli/gaia migrate-csf4}"
+    return 0
+  fi
+  printf 'Worthiness presence gate: the test-identity extractor cannot read %s, so its tests cannot be checked for a worthiness verdict.\n\n%s\n\nNext step: rewrite the story in a supported shape (see wiki Stories as Tests), then retry gh pr merge.' \
+    "$relative_path" "${extractor_line:-extract-test-signals: unsupported story shape in ${relative_path}}"
+}
+
+# red_ledger_signals for a caller that never blocks: on exit 8 it prints the
+# extractor's line to stderr as a warning and emits no signals. Always returns 0.
+red_ledger_signals_or_warn() {
+  local relative_path="$1" error_file status=0 output
+  error_file=$(mktemp "${TMPDIR:-/tmp}/red-ledger-signals-XXXXXX") || error_file=/dev/null
+  output=$(red_ledger_signals "$relative_path" 2>"$error_file") || status=$?
+  if [ "$status" -eq "$RED_LEDGER_OLD_FORMAT_STATUS" ]; then
+    printf 'warning: %s\n' "$(head -n 1 "$error_file" 2>/dev/null)" >&2
+    output=''
+  fi
+  [ "$error_file" = /dev/null ] || rm -f "$error_file"
+  [ -z "$output" ] || printf '%s\n' "$output"
+  return 0
+}

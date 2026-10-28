@@ -1,70 +1,92 @@
-// Story mode for extract-test-signals.mjs: per-story (fullName, signal) pairs
-// from a CSF `*.stories.tsx` / `*.stories.ts` file, whose play functions run
-// as Vitest tests through @storybook/addon-vitest.
+// Story mode for extract-test-signals.mjs: per-test (fullName, signal) pairs
+// from a CSF4 `*.stories.tsx` / `*.stories.ts` file (`preview.meta`,
+// `meta.story`, `.extend`, `.test()`), whose stories @storybook/addon-vitest
+// runs as Vitest tests. CSF4 only: ./story-format.mjs decides the format, an
+// older format throws OldStoryFormat (the caller exits 8 and names the
+// migration command) and an unknown one refuses.
 //
-// One entry per story export that has an EFFECTIVE play function and whose
-// tags keep it a test. Nothing for a render-only story, a story whose
-// combined tags drop `test` (Storybook's combineTags over "test", "dev", the
-// meta `tags`, then the story's own static `tags`, so a story-level `test`
-// re-adds what a meta-level `!test` removed), the default export, or a
-// type-only export.
+// Entries, in export source order, for each exported story whose tags keep it
+// a test (Storybook's combineTags over "test", "dev", the meta `tags`, then the
+// story's own static `tags`: those in its own `meta.story({…})` or
+// `.extend({…})` argument, never a source story's):
+//   - a story carrying any `.test()`: `<Story Name>   base story`, then
+//     `<Story Name>   <test name>` per call in source order;
+//   - a story with an effective play and no tests: `<Story Name>`;
+//   - a render-only story with no tests: nothing.
+// Read from Storybook 10.6.3's vitest transform: a story with tests becomes a
+// describe titled with the story name plus two trailing spaces, so the
+// reporter's fullName joins with three spaces, and its own render/play is the
+// test `base story`. Only a top-level `Story.test('<string literal>', …)`
+// statement is indexed as a test.
 //
-// fullName: what addon-vitest names the test, read from Storybook 10.6.1's
-// CsfFile parse: storyNameFromExport(exportName), overridden by a string-
-// literal `name` property on the story object, then by a top-level
-// `Export.storyName = '<literal>'` assignment. A top-level test, with no meta
-// title prefix and no describe ancestry.
+// <Story Name>: storyNameFromExport(exportName), overridden by a string-literal
+// `name` in the story's own call argument. An `.extend` story is named by its
+// own export, overridden only by a `name` in its own extend argument: the
+// static parse reads the extending call's argument, while `extend` copies the
+// source's whole input, `name` included, into the runtime story only.
+//
+// Effective play, as Storybook 10.6.3's `defineStory` composes it: the story
+// argument's `play`; for `.extend`, the source story's input play when the
+// extend argument sets no `play` key (`{...source.input, ...input}`, so a
+// `play: undefined` overrides it); then the meta's play.
 //
 // signal: "sha256:" + hex sha256 of these regions, each normalized and
-// comment-free exactly as a test signal is, joined by "\n":
-//   1. the story's own declaration statement, plus every top-level
-//      `Export.<anything> = …` statement targeting it, in source order;
-//   2. the resolved play: the function node, the same-file declaration an
-//      identifier resolves to, the whole factory declaration for a factory-
-//      built story, or the spread source's / meta's resolved play;
-//   3. the default-export meta object literal.
-// Editing a shared play rotates every story using it; editing the meta
-// rotates every story in the file.
+// comment-free exactly as a test signal is, joined by "\n", for every entry
+// of a story (its base story, each test, or its plain entry):
+//   1. the story's declaration statement;
+//   2. the resolved play (the function node, or the same-file declaration an
+//      identifier resolves to; for an inherited play, the source's), or empty;
+//   3. the meta's declaration statement;
+//   4. for a test entry only, that `.test(…)` call statement.
+// So an edit to a story's play rotates its base story, every attached test and
+// every `.extend` story inheriting it; an edit to one test rotates that test;
+// an edit to a sibling story rotates nothing of this one.
 //
-// Effective-play resolution follows module evaluation order:
-//
-//   shape              | example                                  | play source
-//   object property    | {play: async () => {…}}                  | the property initializer (or method)
-//   assignment         | Invalid.play = async () => {…}           | the assignment's right side
-//   shared identifier  | Default.play = showError                 | showError's top-level declaration
-//   factory            | export const Info = createTypeStory('i') | the returned object's play; signal
-//                      |                                          | carries the whole factory declaration
-//   meta-level play    | const meta = {play: …}                   | the meta's play, when the story has none
-//   spread             | export const B = {...A, args: {…}}       | A's play at B's declaration (recursive)
-//   story reference    | {play: A.play}                           | A's own play at that point
-//   name override      | {name: 'Custom', play: …}                | as object property; fullName Custom
-//
-// Object members apply in source order, so a later member wins, and a
-// top-level `Export.play =` assignment wins over the object it follows. A play
-// that is literally `undefined` counts as no own play and falls through to the
-// meta's play, as Storybook's `storyAnnotations.play ?? meta.play` does.
-//
-// Refusal: any shape where presence or source of the effective play cannot be
-// decided throws StoryShapeRefusal for the first offending export in source
-// order (the meta reports as `default`). Refused shapes include a play bound
-// to an import or a mutable binding, a story built by an imported function or
-// a CSF4 `meta.story(...)` factory, a `.test(...)` call on a story, meta
-// `includeStories` / `excludeStories`, an `export {…}` clause or a destructured
-// export, a spread or identifier cycle, a factory with no single top-level
-// `return {…}`, and non-literal `tags`. A play body calling imported helpers
-// is normal and never refused.
+// Refusal (StoryShapeRefusal, the first offending export in source order; the
+// meta and the file report as `default`): a play bound to an import or a
+// mutable binding, a play the extractor cannot read, an `export {…}` clause or
+// `export *`, a `.test()` whose name is not a string literal or whose story is
+// not an exported story declared before it, a top-level assignment to a story
+// or the meta, an `.extend` of something other than a same-file story, a cycle,
+// meta spreads, `includeStories` / `excludeStories`, and non-literal `tags`.
+// A play body calling imported helpers is normal and never refused.
 
 import {createHash} from 'node:crypto';
+import {classifyStoryFormat, hasModifier, isPreviewMetaCall} from './story-format.mjs';
 
-export class StoryShapeRefusal extends Error {
-  constructor(exportName, reason) {
+// A story file the extractor will not read: the driver prints
+// `extract-test-signals: <describe(path)>` and exits with exitCode, the code
+// its callers branch on (7 refuse the shape, 8 send the file to migration).
+export class StoryFileRefusal extends Error {
+  constructor(exitCode, reason) {
     super(reason);
-    this.exportName = exportName;
+    this.exitCode = exitCode;
     this.reason = reason;
   }
 }
 
-// Mirrors storybook 10.6.1 `toStartCaseStr` (src/csf/toStartCaseStr.ts), which
+export class StoryShapeRefusal extends StoryFileRefusal {
+  constructor(exportName, reason) {
+    super(7, reason);
+    this.exportName = exportName;
+  }
+
+  describe(filePath) {
+    return `unsupported story shape in ${filePath}: ${this.exportName}: ${this.reason}`;
+  }
+}
+
+export class OldStoryFormat extends StoryFileRefusal {
+  constructor(format) {
+    super(8, `a ${format} story file`);
+  }
+
+  describe(filePath) {
+    return `${filePath} is an old-format story file; migrate it with: .gaia/cli/gaia migrate-csf4`;
+  }
+}
+
+// Mirrors storybook 10.6.3 `toStartCaseStr` (src/csf/toStartCaseStr.ts), which
 // its `storyNameFromExport` (src/csf/export-story.ts) returns unchanged. Copied
 // rather than imported: this script resolves only `typescript` from the repo
 // root and must not depend on frontend's node_modules.
@@ -82,7 +104,7 @@ export function storyNameFromExport(key) {
     .trim();
 }
 
-// Mirrors storybook 10.6.1 `combineTags` (src/csf/csf-utils.ts): later tags
+// Mirrors storybook 10.6.3 `combineTags` (src/csf/csf-utils.ts): later tags
 // win, and a `!tag` deletes an earlier `tag`.
 function combineTags(...tags) {
   const result = new Set();
@@ -96,14 +118,18 @@ function combineTags(...tags) {
   return result;
 }
 
-// A play that is present but literally `undefined`.
+// A play key that is present but literally `undefined`.
 const UNDEFINED_PLAY = Object.freeze({undefinedPlay: true});
+const isRealPlay = (play) => Boolean(play) && play !== UNDEFINED_PLAY;
 
 export function extractStorySignals({ts, sourceFile, textWithoutComments, normalize}) {
-  const hasModifier = (node, kind) =>
-    (ts.canHaveModifiers?.(node) ? ts.getModifiers(node) : node.modifiers)?.some(
-      (modifier) => modifier.kind === kind,
-    ) ?? false;
+  const {format, previewNames} = classifyStoryFormat(ts, sourceFile);
+  if (format === 'csf2' || format === 'csf3') {
+    throw new OldStoryFormat(format);
+  }
+  if (format !== 'csf4') {
+    throw new StoryShapeRefusal('default', 'the file is not a CSF4 story file (a `#.storybook/preview` meta with factory stories) nor an older format the migration converts');
+  }
 
   const unwrap = (expression) => {
     let current = expression;
@@ -119,135 +145,68 @@ export function extractStorySignals({ts, sourceFile, textWithoutComments, normal
     }
     return current;
   };
+  const position = (node) => node.getStart(sourceFile);
+  const regionText = (node) => normalize(textWithoutComments(node.getStart(sourceFile), node.getEnd()));
+  const refuser = (exportName) => (reason) => {
+    throw new StoryShapeRefusal(exportName, reason);
+  };
+  const refuseMeta = refuser('default');
 
   // Top-level bindings: name -> {kind, statement, node, init}.
   const bindings = new Map();
-  // Story exports and export clauses, in source order.
-  const exportEntries = [];
-  // Top-level `Name.prop = value` statements: name -> [{statement, property, value}].
-  const assignments = new Map();
-  // Top-level `Name.test(...)` calls: name -> statement.
-  const testCalls = new Map();
-  let defaultExport = null;
-
-  const addAssignment = (name, record) => {
-    if (!assignments.has(name)) {
-      assignments.set(name, []);
-    }
-    assignments.get(name).push(record);
-  };
-
-  const collectBindingNames = (nameNode, out) => {
-    if (ts.isIdentifier(nameNode)) {
-      out.push(nameNode.text);
-      return;
-    }
-    for (const element of nameNode.elements) {
-      if (!ts.isOmittedExpression(element)) {
-        collectBindingNames(element.name, out);
-      }
-    }
-  };
+  // Exported variable names, in source order.
+  const exportNames = [];
+  // Top-level `Name.prop = value` targets: name -> first statement.
+  const assignedNames = new Map();
+  // Top-level `Name.test(…)` statements, in source order.
+  const testStatements = [];
 
   for (const statement of sourceFile.statements) {
     if (ts.isImportDeclaration(statement)) {
       const clause = statement.importClause;
-      if (clause?.name) {
-        bindings.set(clause.name.text, {kind: 'import', statement});
-      }
       const named = clause?.namedBindings;
-      if (named && ts.isNamespaceImport(named)) {
-        bindings.set(named.name.text, {kind: 'import', statement});
-      } else if (named) {
-        for (const element of named.elements) {
-          bindings.set(element.name.text, {kind: 'import', statement});
-        }
+      const names = [clause?.name, ...(named && ts.isNamespaceImport(named) ? [named.name] : (named?.elements ?? []).map((element) => element.name))];
+      for (const name of names.filter(Boolean)) {
+        bindings.set(name.text, {kind: 'import', statement});
       }
     } else if (ts.isImportEqualsDeclaration(statement)) {
       bindings.set(statement.name.text, {kind: 'import', statement});
     } else if (ts.isVariableStatement(statement)) {
-      if (hasModifier(statement, ts.SyntaxKind.DeclareKeyword)) {
+      if (hasModifier(ts, statement, ts.SyntaxKind.DeclareKeyword)) {
         continue;
       }
       const flags = statement.declarationList.flags;
-      const kind =
-        flags & ts.NodeFlags.Const ? 'const' : flags & ts.NodeFlags.Let ? 'let' : 'var';
-      const exported = hasModifier(statement, ts.SyntaxKind.ExportKeyword);
+      const kind = flags & ts.NodeFlags.Const ? 'const' : flags & ts.NodeFlags.Let ? 'let' : 'var';
+      const exported = hasModifier(ts, statement, ts.SyntaxKind.ExportKeyword);
       for (const declaration of statement.declarationList.declarations) {
-        if (ts.isIdentifier(declaration.name)) {
-          const name = declaration.name.text;
-          bindings.set(name, {kind, statement, node: declaration, init: declaration.initializer});
-          if (exported && name !== '__namedExportsOrder') {
-            exportEntries.push({name, statement});
-          }
-        } else {
-          const names = [];
-          collectBindingNames(declaration.name, names);
-          for (const name of names) {
-            bindings.set(name, {kind: 'destructured', statement});
-          }
+        if (!ts.isIdentifier(declaration.name)) {
           if (exported) {
-            exportEntries.push({
-              name: names[0] ?? '<destructured>',
-              statement,
-              refusal: 'a destructured export has no story name the extractor can read',
-            });
+            refuser('<destructured>')('a destructured export has no story name the extractor can read');
           }
+          continue;
+        }
+        const name = declaration.name.text;
+        bindings.set(name, {kind, statement, node: declaration, init: declaration.initializer});
+        if (exported && name !== '__namedExportsOrder') {
+          exportNames.push(name);
         }
       }
-    } else if (ts.isFunctionDeclaration(statement)) {
-      if (statement.name) {
-        bindings.set(statement.name.text, {kind: 'function', statement, node: statement});
-      }
-      if (hasModifier(statement, ts.SyntaxKind.ExportKeyword)) {
-        if (hasModifier(statement, ts.SyntaxKind.DefaultKeyword)) {
-          defaultExport = {statement, expression: null};
-        } else if (statement.name && statement.body) {
-          exportEntries.push({name: statement.name.text, statement});
-        }
-      }
-    } else if (ts.isClassDeclaration(statement)) {
-      if (statement.name) {
-        bindings.set(statement.name.text, {kind: 'class', statement});
-      }
-      if (
-        hasModifier(statement, ts.SyntaxKind.ExportKeyword) &&
-        hasModifier(statement, ts.SyntaxKind.DefaultKeyword)
-      ) {
-        defaultExport = {statement, expression: null};
-      }
-    } else if (ts.isExportDeclaration(statement)) {
-      if (statement.isTypeOnly) {
-        continue;
-      }
+    } else if (ts.isFunctionDeclaration(statement) && statement.name) {
+      bindings.set(statement.name.text, {kind: 'function', statement, node: statement});
+    } else if (ts.isClassDeclaration(statement) && statement.name) {
+      bindings.set(statement.name.text, {kind: 'class', statement});
+    } else if (ts.isExportDeclaration(statement) && !statement.isTypeOnly) {
       const clause = statement.exportClause;
       if (!clause) {
-        exportEntries.push({
-          name: '*',
-          statement,
-          refusal: 'an `export * from` re-export hides which stories the file exports',
-        });
-      } else if (ts.isNamespaceExport(clause)) {
-        exportEntries.push({
-          name: clause.name.text,
-          statement,
-          refusal: 'a namespace re-export is not a story the extractor can read',
-        });
-      } else {
-        for (const element of clause.elements) {
-          if (!element.isTypeOnly) {
-            exportEntries.push({
-              name: element.name.text,
-              statement,
-              refusal: 'an `export {…}` clause is not a story declaration the extractor can read',
-            });
-          }
-        }
+        refuser('*')('an `export * from` re-export hides which stories the file exports');
       }
-    } else if (ts.isExportAssignment(statement)) {
-      defaultExport = statement.isExportEquals
-        ? {statement, expression: null}
-        : {statement, expression: statement.expression};
+      if (ts.isNamespaceExport(clause)) {
+        refuser(clause.name.text)('a namespace re-export is not a story the extractor can read');
+      }
+      const element = clause.elements.find((candidate) => !candidate.isTypeOnly);
+      if (element) {
+        refuser(element.name.text)('an `export {…}` clause is not a story declaration the extractor can read');
+      }
     } else if (ts.isExpressionStatement(statement)) {
       const expression = statement.expression;
       if (
@@ -256,21 +215,17 @@ export function extractStorySignals({ts, sourceFile, textWithoutComments, normal
         ts.isPropertyAccessExpression(expression.left) &&
         ts.isIdentifier(expression.left.expression)
       ) {
-        addAssignment(expression.left.expression.text, {
-          statement,
-          property: expression.left.name.text,
-          value: expression.right,
-        });
+        const name = expression.left.expression.text;
+        if (!assignedNames.has(name)) {
+          assignedNames.set(name, statement);
+        }
       } else if (
         ts.isCallExpression(expression) &&
         ts.isPropertyAccessExpression(expression.expression) &&
         ts.isIdentifier(expression.expression.expression) &&
         expression.expression.name.text === 'test'
       ) {
-        const name = expression.expression.expression.text;
-        if (!testCalls.has(name)) {
-          testCalls.set(name, statement);
-        }
+        testStatements.push({owner: expression.expression.expression.text, statement, call: expression});
       }
     }
   }
@@ -280,46 +235,48 @@ export function extractStorySignals({ts, sourceFile, textWithoutComments, normal
     if (!name) {
       return null;
     }
-    if (ts.isIdentifier(name) || ts.isPrivateIdentifier(name)) {
-      return name.text;
-    }
-    if (ts.isStringLiteral(name) || ts.isNoSubstitutionTemplateLiteral(name) || ts.isNumericLiteral(name)) {
+    if (ts.isIdentifier(name) || ts.isStringLiteral(name) || ts.isNoSubstitutionTemplateLiteral(name) || ts.isNumericLiteral(name)) {
       return name.text;
     }
     refuse('an object member has a computed key the extractor cannot read');
     return null;
   };
-
-  const regionText = (node) => normalize(textWithoutComments(node.getStart(sourceFile), node.getEnd()));
-
-  // ---- meta -------------------------------------------------------------
-
-  const refuseMeta = (reason) => {
-    throw new StoryShapeRefusal('default', reason);
+  const memberValue = (member) => {
+    if (ts.isPropertyAssignment(member)) {
+      return member.initializer;
+    }
+    return ts.isShorthandPropertyAssignment(member) ? member.name : member;
   };
 
-  if (!defaultExport) {
-    refuseMeta('the file has no default-export meta object');
-  }
-  let metaObject = null;
-  let metaBindingName = null;
-  {
-    const expression = defaultExport.expression ? unwrap(defaultExport.expression) : null;
-    if (expression && ts.isObjectLiteralExpression(expression)) {
-      metaObject = expression;
-    } else if (expression && ts.isIdentifier(expression)) {
-      const binding = bindings.get(expression.text);
-      const init = binding?.kind === 'const' ? unwrap(binding.init) : null;
-      if (init && ts.isObjectLiteralExpression(init)) {
-        metaObject = init;
-        metaBindingName = expression.text;
-      }
+  const parseTags = (node, refuse) => {
+    let value = unwrap(node);
+    if (value && ts.isIdentifier(value)) {
+      const binding = bindings.get(value.text);
+      value = binding?.kind === 'const' ? unwrap(binding.init) : null;
     }
-  }
-  if (!metaObject) {
-    refuseMeta('the default export is not a same-file object literal meta (a CSF4 meta factory is unsupported)');
-  }
+    if (!value || !ts.isArrayLiteralExpression(value) || !value.elements.every((element) => ts.isStringLiteral(element))) {
+      refuse('tags is not an array of string literals');
+    }
+    return value.elements.map((element) => element.text);
+  };
 
+  // ---- meta ---------------------------------------------------------------
+
+  const metaNames = [...bindings].filter(([, binding]) => isPreviewMetaCall(ts, unwrap(binding.init), previewNames));
+  if (metaNames.length !== 1) {
+    refuseMeta('the file binds more than one preview meta');
+  }
+  const [metaBindingName, metaBinding] = metaNames[0];
+  if (metaBinding.kind !== 'const') {
+    refuseMeta('the meta is a mutable binding');
+  }
+  if (assignedNames.has(metaBindingName)) {
+    refuseMeta('the meta is assigned to after its declaration');
+  }
+  const metaObject = unwrap(unwrap(metaBinding.init).arguments[0]);
+  if (!metaObject || !ts.isObjectLiteralExpression(metaObject)) {
+    refuseMeta('the meta argument is not an object literal');
+  }
   let metaTagsNode = null;
   let metaPlayMember = null;
   for (const member of metaObject.properties) {
@@ -330,114 +287,37 @@ export function extractStorySignals({ts, sourceFile, textWithoutComments, normal
     if (name === 'includeStories' || name === 'excludeStories') {
       refuseMeta(`the meta sets ${name}, which decides story exports at runtime`);
     }
-    if (name === 'play' || name === 'tags') {
-      if (ts.isGetAccessorDeclaration(member) || ts.isSetAccessorDeclaration(member)) {
-        refuseMeta(`the meta defines ${name} through an accessor`);
-      }
-      if (name === 'play') {
-        metaPlayMember = member;
-      } else {
-        metaTagsNode = memberValue(member);
-      }
+    if ((name === 'play' || name === 'tags') && (ts.isGetAccessorDeclaration(member) || ts.isSetAccessorDeclaration(member))) {
+      refuseMeta(`the meta defines ${name} through an accessor`);
+    }
+    if (name === 'play') {
+      metaPlayMember = member;
+    } else if (name === 'tags') {
+      metaTagsNode = memberValue(member);
     }
   }
-  if (metaBindingName) {
-    for (const record of assignments.get(metaBindingName) ?? []) {
-      if (['play', 'tags', 'includeStories', 'excludeStories'].includes(record.property)) {
-        refuseMeta(`the meta's ${record.property} is reassigned after its declaration`);
-      }
-    }
-  }
-
-  function memberValue(member) {
-    if (ts.isPropertyAssignment(member)) {
-      return member.initializer;
-    }
-    if (ts.isShorthandPropertyAssignment(member)) {
-      return member.name;
-    }
-    return member;
-  }
-
-  const parseTags = (node, refuse) => {
-    let value = unwrap(node);
-    if (value && ts.isIdentifier(value)) {
-      const binding = bindings.get(value.text);
-      value = binding?.kind === 'const' ? unwrap(binding.init) : null;
-    }
-    if (!value || !ts.isArrayLiteralExpression(value)) {
-      refuse('tags is not an array of string literals');
-    }
-    return value.elements.map((element) => {
-      if (!ts.isStringLiteral(element)) {
-        refuse('tags is not an array of string literals');
-      }
-      return element.text;
-    });
-  };
-
   const metaTags = metaTagsNode ? parseTags(metaTagsNode, refuseMeta) : [];
+  const metaRegion = regionText(metaBinding.statement);
 
-  // ---- play resolution ---------------------------------------------------
+  // ---- stories ------------------------------------------------------------
 
-  // A resolved play is null (absent), UNDEFINED_PLAY, or {nodes: [...]}, the
-  // nodes being the play's region-2 text.
-
-  const statementPosition = (statement) => statement.getStart(sourceFile);
-
-  function resolvePlayValue(expression, context) {
-    const value = unwrap(expression);
-    if (ts.isArrowFunction(value) || ts.isFunctionExpression(value) || ts.isMethodDeclaration(value)) {
-      return {nodes: [value]};
-    }
-    if (ts.isIdentifier(value)) {
-      return resolvePlayIdentifier(value.text, context);
-    }
-    if (
-      ts.isPropertyAccessExpression(value) &&
-      ts.isIdentifier(value.expression) &&
-      value.name.text === 'play'
-    ) {
-      if (context.parameters.has(value.expression.text)) {
-        context.refuse('play is read from a factory parameter');
-      }
-      const owner = value.expression.text;
-      if (owner === metaBindingName) {
-        return metaPlay(context);
-      }
-      const state = ownPlayAt(owner, context.position, context);
-      return state ?? UNDEFINED_PLAY;
-    }
-    context.refuse('play is not a function, a same-file identifier, or a story play reference the extractor can read');
-    return null;
-  }
-
-  function resolvePlayIdentifier(name, context) {
-    if (context.parameters.has(name)) {
-      context.refuse(`play is bound to the factory parameter ${name}`);
-    }
+  // A story binding's factory call: {method: 'story' | 'extend', source, argument}.
+  const storyCall = (name) => {
     const binding = bindings.get(name);
-    if (!binding) {
-      if (name === 'undefined') {
-        return UNDEFINED_PLAY;
-      }
-      context.refuse(`play is bound to ${name}, which has no same-file top-level declaration`);
+    const init = binding?.init ? unwrap(binding.init) : null;
+    if (!init || !ts.isCallExpression(init) || !ts.isPropertyAccessExpression(init.expression)) {
+      return null;
     }
-    if (binding.kind === 'import') {
-      context.refuse(`play is bound to the imported identifier ${name}`);
+    const method = init.expression.name.text;
+    if (method !== 'story' && method !== 'extend') {
+      return null;
     }
-    if (binding.kind === 'function') {
-      return {nodes: [binding.node]};
-    }
-    if (binding.kind !== 'const' || !binding.init) {
-      context.refuse(`play is bound to ${name}, which is not a const or function declaration`);
-    }
-    return withVisit(`identifier ${name}`, context, () => resolvePlayValue(binding.init, context));
-  }
+    return {binding, method, receiver: unwrap(init.expression.expression), argument: init.arguments[0] ? unwrap(init.arguments[0]) : null};
+  };
 
   function withVisit(key, context, run) {
     if (context.visiting.has(key)) {
-      context.refuse(`a spread or identifier cycle runs through ${key.replace(/^\w+ /, '')}`);
+      context.refuse(`a play or extend cycle runs through ${key}`);
     }
     context.visiting.add(key);
     try {
@@ -447,31 +327,56 @@ export function extractStorySignals({ts, sourceFile, textWithoutComments, normal
     }
   }
 
+  // A resolved play is null (no play key), UNDEFINED_PLAY, or {nodes: [...]}.
+  function resolvePlayValue(expression, context) {
+    const value = unwrap(expression);
+    if (ts.isArrowFunction(value) || ts.isFunctionExpression(value) || ts.isMethodDeclaration(value)) {
+      return {nodes: [value]};
+    }
+    if (ts.isIdentifier(value)) {
+      const binding = bindings.get(value.text);
+      if (!binding) {
+        if (value.text === 'undefined') {
+          return UNDEFINED_PLAY;
+        }
+        context.refuse(`play is bound to ${value.text}, which has no same-file top-level declaration`);
+      }
+      if (binding.kind === 'import') {
+        context.refuse(`play is bound to the imported identifier ${value.text}`);
+      }
+      if (binding.kind === 'function') {
+        return {nodes: [binding.node]};
+      }
+      if (binding.kind !== 'const' || !binding.init) {
+        context.refuse(`play is bound to ${value.text}, which is not a const or function declaration`);
+      }
+      return withVisit(`identifier ${value.text}`, context, () => resolvePlayValue(binding.init, context));
+    }
+    if (ts.isPropertyAccessExpression(value) && ts.isIdentifier(value.expression) && value.name.text === 'play' && storyCall(value.expression.text)) {
+      // A story's `play` getter: its input play, else the meta's.
+      return effectivePlay(value.expression.text, context) ?? UNDEFINED_PLAY;
+    }
+    context.refuse('play is not a function, a same-file identifier, or a story play reference the extractor can read');
+    return null;
+  }
+
   // The play an object literal carries once its members have applied.
   function objectPlay(objectNode, context) {
     let state = null;
     for (const member of objectNode.properties) {
       if (ts.isSpreadAssignment(member)) {
-        const spread = unwrap(member.expression);
-        let spreadState;
-        if (ts.isObjectLiteralExpression(spread)) {
-          spreadState = objectPlay(spread, context);
-        } else if (ts.isIdentifier(spread)) {
-          if (context.parameters.has(spread.text)) {
-            context.refuse(`the story spreads the factory parameter ${spread.text}`);
-          }
-          spreadState =
-            spread.text === metaBindingName ? metaPlay(context) : ownPlayAt(spread.text, context.position, context);
-        } else {
-          context.refuse('the story spreads an expression the extractor cannot read');
+        let spread = unwrap(member.expression);
+        if (ts.isIdentifier(spread)) {
+          const binding = bindings.get(spread.text);
+          spread = binding?.kind === 'const' ? unwrap(binding.init) : null;
         }
-        if (spreadState) {
-          state = spreadState;
+        if (!spread || !ts.isObjectLiteralExpression(spread)) {
+          context.refuse('the story spreads something other than a same-file object literal');
         }
+        state = objectPlay(spread, context) ?? state;
         continue;
       }
-      const name = propertyName(member, context.refuse);
-      if (name !== 'play') {
+      if (propertyName(member, context.refuse) !== 'play') {
         continue;
       }
       if (ts.isGetAccessorDeclaration(member) || ts.isSetAccessorDeclaration(member)) {
@@ -482,239 +387,124 @@ export function extractStorySignals({ts, sourceFile, textWithoutComments, normal
     return state;
   }
 
-  // The play a top-level binding's object carries at `position` in module
-  // evaluation: its initializer, then each `name.play =` statement before it.
-  function ownPlayAt(name, position, context) {
+  // The play in a story's composed input: its own argument's, else (extend
+  // only, when the argument has no play key) the source story's input play.
+  function inputPlay(name, context) {
     return withVisit(`story ${name}`, context, () => {
-      const binding = bindings.get(name);
-      if (!binding) {
-        context.refuse(`the story reads ${name}, which has no same-file top-level declaration`);
+      const call = storyCall(name);
+      const argument = call.argument;
+      let own = null;
+      if (argument && ts.isObjectLiteralExpression(argument)) {
+        own = objectPlay(argument, context);
+      } else if (call.method === 'extend' || (argument && !ts.isArrowFunction(argument) && !ts.isFunctionExpression(argument))) {
+        context.refuse(`the .${call.method}(…) argument is not an object literal${call.method === 'story' ? ' or a render function' : ''}`);
       }
-      if (binding.kind === 'import') {
-        context.refuse(`the story reads the imported value ${name}`);
+      if (own !== null || call.method === 'story') {
+        return own;
       }
-      let state = null;
-      if (binding.kind === 'const' || binding.kind === 'let' || binding.kind === 'var') {
-        if (binding.init) {
-          state = initializerPlay(binding.init, binding.statement, {
-            ...context,
-            parameters: new Set(),
-            position: statementPosition(binding.statement),
-          });
-        }
-      } else if (binding.kind !== 'function') {
-        context.refuse(`the story reads ${name}, which is not a variable or function declaration`);
-      }
-      for (const record of assignments.get(name) ?? []) {
-        if (record.property === 'play' && statementPosition(record.statement) < position) {
-          state = resolvePlayValue(record.value, {
-            ...context,
-            parameters: new Set(),
-            position: statementPosition(record.statement),
-          });
-        }
-      }
-      return state;
+      return inputPlay(call.receiver.text, context);
     });
-  }
-
-  function initializerPlay(initializer, statement, context) {
-    const value = unwrap(initializer);
-    if (ts.isObjectLiteralExpression(value)) {
-      return objectPlay(value, context);
-    }
-    if (ts.isArrowFunction(value) || ts.isFunctionExpression(value) || ts.isClassExpression(value)) {
-      return null;
-    }
-    if (ts.isIdentifier(value)) {
-      if (value.text === metaBindingName) {
-        return metaPlay(context);
-      }
-      return ownPlayAt(value.text, context.position, context);
-    }
-    if (ts.isCallExpression(value)) {
-      return callPlay(value, context);
-    }
-    context.refuse('the story initializer is not an object, function, or same-file factory call the extractor can read');
-    return null;
-  }
-
-  function callPlay(call, context) {
-    const callee = unwrap(call.expression);
-    if (ts.isPropertyAccessExpression(callee)) {
-      const method = callee.name.text;
-      if (method === 'story' || method === 'extend') {
-        context.refuse(`a CSF4 factory story (.${method}(…)) is unsupported`);
-      }
-      const target = unwrap(callee.expression);
-      if (method === 'bind' && ts.isIdentifier(target)) {
-        const binding = bindings.get(target.text);
-        const init = binding?.kind === 'const' ? unwrap(binding.init) : null;
-        if (
-          binding?.kind === 'function' ||
-          (init && (ts.isArrowFunction(init) || ts.isFunctionExpression(init)))
-        ) {
-          // A bound function carries none of its target's properties.
-          return null;
-        }
-      }
-      context.refuse('the story initializer is a method call the extractor cannot read');
-    }
-    if (!ts.isIdentifier(callee)) {
-      context.refuse('the story initializer is a call the extractor cannot read');
-    }
-    const binding = bindings.get(callee.text);
-    if (!binding) {
-      context.refuse(`the story is built by ${callee.text}, which has no same-file top-level declaration`);
-    }
-    if (binding.kind === 'import') {
-      context.refuse(`the story is built by the imported function ${callee.text}`);
-    }
-    let factory = null;
-    if (binding.kind === 'function') {
-      factory = binding.node;
-    } else if (binding.kind === 'const') {
-      const init = unwrap(binding.init);
-      if (init && (ts.isArrowFunction(init) || ts.isFunctionExpression(init))) {
-        factory = init;
-      }
-    }
-    if (!factory?.body) {
-      context.refuse(`the story is built by ${callee.text}, which is not a same-file function`);
-    }
-    return withVisit(`factory ${callee.text}`, context, () => {
-      const returned = factoryReturn(factory, callee.text, context);
-      const parameters = [];
-      for (const parameter of factory.parameters) {
-        collectBindingNames(parameter.name, parameters);
-      }
-      const state = objectPlay(returned, {...context, parameters: new Set(parameters)});
-      if (state && state !== UNDEFINED_PLAY) {
-        return {nodes: [binding.statement]};
-      }
-      return state;
-    });
-  }
-
-  function factoryReturn(factory, name, context) {
-    let returned = null;
-    if (ts.isBlock(factory.body)) {
-      const returns = [];
-      const collect = (node) => {
-        if (ts.isFunctionLike(node) || ts.isClassLike(node)) {
-          return;
-        }
-        if (ts.isReturnStatement(node)) {
-          returns.push(node);
-        }
-        ts.forEachChild(node, collect);
-      };
-      ts.forEachChild(factory.body, collect);
-      if (returns.length !== 1 || returns[0].parent !== factory.body || !returns[0].expression) {
-        context.refuse(`the factory ${name} has no single top-level return the extractor can read`);
-      }
-      returned = unwrap(returns[0].expression);
-    } else {
-      returned = unwrap(factory.body);
-    }
-    if (!ts.isObjectLiteralExpression(returned)) {
-      context.refuse(`the factory ${name} does not return an object literal`);
-    }
-    return returned;
   }
 
   function metaPlay(context) {
-    if (!metaPlayMember) {
-      return null;
-    }
-    return resolvePlayValue(memberValue(metaPlayMember), {
-      ...context,
-      parameters: new Set(),
-      position: statementPosition(defaultExport.statement),
-    });
+    return metaPlayMember ? resolvePlayValue(memberValue(metaPlayMember), context) : null;
   }
 
-  // ---- stories -----------------------------------------------------------
+  function effectivePlay(name, context) {
+    const own = inputPlay(name, context);
+    if (isRealPlay(own)) {
+      return own;
+    }
+    const fromMeta = metaPlay(context);
+    return isRealPlay(fromMeta) ? fromMeta : null;
+  }
 
-  const metaRegion = regionText(metaObject);
+  // Every story binding's receiver must be the meta (`.story`) or a same-file
+  // story (`.extend`), and no story may be mutated after its declaration.
+  for (const [name] of bindings) {
+    const call = storyCall(name);
+    if (!call) {
+      continue;
+    }
+    const refuse = refuser(name);
+    if (!ts.isIdentifier(call.receiver)) {
+      refuse(`the .${call.method}(…) receiver is not an identifier the extractor can read`);
+    }
+    if (call.method === 'story' && call.receiver.text !== metaBindingName) {
+      refuse(`.story(…) is called on ${call.receiver.text}, which is not the file's meta`);
+    }
+    if (call.method === 'extend' && !storyCall(call.receiver.text)) {
+      refuse(`.extend(…) is called on ${call.receiver.text}, which is not a same-file story`);
+    }
+    if (call.binding.kind !== 'const') {
+      refuse('the story is a mutable binding');
+    }
+    if (assignedNames.has(name)) {
+      refuse('the story is assigned to after its declaration, which its factory input never sees');
+    }
+  }
+
+  const testsByStory = new Map();
+  for (const test of testStatements) {
+    const refuse = refuser(test.owner);
+    const binding = bindings.get(test.owner);
+    if (!storyCall(test.owner) || !exportNames.includes(test.owner)) {
+      refuse(`a .test(…) is called on ${test.owner}, which is not an exported story`);
+    }
+    if (position(test.statement) < position(binding.statement)) {
+      refuse('a .test(…) call precedes its story declaration');
+    }
+    const [title] = test.call.arguments;
+    if (test.call.arguments.length < 2 || !ts.isStringLiteral(title)) {
+      refuse('a .test(…) call whose name is not a string literal is not indexed as a test');
+    }
+    if (!testsByStory.has(test.owner)) {
+      testsByStory.set(test.owner, []);
+    }
+    testsByStory.get(test.owner).push({name: title.text, statement: test.statement});
+  }
+
   const lines = [];
+  const emit = (fullName, regions) => {
+    const hex = createHash('sha256').update(regions.join('\n'), 'utf8').digest('hex');
+    lines.push(JSON.stringify({fullName, signal: `sha256:${hex}`, kind: 'runtime'}));
+  };
 
-  for (const entry of exportEntries) {
-    const refuse = (reason) => {
-      throw new StoryShapeRefusal(entry.name, reason);
-    };
-    if (entry.refusal) {
-      refuse(entry.refusal);
+  for (const exportName of exportNames) {
+    const call = storyCall(exportName);
+    if (!call) {
+      continue;
     }
-    const binding = bindings.get(entry.name);
-    const storyAssignments = assignments.get(entry.name) ?? [];
-
-    if (testCalls.has(entry.name)) {
-      refuse('a `.test(…)` call on a story (a CSF4 test story) is unsupported');
-    }
-    for (const record of storyAssignments) {
-      if (record.property === 'story') {
-        refuse('a legacy `.story` annotation object is unsupported');
-      }
-    }
-
-    const storyObject =
-      binding.kind === 'function' || !binding.init ? null : unwrap(binding.init);
-    const directObject = storyObject && ts.isObjectLiteralExpression(storyObject) ? storyObject : null;
-
-    // Static name and tags, as Storybook's CsfFile reads them.
-    let fullName = storyNameFromExport(entry.name);
+    const refuse = refuser(exportName);
+    let storyName = storyNameFromExport(exportName);
     let storyTagsNode = null;
-    for (const member of directObject?.properties ?? []) {
-      if (ts.isSpreadAssignment(member)) {
-        continue;
-      }
-      const name = propertyName(member, refuse);
-      if (name === 'name' && ts.isPropertyAssignment(member) && ts.isStringLiteral(member.initializer)) {
-        fullName = member.initializer.text;
-      } else if (name === 'tags') {
-        storyTagsNode = memberValue(member);
-      }
-    }
-    const declaredAt = statementPosition(entry.statement);
-    for (const record of storyAssignments) {
-      if (statementPosition(record.statement) < declaredAt) {
-        continue;
-      }
-      if (record.property === 'storyName' && ts.isStringLiteral(record.value)) {
-        fullName = record.value.text;
-      } else if (record.property === 'tags') {
-        storyTagsNode = record.value;
+    if (call.argument && ts.isObjectLiteralExpression(call.argument)) {
+      for (const member of call.argument.properties) {
+        if (!ts.isPropertyAssignment(member) || !ts.isIdentifier(member.name)) {
+          continue;
+        }
+        if (member.name.text === 'name' && ts.isStringLiteral(member.initializer)) {
+          storyName = member.initializer.text;
+        } else if (member.name.text === 'tags') {
+          storyTagsNode = member.initializer;
+        }
       }
     }
     const storyTags = storyTagsNode ? parseTags(storyTagsNode, refuse) : [];
     if (!combineTags('test', 'dev', ...metaTags, ...storyTags).has('test')) {
       continue;
     }
-
-    const context = {
-      parameters: new Set(),
-      position: Number.POSITIVE_INFINITY,
-      refuse,
-      visiting: new Set(),
-    };
-    let play = ownPlayAt(entry.name, Number.POSITIVE_INFINITY, context);
-    if (!play || play === UNDEFINED_PLAY) {
-      play = metaPlay(context);
+    const play = effectivePlay(exportName, {refuse, visiting: new Set()});
+    const baseRegions = [regionText(call.binding.statement), play ? play.nodes.map(regionText).join('\n') : '', metaRegion];
+    const tests = testsByStory.get(exportName) ?? [];
+    if (tests.length > 0) {
+      emit(`${storyName}   base story`, baseRegions);
+      for (const test of tests) {
+        emit(`${storyName}   ${test.name}`, [...baseRegions, regionText(test.statement)]);
+      }
+    } else if (play) {
+      emit(storyName, baseRegions);
     }
-    if (!play || play === UNDEFINED_PLAY) {
-      continue;
-    }
-
-    const regions = [
-      [entry.statement, ...storyAssignments.map((record) => record.statement)]
-        .map(regionText)
-        .join('\n'),
-      play.nodes.map(regionText).join('\n'),
-      metaRegion,
-    ];
-    const hex = createHash('sha256').update(regions.join('\n'), 'utf8').digest('hex');
-    lines.push(JSON.stringify({fullName, signal: `sha256:${hex}`, kind: 'runtime'}));
   }
 
   return lines;

@@ -291,6 +291,10 @@ auditors:
       - ".gaia/cli/templates/**/*.tmpl"
       - ".gaia/cli/src/**/*.snap"
       - ".gaia/cli/templates/.gitkeep"
+      # Story sources the migration repairs read as input (CSF3 originals and
+      # the upstream codemod's output), stored under suffixes so no story
+      # reader loads them; their contents decide what the repair tests prove.
+      - ".gaia/cli/test-fixtures/migrate-csf4/**"
       # The CLI build/config surface beside src/: the bundle build scripts and
       # runtime deps (package.json), the build config (tsconfig*.json), and
       # the CLI's own
@@ -476,6 +480,10 @@ unowned:
   - ".gaia/tests/**/*.md"
   - ".gaia/tests/**/*.ts"
   - ".gaia/tests/**/*.tsx"
+  # Old-format story sources the migration scenario converts, suffixed so no
+  # story reader loads them: input data like the `.tsx` beside them.
+  - ".gaia/tests/**/*.csf3"
+  - ".gaia/tests/**/*.csf2"
   - ".gaia/tests/**/*.txt"
   - ".gaia/tests/**/*.json"
   - ".gaia/tests/**/*.tsv"

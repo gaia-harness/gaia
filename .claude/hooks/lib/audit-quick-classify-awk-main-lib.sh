@@ -13,8 +13,8 @@ function eval_story(i,   s, o, L, t, c, cat, r, key) {
   if (cat == "blank") return ""
   r = lexical_reason(s, L, t); if (r != "") return r
   c = (cat == "err") ? t : cv[s, L]
-  r = generic_reason(c); if (r != "") return r
   if (c ~ PLAYWORDS || index(c, "within(") > 0 || playany[s, L]) return "quick-story-play"
+  r = generic_reason(c); if (r != "") return r
   if (cat == "err") return "quick-story-shape"
   if (argsdirect0[s, L] && d1[s, L] == d0[s, L] && t ~ ARGLINE) {
     key = t; sub(/^[ \t]*/, "", key); sub(/[ \t]*:.*$/, "", key)
@@ -26,6 +26,28 @@ function eval_story(i,   s, o, L, t, c, cat, r, key) {
     return "quick-story-shape"
   }
   return "quick-story-shape"
+}
+
+# The story-file format predicate in line form: an image is csf4 only when it
+# has no `export default`, a default import of the preview module, a binding
+# from that import's .meta( or .type<, and no named export initialized with an
+# object literal.
+function story_csf4(s,   L, t, ident, rest, found, pat) {
+  found = 0
+  for (L = 1; L <= nlines[s]; L++) {
+    t = raw[s, L]
+    if (t ~ /^export default/) return 0
+    if (t ~ OBJEXPORT) return 0
+  }
+  for (L = 1; L <= nlines[s]; L++) {
+    t = raw[s, L]
+    if (t !~ PREVIEWIMPORT) continue
+    ident = t; sub(/^import[ \t]+/, "", ident); sub(/[ \t]+from.*$/, "", ident)
+    gsub(/\$/, "\\$", ident)
+    pat = "=[ \t]*" ident "\\.(meta\\(|type<)"
+    for (rest = 1; rest <= nlines[s]; rest++) if (raw[s, rest] ~ pat) found = 1
+  }
+  return found
 }
 
 # ---- language files ----------------------------------------------------------
@@ -118,7 +140,9 @@ BEGIN {
   CNSTATIC = "^\\{[ \t]*cn\\([ \t]*" LITERAL "([ \t]*,[ \t]*" LITERAL ")*[ \t]*,?[ \t]*\\)[ \t]*\\}$"
   CNLITLINE = "^[ \t]*" LITERAL ",?[ \t]*$"
   STORYLIT = "('[^'\\\\`]*'|\"[^\"\\\\`]*\"|-?[0-9]+(\\.[0-9]+)?|true|false)"
-  ARGLINE = "^[ \t]*[A-Za-z_$][A-Za-z0-9_$]*:[ \t]*" STORYLIT ",?[ \t]*$"
+  PREVIEWIMPORT = "^import[ \t]+[A-Za-z_$][A-Za-z0-9_$]*[ \t]+from[ \t]+['\"](#\\.storybook/preview|\\.\\.?/(.*/)?\\.storybook/preview(\\.(ts|tsx|js|jsx|mjs|mts))?)['\"];?[ \t]*$"
+  OBJEXPORT = "^export[ \t]+const[ \t]+[A-Za-z_$][A-Za-z0-9_$]*[ \t]*(:[^=]*)?=[ \t]*\\{"
+  ARGLINE ="^[ \t]*[A-Za-z_$][A-Za-z0-9_$]*:[ \t]*" STORYLIT ",?[ \t]*$"
   ARGPAIR = "[A-Za-z_$][A-Za-z0-9_$]*:[ \t]*" STORYLIT
   ARGINLINE = "^[ \t]*args:[ \t]*\\{[ \t]*" ARGPAIR "([ \t]*,[ \t]*" ARGPAIR ")*[ \t]*,?[ \t]*\\},?[ \t]*$"
   PLAYWORDS = "(^|[^A-Za-z0-9_$])(play|expect|userEvent|waitFor|assert[A-Za-z0-9_$]*)([^A-Za-z0-9_$]|$)"
@@ -174,6 +198,7 @@ END {
     if (chl[i] < 1 || chl[i] > nlines[chs[i]]) { print "ERROR"; exit }
     changed[chs[i], chl[i]] = 1
   }
+  if (class == "story" && !(story_csf4("pre") && story_csf4("post"))) { print "quick-story-format\t-"; exit }
   if (class == "language") {
     for (i = 1; i <= nchg; i++) if (chs[i] == "post" && (("post", chl[i]) in lkey)) postchangedkey[lkey["post", chl[i]]] = 1
     for (i = 1; i <= nchg; i++) { r = eval_lang(i); if (r != "") { print r "\t" chs[i] ":" chl[i]; exit } }

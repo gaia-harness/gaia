@@ -1,0 +1,18 @@
+import type {Meta, StoryObj} from '@storybook/react-vite';
+import {expect, within} from 'storybook/test';
+import {FRAGILE_LABEL} from '~/utils/import-time-failure';
+import Fragile from '..';
+
+const meta: Meta<typeof Fragile> = {
+  component: Fragile,
+  title: 'Components/Fragile',
+};
+
+export default meta;
+
+export const Default: StoryObj<typeof Fragile> = {
+  args: {label: FRAGILE_LABEL},
+  play: async ({canvasElement}) => {
+    await expect(within(canvasElement).getByText(FRAGILE_LABEL)).toBeVisible();
+  },
+};

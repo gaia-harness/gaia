@@ -122,7 +122,6 @@ export default defineConfig({
             'i18next',
             'ky',
             'msw-storybook-addon',
-            'msw-storybook-addon/csf3',
             'msw/browser',
             'msw/http',
             'query-string',

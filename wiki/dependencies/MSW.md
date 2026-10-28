@@ -4,7 +4,7 @@ status: active
 package: msw
 role: api-mocking
 created: 2026-04-20
-updated: 2026-10-06
+updated: 2026-10-28
 tags: [dependency, testing, mocking]
 ---
 
@@ -26,6 +26,6 @@ All three share the handler set from `frontend/test/mocks`. Handler and utility 
 
 ## Companion packages
 
-`@msw/data` (in-memory DB), `frontend/public/mockServiceWorker.js` (see Worker script). `msw-storybook-addon` is wired into Storybook: stories supply handlers through `parameters.msw.handlers`. See [[Storybook Stories]].
+`@msw/data` (in-memory DB), `frontend/public/mockServiceWorker.js` (see Worker script). `msw-storybook-addon` is wired into Storybook: a story installs handlers in its `beforeEach` through the addon's CSF Next API. See [[Storybook Stories]] and [[Stories as Tests]].
 
 See [[MSW Handlers]] for handler structure.

@@ -1,10 +1,10 @@
-import type {Meta, StoryFn} from '@storybook/react-vite';
-import {expect, within} from 'storybook/test';
+import {expect} from 'storybook/test';
 import stubs from 'test/stubs';
+import preview from '#.storybook/preview';
 import Layout from '~/components/layout';
 import {{pageName}} from '../page';
 
-const meta: Meta = {
+const meta = preview.meta({
   component: {{pageName}},
   decorators: [
     (Story) => (
@@ -23,21 +23,21 @@ const meta: Meta = {
 {{/hasLoader}}{{#noLoader}}    stubs.reactRouter(),
 {{/noLoader}}  ],
   title: 'Pages/{{routeName}}',
-};
+});
 
-export default meta;
+export const Default = meta.story({
+  render: () => <{{pageName}} />,
+});
 
-export const Default: StoryFn = () => <{{pageName}} />;
+// Starting point only: this checks the page structure. A behavior is a
+// `.test()` on a story; add one per behavior as the page grows.
+export const Renders = meta.story({
+  render: () => <{{pageName}} />,
+});
 
-// Starting point only: this checks the page structure. Add interaction
-// assertions as the page grows.
-export const Renders: StoryFn = () => <{{pageName}} />;
-
-Renders.play = async ({canvasElement}) => {
-  const canvas = within(canvasElement);
-
+Renders.test('renders one heading and one main landmark', async ({canvas}) => {
   const headings = await canvas.findAllByRole('heading', {level: 1});
 
   await expect(headings).toHaveLength(1);
   await expect(canvas.getAllByRole('main')).toHaveLength(1);
-};
+});

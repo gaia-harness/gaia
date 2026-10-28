@@ -74,7 +74,7 @@ The dropdown's option order follows the `LANGUAGES` array order from Step 2, so 
 
 Edit `frontend/.storybook/preview.ts`:
 
-Inside `initialGlobals.locales`, add an entry for the new locale:
+In the `definePreview({...})` call that the file exports, inside `initialGlobals.locales`, add an entry for the new locale:
 
 ```
 {{LOCALE_CODE}}: {left: '<flag emoji>', right: '{{LOCALE_CODE}}', title: '{{LANGUAGE_NAME_NATIVE}}'}

@@ -12,7 +12,7 @@ const a11y = {
       values: AXE_WCAG_TAGS,
     } as const,
   },
-  test: 'error',
+  test: 'error' as const,
 };
 
 export default a11y;

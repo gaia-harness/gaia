@@ -4,6 +4,9 @@
   "private": true,
   "type": "module",
   "sideEffects": false,
+  "imports": {
+    "#.storybook/preview": "./.storybook/preview.ts"
+  },
   "scripts": {
     "install:browsers": "pnpm exec playwright install --with-deps",
     "build": "react-router build",

@@ -118,6 +118,8 @@ Determinism roll-up:
 
 ### 6. Worthiness Audit (emergent surface)
 
+A story is a visual state and a behavior is a `.test()` on it (`wiki/decisions/Stories as Tests.md`); a story file is emergent, so a behavior added as a `.test()` goes through the audit below, not the RED gate.
+
 The deterministic surface earns its honesty proof from the RED gate. The emergent surface (the `emergentTests` globs in the package descriptor `frontend/gaia.package.json`) has no stable failing-then-passing run to gate on, so its honesty and worthiness come from an **advisory audit** instead. Run this audit after green, on the emergent-surface test and story files the task changed (the classifier roll-up above tells you which touched files are `emergent`).
 
 #### Dispatch a fresh-context audit (no-orchestrator path)

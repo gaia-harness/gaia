@@ -1,6 +1,6 @@
 /**
  * Template variables for a data route's page story: the record the MSW
- * handlers serve, the values the play submits, and the body it expects the
+ * handlers serve, the values the submit test types, and the body it expects the
  * mutation handler to receive on the wire.
  */
 import type {DataRouteContext} from './route-data.js';
@@ -25,7 +25,7 @@ import type {TemplateVars} from './template.js';
 type Sample = {
   /** The value as a TypeScript literal in the story source. */
   literal: string;
-  /** The value as the page renders it and the play types it. */
+  /** The value as the page renders it and the test types it. */
   text: string;
 };
 
@@ -36,8 +36,8 @@ const plainSample = (value: boolean | number): Sample => ({
   text: String(value),
 });
 
-// The record the handlers serve and the values the play submits differ for
-// every field with more than one possible value, so the play can tell a value
+// The record the handlers serve and the values the submit test types differ for
+// every field with more than one possible value, so the test can tell a value
 // it typed from one it was served. A boolean is served false so that checking its box submits true.
 const SAMPLE_BUILDERS: Record<
   FieldKind,
@@ -98,23 +98,23 @@ const handlerLines = (context: DataRouteContext): string => {
     list ?
       `url(${urls}.${derived.plural})`
     : `url(${urls}.${derived.plural}Id)`;
-  const getter = block(
-    `        http.get(${target}, () =>`,
-    `          HttpResponse.json({data: ${list ? '[RECORD]' : 'RECORD'}})`,
-    '        ),'
-  );
-
-  if (!context.flags.action) return getter;
-
-  const mutation = block(
-    `        http.${list ? 'post' : 'put'}(${target}, async ({request}) => {`,
-    '          submittedBody = await request.json();',
+  const getter = [
+    `      http.get(${target}, () =>`,
+    `        HttpResponse.json({data: ${list ? '[RECORD]' : 'RECORD'}})`,
+    '      )',
+  ].join('\n');
+  const mutation = [
+    `      http.${list ? 'post' : 'put'}(${target}, async ({request}) => {`,
+    '        submittedBody = await request.json();',
     '',
-    '          return HttpResponse.json({data: RECORD});',
-    '        }),'
-  );
+    '        return HttpResponse.json({data: RECORD});',
+    '      })',
+  ].join('\n');
+  // The last argument of `msw.use(` takes no trailing comma under the
+  // project's Prettier config.
+  const entries = context.flags.action ? [getter, mutation] : [getter];
 
-  return `${getter}${mutation}`;
+  return `${entries.join(',\n')}\n`;
 };
 
 const renderAssertion = (context: DataRouteContext): string => {
@@ -181,17 +181,13 @@ const expectedBody = (context: DataRouteContext): string => {
 
 const storyImportLines = (context: DataRouteContext): string => {
   const {derived} = context.binding;
-  const testNames =
-    context.flags.action ?
-      ['expect', 'userEvent', 'within']
-    : ['expect', 'within'];
 
   return [
-    "import type {Meta, StoryFn} from '@storybook/react-vite';",
     "import {http, HttpResponse} from 'msw/http';",
-    `import {${testNames.join(', ')}} from 'storybook/test';`,
+    "import {expect} from 'storybook/test';",
     "import {url} from 'test/mocks/url';",
     "import stubs from 'test/stubs';",
+    "import preview from '#.storybook/preview';",
     "import Layout from '~/components/layout';",
     destructure(
       'import ',
@@ -206,7 +202,7 @@ const storyImportLines = (context: DataRouteContext): string => {
 /** Variables for `page.data.stories.tsx.tmpl`. */
 export const buildDataStoryVars = (context: DataRouteContext): TemplateVars => {
   const list = isList(context);
-  const {derived, idField, inputFields} = context.binding;
+  const {idField, inputFields} = context.binding;
 
   return {
     expectedBody: expectedBody(context),
@@ -225,6 +221,6 @@ export const buildDataStoryVars = (context: DataRouteContext): TemplateVars => {
     saveLabel: 'Save',
     storyPath: list ? '/' : `/${context.slug}/:id`,
     storyTitle: context.names.storyTitle,
-    submitStoryName: `${list ? 'Creates' : 'Updates'}${derived.Singular}`,
+    submitTestName: list ? 'creates the record' : 'updates the record',
   };
 };

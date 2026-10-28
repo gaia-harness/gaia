@@ -14,6 +14,7 @@ import {run as runCodifyTally} from './codify/tally.js';
 import {run as runFitness} from './fitness/index.js';
 import {run as runInit} from './init/index.js';
 import {run as runLabels} from './labels/index.js';
+import {run as runMigrateCsf4} from './migrate-csf4/index.js';
 import {run as runPackages} from './packages/index.js';
 import {run as runPing} from './ping/index.js';
 import {run as runReactPerf} from './react-perf/index.js';
@@ -36,6 +37,7 @@ const HELP_TEXT = `Usage: gaia <subcommand> [args]
   wiki state|commit-classify|state-init|state-bump|log-prepend|page-index|orphans|near-collisions|dead-paths|frontmatter|empty-sections|broken-links|chain
   fitness check|rules|inventory|builtins|apply|render-card [--cols N]
   labels sync
+  migrate-csf4 [--update-merge] [--json]
   packages sync-settings [--check]
   codify-ledger list|record|lapsed|snapshot
   codify-tally
@@ -58,6 +60,7 @@ const SUBCOMMAND_HANDLERS: Readonly<
   fitness: runFitness,
   init: runInit,
   labels: runLabels,
+  'migrate-csf4': runMigrateCsf4,
   packages: runPackages,
   ping: runPing,
   'react-perf': runReactPerf,

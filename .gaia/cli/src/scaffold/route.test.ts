@@ -10,6 +10,7 @@ import {
 } from './route-fixture.js';
 import type {Sandbox} from './route-fixture.js';
 import {run} from './route.js';
+import {csf4Violations} from './story-shape-fixture.js';
 
 const seedLocaleBarrel = (fakeRoot: string, body: string): string => {
   const dir = path.join(fakeRoot, 'app', 'languages', 'en', 'pages');
@@ -205,6 +206,7 @@ describe('scaffold route: base emission (_session)', () => {
 
     const storiesBody = readFileSync(pageStories, 'utf8');
     expect(storiesBody).toContain("title: 'Pages/Dashboard'");
+    expect(csf4Violations(storiesBody)).toEqual([]);
   });
 
   test('hyphenated names map to a kebab page folder', () => {
@@ -322,6 +324,7 @@ describe('scaffold route: flag combos', () => {
       path.join(pageDir, 'tests', 'page.stories.tsx'),
       'utf8'
     );
+    expect(csf4Violations(story)).toEqual([]);
     expect(story).toContain('stubs.reactRouter({');
     expect(story).toContain('loader: async () => ({');
   });

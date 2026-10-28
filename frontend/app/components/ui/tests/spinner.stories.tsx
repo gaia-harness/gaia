@@ -1,20 +1,20 @@
 import {useTranslation} from 'react-i18next';
-import type {Meta, StoryFn} from '@storybook/react-vite';
+import preview from '#.storybook/preview';
 import {Spinner} from '~/components/ui/spinner';
 
-const meta: Meta = {
+const meta = preview.meta({
   component: Spinner,
   parameters: {
     chromatic: {disableSnapshot: true},
     wrap: 'w-fit p-4',
   },
   title: 'Components/Ui/Spinner',
-};
+});
 
-export default meta;
+export const Default = meta.story({
+  render: () => {
+    const {t} = useTranslation();
 
-export const Default: StoryFn = () => {
-  const {t} = useTranslation();
-
-  return <Spinner aria-label={t('loading')} />;
-};
+    return <Spinner aria-label={t('loading')} />;
+  },
+});

@@ -180,10 +180,10 @@ done
 # --- 6. Storybook wiring -----------------------------------------------------
 
 PREVIEW="$FRONTEND/.storybook/preview.ts"
-grep -Eq "^import \\{mswLoader\\} from 'msw-storybook-addon/csf3';$" "$PREVIEW" \
-  || { fail ".storybook/preview.ts does not import mswLoader from msw-storybook-addon/csf3"; exit 1; }
-grep -q 'mswLoader()' "$PREVIEW" \
-  || { fail ".storybook/preview.ts does not register mswLoader()"; exit 1; }
+grep -Eq "^import addonMsw from 'msw-storybook-addon';$" "$PREVIEW" \
+  || { fail ".storybook/preview.ts does not import addonMsw from msw-storybook-addon"; exit 1; }
+grep -q 'addonMsw()' "$PREVIEW" \
+  || { fail ".storybook/preview.ts does not register addonMsw()"; exit 1; }
 if grep -q 'QueryClientDecorator' "$PREVIEW"; then
   fail ".storybook/preview.ts registers a Query decorator with Query off"
   exit 1
