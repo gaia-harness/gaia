@@ -409,6 +409,7 @@
     ".github/actions/gaia-apt-cache/action.yml": "owned",
     ".github/actions/gaia-apt-cache/apt-cached-install.sh": "owned",
     ".github/actions/gaia-setup-node/action.yml": "owned",
+    ".github/actions/gaia-setup-node/bounded-install.sh": "owned",
     ".github/audit/resolve-audit-base-context.sh": "owned",
     ".github/audit/resolve-audit-base-refusal.sh": "owned",
     ".github/audit/resolve-audit-base-scan.sh": "owned",
@@ -818,7 +819,7 @@
     "wiki/overview.md": "wiki-owned",
     "wiki/README.md": "wiki-owned"
   },
-  "generated": "2026-10-27T22:30:11.045Z",
+  "generated": "2026-10-28T07:21:23.461Z",
   "regions": [
     {
       "endMarker": "<!-- gaia:audit-remit:end -->",
