@@ -295,13 +295,16 @@ frontend/.playwright/e2e/react-perf-smoke.spec.ts
 # shellcheck over GAIA's framework bash via the `.gaia/tests/shell-lint.sh`
 # harness (already excluded by the `.gaia/tests` entry in category 3); adopters
 # run that bash but never author it, so the linter guarding it has no adopter
-# surface. All would be silent passengers at best and confusing CI failures
-# at worst on adopter clones.
+# surface. `distribution-harness.yml` runs the adopter-tarball scenarios under
+# `.gaia/tests/distribution/`, which adopters never receive. All would be
+# silent passengers at best and confusing CI failures at worst on adopter
+# clones.
 # Every workflow excluded here must carry the `GAIA: ` prefix on its workflow
 # `name:`, enforced by `.gaia/cli/src/release/workflow-prefix.test.ts`. Quote
 # the value: an unquoted `GAIA: X` does not parse.
 .github/workflows/release.yml
 .github/workflows/cli-tests.yml
+.github/workflows/distribution-harness.yml
 .github/workflows/audit-ci-tests.yml
 .github/workflows/forensics-triage.yml
 .github/workflows/shell-lint.yml
