@@ -4,7 +4,7 @@ status: active
 priority: 3
 date: 2026-09-07
 created: 2026-09-07
-updated: 2026-10-22
+updated: 2026-10-28
 tags: [decision, ci, github-actions]
 ---
 
@@ -23,6 +23,8 @@ A workflow may still give a provisioning step its own cap, set strictly under it
 ## Provisioning attribution vs. recovery
 
 GAIA declines to replace `pnpm/action-setup` with hand-rolled provisioning, which a per-attempt timeout could otherwise bound below the caller's cap. The one recorded stall degraded at least six provisioning legs across two concurrent runs over roughly seven and a half minutes, a sustained condition that a second attempt starting fifteen to sixty seconds later re-enters rather than escapes. Two of the degraded legs cleared at exactly sixty-one seconds, so a bound sized near sixty seconds would have aborted those attempts rather than rescued them. A bounded retry therefore buys **attribution**, which step is named when the lane reds, not **recovery**: a sustained stall still consumes the caller's whole budget at every surface GAIA provisions pnpm.
+
+The install step carries a third instrument: a wall-clock bound per attempt. The composite runs each `pnpm install` through `.github/actions/gaia-setup-node/bounded-install.sh`, whose header says why pnpm's own fetch timeout cannot bound a registry response that keeps trickling in. An attempt the bound ends is retried once, because a fresh attempt opens new connections; a failure of any other kind fails at once with no retry, and two ended attempts fail the step with a message naming the bound. The `install-attempt-seconds` input sets the bound for the composite's installs, and the workflows that install without the composite (the root-only install in `pr-conventions.yml`, the audit CI commitlint leg, the forensics quality gate) call the helper directly. This retry covers the dependency install only; the `pnpm/action-setup` bootstrap is still bounded by the per-fetch value below.
 
 The per-fetch bound is a different instrument. npm waits 300000 ms for a registry response by default, so one hung tarball fetch in the bootstrap's `npm ci` costs five minutes before npm's own retry runs; `60000` ms, pnpm's own default, hands a hung fetch to that retry in one minute. It bounds one request's wait for a response and any idle gap mid-download, not a provisioning leg, so it neither retries a failed install nor cuts off a download that is slow but still receiving bytes. A download that goes idle mid-body fails with `EIDLETIMEOUT` rather than retrying, so that mode reds in one minute instead of five. In `forensics-triage.yml` the bound also keeps npm's default from equalling that step's five-minute cap, which would red the step before npm retried.
 
