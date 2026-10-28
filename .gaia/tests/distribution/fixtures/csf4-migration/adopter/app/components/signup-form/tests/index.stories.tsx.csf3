@@ -1,0 +1,28 @@
+import type {ComponentProps} from 'react';
+import type {Meta, StoryFn} from '@storybook/react-vite';
+import {expect, fn, userEvent, within} from 'storybook/test';
+import SignupForm from '..';
+
+type StoryArgs = ComponentProps<typeof SignupForm> & {
+  onSubmitSpy: (email: string) => void;
+};
+
+const meta: Meta<StoryArgs> = {
+  args: {heading: 'Join the list', onSubmitSpy: fn()},
+  component: SignupForm,
+  title: 'Components/SignupForm',
+};
+
+export default meta;
+
+export const Default: StoryFn<StoryArgs> = ({heading, onSubmitSpy}) => (
+  <SignupForm heading={heading} onSubmit={onSubmitSpy} />
+);
+
+Default.play = async ({args, canvasElement}) => {
+  const canvas = within(canvasElement);
+
+  await userEvent.type(canvas.getByLabelText('Email'), 'ada@example.com');
+  await userEvent.click(canvas.getByRole('button', {name: 'Sign up'}));
+  await expect(args.onSubmitSpy).toHaveBeenCalledWith('ada@example.com');
+};

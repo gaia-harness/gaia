@@ -1,0 +1,31 @@
+import type {Meta, StoryObj} from '@storybook/react-vite';
+import {http, HttpResponse} from 'msw';
+import {expect, within} from 'storybook/test';
+import ItemList from '..';
+
+const meta: Meta<typeof ItemList> = {
+  component: ItemList,
+  title: 'Components/ItemList',
+};
+
+export default meta;
+
+export const Loaded: StoryObj<typeof ItemList> = {
+  parameters: {
+    msw: {
+      handlers: [
+        http.get('/api/items', () =>
+          HttpResponse.json([
+            {id: 1, name: 'Handler A item'},
+            {id: 2, name: 'Handler A second item'},
+          ])
+        ),
+      ],
+    },
+  },
+  play: async ({canvasElement}) => {
+    await expect(
+      await within(canvasElement).findByText('Handler A item')
+    ).toBeVisible();
+  },
+};

@@ -37660,6 +37660,12 @@ var setTestSyntaxFlag2 = setTestSyntaxFlag;
 var restoreLeadingComment2 = restoreLeadingComment;
 var ensurePreviewImportsSubpath2 = ensurePreviewImportsSubpath;
 
+// src/migrate-csf4/run-tool.ts
+var runTool = (command, args, options) => run2(command, args, {
+  cwd: options.cwd,
+  env: { ...process.env, pnpm_config_verify_deps_before_run: "false" }
+});
+
 // src/migrate-csf4/run.ts
 var import_semver = __toESM(require_semver2(), 1);
 import { existsSync as existsSync28, readFileSync as readFileSync35 } from "node:fs";
@@ -37937,9 +37943,11 @@ var findMswMigrateBin = (workDir) => {
   return bin === void 0 ? void 0 : path47.join(path47.dirname(packageJsonPath), bin);
 };
 var runMswMigrate = (runCommand, options) => {
-  const result = runCommand("node", [options.binPath, "--glob", options.glob], {
-    cwd: options.workDir
-  });
+  const result = runCommand(
+    "node",
+    [options.binPath, "migrate", "--glob", options.glob],
+    { cwd: options.workDir }
+  );
   const output2 = `${result.stdout}
 ${result.stderr}`;
   const notes = [];
@@ -38539,7 +38547,7 @@ var run27 = (argv) => {
       rewirePreview: rewirePreview2,
       setTestSyntaxFlag: setTestSyntaxFlag2
     },
-    runCommand: run2,
+    runCommand: runTool,
     writeErr: (text) => process.stderr.write(text),
     writeOut: (text) => process.stdout.write(text)
   });

@@ -1,0 +1,26 @@
+// Each badge story shows one status the way a teammate sees it in the list.
+
+import type {Meta, StoryObj} from '@storybook/react-vite';
+import {expect, within} from 'storybook/test';
+import StatusBadge from '..';
+import type {Status} from '..';
+
+const meta: Meta<typeof StatusBadge> = {
+  component: StatusBadge,
+  title: 'Components/StatusBadge',
+};
+
+export default meta;
+
+const createStatusStory = (status: Status): StoryObj<typeof meta> => ({
+  args: {status},
+  play: async ({canvasElement}) => {
+    await expect(within(canvasElement).getByText(status)).toBeVisible();
+  },
+});
+
+export const Active: StoryObj<typeof meta> = createStatusStory('active');
+
+export const Archived: StoryObj<typeof meta> = createStatusStory('archived');
+
+export const Paused: StoryObj<typeof meta> = createStatusStory('paused');

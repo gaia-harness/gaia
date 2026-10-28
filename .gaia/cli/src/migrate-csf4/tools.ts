@@ -103,9 +103,11 @@ export const runMswMigrate = (
   runCommand: CommandRunner,
   options: {binPath: string; glob: string; workDir: string}
 ): string[] => {
-  const result = runCommand('node', [options.binPath, '--glob', options.glob], {
-    cwd: options.workDir,
-  });
+  const result = runCommand(
+    'node',
+    [options.binPath, 'migrate', '--glob', options.glob],
+    {cwd: options.workDir}
+  );
   const output = `${result.stdout}\n${result.stderr}`;
   const notes: string[] = [];
 

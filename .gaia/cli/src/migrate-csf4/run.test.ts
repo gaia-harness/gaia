@@ -259,7 +259,9 @@ describe('conversion', () => {
       '--glob={app/a/a.stories.tsx,app/b/b.stories.tsx}',
     ]);
     expect(msw?.cwd).toBe(codemod?.cwd);
+    // The addon's bin dispatches on a `migrate` subcommand and rejects a bare flag.
     expect(msw?.args.slice(1)).toEqual([
+      'migrate',
       '--glob',
       '{app/a/a.stories.tsx,app/b/b.stories.tsx}',
     ]);

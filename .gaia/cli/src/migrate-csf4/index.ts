@@ -2,10 +2,10 @@ import {createRequire} from 'node:module';
 import path from 'node:path';
 import {EXIT_CODES} from '../exit.js';
 import {structuredError} from '../stderr.js';
-import {run as runCommand} from '../util/run-process.js';
 import {parseMigrateArgs} from './args.js';
 import * as repairs from './repairs/index.js';
 import type {Ts} from './repairs/index.js';
+import {runTool} from './run-tool.js';
 import {runMigrateCsf4} from './run.js';
 
 /** The adopter package's own TypeScript; never bundled into this binary. */
@@ -63,7 +63,7 @@ export const run = (argv: string[]): number => {
       rewirePreview: repairs.rewirePreview,
       setTestSyntaxFlag: repairs.setTestSyntaxFlag,
     },
-    runCommand,
+    runCommand: runTool,
     writeErr: (text) => process.stderr.write(text),
     writeOut: (text) => process.stdout.write(text),
   });
