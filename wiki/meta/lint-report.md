@@ -1,17 +1,17 @@
 ---
 type: meta
-title: 'Lint Report 2026-10-26'
-created: 2026-10-26
-updated: 2026-10-26
+title: 'Lint Report 2026-10-28'
+created: 2026-10-28
+updated: 2026-10-28
 tags: [meta, lint]
 status: developing
 ---
 
-# Lint Report: 2026-10-26
+# Lint Report: 2026-10-28
 
 ## #11: Wiki drift check
 
-✓ Wiki in sync with HEAD (615dfa6).
+✓ Wiki in sync with HEAD (f0e4b7b).
 
 ## #12: Dead repo-relative paths
 
