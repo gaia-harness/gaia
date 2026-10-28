@@ -41,8 +41,7 @@ export const Default = meta.story({
 Default.test('renders the served data', async ({canvas}) => {
 {{renderAssertion}}  await expect(canvas.getAllByRole('heading', {level: 1})).toHaveLength(1);
   await expect(canvas.getAllByRole('main')).toHaveLength(1);
-});
-{{#hasAction}}
+});{{#hasAction}}
 
 Default.test('{{submitTestName}}', async ({canvas, userEvent}) => {
   submittedBody = undefined;
@@ -52,5 +51,4 @@ Default.test('{{submitTestName}}', async ({canvas, userEvent}) => {
     await canvas.findByText('Navigated to /{{routeSlug}}')
   ).toBeInTheDocument();
   await expect(submittedBody).toMatchObject({{expectedBody}});
-});
-{{/hasAction}}
+});{{/hasAction}}

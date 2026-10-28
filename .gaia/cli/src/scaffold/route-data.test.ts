@@ -218,6 +218,9 @@ describe.each(CASES)('scaffold route --data: $data $shape', (dataCase) => {
     expect(story).toContain(dataCase.storyStart);
     expect(story).toContain(dataCase.storyHandler);
     expect(story).toContain('Default.test(');
+    // Prettier rejects a doubled blank line between the tests and one at the end of the file.
+    expect(story).not.toContain('\n'.repeat(3));
+    expect(story.endsWith('\n\n')).toBe(false);
     expect(story).toContain('submittedBody = await request.json();');
     expect(story).toContain("await canvas.findByText('Navigated to /items')");
     // The wire carries the camelCase default keys, which the play checks the handler got.
