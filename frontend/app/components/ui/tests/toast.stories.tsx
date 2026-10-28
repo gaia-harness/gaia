@@ -1,4 +1,4 @@
-import {expect, within} from 'storybook/test';
+import {expect, fn, waitFor, within} from 'storybook/test';
 import preview from '#.storybook/preview';
 import {toast, Toaster} from '~/components/ui/toast';
 import {expectToast} from '~/utils/tests/expect-toast';
@@ -21,6 +21,16 @@ const meta = preview.meta({
 const findToast = async (canvasElement: HTMLElement, text: string) =>
   within(canvasElement.ownerDocument.body).findByText(text);
 
+// Each type's icon is decorative, so the toast hides it from assistive
+// technology; the title carries the meaning.
+const getToastIcon = (canvasElement: HTMLElement, title: string) =>
+  within(canvasElement.ownerDocument.body)
+    .getByText(title)
+    .closest('[data-slot="toast"]')
+    ?.querySelector('[data-slot="toast-icon"] svg[aria-hidden="true"]');
+
+const onUndo = fn();
+
 export const Default = meta.story({
   play: async ({canvasElement}) => {
     toast.add({
@@ -35,7 +45,7 @@ export const Default = meta.story({
 export const WithAction = meta.story({
   play: async ({canvasElement}) => {
     toast.add({
-      actionProps: {children: 'Undo', onClick: () => undefined},
+      actionProps: {children: 'Undo', onClick: onUndo},
       title: 'Message archived',
     });
 
@@ -89,31 +99,99 @@ Default.test('shows the toast title', async ({canvasElement}) => {
   await expectToast(canvasElement, 'Event created');
 });
 
-WithAction.test('shows the action button', async ({canvasElement}) => {
-  await expectToast(canvasElement, 'Message archived');
-  await expect(
-    within(canvasElement.ownerDocument.body).getByRole('button', {
-      name: 'Undo',
-    })
-  ).toBeVisible();
-});
+WithAction.test(
+  'fires the action on click',
+  async ({canvasElement, userEvent}) => {
+    await userEvent.click(
+      within(canvasElement.ownerDocument.body).getByRole('button', {
+        name: 'Undo',
+      })
+    );
 
-Loading.test('shows the loading toast', async ({canvasElement}) => {
-  await expectToast(canvasElement, 'Uploading file');
-});
+    await expect(onUndo).toHaveBeenCalledOnce();
+  }
+);
 
-ErrorType.test('shows the error toast', async ({canvasElement}) => {
-  await expectToast(canvasElement, 'error toast');
-});
+WithAction.test(
+  'fires the action from the keyboard',
+  async ({canvasElement, userEvent}) => {
+    const body = within(canvasElement.ownerDocument.body);
 
-Info.test('shows the info toast', async ({canvasElement}) => {
+    // The toast itself takes focus first, then its controls in order.
+    await userEvent.tab();
+    await expect(body.getByRole('dialog')).toHaveFocus();
+    await userEvent.tab();
+    await expect(body.getByRole('button', {name: 'Undo'})).toHaveFocus();
+
+    await userEvent.keyboard('{Enter}');
+
+    await expect(onUndo).toHaveBeenCalledOnce();
+  }
+);
+
+WithAction.test(
+  'closes the toast from the keyboard',
+  async ({canvasElement, userEvent}) => {
+    const body = within(canvasElement.ownerDocument.body);
+
+    await userEvent.tab();
+    await userEvent.tab();
+    await userEvent.tab();
+    // Close stays hidden from assistive technology until focus enters the
+    // toast, so it is queried only once focus has reached it.
+    await expect(body.getByRole('button', {name: 'Close toast'})).toHaveFocus();
+
+    await userEvent.keyboard('{Enter}');
+
+    await waitFor(async () => {
+      await expect(
+        body.queryByText('Message archived')
+      ).not.toBeInTheDocument();
+    });
+  }
+);
+
+Loading.test(
+  'shows the loading toast with its icon',
+  async ({canvasElement}) => {
+    await expectToast(canvasElement, 'Uploading file');
+    await expect(getToastIcon(canvasElement, 'Uploading file')).toHaveClass(
+      'animate-spin'
+    );
+  }
+);
+
+ErrorType.test(
+  'shows the error toast with its icon',
+  async ({canvasElement}) => {
+    await expectToast(canvasElement, 'error toast');
+    await expect(getToastIcon(canvasElement, 'error toast')).toHaveClass(
+      'text-destructive'
+    );
+  }
+);
+
+Info.test('shows the info toast with its icon', async ({canvasElement}) => {
   await expectToast(canvasElement, 'info toast');
+  await expect(getToastIcon(canvasElement, 'info toast')).toBeInTheDocument();
 });
 
-Success.test('shows the success toast', async ({canvasElement}) => {
-  await expectToast(canvasElement, 'success toast');
-});
+Success.test(
+  'shows the success toast with its icon',
+  async ({canvasElement}) => {
+    await expectToast(canvasElement, 'success toast');
+    await expect(
+      getToastIcon(canvasElement, 'success toast')
+    ).toBeInTheDocument();
+  }
+);
 
-Warning.test('shows the warning toast', async ({canvasElement}) => {
-  await expectToast(canvasElement, 'warning toast');
-});
+Warning.test(
+  'shows the warning toast with its icon',
+  async ({canvasElement}) => {
+    await expectToast(canvasElement, 'warning toast');
+    await expect(
+      getToastIcon(canvasElement, 'warning toast')
+    ).toBeInTheDocument();
+  }
+);

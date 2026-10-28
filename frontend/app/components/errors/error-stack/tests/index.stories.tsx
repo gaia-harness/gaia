@@ -111,6 +111,9 @@ CopiesStack.test(
 CopiesStack.test('shows a copy icon on the button', async ({canvas}) => {
   const button = canvas.getByRole('button');
 
-  // Icons are aria-hidden, so the lucide class is the only handle on them.
-  await expect(button.querySelector('svg.lucide')).toBeInTheDocument();
+  // The icon is decorative: the component hides it from assistive technology,
+  // so the button's accessible name comes from its label alone.
+  await expect(
+    button.querySelector('svg[aria-hidden="true"]')
+  ).toBeInTheDocument();
 });
