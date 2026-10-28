@@ -338,14 +338,14 @@ refresh-only. The branch is cut inside a worktree, never in the main checkout.
   + Wave A agent, so no install, lockfile rewrite, or quality gate runs in
   the main checkout. A security-only run (an empty apply set, or `--security` with no
   chain-head bump) then goes on to the security phase even when Phase 5b reports
-  `Nothing moved` or `Reverted (<reason>)`.
+  `Nothing moved`, `Reverted (<reason>)` or `Not run (snapshot failed: <reason>)`.
 - **Refresh-only run.** The refresh installs, rewrites the lockfile and gates,
   so the worktree exists before Phase 5b starts. Run `references/worktree.md`
   (step 2 below) as soon as an interactive run becomes refresh-only: the human picks **Update
   sub-dependencies** at the zero-outdated prompt, **Update the rest** leaves an empty
   apply set because every group is snoozed, or **Choose what to skip** leaves an
   empty apply set. When Phase 5b then reports
-  `Nothing moved` or `Reverted (<reason>)` and the security plan owes nothing,
+  `Nothing moved`, `Reverted (<reason>)` or `Not run (snapshot failed: <reason>)` and the security plan owes nothing,
   skip every phase up to Phase 7 and go straight to the report (Phase 8's
   nothing-updated rule skips publish); the worktree stays in place and its
   notice is printed, as the stop rule says.
