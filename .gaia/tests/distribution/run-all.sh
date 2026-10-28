@@ -115,7 +115,7 @@ is_selected() {
 
 change_scoped=0
 if [ -n "$changed_paths_file" ]; then
-  if matches_any "${SHARED_INPUTS[@]}"; then
+  if matches_any ${SHARED_INPUTS[@]+"${SHARED_INPUTS[@]}"}; then
     echo "A shared harness input changed: running every scenario"
   else
     change_scoped=1
