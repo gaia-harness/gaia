@@ -78,7 +78,7 @@ The last line exits 0 when all four files match the baseline again. `<baseline>`
 
 Take each advisory's candidates in its plan order, starting with the first one not already tried. A chain-head candidate (`chain-head-in-run`, `chain-head-minor`, `chain-head-major`) was the waves' job: it is spent once its wave returned, so here it is skipped. When the advisory has no candidate left, report the reason the last attempt failed with (from step 5 or step 6), or `wave reverted (Wave A)` / `wave reverted (<group>)` when the only attempt was a reverted wave.
 
-**In-range refresh** (`in-range-refresh`), verified on pnpm 12.11.2:
+**In-range refresh** (`in-range-refresh`):
 
 ```bash
 pnpm cache delete <package>

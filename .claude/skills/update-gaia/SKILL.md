@@ -190,7 +190,7 @@ bash .gaia/scripts/update-gaia-preflight.sh verify-bundles --baseline <BASELINE>
 
 It prints `VERIFIED <tag>` per bundle, then `BASELINE_DIR=...`, `LATEST_DIR=...` and one `EXTRA_DIR=<tag>:<path>` line per extra tag. Persist `BASELINE_DIR`, `LATEST_DIR` and each `EXTRA_DIR` line exactly as printed. Only the update cache changes before the Proceed question.
 
-The asset is `gaia-bundle-<tag>.tar.gz` from 2.0.0 on; releases before 2.0.0 published `gaia-<tag>.tar.gz` and are out of reach on purpose (Step 3b refuses a 1.x baseline, and the different name is what makes a 1.6.1 `/update-gaia` fail at its fetch step, before it writes anything, instead of misreading the moved layout as deletions).
+The asset is `gaia-bundle-<tag>.tar.gz` from 2.0.0 on; releases before 2.0.0 published `gaia-<tag>.tar.gz` and are out of reach on purpose (Step 3b refuses a 1.x baseline, and the different asset name makes an older `/update-gaia` fail at its fetch step, before it writes anything, instead of misreading the moved layout as deletions).
 
 Each failure line names the tag and removes that tag's cache directory, so a re-run starts clean. On any of them, stop: nothing was branched, pruned or merged, and no worktree was created.
 

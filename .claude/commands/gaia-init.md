@@ -228,7 +228,7 @@ Hold the resolved choice as `{primary}` (ISO code + English name); the next batc
 
 _Non-response: HARD-BLOCK. Re-ask; the i18n teardown (`STRIP_I18N=true`) is never auto-selected. Automatic mode: primary-only, keep scaffolding (`STRIP_I18N=false`)._
 
-The primary is now known, so its name can appear in the labels below. Ask this as its own AskUserQuestion. It folds the old standalone "localize later?" decision into the no-additional-languages branch, so that decision never needs its own round-trip:
+The primary is now known, so its name can appear in the labels below. Ask this as its own AskUserQuestion. The localize-later choice is an option of the no-additional-languages branch, so it needs no round-trip of its own:
 
 > Primary language is {primary}. Any additional languages?
 >

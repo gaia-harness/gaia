@@ -29,7 +29,7 @@ Touch only what's needed: don't improve adjacent code, don't refactor unbroken t
 
 When building new features or fixing bugs, follow the TDD workflow described in `.claude/skills/tdd/SKILL.md` (read it on demand, do not preload).
 
-- Test individual functions in isolation and user flows end to end; the frontend stack (Vitest, Playwright) is in `frontend/.claude/rules/coding-guidelines-react.md`
+- Test individual functions in isolation and user flows end to end; the frontend stack (Vitest, Storybook, Playwright) is in `frontend/CLAUDE.md` (`## Tests and prerequisites`) and the `tdd-react` skill
 
 ## 4. Always Verify Your Work
 

@@ -98,16 +98,16 @@ Run summary: <total> findings across <domain count> domains.
 
 ### <domain>: <newer-title> supersedes <older-title>
 
-- **Newer:** [[<newer-title>]] (`<newer-path>`), promoted from `<spec_id_new>` on `<date>`
-- **Older:** [[<older-title>]] (`<older-path>`), promoted from `<spec_id_old>` on `<date>`
+- **Newer:** [[<newer-title>]] (`<newer-path>`), promoted in PR #<pr_number_new> on `<date>`
+- **Older:** [[<older-title>]] (`<older-path>`), promoted in PR #<pr_number_old> on `<date>`
 - **Action:** merge older into newer; mark older `status: superseded`; retire older to `wiki/_archived/<older-slug>.md`.
 
 ## Reversed decisions (<count>)
 
 ### <newer-title> reverses <older-title>
 
-- **Newer:** [[<newer-title>]], promoted from `<spec_id>` on `<date>`
-- **Older:** [[<older-title>]], promoted from `<spec_id>` on `<date>`
+- **Newer:** [[<newer-title>]], promoted in PR #<pr_number_new> on `<date>`
+- **Older:** [[<older-title>]], promoted in PR #<pr_number_old> on `<date>`
 - **Negation phrase:** "<phrase>"
 - **Action:** retire older to `wiki/_archived/<older-slug>.md`.
 

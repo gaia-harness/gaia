@@ -27,13 +27,13 @@ Keys stay under the service's `all` root, so `invalidateQueries({queryKey: itemK
 
 ## Dependent Queries
 
-A query that waits on another value takes `enabled: Boolean(value)`, or `queryFn: skipToken` when the value's type needs narrowing, and keeps that value in its key. Never call it with an `undefined` id.
+A query that waits on another value takes `enabled: !!value`, or `queryFn: skipToken` when the value's type needs narrowing, and keeps that value in its key. Never call it with an `undefined` id.
 
 `useSuspenseQuery` cannot be disabled: never pass it `enabled` or `skipToken`. Resolve the dependency in the `clientLoader`, or split the dependent read into a child component that renders once the value exists.
 
 ## Pagination and Filters
 
-- A paged or filtered `useQuery` list takes `placeholderData: keepPreviousData` (imported from `@tanstack/react-query`) so changing the key keeps the previous page on screen instead of flashing a skeleton; `isPlaceholderData` dims it. The v4 `keepPreviousData: true` option no longer exists.
+- A paged or filtered `useQuery` list takes `placeholderData: keepPreviousData` (imported from `@tanstack/react-query`) so changing the key keeps the previous page on screen instead of flashing a skeleton; `isPlaceholderData` dims it.
 - `placeholderData` lives only in that observer and is never cached. `initialData` is written to the cache as real, fresh data: use it only for data that is real.
 - `useInfiniteQuery` requires `initialPageParam` and `getNextPageParam`.
 
