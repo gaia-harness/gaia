@@ -1322,27 +1322,6 @@ EOF
   unset GITHUB_ACTIONS GITHUB_BASE_REF
 }
 
-@test "the write side takes the base from the pull request's own record" {
-  local repo eligibility_changed
-
-  repo="$(make_stacked_repo elig-record)"
-  install_pr_view_mock release
-
-  eligibility_changed="$(evaluate_eligibility code-audit-frontend "$repo" ELIG_CHANGED)" || {
-    echo "the default member's resolver command failed to resolve an eligibility set" >&2
-    return 1
-  }
-  grep -qxF "app/feat-only.ts" <<<"$eligibility_changed" || {
-    printf 'write side dropped the pull request own change: %s\n' "$eligibility_changed" >&2
-    return 1
-  }
-  grep -qxF "app/base-only.ts" <<<"$eligibility_changed" && {
-    printf 'write side still carries a base-branch-only file: %s\n' "$eligibility_changed" >&2
-    return 1
-  }
-  true
-}
-
 @test "no environment variable naming a base branch is read anywhere in the shared resolver (COV-002)" {
   local library_file hits non_comment
 

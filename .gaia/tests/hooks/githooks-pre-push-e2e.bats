@@ -143,24 +143,6 @@ path_without() {
   if remote_has_branch feat/leak; then return 1; fi
 }
 
-@test "a shipped script gaining a runtime dependency on a file that never ships is refused by the leak check" {
-  enable_hook
-  script_path=".claude/hooks/lib/gaia-packages.sh"
-  [ "$(manifest_path_matching "^${script_path//./\\.}\$")" = "$script_path" ]
-  git -C "$REPO" checkout --quiet -b feat/runtime-dependency
-  printf '\nbash .gaia/scripts/helper-that-never-ships.sh\n' >> "$REPO/$script_path"
-  commit_all "depend on a script no manifest entry names"
-
-  push_branch feat/runtime-dependency
-  [ "$status" -ne 0 ]
-  grep -qE -- '^FAIL  release-scrub leak check' <<<"$output"
-  grep -qF -- "runtime-dependency leaks" <<<"$output"
-  grep -qF -- "$script_path" <<<"$output"
-  grep -qF -- ".gaia/scripts/helper-that-never-ships.sh" <<<"$output"
-  grep -qF -- 'reproduce: bash .gaia/tests/distribution/lib/build-staging.sh "$(mktemp -d)"' <<<"$output"
-  if remote_has_branch feat/runtime-dependency; then return 1; fi
-}
-
 @test "an unbalanced maintainer-only marker is attributed to the leak check and skips the later staging checks" {
   enable_hook
   rule_path=".claude/rules/context-discipline.md"

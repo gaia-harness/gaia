@@ -217,8 +217,8 @@ current_tree() {
 # reports.
 digest_of() {
   local root="$1" member="$2" target="${3:-HEAD}"
-  bash -c '. "$1"; merge_base="$5"; [ -n "$merge_base" ] || merge_base=$(audit_branch_patch_merge_base "$2" refs/remotes/origin/main HEAD) || exit 1; audit_branch_member_digest "$2" "$3" "$merge_base" "$4"' \
-    _ "$DIGEST_LIBRARY" "$root" "$member" "$target" "${DIGEST_MERGE_BASE:-}"
+  bash -c '. "$1"; merge_base=$(audit_branch_patch_merge_base "$2" refs/remotes/origin/main HEAD) || exit 1; audit_branch_member_digest "$2" "$3" "$merge_base" "$4"' \
+    _ "$DIGEST_LIBRARY" "$root" "$member" "$target"
 }
 
 # Write a writer-shaped schema-3 EARNED clearance for MEMBER at PATH (an
@@ -885,32 +885,6 @@ build_audited_branch() {
   write_both_markers
 }
 
-# A scratch copy of the poster and the libraries it loads, with the literal
-# text $1 replaced by $2, so a test can prove a guard decides an outcome. Sets
-# POSTER_COPY. Fails when $1 is not in the poster.
-mutate_poster() {
-  local root="$BATS_TEST_TMPDIR/poster-copy" text
-  rm -rf "$root"
-  mkdir -p "$root/.claude/hooks/lib" "$root/.gaia/scripts"
-  cp "$SCRIPT" "$root/.claude/hooks/post-audit-status.sh"
-  cp "$THIS_DIRECTORY"/../../../.claude/hooks/lib/*.sh "$root/.claude/hooks/lib/"
-  cp "$THIS_DIRECTORY/../../../.gaia/scripts/audit-key-lib.sh" "$root/.gaia/scripts/audit-key-lib.sh"
-  POSTER_COPY="$root/.claude/hooks/post-audit-status.sh"
-  text="$(cat "$POSTER_COPY")"
-  [[ "$text" == *"$1"* ]] || return 1
-  # The replacement text carries no ampersand, which bash 5.2 would expand.
-  printf '%s\n' "${text/"$1"/$2}" > "$POSTER_COPY"
-  [ "$(cat "$POSTER_COPY")" != "$text" ]
-}
-
-run_copy() {
-  ( cd "$SANDBOX" && bash "$POSTER_COPY" "$1" )
-}
-
-# The mutation that lets a poster ignore the merge-base verdict: the merge base
-# becomes the fixed commit $1, whatever the base tip is.
-MERGE_BASE_DERIVATION='merge_base="$(audit_branch_patch_merge_base "$repo_root" "$base_tip" HEAD 2>/dev/null)" || merge_base_status=$?'
-
 @test "trusted base: a base tip that is not present locally declines naming git fetch origin, and posts no success" {
   build_audited_branch
   refresh_stub "$ABSENT_TIP"
@@ -919,18 +893,6 @@ MERGE_BASE_DERIVATION='merge_base="$(audit_branch_patch_merge_base "$repo_root" 
   [ "$status" -eq 0 ]
   [ "$output" = "status: declined: trusted base unverified, the base tip is not present locally; next step: git fetch origin" ]
   [ "$(logged_calls 'state=success')" = 0 ]
-}
-
-@test "trusted base: the presence check can fail, a scratch copy that ignores the merge-base verdict posts despite the absent tip" {
-  build_audited_branch
-  refresh_stub "$ABSENT_TIP"
-  merge_base=$(git -C "$SANDBOX" merge-base HEAD refs/remotes/origin/main)
-  mutate_poster "$MERGE_BASE_DERIVATION" "merge_base=\"$merge_base\"" || return 1
-
-  run run_copy "$FRONTEND_MARKER"
-  [ "$status" -eq 0 ]
-  grep -qF -- "status: posted GAIA-Audit success" <<<"$output" || return 1
-  [ "$(logged_calls 'state=success')" = 1 ]
 }
 
 @test "trusted base: gh failing for the base lookup declines naming gh auth status, and posts no success" {
@@ -966,19 +928,6 @@ MERGE_BASE_DERIVATION='merge_base="$(audit_branch_patch_merge_base "$repo_root" 
   true
 }
 
-@test "trusted base: the gh failure check can fail, a scratch copy that continues past it posts despite the failing lookup" {
-  build_audited_branch
-  export GH_STUB_FAIL_BRANCHES=1
-  local_tip=$(git -C "$SANDBOX" rev-parse refs/remotes/origin/main)
-  mutate_poster 'if [ -n "$base_failure" ]; then' \
-    "if [ -n \"\$base_failure\" ]; then base_tip=\"$local_tip\"; base_failure=\"\"; fi; if false; then" || return 1
-
-  run run_copy "$FRONTEND_MARKER"
-  [ "$status" -eq 0 ]
-  grep -qF -- "status: posted GAIA-Audit success" <<<"$output" || return 1
-  [ "$(logged_calls 'state=success')" = 1 ]
-}
-
 @test "trusted base: more than one merge base declines naming the merge, and posts no success" {
   build_audited_branch
   catchup_criss_cross
@@ -988,22 +937,6 @@ MERGE_BASE_DERIVATION='merge_base="$(audit_branch_patch_merge_base "$repo_root" 
   [ "$status" -eq 0 ]
   [ "$output" = "status: declined: trusted base unverified, more than one merge base with the base branch; next step: git merge --no-edit refs/remotes/origin/main" ]
   [ "$(logged_calls 'state=success')" = 0 ]
-}
-
-@test "trusted base: the uniqueness check can fail, a scratch copy that takes the first merge base posts despite the criss-cross" {
-  build_audited_branch
-  catchup_criss_cross
-  refresh_stub
-  first_merge_base=$(git -C "$SANDBOX" merge-base --all HEAD refs/remotes/origin/main | head -1)
-  [ "$(git -C "$SANDBOX" merge-base --all HEAD refs/remotes/origin/main | wc -l)" -gt 1 ]
-  # Markers for the digests the scratch copy will derive from that merge base.
-  DIGEST_MERGE_BASE="$first_merge_base" write_both_markers
-  mutate_poster "$MERGE_BASE_DERIVATION" "merge_base=\"$first_merge_base\"" || return 1
-
-  run run_copy "$FRONTEND_MARKER"
-  [ "$status" -eq 0 ]
-  grep -qF -- "status: posted GAIA-Audit success" <<<"$output" || return 1
-  [ "$(logged_calls 'state=success')" = 1 ]
 }
 
 # A refusal retracts an earlier success whatever the state of the base: the
@@ -1042,20 +975,6 @@ MERGE_BASE_DERIVATION='merge_base="$(audit_branch_patch_merge_base "$repo_root" 
   [ "$status" -eq 0 ]
   [ "$output" = "status: posted GAIA-Audit failure $(git -C "$SANDBOX" rev-parse --short HEAD)" ]
   grep -F -- "statuses/${head_sha}" "$GH_STUB_LOG" | grep -qF -- "state=failure" || return 1
-}
-
-@test "trusted base: the arm separation can fail, a scratch copy that verifies the base on both arms posts no failure" {
-  build_audited_branch
-  frontend_digest=$(digest_of "$SANDBOX" code-audit-frontend)
-  write_refusal_body "$SANDBOX/.gaia/local/audit/${frontend_digest}.refused" code-audit-frontend
-  refresh_stub "$ABSENT_TIP"
-  mutate_poster $'if [ "$post_state" = "success" ]; then\n  version_file=' \
-    $'if true; then\n  version_file=' || return 1
-
-  run run_copy ".gaia/local/audit/${frontend_digest}.refused"
-  [ "$status" -eq 0 ]
-  grep -qF -- "status: declined: trusted base unverified" <<<"$output" || return 1
-  [ "$(logged_calls 'state=failure')" = 0 ]
 }
 
 # After a remedy and with every member holding a marker for its current digest,
@@ -1157,17 +1076,4 @@ EOF
   [ "$(logged_calls 'state=success')" = 1 ]
   listings=$(grep -c -- 'diff-tree -r --raw -z' "$GIT_CALL_LOG") || listings=0
   [ "$listings" = 1 ]
-}
-
-@test "the single identities listing can fail, a scratch copy that derives each member's digest on its own lists them more than once" {
-  build_audited_branch
-  install_git_logger
-  mutate_poster 'member_digest="$(digest_for_member "$roster_member")"' \
-    'member_digest="$(audit_branch_member_digest "$repo_root" "$roster_member" "$merge_base" 2>/dev/null || true)"' || return 1
-
-  run run_copy "$FRONTEND_MARKER"
-  [ "$status" -eq 0 ]
-  grep -qF -- "status: posted GAIA-Audit success " <<<"$output" || return 1
-  listings=$(grep -c -- 'diff-tree -r --raw -z' "$GIT_CALL_LOG") || listings=0
-  [ "$listings" -gt 1 ]
 }

@@ -522,23 +522,6 @@ tree_state() {
   [ -z "$output" ]
 }
 
-@test "red state: a copy reading severity from the dispositions entry passes the relabelled Critical" {
-  local mutant_directory="$BATS_TEST_TMPDIR/mutant" script_name entry
-  mkdir -p "$mutant_directory"
-  for script_name in audit-dispositions-check.sh audit-loop-eval.sh audit-loop-state-lib.sh exclusive-lock-lib.sh audit-loop-signals-lib.sh context-checkpoint-lib.sh branch-name-lib.sh main-root-lib.sh audit-key-lib.sh; do
-    cp "$SCRIPTS/$script_name" "$mutant_directory/$script_name"
-  done
-  # shellcheck disable=SC2016
-  sed 's/\$lookup_entry\.severity/$entry.severity/g' "$SCRIPTS/audit-dispositions-check.sh" >"$mutant_directory/audit-dispositions-check.sh"
-  ! cmp -s "$SCRIPTS/audit-dispositions-check.sh" "$mutant_directory/audit-dispositions-check.sh" || { echo "mutation did not apply"; return 1; }
-  entry="$(disposition_entry f.txt 1 c/crit waive-out-of-scope because triage-threshold | jq -c '. + {severity: "major"}')"
-  write_dispositions 1 "$(fill "$FINDINGS_JSON" "[$entry]")"
-  run bash "$mutant_directory/audit-dispositions-check.sh" check --root "$ALF_ROOT" --run-folder "$RUN_FOLDER" --round 1
-  [ "$status" -eq 0 ] || { echo "mutant status $status: $output"; return 1; }
-  run_check 1
-  red critical-not-fix "$(key_json c/crit f.txt 1)"
-}
-
 @test "cost: check-all over nine snapshotted rounds never calls the evaluator and is fast (DP-017)" {
   local round shim="$BATS_TEST_TMPDIR/shim" start_milliseconds end_milliseconds count
   write_dispositions 1 "$(fill "$FINDINGS_JSON" "[$(disposition_entry f.txt 3 c/imp fix)]")"

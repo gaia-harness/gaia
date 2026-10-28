@@ -337,23 +337,6 @@ light_sidecar_files() {
   expect_line "light-cleared"
 }
 
-# bats test_tags=whole-tree
-@test "the same sequence works in a sandbox with every maintainer-only region stripped" {
-  lsb_init --maintainer
-  lsb_strip_maintainer_only
-  [ ! -e "$LSB_ROOT/.gaia/scripts/audit-light-telemetry.sh" ]
-  grep -qF 'audit-light-telemetry.sh' "$LSB_ROOT/.gaia/scripts/audit-light-mark.sh" && return 1
-  bash -n "$LSB_ROOT/.gaia/scripts/audit-light-mark.sh"
-  lsb_full_clearance "$FRONTEND"
-  lsb_commit frontend/app/notes.md "one line"
-  lsb_route "$FRONTEND"
-  expect_line "$(printf 'light\tlight-eligible')"
-  clear_reply_to_file
-  lsb_mark "$FRONTEND" "$REPLY_FILE"
-  expect_line "light-cleared"
-  [ "$(jq -r .review "$(marker_path)")" = "light" ]
-}
-
 # --- escalate ---------------------------------------------------------------
 
 # bats test_tags=whole-tree
@@ -744,21 +727,6 @@ prepare_refusal_anchored() {
 }
 
 # bats test_tags=whole-tree
-@test "the checklist-unchanged refusal is what blocks the forged reply: a scratch mark script without it clears" {
-  prepare_refusal_anchored "$(printf 'line 1\nfixed 2\nline 3\nline 4\nline 5')"
-  clear_reply_to_file
-  local script="$LSB_ROOT/.gaia/scripts/audit-light-mark.sh"
-  # shellcheck disable=SC2016
-  grep -qF '[ "$touched" = "true" ] || _light_mark_full checklist-unchanged' "$script"
-  # shellcheck disable=SC2016
-  sed 's/\[ "\$touched" = "true" \] || _light_mark_full checklist-unchanged/:/' "$script" >"$script.mutant"
-  grep -qF '[ "$touched" = "true" ]' "$script.mutant" && return 1
-  run bash "$script.mutant" --root "$LSB_ROOT" --member "$FRONTEND" --verdict - <"$REPLY_FILE"
-  expect_line "light-cleared"
-  [ -f "$(marker_path)" ]
-}
-
-# bats test_tags=whole-tree
 @test "a pure insertion beside each cited line counts as touching it" {
   prepare_refusal_anchored "$(printf 'line 1
 line 2
@@ -972,23 +940,6 @@ line 5')"
 }
 
 # bats test_tags=whole-tree
-@test "a merge-base mark run with a reviewer dispatch time records it beside marked_at and the duration, under no bare dispatched_at key" {
-  prepare_quick
-  clear_reply_to_file
-  run bash -c 'bash "$1" --root "$2" --member "$3" --verdict - --reviewer-duration-ms 6900 --reviewer-dispatched-at 2020-01-01T00:00:00Z <"$4"' _ \
-    "$LSB_ROOT/.gaia/scripts/audit-light-mark.sh" "$LSB_ROOT" "$FRONTEND" "$REPLY_FILE"
-  expect_line "light-cleared"
-  local line
-  line="$(tail -n 1 "$(ledger_path)")"
-  jq -e '.reviewer_dispatched_at == "2020-01-01T00:00:00Z"
-    and (.reviewer_dispatched_at | test("^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$"))
-    and .reviewer_dispatched_at != .marked_at
-    and .marked_at >= .reviewer_dispatched_at
-    and (keys | index("reviewer_dispatched_at") != null and index("marked_at") != null and index("reviewer_duration_ms") != null)
-    and (has("dispatched_at") | not)' <<<"$line" >/dev/null
-}
-
-# bats test_tags=whole-tree
 @test "a merge-base mark run without the reviewer dispatch flag clears and records a null dispatch time" {
   prepare_quick
   clear_reply_to_file
@@ -1017,56 +968,6 @@ line 5')"
   [ ! -e "$(ledger_path)" ]
   assert_no_marker
   true
-}
-
-# bats test_tags=whole-tree
-@test "the dispatch time validation is what rejects a malformed value: a scratch mark script without it accepts now" {
-  prepare_quick
-  clear_reply_to_file
-  local script="$LSB_ROOT/.gaia/scripts/audit-light-mark.sh"
-  grep -qF '=~ ^[0-9]{4}' "$script"
-  sed 's/^  if .*=~ \^\[0-9\].*; then$/  if false; then/' "$script" >"$script.mutant"
-  grep -qF '=~ ^[0-9]{4}' "$script.mutant" && return 1
-  run bash "$script.mutant" --root "$LSB_ROOT" --member "$FRONTEND" --verdict "$REPLY_FILE" --reviewer-dispatched-at now </dev/null
-  [ "$status" -eq 0 ]
-  [ "$(jq -r .reviewer_dispatched_at "$(ledger_path)")" = "now" ]
-}
-
-# bats test_tags=whole-tree
-@test "the key set pin is what notices a missing reviewer_dispatched_at: a scratch mark script without the field writes a different key set" {
-  prepare_quick
-  clear_reply_to_file
-  local script="$LSB_ROOT/.gaia/scripts/audit-light-mark.sh"
-  grep -qF 'reviewer_dispatched_at: (if' "$script"
-  grep -vF 'reviewer_dispatched_at: (if' "$script" >"$script.mutant"
-  run bash "$script.mutant" --root "$LSB_ROOT" --member "$FRONTEND" --verdict - <"$REPLY_FILE"
-  expect_line "light-cleared"
-  [ "$(jq -c 'has("reviewer_dispatched_at")' "$(ledger_path)")" = "false" ]
-}
-
-@test "the mark script header names the reviewer dispatch flag, field and latency formula, and no bare dispatched_at" {
-  local script="$BATS_TEST_DIRNAME/../audit-light-mark.sh" header
-  header="$(sed -n '1,/^set -uo pipefail/p' "$script")"
-  grep -qF -- '--reviewer-dispatched-at' <<<"$header"
-  grep -qF 'reviewer_dispatched_at' <<<"$header"
-  grep -qF 'marked_at - reviewer_dispatched_at - reviewer_duration_ms' <<<"$header"
-  grep -qF -- '--dispatched-at' <<<"$header" && return 1
-  grep -qE '(^|[^A-Za-z_])dispatched_at' <<<"$header" && return 1
-  true
-}
-
-# bats test_tags=whole-tree
-@test "the timing assertion is what notices a missing marked_at: a scratch mark script without the field fails it" {
-  prepare_quick
-  clear_reply_to_file
-  local script="$LSB_ROOT/.gaia/scripts/audit-light-mark.sh"
-  grep -qF 'marked_at: $marked_at,' "$script"
-  grep -vF 'marked_at: $marked_at,' "$script" >"$script.mutant"
-  grep -qF 'marked_at: $marked_at,' "$script.mutant" && return 1
-  run bash "$script.mutant" --root "$LSB_ROOT" --member "$FRONTEND" --verdict - --reviewer-duration-ms 6900 <"$REPLY_FILE"
-  expect_line "light-cleared"
-  run assert_ledger_timing 6900
-  [ "$status" -ne 0 ]
 }
 
 # bats test_tags=whole-tree

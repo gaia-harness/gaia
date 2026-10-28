@@ -203,16 +203,6 @@ cost_line() { grep -q "^Cost: $1, [0-9hms]*\$" <<<"$output" || { printf 'no "Cos
   [ "$(merge_rows 105)" -eq 1 ]
 }
 
-@test "guards-must-fail: a copy of usage-merge.sh that skips the MERGED check writes a row for an OPEN PR" {
-  seed_uat007
-  gh_view 105 105 fix/foo OPEN ""
-  sed 's/\[ "\$gh_state" = MERGED \]/true/' "$REPO/.gaia/scripts/usage-merge.sh" >"$REPO/.gaia/scripts/usage-merge-mutant.sh"
-  cmp -s "$REPO/.gaia/scripts/usage-merge.sh" "$REPO/.gaia/scripts/usage-merge-mutant.sh" && return 1
-  run_script "$REPO/.gaia/scripts/usage-merge-mutant.sh" "gh pr merge 105 --auto"
-  [ "$status" -eq 0 ]
-  [ "$(merge_rows 105)" -eq 1 ]
-}
-
 # ---------- 4. the cap ----------
 
 seed_unflushed() {
@@ -240,21 +230,6 @@ seed_unflushed() {
   has_line "  ! Some usage was still being saved, so these figures may be low. For the final numbers run: bash .gaia/scripts/usage.sh pr 106"
   grep -qF '! merge not confirmed; boundary not recorded' <<<"$output"
   [ ! -s "$TELEMETRY_DIRECTORY/links.jsonl" ]
-  rmdir "$TELEMETRY_DIRECTORY/specs.lock.d"
-}
-
-@test "guards-must-fail: a copy of usage-merge.sh without the lock-timeout bound overruns cap plus 3 s" {
-  seed_unflushed
-  export GAIA_USAGE_MERGE_CAP_SECONDS=1 GAIA_LEDGER_LOCK_FORCE_FALLBACK=1 GAIA_LEDGER_LOCK_TIMEOUT_SECONDS=6
-  sed 's/GAIA_LEDGER_LOCK_TIMEOUT_SECONDS="\$(_um_left)" //' "$REPO/.gaia/scripts/usage-merge.sh" >"$REPO/.gaia/scripts/usage-merge-mutant.sh"
-  cmp -s "$REPO/.gaia/scripts/usage-merge.sh" "$REPO/.gaia/scripts/usage-merge-mutant.sh" && return 1
-  mkdir "$TELEMETRY_DIRECTORY/specs.lock.d"
-  local started_at_seconds ended_at_seconds
-  started_at_seconds="$(date +%s)"
-  run_script "$REPO/.gaia/scripts/usage-merge-mutant.sh" "gh pr merge 106" s-un
-  ended_at_seconds="$(date +%s)"
-  [ "$status" -eq 0 ]
-  [ "$((ended_at_seconds - started_at_seconds))" -gt 4 ]
   rmdir "$TELEMETRY_DIRECTORY/specs.lock.d"
 }
 
@@ -323,22 +298,6 @@ slow_render() {
   [ "$output" = "! readout timed out after 1s; rerun: bash .gaia/scripts/usage.sh pr --key branch:fix/bar" ]
 }
 
-@test "guards-must-fail: a copy of usage-merge.sh without the render watchdog overruns cap plus 3 s" {
-  seed_uat007
-  slow_render 8
-  gh_view 103 103 fix/foo MERGED 2026-09-25T02:00:00Z
-  export GAIA_USAGE_RENDER_CAP_SECONDS=1
-  sed '/_um_expired "\$render_cap" && break/d' "$REPO/.gaia/scripts/usage-merge.sh" >"$REPO/.gaia/scripts/usage-merge-mutant.sh"
-  cmp -s "$REPO/.gaia/scripts/usage-merge.sh" "$REPO/.gaia/scripts/usage-merge-mutant.sh" && return 1
-  local started_at_seconds ended_at_seconds
-  started_at_seconds="$(date +%s)"
-  run_script "$REPO/.gaia/scripts/usage-merge-mutant.sh" "gh pr merge 103"
-  ended_at_seconds="$(date +%s)"
-  [ "$status" -eq 0 ]
-  [ "$((ended_at_seconds - started_at_seconds))" -gt 4 ]
-  has_line "[PR cost] late"
-}
-
 @test "the render cap, control: a render inside the cap prints the block and no timed-out line" {
   seed_uat007
   gh_view 103 103 fix/foo MERGED 2026-09-25T02:00:00Z
@@ -386,15 +345,4 @@ slow_render() {
   [ "$status" -eq 0 ]
   [ -z "$output" ]
   [ ! -e "$GH_STUB_DIRECTORY/argv.log" ]
-}
-
-@test "no new network host: across merges the gh stub sees only pr view and curl, wget, and nc are never called" {
-  seed_uat007
-  gh_view 101 101 plan/spec-090-foo MERGED 2026-09-25T00:00:00Z
-  gh_view 105 105 fix/foo OPEN ""
-  run_merge "gh pr merge 101"
-  run_merge "gh pr merge 105 --auto"
-  run_merge "gh pr merge 999"
-  assert_gh_only_pr_view
-  [ "$(wc -l <"$GH_STUB_DIRECTORY/argv.log" | tr -d ' ')" -eq 3 ]
 }

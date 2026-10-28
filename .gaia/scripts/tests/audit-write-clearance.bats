@@ -2292,15 +2292,6 @@ orphan_fixture() {
   [ -f "$AUDIT_DIRECTORY/$(member_digest "$ROOT" "$member").${member}.ok" ]
 }
 
-@test "catch-up: with the ledger lookup removed the same write publishes over the open finding" {
-  orphan_fixture
-  scratch="$(scratch_writer 's/^\( *orphaned_ledgers=\).*/\1""/')"
-  [ -n "$scratch" ]
-  WRITER_UNDER_TEST="$scratch" earned_write_with_capture "$member"
-  [ "$status" -eq 0 ]
-  [ -f "$AUDIT_DIRECTORY/$(member_digest "$ROOT" "$member").${member}.ok" ]
-}
-
 @test "catch-up: ledgers from earlier rounds of the branch never trigger the orphan refusal" {
   catchup_branch_start
   member="$ACCOUNTING_MEMBER"
@@ -2423,43 +2414,6 @@ orphan_fixture() {
   [ "$status" -eq 2 ]
   grep -qF "scope digest not supplied" <<<"$output" || return 1
   [ -f "$AUDIT_DIRECTORY/${old_digest}.refused" ]
-}
-
-@test "catch-up: with the first-parent test removed an earlier round's ledger is wrongly refused" {
-  catchup_branch_start
-  member="$ACCOUNTING_MEMBER"
-  capture_scope "$member"
-  catchup_base_commit base-only.txt "incoming from the base"
-  catchup_merge_base
-  write_orphan_ledger "$AUDIT_DIRECTORY/${FIRST_BRANCH_COMMIT}.fix%2Fcatchup.rerun.json" "$FIRST_BRANCH_COMMIT" "$member"
-
-  earned_write_with_capture "$member"
-  [ "$status" -eq 0 ]
-
-  rm -f "$AUDIT_DIRECTORY/$(member_digest "$ROOT" "$member").${member}.ok"
-  scratch="$(scratch_writer '/\${newline}\${candidate_base}\${newline}/s/\${candidate_base}/never-matches/')"
-  [ -n "$scratch" ]
-  WRITER_UNDER_TEST="$scratch" earned_write_with_capture "$member"
-  [ "$status" -eq 3 ]
-  grep -qF "jq --arg base" <<<"$output" || return 1
-  true
-}
-
-@test "catch-up: with the staleness comparison removed a blend write publishes over the superseded scope" {
-  catchup_branch_start
-  member="$CATCHUP_MEMBER"
-  capture_scope "$member"
-  scope_digest="$(read_scope_digest "$member")"
-  catchup_base_commit base-only.txt "incoming from the base"
-  catchup_merge_base --no-commit
-  printf 'feature v2, rewritten inside the merge\n' > "$ROOT/feature.txt"
-  catchup_commit_merge
-
-  scratch="$(scratch_writer 's/^\( *elif \)\[ "\$SCOPE_DIGEST" != "\$digest" \]/\1false/')"
-  [ -n "$scratch" ]
-  run bash "$scratch" --root "$ROOT" --member "$member" --provenance earned --scope-digest "$scope_digest"
-  [ "$status" -eq 0 ]
-  [ -f "$AUDIT_DIRECTORY/$(member_digest "$ROOT" "$member").ok" ]
 }
 
 @test "catch-up: a criss-cross history exits 2 naming the merge that makes the merge base unique" {

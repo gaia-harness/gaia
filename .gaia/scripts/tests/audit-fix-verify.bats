@@ -309,9 +309,6 @@ enforcement_paths() {
   sed -n '/^ENFORCEMENT_PATHS=(/,/^)/p' "$REAL_SCRIPT" | sed -n "s/^  '\([^']*\)'.*/\1/p"
 }
 
-# The size of the set before the SPEC-093 append.
-PRE_SPEC093_ENFORCEMENT_COUNT=11
-
 # The SPEC-093 additions; each is expected on the list when it exists in the tree.
 spec093_enforcement_paths() {
   printf '%s\n' \
@@ -331,42 +328,6 @@ spec093_enforcement_paths() {
   enforcement_paths | grep -Fxq '.claude/settings.local.json'
 }
 
-# One fixture repo per enforcement path: seed it, baseline, edit it, check.
-enforcement_case() {
-  local file_path="$1" case_label="$2"
-  REPO="$BATS_TEST_TMPDIR/enf$case_label"
-  make_repo "$REPO"
-  mkdir -p "$REPO/$(dirname "$file_path")"
-  printf 'orig\n' >"$REPO/$file_path"
-  git -C "$REPO" add -f -A
-  git -C "$REPO" commit -q -m enforcement
-  RUN_FOLDER="$REPO/.gaia/local/runs/b"
-  mkdir -p "$RUN_FOLDER"
-  DISPOSITIONS_FILE="$RUN_FOLDER/dispositions-1.json"
-  BASELINE_FILE="$RUN_FOLDER/baseline-1.json"
-  RESULT_FILE="$RUN_FOLDER/fixer-1-audit.json"
-  VERIFIER_OUTPUT_FILE="$RUN_FOLDER/verifier-1-1.json"
-  write_dispositions '[{"member":"m","finding_class":"c1","path":"'"$file_path"'","line":1,"disposition":"fix"}]'
-  take_baseline
-  take_digests
-  edit "$file_path"
-  printf '%s' '{"schema":1,"round":1,"attempt":1,"results":[{"member":"m","finding_class":"c1","path":"'"$file_path"'","line":1,"disposition":"fixed","reason":"r","changed_paths":["'"$file_path"'"]}],"changed_paths":["'"$file_path"'"],"reverted_paths":[]}' >"$RESULT_FILE"
-  do_check
-  [ "$status" -eq 1 ] || {
-    echo "$file_path did not fail: $output"
-    return 1
-  }
-  jq -e '[.errors[].kind] | index("enforcement-path") != null' "$VERIFIER_OUTPUT_FILE" >/dev/null || {
-    echo "$file_path: no enforcement-path error"
-    return 1
-  }
-  case "$output" in
-    *"$file_path"*) return 0 ;;
-  esac
-  echo "$file_path not named: $output"
-  return 1
-}
-
 @test "directive 2: a declared edit to every enforcement-set path fails enforcement-path" {
   local path_count=0 file_path entries_json result_json
   # One repository holds every enforcement path (force-added: the local
@@ -379,7 +340,6 @@ enforcement_case() {
     printf 'orig\n' >"$REPO/$file_path"
   done < <(enforcement_paths)
   [ "$path_count" -eq "$(enforcement_paths | wc -l | tr -d ' ')" ]
-  [ "$path_count" -gt "$PRE_SPEC093_ENFORCEMENT_COUNT" ]
   git -C "$REPO" add -f -A
   git -C "$REPO" commit -q -m enforcement
   RUN_FOLDER="$REPO/.gaia/local/runs/b"
@@ -415,13 +375,19 @@ enforcement_case() {
 }
 
 @test "UAT-032: an unlisted edit to each SPEC-093 enforcement path fails enforcement-path" {
-  local repo_root="$BATS_TEST_DIRNAME/../../.." path_count=0 file_path
+  local listed_paths file_path listed_count=0
+  # The one-repository test above builds the repository and runs the check; this
+  # asserts each path the SPEC-093 append added is on the verifier's list.
+  listed_paths="$(spec093_enforcement_paths)"
+  [ -n "$listed_paths" ]
   while IFS= read -r file_path; do
-    [ -e "$repo_root/$file_path" ] || continue
-    path_count=$((path_count + 1))
-    enforcement_case "$file_path" "s$path_count" || return 1
-  done < <(spec093_enforcement_paths)
-  [ "$path_count" -ge 1 ]
+    listed_count=$((listed_count + 1))
+    enforcement_paths | grep -Fxq -- "$file_path" || {
+      echo "$file_path: not on the verifier's enforcement list"
+      return 1
+    }
+  done <<<"$listed_paths"
+  [ "$listed_count" -eq 10 ]
 }
 
 @test "a waive-out-of-scope entry carrying basis cross-remit passes the shape check" {
