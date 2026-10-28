@@ -19,17 +19,24 @@
 # side, or one beside the concurrent phase, time out on tests that pass alone.
 # A scenario that only installs or runs the CLI does not need it.
 #
+# A scenario whose header carries the line `# distribution-runner: skip` runs in
+# neither phase and prints as SKIP in the summary. It is for a scenario whose
+# value is confined to changes in one command: it stays runnable directly, and
+# removing the line puts it back in the run. A skipped scenario never decides
+# the exit status.
+#
 # Each scenario runs in a separate `bash` subprocess, so one scenario's
 # `set -e` exit does not abort the run, with its output captured to a log. A
 # progress line prints as each scenario finishes; once all have, every log
 # prints in scenario order under its `=== name ===` header, then the summary.
 #
-# Exits 0 if all PASS, 1 if any FAIL or if no scenarios were found, 2 when
-# DISTRIBUTION_JOBS is not a positive integer.
+# Exits 0 if every scenario that ran passed, 1 if any FAIL or if no scenarios
+# were found, 2 when DISTRIBUTION_JOBS is not a positive integer.
 set -u
 
 DISTRIBUTION_DIRECTORY="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 EXCLUSIVE_MARKER='# distribution-runner: exclusive'
+SKIP_MARKER='# distribution-runner: skip'
 
 job_limit="${DISTRIBUTION_JOBS:-$(getconf _NPROCESSORS_ONLN 2>/dev/null || echo 2)}"
 case "$job_limit" in
@@ -57,8 +64,13 @@ fi
 
 concurrent_indexes=()
 exclusive_indexes=()
+skipped=()
+skipped_count=0
 for index in "${!scenarios[@]}"; do
-  if grep -qxF "$EXCLUSIVE_MARKER" "${scenarios[index]}"; then
+  if grep -qxF "$SKIP_MARKER" "${scenarios[index]}"; then
+    skipped[index]=1
+    skipped_count=$((skipped_count + 1))
+  elif grep -qxF "$EXCLUSIVE_MARKER" "${scenarios[index]}"; then
     exclusive_indexes+=("$index")
   else
     concurrent_indexes+=("$index")
@@ -150,8 +162,8 @@ run_scenarios() {
   done
 }
 
-printf 'Running %s scenarios up to %s at a time, then %s exclusive scenarios one at a time\n' \
-  "${#concurrent_indexes[@]}" "$job_limit" "${#exclusive_indexes[@]}"
+printf 'Running %s scenarios up to %s at a time, then %s exclusive scenarios one at a time, skipping %s\n' \
+  "${#concurrent_indexes[@]}" "$job_limit" "${#exclusive_indexes[@]}" "$skipped_count"
 run_scenarios "$job_limit" ${concurrent_indexes[@]+"${concurrent_indexes[@]}"}
 run_scenarios 1 ${exclusive_indexes[@]+"${exclusive_indexes[@]}"}
 
@@ -160,6 +172,10 @@ overall=0
 
 for index in "${!scenarios[@]}"; do
   name="$(basename "${scenarios[index]}")"
+  if [ -n "${skipped[index]:-}" ]; then
+    results+=("SKIP  $name")
+    continue
+  fi
   printf '\n=== %s ===\n' "$name"
   cat "$LOG_DIRECTORY/$index.log"
   if [ "${statuses[index]}" -eq 0 ]; then

@@ -391,9 +391,9 @@ jobs:
     # the "not evaluated" it actually is.
     if: github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
-    # Sized from a measured full run of about 20 minutes, mostly the exclusive
-    # scenarios run one at a time, plus half again as headroom. A new exclusive
-    # scenario adds its whole run time, so re-measure when one lands.
+    # Sized from a measured 20-minute full run plus half again as headroom;
+    # 25-csf4-migration took 9 of those minutes and is skipped by default, so
+    # re-enabling it needs no edit here. Re-measure for a new exclusive scenario.
     timeout-minutes: 30
     # Same three consumers as cli-tests above; the scenarios run without a
     # token by design (see the step name at the harness invocation below).
