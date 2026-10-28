@@ -25,7 +25,8 @@ setup() {
 Audit CI Tests
 Run Chromatic
 Vitest and Playwright
-Vitest (.gaia/cli)"
+Vitest (.gaia/cli)
+Shellcheck and bats"
 }
 
 # Usage errors (exit 2)
@@ -83,7 +84,8 @@ Vitest (.gaia/cli)"
   local partial="Audit CI Tests
 Run Chromatic
 Vitest and Playwright
-Vitest (.gaia/cli)"
+Vitest (.gaia/cli)
+Shellcheck and bats"
   run "$SCRIPT" --repo gaia-react/gaia --branch main \
     --ruleset-contexts <(printf '%s\n' "$partial")
   [ "$status" -eq 1 ]
@@ -93,7 +95,8 @@ Vitest (.gaia/cli)"
   local partial="Audit CI Tests
 Run Chromatic
 Vitest and Playwright
-Vitest (.gaia/cli)"
+Vitest (.gaia/cli)
+Shellcheck and bats"
   run "$SCRIPT" --repo gaia-react/gaia --branch main \
     --ruleset-contexts <(printf '%s\n' "$partial")
   assert_contains "MISSING"
@@ -120,6 +123,7 @@ Vitest (.gaia/cli)"
   assert_contains "Run Chromatic"
   assert_contains "Vitest and Playwright"
   assert_contains "Vitest (.gaia/cli)"
+  assert_contains "Shellcheck and bats"
 }
 
 # gh api failure on the live ruleset read (exit 2, not a drift verdict) (#809)
@@ -163,10 +167,10 @@ unmapped_contexts() {
   [ ! -e "$WORKFLOWS_DIRECTORY/${DELETED_WORKFLOW}" ]
 }
 
-@test "the declared contexts are exactly the five the maintainer ruleset requires" {
+@test "the declared contexts are exactly the set the maintainer ruleset requires" {
   local actual expected
   actual="$(declared_contexts | LC_ALL=C sort)"
-  expected="$(printf '%s\n' "GAIA-Audit" "Audit CI Tests" "Run Chromatic" "Vitest and Playwright" "Vitest (.gaia/cli)" | LC_ALL=C sort)"
+  expected="$(printf '%s\n' "GAIA-Audit" "Audit CI Tests" "Run Chromatic" "Vitest and Playwright" "Vitest (.gaia/cli)" "Shellcheck and bats" | LC_ALL=C sort)"
   [ -n "$actual" ]
   [ "$actual" = "$expected" ]
 }
