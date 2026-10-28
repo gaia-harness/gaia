@@ -391,7 +391,10 @@ jobs:
     # the "not evaluated" it actually is.
     if: github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    # Sized from a measured 20-minute full run plus half again as headroom;
+    # 25-csf4-migration took 9 of those minutes and is skipped by default, so
+    # re-enabling it needs no edit here. Re-measure for a new exclusive scenario.
+    timeout-minutes: 30
     # Same three consumers as cli-tests above; the scenarios run without a
     # token by design (see the step name at the harness invocation below).
     # `pull-requests: read` is paths-filter's, for the same reason given there.
