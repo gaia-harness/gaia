@@ -224,6 +224,45 @@ describe('conversion', () => {
     expect(harness.err.join('')).toContain('app/a/a.stories.tsx: still CSF3');
   });
 
+  test('a leftover story names the format it was classified as, not always CSF3', () => {
+    const root = repo(standardFiles);
+    const harness = makeHarness(
+      root,
+      {},
+      {
+        repairs: {
+          ...fakeRepairs,
+          classifyStoryFile: (ts, source, file) =>
+            source.includes('// repaired') ? 'csf2' : (
+              fakeRepairs.classifyStoryFile(ts, source, file)
+            ),
+        },
+      }
+    );
+    const exit = runMigrateCsf4({json: true, updateMerge: false}, harness.deps);
+
+    expect(exit).toBe(1);
+    expect(harness.err.join('')).toContain('app/a/a.stories.tsx: still CSF2');
+  });
+
+  test('config edits with no story to convert are written without the codemod or msw migrate', () => {
+    const root = repo({
+      'frontend/.storybook/main.ts': PLAIN_MAIN,
+      'frontend/.storybook/preview.ts': CSF4_PREVIEW,
+      'frontend/app/a/a.stories.tsx': CSF4_STORY,
+      'frontend/package.json': '{"imports": {}}\n',
+    });
+    const {exit, harness} = execute(root);
+
+    expect(exit).toBe(0);
+    expect(read(root, 'frontend/.storybook/main.ts')).toBe(FLAGGED_MAIN);
+    expect(
+      harness.calls.some(
+        (call) => call.args[0] === 'dlx' || call.command === 'node'
+      )
+    ).toBe(false);
+  });
+
   test('third-party writes to main, preview and package.json never reach the adopter tree', () => {
     const root = repo(standardFiles);
     const {exit} = execute(root);

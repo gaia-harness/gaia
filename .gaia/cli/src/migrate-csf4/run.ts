@@ -260,16 +260,19 @@ export const runMigrateCsf4 = (
     plan.stories.forEach((relative) => {
       const absolute = path.join(packageDir, relative);
 
-      if (
-        !repairFailures.includes(relative) &&
-        repairs.classifyStoryFile(
-          ts,
-          readFileSync(absolute, 'utf8'),
-          absolute
-        ) !== 'csf4'
-      ) {
+      if (repairFailures.includes(relative)) return;
+
+      const format = repairs.classifyStoryFile(
+        ts,
+        readFileSync(absolute, 'utf8'),
+        absolute
+      );
+
+      if (format !== 'csf4') {
         repairFailures.push(relative);
-        notes.push(`${relative}: still CSF3 after conversion.`);
+        notes.push(
+          `${relative}: still ${format.toUpperCase()} after conversion.`
+        );
       }
     });
     notes.push(...outcome.notes);

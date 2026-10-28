@@ -101,26 +101,31 @@ export const convert = (context: ConversionContext): ConversionOutcome => {
       );
     });
 
-    const glob = exactFilesGlob(plan.stories);
-    const codemod = runCsfFactoriesCodemod(runCommand, {
-      glob,
-      storybookVersion,
-      workDir: workspace.workDir,
-    });
-
-    if (!codemod.ok) return {kind: 'codemod-failed', reason: codemod.reason};
-
     const notes: string[] = [];
-    const mswBin = findMswMigrateBin(workspace.workDir);
 
-    if (mswBin !== undefined) {
-      notes.push(
-        ...runMswMigrate(runCommand, {
-          binPath: mswBin,
-          glob,
-          workDir: workspace.workDir,
-        })
-      );
+    // A re-run with no story left to convert has only config edits pending:
+    // skip the third-party tools, which would receive an empty glob.
+    if (plan.stories.length > 0) {
+      const glob = exactFilesGlob(plan.stories);
+      const codemod = runCsfFactoriesCodemod(runCommand, {
+        glob,
+        storybookVersion,
+        workDir: workspace.workDir,
+      });
+
+      if (!codemod.ok) return {kind: 'codemod-failed', reason: codemod.reason};
+
+      const mswBin = findMswMigrateBin(workspace.workDir);
+
+      if (mswBin !== undefined) {
+        notes.push(
+          ...runMswMigrate(runCommand, {
+            binPath: mswBin,
+            glob,
+            workDir: workspace.workDir,
+          })
+        );
+      }
     }
 
     const stories = repairStories(context, workspace.workDir, facts);

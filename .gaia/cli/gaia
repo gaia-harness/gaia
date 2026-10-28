@@ -38010,23 +38010,25 @@ var convert = (context) => {
         )
       );
     });
-    const glob = exactFilesGlob(plan.stories);
-    const codemod = runCsfFactoriesCodemod(runCommand, {
-      glob,
-      storybookVersion,
-      workDir: workspace.workDir
-    });
-    if (!codemod.ok) return { kind: "codemod-failed", reason: codemod.reason };
     const notes = [];
-    const mswBin = findMswMigrateBin(workspace.workDir);
-    if (mswBin !== void 0) {
-      notes.push(
-        ...runMswMigrate(runCommand, {
-          binPath: mswBin,
-          glob,
-          workDir: workspace.workDir
-        })
-      );
+    if (plan.stories.length > 0) {
+      const glob = exactFilesGlob(plan.stories);
+      const codemod = runCsfFactoriesCodemod(runCommand, {
+        glob,
+        storybookVersion,
+        workDir: workspace.workDir
+      });
+      if (!codemod.ok) return { kind: "codemod-failed", reason: codemod.reason };
+      const mswBin = findMswMigrateBin(workspace.workDir);
+      if (mswBin !== void 0) {
+        notes.push(
+          ...runMswMigrate(runCommand, {
+            binPath: mswBin,
+            glob,
+            workDir: workspace.workDir
+          })
+        );
+      }
     }
     const stories = repairStories(context, workspace.workDir, facts);
     stories.repaired.forEach((entry) => {
@@ -38478,13 +38480,17 @@ var runMigrateCsf4 = (options, deps) => {
     repairFailures = [...outcome.repairFailures];
     plan.stories.forEach((relative) => {
       const absolute = path50.join(packageDir, relative);
-      if (!repairFailures.includes(relative) && repairs.classifyStoryFile(
+      if (repairFailures.includes(relative)) return;
+      const format = repairs.classifyStoryFile(
         ts,
         readFileSync35(absolute, "utf8"),
         absolute
-      ) !== "csf4") {
+      );
+      if (format !== "csf4") {
         repairFailures.push(relative);
-        notes.push(`${relative}: still CSF3 after conversion.`);
+        notes.push(
+          `${relative}: still ${format.toUpperCase()} after conversion.`
+        );
       }
     });
     notes.push(...outcome.notes);
