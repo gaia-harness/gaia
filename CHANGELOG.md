@@ -14,6 +14,8 @@ A release change that requires the adopter to act, run a command or hand-migrate
 
 ## [Unreleased]
 
+## [2.3.0] - 2026-10-28
+
 ### Added
 
 - **Shell audit member, bats stack and shell checks in CI:** the new `code-audit-shell` audit member reviews the shell you author and your own edits to shipped shell, not GAIA release updates. Shell files under `frontend/` and composite-action scripts under `.github/actions/` now go to it rather than the frontend member. `bats` is a new devDependency with `pnpm test:shell` (run `pnpm install` after updating). `tests.yml` gains a default-on `Tests / Shellcheck and bats` check that runs on every pull request: it shellchecks the shell the pull request changes (GAIA's own shell is skipped only on a GAIA update) and runs your `tests/shell/` bats suites when shell changed, finishing in seconds when there is nothing to check, so it can be made a required check. Set `"shellcheck": false` in `.gaia/project.json` to turn the lint off. `tests.yml` is a shared file, so a customized copy takes a three-way merge on update. `/update-gaia` removes `unowned:` entries the member makes overbroad and reports them; for a run that skipped it, run `bash .gaia/scripts/roster-prune-overbroad.sh --root . --member code-audit-shell` (#2873)
@@ -784,7 +786,8 @@ GAIA v1.0.0 is the inaugural public release of the GAIA React workflow, a Claude
 - **Quality gate.** Mandatory pre-commit pipeline: simplify, localization check, typecheck, lint, unit tests, E2E tests, dev smoke test, build. Zero warnings tolerated.
 - **Release tooling.** Tag-triggered `release.yml` builds a scrubbed tarball; `create-gaia` bootstrapper consumes it via `npx create-gaia@latest my-app`.
 
-[Unreleased]: https://github.com/gaia-harness/gaia/compare/v2.2.0...HEAD
+[Unreleased]: https://github.com/gaia-harness/gaia/compare/v2.3.0...HEAD
+[2.3.0]: https://github.com/gaia-harness/gaia/releases/tag/v2.3.0
 [2.2.0]: https://github.com/gaia-harness/gaia/releases/tag/v2.2.0
 [2.1.1]: https://github.com/gaia-react/gaia/releases/tag/v2.1.1
 [2.1.0]: https://github.com/gaia-react/gaia/releases/tag/v2.1.0
