@@ -8,7 +8,9 @@
 # is green only when both signals agree:
 #
 #   - no open issue carries the `ci-red-main` label, which
-#     .gaia/tests/report-main-status.sh keeps open while main is red;
+#     .gaia/tests/report-main-status.sh keeps open, one per reporting workflow
+#     (this one and the distribution harness), while that workflow is red on
+#     main;
 #   - the push-to-main run of that workflow on the release commit completed
 #     with `success`. The workflow concludes `success` only when its
 #     `Audit CI Tests` aggregator job does.
@@ -105,7 +107,7 @@ run_line=$(gh api "repos/${repo}/actions/workflows/${WORKFLOW_FILE}/runs?event=p
 if [ -n "$open_issues" ]; then
   echo "verify-main-green: REFUSED: main is red. Open ${LABEL_NAME} issue:" >&2
   printf '%s\n' "$open_issues" | sed 's/^/  #/' >&2
-  echo "Fix main. The issue closes itself when a push run of ${WORKFLOW_NAME} on main passes on the red commit or a descendant of it; then re-run this check." >&2
+  echo "Fix main. Each issue closes itself when a push run of the workflow its title names passes on main on the red commit or a descendant of it; then re-run this check." >&2
   exit 1
 fi
 
