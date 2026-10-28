@@ -181,6 +181,10 @@ frontmatter_tools_are_allowlist() {
   assert_pinned 'An `absent` or `transient` outcome never stops the unit and never blocks the merge.'
 }
 
+@test "the unit carries the member's grade into the filed finding and never grades itself" {
+  assert_pinned 'keep the sidecar'"'"'s `grade` as the member wrote it and never add one yourself'
+}
+
 @test "every pr-sections call the unit makes passes --root" {
   local line
   while IFS= read -r line; do
