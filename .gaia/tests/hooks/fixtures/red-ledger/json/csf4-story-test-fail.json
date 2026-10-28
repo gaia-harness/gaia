@@ -1,0 +1,30 @@
+{
+  "numTotalTestSuites": 1,
+  "numFailedTests": 1,
+  "numPassedTests": 1,
+  "numTotalTests": 2,
+  "success": false,
+  "testResults": [
+    {
+      "name": ".gaia/tests/hooks/fixtures/red-ledger/csf4-with-tests.stories.tsx",
+      "status": "failed",
+      "message": "",
+      "assertionResults": [
+        {
+          "title": "hides nothing else",
+          "fullName": "Default   hides nothing else",
+          "status": "passed",
+          "failureMessages": []
+        },
+        {
+          "title": "shows the marker",
+          "fullName": "Default   shows the marker",
+          "status": "failed",
+          "failureMessages": [
+            "AssertionError: expected null to be truthy // Object.is equality\n    at <anonymous>"
+          ]
+        }
+      ]
+    }
+  ]
+}

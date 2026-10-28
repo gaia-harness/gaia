@@ -19,6 +19,7 @@ const config: StorybookConfig = {
   features: {
     backgrounds: false,
     experimentalDocgenServer: true,
+    experimentalTestSyntax: true,
     measure: false,
     outline: false,
   },

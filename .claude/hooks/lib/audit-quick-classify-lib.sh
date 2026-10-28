@@ -97,7 +97,8 @@
 #   quick-empty-value  a new language value that is empty or whitespace-only
 #   quick-locale-missing  the changed key absent from a sibling locale's same file at HEAD
 #   quick-text-deleted  static JSX text deleted with no text line added in the same hunk
-#   quick-story-play  a changed story line touching play, expect, userEvent, waitFor, within( or an assertion
+#   quick-story-format  a story file whose pre-image or post-image is not in the CSF Next shape
+#   quick-story-play  a changed story line touching play, expect, userEvent, waitFor, within(, an assertion, or a line inside a Name.test( statement
 #   quick-story-shape  a story change other than a literal value inside an existing story's args object
 #   quick-unclassified  a changed line matching no allowed shape
 # quick-signals:end
@@ -121,7 +122,19 @@
 # added, changed or removed, the lines byte-identical once that attribute is
 # removed; a language value change keeping key,
 # placeholders, $t() references and HTML-free form, present in every sibling
-# locale; a literal value change inside an existing story export's args object.
+# locale; a literal value change inside the args object of an existing story
+# export (`export const <Name> = <meta>.story({` or `<Other>.extend({`).
+#
+# Story format. The format predicate (C8) is decided from source text alone;
+# this lexer applies its csf4 clauses as line patterns over the whole image,
+# and an image failing any one routes deep as quick-story-format: (a) no line
+# starting `export default`; (b) a line `import <identifier> from '<spec>';`
+# whose spec is `#.storybook/preview` or a relative path ending
+# `.storybook/preview` with an optional script extension; (c) a line binding
+# `= <identifier>.meta(` or `= <identifier>.type<`; (d) no `export const <Name>`
+# line, bare or typed, whose initializer starts with `{`. A top-level
+# `<Name>.test(` statement is story code, so a changed line inside one is
+# quick-story-play.
 # Both className shapes run every check a top-level intrinsic element's
 # className gets (tokens, class value, other attributes, codepoint, cn count).
 #

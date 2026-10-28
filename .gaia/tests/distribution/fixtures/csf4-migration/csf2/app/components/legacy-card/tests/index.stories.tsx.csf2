@@ -1,0 +1,13 @@
+import type {Meta, StoryFn} from '@storybook/react-vite';
+import LegacyCard from '..';
+
+export default {
+  component: LegacyCard,
+  title: 'Components/LegacyCard',
+} as Meta;
+
+const Template: StoryFn<typeof LegacyCard> = (args) => <LegacyCard {...args} />;
+
+export const Default = Template.bind({});
+
+Default.args = {title: 'Hello'};

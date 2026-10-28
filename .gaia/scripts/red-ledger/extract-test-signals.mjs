@@ -16,11 +16,9 @@
 // newline-delimited:
 //   {"fullName":"...","signal":"sha256:...","kind":"runtime"|"type-only"}
 //
-// Story mode: a path ending `.stories.tsx` or `.stories.ts` is read as a CSF
-// story file instead, emitting one {"fullName","signal","kind":"runtime"}
-// line per story with an effective play function, in export source order.
-// The fullName rule, the signal regions, the supported play shapes and the
-// refusal list live in the header of ./extract-story-signals.mjs.
+// Story mode: a path ending `.stories.tsx` or `.stories.ts` is read as a CSF4
+// story file; its fullName and signal rules and refusal list live in the
+// header of ./extract-story-signals.mjs.
 //
 // Exit codes (each failure writes one stderr line and nothing to stdout):
 //   0  success, including zero tests or stories found (emits nothing)
@@ -29,9 +27,11 @@
 //   4  cannot read the file
 //   5  parser threw
 //   6  syntax error in the file
-//   7  story mode only: a story shape the extractor cannot resolve; stderr is
+//   7  story mode only: a story shape the extractor cannot resolve, or a file
+//      in no story format; stderr is (fail closed: never silently dropped)
 //      `extract-test-signals: unsupported story shape in <path>: <ExportName>: <reason>`
-//      (fail closed: a story is never silently dropped)
+//   8  story mode only: a CSF2 or CSF3 story file; stderr is
+//      `extract-test-signals: <path> is an old-format story file; migrate it with: .gaia/cli/gaia migrate-csf4`
 //
 // fullName: the titles of all enclosing describe(...) blocks (outermost
 // first) plus the test's own title, single-space-joined. Matches vitest's
@@ -70,7 +70,7 @@ import {createRequire} from 'node:module';
 import {readFileSync} from 'node:fs';
 import {
   extractStorySignals,
-  StoryShapeRefusal,
+  StoryFileRefusal,
 } from './extract-story-signals.mjs';
 
 const require = createRequire(import.meta.url);
@@ -132,8 +132,8 @@ try {
 
 // createSourceFile is lenient and records syntactic diagnostics rather than
 // throwing. A genuinely broken file must fail the helper so the caller can
-// fall back: the capture and check hooks skip the file (fail-open; only the
-// exit-7 story shape denies), and append-worthiness.mjs refuses by name.
+// fall back: the capture and check hooks skip the file (fail-open; only a
+// story-mode refusal denies), and append-worthiness.mjs refuses by name.
 const diagnostics = sourceFile.parseDiagnostics ?? [];
 if (diagnostics.length > 0) {
   const first = diagnostics[0];
@@ -481,13 +481,11 @@ if (/\.stories\.tsx?$/.test(filePath)) {
       ...extractStorySignals({ts, sourceFile, textWithoutComments, normalize}),
     );
   } catch (err) {
-    if (!(err instanceof StoryShapeRefusal)) {
+    if (!(err instanceof StoryFileRefusal)) {
       throw err;
     }
-    process.stderr.write(
-      `extract-test-signals: unsupported story shape in ${filePath}: ${err.exportName}: ${err.reason}\n`,
-    );
-    process.exit(7);
+    process.stderr.write(`extract-test-signals: ${err.describe(filePath)}\n`);
+    process.exit(err.exitCode);
   }
 } else {
   visit(sourceFile, [], false);

@@ -51,3 +51,7 @@
 .gaia/scripts/spec/uat-lib.sh	.playwright/e2e	Package-relative e2e directory name joined to the package path from the registry, not a root path.
 .claude/hooks/red-verify-commit-check.sh	pnpm -C frontend test --run app/utils/x.test.ts	Example test path relative to the package directory the -C option names, not a root path.
 .claude/skills/gaia/references/plan/planner.md	pnpm -C frontend test --run app/utils/x.test.ts	Example test path relative to the package directory the -C option names, not a root path.
+.gaia/cli/src/migrate-csf4/inventory.ts	'app/**/*.stories.{ts,tsx}'	Fallback story glob, resolved against the adopter package directory.
+.gaia/cli/src/migrate-csf4/inventory.ts	no .storybook/main file	Refusal text naming the package-relative main file.
+.gaia/cli/src/migrate-csf4/run-fixture.ts	'.storybook/main.ts'	Test-double codemod writing into the package-relative work copy.
+.gaia/cli/src/migrate-csf4/run-fixture.ts	'.storybook/preview.ts'	Test-double codemod writing into the package-relative work copy.

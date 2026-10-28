@@ -99,6 +99,19 @@ run_gate() {
   grep -qF -- "check-retired-paths: clean" <<<"$output"
 }
 
+@test "a package imports subpath naming .storybook is not a root citation, a bare one still is" {
+  local repo
+  repo="$(make_repo imports-subpath)"
+  mkdir -p "$repo/.gaia/cli/src"
+  printf '%s\n' "import preview from '#.storybook/preview';" >"$repo/.gaia/cli/src/x.ts"
+  printf '%s\n' "const main = '.storybook/main.ts';" >"$repo/.gaia/cli/src/y.ts"
+  stage_all "$repo"
+  run_gate "$repo"
+  [ "$status" -eq 1 ]
+  grep -qF -- 'RETIRED .gaia/cli/src/x.ts' <<<"$output" && return 1
+  grep -qF -- "RETIRED .gaia/cli/src/y.ts:1: const main = '.storybook/main.ts';" <<<"$output"
+}
+
 @test "a comment-only line in a code file is skipped but a trailing comment is not" {
   local repo
   repo="$(make_repo comments)"

@@ -4,13 +4,13 @@ status: active
 package: vitest
 role: test-runner
 created: 2026-04-20
-updated: 2026-10-26
+updated: 2026-10-28
 tags: [dependency, testing]
 ---
 
 # Vitest
 
-Test runner for unit tests and, through `@storybook/addon-vitest`, for the story play functions that test components and pages. Browser-mode projects run in headless Chromium via `@vitest/browser-playwright`; no DOM emulation is used. See [[Stories as Tests]].
+Test runner for unit tests and, through `@storybook/addon-vitest`, for the story `.test()` behaviors that test components and pages. Browser-mode projects run in headless Chromium via `@vitest/browser-playwright`; no DOM emulation is used. See [[Stories as Tests]].
 
 ## Companion packages
 
@@ -22,7 +22,7 @@ Vitest-aware lint rules come from `@vitest/eslint-plugin`, which the shared `@ga
 
 ## Conventions
 
-- `*.test.{ts,tsx}` for pure code, server code and hooks; component and page tests are stories (`*.stories.tsx`) with `play` functions
+- `*.test.{ts,tsx}` for pure code, server code and hooks; component and page tests are stories (`*.stories.tsx`) whose behaviors are `.test()` calls ([[Stories as Tests]])
 - Tests and stories live in `tests/` subfolders next to components/pages/hooks
 - Explicit imports in every test file: `import {describe, expect, test} from 'vitest'`
 - Keep `vitest/globals` out of `frontend/tsconfig.json` types: the explicit imports are what type-check

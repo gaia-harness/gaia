@@ -4,7 +4,7 @@ status: active
 package: '@playwright/test'
 role: e2e-testing
 created: 2026-04-20
-updated: 2026-10-27
+updated: 2026-10-28
 tags: [dependency, testing, e2e]
 ---
 
@@ -20,7 +20,7 @@ Tests that mutate MSW in-memory state call `resetTestData()` from `frontend/test
 
 ## Relationship to the story tests
 
-Component and page behavior is tested by story play functions under Vitest ([[Stories as Tests]]), not by Playwright. Playwright keeps user flows against the running app and the story scan, which axe-checks every story in dark at merge time. Vitest's addon-a11y covers the light theme only, so `pnpm pw` is the dark-theme check to run on any theme or token change.
+Component and page behavior is tested by story `.test()` behaviors under Vitest ([[Stories as Tests]]), not by Playwright. Playwright keeps user flows against the running app and the story scan, which skips the index entries Storybook adds for `.test()` (they are behaviors, not visual states) and which axe-checks every story in dark at merge time. Vitest's addon-a11y covers the light theme only, so `pnpm pw` is the dark-theme check to run on any theme or token change.
 
 ## Hydration helper
 

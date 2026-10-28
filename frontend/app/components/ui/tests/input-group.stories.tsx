@@ -1,8 +1,8 @@
 import type {ComponentProps} from 'react';
 import {useTranslation} from 'react-i18next';
-import type {Meta, StoryFn, StoryObj} from '@storybook/react-vite';
 import {SearchIcon, SendIcon} from 'lucide-react';
-import {expect, userEvent, within} from 'storybook/test';
+import {expect, userEvent} from 'storybook/test';
+import preview from '#.storybook/preview';
 import {
   InputGroup,
   InputGroupAddon,
@@ -11,15 +11,13 @@ import {
   InputGroupText,
 } from '~/components/ui/input-group';
 
-const meta: Meta = {
+const meta = preview.meta({
   component: InputGroup,
   parameters: {
     wrap: 'max-w-sm p-4',
   },
   title: 'Components/Ui/InputGroup',
-};
-
-export default meta;
+});
 
 type AddonStoryProps = {align: Align};
 type Align = NonNullable<ComponentProps<typeof InputGroupAddon>['align']>;
@@ -55,55 +53,67 @@ const ButtonStory = ({size}: ButtonStoryProps) => {
   );
 };
 
-export const AddonInlineStart: StoryFn = () => (
-  <AddonStory align="inline-start" />
-);
+export const AddonInlineStart = meta.story({
+  render: () => <AddonStory align="inline-start" />,
+});
 
-export const AddonInlineEnd: StoryFn = () => <AddonStory align="inline-end" />;
+export const AddonInlineEnd = meta.story({
+  render: () => <AddonStory align="inline-end" />,
+});
 
-export const AddonBlockStart: StoryFn = () => (
-  <AddonStory align="block-start" />
-);
+export const AddonBlockStart = meta.story({
+  render: () => <AddonStory align="block-start" />,
+});
 
-export const AddonBlockEnd: StoryFn = () => <AddonStory align="block-end" />;
+export const AddonBlockEnd = meta.story({
+  render: () => <AddonStory align="block-end" />,
+});
 
-export const ButtonXs: StoryFn = () => <ButtonStory size="xs" />;
+export const ButtonXs = meta.story({render: () => <ButtonStory size="xs" />});
 
-export const ButtonSm: StoryFn = () => <ButtonStory size="sm" />;
+export const ButtonSm = meta.story({render: () => <ButtonStory size="sm" />});
 
-export const ButtonIconXs: StoryFn = () => <ButtonStory size="icon-xs" />;
+export const ButtonIconXs = meta.story({
+  render: () => <ButtonStory size="icon-xs" />,
+});
 
-export const ButtonIconSm: StoryFn = () => <ButtonStory size="icon-sm" />;
+export const ButtonIconSm = meta.story({
+  render: () => <ButtonStory size="icon-sm" />,
+});
 
-export const Invalid: StoryFn = () => {
-  const {t} = useTranslation();
+export const Invalid = meta.story({
+  render: () => {
+    const {t} = useTranslation();
 
-  return (
-    <InputGroup>
-      <InputGroupInput aria-invalid={true} aria-label={t('email')} />
-      <InputGroupAddon>
-        <SearchIcon />
-      </InputGroupAddon>
-    </InputGroup>
-  );
-};
+    return (
+      <InputGroup>
+        <InputGroupInput aria-invalid={true} aria-label={t('email')} />
+        <InputGroupAddon>
+          <SearchIcon />
+        </InputGroupAddon>
+      </InputGroup>
+    );
+  },
+});
 
-export const Disabled: StoryFn = () => {
-  const {t} = useTranslation();
+export const Disabled = meta.story({
+  render: () => {
+    const {t} = useTranslation();
 
-  return (
-    <InputGroup>
-      <InputGroupInput aria-label={t('email')} disabled={true} />
-      <InputGroupAddon>
-        <SearchIcon />
-      </InputGroupAddon>
-    </InputGroup>
-  );
-};
+    return (
+      <InputGroup>
+        <InputGroupInput aria-label={t('email')} disabled={true} />
+        <InputGroupAddon>
+          <SearchIcon />
+        </InputGroupAddon>
+      </InputGroup>
+    );
+  },
+});
 
-export const AddonClickFocusesInput: StoryObj<typeof meta> = {
-  play: async ({canvasElement}) => {
-    const canvas = within(canvasElement);
+AddonInlineStart.test(
+  'focuses the input when the addon is clicked',
+  async ({canvas}) => {
     const input = canvas.getByRole('textbox', {name: 'Email'});
 
     await expect(input).not.toHaveFocus();
@@ -111,13 +121,12 @@ export const AddonClickFocusesInput: StoryObj<typeof meta> = {
     await userEvent.click(canvas.getByText('Email'));
 
     await expect(input).toHaveFocus();
-  },
-  render: () => <AddonStory align="inline-start" />,
-};
+  }
+);
 
-export const AddonButtonClickKeepsFocusOnButton: StoryObj<typeof meta> = {
-  play: async ({canvasElement}) => {
-    const canvas = within(canvasElement);
+ButtonXs.test(
+  'keeps focus on the addon button when it is clicked',
+  async ({canvas}) => {
     const button = canvas.getByRole('button', {name: 'Submit'});
 
     await userEvent.click(button);
@@ -126,6 +135,5 @@ export const AddonButtonClickKeepsFocusOnButton: StoryObj<typeof meta> = {
     await expect(
       canvas.getByRole('textbox', {name: 'Email'})
     ).not.toHaveFocus();
-  },
-  render: () => <ButtonStory size="xs" />,
-};
+  }
+);

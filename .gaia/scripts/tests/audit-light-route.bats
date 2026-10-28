@@ -1369,26 +1369,22 @@ EOF
 
 mb_story_text() {
   cat <<'EOF'
-import type {Meta, StoryObj} from '@storybook/react-vite';
+import preview from '#.storybook/preview';
 import {expect, within} from 'storybook/test';
 import Card from '..';
 
-const meta: Meta<typeof Card> = {
+const meta = preview.meta({
   component: Card,
   title: 'Components/Card',
-};
+});
 
-export default meta;
-
-type Story = StoryObj<typeof Card>;
-
-export const Default: Story = {
+export const Default = meta.story({
   args: {
     label: 'Save',
   },
-};
+});
 
-export const Interactive: Story = {
+export const Interactive = meta.story({
   args: {label: 'Go'},
   parameters: {
     a11y: {test: 'error'},
@@ -1397,7 +1393,7 @@ export const Interactive: Story = {
     const canvas = within(canvasElement);
     await expect(canvas.getByText('Go')).toBeVisible();
   },
-};
+});
 EOF
 }
 
@@ -1507,10 +1503,9 @@ cap_locale() {
 
 # cap_story <word>: a story whose Default args hold two literals.
 cap_story() {
-  printf "import type {Meta, StoryObj} from '@storybook/react-vite';\nimport Card from '..';\n\n"
-  printf "const meta: Meta<typeof Card> = {\n  component: Card,\n  title: 'Components/Card',\n};\n\n"
-  printf 'export default meta;\n\ntype Story = StoryObj<typeof Card>;\n\n'
-  printf "export const Default: Story = {\n  args: {\n    label: '%s',\n    title: '%s',\n  },\n};\n" "$1" "$1"
+  printf "import preview from '#.storybook/preview';\nimport Card from '..';\n\n"
+  printf "const meta = preview.meta({\n  component: Card,\n  title: 'Components/Card',\n});\n\n"
+  printf "export const Default = meta.story({\n  args: {\n    label: '%s',\n    title: '%s',\n  },\n});\n" "$1" "$1"
 }
 
 # cap_set_base <component-lines>: main holds the old component, story and two
@@ -1994,15 +1989,15 @@ mb_signal_case() {
 @test "merge-base quick-story-play: a changed story assertion is wired through the router with its signal" {
   mb_pair_base
   mb_line "$MB_COMPONENT" replace 10 '      Hello there'
-  mb_line "$MB_STORY" replace 27 "    await expect(canvas.getByText('Run')).toBeVisible();"
+  mb_line "$MB_STORY" replace 23 "    await expect(canvas.getByText('Run')).toBeVisible();"
   lsb_route "$FRONTEND"
-  mb_signal_case quick-story-play pre:27 "$MB_STORY"
+  mb_signal_case quick-story-play pre:23 "$MB_STORY"
 }
 
 @test "twin: the line stage lets an allowed text edit through on the same sandbox" {
   mb_pair_base
   mb_line "$MB_COMPONENT" replace 10 '      Hello there'
-  mb_line "$MB_STORY" replace 21 "  args: {label: 'Run'},"
+  mb_line "$MB_STORY" replace 17 "  args: {label: 'Run'},"
   lsb_route "$FRONTEND"
   expect_route light quick-eligible
   [ "$(record_value "$FRONTEND" '.quick_signal')" = "null" ]
@@ -2015,7 +2010,7 @@ mb_signal_case() {
   lsb_commit "$MB_COMPONENT" "$(mb_component_text)"
   lsb_commit "$MB_STORY" "$(mb_story_text)"
   lsb_full_clearance "$FRONTEND"
-  mb_line "$MB_STORY" replace 21 "  args: {label: 'Run'},"
+  mb_line "$MB_STORY" replace 17 "  args: {label: 'Run'},"
   lsb_route "$FRONTEND"
   expect_route full hard-full
   [ "$(record_value "$FRONTEND" '[.hard_full_rule, .anchor_kind]')" = '["**/tests/**","full"]' ] || return 1
@@ -2026,7 +2021,7 @@ mb_signal_case() {
   lsb_commit "$MB_COMPONENT" "$(mb_component_text)"
   lsb_commit "$MB_STORY" "$(mb_story_text)"
   lsb_full_clearance "$FRONTEND"
-  mb_line "$MB_STORY" replace 27 "    await expect(canvas.getByText('Run')).toBeVisible();"
+  mb_line "$MB_STORY" replace 23 "    await expect(canvas.getByText('Run')).toBeVisible();"
   lsb_route "$FRONTEND"
   expect_route full hard-full
   [ "$(record_value "$FRONTEND" '[.hard_full_rule, .anchor_kind]')" = '["**/tests/**","full"]' ] || return 1
@@ -2038,7 +2033,7 @@ mb_signal_case() {
   lsb_commit "$MB_STORY" "$(mb_story_text)"
   lsb_refuse_with_findings "$FRONTEND" "[$(lsb_finding "$MB_COMPONENT" 10 major false)]"
   mb_line "$MB_COMPONENT" replace 10 '      Hello there'
-  mb_line "$MB_STORY" replace 21 "  args: {label: 'Run'},"
+  mb_line "$MB_STORY" replace 17 "  args: {label: 'Run'},"
   lsb_route "$FRONTEND"
   expect_route full hard-full
   [ "$(record_value "$FRONTEND" '[.hard_full_rule, .anchor_kind]')" = '["**/tests/**","refusal"]' ] || return 1
@@ -2047,7 +2042,7 @@ mb_signal_case() {
 @test "twin: the same story plus component pair on a merge-base first dispatch routes light quick-eligible" {
   mb_pair_base
   mb_line "$MB_COMPONENT" replace 10 '      Hello there'
-  mb_line "$MB_STORY" replace 21 "  args: {label: 'Run'},"
+  mb_line "$MB_STORY" replace 17 "  args: {label: 'Run'},"
   lsb_route "$FRONTEND"
   expect_route light quick-eligible
   [ "$(record_value "$FRONTEND" '[.files[].path]')" = "[\"$MB_COMPONENT\",\"$MB_STORY\"]" ] || return 1
@@ -2055,7 +2050,7 @@ mb_signal_case() {
 
 @test "merge-base hard-full: a paired story whose component did not change routes full" {
   mb_pair_base
-  mb_line "$MB_STORY" replace 21 "  args: {label: 'Run'},"
+  mb_line "$MB_STORY" replace 17 "  args: {label: 'Run'},"
   lsb_route "$FRONTEND"
   expect_route full hard-full
   [ "$(record_value "$FRONTEND" '.hard_full_rule')" = '"**/tests/**"' ]
@@ -2068,7 +2063,7 @@ mb_signal_case() {
   add_hard_full_glob "$FRONTEND" "frontend/app/components/card/tests/**"
   mb_cut
   mb_line "$MB_COMPONENT" replace 10 '      Hello there'
-  mb_line "$MB_STORY" replace 21 "  args: {label: 'Run'},"
+  mb_line "$MB_STORY" replace 17 "  args: {label: 'Run'},"
   lsb_route "$FRONTEND"
   expect_route full hard-full
   [ "$(record_value "$FRONTEND" '.hard_full_rule')" = '"frontend/app/components/card/tests/**"' ]

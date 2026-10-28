@@ -139,6 +139,26 @@ describe('init strip-branding', () => {
     expect(state.step_args['strip-branding']).toEqual({title: 'Hello World'});
   });
 
+  test('only the brand declaration changes in the definePreview preview', () => {
+    sandbox = setupSandbox();
+
+    expect(run(['--title', 'Hello World'], {cwd: sandbox.root})).toBe(0);
+
+    const after = readFileSync(
+      path.join(sandbox.root, '.storybook', 'preview.ts'),
+      'utf8'
+    );
+    const declaration = /const storybookBrandOptions = \{[\s\S]*?\};/u;
+
+    expect(PREVIEW_BEFORE).toContain('export default definePreview(');
+    expect(after.replace(declaration, '')).toBe(
+      PREVIEW_BEFORE.replace(declaration, '')
+    );
+    expect(after).toContain(
+      "const storybookBrandOptions = {\n  brandTarget: '_blank',\n  brandTitle: 'Hello World',\n};"
+    );
+  });
+
   test('idempotent: re-running is a no-op', () => {
     sandbox = setupSandbox();
 

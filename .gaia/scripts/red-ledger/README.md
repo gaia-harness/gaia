@@ -75,20 +75,30 @@ per discovered `test(...)`/`it(...)` call, newline-delimited:
 on success (no output when no tests are found); non-zero with a one-line stderr
 message on a failure. The exit codes are listed in the helper's header.
 
-**Story mode.** A path ending `.stories.tsx` or `.stories.ts` is read as a CSF
-story file, whose play functions `@storybook/addon-vitest` runs as tests. The
-helper prints one `{"fullName","signal","kind":"runtime"}` line per story that
-has an effective play function and keeps the `test` tag, in export order, and
-nothing for a render-only story, a story tagged `!test`, or the default export.
-`fullName` is the name addon-vitest gives the test (Storybook's start-cased
-export name, or the story's string-literal `name`), with no meta title or
-describe prefix. `signal` covers the story's declaration and its top-level
-assignments, the resolved play function (shared, factory-built, spread or
-inherited from the meta), and the meta object, so editing a shared play or the
-meta rotates every story it reaches. A story shape whose play the helper cannot
-resolve exits `7` with an `unsupported story shape` stderr line and empty
-stdout, never an empty success. The supported shapes and the refusal list live
-in the header of `extract-story-signals.mjs`.
+**Story mode.** A path ending `.stories.tsx` or `.stories.ts` is read as a
+CSF4 story file (`preview.meta`, `meta.story`, `.extend`, `.test()`), whose
+stories `@storybook/addon-vitest` runs as tests. The helper prints
+`{"fullName","signal","kind":"runtime"}` lines in export order: for a story
+carrying any `.test()`, `<Story Name>   base story` and then
+`<Story Name>   <test name>` per test (three spaces, as Storybook's Vitest
+reporter names them); for a story with an effective play and no tests, the
+plain `<Story Name>`; nothing for a render-only story without tests or a story
+tagged `!test`. `<Story Name>` is Storybook's start-cased export name, or a
+string-literal `name` in the story's own call argument; an `.extend` story
+keeps its own export's name, never its source's `name`. An `.extend` story
+without its own play inherits its source's, then the meta's. Every entry of a
+story signs the story's declaration, its resolved play and the meta call, and
+a test entry also its `.test(…)` call, so editing a story's play rotates its
+base story, every test and every `.extend` story inheriting that play, while
+editing one test rotates that test only.
+
+The format is decided from the source text by `story-format.mjs`, the
+predicate the migration command and quick-classify share. A CSF2 or CSF3 file
+exits `8` with empty stdout and one stderr line naming the migration command
+(`.gaia/cli/gaia migrate-csf4`). A CSF4 shape the helper cannot resolve, or a
+file in no story format, exits `7` with an `unsupported story shape` stderr
+line and empty stdout, never an empty success. The rules and the refusal list
+live in the header of `extract-story-signals.mjs`.
 
 `fullName` is the enclosing describe titles (outermost first) plus the test
 title, single-space-joined. `signal` is `sha256:` plus the lowercase-hex

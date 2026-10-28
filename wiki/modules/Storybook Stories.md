@@ -8,17 +8,17 @@ depends_on:
   - '[[Storybook]]'
   - '[[MSW]]'
 created: 2026-04-20
-updated: 2026-10-23
+updated: 2026-10-28
 tags: [module, storybook, testing]
 ---
 
 # Storybook Stories
 
-Storybook v10 with the `@storybook/react-vite` framework. Configured to discover `*.stories.tsx` anywhere in `frontend/app/`.
+Storybook v10 with the `@storybook/react-vite` framework. Configured to discover `*.stories.tsx` anywhere in `frontend/app/`. Stories are written in CSF Next (CSF4): each file imports the preview as `import preview from '#.storybook/preview'`, builds its meta with `preview.meta({...})`, and declares stories with `meta.story({...})`, `.extend({...})` and `.test()`. `.storybook/main.ts` turns on `features.experimentalTestSyntax`, and `.storybook/preview.ts` is a `definePreview` call that wires the addons.
 
 ## Why Storybook is also the test driver
 
-`@storybook/addon-vitest` runs every story as a Vitest test in headless Chromium, and a story's `play` function holds its assertions, so one source of truth drives the component test, visual regression (Chromatic) and the Playwright story scan. `@storybook/addon-a11y` axe-checks each story. See [[Stories as Tests]], [[Component Testing]] and [[Testing]].
+`@storybook/addon-vitest` runs every story as a Vitest test in headless Chromium, and a behavior is a `.test()` attached to a story (a story's `play` only drives the UI into the state its snapshot shows), so one source of truth drives the component test, visual regression (Chromatic) and the Playwright story scan. `@storybook/addon-a11y` axe-checks each story. See [[Stories as Tests]], [[Component Testing]] and [[Testing]].
 
 ## Decorator stack: the load-bearing convention
 
@@ -42,11 +42,11 @@ Chromatic loads only the preview iframe, so the toolbar toggle never fires there
 
 ## i18n in stories
 
-`storybook-react-i18next` is wired to the project's own `~/i18n` config. Toolbar exposes the configured locales. Inside story functions, call `useTranslation()` normally; no extra setup. Per-locale content variation (e.g. stress-testing long CJK strings) is handled inside the story by reading `i18n.language`. A preview loader awaits `changeLanguage` to the story's locale before render, so a built Storybook shows the selected locale during `play`. The initial locale and the Storybook i18next init both read `DEFAULT_LOCALE`.
+`storybook-react-i18next` is wired to the project's own `~/i18n` config. Toolbar exposes the configured locales. Inside story functions, call `useTranslation()` normally; no extra setup. Per-locale content variation (e.g. stress-testing long CJK strings) is handled inside the story by reading `i18n.language`. A preview loader awaits `changeLanguage` to the story's locale before render, so a built Storybook shows the selected locale in a `play` and in a `.test()`. The i18next addon is wired in `definePreview`'s `addons` through `definePreviewAddon<AddonTypes>(storybookReactI18next)`. The initial locale and the Storybook i18next init both read `DEFAULT_LOCALE`.
 
 ## Test data: MSW
 
-`msw-storybook-addon` is wired: `.storybook/main.ts` registers the addon and serves `public/` as a static directory (so built Storybook and Chromatic find `mockServiceWorker.js`), and `.storybook/preview.ts` registers `mswLoader()` from `msw-storybook-addon/csf3`. A story supplies handlers through `parameters.msw.handlers`. Handlers read a mutation body with `request.json()`. Seed data comes from the `@msw/data` collections in `frontend/test/mocks/database`. See `frontend/.claude/rules/storybook.md` for the usage pattern and [[MSW Handlers]] for the handler structure.
+`msw-storybook-addon` is wired: `.storybook/main.ts` serves `public/` as a static directory (so built Storybook and Chromatic find `mockServiceWorker.js`), and `.storybook/preview.ts` lists `addonMsw()` in `definePreview`'s `addons`. A story installs handlers in its `beforeEach` through the addon's CSF Next API. Handlers read a mutation body with `request.json()`. Seed data comes from the `@msw/data` collections in `frontend/test/mocks/database`. See `frontend/.claude/rules/storybook.md` for the usage pattern, [[Stories as Tests]] for the doctrine, and [[MSW Handlers]] for the handler structure.
 
 When TanStack Query is on, a Storybook decorator (`.storybook/decorators/query-client-decorator.tsx`) gives each story a fresh QueryClient. See [[Data Loading]].
 

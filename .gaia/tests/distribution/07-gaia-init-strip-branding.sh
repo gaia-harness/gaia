@@ -20,6 +20,8 @@
 #   - .gaia/LICENSE, GAIA's license notice for the files it provides, is
 #     staged and survives strip-branding byte-identical to the source copy,
 #     while the root LICENSE stays release-excluded for the adopter's own.
+#   - The Storybook preview keeps its CSF Next form (`export default
+#     definePreview(`) and carries the project title, not GAIA's brand URL.
 #
 # Layer 0.5: runs on the host or runner, no Docker. Cheap (~1s after
 # build-staging); no pnpm install, just file-level transforms.
@@ -81,5 +83,15 @@ grep -q "$TITLE" "$SCAFFOLD/README.md" \
 
 cmp -s "$PROJECT_ROOT/.gaia/LICENSE" "$SCAFFOLD/.gaia/LICENSE" \
   || { fail "strip-branding removed or rewrote .gaia/LICENSE"; exit 1; }
+
+PREVIEW="$SCAFFOLD/frontend/.storybook/preview.ts"
+grep -q '^export default definePreview(' "$PREVIEW" \
+  || { fail "strip-branding left a .storybook/preview.ts that is not export default definePreview("; exit 1; }
+grep -q "brandTitle: '$TITLE'" "$PREVIEW" \
+  || { fail "strip-branding did not write the project title as the Storybook brandTitle"; exit 1; }
+if grep -q 'docs.gaiaharness.com' "$PREVIEW"; then
+  fail "strip-branding left GAIA's brand URL in .storybook/preview.ts"
+  exit 1
+fi
 
 pass "gaia init strip-branding produced expected post-conditions on staged tree"

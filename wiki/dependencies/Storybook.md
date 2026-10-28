@@ -4,19 +4,23 @@ status: active
 package: storybook
 role: component-development-and-visual-testing
 created: 2026-04-20
-updated: 2026-10-26
+updated: 2026-10-28
 tags: [dependency, storybook]
 ---
 
 # Storybook
 
-Component-Driven Development environment. v10 with `@storybook/react-vite`.
+Component-Driven Development environment. v10 with `@storybook/react-vite`. Stories are CSF Next (CSF4) only, with `features.experimentalTestSyntax` on in `.storybook/main.ts` so a story carries `.test()` behaviors; [[Stories as Tests]] owns the doctrine.
 
 ## Companion packages
 
-`@storybook/react-vite`, `@storybook/addon-links`, `@storybook/addon-vitest` (runs stories as Vitest tests, see [[Stories as Tests]]), `@storybook/addon-a11y` (axe on every story, see [[Accessibility]]), `@vueless/storybook-dark-mode`, `storybook-react-i18next`, `chromatic`. `msw-storybook-addon` (registered in `.storybook/main.ts`, with its loader in `.storybook/preview.ts`; stories supply handlers through `parameters.msw.handlers`). Storybook lint rules ship through the `@gaia-harness/lint` config (spread as `...lint.storybook` in `frontend/eslint.config.mjs`), which supplies `eslint-plugin-storybook` transitively rather than as a direct `package.json` dependency.
+`@storybook/react-vite`, `@storybook/addon-links`, `@storybook/addon-vitest` (runs stories as Vitest tests, see [[Stories as Tests]]), `@storybook/addon-a11y` (axe on every story, see [[Accessibility]]), `@vueless/storybook-dark-mode`, `storybook-react-i18next`, `chromatic`. `msw-storybook-addon` (wired in the preview as `addonMsw()`; stories install handlers in `beforeEach`). Storybook lint rules ship through the `@gaia-harness/lint` config (spread as `...lint.storybook` in `frontend/eslint.config.mjs`), which supplies `eslint-plugin-storybook` transitively rather than as a direct `package.json` dependency.
 
 See [[Storybook Stories]] module page.
+
+## Preview wiring
+
+`.storybook/preview.ts` is `export default definePreview({...})`, and every addon it uses sits in `definePreview`'s `addons`. The i18next addon is not typed for CSF Next, so it is wrapped as `definePreviewAddon<AddonTypes>(storybookReactI18next)` (both from `storybook/internal/csf`, an internal import that can change in any Storybook upgrade). `@vueless/storybook-dark-mode` is a manager-side addon: it stays in `main.ts`'s `addons` and never appears in the preview. Stories import the preview through the `#.storybook/preview` subpath in `frontend/package.json` `imports`. `gaia migrate-csf4` converts an older project (see [[GAIA CLI]]).
 
 ## Vite and the Rolldown CommonJS fault
 

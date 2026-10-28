@@ -11,7 +11,7 @@ depends_on:
   - '[[Chromatic]]'
   - '[[MSW]]'
 created: 2026-04-20
-updated: 2026-10-13
+updated: 2026-10-28
 tags: [module, testing]
 ---
 
@@ -20,7 +20,7 @@ tags: [module, testing]
 Testing has **four layers**, all sharing a common [[MSW Handlers|MSW]] mocking layer:
 
 - Unit: [[Vitest]] in `frontend/app/utils/tests/` (pure and server code), and `vitest-browser-react` tests for hooks
-- Component and page: Storybook stories with `play` functions in `frontend/app/components/*/tests/`, `frontend/app/pages/*/tests/`, run by Vitest through `@storybook/addon-vitest`
+- Component and page: Storybook stories with `.test()` behaviors in `frontend/app/components/*/tests/`, `frontend/app/pages/*/tests/`, run by Vitest through `@storybook/addon-vitest`
 - E2E: [[Playwright]] in `frontend/.playwright/e2e/*.spec.ts`
 - Visual regression: [[Chromatic]] (CI only), driven by the same stories
 
@@ -45,7 +45,7 @@ Vitest's browser projects need Chromium, and `pnpm install` installs no browsers
 
 ## Component test pattern
 
-Test a component or page with a story that has a `play` function. Never manually mock framework deps (`react-router`, `react-i18next`, etc.); use the stubs. Mock only external services or utilities the component imports directly. See [[Stories as Tests]] and [[Component Testing]] for the canonical pattern.
+Test a component or page with a story that carries a `.test()` for each behavior. Never manually mock framework deps (`react-router`, `react-i18next`, etc.); use the stubs. Mock only external services or utilities the component imports directly. See [[Stories as Tests]] and [[Component Testing]] for the canonical pattern.
 
 ## Playwright
 

@@ -1,0 +1,23 @@
+import type {Meta, StoryFn} from '@storybook/react-vite';
+import {expect, userEvent, within} from 'storybook/test';
+import Counter from '..';
+
+const meta: Meta<typeof Counter> = {
+  component: Counter,
+  title: 'Components/Counter',
+};
+
+export default meta;
+
+export const Default: StoryFn<typeof Counter> = (args) => <Counter {...args} />;
+
+Default.args = {label: 'Clicks', step: 2};
+
+Default.parameters = {layout: 'centered'};
+
+Default.play = async ({canvasElement}) => {
+  const canvas = within(canvasElement);
+
+  await userEvent.click(canvas.getByRole('button', {name: 'Add 2'}));
+  await expect(canvas.getByRole('status')).toHaveTextContent('2');
+};

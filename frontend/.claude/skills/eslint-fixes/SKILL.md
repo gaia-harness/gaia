@@ -72,7 +72,7 @@ const names = items.map((item) => item.name);
 
 ## Unawaited user-event calls
 
-`userEvent` from `storybook/test` is async in a play function, always `await` it.
+`userEvent` from `storybook/test` is async in a play function or a `.test()`, always `await` it.
 
 ```tsx
 // BAD
