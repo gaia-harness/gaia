@@ -1,7 +1,8 @@
 #!/usr/bin/env bats
 
-# Hermetic suite for .gaia/tests/report-main-status.sh, the reporter the
-# push-to-main job runs to keep one `ci-red-main` issue open while main is red.
+# Hermetic suite for .gaia/tests/report-main-status.sh, the reporter each
+# push-to-main job runs to keep one `ci-red-main` issue per workflow open while
+# that workflow is red on main.
 # Push behavior cannot run before merge, so every transition is driven here
 # through a PATH-stubbed `gh` that records its argv and answers from fixture
 # files. Nothing reads the real tree, the network or a real repository.
@@ -77,6 +78,24 @@ write_issue_view() {
     '{author: {login: $login}, body: $text, comments: $comments}' > "$STUB_DIRECTORY/issue-view.json"
 }
 
+# open_issues <number>... [-- <title>]: the open ci-red-main issues the stubbed
+# `issue list` answers with, in the number<TAB>title form the script asks for,
+# titled for GAIA: Audit CI Tests unless a title follows `--`.
+open_issues() {
+  local numbers=() title='Main is red: GAIA: Audit CI Tests' number
+  while [ "$#" -gt 0 ]; do
+    if [ "$1" = "--" ]; then
+      title="$2"
+      break
+    fi
+    numbers+=("$1")
+    shift
+  done
+  for number in "${numbers[@]}"; do
+    printf '%s\t%s\n' "$number" "$title"
+  done >> "$STUB_DIRECTORY/issues.txt"
+}
+
 calls_matching() {
   grep -c -- "$1" "$GH_LOG" || true
 }
@@ -126,7 +145,7 @@ calls_matching() {
 }
 
 @test "red with an open issue comments on it and creates nothing" {
-  printf '42\n' > "$STUB_DIRECTORY/issues.txt"
+  open_issues 42
   run bash "$SCRIPT"
   [ "$status" -eq 0 ]
   [ "$(calls_matching '^issue comment 42 ')" -eq 1 ]
@@ -137,7 +156,7 @@ calls_matching() {
 }
 
 @test "two open issues: acts on the lowest number and creates nothing" {
-  printf '51\n42\n' > "$STUB_DIRECTORY/issues.txt"
+  open_issues 51 42
   run bash "$SCRIPT"
   [ "$status" -eq 0 ]
   [ "$(calls_matching '^issue comment 42 ')" -eq 1 ]
@@ -147,7 +166,7 @@ calls_matching() {
 
 @test "green on a descendant of the red commit closes with a link to the run" {
   export SHARDS_RESULT="success"
-  printf '42\n' > "$STUB_DIRECTORY/issues.txt"
+  open_issues 42
   write_issue_view "github-actions" $'body\n<!-- red-main-sha: cccccccccccccccccccccccccccccccccccccccc -->'
   printf 'ahead\n' > "$STUB_DIRECTORY/compare.txt"
   run bash "$SCRIPT"
@@ -159,7 +178,7 @@ calls_matching() {
 
 @test "green on the identical commit also closes" {
   export SHARDS_RESULT="success"
-  printf '42\n' > "$STUB_DIRECTORY/issues.txt"
+  open_issues 42
   write_issue_view "github-actions" "<!-- red-main-sha: ${HEAD_SHA} -->"
   printf 'identical\n' > "$STUB_DIRECTORY/compare.txt"
   run bash "$SCRIPT"
@@ -169,7 +188,7 @@ calls_matching() {
 
 @test "the newest marker across body and comments decides the compare" {
   export SHARDS_RESULT="success"
-  printf '42\n' > "$STUB_DIRECTORY/issues.txt"
+  open_issues 42
   write_issue_view "github-actions" "<!-- red-main-sha: 1111111111111111111111111111111111111111 -->" \
     "github-actions" "<!-- red-main-sha: 2222222222222222222222222222222222222222 -->"
   run bash "$SCRIPT"
@@ -181,7 +200,7 @@ calls_matching() {
 
 @test "a marker in a comment from another author is ignored" {
   export SHARDS_RESULT="success"
-  printf '42\n' > "$STUB_DIRECTORY/issues.txt"
+  open_issues 42
   write_issue_view "github-actions" "<!-- red-main-sha: cccccccccccccccccccccccccccccccccccccccc -->" \
     "some-stranger" "<!-- red-main-sha: dddddddddddddddddddddddddddddddddddddddd -->"
   run bash "$SCRIPT"
@@ -193,7 +212,7 @@ calls_matching() {
 
 @test "a marker only from another author counts as no marker" {
   export SHARDS_RESULT="success"
-  printf '42\n' > "$STUB_DIRECTORY/issues.txt"
+  open_issues 42
   write_issue_view "some-stranger" "<!-- red-main-sha: cccccccccccccccccccccccccccccccccccccccc -->"
   run bash "$SCRIPT"
   [ "$status" -eq 0 ]
@@ -203,7 +222,7 @@ calls_matching() {
 
 @test "an unresolvable marker sha does not fail the reporter or close the issue" {
   export SHARDS_RESULT="success"
-  printf '42\n' > "$STUB_DIRECTORY/issues.txt"
+  open_issues 42
   write_issue_view "github-actions" "<!-- red-main-sha: cccccccccccccccccccccccccccccccccccccccc -->"
   : > "$STUB_DIRECTORY/compare-fails"
   run bash "$SCRIPT"
@@ -214,7 +233,7 @@ calls_matching() {
 
 @test "green on an older or diverged commit does not close, and says so" {
   export SHARDS_RESULT="success"
-  printf '42\n' > "$STUB_DIRECTORY/issues.txt"
+  open_issues 42
   write_issue_view "github-actions" "<!-- red-main-sha: cccccccccccccccccccccccccccccccccccccccc -->"
   for compare_status in behind diverged; do
     : > "$GH_LOG"
@@ -230,7 +249,7 @@ calls_matching() {
 
 @test "green with an open issue that carries no marker does not close" {
   export SHARDS_RESULT="success"
-  printf '42\n' > "$STUB_DIRECTORY/issues.txt"
+  open_issues 42
   write_issue_view "github-actions" "hand-written issue"
   run bash "$SCRIPT"
   [ "$status" -eq 0 ]
@@ -276,6 +295,46 @@ calls_matching() {
   run bash "$SCRIPT"
   [ "$status" -ne 0 ]
   [[ "$output" == *"report-main-status:"* ]]
+}
+
+@test "CHECK_NAME titles the issue it opens, under the same label" {
+  export CHECK_NAME='GAIA: Distribution Harness'
+  run bash "$SCRIPT"
+  [ "$status" -eq 0 ]
+  [ "$(calls_matching '^issue create ')" -eq 1 ]
+  grep -qF -- '--title Main is red: GAIA: Distribution Harness' "$GH_LOG"
+  grep -q -- '--label ci-red-main' "$GH_LOG"
+}
+
+@test "red under one check name comments on its own issue, not another workflow's" {
+  export CHECK_NAME='GAIA: Distribution Harness'
+  open_issues 42
+  open_issues 57 -- 'Main is red: GAIA: Distribution Harness'
+  run bash "$SCRIPT"
+  [ "$status" -eq 0 ]
+  [ "$(calls_matching '^issue comment 57 ')" -eq 1 ]
+  [ "$(calls_matching '^issue comment 42 ')" -eq 0 ]
+  [ "$(calls_matching '^issue create ')" -eq 0 ]
+}
+
+@test "red with only another workflow's issue open opens its own" {
+  export CHECK_NAME='GAIA: Distribution Harness'
+  open_issues 42
+  run bash "$SCRIPT"
+  [ "$status" -eq 0 ]
+  [ "$(calls_matching '^issue create ')" -eq 1 ]
+  [ "$(calls_matching '^issue comment 42 ')" -eq 0 ]
+}
+
+@test "green under one check name never closes another workflow's issue" {
+  export CHECK_NAME='GAIA: Distribution Harness'
+  export SHARDS_RESULT="success"
+  write_issue_view "github-actions" "<!-- red-main-sha: ${HEAD_SHA} -->"
+  open_issues 42
+  run bash "$SCRIPT"
+  [ "$status" -eq 0 ]
+  grep -qE '^issue (comment|close) 42' "$GH_LOG" && return 1
+  true
 }
 
 @test "a missing variable exits 2 before any gh call" {

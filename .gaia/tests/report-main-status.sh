@@ -1,11 +1,19 @@
 #!/usr/bin/env bash
-# report-main-status.sh: keep one open `ci-red-main` issue while main is red.
+# report-main-status.sh: keep one open `ci-red-main` issue per workflow while
+# that workflow is red on main.
 #
-# Run by the push-to-main reporting job in audit-ci-tests.yml. The interface is
-# environment-only, no arguments: GH_TOKEN, REPOSITORY, RUN_ID, RUN_ATTEMPT,
-# RUN_URL, BEFORE_SHA, HEAD_SHA, SHARDS_RESULT. Every value arrives through the
-# environment and is passed to `gh` as an argument or written to a body file,
-# never spliced into a shell command string.
+# Run by the push-to-main reporting jobs in audit-ci-tests.yml and
+# distribution-harness.yml. The interface is environment-only, no arguments:
+# GH_TOKEN, REPOSITORY, RUN_ID, RUN_ATTEMPT, RUN_URL, BEFORE_SHA, HEAD_SHA,
+# SHARDS_RESULT (the result of the job the reporter `needs:`), and CHECK_NAME
+# (the workflow the issue is titled for; GAIA: Audit CI Tests when unset). Every
+# value arrives through the environment and is passed to `gh` as an argument or
+# written to a body file, never spliced into a shell command string.
+#
+# The title is each workflow's key: the reporter acts only on the open issue
+# carrying its own title, so one workflow's green run never closes, and its
+# red run never comments on, the issue another workflow's red run opened. The
+# shared label is what verify-main-green.sh refuses a release on.
 #
 # Only the commit range, the run link and failing job names reach the issue.
 # Commit messages, authors and ref names are never read, so event text an
@@ -17,7 +25,7 @@
 set -euo pipefail
 
 readonly LABEL_NAME="ci-red-main"
-readonly ISSUE_TITLE="Main is red: GAIA: Audit CI Tests"
+readonly ISSUE_TITLE="Main is red: ${CHECK_NAME:-GAIA: Audit CI Tests}"
 readonly ZERO_SHA="0000000000000000000000000000000000000000"
 
 for required_variable in GH_TOKEN REPOSITORY RUN_ID RUN_ATTEMPT RUN_URL HEAD_SHA SHARDS_RESULT; do
@@ -46,7 +54,8 @@ run_gh() {
 body_file=$(mktemp)
 trap 'rm -f "$body_file"' EXIT
 
-open_issue_numbers=$(run_gh "listing open ci-red-main issues" issue list --repo "$REPOSITORY" --label "$LABEL_NAME" --state open --json number --jq '.[].number')
+open_issues=$(run_gh "listing open ci-red-main issues" issue list --repo "$REPOSITORY" --label "$LABEL_NAME" --state open --json number,title --jq '.[] | "\(.number)\t\(.title)"')
+open_issue_numbers=$(printf '%s\n' "$open_issues" | awk -F '\t' -v title="$ISSUE_TITLE" '$2 == title { print $1 }')
 issue_number=""
 if [ -n "$open_issue_numbers" ]; then
   issue_number=$(printf '%s\n' "$open_issue_numbers" | sort -n | head -n 1)
@@ -107,6 +116,6 @@ fi
 if [ -n "$issue_number" ]; then
   run_gh "commenting on issue $issue_number" issue comment "$issue_number" --repo "$REPOSITORY" --body-file "$body_file"
 else
-  run_gh "creating label $LABEL_NAME" label create "$LABEL_NAME" --force --repo "$REPOSITORY" --description "Main failed GAIA: Audit CI Tests"
+  run_gh "creating label $LABEL_NAME" label create "$LABEL_NAME" --force --repo "$REPOSITORY" --description "Main failed a push-to-main CI run"
   run_gh "creating issue" issue create --repo "$REPOSITORY" --title "$ISSUE_TITLE" --label "$LABEL_NAME" --body-file "$body_file"
 fi
