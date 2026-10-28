@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 # 26-csf4-scaffolds.sh
 # distribution-runner: exclusive
+# distribution-runner: paths .gaia/cli/src/init/** .gaia/cli/src/scaffold/** .gaia/cli/templates/** pnpm-lock.yaml
+# distribution-runner: paths frontend/package.json frontend/.storybook/** frontend/eslint.config.mjs frontend/tsconfig.json frontend/vite.config.ts frontend/vitest.config.ts frontend/react-router.config.ts frontend/app/root.tsx frontend/app/state/** frontend/app/services/** frontend/test/**
 #
 # Adopter-flow regression for the scaffolds and the init commands that edit
 # the CSF Next preview, in four staged release trees:

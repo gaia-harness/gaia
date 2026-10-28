@@ -93,6 +93,18 @@ open_issue() {
   assert_contains "https://example.test/issues/3100"
 }
 
+# The reporter keys each workflow's issue by title, so the release gate must
+# read the label alone: a title or search filter would miss the distribution
+# harness's issue while Audit CI Tests is green.
+@test "red main: the issue listing filters by label only, so any workflow's red-main issue refuses" {
+  open_issue
+  run "$SCRIPT" --repo example/repo --branch main
+  [ "$status" -eq 1 ]
+  grep -E '^issue list ' "$GH_LOG" | grep -qF -- '--label ci-red-main'
+  grep -E '^issue list ' "$GH_LOG" | grep -qE -- '--search|in:title|Audit CI Tests' && return 1
+  assert_contains "the workflow its title names"
+}
+
 @test "red main: an open ci-red-main issue wins over an in-progress push run" {
   open_issue
   write_run 556 in_progress none
