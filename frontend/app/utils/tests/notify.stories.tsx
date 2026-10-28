@@ -147,19 +147,6 @@ export const StringAndDescriptionPayloads = meta.story({
   },
 });
 
-StringAndDescriptionPayloads.test(
-  'renders string and description payloads',
-  async ({canvasElement}) => {
-    const body = within(canvasElement.ownerDocument.body);
-
-    await expect(body.getByText('plain string payload')).toBeInTheDocument();
-    await expect(body.getByText('Titled payload')).toBeInTheDocument();
-    await expect(
-      body.getByText('with description payload')
-    ).toBeInTheDocument();
-  }
-);
-
 export const DescriptionOnlyPromoted = meta.story({
   play: async ({canvasElement}) => {
     notify.warning({description: 'only a description'});

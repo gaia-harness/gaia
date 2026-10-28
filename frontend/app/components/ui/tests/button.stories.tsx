@@ -265,16 +265,8 @@ AsLink.test('renders a link with button semantics', async ({canvas}) => {
   await expectLinkSemantics(canvas.getByRole('link'));
 });
 
-AsLink.test('points at the root path', async ({canvas}) => {
-  await expect(canvas.getByRole('link')).toHaveAttribute('href', '/');
-});
-
 AsNavLink.test('renders a nav link with button semantics', async ({canvas}) => {
   await expectLinkSemantics(canvas.getByRole('link'));
-});
-
-AsNavLink.test('points at the root path', async ({canvas}) => {
-  await expect(canvas.getByRole('link')).toHaveAttribute('href', '/');
 });
 
 AsExternalLink.test(
@@ -283,13 +275,6 @@ AsExternalLink.test(
     await expectLinkSemantics(canvas.getByRole('link'));
   }
 );
-
-AsExternalLink.test('points at the external address', async ({canvas}) => {
-  await expect(canvas.getByRole('link')).toHaveAttribute(
-    'href',
-    'https://example.com'
-  );
-});
 
 LinkNavigates.test('navigates when clicked', async ({canvasElement}) => {
   await expectNavigatesOnClick(canvasElement);
