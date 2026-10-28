@@ -4,7 +4,7 @@ Operate on the root workspace and its `frontend` package only: run every `pnpm` 
 
 1. **Snapshot** the files the refresh could touch, and the direct dependencies' resolved versions. Run each command below as its own call, in order. **If any of them exits non-zero or is refused, stop here:** do not run step 2 or anything after it, change nothing, and report `Not run (snapshot failed: <command>: <first error line>)`. A refresh with no baseline can only be undone by resetting to HEAD, which also throws away the run's uncommitted Wave A and Wave B edits.
 
-   The baseline is a git commit object, never a file copy. The project's settings deny editing `pnpm-lock.yaml`, and Claude Code applies that deny to any shell command that names the file, so a `cp` of the lockfile is refused in either direction, wherever its other path points. git can read the lockfile and restore it.
+   The baseline is a git commit object, never a file copy. The project's settings deny editing `pnpm-lock.yaml`, and Claude Code refuses a `cp` of the lockfile in either direction, wherever its other path points, and a redirect that writes to it. git commands that read the lockfile or restore it are not refused.
    ```bash
    git stash create
    ```

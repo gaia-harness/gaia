@@ -51,7 +51,7 @@ A difference reverts that resolution (step 6) and reports the advisory still ope
 
 This phase keeps its own snapshot directories under `.gaia/local/cache/shared/` and never reuses the directory Phase 5b filled. Before the batch, take one batch snapshot; before each resolution, and before each individual re-apply in step 6, take a fresh resolution snapshot the same way.
 
-A snapshot is a git commit object holding the tracked files (its **baseline**), plus the direct dependencies' resolved versions in the snapshot directory. The files are never copied: the project's settings deny editing `pnpm-lock.yaml`, and Claude Code applies that deny to any shell command that names the file, so a `cp` of the lockfile is refused in either direction. git can read the lockfile and restore it.
+A snapshot is a git commit object holding the tracked files (its **baseline**), plus the direct dependencies' resolved versions in the snapshot directory. The files are never copied: the project's settings deny editing `pnpm-lock.yaml`, and Claude Code refuses a `cp` of the lockfile in either direction and a redirect that writes to it. git commands that read the lockfile or restore it are not refused.
 
 ```bash
 rm -rf <snapshot>

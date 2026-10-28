@@ -9,8 +9,8 @@
 # `SKILL.md` and `references/final-report.md`.
 #
 # Why the baseline is a git object: the shipped `.claude/settings.json` denies
-# `Edit(pnpm-lock.yaml)`, and Claude Code applies that deny to any Bash command
-# that names the file, so `cp pnpm-lock.yaml <anywhere>` and the copy back are
+# `Edit(pnpm-lock.yaml)`, and Claude Code refuses a `cp` of the file
+# in either direction and a redirect that writes to it, so the copy and the copy back are
 # refused in every session, sandboxed or not. A recipe that copies the lockfile
 # has no baseline, and one that does not stop on a failed snapshot then
 # rewrites the lockfile with nothing to revert to.
