@@ -32,7 +32,7 @@ Migration guide URLs:
 
 | Group                | URL                                                                        |
 | -------------------- | -------------------------------------------------------------------------- |
-| react-router         | `https://reactrouter.com/upgrading/v7`                                     |
+| react-router         | `https://reactrouter.com/upgrading/v<major of {FROM}>` (the guide is named for the major you leave; until it exists, `https://reactrouter.com/upgrading/future`) |
 | react                | `https://react.dev/blog` (find the major-version post)                     |
 | tailwindcss          | `https://tailwindcss.com/docs/upgrade-guide`                               |
 | storybook            | `https://storybook.js.org/docs/migration-guide`                            |
