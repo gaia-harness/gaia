@@ -1,6 +1,9 @@
 #!/usr/bin/env bash
 # 25-csf4-migration.sh
 # distribution-runner: exclusive
+# distribution-runner: skip
+# Skipped by run-all.sh: it only has value when migrate-csf4 changes, so run it
+# directly then, or remove the skip line.
 #
 # Adopter-flow regression for `gaia migrate-csf4`, proven in a staged release
 # tree by the adopter's own toolchain (its TypeScript, ESLint, and Storybook
