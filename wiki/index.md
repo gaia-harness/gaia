@@ -147,6 +147,7 @@ Master catalog of every page in the wiki. Newly created pages must be added here
 - [[Code Review Audit Agent]]
 - [[Registering a Code Audit Team Member]]: how-to for adding a new roster member: agent def, roster entry, machinery wiring, finding_class bucket, recurrence-tally integration, and the local-gate checklist.
 - [[Audit Disposition and Debt Fix]]: forced disposition of out-of-scope audit findings as deduped tech-debt issues; security-class divert; the /gaia-debt fix loop (single issue, recommended related batch, or operator-named batch, isolated per the team's git isolation policy) and statusline nudge; /gaia-residue drains the accepted-residual record the same audit leaves unfiled.
+- [[Issue Writing]]: how Claude writes any GitHub issue body, for a fresh-context agent first and a skimming human second; principles and per-kind prompts, not a form.
 - [[GitHub Labels]]: the label registry at `.gaia/labels.json`, the palette rule, the generated page, and `gaia labels sync`, and where project labels go.
 - [[Policy-Memory Loop]]: prune-first self-improvement; recurring finding_class -> statusline nudge -> `/gaia-codify` -> path-scoped rule -> `/gaia-cleanse` prunes only on obsolescence/redundancy/supersession/duplication.
 - [[Incremental CI Skipping]]: required checks skip when the delta since they last passed green has no relevant files; `resolve-check-base.sh` / `resolve-audit-base.sh`.

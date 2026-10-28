@@ -150,8 +150,10 @@ Build a self-contained issue body with these parts, in order:
 
 - The dedup-key comment line from step 1, present verbatim.
 - The `file:line` location. The cited line must resolve to a real line in the named file, don't cite a location you haven't confirmed.
-- A concrete, non-empty description of the failure mode: what input or state triggers it, and what the bad outcome is. "Could be cleaner" is not a failure mode; "a null `userId` reaches this branch and throws" is.
-- A suggested fix.
+- A `## Problem` section: a concrete, non-empty description of the failure mode, what input or state triggers it, and what the bad outcome is. "Could be cleaner" is not a failure mode; "a null `userId` reaches this branch and throws" is.
+- A `## Fix` section: the suggested fix.
+
+Both sections are Markdown, written to `wiki/concepts/Issue Writing.md`: the finding's `failure_mode` and `suggested_fix` may span lines and carry paragraphs, lists, tables and their own sub-headings (evidence, how to verify, scope), and the script renders each whole under its heading.
 - **The research block, on a `severity:investigate` filing only** (step 6). Three lines, byte-for-byte in this shape, appearing exactly once, anywhere in the body:
 
   ```
@@ -267,7 +269,7 @@ Worked boundary, easy versus medium. A swallowed error the issue text says to re
 - **When a filing omits the grade.** A filing omits the label whenever the cited code was not read at filing time, rather than guessing a grade from a description: a direct human invocation that files from a relayed summary or hand-off without reopening the cited code has no rubric-applied grade to give; and the orchestrator's cross-remit disposition has not read the finding against this rubric. A human invocation that *does* read the cited code as it files grades instead (above); it is not forced ungraded merely for arriving by the human path. An issue carrying no grade is normal: it orders, clusters, and drains exactly as a graded one does; in a named batch's budget it scores as medium. That guarantee is what keeps a mixed adopter state safe, since every file this feature touches resolves independently on update: a new copy of this recipe running against an old `debt.md` files grades that nothing yet reads, and a new `debt.md` running against old agents reads a backlog where nothing is graded. Both states are reachable and both benign.
 - **Argv constraint.** The value written to the `difficulty:<grade>` label must be one of the three literals above, byte-for-byte, before it reaches any `gh` argv. Argv exposure is minimal here, the token is fixed-vocabulary, which is why the `--body-file` mandate in step 4 is not implicated, but a model-produced string interpolated into a command whose argv can surface in a public log earns the one-clause constraint anyway.
 - **Disclosure.** The three grade values are fixed and carry no information about the finding: they do not discriminate a security-class finding from any other, so a difficulty grade leaks nothing about security-sensitivity no matter who applies it or where the issue lands. Machine filing never reaches a public repo for a security-class finding, the script's security screen intercepts it first.
-- **Where the grade comes from.** This file defines the rubric; it does not apply it. The two external grading routes named at the top of this section, the audit loop unit and the cleanse references (`cleanse/research.md` and `cleanse/apply.md`), read it and write the label; an edit to the value set or the rubric must reach both. The human-invocation grading applies this section's rubric in place, so it needs no separate propagation.
+- **Where the grade comes from.** This file defines the rubric; it does not apply it. The external grading route named at the top of this section, the cleanse references (`cleanse/research.md` and `cleanse/apply.md`), reads it and writes the label; an edit to the value set or the rubric must reach it. The human-invocation grading applies this section's rubric in place, so it needs no separate propagation.
 
 ## 8. Touch the debt-count staleness sentinel
 
