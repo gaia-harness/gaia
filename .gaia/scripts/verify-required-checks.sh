@@ -44,6 +44,11 @@ REQUIRED_CONTEXTS=(
                                       # repeats it at tag push, too late to stop
                                       # the merge, and a stale bundle silently
                                       # disarms /gaia-release until then
+  "Shellcheck and bats"               # .github/workflows/tests.yml; lints the
+                                      # shell a pull request changes and runs
+                                      # the bats suite when shell changed, so
+                                      # a shell defect cannot merge on a red
+                                      # check that never blocked
 )
 
 repo=""
