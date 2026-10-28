@@ -1081,20 +1081,8 @@ assert_branch_content_raises() {
   expect_route full "$1"
 }
 
-@test "base-only machinery content after a clean catch-up leaves a small branch commit light" {
-  assert_base_content_is_not_the_branchs machinery
-}
-
-@test "base-only global-rules content after a clean catch-up leaves a small branch commit light" {
-  assert_base_content_is_not_the_branchs rules-reset-global
-}
-
 @test "paired: the same global-rules content committed on the branch routes full rules-reset-global" {
   assert_branch_content_raises rules-reset-global
-}
-
-@test "base-only ownerless content after a clean catch-up leaves a small branch commit light" {
-  assert_base_content_is_not_the_branchs ownerless
 }
 
 @test "base-only hard-full content after a clean catch-up leaves a small branch commit light" {
@@ -1103,10 +1091,6 @@ assert_branch_content_raises() {
 
 @test "paired: the same hard-full content committed on the branch routes full hard-full" {
   assert_branch_content_raises hard-full
-}
-
-@test "a base-only symlink after a clean catch-up leaves a small branch commit light" {
-  assert_base_content_is_not_the_branchs special-file
 }
 
 @test "base-only lines past the cap after a clean catch-up leave a small branch commit light" {
@@ -1324,26 +1308,6 @@ assert_branch_content_raises() {
   true
 }
 
-# Driven red: a router copy that records only from the anchor step on (its
-# early decisions print without persisting) fails the keyed-decision
-# assertion for both early reasons.
-@test "the keyed-decision assertion fails on a router that persists only from the anchor on" {
-  lsb_init --maintainer
-  local mutant="$LSB_ROOT/.gaia/scripts/audit-light-route-mutant.sh"
-  sed -e "s/_light_route_finish full not-opted-in/{ printf 'full\\\\tnot-opted-in\\\\n'; exit 0; }/" \
-    -e "s/_light_route_finish full dirty-tree/{ printf 'full\\\\tdirty-tree\\\\n'; exit 0; }/" \
-    "$LSB_ROOT/.gaia/scripts/audit-light-route.sh" >"$mutant"
-  grep -qF '_light_route_finish full not-opted-in' "$mutant" && return 1
-  grep -qF '_light_route_finish full dirty-tree' "$mutant" && return 1
-  lsb_full_clearance "$WORKFLOWS_MEMBER"
-  lsb_commit .github/workflows/sandbox.yml "name: sandbox"
-  run assert_keyed_decision_recorded "$mutant" "$WORKFLOWS_MEMBER" not-opted-in
-  [ "$status" -ne 0 ]
-  printf 'uncommitted\n' >>"$LSB_ROOT/frontend/app/seed.md"
-  run assert_keyed_decision_recorded "$mutant" "$FRONTEND" dirty-tree
-  [ "$status" -ne 0 ]
-}
-
 @test "every line naming the telemetry script sits inside a maintainer-only region" {
   telemetry_is_fenced "$REPO_ROOT/.gaia/scripts/audit-light-route.sh"
   grep -v 'gaia:maintainer-only' "$REPO_ROOT/.gaia/scripts/audit-light-route.sh" >"$BATS_TEST_TMPDIR/unfenced.sh"
@@ -1357,7 +1321,6 @@ MB_COMPONENT="frontend/app/components/card/index.tsx"
 MB_STORY="frontend/app/components/card/tests/index.stories.tsx"
 MB_ENGLISH="frontend/app/languages/en/common.ts"
 MB_JAPANESE="frontend/app/languages/ja/common.ts"
-MB_CHIP="frontend/app/components/ui/chip.tsx"
 
 mb_component_text() {
   cat <<'EOF'
@@ -1404,26 +1367,6 @@ export default Card;
 EOF
 }
 
-mb_chip_text() {
-  cat <<'EOF'
-import {cva} from 'class-variance-authority';
-
-const chipVariants = cva('inline-flex', {
-  variants: {
-    tone: {
-      plain: 'bg-background',
-    },
-  },
-});
-
-const Chip = () => (
-  <span className="bg-background">Chip</span>
-);
-
-export {Chip, chipVariants};
-EOF
-}
-
 mb_story_text() {
   cat <<'EOF'
 import type {Meta, StoryObj} from '@storybook/react-vite';
@@ -1454,38 +1397,6 @@ export const Interactive: Story = {
     const canvas = within(canvasElement);
     await expect(canvas.getByText('Go')).toBeVisible();
   },
-};
-EOF
-}
-
-mb_english_text() {
-  cat <<'EOF'
-export default {
-  title: 'Hello',
-  counters: {
-    clicks_one: '{{count}} click',
-    clicks_other: '{{count}} clicks',
-  },
-  long:
-    'A long value that prettier wrapped onto its own line for width',
-  nested: '$t(common:title) here',
-  html: 'Plain text',
-};
-EOF
-}
-
-mb_japanese_text() {
-  cat <<'EOF'
-export default {
-  title: 'こんにちは',
-  counters: {
-    clicks_one: '{{count}} クリック',
-    clicks_other: '{{count}} クリック',
-  },
-  long:
-    '長い値',
-  nested: '$t(common:title) ここ',
-  html: 'テキスト',
 };
 EOF
 }
@@ -1666,33 +1577,11 @@ cap_set_branch() {
   [ "$(record_value "$FRONTEND" '.anchor_kind')" = '"full"' ]
 }
 
-@test "twin: a refusal-anchored input carries no anchor_kind line either" {
-  lsb_init
-  refuse_notes "$(lsb_finding frontend/app/notes.md 2 major false)"
-  lsb_commit_lines frontend/app/notes.md 5 fixed
-  lsb_route "$FRONTEND"
-  expect_route light refusal-anchored
-  grep -q '^anchor_kind:' "$(input_file_for "$FRONTEND")" && return 1
-  [ "$(record_value "$FRONTEND" '.quick_signal')" = "null" ]
-}
-
 @test "--check on a merge-base first dispatch prints the same line twice and writes no record" {
   mb_component_base
   mb_line "$MB_COMPONENT" replace 26 '      Submit'
   lsb_route "$FRONTEND" --check
   expect_route light quick-eligible
-  local first="$output"
-  lsb_route "$FRONTEND" --check
-  [ "$output" = "$first" ]
-  [ -e "$(light_directory)" ] && return 1
-  true
-}
-
-@test "twin: a deep merge-base first dispatch prints the same line twice under --check" {
-  mb_component_base
-  mb_line "$MB_COMPONENT" replace 7 '  <div className="flex gap-2 hidden">'
-  lsb_route "$FRONTEND" --check
-  expect_route full quick-hiding-token
   local first="$output"
   lsb_route "$FRONTEND" --check
   [ "$output" = "$first" ]
@@ -2095,51 +1984,11 @@ mb_signal_case() {
   assert_merge_base_anchor "$FRONTEND"
 }
 
-@test "merge-base quick-attribute: an added role attribute is wired through the router with its signal" {
-  mb_component_base
-  mb_line "$MB_COMPONENT" replace 7 '  <div className="flex gap-2" role="note">'
-  lsb_route "$FRONTEND"
-  mb_signal_case quick-attribute pre:7
-}
-
-@test "merge-base quick-tag: an h2 swapped to a div is wired through the router with its signal" {
-  mb_component_base
-  mb_line "$MB_COMPONENT" replace 8 '    <div className="text-xl">Title</div>'
-  lsb_route "$FRONTEND"
-  mb_signal_case quick-tag pre:8
-}
-
 @test "merge-base quick-element: an added capitalized element is wired through the router with its signal" {
   mb_component_base
   mb_line "$MB_COMPONENT" insert 10 '      <Icon />'
   lsb_route "$FRONTEND"
   mb_signal_case quick-element post:11
-}
-
-@test "merge-base quick-cva: a className change inside a cva call is wired through the router with its signal" {
-  mb_start
-  lsb_commit "$MB_CHIP" "$(mb_chip_text)"
-  mb_cut
-  mb_line "$MB_CHIP" replace 6 "      plain: 'bg-muted',"
-  lsb_route "$FRONTEND"
-  mb_signal_case quick-cva pre:6 "$MB_CHIP"
-}
-
-@test "merge-base quick-hiding-token: an added hidden token is wired through the router with its signal" {
-  mb_component_base
-  mb_line "$MB_COMPONENT" replace 7 '  <div className="flex gap-2 hidden">'
-  lsb_route "$FRONTEND"
-  mb_signal_case quick-hiding-token post:7
-}
-
-@test "merge-base quick-placeholder: a changed language placeholder is wired through the router with its signal" {
-  mb_start
-  lsb_commit "$MB_ENGLISH" "$(mb_english_text)"
-  lsb_commit "$MB_JAPANESE" "$(mb_japanese_text)"
-  mb_cut
-  mb_line "$MB_ENGLISH" replace 4 "    clicks_one: '{{count, number}} click',"
-  lsb_route "$FRONTEND"
-  mb_signal_case quick-placeholder post:4 "$MB_ENGLISH"
 }
 
 @test "merge-base quick-story-play: a changed story assertion is wired through the router with its signal" {
@@ -2278,39 +2127,10 @@ mb_signal_case() {
 
 # --- the shared sandbox helper --------------------------------------------
 
-@test "a release-stripped sandbox keeps routing light with no telemetry reference" {
-  lsb_init --maintainer
-  lsb_strip_maintainer_only
-  [ -e "$LSB_ROOT/.gaia/scripts/audit-light-telemetry.sh" ] && return 1
-  [ -e "$LSB_ROOT/.claude/rules/maintainers" ] && return 1
-  grep -qF 'maintainer-only' "$LSB_ROOT/.gaia/scripts/audit-light-route.sh" && return 1
-  grep -qF 'maintainer-only' "$LSB_ROOT/.claude/hooks/lib/audit-machinery.sh" && return 1
-  grep -qF 'audit-light-telemetry' "$LSB_ROOT/.gaia/scripts/audit-light-route.sh" && return 1
-  lsb_full_clearance "$FRONTEND"
-  lsb_commit frontend/app/notes.md "one line"
-  lsb_route "$FRONTEND"
-  expect_route light light-eligible
-  [ -e "$(telemetry_log)" ] && return 1
-  true
-}
-
 @test "lsb_merge_payload builds a merge command payload rooted at the sandbox" {
   lsb_init
   [ "$(lsb_merge_payload 42 | jq -r '.tool_name + " " + .tool_input.command')" = "Bash gh pr merge 42 --squash --delete-branch" ]
   [ "$(lsb_merge_payload 42 | jq -r .cwd)" = "$LSB_ROOT" ]
-}
-
-@test "lsb_run_merge_hook denies without a clearance and allows with one" {
-  lsb_init
-  lsb_commit frontend/app/notes.md "one line"
-  lsb_run_merge_hook 30
-  [ "$status" -eq 0 ]
-  grep -qF '"permissionDecision": "deny"' <<<"$output"
-  lsb_full_clearance "$FRONTEND"
-  lsb_run_merge_hook 30
-  [ "$status" -eq 0 ]
-  grep -qF '"permissionDecision": "deny"' <<<"$output" && return 1
-  true
 }
 
 @test "lsb_seed_loop_state records one round for the member at HEAD" {

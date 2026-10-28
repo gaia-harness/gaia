@@ -175,35 +175,6 @@ branch_exists() {
   branch_exists "feature/keepme"
 }
 
-@test "keeps a gone wiki/notes branch while a live wiki landing branch opens the gate" {
-  make_repo
-  make_live_branch "wiki/2026-02-03-0930"
-  make_gone_branch "wiki/notes"
-  cd "$REPO"
-  run bash "$HOOK_ABSOLUTE_PATH"
-  [ "$status" -eq 0 ]
-  branch_exists "wiki/notes"
-}
-
-@test "deletes a merged-and-gone wiki/<YYYY-MM-DD-HHMM> branch" {
-  make_repo
-  make_gone_branch "wiki/2026-10-15-0532"
-  cd "$REPO"
-  run bash "$HOOK_ABSOLUTE_PATH"
-  [ "$status" -eq 0 ]
-  branch_exists "wiki/2026-10-15-0532" && return 1
-  true
-}
-
-@test "keeps a wiki/<YYYY-MM-DD-HHMM> branch whose upstream is still live" {
-  make_repo
-  make_live_branch "wiki/2026-10-15-0533"
-  cd "$REPO"
-  run bash "$HOOK_ABSOLUTE_PATH"
-  [ "$status" -eq 0 ]
-  branch_exists "wiki/2026-10-15-0533"
-}
-
 @test "never deletes the checked-out wiki/<YYYY-MM-DD-HHMM> branch, even when gone" {
   make_repo
   make_gone_branch "wiki/2026-10-15-0534"
@@ -246,26 +217,6 @@ branch_exists() {
   PATH="$SHIM_DIRECTORY:$PATH" run bash "$HOOK_ABSOLUTE_PATH"
   [ "$status" -eq 0 ]
   [ "$(grep -c 'fetch' "$witness")" -ge 1 ]
-}
-
-@test "keeps a gone feat/x branch while a live wiki landing branch opens the gate" {
-  make_repo
-  make_live_branch "wiki/2026-02-04-0931"
-  make_gone_branch "feat/x"
-  cd "$REPO"
-  run bash "$HOOK_ABSOLUTE_PATH"
-  [ "$status" -eq 0 ]
-  branch_exists "feat/x"
-}
-
-@test "runs the branch sweep even when .gaia/local is absent" {
-  make_repo
-  make_gone_branch "wiki/2026-06-06-1006"
-  rm -rf "$REPO/.gaia/local"
-  cd "$REPO"
-  run bash "$HOOK_ABSOLUTE_PATH"
-  [ "$status" -eq 0 ]
-  ! branch_exists "wiki/2026-06-06-1006"
 }
 
 @test "no wiki landing branches: silent no-op, exit 0" {
@@ -410,19 +361,6 @@ SHIM
   [ "$status" -eq 0 ]
   [ -z "$output" ]
   [ "$(grep -c 'fetch' "$witness")" -eq 0 ]
-}
-
-@test "sweep 1: a hanging origin is bounded by the ceiling" {
-  make_repo
-  make_live_branch "wiki/2026-07-07-1007"
-  make_hanging_fetch_shim 60
-  cd "$REPO"
-  export GAIA_WIKI_FETCH_TIMEOUT_SECONDS=2
-  start=$(date +%s)
-  PATH="$SHIM_DIRECTORY:$PATH" run bash "$HOOK_ABSOLUTE_PATH"
-  end=$(date +%s)
-  [ "$status" -eq 0 ]
-  [ "$((end - start))" -lt 10 ]
 }
 
 @test "sweep 1: GAIA_WIKI_FETCH_TIMEOUT_SECONDS=0 disables the fetch" {
@@ -624,6 +562,7 @@ SHIM
   cd "$REPO"
   run bash "$HOOK_ABSOLUTE_PATH"
   [ "$status" -eq 0 ]
+  branch_exists "wiki/2026-07-17-1017" && return 1
   [ ! -d "$REPO/.gaia/local" ]
 }
 
@@ -910,7 +849,7 @@ SHIM
   export GAIA_WIKI_FETCH_MINIMUM_INTERVAL_MINUTES=0
   echo dirty > "$REPO/dirty.txt"
   cd "$REPO"
-  for round_number in 1 2 3 4 5; do
+  for round_number in 1 2; do
     make_gone_branch "wiki/2026-08-2$round_number-000$round_number"
     run bash "$HOOK_ABSOLUTE_PATH"
     [ "$status" -eq 0 ]

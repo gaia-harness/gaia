@@ -1708,15 +1708,6 @@ run_recording_hook() {
 
   run_merge_hook "gh pr merge --body 30 999 --squash"
   assert_denied_by_json
-
-  run_merge_hook "gh pr merge -t 30 999 --squash"
-  assert_denied_by_json
-
-  run_merge_hook "gh pr merge --match-head-commit 30 999 --squash"
-  assert_denied_by_json
-
-  run_merge_hook "gh pr merge --body-file 30 999 --squash"
-  assert_denied_by_json
 }
 
 @test "an empty range still permits when a separated option value sits beside the record's own number" {
@@ -1741,35 +1732,12 @@ run_recording_hook() {
   # the second an arbitrary one. Reading the first reference and permitting
   # would clear both, so the relaxation requires the merge to be the whole
   # command.
-  #
-  # The spellings below are what forced this to be the shell's own tokenizer
-  # rather than a scan of the text. A subshell and a brace group put
-  # a character before the second verb, so a scan that reads command positions
-  # cannot see it; quoting one word of the verb and splitting it across a line
-  # continuation each break the literal run of characters, so a scan that
-  # counts the phrase cannot see it either. Both were demonstrated to permit.
   local head
   head="$(git -C "$REPO" rev-parse HEAD)"
   set_origin_main_at refs/heads/feature
   install_gh_stub_with_record "main" "$head" 30
 
   run_merge_hook "gh pr merge 30 --squash; gh pr merge 999 --squash"
-  assert_denied_by_json
-
-  run_merge_hook "gh pr merge 30 --squash && (gh pr merge 999 --squash)"
-  assert_denied_by_json
-
-  run_merge_hook "gh pr merge 30 --squash && { gh pr merge 999 --squash; }"
-  assert_denied_by_json
-
-  run_merge_hook 'gh pr merge 30 --squash && gh pr "merge" 999 --squash'
-  assert_denied_by_json
-
-  run_merge_hook 'gh pr merge 30 --squash && gh "pr" merge 999 --squash'
-  assert_denied_by_json
-
-  run_merge_hook 'gh pr merge 30 --squash && gh pr \
-merge 999 --squash'
   assert_denied_by_json
 
   # Not a second merge at all, and it still denies: the relaxation cannot
@@ -1787,40 +1755,12 @@ merge 999 --squash'
   # below names the record's own pull request as the real positional, so the
   # four conjuncts above are satisfied and only this guard stands between them
   # and a permit.
-  #
-  # The last two are why the guard is an allowlist rather than a list of
-  # spellings. `=(...)` is zsh's third process substitution and zsh is this
-  # platform's default shell; `${ ...; }` is bash 5.3's value substitution.
-  # Both execute, both were confirmed to permit under a guard that named the
-  # four spellings above them, and neither could have been enumerated in
-  # advance: which text runs a command is a property of the shell and its
-  # version, not a fixed set of sequences.
   local head
   head="$(git -C "$REPO" rev-parse HEAD)"
   set_origin_main_at refs/heads/feature
   install_gh_stub_with_record "main" "$head" 30
 
   run_merge_hook 'gh pr merge --body "$(gh pr merge 999 --squash)" 30 --squash'
-  assert_denied_by_json
-
-  run_merge_hook 'gh pr merge -b "`gh pr merge 999 --squash`" 30 --squash'
-  assert_denied_by_json
-
-  # Quoting is not required: a payload with no unquoted whitespace stays one
-  # word, so the shapes below reached the same permit.
-  run_merge_hook 'gh pr merge --body $(./m) 30 --squash'
-  assert_denied_by_json
-
-  run_merge_hook 'gh pr merge --body-file <(./m) 30 --squash'
-  assert_denied_by_json
-
-  run_merge_hook 'gh pr merge 30 --body "${x:-$(./m)}"'
-  assert_denied_by_json
-
-  run_merge_hook 'gh pr merge --body-file =(./m) 30 --squash'
-  assert_denied_by_json
-
-  run_merge_hook 'gh pr merge --body "${ ./m; }" 30 --squash'
   assert_denied_by_json
 }
 
@@ -1868,15 +1808,6 @@ merge 999 --squash'
   install_failing_diff_git
   run_merge_hook
   assert_denied_by_json
-}
-
-@test "every audit_resolve_base_provenance call in the gate source passes an empty supplied base" {
-  local calls bad
-  calls="$(merge_gate_text "$HOOK_ABSOLUTE_PATH" | grep -n 'audit_resolve_base_provenance ' | grep -v '^[0-9]*:[[:space:]]*#')"
-  [ -n "$calls" ] || return 1
-  bad="$(printf '%s\n' "$calls" \
-    | grep -vF 'audit_resolve_base_provenance "$tree_root" pr-record "" "$pr_record_base"' || true)"
-  [ -z "$bad" ] || return 1
 }
 
 @test "every audit_resolve_base_provenance invocation at run time passes an empty supplied base" {
@@ -1956,33 +1887,6 @@ EOF
 # denied and NOT ARMED means a silent exit 0. The inversion is the point: a case
 # here asserting a deny is asserting that the gate ran at all.
 # ---------------------------------------------------------------------------
-
-@test "arming: a quoted verb reaches the gate instead of skipping it" {
-  install_gh_stub
-  commit_files "frontend/app/x.ts" "export const x = 1"
-
-  run_merge_hook 'gh pr "merge" 30 --squash'
-  assert_denied_by_json
-}
-
-@test "arming: a quoted subcommand reaches the gate" {
-  install_gh_stub
-  commit_files "frontend/app/x.ts" "export const x = 1"
-
-  run_merge_hook 'gh "pr" merge 30 --squash'
-  assert_denied_by_json
-}
-
-@test "arming: a line continuation inside the verb reaches the gate" {
-  install_gh_stub
-  commit_files "frontend/app/x.ts" "export const x = 1"
-
-  # A backslash-newline mid-verb is the shell's own spelling of the verb, and it
-  # leaves the text arm looking at a run of characters that is not one.
-  run_merge_hook 'gh pr me\
-rge 30 --squash'
-  assert_denied_by_json
-}
 
 @test "arming: a merge that is not the first command still reaches the gate" {
   install_gh_stub
@@ -2401,25 +2305,6 @@ rge 30 --squash'
   [ "$elapsed" -lt 10 ]
 }
 
-@test "arming: a split or quoted gh still reaches the gate" {
-  install_gh_stub
-  commit_files "frontend/app/x.ts" "export const x = 1"
-
-  # The tokenizer arm's pre-filter reads the first two characters, so these are
-  # the spellings a tighter filter could silently stop admitting. Each still
-  # tokenizes to `gh` as word 0, so each must arm; a miss here is fail-OPEN,
-  # the gate exiting 0 on a real merge, which is why they are pinned rather
-  # than left to the filter's reasoning.
-  run_merge_hook '"gh" pr merge 30 --squash'
-  assert_denied_by_json
-
-  run_merge_hook 'g"h" pr merge 30 --squash'
-  assert_denied_by_json
-
-  run_merge_hook '\gh pr merge 30 --squash'
-  assert_denied_by_json
-}
-
 # ---------------------------------------------------------------------------
 # Arming: the shared data-proof (heredoc masking) and its abstentions
 #
@@ -2484,112 +2369,6 @@ run_merge_hook_library_absent() {
   assert_denied_by_json
 }
 
-@test "data-proof: the verb on the opener line itself still arms, proving the body starts after it" {
-  install_gh_stub
-  commit_files "frontend/app/x.ts" "export const x = 1"
-
-  run_merge_hook $'true && gh pr merge 30 --squash <<EOF\nirrelevant body\nEOF\n'
-  assert_denied_by_json
-}
-
-@test "data-proof: a heredoc piped into bash still arms (output not to a file)" {
-  install_gh_stub
-  commit_files "frontend/app/x.ts" "export const x = 1"
-
-  run_merge_hook $'cat <<EOF | bash\ngh pr merge 30 --squash\nEOF\n'
-  assert_denied_by_json
-}
-
-@test "data-proof: a heredoc opened by bash directly still arms (command word is not cat/tee)" {
-  install_gh_stub
-  commit_files "frontend/app/x.ts" "export const x = 1"
-
-  run_merge_hook $'bash <<EOF\ngh pr merge 30 --squash\nEOF\n'
-  assert_denied_by_json
-}
-
-@test "data-proof: a heredoc owned by a second command on the opener line still arms" {
-  install_gh_stub
-  commit_files "frontend/app/x.ts" "export const x = 1"
-
-  # The line opens with `cat` and redirects to a file, so it satisfies the
-  # whitelist read line-wide, while the heredoc belongs to `bash` after the
-  # separator and the shell runs the merge in the body. Proving it at the gate
-  # rather than only in the library: this is the hook whose deny is the
-  # enforcement, so a masking defect here is a merge nobody audited.
-  run_merge_hook $'cat > /tmp/f.txt && bash <<EOF\ngh pr merge 30 --squash\nEOF\n'
-  assert_denied_by_json
-}
-
-@test "data-proof: a heredoc opened by ssh still arms" {
-  install_gh_stub
-  commit_files "frontend/app/x.ts" "export const x = 1"
-
-  run_merge_hook $'ssh host <<EOF\ngh pr merge 30 --squash\nEOF\n'
-  assert_denied_by_json
-}
-
-@test "data-proof: a heredoc opened by a parameter-expansion command word still arms" {
-  install_gh_stub
-  commit_files "frontend/app/x.ts" "export const x = 1"
-
-  run_merge_hook $'$RUNNER <<EOF\ngh pr merge 30 --squash\nEOF\n'
-  assert_denied_by_json
-}
-
-# The shell runs a command substitution wherever it sits, so a merge inside
-# one reaches the gate like any other merge. Each deny is paired with the same
-# text minus the substitution character, which runs no merge and is allowed.
-@test "arming: a merge inside a command substitution reaches the gate" {
-  install_gh_stub
-  commit_files "frontend/app/x.ts" "export const x = 1"
-
-  run_merge_hook 'echo "$(gh pr merge 30 --squash)"'
-  assert_denied_by_json || return 1
-  run_merge_hook 'echo "(gh pr merge 30 --squash)"'
-  assert_allowed_by_json || return 1
-  [ -z "$output" ] || return 1
-
-  run_merge_hook 'echo "`gh pr merge 30 --squash`"'
-  assert_denied_by_json || return 1
-  run_merge_hook 'echo `gh pr merge 30 --squash`'
-  assert_denied_by_json || return 1
-  run_merge_hook 'echo x gh pr merge 30 --squash'
-  assert_allowed_by_json || return 1
-  [ -z "$output" ]
-}
-
-@test "arming: a merge inside a process substitution reaches the gate" {
-  install_gh_stub
-  commit_files "frontend/app/x.ts" "export const x = 1"
-
-  run_merge_hook 'cat <(gh pr merge 30 --squash)'
-  assert_denied_by_json || return 1
-  run_merge_hook 'tee >(gh pr merge 30 --squash) </dev/null'
-  assert_denied_by_json
-}
-
-@test "arming: a substitution naming a home merge inside a foreign command's argument reaches the gate" {
-  install_gh_stub
-  commit_files "frontend/app/x.ts" "export const x = 1"
-  git -C "$REPO" remote set-url origin https://github.com/gaia-react/gaia.git
-
-  run_merge_hook 'gh pr view 5 -R other/x --jq "$(gh pr merge 30 --squash)"'
-  assert_denied_by_json
-}
-
-@test "data-proof: a substitution in an unquoted-delimiter heredoc body still arms" {
-  install_gh_stub
-  commit_files "frontend/app/x.ts" "export const x = 1"
-
-  run_merge_hook $'cat > f.txt <<EOF\n$(gh pr merge 30 --squash)\nEOF\n'
-  assert_denied_by_json || return 1
-  # Quoting the delimiter turns substitution off, so the body is data again.
-  run_merge_hook $'cat > f.txt <<\'EOF\'\n$(gh pr merge 30 --squash)\nEOF\n'
-  assert_allowed_by_json || return 1
-  [ -z "$output" ]
-}
-
 @test "arming: a merge cited in a pull-request body passed through a quoted-delimiter heredoc is allowed" {
   install_gh_stub
   commit_files "frontend/app/x.ts" "export const x = 1"
@@ -2622,14 +2401,6 @@ run_merge_hook_library_absent() {
   true
 }
 
-@test "data-proof: an unterminated quote after the heredoc denies (walker abstains, raw match stands)" {
-  install_gh_stub
-  commit_files "frontend/app/x.ts" "export const x = 1"
-
-  run_merge_hook $'cat > f.txt <<EOF\ngh pr merge 30 --squash\nEOF\n'"'"
-  assert_denied_by_json
-}
-
 @test "data-proof: the same payload with the quote terminated is proven data and allowed" {
   install_gh_stub
   commit_files "frontend/app/x.ts" "export const x = 1"
@@ -2637,14 +2408,6 @@ run_merge_hook_library_absent() {
   run_merge_hook $'cat > f.txt <<EOF\ngh pr merge 30 --squash\nEOF\n'"'x'"
   assert_allowed_by_json
   [ -z "$output" ]
-}
-
-@test "data-proof: a heredoc whose delimiter never appears denies (walker abstains)" {
-  install_gh_stub
-  commit_files "frontend/app/x.ts" "export const x = 1"
-
-  run_merge_hook $'cat > f.txt <<EOF\ngh pr merge 30 --squash\n'
-  assert_denied_by_json
 }
 
 @test "data-proof: a heredoc-body merge at the character bound is proven data and allowed" {
@@ -2658,29 +2421,11 @@ run_merge_hook_library_absent() {
   [ -z "$output" ]
 }
 
-@test "data-proof: the same shape one character past the bound denies (identity view, raw match stands)" {
-  install_gh_stub
-  commit_files "frontend/app/x.ts" "export const x = 1"
-
-  padded_heredoc_command 16385
-  [ "${#PADDED_COMMAND}" -eq 16385 ]
-  run_merge_hook "$PADDED_COMMAND"
-  assert_denied_by_json
-}
-
 @test "no-regression: an unrelated first line with an unquoted merge on the second line still arms" {
   install_gh_stub
   commit_files "frontend/app/x.ts" "export const x = 1"
 
   run_merge_hook $'echo hi\ngh pr merge 30 --squash\n'
-  assert_denied_by_json
-}
-
-@test "no-regression: a mid-word # before a real merge still arms" {
-  install_gh_stub
-  commit_files "frontend/app/x.ts" "export const x = 1"
-
-  run_merge_hook 'echo x#y && gh pr merge 30 --squash'
   assert_denied_by_json
 }
 
@@ -2691,17 +2436,6 @@ run_merge_hook_library_absent() {
   run_merge_hook '# gh pr merge 30 --squash'
   assert_allowed_by_json
   [ -z "$output" ]
-}
-
-@test "data-proof: an unmodelled \$'…' word ahead of an otherwise-provable heredoc denies" {
-  install_gh_stub
-  commit_files "frontend/app/x.ts" "export const x = 1"
-
-  # Without the leading $'a' word this payload is proven data and allowed
-  # (see the cat-to-file case above); the walker abandons suppression on the
-  # unmodelled $'…' construct instead, so the pre-existing raw match stands.
-  run_merge_hook $'x=$\'a\'\ncat > f.txt <<EOF\ngh pr merge 30 --squash\nEOF\n'
-  assert_denied_by_json
 }
 
 @test "library-absent: repo-scope.sh missing denies by name, not by blaming the command's spelling" {

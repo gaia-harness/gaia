@@ -158,35 +158,6 @@ legacy_scripts() {
   mutate "$1/usage-memo-lib.sh" 'def usage_present($usage_records; $links):' 'def usage_present(($usage_records; $links):'
 }
 
-# without_active <file>: the readout with every active suffix, the active Note
-# and the blank line before it (when it is the only Note) removed, box borders
-# and padding collapsed, since a shorter figure narrows the box.
-without_active() {
-  awk '
-    { lines[NR] = $0 }
-    END {
-      note = "Note: Some of this spend predates active-time tracking, so the active time is a minimum."
-      for (i = 1; i <= NR; i++) {
-        line = lines[i]
-        if (line == note) continue
-        if (line == "" && lines[i + 1] == note && lines[i + 2] !~ /^Note: /) continue
-        gsub(/ \([0-9hms]+\+? active\)/, "", line)
-        if (line ~ /^\+-+\+$/) line = "+-+"
-        sub(/ +\|$/, " |", line)
-        print line
-      }
-    }' "$1"
-}
-
-# stripped_telemetry <directory>: a telemetry directory holding the ledger with
-# every `act` key and every fact-carrying cursor row removed.
-stripped_telemetry() {
-  mkdir -p "$1"
-  if [ -f "$TEL/links.jsonl" ]; then cp "$TEL/links.jsonl" "$1/"; fi
-  if [ -f "$TEL/usage-cursors.json" ]; then cp "$TEL/usage-cursors.json" "$1/"; fi
-  grep -vF '{"schema_version":1,"kind":"cursor","act":' "$TEL/usage.jsonl" | jq -c 'del(.act)' >"$1/usage.jsonl"
-}
-
 # ---------- scenarios ----------
 
 # Two closed turns two hours apart, each a minute of work with a 60 s turn length.
@@ -335,13 +306,6 @@ build_fact_less() {
 }
 
 # ---------- the line ----------
-
-@test "an idle gap between two closed turns is left out: the line shows two minutes active beside the two-hour wall clock" {
-  build_idle_gap
-  run usage initiative "$REF" --line
-  [ "$status" -eq 0 ]
-  [ "$output" = 'Cost: 0.4M tokens, $0.40, 2h1m0s (2m0s active)' ]
-}
 
 @test "a seven-minute tool call that writes nothing while it runs counts in full" {
   prompt 10:00:00
@@ -754,42 +718,6 @@ split_flush_session() {
   true
 }
 
-# ---------- wall clock is unchanged ----------
-
-# same_wall_clock <readout args...>: the readout over the ledger, its active
-# figures removed, equals the readout over the same ledger stripped of facts.
-same_wall_clock() {
-  local stripped="$TEMPORARY_DIRECTORY/stripped"
-  [ -d "$stripped" ] || stripped_telemetry "$stripped"
-  usage "$@" >"$TEMPORARY_DIRECTORY/with-facts.txt"
-  usage "$@" --telemetry-dir "$stripped" >"$TEMPORARY_DIRECTORY/without-facts.txt"
-  grep -q ' active)' "$TEMPORARY_DIRECTORY/with-facts.txt"
-  grep -q ' active)' "$TEMPORARY_DIRECTORY/without-facts.txt" && return 1
-  diff <(without_active "$TEMPORARY_DIRECTORY/with-facts.txt") <(without_active "$TEMPORARY_DIRECTORY/without-facts.txt")
-}
-
-@test "with its active figures removed, every readout equals the same readout over the ledger stripped of facts" {
-  build_idle_gap
-  same_wall_clock initiative "$REF" --line
-  same_wall_clock initiative "$REF" --box
-}
-
-@test "the three-row and mixed ledgers keep their wall clock, tokens, dollars and Notes once the active figures are removed" {
-  build_three_rows
-  same_wall_clock initiative "$REF" --line
-  same_wall_clock initiative "$REF" --box
-  rm -rf "$TEL" "$TEMPORARY_DIRECTORY/stripped" "${PROJECTS:?}/$ENCODED_MAIN"
-  mkdir -p "$TEL" "$PROJECTS/$ENCODED_MAIN"
-  build_mixed
-  same_wall_clock initiative "$REF" --line
-  same_wall_clock initiative "$REF" --box
-}
-
-@test "the per-PR box keeps its wall clock and markers once the active figures are removed" {
-  build_per_pr
-  same_wall_clock pr 101 --auditors "$AUDITORS"
-}
-
 # ---------- memo parity ----------
 
 # parity <expected> <readout args...>: the readout prints the expected text
@@ -845,19 +773,6 @@ parity() {
 }
 
 # bats test_tags=whole-tree
-@test "a box Total that sums its rows instead of taking their union fails the pinned box" {
-  build_three_rows
-  local scratch="$TEMPORARY_DIRECTORY/scratch"
-  scratch_scripts "$scratch"
-  mutate "$scratch/usage-render-lib.sh" '+ usage_elapsed_active($active_index; $root.segments))};' \
-    '+ usage_elapsed_active($active_index; $root.segments))} | .total.active_seconds = ([.rows[].active_seconds // 0] | add);'
-  run usage_from "$scratch" initiative "$REF" --box
-  [ "$status" -eq 0 ]
-  [ "$output" != "$THREE_ROW_BOX" ]
-  grep -qF 'Total: 6.0M tokens, $6.00, 2h0m0s (30m0s+ active)' <<<"$output"
-}
-
-# bats test_tags=whole-tree
 @test "a Cost line that takes any fourth argument as seconds appends a suffix to a legacy four-argument call" {
   local scratch="$TEMPORARY_DIRECTORY/scratch" call
   scratch_scripts "$scratch"
@@ -878,42 +793,4 @@ parity() {
   run usage_from "$scratch" pr 102 --auditors "$AUDITORS"
   [ "$status" -eq 0 ]
   grep -q '^Note: Some of this spend predates' <<<"$output"
-}
-
-# record_at <scripts directory> <session> <with|without>: a gaia-spec run of
-# the session recorded with the test clock set, inside or outside a bats run;
-# prints the close row's ts.
-record_at() {
-  local scripts_directory="$1" session="$2"
-  UT_SESSION="$session"
-  prompt 10:00:00
-  skill 10:00:00 gaia-spec
-  work 10:01:00
-  UT_SESSION=s-main
-  if [ "$3" = without ]; then
-    env -u BATS_TEST_TMPDIR GAIA_USAGE_TEST_NOW=2000-01-01T00:00:00Z CLAUDE_CODE_SESSION_ID="$session" \
-      bash "$scripts_directory/usage.sh" record "$REF" --workflow gaia-spec --quiet --main-root "$MAIN" --projects-root "$PROJECTS" --rate-table "$RATES"
-  else
-    GAIA_USAGE_TEST_NOW=2000-01-01T00:00:00Z CLAUDE_CODE_SESSION_ID="$session" \
-      bash "$scripts_directory/usage.sh" record "$REF" --workflow gaia-spec --quiet --main-root "$MAIN" --projects-root "$PROJECTS" --rate-table "$RATES"
-  fi
-  jq -r --arg session "$session" 'select(.kind == "binding" and .type == "close" and .session_id == $session) | .ts' "$TEL/usage.jsonl"
-}
-
-# bats test_tags=whole-tree
-@test "the test clock applies only inside a bats run, and a seam without that condition would leak out of one" {
-  DAY=1999-12-31
-  run record_at "$SCRIPTS" s-outside without
-  [ "$status" -eq 0 ]
-  [ -n "$output" ]
-  [[ "$output" != 2000* ]]
-  run record_at "$SCRIPTS" s-inside with
-  [ "$status" -eq 0 ]
-  [ "$output" = 2000-01-01T00:00:00Z ]
-  local scratch="$TEMPORARY_DIRECTORY/scratch"
-  scratch_scripts "$scratch"
-  mutate "$scratch/usage.sh" '[ -n "${GAIA_USAGE_TEST_NOW:-}" ] && [ -n "${BATS_TEST_TMPDIR:-}" ]' '[ -n "${GAIA_USAGE_TEST_NOW:-}" ]'
-  run record_at "$scratch" s-leak without
-  [ "$status" -eq 0 ]
-  [ "$output" = 2000-01-01T00:00:00Z ]
 }

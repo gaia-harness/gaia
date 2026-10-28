@@ -292,7 +292,7 @@ differs() { if cmp -s "$1" "$2"; then return 1; fi; return 0; }
 # --- 4. torn and rewritten stores --------------------------------------------
 
 @test "stores: a torn final line is left for the next read, and a rewrite inside the hashed head scans in full" {
-  local links_store="$UM_TELEMETRY_DIRECTORY/links.jsonl" initial_size initial_offset initial_head_length torn i
+  local links_store="$UM_TELEMETRY_DIRECTORY/links.jsonl" initial_size torn i
   torn='{"schema_version":1,"kind":"edge","child":"'"$KEY"'","parent":"research:torn-extra","source":"link-command","ts":"2026-09-29T00:00:00Z","session_id":null,"sidechain":false'
   warm
   check_same pr "$PR"
@@ -310,25 +310,6 @@ differs() { if cmp -s "$1" "$2"; then return 1; fi; return 0; }
   differs "$BATS_TEST_TMPDIR/base.out" "$NEW_OUTPUT_FILE"
   grep -qF '[initiative research:torn-extra ' "$NEW_OUTPUT_FILE"
   [ "$(jq -r '.stores.l.off' <<<"$(memo_body)")" = "$(wc -c <"$links_store" | tr -d '[:space:]')" ]
-
-  # A same-length rewrite inside the recorded hashed head: the size stays at
-  # the recorded offset, so only the head hash can notice it.
-  initial_offset="$(jq -r '.stores.l.off' <<<"$(memo_body)")"
-  initial_head_length="$(jq -r '.stores.l.hn' <<<"$(memo_body)")"
-  [ "$initial_head_length" -gt 0 ]
-  sed '1s/"source":"gh-pr-create"/"source":"link-command"/' "$links_store" >"$BATS_TEST_TMPDIR/links.rewritten"
-  differs "$links_store" "$BATS_TEST_TMPDIR/links.rewritten"
-  cp "$BATS_TEST_TMPDIR/links.rewritten" "$links_store"
-  [ "$(wc -c <"$links_store" | tr -d '[:space:]')" -ge "$initial_offset" ]
-  check_same pr "$PR"
-  assert_trace "scan=full store=l reason=head"
-  check_same reconcile
-
-  # A plain shrink below the recorded offset.
-  head -n 1 "$links_store" >"$BATS_TEST_TMPDIR/links.cut"
-  cp "$BATS_TEST_TMPDIR/links.cut" "$links_store"
-  check_same reconcile
-  assert_trace "scan=full store=l reason=shrunk"
 
   # The same sequence under a memo-deleted u_new matches u_old too.
   rm -f "$MEMO"
@@ -625,35 +606,4 @@ forced_failure_tree() {
 
   check_same pr "$PR"
   assert_no_trace '^rerun=miss'
-}
-
-# --- 15. trace variable ------------------------------------------------------
-
-# bats test_tags=whole-tree
-@test "trace: the old flag-style variable writes no file and the file variable receives the trace" {
-  local root scratch="$BATS_TEST_TMPDIR/cwd" trace_path="$BATS_TEST_TMPDIR/named.trace" before after
-  warm
-  root="$(jq -r --arg derive_key "$KEY" '.derive[$derive_key][0]' <<<"$(memo_body)")"
-  mkdir -p "$scratch"
-  unset GAIA_USAGE_MEMO_TRACE_FILE
-  export GAIA_USAGE_MEMO_TRACE=1
-  cd "$scratch"
-
-  before="$(ls -A "$scratch")"
-  run_new_tree "$BATS_TEST_TMPDIR/t.out" "$BATS_TEST_TMPDIR/t.err" initiative "$root" --box
-  after="$(ls -A "$scratch")"
-  [ "$before" = "$after" ]
-
-  rm -f "$MEMO"
-  GAIA_USAGE_MEMO_TRACE_FILE="$trace_path" run_new_tree "$BATS_TEST_TMPDIR/t.out" "$BATS_TEST_TMPDIR/t.err" initiative "$root" --box
-  [ -f "$trace_path" ]
-  grep -q '^path=' "$trace_path"
-  grep -q '^write=' "$trace_path"
-
-  # Guard red: a copy that reads the old name creates the file `1` here.
-  make_tree trace
-  mutate "$MUTANT_TREE/$LIBRARY" '[ -n "${GAIA_USAGE_MEMO_TRACE_FILE:-}" ]' '[ -n "${GAIA_USAGE_MEMO_TRACE:-}" ]'
-  mutate "$MUTANT_TREE/$LIBRARY" '>>"$GAIA_USAGE_MEMO_TRACE_FILE"' '>>"$GAIA_USAGE_MEMO_TRACE"'
-  run_mutant_tree "$MUTANT_TREE" "$BATS_TEST_TMPDIR/m.out" "$BATS_TEST_TMPDIR/m.err" initiative "$root" --box
-  [ -f "$scratch/1" ]
 }

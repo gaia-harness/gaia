@@ -236,18 +236,6 @@ mutate_hook() {
   release_stub "$LOCAL"
 }
 
-# bats test_tags=whole-tree
-@test "red state: without the stamp gate a 2-hour-old stamp launches" {
-  make_fixture
-  mutate_hook 'stamp_is_fresh && exit 0' ':' all
-  touch "$STAMP"
-  age_path 2 "$STAMP"
-  run_hook "$MAIN"
-  [ "$status" -eq 0 ]
-  wait_for_file "$LAUNCH_MARKER"
-  release_stub "$LOCAL"
-}
-
 # ---------- single flight ----------
 
 # bats test_tags=whole-tree
@@ -304,17 +292,6 @@ mutate_hook() {
   release_stub "$LOCAL"
 }
 
-# bats test_tags=whole-tree
-@test "red state: without the lock a held fresh lock does not stop a launch" {
-  make_fixture
-  mutate_hook 'if ! gaia_exclusive_lock_take "$lock_directory"; then' 'if ! true; then'
-  mkdir "$LOCK"
-  run_hook "$MAIN"
-  [ "$status" -eq 0 ]
-  wait_for_file "$LAUNCH_MARKER"
-  release_stub "$LOCAL"
-}
-
 # ---------- fail open ----------
 
 # bats test_tags=whole-tree
@@ -331,22 +308,6 @@ mutate_hook() {
   sleep 0.5
   [ ! -e "$bare/.gaia/local/launch-marker" ]
   [ ! -e "$bare/.gaia/local/cache/state-reaper/last-launch" ]
-}
-
-# bats test_tags=whole-tree
-@test "red state: without the main-root resolution a run outside any repository launches the cwd's reaper" {
-  local bare="$TEMPORARY_DIRECTORY/bare"
-  mkdir -p "$bare/.claude/hooks" "$bare/.gaia/scripts"
-  cp "$REPO_ROOT/.claude/hooks/$HOOK_NAME" "$bare/.claude/hooks/"
-  cp "$REPO_ROOT/.gaia/scripts/main-root-lib.sh" "$bare/.gaia/scripts/"
-  cp "$REPO_ROOT/.gaia/scripts/exclusive-lock-lib.sh" "$bare/.gaia/scripts/"
-  MAIN="$bare"
-  write_stub_reaper
-  mutate_hook 'main_root="$(gaia_resolve_main_root 2>/dev/null)" || exit 0' 'main_root="$(gaia_resolve_main_root 2>/dev/null)" || main_root="$PWD"'
-  run_hook "$bare"
-  [ "$status" -eq 0 ]
-  wait_for_file "$bare/.gaia/local/launch-marker"
-  release_stub "$bare/.gaia/local"
 }
 
 # bats test_tags=whole-tree

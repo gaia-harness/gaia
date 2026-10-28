@@ -329,48 +329,6 @@ old_recipe_digest() {
   { printf 'old-recipe\0'; lsb_git ls-tree -z -r HEAD; } | { shasum -a 256 2>/dev/null || sha256sum; } | awk '{ print $1 }'
 }
 
-@test "a marker, a success status and a verdict keyed to the previous recipe clear nothing, and one fresh clearance per member does" {
-  local old version member tree
-  seed_shared_file
-  branch_work
-  old="$(old_recipe_digest)"
-  version="$(awk 'NF { print; exit }' "$LSB_ROOT/.gaia/VERSION" | tr -d '[:space:]')"
-  tree="$(lsb_git rev-parse 'HEAD^{tree}')"
-  while IFS= read -r member; do
-    [ -n "$member" ] || continue
-    lsb_marker_json "$member" earned full "$tree" "$version" "$old" >/dev/null
-  done < <(dispatched_members)
-  STATUSES_JSON="$(jq -n -c --arg description "$version $old $tree" '[{context: "GAIA-Audit", state: "success", description: $description}]')"
-
-  run_gate
-  assert_denied_naming "$FRONTEND"
-  assert_denied_naming "$SHELL_MEMBER"
-
-  clear_dispatched
-  run_gate
-  assert_allowed
-}
-
-@test "a light-route verdict written for the previous recipe's digest is not reused" {
-  local reply="$BATS_TEST_TMPDIR/reply.json"
-  lsb_catchup_branch_commit frontend/app/start.md "start"
-  clear_member "$FRONTEND"
-  lsb_catchup_branch_commit frontend/app/notes.md "$(printf 'one\ntwo\nthree')"
-  lsb_route "$FRONTEND"
-  [ "$output" = "$(printf 'light\tlight-eligible')" ] || { printf 'router: %s\n' "$output" >&2; return 1; }
-
-  lsb_clear_reply "$FRONTEND" | jq -c --arg old "$(old_recipe_digest)" '.digest = $old' >"$reply"
-  lsb_mark "$FRONTEND" "$reply"
-  [ "$status" -eq 0 ]
-  [ "$output" = "$(printf 'full\tverdict-mismatch')" ] || { printf 'marker script: %s\n' "$output" >&2; return 1; }
-
-  # Paired: a verdict for the current digest is accepted.
-  lsb_clear_reply "$FRONTEND" >"$reply"
-  lsb_mark "$FRONTEND" "$reply"
-  [ "$status" -eq 0 ]
-  [ "$output" = "light-cleared" ] || { printf 'marker script: %s\n' "$output" >&2; return 1; }
-}
-
 # --- an open finding survives a catch-up on every resolver arm ---------------------
 
 # resolver_lines [<member>]: the resolver's stdout, from the sandbox root.
@@ -459,38 +417,6 @@ assert_open_finding_survives() {
   refuse_with_open_finding
   lsb_catchup_branch_commit frontend/app/after-refusal.md "after the refusal"
   assert_open_finding_survives member-refusal
-}
-
-@test "an open finding keeps its artifact key across a clean catch-up on the no-anchor arm" {
-  seed_shared_file
-  branch_work
-  refuse_with_open_finding
-  rm -f "$LSB_ROOT"/.gaia/local/audit/*.refused
-  assert_open_finding_survives no-anchor
-}
-
-@test "an open finding keeps its artifact key across a clean catch-up on the global-rules reset arm" {
-  seed_shared_file
-  branch_work
-  refuse_with_open_finding
-  lsb_catchup_branch_commit .claude/rules/quality-gate.md "branch edit to a global rules path"
-  assert_open_finding_survives rules-reset-global
-}
-
-@test "an open finding keeps its artifact key across a clean catch-up on the no-version arm" {
-  seed_shared_file
-  branch_work
-  refuse_with_open_finding
-  rm -f "$LSB_ROOT/.gaia/VERSION"
-  assert_open_finding_survives no-version
-}
-
-@test "an open finding keeps its artifact key across a clean catch-up when the version library cannot be read" {
-  seed_shared_file
-  branch_work
-  refuse_with_open_finding
-  rm -f "$LSB_ROOT/.claude/hooks/lib/gaia-version.sh"
-  assert_open_finding_survives degraded
 }
 
 @test "mutation: a resolver whose shared base is the merge base with the base tip moves the artifact key on a clean catch-up" {

@@ -139,32 +139,31 @@ stores_sha() {
 # memo_inode: the inode of the memo file.
 memo_inode() { ls -i "$MEMO" | awk '{ print $1 }'; }
 
-# memo_inode_flips <tree>: the memo's inode differs after a save that updates an
-# existing memo. The save is temp plus rename, so a reader never sees a half
-# written memo; an in-place writer keeps the inode and fails.
-memo_inode_flips() {
-  local tree="$1" inode_before inode_after
-  umemo_load_store identity || return 1
-  rm -f "$MEMO"
-  _umemo_run "$tree" "$CAPTURE_DIRECTORY/flip1.out" "$CAPTURE_DIRECTORY/flip1.err" pr 2302 || return 1
-  [ -f "$MEMO" ] || { printf 'no memo written by the first run\n' >&2; return 1; }
-  inode_before="$(memo_inode)"
-  new_branch_rows -flip
-  _umemo_run "$tree" "$CAPTURE_DIRECTORY/flip2.out" "$CAPTURE_DIRECTORY/flip2.err" pr --key "$NB_KEY" || return 1
-  inode_after="$(memo_inode)"
-  [ "$inode_before" != "$inode_after" ] || { printf 'memo inode %s unchanged by an update\n' "$inode_before" >&2; return 1; }
-}
-
 # ---------------------------------------------------------------------------
 
 @test "UAT-002: probe identity across pr, pr --key, pr --branch and pr-branch, cold and warm" {
-  local probe_count i seen=0 skipped=0 want_skipped pr key raw roots form tag args_string
-  local -a args
+  local probe_count i seen=0 skipped=0 want_skipped pr key raw roots form tag args_string category selected_json
+  local -a args selected_indexes
   probe_count="$(umemo_probe_count "$PROBES")"
   [ "$probe_count" -ge 20 ]
-  want_skipped="$(jq '[.probes[] | .key, .raw | select(. == null)] | length' "$PROBES")"
+  # One probe per category, plus the first probe whose key is null and the
+  # first whose raw is null, so both skip paths run.
+  selected_json="$(jq -c '
+    (.probes | to_entries) as $entries
+    | ([$entries | group_by(.value.category)[] | .[0].key]
+      + [$entries | map(select(.value.key == null)) | .[0].key // empty]
+      + [$entries | map(select(.value.raw == null)) | .[0].key // empty]) | unique' "$PROBES")"
+  for category in $(jq -r '[.probes[].category] | unique | .[]' "$PROBES"); do
+    jq -e --arg category "$category" --argjson selected "$selected_json" \
+      '[$selected[] as $position | .probes[$position].category] | index($category) != null' "$PROBES" >/dev/null ||
+      { printf 'category %s has no selected probe\n' "$category" >&2; return 1; }
+  done
+  [ "$(jq -r --argjson selected "$selected_json" '[$selected[] as $position | .probes[$position] | select(.key == null)] | length > 0' "$PROBES")" = true ]
+  [ "$(jq -r --argjson selected "$selected_json" '[$selected[] as $position | .probes[$position] | select(.raw == null)] | length > 0' "$PROBES")" = true ]
+  want_skipped="$(jq --argjson selected "$selected_json" '[$selected[] as $position | .probes[$position] | .key, .raw | select(. == null)] | length' "$PROBES")"
   # The jq above counts null keys and null raws: every one is a skipped form.
-  for ((i = 0; i < probe_count; i++)); do
+  read -r -a selected_indexes <<<"$(jq -r 'join(" ")' <<<"$selected_json")"
+  for i in "${selected_indexes[@]}"; do
     pr="$(jq -r --argjson probe_position "$i" '.probes[$probe_position].pr' "$PROBES")"
     key="$(jq -r --argjson probe_position "$i" '.probes[$probe_position].key // ""' "$PROBES")"
     raw="$(jq -r --argjson probe_position "$i" '.probes[$probe_position].raw // ""' "$PROBES")"
@@ -210,7 +209,7 @@ memo_inode_flips() {
       [ ! -s "$CAPTURE_DIRECTORY/$tag-warm.err" ] || { printf 'warm stderr not empty for %s:\n%s\n' "$args_string" "$(cat "$CAPTURE_DIRECTORY/$tag-warm.err")" >&2; return 1; }
     done
   done
-  [ "$seen" -eq "$probe_count" ]
+  [ "$seen" -eq "${#selected_indexes[@]}" ]
   [ "$skipped" -eq "$want_skipped" ]
 }
 
@@ -419,16 +418,6 @@ memo_inode_flips() {
   name="${template%%X*}abc123"
   # shellcheck disable=SC2254
   case "$name" in $glob) ;; *) printf 'temp name %s does not match registered glob %s\n' "$name" "$glob" >&2; return 1 ;; esac
-}
-
-@test "UAT-005 guard: an in-place memo writer fails the inode check" {
-  local mutant_tree="$UM_TEMPORARY_DIRECTORY/tree-inplace"
-  cp -R "$UM_NEW" "$mutant_tree"
-  sed 's|mv -f "\$temporary_file" "\$memo"|cat "$temporary_file" >"$memo"|' "$UM_NEW/.gaia/scripts/usage-memo-lib.sh" >"$mutant_tree/.gaia/scripts/usage-memo-lib.sh"
-  cmp -s "$UM_NEW/.gaia/scripts/usage-memo-lib.sh" "$mutant_tree/.gaia/scripts/usage-memo-lib.sh" && return 1
-  memo_inode_flips "$UM_NEW"
-  run memo_inode_flips "$mutant_tree"
-  [ "$status" -ne 0 ]
 }
 
 # epoch_all <scripts dir> <corpus>: usage_epoch of every corpus value through

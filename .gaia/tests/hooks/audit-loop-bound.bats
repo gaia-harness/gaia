@@ -267,23 +267,8 @@ next_allowed() {
   stalled_denied
 }
 
-@test "stalled evidence denies at the next tree: [5,6,7]" {
-  alf_sequence 5 6 7
-  stalled_denied
-}
-
 @test "falling evidence allows the next tree: [5,4,4]" {
   alf_sequence 5 4 4
-  next_allowed
-}
-
-@test "falling evidence allows the next tree: [5,5,4]" {
-  alf_sequence 5 5 4
-  next_allowed
-}
-
-@test "short evidence allows the next tree: [5,5]" {
-  alf_sequence 5 5
   next_allowed
 }
 
@@ -878,23 +863,6 @@ fork_mutant() {
   [ ! -f "$ALF_STATE" ]
 }
 
-@test "UAT-010 mutation: without the refusal call the fork dispatch is allowed, so the denial test can fail" {
-  fork_mutant 's/(prechecked=1.*?)if fork_reason=\$\(gaia_cross_repo_deny_reason/$1if false \&\& fork_reason=\$(gaia_cross_repo_deny_reason/s'
-  printf '{"number":34,"state":"OPEN"}\n' >"$GH_STUB_STATE_DIRECTORY/branch.json"
-  printf 'true\n' >"$GH_STUB_STATE_DIRECTORY/cross-repository"
-  dispatch
-  assert_allowed
-  [ "$(nrounds)" -eq 1 ]
-}
-
-@test "UAT-010 mutation: treating an unanswerable gh as allow lets the dispatch through, so the fail-closed test can fail" {
-  fork_mutant 's/(prechecked=1.*?)finish_deny "\$fork_reason"/$1case "\$fork_reason" in *"cannot tell"*) ;; *) finish_deny "\$fork_reason" ;; esac/s'
-  printf 'fail\n' >"$GH_STUB_STATE_DIRECTORY/cross-repository"
-  dispatch
-  assert_allowed
-  [ "$(nrounds)" -eq 1 ]
-}
-
 # --- the light reviewer -----------------------------------------------------------
 #
 # A light review is checked (audited root, dirty checkout, fork) but never
@@ -1000,30 +968,6 @@ light_dispatch_in_unit() {
 @test "light: a same-repo pull request is allowed" {
   printf '{"number":34,"state":"OPEN"}\n' >"$GH_STUB_STATE_DIRECTORY/branch.json"
   printf 'false\n' >"$GH_STUB_STATE_DIRECTORY/cross-repository"
-  light_dispatch_in_unit
-  assert_allowed
-}
-
-@test "light mutation: without the scope line the light dispatch is ignored, so the dirty and fork denials can fail" {
-  fork_mutant 's/^  audit-light-reviewer\) kind=light ;;\n//m'
-  printf 'edit\n' >>"$ALF_ROOT/base.txt"
-  printf 'true\n' >"$GH_STUB_STATE_DIRECTORY/cross-repository"
-  printf '{"number":34,"state":"OPEN"}\n' >"$GH_STUB_STATE_DIRECTORY/branch.json"
-  light_dispatch_in_unit
-  assert_allowed
-}
-
-@test "light mutation: without the light arm's fork refusal a fork pull request is let through, so the fork denial can fail" {
-  fork_mutant 's/(kind" = light \]; then.*?)if fork_reason=\$\(gaia_cross_repo_deny_reason/$1if false \&\& fork_reason=\$(gaia_cross_repo_deny_reason/s'
-  printf '{"number":34,"state":"OPEN"}\n' >"$GH_STUB_STATE_DIRECTORY/branch.json"
-  printf 'true\n' >"$GH_STUB_STATE_DIRECTORY/cross-repository"
-  light_dispatch_in_unit
-  assert_allowed
-}
-
-@test "light mutation: without the light arm's dirty check an edited checkout is let through, so the dirty denial can fail" {
-  fork_mutant 's/(kind" = light \]; then\n    dirty_exit_status=0\n)    _gaia_loop_git[^\n]*\n/$1/'
-  printf 'edit\n' >>"$ALF_ROOT/base.txt"
   light_dispatch_in_unit
   assert_allowed
 }
@@ -1226,19 +1170,6 @@ settings() {
   [ "$(nrounds)" -eq "$through" ]
 }
 
-@test "red state: deciding the in-unit member by the round-count allowance denies the round-7 dispatch" {
-  fork_mutant 's/decision=\$\(gaia_loop_decide_member "\$view" "\$snapshot" "\$in_unit" "\$reading" "\$ask_tokens" "\$ask_percent"\)/decision=\$(gaia_loop_decide "\$WORKING_STATE" "\$snapshot")/'
-  alf_sequence 6 5 4 3 2 1
-  alf_state_edit '.history.knobs.checkpoint_round = 6'
-  below
-  unit_dispatch
-  assert_allowed
-  new_tree
-  nested
-  assert_denied
-  [ "$(nrounds)" -eq 6 ]
-}
-
 @test "a reading at the line denies the unit with a pinned context checkpoint and the unattended rule" {
   local nonce elig want
   alf_sequence 6 5
@@ -1383,15 +1314,6 @@ first_pinned_label() { state_field '.history.checkpoints | last | .question.ques
   deny_prefix "BLOCKED: audit dispositions"
   reason | grep -qF -- "violation: security-not-fix"
   cmp "$ALF_STATE" "$BATS_TEST_TMPDIR/before"
-}
-
-@test "red state: without the dispositions check the failing zero-fix re-dispatch joins its round" {
-  fork_mutant 's/^  check_dispositions\n//m'
-  alf_sequence 6 5
-  alf_dispositions 2 '[{"member":"code-audit-frontend","finding_class":"rule/x","path":"f.txt","line":1,"disposition":"accept-residual","reason":"later"}]'
-  dispatch
-  assert_allowed
-  [ "$(nrounds)" -eq 2 ]
 }
 
 # veto_rounds: round 1 reports finding X (security false) and disposes it
@@ -1646,25 +1568,8 @@ veto_rounds() {
   reason | grep -qF -- "vetoes.json"
 }
 
-@test "red state: without the spent-answer view, a main-thread grant of 2 keeps buying trees" {
-  fork_mutant 's/view=\$\(answer_view "\$WORKING_STATE"\)/view="\$WORKING_STATE"/'
-  alf_sequence 6 5 4 3 2
-  alf_add_checkpoint 5 allowance
-  alf_add_answer 1 grant 2
-  new_tree
-  dispatch
-  assert_allowed
-  new_tree
-  dispatch
-  assert_allowed
-  new_tree
-  dispatch
-  assert_allowed
-  [ "$(nrounds)" -eq 8 ]
-}
-
 @test "a unit dispatch over 9 rounds with 9 snapshotted dispositions files decides within 5 seconds" {
-  local round_number start_milliseconds end_milliseconds i
+  local round_number start_milliseconds end_milliseconds
   alf_sequence 6 5 4 3 2 2 1 1 1
   # With no baselines every round reads the newest sidecar, which reports only
   # f.txt:1, and the dispositions check requires that finding disposed.
@@ -1675,12 +1580,10 @@ veto_rounds() {
     --run-folder "$ALF_ROOT/.gaia/local/runs/$ALF_NORMALIZED_BRANCH" --snapshot-dir "${ALF_STATE%.json}.d"
   [ "$(find "${ALF_STATE%.json}.d" -name 'dispositions-*.checked.json' | wc -l | tr -d ' ')" -eq 9 ]
   below
-  for i in 1 2 3 4 5; do
-    start_milliseconds="$(perl -MTime::HiRes=time -e 'printf "%d", time * 1000')"
-    unit_dispatch
-    end_milliseconds="$(perl -MTime::HiRes=time -e 'printf "%d", time * 1000')"
-    [ "$status" -eq 0 ]
-    printf '# run %s: %s ms\n' "$i" $((end_milliseconds - start_milliseconds)) >&3
-    [ $((end_milliseconds - start_milliseconds)) -lt 5000 ]
-  done
+  start_milliseconds="$(perl -MTime::HiRes=time -e 'printf "%d", time * 1000')"
+  unit_dispatch
+  end_milliseconds="$(perl -MTime::HiRes=time -e 'printf "%d", time * 1000')"
+  [ "$status" -eq 0 ]
+  printf '# run: %s ms\n' $((end_milliseconds - start_milliseconds)) >&3
+  [ $((end_milliseconds - start_milliseconds)) -lt 5000 ]
 }

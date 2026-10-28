@@ -15,7 +15,7 @@
 # probe a subset of it, deliberately rather than for want of coverage:
 # code-audit-frontend (default), code-audit-maintainer-shell and
 # code-audit-maintainer-node. The members left out have their ownership routing
-# covered in audit-scope-lib.bats and audit-scope-routing-parity.bats, so what
+# covered in audit-scope-lib.bats and verify-audit-roster.bats, so what
 # this suite adds for them would be a second copy of that. Membership is proved
 # by ROTATION: a path is
 # in member M's digest set iff flipping one byte in it rotates M's digest.

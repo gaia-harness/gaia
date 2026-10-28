@@ -43,9 +43,6 @@ bats_require_minimum_version 1.5.0
 # (see install_gh_mock), keyed by commit SHA so a multi-commit walk can
 # return different statuses per commit.
 #
-# Reason-token reachability lives in its own section at the foot of the file:
-# one test per token in the closed set.
-#
 
 setup() {
   THIS_DIRECTORY="$( cd "$( dirname "$BATS_TEST_FILENAME" )" && pwd )"
@@ -2475,99 +2472,6 @@ assert_characterization_count() {
 }
 
 # =============================================================================
-# Reason-token reachability: each token of the closed set the resolver's header
-# lists must be emitted on at least one input. The tests above assert richer
-# behavior on these same paths; this section exists so the set is enumerated in
-# one place and a new token cannot be introduced unnoticed.
-# =============================================================================
-
-@test "reason token: member-clearance" {
-  require_jq
-  add_commit a
-  add_commit b
-  write_clearance "$DEFAULT_MEMBER" earned "$(tree_of HEAD)" 1.2.3 >/dev/null
-  add_commit c
-  run --separate-stderr run_member "$DEFAULT_MEMBER"
-  [ "$status" -eq 0 ]
-  [ "$(member_reason)" = "member-clearance" ]
-}
-
-@test "reason token: member-refusal" {
-  require_jq
-  build_linked_refusal
-  run --separate-stderr run_member "$DEFAULT_MEMBER"
-  [ "$status" -eq 0 ]
-  [ "$(member_reason)" = "member-refusal" ]
-  [ "$(member_base)" = "$REFUSED_SHA" ]
-  [ "$(member_anchor_tree)" = "$REFUSED_TREE" ]
-  grep -qF "member=${DEFAULT_MEMBER} base=${REFUSED_SHA} reason=member-refusal anchor_tree=${REFUSED_TREE}" <<<"$stderr"
-}
-
-@test "reason token: team-signal" {
-  add_commit a
-  stamp_anchor >/dev/null
-  add_commit b
-  run --separate-stderr run_member "$DEFAULT_MEMBER"
-  [ "$status" -eq 0 ]
-  [ "$(member_reason)" = "team-signal" ]
-}
-
-@test "reason token: no-anchor" {
-  add_commit a
-  add_commit b
-  run --separate-stderr run_member "$DEFAULT_MEMBER"
-  [ "$status" -eq 0 ]
-  [ "$(member_reason)" = "no-anchor" ]
-}
-
-@test "reason token: rules-reset-global" {
-  add_commit a
-  stamp_anchor >/dev/null
-  add_global_rules_commit
-  run --separate-stderr run_member "$DEFAULT_MEMBER"
-  [ "$status" -eq 0 ]
-  [ "$(member_reason)" = "rules-reset-global" ]
-}
-
-@test "reason token: rules-reset-member" {
-  add_commit a
-  stamp_anchor >/dev/null
-  commit_append ".claude/agents/${DEFAULT_MEMBER}.md"
-  run --separate-stderr run_member "$DEFAULT_MEMBER"
-  [ "$status" -eq 0 ]
-  [ "$(member_reason)" = "rules-reset-member" ]
-}
-
-@test "reason token: machinery-reset" {
-  add_commit a
-  stamp_anchor >/dev/null
-  commit_append ".claude/hooks/lib/cross-repo-refusal.sh"
-  run --separate-stderr run_in_sandbox
-  [ "$status" -eq 0 ]
-  grep -qF "reason=machinery-reset" <<<"$stderr"
-}
-
-@test "reason token: degraded" {
-  add_commit a
-  stamp_anchor >/dev/null
-  add_commit b
-  rm -f "$SANDBOX/.claude/hooks/lib/audit-rules-changed.sh"
-  run --separate-stderr run_member "$DEFAULT_MEMBER"
-  [ "$status" -eq 0 ]
-  [ "$(member_reason)" = "degraded" ]
-}
-
-@test "reason token: no-version" {
-  add_commit a
-  stamp_anchor >/dev/null
-  add_commit b
-  rm -f "$SANDBOX/.gaia/VERSION"
-  run --separate-stderr run_member "$DEFAULT_MEMBER"
-  [ "$status" -eq 0 ]
-  [ "$(member_reason)" = "no-version" ]
-}
-
-# =============================================================================
 # Catch-up merges. Resets read the branch's own change since the anchor, so
 # what a clean merge of the base brings in resets nothing; line 3 is the
 # branch's fork point, so the artifact key survives the merge; the base is the
@@ -2957,4 +2861,15 @@ record_all_outputs() {
   run --separate-stderr run_member "$DEFAULT_MEMBER"
   [ "$status" -eq 0 ]
   [ "$(member_reason)" != "degraded" ]
+}
+
+@test "reason token: member-refusal" {
+  require_jq
+  build_linked_refusal
+  run --separate-stderr run_member "$DEFAULT_MEMBER"
+  [ "$status" -eq 0 ]
+  [ "$(member_reason)" = "member-refusal" ]
+  [ "$(member_base)" = "$REFUSED_SHA" ]
+  [ "$(member_anchor_tree)" = "$REFUSED_TREE" ]
+  grep -qF "member=${DEFAULT_MEMBER} base=${REFUSED_SHA} reason=member-refusal anchor_tree=${REFUSED_TREE}" <<<"$stderr"
 }

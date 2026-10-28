@@ -79,7 +79,7 @@ Registering a member touches shared classifier and merge-gate machinery, not jus
 
 - `bash .gaia/scripts/verify-audit-roster.sh`, the roster's own deterministic check, plus its own bats suite.
 - `.gaia/tests/hooks/audit-scope-lib.bats`, structural and invariant tests over the shared ownership classifier (`.claude/hooks/lib/audit-scope.sh`): golden ownership-resolution cases, the machinery-is-roster-claimed invariant, and the fail-closed roster-less init.
-- `.gaia/tests/hooks/audit-scope-routing-parity.bats`, the before/after routing-parity proof: it classifies every tracked file against a committed fixture snapshot and asserts each resolves to its prior owner, except the named set of paths a deliberate roster change is moving. A new member's globs belong in that named-exception set.
+- `.gaia/tests/hooks/audit-scope-routing-parity.bats`, the release-change skip proved over every path of a frozen routing fixture: with the release context armed only the keyed member's owned rows move, each to its keyed-entry-removed owner; disarmed, a keyed roster routes every row exactly as the live roster.
 - `.gaia/tests/hooks/pr-merge-audit-check.bats`, tests over the local merge-gate deny-hook itself: the dispatched-member set it resolves, and the AND-aggregation across every dispatched member's own marker.
 
 All four read live roster and machinery state, so a registration that only edits `.gaia/audit-ci.yml` and the agent file, without updating the machinery lists in lockstep, is exactly the drift these checks exist to catch before CI does.
