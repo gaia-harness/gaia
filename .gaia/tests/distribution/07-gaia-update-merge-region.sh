@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# 17-gaia-update-merge-region.sh
+# 07-gaia-update-merge-region.sh
 #
 # Adopter-flow regression: runs `gaia update merge-region` against the
 # bundled CLI binary in a staged release tree. `merge-region` is the

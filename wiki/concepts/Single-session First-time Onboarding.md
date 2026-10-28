@@ -31,7 +31,7 @@ Supporting changes: the Droid-only React Doctor copy under `frontend/.factory/` 
 
 ### Verification
 
-Doc guards pin the new sequence (inverted, not deleted, with scratch-copy negative controls): the Step 1 React Doctor step-order guard, the Step 11 subsection order ending on the setup read, the absence of per-machine work and restart wording in init, the closing lines verbatim, and the marker's touch and removal sites. Distribution scenario 08 pins the init CLI sequence. Two real fresh-config create-gaia runs with the change laid over the released bundle (claude-opus-5-5, Medium effort) confirmed React Doctor installed once before the first `frontend/` read, setup running inline in the same session, typescript-lsp and React Doctor usable before and after `/clear`, no setup nudge during setup, and no fitness grade afterward. The Code Audit Team cleared in one round.
+Doc guards pin the new sequence (inverted, not deleted, with scratch-copy negative controls): the Step 1 React Doctor step-order guard, the Step 11 subsection order ending on the setup read, the absence of per-machine work and restart wording in init, the closing lines verbatim, and the marker's touch and removal sites. Distribution scenario 05 pins the init CLI sequence. Two real fresh-config create-gaia runs with the change laid over the released bundle (claude-opus-5-5, Medium effort) confirmed React Doctor installed once before the first `frontend/` read, setup running inline in the same session, typescript-lsp and React Doctor usable before and after `/clear`, no setup nudge during setup, and no fitness grade afterward. The Code Audit Team cleared in one round.
 
 ## Divergence
 

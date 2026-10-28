@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# 24-update-roster-prune.sh
+# 15-update-roster-prune.sh
 #
 # Proves the update that first ships the shell member reaches an adopter's
 # roster correctly from the staged bundle: the three-way roster merge adds the

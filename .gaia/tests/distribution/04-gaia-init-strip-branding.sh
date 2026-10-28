@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# 07-gaia-init-strip-branding.sh
+# 04-gaia-init-strip-branding.sh
 #
 # Adopter-flow regression: runs `gaia init strip-branding --title <T>`
 # against a writable copy of the staged release tree. The staged tree is

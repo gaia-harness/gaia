@@ -162,12 +162,43 @@ changed() {
     grep -qxF '# distribution-runner: skip' "$file" && { echo "$name is skip-marked" >&2; return 1; }
     grep -q '^# distribution-runner: paths ' "$file" && declared+=("$name")
   done
-  [ "${declared[*]}" = "19-data-layer-query-on.sh 20-data-layer-query-off.sh 25-csf4-migration.sh 26-csf4-scaffolds.sh" ] \
+  [ "${declared[*]}" = "09-data-layer-query-on.sh 10-data-layer-query-off.sh 16-csf4-migration.sh 17-csf4-scaffolds.sh" ] \
     || { echo "declared: ${declared[*]}" >&2; return 1; }
 }
 
+# duplicate_scenario_numbers <directory>: prints each number two or more
+# scenarios share. Read as a base-10 integer, so `1-` and `01-` collide too.
+duplicate_scenario_numbers() {
+  local file name
+  for file in "$1"/[0-9]*.sh; do
+    [ -e "$file" ] || continue
+    name="$(basename "$file")"
+    printf '%d\n' "$((10#${name%%[!0-9]*}))"
+  done | sort -n | uniq -d
+}
+
+# A bare number ("scenario 12") is how comments, workflows and the wiki name a
+# scenario, so two scenarios sharing one make every such reference ambiguous.
+# Gaps are fine: deleting a scenario leaves one, and nothing reads the count.
+# bats test_tags=whole-tree
+@test "no two live scenarios share a number" {
+  local scenarios=("$REPO_ROOT"/.gaia/tests/distribution/[0-9]*.sh) duplicates
+  [ -e "${scenarios[0]}" ] || { echo "no scenarios found" >&2; return 1; }
+  duplicates="$(duplicate_scenario_numbers "$REPO_ROOT/.gaia/tests/distribution")"
+  [ -z "$duplicates" ] || { echo "shared numbers: $duplicates" >&2; return 1; }
+}
+
+@test "the shared-number check reports a duplicate, including a zero-padding variant" {
+  scenario 01-first.sh 0
+  scenario 02-second.sh 0
+  scenario 02-third.sh 0
+  scenario 3-fourth.sh 0
+  scenario 03-fifth.sh 0
+  [ "$(duplicate_scenario_numbers "$DISTRIBUTION")" = "$(printf '2\n3')" ]
+}
+
 @test "the CSF4 migration scenario declares the migrate-csf4 sources and nothing in the frontend" {
-  local scenario_file="$REPO_ROOT/.gaia/tests/distribution/25-csf4-migration.sh"
+  local scenario_file="$REPO_ROOT/.gaia/tests/distribution/16-csf4-migration.sh"
   grep '^# distribution-runner: paths ' "$scenario_file" | grep -qF '.gaia/cli/src/migrate-csf4/**'
   grep '^# distribution-runner: paths ' "$scenario_file" | grep -qF 'frontend/' && return 1
   true

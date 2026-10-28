@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# 22-shell-member-routing.sh
+# 13-shell-member-routing.sh
 #
 # Proves the adopter shell member routes correctly on the release-scrubbed
 # ADOPTER shape, where the maintainer members are stripped. The staged bundle

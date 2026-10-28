@@ -476,4 +476,4 @@ jobs:
       # same files -- longer than the whole pull-request critical path, on
       # every shell-touching pull request.
       - name: Prove the marker strip left no fragment or doubled separator
-        run: bash .gaia/tests/distribution/03-marker-strip.sh
+        run: bash .gaia/tests/distribution/02-marker-strip.sh

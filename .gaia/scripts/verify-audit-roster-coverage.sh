@@ -90,7 +90,7 @@ else
 # this file's other pairs sit at column 0 for the same reason.
 # gaia:maintainer-only:start
   # The concrete such caller in this repo is
-  # .gaia/tests/distribution/16-audit-remit-parity.sh, which runs the scrubbed
+  # .gaia/tests/distribution/06-audit-remit-parity.sh, which runs the scrubbed
   # checker against the staged bundle.
 # gaia:maintainer-only:end
   printf 'verify-audit-roster: coverage invariant SKIPPED, %s is not a repository root\n' "$root" >&2

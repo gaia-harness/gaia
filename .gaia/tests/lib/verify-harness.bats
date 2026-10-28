@@ -167,7 +167,7 @@ missing_manifest_diagnostic() {
   [ "$(vhf_log_entries shell-lint)" = "$VHF_ROOT" ]
   [ "$(vhf_log_entries build-staging)" = "$VHF_ROOT" ]
   [ "$(vhf_log_entries 01-files-present)" = "$VHF_ROOT" ]
-  [ "$(vhf_log_entries 03-marker-strip)" = "$VHF_ROOT" ]
+  [ "$(vhf_log_entries 02-marker-strip)" = "$VHF_ROOT" ]
 }
 
 @test "round mode runs the HEAD commit's selection and leaves the marked suites to branch mode" {
@@ -231,7 +231,7 @@ harness_commit() {
   [ "$status" -eq 0 ]
   has 'WARN  shellcheck not found: install with brew install shellcheck; CI remains the only check for shell-lint'
   every_label_is SKIP shell-lint
-  every_label_is PASS 'release-scrub leak check' 01-files-present 03-marker-strip 'bats selected'
+  every_label_is PASS 'release-scrub leak check' 01-files-present 02-marker-strip 'bats selected'
 }
 
 @test "a missing rsync skips the three distribution checks and says so" {
@@ -240,8 +240,8 @@ harness_commit() {
   farm="$(vhf_path_without rsync)"
   run env PATH="$farm" bash "$VHF_ROOT/.gaia/tests/verify-harness.sh" round
   [ "$status" -eq 0 ]
-  has 'WARN  rsync not found: install with brew install rsync; CI remains the only check for release-scrub leak check, 01-files-present, 03-marker-strip'
-  every_label_is SKIP 'release-scrub leak check' 01-files-present 03-marker-strip
+  has 'WARN  rsync not found: install with brew install rsync; CI remains the only check for release-scrub leak check, 01-files-present, 02-marker-strip'
+  every_label_is SKIP 'release-scrub leak check' 01-files-present 02-marker-strip
   every_label_is PASS shell-lint 'bats selected'
   [ -z "$(vhf_log_entries build-staging)" ]
 }
@@ -254,7 +254,7 @@ harness_commit() {
   [ "$status" -eq 0 ]
   has 'WARN  bats not found: install with brew install bats-core; CI remains the only check for bats whole-tree, bats selected'
   every_label_is SKIP 'bats whole-tree' 'bats selected'
-  every_label_is PASS shell-lint 'release-scrub leak check' 01-files-present 03-marker-strip
+  every_label_is PASS shell-lint 'release-scrub leak check' 01-files-present 02-marker-strip
 }
 
 @test "a non-executable maintainer binary skips the three distribution checks and says so" {
@@ -263,8 +263,8 @@ harness_commit() {
   chmod -x .gaia/cli/gaia-maintainer
   run_runner round
   [ "$status" -eq 0 ]
-  has 'WARN  .gaia/cli/gaia-maintainer not found: install with pnpm -C .gaia/cli bundle; CI remains the only check for release-scrub leak check, 01-files-present, 03-marker-strip'
-  every_label_is SKIP 'release-scrub leak check' 01-files-present 03-marker-strip
+  has 'WARN  .gaia/cli/gaia-maintainer not found: install with pnpm -C .gaia/cli bundle; CI remains the only check for release-scrub leak check, 01-files-present, 02-marker-strip'
+  every_label_is SKIP 'release-scrub leak check' 01-files-present 02-marker-strip
   every_label_is PASS shell-lint
 }
 
@@ -276,7 +276,7 @@ harness_commit() {
   [ "$status" -eq 0 ]
   has 'WARN  jq not found: install with brew install jq'
   every_label_is SKIP 01-files-present
-  every_label_is PASS shell-lint 'release-scrub leak check' 03-marker-strip 'bats whole-tree' 'bats selected'
+  every_label_is PASS shell-lint 'release-scrub leak check' 02-marker-strip 'bats whole-tree' 'bats selected'
   has 'WARN  no pass record written: jq not found; the audit dispatch gate will deny until jq is installed (brew install jq) and branch mode is re-run'
   lacks 'Pass record written'
   [ ! -e "$VHF_RECORD" ]

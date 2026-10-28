@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Helpers shared by the data-layer scenarios (19, 20). Sourced after lib.sh.
+# Helpers shared by the data-layer scenarios (09, 10). Sourced after lib.sh.
 #
 # API:
 #   hash_frontend ROOT          - prints "<sha256>  <path>" for every file under

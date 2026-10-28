@@ -2375,7 +2375,7 @@ concurrency_tree_needs_packages() {
 # distribution-harness' gated steps is or implies the manifest either -- each
 # names a runner, a committed binary, or a composite action, never the files
 # those read -- while two of the scenarios it runs read the staged manifest
-# (01-files-present.sh walks its files{} keys; 16-audit-remit-parity.sh reads
+# (01-files-present.sh walks its files{} keys; 06-audit-remit-parity.sh reads
 # two classes out of it). A manifest-only change -- a regeneration, a
 # ship-or-withhold answer -- matches no other entry in that filter, so before
 # #1473 it resolved code=false and greened the job having run the scenarios

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# 05-clean-env.sh
+# 03-clean-env.sh
 #
 # Layer 1 isolation: validates the create-gaia bootstrapper survives in
 # a PATH-stripped environment with no pnpm/uv/claude pre-installed.

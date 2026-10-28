@@ -58,7 +58,7 @@ export const GENERATED_END_MARKER = '<!-- gaia:labels:generated-end -->';
  * The edge is interpolated rather than spelled into two whole literals, so the
  * full marker never appears in the shipped adopter bundle: esbuild copies a
  * string constant in verbatim and does not inline this call. Writing it as a
- * literal reds the release, because `03-marker-strip.sh` scans the whole
+ * literal reds the release, because `02-marker-strip.sh` scans the whole
  * staged tree for the full spelling and has no allowlist. Every
  * other shipped file naming the marker survives by sitting inside a marker block
  * the scrub removes, which a compiled bundle cannot carry. That harness is the

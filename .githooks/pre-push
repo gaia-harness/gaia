@@ -6,7 +6,7 @@
 # It verifies only the commits a push would put on a remote branch, by handing
 # their shas to the verification runner's `push` mode, which runs the three
 # distribution checks (the release-scrub leak check, 01-files-present and
-# 03-marker-strip) and nothing else. No bats suite and no shell-lint run here;
+# 02-marker-strip) and nothing else. No bats suite and no shell-lint run here;
 # those belong to the runner's branch and round modes. The runner owns every
 # check and every decision about what counts as a failure, so this file holds
 # no check logic and its exit status is the runner's.
