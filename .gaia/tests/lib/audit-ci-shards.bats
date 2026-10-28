@@ -76,7 +76,7 @@ setup() {
   THIS_DIRECTORY="$( cd "$( dirname "$BATS_TEST_FILENAME" )" && pwd )"
   REPO_ROOT="$( cd "$THIS_DIRECTORY/../../.." && pwd )"
   WORKFLOW="$REPO_ROOT/.github/workflows/audit-ci-tests.yml"
-  CLI_WORKFLOW="$REPO_ROOT/.github/workflows/cli-tests.yml"
+  DISTRIBUTION_WORKFLOW="$REPO_ROOT/.github/workflows/distribution-harness.yml"
   BATS_SHARDS="$REPO_ROOT/.gaia/tests/bats-shards.sh"
   # The four patterns W10 detects a zsh or PyYAML dependency by, written once
   # because three scans have to agree on them: two disagreeing copies would
@@ -107,7 +107,7 @@ setup() {
   PATHS_FILTER_PINNED_TAG='v4.0.3'
 
   require_repo_path -f "$WORKFLOW" "audit-ci-tests.yml" || return 1
-  require_repo_path -f "$CLI_WORKFLOW" "cli-tests.yml" || return 1
+  require_repo_path -f "$DISTRIBUTION_WORKFLOW" "distribution-harness.yml" || return 1
   require_repo_path -f "$BATS_SHARDS" "bats-shards.sh" || return 1
   require_repo_path -f "$SPEC078_FIXTURES/paths-filter-pin-bumped.yml" \
     "fixtures/spec-078/paths-filter-pin-bumped.yml" || return 1
@@ -2370,7 +2370,7 @@ concurrency_tree_needs_packages() {
 # never the files those read). W20 pins the whole `code` list to the change
 # classifier's harness list; these tests keep this one entry's reason in view.
 #
-# .gaia/manifest.json is the same shape on the cli-tests side, and it is
+# .gaia/manifest.json is the same shape in distribution-harness.yml, and it is
 # asserted here for the same reason. None of the literal tokens in
 # distribution-harness' gated steps is or implies the manifest either -- each
 # names a runner, a committed binary, or a composite action, never the files
@@ -2391,12 +2391,12 @@ concurrency_tree_needs_packages() {
   }
 }
 
-@test "W11: cli-tests.yml's distribution-harness code filter lists the release manifest" {
+@test "W11: distribution-harness.yml's code filter lists the release manifest" {
   require_yaml_parser
   local list
-  list="$(read_workflow codefilter "$CLI_WORKFLOW" distribution-harness)"
+  list="$(read_workflow codefilter "$DISTRIBUTION_WORKFLOW" distribution-harness)"
   printf '%s\n' "$list" | grep -qxF -- '.gaia/manifest.json' || {
-    echo "cli-tests.yml's distribution-harness code: filter is missing .gaia/manifest.json" >&2
+    echo "distribution-harness.yml's code: filter is missing .gaia/manifest.json" >&2
     return 1
   }
 }
@@ -2416,11 +2416,11 @@ concurrency_tree_needs_packages() {
   true
 }
 
-@test "W11 adversarial: dropping a line from cli-tests.yml's distribution-harness code filter is caught" {
+@test "W11 adversarial: dropping a line from distribution-harness.yml's code filter is caught" {
   require_yaml_parser
   local doctored="$BATS_TEST_TMPDIR/w11b.yml" line
-  line="$(sole_line_matching "$CLI_WORKFLOW" "^ *- '\\.gaia/manifest\\.json'\$")" || return 1
-  delete_line "$CLI_WORKFLOW" "$line" "$doctored"
+  line="$(sole_line_matching "$DISTRIBUTION_WORKFLOW" "^ *- '\\.gaia/manifest\\.json'\$")" || return 1
+  delete_line "$DISTRIBUTION_WORKFLOW" "$line" "$doctored"
 
   local list
   list="$(read_workflow codefilter "$doctored" distribution-harness)"

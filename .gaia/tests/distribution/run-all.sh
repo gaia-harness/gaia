@@ -25,18 +25,102 @@
 # removing the line puts it back in the run. A skipped scenario never decides
 # the exit status.
 #
+# Change-scoped mode, `--changed-paths <file>` (one repo-relative path per
+# line), is the pull-request lane. A scenario whose header carries one or more
+# `# distribution-runner: paths <glob>...` lines then runs only when a changed
+# path matches one of its globs or is the scenario's own file, and otherwise
+# prints as SKIP with the reason. A glob is a bash pattern, so `*` crosses `/`:
+# over-matching costs time, never coverage. A scenario with no paths line
+# always runs, and a change to a shared harness input (SHARED_INPUTS below)
+# runs every scenario. Only the slow scenarios declare paths: a fast one costs
+# less to run than to keep a path list honest for. With no `--changed-paths`,
+# the declarations are ignored and everything runs; that is the push-to-main
+# and release lane, the backstop for anything a declaration misses.
+#
 # Each scenario runs in a separate `bash` subprocess, so one scenario's
 # `set -e` exit does not abort the run, with its output captured to a log. A
 # progress line prints as each scenario finishes; once all have, every log
 # prints in scenario order under its `=== name ===` header, then the summary.
 #
 # Exits 0 if every scenario that ran passed, 1 if any FAIL or if no scenarios
-# were found, 2 when DISTRIBUTION_JOBS is not a positive integer.
+# were found, 2 when DISTRIBUTION_JOBS is not a positive integer, an argument
+# is not recognized, or the changed-path list cannot be read.
 set -u
 
 DISTRIBUTION_DIRECTORY="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 EXCLUSIVE_MARKER='# distribution-runner: exclusive'
 SKIP_MARKER='# distribution-runner: skip'
+PATHS_MARKER='# distribution-runner: paths '
+# Repo-relative, so a copy of the runner run elsewhere (the bats suite) still
+# names scenarios the way the changed-path list does.
+SCENARIO_PREFIX='.gaia/tests/distribution/'
+# Inputs every scenario runs through, so no scenario's own declaration can
+# name them all. The release inputs (.gaia/release-exclude, the scrub config)
+# and the lockfile are not here: the fast scenarios and the shipped-surface
+# leak check run on every such change, and the push-to-main full run backstops
+# the slow ones.
+SHARED_INPUTS=(
+  "${SCENARIO_PREFIX}run-all.sh"
+  "${SCENARIO_PREFIX}lib/*"
+  '.github/workflows/distribution-harness.yml'
+  '.github/actions/*'
+)
+
+changed_paths_file=''
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --changed-paths)
+      if [ $# -lt 2 ] || [ ! -r "$2" ]; then
+        echo "--changed-paths needs a readable file of changed paths" >&2
+        exit 2
+      fi
+      changed_paths_file="$2"
+      shift 2
+      ;;
+    *)
+      echo "unrecognized argument: $1 (usage: run-all.sh [--changed-paths <file>])" >&2
+      exit 2
+      ;;
+  esac
+done
+
+changed_paths=()
+if [ -n "$changed_paths_file" ]; then
+  while IFS= read -r changed_path || [ -n "$changed_path" ]; do
+    [ -n "$changed_path" ] && changed_paths+=("$changed_path")
+  done < "$changed_paths_file"
+fi
+
+# matches_any PATTERN... : true when a changed path matches one PATTERN.
+matches_any() {
+  local pattern changed_path
+  for pattern in "$@"; do
+    for changed_path in ${changed_paths[@]+"${changed_paths[@]}"}; do
+      # shellcheck disable=SC2053 # the right side is the pattern
+      [[ "$changed_path" == $pattern ]] && return 0
+    done
+  done
+  return 1
+}
+
+# is_selected SCENARIO : whether a declared scenario runs in change-scoped mode.
+is_selected() {
+  local scenario="$1" line line_globs globs=()
+  while IFS= read -r line; do
+    read -ra line_globs <<<"${line#"$PATHS_MARKER"}"
+    globs+=(${line_globs[@]+"${line_globs[@]}"})
+  done < <(grep "^$PATHS_MARKER" "$scenario")
+  matches_any "$SCENARIO_PREFIX$(basename "$scenario")" ${globs[@]+"${globs[@]}"}
+}
+
+change_scoped=0
+if [ -n "$changed_paths_file" ]; then
+  if matches_any ${SHARED_INPUTS[@]+"${SHARED_INPUTS[@]}"}; then
+    echo "A shared harness input changed: running every scenario"
+  else
+    change_scoped=1
+  fi
+fi
 
 job_limit="${DISTRIBUTION_JOBS:-$(getconf _NPROCESSORS_ONLN 2>/dev/null || echo 2)}"
 case "$job_limit" in
@@ -68,7 +152,11 @@ skipped=()
 skipped_count=0
 for index in "${!scenarios[@]}"; do
   if grep -qxF "$SKIP_MARKER" "${scenarios[index]}"; then
-    skipped[index]=1
+    skipped[index]=marker
+    skipped_count=$((skipped_count + 1))
+  elif [ "$change_scoped" -eq 1 ] && grep -q "^$PATHS_MARKER" "${scenarios[index]}" \
+    && ! is_selected "${scenarios[index]}"; then
+    skipped[index]=unselected
     skipped_count=$((skipped_count + 1))
   elif grep -qxF "$EXCLUSIVE_MARKER" "${scenarios[index]}"; then
     exclusive_indexes+=("$index")
@@ -173,7 +261,10 @@ overall=0
 for index in "${!scenarios[@]}"; do
   name="$(basename "${scenarios[index]}")"
   if [ -n "${skipped[index]:-}" ]; then
-    results+=("SKIP  $name")
+    case "${skipped[index]}" in
+      unselected) results+=("SKIP  $name (no declared path changed)") ;;
+      *) results+=("SKIP  $name") ;;
+    esac
     continue
   fi
   printf '\n=== %s ===\n' "$name"

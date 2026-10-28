@@ -1,0 +1,205 @@
+name: 'GAIA: Distribution Harness'
+
+# The distribution harness (.gaia/tests/distribution/run-all.sh: Layers 0+1,
+# the adopter-flow regressions and the marker-strip survival check), the same
+# runner release.yml runs before it publishes a tag. Before the harness ran on
+# pull requests, a change that broke the adopter tarball (a leak, a
+# marker-strip regression, manifest drift) shipped through review and surfaced
+# only at release, when the fix is far more expensive.
+#
+# A pull request runs it change-scoped: the fast scenarios whenever the `code:`
+# filter below matches, and each slow scenario only when a path its header
+# declares changed (run-all.sh owns the rule). Every push to main runs every
+# scenario: it is the backstop for whatever a declaration misses, and
+# `report-main-status` below keeps an open `ci-red-main` issue while it is red,
+# which also holds /gaia-release (verify-main-green.sh refuses on any open one).
+#
+# `workflow_dispatch:` is the manual re-run lane and runs every scenario.
+# GitHub honors it only for the default-branch copy of this file, so a
+# dispatch fails with 422 until it lands on main.
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+
+# A push run's group is its own commit, so no merge's full run is cancelled
+# behind a later merge and each merge gets its own verdict. A pull request
+# keeps one group per ref with in-progress cancellation, so a superseded push
+# to the same branch stops paying for the old head.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event_name == 'push' && github.sha || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+# Default-deny, so a job added later inherits no scope rather than the
+# repository default. Each job below grants exactly what it needs.
+permissions: {}
+
+jobs:
+  # Not a declared-required context (see verify-required-checks.sh): a pull
+  # request the filter does not match reports green without running anything,
+  # so it is branch-protection-safe without ever forcing a merge block from a
+  # maintainer-only surface adopters cannot see.
+  distribution-harness:
+    name: Distribution harness (no-Docker) (advisory)
+    runs-on: ubuntu-latest
+    # Sized for the push-to-main full run, every scenario including the
+    # CSF4 migration one: about 21 minutes measured, plus headroom. Re-measure
+    # for a new slow scenario.
+    timeout-minutes: 30
+    # Checkout, paths-filter and setup-node's defaults. `pull-requests: read`
+    # is paths-filter's: it resolves a pull request's changed files through the
+    # API, which works without the scope only while this repo is public.
+    permissions:
+      contents: read
+      pull-requests: read
+    steps:
+      # Depth 2 so the change-scoped run can diff the pull request's merge
+      # commit against its first parent, the base branch it merges into.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 2
+      # paths-filter resolves changed files from the pull-request context, which
+      # a push or dispatch run does not have, so those lanes skip it and every
+      # gated step below admits them directly.
+      #
+      # The scenario suite's inputs, plus every glob a slow scenario declares
+      # (a guard in distribution-run-all.bats holds the two together, since a
+      # declared path this filter misses could never select its scenario). The
+      # release leak check and the marker-strip scenario, whose real input is
+      # every shipped file, run unfiltered in cli-tests.yml's shipped-surface
+      # job, so this list's narrowness cannot green a leak.
+      - uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # v4.0.3
+        if: github.event_name == 'pull_request'
+        id: filter
+        with:
+          filters: |
+            code:
+              - '.gaia/cli/**'
+              - '.gaia/release-exclude'
+              - '.gaia/release-scrub.yml'
+              # The harness itself: a scenario, lib, or runner edit must re-run.
+              - '.gaia/tests/distribution/**'
+              # The release manifest, read by two scenarios: 01-files-present.sh
+              # walks its files{} keys, and 16-audit-remit-parity.sh reads the
+              # roster writer's and checker's classes out of it. A manifest-only
+              # write (a ship-only /distribution-vet answer, a class
+              # reassignment) matches no other entry here.
+              - '.gaia/manifest.json'
+              - '.github/workflows/distribution-harness.yml'
+              # The composite action the Node setup step `uses:`, and the
+              # action's own inputs. The scenarios also run `pnpm install`
+              # against the extracted staging tree, so the install settings are
+              # load-bearing.
+              - '.github/actions/**'
+              - '.node-version'
+              - '.npmrc'
+              - 'pnpm-workspace.yaml'
+              # The root lockfile: the release scrub strips the CLI member from
+              # the shipped pair, and a scenario installs the scrubbed pair
+              # frozen.
+              - 'pnpm-lock.yaml'
+              # Declared only by slow scenarios: the init command doc one
+              # sources, and the adopter toolchain the generated code is gated
+              # by.
+              - '.claude/commands/gaia-init.md'
+              - 'frontend/package.json'
+              - 'frontend/.storybook/**'
+              - 'frontend/eslint.config.mjs'
+              - 'frontend/tsconfig.json'
+              - 'frontend/vite.config.ts'
+              - 'frontend/vitest.config.ts'
+              - 'frontend/react-router.config.ts'
+              - 'frontend/app/root.tsx'
+              - 'frontend/app/state/**'
+              - 'frontend/app/services/**'
+              - 'frontend/test/**'
+      - if: steps.filter.outputs.code == 'true' || github.event_name != 'pull_request'
+        name: Setup Node
+        uses: ./.github/actions/gaia-setup-node
+        with:
+          install: none
+          # Scenarios 05 and 20 run `pnpm install` against the extracted staging
+          # tree, which resolves the root lockfile; warm the pnpm store on it.
+          cache-dependency-path: 'pnpm-lock.yaml'
+      # The harness shells out to the COMMITTED bundled binaries directly
+      # (build-staging.sh needs gaia-maintainer; the scenarios need gaia); it
+      # does not install the CLI's dependencies. Freshness of those binaries vs.
+      # src is cli-tests.yml's required job's concern; here we test the
+      # committed bundle as-is, which is what the release tarball ships.
+      - if: steps.filter.outputs.code == 'true' || github.event_name != 'pull_request'
+        name: Verify committed CLI binaries are present
+        run: |
+          for bin in .gaia/cli/gaia .gaia/cli/gaia-maintainer; do
+            if [ ! -x "$bin" ]; then
+              echo "::error::$bin missing or not executable. Maintainer must commit the bundled binary." >&2
+              exit 1
+            fi
+          done
+      # The changed-path list is the merge commit's diff against its first
+      # parent, rename detection off so a rename lists both paths, the same
+      # range audit-ci-tests.yml's change-scoped legs read. `-z` because the
+      # plain form C-quotes a non-ASCII path, which then matches no glob.
+      - if: steps.filter.outputs.code == 'true' || github.event_name != 'pull_request'
+        name: Run distribution scenarios (Layers 0+1 + adopter-flow; no token)
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          MERGE_COMMIT: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          if [ "$EVENT_NAME" = pull_request ]; then
+            changed_paths="$RUNNER_TEMP/changed-paths.txt"
+            git diff --name-only -z --no-renames "$MERGE_COMMIT^1" "$MERGE_COMMIT" | tr '\0' '\n' > "$changed_paths"
+            bash .gaia/tests/distribution/run-all.sh --changed-paths "$changed_paths"
+          else
+            bash .gaia/tests/distribution/run-all.sh
+          fi
+
+  # Keeps an open `ci-red-main` issue, titled for this workflow, while main's
+  # full harness run is red; a green run on the red commit or a descendant
+  # closes it. Push to main only: a pull request or a dispatch verdict is not
+  # main's. The logic, and its tests with a stubbed `gh`, live in
+  # .gaia/tests/report-main-status.sh; this job only hands it the run's facts.
+  report-main-status:
+    name: Report main status
+    needs: [distribution-harness]
+    if: always() && github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    # The only write scope in this workflow. `contents: read` for the
+    # checkout, `issues: write` to open, comment on and close the issue, and
+    # `actions: read` for the jobs listing that names the failing job.
+    permissions:
+      contents: read
+      issues: write
+      actions: read
+    # One static group serializes this workflow's reporters, so two red runs
+    # finishing together cannot both see no open issue and both open one. A
+    # pending reporter replaced by a newer one loses only an intermediate
+    # verdict: the newer run tests a superset of that commit.
+    concurrency:
+      group: distribution-harness-main-status-report
+      cancel-in-progress: false
+    steps:
+      # The reporter is the only file this job needs, and the token never has
+      # to reach git, so the checkout persists no credentials.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 1
+      # Every value reaches the script through `env:`, and none of them is
+      # free text from the event: the issue's title and body are built from
+      # the check name, SHAs, run ids and the jobs listing only.
+      - name: Open, update or close the red-main issue
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+          RUN_ID: ${{ github.run_id }}
+          RUN_ATTEMPT: ${{ github.run_attempt }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          BEFORE_SHA: ${{ github.event.before }}
+          HEAD_SHA: ${{ github.sha }}
+          SHARDS_RESULT: ${{ needs.distribution-harness.result }}
+          CHECK_NAME: 'GAIA: Distribution Harness'
+        run: bash .gaia/tests/report-main-status.sh

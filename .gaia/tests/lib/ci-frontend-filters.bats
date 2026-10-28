@@ -206,9 +206,9 @@ workflow_without_job_glob() {
   ' "$workflow" > "$destination"
 }
 
-@test "cli-tests.yml: a root lockfile-only change arms the distribution job" {
+@test "distribution-harness.yml: a root lockfile-only change arms the distribution job" {
   local globs
-  globs="$(workflow_job_globs "$REPO_ROOT/.github/workflows/cli-tests.yml" distribution-harness)"
+  globs="$(workflow_job_globs "$REPO_ROOT/.github/workflows/distribution-harness.yml" distribution-harness)"
   [ -n "$globs" ]
   [ "$(glob_verdict "$globs" pnpm-lock.yaml)" = select ]
   [ "$(glob_verdict "$globs" pnpm-workspace.yaml)" = select ]
@@ -222,15 +222,12 @@ workflow_without_job_glob() {
   [ "$(glob_verdict "$globs" pnpm-workspace.yaml)" = select ]
 }
 
-@test "cli-tests.yml: the distribution job without the lockfile line skips a lockfile-only change (the guard can fail)" {
-  local scratch="$BATS_TEST_TMPDIR/cli-tests.yml" globs
-  workflow_without_job_glob "$REPO_ROOT/.github/workflows/cli-tests.yml" distribution-harness pnpm-lock.yaml "$scratch"
+@test "distribution-harness.yml: the distribution job without the lockfile line skips a lockfile-only change (the guard can fail)" {
+  local scratch="$BATS_TEST_TMPDIR/distribution-harness.yml" globs
+  workflow_without_job_glob "$REPO_ROOT/.github/workflows/distribution-harness.yml" distribution-harness pnpm-lock.yaml "$scratch"
   globs="$(workflow_job_globs "$scratch" distribution-harness)"
   [ -n "$globs" ]
   [ "$(glob_verdict "$globs" pnpm-lock.yaml)" = skip ]
-  # The removal is scoped to the one job: the sibling still selects.
-  globs="$(workflow_job_globs "$scratch" cli-tests)"
-  [ "$(glob_verdict "$globs" pnpm-lock.yaml)" = select ]
 }
 
 # The values the composite's install steps compare `inputs.install` against,
