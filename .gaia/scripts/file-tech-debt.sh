@@ -680,8 +680,10 @@ cmd_file() {
     printf '\n'
     # shellcheck disable=SC2016
     printf '**Location:** `%s:%s`\n\n' "$finding_path" "$finding_line"
-    printf '**Failure mode:** %s\n\n' "$failure_mode"
-    printf '**Suggested fix:** %s\n' "$suggested_fix"
+    # Both fields are Markdown the filer writes to wiki/concepts/Issue Writing.md,
+    # so they open under their own headings rather than after an inline label.
+    printf '## Problem\n\n%s\n\n' "$failure_mode"
+    printf '## Fix\n\n%s\n' "$suggested_fix"
     if [ "$tier" = investigate ]; then
       printf '\n<!-- gaia-investigate: v1 -->\n'
       printf '**Question:** %s\n' "$investigate_question"

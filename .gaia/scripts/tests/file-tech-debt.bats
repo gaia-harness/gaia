@@ -486,6 +486,21 @@ CASES
   jq -e '.[0].body | contains("<!-- gaia-debt-key: v1 class=holistic/swallowed-error path=app/a.ts line=10 -->")' "$STUB/open.json" >/dev/null
 }
 
+@test "filing renders multi-line Markdown fields under Problem and Fix headings, intact" {
+  make_finding '.failure_mode = "Two gaps.\n\n| Scenario | Time |\n|---|---|\n| slow | 218 s |" | .suggested_fix = "1. Run on main.\n2. Select by path.\n\n### Verify\n\nBats cases."'
+  run_file
+  [ "$status" -eq 0 ]
+  [ "$output" = "filed 101" ]
+  jq -j '.[0].body' "$STUB/open.json" >"$BATS_TEST_TMPDIR/body"
+  [ "$(sed -n 1p "$BATS_TEST_TMPDIR/body")" = "<!-- gaia-debt-key: v1 class=holistic/swallowed-error path=app/a.ts line=10 -->" ]
+  # shellcheck disable=SC2016
+  grep -qxF -e '**Location:** `app/a.ts:10`' "$BATS_TEST_TMPDIR/body"
+  printf '## Problem\n\nTwo gaps.\n\n| Scenario | Time |\n|---|---|\n| slow | 218 s |\n\n## Fix\n\n1. Run on main.\n2. Select by path.\n\n### Verify\n\nBats cases.\n' >"$BATS_TEST_TMPDIR/expected"
+  sed -n '/^## Problem$/,$p' "$BATS_TEST_TMPDIR/body" | diff "$BATS_TEST_TMPDIR/expected" -
+  grep -qE '^\*\*(Failure mode|Suggested fix):\*\*' "$BATS_TEST_TMPDIR/body" && return 1
+  true
+}
+
 @test "filing the same key twice records the second call as matched, never as a new filing" {
   run_file
   [ "$status" -eq 0 ]
