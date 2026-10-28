@@ -86,14 +86,14 @@ source_pass_record_helper() {
   run_runner branch
   [ "$status" -eq 0 ]
   local label
-  for label in shell-lint 'release-scrub leak check' 01-files-present 03-marker-strip 'bats whole-tree' 'bats selected'; do
+  for label in shell-lint 'release-scrub leak check' 01-files-present 02-marker-strip 'bats whole-tree' 'bats selected'; do
     has_line "^PASS  $label \\([0-9]+s\\)$"
   done
   has_line '^TOTAL [0-9]+s$'
   [ "$(vhf_log_entries shell-lint)" = "$VHF_ROOT" ]
   [ "$(vhf_log_entries build-staging)" = "$VHF_ROOT" ]
   [ "$(vhf_log_entries 01-files-present)" = "$VHF_ROOT" ]
-  [ "$(vhf_log_entries 03-marker-strip)" = "$VHF_ROOT" ]
+  [ "$(vhf_log_entries 02-marker-strip)" = "$VHF_ROOT" ]
   [ -f "$VHF_RECORD" ]
   [ "$(jq -r .head "$VHF_RECORD")" = "$(vhf_git rev-parse HEAD)" ]
   source_pass_record_helper
@@ -252,16 +252,16 @@ write_load_gated_suite() {
 
 @test "a distribution failure only HEAD has is new, and its base re-run happens in a worktree" {
   fixture
-  vhf_control 03-marker-strip "$(printf '  - Source has marker block but staged counterpart missing: .claude/hooks/x.sh\nFAIL  03-marker-strip.sh: 1 marker-bearing file(s) not stripped')"
+  vhf_control 02-marker-strip "$(printf '  - Source has marker block but staged counterpart missing: .claude/hooks/x.sh\nFAIL  02-marker-strip.sh: 1 marker-bearing file(s) not stripped')"
   vhf_commit "a marker failure on the branch only"
   run_runner branch
   [ "$status" -eq 1 ]
-  has_line '^FAIL  03-marker-strip \([0-9]+s\)$'
+  has_line '^FAIL  02-marker-strip \([0-9]+s\)$'
   has '.claude/hooks/x.sh'
-  has '  reproduce: bash .gaia/tests/distribution/03-marker-strip.sh'
+  has '  reproduce: bash .gaia/tests/distribution/02-marker-strip.sh'
   lacks 'PRE-EXISTING'
   local base_root
-  base_root="$(vhf_log_entries 03-marker-strip | grep -vxF "$VHF_ROOT")"
+  base_root="$(vhf_log_entries 02-marker-strip | grep -vxF "$VHF_ROOT")"
   [ -n "$base_root" ]
   [ ! -e "$base_root" ]
   [ "$(worktree_count)" -eq 1 ]
@@ -284,11 +284,11 @@ write_load_gated_suite() {
 
 @test "push mode verifies the pushed commit in a worktree, not the dirty tree" {
   fixture
-  vhf_control 03-marker-strip "  - broken in the older commit"
+  vhf_control 02-marker-strip "  - broken in the older commit"
   vhf_commit "an older commit failing 03"
   local older_sha
   older_sha="$(vhf_git rev-parse HEAD)"
-  vhf_control 03-marker-strip ""
+  vhf_control 02-marker-strip ""
   vhf_commit "the fix"
   vhf_control 01-files-present "  - an uncommitted edit that would fail 01"
 
@@ -301,9 +301,9 @@ write_load_gated_suite() {
   : >"$VERIFY_FIXTURE_LOG"
   run_runner push "$older_sha"
   [ "$status" -eq 1 ]
-  has_line '^FAIL  03-marker-strip \([0-9]+s\)$'
-  has "  reproduce: git checkout --detach $older_sha && bash .gaia/tests/distribution/03-marker-strip.sh"
-  vhf_log_entries 03-marker-strip | grep -qxF "$VHF_ROOT" && return 1
+  has_line '^FAIL  02-marker-strip \([0-9]+s\)$'
+  has "  reproduce: git checkout --detach $older_sha && bash .gaia/tests/distribution/02-marker-strip.sh"
+  vhf_log_entries 02-marker-strip | grep -qxF "$VHF_ROOT" && return 1
   [ "$(worktree_count)" -eq 1 ]
 }
 

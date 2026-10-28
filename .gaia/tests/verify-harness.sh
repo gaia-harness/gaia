@@ -13,7 +13,7 @@
 #
 # Checks, in order, each run with the tree under check as its working
 # directory: shell-lint (branch, round), the release-scrub leak check (a bare
-# build-staging into an empty directory), 01-files-present, 03-marker-strip,
+# build-staging into an empty directory), 01-files-present, 02-marker-strip,
 # then the bats tests carrying the whole-tree mark (branch) and the suites the
 # change selector picks (branch, round). A mark is per file (every test in the
 # suite) or per test (the one test below it). Branch mode selects over
@@ -231,7 +231,7 @@ if tool_missing jq; then
 fi
 if tool_missing rsync; then
   rsync_missing=1
-  warn_missing_tool rsync 'brew install rsync' 'release-scrub leak check, 01-files-present, 03-marker-strip'
+  warn_missing_tool rsync 'brew install rsync' 'release-scrub leak check, 01-files-present, 02-marker-strip'
 fi
 if [ "$mode" != push ] && tool_missing bats; then
   bats_missing=1

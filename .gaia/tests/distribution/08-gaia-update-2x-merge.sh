@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# 18-gaia-update-2x-merge.sh
+# 08-gaia-update-2x-merge.sh
 #
 # Adopter-flow regression for a 2.x to 2.x /update-gaia (SPEC-092, COV-010).
 # From 2.0.0 the app lives under frontend/, so the update has two package.json

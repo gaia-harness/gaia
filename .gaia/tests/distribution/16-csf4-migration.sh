@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# 25-csf4-migration.sh
+# 16-csf4-migration.sh
 # distribution-runner: exclusive
 # distribution-runner: paths .gaia/cli/src/migrate-csf4/** .gaia/cli/test-fixtures/migrate-csf4/** .gaia/tests/distribution/fixtures/csf4-migration/**
 #

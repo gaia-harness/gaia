@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# 22-debt-source-stripped.sh
+# 12-debt-source-stripped.sh
 #
 # Proves a release-built tree files tech-debt issues with no source record:
 #   1. The staged file-tech-debt.sh holds none of the source-line code.

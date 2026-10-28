@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# 21-executor-lint-form.sh
+# 11-executor-lint-form.sh
 #
 # Adopter-flow regression for the lint command a /gaia-plan task sub-agent runs
 # over its own files, in a staged release tree:

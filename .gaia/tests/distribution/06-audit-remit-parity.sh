@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# 16-audit-remit-parity.sh
+# 06-audit-remit-parity.sh
 #
 # Proves the roster-derived remit invariant and its repair hold on the
 # release-scrubbed ADOPTER shape, not only on the maintainer tree. Runs

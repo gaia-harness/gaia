@@ -154,7 +154,7 @@ vhf_init() {
   vhf_write_stub .gaia/tests/shell-lint.sh shell-lint
   vhf_write_stub .gaia/tests/distribution/lib/build-staging.sh build-staging
   vhf_write_stub .gaia/tests/distribution/01-files-present.sh 01-files-present
-  vhf_write_stub .gaia/tests/distribution/03-marker-strip.sh 03-marker-strip
+  vhf_write_stub .gaia/tests/distribution/02-marker-strip.sh 02-marker-strip
   printf '#!/bin/sh\nexit 0\n' >"$VHF_ROOT/.gaia/cli/gaia-maintainer"
   chmod +x "$VHF_ROOT/.gaia/cli/gaia-maintainer"
 
@@ -175,7 +175,7 @@ vhf_init() {
   printf 's2\n' >"$VHF_ROOT/.claude/rules/s2-rule.md"
   printf 'page\n' >"$VHF_ROOT/frontend/app/page.txt"
   # Tracked and empty, so a test's uncommitted edit to one is a tracked change.
-  for script_name in shell-lint build-staging 01-files-present 03-marker-strip; do
+  for script_name in shell-lint build-staging 01-files-present 02-marker-strip; do
     : >"$VHF_ROOT/control/$script_name"
   done
 

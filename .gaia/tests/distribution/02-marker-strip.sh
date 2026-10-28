@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# 03-marker-strip.sh
+# 02-marker-strip.sh
 #
 # Asserts the marker-strip transform fired correctly:
 #   1. No marker fragments (`gaia:maintainer-only:start/end`) survive in

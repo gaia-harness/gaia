@@ -82,7 +82,7 @@ jobs:
               # The harness itself: a scenario, lib, or runner edit must re-run.
               - '.gaia/tests/distribution/**'
               # The release manifest, read by two scenarios: 01-files-present.sh
-              # walks its files{} keys, and 16-audit-remit-parity.sh reads the
+              # walks its files{} keys, and 06-audit-remit-parity.sh reads the
               # roster writer's and checker's classes out of it. A manifest-only
               # write (a ship-only /distribution-vet answer, a class
               # reassignment) matches no other entry here.
@@ -120,7 +120,7 @@ jobs:
         uses: ./.github/actions/gaia-setup-node
         with:
           install: none
-          # Scenarios 05 and 20 run `pnpm install` against the extracted staging
+          # Several scenarios run `pnpm install` against the extracted staging
           # tree, which resolves the root lockfile; warm the pnpm store on it.
           cache-dependency-path: 'pnpm-lock.yaml'
       # The harness shells out to the COMMITTED bundled binaries directly

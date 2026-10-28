@@ -151,7 +151,7 @@ verify_label_for() {
     shell-lint) printf 'shell-lint' ;;
     leak) printf 'release-scrub leak check' ;;
     files-present) printf '01-files-present' ;;
-    marker-strip) printf '03-marker-strip' ;;
+    marker-strip) printf '02-marker-strip' ;;
   esac
 }
 
@@ -160,7 +160,7 @@ verify_reproduce_for() {
     shell-lint) printf 'bash .gaia/tests/shell-lint.sh' ;;
     leak) printf 'bash .gaia/tests/distribution/lib/build-staging.sh "$(mktemp -d)"' ;;
     files-present) printf 'bash .gaia/tests/distribution/01-files-present.sh' ;;
-    marker-strip) printf 'bash .gaia/tests/distribution/03-marker-strip.sh' ;;
+    marker-strip) printf 'bash .gaia/tests/distribution/02-marker-strip.sh' ;;
   esac
 }
 
@@ -181,7 +181,7 @@ verify_execute_check() {
       (cd "$tree" && bash .gaia/tests/distribution/01-files-present.sh) >"$output_file" 2>&1 </dev/null
       ;;
     marker-strip)
-      (cd "$tree" && bash .gaia/tests/distribution/03-marker-strip.sh) >"$output_file" 2>&1 </dev/null
+      (cd "$tree" && bash .gaia/tests/distribution/02-marker-strip.sh) >"$output_file" 2>&1 </dev/null
       ;;
   esac
 }
@@ -343,7 +343,7 @@ warn_missing_tool() {
 verify_maintainer_binary_missing() {
   [ -x "$1/.gaia/cli/gaia-maintainer" ] && return 1
   warn_missing_tool .gaia/cli/gaia-maintainer 'pnpm -C .gaia/cli bundle' \
-    'release-scrub leak check, 01-files-present, 03-marker-strip'
+    'release-scrub leak check, 01-files-present, 02-marker-strip'
   return 0
 }
 
@@ -361,7 +361,7 @@ verify_run_distribution() {
   verify_run_check leak "$tree" "$merge_base" "$label_suffix" "$reproduce_prefix"
   if [ "$verify_last_check_status" -ne 0 ]; then
     verify_skip "01-files-present$label_suffix" "staging build failed (see release-scrub leak check)"
-    verify_skip "03-marker-strip$label_suffix" "staging build failed (see release-scrub leak check)"
+    verify_skip "02-marker-strip$label_suffix" "staging build failed (see release-scrub leak check)"
     return
   fi
   if [ "$jq_missing" -eq 1 ]; then

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# 20-data-layer-query-off.sh
+# 10-data-layer-query-off.sh
 # distribution-runner: exclusive
 # distribution-runner: paths .gaia/cli/src/init/** .gaia/cli/src/scaffold/** .gaia/cli/templates/** .gaia/tests/distribution/fixtures/data-layer/** .claude/commands/gaia-init.md pnpm-lock.yaml
 # distribution-runner: paths frontend/package.json frontend/.storybook/** frontend/eslint.config.mjs frontend/tsconfig.json frontend/vite.config.ts frontend/vitest.config.ts frontend/react-router.config.ts frontend/app/root.tsx frontend/app/state/** frontend/app/services/** frontend/test/**

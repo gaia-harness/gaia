@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# 23-shell-member-content.sh
+# 14-shell-member-content.sh
 #
 # Proves the shell audit member, its shell testing stack reference, the shell
 # wiki page and the shipped bats assertion rule are present, self-consistent

@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
-# 08-gaia-init-cli-sequence.sh
+# 05-gaia-init-cli-sequence.sh
 #
 # Adopter-flow regression: runs the full deterministic sequence behind
 # `/gaia-init` Step 3 against a writable copy of the staged release tree.
-# Extends 07's pattern (single-step regression for `strip-branding`) by
+# Extends 04's pattern (single-step regression for `strip-branding`) by
 # exercising every CLI surface the slash command dispatches to:
 #
 #   gaia init strip-branding   --title "Test Project"
@@ -13,18 +13,18 @@
 #   gaia init wire-statusline
 #   gaia init finalize
 #
-# Why it exists: 07 catches release-exclude drift on strip-branding's
+# Why it exists: 04 catches release-exclude drift on strip-branding's
 # template/deletion/edit targets. This scenario catches the same class of
 # drift on the four remaining CLI surfaces; any of them silently
 # no-ops if its target file is missing from the staged tree (existsSync
-# guards), so a missing target ships green from 07 but breaks the adopter
+# guards), so a missing target ships green from 04 but breaks the adopter
 # flow at the matching `/gaia-init` step.
 #
 # Asserts (post-conditions per CLI step):
 #
 #   strip-branding  README.md created at scaffold root with title; sets
 #                   the tree up for the remaining steps. Same surface as
-#                   07; no new assertions added here.
+#                   04; no new assertions added here.
 #
 #   configure-i18n  frontend/app/languages/index.ts keeps the 'en' import
 #                   and does not import 'es', whose language tree add-locale
@@ -90,8 +90,8 @@ rsync -a "$STAGING"/ "$SCAFFOLD"/
 [ -x "$SCAFFOLD/.gaia/cli/gaia" ] \
   || { fail "staged tree missing or non-executable .gaia/cli/gaia (bundled CLI)"; exit 1; }
 
-# strip-branding targets (covered by 07; re-checked here so 08 can run
-# standalone if 07 is skipped or rerun-after-edit).
+# strip-branding targets (covered by 04; re-checked here so 05 can run
+# standalone if 04 is skipped or rerun-after-edit).
 [ -f "$SCAFFOLD/.gaia/templates/README.md" ] \
   || { fail "staged tree missing .gaia/templates/README.md (strip-branding template source)"; exit 1; }
 

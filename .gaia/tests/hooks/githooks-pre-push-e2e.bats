@@ -3,7 +3,7 @@
 # End-to-end tests for .githooks/pre-push: a real `git push` over a copy of the
 # real tracked tree, with the real verification runner and the real
 # distribution checks (the staging build with its release-scrub leak check,
-# 01-files-present and 03-marker-strip). The stubbed suite beside this one
+# 01-files-present and 02-marker-strip). The stubbed suite beside this one
 # owns the hook's ref filtering; this one owns what a maintainer sees when a
 # push breaks a distribution check, and that nothing the hook or the runner
 # adds reaches an adopter.
@@ -155,7 +155,7 @@ path_without() {
   [ "$status" -ne 0 ]
   grep -qE -- '^FAIL  release-scrub leak check' <<<"$output"
   grep -qF -- "$rule_path" <<<"$output"
-  grep -qE -- '^SKIP  03-marker-strip: staging build failed' <<<"$output"
+  grep -qE -- '^SKIP  02-marker-strip: staging build failed' <<<"$output"
   grep -qF -- 'reproduce: bash .gaia/tests/distribution/lib/build-staging.sh "$(mktemp -d)"' <<<"$output"
   if remote_has_branch feat/marker; then return 1; fi
 }
@@ -207,7 +207,7 @@ path_without() {
   [ "$status" -eq 0 ]
   grep -qE -- '^PASS  01-files-present \([0-9]+s\)' <<<"$output"
   grep -qE -- '^PASS  release-scrub leak check \([0-9]+s\)' <<<"$output"
-  grep -qE -- '^PASS  03-marker-strip \([0-9]+s\)' <<<"$output"
+  grep -qE -- '^PASS  02-marker-strip \([0-9]+s\)' <<<"$output"
   grep -qE -- '(shell-lint|bats whole-tree|bats selected)' <<<"$output" && return 1
   [ ! -s "$tool_log" ]
   remote_has_branch feat/clean
@@ -225,7 +225,7 @@ path_without() {
   grep -qF -- "CI remains the only check" <<<"$output"
   grep -qE -- '^SKIP  release-scrub leak check: rsync not found' <<<"$output"
   grep -qE -- '^SKIP  01-files-present: rsync not found' <<<"$output"
-  grep -qE -- '^SKIP  03-marker-strip: rsync not found' <<<"$output"
+  grep -qE -- '^SKIP  02-marker-strip: rsync not found' <<<"$output"
   grep -qE -- '^PASS  ' <<<"$output" && return 1
   remote_has_branch feat/no-rsync
 }
@@ -241,7 +241,7 @@ path_without() {
   grep -qE -- '^WARN  jq not found: install with brew install jq' <<<"$output"
   grep -qE -- '^SKIP  01-files-present: jq not found' <<<"$output"
   grep -qE -- '^PASS  release-scrub leak check \([0-9]+s\)' <<<"$output"
-  grep -qE -- '^PASS  03-marker-strip \([0-9]+s\)' <<<"$output"
+  grep -qE -- '^PASS  02-marker-strip \([0-9]+s\)' <<<"$output"
   grep -qE -- '^PASS  01-files-present' <<<"$output" && return 1
   remote_has_branch feat/no-jq
 }

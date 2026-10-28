@@ -1,6 +1,6 @@
 # csf4-migration fixtures
 
-Used by `.gaia/tests/distribution/25-csf4-migration.sh`, which copies them into a staged release tree to prove `gaia migrate-csf4` with the adopter's own toolchain.
+Used by `.gaia/tests/distribution/16-csf4-migration.sh`, which copies them into a staged release tree to prove `gaia migrate-csf4` with the adopter's own toolchain.
 
 - `config/`: CSF3 Storybook config an adopter would hold (`preview.csf3.ts`, `preview-no-i18n.csf3.ts`, `main.csf3.ts`). The scenario copies them over `.storybook/preview.ts` and `.storybook/main.ts`.
 - `adopter/`: components and CSF3 stories covering the shapes the upstream codemod breaks: assignments on a render-function story, custom args beyond the component's props, a factory-built story set under a leading comment, and a `parameters.msw` story whose component renders the handler's distinctive text.
