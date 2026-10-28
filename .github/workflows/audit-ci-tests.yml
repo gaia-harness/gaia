@@ -95,8 +95,20 @@ jobs:
     # cancelled rather than ran. The matrix values are the bats-shards.sh shard
     # ids plus the three workflow-level legs; audit-ci-shards.bats checks the
     # two stay in sync.
+    #
+    # `max-parallel` caps a push run, never a pull request. A push run runs
+    # every leg whole, and at the full width it takes most of the account's
+    # concurrent-job slots for its whole run, right after a merge, when other
+    # branches catch up and push: pull request legs created during a push run
+    # waited over a minute far more often than legs created outside one. Six
+    # legs at a time leaves room for a pull request's legs and lengthens the
+    # push run, which nothing waits on. A pull request's value is the leg
+    # count, so its legs all start at once. audit-ci-push-parallelism.bats
+    # holds the push value below the pull request value and the pull request
+    # value at the leg count.
     strategy:
       fail-fast: false
+      max-parallel: ${{ github.event_name == 'push' && 6 || 17 }}
       matrix:
         shard: [hooks-1, hooks-2, hooks-3, hooks-4, scripts-1, scripts-2, scripts-3, scripts-4, scripts-5, audit, lib-1, lib-2, lib-3, misc, sandbox, concurrency, commitlint]
     steps:

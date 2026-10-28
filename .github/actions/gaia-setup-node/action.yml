@@ -54,6 +54,15 @@ inputs:
       install unchanged.
     required: false
     default: 'false'
+  install-attempt-seconds:
+    description: >-
+      The wall-clock bound on one install attempt, in seconds; an attempt the
+      bound ends is retried once, and two ended attempts fail the step. The
+      default is about three times the slowest normal install, warm or cold
+      cache, so only a stalled registry response reaches it. Raise it for a
+      workspace whose install legitimately takes longer.
+    required: false
+    default: '180'
 runs:
   using: 'composite'
   steps:
@@ -74,15 +83,19 @@ runs:
         node-version-file: '.node-version'
         cache: 'pnpm'
         cache-dependency-path: ${{ inputs.cache-dependency-path }}
+    # Each install runs under bounded-install.sh, whose header says why
+    # pnpm's own fetch timeout cannot bound a slow registry response.
     - name: Install root dependencies
       if: inputs.install == 'root'
       shell: bash
-      run: pnpm install --frozen-lockfile $PNPM_IGNORE_SCRIPTS_FLAG
+      run: bash "$GITHUB_ACTION_PATH/bounded-install.sh" --attempt-seconds "$INSTALL_ATTEMPT_SECONDS" -- pnpm install --frozen-lockfile $PNPM_IGNORE_SCRIPTS_FLAG
       env:
+        INSTALL_ATTEMPT_SECONDS: ${{ inputs.install-attempt-seconds }}
         PNPM_IGNORE_SCRIPTS_FLAG: ${{ inputs.ignore-scripts == 'true' && '--ignore-scripts' || '' }}
     - name: Install CLI dependencies
       if: inputs.install == 'cli'
       shell: bash
-      run: pnpm install --frozen-lockfile --filter "@gaia-harness/cli..." $PNPM_IGNORE_SCRIPTS_FLAG
+      run: bash "$GITHUB_ACTION_PATH/bounded-install.sh" --attempt-seconds "$INSTALL_ATTEMPT_SECONDS" -- pnpm install --frozen-lockfile --filter "@gaia-harness/cli..." $PNPM_IGNORE_SCRIPTS_FLAG
       env:
+        INSTALL_ATTEMPT_SECONDS: ${{ inputs.install-attempt-seconds }}
         PNPM_IGNORE_SCRIPTS_FLAG: ${{ inputs.ignore-scripts == 'true' && '--ignore-scripts' || '' }}
