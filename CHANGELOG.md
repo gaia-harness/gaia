@@ -18,7 +18,7 @@ A release change that requires the adopter to act, run a command or hand-migrate
 
 - **Plainer public release notes (maintainer repo only):** the `release-notes` skill now writes for a visitor skimming the marketing site. Bullets say what changed in plain language and link a docs page for the detail instead of reciting it, and fixes read as the bug going away rather than a new feature (#3178, #3180)
 - **1.6.1 routing line on every release (maintainer repo only):** `/gaia-release` now puts the 1.6.1 migration line first in every release body, since a 1.6.1 project meets whichever release is newest. The CHANGELOG no longer carries a copy in each entry, only in 2.0.0's (#3180)
-- **Release notes bucketed by what the reader sees (maintainer repo only):** the `release-notes` skill now files each item under New, Improved or Fixed by how an adopter experiences it rather than by its CHANGELOG heading, copies the routing-line preamble only into the file it is writing, and leaves already-approved release files as they are
+- **Release notes bucketed by what the reader sees (maintainer repo only):** the `release-notes` skill now files each item under New, Improved or Fixed by how an adopter experiences it rather than by its CHANGELOG heading, copies the routing-line preamble only into the file it is writing, and leaves already-approved release files as they are (#3182)
 
 ## [2.3.0] - 2026-10-28
 
