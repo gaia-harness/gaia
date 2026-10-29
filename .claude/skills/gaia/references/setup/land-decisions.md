@@ -65,13 +65,18 @@ The decision runs in a bash script because Claude's Bash tool may be zsh, which 
 
 ## The closing message
 
-A run can reach Phase 6 with its GitHub setup undone: Phase 3's clean-tree refusal on Create, the set-up-manually answer, or an authentication or admin refusal each skip the rest of Phase 3. So the closing line never claims completion just because the run reached the end. A non-admin (cached admin false) cannot record project settings, and Phase 5 skips the admin-gated features such as the required CI checks for them, so their run must not end on the done line while one is unapplied either. Read two sets, after every record this run made: the project settings still owed that this machine can act on, through the same predicate the statusline's `⚙️ /setup-gaia` nudge counts so the message and the nudge never disagree, and the admin-gated settings a non-admin leaves for an admin:
+A run can reach Phase 6 with its GitHub setup undone: Phase 3's clean-tree refusal on Create, the set-up-manually answer, or an authentication or admin refusal each skip the rest of Phase 3. So the closing line never claims completion just because the run reached the end. A non-admin (cached admin false) cannot record project settings, and Phase 5 skips the admin-gated features such as the required CI checks for them, so their run must not end on the done line while one is unapplied either. Nor must a run on a github.com origin whose admin probe was not `ok` (`gh` not signed in, or GitHub not answering): no admin answer is cached then, so the predicate alone names nothing for the admin-gated settings. Read three sets, after every record this run made: the project settings still owed that this machine can act on, through the same predicate the statusline's `⚙️ /setup-gaia` nudge counts so the message and the nudge never disagree; on a github.com origin whose probe was not `ok`, every undecided admin-gated setting; and the admin-gated settings a cached non-admin leaves for an admin. Run it with Phase 1's cached `HOST` and `AUTH_STATUS` declared in the same call (`AUTH_STATUS` empty when the probe did not run):
 
 ```bash
-. .gaia/statusline/setup-owed.sh && printf 'OWED_AT_END=%s\nADMIN_OWED_AT_END=%s\n' "$(gaia_setup_owed_ids .)" "$(gaia_setup_admin_owed_ids .)"
+. .gaia/statusline/setup-owed.sh
+ADMIN_UNCHECKED_AT_END=""
+if [ "$HOST" = github.com ] && [ "$AUTH_STATUS" != ok ]; then
+  ADMIN_UNCHECKED_AT_END="$(gaia_setup_admin_gated_ids .)"
+fi
+printf 'OWED_AT_END=%s\nADMIN_OWED_AT_END=%s\nADMIN_UNCHECKED_AT_END=%s\n' "$(gaia_setup_owed_ids .)" "$(gaia_setup_admin_owed_ids .)" "$ADMIN_UNCHECKED_AT_END"
 ```
 
-The predicate's header in `.gaia/statusline/setup-owed.sh` says which owed ids count for an admin, a non-admin and a machine with no cached admin answer, and why the nudge stays quiet for a non-admin.
+The predicate's header in `.gaia/statusline/setup-owed.sh` says which owed ids count for an admin, a non-admin and a machine with no cached admin answer, and why the nudge stays quiet for a non-admin. An origin on another host, or no origin, leaves `ADMIN_UNCHECKED_AT_END` empty: the GitHub settings do not apply there.
 
 When the run's summary lists what changed on GitHub and this run applied the Dependabot posture, its Dependabot item is this line verbatim, never a shortened form, because the reason is what keeps a first-time adopter from turning Dependabot's security fix pull requests back on:
 
@@ -81,7 +86,7 @@ Dependabot security alerts are on. GAIA updates vulnerable packages for you and 
 
 Then output these lines (in the user's language), each its own paragraph with a blank line between them, in this order. The closing never asks for a reload command or a restart: a plugin setup installs from the shell loads in this session, and `per-machine.md`'s install-tools names the one case where a skill appears only from the next session.
 
-**The status line.** When `OWED_AT_END` and `ADMIN_OWED_AT_END` are both empty:
+**The status line.** When `OWED_AT_END`, `ADMIN_UNCHECKED_AT_END` and `ADMIN_OWED_AT_END` are all empty:
 
 ```text
 You're all set: your GAIA project is ready.
@@ -93,7 +98,13 @@ When `OWED_AT_END` is not empty, name its ids in place of the placeholder:
 Setup isn't finished: these project settings are still owed: <the OWED_AT_END ids>. Fix what stopped them above, then re-run /setup-gaia; it resumes from the first owed step.
 ```
 
-When `OWED_AT_END` is empty and `ADMIN_OWED_AT_END` is not, name its ids in place of the placeholder:
+When `OWED_AT_END` is empty and `ADMIN_UNCHECKED_AT_END` is not, name its ids in place of the placeholder:
+
+```text
+Your part of setup is done, but these project settings are still undecided: <the ADMIN_UNCHECKED_AT_END ids>. GAIA couldn't check whether you're a repository admin, because gh isn't signed in or GitHub didn't answer. Sign in with gh auth login and re-run /setup-gaia, or ask a repository admin to run it on the default branch.
+```
+
+When `OWED_AT_END` and `ADMIN_UNCHECKED_AT_END` are empty and `ADMIN_OWED_AT_END` is not, name its ids in place of the placeholder:
 
 ```text
 Your part of setup is done, but these project settings still need a repository admin: <the ADMIN_OWED_AT_END ids>. They stay unapplied until a repo admin runs /setup-gaia on the default branch, so ask one to.

@@ -255,6 +255,26 @@ render() {
   [ -z "$output" ]
 }
 
+@test "the admin-gated helper names undecided admin-gated project ids whatever the cached answer" {
+  local cached
+  write_features alpha github-repository gamma
+  run bash -c ". '$MAIN/.gaia/statusline/setup-owed.sh' && gaia_setup_admin_gated_ids '$MAIN'"
+  [ "$status" -eq 0 ]
+  [ "$output" = "gamma" ]
+
+  for cached in true false; do
+    cache_admin "$cached"
+    run bash -c ". '$MAIN/.gaia/statusline/setup-owed.sh' && gaia_setup_admin_gated_ids '$MAIN'"
+    [ "$status" -eq 0 ]
+    [ "$output" = "gamma" ]
+  done
+
+  printf '{"setup_decisions":{"gamma":"declined"}}\n' > "$MAIN/.gaia/project.json"
+  run bash -c ". '$MAIN/.gaia/statusline/setup-owed.sh' && gaia_setup_admin_gated_ids '$MAIN'"
+  [ "$status" -eq 0 ]
+  [ -z "$output" ]
+}
+
 @test "the other nudges keep rendering, after the setup nudge, in their existing order" {
   arm_other_nudges
   render "$MAIN"

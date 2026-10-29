@@ -23,6 +23,7 @@
 
 DONE_LINE="You're all set: your GAIA project is ready."
 NOT_DONE_LINE="Setup isn't finished: these project settings are still owed: <the OWED_AT_END ids>. Fix what stopped them above, then re-run /setup-gaia; it resumes from the first owed step."
+UNCHECKED_LINE="Your part of setup is done, but these project settings are still undecided: <the ADMIN_UNCHECKED_AT_END ids>. GAIA couldn't check whether you're a repository admin, because gh isn't signed in or GitHub didn't answer. Sign in with gh auth login and re-run /setup-gaia, or ask a repository admin to run it on the default branch."
 ADMIN_OWED_LINE="Your part of setup is done, but these project settings still need a repository admin: <the ADMIN_OWED_AT_END ids>. They stay unapplied until a repo admin runs /setup-gaia on the default branch, so ask one to."
 DOCS_LINE='New to GAIA? The docs walk you through your first feature: https://docs.gaiaharness.com/getting-started/onboarding/'
 FRESH_CONTEXT_LINE='Type /clear to start your first feature with a fresh context.'
@@ -80,9 +81,9 @@ mutate_file() {
 # auto-mode, fresh-context and docs lines occur once.
 check_closing_order() {
   local closing="$1" previous=0 position index count text
-  local -a modes=(-xF -xF -xF -F -xF -xF -xF)
-  local -a texts=("$DONE_LINE" "$NOT_DONE_LINE" "$ADMIN_OWED_LINE" "$SANDBOX_LINE" "$AUTO_MODE_LINE" "$FRESH_CONTEXT_LINE" "$DOCS_LINE")
-  for index in 0 1 2 3 4 5 6; do
+  local -a modes=(-xF -xF -xF -xF -F -xF -xF -xF)
+  local -a texts=("$DONE_LINE" "$NOT_DONE_LINE" "$UNCHECKED_LINE" "$ADMIN_OWED_LINE" "$SANDBOX_LINE" "$AUTO_MODE_LINE" "$FRESH_CONTEXT_LINE" "$DOCS_LINE")
+  for index in 0 1 2 3 4 5 6 7; do
     position="$(grep -n "${modes[$index]}" -- "${texts[$index]}" <<<"$closing" | head -n 1 | cut -d: -f1 || true)"
     [ -n "$position" ] || {
       echo "missing whole line: ${texts[$index]}" >&2
@@ -240,6 +241,7 @@ check_halt_rule() {
 @test "the closing message prints each status, conditional, fresh-context and docs line as a whole line" {
   grep -qxF -- "$DONE_LINE" <<<"$CLOSING"
   grep -qxF -- "$NOT_DONE_LINE" <<<"$CLOSING"
+  grep -qxF -- "$UNCHECKED_LINE" <<<"$CLOSING"
   grep -qxF -- "$ADMIN_OWED_LINE" <<<"$CLOSING"
   grep -qxF -- "$FRESH_CONTEXT_LINE" <<<"$CLOSING"
   grep -qxF -- "$DOCS_LINE" <<<"$CLOSING"
@@ -402,9 +404,10 @@ check_halt_rule() {
 }
 
 @test "the done line is gated: the closing message names when each line prints" {
-  grep -qF -- 'When `OWED_AT_END` and `ADMIN_OWED_AT_END` are both empty:' <<<"$CLOSING"
+  grep -qF -- 'When `OWED_AT_END`, `ADMIN_UNCHECKED_AT_END` and `ADMIN_OWED_AT_END` are all empty:' <<<"$CLOSING"
   grep -qF -- 'When `OWED_AT_END` is not empty' <<<"$CLOSING"
-  grep -qF -- 'When `OWED_AT_END` is empty and `ADMIN_OWED_AT_END` is not' <<<"$CLOSING"
+  grep -qF -- 'When `OWED_AT_END` is empty and `ADMIN_UNCHECKED_AT_END` is not' <<<"$CLOSING"
+  grep -qF -- 'When `OWED_AT_END` and `ADMIN_UNCHECKED_AT_END` are empty and `ADMIN_OWED_AT_END` is not' <<<"$CLOSING"
 }
 
 @test "the closing message never says a non-admin owes nothing" {
@@ -465,4 +468,86 @@ check_running_marker() {
   run check_running_marker "$copy"
   [ "$status" -ne 0 ]
   grep -qF 'Phase 6 does not remove the marker' <<<"$output"
+}
+
+# closing_block: the closing message's first bash block, the one that reads the
+# owed sets. Fails when the section holds no bash block.
+closing_block() {
+  local block
+  block="$(awk '/^```bash$/ { inside = 1; next } inside && /^```$/ { exit } inside' <<<"$CLOSING")"
+  [ -n "$block" ] || {
+    echo "the closing message holds no bash block" >&2
+    return 1
+  }
+  printf '%s\n' "$block"
+}
+
+# make_closing_fixture: a checkout holding the shipped feature list, the
+# shared predicate, and a committed project config that decides every project
+# id but required-ci-checks. No admin answer is cached. Prints its path.
+make_closing_fixture() {
+  local fixture="${BATS_TEST_TMPDIR}/closing-fixture"
+  mkdir -p "${fixture}/.gaia/statusline"
+  cp "${REPO_ROOT}/.gaia/setup-features.json" "${fixture}/.gaia/setup-features.json"
+  cp "${REPO_ROOT}/.gaia/statusline/setup-owed.sh" "${fixture}/.gaia/statusline/setup-owed.sh"
+  jq '{setup_decisions: ([.features[] | select(.scope == "project" and .id != "required-ci-checks") | {key: .id, value: "applied"}] | from_entries)}' \
+    "${REPO_ROOT}/.gaia/setup-features.json" >"${fixture}/.gaia/project.json"
+  jq -e '[.features[] | select(.id == "required-ci-checks" and .scope == "project" and .admin == true)] | length == 1' \
+    "${fixture}/.gaia/setup-features.json" >/dev/null || {
+    echo "the shipped list no longer holds required-ci-checks as an admin-gated project id" >&2
+    return 1
+  }
+  printf '%s\n' "$fixture"
+}
+
+# run_closing_block <fixture> <host> <auth status>: run the closing block from
+# the fixture with Phase 1's cached HOST and AUTH_STATUS declared, as the
+# closing message runs it.
+run_closing_block() {
+  local script="${BATS_TEST_TMPDIR}/closing-block.sh"
+  closing_block >"$script"
+  run bash -c 'cd "$1" && HOST="$2" && AUTH_STATUS="$3" && . "$4"' _ "$1" "$2" "$3" "$script"
+}
+
+@test "a github.com origin whose admin probe failed names its undecided admin-gated ids, so the done line cannot print" {
+  local fixture auth_status
+  fixture="$(make_closing_fixture)"
+  for auth_status in unauthenticated api_error ''; do
+    run_closing_block "$fixture" github.com "$auth_status"
+    [ "$status" -eq 0 ]
+    grep -qxF -- 'OWED_AT_END=' <<<"$output"
+    grep -qxF -- 'ADMIN_OWED_AT_END=' <<<"$output"
+    grep -qxF -- 'ADMIN_UNCHECKED_AT_END=required-ci-checks' <<<"$output" || {
+      echo "auth status '${auth_status}' left the admin-gated id unnamed" >&2
+      return 1
+    }
+  done
+}
+
+@test "an ok admin probe leaves the unchecked set empty and a cached non-admin keeps the admin line" {
+  local fixture
+  fixture="$(make_closing_fixture)"
+  mkdir -p "${fixture}/.gaia/local"
+  printf '{"admin":false}\n' >"${fixture}/.gaia/local/setup-state.json"
+  run_closing_block "$fixture" github.com ok
+  [ "$status" -eq 0 ]
+  grep -qxF -- 'ADMIN_UNCHECKED_AT_END=' <<<"$output"
+  grep -qxF -- 'ADMIN_OWED_AT_END=required-ci-checks' <<<"$output"
+}
+
+@test "an origin on another host, or no origin, names no GitHub id as admin-owed or unchecked" {
+  local fixture host
+  fixture="$(make_closing_fixture)"
+  for host in gitlab.com ''; do
+    run_closing_block "$fixture" "$host" ''
+    [ "$status" -eq 0 ]
+    grep -qxF -- 'ADMIN_OWED_AT_END=' <<<"$output" || {
+      echo "host '${host}' named an admin-owed id" >&2
+      return 1
+    }
+    grep -qxF -- 'ADMIN_UNCHECKED_AT_END=' <<<"$output" || {
+      echo "host '${host}' named an unchecked id" >&2
+      return 1
+    }
+  done
 }
