@@ -712,6 +712,18 @@ standalone_block() {
   block_under "${REFERENCES}/standalone-features.md" '# Owed standalone setup features'
 }
 
+# standalone_not_applicable_block <id>: the gated not-applicable record line
+# for a `detect` handoff, with the id substituted.
+standalone_not_applicable_block() {
+  local block
+  block="$(block_under "${REFERENCES}/standalone-features.md" '# Owed standalone setup features' 2)"
+  grep -qF -- '<id>' <<<"$block" || {
+    echo "the not-applicable record block names no <id>: ${block}" >&2
+    return 1
+  }
+  printf '%s\n' "${block//<id>/$1}"
+}
+
 @test "Phase 5 hands an admin each undecided standalone feature, and a non-admin only the machine one" {
   local list="${BATS_TEST_TMPDIR}/standalone-list.json" repo output_text
   jq '.features |= map(select(.standalone | not)) | .features += [
@@ -723,6 +735,26 @@ standalone_block() {
   [ "$output_text" = "$(printf '%s\n' 'OWED_FEATURE later-machine apply docs/later-machine.md' 'OWED_FEATURE later-project ask docs/later-project.md')" ]
   output_text="$(run_block "$repo" "$(standalone_block)" MAY_RECORD_PROJECT=none)"
   [ "$output_text" = "$(printf '%s\n' 'OWED_FEATURE later-machine apply docs/later-machine.md' 'SKIP_PROJECT later-project')" ]
+  output_text="$(run_block "$repo" "$(standalone_block)" MAY_RECORD_PROJECT=not-applicable-only)"
+  [ "$output_text" = "$(printf '%s\n' 'OWED_FEATURE later-machine apply docs/later-machine.md' 'OWED_FEATURE later-project detect docs/later-project.md')" ]
+}
+
+@test "Phase 5 on a non-GitHub origin records required-ci-checks not-applicable, and the next run owes nothing for it" {
+  local repo output_text reference
+  reference="$(jq -r '.features[] | select(.id == "required-ci-checks") | .reference' "$FEATURE_LIST")"
+  [ -n "$reference" ]
+  repo="$(make_repo standalone-other-host)"
+  output_text="$(run_block "$repo" "$(standalone_block)" MAY_RECORD_PROJECT=not-applicable-only)"
+  grep -qxF -- 'SKIP_PROJECT required-ci-checks' <<<"$output_text" && return 1
+  grep -qxF -- "OWED_FEATURE required-ci-checks detect ${reference}" <<<"$output_text"
+  # Off the default branch the gate records nothing.
+  run_block "$repo" "$(standalone_not_applicable_block required-ci-checks)" MAY_RECORD_PROJECT=none >/dev/null
+  [ -z "$(decision "$repo" required-ci-checks)" ]
+  run_block "$repo" "$(standalone_not_applicable_block required-ci-checks)" MAY_RECORD_PROJECT=not-applicable-only >/dev/null
+  [ "$(decision "$repo" required-ci-checks)" = not-applicable ]
+  output_text="$(run_block "$repo" "$(standalone_block)" MAY_RECORD_PROJECT=not-applicable-only)"
+  grep -qF -- 'required-ci-checks' <<<"$output_text" && return 1
+  [ ! -s "$GH_LOG" ]
 }
 
 @test "Phase 5 hands over exactly the shipped standalone features" {
