@@ -71,6 +71,15 @@ transforms:
     start: "# gaia:maintainer-only:start"
     end: "# gaia:maintainer-only:end"
 
+  # Shipped workflows that carry a maintainer-only step: the GAIA release
+  # fast path, which reaches a release-excluded action and script.
+  - type: marker-strip
+    paths:
+      - ".github/workflows/tests.yml"
+      - ".github/workflows/chromatic.yml"
+    start: "# gaia:maintainer-only:start"
+    end: "# gaia:maintainer-only:end"
+
   # Maintainer-only package.json keys that must not reach adopter projects.
   # bin: registers the gaia CLI binary, only meaningful when a package is
   #   published and installed as a dependency; adopters build apps, not

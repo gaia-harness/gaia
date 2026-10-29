@@ -74,6 +74,7 @@ AUDIT_MACHINERY_PATHS="$(cat <<'EOF'
 .gaia/scripts/audit-frontend-oracles.sh
 # gaia:maintainer-only:start
 .claude/maintainers/**
+.gaia/scripts/release-bookkeeping-check.sh
 .gaia/scripts/tests/fixtures/audit-quick-corpus.json
 # gaia:maintainer-only:end
 .claude/rules/**

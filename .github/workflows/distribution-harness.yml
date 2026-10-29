@@ -10,9 +10,10 @@ name: 'GAIA: Distribution Harness'
 # A pull request runs it change-scoped: the fast scenarios whenever the `code:`
 # filter below matches, and each slow scenario only when a path its header
 # declares changed (run-all.sh owns the rule). Every push to main runs every
-# scenario: it is the backstop for whatever a declaration misses, and
-# `report-main-status` below keeps an open `ci-red-main` issue while it is red,
-# which also holds /gaia-release (verify-main-green.sh refuses on any open one).
+# scenario, bar a release-bookkeeping commit on a green main (release step): the
+# backstop for what a declaration misses; `report-main-status` keeps an open
+# `ci-red-main` issue while it is red, which also holds /gaia-release
+# (verify-main-green.sh refuses on any open one).
 #
 # `workflow_dispatch:` is the manual re-run lane and runs every scenario.
 # GitHub honors it only for the default-branch copy of this file, so a
@@ -51,15 +52,31 @@ jobs:
     # Checkout, paths-filter and setup-node's defaults. `pull-requests: read`
     # is paths-filter's: it resolves a pull request's changed files through the
     # API, which works without the scope only while this repo is public.
+    # `actions: read` and `issues: read` are the release fast path's, for main's
+    # push runs and its ci-red-main issues.
     permissions:
       contents: read
       pull-requests: read
+      actions: read
+      issues: read
     steps:
       # Depth 2 so the change-scoped run can diff the pull request's merge
       # commit against its first parent, the base branch it merges into.
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 2
+      # A release-bookkeeping change on a green main, the pull request or the
+      # release commit's push run, skips the scenarios and concludes success:
+      # release.yml's distribution gate tests the tagged tree, the only run
+      # that exercises the new version string, so it is the single
+      # distribution run on the release commit.
+      - name: Release bookkeeping fast path
+        id: release
+        uses: ./.github/actions/gaia-release-fast-path
+        with:
+          event: ${{ github.event_name }}
+          workflow: distribution-harness.yml
+          token: ${{ github.token }}
       # paths-filter resolves changed files from the pull-request context, which
       # a push or dispatch run does not have, so those lanes skip it and every
       # gated step below admits them directly.
@@ -71,7 +88,7 @@ jobs:
       # every shipped file, run unfiltered in cli-tests.yml's shipped-surface
       # job, so this list's narrowness cannot green a leak.
       - uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # v4.0.3
-        if: github.event_name == 'pull_request'
+        if: github.event_name == 'pull_request' && steps.release.outputs.fast != 'true'
         id: filter
         with:
           filters: |
@@ -115,7 +132,7 @@ jobs:
               - 'frontend/app/state/**'
               - 'frontend/app/services/**'
               - 'frontend/test/**'
-      - if: steps.filter.outputs.code == 'true' || github.event_name != 'pull_request'
+      - if: steps.release.outputs.fast != 'true' && (steps.filter.outputs.code == 'true' || github.event_name != 'pull_request')
         name: Setup Node
         uses: ./.github/actions/gaia-setup-node
         with:
@@ -128,7 +145,7 @@ jobs:
       # does not install the CLI's dependencies. Freshness of those binaries vs.
       # src is cli-tests.yml's required job's concern; here we test the
       # committed bundle as-is, which is what the release tarball ships.
-      - if: steps.filter.outputs.code == 'true' || github.event_name != 'pull_request'
+      - if: steps.release.outputs.fast != 'true' && (steps.filter.outputs.code == 'true' || github.event_name != 'pull_request')
         name: Verify committed CLI binaries are present
         run: |
           for bin in .gaia/cli/gaia .gaia/cli/gaia-maintainer; do
@@ -141,7 +158,7 @@ jobs:
       # parent, rename detection off so a rename lists both paths, the same
       # range audit-ci-tests.yml's change-scoped legs read. `-z` because the
       # plain form C-quotes a non-ASCII path, which then matches no glob.
-      - if: steps.filter.outputs.code == 'true' || github.event_name != 'pull_request'
+      - if: steps.release.outputs.fast != 'true' && (steps.filter.outputs.code == 'true' || github.event_name != 'pull_request')
         name: Run distribution scenarios (Layers 0+1 + adopter-flow; no token)
         env:
           EVENT_NAME: ${{ github.event_name }}

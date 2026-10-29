@@ -10,14 +10,15 @@ tags: [decision, ci, performance, github-actions, bats]
 
 # Decision: Sharded CI Test Matrix
 
-The `GAIA: Audit CI Tests` workflow is the whole pull-request critical path. It runs as a fan-out matrix of legs plus a thin aggregator that carries the declared-required check name, because the bats work saturates a single runner's cores and the remaining lever is more runners. A pull request runs each bats leg change-scoped unless it touches harness machinery; every push to `main` and every manual dispatch runs every leg whole.
+The `GAIA: Audit CI Tests` workflow is the whole pull-request critical path. It runs as a fan-out matrix of legs plus a thin aggregator that carries the declared-required check name, because the bats work saturates a single runner's cores and the remaining lever is more runners. A pull request runs each bats leg change-scoped unless it touches harness machinery; every push to `main` and every manual dispatch runs every leg whole. The one exception is a release-bookkeeping change on a green main, which runs a narrow release check in place of every leg ([[Release Workflow]]).
 
 ## Shape
 
 `.github/workflows/audit-ci-tests.yml` declares these jobs:
 
+- `release-fast-path`, which asks `.gaia/scripts/release-bookkeeping-check.sh` whether the run tests release bookkeeping on a green main and, when it does, runs `release manifest --check`; its `fast` output skips every `shards` leg.
 - `shards`, a matrix whose legs are named in the workflow's `matrix.shard` list: the bats shards (assigned by `.gaia/tests/bats-shards.sh`), the `.gaia/tests/sandbox` conformance tree, the INV-7 concurrency meter, and the `commitlint` leg, which installs only the root workspace and runs the `.gaia/tests/commitlint/` suites against the real commitlint binary.
-- `audit-ci-tests`, the aggregator, which reads `shards`'s result and exits non-zero for anything other than `success`.
+- `audit-ci-tests`, the aggregator, which reads `shards`'s result and exits non-zero for anything other than `success`, except a `shards` skip that a successful `release-fast-path` asked for.
 - `report-main-status`, which runs on a push to `main` only and keeps a red-main issue current (see [[#Main is re-tested on every push]]).
 
 Splitting the required check name off the work is what lets `fail-fast: false` stop one failing shard from cancelling its siblings without also cancelling the check. The aggregator compares against `success` rather than enumerating failure states, so a conclusion GitHub adds later fails closed, and `always()` on its `if:` stops a skip-on-dependency-failure from satisfying a required context that ran nothing.
@@ -38,7 +39,7 @@ Every job declares an integer-literal `timeout-minutes` cap, and every `run:` st
 
 Two traps make naive measurement useless:
 
-- **Event mixes the baseline.** A push-to-`main` run and a dispatch run every leg whole, while a pull request usually runs a change-scoped share, so a duration is comparable only within one event and one scope. Push runs are the clean whole-matrix baseline (`gh run list --branch main --event push`); read a pull-request duration against the scope of its change.
+- **Event mixes the baseline.** A push-to-`main` run (other than a release fast path, which runs no leg) and a dispatch run every leg whole, while a pull request usually runs a change-scoped share, so a duration is comparable only within one event and one scope. Push runs are the clean whole-matrix baseline (`gh run list --branch main --event push`); read a pull-request duration against the scope of its change.
 - **`Per-suite results:` reports exit codes, not counts.** The `0 in Ns` figure is the suite's exit status plus elapsed seconds. Assertion counts come from the TAP plan lines (`1..N`) that follow each `##[group]` header, or by counting `ok ` lines per job.
 
 A useful reconciliation is the sum of per-shard TAP plans against the pre-existing per-directory totals: a partition change that loses a file shows up as a count drop, where every check still greens.

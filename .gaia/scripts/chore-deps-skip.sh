@@ -33,6 +33,15 @@
 # Consumers: `git grep chore-deps-skip`.
 set -eu
 
+# `--base <sha>` mode, tests.yml's: the changed paths are <sha>...HEAD in this
+# script's tree instead of stdin (an unreadable diff is `false`), and a
+# manifest change that moves the `msw` entry is `false`, because an msw bump
+# regenerates the committed worker script that only the test suite checks.
+base=""
+if [ "${1-}" = --base ]; then
+  base="${2-}"
+  shift 2 || shift $#
+fi
 subject="${1-}"
 
 # The registry lives beside this script's tree, so a caller running the script
@@ -40,7 +49,10 @@ subject="${1-}"
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 
 paths=""
-if [ ! -t 0 ]; then
+if [ -n "$base" ]; then
+  paths="$(set -o pipefail; git -C "$repo_root" diff --name-only -z --no-renames "${base}...HEAD" 2>/dev/null | tr '\0' '\n')" \
+    || { printf 'false\n'; exit 0; }
+elif [ ! -t 0 ]; then
   # `changed_path=` first: a closed fd 0 (`<&-`) still passes `[ ! -t 0 ]`, and a `read`
   # on a closed fd assigns nothing, so `[ -n "$changed_path" ]` on an unset `changed_path` would trip
   # `set -u`. `read`'s own stderr is silenced for the same closed-fd case:
@@ -90,7 +102,14 @@ case "$subject" in
       esac
     done <<<"$paths"
     if [ "$load_status" -eq 0 ] && [ "$saw_path" -eq 1 ] && [ "$manifest_only" -eq 1 ]; then
-      printf 'true\n'
+      # A grep miss is the skip, so it must not abort under set -e; an
+      # unreadable msw diff is `false`.
+      if [ -n "$base" ] && { ! msw_diff="$(git -C "$repo_root" diff --no-renames "${base}...HEAD" -- '*package.json' 2>/dev/null)" \
+        || printf '%s\n' "$msw_diff" | grep -qE '^[+-][[:space:]]*"msw":'; }; then
+        printf 'false\n'
+      else
+        printf 'true\n'
+      fi
     else
       printf 'false\n'
     fi

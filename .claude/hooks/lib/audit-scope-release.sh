@@ -30,6 +30,20 @@
 #     .gaia/VERSION absent on either side, and an unresolvable merge base each
 #     leave the context disarmed, so nothing is dropped.
 #
+# The release-bookkeeping arm is the same context call answering a second,
+# independent question for GAIA's own repository: is the branch's whole change
+# release bookkeeping (version strings, the CHANGELOG graduation, the wiki
+# scrub), by the maintainer-only release-bookkeeping predicate the CI fast path
+# and verify-harness read too? When it is, each path of that change that is in
+# the fixed bookkeeping set is ownerless and out-of-scope allowlisted (any other
+# changed path stays in scope, and a branch that edits the predicate itself
+# disarms the arm): there is no code for a member to
+# read, the resolver dispatches nobody, and the merge gate's out-of-scope
+# bypass clears the merge. It needs no skip-keyed member. The release scrub
+# strips the arm, so an adopter clone never arms it, and every failure (no
+# script, no merge base, an unchanged .gaia/VERSION, a predicate that says no
+# or cannot answer) leaves it disarmed, which is over-review.
+#
 # Bash 3.2 compatible (macOS default): no associative arrays, no `mapfile`.
 # Never `cd`. Membership of a path in the owned set is a quoted `case` test on a
 # newline-framed string, so classifying a path spawns no process.
@@ -98,6 +112,7 @@ _audit_scope_release_disarm() {
 _audit_scope_release_reset() {
   local config_file="$1" records name members=""
   _AUDIT_SCOPE_SKIP_MEMBERS=""
+  _AUDIT_SCOPE_BOOKKEEPING_PATHS=""
   # Every init runs on hook hot paths, so a roster that never names the key
   # pays one grep rather than the parse.
   if [ ! -f "$config_file" ] || ! grep -q skip_gaia_release_changes "$config_file" 2>/dev/null; then
@@ -129,6 +144,54 @@ _audit_scope_release_owned_keys() {
   printf '%s\n' "$manifest" | jq -r '.files | to_entries[] | select(.value == "owned") | .key' 2>/dev/null
 }
 
+# The shipped copy keeps only this no-op: the release scrub strips the
+# maintainer-only arm below, so an adopter tree never names or runs the
+# predicate, which the release withholds.
+# shellcheck disable=SC2329 # the shipped copy's one definition; the block below overrides it here
+_audit_scope_release_bookkeeping_arm() { _AUDIT_SCOPE_BOOKKEEPING_PATHS=""; }
+# gaia:maintainer-only:start
+# _audit_scope_release_bookkeeping_arm <root> <base-ref> <head-tree-ish> <merge-base>:
+# arms the bookkeeping path set when the predicate says the merge-base-to-head
+# change is release bookkeeping; otherwise leaves it empty. A tree whose
+# .gaia/VERSION did not move pays two rev-parses and never runs the predicate.
+_audit_scope_release_bookkeeping_arm() {
+  local root="$1" base_reference="$2" head="$3" merge_base="$4" predicate predicate_blob paths
+  _AUDIT_SCOPE_BOOKKEEPING_PATHS=""
+  [ -n "$root" ] || return 0
+  predicate="$root/.gaia/scripts/release-bookkeeping-check.sh"
+  [ -f "$predicate" ] || return 0
+  if [ -z "$merge_base" ] && [ -n "$base_reference" ]; then
+    merge_base="$(git -C "$root" merge-base "$base_reference" "$head" 2>/dev/null)" || return 0
+  fi
+  [ -n "$merge_base" ] || return 0
+  [ "$(git -C "$root" rev-parse --verify --quiet "${merge_base}:.gaia/VERSION" 2>/dev/null)" \
+    != "$(git -C "$root" rev-parse --verify --quiet "${head}:.gaia/VERSION" 2>/dev/null)" ] || return 0
+  # The predicate judges the change, so a branch must not be able to loosen the
+  # judge: an edit to it, committed or in the working tree, disarms the arm.
+  predicate_blob="$(git -C "$root" rev-parse --verify --quiet "${head}:.gaia/scripts/release-bookkeeping-check.sh" 2>/dev/null)" || predicate_blob=""
+  [ "$predicate_blob" = "$(git -C "$root" rev-parse --verify --quiet "${merge_base}:.gaia/scripts/release-bookkeeping-check.sh" 2>/dev/null)" ] || return 0
+  # An untracked predicate is in no diff, so only a tracked one is compared to the working tree.
+  [ -z "$predicate_blob" ] || [ "$predicate_blob" = "$(git -C "$root" hash-object -- "$predicate" 2>/dev/null)" ] || return 0
+  bash "$predicate" diff --root "$root" --base "$merge_base" --head "$head" >/dev/null 2>&1 || return 0
+  # Only the fixed bookkeeping set is allowlisted, so any other changed path
+  # stays in scope even if the predicate answered yes.
+  paths="$(git -C "$root" -c core.quotepath=false diff --name-only --no-renames -z "$merge_base" "$head" 2>/dev/null | tr '\0' '\n' | awk '
+    $0 == ".gaia/VERSION" || $0 == ".gaia/manifest.json" || $0 == "package.json" || $0 == "frontend/package.json" || $0 == "CHANGELOG.md" || $0 == "wiki/.state.json" || $0 == "wiki/log.md"')" || return 0
+  [ -n "$paths" ] || return 0
+  _AUDIT_SCOPE_BOOKKEEPING_PATHS=$'\n'"${paths}"$'\n'
+  return 0
+}
+# gaia:maintainer-only:end
+
+# _audit_scope_release_bookkeeping_path <path>: exit 0 when the bookkeeping arm
+# is armed and <path> is one of that change's paths. In-process, no fork.
+_audit_scope_release_bookkeeping_path() {
+  case "${_AUDIT_SCOPE_BOOKKEEPING_PATHS:-}" in
+    *$'\n'"$1"$'\n'*) return 0 ;;
+  esac
+  return 1
+}
+
 # audit_scope_release_context <root> <base-ref> [<head-tree-ish> [<merge-base>]]
 #
 # Arms the release context when every condition holds; otherwise leaves it
@@ -140,6 +203,8 @@ _audit_scope_release_owned_keys() {
 audit_scope_release_context() {
   local root="${1:-}" base_reference="${2:-}" head="${3:-HEAD}" merge_base="${4:-}"
   local base_version head_version base_owned head_owned owned
+
+  _audit_scope_release_bookkeeping_arm "$root" "$base_reference" "$head" "$merge_base"
 
   if [ -z "${_AUDIT_SCOPE_SKIP_MEMBERS:-}" ]; then
     _audit_scope_release_disarm no-skip-member

@@ -1,0 +1,73 @@
+name: GAIA release bookkeeping fast path
+description: >-
+  Decide whether this run tests a GAIA release-bookkeeping change on a green
+  main, and if so run the narrow consistency check that replaces the calling
+  job's full suite. The predicate and the check are
+  .gaia/scripts/release-bookkeeping-check.sh; the caller gates its suite on
+  the `fast` output. Needs a checkout whose HEAD is the commit under test with
+  its first parent fetched, and a token that can read Actions runs and issues.
+
+inputs:
+  event:
+    description: The triggering event, `pull_request` or `push`; any other value never takes the fast path.
+    required: true
+  workflow:
+    description: >-
+      The calling workflow's file name when it also runs on push to main, so its
+      own push run on the base must have completed green too. Empty for a
+      workflow with no push run.
+    required: false
+    default: ''
+  token:
+    description: The job token, for the run and issue reads.
+    required: true
+
+outputs:
+  fast:
+    description: '`true` when the narrow check replaced the suite; `false` otherwise.'
+    value: ${{ steps.decide.outputs.fast || 'false' }}
+
+runs:
+  using: composite
+  steps:
+    # A change that leaves .gaia/VERSION alone is never a release, so every
+    # other run stops here without installing Node or calling the API. Fails
+    # closed: a parent that is not fetched reads as no candidate.
+    - name: Probe for a version bump
+      id: probe
+      shell: bash
+      env:
+        EVENT_NAME: ${{ inputs.event }}
+      run: |
+        set -u
+        candidate=false
+        case "$EVENT_NAME" in
+          pull_request | push)
+            if git rev-parse --verify --quiet 'HEAD^1^{commit}' >/dev/null \
+              && ! git diff --quiet 'HEAD^1' HEAD -- .gaia/VERSION; then
+              candidate=true
+            fi
+            ;;
+        esac
+        echo "candidate=${candidate}" >> "$GITHUB_OUTPUT"
+    # The manifest check runs the committed maintainer CLI bundle, which needs
+    # the pinned Node rather than the runner image's.
+    - if: steps.probe.outputs.candidate == 'true'
+      uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+      with:
+        node-version-file: '.node-version'
+    - if: steps.probe.outputs.candidate == 'true'
+      name: Check for release bookkeeping on a green main
+      id: decide
+      shell: bash
+      env:
+        GH_TOKEN: ${{ inputs.token }}
+        EVENT_NAME: ${{ inputs.event }}
+        WORKFLOW_FILE: ${{ inputs.workflow }}
+        REPOSITORY: ${{ github.repository }}
+      run: |
+        set -euo pipefail
+        head="$(git rev-parse HEAD)"
+        arguments=(ci --event "$EVENT_NAME" --repository "$REPOSITORY" --head "$head")
+        [ -z "$WORKFLOW_FILE" ] || arguments+=(--workflow "$WORKFLOW_FILE")
+        bash .gaia/scripts/release-bookkeeping-check.sh "${arguments[@]}" >> "$GITHUB_OUTPUT"

@@ -2611,7 +2611,8 @@ w20_lists() {
 }
 
 # W21. The permissions map, exactly. The workflow default-denies, and each job
-# holds only what it uses: the shards read the tree and the pull request's
+# holds only what it uses: the release fast path reads the tree, main's runs
+# and its red-main issues, the shards read the tree and the pull request's
 # changed files, the aggregator reads nothing, and the reporter is the one job
 # with a write scope, issues only. A job joining the workflow must be added
 # here on purpose.
@@ -2622,6 +2623,7 @@ w21_check() {
   [ "$(read_workflow permissions "$workflow")" = "{}" ] || gaps="${gaps}top-level permissions is not {}"$'\n'
   for job_id in $(read_workflow jobs "$workflow"); do
     case "$job_id" in
+      release-fast-path) expected='{"actions": "read", "contents": "read", "issues": "read"}' ;;
       shards) expected='{"contents": "read", "pull-requests": "read"}' ;;
       audit-ci-tests) expected='{}' ;;
       report-main-status) expected='{"actions": "read", "contents": "read", "issues": "write"}' ;;
@@ -2673,7 +2675,7 @@ w22_check() {
     return 1
   }
   needs="$(read_workflow needs "$workflow" report-main-status)" || return 1
-  [ "$needs" = "shards" ] || { echo "report-main-status needs: is not exactly [shards]: ${needs}" >&2; return 1; }
+  [ "$needs" = $'release-fast-path\nshards' ] || { echo "report-main-status needs: is not exactly [release-fast-path, shards]: ${needs}" >&2; return 1; }
   persist="$(read_workflow usesfield "$workflow" report-main-status actions/checkout persist-credentials)" || return 1
   [ "$persist" = "false" ] || { echo "report-main-status checkout does not set persist-credentials: false" >&2; return 1; }
   steps="$(read_workflow runsteps "$workflow" report-main-status)" || return 1
@@ -2711,10 +2713,41 @@ w22_check() {
     [ "$status" -ne 0 ] || { echo "a reporter admitting ${event} passed W22" >&2; return 1; }
   done
 
-  line="$(sole_line_matching "$WORKFLOW" '^ *persist-credentials: false$')" || return 1
-  delete_line "$WORKFLOW" "$line" "$doctored"
+  doctor_section "$WORKFLOW" "  report-main-status:" "          persist-credentials: false" "" "$doctored" || return 1
   run w22_check "$doctored"
   [ "$status" -ne 0 ] || { echo "a reporter checkout without persist-credentials: false passed W22" >&2; return 1; }
+}
+
+# reporter_shards_result_line <workflow>: the reporter's SHARDS_RESULT env line,
+# empty when absent.
+reporter_shards_result_line() {
+  awk '/^  report-main-status:/ { inside = 1; next } inside && /^  [A-Za-z]/ { inside = 0 } inside && /SHARDS_RESULT:/ { print }' "$1"
+}
+
+# reporter_reads_release_failure <workflow>: the reporter must fold a failed
+# release-fast-path job into SHARDS_RESULT, as the aggregator does, or a main
+# run that is red reports green.
+reporter_reads_release_failure() {
+  local line
+  line="$(reporter_shards_result_line "$1")"
+  [ -n "$line" ] || { echo "report-main-status carries no SHARDS_RESULT line" >&2; return 1; }
+  case "$line" in
+    *"needs.release-fast-path.result != 'success' && needs.release-fast-path.result"*) return 0 ;;
+  esac
+  echo "report-main-status SHARDS_RESULT ignores a failed release-fast-path job: ${line}" >&2
+  return 1
+}
+
+@test "the reporter's SHARDS_RESULT reads a failed release-fast-path job as a failing input" {
+  reporter_reads_release_failure "$WORKFLOW"
+}
+
+@test "the reporter's release-failure check fails against a reporter that drops the clause" {
+  local doctored="$BATS_TEST_TMPDIR/reporter-no-release.yml"
+  sed "s/needs.release-fast-path.result != 'success' \&\& needs.release-fast-path.result || //" "$WORKFLOW" > "$doctored"
+  cmp -s "$WORKFLOW" "$doctored" && return 1
+  run reporter_reads_release_failure "$doctored"
+  [ "$status" -ne 0 ]
 }
 
 # W23. The reporter closes the issue only forward. A green run on a commit

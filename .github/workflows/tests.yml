@@ -35,6 +35,10 @@ jobs:
       # `checks: read` lets resolve-check-base.sh query prior commits' check-runs
       # to find the last commit this check passed on (incremental scope).
       checks: read
+      # gaia:maintainer-only:start
+      actions: read # the release fast path reads main's push runs
+      issues: read # and its ci-red-main issues
+      # gaia:maintainer-only:end
     env:
       # Only SESSION_SECRET comes from a repo secret; its placeholder fallback lets PRs from forks
       # (which can't read repo secrets) still run the suite. The other values are non-production
@@ -49,36 +53,31 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
-      # Pre-verified dep-bump PRs (the /update-deps wrapper runs the full
-      # quality gate locally before pushing) skip the CI suite, but only when
-      # the dep-bump title is matched AND the PR's diff is confined to
-      # dependency manifests; otherwise the incremental filter below decides
-      # as for any other PR. Skipped jobs do not satisfy required checks under
-      # classic branch protection, so we gate steps instead.
+      # gaia:maintainer-only:start
+      - id: release # release bookkeeping on a green main swaps this suite for the release check
+        uses: ./.github/actions/gaia-release-fast-path
+        with:
+          event: ${{ github.event_name }}
+          token: ${{ github.token }}
+      # gaia:maintainer-only:end
+      # Pre-verified dep-bump PRs skip the suite (rules: chore-deps-skip.sh's header);
+      # skipped jobs do not satisfy required checks, so we gate steps instead.
       - name: Check chore-deps title
         id: chore-deps
         env:
           PR_TITLE: ${{ github.event.pull_request.title }}
           PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
           EVENT_NAME: ${{ github.event_name }}
+          # gaia:maintainer-only:start
+          RELEASE_FAST_PATH: ${{ steps.release.outputs.fast }}
+          # gaia:maintainer-only:end
         run: |
           set -eu
-          if [ "$EVENT_NAME" = "pull_request" ]; then
-            if changed=$(set -o pipefail; git diff --name-only -z --no-renames "${PR_BASE_SHA}...HEAD" | tr '\0' '\n'); then
-              skip="$(bash .gaia/scripts/chore-deps-skip.sh "$PR_TITLE" <<<"$changed")"
-            else
-              skip=false
-            fi
-            # An msw bump regenerates the committed worker script, which only
-            # the test suite checks, so a manifest-only msw change never skips.
-            # An unreadable diff leaves skip as set above; a grep miss must not
-            # abort the step under set -e.
-            if [ "$skip" = "true" ] && msw_diff=$(git diff --no-renames "${PR_BASE_SHA}...HEAD" -- '*package.json') && printf '%s\n' "$msw_diff" | grep -qE '^[+-][[:space:]]*"msw":'; then
-              skip=false
-            fi
-          else
-            skip=false
-          fi
+          skip=false
+          [ "$EVENT_NAME" != pull_request ] || skip="$(bash .gaia/scripts/chore-deps-skip.sh --base "$PR_BASE_SHA" "$PR_TITLE")"
+          # gaia:maintainer-only:start
+          [ "${RELEASE_FAST_PATH:-}" != true ] || skip=true
+          # gaia:maintainer-only:end
           echo "skip=${skip}" >> "$GITHUB_OUTPUT"
       # Incremental scope: resolve the most recent ancestor of HEAD on which
       # "Vitest and Playwright" already passed, then gate the suite on whether
