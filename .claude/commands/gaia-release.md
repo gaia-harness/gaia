@@ -296,7 +296,7 @@ echo "website resolved to: $WEB"                   # ← note this literal path;
 
 **Public changelog page (release notes).** The two edits above are version strings; the human-readable "what's new" entry on the site's changelog page is a separate artifact owned by the `release-notes` skill. Generate it for the version just cut:
 
-- Invoke the `release-notes` skill with `<NEW_VERSION>` (no leading `v`). It reads the graduated `## [<NEW_VERSION>]` block from `CHANGELOG.md`, translates it to adopter-facing notes, writes `$WEB/src/pages/changelog/releases/<NEW_VERSION>.ts` (the page auto-discovers the file via `import.meta.glob`; there is no index to update), and prints an editorial-decisions report.
+- Invoke the `release-notes` skill with `<NEW_VERSION>` (no leading `v`). It reads the released `## [<NEW_VERSION>]` block from `CHANGELOG.md`, rewrites it as adopter-facing notes, writes `$WEB/src/pages/changelog/releases/<NEW_VERSION>.ts` (the page auto-discovers the file via `import.meta.glob`; there is no index to update), and prints an editorial-decisions report.
 - The report is a human gate: review the **Dropped** and **Consolidated** lists and resolve every **Needs a human ruling** item before accepting, then adjust the file per the maintainer's rulings. Ask each ruling through `AskUserQuestion`, up to 4 questions per call, the skill's suggested reading first and marked `(Recommended)`; then ask `Accept the notes (Recommended)` or `Adjust`.
 - The skill only reads `CHANGELOG.md`; never edit the changelog here.
 

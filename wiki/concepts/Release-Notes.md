@@ -1,12 +1,12 @@
 ---
 type: skill
 status: active
-description: Maintainer-only. Translate a version's GAIA CHANGELOG entries into plain-language public release notes for the marketing site.
+description: Maintainer-only. Rewrite a version's GAIA CHANGELOG entries as plain-language public release notes for the marketing site.
 ---
 
 # Release Notes
 
-Maintainer-only skill that translates a version's CHANGELOG entries into adopter-facing public release notes for gaiaharness.com.
+Maintainer-only skill that rewrites a version's CHANGELOG entries as adopter-facing public release notes for gaiaharness.com.
 
 ## Purpose
 
@@ -29,19 +29,19 @@ The CHANGELOG is written for GAIA's own contributors: terse, imperative, full of
 
 ## Invocation
 
-`release-notes <version>` (e.g. `release-notes 1.4.0`, no leading `v`). Resolves which CHANGELOG block to translate (graduated `## [x.y.z]` or `[Unreleased]`) and derives the date from the block header or system clock.
+`release-notes <version>` (e.g. `release-notes 1.4.0`, no leading `v`). Resolves which CHANGELOG block to rewrite (released `## [x.y.z]` or `[Unreleased]`) and derives the date from the block header or system clock.
 
 ## Workflow
 
 1. Resolve version → block → date. For a live cut, run `date +%F`.
 2. Read the website changelog's type definitions for current fields and the newest existing release file for current file form. Read the version's block from `CHANGELOG.md`.
 3. Classify every line: keep, drop (rule category), consolidate-with-siblings, or ambiguous.
-4. Translate kept lines through the contract. Group by bucket (Added / Improved / Fixed). Omit empty optional keys.
+4. Rewrite kept lines through the rewriting rules. Group by bucket (Added / Improved / Fixed). Omit empty optional keys.
 5. Write the `.ts` in exact form of the reference file (today: bare default export, keys alphabetical).
 6. Print the editorial-decisions report: no silent cuts.
 
 ## Relation to other skills
 
-- **Not `/gaia-release`**: that cuts the release itself (version bump, manifest, tag). This translates CHANGELOG for the website.
+- **Not `/gaia-release`**: that cuts the release itself (version bump, manifest, tag). This rewrites CHANGELOG for the website.
 - **Not for adopters' own release notes**: only for GAIA public notes on gaiaharness.com.
 - **Excludes from distribution tarball**: maintainers only, like `/gaia-release`.
