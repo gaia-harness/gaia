@@ -23,6 +23,7 @@
 
 DONE_LINE="You're all set: your GAIA project is ready."
 NOT_DONE_LINE="Setup isn't finished: these project settings are still owed: <the OWED_AT_END ids>. Fix what stopped them above, then re-run /setup-gaia; it resumes from the first owed step."
+ADMIN_OWED_LINE="Your part of setup is done, but these project settings still need a repository admin: <the ADMIN_OWED_AT_END ids>. They stay unapplied until a repo admin runs /setup-gaia on the default branch, so ask one to."
 DOCS_LINE='New to GAIA? The docs walk you through your first feature: https://docs.gaiaharness.com/getting-started/onboarding/'
 FRESH_CONTEXT_LINE='Type /clear to start your first feature with a fresh context.'
 SANDBOX_LINE='The sandbox you enabled takes effect from your next Claude Code session.'
@@ -79,9 +80,9 @@ mutate_file() {
 # auto-mode, fresh-context and docs lines occur once.
 check_closing_order() {
   local closing="$1" previous=0 position index count text
-  local -a modes=(-xF -xF -F -xF -xF -xF)
-  local -a texts=("$DONE_LINE" "$NOT_DONE_LINE" "$SANDBOX_LINE" "$AUTO_MODE_LINE" "$FRESH_CONTEXT_LINE" "$DOCS_LINE")
-  for index in 0 1 2 3 4 5; do
+  local -a modes=(-xF -xF -xF -F -xF -xF -xF)
+  local -a texts=("$DONE_LINE" "$NOT_DONE_LINE" "$ADMIN_OWED_LINE" "$SANDBOX_LINE" "$AUTO_MODE_LINE" "$FRESH_CONTEXT_LINE" "$DOCS_LINE")
+  for index in 0 1 2 3 4 5 6; do
     position="$(grep -n "${modes[$index]}" -- "${texts[$index]}" <<<"$closing" | head -n 1 | cut -d: -f1 || true)"
     [ -n "$position" ] || {
       echo "missing whole line: ${texts[$index]}" >&2
@@ -231,9 +232,15 @@ check_halt_rule() {
   grep -qF -- 'gaia_setup_owed_ids .' <<<"$CLOSING"
 }
 
+@test "the closing message reads the admin-owed ids from the same predicate file" {
+  grep -qF -- 'ADMIN_OWED_AT_END=%s' <<<"$CLOSING"
+  grep -qF -- 'gaia_setup_admin_owed_ids .' <<<"$CLOSING"
+}
+
 @test "the closing message prints each status, conditional, fresh-context and docs line as a whole line" {
   grep -qxF -- "$DONE_LINE" <<<"$CLOSING"
   grep -qxF -- "$NOT_DONE_LINE" <<<"$CLOSING"
+  grep -qxF -- "$ADMIN_OWED_LINE" <<<"$CLOSING"
   grep -qxF -- "$FRESH_CONTEXT_LINE" <<<"$CLOSING"
   grep -qxF -- "$DOCS_LINE" <<<"$CLOSING"
   grep -qxF -- "$SANDBOX_BULLET" <<<"$CLOSING"
@@ -395,8 +402,14 @@ check_halt_rule() {
 }
 
 @test "the done line is gated: the closing message names when each line prints" {
-  grep -qF -- 'When `OWED_AT_END` is empty:' <<<"$CLOSING"
+  grep -qF -- 'When `OWED_AT_END` and `ADMIN_OWED_AT_END` are both empty:' <<<"$CLOSING"
   grep -qF -- 'When `OWED_AT_END` is not empty' <<<"$CLOSING"
+  grep -qF -- 'When `OWED_AT_END` is empty and `ADMIN_OWED_AT_END` is not' <<<"$CLOSING"
+}
+
+@test "the closing message never says a non-admin owes nothing" {
+  grep -qF -- 'owes nothing on this machine and ends on the done line' <<<"$CLOSING" && return 1
+  true
 }
 
 # check_running_marker <page>: Pre-flight touches the marker after the worktree

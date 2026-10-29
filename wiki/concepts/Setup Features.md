@@ -49,7 +49,7 @@ A feature's own state (the sandbox marker, the user's statusline setting, a `.ga
 ## Known limits
 
 - On a non-GitHub origin the team settings (the isolation policy and the sandbox recommendation) are never recorded by `/setup-gaia`, so on a project `/gaia-init` did not record them they stay undecided and `/update-gaia` names them as "run /setup-gaia" on every update.
-- A non-admin's run, and any run off the default branch, records machine decisions only. Project ids wait for an admin run of `/setup-gaia` on the default branch.
+- A non-admin's run, and any run off the default branch, records machine decisions only. Project ids wait for an admin run of `/setup-gaia` on the default branch. A non-admin's run names the admin-gated ids it left unapplied in its closing message instead of the done line; the statusline nudge counts them only on a machine whose cached admin answer is true, since `/setup-gaia` cannot clear them for anyone else.
 
 ## See also
 

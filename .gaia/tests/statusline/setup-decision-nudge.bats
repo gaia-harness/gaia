@@ -216,6 +216,45 @@ render() {
   [ -z "$output" ]
 }
 
+@test "the admin-owed helper names a cached non-admin's undecided admin-gated project ids" {
+  write_features alpha github-repository gamma
+  cache_admin false
+  run bash -c ". '$MAIN/.gaia/statusline/setup-owed.sh' && gaia_setup_admin_owed_ids '$MAIN'"
+  [ "$status" -eq 0 ]
+  [ "$output" = "gamma" ]
+
+  printf '{"setup_decisions":{"gamma":"applied"}}\n' > "$MAIN/.gaia/project.json"
+  run bash -c ". '$MAIN/.gaia/statusline/setup-owed.sh' && gaia_setup_admin_owed_ids '$MAIN'"
+  [ "$status" -eq 0 ]
+  [ -z "$output" ]
+}
+
+@test "the admin-owed helper names nothing for an admin or a machine with no cached answer" {
+  write_features alpha github-repository gamma
+  run bash -c ". '$MAIN/.gaia/statusline/setup-owed.sh' && gaia_setup_admin_owed_ids '$MAIN'"
+  [ "$status" -eq 0 ]
+  [ -z "$output" ]
+
+  cache_admin true
+  run bash -c ". '$MAIN/.gaia/statusline/setup-owed.sh' && gaia_setup_admin_owed_ids '$MAIN'"
+  [ "$status" -eq 0 ]
+  [ -z "$output" ]
+}
+
+@test "the admin-owed helper exits 0 with nothing on a malformed list or project config" {
+  write_features gamma
+  cache_admin false
+  printf '{' > "$MAIN/.gaia/project.json"
+  run bash -c ". '$MAIN/.gaia/statusline/setup-owed.sh' && gaia_setup_admin_owed_ids '$MAIN'"
+  [ "$status" -eq 0 ]
+  [ "$output" = "gamma" ]
+
+  printf '{' > "$MAIN/.gaia/setup-features.json"
+  run bash -c ". '$MAIN/.gaia/statusline/setup-owed.sh' && gaia_setup_admin_owed_ids '$MAIN'"
+  [ "$status" -eq 0 ]
+  [ -z "$output" ]
+}
+
 @test "the other nudges keep rendering, after the setup nudge, in their existing order" {
   arm_other_nudges
   render "$MAIN"
