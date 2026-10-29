@@ -16,7 +16,7 @@ A release change that requires the adopter to act, run a command or hand-migrate
 
 ### Changed
 
-- **Plainer public release notes (maintainer repo only):** the `release-notes` skill now writes for a visitor skimming the marketing site. Bullets say what changed in plain language and link a docs page for the detail instead of reciting it, fixes read as the bug going away rather than a new feature, and any wit is confined to a headline the maintainer picks (#3178)
+- **Plainer public release notes (maintainer repo only):** the `release-notes` skill now writes for a visitor skimming the marketing site. Bullets say what changed in plain language and link a docs page for the detail instead of reciting it, and fixes read as the bug going away rather than a new feature (#3178)
 
 ## [2.3.0] - 2026-10-28
 
