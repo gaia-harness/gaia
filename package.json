@@ -60,7 +60,7 @@
   "devDependencies": {
     "@commitlint/cli": "21.2.4",
     "@commitlint/config-conventional": "21.2.4",
-    "@gaia-harness/lint": "3.0.3",
+    "@gaia-harness/lint": "3.0.4",
     "bats": "1.13.0",
     "lint-staged": "17.6.0",
     "prettier": "3.9.10",

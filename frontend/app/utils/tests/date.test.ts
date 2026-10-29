@@ -1,5 +1,5 @@
-import {describe, expect, test} from 'vitest';
 import {date} from 'test/utils';
+import {describe, expect, test} from 'vitest';
 import {
   formatAbbreviatedMonthDay,
   formatAbbreviatedMonthOrdinalDay,
