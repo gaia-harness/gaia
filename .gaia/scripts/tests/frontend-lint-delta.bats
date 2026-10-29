@@ -126,6 +126,12 @@ commit_change() {
   [ "$status" -eq 2 ]
 }
 
+@test "a change to the script alone runs the job, so the Lint step exercises it" {
+  pattern="$(sed -n "s/^ *pattern='\(.*\)'$/\1/p" "$WORKFLOW")"
+  [ -n "$pattern" ]
+  grep -qE -- "$pattern" <<<".gaia/scripts/frontend-lint-delta.sh"
+}
+
 @test "the workflow's Lint step calls the script with the resolved base" {
   grep -qF -- 'run: bash .gaia/scripts/frontend-lint-delta.sh --root . --base "$CHECK_BASE"' "$WORKFLOW"
   grep -qF -- 'CHECK_BASE: ${{ steps.base.outputs.base }}' "$WORKFLOW"

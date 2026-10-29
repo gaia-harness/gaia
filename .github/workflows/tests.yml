@@ -143,9 +143,10 @@ jobs:
           # The committed msw worker script is read by the node-project drift
           # test, so a change to it alone is test-relevant.
           # The apt archive cache action installs Chromium's system
-          # dependencies for this job, so a change to it must run the job.
+          # dependencies for this job, so a change to it must run the job, and
+          # the Lint step runs frontend-lint-delta.sh, so a change to it does too.
           changed=$(set -o pipefail; git diff --name-only -z --no-renames "${CHECK_BASE}...HEAD" | tr '\0' '\n')
-          pattern='^frontend/(app|test)/|^frontend/\.playwright/|^frontend/\.storybook/|^(package\.json|pnpm-lock\.yaml|pnpm-workspace\.yaml|\.npmrc|\.node-version)$|^frontend/package\.json$|^frontend/tsconfig[^/]*\.json$|^frontend/dev-ports[^/]*\.ts$|^frontend/components\.json$|^frontend/(vite|vitest|playwright|eslint|react-router|react-compiler|doctor|knip|prettier|stylelint)\.config\.|^\.gaia/packages\.json$|^frontend/gaia\.package\.json$|^frontend/public/mockServiceWorker\.js$|^\.github/workflows/tests\.yml$|^\.github/actions/gaia-apt-cache/'
+          pattern='^frontend/(app|test)/|^frontend/\.playwright/|^frontend/\.storybook/|^(package\.json|pnpm-lock\.yaml|pnpm-workspace\.yaml|\.npmrc|\.node-version)$|^frontend/package\.json$|^frontend/tsconfig[^/]*\.json$|^frontend/dev-ports[^/]*\.ts$|^frontend/components\.json$|^frontend/(vite|vitest|playwright|eslint|react-router|react-compiler|doctor|knip|prettier|stylelint)\.config\.|^\.gaia/packages\.json$|^frontend/gaia\.package\.json$|^frontend/public/mockServiceWorker\.js$|^\.github/workflows/tests\.yml$|^\.github/actions/gaia-apt-cache/|^\.gaia/scripts/frontend-lint-delta\.sh$'
           if printf '%s\n' "$changed" | grep -qE "$pattern"; then
             echo "code=true" >> "$GITHUB_OUTPUT"
           else
