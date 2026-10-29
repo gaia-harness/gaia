@@ -369,26 +369,16 @@ write_fixture_release() {
   true
 }
 
-@test "C2: v2.0.0 notes without the routing line are refused" {
+@test "C2: v2.0.0 notes without the routing line still lead with it" {
   notes="$BATS_TEST_TMPDIR/notes.md"
   sha="$BATS_TEST_TMPDIR/asset.sha256"
   out="$BATS_TEST_TMPDIR/body.md"
   printf '## [2.0.0] - 2026-10-03\n\n- the entry\n' > "$notes"
   printf 'deadbeef  gaia-bundle-v2.0.0.tar.gz\n' > "$sha"
   run bash "$COMPOSE" v2.0.0 "$notes" "$sha" "$out"
-  [ "$status" -eq 1 ]
-  [ ! -e "$out" ]
-}
-
-@test "C2b: v2.0.0 notes carrying the retired routing line are refused" {
-  notes="$BATS_TEST_TMPDIR/notes.md"
-  sha="$BATS_TEST_TMPDIR/asset.sha256"
-  out="$BATS_TEST_TMPDIR/body.md"
-  printf '## [2.0.0] - 2026-10-03\n\n### Breaking\n\n%s\n\n- the entry\n' "$(retired_routing_line)" > "$notes"
-  printf 'deadbeef  gaia-bundle-v2.0.0.tar.gz\n' > "$sha"
-  run bash "$COMPOSE" v2.0.0 "$notes" "$sha" "$out"
-  [ "$status" -eq 1 ]
-  [ ! -e "$out" ]
+  [ "$status" -eq 0 ]
+  [ "$(head -n 1 "$out")" = "$ROUTING_LINE" ]
+  grep -qF -- '- the entry' "$out"
 }
 
 @test "C3: an empty sha256 file is refused" {
@@ -402,18 +392,20 @@ write_fixture_release() {
   [ ! -e "$out" ]
 }
 
-@test "C4: a later release without the routing line gets the notes plus the sha256 line" {
+@test "C4: a later release without the routing line in its notes still leads with it" {
   notes="$BATS_TEST_TMPDIR/notes.md"
   sha="$BATS_TEST_TMPDIR/asset.sha256"
   out="$BATS_TEST_TMPDIR/body.md"
-  printf '## [2.1.0] - 2026-10-03\n\n- the entry\n' > "$notes"
-  printf 'cafe  gaia-bundle-v2.1.0.tar.gz\n' > "$sha"
-  run bash "$COMPOSE" v2.1.0 "$notes" "$sha" "$out"
+  printf '## [2.4.0] - 2026-11-03\n\n- the entry\n' > "$notes"
+  printf 'cafe  gaia-bundle-v2.4.0.tar.gz\n' > "$sha"
+  run bash "$COMPOSE" v2.4.0 "$notes" "$sha" "$out"
   [ "$status" -eq 0 ]
-  grep -qF 'sha256: cafe  gaia-bundle-v2.1.0.tar.gz' "$out"
+  [ "$(head -n 1 "$out")" = "$ROUTING_LINE" ]
+  [ "$(grep -cxF -- "$ROUTING_LINE" "$out")" -eq 1 ]
+  sed -n 3p "$out" | grep -qF 'Choosing Proceed on 1.6.1'
+  grep -qxF 'sha256: cafe  gaia-bundle-v2.4.0.tar.gz' "$out"
+  grep -qF '## [2.4.0] - 2026-11-03' "$out"
   grep -qF -- '- the entry' "$out"
-  grep -qF 'FETCH_FAILED' "$out" && return 1
-  true
 }
 
 @test "C5: a wrong argument count is a usage error" {

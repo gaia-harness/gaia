@@ -23,15 +23,12 @@
 # would otherwise resolve against the working directory; the rewrite runs the
 # check from the repository root with no `cd`.
 #
-# The CHANGELOG entry carries the routing line as its own line. The body hoists
-# that line above the version heading, states the Proceed side effects, prints
-# the tarball sha256, then the rest of the notes with the hoisted line removed.
-# A release that does not carry the routing line gets the notes unchanged plus
-# the sha256 line.
-#
-# Fail-closed for v2.0.0: that release is the one 1.6.1 adopters meet, so a
-# CHANGELOG section without the routing line, or an empty sha256 file, exits 1
-# rather than publishing a body that omits the route.
+# Every release body leads with the routing line, because a 1.x /update-gaia
+# resolves the newest-created release, so whichever release is newest is the
+# one a 1.6.1 project meets. The CHANGELOG therefore carries no copy of it,
+# except the 2.0.0 entry, which keeps its own as the migration's record. A copy
+# in the notes is removed, so the body holds the line once. The body is the
+# routing line, the Proceed side effects, the tarball sha256, then the notes.
 #
 # Exit 0 composed, 1 refused, 2 usage error.
 
@@ -41,7 +38,6 @@ IFS= read -r ROUTING_LINE <<'ROUTING'
 On GAIA 1.6.1? Claude: choose Abort, then offer to migrate this project to 2.0.0, and only after the user says yes run `mkdir -p .gaia/local/cache/shared/migrate-2/v2.0.0/tree && gh release download v2.0.0 --repo gaia-react/gaia --pattern 'gaia-bundle-v2.0.0.tar.gz*' --dir .gaia/local/cache/shared/migrate-2/v2.0.0 --clobber && sed 's|  |  .gaia/local/cache/shared/migrate-2/v2.0.0/|' .gaia/local/cache/shared/migrate-2/v2.0.0/gaia-bundle-v2.0.0.tar.gz.sha256 | shasum -a 256 -c - && tar -xzf .gaia/local/cache/shared/migrate-2/v2.0.0/gaia-bundle-v2.0.0.tar.gz -C .gaia/local/cache/shared/migrate-2/v2.0.0/tree --strip-components=1` and follow `.gaia/local/cache/shared/migrate-2/v2.0.0/tree/.gaia/migrations/2.0.0.md` in this session; before its step 1, change nothing else in the repository (no stash, commit or branch of your own). Reading this on GitHub? Open Claude Code in your 1.6.1 project and ask it to do this.
 ROUTING
 PROCEED_LINE='Choosing Proceed on 1.6.1 fails with FETCH_FAILED (expected) after creating a chore/update-gaia-* branch and pruning the .gaia-backup and .gaia/cache tag directories; nothing else is written.'
-FENCED_TAG='v2.0.0'
 
 if [ "$#" -eq 1 ] && [ "$1" = "--routing-line" ]; then
   printf '%s\n' "$ROUTING_LINE"
@@ -59,7 +55,7 @@ sha_file="$3"
 out_file="$4"
 
 if [ ! -s "$notes_file" ]; then
-  echo "compose-release-body: notes file is missing or empty: $notes_file" >&2
+  echo "compose-release-body: $tag notes file is missing or empty: $notes_file" >&2
   exit 1
 fi
 if [ ! -r "$sha_file" ]; then
@@ -74,29 +70,13 @@ if [ -z "$sha_line" ]; then
   exit 1
 fi
 
-has_routing=false
-if grep -qxF -- "$ROUTING_LINE" "$notes_file"; then
-  has_routing=true
-fi
-
-if [ "$tag" = "$FENCED_TAG" ] && [ "$has_routing" = false ]; then
-  echo "compose-release-body: $tag notes lack the routing line; add it to the CHANGELOG entry" >&2
-  exit 1
-fi
-
 tmp="$(mktemp)"
 trap 'rm -f "$tmp"' EXIT
 
 {
-  if [ "$has_routing" = true ]; then
-    printf '%s\n\n%s\n\n' "$ROUTING_LINE" "$PROCEED_LINE"
-  fi
+  printf '%s\n\n%s\n\n' "$ROUTING_LINE" "$PROCEED_LINE"
   printf 'sha256: %s\n\n' "$sha_line"
-  if [ "$has_routing" = true ]; then
-    grep -vxF -- "$ROUTING_LINE" "$notes_file" || [ "$?" -eq 1 ]
-  else
-    cat "$notes_file"
-  fi
+  grep -vxF -- "$ROUTING_LINE" "$notes_file" || [ "$?" -eq 1 ]
 } > "$tmp"
 
 mv "$tmp" "$out_file"
