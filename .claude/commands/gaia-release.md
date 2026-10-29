@@ -323,7 +323,7 @@ gh release edit "v<NEW_VERSION>" -R gaia-harness/gaia --notes-file "/tmp/gh-note
 
 `gh release edit` is neither a push nor a `gh pr merge`, so the repo-scope and audit hooks do not apply; no literal-path treatment is needed here.
 
-**2.x routing line check.** A 1.x `/update-gaia` resolves the newest-created release, so a 1.6.1 project meets whichever 2.x release is newest, not only 2.0.0. The routing line reaches the release body only when this release's `## [<NEW_VERSION>]` CHANGELOG entry carries it: `compose-release-body.sh` then hoists it to the first line, and it refuses to compose without it only for `v2.0.0`. When the entry carries it, the release data `<NEW_VERSION>.ts` must carry a matching `preamble` (the routing line, the Proceed side-effects line, the sha256 line) that the renderer emits verbatim before the headline. After the edit, verify the body still leads with the routing line, and re-render if not:
+**2.x routing line check.** A 1.x `/update-gaia` resolves the newest-created release, so a 1.6.1 project meets whichever 2.x release is newest, not only 2.0.0. `compose-release-body.sh` puts the routing line first in every release body, so the CHANGELOG entry does not carry it. The release data `<NEW_VERSION>.ts` must carry a matching `preamble` (the routing line, the Proceed side-effects line, the sha256 line) that the renderer emits verbatim before the headline. After the edit, verify the body still leads with the routing line, and re-render if not:
 
 ```bash
 gh release view "v<NEW_VERSION>" -R gaia-harness/gaia --json body --jq .body | head -1

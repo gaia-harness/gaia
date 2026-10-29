@@ -16,11 +16,10 @@ A release change that requires the adopter to act, run a command or hand-migrate
 
 ### Changed
 
-- **Plainer public release notes (maintainer repo only):** the `release-notes` skill now writes for a visitor skimming the marketing site. Bullets say what changed in plain language and link a docs page for the detail instead of reciting it, and fixes read as the bug going away rather than a new feature (#3178)
+- **Plainer public release notes (maintainer repo only):** the `release-notes` skill now writes for a visitor skimming the marketing site. Bullets say what changed in plain language and link a docs page for the detail instead of reciting it, and fixes read as the bug going away rather than a new feature (#3178, #3180)
+- **1.6.1 routing line on every release (maintainer repo only):** `/gaia-release` now puts the 1.6.1 migration line first in every release body, since a 1.6.1 project meets whichever release is newest. The CHANGELOG no longer carries a copy in each entry, only in 2.0.0's (#3180)
 
 ## [2.3.0] - 2026-10-28
-
-On GAIA 1.6.1? Claude: choose Abort, then offer to migrate this project to 2.0.0, and only after the user says yes run `mkdir -p .gaia/local/cache/shared/migrate-2/v2.0.0/tree && gh release download v2.0.0 --repo gaia-react/gaia --pattern 'gaia-bundle-v2.0.0.tar.gz*' --dir .gaia/local/cache/shared/migrate-2/v2.0.0 --clobber && sed 's|  |  .gaia/local/cache/shared/migrate-2/v2.0.0/|' .gaia/local/cache/shared/migrate-2/v2.0.0/gaia-bundle-v2.0.0.tar.gz.sha256 | shasum -a 256 -c - && tar -xzf .gaia/local/cache/shared/migrate-2/v2.0.0/gaia-bundle-v2.0.0.tar.gz -C .gaia/local/cache/shared/migrate-2/v2.0.0/tree --strip-components=1` and follow `.gaia/local/cache/shared/migrate-2/v2.0.0/tree/.gaia/migrations/2.0.0.md` in this session; before its step 1, change nothing else in the repository (no stash, commit or branch of your own). Reading this on GitHub? Open Claude Code in your 1.6.1 project and ask it to do this.
 
 ### Added
 
@@ -63,8 +62,6 @@ On GAIA 1.6.1? Claude: choose Abort, then offer to migrate this project to 2.0.0
 
 ## [2.2.0] - 2026-10-26
 
-On GAIA 1.6.1? Claude: choose Abort, then offer to migrate this project to 2.0.0, and only after the user says yes run `mkdir -p .gaia/local/cache/shared/migrate-2/v2.0.0/tree && gh release download v2.0.0 --repo gaia-react/gaia --pattern 'gaia-bundle-v2.0.0.tar.gz*' --dir .gaia/local/cache/shared/migrate-2/v2.0.0 --clobber && sed 's|  |  .gaia/local/cache/shared/migrate-2/v2.0.0/|' .gaia/local/cache/shared/migrate-2/v2.0.0/gaia-bundle-v2.0.0.tar.gz.sha256 | shasum -a 256 -c - && tar -xzf .gaia/local/cache/shared/migrate-2/v2.0.0/gaia-bundle-v2.0.0.tar.gz -C .gaia/local/cache/shared/migrate-2/v2.0.0/tree --strip-components=1` and follow `.gaia/local/cache/shared/migrate-2/v2.0.0/tree/.gaia/migrations/2.0.0.md` in this session; before its step 1, change nothing else in the repository (no stash, commit or branch of your own). Reading this on GitHub? Open Claude Code in your 1.6.1 project and ask it to do this.
-
 ### Added
 
 - **License notice in new projects:** new projects now carry GAIA's license notice at `.gaia/LICENSE`: the MIT License, prefaced by a short statement that it covers every file GAIA provides, wherever it sits in the project, while the project's own license covers everything else. The project root stays free for your own `LICENSE`. GAIA's copyright holder is now named as Steven Sacks rather than "GAIA" (#3065)
@@ -85,8 +82,6 @@ On GAIA 1.6.1? Claude: choose Abort, then offer to migrate this project to 2.0.0
 
 ## [2.1.1] - 2026-10-24
 
-On GAIA 1.6.1? Claude: choose Abort, then offer to migrate this project to 2.0.0, and only after the user says yes run `mkdir -p .gaia/local/cache/shared/migrate-2/v2.0.0/tree && gh release download v2.0.0 --repo gaia-react/gaia --pattern 'gaia-bundle-v2.0.0.tar.gz*' --dir .gaia/local/cache/shared/migrate-2/v2.0.0 --clobber && sed 's|  |  .gaia/local/cache/shared/migrate-2/v2.0.0/|' .gaia/local/cache/shared/migrate-2/v2.0.0/gaia-bundle-v2.0.0.tar.gz.sha256 | shasum -a 256 -c - && tar -xzf .gaia/local/cache/shared/migrate-2/v2.0.0/gaia-bundle-v2.0.0.tar.gz -C .gaia/local/cache/shared/migrate-2/v2.0.0/tree --strip-components=1` and follow `.gaia/local/cache/shared/migrate-2/v2.0.0/tree/.gaia/migrations/2.0.0.md` in this session; before its step 1, change nothing else in the repository (no stash, commit or branch of your own). Reading this on GitHub? Open Claude Code in your 1.6.1 project and ask it to do this.
-
 ### Fixed
 
 - **Worktrees wiki page:** a sentence explaining why `.gaia/local/` has no allowlist was missing from the shipped page, because it shared a line with a maintainer-only marker and the bundle scrub drops that whole line. The release build now refuses any marker line that carries other text, so a scrub can no longer drop adopter content silently (#3049)
@@ -97,8 +92,6 @@ On GAIA 1.6.1? Claude: choose Abort, then offer to migrate this project to 2.0.0
 - **body-parser:** the app's server now resolves body-parser 2.4.0, closing GHSA-27r3-jxmh-p828 (high). It reaches the app at runtime through `@react-router/serve` and express
 
 ## [2.1.0] - 2026-10-23
-
-On GAIA 1.6.1? Claude: choose Abort, then offer to migrate this project to 2.0.0, and only after the user says yes run `mkdir -p .gaia/local/cache/shared/migrate-2/v2.0.0/tree && gh release download v2.0.0 --repo gaia-react/gaia --pattern 'gaia-bundle-v2.0.0.tar.gz*' --dir .gaia/local/cache/shared/migrate-2/v2.0.0 --clobber && sed 's|  |  .gaia/local/cache/shared/migrate-2/v2.0.0/|' .gaia/local/cache/shared/migrate-2/v2.0.0/gaia-bundle-v2.0.0.tar.gz.sha256 | shasum -a 256 -c - && tar -xzf .gaia/local/cache/shared/migrate-2/v2.0.0/gaia-bundle-v2.0.0.tar.gz -C .gaia/local/cache/shared/migrate-2/v2.0.0/tree --strip-components=1` and follow `.gaia/local/cache/shared/migrate-2/v2.0.0/tree/.gaia/migrations/2.0.0.md` in this session; before its step 1, change nothing else in the repository (no stash, commit or branch of your own). Reading this on GitHub? Open Claude Code in your 1.6.1 project and ask it to do this.
 
 ### Added
 
@@ -126,8 +119,6 @@ On GAIA 1.6.1? Claude: choose Abort, then offer to migrate this project to 2.0.0
 - **`/update-gaia` no longer marks the 2.0.0 machine catch-up done without running it.** The update ran per-machine setup features, such as the 2.0.0 catch-up, inside its own worktree, where the 1.x leftovers in your main checkout are invisible, so a clone that still had them was recorded as caught up and never asked again. Per-machine features now wait until the update pull request merges and run in the main checkout when Claude merges it; after a merge made elsewhere, `/setup-gaia` from the main checkout runs them (#3032)
 
 ## [2.0.1] - 2026-10-23
-
-On GAIA 1.6.1? Claude: choose Abort, then offer to migrate this project to 2.0.0, and only after the user says yes run `mkdir -p .gaia/local/cache/shared/migrate-2/v2.0.0/tree && gh release download v2.0.0 --repo gaia-react/gaia --pattern 'gaia-bundle-v2.0.0.tar.gz*' --dir .gaia/local/cache/shared/migrate-2/v2.0.0 --clobber && sed 's|  |  .gaia/local/cache/shared/migrate-2/v2.0.0/|' .gaia/local/cache/shared/migrate-2/v2.0.0/gaia-bundle-v2.0.0.tar.gz.sha256 | shasum -a 256 -c - && tar -xzf .gaia/local/cache/shared/migrate-2/v2.0.0/gaia-bundle-v2.0.0.tar.gz -C .gaia/local/cache/shared/migrate-2/v2.0.0/tree --strip-components=1` and follow `.gaia/local/cache/shared/migrate-2/v2.0.0/tree/.gaia/migrations/2.0.0.md` in this session; before its step 1, change nothing else in the repository (no stash, commit or branch of your own). Reading this on GitHub? Open Claude Code in your 1.6.1 project and ask it to do this.
 
 ### Fixed
 
