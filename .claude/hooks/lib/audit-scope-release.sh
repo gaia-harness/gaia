@@ -145,6 +145,7 @@ _audit_scope_release_owned_keys() {
 # The shipped copy keeps only this no-op: the release scrub strips the
 # maintainer-only arm below, so an adopter tree never names or runs the
 # predicate, which the release withholds.
+# shellcheck disable=SC2329 # the shipped copy's one definition; the block below overrides it here
 _audit_scope_release_bookkeeping_arm() { _AUDIT_SCOPE_BOOKKEEPING_PATHS=""; }
 # gaia:maintainer-only:start
 # _audit_scope_release_bookkeeping_arm <root> <base-ref> <head-tree-ish> <merge-base>:
