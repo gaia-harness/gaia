@@ -14,6 +14,8 @@ A release change that requires the adopter to act, run a command or hand-migrate
 
 ## [Unreleased]
 
+## [2.3.1] - 2026-10-29
+
 ### Changed
 
 - **Plainer public release notes (maintainer repo only):** the `release-notes` skill now writes for a visitor skimming the marketing site. Bullets say what changed in plain language and link a docs page for the detail instead of reciting it, and fixes read as the bug going away rather than a new feature (#3178, #3180)
@@ -790,7 +792,8 @@ GAIA v1.0.0 is the inaugural public release of the GAIA React workflow, a Claude
 - **Quality gate.** Mandatory pre-commit pipeline: simplify, localization check, typecheck, lint, unit tests, E2E tests, dev smoke test, build. Zero warnings tolerated.
 - **Release tooling.** Tag-triggered `release.yml` builds a scrubbed tarball; `create-gaia` bootstrapper consumes it via `npx create-gaia@latest my-app`.
 
-[Unreleased]: https://github.com/gaia-harness/gaia/compare/v2.3.0...HEAD
+[Unreleased]: https://github.com/gaia-harness/gaia/compare/v2.3.1...HEAD
+[2.3.1]: https://github.com/gaia-harness/gaia/releases/tag/v2.3.1
 [2.3.0]: https://github.com/gaia-harness/gaia/releases/tag/v2.3.0
 [2.2.0]: https://github.com/gaia-harness/gaia/releases/tag/v2.2.0
 [2.1.1]: https://github.com/gaia-react/gaia/releases/tag/v2.1.1
