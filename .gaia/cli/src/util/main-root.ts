@@ -110,14 +110,13 @@ const validateMainRootCandidate = (
  * never `realpath`'d. Validation canonicalizes both sides of each
  * comparison (see `sameRealPath`) so two spellings of one directory don't
  * cause a spurious failure, but that canonicalization is for the comparison
- * only: the string returned here is hashed into an adopter's project id
- * (`storage/project-id.ts`, via `storage/paths.ts`), so changing its
- * spelling would rotate every existing adopter's identity.
+ * only. Callers join state paths onto the returned string, and none of them
+ * needs its physical spelling.
  *
  * Two divergences from this function's shell twin (`gaia_resolve_main_root`
  * in `main-root-lib.sh`) are deliberate, not gaps:
  *   - the shell twin physically resolves (`pwd -P`) the path it returns;
- *     this one does not, for the identity-stability reason above.
+ *     this one does not, for the reason above.
  *   - the shell twin reads `core.worktree` from the common dir's config for
  *     a linked worktree; this one does not, because that case is
  *     submodules, which GAIA does not support (see the assumption note
