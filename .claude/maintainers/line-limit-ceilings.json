@@ -7,7 +7,7 @@
     ".claude/hooks/capture-red-observations.sh": 459,
     ".claude/hooks/lib/audit-base-provenance.sh": 417,
     ".claude/hooks/lib/audit-branch-patch.sh": 564,
-    ".claude/hooks/lib/audit-scope.sh": 525,
+    ".claude/hooks/lib/audit-scope.sh": 528,
     ".claude/hooks/lib/gaia-packages.sh": 405,
     ".claude/hooks/local-janitor.sh": 528,
     ".claude/hooks/post-audit-status.sh": 653,
@@ -83,8 +83,8 @@
     ".gaia/scripts/worktree-ports-lib.sh": 491,
     ".gaia/statusline/gaia-statusline-right.sh": 637,
     ".github/forensics/parse-issue-body.sh": 404,
-    ".github/workflows/audit-ci-tests.yml": 963,
-    ".github/workflows/cli-tests.yml": 479,
+    ".github/workflows/audit-ci-tests.yml": 996,
+    ".github/workflows/cli-tests.yml": 489,
     ".github/workflows/forensics-triage.yml": 891
   },
   "version": 1

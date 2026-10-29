@@ -37,6 +37,14 @@
 # workflow's reporter keeps, neither of which exists on an adopter clone, and
 # its one caller is the release-excluded /gaia-release.
 .gaia/scripts/verify-main-green.sh
+# The release-bookkeeping predicate and the composite action that runs it in
+# CI decide whether a change is GAIA's own release bookkeeping (its VERSION,
+# manifest, CHANGELOG graduation and wiki scrub) on GAIA's green main. An
+# adopter never cuts a GAIA release, so neither has an adopter surface; the
+# shipped workflows reach the action only inside maintainer-only blocks the
+# scrub strips, and the audit scope arms on the script only when it exists.
+.gaia/scripts/release-bookkeeping-check.sh
+.github/actions/gaia-release-fast-path
 # This check asserts an invariant true of GAIA's own source and of nothing
 # else: that no consumer hand-rolls a main-root derivation in place of the
 # shared resolver. An adopter

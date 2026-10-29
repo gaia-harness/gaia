@@ -51,8 +51,18 @@ jobs:
     permissions:
       contents: read
       pull-requests: read
+      actions: read # the release fast path reads main's push runs
+      issues: read # and its ci-red-main issues
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 2 # the release fast path diffs HEAD against its first parent
+      # Release bookkeeping on a green main swaps this suite for the release check.
+      - id: release
+        uses: ./.github/actions/gaia-release-fast-path
+        with:
+          event: ${{ github.event_name }}
+          token: ${{ github.token }}
       # Maintainer-only surface. PRs that don't touch the CLI source report
       # this required check green without installing or running anything.
       #
@@ -62,7 +72,7 @@ jobs:
       # That is the intent of a manual re-run: it exists to produce a real green
       # on the dispatched HEAD, and a full run is the only thing that proves one.
       - uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # v4.0.3
-        if: github.event_name == 'pull_request'
+        if: github.event_name == 'pull_request' && steps.release.outputs.fast != 'true'
         id: filter
         with:
           filters: |

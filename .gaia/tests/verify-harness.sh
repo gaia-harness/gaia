@@ -28,6 +28,10 @@
 # maintainer block in wiki/concepts/Audit Round Procedure.md). A marked suite
 # the round's own selection picks still runs, under bats selected.
 #
+# Branch mode on a branch whose whole change since the merge base is GAIA
+# release bookkeeping (.gaia/scripts/release-bookkeeping-check.sh decides) runs
+# `release manifest --check` alone and records every other step as skipped.
+#
 # A failing check is re-run on the merge base with refs/remotes/origin/main, in
 # a temporary worktree. A failure that reproduces there prints PRE-EXISTING
 # ("main is red") and does not fail the run. The ref is never fetched; a
@@ -238,7 +242,35 @@ if [ "$mode" != push ] && tool_missing bats; then
   warn_missing_tool bats 'brew install bats-core' 'bats whole-tree, bats selected'
 fi
 
-if [ "$mode" = push ]; then
+# Branch mode on a GAIA release-bookkeeping branch: the change is version
+# strings, the CHANGELOG graduation and the wiki scrub over a tree main already
+# verified, so the release consistency check replaces the full verification.
+# The predicate is the one the CI fast path and the audit scope read. Without
+# node the check cannot run, so the branch takes the full verification.
+release_bookkeeping=""
+if [ "$mode" = branch ] && command -v node >/dev/null 2>&1 \
+  && release_merge_base="$(verify_merge_base HEAD 2>/dev/null)" && [ -n "$release_merge_base" ]; then
+  release_bookkeeping="$(bash "$verified_root/.gaia/scripts/release-bookkeeping-check.sh" diff \
+    --root "$verified_root" --base "$release_merge_base" 2>/dev/null)" || release_bookkeeping=""
+fi
+
+if [ -n "$release_bookkeeping" ]; then
+  verify_report_merge_base HEAD ""
+  printf 'RELEASE  %s: the release consistency check replaces the full verification\n' "$release_bookkeeping"
+  release_output="$run_temporary_directory/release-manifest-check"
+  release_start_seconds="$SECONDS"
+  if (cd "$verified_root" && node .gaia/cli/gaia-maintainer release manifest --check) >"$release_output" 2>&1; then
+    printf 'PASS  release manifest --check (%ss)\n' "$((SECONDS - release_start_seconds))"
+  else
+    printf 'FAIL  release manifest --check (%ss)\n' "$((SECONDS - release_start_seconds))"
+    verify_print_raw_detail "$release_output"
+    printf '  reproduce: node .gaia/cli/gaia-maintainer release manifest --check\n'
+    new_failure_count=$((new_failure_count + 1))
+  fi
+  for release_skipped_step in shell-lint 'distribution checks' 'bats whole-tree' 'bats selected'; do
+    verify_skip "$release_skipped_step" "release bookkeeping only"
+  done
+elif [ "$mode" = push ]; then
   pushed_count="${#pushed_shas[@]}"
   for pushed_sha in ${pushed_shas[@]+"${pushed_shas[@]}"}; do
     short_sha="$(verify_short_sha "$pushed_sha")"

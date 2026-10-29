@@ -49,6 +49,12 @@ check_out_of_scope_pr() {
   # emptiness arm below.
   changed="$(audit_provenance_changed_files "$tree_root" "$gate_base")" || return 1
 
+  # This runs before gate_require_digests arms the classifier, so arm it here
+  # against the same base: a release-bookkeeping change allowlists its paths
+  # only once the release context has seen it, and the member resolver that
+  # dispatched nobody armed the same way.
+  audit_scope_release_context "$tree_root" "$gate_base"
+
   if [ -z "$changed" ]; then
     # A REAL empty change set. Whether it clears this gate is the record-bound
     # question above, not this function's to answer: a locally-derived base, an

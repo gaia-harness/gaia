@@ -55,6 +55,7 @@ esac
 if [ ! -f "$_audit_scope_release_library" ] || ! . "$_audit_scope_release_library" 2>/dev/null; then
   _audit_scope_release_reset() { _AUDIT_SCOPE_RELEASE_ARMED=0; _AUDIT_SCOPE_SKIP_MEMBERS=""; }
   audit_scope_release_context() { return 0; }
+  _audit_scope_release_bookkeeping_path() { return 1; }
 fi
 unset _audit_scope_release_library
 
@@ -67,7 +68,7 @@ unset _audit_scope_release_library
 # wins (a non-empty dispatched set means the legacy branch is never reached).
 #
 # Exit 0 iff the path is out-of-scope-allowlisted: wiki/, .claude/,
-# .gaia/, docs/, or a root-level (no slash) *.md file.
+# .gaia/, docs/, a root-level (no slash) *.md file, or an armed bookkeeping path.
 #
 # This is NOT a general implementation of `.gaia/audit-ci.yml`'s `unowned:`
 # block, and must not be grown into one by reading entries across from it. That
@@ -94,6 +95,7 @@ unset _audit_scope_release_library
 # the member the gate waits on would be one nothing was ever spawned to write.
 
 audit_out_of_scope_allowlisted() {
+  ! _audit_scope_release_bookkeeping_path "$1" || return 0
   case "$1" in
     wiki/*|.claude/*|.gaia/*|docs/*) return 0 ;;
     */*) return 1 ;;
@@ -465,6 +467,7 @@ _audit_scope_owner_of() {
   local path="$1" i=0 release_owned=0
 
   _AUDIT_SCOPE_OWNER_RESULT=""
+  ! _audit_scope_release_bookkeeping_path "$path" || return 0
   [ "${_AUDIT_SCOPE_RELEASE_ARMED:-0}" != 1 ] || ! _audit_scope_release_path_owned "$path" || release_owned=1
 
   while [ "$i" -lt "$_AUDIT_SCOPE_SPEC_COUNT" ]; do

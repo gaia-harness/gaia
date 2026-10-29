@@ -2660,3 +2660,51 @@ release_skip_gate_agrees() {
   [ "$status" -ne 0 ]
   [[ "$output" == *"markers for the resolver's members did not clear"* ]] || return 1
 }
+
+# ---------------------------------------------------------------------------
+# The release-bookkeeping arm: a change the release-bookkeeping predicate
+# accepts is wholly out of scope, so the out-of-scope bypass clears it with no
+# markers. The fixture is .gaia/tests/helpers/release-bookkeeping-fixture.sh.
+# ---------------------------------------------------------------------------
+
+# release_bookkeeping_gate_branch: rebuilds main as the fixture base, publishes
+# it to the origin, and re-cuts feature as one bookkeeping release on top, with
+# the predicate installed where the audit scope looks for it.
+release_bookkeeping_gate_branch() {
+  . "$(cd "$BATS_TEST_DIRNAME/../../.." && pwd)/.gaia/tests/helpers/release-bookkeeping-fixture.sh"
+  git -C "$REPO" checkout -q main
+  release_bookkeeping_seed_base "$REPO"
+  git -C "$REPO" push -q origin main 2>/dev/null
+  git -C "$REPO" fetch -q origin
+  git -C "$REPO" checkout -q -B feature main
+  release_bookkeeping_install_predicate "$REPO"
+  release_bookkeeping_apply "$REPO"
+}
+
+@test "release bookkeeping: the out-of-scope bypass clears a bookkeeping release with no markers" {
+  command -v jq >/dev/null 2>&1 || skip "jq required"
+  release_bookkeeping_gate_branch
+  [ -z "$(spawn_set)" ]
+  run_merge_hook
+  assert_allowed_by_json
+}
+
+@test "release bookkeeping: the clear fails against a bypass that never arms the release context" {
+  command -v jq >/dev/null 2>&1 || skip "jq required"
+  release_bookkeeping_gate_branch
+  local real_root scratch="$BATS_TEST_TMPDIR/unarmed-bypass" json
+  real_root="$(cd "$BATS_TEST_DIRNAME/../../.." && pwd)"
+  mkdir -p "$scratch/.claude" "$scratch/.gaia/scripts"
+  cp -R "$real_root/.claude/hooks" "$scratch/.claude/hooks"
+  cp "$real_root"/.gaia/scripts/*.sh "$scratch/.gaia/scripts/"
+  json="$(jq -n '{tool_name: "Bash", tool_input: {command: "gh pr merge 30 --squash --delete-branch"}}')"
+  # Positive control: the unmodified copy clears, so the deny below is the
+  # missing context call and nothing else about the copy.
+  invoke_hook_in "$REPO" "$json" "$scratch/.claude/hooks/pr-merge-audit-check.sh"
+  assert_allowed_by_json
+  grep -v '^  audit_scope_release_context "\$tree_root" "\$gate_base"$' \
+    "$real_root/.claude/hooks/pr-merge-audit-check-bypass.sh" > "$scratch/.claude/hooks/pr-merge-audit-check-bypass.sh"
+  cmp -s "$real_root/.claude/hooks/pr-merge-audit-check-bypass.sh" "$scratch/.claude/hooks/pr-merge-audit-check-bypass.sh" && return 1
+  invoke_hook_in "$REPO" "$json" "$scratch/.claude/hooks/pr-merge-audit-check.sh"
+  assert_denied_by_json
+}

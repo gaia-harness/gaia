@@ -54,6 +54,32 @@ concurrency:
 permissions: {}
 
 jobs:
+  # Release bookkeeping on a green main (.gaia/scripts/release-bookkeeping-check.sh)
+  # runs the narrow release check in place of every shard; the aggregator and
+  # reporter read that skip as success, so the release commit's push run is green.
+  release-fast-path:
+    name: Release bookkeeping check
+    if: github.event_name == 'pull_request' || github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      actions: read
+      issues: read
+    outputs:
+      fast: ${{ steps.release.outputs.fast }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 2
+          persist-credentials: false
+      - id: release
+        uses: ./.github/actions/gaia-release-fast-path
+        with:
+          event: ${{ github.event_name }}
+          workflow: audit-ci-tests.yml
+          token: ${{ github.token }}
+
   # The fan-out matrix: one leg per bats shard, plus the sandbox conformance
   # tree, the INV-7 concurrency meter and the commitlint config suite as three
   # further legs that run their own runners under their own filter gates. `audit-ci-tests` below is the
@@ -63,7 +89,9 @@ jobs:
   # itself.
   shards:
     name: Shard (${{ matrix.shard }})
-    if: github.event_name == 'pull_request' || github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+    # `!cancelled()`: a failed release-fast-path still runs every leg.
+    needs: [release-fast-path]
+    if: ${{ !cancelled() && (github.event_name == 'pull_request' || github.event_name == 'push' || github.event_name == 'workflow_dispatch') && needs.release-fast-path.outputs.fast != 'true' }}
     runs-on: ubuntu-latest
     # The outer bound only. A matrix takes ONE integer job cap for every leg,
     # so this one covers the heaviest leg's whole run: the install step's
@@ -875,14 +903,13 @@ jobs:
         timeout-minutes: 2
         run: bash .gaia/scripts/bats5.sh .gaia/tests/commitlint/
 
-  # The declared-required check. `needs: [shards]` makes it the second hop of
-  # a 2-hop chain the arithmetic above is sized to, and `always()` is what
-  # stops a plain skip-on-dependency-failure from satisfying nothing: a
-  # `needs:` with no `if:` SKIPS when a dependency fails, and a skipped stamp
-  # satisfies no required check.
+  # The declared-required check. `always()` is what stops a plain
+  # skip-on-dependency-failure from satisfying nothing: a `needs:` with no
+  # `if:` SKIPS when a dependency fails, and a skipped stamp satisfies no
+  # required check.
   audit-ci-tests:
     name: Audit CI Tests
-    needs: [shards]
+    needs: [release-fast-path, shards]
     if: always() && (github.event_name == 'pull_request' || github.event_name == 'push' || github.event_name == 'workflow_dispatch')
     runs-on: ubuntu-latest
     timeout-minutes: 2
@@ -902,10 +929,16 @@ jobs:
       # `case` enumerating the failure states it knows about, so a conclusion
       # GitHub adds later fails closed instead of reading as an unrecognized,
       # unhandled success.
+      # The one passing skip: shards a successful release fast path replaced.
       - name: Require every dependency in needs to have concluded success
         env:
-          SHARDS_RESULT: ${{ needs.shards.result }}
+          RELEASE_RESULT: ${{ needs.release-fast-path.result }}
+          SHARDS_RESULT: ${{ (needs.release-fast-path.outputs.fast == 'true' && needs.shards.result == 'skipped') && 'success' || needs.shards.result }}
         run: |
+          if [ "$RELEASE_RESULT" != "success" ]; then
+            echo "::error::the release bookkeeping check did not conclude success: $RELEASE_RESULT" >&2
+            exit 1
+          fi
           if [ "$SHARDS_RESULT" != "success" ]; then
             echo "::error::at least one shard did not conclude success: $SHARDS_RESULT" >&2
             exit 1
@@ -916,10 +949,10 @@ jobs:
   # descendant closes it. Push to main only; a pull request or a dispatch
   # verdict is not main's. The logic, and its tests with a stubbed `gh`, live
   # in .gaia/tests/report-main-status.sh; this job only hands it the run's
-  # facts.
+  # facts. A release fast path's shard skip reports `success`.
   report-main-status:
     name: Report main status
-    needs: [shards]
+    needs: [release-fast-path, shards]
     if: always() && github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     timeout-minutes: 3
@@ -959,5 +992,5 @@ jobs:
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
           BEFORE_SHA: ${{ github.event.before }}
           HEAD_SHA: ${{ github.sha }}
-          SHARDS_RESULT: ${{ needs.shards.result }}
+          SHARDS_RESULT: ${{ (needs.release-fast-path.outputs.fast == 'true' && needs.release-fast-path.result == 'success' && needs.shards.result == 'skipped') && 'success' || needs.shards.result }}
         run: bash .gaia/tests/report-main-status.sh

@@ -410,3 +410,57 @@ EOF
     "$BATS_TEST_DIRNAME/verify-harness.bats" "$BATS_TEST_DIRNAME/verify-harness-baseline.bats"
   [ "$status" -eq 0 ]
 }
+
+# release_fixture: the fixture with the release bookkeeping files on main at
+# 1.0.0, the shared predicate, and a node-runnable manifest-check stub, then a
+# feature branch that graduates them to 1.1.0 the way /gaia-release does.
+release_fixture() {
+  local manifest=.gaia/manifest.json
+  fixture --no-branch || return 1
+  cp "$REPO_ROOT/.gaia/scripts/release-bookkeeping-check.sh" .gaia/scripts/release-bookkeeping-check.sh || return 1
+  printf '#!/usr/bin/env node\nprocess.exit(process.env.MANIFEST_CHECK_FAILS ? 1 : 0);\n' >.gaia/cli/gaia-maintainer
+  mkdir -p frontend wiki
+  printf '1.0.0\n' >.gaia/VERSION
+  printf '{"files": {}, "generated": "a", "version": "1.0.0"}\n' >"$manifest"
+  printf '{"name": "gaia", "version": "1.0.0"}\n' >package.json
+  printf '{"name": "frontend", "version": "1.0.0"}\n' >frontend/package.json
+  printf '# Changelog\n\n## [Unreleased]\n\n- **Thing.**\n\n[Unreleased]: https://github.com/example/repo/compare/v1.0.0...HEAD\n' >CHANGELOG.md
+  vhf_commit "release files" && vhf_branch || return 1
+  printf '1.1.0\n' >.gaia/VERSION
+  printf '{"files": {}, "generated": "b", "version": "1.1.0"}\n' >"$manifest"
+  printf '{"name": "gaia", "version": "1.1.0"}\n' >package.json
+  printf '{"name": "frontend", "version": "1.1.0"}\n' >frontend/package.json
+  printf '# Changelog\n\n## [Unreleased]\n\n## [1.1.0] - 2026-10-29\n\n- **Thing.**\n\n[Unreleased]: https://github.com/example/repo/compare/v1.1.0...HEAD\n[1.1.0]: https://github.com/example/repo/releases/tag/v1.1.0\n' >CHANGELOG.md
+  vhf_commit "chore(release): v1.1.0"
+}
+
+@test "a release-bookkeeping branch runs only the manifest check and writes the pass record" {
+  command -v node >/dev/null || skip "node not installed"
+  release_fixture
+  run_runner branch
+  [ "$status" -eq 0 ]
+  has 'RELEASE  bookkeeping 1.0.0 -> 1.1.0'
+  has_line '^PASS  release manifest --check \([0-9]+s\)$'
+  every_label_is SKIP shell-lint 'distribution checks' 'bats whole-tree' 'bats selected'
+  [ ! -s "$VERIFY_FIXTURE_LOG" ]
+  [ -f "$VHF_RECORD" ]
+}
+
+@test "a release-bookkeeping branch whose manifest check fails withholds the pass record" {
+  command -v node >/dev/null || skip "node not installed"
+  release_fixture
+  MANIFEST_CHECK_FAILS=1 run_runner branch
+  [ "$status" -eq 1 ]
+  has_line '^FAIL  release manifest --check \([0-9]+s\)$'
+  [ ! -e "$VHF_RECORD" ]
+}
+
+@test "a release branch that also changes anything else takes the full verification" {
+  command -v node >/dev/null || skip "node not installed"
+  release_fixture
+  printf 'x2\n' >src/x-input.txt
+  vhf_commit "a code change riding the release"
+  run_runner branch
+  lacks 'RELEASE  '
+  has_line '^PASS  bats selected \([0-9]+s\)$'
+}
