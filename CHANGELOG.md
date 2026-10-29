@@ -22,7 +22,7 @@ A release change that requires the adopter to act, run a command or hand-migrate
 
 ### Fixed
 
-- **Lint, typecheck, tests and shellcheck now block a merge:** `/setup-gaia` required only `GAIA-Audit`, so a pull request with red CI could still merge. It now also registers the `Vitest and Playwright` and `Shellcheck and bats` checks as required, keeping every check you already require; both report green when nothing they cover changed, and `Run Chromatic` stays optional. A repository admin's `/update-gaia` registers them on an existing project; otherwise an admin runs `/setup-gaia`. CI now lints only the frontend files changed since the last green run instead of the whole app, and lints everything when the ESLint config, a tsconfig or a dependency changes (#3185)
+- **Lint, typecheck, tests and shellcheck now block a merge:** `/setup-gaia` required only `GAIA-Audit`, so a pull request with red CI could still merge. It now also registers the `Vitest and Playwright` and `Shellcheck and bats` checks as required, keeping every check you already require; both report green when nothing they cover changed, and `Run Chromatic` stays optional. A repository admin's `/update-gaia` registers them on an existing project; otherwise an admin runs `/setup-gaia`. CI now lints only the frontend files changed since the last green run instead of the whole app, and lints everything when the ESLint config, a tsconfig or a dependency changes. A non-admin's `/setup-gaia` now names the checks it could not register and asks for a repository admin, instead of ending on "You're all set" (#3185)
 
 ## [2.3.0] - 2026-10-28
 

@@ -464,7 +464,7 @@ Keep **`$REPO_CHOICE`**, the answer to Phase 3's connect-to-GitHub question. "Cr
 
 Then run `land-decisions.md`'s `## The setup ping` with `SETUP_TYPE`, `REPO_CHOICE` and `OWED_AT_START` (Read `.claude/skills/gaia/references/setup/land-decisions.md` now first when Phase 5.5 skipped it). It sends the ping, or skips it when nothing was newly decided.
 
-Then run `land-decisions.md`'s `## The closing message`. It prints the done line only when no project setting this machine can act on is still owed, and a setup-not-finished line naming them otherwise, so a run whose GitHub setup was refused or skipped never ends on a line that reads as done.
+Then run `land-decisions.md`'s `## The closing message`. It prints the done line only when no project setting is still owed, a setup-not-finished line naming the ones this machine can act on, or, for a non-admin, a line naming the admin-gated ones a repo admin must apply, so a run whose GitHub setup was refused or skipped never ends on a line that reads as done.
 
 ## Idempotence / re-run safety
 
