@@ -17,7 +17,9 @@
 # gaia_setup_admin_owed_ids names the other half for the closing message: the
 # admin-gated ids a cached non-admin cannot act on, so a non-admin run never
 # ends on a done line while a protection such as the required CI checks is
-# still unapplied.
+# still unapplied. gaia_setup_admin_gated_ids names the same ids with no cached
+# answer at all, for a run whose own admin probe failed: no answer is cached
+# then, and the closing message knows from the run's host that the ids apply.
 #
 # Every input is read as text and parsed under try, so a missing or malformed
 # file yields an empty set and never fails the caller's jq.
@@ -36,11 +38,11 @@ def gaia_setup_owed($list_text; $project_text):
   | if $admin == true then .
     elif $admin == false then []
     else map(select(. == "github-repository")) end;
+def gaia_setup_admin_gated($list_text; $project_text):
+  [ gaia_setup_undecided_project($list_text; $project_text)[] | select(.admin == true) | .id ];
 def gaia_setup_admin_owed($list_text; $project_text):
   (if type == "object" then .admin else null end) as $admin
-  | if $admin == false
-    then [ gaia_setup_undecided_project($list_text; $project_text)[] | select(.admin == true) | .id ]
-    else [] end;
+  | if $admin == false then gaia_setup_admin_gated($list_text; $project_text) else [] end;
 '
 
 # gaia_setup_ids_with <repo root> <jq def name>: print the ids the named def
@@ -65,4 +67,10 @@ gaia_setup_owed_ids() {
 # cached non-admin leaves owed, space-separated, or nothing.
 gaia_setup_admin_owed_ids() {
   gaia_setup_ids_with "$1" gaia_setup_admin_owed
+}
+
+# gaia_setup_admin_gated_ids <repo root>: print every undecided admin-gated
+# project id, whatever the cached admin answer, space-separated, or nothing.
+gaia_setup_admin_gated_ids() {
+  gaia_setup_ids_with "$1" gaia_setup_admin_gated
 }
