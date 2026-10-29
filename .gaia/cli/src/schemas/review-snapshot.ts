@@ -98,7 +98,7 @@ export const writeReviewSnapshot = (
 ): void => {
   const target = reviewSnapshotPath(repoRoot);
   // Mode 755 matches the other `.gaia/local` state writers (setup-state, the
-  // sandbox marker, project-id), so the directory stays
+  // sandbox marker, install-id), so the directory stays
   // traversable by a subprocess running as another user.
   mkdirSync(path.dirname(target), {mode: 0o755, recursive: true});
 

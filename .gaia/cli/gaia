@@ -38944,32 +38944,30 @@ import path55 from "node:path";
 // src/storage/paths.ts
 import path53 from "node:path";
 var resolveStorageRoots = ({ repoRoot }) => {
-  const mainRoot = resolveMainWorktreeRoot(repoRoot);
-  const projectIdPath = path53.join(mainRoot, ".gaia", "local", ".project-id");
+  const localDirectory = path53.join(
+    resolveMainWorktreeRoot(repoRoot),
+    ".gaia",
+    "local"
+  );
   return {
-    mainRoot,
-    projectIdPath
+    installIdPath: path53.join(localDirectory, ".install-id"),
+    legacyProjectIdPath: path53.join(localDirectory, ".project-id")
   };
 };
 
 // src/storage/project-id.ts
-import { createHash as createHash2 } from "node:crypto";
-import { existsSync as existsSync30, mkdirSync as mkdirSync11, readFileSync as readFileSync37, writeFileSync as writeFileSync6 } from "node:fs";
+import { randomUUID } from "node:crypto";
+import {
+  existsSync as existsSync30,
+  mkdirSync as mkdirSync11,
+  readFileSync as readFileSync37,
+  rmSync as rmSync5,
+  writeFileSync as writeFileSync6
+} from "node:fs";
 import path54 from "node:path";
 var UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/u;
-var formatAsUuidV4 = (hex32) => {
-  const version2 = "4";
-  const variantMask = 8;
-  const variantBits = Number.parseInt(hex32.charAt(16), 16) & 3;
-  const variant = (variantMask | variantBits).toString(16);
-  return `${hex32.slice(0, 8)}-${hex32.slice(8, 12)}-${version2}${hex32.slice(13, 16)}-${variant}${hex32.slice(17, 20)}-${hex32.slice(20, 32)}`;
-};
-var deriveProjectId = (repoRootPath) => {
-  const hash2 = createHash2("sha256").update(repoRootPath).digest("hex");
-  return formatAsUuidV4(hash2.slice(0, 32));
-};
 var readOrCreateProjectId = (roots) => {
-  const filePath = roots.projectIdPath;
+  const filePath = roots.installIdPath;
   if (existsSync30(filePath)) {
     const existing = readFileSync37(filePath, "utf8").trim();
     if (UUID_RE.test(existing)) {
@@ -38980,7 +38978,8 @@ var readOrCreateProjectId = (roots) => {
   if (!existsSync30(parent)) {
     mkdirSync11(parent, { mode: 493, recursive: true });
   }
-  const id = deriveProjectId(roots.mainRoot);
+  rmSync5(roots.legacyProjectIdPath, { force: true });
+  const id = randomUUID();
   writeFileSync6(filePath, `${id}
 `, { mode: 420 });
   return id;
@@ -39599,13 +39598,13 @@ var run32 = async (argv) => {
 };
 
 // src/residue/cache.ts
-import { createHash as createHash3 } from "node:crypto";
+import { createHash as createHash2 } from "node:crypto";
 import { existsSync as existsSync31, mkdirSync as mkdirSync12, readFileSync as readFileSync40, unlinkSync as unlinkSync2 } from "node:fs";
 import path56 from "node:path";
 var CACHE_DIR_SEGMENTS = [".gaia", "local", "cache"];
 var ATTRIBUTION_CACHE_FILE = "residual-attribution.json";
 var CURSOR_FILE = "residual-cursor.json";
-var attributionBodyDigest = (body) => createHash3("sha256").update(body, "utf8").digest("hex");
+var attributionBodyDigest = (body) => createHash2("sha256").update(body, "utf8").digest("hex");
 var emptyAttributionCache = () => ({
   high_water_merged_at: null,
   prs: {},
@@ -47049,7 +47048,7 @@ import {
   existsSync as existsSync41,
   mkdirSync as mkdirSync20,
   readFileSync as readFileSync58,
-  rmSync as rmSync5,
+  rmSync as rmSync6,
   writeFileSync as writeFileSync10
 } from "node:fs";
 import path79 from "node:path";
@@ -47125,7 +47124,7 @@ var releaseLock = (lockDirectory) => {
   try {
     const owner = readFileSync58(path79.join(lockDirectory, "owner"), "utf8");
     if (owner.trim() === String(process.pid)) {
-      rmSync5(lockDirectory, { force: true, recursive: true });
+      rmSync6(lockDirectory, { force: true, recursive: true });
     }
   } catch {
   }
@@ -48642,7 +48641,7 @@ import { realpathSync as realpathSync8 } from "node:fs";
 import path88 from "node:path";
 
 // src/update/regen-regions-scope.ts
-import { createHash as createHash4 } from "node:crypto";
+import { createHash as createHash3 } from "node:crypto";
 import {
   chmodSync,
   copyFileSync as copyFileSync3,
@@ -48652,7 +48651,7 @@ import {
   readdirSync as readdirSync10,
   readFileSync as readFileSync64,
   readlinkSync,
-  rmSync as rmSync6,
+  rmSync as rmSync7,
   symlinkSync as symlinkSync2,
   writeFileSync as writeFileSync11
 } from "node:fs";
@@ -48728,7 +48727,7 @@ var collectScopeDigests = (root, scopeDirs) => {
       }
       digests.set(repoRelative, {
         content,
-        digest: createHash4("sha256").update(content).digest("hex"),
+        digest: createHash3("sha256").update(content).digest("hex"),
         kind: "file",
         mode: stat.mode
       });
@@ -48747,7 +48746,7 @@ var sweepScope = (inputs) => {
     if (isUntouched(beforeEntry, afterEntry)) return;
     try {
       const abs = path86.resolve(root, relPath);
-      rmSync6(abs, { force: true });
+      rmSync7(abs, { force: true });
       if (beforeEntry.kind === "symlink") {
         symlinkSync2(beforeEntry.target, abs);
       } else {
@@ -48763,7 +48762,7 @@ var sweepScope = (inputs) => {
   [...after.keys()].forEach((relPath) => {
     if (declaredSet.has(relPath) || before.has(relPath)) return;
     try {
-      rmSync6(path86.resolve(root, relPath), { force: true });
+      rmSync7(path86.resolve(root, relPath), { force: true });
       confined.push({ action: "removed", path: relPath, regionId });
     } catch {
       confined.push({ action: "reported", path: relPath, regionId });

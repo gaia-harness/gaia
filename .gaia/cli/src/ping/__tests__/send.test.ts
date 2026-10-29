@@ -77,19 +77,19 @@ describe('postPing', () => {
     });
   });
 
-  test('injects a UUIDv4 projectId and creates .gaia/local/.project-id', async () => {
-    const projectIdPath = path.join(root, '.gaia', 'local', '.project-id');
-    expect(existsSync(projectIdPath)).toBe(false);
+  test('injects a UUIDv4 projectId and creates .gaia/local/.install-id', async () => {
+    const installIdPath = path.join(root, '.gaia', 'local', '.install-id');
+    expect(existsSync(installIdPath)).toBe(false);
 
     await postPing(root, {event: 'update'});
 
     const [, init] = fetchSpy.mock.calls[0] as [string, RequestInit];
     const body = JSON.parse(init.body as string) as Record<string, unknown>;
     expect(body.projectId).toMatch(UUID_V4_RE);
-    expect(existsSync(projectIdPath)).toBe(true);
+    expect(existsSync(installIdPath)).toBe(true);
   });
 
-  test('best-effort projectId: omits it (never throws) when project-id creation fails', async () => {
+  test('best-effort projectId: omits it (never throws) when install-id creation fails', async () => {
     // Replace .gaia with a regular file so mkdirSync('<root>/.gaia/local')
     // inside readOrCreateProjectId throws (parent segment is not a directory).
     rmSync(path.join(root, '.gaia'), {force: true, recursive: true});

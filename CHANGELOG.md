@@ -20,6 +20,10 @@ A release change that requires the adopter to act, run a command or hand-migrate
 - **1.6.1 routing line on every release (maintainer repo only):** `/gaia-release` now puts the 1.6.1 migration line first in every release body, since a 1.6.1 project meets whichever release is newest. The CHANGELOG no longer carries a copy in each entry, only in 2.0.0's (#3180)
 - **Release notes bucketed by what the reader sees (maintainer repo only):** the `release-notes` skill now files each item under New, Improved or Fixed by how an adopter experiences it rather than by its CHANGELOG heading, copies the routing-line preamble only into the file it is writing, and leaves already-approved release files as they are (#3182)
 
+### Fixed
+
+- **Telemetry ID is now random per install:** the adoption ping's `projectId` was a hash of the repository path, which a guessable path makes reversible. It is now a random UUID stored in `.gaia/local/.install-id`, and every existing install rotates to a new one once on its next ping, deleting the old `.gaia/local/.project-id`. No action needed (#3188)
+
 ## [2.3.0] - 2026-10-28
 
 ### Added
