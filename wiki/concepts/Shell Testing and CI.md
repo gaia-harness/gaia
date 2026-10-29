@@ -3,7 +3,7 @@ type: concept
 title: Shell Testing and CI
 status: active
 created: 2026-10-27
-updated: 2026-10-28
+updated: 2026-10-29
 tags: [concept, testing, shell, ci]
 ---
 
@@ -31,7 +31,7 @@ A bare `[[ ]]` or arithmetic test inside a bats test passes silently on some bas
 
 ## Shellcheck and bats in CI
 
-The shipped `.github/workflows/tests.yml` carries a `Shellcheck and bats` job (check name `Tests / Shellcheck and bats`) beside the `Vitest and Playwright` job. It runs on every pull request, with no paths filter, so it always reports and can be made a required check.
+The shipped `.github/workflows/tests.yml` carries a `Shellcheck and bats` job (check name `Tests / Shellcheck and bats`) beside the `Vitest and Playwright` job. It runs on every pull request, with no paths filter, so it always reports, green when the pull request changes no shell, and `/setup-gaia` registers it as a required check beside `Vitest and Playwright` (the `required-ci-checks` [[Setup Features|setup feature]]).
 
 What it does on a pull request:
 
