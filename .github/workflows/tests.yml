@@ -60,10 +60,8 @@ jobs:
           event: ${{ github.event_name }}
           token: ${{ github.token }}
       # gaia:maintainer-only:end
-      # Pre-verified dep-bump PRs (/update-deps runs the full quality gate first)
-      # skip the suite only on a dep-bump title AND a diff confined to dependency
-      # manifests, never an msw bump; else the filter below decides. Skipped jobs
-      # do not satisfy required checks under branch protection, so we gate steps.
+      # Pre-verified dep-bump PRs skip the suite (rules: chore-deps-skip.sh's header);
+      # skipped jobs do not satisfy required checks, so we gate steps instead.
       - name: Check chore-deps title
         id: chore-deps
         env:
