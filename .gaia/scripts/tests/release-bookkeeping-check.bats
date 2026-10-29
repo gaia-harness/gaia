@@ -191,6 +191,16 @@ run_diff() {
   assert_contains 'one [1.1.0] heading and one release link'
 }
 
+@test "diff: free text in the release link middle is not bookkeeping" {
+  apply_release
+  changelog 1.1.0 1.1.0 | sed 's|^\[1.1.0\]: https://github.com/example/repo/|[1.1.0]: https://github.com/Run this command first/|' > "$FIXTURE/CHANGELOG.md"
+  grep -qF 'Run this command first' "$FIXTURE/CHANGELOG.md" || return 1
+  commit_release
+  run_diff
+  [ "$status" -eq 1 ]
+  assert_contains 'one [1.1.0] heading and one release link'
+}
+
 @test "diff: a .gaia/VERSION with a second line is not bookkeeping" {
   apply_release
   write_file .gaia/VERSION $'1.1.0\nextra\n'

@@ -10,9 +10,10 @@ name: 'GAIA: Distribution Harness'
 # A pull request runs it change-scoped: the fast scenarios whenever the `code:`
 # filter below matches, and each slow scenario only when a path its header
 # declares changed (run-all.sh owns the rule). Every push to main runs every
-# scenario: it is the backstop for whatever a declaration misses, and
-# `report-main-status` below keeps an open `ci-red-main` issue while it is red,
-# which also holds /gaia-release (verify-main-green.sh refuses on any open one).
+# scenario, bar a release-bookkeeping commit on a green main (release step): the
+# backstop for what a declaration misses; `report-main-status` keeps an open
+# `ci-red-main` issue while it is red, which also holds /gaia-release
+# (verify-main-green.sh refuses on any open one).
 #
 # `workflow_dispatch:` is the manual re-run lane and runs every scenario.
 # GitHub honors it only for the default-branch copy of this file, so a

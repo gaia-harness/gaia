@@ -38,7 +38,9 @@
 #       new version (renderLogMd in .gaia/cli/src/release/scrub-wiki.ts).
 #   Structural rather than a line allowlist: each file is parsed or rebuilt and
 #   compared whole, so a hunk shaped like a version line cannot carry anything
-#   past it. A scrub or graduation whose output format changes only stops
+#   past it, bar the values left unconstrained on purpose: the manifest
+#   `generated` stamp and the wiki state last_evaluated pair, which the audit
+#   scope and the manifest check still see. A scrub or graduation whose output format changes only stops
 #   matching, which runs the full gates.
 #
 # ci: the CI fast-path decision for one workflow run. Prints `fast=true` or
@@ -163,7 +165,8 @@ ungraduate_changelog() {
         headings++; drop_blank = 1; next
       }
       if (index(line, link_prefix) == 1 && length(line) > length(link_prefix) + length(link_suffix) \
-        && substr(line, length(line) - length(link_suffix) + 1) == link_suffix) {
+        && substr(line, length(line) - length(link_suffix) + 1) == link_suffix \
+        && substr(line, length(link_prefix) + 1, length(line) - length(link_prefix) - length(link_suffix)) ~ /^[A-Za-z0-9._-]+\/[A-Za-z0-9._-]+$/) {
         links++; next
       }
       if (index(line, unreleased_prefix) == 1 && length(line) >= length(new_compare) \

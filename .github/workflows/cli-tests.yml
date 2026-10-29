@@ -40,8 +40,7 @@ jobs:
     timeout-minutes: 15
     # Checkout needs it to clone, and paths-filter and setup-node both default
     # their `token` input to `github.token` for the compare API and the
-    # node-versions download. No step here passes a token to anything else.
-    #
+    # node-versions download. Only the release fast-path step passes it on, to its composite action.
     # `pull-requests: read` is load-bearing for paths-filter, which resolves a
     # PR's changed files through the API (the same reasoning spelled out in
     # audit-ci-tests.yml). Omitting it works only while this repo is

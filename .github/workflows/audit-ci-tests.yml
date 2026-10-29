@@ -22,9 +22,9 @@ name: 'GAIA: Audit CI Tests'
 
 # A pull request runs each bats leg change-scoped (the suites its diff can
 # affect, plus the whole-tree-marked tests) unless it touches harness machinery.
-# Every push to main runs every leg whole: it is the backstop for whatever the
-# change-scoped selection cannot see, and `report-main-status` below keeps one
-# `ci-red-main` issue open while main is red.
+# Every push to main runs every leg whole, bar a release-bookkeeping commit on a
+# green main (release-fast-path job): the backstop for whatever the selection
+# cannot see, and `report-main-status` below keeps one `ci-red-main` issue open.
 #
 # `workflow_dispatch:` is the manual re-run lane, and also runs every leg whole.
 # A push made with a GITHUB_TOKEN fires no `pull_request` event, so a head moved
