@@ -54,6 +54,16 @@ classify() {
   classify_with "$LIBRARY_DIRECTORY" "$@"
 }
 
+# track_predicate_on_main: commits the installed predicate onto the base so the
+# release branch inherits it unchanged, then returns to the release branch.
+track_predicate_on_main() {
+  git -C "$FIXTURE" checkout -q main
+  git -C "$FIXTURE" add .gaia/scripts/release-bookkeeping-check.sh
+  git -C "$FIXTURE" commit -q -m "track predicate"
+  git -C "$FIXTURE" checkout -q release
+  git -C "$FIXTURE" rebase -q main
+}
+
 resolve_members() {
   "$RESOLVER" --root "$FIXTURE" --base "$(git -C "$FIXTURE" merge-base main HEAD)"
 }
@@ -118,4 +128,26 @@ lines_of() {
   grep -v '^  ! _audit_scope_release_bookkeeping_path "\$path" || return 0$' "$LIBRARY_DIRECTORY/audit-scope.sh" > "$scratch/audit-scope.sh"
   cmp -s "$LIBRARY_DIRECTORY/audit-scope.sh" "$scratch/audit-scope.sh" && return 1
   [ "$(classify_with "$scratch" package.json)" = $'package.json\tfixture-default\tyes' ]
+}
+
+@test "a branch that loosens the predicate itself leaves every path in scope and the resolver names its member" {
+  release_bookkeeping_install_predicate "$FIXTURE"
+  track_predicate_on_main
+  printf '#!/usr/bin/env bash\nexit 0\n' > "$FIXTURE/.gaia/scripts/release-bookkeeping-check.sh"
+  git -C "$FIXTURE" commit -qam "loosen predicate"
+  release_bookkeeping_apply "$FIXTURE" extra
+  [ "$(classify a.sh)" = $'a.sh\tfixture-default\tno' ]
+  run resolve_members
+  [ "$status" -eq 0 ]
+  [ "$output" = fixture-default ]
+}
+
+@test "an accepting predicate allowlists only the fixed bookkeeping set, never another changed path" {
+  mkdir -p "$FIXTURE/.gaia/scripts"
+  printf '#!/usr/bin/env bash\nexit 0\n' > "$FIXTURE/.gaia/scripts/release-bookkeeping-check.sh"
+  track_predicate_on_main
+  release_bookkeeping_apply "$FIXTURE" extra
+  run classify package.json a.sh
+  [ "$status" -eq 0 ]
+  [ "$output" = "$(lines_of $'package.json\t\tyes' $'a.sh\tfixture-default\tno')" ]
 }

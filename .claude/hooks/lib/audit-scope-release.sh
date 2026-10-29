@@ -34,8 +34,10 @@
 # independent question for GAIA's own repository: is the branch's whole change
 # release bookkeeping (version strings, the CHANGELOG graduation, the wiki
 # scrub), by the maintainer-only release-bookkeeping predicate the CI fast path
-# and verify-harness read too? When it is, every path of that change
-# is ownerless and out-of-scope allowlisted: there is no code for a member to
+# and verify-harness read too? When it is, each path of that change that is in
+# the fixed bookkeeping set is ownerless and out-of-scope allowlisted (any other
+# changed path stays in scope, and a branch that edits the predicate itself
+# disarms the arm): there is no code for a member to
 # read, the resolver dispatches nobody, and the merge gate's out-of-scope
 # bypass clears the merge. It needs no skip-keyed member. The release scrub
 # strips the arm, so an adopter clone never arms it, and every failure (no
@@ -153,7 +155,7 @@ _audit_scope_release_bookkeeping_arm() { _AUDIT_SCOPE_BOOKKEEPING_PATHS=""; }
 # change is release bookkeeping; otherwise leaves it empty. A tree whose
 # .gaia/VERSION did not move pays two rev-parses and never runs the predicate.
 _audit_scope_release_bookkeeping_arm() {
-  local root="$1" base_reference="$2" head="$3" merge_base="$4" predicate paths
+  local root="$1" base_reference="$2" head="$3" merge_base="$4" predicate predicate_blob paths
   _AUDIT_SCOPE_BOOKKEEPING_PATHS=""
   [ -n "$root" ] || return 0
   predicate="$root/.gaia/scripts/release-bookkeeping-check.sh"
@@ -164,8 +166,17 @@ _audit_scope_release_bookkeeping_arm() {
   [ -n "$merge_base" ] || return 0
   [ "$(git -C "$root" rev-parse --verify --quiet "${merge_base}:.gaia/VERSION" 2>/dev/null)" \
     != "$(git -C "$root" rev-parse --verify --quiet "${head}:.gaia/VERSION" 2>/dev/null)" ] || return 0
+  # The predicate judges the change, so a branch must not be able to loosen the
+  # judge: an edit to it, committed or in the working tree, disarms the arm.
+  predicate_blob="$(git -C "$root" rev-parse --verify --quiet "${head}:.gaia/scripts/release-bookkeeping-check.sh" 2>/dev/null)" || predicate_blob=""
+  [ "$predicate_blob" = "$(git -C "$root" rev-parse --verify --quiet "${merge_base}:.gaia/scripts/release-bookkeeping-check.sh" 2>/dev/null)" ] || return 0
+  # An untracked predicate is in no diff, so only a tracked one is compared to the working tree.
+  [ -z "$predicate_blob" ] || [ "$predicate_blob" = "$(git -C "$root" hash-object -- "$predicate" 2>/dev/null)" ] || return 0
   bash "$predicate" diff --root "$root" --base "$merge_base" --head "$head" >/dev/null 2>&1 || return 0
-  paths="$(git -C "$root" -c core.quotepath=false diff --name-only --no-renames -z "$merge_base" "$head" 2>/dev/null | tr '\0' '\n')" || return 0
+  # Only the fixed bookkeeping set is allowlisted, so any other changed path
+  # stays in scope even if the predicate answered yes.
+  paths="$(git -C "$root" -c core.quotepath=false diff --name-only --no-renames -z "$merge_base" "$head" 2>/dev/null | tr '\0' '\n' | awk '
+    $0 == ".gaia/VERSION" || $0 == ".gaia/manifest.json" || $0 == "package.json" || $0 == "frontend/package.json" || $0 == "CHANGELOG.md" || $0 == "wiki/.state.json" || $0 == "wiki/log.md"')" || return 0
   [ -n "$paths" ] || return 0
   _AUDIT_SCOPE_BOOKKEEPING_PATHS=$'\n'"${paths}"$'\n'
   return 0

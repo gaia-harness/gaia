@@ -992,5 +992,5 @@ jobs:
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
           BEFORE_SHA: ${{ github.event.before }}
           HEAD_SHA: ${{ github.sha }}
-          SHARDS_RESULT: ${{ (needs.release-fast-path.outputs.fast == 'true' && needs.release-fast-path.result == 'success' && needs.shards.result == 'skipped') && 'success' || needs.shards.result }}
+          SHARDS_RESULT: ${{ needs.release-fast-path.result != 'success' && needs.release-fast-path.result || ((needs.release-fast-path.outputs.fast == 'true' && needs.shards.result == 'skipped') && 'success' || needs.shards.result) }}
         run: bash .gaia/tests/report-main-status.sh
