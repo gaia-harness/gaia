@@ -1,7 +1,15 @@
 /* eslint-disable no-bitwise -- POSIX file modes are bitfields; `& 0o777`
    is the standard idiom for masking off the permission bits. */
 import {afterEach, beforeEach, describe, expect, test} from 'vitest';
-import {existsSync, mkdtempSync, readFileSync, rmSync, statSync} from 'node:fs';
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  statSync,
+  writeFileSync,
+} from 'node:fs';
 import {tmpdir} from 'node:os';
 import path from 'node:path';
 import type {StorageRoots} from '../paths.js';
@@ -12,14 +20,15 @@ const UUID_V4_RE =
 
 /**
  * The roots for a given repo root, built directly rather than through
- * `resolveStorageRoots`. These tests exercise the id writer — derivation,
- * idempotence, mode, parent creation — not the resolution that decides which
- * checkout owns the file; that is `paths.test.ts`, which needs real git
- * sandboxes. Keeping them separate lets these run against a plain temp dir.
+ * `resolveStorageRoots`. These tests exercise the id writer — minting,
+ * idempotence, mode, legacy rotation, parent creation — not the resolution
+ * that decides which checkout owns the file; that is `paths.test.ts`, which
+ * needs real git sandboxes. Keeping them separate lets these run against a
+ * plain temp dir.
  */
 const rootsFor = (repoRoot: string): StorageRoots => ({
-  mainRoot: repoRoot,
-  projectIdPath: path.join(repoRoot, '.gaia', 'local', '.project-id'),
+  installIdPath: path.join(repoRoot, '.gaia', 'local', '.install-id'),
+  legacyProjectIdPath: path.join(repoRoot, '.gaia', 'local', '.project-id'),
 });
 
 describe('readOrCreateProjectId', () => {
@@ -33,15 +42,15 @@ describe('readOrCreateProjectId', () => {
     rmSync(repoRoot, {force: true, recursive: true});
   });
 
-  test('writes a UUIDv4-shaped id with mode 644 on first call', () => {
+  test('writes a UUIDv4 id to .install-id with mode 644 on first call', () => {
     const roots = rootsFor(repoRoot);
 
     const id = readOrCreateProjectId(roots);
 
     expect(id).toMatch(UUID_V4_RE);
-    expect(existsSync(roots.projectIdPath)).toBe(true);
-    expect(statSync(roots.projectIdPath).mode & 0o777).toBe(0o644);
-    expect(readFileSync(roots.projectIdPath, 'utf8').trim()).toBe(id);
+    expect(existsSync(roots.installIdPath)).toBe(true);
+    expect(statSync(roots.installIdPath).mode & 0o777).toBe(0o644);
+    expect(readFileSync(roots.installIdPath, 'utf8').trim()).toBe(id);
   });
 
   test('returns the same id on subsequent calls (idempotent)', () => {
@@ -53,77 +62,39 @@ describe('readOrCreateProjectId', () => {
     expect(second).toBe(first);
   });
 
-  test('derives a stable id from the repo root path (same input -> same output)', () => {
-    const repoA = mkdtempSync(path.join(tmpdir(), 'gaia-pid-stable-A-'));
+  test('mints a fresh random id, not one derived from the path, when the file is gone', () => {
+    const roots = rootsFor(repoRoot);
 
-    try {
-      const rootsA1 = rootsFor(repoA);
-      const idA1 = readOrCreateProjectId(rootsA1);
-      // Wipe the file; recompute from scratch.
-      rmSync(rootsA1.projectIdPath, {force: true});
-      const idA2 = readOrCreateProjectId(rootsA1);
-      expect(idA2).toBe(idA1);
-    } finally {
-      rmSync(repoA, {force: true, recursive: true});
-    }
+    const first = readOrCreateProjectId(roots);
+    rmSync(roots.installIdPath, {force: true});
+    const second = readOrCreateProjectId(roots);
+
+    expect(second).toMatch(UUID_V4_RE);
+    expect(second).not.toBe(first);
   });
 
-  test('different repo roots derive different ids', () => {
-    const repoA = mkdtempSync(path.join(tmpdir(), 'gaia-pid-distinct-A-'));
-    const repoB = mkdtempSync(path.join(tmpdir(), 'gaia-pid-distinct-B-'));
+  test('rotates an existing install: deletes the legacy .project-id and never reuses its value', () => {
+    const roots = rootsFor(repoRoot);
+    const legacyId = '0f1e2d3c-4b5a-4968-8776-655443322110';
+    mkdirSync(path.dirname(roots.legacyProjectIdPath), {recursive: true});
+    writeFileSync(roots.legacyProjectIdPath, `${legacyId}\n`);
 
-    try {
-      const rootsA = rootsFor(repoA);
-      const rootsB = rootsFor(repoB);
-      const idA = readOrCreateProjectId(rootsA);
-      const idB = readOrCreateProjectId(rootsB);
-      expect(idA).not.toBe(idB);
-    } finally {
-      rmSync(repoA, {force: true, recursive: true});
-      rmSync(repoB, {force: true, recursive: true});
-    }
-  });
+    const id = readOrCreateProjectId(roots);
 
-  test("the derived id depends only on mainRoot, not on projectIdPath's own location (change 2: hash target is mainRoot)", () => {
-    // Two StorageRoots that share a mainRoot but point at different
-    // projectIdPath locations must derive the SAME id: both hash the same
-    // mainRoot string, and nothing else.
-    const mainRoot = path.join(repoRoot, 'shared-main-root');
-    const projectIdPathA = path.join(
-      repoRoot,
-      'a',
-      '.gaia',
-      'local',
-      '.project-id'
-    );
-    const projectIdPathB = path.join(
-      repoRoot,
-      'b',
-      '.gaia',
-      'local',
-      '.project-id'
-    );
-
-    const idA = readOrCreateProjectId({
-      mainRoot,
-      projectIdPath: projectIdPathA,
-    });
-    const idB = readOrCreateProjectId({
-      mainRoot,
-      projectIdPath: projectIdPathB,
-    });
-
-    expect(idA).toBe(idB);
+    expect(id).toMatch(UUID_V4_RE);
+    expect(id).not.toBe(legacyId);
+    expect(existsSync(roots.legacyProjectIdPath)).toBe(false);
+    expect(readFileSync(roots.installIdPath, 'utf8').trim()).toBe(id);
   });
 
   test('creates the parent .gaia/local/ directory if absent', () => {
     const roots = rootsFor(repoRoot);
 
-    expect(existsSync(path.dirname(roots.projectIdPath))).toBe(false);
+    expect(existsSync(path.dirname(roots.installIdPath))).toBe(false);
 
     const id = readOrCreateProjectId(roots);
 
-    expect(existsSync(path.dirname(roots.projectIdPath))).toBe(true);
+    expect(existsSync(path.dirname(roots.installIdPath))).toBe(true);
     expect(id).toMatch(UUID_V4_RE);
   });
 });

@@ -101,9 +101,9 @@ _notebook_library_files() {
   # process.cwd(), which for a session running in B is B's own directory.
   b_id="$(read_id "$WORKTREE_B")"
 
-  # Target: reading .project-id "from" B yields main's id. Today B mints its
-  # own separate id (sha256 of B's own root path) -- a second identity for
-  # one clone.
+  # Target: reading the install id "from" B yields main's id. A B that
+  # resolved its own root would mint a second random id -- a second identity
+  # for one clone.
   [ "$b_id" = "$main_id" ]
 }
 

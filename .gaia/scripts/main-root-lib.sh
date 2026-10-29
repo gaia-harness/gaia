@@ -74,9 +74,9 @@
 #
 #   Applied UNIFORMLY, including to the main checkout: a caller keys its own
 #   state the same way in every tree, so no code carries an "am I main" branch
-#   for state it owns. sha256-of-the-root-path is the idiom .project-id
-#   already establishes for this repo, so this is a new caller of a settled
-#   mechanism, not a new mechanism. The key deliberately does NOT derive from
+#   for state it owns. The key names local state only and never leaves the
+#   machine, so a hash of the path is safe here; it is no telemetry identity.
+#   The key deliberately does NOT derive from
 #   a worktree's directory name: nothing requires a worktree to live under
 #   .claude/worktrees/, and name-shaped keys have already had to move once.
 #
