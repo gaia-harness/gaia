@@ -23,6 +23,7 @@
 .claude/skills/gaia/references/forensics/redaction.md	app/i18n.ts	Redaction example for an arbitrary user project layout.
 .claude/skills/naming-conventions/SKILL.md	Dockerfile ARG	The generic word Dockerfile, not the retired root file.
 .claude/skills/release-notes/SKILL.md	app/root.tsx	Example adopter-facing release note text about an adopter's own app file.
+.claude/skills/release-notes/SKILL.md	doctor.config.jsonc	Example adopter-facing release note text naming the react-doctor config file, not a path the skill reads.
 .claude/skills/update-gaia/references/merge-execution.md	unprefixed `app/**`	Describes the 1.x roster shape that the 2.x update path refuses.
 .gaia/cli/src/wiki/dead-paths.ts	ROOT_PACKAGE_PREFIXES = 	Prefixes serving a package registered at the root only; a nested package is keyed by its own path.
 .gaia/cli/src/init/bootstrap-env.ts	.env.example	Help text naming the placeholder file.
