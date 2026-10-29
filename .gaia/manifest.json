@@ -152,6 +152,7 @@
     ".claude/skills/gaia/references/setup/land-decisions.md": "owned",
     ".claude/skills/gaia/references/setup/migrate-2-machine.md": "owned",
     ".claude/skills/gaia/references/setup/per-machine.md": "owned",
+    ".claude/skills/gaia/references/setup/required-ci-checks.md": "owned",
     ".claude/skills/gaia/references/setup/sandbox-recommendation.md": "owned",
     ".claude/skills/gaia/references/setup/sandbox.md": "owned",
     ".claude/skills/gaia/references/setup/setup-decisions.md": "owned",
@@ -821,7 +822,7 @@
     "wiki/overview.md": "wiki-owned",
     "wiki/README.md": "wiki-owned"
   },
-  "generated": "2026-10-28T11:49:12.536Z",
+  "generated": "2026-10-29T14:02:34.759Z",
   "regions": [
     {
       "endMarker": "<!-- gaia:audit-remit:end -->",
