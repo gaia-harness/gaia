@@ -23,7 +23,7 @@
 
 DONE_LINE="You're all set: your GAIA project is ready."
 NOT_DONE_LINE="Setup isn't finished: these project settings are still owed: <the OWED_AT_END ids>. Fix what stopped them above, then re-run /setup-gaia; it resumes from the first owed step."
-UNCHECKED_LINE="Your part of setup is done, but these project settings are still undecided: <the ADMIN_UNCHECKED_AT_END ids>. GAIA couldn't check whether you're a repository admin, because gh isn't signed in or GitHub didn't answer. Sign in with gh auth login and re-run /setup-gaia, or ask a repository admin to run it on the default branch."
+UNCHECKED_LINE="Your part of setup is done, but these project settings are still undecided: <the ADMIN_UNCHECKED_AT_END ids>. GAIA couldn't check whether you're a repository admin, because gh isn't signed in, GitHub didn't answer, or the repository didn't exist yet when setup checked. Re-run /setup-gaia (after gh auth login if gh isn't signed in), or ask a repository admin to run it on the default branch."
 ADMIN_OWED_LINE="Your part of setup is done, but these project settings still need a repository admin: <the ADMIN_OWED_AT_END ids>. They stay unapplied until a repo admin runs /setup-gaia on the default branch, so ask one to."
 DOCS_LINE='New to GAIA? The docs walk you through your first feature: https://docs.gaiaharness.com/getting-started/onboarding/'
 FRESH_CONTEXT_LINE='Type /clear to start your first feature with a fresh context.'
