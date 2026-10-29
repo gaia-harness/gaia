@@ -142,9 +142,8 @@ jobs:
           # playwright.config.ts, so a change to one is test-relevant too.
           # The committed msw worker script is read by the node-project drift
           # test, so a change to it alone is test-relevant.
-          # The apt archive cache action installs Chromium's system
-          # dependencies for this job, so a change to it must run the job, and
-          # the Lint step runs frontend-lint-delta.sh, so a change to it does too.
+          # The apt archive cache action and the Lint step's script both serve
+          # this job, so a change to either must run the job.
           changed=$(set -o pipefail; git diff --name-only -z --no-renames "${CHECK_BASE}...HEAD" | tr '\0' '\n')
           pattern='^frontend/(app|test)/|^frontend/\.playwright/|^frontend/\.storybook/|^(package\.json|pnpm-lock\.yaml|pnpm-workspace\.yaml|\.npmrc|\.node-version)$|^frontend/package\.json$|^frontend/tsconfig[^/]*\.json$|^frontend/dev-ports[^/]*\.ts$|^frontend/components\.json$|^frontend/(vite|vitest|playwright|eslint|react-router|react-compiler|doctor|knip|prettier|stylelint)\.config\.|^\.gaia/packages\.json$|^frontend/gaia\.package\.json$|^frontend/public/mockServiceWorker\.js$|^\.github/workflows/tests\.yml$|^\.github/actions/gaia-apt-cache/|^\.gaia/scripts/frontend-lint-delta\.sh$'
           if printf '%s\n' "$changed" | grep -qE "$pattern"; then
@@ -183,8 +182,7 @@ jobs:
       - if: steps.chore-deps.outputs.skip == 'false' && steps.filter.outputs.code == 'true'
         name: Typecheck
         run: pnpm typecheck
-      # Lints only the frontend files changed since the last green base, or
-      # every file when a lint input changed; the script's header says why.
+      # Lints the delta since the last green base; the script's header says why.
       - if: steps.chore-deps.outputs.skip == 'false' && steps.filter.outputs.code == 'true'
         name: Lint
         env:
