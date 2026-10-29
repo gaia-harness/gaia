@@ -33,12 +33,12 @@
 # The release-bookkeeping arm is the same context call answering a second,
 # independent question for GAIA's own repository: is the branch's whole change
 # release bookkeeping (version strings, the CHANGELOG graduation, the wiki
-# scrub), by .gaia/scripts/release-bookkeeping-check.sh, the predicate the CI
-# fast path and verify-harness read too? When it is, every path of that change
+# scrub), by the maintainer-only release-bookkeeping predicate the CI fast path
+# and verify-harness read too? When it is, every path of that change
 # is ownerless and out-of-scope allowlisted: there is no code for a member to
 # read, the resolver dispatches nobody, and the merge gate's out-of-scope
-# bypass clears the merge. It needs no skip-keyed member. The script is
-# release-excluded, so an adopter clone never arms it, and every failure (no
+# bypass clears the merge. It needs no skip-keyed member. The release scrub
+# strips the arm, so an adopter clone never arms it, and every failure (no
 # script, no merge base, an unchanged .gaia/VERSION, a predicate that says no
 # or cannot answer) leaves it disarmed, which is over-review.
 #
@@ -142,6 +142,11 @@ _audit_scope_release_owned_keys() {
   printf '%s\n' "$manifest" | jq -r '.files | to_entries[] | select(.value == "owned") | .key' 2>/dev/null
 }
 
+# The shipped copy keeps only this no-op: the release scrub strips the
+# maintainer-only arm below, so an adopter tree never names or runs the
+# predicate, which the release withholds.
+_audit_scope_release_bookkeeping_arm() { _AUDIT_SCOPE_BOOKKEEPING_PATHS=""; }
+# gaia:maintainer-only:start
 # _audit_scope_release_bookkeeping_arm <root> <base-ref> <head-tree-ish> <merge-base>:
 # arms the bookkeeping path set when the predicate says the merge-base-to-head
 # change is release bookkeeping; otherwise leaves it empty. A tree whose
@@ -164,6 +169,7 @@ _audit_scope_release_bookkeeping_arm() {
   _AUDIT_SCOPE_BOOKKEEPING_PATHS=$'\n'"${paths}"$'\n'
   return 0
 }
+# gaia:maintainer-only:end
 
 # _audit_scope_release_bookkeeping_path <path>: exit 0 when the bookkeeping arm
 # is armed and <path> is one of that change's paths. In-process, no fork.
