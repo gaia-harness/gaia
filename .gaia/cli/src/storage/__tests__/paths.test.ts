@@ -10,8 +10,8 @@ const git = (cwd: string, args: string[]): void => {
   execFileSync('git', args, {cwd, stdio: ['ignore', 'ignore', 'pipe']});
 };
 
-const projectIdPathUnder = (root: string): string =>
-  path.join(root, '.gaia', 'local', '.project-id');
+const installIdPathUnder = (root: string): string =>
+  path.join(root, '.gaia', 'local', '.install-id');
 
 describe('resolveStorageRoots', () => {
   let mainRoot: string;
@@ -26,15 +26,15 @@ describe('resolveStorageRoots', () => {
     for (const dir of scratch) rmSync(dir, {force: true, recursive: true});
   });
 
-  test('resolves the project-id path under the main checkout', () => {
+  test('resolves the install-id path under the main checkout', () => {
     const roots = resolveStorageRoots({repoRoot: mainRoot});
 
-    expect(roots.projectIdPath).toBe(projectIdPathUnder(mainRoot));
+    expect(roots.installIdPath).toBe(installIdPathUnder(mainRoot));
   });
 
   test('resolves to the MAIN checkout from inside a linked worktree', () => {
     // The C3-05 property: one clone, one identity. A worktree that resolves to
-    // its own root mints a second `.project-id`, so one adopter counts as N.
+    // its own root mints a second `.install-id`, so one adopter counts as N.
     const worktree = realpathSync(
       mkdtempSync(path.join(tmpdir(), 'gaia-storage-wt-'))
     );
@@ -44,7 +44,10 @@ describe('resolveStorageRoots', () => {
 
     const roots = resolveStorageRoots({repoRoot: worktree});
 
-    expect(roots.projectIdPath).toBe(projectIdPathUnder(mainRoot));
+    expect(roots.installIdPath).toBe(installIdPathUnder(mainRoot));
+    expect(roots.legacyProjectIdPath).toBe(
+      path.join(mainRoot, '.gaia', 'local', '.project-id')
+    );
   });
 
   test('resolves to the repo root from a subdirectory of the checkout', () => {
@@ -55,7 +58,7 @@ describe('resolveStorageRoots', () => {
 
     const roots = resolveStorageRoots({repoRoot: nested});
 
-    expect(roots.projectIdPath).toBe(projectIdPathUnder(mainRoot));
+    expect(roots.installIdPath).toBe(installIdPathUnder(mainRoot));
   });
 
   test('throws rather than falling back when the cwd is not in a repository', () => {

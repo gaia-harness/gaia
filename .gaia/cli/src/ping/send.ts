@@ -2,13 +2,13 @@
  * Shared "gaia ping" core: a fire-and-forget POST to the adoption ping
  * at PING_URL, shared by the `init`, `setup`, and `update` events.
  * Pseudonymous-per-install, not anonymous: the body carries a stable
- * `projectId` (derived from the repo path, see `../storage/project-id.ts`)
+ * `projectId` (a random per-install id, see `../storage/project-id.ts`)
  * so the server can correlate one install's init -> setup -> update
  * events, but it never carries user paths or free text beyond the
  * low-cardinality categorical fields each event defines.
  *
  * Must never throw or block; a network failure, timeout, unreadable
- * manifest, or project-id write failure is swallowed so the caller's exit
+ * manifest, or install-id write failure is swallowed so the caller's exit
  * code is unaffected.
  *
  * `GAIA_TELEMETRY_PING_DISABLE=1` suppresses the ping (checked first): it is

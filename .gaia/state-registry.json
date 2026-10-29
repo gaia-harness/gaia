@@ -527,13 +527,13 @@
       }
     },
     {
-      "id": "project-id",
-      "path": ".project-id",
+      "id": "install-id",
+      "path": ".install-id",
       "match": "exact",
       "kind": "file",
       "scope": "main-only",
       "keyed_by": null,
-      "why": "One identity per clone, used in ping/telemetry. Forks per worktree path today via a hash of the repo root path, a defect; classified at its main-only target scope with the fix deferred to a later phase.",
+      "why": "One random identity per clone, sent as the adoption ping's projectId. Resolved to the main checkout so every worktree reads the same id.",
       "writer": "code",
       "retention": {
         "class": "keep"
@@ -863,6 +863,13 @@
     }
   ],
   "residue": [
+    {
+      "id": "project-id-residue",
+      "path": ".project-id",
+      "match": "exact",
+      "why": "Legacy telemetry id holding a hash of the repo path; the CLI deletes it when it mints .install-id, and nothing reads it.",
+      "writer": "none-residue"
+    },
     {
       "id": "mentorship-config",
       "path": "mentorship.json",

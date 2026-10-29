@@ -384,7 +384,8 @@ run_in_registry_repo() {
     "codify/review-tally.json:shared"
     "harden/declines.json:residue"
     "cache/gh-artifact-pr.treeA.json:main-only"
-    ".project-id:main-only"
+    ".install-id:main-only"
+    ".project-id:residue"
     "declined-updates.json:main-only"
     "dep-audit-baseline.json:main-only"
     "sandbox.json:main-only"
@@ -719,7 +720,7 @@ gh-artifact-pr-cache branch-spent 7 slug-glob - - -
 residual-triage-caches keep - - - - -
 audit-loop-state branch-spent 7 audit-loop - - -
 harness-verify-pass branch-spent 7 normalized-file - - -
-project-id keep - - - - -
+install-id keep - - - - -
 declined-updates keep - - - - -
 statusline-wrappers keep - - - - -
 machine-markers keep - - - - -

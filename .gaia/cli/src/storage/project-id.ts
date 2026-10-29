@@ -1,7 +1,11 @@
-/* eslint-disable no-bitwise -- RFC 4122 §4.4 UUIDv4 variant nibble derivation
-   uses bitwise OR/AND on hex nibbles; no readable alternative. */
-import {createHash} from 'node:crypto';
-import {existsSync, mkdirSync, readFileSync, writeFileSync} from 'node:fs';
+import {randomUUID} from 'node:crypto';
+import {
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs';
 import path from 'node:path';
 import type {StorageRoots} from './paths.js';
 
@@ -9,34 +13,19 @@ const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/u;
 
 /**
- * Format 16 hex bytes as a UUIDv4 string with the proper version (4) and
- * variant (RFC 4122) bits set per RFC 4122 §4.4.
- */
-const formatAsUuidV4 = (hex32: string): string => {
-  // Force version nibble to 4 (offset 12).
-  // Force variant nibble to 8/9/a/b (offset 16).
-  const version = '4';
-  const variantMask = 0x8;
-  const variantBits = Number.parseInt(hex32.charAt(16), 16) & 0x3;
-  const variant = (variantMask | variantBits).toString(16);
-
-  return `${hex32.slice(0, 8)}-${hex32.slice(8, 12)}-${version}${hex32.slice(13, 16)}-${variant}${hex32.slice(17, 20)}-${hex32.slice(20, 32)}`;
-};
-
-const deriveProjectId = (repoRootPath: string): string => {
-  const hash = createHash('sha256').update(repoRootPath).digest('hex');
-
-  return formatAsUuidV4(hash.slice(0, 32));
-};
-
-/**
- * Read or generate `.gaia/local/.project-id` at the repo root.
- * UUIDv4 derived from sha256(repo_root_path); take first 16 bytes; format per RFC 4122.
- * Mode 644.
+ * Read or mint the telemetry install id at `.gaia/local/.install-id`.
+ * A random UUIDv4 (`crypto.randomUUID()`), so nothing about the machine,
+ * the user or the repo path can be recovered from it. Mode 644.
  * Idempotent: subsequent reads return the existing line.
+ *
+ * Minting deletes the legacy `.project-id` first. That file held a hash of
+ * the repo path, which a guessable path makes reversible, so every install
+ * rotates once to a new file name and the old value is never read. Deleting
+ * before writing means a failed delete leaves no `.install-id`, and the next
+ * run tries the rotation again instead of leaving the old hash behind.
  */
 export const readOrCreateProjectId = (roots: StorageRoots): string => {
-  const filePath = roots.projectIdPath;
+  const filePath = roots.installIdPath;
 
   if (existsSync(filePath)) {
     const existing = readFileSync(filePath, 'utf8').trim();
@@ -44,7 +33,7 @@ export const readOrCreateProjectId = (roots: StorageRoots): string => {
     if (UUID_RE.test(existing)) {
       return existing;
     }
-    // Malformed: regenerate from canonical derivation.
+    // Malformed: mint a new one.
   }
 
   const parent = path.dirname(filePath);
@@ -53,10 +42,8 @@ export const readOrCreateProjectId = (roots: StorageRoots): string => {
     mkdirSync(parent, {mode: 0o755, recursive: true});
   }
 
-  // `roots.mainRoot` is the same main-worktree root `resolveStorageRoots`
-  // already resolved to build `projectIdPath`; hash it directly rather than
-  // reconstructing it from the path.
-  const id = deriveProjectId(roots.mainRoot);
+  rmSync(roots.legacyProjectIdPath, {force: true});
+  const id = randomUUID();
   writeFileSync(filePath, `${id}\n`, {mode: 0o644});
 
   return id;
