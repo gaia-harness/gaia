@@ -14,6 +14,8 @@ A release change that requires the adopter to act, run a command or hand-migrate
 
 ## [Unreleased]
 
+## [2.3.1] - 2026-10-29
+
 ### Changed
 
 - **Plainer public release notes (maintainer repo only):** the `release-notes` skill now writes for a visitor skimming the marketing site. Bullets say what changed in plain language and link a docs page for the detail instead of reciting it, and fixes read as the bug going away rather than a new feature (#3178, #3180)
@@ -23,7 +25,7 @@ A release change that requires the adopter to act, run a command or hand-migrate
 
 ### Fixed
 
-- **Lint, typecheck, tests and shellcheck now block a merge:** `/setup-gaia` required only `GAIA-Audit`, so a pull request with red CI could still merge. It now also registers the `Vitest and Playwright` and `Shellcheck and bats` checks as required, keeping every check you already require; both report green when nothing they cover changed, and `Run Chromatic` stays optional. A repository admin's `/update-gaia` registers them on an existing project; otherwise an admin runs `/setup-gaia`. CI now lints only the frontend files changed since the last green run instead of the whole app, and lints everything when the ESLint config, a tsconfig or a dependency changes. A non-admin's `/setup-gaia` now names the checks it could not register and asks for a repository admin, instead of ending on "You're all set". On a project hosted outside GitHub, `/setup-gaia` records the checks as not applicable instead of naming them as owed by an admin on every run. When `gh` is not signed in or GitHub does not answer the admin check, setup names the settings still undecided and says to sign in and re-run, or ask a repository admin (#3185, #3194, #3197)
+- **Lint, typecheck, tests and shellcheck now block a merge:** `/setup-gaia` required only `GAIA-Audit`, so a pull request with red CI could still merge. It now also registers the `Vitest and Playwright` and `Shellcheck and bats` checks as required, keeping every check you already require; both report green when nothing they cover changed, and `Run Chromatic` stays optional. A repository admin's `/update-gaia` registers them on an existing project; otherwise an admin runs `/setup-gaia`. CI now lints only the frontend files changed since the last green run instead of the whole app, and lints everything when the ESLint config, a tsconfig or a dependency changes. A non-admin's `/setup-gaia` now names the checks it could not register and asks for a repository admin, instead of ending on "You're all set". On a project hosted outside GitHub, `/setup-gaia` records the checks as not applicable instead of naming them as owed by an admin on every run. When `gh` is not signed in or GitHub does not answer the admin check, setup names the settings still undecided and says to sign in and re-run, or ask a repository admin (#3185, #3193, #3194, #3196, #3197)
 - **Telemetry ID is now random per install:** the adoption ping's `projectId` was a hash of the repository path, which a guessable path makes reversible. It is now a random UUID stored in `.gaia/local/.install-id`, and every existing install rotates to a new one once on its next ping, deleting the old `.gaia/local/.project-id`. No action needed (#3188)
 
 ## [2.3.0] - 2026-10-28
@@ -790,7 +792,8 @@ GAIA v1.0.0 is the inaugural public release of the GAIA React workflow, a Claude
 - **Quality gate.** Mandatory pre-commit pipeline: simplify, localization check, typecheck, lint, unit tests, E2E tests, dev smoke test, build. Zero warnings tolerated.
 - **Release tooling.** Tag-triggered `release.yml` builds a scrubbed tarball; `create-gaia` bootstrapper consumes it via `npx create-gaia@latest my-app`.
 
-[Unreleased]: https://github.com/gaia-harness/gaia/compare/v2.3.0...HEAD
+[Unreleased]: https://github.com/gaia-harness/gaia/compare/v2.3.1...HEAD
+[2.3.1]: https://github.com/gaia-harness/gaia/releases/tag/v2.3.1
 [2.3.0]: https://github.com/gaia-harness/gaia/releases/tag/v2.3.0
 [2.2.0]: https://github.com/gaia-harness/gaia/releases/tag/v2.2.0
 [2.1.1]: https://github.com/gaia-react/gaia/releases/tag/v2.1.1
