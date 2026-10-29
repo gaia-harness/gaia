@@ -142,10 +142,10 @@ jobs:
           # playwright.config.ts, so a change to one is test-relevant too.
           # The committed msw worker script is read by the node-project drift
           # test, so a change to it alone is test-relevant.
-          # The apt archive cache action installs Chromium's system
-          # dependencies for this job, so a change to it must run the job.
+          # The apt archive cache action and the Lint step's script both serve
+          # this job, so a change to either must run the job.
           changed=$(set -o pipefail; git diff --name-only -z --no-renames "${CHECK_BASE}...HEAD" | tr '\0' '\n')
-          pattern='^frontend/(app|test)/|^frontend/\.playwright/|^frontend/\.storybook/|^(package\.json|pnpm-lock\.yaml|pnpm-workspace\.yaml|\.npmrc|\.node-version)$|^frontend/package\.json$|^frontend/tsconfig[^/]*\.json$|^frontend/dev-ports[^/]*\.ts$|^frontend/components\.json$|^frontend/(vite|vitest|playwright|eslint|react-router|react-compiler|doctor|knip|prettier|stylelint)\.config\.|^\.gaia/packages\.json$|^frontend/gaia\.package\.json$|^frontend/public/mockServiceWorker\.js$|^\.github/workflows/tests\.yml$|^\.github/actions/gaia-apt-cache/'
+          pattern='^frontend/(app|test)/|^frontend/\.playwright/|^frontend/\.storybook/|^(package\.json|pnpm-lock\.yaml|pnpm-workspace\.yaml|\.npmrc|\.node-version)$|^frontend/package\.json$|^frontend/tsconfig[^/]*\.json$|^frontend/dev-ports[^/]*\.ts$|^frontend/components\.json$|^frontend/(vite|vitest|playwright|eslint|react-router|react-compiler|doctor|knip|prettier|stylelint)\.config\.|^\.gaia/packages\.json$|^frontend/gaia\.package\.json$|^frontend/public/mockServiceWorker\.js$|^\.github/workflows/tests\.yml$|^\.github/actions/gaia-apt-cache/|^\.gaia/scripts/frontend-lint-delta\.sh$'
           if printf '%s\n' "$changed" | grep -qE "$pattern"; then
             echo "code=true" >> "$GITHUB_OUTPUT"
           else
@@ -182,9 +182,12 @@ jobs:
       - if: steps.chore-deps.outputs.skip == 'false' && steps.filter.outputs.code == 'true'
         name: Typecheck
         run: pnpm typecheck
+      # Lints the delta since the last green base; the script's header says why.
       - if: steps.chore-deps.outputs.skip == 'false' && steps.filter.outputs.code == 'true'
         name: Lint
-        run: pnpm lint-dry
+        env:
+          CHECK_BASE: ${{ steps.base.outputs.base }}
+        run: bash .gaia/scripts/frontend-lint-delta.sh --root . --base "$CHECK_BASE"
       # Only the engine the suites run. Vitest's browser and storybook projects
       # and the Playwright story scan all launch Chromium, so this one install
       # serves both steps below and must precede the first of them. `playwright install` resolves its browser
