@@ -21,6 +21,10 @@ A release change that requires the adopter to act, run a command or hand-migrate
 - **Release notes bucketed by what the reader sees (maintainer repo only):** the `release-notes` skill now files each item under New, Improved or Fixed by how an adopter experiences it rather than by its CHANGELOG heading, copies the routing-line preamble only into the file it is writing, and leaves already-approved release files as they are (#3182)
 - **Release fast path (maintainer repo only):** a release pull request whose whole change is version bookkeeping, cut from a green main, now runs a one-minute manifest consistency check in place of the full CI suites and needs no Code Audit Team pass, since main already verified the tree. Anything beyond the bookkeeping, or a main that is not green, still runs every gate (#3176)
 
+### Fixed
+
+- **Lint, typecheck, tests and shellcheck now block a merge:** `/setup-gaia` required only `GAIA-Audit`, so a pull request with red CI could still merge. It now also registers the `Vitest and Playwright` and `Shellcheck and bats` checks as required, keeping every check you already require; both report green when nothing they cover changed, and `Run Chromatic` stays optional. A repository admin's `/update-gaia` registers them on an existing project; otherwise an admin runs `/setup-gaia`. CI now lints only the frontend files changed since the last green run instead of the whole app, and lints everything when the ESLint config, a tsconfig or a dependency changes (#3185)
+
 ## [2.3.0] - 2026-10-28
 
 ### Added
