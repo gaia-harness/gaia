@@ -7,7 +7,7 @@ disable-model-invocation: true
 Run this once after `/gaia-init`, and re-run it any time. `/setup-gaia` is the single onboarding command for a GAIA project. It detects the situation and runs only the phases this clone actually owes:
 
 - **Per-machine work** every clone needs (tool installs, plugins, statusline bit, `.env`, the sandbox decision, and, for a developer with a global statusline, which statusline draws the left side).
-- **GitHub repository provisioning** (create / adopt / manual, private by default), plus branch protection, the `GAIA-Audit` required-check registration, and squash-only merge settings when the runner is a repo admin.
+- **GitHub repository provisioning** (create / adopt / manual, private by default), plus branch protection, the `GAIA-Audit` required-check registration, the `Vitest and Playwright` and `Shellcheck and bats` required checks (Phase 5), and squash-only merge settings when the runner is a repo admin.
 - **Team settings** in `.gaia/project.json`: the git isolation policy and the sandbox recommendation. Both ship with a default (worktrees always, sandbox not recommended), so a plain run records the default and asks nothing; a repo admin changes either with `--reconfigure`, where the admin's own sandbox answer sets the recommendation.
 
 It is safe for **any developer** to run at any time. A phase is owed when its own gate says so, or when the shipped setup feature list (`.gaia/setup-features.json`) holds its feature with no recorded decision; each decision it makes is recorded. A plain (no-flag) re-run on a provisioned project whose decisions are all recorded prints the already-provisioned line and mutates nothing: it never re-provisions the repo or changes branch protection. The one exception is a repo admin re-running it on a repo whose required checks still lack `GAIA-Audit` (or still carry the stale `code-review-audit` context): that run owes the registration and makes it. Pass `--reconfigure` to re-ask the sandbox decision (Phase 2), whose answer from a repo admin also sets the team sandbox recommendation, the team git isolation policy (Phase 3.5), the squash-only-merge offer (Phase 3.7), and the statusline left-side choice (Phase 4.6).
@@ -25,6 +25,7 @@ This command reads these references, all under `.claude/skills/gaia/references/s
 - `statusline-left.md`: Phase 4.6, every invocation for the routing warning, and when a choice or record is owed.
 - `standalone-features.md`: Phase 5, every run.
 - `migrate-2-machine.md`: Phase 5, when `standalone-features.md` names it as owed.
+- `required-ci-checks.md`: Phase 5, when `standalone-features.md` names it as owed.
 - `land-decisions.md`: Phase 5.5, to land project decisions, and Phase 6, for the setup ping and the closing message.
 
 ## Pre-flight: Worktree check
@@ -413,7 +414,7 @@ Fall through to Phase 5.
 
 ## Phase 5: Owed setup features (always evaluated)
 
-Read `.claude/skills/gaia/references/setup/standalone-features.md` now, the whole file, and run it. When it prints `OWED_FEATURE migrate-2-machine`, Read `.claude/skills/gaia/references/setup/migrate-2-machine.md` now, the whole file, as the reference that line names. Fall through to Phase 5.5.
+Read `.claude/skills/gaia/references/setup/standalone-features.md` now, the whole file, and run it. When it prints `OWED_FEATURE migrate-2-machine`, Read `.claude/skills/gaia/references/setup/migrate-2-machine.md` now, the whole file, as the reference that line names. When it prints `OWED_FEATURE required-ci-checks`, Read `.claude/skills/gaia/references/setup/required-ci-checks.md` now, the whole file, the same way. Fall through to Phase 5.5.
 
 ## Phase 5.5: Land setup decisions (when project decisions may be recorded)
 
