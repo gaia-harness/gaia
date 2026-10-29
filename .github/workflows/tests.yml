@@ -182,45 +182,13 @@ jobs:
       - if: steps.chore-deps.outputs.skip == 'false' && steps.filter.outputs.code == 'true'
         name: Typecheck
         run: pnpm typecheck
-      # Lints only the delta since the last green base, not every frontend/
-      # file: the commit-time Quality Gate already lints staged files, so this
-      # step is the backstop for commits that skipped it, and a whole-tree
-      # lint is slow at scale. A change to a lint input (the ESLint or
-      # Prettier config, a tsconfig the type-aware rules read, or a manifest
-      # or lockfile that can move a lint plugin) can turn an untouched file
-      # red, so it lints everything instead. --no-renames lists a moved
-      # file's new path, and its importers must change their import path, so
-      # an architecture-boundaries violation from a move is in the delta too.
-      # --diff-filter=d drops deleted paths, which ESLint cannot open.
-      # --no-warn-ignored keeps an explicitly passed ignored file (the msw
-      # worker script) from tripping --max-warnings=0.
+      # Lints only the frontend files changed since the last green base, or
+      # every file when a lint input changed; the script's header says why.
       - if: steps.chore-deps.outputs.skip == 'false' && steps.filter.outputs.code == 'true'
         name: Lint
         env:
           CHECK_BASE: ${{ steps.base.outputs.base }}
-        run: |
-          set -euo pipefail
-          delta="$RUNNER_TEMP/lint-delta"
-          git diff --name-only -z --no-renames --diff-filter=d "${CHECK_BASE}...HEAD" > "$delta"
-          lint_inputs='^frontend/(eslint|prettier)\.config\.|^frontend/tsconfig[^/]*\.json$|^frontend/package\.json$|^(package\.json|pnpm-lock\.yaml|pnpm-workspace\.yaml)$'
-          if tr '\0' '\n' < "$delta" | grep -qE "$lint_inputs"; then
-            echo "A lint input changed: linting every frontend file."
-            pnpm lint-dry
-            exit 0
-          fi
-          lint_paths=()
-          while IFS= read -r -d '' path; do
-            case "$path" in
-              frontend/*.js | frontend/*.jsx | frontend/*.ts | frontend/*.tsx | frontend/*.mjs | frontend/*.cjs)
-                lint_paths+=("${path#frontend/}") ;;
-            esac
-          done < "$delta"
-          if [ "${#lint_paths[@]}" -eq 0 ]; then
-            echo "No lintable frontend file changed since ${CHECK_BASE}."
-            exit 0
-          fi
-          printf 'Linting %s changed file(s).\n' "${#lint_paths[@]}"
-          pnpm -C frontend exec eslint --fix-dry-run --max-warnings=0 --no-warn-ignored -- "${lint_paths[@]}"
+        run: bash .gaia/scripts/frontend-lint-delta.sh --root . --base "$CHECK_BASE"
       # Only the engine the suites run. Vitest's browser and storybook projects
       # and the Playwright story scan all launch Chromium, so this one install
       # serves both steps below and must precede the first of them. `playwright install` resolves its browser
