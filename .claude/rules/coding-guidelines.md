@@ -12,14 +12,14 @@ Write no error handling for a state that cannot occur, but handle and bound real
 Before writing new code, walk this order and use the first step that fully solves the need:
 
 1. Reuse what the codebase already has, the way surrounding code uses it.
-2. Use the standard library or a platform feature, unless the project has its own: the project's own wins.
+2. Use the standard library or a platform feature when the project has no equivalent.
 3. Use an installed dependency.
-4. Add a new dependency only when the earlier steps fall short and it earns its weight, never for a few lines.
+4. Add a new dependency only when the earlier steps fall short and it earns its weight, never to save writing a few lines.
 5. Only then write the minimum new code.
 
 On a bug fix whose defect lives in shared code, fix it there once rather than at each call site, then check that every caller still holds. Change only callers your fix breaks; a problem found in any other caller is out of scope, so file it as tech debt.
 
-Validation at trust boundaries, error handling that prevents data loss, security, and accessibility are never cut to make code smaller.
+Smaller code never justifies cutting trust-boundary validation, error handling that prevents data loss, security, or accessibility.
 
 ## 2. Surgical Changes
 
