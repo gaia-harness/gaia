@@ -2,7 +2,7 @@
 type: concept
 status: active
 created: 2026-06-02
-updated: 2026-10-13
+updated: 2026-10-29
 tags: [concept, ci]
 ---
 
@@ -50,6 +50,13 @@ The gated workflow does two things before its expensive steps:
    changed files in the un-passed delta and matches them (ERE) against the
    files that affect it. No match → gate the expensive steps off; the job still
    reports its required check green.
+
+When the suite does run, its lint step reuses the same base: it lints only the
+JavaScript and TypeScript files under `frontend/` that `<base>...HEAD` adds or
+modifies, not the whole tree, because the commit-time [[Quality Gate]] already
+lints staged files and CI is the backstop. A change to a lint input (the ESLint
+or Prettier config, a tsconfig, a manifest or the lockfile) can turn an
+untouched file red, so it lints everything instead.
 
 When no green ancestor exists (the first run on a PR, every prior run
 failed/cancelled (those leave no green signal), or the Checks API is unreachable (fork PRs run with a token that the
