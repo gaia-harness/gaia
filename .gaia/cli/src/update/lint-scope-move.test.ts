@@ -20,7 +20,6 @@ type PackageJson = {
 
 const OLD_LINT = ['@gaia', 'react/lint'].join('-');
 const NEW_LINT = '@gaia-harness/lint';
-const LINT_VERSION = '3.0.3';
 const OWNED_CONFIGS = [
   'frontend/eslint.config.mjs',
   'frontend/prettier.config.mjs',
@@ -29,6 +28,15 @@ const OWNED_CONFIGS = [
 ];
 
 const repoRoot = resolveRepoRootFromImportMeta(import.meta.url);
+
+// Read from the release manifest, not pinned: the real-release-file tests
+// compare against it, and every lint bump moves it.
+const LINT_VERSION =
+  (
+    JSON.parse(
+      readFileSync(path.join(repoRoot, 'frontend/package.json'), 'utf8')
+    ) as PackageJson
+  ).devDependencies?.[NEW_LINT] ?? '';
 
 const baseline: PackageJson = {
   devDependencies: {[OLD_LINT]: '3.0.3', prettier: '3.9.10'},
