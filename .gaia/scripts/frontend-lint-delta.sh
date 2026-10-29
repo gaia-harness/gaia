@@ -94,9 +94,9 @@ fi
 
 if [ "$plan" = true ]; then
   echo delta
-  printf '%s\n' "${lint_paths[@]}"
+  printf '%s\n' ${lint_paths[@]+"${lint_paths[@]}"}
   exit 0
 fi
 
 echo "frontend-lint-delta: linting ${#lint_paths[@]} changed file(s)"
-exec pnpm -C "$root/frontend" exec eslint --fix-dry-run --max-warnings=0 --no-warn-ignored -- "${lint_paths[@]}"
+exec pnpm -C "$root/frontend" exec eslint --fix-dry-run --max-warnings=0 --no-warn-ignored -- ${lint_paths[@]+"${lint_paths[@]}"}
