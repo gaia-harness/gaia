@@ -289,9 +289,9 @@ shell_entry_globs() {
     inside && in_globs { print }
   ' "$1"
 }
-region_globs "$SHELL_DEFINITION" | grep -qxF ".claude/settings.json" \
+grep -qxF ".claude/settings.json" <<<"$(region_globs "$SHELL_DEFINITION")" \
   || { fail "the staged shell member's remit region does not name .claude/settings.json"; exit 1; }
-shell_entry_globs "$ROSTER" | grep -qF '".claude/settings.json"' \
+grep -qF '".claude/settings.json"' <<<"$(shell_entry_globs "$ROSTER")" \
   || { fail "the staged roster's code-audit-shell entry does not grant .claude/settings.json"; exit 1; }
 
 UNGRANTED_ROSTER="$STAGING/.gaia/audit-ci-ungranted.yml"
