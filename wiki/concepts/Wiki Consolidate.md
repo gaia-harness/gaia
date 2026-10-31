@@ -56,4 +56,4 @@ Consolidate runs on every `/gaia-wiki` chain whose sync completes normally. A fi
 ## Pairs with
 
 - [[Wiki Sync]]: drives the commit and owns the parallel sync-state fields.
-- [[GAIA Spec]]: the workflow that produces SPECs. the wiki promotion step is the orchestrator's pre-merge step; consolidate audits its writes. The wiki promotion step writes `pr_number` provenance.
+- [[GAIA Spec]]: the workflow that produces SPECs. the wiki promotion step is the orchestrator's pre-audit step; consolidate audits its writes. The wiki promotion step writes `pr_number` provenance.

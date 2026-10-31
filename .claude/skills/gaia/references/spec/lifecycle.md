@@ -39,7 +39,7 @@ A HALTED phase block carries no `Commit:` line, so a resume re-runs the phase. A
 
 ## Pre-audit UAT checks
 
-For a spec-derived plan, after the last phase commits and before the final summary and the pre-merge Code Audit Team audit, from `<RESOLVED_ROOT>`:
+For a spec-derived plan, after the last phase commits and before the worthiness step, the wiki promotion, the pre-merge Code Audit Team audit and the final summary, from `<RESOLVED_ROOT>`:
 
 ```bash
 bash .gaia/scripts/spec/uat-gate.sh <SPEC_PATH> --routing <PLAN_DIR>/README.md --all
@@ -83,7 +83,12 @@ Then judge the test bodies. The gate proves each spec still carries its contract
 
 ## Consolidation
 
-The one consolidation recipe. Two callers run it: the orchestrator, after audit clearance and the human's ready-to-merge confirmation, and the pre-flight sweep's cold consolidation, against a folder whose PR already merged.
+The one consolidation recipe. Four callers run it:
+
+- **The pre-audit pass.** The orchestrator, after the worthiness step and before the first member dispatch. It always attempts promotion.
+- **The post-clearance refresh.** The orchestrator, after audit clearance and the human's ready-to-merge confirmation. It rewrites `SUMMARY.md` against the audited code, uncommitted, and attempts promotion only when it reaches `wiki-promote.md`'s Step 2.
+- **The cold sweep.** The pre-flight sweep's cold consolidation, against a folder whose PR already merged. It accepts an interrupted run's pre-audit `SUMMARY.md` as the last complete summary: a verified one is no candidate, and an unverified one is rewritten from the layers.
+- **A plan generated before this order.** Its own orchestrator block consolidates after clearance and keeps that block's continuation. It may omit `Pass:` from its record, so a plan running its old block needs no new reading of this page.
 
 **Synthesis.** The caller (the warm orchestrator, or the session running the sweep; never a task sub-agent) writes `SUMMARY.md` by layered override-resolution: read the layers in precedence `SPEC.md`, then `AUDIT.md`, then the plan's `PROGRESS.md`; the top layer wins on conflict. A spec-less plan has no `SPEC.md` or `AUDIT.md`, so its `PROGRESS.md` is the only layer; a cold consolidation reads the plan's `PROGRESS.md` when one is present. Ground the result in the merged code and passing tests, write it present-tense as final-state prose, and surface any material narrowing between the stated intent and the shipped scope under an optional `## Divergence` section. Yield blocks in `PROGRESS.md` are resumption records, not findings, so consolidation ignores them.
 
@@ -100,14 +105,17 @@ The one consolidation recipe. Two callers run it: the orchestrator, after audit 
 bash .gaia/scripts/summary-verify.sh <SUMMARY.md path>
 ```
 
-Consolidation removes nothing: `SPEC.md`, `AUDIT.md`, `PROGRESS.md` and the plan folder all stay until the post-merge close (or, for a cold consolidation, until the sweep's own removal below). On exit 0 the orchestrator continues to the wiki promotion step. On a non-zero exit the orchestrator records the outcome in the wiki promotion record and continues to the merge without promoting; the post-merge close then keeps the layers, fail-closed:
+Consolidation removes nothing: `SPEC.md`, `AUDIT.md`, `PROGRESS.md` and the plan folder all stay until the post-merge close (or, for a cold consolidation, until the sweep's own removal below). On exit 0 the orchestrator continues to the wiki promotion step. On a non-zero exit the continuation depends on the caller: the pre-audit pass records the outcome below and goes on to the audit, with no commit and nothing removed; the refresh appends a `## Consolidation refresh` block instead and goes on to the merge. Either way the post-merge close then keeps the layers, fail-closed:
 
 ```
 ## Wiki promotion
+Pass: pre-audit
 Default: <the stamped value>   Choice: skipped-verify-failed
 Pages: none   Commit: none
 Reason: summary-verify.sh failed: <its first stderr line>
 ```
+
+Every record the promotion step writes starts with `Pass: pre-audit` or `Pass: refresh`. The `## Wiki promotion` block is written only by a pass attempting promotion. The pre-audit pass always attempts. A refresh attempts only when it reaches `wiki-promote.md`'s Step 2; any other refresh outcome, a verify failure included, appends a `## Consolidation refresh` block, a different heading, so it can never become the last promotion block. The last `## Wiki promotion` block is the run's outcome. A block recording `promoted` is never promoted again in the run.
 
 ## Post-merge close
 

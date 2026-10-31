@@ -19,6 +19,11 @@ A release change that requires the adopter to act, run a command or hand-migrate
 - **Claude recommends `/gaia-spec` or `/gaia-plan` when the work calls for one:** asking for a new user-visible feature, or for internal work worth planning and auditing first such as a migration, without naming a command now gets a recommendation before any branch is cut, with `Just do it` as the alternative. Bug fixes and contained changes proceed without asking (#3209)
 - Claude now asks before editing `.claude/settings.json`, the file that registers every GAIA hook and permission rule: the edit tools ask in every permission mode including bypassPermissions, and the common shell write shapes ask too, from the main thread and from a dispatched agent. With no human present an ask is a denial, so an unattended run cannot make the change through those routes. Known limit: under bypassPermissions Claude Code does not stop a shell write of this file. A pull request that changes it is now reviewed by the shell audit member, which lists any hook or permission rule the change removes or weakens. `.claude/settings.json` is a shared file, so a customized copy takes a three-way merge on update (#3205)
 
+### Changed
+
+- **Worthiness and wiki promotion run before the audit:** generated plans and the merge workflow now finish the test-worthiness step and the wiki commit before the first code audit round, so neither restarts CI or owes another audit pass after clearance (#3210)
+- **No debt on your own branch's code:** `file-tech-debt.sh file` now refuses a non-security finding on a line the branch wrote, routing it to a fix on the branch or an accepted residual, so the debt backlog holds only unrelated finds (#3210)
+
 ### Fixed
 
 - **`/update-deps` honors `minimumReleaseAgeExclude`:** a package your workspace exempts from the release-age window now shows up as an update right away, in the run and the statusline count, instead of being silently held back until it ages past the window (#3207)

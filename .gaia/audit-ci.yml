@@ -279,6 +279,8 @@ auditors:
       - ".gaia/scripts/audit-write-clearance-publish.sh"
       - ".gaia/scripts/audit-write-clearance-ledger.sh"
       - ".gaia/scripts/audit-dispositions-check.sh"
+      - ".gaia/scripts/audit-pr-sections-lib.sh"
+      - ".gaia/scripts/filing-outcomes-lib.sh"
       - ".gaia/scripts/audit-fix-verify.sh"
       - ".gaia/scripts/audit-light-route.sh"
       - ".gaia/scripts/audit-light-mark.sh"

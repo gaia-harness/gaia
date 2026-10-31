@@ -3,7 +3,8 @@
 # .gaia/scripts/spec/plan-verify.sh behavior: existence checks, the routing
 # table, the story test criterion line, the orchestrator step
 # sentinels (match rule, order rule, per-arm requirements), the verbatim
-# yield-handling block, failure aggregation and the misrouting warning. Shell
+# blocks (yield handling, worthiness step, wiki promotion, code audit and
+# post-clearance), failure aggregation and the misrouting warning. Shell
 # level only.
 #
 # Assertion style follows .claude/rules/bats-assertions.md.
@@ -19,8 +20,13 @@ setup() {
   S_GATE='<!-- gaia:orchestrator-step uat-gate -->'
   S_YIELD='<!-- gaia:orchestrator-step yield-handling -->'
   S_PRE='<!-- gaia:orchestrator-step uat-pre-audit -->'
+  S_WORTH='<!-- gaia:orchestrator-step worthiness-step -->'
   S_WIKI='<!-- gaia:orchestrator-step wiki-promotion -->'
+  S_AUDIT='<!-- gaia:orchestrator-step code-audit -->'
+  S_CLEAR='<!-- gaia:orchestrator-step post-clearance -->'
   S_CLOSE='<!-- gaia:orchestrator-step post-merge-close -->'
+  SPEC_ORDER=("$S_RENDER" "$S_GATE" "$S_YIELD" "$S_PRE" "$S_WORTH" "$S_WIKI" "$S_AUDIT" "$S_CLEAR" "$S_CLOSE")
+  SPEC_LESS_ORDER=("$S_YIELD" "$S_WORTH" "$S_WIKI" "$S_AUDIT" "$S_CLEAR" "$S_CLOSE")
 }
 
 # write_spec [<story then-clause>]: three UATs, one per surface.
@@ -59,13 +65,14 @@ write_routing() {
 EOF2
 }
 
-# yield_block [<indent>]: the yield-handling block as planner.md holds it,
-# re-indented to <indent> spaces, with the plan-directory placeholder replaced
-# by this fixture's plan folder.
-yield_block() {
-  local indent="${1:-0}" pad block
+# block_of <sentinel> [<indent>]: the block that sentinel opens, as the planner
+# file in BLOCK_SOURCE (default planner.md) holds it, re-indented to <indent>
+# spaces, with the plan-directory and SPEC-path placeholders replaced by this
+# fixture's values.
+block_of() {
+  local want="$1" indent="${2:-0}" pad block
   pad="$(printf '%*s' "$indent" '')"
-  block="$(awk -v want="$S_YIELD" -v pad="$pad" '
+  block="$(awk -v want="$want" -v pad="$pad" '
     { t = $0; sub(/^[ \t]+/, "", t); sub(/[ \t\r]+$/, "", t) }
     t ~ /^```/ {
       if (in_fence) { if (hit) { printf "%s", buffer; exit } in_fence = 0 }
@@ -77,20 +84,33 @@ yield_block() {
       line = $0
       sub(/^ {6}/, "", line)
       buffer = buffer (line == "" ? "" : pad line) "\n"
-    }' "$PLANNER_MD")"
+    }' "${BLOCK_SOURCE:-$PLANNER_MD}")"
   [ -n "$block" ] || return 1
-  printf '%s\n' "${block//\{PLAN_DIR\}/$PLAN}"
+  block="${block//\{PLAN_DIR\}/$PLAN}"
+  printf '%s\n' "${block//\{SPEC_PATH\}/$SPEC}"
+}
+
+yield_block() {
+  block_of "$S_YIELD" "${1:-0}"
+}
+
+# is_verbatim <sentinel>: the sentinels whose whole block is copied.
+is_verbatim() {
+  case "$1" in
+    "$S_YIELD" | "$S_WORTH" | "$S_WIKI" | "$S_AUDIT" | "$S_CLEAR") return 0 ;;
+  esac
+  return 1
 }
 
 # write_orchestrator <sentinel>...: ORCHESTRATOR.md with these lines in this
-# order; the yield-handling sentinel stands for the whole copied block.
+# order; a verbatim sentinel stands for the whole copied block.
 write_orchestrator() {
   local entry
   {
     printf '# Orchestrator\n\n'
     for entry in "$@"; do
-      if [ "$entry" = "$S_YIELD" ]; then
-        yield_block 0 || return 1
+      if is_verbatim "$entry"; then
+        block_of "$entry" 0 || return 1
       else
         printf '%s\n' "$entry"
       fi
@@ -107,7 +127,7 @@ write_task() {
 spec_fixture() {
   write_spec
   write_routing
-  write_orchestrator "$S_RENDER" "$S_GATE" "$S_YIELD" "$S_PRE" "$S_WIKI" "$S_CLOSE"
+  write_orchestrator "${SPEC_ORDER[@]}"
   printf '# Kickoff\n' >"$PLAN/KICKOFF.md"
   write_task '- Story test criterion (UAT-002): the toast reads Saved'
 }
@@ -115,7 +135,7 @@ spec_fixture() {
 # spec_less_fixture: a passing spec-less plan folder.
 spec_less_fixture() {
   printf '# Plan\n' >"$PLAN/README.md"
-  write_orchestrator "$S_YIELD" "$S_WIKI" "$S_CLOSE"
+  write_orchestrator "${SPEC_LESS_ORDER[@]}"
   printf '# Kickoff\n' >"$PLAN/KICKOFF.md"
   write_task '- nothing'
 }
@@ -211,7 +231,8 @@ verify_spec_less() {
 
 @test "each spec-derived sentinel is required and a missing one is named alone" {
   local literal
-  for literal in "$S_RENDER" "$S_GATE" "$S_YIELD" "$S_PRE" "$S_WIKI" "$S_CLOSE"; do
+  [ "${#SPEC_ORDER[@]}" -eq 9 ]
+  for literal in "${SPEC_ORDER[@]}"; do
     spec_fixture
     grep -vxF -- "$literal" "$PLAN/ORCHESTRATOR.md" >"$PLAN/ORCHESTRATOR.md.new"
     mv "$PLAN/ORCHESTRATOR.md.new" "$PLAN/ORCHESTRATOR.md"
@@ -222,12 +243,13 @@ verify_spec_less() {
   done
 }
 
-@test "a spec-less plan does not require the UAT sentinels but requires the other three" {
+@test "a spec-less plan does not require the UAT sentinels but requires the other six" {
   local literal
   spec_less_fixture
   verify_spec_less
   [ "$status" -eq 0 ]
-  for literal in "$S_YIELD" "$S_WIKI" "$S_CLOSE"; do
+  [ "${#SPEC_LESS_ORDER[@]}" -eq 6 ]
+  for literal in "${SPEC_LESS_ORDER[@]}"; do
     spec_less_fixture
     grep -vxF -- "$literal" "$PLAN/ORCHESTRATOR.md" >"$PLAN/ORCHESTRATOR.md.new"
     mv "$PLAN/ORCHESTRATOR.md.new" "$PLAN/ORCHESTRATOR.md"
@@ -238,11 +260,16 @@ verify_spec_less() {
 }
 
 @test "indented sentinels and a trailing tab still match" {
+  local literal
   spec_fixture
   {
     printf '      %s\n\n' "$S_RENDER" "$S_GATE"
     yield_block 6
-    printf '\n      %s\n\n' "$S_PRE" "$S_WIKI"
+    printf '\n      %s\n\n' "$S_PRE"
+    for literal in "$S_WORTH" "$S_WIKI" "$S_AUDIT" "$S_CLEAR"; do
+      block_of "$literal" 6
+      printf '\n'
+    done
     printf '%s\t\n' "$S_CLOSE"
   } >"$PLAN/ORCHESTRATOR.md"
   verify_spec
@@ -251,7 +278,7 @@ verify_spec_less() {
 
 @test "a sentinel line carrying trailing prose does not match" {
   spec_fixture
-  write_orchestrator "$S_RENDER" "$S_GATE" "$S_YIELD" "$S_PRE" "$S_WIKI" "$S_CLOSE see below"
+  write_orchestrator "$S_RENDER" "$S_GATE" "$S_YIELD" "$S_PRE" "$S_WORTH" "$S_WIKI" "$S_AUDIT" "$S_CLEAR" "$S_CLOSE see below"
   verify_spec
   [ "$status" -eq 1 ]
   echo "$output" | grep -qF -- "$S_CLOSE"
@@ -259,7 +286,7 @@ verify_spec_less() {
 
 @test "the render sentinel below the gate sentinel is out of order and named" {
   spec_fixture
-  write_orchestrator "$S_GATE" "$S_RENDER" "$S_YIELD" "$S_PRE" "$S_WIKI" "$S_CLOSE"
+  write_orchestrator "$S_GATE" "$S_RENDER" "$S_YIELD" "$S_PRE" "$S_WORTH" "$S_WIKI" "$S_AUDIT" "$S_CLEAR" "$S_CLOSE"
   verify_spec
   [ "$status" -eq 1 ]
   echo "$output" | grep -F 'out of order' | grep -qF -- "$S_RENDER"
@@ -267,7 +294,7 @@ verify_spec_less() {
 
 @test "a spec-less plan with the close sentinel above the promotion sentinel fails" {
   spec_less_fixture
-  write_orchestrator "$S_YIELD" "$S_CLOSE" "$S_WIKI"
+  write_orchestrator "$S_YIELD" "$S_WORTH" "$S_CLOSE" "$S_WIKI" "$S_AUDIT" "$S_CLEAR"
   verify_spec_less
   [ "$status" -eq 1 ]
   echo "$output" | grep -qF 'out of order'
@@ -365,12 +392,18 @@ mutate_orchestrator() {
 }
 
 @test "a block copied from planner.md and indented as a planner indents it passes, with and without the spec" {
+  local literal
   spec_fixture
   {
     printf '# Orchestrator\n\n'
     printf '      %s\n\n' "$S_RENDER" "$S_GATE"
     yield_block 6
-    printf '\n      %s\n\n' "$S_PRE" "$S_WIKI" "$S_CLOSE"
+    printf '\n      %s\n\n' "$S_PRE"
+    for literal in "$S_WORTH" "$S_WIKI" "$S_AUDIT" "$S_CLEAR"; do
+      block_of "$literal" 6
+      printf '\n'
+    done
+    printf '      %s\n\n' "$S_CLOSE"
   } >"$PLAN/ORCHESTRATOR.md"
   grep -qE '^      <!-- gaia:orchestrator-step yield-handling -->$' "$PLAN/ORCHESTRATOR.md"
   verify_spec
@@ -379,7 +412,12 @@ mutate_orchestrator() {
   {
     printf '# Orchestrator\n\n'
     yield_block 6
-    printf '\n      %s\n\n' "$S_WIKI" "$S_CLOSE"
+    printf '\n'
+    for literal in "$S_WORTH" "$S_WIKI" "$S_AUDIT" "$S_CLEAR"; do
+      block_of "$literal" 6
+      printf '\n'
+    done
+    printf '      %s\n\n' "$S_CLOSE"
   } >"$PLAN/ORCHESTRATOR.md"
   verify_spec_less
   [ "$status" -eq 0 ] || { echo "$output" >&2; return 1; }
@@ -428,7 +466,7 @@ mutate_orchestrator() {
 
 @test "red twin: the yield-handling block above the gate block is out of order" {
   spec_fixture
-  write_orchestrator "$S_RENDER" "$S_YIELD" "$S_GATE" "$S_PRE" "$S_WIKI" "$S_CLOSE"
+  write_orchestrator "$S_RENDER" "$S_YIELD" "$S_GATE" "$S_PRE" "$S_WORTH" "$S_WIKI" "$S_AUDIT" "$S_CLEAR" "$S_CLOSE"
   verify_spec
   [ "$status" -eq 1 ]
   echo "$output" | grep -F 'out of order' | grep -qF -- "$S_GATE"
@@ -447,4 +485,94 @@ mutate_orchestrator() {
   run bash "$tree/.gaia/scripts/spec/plan-verify.sh" "$PLAN"
   [ "$status" -eq 1 ]
   echo "$output" | grep -F 'planner.md' | grep -qF 'no fenced yield-handling block'
+}
+
+# ---------- the other verbatim blocks and the order of the six late sentinels ----------
+
+@test "red twin: each adjacent swap among the late sentinels is out of order and named" {
+  local order=("$S_PRE" "$S_WORTH" "$S_WIKI" "$S_AUDIT" "$S_CLEAR" "$S_CLOSE") index swapped
+  [ "${#order[@]}" -eq 6 ]
+  index=0
+  while [ "$index" -lt 5 ]; do
+    swapped=("${order[@]}")
+    swapped[index]="${order[$((index + 1))]}"
+    swapped[$((index + 1))]="${order[$index]}"
+    spec_fixture
+    write_orchestrator "$S_RENDER" "$S_GATE" "$S_YIELD" "${swapped[@]}"
+    verify_spec
+    [ "$status" -eq 1 ] || { echo "swap at $index exited $status" >&2; return 1; }
+    echo "$output" | grep -F 'out of order' | grep -qF -- "${order[$index]}" || { echo "swap at $index not named: $output" >&2; return 1; }
+    index=$((index + 1))
+  done
+}
+
+@test "red twin: a reworded line in each new block fails naming the line and the block" {
+  local entry name from to line
+  for entry in \
+    'worthiness-step|skip-safe|resumable' \
+    'wiki-promotion|no re-consolidation|maybe re-consolidation' \
+    'code-audit|the late pass from|the early pass from' \
+    'post-clearance|costs no commit|costs a commit'; do
+    name="${entry%%|*}"
+    entry="${entry#*|}"
+    from="${entry%%|*}"
+    to="${entry#*|}"
+    spec_fixture
+    awk -v from="$from" -v to="$to" '{ if ((i = index($0, from)) > 0) $0 = substr($0, 1, i - 1) to substr($0, i + length(from)) } { print }' "$PLAN/ORCHESTRATOR.md" >"$PLAN/ORCHESTRATOR.md.new"
+    mv "$PLAN/ORCHESTRATOR.md.new" "$PLAN/ORCHESTRATOR.md"
+    line="$(grep -nF -m1 -- "$to" "$PLAN/ORCHESTRATOR.md" | cut -d: -f1)"
+    [ -n "$line" ] || { echo "'$from' is not in the $name block" >&2; return 1; }
+    verify_spec
+    [ "$status" -eq 1 ] || { echo "$name reworded exited $status" >&2; return 1; }
+    echo "$output" | grep -F "ORCHESTRATOR.md:$line:" | grep -qF "$name block does not match planner.md" || { echo "$name: $output" >&2; return 1; }
+  done
+}
+
+# marker_tree <planner file>: a script tree whose planner.md is the given file.
+marker_tree() {
+  MARKER_TREE="$BATS_TEST_TMPDIR/tree"
+  mkdir -p "$MARKER_TREE/.gaia/scripts/spec" "$MARKER_TREE/.claude/skills/gaia/references/plan"
+  cp "$SCRIPT" "$REPO_ROOT_REAL/.gaia/scripts/spec/uat-lib.sh" "$MARKER_TREE/.gaia/scripts/spec/"
+  cp "$1" "$MARKER_TREE/.claude/skills/gaia/references/plan/planner.md"
+}
+
+# strip_marked <in> <out>: the file with each maintainer-only marker pair and
+# the lines between them removed, as the release's strip does.
+strip_marked() {
+  awk '
+    { t = $0; sub(/^[ \t]+/, "", t); sub(/[ \t\r]+$/, "", t) }
+    t == "<!-- gaia:maintainer-only:start -->" { skipping = 1; next }
+    t == "<!-- gaia:maintainer-only:end -->" { skipping = 0; next }
+    !skipping { print }' "$1" >"$2"
+}
+
+@test "marker case: a plan copying a marked pair passes against the planner that holds it" {
+  spec_fixture
+  grep -qF 'gaia:maintainer-only:start' "$PLAN/ORCHESTRATOR.md"
+  marker_tree "$PLANNER_MD"
+  run bash "$MARKER_TREE/.gaia/scripts/spec/plan-verify.sh" "$PLAN" --spec "$SPEC"
+  [ "$status" -eq 0 ] || { echo "$output" >&2; return 1; }
+}
+
+@test "marker case: the stripped planner and a plan copying its stripped blocks pass" {
+  local stripped="$BATS_TEST_TMPDIR/planner-stripped.md"
+  strip_marked "$PLANNER_MD" "$stripped"
+  grep -qF 'gaia:maintainer-only:start' "$stripped" && return 1
+  BLOCK_SOURCE="$stripped"
+  spec_fixture
+  grep -qF 'gaia:maintainer-only:start' "$PLAN/ORCHESTRATOR.md" && return 1
+  marker_tree "$stripped"
+  run bash "$MARKER_TREE/.gaia/scripts/spec/plan-verify.sh" "$PLAN" --spec "$SPEC"
+  [ "$status" -eq 0 ] || { echo "$output" >&2; return 1; }
+}
+
+@test "red twin: a plan that dropped the marked pair its planner keeps fails naming the line" {
+  local stripped="$BATS_TEST_TMPDIR/planner-stripped.md"
+  strip_marked "$PLANNER_MD" "$stripped"
+  BLOCK_SOURCE="$stripped"
+  spec_fixture
+  marker_tree "$PLANNER_MD"
+  run bash "$MARKER_TREE/.gaia/scripts/spec/plan-verify.sh" "$PLAN" --spec "$SPEC"
+  [ "$status" -eq 1 ]
+  echo "$output" | grep -E 'ORCHESTRATOR.md:[0-9]+:' | grep -qF 'block does not match planner.md'
 }

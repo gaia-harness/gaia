@@ -121,34 +121,20 @@ A story is a visual state and a behavior is a `.test()` on it (`wiki/decisions/S
 
 The deterministic surface earns its honesty proof from the RED gate. The emergent surface (the `emergentTests` globs in the package descriptor `frontend/gaia.package.json`) has no stable failing-then-passing run to gate on, so its honesty and worthiness come from an **advisory audit** instead. Run this audit after green, on the emergent-surface test and story files the task changed (the classifier roll-up above tells you which touched files are `emergent`).
 
-#### Dispatch a fresh-context audit (no-orchestrator path)
+#### Dispatch and record
 
-On the main loop, with no orchestrator above you, the audit MUST run in a **genuine fresh-context `Agent` sub-leaf** (the author shares their own blind spots); an in-context self-review by the test author does not satisfy this step.
-
-Dispatch one `Agent` leaf running the committed evaluator prompt (`.claude/agents/worthiness-evaluator.md`) over the task's changed emergent test and story files plus their sibling suites. The evaluator judges each test on two axes (honesty, worthiness), returns a `keep`/`fix`/`delete` verdict per test, and **edits no files**: every `delete` is a proposal a human confirms.
-
-#### Write the worthiness ledger (no-orchestrator path)
-
-With no orchestrator to record verdicts, **the tdd skill is the ledger writer**, otherwise the worthiness audit leaves no record and the merge presence gate has nothing to read. For each verdict the evaluator returns, append one ledger line via the writer:
-
-```
-node .gaia/scripts/audit-ledger/append-worthiness.mjs <repo-rel-test-path> <fullName> <verdict> [artifact]
-```
-
-`<verdict>` is `keep` | `fix` | `delete`; `[artifact]` is REQUIRED for a non-keep verdict (the cited machine-verified sibling for a redundancy delete, the unreachable/missing assertion for a fix) and omitted for `keep`. The writer recomputes the test-identity signal from the file via the RED-ledger signal helper, so it byte-matches what the presence gate later recomputes; the ledger at `.gaia/local/worthiness-ledger/<tree_key>/worthiness.jsonl` (`<tree_key>` printed by `bash .gaia/scripts/main-root-lib.sh --tree-key`) is append-only and gitignored.
-
-Surface the evaluator's verdicts in the same end-of-task summary (see "Surfacing the advisory findings"). Deletes are proposals: present them for human confirmation, never act on them.
+Run the `## The tdd arm` of `.claude/skills/gaia/references/worthiness-step.md` after green, over the emergent test and story files the task changed. A genuine fresh-context evaluator judges them (the author shares their own blind spots, so an in-context self-review does not satisfy this step), and the arm records each verdict in the worthiness ledger. The arm dispatches and records only: it runs no repair, makes no commit and asks no question, since this skill runs on uncommitted work. Surface the verdicts in the same end-of-task summary (see "Surfacing the advisory findings").
 
 #### Path-scoped guarantees
 
 The guarantee this audit provides is scoped to **the subset a same-model fresh-context reviewer reliably flags**, not a proof of test worthiness. State the surviving guarantees by path:
 
-- **No-orchestrator path (this skill alone), surviving guarantees:** static honesty lint on every test; a real RED on the deterministic surface; the fresh-subagent worthiness audit **if it was dispatched**. The audit is advisory and depends on this dispatch step running; a skipped dispatch leaves only the static lint and the RED gate.
+- **No-orchestrator path (this skill alone), surviving guarantees:** static honesty lint on every test; a real RED on the deterministic surface; the fresh-subagent worthiness audit **if it was dispatched**. On this path the audit is advisory and depends on this dispatch step running; a skipped dispatch leaves only the static lint, the RED gate and the merge presence check.
 - **Orchestrated path, additional guarantees (NOT available here):** leaf isolation enforced by the orchestrator. That is orchestrator-owned; the no-orchestrator path does not provide it. The merge presence gate (which recomputes signals and refuses a merge whose audit ledger is absent or mismatched) is a repo-wide hook that fires on every `gh pr merge`: see `wiki/concepts/PR Merge Workflow.md`, "Second merge gate: the worthiness presence gate".
 
 ### 7. Surfacing the advisory findings
 
-Advisory findings (the worthiness verdicts) never interrupt mid-implementation. They surface only in the one end-of-task summary the determinism roll-up also renders into, before commit (no-orchestrator path), or in the orchestrator's `SUMMARY.md` plus the pre-merge summary (orchestrated path).
+Advisory findings (the worthiness verdicts) never interrupt mid-implementation. They surface only in the one end-of-task summary the determinism roll-up also renders into, before commit (no-orchestrator path), or in the orchestrator's `SUMMARY.md` plus the pre-merge summary (orchestrated path). A fix verdict is advisory only here: the pre-audit worthiness step of a plan run, the work lifecycle or `/gaia-debt` (`.claude/skills/gaia/references/worthiness-step.md`) acts on it before the audit.
 
 #### Two tiers, capped
 

@@ -69,8 +69,10 @@ A story is a visual state and a behavior is a `.test()` attached to it ([[Storie
 
 ### Two-tier surfacing
 
-Advisory findings never interrupt mid-implementation; they surface only at
-end-of-task, in two tiers. Honesty findings auto-fix in place and are left in the
+On the tdd path, advisory findings never interrupt mid-implementation; they
+surface only at end-of-task, in two tiers. A plan run, the work lifecycle and
+`/gaia-debt` run the pre-audit worthiness step instead, which acts on a `fix`
+verdict before the audit (`.claude/skills/gaia/references/worthiness-step.md`). Honesty findings auto-fix in place and are left in the
 working tree for normal review. Every proposed delete requires human
 confirmation and renders its cited redundant sibling AND the subsuming seam
 assertion inline, so the human confirms against the evidence without opening
@@ -120,8 +122,12 @@ ledger:
 
 ## Consumers
 
-- The tdd skill dispatches the fresh-context reviewer and writes the ledger on
-  the no-orchestrator path (otherwise principle-6 always-on is violated). Its
+- The shared worthiness step (`.claude/skills/gaia/references/worthiness-step.md`)
+  owns dispatch and verdict routing for a plan run, the work lifecycle and
+  `/gaia-debt`; its `worthiness-step.sh record` is the one ledger writer's
+  invoker. The tdd skill dispatches the reviewer through that page's tdd arm,
+  which dispatches and records only (otherwise principle-6 always-on is
+  violated). The tdd path's
   surviving no-orchestrator guarantees (static honesty lint, RED on the
   deterministic surface, the fresh-subagent audit if dispatched) are distinct
   from the orchestrated-only guarantee (leaf isolation).

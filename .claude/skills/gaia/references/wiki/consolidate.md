@@ -6,7 +6,7 @@ Contents: Playbook; Step 1, Build the page index; Step 2, Detection passes; Step
 
 ## Playbook
 
-This workflow complements but does not replace the orchestrator's wiki promotion step (per-SPEC writes, before the merge, acting on `SUMMARY.md` frontmatter), the sync stage (commit-driven updates), or the lint stage (broken-thing detection and repair). It detects **redundancy and contradiction** across the wiki and proposes merges so the wiki stays an accurate "today's state of the app" snapshot.
+This workflow complements but does not replace the orchestrator's wiki promotion step (per-SPEC writes, before the audit, acting on `SUMMARY.md` frontmatter), the sync stage (commit-driven updates), or the lint stage (broken-thing detection and repair). It detects **redundancy and contradiction** across the wiki and proposes merges so the wiki stays an accurate "today's state of the app" snapshot.
 
 **Follow `.claude/rules/wiki-style.md` when writing prose during apply actions.** The `## Historical context (from <older-title>)` archival heading defined in Step 4 is a deliberate exception, it labels content lifted from a superseded page so it remains discoverable.
 

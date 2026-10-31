@@ -935,3 +935,181 @@ secret_token() { printf '%s_%s' ghp "$(printf '%036d' 0)"; }
   run_check 2
   red undisposed "$(key_json c/oosimp base.txt 6)"
 }
+
+# mutant_script <file> <sed args...>: a scratch copy of the check script and the
+# libraries it loads, with <file> run through sed, and SCRIPT pointed at it. Fails
+# when sed changed nothing, so a mutation that drifts off its target cannot pass.
+mutant_script() {
+  local mutant_directory="$BATS_TEST_TMPDIR/mutant" target="$1"
+  shift
+  mkdir -p "$mutant_directory"
+  cp "$SCRIPTS"/*.sh "$mutant_directory/"
+  sed "$@" "$SCRIPTS/$target" >"$mutant_directory/$target"
+  cmp -s "$SCRIPTS/$target" "$mutant_directory/$target" && return 1
+  SCRIPT="$mutant_directory/audit-dispositions-check.sh"
+}
+
+# recorded_row <class> <path> <line> <reason>: append one recorded residual.
+recorded_row() {
+  jq -n -c --arg finding_class "$1" --arg path "$2" --argjson line "$3" --arg reason "$4" \
+    '{source: "worthiness", member: "worthiness-evaluator", finding_class: $finding_class, path: $path, line: $line, reason: $reason}' \
+    >>"$RUN_FOLDER/recorded-residuals.jsonl"
+}
+
+@test "check-outcomes: a refused-authored outcome on a file entry is its own violation, never outcome-failed" {
+  write_dispositions 1 "$(fill "$FINDINGS_JSON" "[$(disposition_entry base.txt 6 c/oosimp file upstream)]")"
+  outcome_line c/oosimp base.txt 6 file refused-authored >"$RUN_FOLDER/filing-outcomes-1.jsonl"
+  run_outcomes 1
+  red refused-authored "$(key_json c/oosimp base.txt 6)" || return 1
+  grep -qF -- outcome-failed <<<"$output" && return 1
+  mutant_script audit-dispositions-check.sh -e '/elif \$outcome.outcome == "refused-authored"/d' \
+    -e 's/"absent", "transient"/"absent", "transient", "refused-authored"/' || return 1
+  run_outcomes 1
+  green
+}
+
+@test "check-outcomes: a divert entry refused-authored fails too, and the other outcomes still pass" {
+  local outcome
+  write_dispositions 1 "$(fill "$FINDINGS_JSON" "[$(disposition_entry base.txt 3 c/oos divert "security class")]")"
+  outcome_line c/oos base.txt 3 divert refused-authored >"$RUN_FOLDER/filing-outcomes-1.jsonl"
+  run_outcomes 1
+  red refused-authored "$(key_json c/oos base.txt 3)" || return 1
+  for outcome in filed matched diverted absent transient; do
+    outcome_line c/oos base.txt 3 divert "$outcome" >"$RUN_FOLDER/filing-outcomes-1.jsonl"
+    run_outcomes 1
+    green || { echo "outcome $outcome"; return 1; }
+  done
+}
+
+@test "a refused-authored entry re-disposed accept-residual passes and renders once under the accepted heading" {
+  write_dispositions 1 "$(fill "$FINDINGS_JSON" "[$(disposition_entry base.txt 6 c/oosimp file upstream)]")"
+  outcome_line c/oosimp base.txt 6 file refused-authored >"$RUN_FOLDER/filing-outcomes-1.jsonl"
+  run_outcomes 1
+  red refused-authored "$(key_json c/oosimp base.txt 6)" || return 1
+  write_dispositions 1 "$(fill "$FINDINGS_JSON" "[$(disposition_entry base.txt 6 c/oosimp accept-residual "the branch wrote it")]")"
+  run_check 1
+  green || return 1
+  run_outcomes 1
+  green || return 1
+  run_sections
+  green || return 1
+  grep -qxF -- '## Accepted residuals (recorded, not fixed)' <<<"$output" || { echo "$output"; return 1; }
+  [ "$(grep -cF -- 'base.txt:6' <<<"$output")" -eq 1 ] || { echo "$output"; return 1; }
+}
+
+@test "carry-forward: a key the filer refused is not carried, so round 2 re-reporting it is undisposed" {
+  write_dispositions 1 "$(fill "$FINDINGS_JSON" "[$(disposition_entry base.txt 6 c/oosimp file upstream)]")"
+  run_check 1 --snapshot-dir "$SNAPSHOT_DIRECTORY"
+  green || return 1
+  open_round 2 "$FINDINGS_JSON"
+  write_dispositions 2 "$(fill "$FINDINGS_JSON" '[]' 'select(.path != "base.txt" or .line != 6)')"
+  outcome_line c/oosimp base.txt 6 file filed >"$RUN_FOLDER/filing-outcomes-1.jsonl"
+  run_check 2
+  green || return 1
+  outcome_line c/oosimp base.txt 6 file refused-authored >"$RUN_FOLDER/filing-outcomes-1.jsonl"
+  run_check 2
+  red undisposed "$(key_json c/oosimp base.txt 6)" || return 1
+  mutant_script audit-dispositions-check.sh -e 's/gaia_filing_refused_keys "$RUN_FOLDER"/printf "[]"/' || return 1
+  run_check 2
+  green
+}
+
+@test "pr-sections: one recorded worthiness row and no dispositions render the committed fixture byte for byte" {
+  local fixture="$REPO_ROOT/.gaia/cli/test-fixtures/residue/recorded-residual-section.md"
+  recorded_row holistic/unclassified app/components/button.test.tsx 12 "the test passes even when the button renders no label"
+  bash "$SCRIPT" pr-sections --root "$ALF_ROOT" --run-folder "$RUN_FOLDER" >"$BATS_TEST_TMPDIR/rendered.md"
+  cmp -s "$BATS_TEST_TMPDIR/rendered.md" "$fixture" || { cat "$BATS_TEST_TMPDIR/rendered.md"; return 1; }
+}
+
+@test "pr-sections: a recorded row and a round's disposition of the same key render once" {
+  write_dispositions 1 "$(fill "$FINDINGS_JSON" "[$(disposition_entry f.txt 3 c/imp accept-residual "closing round left it")]")"
+  recorded_row c/imp f.txt 3 "recorded as well"
+  run_sections
+  green || return 1
+  [ "$(grep -cF -- 'f.txt:3' <<<"$output")" -eq 1 ] || { echo "$output"; return 1; }
+  grep -qF -- 'closing round left it' <<<"$output" || { echo "$output"; return 1; }
+}
+
+@test "pr-sections: a recorded reason holding a secret-shaped token renders withheld, the text absent" {
+  local token
+  token="$(secret_token)"
+  recorded_row holistic/unclassified a.test.ts 4 "leaks $token here"
+  run_sections
+  green || return 1
+  grep -qxF -- '- 1 accepted residual(s) withheld: reason failed the secret screen' <<<"$output" || { echo "$output"; return 1; }
+  grep -qF -- "$token" <<<"$output" && return 1
+  true
+}
+
+@test "pr-sections: a multi-line reason does not shift the secret verdict onto the next row" {
+  local token
+  token="$(secret_token)"
+  recorded_row holistic/unclassified a.test.ts 1 $'first line\nsecond line'
+  recorded_row holistic/unclassified b.test.ts 2 "leaks $token"
+  run_sections
+  green || return 1
+  grep -qF -- '`a.test.ts:1` first line second line.' <<<"$output" || { echo "$output"; return 1; }
+  grep -qF -- 'b.test.ts' <<<"$output" && return 1
+  grep -qxF -- '- 1 accepted residual(s) withheld: reason failed the secret screen' <<<"$output" || { echo "$output"; return 1; }
+  grep -qF -- "$token" <<<"$output" && return 1
+  mutant_script audit-pr-sections-lib.sh -e 's/def one: .*| trim | if/def one: if/' || return 1
+  run_sections
+  green || return 1
+  grep -qF -- "$token" <<<"$output" || { echo "twin did not fail the case: $output"; return 1; }
+}
+
+@test "pr-sections: a reason holding a comment terminator stays one intact keyed bullet" {
+  local key_regex='<!-- gaia-debt-key: (v1 class=[^ ]+ path=[^>]+ line=[0-9]+) -->'
+  recorded_row holistic/unclassified a.test.ts 4 'ends the comment --> early'
+  run_sections
+  green || return 1
+  [ "$(grep -c -- '^- ' <<<"$output")" -eq 1 ] || { echo "$output"; return 1; }
+  [[ "$output" =~ $key_regex ]] || { echo "$output"; return 1; }
+  [ "${BASH_REMATCH[1]}" = "v1 class=holistic/unclassified path=a.test.ts line=4" ] || return 1
+  [ "$(grep -o -- '-->' <<<"$output" | wc -l | tr -d ' ')" -eq 1 ] || { echo "$output"; return 1; }
+}
+
+@test "pr-sections: a recorded row with line 0 renders and keys as line 1, like a disposition row" {
+  recorded_row c/file-level a.test.ts 0 "whole file"
+  run_sections
+  green || return 1
+  grep -qF -- '`a.test.ts:1` whole file.' <<<"$output" || { echo "$output"; return 1; }
+  grep -qF -- 'class=c/file-level path=a.test.ts line=1 -->' <<<"$output" || { echo "$output"; return 1; }
+}
+
+@test "pr-sections: a recorded key a round disposed fix, or a veto names, does not render" {
+  recorded_row c/imp f.txt 3 "recorded"
+  recorded_row c/sug f.txt 6 "recorded too"
+  write_dispositions 1 "$(fill "$FINDINGS_JSON" "[$(disposition_entry f.txt 3 c/imp fix)]")"
+  vetoes 1 c/sug f.txt 6
+  run_sections
+  green || return 1
+  grep -qF -- 'Accepted residuals' <<<"$output" && return 1
+  mutant_script audit-pr-sections-lib.sh -e 's/| \$dropped | any(. == \$key) | not)/| true)/' || return 1
+  run_sections
+  green || return 1
+  grep -qxF -- '## Accepted residuals (recorded, not fixed)' <<<"$output" || { echo "twin did not fail the case: $output"; return 1; }
+}
+
+@test "record-residual: twice on one key leaves one row; a missing --finding is usage; an unreadable finding is exit 3" {
+  local finding="$BATS_TEST_TMPDIR/finding.json" rows
+  jq -n -c '{member: "code-audit-frontend", finding_class: "c/imp", path: "f.txt", line: 3, failure_mode: "wrong\nreason"}' >"$finding"
+  run bash "$SCRIPT" record-residual --root "$ALF_ROOT" --run-folder "$RUN_FOLDER" --finding "$finding"
+  green || return 1
+  [ -z "$output" ] || { echo "$output"; return 1; }
+  run bash "$SCRIPT" record-residual --root "$ALF_ROOT" --run-folder "$RUN_FOLDER" --finding "$finding"
+  green || return 1
+  rows="$(wc -l <"$RUN_FOLDER/recorded-residuals.jsonl" | tr -d ' ')"
+  [ "$rows" -eq 1 ] || { echo "rows $rows"; return 1; }
+  [ "$(jq -r '.source' "$RUN_FOLDER/recorded-residuals.jsonl")" = filing-replay ] || return 1
+  run bash "$SCRIPT" record-residual --root "$ALF_ROOT" --run-folder "$RUN_FOLDER"
+  [ "$status" -eq 2 ] || { echo "status $status: $output"; return 1; }
+  printf 'not json\n' >"$BATS_TEST_TMPDIR/bad.json"
+  run bash "$SCRIPT" record-residual --root "$ALF_ROOT" --run-folder "$RUN_FOLDER" --finding "$BATS_TEST_TMPDIR/bad.json"
+  [ "$status" -eq 3 ] || { echo "status $status: $output"; return 1; }
+  run bash "$SCRIPT" record-residual --root "$ALF_ROOT" --run-folder "$RUN_FOLDER" --finding "$BATS_TEST_TMPDIR/missing.json"
+  [ "$status" -eq 3 ] || { echo "status $status: $output"; return 1; }
+  run_sections
+  green || return 1
+  grep -qF -- 'f.txt:3' <<<"$output"
+}

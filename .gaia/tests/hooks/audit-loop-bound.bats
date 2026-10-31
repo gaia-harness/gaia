@@ -1073,7 +1073,7 @@ scratch_copy() {
   local scratch_directory="$BATS_TEST_TMPDIR/scratch-copy" script_name
   rm -rf "$scratch_directory"
   mkdir -p "$scratch_directory/.claude/hooks" "$scratch_directory/.gaia/scripts"
-  for script_name in audit-loop-state-lib.sh exclusive-lock-lib.sh branch-name-lib.sh main-root-lib.sh audit-key-lib.sh context-checkpoint-lib.sh \
+  for script_name in audit-loop-state-lib.sh exclusive-lock-lib.sh branch-authorship-lib.sh filing-outcomes-lib.sh branch-name-lib.sh main-root-lib.sh audit-key-lib.sh context-checkpoint-lib.sh \
     audit-loop-eval.sh audit-loop-signals-lib.sh audit-dispositions-check.sh; do
     cp "$REPO_ROOT/.gaia/scripts/$script_name" "$scratch_directory/.gaia/scripts/$script_name"
   done

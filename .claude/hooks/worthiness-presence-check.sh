@@ -2,9 +2,9 @@
 # PreToolUse Bash hook: DENY `gh pr merge` when an emergent test the PR changed
 # has no worthiness-ledger line matching its CURRENT content. This is the
 # merge-time half of the worthiness audit: the evaluator
-# (.claude/agents/worthiness-evaluator.md) judges each emergent test and the tdd
-# skill appends one ledger line per judged test
-# (.gaia/scripts/audit-ledger/append-worthiness.mjs); this hook enforces at merge
+# (.claude/agents/worthiness-evaluator.md) judges each emergent test and the
+# tdd skill's step and the worthiness step each append one ledger line per
+# judged test (.gaia/scripts/audit-ledger/append-worthiness.mjs); this hook enforces at merge
 # that such a line exists for the content being merged. It sits ALONGSIDE
 # pr-merge-audit-check.sh: both gate `gh pr merge` and deny independently.
 #
@@ -274,154 +274,60 @@ prov="$(audit_resolve_base_provenance "$tree_root" default-branch)" || prov=""
 IFS=$'\t' read -r _ _ base <<< "$prov" || true
 [ -n "$base" ] || exit 0
 
-# `-z` because the emergent-surface glob below matches a repo-relative path
-# literally: under git's default core.quotePath a path carrying non-ASCII or
-# control bytes comes back wrapped in literal double quotes, matches none of
-# them, and the gate passes on the input it exists to hold. `--name-status -M100%`
-# reports an EXACT rename as `R100<NUL>old<NUL>new`, which is skipped (content
-# identical, nothing new to judge); every other status carries one path, in scope
-# at that path. A rename below 100% is never reported as R at this threshold: git
-# reports it as D plus A, so the new path is in scope. The records are translated
-# to newlines for the read loop below.
-changed=""
-while IFS= read -r -d '' diff_status; do
-  IFS= read -r -d '' diff_path || break
-  case "$diff_status" in
-    R* | C*)
-      IFS= read -r -d '' diff_new_path || break
-      [ "$diff_status" = "R100" ] && continue
-      diff_path="$diff_new_path"
-      ;;
-  esac
-  changed="${changed}${diff_path}
-"
-done < <(git -C "$tree_root" diff --name-status -z -M100% "${base}...HEAD" 2>/dev/null)
-[ -n "$changed" ] || exit 0
-
-# Sets `path_is_emergent` to 1 only when the classifier affirmatively classifies
-# the given repo-relative path emergent, and to 0 otherwise (non-zero exit,
-# unparseable JSON, or a strict verdict). Mirrors red-verify-commit-check.sh.
-# Exit 7 is the one failure that is NOT a 0: the classifier could not read the
-# package descriptor, so it sets `classifier_package_error` and the loop denies.
-# Not a command substitution, so both variables survive the call.
-path_is_emergent=0
-classifier_package_error=''
-classify_emergent() {
-  local relative_path="$1"
-  local classifier_output classifier_status=0
-  path_is_emergent=0
-  # Run from the ACTING TREE, not the process working directory. `$relative_path` stays
-  # repo-relative because the classifier's own path rules read it, but it must
-  # not be resolved against a working directory nobody chose: the file read then
-  # fails and the verdict stops describing the file. The same working directory
-  # is where the classifier finds the registry. The `cd` is inside a command
-  # substitution, so it never persists into the rest of this hook.
-  classifier_output=$( cd "$tree_root" && node "$classifier_script" "$relative_path" 2>/dev/null ) || classifier_status=$?
-  if [ "$classifier_status" -eq 7 ]; then
-    classifier_package_error=$(printf '%s' "$classifier_output" | jq -r '.error // empty' 2>/dev/null)
-    [ -n "$classifier_package_error" ] || classifier_package_error='gaia-packages: the determinism classifier could not read the package descriptor. Next step: fix .gaia/packages.json or the package descriptor and retry.'
-    return 0
-  fi
-  [ "$classifier_status" -eq 0 ] || return 0
-  [ -n "$classifier_output" ] || return 0
-  if [ -n "$(printf '%s' "$classifier_output" \
-    | jq -r 'select((.classification // "") == "emergent") | "emergent"' \
-        2>/dev/null \
-    | head -1)" ]; then
-    path_is_emergent=1
-  fi
-}
+# The selection (which changed files are emergent tests, which tests they hold,
+# which refusals deny) lives in lib/worthiness-selection.sh, shared with the
+# worthiness step so the two judge the same set. The walk writes to a file and
+# runs in this shell: a pipe or command substitution would lose its status and
+# the refusal reason, and a lost refusal reads as an allowed merge.
+if ! [ -n "$_hook_library_directory" ] || ! [ -f "$_hook_library_directory/worthiness-selection.sh" ]; then
+  deny_with_reason "Worthiness presence gate: cannot load .claude/hooks/lib/worthiness-selection.sh, so the emergent tests in scope are unknown and this merge cannot be checked. Next step: restore .claude/hooks/lib/worthiness-selection.sh from the GAIA release and retry."
+fi
+# shellcheck source=lib/worthiness-selection.sh
+. "$_hook_library_directory/worthiness-selection.sh"
+# shellcheck disable=SC2034
+WORTHINESS_SELECTION_CLASSIFIER="$classifier_script"
+# shellcheck disable=SC2034
+WORTHINESS_SELECTION_ERE="$emergent_test_ere"
+records_file=$(mktemp "${TMPDIR:-/tmp}/worthiness-records-XXXXXX") || exit 0
+walk_status=0
+worthiness_selection_walk "$tree_root" "$base" >"$records_file" || walk_status=$?
+if [ "$walk_status" -ne 0 ]; then
+  rm -f "$records_file"
+  deny_with_reason "$WORTHINESS_SELECTION_ERROR"
+fi
 
 # Collect missing-line offenders as "file\tfullName" lines.
 offenders=""
 
-while IFS= read -r path; do
-  [ -n "$path" ] || continue
+while IFS=$'\t' read -r relative_path line; do
+  [ -n "$line" ] || continue
+  full=$(printf '%s' "$line" | jq -r '.fullName // empty' 2>/dev/null || true)
+  signal=$(printf '%s' "$line" | jq -r '.signal // empty' 2>/dev/null || true)
+  [ -n "$full" ] && [ -n "$signal" ] || continue
 
-  # Emergent surface only: the package descriptor's `emergentTests` globs (the
-  # component tests and the Playwright specs of each registered package), joined
-  # with the package path. The signal helper only emits for test files; a
-  # non-test file that slips through emits nothing and drops out below. An empty
-  # ERE matches nothing.
-  [ -n "$emergent_test_ere" ] && [[ "$path" =~ $emergent_test_ere ]] || continue
-
-  relative_path=$(red_ledger_repo_relative_path "$path")
-
-  # A pure deletion leaves no working-tree file to recompute from; if the file is
-  # gone, there is nothing in scope for it. Tested against the ACTING TREE, not
-  # the process working directory: `$relative_path` is repo-relative, so from a
-  # subdirectory this answers "deleted" for every file that exists, and the
-  # `continue` empties the offender scan into a clean pass.
-  [ -f "$tree_root/$relative_path" ] || continue
-
-  # Authoritative emergent membership: the determinism classifier. A `.ts` test
-  # under app/components/** that the classifier proves deterministic is RED-gated,
-  # not worthiness-gated; skip it. A classifier failure echoes nothing (fail-open:
-  # the file is not treated as emergent, so it is not demanded here; the RED gate
-  # owns the deterministic surface).
-  classify_emergent "$relative_path"
-  if [ -n "$classifier_package_error" ]; then
-    deny_with_reason "$classifier_package_error"
+  # Require >=1 ledger line with schema 1, this file, this fullName, and this
+  # CURRENT signal. A matching line at a stale signal (the test's executed
+  # content was edited after its verdict; a comment reword does not change the
+  # signal) does not count -> stale-signal rejection. A missing ledger file
+  # means zero matches -> deny. Presence is the whole decision; the
+  # keep/fix/delete verdict stays advisory and is never read here.
+  matched=""
+  if [ -f "$ledger" ]; then
+    matched=$(jq -r --arg test_file_path "$relative_path" --arg test_full_name "$full" --arg test_signal "$signal" '
+      select((.schema // 0) == 1
+        and (.file // "") == $test_file_path
+        and (.fullName // "") == $test_full_name
+        and (.signal // "") == $test_signal)
+      | "1"' "$ledger" 2>/dev/null \
+      | head -1 || true)
   fi
-  [ "$path_is_emergent" -eq 1 ] || continue
 
-  # Current tests: helper over the working-tree file content on disk. Parse
-  # failure (mid-edit syntax error) -> skip this file (fail-open).
-  current_ndjson=""
-  # From the acting tree, for the reason the classifier call above gives: this
-  # helper reads the file from disk at the repo-relative path, so from a
-  # subdirectory it finds nothing, and "no signals" is a `continue` -- the file
-  # leaves the scan and the merge clears with no verdict demanded.
-  # Exit 7 (a story play it cannot follow) and exit 8 (an old-format story file)
-  # are extractor refusals: they deny, because skipping would let an unreviewable
-  # test through. Every other non-zero is a mid-edit parse error.
-  extractor_error_file=$(mktemp "${TMPDIR:-/tmp}/worthiness-extractor-XXXXXX") || extractor_error_file=/dev/null
-  extractor_status=0
-  current_ndjson=$( cd "$tree_root" && red_ledger_signals "$relative_path" 2>"$extractor_error_file" ) || extractor_status=$?
-  if [ "$extractor_status" = "$RED_LEDGER_UNRESOLVABLE_SHAPE_STATUS" ] || [ "$extractor_status" = "$RED_LEDGER_OLD_FORMAT_STATUS" ]; then
-    extractor_error_line=$(head -n 1 "$extractor_error_file" 2>/dev/null || true)
-    [ "$extractor_error_file" = /dev/null ] || rm -f "$extractor_error_file"
-    deny_with_reason "$(red_ledger_refusal_reason "$extractor_status" "$relative_path" "$extractor_error_line")"
-  fi
-  [ "$extractor_error_file" = /dev/null ] || rm -f "$extractor_error_file"
-  [ "$extractor_status" -eq 0 ] || continue
-  # No emitted tests (only dynamic-title tests, or a no-tests file): nothing in
-  # scope for this file.
-  [ -n "$current_ndjson" ] || continue
-
-  while IFS= read -r line; do
-    [ -n "$line" ] || continue
-    full=$(printf '%s' "$line" | jq -r '.fullName // empty' 2>/dev/null || true)
-    signal=$(printf '%s' "$line" | jq -r '.signal // empty' 2>/dev/null || true)
-    [ -n "$full" ] && [ -n "$signal" ] || continue
-
-    # Require >=1 ledger line with schema 1, this file, this fullName, and this
-    # CURRENT signal. A matching line at a stale signal (the test's executed
-    # content was edited after its verdict; a comment reword does not change the
-    # signal) does not count -> stale-signal rejection. A missing ledger file
-    # means zero matches -> deny. Presence is the whole decision; the
-    # keep/fix/delete verdict stays advisory and is never read here.
-    matched=""
-    if [ -f "$ledger" ]; then
-      matched=$(jq -r --arg test_file_path "$relative_path" --arg test_full_name "$full" --arg test_signal "$signal" '
-        select((.schema // 0) == 1
-          and (.file // "") == $test_file_path
-          and (.fullName // "") == $test_full_name
-          and (.signal // "") == $test_signal)
-        | "1"' "$ledger" 2>/dev/null \
-        | head -1 || true)
-    fi
-
-    if [ -z "$matched" ]; then
-      offenders="${offenders}${relative_path}	${full}
+  if [ -z "$matched" ]; then
+    offenders="${offenders}${relative_path}	${full}
 "
-    fi
-  done <<EOF
-$current_ndjson
-EOF
-done <<EOF
-$changed
-EOF
+  fi
+done <"$records_file"
+rm -f "$records_file"
 
 # ---------------------------------------------------------------------------
 # Decision: allow when no offenders; otherwise deny.
@@ -450,8 +356,9 @@ fi
 reason="${reason}
 
 To unblock:
-  1. Run the worthiness evaluator on the tests listed above, the way the tdd skill's Worthiness Audit step dispatches it, and record each verdict it returns as that step says.
-  2. Retry gh pr merge.
+  1. Run the worthiness evaluator on the tests listed above, as .claude/skills/gaia/references/worthiness-step.md says, and record each verdict. A run with only keep verdicts needs no commit.
+  2. Fix a fix verdict on the branch: this is the recommendation. Before the fix, ask the human, and the question must state which Code Audit Team members' clearances the fix rotates and the CI cycle it costs. Accepted residual is the alternative.
+  3. Retry gh pr merge.
 
 See wiki/decisions/Worthiness Presence Gate.md for the full contract."
 

@@ -9,7 +9,8 @@
 # the pre-merge audit gate (stop and surface, never inline fallback, because a
 # Code Audit Team member's clearance marker is that member's own attestation).
 # The plan orchestrator's UAT fidelity judge departs too, halting rather than
-# letting the orchestrator grade its own phases' specs inline.
+# letting the orchestrator grade its own phases' specs inline. The worthiness
+# step departs for the same reason, and its tdd arm reports instead of halting.
 # An undeclared deliberate exception is worse than drift: the safe-looking
 # reading of an unexplained difference is that the agreeing sites are right and
 # the odd one is stale, and acting on that turns a fail-closed merge gate into
@@ -63,6 +64,8 @@ setup() {
   # The second deliberate departure: the plan orchestrator halts rather than
   # judge its own phases' UAT specs inline.
   LIFECYCLE_RELATIVE_PATH='.claude/skills/gaia/references/spec/lifecycle.md'
+  # The third: the caller wrote the code the evaluator judges.
+  WORTHINESS_RELATIVE_PATH='.claude/skills/gaia/references/worthiness-step.md'
 
   OWNER="$ROOT/$OWNER_RELATIVE_PATH"
   GATE="$ROOT/$GATE_RELATIVE_PATH"
@@ -77,6 +80,7 @@ setup() {
     '.claude/skills/gaia/references/spec/audit.md'
     '.claude/skills/gaia/references/spec/lens-dispatch.md'
     '.claude/skills/gaia/references/spec/lifecycle.md'
+    '.claude/skills/gaia/references/worthiness-step.md'
     '.claude/rules/subagent-dispatch.md'
     '.claude/skills/update-gaia/references/conflict-flow.md'
     'wiki/concepts/Code Review Audit Agent.md'
@@ -210,6 +214,7 @@ terminal_segments() {
     [ "$relative_path" = "$GATE_RELATIVE_PATH" ] && continue
     [ "$relative_path" = "$RUNBOOK_RELATIVE_PATH" ] && continue
     [ "$relative_path" = "$LIFECYCLE_RELATIVE_PATH" ] && continue
+    [ "$relative_path" = "$WORTHINESS_RELATIVE_PATH" ] && continue
     lines="$(terminal_segments "$ROOT/$relative_path")"
     [ -n "$lines" ] || { echo "no terminal statement read in ${relative_path}" >&2; return 1; }
     # Per statement, not per file: a file whose ending drifted at one of
@@ -278,6 +283,28 @@ terminal_segments() {
   grep -qF -- 'departs from the general inline ending' "$ROOT/$LIFECYCLE_RELATIVE_PATH"
   grep -qF -- 'wiki/concepts/Code Review Audit Agent.md' "$ROOT/$LIFECYCLE_RELATIVE_PATH"
   grep -qF -- 'cannot legitimately do the work itself' "$ROOT/$LIFECYCLE_RELATIVE_PATH"
+}
+
+@test "the owner page admits the worthiness step's exception and states its reason" {
+  grep -qF -- "$WORTHINESS_RELATIVE_PATH" "$OWNER"
+  grep -qF -- 'an absent verdict is not a keep' "$OWNER"
+  grep -qF -- 'tdd never interrupts mid-implementation' "$OWNER"
+}
+
+@test "the worthiness step's terminal statements halt or report and do not fall back inline" {
+  local lines
+  lines="$(terminal_segments "$ROOT/$WORTHINESS_RELATIVE_PATH")"
+  [ -n "$lines" ] || { echo "no terminal statement read in $WORTHINESS_RELATIVE_PATH" >&2; return 1; }
+  printf '%s\n' "$lines" | grep -qi -- 'inline' && return 1
+  printf '%s\n' "$lines" | grep -qF -- 'is a HALT'
+  printf '%s\n' "$lines" | grep -qF -- 'is reported in that summary'
+}
+
+@test "the worthiness step declares its departure as deliberate and names the owner" {
+  grep -qF -- 'departs from the general inline ending' "$ROOT/$WORTHINESS_RELATIVE_PATH"
+  grep -qF -- 'wiki/concepts/Code Review Audit Agent.md' "$ROOT/$WORTHINESS_RELATIVE_PATH"
+  grep -qF -- 'cannot legitimately do the work itself' "$ROOT/$WORTHINESS_RELATIVE_PATH"
+  grep -qF -- 'same deliberate departure from the general inline ending' "$ROOT/$WORTHINESS_RELATIVE_PATH"
 }
 
 @test "the owner page no longer asserts a uniform ending across every surface" {

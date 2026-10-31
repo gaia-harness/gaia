@@ -4,7 +4,7 @@ description: Promote a consolidated SPEC or plan summary into the GAIA wiki, pre
 
 # Wiki Promote
 
-The orchestrator runs this step after consolidation, once the audit has cleared and the human confirmed ready to merge, on the open PR's branch. It takes a `SPEC-NNN` id for the spec arm (`.notebook/specs/SPEC-NNN/SUMMARY.md`) or a `PLAN-NNN` id for the plan arm (`.notebook/plans/PLAN-NNN/SUMMARY.md`), both resolved through the notebook library. It reads the consolidated `SUMMARY.md`, writes pages into `wiki/` in the working tree, and returns the page list and one Choice token for the orchestrator to record and commit.
+The orchestrator runs this step after consolidation and before the first member dispatch, on the open PR's branch. A refresh after audit clearance runs it again only to retry a pass that recorded `skipped-verify-failed`. It takes a `SPEC-NNN` id for the spec arm (`.notebook/specs/SPEC-NNN/SUMMARY.md`) or a `PLAN-NNN` id for the plan arm (`.notebook/plans/PLAN-NNN/SUMMARY.md`), both resolved through the notebook library. It reads the consolidated `SUMMARY.md`, writes pages into `wiki/` in the working tree, and returns the page list and one Choice token for the orchestrator to record and commit.
 
 Contents: Step 1 - Resolve the source; Step 2 - Read promotion gate; Step 3 - Resolve the open PR; Step 4 - Route to wiki destinations; Step 5 - Render and write pages; Step 5b - Page body rendering; Step 6 - Return the page list; Step 7 - Report.
 
@@ -243,8 +243,14 @@ This command does NOT commit or push; the orchestrator does. Return a structured
 The orchestrator stages exactly the `pages_written` and `pages_updated` paths plus `wiki/index.md` and `wiki/log.md`, commits them with a `wiki:` Conventional Commits subject (`.gaia/conventional-commits.json` has a `wiki` type), and pushes. `wiki/**` is outside every Code Audit Team member's scope, so a commit of only `wiki/**` paths keeps the members' already-posted markers valid; any other path in the commit rotates the marker of the member that owns it.
 
 <!-- gaia:maintainer-only:start -->
-GAIA maintainers: a non-empty `pages_written` also owes a manifest answer, because `.gaia/cli/gaia-maintainer release manifest --check` fails on a new wiki page until `.gaia/manifest.json` lists it. Answer every new page in the promotion commit: run `.gaia/cli/gaia-maintainer release manifest` once with one `--ship <path>` per `pages_written` entry, and stage `.gaia/manifest.json` with the pages. The manifest is in code-audit-maintainer-shell's scope, so that commit rotates the shell member's marker, and before the merge a fresh `bash .gaia/tests/verify-harness.sh branch` pass and a shell re-audit are owed (`.claude/rules/pr-merge.md`). A promotion that only updates existing pages owes no answer and rotates nothing. Promotion runs after audit clearance because consolidation summarizes the audited code, so moving it earlier does not avoid this cost: plan for the extra verify run and shell audit unit whenever a promotion writes a new page.
+GAIA maintainers: a non-empty `pages_written` also owes a manifest answer, because `.gaia/cli/gaia-maintainer release manifest --check` fails on a new wiki page until `.gaia/manifest.json` lists it. Answer every new page in the promotion commit: run `.gaia/cli/gaia-maintainer release manifest` once with one `--ship <path>` per `pages_written` entry, and stage `.gaia/manifest.json` with the pages. The manifest is in code-audit-maintainer-shell's scope, so that commit rotates the shell member's marker, and before the merge a fresh `bash .gaia/tests/verify-harness.sh branch` pass and a shell re-audit are owed (`.claude/rules/pr-merge.md`). A promotion that only updates existing pages owes no answer and rotates nothing. A promotion that runs before the first member dispatch lands its manifest answer before the first verify pass and before any member's marker exists, so no extra verify run and no shell re-audit is owed. A promotion that runs after clearance, which covers the retry after a failed verify and a plan generated before this order, still owes both: plan for the extra verify run and shell audit unit whenever such a promotion writes a new page.
 <!-- gaia:maintainer-only:end -->
+
+A page corrected after promotion recomputes `promoted_hash`, so it stays `our-update` and a later pass does not read the correction as a hand edit. This one command hashes the body below the closing `---` and rewrites the field:
+
+```bash
+page=<wiki page path>; hash="sha256:$(awk 'f{print} /^---$/ && ++n==2{f=1}' "$page" | shasum -a 256 | cut -d' ' -f1)"; sed -i.bak "s/^promoted_hash: .*/promoted_hash: $hash/" "$page" && rm "$page.bak"
+```
 
 When every page was skipped (the union of `pages_written` and `pages_updated` is empty), return Choice `no`, `Pages: none` and `Reason: every target page was skipped; see warnings`, and the orchestrator makes no commit.
 

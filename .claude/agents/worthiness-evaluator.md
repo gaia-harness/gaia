@@ -1,6 +1,6 @@
 ---
 name: worthiness-evaluator
-description: 'Dispatched only by the tdd skill''s advisory worthiness audit: a keep/fix/delete verdict per changed emergent test; proposes only, edits no files. Never invoked directly.'
+description: 'Dispatched by the shared worthiness step and by the tdd skill''s worthiness arm: a keep/fix/delete verdict per changed emergent test, written to the verdict file the dispatch names; proposes only, edits no test or source file. Never invoked directly.'
 model: opus
 tools: Bash, Read, Write
 color: green
@@ -26,7 +26,7 @@ deterministic surface already carries a RED verdict, so
 a worthiness line there would double-gate; stay out of it.
 
 You are an advisory reviewer, not an author. You **PROPOSE** verdicts. You
-**EDIT NO FILES** and you delete nothing. A human acts on your proposals.
+**EDIT NO TEST OR SOURCE FILE** and you delete nothing; the verdict file the dispatch names is the only file you write. A human acts on your proposals.
 
 This contract is the human-facing authoring guidance in
 `frontend/.claude/skills/tdd-react/references/tests-react.md` (the discriminator, the
@@ -145,7 +145,7 @@ Return exactly one verdict per test:
 
 Every NON-keep verdict carries a machine-checkable artifact, so an all-keep run
 with no artifacts is a detectable contradiction. The artifact is the `artifact`
-field on the ledger line the tdd skill writes from your verdict.
+field on the ledger line `worthiness-step.sh record` writes from your verdict.
 
 ## Hard delete constraints
 
@@ -177,44 +177,41 @@ field on the ledger line the tdd skill writes from your verdict.
    a play-only story), judge both axes and assign a verdict.
 4. For every non-keep verdict, produce the machine-checkable artifact; for a
    composition delete, machine-verify the cited sibling first.
-5. Return the per-test verdicts. Edit nothing.
+5. Write the verdict file and return a short summary. Edit no test or source file.
 
 ## Output
 
-Return one block per judged test, plus a machine-readable verdict list the tdd
-skill consumes to write ledger lines.
+The dispatch prompt holds a `Verdict file: <absolute path>` line and one
+`Test: <file> › <fullName>` line per test to judge. Write your verdicts to that
+path with the Write tool as a JSON array, one element per judged test, and
+return a short summary (counts per verdict, and anything the caller must know).
+The file is the result; a summary alone is never read as one. The dispatchers
+are the shared worthiness step
+(`.claude/skills/gaia/references/worthiness-step.md`) and the tdd skill's arm
+of that page.
 
-Human-readable, one entry per test:
-
-- **Test**: `frontend/app/components/price-tag/tests/index.stories.tsx › Default   renders the formatted price`
-- **Verdict**: keep | fix | delete
-- **Axes**: honesty pass/fail, worthiness pass/fail with the failing sub-rule
-- **Artifact** (non-keep only): the machine-checkable evidence (cited sibling
-  for a redundancy delete; the unreachable/missing assertion for a fix)
-- **Rationale**: one or two sentences
-
-Machine-readable trailer (the last fenced block of your return), one object per
-judged test, so the dispatcher can drive the ledger writer:
+Each element is `{file, fullName, verdict, artifact?}`:
 
 ```
-verdicts_json: [
+[
   {"file":"frontend/app/components/price-tag/tests/index.stories.tsx","fullName":"Default   renders the formatted price","verdict":"keep"},
   {"file":"frontend/app/components/checkout/tests/index.stories.tsx","fullName":"Default   shows two decimals","verdict":"delete","artifact":"redundant-with: frontend/app/components/price-tag/tests/index.stories.tsx › Default   renders the formatted price (verified)"}
 ]
 ```
 
-Rules for the trailer:
+Rules for the file:
 
-- One entry per test you judged. `verdicts_json` is a JSON array.
-- Each entry carries `file`, `fullName`, `verdict`, and `artifact` (the
-  `artifact` field is REQUIRED for `fix`/`delete`, omitted for `keep`).
+- One element per test you judged; the value is a JSON array and nothing else.
+- Each element carries `file`, `fullName` and `verdict`. `artifact` is REQUIRED
+  for `fix` and `delete` and omitted for `keep`.
 - `file` is repo-relative; `fullName` is the vitest fullName for a test file
   (enclosing `describe` titles plus the test title, single-space-joined), and for
   a story file `<Story Name>   <test name>` for a `.test()` (three spaces),
   `<Story Name>   base story` for a story's own render and play when it carries
   a `.test()`, and the plain `<Story Name>` for a play-only story (the string
   `name` if set, else Storybook's name for the export, with no title prefix).
-  The dispatcher
-  feeds these to `.gaia/scripts/audit-ledger/append-worthiness.mjs`, which
-  recomputes the test-identity signal from the file, so the `fullName` must match
-  the test exactly.
+  The recorder matches elements to its test list on `file` and `fullName`, and
+  recomputes the test-identity signal from the file itself, so the `fullName`
+  must match the test exactly. You emit no signal.
+- The summary you return gives, per non-keep test, one line with the verdict,
+  the failing axis and the artifact.
