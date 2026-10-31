@@ -16,7 +16,7 @@ A release change that requires the adopter to act, run a command or hand-migrate
 
 ### Fixed
 
-- **`/update-deps` honors `minimumReleaseAgeExclude`:** a package your workspace exempts from the release-age window now shows up as an update right away, in the run and the statusline count, instead of being silently held back until it ages past the window (#3199)
+- **`/update-deps` honors `minimumReleaseAgeExclude`:** a package your workspace exempts from the release-age window now shows up as an update right away, in the run and the statusline count, instead of being silently held back until it ages past the window (#3207)
 
 ### Security
 
