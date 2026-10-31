@@ -10,7 +10,7 @@
 # real file. The ledger is a fixture file reached through the writer's own
 # WORTHINESS_LEDGER_PATH seam.
 #
-# Run: .gaia/scripts/bats5.sh .gaia/scripts/tests/worthiness-step.bats < /dev/null
+# Run: .gaia/scripts/bats5.sh .gaia/tests/hooks/worthiness-step.bats < /dev/null
 # Assertion style: bash-3.2-safe per .claude/rules/bats-assertions.md.
 
 # bats file_tags=installed-dependencies

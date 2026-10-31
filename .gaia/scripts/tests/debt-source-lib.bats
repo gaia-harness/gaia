@@ -274,7 +274,7 @@ hasher_fails() { return 1; }
 # A scratch repository on main holds copies of the filing script and its
 # siblings; a linked worktree carries the branch under test. gh is a stub.
 
-FX_SIBLINGS="file-tech-debt.sh main-root-lib.sh debt-dedup.sh check-debt-issue-metadata.sh branch-name-lib.sh debt-source-lib.sh debt-list-lib.sh"
+FX_SIBLINGS="file-tech-debt.sh main-root-lib.sh debt-dedup.sh check-debt-issue-metadata.sh branch-name-lib.sh debt-source-lib.sh debt-list-lib.sh branch-authorship-lib.sh"
 
 # fx_copy_scripts <directory>: copies of the script and its siblings, never links.
 fx_copy_scripts() {

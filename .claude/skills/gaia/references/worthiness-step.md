@@ -36,7 +36,7 @@ For the tests whose route is `evaluate`: pre-clear a scratchpad verdict file wit
 bash .gaia/scripts/audit-noop-detect.sh --shape agent-report-file --path <verdict file> --expect-count <n>
 ```
 
-A no-op re-dispatches once against the re-cleared path. A second no-op is a HALT: stop and say why, because the caller wrote the code under judgment and an absent verdict is not a keep. Then record against the route file and route again:
+A no-op re-dispatches once against the re-cleared path. A second no-op is a HALT: stop and say why, because the caller wrote the code under judgment and an absent verdict is not a keep. This departs from the general inline ending (`wiki/concepts/Code Review Audit Agent.md`, `### The terminal action, stated once`) deliberately: the caller cannot legitimately do the work itself. Then record against the route file and route again:
 
 ```bash
 bash .gaia/scripts/worthiness-step.sh record --root <RESOLVED_ROOT> --verdicts <verdict file> --expect <route file>
@@ -97,4 +97,4 @@ The tdd skill follows this arm only. It dispatches and records, nothing else, be
 - The test list is the task's own changed emergent files, not a `route` result.
 - Dispatch the evaluator with a `Verdict file:` line in the scratchpad and classify the file as the Evaluate step does, with `--expect-count`.
 - Record with `bash .gaia/scripts/worthiness-step.sh record --root <root> --verdicts <verdict file>`, with no `--expect`.
-- Run no repair agent, make no history change and ask no question. The verdicts go in tdd's end-of-task summary. A second no-op is reported in that summary rather than halting, because tdd never interrupts mid-implementation and the presence check backs up a missing line.
+- Run no repair agent, make no history change and ask no question. The verdicts go in tdd's end-of-task summary. A second no-op is reported in that summary rather than halting, because tdd never interrupts mid-implementation and the presence check backs up a missing line. This is the same deliberate departure from the general inline ending as the Evaluate step's.

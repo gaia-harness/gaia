@@ -426,6 +426,7 @@ reconcile_passes() {
   true
 }
 
+# bats test_tags=whole-tree
 @test "every skill file that lists the absent and transient outcomes also names refused-authored, with a red twin" {
   local caller_files caller_count caller_file copy
   caller_files="$(git -C "$ROOT" grep --untracked -l -F -e '`absent`' -- .claude/skills | while IFS= read -r caller_file; do

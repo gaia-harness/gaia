@@ -990,6 +990,7 @@ rm -f "$records_file"
 printf 'status=%s\n' "$walk_status"
 printf 'error=%s\n' "$WORTHINESS_SELECTION_ERROR"
 DRIVER
+  # gaia-lint-ignore whole-tree-mark-guard: operand is not the tracked tree
   run bash "$BATS_TEST_TMPDIR/walk-driver.sh" "$tree" "$mode" "$HOME_ROOT"
 }
 

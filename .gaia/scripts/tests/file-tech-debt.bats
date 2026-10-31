@@ -871,7 +871,11 @@ build_fixture() {
   git -C "$FIX" config user.email tester@example.com
   git -C "$FIX" config commit.gpgsign false
   seq 1 12 | sed 's/^/line /' >"$FIX/app/a.ts"
-  find "$REAL_ROOT/.gaia/scripts" -maxdepth 1 -type f -exec cp {} "$FIX/.gaia/scripts/" \;
+  local script_name
+  for script_name in file-tech-debt.sh main-root-lib.sh debt-dedup.sh check-debt-issue-metadata.sh \
+    branch-name-lib.sh debt-source-lib.sh debt-list-lib.sh branch-authorship-lib.sh; do
+    cp "$REAL_ROOT/.gaia/scripts/$script_name" "$FIX/.gaia/scripts/"
+  done
   git -C "$FIX" add -A
   git -C "$FIX" commit -q -m base
   git -C "$FIX" checkout -q -b feature
