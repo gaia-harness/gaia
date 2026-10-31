@@ -1,9 +1,9 @@
 #!/usr/bin/env node
 // Append one worthiness-audit verdict line to the append-only worthiness
 // ledger. The worthiness evaluator (.claude/agents/worthiness-evaluator.md)
-// judges each emergent-surface test keep/fix/delete; on the no-orchestrator
-// path the tdd skill drives one invocation of this writer per judged test, so
-// principle-6 always-on holds even without an orchestrator.
+// judges each emergent-surface test keep/fix/delete; `worthiness-step.sh record`
+// is the one invoker, running this writer once per judged test for the shared
+// worthiness step and the tdd skill's arm alike.
 //
 // Invocation:
 //   node .gaia/scripts/audit-ledger/append-worthiness.mjs \

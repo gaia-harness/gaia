@@ -373,3 +373,72 @@ pinned_labels() {
   grep -qF -- 'no snapshot directory)' <<<"$row" && return 1
   true
 }
+
+# page_with <sed_expr>: prints the path of a scratch copy of the page edited
+# by the sed expression.
+page_with() {
+  local scratch_page="$BATS_TEST_TMPDIR/page-edited.md"
+  sed -E "$1" "$PAGE" >"$scratch_page"
+  printf '%s\n' "$scratch_page"
+}
+
+# fixer_template_passes <page>: rc 0 when the fixer template names the
+# promoted-pages carrier.
+fixer_template_passes() {
+  section "$FIXROUND" "$1" | grep -qF -- 'promoted-pages.txt exists it lists the wiki pages this PR promoted'
+}
+
+# digest_statement_passes <page>: rc 0 when the late worthiness fix statement
+# says its re-dispatch is Full and never says Light.
+digest_statement_passes() {
+  local statement
+  statement="$(section '^#### Applying the audit.s own Minor findings' "$1" | grep -F -- 'A late worthiness fix')" || return 1
+  grep -qF -- 'Its re-dispatch is Full' <<<"$statement" || return 1
+  grep -qF -- 'Light' <<<"$statement" && return 1
+  true
+}
+
+# reconcile_passes <page>: rc 0 when the reconcile text calls refused-authored
+# a named violation the unit re-disposes, and still stops on failed.
+reconcile_passes() {
+  local reconcile
+  reconcile="$(section "$FIXROUND" "$1" | sentences | grep -F -- 'A `refused-authored` outcome is a named violation')" || return 1
+  grep -qF -- 'the unit re-disposes, not a stop' <<<"$reconcile" || return 1
+  section "$FIXROUND" "$1" | grep -qF -- 'or a `failed` outcome) stops the unit `dispositions-check-failed`'
+}
+
+@test "the fixer template hands the fixer the promoted pages, with a red twin" {
+  fixer_template_passes "$PAGE" || return 1
+  fixer_template_passes "$(page_with 's/promoted-pages\.txt/other.txt/')" && return 1
+  true
+}
+
+@test "a late worthiness fix re-dispatches Full: the statement passes, and a seeded Light fails" {
+  digest_statement_passes "$PAGE" || return 1
+  digest_statement_passes "$(page_with 's/Its re-dispatch is Full/Its re-dispatch is Light/')" && return 1
+  digest_statement_passes "$(page_with 's/Its re-dispatch is Full, since/Its re-dispatch is Full on Light, since/')" && return 1
+  true
+}
+
+@test "the reconcile text names refused-authored a named violation the unit re-disposes, with a red twin" {
+  reconcile_passes "$PAGE" || return 1
+  reconcile_passes "$(page_with 's/is a named violation the unit re-disposes, not a stop/is a stop/')" && return 1
+  true
+}
+
+# bats test_tags=whole-tree
+@test "every skill file that lists the absent and transient outcomes also names refused-authored, with a red twin" {
+  local caller_files caller_count caller_file copy
+  caller_files="$(git -C "$ROOT" grep --untracked -l -F -e '`absent`' -- .claude/skills | while IFS= read -r caller_file; do
+    grep -qF -- 'transient' "$ROOT/$caller_file" && printf '%s\n' "$caller_file"
+  done)"
+  caller_count="$(grep -c . <<<"$caller_files")"
+  [ "$caller_count" -eq 4 ] || { echo "expected 4 caller files, found $caller_count: $caller_files" >&2; return 1; }
+  while IFS= read -r caller_file; do
+    grep -qF -- 'refused-authored' "$ROOT/$caller_file" || { echo "missing refused-authored: $caller_file" >&2; return 1; }
+  done <<<"$caller_files"
+  copy="$BATS_TEST_TMPDIR/caller-copy.md"
+  sed 's/refused-authored/refused/g' "$ROOT/.claude/skills/file-tech-debt/SKILL.md" >"$copy"
+  grep -qF -- 'refused-authored' "$copy" && return 1
+  true
+}

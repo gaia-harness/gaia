@@ -25,6 +25,8 @@ A release change that requires the adopter to act, run a command or hand-migrate
 
 - `/gaia-init` and `/setup-gaia` install pnpm with `npm install -g pnpm@latest` instead of corepack, which on Node 22.22 left a broken pnpm.
 - `/setup-gaia` now catches a stale pnpm on a clone, and `/update-gaia` refreshes the React Doctor skill after its merge.
+- **Worthiness and wiki promotion run before the audit:** generated plans and the merge workflow now finish the test-worthiness step and the wiki commit before the first code audit round, so neither restarts CI or owes another audit pass after clearance (#3210)
+- **No debt on your own branch's code:** `file-tech-debt.sh file` now refuses a non-security finding on a line the branch wrote, routing it to a fix on the branch or an accepted residual, so the debt backlog holds only unrelated finds (#3210)
 
 ### Fixed
 

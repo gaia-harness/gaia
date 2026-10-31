@@ -582,7 +582,10 @@ describe('extract-test-signals story mode: signal rotation', () => {
       rotationSource({playBody: '// the first comment\n      await drive();'})
     );
 
-    expect(reworded).toEqual(original);
+    const identity = (lines: typeof original) =>
+      lines.map(({fullName, kind, signal}) => ({fullName, kind, signal}));
+
+    expect(identity(reworded)).toEqual(identity(original));
     expect(namesOf(original)).toEqual(ROTATION_NAMES);
   });
 });

@@ -14,7 +14,10 @@
 //
 // Output (stdout): one JSON object per discovered test(...)/it(...) call,
 // newline-delimited:
-//   {"fullName":"...","signal":"sha256:...","kind":"runtime"|"type-only"}
+//   {"fullName":"...","signal":"sha256:...","kind":"runtime"|"type-only",
+//    "firstLine":N,"ranges":[[start,end],...]}
+// firstLine and ranges are 1-based inclusive lines of the regions the signal
+// hashes, comments above a region excluded; a story entry lists several.
 //
 // Story mode: a path ending `.stories.tsx` or `.stories.ts` is read as a CSF4
 // story file; its fullName and signal rules and refusal list live in the
@@ -358,6 +361,12 @@ function normalize(text) {
   return text.trim().replace(/\s+/g, ' ');
 }
 
+function rangeOf(node) {
+  const start = sourceFile.getLineAndCharacterOfPosition(node.getStart(sourceFile));
+  const end = sourceFile.getLineAndCharacterOfPosition(node.getEnd() - 1);
+  return [start.line + 1, end.line + 1];
+}
+
 function signalFor(node) {
   const text = textWithoutComments(node.getStart(sourceFile), node.getEnd());
   const normalized = normalize(text);
@@ -446,6 +455,8 @@ function visit(node, ancestors, unmatchable) {
             fullName,
             signal: signalFor(node),
             kind: classifyKind(node),
+            firstLine: rangeOf(node)[0],
+            ranges: [rangeOf(node)],
           }),
         );
       }

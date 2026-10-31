@@ -38,6 +38,11 @@
 //      identifier resolves to; for an inherited play, the source's), or empty;
 //   3. the meta's declaration statement;
 //   4. for a test entry only, that `.test(…)` call statement.
+// Each entry also carries `firstLine` and `ranges`: the 1-based inclusive line
+// range of each node behind those regions, in the same order, and `firstLine`
+// is the test statement's first line for a test entry, else the story
+// declaration's.
+//
 // So an edit to a story's play rotates its base story, every attached test and
 // every `.extend` story inheriting it; an edit to one test rotates that test;
 // an edit to a sibling story rotates nothing of this one.
@@ -147,6 +152,10 @@ export function extractStorySignals({ts, sourceFile, textWithoutComments, normal
   };
   const position = (node) => node.getStart(sourceFile);
   const regionText = (node) => normalize(textWithoutComments(node.getStart(sourceFile), node.getEnd()));
+  const rangeOf = (node) => [
+    sourceFile.getLineAndCharacterOfPosition(node.getStart(sourceFile)).line + 1,
+    sourceFile.getLineAndCharacterOfPosition(node.getEnd() - 1).line + 1,
+  ];
   const refuser = (exportName) => (reason) => {
     throw new StoryShapeRefusal(exportName, reason);
   };
@@ -297,7 +306,7 @@ export function extractStorySignals({ts, sourceFile, textWithoutComments, normal
     }
   }
   const metaTags = metaTagsNode ? parseTags(metaTagsNode, refuseMeta) : [];
-  const metaRegion = regionText(metaBinding.statement);
+  const metaRegion = {text: regionText(metaBinding.statement), nodes: [metaBinding.statement]};
 
   // ---- stories ------------------------------------------------------------
 
@@ -465,9 +474,11 @@ export function extractStorySignals({ts, sourceFile, textWithoutComments, normal
   }
 
   const lines = [];
-  const emit = (fullName, regions) => {
-    const hex = createHash('sha256').update(regions.join('\n'), 'utf8').digest('hex');
-    lines.push(JSON.stringify({fullName, signal: `sha256:${hex}`, kind: 'runtime'}));
+  // regions: [{text, nodes}] in hash order; a region's nodes may be empty.
+  const emit = (fullName, regions, firstNode) => {
+    const hex = createHash('sha256').update(regions.map((region) => region.text).join('\n'), 'utf8').digest('hex');
+    const ranges = regions.flatMap((region) => region.nodes.map(rangeOf));
+    lines.push(JSON.stringify({fullName, signal: `sha256:${hex}`, kind: 'runtime', firstLine: rangeOf(firstNode)[0], ranges}));
   };
 
   for (const exportName of exportNames) {
@@ -495,15 +506,19 @@ export function extractStorySignals({ts, sourceFile, textWithoutComments, normal
       continue;
     }
     const play = effectivePlay(exportName, {refuse, visiting: new Set()});
-    const baseRegions = [regionText(call.binding.statement), play ? play.nodes.map(regionText).join('\n') : '', metaRegion];
+    const baseRegions = [
+      {text: regionText(call.binding.statement), nodes: [call.binding.statement]},
+      {text: play ? play.nodes.map(regionText).join('\n') : '', nodes: play ? play.nodes : []},
+      metaRegion,
+    ];
     const tests = testsByStory.get(exportName) ?? [];
     if (tests.length > 0) {
-      emit(`${storyName}   base story`, baseRegions);
+      emit(`${storyName}   base story`, baseRegions, call.binding.statement);
       for (const test of tests) {
-        emit(`${storyName}   ${test.name}`, [...baseRegions, regionText(test.statement)]);
+        emit(`${storyName}   ${test.name}`, [...baseRegions, {text: regionText(test.statement), nodes: [test.statement]}], test.statement);
       }
     } else if (play) {
-      emit(storyName, baseRegions);
+      emit(storyName, baseRegions, call.binding.statement);
     }
   }
 

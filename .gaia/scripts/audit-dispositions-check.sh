@@ -19,6 +19,7 @@
 #   audit-dispositions-check.sh check-outcomes --root <R> --run-folder <D> --round <r>
 #   audit-dispositions-check.sh waiver-table   --root <R> --run-folder <D> --rounds <a>-<b> [--snapshot-dir <S>]
 #   audit-dispositions-check.sh pr-sections    --root <R> --run-folder <D> [--snapshot-dir <S>]
+#   audit-dispositions-check.sh record-residual --root <R> --run-folder <D> --finding <file>
 #
 # Dispositions: fix, accept-residual, waive-out-of-scope, file, divert.
 #
@@ -54,6 +55,9 @@
 #   outcome-failed              (check-outcomes) that line's outcome is failed, or a
 #                               value the filing script never writes; absent and
 #                               transient pass, since neither is a merge blocker
+#   refused-authored            (check-outcomes) that line's outcome is refused-authored:
+#                               the filer found the site branch-authored, so the entry
+#                               must be re-disposed accept-residual (or fixed by a veto)
 #
 # Triage mark. A sidecar entry with `triage: true` is honored as disposed only
 # when its member is on the triage allowlist (empty unless this checkout
@@ -68,7 +72,8 @@
 # Carry-forward. A key disposed file or divert in dispositions-<k>.json, k < r,
 # is not undisposed in round r: the filing script's outcome (and its retry
 # file, for a transient one) is what keeps it pending, matching the A(r)
-# model's disposed set. A key disposed fix earlier carries nothing.
+# model's disposed set. A key disposed fix earlier carries nothing, and neither
+# does a key the filer refused as branch-authored.
 #
 # check-outcomes reconciles one round. check-all runs it for every round
 # graded under the current predicate (a live round or a version-2 snapshot);
@@ -129,7 +134,10 @@
 # from the outcomes files and <D>/filing-retry/. A waiver or triage line
 # renders only when the lookup says security false and severity not critical, and
 # every rendered reason passes `file-tech-debt.sh screen-text` first; a reason
-# that fails renders as a withheld count.
+# that fails renders as a withheld count. It also renders <D>/recorded-residuals.jsonl
+# (rows record-residual and the worthiness step append) as accepted residuals,
+# even with no dispositions file. record-residual appends the row for a finding
+# the filer refused on replay, once per key, and prints nothing.
 
 set -uo pipefail
 
@@ -137,6 +145,10 @@ case "${BASH_SOURCE[0]}" in
   */*) _GAIA_DISPOSITIONS_DIRECTORY="${BASH_SOURCE[0]%/*}" ;;
   *) _GAIA_DISPOSITIONS_DIRECTORY="." ;;
 esac
+# shellcheck source=/dev/null
+. "$_GAIA_DISPOSITIONS_DIRECTORY/filing-outcomes-lib.sh"
+# shellcheck source=/dev/null
+. "$_GAIA_DISPOSITIONS_DIRECTORY/audit-pr-sections-lib.sh"
 
 # The members whose sidecar triage mark can be honored. Empty by default, so a
 # mark is ignored and the finding is disposed like any other.
@@ -147,7 +159,7 @@ _TRIAGE_MEMBERS='["code-audit-maintainer-shell","code-audit-maintainer-node"]'
 # gaia:maintainer-only:end
 
 _usage() {
-  printf 'usage: audit-dispositions-check.sh check|check-all|check-outcomes|waiver-table|pr-sections --root <R> --run-folder <D> [--round <r>|--rounds <a>-<b>] [--snapshot-dir <S>]\n' >&2
+  printf 'usage: audit-dispositions-check.sh check|check-all|check-outcomes|waiver-table|pr-sections|record-residual --root <R> --run-folder <D> [--round <r>|--rounds <a>-<b>] [--snapshot-dir <S>] [--finding <file>]\n' >&2
   return 2
 }
 
@@ -301,7 +313,9 @@ _carried_keys() {
     k=$((k + 1))
   done
   [ "${#earlier_files[@]}" -gt 0 ] || { printf '[]\n'; return 0; }
-  carried="$(jq -c -n '[inputs | .entries[] | select(.disposition == "file" or .disposition == "divert") | [.member, .finding_class, .path, .line]]' \
+  carried="$(jq -c -n --argjson refused "$(gaia_filing_refused_keys "$RUN_FOLDER")" \
+    '[inputs | .entries[] | select(.disposition == "file" or .disposition == "divert") | [.member, .finding_class, .path, .line]
+      | select(. as $key | $refused | any(. == $key) | not)]' \
     ${earlier_files[@]+"${earlier_files[@]}"} 2>/dev/null)" || carried=""
   printf '%s\n' "${carried:-[]}"
 }
@@ -421,6 +435,7 @@ _check_outcomes() {
     | [.member, .finding_class, .path, .line] as $key | ({member, finding_class, path, line} | tojson) as $key_json
     | ([$outcomes[] | select(.key == $key)] | last) as $outcome
     | if $outcome == null then "violation: outcome-missing \($key_json)"
+      elif $outcome.outcome == "refused-authored" then "violation: refused-authored \($key_json)"
       elif ($outcome.outcome | IN("filed", "matched", "diverted", "absent", "transient")) then empty
       else "violation: outcome-failed \($key_json)" end' "$dispositions_file" 2>/dev/null)" \
     || { _error "unparseable $dispositions_file or $outcome_file"; return 3; }
@@ -532,136 +547,10 @@ _command_waiver_table() {
   [ "$divert_count" -eq 0 ] || { printf '\n'; _divert_line "$divert_count"; }
 }
 
-# _ROWS_JQ: one round's PR-body candidate rows. A waiver or triage row exists
-# only inside the render bound (the lookup says security false and severity
-# not critical); divert rows carry no reason, since only their count is rendered.
-# shellcheck disable=SC2016
-_ROWS_JQ='
-def key_array: [.member, .finding_class, .path, .line];
-def trim: gsub("^\\s+|\\s+$"; "");
-def one: gsub("<!--|-->"; "") | gsub("\\s+"; " ") | trim | if . == "" then "no reason recorded" else . end;
-def text($value): (if ($value | type) == "string" then $value else "" end) | one;
-def in_bound: . != null and .security == false and .severity != "critical";
-($vetoes | map(select(.effective_from_round <= $round) | [.member, .finding_class, .path, .line])) as $vetoed_keys
-| ($lookup | map({key: (key_array | tojson), value: .}) | from_entries) as $lookup_by_key
-| [.entries[] | key_array] as $disposed_keys
-| [ (.entries[] | select(.disposition != "fix") | select(key_array as $key | $vetoed_keys | any(. == $key) | not)
-      | $lookup_by_key[(key_array | tojson)] as $lookup_entry
-      | (if .disposition == "accept-residual" then "accept"
-         elif .disposition == "divert" then "divert"
-         elif .disposition != "waive-out-of-scope" then ""
-         elif (($lookup_entry | in_bound) | not) then ""
-         elif .basis == "cross-remit" then "cross"
-         elif .basis == "triage-threshold" then "triage"
-         else "" end) as $section
-      | select($section != "")
-      | {round: $round, section: $section, member, path, line, finding_class,
-         reason: (if $section == "divert" then "" else text(.reason) end)}),
-    ($lookup[] | select(.triage == true and (.member | IN($triage_members[])) and in_bound)
-      | select(key_array as $key | ($disposed_keys | any(. == $key)) or ($vetoed_keys | any(. == $key)) | not)
-      | {round: $round, section: "triage", member, path, line, finding_class, reason: text(.triage_reason)}) ]
-'
-
-# shellcheck disable=SC2016
-_SECTIONS_JQ='
-def line_number: if (.line | type) == "number" and .line >= 1 then .line else 1 end;
-def keyed: "- `\(.path):\(line_number)` \(.reason). <!-- gaia-debt-key: v1 class=\(.finding_class) path=\(.path) line=\(line_number) -->";
-def triage: "- \(.path):\(line_number) \(.finding_class): \(.reason)";
-def withheld($count; $noun): "- \($count) \($noun) withheld: reason failed the secret screen";
-def section($head; $rows; fmt; $noun):
-  if ($rows | length) == 0 then empty
-  else ($rows | map(select(.clean))) as $shown | (($rows | length) - ($shown | length)) as $withheld_count
-    | ([$head, ""] + ($shown | map(fmt)) + (if $withheld_count > 0 then [withheld($withheld_count; $noun)] else [] end)) | join("\n") end;
-. as $rows
-| ([$rows[] | select(.section != "divert")] | to_entries | map(.value + {clean: ($clean[.key] == true)})) as $screened
-| [ section("## Accepted residuals (recorded, not fixed)"; ($screened | map(select(.section == "accept"))); keyed; "accepted residual(s)"),
-    section("## Out-of-scope machinery findings (recorded, not filed)"; ($screened | map(select(.section == "cross"))); keyed; "waived finding(s)"),
-    section("## Waived below triage threshold (not filed)"; ($screened | map(select(.section == "triage"))); triage; "waived finding(s)"),
-    (if $divert_line == "" then empty else $divert_line end),
-    (if ($absent | length) == 0 and $pending == 0 then empty
-     else (["## Not filed (no issue backend)", ""]
-       + ($absent | map("- \(.member) \(.path):\(line_number) (\(.finding_class)): not filed, no issue backend"))
-       + (if $pending > 0 then ["- \($pending) finding(s) pending: the issue backend was unreachable; retried next round"] else [] end))
-       | join("\n") end) ]
-| join("\n\n")
-'
-
-# _absent_outcomes: the keys whose latest outcome across the rounds' outcome
-# files is a file disposition left absent (no issue backend). Lines that do
-# not parse are skipped: this renders a record, it does not grade one.
-_absent_outcomes() {
-  local outcome_file base round chunks=""
-  for outcome_file in "$RUN_FOLDER"/filing-outcomes-*.jsonl; do
-    [ -e "$outcome_file" ] || continue
-    base="${outcome_file##*/}"
-    [[ "$base" =~ ^filing-outcomes-([0-9]+)\.jsonl$ ]] || continue
-    round=$((10#${BASH_REMATCH[1]}))
-    chunks="$chunks$(jq -c -R --argjson round "$round" 'fromjson? | select(type == "object" and (.key | type) == "object") | . + {round: $round}' <"$outcome_file" 2>/dev/null)"$'\n'
-  done
-  printf '%s' "$chunks" | jq -c -s 'sort_by(.round) | group_by(.key | [.member, .finding_class, .path, .line]) | map(last)
-    | map(select(.outcome == "absent" and .disposition == "file") | .key | {member, finding_class, path, line})
-    | sort_by(.path, .line, .finding_class)'
-}
-
-# _pending_count: the retry files the filing script keeps for transient outcomes.
-_pending_count() {
-  local retry_file count=0
-  for retry_file in "$RUN_FOLDER"/filing-retry/*.json; do
-    [ -f "$retry_file" ] && count=$((count + 1))
-  done
-  printf '%s\n' "$count"
-}
-
-# _screen_reasons <texts> <scratch-file>: a JSON array of booleans, true for
-# each line of <texts> that passes the secret screen. rc 3 when the screen
-# cannot run.
-_screen_reasons() {
-  local text_file="$2" reason_text verdicts="" screen_status
-  [ -n "$1" ] || { printf '[]\n'; return 0; }
-  while IFS= read -r reason_text; do
-    printf '%s\n' "$reason_text" >"$text_file"
-    screen_status=0
-    bash "$_GAIA_DISPOSITIONS_DIRECTORY/file-tech-debt.sh" screen-text --text-file "$text_file" >/dev/null 2>&1 || screen_status=$?
-    case "$screen_status" in
-      0) verdicts="$verdicts,true" ;;
-      1) verdicts="$verdicts,false" ;;
-      *) _error "the secret screen could not run (exit $screen_status)"; return 3 ;;
-    esac
-  done <<<"$1"
-  printf '[%s]\n' "${verdicts#,}"
-}
-
-_command_pr_sections() {
-  local dispositions_file base round chunks="" one lookup rows texts text_file clean absent pending divert_count divert_line=""
-  _load_vetoes || return 3
-  for dispositions_file in "$RUN_FOLDER"/dispositions-*.json; do
-    [ -e "$dispositions_file" ] || continue
-    base="${dispositions_file##*/}"
-    [[ "$base" =~ ^dispositions-([0-9]+)\.json$ ]] || continue
-    round=$((10#${BASH_REMATCH[1]}))
-    _valid_dispositions "$dispositions_file" || { _error "unreadable dispositions file $dispositions_file"; return 3; }
-    lookup="$(_round_lookup "$round")"
-    one="$(jq -c --argjson round "$round" --argjson vetoes "$VETOES" --argjson lookup "$lookup" \
-      --argjson triage_members "$_TRIAGE_MEMBERS" "$_ROWS_JQ" "$dispositions_file")" || return 3
-    chunks="$chunks$one"$'\n'
-  done
-  rows="$(printf '%s' "$chunks" | jq -c -s 'add // [] | sort_by(-.round) | unique_by([.section, .path, .line, .finding_class]) | sort_by(.path, .line, .finding_class)')" || return 3
-  texts="$(printf '%s' "$rows" | jq -r '.[] | select(.section != "divert") | .reason')" || return 3
-  text_file="$(mktemp "${TMPDIR:-/tmp}/audit-dispositions-reason.XXXXXX")" || { _error "cannot create a scratch file"; return 3; }
-  _TEMPORARY_FILES+=("$text_file")
-  clean="$(_screen_reasons "$texts" "$text_file")" || return 3
-  absent="$(_absent_outcomes)" || return 3
-  pending="$(_pending_count)"
-  divert_count="$(printf '%s' "$rows" | jq '[.[] | select(.section == "divert")] | length')" || return 3
-  [ "$divert_count" -eq 0 ] || divert_line="$(_divert_line "$divert_count")"
-  printf '%s' "$rows" | jq -r --argjson clean "$clean" --argjson absent "$absent" --argjson pending "$pending" \
-    --arg divert_line "$divert_line" "$_SECTIONS_JQ" || return 3
-}
-
 main() {
   local subcommand="${1-}"
   [ $# -gt 0 ] && shift
-  ROOT="" RUN_FOLDER="" ROUND="" ROUNDS="" SNAPSHOT_DIRECTORY="" READ_DIRECTORY=""
+  ROOT="" RUN_FOLDER="" ROUND="" ROUNDS="" SNAPSHOT_DIRECTORY="" READ_DIRECTORY="" FINDING_FILE=""
   while [ $# -gt 0 ]; do
     case "$1" in
       --root) [ $# -ge 2 ] || { _usage; return 2; }; ROOT="$2"; shift 2 ;;
@@ -669,15 +558,17 @@ main() {
       --round) [ $# -ge 2 ] || { _usage; return 2; }; ROUND="$2"; shift 2 ;;
       --rounds) [ $# -ge 2 ] || { _usage; return 2; }; ROUNDS="$2"; shift 2 ;;
       --snapshot-dir) [ $# -ge 2 ] || { _usage; return 2; }; SNAPSHOT_DIRECTORY="$2"; shift 2 ;;
+      --finding) [ $# -ge 2 ] || { _usage; return 2; }; FINDING_FILE="$2"; shift 2 ;;
       *) _usage; return 2 ;;
     esac
   done
   case "$subcommand" in
-    check | check-all | check-outcomes | waiver-table | pr-sections) ;;
+    check | check-all | check-outcomes | waiver-table | pr-sections | record-residual) ;;
     *) _usage; return 2 ;;
   esac
   [ -n "$RUN_FOLDER" ] || { _usage; return 2; }
   [ -n "$ROOT" ] || { _usage; return 2; }
+  [ "$subcommand" != record-residual ] || [ -n "$FINDING_FILE" ] || { _usage; return 2; }
   command -v jq >/dev/null 2>&1 || { _error "jq is required and was not found on PATH"; return 3; }
   READ_DIRECTORY="$SNAPSHOT_DIRECTORY"
   [ -n "$READ_DIRECTORY" ] || READ_DIRECTORY="$(_default_snapshot_directory)"
@@ -687,6 +578,7 @@ main() {
     check-outcomes) _command_check_outcomes ;;
     waiver-table) _command_waiver_table ;;
     pr-sections) _command_pr_sections ;;
+    record-residual) _command_record_residual ;;
   esac
 }
 

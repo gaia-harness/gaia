@@ -40,6 +40,10 @@ _gaia_loop_library_directory="${BASH_SOURCE[0]%/*}"
 . "$_gaia_loop_library_directory/audit-key-lib.sh"
 # shellcheck source=/dev/null
 . "$_gaia_loop_library_directory/exclusive-lock-lib.sh"
+# shellcheck source=/dev/null
+. "$_gaia_loop_library_directory/branch-authorship-lib.sh"
+# shellcheck source=/dev/null
+. "$_gaia_loop_library_directory/filing-outcomes-lib.sh"
 unset _gaia_loop_library_directory
 
 # Git with the repository-discovery overrides stripped, so an ambient GIT_DIR
@@ -463,89 +467,20 @@ gaia_loop_next_closing() {
   [ "$closing" = true ] && printf 'true\n' || printf 'false\n'
 }
 
-# _gaia_loop_hunks <git-directory> <a> <b>: one `diff -U0` of a..b, printed as
-# `<path>\t<first>\t<last>` per new-side hunk. The prefixes and every option a
-# user's config could flip (noprefix, mnemonicPrefix, external diff, relative,
-# quotePath) are pinned on the command line. `+++ ` names a path only in a
-# file header: with -U0 an added content line `++ x` prints as `+++ x`. A path
-# git still quotes (a double quote, backslash or control byte in it) does not
-# match any finding's path, so such a path's lines read as not authored; the
-# path set from _gaia_loop_names is unaffected. rc 1 when git fails, so the
-# caller fails closed rather than reading an empty hunk set as "none".
-_gaia_loop_hunks() {
-  local diff_output
-  gaia_loop_is_oid "${2-}" && gaia_loop_is_oid "${3-}" || return 2
-  diff_output="$(_gaia_loop_git -C "$1" -c core.quotePath=false diff -U0 -M --no-color --no-ext-diff \
-    --no-relative --src-prefix=a/ --dst-prefix=b/ "$2" "$3" -- 2>/dev/null)" || return 1
-  printf '%s\n' "$diff_output" |
-    awk '
-      /^diff --git / { in_header = 1; current_path = ""; next }
-      in_header && /^\+\+\+ / {
-        header_path = substr($0, 5); sub(/\t$/, "", header_path)
-        if (header_path == "/dev/null") current_path = ""; else if (substr(header_path, 1, 2) == "b/") current_path = substr(header_path, 3); else current_path = header_path
-        next
-      }
-      /^@@ / {
-        in_header = 0
-        if (current_path == "") next
-        plus_offset = index($0, " +"); rest = substr($0, plus_offset + 2); space_offset = index(rest, " ")
-        spec = substr(rest, 1, space_offset - 1); comma_offset = index(spec, ",")
-        if (comma_offset) { start_line = substr(spec, 1, comma_offset - 1) + 0; line_count = substr(spec, comma_offset + 1) + 0 } else { start_line = spec + 0; line_count = 1 }
-        if (line_count > 0) printf "%s\t%d\t%d\n", current_path, start_line, start_line + line_count - 1
-      }'
-}
-
-# _gaia_loop_names <git-directory> <a> <b>: `diff --name-only -M` of a..b, one path
-# per line (`-z` so no path is C-quoted).
-_gaia_loop_names() {
-  gaia_loop_is_oid "${2-}" && gaia_loop_is_oid "${3-}" || return 2
-  # A subshell so pipefail carries git's own failure out without changing the
-  # caller's shell options.
-  (
-    set -o pipefail
-    _gaia_loop_git -C "$1" diff --name-only -z -M --no-relative "$2" "$3" -- 2>/dev/null | tr '\0' '\n'
-  )
-}
-
-# _gaia_loop_hunks_json <git-directory> <a> <b>: new-side hunks as JSON, or `null`
-# when the diff cannot be read.
-_gaia_loop_hunks_json() {
-  local hunks_output
-  hunks_output="$(_gaia_loop_hunks "$@")" || { printf 'null\n'; return 0; }
-  printf '%s' "$hunks_output" | jq -R -s -c 'split("\n") | map(select(length > 0) | split("\t")
-    | {p: .[0], s: (.[1] | tonumber), e: (.[2] | tonumber)})'
-}
-
-# _gaia_loop_merge_base <git-directory> <commit>: merge base with the default branch
-# (origin's HEAD target, else origin/main, else local main, else master).
-# Full ref names only, so no ref text can be read as an option.
-_gaia_loop_merge_base() {
-  local directory="$1" commit="$2" reference oid merge_base
-  gaia_loop_is_oid "$commit" || return 1
-  for reference in "$(_gaia_loop_git -C "$directory" symbolic-ref -q refs/remotes/origin/HEAD 2>/dev/null)" \
-    refs/remotes/origin/main refs/heads/main refs/heads/master; do
-    case "$reference" in refs/*) ;; *) continue ;; esac
-    oid="$(_gaia_loop_git -C "$directory" rev-parse -q --verify "$reference^{commit}" 2>/dev/null)" || continue
-    gaia_loop_is_oid "$oid" || continue
-    merge_base="$(_gaia_loop_git -C "$directory" merge-base "$oid" "$commit" 2>/dev/null)" || return 1
-    gaia_loop_is_oid "$merge_base" || return 1
-    printf '%s\n' "$merge_base"
-    return 0
-  done
-  return 1
-}
-
 # _gaia_loop_disposed <main-root> <B> <r>: identity keys disposed non-fix in
 # any dispositions-<k>.json, k < r. An unreadable file excludes nothing, so a
-# lost file counts more findings, never fewer.
+# lost file counts more findings, never fewer. A key the filer refused as
+# branch-authored is not disposed by its file or divert entry: it counts again.
 _gaia_loop_disposed() {
-  local run k round_disposed accumulated="[]"
+  local run k round_disposed accumulated="[]" refused
   run="$(gaia_loop_run_directory "$1" "$2")"
+  refused="$(gaia_filing_refused_keys "$run")"
   k=1
   while [ "$k" -lt "$3" ]; do
     if [ -f "$run/dispositions-$k.json" ]; then
-      round_disposed="$(jq -c '[.entries[] | select(.disposition == "accept-residual" or .disposition == "waive-out-of-scope" or .disposition == "file" or .disposition == "divert")
-        | [.member, .finding_class, .path, .line]]' <"$run/dispositions-$k.json" 2>/dev/null)" || round_disposed=""
+      round_disposed="$(jq -c --argjson refused "$refused" '[.entries[] | select(.disposition == "accept-residual" or .disposition == "waive-out-of-scope" or .disposition == "file" or .disposition == "divert")
+        | [.member, .finding_class, .path, .line] as $key
+        | select(((.disposition == "file" or .disposition == "divert") and ($refused | any(. == $key))) | not) | $key]' <"$run/dispositions-$k.json" 2>/dev/null)" || round_disposed=""
       [ -n "$round_disposed" ] && accumulated="$(jq -n -c --argjson accumulated "$accumulated" --argjson round_disposed "$round_disposed" '$accumulated + $round_disposed')"
     fi
     k=$((k + 1))

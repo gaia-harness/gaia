@@ -311,15 +311,9 @@ gaia_loop_context_config_effective() {
 # round r's changed paths and new-side hunks against its merge base, null when
 # the merge base cannot be computed.
 # shellcheck disable=SC2016
-_GAIA_LOOP_AUTHORED_JQ='
-def safe_path: type == "string" and length > 0 and (startswith("/") | not) and (startswith("-") | not)
-  and ((("/" + . + "/") | contains("/../")) | not) and (contains("\n") | not) and (contains("\u0000") | not);
-def valid_line: . == null or (type == "number" and . == floor and . >= 0 and . < 1000000000);
+_GAIA_LOOP_AUTHORED_JQ="$GAIA_AUTHORSHIP_JQ"'
 def key: [.member, .finding_class, .path, .line];
-def in_hunks($hunks): .path as $entry_path | .line as $entry_line | any($hunks[]; .p == $entry_path and .s <= $entry_line and $entry_line <= .e);
-def authored($names; $hunks):
-  if (.path | safe_path | not) or (.line | valid_line | not) or $names == null or $hunks == null then true
-  else (.path as $entry_path | any($names[]; . == $entry_path)) and (.line == null or .line == 0 or in_hunks($hunks)) end;
+def authored($names; $hunks): authorship($names; $hunks) != "not-authored";
 '
 
 # _gaia_loop_authorship <main-root> <state-json> <r>: round r's
@@ -328,9 +322,9 @@ _gaia_loop_authorship() {
   local main="$1" round="$3" tree commit merge_base names=null hunks=null
   tree="$(printf '%s' "$2" | jq -r --argjson round "$round" '.history.rounds[$round - 1].tree // ""' 2>/dev/null)" || tree=""
   commit="$(printf '%s' "$2" | jq -r --argjson round "$round" '.history.rounds[$round - 1].commit // ""' 2>/dev/null)" || commit=""
-  if gaia_loop_is_oid "$tree" && merge_base="$(_gaia_loop_merge_base "$main" "$commit")"; then
-    names="$(_gaia_loop_names "$main" "$merge_base" "$tree" | jq -R -s -c 'split("\n") | map(select(length > 0))')" || names="null"
-    hunks="$(_gaia_loop_hunks_json "$main" "$merge_base" "$tree")"
+  if gaia_loop_is_oid "$tree" && merge_base="$(gaia_authorship_merge_base "$main" "$commit")"; then
+    names="$(gaia_authorship_names "$main" "$merge_base" "$tree" | jq -R -s -c 'split("\n") | map(select(length > 0))')" || names="null"
+    hunks="$(gaia_authorship_hunks_json "$main" "$merge_base" "$tree")"
   else
     merge_base=""
   fi
@@ -490,7 +484,7 @@ gaia_loop_evaluate_round() {
   findings="$(_gaia_loop_annotate "$findings" "$authorship")" ||
     { printf 'audit-loop-eval: could not annotate authorship on the findings for round %s\n' "$round" >&2; return 2; }
   if gaia_loop_is_oid "$previous_tree"; then
-    enriching_hunks="$(_gaia_loop_hunks_json "$main" "$previous_tree" "$tree")"
+    enriching_hunks="$(gaia_authorship_hunks_json "$main" "$previous_tree" "$tree")"
   fi
   disposed="$(_gaia_loop_disposed "$main" "$branch_key" "$round" | jq -c --argjson vetoed_keys "$vetoed" 'map(select(. as $entry_key | any($vetoed_keys[]; . == $entry_key) | not))')" ||
     { printf 'audit-loop-eval: could not read the dispositions before round %s\n' "$round" >&2; return 5; }

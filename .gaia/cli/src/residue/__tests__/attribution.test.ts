@@ -1,4 +1,5 @@
 import {describe, expect, test} from 'vitest';
+import {readFileSync} from 'node:fs';
 import {
   attributeBody,
   attributeBodyWith,
@@ -345,5 +346,28 @@ describe('attributeBodyWith, the predicate seam', () => {
     expect(mutated.entries).toStrictEqual([]);
     expect(mutated.keyless_count).toBe(2);
     expect(attributeBody(body).entries).toHaveLength(2);
+  });
+});
+
+describe('attributeBody, recorded residual section', () => {
+  test('reads the section the dispositions renderer prints for a recorded residual as one keyed entry', () => {
+    const body = readFileSync(
+      new URL(
+        '../../../test-fixtures/residue/recorded-residual-section.md',
+        import.meta.url
+      ),
+      'utf8'
+    );
+    const result = attributeBody(body);
+
+    expect(result.malformed).toStrictEqual([]);
+    expect(result.entries).toHaveLength(1);
+    expect(result.entries[0]?.disposition).toBe('accept');
+    expect(result.entries[0]?.key).toStrictEqual({
+      class: 'holistic/unclassified',
+      line: 12,
+      path: 'app/components/button.test.tsx',
+      version: 'v1',
+    });
   });
 });

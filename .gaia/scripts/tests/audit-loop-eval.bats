@@ -61,7 +61,7 @@ cli_copy() {
   local script_file
   CLI="$BATS_TEST_TMPDIR/scripts"
   mkdir -p "$CLI"
-  for script_file in audit-loop-eval.sh audit-loop-state-lib.sh exclusive-lock-lib.sh audit-loop-signals-lib.sh context-checkpoint-lib.sh branch-name-lib.sh main-root-lib.sh audit-key-lib.sh; do
+  for script_file in audit-loop-eval.sh audit-loop-state-lib.sh exclusive-lock-lib.sh branch-authorship-lib.sh filing-outcomes-lib.sh audit-loop-signals-lib.sh context-checkpoint-lib.sh branch-name-lib.sh main-root-lib.sh audit-key-lib.sh; do
     cp "$SCRIPTS/$script_file" "$CLI/$script_file"
   done
   cat >"$CLI/usage.sh" <<'EOF'
@@ -283,6 +283,24 @@ sequence_case() {
   snapshot="$(evaluate_round 2)"
   [ "$(read_json "$snapshot" '.A')" = 1 ]
   [ "$(read_json "$snapshot" '.verdict')" = continue ]
+}
+
+@test "a file entry the filer refused as branch-authored no longer disposes its key in A(r)" {
+  local rows run_folder="$ALF_ROOT/.gaia/local/runs/$ALF_NORMALIZED_BRANCH" key_line
+  alf_fill f.txt 12 feature
+  alf_set_line other.txt 1 "round 1"
+  next_round 1 "$(alf_entries f.txt 1 2)"
+  alf_dispositions 1 '[{"member":"code-audit-frontend","finding_class":"rule/x","path":"f.txt","line":1,"disposition":"file"}]'
+  rows='[{"path":"f.txt","line":1,"finding_class":"rule/x"}]'
+  alf_set_line other.txt 2 "round 2"
+  next_round 2 "$rows"
+  key_line='{"key":{"member":"code-audit-frontend","finding_class":"rule/x","path":"f.txt","line":1},"disposition":"file","issue":null,"record":null,"outcome":'
+  printf '%s"filed"}\n' "$key_line" >"$run_folder/filing-outcomes-1.jsonl"
+  [ "$(read_json "$(evaluate_round 2)" '.A')" = 0 ]
+  printf '%s"refused-authored"}\n' "$key_line" >"$run_folder/filing-outcomes-1.jsonl"
+  [ "$(read_json "$(evaluate_round 2)" '.A')" = 1 ]
+  alf_dispositions 1 '[{"member":"code-audit-frontend","finding_class":"rule/x","path":"f.txt","line":1,"disposition":"accept-residual"}]'
+  [ "$(read_json "$(evaluate_round 2)" '.A')" = 0 ]
 }
 
 @test "UAT-018: re-reported residuals never stall a converging branch" {
@@ -1449,4 +1467,13 @@ drift_fixture() {
   run "$CLI/audit-loop-eval.sh" brief --root "$ALF_ROOT"
   [ "$(read_json "$output" '.verdict')" = stalled ]
   [ "$(read_json "$output" '.recommended')" = stop ]
+}
+
+@test "the audit predicate counts an invalid path, an invalid line and a missing diff as authored, and an untouched line as not" {
+  run jq -n -r "$_GAIA_LOOP_AUTHORED_JQ"'
+    [ ({path:"-rf",line:1} | authored(["f.txt"]; [])),
+      ({path:"f.txt",line:"x"} | authored(["f.txt"]; [])),
+      ({path:"f.txt",line:1} | authored(null; null)),
+      ({path:"f.txt",line:5} | authored(["f.txt"]; [{p:"f.txt",s:1,e:2}])) ] | map(tostring) | join(",")'
+  [ "$output" = "true,true,true,false" ]
 }

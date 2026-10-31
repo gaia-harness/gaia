@@ -49,3 +49,44 @@ prompt_states_test_units() {
   grep -qxF "Default   shows the marker" <<<"$names"
   grep -qxF "Default   hides nothing else" <<<"$names"
 }
+
+# Succeeds only for a prompt that names the verdict-file contract.
+prompt_states_verdict_file_contract() {
+  local prompt_file="$1"
+  grep -qF -- 'Verdict file: <absolute path>' "$prompt_file" || return 1
+  grep -qF -- 'JSON array' "$prompt_file" || return 1
+  grep -qF -- '{file, fullName, verdict, artifact?}' "$prompt_file" || return 1
+  return 0
+}
+
+# Succeeds only for a prompt that no longer calls the tdd skill the only
+# dispatcher and still names the tdd skill as a dispatcher.
+prompt_names_tdd_as_one_dispatcher() {
+  local prompt_file="$1"
+  grep -qiF -- 'only dispatcher' "$prompt_file" && return 1
+  grep -qF -- 'tdd skill' "$prompt_file" || return 1
+  grep -qF -- 'worthiness-step.md' "$prompt_file" || return 1
+  return 0
+}
+
+@test "the evaluator prompt states the Verdict file contract" {
+  prompt_states_verdict_file_contract "$PROMPT"
+}
+
+@test "the contract check rejects a prompt that returns a trailer instead of a file" {
+  local old_prompt="$BATS_TEST_TMPDIR/old-prompt.md"
+  printf '%s\n' 'Machine-readable trailer (the last fenced block of your return)' 'verdicts_json: []' > "$old_prompt"
+  run prompt_states_verdict_file_contract "$old_prompt"
+  [ "$status" -ne 0 ]
+}
+
+@test "the evaluator prompt keeps tdd as one named dispatcher beside the shared step" {
+  prompt_names_tdd_as_one_dispatcher "$PROMPT"
+}
+
+@test "the dispatcher check rejects a prompt that calls the tdd skill the only dispatcher" {
+  local old_prompt="$BATS_TEST_TMPDIR/old-prompt.md"
+  printf '%s\n' "The tdd skill is the only dispatcher of this audit; see worthiness-step.md." > "$old_prompt"
+  run prompt_names_tdd_as_one_dispatcher "$old_prompt"
+  [ "$status" -ne 0 ]
+}

@@ -71,7 +71,10 @@ node .gaia/scripts/red-ledger/extract-test-signals.mjs <path> --stdin
 
 Reads the file from disk (or stdin with `--stdin`) and prints one JSON object
 per discovered `test(...)`/`it(...)` call, newline-delimited:
-`{"fullName":"…","signal":"sha256:…","kind":"runtime"|"type-only"}`. Exit `0`
+`{"fullName":"…","signal":"sha256:…","kind":"runtime"|"type-only","firstLine":N,"ranges":[[start,end],…]}`.
+`firstLine` and `ranges` are 1-based inclusive line numbers of the regions the
+signal hashes (a story entry lists its story, play, meta and, for a `.test()`
+entry, the test statement); they are not part of the signal. Exit `0`
 on success (no output when no tests are found); non-zero with a one-line stderr
 message on a failure. The exit codes are listed in the helper's header.
 

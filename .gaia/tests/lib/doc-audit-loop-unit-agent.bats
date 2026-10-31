@@ -181,6 +181,14 @@ frontmatter_tools_are_allowlist() {
   assert_pinned 'An `absent` or `transient` outcome never stops the unit and never blocks the merge.'
 }
 
+@test "the unit re-disposes a refused-authored entry accept-residual instead of stopping, and records a replayed refusal" {
+  assert_pinned 'A `refused-authored` violation does not stop the unit either: rewrite that entry in `dispositions-<r>.json` as `accept-residual` with a reason'
+  assert_pinned 're-run `check` then `check-outcomes`, and go on only when both pass'
+  assert_pinned 'A `refused-authored` outcome never passes, and no filing is retried.'
+  assert_pinned 'audit-dispositions-check.sh record-residual --root <root> --run-folder <run> --finding <f>'
+  assert_pinned 'and count nothing in `filing_pending`'
+}
+
 @test "the unit carries the member's grade and audience into the filed finding and never sets either itself" {
   assert_pinned 'keep the sidecar'"'"'s `grade` as the member wrote it and never add one yourself'
   assert_pinned 'every filed finding also needs the sidecar'"'"'s `audience`: keep it as the member wrote it and never add one yourself'

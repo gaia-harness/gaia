@@ -547,7 +547,7 @@ run_library() {
 
   local shapes
   shapes=$(jq -r '[keys_unsorted[]] | join(",")' "$corpus" | sort -u)
-  [ "$shapes" = "fullName,signal,kind" ]
+  [ "$shapes" = "fullName,signal,kind,firstLine,ranges" ]
 
   # Zero in-scope tests classify type-only today, so this is a floor rather
   # than a check; the real catcher for `kind` classification is the

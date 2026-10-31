@@ -149,6 +149,9 @@ ENFORCEMENT_PATHS=(
   '.claude/hooks/audit-loop-ask-grant.sh'     # records the human's AskUserQuestion answer
   '.gaia/scripts/context-checkpoint-lib.sh'   # shared context threshold and bands
   '.gaia/scripts/audit-dispositions-check.sh' # deterministic dispositions check
+  '.gaia/scripts/branch-authorship-lib.sh'    # the authorship predicate the audit and filer share
+  '.gaia/scripts/audit-pr-sections-lib.sh'    # renders the PR-body records and the recorded residuals
+  '.gaia/scripts/filing-outcomes-lib.sh'      # reads which keys the filer refused as branch-authored
   '.gaia/scripts/audit-loop-signals-lib.sh'   # rubric signals and unit/member decisions
   '.claude/agents/audit-loop-unit.md'         # the unit orchestrator's definition
   '.gaia/statusline/gaia-statusline.sh'       # writes the context reading the gate trusts

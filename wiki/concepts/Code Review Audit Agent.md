@@ -59,7 +59,9 @@ Detection and the single hardened re-dispatch are the same on every surface. Wha
 
 The UAT fidelity judge of a spec-derived plan (`.claude/skills/gaia/references/spec/lifecycle.md`, `## Pre-audit UAT checks`) halts the run instead of falling back inline. Its caller is the orchestrator whose phases wrote the specs under judgment, so it cannot legitimately do the work itself: an inline verdict would be the implementer grading its own work. Halting is safe there because the run stops before the pre-merge audit and the merge. That page states the departure and its reason.
 
-A surface named in neither place takes the inline ending above.
+The worthiness step (`.claude/skills/gaia/references/worthiness-step.md`) halts as well, for the same reason: its caller wrote the code under judgment, and an absent verdict is not a keep. Its tdd arm reports the double no-op in the end-of-task summary instead of halting, because tdd never interrupts mid-implementation and the presence check backs up a missing line at merge. That page states both departures and their reason.
+
+A surface named in none of these places takes the inline ending above.
 
 ### Ad-hoc dispatches: `--shape agent-report-file`
 
