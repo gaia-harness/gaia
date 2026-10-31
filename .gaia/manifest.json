@@ -778,6 +778,7 @@
     "wiki/decisions/Vendored Third-Party Skills.md": "wiki-owned",
     "wiki/decisions/Wiki Management.md": "wiki-owned",
     "wiki/decisions/Workflow Naming Convention.md": "wiki-owned",
+    "wiki/decisions/Worthiness And Wiki Before The Audit.md": "wiki-owned",
     "wiki/decisions/Worthiness Audit.md": "wiki-owned",
     "wiki/decisions/Worthiness Presence Gate.md": "wiki-owned",
     "wiki/dependencies/Chromatic.md": "wiki-owned",
@@ -829,7 +830,7 @@
     "wiki/overview.md": "wiki-owned",
     "wiki/README.md": "wiki-owned"
   },
-  "generated": "2026-10-31T14:35:17.752Z",
+  "generated": "2026-10-31T15:56:36.946Z",
   "regions": [
     {
       "endMarker": "<!-- gaia:audit-remit:end -->",
