@@ -14,6 +14,10 @@ A release change that requires the adopter to act, run a command or hand-migrate
 
 ## [Unreleased]
 
+### Added
+
+- Claude now asks before editing `.claude/settings.json`, the file that registers every GAIA hook and permission rule: the edit tools ask in every permission mode including bypassPermissions, and the common shell write shapes ask too, from the main thread and from a dispatched agent. With no human present an ask is a denial, so an unattended run cannot make the change through those routes. Known limit: under bypassPermissions Claude Code does not stop a shell write of this file. A pull request that changes it is now reviewed by the shell audit member, which lists any hook or permission rule the change removes or weakens. `.claude/settings.json` is a shared file, so a customized copy takes a three-way merge on update (#3205)
+
 ### Fixed
 
 - **`/update-deps` honors `minimumReleaseAgeExclude`:** a package your workspace exempts from the release-age window now shows up as an update right away, in the run and the statusline count, instead of being silently held back until it ages past the window (#3207)
