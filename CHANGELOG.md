@@ -14,6 +14,10 @@ A release change that requires the adopter to act, run a command or hand-migrate
 
 ## [Unreleased]
 
+### Added
+
+- **Claude recommends `/gaia-spec` or `/gaia-plan` when the work calls for one:** asking for a new user-visible feature, or for multi-phase internal work such as a migration, without naming a command now gets one question before any branch is cut, with `Just do it` as the alternative. Bug fixes and contained changes proceed without asking
+
 ### Fixed
 
 - **`/update-deps` honors `minimumReleaseAgeExclude`:** a package your workspace exempts from the release-age window now shows up as an update right away, in the run and the statusline count, instead of being silently held back until it ages past the window (#3207)
