@@ -88,6 +88,11 @@ auditConfig:
   ignoreGhsas:
     - GHSA-vfj7-8cjw-p6xm
 
+# Security floors: each pins a transitive dependency at or above its patched
+# release. Remove a key once its parent's range admits the patch.
+overrides:
+  '@joshwooding/vite-plugin-react-docgen-typescript>glob': '>=14.0.2'
+
 # Resolution settings. pnpm 11 reads these from pnpm-workspace.yaml, not from
 # .npmrc (which it consults only for auth/registry). publicHoistPattern lifts
 # stylelint's shared config/plugins and prettier plugins to the root
