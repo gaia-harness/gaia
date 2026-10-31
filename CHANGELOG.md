@@ -14,6 +14,10 @@ A release change that requires the adopter to act, run a command or hand-migrate
 
 ## [Unreleased]
 
+### Security
+
+- **glob:** Storybook's docgen plugin now resolves glob 14.0.3 through a security floor, closing GHSA-3g3m-2fjr-6pw4 (medium). It is a development-time dependency and never reaches the built app (#3204)
+
 ## [2.3.1] - 2026-10-29
 
 ### Changed
