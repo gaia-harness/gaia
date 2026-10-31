@@ -82,7 +82,7 @@ Then write the following files directly to `{PLAN_DIR}/`:
         - `Restart from Phase 1`: run every phase from Phase 1.
         - `Abandon`: stop cleanly without re-running, committing, merging, or deleting anything; the sentinel, `PROGRESS.md`, branch, and prior commits stay intact.
 
-        When `K` equals `M+1` (every phase a verified-complete ancestor), resume proceeds straight to the pre-merge Code Audit Team audit with no phase re-run.
+        When `K` equals `M+1` (every phase a verified-complete ancestor), resume re-enters at the worthiness step with no phase re-run, then continues through the wiki promotion and the pre-merge Code Audit Team audit; each of those steps skips what its own `PROGRESS.md` record or its route already settled.
       - **Resumed-run git flow.** A resumed run reuses the already-open PR, it does NOT re-issue `gh pr create`; it updates the existing PR with subsequent commits exactly like an uninterrupted run. The branch edge recorded at the first cut still keys the run's cost to the same feature after reconnect, so no second `usage.sh link` runs; the pre-merge marker handshake and the post-merge close behave unchanged.
 
     - **Pre-flight isolation.** The generated `ORCHESTRATOR.md` carries this pointer, verbatim, as its pre-flight step:
@@ -112,7 +112,7 @@ Then write the following files directly to `{PLAN_DIR}/`:
 
     - **Link the branch to its feature.** Right after the RUNNING sentinel is written and before the first phase dispatch, record the execution branch's edge in the usage ledger: `bash .gaia/scripts/usage.sh link branch:<branch> <feature-ref>`, with `<branch>` the canonical branch name the sentinel's `branch:` line holds, and `<feature-ref>` `spec:SPEC-NNN` (the id from `README.md`'s `## Source SPEC`) for a spec-derived plan or `plan:PLAN-NNN` (the basename of `{PLAN_DIR}`) for a spec-less one. It runs once per branch, never on a resume.
 
-    - **Verbatim step blocks.** Six blocks below carry a sentinel line (`<!-- gaia:orchestrator-step ... -->`) and are copied into the generated `ORCHESTRATOR.md` verbatim, sentinel line first, the way the isolation pointer above is: the UAT render, the owning-phase UAT gate, the sub-agent yield handling, the pre-audit UAT checks, the wiki promotion and the post-merge close, in that order. Substitute only `{SPEC_PATH}` and `{PLAN_DIR}`, with the absolute input values; the `<...>` placeholders stay for the orchestrator to fill at run time. A spec-derived plan carries all six; a spec-less plan omits the three UAT blocks and carries the sub-agent yield handling, the wiki promotion and the post-merge close. `/gaia-plan` step 4.5 checks each sentinel and their order with `plan-verify.sh`, `plan-verify.sh` also compares the yield-handling block's text, line by line with indentation and blank lines ignored, against this file's copy, with `{PLAN_DIR}` substituted, so a paraphrase fails. Never paraphrase a block, drop its sentinel line or reorder them.
+    - **Verbatim step blocks.** Nine blocks below carry a sentinel line (`<!-- gaia:orchestrator-step ... -->`) and are copied into the generated `ORCHESTRATOR.md` verbatim, sentinel line first, the way the isolation pointer above is, in this order: `uat-render`, `uat-gate`, `yield-handling`, `uat-pre-audit`, `worthiness-step`, `wiki-promotion`, `code-audit`, `post-clearance` and `post-merge-close`. Substitute only `{SPEC_PATH}` and `{PLAN_DIR}`, with the absolute input values; the `<...>` placeholders stay for the orchestrator to fill at run time. A spec-derived plan carries all nine; a spec-less plan omits `uat-render`, `uat-gate` and `uat-pre-audit`, and carries the other six, with the yield handling before the worthiness step. `/gaia-plan` step 4.5 checks each sentinel and their order with `plan-verify.sh`, which also compares the text of the yield-handling, worthiness-step, wiki-promotion, code-audit and post-clearance blocks, line by line with indentation and blank lines ignored, against this file's copy, with `{PLAN_DIR}` and `{SPEC_PATH}` substituted, so a paraphrase fails. A plan generated before this order keeps its own order and is not re-verified, because only step 4.5 runs the script. Never paraphrase a block, drop its sentinel line or reorder them.
 
     - **UAT render (spec-derived plans only).** Place this block after the RUNNING sentinel step and before the phase loop:
 
@@ -151,7 +151,7 @@ Then write the following files directly to `{PLAN_DIR}/`:
       Prerequisites, cost and the action for each exit code: `.claude/skills/gaia/references/spec/lifecycle.md` `## Owning-phase UAT gate`. A non-zero exit never commits.
       ```
 
-    - **Sub-agent yield handling.** Place this block inside the phase loop, after the owning-phase UAT gate block (a spec-less plan: after the phase order) and before the pre-audit UAT checks block (a spec-less plan: before the wiki promotion block). It is the dispatcher half of the sub-agent context checkpoint (`.claude/hooks/context-checkpoint-subagent.sh`, `.claude/doctrine/context-yield.md`):
+    - **Sub-agent yield handling.** Place this block inside the phase loop, after the owning-phase UAT gate block (a spec-less plan: after the phase order) and before the pre-audit UAT checks block (a spec-less plan: before the worthiness step block). It is the dispatcher half of the sub-agent context checkpoint (`.claude/hooks/context-checkpoint-subagent.sh`, `.claude/doctrine/context-yield.md`):
 
       ```
       <!-- gaia:orchestrator-step yield-handling -->
@@ -181,22 +181,60 @@ Then write the following files directly to `{PLAN_DIR}/`:
 
       ```
       <!-- gaia:orchestrator-step uat-pre-audit -->
-      **Pre-audit UAT checks.** After the last phase commits, and before the final summary and the pre-merge Code Audit Team audit, run from `RESOLVED_ROOT`:
+      **Pre-audit UAT checks.** After the last phase commits, and before the worthiness step, the wiki promotion, the pre-merge Code Audit Team audit and the final summary, run from `RESOLVED_ROOT`:
 
           bash .gaia/scripts/spec/uat-gate.sh {SPEC_PATH} --routing {PLAN_DIR}/README.md --all
 
       then the render-ancestry check, then the `uat-fidelity-judge` dispatch that judges each rendered spec's test body against its contract, all per `.claude/skills/gaia/references/spec/lifecycle.md` `## Pre-audit UAT checks`. A failure of any of the three is a HALT, never an audit finding to fix in a fix round.
       ```
 
-    - **Pre-merge Code Audit Team audit (roster-first, non-skippable).** Before any `gh pr merge` call, resolve which Code Audit Team members this branch's diff dispatches:
+    - **Worthiness step.** Place this block after the pre-audit UAT checks block (a spec-less plan: after the sub-agent yield handling block) and before the wiki promotion block. The reference page owns the step's mechanics:
+
+      ```
+      <!-- gaia:orchestrator-step worthiness-step -->
+      **Worthiness step (every start and every resume, before the wiki promotion).** After the last phase commits and the pre-audit UAT checks pass, read `.claude/skills/gaia/references/worthiness-step.md` and run it from `RESOLVED_ROOT`. Its `route` makes it skip-safe, so a resume re-enters here and settles only what is still open. It records each outcome as a `## Worthiness step` block in `{PLAN_DIR}/PROGRESS.md`.
+      ```
+
+    - **Consolidation and wiki promotion (before the first member dispatch).** The orchestrator runs this step warm, on its own session: consolidation is synthesis, not a task sub-agent's job. Place this block after the worthiness step block and before the audit bullet below, so the promotion commit lands before any member's marker exists and rotates none:
+
+      ```
+      <!-- gaia:orchestrator-step wiki-promotion -->
+      **Consolidation and wiki promotion.** Runs after the worthiness step and before the first member dispatch.
+
+      1. On a resume, when `{PLAN_DIR}/PROGRESS.md` already holds a `## Wiki promotion` block with `Pass: pre-audit`, skip this whole step: no re-consolidation and no re-promotion.
+      2. Consolidate per `.claude/skills/gaia/references/spec/lifecycle.md` `## Consolidation`. It writes `SUMMARY.md` and runs `summary-verify.sh`, and removes nothing. When its verify fails it records `skipped-verify-failed`; make no commit, remove nothing, skip step 3 and go on to the audit.
+      3. Promote per `.claude/skills/gaia/references/spec/wiki-promote.md`. Its Step 2 reads `SUMMARY.md`'s `wiki_promote_default` and `wiki_promote_targets` and decides whether pages are written and which Choice token results; this block does not decide it. A Step 2 `ask` fires its question here, and an unattended run records `skipped-unattended` and goes on to the audit. Nothing writes a defer cache.
+      4. The promotion commit holds the paths that file's Step 6 names, lands on this PR branch, and is pushed before the first member dispatch and before the pre-dispatch verification. Write the committed page paths, one per line, to `promoted-pages.txt` in this branch's run folder (`.claude/doctrine/execution.md`, `## Run folder`).
+      <!-- gaia:maintainer-only:start -->
+      On the maintainer repo, that commit also carries the manifest answer `wiki-promote.md`'s maintainer note describes, before any `bash .gaia/tests/verify-harness.sh branch` pass.
+      <!-- gaia:maintainer-only:end -->
+      5. Append the record to `{PLAN_DIR}/PROGRESS.md`, `Pass: pre-audit` first, then the Choice token and `Reason:` line exactly as that Step 2 returned them:
+
+             ## Wiki promotion
+             Pass: pre-audit
+             Default: <yes | ask | no>   Choice: <promoted | declined | skipped-unattended | skipped-verify-failed | no>
+             Pages: <paths or none>   Commit: <short-sha or none>
+             Reason: <one line; required whenever Choice is not promoted>
+      ```
+
+    - **Pre-merge Code Audit Team audit (roster-first, non-skippable).** Place this block after the wiki promotion block. It names the resolver and the dispatch, and closes with the late pass:
+
+      ```
+      <!-- gaia:orchestrator-step code-audit -->
+      **Code Audit Team audit.** Resolve the dispatched members with `bash .gaia/scripts/resolve-audit-members.sh`, then dispatch the audit loop unit per `wiki/concepts/PR Merge Workflow.md` `## Dispatch the audit loop unit`, only after the wiki promotion commit is pushed and the pre-dispatch verification has passed.
+
+      On a `clean` unit, run `bash .gaia/scripts/audit-dispositions-check.sh check-all --root <RESOLVED_ROOT> --run-folder <RUN_FOLDER>`, then the late pass from `.claude/skills/gaia/references/worthiness-step.md`, before the final summary, so a residual it decides is surfaced before the merge confirmation. The `GAIA-Audit` status posts later, in the post-clearance block.
+      ```
+
+      Before any `gh pr merge` call, resolve which Code Audit Team members this branch's diff dispatches:
 
           bash .gaia/scripts/resolve-audit-members.sh
 
-      It prints one member (agent) name per line, deduped and sorted. Dispatch the `audit-loop-unit` agent per `wiki/concepts/PR Merge Workflow.md` `## Dispatch the audit loop unit`: the unit runs the named members, and `code-audit-frontend` fail-closed when the output is empty or an in-scope file no member owns. Post the status per `#### Posting the status last` before `gh pr merge`.
+      It prints one member (agent) name per line, deduped and sorted. Dispatch the `audit-loop-unit` agent per `wiki/concepts/PR Merge Workflow.md` `## Dispatch the audit loop unit`: the unit runs the named members, and `code-audit-frontend` fail-closed when the output is empty or an in-scope file no member owns. The status posts in the post-clearance block below, per `#### Posting the status last`.
 
       Skip a spawn for a member already cleared for HEAD: its marker exists, or (for the default member) one of the bypass signals in the marker-handshake table already applies to this PR. The spawn set names who *can* be required, not who is still outstanding.
 
-      On a clean pass each member writes its own marker; it does not post the `GAIA-Audit` success status itself, the orchestrator does, per `wiki/concepts/PR Merge Workflow.md` `#### Posting the status last`. The merge deny-hook requires **every** dispatched member's marker, so one member withholding holds the gate shut for all. If a member declines to write its marker, its report names what remains unaddressed; resolve those, commit, push (HEAD moves), then re-spawn the pending members on the new HEAD. A member's marker is keyed to its own branch-own digest (the branch's own patch on the files it owns plus the shared gate machinery), not to HEAD's sha, so a re-spawn is owed only when the fix changed the branch's own patch on a path that member's digest covers; an unrelated fix, or a catch-up merge of the base, leaves an already-cleared member's marker valid and it is skipped per the rule above (`wiki/concepts/PR Merge Workflow.md` `#### Skipping already-cleared members`). Never hand-write a marker to bypass the gate. Once the `#### Posting the status last` conditions all hold, the orchestrator posts the status itself, `bash .claude/hooks/post-audit-status.sh <path to a current member marker>`, after the wiki promotion step's commit and immediately before calling `gh pr merge` (the wiki promotion block below).
+      On a clean pass each member writes its own marker; it does not post the `GAIA-Audit` success status itself, the orchestrator does, per `wiki/concepts/PR Merge Workflow.md` `#### Posting the status last`. The merge deny-hook requires **every** dispatched member's marker, so one member withholding holds the gate shut for all. If a member declines to write its marker, its report names what remains unaddressed; resolve those, commit, push (HEAD moves), then re-spawn the pending members on the new HEAD. A member's marker is keyed to its own branch-own digest (the branch's own patch on the files it owns plus the shared gate machinery), not to HEAD's sha, so a re-spawn is owed only when the fix changed the branch's own patch on a path that member's digest covers; an unrelated fix, or a catch-up merge of the base, leaves an already-cleared member's marker valid and it is skipped per the rule above (`wiki/concepts/PR Merge Workflow.md` `#### Skipping already-cleared members`). Never hand-write a marker to bypass the gate. Once the `#### Posting the status last` conditions all hold, the orchestrator posts the status itself, `bash .claude/hooks/post-audit-status.sh <path to a current member marker>`, immediately before calling `gh pr merge` (the post-clearance block below).
 
       A member spawned with nothing in its remit self-skips and writes no marker, so an over-broad spawn is harmless, but an under-broad one deadlocks the merge, which is why the spawn set comes from the resolver and not from a guess.
 
@@ -269,29 +307,28 @@ Then write the following files directly to `{PLAN_DIR}/`:
       Uncommitted edits: this phase's edits remain uncommitted in <RESOLVED_ROOT>; stash or discard them before resuming (resume refuses a dirty tree), and the phase re-runs from its start.
       Next step: reopen the SPEC (.claude/skills/gaia/references/spec/uat-divergence.md, "Reopen"), then resume with KICKOFF.md.
       ```
-    - **Final summary.** After all implementation phases pass and the final commit is pushed, before asking for merge confirmation with `AskUserQuestion` (`Merge it` (Recommended) or `Hold the merge`), **read `{PLAN_DIR}/PROGRESS.md`** and print a brief summary to the user: phases completed, sub-agents run, files touched (count), commits pushed (count + short SHAs), PR URL, quality-gate status, a yields line, and the highest-signal findings/deviations/follow-ups drawn from `PROGRESS.md` so nothing is lost to context compression. The yields line gives, per phase that yielded, the number of its `(YIELD k)` blocks in `PROGRESS.md` and the peak band among them (red below fire below skull), printed as `Yields: Phase <N> <count> (peak <band>)` with entries joined by `; `, and as `Yields: none` when no phase yielded. Keep it tight, a few lines plus the surfaced notes, not a recap of every change.
+    - **Final summary.** After all implementation phases pass and the final commit is pushed, before asking for merge confirmation with `AskUserQuestion` (`Merge it` (Recommended) or `Hold the merge`), **read `{PLAN_DIR}/PROGRESS.md`** and print a brief summary to the user: phases completed, sub-agents run, files touched (count), commits pushed (count + short SHAs), PR URL, quality-gate status, a yields line, the `## Worthiness step` blocks from `PROGRESS.md` (residuals, refused deletes and filings, stated before the `AskUserQuestion`; the summary runs after the late pass, so a late residual is in it), and the highest-signal findings/deviations/follow-ups drawn from `PROGRESS.md` so nothing is lost to context compression. The yields line gives, per phase that yielded, the number of its `(YIELD k)` blocks in `PROGRESS.md` and the peak band among them (red below fire below skull), printed as `Yields: Phase <N> <count> (peak <band>)` with entries joined by `; `, and as `Yields: none` when no phase yielded. Keep it tight, a few lines plus the surfaced notes, not a recap of every change.
 
       After every dispatched member's clean-pass marker is written and before the merge, the orchestrator prints the whole implementation's cost with `bash .gaia/scripts/usage.sh initiative <root> --box`, where `<root>` is `spec:SPEC-NNN` (from the `## Source SPEC` section of `README.md`) for a spec-derived plan or `plan:PLAN-NNN` for a spec-less one. The output lists the spec (when there is one), the plan and the execution, with a total, and is relayed verbatim inside a bare fenced block (an unfenced box is reflowed by the Markdown renderer and loses its alignment). Never compute or restate a figure; on a non-zero exit, relay the command's one stderr line in its place.
 
 
 
-    - **Consolidation and wiki promotion (after audit clearance and the ready-to-merge confirmation, before the merge).** The orchestrator runs this step warm, on its own session: consolidation is synthesis, not a task sub-agent's job. Place this block after the cost line and the human's ready-to-merge confirmation:
+    - **Post-clearance (after audit clearance and the ready-to-merge confirmation, before the merge).** The orchestrator runs this step warm. Place this block after the cost line and the human's ready-to-merge confirmation:
 
       ```
-      <!-- gaia:orchestrator-step wiki-promotion -->
-      **Consolidation and wiki promotion.** Runs after every dispatched Code Audit Team member has cleared and the human has confirmed the PR is ready to merge, and before the merge.
+      <!-- gaia:orchestrator-step post-clearance -->
+      **Post-clearance.** Runs after every dispatched Code Audit Team member has cleared and the human has confirmed the PR is ready to merge, and before the merge.
 
-      1. Consolidate per `.claude/skills/gaia/references/spec/lifecycle.md` `## Consolidation`. It writes `SUMMARY.md` and runs `summary-verify.sh`, and removes nothing. When its verify fails it records the wiki promotion block itself; skip step 2 and go to step 4.
-      2. Promote per `.claude/skills/gaia/references/spec/wiki-promote.md`. Its Step 2 reads `SUMMARY.md`'s `wiki_promote_default` and `wiki_promote_targets` and decides whether pages are written and which Choice token results; this block does not decide it. A promotion commit holds the paths that file's Step 6 names, lands on this PR branch, and is pushed before the merge. Nothing writes a defer cache.
-      3. Append the record to `{PLAN_DIR}/PROGRESS.md`, with the Choice token and `Reason:` line exactly as that Step 2 returned them:
-
-             ## Wiki promotion
-             Default: <yes | ask | no>   Choice: <promoted | declined | skipped-unattended | skipped-verify-failed | no>
-             Pages: <paths or none>   Commit: <short-sha or none>
-             Reason: <one line; required whenever Choice is not promoted>
-
-      4. A promotion commit moves HEAD. Confirm every dispatched member's marker is still current (`wiki/concepts/PR Merge Workflow.md` `#### Skipping already-cleared members`); re-spawn any member whose marker rotated, and never hand-write one.
-      5. Post the `GAIA-Audit` status after the promotion commit, immediately before `gh pr merge`: `bash .claude/hooks/post-audit-status.sh <path to a current member marker>`. Then merge.
+      1. Consolidate again into `SUMMARY.md` per `.claude/skills/gaia/references/spec/lifecycle.md` `## Consolidation`, uncommitted. It is not tracked, so this costs no commit.
+      2. Read each page in `promoted-pages.txt` against the audited code. A falsified page gets a wiki-only commit and push, which keeps every member's marker and restarts CI.
+      3. When the last attempted pass recorded `skipped-verify-failed` and the verify now passes, retry promotion per `.claude/skills/gaia/references/spec/wiki-promote.md`.
+      <!-- gaia:maintainer-only:start -->
+      On the maintainer repo, a retry that writes a new page commits its manifest answer per `wiki-promote.md`'s maintainer note, which rotates the shell member's marker and owes a fresh `bash .gaia/tests/verify-harness.sh branch` pass and a shell re-audit before the status posts.
+      <!-- gaia:maintainer-only:end -->
+      4. A verify failure here, or a refresh with nothing to retry, appends a `## Consolidation refresh` block to `{PLAN_DIR}/PROGRESS.md`, and the run continues to the merge, the close keeping the layers.
+      5. A pass that reached `wiki-promote.md`'s Step 2 appends a `## Wiki promotion` block with `Pass: refresh` first, in the same shape as the pre-audit record. The last `## Wiki promotion` block is the outcome, so a refresh verify failure never overwrites a promoted record. A block recording `promoted` is never promoted again.
+      6. Confirm every dispatched member's marker is current, per `wiki/concepts/PR Merge Workflow.md` `#### Skipping already-cleared members`, and re-spawn any member whose marker rotated; never hand-write one.
+      7. Post the `GAIA-Audit` status with `bash .claude/hooks/post-audit-status.sh <path to a current member marker>` per `wiki/concepts/PR Merge Workflow.md` `#### Posting the status last`, which writes the residual sections first, immediately before `gh pr merge`, on the head the audit cleared, including after a catch-up merge. Then merge.
       ```
 
     - **Post-merge close.** Place this block after the merge, ahead of the post-merge cleanup bullet below:

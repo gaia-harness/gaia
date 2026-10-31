@@ -10,11 +10,17 @@
 # task-*.md exist; ORCHESTRATOR.md carries the verbatim step sentinels the plan
 # needs, each on a line of its own (leading and trailing whitespace allowed,
 # nothing else), in the order the template places them. Without --spec the plan
-# is spec-less and only the yield-handling, wiki-promotion and post-merge-close
-# sentinels are required. The yield-handling block is also checked verbatim: its
-# non-blank lines (trimmed) must equal the fenced block planner.md holds, with
-# the plan-directory placeholder replaced by this plan's absolute path, so a
-# paraphrased or shortened copy cannot ship. README.md, ORCHESTRATOR.md, KICKOFF.md and every task-*.md hold no
+# is spec-less and the three UAT sentinels are not required. The
+# yield-handling, worthiness-step, wiki-promotion, code-audit and
+# post-clearance blocks are also checked verbatim: each one's non-blank lines
+# (trimmed) must equal the fenced block planner.md holds, with the
+# plan-directory and SPEC-path placeholders replaced by this plan's absolute
+# values, so a paraphrased or shortened copy cannot ship. Maintainer-only marker
+# lines inside a block are compared like any other line, so a plan matches the
+# planner.md it was generated from, marked or stripped, and a plan that dropped a
+# marked pair its planner.md keeps fails. A plan generated before a block
+# existed is not re-verified: only /gaia-plan step 4.5 runs this script.
+# README.md, ORCHESTRATOR.md, KICKOFF.md and every task-*.md hold no
 # literal {PLAN_DIR}, {SPEC_PATH} or {AUDIT_PATH}; one failure line per hit.
 #
 # With --spec (a spec-derived plan) additionally: the UAT routing table in
@@ -94,8 +100,20 @@ sentinels+=('<!-- gaia:orchestrator-step yield-handling -->')
 if [ -n "$spec_path" ]; then
   sentinels+=('<!-- gaia:orchestrator-step uat-pre-audit -->')
 fi
-sentinels+=('<!-- gaia:orchestrator-step wiki-promotion -->' '<!-- gaia:orchestrator-step post-merge-close -->')
-yield_sentinel='<!-- gaia:orchestrator-step yield-handling -->'
+sentinels+=(
+  '<!-- gaia:orchestrator-step worthiness-step -->'
+  '<!-- gaia:orchestrator-step wiki-promotion -->'
+  '<!-- gaia:orchestrator-step code-audit -->'
+  '<!-- gaia:orchestrator-step post-clearance -->'
+  '<!-- gaia:orchestrator-step post-merge-close -->'
+)
+verbatim_sentinels=(
+  '<!-- gaia:orchestrator-step yield-handling -->'
+  '<!-- gaia:orchestrator-step worthiness-step -->'
+  '<!-- gaia:orchestrator-step wiki-promotion -->'
+  '<!-- gaia:orchestrator-step code-audit -->'
+  '<!-- gaia:orchestrator-step post-clearance -->'
+)
 planner_template="$script_directory/../../../.claude/skills/gaia/references/plan/planner.md"
 
 if [ -f "$orchestrator" ]; then
@@ -138,25 +156,39 @@ if [ -f "$orchestrator" ]; then
     index=$((index + 1))
   done
 
-  # Verbatim check of the yield-handling block against planner.md's copy.
-  yield_found=0
-  index=0
-  while [ "$index" -lt "${#sentinels[@]}" ]; do
-    if [ "${sentinels[$index]}" = "$yield_sentinel" ] && [ "${first_lines[$index]}" -ne 0 ]; then
-      yield_found="${first_lines[$index]}"
-    fi
-    index=$((index + 1))
-  done
-  if [ "$yield_found" -ne 0 ]; then
-    case "$plan_directory" in
-      /*) absolute_plan_directory="${plan_directory%/}" ;;
-      *) absolute_plan_directory="$(cd "$plan_directory" && pwd)" ;;
+  # Verbatim check of each listed block against planner.md's copy.
+  case "$plan_directory" in
+    /*) absolute_plan_directory="${plan_directory%/}" ;;
+    *) absolute_plan_directory="$(cd "$plan_directory" && pwd)" ;;
+  esac
+  absolute_spec_path=''
+  if [ -n "$spec_path" ]; then
+    case "$spec_path" in
+      /*) absolute_spec_path="$spec_path" ;;
+      *) absolute_spec_path="$(cd "$(dirname "$spec_path")" && pwd)/$(basename "$spec_path")" ;;
     esac
+  fi
+  for verbatim_sentinel in ${verbatim_sentinels[@]+"${verbatim_sentinels[@]}"}; do
+    block_found=0
+    index=0
+    while [ "$index" -lt "${#sentinels[@]}" ]; do
+      if [ "${sentinels[$index]}" = "$verbatim_sentinel" ] && [ "${first_lines[$index]}" -ne 0 ]; then
+        block_found="${first_lines[$index]}"
+      fi
+      index=$((index + 1))
+    done
+    [ "$block_found" -ne 0 ] || continue
+    block_name="${verbatim_sentinel#<!-- gaia:orchestrator-step }"
+    block_name="${block_name% -->}"
     expected_lines=()
     if [ -f "$planner_template" ]; then
       while IFS= read -r line; do
-        expected_lines+=("${line//\{PLAN_DIR\}/$absolute_plan_directory}")
-      done < <(awk -v want="$yield_sentinel" '
+        line="${line//\{PLAN_DIR\}/$absolute_plan_directory}"
+        if [ -n "$absolute_spec_path" ]; then
+          line="${line//\{SPEC_PATH\}/$absolute_spec_path}"
+        fi
+        expected_lines+=("$line")
+      done < <(awk -v want="$verbatim_sentinel" '
         { t = $0; sub(/^[ \t]+/, "", t); sub(/[ \t\r]+$/, "", t) }
         t ~ /^```/ {
           if (in_fence) { if (hit) { printf "%s", buffer; exit } in_fence = 0 }
@@ -166,38 +198,38 @@ if [ -f "$orchestrator" ]; then
         in_fence { if (t == want) hit = 1; if (t != "") buffer = buffer t "\n" }' "$planner_template")
     fi
     if [ "${#expected_lines[@]}" -eq 0 ]; then
-      fail "planner.md holds no fenced yield-handling block to check ORCHESTRATOR.md against: $planner_template"
-    else
-      actual_numbers=()
-      actual_lines=()
-      while IFS=$'\t' read -r actual_number actual_text; do
-        actual_numbers+=("$actual_number")
-        actual_lines+=("$actual_text")
-      done < <(awk -v start="$yield_found" -v count="${#expected_lines[@]}" '
-        NR >= start {
-          t = $0; sub(/^[ \t]+/, "", t); sub(/[ \t\r]+$/, "", t)
-          if (t == "") next
-          print NR "\t" t
-          if (++taken == count) exit
-        }' "$orchestrator")
-      mismatch_line=0
-      index=0
-      while [ "$index" -lt "${#expected_lines[@]}" ]; do
-        if [ "$index" -ge "${#actual_lines[@]}" ]; then
-          mismatch_line=$(($(wc -l <"$orchestrator") + 1))
-          break
-        fi
-        if [ "${actual_lines[$index]}" != "${expected_lines[$index]}" ]; then
-          mismatch_line="${actual_numbers[$index]}"
-          break
-        fi
-        index=$((index + 1))
-      done
-      if [ "$mismatch_line" -ne 0 ]; then
-        fail "ORCHESTRATOR.md:$mismatch_line: the yield-handling block does not match planner.md's copy"
-      fi
+      fail "planner.md holds no fenced $block_name block to check ORCHESTRATOR.md against: $planner_template"
+      continue
     fi
-  fi
+    actual_numbers=()
+    actual_lines=()
+    while IFS=$'\t' read -r actual_number actual_text; do
+      actual_numbers+=("$actual_number")
+      actual_lines+=("$actual_text")
+    done < <(awk -v start="$block_found" -v count="${#expected_lines[@]}" '
+      NR >= start {
+        t = $0; sub(/^[ \t]+/, "", t); sub(/[ \t\r]+$/, "", t)
+        if (t == "") next
+        print NR "\t" t
+        if (++taken == count) exit
+      }' "$orchestrator")
+    mismatch_line=0
+    index=0
+    while [ "$index" -lt "${#expected_lines[@]}" ]; do
+      if [ "$index" -ge "${#actual_lines[@]}" ]; then
+        mismatch_line=$(($(wc -l <"$orchestrator") + 1))
+        break
+      fi
+      if [ "${actual_lines[$index]}" != "${expected_lines[$index]}" ]; then
+        mismatch_line="${actual_numbers[$index]}"
+        break
+      fi
+      index=$((index + 1))
+    done
+    if [ "$mismatch_line" -ne 0 ]; then
+      fail "ORCHESTRATOR.md:$mismatch_line: the $block_name block does not match planner.md's copy"
+    fi
+  done
 fi
 
 # The planner substitutes absolute values for these tokens in every file it

@@ -1,6 +1,8 @@
 #!/usr/bin/env bats
-# A wiki promotion commit lands after every Code Audit Team member has cleared,
-# so it must not rotate any member's marker. Each marker is keyed to its
+# A wiki promotion commit lands before the first member dispatch (and, for a
+# retry or a plan generated before that order, after every Code Audit Team
+# member has cleared), so it must not rotate any member's marker, in either
+# position. Each marker is keyed to its
 # member's branch-own digest, and wiki pages are ownerless and allowlisted, so a
 # commit touching only wiki pages leaves every digest byte-identical. The red
 # twin proves the comparison can fail: a commit inside a member's remit rotates
@@ -78,6 +80,23 @@ all_digests() {
   git -C "$SANDBOX" commit --quiet -am "promote wiki pages"
   after="$(all_digests HEAD)"
   [ "$after" = "$before" ]
+}
+
+@test "a promotion commit made before the code change gives the digest the opposite order gives" {
+  echo "promoted" >> "$SANDBOX/wiki/concepts/page.md"
+  git -C "$SANDBOX" add wiki/concepts/page.md
+  git -C "$SANDBOX" commit --quiet -m "promote wiki pages"
+  echo "export const later = 1;" >> "$SANDBOX/frontend/app/x.ts"
+  git -C "$SANDBOX" commit --quiet -am "change after promotion"
+  with_promotion="$(bash "$DIGEST_CLI" --root "$SANDBOX" --member code-audit-frontend --ref HEAD)"
+  [ -n "$with_promotion" ]
+  git -C "$SANDBOX" reset --quiet --hard HEAD~2
+  echo "export const later = 1;" >> "$SANDBOX/frontend/app/x.ts"
+  git -C "$SANDBOX" commit --quiet -am "change before promotion"
+  echo "promoted" >> "$SANDBOX/wiki/concepts/page.md"
+  git -C "$SANDBOX" commit --quiet -am "promote wiki pages"
+  promotion_last="$(bash "$DIGEST_CLI" --root "$SANDBOX" --member code-audit-frontend --ref HEAD)"
+  [ "$with_promotion" = "$promotion_last" ]
 }
 
 @test "red twin: a commit inside code-audit-frontend's remit rotates its digest" {

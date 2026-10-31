@@ -85,6 +85,7 @@ The same is true of the verification command's branch mode run just after (`bash
 
 A clean catch-up merge that lands after dispatch rotates no member's digest, because the digest measures the branch's own patch and the base's incoming content is trusted as already audited; no marker is refused and no round is forfeited. The exception is a base edit within three lines of a branch hunk on a covered path, which rotates that member. A blend, a merge commit that carries an edit beyond what the base brought (a conflict resolution, an evil merge), changes the branch's own patch and rotates only the members covering the touched paths, who review it as a diff. Absorbing the base first still pays, because the deterministic checks below run against the merged tree. After any catch-up merge, when the digest check shows every resolved member holding a marker for its current digest, the step 3 re-post in [[#Conflict found mid-wait]] applies and no unit is dispatched.
 
+- **Land the pre-dispatch commits first.** The worthiness step (`.claude/skills/gaia/references/worthiness-step.md`) and a spec-derived plan's wiki promotion (`.claude/skills/gaia/references/spec/wiki-promote.md`) can each commit: a fix to a judged test, a promoted page. Both run before the verification below and before the first member dispatch, because a commit that lands later rotates the digest of the member covering it and buys another round.
 - **Run the deterministic checks that cover the change.** The test suites for the paths touched, the linters for the languages involved, the [[Quality Gate]] when its skip logic says it applies, and any suite that consumes what changed. Green locally is the entry condition for dispatch, not a milestone passed once: re-run it after the **last** edit. Verifying, then editing prose or docs, then dispatching without re-running is the same defect as never running it, and it is the easier one to commit because the green output is still on screen.
 <!-- gaia:maintainer-only:start -->
 - **Run `bash .gaia/tests/verify-harness.sh branch` as the one verification step, after the catch-up merge and after the last edit.** It runs shell-lint, the three distribution checks (the release-scrub leak check, `01-files-present`, `02-marker-strip`), every bats test marked whole-tree (a per-test or file-level mark), and the bats suites the change selector picks over the branch's range from the merge base. Path-based selection alone misses a suite that names a changed file from somewhere else or checks the whole tree, and shell-lint reads the whole tree, so no path selects it; the marked tests and the shell-lint run cover that. The bats steps run in parallel, about five times faster than serial on a branch-sized set; without GNU parallel installed, `bats5.sh` warns and runs serially. The first member or unit dispatch is refused with `BLOCKED: audit verify` until branch mode has passed for the current HEAD, so branch mode is the last action before that dispatch, after every other pre-dispatch commit, because any commit after the pass needs a new pass. It refuses to start with exit 3 on uncommitted tracked changes or a detached HEAD: commit first, then run it. A failure that also fails on the merge base is reported as pre-existing (main is red) and does not block. A bats test that fails under the parallel run but passes when re-run alone at HEAD is reported as `FLAKY`, listed in the pass record, and does not block. A missing tool skips the steps that need it with a loud `WARN`, never a `PASS`. It takes minutes, so run it in the background with its output redirected to a log and read the log when it finishes.
@@ -142,7 +143,7 @@ Write the `Working root:` value as the bare absolute path with nothing after it:
 
 | `stop_reason` | The main thread |
 | --- | --- |
-| `clean` | Runs `bash .gaia/scripts/audit-dispositions-check.sh check-all --root <RESOLVED_ROOT> --run-folder <RUN_FOLDER>` once more as a last guard (read-only: with no `--snapshot-dir` it re-grades each round from the branch's frozen snapshots, and from live findings only for a round with none, and it writes nothing), then the `GAIA-Audit` status ([[#Posting the status last]], which surfaces a non-zero `diverted_count` first), and the merge. |
+| `clean` | Runs `bash .gaia/scripts/audit-dispositions-check.sh check-all --root <RESOLVED_ROOT> --run-folder <RUN_FOLDER>` once more as a last guard (read-only: with no `--snapshot-dir` it re-grades each round from the branch's frozen snapshots, and from live findings only for a round with none, and it writes nothing), then the late worthiness pass (`.claude/skills/gaia/references/worthiness-step.md` `## The late pass`: a fix verdict moves HEAD, so it runs before the status, or the status would be stranded on the old head), then the `GAIA-Audit` status ([[#Posting the status last]], which surfaces a non-zero `diverted_count` first), and the merge. |
 | `window-end` | Starts the next unit at step 1; the bound hook decides whether it is admitted. |
 | `checkpoint-deny` | Asks the pinned question ([[#The branch checkpoint]]). |
 | `dispositions-check-failed`, `needs-human`, `failure` | Asks the human what to do through `AskUserQuestion`, naming `stop_detail`; an unattended run stops and reports. A unit that finds the Agent tool absent stops `needs-human` and its `stop_detail` names Claude Code 2.1.287 or later and the upgrade step (`claude update`, then relaunch the session). |
@@ -235,6 +236,7 @@ The orchestrator posts the success status itself, last, once every one of these 
 - The CHANGELOG gate below is resolved, and its entry, if any, has landed on the branch.
 <!-- gaia:maintainer-only:end -->
 - The last push has landed on the pull request's remote head.
+- When `<RUN_FOLDER>/recorded-residuals.jsonl` exists, the PR body carries the sections `bash .gaia/scripts/audit-dispositions-check.sh pr-sections --root <RESOLVED_ROOT> --run-folder <RUN_FOLDER>` prints, written before the status posts, because a quick-clear unit or a bypass writes none. The rewrite is idempotent and is the one a veto uses.
 
 ```bash
 bash .claude/hooks/post-audit-status.sh <current-member-marker>
@@ -391,7 +393,8 @@ If it prints `MERGED`, do NOT retry the merge. Treat it as merged, run any post-
 `.claude/hooks/worthiness-presence-check.sh`. It denies the merge when an
 emergent test the PR changed (matching the package's `emergentTests` globs in its `gaia.package.json`, as
 the [[Determinism Classifier]] labels it) has no worthiness-ledger line matching
-its current content. It checks presence and signal match only, never the
+its current content. The pre-audit worthiness step normally satisfies this
+gate; the hook backs up a missing or stale line only. It checks presence and signal match only, never the
 keep/fix/delete verdict, and scopes to the emergent tests this PR changed (a no-op
 when none changed). It is a separate denial
 from the Code Audit Team markers above; both must clear.

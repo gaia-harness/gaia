@@ -89,6 +89,10 @@ The PR title, the PR body and every commit message describe the change in words,
 
 In worktree mode, every command runs from inside the worktree.
 
+## 5b. Worthiness step
+
+Read `.claude/skills/gaia/references/worthiness-step.md` and run it, with the draft PR open and before the audit's pre-dispatch verification and the first member dispatch. When the branch changes no emergent test it routes to nothing and ends with no commit.
+
 ## 6. Audit
 
 Read `wiki/concepts/PR Merge Workflow.md` and run it, not a remembered version of it, to a posted `GAIA-Audit` success status. The full gate applies to an ad-hoc PR; there is no lighter path. The success post (`.claude/hooks/post-audit-status.sh`) marks the draft ready for review, so the session runs no `gh pr ready`.

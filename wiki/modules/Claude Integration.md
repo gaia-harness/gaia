@@ -73,7 +73,7 @@ The committed command runs the session checkout's own copy of `.gaia/statusline/
 
 Pre-seeded with GAIA's architecture knowledge. Durable findings belong in the wiki (`wiki/concepts/Code Review Audit Agent.md` and adjacent pages). The `.claude/agent-memory/` path is a gitignored scratch path (created on demand under a per-agent subdir such as `code-audit-frontend/`), not a source of truth.
 
-`worthiness-evaluator` is an opus advisory agent that judges each emergent-surface test (the package descriptor's `emergentTests` globs: components, pages, and Playwright) on honesty and worthiness, returning a keep / fix / delete verdict per test. It proposes only and edits no files; every delete is human-gated. Its verdicts feed the worthiness ledger that `worthiness-presence-check.sh` enforces at merge.
+`worthiness-evaluator` is an opus advisory agent that judges each emergent-surface test (the package descriptor's `emergentTests` globs: components, pages, and Playwright) on honesty and worthiness, returning a keep / fix / delete verdict per test. It proposes only and edits no test or source file, writing its verdicts to the JSON file the dispatch names; every delete is human-gated. The shared worthiness step and the tdd skill's arm dispatch it, and the verdicts feed the worthiness ledger that `worthiness-presence-check.sh` enforces at merge.
 
 ## Skills
 

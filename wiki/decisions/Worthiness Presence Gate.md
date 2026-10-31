@@ -13,7 +13,8 @@ tags: [decision, tdd, testing, audit, merge, quality]
 A merge-time `gh pr merge` gate that requires each emergent test a PR changes to
 carry a worthiness-ledger line matching its current content. It is the
 merge-time half of the [[Worthiness Audit]]: the evaluator judges each emergent
-test and the tdd skill appends one ledger line per judged test; this gate
+test and the shared worthiness step or the tdd skill's arm appends one ledger
+line per judged test; this gate
 enforces at merge that such a line exists for the content being merged. It sits
 alongside the [[PR Merge Workflow]]'s Code Audit Team gate, both deny
 `gh pr merge` independently.

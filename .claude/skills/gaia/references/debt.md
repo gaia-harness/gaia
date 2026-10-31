@@ -310,6 +310,7 @@ A `CLOSED` verdict is not one of them: it is read from GitHub and it is terminal
 
 Resolve the PR to completion through `wiki/concepts/PR Merge Workflow.md`, read it, don't merge from memory. Follow its marker handshake; do **not** substitute a bare `gh pr merge`:
 
+- **Run the worthiness step first.** Read `.claude/skills/gaia/references/worthiness-step.md` and run it in the same `RESOLVED_ROOT`, after the draft PR opens and before the audit's pre-dispatch verification and the first member dispatch. A fix commit it makes lands before the marker is earned, so no clearance rotates.
 - **Get a real marker for HEAD.** The local merge hook denies `gh pr merge` until the marker exists, and `--auto` cannot skip this. Run the audit loop per `wiki/concepts/PR Merge Workflow.md` `## Dispatch the audit loop unit`, with `Working root:` set to the `RESOLVED_ROOT` the `## Pre-flight isolation (branch vs worktree)` section above resolved. The main thread dispatches `audit-loop-unit`; the out-of-scope bypass applies when the resolver names no member. Never hand-write, fake, or pre-empt the marker, an in-scope debt fix earns its marker the same way every feature PR does.
 - **Post the success status yourself.** Once `wiki/concepts/PR Merge Workflow.md` `#### Posting the status last` conditions hold, run `bash .claude/hooks/post-audit-status.sh <path to a current member marker>` before merging.
   <!-- gaia:maintainer-only:start -->
