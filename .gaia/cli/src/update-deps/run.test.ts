@@ -46,6 +46,20 @@ const writeWorkspace = (root: string, minutes: number): void => {
   );
 };
 
+const writeWorkspaceWithExcludes = (
+  root: string,
+  minutes: number,
+  excludes: readonly string[]
+): void => {
+  const entries = excludes.map((entry) => `  - '${entry}'\n`).join('');
+
+  writeFileSync(
+    path.join(root, 'pnpm-workspace.yaml'),
+    `minimumReleaseAge: ${minutes}\nminimumReleaseAgeExclude:\n${entries}`,
+    'utf8'
+  );
+};
+
 const setupSandbox = (): Sandbox => {
   const root = mkdtempSync(path.join(tmpdir(), 'gaia-update-deps-'));
   writeFrontendRegistry(root);
@@ -1169,6 +1183,84 @@ describe('update-deps run: release-age cooldown', () => {
 
     expect(result.skipped).toEqual([]);
     expect(result.wave_a[0]?.latest).toBe('1.3.0');
+  });
+
+  describe('minimumReleaseAgeExclude', () => {
+    const OUTDATED = {current: '1.0.0', latest: '1.3.0', wanted: '1.3.0'};
+    const FOO_TIMES = {
+      '1.0.0': ANCIENT,
+      '1.1.0': AGED,
+      '1.2.0': TOO_YOUNG,
+      '1.3.0': TOO_YOUNG,
+    };
+
+    // Omitting `times` makes any publish-time lookup fail, which would skip
+    // the package as unresolved.
+    const computeWithExcludes = (
+      excludes: readonly string[],
+      name = 'foo',
+      times?: Record<string, string>
+    ): ReturnType<typeof computeUpdates> => {
+      sandbox.writePackageJson({dependencies: {[name]: '^1.0.0'}});
+      writeWorkspaceWithExcludes(sandbox.root, 10_080, excludes);
+
+      return computeUpdates({
+        cwd: sandbox.root,
+        now: RELEASE_AGE_NOW,
+        pnpmRunner: makePnpmRunner(
+          {[name]: OUTDATED},
+          undefined,
+          undefined,
+          times === undefined ? undefined : {[name]: times}
+        ),
+      });
+    };
+
+    test.each([
+      ['a bare name', ['foo'], 'foo'],
+      ['a name pattern', ['fo*'], 'foo'],
+      ['a scoped pattern', ['@acme/*'], '@acme/widget'],
+      ['an exact latest', ['foo@1.3.0'], 'foo'],
+      ['an exact scoped latest', ['@acme/widget@1.3.0'], '@acme/widget'],
+      ['a version union naming latest', ['foo@1.2.0 || 1.3.0'], 'foo'],
+    ])(
+      '%s admits the uncapped latest with no publish-time lookup',
+      (_label, excludes, name) => {
+        const result = computeWithExcludes(excludes, name);
+
+        expect(result.skipped).toEqual([]);
+        expect(result.wave_a[0]?.latest).toBe('1.3.0');
+      }
+    );
+
+    test('a name@version entry admits that version and caps a newer one', () => {
+      const result = computeWithExcludes(['foo@1.2.0'], 'foo', FOO_TIMES);
+
+      expect(result.skipped).toEqual([]);
+      expect(result.wave_a[0]?.latest).toBe('1.2.0');
+    });
+
+    test.each([
+      ['another package', ['bar']],
+      ['a name that only shares a prefix', ['fo']],
+      ['a version that is not published', ['foo@9.9.9']],
+      ['a range, which pnpm rejects', ['foo@^1.3.0']],
+      ['a name pattern with a version, which pnpm rejects', ['fo*@1.3.0']],
+    ])('an entry for %s leaves the cooldown in force', (_label, excludes) => {
+      const result = computeWithExcludes(excludes, 'foo', FOO_TIMES);
+
+      expect(result.skipped).toEqual([]);
+      expect(result.wave_a[0]?.latest).toBe('1.1.0');
+    });
+
+    test('a non-matching entry still skips when nothing has aged', () => {
+      const result = computeWithExcludes(['bar'], 'foo', {
+        '1.0.0': ANCIENT,
+        '1.3.0': TOO_YOUNG,
+      });
+
+      expect(result.skipped[0]?.reason).toBe('release-age-cooldown');
+    });
   });
 
   test('records release-age-unresolved when the time lookup fails', () => {
