@@ -103,7 +103,7 @@ The registry is `.gaia/packages.json` (adopter-owned, a JSON array of `{name, pa
 | `shared` / `wiki-owned` | B missing, A equals L | Nothing | `skip`, note `already-latest` |
 | `shared` / `wiki-owned` | B missing, A differs from L | Nothing; record the question | `open`, kind `absent-baseline` |
 | any | B equals L (no upstream change) | Nothing | `skip`, note `no-upstream-change` |
-| any | A equals B (no adopter drift) | Back up A; copy L over it | `owned` → `overwrite`; `shared` / `wiki-owned` → `merge` |
+| any | A equals B (no adopter drift) | Back up A; copy L over it | `owned` → `overwrite`; `shared` / `wiki-owned` → `merge`. For `.claude/settings.json` the copy asks the human first (GAIA guards that file), and an unattended run is denied it |
 | any | A equals L (already at latest) | Nothing | `skip`, note `already-latest` |
 | any | A differs from B, B differs from L | The three-way merge and judgment pass below | `auto-merged`, `open` or `pending-judgment` |
 

@@ -25,6 +25,7 @@ setup() {
     "/Users/you/app/.claude/settings.json"
     "frontend/.claude/settings.json"
     ".claude/worktrees/w1/.claude/settings.json"
+    "\"/Users/you/my app/.claude/settings.json\""
     "~/.claude/settings.json"
   )
   # Each shape holds the literal PATH, replaced by the guarded path.
@@ -38,6 +39,9 @@ setup() {
     "jq . x.json | sponge PATH"
     "cp /tmp/src.json PATH"
     "mv /tmp/src.json PATH"
+    "cp /tmp/src.json PATH 2>/dev/null"
+    "cp /tmp/src.json PATH 2> /dev/null"
+    "mv /tmp/src.json PATH >/dev/null 2>&1"
     "jq '.a = 1' PATH > /tmp/tmp.json && mv /tmp/tmp.json PATH"
   )
 }

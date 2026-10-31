@@ -5,7 +5,9 @@
 # recognised write shape, hands the named target to a caller-supplied predicate.
 # The shapes: an output redirect (> or >>, spaced or glued to the target), every
 # token after tee or sponge, sed carrying -i (with or without a macOS '' backup
-# suffix), and the last non-flag token after cp or mv (the destination).
+# suffix), and the last non-flag, non-redirect token after cp or mv (the
+# destination). A quoted run is rejoined so a path with a space reaches the
+# predicate whole.
 #
 # It is best-effort and biased toward allowing on ambiguity: Bash vectors are
 # unbounded, so a shape it does not recognise passes. Two PreToolUse guards
@@ -32,6 +34,40 @@ gaia_write_target_strip_quotes() {
   printf '%s' "$text"
 }
 
+# Rejoin tokens a quoted run split on whitespace, so a quoted path with a space
+# reaches the predicate whole. Result lands in GAIA_WRITE_TARGET_JOINED. An
+# unterminated quote joins to the end of the line.
+gaia_write_target_join_quoted() {
+  local current="" quote="" word position character
+  GAIA_WRITE_TARGET_JOINED=()
+  for word in "$@"; do
+    if [ -n "$quote" ]; then
+      current="$current $word"
+    else
+      current="$word"
+    fi
+    position=0
+    while [ "$position" -lt "${#word}" ]; do
+      character="${word:$position:1}"
+      if [ -z "$quote" ]; then
+        case "$character" in
+          \" | \') quote="$character" ;;
+        esac
+      elif [ "$character" = "$quote" ]; then
+        quote=""
+      fi
+      position=$((position + 1))
+    done
+    if [ -z "$quote" ]; then
+      GAIA_WRITE_TARGET_JOINED+=("$current")
+      current=""
+    fi
+  done
+  if [ -n "$current" ]; then
+    GAIA_WRITE_TARGET_JOINED+=("$current")
+  fi
+}
+
 # Return 0 when a recognised write shape in the command line names a target the
 # predicate function accepts (called with the raw token); return 1 otherwise.
 gaia_bash_command_writes_target() {
@@ -44,7 +80,8 @@ gaia_bash_command_writes_target() {
   # statements) must still be inspected.
   while IFS= read -r line || [ -n "$line" ]; do
     read -r -a line_tokens <<<"$line"
-    tokens+=(${line_tokens[@]+"${line_tokens[@]}"} ';')
+    gaia_write_target_join_quoted ${line_tokens[@]+"${line_tokens[@]}"}
+    tokens+=(${GAIA_WRITE_TARGET_JOINED[@]+"${GAIA_WRITE_TARGET_JOINED[@]}"} ';')
   done <<<"$command_line"
   token_count=${#tokens[@]}
 
@@ -97,7 +134,16 @@ gaia_bash_command_writes_target() {
           case "$following_token" in
             ';' | '&&' | '||' | '|') break ;;
           esac
-          [[ "$following_token" == -* ]] || destination="$following_token"
+          case "$following_token" in
+            -*) ;;
+            # A redirect is no operand; a bare operator also owns the next token.
+            [0-9]*[\<\>]* | [\<\>]* | '&>'*)
+              case "$following_token" in
+                *[\<\>] | '&>>') j=$((j + 1)) ;;
+              esac
+              ;;
+            *) destination="$following_token" ;;
+          esac
           j=$((j + 1))
         done
         "$predicate" "$destination" && return 0

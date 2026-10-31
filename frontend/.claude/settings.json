@@ -106,7 +106,8 @@
       "WebFetch(domain:context7.com)"
     ],
     "ask": [
-      "Edit(**/.claude/settings.json)"
+      "Edit(**/.claude/settings.json)",
+      "Edit(../.claude/settings.json)"
     ],
     "deny": [
       "Bash(git push --force-with-lease *main*)",
