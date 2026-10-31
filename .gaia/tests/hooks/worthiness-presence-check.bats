@@ -958,3 +958,189 @@ export const UsesImportedPlay = meta.story({play: sharedPlay});
   spawn_count=$(wc -c <"$spawn_log" | tr -d ' ')
   [ "$spawn_count" -eq 1 ]
 }
+
+# --- the shared selection library ---
+
+# Run the library's walk directly, the way a caller outside the hook does: its
+# inputs set in the caller's own shell, the walk written to a file. Prints the
+# records, then `status=<n>` and `error=<reason>` lines. Args: <tree> then an
+# optional mode: `unset-ere`, `unset-classifier` or `empty-ere`.
+run_selection_walk() {
+  local tree="$1" mode="${2:-normal}"
+  cat >"$BATS_TEST_TMPDIR/walk-driver.sh" <<'DRIVER'
+tree="$1"; mode="$2"; home_root="$3"
+. "$home_root/.claude/hooks/lib/gaia-packages.sh"
+. "$home_root/.claude/hooks/lib/red-ledger.sh"
+. "$home_root/.claude/hooks/lib/worthiness-selection.sh"
+gaia_packages_load "$tree" || exit 5
+case "$mode" in
+  empty-ere) WORTHINESS_SELECTION_ERE='' ;;
+  unset-ere) ;;
+  *) WORTHINESS_SELECTION_ERE=$(gaia_package_globs_ere emergentTests) ;;
+esac
+if [ "$mode" != unset-classifier ]; then
+  WORTHINESS_SELECTION_CLASSIFIER="$home_root/.gaia/scripts/classifier/classify-determinism.mjs"
+fi
+base=$(git -C "$tree" merge-base main HEAD)
+records_file=$(mktemp)
+walk_status=0
+worthiness_selection_walk "$tree" "$base" >"$records_file" || walk_status=$?
+cat "$records_file"
+rm -f "$records_file"
+printf 'status=%s\n' "$walk_status"
+printf 'error=%s\n' "$WORTHINESS_SELECTION_ERROR"
+DRIVER
+  run bash "$BATS_TEST_TMPDIR/walk-driver.sh" "$tree" "$mode" "$HOME_ROOT"
+}
+
+# Lines of a driver run that are walk records, not the trailing status lines.
+walk_records() {
+  grep -v '^status=\|^error=' <<<"$output" || true
+}
+
+TWO_TEST_FILE='import {expect, test} from "vitest";
+test("first label", () => {
+  expect(1).toBe(1);
+});
+test("second label", () => {
+  expect(2).toBe(2);
+});
+'
+
+# A story whose play is an imported identifier: the extractor refuses it (exit 7).
+IMPORTED_PLAY_STORY="import preview from '#.storybook/preview';
+import {sharedPlay} from './shared-play';
+
+const Marker = () => <p>marker</p>;
+
+const meta = preview.meta({component: Marker, title: 'Internal/Imported'});
+
+export const UsesImportedPlay = meta.story({play: sharedPlay});
+"
+
+@test "the library's walk and the hook agree on a changed file, an exact rename, a deletion and a non-emergent test" {
+  commit_file "frontend/app/components/Foo/tests/index.test.tsx" "$TWO_TEST_FILE"
+  commit_file "frontend/app/components/Moved/tests/index.test.tsx" "$EMERGENT_TEST"
+  commit_file "frontend/app/components/Gone/tests/index.test.tsx" "$EMERGENT_TEST"
+  advance_base_to_head
+  commit_file "frontend/app/components/Foo/tests/index.test.tsx" "${TWO_TEST_FILE/expect(1)/expect(3)}"
+  mkdir -p "$REPO/frontend/app/components/Renamed/tests"
+  git -C "$REPO" mv frontend/app/components/Moved/tests/index.test.tsx frontend/app/components/Renamed/tests/index.test.tsx
+  git -C "$REPO" rm --quiet frontend/app/components/Gone/tests/index.test.tsx
+  git -C "$REPO" commit --quiet -m "rename and delete"
+  commit_file "frontend/app/utils/x/index.test.ts" "$STRICT_TEST"
+
+  run_selection_walk "$REPO"
+  grep -qx 'status=0' <<<"$output"
+  local walk_pairs hook_pairs walk_path walk_line
+  walk_pairs=$(walk_records | while IFS=$'\t' read -r walk_path walk_line; do
+    printf '%s %s\n' "$walk_path" "$(jq -r '.fullName' <<<"$walk_line")"
+  done | sort)
+  [ "$walk_pairs" = "$(printf '%s\n%s' \
+    'frontend/app/components/Foo/tests/index.test.tsx first label' \
+    'frontend/app/components/Foo/tests/index.test.tsx second label')" ]
+
+  run_merge_hook
+  denied
+  hook_pairs=$(reason_of_output | grep '^  • ' | sed 's/^  • //; s/ › / /' | sort)
+  [ "$hook_pairs" = "$walk_pairs" ]
+}
+
+@test "the library returns the extractor refusal status with the reason set, and the hook denies with that same reason" {
+  write_story_descriptor
+  commit_file "frontend/app/utils/tests/imported-play.stories.tsx" "$IMPORTED_PLAY_STORY"
+  run_selection_walk "$REPO"
+  grep -qx 'status=7' <<<"$output"
+  local walk_reason
+  walk_reason="${output#*$'\n'error=}"
+  [[ "$walk_reason" == *"unsupported story shape"* ]]
+
+  run_merge_hook
+  denied
+  [ "$(reason_of_output)" = "$walk_reason" ]
+}
+
+# A copy of the hook whose walk call is routed through a pipe. Every library and
+# script is the real one, linked in.
+install_piped_walk_hook() {
+  local entry
+  FAKE_HOME="$BATS_TEST_TMPDIR/piped-home"
+  mkdir -p "$FAKE_HOME/.claude/hooks/lib" "$FAKE_HOME/.gaia/scripts"
+  # gaia-lint-ignore whole-tree-mark-guard: every test that reaches this link farm carries the per-test mark
+  for entry in "$HOME_ROOT"/.claude/hooks/lib/*; do
+    ln -sfn "$entry" "$FAKE_HOME/.claude/hooks/lib/$(basename "$entry")"
+  done
+  # gaia-lint-ignore whole-tree-mark-guard: every test that reaches this link farm carries the per-test mark
+  for entry in "$HOME_ROOT"/.gaia/scripts/*; do
+    ln -sfn "$entry" "$FAKE_HOME/.gaia/scripts/$(basename "$entry")"
+  done
+  sed 's#worthiness_selection_walk "$tree_root" "$base" >"$records_file"#worthiness_selection_walk "$tree_root" "$base" | cat >"$records_file"#' \
+    "$HOME_ROOT/.claude/hooks/worthiness-presence-check.sh" >"$FAKE_HOME/.claude/hooks/worthiness-presence-check.sh"
+  grep -qF '| cat >"$records_file"' "$FAKE_HOME/.claude/hooks/worthiness-presence-check.sh"
+  HOOK_ABSOLUTE_PATH="$FAKE_HOME/.claude/hooks/worthiness-presence-check.sh"
+}
+
+# bats test_tags=whole-tree
+@test "red twin: routing the walk through a pipe loses the refusal reason" {
+  write_story_descriptor
+  commit_file "frontend/app/utils/tests/imported-play.stories.tsx" "$IMPORTED_PLAY_STORY"
+  run_merge_hook
+  local expected_reason
+  expected_reason=$(reason_of_output)
+  [[ "$expected_reason" == *"unsupported story shape"* ]]
+
+  install_piped_walk_hook
+  run_merge_hook
+  [ "$(reason_of_output)" != "$expected_reason" ]
+}
+
+@test "the library returns 9 and emits nothing when a required input is unset; a set but empty glob returns 0 with no records" {
+  commit_file "frontend/app/components/Foo/tests/index.test.tsx" "$EMERGENT_TEST"
+
+  run_selection_walk "$REPO" unset-classifier
+  [ -z "$(walk_records)" ]
+  grep -qx 'status=9' <<<"$output"
+
+  run_selection_walk "$REPO" unset-ere
+  [ -z "$(walk_records)" ]
+  grep -qx 'status=9' <<<"$output"
+
+  run_selection_walk "$REPO" empty-ere
+  [ -z "$(walk_records)" ]
+  grep -qx 'status=0' <<<"$output"
+}
+
+# Failing-state assertion: returns 1 when the refusal text mentions debt.
+refusal_free_of_debt_wording() {
+  local text="$1"
+  grep -qiF 'tech debt' <<<"$text" && return 1
+  grep -qiF 'tech-debt' <<<"$text" && return 1
+  return 0
+}
+
+@test "the refusal tells the agent to run the evaluator, fix on the branch, and ask with the rotation and CI cost, without debt wording" {
+  commit_file "frontend/app/components/Foo/tests/index.test.tsx" "$EMERGENT_TEST"
+  run_merge_hook
+  denied
+  local refusal
+  refusal=$(reason_of_output)
+  grep -qF -- 'To unblock:' <<<"$refusal"
+  grep -qF -- 'worthiness evaluator' <<<"$refusal"
+  grep -qF -- '.claude/skills/gaia/references/worthiness-step.md' <<<"$refusal"
+  grep -qF -- 'only keep verdicts needs no commit' <<<"$refusal"
+  grep -qF -- 'Fix a fix verdict on the branch: this is the recommendation' <<<"$refusal"
+  grep -qF -- 'ask the human' <<<"$refusal"
+  grep -qF -- 'clearances the fix rotates and the CI cycle it costs' <<<"$refusal"
+  grep -qF -- 'Accepted residual is the alternative' <<<"$refusal"
+  grep -qF -- 'Retry gh pr merge' <<<"$refusal"
+  refusal_free_of_debt_wording "$refusal"
+}
+
+@test "red twin: a refusal seeded with debt wording fails the debt-free assertion" {
+  local seeded_phrase
+  for seeded_phrase in 'file it as tech debt' 'use the file-tech-debt skill' 'record Tech-Debt'; do
+    if refusal_free_of_debt_wording "To unblock: $seeded_phrase"; then
+      return 1
+    fi
+  done
+}

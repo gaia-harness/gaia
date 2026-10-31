@@ -12,7 +12,7 @@
 setup() {
   REPO_ROOT="$(cd "$BATS_TEST_DIRNAME/../../.." && pwd)"
   FIXTURE="$BATS_TEST_DIRNAME/fixtures/context-checkpoint/pinned-question.txt"
-  LIBRARY_NAMES="context-checkpoint-lib.sh audit-loop-state-lib.sh branch-name-lib.sh main-root-lib.sh audit-key-lib.sh exclusive-lock-lib.sh"
+  LIBRARY_NAMES="context-checkpoint-lib.sh audit-loop-state-lib.sh branch-name-lib.sh main-root-lib.sh audit-key-lib.sh exclusive-lock-lib.sh branch-authorship-lib.sh"
 }
 
 # emit_questions <library-directory>: the three fixture questions, one line each.
