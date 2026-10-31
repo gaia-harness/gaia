@@ -18,6 +18,7 @@ setup() {
   . "$(cd "$BATS_TEST_DIRNAME/../../.." && pwd)/.gaia/tests/helpers/path.sh"
   HOOKS_SOURCE_DIRECTORY=$(cd "$BATS_TEST_DIRNAME/../../../.claude/hooks" && pwd)
   HOOK_ABSOLUTE_PATH="$HOOKS_SOURCE_DIRECTORY/block-settings-write.sh"
+  # shellcheck disable=SC2088 # The literal tilde is the command text under test.
   GUARDED_PATHS=(
     ".claude/settings.json"
     "./.claude/settings.json"
