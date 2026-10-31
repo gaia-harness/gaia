@@ -19,6 +19,7 @@
     {"id": "isolation-policy", "scope": "project", "required": false, "admin": true, "standalone": false, "reference": ".claude/skills/gaia/references/setup/isolation-question.md"},
     {"id": "sandbox-recommendation", "scope": "project", "required": false, "admin": true, "standalone": false, "reference": ".claude/commands/setup-gaia.md"},
     {"id": "migrate-2-machine", "scope": "machine", "required": true, "admin": false, "standalone": true, "reference": ".claude/skills/gaia/references/setup/migrate-2-machine.md"},
-    {"id": "required-ci-checks", "scope": "project", "required": true, "admin": true, "standalone": true, "reference": ".claude/skills/gaia/references/setup/required-ci-checks.md"}
+    {"id": "required-ci-checks", "scope": "project", "required": true, "admin": true, "standalone": true, "reference": ".claude/skills/gaia/references/setup/required-ci-checks.md"},
+    {"id": "auto-merge", "scope": "project", "required": false, "admin": true, "standalone": true, "reference": ".claude/skills/gaia/references/setup/auto-merge.md"}
   ]
 }

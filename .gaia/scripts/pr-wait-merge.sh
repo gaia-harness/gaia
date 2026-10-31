@@ -7,10 +7,16 @@
 # spelling below assumes a shell at the checkout root:
 #   bash .gaia/scripts/pr-wait-merge.sh --pr <N> [--repo <[HOST/]OWNER/REPO>]
 #                                       [--attempts <N>] [--interval <seconds>]
+#                                       [--until-green]
+#
+# --until-green, for a repository with auto-merge off: GREEN once every required
+# check passed and the pull request is mergeable, and the caller then merges.
+# A non-required check that never finishes cannot hold it.
 #
 # Exit codes, one per verdict, so a caller branches on the status rather than
 # parsing prose. The verdict token is also printed to stdout on its own line.
 #   0   MERGED        the merge landed
+#   0   GREEN         --until-green only: required checks passed, ready to merge
 #   3   CONFLICTING   the base branch conflicts with the pull request
 #   4   CHECK_FAILED  a REQUIRED check failed or was cancelled
 #   5   TIMEOUT       the attempt bound was spent with the pull request still open
@@ -84,6 +90,7 @@ usage() {
   cat <<EOF
 Usage: bash .gaia/scripts/$PROGRAM_NAME --pr <number> [--repo <[HOST/]OWNER/REPO>]
                                 [--attempts <n>] [--interval <seconds>]
+                                [--until-green]
 
   --pr        the pull request number to wait on. Required.
   --repo      the repository holding it, in gh's own [HOST/]OWNER/REPO
@@ -94,9 +101,14 @@ Usage: bash .gaia/scripts/$PROGRAM_NAME --pr <number> [--repo <[HOST/]OWNER/REPO
               Default $DEFAULT_ATTEMPTS.
   --interval  seconds to sleep between reads. Default $DEFAULT_INTERVAL.
               Zero is allowed, which polls without sleeping.
+  --until-green
+              return GREEN when every required check passed and the pull
+              request is mergeable, for a repository with auto-merge off. The
+              caller then runs gh pr merge. Non-required checks are ignored.
 
 Prints one verdict token on stdout and exits:
-  MERGED (0), CONFLICTING (3), CHECK_FAILED (4), TIMEOUT (5), CLOSED (6).
+  MERGED (0), GREEN (0, --until-green only), CONFLICTING (3), CHECK_FAILED (4),
+  TIMEOUT (5), CLOSED (6).
 Exit 2 is a refusal rather than a verdict: a usage error, no gh, or a gh that
 never answered.
 EOF
@@ -106,6 +118,7 @@ PR=""
 REPO=""
 ATTEMPTS="$DEFAULT_ATTEMPTS"
 INTERVAL="$DEFAULT_INTERVAL"
+UNTIL_GREEN=0
 
 # A non-negative integer, and nothing else. Rejecting a bad value loudly
 # matters more here than in most argument parsing: a bound that silently
@@ -140,6 +153,10 @@ while [ "$#" -gt 0 ]; do
       [ "$#" -ge 2 ] || { printf '%s: --interval needs a value\n' "$PROGRAM_NAME" >&2; exit 2; }
       INTERVAL="$2"
       shift 2
+      ;;
+    --until-green)
+      UNTIL_GREEN=1
+      shift
       ;;
     -h | --help)
       usage
@@ -208,6 +225,8 @@ trap 'exit 143' TERM
 VIEW_JQ='[.state, (.mergeable // "UNKNOWN")] | @tsv'
 # shellcheck disable=SC2016
 CHECKS_JQ='map(select(.bucket == "fail" or .bucket == "cancel")) | length'
+# shellcheck disable=SC2016
+GREEN_JQ='if length > 0 and all(.bucket == "pass" or .bucket == "skipping") then "green" else "waiting" end'
 
 read_state() {
   if [ -n "$REPO" ]; then
@@ -236,6 +255,22 @@ required_check_failed() {
   fi
   is_non_negative_integer "$failed" || return 1
   [ "$failed" -gt 0 ]
+}
+
+# 0 when required checks exist and every one passed or was skipped. A pending
+# bucket, an empty list and an unreadable answer all keep the wait going: green
+# has to be proved, and a repository with no required check times out here
+# rather than reporting a green nothing established.
+required_checks_green() {
+  local answer
+  if [ -n "$REPO" ]; then
+    answer=$(gh pr checks "$PR" --repo "$REPO" --required --json bucket \
+      --jq "$GREEN_JQ" 2>/dev/null) || return 1
+  else
+    answer=$(gh pr checks "$PR" --required --json bucket \
+      --jq "$GREEN_JQ" 2>/dev/null) || return 1
+  fi
+  [ "$answer" = "green" ]
 }
 
 verdict="TIMEOUT"
@@ -295,6 +330,13 @@ while [ "$attempt" -lt "$ATTEMPTS" ]; do
     break
   fi
 
+  # MERGEABLE only, so a green read during the UNKNOWN window after a push keeps
+  # waiting instead of handing the caller a merge that may conflict.
+  if [ "$UNTIL_GREEN" -eq 1 ] && [ "$mergeable" = "MERGEABLE" ] && required_checks_green; then
+    verdict="GREEN"
+    break
+  fi
+
   # Sleep between reads, never after the last one: a bound of N attempts owes
   # N-1 waits, and sleeping after the final read would add the interval to
   # every timeout for nothing.
@@ -324,6 +366,9 @@ printf '%s\n' "$verdict"
 
 case "$verdict" in
   MERGED)
+    exit 0
+    ;;
+  GREEN)
     exit 0
     ;;
   CLOSED)

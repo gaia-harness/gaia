@@ -28,6 +28,7 @@ You also own the declarative half of that same subsystem: the roster your own di
 - `.gaia/scripts/token-rates.json`
 - `.gaia/release-exclude`
 - `.gaia/retired-paths-allowlist.tsv`
+- `.gaia/toolchain-floors.tsv`
 - `.gaia/tests/vendor/**`
 - `.gaia/scripts/tests/fixtures/**/*.jq`
 - `.gaia/scripts/tests/fixtures/**/*.sed`

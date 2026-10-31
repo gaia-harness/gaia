@@ -6,12 +6,12 @@
 # STEP_ORDER. It also pins the single-session shape: the React Doctor install
 # sits once in Step 1, before any line names a `frontend/` path; the command
 # reads no setup reference and runs or records no per-machine step; it asks for
-# no exit, restart or reload; Step 10 finalizes and Step 11 hands off to
+# no exit, restart or reload; Step 9 finalizes and Step 10 hands off to
 # /setup-gaia, ending on the read of the setup command with RECONFIGURE false
 # and the halt rule; the wiki log claims no install; the resume section names no
 # install. It also pins that it updates no dependencies: no /update-deps run or
-# cache bust before Step 11, Chromium installed in Step 1 and not again in
-# Step 7, and a handoff pointer to /update-deps.
+# cache bust before Step 10, Chromium installed in Step 1 and not again in
+# Step 6, and a handoff pointer to /update-deps.
 
 # The exact opening sentence a command's references block carries.
 REFERENCES_OPENING='This command reads these references, all under `.claude/skills/gaia/references/setup/`. Read one only when a "Read ... now" line sends you there, and then read the whole file:'
@@ -196,11 +196,11 @@ install_line_text() {
   grep -qF 'names the React Doctor installer 0 times' <<<"$output"
 }
 
-@test "the early-install check fails when the installer line is duplicated into Step 8" {
+@test "the early-install check fails when the installer line is duplicated into Step 7" {
   local scratch="$BATS_TEST_TMPDIR/gaia-init.scratch.md" line
   line="$(install_line_text)"
   [ -n "$line" ]
-  insert_after "$INIT_MD" "$scratch" "$line" '## Step 8:'
+  insert_after "$INIT_MD" "$scratch" "$line" '## Step 7:'
   cmp -s "$INIT_MD" "$scratch" && return 1
   run check_react_doctor_early_install "$scratch"
   [ "$status" -ne 0 ]
@@ -326,7 +326,7 @@ check_setup_names_per_machine() {
 @test "the no-reference check fails when the references block and its bullet come back" {
   local scratch="$BATS_TEST_TMPDIR/gaia-init.scratch.md"
   cp "$INIT_MD" "$scratch"
-  printf '\n%s\n- `per-machine.md`: Step 8.\n' "$REFERENCES_OPENING" >>"$scratch"
+  printf '\n%s\n- `per-machine.md`: Step 7.\n' "$REFERENCES_OPENING" >>"$scratch"
   run check_no_setup_references "$scratch"
   [ "$status" -ne 0 ]
   grep -qF 'carries a references block' <<<"$output"
@@ -382,8 +382,8 @@ SETUP_STEP_NEEDLES=(
 )
 
 # check_no_setup_step <init>: none of the per-machine commands appear, while
-# the project decisions init does record (the .env bootstrap in Step 6, the
-# sandbox recommendation in Step 8) stay.
+# the project decision init does record (the sandbox recommendation in
+# Step 7) stays.
 check_no_setup_step() {
   local needle
   for needle in "${SETUP_STEP_NEEDLES[@]}"; do
@@ -392,12 +392,8 @@ check_no_setup_step() {
       return 1
     fi
   done
-  section_of "$1" '## Step 6:' | grep -qF -- '.gaia/cli/gaia init bootstrap-env' || {
-    echo "Step 6 no longer bootstraps .env" >&2
-    return 1
-  }
-  section_of "$1" '## Step 8: Project settings' | grep -qF -- 'gaia setup record sandbox-recommendation declined' || {
-    echo "Step 8 no longer records the sandbox recommendation" >&2
+  section_of "$1" '## Step 7: Project settings' | grep -qF -- 'gaia setup record sandbox-recommendation declined' || {
+    echo "Step 7 no longer records the sandbox recommendation" >&2
     return 1
   }
 }
@@ -420,22 +416,13 @@ check_no_setup_step() {
   [ "$ran" -eq "${#SETUP_STEP_NEEDLES[@]}" ]
 }
 
-@test "the no-per-machine-step check fails when Step 6 stops bootstrapping .env" {
-  local scratch="$BATS_TEST_TMPDIR/gaia-init.scratch.md"
-  grep -vF -- '.gaia/cli/gaia init bootstrap-env' "$INIT_MD" >"$scratch" || true
-  cmp -s "$INIT_MD" "$scratch" && return 1
-  run check_no_setup_step "$scratch"
-  [ "$status" -ne 0 ]
-  grep -qF 'Step 6 no longer bootstraps .env' <<<"$output"
-}
-
-@test "the no-per-machine-step check fails when Step 8 stops recording the sandbox recommendation" {
+@test "the no-per-machine-step check fails when Step 7 stops recording the sandbox recommendation" {
   local scratch="$BATS_TEST_TMPDIR/gaia-init.scratch.md"
   grep -vF -- 'gaia setup record sandbox-recommendation declined' "$INIT_MD" >"$scratch" || true
   cmp -s "$INIT_MD" "$scratch" && return 1
   run check_no_setup_step "$scratch"
   [ "$status" -ne 0 ]
-  grep -qF 'Step 8 no longer records the sandbox recommendation' <<<"$output"
+  grep -qF 'Step 7 no longer records the sandbox recommendation' <<<"$output"
 }
 
 # ---------------------------------------------------------------------------
@@ -487,68 +474,68 @@ check_no_restart() {
 }
 
 # ---------------------------------------------------------------------------
-# Step 10 finalizes, Step 11 hands off and its read of setup comes last
+# Step 9 finalizes, Step 10 hands off and its read of setup comes last
 # ---------------------------------------------------------------------------
 
 SETUP_READ='Read `.claude/commands/setup-gaia.md` now'
 
-# check_handoff_order <init>: Step 10 runs init finalize before its commit,
-# Step 11 follows it with its four subsections in order, and the read of the
-# setup command is the last non-blank line of Step 11 and appears nowhere else.
+# check_handoff_order <init>: Step 9 runs init finalize before its commit,
+# Step 10 follows it with its four subsections in order, and the read of the
+# setup command is the last non-blank line of Step 10 and appears nowhere else.
 check_handoff_order() {
-  local file="$1" step10 step11 finalize_call commit_heading ten_line eleven_line
+  local file="$1" step_finalize step_handoff finalize_call commit_heading ten_line eleven_line
   local previous=0 heading position total inside last
-  step10="$(section_of "$file" '## Step 10: Finalize')"
-  [ -n "$step10" ] || {
+  step_finalize="$(section_of "$file" '## Step 9: Finalize')"
+  [ -n "$step_finalize" ] || {
+    echo "the Step 9 section is absent" >&2
+    return 1
+  }
+  finalize_call="$(grep -nF -- '.gaia/cli/gaia init finalize' <<<"$step_finalize" | head -n 1 | cut -d: -f1)"
+  commit_heading="$(grep -nF -- '### Commit the init output' <<<"$step_finalize" | head -n 1 | cut -d: -f1)"
+  { [ -n "$finalize_call" ] && [ -n "$commit_heading" ] && [ "$finalize_call" -lt "$commit_heading" ]; } || {
+    echo "Step 9 does not run init finalize before the commit" >&2
+    return 1
+  }
+  step_handoff="$(section_of "$file" '## Step 10: Continue into /setup-gaia')"
+  [ -n "$step_handoff" ] || {
     echo "the Step 10 section is absent" >&2
     return 1
   }
-  finalize_call="$(grep -nF -- '.gaia/cli/gaia init finalize' <<<"$step10" | head -n 1 | cut -d: -f1)"
-  commit_heading="$(grep -nF -- '### Commit the init output' <<<"$step10" | head -n 1 | cut -d: -f1)"
-  { [ -n "$finalize_call" ] && [ -n "$commit_heading" ] && [ "$finalize_call" -lt "$commit_heading" ]; } || {
-    echo "Step 10 does not run init finalize before the commit" >&2
-    return 1
-  }
-  step11="$(section_of "$file" '## Step 11: Continue into /setup-gaia')"
-  [ -n "$step11" ] || {
-    echo "the Step 11 section is absent" >&2
-    return 1
-  }
-  ten_line="$(grep -nF -- '## Step 10: Finalize' "$file" | head -n 1 | cut -d: -f1)"
-  eleven_line="$(grep -nF -- '## Step 11: Continue into /setup-gaia' "$file" | head -n 1 | cut -d: -f1)"
+  ten_line="$(grep -nF -- '## Step 9: Finalize' "$file" | head -n 1 | cut -d: -f1)"
+  eleven_line="$(grep -nF -- '## Step 10: Continue into /setup-gaia' "$file" | head -n 1 | cut -d: -f1)"
   [ "$eleven_line" -gt "$ten_line" ] || {
-    echo "Step 11 does not come after Step 10" >&2
+    echo "Step 10 does not come after Step 9" >&2
     return 1
   }
   for heading in '### Send the adoption ping' '### Stop on an uncommitted init' '### CODEOWNERS follow-up' '### Hand off to /setup-gaia'; do
-    position="$(grep -nF -- "$heading" <<<"$step11" | head -n 1 | cut -d: -f1)"
+    position="$(grep -nF -- "$heading" <<<"$step_handoff" | head -n 1 | cut -d: -f1)"
     { [ -n "$position" ] && [ "$position" -gt "$previous" ]; } || {
-      echo "the Step 11 subsections are out of order at: ${heading}" >&2
+      echo "the Step 10 subsections are out of order at: ${heading}" >&2
       return 1
     }
     previous="$position"
   done
   total="$(grep -cF -- "$SETUP_READ" "$file" || true)"
-  inside="$(grep -cF -- "$SETUP_READ" <<<"$step11" || true)"
+  inside="$(grep -cF -- "$SETUP_READ" <<<"$step_handoff" || true)"
   [ "$total" = "$inside" ] || {
-    echo "the setup-gaia read appears outside Step 11" >&2
+    echo "the setup-gaia read appears outside Step 10" >&2
     return 1
   }
   [ "$inside" = 1 ] || {
-    echo "Step 11 reads the setup command ${inside} times" >&2
+    echo "Step 10 reads the setup command ${inside} times" >&2
     return 1
   }
-  last="$(grep -v '^[[:space:]]*$' <<<"$step11" | tail -n 1)"
+  last="$(grep -v '^[[:space:]]*$' <<<"$step_handoff" | tail -n 1)"
   case "$last" in
     *"$SETUP_READ"*) ;;
     *)
-      echo "the setup-gaia read is not the last line of Step 11" >&2
+      echo "the setup-gaia read is not the last line of Step 10" >&2
       return 1
       ;;
   esac
 }
 
-@test "gaia-init.md finalizes in Step 10 and ends Step 11 on the read of the setup command" {
+@test "gaia-init.md finalizes in Step 9 and ends Step 10 on the read of the setup command" {
   check_handoff_order "$INIT_MD"
 }
 
@@ -561,18 +548,18 @@ check_handoff_order() {
   cmp -s "$INIT_MD" "$scratch" && return 1
   run check_handoff_order "$scratch"
   [ "$status" -ne 0 ]
-  grep -qF 'not the last line of Step 11' <<<"$output"
+  grep -qF 'not the last line of Step 10' <<<"$output"
 }
 
-@test "the handoff-order check fails when the read is duplicated into Step 9" {
+@test "the handoff-order check fails when the read is duplicated into Step 8" {
   local scratch="$BATS_TEST_TMPDIR/gaia-init.scratch.md" line
   line="$(grep -F -- "$SETUP_READ" "$INIT_MD")"
   [ -n "$line" ]
-  insert_after "$INIT_MD" "$scratch" "$line" '## Step 9:'
+  insert_after "$INIT_MD" "$scratch" "$line" '## Step 8:'
   cmp -s "$INIT_MD" "$scratch" && return 1
   run check_handoff_order "$scratch"
   [ "$status" -ne 0 ]
-  grep -qF 'appears outside Step 11' <<<"$output"
+  grep -qF 'appears outside Step 10' <<<"$output"
 }
 
 @test "the handoff-order check fails when the ping and the uncommitted stop swap places" {
@@ -586,7 +573,7 @@ check_handoff_order() {
   grep -qF 'subsections are out of order' <<<"$output"
 }
 
-@test "the handoff-order check fails when Step 10 loses its init finalize call" {
+@test "the handoff-order check fails when Step 9 loses its init finalize call" {
   local scratch="$BATS_TEST_TMPDIR/gaia-init.scratch.md"
   grep -vF -- '.gaia/cli/gaia init finalize' "$INIT_MD" >"$scratch" || true
   cmp -s "$INIT_MD" "$scratch" && return 1
@@ -668,24 +655,24 @@ check_handoff_contract() {
 RUNNING_MARKER_TOUCH='mkdir -p .gaia/local && touch .gaia/local/setup-running'
 RUNNING_MARKER_REMOVE='rm -f .gaia/local/setup-running'
 
-# check_running_marker <init>: Step 10 touches the marker on a line before the
+# check_running_marker <init>: Step 9 touches the marker on a line before the
 # finalize call, and the uncommitted-init stop removes it.
 check_running_marker() {
   local file="$1" step stop touch_line finalize_line
-  step="$(section_of "$file" '## Step 10: Finalize')"
+  step="$(section_of "$file" '## Step 9: Finalize')"
   stop="$(section_of "$file" '### Stop on an uncommitted init')"
   touch_line="$(grep -nxF -- "$RUNNING_MARKER_TOUCH" <<<"$step" | head -n 1 | cut -d: -f1)"
   finalize_line="$(grep -nxF -- '.gaia/cli/gaia init finalize' <<<"$step" | head -n 1 | cut -d: -f1)"
   [ -n "$touch_line" ] || {
-    echo "Step 10 does not touch the setup-running marker" >&2
+    echo "Step 9 does not touch the setup-running marker" >&2
     return 1
   }
   [ -n "$finalize_line" ] || {
-    echo "Step 10 has no finalize call" >&2
+    echo "Step 9 has no finalize call" >&2
     return 1
   }
   [ "$touch_line" -lt "$finalize_line" ] || {
-    echo "Step 10 touches the marker after finalize" >&2
+    echo "Step 9 touches the marker after finalize" >&2
     return 1
   }
   grep -qxF -- "$RUNNING_MARKER_REMOVE" <<<"$stop" || {
@@ -730,10 +717,10 @@ check_running_marker() {
 
 LOG_TOOLS=('React Doctor' 'Playwright CLI' 'typescript-lsp')
 
-# wiki_log_block <init>: the lines of the fenced log block under Step 9,
+# wiki_log_block <init>: the lines of the fenced log block under Step 8,
 # between its opening and closing fence.
 wiki_log_block() {
-  section_of "$1" '## Step 9: Refresh the wiki' | awk '
+  section_of "$1" '## Step 8: Refresh the wiki' | awk '
     /^```/ { fences++; if (fences == 1) { on = 1; next } exit }
     on { print }
   '
@@ -778,8 +765,8 @@ check_no_install_claim() {
 # The resume section
 # ---------------------------------------------------------------------------
 
-# check_resume_section <init>: the resume section names no Step 8 install and
-# says the run continues through Step 11.
+# check_resume_section <init>: the resume section names no Step 7 install and
+# says the run continues through Step 10.
 check_resume_section() {
   local section
   section="$(section_of "$1" '## On failure: resume')"
@@ -787,36 +774,36 @@ check_resume_section() {
     echo "the resume section is absent" >&2
     return 1
   }
-  if grep -qF -- 'Step 8' <<<"$section"; then
-    echo "the resume section names Step 8" >&2
+  if grep -qF -- 'Step 7' <<<"$section"; then
+    echo "the resume section names Step 7" >&2
     return 1
   fi
   if grep -qi -- 'install' <<<"$section"; then
     echo "the resume section mentions an install" >&2
     return 1
   fi
-  grep -qF -- 'continues with the remaining steps through Step 11' <<<"$section" || {
+  grep -qF -- 'continues with the remaining steps through Step 10' <<<"$section" || {
     echo "the resume section lacks the continue sentence" >&2
     return 1
   }
 }
 
-@test "gaia-init.md's resume section has no install and continues through Step 11" {
+@test "gaia-init.md's resume section has no install and continues through Step 10" {
   check_resume_section "$INIT_MD"
 }
 
-@test "the resume check fails when the Step 8 install sentence comes back" {
+@test "the resume check fails when the Step 7 install sentence comes back" {
   local scratch="$BATS_TEST_TMPDIR/gaia-init.scratch.md"
-  insert_after "$INIT_MD" "$scratch" 'A failed Step 8 install is re-run first.' 'If any `gaia init <step>` invocation'
+  insert_after "$INIT_MD" "$scratch" 'A failed Step 7 install is re-run first.' 'If any `gaia init <step>` invocation'
   cmp -s "$INIT_MD" "$scratch" && return 1
   run check_resume_section "$scratch"
   [ "$status" -ne 0 ]
-  grep -qF 'the resume section names Step 8' <<<"$output"
+  grep -qF 'the resume section names Step 7' <<<"$output"
 }
 
 @test "the resume check fails when the continue sentence is removed" {
   local scratch="$BATS_TEST_TMPDIR/gaia-init.scratch.md"
-  remove_text "$INIT_MD" "$scratch" 'continues with the remaining steps through Step 11'
+  remove_text "$INIT_MD" "$scratch" 'continues with the remaining steps through Step 10'
   cmp -s "$INIT_MD" "$scratch" && return 1
   run check_resume_section "$scratch"
   [ "$status" -ne 0 ]
@@ -824,25 +811,25 @@ check_resume_section() {
 }
 
 # check_no_dependency_update <file>: init leaves the bundle's lockfile as
-# shipped. No step before Step 11 names /update-deps (Step 11's handoff points
+# shipped. No step before Step 10 names /update-deps (Step 10's handoff points
 # at it, so it must), nothing busts the update-check cache, and Chromium is
-# installed in Step 1 and not again in Step 7, since with no update Playwright
+# installed in Step 1 and not again in Step 6, since with no update Playwright
 # cannot change between the two.
 check_no_dependency_update() {
   awk '
     /^## / { section = $0 }
     /update-check-bust\.sh/ { print "gaia-init.md busts the update-check cache"; failed = 1 }
-    section ~ /^## Step (0|1|2|3|4|5|6|7|8|9|10):/ && /\/update-deps/ {
-      print "a step before Step 11 names /update-deps"; failed = 1
+    section ~ /^## Step (0|1|2|3|4|5|6|7|8|9):/ && /\/update-deps/ {
+      print "a step before Step 10 names /update-deps"; failed = 1
     }
-    section ~ /^## Step 11:/ && /\/update-deps/ { closing = 1 }
+    section ~ /^## Step 10:/ && /\/update-deps/ { closing = 1 }
     /playwright install chromium/ {
       if (section ~ /^## Step 1:/) step1 = 1
-      if (section ~ /^## Step 7:/) { print "Step 7 installs Chromium again"; failed = 1 }
+      if (section ~ /^## Step 6:/) { print "Step 6 installs Chromium again"; failed = 1 }
     }
     END {
       if (!step1) { print "Step 1 installs no Chromium"; failed = 1 }
-      if (!closing) { print "Step 11 does not point at /update-deps"; failed = 1 }
+      if (!closing) { print "Step 10 does not point at /update-deps"; failed = 1 }
       exit failed
     }
   ' "$1"
@@ -858,7 +845,7 @@ check_no_dependency_update() {
   cmp -s "$INIT_MD" "$scratch" && return 1
   run check_no_dependency_update "$scratch"
   [ "$status" -ne 0 ]
-  grep -qF 'a step before Step 11 names /update-deps' <<<"$output"
+  grep -qF 'a step before Step 10 names /update-deps' <<<"$output"
 }
 
 @test "the no-update check fails when the update-check cache bust returns" {
@@ -870,13 +857,13 @@ check_no_dependency_update() {
   grep -qF 'busts the update-check cache' <<<"$output"
 }
 
-@test "the no-update check fails when Step 7 installs Chromium again" {
+@test "the no-update check fails when Step 6 installs Chromium again" {
   local scratch="$BATS_TEST_TMPDIR/gaia-init.scratch.md"
   sed 's/^pnpm typecheck && /pnpm -C frontend exec playwright install chromium \&\& pnpm typecheck \&\& /' "$INIT_MD" >"$scratch"
   cmp -s "$INIT_MD" "$scratch" && return 1
   run check_no_dependency_update "$scratch"
   [ "$status" -ne 0 ]
-  grep -qF 'Step 7 installs Chromium again' <<<"$output"
+  grep -qF 'Step 6 installs Chromium again' <<<"$output"
 }
 
 @test "the no-update check fails when Step 1 drops its Chromium install" {
@@ -890,9 +877,9 @@ check_no_dependency_update() {
 
 @test "the no-update check fails when the handoff drops its /update-deps pointer" {
   local scratch="$BATS_TEST_TMPDIR/gaia-init.scratch.md"
-  awk '/^## / { inside = ($0 ~ /^## Step 11:/) } inside && /\/update-deps/ { next } { print }' "$INIT_MD" >"$scratch"
+  awk '/^## / { inside = ($0 ~ /^## Step 10:/) } inside && /\/update-deps/ { next } { print }' "$INIT_MD" >"$scratch"
   cmp -s "$INIT_MD" "$scratch" && return 1
   run check_no_dependency_update "$scratch"
   [ "$status" -ne 0 ]
-  grep -qF 'Step 11 does not point at /update-deps' <<<"$output"
+  grep -qF 'Step 10 does not point at /update-deps' <<<"$output"
 }

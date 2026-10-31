@@ -13,7 +13,6 @@ import path from 'node:path';
 import {EXIT_CODES} from '../exit.js';
 import {structuredError} from '../stderr.js';
 import {lookupOwn} from '../util/argv.js';
-import {run as runBootstrapEnv} from './bootstrap-env.js';
 import {run as runConfigureDataLayer} from './configure-data-layer.js';
 import {run as runConfigureI18n} from './configure-i18n.js';
 import {run as runFinalize} from './finalize.js';
@@ -38,7 +37,6 @@ const HELP_TEXT = `Usage: gaia init <subcommand> [args]
                             and seeded language files.
   wire-statusline
                             Wire the GAIA statusline into Claude settings.
-  bootstrap-env             Copy .env.example to .env if .env is absent.
   write-project-config --sandbox-recommended <bool> [--isolation-policy <policy>]
                             Write .gaia/project.json (sandbox + isolation policy).
   finalize                  Final cleanup steps for the init runbook.
@@ -101,7 +99,6 @@ const targetRefusal = (cwd: string, subcommand: string): null | number => {
 const SUBCOMMAND_HANDLERS: Readonly<
   Partial<Record<string, SubcommandHandler>>
 > = {
-  'bootstrap-env': runBootstrapEnv,
   'configure-data-layer': runConfigureDataLayer,
   'configure-i18n': runConfigureI18n,
   finalize: runFinalize,

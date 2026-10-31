@@ -22,7 +22,6 @@
 import {EXIT_CODES} from '../exit.js';
 import {structuredError} from '../stderr.js';
 import {takeValue} from '../util/argv.js';
-import {run as runBootstrapEnv} from './bootstrap-env.js';
 import {run as runConfigureDataLayer} from './configure-data-layer.js';
 import {run as runConfigureI18n} from './configure-i18n.js';
 import {run as runFinalize} from './finalize.js';
@@ -47,9 +46,8 @@ const HELP_TEXT = `Usage: gaia init resume [--from-step <N>]
     3. configure-data-layer
     4. rename
     5. wire-statusline
-    6. bootstrap-env
-    7. write-project-config
-    8. finalize
+    6. write-project-config
+    7. finalize
 
   Exit codes:
     0  resume completed
@@ -115,7 +113,6 @@ type StepRunner = (
 ) => number | Promise<number>;
 
 const STEP_RUNNERS: Readonly<Record<StepName, StepRunner>> = {
-  'bootstrap-env': runBootstrapEnv,
   'configure-data-layer': runConfigureDataLayer,
   'configure-i18n': runConfigureI18n,
   finalize: runFinalize,
@@ -202,7 +199,6 @@ const buildWriteProjectConfigArgv: StepArgvBuilder = (saved) => {
 };
 
 const STEP_ARGV_BUILDERS: Readonly<Record<StepName, StepArgvBuilder>> = {
-  'bootstrap-env': () => [],
   'configure-data-layer': buildConfigureDataLayerArgv,
   'configure-i18n': buildConfigureI18nArgv,
   finalize: () => [],

@@ -12,7 +12,7 @@ Run this once after `/gaia-init`, and re-run it any time. `/setup-gaia` is the s
 
 It is safe for **any developer** to run at any time. A phase is owed when its own gate says so, or when the shipped setup feature list (`.gaia/setup-features.json`) holds its feature with no recorded decision; each decision it makes is recorded. A plain (no-flag) re-run on a provisioned project whose decisions are all recorded prints the already-provisioned line and mutates nothing: it never re-provisions the repo or changes branch protection. The one exception is a repo admin re-running it on a repo whose required checks still lack `GAIA-Audit` (or still carry the stale `code-review-audit` context): that run owes the registration and makes it. Pass `--reconfigure` to re-ask the sandbox decision (Phase 2), whose answer from a repo admin also sets the team sandbox recommendation, the team git isolation policy (Phase 3.5), the squash-only-merge offer (Phase 3.7), and the statusline left-side choice (Phase 4.6).
 
-Contents: Pre-flight: Worktree check; Argument parse; Phase 0: Prerequisites; Phase 1: Detect situation; Phase 2: Per-machine setup; Phase 3: GitHub repository; Phase 3.5: Team settings; Phase 3.7: Squash-only merges; Phase 4.5: Label sync; Phase 4.6: Statusline left side; Phase 5: Owed setup features; Phase 5.5: Land setup decisions; Phase 6: Finalize; Idempotence / re-run safety; On failure: re-run.
+Contents: Pre-flight: Worktree check; Argument parse; Phase 0: Prerequisites (toolchain floors first); Phase 1: Detect situation; Phase 2: Per-machine setup; Phase 3: GitHub repository; Phase 3.5: Team settings; Phase 3.7: Squash-only merges; Phase 4.5: Label sync; Phase 4.6: Statusline left side; Phase 5: Owed setup features; Phase 5.5: Land setup decisions; Phase 6: Finalize; Idempotence / re-run safety; On failure: re-run.
 
 This command reads these references, all under `.claude/skills/gaia/references/setup/`. Read one only when a "Read ... now" line sends you there, and then read the whole file:
 - `setup-decisions.md`: Phase 1, every run, for the owed check and who may record project decisions.
@@ -26,6 +26,7 @@ This command reads these references, all under `.claude/skills/gaia/references/s
 - `standalone-features.md`: Phase 5, every run.
 - `migrate-2-machine.md`: Phase 5, when `standalone-features.md` names it as owed.
 - `required-ci-checks.md`: Phase 5, when `standalone-features.md` names it as owed.
+- `auto-merge.md`: Phase 5, when `standalone-features.md` names it as owed.
 - `land-decisions.md`: Phase 5.5, to land project decisions, and Phase 6, for the setup ping and the closing message.
 
 ## Pre-flight: Worktree check
@@ -53,6 +54,16 @@ Parse `$ARGUMENTS` for the `--reconfigure` flag. Cache the boolean as `RECONFIGU
 
 These record no setup-state step.
 
+### Toolchain floors
+
+Run this first: every later step uses these tools, and GAIA cannot install them for the user.
+
+```bash
+bash .gaia/scripts/toolchain-check.sh --scope user
+```
+
+Exit 0: say nothing and continue. Any other exit: HALT. Show every `BELOW` and `MISSING` line as the tool, its installed version and its floor, followed by that tool's `GUIDE` line verbatim, and tell the user to re-run `/setup-gaia` once they have updated. There is no fallback for an older tool.
+
 ### 0a. Self-heal worktree symlinks
 
 If this clone is being set up from a linked worktree (e.g. one created via `git worktree add` outside the Claude Code harness), the shared-state links that `.gaia/scripts/link-worktree.sh` creates (its header lists them) may not exist yet. Run the self-heal:
@@ -69,15 +80,11 @@ The script always exits 0, so read its output: if it prints a `failed:` line (e.
 
 Tell the user: "Checking pnpm, node_modules and Chromium…"
 
-If `corepack` is available, run `corepack enable pnpm`. Otherwise `npm install -g pnpm`. If `node_modules/` does not exist at the project root, run `pnpm install`. `pnpm install` is fast on a clean clone and fast-no-op when up to date.
+Read `.claude/skills/gaia/references/toolchain.md` now, the whole file, and run its `## pnpm`, which also catches a stale pnpm on a clone. A stop there halts setup.
 
-Then provision Chromium, on every invocation. Stories and hook tests run in headless Chromium and `pnpm install` installs no browsers, so a fresh clone without this fails its first `pnpm test` and its first commit (the pre-commit hook runs Vitest). Run:
+If `node_modules/` does not exist at the project root, run `pnpm install`. `pnpm install` is fast on a clean clone and fast-no-op when up to date.
 
-```bash
-pnpm -C frontend exec playwright install chromium
-```
-
-It installs Chromium alone into the per-user Playwright cache, without the system libraries `pnpm install:browsers` (`--with-deps`) adds, so it never asks for `sudo`, and it is a quick no-op when the matching Chromium is already installed. If it fails, HALT and surface the error with the command to retry it. On Linux, a browser launch can still fail with `Host system is missing dependencies`; then tell the user to run `pnpm -C frontend exec playwright install-deps chromium` themselves (it asks for their `sudo` password to install the system libraries).
+Then run the file's `## Chromium`, on every invocation: a fresh clone without it fails its first `pnpm test` and its first commit, since the pre-commit hook runs Vitest. A stop there halts setup.
 
 ### 0c. GitHub CLI prerequisites (advisory)
 
@@ -202,7 +209,7 @@ Reached from Option 1 (after create) or Option 2 (adopt). Run the admin probe fo
 Cache `admin` and `auth_status`, then re-run `setup-decisions.md`'s `## Who records project decisions` with them (this repo may exist only now) and cache its new values. **If `admin` is not `true` (or `auth_status != "ok"`)**, none of the GitHub mutations below fire; print the admin-note and skip straight to Phase 3.5 (which runs its own admin probe and fails closed the same way):
 
 ```
-GitHub provisioning needs repo-admin permission and an authenticated gh (yours: admin=<admin>, auth_status=<auth_status>). Skipping the admin-only steps (branch protection, the GAIA-Audit required-check registration, Dependabot alerts, delete-branch-on-merge, and squash-only merges). Per-machine setup still completes. Ask a repo admin to finish the GitHub side, or gain admin access and re-run /setup-gaia.
+GitHub provisioning needs repo-admin permission and an authenticated gh (yours: admin=<admin>, auth_status=<auth_status>). Skipping the admin-only steps (branch protection, the GAIA-Audit required-check registration, Dependabot alerts, delete-branch-on-merge, auto-merge, and squash-only merges). Per-machine setup still completes. Ask a repo admin to finish the GitHub side, or gain admin access and re-run /setup-gaia.
 ```
 
 When `admin: true` and `auth_status == "ok"`:
@@ -414,7 +421,7 @@ Fall through to Phase 5.
 
 ## Phase 5: Owed setup features (always evaluated)
 
-Read `.claude/skills/gaia/references/setup/standalone-features.md` now, the whole file, and run it. When it prints `OWED_FEATURE migrate-2-machine`, Read `.claude/skills/gaia/references/setup/migrate-2-machine.md` now, the whole file, as the reference that line names. When it prints `OWED_FEATURE required-ci-checks`, Read `.claude/skills/gaia/references/setup/required-ci-checks.md` now, the whole file, the same way. Fall through to Phase 5.5.
+Read `.claude/skills/gaia/references/setup/standalone-features.md` now, the whole file, and run it. When it prints `OWED_FEATURE migrate-2-machine`, Read `.claude/skills/gaia/references/setup/migrate-2-machine.md` now, the whole file, as the reference that line names. When it prints `OWED_FEATURE required-ci-checks`, Read `.claude/skills/gaia/references/setup/required-ci-checks.md` now, the whole file, the same way. When it prints `OWED_FEATURE auto-merge`, Read `.claude/skills/gaia/references/setup/auto-merge.md` now, the whole file, the same way. Fall through to Phase 5.5.
 
 ## Phase 5.5: Land setup decisions (when project decisions may be recorded)
 

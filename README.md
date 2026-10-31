@@ -41,7 +41,7 @@ One command. GAIA handles the rest, then `/gaia-init` finishes the last-mile set
 GAIA ships clean. `/gaia-init` does the last-mile setup:
 
 - **Configures the project.** Title, package name, docs title, CODEOWNERS, localized site titles.
-- **Installs dependencies.** Bootstraps pnpm via `corepack`, runs `pnpm install`.
+- **Installs dependencies.** Installs pnpm with npm when it is missing, runs `pnpm install`.
 - **Configures i18n.** Prompts for your language set, scaffolds the matching language files, updates the component and Storybook wiring.
 - **Installs the React Doctor skill.** [React Doctor](https://github.com/millionco/react-doctor), first, so it is ready in the same session.
 
