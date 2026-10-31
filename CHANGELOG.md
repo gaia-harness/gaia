@@ -14,6 +14,11 @@ A release change that requires the adopter to act, run a command or hand-migrate
 
 ## [Unreleased]
 
+### Changed
+
+- **Worthiness and wiki promotion run before the audit:** generated plans and the merge workflow now finish the test-worthiness step and the wiki commit before the first code audit round, so neither restarts CI or owes another audit pass after clearance (#3210)
+- **No debt on your own branch's code:** `file-tech-debt.sh file` now refuses a non-security finding on a line the branch wrote, routing it to a fix on the branch or an accepted residual, so the debt backlog holds only unrelated finds (#3210)
+
 ### Fixed
 
 - **`/update-deps` honors `minimumReleaseAgeExclude`:** a package your workspace exempts from the release-age window now shows up as an update right away, in the run and the statusline count, instead of being silently held back until it ages past the window (#3207)
