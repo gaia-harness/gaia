@@ -39,9 +39,11 @@ gaia_write_target_strip_quotes() {
 #
 # Each line is read alone, so a quote that opens and does not close on the line
 # proves nothing: it may be the closing quote of a multi-line argument or an
-# apostrophe in a word. Joining to the end of the line would swallow a redirect
-# or an mv behind it, which fails open, so that word stands alone and the scan
-# restarts at the next one.
+# apostrophe in a word. A quote therefore opens only at the start of a word or
+# right after an =, so a mid-word closing quote or apostrophe stays inert and
+# cannot pair with a later spaced argument. Joining to the end of the line would
+# swallow a redirect or an mv behind it, which fails open, so an unclosed word
+# stands alone and the scan restarts at the next one.
 gaia_write_target_join_quoted() {
   local words=("$@") total=$# start=0 stop current quote word position character
   GAIA_WRITE_TARGET_JOINED=()
@@ -56,9 +58,11 @@ gaia_write_target_join_quoted() {
       while [ "$position" -lt "${#word}" ]; do
         character="${word:$position:1}"
         if [ -z "$quote" ]; then
-          case "$character" in
-            \" | \') quote="$character" ;;
-          esac
+          if [ "$position" -eq 0 ] || [ "${word:$((position - 1)):1}" = "=" ]; then
+            case "$character" in
+              \" | \') quote="$character" ;;
+            esac
+          fi
         elif [ "$character" = "$quote" ]; then
           quote=""
         fi

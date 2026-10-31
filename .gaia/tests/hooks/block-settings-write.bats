@@ -47,6 +47,7 @@ setup() {
     $'jq \'.a = 1\n| .b = 2\' x.json > /tmp/tmp.json && mv /tmp/tmp.json PATH'
     $'jq \'.a = 1\n| .b = 2\' PATH > /tmp/tmp.json\nmv /tmp/tmp.json PATH'
     "echo it's > PATH"
+    $'jq \'.a = 1\n| .b = 2\' x.json > /tmp/tmp.json && mv /tmp/tmp.json PATH && echo \'two words\''
     $'cp /tmp/src.json \\\n  PATH'
     $'mv /tmp/src.json \\\n  PATH'
     $'sed -i \'s/a/b/\' \\\n  PATH'
