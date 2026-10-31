@@ -32,10 +32,10 @@ A new file git does not yet track is not in that diff: copy it into the worktree
 Before step 1, classify the task from what the session knows of the code so far:
 
 - **Recommend `/gaia-spec`:** a new feature or product that adds user-visible rules, data or flows, even when a long request answers every question. A spec turns a brief's rules into checked acceptance tests, and `/gaia-spec` also plans. Open questions about the behavior are a stronger signal for the same answer.
-- **Recommend `/gaia-plan`:** clear internal or mechanical work that needs several phases or more than one PR, such as a rollout across many files or with a pass per target (language, tenant, service), even when a runbook covers each pass, or a migration of stored data, which needs ordered steps however small the code change. One oversized PR counts as more than one.
-- **Proceed silently:** a bug fix, or a contained change that fits one PR, such as new UI over what the app already does.
+- **Recommend `/gaia-plan`:** clear internal or mechanical work worth planning and auditing before implementation: several phases, parallel streams, a rollout across many files or targets (language, tenant, service), even when a runbook covers each pass, or a migration of stored data, however small the code change. It may still land in one PR.
+- **Proceed silently:** a bug fix, or a small contained change, such as new UI over what the app already does.
 
-Ask with `AskUserQuestion`: the recommended command first, `Just do it` second, and a one-line reason in the question, such as `This touches several areas and needs more than one PR. Plan it with /gaia-plan?`. On the recommended answer, run that command with the request as its description, in place of the steps below. On `Just do it`, go on to step 1.
+Ask with `AskUserQuestion`: the recommended command first, `Just do it` second, and a one-line reason in the question, such as `This splits into parallel work worth auditing before it starts. Plan it with /gaia-plan?`. On the recommended answer, run that command with the request as its description, in place of the steps below. On `Just do it`, go on to step 1.
 
 Ask once per task; `Just do it` holds for the rest of it. Skip the check inside any GAIA skill, in an unattended run, when the work's branch already exists, and when the user has said how to proceed, such as "just fix it". In doubt, stay silent: a missed suggestion is cheap, a nagging prompt is not.
 

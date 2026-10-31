@@ -16,7 +16,7 @@ A release change that requires the adopter to act, run a command or hand-migrate
 
 ### Added
 
-- **Claude recommends `/gaia-spec` or `/gaia-plan` when the work calls for one:** asking for a new user-visible feature, or for multi-phase internal work such as a migration, without naming a command now gets a recommendation before any branch is cut, with `Just do it` as the alternative. Bug fixes and contained changes proceed without asking (#3209)
+- **Claude recommends `/gaia-spec` or `/gaia-plan` when the work calls for one:** asking for a new user-visible feature, or for internal work worth planning and auditing first such as a migration, without naming a command now gets a recommendation before any branch is cut, with `Just do it` as the alternative. Bug fixes and contained changes proceed without asking (#3209)
 
 ### Fixed
 
