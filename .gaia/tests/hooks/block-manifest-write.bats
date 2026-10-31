@@ -165,6 +165,40 @@ run_hook_bash() {
   assert_denied_by_json
 }
 
+@test "an mv after a jq program whose closing single quote starts its own line is denied" {
+  run_hook_bash $'jq \'.a = 1\n| .b = 2\n\' x.json > /tmp/tmp.json && mv /tmp/tmp.json .gaia/manifest.json && echo \'two words\''
+  assert_denied_by_json
+}
+
+@test "an mv after a jq program whose closing double quote starts its own line is denied" {
+  run_hook_bash $'jq ".a = 1\n| .b = 2\n" x.json > /tmp/tmp.json && mv /tmp/tmp.json .gaia/manifest.json && echo "two words"'
+  assert_denied_by_json
+}
+
+@test "a stray word-start apostrophe that never closes does not hide a later write" {
+  run_hook_bash $'echo \'tis the season\nmv /tmp/tmp.json .gaia/manifest.json'
+  assert_denied_by_json
+}
+
+@test "a cp destination followed by a spaced redirect is denied" {
+  run_hook_bash 'cp /tmp/x.json .gaia/manifest.json >& /dev/null'
+  assert_denied_by_json
+}
+
+@test "an mv destination followed by a spaced separator or comment is denied" {
+  run_hook_bash '( mv /tmp/x.json .gaia/manifest.json )'
+  assert_denied_by_json
+  run_hook_bash 'cp /tmp/x.json .gaia/manifest.json & wait'
+  assert_denied_by_json
+  run_hook_bash 'cp /tmp/x.json .gaia/manifest.json # restore'
+  assert_denied_by_json
+}
+
+@test "a glued redirect to a quoted path with a space is denied" {
+  run_hook_bash 'echo x >"/Users/you/my app/.gaia/manifest.json"'
+  assert_denied_by_json
+}
+
 @test "a redirect target with a glued semicolon is denied" {
   run_hook_bash 'echo x > .gaia/manifest.json; echo done'
   assert_denied_by_json

@@ -65,6 +65,15 @@ setup() {
     "sed -i 's/a/b/' PATH; echo done"
     "echo x | tee PATH; echo done"
     "echo x | tee PATH| cat"
+    $'jq \'.a = 1\n| .b = 2\n\' x.json > /tmp/tmp.json && mv /tmp/tmp.json PATH && echo \'two words\''
+    $'jq ".a = 1\n| .b = 2\n" x.json > /tmp/tmp.json && mv /tmp/tmp.json PATH && echo "two words"'
+    $'echo \'tis the season\nmv /tmp/tmp.json PATH'
+    "cp /tmp/src.json PATH >& /dev/null"
+    "( mv /tmp/src.json PATH )"
+    "cp /tmp/src.json PATH & wait"
+    "cp /tmp/src.json PATH # restore"
+    "echo x >PATH"
+    "echo x >>PATH"
   )
 }
 
