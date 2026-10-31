@@ -14,6 +14,10 @@ A release change that requires the adopter to act, run a command or hand-migrate
 
 ## [Unreleased]
 
+### Added
+
+- Claude now asks before editing `.claude/settings.json`, the file that registers every GAIA hook and permission rule: the edit tools ask in every permission mode including bypassPermissions, and the common shell write shapes ask too, from the main thread and from a dispatched agent. With no human present an ask is a denial, so an unattended run cannot make the change through those routes. Known limit: under bypassPermissions Claude Code does not stop a shell write of this file. A pull request that changes it is now reviewed by the shell audit member, which lists any hook or permission rule the change removes or weakens. `.claude/settings.json` is a shared file, so a customized copy takes a three-way merge on update (#3205)
+
 ### Changed
 
 - **Worthiness and wiki promotion run before the audit:** generated plans and the merge workflow now finish the test-worthiness step and the wiki commit before the first code audit round, so neither restarts CI or owes another audit pass after clearance (#3210)
