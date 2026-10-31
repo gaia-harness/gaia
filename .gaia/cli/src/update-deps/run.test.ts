@@ -1243,6 +1243,8 @@ describe('update-deps run: release-age cooldown', () => {
     test.each([
       ['another package', ['bar']],
       ['a name that only shares a prefix', ['fo']],
+      ['a name that only shares a suffix', ['oo']],
+      ['a version of another package', ['bar@1.3.0']],
       ['a version that is not published', ['foo@9.9.9']],
       ['a range, which pnpm rejects', ['foo@^1.3.0']],
       ['a name pattern with a version, which pnpm rejects', ['fo*@1.3.0']],
@@ -1250,6 +1252,42 @@ describe('update-deps run: release-age cooldown', () => {
       const result = computeWithExcludes(excludes, 'foo', FOO_TIMES);
 
       expect(result.skipped).toEqual([]);
+      expect(result.wave_a[0]?.latest).toBe('1.1.0');
+    });
+
+    test('a flow-style list is read like a block list', () => {
+      sandbox.writePackageJson({dependencies: {foo: '^1.0.0'}});
+      writeFileSync(
+        path.join(sandbox.root, 'pnpm-workspace.yaml'),
+        'minimumReleaseAge: 10080\nminimumReleaseAgeExclude: [foo]\n',
+        'utf8'
+      );
+
+      const result = computeUpdates({
+        cwd: sandbox.root,
+        now: RELEASE_AGE_NOW,
+        pnpmRunner: makePnpmRunner({foo: OUTDATED}),
+      });
+
+      expect(result.wave_a[0]?.latest).toBe('1.3.0');
+    });
+
+    test('an unparsable workspace file exempts nothing', () => {
+      sandbox.writePackageJson({dependencies: {foo: '^1.0.0'}});
+      writeFileSync(
+        path.join(sandbox.root, 'pnpm-workspace.yaml'),
+        'minimumReleaseAge: 10080\nminimumReleaseAgeExclude:\n  - @foo\n',
+        'utf8'
+      );
+
+      const result = computeUpdates({
+        cwd: sandbox.root,
+        now: RELEASE_AGE_NOW,
+        pnpmRunner: makePnpmRunner({foo: OUTDATED}, undefined, undefined, {
+          foo: FOO_TIMES,
+        }),
+      });
+
       expect(result.wave_a[0]?.latest).toBe('1.1.0');
     });
 
