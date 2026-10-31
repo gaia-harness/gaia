@@ -1,7 +1,11 @@
 import {resolveGroup} from './groups.js';
 import {classifyKind, isPinnedSpec, lookupSpec} from './run-outdated.js';
 import type {OutdatedEntry, PackageJsonShape} from './run-outdated.js';
-import {capToAgedVersion, fetchVersionTimes} from './run-release-age.js';
+import {
+  capToAgedVersion,
+  fetchVersionTimes,
+  resolveReleaseAgeExemption,
+} from './run-release-age.js';
 import type {Kind, PnpmRunner, SkippedEntry} from './run-types.js';
 import {
   applyEslintCap,
@@ -32,6 +36,7 @@ export type ComputeOptions = {
 export type CooldownContext = {
   cooldownCutoffMs: number;
   cwd: string;
+  minimumReleaseAgeExcludes: readonly string[];
   minimumReleaseAgeMinutes: number;
   pnpmRunner: PnpmRunner;
 };
@@ -41,10 +46,11 @@ type CooldownDecision =
 
 /**
  * Release-age cooldown for one target: pnpm 11 re-verifies the whole
- * lockfile against `minimumReleaseAge`, so a target newer than the cooldown
- * window would make the resulting install fail. Caps `latest` to the newest
- * version that has already cleared the window. A no-op (`kind: 'ok'`) when
- * the cooldown is disabled or `latest` is not actually an upgrade.
+ * lockfile against `minimumReleaseAge`, so a target inside the cooldown window
+ * that `minimumReleaseAgeExclude` does not exempt would make the resulting
+ * install fail. Caps `latest` to the newest version that has cleared the window
+ * or is exempt. A no-op (`kind: 'ok'`) when the cooldown is disabled, `latest`
+ * is not actually an upgrade, or `latest` is exempt.
  */
 export const applyCooldown = (args: {
   context: CooldownContext;
@@ -62,6 +68,15 @@ export const applyCooldown = (args: {
     return {kind: 'ok', latest};
   }
 
+  const {coversEveryVersion, exactVersions} = resolveReleaseAgeExemption(
+    context.minimumReleaseAgeExcludes,
+    name
+  );
+
+  if (coversEveryVersion || exactVersions.has(latest)) {
+    return {kind: 'ok', latest};
+  }
+
   const times = fetchVersionTimes(name, context.cwd, context.pnpmRunner);
 
   if (times === undefined) return {kind: 'unresolved'};
@@ -69,6 +84,7 @@ export const applyCooldown = (args: {
   const capped = capToAgedVersion({
     current,
     cutoffMs: context.cooldownCutoffMs,
+    exemptVersions: exactVersions,
     latest,
     times,
   });
