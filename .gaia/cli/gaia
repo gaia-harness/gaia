@@ -45508,12 +45508,41 @@ var parseOutdated = (stdout) => {
 };
 
 // src/update-deps/run-release-age.ts
-import { readFileSync as readFileSync53 } from "node:fs";
+import { readFileSync as readFileSync54 } from "node:fs";
+import path73 from "node:path";
+
+// src/update-deps/workspace-member.ts
+import { existsSync as existsSync40, readFileSync as readFileSync53 } from "node:fs";
 import path72 from "node:path";
+var CLI_WORKSPACE_MEMBER = ".gaia/cli";
+var readWorkspaceYaml = (repoRoot) => {
+  try {
+    return load(
+      readFileSync53(path72.join(repoRoot, "pnpm-workspace.yaml"), "utf8")
+    );
+  } catch {
+    return void 0;
+  }
+};
+var readCliWorkspaceMember = (repoRoot) => {
+  try {
+    const parsed = readWorkspaceYaml(repoRoot);
+    if (typeof parsed !== "object" || parsed === null) return null;
+    const { packages } = parsed;
+    if (!Array.isArray(packages) || !packages.includes(CLI_WORKSPACE_MEMBER))
+      return null;
+    const manifestPath = path72.posix.join(CLI_WORKSPACE_MEMBER, "package.json");
+    return existsSync40(path72.join(repoRoot, manifestPath)) ? CLI_WORKSPACE_MEMBER : null;
+  } catch {
+    return null;
+  }
+};
+
+// src/update-deps/run-release-age.ts
 var readMinimumReleaseAge = (cwd) => {
   let raw;
   try {
-    raw = readFileSync53(path72.join(cwd, "pnpm-workspace.yaml"), "utf8");
+    raw = readFileSync54(path73.join(cwd, "pnpm-workspace.yaml"), "utf8");
   } catch {
     return 0;
   }
@@ -45530,6 +45559,37 @@ var readMinimumReleaseAge = (cwd) => {
     }
   }
   return 0;
+};
+var readMinimumReleaseAgeExclude = (repoRoot) => {
+  const workspace = readWorkspaceYaml(repoRoot);
+  if (typeof workspace !== "object" || workspace === null) return [];
+  const { minimumReleaseAgeExclude: entries } = workspace;
+  return Array.isArray(entries) ? entries.filter((entry) => typeof entry === "string") : [];
+};
+var parseExcludeEntry = (entry) => {
+  const separatorIndex = entry.indexOf("@", 1);
+  if (separatorIndex === -1) return { name: entry, versions: [] };
+  return {
+    name: entry.slice(0, separatorIndex),
+    versions: entry.slice(separatorIndex + 1).split("||").map((version2) => version2.trim())
+  };
+};
+var matchesNamePattern = (pattern2, packageName2) => new RegExp(`^${pattern2.split("*").map(escapeRegExp).join(".*")}$`, "u").test(
+  packageName2
+);
+var resolveReleaseAgeExemption = (excludes, packageName2) => {
+  const exactVersions = /* @__PURE__ */ new Set();
+  for (const entry of excludes) {
+    const { name, versions } = parseExcludeEntry(entry);
+    if (versions.length === 0) {
+      if (matchesNamePattern(name, packageName2)) {
+        return { coversEveryVersion: true, exactVersions };
+      }
+    } else if (name === packageName2) {
+      for (const version2 of versions) exactVersions.add(version2);
+    }
+  }
+  return { coversEveryVersion: false, exactVersions };
 };
 var fetchVersionTimes = (name, cwd, pnpmRunner) => {
   const result = pnpmRunner(["view", name, "time", "--json"], { cwd });
@@ -45560,6 +45620,7 @@ var evaluateAgedCandidate = (version2, isoTime, bounds) => {
   const segments = parseSegments(version2);
   if (compareSegments(segments, bounds.currentSegments) <= 0) return null;
   if (compareSegments(segments, bounds.latestSegments) > 0) return null;
+  if (bounds.exemptVersions.has(version2)) return { raw: version2, segments };
   const publishedMs = Date.parse(isoTime);
   if (!Number.isFinite(publishedMs) || publishedMs > bounds.cutoffMs) {
     return null;
@@ -45570,6 +45631,7 @@ var capToAgedVersion = (params) => {
   const bounds = {
     currentSegments: parseSegments(params.current),
     cutoffMs: params.cutoffMs,
+    exemptVersions: params.exemptVersions,
     latestSegments: parseSegments(params.latest)
   };
   let best;
@@ -45670,11 +45732,19 @@ var applyCooldown = (args) => {
   if (compareSegments(parseSegments(latest), parseSegments(current)) <= 0) {
     return { kind: "ok", latest };
   }
+  const { coversEveryVersion, exactVersions } = resolveReleaseAgeExemption(
+    context.minimumReleaseAgeExcludes,
+    name
+  );
+  if (coversEveryVersion || exactVersions.has(latest)) {
+    return { kind: "ok", latest };
+  }
   const times = fetchVersionTimes(name, context.cwd, context.pnpmRunner);
   if (times === void 0) return { kind: "unresolved" };
   const capped = capToAgedVersion({
     current,
     cutoffMs: context.cooldownCutoffMs,
+    exemptVersions: exactVersions,
     latest,
     times
   });
@@ -45880,33 +45950,6 @@ var routeGroupIntoWaves = (group, members2, workspace) => {
   };
 };
 
-// src/update-deps/workspace-member.ts
-import { existsSync as existsSync40, readFileSync as readFileSync54 } from "node:fs";
-import path73 from "node:path";
-var CLI_WORKSPACE_MEMBER = ".gaia/cli";
-var readWorkspaceYaml = (repoRoot) => {
-  try {
-    return load(
-      readFileSync54(path73.join(repoRoot, "pnpm-workspace.yaml"), "utf8")
-    );
-  } catch {
-    return void 0;
-  }
-};
-var readCliWorkspaceMember = (repoRoot) => {
-  try {
-    const parsed = readWorkspaceYaml(repoRoot);
-    if (typeof parsed !== "object" || parsed === null) return null;
-    const { packages } = parsed;
-    if (!Array.isArray(packages) || !packages.includes(CLI_WORKSPACE_MEMBER))
-      return null;
-    const manifestPath = path73.posix.join(CLI_WORKSPACE_MEMBER, "package.json");
-    return existsSync40(path73.join(repoRoot, manifestPath)) ? CLI_WORKSPACE_MEMBER : null;
-  } catch {
-    return null;
-  }
-};
-
 // src/update-deps/run-compute.ts
 var discoverOutdated = (cwd, pnpmRunner) => {
   const result = pnpmRunner(["outdated", "--json"], { cwd });
@@ -45991,6 +46034,7 @@ var computeUpdates = (options) => {
   const cooldown = {
     cooldownCutoffMs: now.getTime() - minimumReleaseAgeMinutes * 6e4,
     cwd: packageDir,
+    minimumReleaseAgeExcludes: readMinimumReleaseAgeExclude(repoRoot),
     minimumReleaseAgeMinutes,
     pnpmRunner
   };

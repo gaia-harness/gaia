@@ -26,7 +26,10 @@ import {
   readUpdateDepsHolds,
 } from './run-outdated.js';
 import type {OutdatedEntry, PackageJsonShape} from './run-outdated.js';
-import {readMinimumReleaseAge} from './run-release-age.js';
+import {
+  readMinimumReleaseAge,
+  readMinimumReleaseAgeExclude,
+} from './run-release-age.js';
 import type {
   PnpmRunner,
   SkippedEntry,
@@ -200,6 +203,7 @@ export const computeUpdates = (options: ComputeOptions): UpdatesPayload => {
   const cooldown: CooldownContext = {
     cooldownCutoffMs: now.getTime() - minimumReleaseAgeMinutes * 60_000,
     cwd: packageDir,
+    minimumReleaseAgeExcludes: readMinimumReleaseAgeExclude(repoRoot),
     minimumReleaseAgeMinutes,
     pnpmRunner,
   };

@@ -18,6 +18,7 @@ A release change that requires the adopter to act, run a command or hand-migrate
 
 - **Toolchain floors:** `/setup-gaia` now halts when git, jq or the platform's `lsof` or `ss` falls short, with install steps that reach the latest release, and `/update-gaia` flags the same tools before its Proceed question, reading the incoming release's floors. git 2.40 is the new floor; below it every audit ran a full review without saying why, and the router now reports `git-too-old`.
 - **Auto-merge default:** `/setup-gaia` turns on `allow_auto_merge` for a repository it creates and offers it otherwise, and `/update-gaia` makes the same offer. An opted-out repository waits with `pr-wait-merge.sh --until-green`, then merges.
+- Claude now asks before editing `.claude/settings.json`, the file that registers every GAIA hook and permission rule: the edit tools ask in every permission mode including bypassPermissions, and the common shell write shapes ask too, from the main thread and from a dispatched agent. With no human present an ask is a denial, so an unattended run cannot make the change through those routes. Known limit: under bypassPermissions Claude Code does not stop a shell write of this file. A pull request that changes it is now reviewed by the shell audit member, which lists any hook or permission rule the change removes or weakens. `.claude/settings.json` is a shared file, so a customized copy takes a three-way merge on update (#3205)
 
 ### Changed
 
@@ -27,6 +28,8 @@ A release change that requires the adopter to act, run a command or hand-migrate
 ### Fixed
 
 - **`usage.sh` on jq 1.6:** cost lines no longer fail with "could not read the usage ledger".
+- **`/update-deps` honors `minimumReleaseAgeExclude`:** a package your workspace exempts from the release-age window now shows up as an update right away, in the run and the statusline count, instead of being silently held back until it ages past the window (#3207)
+- **Language-switch accessibility check covers a switched page:** adding a second language now runs the `after-switch` scan on the new language with no hand edit, so a language added outside `add-locale` no longer gets a scan that re-checks the unswitched page (#3208)
 
 ### Security
 
