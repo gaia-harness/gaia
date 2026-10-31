@@ -165,6 +165,21 @@ run_hook_bash() {
   assert_denied_by_json
 }
 
+@test "a redirect target with a glued semicolon is denied" {
+  run_hook_bash 'echo x > .gaia/manifest.json; echo done'
+  assert_denied_by_json
+}
+
+@test "a cp destination with a glued separator is denied" {
+  run_hook_bash 'cp /tmp/x.json .gaia/manifest.json&& echo done'
+  assert_denied_by_json
+}
+
+@test "a target closing a subshell is denied" {
+  run_hook_bash '(echo x > .gaia/manifest.json)'
+  assert_denied_by_json
+}
+
 @test "a cp destination on a backslash continuation line is denied" {
   run_hook_bash $'cp /tmp/x.json \\\n  .gaia/manifest.json'
   assert_denied_by_json

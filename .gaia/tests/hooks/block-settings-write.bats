@@ -53,6 +53,18 @@ setup() {
     $'sed -i \'s/a/b/\' \\\n  PATH'
     $'echo x | tee \\\n  PATH'
     $'echo x > \\\n  PATH'
+    "echo x > PATH; echo done"
+    "echo x > PATH&& echo done"
+    "echo x > PATH|| echo failed"
+    "echo x > PATH| cat"
+    "echo x > PATH& wait"
+    "(echo x > PATH)"
+    "cp /tmp/src.json PATH; echo done"
+    "mv /tmp/src.json PATH&& echo done"
+    "(cd /tmp && cp /tmp/src.json PATH)"
+    "sed -i 's/a/b/' PATH; echo done"
+    "echo x | tee PATH; echo done"
+    "echo x | tee PATH| cat"
   )
 }
 
@@ -137,6 +149,11 @@ assert_settings_ask() {
     "sed -i s/a/b/ .claude/settings.local.json" \
     "cp a .claude/settings.local.json" \
     $'cp .claude/settings.json \\\n  /tmp/x' \
+    "cat .claude/settings.json; echo done" \
+    "cp .claude/settings.json /tmp/x; echo done" \
+    "echo x > .claude/settings.json.bak; echo done" \
+    "(cat .claude/settings.json)" \
+    "cp .claude/settings.json /tmp/x >& /dev/null" \
     $'jq \'.a\n| .b\' .claude/settings.json > /tmp/x'; do
     run_hook_command Bash "$command_line"
     if [ "$status" -ne 0 ] || [ -n "$output" ]; then

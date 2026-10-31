@@ -82,12 +82,34 @@ gaia_write_target_join_quoted() {
 }
 
 # Append one logical line's tokens to the caller's tokens array, then the ';'
-# that ends the statement for the walk.
+# that ends the statement for the walk. A separator glued to the end of a word
+# (target; target&& target| target) ) splits off as a ';', so the path reaches
+# the predicate bare and a walk stops where the statement does. A word that is
+# only separators stays whole, and >& is a redirect, not a separator.
 gaia_write_target_tokenize_line() {
-  local line_tokens
+  local line_tokens word bare
   read -r -a line_tokens <<<"$1"
   gaia_write_target_join_quoted ${line_tokens[@]+"${line_tokens[@]}"}
-  tokens+=(${GAIA_WRITE_TARGET_JOINED[@]+"${GAIA_WRITE_TARGET_JOINED[@]}"} ';')
+  for word in ${GAIA_WRITE_TARGET_JOINED[@]+"${GAIA_WRITE_TARGET_JOINED[@]}"}; do
+    bare="$word"
+    case "$word" in
+      *[\<\>]\&) ;;
+      *)
+        while :; do
+          case "$bare" in
+            *\; | *\& | *\| | *\)) bare="${bare%?}" ;;
+            *) break ;;
+          esac
+        done
+        ;;
+    esac
+    if [ -z "$bare" ] || [ "$bare" = "$word" ]; then
+      tokens+=("$word")
+    else
+      tokens+=("$bare" ';')
+    fi
+  done
+  tokens+=(';')
 }
 
 # Return 0 when a recognised write shape in the command line names a target the
