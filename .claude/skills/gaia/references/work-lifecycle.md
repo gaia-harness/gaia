@@ -31,7 +31,7 @@ A new file git does not yet track is not in that diff: copy it into the worktree
 
 Before step 1, classify the task from what the session knows of the code so far:
 
-- **Recommend `/gaia-spec`:** a new feature or product that adds user-visible rules, data or flows, even when a long request answers every question. A spec turns a brief's rules into checked acceptance tests, and `/gaia-spec` also plans. Open questions about the behavior are a stronger signal for the same answer.
+- **Recommend `/gaia-spec`:** a new feature or product that adds user-visible rules, data or flows, even when a long request answers every question. A spec turns a brief's rules into checked acceptance tests. Open questions about the behavior are a stronger signal for the same answer.
 - **Recommend `/gaia-plan`:** clear internal or mechanical work worth planning and auditing before implementation: several phases, parallel streams, a rollout across many files or targets (language, tenant, service), even when a runbook covers each pass, or a migration of stored data, however small the code change. It may still land in one PR.
 - **Proceed silently:** a bug fix, or a small contained change, such as new UI over what the app already does.
 
