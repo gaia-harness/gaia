@@ -6,7 +6,9 @@
 # Code's own protected-path check does not fire, and a session can rewrite the
 # file with no prompt at all. The Edit, Write and MultiEdit tools are covered by
 # a permissions.ask rule in .claude/settings.json rather than by this hook; this
-# hook covers the shell.
+# hook covers the shell. Honest limit: under bypassPermissions Claude Code does
+# not honor a hook's ask on this file, so a shell write still goes through there
+# with no prompt.
 #
 # Why ask rather than deny: the guard matches on the target alone and cannot
 # read intent. A legitimate change (registering a new hook) and a guard being
