@@ -3,7 +3,7 @@ name: update-gaia
 description: Pulls the latest GAIA release into this project without clobbering customizations, with a three-way merge per file using .gaia/manifest.json classes. Trigger when the user clicks the statusline `🚀 /update-gaia` indicator or asks "update GAIA", "pull the latest GAIA", "apply the new GAIA release".
 ---
 
-Contents: Pre-flight: Worktree check; Pre-flight: Branch check (run modes); Step 1: Read baseline version; Step 2: Resolve latest release; Step 3: Compare versions (main checkout, worktree run in place); Pre-flight: Pull check (reads `references/pull-mode.md`); Pre-flight: Decision log check; Pre-flight: Claim check (reads `references/claim-flow.md`); Step 3b: Refuse a 1.x baseline; Step 3c: Download and verify the bundles; Step 3d: Select migration notes; Step 4: Show the release notes and confirm (on Proceed: the update worktree, the worktree notice, the stop rule, the claim); Step 4b: Prune prior-run artifacts; Conflict flow (reads `references/conflict-flow.md`: dispatch, questions, decisions, follow-ups); Step 9b: Follow the after-merge notes; Step 9c: Carry new setup features (machine scope deferred to the post-merge cleanup); Step 9c2: Prune overbroad unowned entries; Step 9d: Record the update; Quality gate; Review point; Step 11 (orchestrator, after the review-point commit); Step 12: The leftover-file cleanup; Cost record (run end). Local runs (`--local <tarball>`) and recorded local builds: `references/local-bundle.md`, read at Step 1.
+Contents: Pre-flight: Worktree check; Pre-flight: Branch check (run modes); Step 1: Read baseline version; Step 2: Resolve latest release; Step 3: Compare versions (main checkout, worktree run in place); Pre-flight: Pull check (reads `references/pull-mode.md`); Pre-flight: Decision log check; Pre-flight: Claim check (reads `references/claim-flow.md`); Step 3b: Refuse a 1.x baseline; Step 3c: Download and verify the bundles; Step 3c2: Flag the toolchain; Step 3d: Select migration notes; Step 4: Show the release notes and confirm (on Proceed: the update worktree, the worktree notice, the stop rule, the claim); Step 4b: Prune prior-run artifacts; Conflict flow (reads `references/conflict-flow.md`: dispatch, questions, decisions, follow-ups); Step 9b: Follow the after-merge notes; Step 9c: Carry new setup features (machine scope deferred to the post-merge cleanup); Step 9c2: Prune overbroad unowned entries; Step 9d: Record the update; Quality gate; Review point; Step 11 (orchestrator, after the review-point commit); Step 12: The leftover-file cleanup; Cost record (run end). Local runs (`--local <tarball>`) and recorded local builds: `references/local-bundle.md`, read at Step 1.
 
 Pull the latest GAIA release into this project without clobbering customizations. Does a three-way comparison per file (adopter / baseline / latest) and respects explicit classes in `.gaia/manifest.json`:
 
@@ -198,6 +198,19 @@ Each failure line names the tag and removes that tag's cache directory, so a re-
 - `FETCH_FAILED v<BASELINE>` or `CHECKSUM_MISSING v<BASELINE>`: the baseline bundle is unavailable (an older release, or one published without a checksum). The three-way merge cannot run without a baseline, so stop and explain that the adopter can cherry-pick changes by hand, comparing their project to the release.
 - `FETCH_FAILED`, `CHECKSUM_MISSING` or `VERIFY_FAILED` for an extra baseline tag: the deferred items need that bundle as their baseline. Name each deferred path whose `DEFERRED` line carries that tag, and give the next step: re-run once the release is reachable, or resolve those paths by hand (merge each one yourself, then delete its entry from `.gaia/update-decisions.json` and commit) and re-run.
 - `VERIFY_FAILED <tag>`: the tarball does not match its release checksum. Never use it. Tell the user and re-run; a second mismatch on a fresh download is a damaged or tampered release, which the user reports upstream.
+
+## Step 3c2: Flag the toolchain
+
+An existing project never reruns `/setup-gaia`, so the update flags a tool below what the incoming release needs. The target bundle's own check runs, never the project's copy, so the incoming release sets the floor:
+
+```bash
+bash <LATEST_DIR>/.gaia/scripts/toolchain-check.sh
+```
+
+Exit 0: say nothing and continue. Otherwise show each `BELOW` or `MISSING` line as the tool, its installed version and its floor, with its `GUIDE` line verbatim.
+
+- **Exit 3**: GAIA degrades safely without these. Repeat them above the Proceed question and continue.
+- **Exit 1**: the update would leave the harness broken, so stop: nothing was branched, pruned or merged, and no worktree was created. The user re-runs `/update-gaia` once the tool is updated.
 
 ## Step 3d: Select migration notes
 

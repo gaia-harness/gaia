@@ -179,6 +179,7 @@ Master catalog of every page in the wiki. Newly created pages must be added here
 - [[Wiki Sync]]: the sync stage of `/gaia-wiki` and the statusline drift nudge: keep the wiki convergent with code without spawned sub-Claudes.
 - [[Wiki Consolidate]]: the consolidate stage of `/gaia-wiki`: cross-SPEC redundancy and contradiction audit; surfaces supersession candidates, reversed decisions, near-collision slugs, and subject-orphans.
 - [[GAIA Init Workflow]]: `/gaia init` subcommands, one section each.
+- [[Toolchain Floors]]: the tools GAIA needs, who checks them, and how a miss is told to the user.
 - [[GAIA CLI]]: the `.gaia/cli/` workspace, the `.gaia/cli/gaia` bundled binary, and the adoption ping (`gaia ping`) sent on `/gaia-init`, `/setup-gaia`, and `/update-gaia` completion.
 - [[Token Cost Readout]]: read-time token-to-dollar pricing off one shared pricing lib; the distributed rate table, the optional local price override, the unpriced and unparseable-override markers, and the pinned `Cost:` line.
 - [[Usage Ledger]]: the only cost store, an append-only per-message usage ledger under `.gaia/local/telemetry/`; start and close bindings with latest-start-wins pairing, agent fields on segments, `usage.sh record` and `represented`, read-time attribution through a lineage graph, the per-PR block with its Code Audit Team line, and initiative readouts.

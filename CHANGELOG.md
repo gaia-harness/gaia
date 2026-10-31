@@ -14,6 +14,20 @@ A release change that requires the adopter to act, run a command or hand-migrate
 
 ## [Unreleased]
 
+### Added
+
+- **Toolchain floors:** `/setup-gaia` now halts when git, jq or the platform's `lsof` or `ss` falls short, with install steps that reach the latest release, and `/update-gaia` flags the same tools before its Proceed question, reading the incoming release's floors. git 2.40 is the new floor; below it every audit ran a full review without saying why, and the router now reports `git-too-old`.
+- **Auto-merge default:** `/setup-gaia` turns on `allow_auto_merge` for a repository it creates and offers it otherwise, and `/update-gaia` makes the same offer. An opted-out repository waits with `pr-wait-merge.sh --until-green`, then merges.
+
+### Changed
+
+- `/gaia-init` and `/setup-gaia` install pnpm with `npm install -g pnpm@latest` instead of corepack, which on Node 22.22 left a broken pnpm.
+- `/setup-gaia` now catches a stale pnpm on a clone, and `/update-gaia` refreshes the React Doctor skill after its merge.
+
+### Fixed
+
+- **`usage.sh` on jq 1.6:** cost lines no longer fail with "could not read the usage ledger".
+
 ### Security
 
 - **glob:** Storybook's docgen plugin now resolves glob 14.0.3 through a security floor, closing GHSA-3g3m-2fjr-6pw4 (medium). It is a development-time dependency and never reaches the built app (#3204)

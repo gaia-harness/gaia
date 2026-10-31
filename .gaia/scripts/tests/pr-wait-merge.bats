@@ -561,3 +561,86 @@ tsv() {
   grep -qF -- 'gh is not on PATH' <<<"$output"
   grep -qF -- 'not a verdict' <<<"$output"
 }
+
+# --- --until-green: the wait for a repository with auto-merge off -------------
+
+# stub_green <view-tsv> <green-answer>: the failure read answers 0, and the
+# green read, told apart by its filter text, answers <green-answer>.
+stub_green() {
+  stub_gh "$1" 0
+  printf '%s\n' "$2" >"$TEMPORARY_DIRECTORY/green.txt"
+  cat >"$TEMPORARY_DIRECTORY/bin/gh" <<'EOF'
+#!/usr/bin/env bash
+printf '%s\n' "$*" >>"$STUB_DIRECTORY/argv.log"
+case "$2" in
+  view) cat "$STUB_DIRECTORY/view.tsv"; printf '\n' ;;
+  checks)
+    case "$*" in
+      *'"green"'*) cat "$STUB_DIRECTORY/green.txt" ;;
+      *) cat "$STUB_DIRECTORY/checks.txt" ;;
+    esac
+    ;;
+  *) exit 1 ;;
+esac
+EOF
+}
+
+@test "--until-green returns GREEN once required checks pass and the pull request is mergeable" {
+  stub_green "$(tsv OPEN MERGEABLE)" green
+  run bash "$WAIT" --pr 7 --until-green --interval 0
+  [ "$status" -eq 0 ]
+  [ "${lines[0]}" = "GREEN" ]
+}
+
+@test "twin: without --until-green the same state keeps waiting and never prints GREEN" {
+  stub_green "$(tsv OPEN MERGEABLE)" green
+  run bash "$WAIT" --pr 7 --attempts 2 --interval 0
+  [ "$status" -eq 5 ]
+  [ "${lines[0]}" = "TIMEOUT" ]
+}
+
+@test "--until-green keeps waiting on a pending required check" {
+  stub_green "$(tsv OPEN MERGEABLE)" waiting
+  run bash "$WAIT" --pr 7 --until-green --attempts 3 --interval 0
+  [ "$status" -eq 5 ]
+  [ "$(view_calls)" -eq 3 ]
+}
+
+@test "--until-green keeps waiting while mergeable reads UNKNOWN, though checks are green" {
+  stub_green "$(tsv OPEN UNKNOWN)" green
+  run bash "$WAIT" --pr 7 --until-green --attempts 2 --interval 0
+  [ "$status" -eq 5 ]
+}
+
+@test "--until-green still stops on a conflict and on a failed required check" {
+  stub_green "$(tsv OPEN CONFLICTING)" green
+  run bash "$WAIT" --pr 7 --until-green --interval 0
+  [ "$status" -eq 3 ]
+  stub_gh "$(tsv OPEN MERGEABLE)" 1
+  run bash "$WAIT" --pr 7 --until-green --interval 0
+  [ "$status" -eq 4 ]
+}
+
+@test "--until-green reads required checks only, on both the failure and the green read" {
+  stub_green "$(tsv OPEN MERGEABLE)" green
+  run bash "$WAIT" --pr 7 --until-green --interval 0
+  [ "$status" -eq 0 ]
+  grep 'pr checks' "$TEMPORARY_DIRECTORY/argv.log" | grep -qv -- '--required' && return 1
+  true
+}
+
+@test "the green filter refuses an empty list and any bucket that is not finished" {
+  local filter
+  filter="$(sed -n "s/^GREEN_JQ='\(.*\)'\$/\1/p" "$WAIT")"
+  [ -n "$filter" ]
+  [ "$(jq -n '[]' | jq -r "$filter")" = waiting ]
+  [ "$(jq -n '[{bucket:"pass"},{bucket:"pending"}]' | jq -r "$filter")" = waiting ]
+  [ "$(jq -n '[{bucket:"pass"},{bucket:"skipping"}]' | jq -r "$filter")" = green ]
+}
+
+@test "MERGED during --until-green is still MERGED" {
+  stub_green "$(tsv MERGED MERGEABLE)" green
+  run bash "$WAIT" --pr 7 --until-green --interval 0
+  [ "$status" -eq 0 ]
+  [ "${lines[0]}" = "MERGED" ]
+}

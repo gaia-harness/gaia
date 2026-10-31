@@ -8,7 +8,7 @@ Initialize a new project from the GAIA harness. It already ships clean (no examp
 
 **Language meta-instruction:** Conduct this entire conversation in the language the user has been typing in. Detect it from prior context, no explicit detection step needed. Do not translate source files, rules, skills, or wiki entries, those stay English regardless. Only translate the prompts you show the user.
 
-Contents: Interactive gates: run mode and non-response policy; Step 0: Ensure pnpm is available; Step 1: Install dependencies; Step 2: Gather user input; Step 3: Run the init CLI; Step 4: Locale-specific scaffolding; Step 5: Create CODEOWNERS; Step 6: Check `.env`; Step 7: Verify the build; Step 8: Project settings; Step 9: Refresh the wiki; Step 10: Finalize; Step 11: Continue into /setup-gaia; On failure: resume.
+Contents: Interactive gates: run mode and non-response policy; Step 0: Ensure pnpm is available; Step 1: Install dependencies; Step 2: Gather user input; Step 3: Run the init CLI; Step 4: Locale-specific scaffolding; Step 5: Create CODEOWNERS; Step 6: Check `.env`; Step 6: Verify the build; Step 7: Project settings; Step 8: Refresh the wiki; Step 9: Finalize; Step 10: Continue into /setup-gaia; On failure: resume.
 
 ## Interactive gates: run mode and non-response policy
 
@@ -45,7 +45,7 @@ Every gate is one of two tiers. The tier is fixed here, do not reclassify by jud
 | Gate                                                                 | Where         |
 | -------------------------------------------------------------------- | ------------- |
 | Run mode (this section)                                              | before Step 0 |
-| pnpm upgrade consent                                                 | Step 0c       |
+| pnpm upgrade consent                                                 | Step 0        |
 | Primary app language (+ "Other" free-text)                           | Step 2, Q1    |
 | Additional languages / i18n teardown, `STRIP_I18N` (+ free-text)     | Step 2, Q2    |
 | CODEOWNERS GitHub handle (HARD-BLOCK only when `gh` can't detect it) | Step 2, Q3    |
@@ -76,7 +76,7 @@ fi
 `gh api user` is the most reliable method: a single call both verifies auth and returns the login. Treat detection as **failed** if `gh` is absent, unauthenticated, or the call returns empty. Do **not** fall back to `git config user.name` (a display name, not a handle) or remote-URL parsing (there is no remote at init time). What stays never-fabricated is any handle that is neither user-typed nor gh-detected: never invent a plausible-looking one.
 
 - Interactive: offer the gh-detected handle as the recommended default; the user can override it. HARD-BLOCK applies only when detection failed (no default to fall back to): re-ask, do not reach Step 5 without a real handle.
-- Automatic: use the gh-detected handle when available. Only when detection also fails, write a loud placeholder that fails visibly, never a guess. Use `REPLACE-WITH-YOUR-GITHUB-HANDLE`, GitHub flags it as an unknown owner so the gap is obvious, and surface it as a required follow-up in Step 11's `### CODEOWNERS follow-up`.
+- Automatic: use the gh-detected handle when available. Only when detection also fails, write a loud placeholder that fails visibly, never a guess. Use `REPLACE-WITH-YOUR-GITHUB-HANDLE`, GitHub flags it as an unknown owner so the gap is obvious, and surface it as a required follow-up in Step 10's `### CODEOWNERS follow-up`.
 
 ### Automatic defaults, per gate
 
@@ -100,65 +100,20 @@ Exactly one row per setting. The CODEOWNERS row shows the gh-detected handle, ot
 
 Then apply the defaults and proceed without stopping (the user chose Automatic; do not block, they can interrupt if they want to change something):
 
-- pnpm upgrade (0c): upgrade (Yes), it is required to continue.
+- pnpm upgrade (Step 0): upgrade (Yes), it is required to continue.
 - Primary language (Q1): the detected user language.
 - Additional languages / i18n (Q2): primary-only, keep i18n scaffolding (`STRIP_I18N=false`). The teardown is never auto-selected.
-- CODEOWNERS (Q3): the gh-detected handle when available; otherwise the `REPLACE-WITH-YOUR-GITHUB-HANDLE` placeholder, flagged as a required Step 11 follow-up.
+- CODEOWNERS (Q3): the gh-detected handle when available; otherwise the `REPLACE-WITH-YOUR-GITHUB-HANDLE` placeholder, flagged as a required Step 10 follow-up.
 - Project title (Q4): title-cased folder name.
 - kebab slug (Q5): folder name.
 - Backend casing (Step 2): `camelCase` (`CASING=camel`).
 - TanStack Query (Step 2): `No` (`QUERY=false`).
 
-Step 8's two team defaults are the same in both modes, so they need no Automatic default of their own.
+Step 7's two team defaults are the same in both modes, so they need no Automatic default of their own.
 
 ## Step 0: Ensure pnpm is available (and new enough)
 
-**First, ask the run-mode gate** ("Interactive gates: run mode and non-response policy" above) and hold the answer for every later gate. Then continue with the pnpm check.
-
-GAIA needs pnpm 12+. Tell the user: "Checking for pnpm…" then read the currently-resolved version **from the project root** (so corepack's `packageManager` pin applies when it's active):
-
-```bash
-pnpm --version 2>/dev/null || echo "absent"
-```
-
-Branch on the result:
-
-**a) `absent` (no pnpm on PATH):** auto-install. Prefer corepack (it activates the version pinned in `package.json` `packageManager`); fall back to the latest global when corepack is missing.
-
-```bash
-if command -v corepack &>/dev/null; then
-  corepack enable pnpm
-else
-  npm install -g pnpm@latest
-fi
-```
-
-If this fails, stop and report the error. Then proceed to Step 1.
-
-**b) Major version ≥ 12:** good, proceed to Step 1.
-
-**c) Major version < 12 (a stale pnpm, e.g. 11.x):** do **not** silently proceed. Use the **AskUserQuestion** tool to get consent before touching the user's toolchain, with exactly these two options:
-
-_Non-response: HARD-BLOCK. Re-ask; never auto-upgrade or auto-exit on a timeout. Automatic mode: upgrade (Yes)._
-
-- **Yes (Recommended)**: "Upgrade pnpm to a supported version (12+). Required to continue with /gaia-init."
-- **No**: "Keep the current pnpm and stop /gaia-init. Nothing has been installed or renamed yet, so it's safe to exit and re-run later."
-
-On **No** (or anything that is not an explicit Yes): stop `/gaia-init` immediately with a one-line message. Step 0 runs before any file is installed or renamed, so exiting here leaves the clone untouched.
-
-On **Yes**: upgrade by enabling corepack (its `packageManager` pin sets the in-project version regardless of any stray global pnpm); fall back to a latest global install when corepack is missing.
-
-```bash
-if command -v corepack &>/dev/null; then
-  corepack enable pnpm
-else
-  npm install -g pnpm@latest
-fi
-```
-
-Then **re-verify from the project root** with `pnpm --version`.
-
-If the major version is still < 12, a non-corepack pnpm (Homebrew, the standalone installer) is shadowing the upgrade earlier on `PATH`. Show which binary wins with `command -v pnpm` (e.g. `/opt/homebrew/bin/pnpm`, the shadowing install) and halt so the user can resolve it. Halt with: "pnpm <version> at <path> is older than the required 12+ and takes precedence on your PATH. Upgrade or remove it (e.g. `brew upgrade pnpm`, `pnpm self-update`) so corepack's pinned version wins, then re-run /gaia-init."
+**First, ask the run-mode gate** ("Interactive gates: run mode and non-response policy" above) and hold the answer for every later gate. Then read `.claude/skills/gaia/references/toolchain.md` and run its `## pnpm`. It runs here because Step 1 needs pnpm. Its consent question is the pnpm upgrade gate: _non-response is HARD-BLOCK, re-ask and never auto-upgrade or auto-exit on a timeout; Automatic mode answers Yes._ A stop here exits `/gaia-init`, and Step 0 runs before any file is installed or renamed, so it leaves the clone untouched.
 
 ## Step 1: Install dependencies
 
@@ -174,7 +129,7 @@ pnpm install --config.confirm-modules-purge=false
 
 If install fails, stop and report the error.
 
-Then tell the user "Installing Chromium for the browser tests…" and run `pnpm -C frontend exec playwright install chromium`. Stories and hook tests run in headless Chromium and `pnpm install` installs no browsers, so without it Step 7's `pnpm test:ci` fails with `Executable doesn't exist`. It installs Chromium alone into the per-user Playwright cache, without the system libraries `pnpm install:browsers` (`--with-deps`) adds, so it never asks for `sudo`, and it is a quick no-op when the matching Chromium is already installed. If it fails, stop and report the error with the command to retry it. On Linux, a later browser launch can still fail with `Host system is missing dependencies`; then tell the user to run `pnpm -C frontend exec playwright install-deps chromium` themselves (it asks for their `sudo` password to install the system libraries) and re-run /gaia-init.
+Then tell the user "Installing Chromium for the browser tests…" and run `pnpm -C frontend exec playwright install chromium`. It runs here because Step 6's `pnpm test:ci` fails without a browser. If it fails, or a Linux browser launch reports missing dependencies, follow `## Chromium` in `.claude/skills/gaia/references/toolchain.md`, and stop `/gaia-init` until it is fixed.
 
 Then tell the user "Installing the React Doctor skill…" and run `bash .gaia/scripts/install-react-doctor.sh`. It runs here, before any later step reads a file under `frontend/`, because Claude Code lists the skills in `frontend/.claude/skills/` the first time the session reads a file in that folder, and a skill added after that scan appears only from the next session. It records nothing: `/setup-gaia`'s tool step finds the skill already installed and records it. If it fails, show its error as a warning and continue; `/setup-gaia` runs the same install again.
 
@@ -253,14 +208,14 @@ Resolve two values from the answer:
 
 ### Q3–Q5, Project identity (one AskUserQuestion; the slug is derived)
 
-_Non-response: title is HARD-BLOCK, re-ask, never guess. CODEOWNERS: offer the gh-detected handle as the recommended default; HARD-BLOCK only when detection failed (no default to fall back to), re-ask, never guess. The slug is never asked: it is derived from the chosen title. Automatic mode: title-cased folder name (title), folder name (slug), and the gh-detected handle (CODEOWNERS) when available, else the `REPLACE-WITH-YOUR-GITHUB-HANDLE` placeholder flagged as a required Step 11 follow-up._
+_Non-response: title is HARD-BLOCK, re-ask, never guess. CODEOWNERS: offer the gh-detected handle as the recommended default; HARD-BLOCK only when detection failed (no default to fall back to), re-ask, never guess. The slug is never asked: it is derived from the chosen title. Automatic mode: title-cased folder name (title), folder name (slug), and the gh-detected handle (CODEOWNERS) when available, else the `REPLACE-WITH-YOUR-GITHUB-HANDLE` placeholder flagged as a required Step 10 follow-up._
 
 Ask Q3 and Q4 in a single AskUserQuestion call. Each question carries exactly the two real options below, its default first and marked ` (Recommended)`; the tool's own Other takes a typed value. Never add an option that only points at Other (such as "Enter another" or "Type a value"): the tool adds its own, and a hand-added one is an inert button that returns no value.
 
 **Q3, GitHub username for CODEOWNERS.** First run the GitHub-handle detection from "Free-text identity values are never fabricated" above (reuse the automatic-mode result if it already ran). If it yields a handle, ask with these options:
 
 - `@{handle} (Recommended)`, description: `your authenticated GitHub login`. A gh-detected handle is the user's own identity, not a guess, so it is safe to default to.
-- `Set it later`: writes the `REPLACE-WITH-YOUR-GITHUB-HANDLE` placeholder to `.github/CODEOWNERS` and flags it as a required Step 11 follow-up.
+- `Set it later`: writes the `REPLACE-WITH-YOUR-GITHUB-HANDLE` placeholder to `.github/CODEOWNERS` and flags it as a required Step 10 follow-up.
 
 A different handle arrives through Other. Suggest `@username` format; store the bare handle. If detection fails there is no default, so this stays a free-text identity value that is **never fabricated**: leave Q3 out of the call and ask for the handle as a plain chat message (its answer is open-ended free text), and on interactive non-response HARD-BLOCK and re-ask rather than guessing; in automatic mode, use the loud placeholder so a wrong owner never ships.
 
@@ -340,21 +295,11 @@ printf '* @%s\n' "<github-username>" > .github/CODEOWNERS
 
 `<github-username>` is the bare handle (no leading `@`); the `* @` prefix makes that user the default owner for every path.
 
-`<github-username>` is the handle Q3 resolved: the user's typed handle, or the gh-detected login when the user accepted (or automatic mode used) that default. Any of these is a real handle, write `* @<handle>` and emit **no** Step 11 follow-up warning.
+`<github-username>` is the handle Q3 resolved: the user's typed handle, or the gh-detected login when the user accepted (or automatic mode used) that default. Any of these is a real handle, write `* @<handle>` and emit **no** Step 10 follow-up warning.
 
-Only when Q3 obtained no real handle (the user picked `Set it later`, or automatic mode where gh detection also failed) is `<github-username>` the placeholder `REPLACE-WITH-YOUR-GITHUB-HANDLE`. Write it anyway, GitHub flags the unknown owner in its CODEOWNERS validation, so the gap is visible. Step 11's `### CODEOWNERS follow-up` prints the warning.
+Only when Q3 obtained no real handle (the user picked `Set it later`, or automatic mode where gh detection also failed) is `<github-username>` the placeholder `REPLACE-WITH-YOUR-GITHUB-HANDLE`. Write it anyway, GitHub flags the unknown owner in its CODEOWNERS validation, so the gap is visible. Step 10's `### CODEOWNERS follow-up` prints the warning.
 
-## Step 6: Check `.env`
-
-Run the CLI, it copies `frontend/.env.example` to `frontend/.env` when `frontend/.env` is absent, no-op otherwise. Routing through the CLI subprocess bypasses the project's `Edit(.env)` deny rule, which guards against Claude writing secrets, not against init seeding from the example file.
-
-```bash
-.gaia/cli/gaia init bootstrap-env
-```
-
-If this exits non-zero, surface the structured error verbatim and stop.
-
-## Step 7: Verify the build
+## Step 6: Verify the build
 
 Run sequentially from the repository root, stopping at the first failure (the root scripts proxy to the `frontend` package):
 
@@ -364,7 +309,7 @@ pnpm typecheck && pnpm lint && pnpm test:ci && pnpm build
 
 Fix any issues before moving on.
 
-## Step 8: Project settings
+## Step 7: Project settings
 
 Write GAIA's two team-level defaults to `.gaia/project.json` and record them, with no question: the sandbox is not recommended, and the git isolation policy is left unset, which is GAIA's default, `always-worktree` (every `/gaia-plan`, `/gaia-debt` and ad-hoc task works in its own worktree). GAIA is built for concurrent multi-agent work, so worktrees are the default; the OS-level Bash sandbox breaks `gh`, git-over-https and `docker` until allowlisted, and GAIA's lifecycle runs on `gh`, so it is not recommended. The file is committed and team-shared, and `/update-gaia`'s merge never overwrites it. A repo admin changes either setting later with `/setup-gaia --reconfigure`.
 
@@ -380,9 +325,9 @@ If it exits non-zero, surface the structured-error JSON verbatim, then follow "O
 
 The two records mean `/setup-gaia` owes neither decision.
 
-End of Step 8.
+End of Step 7.
 
-## Step 9: Refresh the wiki
+## Step 8: Refresh the wiki
 
 The template ships with a wiki shaped for the upstream GAIA project. Refresh the file that encodes "where we are right now" so the new project starts with a clean context.
 
@@ -409,7 +354,7 @@ Append-only. New entries at the TOP.
 - Removed: GAIA branding (FUNDING.yml, README, Storybook brand)
 ```
 
-## Step 10: Finalize
+## Step 9: Finalize
 
 Mark setup as running first, in its own call. Finalize deletes this command file, which ends the statusline's mid-init gate, and setup runs next in this session, so the marker keeps the statusline from telling the user to run the setup that is about to run:
 
@@ -436,9 +381,9 @@ git add -A && git commit -m "chore: initialize project with /gaia-init" && echo 
 rm -f .gaia/local/setup-in-progress
 ```
 
-On `COMMIT_FAILED`, surface the commit's error and hold it for Step 11, which stops before the handoff. Do not retry with `--no-verify`.
+On `COMMIT_FAILED`, surface the commit's error and hold it for Step 10, which stops before the handoff. Do not retry with `--no-verify`.
 
-## Step 11: Continue into /setup-gaia
+## Step 10: Continue into /setup-gaia
 
 ### Send the adoption ping
 
@@ -455,7 +400,7 @@ Derive the two values from state this run already holds, never from a state file
 
 ### Stop on an uncommitted init
 
-When Step 10 printed `COMMIT_FAILED`, stop; do not continue into `/setup-gaia`, whose GitHub step pushes only what is committed. Remove the setup marker first, since setup will not run, then print the warning below it:
+When Step 9 printed `COMMIT_FAILED`, stop; do not continue into `/setup-gaia`, whose GitHub step pushes only what is committed. Remove the setup marker first, since setup will not run, then print the warning below it:
 
 ```bash
 rm -f .gaia/local/setup-running
@@ -499,6 +444,6 @@ If any `gaia init <step>` invocation exits non-zero, the structured-error JSON o
 
 When it fails again, return to item 1 with its new error.
 
-Resume reads `.gaia/init-state.json`, skips already-complete steps, and replays remaining steps using the saved arguments. Use `--from-step <N>` to force restart from a specific step (1-indexed: 1=strip-branding, 2=configure-i18n, 3=configure-data-layer, 4=rename, 5=wire-statusline, 6=bootstrap-env, 7=write-project-config, 8=finalize).
+Resume reads `.gaia/init-state.json`, skips already-complete steps, and replays remaining steps using the saved arguments. Use `--from-step <N>` to force restart from a specific step (1-indexed: 1=strip-branding, 2=configure-i18n, 3=configure-data-layer, 4=rename, 5=wire-statusline, 6=write-project-config, 7=finalize).
 
-After the resume, the run continues with the remaining steps through Step 11, which hands off to `/setup-gaia` as on a first run. This section covers Steps 0 to 11 up to the handoff; once Step 11 hands off, a halt follows `.claude/commands/setup-gaia.md` `## On failure: re-run`.
+After the resume, the run continues with the remaining steps through Step 10, which hands off to `/setup-gaia` as on a first run. This section covers Steps 0 to 11 up to the handoff; once Step 10 hands off, a halt follows `.claude/commands/setup-gaia.md` `## On failure: re-run`.

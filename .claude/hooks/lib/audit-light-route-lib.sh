@@ -243,6 +243,20 @@ light_route_read_delta() {
   [ "$index" -eq "$LIGHT_DELTA_COUNT" ]
 }
 
+# light_route_replay_failure_reason <root>: why the anchor's replay left no tree.
+# Git prints its usage for `-h` and exits 129, so the option list is the probe:
+# one with no merge-base option is a git below the floor, and anything else, a
+# real conflict included, stays the unreadable-path reason. The bare word is the
+# match because git also spells the option `--[no-]merge-base`.
+light_route_replay_failure_reason() {
+  local usage
+  usage="$(git -C "$1" merge-tree -h 2>&1)"
+  case "$usage" in
+    *merge-base*) printf 'unclassifiable-path\n' ;;
+    *) printf 'git-too-old\n' ;;
+  esac
+}
+
 # light_route_hard_full_rule <path> <member-globs>: prints the first floor glob,
 # then the first newline-separated member glob, that <path> matches, and
 # returns 0; returns 1 when none matches and 2 when the shared matcher errors.

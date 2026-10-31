@@ -328,6 +328,8 @@ Rules the script preserves, each of which exists to stop the wait abandoning a m
 
 **`--auto` vs `--admin`:** when `gh pr merge` rejects with "base branch policy prohibits the merge", the right escape is `--auto`; it queues the merge and GitHub completes it once checks pass. Never reach for `--admin` to bypass branch protection without explicit permission; it removes the safety the policy exists to provide.
 
+**When `--auto` is refused:** "Auto merge is not allowed" means the repository's `allow_auto_merge` setting is off, which `/setup-gaia` offers to change. Wait for the required checks instead, then merge: `bash .gaia/scripts/pr-wait-merge.sh --pr <N> --until-green --attempts 20`, and on `GREEN` run `gh pr merge <N> --squash --delete-branch` and the ordinary wait. It stops on `CONFLICTING`, `CHECK_FAILED` and `CLOSED` as the ordinary wait does, and it counts required checks only, so a non-required check never holds it. A repository with no required check has nothing to prove green, so it ends in `TIMEOUT`.
+
 Cleanup runs from `.claude/skills/gaia/references/work-lifecycle.md` `## 8. Cleanup`, whose arm depends on how the session holds the branch; [[Task Orchestration]] covers how that choice is made.
 
 **Read what the main checkout is holding before you pick an arm.** The cleanup arms in `.claude/skills/gaia/references/work-lifecycle.md` run from a shell in the main checkout, and only the feature-branch arm can move that checkout's HEAD, so isolation mode alone does not decide which is safe:

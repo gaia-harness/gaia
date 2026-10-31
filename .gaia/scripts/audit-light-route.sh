@@ -41,6 +41,8 @@
 #                        special-file); the glob matcher errors or the
 #                        reviewer input (checklist rows or diff) cannot be
 #                        built (after it)
+#   git-too-old          that replay failed because this git lacks merge-tree's
+#                        --merge-base (.gaia/toolchain-floors.tsv holds the floor)
 #   special-file         binary, mode change, symlink or submodule row
 #   machinery            a gate-machinery path changed
 #   ownerless            an in-scope path no member owns changed
@@ -158,7 +160,8 @@ _light_route_load_libraries() {
     clearance_scan audit_branch_digests_local audit_branch_patch_changed_paths audit_branch_patch_rebased_anchor_tree \
     audit_local_base_reference light_route_main_reference light_route_diff \
     light_route_full_anchor_trees light_route_refusal_trees light_route_refusal_checklist light_route_post_ranges \
-    light_route_read_delta light_route_hard_full_rule light_route_hard_full_rule_except gaia_branch_slug \
+    light_route_read_delta light_route_replay_failure_reason light_route_hard_full_rule \
+    light_route_hard_full_rule_except gaia_branch_slug \
     quick_classify_paths quick_classify_lines quick_story_component quick_path_class; do
     command -v "$library" >/dev/null 2>&1 || return 1
   done
@@ -518,7 +521,7 @@ light_route_main() {
   if [ -s "$changed_file" ]; then
     rebased_tree="$(audit_branch_patch_rebased_anchor_tree "$root" "$main_reference" "$anchor_sha" HEAD 2>/dev/null)" \
       || rebased_tree=""
-    [ -n "$rebased_tree" ] || _light_route_finish full unclassifiable-path
+    [ -n "$rebased_tree" ] || _light_route_finish full "$(light_route_replay_failure_reason "$root")"
   fi
 
   light_route_read_delta "$root" "$rebased_tree" "$head_sha" "$scratch_directory" "$changed_file" || _light_route_finish full unclassifiable-path
