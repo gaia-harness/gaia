@@ -13,8 +13,9 @@
 # Why ask rather than deny: the guard matches on the target alone and cannot
 # read intent. A legitimate change (registering a new hook) and a guard being
 # switched off are the same shape, and the party that holds the separating fact
-# is the operator, so the call goes to them. The reason string admits the prompt
-# is on the target alone.
+# is the operator, so the call goes to them. Claude Code answers this ask with
+# its own permission wording on this file, so the reason below is not displayed;
+# it stays for a platform that shows it.
 #
 # Path rule: the path equals .claude/settings.json or ends with
 # /.claude/settings.json after surrounding quotes and one leading ./ are
