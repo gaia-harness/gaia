@@ -9,11 +9,9 @@
 #                                       [--attempts <N>] [--interval <seconds>]
 #                                       [--until-green]
 #
-# --until-green is the wait for a repository with auto-merge off, where
-# `gh pr merge --auto` is refused: it returns GREEN once every required check
-# passed and the pull request is mergeable, and the caller then runs
-# `gh pr merge` itself. Only required checks count, so a non-required check that
-# never finishes cannot hold it.
+# --until-green, for a repository with auto-merge off: GREEN once every required
+# check passed and the pull request is mergeable, and the caller then merges.
+# A non-required check that never finishes cannot hold it.
 #
 # Exit codes, one per verdict, so a caller branches on the status rather than
 # parsing prose. The verdict token is also printed to stdout on its own line.
