@@ -207,7 +207,7 @@ make_fixture() {
 install_cleanup_verb() {
   local file
   mkdir -p "$MAIN/.gaia/scripts" "$MAIN/.gaia/local" || return 1
-  for file in state-cleanup.sh state-reaper-classes.sh state-reaper-lib.sh main-root-lib.sh state-registry-lib.sh branch-name-lib.sh audit-key-lib.sh audit-loop-state-lib.sh exclusive-lock-lib.sh branch-authorship-lib.sh; do
+  for file in state-cleanup.sh state-reaper-classes.sh state-reaper-lib.sh main-root-lib.sh state-registry-lib.sh branch-name-lib.sh audit-key-lib.sh audit-loop-state-lib.sh exclusive-lock-lib.sh branch-authorship-lib.sh filing-outcomes-lib.sh; do
     cp "$REPO_ROOT/.gaia/scripts/$file" "$MAIN/.gaia/scripts/$file" || return 1
   done
   cp "$REPO_ROOT/.gaia/state-registry.json" "$MAIN/.gaia/state-registry.json" || return 1

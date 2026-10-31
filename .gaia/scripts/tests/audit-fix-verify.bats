@@ -374,6 +374,67 @@ spec093_enforcement_paths() {
   done < <(enforcement_paths)
 }
 
+# The libraries the disposition check, the audit loop and the filer moved logic
+# into stay under the fixer bound, or the actor the loop bounds could edit them.
+moved_library_paths() {
+  printf '%s\n' \
+    '.gaia/scripts/branch-authorship-lib.sh' \
+    '.gaia/scripts/audit-pr-sections-lib.sh' \
+    '.gaia/scripts/filing-outcomes-lib.sh'
+}
+
+# declared_edit_check <script> <path>: a fix entry names <path>, the fixer edits it
+# and the check runs, with <script> as the verifier.
+declared_edit_check() {
+  local verifier="$1" file_path="$2"
+  mkdir -p "$REPO/$(dirname "$file_path")"
+  printf 'orig\n' >"$REPO/$file_path"
+  git -C "$REPO" add -A
+  git -C "$REPO" commit -q -m moved-library
+  write_dispositions '[{"member":"m","finding_class":"c1","path":"'"$file_path"'","line":1,"disposition":"fix"}]'
+  SCRIPT="$verifier" take_baseline
+  take_digests
+  edit "$file_path"
+  printf '%s' '{"schema":1,"round":1,"attempt":1,"results":[{"member":"m","finding_class":"c1","path":"'"$file_path"'","line":1,"disposition":"fixed","reason":"r","changed_paths":["'"$file_path"'"]}],"changed_paths":["'"$file_path"'"],"reverted_paths":[]}' >"$RESULT_FILE"
+  SCRIPT="$verifier" do_check
+}
+
+@test "each moved library is on the enforcement list" {
+  local file_path listed=0
+  while IFS= read -r file_path; do
+    listed=$((listed + 1))
+    enforcement_paths | grep -Fxq -- "$file_path" || {
+      echo "$file_path: not on the verifier's enforcement list"
+      return 1
+    }
+  done < <(moved_library_paths)
+  [ "$listed" -eq "$(moved_library_paths | wc -l | tr -d ' ')" ]
+}
+
+@test "a fixer edit to each moved library with no allowance fails enforcement-path" {
+  local file_path
+  while IFS= read -r file_path; do
+    rm -rf "$REPO"
+    make_repo "$REPO"
+    mkdir -p "$RUN_FOLDER"
+    declared_edit_check "$SCRIPT" "$file_path"
+    assert_fail_kind enforcement-path "$file_path"
+  done < <(moved_library_paths)
+}
+
+@test "twin: the same edit passes once its line is off the enforcement list" {
+  local mutant_directory="$BATS_TEST_TMPDIR/mutant" file_path=.gaia/scripts/audit-pr-sections-lib.sh
+  mkdir -p "$mutant_directory"
+  cp "$REAL_SCRIPT" "$BATS_TEST_DIRNAME/../main-root-lib.sh" "$BATS_TEST_DIRNAME/../audit-key-lib.sh" "$mutant_directory/"
+  grep -vF -- "'$file_path'" "$REAL_SCRIPT" >"$mutant_directory/audit-fix-verify.sh"
+  cmp -s "$REAL_SCRIPT" "$mutant_directory/audit-fix-verify.sh" && return 1
+  declared_edit_check "$mutant_directory/audit-fix-verify.sh" "$file_path"
+  [ "$status" -eq 0 ] || {
+    echo "status=$status output=$output"
+    return 1
+  }
+}
+
 @test "UAT-032: an unlisted edit to each SPEC-093 enforcement path fails enforcement-path" {
   local listed_paths file_path listed_count=0
   # The one-repository test above builds the repository and runs the check; this

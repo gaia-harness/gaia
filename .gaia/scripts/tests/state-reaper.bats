@@ -15,7 +15,7 @@
 # Run via: bash .gaia/scripts/bats5.sh .gaia/scripts/tests/state-reaper.bats < /dev/null
 # Assertion style: bash-3.2-safe per .claude/rules/bats-assertions.md.
 
-SCRIPT_FILES="state-reaper.sh state-reaper-lib.sh state-reaper-classes.sh main-root-lib.sh state-registry-lib.sh branch-name-lib.sh audit-key-lib.sh audit-loop-state-lib.sh exclusive-lock-lib.sh branch-authorship-lib.sh"
+SCRIPT_FILES="state-reaper.sh state-reaper-lib.sh state-reaper-classes.sh main-root-lib.sh state-registry-lib.sh branch-name-lib.sh audit-key-lib.sh audit-loop-state-lib.sh exclusive-lock-lib.sh branch-authorship-lib.sh filing-outcomes-lib.sh"
 SHA="0123456789abcdef0123456789abcdef01234567"
 
 setup() {

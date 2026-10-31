@@ -387,7 +387,7 @@ refuse_notes() {
 
 @test "the live roster routes an enforcement script edit full hard-full for the shell member" {
   local path
-  for path in .gaia/scripts/audit-fix-verify.sh .gaia/scripts/audit-dispositions-check.sh; do
+  for path in .gaia/scripts/audit-fix-verify.sh .gaia/scripts/audit-dispositions-check.sh .gaia/scripts/audit-pr-sections-lib.sh .gaia/scripts/filing-outcomes-lib.sh; do
     lsb_init
     lsb_full_clearance "$SHELL_MEMBER"
     printf '# touched\n' >>"$LSB_ROOT/$path"
@@ -410,6 +410,23 @@ refuse_notes() {
   lsb_git add -A && lsb_git commit -q -m enforcement
   lsb_route "$SHELL_MEMBER"
   expect_route light light-eligible
+}
+
+@test "twin: an edit to each moved disposition library routes light once its roster glob is gone" {
+  local path
+  for path in .gaia/scripts/audit-pr-sections-lib.sh .gaia/scripts/filing-outcomes-lib.sh; do
+    lsb_init
+    grep -vF -- "- \"$path\"" "$LSB_ROOT/.gaia/audit-ci.yml" >"$LSB_ROOT/.gaia/audit-ci.yml.new"
+    cmp -s "$LSB_ROOT/.gaia/audit-ci.yml" "$LSB_ROOT/.gaia/audit-ci.yml.new" && return 1
+    mv "$LSB_ROOT/.gaia/audit-ci.yml.new" "$LSB_ROOT/.gaia/audit-ci.yml"
+    lsb_git add -A && lsb_git commit -q -m "drop the glob"
+    lsb_full_clearance "$SHELL_MEMBER"
+    printf '# touched\n' >>"$LSB_ROOT/$path"
+    lsb_git add -A && lsb_git commit -q -m enforcement
+    lsb_route "$SHELL_MEMBER"
+    expect_route light light-eligible || { printf 'not light: %s\n' "$path" >&2; return 1; }
+    rm -rf "$BATS_TEST_TMPDIR/lsb-repo" "$BATS_TEST_TMPDIR/lsb-origin.git"
+  done
 }
 
 @test "the live roster caps the shell member at 30 changed lines" {

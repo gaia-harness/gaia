@@ -2,9 +2,10 @@
 #
 # The one door every tech-debt filing passes through (the file-tech-debt
 # skill, .claude/skills/file-tech-debt/SKILL.md, tells every caller to run it).
-# It screens a finding for security class FIRST, probes the issue backend,
+# It screens a finding for security class FIRST, refuses a non-security site the
+# branch itself wrote, probes the issue backend,
 # re-reads repository visibility immediately before any write, and then either
-# files (dedup, labels, metadata check, create, verify-after-file) or writes a
+# files (dedup, labels, metadata check, create, verify-after-file), refuses, or writes a
 # redacted local record and reports only a count. No security-class finding's
 # detail reaches a public or internal GitHub surface from any caller.
 #
@@ -30,15 +31,23 @@
 #   PEM private-key header), 0 with `clear` otherwise.
 # file: appends exactly one JSON line to --outcome-file:
 #   {"key":{"member","finding_class","path","line"},"disposition":"file|divert",
-#    "outcome":"filed|matched|diverted|absent|transient|failed","issue":<int|null>,
-#    "record":"<path|null>"}
+#    "outcome":"filed|matched|diverted|refused-authored|absent|transient|failed",
+#    "issue":<int|null>,"record":"<path|null>"[,"authorship":"unchecked"]}
 #   and prints one stdout line: `filed <n>`, `matched <n>`,
-#   `diverted <count> <record-path>`, `absent`, `transient` or
-#   `failed <reason>`. `matched <n>` means dedup found issue <n> already
+#   `diverted <count> <record-path>`, `refused-authored`, `absent`, `transient` or
+#   `failed <reason>`. `refused-authored` means the finding's site is in the
+#   committed diff of the tree holding this script against its merge base with
+#   the default branch: no issue is created, any retry copy is removed, and
+#   stderr names the two ways forward (fix on the branch, or an accepted
+#   residual). Line 0 (a file-level finding) on a changed path counts as
+#   authored. The `authorship` note appears when that diff could not be
+#   computed and the filing went ahead. There is no flag or variable that
+#   bypasses it; the subject is the script's own tree, never `--repo`, a
+#   source branch or the main checkout. `matched <n>` means dedup found issue <n> already
 #   carrying the key and nothing was created; it is never a new filing. A
 #   `verify-after-file-*` reason means the create itself succeeded and the
 #   issue may exist; the caller reconciles by dedup before any retry. Exit 0
-#   for filed, matched, diverted, absent and transient; 1 for failed; 2 usage;
+#   for filed, matched, diverted, refused-authored, absent and transient; 1 for failed; 2 usage;
 #   3 unreadable input or a missing tool (jq, a sha256 tool).
 #   The outcome line keeps the key fields so the caller can reconcile it with
 #   its dispositions; it never carries a title, failure mode, fix or trigger.
@@ -83,7 +92,8 @@
 # never written to the body.
 # gaia:maintainer-only:end
 #
-# Order for file: screen, then (security-class only) a first visibility read,
+# Order for file: screen, then (non-security only) the authorship test, then
+# (security-class only) a first visibility read,
 # probe, dedup, a second visibility read as the last gh call before the first
 # write, label creation, create, verify-after-file. A security-class finding
 # files only when BOTH reads answer exactly PRIVATE and the backend is present;
@@ -99,7 +109,7 @@
 # Transient retention: a non-security finding whose outcome is `transient` is
 # copied byte for byte to <dirname of --outcome-file>/filing-retry/<sha256 of
 # the wrapped key>.json. A later run for the same key that ends filed, matched,
-# absent or failed removes it; another transient leaves it. Security-class findings
+# refused-authored, absent or failed removes it; another transient leaves it. Security-class findings
 # never reach that directory.
 # gaia:maintainer-only:start
 # On this repository the retained copy then gains `source_branch` (the resolved raw
@@ -144,6 +154,8 @@ command -v jq >/dev/null 2>&1 || die_input "jq is not installed; refusing to con
 script_directory="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)" || die_input "cannot resolve the script directory"
 # shellcheck source=/dev/null
 . "$script_directory/debt-list-lib.sh" || die_input "cannot read the list library"
+# shellcheck source=/dev/null
+. "$script_directory/branch-authorship-lib.sh" || die_input "cannot read the authorship library"
 
 work_directory=""
 # shellcheck disable=SC2329
@@ -405,6 +417,10 @@ wrapped_key=""
 key_hash=""
 retry_file=""
 security_trigger=""
+authorship_note=""
+# The tree holding this script is the subject, never $root (the main checkout),
+# and neither --repo nor a source branch moves it.
+authorship_subject="$(cd "$script_directory/../.." && pwd)"
 # gaia:maintainer-only:start
 source_branch_flag=""
 source_line=""
@@ -416,10 +432,11 @@ append_outcome() {
   mkdir -p "$(dirname "$outcome_file")" 2>/dev/null || die_input "cannot create the outcome directory"
   jq -n -c --arg member "$member" --arg finding_class "$finding_class_text" --arg path "$finding_path" \
     --argjson line "$finding_line" --arg disposition "$disposition" --arg outcome "$1" \
-    --argjson issue "$outcome_issue" --arg record "$outcome_record" \
+    --argjson issue "$outcome_issue" --arg record "$outcome_record" --arg authorship "$authorship_note" \
     '{key: {member: $member, finding_class: (if $finding_class == "" then null else $finding_class end), path: $path, line: $line},
       disposition: $disposition, outcome: $outcome, issue: $issue,
-      record: (if $record == "" then null else $record end)}' >>"$outcome_file" \
+      record: (if $record == "" then null else $record end)}
+      + (if $authorship == "" then {} else {authorship: $authorship} end)' >>"$outcome_file" \
     || die_input "cannot append to $outcome_file"
 }
 
@@ -439,6 +456,15 @@ finish_matched() {
   append_outcome matched "$1" ""
   drop_retry_file
   printf 'matched %s\n' "$1"
+  exit 0
+}
+
+finish_refused_authored() {
+  append_outcome refused-authored null ""
+  drop_retry_file
+  printf 'file-tech-debt: %s:%s is a site this branch wrote; no issue was created\n' "$finding_path" "$finding_line" >&2
+  printf '  fix on the branch, or record it as an accepted residual\n' >&2
+  printf 'refused-authored\n'
   exit 0
 }
 
@@ -585,6 +611,13 @@ cmd_file() {
   fi
 
   [ "$disposition" = divert ] && finish_diverted "$security_trigger"
+
+  if [ "$sensitive" -eq 0 ]; then
+    case "$(gaia_authorship_site_state "$authorship_subject" "$finding_path" "$finding_line")" in
+      authored) finish_refused_authored ;;
+      unknown) authorship_note=unchecked ;;
+    esac
+  fi
 
   if [ -z "$repo" ]; then
     gh_output="$(cd "$root" && gh repo view --json nameWithOwner --jq .nameWithOwner 2>"$work_directory/gh-error")"

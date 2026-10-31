@@ -126,7 +126,7 @@ else
   echo "tmp-notebook-repo.sh: skipped copy of .gaia/scripts/notebook: directory not found" >&2
 fi
 copy_scripts "${real_scripts}/spec" .gaia/scripts/spec
-for script_name in main-root-lib.sh branch-name-lib.sh audit-loop-state-lib.sh audit-key-lib.sh exclusive-lock-lib.sh branch-authorship-lib.sh plan-archive.sh; do
+for script_name in main-root-lib.sh branch-name-lib.sh audit-loop-state-lib.sh audit-key-lib.sh exclusive-lock-lib.sh branch-authorship-lib.sh filing-outcomes-lib.sh plan-archive.sh; do
   copy_one ".gaia/scripts/${script_name}"
 done
 copy_one .gaia/scripts/summary-verify.sh optional

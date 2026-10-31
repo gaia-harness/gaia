@@ -468,7 +468,7 @@ CASES
   run_file
   [ "$(wc -l <"$OUTCOMES" | tr -d ' ')" -eq 2 ]
   [ "$(jq -r '.outcome' "$OUTCOMES" | paste -sd, -)" = "absent,transient" ]
-  jq -e -s 'all(.[]; (keys | sort) == ["disposition","issue","key","outcome","record"]
+  jq -e -s 'all(.[]; (keys - ["authorship"] | sort) == ["disposition","issue","key","outcome","record"]
     and (.key | keys | sort) == ["finding_class","line","member","path"])' "$OUTCOMES" >/dev/null
 }
 
@@ -854,4 +854,189 @@ CASES
   run /bin/bash "$SCRIPT" file --finding "$FINDING" --outcome-file "$OUTCOMES" --repo owner/name
   [ "$status" -eq 0 ]
   [ "$output" = "filed 101" ]
+}
+
+# --- authorship refusal --------------------------------------------------------
+
+# build_fixture: a repository holding a copy of the script and the libraries it
+# sources, a default branch `main` and a `feature` branch that edits line 5 of
+# app/a.ts. The suite's other cases run against the real checkout, so these
+# cases need a tree whose committed diff they control. Leaves main checked out.
+build_fixture() {
+  FIX="$BATS_TEST_TMPDIR/fixture"
+  FIX_SCRIPT="$FIX/.gaia/scripts/file-tech-debt.sh"
+  mkdir -p "$FIX/app" "$FIX/.gaia/scripts"
+  git -C "$FIX" init -q -b main
+  git -C "$FIX" config user.name tester
+  git -C "$FIX" config user.email tester@example.com
+  git -C "$FIX" config commit.gpgsign false
+  seq 1 12 | sed 's/^/line /' >"$FIX/app/a.ts"
+  find "$REAL_ROOT/.gaia/scripts" -maxdepth 1 -type f -exec cp {} "$FIX/.gaia/scripts/" \;
+  git -C "$FIX" add -A
+  git -C "$FIX" commit -q -m base
+  git -C "$FIX" checkout -q -b feature
+  seq 1 12 | sed 's/^/line /;s/^line 5$/line 5 edited/' >"$FIX/app/a.ts"
+  git -C "$FIX" commit -q -am edit
+  git -C "$FIX" checkout -q main
+}
+
+run_fixture_file() {
+  run --separate-stderr bash "${FIX_SCRIPT_OVERRIDE:-$FIX_SCRIPT}" file --finding "$FINDING" --outcome-file "$OUTCOMES" --repo owner/name "$@"
+}
+
+assert_refused_authored() {
+  [ "$status" -eq 0 ]
+  [ "$output" = refused-authored ]
+  [[ "$stderr" == *"fix on the branch"* ]]
+  [[ "$stderr" == *"accepted residual"* ]]
+  [ "$(jq -r '.outcome' "$OUTCOMES")" = refused-authored ]
+  [ ! -s "$STUB/log" ]
+}
+
+@test "an authored line on a feature branch creates no issue and names both routes" {
+  build_fixture
+  git -C "$FIX" checkout -q feature
+  make_finding '.line = 5'
+  run_fixture_file
+  assert_refused_authored
+  [ "$(jq -r '.issue' "$OUTCOMES")" = null ]
+}
+
+@test "the subject is the tree holding the script: a linked worktree beside a main checkout on the default branch is refused" {
+  build_fixture
+  local linked="$BATS_TEST_TMPDIR/linked"
+  git -C "$FIX" worktree add -q "$linked" feature
+  make_finding '.line = 5'
+  cd "$linked" || return 1
+  FIX_SCRIPT="$linked/.gaia/scripts/file-tech-debt.sh"
+  run_fixture_file
+  assert_refused_authored
+  # The guard can fail: with the subject swapped for the main checkout's root
+  # the same finding files.
+  local mutant="$linked/.gaia/scripts/file-tech-debt-mutant.sh"
+  sed 's/gaia_authorship_site_state "\$authorship_subject"/gaia_authorship_site_state "$root"/' "$FIX_SCRIPT" >"$mutant"
+  cmp -s "$mutant" "$FIX_SCRIPT" && return 1
+  rm -f "$OUTCOMES" "$STUB/log"
+  FIX_SCRIPT_OVERRIDE="$mutant" run_fixture_file
+  [ "$output" = "filed 101" ]
+}
+
+@test "an unchanged line in an edited file files with no authorship note, and the line inside the hunk is refused" {
+  build_fixture
+  git -C "$FIX" checkout -q feature
+  make_finding '.line = 10'
+  run_fixture_file
+  [ "$output" = "filed 101" ]
+  [ "$(jq -r 'has("authorship")' "$OUTCOMES")" = false ]
+  reset_state
+  make_finding '.line = 5'
+  run_fixture_file
+  assert_refused_authored
+}
+
+@test "the outcome of a filing whose authorship was computed has exactly the base key set" {
+  build_fixture
+  git -C "$FIX" checkout -q feature
+  make_finding '.line = 10'
+  run_fixture_file
+  jq -e -s 'all(.[]; (keys | sort) == ["disposition","issue","key","outcome","record"])' "$OUTCOMES" >/dev/null
+}
+
+@test "any line on the default branch files" {
+  build_fixture
+  make_finding '.line = 5'
+  run_fixture_file
+  [ "$output" = "filed 101" ]
+  [ "$(jq -r 'has("authorship")' "$OUTCOMES")" = false ]
+}
+
+@test "an uncommitted edit on an otherwise unchanged line files" {
+  build_fixture
+  git -C "$FIX" checkout -q feature
+  sed 's/^line 10$/line 10 dirty/' "$FIX/app/a.ts" >"$FIX/app/a.ts.next"
+  mv "$FIX/app/a.ts.next" "$FIX/app/a.ts"
+  make_finding '.line = 10'
+  run_fixture_file
+  [ "$output" = "filed 101" ]
+}
+
+@test "a file-level finding on a changed path is refused" {
+  build_fixture
+  git -C "$FIX" checkout -q feature
+  make_finding '.line = 0'
+  run_fixture_file
+  assert_refused_authored
+}
+
+@test "a finding naming another source branch on an authored site is still refused" {
+  build_fixture
+  git -C "$FIX" checkout -q feature
+  make_finding '.line = 5 | .source_branch = "some/other-branch"'
+  run_fixture_file
+  assert_refused_authored
+}
+
+@test "a security-class finding on an authored line diverts on every non-private read and files on PRIVATE, never testing authorship" {
+  build_fixture
+  git -C "$FIX" checkout -q feature
+  local visibility
+  for visibility in PUBLIC INTERNAL EMPTY FAIL; do
+    reset_state
+    printf '%s\n' "$visibility" >"$STUB/visibility"
+    make_finding '.line = 5 | .security = true'
+    run_fixture_file
+    [ "$status" -eq 0 ] || { echo "$visibility: status $status"; return 1; }
+    [[ "$output" == "diverted 1 "* ]] || { echo "$visibility: $output"; return 1; }
+    [ "$(jq -r '.outcome' "$OUTCOMES")" = diverted ] || return 1
+    has_write_call && { echo "$visibility: gh write"; return 1; }
+    [[ "$output$stderr" != *SENTINEL* ]] || return 1
+  done
+  reset_state
+  printf 'PRIVATE\n' >"$STUB/visibility"
+  make_finding '.line = 5 | .security = true'
+  run_fixture_file
+  [ "$output" = "filed 101" ]
+}
+
+@test "a site whose authorship cannot be computed files and the outcome says it was unchecked" {
+  build_fixture
+  git -C "$FIX" checkout -q --detach feature
+  git -C "$FIX" branch -q -D main
+  make_finding '.line = 5'
+  run_fixture_file
+  [ "$output" = "filed 101" ]
+  [ "$(jq -r '.authorship' "$OUTCOMES")" = unchecked ]
+}
+
+@test "a retained retry copy for a site that has since become authored is refused and removed" {
+  build_fixture
+  git -C "$FIX" checkout -q feature
+  make_finding '.line = 5'
+  local key_hash
+  key_hash="$(printf '%s' '<!-- gaia-debt-key: v1 class=holistic/swallowed-error path=app/a.ts line=5 -->' | shasum -a 256 | cut -d' ' -f1)"
+  mkdir -p "$BATS_TEST_TMPDIR/run/filing-retry"
+  cp "$FINDING" "$BATS_TEST_TMPDIR/run/filing-retry/$key_hash.json"
+  [ "$(retry_count)" -eq 1 ]
+  run_fixture_file
+  assert_refused_authored
+  [ "$(retry_count)" -eq 0 ]
+}
+
+@test "no flag and no environment variable bypasses the refusal" {
+  build_fixture
+  git -C "$FIX" checkout -q feature
+  make_finding '.line = 5'
+  run_fixture_file --allow-authored
+  [ "$status" -eq 2 ]
+  [ ! -e "$OUTCOMES" ]
+  GAIA_ALLOW_AUTHORED=1 GAIA_AUTHORSHIP=off GAIA_AUTHORSHIP_BYPASS=1 run_fixture_file
+  assert_refused_authored
+}
+
+@test "the script's line count equals its recorded ceiling and the fixture carries the authorship library" {
+  build_fixture
+  [ -f "$FIX/.gaia/scripts/branch-authorship-lib.sh" ]
+  local ceiling
+  ceiling="$(jq -r '.. | objects | select(has(".gaia/scripts/file-tech-debt.sh")) | .[".gaia/scripts/file-tech-debt.sh"]' "$REAL_ROOT/.claude/maintainers/line-limit-ceilings.json")"
+  [ "$(wc -l <"$SCRIPT" | tr -d ' ')" = "$ceiling" ]
 }

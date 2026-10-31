@@ -42,6 +42,8 @@ _gaia_loop_library_directory="${BASH_SOURCE[0]%/*}"
 . "$_gaia_loop_library_directory/exclusive-lock-lib.sh"
 # shellcheck source=/dev/null
 . "$_gaia_loop_library_directory/branch-authorship-lib.sh"
+# shellcheck source=/dev/null
+. "$_gaia_loop_library_directory/filing-outcomes-lib.sh"
 unset _gaia_loop_library_directory
 
 # Git with the repository-discovery overrides stripped, so an ambient GIT_DIR
@@ -467,15 +469,18 @@ gaia_loop_next_closing() {
 
 # _gaia_loop_disposed <main-root> <B> <r>: identity keys disposed non-fix in
 # any dispositions-<k>.json, k < r. An unreadable file excludes nothing, so a
-# lost file counts more findings, never fewer.
+# lost file counts more findings, never fewer. A key the filer refused as
+# branch-authored is not disposed by its file or divert entry: it counts again.
 _gaia_loop_disposed() {
-  local run k round_disposed accumulated="[]"
+  local run k round_disposed accumulated="[]" refused
   run="$(gaia_loop_run_directory "$1" "$2")"
+  refused="$(gaia_filing_refused_keys "$run")"
   k=1
   while [ "$k" -lt "$3" ]; do
     if [ -f "$run/dispositions-$k.json" ]; then
-      round_disposed="$(jq -c '[.entries[] | select(.disposition == "accept-residual" or .disposition == "waive-out-of-scope" or .disposition == "file" or .disposition == "divert")
-        | [.member, .finding_class, .path, .line]]' <"$run/dispositions-$k.json" 2>/dev/null)" || round_disposed=""
+      round_disposed="$(jq -c --argjson refused "$refused" '[.entries[] | select(.disposition == "accept-residual" or .disposition == "waive-out-of-scope" or .disposition == "file" or .disposition == "divert")
+        | [.member, .finding_class, .path, .line] as $key
+        | select(((.disposition == "file" or .disposition == "divert") and ($refused | any(. == $key))) | not) | $key]' <"$run/dispositions-$k.json" 2>/dev/null)" || round_disposed=""
       [ -n "$round_disposed" ] && accumulated="$(jq -n -c --argjson accumulated "$accumulated" --argjson round_disposed "$round_disposed" '$accumulated + $round_disposed')"
     fi
     k=$((k + 1))
