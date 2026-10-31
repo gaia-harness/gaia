@@ -421,7 +421,7 @@ Fall through to Phase 5.
 
 ## Phase 5: Owed setup features (always evaluated)
 
-Read `.claude/skills/gaia/references/setup/standalone-features.md` now, the whole file, and run it. When it prints `OWED_FEATURE migrate-2-machine`, Read `.claude/skills/gaia/references/setup/migrate-2-machine.md` now, the whole file, as the reference that line names. When it prints `OWED_FEATURE required-ci-checks`, Read `.claude/skills/gaia/references/setup/required-ci-checks.md` now, the whole file, the same way. Fall through to Phase 5.5.
+Read `.claude/skills/gaia/references/setup/standalone-features.md` now, the whole file, and run it. When it prints `OWED_FEATURE migrate-2-machine`, Read `.claude/skills/gaia/references/setup/migrate-2-machine.md` now, the whole file, as the reference that line names. When it prints `OWED_FEATURE required-ci-checks`, Read `.claude/skills/gaia/references/setup/required-ci-checks.md` now, the whole file, the same way. When it prints `OWED_FEATURE auto-merge`, Read `.claude/skills/gaia/references/setup/auto-merge.md` now, the whole file, the same way. Fall through to Phase 5.5.
 
 ## Phase 5.5: Land setup decisions (when project decisions may be recorded)
 

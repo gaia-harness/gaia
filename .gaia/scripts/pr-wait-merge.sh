@@ -367,7 +367,10 @@ fi
 printf '%s\n' "$verdict"
 
 case "$verdict" in
-  MERGED | GREEN)
+  MERGED)
+    exit 0
+    ;;
+  GREEN)
     exit 0
     ;;
   CLOSED)

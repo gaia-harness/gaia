@@ -195,7 +195,7 @@ Use the shipped wait, which exits on every state that means the merge will never
 
     bash .gaia/scripts/pr-wait-merge.sh --pr <N>
 
-It prints one verdict token and exits 0 MERGED / 3 CONFLICTING / 4 CHECK_FAILED / 5 TIMEOUT / 6 CLOSED, with exit 2 a refusal rather than a verdict. The script's own header is the authority on that set; run it with `--help`, and branch on it rather than on a list copied from here. Pass `--attempts` for a longer bound (releases and full CI runs use 20), `--interval` to change the 30-second spacing, and `--repo OWNER/REPO` to wait on another repository's pull request. On a repository with auto-merge off, add `--until-green`, which returns `GREEN` once every required check passed, then run `gh pr merge` yourself. On CONFLICTING, repair per `wiki/concepts/PR Merge Workflow.md`, "### Conflict found mid-wait", then run it again.
+It prints one verdict token and exits 0 MERGED (or GREEN with --until-green) / 3 CONFLICTING / 4 CHECK_FAILED / 5 TIMEOUT / 6 CLOSED, with exit 2 a refusal rather than a verdict. The script's own header is the authority on that set; run it with `--help`, and branch on it rather than on a list copied from here. Pass `--attempts` for a longer bound (releases and full CI runs use 20), `--interval` to change the 30-second spacing, and `--repo OWNER/REPO` to wait on another repository's pull request. On a repository with auto-merge off, add `--until-green`, which returns `GREEN` once every required check passed, then run `gh pr merge` yourself. On CONFLICTING, repair per `wiki/concepts/PR Merge Workflow.md`, "### Conflict found mid-wait", then run it again.
 
 If you genuinely need your own loop, read `mergeable` in it and this guard stands down.
 
