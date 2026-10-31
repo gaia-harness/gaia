@@ -4,6 +4,8 @@ description: Plans a complex feature with GAIA's task-orchestration pattern, str
 argument-hint: "[auto] [feature description]"
 ---
 
+**Ask first when Claude picked this.** When Claude started this command from a request that asked for neither a spec nor a plan, ask the question in `.claude/skills/gaia/references/work-lifecycle.md` (`## Spec, plan or proceed`) with this command recommended, before anything below: on the recommended answer continue here, and on `Just do it` leave this command and go on at that page's step 1. No question for a typed or pasted command, an answer to that question, an `auto` argument, a SPEC id, an unattended run, or a workflow instruction that names this command, such as the plan `/gaia-spec` chains.
+
 Run the GAIA **plan** workflow with these arguments: `$ARGUMENTS`
 
 Read `.claude/skills/gaia/references/plan.md` from the project root and follow it exactly. Treat the arguments above as the reference's `$ARGUMENTS`.

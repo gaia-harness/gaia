@@ -4,6 +4,8 @@ description: Authors an immutable SPEC artifact through Socratic discovery, then
 argument-hint: "[auto] [description] | reopen SPEC-NNN"
 ---
 
+**Ask first when Claude picked this.** When Claude started this command from a request that asked for neither a spec nor a plan, ask the question in `.claude/skills/gaia/references/work-lifecycle.md` (`## Spec, plan or proceed`) with this command recommended, before anything below: on the recommended answer continue here, and on `Just do it` leave this command and go on at that page's step 1. No question for a typed or pasted command, an answer to that question, an `auto` or `reopen` argument, an unattended run, or a workflow instruction that names this command.
+
 Run the GAIA **spec** workflow with these arguments: `$ARGUMENTS`
 
 When the first word of the arguments is `reopen`, skip `spec.md`: read `.claude/skills/gaia/references/spec/uat-divergence.md` and follow its `## Reopen` for the SPEC id the next word names.
