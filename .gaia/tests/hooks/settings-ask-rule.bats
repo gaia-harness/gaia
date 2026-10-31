@@ -31,7 +31,10 @@ shadowing_allow_entries() {
      "Edit(/.claude/**)", "Write(/.claude/**)", "Edit(.claude/*)",
      "Write(.claude/*)", "Edit(.claude/settings.json)",
      "Write(.claude/settings.json)", "Edit(**/.claude/settings.json)",
-     "Write(**/.claude/settings.json)"] as $bad
+     "Write(**/.claude/settings.json)", "Edit(../.claude/**)",
+     "Write(../.claude/**)", "Edit(../**)", "Write(../**)",
+     "Edit(../.claude/settings.json)",
+     "Write(../.claude/settings.json)"] as $bad
     | (.permissions.allow // [])[] | select(. as $e | $bad | index($e))' "$1")
   if [ -n "$offenders" ]; then
     printf '%s\n' "$offenders"
@@ -40,8 +43,23 @@ shadowing_allow_entries() {
   return 0
 }
 
+# root_anchored_rule_present FILE RULE: succeeds when permissions.ask carries
+# RULE, the spelling that reaches the root settings file from FILE's package.
+root_anchored_rule_present() {
+  jq -e --arg rule "$2" '.permissions.ask | index($rule)' "$1" >/dev/null
+}
+
 @test "root permissions.ask carries Edit(**/.claude/settings.json)" {
   ask_rule_present "$SETTINGS"
+}
+
+@test "root permissions.ask carries the root-anchored rule generation reanchors per package" {
+  root_anchored_rule_present "$SETTINGS" "Edit(.claude/settings.json)"
+}
+
+@test "the frontend overlay adds nothing: the root settings own the ask rules" {
+  run jq -e '. == {}' "$REPO_ROOT/frontend/.claude/settings.overlay.json"
+  [ "$status" -eq 0 ]
 }
 
 @test "no allow entry shadows the ask rule in the root or generated settings" {
@@ -72,7 +90,21 @@ shadowing_allow_entries() {
 
 @test "the generated frontend settings carry the ask rule and the registration" {
   ask_rule_present "$GENERATED"
+  root_anchored_rule_present "$GENERATED" "Edit(../.claude/settings.json)"
   hook_registered "$GENERATED" '.hooks.PreToolUse[] | select(.matcher == "Bash|Monitor")' block-settings-write.sh
+}
+
+@test "the root-file check fails when the generated rule is removed" {
+  jq '.permissions.ask -= ["Edit(../.claude/settings.json)"]' "$GENERATED" >"$BATS_TEST_TMPDIR/no-root-rule.json"
+  run root_anchored_rule_present "$BATS_TEST_TMPDIR/no-root-rule.json" "Edit(../.claude/settings.json)"
+  [ "$status" -ne 0 ]
+}
+
+@test "the shadow check fails on a package-relative parent allow entry" {
+  jq '.permissions.allow += ["Edit(../**)"]' "$GENERATED" >"$BATS_TEST_TMPDIR/shadowed-parent.json"
+  run shadowing_allow_entries "$BATS_TEST_TMPDIR/shadowed-parent.json"
+  [ "$status" -ne 0 ]
+  grep -qF -- "Edit(../**)" <<<"$output"
 }
 
 # bats test_tags=whole-tree

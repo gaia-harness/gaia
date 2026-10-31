@@ -35,54 +35,82 @@ gaia_write_target_strip_quotes() {
 }
 
 # Rejoin tokens a quoted run split on whitespace, so a quoted path with a space
-# reaches the predicate whole. Result lands in GAIA_WRITE_TARGET_JOINED. An
-# unterminated quote joins to the end of the line.
+# reaches the predicate whole. Result lands in GAIA_WRITE_TARGET_JOINED.
+#
+# Each line is read alone, so a quote that opens and does not close on the line
+# proves nothing: it may be the closing quote of a multi-line argument or an
+# apostrophe in a word. Joining to the end of the line would swallow a redirect
+# or an mv behind it, which fails open, so that word stands alone and the scan
+# restarts at the next one.
 gaia_write_target_join_quoted() {
-  local current="" quote="" word position character
+  local words=("$@") total=$# start=0 stop current quote word position character
   GAIA_WRITE_TARGET_JOINED=()
-  for word in "$@"; do
-    if [ -n "$quote" ]; then
-      current="$current $word"
-    else
-      current="$word"
-    fi
-    position=0
-    while [ "$position" -lt "${#word}" ]; do
-      character="${word:$position:1}"
-      if [ -z "$quote" ]; then
-        case "$character" in
-          \" | \') quote="$character" ;;
-        esac
-      elif [ "$character" = "$quote" ]; then
-        quote=""
-      fi
-      position=$((position + 1))
+  while [ "$start" -lt "$total" ]; do
+    current=""
+    quote=""
+    stop=$start
+    while [ "$stop" -lt "$total" ]; do
+      word="${words[$stop]}"
+      current="${current:+$current }$word"
+      position=0
+      while [ "$position" -lt "${#word}" ]; do
+        character="${word:$position:1}"
+        if [ -z "$quote" ]; then
+          case "$character" in
+            \" | \') quote="$character" ;;
+          esac
+        elif [ "$character" = "$quote" ]; then
+          quote=""
+        fi
+        position=$((position + 1))
+      done
+      [ -z "$quote" ] && break
+      stop=$((stop + 1))
     done
-    if [ -z "$quote" ]; then
+    if [ -n "$quote" ]; then
+      GAIA_WRITE_TARGET_JOINED+=("${words[$start]}")
+      start=$((start + 1))
+    else
       GAIA_WRITE_TARGET_JOINED+=("$current")
-      current=""
+      start=$((stop + 1))
     fi
   done
-  if [ -n "$current" ]; then
-    GAIA_WRITE_TARGET_JOINED+=("$current")
-  fi
+}
+
+# Append one logical line's tokens to the caller's tokens array, then the ';'
+# that ends the statement for the walk.
+gaia_write_target_tokenize_line() {
+  local line_tokens
+  read -r -a line_tokens <<<"$1"
+  gaia_write_target_join_quoted ${line_tokens[@]+"${line_tokens[@]}"}
+  tokens+=(${GAIA_WRITE_TARGET_JOINED[@]+"${GAIA_WRITE_TARGET_JOINED[@]}"} ';')
 }
 
 # Return 0 when a recognised write shape in the command line names a target the
 # predicate function accepts (called with the raw token); return 1 otherwise.
 gaia_bash_command_writes_target() {
   local command_line="$1" predicate="$2"
-  local tokens=() line line_tokens token_count i j token next target
+  local tokens=() line continued="" token_count i j token next target
   local following_token destination has_i found
 
   # Tokenize every line, not just the first: a write vector on line 2+ of a
   # multi-line command (heredoc body, &&-joined block, newline-separated
-  # statements) must still be inspected.
+  # statements) must still be inspected. A trailing backslash continues the
+  # statement, so its line joins the next one before the ';' can end a walk
+  # short of a destination on the continuation.
   while IFS= read -r line || [ -n "$line" ]; do
-    read -r -a line_tokens <<<"$line"
-    gaia_write_target_join_quoted ${line_tokens[@]+"${line_tokens[@]}"}
-    tokens+=(${GAIA_WRITE_TARGET_JOINED[@]+"${GAIA_WRITE_TARGET_JOINED[@]}"} ';')
+    line="$continued$line"
+    continued=""
+    case "$line" in
+      *\\\\) ;;
+      *\\)
+        continued="${line%\\} "
+        continue
+        ;;
+    esac
+    gaia_write_target_tokenize_line "$line"
   done <<<"$command_line"
+  [ -z "$continued" ] || gaia_write_target_tokenize_line "$continued"
   token_count=${#tokens[@]}
 
   i=0

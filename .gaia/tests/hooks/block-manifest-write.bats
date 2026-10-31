@@ -150,6 +150,21 @@ run_hook_bash() {
   assert_denied_by_json
 }
 
+@test "a redirect after the closing quote of a multi-line argument is denied" {
+  run_hook_bash $'echo \'line one\nline two\' > .gaia/manifest.json'
+  assert_denied_by_json
+}
+
+@test "an mv after a multi-line jq program is denied" {
+  run_hook_bash $'jq \'.a = 1\n| .b = 2\' x.json > /tmp/tmp.json && mv /tmp/tmp.json .gaia/manifest.json'
+  assert_denied_by_json
+}
+
+@test "a cp destination on a backslash continuation line is denied" {
+  run_hook_bash $'cp /tmp/x.json \\\n  .gaia/manifest.json'
+  assert_denied_by_json
+}
+
 @test "a blank line between statements does not break detection of a later write" {
   run_hook_bash $'echo prep\n\nprintf x > .gaia/manifest.json'
   assert_denied_by_json

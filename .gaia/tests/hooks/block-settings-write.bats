@@ -43,6 +43,15 @@ setup() {
     "cp /tmp/src.json PATH 2> /dev/null"
     "mv /tmp/src.json PATH >/dev/null 2>&1"
     "jq '.a = 1' PATH > /tmp/tmp.json && mv /tmp/tmp.json PATH"
+    $'echo \'line one\nline two\' > PATH'
+    $'jq \'.a = 1\n| .b = 2\' x.json > /tmp/tmp.json && mv /tmp/tmp.json PATH'
+    $'jq \'.a = 1\n| .b = 2\' PATH > /tmp/tmp.json\nmv /tmp/tmp.json PATH'
+    "echo it's > PATH"
+    $'cp /tmp/src.json \\\n  PATH'
+    $'mv /tmp/src.json \\\n  PATH'
+    $'sed -i \'s/a/b/\' \\\n  PATH'
+    $'echo x | tee \\\n  PATH'
+    $'echo x > \\\n  PATH'
   )
 }
 
@@ -125,7 +134,9 @@ assert_settings_ask() {
     "echo x > frontend/package.json" \
     "echo x > .claude/settings.json.bak" \
     "sed -i s/a/b/ .claude/settings.local.json" \
-    "cp a .claude/settings.local.json"; do
+    "cp a .claude/settings.local.json" \
+    $'cp .claude/settings.json \\\n  /tmp/x' \
+    $'jq \'.a\n| .b\' .claude/settings.json > /tmp/x'; do
     run_hook_command Bash "$command_line"
     if [ "$status" -ne 0 ] || [ -n "$output" ]; then
       printf 'not silent: %s\n' "$command_line" >&2
