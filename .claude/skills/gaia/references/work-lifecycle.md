@@ -2,7 +2,7 @@
 
 The one statement of how committed work moves from its first edit to a cleaned-up checkout: claim, name, isolate, enter the worktree, commit and open the draft PR, audit, merge, clean up. A session working outside any GAIA skill follows it in full, and every skill that drives its own PR points here for the steps it shares.
 
-Contents: When this applies; 1. Claim; 2. Name; 3. Isolate; 4. Enter the worktree; 5. Commit and open the draft PR; 6. Audit; 7. Merge (when asked); 8. Cleanup (worktree entered by name in this session, worktree entered by path or in an earlier session, feature branch, sub-agent context, leftover-file cleanup after an update merge); Releasing the claim on an unmerged ending; Releasing an empty worktree; The git worktree add backstop.
+Contents: When this applies; Spec, plan or proceed; 1. Claim; 2. Name; 3. Isolate; 4. Enter the worktree; 5. Commit and open the draft PR; 6. Audit; 7. Merge (when asked); 8. Cleanup (worktree entered by name in this session, worktree entered by path or in an earlier session, feature branch, sub-agent context, leftover-file cleanup after an update merge); Releasing the claim on an unmerged ending; Releasing an empty worktree; The git worktree add backstop.
 
 ## When this applies
 
@@ -26,6 +26,18 @@ git status --short
 ```
 
 A new file git does not yet track is not in that diff: copy it into the worktree at the same relative path. Then tell the user the main checkout still holds the original edits, and leave them there: never discard, stash or reset the main checkout's copies. When `git apply` fails, report the failure and stop.
+
+## Spec, plan or proceed
+
+Before step 1, classify the task from what the session knows of the code so far:
+
+- **Recommend `/gaia-spec`:** a new feature or product that adds user-visible rules, data or flows, even when a long request answers every question. A spec turns a brief's rules into checked acceptance tests. Open questions about the behavior are a stronger signal for the same answer.
+- **Recommend `/gaia-plan`:** clear internal or mechanical work worth planning and auditing before implementation: several phases, parallel streams, a rollout across many files or targets (language, tenant, service), even when a runbook covers each pass, or a migration of stored data, however small the code change. It may still land in one PR.
+- **Proceed silently:** a bug fix, or a small contained change, such as new UI over what the app already does.
+
+Ask with `AskUserQuestion`: the recommended command first, `Just do it` second, and a one-line reason in the question, such as `This splits into parallel work worth auditing before it starts. Plan it with /gaia-plan?`. On the recommended answer, run that command with the request as its description, in place of the steps below. On `Just do it`, go on to step 1.
+
+Ask once per task; `Just do it` holds for the rest of it. Skip the check inside any GAIA skill, in an unattended run, when the work's branch already exists, and when the user has said how to proceed, such as "just fix it". In doubt, stay silent: a missed suggestion is cheap, a nagging prompt is not.
 
 ## 1. Claim
 
