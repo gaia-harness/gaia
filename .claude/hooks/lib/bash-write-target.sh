@@ -105,7 +105,8 @@ gaia_write_target_ends_statement() {
 }
 
 # Append one logical line's tokens to the caller's tokens array, then the ';'
-# that ends the statement for the walk. A separator glued to the end of a word
+# that ends the statement for the walk (none while a quote is still open, so a
+# multi-line quoted argument stays one statement). A separator glued to the end of a word
 # (target; target&& target| target) ) splits off as a ';', so the path reaches
 # the predicate bare and a walk stops where the statement does. A word that is
 # only separators stays whole, and >& is a redirect, not a separator.
@@ -133,7 +134,7 @@ gaia_write_target_tokenize_line() {
       tokens+=("$bare" ';')
     fi
   done
-  tokens+=(';')
+  [ -n "$GAIA_WRITE_TARGET_QUOTE" ] || tokens+=(';')
 }
 
 # Tokenize every line, not just the first: a write vector on line 2+ of a

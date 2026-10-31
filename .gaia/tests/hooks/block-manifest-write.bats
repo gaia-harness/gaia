@@ -209,6 +209,16 @@ run_hook_bash() {
   assert_denied_by_json
 }
 
+@test "a sed -i script spanning lines before the manifest path is denied" {
+  run_hook_bash $'sed -i \'s/a/b/\n s/c/d/\' .gaia/manifest.json'
+  assert_denied_by_json
+}
+
+@test "a cp source spanning lines before the manifest destination is denied" {
+  run_hook_bash $'cp \'/tmp/a\n b.json\' .gaia/manifest.json'
+  assert_denied_by_json
+}
+
 @test "a target closing a subshell is denied" {
   run_hook_bash '(echo x > .gaia/manifest.json)'
   assert_denied_by_json

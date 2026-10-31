@@ -73,6 +73,8 @@ setup() {
     "cp /tmp/src.json PATH & wait"
     "cp /tmp/src.json PATH # restore"
     "echo x >PATH"
+    $'sed -i \'s/a/b/\n s/c/d/\' PATH'
+    $'cp \'/tmp/a\n b.json\' PATH'
     "echo x >>PATH"
   )
 }
