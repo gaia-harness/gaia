@@ -54,8 +54,6 @@ and the offer-time security and spec reads `debt.md` defines in `### Offer-time 
      no argument had been passed. Read
      `.claude/skills/gaia/references/debt/recommend.md` now and follow its
      `## Recommend and present`.
-     The fall-through shows the budget batch because it is the no-argument
-     offer; this file makes no offer-mode call of its own.
   - The built-in **Other** entry still lets the human type any open
     `tech-debt` issue number to fix that one alone, handled as
     `### Offer-time reads` in `debt.md` states.

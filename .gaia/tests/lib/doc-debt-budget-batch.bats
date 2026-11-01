@@ -210,10 +210,6 @@ last_item_is_budget_batch() {
   check_pin debt/recommend.md "$OFFER_HEADING" 'When the full backlog prints' 'the annotation never enters a pull request body or a commit'
 }
 
-@test "a picked budget batch continues at the claim as a non-named selection" {
-  check_pin debt/recommend.md "$OFFER_HEADING" 'A picked budget batch' 'continues at `## Claim the fix unit` in `debt.md` as a non-named selection'
-}
-
 # --- the budget batch rules region holds no weight or limit -----------------
 
 # budget_region <dir>: from the `Budget batch rules:` anchor line to the
@@ -385,7 +381,7 @@ OFFER_COMMAND='bash .gaia/scripts/debt-batch-budget.sh --offer --backlog "<offer
 }
 
 @test "the staleness probe excludes a gone issue from the budget batch only" {
-  check_pin debt.md '### Staleness probe' 'This probe is **advisory' 'Its one exclusion is from the budget batch'
+  check_pin debt.md '### Staleness probe' 'This probe is **advisory' 'Only the budget batch leaves out a `gone` issue'
 }
 
 @test "the staleness probe still offers a gone issue one at a time or in a cluster" {
@@ -407,7 +403,7 @@ OFFER_COMMAND='bash .gaia/scripts/debt-batch-budget.sh --offer --backlog "<offer
 }
 
 @test "a claim-time drop or a screen peel may split a cluster" {
-  check_pin debt.md "$CLAIM_HEADING" 'A budget batch is a non-named selection' 'may split a cluster exactly as it does today'
+  check_pin debt.md "$CLAIM_HEADING" 'A budget batch is a non-named selection' 'leaves its survivors as one batch part'
 }
 
 @test "a batch part is one cluster or one singleton inside the selection" {
@@ -446,8 +442,8 @@ OFFER_COMMAND='bash .gaia/scripts/debt-batch-budget.sh --offer --backlog "<offer
   check_pin debt.md "$RESOLVE_HEADING" 'Run the Quality Gate' 'A cluster is one batch part and one commit'
 }
 
-@test "implementation stages part by part and records each part's staged patch" {
-  check_pin debt.md "$RESOLVE_HEADING" 'Implement all fixes in the unit' "recording each part's staged patch"
+@test "implementation stages part by part and records each part's changed paths" {
+  check_pin debt.md "$RESOLVE_HEADING" 'Implement all fixes in the unit' "recording each part's changed paths"
 }
 
 @test "two batch parts that touch one file merge into one commit that reverts together" {
@@ -485,15 +481,11 @@ OFFER_COMMAND='bash .gaia/scripts/debt-batch-budget.sh --offer --backlog "<offer
 }
 
 @test "a revert that conflicts is resolved by hand" {
-  check_pin debt.md "$DROP_HEADING" 'A part'"'"'s commit normally reverts alone' 'the revert can conflict, and the conflict is resolved by hand'
-}
-
-@test "a revert commit runs the Quality Gate and needs a fresh verification pass" {
-  check_pin debt.md "$DROP_HEADING" 'The revert is a commit like any other' 'it runs the Quality Gate and needs a fresh verification pass'
+  check_pin debt.md "$DROP_HEADING" 'A part'"'"'s commit normally reverts alone' 'the revert can conflict; resolve it by hand'
 }
 
 @test "a revert uses a Conventional Commits revert subject naming what was dropped" {
-  check_pin debt.md "$DROP_HEADING" 'The revert is a commit like any other' '`revert:` subject that names what was dropped'
+  check_pin debt.md "$DROP_HEADING" "The revert's subject" '`revert:` subject that names what was dropped'
 }
 
 @test "a member found security-class after its commit needs a history rewrite with a count-only pointer" {
@@ -501,7 +493,7 @@ OFFER_COMMAND='bash .gaia/scripts/debt-batch-budget.sh --offer --backlog "<offer
 }
 
 @test "every part dropped strips every claim and closes the draft pull request unmerged" {
-  check_pin debt.md "$DROP_HEADING" '**Every part dropped.**' 'strip every claim, close an open draft pull request unmerged, report it'
+  check_pin debt.md "$DROP_HEADING" '**Every part dropped.**' 'apply the corrections below to every member, close an open draft pull request unmerged, report it'
 }
 
 @test "every part dropped ends the run through the cost record" {

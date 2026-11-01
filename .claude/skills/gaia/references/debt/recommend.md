@@ -45,6 +45,4 @@ The budget batch is the scorer's `members`, shown only when `members` is not emp
 
 When the full backlog prints, annotate each budget batch member (for example `[budget batch]`). Skip reasons are never printed, and the annotation never enters a pull request body or a commit.
 
-A picked budget batch continues at `## Claim the fix unit` in `debt.md` as a non-named selection.
-
 Handle the pick, and anything typed into **Other**, as `### Offer-time reads` in `debt.md` states, then continue at `## Claim the fix unit` in `debt.md`.
