@@ -9,7 +9,8 @@
 # directory and the rule silently never loads. The suite parses the
 # frontmatter of every rule, rejects the repo-root form, and requires each glob
 # to match at least one tracked file under frontend/ (a glob that matches
-# nothing is a rule that never fires).
+# nothing is a rule that never fires), except the renderer-filled folder that
+# renderer_filled_glob names.
 #
 # Assertion style follows .claude/rules/bats-assertions.md.
 
@@ -53,6 +54,14 @@ glob_matches_tracked_file() {
   [ "$first" -gt 0 ]
 }
 
+# Globs over a folder the UAT renderer fills, empty in this repo by design:
+# app/route-tests/ holds only rendered route tests, and shipping a placeholder
+# there would hand adopters an empty fixture. Exact match, so a misspelled glob
+# over the same folder still fails.
+renderer_filled_glob() {
+  [ "$1" = 'app/route-tests/**/*' ]
+}
+
 # Check every rule in a directory. Prints one line per violation; exits 1 when
 # there is any. Rules with no `paths:` key are skipped (always loaded).
 check_rules_dir() {
@@ -63,7 +72,7 @@ check_rules_dir() {
       if problem="$(glob_form_problem "$glob")"; then
         echo "$(basename "$rule"): '$glob': $problem"
         found=1
-      elif ! glob_matches_tracked_file "$glob"; then
+      elif ! renderer_filled_glob "$glob" && ! glob_matches_tracked_file "$glob"; then
         echo "$(basename "$rule"): '$glob': matches no tracked file under frontend/"
         found=1
       fi
@@ -136,4 +145,21 @@ EOF
   run check_rules_dir "$copy"
   [ "$status" -ne 0 ] || return 1
   grep -qF -- "matches no tracked file" <<<"$output"
+}
+
+# bats test_tags=whole-tree
+@test "the renderer-filled exemption is exact: a misspelled route-tests glob still fails" {
+  local copy="$BATS_TEST_TMPDIR/rules-near-miss"
+  mkdir -p "$copy"
+  cat >"$copy/near.md" <<'EOF'
+---
+paths:
+  - 'app/route-test/**/*'
+---
+
+# Near miss
+EOF
+  run check_rules_dir "$copy"
+  [ "$status" -ne 0 ] || return 1
+  grep -qF -- "near.md: 'app/route-test/**/*': matches no tracked file" <<<"$output"
 }

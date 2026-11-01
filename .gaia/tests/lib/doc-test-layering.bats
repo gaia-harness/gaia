@@ -129,6 +129,7 @@ check_wikilinks() {
       target="${target%%|*}"
       target="${target%%#*}"
       [ -n "$target" ] || continue
+      # gaia-lint-ignore whole-tree-mark-guard: every test that reaches this find carries the per-test mark
       find "$REPO_ROOT/wiki" -name "$target.md" | grep -q . || {
         echo "broken: $target in $file"
         return 1
@@ -262,12 +263,14 @@ mutate_copy() {
   [ "$status" -ne 0 ]
 }
 
+# bats test_tags=whole-tree
 @test "every wikilink in the changed pages resolves to a wiki page" {
   [ "${#CHANGED_PAGES[@]}" -gt 0 ]
   run check_wikilinks "${CHANGED_PAGES[@]}"
   [ "$status" -eq 0 ]
 }
 
+# bats test_tags=whole-tree
 @test "red twin: a broken wikilink fails the resolver" {
   local copy="$BATS_TEST_TMPDIR/broken.md"
   printf 'See [[No Such Page Anywhere]].\n' >"$copy"
