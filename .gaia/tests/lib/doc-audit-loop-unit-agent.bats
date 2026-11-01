@@ -252,17 +252,17 @@ has_bare_shell_eval() {
 
 @test "no command line the unit runs carries the word worktree isolation refuses" {
   local procedure="$ROOT/wiki/concepts/Audit Round Procedure.md"
-  local lines="$BATS_TEST_TMPDIR/unit-command-lines.txt"
-  unit_command_lines "$AGENT" "$procedure" >"$lines"
+  local command_lines_file="$BATS_TEST_TMPDIR/unit-command-lines.txt"
+  unit_command_lines "$AGENT" "$procedure" >"$command_lines_file"
   # The derivation reaches the default stop's evaluator call.
-  grep -qF 'audit-loop-eval.sh evaluate-round --root <root> --round <r>' -- "$lines" || return 1
-  has_bare_shell_eval "$lines" && { grep -nE '(^|[^[:alnum:]_.-])eval([^[:alnum:]_.-]|$)' -- "$lines" >&2; return 1; }
+  grep -qF 'audit-loop-eval.sh evaluate-round --root <root> --round <r>' -- "$command_lines_file" || return 1
+  has_bare_shell_eval "$command_lines_file" && { grep -nE '(^|[^[:alnum:]_.-])eval([^[:alnum:]_.-]|$)' -- "$command_lines_file" >&2; return 1; }
   # Red twin: the old subcommand spelling trips the predicate.
   local mutant="$BATS_TEST_TMPDIR/agent-bare-word.md"
   sed 's/audit-loop-eval\.sh evaluate-round/audit-loop-eval.sh eval/' "$AGENT" >"$mutant"
   cmp -s "$AGENT" "$mutant" && return 1
-  unit_command_lines "$mutant" >"$lines"
-  has_bare_shell_eval "$lines"
+  unit_command_lines "$mutant" >"$command_lines_file"
+  has_bare_shell_eval "$command_lines_file"
 }
 
 @test "the reopened round is a first action that fixes before it reviews, for a veto and for a gate failure" {
