@@ -43,6 +43,6 @@ Budget batch rules:
 
 The budget batch is the scorer's `members`, shown only when `members` is not empty. Its option label carries those members and the scorer's total against its budget, both read from the scorer's output, and it never carries the recommended mark. Its description says one branch, one pull request, all close on merge, and states no number of its own.
 
-When the full backlog prints, annotate each budget batch member (for example `[budget batch]`). Never print, commit or put in the pull request body a reason an issue was left out. The annotation never enters a pull request body or a commit.
+When the full backlog prints, annotate each budget batch member (for example `[budget batch]`). Never print a reason an issue was left out, and never put that reason or the annotation in a commit or pull request body.
 
 Handle the pick, and anything typed into **Other**, as `### Offer-time reads` in `debt.md` states, then continue at `## Claim the fix unit` in `debt.md`.

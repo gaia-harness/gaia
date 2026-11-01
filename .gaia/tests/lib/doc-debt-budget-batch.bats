@@ -249,11 +249,11 @@ shapes_hold_at_most_four_options() {
 }
 
 @test "a reason an issue was left out is never printed, committed or put in the pull request body" {
-  check_pin debt/recommend.md "$OFFER_HEADING" 'When the full backlog prints' 'Never print, commit or put in the pull request body a reason an issue was left out'
+  check_pin debt/recommend.md "$OFFER_HEADING" 'When the full backlog prints' 'Never print a reason an issue was left out'
 }
 
-@test "the annotation never enters a pull request body or a commit" {
-  check_pin debt/recommend.md "$OFFER_HEADING" 'When the full backlog prints' 'annotation never enters a pull request body or a commit'
+@test "neither a left-out reason nor the annotation enters a commit or the pull request body" {
+  check_pin debt/recommend.md "$OFFER_HEADING" 'When the full backlog prints' 'never put that reason or the annotation in a commit or pull request body'
 }
 
 # --- the budget batch rules region holds no weight or limit -----------------
@@ -489,15 +489,19 @@ OFFER_COMMAND='bash .gaia/scripts/debt-batch-budget.sh --offer --backlog "<offer
 }
 
 @test "the recorded paths come from the working tree diff and the untracked files" {
-  check_pin debt.md "$RESOLVE_HEADING" 'Implement all fixes in the unit' '`git diff --name-only --no-renames` plus `git ls-files --others --exclude-standard`'
+  check_pin debt.md "$RESOLVE_HEADING" 'Implement all fixes in the unit' '`git diff --name-only` plus `git ls-files --others --exclude-standard`'
+}
+
+@test "each part's changes stay unstaged until its record" {
+  check_pin debt.md "$RESOLVE_HEADING" 'Implement all fixes in the unit' 'no `git mv`, `git rm` or `git add` before its record'
 }
 
 @test "a part is staged only after its paths are recorded" {
   check_pin debt.md "$RESOLVE_HEADING" 'Implement all fixes in the unit' 'Then stage the paths (`git add -A -- <paths>`)'
 }
 
-@test "a file the gate changed goes with the part whose change caused it" {
-  check_pin debt.md "$RESOLVE_HEADING" 'Run the Quality Gate' 'goes with the part whose change caused it'
+@test "a path the gate changed joins the list of the part whose change caused it" {
+  check_pin debt.md "$RESOLVE_HEADING" 'Run the Quality Gate' 'that no part recorded to the list of the part whose change caused it'
 }
 
 @test "the working tree is clean after the last part" {
