@@ -140,14 +140,14 @@ STATUSLINE_DIRECTORY="${STATUSLINE_DIRECTORY:-.gaia/tests/statusline}"
 # heaviest hooks suite, over three minutes on CI. Pinned by name, they share
 # hooks-1 under the single-shard legs' larger step cap rather than folding into
 # the weighted split. Not an anchor: an anchor still weighs only its bytes, so
-# the byte walk loads its bucket as if it were light and that bucket becomes
-# the slowest leg of the matrix.
+# the byte walk loads its bucket as if it were light, and that bucket can
+# become the slowest leg of the matrix.
 #
-# hooks-1 is also part of the partition's floor: neither its heaviest pinned
-# file nor the whole AUDIT_TESTS_DIRECTORY shard splits further, so no
-# arrangement of the weighted groups takes the slowest shard below the larger
-# of the two. Group sizes are chosen against that floor rather than against
-# each other; `wiki/decisions/Sharded CI Test Matrix.md` carries the
+# hooks-1 is also part of the partition's floor: neither hooks-1, which holds
+# only pinned files, nor the whole AUDIT_TESTS_DIRECTORY shard splits further,
+# so no arrangement of the weighted groups takes the slowest shard below the
+# larger of the two. Group sizes are chosen against that floor rather than
+# against each other; `wiki/decisions/Sharded CI Test Matrix.md` carries the
 # measurements and why the groups stop where they do.
 PINNED_HOOKS=(local-janitor.bats audit-loop-bound.bats)
 
