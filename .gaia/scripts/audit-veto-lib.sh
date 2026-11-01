@@ -1,8 +1,9 @@
 # shellcheck shell=bash
 #
-# Veto satisfaction, the shell inputs of the default stop, and the stop
-# override, sourced by audit-loop-eval.sh only. The formulas they serve are
-# stated once, in audit-loop-eval.sh's header (DEFAULT STOP, DECISION); this
+# Veto satisfaction, the shell inputs of the default stop, the stop override
+# and the reopened-round test, sourced by audit-loop-eval.sh only. The
+# formulas they serve are stated once, in audit-loop-eval.sh's header
+# (DEFAULT STOP, DECISION) and the bound hook's (THE REOPENED ROUND); this
 # file implements them and restates none. Needs audit-loop-state-lib.sh and
 # audit-triage-lib.sh already sourced. Defines functions only and runs nothing
 # at source time. Bash 3.2 compatible.
@@ -85,6 +86,28 @@ gaia_loop_stop_override() {
   printf '%s' "$4" | jq -c --argjson fix_keys "$fix_keys" 'if type != "object" then error("not a snapshot") else . end
     | . + {stop_override: (.default_stop == true and $fix_keys != null
         and ((.default_stop_keys // []) as $stop_keys | any($fix_keys[]; . as $key | any($stop_keys[]; . == $key)) | not))}' 2>/dev/null || return 5
+}
+
+# gaia_loop_reopen_due <main-root> <B> <state-json> <tree>: prints true when
+# the bound hook must record a reopened round before it admits a unit on HEAD
+# tree <tree> (its header, THE REOPENED ROUND), else false. rc 1 on an
+# unreadable or malformed vetoes.json or gate-failure.json: reading either as
+# absent would leave its repair no round.
+gaia_loop_reopen_due() {
+  local run vetoes="[]" failure="{}"
+  run="$(gaia_loop_run_directory "$1" "$2")"
+  if [ -e "$run/vetoes.json" ]; then
+    vetoes="$(jq -c -s 'if length == 1 and .[0].version == 1 and (.[0].keys | type) == "array" then .[0].keys else error("malformed") end' <"$run/vetoes.json" 2>/dev/null)" || return 1
+  fi
+  if [ -e "$run/gate-failure.json" ]; then
+    failure="$(jq -c -s 'if length == 1 and (.[0] | type) == "object" then .[0] else error("malformed") end' <"$run/gate-failure.json" 2>/dev/null)" || return 1
+  fi
+  printf '%s' "$3" | jq -r --arg tree "$4" --argjson vetoes "$vetoes" --argjson failure "$failure" '
+    (.history.rounds | length) as $used | (.history.rounds | last) as $latest | ($latest.tree == $tree) as $unmoved
+    | $used > 0
+      and (($latest.reopened == true and $unmoved) | not)
+      and ((any($vetoes[]; .effective_from_round == $used + 1) and $unmoved)
+           or ($failure.after_round == $used and $failure.tree == $tree))' 2>/dev/null
 }
 
 # _gaia_loop_fixed_triples <main-root> <B> <r>: the (member, finding_class,

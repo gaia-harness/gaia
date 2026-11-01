@@ -1,9 +1,10 @@
 #!/usr/bin/env bats
 #
 # Suite for .gaia/scripts/audit-veto-lib.sh: when a veto key counts as
-# satisfied, and the in-memory stop override the bound hook applies to a
-# snapshot. Pure state and run-folder fixtures: no repository is needed,
-# because neither function reads git.
+# satisfied, the in-memory stop override the bound hook applies to a
+# snapshot, and the reopened-round test's fail-loud reads. Pure state and
+# run-folder fixtures: no repository is needed, because no function here
+# reads git.
 #
 # Run: .gaia/scripts/bats5.sh .gaia/scripts/tests/audit-veto-lib.bats < /dev/null
 # Assertion style: bash-3.2-safe per .claude/rules/bats-assertions.md.
@@ -171,4 +172,21 @@ override_of() {
   [ "$(gaia_loop_stop_override "$MAIN" "$BRANCH_NAME" 3 null)" = null ] || return 1
   after="$(find "$MAIN" -type f | sort | xargs cat | shasum)"
   [ "$before" = "$after" ]
+}
+
+@test "reopen due: no round prints false, and a malformed vetoes or gate failure file fails rather than reading as absent" {
+  local empty_state one_round
+  empty_state="$(state_with '[]')"
+  one_round="$(state_with "[{\"tree\":\"$TREE_ONE\",\"members\":[\"code-audit-frontend\"],\"keys\":null}]")"
+  veto 1
+  [ "$(gaia_loop_reopen_due "$MAIN" "$BRANCH_NAME" "$empty_state" "$TREE_ONE")" = false ] || return 1
+  veto 2
+  [ "$(gaia_loop_reopen_due "$MAIN" "$BRANCH_NAME" "$one_round" "$TREE_ONE")" = true ] || return 1
+  printf '{"version":1,"keys":"no"}\n' >"$RUN/vetoes.json"
+  run gaia_loop_reopen_due "$MAIN" "$BRANCH_NAME" "$one_round" "$TREE_ONE"
+  [ "$status" -ne 0 ] || return 1
+  rm -f "$RUN/vetoes.json"
+  printf '{broken' >"$RUN/gate-failure.json"
+  run gaia_loop_reopen_due "$MAIN" "$BRANCH_NAME" "$one_round" "$TREE_ONE"
+  [ "$status" -ne 0 ]
 }

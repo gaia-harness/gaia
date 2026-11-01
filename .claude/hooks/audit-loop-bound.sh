@@ -57,7 +57,17 @@
 # wave's unmoved tree and is therefore free, which is correct: it is the
 # first round finishing, not a new one. A dispatch on an already-audited tree
 # is allowed at a checkpoint and past a window too, but it still runs the
-# dispositions check below. A unit dispatch never records a round.
+# dispositions check below. A unit dispatch records a round only when it
+# reopens one (THE REOPENED ROUND).
+#
+# THE REOPENED ROUND. Only this hook writes rounds, and a fix needs one: a
+# veto after a default stop, or an owed gate step failing after the latest
+# round, would otherwise leave the next wave joining round r, or HEAD on a
+# tree no round recorded (a quick clear, a light clear, a late pass). So an
+# allowed unit not admitted on accept (a closing round runs no fixer) records
+# round used + 1 on HEAD's tree, `reopened: true` with no members, in the
+# write that appends its window, when gaia_loop_reopen_due in
+# audit-veto-lib.sh is true. The unit starts at that round; it evaluates quiet.
 #
 # THE ORDER OF ONE DECISION. Resolve the audited checkout and the branch; on a
 # dispatch that may change the state (a unit, or a member on a new tree),
@@ -67,8 +77,8 @@
 # join an already-recorded wave; link, close or carry over the pull request
 # record; freeze the knobs and the line config when absent; evaluate the
 # previous round when its snapshot is missing; read the context; decide. On an
-# allowed unit the hook appends its window to `history.units`; on an allowed
-# member it records the round. A light reviewer dispatch stops after the
+# allowed unit the hook appends its window to `history.units`, after any
+# reopened round; on an allowed member it records the round. A light reviewer dispatch stops after the
 # audited root, the dirty check and the fork refusal: it allows there, before
 # any state is read.
 #
@@ -464,7 +474,7 @@ adopt_renamed() {
 run_decision() {
   local libs_failed=0 lookup_exit_status dirty_exit_status state_under_lock used round_index snapshot decision now stamp_file slug closing NEXT_STATE current_pr_number old_file closed=0
   local verb trigger decision_third_field decision_fourth_field accept_is_eligible cap extra nonce question in_unit reading ask_tokens ask_percent config view recommended context_line
-  local admitted_on start_round through_round
+  local admitted_on start_round through_round reopen
   HELD=''
   trap 'exit 143' TERM INT HUP
   trap '[ -z "$HELD" ] || gaia_loop_unlock "$HELD"' EXIT
@@ -776,6 +786,13 @@ run_decision() {
     if [ -z "$admitted_on" ] || ! gaia_loop_is_uint "$start_round" || ! gaia_loop_is_uint "$through_round" ||
       [ "$start_round" -ne $((used + 1)) ] || [ "$through_round" -lt "$start_round" ]; then
       finish_deny 'BLOCKED: the audit loop checkpoint got an unreadable decision. Fail-loud, not fail-open: retry the dispatch.'
+    fi
+    reopen=$(gaia_loop_reopen_due "$main" "$BRANCH_KEY" "$WORKING_STATE" "$tree") ||
+      finish_deny "BLOCKED: the audit loop checkpoint could not read vetoes.json or gate-failure.json in $run_directory. Fail-loud, not fail-open: repair the file and retry the dispatch."
+    if [ "$admitted_on" != accept ] && [ "$reopen" = true ]; then
+      { slug=$(gaia_branch_slug "$root") && stamp_file=$(gaia_loop_stamp_file "$main" "$BRANCH_KEY" "$start_round") && mkdir -p "${stamp_file%/*}" && : >"$stamp_file" &&
+        WORKING_STATE=$(jq -c --arg tree "$tree" --arg commit "$commit" --arg slug "$slug" --arg now "$now" --argjson round_number "$start_round" '.history.rounds += [{round: $round_number, tree: $tree, commit: $commit, raw_branch_slug: $slug, dispatched_at: $now, members: [], closing: false, reopened: true, snapshot: null}]' <<<"$WORKING_STATE"); } ||
+        finish_deny "BLOCKED: the audit loop checkpoint could not record reopened round $start_round. Fail-loud, not fail-open: check the checkout and retry."
     fi
     NEXT_STATE=$(jq -c --arg admitted_on_trigger "$admitted_on" --argjson start_round "$start_round" --argjson through_round "$through_round" --argjson unit_rounds "$GAIA_CONTEXT_UNIT_ROUNDS" \
       --arg now "$now" --arg session_id "$session" \

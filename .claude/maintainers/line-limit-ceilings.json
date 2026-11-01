@@ -1,6 +1,6 @@
 {
   "ceilings": {
-    ".claude/hooks/audit-loop-bound.sh": 838,
+    ".claude/hooks/audit-loop-bound.sh": 855,
     ".claude/hooks/block-audit-loop-write.sh": 629,
     ".claude/hooks/block-main-destructive-git.sh": 497,
     ".claude/hooks/block-rm-rf.sh": 820,
