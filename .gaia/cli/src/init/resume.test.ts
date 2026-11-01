@@ -144,11 +144,11 @@ describe('argvFromStepArgs', () => {
   });
 
   test('STEP_ORDER places configure-data-layer right after configure-i18n', () => {
-    expect(STEP_ORDER).toHaveLength(8);
+    expect(STEP_ORDER).toHaveLength(7);
     expect(STEP_ORDER.indexOf('configure-data-layer')).toBe(
       STEP_ORDER.indexOf('configure-i18n') + 1
     );
-    expect(STEP_ORDER.indexOf('write-project-config')).toBe(6);
+    expect(STEP_ORDER.indexOf('write-project-config')).toBe(5);
     expect(STEP_ORDER as readonly string[]).not.toContain(
       ['configure', 'automation'].join('-')
     );
@@ -302,14 +302,14 @@ describe('init resume', () => {
     expect(stdio.errors.join('')).toContain('--from-step must be');
   });
 
-  test('--from-step 9 is refused because only eight steps exist', async () => {
+  test('--from-step 8 is refused because only seven steps exist', async () => {
     sandbox = setupSandbox();
-    const exit = await run(['--from-step', '9'], {cwd: sandbox.root});
+    const exit = await run(['--from-step', '8'], {cwd: sandbox.root});
     expect(exit).toBe(1);
     expect(stdio.errors.join('')).toContain('--from-step must be');
   });
 
-  test('--from-step 7 replays write-project-config from its saved args', async () => {
+  test('--from-step 6 replays write-project-config from its saved args', async () => {
     sandbox = setupSandbox();
     writeState(sandbox.root, {
       completed_steps: [],
@@ -329,7 +329,7 @@ describe('init resume', () => {
       return 0;
     };
 
-    const exit = await run(['--from-step', '7'], {
+    const exit = await run(['--from-step', '6'], {
       cwd: sandbox.root,
       runners: {
         finalize: stub('finalize'),

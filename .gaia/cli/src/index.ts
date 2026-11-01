@@ -43,7 +43,7 @@ const HELP_TEXT = `Usage: gaia <subcommand> [args]
   codify-tally
   update merge-package|merge-workspace|merge-audit-ci|lockfile-command|merge-region|regen-regions
   update-deps run|decline|global-tools|advisories|advisory-landed|dismiss-alert|write-security-cache|check-security-override
-  init strip-branding|configure-i18n|configure-data-layer|rename|wire-statusline|bootstrap-env|write-project-config|finalize|resume
+  init strip-branding|configure-i18n|configure-data-layer|rename|wire-statusline|write-project-config|finalize|resume
   setup status|mark-step|finalize|bootstrap-env|detect-remote|warn-existing-tools|check-admin|enable-delete-branch|write-isolation-policy|configure-dependabot-alerts|write-sandbox-recommendation|record|drift
   sandbox detect|apply|record|status
   ping --event <init|setup|update> [--field value ...]

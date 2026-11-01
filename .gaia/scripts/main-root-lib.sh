@@ -7,11 +7,9 @@
 # git's common directory. Dual-mode: source it for the functions below,
 # or run it directly as a script.
 #
-# Git version floor: git >= 2.31. `--absolute-git-dir` (used below) shipped in
-# git 2.13 and `--git-common-dir` in git 2.5; 2.31 is named as the floor
-# because it is the version that also carries `--path-format=absolute` and
-# reliable `git worktree` plumbing, matching the rest of this repo's worktree
-# machinery. This library deliberately does NOT reach for
+# Git version: `.gaia/toolchain-floors.tsv` holds GAIA's floor. This library needs
+# far less: `--absolute-git-dir` (used below) shipped in git 2.13 and
+# `--git-common-dir` in git 2.5. It deliberately does NOT reach for
 # `--path-format=absolute`: it does not canonicalize symlinks (see the
 # physical-resolution note below), so relying on it would silently reintroduce
 # the logical/physical mismatch this resolver exists to close. Empirically

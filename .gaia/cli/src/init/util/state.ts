@@ -91,7 +91,6 @@ export const STEP_ORDER = [
   'configure-data-layer',
   'rename',
   'wire-statusline',
-  'bootstrap-env',
   'write-project-config',
   'finalize',
 ] as const;

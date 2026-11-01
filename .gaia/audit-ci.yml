@@ -191,6 +191,9 @@ auditors:
       # The retired-path gate's allowlist: each row excuses a harness line
       # from that gate, so a widened row quietly shrinks it.
       - ".gaia/retired-paths-allowlist.tsv"
+      # The tool floors setup and update enforce: a lowered row or a block
+      # turned to warn lets a broken toolchain through both commands.
+      - ".gaia/toolchain-floors.tsv"
       # The vendored bats archive .gaia/tests/install-bats.sh extracts onto
       # every matrix leg of the bats workflow. Granted rather than declared
       # unowned, even though no lens reads a tarball: a change to it is a
