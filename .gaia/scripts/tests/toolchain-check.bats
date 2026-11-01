@@ -186,12 +186,14 @@ floor_of() {
   grep -q 'apt stays behind' "$NOTE"
 }
 
+# bats test_tags=whole-tree
 @test "a 2.3.x project crosses the 2.4.0 note, and it is blocking" {
   run --separate-stderr bash "$REPO_ROOT/.gaia/scripts/select-migration-notes.sh" "$REPO_ROOT" 2.3.1 2.4.0
   [ "$status" -eq 0 ]
   [ "$output" = "$(printf '2.4.0\tblocking\t%s/.gaia/migrations/2.4.0.md' "$REPO_ROOT")" ]
 }
 
+# bats test_tags=whole-tree
 @test "a project at 2.4.0 selects no 2.4.0 note, so a re-run after the crossing is clean" {
   run --separate-stderr bash "$REPO_ROOT/.gaia/scripts/select-migration-notes.sh" "$REPO_ROOT" 2.4.0 2.4.0
   [ "$status" -eq 0 ]
@@ -237,6 +239,7 @@ later_bundle() {
   grep -qF 'A `BLOCKING` line from it: stop before any merge' "$NOTE"
 }
 
+# bats test_tags=whole-tree
 @test "no shipped note above 2.4.0 is blocking: the 2.4.0 note's hop stops at one" {
   local note version highest offenders=""
   for note in "$REPO_ROOT"/.gaia/migrations/*.md; do
