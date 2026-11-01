@@ -463,3 +463,18 @@ EOF
   [ "$(printf '%s' "$output" | jq -c '[.subsets[].members | length]')" = "[6,6,6]" ]
   [ "$(subsets_compact | jq -c '.[0].members')" = "[1,2,3,4,5,6]" ]
 }
+
+@test "the offer member ceiling stays within the branch-name limit" {
+  local limit easy ceiling numbers=() index=0
+  limit="$(sed -n 's/^DEBT_BUDGET_LIMIT=\([0-9][0-9]*\).*/\1/p' "$SCRIPT")"
+  easy="$(sed -n 's/^DEBT_BUDGET_COST_EASY=\([0-9][0-9]*\).*/\1/p' "$SCRIPT")"
+  [ -n "$limit" ] && [ -n "$easy" ]
+  ceiling=$((limit / easy))
+  [ "$ceiling" -ge 2 ]
+  while [ "$index" -lt "$ceiling" ]; do
+    index=$((index + 1))
+    numbers+=("$((100000 + index))")
+  done
+  run bash "$BRANCH_LIBRARY" name debt "${numbers[@]}"
+  [ "$status" -eq 0 ]
+}
