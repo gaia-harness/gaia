@@ -62,7 +62,7 @@ Run this first: GAIA cannot install these tools for the user.
 bash .gaia/scripts/toolchain-check.sh --scope user
 ```
 
-Exit 0: say nothing and continue. Any other exit: HALT. Show every `BELOW` and `MISSING` line as the tool, its installed version and its floor, followed by that tool's `GUIDE` line verbatim, and tell the user to re-run `/setup-gaia` once they have updated. There is no fallback for an older tool.
+Exit 0: say nothing and continue. Exit 1: read `.claude/skills/gaia/references/toolchain.md` now and run its `## Below a floor` with this command. A stop there HALTS setup: tell the user to re-run `/setup-gaia` once they have updated. There is no fallback for an older tool. Any other exit: HALT and show the script's stderr.
 
 ### 0a. Self-heal worktree symlinks
 
