@@ -22,7 +22,7 @@ import {EXIT_CODES} from '../exit.js';
 import {structuredError} from '../stderr.js';
 import {takeValue} from '../util/argv.js';
 import {atomicWriteFileSync} from '../util/atomic-write.js';
-import {resolvePackageTarget} from '../util/package-target.js';
+import {resolveWebTarget} from '../util/package-target.js';
 import {escapeJsLiteralValue} from './util/js-literal.js';
 import {markStepCompleted} from './util/state.js';
 import {titleFlagError} from './util/title-flag.js';
@@ -183,7 +183,7 @@ export const run = (
   }
 
   const cwd = options.cwd ?? process.cwd();
-  const target = resolvePackageTarget(cwd);
+  const target = resolveWebTarget(cwd);
 
   if (!target.ok) {
     structuredError({

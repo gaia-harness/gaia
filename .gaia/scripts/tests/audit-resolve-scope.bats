@@ -65,7 +65,12 @@ make_repo() {
     "$REPO_ROOT/.claude/hooks/lib/audit-digest.sh" \
     "$REPO_ROOT/.claude/hooks/lib/audit-machinery.sh" \
     "$REPO_ROOT/.claude/hooks/lib/gaia-version.sh" \
+    "$REPO_ROOT/.claude/hooks/lib/gaia-packages.sh" \
     "$repository_directory/.claude/hooks/lib/"
+  mkdir -p "$repository_directory/frontend"
+  printf '%s\n' '{"schemaVersion":1,"name":"root","stack":"web","globs":{"tddUnitTests":[],"tddStrictCandidates":[],"emergentTests":[],"preCommitSource":[],"doctorConfigs":[],"dependencyManifests":[]},"wiki":{"sourcePaths":[],"inventoryPaths":[],"flowPaths":[]}}' >"$repository_directory/gaia.package.json"
+  printf '%s\n' '[{"name":"root","path":"."},{"name":"frontend","path":"frontend"}]' >"$repository_directory/.gaia/packages.json"
+  printf '%s\n' '{"schemaVersion":1,"name":"frontend","stack":"web","globs":{"tddUnitTests":[],"tddStrictCandidates":[],"emergentTests":[],"preCommitSource":[],"doctorConfigs":[],"dependencyManifests":[]},"wiki":{"sourcePaths":[],"inventoryPaths":[],"flowPaths":[]}}' >"$repository_directory/frontend/gaia.package.json"
   printf '2.0.0\n' > "$repository_directory/.gaia/VERSION"
   git -C "$repository_directory" init -q --initial-branch="$branch"
   git -C "$repository_directory" config user.email t@example.com
@@ -784,7 +789,7 @@ resolve_with_specialists() {
   shift
   FLAGLESS_OUTPUT="$("$repo/.gaia/scripts/audit-resolve-scope.sh" --member code-audit-frontend --root "$repo" "$@" 2>/dev/null)" || return 1
   FLAGGED_OUTPUT="$("$repo/.gaia/scripts/audit-resolve-scope.sh" --member code-audit-frontend --root "$repo" "$@" --specialists 2>/dev/null)" || return 1
-  [ "$(printf '%s\n' "$FLAGGED_OUTPUT" | grep -v '^SPECIALIST=')" = "$FLAGLESS_OUTPUT" ]
+  [ "$(printf '%s\n' "$FLAGGED_OUTPUT" | grep -v -e '^SPECIALIST=' -e '^LENSES=')" = "$FLAGLESS_OUTPUT" ]
 }
 
 # specialist_line <name>: the SPECIALIST line for <name> in FLAGGED_OUTPUT.

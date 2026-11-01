@@ -26,10 +26,13 @@
 import {existsSync, readFileSync} from 'node:fs';
 import path from 'node:path';
 import {EXIT_CODES} from '../exit.js';
+import {
+  resolveScaffoldTarget,
+  splitPackageFlag,
+} from '../scaffold/resolve-target.js';
 import {structuredError} from '../stderr.js';
 import {takeValue} from '../util/argv.js';
 import {atomicWriteFileSync} from '../util/atomic-write.js';
-import {resolvePackageTarget} from '../util/package-target.js';
 import {escapeJsLiteralValue} from './util/js-literal.js';
 import type {JsLiteralQuote} from './util/js-literal.js';
 import {markStepCompleted} from './util/state.js';
@@ -353,7 +356,10 @@ export const run = (
     return EXIT_CODES.OK;
   }
 
-  const parsed = parseFlags(argv);
+  const split = splitPackageFlag(argv, 'init rename');
+
+  if (split === undefined) return EXIT_CODES.UNKNOWN_SUBCOMMAND;
+  const parsed = parseFlags(split.argv);
 
   if (!parsed.ok) {
     structuredError({
@@ -366,17 +372,9 @@ export const run = (
   }
 
   const cwd = options.cwd ?? process.cwd();
-  const target = resolvePackageTarget(cwd);
+  const target = resolveScaffoldTarget(cwd, 'init rename', split.packageName);
 
-  if (!target.ok) {
-    structuredError({
-      code: 'gaia_packages',
-      message: target.message,
-      subcommand: 'init rename',
-    });
-
-    return EXIT_CODES.CONFIG_INVALID;
-  }
+  if (target === undefined) return EXIT_CODES.CONFIG_INVALID;
 
   try {
     // Ahead of every write: a knowable precondition should not fail the run

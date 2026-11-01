@@ -76,6 +76,8 @@ const EXPECTED_RULE_IDS = [
   'settings.local-gitignored',
   'settings.redundant-permissions',
   'settings.valid-json',
+  'settings.workspace-member-unregistered',
+  'settings.workspace-member-unregistrable',
   'wiki.dead-paths',
   'wiki.orphans',
 ];

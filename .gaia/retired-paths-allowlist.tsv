@@ -57,3 +57,7 @@
 .gaia/cli/src/migrate-csf4/run-fixture.ts	'.storybook/preview.ts'	Test-double codemod writing into the package-relative work copy.
 .claude/agents/worthiness-evaluator.md	a route test under `app/route-tests/`	Names the frontend package-relative home of route tests, not a root path.
 .gaia/scripts/classifier/classify-determinism.mjs	a test under app/route-tests/<route>/tests/	Reason string naming the frontend package-relative home of route tests, not a root path.
+.claude/hooks/lib/audit-quick-classify-lines-lib.sh	"${prefix}"app/languages/}	The path is composed onto the owning web member prefix from the registry, so app/languages is member-relative here, not a root path.
+.claude/hooks/lib/audit-quick-classify-lines-lib.sh	"${prefix}app/languages/	The path is composed onto the owning web member prefix from the registry, so app/languages is member-relative here, not a root path.
+.gaia/scripts/audit-resolve-scope.sh	language_file_pattern='^(.*/)?app/languages/	Fail-open pattern for an unreadable registry: matches app/languages under any member prefix, not a root path.
+.gaia/scripts/audit-resolve-scope.sh	${web_member_alternation})app/languages/	The pattern is composed onto the web member paths from the registry, so app/languages is member-relative here, not a root path.

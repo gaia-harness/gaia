@@ -58,11 +58,20 @@ STUB
   : > "$PNPM_LOG"
 }
 
+# A manifest defining all three gate steps, which the hook runs only where defined.
+write_member_manifest() {
+  mkdir -p "$1"
+  printf '%s\n' '{"scripts":{"typecheck":"tsc","test:lint-staged":"vitest"},"lint-staged":{"*.ts":"eslint"}}' > "$1/package.json"
+}
+
 # A descriptor with every required key; $1 is the destination directory, $2 the
 # `preCommitSource` array as JSON.
 write_descriptor() {
   local directory="$1" pre_commit_source="$2"
   mkdir -p "$directory"
+  # The hook runs a step only where the member defines it, so the member
+  # defines all three.
+  write_member_manifest "$directory"
   cat > "$directory/gaia.package.json" <<JSON
 {
   "schemaVersion": 1,
@@ -559,6 +568,7 @@ CASES
   cp "$REPO_ROOT/.gaia/packages.json" "$REPO/.gaia/packages.json"
   mkdir -p "$REPO/$package_directory"
   cp "$(live_descriptor_file)" "$REPO/$package_directory/gaia.package.json"
+  write_member_manifest "$REPO/$package_directory"
   if [ "$package_directory" = . ]; then
     prefix=''
     package_path="$REPO"
@@ -703,6 +713,7 @@ OLD_HOOK
   rm -f "$REPO/.gaia/packages.json"
   . "$BATS_TEST_DIRNAME/helpers/package-fixture.sh"
   write_builtin_descriptor "$REPO"
+  write_member_manifest "$REPO/frontend"
   stage_and_run "frontend/app/x.tsx"
   assert_gate_ran "$REPO/frontend"
 }

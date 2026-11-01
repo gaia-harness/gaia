@@ -125,6 +125,23 @@ PACKAGE_DIRS=$(printf '%s\n' "$PLAN" | while IFS="$TAB" read -r KIND VALUE; do
   if [ "$KIND" = "package" ]; then printf '%s\n' "$VALUE"; fi
 done)
 
+# A member runs only the steps it defines: a library with just `typecheck` must
+# not fail the commit on a missing `test:lint-staged`. `jq -e` exits non-zero
+# for an absent script, an empty one, or an unreadable manifest, and the step is
+# skipped in each case.
+member_has_script() {
+  jq -e --arg script "$2" '(.scripts[$script] // "") | length > 0' "$1/package.json" >/dev/null 2>&1
+}
+
+# lint-staged reads a config file or the manifest's own `lint-staged` key.
+member_has_lint_staged_config() {
+  if jq -e 'has("lint-staged")' "$1/package.json" >/dev/null 2>&1; then return 0; fi
+  for CONFIG_FILE in "$1"/.lintstagedrc "$1"/.lintstagedrc.* "$1"/lint-staged.config.*; do
+    if [ -e "$CONFIG_FILE" ]; then return 0; fi
+  done
+  return 1
+}
+
 if [ -n "$PACKAGE_DIRS" ]
 then
   printf "\x1b[33m"
@@ -134,9 +151,9 @@ then
   # stops the commit on the first failing step.
   while IFS= read -r PACKAGE_DIR; do
     if [ "$PACKAGE_DIR" = "." ]; then PACKAGE_PATH="$ROOT"; else PACKAGE_PATH="$ROOT/$PACKAGE_DIR"; fi
-    pnpm -C "$PACKAGE_PATH" typecheck
-    pnpm -C "$PACKAGE_PATH" exec lint-staged
-    pnpm -C "$PACKAGE_PATH" test:lint-staged
+    if member_has_script "$PACKAGE_PATH" typecheck; then pnpm -C "$PACKAGE_PATH" typecheck; fi
+    if member_has_lint_staged_config "$PACKAGE_PATH"; then pnpm -C "$PACKAGE_PATH" exec lint-staged; fi
+    if member_has_script "$PACKAGE_PATH" test:lint-staged; then pnpm -C "$PACKAGE_PATH" test:lint-staged; fi
   done <<EOF
 $PACKAGE_DIRS
 EOF

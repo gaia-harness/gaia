@@ -26,7 +26,7 @@ import {structuredError} from '../stderr.js';
 import {hasTanstackQuery, QUERY_ON_INIT_COMMAND} from './data-layer.js';
 import {writeAndRecordWith} from './fs.js';
 import {resolveLayer} from './layer.js';
-import {resolveScaffoldTarget} from './resolve-target.js';
+import {resolveScaffoldTarget, splitPackageFlag} from './resolve-target.js';
 import {buildDataPageVars} from './route-data-page.js';
 import {buildDataStoryVars} from './route-data-story.js';
 import {
@@ -591,8 +591,11 @@ export const run = (
     return first === undefined ? EXIT_CODES.UNKNOWN_SUBCOMMAND : EXIT_CODES.OK;
   }
 
-  const name = first;
-  const flags = parseFlags(rest.slice(1));
+  const split = splitPackageFlag(rest, 'scaffold route');
+
+  if (split === undefined) return EXIT_CODES.UNKNOWN_SUBCOMMAND;
+  const name = split.argv.at(0) ?? first;
+  const flags = parseFlags(split.argv.slice(1));
 
   if (flags === null) {
     return userError('invalid or unknown flag (see --help)');
@@ -614,7 +617,8 @@ export const run = (
   // levels shallower than its source, so that overshoots the repo root.
   const target = resolveScaffoldTarget(
     options.cwd ?? process.cwd(),
-    'scaffold route'
+    'scaffold route',
+    split.packageName
   );
 
   if (target === undefined) return EXIT_CODES.CONFIG_INVALID;

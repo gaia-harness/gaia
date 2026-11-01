@@ -18,6 +18,9 @@ setup() {
   . "$REPO_ROOT/.claude/hooks/lib/audit-light-route-lib.sh"
   # shellcheck source=.claude/hooks/lib/audit-quick-classify-lib.sh
   . "$LIBRARY"
+  mkdir -p "$BATS_TEST_TMPDIR/registry/frontend"
+  printf '%s\n' '{"schemaVersion":1,"name":"frontend","stack":"web","globs":{"tddUnitTests":[],"tddStrictCandidates":[],"emergentTests":[],"preCommitSource":[],"doctorConfigs":[],"dependencyManifests":[]},"wiki":{"sourcePaths":[],"inventoryPaths":[],"flowPaths":[]}}' >"$BATS_TEST_TMPDIR/registry/frontend/gaia.package.json"
+  quick_load_registry "$BATS_TEST_TMPDIR/registry"
   COMPONENT="frontend/app/components/card/index.tsx"
   STORY="frontend/app/components/card/tests/index.stories.tsx"
   CHIP="frontend/app/components/ui/chip.tsx"
@@ -280,6 +283,7 @@ qc_start() {
   QC_ROOT="$BATS_TEST_TMPDIR/repo"
   rm -rf "$QC_ROOT"
   git init -q "$QC_ROOT"
+  qc_put frontend/gaia.package.json '{"schemaVersion":1,"name":"frontend","stack":"web","globs":{"tddUnitTests":[],"tddStrictCandidates":[],"emergentTests":[],"preCommitSource":[],"doctorConfigs":[],"dependencyManifests":[]},"wiki":{"sourcePaths":[],"inventoryPaths":[],"flowPaths":[]}}'
 }
 
 qc_put() {

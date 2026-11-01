@@ -38,6 +38,7 @@ write_package_descriptor() {
   jq -n --argjson unit "$unit" --argjson strict "$strict" --argjson emergent "$emergent" '{
     schemaVersion: 1,
     name: "frontend",
+    stack: "web",
     globs: {
       tddUnitTests: $unit,
       tddStrictCandidates: $strict,

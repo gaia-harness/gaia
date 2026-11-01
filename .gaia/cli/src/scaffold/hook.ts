@@ -18,7 +18,7 @@ import path from 'node:path';
 import {EXIT_CODES} from '../exit.js';
 import {structuredError} from '../stderr.js';
 import {writeFileIfAbsent} from './fs.js';
-import {resolveScaffoldTarget} from './resolve-target.js';
+import {resolveScaffoldTarget, splitPackageFlag} from './resolve-target.js';
 import {renderTemplate, templatePath} from './template.js';
 import type {ScaffoldResult} from './types.js';
 
@@ -207,9 +207,12 @@ export const run = (
   options: HandlerOptions = {}
 ): number => {
   let parsed: FlagReadResult;
+  const split = splitPackageFlag(argv, 'scaffold hook');
+
+  if (split === undefined) return EXIT_CODES.UNKNOWN_SUBCOMMAND;
 
   try {
-    parsed = readFlags(argv);
+    parsed = readFlags(split.argv);
   } catch (error) {
     structuredError({
       code: 'invalid_flag',
@@ -246,7 +249,8 @@ export const run = (
 
   const target = resolveScaffoldTarget(
     options.repoRoot ?? process.cwd(),
-    'scaffold hook'
+    'scaffold hook',
+    split.packageName
   );
 
   if (target === undefined) return EXIT_CODES.CONFIG_INVALID;

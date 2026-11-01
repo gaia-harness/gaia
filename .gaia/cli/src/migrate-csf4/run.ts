@@ -2,7 +2,7 @@ import semver from 'semver';
 import {existsSync, readFileSync} from 'node:fs';
 import path from 'node:path';
 import {EXIT_CODES} from '../exit.js';
-import {resolvePackageTarget} from '../util/package-target.js';
+import {resolveWebTarget} from '../util/package-target.js';
 import {convert} from './convert.js';
 import {
   findMainPath,
@@ -76,7 +76,7 @@ const listLines = (paths: readonly string[]): string =>
 const resolveEnvironment = (
   deps: MigrateDeps
 ): Resolved | {packagePath: string; refusal: Refusal} => {
-  const target = resolvePackageTarget(deps.cwd, 'frontend');
+  const target = resolveWebTarget(deps.cwd);
 
   if (!target.ok) {
     return {

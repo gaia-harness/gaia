@@ -470,6 +470,53 @@ branch_with() {
   [ "$output" = skip-no-playwright-change ]
 }
 
+# register_members <name:path>...: replaces the registry with these members,
+# each with the web-stack descriptor renamed to the member.
+register_members() {
+  local entry name path entries=''
+  for entry in "$@"; do
+    name="${entry%%:*}"
+    path="${entry#*:}"
+    entries="${entries:+$entries,}{\"name\":\"$name\",\"path\":\"$path\"}"
+    write_package_descriptor "$REPO" "$path"
+    jq --arg name "$name" '.name = $name' "$REPO/$path/gaia.package.json" >"$REPO/$path/gaia.package.json.tmp"
+    mv "$REPO/$path/gaia.package.json.tmp" "$REPO/$path/gaia.package.json"
+  done
+  write_package_registry "$REPO" "[$entries]"
+}
+
+@test "a web member named storefront still maps spec and unit paths to their layers" {
+  branch_with apps/storefront/.playwright/e2e/only.spec.ts apps/storefront/app/utils/only.test.ts
+  register_members storefront:apps/storefront
+  run bash "$CHECK" route --root "$REPO"
+  [ "$status" -eq 0 ]
+  [ "$output" = run ]
+  run bash "$CHECK" changed --root "$REPO"
+  [ "$status" -eq 0 ]
+  jq -e 'any(.[]; .file == "apps/storefront/.playwright/e2e/only.spec.ts" and .layer == "e2e")' <<<"$output" >/dev/null || return 1
+  jq -e 'any(.[]; .file == "apps/storefront/app/utils/only.test.ts" and .layer == "unit")' <<<"$output" >/dev/null
+}
+
+@test "several web members exit 3 naming both" {
+  branch_with apps/storefront/.playwright/e2e/only.spec.ts
+  register_members storefront:apps/storefront admin:apps/admin
+  run --separate-stderr bash "$CHECK" route --root "$REPO"
+  [ "$status" -eq 3 ]
+  [[ "$stderr" == *storefront* ]] || return 1
+  [[ "$stderr" == *admin* ]]
+}
+
+@test "no web member leaves every path without a layer and says so on stderr" {
+  branch_with apps/storefront/.playwright/e2e/only.spec.ts
+  register_members storefront:apps/storefront
+  jq 'del(.stack)' "$REPO/apps/storefront/gaia.package.json" >"$REPO/descriptor.tmp"
+  mv "$REPO/descriptor.tmp" "$REPO/apps/storefront/gaia.package.json"
+  run --separate-stderr bash "$CHECK" route --root "$REPO"
+  [ "$status" -eq 0 ]
+  [ "$output" = skip-no-playwright-change ] || return 1
+  [[ "$stderr" == *stack* ]]
+}
+
 # --- exits -------------------------------------------------------------------
 
 @test "usage mistakes exit 2 and an unreadable proposals file exits 3" {

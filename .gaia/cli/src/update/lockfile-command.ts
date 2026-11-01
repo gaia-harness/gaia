@@ -19,6 +19,7 @@ import {existsSync, readFileSync} from 'node:fs';
 import path from 'node:path';
 import {EXIT_CODES} from '../exit.js';
 import {structuredError} from '../stderr.js';
+import {BUILTIN_REGISTRY} from '../util/packages.js';
 import {parseValueFlags} from '../util/parse-value-flags.js';
 import type {ValueFlagMap} from '../util/parse-value-flags.js';
 import {asRecord, deepEqual} from './field-verdict.js';
@@ -161,6 +162,8 @@ const readWorkingTree = (
   );
 };
 
+const BUILTIN_PATHS = BUILTIN_REGISTRY.map((entry) => entry.path);
+
 const PLAIN_DIRECTORY =
   /^(?:\.|[a-z0-9][a-z0-9._-]*(?:\/[a-z0-9][a-z0-9._-]*)*)$/;
 
@@ -169,7 +172,7 @@ const PLAIN_DIRECTORY =
 // relative directory is dropped so a hand-edited registry cannot steer the
 // comparison outside the tree.
 const packageDirectories = (root: string): string[] => {
-  let registered: string[] = ['frontend'];
+  let registered: string[] = BUILTIN_PATHS;
   const registryPath = path.join(root, '.gaia', 'packages.json');
 
   if (existsSync(registryPath)) {
@@ -184,7 +187,7 @@ const packageDirectories = (root: string): string[] => {
         });
       }
     } catch {
-      registered = ['frontend'];
+      registered = BUILTIN_PATHS;
     }
   }
 

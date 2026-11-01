@@ -2,6 +2,11 @@
   "version": 1,
   "ignore": [
     {
+      "rule_id": "settings.workspace-member-unregistrable",
+      "path": ".gaia/cli/package.json",
+      "reason": "The maintainer CLI is a workspace member that is not an app or package; its leading dot fails the registry path pattern. It is release-excluded, so it never reaches adopters."
+    },
+    {
       "rule_id": "frontmatter.name-collision",
       "path": ".gaia/tests/lib/fixtures/cleanse-conflict-routing/.claude/commands/example-release.md",
       "reason": "Test fixture that reproduces a command and skill pair sharing one name by design; it is not a live harness file."

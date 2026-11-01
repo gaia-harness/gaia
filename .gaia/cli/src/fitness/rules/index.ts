@@ -10,6 +10,7 @@ import {PROMPT_RULES} from './prompt.js';
 import {RULES_RULES} from './rules.js';
 import {SETTINGS_RULES} from './settings.js';
 import {WIKI_RULES} from './wiki.js';
+import {WORKSPACE_RULES} from './workspace.js';
 
 /** Every graded rule, sorted by id. The one list `check` runs. */
 const ALL_RULES: readonly RuleDefinition[] = [
@@ -23,6 +24,7 @@ const ALL_RULES: readonly RuleDefinition[] = [
   ...PROMPT_RULES,
   ...WIKI_RULES,
   ...FITNESS_CONFIG_RULES,
+  ...WORKSPACE_RULES,
 ];
 
 export const RULE_CATALOG: readonly RuleDefinition[] = ALL_RULES.toSorted(

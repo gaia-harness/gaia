@@ -109,6 +109,7 @@ _lsb_build() {
   printf '.gaia/local/\n' >"$LSB_ROOT/.gitignore"
   mkdir -p "$LSB_ROOT/frontend/app"
   printf 'seed\n' >"$LSB_ROOT/frontend/app/seed.md"
+  printf '{"schemaVersion":1,"name":"frontend","stack":"web","globs":{"tddUnitTests":[],"tddStrictCandidates":[],"emergentTests":[],"preCommitSource":[],"doctorConfigs":[],"dependencyManifests":[]},"wiki":{"sourcePaths":[],"inventoryPaths":[],"flowPaths":[]}}\n' >"$LSB_ROOT/frontend/gaia.package.json"
   if [ "${1:-}" = "--maintainer" ]; then
     mkdir -p "$LSB_ROOT/.claude/rules/maintainers"
     printf '# maintainer repository marker\n' >"$LSB_ROOT/.claude/rules/maintainers/harness-triage-threshold.md"

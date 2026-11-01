@@ -10,7 +10,7 @@ import {copyFileSync, existsSync} from 'node:fs';
 import path from 'node:path';
 import {EXIT_CODES} from '../exit.js';
 import {structuredError} from '../stderr.js';
-import {resolvePackageTarget} from './package-target.js';
+import {resolveWebTarget} from './package-target.js';
 
 export const UNEXPECTED_EXIT = 2;
 
@@ -19,7 +19,7 @@ export const seedEnvironmentFile = (
   cwd: string,
   subcommand: string
 ): number => {
-  const target = resolvePackageTarget(cwd);
+  const target = resolveWebTarget(cwd);
 
   if (!target.ok) {
     structuredError({

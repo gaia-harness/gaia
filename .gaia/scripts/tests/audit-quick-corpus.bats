@@ -288,6 +288,8 @@ corpus_git() {
 corpus_write_side() {
   local count index path
   find "$CORPUS_ROOT" -mindepth 1 -maxdepth 1 ! -name .git -exec rm -rf {} +
+  mkdir -p "$CORPUS_ROOT/frontend" || return 1
+  printf '%s\n' '{"schemaVersion":1,"name":"frontend","stack":"web","globs":{"tddUnitTests":[],"tddStrictCandidates":[],"emergentTests":[],"preCommitSource":[],"doctorConfigs":[],"dependencyManifests":[]},"wiki":{"sourcePaths":[],"inventoryPaths":[],"flowPaths":[]}}' >"$CORPUS_ROOT/frontend/gaia.package.json" || return 1
   count="$(jq '.files | length' <<<"$1")"
   index=0
   while [ "$index" -lt "$count" ]; do

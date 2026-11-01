@@ -52,15 +52,23 @@ load_libraries() {
   [ -f "$checker_script" ] || die_input "the checker is missing at $checker_script"
 }
 
-# Sets base and package_dir; package_dir stays empty when no frontend package
-# is registered, which leaves every path without a layer.
+# Sets base and package_dir; package_dir stays empty when no web-stack package
+# is registered, which leaves every path without a layer. The checker maps
+# paths under one package directory, so several web members are refused.
 resolve_subject() {
-  local root="$1" provenance packages_status=0
+  local root="$1" provenance packages_status=0 members member_names
   gaia_packages_load "$root" || packages_status=$?
   [ "$packages_status" -eq 0 ] || die_input "$GAIA_PACKAGES_ERROR"
   package_dir=''
   has_package_dir=0
-  if package_dir="$(gaia_package_dir frontend)"; then
+  members="$(gaia_packages_web_members)"
+  if [ -z "$members" ]; then
+    printf 'overlap-check: no package in .gaia/packages.json declares "stack": "web", so no path is mapped to a test layer\n' >&2
+  elif [ "$(printf '%s\n' "$members" | grep -c .)" -gt 1 ]; then
+    member_names="$(printf '%s\n' "$members" | cut -f1 | paste -sd, - | sed 's/,/, /g')"
+    die_input "several packages declare the web stack ($member_names), and the layer mapping reads one package directory. Next step: leave one web-stack package"
+  else
+    package_dir="$(printf '%s\n' "$members" | cut -f2)"
     has_package_dir=1
   fi
   provenance="$(audit_resolve_base_provenance "$root" default-branch)" || provenance=''

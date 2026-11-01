@@ -71,13 +71,13 @@ A full review is your default: run it unconditionally, without re-deriving your 
 
 Before starting the review, load library-specific extensions from the `<root>` you resolved above, typed as a literal in each step (never a variable or a command substitution; the Claude project directory is the launch directory, which is not the repository root in a package launch):
 
-1. Read `<root>/.gaia/packages.json`. When it is absent, the registry is the built-in default: one package named `frontend` at path `frontend`. A registry that is present but unreadable is an error finding; do not guess a layout.
+1. Read `<root>/.gaia/packages.json`. When it is absent, the registry is the built-in default: one web-stack package. A web member is one whose `gaia.package.json` declares `"stack": "web"`. A registry that is present but unreadable is an error finding; do not guess a layout.
 2. List `<root>/.claude/agents/code-audit-frontend/*.md` with `ls -1 <root>/.claude/agents/code-audit-frontend/*.md`, and for each registered package path typed as a literal, `<root>/<path>/.claude/agents/code-audit-frontend/*.md` with `ls -1 <root>/<path>/.claude/agents/code-audit-frontend/*.md`, one plain Bash call per directory (a package at path `.` adds nothing beyond step 2's first listing)
 3. Skip any file named exactly `README.md`. Do not Read the extension bodies: read each remaining file's `subagents:` line with one Bash call, `grep -H '^subagents:' <files>`, the absolute paths typed as literals
 4. The `subagents:` value must be a flow list on that one line (`subagents: [react-patterns, typescript]`) of `react-patterns`, `typescript` and/or `translation`. A matched file whose `subagents:` line carries no inline list (block style), or that has no `subagents:` line, is an **error finding** naming the file, never a silent skip
 5. Keep a map from each role to the absolute paths of the files that list it
 
-Each specialist is handed the absolute paths of every extension file whose `subagents:` lists its role, and Reads them itself. If the package named `frontend` is registered (or the built-in default applies) and its extension directory `<root>/<path>/.claude/agents/code-audit-frontend/` is missing or empty, report an **error finding** that names the missing directory instead of proceeding without extensions: the library rules would silently not apply. All generic review dimensions still apply.
+Each specialist is handed the absolute paths of every extension file whose `subagents:` lists its role, and Reads them itself, with one limit: an extension file under a web member goes only to a specialist reviewing a path whose `LENSES=` line (see "Resolve the review scope") lists the web lenses. A diff mixing web and non-web TypeScript splits the `typescript` dispatch in two: one call for the web paths, handed the web member's extension files, and one for the non-web paths, handed none of them. Four extension files list `typescript`, so without the split a library path would be held to React and shadcn rules. When every path is one kind, the dispatch is not split. If a web-stack package is registered (or the built-in default applies) and its extension directory `<root>/<path>/.claude/agents/code-audit-frontend/` is missing or empty, report an **error finding** that names the missing directory instead of proceeding without extensions: the library rules would silently not apply. All generic review dimensions still apply.
 
 ## How this review runs
 
@@ -139,6 +139,8 @@ Analyze the changed code across these dimensions, focusing on cross-cutting conc
 
 ### 5. Accessibility
 
+Review this dimension only over paths whose `LENSES=` line lists `accessibility`; a path without it is not a web path and carries no accessibility finding.
+
 - **Keyboard**: All interactive elements reachable and operable via keyboard (Tab, Enter, Escape, Arrow keys); no keyboard traps
 - **Semantic HTML**: Prefer `<button>`, `<nav>`, `<main>` over divs with ARIA roles
 - **Images**: `<img>` must have descriptive `alt` or `alt=""` for decorative images
@@ -155,7 +157,7 @@ Analyze the changed code across these dimensions, focusing on cross-cutting conc
 
 ## Project-Specific Rules to Enforce
 
-Beyond general best practices, verify adherence to these project-specific patterns:
+Beyond general best practices, verify adherence to these project-specific patterns, over paths whose `LENSES=` line lists `project-specific-rules` (a non-web path keeps every other dimension, security included):
 
 - No `eslint-disable react-hooks/exhaustive-deps` to hide missing fetcher deps, fix the deps instead
 - No `.catch(() => {})` to silence a promise: an event handler that fires one is `async` and `await`s it; any other fire-and-forget statement uses `void`
@@ -292,7 +294,8 @@ The protocol's "Scope resolution" section says what each printed line means. Wha
 - `CHANGED=` lines are filtered to `*.ts` / `*.tsx` by the two `--review-path` flags. `BASE_SHA` is the base "Incremental scope" above describes.
 - `AUDIT_KEY` is `KEY_BASE` plus the branch, empty when either is undeterminable.
 - `ELIG_BASE` and the `ELIG_CHANGED=` lines are the whole pull request's eligibility set, unfiltered. They decide nothing you do: never review against them.
-- `SPECIALIST=` lines, printed last, name each specialist that runs and the paths that triggered it.
+- `SPECIALIST=` lines name each specialist that runs and the paths that triggered it. `react-patterns` and `translation` appear only for paths under a web-stack member; `typescript` is stack-independent.
+- `LENSES=<path><TAB><lens,lens>` lines, printed last, cover every path of the incremental diff (`.sh`, `.tf`, `.css` and deleted paths included, not only `CHANGED=`). A path whose line lists `accessibility`, `project-specific-rules`, `react-patterns` and `translation` is a web path and takes those lenses; `security` is on for every path.
 
 **The branch's own patch, at HEAD, is the whole point.** `CHANGED` and `REVIEW_DIFF` are the branch's own patch against the PR's base at HEAD, which your marker attests to; never compare the base to the working tree, and a clean catch-up merge of the base changes none of it.
 
@@ -351,7 +354,7 @@ When nothing is surfaced, write **No high/critical advisories**.
 
 ### Specialist roles
 
-The `audit-rule-specialist` type checks one role per dispatch: `react-patterns` (`.tsx` files), `typescript` (`.ts` and `.tsx` files; its generic rules live in the specialist type) and `translation` (language files and files with an i18n call signal). The React patterns, accessibility and translation rules ship as extension files. A hardcoded user-facing string in a `.tsx` with no i18n signal stays with your own review, under Project-Specific Rules "Localization".
+The `audit-rule-specialist` type checks one role per dispatch: `react-patterns` (`.tsx` files under a web member), `typescript` (`.ts` and `.tsx` files; its generic rules live in the specialist type) and `translation` (language files and files with an i18n call signal, under a web member). The React patterns, accessibility and translation rules ship as extension files. A hardcoded user-facing string in a `.tsx` with no i18n signal stays with your own review, under Project-Specific Rules "Localization".
 
 ## Constraints
 

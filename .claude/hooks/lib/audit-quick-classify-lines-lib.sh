@@ -10,13 +10,14 @@
 # A sibling without the file, or whose file does not parse, lists no keys, so
 # every changed key reads as missing there (the deep direction).
 _quick_language_siblings() {
-  local root="$1" head="$2" path="$3" scratch="$4" out="$5" rest locale relative entry meta name sibling_locale sibling_path tab
+  local root="$1" head="$2" path="$3" scratch="$4" out="$5" rest locale relative entry meta name sibling_locale sibling_path tab prefix
   tab="$(printf '\t')"
-  rest="${path#frontend/app/languages/}"
+  prefix="$(quick_web_member_prefix "$path")" || return 2
+  rest="${path#"${prefix}"app/languages/}"
   locale="${rest%%/*}"
   relative="${rest#*/}"
   : >"$out"
-  git -C "$root" ls-tree -z "$head" frontend/app/languages/ >"$scratch/locales" 2>/dev/null || return 2
+  git -C "$root" ls-tree -z "$head" "${prefix}app/languages/" >"$scratch/locales" 2>/dev/null || return 2
   while IFS= read -r -d '' entry; do
     meta="${entry%%"$tab"*}"
     name="${entry#*"$tab"}"
@@ -27,7 +28,7 @@ _quick_language_siblings() {
     sibling_locale="${name##*/}"
     [ "$sibling_locale" != "$locale" ] || continue
     printf '%s\t\n' "$sibling_locale" >>"$out"
-    sibling_path="frontend/app/languages/$sibling_locale/$relative"
+    sibling_path="${prefix}app/languages/$sibling_locale/$relative"
     git -C "$root" cat-file -e "$head:$sibling_path" 2>/dev/null || continue
     git -C "$root" show "$head:$sibling_path" >"$scratch/sibling" 2>/dev/null || return 2
     LC_ALL=C awk -v mode=keys -v prefile="$scratch/sibling" "$_QUICK_LINE_PROGRAM" </dev/null >"$scratch/sibling-keys" || return 2
@@ -80,6 +81,7 @@ quick_classify_lines() {
   local scratch output status=0
   declare -F light_route_diff >/dev/null 2>&1 || return 2
   [ "$#" -eq 4 ] || return 2
+  quick_load_registry "$1" || return 2
   _quick_read_paths "$4" || return 2
   scratch="$(mktemp -d 2>/dev/null)" || return 2
   output="$(_quick_lines_run "$1" "$2" "$3" "$scratch")" || status=$?

@@ -14,8 +14,9 @@
 #   doctor<TAB><dir>        <dir> holds more than one react-doctor config
 #   doctor-file<TAB><path>  one such config, repo-relative
 #   package<TAB><dir>       a registered package with a staged path that
-#                           matches its preCommitSource globs; <dir> is the
-#                           registry path (`.` or `frontend`)
+#                           matches its preCommitSource globs, or sits anywhere
+#                           in a package whose list is empty; <dir> is the
+#                           registry path
 #   settings-drift          a staged path feeds the generated package settings
 #                           (root `.claude/settings.json`, `.gaia/packages.json`,
 #                           or any `*/.claude/settings.{json,overlay.json}`); the

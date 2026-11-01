@@ -147,6 +147,7 @@ quick_classify_paths() {
   local scratch output status=0
   declare -F light_route_diff >/dev/null 2>&1 || return 2
   [ "$#" -eq 4 ] || return 2
+  quick_load_registry "$1" || return 2
   _quick_read_paths "$4" || return 2
   scratch="$(mktemp -d 2>/dev/null)" || return 2
   output="$(_quick_paths_run "$1" "$2" "$3" "$scratch")" || status=$?

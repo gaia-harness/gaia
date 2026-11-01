@@ -64,6 +64,13 @@ STUB
   chmod +x "$STUB_BIN/pnpm"
 }
 
+# write_web_descriptor <name> <path>: registers one web-stack member in the scratch repo.
+write_web_descriptor() {
+  mkdir -p "$REPO/.gaia" "$REPO/$2"
+  printf '[{"name":"%s","path":"%s"}]\n' "$1" "$2" >"$REPO/.gaia/packages.json"
+  printf '{"schemaVersion":1,"name":"%s","stack":"web","globs":{"tddUnitTests":[],"tddStrictCandidates":[],"emergentTests":[],"preCommitSource":[],"doctorConfigs":[],"dependencyManifests":[]},"wiki":{"flowPaths":[],"inventoryPaths":[],"sourcePaths":[]}}\n' "$1" >"$REPO/$2/gaia.package.json"
+}
+
 setup() {
   REPO="$BATS_TEST_TMPDIR/repo"
   STUB_BIN="$BATS_TEST_TMPDIR/bin"
@@ -76,6 +83,9 @@ setup() {
   printf '{"name":"root"}\n' >"$REPO/package.json"
   printf 'packages:\n  - frontend\n' >"$REPO/pnpm-workspace.yaml"
   printf '{"name":"frontend"}\n' >"$REPO/frontend/package.json"
+  mkdir -p "$REPO/.claude/hooks/lib"
+  cp "$BATS_TEST_DIRNAME/../../../.claude/hooks/lib/gaia-packages.sh" "$REPO/.claude/hooks/lib/"
+  write_web_descriptor frontend frontend
   printf 'lockfileVersion: 9\n' >"$REPO/pnpm-lock.yaml"
   printf '#!/bin/sh\necho existing hook\n' >"$REPO/.githooks/pre-commit"
   chmod +x "$REPO/.githooks/pre-commit"
@@ -204,4 +214,39 @@ install --frozen-lockfile --config.ignore-scripts=true'
   [ "$status" -eq 2 ]
   [[ "$output" == *"Usage"* ]]
   [ ! -s "$NPX_LOG" ]
+}
+
+@test "--refresh with no member holding the skill exits 0 without running the installer" {
+  run bash "$SCRIPT" --refresh
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"nothing to refresh"* ]]
+  [ ! -s "$NPX_LOG" ]
+}
+
+@test "--refresh reinstalls where a web member already holds the skill" {
+  mkdir -p frontend/.claude/skills/react-doctor
+  printf 'old\n' >frontend/.claude/skills/react-doctor/SKILL.md
+  run bash "$SCRIPT" --refresh
+  [ "$status" -eq 0 ]
+  [[ "$(cat "$NPX_LOG")" == *"--cwd frontend"* ]]
+}
+
+@test "a registry with no web-stack member exits 0 without running the installer" {
+  jq 'del(.stack)' frontend/gaia.package.json >frontend/gaia.package.json.tmp
+  mv frontend/gaia.package.json.tmp frontend/gaia.package.json
+  run bash "$SCRIPT"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"stack"* ]]
+  [ ! -s "$NPX_LOG" ]
+}
+
+@test "the skill is installed under a web member named storefront at its own path" {
+  rm -rf frontend
+  write_web_descriptor storefront apps/storefront
+  printf '{"name":"storefront"}\n' >apps/storefront/package.json
+  sed -i.bak 's#frontend#apps/storefront#g' "$STUB_BIN/npx"
+  run bash "$SCRIPT"
+  [ "$status" -eq 0 ]
+  [ -f apps/storefront/.claude/skills/react-doctor/SKILL.md ]
+  [[ "$(cat "$NPX_LOG")" == *"--cwd apps/storefront"* ]]
 }

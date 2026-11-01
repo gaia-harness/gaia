@@ -34,22 +34,52 @@ export const writeBuiltinDescriptor = (root: string): void => {
   );
 };
 
-/** Register the frontend package at `packagePath` with the committed descriptor. */
-export const writeFrontendRegistry = (
+/** A registered member of a fixture tree; `web` false drops the stack field. */
+export type FixtureMember = {
+  name: string;
+  path: string;
+  web?: boolean;
+};
+
+/**
+ * Register `members` and write each one's descriptor from the committed one,
+ * renamed to the member and carrying the web stack unless `web` is false. The
+ * tree the name-keyed behavior is proven on.
+ */
+export const writeMemberRegistry = (
   root: string,
-  packagePath = '.'
+  members: readonly FixtureMember[]
 ): void => {
   mkdirSync(path.join(root, '.gaia'), {recursive: true});
   writeFileSync(
     path.join(root, '.gaia', 'packages.json'),
-    JSON.stringify([{name: 'frontend', path: packagePath}])
+    JSON.stringify(
+      members.map((member) => ({name: member.name, path: member.path}))
+    )
   );
-  const descriptorDir =
-    packagePath === '.' ? root : path.join(root, packagePath);
 
-  mkdirSync(descriptorDir, {recursive: true});
-  writeFileSync(
-    path.join(descriptorDir, 'gaia.package.json'),
-    JSON.stringify(committedFrontendDescriptor())
-  );
+  for (const member of members) {
+    const descriptorDir =
+      member.path === '.' ? root : path.join(root, member.path);
+    const {stack, ...rest} = committedFrontendDescriptor();
+
+    mkdirSync(descriptorDir, {recursive: true});
+    writeFileSync(
+      path.join(descriptorDir, 'gaia.package.json'),
+      JSON.stringify({
+        ...rest,
+        name: member.name,
+        ...(member.web === false ? {} : {stack}),
+      })
+    );
+  }
+};
+
+/** Register the frontend package at `packagePath` with the committed descriptor. */
+export const writeFrontendRegistry = (
+  root: string,
+  packagePath = '.',
+  name = 'frontend'
+): void => {
+  writeMemberRegistry(root, [{name, path: packagePath}]);
 };

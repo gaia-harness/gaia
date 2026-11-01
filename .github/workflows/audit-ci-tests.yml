@@ -783,7 +783,7 @@ jobs:
       # The cost is bounded by something already on this job rather than by an
       # estimate: it is the same composite action the `concurrency` leg runs,
       # the same install, with the pnpm store cached the same way.
-      - if: contains(fromJSON('["hooks-2", "hooks-3", "hooks-4", "hooks-5", "hooks-6"]'), matrix.shard) && contains(fromJSON('["full","scoped"]'), steps.selection.outputs.mode) && steps.selection.outputs.needs_node == '1'
+      - if: contains(fromJSON('["hooks-2", "hooks-3", "hooks-4", "hooks-5", "hooks-6", "scripts-1", "scripts-2", "scripts-3", "scripts-4", "scripts-5"]'), matrix.shard) && contains(fromJSON('["full","scoped"]'), steps.selection.outputs.mode) && steps.selection.outputs.needs_node == '1'
         name: Setup Node for the node-dependent RED suites
         uses: ./.github/actions/gaia-setup-node
         with:

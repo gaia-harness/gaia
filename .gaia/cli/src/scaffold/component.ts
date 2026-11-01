@@ -43,7 +43,7 @@ import {structuredError} from '../stderr.js';
 import {takeNonFlagValue} from '../util/argv.js';
 import {toPackageRelative} from '../util/package-target.js';
 import {writeAndRecord} from './fs.js';
-import {resolveScaffoldTarget} from './resolve-target.js';
+import {resolveScaffoldTarget, splitPackageFlag} from './resolve-target.js';
 import {renderTemplate, templatePath} from './template.js';
 import type {ScaffoldResult} from './types.js';
 
@@ -567,7 +567,10 @@ export const run = (
     return EXIT_CODES.OK;
   }
 
-  const parsed = parseFlags(argv);
+  const split = splitPackageFlag(argv, 'scaffold component');
+
+  if (split === undefined) return EXIT_CODES.UNKNOWN_SUBCOMMAND;
+  const parsed = parseFlags(split.argv);
 
   if (!parsed.ok) {
     structuredError({
@@ -582,7 +585,8 @@ export const run = (
   const {flags} = parsed;
   const target = resolveScaffoldTarget(
     options.cwd ?? process.cwd(),
-    'scaffold component'
+    'scaffold component',
+    split.packageName
   );
 
   if (target === undefined) return EXIT_CODES.CONFIG_INVALID;

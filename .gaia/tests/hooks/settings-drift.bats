@@ -44,10 +44,18 @@ build_tree() {
   cp "$REPO_ROOT/.claude/hooks/lib/gaia-packages.sh" "$TREE/.claude/hooks/lib/"
   cp "$REPO_ROOT/.gaia/scripts/check-settings-drift.sh" "$TREE/.gaia/scripts/"
   cp "$REPO_ROOT/.gaia/scripts/precommit-packages.sh" "$TREE/.gaia/scripts/"
-  cp "$REPO_ROOT/.gaia/cli/gaia" "$TREE/.gaia/cli/gaia"
+  # The CLI runs from source, so a change not yet rebuilt into the committed
+  # bundle is what the suite exercises.
+  # pnpm is named by absolute path because the hook cases put a stub pnpm first
+  # on PATH.
+  printf '#!/bin/sh\nexec "%s" -C "%s/.gaia/cli" exec tsx src/index.ts "$@"\n' "$(command -v pnpm)" "$REPO_ROOT" >"$TREE/.gaia/cli/gaia"
   cp "$REPO_ROOT/frontend/.claude/settings.json" "$TREE/frontend/.claude/"
   cp "$REPO_ROOT/frontend/.claude/settings.overlay.json" "$TREE/frontend/.claude/"
   write_packages_moved "$TREE"
+  # The shared fixture descriptor carries no stack, and full generated settings
+  # apply to a web-stack member.
+  jq '.stack = "web"' "$TREE/frontend/gaia.package.json" >"$TREE/frontend/gaia.package.json.next"
+  mv "$TREE/frontend/gaia.package.json.next" "$TREE/frontend/gaia.package.json"
   printf '#!/bin/sh\nexit 0\n' >"$TREE/stub-bin/pnpm"
   chmod +x "$TREE/stub-bin/pnpm" "$TREE/.gaia/cli/gaia"
   git -C "$TREE" add -A

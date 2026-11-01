@@ -87,10 +87,10 @@ uat_lib_route_row_problems() {
   printf '%s\n' "$problems"
 }
 
-# Prints a subdirectory of the frontend package, bare for package path `.`.
-_uat_lib_frontend_subdirectory() {
+# Prints a subdirectory of the web package, bare for package path `.`.
+_uat_lib_web_subdirectory() {
   local package_path
-  package_path=$(_uat_lib_frontend_package_path "${1:-}") || return 1
+  package_path=$(_uat_lib_web_package_path "${1:-}") || return 1
   if [ "$package_path" = "." ]; then
     printf '%s\n' "$2"
   else
@@ -98,8 +98,9 @@ _uat_lib_frontend_subdirectory() {
   fi
 }
 
-_uat_lib_frontend_package_path() {
-  local repo_root="${1:-}" packages_library packages_status=0 package_path
+_uat_lib_web_package_path() {
+  local repo_root="${1:-}" packages_library packages_status=0 members member_count
+  local member_path
   packages_library="$_UAT_LIB_DIRECTORY/../../../.claude/hooks/lib/gaia-packages.sh"
   if [ ! -f "$packages_library" ]; then
     printf 'package library missing: %s. Next step: restore it from the GAIA release.\n' "$packages_library" >&2
@@ -112,9 +113,16 @@ _uat_lib_frontend_package_path() {
     printf '%s\n' "$GAIA_PACKAGES_ERROR" >&2
     return 1
   fi
-  if ! package_path=$(gaia_package_dir frontend); then
-    printf '%s\n' "gaia-packages: .gaia/packages.json registers no package named frontend. Next step: add a frontend entry, or delete the registry to use the built-in default." >&2
+  members=$(gaia_packages_web_members)
+  if [ -z "$members" ]; then
+    printf '%s\n' 'gaia-packages: no registered package declares "stack": "web". Next step: add "stack": "web" to the app package'"'"'s gaia.package.json, which .gaia/packages.json registers.' >&2
     return 1
   fi
-  printf '%s\n' "$package_path"
+  member_count=$(grep -c . <<<"$members")
+  if [ "$member_count" -gt 1 ]; then
+    printf 'gaia-packages: several packages declare the web stack (%s). Next step: leave one web member, since UAT files land in a single package.\n' "$(cut -f1 <<<"$members" | paste -sd, - | sed 's/,/, /g')" >&2
+    return 1
+  fi
+  IFS=$'\t' read -r _ member_path <<<"$members"
+  printf '%s\n' "$member_path"
 }

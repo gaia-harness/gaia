@@ -2,8 +2,9 @@
  * `gaia packages sync-settings [--check] [--repo-root <path>]`
  *
  * Writes `<package>/.claude/settings.json` for every registered package whose
- * path is not `.`, generated from the root `.claude/settings.json` plus the
- * optional `<package>/.claude/settings.overlay.json`. Exit 0 when written or up
+ * path is not `.`: the full file, generated from the root `.claude/settings.json`
+ * plus the optional `<package>/.claude/settings.overlay.json`, for a web-stack
+ * or opted-in member, and a one-hook warning stub for every other. Exit 0 when written or up
  * to date, 1 when `--check` finds drift, 2 on a generation or usage error. A
  * generation error writes nothing for any package.
  */
@@ -13,30 +14,41 @@ import {EXIT_CODES} from '../exit.js';
 import {structuredError} from '../stderr.js';
 import {takeNonFlagValue} from '../util/argv.js';
 import {atomicWriteFileSync} from '../util/atomic-write.js';
-import {loadPackages} from '../util/packages.js';
+import {loadPackages, wantsGeneratedSettings} from '../util/packages.js';
 import {resolveRepoRoot} from '../util/repo-root.js';
 import {
   generateSettings,
+  generateStubSettings,
   serializeSettings,
   SettingsGenerationError,
+  STUB_MARKER,
 } from './settings-transform.js';
 import type {JsonObject} from './settings-transform.js';
 
 const HELP_TEXT = `Usage: gaia packages sync-settings [--check] [--repo-root <path>]
 
   Generates <package>/.claude/settings.json for every registered package not
-  at the repo root, from .claude/settings.json plus the package's optional
-  .claude/settings.overlay.json.
+  at the repo root. A web-stack or generatedSettings member gets the full file,
+  from .claude/settings.json plus the package's optional
+  .claude/settings.overlay.json; every other member gets a warning stub, and a
+  hand-written file there is left alone.
 
-  --check   Write nothing. Exit 0 when every generated file is current, 1
-            naming each file that is missing or out of date, 2 on an error.
+  --check   Write nothing. Exit 0 when every full file is current, 1 naming
+            each one that is missing or out of date, 2 on an error. A missing
+            or edited stub prints a stub-stale line on stdout and never fails.
 `;
 
 const HELP_TOKENS = new Set(['--help', '-h', 'help']);
 const EXIT_DRIFT = 1;
 const SYNC_COMMAND = './.gaia/cli/gaia packages sync-settings';
 
-type GeneratedFile = {content: string; file: string};
+type GeneratedFile = {
+  content: string;
+  file: string;
+  /** `stub` for a member without full generated settings. */
+  kind: 'full' | 'stub';
+  member: string;
+};
 
 const readJsonObject = (file: string, label: string): JsonObject => {
   let parsed: unknown;
@@ -82,23 +94,34 @@ const generateAll = (
     )) {
       const overlayFile = `${entry.path}/.claude/settings.overlay.json`;
 
-      try {
-        const settings = generateSettings(
-          rootSettings,
-          readOverlay(path.join(repoRoot, overlayFile), overlayFile),
-          entry.path
-        );
+      if (wantsGeneratedSettings(entry)) {
+        try {
+          const settings = generateSettings(
+            rootSettings,
+            readOverlay(path.join(repoRoot, overlayFile), overlayFile),
+            entry.path
+          );
 
-        files.push({
-          content: serializeSettings(settings),
-          file: `${entry.path}/.claude/settings.json`,
-        });
-      } catch (error) {
-        if (error instanceof SettingsGenerationError) {
-          return {error: `${entry.path}: ${error.message}`};
+          files.push({
+            content: serializeSettings(settings),
+            file: `${entry.path}/.claude/settings.json`,
+            kind: 'full',
+            member: entry.name,
+          });
+        } catch (error) {
+          if (error instanceof SettingsGenerationError) {
+            return {error: `${entry.path}: ${error.message}`};
+          }
+
+          throw error;
         }
-
-        throw error;
+      } else {
+        files.push({
+          content: serializeSettings(generateStubSettings()),
+          file: `${entry.path}/.claude/settings.json`,
+          kind: 'stub',
+          member: entry.name,
+        });
       }
     }
 
@@ -114,6 +137,24 @@ const generateAll = (
 
 const currentContent = (absolute: string): null | string =>
   existsSync(absolute) ? readFileSync(absolute, 'utf8') : null;
+
+/**
+ * A full file is stale when it differs. A stub is stale when missing or when
+ * it carries the marker yet differs; a file without the marker is hand-written
+ * and never touched.
+ */
+const isStale = (repoRoot: string, generated: GeneratedFile): boolean => {
+  const current = currentContent(path.join(repoRoot, generated.file));
+
+  if (generated.kind === 'full') {
+    return current !== generated.content;
+  }
+
+  return (
+    current === null ||
+    (current.includes(STUB_MARKER) && current !== generated.content)
+  );
+};
 
 type Options = {check: boolean; repoRoot: string | undefined};
 
@@ -182,20 +223,27 @@ export const run = (args: readonly string[]): number => {
 
     return EXIT_CODES.INVALID_ARGUMENTS;
   }
-  const stale = generated.files.filter(
-    ({content, file}) => currentContent(path.join(repoRoot, file)) !== content
+  const stale = generated.files.filter((candidate) =>
+    isStale(repoRoot, candidate)
   );
 
   if (options.check) {
-    if (stale.length === 0) {
+    // A stub never fails the check: it is reported on stdout for the drift
+    // script to turn into a warning, and the exit status ignores it.
+    for (const {file, member} of stale.filter(({kind}) => kind === 'stub')) {
+      process.stdout.write(`stub-stale\t${member}\t${file}\n`);
+    }
+    const failing = stale.filter(({kind}) => kind === 'full');
+
+    if (failing.length === 0) {
       process.stdout.write('settings up to date\n');
 
       return EXIT_CODES.OK;
     }
     structuredError({
       code: 'settings_drift',
-      files: stale.map(({file}) => file),
-      message: `generated settings are out of date: ${stale.map(({file}) => file).join(', ')}. Next step: run ${SYNC_COMMAND} and stage the result.`,
+      files: failing.map(({file}) => file),
+      message: `generated settings are out of date: ${failing.map(({file}) => file).join(', ')}. Next step: run ${SYNC_COMMAND} and stage the result.`,
     });
 
     return EXIT_DRIFT;
