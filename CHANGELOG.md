@@ -26,6 +26,7 @@ A release change that requires the adopter to act, run a command or hand-migrate
 
 ### Fixed
 
+- **`/gaia-spec`'s final review prints as plain Markdown:** the brief you approve before the SPEC saves no longer prints inside a code fence; it uses bold labels, like the first review
 - **`/update-deps` honors `minimumReleaseAgeExclude`:** a package your workspace exempts from the release-age window now shows up as an update right away, in the run and the statusline count, instead of being silently held back until it ages past the window (#3207)
 - **Language-switch accessibility check covers a switched page:** the `after-switch` scan now switches to a language other than the page's current one and waits for the switch, so it no longer re-scans the unswitched page and needs no hand edit after adding a language (#3208)
 

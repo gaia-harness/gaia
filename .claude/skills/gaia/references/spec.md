@@ -310,42 +310,43 @@ Present the gate 2 brief, built below from the draft and its `AUDIT.md`, to the 
 
 While filling frontmatter, set `lineage:` to the research folder slug(s) under `.notebook/research/` (as `research:<slug>`) or issue number(s) (as `issue:<n>`) that discovery named as this SPEC's origin, and leave it `[]` when none. This is never a new question to the user, in auto mode or otherwise.
 
-Print the brief as text, then ask with `AskUserQuestion`. The print is required, not a suggestion: the user approves from the brief alone and opening the files is never required, so it carries everything they sign off on. The brief is a synthesis of the draft and its AUDIT.md (step 7), never either one alone, and it shows only the final contract: no audit verdict or severity counts, no marks for what changed since gate 1, no clarify history. Never print the whole rendered artifact, its frontmatter, or its body in place of the brief; the paths at its foot are where the full text lives. Write every line in plain words: no finding, lens, directive or section id, and no phrase coined in the research or audit (`spec/system-prompt.md`, Plain language).
+Print the brief, then ask with `AskUserQuestion`. The print is required, not a suggestion: the user approves from the brief alone and opening the files is never required, so it carries everything they sign off on. The brief is a synthesis of the draft and its AUDIT.md (step 7), never either one alone, and it shows only the final contract: no audit verdict or severity counts, no marks for what changed since gate 1, no clarify history. Never print the whole rendered artifact, its frontmatter, or its body in place of the brief; the paths at its foot are where the full text lives. Write every line in plain words: no finding, lens, directive or section id, and no phrase coined in the research or audit (`spec/system-prompt.md`, Plain language).
 
 The parts run in this order, so the decision sits nearest the question (a terminal reader starts at the bottom and scrolls up for context):
 
 1. **Title line:** the SPEC id, its title, and its type.
-2. **Change**, **Why**, **Success:** three labeled rows with one blank line between each. Change says in plain words what the SPEC changes, Why the problem it solves, Success what must be true when it is done.
+2. **Change**, **Why**, **Success:** three bold-labeled lines with one blank line between each. Change says in plain words what the SPEC changes, Why the problem it solves, Success what must be true when it is done.
 3. **UATs:** every UAT in the draft, one line each, keeping its number: what is set up, then what must be true.
 4. **Plan will (N directives):** one line naming what the plan will do for the audit's plan-time directives, as actions separated by ` · `. Omit it when `AUDIT.md` holds none.
 5. **You are signing off on:** every accepted cost and residual risk the draft and its audit leave in place, one bullet each: what a decided removal or trade-off gives up, what only a backstop catches, what a waiver or exception allows.
 6. **Not settled (approving saves the SPEC with these open):** printed only when it has an item: each `clarifications.deferred[]` entry, each audit finding the user kept against its recommendation at step 7, and a line saying the audit did not run (step 7's fallback) or a lens ran inline. Each item names what the plan will do because of it.
 7. **Paths:** the draft path and the AUDIT.md path, repo-relative, one per line; the audit line reads `none` when the audit did not run.
 
-Keep the brief to at most 50 lines. Only the `Plan will` line compresses to fit. Response-length or terseness preferences do not shorten gate content: the brief never drops or merges a UAT, a sign-off item, or a not-settled item, whatever its length. Print it in this shape:
+Keep the brief to at most 50 lines. Only the `Plan will` line compresses to fit. Response-length or terseness preferences do not shorten gate content: the brief never drops or merges a UAT, a sign-off item, or a not-settled item, whatever its length. Print it as plain Markdown, never in a blockquote or a code fence, in this shape:
 
-```text
-SPEC-NNN · <title> (<type>)
+```markdown
+**SPEC-NNN · <title>** (<type>)
 
-Change   <what the SPEC changes, in plain words>
+**Change:** <what the SPEC changes, in plain words>
 
-Why      <the problem it solves>
+**Why:** <the problem it solves>
 
-Success  <what must be true when it is done>
+**Success:** <what must be true when it is done>
 
-UATs
-- NNN  <what is set up> → <what must be true>
+**UATs:**
+- **NNN:** <what is set up> → <what must be true>
 
-Plan will (<N> directives): <action> · <action> · <action>
+**Plan will (<N> directives):** <action> · <action> · <action>
 
-You are signing off on
+**You are signing off on:**
 - <accepted cost or residual risk>
 
-Not settled (approving saves the SPEC with these open)
+**Not settled (approving saves the SPEC with these open):**
 - <deferred item or finding kept against the audit>; <what the plan will do because of it>
 
-Full SPEC  .gaia/local/cache/draft-<spec_id>.md
-Audit      .notebook/specs/<spec_id>/AUDIT.md
+**Paths:**
+- Full SPEC: `.gaia/local/cache/draft-<spec_id>.md`
+- Audit: `.notebook/specs/<spec_id>/AUDIT.md`
 ```
 
 Then one `AskUserQuestion` (header `Gate 2`, single-select), question `Save this SPEC as rendered?`, with two options:
